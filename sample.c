@@ -8,6 +8,8 @@
  *   glBegin(MODE)        glEnd()
  *   glVertex3f(x,y,z)    glNormal3f(x,y,z)
  *   glColor3f(r,g,b)     glColor4f(r,g,b,a)
+ *   glEnable(CAP)        glDisable(CAP)
+ *   glShadeModel(MODE)
  *
  * Controls:
  *   Type + ;       Execute / commit line
@@ -25,7 +27,7 @@
  *   Left-drag      Orbit camera
  *   Right-drag     Pan camera
  *   Middle-drag    Zoom
- *   F1-F7          Toggle overlays (help/wire/grid/axes/vnums/normals/indices)
+ *   F1-F8          Toggle overlays (help/wire/grid/axes/vnums/normals/indices/guides)
  *   PgUp/PgDn      Scroll code panel
  */
 
@@ -68,6 +70,9 @@ typedef enum {
     CMD_NORMAL3F,
     CMD_COLOR3F,
     CMD_COLOR4F,
+    CMD_ENABLE,
+    CMD_DISABLE,
+    CMD_SHADE_MODEL,
     CMD_TYPE_COUNT
 } CmdType;
 
@@ -103,6 +108,19 @@ static const EnumEntry g_begin_modes[] = {
     { NULL, 0 }
 };
 
+static const EnumEntry g_enable_caps[] = {
+    { "GL_DEPTH_TEST",      GL_DEPTH_TEST },
+    { "GL_LIGHTING",        GL_LIGHTING },
+    { "GL_COLOR_MATERIAL",  GL_COLOR_MATERIAL },
+    { NULL, 0 }
+};
+
+static const EnumEntry g_shade_models[] = {
+    { "GL_SMOOTH", GL_SMOOTH },
+    { "GL_FLAT",   GL_FLAT },
+    { NULL, 0 }
+};
+
 static const char *g_func_completions[] = {
     "glVertex3f(",
     "glNormal3f(",
@@ -110,6 +128,9 @@ static const char *g_func_completions[] = {
     "glColor4f(",
     "glBegin(",
     "glEnd()",
+    "glEnable(",
+    "glDisable(",
+    "glShadeModel(",
     NULL
 };
 
@@ -129,7 +150,6 @@ static char g_lookat[3][128] = {
 };
 
 static const char *g_header_post[] = {
-    "",
     NULL
 };
 
@@ -147,10 +167,7 @@ static const char *g_footer[] = {
     "}",
     "",
     "void init() {",
-    "  glEnable(GL_DEPTH_TEST);",
-    "  glEnable(GL_LIGHTING);",
     "  glEnable(GL_LIGHT0);",
-    "  glEnable(GL_COLOR_MATERIAL);",
     "}",
     "",
     "int main(int argc, char **argv) {",
@@ -212,6 +229,7 @@ static int    g_show_axes    = 1;
 static int    g_show_vnums   = 0;
 static int    g_show_normals = 0;
 static int    g_show_indices = 0;
+static int    g_show_guides  = 1;
 
 /* Status bar */
 static char   g_status[256] = "";
@@ -406,6 +424,42 @@ static void update_autocomplete(void) {
         return;
     }
 
+    /* If inside glShadeModel(...), complete model names */
+    if (strncmp(g_input, "glShadeModel(", 13) == 0 && g_input_len > 13) {
+        const char *after = g_input + 13;
+        int alen = g_input_len - 13;
+        for (int i = 0; g_shade_models[i].name && g_ac_count < MAX_AC_MATCHES; i++) {
+            if (strncmp(g_shade_models[i].name, after, alen) == 0 &&
+                (int)strlen(g_shade_models[i].name) > alen) {
+                g_ac_matches[g_ac_count++] = g_shade_models[i].name;
+            }
+        }
+        if (g_ac_count > 0) {
+            const char *m = g_ac_matches[0];
+            snprintf(g_ac_ghost, sizeof(g_ac_ghost), "%s)", m + alen);
+        }
+        return;
+    }
+
+    /* If inside glEnable/glDisable(...), complete cap names */
+    if ((strncmp(g_input, "glEnable(", 9) == 0 && g_input_len > 9) ||
+        (strncmp(g_input, "glDisable(", 10) == 0 && g_input_len > 10)) {
+        int prefix = (g_input[2] == 'E') ? 9 : 10;
+        const char *after = g_input + prefix;
+        int alen = g_input_len - prefix;
+        for (int i = 0; g_enable_caps[i].name && g_ac_count < MAX_AC_MATCHES; i++) {
+            if (strncmp(g_enable_caps[i].name, after, alen) == 0 &&
+                (int)strlen(g_enable_caps[i].name) > alen) {
+                g_ac_matches[g_ac_count++] = g_enable_caps[i].name;
+            }
+        }
+        if (g_ac_count > 0) {
+            const char *m = g_ac_matches[0];
+            snprintf(g_ac_ghost, sizeof(g_ac_ghost), "%s)", m + alen);
+        }
+        return;
+    }
+
     /* Complete function names */
     for (int i = 0; g_func_completions[i] && g_ac_count < MAX_AC_MATCHES; i++) {
         if (strncmp(g_func_completions[i], g_input, g_input_len) == 0 &&
@@ -518,6 +572,66 @@ static int parse_command(const char *line, GLCmd *cmd) {
         return 1;
     }
 
+    /* glEnable(CAP) */
+    if (strcmp(func, "glEnable") == 0) {
+        char *a = args;
+        while (*a && isspace((unsigned char)*a)) a++;
+        int al = (int)strlen(a);
+        while (al > 0 && isspace((unsigned char)a[al - 1])) a[--al] = '\0';
+        for (int i = 0; g_enable_caps[i].name; i++) {
+            if (strcmp(a, g_enable_caps[i].name) == 0) {
+                cmd->type = CMD_ENABLE;
+                cmd->mode = g_enable_caps[i].value;
+                cmd->valid = 1;
+                snprintf(cmd->source, sizeof(cmd->source),
+                         "  glEnable(%s);", g_enable_caps[i].name);
+                return 1;
+            }
+        }
+        set_status("Try GL_DEPTH_TEST, GL_LIGHTING, GL_COLOR_MATERIAL");
+        return 0;
+    }
+
+    /* glDisable(CAP) */
+    if (strcmp(func, "glDisable") == 0) {
+        char *a = args;
+        while (*a && isspace((unsigned char)*a)) a++;
+        int al = (int)strlen(a);
+        while (al > 0 && isspace((unsigned char)a[al - 1])) a[--al] = '\0';
+        for (int i = 0; g_enable_caps[i].name; i++) {
+            if (strcmp(a, g_enable_caps[i].name) == 0) {
+                cmd->type = CMD_DISABLE;
+                cmd->mode = g_enable_caps[i].value;
+                cmd->valid = 1;
+                snprintf(cmd->source, sizeof(cmd->source),
+                         "  glDisable(%s);", g_enable_caps[i].name);
+                return 1;
+            }
+        }
+        set_status("Try GL_DEPTH_TEST, GL_LIGHTING, GL_COLOR_MATERIAL");
+        return 0;
+    }
+
+    /* glShadeModel(MODE) */
+    if (strcmp(func, "glShadeModel") == 0) {
+        char *a = args;
+        while (*a && isspace((unsigned char)*a)) a++;
+        int al = (int)strlen(a);
+        while (al > 0 && isspace((unsigned char)a[al - 1])) a[--al] = '\0';
+        for (int i = 0; g_shade_models[i].name; i++) {
+            if (strcmp(a, g_shade_models[i].name) == 0) {
+                cmd->type = CMD_SHADE_MODEL;
+                cmd->mode = g_shade_models[i].value;
+                cmd->valid = 1;
+                snprintf(cmd->source, sizeof(cmd->source),
+                         "  glShadeModel(%s);", g_shade_models[i].name);
+                return 1;
+            }
+        }
+        set_status("Try GL_SMOOTH or GL_FLAT");
+        return 0;
+    }
+
     /* Indent based on cursor position context */
     const char *indent = in_begin_block_at(g_edit_line) ? "    " : "  ";
 
@@ -582,7 +696,7 @@ static int parse_command(const char *line, GLCmd *cmd) {
         return 0;
     }
 
-    set_status("Unknown cmd. Try glVertex3f, glNormal3f, glColor3f, glBegin, glEnd");
+    set_status("Unknown cmd. Try glVertex3f, glBegin, glEnable, glShadeModel, ...");
     return 0;
 }
 
@@ -619,6 +733,15 @@ static void execute_commands(void) {
         case CMD_COLOR4F:
             glColor4f(g_cmds[i].args[0], g_cmds[i].args[1],
                       g_cmds[i].args[2], g_cmds[i].args[3]);
+            break;
+        case CMD_ENABLE:
+            glEnable(g_cmds[i].mode);
+            break;
+        case CMD_DISABLE:
+            glDisable(g_cmds[i].mode);
+            break;
+        case CMD_SHADE_MODEL:
+            glShadeModel(g_cmds[i].mode);
             break;
         default:
             break;
@@ -1067,7 +1190,7 @@ static void render_help(void) {
         "  F1  Help overlay     F2  Wireframe mode",
         "  F3  Grid             F4  Axes",
         "  F5  Vertex numbers   F6  Normal vectors",
-        "  F7  Command indices",
+        "  F7  Command indices  F8  Vertex guides",
         "  PgUp / PgDn          Scroll code panel",
         "",
         "Press F1 or Escape to close.",
@@ -1215,6 +1338,69 @@ static void draw_normal_vectors(void) {
 }
 
 /* ========================================================================= */
+/* Vertex input guides — plane / line / point for partial glVertex3f args     */
+/* ========================================================================= */
+
+static void draw_vertex_guides(void) {
+    if (!g_show_guides) return;
+
+    /* Check current input for a partial glVertex3f( */
+    if (strncmp(g_input, "glVertex3f(", 11) != 0 || g_input_len <= 11)
+        return;
+
+    float vals[3];
+    int n = parse_floats(g_input + 11, vals, 3);
+    if (n < 1) return;
+
+    float sz = 3.0f;  /* half-size of guide geometry */
+
+    glDisable(GL_LIGHTING);
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+    if (n == 1) {
+        /* One axis (x) — draw a YZ plane at x */
+        glColor4f(0.3f, 0.6f, 1.0f, 0.15f);
+        glBegin(GL_QUADS);
+        glVertex3f(vals[0], -sz, -sz);
+        glVertex3f(vals[0],  sz, -sz);
+        glVertex3f(vals[0],  sz,  sz);
+        glVertex3f(vals[0], -sz,  sz);
+        glEnd();
+        /* Outline */
+        glColor4f(0.3f, 0.6f, 1.0f, 0.5f);
+        glBegin(GL_LINE_LOOP);
+        glVertex3f(vals[0], -sz, -sz);
+        glVertex3f(vals[0],  sz, -sz);
+        glVertex3f(vals[0],  sz,  sz);
+        glVertex3f(vals[0], -sz,  sz);
+        glEnd();
+    } else if (n == 2) {
+        /* Two axes (x, y) — draw a line parallel to Z */
+        glColor4f(1.0f, 0.8f, 0.2f, 0.7f);
+        glLineWidth(2.0f);
+        glBegin(GL_LINES);
+        glVertex3f(vals[0], vals[1], -sz);
+        glVertex3f(vals[0], vals[1],  sz);
+        glEnd();
+        glLineWidth(1.0f);
+    }
+
+    if (n >= 3) {
+        /* All three axes — draw a point */
+        glColor4f(1.0f, 0.3f, 0.3f, 0.9f);
+        glPointSize(8.0f);
+        glBegin(GL_POINTS);
+        glVertex3f(vals[0], vals[1], vals[2]);
+        glEnd();
+        glPointSize(1.0f);
+    }
+
+    glDisable(GL_BLEND);
+    glEnable(GL_LIGHTING);
+}
+
+/* ========================================================================= */
 /* 3D scene render (viewport offset to the right of the code panel)           */
 /* ========================================================================= */
 
@@ -1256,10 +1442,11 @@ static void render_3d_scene(void) {
 
     if (g_wireframe) glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
 
-    glEnable(GL_LIGHTING);
     execute_commands();
 
     if (g_wireframe) glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+
+    draw_vertex_guides();
 
     if (g_show_vnums)   draw_vertex_numbers();
     if (g_show_normals) draw_normal_vectors();
@@ -1576,8 +1763,10 @@ static void special_func(int key, int x, int y) {
             g_ac_sel = (g_ac_sel - 1 + g_ac_count) % g_ac_count;
             /* Update ghost to selected match */
             const char *m = g_ac_matches[g_ac_sel];
-            if (strncmp(g_input, "glBegin(", 8) == 0 && g_input_len > 8) {
-                int alen = g_input_len - 8;
+            /* Find the prefix length inside parentheses for enum completions */
+            char *paren = strchr(g_input, '(');
+            if (paren && (int)(paren - g_input + 1) < g_input_len) {
+                int alen = g_input_len - (int)(paren - g_input + 1);
                 snprintf(g_ac_ghost, sizeof(g_ac_ghost), "%s)", m + alen);
             } else {
                 snprintf(g_ac_ghost, sizeof(g_ac_ghost), "%s",
@@ -1592,8 +1781,9 @@ static void special_func(int key, int x, int y) {
         if (g_ac_count > 1) {
             g_ac_sel = (g_ac_sel + 1) % g_ac_count;
             const char *m2 = g_ac_matches[g_ac_sel];
-            if (strncmp(g_input, "glBegin(", 8) == 0 && g_input_len > 8) {
-                int alen = g_input_len - 8;
+            char *paren2 = strchr(g_input, '(');
+            if (paren2 && (int)(paren2 - g_input + 1) < g_input_len) {
+                int alen = g_input_len - (int)(paren2 - g_input + 1);
                 snprintf(g_ac_ghost, sizeof(g_ac_ghost), "%s)", m2 + alen);
             } else {
                 snprintf(g_ac_ghost, sizeof(g_ac_ghost), "%s",
@@ -1629,6 +1819,12 @@ static void special_func(int key, int x, int y) {
         g_show_indices = !g_show_indices;
         set_status(g_show_indices ? "Command indices ON" :
                    "Command indices OFF");
+        break;
+    case GLUT_KEY_F8:
+        g_show_guides = !g_show_guides;
+        set_status(g_show_guides ? "Vertex guides ON" :
+                   "Vertex guides OFF");
+        break;
         break;
 
     /* Scroll */
@@ -1705,6 +1901,10 @@ static void timer_func(int value) {
 
 static void load_initial_commands(void) {
     static const char *init_cmds[] = {
+        "glEnable(GL_DEPTH_TEST);",
+        "glEnable(GL_LIGHTING);",
+        "glEnable(GL_COLOR_MATERIAL);",
+        "glShadeModel(GL_SMOOTH);",
         "glBegin(GL_TRIANGLE_STRIP);",
         "glNormal3f(-0.5, -0.5, 0.2);",
         "glVertex3f(-1.0, -1.0, -0.5);",
