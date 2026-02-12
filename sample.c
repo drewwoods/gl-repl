@@ -26,9 +26,13 @@
  *   Tab            Accept autocomplete suggestion
  *   Left-drag      Orbit camera
  *   Right-drag     Pan camera
- *   Middle-drag    Zoom
+ *   Scroll wheel   Zoom
  *   F1-F9          Toggle overlays (help/wire/grid/axes/vnums/normals/indices/guides/autonorm)
  *   PgUp/PgDn      Scroll code panel
+ *
+ * Import/Export:
+ *   Ctrl+S saves to output.c with snippet markers.
+ *   Run ./sample output.c to reload a saved session.
  */
 
 #include <gl_includes.h>
@@ -113,6 +117,7 @@ static const EnumEntry g_enable_caps[] = {
     { "GL_DEPTH_TEST",      GL_DEPTH_TEST },
     { "GL_LIGHTING",        GL_LIGHTING },
     { "GL_COLOR_MATERIAL",  GL_COLOR_MATERIAL },
+    { "GL_NORMALIZE",       GL_NORMALIZE },
     { NULL, 0 }
 };
 
@@ -229,8 +234,8 @@ static int    g_show_help    = 0;
 static int    g_wireframe    = 0;
 static int    g_show_grid    = 1;
 static int    g_show_axes    = 1;
-static int    g_show_vnums   = 0;
-static int    g_show_normals = 0;
+static int    g_show_vnums   = 1;
+static int    g_show_normals = 1;
 static int    g_show_indices = 0;
 static int    g_show_guides  = 1;
 static int    g_autonormal   = 1;
@@ -246,6 +251,9 @@ static int    g_ac_sel = 0;
 static char   g_ac_ghost[MAX_LINE_LEN] = "";
 static int    g_cursor_px = 0;     /* screen pos of cursor, set during render */
 static int    g_cursor_py = 0;
+
+/* Forward declarations */
+static int parse_command(const char *line, GLCmd *cmd);
 
 /* ========================================================================= */
 /* Utility                                                                    */
@@ -334,10 +342,12 @@ static void save_output(void) {
         fprintf(f, "%s\n", g_lookat[i]);
     for (int i = 0; g_header_post[i]; i++)
         fprintf(f, "%s\n", g_header_post[i]);
+    fprintf(f, "// Snippet start\n");
     for (int i = 0; i < g_num_cmds; i++)
         fprintf(f, "%s\n", g_cmds[i].source);
     if (in_begin_block())
         fprintf(f, "  glEnd();\n");
+    fprintf(f, "// Snippet end\n");
     for (int i = 0; g_footer[i]; i++)
         fprintf(f, "%s\n", g_footer[i]);
 
@@ -346,6 +356,72 @@ static void save_output(void) {
     char msg[128];
     snprintf(msg, sizeof(msg), "Saved to output.c (%d commands)", g_num_cmds);
     set_status(msg);
+}
+
+/* Load commands from a file, reading lines between snippet markers.
+ * Returns 1 if at least one command was loaded, 0 otherwise. */
+static int load_from_file(const char *filename) {
+    FILE *f = fopen(filename, "r");
+    if (!f) return 0;
+
+    char line[MAX_LINE_LEN];
+    int in_snippet = 0;
+    int loaded = 0;
+    int warnings = 0;
+
+    while (fgets(line, sizeof(line), f)) {
+        /* Strip trailing newline */
+        int len = (int)strlen(line);
+        while (len > 0 && (line[len-1] == '\n' || line[len-1] == '\r'))
+            line[--len] = '\0';
+
+        if (!in_snippet) {
+            /* Look for start marker */
+            const char *p = line;
+            while (*p && isspace((unsigned char)*p)) p++;
+            if (strncmp(p, "// Snippet start", 16) == 0)
+                in_snippet = 1;
+            continue;
+        }
+
+        /* Check for end marker */
+        const char *p = line;
+        while (*p && isspace((unsigned char)*p)) p++;
+        if (strncmp(p, "// Snippet end", 14) == 0)
+            break;
+
+        /* Skip empty lines */
+        if (len == 0 || *p == '\0') continue;
+
+        /* Try to parse the line as a command */
+        GLCmd cmd;
+        memset(&cmd, 0, sizeof(cmd));
+        if (parse_command(line, &cmd)) {
+            if (g_num_cmds < MAX_COMMANDS) {
+                g_cmds[g_num_cmds++] = cmd;
+                loaded++;
+            }
+        } else {
+            fprintf(stderr, "Warning: could not parse line: %s\n", line);
+            warnings++;
+        }
+    }
+
+    fclose(f);
+
+    if (loaded > 0) {
+        char msg[256];
+        if (warnings > 0)
+            snprintf(msg, sizeof(msg),
+                     "Loaded %d commands from %s (%d warnings)",
+                     loaded, filename, warnings);
+        else
+            snprintf(msg, sizeof(msg),
+                     "Loaded %d commands from %s", loaded, filename);
+        set_status(msg);
+        fprintf(stderr, "%s\n", msg);
+    }
+    return loaded > 0;
 }
 
 /* ========================================================================= */
@@ -746,16 +822,6 @@ static void insert_cmd_at(int pos, const GLCmd *cmd) {
     if (g_edit_line >= pos) g_edit_line++;
 }
 
-/* Update an existing auto-normal command's values */
-static void update_auto_normal(int idx, float nx, float ny, float nz) {
-    g_cmds[idx].args[0] = nx;
-    g_cmds[idx].args[1] = ny;
-    g_cmds[idx].args[2] = nz;
-    int inside = in_begin_block_at(idx);
-    const char *indent = inside ? "    " : "  ";
-    snprintf(g_cmds[idx].source, sizeof(g_cmds[idx].source),
-             "%sglNormal3f(%g, %g, %g);", indent, nx, ny, nz);
-}
 
 /* Compute per-vertex normals for a block and store into norms[] */
 static void compute_block_normals(GLenum mode, int *vi, int nv,
@@ -834,10 +900,11 @@ static void compute_block_normals(GLenum mode, int *vi, int nv,
 }
 
 /*
- * Scan the entire command list: for every vertex inside a begin/end block,
- * ensure there is an is_auto normal command immediately before it with the
- * correct computed value.  Inserts new auto-normals where missing, updates
- * existing ones in place.
+ * Scan the entire command list: for every vertex inside a begin/end block
+ * that does not already have a normal command (auto or manual) immediately
+ * before it, insert a new auto-normal with the computed face normal.
+ * Existing normals (whether auto-generated or manually edited) are never
+ * overwritten, so the user can freely modify them.
  */
 static void recompute_autonormals(void) {
     if (!g_autonormal) return;
@@ -866,25 +933,24 @@ static void recompute_autonormals(void) {
         float norms[MAX_COMMANDS][3];
         compute_block_normals(mode, vi, nv, norms);
 
-        /* For each vertex, ensure an auto-normal precedes it */
+        /* For each vertex, insert an auto-normal only if none precedes it */
         int offset = 0; /* tracks insertions shifting indices */
         for (int v = 0; v < nv; v++) {
             int vidx = vi[v] + offset;
             float nx = norms[v][0], ny = norms[v][1], nz = norms[v][2];
 
-            /* Check if command before this vertex is already an auto-normal */
+            /* Skip if there is already any normal (auto or manual) before
+               this vertex — the user may have edited it */
             if (vidx > 0 && g_cmds[vidx - 1].valid &&
-                g_cmds[vidx - 1].type == CMD_NORMAL3F &&
-                g_cmds[vidx - 1].is_auto) {
-                /* Update in place */
-                update_auto_normal(vidx - 1, nx, ny, nz);
-            } else {
-                /* Insert new auto-normal before vertex */
-                GLCmd nc = make_auto_normal(nx, ny, nz, 1);
-                insert_cmd_at(vidx, &nc);
-                offset++;
-                block_end++;
+                g_cmds[vidx - 1].type == CMD_NORMAL3F) {
+                continue;
             }
+
+            /* Insert new auto-normal before vertex */
+            GLCmd nc = make_auto_normal(nx, ny, nz, 1);
+            insert_cmd_at(vidx, &nc);
+            offset++;
+            block_end++;
         }
 
         i = block_end + 1;
@@ -1357,6 +1423,9 @@ static void render_help(void) {
         "  glNormal3f(x,y,z)   Specify a vertex normal",
         "  glColor3f(r,g,b)    Specify vertex color",
         "  glColor4f(r,g,b,a)  Specify color with alpha",
+        "  glEnable(CAP)        GL_DEPTH_TEST, GL_LIGHTING, ...",
+        "  glDisable(CAP)       GL_COLOR_MATERIAL, GL_NORMALIZE",
+        "  glShadeModel(MODE)   GL_SMOOTH, GL_FLAT",
         "",
         "Editing:",
         "  Up / Down            Navigate command lines",
@@ -1375,7 +1444,7 @@ static void render_help(void) {
         "Camera:",
         "  Left-drag            Orbit",
         "  Right-drag           Pan",
-        "  Middle-drag Y        Zoom",
+        "  Scroll wheel         Zoom",
         "",
         "Toggles:",
         "  F1  Help overlay     F2  Wireframe mode",
@@ -1385,6 +1454,11 @@ static void render_help(void) {
         "  F9  Auto-normals",
         "  PgUp / PgDn          Scroll code panel",
         "",
+        "Save / Load:",
+        "  Ctrl+S saves the session to output.c",
+        "  Reload a saved file:  ./sample output.c",
+        "  (Commands between // Snippet start/end are imported)",
+        "",
         "Press F1 or Escape to close.",
         NULL
     };
@@ -1392,8 +1466,8 @@ static void render_help(void) {
     begin_2d();
     glEnable(GL_BLEND);
 
-    int hx = g_win_w / 5, hy = g_win_h / 8;
-    int hw = g_win_w * 3 / 5, hh = g_win_h * 3 / 4;
+    int hx = g_win_w / 5, hy = g_win_h / 20;
+    int hw = g_win_w * 3 / 5, hh = g_win_h * 9 / 10;
 
     glColor4f(0.03f, 0.03f, 0.06f, 0.92f);
     draw_quad((float)hx, (float)hy, (float)hw, (float)hh);
@@ -1437,8 +1511,8 @@ static void draw_grid(void) {
     for (float v = -extent; v <= extent + 0.01f; v += step) {
         float a = (fabsf(v) < 0.01f) ? 0.45f : 0.12f;
         glColor4f(0.50f, 0.50f, 0.60f, a);
-        glVertex3f(v, -extent, 0); glVertex3f(v, extent, 0);
-        glVertex3f(-extent, v, 0); glVertex3f(extent, v, 0);
+        glVertex3f(v, 0, -extent); glVertex3f(v, 0, extent);
+        glVertex3f(-extent, 0, v); glVertex3f(extent, 0, v);
     }
     glEnd();
 
@@ -1586,7 +1660,159 @@ static void draw_vertex_guides(void) {
         glVertex3f(vals[0], vals[1], vals[2]);
         glEnd();
         glPointSize(1.0f);
+
+        /* Show axis line for the component under the cursor */
+        int paren_pos = 11; /* position after "glVertex3f(" */
+        if (g_cursor_pos >= paren_pos) {
+            int close = g_input_len;
+            for (int ci = paren_pos; ci < g_input_len; ci++)
+                if (g_input[ci] == ')') { close = ci; break; }
+            if (g_cursor_pos <= close) {
+                int component = 0;
+                for (int ci = paren_pos; ci < g_cursor_pos; ci++)
+                    if (g_input[ci] == ',') component++;
+                if (component > 2) component = 2;
+
+                glLineWidth(2.0f);
+                glBegin(GL_LINES);
+                switch (component) {
+                case 0: /* x-axis */
+                    glColor4f(0.9f, 0.2f, 0.2f, 0.7f);
+                    glVertex3f(-sz, vals[1], vals[2]);
+                    glVertex3f( sz, vals[1], vals[2]);
+                    break;
+                case 1: /* y-axis */
+                    glColor4f(0.2f, 0.9f, 0.2f, 0.7f);
+                    glVertex3f(vals[0], -sz, vals[2]);
+                    glVertex3f(vals[0],  sz, vals[2]);
+                    break;
+                case 2: /* z-axis */
+                    glColor4f(0.2f, 0.2f, 0.9f, 0.7f);
+                    glVertex3f(vals[0], vals[1], -sz);
+                    glVertex3f(vals[0], vals[1],  sz);
+                    break;
+                }
+                glEnd();
+                glLineWidth(1.0f);
+            }
+        }
     }
+
+    glDisable(GL_BLEND);
+    glEnable(GL_LIGHTING);
+}
+
+/* ========================================================================= */
+/* Normal edit guides — show doubled/halved component impact                  */
+/* ========================================================================= */
+
+static void draw_normal_guides(void) {
+    if (!g_show_guides) return;
+
+    /* Check current input for glNormal3f( */
+    if (strncmp(g_input, "glNormal3f(", 11) != 0 || g_input_len <= 11)
+        return;
+
+    float vals[3];
+    int n = parse_floats(g_input + 11, vals, 3);
+    if (n < 3) return;
+
+    /* Determine which component the cursor is on */
+    int paren_pos = 11;
+    if (g_cursor_pos < paren_pos) return;
+    int close = g_input_len;
+    for (int ci = paren_pos; ci < g_input_len; ci++)
+        if (g_input[ci] == ')') { close = ci; break; }
+    if (g_cursor_pos > close) return;
+
+    int component = 0;
+    for (int ci = paren_pos; ci < g_cursor_pos; ci++)
+        if (g_input[ci] == ',') component++;
+    if (component > 2) component = 2;
+
+    /* Find the associated vertex — next CMD_VERTEX3F after current position */
+    int search_start = (g_edit_line < g_num_cmds && !g_inserting)
+                      ? g_edit_line + 1 : g_edit_line;
+    float vx = 0, vy = 0, vz = 0;
+    int found = 0;
+    for (int i = search_start; i < g_num_cmds; i++) {
+        if (!g_cmds[i].valid) continue;
+        if (g_cmds[i].type == CMD_VERTEX3F) {
+            vx = g_cmds[i].args[0];
+            vy = g_cmds[i].args[1];
+            vz = g_cmds[i].args[2];
+            found = 1;
+            break;
+        }
+        if (g_cmds[i].type == CMD_END || g_cmds[i].type == CMD_BEGIN) break;
+    }
+    if (!found) return;
+
+    /* Compute doubled and halved normals (re-normalized) */
+    float doubled[3] = { vals[0], vals[1], vals[2] };
+    float halved[3]  = { vals[0], vals[1], vals[2] };
+    doubled[component] *= 2.0f;
+    halved[component]  *= 0.5f;
+
+    float dlen = sqrtf(doubled[0]*doubled[0] + doubled[1]*doubled[1]
+                      + doubled[2]*doubled[2]);
+    if (dlen > 1e-8f) { doubled[0]/=dlen; doubled[1]/=dlen; doubled[2]/=dlen; }
+    float hlen = sqrtf(halved[0]*halved[0] + halved[1]*halved[1]
+                      + halved[2]*halved[2]);
+    if (hlen > 1e-8f) { halved[0]/=hlen; halved[1]/=hlen; halved[2]/=hlen; }
+
+    float scale = 0.45f;
+
+    glDisable(GL_LIGHTING);
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+    /* Current normal — thin white reference line */
+    float clen = sqrtf(vals[0]*vals[0] + vals[1]*vals[1] + vals[2]*vals[2]);
+    if (clen > 1e-8f) {
+        float cn[3] = { vals[0]/clen, vals[1]/clen, vals[2]/clen };
+        glColor4f(0.8f, 0.8f, 0.8f, 0.4f);
+        glLineWidth(1.0f);
+        glBegin(GL_LINES);
+        glVertex3f(vx, vy, vz);
+        glVertex3f(vx + cn[0]*scale, vy + cn[1]*scale, vz + cn[2]*scale);
+        glEnd();
+    }
+
+    /* Doubled component — green stippled arrow */
+    glEnable(GL_LINE_STIPPLE);
+    glLineStipple(1, 0xAAAA);
+    glLineWidth(2.0f);
+
+    glColor4f(0.2f, 0.95f, 0.2f, 0.75f);
+    glBegin(GL_LINES);
+    glVertex3f(vx, vy, vz);
+    glVertex3f(vx + doubled[0]*scale, vy + doubled[1]*scale,
+               vz + doubled[2]*scale);
+    glEnd();
+
+    /* Halved component — red stippled arrow */
+    glColor4f(0.95f, 0.2f, 0.2f, 0.75f);
+    glBegin(GL_LINES);
+    glVertex3f(vx, vy, vz);
+    glVertex3f(vx + halved[0]*scale, vy + halved[1]*scale,
+               vz + halved[2]*scale);
+    glEnd();
+
+    glDisable(GL_LINE_STIPPLE);
+    glLineWidth(1.0f);
+
+    /* Dots at arrow tips */
+    glPointSize(5.0f);
+    glBegin(GL_POINTS);
+    glColor4f(0.2f, 0.95f, 0.2f, 0.85f);
+    glVertex3f(vx + doubled[0]*scale, vy + doubled[1]*scale,
+               vz + doubled[2]*scale);
+    glColor4f(0.95f, 0.2f, 0.2f, 0.85f);
+    glVertex3f(vx + halved[0]*scale, vy + halved[1]*scale,
+               vz + halved[2]*scale);
+    glEnd();
+    glPointSize(1.0f);
 
     glDisable(GL_BLEND);
     glEnable(GL_LIGHTING);
@@ -1684,6 +1910,7 @@ static void render_3d_scene(void) {
     glEnable(GL_LIGHTING);
 
     draw_vertex_guides();
+    draw_normal_guides();
 
     if (g_show_vnums)   draw_vertex_numbers();
     if (g_show_normals) draw_normal_vectors();
@@ -1750,7 +1977,6 @@ static void keyboard_func(unsigned char key, int x, int y) {
             g_cursor_pos = 0;
             set_status("Input cleared");
         }
-        glutPostRedisplay();
         return;
     }
 
@@ -1768,7 +1994,6 @@ static void keyboard_func(unsigned char key, int x, int y) {
         } else {
             set_status("Nothing to undo");
         }
-        glutPostRedisplay();
         return;
     }
 
@@ -1790,7 +2015,6 @@ static void keyboard_func(unsigned char key, int x, int y) {
             mark_normals_dirty();
             set_status("Line deleted");
         }
-        glutPostRedisplay();
         return;
     }
 
@@ -1806,14 +2030,12 @@ static void keyboard_func(unsigned char key, int x, int y) {
         g_newline_len = 0;
         mark_normals_dirty();
         set_status("All commands cleared");
-        glutPostRedisplay();
         return;
     }
 
     /* Ctrl+S: save to output.c */
     if (key == 19) {
         save_output();
-        glutPostRedisplay();
         return;
     }
 
@@ -1826,7 +2048,6 @@ static void keyboard_func(unsigned char key, int x, int y) {
             g_cursor_pos--;
             update_autocomplete();
         }
-        glutPostRedisplay();
         return;
     }
 
@@ -1836,7 +2057,6 @@ static void keyboard_func(unsigned char key, int x, int y) {
             accept_autocomplete();
             update_autocomplete();
         }
-        glutPostRedisplay();
         return;
     }
 
@@ -1906,7 +2126,6 @@ static void keyboard_func(unsigned char key, int x, int y) {
         g_ac_count = 0;
         g_ac_ghost[0] = '\0';
         mark_normals_dirty();
-        glutPostRedisplay();
         return;
     }
 
@@ -1960,7 +2179,6 @@ static void keyboard_func(unsigned char key, int x, int y) {
         g_ac_count = 0;
         g_ac_ghost[0] = '\0';
         mark_normals_dirty();
-        glutPostRedisplay();
         return;
     }
 
@@ -1972,7 +2190,6 @@ static void keyboard_func(unsigned char key, int x, int y) {
         g_input_len++;
         g_cursor_pos++;
         update_autocomplete();
-        glutPostRedisplay();
     }
 }
 
@@ -2077,16 +2294,7 @@ static void special_func(int key, int x, int y) {
             mark_normals_dirty();
             set_status("Auto-normals ON");
         } else {
-            /* Remove all auto-inserted normals */
-            for (int i = g_num_cmds - 1; i >= 0; i--) {
-                if (g_cmds[i].is_auto) {
-                    memmove(&g_cmds[i], &g_cmds[i+1],
-                            (g_num_cmds - i - 1) * sizeof(GLCmd));
-                    g_num_cmds--;
-                    if (g_edit_line > i) g_edit_line--;
-                }
-            }
-            set_status("Auto-normals OFF (auto normals removed)");
+            set_status("Auto-normals OFF (existing normals kept)");
         }
         break;
 
@@ -2096,7 +2304,6 @@ static void special_func(int key, int x, int y) {
     default: break;
     }
 
-    glutPostRedisplay();
 }
 
 static void mouse_func(int button, int state, int x, int y) {
@@ -2108,7 +2315,8 @@ static void mouse_func(int button, int state, int x, int y) {
         g_mouse_btn = -1;
     }
 
-    /* Scroll wheel */
+#ifdef USE_GLUT
+    /* Apple GLUT reports scroll wheel as button 3/4 */
     if (button == 3 && state == GLUT_DOWN) {
         g_cam_dist -= 0.3f;
         if (g_cam_dist < 0.5f) g_cam_dist = 0.5f;
@@ -2118,7 +2326,23 @@ static void mouse_func(int button, int state, int x, int y) {
         if (g_cam_dist > 50.0f) g_cam_dist = 50.0f;
         glutPostRedisplay();
     }
+#endif
 }
+
+#ifndef USE_GLUT
+/* FreeGLUT mouse wheel callback */
+static void mousewheel_func(int wheel, int direction, int x, int y) {
+    (void)wheel; (void)x; (void)y;
+    if (direction > 0) {
+        g_cam_dist -= 0.3f;
+        if (g_cam_dist < 0.5f) g_cam_dist = 0.5f;
+    } else {
+        g_cam_dist += 0.3f;
+        if (g_cam_dist > 50.0f) g_cam_dist = 50.0f;
+    }
+    glutPostRedisplay();
+}
+#endif
 
 static void motion_func(int x, int y) {
     int dx = x - g_mouse_x;
@@ -2140,7 +2364,6 @@ static void motion_func(int x, int y) {
 
     g_mouse_x = x;
     g_mouse_y = y;
-    glutPostRedisplay();
 }
 
 static void timer_func(int value) {
@@ -2162,16 +2385,23 @@ static void timer_func(int value) {
 /* Initialization                                                             */
 /* ========================================================================= */
 
-static void load_initial_commands(void) {
+static void load_initial_commands(const char *import_file) {
+    /* Try importing from file first */
+    if (import_file && load_from_file(import_file)) {
+        g_edit_line = g_num_cmds;
+        return;
+    }
+
+    /* Fall back to default example */
     static const char *init_cmds[] = {
         "glEnable(GL_DEPTH_TEST);",
         "glEnable(GL_LIGHTING);",
         "glEnable(GL_COLOR_MATERIAL);",
         "glShadeModel(GL_SMOOTH);",
         "glBegin(GL_TRIANGLE_STRIP);",
-        "glVertex3f(-1.0, -1.0, -0.5);",
-        "glVertex3f(-1.0, 1.0, -0.5);",
-        "glVertex3f(0.0, -1.0, -0.5);",
+        "glVertex3f(-1.0, 1.0, 0.0);",
+        "glVertex3f(-1.0, 0, 0.0);",
+        "glVertex3f(0.0, 0, 0.0);",
         NULL
     };
 
@@ -2182,8 +2412,8 @@ static void load_initial_commands(void) {
             g_cmds[g_num_cmds++] = cmd;
     }
 
-    g_edit_line = g_num_cmds;  /* cursor on new line */
-        set_status("Ready - type GL commands, press ; to execute. F1 for help.");
+    g_edit_line = g_num_cmds;
+    set_status("Ready - type GL commands, press ; to execute. F1 for help.");
 }
 
 static void init_gl(void) {
@@ -2211,7 +2441,7 @@ int main(int argc, char **argv) {
     glutCreateWindow("OpenGL REPL - Display List Dynamic Rendering");
 
     init_gl();
-    load_initial_commands();
+    load_initial_commands((argc > 1) ? argv[1] : NULL);
 
     glutDisplayFunc(display_func);
     glutReshapeFunc(reshape_func);
@@ -2219,6 +2449,9 @@ int main(int argc, char **argv) {
     glutSpecialFunc(special_func);
     glutMouseFunc(mouse_func);
     glutMotionFunc(motion_func);
+#ifndef USE_GLUT
+    glutMouseWheelFunc(mousewheel_func);
+#endif
     glutTimerFunc(16, timer_func, 0);
 
     glutMainLoop();
