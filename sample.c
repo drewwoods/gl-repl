@@ -27,7 +27,7 @@
  *   Left-drag      Orbit camera
  *   Right-drag     Pan camera
  *   Middle-drag    Zoom
- *   F1-F8          Toggle overlays (help/wire/grid/axes/vnums/normals/indices/guides)
+ *   F1-F9          Toggle overlays (help/wire/grid/axes/vnums/normals/indices/guides/autonorm)
  *   PgUp/PgDn      Scroll code panel
  */
 
@@ -88,6 +88,7 @@ typedef struct {
     int     num_args;
     char    source[MAX_LINE_LEN];
     int     valid;
+    int     is_auto;
 } GLCmd;
 
 /* ========================================================================= */
@@ -190,6 +191,8 @@ static const char *g_footer[] = {
 
 static GLCmd  g_cmds[MAX_COMMANDS];
 static int    g_num_cmds = 0;
+static int    g_normals_dirty = 1;
+static void mark_normals_dirty(void) { g_normals_dirty = 1; }
 
 /* Editor */
 static char   g_input[MAX_INPUT_LEN];
@@ -230,6 +233,7 @@ static int    g_show_vnums   = 0;
 static int    g_show_normals = 0;
 static int    g_show_indices = 0;
 static int    g_show_guides  = 1;
+static int    g_autonormal   = 1;
 
 /* Status bar */
 static char   g_status[256] = "";
@@ -698,6 +702,193 @@ static int parse_command(const char *line, GLCmd *cmd) {
 
     set_status("Unknown cmd. Try glVertex3f, glBegin, glEnable, glShadeModel, ...");
     return 0;
+}
+
+/* ========================================================================= */
+/* Auto-normal: insert / update glNormal3f commands in the command list       */
+/* ========================================================================= */
+
+static void face_normal(const float *a, const float *b, const float *c,
+                        float *n) {
+    float e1[3] = { b[0]-a[0], b[1]-a[1], b[2]-a[2] };
+    float e2[3] = { c[0]-a[0], c[1]-a[1], c[2]-a[2] };
+    n[0] = e1[1]*e2[2] - e1[2]*e2[1];
+    n[1] = e1[2]*e2[0] - e1[0]*e2[2];
+    n[2] = e1[0]*e2[1] - e1[1]*e2[0];
+    float len = sqrtf(n[0]*n[0] + n[1]*n[1] + n[2]*n[2]);
+    if (len > 1e-8f) { n[0] /= len; n[1] /= len; n[2] /= len; }
+    else { n[0] = 0; n[1] = 0; n[2] = 0; }
+}
+
+/* Build an auto-normal command */
+static GLCmd make_auto_normal(float nx, float ny, float nz,
+                              int inside_begin) {
+    GLCmd c;
+    memset(&c, 0, sizeof(c));
+    c.type = CMD_NORMAL3F;
+    c.args[0] = nx; c.args[1] = ny; c.args[2] = nz;
+    c.num_args = 3;
+    c.valid = 1;
+    c.is_auto = 1;
+    const char *indent = inside_begin ? "    " : "  ";
+    snprintf(c.source, sizeof(c.source),
+             "%sglNormal3f(%g, %g, %g);", indent, nx, ny, nz);
+    return c;
+}
+
+/* Insert a command at position pos, shifting everything after it */
+static void insert_cmd_at(int pos, const GLCmd *cmd) {
+    if (g_num_cmds >= MAX_COMMANDS) return;
+    memmove(&g_cmds[pos + 1], &g_cmds[pos],
+            (g_num_cmds - pos) * sizeof(GLCmd));
+    g_cmds[pos] = *cmd;
+    g_num_cmds++;
+    if (g_edit_line >= pos) g_edit_line++;
+}
+
+/* Update an existing auto-normal command's values */
+static void update_auto_normal(int idx, float nx, float ny, float nz) {
+    g_cmds[idx].args[0] = nx;
+    g_cmds[idx].args[1] = ny;
+    g_cmds[idx].args[2] = nz;
+    int inside = in_begin_block_at(idx);
+    const char *indent = inside ? "    " : "  ";
+    snprintf(g_cmds[idx].source, sizeof(g_cmds[idx].source),
+             "%sglNormal3f(%g, %g, %g);", indent, nx, ny, nz);
+}
+
+/* Compute per-vertex normals for a block and store into norms[] */
+static void compute_block_normals(GLenum mode, int *vi, int nv,
+                                  float norms[][3]) {
+    /* Default: zero (will be overwritten for valid faces) */
+    for (int i = 0; i < nv; i++)
+        norms[i][0] = norms[i][1] = norms[i][2] = 0;
+
+    float n[3];
+    switch (mode) {
+    case GL_TRIANGLES:
+        for (int i = 0; i + 2 < nv; i += 3) {
+            face_normal(g_cmds[vi[i]].args, g_cmds[vi[i+1]].args,
+                        g_cmds[vi[i+2]].args, n);
+            for (int j = 0; j < 3; j++)
+                memcpy(norms[i+j], n, sizeof(n));
+        }
+        break;
+    case GL_TRIANGLE_STRIP:
+        for (int i = 0; i + 2 < nv; i++) {
+            if (i % 2 == 0)
+                face_normal(g_cmds[vi[i]].args, g_cmds[vi[i+1]].args,
+                            g_cmds[vi[i+2]].args, n);
+            else
+                face_normal(g_cmds[vi[i]].args, g_cmds[vi[i+2]].args,
+                            g_cmds[vi[i+1]].args, n);
+            memcpy(norms[i+2], n, sizeof(n));
+            if (i == 0) {
+                memcpy(norms[0], n, sizeof(n));
+                memcpy(norms[1], n, sizeof(n));
+            }
+        }
+        break;
+    case GL_TRIANGLE_FAN:
+        for (int i = 1; i + 1 < nv; i++) {
+            face_normal(g_cmds[vi[0]].args, g_cmds[vi[i]].args,
+                        g_cmds[vi[i+1]].args, n);
+            memcpy(norms[i+1], n, sizeof(n));
+            if (i == 1) {
+                memcpy(norms[0], n, sizeof(n));
+                memcpy(norms[1], n, sizeof(n));
+            }
+        }
+        break;
+    case GL_QUADS:
+        for (int i = 0; i + 3 < nv; i += 4) {
+            face_normal(g_cmds[vi[i]].args, g_cmds[vi[i+1]].args,
+                        g_cmds[vi[i+2]].args, n);
+            for (int j = 0; j < 4; j++)
+                memcpy(norms[i+j], n, sizeof(n));
+        }
+        break;
+    case GL_QUAD_STRIP:
+        for (int i = 0; i + 3 < nv; i += 2) {
+            face_normal(g_cmds[vi[i]].args, g_cmds[vi[i+1]].args,
+                        g_cmds[vi[i+2]].args, n);
+            memcpy(norms[i+2], n, sizeof(n));
+            memcpy(norms[i+3], n, sizeof(n));
+            if (i == 0) {
+                memcpy(norms[0], n, sizeof(n));
+                memcpy(norms[1], n, sizeof(n));
+            }
+        }
+        break;
+    case GL_POLYGON:
+        if (nv >= 3) {
+            face_normal(g_cmds[vi[0]].args, g_cmds[vi[1]].args,
+                        g_cmds[vi[2]].args, n);
+            for (int i = 0; i < nv; i++)
+                memcpy(norms[i], n, sizeof(n));
+        }
+        break;
+    default:
+        break;
+    }
+}
+
+/*
+ * Scan the entire command list: for every vertex inside a begin/end block,
+ * ensure there is an is_auto normal command immediately before it with the
+ * correct computed value.  Inserts new auto-normals where missing, updates
+ * existing ones in place.
+ */
+static void recompute_autonormals(void) {
+    if (!g_autonormal) return;
+
+    /* Process each begin/end block */
+    int i = 0;
+    while (i < g_num_cmds) {
+        if (!g_cmds[i].valid || g_cmds[i].type != CMD_BEGIN) { i++; continue; }
+
+        GLenum mode = g_cmds[i].mode;
+        i++;
+
+        /* Collect vertex indices in this block (skip auto-normals for now) */
+        int vi[MAX_COMMANDS];
+        int nv = 0;
+        int block_end = g_num_cmds; /* if no glEnd found */
+        for (int j = i; j < g_num_cmds; j++) {
+            if (!g_cmds[j].valid) continue;
+            if (g_cmds[j].type == CMD_END) { block_end = j; break; }
+            if (g_cmds[j].type == CMD_BEGIN) { block_end = j; break; }
+            if (g_cmds[j].type == CMD_VERTEX3F)
+                vi[nv++] = j;
+        }
+
+        /* Compute desired normals */
+        float norms[MAX_COMMANDS][3];
+        compute_block_normals(mode, vi, nv, norms);
+
+        /* For each vertex, ensure an auto-normal precedes it */
+        int offset = 0; /* tracks insertions shifting indices */
+        for (int v = 0; v < nv; v++) {
+            int vidx = vi[v] + offset;
+            float nx = norms[v][0], ny = norms[v][1], nz = norms[v][2];
+
+            /* Check if command before this vertex is already an auto-normal */
+            if (vidx > 0 && g_cmds[vidx - 1].valid &&
+                g_cmds[vidx - 1].type == CMD_NORMAL3F &&
+                g_cmds[vidx - 1].is_auto) {
+                /* Update in place */
+                update_auto_normal(vidx - 1, nx, ny, nz);
+            } else {
+                /* Insert new auto-normal before vertex */
+                GLCmd nc = make_auto_normal(nx, ny, nz, 1);
+                insert_cmd_at(vidx, &nc);
+                offset++;
+                block_end++;
+            }
+        }
+
+        i = block_end + 1;
+    }
 }
 
 /* ========================================================================= */
@@ -1191,6 +1382,7 @@ static void render_help(void) {
         "  F3  Grid             F4  Axes",
         "  F5  Vertex numbers   F6  Normal vectors",
         "  F7  Command indices  F8  Vertex guides",
+        "  F9  Auto-normals",
         "  PgUp / PgDn          Scroll code panel",
         "",
         "Press F1 or Escape to close.",
@@ -1446,6 +1638,51 @@ static void render_3d_scene(void) {
 
     if (g_wireframe) glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
 
+    /* Always-on wireframe + vertex dots overlay */
+    glDisable(GL_LIGHTING);
+    glEnable(GL_POLYGON_OFFSET_LINE);
+    glPolygonOffset(-1.0f, -1.0f);
+    glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+    glColor3f(0.0f, 0.0f, 0.0f);
+    {
+        int in_begin = 0;
+        for (int i = 0; i < g_num_cmds; i++) {
+            if (!g_cmds[i].valid) continue;
+            switch (g_cmds[i].type) {
+            case CMD_BEGIN:
+                if (in_begin) glEnd();
+                glBegin(g_cmds[i].mode);
+                in_begin = 1;
+                break;
+            case CMD_END:
+                if (in_begin) { glEnd(); in_begin = 0; }
+                break;
+            case CMD_VERTEX3F:
+                if (in_begin)
+                    glVertex3f(g_cmds[i].args[0], g_cmds[i].args[1],
+                               g_cmds[i].args[2]);
+                break;
+            default: break;
+            }
+        }
+        if (in_begin) glEnd();
+    }
+    glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+    glDisable(GL_POLYGON_OFFSET_LINE);
+
+    /* Vertex dots */
+    glPointSize(5.0f);
+    glColor3f(0.0f, 0.0f, 0.0f);
+    glBegin(GL_POINTS);
+    for (int i = 0; i < g_num_cmds; i++) {
+        if (g_cmds[i].valid && g_cmds[i].type == CMD_VERTEX3F)
+            glVertex3f(g_cmds[i].args[0], g_cmds[i].args[1],
+                       g_cmds[i].args[2]);
+    }
+    glEnd();
+    glPointSize(1.0f);
+    glEnable(GL_LIGHTING);
+
     draw_vertex_guides();
 
     if (g_show_vnums)   draw_vertex_numbers();
@@ -1457,6 +1694,10 @@ static void render_3d_scene(void) {
 /* ========================================================================= */
 
 static void display_func(void) {
+    if (g_normals_dirty) {
+        recompute_autonormals();
+        g_normals_dirty = 0;
+    }
     update_lookat_strings();
 
     /* Full-window clear */
@@ -1522,6 +1763,7 @@ static void keyboard_func(unsigned char key, int x, int y) {
                 g_edit_line = g_num_cmds;
             }
             load_line_to_input(g_edit_line);
+            mark_normals_dirty();
             set_status("Undo: removed last command");
         } else {
             set_status("Nothing to undo");
@@ -1545,6 +1787,7 @@ static void keyboard_func(unsigned char key, int x, int y) {
                         if (g_edit_line > g_num_cmds)
                 g_edit_line = g_num_cmds;
             load_line_to_input(g_edit_line);
+            mark_normals_dirty();
             set_status("Line deleted");
         }
         glutPostRedisplay();
@@ -1561,6 +1804,7 @@ static void keyboard_func(unsigned char key, int x, int y) {
         g_cursor_pos = 0;
         g_newline_buf[0] = '\0';
         g_newline_len = 0;
+        mark_normals_dirty();
         set_status("All commands cleared");
         glutPostRedisplay();
         return;
@@ -1661,6 +1905,7 @@ static void keyboard_func(unsigned char key, int x, int y) {
         }
         g_ac_count = 0;
         g_ac_ghost[0] = '\0';
+        mark_normals_dirty();
         glutPostRedisplay();
         return;
     }
@@ -1714,6 +1959,7 @@ static void keyboard_func(unsigned char key, int x, int y) {
         }
         g_ac_count = 0;
         g_ac_ghost[0] = '\0';
+        mark_normals_dirty();
         glutPostRedisplay();
         return;
     }
@@ -1825,6 +2071,23 @@ static void special_func(int key, int x, int y) {
         set_status(g_show_guides ? "Vertex guides ON" :
                    "Vertex guides OFF");
         break;
+    case GLUT_KEY_F9:
+        g_autonormal = !g_autonormal;
+        if (g_autonormal) {
+            mark_normals_dirty();
+            set_status("Auto-normals ON");
+        } else {
+            /* Remove all auto-inserted normals */
+            for (int i = g_num_cmds - 1; i >= 0; i--) {
+                if (g_cmds[i].is_auto) {
+                    memmove(&g_cmds[i], &g_cmds[i+1],
+                            (g_num_cmds - i - 1) * sizeof(GLCmd));
+                    g_num_cmds--;
+                    if (g_edit_line > i) g_edit_line--;
+                }
+            }
+            set_status("Auto-normals OFF (auto normals removed)");
+        }
         break;
 
     /* Scroll */
@@ -1906,11 +2169,8 @@ static void load_initial_commands(void) {
         "glEnable(GL_COLOR_MATERIAL);",
         "glShadeModel(GL_SMOOTH);",
         "glBegin(GL_TRIANGLE_STRIP);",
-        "glNormal3f(-0.5, -0.5, 0.2);",
         "glVertex3f(-1.0, -1.0, -0.5);",
-        "glNormal3f(-0.5, 0.5, 1.0);",
         "glVertex3f(-1.0, 1.0, -0.5);",
-        "glNormal3f(0.0, -0.5, 1.0);",
         "glVertex3f(0.0, -1.0, -0.5);",
         NULL
     };
