@@ -1,7 +1,9 @@
 {
   "permissions": {
     "allow": [
-      "Bash(gcc:*)"
+      "Bash(gcc:*)",
+      "Bash(glcompile:*)",
+      "Bash(declare:*)"
     ]
   }
 }
