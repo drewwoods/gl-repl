@@ -29,8 +29,9 @@
  *   Home/End       Jump to start/end of input line
  *   Backspace      Delete character before cursor
  *   Ctrl+/         Toggle comment (// prefix)
- *   Ctrl+C         Copy line (or whole for-loop)
- *   Ctrl+X         Cut line (or whole for-loop)
+ *   Shift+Up/Down  Select multiple lines
+ *   Ctrl+C         Copy line/selection (whole for-loop on FOR_BEGIN)
+ *   Ctrl+X         Cut line/selection (whole for-loop on FOR_BEGIN)
  *   Ctrl+V         Paste before current line
  *   Ctrl+Z         Undo last command
  *   Ctrl+D         Delete line at cursor
@@ -389,6 +390,19 @@ static int    g_cursor_py = 0;
 /* Clipboard */
 static GLCmd  g_clipboard[MAX_COMMANDS];
 static int    g_clipboard_count = 0;
+
+/* Selection (shift+arrow) */
+static int    g_sel_anchor = -1;   /* -1 = no selection */
+static int    g_sel_end = -1;
+
+static void clear_selection(void) { g_sel_anchor = g_sel_end = -1; }
+static int sel_active(void) { return g_sel_anchor >= 0 && g_sel_end >= 0; }
+static int sel_lo(void) {
+    return g_sel_anchor < g_sel_end ? g_sel_anchor : g_sel_end;
+}
+static int sel_hi(void) {
+    return g_sel_anchor > g_sel_end ? g_sel_anchor : g_sel_end;
+}
 
 /* Forward declarations */
 static int parse_command(const char *line, GLCmd *cmd);
@@ -2082,6 +2096,14 @@ static void render_code_panel(void) {
             } else {
                 /* Existing command, not being edited */
                 if (cur >= g_scroll && cur < g_scroll + visible_lines) {
+                    /* Selection highlight */
+                    if (sel_active() && i >= sel_lo() && i <= sel_hi()) {
+                        glEnable(GL_BLEND);
+                        glColor4f(0.20f, 0.30f, 0.50f, 0.55f);
+                        draw_quad(0, (float)(line_y - 3),
+                                  (float)panel_w, (float)LINE_H);
+                        glDisable(GL_BLEND);
+                    }
                     glColor3f(0.30f, 0.30f, 0.38f);
                     { char ln[16]; snprintf(ln, sizeof(ln), "%3d", file_line);
                       draw_string(CODE_MARGIN_X, line_y, ln, FONT_MONO); }
@@ -2288,8 +2310,9 @@ static void render_help(void) {
         "  Tab / Enter          Accept autocomplete suggestion",
         "  Backspace            Delete character before cursor",
         "  Ctrl+/               Toggle comment on current line",
-        "  Ctrl+C               Copy line (or whole for-loop)",
-        "  Ctrl+X               Cut line (or whole for-loop)",
+        "  Shift+Up/Down        Select multiple lines",
+        "  Ctrl+C               Copy line/selection (for-loop on BEGIN)",
+        "  Ctrl+X               Cut line/selection (for-loop on BEGIN)",
         "  Ctrl+V               Paste before current line",
         "  Ctrl+Z               Undo last command",
         "  Ctrl+D               Delete line at cursor",
@@ -3888,6 +3911,9 @@ static void keyboard_func(unsigned char key, int x, int y) {
     g_cursor_on = 1;
     g_blink_tick = 0;
 
+    /* Clear selection on any key except Ctrl+C/X (which consume it) */
+    if (key != 3 && key != 24)
+        clear_selection();
 
 
     /* Escape */
@@ -3973,10 +3999,21 @@ static void keyboard_func(unsigned char key, int x, int y) {
         return;
     }
 
-    /* Ctrl+C: copy line (or whole for-loop if on FOR_BEGIN) */
+    /* Ctrl+C: copy line/selection (or whole for-loop if on FOR_BEGIN) */
     if (key == 3) {
-        if (g_edit_line < g_num_cmds && !g_inserting) {
-            g_clipboard_count = 0;
+        if (g_inserting) { clear_selection(); return; }
+        g_clipboard_count = 0;
+        if (sel_active()) {
+            /* Copy selected range */
+            int lo = sel_lo(), hi = sel_hi();
+            if (hi >= g_num_cmds) hi = g_num_cmds - 1;
+            for (int i = lo; i <= hi && g_clipboard_count < MAX_COMMANDS; i++)
+                g_clipboard[g_clipboard_count++] = g_cmds[i];
+            char msg[64];
+            snprintf(msg, sizeof(msg), "Copied %d line%s",
+                     g_clipboard_count, g_clipboard_count > 1 ? "s" : "");
+            set_status(msg);
+        } else if (g_edit_line < g_num_cmds) {
             if (g_cmds[g_edit_line].type == CMD_FOR_BEGIN) {
                 int fe = find_for_end(g_edit_line);
                 int end_idx = (fe < g_num_cmds) ? fe + 1 : g_num_cmds;
@@ -3993,34 +4030,46 @@ static void keyboard_func(unsigned char key, int x, int y) {
                 set_status("Copied line");
             }
         }
+        clear_selection();
         return;
     }
 
-    /* Ctrl+X: cut line (or whole for-loop if on FOR_BEGIN) */
+    /* Ctrl+X: cut line/selection (or whole for-loop if on FOR_BEGIN) */
     if (key == 24) {
-        if (g_edit_line < g_num_cmds && !g_inserting) {
-            g_clipboard_count = 0;
-            int start = g_edit_line;
-            int count;
+        if (g_inserting) { clear_selection(); return; }
+        g_clipboard_count = 0;
+        int start, count;
+        if (sel_active()) {
+            start = sel_lo();
+            int hi = sel_hi();
+            if (hi >= g_num_cmds) hi = g_num_cmds - 1;
+            count = hi - start + 1;
+        } else if (g_edit_line < g_num_cmds) {
+            start = g_edit_line;
             if (g_cmds[start].type == CMD_FOR_BEGIN) {
                 int fe = find_for_end(start);
                 count = ((fe < g_num_cmds) ? fe + 1 : g_num_cmds) - start;
             } else {
                 count = 1;
             }
-            for (int i = 0; i < count && g_clipboard_count < MAX_COMMANDS; i++)
-                g_clipboard[g_clipboard_count++] = g_cmds[start + i];
-            memmove(&g_cmds[start], &g_cmds[start + count],
-                    (g_num_cmds - start - count) * sizeof(GLCmd));
-            g_num_cmds -= count;
-            if (g_edit_line > g_num_cmds) g_edit_line = g_num_cmds;
-            load_line_to_input(g_edit_line);
-            mark_normals_dirty();
-            char msg[64];
-            snprintf(msg, sizeof(msg), "Cut %d line%s",
-                     count, count > 1 ? "s" : "");
-            set_status(msg);
+        } else {
+            clear_selection();
+            return;
         }
+        for (int i = 0; i < count && g_clipboard_count < MAX_COMMANDS; i++)
+            g_clipboard[g_clipboard_count++] = g_cmds[start + i];
+        memmove(&g_cmds[start], &g_cmds[start + count],
+                (g_num_cmds - start - count) * sizeof(GLCmd));
+        g_num_cmds -= count;
+        g_edit_line = start;
+        if (g_edit_line > g_num_cmds) g_edit_line = g_num_cmds;
+        load_line_to_input(g_edit_line);
+        mark_normals_dirty();
+        char msg[64];
+        snprintf(msg, sizeof(msg), "Cut %d line%s",
+                 count, count > 1 ? "s" : "");
+        set_status(msg);
+        clear_selection();
         return;
     }
 
@@ -4466,7 +4515,16 @@ static void special_func(int key, int x, int y) {
                 snprintf(g_ac_ghost, sizeof(g_ac_ghost), "%s",
                          m + g_input_len);
             }
+        } else if (glutGetModifiers() & GLUT_ACTIVE_SHIFT) {
+            /* Shift+Up: extend selection */
+            if (!sel_active()) {
+                g_sel_anchor = g_edit_line;
+                g_sel_end = g_edit_line;
+            }
+            if (g_sel_end > 0) g_sel_end--;
+            navigate_to_line(g_sel_end);
         } else {
+            clear_selection();
             navigate_to_line(g_edit_line - 1);
         }
         break;
@@ -4487,7 +4545,16 @@ static void special_func(int key, int x, int y) {
                 snprintf(g_ac_ghost, sizeof(g_ac_ghost), "%s",
                          m2 + g_input_len);
             }
+        } else if (glutGetModifiers() & GLUT_ACTIVE_SHIFT) {
+            /* Shift+Down: extend selection */
+            if (!sel_active()) {
+                g_sel_anchor = g_edit_line;
+                g_sel_end = g_edit_line;
+            }
+            if (g_sel_end < g_num_cmds - 1) g_sel_end++;
+            navigate_to_line(g_sel_end);
         } else {
+            clear_selection();
             navigate_to_line(g_edit_line + 1);
         }
         break;
@@ -4619,6 +4686,7 @@ static void handle_code_panel_click(int mx, int my) {
     g_blink_tick = 0;
     g_ac_count = 0;
     g_ac_ghost[0] = '\0';
+    clear_selection();
 }
 
 static void mouse_func(int button, int state, int x, int y) {
