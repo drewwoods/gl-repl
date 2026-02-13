@@ -4371,7 +4371,79 @@ static void special_func(int key, int x, int y) {
 
 }
 
+/* Handle left-click in the code panel: navigate to line + column */
+static void handle_code_panel_click(int mx, int my) {
+    /* Convert GLUT Y (top=0) to OpenGL Y (bottom=0) */
+    int gl_y = g_win_h - my;
+
+    /* Same layout constants as render_code_panel */
+    int line_y_start = g_win_h - CODE_MARGIN_Y - LINE_H - LINE_H;
+    int vis = (line_y_start + LINE_H - 3 - gl_y) / LINE_H;
+    if (vis < 0) return;   /* clicked in info bar */
+
+    int n_hpre = 0;
+    for (int i = 0; g_header_pre[i]; i++) n_hpre++;
+    int n_hpost = 0;
+    for (int i = 0; g_header_post[i]; i++) n_hpost++;
+    int n_header = n_hpre + 3 + n_hpost;
+
+    int doc_line = g_scroll + vis;
+    int cmd_area = doc_line - n_header;
+
+    /* Ignore clicks on header or footer */
+    int n_cmd_area = g_num_cmds + (g_inserting ? 1 : 0) + 1;
+    if (cmd_area < 0 || cmd_area >= n_cmd_area) return;
+
+    /* Map cmd_area index to actual command index, accounting for insert line */
+    int target;
+    int on_insert_line = 0;
+    if (g_inserting) {
+        if (cmd_area < g_edit_line) {
+            target = cmd_area;
+        } else if (cmd_area == g_edit_line) {
+            target = -1;
+            on_insert_line = 1;
+        } else {
+            target = cmd_area - 1;
+        }
+    } else {
+        target = cmd_area;
+    }
+
+    if (!on_insert_line) {
+        if (target < 0) target = 0;
+        if (target > g_num_cmds) target = g_num_cmds;
+        navigate_to_line(target);
+    }
+
+    /* Compute cursor column from click X */
+    int linenum_w = 4 * FONT_W;
+    int idx_col_w = g_show_indices ? (6 * FONT_W) : 0;
+    int text_x = CODE_MARGIN_X + linenum_w + FONT_W + idx_col_w;
+    int edit_idx = on_insert_line ? g_edit_line : target;
+    int indent_chars = in_begin_block_at(
+        edit_idx < g_num_cmds ? edit_idx : g_num_cmds) ? 4 : 2;
+    int col = (mx - text_x - indent_chars * FONT_W + FONT_W / 2) / FONT_W;
+    if (col < 0) col = 0;
+    if (col > g_input_len) col = g_input_len;
+    g_cursor_pos = col;
+
+    g_cursor_on = 1;
+    g_blink_tick = 0;
+    g_ac_count = 0;
+    g_ac_ghost[0] = '\0';
+}
+
 static void mouse_func(int button, int state, int x, int y) {
+    /* Left-click in code panel: navigate to line + column */
+    if (button == GLUT_LEFT_BUTTON && state == GLUT_DOWN) {
+        int panel_w = (int)(g_win_w * g_panel_frac);
+        if (x < panel_w) {
+            handle_code_panel_click(x, y);
+            return;   /* don't start camera drag */
+        }
+    }
+
     if (state == GLUT_DOWN) {
         g_mouse_btn = button;
         g_mouse_x = x;
