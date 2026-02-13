@@ -29,6 +29,9 @@
  *   Home/End       Jump to start/end of input line
  *   Backspace      Delete character before cursor
  *   Ctrl+/         Toggle comment (// prefix)
+ *   Ctrl+C         Copy line (or whole for-loop)
+ *   Ctrl+X         Cut line (or whole for-loop)
+ *   Ctrl+V         Paste before current line
  *   Ctrl+Z         Undo last command
  *   Ctrl+D         Delete line at cursor
  *   Ctrl+L         Clear all commands
@@ -379,6 +382,10 @@ static int    g_ac_sel = 0;
 static char   g_ac_ghost[MAX_LINE_LEN] = "";
 static int    g_cursor_px = 0;     /* screen pos of cursor, set during render */
 static int    g_cursor_py = 0;
+
+/* Clipboard */
+static GLCmd  g_clipboard[MAX_COMMANDS];
+static int    g_clipboard_count = 0;
 
 /* Forward declarations */
 static int parse_command(const char *line, GLCmd *cmd);
@@ -2278,6 +2285,9 @@ static void render_help(void) {
         "  Tab / Enter          Accept autocomplete suggestion",
         "  Backspace            Delete character before cursor",
         "  Ctrl+/               Toggle comment on current line",
+        "  Ctrl+C               Copy line (or whole for-loop)",
+        "  Ctrl+X               Cut line (or whole for-loop)",
+        "  Ctrl+V               Paste before current line",
         "  Ctrl+Z               Undo last command",
         "  Ctrl+D               Delete line at cursor",
         "  Ctrl+L               Clear all commands",
@@ -3405,6 +3415,7 @@ static int parse_c_for_header(const char *input, char *var_name, int var_sz,
     ExprCtx ctx = { p, NULL, 0 };
     *start = eval_expr(&ctx);
     p = ctx.p;
+    if (*p == 'f' || *p == 'F') p++;   /* skip C float suffix */
     while (*p && isspace((unsigned char)*p)) p++;
     if (*p != ';') return 0;
     p++;
@@ -3430,6 +3441,7 @@ static int parse_c_for_header(const char *input, char *var_name, int var_sz,
     if (eq && !gt) *end += 1.0f;  /* <= N means "end = N+1" for step=1 */
     if (eq && gt) *end -= 1.0f;
     p = ctx.p;
+    if (*p == 'f' || *p == 'F') p++;   /* skip C float suffix */
     while (*p && isspace((unsigned char)*p)) p++;
     if (*p != ';') return 0;
     p++;
@@ -3451,11 +3463,13 @@ static int parse_c_for_header(const char *input, char *var_name, int var_sz,
         ctx.p = p;
         *step = eval_expr(&ctx);
         p = ctx.p;
+        if (*p == 'f' || *p == 'F') p++;   /* skip C float suffix */
     } else if (*p == '-' && *(p+1) == '=') {
         p += 2;
         ctx.p = p;
         *step = -eval_expr(&ctx);
         p = ctx.p;
+        if (*p == 'f' || *p == 'F') p++;   /* skip C float suffix */
     } else {
         return 0;
     }
@@ -3862,6 +3876,85 @@ static void keyboard_func(unsigned char key, int x, int y) {
     /* Ctrl+S: save to output.c */
     if (key == 19) {
         save_output(outfile);
+        return;
+    }
+
+    /* Ctrl+C: copy line (or whole for-loop if on FOR_BEGIN) */
+    if (key == 3) {
+        if (g_edit_line < g_num_cmds && !g_inserting) {
+            g_clipboard_count = 0;
+            if (g_cmds[g_edit_line].type == CMD_FOR_BEGIN) {
+                int fe = find_for_end(g_edit_line);
+                int end_idx = (fe < g_num_cmds) ? fe + 1 : g_num_cmds;
+                for (int i = g_edit_line; i < end_idx &&
+                     g_clipboard_count < MAX_COMMANDS; i++)
+                    g_clipboard[g_clipboard_count++] = g_cmds[i];
+                char msg[64];
+                snprintf(msg, sizeof(msg), "Copied for-loop (%d lines)",
+                         g_clipboard_count);
+                set_status(msg);
+            } else {
+                g_clipboard[0] = g_cmds[g_edit_line];
+                g_clipboard_count = 1;
+                set_status("Copied line");
+            }
+        }
+        return;
+    }
+
+    /* Ctrl+X: cut line (or whole for-loop if on FOR_BEGIN) */
+    if (key == 24) {
+        if (g_edit_line < g_num_cmds && !g_inserting) {
+            g_clipboard_count = 0;
+            int start = g_edit_line;
+            int count;
+            if (g_cmds[start].type == CMD_FOR_BEGIN) {
+                int fe = find_for_end(start);
+                count = ((fe < g_num_cmds) ? fe + 1 : g_num_cmds) - start;
+            } else {
+                count = 1;
+            }
+            for (int i = 0; i < count && g_clipboard_count < MAX_COMMANDS; i++)
+                g_clipboard[g_clipboard_count++] = g_cmds[start + i];
+            memmove(&g_cmds[start], &g_cmds[start + count],
+                    (g_num_cmds - start - count) * sizeof(GLCmd));
+            g_num_cmds -= count;
+            if (g_edit_line > g_num_cmds) g_edit_line = g_num_cmds;
+            load_line_to_input(g_edit_line);
+            mark_normals_dirty();
+            char msg[64];
+            snprintf(msg, sizeof(msg), "Cut %d line%s",
+                     count, count > 1 ? "s" : "");
+            set_status(msg);
+        }
+        return;
+    }
+
+    /* Ctrl+V: paste clipboard at current position */
+    if (key == 22) {
+        if (g_clipboard_count > 0) {
+            if (g_num_cmds + g_clipboard_count > MAX_COMMANDS) {
+                set_status("Command buffer full!");
+                return;
+            }
+            int pos = g_inserting ? g_edit_line :
+                      (g_edit_line < g_num_cmds ? g_edit_line : g_num_cmds);
+            memmove(&g_cmds[pos + g_clipboard_count], &g_cmds[pos],
+                    (g_num_cmds - pos) * sizeof(GLCmd));
+            memcpy(&g_cmds[pos], g_clipboard,
+                   g_clipboard_count * sizeof(GLCmd));
+            g_num_cmds += g_clipboard_count;
+            g_edit_line = pos + g_clipboard_count;
+            g_inserting = 0;
+            load_line_to_input(g_edit_line);
+            mark_normals_dirty();
+            char msg[64];
+            snprintf(msg, sizeof(msg), "Pasted %d line%s",
+                     g_clipboard_count, g_clipboard_count > 1 ? "s" : "");
+            set_status(msg);
+        } else {
+            set_status("Clipboard empty");
+        }
         return;
     }
 
