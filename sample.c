@@ -96,6 +96,7 @@ typedef enum {
     CMD_FOR_BEGIN,
     CMD_FOR_END,
     CMD_COMMENT,
+    CMD_VAR_ASSIGN,
     CMD_TYPE_COUNT
 } CmdType;
 
@@ -112,6 +113,7 @@ typedef struct {
     char    source[MAX_LINE_LEN];
     int     valid;
     int     is_auto;
+    int     has_vars;   /* source contains predefined var references, re-eval on flatten */
 } GLCmd;
 
 #define MAX_EXPR_VARS 8
@@ -281,6 +283,22 @@ static void init_predef_vars(void) {
         g_predef_vars[i].name[sizeof(g_predef_vars[i].name) - 1] = '\0';
         g_predef_vars[i].value = 0.0f;
     }
+}
+
+/* Check if a string contains any predefined variable names as whole identifiers */
+static int input_has_predef_vars(const char *s) {
+    while (*s) {
+        if (!isalpha((unsigned char)*s) && *s != '_') { s++; continue; }
+        const char *start = s;
+        while (*s && (isalnum((unsigned char)*s) || *s == '_')) s++;
+        int len = (int)(s - start);
+        for (int pv = 0; pv < g_num_predef_vars; pv++) {
+            int nlen = (int)strlen(g_predef_vars[pv].name);
+            if (nlen == len && strncmp(start, g_predef_vars[pv].name, len) == 0)
+                return 1;
+        }
+    }
+    return 0;
 }
 
 /* Editor */
@@ -576,21 +594,16 @@ static void save_output(const char *filename) {
     write_light_setup(f);
     fprintf(f, "\n// Snippet start\n");
 
-    /* Emit predefined variable declarations if any are non-zero */
-    {
-        int any_set = 0;
-        for (int i = 0; i < g_num_predef_vars; i++)
-            if (g_predef_vars[i].value != 0.0f) { any_set = 1; break; }
-        if (any_set) {
-            fprintf(f, "  float");
-            int first = 1;
-            for (int i = 0; i < g_num_predef_vars; i++) {
-                fprintf(f, "%s %s = %g", first ? "" : ",",
-                        g_predef_vars[i].name, g_predef_vars[i].value);
-                first = 0;
-            }
-            fprintf(f, ";\n");
+    /* Always emit predefined variable declarations */
+    if (g_num_predef_vars > 0) {
+        fprintf(f, "  float");
+        int first = 1;
+        for (int i = 0; i < g_num_predef_vars; i++) {
+            fprintf(f, "%s %s = %g", first ? "" : ",",
+                    g_predef_vars[i].name, g_predef_vars[i].value);
+            first = 0;
         }
+        fprintf(f, ";\n");
     }
 
     /* Write g_cmds[] preserving for-loop structure */
@@ -609,14 +622,17 @@ static void save_output(const char *filename) {
         case CMD_COMMENT:
             fprintf(f, "%s\n", g_cmds[i].source);
             break;
+        case CMD_VAR_ASSIGN:
+            fprintf(f, "%s\n", g_cmds[i].source);
+            break;
         default:
-            if (for_depth > 0) {
-                /* Inside for-loop: translate REPL expressions to C */
+            if (for_depth > 0 || g_cmds[i].has_vars) {
+                /* Has expressions: translate REPL names to C */
                 char c_src[MAX_LINE_LEN];
                 repl_expr_to_c(g_cmds[i].source, c_src, sizeof(c_src));
                 fprintf(f, "%s\n", c_src);
             } else {
-                /* Outside for-loop: already concrete values */
+                /* Outside for-loop, concrete values */
                 fprintf(f, "%s\n", g_cmds[i].source);
             }
             break;
@@ -846,17 +862,67 @@ static int load_from_file(const char *filename) {
             continue;
         }
 
-        /* Regular line (outside for-loop): parse as normal command */
-        GLCmd cmd;
-        memset(&cmd, 0, sizeof(cmd));
-        if (parse_command(line, &cmd)) {
-            if (g_num_cmds < MAX_COMMANDS) {
-                g_cmds[g_num_cmds++] = cmd;
-                loaded++;
+        /* Try variable assignment: "  x = expr;" */
+        {
+            const char *ap = p;
+            char vname[16]; int vi = 0;
+            while (*ap && (isalpha((unsigned char)*ap) || *ap == '_') &&
+                   vi < (int)sizeof(vname) - 1)
+                vname[vi++] = *ap++;
+            vname[vi] = '\0';
+            if (vi > 0 && vi <= 2) { /* short var names like x, y, z, i, j */
+                while (*ap && isspace((unsigned char)*ap)) ap++;
+                if (*ap == '=' && *(ap+1) != '=') {
+                    int pidx = -1;
+                    for (int pv = 0; pv < g_num_predef_vars; pv++) {
+                        if (strcmp(g_predef_vars[pv].name, vname) == 0) {
+                            pidx = pv; break;
+                        }
+                    }
+                    if (pidx >= 0) {
+                        ap++;
+                        ExprCtx ectx = { ap, NULL, 0 };
+                        float val = eval_expr(&ectx);
+                        g_predef_vars[pidx].value = val;
+                        if (g_num_cmds < MAX_COMMANDS) {
+                            GLCmd vc;
+                            memset(&vc, 0, sizeof(vc));
+                            vc.type = CMD_VAR_ASSIGN;
+                            vc.valid = 1;
+                            vc.args[0] = val;
+                            vc.num_args = pidx;
+                            strncpy(vc.source, line, sizeof(vc.source) - 1);
+                            vc.source[sizeof(vc.source) - 1] = '\0';
+                            g_cmds[g_num_cmds++] = vc;
+                            loaded++;
+                        }
+                        continue;
+                    }
+                }
             }
-        } else {
-            fprintf(stderr, "Warning: could not parse line: %s\n", line);
-            warnings++;
+        }
+
+        /* Regular line (outside for-loop): parse as normal command */
+        {
+            /* Translate C expressions to REPL first */
+            char repl_line[MAX_LINE_LEN];
+            c_expr_to_repl(line, repl_line, sizeof(repl_line));
+            GLCmd cmd;
+            memset(&cmd, 0, sizeof(cmd));
+            if (parse_command(repl_line, &cmd)) {
+                if (input_has_predef_vars(repl_line)) {
+                    cmd.has_vars = 1;
+                    strncpy(cmd.source, repl_line, sizeof(cmd.source) - 1);
+                    cmd.source[sizeof(cmd.source) - 1] = '\0';
+                }
+                if (g_num_cmds < MAX_COMMANDS) {
+                    g_cmds[g_num_cmds++] = cmd;
+                    loaded++;
+                }
+            } else {
+                fprintf(stderr, "Warning: could not parse line: %s\n", line);
+                warnings++;
+            }
         }
     }
 
@@ -1767,6 +1833,17 @@ static void flatten_range(int start, int end_idx, ExprVar *vars, int nv) {
             continue;
         }
 
+        /* Variable assignments: update predefined var and pass through */
+        if (g_cmds[i].type == CMD_VAR_ASSIGN) {
+            int vi = g_cmds[i].num_args; /* predef var index */
+            if (vi >= 0 && vi < g_num_predef_vars)
+                g_predef_vars[vi].value = g_cmds[i].args[0];
+            if (g_num_flat_cmds < MAX_COMMANDS)
+                g_flat_cmds[g_num_flat_cmds++] = g_cmds[i];
+            i++;
+            continue;
+        }
+
         /* Regular command */
         if (g_num_flat_cmds >= MAX_COMMANDS) { i++; continue; }
 
@@ -1775,9 +1852,23 @@ static void flatten_range(int start, int end_idx, ExprVar *vars, int nv) {
             memset(&tmp, 0, sizeof(tmp));
             int saved = g_edit_line;
             g_edit_line = g_num_flat_cmds;
-            if (parse_command_with_vars(g_cmds[i].source, &tmp, vars, nv))
+            if (parse_command_with_vars(g_cmds[i].source, &tmp, vars, nv)) {
+                tmp.has_vars = g_cmds[i].has_vars;
+                strncpy(tmp.source, g_cmds[i].source, sizeof(tmp.source) - 1);
+                tmp.source[sizeof(tmp.source) - 1] = '\0';
                 g_flat_cmds[g_num_flat_cmds++] = tmp;
+            }
             g_edit_line = saved;
+        } else if (g_cmds[i].has_vars) {
+            /* Outside loop but has predefined var references: re-evaluate */
+            GLCmd tmp;
+            memset(&tmp, 0, sizeof(tmp));
+            if (parse_command(g_cmds[i].source, &tmp)) {
+                tmp.has_vars = 1;
+                strncpy(tmp.source, g_cmds[i].source, sizeof(tmp.source) - 1);
+                tmp.source[sizeof(tmp.source) - 1] = '\0';
+                g_flat_cmds[g_num_flat_cmds++] = tmp;
+            }
         } else {
             g_flat_cmds[g_num_flat_cmds++] = g_cmds[i];
         }
@@ -1900,8 +1991,9 @@ static void color_for_type(CmdType t) {
     case CMD_COLOR4F:  glColor3f(0.95f, 0.85f, 0.30f); break;
     case CMD_FOR_BEGIN:
     case CMD_FOR_END:  glColor3f(0.95f, 0.60f, 0.30f); break;
-    case CMD_COMMENT:  glColor3f(0.45f, 0.50f, 0.45f); break;
-    default:           glColor3f(0.70f, 0.70f, 0.70f); break;
+    case CMD_COMMENT:    glColor3f(0.45f, 0.50f, 0.45f); break;
+    case CMD_VAR_ASSIGN: glColor3f(0.55f, 0.80f, 0.95f); break;
+    default:             glColor3f(0.70f, 0.70f, 0.70f); break;
     }
 }
 
@@ -2876,16 +2968,54 @@ static void draw_vertex_numbers(void) {
     glDisable(GL_DEPTH_TEST);
     glColor3f(1.0f, 1.0f, 0.30f);
 
+    /* Find which glBegin/glEnd block (in g_cmds) the cursor is in */
+    int target_block = -1;
+    {
+        int block = -1;
+        int in_block = 0;
+        for (int i = 0; i < g_num_cmds; i++) {
+            if (!g_cmds[i].valid) continue;
+            if (g_cmds[i].type == CMD_BEGIN) {
+                block++;
+                in_block = 1;
+            }
+            if (in_block && i == g_edit_line) {
+                target_block = block;
+                break;
+            }
+            if (g_cmds[i].type == CMD_END) {
+                if (i == g_edit_line) {
+                    target_block = block;
+                    break;
+                }
+                in_block = 0;
+            }
+        }
+    }
+
+    /* Draw vertex labels only for the target block in g_flat_cmds */
+    int block = -1;
+    int in_block = 0;
     int vn = 0;
     for (int i = 0; i < g_num_flat_cmds; i++) {
-        if (!g_flat_cmds[i].valid || g_flat_cmds[i].type != CMD_VERTEX3F) continue;
-        char label[16];
-        snprintf(label, sizeof(label), " v%d", vn);
-        glRasterPos3f(g_flat_cmds[i].args[0], g_flat_cmds[i].args[1],
-                      g_flat_cmds[i].args[2]);
-        for (const char *c = label; *c; c++)
-            glutBitmapCharacter(FONT_MONO, (unsigned char)*c);
-        vn++;
+        if (!g_flat_cmds[i].valid) continue;
+        if (g_flat_cmds[i].type == CMD_BEGIN) {
+            block++;
+            in_block = 1;
+            vn = 0;
+        } else if (g_flat_cmds[i].type == CMD_END) {
+            in_block = 0;
+        } else if (g_flat_cmds[i].type == CMD_VERTEX3F) {
+            if (in_block && block == target_block) {
+                char label[16];
+                snprintf(label, sizeof(label), " v%d", vn);
+                glRasterPos3f(g_flat_cmds[i].args[0], g_flat_cmds[i].args[1],
+                              g_flat_cmds[i].args[2]);
+                for (const char *c = label; *c; c++)
+                    glutBitmapCharacter(FONT_MONO, (unsigned char)*c);
+            }
+            vn++;
+        }
     }
 
     glEnable(GL_DEPTH_TEST);
@@ -3691,6 +3821,34 @@ static int try_assign_variable(void) {
     float val = eval_expr(&ctx);
     g_predef_vars[var_idx].value = val;
 
+    /* Build a CMD_VAR_ASSIGN command so it appears in the code panel */
+    GLCmd cmd;
+    memset(&cmd, 0, sizeof(cmd));
+    cmd.type = CMD_VAR_ASSIGN;
+    cmd.valid = 1;
+    cmd.args[0] = val;
+    cmd.num_args = var_idx; /* store predef var index */
+    snprintf(cmd.source, sizeof(cmd.source), "  %s = %g;", name, val);
+
+    int fpos = g_inserting ? g_edit_line :
+               (g_edit_line < g_num_cmds ? g_edit_line : g_num_cmds);
+    if (g_inserting) {
+        if (g_num_cmds < MAX_COMMANDS) {
+            for (int j = g_num_cmds; j > fpos; j--)
+                g_cmds[j] = g_cmds[j - 1];
+            g_cmds[fpos] = cmd;
+            g_num_cmds++;
+            g_edit_line++;
+        }
+    } else if (fpos < g_num_cmds) {
+        g_cmds[fpos] = cmd;
+        g_edit_line++;
+    } else {
+        if (g_num_cmds < MAX_COMMANDS)
+            g_cmds[g_num_cmds++] = cmd;
+        g_edit_line = g_num_cmds;
+    }
+
     char msg[128];
     snprintf(msg, sizeof(msg), "%s = %g", name, val);
     set_status(msg);
@@ -4328,6 +4486,25 @@ static void keyboard_func(unsigned char key, int x, int y) {
                     }
                 } else {
                     parsed = parse_command(g_input, &cmd);
+                    if (parsed && input_has_predef_vars(g_input)) {
+                        cmd.has_vars = 1;
+                        char stripped[MAX_LINE_LEN];
+                        const char *sp = g_input;
+                        while (*sp && isspace((unsigned char)*sp)) sp++;
+                        strncpy(stripped, sp, MAX_LINE_LEN - 1);
+                        stripped[MAX_LINE_LEN - 1] = '\0';
+                        int slen = (int)strlen(stripped);
+                        while (slen > 0 && (stripped[slen-1] == ';' ||
+                               isspace((unsigned char)stripped[slen-1])))
+                            stripped[--slen] = '\0';
+                        int bb_v = in_begin_block_at(fpos);
+                        int ind_v = bb_v ? 4 : 2;
+                        char indent_v[32];
+                        if (ind_v > (int)sizeof(indent_v) - 1) ind_v = (int)sizeof(indent_v) - 1;
+                        memset(indent_v, ' ', ind_v);
+                        indent_v[ind_v] = '\0';
+                        snprintf(cmd.source, sizeof(cmd.source), "%s%s;", indent_v, stripped);
+                    }
                 }
                 if (parsed && g_num_cmds < MAX_COMMANDS) {
                     g_cmds[g_num_cmds++] = cmd;
@@ -4403,6 +4580,26 @@ static void keyboard_func(unsigned char key, int x, int y) {
                 }
             } else {
                 parsed = parse_command(g_input, &cmd);
+                if (parsed && input_has_predef_vars(g_input)) {
+                    /* Preserve expression source with variable names */
+                    cmd.has_vars = 1;
+                    char stripped[MAX_LINE_LEN];
+                    const char *sp = g_input;
+                    while (*sp && isspace((unsigned char)*sp)) sp++;
+                    strncpy(stripped, sp, MAX_LINE_LEN - 1);
+                    stripped[MAX_LINE_LEN - 1] = '\0';
+                    int slen = (int)strlen(stripped);
+                    while (slen > 0 && (stripped[slen-1] == ';' ||
+                           isspace((unsigned char)stripped[slen-1])))
+                        stripped[--slen] = '\0';
+                    int bb_v = in_begin_block_at(fpos);
+                    int ind_v = bb_v ? 4 : 2;
+                    char indent_v[32];
+                    if (ind_v > (int)sizeof(indent_v) - 1) ind_v = (int)sizeof(indent_v) - 1;
+                    memset(indent_v, ' ', ind_v);
+                    indent_v[ind_v] = '\0';
+                    snprintf(cmd.source, sizeof(cmd.source), "%s%s;", indent_v, stripped);
+                }
             }
             if (parsed) {
                 if (g_inserting) {
