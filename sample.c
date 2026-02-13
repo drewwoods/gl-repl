@@ -319,11 +319,14 @@ static float  g_anim_time = 0.0f;
 static int    g_show_help    = 0;
 static int    g_help_scroll  = 0;
 static int    g_wireframe    = 0;
-static int    g_grid_theme   = 2;  /* 0=off, 1=classic, 2=fog, 3=tron, 4=ember */
-#define GRID_THEME_COUNT 5
+static int    g_grid_theme   = 2;  /* 0=off, 1=classic, 2=fog, 3=tron, 4=ember, 5=faint, 6=focus */
+#define GRID_THEME_COUNT 7
 static const char *g_grid_names[] = {
-    "Grid OFF", "Grid: Classic", "Grid: Fog", "Grid: Tron", "Grid: Ember"
+    "Grid OFF", "Grid: Classic", "Grid: Fog", "Grid: Tron", "Grid: Ember",
+    "Grid: Faint", "Grid: Focus"
 };
+static float  g_focus_vtx[3] = { 0.0f, 0.0f, 0.0f };  /* last vertex pos for focus grid */
+static int    g_focus_vtx_valid = 0;
 static int    g_axes_theme   = 3;  /* 0=off, 1=classic, 2=pulse, 3=neon, 4=compass */
 #define AXES_THEME_COUNT 5
 static const char *g_axes_names[] = {
@@ -2522,6 +2525,97 @@ static void draw_grid(void) {
             glVertex3f(-extent, 0, v); glVertex3f(extent, 0, v);
         }
         glEnd();
+        break;
+    }
+
+    case 5: { /* Faint — very subtle 0.5 reference lines */
+        float extent = 5.0f, step = 0.5f;
+        glBegin(GL_LINES);
+        for (float v = -extent; v <= extent + 0.01f; v += step) {
+            int is_origin = (fabsf(v) < 0.01f);
+            int is_major = (fabsf(fmodf(fabsf(v) + 0.01f, 1.0f)) < 0.1f);
+            float a = is_origin ? 0.18f : (is_major ? 0.07f : 0.03f);
+            glColor4f(0.50f, 0.50f, 0.60f, a);
+            glVertex3f(v, 0, -extent); glVertex3f(v, 0, extent);
+            glVertex3f(-extent, 0, v); glVertex3f(extent, 0, v);
+        }
+        glEnd();
+        break;
+    }
+
+    case 6: { /* Focus — fades rapidly around selected vertex */
+        /* Update focus vertex from current or nearest vertex line */
+        if (g_edit_line < g_num_cmds &&
+            g_cmds[g_edit_line].valid &&
+            g_cmds[g_edit_line].type == CMD_VERTEX3F) {
+            g_focus_vtx[0] = g_cmds[g_edit_line].args[0];
+            g_focus_vtx[1] = g_cmds[g_edit_line].args[1];
+            g_focus_vtx[2] = g_cmds[g_edit_line].args[2];
+            g_focus_vtx_valid = 1;
+        } else if (!g_focus_vtx_valid) {
+            /* Scan backwards from edit line for nearest vertex */
+            for (int i = g_edit_line - 1; i >= 0; i--) {
+                if (g_cmds[i].valid && g_cmds[i].type == CMD_VERTEX3F) {
+                    g_focus_vtx[0] = g_cmds[i].args[0];
+                    g_focus_vtx[1] = g_cmds[i].args[1];
+                    g_focus_vtx[2] = g_cmds[i].args[2];
+                    g_focus_vtx_valid = 1;
+                    break;
+                }
+            }
+        }
+
+        float cx = g_focus_vtx[0], cz = g_focus_vtx[2];
+        float extent = 8.0f, step = 0.5f;
+        float radius = 3.0f;  /* fade-out radius */
+
+        glBegin(GL_LINES);
+        for (float v = -extent; v <= extent + 0.01f; v += step) {
+            int is_origin = (fabsf(v) < 0.01f);
+            int is_major = (fabsf(fmodf(fabsf(v) + 0.01f, 1.0f)) < 0.1f);
+            float base = is_origin ? 0.40f : (is_major ? 0.18f : 0.06f);
+
+            /* Vertical line at x=v: fade based on distance from cx */
+            float dx = v - cx;
+            float fx = 1.0f - (dx * dx) / (radius * radius);
+            if (fx < 0.0f) fx = 0.0f;
+            fx = fx * fx;  /* sharper falloff */
+            if (fx > 0.001f) {
+                glColor4f(0.50f, 0.55f, 0.70f, base * fx);
+                /* Clamp line Z extent around focus */
+                float z0 = cz - radius, z1 = cz + radius;
+                if (z0 < -extent) z0 = -extent;
+                if (z1 > extent) z1 = extent;
+                glVertex3f(v, 0, z0); glVertex3f(v, 0, z1);
+            }
+
+            /* Horizontal line at z=v: fade based on distance from cz */
+            float dz = v - cz;
+            float fz = 1.0f - (dz * dz) / (radius * radius);
+            if (fz < 0.0f) fz = 0.0f;
+            fz = fz * fz;
+            if (fz > 0.001f) {
+                glColor4f(0.50f, 0.55f, 0.70f, base * fz);
+                float x0 = cx - radius, x1 = cx + radius;
+                if (x0 < -extent) x0 = -extent;
+                if (x1 > extent) x1 = extent;
+                glVertex3f(x0, 0, v); glVertex3f(x1, 0, v);
+            }
+        }
+        glEnd();
+
+        /* Crosshair at focus point */
+        if (g_focus_vtx_valid) {
+            glLineWidth(1.5f);
+            glBegin(GL_LINES);
+            glColor4f(0.80f, 0.85f, 0.95f, 0.25f);
+            glVertex3f(cx - 0.3f, 0, cz);
+            glVertex3f(cx + 0.3f, 0, cz);
+            glVertex3f(cx, 0, cz - 0.3f);
+            glVertex3f(cx, 0, cz + 0.3f);
+            glEnd();
+            glLineWidth(1.0f);
+        }
         break;
     }
 
