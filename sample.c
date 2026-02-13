@@ -11,6 +11,13 @@
  *   glEnable(CAP)        glDisable(CAP)
  *   glShadeModel(MODE)
  *
+ * Math expressions: sin, cos, tan, sqrt, abs, pow, min, max, PI, TAU
+ *   Example: glVertex3f(cos(PI/4), sin(PI/4), 0)
+ *
+ * For-loops (expanded into concrete commands):
+ *   for(i, 0, 24) glVertex3f(cos(i*TAU/24), sin(i*TAU/24), 0);
+ *   for(i, 0, N) { body... }   Multi-line block
+ *
  * Controls:
  *   Type + ;       Execute / commit line
  *   Enter          Insert new line (works in middle of list)
@@ -50,7 +57,7 @@
 /* Configuration                                                              */
 /* ========================================================================= */
 
-#define MAX_COMMANDS    512
+#define MAX_COMMANDS    4096
 #define MAX_LINE_LEN    256
 #define MAX_INPUT_LEN   1024
 #define MAX_AC_MATCHES  10
@@ -141,6 +148,7 @@ static const char *g_func_completions[] = {
     "glEnable(",
     "glDisable(",
     "glShadeModel(",
+    "for(",
     NULL
 };
 
@@ -670,22 +678,171 @@ static void accept_autocomplete(void) {
 /* Parsing                                                                    */
 /* ========================================================================= */
 
-static int parse_floats(const char *s, float *out, int max) {
+/* ========================================================================= */
+/* Expression evaluator — recursive descent with variables                    */
+/* ========================================================================= */
+
+#define MAX_EXPR_VARS 8
+
+typedef struct {
+    char  name[16];
+    float value;
+} ExprVar;
+
+typedef struct {
+    const char *p;          /* current position in string */
+    ExprVar    *vars;
+    int         num_vars;
+} ExprCtx;
+
+static float eval_expr(ExprCtx *ctx);   /* forward */
+
+static void expr_skip_ws(ExprCtx *ctx) {
+    while (*ctx->p && isspace((unsigned char)*ctx->p)) ctx->p++;
+}
+
+static float eval_primary(ExprCtx *ctx) {
+    expr_skip_ws(ctx);
+
+    /* Unary minus / plus */
+    if (*ctx->p == '-') { ctx->p++; return -eval_primary(ctx); }
+    if (*ctx->p == '+') { ctx->p++; return eval_primary(ctx); }
+
+    /* Parenthesised expression */
+    if (*ctx->p == '(') {
+        ctx->p++;
+        float v = eval_expr(ctx);
+        expr_skip_ws(ctx);
+        if (*ctx->p == ')') ctx->p++;
+        return v;
+    }
+
+    /* Number literal */
+    if (isdigit((unsigned char)*ctx->p) || *ctx->p == '.') {
+        char *end;
+        float v = strtof(ctx->p, &end);
+        ctx->p = end;
+        return v;
+    }
+
+    /* Identifier: constant, variable, or function */
+    if (isalpha((unsigned char)*ctx->p) || *ctx->p == '_') {
+        char name[32];
+        int ni = 0;
+        while ((isalnum((unsigned char)*ctx->p) || *ctx->p == '_') &&
+               ni < (int)sizeof(name) - 1)
+            name[ni++] = *ctx->p++;
+        name[ni] = '\0';
+
+        /* Constants */
+        if (strcmp(name, "PI") == 0)  return (float)M_PI;
+        if (strcmp(name, "TAU") == 0) return (float)(2.0 * M_PI);
+
+        /* Variables */
+        if (ctx->vars) {
+            for (int i = 0; i < ctx->num_vars; i++)
+                if (strcmp(name, ctx->vars[i].name) == 0)
+                    return ctx->vars[i].value;
+        }
+
+        /* Functions (consume opening paren) */
+        expr_skip_ws(ctx);
+        if (*ctx->p == '(') {
+            ctx->p++;
+            float a = eval_expr(ctx);
+            float b = 0;
+            int has_b = 0;
+            expr_skip_ws(ctx);
+            if (*ctx->p == ',') { ctx->p++; b = eval_expr(ctx); has_b = 1; }
+            expr_skip_ws(ctx);
+            if (*ctx->p == ')') ctx->p++;
+
+            if (strcmp(name, "sin") == 0)  return sinf(a);
+            if (strcmp(name, "cos") == 0)  return cosf(a);
+            if (strcmp(name, "tan") == 0)  return tanf(a);
+            if (strcmp(name, "sqrt") == 0) return sqrtf(fabsf(a));
+            if (strcmp(name, "abs") == 0)  return fabsf(a);
+            if (strcmp(name, "pow") == 0 && has_b) return powf(a, b);
+            if (strcmp(name, "min") == 0 && has_b) return a < b ? a : b;
+            if (strcmp(name, "max") == 0 && has_b) return a > b ? a : b;
+            if (strcmp(name, "floor") == 0) return floorf(a);
+            if (strcmp(name, "ceil") == 0)  return ceilf(a);
+            if (strcmp(name, "fmod") == 0 && has_b) return fmodf(a, b);
+        }
+
+        return 0.0f;   /* unknown identifier */
+    }
+
+    return 0.0f;
+}
+
+static float eval_term(ExprCtx *ctx) {
+    float v = eval_primary(ctx);
+    for (;;) {
+        expr_skip_ws(ctx);
+        if (*ctx->p == '*') { ctx->p++; v *= eval_primary(ctx); }
+        else if (*ctx->p == '/') {
+            ctx->p++;
+            float d = eval_primary(ctx);
+            v = (fabsf(d) > 1e-12f) ? v / d : 0.0f;
+        }
+        else break;
+    }
+    return v;
+}
+
+static float eval_expr(ExprCtx *ctx) {
+    float v = eval_term(ctx);
+    for (;;) {
+        expr_skip_ws(ctx);
+        if (*ctx->p == '+') { ctx->p++; v += eval_term(ctx); }
+        else if (*ctx->p == '-') { ctx->p++; v -= eval_term(ctx); }
+        else break;
+    }
+    return v;
+}
+
+/* Drop-in replacement for parse_floats that evaluates expressions.
+ * When vars==NULL and num_vars==0, behaves identically to parse_floats. */
+static int parse_exprs(const char *s, float *out, int max,
+                       ExprVar *vars, int num_vars) {
     int n = 0;
     const char *p = s;
     while (*p && n < max) {
         while (*p && (isspace((unsigned char)*p) || *p == ',')) p++;
-        if (!*p) break;
-        char *end;
-        out[n] = strtof(p, &end);
-        if (end == p) break;
+        if (!*p || *p == ')') break;
+        ExprCtx ctx = { p, vars, num_vars };
+        out[n] = eval_expr(&ctx);
+        if (ctx.p == p) break;   /* no progress */
         n++;
-        p = end;
+        p = ctx.p;
     }
     return n;
 }
 
-static int parse_command(const char *line, GLCmd *cmd) {
+/* ========================================================================= */
+/* For-loop state                                                             */
+/* ========================================================================= */
+
+#define MAX_LOOP_DEPTH  4
+#define MAX_LOOP_BODY   64
+
+typedef struct {
+    char    var_name[16];
+    float   start, end, step;
+    char    body_lines[MAX_LOOP_BODY][MAX_LINE_LEN];
+    int     body_count;
+} LoopLevel;
+
+static LoopLevel g_loops[MAX_LOOP_DEPTH];
+static int       g_loop_depth = 0;
+
+/* Forward declaration for parse_command_with_vars */
+static int parse_command_with_vars(const char *line, GLCmd *cmd,
+                                   ExprVar *vars, int num_vars);
+
+static int parse_command_internal(const char *line, GLCmd *cmd,
+                                  ExprVar *vars, int num_vars) {
     char buf[MAX_LINE_LEN];
     strncpy(buf, line, sizeof(buf) - 1);
     buf[sizeof(buf) - 1] = '\0';
@@ -817,7 +974,7 @@ static int parse_command(const char *line, GLCmd *cmd) {
 
     /* glVertex3f(x, y, z) */
     if (strcmp(func, "glVertex3f") == 0) {
-        cmd->num_args = parse_floats(args, cmd->args, 3);
+        cmd->num_args = parse_exprs(args, cmd->args, 3, vars, num_vars);
         if (cmd->num_args == 3) {
             cmd->type = CMD_VERTEX3F;
             cmd->valid = 1;
@@ -832,7 +989,7 @@ static int parse_command(const char *line, GLCmd *cmd) {
 
     /* glNormal3f(x, y, z) */
     if (strcmp(func, "glNormal3f") == 0) {
-        cmd->num_args = parse_floats(args, cmd->args, 3);
+        cmd->num_args = parse_exprs(args, cmd->args, 3, vars, num_vars);
         if (cmd->num_args == 3) {
             cmd->type = CMD_NORMAL3F;
             cmd->valid = 1;
@@ -847,7 +1004,7 @@ static int parse_command(const char *line, GLCmd *cmd) {
 
     /* glColor3f(r, g, b) */
     if (strcmp(func, "glColor3f") == 0) {
-        cmd->num_args = parse_floats(args, cmd->args, 3);
+        cmd->num_args = parse_exprs(args, cmd->args, 3, vars, num_vars);
         if (cmd->num_args == 3) {
             cmd->type = CMD_COLOR3F;
             cmd->valid = 1;
@@ -862,7 +1019,7 @@ static int parse_command(const char *line, GLCmd *cmd) {
 
     /* glColor4f(r, g, b, a) */
     if (strcmp(func, "glColor4f") == 0) {
-        cmd->num_args = parse_floats(args, cmd->args, 4);
+        cmd->num_args = parse_exprs(args, cmd->args, 4, vars, num_vars);
         if (cmd->num_args == 4) {
             cmd->type = CMD_COLOR4F;
             cmd->valid = 1;
@@ -878,6 +1035,15 @@ static int parse_command(const char *line, GLCmd *cmd) {
 
     set_status("Unknown cmd. Try glVertex3f, glBegin, glEnable, glShadeModel, ...");
     return 0;
+}
+
+static int parse_command(const char *line, GLCmd *cmd) {
+    return parse_command_internal(line, cmd, NULL, 0);
+}
+
+static int parse_command_with_vars(const char *line, GLCmd *cmd,
+                                   ExprVar *vars, int num_vars) {
+    return parse_command_internal(line, cmd, vars, num_vars);
 }
 
 /* ========================================================================= */
@@ -1533,6 +1699,16 @@ static void render_help(void) {
         "  glDisable(CAP)       GL_COLOR_MATERIAL, GL_NORMALIZE",
         "  glShadeModel(MODE)   GL_SMOOTH, GL_FLAT",
         "",
+        "Math Expressions (use anywhere floats are expected):",
+        "  Constants:  PI, TAU          Functions: sin cos tan sqrt abs pow",
+        "  Operators:  + - * / ( )      Also: min max floor ceil fmod",
+        "  Example:    glVertex3f(cos(PI/4), sin(PI/4), 0)",
+        "",
+        "For-Loops (expanded into concrete commands):",
+        "  for(i, 0, 24) glVertex3f(cos(i*TAU/24), sin(i*TAU/24), 0);",
+        "  for(i, 0, N, step) { ... }   Multi-line block, end with }",
+        "  Nesting supported up to 4 levels (for spheres, tori, etc.)",
+        "",
         "Editing:",
         "  Up / Down            Navigate command lines",
         "  Left / Right         Move cursor within line",
@@ -2020,7 +2196,7 @@ static void draw_vertex_guides(void) {
         return;
 
     float vals[3];
-    int n = parse_floats(g_input + 11, vals, 3);
+    int n = parse_exprs(g_input + 11, vals, 3, NULL, 0);
     if (n < 1) return;
 
     float sz = 3.0f;  /* half-size of guide geometry */
@@ -2119,7 +2295,7 @@ static void draw_normal_guides(void) {
         return;
 
     float vals[3];
-    int n = parse_floats(g_input + 11, vals, 3);
+    int n = parse_exprs(g_input + 11, vals, 3, NULL, 0);
     if (n < 3) return;
 
     /* Determine which component the cursor is on */
@@ -2500,6 +2676,366 @@ static void reshape_func(int w, int h) {
     g_win_h = h;
 }
 
+/* ========================================================================= */
+/* For-loop parsing and expansion                                             */
+/* ========================================================================= */
+
+/*
+ * Parse a for-loop header: "for(var, start, end)" or "for(var, start, end, step)"
+ * Returns 1 on success, filling out var_name, start, end, step.
+ * *body_start is set to point at the character after the closing ')'.
+ */
+static int parse_for_header(const char *input, char *var_name, int var_sz,
+                            float *start, float *end, float *step,
+                            const char **body_start) {
+    const char *p = input;
+    while (*p && isspace((unsigned char)*p)) p++;
+    if (strncmp(p, "for(", 4) != 0 && strncmp(p, "for (", 5) != 0)
+        return 0;
+
+    /* Skip to opening paren */
+    while (*p && *p != '(') p++;
+    if (!*p) return 0;
+    p++;  /* skip '(' */
+
+    /* Variable name */
+    while (*p && isspace((unsigned char)*p)) p++;
+    int ni = 0;
+    while (*p && (isalnum((unsigned char)*p) || *p == '_') && ni < var_sz - 1)
+        var_name[ni++] = *p++;
+    var_name[ni] = '\0';
+    if (ni == 0) return 0;
+
+    while (*p && isspace((unsigned char)*p)) p++;
+    if (*p != ',') return 0;
+    p++;
+
+    /* Start value (expression) */
+    ExprCtx ctx = { p, NULL, 0 };
+    *start = eval_expr(&ctx);
+    p = ctx.p;
+    while (*p && isspace((unsigned char)*p)) p++;
+    if (*p != ',') return 0;
+    p++;
+
+    /* End value (expression) */
+    ctx.p = p;
+    *end = eval_expr(&ctx);
+    p = ctx.p;
+    while (*p && isspace((unsigned char)*p)) p++;
+
+    /* Optional step */
+    *step = 1.0f;
+    if (*p == ',') {
+        p++;
+        ctx.p = p;
+        *step = eval_expr(&ctx);
+        p = ctx.p;
+        while (*p && isspace((unsigned char)*p)) p++;
+    }
+
+    if (*p != ')') return 0;
+    p++;  /* skip ')' */
+
+    if (body_start) *body_start = p;
+    return 1;
+}
+
+/*
+ * Expand a single-line for-loop into concrete commands inserted at insert_pos.
+ * Body lines are in body_lines[0..body_count-1].
+ * Outer vars are inherited from enclosing loops.
+ * Returns number of commands inserted.
+ */
+static int expand_for_loop(int insert_pos, const char *var_name,
+                           float start, float end, float step,
+                           char body_lines[][MAX_LINE_LEN], int body_count,
+                           ExprVar *outer_vars, int num_outer_vars) {
+    if (fabsf(step) < 1e-9f) return 0;
+    if ((step > 0 && start > end) || (step < 0 && start < end)) return 0;
+
+    int total_inserted = 0;
+    int max_iters = 100000;  /* safety limit */
+
+    for (float val = start;
+         (step > 0) ? (val < end - 1e-6f) : (val > end + 1e-6f);
+         val += step) {
+        if (--max_iters < 0) break;
+
+        /* Build variable array: outer vars + this loop var */
+        ExprVar vars[MAX_EXPR_VARS];
+        int nv = 0;
+        if (outer_vars) {
+            for (int i = 0; i < num_outer_vars && nv < MAX_EXPR_VARS; i++)
+                vars[nv++] = outer_vars[i];
+        }
+        if (nv < MAX_EXPR_VARS) {
+            strncpy(vars[nv].name, var_name, sizeof(vars[nv].name) - 1);
+            vars[nv].name[sizeof(vars[nv].name) - 1] = '\0';
+            vars[nv].value = val;
+            nv++;
+        }
+
+        for (int b = 0; b < body_count; b++) {
+            const char *line = body_lines[b];
+
+            /* Skip empty lines */
+            const char *lp = line;
+            while (*lp && isspace((unsigned char)*lp)) lp++;
+            if (*lp == '\0') continue;
+
+            /* Check for nested for-loop */
+            char nested_var[16];
+            float ns, ne, nstep;
+            const char *nbody_start;
+            if (parse_for_header(lp, nested_var, sizeof(nested_var),
+                                 &ns, &ne, &nstep, &nbody_start)) {
+                /* Evaluate nested header with current vars */
+                {
+                    ExprCtx ectx = { NULL, vars, nv };
+                    /* Re-parse start/end/step with variables */
+                    /* We need to re-parse from the original line */
+                    const char *hp = lp;
+                    while (*hp && *hp != '(') hp++;
+                    hp++; /* skip ( */
+                    /* skip var name and comma */
+                    while (*hp && *hp != ',') hp++;
+                    hp++;
+                    ectx.p = hp;
+                    ns = eval_expr(&ectx);
+                    hp = ectx.p;
+                    while (*hp && isspace((unsigned char)*hp)) hp++;
+                    if (*hp == ',') hp++;
+                    ectx.p = hp;
+                    ne = eval_expr(&ectx);
+                    hp = ectx.p;
+                    while (*hp && isspace((unsigned char)*hp)) hp++;
+                    nstep = 1.0f;
+                    if (*hp == ',') {
+                        hp++;
+                        ectx.p = hp;
+                        nstep = eval_expr(&ectx);
+                        hp = ectx.p;
+                    }
+                }
+
+                /* Collect nested body: if single-line, it's the rest after ) */
+                while (*nbody_start && isspace((unsigned char)*nbody_start))
+                    nbody_start++;
+
+                char nested_body[MAX_LOOP_BODY][MAX_LINE_LEN];
+                int nested_count = 0;
+
+                if (*nbody_start == '{') {
+                    /* Multi-line nested body: collect lines between { and } */
+                    nbody_start++;
+                    /* Remaining body_lines after this one form the block */
+                    int brace_depth = 1;
+                    for (int nb = b + 1; nb < body_count && brace_depth > 0; nb++) {
+                        const char *nl = body_lines[nb];
+                        while (*nl && isspace((unsigned char)*nl)) nl++;
+                        if (*nl == '}') {
+                            brace_depth--;
+                            if (brace_depth == 0) { b = nb; break; }
+                        }
+                        /* Check for nested { */
+                        for (const char *ch = nl; *ch; ch++) {
+                            if (*ch == '{') brace_depth++;
+                            else if (*ch == '}') { brace_depth--; if (brace_depth == 0) break; }
+                        }
+                        if (brace_depth > 0 && nested_count < MAX_LOOP_BODY) {
+                            strncpy(nested_body[nested_count], body_lines[nb],
+                                    MAX_LINE_LEN - 1);
+                            nested_body[nested_count][MAX_LINE_LEN - 1] = '\0';
+                            nested_count++;
+                        }
+                        b = nb;
+                    }
+                } else if (*nbody_start) {
+                    /* Single-line nested body */
+                    strncpy(nested_body[0], nbody_start, MAX_LINE_LEN - 1);
+                    nested_body[0][MAX_LINE_LEN - 1] = '\0';
+                    nested_count = 1;
+                }
+
+                int n = expand_for_loop(insert_pos + total_inserted,
+                                        nested_var, ns, ne, nstep,
+                                        nested_body, nested_count,
+                                        vars, nv);
+                total_inserted += n;
+                continue;
+            }
+
+            /* Normal command line — parse with variables */
+            GLCmd cmd;
+            memset(&cmd, 0, sizeof(cmd));
+            int saved_edit = g_edit_line;
+            g_edit_line = insert_pos + total_inserted;
+            if (parse_command_with_vars(line, &cmd, vars, nv)) {
+                if (g_num_cmds < MAX_COMMANDS) {
+                    int pos = insert_pos + total_inserted;
+                    memmove(&g_cmds[pos + 1], &g_cmds[pos],
+                            (g_num_cmds - pos) * sizeof(GLCmd));
+                    g_cmds[pos] = cmd;
+                    g_num_cmds++;
+                    total_inserted++;
+                }
+            }
+            g_edit_line = saved_edit;
+        }
+    }
+    return total_inserted;
+}
+
+/*
+ * Try to handle the input as a for-loop. Returns 1 if handled, 0 otherwise.
+ * Handles both single-line: for(i, 0, 24) glVertex3f(...)
+ * and multi-line block start: for(i, 0, 24) {
+ */
+static int try_handle_for_loop(void) {
+    const char *p = g_input;
+    while (*p && isspace((unsigned char)*p)) p++;
+
+    if (strncmp(p, "for(", 4) != 0 && strncmp(p, "for (", 5) != 0)
+        return 0;
+
+    char var_name[16];
+    float start, end, step;
+    const char *body_start;
+
+    if (!parse_for_header(p, var_name, sizeof(var_name),
+                          &start, &end, &step, &body_start)) {
+        set_status("for-loop syntax: for(var, start, end[, step]) body;");
+        return 1;  /* consumed but error */
+    }
+
+    /* Skip whitespace after header */
+    while (*body_start && isspace((unsigned char)*body_start)) body_start++;
+
+    /* Multi-line block: for(...) { */
+    if (*body_start == '{') {
+        if (g_loop_depth >= MAX_LOOP_DEPTH) {
+            set_status("Max loop nesting depth reached");
+            return 1;
+        }
+        LoopLevel *lv = &g_loops[g_loop_depth];
+        strncpy(lv->var_name, var_name, sizeof(lv->var_name) - 1);
+        lv->var_name[sizeof(lv->var_name) - 1] = '\0';
+        lv->start = start;
+        lv->end = end;
+        lv->step = step;
+        lv->body_count = 0;
+        g_loop_depth++;
+        set_status("for-loop block: type body lines, end with }");
+        return 1;
+    }
+
+    /* Single-line: for(...) command; */
+    if (*body_start == '\0') {
+        set_status("for-loop needs a body: for(i,0,N) glVertex3f(...)");
+        return 1;
+    }
+
+    /* Strip trailing semicolon from body */
+    char body_line[MAX_LINE_LEN];
+    strncpy(body_line, body_start, MAX_LINE_LEN - 1);
+    body_line[MAX_LINE_LEN - 1] = '\0';
+    int blen = (int)strlen(body_line);
+    while (blen > 0 && (body_line[blen-1] == ';' || isspace((unsigned char)body_line[blen-1])))
+        body_line[--blen] = '\0';
+
+    char body_arr[1][MAX_LINE_LEN];
+    strncpy(body_arr[0], body_line, MAX_LINE_LEN - 1);
+    body_arr[0][MAX_LINE_LEN - 1] = '\0';
+
+    int insert_pos = g_inserting ? g_edit_line :
+                     (g_edit_line < g_num_cmds ? g_edit_line : g_num_cmds);
+
+    int n = expand_for_loop(insert_pos, var_name, start, end, step,
+                            body_arr, 1, NULL, 0);
+
+    if (n > 0) {
+        g_edit_line = insert_pos + n;
+        g_inserting = 0;
+        g_input[0] = '\0';
+        g_input_len = 0;
+        g_cursor_pos = 0;
+        g_newline_buf[0] = '\0';
+        g_newline_len = 0;
+        char msg[128];
+        snprintf(msg, sizeof(msg), "Expanded %d commands from for-loop", n);
+        set_status(msg);
+        mark_normals_dirty();
+    } else {
+        set_status("for-loop produced no commands");
+    }
+    return 1;
+}
+
+/*
+ * Try to handle '}' closing a multi-line for-loop block.
+ * Returns 1 if handled, 0 otherwise.
+ */
+static int try_handle_close_brace(void) {
+    const char *p = g_input;
+    while (*p && isspace((unsigned char)*p)) p++;
+    if (*p != '}' || g_loop_depth == 0) return 0;
+
+    g_loop_depth--;
+    LoopLevel *lv = &g_loops[g_loop_depth];
+
+    int insert_pos = g_inserting ? g_edit_line :
+                     (g_edit_line < g_num_cmds ? g_edit_line : g_num_cmds);
+
+    int n = expand_for_loop(insert_pos, lv->var_name,
+                            lv->start, lv->end, lv->step,
+                            lv->body_lines, lv->body_count, NULL, 0);
+
+    if (n > 0) {
+        g_edit_line = insert_pos + n;
+        g_inserting = 0;
+        g_input[0] = '\0';
+        g_input_len = 0;
+        g_cursor_pos = 0;
+        g_newline_buf[0] = '\0';
+        g_newline_len = 0;
+        char msg[128];
+        snprintf(msg, sizeof(msg), "Expanded %d commands from for-loop block", n);
+        set_status(msg);
+        mark_normals_dirty();
+    } else {
+        set_status("for-loop block produced no commands");
+    }
+    return 1;
+}
+
+/*
+ * Try to accumulate a line into the current for-loop body buffer.
+ * Returns 1 if we're inside a loop block, 0 otherwise.
+ */
+static int try_accumulate_loop_body(void) {
+    if (g_loop_depth == 0) return 0;
+
+    LoopLevel *lv = &g_loops[g_loop_depth - 1];
+    if (lv->body_count < MAX_LOOP_BODY) {
+        strncpy(lv->body_lines[lv->body_count], g_input, MAX_LINE_LEN - 1);
+        lv->body_lines[lv->body_count][MAX_LINE_LEN - 1] = '\0';
+        lv->body_count++;
+
+        char msg[128];
+        snprintf(msg, sizeof(msg), "for-loop body: %d line(s), end with }",
+                 lv->body_count);
+        set_status(msg);
+    } else {
+        set_status("for-loop body too long (max 64 lines)");
+    }
+
+    g_input[0] = '\0';
+    g_input_len = 0;
+    g_cursor_pos = 0;
+    return 1;
+}
+
 static void keyboard_func(unsigned char key, int x, int y) {
     (void)x; (void)y;
 
@@ -2617,6 +3153,24 @@ static void keyboard_func(unsigned char key, int x, int y) {
             update_autocomplete();
             return;
         }
+        /* Check for } closing a loop block */
+        if (g_input_len > 0 && try_handle_close_brace()) {
+            g_ac_count = 0;
+            g_ac_ghost[0] = '\0';
+            return;
+        }
+        /* Check for for-loop (single-line or block start) */
+        if (g_input_len > 0 && try_handle_for_loop()) {
+            g_ac_count = 0;
+            g_ac_ghost[0] = '\0';
+            return;
+        }
+        /* Accumulate into loop body if inside a block */
+        if (g_input_len > 0 && try_accumulate_loop_body()) {
+            g_ac_count = 0;
+            g_ac_ghost[0] = '\0';
+            return;
+        }
         if (g_inserting) {
             /* Already in insert mode */
             if (g_input_len > 0) {
@@ -2687,6 +3241,24 @@ static void keyboard_func(unsigned char key, int x, int y) {
     /* Semicolon: parse and commit */
     if (key == ';') {
         if (g_input_len > 0) {
+            /* Check for } closing a loop block */
+            if (try_handle_close_brace()) {
+                g_ac_count = 0;
+                g_ac_ghost[0] = '\0';
+                return;
+            }
+            /* Check for for-loop */
+            if (try_handle_for_loop()) {
+                g_ac_count = 0;
+                g_ac_ghost[0] = '\0';
+                return;
+            }
+            /* Accumulate into loop body if inside a block */
+            if (try_accumulate_loop_body()) {
+                g_ac_count = 0;
+                g_ac_ghost[0] = '\0';
+                return;
+            }
             GLCmd cmd;
             memset(&cmd, 0, sizeof(cmd));
             if (parse_command(g_input, &cmd)) {

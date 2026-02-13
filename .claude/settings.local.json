@@ -3,7 +3,8 @@
     "allow": [
       "Bash(gcc:*)",
       "Bash(glcompile:*)",
-      "Bash(declare:*)"
+      "Bash(declare:*)",
+      "Bash(glut_compile:*)"
     ]
   }
 }
