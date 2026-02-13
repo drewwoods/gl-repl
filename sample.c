@@ -270,6 +270,7 @@ static float  g_anim_time = 0.0f;
 
 /* Toggles */
 static int    g_show_help    = 0;
+static int    g_help_scroll  = 0;
 static int    g_wireframe    = 0;
 static int    g_grid_theme   = 2;  /* 0=off, 1=classic, 2=fog, 3=tron, 4=ember */
 #define GRID_THEME_COUNT 5
@@ -1806,18 +1807,25 @@ static void render_help(void) {
         "  glDisable(CAP)       GL_COLOR_MATERIAL, GL_NORMALIZE",
         "  glShadeModel(MODE)   GL_SMOOTH, GL_FLAT",
         "",
+        "Comments:",
+        "  // text              Type directly to add a comment line",
+        "  Ctrl+/               Toggle comment on current line",
+        "",
         "Math Expressions (use anywhere floats are expected):",
         "  Constants:  PI, TAU          Functions: sin cos tan sqrt abs pow",
         "  Operators:  + - * / ( )      Also: min max floor ceil fmod",
         "  Example:    glVertex3f(cos(PI/4), sin(PI/4), 0)",
         "",
-        "For-Loops (expanded into concrete commands):",
+        "For-Loops (stored as editable blocks):",
         "  for(i, 0, 24) glVertex3f(cos(i*TAU/24), sin(i*TAU/24), 0);",
-        "  for(i, 0, N, step) { ... }   Multi-line block, end with }",
+        "  for(i, 0, N) {              Multi-line block:",
+        "    glNormal3f(...)              type body lines, end with }",
+        "    glVertex3f(...)              or press Esc to exit",
+        "  }",
         "  Nesting supported up to 4 levels (for spheres, tori, etc.)",
         "",
         "Editing:",
-        "  Up / Down            Navigate command lines",
+        "  Up / Down            Navigate lines (scroll help when open)",
         "  Left / Right         Move cursor within line",
         "  Home / End           Jump to start / end of line",
         "  Type + ;             Commit line (edit existing or append new)",
@@ -1837,29 +1845,50 @@ static void render_help(void) {
         "  Scroll wheel         Zoom",
         "",
         "Toggles:",
-        "  F1  Help overlay     F2  Wireframe mode   F3  Grid theme       F4  Axes theme",
-        "  F5  Vertex numbers   F6  Normal vectors   F7  Command indices  F8  Vertex guides",
-        "  F9  Auto-normals     F10 Light indicators F11 Camera rotate",
-        "  PgUp / PgDn          Scroll code panel",
+        "  F1  Help overlay     F2  Wireframe mode",
+        "  F3  Grid theme       F4  Axes theme",
+        "  F5  Vertex numbers   F6  Normal vectors",
+        "  F7  Command indices  F8  Vertex guides",
+        "  F9  Auto-normals     F10 Light indicators",
+        "  F11 Camera rotate",
+        "",
+        "  PgUp / PgDn          Scroll code panel (or help when open)",
         "",
         "Save / Load:",
         "  Ctrl+S saves the session to output.c",
         "  Reload a saved file:  ./sample output.c",
         "  (Commands between // Snippet start/end are imported)",
         "",
-        "Press F1 or Escape to close.",
+        "Press F1 or Escape to close.  Up/Down or PgUp/PgDn to scroll.",
         NULL
     };
 
+    /* Count total lines */
+    int n_lines = 0;
+    while (text[n_lines]) n_lines++;
+
     begin_2d();
     glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
-    int hx = g_win_w / 5, hy = g_win_h / 20;
-    int hw = g_win_w * 3 / 5, hh = g_win_h * 9 / 10;
+    int hx = g_win_w / 6, hy = g_win_h / 12;
+    int hw = g_win_w * 2 / 3, hh = g_win_h * 5 / 6;
+    int pad_top = 32, pad_bot = 24;
+    int content_h = hh - pad_top - pad_bot;
+    int visible_lines = content_h / LINE_H;
+    if (visible_lines < 1) visible_lines = 1;
 
-    glColor4f(0.03f, 0.03f, 0.06f, 0.92f);
+    /* Clamp scroll */
+    int max_scroll = n_lines - visible_lines;
+    if (max_scroll < 0) max_scroll = 0;
+    if (g_help_scroll > max_scroll) g_help_scroll = max_scroll;
+    if (g_help_scroll < 0) g_help_scroll = 0;
+
+    /* Background */
+    glColor4f(0.03f, 0.03f, 0.06f, 0.94f);
     draw_quad((float)hx, (float)hy, (float)hw, (float)hh);
 
+    /* Border */
     glColor4f(0.45f, 0.45f, 0.75f, 0.80f);
     glBegin(GL_LINE_LOOP);
     glVertex2f((float)hx, (float)hy);
@@ -1868,17 +1897,59 @@ static void render_help(void) {
     glVertex2f((float)hx, (float)(hy + hh));
     glEnd();
 
-    int tx = hx + 24, ty = hy + hh - 32;
-    for (int i = 0; text[i]; i++) {
+    /* Scissor clip to content area */
+    glEnable(GL_SCISSOR_TEST);
+    glScissor(hx + 1, hy + pad_bot, hw - 2, content_h);
+
+    int tx = hx + 24;
+    int ty_start = hy + hh - pad_top;
+
+    for (int i = g_help_scroll; i < n_lines && i < g_help_scroll + visible_lines + 1; i++) {
+        int ty = ty_start - (i - g_help_scroll) * LINE_H;
+        if (ty < hy + pad_bot - LINE_H) break;
+
         if (text[i][0] == '=')
             glColor3f(0.80f, 0.80f, 1.00f);
         else if (text[i][0] == ' ' && text[i][1] == ' ')
             glColor3f(0.65f, 0.90f, 0.65f);
+        else if (text[i][0] == '\0')
+            continue;   /* skip blank lines (save space) — still scrolls past them */
         else
             glColor3f(0.75f, 0.75f, 0.80f);
 
         draw_string((float)tx, (float)ty, text[i], FONT_MONO);
-        ty -= LINE_H;
+    }
+
+    glDisable(GL_SCISSOR_TEST);
+
+    /* Scroll indicator (only if content overflows) */
+    if (n_lines > visible_lines) {
+        int bar_x = hx + hw - 10;
+        int bar_top = hy + hh - pad_top;
+        int bar_h = content_h;
+        float frac = (float)visible_lines / (float)n_lines;
+        float pos  = (float)g_help_scroll / (float)n_lines;
+        int thumb_h = (int)(bar_h * frac);
+        if (thumb_h < 12) thumb_h = 12;
+        int thumb_y = bar_top - (int)(bar_h * pos) - thumb_h;
+
+        /* Track */
+        glColor4f(0.20f, 0.20f, 0.35f, 0.40f);
+        draw_quad((float)bar_x, (float)(bar_top - bar_h), 5.0f, (float)bar_h);
+
+        /* Thumb */
+        glColor4f(0.55f, 0.55f, 0.80f, 0.65f);
+        draw_quad((float)bar_x, (float)thumb_y, 5.0f, (float)thumb_h);
+
+        /* Scroll hint at bottom */
+        if (g_help_scroll < max_scroll) {
+            glColor4f(0.50f, 0.50f, 0.65f, 0.50f);
+            char hint[32];
+            snprintf(hint, sizeof(hint), "v %d more v",
+                     n_lines - g_help_scroll - visible_lines);
+            int hint_x = hx + (hw - (int)strlen(hint) * FONT_W) / 2;
+            draw_string((float)hint_x, (float)(hy + 6), hint, FONT_SMALL);
+        }
     }
 
     glDisable(GL_BLEND);
@@ -3118,10 +3189,13 @@ static void keyboard_func(unsigned char key, int x, int y) {
     g_cursor_on = 1;
     g_blink_tick = 0;
 
+    
+
     /* Escape */
     if (key == 27) {
         if (g_show_help) {
             g_show_help = 0;
+            g_help_scroll = 0;
         } else if (g_ac_count > 0) {
             /* Dismiss autocomplete */
             g_ac_count = 0;
@@ -3201,7 +3275,7 @@ static void keyboard_func(unsigned char key, int x, int y) {
     }
 
     /* Ctrl+/: toggle comment on current line */
-    if (key == 31) {
+    if (key == 31 || key == '/' && glutGetModifiers() & GLUT_ACTIVE_CTRL) {
         if (g_edit_line < g_num_cmds && !g_inserting) {
             GLCmd *cur = &g_cmds[g_edit_line];
             if (cur->type == CMD_COMMENT) {
@@ -3584,6 +3658,10 @@ static void special_func(int key, int x, int y) {
 
     /* Line navigation */
     case GLUT_KEY_UP:
+        if (g_show_help) {
+            g_help_scroll--;
+            break;
+        }
         if (g_ac_count > 1) {
             /* Navigate autocomplete popup */
             g_ac_sel = (g_ac_sel - 1 + g_ac_count) % g_ac_count;
@@ -3604,6 +3682,10 @@ static void special_func(int key, int x, int y) {
         break;
 
     case GLUT_KEY_DOWN:
+        if (g_show_help) {
+            g_help_scroll++;
+            break;
+        }
         if (g_ac_count > 1) {
             g_ac_sel = (g_ac_sel + 1) % g_ac_count;
             const char *m2 = g_ac_matches[g_ac_sel];
@@ -3622,7 +3704,9 @@ static void special_func(int key, int x, int y) {
 
     /* Toggle keys */
     case GLUT_KEY_F1:
-        g_show_help = !g_show_help; break;
+        g_show_help = !g_show_help;
+        g_help_scroll = 0;
+        break;
     case GLUT_KEY_F2:
         g_wireframe = !g_wireframe;
         set_status(g_wireframe ? "Wireframe ON" : "Wireframe OFF"); break;
@@ -3671,8 +3755,14 @@ static void special_func(int key, int x, int y) {
         break;
 
     /* Scroll */
-    case GLUT_KEY_PAGE_UP:   g_scroll -= 5; break;
-    case GLUT_KEY_PAGE_DOWN: g_scroll += 5; break;
+    case GLUT_KEY_PAGE_UP:
+        if (g_show_help) g_help_scroll -= 5;
+        else g_scroll -= 5;
+        break;
+    case GLUT_KEY_PAGE_DOWN:
+        if (g_show_help) g_help_scroll += 5;
+        else g_scroll += 5;
+        break;
     default: break;
     }
 
