@@ -147,6 +147,9 @@ static const char *g_func_completions[] = {
 static const char *g_header_pre[] = {
     "#include <gl_includes.h>",
     "",
+    "static float g_angle = 0.0f;",
+    "static int   g_rotating = 1;",
+    "",
     "void display() {",
     "  glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);",
     "  glLoadIdentity();",
@@ -160,6 +163,7 @@ static char g_lookat[3][128] = {
 };
 
 static const char *g_header_post[] = {
+    "  glRotatef(g_angle, 0.0f, 1.0f, 0.0f);",
     NULL
 };
 
@@ -176,6 +180,16 @@ static const char *g_footer[] = {
     "  glMatrixMode(GL_MODELVIEW);",
     "}",
     "",
+    "void keyboard(unsigned char key, int x, int y) {",
+    "  (void)x; (void)y;",
+    "  if (key == ' ') g_rotating = !g_rotating;",
+    "  if (key == 27) exit(0);",
+    "}",
+    "",
+    "void idle() {",
+    "  if (g_rotating) { g_angle += 0.5f; glutPostRedisplay(); }",
+    "}",
+    "",
     "void init() {",
     "  glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE);",
     "  glLightModeli(GL_LIGHT_MODEL_TWO_SIDE, GL_TRUE);",
@@ -183,12 +197,14 @@ static const char *g_footer[] = {
     "",
     "int main(int argc, char **argv) {",
     "  glutInit(&argc, argv);",
-    "  glutInitDisplayMode(GLUT_DOUBLE|GLUT_RGB|GLUT_DEPTH);",
+    "  glutInitDisplayMode(GLUT_DOUBLE|GLUT_RGB|GLUT_DEPTH|GLUT_MULTISAMPLE);",
     "  glutInitWindowSize(800, 600);",
     "  glutCreateWindow(\"OpenGL REPL\");",
     "  init();",
     "  glutDisplayFunc(display);",
     "  glutReshapeFunc(reshape);",
+    "  glutKeyboardFunc(keyboard);",
+    "  glutIdleFunc(idle);",
     "  glutMainLoop();",
     "  return 0;",
     "}",
@@ -256,6 +272,7 @@ static int    g_show_indices = 0;
 static int    g_show_guides  = 1;
 static int    g_autonormal   = 1;
 static int    g_show_lights  = 1;
+static int    g_cam_rotate   = 0;  /* auto-rotate camera around Y */
 
 /* Lights */
 #define MAX_LIGHTS 4
@@ -1538,7 +1555,7 @@ static void render_help(void) {
         "Toggles:",
         "  F1  Help overlay     F2  Wireframe mode   F3  Grid theme       F4  Axes theme",
         "  F5  Vertex numbers   F6  Normal vectors   F7  Command indices  F8  Vertex guides",
-        "  F9  Auto-normals     F10 Light indicators",
+        "  F9  Auto-normals     F10 Light indicators F11 Camera rotate",
         "  PgUp / PgDn          Scroll code panel",
         "",
         "Save / Load:",
@@ -2840,6 +2857,10 @@ static void special_func(int key, int x, int y) {
         set_status(g_show_lights ? "Light indicators ON" :
                    "Light indicators OFF");
         break;
+    case GLUT_KEY_F11:
+        g_cam_rotate = !g_cam_rotate;
+        set_status(g_cam_rotate ? "Camera rotate ON" : "Camera rotate OFF");
+        break;
 
     /* Scroll */
     case GLUT_KEY_PAGE_UP:   g_scroll -= 5; break;
@@ -2914,6 +2935,9 @@ static void timer_func(int value) {
 
     g_anim_time += 0.016f;  /* ~60 fps */
 
+    if (g_cam_rotate)
+        g_cam_ry += 0.3f;
+
     g_blink_tick++;
     if (g_blink_tick >= 30) {
         g_blink_tick = 0;
@@ -2944,15 +2968,36 @@ static void load_initial_commands(const char *import_file) {
         "glEnable(GL_COLOR_MATERIAL);",
         "glEnable(GL_NORMALIZE);",
         "glShadeModel(GL_SMOOTH);",
-        "glEnable(GL_LIGHT0);",
-        "glBegin(GL_TRIANGLE_STRIP);",
-        "glVertex3f(-1.0, 0, 0.0);",
-        "glVertex3f(0.0, 0, 0.0);",
-        "glVertex3f(-1.0, 1.0, 0.0);",
+        "glEnable(GL_LIGHT3);",
+        "glEnable(GL_LIGHT2);",
+        "glColor3f(1, 1, 1);",
+        "glBegin(GL_QUAD_STRIP);",
+        "glNormal3f(0, 0, 1);",
+        "glVertex3f(1, 1, 1);",
+        "glNormal3f(0, 0, 1);",
+        "glVertex3f(-1, 1, 1);",
+        "glNormal3f(0, 0, 1);",
+        "glVertex3f(1, -1, 1);",
+        "glNormal3f(0, 0, 1);",
+        "glVertex3f(-1, -1, 1);",
+        "glNormal3f(-0, -1, -0);",
+        "glVertex3f(1, -1, -1);",
+        "glNormal3f(-0, -1, -0);",
+        "glVertex3f(-1, -1, -1);",
+        "glNormal3f(0, 0, -1);",
+        "glVertex3f(1, 1, -1);",
+        "glNormal3f(0, 0, -1);",
+        "glVertex3f(-1, 1, -1);",
+        "glNormal3f(0, 1, -0);",
+        "glVertex3f(1, 1, 1);",
+        "glNormal3f(0, 1, -0);",
+        "glVertex3f(-1, 1, 1);",
+        "glEnd();",
         NULL
     };
 
     for (int i = 0; init_cmds[i]; i++) {
+        g_edit_line = g_num_cmds;
         GLCmd cmd;
         memset(&cmd, 0, sizeof(cmd));
         if (parse_command(init_cmds[i], &cmd))
