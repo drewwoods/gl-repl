@@ -550,15 +550,74 @@ static void write_for_begin_as_c(FILE *f, const GLCmd *cmd) {
     int indent = 0;
     while (p[indent] && isspace((unsigned char)p[indent])) indent++;
 
+    char ind[32];
+    if (indent > (int)sizeof(ind) - 1) indent = (int)sizeof(ind) - 1;
+    memset(ind, ' ', indent);
+    ind[indent] = '\0';
+
+    if (cmd->has_vars) {
+        /* Extract raw arg expressions from source and translate to C */
+        const char *hp = p;
+        while (*hp && *hp != '(') hp++;
+        if (*hp) hp++;
+        /* skip var name */
+        while (*hp && isspace((unsigned char)*hp)) hp++;
+        int ni = 0;
+        while (*hp && (isalnum((unsigned char)*hp) || *hp == '_') && ni < (int)sizeof(var_name) - 1)
+            var_name[ni++] = *hp++;
+        var_name[ni] = '\0';
+        while (*hp && isspace((unsigned char)*hp)) hp++;
+        if (*hp == ',') hp++;
+
+        /* Extract each comma-separated arg expression */
+        char start_s[128] = "", end_s[128] = "", step_s[128] = "";
+        int nargs = 0;
+        char *dests[] = { start_s, end_s, step_s };
+        int dsizes[] = { (int)sizeof(start_s), (int)sizeof(end_s), (int)sizeof(step_s) };
+        while (*hp && *hp != ')' && nargs < 3) {
+            while (*hp && isspace((unsigned char)*hp)) hp++;
+            const char *as = hp;
+            int depth = 0;
+            while (*hp && !(*hp == ',' && depth == 0) && !(*hp == ')' && depth == 0)) {
+                if (*hp == '(') depth++;
+                else if (*hp == ')') depth--;
+                hp++;
+            }
+            int alen = (int)(hp - as);
+            while (alen > 0 && isspace((unsigned char)as[alen-1])) alen--;
+            if (alen > dsizes[nargs] - 1) alen = dsizes[nargs] - 1;
+            memcpy(dests[nargs], as, alen);
+            dests[nargs][alen] = '\0';
+            nargs++;
+            if (*hp == ',') hp++;
+        }
+
+        /* Translate expressions to C */
+        char c_start[128], c_end[128], c_step[128];
+        repl_expr_to_c(start_s, c_start, sizeof(c_start));
+        repl_expr_to_c(end_s, c_end, sizeof(c_end));
+        if (step_s[0])
+            repl_expr_to_c(step_s, c_step, sizeof(c_step));
+        else
+            strncpy(c_step, "1.0f", sizeof(c_step));
+
+        /* Determine direction from evaluated values */
+        float step_v = cmd->args[2];
+        if (step_v >= 0) {
+            fprintf(f, "%sfor (float %s = %s; %s < %s; %s += %s) {\n",
+                    ind, var_name, c_start, var_name, c_end, var_name, c_step);
+        } else {
+            fprintf(f, "%sfor (float %s = %s; %s > %s; %s += %s) {\n",
+                    ind, var_name, c_start, var_name, c_end, var_name, c_step);
+        }
+        return;
+    }
+
     /* Parse REPL for-header from source */
     float start_v, end_v, step_v;
     const char *body;
     if (parse_for_header(p, var_name, sizeof(var_name),
                          &start_v, &end_v, &step_v, &body)) {
-        char ind[32];
-        if (indent > (int)sizeof(ind) - 1) indent = (int)sizeof(ind) - 1;
-        memset(ind, ' ', indent);
-        ind[indent] = '\0';
         if (step_v == 1.0f) {
             fprintf(f, "%sfor (float %s = %g; %s < %g; %s += 1.0f) {\n",
                     ind, var_name, start_v, var_name, end_v, var_name);
@@ -755,14 +814,66 @@ static int load_from_file(const char *filename) {
                     if (indent > (int)sizeof(ind) - 1) indent = (int)sizeof(ind) - 1;
                     memset(ind, ' ', indent);
                     ind[indent] = '\0';
-                    if (step_v != 1.0f)
-                        snprintf(fb.source, sizeof(fb.source),
-                                 "%sfor(%s, %g, %g, %g) {",
-                                 ind, var_name, start_v, end_v, step_v);
-                    else
-                        snprintf(fb.source, sizeof(fb.source),
-                                 "%sfor(%s, %g, %g) {",
-                                 ind, var_name, start_v, end_v);
+
+                    /* Extract raw C expressions from the for-loop header
+                     * to detect variable references. Format:
+                     * for (float VAR = START; VAR <op> END; VAR +=/-= STEP) { */
+                    char repl_line[MAX_LINE_LEN];
+                    c_expr_to_repl(line, repl_line, sizeof(repl_line));
+                    if (input_has_predef_vars(repl_line)) {
+                        /* Re-parse from REPL-translated line to build
+                         * source with variable names preserved */
+                        char rv[16];
+                        float rs, re, rst;
+                        if (parse_c_for_header(repl_line, rv, sizeof(rv),
+                                               &rs, &re, &rst)) {
+                            /* Extract raw arg expressions from REPL line */
+                            const char *rp = repl_line;
+                            while (*rp && *rp != '=') rp++;
+                            if (*rp) rp++;
+                            /* rp now past '='; extract start expr up to ';' */
+                            while (*rp && isspace((unsigned char)*rp)) rp++;
+                            const char *se_start = rp;
+                            while (*rp && *rp != ';') rp++;
+                            char se[64]; int sl = (int)(rp - se_start);
+                            if (sl > (int)sizeof(se) - 1) sl = (int)sizeof(se) - 1;
+                            memcpy(se, se_start, sl); se[sl] = '\0';
+                            while (sl > 0 && isspace((unsigned char)se[sl-1])) se[--sl] = '\0';
+                            /* Skip ';', var, operator to get end expr */
+                            if (*rp == ';') rp++;
+                            while (*rp && isspace((unsigned char)*rp)) rp++;
+                            while (*rp && (isalnum((unsigned char)*rp) || *rp == '_')) rp++;
+                            while (*rp && isspace((unsigned char)*rp)) rp++;
+                            while (*rp && (*rp == '<' || *rp == '>' || *rp == '=')) rp++;
+                            while (*rp && isspace((unsigned char)*rp)) rp++;
+                            const char *ee_start = rp;
+                            while (*rp && *rp != ';') rp++;
+                            char ee[64]; int el = (int)(rp - ee_start);
+                            if (el > (int)sizeof(ee) - 1) el = (int)sizeof(ee) - 1;
+                            memcpy(ee, ee_start, el); ee[el] = '\0';
+                            while (el > 0 && isspace((unsigned char)ee[el-1])) ee[--el] = '\0';
+
+                            fb.has_vars = 1;
+                            if (step_v != 1.0f)
+                                snprintf(fb.source, sizeof(fb.source),
+                                         "%sfor(%s, %s, %s, %g) {",
+                                         ind, var_name, se, ee, step_v);
+                            else
+                                snprintf(fb.source, sizeof(fb.source),
+                                         "%sfor(%s, %s, %s) {",
+                                         ind, var_name, se, ee);
+                        }
+                    }
+                    if (!fb.has_vars) {
+                        if (step_v != 1.0f)
+                            snprintf(fb.source, sizeof(fb.source),
+                                     "%sfor(%s, %g, %g, %g) {",
+                                     ind, var_name, start_v, end_v, step_v);
+                        else
+                            snprintf(fb.source, sizeof(fb.source),
+                                     "%sfor(%s, %g, %g) {",
+                                     ind, var_name, start_v, end_v);
+                    }
                     g_cmds[g_num_cmds++] = fb;
                     for_depth++;
                     loaded++;
@@ -793,14 +904,19 @@ static int load_from_file(const char *filename) {
                     if (indent > (int)sizeof(ind) - 1) indent = (int)sizeof(ind) - 1;
                     memset(ind, ' ', indent);
                     ind[indent] = '\0';
-                    if (step_v != 1.0f)
+                    if (input_has_predef_vars(line)) {
+                        fb.has_vars = 1;
+                        strncpy(fb.source, line, sizeof(fb.source) - 1);
+                        fb.source[sizeof(fb.source) - 1] = '\0';
+                    } else if (step_v != 1.0f) {
                         snprintf(fb.source, sizeof(fb.source),
                                  "%sfor(%s, %g, %g, %g) {",
                                  ind, var_name, start_v, end_v, step_v);
-                    else
+                    } else {
                         snprintf(fb.source, sizeof(fb.source),
                                  "%sfor(%s, %g, %g) {",
                                  ind, var_name, start_v, end_v);
+                    }
                     g_cmds[g_num_cmds++] = fb;
                     for_depth++;
                     loaded++;
@@ -1796,6 +1912,17 @@ static void flatten_range(int start, int end_idx, ExprVar *vars, int nv) {
             char var_name[16];
             get_for_var_name(fb_cmd, var_name, sizeof(var_name));
             float s = fb_cmd->args[0], e = fb_cmd->args[1], st = fb_cmd->args[2];
+
+            /* Re-evaluate for-loop bounds from source if they contain variables */
+            if (fb_cmd->has_vars) {
+                const char *unused_body;
+                float rs, re, rst;
+                char rv[16];
+                if (parse_for_header(fb_cmd->source, rv, sizeof(rv),
+                                     &rs, &re, &rst, &unused_body)) {
+                    s = rs; e = re; st = rst;
+                }
+            }
 
             if (fabsf(st) > 1e-9f &&
                 !((st > 0 && s >= e) || (st < 0 && s <= e))) {
@@ -3900,12 +4027,47 @@ static int try_commit_for_loop(void) {
     fb.args[1] = end;
     fb.args[2] = step;
     fb.valid = 1;
-    if (step != 1.0f)
+
+    /* Extract raw arg text from input to preserve variable references */
+    const char *raw = p;
+    while (*raw && *raw != '(') raw++;
+    if (*raw) raw++;
+    /* skip var name and comma */
+    while (*raw && isspace((unsigned char)*raw)) raw++;
+    while (*raw && (isalnum((unsigned char)*raw) || *raw == '_')) raw++;
+    while (*raw && isspace((unsigned char)*raw)) raw++;
+    if (*raw == ',') raw++;
+    /* raw now points at start expr; find closing paren */
+    const char *args_start = raw;
+    int paren = 1;
+    const char *ap = args_start;
+    while (*ap && paren > 0) {
+        if (*ap == '(') paren++;
+        else if (*ap == ')') paren--;
+        if (paren > 0) ap++;
+    }
+    /* ap points at closing ')'; extract raw args text */
+    char raw_args[MAX_LINE_LEN];
+    int rlen = (int)(ap - args_start);
+    if (rlen > (int)sizeof(raw_args) - 1) rlen = (int)sizeof(raw_args) - 1;
+    memcpy(raw_args, args_start, rlen);
+    raw_args[rlen] = '\0';
+    /* Trim whitespace */
+    while (rlen > 0 && isspace((unsigned char)raw_args[rlen-1])) raw_args[--rlen] = '\0';
+    char *ra = raw_args;
+    while (*ra && isspace((unsigned char)*ra)) ra++;
+
+    if (input_has_predef_vars(ra)) {
+        fb.has_vars = 1;
+        snprintf(fb.source, sizeof(fb.source),
+                 "%sfor(%s, %s) {", indent, var_name, ra);
+    } else if (step != 1.0f) {
         snprintf(fb.source, sizeof(fb.source),
                  "%sfor(%s, %g, %g, %g) {", indent, var_name, start, end, step);
-    else
+    } else {
         snprintf(fb.source, sizeof(fb.source),
                  "%sfor(%s, %g, %g) {", indent, var_name, start, end);
+    }
 
     /* Build FOR_END cmd */
     GLCmd fe;
