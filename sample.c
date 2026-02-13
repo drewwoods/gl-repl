@@ -33,6 +33,7 @@
  *   Ctrl+D         Delete line at cursor
  *   Ctrl+L         Clear all commands
  *   Ctrl+S         Save to output.c
+ *   Ctrl+Q         Exit
  *   Escape         Clear input / exit insert mode / close help
  *   Tab            Accept autocomplete suggestion
  *   Left-drag      Orbit camera
@@ -246,6 +247,9 @@ static const char *g_footer[] = {
     "}",
     NULL
 };
+
+static const char *outfile = "output.c";
+static const char *tempfile = "/tmp/temp-output.c";
 
 /* ========================================================================= */
 /* Global state                                                               */
@@ -532,8 +536,8 @@ static void write_for_begin_as_c(FILE *f, const GLCmd *cmd) {
     }
 }
 
-static void save_output(void) {
-    FILE *f = fopen("output.c", "w");
+static void save_output(const char *filename) {
+    FILE *f = fopen(filename, "w");
     if (!f) {
         set_status("Error: cannot write output.c");
         return;
@@ -2278,6 +2282,7 @@ static void render_help(void) {
         "  Ctrl+D               Delete line at cursor",
         "  Ctrl+L               Clear all commands",
         "  Ctrl+S               Save to output.c",
+        "  Ctrl+Q               Exit and save to temporary file",
         "  Escape               Clear input / exit insert / close help",
         "",
         "Camera:",
@@ -3856,7 +3861,7 @@ static void keyboard_func(unsigned char key, int x, int y) {
 
     /* Ctrl+S: save to output.c */
     if (key == 19) {
-        save_output();
+        save_output(outfile);
         return;
     }
 
@@ -4209,6 +4214,12 @@ static void keyboard_func(unsigned char key, int x, int y) {
         g_ac_ghost[0] = '\0';
         mark_normals_dirty();
         return;
+    }
+
+    if (key == 0x11) { /* Ctrl+Q: quit */
+        save_output(tempfile);
+        printf("Saved to %s\n", tempfile);
+        exit(0);
     }
 
     /* Printable character: insert at cursor position */
