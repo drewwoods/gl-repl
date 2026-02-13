@@ -25,6 +25,7 @@
  *   Left/Right     Move cursor within input line
  *   Home/End       Jump to start/end of input line
  *   Backspace      Delete character before cursor
+ *   Ctrl+/         Toggle comment (// prefix)
  *   Ctrl+Z         Undo last command
  *   Ctrl+D         Delete line at cursor
  *   Ctrl+L         Clear all commands
@@ -86,6 +87,7 @@ typedef enum {
     CMD_SHADE_MODEL,
     CMD_FOR_BEGIN,
     CMD_FOR_END,
+    CMD_COMMENT,
     CMD_TYPE_COUNT
 } CmdType;
 
@@ -864,6 +866,23 @@ static int parse_command_internal(const char *line, GLCmd *cmd,
 
     if (len == 0) return 0;
 
+    /* Comment: line starts with // */
+    if (p[0] == '/' && p[1] == '/') {
+        cmd->type = CMD_COMMENT;
+        cmd->valid = 1;
+        cmd->is_auto = 0;
+        cmd->num_args = 0;
+        int fdepth = for_loop_depth_at(g_edit_line);
+        int bb = in_begin_block_at(g_edit_line);
+        int ind = (bb ? 4 : 2) + fdepth * 2;
+        char indent[32];
+        if (ind > (int)sizeof(indent) - 1) ind = (int)sizeof(indent) - 1;
+        memset(indent, ' ', ind);
+        indent[ind] = '\0';
+        snprintf(cmd->source, sizeof(cmd->source), "%s%s", indent, p);
+        return 1;
+    }
+
     char *open_p = strchr(p, '(');
     char *close_p = open_p ? strrchr(p, ')') : NULL;
     char func[64] = "";
@@ -1277,6 +1296,14 @@ static void flatten_range(int start, int end_idx, ExprVar *vars, int nv) {
 
         if (g_cmds[i].type == CMD_FOR_END) { i++; continue; }
 
+        /* Comments: pass through to flat array (skipped by execute, kept in save) */
+        if (g_cmds[i].type == CMD_COMMENT) {
+            if (g_num_flat_cmds < MAX_COMMANDS)
+                g_flat_cmds[g_num_flat_cmds++] = g_cmds[i];
+            i++;
+            continue;
+        }
+
         /* Regular command */
         if (g_num_flat_cmds >= MAX_COMMANDS) { i++; continue; }
 
@@ -1410,6 +1437,7 @@ static void color_for_type(CmdType t) {
     case CMD_COLOR4F:  glColor3f(0.95f, 0.85f, 0.30f); break;
     case CMD_FOR_BEGIN:
     case CMD_FOR_END:  glColor3f(0.95f, 0.60f, 0.30f); break;
+    case CMD_COMMENT:  glColor3f(0.45f, 0.50f, 0.45f); break;
     default:           glColor3f(0.70f, 0.70f, 0.70f); break;
     }
 }
@@ -1796,6 +1824,7 @@ static void render_help(void) {
         "  Enter                Insert new line (even in middle of list)",
         "  Tab / Enter          Accept autocomplete suggestion",
         "  Backspace            Delete character before cursor",
+        "  Ctrl+/               Toggle comment on current line",
         "  Ctrl+Z               Undo last command",
         "  Ctrl+D               Delete line at cursor",
         "  Ctrl+L               Clear all commands",
@@ -3168,6 +3197,49 @@ static void keyboard_func(unsigned char key, int x, int y) {
     /* Ctrl+S: save to output.c */
     if (key == 19) {
         save_output();
+        return;
+    }
+
+    /* Ctrl+/: toggle comment on current line */
+    if (key == 31) {
+        if (g_edit_line < g_num_cmds && !g_inserting) {
+            GLCmd *cur = &g_cmds[g_edit_line];
+            if (cur->type == CMD_COMMENT) {
+                /* Uncomment: strip // prefix and re-parse */
+                const char *s = cur->source;
+                while (*s && isspace((unsigned char)*s)) s++;
+                if (s[0] == '/' && s[1] == '/') {
+                    s += 2;
+                    if (*s == ' ') s++;
+                }
+                GLCmd new_cmd;
+                memset(&new_cmd, 0, sizeof(new_cmd));
+                if (parse_command(s, &new_cmd)) {
+                    g_cmds[g_edit_line] = new_cmd;
+                    load_line_to_input(g_edit_line);
+                    mark_normals_dirty();
+                    set_status("Uncommented");
+                } else {
+                    set_status("Cannot uncomment: not a valid command");
+                }
+            } else if (cur->type != CMD_FOR_BEGIN &&
+                       cur->type != CMD_FOR_END) {
+                /* Comment out: prepend // to source, preserve indent */
+                char new_src[MAX_LINE_LEN];
+                const char *s = cur->source;
+                int ind = 0;
+                while (s[ind] && isspace((unsigned char)s[ind])) ind++;
+                snprintf(new_src, sizeof(new_src), "%.*s// %s",
+                         ind, s, s + ind);
+                cur->type = CMD_COMMENT;
+                cur->valid = 1;
+                strncpy(cur->source, new_src, sizeof(cur->source) - 1);
+                cur->source[sizeof(cur->source) - 1] = '\0';
+                load_line_to_input(g_edit_line);
+                mark_normals_dirty();
+                set_status("Commented out");
+            }
+        }
         return;
     }
 
