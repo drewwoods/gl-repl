@@ -229,11 +229,22 @@ static int    g_scroll = 0;
 static int    g_cursor_on = 1;
 static int    g_blink_tick = 0;
 
+/* Animation */
+static float  g_anim_time = 0.0f;
+
 /* Toggles */
 static int    g_show_help    = 0;
 static int    g_wireframe    = 0;
-static int    g_show_grid    = 1;
-static int    g_show_axes    = 1;
+static int    g_grid_theme   = 2;  /* 0=off, 1=classic, 2=fog, 3=tron, 4=ember */
+#define GRID_THEME_COUNT 5
+static const char *g_grid_names[] = {
+    "Grid OFF", "Grid: Classic", "Grid: Fog", "Grid: Tron", "Grid: Ember"
+};
+static int    g_axes_theme   = 3;  /* 0=off, 1=classic, 2=pulse, 3=neon, 4=compass */
+#define AXES_THEME_COUNT 5
+static const char *g_axes_names[] = {
+    "Axes OFF", "Axes: Classic", "Axes: Pulse", "Axes: Neon", "Axes: Compass"
+};
 static int    g_show_vnums   = 1;
 static int    g_show_normals = 1;
 static int    g_show_indices = 0;
@@ -1448,7 +1459,9 @@ static void render_help(void) {
         "",
         "Toggles:",
         "  F1  Help overlay     F2  Wireframe mode",
-        "  F3  Grid             F4  Axes",
+        "  F3  Grid theme       F4  Axes theme",
+        "      (Off/Classic/Fog/         (Off/Classic/Pulse/",
+        "       Tron/Ember)               Neon/Compass)",
         "  F5  Vertex numbers   F6  Normal vectors",
         "  F7  Command indices  F8  Vertex guides",
         "  F9  Auto-normals",
@@ -1502,44 +1515,341 @@ static void render_help(void) {
 /* ========================================================================= */
 
 static void draw_grid(void) {
+    if (g_grid_theme == 0) return;
+
     glDisable(GL_LIGHTING);
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
-    float extent = 5.0f, step = 0.5f;
-    glBegin(GL_LINES);
-    for (float v = -extent; v <= extent + 0.01f; v += step) {
-        float a = (fabsf(v) < 0.01f) ? 0.45f : 0.12f;
-        glColor4f(0.50f, 0.50f, 0.60f, a);
-        glVertex3f(v, 0, -extent); glVertex3f(v, 0, extent);
-        glVertex3f(-extent, 0, v); glVertex3f(extent, 0, v);
-    }
-    glEnd();
+    /* Nudge grid slightly below Y=0 to avoid z-fighting with axes */
+    glPushMatrix();
+    glTranslatef(0, -0.002f, 0);
 
+    float breath = sinf(g_anim_time * 0.8f) * 0.5f + 0.5f; /* 0..1 */
+
+    switch (g_grid_theme) {
+
+    case 1: { /* Classic */
+        float extent = 5.0f, step = 0.5f;
+        glBegin(GL_LINES);
+        for (float v = -extent; v <= extent + 0.01f; v += step) {
+            float a = (fabsf(v) < 0.01f) ? 0.45f : 0.12f;
+            glColor4f(0.50f, 0.50f, 0.60f, a);
+            glVertex3f(v, 0, -extent); glVertex3f(v, 0, extent);
+            glVertex3f(-extent, 0, v); glVertex3f(extent, 0, v);
+        }
+        glEnd();
+        break;
+    }
+
+    case 2: { /* Fog — large grid, breathing fog density */
+        float extent = 15.0f, step = 0.5f;
+        float fog_density = 0.06f + breath * 0.04f;
+        GLfloat fog_col[] = { 0.10f, 0.10f, 0.13f, 1.0f };
+        glEnable(GL_FOG);
+        glFogi(GL_FOG_MODE, GL_EXP2);
+        glFogfv(GL_FOG_COLOR, fog_col);
+        glFogf(GL_FOG_DENSITY, fog_density);
+
+        glBegin(GL_LINES);
+        for (float v = -extent; v <= extent + 0.01f; v += step) {
+            int is_major = (fabsf(fmodf(fabsf(v) + 0.01f, 2.0f)) < 0.1f);
+            int is_origin = (fabsf(v) < 0.01f);
+            float a = is_origin ? 0.55f : (is_major ? 0.25f : 0.10f);
+            glColor4f(0.45f, 0.50f, 0.65f, a);
+            glVertex3f(v, 0, -extent); glVertex3f(v, 0, extent);
+            glVertex3f(-extent, 0, v); glVertex3f(extent, 0, v);
+        }
+        glEnd();
+
+        glDisable(GL_FOG);
+        break;
+    }
+
+    case 3: { /* Tron — cyan/blue glow, distance fade */
+        float extent = 12.0f, step = 0.5f;
+        float glow = 0.7f + breath * 0.3f;
+
+        glLineWidth(1.0f);
+        glBegin(GL_LINES);
+        for (float v = -extent; v <= extent + 0.01f; v += step) {
+            float dist = fabsf(v) / extent;
+            float fade = (1.0f - dist * dist);
+            if (fade < 0.0f) fade = 0.0f;
+            int is_origin = (fabsf(v) < 0.01f);
+            int is_major = (fabsf(fmodf(fabsf(v) + 0.01f, 2.0f)) < 0.1f);
+            float base = is_origin ? 0.8f : (is_major ? 0.35f : 0.12f);
+            float a = base * fade * glow;
+            float r = 0.05f, g = is_origin ? 0.9f : 0.55f, b = 0.95f;
+            glColor4f(r, g, b, a);
+            /* Draw both directions with distance fade per-endpoint */
+            glVertex3f(v, 0, -extent); glVertex3f(v, 0, extent);
+            glVertex3f(-extent, 0, v); glVertex3f(extent, 0, v);
+        }
+        glEnd();
+
+        /* Subtle glow line on axes */
+        glLineWidth(2.0f);
+        float ga = 0.25f * glow;
+        glBegin(GL_LINES);
+        glColor4f(0.0f, 0.8f, 1.0f, ga);
+        glVertex3f(0, 0, -extent); glVertex3f(0, 0, extent);
+        glVertex3f(-extent, 0, 0); glVertex3f(extent, 0, 0);
+        glEnd();
+        glLineWidth(1.0f);
+        break;
+    }
+
+    case 4: { /* Ember — warm orange/red, pulsing ripple */
+        float extent = 12.0f, step = 0.5f;
+
+        glBegin(GL_LINES);
+        for (float v = -extent; v <= extent + 0.01f; v += step) {
+            float dist = fabsf(v) / extent;
+            /* Ripple: wave traveling outward from center */
+            float ripple = sinf(dist * 12.0f - g_anim_time * 2.5f);
+            ripple = ripple * 0.5f + 0.5f; /* 0..1 */
+            float fade = 1.0f - dist;
+            if (fade < 0.0f) fade = 0.0f;
+            int is_origin = (fabsf(v) < 0.01f);
+            int is_major = (fabsf(fmodf(fabsf(v) + 0.01f, 2.0f)) < 0.1f);
+            float base = is_origin ? 0.7f : (is_major ? 0.30f : 0.10f);
+            float a = base * fade * (0.6f + ripple * 0.4f);
+            float r = 0.95f, g = 0.35f + ripple * 0.25f, b = 0.05f;
+            glColor4f(r, g, b, a);
+            glVertex3f(v, 0, -extent); glVertex3f(v, 0, extent);
+            glVertex3f(-extent, 0, v); glVertex3f(extent, 0, v);
+        }
+        glEnd();
+        break;
+    }
+
+    default: break;
+    }
+
+    glPopMatrix();
     glDisable(GL_BLEND);
     glEnable(GL_LIGHTING);
 }
 
+/* Helper: draw an axis label at a 3D position */
+static void draw_axis_label(float x, float y, float z, char ch,
+                            float r, float g, float b) {
+    glColor3f(r, g, b);
+    glRasterPos3f(x, y, z);
+    glutBitmapCharacter(FONT_MONO, ch);
+}
+
 static void draw_axes(void) {
+    if (g_axes_theme == 0) return;
+
     glDisable(GL_LIGHTING);
-    glLineWidth(2.0f);
-    glBegin(GL_LINES);
-    glColor3f(0.90f, 0.20f, 0.20f);
-    glVertex3f(0, 0, 0); glVertex3f(2, 0, 0);
-    glColor3f(0.20f, 0.90f, 0.20f);
-    glVertex3f(0, 0, 0); glVertex3f(0, 2, 0);
-    glColor3f(0.20f, 0.20f, 0.90f);
-    glVertex3f(0, 0, 0); glVertex3f(0, 0, 2);
-    glEnd();
-    glLineWidth(1.0f);
+    glDisable(GL_DEPTH_TEST);
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
-    glColor3f(0.90f, 0.30f, 0.30f);
-    glRasterPos3f(2.15f, 0, 0); glutBitmapCharacter(FONT_MONO, 'X');
-    glColor3f(0.30f, 0.90f, 0.30f);
-    glRasterPos3f(0, 2.15f, 0); glutBitmapCharacter(FONT_MONO, 'Y');
-    glColor3f(0.30f, 0.30f, 0.90f);
-    glRasterPos3f(0, 0, 2.15f); glutBitmapCharacter(FONT_MONO, 'Z');
+    float breath = sinf(g_anim_time * 0.8f) * 0.5f + 0.5f; /* 0..1 */
 
+    switch (g_axes_theme) {
+
+    case 1: { /* Classic */
+        float len = 2.0f;
+        glLineWidth(2.0f);
+        glBegin(GL_LINES);
+        glColor3f(0.90f, 0.20f, 0.20f);
+        glVertex3f(0, 0, 0); glVertex3f(len, 0, 0);
+        glColor3f(0.20f, 0.90f, 0.20f);
+        glVertex3f(0, 0, 0); glVertex3f(0, len, 0);
+        glColor3f(0.20f, 0.20f, 0.90f);
+        glVertex3f(0, 0, 0); glVertex3f(0, 0, len);
+        glEnd();
+        glLineWidth(1.0f);
+
+        draw_axis_label(2.15f, 0, 0, 'X', 0.90f, 0.30f, 0.30f);
+        draw_axis_label(0, 2.15f, 0, 'Y', 0.30f, 0.90f, 0.30f);
+        draw_axis_label(0, 0, 2.15f, 'Z', 0.30f, 0.30f, 0.90f);
+        break;
+    }
+
+    case 2: { /* Pulse — dot traveling outward along each axis */
+        float len = 3.0f;
+        /* Solid dim axes */
+        glLineWidth(1.5f);
+        glBegin(GL_LINES);
+        glColor4f(0.90f, 0.20f, 0.20f, 0.30f);
+        glVertex3f(0, 0, 0); glVertex3f(len, 0, 0);
+        glColor4f(0.20f, 0.90f, 0.20f, 0.30f);
+        glVertex3f(0, 0, 0); glVertex3f(0, len, 0);
+        glColor4f(0.20f, 0.20f, 0.90f, 0.30f);
+        glVertex3f(0, 0, 0); glVertex3f(0, 0, len);
+        glEnd();
+        glLineWidth(1.0f);
+
+        /* Pulsing dot position (loops 0..1) */
+        float t = fmodf(g_anim_time * 0.6f, 1.0f);
+        float pos = t * len;
+        float glow = sinf(t * (float)M_PI); /* bright in middle, dim at ends */
+        glow = glow * 0.8f + 0.2f;
+
+        glPointSize(8.0f);
+        glBegin(GL_POINTS);
+        glColor4f(1.0f, 0.3f, 0.3f, glow);
+        glVertex3f(pos, 0, 0);
+        glColor4f(0.3f, 1.0f, 0.3f, glow);
+        glVertex3f(0, pos, 0);
+        glColor4f(0.3f, 0.3f, 1.0f, glow);
+        glVertex3f(0, 0, pos);
+        glEnd();
+        glPointSize(1.0f);
+
+        /* Bright trail behind the dot */
+        glLineWidth(3.0f);
+        float trail = 0.6f;
+        float t0 = pos - trail;
+        if (t0 < 0) t0 = 0;
+        glBegin(GL_LINES);
+        glColor4f(1.0f, 0.3f, 0.3f, 0.05f);
+        glVertex3f(t0, 0, 0);
+        glColor4f(1.0f, 0.3f, 0.3f, glow * 0.7f);
+        glVertex3f(pos, 0, 0);
+
+        glColor4f(0.3f, 1.0f, 0.3f, 0.05f);
+        glVertex3f(0, t0, 0);
+        glColor4f(0.3f, 1.0f, 0.3f, glow * 0.7f);
+        glVertex3f(0, pos, 0);
+
+        glColor4f(0.3f, 0.3f, 1.0f, 0.05f);
+        glVertex3f(0, 0, t0);
+        glColor4f(0.3f, 0.3f, 1.0f, glow * 0.7f);
+        glVertex3f(0, 0, pos);
+        glEnd();
+        glLineWidth(1.0f);
+
+        draw_axis_label(len + 0.15f, 0, 0, 'X', 0.70f, 0.25f, 0.25f);
+        draw_axis_label(0, len + 0.15f, 0, 'Y', 0.25f, 0.70f, 0.25f);
+        draw_axis_label(0, 0, len + 0.15f, 'Z', 0.25f, 0.25f, 0.70f);
+        break;
+    }
+
+    case 3: { /* Neon — bright glowing axes with breathing intensity */
+        float len = 2.5f;
+        float glow = 0.6f + breath * 0.4f;
+
+        /* Outer glow (wide, dim) */
+        glLineWidth(6.0f);
+        glBegin(GL_LINES);
+        glColor4f(1.0f, 0.1f, 0.1f, 0.12f * glow);
+        glVertex3f(0, 0, 0); glVertex3f(len, 0, 0);
+        glColor4f(0.1f, 1.0f, 0.1f, 0.12f * glow);
+        glVertex3f(0, 0, 0); glVertex3f(0, len, 0);
+        glColor4f(0.1f, 0.1f, 1.0f, 0.12f * glow);
+        glVertex3f(0, 0, 0); glVertex3f(0, 0, len);
+        glEnd();
+
+        /* Core (narrow, bright) */
+        glLineWidth(2.0f);
+        glBegin(GL_LINES);
+        glColor4f(1.0f, 0.4f, 0.4f, 0.9f * glow);
+        glVertex3f(0, 0, 0); glVertex3f(len, 0, 0);
+        glColor4f(0.4f, 1.0f, 0.4f, 0.9f * glow);
+        glVertex3f(0, 0, 0); glVertex3f(0, len, 0);
+        glColor4f(0.4f, 0.4f, 1.0f, 0.9f * glow);
+        glVertex3f(0, 0, 0); glVertex3f(0, 0, len);
+        glEnd();
+        glLineWidth(1.0f);
+
+        /* Bright tip dots */
+        glPointSize(6.0f);
+        glBegin(GL_POINTS);
+        glColor4f(1.0f, 0.5f, 0.5f, glow);
+        glVertex3f(len, 0, 0);
+        glColor4f(0.5f, 1.0f, 0.5f, glow);
+        glVertex3f(0, len, 0);
+        glColor4f(0.5f, 0.5f, 1.0f, glow);
+        glVertex3f(0, 0, len);
+        glEnd();
+        glPointSize(1.0f);
+
+        float la = 0.5f + glow * 0.5f;
+        draw_axis_label(len + 0.15f, 0, 0, 'X', 1.0f * la, 0.3f * la, 0.3f * la);
+        draw_axis_label(0, len + 0.15f, 0, 'Y', 0.3f * la, 1.0f * la, 0.3f * la);
+        draw_axis_label(0, 0, len + 0.15f, 'Z', 0.3f * la, 0.3f * la, 1.0f * la);
+        break;
+    }
+
+    case 4: { /* Compass — positive and negative axes, dashed negative */
+        float len = 2.5f;
+
+        /* Positive axes (solid) */
+        glLineWidth(2.0f);
+        glBegin(GL_LINES);
+        glColor4f(1.0f, 0.30f, 0.30f, 0.85f);
+        glVertex3f(0, 0, 0); glVertex3f(len, 0, 0);
+        glColor4f(0.30f, 1.0f, 0.30f, 0.85f);
+        glVertex3f(0, 0, 0); glVertex3f(0, len, 0);
+        glColor4f(0.30f, 0.30f, 1.0f, 0.85f);
+        glVertex3f(0, 0, 0); glVertex3f(0, 0, len);
+        glEnd();
+
+        /* Negative axes (stippled) */
+        glEnable(GL_LINE_STIPPLE);
+        glLineStipple(2, 0xAAAA);
+        glBegin(GL_LINES);
+        glColor4f(1.0f, 0.30f, 0.30f, 0.35f);
+        glVertex3f(0, 0, 0); glVertex3f(-len, 0, 0);
+        glColor4f(0.30f, 1.0f, 0.30f, 0.35f);
+        glVertex3f(0, 0, 0); glVertex3f(0, -len, 0);
+        glColor4f(0.30f, 0.30f, 1.0f, 0.35f);
+        glVertex3f(0, 0, 0); glVertex3f(0, 0, -len);
+        glEnd();
+        glDisable(GL_LINE_STIPPLE);
+        glLineWidth(1.0f);
+
+        /* Arrowheads at positive tips */
+        glPointSize(7.0f);
+        glBegin(GL_POINTS);
+        glColor4f(1.0f, 0.4f, 0.4f, 0.9f);
+        glVertex3f(len, 0, 0);
+        glColor4f(0.4f, 1.0f, 0.4f, 0.9f);
+        glVertex3f(0, len, 0);
+        glColor4f(0.4f, 0.4f, 1.0f, 0.9f);
+        glVertex3f(0, 0, len);
+        glEnd();
+
+        /* Small dots at negative tips */
+        glPointSize(4.0f);
+        glBegin(GL_POINTS);
+        glColor4f(1.0f, 0.3f, 0.3f, 0.30f);
+        glVertex3f(-len, 0, 0);
+        glColor4f(0.3f, 1.0f, 0.3f, 0.30f);
+        glVertex3f(0, -len, 0);
+        glColor4f(0.3f, 0.3f, 1.0f, 0.30f);
+        glVertex3f(0, 0, -len);
+        glEnd();
+        glPointSize(1.0f);
+
+        /* Origin sphere-ish dot */
+        glPointSize(5.0f);
+        glBegin(GL_POINTS);
+        glColor4f(0.9f, 0.9f, 0.9f, 0.6f);
+        glVertex3f(0, 0, 0);
+        glEnd();
+        glPointSize(1.0f);
+
+        draw_axis_label(len + 0.15f, 0, 0, 'X', 0.90f, 0.30f, 0.30f);
+        draw_axis_label(0, len + 0.15f, 0, 'Y', 0.30f, 0.90f, 0.30f);
+        draw_axis_label(0, 0, len + 0.15f, 'Z', 0.30f, 0.30f, 0.90f);
+        draw_axis_label(-len - 0.15f, 0, 0, 'x', 0.55f, 0.25f, 0.25f);
+        draw_axis_label(0, -len - 0.15f, 0, 'y', 0.25f, 0.55f, 0.25f);
+        draw_axis_label(0, 0, -len - 0.15f, 'z', 0.25f, 0.25f, 0.55f);
+        break;
+    }
+
+    default: break;
+    }
+
+    glDisable(GL_BLEND);
+    glEnable(GL_DEPTH_TEST);
     glEnable(GL_LIGHTING);
 }
 
@@ -1564,6 +1874,7 @@ static void draw_vertex_numbers(void) {
 
 static void draw_normal_vectors(void) {
     glDisable(GL_LIGHTING);
+    glDisable(GL_DEPTH_TEST);
     glColor3f(0.30f, 0.80f, 1.00f);
     float scale = 0.35f;
     float nx = 0, ny = 0, nz = 1;
@@ -1600,6 +1911,7 @@ static void draw_normal_vectors(void) {
     glEnd();
     glPointSize(1.0f);
 
+    glEnable(GL_DEPTH_TEST);
     glEnable(GL_LIGHTING);
 }
 
@@ -1855,8 +2167,8 @@ static void render_3d_scene(void) {
 
     glColor3f(0.70f, 0.70f, 0.80f);
 
-    if (g_show_grid) draw_grid();
-    if (g_show_axes) draw_axes();
+    draw_grid();
+    draw_axes();
 
     if (g_wireframe) glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
 
@@ -2264,11 +2576,11 @@ static void special_func(int key, int x, int y) {
         g_wireframe = !g_wireframe;
         set_status(g_wireframe ? "Wireframe ON" : "Wireframe OFF"); break;
     case GLUT_KEY_F3:
-        g_show_grid = !g_show_grid;
-        set_status(g_show_grid ? "Grid ON" : "Grid OFF"); break;
+        g_grid_theme = (g_grid_theme + 1) % GRID_THEME_COUNT;
+        set_status(g_grid_names[g_grid_theme]); break;
     case GLUT_KEY_F4:
-        g_show_axes = !g_show_axes;
-        set_status(g_show_axes ? "Axes ON" : "Axes OFF"); break;
+        g_axes_theme = (g_axes_theme + 1) % AXES_THEME_COUNT;
+        set_status(g_axes_names[g_axes_theme]); break;
     case GLUT_KEY_F5:
         g_show_vnums = !g_show_vnums;
         set_status(g_show_vnums ? "Vertex numbers ON" : "Vertex numbers OFF");
@@ -2368,6 +2680,8 @@ static void motion_func(int x, int y) {
 
 static void timer_func(int value) {
     (void)value;
+
+    g_anim_time += 0.016f;  /* ~60 fps */
 
     g_blink_tick++;
     if (g_blink_tick >= 30) {
