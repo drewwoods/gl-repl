@@ -3495,6 +3495,14 @@ static int try_assign_variable(void) {
     } else if (fpos < g_num_cmds) {
         g_cmds[fpos] = cmd;
         g_edit_line++;
+        load_line_to_input(g_edit_line);
+        {
+            char msg[128];
+            snprintf(msg, sizeof(msg), "%s = %g", name, val);
+            set_status(msg);
+        }
+        mark_normals_dirty();
+        return 1;
     } else {
         if (g_num_cmds < MAX_COMMANDS)
             g_cmds[g_num_cmds++] = cmd;
@@ -4086,14 +4094,30 @@ static void keyboard_func(unsigned char key, int x, int y) {
                     load_line_to_input(g_edit_line);
             }
         } else if (g_edit_line < g_num_cmds) {
-            /* On existing line: commit any changes, then enter insert mode */
+            /* On existing line: if unmodified just advance; if modified, re-parse */
             int can_advance = 1;
-            if (g_input_len > 0) {
+
+            /* Check if input matches the existing line (unmodified) */
+            int unmodified = 0;
+            {
+                const char *s = g_cmds[g_edit_line].source;
+                while (*s && isspace((unsigned char)*s)) s++;
+                int slen = (int)strlen(s);
+                while (slen > 0 && (s[slen-1] == ';' ||
+                       isspace((unsigned char)s[slen-1])))
+                    slen--;
+                if (slen == g_input_len &&
+                    strncmp(g_input, s, slen) == 0)
+                    unmodified = 1;
+            }
+
+            if (!unmodified && g_input_len > 0) {
+                /* Input was modified — try to re-parse */
                 GLCmd cmd;
                 memset(&cmd, 0, sizeof(cmd));
                 int fpos = g_edit_line;
                 int in_loop = for_loop_depth_at(fpos) > 0;
-                int parsed;
+                int parsed = 0;
                 if (in_loop) {
                     ExprVar dvars[MAX_EXPR_VARS];
                     int dnv = collect_for_vars(fpos, dvars, MAX_EXPR_VARS);
@@ -4121,7 +4145,40 @@ static void keyboard_func(unsigned char key, int x, int y) {
                         snprintf(cmd.source, sizeof(cmd.source), "%s%s;", indent_v, stripped);
                     }
                 } else {
+                    /* Try var assignment first */
+                    if (try_assign_variable()) {
+                        /* try_assign_variable already updated g_cmds and
+                         * advanced g_edit_line — just enter insert mode */
+                        g_inserting = 1;
+                        g_input[0] = '\0';
+                        g_input_len = 0;
+                        g_cursor_pos = 0;
+                        g_ac_count = 0;
+                        g_ac_ghost[0] = '\0';
+                        set_status("Insert mode");
+                        mark_normals_dirty();
+                        return;
+                    }
                     parsed = parse_command(g_input, &cmd);
+                    if (parsed && input_has_predef_vars(g_input)) {
+                        cmd.has_vars = 1;
+                        char stripped[MAX_LINE_LEN];
+                        const char *sp = g_input;
+                        while (*sp && isspace((unsigned char)*sp)) sp++;
+                        strncpy(stripped, sp, MAX_LINE_LEN - 1);
+                        stripped[MAX_LINE_LEN - 1] = '\0';
+                        int slen = (int)strlen(stripped);
+                        while (slen > 0 && (stripped[slen-1] == ';' ||
+                               isspace((unsigned char)stripped[slen-1])))
+                            stripped[--slen] = '\0';
+                        int bb_v = in_begin_block_at(fpos);
+                        int ind_v = bb_v ? 4 : 2;
+                        char indent_v[32];
+                        if (ind_v > (int)sizeof(indent_v) - 1) ind_v = (int)sizeof(indent_v) - 1;
+                        memset(indent_v, ' ', ind_v);
+                        indent_v[ind_v] = '\0';
+                        snprintf(cmd.source, sizeof(cmd.source), "%s%s;", indent_v, stripped);
+                    }
                 }
                 if (parsed) {
                     g_cmds[g_edit_line] = cmd;
@@ -4129,6 +4186,8 @@ static void keyboard_func(unsigned char key, int x, int y) {
                     can_advance = 0;
                 }
             }
+            /* else: unmodified or empty — keep existing line as-is */
+
             if (can_advance) {
                 g_edit_line++;
                 g_inserting = 1;
