@@ -84,6 +84,8 @@ typedef enum {
     CMD_ENABLE,
     CMD_DISABLE,
     CMD_SHADE_MODEL,
+    CMD_FOR_BEGIN,
+    CMD_FOR_END,
     CMD_TYPE_COUNT
 } CmdType;
 
@@ -226,7 +228,10 @@ static const char *g_footer[] = {
 static GLCmd  g_cmds[MAX_COMMANDS];
 static int    g_num_cmds = 0;
 static int    g_normals_dirty = 1;
-static void mark_normals_dirty(void) { g_normals_dirty = 1; }
+static GLCmd  g_flat_cmds[MAX_COMMANDS];
+static int    g_num_flat_cmds = 0;
+static int    g_flat_dirty = 1;
+static void mark_normals_dirty(void) { g_normals_dirty = 1; g_flat_dirty = 1; }
 
 /* Editor */
 static char   g_input[MAX_INPUT_LEN];
@@ -373,8 +378,8 @@ static GLenum current_begin_mode(void) {
 
 static int count_vertices(void) {
     int n = 0;
-    for (int i = 0; i < g_num_cmds; i++)
-        if (g_cmds[i].valid && g_cmds[i].type == CMD_VERTEX3F) n++;
+    for (int i = 0; i < g_num_flat_cmds; i++)
+        if (g_flat_cmds[i].valid && g_flat_cmds[i].type == CMD_VERTEX3F) n++;
     return n;
 }
 
@@ -451,10 +456,16 @@ static void save_output(void) {
         fprintf(f, "%s\n", g_header_post[i]);
     write_light_setup(f);
     fprintf(f, "\n// Snippet start\n");
-    for (int i = 0; i < g_num_cmds; i++)
-        fprintf(f, "%s\n", g_cmds[i].source);
-    if (in_begin_block())
-        fprintf(f, "  glEnd();\n");
+    for (int i = 0; i < g_num_flat_cmds; i++)
+        fprintf(f, "%s\n", g_flat_cmds[i].source);
+    {
+        int bb = 0;
+        for (int i = 0; i < g_num_flat_cmds; i++) {
+            if (g_flat_cmds[i].valid && g_flat_cmds[i].type == CMD_BEGIN) bb++;
+            else if (g_flat_cmds[i].valid && g_flat_cmds[i].type == CMD_END) bb--;
+        }
+        if (bb > 0) fprintf(f, "  glEnd();\n");
+    }
     fprintf(f, "// Snippet end\n");
     for (int i = 0; g_footer[i]; i++)
         fprintf(f, "%s\n", g_footer[i]);
@@ -462,7 +473,7 @@ static void save_output(void) {
     fclose(f);
 
     char msg[128];
-    snprintf(msg, sizeof(msg), "Saved to output.c (%d commands)", g_num_cmds);
+    snprintf(msg, sizeof(msg), "Saved to output.c (%d commands)", g_num_flat_cmds);
     set_status(msg);
 }
 
@@ -825,21 +836,14 @@ static int parse_exprs(const char *s, float *out, int max,
 /* ========================================================================= */
 
 #define MAX_LOOP_DEPTH  4
-#define MAX_LOOP_BODY   64
 
-typedef struct {
-    char    var_name[16];
-    float   start, end, step;
-    char    body_lines[MAX_LOOP_BODY][MAX_LINE_LEN];
-    int     body_count;
-} LoopLevel;
-
-static LoopLevel g_loops[MAX_LOOP_DEPTH];
-static int       g_loop_depth = 0;
-
-/* Forward declaration for parse_command_with_vars */
+/* Forward declarations */
 static int parse_command_with_vars(const char *line, GLCmd *cmd,
                                    ExprVar *vars, int num_vars);
+static int for_loop_depth_at(int pos);
+static int find_for_end(int for_begin_idx);
+static void get_for_var_name(const GLCmd *cmd, char *var, int var_sz);
+static int collect_for_vars(int pos, ExprVar *vars, int max_vars);
 
 static int parse_command_internal(const char *line, GLCmd *cmd,
                                   ExprVar *vars, int num_vars) {
@@ -1175,9 +1179,14 @@ static void compute_block_normals(GLenum mode, int *vi, int nv,
 static void recompute_autonormals(void) {
     if (!g_autonormal) return;
 
-    /* Process each begin/end block */
+    /* Process each begin/end block (skip for-loop regions) */
     int i = 0;
     while (i < g_num_cmds) {
+        if (g_cmds[i].type == CMD_FOR_BEGIN) {
+            i = find_for_end(i);
+            if (i < g_num_cmds) i++;
+            continue;
+        }
         if (!g_cmds[i].valid || g_cmds[i].type != CMD_BEGIN) { i++; continue; }
 
         GLenum mode = g_cmds[i].mode;
@@ -1224,17 +1233,85 @@ static void recompute_autonormals(void) {
 }
 
 /* ========================================================================= */
+/* Flatten for-loops into concrete commands                                    */
+/* ========================================================================= */
+
+/* Flatten g_cmds (with for-loops) into g_flat_cmds (concrete commands) */
+static void flatten_range(int start, int end_idx, ExprVar *vars, int nv) {
+    int i = start;
+    while (i < end_idx && i < g_num_cmds) {
+        if (!g_cmds[i].valid) { i++; continue; }
+
+        if (g_cmds[i].type == CMD_FOR_BEGIN) {
+            int fe = find_for_end(i);
+            GLCmd *fb_cmd = &g_cmds[i];
+            char var_name[16];
+            get_for_var_name(fb_cmd, var_name, sizeof(var_name));
+            float s = fb_cmd->args[0], e = fb_cmd->args[1], st = fb_cmd->args[2];
+
+            if (fabsf(st) > 1e-9f &&
+                !((st > 0 && s >= e) || (st < 0 && s <= e))) {
+                int max_iters = 100000;
+                for (float val = s;
+                     (st > 0) ? (val < e - 1e-6f) : (val > e + 1e-6f);
+                     val += st) {
+                    if (--max_iters < 0) break;
+                    ExprVar lvars[MAX_EXPR_VARS];
+                    int lnv = 0;
+                    if (vars)
+                        for (int v = 0; v < nv && lnv < MAX_EXPR_VARS; v++)
+                            lvars[lnv++] = vars[v];
+                    if (lnv < MAX_EXPR_VARS) {
+                        strncpy(lvars[lnv].name, var_name,
+                                sizeof(lvars[lnv].name) - 1);
+                        lvars[lnv].name[sizeof(lvars[lnv].name) - 1] = '\0';
+                        lvars[lnv].value = val;
+                        lnv++;
+                    }
+                    flatten_range(i + 1, fe, lvars, lnv);
+                }
+            }
+            i = (fe < g_num_cmds) ? fe + 1 : g_num_cmds;
+            continue;
+        }
+
+        if (g_cmds[i].type == CMD_FOR_END) { i++; continue; }
+
+        /* Regular command */
+        if (g_num_flat_cmds >= MAX_COMMANDS) { i++; continue; }
+
+        if (vars && nv > 0) {
+            GLCmd tmp;
+            memset(&tmp, 0, sizeof(tmp));
+            int saved = g_edit_line;
+            g_edit_line = g_num_flat_cmds;
+            if (parse_command_with_vars(g_cmds[i].source, &tmp, vars, nv))
+                g_flat_cmds[g_num_flat_cmds++] = tmp;
+            g_edit_line = saved;
+        } else {
+            g_flat_cmds[g_num_flat_cmds++] = g_cmds[i];
+        }
+        i++;
+    }
+}
+
+static void flatten_commands(void) {
+    g_num_flat_cmds = 0;
+    flatten_range(0, g_num_cmds, NULL, 0);
+}
+
+/* ========================================================================= */
 /* Command execution                                                          */
 /* ========================================================================= */
 
 static void execute_commands(void) {
     int in_begin = 0;
-    for (int i = 0; i < g_num_cmds; i++) {
-        if (!g_cmds[i].valid) continue;
-        switch (g_cmds[i].type) {
+    for (int i = 0; i < g_num_flat_cmds; i++) {
+        if (!g_flat_cmds[i].valid) continue;
+        switch (g_flat_cmds[i].type) {
         case CMD_BEGIN:
             if (in_begin) glEnd();
-            glBegin(g_cmds[i].mode);
+            glBegin(g_flat_cmds[i].mode);
             in_begin = 1;
             break;
         case CMD_END:
@@ -1242,35 +1319,35 @@ static void execute_commands(void) {
             break;
         case CMD_VERTEX3F:
             if (in_begin)
-                glVertex3f(g_cmds[i].args[0], g_cmds[i].args[1],
-                           g_cmds[i].args[2]);
+                glVertex3f(g_flat_cmds[i].args[0], g_flat_cmds[i].args[1],
+                           g_flat_cmds[i].args[2]);
             break;
         case CMD_NORMAL3F:
-            glNormal3f(g_cmds[i].args[0], g_cmds[i].args[1],
-                       g_cmds[i].args[2]);
+            glNormal3f(g_flat_cmds[i].args[0], g_flat_cmds[i].args[1],
+                       g_flat_cmds[i].args[2]);
             break;
         case CMD_COLOR3F:
-            glColor3f(g_cmds[i].args[0], g_cmds[i].args[1],
-                      g_cmds[i].args[2]);
+            glColor3f(g_flat_cmds[i].args[0], g_flat_cmds[i].args[1],
+                      g_flat_cmds[i].args[2]);
             break;
         case CMD_COLOR4F:
-            glColor4f(g_cmds[i].args[0], g_cmds[i].args[1],
-                      g_cmds[i].args[2], g_cmds[i].args[3]);
+            glColor4f(g_flat_cmds[i].args[0], g_flat_cmds[i].args[1],
+                      g_flat_cmds[i].args[2], g_flat_cmds[i].args[3]);
             break;
         case CMD_ENABLE:
-            glEnable(g_cmds[i].mode);
+            glEnable(g_flat_cmds[i].mode);
             for (int li = 0; li < MAX_LIGHTS; li++)
-                if (g_lights[li].id == g_cmds[i].mode)
+                if (g_lights[li].id == g_flat_cmds[i].mode)
                     g_lights[li].enabled = 1;
             break;
         case CMD_DISABLE:
-            glDisable(g_cmds[i].mode);
+            glDisable(g_flat_cmds[i].mode);
             for (int li = 0; li < MAX_LIGHTS; li++)
-                if (g_lights[li].id == g_cmds[i].mode)
+                if (g_lights[li].id == g_flat_cmds[i].mode)
                     g_lights[li].enabled = 0;
             break;
         case CMD_SHADE_MODEL:
-            glShadeModel(g_cmds[i].mode);
+            glShadeModel(g_flat_cmds[i].mode);
             break;
         default:
             break;
@@ -1331,6 +1408,8 @@ static void color_for_type(CmdType t) {
     case CMD_NORMAL3F: glColor3f(0.40f, 0.80f, 0.95f); break;
     case CMD_COLOR3F:
     case CMD_COLOR4F:  glColor3f(0.95f, 0.85f, 0.30f); break;
+    case CMD_FOR_BEGIN:
+    case CMD_FOR_END:  glColor3f(0.95f, 0.60f, 0.30f); break;
     default:           glColor3f(0.70f, 0.70f, 0.70f); break;
     }
 }
@@ -2126,12 +2205,12 @@ static void draw_vertex_numbers(void) {
     glColor3f(1.0f, 1.0f, 0.30f);
 
     int vn = 0;
-    for (int i = 0; i < g_num_cmds; i++) {
-        if (!g_cmds[i].valid || g_cmds[i].type != CMD_VERTEX3F) continue;
+    for (int i = 0; i < g_num_flat_cmds; i++) {
+        if (!g_flat_cmds[i].valid || g_flat_cmds[i].type != CMD_VERTEX3F) continue;
         char label[16];
         snprintf(label, sizeof(label), " v%d", vn);
-        glRasterPos3f(g_cmds[i].args[0], g_cmds[i].args[1],
-                      g_cmds[i].args[2]);
+        glRasterPos3f(g_flat_cmds[i].args[0], g_flat_cmds[i].args[1],
+                      g_flat_cmds[i].args[2]);
         for (const char *c = label; *c; c++)
             glutBitmapCharacter(FONT_MONO, (unsigned char)*c);
         vn++;
@@ -2149,14 +2228,14 @@ static void draw_normal_vectors(void) {
     float nx = 0, ny = 0, nz = 1;
 
     glBegin(GL_LINES);
-    for (int i = 0; i < g_num_cmds; i++) {
-        if (!g_cmds[i].valid) continue;
-        if (g_cmds[i].type == CMD_NORMAL3F) {
-            nx = g_cmds[i].args[0]; ny = g_cmds[i].args[1];
-            nz = g_cmds[i].args[2];
-        } else if (g_cmds[i].type == CMD_VERTEX3F) {
-            float vx = g_cmds[i].args[0], vy = g_cmds[i].args[1],
-                  vz = g_cmds[i].args[2];
+    for (int i = 0; i < g_num_flat_cmds; i++) {
+        if (!g_flat_cmds[i].valid) continue;
+        if (g_flat_cmds[i].type == CMD_NORMAL3F) {
+            nx = g_flat_cmds[i].args[0]; ny = g_flat_cmds[i].args[1];
+            nz = g_flat_cmds[i].args[2];
+        } else if (g_flat_cmds[i].type == CMD_VERTEX3F) {
+            float vx = g_flat_cmds[i].args[0], vy = g_flat_cmds[i].args[1],
+                  vz = g_flat_cmds[i].args[2];
             glVertex3f(vx, vy, vz);
             glVertex3f(vx + nx * scale, vy + ny * scale, vz + nz * scale);
         }
@@ -2166,15 +2245,15 @@ static void draw_normal_vectors(void) {
     glPointSize(4.0f);
     glBegin(GL_POINTS);
     nx = 0; ny = 0; nz = 1;
-    for (int i = 0; i < g_num_cmds; i++) {
-        if (!g_cmds[i].valid) continue;
-        if (g_cmds[i].type == CMD_NORMAL3F) {
-            nx = g_cmds[i].args[0]; ny = g_cmds[i].args[1];
-            nz = g_cmds[i].args[2];
-        } else if (g_cmds[i].type == CMD_VERTEX3F) {
-            glVertex3f(g_cmds[i].args[0] + nx * scale,
-                       g_cmds[i].args[1] + ny * scale,
-                       g_cmds[i].args[2] + nz * scale);
+    for (int i = 0; i < g_num_flat_cmds; i++) {
+        if (!g_flat_cmds[i].valid) continue;
+        if (g_flat_cmds[i].type == CMD_NORMAL3F) {
+            nx = g_flat_cmds[i].args[0]; ny = g_flat_cmds[i].args[1];
+            nz = g_flat_cmds[i].args[2];
+        } else if (g_flat_cmds[i].type == CMD_VERTEX3F) {
+            glVertex3f(g_flat_cmds[i].args[0] + nx * scale,
+                       g_flat_cmds[i].args[1] + ny * scale,
+                       g_flat_cmds[i].args[2] + nz * scale);
         }
     }
     glEnd();
@@ -2597,12 +2676,12 @@ static void render_3d_scene(void) {
     glColor3f(0.0f, 0.0f, 0.0f);
     {
         int in_begin = 0;
-        for (int i = 0; i < g_num_cmds; i++) {
-            if (!g_cmds[i].valid) continue;
-            switch (g_cmds[i].type) {
+        for (int i = 0; i < g_num_flat_cmds; i++) {
+            if (!g_flat_cmds[i].valid) continue;
+            switch (g_flat_cmds[i].type) {
             case CMD_BEGIN:
                 if (in_begin) glEnd();
-                glBegin(g_cmds[i].mode);
+                glBegin(g_flat_cmds[i].mode);
                 in_begin = 1;
                 break;
             case CMD_END:
@@ -2610,8 +2689,8 @@ static void render_3d_scene(void) {
                 break;
             case CMD_VERTEX3F:
                 if (in_begin)
-                    glVertex3f(g_cmds[i].args[0], g_cmds[i].args[1],
-                               g_cmds[i].args[2]);
+                    glVertex3f(g_flat_cmds[i].args[0], g_flat_cmds[i].args[1],
+                               g_flat_cmds[i].args[2]);
                 break;
             default: break;
             }
@@ -2625,10 +2704,10 @@ static void render_3d_scene(void) {
     glPointSize(5.0f);
     glColor3f(0.0f, 0.0f, 0.0f);
     glBegin(GL_POINTS);
-    for (int i = 0; i < g_num_cmds; i++) {
-        if (g_cmds[i].valid && g_cmds[i].type == CMD_VERTEX3F)
-            glVertex3f(g_cmds[i].args[0], g_cmds[i].args[1],
-                       g_cmds[i].args[2]);
+    for (int i = 0; i < g_num_flat_cmds; i++) {
+        if (g_flat_cmds[i].valid && g_flat_cmds[i].type == CMD_VERTEX3F)
+            glVertex3f(g_flat_cmds[i].args[0], g_flat_cmds[i].args[1],
+                       g_flat_cmds[i].args[2]);
     }
     glEnd();
     glPointSize(1.0f);
@@ -2650,6 +2729,10 @@ static void display_func(void) {
     if (g_normals_dirty) {
         recompute_autonormals();
         g_normals_dirty = 0;
+    }
+    if (g_flat_dirty) {
+        flatten_commands();
+        g_flat_dirty = 0;
     }
     update_lookat_strings();
 
@@ -2741,298 +2824,261 @@ static int parse_for_header(const char *input, char *var_name, int var_sz,
     return 1;
 }
 
-/*
- * Expand a single-line for-loop into concrete commands inserted at insert_pos.
- * Body lines are in body_lines[0..body_count-1].
- * Outer vars are inherited from enclosing loops.
- * Returns number of commands inserted.
- */
-static int expand_for_loop(int insert_pos, const char *var_name,
-                           float start, float end, float step,
-                           char body_lines[][MAX_LINE_LEN], int body_count,
-                           ExprVar *outer_vars, int num_outer_vars) {
-    if (fabsf(step) < 1e-9f) return 0;
-    if ((step > 0 && start > end) || (step < 0 && start < end)) return 0;
+/* Check for-loop nesting depth at a position in g_cmds */
+static int for_loop_depth_at(int pos) {
+    int depth = 0;
+    for (int i = 0; i < pos && i < g_num_cmds; i++) {
+        if (g_cmds[i].type == CMD_FOR_BEGIN) depth++;
+        else if (g_cmds[i].type == CMD_FOR_END) depth--;
+    }
+    return depth > 0 ? depth : 0;
+}
 
-    int total_inserted = 0;
-    int max_iters = 100000;  /* safety limit */
-
-    for (float val = start;
-         (step > 0) ? (val < end - 1e-6f) : (val > end + 1e-6f);
-         val += step) {
-        if (--max_iters < 0) break;
-
-        /* Build variable array: outer vars + this loop var */
-        ExprVar vars[MAX_EXPR_VARS];
-        int nv = 0;
-        if (outer_vars) {
-            for (int i = 0; i < num_outer_vars && nv < MAX_EXPR_VARS; i++)
-                vars[nv++] = outer_vars[i];
-        }
-        if (nv < MAX_EXPR_VARS) {
-            strncpy(vars[nv].name, var_name, sizeof(vars[nv].name) - 1);
-            vars[nv].name[sizeof(vars[nv].name) - 1] = '\0';
-            vars[nv].value = val;
-            nv++;
-        }
-
-        for (int b = 0; b < body_count; b++) {
-            const char *line = body_lines[b];
-
-            /* Skip empty lines */
-            const char *lp = line;
-            while (*lp && isspace((unsigned char)*lp)) lp++;
-            if (*lp == '\0') continue;
-
-            /* Check for nested for-loop */
-            char nested_var[16];
-            float ns, ne, nstep;
-            const char *nbody_start;
-            if (parse_for_header(lp, nested_var, sizeof(nested_var),
-                                 &ns, &ne, &nstep, &nbody_start)) {
-                /* Evaluate nested header with current vars */
-                {
-                    ExprCtx ectx = { NULL, vars, nv };
-                    /* Re-parse start/end/step with variables */
-                    /* We need to re-parse from the original line */
-                    const char *hp = lp;
-                    while (*hp && *hp != '(') hp++;
-                    hp++; /* skip ( */
-                    /* skip var name and comma */
-                    while (*hp && *hp != ',') hp++;
-                    hp++;
-                    ectx.p = hp;
-                    ns = eval_expr(&ectx);
-                    hp = ectx.p;
-                    while (*hp && isspace((unsigned char)*hp)) hp++;
-                    if (*hp == ',') hp++;
-                    ectx.p = hp;
-                    ne = eval_expr(&ectx);
-                    hp = ectx.p;
-                    while (*hp && isspace((unsigned char)*hp)) hp++;
-                    nstep = 1.0f;
-                    if (*hp == ',') {
-                        hp++;
-                        ectx.p = hp;
-                        nstep = eval_expr(&ectx);
-                        hp = ectx.p;
-                    }
-                }
-
-                /* Collect nested body: if single-line, it's the rest after ) */
-                while (*nbody_start && isspace((unsigned char)*nbody_start))
-                    nbody_start++;
-
-                char nested_body[MAX_LOOP_BODY][MAX_LINE_LEN];
-                int nested_count = 0;
-
-                if (*nbody_start == '{') {
-                    /* Multi-line nested body: collect lines between { and } */
-                    nbody_start++;
-                    /* Remaining body_lines after this one form the block */
-                    int brace_depth = 1;
-                    for (int nb = b + 1; nb < body_count && brace_depth > 0; nb++) {
-                        const char *nl = body_lines[nb];
-                        while (*nl && isspace((unsigned char)*nl)) nl++;
-                        if (*nl == '}') {
-                            brace_depth--;
-                            if (brace_depth == 0) { b = nb; break; }
-                        }
-                        /* Check for nested { */
-                        for (const char *ch = nl; *ch; ch++) {
-                            if (*ch == '{') brace_depth++;
-                            else if (*ch == '}') { brace_depth--; if (brace_depth == 0) break; }
-                        }
-                        if (brace_depth > 0 && nested_count < MAX_LOOP_BODY) {
-                            strncpy(nested_body[nested_count], body_lines[nb],
-                                    MAX_LINE_LEN - 1);
-                            nested_body[nested_count][MAX_LINE_LEN - 1] = '\0';
-                            nested_count++;
-                        }
-                        b = nb;
-                    }
-                } else if (*nbody_start) {
-                    /* Single-line nested body */
-                    strncpy(nested_body[0], nbody_start, MAX_LINE_LEN - 1);
-                    nested_body[0][MAX_LINE_LEN - 1] = '\0';
-                    nested_count = 1;
-                }
-
-                int n = expand_for_loop(insert_pos + total_inserted,
-                                        nested_var, ns, ne, nstep,
-                                        nested_body, nested_count,
-                                        vars, nv);
-                total_inserted += n;
-                continue;
-            }
-
-            /* Normal command line — parse with variables */
-            GLCmd cmd;
-            memset(&cmd, 0, sizeof(cmd));
-            int saved_edit = g_edit_line;
-            g_edit_line = insert_pos + total_inserted;
-            if (parse_command_with_vars(line, &cmd, vars, nv)) {
-                if (g_num_cmds < MAX_COMMANDS) {
-                    int pos = insert_pos + total_inserted;
-                    memmove(&g_cmds[pos + 1], &g_cmds[pos],
-                            (g_num_cmds - pos) * sizeof(GLCmd));
-                    g_cmds[pos] = cmd;
-                    g_num_cmds++;
-                    total_inserted++;
-                }
-            }
-            g_edit_line = saved_edit;
+/* Find matching FOR_END for a FOR_BEGIN at index i */
+static int find_for_end(int for_begin_idx) {
+    int depth = 1;
+    for (int j = for_begin_idx + 1; j < g_num_cmds; j++) {
+        if (g_cmds[j].type == CMD_FOR_BEGIN) depth++;
+        else if (g_cmds[j].type == CMD_FOR_END) {
+            depth--;
+            if (depth == 0) return j;
         }
     }
-    return total_inserted;
+    return g_num_cmds;
+}
+
+/* Parse variable name from a FOR_BEGIN source string */
+static void get_for_var_name(const GLCmd *cmd, char *var, int var_sz) {
+    const char *p = cmd->source;
+    while (*p && *p != '(') p++;
+    if (*p) p++;
+    while (*p && isspace((unsigned char)*p)) p++;
+    int i = 0;
+    while (*p && (isalnum((unsigned char)*p) || *p == '_') && i < var_sz - 1)
+        var[i++] = *p++;
+    var[i] = '\0';
+}
+
+/* Collect loop variable names/dummy values from enclosing FOR_BEGINs */
+static int collect_for_vars(int pos, ExprVar *vars, int max_vars) {
+    ExprVar stack[MAX_LOOP_DEPTH];
+    int depth = 0;
+    for (int i = 0; i < pos && i < g_num_cmds; i++) {
+        if (g_cmds[i].type == CMD_FOR_BEGIN && depth < MAX_LOOP_DEPTH) {
+            char vn[16];
+            get_for_var_name(&g_cmds[i], vn, sizeof(vn));
+            strncpy(stack[depth].name, vn, sizeof(stack[depth].name) - 1);
+            stack[depth].name[sizeof(stack[depth].name) - 1] = '\0';
+            stack[depth].value = g_cmds[i].args[0];
+            depth++;
+        } else if (g_cmds[i].type == CMD_FOR_END && depth > 0) {
+            depth--;
+        }
+    }
+    int nv = depth < max_vars ? depth : max_vars;
+    for (int i = 0; i < nv; i++) vars[i] = stack[i];
+    return nv;
 }
 
 /*
- * Try to handle the input as a for-loop. Returns 1 if handled, 0 otherwise.
- * Handles both single-line: for(i, 0, 24) glVertex3f(...)
- * and multi-line block start: for(i, 0, 24) {
+ * Try to handle the input as a for-loop header.
+ * Single-line: for(i,0,24) glVertex3f(...) -> inserts FOR_BEGIN + body + FOR_END
+ * Multi-line:  for(i,0,24) {             -> inserts FOR_BEGIN + FOR_END, enters insert mode between
  */
-static int try_handle_for_loop(void) {
+static int try_commit_for_loop(void) {
     const char *p = g_input;
     while (*p && isspace((unsigned char)*p)) p++;
-
     if (strncmp(p, "for(", 4) != 0 && strncmp(p, "for (", 5) != 0)
         return 0;
 
     char var_name[16];
     float start, end, step;
     const char *body_start;
-
     if (!parse_for_header(p, var_name, sizeof(var_name),
                           &start, &end, &step, &body_start)) {
-        set_status("for-loop syntax: for(var, start, end[, step]) body;");
-        return 1;  /* consumed but error */
+        set_status("for syntax: for(var, start, end[, step]) body;");
+        return 1;
     }
 
-    /* Skip whitespace after header */
     while (*body_start && isspace((unsigned char)*body_start)) body_start++;
 
-    /* Multi-line block: for(...) { */
-    if (*body_start == '{') {
-        if (g_loop_depth >= MAX_LOOP_DEPTH) {
-            set_status("Max loop nesting depth reached");
+    int pos = g_inserting ? g_edit_line :
+              (g_edit_line < g_num_cmds ? g_edit_line : g_num_cmds);
+    int fdepth = for_loop_depth_at(pos);
+    int bb = in_begin_block_at(pos);
+    int ind = (bb ? 4 : 2) + fdepth * 2;
+    char indent[32];
+    if (ind > (int)sizeof(indent) - 1) ind = (int)sizeof(indent) - 1;
+    memset(indent, ' ', ind);
+    indent[ind] = '\0';
+
+    /* Build FOR_BEGIN cmd */
+    GLCmd fb;
+    memset(&fb, 0, sizeof(fb));
+    fb.type = CMD_FOR_BEGIN;
+    fb.args[0] = start;
+    fb.args[1] = end;
+    fb.args[2] = step;
+    fb.valid = 1;
+    if (step != 1.0f)
+        snprintf(fb.source, sizeof(fb.source),
+                 "%sfor(%s, %g, %g, %g) {", indent, var_name, start, end, step);
+    else
+        snprintf(fb.source, sizeof(fb.source),
+                 "%sfor(%s, %g, %g) {", indent, var_name, start, end);
+
+    /* Build FOR_END cmd */
+    GLCmd fe;
+    memset(&fe, 0, sizeof(fe));
+    fe.type = CMD_FOR_END;
+    fe.valid = 1;
+    snprintf(fe.source, sizeof(fe.source), "%s}", indent);
+
+    if (*body_start == '{' || *body_start == '\0') {
+        /* Multi-line block: insert FOR_BEGIN and FOR_END, enter insert mode between */
+        if (g_num_cmds + 2 > MAX_COMMANDS) {
+            set_status("Command buffer full!");
             return 1;
         }
-        LoopLevel *lv = &g_loops[g_loop_depth];
-        strncpy(lv->var_name, var_name, sizeof(lv->var_name) - 1);
-        lv->var_name[sizeof(lv->var_name) - 1] = '\0';
-        lv->start = start;
-        lv->end = end;
-        lv->step = step;
-        lv->body_count = 0;
-        g_loop_depth++;
-        set_status("for-loop block: type body lines, end with }");
-        return 1;
-    }
+        memmove(&g_cmds[pos + 2], &g_cmds[pos],
+                (g_num_cmds - pos) * sizeof(GLCmd));
+        g_cmds[pos] = fb;
+        g_cmds[pos + 1] = fe;
+        g_num_cmds += 2;
 
-    /* Single-line: for(...) command; */
-    if (*body_start == '\0') {
-        set_status("for-loop needs a body: for(i,0,N) glVertex3f(...)");
-        return 1;
-    }
-
-    /* Strip trailing semicolon from body */
-    char body_line[MAX_LINE_LEN];
-    strncpy(body_line, body_start, MAX_LINE_LEN - 1);
-    body_line[MAX_LINE_LEN - 1] = '\0';
-    int blen = (int)strlen(body_line);
-    while (blen > 0 && (body_line[blen-1] == ';' || isspace((unsigned char)body_line[blen-1])))
-        body_line[--blen] = '\0';
-
-    char body_arr[1][MAX_LINE_LEN];
-    strncpy(body_arr[0], body_line, MAX_LINE_LEN - 1);
-    body_arr[0][MAX_LINE_LEN - 1] = '\0';
-
-    int insert_pos = g_inserting ? g_edit_line :
-                     (g_edit_line < g_num_cmds ? g_edit_line : g_num_cmds);
-
-    int n = expand_for_loop(insert_pos, var_name, start, end, step,
-                            body_arr, 1, NULL, 0);
-
-    if (n > 0) {
-        g_edit_line = insert_pos + n;
-        g_inserting = 0;
+        g_edit_line = pos + 1;
+        g_inserting = 1;
         g_input[0] = '\0';
         g_input_len = 0;
         g_cursor_pos = 0;
-        g_newline_buf[0] = '\0';
-        g_newline_len = 0;
-        char msg[128];
-        snprintf(msg, sizeof(msg), "Expanded %d commands from for-loop", n);
-        set_status(msg);
+        set_status("for-loop: type body lines, press Esc when done");
         mark_normals_dirty();
-    } else {
-        set_status("for-loop produced no commands");
-    }
-    return 1;
-}
-
-/*
- * Try to handle '}' closing a multi-line for-loop block.
- * Returns 1 if handled, 0 otherwise.
- */
-static int try_handle_close_brace(void) {
-    const char *p = g_input;
-    while (*p && isspace((unsigned char)*p)) p++;
-    if (*p != '}' || g_loop_depth == 0) return 0;
-
-    g_loop_depth--;
-    LoopLevel *lv = &g_loops[g_loop_depth];
-
-    int insert_pos = g_inserting ? g_edit_line :
-                     (g_edit_line < g_num_cmds ? g_edit_line : g_num_cmds);
-
-    int n = expand_for_loop(insert_pos, lv->var_name,
-                            lv->start, lv->end, lv->step,
-                            lv->body_lines, lv->body_count, NULL, 0);
-
-    if (n > 0) {
-        g_edit_line = insert_pos + n;
-        g_inserting = 0;
-        g_input[0] = '\0';
-        g_input_len = 0;
-        g_cursor_pos = 0;
-        g_newline_buf[0] = '\0';
-        g_newline_len = 0;
-        char msg[128];
-        snprintf(msg, sizeof(msg), "Expanded %d commands from for-loop block", n);
-        set_status(msg);
-        mark_normals_dirty();
-    } else {
-        set_status("for-loop block produced no commands");
-    }
-    return 1;
-}
-
-/*
- * Try to accumulate a line into the current for-loop body buffer.
- * Returns 1 if we're inside a loop block, 0 otherwise.
- */
-static int try_accumulate_loop_body(void) {
-    if (g_loop_depth == 0) return 0;
-
-    LoopLevel *lv = &g_loops[g_loop_depth - 1];
-    if (lv->body_count < MAX_LOOP_BODY) {
-        strncpy(lv->body_lines[lv->body_count], g_input, MAX_LINE_LEN - 1);
-        lv->body_lines[lv->body_count][MAX_LINE_LEN - 1] = '\0';
-        lv->body_count++;
-
-        char msg[128];
-        snprintf(msg, sizeof(msg), "for-loop body: %d line(s), end with }",
-                 lv->body_count);
-        set_status(msg);
-    } else {
-        set_status("for-loop body too long (max 64 lines)");
+        return 1;
     }
 
+    /* Single-line: for(...) body; */
+    char body[MAX_LINE_LEN];
+    strncpy(body, body_start, MAX_LINE_LEN - 1);
+    body[MAX_LINE_LEN - 1] = '\0';
+    int blen = (int)strlen(body);
+    while (blen > 0 && (body[blen-1] == ';' || isspace((unsigned char)body[blen-1])))
+        body[--blen] = '\0';
+    if (blen == 0) {
+        set_status("for-loop needs a body");
+        return 1;
+    }
+
+    /* Validate body with dummy vars */
+    ExprVar dv[1];
+    strncpy(dv[0].name, var_name, sizeof(dv[0].name) - 1);
+    dv[0].name[sizeof(dv[0].name) - 1] = '\0';
+    dv[0].value = start;
+    GLCmd body_cmd;
+    memset(&body_cmd, 0, sizeof(body_cmd));
+    int saved = g_edit_line;
+    g_edit_line = pos;
+    if (!parse_command_with_vars(body, &body_cmd, dv, 1)) {
+        g_edit_line = saved;
+        set_status("Invalid for-loop body command");
+        return 1;
+    }
+    g_edit_line = saved;
+
+    /* Overwrite source with original expression text */
+    char bind[32];
+    int bi = ind + 2;
+    if (bi > (int)sizeof(bind) - 1) bi = (int)sizeof(bind) - 1;
+    memset(bind, ' ', bi);
+    bind[bi] = '\0';
+    snprintf(body_cmd.source, sizeof(body_cmd.source), "%s%s;", bind, body);
+
+    if (g_num_cmds + 3 > MAX_COMMANDS) {
+        set_status("Command buffer full!");
+        return 1;
+    }
+    memmove(&g_cmds[pos + 3], &g_cmds[pos],
+            (g_num_cmds - pos) * sizeof(GLCmd));
+    g_cmds[pos] = fb;
+    g_cmds[pos + 1] = body_cmd;
+    g_cmds[pos + 2] = fe;
+    g_num_cmds += 3;
+
+    g_edit_line = pos + 3;
+    g_inserting = 0;
     g_input[0] = '\0';
     g_input_len = 0;
     g_cursor_pos = 0;
+    g_newline_buf[0] = '\0';
+    g_newline_len = 0;
+
+    char msg[128];
+    snprintf(msg, sizeof(msg), "for-loop: %s from %g to %g", var_name, start, end);
+    set_status(msg);
+    mark_normals_dirty();
+    return 1;
+}
+
+/*
+ * Try to handle '}' closing a for-loop block.
+ * If there's already a pre-inserted FOR_END at the current position, skip past it.
+ * Otherwise, if there's an unclosed FOR_BEGIN, insert FOR_END.
+ */
+static int try_commit_close_brace(void) {
+    const char *p = g_input;
+    while (*p && isspace((unsigned char)*p)) p++;
+    if (*p != '}') return 0;
+
+    int pos = g_inserting ? g_edit_line :
+              (g_edit_line < g_num_cmds ? g_edit_line : g_num_cmds);
+
+    /* Check for unclosed FOR_BEGIN */
+    if (for_loop_depth_at(pos) <= 0) return 0;
+
+    /* If we're in insert mode right before a FOR_END, just exit insert mode */
+    if (g_inserting && pos < g_num_cmds && g_cmds[pos].type == CMD_FOR_END) {
+        g_edit_line = pos + 1;
+        g_inserting = 0;
+        g_input[0] = '\0';
+        g_input_len = 0;
+        g_cursor_pos = 0;
+        load_line_to_input(g_edit_line);
+        set_status("for-loop block closed");
+        mark_normals_dirty();
+        return 1;
+    }
+
+    /* Otherwise insert a FOR_END */
+    int fdepth = for_loop_depth_at(pos) - 1;
+    int bb_val = in_begin_block_at(pos);
+    int ind_len = (bb_val ? 4 : 2) + fdepth * 2;
+    char indent[32];
+    if (ind_len > (int)sizeof(indent) - 1) ind_len = (int)sizeof(indent) - 1;
+    memset(indent, ' ', ind_len);
+    indent[ind_len] = '\0';
+
+    GLCmd fe;
+    memset(&fe, 0, sizeof(fe));
+    fe.type = CMD_FOR_END;
+    fe.valid = 1;
+    snprintf(fe.source, sizeof(fe.source), "%s}", indent);
+
+    if (g_num_cmds >= MAX_COMMANDS) {
+        set_status("Command buffer full!");
+        return 1;
+    }
+    memmove(&g_cmds[pos + 1], &g_cmds[pos],
+            (g_num_cmds - pos) * sizeof(GLCmd));
+    g_cmds[pos] = fe;
+    g_num_cmds++;
+    g_edit_line = pos + 1;
+    g_inserting = 0;
+    g_input[0] = '\0';
+    g_input_len = 0;
+    g_cursor_pos = 0;
+    g_newline_buf[0] = '\0';
+    g_newline_len = 0;
+    set_status("for-loop block closed");
+    mark_normals_dirty();
     return 1;
 }
 
@@ -3154,19 +3200,13 @@ static void keyboard_func(unsigned char key, int x, int y) {
             return;
         }
         /* Check for } closing a loop block */
-        if (g_input_len > 0 && try_handle_close_brace()) {
+        if (g_input_len > 0 && try_commit_close_brace()) {
             g_ac_count = 0;
             g_ac_ghost[0] = '\0';
             return;
         }
         /* Check for for-loop (single-line or block start) */
-        if (g_input_len > 0 && try_handle_for_loop()) {
-            g_ac_count = 0;
-            g_ac_ghost[0] = '\0';
-            return;
-        }
-        /* Accumulate into loop body if inside a block */
-        if (g_input_len > 0 && try_accumulate_loop_body()) {
+        if (g_input_len > 0 && try_commit_for_loop()) {
             g_ac_count = 0;
             g_ac_ghost[0] = '\0';
             return;
@@ -3177,12 +3217,44 @@ static void keyboard_func(unsigned char key, int x, int y) {
                 /* Commit insertion, stay in insert mode */
                 GLCmd cmd;
                 memset(&cmd, 0, sizeof(cmd));
-                if (parse_command(g_input, &cmd) && g_num_cmds < MAX_COMMANDS) {
+                int fpos = g_edit_line;
+                int in_loop = for_loop_depth_at(fpos) > 0;
+                int parsed;
+                if (in_loop) {
+                    ExprVar dvars[MAX_EXPR_VARS];
+                    int dnv = collect_for_vars(fpos, dvars, MAX_EXPR_VARS);
+                    int saved_el = g_edit_line;
+                    g_edit_line = fpos;
+                    parsed = parse_command_with_vars(g_input, &cmd, dvars, dnv);
+                    g_edit_line = saved_el;
+                    if (parsed) {
+                        char stripped[MAX_LINE_LEN];
+                        const char *sp = g_input;
+                        while (*sp && isspace((unsigned char)*sp)) sp++;
+                        strncpy(stripped, sp, MAX_LINE_LEN - 1);
+                        stripped[MAX_LINE_LEN - 1] = '\0';
+                        int slen = (int)strlen(stripped);
+                        while (slen > 0 && (stripped[slen-1] == ';' ||
+                               isspace((unsigned char)stripped[slen-1])))
+                            stripped[--slen] = '\0';
+                        int fdepth = for_loop_depth_at(fpos);
+                        int bb_v = in_begin_block_at(fpos);
+                        int ind_v = (bb_v ? 4 : 2) + fdepth * 2;
+                        char indent_v[32];
+                        if (ind_v > (int)sizeof(indent_v) - 1) ind_v = (int)sizeof(indent_v) - 1;
+                        memset(indent_v, ' ', ind_v);
+                        indent_v[ind_v] = '\0';
+                        snprintf(cmd.source, sizeof(cmd.source), "%s%s;", indent_v, stripped);
+                    }
+                } else {
+                    parsed = parse_command(g_input, &cmd);
+                }
+                if (parsed && g_num_cmds < MAX_COMMANDS) {
                     for (int j = g_num_cmds; j > g_edit_line; j--)
                         g_cmds[j] = g_cmds[j - 1];
                     g_cmds[g_edit_line] = cmd;
                     g_num_cmds++;
-                                        g_edit_line++;
+                    g_edit_line++;
                     g_input[0] = '\0';
                     g_input_len = 0;
                     g_cursor_pos = 0;
@@ -3201,9 +3273,41 @@ static void keyboard_func(unsigned char key, int x, int y) {
             if (g_input_len > 0) {
                 GLCmd cmd;
                 memset(&cmd, 0, sizeof(cmd));
-                if (parse_command(g_input, &cmd)) {
+                int fpos = g_edit_line;
+                int in_loop = for_loop_depth_at(fpos) > 0;
+                int parsed;
+                if (in_loop) {
+                    ExprVar dvars[MAX_EXPR_VARS];
+                    int dnv = collect_for_vars(fpos, dvars, MAX_EXPR_VARS);
+                    int saved_el = g_edit_line;
+                    g_edit_line = fpos;
+                    parsed = parse_command_with_vars(g_input, &cmd, dvars, dnv);
+                    g_edit_line = saved_el;
+                    if (parsed) {
+                        char stripped[MAX_LINE_LEN];
+                        const char *sp = g_input;
+                        while (*sp && isspace((unsigned char)*sp)) sp++;
+                        strncpy(stripped, sp, MAX_LINE_LEN - 1);
+                        stripped[MAX_LINE_LEN - 1] = '\0';
+                        int slen = (int)strlen(stripped);
+                        while (slen > 0 && (stripped[slen-1] == ';' ||
+                               isspace((unsigned char)stripped[slen-1])))
+                            stripped[--slen] = '\0';
+                        int fdepth = for_loop_depth_at(fpos);
+                        int bb_v = in_begin_block_at(fpos);
+                        int ind_v = (bb_v ? 4 : 2) + fdepth * 2;
+                        char indent_v[32];
+                        if (ind_v > (int)sizeof(indent_v) - 1) ind_v = (int)sizeof(indent_v) - 1;
+                        memset(indent_v, ' ', ind_v);
+                        indent_v[ind_v] = '\0';
+                        snprintf(cmd.source, sizeof(cmd.source), "%s%s;", indent_v, stripped);
+                    }
+                } else {
+                    parsed = parse_command(g_input, &cmd);
+                }
+                if (parsed) {
                     g_cmds[g_edit_line] = cmd;
-                                    } else {
+                } else {
                     can_advance = 0;
                 }
             }
@@ -3220,10 +3324,42 @@ static void keyboard_func(unsigned char key, int x, int y) {
             if (g_input_len > 0) {
                 GLCmd cmd;
                 memset(&cmd, 0, sizeof(cmd));
-                if (parse_command(g_input, &cmd) && g_num_cmds < MAX_COMMANDS) {
+                int fpos = g_num_cmds;
+                int in_loop = for_loop_depth_at(fpos) > 0;
+                int parsed;
+                if (in_loop) {
+                    ExprVar dvars[MAX_EXPR_VARS];
+                    int dnv = collect_for_vars(fpos, dvars, MAX_EXPR_VARS);
+                    int saved_el = g_edit_line;
+                    g_edit_line = fpos;
+                    parsed = parse_command_with_vars(g_input, &cmd, dvars, dnv);
+                    g_edit_line = saved_el;
+                    if (parsed) {
+                        char stripped[MAX_LINE_LEN];
+                        const char *sp = g_input;
+                        while (*sp && isspace((unsigned char)*sp)) sp++;
+                        strncpy(stripped, sp, MAX_LINE_LEN - 1);
+                        stripped[MAX_LINE_LEN - 1] = '\0';
+                        int slen = (int)strlen(stripped);
+                        while (slen > 0 && (stripped[slen-1] == ';' ||
+                               isspace((unsigned char)stripped[slen-1])))
+                            stripped[--slen] = '\0';
+                        int fdepth = for_loop_depth_at(fpos);
+                        int bb_v = in_begin_block_at(fpos);
+                        int ind_v = (bb_v ? 4 : 2) + fdepth * 2;
+                        char indent_v[32];
+                        if (ind_v > (int)sizeof(indent_v) - 1) ind_v = (int)sizeof(indent_v) - 1;
+                        memset(indent_v, ' ', ind_v);
+                        indent_v[ind_v] = '\0';
+                        snprintf(cmd.source, sizeof(cmd.source), "%s%s;", indent_v, stripped);
+                    }
+                } else {
+                    parsed = parse_command(g_input, &cmd);
+                }
+                if (parsed && g_num_cmds < MAX_COMMANDS) {
                     g_cmds[g_num_cmds++] = cmd;
                     g_edit_line = g_num_cmds;
-                                        g_input[0] = '\0';
+                    g_input[0] = '\0';
                     g_input_len = 0;
                     g_cursor_pos = 0;
                     g_newline_buf[0] = '\0';
@@ -3242,26 +3378,54 @@ static void keyboard_func(unsigned char key, int x, int y) {
     if (key == ';') {
         if (g_input_len > 0) {
             /* Check for } closing a loop block */
-            if (try_handle_close_brace()) {
+            if (try_commit_close_brace()) {
                 g_ac_count = 0;
                 g_ac_ghost[0] = '\0';
                 return;
             }
             /* Check for for-loop */
-            if (try_handle_for_loop()) {
-                g_ac_count = 0;
-                g_ac_ghost[0] = '\0';
-                return;
-            }
-            /* Accumulate into loop body if inside a block */
-            if (try_accumulate_loop_body()) {
+            if (try_commit_for_loop()) {
                 g_ac_count = 0;
                 g_ac_ghost[0] = '\0';
                 return;
             }
             GLCmd cmd;
             memset(&cmd, 0, sizeof(cmd));
-            if (parse_command(g_input, &cmd)) {
+            int fpos = g_inserting ? g_edit_line :
+                       (g_edit_line < g_num_cmds ? g_edit_line : g_num_cmds);
+            int in_loop = for_loop_depth_at(fpos) > 0;
+            int parsed;
+            if (in_loop) {
+                ExprVar dvars[MAX_EXPR_VARS];
+                int dnv = collect_for_vars(fpos, dvars, MAX_EXPR_VARS);
+                int saved_el = g_edit_line;
+                g_edit_line = fpos;
+                parsed = parse_command_with_vars(g_input, &cmd, dvars, dnv);
+                g_edit_line = saved_el;
+                if (parsed) {
+                    /* Preserve original expression source */
+                    char stripped[MAX_LINE_LEN];
+                    const char *sp = g_input;
+                    while (*sp && isspace((unsigned char)*sp)) sp++;
+                    strncpy(stripped, sp, MAX_LINE_LEN - 1);
+                    stripped[MAX_LINE_LEN - 1] = '\0';
+                    int slen = (int)strlen(stripped);
+                    while (slen > 0 && (stripped[slen-1] == ';' ||
+                           isspace((unsigned char)stripped[slen-1])))
+                        stripped[--slen] = '\0';
+                    int fdepth = for_loop_depth_at(fpos);
+                    int bb_v = in_begin_block_at(fpos);
+                    int ind_v = (bb_v ? 4 : 2) + fdepth * 2;
+                    char indent_v[32];
+                    if (ind_v > (int)sizeof(indent_v) - 1) ind_v = (int)sizeof(indent_v) - 1;
+                    memset(indent_v, ' ', ind_v);
+                    indent_v[ind_v] = '\0';
+                    snprintf(cmd.source, sizeof(cmd.source), "%s%s;", indent_v, stripped);
+                }
+            } else {
+                parsed = parse_command(g_input, &cmd);
+            }
+            if (parsed) {
                 if (g_inserting) {
                     /* Insert at current position */
                     if (g_num_cmds < MAX_COMMANDS) {
@@ -3269,7 +3433,7 @@ static void keyboard_func(unsigned char key, int x, int y) {
                             g_cmds[j] = g_cmds[j - 1];
                         g_cmds[g_edit_line] = cmd;
                         g_num_cmds++;
-                                                g_edit_line++;
+                        g_edit_line++;
                         /* Stay in insert mode */
                         g_input[0] = '\0';
                         g_input_len = 0;
@@ -3281,7 +3445,7 @@ static void keyboard_func(unsigned char key, int x, int y) {
                 } else if (g_edit_line < g_num_cmds) {
                     /* Replace existing line */
                     g_cmds[g_edit_line] = cmd;
-                                        set_status("Line updated");
+                    set_status("Line updated");
                     /* Advance to next line */
                     g_edit_line++;
                     load_line_to_input(g_edit_line);
@@ -3290,7 +3454,7 @@ static void keyboard_func(unsigned char key, int x, int y) {
                     if (g_num_cmds < MAX_COMMANDS) {
                         g_cmds[g_num_cmds++] = cmd;
                         g_edit_line = g_num_cmds;
-                                                set_status("OK");
+                        set_status("OK");
                         g_input[0] = '\0';
                         g_input_len = 0;
                         g_cursor_pos = 0;
