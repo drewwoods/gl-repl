@@ -27,7 +27,7 @@
  *   Left-drag      Orbit camera
  *   Right-drag     Pan camera
  *   Scroll wheel   Zoom
- *   F1-F9          Toggle overlays (help/wire/grid/axes/vnums/normals/indices/guides/autonorm)
+ *   F1-F10         Toggle overlays (help/wire/grid/axes/vnums/normals/indices/guides/autonorm/lights)
  *   PgUp/PgDn      Scroll code panel
  *
  * Import/Export:
@@ -118,6 +118,10 @@ static const EnumEntry g_enable_caps[] = {
     { "GL_LIGHTING",        GL_LIGHTING },
     { "GL_COLOR_MATERIAL",  GL_COLOR_MATERIAL },
     { "GL_NORMALIZE",       GL_NORMALIZE },
+    { "GL_LIGHT0",          GL_LIGHT0 },
+    { "GL_LIGHT1",          GL_LIGHT1 },
+    { "GL_LIGHT2",          GL_LIGHT2 },
+    { "GL_LIGHT3",          GL_LIGHT3 },
     { NULL, 0 }
 };
 
@@ -173,7 +177,8 @@ static const char *g_footer[] = {
     "}",
     "",
     "void init() {",
-    "  glEnable(GL_LIGHT0);",
+    "  glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE);",
+    "  glLightModeli(GL_LIGHT_MODEL_TWO_SIDE, GL_TRUE);",
     "}",
     "",
     "int main(int argc, char **argv) {",
@@ -250,6 +255,41 @@ static int    g_show_normals = 1;
 static int    g_show_indices = 0;
 static int    g_show_guides  = 1;
 static int    g_autonormal   = 1;
+static int    g_show_lights  = 1;
+
+/* Lights */
+#define MAX_LIGHTS 4
+typedef struct {
+    GLenum   id;         /* GL_LIGHT0 .. GL_LIGHT3 */
+    int      enabled;
+    float    pos[4];     /* xyz + w (0=directional, 1=positional) */
+    float    diffuse[4];
+    float    ambient[4];
+    float    specular[4];
+} SceneLight;
+
+static SceneLight g_lights[MAX_LIGHTS] = {
+    { GL_LIGHT0, 1,
+      { 2.0f, 4.0f, 5.0f, 0.0f },           /* key light (directional) */
+      { 0.80f, 0.80f, 0.75f, 1.0f },
+      { 0.10f, 0.10f, 0.12f, 1.0f },
+      { 1.0f, 1.0f, 0.95f, 1.0f } },
+    { GL_LIGHT1, 1,
+      { -3.0f, 2.0f, -2.0f, 1.0f },          /* warm fill (positional) */
+      { 0.45f, 0.30f, 0.15f, 1.0f },
+      { 0.05f, 0.03f, 0.02f, 1.0f },
+      { 0.30f, 0.20f, 0.10f, 1.0f } },
+    { GL_LIGHT2, 1,
+      { 0.0f, -1.0f, 3.0f, 1.0f },           /* cool rim (positional) */
+      { 0.15f, 0.25f, 0.50f, 1.0f },
+      { 0.02f, 0.03f, 0.06f, 1.0f },
+      { 0.10f, 0.15f, 0.35f, 1.0f } },
+    { GL_LIGHT3, 0,
+      { 1.0f, 1.0f, -4.0f, 0.0f },           /* back light (directional, off) */
+      { 0.35f, 0.35f, 0.40f, 1.0f },
+      { 0.05f, 0.05f, 0.06f, 1.0f },
+      { 0.20f, 0.20f, 0.25f, 1.0f } },
+};
 
 /* Status bar */
 static char   g_status[256] = "";
@@ -339,6 +379,37 @@ static void update_lookat_strings(void) {
              "            0.0, 1.0, 0.0);");
 }
 
+/* Write light configuration to a file as C source */
+static void write_light_setup(FILE *f) {
+    static const char *light_names[] = {
+        "GL_LIGHT0", "GL_LIGHT1", "GL_LIGHT2", "GL_LIGHT3"
+    };
+
+    fprintf(f, "\n  /* Light setup */\n");
+    for (int i = 0; i < MAX_LIGHTS; i++) {
+        const SceneLight *l = &g_lights[i];
+        const char *ln = light_names[i];
+
+        if (!l->enabled) continue;
+
+        fprintf(f, "  {\n");
+        fprintf(f, "    GLfloat pos[]  = { %.2ff, %.2ff, %.2ff, %.2ff };\n",
+                l->pos[0], l->pos[1], l->pos[2], l->pos[3]);
+        fprintf(f, "    GLfloat dif[]  = { %.2ff, %.2ff, %.2ff, 1.0f };\n",
+                l->diffuse[0], l->diffuse[1], l->diffuse[2]);
+        fprintf(f, "    GLfloat amb[]  = { %.2ff, %.2ff, %.2ff, 1.0f };\n",
+                l->ambient[0], l->ambient[1], l->ambient[2]);
+        fprintf(f, "    GLfloat spec[] = { %.2ff, %.2ff, %.2ff, 1.0f };\n",
+                l->specular[0], l->specular[1], l->specular[2]);
+        fprintf(f, "    glEnable(%s);\n", ln);
+        fprintf(f, "    glLightfv(%s, GL_POSITION, pos);\n", ln);
+        fprintf(f, "    glLightfv(%s, GL_DIFFUSE,  dif);\n", ln);
+        fprintf(f, "    glLightfv(%s, GL_AMBIENT,  amb);\n", ln);
+        fprintf(f, "    glLightfv(%s, GL_SPECULAR, spec);\n", ln);
+        fprintf(f, "  }\n");
+    }
+}
+
 /* Save the current session as a standalone C source file */
 static void save_output(void) {
     FILE *f = fopen("output.c", "w");
@@ -353,7 +424,8 @@ static void save_output(void) {
         fprintf(f, "%s\n", g_lookat[i]);
     for (int i = 0; g_header_post[i]; i++)
         fprintf(f, "%s\n", g_header_post[i]);
-    fprintf(f, "// Snippet start\n");
+    write_light_setup(f);
+    fprintf(f, "\n// Snippet start\n");
     for (int i = 0; i < g_num_cmds; i++)
         fprintf(f, "%s\n", g_cmds[i].source);
     if (in_begin_block())
@@ -1004,9 +1076,15 @@ static void execute_commands(void) {
             break;
         case CMD_ENABLE:
             glEnable(g_cmds[i].mode);
+            for (int li = 0; li < MAX_LIGHTS; li++)
+                if (g_lights[li].id == g_cmds[i].mode)
+                    g_lights[li].enabled = 1;
             break;
         case CMD_DISABLE:
             glDisable(g_cmds[i].mode);
+            for (int li = 0; li < MAX_LIGHTS; li++)
+                if (g_lights[li].id == g_cmds[i].mode)
+                    g_lights[li].enabled = 0;
             break;
         case CMD_SHADE_MODEL:
             glShadeModel(g_cmds[i].mode);
@@ -1444,7 +1522,7 @@ static void render_help(void) {
         "  Home / End           Jump to start / end of line",
         "  Type + ;             Commit line (edit existing or append new)",
         "  Enter                Insert new line (even in middle of list)",
-        "  Tab                  Accept autocomplete suggestion",
+        "  Tab / Enter          Accept autocomplete suggestion",
         "  Backspace            Delete character before cursor",
         "  Ctrl+Z               Undo last command",
         "  Ctrl+D               Delete line at cursor",
@@ -1458,13 +1536,9 @@ static void render_help(void) {
         "  Scroll wheel         Zoom",
         "",
         "Toggles:",
-        "  F1  Help overlay     F2  Wireframe mode",
-        "  F3  Grid theme       F4  Axes theme",
-        "      (Off/Classic/Fog/         (Off/Classic/Pulse/",
-        "       Tron/Ember)               Neon/Compass)",
-        "  F5  Vertex numbers   F6  Normal vectors",
-        "  F7  Command indices  F8  Vertex guides",
-        "  F9  Auto-normals",
+        "  F1  Help overlay     F2  Wireframe mode   F3  Grid theme       F4  Axes theme",
+        "  F5  Vertex numbers   F6  Normal vectors   F7  Command indices  F8  Vertex guides",
+        "  F9  Auto-normals     F10 Light indicators",
         "  PgUp / PgDn          Scroll code panel",
         "",
         "Save / Load:",
@@ -1644,7 +1718,7 @@ static void draw_axes(void) {
     if (g_axes_theme == 0) return;
 
     glDisable(GL_LIGHTING);
-    glDisable(GL_DEPTH_TEST);
+//    glDisable(GL_DEPTH_TEST);
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
@@ -1749,11 +1823,11 @@ static void draw_axes(void) {
         /* Core (narrow, bright) */
         glLineWidth(2.0f);
         glBegin(GL_LINES);
-        glColor4f(1.0f, 0.4f, 0.4f, 0.9f * glow);
+        glColor4f(1.0f, 0.4f, 0.4f, 1.0f * glow);
         glVertex3f(0, 0, 0); glVertex3f(len, 0, 0);
-        glColor4f(0.4f, 1.0f, 0.4f, 0.9f * glow);
+        glColor4f(0.4f, 1.0f, 0.4f, 1.0f * glow);
         glVertex3f(0, 0, 0); glVertex3f(0, len, 0);
-        glColor4f(0.4f, 0.4f, 1.0f, 0.9f * glow);
+        glColor4f(0.4f, 0.4f, 1.0f, 1.0f * glow);
         glVertex3f(0, 0, 0); glVertex3f(0, 0, len);
         glEnd();
         glLineWidth(1.0f);
@@ -1855,6 +1929,7 @@ static void draw_axes(void) {
 
 static void draw_vertex_numbers(void) {
     glDisable(GL_LIGHTING);
+    glDisable(GL_DEPTH_TEST);
     glColor3f(1.0f, 1.0f, 0.30f);
 
     int vn = 0;
@@ -1869,13 +1944,14 @@ static void draw_vertex_numbers(void) {
         vn++;
     }
 
+    glEnable(GL_DEPTH_TEST);
     glEnable(GL_LIGHTING);
 }
 
 static void draw_normal_vectors(void) {
     glDisable(GL_LIGHTING);
     glDisable(GL_DEPTH_TEST);
-    glColor3f(0.30f, 0.80f, 1.00f);
+    glColor3f(0.80f, 0.80f, 0.30f);
     float scale = 0.35f;
     float nx = 0, ny = 0, nz = 1;
 
@@ -2131,6 +2207,157 @@ static void draw_normal_guides(void) {
 }
 
 /* ========================================================================= */
+/* Scene lights — setup and visualization                                     */
+/* ========================================================================= */
+
+/* Set light properties (position/colors) only — enable/disable is driven
+   by the user's REPL commands via execute_commands(). */
+static void setup_lights(void) {
+    /* Reset all lights to disabled; execute_commands() will enable them */
+    for (int i = 0; i < MAX_LIGHTS; i++) {
+        glDisable(g_lights[i].id);
+        g_lights[i].enabled = 0;
+        glLightfv(g_lights[i].id, GL_POSITION, g_lights[i].pos);
+        glLightfv(g_lights[i].id, GL_DIFFUSE,  g_lights[i].diffuse);
+        glLightfv(g_lights[i].id, GL_AMBIENT,  g_lights[i].ambient);
+        glLightfv(g_lights[i].id, GL_SPECULAR, g_lights[i].specular);
+    }
+}
+
+static void draw_lights(void) {
+    if (!g_show_lights) return;
+
+    glDisable(GL_LIGHTING);
+    glDisable(GL_DEPTH_TEST);
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+    float breath = sinf(g_anim_time * 1.2f) * 0.5f + 0.5f;
+
+    for (int i = 0; i < MAX_LIGHTS; i++) {
+        float *d = g_lights[i].diffuse;
+        float *p = g_lights[i].pos;
+        int is_dir = (p[3] == 0.0f);
+        int on = g_lights[i].enabled;
+
+        /* Compute display position */
+        float lx, ly, lz;
+        if (is_dir) {
+            float len = sqrtf(p[0]*p[0] + p[1]*p[1] + p[2]*p[2]);
+            if (len < 1e-6f) continue;
+            lx = p[0] / len * 3.5f;
+            ly = p[1] / len * 3.5f;
+            lz = p[2] / len * 3.5f;
+        } else {
+            lx = p[0]; ly = p[1]; lz = p[2];
+        }
+
+        if (on) {
+            /* === ENABLED: bright, glowing, animated === */
+            float glow = 0.6f + breath * 0.4f;
+
+            /* Outer glow */
+            glPointSize(18.0f);
+            glBegin(GL_POINTS);
+            glColor4f(d[0], d[1], d[2], 0.15f * glow);
+            glVertex3f(lx, ly, lz);
+            glEnd();
+
+            /* Inner core */
+            glPointSize(8.0f);
+            glBegin(GL_POINTS);
+            glColor4f(d[0], d[1], d[2], 0.7f * glow);
+            glVertex3f(lx, ly, lz);
+            glEnd();
+
+            /* White hot center */
+            glPointSize(3.0f);
+            glBegin(GL_POINTS);
+            glColor4f(1.0f, 1.0f, 1.0f, 0.9f * glow);
+            glVertex3f(lx, ly, lz);
+            glEnd();
+
+            /* Directional: ray toward origin */
+            if (is_dir) {
+                glEnable(GL_LINE_STIPPLE);
+                glLineStipple(2, 0xAAAA);
+                glLineWidth(1.0f);
+                glBegin(GL_LINES);
+                glColor4f(d[0], d[1], d[2], 0.35f * glow);
+                glVertex3f(lx, ly, lz);
+                glColor4f(d[0], d[1], d[2], 0.05f);
+                glVertex3f(0, 0, 0);
+                glEnd();
+                glDisable(GL_LINE_STIPPLE);
+            } else {
+                /* Positional: radiating lines */
+                float rlen = 0.25f + breath * 0.1f;
+                glLineWidth(1.0f);
+                glBegin(GL_LINES);
+                float dirs[][3] = {
+                    {1,0,0},{-1,0,0},{0,1,0},{0,-1,0},{0,0,1},{0,0,-1}
+                };
+                for (int r = 0; r < 6; r++) {
+                    glColor4f(d[0], d[1], d[2], 0.4f * glow);
+                    glVertex3f(lx, ly, lz);
+                    glColor4f(d[0], d[1], d[2], 0.0f);
+                    glVertex3f(lx + dirs[r][0] * rlen,
+                               ly + dirs[r][1] * rlen,
+                               lz + dirs[r][2] * rlen);
+                }
+                glEnd();
+            }
+
+            /* Label */
+            char label[8];
+            snprintf(label, sizeof(label), " L%d", i);
+            glColor4f(d[0] * 0.7f + 0.3f, d[1] * 0.7f + 0.3f,
+                      d[2] * 0.7f + 0.3f, 0.8f);
+            glRasterPos3f(lx, ly, lz);
+            for (const char *c = label; *c; c++)
+                glutBitmapCharacter(FONT_SMALL, (unsigned char)*c);
+
+        } else {
+            /* === DISABLED: dim grey marker with X === */
+
+            /* Small grey dot */
+            glPointSize(6.0f);
+            glBegin(GL_POINTS);
+            glColor4f(0.4f, 0.4f, 0.4f, 0.3f);
+            glVertex3f(lx, ly, lz);
+            glEnd();
+
+            /* X cross through the light position */
+            float xsz = 0.12f;
+            glEnable(GL_LINE_STIPPLE);
+            glLineStipple(1, 0xAAAA);
+            glLineWidth(1.0f);
+            glBegin(GL_LINES);
+            glColor4f(0.7f, 0.2f, 0.2f, 0.45f);
+            glVertex3f(lx - xsz, ly - xsz, lz);
+            glVertex3f(lx + xsz, ly + xsz, lz);
+            glVertex3f(lx - xsz, ly + xsz, lz);
+            glVertex3f(lx + xsz, ly - xsz, lz);
+            glEnd();
+            glDisable(GL_LINE_STIPPLE);
+
+            /* Dimmed label */
+            char label[16];
+            snprintf(label, sizeof(label), " L%d off", i);
+            glColor4f(0.5f, 0.3f, 0.3f, 0.45f);
+            glRasterPos3f(lx, ly, lz);
+            for (const char *c = label; *c; c++)
+                glutBitmapCharacter(FONT_SMALL, (unsigned char)*c);
+        }
+    }
+
+    glPointSize(1.0f);
+    glDisable(GL_BLEND);
+    glEnable(GL_DEPTH_TEST);
+    glEnable(GL_LIGHTING);
+}
+
+/* ========================================================================= */
 /* 3D scene render (viewport offset to the right of the code panel)           */
 /* ========================================================================= */
 
@@ -2151,14 +2378,7 @@ static void render_3d_scene(void) {
     glRotatef(g_cam_rx, 1, 0, 0);
     glRotatef(g_cam_ry, 0, 1, 0);
 
-    GLfloat lpos[] = { 2.0f, 4.0f, 5.0f, 0.0f };
-    GLfloat lamb[] = { 0.20f, 0.20f, 0.25f, 1.0f };
-    GLfloat ldif[] = { 0.80f, 0.80f, 0.75f, 1.0f };
-    GLfloat lspc[] = { 1.0f, 1.0f, 0.95f, 1.0f };
-    glLightfv(GL_LIGHT0, GL_POSITION, lpos);
-    glLightfv(GL_LIGHT0, GL_AMBIENT,  lamb);
-    glLightfv(GL_LIGHT0, GL_DIFFUSE,  ldif);
-    glLightfv(GL_LIGHT0, GL_SPECULAR, lspc);
+    setup_lights();
 
     GLfloat mspec[] = { 0.4f, 0.4f, 0.4f, 1.0f };
     GLfloat mshin[] = { 30.0f };
@@ -2226,6 +2446,7 @@ static void render_3d_scene(void) {
 
     if (g_show_vnums)   draw_vertex_numbers();
     if (g_show_normals) draw_normal_vectors();
+    draw_lights();
 }
 
 /* ========================================================================= */
@@ -2372,8 +2593,13 @@ static void keyboard_func(unsigned char key, int x, int y) {
         return;
     }
 
-    /* Enter: insert new line */
+    /* Enter: accept autocomplete if active, otherwise insert new line */
     if (key == '\r' || key == '\n') {
+        if (g_ac_count > 0) {
+            accept_autocomplete();
+            update_autocomplete();
+            return;
+        }
         if (g_inserting) {
             /* Already in insert mode */
             if (g_input_len > 0) {
@@ -2609,6 +2835,11 @@ static void special_func(int key, int x, int y) {
             set_status("Auto-normals OFF (existing normals kept)");
         }
         break;
+    case GLUT_KEY_F10:
+        g_show_lights = !g_show_lights;
+        set_status(g_show_lights ? "Light indicators ON" :
+                   "Light indicators OFF");
+        break;
 
     /* Scroll */
     case GLUT_KEY_PAGE_UP:   g_scroll -= 5; break;
@@ -2711,11 +2942,13 @@ static void load_initial_commands(const char *import_file) {
         "glEnable(GL_DEPTH_TEST);",
         "glEnable(GL_LIGHTING);",
         "glEnable(GL_COLOR_MATERIAL);",
+        "glEnable(GL_NORMALIZE);",
         "glShadeModel(GL_SMOOTH);",
+        "glEnable(GL_LIGHT0);",
         "glBegin(GL_TRIANGLE_STRIP);",
-        "glVertex3f(-1.0, 1.0, 0.0);",
         "glVertex3f(-1.0, 0, 0.0);",
         "glVertex3f(0.0, 0, 0.0);",
+        "glVertex3f(-1.0, 1.0, 0.0);",
         NULL
     };
 
@@ -2731,13 +2964,8 @@ static void load_initial_commands(const char *import_file) {
 }
 
 static void init_gl(void) {
-    glEnable(GL_DEPTH_TEST);
-    glEnable(GL_LIGHTING);
-    glEnable(GL_LIGHT0);
-    glEnable(GL_NORMALIZE);
-    glEnable(GL_COLOR_MATERIAL);
-    glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE);
     glEnable(GL_MULTISAMPLE);
+    glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE);
 
     GLfloat lm_amb[] = { 0.15f, 0.15f, 0.20f, 1.0f };
     glLightModelfv(GL_LIGHT_MODEL_AMBIENT, lm_amb);
