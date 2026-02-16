@@ -4025,14 +4025,46 @@ static void keyboard_func(unsigned char key, int x, int y) {
             update_autocomplete();
             return;
         }
-        /* Check for } closing a loop block */
-        if (g_input_len > 0 && try_commit_close_brace()) {
+
+        /* On existing line: if unmodified, just advance to insert mode */
+        if (!g_inserting && g_edit_line < g_num_cmds) {
+            int unmodified = 0;
+            {
+                const char *s = g_cmds[g_edit_line].source;
+                while (*s && isspace((unsigned char)*s)) s++;
+                int slen = (int)strlen(s);
+                while (slen > 0 && (s[slen-1] == ';' ||
+                       isspace((unsigned char)s[slen-1])))
+                    slen--;
+                if ((slen == g_input_len &&
+                     strncmp(g_input, s, slen) == 0) ||
+                    g_input_len == 0)
+                    unmodified = 1;
+            }
+            if (unmodified) {
+                g_edit_line++;
+                g_inserting = 1;
+                g_input[0] = '\0';
+                g_input_len = 0;
+                g_cursor_pos = 0;
+                g_ac_count = 0;
+                g_ac_ghost[0] = '\0';
+                set_status("Insert mode");
+                mark_normals_dirty();
+                return;
+            }
+        }
+
+        /* Check for } closing a loop block (only for insert/new-line, not existing lines) */
+        if ((g_inserting || g_edit_line >= g_num_cmds) &&
+            g_input_len > 0 && try_commit_close_brace()) {
             g_ac_count = 0;
             g_ac_ghost[0] = '\0';
             return;
         }
-        /* Check for for-loop (single-line or block start) */
-        if (g_input_len > 0 && try_commit_for_loop()) {
+        /* Check for for-loop (only for insert/new-line, not existing lines) */
+        if ((g_inserting || g_edit_line >= g_num_cmds) &&
+            g_input_len > 0 && try_commit_for_loop()) {
             g_ac_count = 0;
             g_ac_ghost[0] = '\0';
             return;
@@ -4094,25 +4126,10 @@ static void keyboard_func(unsigned char key, int x, int y) {
                     load_line_to_input(g_edit_line);
             }
         } else if (g_edit_line < g_num_cmds) {
-            /* On existing line: if unmodified just advance; if modified, re-parse */
+            /* On existing line with modified content — try to re-parse */
             int can_advance = 1;
 
-            /* Check if input matches the existing line (unmodified) */
-            int unmodified = 0;
-            {
-                const char *s = g_cmds[g_edit_line].source;
-                while (*s && isspace((unsigned char)*s)) s++;
-                int slen = (int)strlen(s);
-                while (slen > 0 && (s[slen-1] == ';' ||
-                       isspace((unsigned char)s[slen-1])))
-                    slen--;
-                if (slen == g_input_len &&
-                    strncmp(g_input, s, slen) == 0)
-                    unmodified = 1;
-            }
-
-            if (!unmodified && g_input_len > 0) {
-                /* Input was modified — try to re-parse */
+            if (g_input_len > 0) {
                 GLCmd cmd;
                 memset(&cmd, 0, sizeof(cmd));
                 int fpos = g_edit_line;
@@ -4186,7 +4203,7 @@ static void keyboard_func(unsigned char key, int x, int y) {
                     can_advance = 0;
                 }
             }
-            /* else: unmodified or empty — keep existing line as-is */
+            /* else: empty input — keep existing line as-is */
 
             if (can_advance) {
                 g_edit_line++;
