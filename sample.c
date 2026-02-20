@@ -42,9 +42,15 @@
  *   Tab            Accept autocomplete suggestion
  *   Left-drag      Orbit camera
  *   Right-drag     Pan camera
- *   Scroll wheel   Zoom
+ *   Scroll wheel   Zoom (or scroll code panel when cursor is over panel)
  *   F1-F10         Toggle overlays (help/wire/grid/axes/vnums/normals/indices/guides/autonorm/lights)
  *   PgUp/PgDn      Scroll code panel
+ *   Ctrl+A         Toggle accumulation-buffer AA
+ *   Ctrl+=         Increase AA jitter samples (1→2→4→8→16)
+ *   Ctrl+-         Decrease AA jitter samples (16→8→4→2→1)
+ *
+ * Command-line flags:
+ *   --noaccum      Disable accumulation buffer (enabled by default)
  *
  * Import/Export:
  *   Ctrl+S saves to output.c with snippet markers.
@@ -287,6 +293,39 @@ static int    g_win_w = 1200, g_win_h = 800;
 /* Code panel */
 static float  g_panel_frac = 0.42f;
 static int    g_scroll = 0;
+
+/* Accumulation buffer — enabled by default, disabled with --noaccum.
+ * Designed to be forward-compatible with FBO-based accumulation later. */
+static int    g_use_accum        = 1;  /* GLUT_ACCUM requested at init */
+static int    g_accum_aa_enabled = 1;  /* Ctrl+A toggles jitter AA on/off */
+static int    g_accum_samples    = 8;  /* current sample count */
+static float  g_accum_jitter_x   = 0.0f;
+static float  g_accum_jitter_y   = 0.0f;
+
+/* Sub-pixel jitter offsets (units: fraction of one pixel).
+ * Table is ordered so the first N entries form a good N-sample set.
+ * Supports 1, 2, 4, 8, or 16 samples. */
+#define MAX_ACCUM_SAMPLES 16
+static const float g_jitter_table[MAX_ACCUM_SAMPLES][2] = {
+    {  0.000f,  0.000f },  /* 1  */
+    {  0.250f,  0.250f },  /* 2  */
+    { -0.250f, -0.250f },
+    {  0.250f, -0.250f },  /* 4  */
+    { -0.250f,  0.250f },
+    { -0.125f,  0.375f },
+    {  0.375f,  0.125f },
+    { -0.375f, -0.125f },  /* 8  */
+    {  0.125f, -0.375f },
+    {  0.375f, -0.375f },
+    { -0.375f,  0.375f },
+    {  0.125f,  0.125f },
+    { -0.125f, -0.125f },
+    {  0.375f,  0.375f },
+    { -0.375f, -0.375f },
+    {  0.000f,  0.500f },  /* 16 */
+};
+static const int g_accum_steps[]     = { 1, 2, 4, 8, 16 };
+#define ACCUM_STEP_COUNT 5
 
 /* Cursor blink */
 static int    g_cursor_on = 1;
@@ -1911,19 +1950,27 @@ static void render_code_panel(void) {
     {
         char info[256];
         int nv = count_vertices();
+        /* Accumulation AA indicator suffix */
+        char aa_tag[24] = "";
+        if (g_use_accum) {
+            if (g_accum_aa_enabled && g_accum_samples > 1)
+                snprintf(aa_tag, sizeof(aa_tag), " | AA:%dx", g_accum_samples);
+            else
+                snprintf(aa_tag, sizeof(aa_tag), " | AA:off");
+        }
         if (g_inserting) {
             snprintf(info, sizeof(info),
-                     "F1:Help | %d cmds | %d verts | Ln %d [INSERT]",
-                     g_num_cmds, nv, g_edit_line + 1);
+                     "F1:Help | %d cmds | %d verts | Ln %d [INSERT]%s",
+                     g_num_cmds, nv, g_edit_line + 1, aa_tag);
         } else if (in_begin_block()) {
             snprintf(info, sizeof(info),
-                     "F1:Help | %d cmds | %d verts | %s | Ln %d",
+                     "F1:Help | %d cmds | %d verts | %s | Ln %d%s",
                      g_num_cmds, nv, mode_name(current_begin_mode()),
-                     g_edit_line + 1);
+                     g_edit_line + 1, aa_tag);
         } else {
             snprintf(info, sizeof(info),
-                     "F1:Help | %d cmds | %d verts | Ln %d",
-                     g_num_cmds, nv, g_edit_line + 1);
+                     "F1:Help | %d cmds | %d verts | Ln %d%s",
+                     g_num_cmds, nv, g_edit_line + 1, aa_tag);
         }
         glColor3f(0.50f, 0.55f, 0.65f);
         draw_string(CODE_MARGIN_X, g_win_h - CODE_MARGIN_Y - 2, info,
@@ -2228,7 +2275,15 @@ static void render_help(void) {
         "Camera:",
         "  Left-drag            Orbit",
         "  Right-drag           Pan",
-        "  Scroll wheel         Zoom",
+        "  Scroll wheel         Zoom camera",
+        "  Scroll wheel (over code panel)  Scroll code panel",
+        "",
+        "Accumulation Buffer AA (requires accum buffer, on by default):",
+        "  Ctrl+A               Toggle jitter AA on / off",
+        "  Ctrl+=               Increase jitter samples (1→2→4→8→16)",
+        "  Ctrl+-               Decrease jitter samples (16→8→4→2→1)",
+        "  Status shown in info bar (AA:8x / AA:off)",
+        "  Launch with --noaccum to disable the accum buffer entirely",
         "",
         "Toggles:",
         "  F1  Help overlay     F2  Wireframe mode",
@@ -3256,7 +3311,21 @@ static void render_3d_scene(void) {
 
     glMatrixMode(GL_PROJECTION);
     glLoadIdentity();
-    gluPerspective(45.0, (double)scene_w / (double)g_win_h, 0.1, 100.0);
+    {
+        /* Build a jitter-aware perspective frustum.
+         * When g_accum_jitter_x/y are both 0 this is identical to
+         * gluPerspective(45, aspect, 0.1, 100). */
+        double near_z = 0.1, far_z = 100.0;
+        double aspect  = (double)scene_w / (double)g_win_h;
+        double top_v   = near_z * tan(45.0 * M_PI / 360.0);
+        double right_v = top_v * aspect;
+        /* Convert sub-pixel offset (fraction of 1 pixel) → frustum units */
+        double dx = (double)g_accum_jitter_x * 2.0 * right_v / (double)scene_w;
+        double dy = (double)g_accum_jitter_y * 2.0 * top_v   / (double)g_win_h;
+        glFrustum(-right_v + dx, right_v + dx,
+                  -top_v   + dy, top_v   + dy,
+                  near_z, far_z);
+    }
     glMatrixMode(GL_MODELVIEW);
     glLoadIdentity();
 
@@ -3353,10 +3422,26 @@ static void display_func(void) {
     /* Full-window clear */
     glViewport(0, 0, g_win_w, g_win_h);
     glClearColor(0.10f, 0.10f, 0.13f, 1.0f);
-    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-    /* 3D scene in right portion */
-    render_3d_scene();
+    /* 3D scene — with optional accumulation-buffer jitter AA */
+    if (g_use_accum && g_accum_aa_enabled && g_accum_samples > 1) {
+        /* Clear the accumulation buffer once per frame */
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_ACCUM_BUFFER_BIT);
+        float weight = 1.0f / (float)g_accum_samples;
+        for (int j = 0; j < g_accum_samples; j++) {
+            glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+            g_accum_jitter_x = g_jitter_table[j % MAX_ACCUM_SAMPLES][0];
+            g_accum_jitter_y = g_jitter_table[j % MAX_ACCUM_SAMPLES][1];
+            render_3d_scene();
+            glAccum(GL_ACCUM, weight);
+        }
+        g_accum_jitter_x = 0.0f;
+        g_accum_jitter_y = 0.0f;
+        glAccum(GL_RETURN, 1.0f);
+    } else {
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+        render_3d_scene();
+    }
 
     /* 2D overlays in full window coords */
     glViewport(0, 0, g_win_w, g_win_h);
@@ -3993,6 +4078,49 @@ static void keyboard_func(unsigned char key, int x, int y) {
                 mark_normals_dirty();
                 set_status("Commented out");
             }
+        }
+        return;
+    }
+
+    /* Ctrl+A: toggle accumulation AA */
+    if (key == 1) {
+        if (g_use_accum) {
+            g_accum_aa_enabled = !g_accum_aa_enabled;
+            set_status(g_accum_aa_enabled ? "Accum AA: ON" : "Accum AA: OFF");
+        } else {
+            set_status("Accum buffer disabled (remove --noaccum to enable)");
+        }
+        return;
+    }
+
+    /* Ctrl+= or Ctrl++: increase jitter sample count */
+    if ((key == '=' || key == '+') && (glutGetModifiers() & GLUT_ACTIVE_CTRL)) {
+        if (g_use_accum) {
+            for (int i = 0; i < ACCUM_STEP_COUNT - 1; i++) {
+                if (g_accum_samples <= g_accum_steps[i]) {
+                    g_accum_samples = g_accum_steps[i + 1];
+                    break;
+                }
+            }
+            char msg[64];
+            snprintf(msg, sizeof(msg), "Accum samples: %d", g_accum_samples);
+            set_status(msg);
+        }
+        return;
+    }
+
+    /* Ctrl+-: decrease jitter sample count */
+    if (key == '-' && (glutGetModifiers() & GLUT_ACTIVE_CTRL)) {
+        if (g_use_accum) {
+            for (int i = ACCUM_STEP_COUNT - 1; i > 0; i--) {
+                if (g_accum_samples >= g_accum_steps[i]) {
+                    g_accum_samples = g_accum_steps[i - 1];
+                    break;
+                }
+            }
+            char msg[64];
+            snprintf(msg, sizeof(msg), "Accum samples: %d", g_accum_samples);
+            set_status(msg);
         }
         return;
     }
@@ -4670,12 +4798,22 @@ static void mouse_func(int button, int state, int x, int y) {
 #ifdef USE_GLUT
     /* Apple GLUT reports scroll wheel as button 3/4 */
     if (button == 3 && state == GLUT_DOWN) {
-        g_cam_dist -= 0.3f;
-        if (g_cam_dist < 0.5f) g_cam_dist = 0.5f;
+        if (g_show_help) {
+            g_help_scroll--;
+        } else {
+            int panel_w = (int)(g_win_w * g_panel_frac);
+            if (x < panel_w) g_scroll--;
+            else { g_cam_dist -= 0.3f; if (g_cam_dist < 0.5f) g_cam_dist = 0.5f; }
+        }
         glutPostRedisplay();
     } else if (button == 4 && state == GLUT_DOWN) {
-        g_cam_dist += 0.3f;
-        if (g_cam_dist > 50.0f) g_cam_dist = 50.0f;
+        if (g_show_help) {
+            g_help_scroll++;
+        } else {
+            int panel_w = (int)(g_win_w * g_panel_frac);
+            if (x < panel_w) g_scroll++;
+            else { g_cam_dist += 0.3f; if (g_cam_dist > 50.0f) g_cam_dist = 50.0f; }
+        }
         glutPostRedisplay();
     }
 #endif
@@ -4684,17 +4822,32 @@ static void mouse_func(int button, int state, int x, int y) {
 #ifndef USE_GLUT
 /* FreeGLUT mouse wheel callback */
 static void mousewheel_func(int wheel, int direction, int x, int y) {
-    (void)wheel; (void)x; (void)y;
-    if (direction > 0) {
-        g_cam_dist -= 0.3f;
-        if (g_cam_dist < 0.5f) g_cam_dist = 0.5f;
+    (void)wheel; (void)y;
+    if (g_show_help) {
+        /* direction > 0 = scroll up (towards top of help) */
+        g_help_scroll -= direction;
     } else {
-        g_cam_dist += 0.3f;
-        if (g_cam_dist > 50.0f) g_cam_dist = 50.0f;
+        int panel_w = (int)(g_win_w * g_panel_frac);
+        if (x < panel_w) {
+            g_scroll -= direction;
+        } else {
+            if (direction > 0) {
+                g_cam_dist -= 0.3f;
+                if (g_cam_dist < 0.5f) g_cam_dist = 0.5f;
+            } else {
+                g_cam_dist += 0.3f;
+                if (g_cam_dist > 50.0f) g_cam_dist = 50.0f;
+            }
+        }
     }
     glutPostRedisplay();
 }
 #endif
+
+static void passive_motion_func(int x, int y) {
+    g_mouse_x = x;
+    g_mouse_y = y;
+}
 
 static void motion_func(int x, int y) {
     int dx = x - g_mouse_x;
@@ -4810,14 +4963,25 @@ static void init_gl(void) {
 /* ========================================================================= */
 
 int main(int argc, char **argv) {
+    /* Pre-scan argv for flags and extract the optional input file path.
+     * --noaccum disables the accumulation buffer (on by default). */
+    const char *input_file = NULL;
+    for (int i = 1; i < argc; i++) {
+        if (strcmp(argv[i], "--noaccum") == 0)
+            g_use_accum = 0;
+        else if (!input_file)
+            input_file = argv[i];
+    }
+
     glutInit(&argc, argv);
-    glutInitDisplayMode(GLUT_DOUBLE | GLUT_RGB | GLUT_DEPTH | GLUT_MULTISAMPLE);
+    glutInitDisplayMode(GLUT_DOUBLE | GLUT_RGB | GLUT_DEPTH | GLUT_MULTISAMPLE |
+                        (g_use_accum ? GLUT_ACCUM : 0));
     glutInitWindowSize(g_win_w, g_win_h);
     glutCreateWindow("OpenGL REPL - Display List Dynamic Rendering");
 
     init_gl();
     init_predef_vars();
-    load_initial_commands((argc > 1) ? argv[1] : NULL);
+    load_initial_commands(input_file);
 
     glutDisplayFunc(display_func);
     glutReshapeFunc(reshape_func);
@@ -4825,6 +4989,7 @@ int main(int argc, char **argv) {
     glutSpecialFunc(special_func);
     glutMouseFunc(mouse_func);
     glutMotionFunc(motion_func);
+    glutPassiveMotionFunc(passive_motion_func);
 #ifndef USE_GLUT
     glutMouseWheelFunc(mousewheel_func);
 #endif
