@@ -287,6 +287,16 @@ static float  g_cam_px = 0.0f, g_cam_py = 0.0f;
 static int    g_mouse_x, g_mouse_y;
 static int    g_mouse_btn = -1;
 
+/* Camera momentum — motion_func feeds these; timer_func integrates + decays */
+static float  g_vel_ry   = 0.0f;   /* orbit yaw   (deg/frame)   */
+static float  g_vel_rx   = 0.0f;   /* orbit pitch (deg/frame)   */
+static float  g_vel_px   = 0.0f;   /* pan X       (units/frame) */
+static float  g_vel_py   = 0.0f;   /* pan Y       (units/frame) */
+static float  g_vel_zoom = 0.0f;   /* zoom        (units/frame) */
+#define CAM_DECAY 0.88f
+#define CAM_DECAY_ZOOM 0.65f
+#define CAM_MOMENTUM_THRESHOLD 1.0f
+
 /* Window */
 static int    g_win_w = 1200, g_win_h = 800;
 
@@ -4791,7 +4801,14 @@ static void mouse_func(int button, int state, int x, int y) {
         g_mouse_btn = button;
         g_mouse_x = x;
         g_mouse_y = y;
+        /* Cancel any coasting so a fresh grab starts clean */
+        g_vel_ry = g_vel_rx = g_vel_px = g_vel_py = g_vel_zoom = 0.0f;
     } else {
+        g_vel_ry = fabsf(g_vel_ry) > CAM_MOMENTUM_THRESHOLD ? g_vel_ry : 0.0f;
+        g_vel_rx = fabsf(g_vel_rx) > CAM_MOMENTUM_THRESHOLD ? g_vel_rx : 0.0f;
+        g_vel_px = fabsf(g_vel_px) > CAM_MOMENTUM_THRESHOLD ? g_vel_px : 0.0f;
+        g_vel_py = fabsf(g_vel_py) > CAM_MOMENTUM_THRESHOLD ? g_vel_py : 0.0f;
+        g_vel_zoom = fabsf(g_vel_zoom) > CAM_MOMENTUM_THRESHOLD ? g_vel_zoom : 0.0f;
         g_mouse_btn = -1;
     }
 
@@ -4803,7 +4820,7 @@ static void mouse_func(int button, int state, int x, int y) {
         } else {
             int panel_w = (int)(g_win_w * g_panel_frac);
             if (x < panel_w) g_scroll--;
-            else { g_cam_dist -= 0.3f; if (g_cam_dist < 0.5f) g_cam_dist = 0.5f; }
+            else g_vel_zoom -= 0.3f;
         }
         glutPostRedisplay();
     } else if (button == 4 && state == GLUT_DOWN) {
@@ -4812,7 +4829,7 @@ static void mouse_func(int button, int state, int x, int y) {
         } else {
             int panel_w = (int)(g_win_w * g_panel_frac);
             if (x < panel_w) g_scroll++;
-            else { g_cam_dist += 0.3f; if (g_cam_dist > 50.0f) g_cam_dist = 50.0f; }
+            else g_vel_zoom += 0.3f;
         }
         glutPostRedisplay();
     }
@@ -4831,13 +4848,8 @@ static void mousewheel_func(int wheel, int direction, int x, int y) {
         if (x < panel_w) {
             g_scroll -= direction;
         } else {
-            if (direction > 0) {
-                g_cam_dist -= 0.3f;
-                if (g_cam_dist < 0.5f) g_cam_dist = 0.5f;
-            } else {
-                g_cam_dist += 0.3f;
-                if (g_cam_dist > 50.0f) g_cam_dist = 50.0f;
-            }
+            /* direction > 0 = wheel up = zoom in */
+            g_vel_zoom -= direction * 0.1f;
         }
     }
     glutPostRedisplay();
@@ -4854,10 +4866,16 @@ static void motion_func(int x, int y) {
     int dy = y - g_mouse_y;
 
     if (g_mouse_btn == GLUT_LEFT_BUTTON) {
+        /* Direct: responsive while held */
         g_cam_ry += (float)dx * 0.5f;
         g_cam_rx += (float)dy * 0.5f;
         if (g_cam_rx >  89.0f) g_cam_rx =  89.0f;
         if (g_cam_rx < -89.0f) g_cam_rx = -89.0f;
+        /* Accumulate: feeds the coast after release */
+        g_vel_rx *= CAM_DECAY;
+        g_vel_ry *= CAM_DECAY;
+        g_vel_ry += (float)dx * 0.25f;
+        g_vel_rx += (float)dy * 0.25f;
     } else if (g_mouse_btn == GLUT_RIGHT_BUTTON) {
         g_cam_px += (float)dx * 0.01f;
         g_cam_py -= (float)dy * 0.01f;
@@ -4876,6 +4894,29 @@ static void timer_func(int value) {
 
     g_anim_time += 0.016f;  /* ~60 fps */
 
+    /* Apply momentum only while no button is held (coast after release).
+     * Velocity always decays so it drains cleanly whether or not it drives. */
+    if (g_mouse_btn == -1) {
+        g_cam_ry += g_vel_ry;
+        g_cam_rx += g_vel_rx;
+        if (g_cam_rx >  89.0f) { g_cam_rx =  89.0f; g_vel_rx = 0.0f; }
+        if (g_cam_rx < -89.0f) { g_cam_rx = -89.0f; g_vel_rx = 0.0f; }
+
+        g_cam_px   += g_vel_px;
+        g_cam_py   += g_vel_py;
+
+        g_cam_dist += g_vel_zoom;
+        if (g_cam_dist < 0.5f)  { g_cam_dist = 0.5f;  g_vel_zoom = 0.0f; }
+        if (g_cam_dist > 50.0f) { g_cam_dist = 50.0f; g_vel_zoom = 0.0f; }
+    }
+
+    g_vel_ry   *= CAM_DECAY;
+    g_vel_rx   *= CAM_DECAY;
+    g_vel_px   *= CAM_DECAY;
+    g_vel_py   *= CAM_DECAY;
+    g_vel_zoom *= CAM_DECAY_ZOOM;
+
+    /* Auto-rotate bypasses momentum (constant angular rate) */
     if (g_cam_rotate)
         g_cam_ry += 0.3f;
 
