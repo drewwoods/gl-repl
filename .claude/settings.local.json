@@ -6,7 +6,8 @@
       "Bash(declare:*)",
       "Bash(glut_compile:*)",
       "Bash(python3:*)",
-      "Bash(/tmp/test_eval:*)"
+      "Bash(/tmp/test_eval:*)",
+      "Bash(make:*)"
     ]
   }
 }
