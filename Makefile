@@ -1,0 +1,31 @@
+CC = gcc
+
+CFLAGS = \
+	-Wall -ggdb -O0 -g3 \
+	-Wno-deprecated-declarations -Wfloat-conversion \
+	-fsanitize=address -fno-omit-frame-pointer \
+	-std=c2x -DGL_SILENCE_DEPRECATION \
+	-I/usr/include \
+	-I/opt/homebrew/include \
+	-I$(HOME)/src/freeglut-fork/include \
+	-I$(HOME)/code/openGL/samples/gen-ai/OpenGL-Vibe/include
+
+GL_LDFLAGS = \
+	-L/opt/homebrew/lib \
+	-L$(HOME)/src/freeglut-fork/build/lib \
+	-Wl,-rpath,$(HOME)/src/freeglut-fork/build/lib \
+	-lglut -lm -lpthread \
+	-framework IOKit -framework Cocoa -framework OpenGL
+
+.PHONY: all clean
+
+all: sample test_eval
+
+sample: sample.c repl_eval.c repl_eval.h
+	$(CC) $(CFLAGS) -o $@ sample.c repl_eval.c $(GL_LDFLAGS)
+
+test_eval: test_eval.c repl_eval.c repl_eval.h
+	$(CC) $(CFLAGS) -o $@ test_eval.c repl_eval.c -lm -lpthread
+
+clean:
+	rm -rf sample sample.dSYM test_eval test_eval.dSYM
