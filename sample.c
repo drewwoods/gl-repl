@@ -298,7 +298,7 @@ static int    g_scroll = 0;
  * Designed to be forward-compatible with FBO-based accumulation later. */
 static int    g_use_accum        = 1;  /* GLUT_ACCUM requested at init */
 static int    g_accum_aa_enabled = 1;  /* Ctrl+A toggles jitter AA on/off */
-static int    g_accum_samples    = 8;  /* current sample count */
+static int    g_accum_samples    = 4;  /* current sample count */
 static float  g_accum_jitter_x   = 0.0f;
 static float  g_accum_jitter_y   = 0.0f;
 
@@ -307,22 +307,22 @@ static float  g_accum_jitter_y   = 0.0f;
  * Supports 1, 2, 4, 8, or 16 samples. */
 #define MAX_ACCUM_SAMPLES 16
 static const float g_jitter_table[MAX_ACCUM_SAMPLES][2] = {
-    {  0.000f,  0.000f },  /* 1  */
-    {  0.250f,  0.250f },  /* 2  */
-    { -0.250f, -0.250f },
-    {  0.250f, -0.250f },  /* 4  */
-    { -0.250f,  0.250f },
+    {  0.250f,  0.250f },
+    { -0.250f, -0.250f },/* 2  */
+    {  0.250f, -0.250f },
+    { -0.250f,  0.250f },  /* 4  */
     { -0.125f,  0.375f },
     {  0.375f,  0.125f },
-    { -0.375f, -0.125f },  /* 8  */
-    {  0.125f, -0.375f },
+    { -0.375f, -0.125f },
+    {  0.125f, -0.375f }, /* 8  */
     {  0.375f, -0.375f },
     { -0.375f,  0.375f },
     {  0.125f,  0.125f },
     { -0.125f, -0.125f },
     {  0.375f,  0.375f },
     { -0.375f, -0.375f },
-    {  0.000f,  0.500f },  /* 16 */
+    {  0.000f,  0.500f },
+    {  0.500f,  0.000f },  /* 16 */
 };
 static const int g_accum_steps[]     = { 1, 2, 4, 8, 16 };
 #define ACCUM_STEP_COUNT 5
@@ -4040,7 +4040,7 @@ static void keyboard_func(unsigned char key, int x, int y) {
     }
 
     /* Ctrl+/: toggle comment on current line */
-    if (key == 31 || (key == '/' && glutGetModifiers() & GLUT_ACTIVE_CTRL)) {
+    if (key == '/' && glutGetModifiers() & GLUT_ACTIVE_CTRL) {
         if (g_edit_line < g_num_cmds && !g_inserting) {
             GLCmd *cur = &g_cmds[g_edit_line];
             if (cur->type == CMD_COMMENT) {
@@ -4110,7 +4110,7 @@ static void keyboard_func(unsigned char key, int x, int y) {
     }
 
     /* Ctrl+-: decrease jitter sample count */
-    if (key == '-' && (glutGetModifiers() & GLUT_ACTIVE_CTRL)) {
+    if (key == 31 || (key == '-' && (glutGetModifiers() & GLUT_ACTIVE_CTRL))) {
         if (g_use_accum) {
             for (int i = ACCUM_STEP_COUNT - 1; i > 0; i--) {
                 if (g_accum_samples >= g_accum_steps[i]) {
