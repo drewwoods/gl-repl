@@ -55,6 +55,7 @@
  *   Right-drag     Pan camera
  *   Scroll wheel   Zoom (or scroll code panel when cursor is over panel)
  *   F1-F10         Toggle overlays (help/wire/grid/axes/vnums/normals/indices/guides/autonorm/lights)
+ *   F12            Cycle predefined examples
  *   PgUp/PgDn      Scroll code panel
  *   Ctrl+T         Toggle time variable 't' play/pause
  *   Ctrl+A         Toggle accumulation-buffer AA
@@ -398,6 +399,7 @@ static int    g_show_guides  = 1;
 static int    g_autonormal   = 1;
 static int    g_show_lights  = 1;
 static int    g_cam_rotate   = 0;  /* auto-rotate camera around Y */
+static int    g_example_idx  = -1; /* current predefined example (-1 = none loaded yet) */
 
 /* Lights */
 #define MAX_LIGHTS 4
@@ -467,6 +469,15 @@ static int parse_command(const char *line, GLCmd *cmd);
 static int parse_command_with_vars(const char *line, GLCmd *cmd,
                                    ExprVar *vars, int num_vars);
 static int collect_for_vars(int pos, ExprVar *vars, int max_vars);
+static int for_loop_depth_at(int pos);
+static int block_depth_at(int pos);
+static int in_begin_block_at(int line_idx);
+static int try_commit_for_loop(void);
+static int try_commit_func_def(void);
+static int try_commit_if_block(void);
+static int try_commit_close_brace(void);
+static void load_example(int idx);
+#define NUM_EXAMPLES 5
 
 /* ========================================================================= */
 /* Utility                                                                    */
@@ -2460,7 +2471,7 @@ static void render_help(void) {
         "  F5  Vertex numbers   F6  Normal vectors",
         "  F7  Command indices  F8  Vertex guides",
         "  F9  Auto-normals     F10 Light indicators",
-        "  F11 Camera rotate",
+        "  F11 Camera rotate   F12 Cycle examples",
         "",
         "  PgUp / PgDn          Scroll code panel (or help when open)",
         "",
@@ -5155,6 +5166,9 @@ static void special_func(int key, int x, int y) {
         g_cam_rotate = !g_cam_rotate;
         set_status(g_cam_rotate ? "Camera rotate ON" : "Camera rotate OFF");
         break;
+    case GLUT_KEY_F12:
+        load_example((g_example_idx + 1) % NUM_EXAMPLES);
+        break;
 
     /* Scroll */
     case GLUT_KEY_PAGE_UP:
@@ -5386,6 +5400,300 @@ static void timer_func(int value) {
 }
 
 /* ========================================================================= */
+/* Predefined examples (F12 to cycle)                                         */
+/* ========================================================================= */
+
+/* Each example is an array of source lines terminated by NULL.
+ * Lines are processed sequentially:
+ *   "for(...) {"  → CMD_FOR_BEGIN + CMD_FOR_END, enters block
+ *   "funcN {"     → CMD_FUNC_DEF + CMD_FUNC_END, enters block
+ *   "if(...) {"   → CMD_IF_BEGIN + CMD_IF_END, enters block
+ *   "}"           → closes current block
+ *   "funcN()"     → CMD_CALL
+ *   anything else → parse_command() as a regular GL command
+ */
+
+/* Helper: feed one line through the commit pipeline, as if the user typed it
+ * and pressed ';'.  This reuses the existing try_commit_* functions so that
+ * source strings, indentation, has_vars, and block nesting are handled
+ * identically to interactive use. */
+static void feed_line(const char *line) {
+    strncpy(g_input, line, MAX_INPUT_LEN - 1);
+    g_input[MAX_INPUT_LEN - 1] = '\0';
+    g_input_len = (int)strlen(g_input);
+    g_cursor_pos = g_input_len;
+
+    /* Try structured blocks first (order matters) */
+    if (try_commit_close_brace()) return;
+    if (try_commit_for_loop()) return;
+    if (try_commit_func_def()) return;
+    if (try_commit_if_block()) return;
+
+    /* Regular command */
+    GLCmd cmd;
+    memset(&cmd, 0, sizeof(cmd));
+    int fpos = g_inserting ? g_edit_line : g_num_cmds;
+    int in_loop = for_loop_depth_at(fpos) > 0;
+    int parsed;
+    if (in_loop) {
+        ExprVar dvars[MAX_EXPR_VARS];
+        int dnv = collect_for_vars(fpos, dvars, MAX_EXPR_VARS);
+        int saved_el = g_edit_line;
+        g_edit_line = fpos;
+        parsed = parse_command_with_vars(g_input, &cmd, dvars, dnv);
+        g_edit_line = saved_el;
+        if (parsed) {
+            char stripped[MAX_LINE_LEN];
+            const char *sp = g_input;
+            while (*sp && isspace((unsigned char)*sp)) sp++;
+            strncpy(stripped, sp, MAX_LINE_LEN - 1);
+            stripped[MAX_LINE_LEN - 1] = '\0';
+            int slen = (int)strlen(stripped);
+            while (slen > 0 && (stripped[slen-1] == ';' ||
+                   isspace((unsigned char)stripped[slen-1])))
+                stripped[--slen] = '\0';
+            int fdepth = block_depth_at(fpos);
+            int bb_v = in_begin_block_at(fpos);
+            int ind_v = (bb_v ? 4 : 2) + fdepth * 2;
+            char indent_v[32];
+            if (ind_v > (int)sizeof(indent_v) - 1) ind_v = (int)sizeof(indent_v) - 1;
+            memset(indent_v, ' ', ind_v);
+            indent_v[ind_v] = '\0';
+            snprintf(cmd.source, sizeof(cmd.source), "%s%s;", indent_v, stripped);
+        }
+    } else {
+        parsed = parse_command(g_input, &cmd);
+        if (parsed && input_has_predef_vars(g_input)) {
+            cmd.has_vars = 1;
+            char stripped[MAX_LINE_LEN];
+            const char *sp = g_input;
+            while (*sp && isspace((unsigned char)*sp)) sp++;
+            strncpy(stripped, sp, MAX_LINE_LEN - 1);
+            stripped[MAX_LINE_LEN - 1] = '\0';
+            int slen = (int)strlen(stripped);
+            while (slen > 0 && (stripped[slen-1] == ';' ||
+                   isspace((unsigned char)stripped[slen-1])))
+                stripped[--slen] = '\0';
+            int bb_v = in_begin_block_at(fpos);
+            int fdepth = block_depth_at(fpos);
+            int ind_v = (bb_v ? 4 : 2) + fdepth * 2;
+            char indent_v[32];
+            if (ind_v > (int)sizeof(indent_v) - 1) ind_v = (int)sizeof(indent_v) - 1;
+            memset(indent_v, ' ', ind_v);
+            indent_v[ind_v] = '\0';
+            snprintf(cmd.source, sizeof(cmd.source), "%s%s;", indent_v, stripped);
+        }
+    }
+    if (parsed && g_num_cmds < MAX_COMMANDS) {
+        if (g_inserting) {
+            /* Insert at g_edit_line (inside a block) */
+            for (int j = g_num_cmds; j > g_edit_line; j--)
+                g_cmds[j] = g_cmds[j - 1];
+            g_cmds[g_edit_line] = cmd;
+            g_num_cmds++;
+            g_edit_line++;
+        } else {
+            g_cmds[g_num_cmds++] = cmd;
+            g_edit_line = g_num_cmds;
+        }
+    }
+    g_input[0] = '\0';
+    g_input_len = 0;
+    g_cursor_pos = 0;
+}
+
+/* Load an example from an array of source lines */
+static void load_example_lines(const char **lines) {
+    /* Clear state */
+    g_num_cmds = 0;
+    g_num_flat_cmds = 0;
+    g_edit_line = 0;
+    g_inserting = 0;
+    g_input[0] = '\0';
+    g_input_len = 0;
+    g_cursor_pos = 0;
+    g_newline_buf[0] = '\0';
+    g_newline_len = 0;
+
+    for (int i = 0; lines[i]; i++)
+        feed_line(lines[i]);
+
+    /* Clean up: exit insert mode if still active */
+    g_inserting = 0;
+    g_edit_line = g_num_cmds;
+    g_input[0] = '\0';
+    g_input_len = 0;
+    g_cursor_pos = 0;
+    mark_normals_dirty();
+}
+
+/* Example 0: Lit cube (default) */
+static const char *g_example_cube[] = {
+    "glEnable(GL_DEPTH_TEST);",
+    "glEnable(GL_LIGHTING);",
+    "glEnable(GL_COLOR_MATERIAL);",
+    "glEnable(GL_NORMALIZE);",
+    "glShadeModel(GL_SMOOTH);",
+    "glEnable(GL_LIGHT3);",
+    "glEnable(GL_LIGHT2);",
+    "glColor3f(1, 1, 1);",
+    "glBegin(GL_QUAD_STRIP);",
+    "glNormal3f(0, 0, 1);",
+    "glVertex3f(1, 1, 1);",
+    "glNormal3f(0, 0, 1);",
+    "glVertex3f(-1, 1, 1);",
+    "glNormal3f(0, 0, 1);",
+    "glVertex3f(1, -1, 1);",
+    "glNormal3f(0, 0, 1);",
+    "glVertex3f(-1, -1, 1);",
+    "glNormal3f(-0, -1, -0);",
+    "glVertex3f(1, -1, -1);",
+    "glNormal3f(-0, -1, -0);",
+    "glVertex3f(-1, -1, -1);",
+    "glNormal3f(0, 0, -1);",
+    "glVertex3f(1, 1, -1);",
+    "glNormal3f(0, 0, -1);",
+    "glVertex3f(-1, 1, -1);",
+    "glNormal3f(0, 1, -0);",
+    "glVertex3f(1, 1, 1);",
+    "glNormal3f(0, 1, -0);",
+    "glVertex3f(-1, 1, 1);",
+    "glEnd();",
+    NULL
+};
+
+/* Example 1: Animated ring — for-loop + t variable */
+static const char *g_example_ring[] = {
+    "glEnable(GL_DEPTH_TEST);",
+    "glEnable(GL_LIGHTING);",
+    "glEnable(GL_COLOR_MATERIAL);",
+    "glEnable(GL_NORMALIZE);",
+    "glEnable(GL_LIGHT3);",
+    "glBegin(GL_LINE_LOOP);",
+    "for(i, 0, 48) {",
+        "glColor3f(sin(i*TAU/48)*0.5+0.5, cos(i*TAU/48)*0.5+0.5, 0.5);",
+        "glVertex3f(cos(i*TAU/48+t)*2, sin(i*TAU/48+t)*2, sin(i*TAU/12+t)*0.5);",
+    "}",
+    "glEnd();",
+    "glBegin(GL_TRIANGLE_FAN);",
+    "glColor3f(0.2, 0.5, 1);",
+    "glVertex3f(0, 0, 0);",
+    "for(i, 0, 25) {",
+        "glColor3f(sin(i*TAU/24+t)*0.5+0.5, 0.3, cos(i*TAU/24+t)*0.5+0.5);",
+        "glVertex3f(cos(i*TAU/24)*1.5, sin(i*TAU/24)*1.5, 0);",
+    "}",
+    "glEnd();",
+    NULL
+};
+
+/* Example 2: Function demo — define reusable triangle, call with transforms */
+static const char *g_example_func[] = {
+    "glEnable(GL_DEPTH_TEST);",
+    "glEnable(GL_LIGHTING);",
+    "glEnable(GL_COLOR_MATERIAL);",
+    "glEnable(GL_NORMALIZE);",
+    "glEnable(GL_LIGHT3);",
+    "func0 {",
+        "glBegin(GL_TRIANGLES);",
+        "glNormal3f(0, 0, 1);",
+        "glVertex3f(0, 0.8, 0);",
+        "glVertex3f(-0.7, -0.4, 0);",
+        "glVertex3f(0.7, -0.4, 0);",
+        "glEnd();",
+    "}",
+    "glColor3f(1, 0.3, 0.3);",
+    "func0();",
+    "glTranslatef(2, 0, 0);",
+    "glColor3f(0.3, 1, 0.3);",
+    "func0();",
+    "glTranslatef(-4, 0, 0);",
+    "glColor3f(0.3, 0.3, 1);",
+    "func0();",
+    NULL
+};
+
+/* Example 3: Conditional colors — if-blocks + t variable */
+static const char *g_example_cond[] = {
+    "glEnable(GL_DEPTH_TEST);",
+    "glEnable(GL_LIGHTING);",
+    "glEnable(GL_COLOR_MATERIAL);",
+    "glEnable(GL_NORMALIZE);",
+    "glEnable(GL_LIGHT3);",
+    "glBegin(GL_QUADS);",
+    "if(sin(t) > 0) {",
+        "glColor3f(1, 0.2, 0.2);",
+    "}",
+    "if(sin(t) <= 0) {",
+        "glColor3f(0.2, 0.2, 1);",
+    "}",
+    "glNormal3f(0, 0, 1);",
+    "glVertex3f(-1, -1, 0);",
+    "glVertex3f(1, -1, 0);",
+    "glVertex3f(1, 1, 0);",
+    "glVertex3f(-1, 1, 0);",
+    "if(cos(t) > 0) {",
+        "glColor3f(0.2, 1, 0.2);",
+    "}",
+    "if(cos(t) <= 0) {",
+        "glColor3f(1, 1, 0.2);",
+    "}",
+    "glNormal3f(0, 0, -1);",
+    "glVertex3f(-1, -1, -1);",
+    "glVertex3f(-1, 1, -1);",
+    "glVertex3f(1, 1, -1);",
+    "glVertex3f(1, -1, -1);",
+    "glEnd();",
+    NULL
+};
+
+/* Example 4: Parametric torus — nested for-loops */
+static const char *g_example_torus[] = {
+    "glEnable(GL_DEPTH_TEST);",
+    "glEnable(GL_LIGHTING);",
+    "glEnable(GL_COLOR_MATERIAL);",
+    "glEnable(GL_NORMALIZE);",
+    "glEnable(GL_LIGHT3);",
+    "glEnable(GL_LIGHT2);",
+    "glShadeModel(GL_SMOOTH);",
+    "for(i, 0, 24) {",
+        "glBegin(GL_QUAD_STRIP);",
+        "for(j, 0, 25) {",
+            "glColor3f(sin(i*TAU/24)*0.4+0.6, cos(j*TAU/24)*0.4+0.6, 0.5);",
+            "glVertex3f((2+cos(j*TAU/24))*cos(i*TAU/24), (2+cos(j*TAU/24))*sin(i*TAU/24), sin(j*TAU/24));",
+            "glVertex3f((2+cos(j*TAU/24))*cos((i+1)*TAU/24), (2+cos(j*TAU/24))*sin((i+1)*TAU/24), sin(j*TAU/24));",
+        "}",
+        "glEnd();",
+    "}",
+    NULL
+};
+
+static const char **g_examples[] = {
+    g_example_cube,
+    g_example_ring,
+    g_example_func,
+    g_example_cond,
+    g_example_torus,
+};
+static const char *g_example_names[] = {
+    "Lit cube",
+    "Animated ring (for + t)",
+    "Function demo (func0)",
+    "Conditional colors (if + t)",
+    "Parametric torus (nested for)",
+};
+/* NUM_EXAMPLES defined in forward declarations section */
+
+static void load_example(int idx) {
+    if (idx < 0 || idx >= NUM_EXAMPLES) return;
+    load_example_lines(g_examples[idx]);
+    g_example_idx = idx;
+    char msg[128];
+    snprintf(msg, sizeof(msg), "Example %d/%d: %s (F12 for next)",
+             idx + 1, NUM_EXAMPLES, g_example_names[idx]);
+    set_status(msg);
+}
+
+/* ========================================================================= */
 /* Initialization                                                             */
 /* ========================================================================= */
 
@@ -5396,51 +5704,9 @@ static void load_initial_commands(const char *import_file) {
         return;
     }
 
-    /* Fall back to default example */
-    static const char *init_cmds[] = {
-        "glEnable(GL_DEPTH_TEST);",
-        "glEnable(GL_LIGHTING);",
-        "glEnable(GL_COLOR_MATERIAL);",
-        "glEnable(GL_NORMALIZE);",
-        "glShadeModel(GL_SMOOTH);",
-        "glEnable(GL_LIGHT3);",
-        "glEnable(GL_LIGHT2);",
-        "glColor3f(1, 1, 1);",
-        "glBegin(GL_QUAD_STRIP);",
-        "glNormal3f(0, 0, 1);",
-        "glVertex3f(1, 1, 1);",
-        "glNormal3f(0, 0, 1);",
-        "glVertex3f(-1, 1, 1);",
-        "glNormal3f(0, 0, 1);",
-        "glVertex3f(1, -1, 1);",
-        "glNormal3f(0, 0, 1);",
-        "glVertex3f(-1, -1, 1);",
-        "glNormal3f(-0, -1, -0);",
-        "glVertex3f(1, -1, -1);",
-        "glNormal3f(-0, -1, -0);",
-        "glVertex3f(-1, -1, -1);",
-        "glNormal3f(0, 0, -1);",
-        "glVertex3f(1, 1, -1);",
-        "glNormal3f(0, 0, -1);",
-        "glVertex3f(-1, 1, -1);",
-        "glNormal3f(0, 1, -0);",
-        "glVertex3f(1, 1, 1);",
-        "glNormal3f(0, 1, -0);",
-        "glVertex3f(-1, 1, 1);",
-        "glEnd();",
-        NULL
-    };
-
-    for (int i = 0; init_cmds[i]; i++) {
-        g_edit_line = g_num_cmds;
-        GLCmd cmd;
-        memset(&cmd, 0, sizeof(cmd));
-        if (parse_command(init_cmds[i], &cmd))
-            g_cmds[g_num_cmds++] = cmd;
-    }
-
-    g_edit_line = g_num_cmds;
-    set_status("Ready - type GL commands, press ; to execute. F1 for help.");
+    /* Fall back to default example (cube) */
+    load_example(0);
+    set_status("Ready - type GL commands, press ; to execute. F1 for help. F12 for examples.");
 }
 
 static void init_gl(void) {
