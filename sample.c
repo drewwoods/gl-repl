@@ -8,6 +8,7 @@
  *   glBegin(MODE)        glEnd()
  *   glVertex3f(x,y,z)    glNormal3f(x,y,z)
  *   glColor3f(r,g,b)     glColor4f(r,g,b,a)
+ *   glTranslatef(x,y,z)
  *   glEnable(CAP)        glDisable(CAP)
  *   glShadeModel(MODE)
  *
@@ -101,6 +102,7 @@ typedef enum {
     CMD_ENABLE,
     CMD_DISABLE,
     CMD_SHADE_MODEL,
+    CMD_TRANSLATE3F,
     CMD_FOR_BEGIN,
     CMD_FOR_END,
     CMD_COMMENT,
@@ -172,6 +174,7 @@ static const char *g_func_completions[] = {
     "glEnable(",
     "glDisable(",
     "glShadeModel(",
+    "glTranslatef(",
     "for(",
     "x = ",
     "y = ",
@@ -1404,6 +1407,22 @@ static int parse_command_internal(const char *line, GLCmd *cmd,
         return 0;
     }
 
+    /* glTranslatef(x, y, z) */
+    if (strcmp(func, "glTranslatef") == 0) {
+        cmd->num_args = parse_exprs(args, cmd->args, 3, vars, num_vars);
+        if (cmd->num_args == 3) {
+            cmd->type = CMD_TRANSLATE3F;
+            cmd->valid = 1;
+            cmd->has_vars = (num_vars > 0);
+            snprintf(cmd->source, sizeof(cmd->source),
+                     "%sglTranslatef(%g, %g, %g);",
+                     indent, cmd->args[0], cmd->args[1], cmd->args[2]);
+            return 1;
+        }
+        set_status("Usage: glTranslatef(x, y, z)");
+        return 0;
+    }
+
     /* glColor3f(r, g, b) */
     if (strcmp(func, "glColor3f") == 0) {
         cmd->num_args = parse_exprs(args, cmd->args, 3, vars, num_vars);
@@ -1791,6 +1810,10 @@ static void execute_commands(void) {
         case CMD_SHADE_MODEL:
             glShadeModel(g_flat_cmds[i].mode);
             break;
+        case CMD_TRANSLATE3F:
+            glTranslatef(g_flat_cmds[i].args[0], g_flat_cmds[i].args[1],
+                         g_flat_cmds[i].args[2]);
+            break;
         default:
             break;
         }
@@ -1847,7 +1870,8 @@ static void color_for_type(CmdType t) {
     case CMD_BEGIN:
     case CMD_END:      glColor3f(0.85f, 0.45f, 0.85f); break;
     case CMD_VERTEX3F: glColor3f(0.40f, 0.90f, 0.40f); break;
-    case CMD_NORMAL3F: glColor3f(0.40f, 0.80f, 0.95f); break;
+    case CMD_NORMAL3F:      glColor3f(0.40f, 0.80f, 0.95f); break;
+    case CMD_TRANSLATE3F:   glColor3f(0.95f, 0.65f, 0.40f); break;
     case CMD_COLOR3F:
     case CMD_COLOR4F:  glColor3f(0.95f, 0.85f, 0.30f); break;
     case CMD_FOR_BEGIN:
@@ -2235,6 +2259,7 @@ static void render_help(void) {
         "  glNormal3f(x,y,z)    Specify a vertex normal",
         "  glColor3f(r,g,b)     Specify vertex color",
         "  glColor4f(r,g,b,a)   Specify color with alpha",
+        "  glTranslatef(x,y,z)  Translate the modelview matrix",
         "  glEnable(CAP)        GL_DEPTH_TEST, GL_LIGHTING, ...",
         "  glDisable(CAP)       GL_COLOR_MATERIAL, GL_NORMALIZE",
         "  glShadeModel(MODE)   GL_SMOOTH, GL_FLAT",
@@ -3705,6 +3730,22 @@ static int try_commit_for_loop(void) {
     snprintf(fe.source, sizeof(fe.source), "%s}", indent);
 
     if (*body_start == '{' || *body_start == '\0') {
+        /* Editing an existing FOR_BEGIN in-place: update header, leave body/end untouched */
+        if (!g_inserting && g_edit_line < g_num_cmds &&
+            g_cmds[g_edit_line].type == CMD_FOR_BEGIN) {
+            g_cmds[g_edit_line] = fb;
+            g_edit_line++;
+            g_inserting = 1;
+            g_input[0] = '\0';
+            g_input_len = 0;
+            g_cursor_pos = 0;
+            g_ac_count = 0;
+            g_ac_ghost[0] = '\0';
+            set_status("for-loop header updated");
+            mark_normals_dirty();
+            return 1;
+        }
+
         /* Multi-line block: insert FOR_BEGIN and FOR_END, enter insert mode between */
         if (g_num_cmds + 2 > MAX_COMMANDS) {
             set_status("Command buffer full!");
@@ -4268,6 +4309,14 @@ static void keyboard_func(unsigned char key, int x, int y) {
             int can_advance = 1;
 
             if (g_input_len > 0) {
+                /* For-loop header: delegate entirely to try_commit_for_loop,
+                 * which knows how to update the FOR_BEGIN in-place. */
+                if (g_cmds[g_edit_line].type == CMD_FOR_BEGIN) {
+                    if (try_commit_for_loop()) return;
+                    can_advance = 0;
+                    /* Fall through so set_status "Invalid" can be reached */
+                }
+
                 GLCmd cmd;
                 memset(&cmd, 0, sizeof(cmd));
                 int fpos = g_edit_line;
