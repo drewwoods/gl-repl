@@ -140,6 +140,11 @@ static float eval_term(ExprCtx *ctx) {
             float d = eval_primary(ctx);
             v = (fabsf(d) > 1e-12f) ? v / d : 0.0f;
         }
+        else if (*ctx->p == '%') {
+            ctx->p++;
+            float d = eval_primary(ctx);
+            v = (fabsf(d) > 1e-12f) ? fmodf(v, d) : 0.0f;
+        }
         else break;
     }
     return v;

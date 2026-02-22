@@ -46,6 +46,7 @@
  *   Scroll wheel   Zoom (or scroll code panel when cursor is over panel)
  *   F1-F10         Toggle overlays (help/wire/grid/axes/vnums/normals/indices/guides/autonorm/lights)
  *   PgUp/PgDn      Scroll code panel
+ *   Ctrl+T         Toggle time variable 't' play/pause
  *   Ctrl+A         Toggle accumulation-buffer AA
  *   Ctrl+=         Increase AA jitter samples (1→2→4→8→16)
  *   Ctrl+-         Decrease AA jitter samples (16→8→4→2→1)
@@ -118,7 +119,7 @@ typedef struct {
 typedef struct {
     CmdType type;
     GLenum  mode;
-    float   args[4];
+    float   args[8];
     int     num_args;
     char    source[MAX_LINE_LEN];
     int     valid;
@@ -346,6 +347,8 @@ static int    g_blink_tick = 0;
 
 /* Animation */
 static float  g_anim_time = 0.0f;
+static int    g_t_playing = 1;    /* 1: 't' var auto-increments with time; 0: frozen */
+static int    g_t_var_idx = -1;   /* index of "t" in g_predef_vars[], cached at init */
 
 /* Toggles */
 static int    g_show_help    = 0;
@@ -1767,12 +1770,13 @@ static void flatten_commands(void) {
 
 static void execute_commands(void) {
     int in_begin = 0;
-    for (int i = 0; i < g_num_flat_cmds; i++) {
-        if (!g_flat_cmds[i].valid) continue;
-        switch (g_flat_cmds[i].type) {
+    int pc = 0;
+    while (pc < g_num_flat_cmds) {
+        if (!g_flat_cmds[pc].valid) { pc++; continue; }
+        switch (g_flat_cmds[pc].type) {
         case CMD_BEGIN:
             if (in_begin) glEnd();
-            glBegin(g_flat_cmds[i].mode);
+            glBegin(g_flat_cmds[pc].mode);
             in_begin = 1;
             break;
         case CMD_END:
@@ -1780,43 +1784,44 @@ static void execute_commands(void) {
             break;
         case CMD_VERTEX3F:
             if (in_begin)
-                glVertex3f(g_flat_cmds[i].args[0], g_flat_cmds[i].args[1],
-                           g_flat_cmds[i].args[2]);
+                glVertex3f(g_flat_cmds[pc].args[0], g_flat_cmds[pc].args[1],
+                           g_flat_cmds[pc].args[2]);
             break;
         case CMD_NORMAL3F:
-            glNormal3f(g_flat_cmds[i].args[0], g_flat_cmds[i].args[1],
-                       g_flat_cmds[i].args[2]);
+            glNormal3f(g_flat_cmds[pc].args[0], g_flat_cmds[pc].args[1],
+                       g_flat_cmds[pc].args[2]);
             break;
         case CMD_COLOR3F:
-            glColor3f(g_flat_cmds[i].args[0], g_flat_cmds[i].args[1],
-                      g_flat_cmds[i].args[2]);
+            glColor3f(g_flat_cmds[pc].args[0], g_flat_cmds[pc].args[1],
+                      g_flat_cmds[pc].args[2]);
             break;
         case CMD_COLOR4F:
-            glColor4f(g_flat_cmds[i].args[0], g_flat_cmds[i].args[1],
-                      g_flat_cmds[i].args[2], g_flat_cmds[i].args[3]);
+            glColor4f(g_flat_cmds[pc].args[0], g_flat_cmds[pc].args[1],
+                      g_flat_cmds[pc].args[2], g_flat_cmds[pc].args[3]);
             break;
         case CMD_ENABLE:
-            glEnable(g_flat_cmds[i].mode);
+            glEnable(g_flat_cmds[pc].mode);
             for (int li = 0; li < MAX_LIGHTS; li++)
-                if (g_lights[li].id == g_flat_cmds[i].mode)
+                if (g_lights[li].id == g_flat_cmds[pc].mode)
                     g_lights[li].enabled = 1;
             break;
         case CMD_DISABLE:
-            glDisable(g_flat_cmds[i].mode);
+            glDisable(g_flat_cmds[pc].mode);
             for (int li = 0; li < MAX_LIGHTS; li++)
-                if (g_lights[li].id == g_flat_cmds[i].mode)
+                if (g_lights[li].id == g_flat_cmds[pc].mode)
                     g_lights[li].enabled = 0;
             break;
         case CMD_SHADE_MODEL:
-            glShadeModel(g_flat_cmds[i].mode);
+            glShadeModel(g_flat_cmds[pc].mode);
             break;
         case CMD_TRANSLATE3F:
-            glTranslatef(g_flat_cmds[i].args[0], g_flat_cmds[i].args[1],
-                         g_flat_cmds[i].args[2]);
+            glTranslatef(g_flat_cmds[pc].args[0], g_flat_cmds[pc].args[1],
+                         g_flat_cmds[pc].args[2]);
             break;
         default:
             break;
         }
+        pc++;
     }
     if (in_begin) glEnd();
 }
@@ -1992,19 +1997,29 @@ static void render_code_panel(void) {
             else
                 snprintf(aa_tag, sizeof(aa_tag), " | AA:off");
         }
+        /* Time variable indicator */
+        char t_tag[32] = "";
+        if (g_t_var_idx >= 0) {
+            if (g_t_playing)
+                snprintf(t_tag, sizeof(t_tag), " | t=%.2f",
+                         g_predef_vars[g_t_var_idx].value);
+            else
+                snprintf(t_tag, sizeof(t_tag), " | t=%.2f[P]",
+                         g_predef_vars[g_t_var_idx].value);
+        }
         if (g_inserting) {
             snprintf(info, sizeof(info),
-                     "F1:Help | %d cmds | %d verts | Ln %d [INSERT]%s",
-                     g_num_cmds, nv, g_edit_line + 1, aa_tag);
+                     "F1:Help | %d cmds | %d verts | Ln %d [INSERT]%s%s",
+                     g_num_cmds, nv, g_edit_line + 1, t_tag, aa_tag);
         } else if (in_begin_block()) {
             snprintf(info, sizeof(info),
-                     "F1:Help | %d cmds | %d verts | %s | Ln %d%s",
+                     "F1:Help | %d cmds | %d verts | %s | Ln %d%s%s",
                      g_num_cmds, nv, mode_name(current_begin_mode()),
-                     g_edit_line + 1, aa_tag);
+                     g_edit_line + 1, t_tag, aa_tag);
         } else {
             snprintf(info, sizeof(info),
-                     "F1:Help | %d cmds | %d verts | Ln %d%s",
-                     g_num_cmds, nv, g_edit_line + 1, aa_tag);
+                     "F1:Help | %d cmds | %d verts | Ln %d%s%s",
+                     g_num_cmds, nv, g_edit_line + 1, t_tag, aa_tag);
         }
         glColor3f(0.50f, 0.55f, 0.65f);
         draw_string(CODE_MARGIN_X, g_win_h - CODE_MARGIN_Y - 2, info,
@@ -2312,6 +2327,11 @@ static void render_help(void) {
         "  Right-drag           Pan",
         "  Scroll wheel         Zoom camera",
         "  Scroll wheel (over code panel)  Scroll code panel",
+        "",
+        "Time variable 't':",
+        "  't' is a predefined var that auto-increments with elapsed time.",
+        "  Use it in any expression: glVertex3f(sin(t), cos(t), 0)",
+        "  Ctrl+T               Play / pause time (shown as t=X.XX or t=X.XX[P])",
         "",
         "Accumulation Buffer AA (requires accum buffer, on by default):",
         "  Ctrl+A               Toggle jitter AA on / off",
@@ -4144,6 +4164,13 @@ static void keyboard_func(unsigned char key, int x, int y) {
         return;
     }
 
+    /* Ctrl+T: toggle time ('t' variable) play / pause */
+    if (key == 20) {
+        g_t_playing = !g_t_playing;
+        set_status(g_t_playing ? "Time: playing" : "Time: paused (set 't' manually)");
+        return;
+    }
+
     /* Ctrl+= or Ctrl++: increase jitter sample count */
     if ((key == '=' || key == '+') && (glutGetModifiers() & GLUT_ACTIVE_CTRL)) {
         if (g_use_accum) {
@@ -4943,6 +4970,12 @@ static void timer_func(int value) {
 
     g_anim_time += 0.016f;  /* ~60 fps */
 
+    /* Drive predefined 't' variable with elapsed time when playing */
+    if (g_t_playing && g_t_var_idx >= 0) {
+        g_predef_vars[g_t_var_idx].value = g_anim_time;
+        g_flat_dirty = 1;   /* re-flatten so expressions referencing t update */
+    }
+
     /* Apply momentum only while no button is held (coast after release).
      * Velocity always decays so it drains cleanly whether or not it drives. */
     if (g_mouse_btn == -1) {
@@ -5071,6 +5104,9 @@ int main(int argc, char **argv) {
 
     init_gl();
     init_predef_vars();
+    /* Cache index of 't' in predefined vars for the time animation */
+    for (int i = 0; i < g_num_predef_vars; i++)
+        if (strcmp(g_predef_vars[i].name, "t") == 0) { g_t_var_idx = i; break; }
     load_initial_commands(input_file);
 
     glutDisplayFunc(display_func);
