@@ -53,9 +53,10 @@ static void expr_skip_ws(ExprCtx *ctx) {
 static float eval_primary(ExprCtx *ctx) {
     expr_skip_ws(ctx);
 
-    /* Unary minus / plus */
+    /* Unary minus / plus / logical not */
     if (*ctx->p == '-') { ctx->p++; return -eval_primary(ctx); }
     if (*ctx->p == '+') { ctx->p++; return eval_primary(ctx); }
+    if (*ctx->p == '!') { ctx->p++; return eval_primary(ctx) != 0.0f ? 0.0f : 1.0f; }
 
     /* Parenthesised expression */
     if (*ctx->p == '(') {
@@ -150,13 +151,51 @@ static float eval_term(ExprCtx *ctx) {
     return v;
 }
 
-float eval_expr(ExprCtx *ctx) {
+static float eval_additive(ExprCtx *ctx) {
     float v = eval_term(ctx);
     for (;;) {
         expr_skip_ws(ctx);
         if (*ctx->p == '+') { ctx->p++; v += eval_term(ctx); }
         else if (*ctx->p == '-') { ctx->p++; v -= eval_term(ctx); }
         else break;
+    }
+    return v;
+}
+
+static float eval_comparison(ExprCtx *ctx) {
+    float v = eval_additive(ctx);
+    for (;;) {
+        expr_skip_ws(ctx);
+        if (ctx->p[0] == '>' && ctx->p[1] == '=') {
+            ctx->p += 2; v = (v >= eval_additive(ctx)) ? 1.0f : 0.0f;
+        } else if (ctx->p[0] == '<' && ctx->p[1] == '=') {
+            ctx->p += 2; v = (v <= eval_additive(ctx)) ? 1.0f : 0.0f;
+        } else if (ctx->p[0] == '=' && ctx->p[1] == '=') {
+            ctx->p += 2; v = (fabsf(v - eval_additive(ctx)) < 1e-6f) ? 1.0f : 0.0f;
+        } else if (ctx->p[0] == '!' && ctx->p[1] == '=') {
+            ctx->p += 2; v = (fabsf(v - eval_additive(ctx)) >= 1e-6f) ? 1.0f : 0.0f;
+        } else if (*ctx->p == '>' && ctx->p[1] != '=') {
+            ctx->p++; v = (v > eval_additive(ctx)) ? 1.0f : 0.0f;
+        } else if (*ctx->p == '<' && ctx->p[1] != '=') {
+            ctx->p++; v = (v < eval_additive(ctx)) ? 1.0f : 0.0f;
+        } else break;
+    }
+    return v;
+}
+
+float eval_expr(ExprCtx *ctx) {
+    float v = eval_comparison(ctx);
+    for (;;) {
+        expr_skip_ws(ctx);
+        if (ctx->p[0] == '&' && ctx->p[1] == '&') {
+            ctx->p += 2;
+            float r = eval_comparison(ctx);
+            v = (v != 0.0f && r != 0.0f) ? 1.0f : 0.0f;
+        } else if (ctx->p[0] == '|' && ctx->p[1] == '|') {
+            ctx->p += 2;
+            float r = eval_comparison(ctx);
+            v = (v != 0.0f || r != 0.0f) ? 1.0f : 0.0f;
+        } else break;
     }
     return v;
 }
