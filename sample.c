@@ -108,6 +108,7 @@ typedef enum {
     CMD_BEGIN,
     CMD_END,
     CMD_VERTEX3F,
+    CMD_VERTEX2F,
     CMD_NORMAL3F,
     CMD_COLOR3F,
     CMD_COLOR4F,
@@ -124,6 +125,13 @@ typedef enum {
     CMD_IF_END,
     CMD_COMMENT,
     CMD_VAR_ASSIGN,
+    CMD_LABEL,
+    CMD_GOTO,
+    CMD_GLU_SPHERE,
+    CMD_GLU_CYLINDER,
+    CMD_GLU_DISK,
+    CMD_GLU_PARTIAL_DISK,
+    CMD_GLUT_TORUS,
     CMD_TYPE_COUNT
 } CmdType;
 
@@ -183,6 +191,7 @@ static const EnumEntry g_shade_models[] = {
 
 static const char *g_func_completions[] = {
     "glVertex3f(",
+    "glVertex2f(",
     "glNormal3f(",
     "glColor3f(",
     "glColor4f(",
@@ -192,8 +201,14 @@ static const char *g_func_completions[] = {
     "glDisable(",
     "glShadeModel(",
     "glTranslatef(",
+    "gluSphere(",
+    "gluCylinder(",
+    "gluDisk(",
+    "gluPartialDisk(",
+    "glutSolidTorus(",
     "for(",
     "if(",
+    "goto ",
     "func0 {",
     "func1 {",
     "func2 {",
@@ -400,6 +415,23 @@ static int    g_autonormal   = 1;
 static int    g_show_lights  = 1;
 static int    g_cam_rotate   = 0;  /* auto-rotate camera around Y */
 static int    g_example_idx  = -1; /* current predefined example (-1 = none loaded yet) */
+static int    g_user_lighting_enabled = 0; /* tracks if user typed glEnable(GL_LIGHTING) */
+static int    g_show_outlines = 1; /* draw black wireframe over filled polygons */
+static int    g_highlight_current_poly = 1; /* highlight glBegin block under cursor */
+static int    g_current_block_begin = -1;  /* flat cmd index of cursor's glBegin */
+static int    g_current_block_end   = -1;  /* flat cmd index of cursor's glEnd */
+static int    g_ortho_mode = 0;  /* 0=perspective, 1=2D orthographic */
+
+/* GLU quadric (shared for sphere/cylinder/disk drawing) */
+static GLUquadric *g_quadric = NULL;
+
+/* GLU tessellator (for concave polygon support) */
+static GLUtesselator *g_tess = NULL;
+
+/* Tessellator combine callback vertex buffer */
+#define TESS_VERT_BUF_SIZE 256
+static GLdouble g_tess_verts[TESS_VERT_BUF_SIZE][3];
+static int      g_tess_vert_count = 0;
 
 /* Lights */
 #define MAX_LIGHTS 4
@@ -680,6 +712,63 @@ static void write_for_begin_as_c(FILE *f, const GLCmd *cmd) {
     }
 }
 
+/* Write the body of a func def block (start..end exclusive) as C.
+ * Used by write_func_defs_as_c to emit static helper functions. */
+static void write_func_body_range_as_c(FILE *f, int start, int end_idx) {
+    int for_depth = 0;
+    for (int i = start; i < end_idx && i < g_num_cmds; i++) {
+        if (!g_cmds[i].valid) continue;
+        switch (g_cmds[i].type) {
+        case CMD_FOR_BEGIN:
+            write_for_begin_as_c(f, &g_cmds[i]);
+            for_depth++;
+            break;
+        case CMD_FOR_END:
+            for_depth--;
+            fprintf(f, "%s\n", g_cmds[i].source);
+            break;
+        case CMD_COMMENT:
+        case CMD_VAR_ASSIGN:
+            fprintf(f, "%s\n", g_cmds[i].source);
+            break;
+        case CMD_FUNC_DEF: case CMD_FUNC_END:
+            break; /* nested func defs not supported */
+        case CMD_CALL:
+            fprintf(f, "  func%d();\n", (int)g_cmds[i].args[0]);
+            break;
+        default:
+            if (for_depth > 0 || g_cmds[i].has_vars) {
+                char c_src[MAX_LINE_LEN];
+                repl_expr_to_c(g_cmds[i].source, c_src, sizeof(c_src));
+                fprintf(f, "%s\n", c_src);
+            } else {
+                fprintf(f, "%s\n", g_cmds[i].source);
+            }
+            break;
+        }
+    }
+}
+
+/* Emit all user-defined functions as static C functions (before display()) */
+static void write_func_defs_as_c(FILE *f) {
+    for (int i = 0; i < g_num_cmds; i++) {
+        if (!g_cmds[i].valid || g_cmds[i].type != CMD_FUNC_DEF) continue;
+        int fn = (int)g_cmds[i].args[0];
+        /* find the matching CMD_FUNC_END */
+        int depth = 1, fe = g_num_cmds;
+        for (int j = i + 1; j < g_num_cmds; j++) {
+            CmdType t = g_cmds[j].type;
+            if (t == CMD_FOR_BEGIN || t == CMD_FUNC_DEF || t == CMD_IF_BEGIN) depth++;
+            else if (t == CMD_FOR_END || t == CMD_FUNC_END || t == CMD_IF_END) {
+                if (--depth == 0) { fe = j; break; }
+            }
+        }
+        fprintf(f, "\nstatic void func%d(void) {\n", fn);
+        write_func_body_range_as_c(f, i + 1, fe);
+        fprintf(f, "}\n");
+    }
+}
+
 static void save_output(const char *filename) {
     FILE *f = fopen(filename, "w");
     if (!f) {
@@ -687,8 +776,12 @@ static void save_output(const char *filename) {
         return;
     }
 
-    for (int i = 0; g_header_pre[i]; i++)
+    /* Emit header, inserting any func defs just before void display() { */
+    for (int i = 0; g_header_pre[i]; i++) {
+        if (strcmp(g_header_pre[i], "void display() {") == 0)
+            write_func_defs_as_c(f);
         fprintf(f, "%s\n", g_header_pre[i]);
+    }
     for (int i = 0; i < 3; i++)
         fprintf(f, "%s\n", g_lookat[i]);
     for (int i = 0; g_header_post[i]; i++)
@@ -708,7 +801,7 @@ static void save_output(const char *filename) {
         fprintf(f, ";\n");
     }
 
-    /* Write g_cmds[] preserving for-loop structure */
+    /* Write g_cmds[] preserving for-loop structure; skip func defs, emit calls */
     int for_depth = 0;
     for (int i = 0; i < g_num_cmds; i++) {
         if (!g_cmds[i].valid) continue;
@@ -726,6 +819,23 @@ static void save_output(const char *filename) {
             break;
         case CMD_VAR_ASSIGN:
             fprintf(f, "%s\n", g_cmds[i].source);
+            break;
+        case CMD_FUNC_DEF: {
+            /* Skip entire function definition — already emitted above display() */
+            int depth = 1;
+            for (int j = i + 1; j < g_num_cmds; j++) {
+                CmdType t = g_cmds[j].type;
+                if (t == CMD_FOR_BEGIN || t == CMD_FUNC_DEF || t == CMD_IF_BEGIN) depth++;
+                else if (t == CMD_FOR_END || t == CMD_FUNC_END || t == CMD_IF_END) {
+                    if (--depth == 0) { i = j; break; }
+                }
+            }
+            break;
+        }
+        case CMD_FUNC_END:
+            break; /* shouldn't be reached due to above skip */
+        case CMD_CALL:
+            fprintf(f, "  func%d();\n", (int)g_cmds[i].args[0]);
             break;
         default:
             if (for_depth > 0 || g_cmds[i].has_vars) {
@@ -1511,6 +1621,139 @@ static int parse_command_internal(const char *line, GLCmd *cmd,
         return 1;
     }
 
+    /* glVertex2f(x, y) — 2D vertex for ortho mode */
+    if (strcmp(func, "glVertex2f") == 0) {
+        cmd->num_args = parse_exprs(args, cmd->args, 2, vars, num_vars);
+        if (cmd->num_args == 2) {
+            cmd->type = CMD_VERTEX2F;
+            cmd->valid = 1;
+            cmd->has_vars = (num_vars > 0);
+            snprintf(cmd->source, sizeof(cmd->source),
+                     "%sglVertex2f(%g, %g);",
+                     indent, cmd->args[0], cmd->args[1]);
+            return 1;
+        }
+        set_status("Usage: glVertex2f(x, y)");
+        return 0;
+    }
+
+    /* gluSphere(radius, slices, stacks) */
+    if (strcmp(func, "gluSphere") == 0) {
+        cmd->num_args = parse_exprs(args, cmd->args, 3, vars, num_vars);
+        if (cmd->num_args == 3) {
+            cmd->type = CMD_GLU_SPHERE;
+            cmd->valid = 1;
+            cmd->has_vars = (num_vars > 0);
+            snprintf(cmd->source, sizeof(cmd->source),
+                     "%sgluSphere(g_quadric, %g, %d, %d);",
+                     indent, cmd->args[0], (int)cmd->args[1], (int)cmd->args[2]);
+            return 1;
+        }
+        set_status("Usage: gluSphere(radius, slices, stacks)");
+        return 0;
+    }
+
+    /* gluCylinder(baseRadius, topRadius, height, slices, stacks) */
+    if (strcmp(func, "gluCylinder") == 0) {
+        cmd->num_args = parse_exprs(args, cmd->args, 5, vars, num_vars);
+        if (cmd->num_args == 5) {
+            cmd->type = CMD_GLU_CYLINDER;
+            cmd->valid = 1;
+            cmd->has_vars = (num_vars > 0);
+            snprintf(cmd->source, sizeof(cmd->source),
+                     "%sgluCylinder(g_quadric, %g, %g, %g, %d, %d);",
+                     indent, cmd->args[0], cmd->args[1], cmd->args[2],
+                     (int)cmd->args[3], (int)cmd->args[4]);
+            return 1;
+        }
+        set_status("Usage: gluCylinder(baseR, topR, height, slices, stacks)");
+        return 0;
+    }
+
+    /* gluDisk(innerRadius, outerRadius, slices, loops) */
+    if (strcmp(func, "gluDisk") == 0) {
+        cmd->num_args = parse_exprs(args, cmd->args, 4, vars, num_vars);
+        if (cmd->num_args == 4) {
+            cmd->type = CMD_GLU_DISK;
+            cmd->valid = 1;
+            cmd->has_vars = (num_vars > 0);
+            snprintf(cmd->source, sizeof(cmd->source),
+                     "%sgluDisk(g_quadric, %g, %g, %d, %d);",
+                     indent, cmd->args[0], cmd->args[1],
+                     (int)cmd->args[2], (int)cmd->args[3]);
+            return 1;
+        }
+        set_status("Usage: gluDisk(innerR, outerR, slices, loops)");
+        return 0;
+    }
+
+    /* gluPartialDisk(innerR, outerR, slices, loops, startAngle, sweepAngle) */
+    if (strcmp(func, "gluPartialDisk") == 0) {
+        cmd->num_args = parse_exprs(args, cmd->args, 6, vars, num_vars);
+        if (cmd->num_args == 6) {
+            cmd->type = CMD_GLU_PARTIAL_DISK;
+            cmd->valid = 1;
+            cmd->has_vars = (num_vars > 0);
+            snprintf(cmd->source, sizeof(cmd->source),
+                     "%sgluPartialDisk(g_quadric, %g, %g, %d, %d, %g, %g);",
+                     indent, cmd->args[0], cmd->args[1],
+                     (int)cmd->args[2], (int)cmd->args[3],
+                     cmd->args[4], cmd->args[5]);
+            return 1;
+        }
+        set_status("Usage: gluPartialDisk(innerR, outerR, slices, loops, startAngle, sweepAngle)");
+        return 0;
+    }
+
+    /* glutSolidTorus(innerRadius, outerRadius, nsides, rings) */
+    if (strcmp(func, "glutSolidTorus") == 0) {
+        cmd->num_args = parse_exprs(args, cmd->args, 4, vars, num_vars);
+        if (cmd->num_args == 4) {
+            cmd->type = CMD_GLUT_TORUS;
+            cmd->valid = 1;
+            cmd->has_vars = (num_vars > 0);
+            snprintf(cmd->source, sizeof(cmd->source),
+                     "%sglutstolidTorus(%g, %g, %d, %d);",
+                     indent, cmd->args[0], cmd->args[1],
+                     (int)cmd->args[2], (int)cmd->args[3]);
+            /* Fix: use correct spelling */
+            snprintf(cmd->source, sizeof(cmd->source),
+                     "%sglutSolidTorus(%g, %g, %d, %d);",
+                     indent, cmd->args[0], cmd->args[1],
+                     (int)cmd->args[2], (int)cmd->args[3]);
+            return 1;
+        }
+        set_status("Usage: glutSolidTorus(innerR, outerR, nsides, rings)");
+        return 0;
+    }
+
+    /* goto label — jump to a named label */
+    if (strncmp(p, "goto ", 5) == 0) {
+        const char *lname = p + 5;
+        while (*lname && isspace((unsigned char)*lname)) lname++;
+        if (*lname) {
+            cmd->type = CMD_GOTO;
+            cmd->valid = 1;
+            int fdepth = block_depth_at(g_edit_line);
+            int bb_v = in_begin_block_at(g_edit_line);
+            int ind_v = (bb_v ? 4 : 2) + fdepth * 2;
+            char ind_str[32];
+            if (ind_v > (int)sizeof(ind_str) - 1) ind_v = (int)sizeof(ind_str) - 1;
+            memset(ind_str, ' ', ind_v); ind_str[ind_v] = '\0';
+            snprintf(cmd->source, sizeof(cmd->source), "%sgoto %s;", ind_str, lname);
+            return 1;
+        }
+    }
+
+    /* :label — define a label */
+    if (p[0] == ':' && p[1] && !isspace((unsigned char)p[1])) {
+        cmd->type = CMD_LABEL;
+        cmd->valid = 1;
+        /* labels go at column 0 in C */
+        snprintf(cmd->source, sizeof(cmd->source), "%s:", p + 1);
+        return 1;
+    }
+
     set_status("Unknown cmd. Try glVertex3f, glBegin, glEnable, glShadeModel, ...");
     return 0;
 }
@@ -1861,6 +2104,64 @@ static void flatten_range(int start, int end_idx, ExprVar *vars, int nv) {
 static void flatten_commands(void) {
     g_num_flat_cmds = 0;
     flatten_range(0, g_num_cmds, NULL, 0);
+
+    /* Track whether user enabled lighting (for correct default state) */
+    g_user_lighting_enabled = 0;
+    for (int i = 0; i < g_num_cmds; i++) {
+        if (g_cmds[i].valid && g_cmds[i].type == CMD_ENABLE &&
+            g_cmds[i].mode == GL_LIGHTING)
+            g_user_lighting_enabled = 1;
+        if (g_cmds[i].valid && g_cmds[i].type == CMD_DISABLE &&
+            g_cmds[i].mode == GL_LIGHTING)
+            g_user_lighting_enabled = 0;
+    }
+
+    /* Find glBegin/glEnd block containing the cursor line (g_edit_line) */
+    g_current_block_begin = -1;
+    g_current_block_end   = -1;
+    /* Walk flat cmds: track which source line each cmd came from via g_cmds index */
+    /* Approximate: find last BEGIN at or before g_edit_line, then matching END */
+    int found_begin = -1;
+    for (int i = 0; i < g_num_flat_cmds; i++) {
+        if (!g_flat_cmds[i].valid) continue;
+        if (g_flat_cmds[i].type == CMD_BEGIN) { found_begin = i; }
+        else if (g_flat_cmds[i].type == CMD_END && found_begin >= 0) {
+            /* Check if g_edit_line is between the source lines of these */
+            /* We check g_cmds array for a rough match using the flat cmd
+               index position relative to what lines have been committed */
+            found_begin = -1;
+        }
+    }
+    /* Better approach: scan g_cmds for the innermost BEGIN/END containing g_edit_line */
+    {
+        int begin_src = -1, begin_flat = -1;
+        /* Simple: track BEGIN positions in g_flat_cmds that correspond to g_cmds before g_edit_line */
+        int fcur = 0;
+        for (int ci = 0; ci < g_num_cmds && fcur < g_num_flat_cmds; ci++) {
+            if (!g_cmds[ci].valid) continue;
+            if (g_cmds[ci].type == CMD_FUNC_DEF || g_cmds[ci].type == CMD_FUNC_END ||
+                g_cmds[ci].type == CMD_FOR_BEGIN || g_cmds[ci].type == CMD_FOR_END ||
+                g_cmds[ci].type == CMD_IF_BEGIN  || g_cmds[ci].type == CMD_IF_END  ||
+                g_cmds[ci].type == CMD_CALL)
+                continue; /* these expand or skip */
+            /* match next flat cmd */
+            while (fcur < g_num_flat_cmds && !g_flat_cmds[fcur].valid) fcur++;
+            if (fcur >= g_num_flat_cmds) break;
+            if (g_cmds[ci].type == CMD_BEGIN) {
+                if (ci <= g_edit_line) { begin_src = ci; begin_flat = fcur; }
+            } else if (g_cmds[ci].type == CMD_END) {
+                if (begin_src >= 0 && ci > g_edit_line) {
+                    g_current_block_begin = begin_flat;
+                    g_current_block_end   = fcur;
+                    begin_src = -1; begin_flat = -1;
+                    break;
+                } else if (begin_src >= 0 && ci <= g_edit_line) {
+                    begin_src = -1; begin_flat = -1;
+                }
+            }
+            fcur++;
+        }
+    }
 }
 
 /* ========================================================================= */
@@ -1963,7 +2264,8 @@ static void begin_2d(void) {
 
 static void end_2d(void) {
     glEnable(GL_DEPTH_TEST);
-    glEnable(GL_LIGHTING);
+    if (g_user_lighting_enabled) glEnable(GL_LIGHTING);
+    else glDisable(GL_LIGHTING);
     glMatrixMode(GL_PROJECTION);
     glPopMatrix();
     glMatrixMode(GL_MODELVIEW);
@@ -2786,7 +3088,7 @@ static void draw_grid(void) {
 
     glPopMatrix();
     glDisable(GL_BLEND);
-    glEnable(GL_LIGHTING);
+    if (g_user_lighting_enabled) glEnable(GL_LIGHTING);
 }
 
 /* Helper: draw an axis label at a 3D position */
@@ -3007,7 +3309,7 @@ static void draw_axes(void) {
 
     glDisable(GL_BLEND);
     glEnable(GL_DEPTH_TEST);
-    glEnable(GL_LIGHTING);
+    if (g_user_lighting_enabled) glEnable(GL_LIGHTING);
 }
 
 static void draw_vertex_numbers(void) {
@@ -3066,7 +3368,7 @@ static void draw_vertex_numbers(void) {
     }
 
     glEnable(GL_DEPTH_TEST);
-    glEnable(GL_LIGHTING);
+    if (g_user_lighting_enabled) glEnable(GL_LIGHTING);
 }
 
 static void draw_normal_vectors(void) {
@@ -3109,12 +3411,54 @@ static void draw_normal_vectors(void) {
     glPointSize(1.0f);
 
     glEnable(GL_DEPTH_TEST);
-    glEnable(GL_LIGHTING);
+    if (g_user_lighting_enabled) glEnable(GL_LIGHTING);
 }
 
 /* ========================================================================= */
 /* Vertex input guides — plane / line / point for partial glVertex3f args     */
 /* ========================================================================= */
+
+/* Draw a semi-transparent plane perpendicular to the X axis at x=v */
+static void draw_guide_yz_plane(float v, float sz) {
+    glColor4f(0.9f, 0.3f, 0.3f, 0.12f);
+    glBegin(GL_QUADS);
+    glVertex3f(v, -sz, -sz); glVertex3f(v,  sz, -sz);
+    glVertex3f(v,  sz,  sz); glVertex3f(v, -sz,  sz);
+    glEnd();
+    glColor4f(0.9f, 0.3f, 0.3f, 0.45f);
+    glBegin(GL_LINE_LOOP);
+    glVertex3f(v, -sz, -sz); glVertex3f(v,  sz, -sz);
+    glVertex3f(v,  sz,  sz); glVertex3f(v, -sz,  sz);
+    glEnd();
+}
+
+/* Draw a semi-transparent plane perpendicular to the Y axis at y=v */
+static void draw_guide_xz_plane(float v, float sz) {
+    glColor4f(0.3f, 0.9f, 0.3f, 0.12f);
+    glBegin(GL_QUADS);
+    glVertex3f(-sz, v, -sz); glVertex3f( sz, v, -sz);
+    glVertex3f( sz, v,  sz); glVertex3f(-sz, v,  sz);
+    glEnd();
+    glColor4f(0.3f, 0.9f, 0.3f, 0.45f);
+    glBegin(GL_LINE_LOOP);
+    glVertex3f(-sz, v, -sz); glVertex3f( sz, v, -sz);
+    glVertex3f( sz, v,  sz); glVertex3f(-sz, v,  sz);
+    glEnd();
+}
+
+/* Draw a semi-transparent plane perpendicular to the Z axis at z=v */
+static void draw_guide_xy_plane(float v, float sz) {
+    glColor4f(0.3f, 0.3f, 0.9f, 0.12f);
+    glBegin(GL_QUADS);
+    glVertex3f(-sz, -sz, v); glVertex3f( sz, -sz, v);
+    glVertex3f( sz,  sz, v); glVertex3f(-sz,  sz, v);
+    glEnd();
+    glColor4f(0.3f, 0.3f, 0.9f, 0.45f);
+    glBegin(GL_LINE_LOOP);
+    glVertex3f(-sz, -sz, v); glVertex3f( sz, -sz, v);
+    glVertex3f( sz,  sz, v); glVertex3f(-sz,  sz, v);
+    glEnd();
+}
 
 static void draw_vertex_guides(void) {
     if (!g_show_guides) return;
@@ -3129,30 +3473,42 @@ static void draw_vertex_guides(void) {
 
     float sz = 3.0f;  /* half-size of guide geometry */
 
+    /* Count commas before cursor to determine which arg slot cursor is on */
+    int paren_pos = 11;
+    int cursor_slot = 0;
+    {
+        int close = g_input_len;
+        for (int ci = paren_pos; ci < g_input_len; ci++)
+            if (g_input[ci] == ')') { close = ci; break; }
+        int cp = (g_cursor_pos < close) ? g_cursor_pos : close;
+        if (cp > paren_pos) {
+            for (int ci = paren_pos; ci < cp; ci++)
+                if (g_input[ci] == ',') cursor_slot++;
+            if (cursor_slot > 2) cursor_slot = 2;
+        }
+    }
+
     glDisable(GL_LIGHTING);
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
     if (n == 1) {
-        /* One axis (x) — draw a YZ plane at x */
-        glColor4f(0.3f, 0.6f, 1.0f, 0.15f);
-        glBegin(GL_QUADS);
-        glVertex3f(vals[0], -sz, -sz);
-        glVertex3f(vals[0],  sz, -sz);
-        glVertex3f(vals[0],  sz,  sz);
-        glVertex3f(vals[0], -sz,  sz);
-        glEnd();
-        /* Outline */
-        glColor4f(0.3f, 0.6f, 1.0f, 0.5f);
-        glBegin(GL_LINE_LOOP);
-        glVertex3f(vals[0], -sz, -sz);
-        glVertex3f(vals[0],  sz, -sz);
-        glVertex3f(vals[0],  sz,  sz);
-        glVertex3f(vals[0], -sz,  sz);
-        glEnd();
+        /* One value known — draw plane perpendicular to the axis being entered.
+         * Use cursor_slot to determine which arg the cursor is on. */
+        switch (cursor_slot) {
+        case 0: /* typing x → YZ plane at x=vals[0] */
+            draw_guide_yz_plane(vals[0], sz); break;
+        case 1: /* typed x, now typing y → show XZ plane as target surface */
+            draw_guide_xz_plane(vals[0], sz); break;
+        case 2: /* typed x (or y), now typing z → XY plane */
+            draw_guide_xy_plane(vals[0], sz); break;
+        }
     } else if (n == 2) {
-        /* Two axes (x, y) — draw a line parallel to Z */
-        glColor4f(1.0f, 0.8f, 0.2f, 0.7f);
+        /* Two values (x,y) known — draw both constraint planes + intersection line */
+        draw_guide_yz_plane(vals[0], sz);  /* X constraint */
+        draw_guide_xz_plane(vals[1], sz);  /* Y constraint */
+        /* Intersection: line parallel to Z at (x,y) */
+        glColor4f(1.0f, 0.8f, 0.2f, 0.9f);
         glLineWidth(2.0f);
         glBegin(GL_LINES);
         glVertex3f(vals[0], vals[1], -sz);
@@ -3162,7 +3518,7 @@ static void draw_vertex_guides(void) {
     }
 
     if (n >= 3) {
-        /* All three axes — draw a point */
+        /* All three values known — draw a point */
         glColor4f(1.0f, 0.3f, 0.3f, 0.9f);
         glPointSize(8.0f);
         glBegin(GL_POINTS);
@@ -3170,45 +3526,34 @@ static void draw_vertex_guides(void) {
         glEnd();
         glPointSize(1.0f);
 
-        /* Show axis line for the component under the cursor */
-        int paren_pos = 11; /* position after "glVertex3f(" */
+        /* Show axis line for the component the cursor is on */
         if (g_cursor_pos >= paren_pos) {
-            int close = g_input_len;
-            for (int ci = paren_pos; ci < g_input_len; ci++)
-                if (g_input[ci] == ')') { close = ci; break; }
-            if (g_cursor_pos <= close) {
-                int component = 0;
-                for (int ci = paren_pos; ci < g_cursor_pos; ci++)
-                    if (g_input[ci] == ',') component++;
-                if (component > 2) component = 2;
-
-                glLineWidth(2.0f);
-                glBegin(GL_LINES);
-                switch (component) {
-                case 0: /* x-axis */
-                    glColor4f(0.9f, 0.2f, 0.2f, 0.7f);
-                    glVertex3f(-sz, vals[1], vals[2]);
-                    glVertex3f( sz, vals[1], vals[2]);
-                    break;
-                case 1: /* y-axis */
-                    glColor4f(0.2f, 0.9f, 0.2f, 0.7f);
-                    glVertex3f(vals[0], -sz, vals[2]);
-                    glVertex3f(vals[0],  sz, vals[2]);
-                    break;
-                case 2: /* z-axis */
-                    glColor4f(0.2f, 0.2f, 0.9f, 0.7f);
-                    glVertex3f(vals[0], vals[1], -sz);
-                    glVertex3f(vals[0], vals[1],  sz);
-                    break;
-                }
-                glEnd();
-                glLineWidth(1.0f);
+            glLineWidth(2.0f);
+            glBegin(GL_LINES);
+            switch (cursor_slot) {
+            case 0: /* x-axis */
+                glColor4f(0.9f, 0.2f, 0.2f, 0.7f);
+                glVertex3f(-sz, vals[1], vals[2]);
+                glVertex3f( sz, vals[1], vals[2]);
+                break;
+            case 1: /* y-axis */
+                glColor4f(0.2f, 0.9f, 0.2f, 0.7f);
+                glVertex3f(vals[0], -sz, vals[2]);
+                glVertex3f(vals[0],  sz, vals[2]);
+                break;
+            case 2: /* z-axis */
+                glColor4f(0.2f, 0.2f, 0.9f, 0.7f);
+                glVertex3f(vals[0], vals[1], -sz);
+                glVertex3f(vals[0], vals[1],  sz);
+                break;
             }
+            glEnd();
+            glLineWidth(1.0f);
         }
     }
 
     glDisable(GL_BLEND);
-    glEnable(GL_LIGHTING);
+    if (g_user_lighting_enabled) glEnable(GL_LIGHTING);
 }
 
 /* ========================================================================= */
@@ -3324,7 +3669,7 @@ static void draw_normal_guides(void) {
     glPointSize(1.0f);
 
     glDisable(GL_BLEND);
-    glEnable(GL_LIGHTING);
+    if (g_user_lighting_enabled) glEnable(GL_LIGHTING);
 }
 
 /* ========================================================================= */
@@ -3475,7 +3820,7 @@ static void draw_lights(void) {
     glPointSize(1.0f);
     glDisable(GL_BLEND);
     glEnable(GL_DEPTH_TEST);
-    glEnable(GL_LIGHTING);
+    if (g_user_lighting_enabled) glEnable(GL_LIGHTING);
 }
 
 /* ========================================================================= */
@@ -3514,6 +3859,7 @@ static void render_3d_scene(void) {
     glRotatef(g_cam_ry, 0, 1, 0);
 
     setup_lights();
+    glDisable(GL_LIGHTING); /* baseline: disabled; execute_commands() enables if user typed it */
 
     GLfloat mspec[] = { 0.4f, 0.4f, 0.4f, 1.0f };
     GLfloat mshin[] = { 30.0f };
@@ -3531,34 +3877,60 @@ static void render_3d_scene(void) {
 
     if (g_wireframe) glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
 
-    /* Always-on wireframe + vertex dots overlay */
+    /* Polygon outline overlay (optional) + current-block highlight */
     glDisable(GL_LIGHTING);
     glEnable(GL_POLYGON_OFFSET_LINE);
     glPolygonOffset(-1.0f, -1.0f);
     glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
-    glColor3f(0.0f, 0.0f, 0.0f);
-    {
+    if (g_show_outlines || g_highlight_current_poly) {
         int in_begin = 0;
+        int block_begin_idx = -1; /* flat index of current block's CMD_BEGIN */
         for (int i = 0; i < g_num_flat_cmds; i++) {
             if (!g_flat_cmds[i].valid) continue;
             switch (g_flat_cmds[i].type) {
-            case CMD_BEGIN:
+            case CMD_BEGIN: {
                 if (in_begin) glEnd();
+                /* Choose outline color: bright cyan for highlighted block, black otherwise */
+                int is_current = (g_highlight_current_poly &&
+                                  g_current_block_begin >= 0 &&
+                                  i == g_current_block_begin);
+                if (is_current) {
+                    glLineWidth(3.0f);
+                    glColor3f(0.0f, 0.9f, 0.9f); /* bright cyan */
+                } else if (g_show_outlines) {
+                    glLineWidth(1.0f);
+                    glColor3f(0.0f, 0.0f, 0.0f);
+                } else {
+                    /* outlines off but current poly highlight enabled — skip non-current */
+                    if (!is_current) { glBegin(g_flat_cmds[i].mode); in_begin = 1; block_begin_idx = i; break; }
+                }
                 glBegin(g_flat_cmds[i].mode);
                 in_begin = 1;
+                block_begin_idx = i;
                 break;
+            }
             case CMD_END:
-                if (in_begin) { glEnd(); in_begin = 0; }
+                if (in_begin) {
+                    glEnd(); in_begin = 0;
+                    glLineWidth(1.0f);
+                    glColor3f(0.0f, 0.0f, 0.0f);
+                }
+                block_begin_idx = -1;
                 break;
             case CMD_VERTEX3F:
-                if (in_begin)
-                    glVertex3f(g_flat_cmds[i].args[0], g_flat_cmds[i].args[1],
-                               g_flat_cmds[i].args[2]);
+                if (in_begin) {
+                    int is_cur_blk = (g_highlight_current_poly &&
+                                      g_current_block_begin >= 0 &&
+                                      block_begin_idx == g_current_block_begin);
+                    if (is_cur_blk || g_show_outlines)
+                        glVertex3f(g_flat_cmds[i].args[0], g_flat_cmds[i].args[1],
+                                   g_flat_cmds[i].args[2]);
+                }
                 break;
             default: break;
             }
         }
-        if (in_begin) glEnd();
+        if (in_begin) { glEnd(); glLineWidth(1.0f); }
     }
     glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
     glDisable(GL_POLYGON_OFFSET_LINE);
@@ -3574,7 +3946,7 @@ static void render_3d_scene(void) {
     }
     glEnd();
     glPointSize(1.0f);
-    glEnable(GL_LIGHTING);
+    if (g_user_lighting_enabled) glEnable(GL_LIGHTING);
 
     draw_vertex_guides();
     draw_normal_guides();
