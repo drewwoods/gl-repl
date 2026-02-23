@@ -233,6 +233,7 @@ static const char *g_header_pre[] = {
     "",
     "static float g_angle = 0.0f;",
     "static int   g_rotating = 1;",
+    "static GLUquadric *g_quadric = NULL;",
     "",
     "void display() {",
     "  glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);",
@@ -277,6 +278,8 @@ static const char *g_footer[] = {
     "void init() {",
     "  glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE);",
     "  glLightModeli(GL_LIGHT_MODEL_TWO_SIDE, GL_TRUE);",
+    "  g_quadric = gluNewQuadric();",
+    "  gluQuadricNormals(g_quadric, GLU_SMOOTH);",
     "}",
     "",
     "int main(int argc, char **argv) {",
@@ -409,7 +412,7 @@ static const char *g_axes_names[] = {
 };
 static int    g_show_vnums   = 1;
 static int    g_show_normals = 1;
-static int    g_show_indices = 0;
+static int    g_show_indices = 1;
 static int    g_show_guides  = 1;
 static int    g_autonormal   = 1;
 static int    g_show_lights  = 1;
@@ -2170,22 +2173,50 @@ static void flatten_commands(void) {
 
 static void execute_commands(void) {
     int in_begin = 0;
+    int in_polygon = 0; /* using tessellator for GL_POLYGON */
+    /* Tessellator vertex buffer: collect positions for GL_POLYGON */
+    static GLdouble tess_buf[256][3];
+    int tess_n = 0;
+
     int pc = 0;
     while (pc < g_num_flat_cmds) {
         if (!g_flat_cmds[pc].valid) { pc++; continue; }
         switch (g_flat_cmds[pc].type) {
         case CMD_BEGIN:
-            if (in_begin) glEnd();
-            glBegin(g_flat_cmds[pc].mode);
-            in_begin = 1;
+            if (in_begin) { glEnd(); in_begin = 0; }
+            if (in_polygon) { /* shouldn't happen, but reset */ in_polygon = 0; }
+            if (g_flat_cmds[pc].mode == GL_POLYGON && g_tess) {
+                /* Use tessellator for potentially-concave polygon */
+                in_polygon = 1;
+                tess_n = 0;
+                g_tess_vert_count = 0;
+                gluTessBeginPolygon(g_tess, NULL);
+                gluTessBeginContour(g_tess);
+            } else {
+                glBegin(g_flat_cmds[pc].mode);
+                in_begin = 1;
+            }
             break;
         case CMD_END:
-            if (in_begin) { glEnd(); in_begin = 0; }
+            if (in_polygon) {
+                gluTessEndContour(g_tess);
+                gluTessEndPolygon(g_tess);
+                in_polygon = 0;
+            } else if (in_begin) {
+                glEnd(); in_begin = 0;
+            }
             break;
         case CMD_VERTEX3F:
-            if (in_begin)
+            if (in_polygon && tess_n < 256) {
+                tess_buf[tess_n][0] = (GLdouble)g_flat_cmds[pc].args[0];
+                tess_buf[tess_n][1] = (GLdouble)g_flat_cmds[pc].args[1];
+                tess_buf[tess_n][2] = (GLdouble)g_flat_cmds[pc].args[2];
+                gluTessVertex(g_tess, tess_buf[tess_n], tess_buf[tess_n]);
+                tess_n++;
+            } else if (in_begin) {
                 glVertex3f(g_flat_cmds[pc].args[0], g_flat_cmds[pc].args[1],
                            g_flat_cmds[pc].args[2]);
+            }
             break;
         case CMD_NORMAL3F:
             glNormal3f(g_flat_cmds[pc].args[0], g_flat_cmds[pc].args[1],
@@ -2218,6 +2249,86 @@ static void execute_commands(void) {
             glTranslatef(g_flat_cmds[pc].args[0], g_flat_cmds[pc].args[1],
                          g_flat_cmds[pc].args[2]);
             break;
+        case CMD_VERTEX2F:
+            if (in_begin)
+                glVertex2f(g_flat_cmds[pc].args[0], g_flat_cmds[pc].args[1]);
+            break;
+        case CMD_GLU_SPHERE:
+            if (in_begin) { glEnd(); in_begin = 0; }
+            if (g_quadric)
+                gluSphere(g_quadric,
+                          (double)g_flat_cmds[pc].args[0],
+                          (int)g_flat_cmds[pc].args[1],
+                          (int)g_flat_cmds[pc].args[2]);
+            break;
+        case CMD_GLU_CYLINDER:
+            if (in_begin) { glEnd(); in_begin = 0; }
+            if (g_quadric)
+                gluCylinder(g_quadric,
+                            (double)g_flat_cmds[pc].args[0],
+                            (double)g_flat_cmds[pc].args[1],
+                            (double)g_flat_cmds[pc].args[2],
+                            (int)g_flat_cmds[pc].args[3],
+                            (int)g_flat_cmds[pc].args[4]);
+            break;
+        case CMD_GLU_DISK:
+            if (in_begin) { glEnd(); in_begin = 0; }
+            if (g_quadric)
+                gluDisk(g_quadric,
+                        (double)g_flat_cmds[pc].args[0],
+                        (double)g_flat_cmds[pc].args[1],
+                        (int)g_flat_cmds[pc].args[2],
+                        (int)g_flat_cmds[pc].args[3]);
+            break;
+        case CMD_GLU_PARTIAL_DISK:
+            if (in_begin) { glEnd(); in_begin = 0; }
+            if (g_quadric)
+                gluPartialDisk(g_quadric,
+                               (double)g_flat_cmds[pc].args[0],
+                               (double)g_flat_cmds[pc].args[1],
+                               (int)g_flat_cmds[pc].args[2],
+                               (int)g_flat_cmds[pc].args[3],
+                               (double)g_flat_cmds[pc].args[4],
+                               (double)g_flat_cmds[pc].args[5]);
+            break;
+        case CMD_GLUT_TORUS:
+            if (in_begin) { glEnd(); in_begin = 0; }
+            glutSolidTorus((double)g_flat_cmds[pc].args[0],
+                           (double)g_flat_cmds[pc].args[1],
+                           (int)g_flat_cmds[pc].args[2],
+                           (int)g_flat_cmds[pc].args[3]);
+            break;
+        case CMD_LABEL:
+            break; /* no-op marker */
+        case CMD_GOTO: {
+            /* Find matching CMD_LABEL by name in source and set pc */
+            const char *src = g_flat_cmds[pc].source;
+            /* src is like "  goto labelname;" — extract label name */
+            const char *gname = src;
+            while (*gname && *gname != ' ') gname++;
+            while (*gname == ' ') gname++;
+            /* gname now points to label name (with trailing ;) */
+            char lname[64];
+            int llen = 0;
+            while (llen < 63 && gname[llen] && gname[llen] != ';' && !isspace((unsigned char)gname[llen])) {
+                lname[llen] = gname[llen];
+                llen++;
+            }
+            lname[llen] = '\0';
+            /* Search for matching CMD_LABEL */
+            for (int li = 0; li < g_num_flat_cmds; li++) {
+                if (g_flat_cmds[li].valid && g_flat_cmds[li].type == CMD_LABEL) {
+                    const char *lsrc = g_flat_cmds[li].source;
+                    /* source is "labelname:" */
+                    if (strncmp(lsrc, lname, llen) == 0 && lsrc[llen] == ':') {
+                        pc = li; /* will be incremented at end of loop */
+                        goto goto_done;
+                    }
+                }
+            }
+            goto_done:;
+            break;
+        }
         /* These are resolved during flatten and shouldn't appear in flat_cmds */
         case CMD_FOR_BEGIN: case CMD_FOR_END:
         case CMD_FUNC_DEF: case CMD_FUNC_END: case CMD_CALL:
@@ -2229,6 +2340,10 @@ static void execute_commands(void) {
         pc++;
     }
     if (in_begin) glEnd();
+    if (in_polygon && g_tess) {
+        gluTessEndContour(g_tess);
+        gluTessEndPolygon(g_tess);
+    }
 }
 
 /* ========================================================================= */
@@ -2280,7 +2395,8 @@ static void color_for_type(CmdType t) {
     switch (t) {
     case CMD_BEGIN:
     case CMD_END:      glColor3f(0.85f, 0.45f, 0.85f); break;
-    case CMD_VERTEX3F: glColor3f(0.40f, 0.90f, 0.40f); break;
+    case CMD_VERTEX3F:
+    case CMD_VERTEX2F: glColor3f(0.40f, 0.90f, 0.40f); break;
     case CMD_NORMAL3F:      glColor3f(0.40f, 0.80f, 0.95f); break;
     case CMD_TRANSLATE3F:   glColor3f(0.95f, 0.65f, 0.40f); break;
     case CMD_COLOR3F:
@@ -2294,6 +2410,13 @@ static void color_for_type(CmdType t) {
     case CMD_IF_END:   glColor3f(0.95f, 0.75f, 0.50f); break;
     case CMD_COMMENT:    glColor3f(0.45f, 0.50f, 0.45f); break;
     case CMD_VAR_ASSIGN: glColor3f(0.55f, 0.80f, 0.95f); break;
+    case CMD_LABEL:
+    case CMD_GOTO:       glColor3f(0.85f, 0.55f, 0.85f); break;
+    case CMD_GLU_SPHERE:
+    case CMD_GLU_CYLINDER:
+    case CMD_GLU_DISK:
+    case CMD_GLU_PARTIAL_DISK:
+    case CMD_GLUT_TORUS:  glColor3f(0.50f, 0.90f, 0.70f); break;
     default:             glColor3f(0.70f, 0.70f, 0.70f); break;
     }
 }
@@ -2470,6 +2593,7 @@ static void render_code_panel(void) {
     }
 
     /* Commands + insert line + new-line slot */
+    int vnum = 0; /* vertex counter within current glBegin/glEnd block */
     for (int i = 0; i <= g_num_cmds; i++) {
         /* If inserting, render the virtual insert line before command[g_edit_line] */
         if (g_inserting && i == g_edit_line) {
@@ -2486,15 +2610,19 @@ static void render_code_panel(void) {
         }
 
         if (i < g_num_cmds) {
+            /* Track vertex number for all commands regardless of visibility */
+            if (g_cmds[i].valid && g_cmds[i].type == CMD_BEGIN) vnum = 0;
+
             int is_edit = (!g_inserting && i == g_edit_line);
+            int is_vertex = g_cmds[i].valid && g_cmds[i].type == CMD_VERTEX3F;
             if (is_edit) {
                 /* Active editing line */
                 if (cur >= g_scroll && cur < g_scroll + visible_lines) {
                     glColor3f(0.55f, 0.55f, 0.30f);
                     { char ln[16]; snprintf(ln, sizeof(ln), "%3d", file_line);
                       draw_string(CODE_MARGIN_X, line_y, ln, FONT_MONO); }
-                    if (g_show_indices) {
-                        char idx_s[16]; snprintf(idx_s, sizeof(idx_s), "[%d]", i);
+                    if (g_show_indices && is_vertex) {
+                        char idx_s[16]; snprintf(idx_s, sizeof(idx_s), "v%d", vnum);
                         glColor3f(0.45f, 0.50f, 0.65f);
                         draw_string((float)idx_x, (float)line_y, idx_s, FONT_MONO);
                     }
@@ -2518,8 +2646,8 @@ static void render_code_panel(void) {
                     glColor3f(0.30f, 0.30f, 0.38f);
                     { char ln[16]; snprintf(ln, sizeof(ln), "%3d", file_line);
                       draw_string(CODE_MARGIN_X, line_y, ln, FONT_MONO); }
-                    if (g_show_indices) {
-                        char idx_s[16]; snprintf(idx_s, sizeof(idx_s), "[%d]", i);
+                    if (g_show_indices && is_vertex) {
+                        char idx_s[16]; snprintf(idx_s, sizeof(idx_s), "v%d", vnum);
                         glColor3f(0.45f, 0.50f, 0.65f);
                         draw_string((float)idx_x, (float)line_y, idx_s, FONT_MONO);
                     }
@@ -2531,6 +2659,9 @@ static void render_code_panel(void) {
                 file_line++;
                 cur++;
             }
+
+            /* Advance vertex counter after rendering this command */
+            if (is_vertex) vnum++;
         } else {
             /* i == g_num_cmds: new-line slot */
             int is_edit_nl = (!g_inserting && g_edit_line == g_num_cmds);
@@ -2771,9 +2902,9 @@ static void render_help(void) {
         "  F1  Help overlay     F2  Wireframe mode",
         "  F3  Grid theme       F4  Axes theme",
         "  F5  Vertex numbers   F6  Normal vectors",
-        "  F7  Command indices  F8  Vertex guides",
+        "  F7  Vertex numbers   F8  Vertex guides",
         "  F9  Auto-normals     F10 Light indicators",
-        "  F11 Camera rotate   F12 Cycle examples",
+        "  F11 Camera rotate    F12 Cycle examples",
         "",
         "  PgUp / PgDn          Scroll code panel (or help when open)",
         "",
@@ -3342,13 +3473,18 @@ static void draw_vertex_numbers(void) {
         }
     }
 
-    /* Draw vertex labels only for the target block in g_flat_cmds */
+    /* Draw vertex labels only for the target block, replaying transforms */
+    glPushMatrix();
     int block = -1;
     int in_block = 0;
     int vn = 0;
     for (int i = 0; i < g_num_flat_cmds; i++) {
         if (!g_flat_cmds[i].valid) continue;
-        if (g_flat_cmds[i].type == CMD_BEGIN) {
+        if (g_flat_cmds[i].type == CMD_TRANSLATE3F) {
+            if (!in_block)
+                glTranslatef(g_flat_cmds[i].args[0], g_flat_cmds[i].args[1],
+                             g_flat_cmds[i].args[2]);
+        } else if (g_flat_cmds[i].type == CMD_BEGIN) {
             block++;
             in_block = 1;
             vn = 0;
@@ -3366,6 +3502,7 @@ static void draw_vertex_numbers(void) {
             vn++;
         }
     }
+    glPopMatrix();
 
     glEnable(GL_DEPTH_TEST);
     if (g_user_lighting_enabled) glEnable(GL_LIGHTING);
@@ -3378,37 +3515,40 @@ static void draw_normal_vectors(void) {
     float scale = 0.35f;
     float nx = 0, ny = 0, nz = 1;
 
-    glBegin(GL_LINES);
+    /* Single pass — replay CMD_TRANSLATE3F so normals align with geometry.
+     * Use per-vertex glBegin/glEnd pairs so transforms can be applied
+     * between blocks without being inside a begin/end. */
+    glPushMatrix();
+    int in_begin = 0;
     for (int i = 0; i < g_num_flat_cmds; i++) {
         if (!g_flat_cmds[i].valid) continue;
-        if (g_flat_cmds[i].type == CMD_NORMAL3F) {
+        if (g_flat_cmds[i].type == CMD_TRANSLATE3F) {
+            if (!in_begin)
+                glTranslatef(g_flat_cmds[i].args[0], g_flat_cmds[i].args[1],
+                             g_flat_cmds[i].args[2]);
+        } else if (g_flat_cmds[i].type == CMD_BEGIN) {
+            in_begin = 1;
+            nx = 0; ny = 0; nz = 1; /* reset normal per block */
+        } else if (g_flat_cmds[i].type == CMD_END) {
+            in_begin = 0;
+        } else if (g_flat_cmds[i].type == CMD_NORMAL3F) {
             nx = g_flat_cmds[i].args[0]; ny = g_flat_cmds[i].args[1];
             nz = g_flat_cmds[i].args[2];
         } else if (g_flat_cmds[i].type == CMD_VERTEX3F) {
             float vx = g_flat_cmds[i].args[0], vy = g_flat_cmds[i].args[1],
                   vz = g_flat_cmds[i].args[2];
+            glBegin(GL_LINES);
             glVertex3f(vx, vy, vz);
             glVertex3f(vx + nx * scale, vy + ny * scale, vz + nz * scale);
+            glEnd();
+            glPointSize(4.0f);
+            glBegin(GL_POINTS);
+            glVertex3f(vx + nx * scale, vy + ny * scale, vz + nz * scale);
+            glEnd();
+            glPointSize(1.0f);
         }
     }
-    glEnd();
-
-    glPointSize(4.0f);
-    glBegin(GL_POINTS);
-    nx = 0; ny = 0; nz = 1;
-    for (int i = 0; i < g_num_flat_cmds; i++) {
-        if (!g_flat_cmds[i].valid) continue;
-        if (g_flat_cmds[i].type == CMD_NORMAL3F) {
-            nx = g_flat_cmds[i].args[0]; ny = g_flat_cmds[i].args[1];
-            nz = g_flat_cmds[i].args[2];
-        } else if (g_flat_cmds[i].type == CMD_VERTEX3F) {
-            glVertex3f(g_flat_cmds[i].args[0] + nx * scale,
-                       g_flat_cmds[i].args[1] + ny * scale,
-                       g_flat_cmds[i].args[2] + nz * scale);
-        }
-    }
-    glEnd();
-    glPointSize(1.0f);
+    glPopMatrix();
 
     glEnable(GL_DEPTH_TEST);
     if (g_user_lighting_enabled) glEnable(GL_LIGHTING);
@@ -3420,7 +3560,7 @@ static void draw_normal_vectors(void) {
 
 /* Draw a semi-transparent plane perpendicular to the X axis at x=v */
 static void draw_guide_yz_plane(float v, float sz) {
-    glColor4f(0.9f, 0.3f, 0.3f, 0.12f);
+    glColor4f(0.9f, 0.65f, 0.6f, 0.72f);
     glBegin(GL_QUADS);
     glVertex3f(v, -sz, -sz); glVertex3f(v,  sz, -sz);
     glVertex3f(v,  sz,  sz); glVertex3f(v, -sz,  sz);
@@ -3432,33 +3572,6 @@ static void draw_guide_yz_plane(float v, float sz) {
     glEnd();
 }
 
-/* Draw a semi-transparent plane perpendicular to the Y axis at y=v */
-static void draw_guide_xz_plane(float v, float sz) {
-    glColor4f(0.3f, 0.9f, 0.3f, 0.12f);
-    glBegin(GL_QUADS);
-    glVertex3f(-sz, v, -sz); glVertex3f( sz, v, -sz);
-    glVertex3f( sz, v,  sz); glVertex3f(-sz, v,  sz);
-    glEnd();
-    glColor4f(0.3f, 0.9f, 0.3f, 0.45f);
-    glBegin(GL_LINE_LOOP);
-    glVertex3f(-sz, v, -sz); glVertex3f( sz, v, -sz);
-    glVertex3f( sz, v,  sz); glVertex3f(-sz, v,  sz);
-    glEnd();
-}
-
-/* Draw a semi-transparent plane perpendicular to the Z axis at z=v */
-static void draw_guide_xy_plane(float v, float sz) {
-    glColor4f(0.3f, 0.3f, 0.9f, 0.12f);
-    glBegin(GL_QUADS);
-    glVertex3f(-sz, -sz, v); glVertex3f( sz, -sz, v);
-    glVertex3f( sz,  sz, v); glVertex3f(-sz,  sz, v);
-    glEnd();
-    glColor4f(0.3f, 0.3f, 0.9f, 0.45f);
-    glBegin(GL_LINE_LOOP);
-    glVertex3f(-sz, -sz, v); glVertex3f( sz, -sz, v);
-    glVertex3f( sz,  sz, v); glVertex3f(-sz,  sz, v);
-    glEnd();
-}
 
 static void draw_vertex_guides(void) {
     if (!g_show_guides) return;
@@ -3473,41 +3586,15 @@ static void draw_vertex_guides(void) {
 
     float sz = 3.0f;  /* half-size of guide geometry */
 
-    /* Count commas before cursor to determine which arg slot cursor is on */
-    int paren_pos = 11;
-    int cursor_slot = 0;
-    {
-        int close = g_input_len;
-        for (int ci = paren_pos; ci < g_input_len; ci++)
-            if (g_input[ci] == ')') { close = ci; break; }
-        int cp = (g_cursor_pos < close) ? g_cursor_pos : close;
-        if (cp > paren_pos) {
-            for (int ci = paren_pos; ci < cp; ci++)
-                if (g_input[ci] == ',') cursor_slot++;
-            if (cursor_slot > 2) cursor_slot = 2;
-        }
-    }
-
     glDisable(GL_LIGHTING);
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
     if (n == 1) {
-        /* One value known — draw plane perpendicular to the axis being entered.
-         * Use cursor_slot to determine which arg the cursor is on. */
-        switch (cursor_slot) {
-        case 0: /* typing x → YZ plane at x=vals[0] */
-            draw_guide_yz_plane(vals[0], sz); break;
-        case 1: /* typed x, now typing y → show XZ plane as target surface */
-            draw_guide_xz_plane(vals[0], sz); break;
-        case 2: /* typed x (or y), now typing z → XY plane */
-            draw_guide_xy_plane(vals[0], sz); break;
-        }
+        /* One value (x) known — draw YZ plane at x=vals[0] */
+        draw_guide_yz_plane(vals[0], sz);
     } else if (n == 2) {
-        /* Two values (x,y) known — draw both constraint planes + intersection line */
-        draw_guide_yz_plane(vals[0], sz);  /* X constraint */
-        draw_guide_xz_plane(vals[1], sz);  /* Y constraint */
-        /* Intersection: line parallel to Z at (x,y) */
+        /* Two values (x,y) known — draw line parallel to Z at (x,y) */
         glColor4f(1.0f, 0.8f, 0.2f, 0.9f);
         glLineWidth(2.0f);
         glBegin(GL_LINES);
@@ -3515,9 +3602,7 @@ static void draw_vertex_guides(void) {
         glVertex3f(vals[0], vals[1],  sz);
         glEnd();
         glLineWidth(1.0f);
-    }
-
-    if (n >= 3) {
+    } else {
         /* All three values known — draw a point */
         glColor4f(1.0f, 0.3f, 0.3f, 0.9f);
         glPointSize(8.0f);
@@ -3525,31 +3610,6 @@ static void draw_vertex_guides(void) {
         glVertex3f(vals[0], vals[1], vals[2]);
         glEnd();
         glPointSize(1.0f);
-
-        /* Show axis line for the component the cursor is on */
-        if (g_cursor_pos >= paren_pos) {
-            glLineWidth(2.0f);
-            glBegin(GL_LINES);
-            switch (cursor_slot) {
-            case 0: /* x-axis */
-                glColor4f(0.9f, 0.2f, 0.2f, 0.7f);
-                glVertex3f(-sz, vals[1], vals[2]);
-                glVertex3f( sz, vals[1], vals[2]);
-                break;
-            case 1: /* y-axis */
-                glColor4f(0.2f, 0.9f, 0.2f, 0.7f);
-                glVertex3f(vals[0], -sz, vals[2]);
-                glVertex3f(vals[0],  sz, vals[2]);
-                break;
-            case 2: /* z-axis */
-                glColor4f(0.2f, 0.2f, 0.9f, 0.7f);
-                glVertex3f(vals[0], vals[1], -sz);
-                glVertex3f(vals[0], vals[1],  sz);
-                break;
-            }
-            glEnd();
-            glLineWidth(1.0f);
-        }
     }
 
     glDisable(GL_BLEND);
@@ -3873,21 +3933,32 @@ static void render_3d_scene(void) {
 
     if (g_wireframe) glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
 
+    glPushMatrix();
     execute_commands();
+    glPopMatrix();
 
     if (g_wireframe) glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
 
-    /* Polygon outline overlay (optional) + current-block highlight */
+    /* Polygon outline overlay (optional) + current-block highlight.
+     * Each overlay pass is wrapped in push/pop so transforms don't bleed
+     * between passes.  CMD_TRANSLATE3F is replayed within each pass so
+     * outlines are positioned correctly even when transforms separate blocks. */
     glDisable(GL_LIGHTING);
     glEnable(GL_POLYGON_OFFSET_LINE);
     glPolygonOffset(-1.0f, -1.0f);
     glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
     if (g_show_outlines || g_highlight_current_poly) {
+        glPushMatrix();
         int in_begin = 0;
         int block_begin_idx = -1; /* flat index of current block's CMD_BEGIN */
         for (int i = 0; i < g_num_flat_cmds; i++) {
             if (!g_flat_cmds[i].valid) continue;
             switch (g_flat_cmds[i].type) {
+            case CMD_TRANSLATE3F:
+                if (!in_begin)
+                    glTranslatef(g_flat_cmds[i].args[0], g_flat_cmds[i].args[1],
+                                 g_flat_cmds[i].args[2]);
+                break;
             case CMD_BEGIN: {
                 if (in_begin) glEnd();
                 /* Choose outline color: bright cyan for highlighted block, black otherwise */
@@ -3931,29 +4002,40 @@ static void render_3d_scene(void) {
             }
         }
         if (in_begin) { glEnd(); glLineWidth(1.0f); }
+        glPopMatrix();
     }
     glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
     glDisable(GL_POLYGON_OFFSET_LINE);
 
-    /* Vertex dots */
+    /* Vertex dots — replay transforms so dots match the filled geometry */
+    glPushMatrix();
     glPointSize(5.0f);
     glColor3f(0.0f, 0.0f, 0.0f);
-    glBegin(GL_POINTS);
     for (int i = 0; i < g_num_flat_cmds; i++) {
-        if (g_flat_cmds[i].valid && g_flat_cmds[i].type == CMD_VERTEX3F)
+        if (!g_flat_cmds[i].valid) continue;
+        if (g_flat_cmds[i].type == CMD_TRANSLATE3F) {
+            glTranslatef(g_flat_cmds[i].args[0], g_flat_cmds[i].args[1],
+                         g_flat_cmds[i].args[2]);
+        } else if (g_flat_cmds[i].type == CMD_VERTEX3F) {
+            glBegin(GL_POINTS);
             glVertex3f(g_flat_cmds[i].args[0], g_flat_cmds[i].args[1],
                        g_flat_cmds[i].args[2]);
+            glEnd();
+        }
     }
-    glEnd();
     glPointSize(1.0f);
+    glPopMatrix();
     if (g_user_lighting_enabled) glEnable(GL_LIGHTING);
+
+    draw_lights();
+
+    // These are affected by transformations
 
     draw_vertex_guides();
     draw_normal_guides();
 
     if (g_show_vnums)   draw_vertex_numbers();
     if (g_show_normals) draw_normal_vectors();
-    draw_lights();
 }
 
 /* ========================================================================= */
@@ -5512,8 +5594,8 @@ static void special_func(int key, int x, int y) {
         break;
     case GLUT_KEY_F7:
         g_show_indices = !g_show_indices;
-        set_status(g_show_indices ? "Command indices ON" :
-                   "Command indices OFF");
+        set_status(g_show_indices ? "Vertex numbers ON" :
+                   "Vertex numbers OFF");
         break;
     case GLUT_KEY_F8:
         g_show_guides = !g_show_guides;
@@ -6081,6 +6163,26 @@ static void load_initial_commands(const char *import_file) {
     set_status("Ready - type GL commands, press ; to execute. F1 for help. F12 for examples.");
 }
 
+/* GLU tessellator callbacks for concave polygon support */
+static void tess_combine_callback(GLdouble coords[3],
+                                   void *vertex_data[4],
+                                   GLfloat weight[4],
+                                   void **out_data) {
+    (void)vertex_data; (void)weight;
+    /* Allocate from static buffer; reset at start of each polygon */
+    if (g_tess_vert_count < TESS_VERT_BUF_SIZE) {
+        GLdouble *v = g_tess_verts[g_tess_vert_count++];
+        v[0] = coords[0]; v[1] = coords[1]; v[2] = coords[2];
+        *out_data = v;
+    } else {
+        *out_data = NULL;
+    }
+}
+
+static void tess_error_callback(GLenum err) {
+    (void)err; /* silently ignore tessellation errors */
+}
+
 static void init_gl(void) {
     glEnable(GL_MULTISAMPLE);
     glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE);
@@ -6088,6 +6190,24 @@ static void init_gl(void) {
     GLfloat lm_amb[] = { 0.15f, 0.15f, 0.20f, 1.0f };
     glLightModelfv(GL_LIGHT_MODEL_AMBIENT, lm_amb);
     glLightModeli(GL_LIGHT_MODEL_TWO_SIDE, GL_TRUE);
+
+    /* Init GLU quadric for gluSphere/gluCylinder/gluDisk */
+    g_quadric = gluNewQuadric();
+    gluQuadricNormals(g_quadric, GLU_SMOOTH);
+    gluQuadricTexture(g_quadric, GL_FALSE);
+
+    /* Init GLU tessellator for concave polygon support */
+    g_tess = gluNewTess();
+    gluTessCallback(g_tess, GLU_TESS_BEGIN,
+                    (void (*)())glBegin);
+    gluTessCallback(g_tess, GLU_TESS_END,
+                    (void (*)())glEnd);
+    gluTessCallback(g_tess, GLU_TESS_VERTEX,
+                    (void (*)())glVertex3dv);
+    gluTessCallback(g_tess, GLU_TESS_COMBINE,
+                    (void (*)())tess_combine_callback);
+    gluTessCallback(g_tess, GLU_TESS_ERROR,
+                    (void (*)())tess_error_callback);
 }
 
 /* ========================================================================= */
