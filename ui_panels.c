@@ -37,6 +37,12 @@ static void color_for_type(CmdType t) {
     case CMD_GLU_DISK:
     case CMD_GLU_PARTIAL_DISK:
     case CMD_GLUT_TORUS:  glColor3f(0.50f, 0.90f, 0.70f); break;
+    case CMD_TESS_BEGIN_POLYGON:
+    case CMD_TESS_BEGIN_CONTOUR:
+    case CMD_TESS_END:    glColor3f(0.70f, 0.55f, 0.90f); break; /* violet */
+    case CMD_TESS_NORMAL: glColor3f(0.40f, 0.80f, 0.95f); break; /* cyan */
+    case CMD_TESS_COLOR:  glColor3f(0.95f, 0.85f, 0.30f); break; /* yellow */
+    case CMD_TESS_VERTEX: glColor3f(0.40f, 0.90f, 0.40f); break; /* green */
     default:             glColor3f(0.70f, 0.70f, 0.70f); break;
     }
 }

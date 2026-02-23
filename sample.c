@@ -128,6 +128,12 @@ const char *g_func_completions[] = {
     "gluDisk(",
     "gluPartialDisk(",
     "glutSolidTorus(",
+    "gluBegin(GLU_POLYGON)",
+    "gluBegin(GLU_CONTOUR)",
+    "gluEnd()",
+    "gluNormal(",
+    "gluColor(",
+    "gluVertex(",
     "for(",
     "if(",
     "goto ",
@@ -359,9 +365,9 @@ GLUquadric *g_quadric = NULL;
 /* GLU tessellator (for concave polygon support) */
 GLUtesselator *g_tess = NULL;
 
-/* Tessellator combine callback vertex buffer */
-GLdouble g_tess_verts[TESS_VERT_BUF_SIZE][3];
-int      g_tess_vert_count = 0;
+/* Tessellator vertex buffer (position + normal + color per vertex) */
+TessVertex g_tess_verts[TESS_VERT_BUF_SIZE];
+int        g_tess_vert_count = 0;
 
 /* Lights */
 SceneLight g_lights[MAX_LIGHTS] = {
@@ -707,6 +713,45 @@ static void write_func_defs_as_c(FILE *f) {
     }
 }
 
+static void write_tess_preamble(FILE *f) {
+    fprintf(f,
+        "#include <string.h>\n"
+        "typedef struct { GLdouble pos[3]; GLdouble normal[3]; GLdouble color[4]; } TessVertex;\n"
+        "static TessVertex _tv[256];\n"
+        "static int _tv_n = 0;\n"
+        "static GLdouble _tn[3] = {0.0, 0.0, 1.0};\n"
+        "static GLdouble _tc[4] = {1.0, 1.0, 1.0, 1.0};\n"
+        "static GLUtesselator *g_tess = NULL;\n"
+        "static void _tess_vtx_cb(void *vd) {\n"
+        "    TessVertex *v=(TessVertex*)vd;\n"
+        "    glNormal3dv(v->normal); glColor4dv(v->color); glVertex3dv(v->pos);\n"
+        "}\n"
+        "static void _tess_comb_cb(GLdouble coords[3],void *vd[4],GLfloat w[4],void **out) {\n"
+        "    if(_tv_n>=256){*out=NULL;return;}\n"
+        "    TessVertex *v=&_tv[_tv_n++];\n"
+        "    v->pos[0]=coords[0];v->pos[1]=coords[1];v->pos[2]=coords[2];\n"
+        "    for(int c=0;c<3;c++)v->normal[c]=0.0;\n"
+        "    for(int c=0;c<4;c++)v->color[c]=0.0;\n"
+        "    for(int j=0;j<4;j++){\n"
+        "        if(!vd[j])continue;\n"
+        "        TessVertex *s=(TessVertex*)vd[j];\n"
+        "        for(int c=0;c<3;c++)v->normal[c]+=w[j]*s->normal[c];\n"
+        "        for(int c=0;c<4;c++)v->color[c]+=w[j]*s->color[c];\n"
+        "    }\n"
+        "    double len=sqrt(v->normal[0]*v->normal[0]+v->normal[1]*v->normal[1]+v->normal[2]*v->normal[2]);\n"
+        "    if(len>1e-9){v->normal[0]/=len;v->normal[1]/=len;v->normal[2]/=len;}\n"
+        "    *out=v;\n"
+        "}\n"
+        "__attribute__((constructor)) static void _init_tess(void) {\n"
+        "    g_tess=gluNewTess();\n"
+        "    gluTessCallback(g_tess,GLU_TESS_BEGIN,(void(*)())glBegin);\n"
+        "    gluTessCallback(g_tess,GLU_TESS_END,(void(*)())glEnd);\n"
+        "    gluTessCallback(g_tess,GLU_TESS_VERTEX,(void(*)())_tess_vtx_cb);\n"
+        "    gluTessCallback(g_tess,GLU_TESS_COMBINE,(void(*)())_tess_comb_cb);\n"
+        "}\n"
+    );
+}
+
 static void save_output(const char *filename) {
     FILE *f = fopen(filename, "w");
     if (!f) {
@@ -714,10 +759,19 @@ static void save_output(const char *filename) {
         return;
     }
 
-    /* Emit header, inserting any func defs just before void display() { */
+    /* Detect whether any tess commands are present */
+    int has_tess = 0;
+    for (int i = 0; i < g_num_cmds; i++)
+        if (g_cmds[i].valid && g_cmds[i].type >= CMD_TESS_BEGIN_POLYGON
+                            && g_cmds[i].type <= CMD_TESS_VERTEX)
+            has_tess = 1;
+
+    /* Emit header, inserting func defs and optional tess preamble before void display() { */
     for (int i = 0; g_header_pre[i]; i++) {
-        if (strcmp(g_header_pre[i], "void display() {") == 0)
+        if (strcmp(g_header_pre[i], "void display() {") == 0) {
             write_func_defs_as_c(f);
+            if (has_tess) write_tess_preamble(f);
+        }
         fprintf(f, "%s\n", g_header_pre[i]);
     }
     for (int i = 0; i < 3; i++)
@@ -741,6 +795,7 @@ static void save_output(const char *filename) {
 
     /* Write g_cmds[] preserving for-loop structure; skip func defs, emit calls */
     int for_depth = 0;
+    int save_tess_depth = 0; /* tracks polygon/contour nesting for gluEnd translation */
     for (int i = 0; i < g_num_cmds; i++) {
         if (!g_cmds[i].valid) continue;
         switch (g_cmds[i].type) {
@@ -775,6 +830,30 @@ static void save_output(const char *filename) {
         case CMD_CALL:
             fprintf(f, "  func%d();\n", (int)g_cmds[i].args[0]);
             break;
+        case CMD_TESS_BEGIN_POLYGON:
+            fprintf(f, "  { _tv_n=0; gluTessBeginPolygon(g_tess,NULL); }\n");
+            save_tess_depth = 1; break;
+        case CMD_TESS_BEGIN_CONTOUR:
+            fprintf(f, "    gluTessBeginContour(g_tess);\n");
+            save_tess_depth = 2; break;
+        case CMD_TESS_END:
+            if (save_tess_depth == 2) {
+                fprintf(f, "    gluTessEndContour(g_tess);\n"); save_tess_depth = 1;
+            } else {
+                fprintf(f, "  gluTessEndPolygon(g_tess);\n"); save_tess_depth = 0;
+            } break;
+        case CMD_TESS_NORMAL:
+            fprintf(f, "      { _tn[0]=%g; _tn[1]=%g; _tn[2]=%g; }\n",
+                    g_cmds[i].args[0], g_cmds[i].args[1], g_cmds[i].args[2]); break;
+        case CMD_TESS_COLOR:
+            fprintf(f, "      { _tc[0]=%g; _tc[1]=%g; _tc[2]=%g; _tc[3]=%g; }\n",
+                    g_cmds[i].args[0], g_cmds[i].args[1], g_cmds[i].args[2], g_cmds[i].args[3]); break;
+        case CMD_TESS_VERTEX:
+            fprintf(f, "      { TessVertex *_v=&_tv[_tv_n++];"
+                       " _v->pos[0]=%g;_v->pos[1]=%g;_v->pos[2]=%g;"
+                       " memcpy(_v->normal,_tn,24); memcpy(_v->color,_tc,32);"
+                       " gluTessVertex(g_tess,_v->pos,_v); }\n",
+                    g_cmds[i].args[0], g_cmds[i].args[1], g_cmds[i].args[2]); break;
         default:
             if (for_depth > 0 || g_cmds[i].has_vars) {
                 /* Has expressions: translate REPL names to C */
@@ -1754,6 +1833,83 @@ static int parse_command_internal(const char *line, GLCmd *cmd,
         return 0;
     }
 
+    /* gluBegin(GLU_POLYGON) — start a tessellated polygon */
+    if (strcmp(func, "gluBegin") == 0) {
+        char *a = args; while (*a && isspace((unsigned char)*a)) a++;
+        if (strncmp(a, "GLU_POLYGON", 11) == 0) {
+            cmd->type = CMD_TESS_BEGIN_POLYGON;
+            cmd->valid = 1;
+            snprintf(cmd->source, sizeof(cmd->source), "  gluBegin(GLU_POLYGON);");
+            return 1;
+        }
+        if (strncmp(a, "GLU_CONTOUR", 11) == 0) {
+            cmd->type = CMD_TESS_BEGIN_CONTOUR;
+            cmd->valid = 1;
+            snprintf(cmd->source, sizeof(cmd->source), "    gluBegin(GLU_CONTOUR);");
+            return 1;
+        }
+        set_status("Usage: gluBegin(GLU_POLYGON) or gluBegin(GLU_CONTOUR)");
+        return 0;
+    }
+
+    /* gluEnd() — end tessellator contour or polygon */
+    if (strcmp(func, "gluEnd") == 0 || strcmp(p, "gluEnd()") == 0) {
+        cmd->type = CMD_TESS_END;
+        cmd->valid = 1;
+        snprintf(cmd->source, sizeof(cmd->source), "%sgluEnd();", indent);
+        return 1;
+    }
+
+    /* gluNormal(x, y, z) — set per-vertex normal for tessellator */
+    if (strcmp(func, "gluNormal") == 0) {
+        cmd->num_args = parse_exprs(args, cmd->args, 3, vars, num_vars);
+        if (cmd->num_args == 3) {
+            cmd->type = CMD_TESS_NORMAL;
+            cmd->valid = 1;
+            cmd->has_vars = (num_vars > 0);
+            snprintf(cmd->source, sizeof(cmd->source),
+                     "%sgluNormal(%g, %g, %g);",
+                     indent, cmd->args[0], cmd->args[1], cmd->args[2]);
+            return 1;
+        }
+        set_status("Usage: gluNormal(x, y, z)");
+        return 0;
+    }
+
+    /* gluColor(r, g, b[, a]) — set per-vertex color for tessellator */
+    if (strcmp(func, "gluColor") == 0) {
+        cmd->num_args = parse_exprs(args, cmd->args, 4, vars, num_vars);
+        if (cmd->num_args >= 3) {
+            if (cmd->num_args < 4) cmd->args[3] = 1.0f;
+            cmd->num_args = 4;
+            cmd->type = CMD_TESS_COLOR;
+            cmd->valid = 1;
+            cmd->has_vars = (num_vars > 0);
+            snprintf(cmd->source, sizeof(cmd->source),
+                     "%sgluColor(%g, %g, %g, %g);",
+                     indent, cmd->args[0], cmd->args[1], cmd->args[2], cmd->args[3]);
+            return 1;
+        }
+        set_status("Usage: gluColor(r, g, b) or gluColor(r, g, b, a)");
+        return 0;
+    }
+
+    /* gluVertex(x, y, z) — add a vertex to the current tessellator contour */
+    if (strcmp(func, "gluVertex") == 0) {
+        cmd->num_args = parse_exprs(args, cmd->args, 3, vars, num_vars);
+        if (cmd->num_args == 3) {
+            cmd->type = CMD_TESS_VERTEX;
+            cmd->valid = 1;
+            cmd->has_vars = (num_vars > 0);
+            snprintf(cmd->source, sizeof(cmd->source),
+                     "%sgluVertex(%g, %g, %g);",
+                     indent, cmd->args[0], cmd->args[1], cmd->args[2]);
+            return 1;
+        }
+        set_status("Usage: gluVertex(x, y, z)");
+        return 0;
+    }
+
     /* goto label — jump to a named label */
     if (strncmp(p, "goto ", 5) == 0) {
         const char *lname = p + 5;
@@ -2201,10 +2357,9 @@ void flatten_commands(void) {
 
 void execute_commands(void) {
     int in_begin = 0;
-    int in_polygon = 0; /* using tessellator for GL_POLYGON */
-    /* Tessellator vertex buffer: collect positions for GL_POLYGON */
-    static GLdouble tess_buf[256][3];
-    int tess_n = 0;
+    int tess_depth = 0; /* 0=outside, 1=in polygon, 2=in contour */
+    GLdouble tess_current_normal[3] = {0.0, 0.0, 1.0};
+    GLdouble tess_current_color[4]  = {1.0, 1.0, 1.0, 1.0};
     int goto_count = 0; /* safety guard against infinite goto loops */
 
     int pc = 0;
@@ -2213,39 +2368,16 @@ void execute_commands(void) {
         switch (g_flat_cmds[pc].type) {
         case CMD_BEGIN:
             if (in_begin) { glEnd(); in_begin = 0; }
-            if (in_polygon) { /* shouldn't happen, but reset */ in_polygon = 0; }
-            if (g_flat_cmds[pc].mode == GL_POLYGON && g_tess) {
-                /* Use tessellator for potentially-concave polygon */
-                in_polygon = 1;
-                tess_n = 0;
-                g_tess_vert_count = 0;
-                gluTessBeginPolygon(g_tess, NULL);
-                gluTessBeginContour(g_tess);
-            } else {
-                glBegin(g_flat_cmds[pc].mode);
-                in_begin = 1;
-            }
+            glBegin(g_flat_cmds[pc].mode);
+            in_begin = 1;
             break;
         case CMD_END:
-            if (in_polygon) {
-                gluTessEndContour(g_tess);
-                gluTessEndPolygon(g_tess);
-                in_polygon = 0;
-            } else if (in_begin) {
-                glEnd(); in_begin = 0;
-            }
+            if (in_begin) { glEnd(); in_begin = 0; }
             break;
         case CMD_VERTEX3F:
-            if (in_polygon && tess_n < 256) {
-                tess_buf[tess_n][0] = (GLdouble)g_flat_cmds[pc].args[0];
-                tess_buf[tess_n][1] = (GLdouble)g_flat_cmds[pc].args[1];
-                tess_buf[tess_n][2] = (GLdouble)g_flat_cmds[pc].args[2];
-                gluTessVertex(g_tess, tess_buf[tess_n], tess_buf[tess_n]);
-                tess_n++;
-            } else if (in_begin) {
+            if (in_begin)
                 glVertex3f(g_flat_cmds[pc].args[0], g_flat_cmds[pc].args[1],
                            g_flat_cmds[pc].args[2]);
-            }
             break;
         case CMD_NORMAL3F:
             glNormal3f(g_flat_cmds[pc].args[0], g_flat_cmds[pc].args[1],
@@ -2327,6 +2459,39 @@ void execute_commands(void) {
                            (int)g_flat_cmds[pc].args[2],
                            (int)g_flat_cmds[pc].args[3]);
             break;
+        case CMD_TESS_BEGIN_POLYGON:
+            if (in_begin) { glEnd(); in_begin = 0; }
+            if (g_tess) { g_tess_vert_count = 0; gluTessBeginPolygon(g_tess, NULL); tess_depth = 1; }
+            break;
+        case CMD_TESS_BEGIN_CONTOUR:
+            if (g_tess && tess_depth == 1) { gluTessBeginContour(g_tess); tess_depth = 2; }
+            break;
+        case CMD_TESS_END:
+            if (g_tess && tess_depth == 2) { gluTessEndContour(g_tess); tess_depth = 1; }
+            else if (g_tess && tess_depth == 1) { gluTessEndPolygon(g_tess); tess_depth = 0; }
+            break;
+        case CMD_TESS_NORMAL:
+            tess_current_normal[0] = g_flat_cmds[pc].args[0];
+            tess_current_normal[1] = g_flat_cmds[pc].args[1];
+            tess_current_normal[2] = g_flat_cmds[pc].args[2];
+            break;
+        case CMD_TESS_COLOR:
+            tess_current_color[0] = g_flat_cmds[pc].args[0];
+            tess_current_color[1] = g_flat_cmds[pc].args[1];
+            tess_current_color[2] = g_flat_cmds[pc].args[2];
+            tess_current_color[3] = (g_flat_cmds[pc].num_args >= 4) ? g_flat_cmds[pc].args[3] : 1.0;
+            break;
+        case CMD_TESS_VERTEX:
+            if (g_tess && tess_depth == 2 && g_tess_vert_count < TESS_VERT_BUF_SIZE) {
+                TessVertex *v = &g_tess_verts[g_tess_vert_count++];
+                v->pos[0] = g_flat_cmds[pc].args[0];
+                v->pos[1] = g_flat_cmds[pc].args[1];
+                v->pos[2] = g_flat_cmds[pc].args[2];
+                memcpy(v->normal, tess_current_normal, sizeof(v->normal));
+                memcpy(v->color,  tess_current_color,  sizeof(v->color));
+                gluTessVertex(g_tess, v->pos, v);
+            }
+            break;
         case CMD_LABEL:
             break; /* no-op marker */
         case CMD_GOTO: {
@@ -2404,10 +2569,8 @@ void execute_commands(void) {
     }
 execute_done:;
     if (in_begin) glEnd();
-    if (in_polygon && g_tess) {
-        gluTessEndContour(g_tess);
-        gluTessEndPolygon(g_tess);
-    }
+    if (tess_depth == 2 && g_tess) { gluTessEndContour(g_tess); tess_depth = 1; }
+    if (tess_depth == 1 && g_tess) { gluTessEndPolygon(g_tess); }
 }
 
 /* ========================================================================= */
@@ -4577,20 +4740,34 @@ static void load_initial_commands(const char *import_file) {
     set_status("Ready - type GL commands, press ; to execute. F1 for help. F12 for examples.");
 }
 
-/* GLU tessellator callbacks for concave polygon support */
+/* GLU tessellator callbacks for explicit gluBegin/gluEnd tessellation */
+static void tess_vertex_callback(void *vertex_data) {
+    TessVertex *v = (TessVertex *)vertex_data;
+    glNormal3dv(v->normal);
+    glColor4dv(v->color);
+    glVertex3dv(v->pos);
+}
+
 static void tess_combine_callback(GLdouble coords[3],
                                    void *vertex_data[4],
                                    GLfloat weight[4],
                                    void **out_data) {
-    (void)vertex_data; (void)weight;
-    /* Allocate from static buffer; reset at start of each polygon */
-    if (g_tess_vert_count < TESS_VERT_BUF_SIZE) {
-        GLdouble *v = g_tess_verts[g_tess_vert_count++];
-        v[0] = coords[0]; v[1] = coords[1]; v[2] = coords[2];
-        *out_data = v;
-    } else {
-        *out_data = NULL;
+    if (g_tess_vert_count >= TESS_VERT_BUF_SIZE) { *out_data = NULL; return; }
+    TessVertex *v = &g_tess_verts[g_tess_vert_count++];
+    v->pos[0] = coords[0]; v->pos[1] = coords[1]; v->pos[2] = coords[2];
+    for (int c = 0; c < 3; c++) v->normal[c] = 0.0;
+    for (int c = 0; c < 4; c++) v->color[c]  = 0.0;
+    for (int j = 0; j < 4; j++) {
+        if (!vertex_data[j]) continue;
+        TessVertex *src = (TessVertex *)vertex_data[j];
+        for (int c = 0; c < 3; c++) v->normal[c] += weight[j] * src->normal[c];
+        for (int c = 0; c < 4; c++) v->color[c]  += weight[j] * src->color[c];
     }
+    /* Renormalize interpolated normal */
+    double len = sqrt(v->normal[0]*v->normal[0] + v->normal[1]*v->normal[1]
+                    + v->normal[2]*v->normal[2]);
+    if (len > 1e-9) { v->normal[0]/=len; v->normal[1]/=len; v->normal[2]/=len; }
+    *out_data = v;
 }
 
 static void tess_error_callback(GLenum err) {
@@ -4617,7 +4794,7 @@ static void init_gl(void) {
     gluTessCallback(g_tess, GLU_TESS_END,
                     (void (*)())glEnd);
     gluTessCallback(g_tess, GLU_TESS_VERTEX,
-                    (void (*)())glVertex3dv);
+                    (void (*)())tess_vertex_callback);
     gluTessCallback(g_tess, GLU_TESS_COMBINE,
                     (void (*)())tess_combine_callback);
     gluTessCallback(g_tess, GLU_TESS_ERROR,

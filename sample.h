@@ -45,6 +45,12 @@
 #define MAX_LIGHTS        4
 #define TESS_VERT_BUF_SIZE 256
 
+typedef struct {
+    GLdouble pos[3];
+    GLdouble normal[3]; /* per-vertex normal, default (0,0,1) */
+    GLdouble color[4];  /* per-vertex RGBA,   default (1,1,1,1) */
+} TessVertex;
+
 /* ========================================================================= */
 /* Types                                                                      */
 /* ========================================================================= */
@@ -65,6 +71,12 @@ typedef enum {
     CMD_LABEL, CMD_GOTO,
     CMD_GLU_SPHERE, CMD_GLU_CYLINDER, CMD_GLU_DISK, CMD_GLU_PARTIAL_DISK,
     CMD_GLUT_TORUS,
+    CMD_TESS_BEGIN_POLYGON,
+    CMD_TESS_BEGIN_CONTOUR,
+    CMD_TESS_END,
+    CMD_TESS_NORMAL,
+    CMD_TESS_COLOR,
+    CMD_TESS_VERTEX,
     CMD_TYPE_COUNT
 } CmdType;
 
@@ -189,7 +201,7 @@ extern int    g_config_hover;
 /* GLU quadric & tessellator */
 extern GLUquadric    *g_quadric;
 extern GLUtesselator *g_tess;
-extern GLdouble       g_tess_verts[TESS_VERT_BUF_SIZE][3];
+extern TessVertex     g_tess_verts[TESS_VERT_BUF_SIZE];
 extern int            g_tess_vert_count;
 
 /* Lights */
