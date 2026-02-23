@@ -148,7 +148,8 @@ typedef struct {
     char    source[MAX_LINE_LEN];
     int     valid;
     int     is_auto;
-    int     has_vars;   /* source contains predefined var references, re-eval on flatten */
+    int     has_vars;       /* source contains predefined var references, re-eval on flatten */
+    int     src_cmd_idx;    /* index into g_cmds[] that produced this flat command */
 } GLCmd;
 
 /* ExprVar, ExprCtx, MAX_EXPR_VARS defined in repl_eval.h */
@@ -176,6 +177,7 @@ static const EnumEntry g_enable_caps[] = {
     { "GL_LIGHTING",        GL_LIGHTING },
     { "GL_COLOR_MATERIAL",  GL_COLOR_MATERIAL },
     { "GL_NORMALIZE",       GL_NORMALIZE },
+    { "GL_LINE_SMOOTH",     GL_LINE_SMOOTH },
     { "GL_LIGHT0",          GL_LIGHT0 },
     { "GL_LIGHT1",          GL_LIGHT1 },
     { "GL_LIGHT2",          GL_LIGHT2 },
@@ -2055,8 +2057,10 @@ static void flatten_range(int start, int end_idx, ExprVar *vars, int nv) {
 
         /* Comments: pass through to flat array (skipped by execute, kept in save) */
         if (g_cmds[i].type == CMD_COMMENT) {
-            if (g_num_flat_cmds < MAX_COMMANDS)
-                g_flat_cmds[g_num_flat_cmds++] = g_cmds[i];
+            if (g_num_flat_cmds < MAX_COMMANDS) {
+                g_flat_cmds[g_num_flat_cmds] = g_cmds[i];
+                g_flat_cmds[g_num_flat_cmds++].src_cmd_idx = i;
+            }
             i++;
             continue;
         }
@@ -2066,8 +2070,10 @@ static void flatten_range(int start, int end_idx, ExprVar *vars, int nv) {
             int vi = g_cmds[i].num_args; /* predef var index */
             if (vi >= 0 && vi < g_num_predef_vars)
                 g_predef_vars[vi].value = g_cmds[i].args[0];
-            if (g_num_flat_cmds < MAX_COMMANDS)
-                g_flat_cmds[g_num_flat_cmds++] = g_cmds[i];
+            if (g_num_flat_cmds < MAX_COMMANDS) {
+                g_flat_cmds[g_num_flat_cmds] = g_cmds[i];
+                g_flat_cmds[g_num_flat_cmds++].src_cmd_idx = i;
+            }
             i++;
             continue;
         }
@@ -2082,6 +2088,7 @@ static void flatten_range(int start, int end_idx, ExprVar *vars, int nv) {
             g_edit_line = g_num_flat_cmds;
             if (parse_command_with_vars(g_cmds[i].source, &tmp, vars, nv)) {
                 tmp.has_vars = g_cmds[i].has_vars;
+                tmp.src_cmd_idx = i;
                 strncpy(tmp.source, g_cmds[i].source, sizeof(tmp.source) - 1);
                 tmp.source[sizeof(tmp.source) - 1] = '\0';
                 g_flat_cmds[g_num_flat_cmds++] = tmp;
@@ -2093,12 +2100,14 @@ static void flatten_range(int start, int end_idx, ExprVar *vars, int nv) {
             memset(&tmp, 0, sizeof(tmp));
             if (parse_command(g_cmds[i].source, &tmp)) {
                 tmp.has_vars = 1;
+                tmp.src_cmd_idx = i;
                 strncpy(tmp.source, g_cmds[i].source, sizeof(tmp.source) - 1);
                 tmp.source[sizeof(tmp.source) - 1] = '\0';
                 g_flat_cmds[g_num_flat_cmds++] = tmp;
             }
         } else {
-            g_flat_cmds[g_num_flat_cmds++] = g_cmds[i];
+            g_flat_cmds[g_num_flat_cmds] = g_cmds[i];
+            g_flat_cmds[g_num_flat_cmds++].src_cmd_idx = i;
         }
         i++;
     }
@@ -2902,7 +2911,7 @@ static void render_help(void) {
         "  F1  Help overlay     F2  Wireframe mode",
         "  F3  Grid theme       F4  Axes theme",
         "  F5  Vertex numbers   F6  Normal vectors",
-        "  F7  Vertex numbers   F8  Vertex guides",
+        "  F7  Vertex outlines  F8  Vertex guides",
         "  F9  Auto-normals     F10 Light indicators",
         "  F11 Camera rotate    F12 Cycle examples",
         "",
@@ -3603,6 +3612,8 @@ static void draw_vertex_guides(void) {
         glEnd();
         glLineWidth(1.0f);
     } else {
+        int depth = glIsEnabled(GL_DEPTH_TEST);
+        if (depth) glDisable(GL_DEPTH_TEST);
         /* All three values known — draw a point */
         glColor4f(1.0f, 0.3f, 0.3f, 0.9f);
         glPointSize(8.0f);
@@ -3610,6 +3621,7 @@ static void draw_vertex_guides(void) {
         glVertex3f(vals[0], vals[1], vals[2]);
         glEnd();
         glPointSize(1.0f);
+        if (depth) glEnable(GL_DEPTH_TEST);
     }
 
     glDisable(GL_BLEND);
@@ -3927,6 +3939,9 @@ static void render_3d_scene(void) {
     glMaterialfv(GL_FRONT_AND_BACK, GL_SHININESS, mshin);
 
     glColor3f(0.70f, 0.70f, 0.80f);
+    // Enable blending for line smoothing
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
     draw_grid();
     draw_axes();
@@ -3953,6 +3968,7 @@ static void render_3d_scene(void) {
         int block_begin_idx = -1; /* flat index of current block's CMD_BEGIN */
         for (int i = 0; i < g_num_flat_cmds; i++) {
             if (!g_flat_cmds[i].valid) continue;
+
             switch (g_flat_cmds[i].type) {
             case CMD_TRANSLATE3F:
                 if (!in_begin)
@@ -4013,6 +4029,17 @@ static void render_3d_scene(void) {
     glColor3f(0.0f, 0.0f, 0.0f);
     for (int i = 0; i < g_num_flat_cmds; i++) {
         if (!g_flat_cmds[i].valid) continue;
+        int is_cursor = (g_flat_cmds[i].src_cmd_idx == g_edit_line);
+
+        // Draw vertex guides and normals if this vertex is at the cursor
+        // position. Do this inline so that the current model matrix is applied
+        // to the guides, ensuring they are positioned correctly even when
+        // transforms separate blocks.
+        if (is_cursor) {
+            draw_vertex_guides();
+            draw_normal_guides();
+        }
+
         if (g_flat_cmds[i].type == CMD_TRANSLATE3F) {
             glTranslatef(g_flat_cmds[i].args[0], g_flat_cmds[i].args[1],
                          g_flat_cmds[i].args[2]);
@@ -4025,14 +4052,10 @@ static void render_3d_scene(void) {
     }
     glPointSize(1.0f);
     glPopMatrix();
+    glDisable(GL_BLEND);
     if (g_user_lighting_enabled) glEnable(GL_LIGHTING);
 
     draw_lights();
-
-    // These are affected by transformations
-
-    draw_vertex_guides();
-    draw_normal_guides();
 
     if (g_show_vnums)   draw_vertex_numbers();
     if (g_show_normals) draw_normal_vectors();
@@ -5593,9 +5616,8 @@ static void special_func(int key, int x, int y) {
                    "Normal vectors OFF");
         break;
     case GLUT_KEY_F7:
-        g_show_indices = !g_show_indices;
-        set_status(g_show_indices ? "Vertex numbers ON" :
-                   "Vertex numbers OFF");
+        g_show_outlines = !g_show_outlines;
+        set_status(g_show_outlines ? "Vertex outlines ON" : "Vertex outlines OFF");
         break;
     case GLUT_KEY_F8:
         g_show_guides = !g_show_guides;
@@ -5990,6 +6012,7 @@ static const char *g_example_cube[] = {
     "glShadeModel(GL_SMOOTH);",
     "glEnable(GL_LIGHT3);",
     "glEnable(GL_LIGHT2);",
+    "glEnable(GL_LINE_SMOOTH);",
     "glColor3f(1, 1, 1);",
     "glBegin(GL_QUAD_STRIP);",
     "glNormal3f(0, 0, 1);",
@@ -6226,7 +6249,7 @@ int main(int argc, char **argv) {
     }
 
     glutInit(&argc, argv);
-    glutInitDisplayMode(GLUT_DOUBLE | GLUT_RGB | GLUT_DEPTH | GLUT_MULTISAMPLE |
+    glutInitDisplayMode(GLUT_DOUBLE | GLUT_RGBA | GLUT_DEPTH | GLUT_MULTISAMPLE |
                         (g_use_accum ? GLUT_ACCUM : 0));
     glutInitWindowSize(g_win_w, g_win_h);
     glutCreateWindow("OpenGL REPL - Display List Dynamic Rendering");
