@@ -819,7 +819,10 @@ static int load_from_file(const char *filename) {
     int in_snippet = 0;
     int loaded = 0;
     int warnings = 0;
-    int for_depth = 0;
+    /* Block stack: 1=for-loop, 2=if-block */
+    int block_stack[64];
+    int block_top = 0;
+    int for_depth = 0; /* # of for-loop levels (for parse_command_with_vars context) */
 
     while (fgets(line, sizeof(line), f)) {
         /* Strip trailing newline */
@@ -966,6 +969,7 @@ static int load_from_file(const char *filename) {
                                      ind, var_name, start_v, end_v);
                     }
                     g_cmds[g_num_cmds++] = fb;
+                    if (block_top < 64) block_stack[block_top++] = 1; /* BTYPE_FOR */
                     for_depth++;
                     loaded++;
                 }
@@ -1009,6 +1013,7 @@ static int load_from_file(const char *filename) {
                                  ind, var_name, start_v, end_v);
                     }
                     g_cmds[g_num_cmds++] = fb;
+                    if (block_top < 64) block_stack[block_top++] = 1; /* BTYPE_FOR */
                     for_depth++;
                     loaded++;
                 }
@@ -1016,18 +1021,83 @@ static int load_from_file(const char *filename) {
             }
         }
 
-        /* Closing brace: for-loop end */
-        if (*p == '}' && for_depth > 0) {
-            if (g_num_cmds < MAX_COMMANDS) {
-                GLCmd fe;
-                memset(&fe, 0, sizeof(fe));
-                fe.type = CMD_FOR_END;
-                fe.valid = 1;
-                strncpy(fe.source, line, sizeof(fe.source) - 1);
-                fe.source[sizeof(fe.source) - 1] = '\0';
-                g_cmds[g_num_cmds++] = fe;
-                for_depth--;
-                loaded++;
+        /* If-block: if(cond) { — create CMD_IF_BEGIN */
+        if (strncmp(p, "if(", 3) == 0 || strncmp(p, "if (", 4) == 0) {
+            /* Find opening paren */
+            const char *ip = p;
+            while (*ip && *ip != '(') ip++;
+            if (*ip) {
+                ip++; /* skip '(' */
+                int paren = 1;
+                const char *cond_start = ip;
+                while (*ip && paren > 0) {
+                    if (*ip == '(') paren++;
+                    else if (*ip == ')') paren--;
+                    if (paren > 0) ip++;
+                }
+                /* Check for opening brace */
+                const char *brace = ip + 1;
+                while (*brace && isspace((unsigned char)*brace)) brace++;
+                if (*brace == '{' || *brace == '\0') {
+                    /* Extract and evaluate condition */
+                    char cond_text[MAX_LINE_LEN];
+                    int clen = (int)(ip - cond_start);
+                    if (clen > (int)sizeof(cond_text) - 1) clen = (int)sizeof(cond_text) - 1;
+                    memcpy(cond_text, cond_start, clen);
+                    cond_text[clen] = '\0';
+                    float cond_args[1];
+                    float cond_val = 0.0f;
+                    if (parse_exprs(cond_text, cond_args, 1, NULL, 0) >= 1)
+                        cond_val = cond_args[0];
+                    /* Count leading whitespace for indent */
+                    int indent = 0;
+                    while (line[indent] && isspace((unsigned char)line[indent])) indent++;
+                    char ind[32];
+                    if (indent > (int)sizeof(ind) - 1) indent = (int)sizeof(ind) - 1;
+                    memset(ind, ' ', indent); ind[indent] = '\0';
+                    if (g_num_cmds < MAX_COMMANDS) {
+                        GLCmd ib;
+                        memset(&ib, 0, sizeof(ib));
+                        ib.type = CMD_IF_BEGIN;
+                        ib.args[0] = cond_val;
+                        ib.valid = 1;
+                        ib.has_vars = input_has_predef_vars(cond_text);
+                        snprintf(ib.source, sizeof(ib.source), "%sif(%s) {", ind, cond_text);
+                        g_cmds[g_num_cmds++] = ib;
+                        if (block_top < 64) block_stack[block_top++] = 2; /* BTYPE_IF */
+                        loaded++;
+                    }
+                    continue;
+                }
+            }
+        }
+
+        /* Closing brace: end of for-loop or if-block */
+        if (*p == '}' && block_top > 0) {
+            int btype = block_stack[--block_top];
+            if (btype == 1) { /* BTYPE_FOR */
+                if (g_num_cmds < MAX_COMMANDS) {
+                    GLCmd fe;
+                    memset(&fe, 0, sizeof(fe));
+                    fe.type = CMD_FOR_END;
+                    fe.valid = 1;
+                    strncpy(fe.source, line, sizeof(fe.source) - 1);
+                    fe.source[sizeof(fe.source) - 1] = '\0';
+                    g_cmds[g_num_cmds++] = fe;
+                    for_depth--;
+                    loaded++;
+                }
+            } else { /* BTYPE_IF */
+                if (g_num_cmds < MAX_COMMANDS) {
+                    GLCmd ie;
+                    memset(&ie, 0, sizeof(ie));
+                    ie.type = CMD_IF_END;
+                    ie.valid = 1;
+                    strncpy(ie.source, line, sizeof(ie.source) - 1);
+                    ie.source[sizeof(ie.source) - 1] = '\0';
+                    g_cmds[g_num_cmds++] = ie;
+                    loaded++;
+                }
             }
             continue;
         }
@@ -1106,6 +1176,25 @@ static int load_from_file(const char *filename) {
                         continue;
                     }
                 }
+            }
+        }
+
+        /* C-style label: identifier: — create CMD_LABEL */
+        {
+            int llen = 0;
+            while (p[llen] && (isalnum((unsigned char)p[llen]) || p[llen] == '_')) llen++;
+            if (llen > 0 && p[llen] == ':' &&
+                (p[llen+1] == '\0' || isspace((unsigned char)p[llen+1]))) {
+                if (g_num_cmds < MAX_COMMANDS) {
+                    GLCmd lc;
+                    memset(&lc, 0, sizeof(lc));
+                    lc.type = CMD_LABEL;
+                    lc.valid = 1;
+                    snprintf(lc.source, sizeof(lc.source), "%.*s:", llen, p);
+                    g_cmds[g_num_cmds++] = lc;
+                    loaded++;
+                }
+                continue;
             }
         }
 
@@ -1669,7 +1758,13 @@ static int parse_command_internal(const char *line, GLCmd *cmd,
     if (strncmp(p, "goto ", 5) == 0) {
         const char *lname = p + 5;
         while (*lname && isspace((unsigned char)*lname)) lname++;
-        if (*lname) {
+        /* Extract clean label name (strip trailing ; or whitespace) */
+        char clean_lname[64]; int ll = 0;
+        while (ll < 63 && lname[ll] && lname[ll] != ';' && !isspace((unsigned char)lname[ll])) {
+            clean_lname[ll] = lname[ll]; ll++;
+        }
+        clean_lname[ll] = '\0';
+        if (ll > 0) {
             cmd->type = CMD_GOTO;
             cmd->valid = 1;
             int fdepth = block_depth_at(g_edit_line);
@@ -1678,7 +1773,7 @@ static int parse_command_internal(const char *line, GLCmd *cmd,
             char ind_str[32];
             if (ind_v > (int)sizeof(ind_str) - 1) ind_v = (int)sizeof(ind_str) - 1;
             memset(ind_str, ' ', ind_v); ind_str[ind_v] = '\0';
-            snprintf(cmd->source, sizeof(cmd->source), "%sgoto %s;", ind_str, lname);
+            snprintf(cmd->source, sizeof(cmd->source), "%sgoto %s;", ind_str, clean_lname);
             return 1;
         }
     }
@@ -1967,26 +2062,17 @@ static void flatten_range(int start, int end_idx, ExprVar *vars, int nv) {
             continue;
         }
 
-        /* Conditionals: evaluate condition, include or skip body */
-        if (g_cmds[i].type == CMD_IF_BEGIN) {
-            int ie = find_block_end(i);
-            float cond = g_cmds[i].args[0];
-            /* Re-evaluate condition from source if it references variables */
-            if (g_cmds[i].has_vars) {
-                const char *p = g_cmds[i].source;
-                while (*p && *p != '(') p++;
-                if (*p) p++;
-                ExprCtx ctx = { p, vars ? vars : g_predef_vars,
-                                vars ? nv : g_num_predef_vars };
-                cond = eval_expr(&ctx);
+        /* Conditionals: pass through to flat_cmds unchanged.
+         * Conditions are evaluated at execute time so that goto loops
+         * see updated variable values on each iteration. */
+        if (g_cmds[i].type == CMD_IF_BEGIN || g_cmds[i].type == CMD_IF_END) {
+            if (g_num_flat_cmds < MAX_COMMANDS) {
+                g_flat_cmds[g_num_flat_cmds] = g_cmds[i];
+                g_flat_cmds[g_num_flat_cmds++].src_cmd_idx = i;
             }
-            if (cond != 0.0f) {
-                flatten_range(i + 1, ie, vars, nv);
-            }
-            i = (ie < g_num_cmds) ? ie + 1 : g_num_cmds;
+            i++;
             continue;
         }
-        if (g_cmds[i].type == CMD_IF_END) { i++; continue; }
 
         /* Comments: pass through to flat array (skipped by execute, kept in save) */
         if (g_cmds[i].type == CMD_COMMENT) {
@@ -2119,6 +2205,7 @@ void execute_commands(void) {
     /* Tessellator vertex buffer: collect positions for GL_POLYGON */
     static GLdouble tess_buf[256][3];
     int tess_n = 0;
+    int goto_count = 0; /* safety guard against infinite goto loops */
 
     int pc = 0;
     while (pc < g_num_flat_cmds) {
@@ -2245,11 +2332,11 @@ void execute_commands(void) {
         case CMD_GOTO: {
             /* Find matching CMD_LABEL by name in source and set pc */
             const char *src = g_flat_cmds[pc].source;
-            /* src is like "  goto labelname;" — extract label name */
-            const char *gname = src;
-            while (*gname && *gname != ' ') gname++;
-            while (*gname == ' ') gname++;
-            /* gname now points to label name (with trailing ;) */
+            /* src is like "  goto labelname;" — skip past "goto " keyword */
+            const char *goto_kw = strstr(src, "goto ");
+            if (!goto_kw) break;
+            const char *gname = goto_kw + 5;
+            while (*gname == ' ') gname++; /* skip any extra spaces */
             char lname[64];
             int llen = 0;
             while (llen < 63 && gname[llen] && gname[llen] != ';' && !isspace((unsigned char)gname[llen])) {
@@ -2257,7 +2344,12 @@ void execute_commands(void) {
                 llen++;
             }
             lname[llen] = '\0';
-            /* Search for matching CMD_LABEL */
+            if (llen == 0) break;
+            /* Search for matching CMD_LABEL; guard against infinite loops */
+            if (goto_count++ > 100000) {
+                set_status("goto: loop limit reached");
+                goto execute_done;
+            }
             for (int li = 0; li < g_num_flat_cmds; li++) {
                 if (g_flat_cmds[li].valid && g_flat_cmds[li].type == CMD_LABEL) {
                     const char *lsrc = g_flat_cmds[li].source;
@@ -2271,16 +2363,46 @@ void execute_commands(void) {
             goto_done:;
             break;
         }
+        case CMD_IF_BEGIN: {
+            /* Evaluate condition at execute time so goto loops see updated vars */
+            float cond = g_flat_cmds[pc].args[0];
+            if (g_flat_cmds[pc].has_vars) {
+                const char *p = g_flat_cmds[pc].source;
+                while (*p && *p != '(') p++;
+                if (*p) p++;
+                ExprCtx ctx = { p, g_predef_vars, g_num_predef_vars };
+                cond = eval_expr(&ctx);
+            }
+            if (cond == 0.0f) {
+                /* Skip to matching CMD_IF_END */
+                int depth = 1;
+                while (depth > 0 && ++pc < g_num_flat_cmds) {
+                    if (g_flat_cmds[pc].type == CMD_IF_BEGIN) depth++;
+                    else if (g_flat_cmds[pc].type == CMD_IF_END) depth--;
+                }
+                /* pc now points to CMD_IF_END; outer pc++ steps past it */
+            }
+            break;
+        }
+        case CMD_IF_END:
+            break; /* body executed; just step past */
+        case CMD_VAR_ASSIGN: {
+            /* Re-apply variable assignment so goto loops see updated values */
+            int vi = g_flat_cmds[pc].num_args;
+            if (vi >= 0 && vi < g_num_predef_vars)
+                g_predef_vars[vi].value = g_flat_cmds[pc].args[0];
+            break;
+        }
         /* These are resolved during flatten and shouldn't appear in flat_cmds */
         case CMD_FOR_BEGIN: case CMD_FOR_END:
         case CMD_FUNC_DEF: case CMD_FUNC_END: case CMD_CALL:
-        case CMD_IF_BEGIN: case CMD_IF_END:
-        case CMD_COMMENT: case CMD_VAR_ASSIGN:
+        case CMD_COMMENT:
         case CMD_TYPE_COUNT:
             break;
         }
         pc++;
     }
+execute_done:;
     if (in_begin) glEnd();
     if (in_polygon && g_tess) {
         gluTessEndContour(g_tess);
@@ -4281,7 +4403,7 @@ static const char *g_example_cube[] = {
     "glShadeModel(GL_SMOOTH);",
     "glEnable(GL_LIGHT3);",
     "glEnable(GL_LIGHT2);",
-    "glEnable(GL_LINE_SMOOTH);",
+    "//glEnable(GL_LINE_SMOOTH);",
     "glColor3f(1, 1, 1);",
     "glBegin(GL_QUAD_STRIP);",
     "glNormal3f(0, 0, 1);",
