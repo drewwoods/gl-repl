@@ -427,6 +427,16 @@ static int    g_current_block_begin = -1;  /* flat cmd index of cursor's glBegin
 static int    g_current_block_end   = -1;  /* flat cmd index of cursor's glEnd */
 static int    g_ortho_mode = 0;  /* 0=perspective, 1=2D orthographic */
 
+/* Variable slider panel (4.8) */
+static int    g_show_var_panel  = 1;   /* show predefined-variable sliders */
+static int    g_drag_var        = -1;  /* index of var being dragged, -1=none */
+static float  g_drag_start_val  = 0.0f;
+static int    g_drag_start_x    = 0;
+
+/* Configuration menu (4.10) */
+static int    g_show_config     = 0;   /* show config overlay */
+static int    g_config_hover    = -1;  /* hovered row (-1=none) */
+
 /* GLU quadric (shared for sphere/cylinder/disk drawing) */
 static GLUquadric *g_quadric = NULL;
 
@@ -515,6 +525,34 @@ static int try_commit_if_block(void);
 static int try_commit_close_brace(void);
 static void load_example(int idx);
 #define NUM_EXAMPLES 5
+
+/* ========================================================================= */
+/* Configuration menu item table (4.10)                                       */
+/* ========================================================================= */
+
+typedef struct {
+    const char  *label;
+    const char  *key_hint;
+    int         *value;
+    int          n_states;    /* 2 = ON/OFF toggle; >2 = cycle */
+    const char **state_names; /* NULL → display "OFF"/"ON" */
+} CfgItem;
+
+static CfgItem g_cfg_items[] = {
+    { "Wireframe",        "F2",  &g_wireframe,              2,               NULL          },
+    { "Grid",             "F3",  &g_grid_theme,             GRID_THEME_COUNT, g_grid_names },
+    { "Axes",             "F4",  &g_axes_theme,             AXES_THEME_COUNT, g_axes_names },
+    { "Vertex labels",    "F5",  &g_show_vnums,             2,               NULL          },
+    { "Normal vectors",   "F6",  &g_show_normals,           2,               NULL          },
+    { "Outlines",         "F7",  &g_show_outlines,          2,               NULL          },
+    { "Vertex guides",    "F8",  &g_show_guides,            2,               NULL          },
+    { "Auto-normals",     "F9",  &g_autonormal,             2,               NULL          },
+    { "Light indicators", "F10", &g_show_lights,            2,               NULL          },
+    { "Camera rotate",    "F11", &g_cam_rotate,             2,               NULL          },
+    { "Poly highlight",   "--",  &g_highlight_current_poly, 2,               NULL          },
+    { "Variable panel",   "--",  &g_show_var_panel,         2,               NULL          },
+};
+#define CFG_ITEM_COUNT ((int)(sizeof(g_cfg_items)/sizeof(g_cfg_items[0])))
 
 /* ========================================================================= */
 /* Utility                                                                    */
@@ -2818,6 +2856,9 @@ static void render_help(void) {
         "=== OpenGL REPL - Help ===",
         "Press F1 or Escape to close.  Up/Down or PgUp/PgDn to scroll.",
         "",
+        "Configuration Menu:",
+        "  `                    Open configuration menu",
+        "",
         "Supported Commands (type + ;):",
         "  glBegin(MODE)        GL_TRIANGLES, GL_TRIANGLE_STRIP, ...",
         "  glEnd()              End current primitive block",
@@ -4062,6 +4103,237 @@ static void render_3d_scene(void) {
 }
 
 /* ========================================================================= */
+/* Variable slider panel (4.8)                                               */
+/* ========================================================================= */
+
+#define VAR_PANEL_W   200
+#define VAR_PANEL_PAD   6
+#define VAR_TITLE_H    20
+#define VAR_ROW_H      20
+
+/* Geometry in render coords (y=0 at bottom). */
+static void var_panel_geom(int *px, int *py, int *pw, int *ph) {
+    *pw = VAR_PANEL_W;
+    *ph = VAR_TITLE_H + g_num_predef_vars * VAR_ROW_H + 2 * VAR_PANEL_PAD;
+    int vp_left = (int)(g_win_w * g_panel_frac);
+    *px = g_win_w - *pw - 8;
+    if (*px < vp_left + 4) *px = vp_left + 4;
+    *py = 8;
+}
+
+/* Return 1 if GLUT screen coord (gx, gy) is in the panel; sets *out_row. */
+static int var_panel_hit(int gx, int gy, int *out_row) {
+    int px, py, pw, ph;
+    var_panel_geom(&px, &py, &pw, &ph);
+    int ry = g_win_h - gy;
+    if (gx < px || gx >= px + pw || ry < py || ry >= py + ph) return 0;
+    int inner_top = py + ph - VAR_PANEL_PAD - VAR_TITLE_H;
+    int row = (inner_top - ry) / VAR_ROW_H;
+    if (row < 0 || row >= g_num_predef_vars) return 0;
+    if (out_row) *out_row = row;
+    return 1;
+}
+
+static void render_var_panel(void) {
+    if (!g_show_var_panel) return;
+
+    int px, py, pw, ph;
+    var_panel_geom(&px, &py, &pw, &ph);
+
+    begin_2d();
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+    /* Background */
+    glColor4f(0.05f, 0.05f, 0.10f, 0.88f);
+    draw_quad((float)px, (float)py, (float)pw, (float)ph);
+
+    /* Border */
+    glColor4f(0.40f, 0.40f, 0.70f, 0.75f);
+    glBegin(GL_LINE_LOOP);
+    glVertex2f((float)px,        (float)py);
+    glVertex2f((float)(px + pw), (float)py);
+    glVertex2f((float)(px + pw), (float)(py + ph));
+    glVertex2f((float)px,        (float)(py + ph));
+    glEnd();
+
+    /* Title */
+    glColor3f(0.75f, 0.75f, 1.00f);
+    draw_string((float)(px + 6),
+                (float)(py + ph - VAR_PANEL_PAD - 4),
+                "Variables", FONT_SMALL);
+
+    /* Column offsets within the panel */
+    int label_x  = px + 6;
+    int val_x    = px + 22;       /* 1 char label + space */
+    int track_x  = px + 88;       /* label + 8-char value */
+    int track_w  = pw - 88 - 8;
+    int handle_w = 10;
+    float vmin = -5.0f, vmax = 5.0f;
+
+    int inner_top = py + ph - VAR_PANEL_PAD - VAR_TITLE_H;
+
+    for (int i = 0; i < g_num_predef_vars; i++) {
+        int row_y  = inner_top - (i + 1) * VAR_ROW_H;
+        int text_y = row_y + 4;
+        float val  = g_predef_vars[i].value;
+
+        /* Drag highlight */
+        if (g_drag_var == i) {
+            glColor4f(0.20f, 0.20f, 0.40f, 0.60f);
+            draw_quad((float)(px + 1), (float)row_y,
+                      (float)(pw - 2), (float)VAR_ROW_H);
+        }
+
+        /* Label */
+        glColor3f(0.70f, 0.85f, 0.70f);
+        draw_string((float)label_x, (float)text_y,
+                    g_predef_vars[i].name, FONT_SMALL);
+
+        /* Value */
+        char valstr[16]; snprintf(valstr, sizeof(valstr), "%7.3f", (double)val);
+        glColor3f(0.90f, 0.90f, 0.60f);
+        draw_string((float)val_x, (float)text_y, valstr, FONT_SMALL);
+
+        /* Slider track */
+        glColor4f(0.18f, 0.18f, 0.28f, 0.90f);
+        draw_quad((float)track_x, (float)(row_y + 6),
+                  (float)track_w, (float)(VAR_ROW_H - 12));
+
+        /* Centre tick */
+        float cx = (float)track_x + (float)track_w * 0.5f;
+        glColor4f(0.35f, 0.35f, 0.50f, 0.70f);
+        glBegin(GL_LINES);
+        glVertex2f(cx, (float)(row_y + 5));
+        glVertex2f(cx, (float)(row_y + VAR_ROW_H - 5));
+        glEnd();
+
+        /* Handle */
+        float t = (val - vmin) / (vmax - vmin);
+        if (t < 0.0f) t = 0.0f;
+        if (t > 1.0f) t = 1.0f;
+        float hx = (float)track_x + t * (float)(track_w - handle_w);
+        if (g_drag_var == i)
+            glColor4f(1.00f, 0.80f, 0.20f, 0.95f);
+        else
+            glColor4f(0.55f, 0.70f, 1.00f, 0.90f);
+        draw_quad(hx, (float)(row_y + 4),
+                  (float)handle_w, (float)(VAR_ROW_H - 8));
+    }
+
+    glDisable(GL_BLEND);
+    end_2d();
+}
+
+/* ========================================================================= */
+/* Configuration menu (4.10)                                                  */
+/* ========================================================================= */
+
+#define CFG_ROW_H   22
+#define CFG_PANEL_W 380
+#define CFG_PAD      10
+#define CFG_TITLE_H  24
+
+static void cfg_panel_geom(int *px, int *py, int *pw, int *ph) {
+    *pw = CFG_PANEL_W;
+    *ph = CFG_TITLE_H + CFG_ITEM_COUNT * CFG_ROW_H + 2 * CFG_PAD;
+    int vp_left = (int)(g_win_w * g_panel_frac);
+    int vp_w    = g_win_w - vp_left;
+    *px = vp_left + (vp_w - *pw) / 2;
+    if (*px < vp_left + 4) *px = vp_left + 4;
+    *py = (g_win_h - *ph) / 2;
+    if (*py < 4) *py = 4;
+}
+
+/* Return config row index for GLUT coord, or -1 if outside panel. */
+static int cfg_hit_row(int gx, int gy) {
+    int px, py, pw, ph;
+    cfg_panel_geom(&px, &py, &pw, &ph);
+    int ry = g_win_h - gy;
+    if (gx < px || gx >= px + pw || ry < py || ry >= py + ph) return -1;
+    int inner_top = py + ph - CFG_PAD - CFG_TITLE_H;
+    int row = (inner_top - ry) / CFG_ROW_H;
+    if (row < 0 || row >= CFG_ITEM_COUNT) return -1;
+    return row;
+}
+
+static void render_config_menu(void) {
+    if (!g_show_config) return;
+
+    int px, py, pw, ph;
+    cfg_panel_geom(&px, &py, &pw, &ph);
+
+    begin_2d();
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+    /* Background */
+    glColor4f(0.04f, 0.04f, 0.08f, 0.93f);
+    draw_quad((float)px, (float)py, (float)pw, (float)ph);
+
+    /* Border */
+    glColor4f(0.50f, 0.50f, 0.80f, 0.80f);
+    glBegin(GL_LINE_LOOP);
+    glVertex2f((float)px,        (float)py);
+    glVertex2f((float)(px + pw), (float)py);
+    glVertex2f((float)(px + pw), (float)(py + ph));
+    glVertex2f((float)px,        (float)(py + ph));
+    glEnd();
+
+    /* Title */
+    glColor3f(0.80f, 0.80f, 1.00f);
+    draw_string((float)(px + 10),
+                (float)(py + ph - CFG_PAD - 4),
+                "Configuration  ( ` to close )", FONT_MONO);
+
+    /* Column x positions */
+    int col_label = px + 10;
+    int col_state = px + pw - 150;
+    int col_key   = px + pw - 46;
+
+    int inner_top = py + ph - CFG_PAD - CFG_TITLE_H;
+
+    for (int i = 0; i < CFG_ITEM_COUNT; i++) {
+        int row_y  = inner_top - (i + 1) * CFG_ROW_H;
+        int text_y = row_y + 5;
+
+        /* Hover highlight */
+        if (g_config_hover == i) {
+            glColor4f(0.20f, 0.20f, 0.45f, 0.65f);
+            draw_quad((float)(px + 1), (float)row_y,
+                      (float)(pw - 2), (float)CFG_ROW_H);
+        }
+
+        /* Label */
+        glColor3f(0.80f, 0.80f, 0.85f);
+        draw_string((float)col_label, (float)text_y,
+                    g_cfg_items[i].label, FONT_SMALL);
+
+        /* Current state */
+        int val = *g_cfg_items[i].value;
+        const char *state_str;
+        if (g_cfg_items[i].state_names) {
+            state_str = g_cfg_items[i].state_names[val];
+        } else {
+            state_str = val ? "ON" : "OFF";
+        }
+        if (val)
+            glColor3f(0.50f, 1.00f, 0.50f);
+        else
+            glColor3f(0.60f, 0.60f, 0.65f);
+        draw_string((float)col_state, (float)text_y, state_str, FONT_SMALL);
+
+        /* Key hint */
+        glColor3f(0.50f, 0.60f, 0.75f);
+        draw_string((float)col_key, (float)text_y,
+                    g_cfg_items[i].key_hint, FONT_SMALL);
+    }
+
+    glDisable(GL_BLEND);
+    end_2d();
+}
+
+/* ========================================================================= */
 /* GLUT callbacks                                                             */
 /* ========================================================================= */
 
@@ -4104,6 +4376,8 @@ static void display_func(void) {
     glViewport(0, 0, g_win_w, g_win_h);
     render_code_panel();
     render_autocomplete();
+    render_var_panel();
+    render_config_menu();
     render_help();
 
     glutSwapBuffers();
@@ -4751,8 +5025,19 @@ static void keyboard_func(unsigned char key, int x, int y) {
         clear_selection();
 
 
+    /* Backtick: toggle configuration menu */
+    if (key == '`') {
+        g_show_config = !g_show_config;
+        g_config_hover = -1;
+        return;
+    }
+
     /* Escape */
     if (key == 27) {
+        if (g_show_config) {
+            g_show_config = 0;
+            return;
+        }
         if (g_show_help) {
             g_show_help = 0;
             g_help_scroll = 0;
@@ -5725,8 +6010,44 @@ static void handle_code_panel_click(int mx, int my) {
 }
 
 static void mouse_func(int button, int state, int x, int y) {
-    /* Left-click in code panel: navigate to line + column */
+    /* Release: end any variable drag */
+    if (state == GLUT_UP && g_drag_var >= 0) {
+        g_drag_var = -1;
+        glutPostRedisplay();
+        return;
+    }
+
     if (button == GLUT_LEFT_BUTTON && state == GLUT_DOWN) {
+        /* Config menu click: toggle the clicked item */
+        if (g_show_config) {
+            int row = cfg_hit_row(x, y);
+            if (row >= 0) {
+                *g_cfg_items[row].value =
+                    (*g_cfg_items[row].value + 1) % g_cfg_items[row].n_states;
+                if (g_cfg_items[row].value == &g_autonormal && g_autonormal)
+                    mark_normals_dirty();
+                glutPostRedisplay();
+                return;
+            }
+            /* Click outside config panel closes it */
+            g_show_config = 0;
+            glutPostRedisplay();
+            return;
+        }
+
+        /* Variable panel drag start */
+        if (g_show_var_panel) {
+            int row;
+            if (var_panel_hit(x, y, &row)) {
+                g_drag_var       = row;
+                g_drag_start_val = g_predef_vars[row].value;
+                g_drag_start_x   = x;
+                glutPostRedisplay();
+                return;
+            }
+        }
+
+        /* Left-click in code panel: navigate to line + column */
         int panel_w = (int)(g_win_w * g_panel_frac);
         if (x < panel_w) {
             handle_code_panel_click(x, y);
@@ -5796,11 +6117,27 @@ static void mousewheel_func(int wheel, int direction, int x, int y) {
 static void passive_motion_func(int x, int y) {
     g_mouse_x = x;
     g_mouse_y = y;
+    /* Update config menu hover */
+    if (g_show_config) {
+        int prev = g_config_hover;
+        g_config_hover = cfg_hit_row(x, y);
+        if (g_config_hover != prev) glutPostRedisplay();
+    }
 }
 
 static void motion_func(int x, int y) {
     int dx = x - g_mouse_x;
     int dy = y - g_mouse_y;
+
+    /* Variable drag */
+    if (g_drag_var >= 0) {
+        float delta = (float)(x - g_drag_start_x) * 0.05f;
+        g_predef_vars[g_drag_var].value = g_drag_start_val + delta;
+        g_flat_dirty = 1;
+        g_mouse_x = x; g_mouse_y = y;
+        glutPostRedisplay();
+        return;
+    }
 
     if (g_mouse_btn == GLUT_LEFT_BUTTON) {
         /* Direct: responsive while held */
