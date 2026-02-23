@@ -70,95 +70,15 @@
  *   Run ./sample output.c to reload a saved session.
  */
 
-#include <gl_includes.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <ctype.h>
-#include <math.h>
-
-#ifndef M_PI
-#define M_PI 3.14159265358979323846
-#endif
-
-#include "repl_eval.h"
-
-/* ========================================================================= */
-/* Configuration                                                              */
-/* ========================================================================= */
-
-#define MAX_COMMANDS    4096
-#define MAX_LINE_LEN    256
-#define MAX_INPUT_LEN   1024
-#define MAX_AC_MATCHES  10
-
-#define FONT_MONO       GLUT_BITMAP_9_BY_15
-#define FONT_SMALL      GLUT_BITMAP_8_BY_13
-#define FONT_W          9
-#define FONT_H          15
-#define LINE_H          18
-#define CODE_MARGIN_X   10
-#define CODE_MARGIN_Y   8
-
-/* ========================================================================= */
-/* Types                                                                      */
-/* ========================================================================= */
-
-typedef enum {
-    CMD_BEGIN,
-    CMD_END,
-    CMD_VERTEX3F,
-    CMD_VERTEX2F,
-    CMD_NORMAL3F,
-    CMD_COLOR3F,
-    CMD_COLOR4F,
-    CMD_ENABLE,
-    CMD_DISABLE,
-    CMD_SHADE_MODEL,
-    CMD_TRANSLATE3F,
-    CMD_FOR_BEGIN,
-    CMD_FOR_END,
-    CMD_FUNC_DEF,
-    CMD_FUNC_END,
-    CMD_CALL,
-    CMD_IF_BEGIN,
-    CMD_IF_END,
-    CMD_COMMENT,
-    CMD_VAR_ASSIGN,
-    CMD_LABEL,
-    CMD_GOTO,
-    CMD_GLU_SPHERE,
-    CMD_GLU_CYLINDER,
-    CMD_GLU_DISK,
-    CMD_GLU_PARTIAL_DISK,
-    CMD_GLUT_TORUS,
-    CMD_TYPE_COUNT
-} CmdType;
-
-typedef struct {
-    const char *name;
-    GLenum      value;
-} EnumEntry;
-
-typedef struct {
-    CmdType type;
-    GLenum  mode;
-    float   args[8];
-    int     num_args;
-    char    source[MAX_LINE_LEN];
-    int     valid;
-    int     is_auto;
-    int     has_vars;       /* source contains predefined var references, re-eval on flatten */
-    int     src_cmd_idx;    /* index into g_cmds[] that produced this flat command */
-} GLCmd;
-
-/* ExprVar, ExprCtx, MAX_EXPR_VARS defined in repl_eval.h */
+#include "sample.h"
+#include "scene_render.h"
+#include "ui_panels.h"
 
 /* ========================================================================= */
 /* Constants                                                                  */
 /* ========================================================================= */
 
-static const EnumEntry g_begin_modes[] = {
+const EnumEntry g_begin_modes[] = {
     { "GL_POINTS",         GL_POINTS },
     { "GL_LINES",          GL_LINES },
     { "GL_LINE_STRIP",     GL_LINE_STRIP },
@@ -172,7 +92,7 @@ static const EnumEntry g_begin_modes[] = {
     { NULL, 0 }
 };
 
-static const EnumEntry g_enable_caps[] = {
+const EnumEntry g_enable_caps[] = {
     { "GL_DEPTH_TEST",      GL_DEPTH_TEST },
     { "GL_LIGHTING",        GL_LIGHTING },
     { "GL_COLOR_MATERIAL",  GL_COLOR_MATERIAL },
@@ -185,13 +105,13 @@ static const EnumEntry g_enable_caps[] = {
     { NULL, 0 }
 };
 
-static const EnumEntry g_shade_models[] = {
+const EnumEntry g_shade_models[] = {
     { "GL_SMOOTH", GL_SMOOTH },
     { "GL_FLAT",   GL_FLAT },
     { NULL, 0 }
 };
 
-static const char *g_func_completions[] = {
+const char *g_func_completions[] = {
     "glVertex3f(",
     "glVertex2f(",
     "glNormal3f(",
@@ -225,7 +145,7 @@ static const char *g_func_completions[] = {
     NULL
 };
 
-static const char *g_header_pre[] = {
+const char *g_header_pre[] = {
     "#include <gl_includes.h>",
     "#include <math.h>",
     "",
@@ -243,18 +163,18 @@ static const char *g_header_pre[] = {
     NULL
 };
 
-static char g_lookat[3][128] = {
+char g_lookat[3][128] = {
     "  gluLookAt(0.00, 0.00, 5.00,",
     "            0.00, 0.00, 0.00,",
     "            0.00, 1.00, 0.00);"
 };
 
-static const char *g_header_post[] = {
+const char *g_header_post[] = {
     "  glRotatef(g_angle, 0.0f, 1.0f, 0.0f);",
     NULL
 };
 
-static const char *g_footer[] = {
+const char *g_footer[] = {
     "",
     "  glutSwapBuffers();",
     "}",
@@ -307,34 +227,34 @@ static const char *tempfile = "/tmp/temp-output.c";
 /* Global state                                                               */
 /* ========================================================================= */
 
-static GLCmd  g_cmds[MAX_COMMANDS];
-static int    g_num_cmds = 0;
-static int    g_normals_dirty = 1;
-static GLCmd  g_flat_cmds[MAX_COMMANDS];
-static int    g_num_flat_cmds = 0;
-static int    g_flat_dirty = 1;
-static void mark_normals_dirty(void) { g_normals_dirty = 1; g_flat_dirty = 1; }
+GLCmd  g_cmds[MAX_COMMANDS];
+int    g_num_cmds = 0;
+int    g_normals_dirty = 1;
+GLCmd  g_flat_cmds[MAX_COMMANDS];
+int    g_num_flat_cmds = 0;
+int    g_flat_dirty = 1;
+void mark_normals_dirty(void) { g_normals_dirty = 1; g_flat_dirty = 1; }
 
 /* Predefined variables — defined in repl_eval.c */
 
 /* Editor */
-static char   g_input[MAX_INPUT_LEN];
-static int    g_input_len = 0;
-static int    g_cursor_pos = 0;     /* cursor position within g_input (0..g_input_len) */
-static int    g_edit_line = 0;      /* 0..g_num_cmds; g_num_cmds = new line */
-static char   g_newline_buf[MAX_INPUT_LEN] = "";
-static int    g_newline_len = 0;
-static int    g_inserting = 0;      /* insert mode: virtual new line at g_edit_line */
+char   g_input[MAX_INPUT_LEN];
+int    g_input_len = 0;
+int    g_cursor_pos = 0;     /* cursor position within g_input (0..g_input_len) */
+int    g_edit_line = 0;      /* 0..g_num_cmds; g_num_cmds = new line */
+char   g_newline_buf[MAX_INPUT_LEN] = "";
+int    g_newline_len = 0;
+int    g_inserting = 0;      /* insert mode: virtual new line at g_edit_line */
 
 /* (no display list - commands are executed directly each frame) */
 
 /* Camera */
-static float  g_cam_rx = 20.0f;
-static float  g_cam_ry = 30.0f;
-static float  g_cam_dist = 5.0f;
-static float  g_cam_px = 0.0f, g_cam_py = 0.0f;
-static int    g_mouse_x, g_mouse_y;
-static int    g_mouse_btn = -1;
+float  g_cam_rx = 20.0f;
+float  g_cam_ry = 30.0f;
+float  g_cam_dist = 5.0f;
+float  g_cam_px = 0.0f, g_cam_py = 0.0f;
+int    g_mouse_x, g_mouse_y;
+int    g_mouse_btn = -1;
 
 /* Camera momentum — motion_func feeds these; timer_func integrates + decays */
 static float  g_vel_ry   = 0.0f;   /* orbit yaw   (deg/frame)   */
@@ -347,24 +267,23 @@ static float  g_vel_zoom = 0.0f;   /* zoom        (units/frame) */
 #define CAM_MOMENTUM_THRESHOLD 1.0f
 
 /* Window */
-static int    g_win_w = 1200, g_win_h = 800;
+int    g_win_w = 1200, g_win_h = 800;
 
 /* Code panel */
-static float  g_panel_frac = 0.42f;
-static int    g_scroll = 0;
+float  g_panel_frac = 0.42f;
+int    g_scroll = 0;
 
 /* Accumulation buffer — enabled by default, disabled with --noaccum.
  * Designed to be forward-compatible with FBO-based accumulation later. */
-static int    g_use_accum        = 1;  /* GLUT_ACCUM requested at init */
-static int    g_accum_aa_enabled = 1;  /* Ctrl+A toggles jitter AA on/off */
-static int    g_accum_samples    = 4;  /* current sample count */
-static float  g_accum_jitter_x   = 0.0f;
-static float  g_accum_jitter_y   = 0.0f;
+int    g_use_accum        = 1;  /* GLUT_ACCUM requested at init */
+int    g_accum_aa_enabled = 1;  /* Ctrl+A toggles jitter AA on/off */
+int    g_accum_samples    = 4;  /* current sample count */
+float  g_accum_jitter_x   = 0.0f;
+float  g_accum_jitter_y   = 0.0f;
 
 /* Sub-pixel jitter offsets (units: fraction of one pixel).
  * Table is ordered so the first N entries form a good N-sample set.
  * Supports 1, 2, 4, 8, or 16 samples. */
-#define MAX_ACCUM_SAMPLES 16
 static const float g_jitter_table[MAX_ACCUM_SAMPLES][2] = {
     {  0.250f,  0.250f },
     { -0.250f, -0.250f },/* 2  */
@@ -384,82 +303,68 @@ static const float g_jitter_table[MAX_ACCUM_SAMPLES][2] = {
     {  0.500f,  0.000f },  /* 16 */
 };
 static const int g_accum_steps[]     = { 1, 2, 4, 8, 16 };
-#define ACCUM_STEP_COUNT 5
 
 /* Cursor blink */
-static int    g_cursor_on = 1;
-static int    g_blink_tick = 0;
+int    g_cursor_on = 1;
+int    g_blink_tick = 0;
 
 /* Animation */
-static float  g_anim_time = 0.0f;
-static int    g_t_playing = 1;    /* 1: 't' var auto-increments with time; 0: frozen */
-static int    g_t_var_idx = -1;   /* index of "t" in g_predef_vars[], cached at init */
+float  g_anim_time = 0.0f;
+int    g_t_playing = 1;    /* 1: 't' var auto-increments with time; 0: frozen */
+int    g_t_var_idx = -1;   /* index of "t" in g_predef_vars[], cached at init */
 
 /* Toggles */
-static int    g_show_help    = 0;
-static int    g_help_scroll  = 0;
-static int    g_wireframe    = 0;
-static int    g_grid_theme   = 2;  /* 0=off, 1=classic, 2=fog, 3=tron, 4=ember, 5=faint, 6=focus */
-#define GRID_THEME_COUNT 7
-static const char *g_grid_names[] = {
+int    g_show_help    = 0;
+int    g_help_scroll  = 0;
+int    g_wireframe    = 0;
+int    g_grid_theme   = 2;  /* 0=off, 1=classic, 2=fog, 3=tron, 4=ember, 5=faint, 6=focus */
+const char *g_grid_names[] = {
     "Grid OFF", "Grid: Classic", "Grid: Fog", "Grid: Tron", "Grid: Ember",
     "Grid: Faint", "Grid: Focus"
 };
-static float  g_focus_vtx[3] = { 0.0f, 0.0f, 0.0f };  /* last vertex pos for focus grid */
-static int    g_focus_vtx_valid = 0;
-static int    g_axes_theme   = 3;  /* 0=off, 1=classic, 2=pulse, 3=neon, 4=compass */
-#define AXES_THEME_COUNT 5
-static const char *g_axes_names[] = {
+float  g_focus_vtx[3] = { 0.0f, 0.0f, 0.0f };  /* last vertex pos for focus grid */
+int    g_focus_vtx_valid = 0;
+int    g_axes_theme   = 3;  /* 0=off, 1=classic, 2=pulse, 3=neon, 4=compass */
+const char *g_axes_names[] = {
     "Axes OFF", "Axes: Classic", "Axes: Pulse", "Axes: Neon", "Axes: Compass"
 };
-static int    g_show_vnums   = 1;
-static int    g_show_normals = 1;
-static int    g_show_indices = 1;
-static int    g_show_guides  = 1;
-static int    g_autonormal   = 1;
-static int    g_show_lights  = 1;
-static int    g_cam_rotate   = 0;  /* auto-rotate camera around Y */
-static int    g_example_idx  = -1; /* current predefined example (-1 = none loaded yet) */
-static int    g_user_lighting_enabled = 0; /* tracks if user typed glEnable(GL_LIGHTING) */
-static int    g_show_outlines = 1; /* draw black wireframe over filled polygons */
-static int    g_highlight_current_poly = 1; /* highlight glBegin block under cursor */
-static int    g_current_block_begin = -1;  /* flat cmd index of cursor's glBegin */
-static int    g_current_block_end   = -1;  /* flat cmd index of cursor's glEnd */
-static int    g_ortho_mode = 0;  /* 0=perspective, 1=2D orthographic */
+int    g_show_vnums   = 1;
+int    g_show_normals = 1;
+int    g_show_indices = 1;
+int    g_show_guides  = 1;
+int    g_autonormal   = 1;
+int    g_show_lights  = 1;
+int    g_cam_rotate   = 0;  /* auto-rotate camera around Y */
+int    g_example_idx  = -1; /* current predefined example (-1 = none loaded yet) */
+int    g_user_lighting_enabled = 0; /* tracks if user typed glEnable(GL_LIGHTING) */
+int    g_show_outlines = 1; /* draw black wireframe over filled polygons */
+int    g_highlight_current_poly = 1; /* highlight glBegin block under cursor */
+int    g_current_block_begin = -1;  /* flat cmd index of cursor's glBegin */
+int    g_current_block_end   = -1;  /* flat cmd index of cursor's glEnd */
+int    g_ortho_mode = 0;  /* 0=perspective, 1=2D orthographic */
 
 /* Variable slider panel (4.8) */
-static int    g_show_var_panel  = 1;   /* show predefined-variable sliders */
-static int    g_drag_var        = -1;  /* index of var being dragged, -1=none */
-static float  g_drag_start_val  = 0.0f;
-static int    g_drag_start_x    = 0;
+int    g_show_var_panel  = 1;   /* show predefined-variable sliders */
+int    g_drag_var        = -1;  /* index of var being dragged, -1=none */
+float  g_drag_start_val  = 0.0f;
+int    g_drag_start_x    = 0;
 
 /* Configuration menu (4.10) */
-static int    g_show_config     = 0;   /* show config overlay */
-static int    g_config_hover    = -1;  /* hovered row (-1=none) */
+int    g_show_config     = 0;   /* show config overlay */
+int    g_config_hover    = -1;  /* hovered row (-1=none) */
 
 /* GLU quadric (shared for sphere/cylinder/disk drawing) */
-static GLUquadric *g_quadric = NULL;
+GLUquadric *g_quadric = NULL;
 
 /* GLU tessellator (for concave polygon support) */
-static GLUtesselator *g_tess = NULL;
+GLUtesselator *g_tess = NULL;
 
 /* Tessellator combine callback vertex buffer */
-#define TESS_VERT_BUF_SIZE 256
-static GLdouble g_tess_verts[TESS_VERT_BUF_SIZE][3];
-static int      g_tess_vert_count = 0;
+GLdouble g_tess_verts[TESS_VERT_BUF_SIZE][3];
+int      g_tess_vert_count = 0;
 
 /* Lights */
-#define MAX_LIGHTS 4
-typedef struct {
-    GLenum   id;         /* GL_LIGHT0 .. GL_LIGHT3 */
-    int      enabled;
-    float    pos[4];     /* xyz + w (0=directional, 1=positional) */
-    float    diffuse[4];
-    float    ambient[4];
-    float    specular[4];
-} SceneLight;
-
-static SceneLight g_lights[MAX_LIGHTS] = {
+SceneLight g_lights[MAX_LIGHTS] = {
     { GL_LIGHT0, 1,
       { 2.0f, 4.0f, 5.0f, 0.0f },           /* key light (directional) */
       { 0.80f, 0.80f, 0.75f, 1.0f },
@@ -483,31 +388,31 @@ static SceneLight g_lights[MAX_LIGHTS] = {
 };
 
 /* Status bar */
-static char   g_status[256] = "";
-static int    g_status_ttl = 0;
+char   g_status[256] = "";
+int    g_status_ttl = 0;
 
 /* Autocomplete */
-static const char *g_ac_matches[MAX_AC_MATCHES];
-static int    g_ac_count = 0;
-static int    g_ac_sel = 0;
-static char   g_ac_ghost[MAX_LINE_LEN] = "";
-static int    g_cursor_px = 0;     /* screen pos of cursor, set during render */
-static int    g_cursor_py = 0;
+const char *g_ac_matches[MAX_AC_MATCHES];
+int    g_ac_count = 0;
+int    g_ac_sel = 0;
+char   g_ac_ghost[MAX_LINE_LEN] = "";
+int    g_cursor_px = 0;     /* screen pos of cursor, set during render */
+int    g_cursor_py = 0;
 
 /* Clipboard */
-static GLCmd  g_clipboard[MAX_COMMANDS];
-static int    g_clipboard_count = 0;
+GLCmd  g_clipboard[MAX_COMMANDS];
+int    g_clipboard_count = 0;
 
 /* Selection (shift+arrow) */
-static int    g_sel_anchor = -1;   /* -1 = no selection */
-static int    g_sel_end = -1;
+int    g_sel_anchor = -1;   /* -1 = no selection */
+int    g_sel_end = -1;
 
-static void clear_selection(void) { g_sel_anchor = g_sel_end = -1; }
-static int sel_active(void) { return g_sel_anchor >= 0 && g_sel_end >= 0; }
-static int sel_lo(void) {
+void clear_selection(void) { g_sel_anchor = g_sel_end = -1; }
+int sel_active(void) { return g_sel_anchor >= 0 && g_sel_end >= 0; }
+int sel_lo(void) {
     return g_sel_anchor < g_sel_end ? g_sel_anchor : g_sel_end;
 }
-static int sel_hi(void) {
+int sel_hi(void) {
     return g_sel_anchor > g_sel_end ? g_sel_anchor : g_sel_end;
 }
 
@@ -518,27 +423,17 @@ static int parse_command_with_vars(const char *line, GLCmd *cmd,
 static int collect_for_vars(int pos, ExprVar *vars, int max_vars);
 static int for_loop_depth_at(int pos);
 static int block_depth_at(int pos);
-static int in_begin_block_at(int line_idx);
 static int try_commit_for_loop(void);
 static int try_commit_func_def(void);
 static int try_commit_if_block(void);
 static int try_commit_close_brace(void);
 static void load_example(int idx);
-#define NUM_EXAMPLES 5
 
 /* ========================================================================= */
 /* Configuration menu item table (4.10)                                       */
 /* ========================================================================= */
 
-typedef struct {
-    const char  *label;
-    const char  *key_hint;
-    int         *value;
-    int          n_states;    /* 2 = ON/OFF toggle; >2 = cycle */
-    const char **state_names; /* NULL → display "OFF"/"ON" */
-} CfgItem;
-
-static CfgItem g_cfg_items[] = {
+CfgItem g_cfg_items[] = {
     { "Wireframe",        "F2",  &g_wireframe,              2,               NULL          },
     { "Grid",             "F3",  &g_grid_theme,             GRID_THEME_COUNT, g_grid_names },
     { "Axes",             "F4",  &g_axes_theme,             AXES_THEME_COUNT, g_axes_names },
@@ -552,26 +447,26 @@ static CfgItem g_cfg_items[] = {
     { "Poly highlight",   "--",  &g_highlight_current_poly, 2,               NULL          },
     { "Variable panel",   "--",  &g_show_var_panel,         2,               NULL          },
 };
-#define CFG_ITEM_COUNT ((int)(sizeof(g_cfg_items)/sizeof(g_cfg_items[0])))
+const int CFG_ITEM_COUNT = (int)(sizeof(g_cfg_items)/sizeof(g_cfg_items[0]));
 
 /* ========================================================================= */
 /* Utility                                                                    */
 /* ========================================================================= */
 
-static void set_status(const char *msg) {
+void set_status(const char *msg) {
     strncpy(g_status, msg, sizeof(g_status) - 1);
     g_status[sizeof(g_status) - 1] = '\0';
     g_status_ttl = 240;
 }
 
-static const char *mode_name(GLenum mode) {
+const char *mode_name(GLenum mode) {
     for (int i = 0; g_begin_modes[i].name; i++)
         if (g_begin_modes[i].value == mode) return g_begin_modes[i].name;
     return "???";
 }
 
 /* Check begin block depth up to (but not including) line_idx */
-static int in_begin_block_at(int line_idx) {
+int in_begin_block_at(int line_idx) {
     int depth = 0;
     int limit = (line_idx < g_num_cmds) ? line_idx : g_num_cmds;
     for (int i = 0; i < limit; i++) {
@@ -582,11 +477,11 @@ static int in_begin_block_at(int line_idx) {
     return depth > 0;
 }
 
-static int in_begin_block(void) {
+int in_begin_block(void) {
     return in_begin_block_at(g_num_cmds);
 }
 
-static GLenum current_begin_mode(void) {
+GLenum current_begin_mode(void) {
     GLenum mode = GL_TRIANGLES;
     for (int i = 0; i < g_num_cmds; i++)
         if (g_cmds[i].valid && g_cmds[i].type == CMD_BEGIN)
@@ -594,7 +489,7 @@ static GLenum current_begin_mode(void) {
     return mode;
 }
 
-static int count_vertices(void) {
+int count_vertices(void) {
     int n = 0;
     for (int i = 0; i < g_num_flat_cmds; i++)
         if (g_flat_cmds[i].valid && g_flat_cmds[i].type == CMD_VERTEX3F) n++;
@@ -602,7 +497,7 @@ static int count_vertices(void) {
 }
 
 /* Update the gluLookAt header lines from current camera orbit params */
-static void update_lookat_strings(void) {
+void update_lookat_strings(void) {
     float rx = g_cam_rx * (float)M_PI / 180.0f;
     float ry = g_cam_ry * (float)M_PI / 180.0f;
     float crx = cosf(rx), srx = sinf(rx);
@@ -1288,7 +1183,7 @@ static void save_newline_buf(void) {
 }
 
 /* Navigate to a different line */
-static void navigate_to_line(int target) {
+void navigate_to_line(int target) {
     if (target < 0) target = 0;
     if (target > g_num_cmds) target = g_num_cmds;
     if (target == g_edit_line && !g_inserting) return;
@@ -1936,7 +1831,7 @@ static void compute_block_normals(GLenum mode, int *vi, int nv,
  * Existing normals (whether auto-generated or manually edited) are never
  * overwritten, so the user can freely modify them.
  */
-static void recompute_autonormals(void) {
+void recompute_autonormals(void) {
     if (!g_autonormal) return;
 
     /* Process each begin/end block (skip for-loop regions) */
@@ -2151,7 +2046,7 @@ static void flatten_range(int start, int end_idx, ExprVar *vars, int nv) {
     }
 }
 
-static void flatten_commands(void) {
+void flatten_commands(void) {
     g_num_flat_cmds = 0;
     flatten_range(0, g_num_cmds, NULL, 0);
 
@@ -2218,7 +2113,7 @@ static void flatten_commands(void) {
 /* Command execution                                                          */
 /* ========================================================================= */
 
-static void execute_commands(void) {
+void execute_commands(void) {
     int in_begin = 0;
     int in_polygon = 0; /* using tessellator for GL_POLYGON */
     /* Tessellator vertex buffer: collect positions for GL_POLYGON */
@@ -2397,13 +2292,13 @@ static void execute_commands(void) {
 /* 2D rendering helpers                                                       */
 /* ========================================================================= */
 
-static void draw_string(float x, float y, const char *s, void *font) {
+void draw_string(float x, float y, const char *s, void *font) {
     glRasterPos2f(x, y);
     for (; *s; s++)
         glutBitmapCharacter(font, (unsigned char)*s);
 }
 
-static void draw_quad(float x, float y, float w, float h) {
+void draw_quad(float x, float y, float w, float h) {
     glBegin(GL_QUADS);
     glVertex2f(x, y);
     glVertex2f(x + w, y);
@@ -2412,7 +2307,7 @@ static void draw_quad(float x, float y, float w, float h) {
     glEnd();
 }
 
-static void begin_2d(void) {
+void begin_2d(void) {
     glMatrixMode(GL_PROJECTION);
     glPushMatrix();
     glLoadIdentity();
@@ -2424,7 +2319,7 @@ static void begin_2d(void) {
     glDisable(GL_LIGHTING);
 }
 
-static void end_2d(void) {
+void end_2d(void) {
     glEnable(GL_DEPTH_TEST);
     if (g_user_lighting_enabled) glEnable(GL_LIGHTING);
     else glDisable(GL_LIGHTING);
@@ -2432,1905 +2327,6 @@ static void end_2d(void) {
     glPopMatrix();
     glMatrixMode(GL_MODELVIEW);
     glPopMatrix();
-}
-
-/* ========================================================================= */
-/* Syntax color helpers                                                       */
-/* ========================================================================= */
-
-static void color_for_type(CmdType t) {
-    switch (t) {
-    case CMD_BEGIN:
-    case CMD_END:      glColor3f(0.85f, 0.45f, 0.85f); break;
-    case CMD_VERTEX3F:
-    case CMD_VERTEX2F: glColor3f(0.40f, 0.90f, 0.40f); break;
-    case CMD_NORMAL3F:      glColor3f(0.40f, 0.80f, 0.95f); break;
-    case CMD_TRANSLATE3F:   glColor3f(0.95f, 0.65f, 0.40f); break;
-    case CMD_COLOR3F:
-    case CMD_COLOR4F:  glColor3f(0.95f, 0.85f, 0.30f); break;
-    case CMD_FOR_BEGIN:
-    case CMD_FOR_END:  glColor3f(0.95f, 0.60f, 0.30f); break;
-    case CMD_FUNC_DEF:
-    case CMD_FUNC_END: glColor3f(0.60f, 0.85f, 0.95f); break;
-    case CMD_CALL:     glColor3f(0.60f, 0.85f, 0.95f); break;
-    case CMD_IF_BEGIN:
-    case CMD_IF_END:   glColor3f(0.95f, 0.75f, 0.50f); break;
-    case CMD_COMMENT:    glColor3f(0.45f, 0.50f, 0.45f); break;
-    case CMD_VAR_ASSIGN: glColor3f(0.55f, 0.80f, 0.95f); break;
-    case CMD_LABEL:
-    case CMD_GOTO:       glColor3f(0.85f, 0.55f, 0.85f); break;
-    case CMD_GLU_SPHERE:
-    case CMD_GLU_CYLINDER:
-    case CMD_GLU_DISK:
-    case CMD_GLU_PARTIAL_DISK:
-    case CMD_GLUT_TORUS:  glColor3f(0.50f, 0.90f, 0.70f); break;
-    default:             glColor3f(0.70f, 0.70f, 0.70f); break;
-    }
-}
-
-/* ========================================================================= */
-/* Code panel                                                                 */
-/* ========================================================================= */
-
-static void render_edit_line(int x, int y, int indent_chars) {
-    int indent_px = indent_chars * FONT_W;
-
-    /* Highlight background for active line */
-    glEnable(GL_BLEND);
-    glColor4f(0.15f, 0.18f, 0.28f, 0.70f);
-    int panel_w = (int)(g_win_w * g_panel_frac);
-    draw_quad(0, (float)(y - 3), (float)panel_w, (float)(LINE_H));
-    glDisable(GL_BLEND);
-
-    /* Indent (dimmed) */
-    glColor3f(0.30f, 0.30f, 0.38f);
-    { char spaces[16];
-      memset(spaces, ' ', indent_chars);
-      spaces[indent_chars] = '\0';
-      draw_string((float)x, (float)y, spaces, FONT_MONO); }
-
-    /* User-typed text */
-    glColor3f(0.95f, 0.95f, 0.90f);
-    draw_string((float)(x + indent_px), (float)y, g_input, FONT_MONO);
-
-    /* Ghost autocomplete text (only when cursor is at end) */
-    if (g_ac_ghost[0] && g_cursor_pos == g_input_len) {
-        glEnable(GL_BLEND);
-        glColor4f(0.50f, 0.55f, 0.65f, 0.55f);
-        draw_string((float)(x + indent_px + g_input_len * FONT_W),
-                    (float)y, g_ac_ghost, FONT_MONO);
-        glDisable(GL_BLEND);
-    }
-
-    /* Blinking cursor at g_cursor_pos */
-    if (g_cursor_on) {
-        int cx = x + indent_px + g_cursor_pos * FONT_W;
-        glEnable(GL_BLEND);
-        glColor4f(0.90f, 0.80f, 0.25f, 0.85f);
-        draw_quad((float)cx, (float)(y - 2), 2.0f, (float)(FONT_H + 2));
-        glDisable(GL_BLEND);
-    }
-
-    /* Save cursor screen position for autocomplete popup */
-    g_cursor_px = x + indent_px;
-    g_cursor_py = y;
-}
-
-static void render_code_panel(void) {
-    int panel_w = (int)(g_win_w * g_panel_frac);
-    int linenum_w = 4 * FONT_W;
-    int idx_col_w = g_show_indices ? (6 * FONT_W) : 0;
-    int idx_x = CODE_MARGIN_X + linenum_w + FONT_W;
-    int text_x = idx_x + idx_col_w;
-    int visible_lines = (g_win_h - 2 * CODE_MARGIN_Y - LINE_H) / LINE_H;
-
-    int n_hpre = 0;
-    for (int i = 0; g_header_pre[i]; i++) n_hpre++;
-    int n_hpost = 0;
-    for (int i = 0; g_header_post[i]; i++) n_hpost++;
-    int n_header = n_hpre + 3 + n_hpost;  /* pre + gluLookAt + post */
-    int n_footer = 0;
-    for (int i = 0; g_footer[i]; i++) n_footer++;
-    /* +1 for the new-line slot, +1 if inserting */
-    int total_lines = n_header + g_num_cmds + (g_inserting ? 1 : 0)
-                    + 1 + n_footer;
-
-    /* Which document line is the cursor on? (offset by header) */
-    int cursor_doc_line = n_header + g_edit_line;
-
-    /* Clamp scroll */
-    int max_scroll = total_lines - visible_lines;
-    if (max_scroll < 0) max_scroll = 0;
-    if (g_scroll > max_scroll) g_scroll = max_scroll;
-    if (g_scroll < 0) g_scroll = 0;
-
-    /* Auto-scroll to keep cursor visible */
-    if (cursor_doc_line < g_scroll)
-        g_scroll = cursor_doc_line;
-    if (cursor_doc_line >= g_scroll + visible_lines)
-        g_scroll = cursor_doc_line - visible_lines + 1;
-
-    begin_2d();
-
-    /* Background */
-    glEnable(GL_BLEND);
-    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-    glColor4f(0.06f, 0.06f, 0.10f, 0.92f);
-    draw_quad(0, 0, (float)panel_w, (float)g_win_h);
-
-    /* Border */
-    glColor4f(0.30f, 0.30f, 0.50f, 0.80f);
-    glBegin(GL_LINES);
-    glVertex2f((float)panel_w, 0);
-    glVertex2f((float)panel_w, (float)g_win_h);
-    glEnd();
-    glDisable(GL_BLEND);
-
-    /* Top info bar */
-    {
-        char info[256];
-        int nv = count_vertices();
-        /* Accumulation AA indicator suffix */
-        char aa_tag[24] = "";
-        if (g_use_accum) {
-            if (g_accum_aa_enabled && g_accum_samples > 1)
-                snprintf(aa_tag, sizeof(aa_tag), " | AA:%dx", g_accum_samples);
-            else
-                snprintf(aa_tag, sizeof(aa_tag), " | AA:off");
-        }
-        /* Time variable indicator */
-        char t_tag[32] = "";
-        if (g_t_var_idx >= 0) {
-            if (g_t_playing)
-                snprintf(t_tag, sizeof(t_tag), " | t=%.2f",
-                         g_predef_vars[g_t_var_idx].value);
-            else
-                snprintf(t_tag, sizeof(t_tag), " | t=%.2f[P]",
-                         g_predef_vars[g_t_var_idx].value);
-        }
-        if (g_inserting) {
-            snprintf(info, sizeof(info),
-                     "F1:Help | %d cmds | %d verts | Ln %d [INSERT]%s%s",
-                     g_num_cmds, nv, g_edit_line + 1, t_tag, aa_tag);
-        } else if (in_begin_block()) {
-            snprintf(info, sizeof(info),
-                     "F1:Help | %d cmds | %d verts | %s | Ln %d%s%s",
-                     g_num_cmds, nv, mode_name(current_begin_mode()),
-                     g_edit_line + 1, t_tag, aa_tag);
-        } else {
-            snprintf(info, sizeof(info),
-                     "F1:Help | %d cmds | %d verts | Ln %d%s%s",
-                     g_num_cmds, nv, g_edit_line + 1, t_tag, aa_tag);
-        }
-        glColor3f(0.50f, 0.55f, 0.65f);
-        draw_string(CODE_MARGIN_X, g_win_h - CODE_MARGIN_Y - 2, info,
-                    FONT_SMALL);
-    }
-
-    /* Code lines */
-    int line_y = g_win_h - CODE_MARGIN_Y - LINE_H - LINE_H;
-    int cur = 0;
-    int file_line = 1;
-
-    /* Macro for rendering a static line (header/footer) */
-    #define RENDER_STATIC_LINE(text, set_color) do {                           \
-        if (cur >= g_scroll && cur < g_scroll + visible_lines) {               \
-            glColor3f(0.30f, 0.30f, 0.38f);                                   \
-            { char ln[16]; snprintf(ln, sizeof(ln), "%3d", file_line);         \
-              draw_string(CODE_MARGIN_X, line_y, ln, FONT_MONO); }             \
-            set_color;                                                          \
-            draw_string(text_x, line_y, text, FONT_MONO);                      \
-            line_y -= LINE_H;                                                   \
-        }                                                                       \
-        file_line++;                                                            \
-        cur++;                                                                  \
-    } while (0)
-
-    /* Header pre-lookAt (dimmed) */
-    for (int i = 0; g_header_pre[i]; i++) {
-        RENDER_STATIC_LINE(g_header_pre[i], glColor3f(0.38f, 0.38f, 0.42f));
-    }
-    /* gluLookAt lines (slightly brighter - dynamic) */
-    for (int i = 0; i < 3; i++) {
-        RENDER_STATIC_LINE(g_lookat[i], glColor3f(0.50f, 0.45f, 0.55f));
-    }
-    /* Header post-lookAt */
-    for (int i = 0; g_header_post[i]; i++) {
-        RENDER_STATIC_LINE(g_header_post[i], glColor3f(0.38f, 0.38f, 0.42f));
-    }
-
-    /* Commands + insert line + new-line slot */
-    int vnum = 0; /* vertex counter within current glBegin/glEnd block */
-    for (int i = 0; i <= g_num_cmds; i++) {
-        /* If inserting, render the virtual insert line before command[g_edit_line] */
-        if (g_inserting && i == g_edit_line) {
-            if (cur >= g_scroll && cur < g_scroll + visible_lines) {
-                glColor3f(0.55f, 0.55f, 0.30f);
-                { char ln[16]; snprintf(ln, sizeof(ln), "%3d", file_line);
-                  draw_string(CODE_MARGIN_X, line_y, ln, FONT_MONO); }
-                int ind = in_begin_block_at(i) ? 4 : 2;
-                render_edit_line(text_x, line_y, ind);
-                line_y -= LINE_H;
-            }
-            file_line++;
-            cur++;
-        }
-
-        if (i < g_num_cmds) {
-            /* Track vertex number for all commands regardless of visibility */
-            if (g_cmds[i].valid && g_cmds[i].type == CMD_BEGIN) vnum = 0;
-
-            int is_edit = (!g_inserting && i == g_edit_line);
-            int is_vertex = g_cmds[i].valid && g_cmds[i].type == CMD_VERTEX3F;
-            if (is_edit) {
-                /* Active editing line */
-                if (cur >= g_scroll && cur < g_scroll + visible_lines) {
-                    glColor3f(0.55f, 0.55f, 0.30f);
-                    { char ln[16]; snprintf(ln, sizeof(ln), "%3d", file_line);
-                      draw_string(CODE_MARGIN_X, line_y, ln, FONT_MONO); }
-                    if (g_show_indices && is_vertex) {
-                        char idx_s[16]; snprintf(idx_s, sizeof(idx_s), "v%d", vnum);
-                        glColor3f(0.45f, 0.50f, 0.65f);
-                        draw_string((float)idx_x, (float)line_y, idx_s, FONT_MONO);
-                    }
-                    int ind = in_begin_block_at(i) ? 4 : 2;
-                    render_edit_line(text_x, line_y, ind);
-                    line_y -= LINE_H;
-                }
-                file_line++;
-                cur++;
-            } else {
-                /* Existing command, not being edited */
-                if (cur >= g_scroll && cur < g_scroll + visible_lines) {
-                    /* Selection highlight */
-                    if (sel_active() && i >= sel_lo() && i <= sel_hi()) {
-                        glEnable(GL_BLEND);
-                        glColor4f(0.20f, 0.30f, 0.50f, 0.55f);
-                        draw_quad(0, (float)(line_y - 3),
-                                  (float)panel_w, (float)LINE_H);
-                        glDisable(GL_BLEND);
-                    }
-                    glColor3f(0.30f, 0.30f, 0.38f);
-                    { char ln[16]; snprintf(ln, sizeof(ln), "%3d", file_line);
-                      draw_string(CODE_MARGIN_X, line_y, ln, FONT_MONO); }
-                    if (g_show_indices && is_vertex) {
-                        char idx_s[16]; snprintf(idx_s, sizeof(idx_s), "v%d", vnum);
-                        glColor3f(0.45f, 0.50f, 0.65f);
-                        draw_string((float)idx_x, (float)line_y, idx_s, FONT_MONO);
-                    }
-                    color_for_type(g_cmds[i].type);
-                    draw_string((float)text_x, (float)line_y,
-                                g_cmds[i].source, FONT_MONO);
-                    line_y -= LINE_H;
-                }
-                file_line++;
-                cur++;
-            }
-
-            /* Advance vertex counter after rendering this command */
-            if (is_vertex) vnum++;
-        } else {
-            /* i == g_num_cmds: new-line slot */
-            int is_edit_nl = (!g_inserting && g_edit_line == g_num_cmds);
-            if (is_edit_nl) {
-                if (cur >= g_scroll && cur < g_scroll + visible_lines) {
-                    glColor3f(0.55f, 0.55f, 0.30f);
-                    { char ln[16]; snprintf(ln, sizeof(ln), "%3d", file_line);
-                      draw_string(CODE_MARGIN_X, line_y, ln, FONT_MONO); }
-                    int ind = in_begin_block() ? 4 : 2;
-                    render_edit_line(text_x, line_y, ind);
-                    line_y -= LINE_H;
-                }
-            } else {
-                if (cur >= g_scroll && cur < g_scroll + visible_lines) {
-                    glColor3f(0.30f, 0.30f, 0.38f);
-                    { char ln[16]; snprintf(ln, sizeof(ln), "%3d", file_line);
-                      draw_string(CODE_MARGIN_X, line_y, ln, FONT_MONO); }
-                    glColor3f(0.28f, 0.28f, 0.35f);
-                    const char *ind_s = in_begin_block() ? "    " : "  ";
-                    draw_string((float)text_x, (float)line_y, ind_s, FONT_MONO);
-                    line_y -= LINE_H;
-                }
-            }
-            file_line++;
-            cur++;
-        }
-    }
-
-    /* Footer (dimmed) */
-    for (int i = 0; g_footer[i]; i++) {
-        RENDER_STATIC_LINE(g_footer[i], glColor3f(0.38f, 0.38f, 0.42f));
-    }
-
-    #undef RENDER_STATIC_LINE
-
-    /* Scroll indicator */
-    if (total_lines > visible_lines) {
-        int bar_h = g_win_h - 2 * CODE_MARGIN_Y - LINE_H;
-        float frac = (float)visible_lines / (float)total_lines;
-        float pos  = (float)g_scroll / (float)total_lines;
-        int thumb_h = (int)(bar_h * frac);
-        if (thumb_h < 12) thumb_h = 12;
-        int thumb_y = g_win_h - CODE_MARGIN_Y - LINE_H
-                      - (int)(bar_h * pos) - thumb_h;
-
-        glEnable(GL_BLEND);
-        glColor4f(0.50f, 0.50f, 0.65f, 0.35f);
-        draw_quad((float)(panel_w - 6), (float)thumb_y,
-                  5.0f, (float)thumb_h);
-        glDisable(GL_BLEND);
-    }
-
-    /* Status bar */
-    if (g_status_ttl > 0) {
-        float alpha = g_status_ttl > 60 ? 1.0f : (float)g_status_ttl / 60.0f;
-        glEnable(GL_BLEND);
-        glColor4f(0.12f, 0.12f, 0.05f, 0.92f * alpha);
-        draw_quad(0, 0, (float)panel_w, (float)(LINE_H + 6));
-        glColor4f(1.0f, 0.85f, 0.20f, alpha);
-        draw_string(CODE_MARGIN_X, 5, g_status, FONT_MONO);
-        glDisable(GL_BLEND);
-    }
-
-    end_2d();
-}
-
-/* ========================================================================= */
-/* Autocomplete popup                                                         */
-/* ========================================================================= */
-
-static void render_autocomplete(void) {
-    if (g_ac_count < 1) return;
-
-    begin_2d();
-    glEnable(GL_BLEND);
-    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-
-    int popup_x = g_cursor_px;
-    int popup_y = g_cursor_py - LINE_H - 4;
-
-    /* Calculate popup width from longest match */
-    int max_w = 0;
-    for (int i = 0; i < g_ac_count; i++) {
-        int w = (int)strlen(g_ac_matches[i]) * FONT_W;
-        if (w > max_w) max_w = w;
-    }
-    int popup_w = max_w + 16;
-    int popup_h = g_ac_count * LINE_H + 6;
-
-    /* Clamp to panel width */
-    int panel_w = (int)(g_win_w * g_panel_frac);
-    if (popup_x + popup_w > panel_w - 4)
-        popup_x = panel_w - popup_w - 4;
-    if (popup_x < 4) popup_x = 4;
-
-    /* Background */
-    glColor4f(0.08f, 0.08f, 0.15f, 0.95f);
-    draw_quad((float)popup_x, (float)(popup_y - popup_h),
-              (float)popup_w, (float)popup_h);
-
-    /* Border */
-    glColor4f(0.40f, 0.40f, 0.65f, 0.80f);
-    glBegin(GL_LINE_LOOP);
-    glVertex2f((float)popup_x, (float)(popup_y - popup_h));
-    glVertex2f((float)(popup_x + popup_w), (float)(popup_y - popup_h));
-    glVertex2f((float)(popup_x + popup_w), (float)popup_y);
-    glVertex2f((float)popup_x, (float)popup_y);
-    glEnd();
-
-    /* Entries */
-    int ey = popup_y - LINE_H + 1;
-    for (int i = 0; i < g_ac_count; i++) {
-        if (i == g_ac_sel) {
-            /* Highlight selected */
-            glColor4f(0.20f, 0.25f, 0.42f, 0.90f);
-            draw_quad((float)(popup_x + 1), (float)(ey - 2),
-                      (float)(popup_w - 2), (float)LINE_H);
-            glColor3f(1.0f, 1.0f, 0.90f);
-        } else {
-            glColor3f(0.65f, 0.65f, 0.72f);
-        }
-        draw_string((float)(popup_x + 8), (float)ey,
-                    g_ac_matches[i], FONT_MONO);
-        ey -= LINE_H;
-    }
-
-    /* Hint text */
-    glColor4f(0.45f, 0.45f, 0.55f, 0.70f);
-    draw_string((float)(popup_x + 4),
-                (float)(popup_y - popup_h - FONT_H - 2),
-                "Tab to accept", FONT_SMALL);
-
-    glDisable(GL_BLEND);
-    end_2d();
-}
-
-/* ========================================================================= */
-/* Help overlay                                                               */
-/* ========================================================================= */
-
-static void render_help(void) {
-    if (!g_show_help) return;
-
-    static const char *text[] = {
-        "=== OpenGL REPL - Help ===",
-        "Press F1 or Escape to close.  Up/Down or PgUp/PgDn to scroll.",
-        "",
-        "Configuration Menu:",
-        "  `                    Open configuration menu",
-        "",
-        "Supported Commands (type + ;):",
-        "  glBegin(MODE)        GL_TRIANGLES, GL_TRIANGLE_STRIP, ...",
-        "  glEnd()              End current primitive block",
-        "  glVertex3f(x,y,z)    Specify a vertex position",
-        "  glNormal3f(x,y,z)    Specify a vertex normal",
-        "  glColor3f(r,g,b)     Specify vertex color",
-        "  glColor4f(r,g,b,a)   Specify color with alpha",
-        "  glTranslatef(x,y,z)  Translate the modelview matrix",
-        "  glEnable(CAP)        GL_DEPTH_TEST, GL_LIGHTING, ...",
-        "  glDisable(CAP)       GL_COLOR_MATERIAL, GL_NORMALIZE",
-        "  glShadeModel(MODE)   GL_SMOOTH, GL_FLAT",
-        "",
-        "Comments:",
-        "  // text              Type directly to add a comment line",
-        "  Ctrl+/               Toggle comment on current line",
-        "",
-        "Math Expressions (use anywhere floats are expected):",
-        "  Constants:  PI, TAU          Functions: sin cos tan sqrt abs pow",
-        "  Operators:  + - * / % ( )    Also: min max floor ceil fmod",
-        "  Comparison: > < >= <= == !=  Logical: && || !",
-        "  Example:    glVertex3f(cos(PI/4), sin(PI/4), 0)",
-        "",
-        "Variables (predefined: x, y, z, i, j, k, n, t):",
-        "  x = 1.5;                    Assign a value to a variable",
-        "  glVertex3f(x, y, z);        Use variables in expressions",
-        "  Variables persist across commands and are saved/loaded",
-        "",
-        "For-Loops (stored as editable blocks, saved as C for-loops):",
-        "  for(i, 0, 24) glVertex3f(cos(i*TAU/24), sin(i*TAU/24), 0);",
-        "  for(i, 0, N) {              Multi-line block:",
-        "    glNormal3f(...)              type body lines, end with }",
-        "    glVertex3f(...)              or press Esc to exit",
-        "  }",
-        "  Nesting supported up to 4 levels (for spheres, tori, etc.)",
-        "  Ctrl+S preserves loop structure in output.c (not expanded)",
-        "",
-        "Functions (define reusable blocks, call with funcN()):",
-        "  func0 {                     Define a function:",
-        "    glBegin(GL_TRIANGLES)       type body lines, end with }",
-        "    glVertex3f(...)             or press Esc to exit",
-        "    glEnd()",
-        "  }",
-        "  func0()                     Call the function",
-        "  Up to func0..func9 supported",
-        "",
-        "Conditionals:",
-        "  if(t > 1) {                 Body included when condition is true",
-        "    glColor3f(1, 0, 0)",
-        "  }",
-        "  Supports: > < >= <= == != && || !",
-        "",
-        "Editing:",
-        "  Up / Down            Navigate lines (scroll help when open)",
-        "  Left / Right         Move cursor within line",
-        "  Home / End           Jump to start / end of line",
-        "  Type + ;             Commit line (edit existing or append new)",
-        "  Enter                Insert new line (even in middle of list)",
-        "  Tab / Enter          Accept autocomplete suggestion",
-        "  Backspace            Delete character before cursor",
-        "  Ctrl+/               Toggle comment on current line",
-        "  Shift+Up/Down        Select multiple lines",
-        "  Ctrl+C               Copy line/selection (for-loop on BEGIN)",
-        "  Ctrl+X               Cut line/selection (for-loop on BEGIN)",
-        "  Ctrl+V               Paste before current line",
-        "  Ctrl+Z               Undo last command",
-        "  Ctrl+D               Delete line at cursor",
-        "  Ctrl+L               Clear all commands",
-        "  Ctrl+S               Save to output.c",
-        "  Ctrl+Q               Exit and save to temporary file",
-        "  Escape               Clear input / exit insert / close help",
-        "",
-        "Camera:",
-        "  Left-drag            Orbit",
-        "  Right-drag           Pan",
-        "  Scroll wheel         Zoom camera",
-        "  Scroll wheel (over code panel)  Scroll code panel",
-        "",
-        "Time variable 't':",
-        "  't' is a predefined var that auto-increments with elapsed time.",
-        "  Use it in any expression: glVertex3f(sin(t), cos(t), 0)",
-        "  Ctrl+T               Play / pause time (shown as t=X.XX or t=X.XX[P])",
-        "",
-        "Accumulation Buffer AA (requires accum buffer, on by default):",
-        "  Ctrl+A               Toggle jitter AA on / off",
-        "  Ctrl+=               Increase jitter samples (1→2→4→8→16)",
-        "  Ctrl+-               Decrease jitter samples (16→8→4→2→1)",
-        "  Status shown in info bar (AA:8x / AA:off)",
-        "  Launch with --noaccum to disable the accum buffer entirely",
-        "",
-        "Toggles:",
-        "  F1  Help overlay     F2  Wireframe mode",
-        "  F3  Grid theme       F4  Axes theme",
-        "  F5  Vertex numbers   F6  Normal vectors",
-        "  F7  Vertex outlines  F8  Vertex guides",
-        "  F9  Auto-normals     F10 Light indicators",
-        "  F11 Camera rotate    F12 Cycle examples",
-        "",
-        "  PgUp / PgDn          Scroll code panel (or help when open)",
-        "",
-        "Save / Load:",
-        "  Ctrl+S saves the session to output.c",
-        "  Reload a saved file:  ./sample output.c",
-        "  (Commands between // Snippet start/end are imported)",
-        "",
-        NULL
-    };
-
-    /* Count total lines */
-    int n_lines = 0;
-    while (text[n_lines]) n_lines++;
-
-    begin_2d();
-    glEnable(GL_BLEND);
-    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-
-    int hx = g_win_w / 6, hy = g_win_h / 12;
-    int hw = g_win_w * 2 / 3, hh = g_win_h * 5 / 6;
-    int pad_top = 32, pad_bot = 24;
-    int content_h = hh - pad_top - pad_bot;
-    int visible_lines = content_h / LINE_H;
-    if (visible_lines < 1) visible_lines = 1;
-
-    /* Clamp scroll */
-    int max_scroll = n_lines - visible_lines;
-    if (max_scroll < 0) max_scroll = 0;
-    if (g_help_scroll > max_scroll) g_help_scroll = max_scroll;
-    if (g_help_scroll < 0) g_help_scroll = 0;
-
-    /* Background */
-    glColor4f(0.03f, 0.03f, 0.06f, 0.94f);
-    draw_quad((float)hx, (float)hy, (float)hw, (float)hh);
-
-    /* Border */
-    glColor4f(0.45f, 0.45f, 0.75f, 0.80f);
-    glBegin(GL_LINE_LOOP);
-    glVertex2f((float)hx, (float)hy);
-    glVertex2f((float)(hx + hw), (float)hy);
-    glVertex2f((float)(hx + hw), (float)(hy + hh));
-    glVertex2f((float)hx, (float)(hy + hh));
-    glEnd();
-
-    /* Scissor clip to content area */
-    glEnable(GL_SCISSOR_TEST);
-    glScissor(hx + 1, hy + pad_bot, hw - 2, content_h);
-
-    int tx = hx + 24;
-    int ty_start = hy + hh - pad_top;
-
-    for (int i = g_help_scroll; i < n_lines && i < g_help_scroll + visible_lines + 1; i++) {
-        int ty = ty_start - (i - g_help_scroll) * LINE_H;
-        if (ty < hy + pad_bot - LINE_H) break;
-
-        if (text[i][0] == '=')
-            glColor3f(0.80f, 0.80f, 1.00f);
-        else if (text[i][0] == ' ' && text[i][1] == ' ')
-            glColor3f(0.65f, 0.90f, 0.65f);
-        else if (text[i][0] == '\0')
-            continue;   /* skip blank lines (save space) — still scrolls past them */
-        else
-            glColor3f(0.75f, 0.75f, 0.80f);
-
-        draw_string((float)tx, (float)ty, text[i], FONT_MONO);
-    }
-
-    glDisable(GL_SCISSOR_TEST);
-
-    /* Scroll indicator (only if content overflows) */
-    if (n_lines > visible_lines) {
-        int bar_x = hx + hw - 10;
-        int bar_top = hy + hh - pad_top;
-        int bar_h = content_h;
-        float frac = (float)visible_lines / (float)n_lines;
-        float pos  = (float)g_help_scroll / (float)n_lines;
-        int thumb_h = (int)(bar_h * frac);
-        if (thumb_h < 12) thumb_h = 12;
-        int thumb_y = bar_top - (int)(bar_h * pos) - thumb_h;
-
-        /* Track */
-        glColor4f(0.20f, 0.20f, 0.35f, 0.40f);
-        draw_quad((float)bar_x, (float)(bar_top - bar_h), 5.0f, (float)bar_h);
-
-        /* Thumb */
-        glColor4f(0.55f, 0.55f, 0.80f, 0.65f);
-        draw_quad((float)bar_x, (float)thumb_y, 5.0f, (float)thumb_h);
-
-        /* Scroll hint at bottom */
-        if (g_help_scroll < max_scroll) {
-            glColor4f(0.50f, 0.50f, 0.65f, 0.50f);
-            char hint[32];
-            snprintf(hint, sizeof(hint), "v %d more v",
-                     n_lines - g_help_scroll - visible_lines);
-            int hint_x = hx + (hw - (int)strlen(hint) * FONT_W) / 2;
-            draw_string((float)hint_x, (float)(hy + 6), hint, FONT_SMALL);
-        }
-    }
-
-    glDisable(GL_BLEND);
-    end_2d();
-}
-
-/* ========================================================================= */
-/* 3D scene helpers                                                           */
-/* ========================================================================= */
-
-static void draw_grid(void) {
-    if (g_grid_theme == 0) return;
-
-    glDisable(GL_LIGHTING);
-    glEnable(GL_BLEND);
-    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-
-    /* Nudge grid slightly below Y=0 to avoid z-fighting with axes */
-    glPushMatrix();
-    glTranslatef(0, -0.002f, 0);
-
-    float breath = sinf(g_anim_time * 0.8f) * 0.5f + 0.5f; /* 0..1 */
-
-    switch (g_grid_theme) {
-
-    case 1: { /* Classic */
-        float extent = 5.0f, step = 0.5f;
-        glBegin(GL_LINES);
-        for (float v = -extent; v <= extent + 0.01f; v += step) {
-            float a = (fabsf(v) < 0.01f) ? 0.45f : 0.12f;
-            glColor4f(0.50f, 0.50f, 0.60f, a);
-            glVertex3f(v, 0, -extent); glVertex3f(v, 0, extent);
-            glVertex3f(-extent, 0, v); glVertex3f(extent, 0, v);
-        }
-        glEnd();
-        break;
-    }
-
-    case 2: { /* Fog — large grid, breathing fog density */
-        float extent = 15.0f, step = 0.5f;
-        float fog_density = 0.06f + breath * 0.04f;
-        GLfloat fog_col[] = { 0.10f, 0.10f, 0.13f, 1.0f };
-        glEnable(GL_FOG);
-        glFogi(GL_FOG_MODE, GL_EXP2);
-        glFogfv(GL_FOG_COLOR, fog_col);
-        glFogf(GL_FOG_DENSITY, fog_density);
-
-        glBegin(GL_LINES);
-        for (float v = -extent; v <= extent + 0.01f; v += step) {
-            int is_major = (fabsf(fmodf(fabsf(v) + 0.01f, 2.0f)) < 0.1f);
-            int is_origin = (fabsf(v) < 0.01f);
-            float a = is_origin ? 0.55f : (is_major ? 0.25f : 0.10f);
-            glColor4f(0.45f, 0.50f, 0.65f, a);
-            glVertex3f(v, 0, -extent); glVertex3f(v, 0, extent);
-            glVertex3f(-extent, 0, v); glVertex3f(extent, 0, v);
-        }
-        glEnd();
-
-        glDisable(GL_FOG);
-        break;
-    }
-
-    case 3: { /* Tron — cyan/blue glow, distance fade */
-        float extent = 12.0f, step = 0.5f;
-        float glow = 0.7f + breath * 0.3f;
-
-        glLineWidth(1.0f);
-        glBegin(GL_LINES);
-        for (float v = -extent; v <= extent + 0.01f; v += step) {
-            float dist = fabsf(v) / extent;
-            float fade = (1.0f - dist * dist);
-            if (fade < 0.0f) fade = 0.0f;
-            int is_origin = (fabsf(v) < 0.01f);
-            int is_major = (fabsf(fmodf(fabsf(v) + 0.01f, 2.0f)) < 0.1f);
-            float base = is_origin ? 0.8f : (is_major ? 0.35f : 0.12f);
-            float a = base * fade * glow;
-            float r = 0.05f, g = is_origin ? 0.9f : 0.55f, b = 0.95f;
-            glColor4f(r, g, b, a);
-            /* Draw both directions with distance fade per-endpoint */
-            glVertex3f(v, 0, -extent); glVertex3f(v, 0, extent);
-            glVertex3f(-extent, 0, v); glVertex3f(extent, 0, v);
-        }
-        glEnd();
-
-        /* Subtle glow line on axes */
-        glLineWidth(2.0f);
-        float ga = 0.25f * glow;
-        glBegin(GL_LINES);
-        glColor4f(0.0f, 0.8f, 1.0f, ga);
-        glVertex3f(0, 0, -extent); glVertex3f(0, 0, extent);
-        glVertex3f(-extent, 0, 0); glVertex3f(extent, 0, 0);
-        glEnd();
-        glLineWidth(1.0f);
-        break;
-    }
-
-    case 4: { /* Ember — warm orange/red, pulsing ripple */
-        float extent = 12.0f, step = 0.5f;
-
-        glBegin(GL_LINES);
-        for (float v = -extent; v <= extent + 0.01f; v += step) {
-            float dist = fabsf(v) / extent;
-            /* Ripple: wave traveling outward from center */
-            float ripple = sinf(dist * 12.0f - g_anim_time * 2.5f);
-            ripple = ripple * 0.5f + 0.5f; /* 0..1 */
-            float fade = 1.0f - dist;
-            if (fade < 0.0f) fade = 0.0f;
-            int is_origin = (fabsf(v) < 0.01f);
-            int is_major = (fabsf(fmodf(fabsf(v) + 0.01f, 2.0f)) < 0.1f);
-            float base = is_origin ? 0.7f : (is_major ? 0.30f : 0.10f);
-            float a = base * fade * (0.6f + ripple * 0.4f);
-            float r = 0.95f, g = 0.35f + ripple * 0.25f, b = 0.05f;
-            glColor4f(r, g, b, a);
-            glVertex3f(v, 0, -extent); glVertex3f(v, 0, extent);
-            glVertex3f(-extent, 0, v); glVertex3f(extent, 0, v);
-        }
-        glEnd();
-        break;
-    }
-
-    case 5: { /* Faint — very subtle 0.5 reference lines */
-        float extent = 5.0f, step = 0.5f;
-        glBegin(GL_LINES);
-        for (float v = -extent; v <= extent + 0.01f; v += step) {
-            int is_origin = (fabsf(v) < 0.01f);
-            int is_major = (fabsf(fmodf(fabsf(v) + 0.01f, 1.0f)) < 0.1f);
-            float a = is_origin ? 0.18f : (is_major ? 0.07f : 0.03f);
-            glColor4f(0.50f, 0.50f, 0.60f, a);
-            glVertex3f(v, 0, -extent); glVertex3f(v, 0, extent);
-            glVertex3f(-extent, 0, v); glVertex3f(extent, 0, v);
-        }
-        glEnd();
-        break;
-    }
-
-    case 6: { /* Focus — fades rapidly around selected vertex */
-        /* Update focus vertex from current or nearest vertex line */
-        if (g_edit_line < g_num_cmds &&
-            g_cmds[g_edit_line].valid &&
-            g_cmds[g_edit_line].type == CMD_VERTEX3F) {
-            g_focus_vtx[0] = g_cmds[g_edit_line].args[0];
-            g_focus_vtx[1] = g_cmds[g_edit_line].args[1];
-            g_focus_vtx[2] = g_cmds[g_edit_line].args[2];
-            g_focus_vtx_valid = 1;
-        } else if (!g_focus_vtx_valid) {
-            /* Scan backwards from edit line for nearest vertex */
-            for (int i = g_edit_line - 1; i >= 0; i--) {
-                if (g_cmds[i].valid && g_cmds[i].type == CMD_VERTEX3F) {
-                    g_focus_vtx[0] = g_cmds[i].args[0];
-                    g_focus_vtx[1] = g_cmds[i].args[1];
-                    g_focus_vtx[2] = g_cmds[i].args[2];
-                    g_focus_vtx_valid = 1;
-                    break;
-                }
-            }
-        }
-
-        float cx = g_focus_vtx[0], cz = g_focus_vtx[2];
-        float extent = 8.0f, step = 0.5f;
-        float radius = 3.0f;  /* fade-out radius */
-
-        glBegin(GL_LINES);
-        for (float v = -extent; v <= extent + 0.01f; v += step) {
-            int is_origin = (fabsf(v) < 0.01f);
-            int is_major = (fabsf(fmodf(fabsf(v) + 0.01f, 1.0f)) < 0.1f);
-            float base = is_origin ? 0.40f : (is_major ? 0.18f : 0.06f);
-
-            /* Vertical line at x=v: fade based on distance from cx */
-            float dx = v - cx;
-            float fx = 1.0f - (dx * dx) / (radius * radius);
-            if (fx < 0.0f) fx = 0.0f;
-            fx = fx * fx;  /* sharper falloff */
-            if (fx > 0.001f) {
-                glColor4f(0.50f, 0.55f, 0.70f, base * fx);
-                /* Clamp line Z extent around focus */
-                float z0 = cz - radius, z1 = cz + radius;
-                if (z0 < -extent) z0 = -extent;
-                if (z1 > extent) z1 = extent;
-                glVertex3f(v, 0, z0); glVertex3f(v, 0, z1);
-            }
-
-            /* Horizontal line at z=v: fade based on distance from cz */
-            float dz = v - cz;
-            float fz = 1.0f - (dz * dz) / (radius * radius);
-            if (fz < 0.0f) fz = 0.0f;
-            fz = fz * fz;
-            if (fz > 0.001f) {
-                glColor4f(0.50f, 0.55f, 0.70f, base * fz);
-                float x0 = cx - radius, x1 = cx + radius;
-                if (x0 < -extent) x0 = -extent;
-                if (x1 > extent) x1 = extent;
-                glVertex3f(x0, 0, v); glVertex3f(x1, 0, v);
-            }
-        }
-        glEnd();
-
-        /* Crosshair at focus point */
-        if (g_focus_vtx_valid) {
-            glLineWidth(1.5f);
-            glBegin(GL_LINES);
-            glColor4f(0.80f, 0.85f, 0.95f, 0.25f);
-            glVertex3f(cx - 0.3f, 0, cz);
-            glVertex3f(cx + 0.3f, 0, cz);
-            glVertex3f(cx, 0, cz - 0.3f);
-            glVertex3f(cx, 0, cz + 0.3f);
-            glEnd();
-            glLineWidth(1.0f);
-        }
-        break;
-    }
-
-    default: break;
-    }
-
-    glPopMatrix();
-    glDisable(GL_BLEND);
-    if (g_user_lighting_enabled) glEnable(GL_LIGHTING);
-}
-
-/* Helper: draw an axis label at a 3D position */
-static void draw_axis_label(float x, float y, float z, char ch,
-                            float r, float g, float b) {
-    glColor3f(r, g, b);
-    glRasterPos3f(x, y, z);
-    glutBitmapCharacter(FONT_MONO, ch);
-}
-
-static void draw_axes(void) {
-    if (g_axes_theme == 0) return;
-
-    glDisable(GL_LIGHTING);
-//    glDisable(GL_DEPTH_TEST);
-    glEnable(GL_BLEND);
-    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-
-    float breath = sinf(g_anim_time * 0.8f) * 0.5f + 0.5f; /* 0..1 */
-
-    switch (g_axes_theme) {
-
-    case 1: { /* Classic */
-        float len = 2.0f;
-        glLineWidth(2.0f);
-        glBegin(GL_LINES);
-        glColor3f(0.90f, 0.20f, 0.20f);
-        glVertex3f(0, 0, 0); glVertex3f(len, 0, 0);
-        glColor3f(0.20f, 0.90f, 0.20f);
-        glVertex3f(0, 0, 0); glVertex3f(0, len, 0);
-        glColor3f(0.20f, 0.20f, 0.90f);
-        glVertex3f(0, 0, 0); glVertex3f(0, 0, len);
-        glEnd();
-        glLineWidth(1.0f);
-
-        draw_axis_label(2.15f, 0, 0, 'X', 0.90f, 0.30f, 0.30f);
-        draw_axis_label(0, 2.15f, 0, 'Y', 0.30f, 0.90f, 0.30f);
-        draw_axis_label(0, 0, 2.15f, 'Z', 0.30f, 0.30f, 0.90f);
-        break;
-    }
-
-    case 2: { /* Pulse — dot traveling outward along each axis */
-        float len = 3.0f;
-        /* Solid dim axes */
-        glLineWidth(1.5f);
-        glBegin(GL_LINES);
-        glColor4f(0.90f, 0.20f, 0.20f, 0.30f);
-        glVertex3f(0, 0, 0); glVertex3f(len, 0, 0);
-        glColor4f(0.20f, 0.90f, 0.20f, 0.30f);
-        glVertex3f(0, 0, 0); glVertex3f(0, len, 0);
-        glColor4f(0.20f, 0.20f, 0.90f, 0.30f);
-        glVertex3f(0, 0, 0); glVertex3f(0, 0, len);
-        glEnd();
-        glLineWidth(1.0f);
-
-        /* Pulsing dot position (loops 0..1) */
-        float t = fmodf(g_anim_time * 0.6f, 1.0f);
-        float pos = t * len;
-        float glow = sinf(t * (float)M_PI); /* bright in middle, dim at ends */
-        glow = glow * 0.8f + 0.2f;
-
-        glPointSize(8.0f);
-        glBegin(GL_POINTS);
-        glColor4f(1.0f, 0.3f, 0.3f, glow);
-        glVertex3f(pos, 0, 0);
-        glColor4f(0.3f, 1.0f, 0.3f, glow);
-        glVertex3f(0, pos, 0);
-        glColor4f(0.3f, 0.3f, 1.0f, glow);
-        glVertex3f(0, 0, pos);
-        glEnd();
-        glPointSize(1.0f);
-
-        /* Bright trail behind the dot */
-        glLineWidth(3.0f);
-        float trail = 0.6f;
-        float t0 = pos - trail;
-        if (t0 < 0) t0 = 0;
-        glBegin(GL_LINES);
-        glColor4f(1.0f, 0.3f, 0.3f, 0.05f);
-        glVertex3f(t0, 0, 0);
-        glColor4f(1.0f, 0.3f, 0.3f, glow * 0.7f);
-        glVertex3f(pos, 0, 0);
-
-        glColor4f(0.3f, 1.0f, 0.3f, 0.05f);
-        glVertex3f(0, t0, 0);
-        glColor4f(0.3f, 1.0f, 0.3f, glow * 0.7f);
-        glVertex3f(0, pos, 0);
-
-        glColor4f(0.3f, 0.3f, 1.0f, 0.05f);
-        glVertex3f(0, 0, t0);
-        glColor4f(0.3f, 0.3f, 1.0f, glow * 0.7f);
-        glVertex3f(0, 0, pos);
-        glEnd();
-        glLineWidth(1.0f);
-
-        draw_axis_label(len + 0.15f, 0, 0, 'X', 0.70f, 0.25f, 0.25f);
-        draw_axis_label(0, len + 0.15f, 0, 'Y', 0.25f, 0.70f, 0.25f);
-        draw_axis_label(0, 0, len + 0.15f, 'Z', 0.25f, 0.25f, 0.70f);
-        break;
-    }
-
-    case 3: { /* Neon — bright glowing axes with breathing intensity */
-        float len = 2.5f;
-        float glow = 0.6f + breath * 0.4f;
-
-        /* Outer glow (wide, dim) */
-        glLineWidth(6.0f);
-        glBegin(GL_LINES);
-        glColor4f(1.0f, 0.1f, 0.1f, 0.12f * glow);
-        glVertex3f(0, 0, 0); glVertex3f(len, 0, 0);
-        glColor4f(0.1f, 1.0f, 0.1f, 0.12f * glow);
-        glVertex3f(0, 0, 0); glVertex3f(0, len, 0);
-        glColor4f(0.1f, 0.1f, 1.0f, 0.12f * glow);
-        glVertex3f(0, 0, 0); glVertex3f(0, 0, len);
-        glEnd();
-
-        /* Core (narrow, bright) */
-        glLineWidth(2.0f);
-        glBegin(GL_LINES);
-        glColor4f(1.0f, 0.4f, 0.4f, 1.0f * glow);
-        glVertex3f(0, 0, 0); glVertex3f(len, 0, 0);
-        glColor4f(0.4f, 1.0f, 0.4f, 1.0f * glow);
-        glVertex3f(0, 0, 0); glVertex3f(0, len, 0);
-        glColor4f(0.4f, 0.4f, 1.0f, 1.0f * glow);
-        glVertex3f(0, 0, 0); glVertex3f(0, 0, len);
-        glEnd();
-        glLineWidth(1.0f);
-
-        /* Bright tip dots */
-        glPointSize(6.0f);
-        glBegin(GL_POINTS);
-        glColor4f(1.0f, 0.5f, 0.5f, glow);
-        glVertex3f(len, 0, 0);
-        glColor4f(0.5f, 1.0f, 0.5f, glow);
-        glVertex3f(0, len, 0);
-        glColor4f(0.5f, 0.5f, 1.0f, glow);
-        glVertex3f(0, 0, len);
-        glEnd();
-        glPointSize(1.0f);
-
-        float la = 0.5f + glow * 0.5f;
-        draw_axis_label(len + 0.15f, 0, 0, 'X', 1.0f * la, 0.3f * la, 0.3f * la);
-        draw_axis_label(0, len + 0.15f, 0, 'Y', 0.3f * la, 1.0f * la, 0.3f * la);
-        draw_axis_label(0, 0, len + 0.15f, 'Z', 0.3f * la, 0.3f * la, 1.0f * la);
-        break;
-    }
-
-    case 4: { /* Compass — positive and negative axes, dashed negative */
-        float len = 2.5f;
-
-        /* Positive axes (solid) */
-        glLineWidth(2.0f);
-        glBegin(GL_LINES);
-        glColor4f(1.0f, 0.30f, 0.30f, 0.85f);
-        glVertex3f(0, 0, 0); glVertex3f(len, 0, 0);
-        glColor4f(0.30f, 1.0f, 0.30f, 0.85f);
-        glVertex3f(0, 0, 0); glVertex3f(0, len, 0);
-        glColor4f(0.30f, 0.30f, 1.0f, 0.85f);
-        glVertex3f(0, 0, 0); glVertex3f(0, 0, len);
-        glEnd();
-
-        /* Negative axes (stippled) */
-        glEnable(GL_LINE_STIPPLE);
-        glLineStipple(2, 0xAAAA);
-        glBegin(GL_LINES);
-        glColor4f(1.0f, 0.30f, 0.30f, 0.35f);
-        glVertex3f(0, 0, 0); glVertex3f(-len, 0, 0);
-        glColor4f(0.30f, 1.0f, 0.30f, 0.35f);
-        glVertex3f(0, 0, 0); glVertex3f(0, -len, 0);
-        glColor4f(0.30f, 0.30f, 1.0f, 0.35f);
-        glVertex3f(0, 0, 0); glVertex3f(0, 0, -len);
-        glEnd();
-        glDisable(GL_LINE_STIPPLE);
-        glLineWidth(1.0f);
-
-        /* Arrowheads at positive tips */
-        glPointSize(7.0f);
-        glBegin(GL_POINTS);
-        glColor4f(1.0f, 0.4f, 0.4f, 0.9f);
-        glVertex3f(len, 0, 0);
-        glColor4f(0.4f, 1.0f, 0.4f, 0.9f);
-        glVertex3f(0, len, 0);
-        glColor4f(0.4f, 0.4f, 1.0f, 0.9f);
-        glVertex3f(0, 0, len);
-        glEnd();
-
-        /* Small dots at negative tips */
-        glPointSize(4.0f);
-        glBegin(GL_POINTS);
-        glColor4f(1.0f, 0.3f, 0.3f, 0.30f);
-        glVertex3f(-len, 0, 0);
-        glColor4f(0.3f, 1.0f, 0.3f, 0.30f);
-        glVertex3f(0, -len, 0);
-        glColor4f(0.3f, 0.3f, 1.0f, 0.30f);
-        glVertex3f(0, 0, -len);
-        glEnd();
-        glPointSize(1.0f);
-
-        /* Origin sphere-ish dot */
-        glPointSize(5.0f);
-        glBegin(GL_POINTS);
-        glColor4f(0.9f, 0.9f, 0.9f, 0.6f);
-        glVertex3f(0, 0, 0);
-        glEnd();
-        glPointSize(1.0f);
-
-        draw_axis_label(len + 0.15f, 0, 0, 'X', 0.90f, 0.30f, 0.30f);
-        draw_axis_label(0, len + 0.15f, 0, 'Y', 0.30f, 0.90f, 0.30f);
-        draw_axis_label(0, 0, len + 0.15f, 'Z', 0.30f, 0.30f, 0.90f);
-        draw_axis_label(-len - 0.15f, 0, 0, 'x', 0.55f, 0.25f, 0.25f);
-        draw_axis_label(0, -len - 0.15f, 0, 'y', 0.25f, 0.55f, 0.25f);
-        draw_axis_label(0, 0, -len - 0.15f, 'z', 0.25f, 0.25f, 0.55f);
-        break;
-    }
-
-    default: break;
-    }
-
-    glDisable(GL_BLEND);
-    glEnable(GL_DEPTH_TEST);
-    if (g_user_lighting_enabled) glEnable(GL_LIGHTING);
-}
-
-static void draw_vertex_numbers(void) {
-    glDisable(GL_LIGHTING);
-    glDisable(GL_DEPTH_TEST);
-    glColor3f(1.0f, 1.0f, 0.30f);
-
-    /* Find which glBegin/glEnd block (in g_cmds) the cursor is in */
-    int target_block = -1;
-    {
-        int block = -1;
-        int in_block = 0;
-        for (int i = 0; i < g_num_cmds; i++) {
-            if (!g_cmds[i].valid) continue;
-            if (g_cmds[i].type == CMD_BEGIN) {
-                block++;
-                in_block = 1;
-            }
-            if (in_block && i == g_edit_line) {
-                target_block = block;
-                break;
-            }
-            if (g_cmds[i].type == CMD_END) {
-                if (i == g_edit_line) {
-                    target_block = block;
-                    break;
-                }
-                in_block = 0;
-            }
-        }
-    }
-
-    /* Draw vertex labels only for the target block, replaying transforms */
-    glPushMatrix();
-    int block = -1;
-    int in_block = 0;
-    int vn = 0;
-    for (int i = 0; i < g_num_flat_cmds; i++) {
-        if (!g_flat_cmds[i].valid) continue;
-        if (g_flat_cmds[i].type == CMD_TRANSLATE3F) {
-            if (!in_block)
-                glTranslatef(g_flat_cmds[i].args[0], g_flat_cmds[i].args[1],
-                             g_flat_cmds[i].args[2]);
-        } else if (g_flat_cmds[i].type == CMD_BEGIN) {
-            block++;
-            in_block = 1;
-            vn = 0;
-        } else if (g_flat_cmds[i].type == CMD_END) {
-            in_block = 0;
-        } else if (g_flat_cmds[i].type == CMD_VERTEX3F) {
-            if (in_block && block == target_block) {
-                char label[16];
-                snprintf(label, sizeof(label), " v%d", vn);
-                glRasterPos3f(g_flat_cmds[i].args[0], g_flat_cmds[i].args[1],
-                              g_flat_cmds[i].args[2]);
-                for (const char *c = label; *c; c++)
-                    glutBitmapCharacter(FONT_MONO, (unsigned char)*c);
-            }
-            vn++;
-        }
-    }
-    glPopMatrix();
-
-    glEnable(GL_DEPTH_TEST);
-    if (g_user_lighting_enabled) glEnable(GL_LIGHTING);
-}
-
-static void draw_normal_vectors(void) {
-    glDisable(GL_LIGHTING);
-    glDisable(GL_DEPTH_TEST);
-    glColor3f(0.80f, 0.80f, 0.30f);
-    float scale = 0.35f;
-    float nx = 0, ny = 0, nz = 1;
-
-    /* Single pass — replay CMD_TRANSLATE3F so normals align with geometry.
-     * Use per-vertex glBegin/glEnd pairs so transforms can be applied
-     * between blocks without being inside a begin/end. */
-    glPushMatrix();
-    int in_begin = 0;
-    for (int i = 0; i < g_num_flat_cmds; i++) {
-        if (!g_flat_cmds[i].valid) continue;
-        if (g_flat_cmds[i].type == CMD_TRANSLATE3F) {
-            if (!in_begin)
-                glTranslatef(g_flat_cmds[i].args[0], g_flat_cmds[i].args[1],
-                             g_flat_cmds[i].args[2]);
-        } else if (g_flat_cmds[i].type == CMD_BEGIN) {
-            in_begin = 1;
-            nx = 0; ny = 0; nz = 1; /* reset normal per block */
-        } else if (g_flat_cmds[i].type == CMD_END) {
-            in_begin = 0;
-        } else if (g_flat_cmds[i].type == CMD_NORMAL3F) {
-            nx = g_flat_cmds[i].args[0]; ny = g_flat_cmds[i].args[1];
-            nz = g_flat_cmds[i].args[2];
-        } else if (g_flat_cmds[i].type == CMD_VERTEX3F) {
-            float vx = g_flat_cmds[i].args[0], vy = g_flat_cmds[i].args[1],
-                  vz = g_flat_cmds[i].args[2];
-            glBegin(GL_LINES);
-            glVertex3f(vx, vy, vz);
-            glVertex3f(vx + nx * scale, vy + ny * scale, vz + nz * scale);
-            glEnd();
-            glPointSize(4.0f);
-            glBegin(GL_POINTS);
-            glVertex3f(vx + nx * scale, vy + ny * scale, vz + nz * scale);
-            glEnd();
-            glPointSize(1.0f);
-        }
-    }
-    glPopMatrix();
-
-    glEnable(GL_DEPTH_TEST);
-    if (g_user_lighting_enabled) glEnable(GL_LIGHTING);
-}
-
-/* ========================================================================= */
-/* Vertex input guides — plane / line / point for partial glVertex3f args     */
-/* ========================================================================= */
-
-/* Draw a semi-transparent plane perpendicular to the X axis at x=v */
-static void draw_guide_yz_plane(float v, float sz) {
-    glColor4f(0.9f, 0.65f, 0.6f, 0.72f);
-    glBegin(GL_QUADS);
-    glVertex3f(v, -sz, -sz); glVertex3f(v,  sz, -sz);
-    glVertex3f(v,  sz,  sz); glVertex3f(v, -sz,  sz);
-    glEnd();
-    glColor4f(0.9f, 0.3f, 0.3f, 0.45f);
-    glBegin(GL_LINE_LOOP);
-    glVertex3f(v, -sz, -sz); glVertex3f(v,  sz, -sz);
-    glVertex3f(v,  sz,  sz); glVertex3f(v, -sz,  sz);
-    glEnd();
-}
-
-
-static void draw_vertex_guides(void) {
-    if (!g_show_guides) return;
-
-    /* Check current input for a partial glVertex3f( */
-    if (strncmp(g_input, "glVertex3f(", 11) != 0 || g_input_len <= 11)
-        return;
-
-    float vals[3];
-    int n = parse_exprs(g_input + 11, vals, 3, NULL, 0);
-    if (n < 1) return;
-
-    float sz = 3.0f;  /* half-size of guide geometry */
-
-    glDisable(GL_LIGHTING);
-    glEnable(GL_BLEND);
-    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-
-    if (n == 1) {
-        /* One value (x) known — draw YZ plane at x=vals[0] */
-        draw_guide_yz_plane(vals[0], sz);
-    } else if (n == 2) {
-        /* Two values (x,y) known — draw line parallel to Z at (x,y) */
-        glColor4f(1.0f, 0.8f, 0.2f, 0.9f);
-        glLineWidth(2.0f);
-        glBegin(GL_LINES);
-        glVertex3f(vals[0], vals[1], -sz);
-        glVertex3f(vals[0], vals[1],  sz);
-        glEnd();
-        glLineWidth(1.0f);
-    } else {
-        int depth = glIsEnabled(GL_DEPTH_TEST);
-        if (depth) glDisable(GL_DEPTH_TEST);
-        /* All three values known — draw a point */
-        glColor4f(1.0f, 0.3f, 0.3f, 0.9f);
-        glPointSize(8.0f);
-        glBegin(GL_POINTS);
-        glVertex3f(vals[0], vals[1], vals[2]);
-        glEnd();
-        glPointSize(1.0f);
-        if (depth) glEnable(GL_DEPTH_TEST);
-    }
-
-    glDisable(GL_BLEND);
-    if (g_user_lighting_enabled) glEnable(GL_LIGHTING);
-}
-
-/* ========================================================================= */
-/* Normal edit guides — show doubled/halved component impact                  */
-/* ========================================================================= */
-
-static void draw_normal_guides(void) {
-    if (!g_show_guides) return;
-
-    /* Check current input for glNormal3f( */
-    if (strncmp(g_input, "glNormal3f(", 11) != 0 || g_input_len <= 11)
-        return;
-
-    float vals[3];
-    int n = parse_exprs(g_input + 11, vals, 3, NULL, 0);
-    if (n < 3) return;
-
-    /* Determine which component the cursor is on */
-    int paren_pos = 11;
-    if (g_cursor_pos < paren_pos) return;
-    int close = g_input_len;
-    for (int ci = paren_pos; ci < g_input_len; ci++)
-        if (g_input[ci] == ')') { close = ci; break; }
-    if (g_cursor_pos > close) return;
-
-    int component = 0;
-    for (int ci = paren_pos; ci < g_cursor_pos; ci++)
-        if (g_input[ci] == ',') component++;
-    if (component > 2) component = 2;
-
-    /* Find the associated vertex — next CMD_VERTEX3F after current position */
-    int search_start = (g_edit_line < g_num_cmds && !g_inserting)
-                      ? g_edit_line + 1 : g_edit_line;
-    float vx = 0, vy = 0, vz = 0;
-    int found = 0;
-    for (int i = search_start; i < g_num_cmds; i++) {
-        if (!g_cmds[i].valid) continue;
-        if (g_cmds[i].type == CMD_VERTEX3F) {
-            vx = g_cmds[i].args[0];
-            vy = g_cmds[i].args[1];
-            vz = g_cmds[i].args[2];
-            found = 1;
-            break;
-        }
-        if (g_cmds[i].type == CMD_END || g_cmds[i].type == CMD_BEGIN) break;
-    }
-    if (!found) return;
-
-    /* Compute doubled and halved normals (re-normalized) */
-    float doubled[3] = { vals[0], vals[1], vals[2] };
-    float halved[3]  = { vals[0], vals[1], vals[2] };
-    doubled[component] *= 2.0f;
-    halved[component]  *= 0.5f;
-
-    float dlen = sqrtf(doubled[0]*doubled[0] + doubled[1]*doubled[1]
-                      + doubled[2]*doubled[2]);
-    if (dlen > 1e-8f) { doubled[0]/=dlen; doubled[1]/=dlen; doubled[2]/=dlen; }
-    float hlen = sqrtf(halved[0]*halved[0] + halved[1]*halved[1]
-                      + halved[2]*halved[2]);
-    if (hlen > 1e-8f) { halved[0]/=hlen; halved[1]/=hlen; halved[2]/=hlen; }
-
-    float scale = 0.45f;
-
-    glDisable(GL_LIGHTING);
-    glEnable(GL_BLEND);
-    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-
-    /* Current normal — thin white reference line */
-    float clen = sqrtf(vals[0]*vals[0] + vals[1]*vals[1] + vals[2]*vals[2]);
-    if (clen > 1e-8f) {
-        float cn[3] = { vals[0]/clen, vals[1]/clen, vals[2]/clen };
-        glColor4f(0.8f, 0.8f, 0.8f, 0.4f);
-        glLineWidth(1.0f);
-        glBegin(GL_LINES);
-        glVertex3f(vx, vy, vz);
-        glVertex3f(vx + cn[0]*scale, vy + cn[1]*scale, vz + cn[2]*scale);
-        glEnd();
-    }
-
-    /* Doubled component — green stippled arrow */
-    glEnable(GL_LINE_STIPPLE);
-    glLineStipple(1, 0xAAAA);
-    glLineWidth(2.0f);
-
-    glColor4f(0.2f, 0.95f, 0.2f, 0.75f);
-    glBegin(GL_LINES);
-    glVertex3f(vx, vy, vz);
-    glVertex3f(vx + doubled[0]*scale, vy + doubled[1]*scale,
-               vz + doubled[2]*scale);
-    glEnd();
-
-    /* Halved component — red stippled arrow */
-    glColor4f(0.95f, 0.2f, 0.2f, 0.75f);
-    glBegin(GL_LINES);
-    glVertex3f(vx, vy, vz);
-    glVertex3f(vx + halved[0]*scale, vy + halved[1]*scale,
-               vz + halved[2]*scale);
-    glEnd();
-
-    glDisable(GL_LINE_STIPPLE);
-    glLineWidth(1.0f);
-
-    /* Dots at arrow tips */
-    glPointSize(5.0f);
-    glBegin(GL_POINTS);
-    glColor4f(0.2f, 0.95f, 0.2f, 0.85f);
-    glVertex3f(vx + doubled[0]*scale, vy + doubled[1]*scale,
-               vz + doubled[2]*scale);
-    glColor4f(0.95f, 0.2f, 0.2f, 0.85f);
-    glVertex3f(vx + halved[0]*scale, vy + halved[1]*scale,
-               vz + halved[2]*scale);
-    glEnd();
-    glPointSize(1.0f);
-
-    glDisable(GL_BLEND);
-    if (g_user_lighting_enabled) glEnable(GL_LIGHTING);
-}
-
-/* ========================================================================= */
-/* Scene lights — setup and visualization                                     */
-/* ========================================================================= */
-
-/* Set light properties (position/colors) only — enable/disable is driven
-   by the user's REPL commands via execute_commands(). */
-static void setup_lights(void) {
-    /* Reset all lights to disabled; execute_commands() will enable them */
-    for (int i = 0; i < MAX_LIGHTS; i++) {
-        glDisable(g_lights[i].id);
-        g_lights[i].enabled = 0;
-        glLightfv(g_lights[i].id, GL_POSITION, g_lights[i].pos);
-        glLightfv(g_lights[i].id, GL_DIFFUSE,  g_lights[i].diffuse);
-        glLightfv(g_lights[i].id, GL_AMBIENT,  g_lights[i].ambient);
-        glLightfv(g_lights[i].id, GL_SPECULAR, g_lights[i].specular);
-    }
-}
-
-static void draw_lights(void) {
-    if (!g_show_lights) return;
-
-    glDisable(GL_LIGHTING);
-    glDisable(GL_DEPTH_TEST);
-    glEnable(GL_BLEND);
-    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-
-    float breath = sinf(g_anim_time * 1.2f) * 0.5f + 0.5f;
-
-    for (int i = 0; i < MAX_LIGHTS; i++) {
-        float *d = g_lights[i].diffuse;
-        float *p = g_lights[i].pos;
-        int is_dir = (p[3] == 0.0f);
-        int on = g_lights[i].enabled;
-
-        /* Compute display position */
-        float lx, ly, lz;
-        if (is_dir) {
-            float len = sqrtf(p[0]*p[0] + p[1]*p[1] + p[2]*p[2]);
-            if (len < 1e-6f) continue;
-            lx = p[0] / len * 3.5f;
-            ly = p[1] / len * 3.5f;
-            lz = p[2] / len * 3.5f;
-        } else {
-            lx = p[0]; ly = p[1]; lz = p[2];
-        }
-
-        if (on) {
-            /* === ENABLED: bright, glowing, animated === */
-            float glow = 0.6f + breath * 0.4f;
-
-            /* Outer glow */
-            glPointSize(18.0f);
-            glBegin(GL_POINTS);
-            glColor4f(d[0], d[1], d[2], 0.15f * glow);
-            glVertex3f(lx, ly, lz);
-            glEnd();
-
-            /* Inner core */
-            glPointSize(8.0f);
-            glBegin(GL_POINTS);
-            glColor4f(d[0], d[1], d[2], 0.7f * glow);
-            glVertex3f(lx, ly, lz);
-            glEnd();
-
-            /* White hot center */
-            glPointSize(3.0f);
-            glBegin(GL_POINTS);
-            glColor4f(1.0f, 1.0f, 1.0f, 0.9f * glow);
-            glVertex3f(lx, ly, lz);
-            glEnd();
-
-            /* Directional: ray toward origin */
-            if (is_dir) {
-                glEnable(GL_LINE_STIPPLE);
-                glLineStipple(2, 0xAAAA);
-                glLineWidth(1.0f);
-                glBegin(GL_LINES);
-                glColor4f(d[0], d[1], d[2], 0.35f * glow);
-                glVertex3f(lx, ly, lz);
-                glColor4f(d[0], d[1], d[2], 0.05f);
-                glVertex3f(0, 0, 0);
-                glEnd();
-                glDisable(GL_LINE_STIPPLE);
-            } else {
-                /* Positional: radiating lines */
-                float rlen = 0.25f + breath * 0.1f;
-                glLineWidth(1.0f);
-                glBegin(GL_LINES);
-                float dirs[][3] = {
-                    {1,0,0},{-1,0,0},{0,1,0},{0,-1,0},{0,0,1},{0,0,-1}
-                };
-                for (int r = 0; r < 6; r++) {
-                    glColor4f(d[0], d[1], d[2], 0.4f * glow);
-                    glVertex3f(lx, ly, lz);
-                    glColor4f(d[0], d[1], d[2], 0.0f);
-                    glVertex3f(lx + dirs[r][0] * rlen,
-                               ly + dirs[r][1] * rlen,
-                               lz + dirs[r][2] * rlen);
-                }
-                glEnd();
-            }
-
-            /* Label */
-            char label[8];
-            snprintf(label, sizeof(label), " L%d", i);
-            glColor4f(d[0] * 0.7f + 0.3f, d[1] * 0.7f + 0.3f,
-                      d[2] * 0.7f + 0.3f, 0.8f);
-            glRasterPos3f(lx, ly, lz);
-            for (const char *c = label; *c; c++)
-                glutBitmapCharacter(FONT_SMALL, (unsigned char)*c);
-
-        } else {
-            /* === DISABLED: dim grey marker with X === */
-
-            /* Small grey dot */
-            glPointSize(6.0f);
-            glBegin(GL_POINTS);
-            glColor4f(0.4f, 0.4f, 0.4f, 0.3f);
-            glVertex3f(lx, ly, lz);
-            glEnd();
-
-            /* X cross through the light position */
-            float xsz = 0.12f;
-            glEnable(GL_LINE_STIPPLE);
-            glLineStipple(1, 0xAAAA);
-            glLineWidth(1.0f);
-            glBegin(GL_LINES);
-            glColor4f(0.7f, 0.2f, 0.2f, 0.45f);
-            glVertex3f(lx - xsz, ly - xsz, lz);
-            glVertex3f(lx + xsz, ly + xsz, lz);
-            glVertex3f(lx - xsz, ly + xsz, lz);
-            glVertex3f(lx + xsz, ly - xsz, lz);
-            glEnd();
-            glDisable(GL_LINE_STIPPLE);
-
-            /* Dimmed label */
-            char label[16];
-            snprintf(label, sizeof(label), " L%d off", i);
-            glColor4f(0.5f, 0.3f, 0.3f, 0.45f);
-            glRasterPos3f(lx, ly, lz);
-            for (const char *c = label; *c; c++)
-                glutBitmapCharacter(FONT_SMALL, (unsigned char)*c);
-        }
-    }
-
-    glPointSize(1.0f);
-    glDisable(GL_BLEND);
-    glEnable(GL_DEPTH_TEST);
-    if (g_user_lighting_enabled) glEnable(GL_LIGHTING);
-}
-
-/* ========================================================================= */
-/* 3D scene render (viewport offset to the right of the code panel)           */
-/* ========================================================================= */
-
-static void render_3d_scene(void) {
-    int panel_w = (int)(g_win_w * g_panel_frac);
-    int scene_w = g_win_w - panel_w;
-    if (scene_w < 1) scene_w = 1;
-
-    glViewport(panel_w, 0, scene_w, g_win_h);
-
-    glMatrixMode(GL_PROJECTION);
-    glLoadIdentity();
-    {
-        /* Build a jitter-aware perspective frustum.
-         * When g_accum_jitter_x/y are both 0 this is identical to
-         * gluPerspective(45, aspect, 0.1, 100). */
-        double near_z = 0.1, far_z = 100.0;
-        double aspect  = (double)scene_w / (double)g_win_h;
-        double top_v   = near_z * tan(45.0 * M_PI / 360.0);
-        double right_v = top_v * aspect;
-        /* Convert sub-pixel offset (fraction of 1 pixel) → frustum units */
-        double dx = (double)g_accum_jitter_x * 2.0 * right_v / (double)scene_w;
-        double dy = (double)g_accum_jitter_y * 2.0 * top_v   / (double)g_win_h;
-        glFrustum(-right_v + dx, right_v + dx,
-                  -top_v   + dy, top_v   + dy,
-                  near_z, far_z);
-    }
-    glMatrixMode(GL_MODELVIEW);
-    glLoadIdentity();
-
-    glTranslatef(g_cam_px, g_cam_py, -g_cam_dist);
-    glRotatef(g_cam_rx, 1, 0, 0);
-    glRotatef(g_cam_ry, 0, 1, 0);
-
-    setup_lights();
-    glDisable(GL_LIGHTING); /* baseline: disabled; execute_commands() enables if user typed it */
-
-    GLfloat mspec[] = { 0.4f, 0.4f, 0.4f, 1.0f };
-    GLfloat mshin[] = { 30.0f };
-    glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, mspec);
-    glMaterialfv(GL_FRONT_AND_BACK, GL_SHININESS, mshin);
-
-    glColor3f(0.70f, 0.70f, 0.80f);
-    // Enable blending for line smoothing
-    glEnable(GL_BLEND);
-    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-
-    draw_grid();
-    draw_axes();
-
-    if (g_wireframe) glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
-
-    glPushMatrix();
-    execute_commands();
-    glPopMatrix();
-
-    if (g_wireframe) glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
-
-    /* Polygon outline overlay (optional) + current-block highlight.
-     * Each overlay pass is wrapped in push/pop so transforms don't bleed
-     * between passes.  CMD_TRANSLATE3F is replayed within each pass so
-     * outlines are positioned correctly even when transforms separate blocks. */
-    glDisable(GL_LIGHTING);
-    glEnable(GL_POLYGON_OFFSET_LINE);
-    glPolygonOffset(-1.0f, -1.0f);
-    glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
-    if (g_show_outlines || g_highlight_current_poly) {
-        glPushMatrix();
-        int in_begin = 0;
-        int block_begin_idx = -1; /* flat index of current block's CMD_BEGIN */
-        for (int i = 0; i < g_num_flat_cmds; i++) {
-            if (!g_flat_cmds[i].valid) continue;
-
-            switch (g_flat_cmds[i].type) {
-            case CMD_TRANSLATE3F:
-                if (!in_begin)
-                    glTranslatef(g_flat_cmds[i].args[0], g_flat_cmds[i].args[1],
-                                 g_flat_cmds[i].args[2]);
-                break;
-            case CMD_BEGIN: {
-                if (in_begin) glEnd();
-                /* Choose outline color: bright cyan for highlighted block, black otherwise */
-                int is_current = (g_highlight_current_poly &&
-                                  g_current_block_begin >= 0 &&
-                                  i == g_current_block_begin);
-                if (is_current) {
-                    glLineWidth(3.0f);
-                    glColor3f(0.0f, 0.9f, 0.9f); /* bright cyan */
-                } else if (g_show_outlines) {
-                    glLineWidth(1.0f);
-                    glColor3f(0.0f, 0.0f, 0.0f);
-                } else {
-                    /* outlines off but current poly highlight enabled — skip non-current */
-                    if (!is_current) { glBegin(g_flat_cmds[i].mode); in_begin = 1; block_begin_idx = i; break; }
-                }
-                glBegin(g_flat_cmds[i].mode);
-                in_begin = 1;
-                block_begin_idx = i;
-                break;
-            }
-            case CMD_END:
-                if (in_begin) {
-                    glEnd(); in_begin = 0;
-                    glLineWidth(1.0f);
-                    glColor3f(0.0f, 0.0f, 0.0f);
-                }
-                block_begin_idx = -1;
-                break;
-            case CMD_VERTEX3F:
-                if (in_begin) {
-                    int is_cur_blk = (g_highlight_current_poly &&
-                                      g_current_block_begin >= 0 &&
-                                      block_begin_idx == g_current_block_begin);
-                    if (is_cur_blk || g_show_outlines)
-                        glVertex3f(g_flat_cmds[i].args[0], g_flat_cmds[i].args[1],
-                                   g_flat_cmds[i].args[2]);
-                }
-                break;
-            default: break;
-            }
-        }
-        if (in_begin) { glEnd(); glLineWidth(1.0f); }
-        glPopMatrix();
-    }
-    glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
-    glDisable(GL_POLYGON_OFFSET_LINE);
-
-    /* Vertex dots — replay transforms so dots match the filled geometry */
-    glPushMatrix();
-    glPointSize(5.0f);
-    glColor3f(0.0f, 0.0f, 0.0f);
-    for (int i = 0; i < g_num_flat_cmds; i++) {
-        if (!g_flat_cmds[i].valid) continue;
-        int is_cursor = (g_flat_cmds[i].src_cmd_idx == g_edit_line);
-
-        // Draw vertex guides and normals if this vertex is at the cursor
-        // position. Do this inline so that the current model matrix is applied
-        // to the guides, ensuring they are positioned correctly even when
-        // transforms separate blocks.
-        if (is_cursor) {
-            draw_vertex_guides();
-            draw_normal_guides();
-        }
-
-        if (g_flat_cmds[i].type == CMD_TRANSLATE3F) {
-            glTranslatef(g_flat_cmds[i].args[0], g_flat_cmds[i].args[1],
-                         g_flat_cmds[i].args[2]);
-        } else if (g_flat_cmds[i].type == CMD_VERTEX3F) {
-            glBegin(GL_POINTS);
-            glVertex3f(g_flat_cmds[i].args[0], g_flat_cmds[i].args[1],
-                       g_flat_cmds[i].args[2]);
-            glEnd();
-        }
-    }
-    glPointSize(1.0f);
-    glPopMatrix();
-    glDisable(GL_BLEND);
-    if (g_user_lighting_enabled) glEnable(GL_LIGHTING);
-
-    draw_lights();
-
-    if (g_show_vnums)   draw_vertex_numbers();
-    if (g_show_normals) draw_normal_vectors();
-}
-
-/* ========================================================================= */
-/* Variable slider panel (4.8)                                               */
-/* ========================================================================= */
-
-#define VAR_PANEL_W   200
-#define VAR_PANEL_PAD   6
-#define VAR_TITLE_H    20
-#define VAR_ROW_H      20
-
-/* Geometry in render coords (y=0 at bottom). */
-static void var_panel_geom(int *px, int *py, int *pw, int *ph) {
-    *pw = VAR_PANEL_W;
-    *ph = VAR_TITLE_H + g_num_predef_vars * VAR_ROW_H + 2 * VAR_PANEL_PAD;
-    int vp_left = (int)(g_win_w * g_panel_frac);
-    *px = g_win_w - *pw - 8;
-    if (*px < vp_left + 4) *px = vp_left + 4;
-    *py = 8;
-}
-
-/* Return 1 if GLUT screen coord (gx, gy) is in the panel; sets *out_row. */
-static int var_panel_hit(int gx, int gy, int *out_row) {
-    int px, py, pw, ph;
-    var_panel_geom(&px, &py, &pw, &ph);
-    int ry = g_win_h - gy;
-    if (gx < px || gx >= px + pw || ry < py || ry >= py + ph) return 0;
-    int inner_top = py + ph - VAR_PANEL_PAD - VAR_TITLE_H;
-    int row = (inner_top - ry) / VAR_ROW_H;
-    if (row < 0 || row >= g_num_predef_vars) return 0;
-    if (out_row) *out_row = row;
-    return 1;
-}
-
-static void render_var_panel(void) {
-    if (!g_show_var_panel) return;
-
-    int px, py, pw, ph;
-    var_panel_geom(&px, &py, &pw, &ph);
-
-    begin_2d();
-    glEnable(GL_BLEND);
-    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-
-    /* Background */
-    glColor4f(0.05f, 0.05f, 0.10f, 0.88f);
-    draw_quad((float)px, (float)py, (float)pw, (float)ph);
-
-    /* Border */
-    glColor4f(0.40f, 0.40f, 0.70f, 0.75f);
-    glBegin(GL_LINE_LOOP);
-    glVertex2f((float)px,        (float)py);
-    glVertex2f((float)(px + pw), (float)py);
-    glVertex2f((float)(px + pw), (float)(py + ph));
-    glVertex2f((float)px,        (float)(py + ph));
-    glEnd();
-
-    /* Title */
-    glColor3f(0.75f, 0.75f, 1.00f);
-    draw_string((float)(px + 6),
-                (float)(py + ph - VAR_PANEL_PAD - 4),
-                "Variables", FONT_SMALL);
-
-    /* Column offsets within the panel */
-    int label_x  = px + 6;
-    int val_x    = px + 22;       /* 1 char label + space */
-    int track_x  = px + 88;       /* label + 8-char value */
-    int track_w  = pw - 88 - 8;
-    int handle_w = 10;
-    float vmin = -5.0f, vmax = 5.0f;
-
-    int inner_top = py + ph - VAR_PANEL_PAD - VAR_TITLE_H;
-
-    for (int i = 0; i < g_num_predef_vars; i++) {
-        int row_y  = inner_top - (i + 1) * VAR_ROW_H;
-        int text_y = row_y + 4;
-        float val  = g_predef_vars[i].value;
-
-        /* Drag highlight */
-        if (g_drag_var == i) {
-            glColor4f(0.20f, 0.20f, 0.40f, 0.60f);
-            draw_quad((float)(px + 1), (float)row_y,
-                      (float)(pw - 2), (float)VAR_ROW_H);
-        }
-
-        /* Label */
-        glColor3f(0.70f, 0.85f, 0.70f);
-        draw_string((float)label_x, (float)text_y,
-                    g_predef_vars[i].name, FONT_SMALL);
-
-        /* Value */
-        char valstr[16]; snprintf(valstr, sizeof(valstr), "%7.3f", (double)val);
-        glColor3f(0.90f, 0.90f, 0.60f);
-        draw_string((float)val_x, (float)text_y, valstr, FONT_SMALL);
-
-        /* Slider track */
-        glColor4f(0.18f, 0.18f, 0.28f, 0.90f);
-        draw_quad((float)track_x, (float)(row_y + 6),
-                  (float)track_w, (float)(VAR_ROW_H - 12));
-
-        /* Centre tick */
-        float cx = (float)track_x + (float)track_w * 0.5f;
-        glColor4f(0.35f, 0.35f, 0.50f, 0.70f);
-        glBegin(GL_LINES);
-        glVertex2f(cx, (float)(row_y + 5));
-        glVertex2f(cx, (float)(row_y + VAR_ROW_H - 5));
-        glEnd();
-
-        /* Handle */
-        float t = (val - vmin) / (vmax - vmin);
-        if (t < 0.0f) t = 0.0f;
-        if (t > 1.0f) t = 1.0f;
-        float hx = (float)track_x + t * (float)(track_w - handle_w);
-        if (g_drag_var == i)
-            glColor4f(1.00f, 0.80f, 0.20f, 0.95f);
-        else
-            glColor4f(0.55f, 0.70f, 1.00f, 0.90f);
-        draw_quad(hx, (float)(row_y + 4),
-                  (float)handle_w, (float)(VAR_ROW_H - 8));
-    }
-
-    glDisable(GL_BLEND);
-    end_2d();
-}
-
-/* ========================================================================= */
-/* Configuration menu (4.10)                                                  */
-/* ========================================================================= */
-
-#define CFG_ROW_H   22
-#define CFG_PANEL_W 380
-#define CFG_PAD      10
-#define CFG_TITLE_H  24
-
-static void cfg_panel_geom(int *px, int *py, int *pw, int *ph) {
-    *pw = CFG_PANEL_W;
-    *ph = CFG_TITLE_H + CFG_ITEM_COUNT * CFG_ROW_H + 2 * CFG_PAD;
-    int vp_left = (int)(g_win_w * g_panel_frac);
-    int vp_w    = g_win_w - vp_left;
-    *px = vp_left + (vp_w - *pw) / 2;
-    if (*px < vp_left + 4) *px = vp_left + 4;
-    *py = (g_win_h - *ph) / 2;
-    if (*py < 4) *py = 4;
-}
-
-/* Return config row index for GLUT coord, or -1 if outside panel. */
-static int cfg_hit_row(int gx, int gy) {
-    int px, py, pw, ph;
-    cfg_panel_geom(&px, &py, &pw, &ph);
-    int ry = g_win_h - gy;
-    if (gx < px || gx >= px + pw || ry < py || ry >= py + ph) return -1;
-    int inner_top = py + ph - CFG_PAD - CFG_TITLE_H;
-    int row = (inner_top - ry) / CFG_ROW_H;
-    if (row < 0 || row >= CFG_ITEM_COUNT) return -1;
-    return row;
-}
-
-static void render_config_menu(void) {
-    if (!g_show_config) return;
-
-    int px, py, pw, ph;
-    cfg_panel_geom(&px, &py, &pw, &ph);
-
-    begin_2d();
-    glEnable(GL_BLEND);
-    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-
-    /* Background */
-    glColor4f(0.04f, 0.04f, 0.08f, 0.93f);
-    draw_quad((float)px, (float)py, (float)pw, (float)ph);
-
-    /* Border */
-    glColor4f(0.50f, 0.50f, 0.80f, 0.80f);
-    glBegin(GL_LINE_LOOP);
-    glVertex2f((float)px,        (float)py);
-    glVertex2f((float)(px + pw), (float)py);
-    glVertex2f((float)(px + pw), (float)(py + ph));
-    glVertex2f((float)px,        (float)(py + ph));
-    glEnd();
-
-    /* Title */
-    glColor3f(0.80f, 0.80f, 1.00f);
-    draw_string((float)(px + 10),
-                (float)(py + ph - CFG_PAD - 4),
-                "Configuration  ( ` to close )", FONT_MONO);
-
-    /* Column x positions */
-    int col_label = px + 10;
-    int col_state = px + pw - 150;
-    int col_key   = px + pw - 46;
-
-    int inner_top = py + ph - CFG_PAD - CFG_TITLE_H;
-
-    for (int i = 0; i < CFG_ITEM_COUNT; i++) {
-        int row_y  = inner_top - (i + 1) * CFG_ROW_H;
-        int text_y = row_y + 5;
-
-        /* Hover highlight */
-        if (g_config_hover == i) {
-            glColor4f(0.20f, 0.20f, 0.45f, 0.65f);
-            draw_quad((float)(px + 1), (float)row_y,
-                      (float)(pw - 2), (float)CFG_ROW_H);
-        }
-
-        /* Label */
-        glColor3f(0.80f, 0.80f, 0.85f);
-        draw_string((float)col_label, (float)text_y,
-                    g_cfg_items[i].label, FONT_SMALL);
-
-        /* Current state */
-        int val = *g_cfg_items[i].value;
-        const char *state_str;
-        if (g_cfg_items[i].state_names) {
-            state_str = g_cfg_items[i].state_names[val];
-        } else {
-            state_str = val ? "ON" : "OFF";
-        }
-        if (val)
-            glColor3f(0.50f, 1.00f, 0.50f);
-        else
-            glColor3f(0.60f, 0.60f, 0.65f);
-        draw_string((float)col_state, (float)text_y, state_str, FONT_SMALL);
-
-        /* Key hint */
-        glColor3f(0.50f, 0.60f, 0.75f);
-        draw_string((float)col_key, (float)text_y,
-                    g_cfg_items[i].key_hint, FONT_SMALL);
-    }
-
-    glDisable(GL_BLEND);
-    end_2d();
 }
 
 /* ========================================================================= */
@@ -5943,70 +3939,6 @@ static void special_func(int key, int x, int y) {
     default: break;
     }
 
-}
-
-/* Handle left-click in the code panel: navigate to line + column */
-static void handle_code_panel_click(int mx, int my) {
-    /* Convert GLUT Y (top=0) to OpenGL Y (bottom=0) */
-    int gl_y = g_win_h - my;
-
-    /* Same layout constants as render_code_panel */
-    int line_y_start = g_win_h - CODE_MARGIN_Y - LINE_H - LINE_H;
-    int vis = (line_y_start + LINE_H - 3 - gl_y) / LINE_H;
-    if (vis < 0) return;   /* clicked in info bar */
-
-    int n_hpre = 0;
-    for (int i = 0; g_header_pre[i]; i++) n_hpre++;
-    int n_hpost = 0;
-    for (int i = 0; g_header_post[i]; i++) n_hpost++;
-    int n_header = n_hpre + 3 + n_hpost;
-
-    int doc_line = g_scroll + vis;
-    int cmd_area = doc_line - n_header;
-
-    /* Ignore clicks on header or footer */
-    int n_cmd_area = g_num_cmds + (g_inserting ? 1 : 0) + 1;
-    if (cmd_area < 0 || cmd_area >= n_cmd_area) return;
-
-    /* Map cmd_area index to actual command index, accounting for insert line */
-    int target;
-    int on_insert_line = 0;
-    if (g_inserting) {
-        if (cmd_area < g_edit_line) {
-            target = cmd_area;
-        } else if (cmd_area == g_edit_line) {
-            target = -1;
-            on_insert_line = 1;
-        } else {
-            target = cmd_area - 1;
-        }
-    } else {
-        target = cmd_area;
-    }
-
-    if (!on_insert_line) {
-        if (target < 0) target = 0;
-        if (target > g_num_cmds) target = g_num_cmds;
-        navigate_to_line(target);
-    }
-
-    /* Compute cursor column from click X */
-    int linenum_w = 4 * FONT_W;
-    int idx_col_w = g_show_indices ? (6 * FONT_W) : 0;
-    int text_x = CODE_MARGIN_X + linenum_w + FONT_W + idx_col_w;
-    int edit_idx = on_insert_line ? g_edit_line : target;
-    int indent_chars = in_begin_block_at(
-        edit_idx < g_num_cmds ? edit_idx : g_num_cmds) ? 4 : 2;
-    int col = (mx - text_x - indent_chars * FONT_W + FONT_W / 2) / FONT_W;
-    if (col < 0) col = 0;
-    if (col > g_input_len) col = g_input_len;
-    g_cursor_pos = col;
-
-    g_cursor_on = 1;
-    g_blink_tick = 0;
-    g_ac_count = 0;
-    g_ac_ghost[0] = '\0';
-    clear_selection();
 }
 
 static void mouse_func(int button, int state, int x, int y) {

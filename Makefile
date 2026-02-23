@@ -21,8 +21,11 @@ GL_LDFLAGS = \
 
 all: sample test_eval
 
-sample: sample.c repl_eval.c repl_eval.h
-	$(CC) $(CFLAGS) -o $@ sample.c repl_eval.c $(GL_LDFLAGS)
+SRCS = sample.c scene_render.c ui_panels.c repl_eval.c
+HDRS = sample.h scene_render.h ui_panels.h repl_eval.h
+
+sample: $(SRCS) $(HDRS)
+	$(CC) $(CFLAGS) -o $@ $(SRCS) $(GL_LDFLAGS)
 
 test_eval: test_eval.c repl_eval.c repl_eval.h
 	$(CC) $(CFLAGS) -o $@ test_eval.c repl_eval.c -lm -lpthread
