@@ -18,7 +18,13 @@ static void color_for_type(CmdType t) {
     case CMD_VERTEX3F:
     case CMD_VERTEX2F: glColor3f(0.40f, 0.90f, 0.40f); break;
     case CMD_NORMAL3F:      glColor3f(0.40f, 0.80f, 0.95f); break;
-    case CMD_TRANSLATE3F:   glColor3f(0.95f, 0.65f, 0.40f); break;
+    case CMD_TRANSLATE3F:
+    case CMD_SCALEF:
+    case CMD_ROTATEF:
+    case CMD_PUSH_MATRIX:
+    case CMD_POP_MATRIX:    glColor3f(0.95f, 0.65f, 0.40f); break; /* orange */
+    case CMD_COLOR_MATERIAL:glColor3f(0.95f, 0.85f, 0.30f); break; /* yellow */
+    case CMD_LIGHT_MODEL_I: glColor3f(0.80f, 0.70f, 0.95f); break; /* lavender */
     case CMD_COLOR3F:
     case CMD_COLOR4F:  glColor3f(0.95f, 0.85f, 0.30f); break;
     case CMD_FOR_BEGIN:
@@ -571,6 +577,7 @@ void render_help(void) {
         "  Ctrl+X               Cut line/selection (for-loop on BEGIN)",
         "  Ctrl+V               Paste before current line",
         "  Ctrl+Z               Undo last command",
+        "  Ctrl+Y/Ctrl+Shift+Z  Redo last command",
         "  Ctrl+D               Delete line at cursor",
         "  Ctrl+L               Clear all commands",
         "  Ctrl+S               Save to output.c",

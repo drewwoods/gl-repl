@@ -112,6 +112,34 @@ const EnumEntry g_shade_models[] = {
     { NULL, 0 }
 };
 
+const EnumEntry g_face_types[] = {
+    { "GL_FRONT",            GL_FRONT },
+    { "GL_BACK",             GL_BACK },
+    { "GL_FRONT_AND_BACK",   GL_FRONT_AND_BACK },
+    { NULL, 0 }
+};
+
+const EnumEntry g_material_params[] = {
+    { "GL_AMBIENT",             GL_AMBIENT },
+    { "GL_DIFFUSE",             GL_DIFFUSE },
+    { "GL_SPECULAR",            GL_SPECULAR },
+    { "GL_EMISSION",            GL_EMISSION },
+    { "GL_AMBIENT_AND_DIFFUSE", GL_AMBIENT_AND_DIFFUSE },
+    { NULL, 0 }
+};
+
+const EnumEntry g_light_model_params[] = {
+    { "GL_LIGHT_MODEL_LOCAL_VIEWER", GL_LIGHT_MODEL_LOCAL_VIEWER },
+    { "GL_LIGHT_MODEL_TWO_SIDE",     GL_LIGHT_MODEL_TWO_SIDE },
+    { NULL, 0 }
+};
+
+const EnumEntry g_bool_vals[] = {
+    { "GL_TRUE",  GL_TRUE  },
+    { "GL_FALSE", GL_FALSE },
+    { NULL, 0 }
+};
+
 const char *g_func_completions[] = {
     "glVertex3f(",
     "glVertex2f(",
@@ -124,6 +152,12 @@ const char *g_func_completions[] = {
     "glDisable(",
     "glShadeModel(",
     "glTranslatef(",
+    "glScalef(",
+    "glRotatef(",
+    "glPushMatrix(GL_MODELVIEW)",
+    "glPopMatrix()",
+    "glColorMaterial(",
+    "glLightModeli(",
     "gluSphere(",
     "gluCylinder(",
     "gluDisk(",
@@ -167,6 +201,7 @@ const char *g_header_pre[] = {
     "void display() {",
     "  glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);",
     "  glLoadIdentity();",
+    "  glPushAttrib(GL_ALL_ATTRIB_BITS);",
     NULL
 };
 
@@ -183,6 +218,7 @@ const char *g_header_post[] = {
 
 const char *g_footer[] = {
     "",
+    "  glPopAttrib();",
     "  glutSwapBuffers();",
     "}",
     "",
@@ -1926,6 +1962,118 @@ static int parse_command_internal(const char *line, GLCmd *cmd,
         return 0;
     }
 
+    /* glScalef(x, y, z) */
+    if (strcmp(func, "glScalef") == 0) {
+        cmd->num_args = parse_exprs(args, cmd->args, 3, vars, num_vars);
+        if (cmd->num_args == 3) {
+            cmd->type = CMD_SCALEF;
+            cmd->valid = 1;
+            snprintf(cmd->source, sizeof(cmd->source),
+                     "%sglScalef(%g, %g, %g);",
+                     indent, cmd->args[0], cmd->args[1], cmd->args[2]);
+            return 1;
+        }
+        set_status("Usage: glScalef(x, y, z)");
+        return 0;
+    }
+
+    /* glRotatef(angle, x, y, z) */
+    if (strcmp(func, "glRotatef") == 0) {
+        cmd->num_args = parse_exprs(args, cmd->args, 4, vars, num_vars);
+        if (cmd->num_args == 4) {
+            cmd->type = CMD_ROTATEF;
+            cmd->valid = 1;
+            snprintf(cmd->source, sizeof(cmd->source),
+                     "%sglRotatef(%g, %g, %g, %g);",
+                     indent, cmd->args[0], cmd->args[1],
+                     cmd->args[2], cmd->args[3]);
+            return 1;
+        }
+        set_status("Usage: glRotatef(angle, x, y, z)");
+        return 0;
+    }
+
+    /* glPushMatrix() */
+    if (strcmp(func, "glPushMatrix") == 0) {
+        cmd->type = CMD_PUSH_MATRIX;
+        cmd->valid = 1;
+        snprintf(cmd->source, sizeof(cmd->source), "%sglPushMatrix(GL_MODELVIEW);", indent);
+        return 1;
+    }
+
+    /* glPopMatrix() */
+    if (strcmp(func, "glPopMatrix") == 0) {
+        cmd->type = CMD_POP_MATRIX;
+        cmd->valid = 1;
+        snprintf(cmd->source, sizeof(cmd->source), "%sglPopMatrix();", indent);
+        return 1;
+    }
+
+    /* glColorMaterial(face, mode) */
+    if (strcmp(func, "glColorMaterial") == 0) {
+        char a1[64] = "", a2[64] = "";
+        char *comma = strchr(args, ',');
+        if (!comma) { set_status("Usage: glColorMaterial(face, mode)"); return 0; }
+        int l1 = (int)(comma - args);
+        strncpy(a1, args, l1); a1[l1] = '\0';
+        strncpy(a2, comma + 1, sizeof(a2) - 1);
+        /* trim */
+        char *p1 = a1; while (*p1 == ' ') p1++;
+        int e1 = (int)strlen(p1); while (e1 > 0 && p1[e1-1] == ' ') p1[--e1] = '\0';
+        char *p2 = a2; while (*p2 == ' ') p2++;
+        int e2 = (int)strlen(p2); while (e2 > 0 && p2[e2-1] == ' ') p2[--e2] = '\0';
+        GLenum face = 0, mat = 0;
+        int found1 = 0, found2 = 0;
+        for (int i = 0; g_face_types[i].name; i++)
+            if (strcmp(p1, g_face_types[i].name) == 0) { face = g_face_types[i].value; found1 = 1; break; }
+        for (int i = 0; g_material_params[i].name; i++)
+            if (strcmp(p2, g_material_params[i].name) == 0) { mat = g_material_params[i].value; found2 = 1; break; }
+        if (!found1) { set_status("face: GL_FRONT, GL_BACK, GL_FRONT_AND_BACK"); return 0; }
+        if (!found2) { set_status("mode: GL_AMBIENT, GL_DIFFUSE, GL_AMBIENT_AND_DIFFUSE..."); return 0; }
+        cmd->type = CMD_COLOR_MATERIAL;
+        cmd->valid = 1;
+        cmd->mode = face;
+        cmd->args[0] = (float)mat;
+        cmd->num_args = 1;
+        snprintf(cmd->source, sizeof(cmd->source),
+                 "%sglColorMaterial(%s, %s);", indent, p1, p2);
+        return 1;
+    }
+
+    /* glLightModeli(pname, param) */
+    if (strcmp(func, "glLightModeli") == 0) {
+        char a1[64] = "", a2[64] = "";
+        char *comma = strchr(args, ',');
+        if (!comma) { set_status("Usage: glLightModeli(pname, param)"); return 0; }
+        int l1 = (int)(comma - args);
+        strncpy(a1, args, l1); a1[l1] = '\0';
+        strncpy(a2, comma + 1, sizeof(a2) - 1);
+        char *p1 = a1; while (*p1 == ' ') p1++;
+        int e1 = (int)strlen(p1); while (e1 > 0 && p1[e1-1] == ' ') p1[--e1] = '\0';
+        char *p2 = a2; while (*p2 == ' ') p2++;
+        int e2 = (int)strlen(p2); while (e2 > 0 && p2[e2-1] == ' ') p2[--e2] = '\0';
+        GLenum pname = 0; int found1 = 0;
+        for (int i = 0; g_light_model_params[i].name; i++)
+            if (strcmp(p1, g_light_model_params[i].name) == 0) { pname = g_light_model_params[i].value; found1 = 1; break; }
+        if (!found1) { set_status("pname: GL_LIGHT_MODEL_TWO_SIDE, GL_LIGHT_MODEL_LOCAL_VIEWER"); return 0; }
+        /* param: try GL_TRUE/GL_FALSE by name, then numeric */
+        GLint param = 0; int found2 = 0;
+        for (int i = 0; g_bool_vals[i].name; i++)
+            if (strcmp(p2, g_bool_vals[i].name) == 0) { param = (GLint)g_bool_vals[i].value; found2 = 1; break; }
+        if (!found2) {
+            float fv; if (parse_exprs(p2, &fv, 1, vars, num_vars) == 1) { param = (GLint)fv; found2 = 1; }
+        }
+        if (!found2) { set_status("param: GL_TRUE, GL_FALSE, or integer"); return 0; }
+        cmd->type = CMD_LIGHT_MODEL_I;
+        cmd->valid = 1;
+        cmd->mode = pname;
+        cmd->args[0] = (float)param;
+        cmd->num_args = 1;
+        snprintf(cmd->source, sizeof(cmd->source),
+                 "%sglLightModeli(%s, %s);", indent, p1, p2);
+        return 1;
+    }
+
     /* glColor3f(r, g, b) */
     if (strcmp(func, "glColor3f") == 0) {
         cmd->num_args = parse_exprs(args, cmd->args, 3, vars, num_vars);
@@ -2659,6 +2807,26 @@ void execute_commands(void) {
         case CMD_TRANSLATE3F:
             glTranslatef(g_flat_cmds[pc].args[0], g_flat_cmds[pc].args[1],
                          g_flat_cmds[pc].args[2]);
+            break;
+        case CMD_SCALEF:
+            glScalef(g_flat_cmds[pc].args[0], g_flat_cmds[pc].args[1],
+                     g_flat_cmds[pc].args[2]);
+            break;
+        case CMD_ROTATEF:
+            glRotatef(g_flat_cmds[pc].args[0], g_flat_cmds[pc].args[1],
+                      g_flat_cmds[pc].args[2], g_flat_cmds[pc].args[3]);
+            break;
+        case CMD_PUSH_MATRIX:
+            glPushMatrix();
+            break;
+        case CMD_POP_MATRIX:
+            glPopMatrix();
+            break;
+        case CMD_COLOR_MATERIAL:
+            glColorMaterial(g_flat_cmds[pc].mode, (GLenum)g_flat_cmds[pc].args[0]);
+            break;
+        case CMD_LIGHT_MODEL_I:
+            glLightModeli(g_flat_cmds[pc].mode, (GLint)g_flat_cmds[pc].args[0]);
             break;
         case CMD_VERTEX2F:
             if (in_begin)
