@@ -1371,7 +1371,7 @@ static int load_from_file(const char *filename) {
                 GLCmd tc; memset(&tc, 0, sizeof(tc));
                 tc.type = CMD_TESS_NORMAL; tc.valid = 1; tc.num_args = 3;
                 tc.args[0] = nv[0]; tc.args[1] = nv[1]; tc.args[2] = nv[2];
-                char ind[32]; cmd_indent(g_num_cmds, ind, sizeof(ind));
+                char ind[32]; cmd_tess_indent(g_num_cmds, ind, sizeof(ind));
                 snprintf(tc.source, sizeof(tc.source),
                          "%sgluNormal(%g, %g, %g);", ind, nv[0], nv[1], nv[2]);
                 g_cmds[g_num_cmds++] = tc; loaded++;
@@ -1394,7 +1394,7 @@ static int load_from_file(const char *filename) {
                 tc.type = CMD_TESS_COLOR; tc.valid = 1; tc.num_args = 4;
                 tc.args[0] = cv[0]; tc.args[1] = cv[1];
                 tc.args[2] = cv[2]; tc.args[3] = cv[3];
-                char ind[32]; cmd_indent(g_num_cmds, ind, sizeof(ind));
+                char ind[32]; cmd_tess_indent(g_num_cmds, ind, sizeof(ind));
                 snprintf(tc.source, sizeof(tc.source),
                          "%sgluColor(%g, %g, %g, %g);",
                          ind, cv[0], cv[1], cv[2], cv[3]);
@@ -1419,7 +1419,7 @@ static int load_from_file(const char *filename) {
                 GLCmd tc; memset(&tc, 0, sizeof(tc));
                 tc.type = CMD_TESS_VERTEX; tc.valid = 1; tc.num_args = 3;
                 tc.args[0] = vv[0]; tc.args[1] = vv[1]; tc.args[2] = vv[2];
-                char ind[32]; cmd_indent(g_num_cmds, ind, sizeof(ind));
+                char ind[32]; cmd_tess_indent(g_num_cmds, ind, sizeof(ind));
                 snprintf(tc.source, sizeof(tc.source),
                          "%sgluVertex(%g, %g, %g);", ind, vv[0], vv[1], vv[2]);
                 g_cmds[g_num_cmds++] = tc; loaded++;
