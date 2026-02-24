@@ -852,8 +852,8 @@ void render_config_menu(void) {
 
     /* Column x positions */
     int col_label = px + 10;
-    int col_state = px + pw - 150;
-    int col_key   = px + pw - 46;
+    int col_state = px + pw - 190;
+    int col_key   = px + pw - 56;
 
     int inner_top = py + ph - CFG_PAD - CFG_TITLE_H;
 

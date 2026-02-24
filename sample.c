@@ -339,7 +339,7 @@ int    g_show_vnums   = 1;
 int    g_show_normals = 1;
 int    g_show_indices = 1;
 int    g_show_guides  = 1;
-int    g_autonormal   = 1;
+int    g_autonormal   = 0;
 int    g_show_lights  = 1;
 int    g_cam_rotate   = 0;  /* auto-rotate camera around Y */
 int    g_example_idx  = -1; /* current predefined example (-1 = none loaded yet) */
@@ -441,18 +441,19 @@ static void load_example(int idx);
 /* ========================================================================= */
 
 CfgItem g_cfg_items[] = {
-    { "Wireframe",        "F2",  &g_wireframe,              2,               NULL          },
-    { "Grid",             "F3",  &g_grid_theme,             GRID_THEME_COUNT, g_grid_names },
-    { "Axes",             "F4",  &g_axes_theme,             AXES_THEME_COUNT, g_axes_names },
-    { "Vertex labels",    "F5",  &g_show_vnums,             2,               NULL          },
-    { "Normal vectors",   "F6",  &g_show_normals,           2,               NULL          },
-    { "Outlines",         "F7",  &g_show_outlines,          2,               NULL          },
-    { "Vertex guides",    "F8",  &g_show_guides,            2,               NULL          },
-    { "Auto-normals",     "F9",  &g_autonormal,             2,               NULL          },
-    { "Light indicators", "F10", &g_show_lights,            2,               NULL          },
-    { "Camera rotate",    "F11", &g_cam_rotate,             2,               NULL          },
-    { "Poly highlight",   "--",  &g_highlight_current_poly, 2,               NULL          },
-    { "Variable panel",   "--",  &g_show_var_panel,         2,               NULL          },
+    { "Wireframe",        "F2",     &g_wireframe,              2,               NULL          },
+    { "Grid",             "F3",     &g_grid_theme,             GRID_THEME_COUNT, g_grid_names },
+    { "Axes",             "F4",     &g_axes_theme,             AXES_THEME_COUNT, g_axes_names },
+    { "Vertex labels",    "F5",     &g_show_vnums,             2,               NULL          },
+    { "Normal vectors",   "F6",     &g_show_normals,           2,               NULL          },
+    { "Outlines",         "F7",     &g_show_outlines,          2,               NULL          },
+    { "Vertex guides",    "F8",     &g_show_guides,            2,               NULL          },
+    { "Auto-normals",     "F9",     &g_autonormal,             2,               NULL          },
+    { "Light indicators", "F10",    &g_show_lights,            2,               NULL          },
+    { "Camera rotate",    "F11",    &g_cam_rotate,             2,               NULL          },
+    { "Auto time",        "Ctrl+t", &g_t_playing,              2,               NULL          },
+    { "Poly highlight",   "--",     &g_highlight_current_poly, 2,               NULL          },
+    { "Variable panel",   "`",      &g_show_var_panel,         2,               NULL          },
 };
 const int CFG_ITEM_COUNT = (int)(sizeof(g_cfg_items)/sizeof(g_cfg_items[0]));
 
