@@ -339,6 +339,124 @@ static void test_reindent_for_loop_body(void) {
                "      gluVertex(cos(i), sin(i), 0);");
 }
 
+/* ---- fmt_tess_leaf_indent tests --------------------------------------- */
+
+static void test_tess_leaf_indent(void) {
+    printf("test_tess_leaf_indent\n");
+
+    /* Outside all scopes: 2-space */
+    { FmtCmd seq[] = {}; ASSERT_STR("tess_leaf empty", indent_str(seq, 0), "  "); }
+
+    /* Inside tess polygon only (tess=1): 4-space */
+    { FmtCmd seq[] = { V(FMT_TESS_BEGIN_POLYGON) };
+      char buf[32]; fmt_tess_leaf_indent(seq, 1, buf, sizeof(buf));
+      ASSERT_STR("tess_leaf tess=1", buf, "    "); }
+
+    /* Inside tess contour (tess=2): 6-space */
+    { FmtCmd seq[] = { V(FMT_TESS_BEGIN_POLYGON), V(FMT_TESS_BEGIN_CONTOUR) };
+      char buf[32]; fmt_tess_leaf_indent(seq, 2, buf, sizeof(buf));
+      ASSERT_STR("tess_leaf tess=2", buf, "      "); }
+
+    /* KEY: inside tess=2 AND inside glBegin — begin depth must NOT be added */
+    { FmtCmd seq[] = {
+          V(FMT_TESS_BEGIN_POLYGON), V(FMT_TESS_BEGIN_CONTOUR), V(FMT_GL_BEGIN) };
+      char buf[32]; fmt_tess_leaf_indent(seq, 3, buf, sizeof(buf));
+      ASSERT_STR("tess_leaf tess=2 begin=1", buf, "      ");  /* 6, not 8 */
+      /* Compare with fmt_indent at same position: */
+      fmt_indent(seq, 3, buf, sizeof(buf));
+      ASSERT_STR("fmt_indent tess=2 begin=1", buf, "        ");  /* 8 */
+    }
+}
+
+static void test_glu_vs_gl_indent_contrast(void) {
+    printf("test_glu_vs_gl_indent_contrast\n");
+    /* Demonstrates the distinction from the user's desired layout:
+     *
+     *   gluBegin(GLU_POLYGON);         ← 2-space  tess_leaf(tess=0)
+     *     gluBegin(GLU_CONTOUR);       ← 4-space  tess_leaf(tess=1)
+     *       glBegin(GL_QUAD_STRIP);    ← 6-space  fmt_indent(tess=2, begin=0)
+     *       gluNormal(0, 0, 1);        ← 6-space  tess_leaf(tess=2, begin=1→ignored)
+     *       gluVertex(-1, -1, 0);      ← 6-space  tess_leaf(tess=2, begin=1→ignored)
+     *         glColor3f(1, 0, 0);      ← 8-space  fmt_indent(tess=2, begin=1)
+     *         glVertex3f(-1, -1, 0);   ← 8-space  fmt_indent(tess=2, begin=1)
+     *       glEnd();                   ← 6-space  fmt_end_indent(tess=2)
+     *     gluEnd();                    ← 4-space  tess_end(tess=2 → tess-1=1)
+     *   gluEnd();                      ← 2-space  tess_end(tess=1 → tess-1=0)
+     */
+    FmtCmd polygon[]  = {};
+    FmtCmd contour[]  = { V(FMT_TESS_BEGIN_POLYGON) };
+    FmtCmd gl_begin[] = { V(FMT_TESS_BEGIN_POLYGON), V(FMT_TESS_BEGIN_CONTOUR) };
+    FmtCmd inside[]   = { V(FMT_TESS_BEGIN_POLYGON), V(FMT_TESS_BEGIN_CONTOUR),
+                          V(FMT_GL_BEGIN) };
+    char buf[32];
+
+    /* gluBegin(GLU_POLYGON) opener: tess_leaf at tess=0 */
+    fmt_tess_leaf_indent(polygon, 0, buf, sizeof(buf));
+    ASSERT_STR("gluBegin(POLYGON) opener", buf, "  ");
+
+    /* gluBegin(GLU_CONTOUR) opener: tess_leaf at tess=1 */
+    fmt_tess_leaf_indent(contour, 1, buf, sizeof(buf));
+    ASSERT_STR("gluBegin(CONTOUR) opener", buf, "    ");
+
+    /* glBegin(GL_QUAD_STRIP): fmt_indent at tess=2, begin=0 */
+    fmt_indent(gl_begin, 2, buf, sizeof(buf));
+    ASSERT_STR("glBegin at tess=2", buf, "      ");
+
+    /* gluNormal/gluVertex: tess_leaf at tess=2, begin=1 → 6 */
+    fmt_tess_leaf_indent(inside, 3, buf, sizeof(buf));
+    ASSERT_STR("gluNormal at tess=2 begin=1", buf, "      ");
+
+    /* glColor3f/glVertex3f: fmt_indent at tess=2, begin=1 → 8 */
+    fmt_indent(inside, 3, buf, sizeof(buf));
+    ASSERT_STR("glVertex3f at tess=2 begin=1", buf, "        ");
+
+    /* glEnd(): fmt_end_indent at tess=2, begin=1 → 6 */
+    fmt_end_indent(inside, 3, buf, sizeof(buf));
+    ASSERT_STR("glEnd at tess=2 begin=1", buf, "      ");
+
+    /* gluEnd() closing contour: tess_end at tess=2 → 4 */
+    fmt_tess_end_indent(gl_begin, 2, buf, sizeof(buf));
+    ASSERT_STR("gluEnd(contour)", buf, "    ");
+
+    /* gluEnd() closing polygon: tess_end at tess=1 → 2 */
+    fmt_tess_end_indent(contour, 1, buf, sizeof(buf));
+    ASSERT_STR("gluEnd(polygon)", buf, "  ");
+}
+
+/* ---- fmt_reindent_from_parsed tests ----------------------------------- */
+
+static void test_reindent_from_parsed(void) {
+    printf("test_reindent_from_parsed\n");
+    char out[64];
+
+    /* Simple case: parse_command produced 2-space indent */
+    fmt_reindent_from_parsed("  glVertex3f(0, 1, 0);",
+                             "  glVertex3f(x, y, z);", out, sizeof(out));
+    ASSERT_STR("reindent_from_parsed 2-space", out, "  glVertex3f(x, y, z);");
+
+    /* 8-space parsed (gl command inside tess+begin), raw has 2-space */
+    fmt_reindent_from_parsed("        glVertex3f(0, 1, 0);",
+                             "  glVertex3f(x, y, z);", out, sizeof(out));
+    ASSERT_STR("reindent_from_parsed 8-space", out, "        glVertex3f(x, y, z);");
+
+    /* 6-space parsed (glu command inside tess+begin), raw has 2-space.
+     * This is the key case: gluNormal/gluColor/gluVertex get 6-space from
+     * parse_command (using fmt_tess_leaf_indent), and we preserve that. */
+    fmt_reindent_from_parsed("      gluVertex(0, 1, 0);",
+                             "  gluVertex(x, y, z);", out, sizeof(out));
+    ASSERT_STR("reindent_from_parsed 6-space glu", out, "      gluVertex(x, y, z);");
+
+    /* 0-space parsed (label or similar) */
+    fmt_reindent_from_parsed("loop:",
+                             "loop:", out, sizeof(out));
+    ASSERT_STR("reindent_from_parsed 0-space", out, "loop:");
+
+    /* raw has no leading whitespace */
+    fmt_reindent_from_parsed("    glColor3f(1, 0, 0);",
+                             "glColor3f(r, g, b);", out, sizeof(out));
+    ASSERT_STR("reindent_from_parsed raw no indent", out, "    glColor3f(r, g, b);");
+}
+
 static void test_autonormal_indent(void) {
     printf("test_autonormal_indent\n");
     /* Autonormals are inserted immediately before a vertex command using
@@ -398,6 +516,13 @@ int main(void) {
     test_invalid_cmds_skipped();
     test_underflow_clamps_to_zero();
     test_no_tess_plain_begin();
+
+    printf("\n--- fmt_tess_leaf_indent ---\n\n");
+    test_tess_leaf_indent();
+    test_glu_vs_gl_indent_contrast();
+
+    printf("\n--- fmt_reindent_from_parsed ---\n\n");
+    test_reindent_from_parsed();
 
     printf("\n--- autonormal ---\n\n");
     test_autonormal_indent();
