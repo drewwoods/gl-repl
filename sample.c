@@ -71,6 +71,7 @@
  */
 
 #include "sample.h"
+#include "cmd_format.h"
 #include "scene_render.h"
 #include "ui_panels.h"
 
@@ -472,19 +473,51 @@ const char *mode_name(GLenum mode) {
 }
 
 /* Check begin block depth up to (but not including) line_idx */
-int in_begin_block_at(int line_idx) {
-    int depth = 0;
-    int limit = (line_idx < g_num_cmds) ? line_idx : g_num_cmds;
-    for (int i = 0; i < limit; i++) {
-        if (!g_cmds[i].valid) continue;
-        if (g_cmds[i].type == CMD_BEGIN) depth++;
-        else if (g_cmds[i].type == CMD_END) depth--;
+/* Map CmdType to the minimal FmtType used by cmd_format.c */
+static FmtType to_fmt_type(CmdType t) {
+    switch (t) {
+        case CMD_BEGIN:              return FMT_GL_BEGIN;
+        case CMD_END:                return FMT_GL_END;
+        case CMD_TESS_BEGIN_POLYGON: return FMT_TESS_BEGIN_POLYGON;
+        case CMD_TESS_BEGIN_CONTOUR: return FMT_TESS_BEGIN_CONTOUR;
+        case CMD_TESS_END:           return FMT_TESS_END;
+        default:                     return FMT_OTHER;
     }
-    return depth > 0;
+}
+
+/* Build a FmtCmd slice from g_cmds[0..pos-1] (capped at g_num_cmds).
+ * Returns the number of entries written. */
+static int build_fmt_slice(int pos, FmtCmd *out, int out_sz) {
+    int n = pos < g_num_cmds ? pos : g_num_cmds;
+    if (n > out_sz) n = out_sz;
+    for (int i = 0; i < n; i++) {
+        out[i].type  = to_fmt_type(g_cmds[i].type);
+        out[i].valid = g_cmds[i].valid;
+    }
+    return n;
+}
+
+int in_begin_block_at(int pos) {
+    FmtCmd fc[MAX_COMMANDS];
+    int n = build_fmt_slice(pos, fc, MAX_COMMANDS);
+    return fmt_begin_depth(fc, n) > 0;
 }
 
 int in_begin_block(void) {
     return in_begin_block_at(g_num_cmds);
+}
+
+static int tess_scope_depth_at(int pos) {
+    FmtCmd fc[MAX_COMMANDS];
+    int n = build_fmt_slice(pos, fc, MAX_COMMANDS);
+    return fmt_tess_depth(fc, n);
+}
+
+/* Normal command indent: 2 + 2*tess + 2*begin */
+static void cmd_indent(int pos, char *buf, int buf_sz) {
+    FmtCmd fc[MAX_COMMANDS];
+    int n = build_fmt_slice(pos, fc, MAX_COMMANDS);
+    fmt_indent(fc, n, buf, buf_sz);
 }
 
 GLenum current_begin_mode(void) {
@@ -1194,9 +1227,8 @@ static int load_from_file(const char *filename) {
             int saved = g_edit_line;
             g_edit_line = g_num_cmds;
             if (parse_command_with_vars(repl_line, &cmd, dvars, dnv)) {
-                /* Overwrite source with REPL expression text */
-                strncpy(cmd.source, repl_line, sizeof(cmd.source) - 1);
-                cmd.source[sizeof(cmd.source) - 1] = '\0';
+                /* Rewrite source with REPL expression text but correct indent */
+                { FmtCmd _fc[MAX_COMMANDS]; int _n=build_fmt_slice(g_num_cmds,_fc,MAX_COMMANDS); fmt_reindent_expr(_fc,_n,repl_line,cmd.source,sizeof(cmd.source)); }
                 /* Ensure trailing semicolon */
                 int slen = (int)strlen(cmd.source);
                 while (slen > 0 && isspace((unsigned char)cmd.source[slen-1]))
@@ -1309,8 +1341,9 @@ static int load_from_file(const char *filename) {
             if (g_num_cmds < MAX_COMMANDS) {
                 GLCmd tc; memset(&tc, 0, sizeof(tc));
                 tc.type = CMD_TESS_END; tc.valid = 1;
-                const char *end_ind = strstr(p, "gluTessEndContour") ? "    " : "  ";
-                snprintf(tc.source, sizeof(tc.source), "%sgluEnd();", end_ind);
+                FmtCmd _fc[MAX_COMMANDS]; int _n=build_fmt_slice(g_num_cmds,_fc,MAX_COMMANDS);
+                char ind[32]; fmt_tess_end_indent(_fc,_n,ind,sizeof(ind));
+                snprintf(tc.source, sizeof(tc.source), "%sgluEnd();", ind);
                 g_cmds[g_num_cmds++] = tc; loaded++;
             }
             continue;
@@ -1330,8 +1363,9 @@ static int load_from_file(const char *filename) {
                 GLCmd tc; memset(&tc, 0, sizeof(tc));
                 tc.type = CMD_TESS_NORMAL; tc.valid = 1; tc.num_args = 3;
                 tc.args[0] = nv[0]; tc.args[1] = nv[1]; tc.args[2] = nv[2];
+                char ind[32]; cmd_indent(g_num_cmds, ind, sizeof(ind));
                 snprintf(tc.source, sizeof(tc.source),
-                         "      gluNormal(%g, %g, %g);", nv[0], nv[1], nv[2]);
+                         "%sgluNormal(%g, %g, %g);", ind, nv[0], nv[1], nv[2]);
                 g_cmds[g_num_cmds++] = tc; loaded++;
             }
             continue;
@@ -1352,9 +1386,10 @@ static int load_from_file(const char *filename) {
                 tc.type = CMD_TESS_COLOR; tc.valid = 1; tc.num_args = 4;
                 tc.args[0] = cv[0]; tc.args[1] = cv[1];
                 tc.args[2] = cv[2]; tc.args[3] = cv[3];
+                char ind[32]; cmd_indent(g_num_cmds, ind, sizeof(ind));
                 snprintf(tc.source, sizeof(tc.source),
-                         "      gluColor(%g, %g, %g, %g);",
-                         cv[0], cv[1], cv[2], cv[3]);
+                         "%sgluColor(%g, %g, %g, %g);",
+                         ind, cv[0], cv[1], cv[2], cv[3]);
                 g_cmds[g_num_cmds++] = tc; loaded++;
             }
             continue;
@@ -1376,8 +1411,9 @@ static int load_from_file(const char *filename) {
                 GLCmd tc; memset(&tc, 0, sizeof(tc));
                 tc.type = CMD_TESS_VERTEX; tc.valid = 1; tc.num_args = 3;
                 tc.args[0] = vv[0]; tc.args[1] = vv[1]; tc.args[2] = vv[2];
+                char ind[32]; cmd_indent(g_num_cmds, ind, sizeof(ind));
                 snprintf(tc.source, sizeof(tc.source),
-                         "      gluVertex(%g, %g, %g);", vv[0], vv[1], vv[2]);
+                         "%sgluVertex(%g, %g, %g);", ind, vv[0], vv[1], vv[2]);
                 g_cmds[g_num_cmds++] = tc; loaded++;
             }
             continue;
@@ -1390,11 +1426,18 @@ static int load_from_file(const char *filename) {
             c_expr_to_repl(line, repl_line, sizeof(repl_line));
             GLCmd cmd;
             memset(&cmd, 0, sizeof(cmd));
-            if (parse_command(repl_line, &cmd)) {
+            /* Set g_edit_line so tess/begin-block depth is computed correctly */
+            int saved_el = g_edit_line;
+            g_edit_line = g_num_cmds;
+            int parsed = parse_command(repl_line, &cmd);
+            g_edit_line = saved_el;
+            if (parsed) {
                 if (input_has_predef_vars(repl_line)) {
                     cmd.has_vars = 1;
-                    strncpy(cmd.source, repl_line, sizeof(cmd.source) - 1);
-                    cmd.source[sizeof(cmd.source) - 1] = '\0';
+                    /* Rewrite source with correct indent but raw expression
+                     * text (variable names must be preserved, not substituted) */
+                    FmtCmd _fc[MAX_COMMANDS]; int _n=build_fmt_slice(g_num_cmds,_fc,MAX_COMMANDS);
+                    fmt_reindent_expr(_fc,_n,repl_line,cmd.source,sizeof(cmd.source));
                 }
                 if (g_num_cmds < MAX_COMMANDS) {
                     g_cmds[g_num_cmds++] = cmd;
@@ -1659,8 +1702,7 @@ static int parse_command_internal(const char *line, GLCmd *cmd,
                 cmd->type = CMD_BEGIN;
                 cmd->mode = g_begin_modes[i].value;
                 cmd->valid = 1;
-                snprintf(cmd->source, sizeof(cmd->source),
-                         "  glBegin(%s);", g_begin_modes[i].name);
+                { char _bi[32]; int _td=tess_scope_depth_at(g_edit_line),_sp=2+2*_td; if(_sp>(int)sizeof(_bi)-1)_sp=(int)sizeof(_bi)-1; memset(_bi,' ',_sp);_bi[_sp]='\0'; snprintf(cmd->source,sizeof(cmd->source),"%sglBegin(%s);",_bi,g_begin_modes[i].name); }
                 return 1;
             }
         }
@@ -1668,11 +1710,11 @@ static int parse_command_internal(const char *line, GLCmd *cmd,
         return 0;
     }
 
-    /* glEnd() */
+    /* glEnd() — aligns with its matching glBegin (begin depth not added) */
     if (strcmp(func, "glEnd") == 0) {
         cmd->type = CMD_END;
         cmd->valid = 1;
-        snprintf(cmd->source, sizeof(cmd->source), "  glEnd();");
+        { FmtCmd _fc[MAX_COMMANDS]; int _n=build_fmt_slice(g_edit_line,_fc,MAX_COMMANDS); char _ei[32]; fmt_end_indent(_fc,_n,_ei,sizeof(_ei)); snprintf(cmd->source,sizeof(cmd->source),"%sglEnd();",_ei); }
         return 1;
     }
 
@@ -1687,8 +1729,7 @@ static int parse_command_internal(const char *line, GLCmd *cmd,
                 cmd->type = CMD_ENABLE;
                 cmd->mode = g_enable_caps[i].value;
                 cmd->valid = 1;
-                snprintf(cmd->source, sizeof(cmd->source),
-                         "  glEnable(%s);", g_enable_caps[i].name);
+                { char _ii[32]; cmd_indent(g_edit_line,_ii,sizeof(_ii)); snprintf(cmd->source,sizeof(cmd->source),"%sglEnable(%s);",_ii,g_enable_caps[i].name); }
                 return 1;
             }
         }
@@ -1707,8 +1748,7 @@ static int parse_command_internal(const char *line, GLCmd *cmd,
                 cmd->type = CMD_DISABLE;
                 cmd->mode = g_enable_caps[i].value;
                 cmd->valid = 1;
-                snprintf(cmd->source, sizeof(cmd->source),
-                         "  glDisable(%s);", g_enable_caps[i].name);
+                { char _di[32]; cmd_indent(g_edit_line,_di,sizeof(_di)); snprintf(cmd->source,sizeof(cmd->source),"%sglDisable(%s);",_di,g_enable_caps[i].name); }
                 return 1;
             }
         }
@@ -1727,8 +1767,7 @@ static int parse_command_internal(const char *line, GLCmd *cmd,
                 cmd->type = CMD_SHADE_MODEL;
                 cmd->mode = g_shade_models[i].value;
                 cmd->valid = 1;
-                snprintf(cmd->source, sizeof(cmd->source),
-                         "  glShadeModel(%s);", g_shade_models[i].name);
+                { char _si[32]; cmd_indent(g_edit_line,_si,sizeof(_si)); snprintf(cmd->source,sizeof(cmd->source),"%sglShadeModel(%s);",_si,g_shade_models[i].name); }
                 return 1;
             }
         }
@@ -1736,8 +1775,10 @@ static int parse_command_internal(const char *line, GLCmd *cmd,
         return 0;
     }
 
-    /* Indent based on cursor position context */
-    const char *indent = in_begin_block_at(g_edit_line) ? "    " : "  ";
+    /* Indent: 2-space base + 2 per tess scope depth + 2 if inside glBegin block */
+    char indent_buf[32];
+    cmd_indent(g_edit_line, indent_buf, sizeof(indent_buf));
+    const char *indent = indent_buf;
 
     /* glVertex3f(x, y, z) */
     if (strcmp(func, "glVertex3f") == 0) {
@@ -1958,11 +1999,13 @@ static int parse_command_internal(const char *line, GLCmd *cmd,
         return 0;
     }
 
-    /* gluEnd() — end tessellator contour or polygon */
+    /* gluEnd() — end tessellator contour or polygon.
+     * Indent at the *enclosing* level (tess_depth - 1), same logic as glEnd()
+     * always being at 2-space rather than the 4-space inside a glBegin block. */
     if (strcmp(func, "gluEnd") == 0 || strcmp(p, "gluEnd()") == 0) {
         cmd->type = CMD_TESS_END;
         cmd->valid = 1;
-        snprintf(cmd->source, sizeof(cmd->source), "%sgluEnd();", indent);
+        { FmtCmd _fc[MAX_COMMANDS]; int _n=build_fmt_slice(g_edit_line,_fc,MAX_COMMANDS); char close_ind[32]; fmt_tess_end_indent(_fc,_n,close_ind,sizeof(close_ind)); snprintf(cmd->source,sizeof(cmd->source),"%sgluEnd();",close_ind); }
         return 1;
     }
 
@@ -2080,7 +2123,7 @@ static void face_normal(const float *a, const float *b, const float *c,
 
 /* Build an auto-normal command */
 static GLCmd make_auto_normal(float nx, float ny, float nz,
-                              int inside_begin) {
+                              int insert_pos) {
     GLCmd c;
     memset(&c, 0, sizeof(c));
     c.type = CMD_NORMAL3F;
@@ -2088,9 +2131,10 @@ static GLCmd make_auto_normal(float nx, float ny, float nz,
     c.num_args = 3;
     c.valid = 1;
     c.is_auto = 1;
-    const char *indent = inside_begin ? "    " : "  ";
+    char ind[32];
+    cmd_indent(insert_pos, ind, sizeof(ind));
     snprintf(c.source, sizeof(c.source),
-             "%sglNormal3f(%g, %g, %g);", indent, nx, ny, nz);
+             "%sglNormal3f(%g, %g, %g);", ind, nx, ny, nz);
     return c;
 }
 
@@ -2236,7 +2280,7 @@ void recompute_autonormals(void) {
             }
 
             /* Insert new auto-normal before vertex */
-            GLCmd nc = make_auto_normal(nx, ny, nz, 1);
+            GLCmd nc = make_auto_normal(nx, ny, nz, vidx);
             insert_cmd_at(vidx, &nc);
             offset++;
             block_end++;
