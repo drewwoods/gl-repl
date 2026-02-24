@@ -520,6 +520,13 @@ static void cmd_indent(int pos, char *buf, int buf_sz) {
     fmt_indent(fc, n, buf, buf_sz);
 }
 
+/* Tessellator leaf command indent: 2 + 2*tess  (begin depth ignored) */
+static void cmd_tess_indent(int pos, char *buf, int buf_sz) {
+    FmtCmd fc[MAX_COMMANDS];
+    int n = build_fmt_slice(pos, fc, MAX_COMMANDS);
+    fmt_tess_leaf_indent(fc, n, buf, buf_sz);
+}
+
 GLenum current_begin_mode(void) {
     GLenum mode = GL_TRIANGLES;
     for (int i = 0; i < g_num_cmds; i++)
@@ -1227,8 +1234,9 @@ static int load_from_file(const char *filename) {
             int saved = g_edit_line;
             g_edit_line = g_num_cmds;
             if (parse_command_with_vars(repl_line, &cmd, dvars, dnv)) {
-                /* Rewrite source with REPL expression text but correct indent */
-                { FmtCmd _fc[MAX_COMMANDS]; int _n=build_fmt_slice(g_num_cmds,_fc,MAX_COMMANDS); fmt_reindent_expr(_fc,_n,repl_line,cmd.source,sizeof(cmd.source)); }
+                /* Rewrite source: keep indent from parsed cmd.source (which already
+                 * uses the correct rule for gl vs glu), replace args with raw text */
+                { char _tmp[MAX_LINE_LEN]; fmt_reindent_from_parsed(cmd.source,repl_line,_tmp,sizeof(_tmp)); strncpy(cmd.source,_tmp,sizeof(cmd.source)-1); cmd.source[sizeof(cmd.source)-1]='\0'; }
                 /* Ensure trailing semicolon */
                 int slen = (int)strlen(cmd.source);
                 while (slen > 0 && isspace((unsigned char)cmd.source[slen-1]))
@@ -1318,7 +1326,7 @@ static int load_from_file(const char *filename) {
             if (g_num_cmds < MAX_COMMANDS) {
                 GLCmd tc; memset(&tc, 0, sizeof(tc));
                 tc.type = CMD_TESS_BEGIN_POLYGON; tc.valid = 1;
-                snprintf(tc.source, sizeof(tc.source), "  gluBegin(GLU_POLYGON);");
+                { FmtCmd _fc[MAX_COMMANDS]; int _n=build_fmt_slice(g_num_cmds,_fc,MAX_COMMANDS); char _ti[32]; fmt_tess_leaf_indent(_fc,_n,_ti,sizeof(_ti)); snprintf(tc.source,sizeof(tc.source),"%sgluBegin(GLU_POLYGON);",_ti); }
                 g_cmds[g_num_cmds++] = tc; loaded++;
             }
             continue;
@@ -1329,7 +1337,7 @@ static int load_from_file(const char *filename) {
             if (g_num_cmds < MAX_COMMANDS) {
                 GLCmd tc; memset(&tc, 0, sizeof(tc));
                 tc.type = CMD_TESS_BEGIN_CONTOUR; tc.valid = 1;
-                snprintf(tc.source, sizeof(tc.source), "    gluBegin(GLU_CONTOUR);");
+                { FmtCmd _fc[MAX_COMMANDS]; int _n=build_fmt_slice(g_num_cmds,_fc,MAX_COMMANDS); char _ti[32]; fmt_tess_leaf_indent(_fc,_n,_ti,sizeof(_ti)); snprintf(tc.source,sizeof(tc.source),"%sgluBegin(GLU_CONTOUR);",_ti); }
                 g_cmds[g_num_cmds++] = tc; loaded++;
             }
             continue;
@@ -1434,10 +1442,12 @@ static int load_from_file(const char *filename) {
             if (parsed) {
                 if (input_has_predef_vars(repl_line)) {
                     cmd.has_vars = 1;
-                    /* Rewrite source with correct indent but raw expression
-                     * text (variable names must be preserved, not substituted) */
-                    FmtCmd _fc[MAX_COMMANDS]; int _n=build_fmt_slice(g_num_cmds,_fc,MAX_COMMANDS);
-                    fmt_reindent_expr(_fc,_n,repl_line,cmd.source,sizeof(cmd.source));
+                    /* Rewrite source: keep indent from parsed cmd.source (which already
+                     * uses the correct rule for gl vs glu), replace args with raw text */
+                    char _tmp[MAX_LINE_LEN];
+                    fmt_reindent_from_parsed(cmd.source, repl_line, _tmp, sizeof(_tmp));
+                    strncpy(cmd.source, _tmp, sizeof(cmd.source) - 1);
+                    cmd.source[sizeof(cmd.source) - 1] = '\0';
                 }
                 if (g_num_cmds < MAX_COMMANDS) {
                     g_cmds[g_num_cmds++] = cmd;
@@ -1775,10 +1785,17 @@ static int parse_command_internal(const char *line, GLCmd *cmd,
         return 0;
     }
 
-    /* Indent: 2-space base + 2 per tess scope depth + 2 if inside glBegin block */
+    /* Indent for gl commands: 2 + 2*tess + 2*begin */
     char indent_buf[32];
     cmd_indent(g_edit_line, indent_buf, sizeof(indent_buf));
     const char *indent = indent_buf;
+
+    /* Indent for glu (tessellator) commands: 2 + 2*tess only.
+     * glu commands belong to the tessellator scope, not the GL vertex block,
+     * so glBegin depth is intentionally excluded. */
+    char tess_indent_buf[32];
+    cmd_tess_indent(g_edit_line, tess_indent_buf, sizeof(tess_indent_buf));
+    const char *tess_indent = tess_indent_buf;
 
     /* glVertex3f(x, y, z) */
     if (strcmp(func, "glVertex3f") == 0) {
@@ -1986,13 +2003,13 @@ static int parse_command_internal(const char *line, GLCmd *cmd,
         if (strncmp(a, "GLU_POLYGON", 11) == 0) {
             cmd->type = CMD_TESS_BEGIN_POLYGON;
             cmd->valid = 1;
-            snprintf(cmd->source, sizeof(cmd->source), "  gluBegin(GLU_POLYGON);");
+            snprintf(cmd->source, sizeof(cmd->source), "%sgluBegin(GLU_POLYGON);", tess_indent);
             return 1;
         }
         if (strncmp(a, "GLU_CONTOUR", 11) == 0) {
             cmd->type = CMD_TESS_BEGIN_CONTOUR;
             cmd->valid = 1;
-            snprintf(cmd->source, sizeof(cmd->source), "    gluBegin(GLU_CONTOUR);");
+            snprintf(cmd->source, sizeof(cmd->source), "%sgluBegin(GLU_CONTOUR);", tess_indent);
             return 1;
         }
         set_status("Usage: gluBegin(GLU_POLYGON) or gluBegin(GLU_CONTOUR)");
@@ -2018,7 +2035,7 @@ static int parse_command_internal(const char *line, GLCmd *cmd,
             cmd->has_vars = (num_vars > 0);
             snprintf(cmd->source, sizeof(cmd->source),
                      "%sgluNormal(%g, %g, %g);",
-                     indent, cmd->args[0], cmd->args[1], cmd->args[2]);
+                     tess_indent, cmd->args[0], cmd->args[1], cmd->args[2]);
             return 1;
         }
         set_status("Usage: gluNormal(x, y, z)");
@@ -2036,7 +2053,7 @@ static int parse_command_internal(const char *line, GLCmd *cmd,
             cmd->has_vars = (num_vars > 0);
             snprintf(cmd->source, sizeof(cmd->source),
                      "%sgluColor(%g, %g, %g, %g);",
-                     indent, cmd->args[0], cmd->args[1], cmd->args[2], cmd->args[3]);
+                     tess_indent, cmd->args[0], cmd->args[1], cmd->args[2], cmd->args[3]);
             return 1;
         }
         set_status("Usage: gluColor(r, g, b) or gluColor(r, g, b, a)");
@@ -2052,7 +2069,7 @@ static int parse_command_internal(const char *line, GLCmd *cmd,
             cmd->has_vars = (num_vars > 0);
             snprintf(cmd->source, sizeof(cmd->source),
                      "%sgluVertex(%g, %g, %g);",
-                     indent, cmd->args[0], cmd->args[1], cmd->args[2]);
+                     tess_indent, cmd->args[0], cmd->args[1], cmd->args[2]);
             return 1;
         }
         set_status("Usage: gluVertex(x, y, z)");

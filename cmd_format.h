@@ -75,6 +75,19 @@ void fmt_end_indent(const FmtCmd *cmds, int n, char *buf, int buf_sz);
 void fmt_tess_end_indent(const FmtCmd *cmds, int n, char *buf, int buf_sz);
 
 /*
+ * Write indent for tessellator leaf commands (gluNormal, gluColor, gluVertex,
+ * gluBegin openers).  glBegin depth is intentionally NOT added: these commands
+ * belong to the tessellator scope, not the GL vertex block, so they should
+ * align with the enclosing gluBegin rather than the enclosing glBegin.
+ * Spaces = 2 + 2*tess_depth
+ *
+ * Example — tess=2, begin=1 (glBegin opened inside the contour):
+ *   fmt_indent      → 8 spaces  (gl commands like glVertex3f)
+ *   fmt_tess_leaf_indent → 6 spaces  (glu commands like gluNormal)
+ */
+void fmt_tess_leaf_indent(const FmtCmd *cmds, int n, char *buf, int buf_sz);
+
+/*
  * Reindent a source line for display when the expression text must be
  * preserved verbatim (e.g. has_vars commands where "z" must not be replaced
  * by its current numeric value, or for-loop body lines that reference "i").
@@ -88,5 +101,21 @@ void fmt_tess_end_indent(const FmtCmd *cmds, int n, char *buf, int buf_sz);
  */
 void fmt_reindent_expr(const FmtCmd *cmds, int n,
                        const char *raw_expr, char *out, int out_sz);
+
+/*
+ * Reindent a source line by extracting the indent already present in
+ * parsed_source (computed by parse_command) and applying it to raw_expr.
+ *
+ * Use this instead of fmt_reindent_expr when the correct indent was already
+ * computed by parse_command — it preserves whatever indent rule (fmt_indent
+ * or fmt_tess_leaf_indent) was used there, without recomputing it.
+ *
+ * parsed_source: the source string produced by parse_command (leading spaces
+ *                give the correct indent).
+ * raw_expr:      the raw REPL/file line (leading whitespace is stripped and
+ *                replaced).
+ */
+void fmt_reindent_from_parsed(const char *parsed_source, const char *raw_expr,
+                               char *out, int out_sz);
 
 #endif /* CMD_FORMAT_H */
