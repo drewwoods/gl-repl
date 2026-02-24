@@ -237,10 +237,12 @@ void render_code_panel(void) {
 
         if (i < g_num_cmds) {
             /* Track vertex number for all commands regardless of visibility */
-            if (g_cmds[i].valid && g_cmds[i].type == CMD_BEGIN) vnum = 0;
+            if (g_cmds[i].valid && (g_cmds[i].type == CMD_BEGIN ||
+                                    g_cmds[i].type == CMD_TESS_BEGIN_POLYGON)) vnum = 0;
 
             int is_edit = (!g_inserting && i == g_edit_line);
-            int is_vertex = g_cmds[i].valid && g_cmds[i].type == CMD_VERTEX3F;
+            int is_vertex = g_cmds[i].valid && (g_cmds[i].type == CMD_VERTEX3F ||
+                                                g_cmds[i].type == CMD_TESS_VERTEX);
             if (is_edit) {
                 /* Active editing line */
                 if (cur >= g_scroll && cur < g_scroll + visible_lines) {
