@@ -4349,7 +4349,19 @@ static void motion_func(int x, int y) {
     /* Variable drag */
     if (g_drag_var >= 0) {
         float delta = (float)(x - g_drag_start_x) * 0.05f;
-        g_predef_vars[g_drag_var].value = g_drag_start_val + delta;
+        float new_val = g_drag_start_val + delta;
+        g_predef_vars[g_drag_var].value = new_val;
+        /* Update any CMD_VAR_ASSIGN commands for this variable so that
+         * flatten_range doesn't overwrite the slider value on the next frame. */
+        const char *vname = g_predef_vars[g_drag_var].name;
+        for (int i = 0; i < g_num_cmds; i++) {
+            if (g_cmds[i].valid && g_cmds[i].type == CMD_VAR_ASSIGN &&
+                g_cmds[i].num_args == g_drag_var) {
+                g_cmds[i].args[0] = new_val;
+                snprintf(g_cmds[i].source, sizeof(g_cmds[i].source),
+                         "  %s = %g;", vname, (double)new_val);
+            }
+        }
         g_flat_dirty = 1;
         g_mouse_x = x; g_mouse_y = y;
         glutPostRedisplay();
