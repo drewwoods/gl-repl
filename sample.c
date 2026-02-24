@@ -243,7 +243,7 @@ int    g_flat_dirty = 1;
 void mark_normals_dirty(void) { g_normals_dirty = 1; g_flat_dirty = 1; }
 
 /* ========================================================================= */
-/* Undo ring buffer                                                           */
+/* Undo / redo ring buffers                                                   */
 /* ========================================================================= */
 
 static void load_line_to_input(int idx);  /* defined later */
@@ -259,24 +259,21 @@ typedef struct {
 
 static UndoSnapshot g_undo_buf[UNDO_DEPTH];
 static int g_undo_head  = 0;  /* next slot to write into */
-static int g_undo_count = 0;  /* number of valid snapshots */
+static int g_undo_count = 0;  /* number of valid undo snapshots */
 
-static void push_undo_snapshot(void) {
-    UndoSnapshot *s = &g_undo_buf[g_undo_head];
+static UndoSnapshot g_redo_buf[UNDO_DEPTH];
+static int g_redo_head  = 0;  /* next slot to write into */
+static int g_redo_count = 0;  /* number of valid redo snapshots */
+
+static void snapshot_save(UndoSnapshot *s) {
     memcpy(s->cmds, g_cmds, (size_t)g_num_cmds * sizeof(GLCmd));
     s->num_cmds  = g_num_cmds;
     s->edit_line = g_edit_line;
     for (int i = 0; i < g_num_predef_vars; i++)
         s->predef_vals[i] = g_predef_vars[i].value;
-    g_undo_head = (g_undo_head + 1) % UNDO_DEPTH;
-    if (g_undo_count < UNDO_DEPTH) g_undo_count++;
 }
 
-static void pop_undo_snapshot(void) {
-    if (g_undo_count == 0) { set_status("Nothing to undo"); return; }
-    g_undo_head  = (g_undo_head + UNDO_DEPTH - 1) % UNDO_DEPTH;
-    g_undo_count--;
-    UndoSnapshot *s = &g_undo_buf[g_undo_head];
+static void snapshot_restore(const UndoSnapshot *s) {
     memcpy(g_cmds, s->cmds, (size_t)s->num_cmds * sizeof(GLCmd));
     g_num_cmds  = s->num_cmds;
     g_edit_line = s->edit_line;
@@ -285,8 +282,44 @@ static void pop_undo_snapshot(void) {
     g_inserting = 0;
     load_line_to_input(g_edit_line);
     mark_normals_dirty();
+}
+
+static void push_undo_snapshot(void) {
+    snapshot_save(&g_undo_buf[g_undo_head]);
+    g_undo_head = (g_undo_head + 1) % UNDO_DEPTH;
+    if (g_undo_count < UNDO_DEPTH) g_undo_count++;
+    /* new change invalidates the redo stack */
+    g_redo_count = 0;
+    g_redo_head  = 0;
+}
+
+static void pop_undo_snapshot(void) {
+    if (g_undo_count == 0) { set_status("Nothing to undo"); return; }
+    /* save current state so it can be redone */
+    snapshot_save(&g_redo_buf[g_redo_head]);
+    g_redo_head = (g_redo_head + 1) % UNDO_DEPTH;
+    if (g_redo_count < UNDO_DEPTH) g_redo_count++;
+    /* restore previous state */
+    g_undo_head = (g_undo_head + UNDO_DEPTH - 1) % UNDO_DEPTH;
+    g_undo_count--;
+    snapshot_restore(&g_undo_buf[g_undo_head]);
     char msg[64];
     snprintf(msg, sizeof(msg), "Undo (%d more)", g_undo_count);
+    set_status(msg);
+}
+
+static void do_redo(void) {
+    if (g_redo_count == 0) { set_status("Nothing to redo"); return; }
+    /* save current state so it can be undone */
+    snapshot_save(&g_undo_buf[g_undo_head]);
+    g_undo_head = (g_undo_head + 1) % UNDO_DEPTH;
+    if (g_undo_count < UNDO_DEPTH) g_undo_count++;
+    /* restore next redo state */
+    g_redo_head = (g_redo_head + UNDO_DEPTH - 1) % UNDO_DEPTH;
+    g_redo_count--;
+    snapshot_restore(&g_redo_buf[g_redo_head]);
+    char msg[64];
+    snprintf(msg, sizeof(msg), "Redo (%d more)", g_redo_count);
     set_status(msg);
 }
 
@@ -3558,9 +3591,18 @@ static void keyboard_func(unsigned char key, int x, int y) {
         return;
     }
 
-    /* Ctrl+Z: undo */
+    /* Ctrl+Z: undo  /  Ctrl+Shift+Z: redo */
     if (key == 26) {
-        pop_undo_snapshot();
+        if (glutGetModifiers() & GLUT_ACTIVE_SHIFT)
+            do_redo();
+        else
+            pop_undo_snapshot();
+        return;
+    }
+
+    /* Ctrl+Y: redo */
+    if (key == 25) {
+        do_redo();
         return;
     }
 

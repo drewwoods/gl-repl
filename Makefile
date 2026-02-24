@@ -38,4 +38,4 @@ test: test_eval test_format
 	./test_format
 
 clean:
-	rm -rf sample sample.dSYM test_eval test_eval.dSYM test_format test_format.dSYM
+	rm -rf sample sample.dSYM test_eval test_eval.dSYM test_format test_format.dSYM *.o
