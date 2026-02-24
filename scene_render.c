@@ -139,7 +139,8 @@ static void draw_grid(void) {
         /* Update focus vertex from current or nearest vertex line */
         if (g_edit_line < g_num_cmds &&
             g_cmds[g_edit_line].valid &&
-            g_cmds[g_edit_line].type == CMD_VERTEX3F) {
+            (g_cmds[g_edit_line].type == CMD_VERTEX3F ||
+             g_cmds[g_edit_line].type == CMD_TESS_VERTEX)) {
             g_focus_vtx[0] = g_cmds[g_edit_line].args[0];
             g_focus_vtx[1] = g_cmds[g_edit_line].args[1];
             g_focus_vtx[2] = g_cmds[g_edit_line].args[2];
@@ -147,7 +148,9 @@ static void draw_grid(void) {
         } else if (!g_focus_vtx_valid) {
             /* Scan backwards from edit line for nearest vertex */
             for (int i = g_edit_line - 1; i >= 0; i--) {
-                if (g_cmds[i].valid && g_cmds[i].type == CMD_VERTEX3F) {
+                if (g_cmds[i].valid &&
+                    (g_cmds[i].type == CMD_VERTEX3F ||
+                     g_cmds[i].type == CMD_TESS_VERTEX)) {
                     g_focus_vtx[0] = g_cmds[i].args[0];
                     g_focus_vtx[1] = g_cmds[i].args[1];
                     g_focus_vtx[2] = g_cmds[i].args[2];
@@ -445,27 +448,35 @@ static void draw_vertex_numbers(void) {
     glDisable(GL_DEPTH_TEST);
     glColor3f(1.0f, 1.0f, 0.30f);
 
-    /* Find which glBegin/glEnd block (in g_cmds) the cursor is in */
+    /* Find which glBegin/glEnd or gluBegin(GLU_POLYGON) block the cursor is in */
     int target_block = -1;
     {
         int block = -1;
         int in_block = 0;
+        int tess_depth = 0;
         for (int i = 0; i < g_num_cmds; i++) {
             if (!g_cmds[i].valid) continue;
             if (g_cmds[i].type == CMD_BEGIN) {
                 block++;
                 in_block = 1;
+            } else if (g_cmds[i].type == CMD_TESS_BEGIN_POLYGON) {
+                block++;
+                in_block = 1;
+                tess_depth = 1;
+            } else if (g_cmds[i].type == CMD_TESS_BEGIN_CONTOUR && tess_depth == 1) {
+                tess_depth = 2;
             }
             if (in_block && i == g_edit_line) {
                 target_block = block;
                 break;
             }
             if (g_cmds[i].type == CMD_END) {
-                if (i == g_edit_line) {
-                    target_block = block;
-                    break;
-                }
+                if (i == g_edit_line) { target_block = block; break; }
                 in_block = 0;
+            } else if (g_cmds[i].type == CMD_TESS_END && tess_depth > 0) {
+                if (i == g_edit_line) { target_block = block; break; }
+                tess_depth--;
+                if (tess_depth == 0) in_block = 0;
             }
         }
     }
@@ -475,6 +486,7 @@ static void draw_vertex_numbers(void) {
     int block = -1;
     int in_block = 0;
     int vn = 0;
+    int tess_depth = 0;
     for (int i = 0; i < g_num_flat_cmds; i++) {
         if (!g_flat_cmds[i].valid) continue;
         if (g_flat_cmds[i].type == CMD_TRANSLATE3F) {
@@ -485,9 +497,21 @@ static void draw_vertex_numbers(void) {
             block++;
             in_block = 1;
             vn = 0;
+            tess_depth = 0;
         } else if (g_flat_cmds[i].type == CMD_END) {
             in_block = 0;
-        } else if (g_flat_cmds[i].type == CMD_VERTEX3F) {
+        } else if (g_flat_cmds[i].type == CMD_TESS_BEGIN_POLYGON) {
+            block++;
+            in_block = 1;
+            vn = 0;
+            tess_depth = 1;
+        } else if (g_flat_cmds[i].type == CMD_TESS_BEGIN_CONTOUR) {
+            tess_depth = 2;
+        } else if (g_flat_cmds[i].type == CMD_TESS_END && tess_depth > 0) {
+            tess_depth--;
+            if (tess_depth == 0) in_block = 0;
+        } else if (g_flat_cmds[i].type == CMD_VERTEX3F ||
+                   g_flat_cmds[i].type == CMD_TESS_VERTEX) {
             if (in_block && block == target_block) {
                 char label[16];
                 snprintf(label, sizeof(label), " v%d", vn);
@@ -523,15 +547,18 @@ static void draw_normal_vectors(void) {
             if (!in_begin)
                 glTranslatef(g_flat_cmds[i].args[0], g_flat_cmds[i].args[1],
                              g_flat_cmds[i].args[2]);
-        } else if (g_flat_cmds[i].type == CMD_BEGIN) {
+        } else if (g_flat_cmds[i].type == CMD_BEGIN ||
+                   g_flat_cmds[i].type == CMD_TESS_BEGIN_POLYGON) {
             in_begin = 1;
             nx = 0; ny = 0; nz = 1; /* reset normal per block */
         } else if (g_flat_cmds[i].type == CMD_END) {
             in_begin = 0;
-        } else if (g_flat_cmds[i].type == CMD_NORMAL3F) {
+        } else if (g_flat_cmds[i].type == CMD_NORMAL3F ||
+                   g_flat_cmds[i].type == CMD_TESS_NORMAL) {
             nx = g_flat_cmds[i].args[0]; ny = g_flat_cmds[i].args[1];
             nz = g_flat_cmds[i].args[2];
-        } else if (g_flat_cmds[i].type == CMD_VERTEX3F) {
+        } else if (g_flat_cmds[i].type == CMD_VERTEX3F ||
+                   g_flat_cmds[i].type == CMD_TESS_VERTEX) {
             float vx = g_flat_cmds[i].args[0], vy = g_flat_cmds[i].args[1],
                   vz = g_flat_cmds[i].args[2];
             glBegin(GL_LINES);
@@ -573,12 +600,16 @@ static void draw_guide_yz_plane(float v, float sz) {
 static void draw_vertex_guides(void) {
     if (!g_show_guides) return;
 
-    /* Check current input for a partial glVertex3f( */
-    if (strncmp(g_input, "glVertex3f(", 11) != 0 || g_input_len <= 11)
-        return;
+    /* Check current input for a partial glVertex3f( or gluVertex( */
+    const char *args_str = NULL;
+    if (strncmp(g_input, "glVertex3f(", 11) == 0 && g_input_len > 11)
+        args_str = g_input + 11;
+    else if (strncmp(g_input, "gluVertex(", 10) == 0 && g_input_len > 10)
+        args_str = g_input + 10;
+    if (!args_str) return;
 
     float vals[3];
-    int n = parse_exprs(g_input + 11, vals, 3, NULL, 0);
+    int n = parse_exprs(args_str, vals, 3, NULL, 0);
     if (n < 1) return;
 
     float sz = 3.0f;  /* half-size of guide geometry */
@@ -623,16 +654,18 @@ static void draw_vertex_guides(void) {
 static void draw_normal_guides(void) {
     if (!g_show_guides) return;
 
-    /* Check current input for glNormal3f( */
-    if (strncmp(g_input, "glNormal3f(", 11) != 0 || g_input_len <= 11)
-        return;
+    /* Check current input for glNormal3f( or gluNormal( */
+    const char *args_str = NULL;
+    int paren_pos = 0;
+    if (strncmp(g_input, "glNormal3f(", 11) == 0 && g_input_len > 11)
+        { args_str = g_input + 11; paren_pos = 11; }
+    else if (strncmp(g_input, "gluNormal(", 10) == 0 && g_input_len > 10)
+        { args_str = g_input + 10; paren_pos = 10; }
+    if (!args_str) return;
 
     float vals[3];
-    int n = parse_exprs(g_input + 11, vals, 3, NULL, 0);
+    int n = parse_exprs(args_str, vals, 3, NULL, 0);
     if (n < 3) return;
-
-    /* Determine which component the cursor is on */
-    int paren_pos = 11;
     if (g_cursor_pos < paren_pos) return;
     int close = g_input_len;
     for (int ci = paren_pos; ci < g_input_len; ci++)
@@ -644,21 +677,24 @@ static void draw_normal_guides(void) {
         if (g_input[ci] == ',') component++;
     if (component > 2) component = 2;
 
-    /* Find the associated vertex — next CMD_VERTEX3F after current position */
+    /* Find the associated vertex — next CMD_VERTEX3F or CMD_TESS_VERTEX */
     int search_start = (g_edit_line < g_num_cmds && !g_inserting)
                       ? g_edit_line + 1 : g_edit_line;
     float vx = 0, vy = 0, vz = 0;
     int found = 0;
     for (int i = search_start; i < g_num_cmds; i++) {
         if (!g_cmds[i].valid) continue;
-        if (g_cmds[i].type == CMD_VERTEX3F) {
+        if (g_cmds[i].type == CMD_VERTEX3F ||
+            g_cmds[i].type == CMD_TESS_VERTEX) {
             vx = g_cmds[i].args[0];
             vy = g_cmds[i].args[1];
             vz = g_cmds[i].args[2];
             found = 1;
             break;
         }
-        if (g_cmds[i].type == CMD_END || g_cmds[i].type == CMD_BEGIN) break;
+        if (g_cmds[i].type == CMD_END   || g_cmds[i].type == CMD_BEGIN ||
+            g_cmds[i].type == CMD_TESS_END ||
+            g_cmds[i].type == CMD_TESS_BEGIN_POLYGON) break;
     }
     if (!found) return;
 
@@ -954,14 +990,35 @@ void render_3d_scene(void) {
         glPushMatrix();
         int in_begin = 0;
         int block_begin_idx = -1; /* flat index of current block's CMD_BEGIN */
+        int tess_in_contour = 0;  /* drawing a tess contour as GL_LINE_LOOP */
         for (int i = 0; i < g_num_flat_cmds; i++) {
             if (!g_flat_cmds[i].valid) continue;
 
             switch (g_flat_cmds[i].type) {
             case CMD_TRANSLATE3F:
-                if (!in_begin)
+                if (!in_begin && !tess_in_contour)
                     glTranslatef(g_flat_cmds[i].args[0], g_flat_cmds[i].args[1],
                                  g_flat_cmds[i].args[2]);
+                break;
+            case CMD_TESS_BEGIN_CONTOUR:
+                if (tess_in_contour) { glEnd(); glLineWidth(1.0f); }
+                if (g_show_outlines) {
+                    glLineWidth(1.5f);
+                    glColor3f(0.55f, 0.20f, 0.70f); /* violet — matches syntax color */
+                    glBegin(GL_LINE_LOOP);
+                    tess_in_contour = 1;
+                }
+                break;
+            case CMD_TESS_VERTEX:
+                if (tess_in_contour)
+                    glVertex3f(g_flat_cmds[i].args[0], g_flat_cmds[i].args[1],
+                               g_flat_cmds[i].args[2]);
+                break;
+            case CMD_TESS_END:
+                if (tess_in_contour) {
+                    glEnd(); glLineWidth(1.0f);
+                    tess_in_contour = 0;
+                }
                 break;
             case CMD_BEGIN: {
                 if (in_begin) glEnd();
@@ -1006,6 +1063,7 @@ void render_3d_scene(void) {
             }
         }
         if (in_begin) { glEnd(); glLineWidth(1.0f); }
+        if (tess_in_contour) { glEnd(); glLineWidth(1.0f); }
         glPopMatrix();
     }
     glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
@@ -1031,7 +1089,8 @@ void render_3d_scene(void) {
         if (g_flat_cmds[i].type == CMD_TRANSLATE3F) {
             glTranslatef(g_flat_cmds[i].args[0], g_flat_cmds[i].args[1],
                          g_flat_cmds[i].args[2]);
-        } else if (g_flat_cmds[i].type == CMD_VERTEX3F) {
+        } else if (g_flat_cmds[i].type == CMD_VERTEX3F ||
+                   g_flat_cmds[i].type == CMD_TESS_VERTEX) {
             glBegin(GL_POINTS);
             glVertex3f(g_flat_cmds[i].args[0], g_flat_cmds[i].args[1],
                        g_flat_cmds[i].args[2]);
