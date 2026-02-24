@@ -17,12 +17,12 @@ GL_LDFLAGS = \
 	-lglut -lm -lpthread \
 	-framework IOKit -framework Cocoa -framework OpenGL
 
-.PHONY: all clean
+.PHONY: all clean test
 
-all: sample test_eval
+all: sample test_eval test_format
 
-SRCS = sample.c scene_render.c ui_panels.c repl_eval.c
-HDRS = sample.h scene_render.h ui_panels.h repl_eval.h
+SRCS = sample.c scene_render.c ui_panels.c repl_eval.c cmd_format.c
+HDRS = sample.h scene_render.h ui_panels.h repl_eval.h cmd_format.h
 
 sample: $(SRCS) $(HDRS)
 	$(CC) $(CFLAGS) -o $@ $(SRCS) $(GL_LDFLAGS)
@@ -30,5 +30,12 @@ sample: $(SRCS) $(HDRS)
 test_eval: test_eval.c repl_eval.c repl_eval.h
 	$(CC) $(CFLAGS) -o $@ test_eval.c repl_eval.c -lm -lpthread
 
+test_format: test_format.c cmd_format.c cmd_format.h
+	$(CC) $(CFLAGS) -o $@ test_format.c cmd_format.c -lm
+
+test: test_eval test_format
+	./test_eval --run-tests
+	./test_format
+
 clean:
-	rm -rf sample sample.dSYM test_eval test_eval.dSYM
+	rm -rf sample sample.dSYM test_eval test_eval.dSYM test_format test_format.dSYM
