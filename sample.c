@@ -639,6 +639,13 @@ static void cmd_indent(int pos, char *buf, int buf_sz) {
     fmt_indent(fc, n, buf, buf_sz);
 }
 
+/* Returns indent character count for a normal command at pos: 2 + 2*tess + 2*begin */
+int cmd_indent_chars(int pos) {
+    FmtCmd fc[MAX_COMMANDS];
+    int n = build_fmt_slice(pos, fc, MAX_COMMANDS);
+    return 2 + 2 * fmt_tess_depth(fc, n) + 2 * fmt_begin_depth(fc, n);
+}
+
 /* Tessellator leaf command indent: 2 + 2*tess  (begin depth ignored) */
 static void cmd_tess_indent(int pos, char *buf, int buf_sz) {
     FmtCmd fc[MAX_COMMANDS];
@@ -4386,8 +4393,7 @@ static void keyboard_func(unsigned char key, int x, int y) {
                            isspace((unsigned char)stripped[slen-1])))
                         stripped[--slen] = '\0';
                     int fdepth = block_depth_at(fpos);
-                    int bb_v = in_begin_block_at(fpos);
-                    int ind_v = (bb_v ? 4 : 2) + fdepth * 2;
+                    int ind_v = cmd_indent_chars(fpos) + fdepth * 2;
                     char indent_v[32];
                     if (ind_v > (int)sizeof(indent_v) - 1) ind_v = (int)sizeof(indent_v) - 1;
                     memset(indent_v, ' ', ind_v);
@@ -4408,8 +4414,7 @@ static void keyboard_func(unsigned char key, int x, int y) {
                     while (slen > 0 && (stripped[slen-1] == ';' ||
                            isspace((unsigned char)stripped[slen-1])))
                         stripped[--slen] = '\0';
-                    int bb_v = in_begin_block_at(fpos);
-                    int ind_v = bb_v ? 4 : 2;
+                    int ind_v = cmd_indent_chars(fpos);
                     char indent_v[32];
                     if (ind_v > (int)sizeof(indent_v) - 1) ind_v = (int)sizeof(indent_v) - 1;
                     memset(indent_v, ' ', ind_v);

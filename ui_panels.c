@@ -262,7 +262,7 @@ void render_code_panel(void) {
                 glColor3f(0.55f, 0.55f, 0.30f);
                 { char ln[16]; snprintf(ln, sizeof(ln), "%3d", file_line);
                   draw_string(CODE_MARGIN_X, line_y, ln, FONT_MONO); }
-                int ind = in_begin_block_at(i) ? 4 : 2;
+                int ind = cmd_indent_chars(i);
                 render_edit_line(text_x, line_y, ind);
                 line_y -= LINE_H;
             }
@@ -289,7 +289,7 @@ void render_code_panel(void) {
                         glColor3f(0.45f, 0.50f, 0.65f);
                         draw_string((float)idx_x, (float)line_y, idx_s, FONT_MONO);
                     }
-                    int ind = in_begin_block_at(i) ? 4 : 2;
+                    int ind = cmd_indent_chars(i);
                     render_edit_line(text_x, line_y, ind);
                     line_y -= LINE_H;
                 }
@@ -344,7 +344,7 @@ void render_code_panel(void) {
                     glColor3f(0.55f, 0.55f, 0.30f);
                     { char ln[16]; snprintf(ln, sizeof(ln), "%3d", file_line);
                       draw_string(CODE_MARGIN_X, line_y, ln, FONT_MONO); }
-                    int ind = in_begin_block() ? 4 : 2;
+                    int ind = cmd_indent_chars(g_num_cmds);
                     render_edit_line(text_x, line_y, ind);
                     line_y -= LINE_H;
                 }
@@ -354,8 +354,9 @@ void render_code_panel(void) {
                     { char ln[16]; snprintf(ln, sizeof(ln), "%3d", file_line);
                       draw_string(CODE_MARGIN_X, line_y, ln, FONT_MONO); }
                     glColor3f(0.28f, 0.28f, 0.35f);
-                    const char *ind_s = in_begin_block() ? "    " : "  ";
-                    draw_string((float)text_x, (float)line_y, ind_s, FONT_MONO);
+                    { char ind_s[32]; int nc = cmd_indent_chars(g_num_cmds);
+                      if (nc > 31) nc = 31; memset(ind_s, ' ', nc); ind_s[nc] = '\0';
+                      draw_string((float)text_x, (float)line_y, ind_s, FONT_MONO); }
                     line_y -= LINE_H;
                 }
             }
@@ -998,8 +999,8 @@ void handle_code_panel_click(int mx, int my) {
     int idx_col_w = g_show_indices ? (6 * FONT_W) : 0;
     int text_x = CODE_MARGIN_X + linenum_w + FONT_W + idx_col_w;
     int edit_idx = on_insert_line ? g_edit_line : target;
-    int indent_chars = in_begin_block_at(
-        edit_idx < g_num_cmds ? edit_idx : g_num_cmds) ? 4 : 2;
+    int indent_chars = cmd_indent_chars(
+        edit_idx < g_num_cmds ? edit_idx : g_num_cmds);
     int col = (mx - text_x - indent_chars * FONT_W + FONT_W / 2) / FONT_W;
     if (col < 0) col = 0;
     if (col > g_input_len) col = g_input_len;
