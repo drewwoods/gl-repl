@@ -158,11 +158,16 @@ void render_code_panel(void) {
     if (g_scroll > max_scroll) g_scroll = max_scroll;
     if (g_scroll < 0) g_scroll = 0;
 
-    /* Auto-scroll to keep cursor visible */
-    if (cursor_doc_line < g_scroll)
-        g_scroll = cursor_doc_line;
-    if (cursor_doc_line >= g_scroll + visible_lines)
-        g_scroll = cursor_doc_line - visible_lines + 1;
+    /* Only snap to cursor after an edit; manual scroll can stay off-cursor. */
+    if (g_scroll_follow_cursor) {
+        if (cursor_doc_line < g_scroll)
+            g_scroll = cursor_doc_line;
+        if (cursor_doc_line >= g_scroll + visible_lines)
+            g_scroll = cursor_doc_line - visible_lines + 1;
+        if (g_scroll > max_scroll) g_scroll = max_scroll;
+        if (g_scroll < 0) g_scroll = 0;
+        g_scroll_follow_cursor = 0;
+    }
 
     begin_2d();
 

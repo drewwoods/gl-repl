@@ -461,6 +461,7 @@ int    g_win_w = 1200, g_win_h = 800;
 /* Code panel */
 float  g_panel_frac = 0.42f;
 int    g_scroll = 0;
+int    g_scroll_follow_cursor = 0;
 
 /* Accumulation buffer — enabled by default, disabled with --noaccum.
  * Designed to be forward-compatible with FBO-based accumulation later. */
@@ -4248,6 +4249,9 @@ static void keyboard_func(unsigned char key, int x, int y) {
     if (key != 3 && key != 24)
         clear_selection();
 
+    /* Any keyboard input re-reveals the cursor line on next render. */
+    g_scroll_follow_cursor = 1;
+
 
     /* Backtick: toggle configuration menu */
     if (key == '`') {
@@ -5377,6 +5381,7 @@ static void timer_func(int value) {
  *   "funcN {"     → CMD_FUNC_DEF + CMD_FUNC_END, enters block
  *   "if(...) {"   → CMD_IF_BEGIN + CMD_IF_END, enters block
  *   "}"           → closes current block
+ *   "x = expr;"   → CMD_VAR_ASSIGN
  *   "funcN()"     → CMD_CALL
  *   anything else → parse_command() as a regular GL command
  */
@@ -5396,6 +5401,7 @@ static void feed_line(const char *line) {
     if (try_commit_for_loop()) return;
     if (try_commit_func_def()) return;
     if (try_commit_if_block()) return;
+    if (try_assign_variable()) return;
 
     /* Regular command */
     GLCmd cmd;
@@ -5628,6 +5634,128 @@ static const char *g_example_tess[] = {
     NULL
 };
 
+/* Example 5: GLU tessellator — concave arrow polygon cutout */
+static const char *g_example_tess_cutout[] = {
+    "glEnable(GL_DEPTH_TEST);",
+    "glEnable(GL_LIGHTING);",
+    "glEnable(GL_COLOR_MATERIAL);",
+    "glEnable(GL_NORMALIZE);",
+    "glEnable(GL_LIGHT3);",
+    "glEnable(GL_LIGHT2);",
+    "glShadeModel(GL_SMOOTH);",
+    "z = -0.55;",
+    "glRotatef(10*t, 0, 0, 1);",
+    "glScalef(0.5, 0.5, 0.5);",
+    "// Arrow shape — concave, tessellated with per-vertex color",
+    "gluBegin(GLU_POLYGON);",
+    "  gluBegin(GLU_CONTOUR);",
+    "    glBegin(GL_QUAD_STRIP);",
+    "    gluNormal(0, 0, 1);",
+    "  // Side 0",
+    "    gluColor(0.2, 0.4, 1, 1);",
+    "      glColor3f(0.2, 0.4, 1);",
+    "      glNormal3f(-1, 0, 0);",
+    "      glVertex3f(-1.2, -0.45, 0);",
+    "      glVertex3f(-1.2, -0.45, z);",
+    "    gluVertex(-1.2, -0.45, 0);",
+    "  // Side 1",
+    "    gluColor(0.2, 0.4, 1, 1);",
+    "      glColor3f(0.2, 0.4, 1);",
+    "      glNormal3f(0, 1, 0);",
+    "      glVertex3f(-1.2, 0.45, 0);",
+    "      glVertex3f(-1.2, 0.45, z);",
+    "    gluVertex(-1.2, 0.45, 0);",
+    "  // Side 2",
+    "    gluColor(0.55, 0.3, 1, 1);",
+    "      glColor3f(0.55, 0.3, 1);",
+    "      glNormal3f(-1, 1, 0);",
+    "      glVertex3f(0, 0.45, 0);",
+    "      glVertex3f(0, 0.45, z);",
+    "    gluVertex(0, 0.45, 0);",
+    "  // Side 3",
+    "    gluColor(1, 0.45, 0.05, 1);",
+    "      glColor3f(1, 0.45, 0.05);",
+    "      glNormal3f(-1, 0, 0);",
+    "      glVertex3f(0, 1.1, 0);",
+    "      glVertex3f(0, 1.1, z);",
+    "    gluVertex(0, 1.1, 0);",
+    "  // Side 4",
+    "    gluColor(1, 0.9, 0.1, 1);",
+    "      glColor3f(1, 0.9, 0.1);",
+    "      glNormal3f(1, 0, 0);",
+    "      glVertex3f(1.3, 0, 0);",
+    "      glVertex3f(1.3, 0, z);",
+    "    gluVertex(1.3, 0, 0);",
+    "  // Side 5",
+    "    gluColor(1, 0.45, 0.05, 1);",
+    "      glColor3f(1, 0.45, 0.05);",
+    "      glNormal3f(-1, 0, 0);",
+    "      glVertex3f(0, -1.1, 0);",
+    "      glVertex3f(0, -1.1, z);",
+    "    gluVertex(0, -1.1, 0);",
+    "  // Side 6",
+    "    gluColor(0.55, 0.3, 1, 1);",
+    "      glColor3f(0.55, 0.3, 1);",
+    "      glNormal3f(-1, -1, 0);",
+    "      glVertex3f(0, -0.45, 0);",
+    "      glVertex3f(0, -0.45, z);",
+    "    gluVertex(0, -0.45, 0);",
+    "  // Quade side 7",
+    "      glColor3f(0.2, 0.4, 1);",
+    "      glNormal3f(0, -1, 0);",
+    "      glVertex3f(-1.2, -0.45, 0);",
+    "      glVertex3f(-1.2, -0.45, z);",
+    "    glEnd();",
+    "  gluEnd();",
+    "  gluBegin(GLU_CONTOUR);",
+    "    glBegin(GL_QUAD_STRIP);",
+    "      glColor3f(0.5, 0.5, 0.5);",
+    "    gluNormal(0, 0, 1);",
+    "  // Side 0",
+    "      glNormal3f(-1, 0, 0);",
+    "      glVertex3f(-0.6, -0.225, 0);",
+    "      glVertex3f(-0.6, -0.225, z);",
+    "    gluVertex(-0.6, -0.225, 0);",
+    "  // Side 1",
+    "      glNormal3f(0, 1, 0);",
+    "      glVertex3f(-0.6, 0.225, 0);",
+    "      glVertex3f(-1.2/2, 0.45/2, z);",
+    "    gluVertex(-0.6, 0.225, 0);",
+    "  // Side 2",
+    "      glNormal3f(-1, 1, 0);",
+    "      glVertex3f(0.2, 0.225, 0);",
+    "      glVertex3f(0.2, 0.45/2, z);",
+    "    gluVertex(0.2, 0.225, 0);",
+    "  // Side 3",
+    "      glNormal3f(-1, 0, 0);",
+    "      glVertex3f(0.2, 0.55, 0);",
+    "      glVertex3f(0.2, 1.1/2, z);",
+    "    gluVertex(0.2, 0.55, 0);",
+    "  // Side 4",
+    "      glNormal3f(1, 0, 0);",
+    "      glVertex3f(0.85, 0, 0);",
+    "      glVertex3f(1.7/2, 0, z);",
+    "    gluVertex(0.85, 0, 0);",
+    "  // Side 5",
+    "      glNormal3f(-1, 0, 0);",
+    "      glVertex3f(0.2, -0.55, 0);",
+    "      glVertex3f(0.2, -1.1/2, z);",
+    "    gluVertex(0.2, -0.55, 0);",
+    "  // Side 6",
+    "      glNormal3f(-1, -1, 0);",
+    "      glVertex3f(0.2, -0.225, 0);",
+    "      glVertex3f(0.2, -0.45/2, z);",
+    "    gluVertex(0.2, -0.225, 0);",
+    "  // Quad side 7",
+    "      glNormal3f(0, -1, 0);",
+    "      glVertex3f(-0.6, -0.225, 0);",
+    "      glVertex3f(-1.2/2, -0.45/2, z);",
+    "    glEnd();",
+    "  gluEnd();",
+    "gluEnd();",
+    NULL
+};
+
 static const char **g_examples[] = {
     g_example_cube,
     g_example_ring,
@@ -5635,6 +5763,7 @@ static const char **g_examples[] = {
     g_example_cond,
     g_example_torus,
     g_example_tess,
+    g_example_tess_cutout,
 };
 static const char *g_example_names[] = {
     "Lit cube",
@@ -5643,6 +5772,7 @@ static const char *g_example_names[] = {
     "Conditional colors (if + t)",
     "Parametric torus (nested for)",
     "GLU tessellator (concave arrow)",
+    "GLU tessellator (concave arrow cutout)",
 };
 /* NUM_EXAMPLES defined in forward declarations section */
 
@@ -5827,6 +5957,7 @@ void repl_reset_state(void) {
     g_newline_buf[0] = '\0';
     g_newline_len = 0;
     g_scroll = 0;
+    g_scroll_follow_cursor = 0;
     g_flat_dirty = 1;
     g_normals_dirty = 1;
     g_ac_count = 0;

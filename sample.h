@@ -41,7 +41,7 @@
 #define ACCUM_STEP_COUNT  5
 #define GRID_THEME_COUNT  7
 #define AXES_THEME_COUNT  5
-#define NUM_EXAMPLES      6
+#define NUM_EXAMPLES      7
 #define MAX_LIGHTS        4
 #define TESS_VERT_BUF_SIZE 256
 
@@ -177,6 +177,7 @@ extern int    g_win_w, g_win_h;
 /* Code panel */
 extern float  g_panel_frac;
 extern int    g_scroll;
+extern int    g_scroll_follow_cursor;
 
 /* Accumulation buffer */
 extern int    g_use_accum;
