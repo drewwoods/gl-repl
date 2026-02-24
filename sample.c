@@ -1277,6 +1277,112 @@ static int load_from_file(const char *filename) {
             }
         }
 
+        /* Tessellator C-style lines — match what save_output() emits and
+         * reconstruct the corresponding CMD_TESS_* commands.
+         * These lines are never inside a for-loop so they reach here directly. */
+
+        /* { _tv_n=0; gluTessBeginPolygon(g_tess,NULL); } */
+        if (strstr(p, "gluTessBeginPolygon") != NULL) {
+            if (g_num_cmds < MAX_COMMANDS) {
+                GLCmd tc; memset(&tc, 0, sizeof(tc));
+                tc.type = CMD_TESS_BEGIN_POLYGON; tc.valid = 1;
+                snprintf(tc.source, sizeof(tc.source), "  gluBegin(GLU_POLYGON);");
+                g_cmds[g_num_cmds++] = tc; loaded++;
+            }
+            continue;
+        }
+
+        /* gluTessBeginContour(g_tess); */
+        if (strstr(p, "gluTessBeginContour") != NULL) {
+            if (g_num_cmds < MAX_COMMANDS) {
+                GLCmd tc; memset(&tc, 0, sizeof(tc));
+                tc.type = CMD_TESS_BEGIN_CONTOUR; tc.valid = 1;
+                snprintf(tc.source, sizeof(tc.source), "    gluBegin(GLU_CONTOUR);");
+                g_cmds[g_num_cmds++] = tc; loaded++;
+            }
+            continue;
+        }
+
+        /* gluTessEndContour(g_tess); / gluTessEndPolygon(g_tess); */
+        if (strstr(p, "gluTessEndContour") != NULL ||
+            strstr(p, "gluTessEndPolygon") != NULL) {
+            if (g_num_cmds < MAX_COMMANDS) {
+                GLCmd tc; memset(&tc, 0, sizeof(tc));
+                tc.type = CMD_TESS_END; tc.valid = 1;
+                const char *end_ind = strstr(p, "gluTessEndContour") ? "    " : "  ";
+                snprintf(tc.source, sizeof(tc.source), "%sgluEnd();", end_ind);
+                g_cmds[g_num_cmds++] = tc; loaded++;
+            }
+            continue;
+        }
+
+        /* { _tn[0]=X; _tn[1]=Y; _tn[2]=Z; } — CMD_TESS_NORMAL */
+        if (strncmp(p, "{ _tn[", 6) == 0) {
+            float nv[3] = {0, 0, 1};
+            const char *np = p;
+            for (int ni = 0; ni < 3; ni++) {
+                const char *eq = strchr(np, '=');
+                if (!eq) break; eq++;
+                ExprCtx ctx = { eq, NULL, 0 };
+                nv[ni] = eval_expr(&ctx); np = ctx.p;
+            }
+            if (g_num_cmds < MAX_COMMANDS) {
+                GLCmd tc; memset(&tc, 0, sizeof(tc));
+                tc.type = CMD_TESS_NORMAL; tc.valid = 1; tc.num_args = 3;
+                tc.args[0] = nv[0]; tc.args[1] = nv[1]; tc.args[2] = nv[2];
+                snprintf(tc.source, sizeof(tc.source),
+                         "      gluNormal(%g, %g, %g);", nv[0], nv[1], nv[2]);
+                g_cmds[g_num_cmds++] = tc; loaded++;
+            }
+            continue;
+        }
+
+        /* { _tc[0]=R; _tc[1]=G; _tc[2]=B; _tc[3]=A; } — CMD_TESS_COLOR */
+        if (strncmp(p, "{ _tc[", 6) == 0) {
+            float cv[4] = {1, 1, 1, 1};
+            const char *cp = p;
+            for (int ci = 0; ci < 4; ci++) {
+                const char *eq = strchr(cp, '=');
+                if (!eq) break; eq++;
+                ExprCtx ctx = { eq, NULL, 0 };
+                cv[ci] = eval_expr(&ctx); cp = ctx.p;
+            }
+            if (g_num_cmds < MAX_COMMANDS) {
+                GLCmd tc; memset(&tc, 0, sizeof(tc));
+                tc.type = CMD_TESS_COLOR; tc.valid = 1; tc.num_args = 4;
+                tc.args[0] = cv[0]; tc.args[1] = cv[1];
+                tc.args[2] = cv[2]; tc.args[3] = cv[3];
+                snprintf(tc.source, sizeof(tc.source),
+                         "      gluColor(%g, %g, %g, %g);",
+                         cv[0], cv[1], cv[2], cv[3]);
+                g_cmds[g_num_cmds++] = tc; loaded++;
+            }
+            continue;
+        }
+
+        /* { TessVertex *_v=...; _v->pos[0]=X; ... gluTessVertex(...); } — CMD_TESS_VERTEX */
+        if (strstr(p, "TessVertex") != NULL && strstr(p, "gluTessVertex") != NULL) {
+            float vv[3] = {0, 0, 0};
+            const char *vp = strstr(p, "_v->pos[0]");
+            if (vp) {
+                for (int vi = 0; vi < 3; vi++) {
+                    const char *eq = strchr(vp, '=');
+                    if (!eq) break; eq++;
+                    ExprCtx ctx = { eq, NULL, 0 };
+                    vv[vi] = eval_expr(&ctx); vp = ctx.p;
+                }
+            }
+            if (g_num_cmds < MAX_COMMANDS) {
+                GLCmd tc; memset(&tc, 0, sizeof(tc));
+                tc.type = CMD_TESS_VERTEX; tc.valid = 1; tc.num_args = 3;
+                tc.args[0] = vv[0]; tc.args[1] = vv[1]; tc.args[2] = vv[2];
+                snprintf(tc.source, sizeof(tc.source),
+                         "      gluVertex(%g, %g, %g);", vv[0], vv[1], vv[2]);
+                g_cmds[g_num_cmds++] = tc; loaded++;
+            }
+            continue;
+        }
+
         /* Regular line (outside for-loop): parse as normal command */
         {
             /* Translate C expressions to REPL first */
