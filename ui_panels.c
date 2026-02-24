@@ -103,6 +103,30 @@ void render_code_panel(void) {
     int text_x = idx_x + idx_col_w;
     int visible_lines = (g_win_h - 2 * CODE_MARGIN_Y - LINE_H) / LINE_H;
 
+    /* When cursor is on a vertex, find which normal/color lines feed it so
+     * we can draw a gutter accent bar on them below. */
+    int highlight_normal_idx = -1;
+    int highlight_color_idx  = -1;
+    if (!g_inserting && g_edit_line < g_num_cmds && g_cmds[g_edit_line].valid) {
+        CmdType et = g_cmds[g_edit_line].type;
+        if (et == CMD_VERTEX3F || et == CMD_VERTEX2F || et == CMD_TESS_VERTEX) {
+            for (int i = g_edit_line - 1; i >= 0; i--) {
+                if (!g_cmds[i].valid) continue;
+                CmdType t = g_cmds[i].type;
+                if (t == CMD_BEGIN || t == CMD_END ||
+                    t == CMD_TESS_BEGIN_POLYGON || t == CMD_TESS_BEGIN_CONTOUR ||
+                    t == CMD_TESS_END) break;
+                if (highlight_normal_idx < 0 &&
+                    (t == CMD_NORMAL3F || t == CMD_TESS_NORMAL))
+                    highlight_normal_idx = i;
+                if (highlight_color_idx < 0 &&
+                    (t == CMD_COLOR3F || t == CMD_COLOR4F || t == CMD_TESS_COLOR))
+                    highlight_color_idx = i;
+                if (highlight_normal_idx >= 0 && highlight_color_idx >= 0) break;
+            }
+        }
+    }
+
     int n_hpre = 0;
     for (int i = 0; g_header_pre[i]; i++) n_hpre++;
     int n_hpost = 0;
@@ -269,6 +293,17 @@ void render_code_panel(void) {
                         glColor4f(0.20f, 0.30f, 0.50f, 0.55f);
                         draw_quad(0, (float)(line_y - 3),
                                   (float)panel_w, (float)LINE_H);
+                        glDisable(GL_BLEND);
+                    }
+                    /* Gutter accent: show which normal/color feeds the cursor vertex */
+                    if (i == highlight_normal_idx || i == highlight_color_idx) {
+                        glEnable(GL_BLEND);
+                        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+                        if (i == highlight_normal_idx)
+                            glColor4f(0.40f, 0.80f, 0.95f, 0.85f); /* cyan — normal */
+                        else
+                            glColor4f(0.95f, 0.85f, 0.30f, 0.85f); /* yellow — color */
+                        draw_quad(1.0f, (float)(line_y - 3), 3.0f, (float)LINE_H);
                         glDisable(GL_BLEND);
                     }
                     glColor3f(0.30f, 0.30f, 0.38f);

@@ -670,10 +670,12 @@ static void draw_normal_guides(void) {
     int close = g_input_len;
     for (int ci = paren_pos; ci < g_input_len; ci++)
         if (g_input[ci] == ')') { close = ci; break; }
-    if (g_cursor_pos > close) return;
+    /* Allow cursor past ')' — navigating to an existing normal line places the
+     * cursor at end-of-string; still show the guide for the full expression. */
+    int effective_cursor = (g_cursor_pos > close) ? close : g_cursor_pos;
 
     int component = 0;
-    for (int ci = paren_pos; ci < g_cursor_pos; ci++)
+    for (int ci = paren_pos; ci < effective_cursor; ci++)
         if (g_input[ci] == ',') component++;
     if (component > 2) component = 2;
 
@@ -722,7 +724,7 @@ static void draw_normal_guides(void) {
     if (clen > 1e-8f) {
         float cn[3] = { vals[0]/clen, vals[1]/clen, vals[2]/clen };
         glColor4f(0.8f, 0.8f, 0.8f, 0.4f);
-        glLineWidth(1.0f);
+        glLineWidth(3.0f);
         glBegin(GL_LINES);
         glVertex3f(vx, vy, vz);
         glVertex3f(vx + cn[0]*scale, vy + cn[1]*scale, vz + cn[2]*scale);
@@ -732,7 +734,7 @@ static void draw_normal_guides(void) {
     /* Doubled component — green stippled arrow */
     glEnable(GL_LINE_STIPPLE);
     glLineStipple(1, 0xAAAA);
-    glLineWidth(2.0f);
+    glLineWidth(4.0f);
 
     glColor4f(0.2f, 0.95f, 0.2f, 0.75f);
     glBegin(GL_LINES);
@@ -753,7 +755,7 @@ static void draw_normal_guides(void) {
     glLineWidth(1.0f);
 
     /* Dots at arrow tips */
-    glPointSize(5.0f);
+    glPointSize(8.0f);
     glBegin(GL_POINTS);
     glColor4f(0.2f, 0.95f, 0.2f, 0.85f);
     glVertex3f(vx + doubled[0]*scale, vy + doubled[1]*scale,
