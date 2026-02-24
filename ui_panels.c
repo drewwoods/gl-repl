@@ -109,19 +109,24 @@ void render_code_panel(void) {
     int highlight_color_idx  = -1;
     if (!g_inserting && g_edit_line < g_num_cmds && g_cmds[g_edit_line].valid) {
         CmdType et = g_cmds[g_edit_line].type;
-        if (et == CMD_VERTEX3F || et == CMD_VERTEX2F || et == CMD_TESS_VERTEX) {
+        int is_gl_vtx  = (et == CMD_VERTEX3F || et == CMD_VERTEX2F);
+        int is_glu_vtx = (et == CMD_TESS_VERTEX);
+        if (is_gl_vtx || is_glu_vtx) {
             for (int i = g_edit_line - 1; i >= 0; i--) {
                 if (!g_cmds[i].valid) continue;
                 CmdType t = g_cmds[i].type;
                 if (t == CMD_BEGIN || t == CMD_END ||
                     t == CMD_TESS_BEGIN_POLYGON || t == CMD_TESS_BEGIN_CONTOUR ||
                     t == CMD_TESS_END) break;
-                if (highlight_normal_idx < 0 &&
-                    (t == CMD_NORMAL3F || t == CMD_TESS_NORMAL))
-                    highlight_normal_idx = i;
-                if (highlight_color_idx < 0 &&
-                    (t == CMD_COLOR3F || t == CMD_COLOR4F || t == CMD_TESS_COLOR))
-                    highlight_color_idx = i;
+                if (highlight_normal_idx < 0) {
+                    if (is_gl_vtx  && t == CMD_NORMAL3F)     highlight_normal_idx = i;
+                    if (is_glu_vtx && t == CMD_TESS_NORMAL)  highlight_normal_idx = i;
+                }
+                if (highlight_color_idx < 0) {
+                    if (is_gl_vtx  && (t == CMD_COLOR3F || t == CMD_COLOR4F))
+                        highlight_color_idx = i;
+                    if (is_glu_vtx && t == CMD_TESS_COLOR)   highlight_color_idx = i;
+                }
                 if (highlight_normal_idx >= 0 && highlight_color_idx >= 0) break;
             }
         }

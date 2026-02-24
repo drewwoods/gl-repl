@@ -242,6 +242,54 @@ int    g_num_flat_cmds = 0;
 int    g_flat_dirty = 1;
 void mark_normals_dirty(void) { g_normals_dirty = 1; g_flat_dirty = 1; }
 
+/* ========================================================================= */
+/* Undo ring buffer                                                           */
+/* ========================================================================= */
+
+static void load_line_to_input(int idx);  /* defined later */
+
+#define UNDO_DEPTH 32
+
+typedef struct {
+    GLCmd cmds[MAX_COMMANDS];
+    int   num_cmds;
+    int   edit_line;
+    float predef_vals[MAX_PREDEF_VARS];
+} UndoSnapshot;
+
+static UndoSnapshot g_undo_buf[UNDO_DEPTH];
+static int g_undo_head  = 0;  /* next slot to write into */
+static int g_undo_count = 0;  /* number of valid snapshots */
+
+static void push_undo_snapshot(void) {
+    UndoSnapshot *s = &g_undo_buf[g_undo_head];
+    memcpy(s->cmds, g_cmds, (size_t)g_num_cmds * sizeof(GLCmd));
+    s->num_cmds  = g_num_cmds;
+    s->edit_line = g_edit_line;
+    for (int i = 0; i < g_num_predef_vars; i++)
+        s->predef_vals[i] = g_predef_vars[i].value;
+    g_undo_head = (g_undo_head + 1) % UNDO_DEPTH;
+    if (g_undo_count < UNDO_DEPTH) g_undo_count++;
+}
+
+static void pop_undo_snapshot(void) {
+    if (g_undo_count == 0) { set_status("Nothing to undo"); return; }
+    g_undo_head  = (g_undo_head + UNDO_DEPTH - 1) % UNDO_DEPTH;
+    g_undo_count--;
+    UndoSnapshot *s = &g_undo_buf[g_undo_head];
+    memcpy(g_cmds, s->cmds, (size_t)s->num_cmds * sizeof(GLCmd));
+    g_num_cmds  = s->num_cmds;
+    g_edit_line = s->edit_line;
+    for (int i = 0; i < g_num_predef_vars; i++)
+        g_predef_vars[i].value = s->predef_vals[i];
+    g_inserting = 0;
+    load_line_to_input(g_edit_line);
+    mark_normals_dirty();
+    char msg[64];
+    snprintf(msg, sizeof(msg), "Undo (%d more)", g_undo_count);
+    set_status(msg);
+}
+
 /* Predefined variables — defined in repl_eval.c */
 
 /* Editor */
@@ -435,6 +483,7 @@ static int try_commit_func_def(void);
 static int try_commit_if_block(void);
 static int try_commit_close_brace(void);
 static void load_example(int idx);
+static void load_line_to_input(int idx);
 
 /* ========================================================================= */
 /* Configuration menu item table (4.10)                                       */
@@ -3509,20 +3558,9 @@ static void keyboard_func(unsigned char key, int x, int y) {
         return;
     }
 
-    /* Ctrl+Z: undo (remove last command) */
+    /* Ctrl+Z: undo */
     if (key == 26) {
-        if (g_num_cmds > 0) {
-            g_num_cmds--;
-                        g_inserting = 0;
-            if (g_edit_line > g_num_cmds) {
-                g_edit_line = g_num_cmds;
-            }
-            load_line_to_input(g_edit_line);
-            mark_normals_dirty();
-            set_status("Undo: removed last command");
-        } else {
-            set_status("Nothing to undo");
-        }
+        pop_undo_snapshot();
         return;
     }
 
@@ -3535,6 +3573,7 @@ static void keyboard_func(unsigned char key, int x, int y) {
                 load_line_to_input(g_edit_line);
             set_status("Insert mode exited");
         } else if (g_edit_line < g_num_cmds) {
+            push_undo_snapshot();
             for (int i = g_edit_line; i < g_num_cmds - 1; i++)
                 g_cmds[i] = g_cmds[i + 1];
             g_num_cmds--;
@@ -3549,6 +3588,7 @@ static void keyboard_func(unsigned char key, int x, int y) {
 
     /* Ctrl+L: clear all */
     if (key == 12) {
+        push_undo_snapshot();
         g_num_cmds = 0;
         g_edit_line = 0;
                 g_inserting = 0;
@@ -3625,6 +3665,7 @@ static void keyboard_func(unsigned char key, int x, int y) {
             clear_selection();
             return;
         }
+        push_undo_snapshot();
         for (int i = 0; i < count && g_clipboard_count < MAX_COMMANDS; i++)
             g_clipboard[g_clipboard_count++] = g_cmds[start + i];
         memmove(&g_cmds[start], &g_cmds[start + count],
@@ -3649,6 +3690,7 @@ static void keyboard_func(unsigned char key, int x, int y) {
                 set_status("Command buffer full!");
                 return;
             }
+            push_undo_snapshot();
             int pos = g_inserting ? g_edit_line :
                       (g_edit_line < g_num_cmds ? g_edit_line : g_num_cmds);
             memmove(&g_cmds[pos + g_clipboard_count], &g_cmds[pos],
@@ -3673,6 +3715,7 @@ static void keyboard_func(unsigned char key, int x, int y) {
     /* Ctrl+/: toggle comment on current line */
     if (key == '/' && glutGetModifiers() & GLUT_ACTIVE_CTRL) {
         if (g_edit_line < g_num_cmds && !g_inserting) {
+            push_undo_snapshot();
             GLCmd *cur = &g_cmds[g_edit_line];
             if (cur->type == CMD_COMMENT) {
                 /* Uncomment: strip // prefix and re-parse */
@@ -3820,6 +3863,8 @@ static void keyboard_func(unsigned char key, int x, int y) {
                 return;
             }
         }
+
+        if (g_input_len > 0) push_undo_snapshot();
 
         /* Check for } closing a block (only for insert/new-line, not existing lines) */
         if ((g_inserting || g_edit_line >= g_num_cmds) &&
@@ -4085,6 +4130,7 @@ static void keyboard_func(unsigned char key, int x, int y) {
     /* Semicolon: parse and commit */
     if (key == ';') {
         if (g_input_len > 0) {
+            push_undo_snapshot();
             /* Check for variable assignment (x = expr) */
             if (try_assign_variable()) {
                 g_ac_count = 0;
