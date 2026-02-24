@@ -620,6 +620,7 @@ static int try_commit_if_block(void);
 static int try_commit_close_brace(void);
 static void load_example(int idx);
 static void load_line_to_input(int idx);
+static int feed_line(const char *line);
 
 /* ========================================================================= */
 /* Configuration menu item table (4.10)                                       */
@@ -1213,6 +1214,211 @@ static int extract_goto_label(const char *src, char *name, int name_sz) {
     return n > 0;
 }
 
+static int import_parse_predef_decl(const char *line) {
+    const char *p = line;
+    while (*p && isspace((unsigned char)*p)) p++;
+    if (strncmp(p, "float ", 6) != 0) return 0;
+    p += 6;
+
+    int updated = 0;
+    while (*p) {
+        while (*p && isspace((unsigned char)*p)) p++;
+
+        char name[16];
+        int ni = 0;
+        while (*p && (isalnum((unsigned char)*p) || *p == '_') &&
+               ni < (int)sizeof(name) - 1)
+            name[ni++] = *p++;
+        name[ni] = '\0';
+        if (ni == 0) break;
+
+        while (*p && isspace((unsigned char)*p)) p++;
+        if (*p != '=') break;
+        p++;
+
+        ExprCtx ctx = { p, NULL, 0 };
+        float val = eval_expr(&ctx);
+        p = ctx.p;
+
+        for (int i = 0; i < g_num_predef_vars; i++) {
+            if (strcmp(g_predef_vars[i].name, name) == 0) {
+                g_predef_vars[i].value = val;
+                updated = 1;
+                break;
+            }
+        }
+
+        while (*p && isspace((unsigned char)*p)) p++;
+        if (*p == ',') {
+            p++;
+            continue;
+        }
+        break;
+    }
+    return updated;
+}
+
+static int import_make_repl_for_header(const char *line, char *out, int out_sz) {
+    char var[16];
+    float start_v, end_v, step_v;
+    if (!parse_c_for_header(line, var, sizeof(var), &start_v, &end_v, &step_v))
+        return 0;
+
+    char repl_line[MAX_LINE_LEN];
+    c_expr_to_repl(line, repl_line, sizeof(repl_line));
+
+    if (input_has_predef_vars(repl_line)) {
+        const char *rp = repl_line;
+        while (*rp && *rp != '=') rp++;
+        if (!*rp) return 0;
+        rp++;
+        while (*rp && isspace((unsigned char)*rp)) rp++;
+
+        const char *se_start = rp;
+        int depth = 0;
+        while (*rp) {
+            if (*rp == '(') depth++;
+            else if (*rp == ')') depth--;
+            if (*rp == ';' && depth == 0) break;
+            rp++;
+        }
+        if (*rp != ';') return 0;
+
+        char start_expr[96];
+        int sl = (int)(rp - se_start);
+        if (sl > (int)sizeof(start_expr) - 1) sl = (int)sizeof(start_expr) - 1;
+        memcpy(start_expr, se_start, (size_t)sl);
+        start_expr[sl] = '\0';
+        trim_in_place(start_expr);
+
+        rp++;
+        while (*rp && isspace((unsigned char)*rp)) rp++;
+        while (*rp && (isalnum((unsigned char)*rp) || *rp == '_')) rp++;
+        while (*rp && isspace((unsigned char)*rp)) rp++;
+        while (*rp && (*rp == '<' || *rp == '>' || *rp == '=' || *rp == '!')) rp++;
+        while (*rp && isspace((unsigned char)*rp)) rp++;
+
+        const char *ee_start = rp;
+        depth = 0;
+        while (*rp) {
+            if (*rp == '(') depth++;
+            else if (*rp == ')') depth--;
+            if (*rp == ';' && depth == 0) break;
+            rp++;
+        }
+        if (*rp != ';') return 0;
+
+        char end_expr[96];
+        int el = (int)(rp - ee_start);
+        if (el > (int)sizeof(end_expr) - 1) el = (int)sizeof(end_expr) - 1;
+        memcpy(end_expr, ee_start, (size_t)el);
+        end_expr[el] = '\0';
+        trim_in_place(end_expr);
+
+        if (step_v != 1.0f) {
+            snprintf(out, out_sz, "for(%s, %s, %s, %g) {",
+                     var, start_expr, end_expr, step_v);
+        } else {
+            snprintf(out, out_sz, "for(%s, %s, %s) {",
+                     var, start_expr, end_expr);
+        }
+        return 1;
+    }
+
+    if (step_v != 1.0f)
+        snprintf(out, out_sz, "for(%s, %g, %g, %g) {",
+                 var, start_v, end_v, step_v);
+    else
+        snprintf(out, out_sz, "for(%s, %g, %g) {",
+                 var, start_v, end_v);
+    return 1;
+}
+
+static int import_make_repl_label(const char *line, char *out, int out_sz) {
+    const char *p = line;
+    while (*p && isspace((unsigned char)*p)) p++;
+
+    int llen = 0;
+    while (p[llen] && (isalnum((unsigned char)p[llen]) || p[llen] == '_'))
+        llen++;
+    if (llen <= 0 || p[llen] != ':')
+        return 0;
+    if (p[llen + 1] != '\0' && !isspace((unsigned char)p[llen + 1]))
+        return 0;
+
+    snprintf(out, out_sz, ":%.*s", llen, p);
+    return 1;
+}
+
+static int import_make_repl_tess_line(const char *line, char *out, int out_sz) {
+    const char *p = line;
+    while (*p && isspace((unsigned char)*p)) p++;
+
+    if (strstr(p, "gluTessBeginPolygon") != NULL) {
+        snprintf(out, out_sz, "gluBegin(GLU_POLYGON);");
+        return 1;
+    }
+    if (strstr(p, "gluTessBeginContour") != NULL) {
+        snprintf(out, out_sz, "gluBegin(GLU_CONTOUR);");
+        return 1;
+    }
+    if (strstr(p, "gluTessEndContour") != NULL ||
+        strstr(p, "gluTessEndPolygon") != NULL) {
+        snprintf(out, out_sz, "gluEnd();");
+        return 1;
+    }
+
+    if (strncmp(p, "{ _tn[", 6) == 0) {
+        float nv[3] = {0, 0, 1};
+        const char *np = p;
+        for (int i = 0; i < 3; i++) {
+            const char *eq = strchr(np, '=');
+            if (!eq) break;
+            eq++;
+            ExprCtx ctx = { eq, NULL, 0 };
+            nv[i] = eval_expr(&ctx);
+            np = ctx.p;
+        }
+        snprintf(out, out_sz, "gluNormal(%g, %g, %g);", nv[0], nv[1], nv[2]);
+        return 1;
+    }
+
+    if (strncmp(p, "{ _tc[", 6) == 0) {
+        float cv[4] = {1, 1, 1, 1};
+        const char *cp = p;
+        for (int i = 0; i < 4; i++) {
+            const char *eq = strchr(cp, '=');
+            if (!eq) break;
+            eq++;
+            ExprCtx ctx = { eq, NULL, 0 };
+            cv[i] = eval_expr(&ctx);
+            cp = ctx.p;
+        }
+        snprintf(out, out_sz, "gluColor(%g, %g, %g, %g);",
+                 cv[0], cv[1], cv[2], cv[3]);
+        return 1;
+    }
+
+    if (strstr(p, "TessVertex") != NULL && strstr(p, "gluTessVertex") != NULL) {
+        float vv[3] = {0, 0, 0};
+        const char *vp = strstr(p, "_v->pos[0]");
+        if (!vp) return 0;
+        for (int i = 0; i < 3; i++) {
+            const char *eq = strchr(vp, '=');
+            if (!eq) break;
+            eq++;
+            ExprCtx ctx = { eq, NULL, 0 };
+            vv[i] = eval_expr(&ctx);
+            vp = ctx.p;
+        }
+        snprintf(out, out_sz, "gluVertex(%g, %g, %g);",
+                 vv[0], vv[1], vv[2]);
+        return 1;
+    }
+
+    return 0;
+}
+
 int repl_parse_and_normalize(const char *line, int pos,
                              ExprVar *vars, int num_vars,
                              int preserve_expr, GLCmd *out_cmd) {
@@ -1551,10 +1757,6 @@ static int load_from_file(const char *filename) {
     int in_snippet = 0;
     int loaded = 0;
     int warnings = 0;
-    /* Block stack: 1=for-loop, 2=if-block */
-    int block_stack[64];
-    int block_top = 0;
-    int for_depth = 0; /* # of for-loop levels (for parse_command_with_vars context) */
 
     while (fgets(line, sizeof(line), f)) {
         /* Strip trailing newline */
@@ -1579,494 +1781,40 @@ static int load_from_file(const char *filename) {
 
         /* Skip empty lines */
         if (len == 0 || *p == '\0') continue;
-
-        /* Skip predefined variable declarations (float x = ..., y = ...) */
-        if (strncmp(p, "float ", 6) == 0 && for_depth == 0) {
-            const char *q = p + 6;
-            /* Check if it looks like "float x = 0, y = 0, ..." (predef vars) */
-            while (*q && isspace((unsigned char)*q)) q++;
-            if (isalpha((unsigned char)*q) && !isalpha((unsigned char)*(q+1))) {
-                /* Single-char variable: likely a predefined var declaration.
-                 * Parse values back into g_predef_vars. */
-                const char *vp = p + 6;
-                while (*vp) {
-                    while (*vp && isspace((unsigned char)*vp)) vp++;
-                    if (!isalpha((unsigned char)*vp)) break;
-                    char vname[16]; int vi = 0;
-                    while (*vp && (isalnum((unsigned char)*vp) || *vp == '_') &&
-                           vi < (int)sizeof(vname) - 1)
-                        vname[vi++] = *vp++;
-                    vname[vi] = '\0';
-                    while (*vp && isspace((unsigned char)*vp)) vp++;
-                    if (*vp == '=') {
-                        vp++;
-                        ExprCtx ctx = { vp, NULL, 0 };
-                        float val = eval_expr(&ctx);
-                        vp = ctx.p;
-                        for (int i = 0; i < g_num_predef_vars; i++) {
-                            if (strcmp(g_predef_vars[i].name, vname) == 0) {
-                                g_predef_vars[i].value = val;
-                                break;
-                            }
-                        }
-                    }
-                    while (*vp && isspace((unsigned char)*vp)) vp++;
-                    if (*vp == ',') vp++;
-                    else break;
-                }
-                continue;
-            }
-        }
-
-        /* Try C-style for-loop header */
-        {
-            char var_name[16];
-            float start_v, end_v, step_v;
-            if (parse_c_for_header(line, var_name, sizeof(var_name),
-                                   &start_v, &end_v, &step_v)) {
-                if (g_num_cmds < MAX_COMMANDS) {
-                    GLCmd fb;
-                    memset(&fb, 0, sizeof(fb));
-                    fb.type = CMD_FOR_BEGIN;
-                    fb.args[0] = start_v;
-                    fb.args[1] = end_v;
-                    fb.args[2] = step_v;
-                    fb.valid = 1;
-                    /* Count leading whitespace for indent */
-                    int indent = 0;
-                    while (line[indent] && isspace((unsigned char)line[indent]))
-                        indent++;
-                    char ind[32];
-                    if (indent > (int)sizeof(ind) - 1) indent = (int)sizeof(ind) - 1;
-                    memset(ind, ' ', indent);
-                    ind[indent] = '\0';
-
-                    /* Extract raw C expressions from the for-loop header
-                     * to detect variable references. Format:
-                     * for (float VAR = START; VAR <op> END; VAR +=/-= STEP) { */
-                    char repl_line[MAX_LINE_LEN];
-                    c_expr_to_repl(line, repl_line, sizeof(repl_line));
-                    if (input_has_predef_vars(repl_line)) {
-                        /* Re-parse from REPL-translated line to build
-                         * source with variable names preserved */
-                        char rv[16];
-                        float rs, re, rst;
-                        if (parse_c_for_header(repl_line, rv, sizeof(rv),
-                                               &rs, &re, &rst)) {
-                            /* Extract raw arg expressions from REPL line */
-                            const char *rp = repl_line;
-                            while (*rp && *rp != '=') rp++;
-                            if (*rp) rp++;
-                            /* rp now past '='; extract start expr up to ';' */
-                            while (*rp && isspace((unsigned char)*rp)) rp++;
-                            const char *se_start = rp;
-                            while (*rp && *rp != ';') rp++;
-                            char se[64]; int sl = (int)(rp - se_start);
-                            if (sl > (int)sizeof(se) - 1) sl = (int)sizeof(se) - 1;
-                            memcpy(se, se_start, sl); se[sl] = '\0';
-                            while (sl > 0 && isspace((unsigned char)se[sl-1])) se[--sl] = '\0';
-                            /* Skip ';', var, operator to get end expr */
-                            if (*rp == ';') rp++;
-                            while (*rp && isspace((unsigned char)*rp)) rp++;
-                            while (*rp && (isalnum((unsigned char)*rp) || *rp == '_')) rp++;
-                            while (*rp && isspace((unsigned char)*rp)) rp++;
-                            while (*rp && (*rp == '<' || *rp == '>' || *rp == '=')) rp++;
-                            while (*rp && isspace((unsigned char)*rp)) rp++;
-                            const char *ee_start = rp;
-                            while (*rp && *rp != ';') rp++;
-                            char ee[64]; int el = (int)(rp - ee_start);
-                            if (el > (int)sizeof(ee) - 1) el = (int)sizeof(ee) - 1;
-                            memcpy(ee, ee_start, el); ee[el] = '\0';
-                            while (el > 0 && isspace((unsigned char)ee[el-1])) ee[--el] = '\0';
-
-                            fb.has_vars = 1;
-                            if (step_v != 1.0f)
-                                snprintf(fb.source, sizeof(fb.source),
-                                         "%sfor(%s, %s, %s, %g) {",
-                                         ind, var_name, se, ee, step_v);
-                            else
-                                snprintf(fb.source, sizeof(fb.source),
-                                         "%sfor(%s, %s, %s) {",
-                                         ind, var_name, se, ee);
-                        }
-                    }
-                    if (!fb.has_vars) {
-                        if (step_v != 1.0f)
-                            snprintf(fb.source, sizeof(fb.source),
-                                     "%sfor(%s, %g, %g, %g) {",
-                                     ind, var_name, start_v, end_v, step_v);
-                        else
-                            snprintf(fb.source, sizeof(fb.source),
-                                     "%sfor(%s, %g, %g) {",
-                                     ind, var_name, start_v, end_v);
-                    }
-                    g_cmds[g_num_cmds++] = fb;
-                    if (block_top < 64) block_stack[block_top++] = 1; /* BTYPE_FOR */
-                    for_depth++;
-                    loaded++;
-                }
-                continue;
-            }
-        }
-
-        /* Try REPL-style for-loop header (backwards compatibility) */
-        {
-            char var_name[16];
-            float start_v, end_v, step_v;
-            const char *body_start;
-            if (parse_for_header(line, var_name, sizeof(var_name),
-                                 &start_v, &end_v, &step_v, &body_start)) {
-                if (g_num_cmds < MAX_COMMANDS) {
-                    GLCmd fb;
-                    memset(&fb, 0, sizeof(fb));
-                    fb.type = CMD_FOR_BEGIN;
-                    fb.args[0] = start_v;
-                    fb.args[1] = end_v;
-                    fb.args[2] = step_v;
-                    fb.valid = 1;
-                    int indent = 0;
-                    while (line[indent] && isspace((unsigned char)line[indent]))
-                        indent++;
-                    char ind[32];
-                    if (indent > (int)sizeof(ind) - 1) indent = (int)sizeof(ind) - 1;
-                    memset(ind, ' ', indent);
-                    ind[indent] = '\0';
-                    if (input_has_predef_vars(line)) {
-                        fb.has_vars = 1;
-                        strncpy(fb.source, line, sizeof(fb.source) - 1);
-                        fb.source[sizeof(fb.source) - 1] = '\0';
-                    } else if (step_v != 1.0f) {
-                        snprintf(fb.source, sizeof(fb.source),
-                                 "%sfor(%s, %g, %g, %g) {",
-                                 ind, var_name, start_v, end_v, step_v);
-                    } else {
-                        snprintf(fb.source, sizeof(fb.source),
-                                 "%sfor(%s, %g, %g) {",
-                                 ind, var_name, start_v, end_v);
-                    }
-                    g_cmds[g_num_cmds++] = fb;
-                    if (block_top < 64) block_stack[block_top++] = 1; /* BTYPE_FOR */
-                    for_depth++;
-                    loaded++;
-                }
-                continue;
-            }
-        }
-
-        /* If-block: if(cond) { — create CMD_IF_BEGIN */
-        if (strncmp(p, "if(", 3) == 0 || strncmp(p, "if (", 4) == 0) {
-            /* Find opening paren */
-            const char *ip = p;
-            while (*ip && *ip != '(') ip++;
-            if (*ip) {
-                ip++; /* skip '(' */
-                int paren = 1;
-                const char *cond_start = ip;
-                while (*ip && paren > 0) {
-                    if (*ip == '(') paren++;
-                    else if (*ip == ')') paren--;
-                    if (paren > 0) ip++;
-                }
-                /* Check for opening brace */
-                const char *brace = ip + 1;
-                while (*brace && isspace((unsigned char)*brace)) brace++;
-                if (*brace == '{' || *brace == '\0') {
-                    /* Extract and evaluate condition */
-                    char cond_text[MAX_LINE_LEN];
-                    int clen = (int)(ip - cond_start);
-                    if (clen > (int)sizeof(cond_text) - 1) clen = (int)sizeof(cond_text) - 1;
-                    memcpy(cond_text, cond_start, clen);
-                    cond_text[clen] = '\0';
-                    float cond_args[1];
-                    float cond_val = 0.0f;
-                    if (parse_exprs(cond_text, cond_args, 1, NULL, 0) >= 1)
-                        cond_val = cond_args[0];
-                    /* Count leading whitespace for indent */
-                    int indent = 0;
-                    while (line[indent] && isspace((unsigned char)line[indent])) indent++;
-                    char ind[32];
-                    if (indent > (int)sizeof(ind) - 1) indent = (int)sizeof(ind) - 1;
-                    memset(ind, ' ', indent); ind[indent] = '\0';
-                    if (g_num_cmds < MAX_COMMANDS) {
-                        GLCmd ib;
-                        memset(&ib, 0, sizeof(ib));
-                        ib.type = CMD_IF_BEGIN;
-                        ib.args[0] = cond_val;
-                        ib.valid = 1;
-                        ib.has_vars = input_has_predef_vars(cond_text);
-                        snprintf(ib.source, sizeof(ib.source), "%sif(%s) {", ind, cond_text);
-                        g_cmds[g_num_cmds++] = ib;
-                        if (block_top < 64) block_stack[block_top++] = 2; /* BTYPE_IF */
-                        loaded++;
-                    }
-                    continue;
-                }
-            }
-        }
-
-        /* Closing brace: end of for-loop or if-block */
-        if (*p == '}' && block_top > 0) {
-            int btype = block_stack[--block_top];
-            if (btype == 1) { /* BTYPE_FOR */
-                if (g_num_cmds < MAX_COMMANDS) {
-                    GLCmd fe;
-                    memset(&fe, 0, sizeof(fe));
-                    fe.type = CMD_FOR_END;
-                    fe.valid = 1;
-                    int bdepth = block_depth_at(g_num_cmds) - 1;
-                    if (bdepth < 0) bdepth = 0;
-                    int bb = in_begin_block_at(g_num_cmds);
-                    int ind = (bb ? 4 : 2) + bdepth * 2;
-                    char ind_s[32];
-                    if (ind > (int)sizeof(ind_s) - 1) ind = (int)sizeof(ind_s) - 1;
-                    memset(ind_s, ' ', (size_t)ind);
-                    ind_s[ind] = '\0';
-                    snprintf(fe.source, sizeof(fe.source), "%s}", ind_s);
-                    g_cmds[g_num_cmds++] = fe;
-                    for_depth--;
-                    loaded++;
-                }
-            } else { /* BTYPE_IF */
-                if (g_num_cmds < MAX_COMMANDS) {
-                    GLCmd ie;
-                    memset(&ie, 0, sizeof(ie));
-                    ie.type = CMD_IF_END;
-                    ie.valid = 1;
-                    int bdepth = block_depth_at(g_num_cmds) - 1;
-                    if (bdepth < 0) bdepth = 0;
-                    int bb = in_begin_block_at(g_num_cmds);
-                    int ind = (bb ? 4 : 2) + bdepth * 2;
-                    char ind_s[32];
-                    if (ind > (int)sizeof(ind_s) - 1) ind = (int)sizeof(ind_s) - 1;
-                    memset(ind_s, ' ', (size_t)ind);
-                    ind_s[ind] = '\0';
-                    snprintf(ie.source, sizeof(ie.source), "%s}", ind_s);
-                    g_cmds[g_num_cmds++] = ie;
-                    loaded++;
-                }
-            }
+        if (import_parse_predef_decl(p))
             continue;
-        }
 
-        /* Inside for-loop: translate C expressions back to REPL */
-        if (for_depth > 0) {
-            char repl_line[MAX_LINE_LEN];
-            c_expr_to_repl(line, repl_line, sizeof(repl_line));
-
-            /* Parse with dummy loop vars so expression vars are recognized */
-            ExprVar dvars[MAX_EXPR_VARS];
-            int dnv = collect_for_vars(g_num_cmds, dvars, MAX_EXPR_VARS);
-            GLCmd cmd;
-            memset(&cmd, 0, sizeof(cmd));
-            if (repl_parse_and_normalize(repl_line, g_num_cmds, dvars, dnv, 1, &cmd)) {
-                if (g_num_cmds < MAX_COMMANDS) {
-                    g_cmds[g_num_cmds++] = cmd;
-                    loaded++;
-                }
-            } else {
+        char repl_line[MAX_LINE_LEN];
+        if (import_make_repl_for_header(p, repl_line, sizeof(repl_line))) {
+            int before = g_num_cmds;
+            int handled = feed_line(repl_line);
+            if (g_num_cmds > before) loaded += (g_num_cmds - before);
+            if (!handled) {
                 fprintf(stderr, "Warning: could not parse line: %s\n", line);
                 warnings++;
             }
             continue;
         }
 
-        /* Try variable assignment: "  x = expr;" */
+        if (import_make_repl_tess_line(p, repl_line, sizeof(repl_line)) ||
+            import_make_repl_label(p, repl_line, sizeof(repl_line))) {
+            int before = g_num_cmds;
+            int handled = feed_line(repl_line);
+            if (g_num_cmds > before) loaded += (g_num_cmds - before);
+            if (!handled) {
+                fprintf(stderr, "Warning: could not parse line: %s\n", line);
+                warnings++;
+            }
+            continue;
+        }
+
+        /* Default path: translate C expression names to REPL equivalents. */
+        c_expr_to_repl(p, repl_line, sizeof(repl_line));
         {
-            const char *ap = p;
-            char vname[16]; int vi = 0;
-            while (*ap && (isalpha((unsigned char)*ap) || *ap == '_') &&
-                   vi < (int)sizeof(vname) - 1)
-                vname[vi++] = *ap++;
-            vname[vi] = '\0';
-            if (vi > 0 && vi <= 2) { /* short var names like x, y, z, i, j */
-                while (*ap && isspace((unsigned char)*ap)) ap++;
-                if (*ap == '=' && *(ap+1) != '=') {
-                    int pidx = -1;
-                    for (int pv = 0; pv < g_num_predef_vars; pv++) {
-                        if (strcmp(g_predef_vars[pv].name, vname) == 0) {
-                            pidx = pv; break;
-                        }
-                    }
-                    if (pidx >= 0) {
-                        ap++;
-                        ExprCtx ectx = { ap, NULL, 0 };
-                        float val = eval_expr(&ectx);
-                        g_predef_vars[pidx].value = val;
-                        if (g_num_cmds < MAX_COMMANDS) {
-                            GLCmd vc;
-                            memset(&vc, 0, sizeof(vc));
-                            vc.type = CMD_VAR_ASSIGN;
-                            vc.valid = 1;
-                            vc.args[0] = val;
-                            vc.num_args = pidx;
-                            int bdepth = block_depth_at(g_num_cmds);
-                            int bb = in_begin_block_at(g_num_cmds);
-                            int ind = (bb ? 4 : 2) + bdepth * 2;
-                            char ind_s[32];
-                            if (ind > (int)sizeof(ind_s) - 1) ind = (int)sizeof(ind_s) - 1;
-                            memset(ind_s, ' ', (size_t)ind);
-                            ind_s[ind] = '\0';
-                            snprintf(vc.source, sizeof(vc.source), "%s%s = %g;", ind_s, vname, val);
-                            g_cmds[g_num_cmds++] = vc;
-                            loaded++;
-                        }
-                        continue;
-                    }
-                }
-            }
-        }
-
-        /* C-style label: identifier: — create CMD_LABEL */
-        {
-            int llen = 0;
-            while (p[llen] && (isalnum((unsigned char)p[llen]) || p[llen] == '_')) llen++;
-            if (llen > 0 && p[llen] == ':' &&
-                (p[llen+1] == '\0' || isspace((unsigned char)p[llen+1]))) {
-                if (g_num_cmds < MAX_COMMANDS) {
-                    GLCmd lc;
-                    memset(&lc, 0, sizeof(lc));
-                    lc.type = CMD_LABEL;
-                    lc.valid = 1;
-                    snprintf(lc.source, sizeof(lc.source), "%.*s:", llen, p);
-                    g_cmds[g_num_cmds++] = lc;
-                    loaded++;
-                }
-                continue;
-            }
-        }
-
-        /* Tessellator C-style lines — match what save_output() emits and
-         * reconstruct the corresponding CMD_TESS_* commands.
-         * These lines are never inside a for-loop so they reach here directly. */
-
-        /* { _tv_n=0; gluTessBeginPolygon(g_tess,NULL); } */
-        if (strstr(p, "gluTessBeginPolygon") != NULL) {
-            if (g_num_cmds < MAX_COMMANDS) {
-                GLCmd tc; memset(&tc, 0, sizeof(tc));
-                tc.type = CMD_TESS_BEGIN_POLYGON; tc.valid = 1;
-                { char _ti[32]; cmd_tess_indent(g_num_cmds, _ti, sizeof(_ti)); snprintf(tc.source,sizeof(tc.source),"%sgluBegin(GLU_POLYGON);",_ti); }
-                g_cmds[g_num_cmds++] = tc; loaded++;
-            }
-            continue;
-        }
-
-        /* gluTessBeginContour(g_tess); */
-        if (strstr(p, "gluTessBeginContour") != NULL) {
-            if (g_num_cmds < MAX_COMMANDS) {
-                GLCmd tc; memset(&tc, 0, sizeof(tc));
-                tc.type = CMD_TESS_BEGIN_CONTOUR; tc.valid = 1;
-                { char _ti[32]; cmd_tess_indent(g_num_cmds, _ti, sizeof(_ti)); snprintf(tc.source,sizeof(tc.source),"%sgluBegin(GLU_CONTOUR);",_ti); }
-                g_cmds[g_num_cmds++] = tc; loaded++;
-            }
-            continue;
-        }
-
-        /* gluTessEndContour(g_tess); / gluTessEndPolygon(g_tess); */
-        if (strstr(p, "gluTessEndContour") != NULL ||
-            strstr(p, "gluTessEndPolygon") != NULL) {
-            if (g_num_cmds < MAX_COMMANDS) {
-                GLCmd tc; memset(&tc, 0, sizeof(tc));
-                tc.type = CMD_TESS_END; tc.valid = 1;
-                depth_cache_rebuild();
-                int td = tess_scope_depth_at(g_num_cmds);
-                if (td > 0) td--;
-                int spaces = 2 + 2 * td;
-                char ind[32];
-                if (spaces > (int)sizeof(ind) - 1) spaces = (int)sizeof(ind) - 1;
-                memset(ind, ' ', (size_t)spaces);
-                ind[spaces] = '\0';
-                snprintf(tc.source, sizeof(tc.source), "%sgluEnd();", ind);
-                g_cmds[g_num_cmds++] = tc; loaded++;
-            }
-            continue;
-        }
-
-        /* { _tn[0]=X; _tn[1]=Y; _tn[2]=Z; } — CMD_TESS_NORMAL */
-        if (strncmp(p, "{ _tn[", 6) == 0) {
-            float nv[3] = {0, 0, 1};
-            const char *np = p;
-            for (int ni = 0; ni < 3; ni++) {
-                const char *eq = strchr(np, '=');
-                if (!eq) break; eq++;
-                ExprCtx ctx = { eq, NULL, 0 };
-                nv[ni] = eval_expr(&ctx); np = ctx.p;
-            }
-            if (g_num_cmds < MAX_COMMANDS) {
-                GLCmd tc; memset(&tc, 0, sizeof(tc));
-                tc.type = CMD_TESS_NORMAL; tc.valid = 1; tc.num_args = 3;
-                tc.args[0] = nv[0]; tc.args[1] = nv[1]; tc.args[2] = nv[2];
-                char ind[32]; cmd_tess_indent(g_num_cmds, ind, sizeof(ind));
-                snprintf(tc.source, sizeof(tc.source),
-                         "%sgluNormal(%g, %g, %g);", ind, nv[0], nv[1], nv[2]);
-                g_cmds[g_num_cmds++] = tc; loaded++;
-            }
-            continue;
-        }
-
-        /* { _tc[0]=R; _tc[1]=G; _tc[2]=B; _tc[3]=A; } — CMD_TESS_COLOR */
-        if (strncmp(p, "{ _tc[", 6) == 0) {
-            float cv[4] = {1, 1, 1, 1};
-            const char *cp = p;
-            for (int ci = 0; ci < 4; ci++) {
-                const char *eq = strchr(cp, '=');
-                if (!eq) break; eq++;
-                ExprCtx ctx = { eq, NULL, 0 };
-                cv[ci] = eval_expr(&ctx); cp = ctx.p;
-            }
-            if (g_num_cmds < MAX_COMMANDS) {
-                GLCmd tc; memset(&tc, 0, sizeof(tc));
-                tc.type = CMD_TESS_COLOR; tc.valid = 1; tc.num_args = 4;
-                tc.args[0] = cv[0]; tc.args[1] = cv[1];
-                tc.args[2] = cv[2]; tc.args[3] = cv[3];
-                char ind[32]; cmd_tess_indent(g_num_cmds, ind, sizeof(ind));
-                snprintf(tc.source, sizeof(tc.source),
-                         "%sgluColor(%g, %g, %g, %g);",
-                         ind, cv[0], cv[1], cv[2], cv[3]);
-                g_cmds[g_num_cmds++] = tc; loaded++;
-            }
-            continue;
-        }
-
-        /* { TessVertex *_v=...; _v->pos[0]=X; ... gluTessVertex(...); } — CMD_TESS_VERTEX */
-        if (strstr(p, "TessVertex") != NULL && strstr(p, "gluTessVertex") != NULL) {
-            float vv[3] = {0, 0, 0};
-            const char *vp = strstr(p, "_v->pos[0]");
-            if (vp) {
-                for (int vi = 0; vi < 3; vi++) {
-                    const char *eq = strchr(vp, '=');
-                    if (!eq) break; eq++;
-                    ExprCtx ctx = { eq, NULL, 0 };
-                    vv[vi] = eval_expr(&ctx); vp = ctx.p;
-                }
-            }
-            if (g_num_cmds < MAX_COMMANDS) {
-                GLCmd tc; memset(&tc, 0, sizeof(tc));
-                tc.type = CMD_TESS_VERTEX; tc.valid = 1; tc.num_args = 3;
-                tc.args[0] = vv[0]; tc.args[1] = vv[1]; tc.args[2] = vv[2];
-                char ind[32]; cmd_tess_indent(g_num_cmds, ind, sizeof(ind));
-                snprintf(tc.source, sizeof(tc.source),
-                         "%sgluVertex(%g, %g, %g);", ind, vv[0], vv[1], vv[2]);
-                g_cmds[g_num_cmds++] = tc; loaded++;
-            }
-            continue;
-        }
-
-        /* Regular line (outside for-loop): parse as normal command */
-        {
-            /* Translate C expressions to REPL first */
-            char repl_line[MAX_LINE_LEN];
-            c_expr_to_repl(line, repl_line, sizeof(repl_line));
-            GLCmd cmd;
-            memset(&cmd, 0, sizeof(cmd));
-            int parsed = repl_parse_and_normalize(
-                repl_line, g_num_cmds, NULL, 0,
-                input_has_predef_vars(repl_line), &cmd);
-            if (parsed) {
-                if (g_num_cmds < MAX_COMMANDS) {
-                    g_cmds[g_num_cmds++] = cmd;
-                    loaded++;
-                }
-            } else {
+            int before = g_num_cmds;
+            int handled = feed_line(repl_line);
+            if (g_num_cmds > before) loaded += (g_num_cmds - before);
+            if (!handled) {
                 fprintf(stderr, "Warning: could not parse line: %s\n", line);
                 warnings++;
             }
@@ -5390,20 +5138,21 @@ static void timer_func(int value) {
  * and pressed ';'.  This reuses the existing try_commit_* functions so that
  * source strings, indentation, has_vars, and block nesting are handled
  * identically to interactive use. */
-static void feed_line(const char *line) {
+static int feed_line(const char *line) {
     strncpy(g_input, line, MAX_INPUT_LEN - 1);
     g_input[MAX_INPUT_LEN - 1] = '\0';
     g_input_len = (int)strlen(g_input);
     g_cursor_pos = g_input_len;
 
     /* Try structured blocks first (order matters) */
-    if (try_commit_close_brace()) return;
-    if (try_commit_for_loop()) return;
-    if (try_commit_func_def()) return;
-    if (try_commit_if_block()) return;
-    if (try_assign_variable()) return;
+    if (try_commit_close_brace()) return 1;
+    if (try_commit_for_loop()) return 1;
+    if (try_commit_func_def()) return 1;
+    if (try_commit_if_block()) return 1;
+    if (try_assign_variable()) return 1;
 
     /* Regular command */
+    int handled = 0;
     GLCmd cmd;
     memset(&cmd, 0, sizeof(cmd));
     int fpos = g_inserting ? g_edit_line : g_num_cmds;
@@ -5430,10 +5179,12 @@ static void feed_line(const char *line) {
             g_edit_line = g_num_cmds;
         }
         depth_cache_invalidate();
+        handled = 1;
     }
     g_input[0] = '\0';
     g_input_len = 0;
     g_cursor_pos = 0;
+    return handled;
 }
 
 /* Load an example from an array of source lines */
