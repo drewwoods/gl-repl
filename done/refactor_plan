@@ -1,0 +1,109 @@
+ Plan: Separate sample.c into scene_render, ui_panels, and shared header
+
+ Context
+
+ sample.c is 6615 lines containing the entire OpenGL REPL: types, globals, REPL core logic, 3D scene rendering, UI panels (code editor, help overlay, var sliders, config menu), input handlers, and main().
+ The goal is to extract the 3D scene rendering and UI panel rendering into their own files to improve maintainability.
+
+ New Files
+
+ ┌────────────────┬────────────────────────────────────────────────────────────────────────────┐
+ │      File      │                                  Purpose                                   │
+ ├────────────────┼────────────────────────────────────────────────────────────────────────────┤
+ │ sample.h       │ Shared types, macros, extern globals, shared utility declarations          │
+ ├────────────────┼────────────────────────────────────────────────────────────────────────────┤
+ │ scene_render.h │ Declaration of render_3d_scene()                                           │
+ ├────────────────┼────────────────────────────────────────────────────────────────────────────┤
+ │ scene_render.c │ 3D scene: grid, axes, lights, vertex overlays, guides, scene orchestration │
+ ├────────────────┼────────────────────────────────────────────────────────────────────────────┤
+ │ ui_panels.h    │ Declarations for panel render + hit-test functions                         │
+ ├────────────────┼────────────────────────────────────────────────────────────────────────────┤
+ │ ui_panels.c    │ Code panel, autocomplete, help overlay, var panel, config menu             │
+ └────────────────┴────────────────────────────────────────────────────────────────────────────┘
+
+ Modified Files
+
+ - sample.c — Remove extracted sections, remove static from shared symbols, add new includes
+ - Makefile — Add new source/header files to build
+
+ ---
+ Step 1: Create sample.h
+
+ Extract from sample.c lines 73-84 (includes), 80-101 (macros), 107-153 (CmdType, EnumEntry, GLCmd), 453-460 (SceneLight), 533-539 (CfgItem).
+
+ Add extern declarations for all globals accessed by multiple files:
+ - Command arrays: g_cmds[], g_num_cmds, g_flat_cmds[], g_num_flat_cmds, g_flat_dirty, g_normals_dirty
+ - Editor: g_input[], g_input_len, g_cursor_pos, g_edit_line, g_inserting, g_scroll
+ - Camera: g_cam_rx, g_cam_ry, g_cam_dist, g_cam_px, g_cam_py
+ - Window: g_win_w, g_win_h, g_panel_frac
+ - Scene toggles: g_wireframe, g_grid_theme, g_axes_theme, g_show_vnums, g_show_normals, g_show_indices, g_show_guides, g_autonormal, g_show_lights, g_show_outlines, g_highlight_current_poly,
+ g_current_block_begin, g_current_block_end, g_cam_rotate, g_ortho_mode
+ - Lights/GLU: g_lights[], g_user_lighting_enabled, g_quadric, g_tess, g_tess_verts[], g_tess_vert_count
+ - UI state: g_show_help, g_help_scroll, g_show_config, g_config_hover, g_show_var_panel, g_drag_var
+ - Cursor/AC: g_cursor_on, g_cursor_px, g_cursor_py, g_ac_matches[], g_ac_count, g_ac_sel, g_ac_ghost[]
+ - Selection: g_sel_anchor, g_sel_end
+ - Status: g_status[], g_status_ttl
+ - Animation: g_anim_time, g_t_playing, g_t_var_idx
+ - AA: g_accum_jitter_x, g_accum_jitter_y, g_use_accum, g_accum_aa_enabled, g_accum_samples
+ - Focus: g_focus_vtx[], g_focus_vtx_valid
+ - Lookup tables (extern): g_begin_modes[], g_header_pre[], g_lookat[][], g_header_post[], g_footer[], g_grid_names[], g_axes_names[]
+ - Config: g_cfg_items[] + extern const int CFG_ITEM_COUNT;
+
+ Declare shared utility functions (remove static in sample.c):
+ - draw_string(), draw_quad(), begin_2d(), end_2d()
+ - set_status(), mode_name(), in_begin_block_at(), in_begin_block(), count_vertices(), current_begin_mode()
+ - execute_commands(), sel_active(), sel_lo(), sel_hi(), clear_selection(), navigate_to_line()
+
+ Step 2: Create scene_render.h / scene_render.c
+
+ scene_render.h: Declare void render_3d_scene(void);
+
+ scene_render.c — Extract lines 3066-4103:
+ - static draw_grid() (3066-3273)
+ - static draw_axis_label(), static draw_axes() (3276-3494)
+ - static draw_vertex_numbers() (3496-3559)
+ - static draw_normal_vectors() (3561-3605)
+ - static draw_guide_yz_plane(), static draw_vertex_guides() (3612-3670)
+ - static draw_normal_guides() (3676-3786)
+ - static setup_lights(), static draw_lights() (3794-3937)
+ - render_3d_scene() — non-static (3943-4103)
+
+ Step 3: Create ui_panels.h / ui_panels.c
+
+ ui_panels.h: Declare 8 public functions:
+ - render_code_panel(), render_autocomplete(), render_help()
+ - render_var_panel(), render_config_menu()
+ - cfg_hit_row(), var_panel_hit(), handle_code_panel_click()
+
+ ui_panels.c — Extract from sample.c:
+ - static color_for_type() (2441-2469)
+ - static render_edit_line() (2475-2517)
+ - render_code_panel() (2519-2776) — non-static
+ - render_autocomplete() (2782-2846) — non-static
+ - render_help() (2852-3060) — non-static
+ - VAR_PANEL_* defines (4109-4112), static var_panel_geom(), var_panel_hit(), render_var_panel() (4115-4226)
+ - CFG_* defines (4232-4235), static cfg_panel_geom(), cfg_hit_row(), render_config_menu() (4237-4334)
+ - handle_code_panel_click() (5949-6009) — non-static
+
+ Step 4: Modify sample.c
+
+ 1. Replace system includes + repl_eval.h with #include "sample.h", #include "scene_render.h", #include "ui_panels.h"
+ 2. Remove type/struct/enum definitions (now in sample.h)
+ 3. Remove static from all shared globals and shared functions
+ 4. Delete extracted function blocks (scene render, UI panels)
+ 5. Keep: globals definitions, 2D utilities, REPL core, command parsing, flatten/execute, autonormals, display_func, input handlers, examples, init, main
+ 6. Change CFG_ITEM_COUNT from sizeof-macro to const int CFG_ITEM_COUNT = sizeof(g_cfg_items)/sizeof(g_cfg_items[0]);
+
+ Step 5: Update Makefile
+
+ SRCS = sample.c scene_render.c ui_panels.c repl_eval.c
+ HDRS = sample.h scene_render.h ui_panels.h repl_eval.h
+
+ sample: $(SRCS) $(HDRS)
+        $(CC) $(CFLAGS) -o $@ $(SRCS) $(GL_LDFLAGS
+
+ Verification
+
+ 1. make clean && make — must compile without errors or warnings
+ 2. Run ./sample — verify 3D scene renders, code panel works, help overlay (F1) works, config menu (backtick) works, variable panel works
+ 3. Test mouse interactions: clicking code panel lines, config menu toggles, variable sliders
