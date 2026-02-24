@@ -4698,12 +4698,45 @@ static const char *g_example_torus[] = {
     NULL
 };
 
+/* Example 5: GLU tessellator — concave arrow polygon with per-vertex color */
+static const char *g_example_tess[] = {
+    "glEnable(GL_DEPTH_TEST);",
+    "glEnable(GL_LIGHTING);",
+    "glEnable(GL_COLOR_MATERIAL);",
+    "glEnable(GL_NORMALIZE);",
+    "glEnable(GL_LIGHT3);",
+    "glEnable(GL_LIGHT2);",
+    "glShadeModel(GL_SMOOTH);",
+    "// Arrow shape — concave, tessellated with per-vertex color",
+    "gluBegin(GLU_POLYGON);",
+    "gluBegin(GLU_CONTOUR);",
+    "gluNormal(0, 0, 1);",
+    "gluColor(0.2, 0.4, 1, 1);",
+    "gluVertex(-1.2, -0.45, 0);",
+    "gluColor(0.2, 0.4, 1, 1);",
+    "gluVertex(-1.2, 0.45, 0);",
+    "gluColor(0.55, 0.3, 1, 1);",
+    "gluVertex(0, 0.45, 0);",
+    "gluColor(1, 0.45, 0.05, 1);",
+    "gluVertex(0, 1.1, 0);",
+    "gluColor(1, 0.9, 0.1, 1);",
+    "gluVertex(1.3, 0, 0);",
+    "gluColor(1, 0.45, 0.05, 1);",
+    "gluVertex(0, -1.1, 0);",
+    "gluColor(0.55, 0.3, 1, 1);",
+    "gluVertex(0, -0.45, 0);",
+    "gluEnd();",
+    "gluEnd();",
+    NULL
+};
+
 static const char **g_examples[] = {
     g_example_cube,
     g_example_ring,
     g_example_func,
     g_example_cond,
     g_example_torus,
+    g_example_tess,
 };
 static const char *g_example_names[] = {
     "Lit cube",
@@ -4711,6 +4744,7 @@ static const char *g_example_names[] = {
     "Function demo (func0)",
     "Conditional colors (if + t)",
     "Parametric torus (nested for)",
+    "GLU tessellator (concave arrow)",
 };
 /* NUM_EXAMPLES defined in forward declarations section */
 
