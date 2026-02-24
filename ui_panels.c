@@ -581,6 +581,8 @@ void render_help(void) {
         "  Ctrl+Y/Ctrl+Shift+Z  Redo last command",
         "  Ctrl+D               Delete line at cursor",
         "  Ctrl+L               Clear all commands",
+        "  Ctrl+R               Reformat command buffer",
+        "  Ctrl+P               Dump editor code to stdout",
         "  Ctrl+S               Save to output.c",
         "  Ctrl+Q               Exit and save to temporary file",
         "  Escape               Clear input / exit insert / close help",

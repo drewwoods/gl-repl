@@ -19,10 +19,12 @@ GL_LDFLAGS = \
 
 .PHONY: all clean test lines
 
-all: sample test_eval test_format
+all: sample test_eval test_format \
+	test_repl_core_parse test_repl_core_format test_repl_core_commit test_repl_core_io
 
-SRCS = sample.c scene_render.c ui_panels.c repl_eval.c cmd_format.c
-HDRS = sample.h scene_render.h ui_panels.h repl_eval.h cmd_format.h
+SRCS = sample.c repl_core.c scene_render.c ui_panels.c repl_eval.c cmd_format.c
+HDRS = sample.h repl_core.h repl_core_internal.h scene_render.h ui_panels.h repl_eval.h cmd_format.h
+CORE_TEST_SRCS = repl_core.c scene_render.c ui_panels.c repl_eval.c cmd_format.c
 
 sample: $(SRCS) $(HDRS)
 	$(CC) $(CFLAGS) -o $@ $(SRCS) $(GL_LDFLAGS)
@@ -33,9 +35,25 @@ test_eval: test_eval.c repl_eval.c repl_eval.h
 test_format: test_format.c cmd_format.c cmd_format.h
 	$(CC) $(CFLAGS) -o $@ test_format.c cmd_format.c -lm
 
-test: test_eval test_format
+test_repl_core_parse: test_repl_core_parse.c $(CORE_TEST_SRCS) $(HDRS)
+	$(CC) $(CFLAGS) -o $@ test_repl_core_parse.c $(CORE_TEST_SRCS) $(GL_LDFLAGS)
+
+test_repl_core_format: test_repl_core_format.c $(CORE_TEST_SRCS) $(HDRS)
+	$(CC) $(CFLAGS) -o $@ test_repl_core_format.c $(CORE_TEST_SRCS) $(GL_LDFLAGS)
+
+test_repl_core_commit: test_repl_core_commit.c $(CORE_TEST_SRCS) $(HDRS)
+	$(CC) $(CFLAGS) -o $@ test_repl_core_commit.c $(CORE_TEST_SRCS) $(GL_LDFLAGS)
+
+test_repl_core_io: test_repl_core_io.c $(CORE_TEST_SRCS) $(HDRS)
+	$(CC) $(CFLAGS) -o $@ test_repl_core_io.c $(CORE_TEST_SRCS) $(GL_LDFLAGS)
+
+test: test_eval test_format test_repl_core_parse test_repl_core_format test_repl_core_commit test_repl_core_io
 	./test_eval --run-tests
 	./test_format
+	./test_repl_core_parse
+	./test_repl_core_format
+	./test_repl_core_commit
+	./test_repl_core_io
 
 # count lines: $(SRCS) $(HDRS)
 lines: $(SRCS) $(HDRS)
@@ -43,4 +61,10 @@ lines: $(SRCS) $(HDRS)
 	@wc -l $(SRCS) $(HDRS) | sort -nr
 
 clean:
-	rm -rf sample sample.dSYM test_eval test_eval.dSYM test_format test_format.dSYM *.o
+	rm -rf sample sample.dSYM \
+		test_eval test_eval.dSYM test_format test_format.dSYM \
+		test_repl_core_parse test_repl_core_parse.dSYM \
+		test_repl_core_format test_repl_core_format.dSYM \
+		test_repl_core_commit test_repl_core_commit.dSYM \
+		test_repl_core_io test_repl_core_io.dSYM \
+		*.o
