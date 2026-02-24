@@ -341,6 +341,144 @@ static void test_reindent_for_loop_body(void) {
 
 /* ---- fmt_tess_leaf_indent tests --------------------------------------- */
 
+/* ---- output.c import trace -------------------------------------------- */
+
+static void test_output_c_import_trace(void) {
+    printf("test_output_c_import_trace\n");
+    /*
+     * Trace load_from_file processing output.c line by line.
+     * The snippet contains (relevant lines only):
+     *
+     *   glEnable/glShadeModel×7   → FMT_OTHER ×7
+     *   z = -0.25                 → FMT_OTHER (var assign)
+     *   // comment                → FMT_OTHER
+     *   { gluTessBeginPolygon }   → CMD_TESS_BEGIN_POLYGON
+     *   gluTessBeginContour       → CMD_TESS_BEGIN_CONTOUR
+     *   glBegin(GL_QUAD_STRIP)    → CMD_GL_BEGIN
+     *   { _tn[0]=0;... }          → CMD_TESS_NORMAL  (gluNormal)
+     *   { _tc[0]=1;... }          → CMD_TESS_COLOR   (gluColor)
+     *   { TessVertex...vertex }   → CMD_TESS_VERTEX  (gluVertex)
+     *   glNormal3f(0, 0, 1)       → CMD_NORMAL3F
+     *   glColor3f(1, 1, 1)        → CMD_COLOR3F
+     *   glVertex3f(-1.2,-0.45, z) → CMD_VERTEX3F  (has_vars)
+     *   glVertex3f(-1.2,-0.45, 0) → CMD_VERTEX3F
+     *   { _tc[0]=1;... }          → CMD_TESS_COLOR
+     *   { TessVertex...vertex }   → CMD_TESS_VERTEX
+     *   glVertex3f(-1, -0.45, 0)  → CMD_VERTEX3F
+     *   glEnd()                   → CMD_GL_END
+     *   gluTessEndContour         → CMD_TESS_END
+     *   gluTessEndPolygon         → CMD_TESS_END
+     *
+     * For indent purposes only POLYGON/CONTOUR/GL_BEGIN/GL_END/TESS_END matter.
+     * We use 9 FMT_OTHER entries to represent the preamble.
+     *
+     * Expected indentation for each command:
+     *   gluBegin(GLU_POLYGON)   ← tess_leaf(tess=0)           = 2
+     *   gluBegin(GLU_CONTOUR)   ← tess_leaf(tess=1)           = 4
+     *   glBegin(GL_QUAD_STRIP)  ← fmt_indent(tess=2, begin=0) = 6
+     *   gluNormal               ← tess_leaf(tess=2, begin=1→ignored) = 6
+     *   gluColor                ← tess_leaf(tess=2, begin=1→ignored) = 6
+     *   gluVertex               ← tess_leaf(tess=2, begin=1→ignored) = 6
+     *   glNormal3f              ← fmt_indent(tess=2, begin=1)  = 8
+     *   glColor3f               ← fmt_indent(tess=2, begin=1)  = 8
+     *   glVertex3f (has_vars)   ← fmt_indent(tess=2, begin=1)  = 8
+     *   glVertex3f              ← fmt_indent(tess=2, begin=1)  = 8
+     *   gluColor  (second)      ← tess_leaf(tess=2, begin=1→ignored) = 6
+     *   gluVertex (second)      ← tess_leaf(tess=2, begin=1→ignored) = 6
+     *   glVertex3f              ← fmt_indent(tess=2, begin=1)  = 8
+     *   glEnd()                 ← fmt_end_indent(tess=2)       = 6
+     *   gluEnd() contour        ← tess_end(tess=2→tess-1=1)   = 4
+     *   gluEnd() polygon        ← tess_end(tess=1→tess-1=0)   = 2
+     */
+    char buf[32];
+
+    /* Build a sequence incrementally, mirroring g_cmds as load_from_file fills it. */
+    FmtCmd seq[32];
+    int n = 0;
+    /* Preamble: 9 FMT_OTHER entries (glEnable×7, var, comment) */
+    for (int i = 0; i < 9; i++) seq[n++] = V(FMT_OTHER);
+
+    /* gluBegin(GLU_POLYGON): uses tess_leaf at n=9 */
+    fmt_tess_leaf_indent(seq, n, buf, sizeof(buf));
+    ASSERT_STR("import: gluBegin(POLYGON)", buf, "  ");
+    seq[n++] = V(FMT_TESS_BEGIN_POLYGON);
+
+    /* gluBegin(GLU_CONTOUR): uses tess_leaf at n=10 */
+    fmt_tess_leaf_indent(seq, n, buf, sizeof(buf));
+    ASSERT_STR("import: gluBegin(CONTOUR)", buf, "    ");
+    seq[n++] = V(FMT_TESS_BEGIN_CONTOUR);
+
+    /* glBegin(GL_QUAD_STRIP): uses fmt_indent at n=11 */
+    fmt_indent(seq, n, buf, sizeof(buf));
+    ASSERT_STR("import: glBegin", buf, "      ");
+    seq[n++] = V(FMT_GL_BEGIN);
+
+    /* gluNormal (_tn handler): must use tess_leaf at n=12 */
+    fmt_tess_leaf_indent(seq, n, buf, sizeof(buf));
+    ASSERT_STR("import: gluNormal (_tn)", buf, "      ");
+    seq[n++] = V(FMT_OTHER);  /* CMD_TESS_NORMAL */
+
+    /* gluColor (_tc handler): must use tess_leaf at n=13 */
+    fmt_tess_leaf_indent(seq, n, buf, sizeof(buf));
+    ASSERT_STR("import: gluColor (_tc)", buf, "      ");
+    seq[n++] = V(FMT_OTHER);  /* CMD_TESS_COLOR */
+
+    /* gluVertex (TessVertex handler): must use tess_leaf at n=14 */
+    fmt_tess_leaf_indent(seq, n, buf, sizeof(buf));
+    ASSERT_STR("import: gluVertex (TessVertex)", buf, "      ");
+    seq[n++] = V(FMT_OTHER);  /* CMD_TESS_VERTEX */
+
+    /* glNormal3f (regular line): uses fmt_indent at n=15 */
+    fmt_indent(seq, n, buf, sizeof(buf));
+    ASSERT_STR("import: glNormal3f", buf, "        ");
+    seq[n++] = V(FMT_OTHER);
+
+    /* glColor3f (regular line): uses fmt_indent at n=16 */
+    fmt_indent(seq, n, buf, sizeof(buf));
+    ASSERT_STR("import: glColor3f", buf, "        ");
+    seq[n++] = V(FMT_OTHER);
+
+    /* glVertex3f has_vars (fmt_reindent_from_parsed uses parsed source = 8-space) */
+    fmt_indent(seq, n, buf, sizeof(buf));
+    ASSERT_STR("import: glVertex3f(has_vars)", buf, "        ");
+    seq[n++] = V(FMT_OTHER);
+
+    /* glVertex3f plain: fmt_indent at n=18 */
+    fmt_indent(seq, n, buf, sizeof(buf));
+    ASSERT_STR("import: glVertex3f plain", buf, "        ");
+    seq[n++] = V(FMT_OTHER);
+
+    /* gluColor second (_tc): tess_leaf at n=19 */
+    fmt_tess_leaf_indent(seq, n, buf, sizeof(buf));
+    ASSERT_STR("import: gluColor (2nd)", buf, "      ");
+    seq[n++] = V(FMT_OTHER);
+
+    /* gluVertex second (TessVertex): tess_leaf at n=20 */
+    fmt_tess_leaf_indent(seq, n, buf, sizeof(buf));
+    ASSERT_STR("import: gluVertex (2nd)", buf, "      ");
+    seq[n++] = V(FMT_OTHER);
+
+    /* glVertex3f: fmt_indent at n=21 */
+    fmt_indent(seq, n, buf, sizeof(buf));
+    ASSERT_STR("import: glVertex3f (3rd)", buf, "        ");
+    seq[n++] = V(FMT_OTHER);
+
+    /* glEnd(): fmt_end_indent at n=22 */
+    fmt_end_indent(seq, n, buf, sizeof(buf));
+    ASSERT_STR("import: glEnd()", buf, "      ");
+    seq[n++] = V(FMT_GL_END);
+
+    /* gluEnd() closing contour: tess_end at n=23 (tess=2 → 4-space) */
+    fmt_tess_end_indent(seq, n, buf, sizeof(buf));
+    ASSERT_STR("import: gluEnd(CONTOUR)", buf, "    ");
+    seq[n++] = V(FMT_TESS_END);
+
+    /* gluEnd() closing polygon: tess_end at n=24 (tess=1 → 2-space) */
+    fmt_tess_end_indent(seq, n, buf, sizeof(buf));
+    ASSERT_STR("import: gluEnd(POLYGON)", buf, "  ");
+    seq[n++] = V(FMT_TESS_END);
+}
+
 static void test_tess_leaf_indent(void) {
     printf("test_tess_leaf_indent\n");
 
@@ -516,6 +654,9 @@ int main(void) {
     test_invalid_cmds_skipped();
     test_underflow_clamps_to_zero();
     test_no_tess_plain_begin();
+
+    printf("\n--- output.c import trace ---\n\n");
+    test_output_c_import_trace();
 
     printf("\n--- fmt_tess_leaf_indent ---\n\n");
     test_tess_leaf_indent();
