@@ -17,7 +17,7 @@ GL_LDFLAGS = \
 	-lglut -lm -lpthread \
 	-framework IOKit -framework Cocoa -framework OpenGL
 
-.PHONY: all clean test
+.PHONY: all clean test lines
 
 all: sample test_eval test_format
 
@@ -36,6 +36,11 @@ test_format: test_format.c cmd_format.c cmd_format.h
 test: test_eval test_format
 	./test_eval --run-tests
 	./test_format
+
+# count lines: $(SRCS) $(HDRS)
+lines: $(SRCS) $(HDRS)
+	@echo "Counting lines of code in source and header files..."
+	@wc -l $(SRCS) $(HDRS) | sort -nr
 
 clean:
 	rm -rf sample sample.dSYM test_eval test_eval.dSYM test_format test_format.dSYM *.o

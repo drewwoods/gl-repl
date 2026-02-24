@@ -285,6 +285,7 @@ void set_status(const char *msg);
 const char *mode_name(GLenum mode);
 int  in_begin_block_at(int line_idx);
 int  in_begin_block(void);
+int  cmd_indent_chars(int pos);
 GLenum current_begin_mode(void);
 int  count_vertices(void);
 void mark_normals_dirty(void);
