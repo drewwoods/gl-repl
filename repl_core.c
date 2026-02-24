@@ -2034,6 +2034,38 @@ static CmdType nearest_open_block_at(int pos);
 static void get_for_var_name(const GLCmd *cmd, char *var, int var_sz);
 static int collect_for_vars(int pos, ExprVar *vars, int max_vars);
 
+/* ========================================================================= */
+/* Command Definitions (Table-Driven)                                         */
+/* ========================================================================= */
+
+typedef struct {
+    const char *name;
+    CmdType     type;
+    int         num_args;
+    const char *fmt;    /* e.g. "glVertex3f(%g, %g, %g);" */
+    const char *usage;
+    int         is_tess; /* 1 if uses tess_indent, 0 for regular indent */
+} StdCmdDef;
+
+static const StdCmdDef g_std_cmds[] = {
+    { "glVertex3f",     CMD_VERTEX3F,         3, "glVertex3f(%g, %g, %g);",         "Usage: glVertex3f(x, y, z)", 0 },
+    { "glNormal3f",     CMD_NORMAL3F,         3, "glNormal3f(%g, %g, %g);",         "Usage: glNormal3f(nx, ny, nz)", 0 },
+    { "glColor3f",      CMD_COLOR3F,          3, "glColor3f(%g, %g, %g);",          "Usage: glColor3f(r, g, b)", 0 },
+    { "glColor4f",      CMD_COLOR4F,          4, "glColor4f(%g, %g, %g, %g);",      "Usage: glColor4f(r, g, b, a)", 0 },
+    { "glTranslatef",   CMD_TRANSLATE3F,      3, "glTranslatef(%g, %g, %g);",       "Usage: glTranslatef(x, y, z)", 0 },
+    { "glScalef",       CMD_SCALEF,           3, "glScalef(%g, %g, %g);",           "Usage: glScalef(x, y, z)", 0 },
+    { "glRotatef",      CMD_ROTATEF,          4, "glRotatef(%g, %g, %g, %g);",      "Usage: glRotatef(angle, x, y, z)", 0 },
+    { "glVertex2f",     CMD_VERTEX2F,         2, "glVertex2f(%g, %g);",             "Usage: glVertex2f(x, y)", 0 },
+    { "gluSphere",      CMD_GLU_SPHERE,       3, "gluSphere(g_quadric, %g, %g, %g);", "Usage: gluSphere(radius, slices, stacks)", 0 },
+    { "gluCylinder",    CMD_GLU_CYLINDER,     5, "gluCylinder(g_quadric, %g, %g, %g, %g, %g);", "Usage: gluCylinder(baseR, topR, height, slices, stacks)", 0 },
+    { "gluDisk",        CMD_GLU_DISK,         4, "gluDisk(g_quadric, %g, %g, %g, %g);", "Usage: gluDisk(innerR, outerR, slices, loops)", 0 },
+    { "gluPartialDisk", CMD_GLU_PARTIAL_DISK, 6, "gluPartialDisk(g_quadric, %g, %g, %g, %g, %g, %g);", "Usage: gluPartialDisk(innerR, outerR, slices, loops, startAngle, sweepAngle)", 0 },
+    { "glutSolidTorus", CMD_GLUT_TORUS,       4, "glutSolidTorus(%g, %g, %g, %g);", "Usage: glutSolidTorus(innerR, outerR, nsides, rings)", 0 },
+    { "gluNormal",      CMD_TESS_NORMAL,      3, "gluNormal(%g, %g, %g);",          "Usage: gluNormal(x, y, z)", 1 },
+    { "gluVertex",      CMD_TESS_VERTEX,      3, "gluVertex(%g, %g, %g);",          "Usage: gluVertex(x, y, z)", 1 },
+    { NULL, 0, 0, NULL, NULL, 0 }
+};
+
 static int parse_command_internal(const char *line, GLCmd *cmd,
                                   ExprVar *vars, int num_vars) {
     char buf[MAX_LINE_LEN];
@@ -2195,81 +2227,46 @@ static int parse_command_internal(const char *line, GLCmd *cmd,
     cmd_tess_indent(g_edit_line, tess_indent_buf, sizeof(tess_indent_buf));
     const char *tess_indent = tess_indent_buf;
 
-    /* glVertex3f(x, y, z) */
-    if (strcmp(func, "glVertex3f") == 0) {
-        cmd->num_args = parse_exprs(args, cmd->args, 3, vars, num_vars);
-        if (cmd->num_args == 3) {
-            cmd->type = CMD_VERTEX3F;
-            cmd->valid = 1;
-            snprintf(cmd->source, sizeof(cmd->source),
-                     "%sglVertex3f(%g, %g, %g);",
-                     indent, cmd->args[0], cmd->args[1], cmd->args[2]);
-            return 1;
-        }
-        set_status("Usage: glVertex3f(x, y, z)");
-        return 0;
-    }
+    /* Table-driven parsing for standard commands */
+    for (const StdCmdDef *def = g_std_cmds; def->name; def++) {
+        if (strcmp(func, def->name) == 0) {
+            cmd->num_args = parse_exprs(args, cmd->args, def->num_args, vars, num_vars);
+            if (cmd->num_args == def->num_args) {
+                cmd->type = def->type;
+                cmd->valid = 1;
+                cmd->has_vars = (num_vars > 0); /* Approximate */
 
-    /* glNormal3f(x, y, z) */
-    if (strcmp(func, "glNormal3f") == 0) {
-        cmd->num_args = parse_exprs(args, cmd->args, 3, vars, num_vars);
-        if (cmd->num_args == 3) {
-            cmd->type = CMD_NORMAL3F;
-            cmd->valid = 1;
-            snprintf(cmd->source, sizeof(cmd->source),
-                     "%sglNormal3f(%g, %g, %g);",
-                     indent, cmd->args[0], cmd->args[1], cmd->args[2]);
-            return 1;
-        }
-        set_status("Usage: glNormal3f(nx, ny, nz)");
-        return 0;
-    }
+                const char *ind = def->is_tess ? tess_indent : indent;
+                snprintf(cmd->source, sizeof(cmd->source), "%s", ind);
+                size_t current_len = strlen(cmd->source);
 
-    /* glTranslatef(x, y, z) */
-    if (strcmp(func, "glTranslatef") == 0) {
-        cmd->num_args = parse_exprs(args, cmd->args, 3, vars, num_vars);
-        if (cmd->num_args == 3) {
-            cmd->type = CMD_TRANSLATE3F;
-            cmd->valid = 1;
-            cmd->has_vars = (num_vars > 0);
-            snprintf(cmd->source, sizeof(cmd->source),
-                     "%sglTranslatef(%g, %g, %g);",
-                     indent, cmd->args[0], cmd->args[1], cmd->args[2]);
-            return 1;
+                switch (def->num_args) {
+                case 2:
+                    snprintf(cmd->source + current_len, sizeof(cmd->source) - current_len,
+                             def->fmt, cmd->args[0], cmd->args[1]);
+                    break;
+                case 3:
+                    snprintf(cmd->source + current_len, sizeof(cmd->source) - current_len,
+                             def->fmt, cmd->args[0], cmd->args[1], cmd->args[2]);
+                    break;
+                case 4:
+                    snprintf(cmd->source + current_len, sizeof(cmd->source) - current_len,
+                             def->fmt, cmd->args[0], cmd->args[1], cmd->args[2], cmd->args[3]);
+                    break;
+                case 5:
+                    snprintf(cmd->source + current_len, sizeof(cmd->source) - current_len,
+                             def->fmt, cmd->args[0], cmd->args[1], cmd->args[2], cmd->args[3], cmd->args[4]);
+                    break;
+                case 6:
+                    snprintf(cmd->source + current_len, sizeof(cmd->source) - current_len,
+                             def->fmt, cmd->args[0], cmd->args[1], cmd->args[2], cmd->args[3], cmd->args[4], cmd->args[5]);
+                    break;
+                }
+                return 1;
+            }
+            set_status(def->usage);
+            return 0;
         }
-        set_status("Usage: glTranslatef(x, y, z)");
-        return 0;
-    }
-
-    /* glScalef(x, y, z) */
-    if (strcmp(func, "glScalef") == 0) {
-        cmd->num_args = parse_exprs(args, cmd->args, 3, vars, num_vars);
-        if (cmd->num_args == 3) {
-            cmd->type = CMD_SCALEF;
-            cmd->valid = 1;
-            snprintf(cmd->source, sizeof(cmd->source),
-                     "%sglScalef(%g, %g, %g);",
-                     indent, cmd->args[0], cmd->args[1], cmd->args[2]);
-            return 1;
-        }
-        set_status("Usage: glScalef(x, y, z)");
-        return 0;
-    }
-
-    /* glRotatef(angle, x, y, z) */
-    if (strcmp(func, "glRotatef") == 0) {
-        cmd->num_args = parse_exprs(args, cmd->args, 4, vars, num_vars);
-        if (cmd->num_args == 4) {
-            cmd->type = CMD_ROTATEF;
-            cmd->valid = 1;
-            snprintf(cmd->source, sizeof(cmd->source),
-                     "%sglRotatef(%g, %g, %g, %g);",
-                     indent, cmd->args[0], cmd->args[1],
-                     cmd->args[2], cmd->args[3]);
-            return 1;
-        }
-        set_status("Usage: glRotatef(angle, x, y, z)");
-        return 0;
     }
 
     /* glPushMatrix() */
@@ -2353,37 +2350,6 @@ static int parse_command_internal(const char *line, GLCmd *cmd,
         return 1;
     }
 
-    /* glColor3f(r, g, b) */
-    if (strcmp(func, "glColor3f") == 0) {
-        cmd->num_args = parse_exprs(args, cmd->args, 3, vars, num_vars);
-        if (cmd->num_args == 3) {
-            cmd->type = CMD_COLOR3F;
-            cmd->valid = 1;
-            snprintf(cmd->source, sizeof(cmd->source),
-                     "%sglColor3f(%g, %g, %g);",
-                     indent, cmd->args[0], cmd->args[1], cmd->args[2]);
-            return 1;
-        }
-        set_status("Usage: glColor3f(r, g, b)");
-        return 0;
-    }
-
-    /* glColor4f(r, g, b, a) */
-    if (strcmp(func, "glColor4f") == 0) {
-        cmd->num_args = parse_exprs(args, cmd->args, 4, vars, num_vars);
-        if (cmd->num_args == 4) {
-            cmd->type = CMD_COLOR4F;
-            cmd->valid = 1;
-            snprintf(cmd->source, sizeof(cmd->source),
-                     "%sglColor4f(%g, %g, %g, %g);",
-                     indent, cmd->args[0], cmd->args[1], cmd->args[2],
-                     cmd->args[3]);
-            return 1;
-        }
-        set_status("Usage: glColor4f(r, g, b, a)");
-        return 0;
-    }
-
     /* funcN() — function call */
     if (strncmp(func, "func", 4) == 0 && func[4] >= '0' && func[4] <= '9' && func[5] == '\0') {
         int fn = func[4] - '0';
@@ -2401,111 +2367,6 @@ static int parse_command_internal(const char *line, GLCmd *cmd,
         return 1;
     }
 
-    /* glVertex2f(x, y) — 2D vertex for ortho mode */
-    if (strcmp(func, "glVertex2f") == 0) {
-        cmd->num_args = parse_exprs(args, cmd->args, 2, vars, num_vars);
-        if (cmd->num_args == 2) {
-            cmd->type = CMD_VERTEX2F;
-            cmd->valid = 1;
-            cmd->has_vars = (num_vars > 0);
-            snprintf(cmd->source, sizeof(cmd->source),
-                     "%sglVertex2f(%g, %g);",
-                     indent, cmd->args[0], cmd->args[1]);
-            return 1;
-        }
-        set_status("Usage: glVertex2f(x, y)");
-        return 0;
-    }
-
-    /* gluSphere(radius, slices, stacks) */
-    if (strcmp(func, "gluSphere") == 0) {
-        cmd->num_args = parse_exprs(args, cmd->args, 3, vars, num_vars);
-        if (cmd->num_args == 3) {
-            cmd->type = CMD_GLU_SPHERE;
-            cmd->valid = 1;
-            cmd->has_vars = (num_vars > 0);
-            snprintf(cmd->source, sizeof(cmd->source),
-                     "%sgluSphere(g_quadric, %g, %d, %d);",
-                     indent, cmd->args[0], (int)cmd->args[1], (int)cmd->args[2]);
-            return 1;
-        }
-        set_status("Usage: gluSphere(radius, slices, stacks)");
-        return 0;
-    }
-
-    /* gluCylinder(baseRadius, topRadius, height, slices, stacks) */
-    if (strcmp(func, "gluCylinder") == 0) {
-        cmd->num_args = parse_exprs(args, cmd->args, 5, vars, num_vars);
-        if (cmd->num_args == 5) {
-            cmd->type = CMD_GLU_CYLINDER;
-            cmd->valid = 1;
-            cmd->has_vars = (num_vars > 0);
-            snprintf(cmd->source, sizeof(cmd->source),
-                     "%sgluCylinder(g_quadric, %g, %g, %g, %d, %d);",
-                     indent, cmd->args[0], cmd->args[1], cmd->args[2],
-                     (int)cmd->args[3], (int)cmd->args[4]);
-            return 1;
-        }
-        set_status("Usage: gluCylinder(baseR, topR, height, slices, stacks)");
-        return 0;
-    }
-
-    /* gluDisk(innerRadius, outerRadius, slices, loops) */
-    if (strcmp(func, "gluDisk") == 0) {
-        cmd->num_args = parse_exprs(args, cmd->args, 4, vars, num_vars);
-        if (cmd->num_args == 4) {
-            cmd->type = CMD_GLU_DISK;
-            cmd->valid = 1;
-            cmd->has_vars = (num_vars > 0);
-            snprintf(cmd->source, sizeof(cmd->source),
-                     "%sgluDisk(g_quadric, %g, %g, %d, %d);",
-                     indent, cmd->args[0], cmd->args[1],
-                     (int)cmd->args[2], (int)cmd->args[3]);
-            return 1;
-        }
-        set_status("Usage: gluDisk(innerR, outerR, slices, loops)");
-        return 0;
-    }
-
-    /* gluPartialDisk(innerR, outerR, slices, loops, startAngle, sweepAngle) */
-    if (strcmp(func, "gluPartialDisk") == 0) {
-        cmd->num_args = parse_exprs(args, cmd->args, 6, vars, num_vars);
-        if (cmd->num_args == 6) {
-            cmd->type = CMD_GLU_PARTIAL_DISK;
-            cmd->valid = 1;
-            cmd->has_vars = (num_vars > 0);
-            snprintf(cmd->source, sizeof(cmd->source),
-                     "%sgluPartialDisk(g_quadric, %g, %g, %d, %d, %g, %g);",
-                     indent, cmd->args[0], cmd->args[1],
-                     (int)cmd->args[2], (int)cmd->args[3],
-                     cmd->args[4], cmd->args[5]);
-            return 1;
-        }
-        set_status("Usage: gluPartialDisk(innerR, outerR, slices, loops, startAngle, sweepAngle)");
-        return 0;
-    }
-
-    /* glutSolidTorus(innerRadius, outerRadius, nsides, rings) */
-    if (strcmp(func, "glutSolidTorus") == 0) {
-        cmd->num_args = parse_exprs(args, cmd->args, 4, vars, num_vars);
-        if (cmd->num_args == 4) {
-            cmd->type = CMD_GLUT_TORUS;
-            cmd->valid = 1;
-            cmd->has_vars = (num_vars > 0);
-            snprintf(cmd->source, sizeof(cmd->source),
-                     "%sglutstolidTorus(%g, %g, %d, %d);",
-                     indent, cmd->args[0], cmd->args[1],
-                     (int)cmd->args[2], (int)cmd->args[3]);
-            /* Fix: use correct spelling */
-            snprintf(cmd->source, sizeof(cmd->source),
-                     "%sglutSolidTorus(%g, %g, %d, %d);",
-                     indent, cmd->args[0], cmd->args[1],
-                     (int)cmd->args[2], (int)cmd->args[3]);
-            return 1;
-        }
-        set_status("Usage: glutSolidTorus(innerR, outerR, nsides, rings)");
-        return 0;
-    }
 
     /* gluBegin(GLU_POLYGON) — start a tessellated polygon */
     if (strcmp(func, "gluBegin") == 0) {
@@ -2545,21 +2406,6 @@ static int parse_command_internal(const char *line, GLCmd *cmd,
         return 1;
     }
 
-    /* gluNormal(x, y, z) — set per-vertex normal for tessellator */
-    if (strcmp(func, "gluNormal") == 0) {
-        cmd->num_args = parse_exprs(args, cmd->args, 3, vars, num_vars);
-        if (cmd->num_args == 3) {
-            cmd->type = CMD_TESS_NORMAL;
-            cmd->valid = 1;
-            cmd->has_vars = (num_vars > 0);
-            snprintf(cmd->source, sizeof(cmd->source),
-                     "%sgluNormal(%g, %g, %g);",
-                     tess_indent, cmd->args[0], cmd->args[1], cmd->args[2]);
-            return 1;
-        }
-        set_status("Usage: gluNormal(x, y, z)");
-        return 0;
-    }
 
     /* gluColor(r, g, b[, a]) — set per-vertex color for tessellator */
     if (strcmp(func, "gluColor") == 0) {
@@ -2579,21 +2425,6 @@ static int parse_command_internal(const char *line, GLCmd *cmd,
         return 0;
     }
 
-    /* gluVertex(x, y, z) — add a vertex to the current tessellator contour */
-    if (strcmp(func, "gluVertex") == 0) {
-        cmd->num_args = parse_exprs(args, cmd->args, 3, vars, num_vars);
-        if (cmd->num_args == 3) {
-            cmd->type = CMD_TESS_VERTEX;
-            cmd->valid = 1;
-            cmd->has_vars = (num_vars > 0);
-            snprintf(cmd->source, sizeof(cmd->source),
-                     "%sgluVertex(%g, %g, %g);",
-                     tess_indent, cmd->args[0], cmd->args[1], cmd->args[2]);
-            return 1;
-        }
-        set_status("Usage: gluVertex(x, y, z)");
-        return 0;
-    }
 
     /* goto label — jump to a named label */
     if (strncmp(p, "goto ", 5) == 0) {
