@@ -121,6 +121,29 @@ typedef struct {
 } CfgItem;
 
 /* ========================================================================= */
+/* Transform command helpers (used by sample.c and scene_render.c)           */
+/* ========================================================================= */
+
+/* Returns non-zero if t is a matrix transform command */
+static inline int is_transform_cmd(CmdType t) {
+    return (t == CMD_TRANSLATE3F || t == CMD_SCALEF  || t == CMD_ROTATEF ||
+            t == CMD_PUSH_MATRIX  || t == CMD_POP_MATRIX);
+}
+
+/* Execute the GL call for a transform command (must not be inside glBegin/glEnd) */
+static inline void apply_transform_cmd(const GLCmd *cmd) {
+    switch (cmd->type) {
+    case CMD_TRANSLATE3F: glTranslatef(cmd->args[0], cmd->args[1], cmd->args[2]); break;
+    case CMD_SCALEF:      glScalef    (cmd->args[0], cmd->args[1], cmd->args[2]); break;
+    case CMD_ROTATEF:     glRotatef   (cmd->args[0], cmd->args[1],
+                                       cmd->args[2], cmd->args[3]); break;
+    case CMD_PUSH_MATRIX: glPushMatrix(); break;
+    case CMD_POP_MATRIX:  glPopMatrix();  break;
+    default: break;
+    }
+}
+
+/* ========================================================================= */
 /* Extern globals                                                             */
 /* ========================================================================= */
 

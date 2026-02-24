@@ -489,22 +489,9 @@ static void draw_vertex_numbers(void) {
     int tess_depth = 0;
     for (int i = 0; i < g_num_flat_cmds; i++) {
         if (!g_flat_cmds[i].valid) continue;
-        if (!in_block) {
-            if (g_flat_cmds[i].type == CMD_TRANSLATE3F)
-                glTranslatef(g_flat_cmds[i].args[0], g_flat_cmds[i].args[1],
-                             g_flat_cmds[i].args[2]);
-            else if (g_flat_cmds[i].type == CMD_SCALEF)
-                glScalef(g_flat_cmds[i].args[0], g_flat_cmds[i].args[1],
-                         g_flat_cmds[i].args[2]);
-            else if (g_flat_cmds[i].type == CMD_ROTATEF)
-                glRotatef(g_flat_cmds[i].args[0], g_flat_cmds[i].args[1],
-                          g_flat_cmds[i].args[2], g_flat_cmds[i].args[3]);
-            else if (g_flat_cmds[i].type == CMD_PUSH_MATRIX)
-                glPushMatrix();
-            else if (g_flat_cmds[i].type == CMD_POP_MATRIX)
-                glPopMatrix();
-        }
-        if (g_flat_cmds[i].type == CMD_BEGIN) {
+        if (!in_block && is_transform_cmd(g_flat_cmds[i].type)) {
+            apply_transform_cmd(&g_flat_cmds[i]);
+        } else if (g_flat_cmds[i].type == CMD_BEGIN) {
             block++;
             in_block = 1;
             vn = 0;
@@ -554,22 +541,9 @@ static void draw_normal_vectors(void) {
     int in_begin = 0;
     for (int i = 0; i < g_num_flat_cmds; i++) {
         if (!g_flat_cmds[i].valid) continue;
-        if (!in_begin) {
-            if (g_flat_cmds[i].type == CMD_TRANSLATE3F)
-                glTranslatef(g_flat_cmds[i].args[0], g_flat_cmds[i].args[1],
-                             g_flat_cmds[i].args[2]);
-            else if (g_flat_cmds[i].type == CMD_SCALEF)
-                glScalef(g_flat_cmds[i].args[0], g_flat_cmds[i].args[1],
-                         g_flat_cmds[i].args[2]);
-            else if (g_flat_cmds[i].type == CMD_ROTATEF)
-                glRotatef(g_flat_cmds[i].args[0], g_flat_cmds[i].args[1],
-                          g_flat_cmds[i].args[2], g_flat_cmds[i].args[3]);
-            else if (g_flat_cmds[i].type == CMD_PUSH_MATRIX)
-                glPushMatrix();
-            else if (g_flat_cmds[i].type == CMD_POP_MATRIX)
-                glPopMatrix();
-        }
-        if (g_flat_cmds[i].type == CMD_BEGIN ||
+        if (!in_begin && is_transform_cmd(g_flat_cmds[i].type)) {
+            apply_transform_cmd(&g_flat_cmds[i]);
+        } else if (g_flat_cmds[i].type == CMD_BEGIN ||
                    g_flat_cmds[i].type == CMD_TESS_BEGIN_POLYGON) {
             in_begin = 1;
             nx = 0; ny = 0; nz = 1; /* reset normal per block */
@@ -1018,28 +992,12 @@ void render_3d_scene(void) {
         for (int i = 0; i < g_num_flat_cmds; i++) {
             if (!g_flat_cmds[i].valid) continue;
 
+            if (is_transform_cmd(g_flat_cmds[i].type)) {
+                if (!in_begin && !tess_in_contour)
+                    apply_transform_cmd(&g_flat_cmds[i]);
+                continue;
+            }
             switch (g_flat_cmds[i].type) {
-            case CMD_TRANSLATE3F:
-                if (!in_begin && !tess_in_contour)
-                    glTranslatef(g_flat_cmds[i].args[0], g_flat_cmds[i].args[1],
-                                 g_flat_cmds[i].args[2]);
-                break;
-            case CMD_SCALEF:
-                if (!in_begin && !tess_in_contour)
-                    glScalef(g_flat_cmds[i].args[0], g_flat_cmds[i].args[1],
-                             g_flat_cmds[i].args[2]);
-                break;
-            case CMD_ROTATEF:
-                if (!in_begin && !tess_in_contour)
-                    glRotatef(g_flat_cmds[i].args[0], g_flat_cmds[i].args[1],
-                              g_flat_cmds[i].args[2], g_flat_cmds[i].args[3]);
-                break;
-            case CMD_PUSH_MATRIX:
-                if (!in_begin && !tess_in_contour) glPushMatrix();
-                break;
-            case CMD_POP_MATRIX:
-                if (!in_begin && !tess_in_contour) glPopMatrix();
-                break;
             case CMD_TESS_BEGIN_CONTOUR:
                 if (tess_in_contour) { glEnd(); glLineWidth(1.0f); }
                 if (g_show_outlines) {
@@ -1126,19 +1084,8 @@ void render_3d_scene(void) {
             draw_normal_guides();
         }
 
-        if (g_flat_cmds[i].type == CMD_TRANSLATE3F) {
-            glTranslatef(g_flat_cmds[i].args[0], g_flat_cmds[i].args[1],
-                         g_flat_cmds[i].args[2]);
-        } else if (g_flat_cmds[i].type == CMD_SCALEF) {
-            glScalef(g_flat_cmds[i].args[0], g_flat_cmds[i].args[1],
-                     g_flat_cmds[i].args[2]);
-        } else if (g_flat_cmds[i].type == CMD_ROTATEF) {
-            glRotatef(g_flat_cmds[i].args[0], g_flat_cmds[i].args[1],
-                      g_flat_cmds[i].args[2], g_flat_cmds[i].args[3]);
-        } else if (g_flat_cmds[i].type == CMD_PUSH_MATRIX) {
-            glPushMatrix();
-        } else if (g_flat_cmds[i].type == CMD_POP_MATRIX) {
-            glPopMatrix();
+        if (is_transform_cmd(g_flat_cmds[i].type)) {
+            apply_transform_cmd(&g_flat_cmds[i]);
         } else if (g_flat_cmds[i].type == CMD_VERTEX3F ||
                    g_flat_cmds[i].type == CMD_TESS_VERTEX) {
             glBegin(GL_POINTS);

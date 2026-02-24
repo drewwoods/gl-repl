@@ -2763,6 +2763,11 @@ void execute_commands(void) {
     int pc = 0;
     while (pc < g_num_flat_cmds) {
         if (!g_flat_cmds[pc].valid) { pc++; continue; }
+        if (is_transform_cmd(g_flat_cmds[pc].type)) {
+            apply_transform_cmd(&g_flat_cmds[pc]);
+            pc++;
+            continue;
+        }
         switch (g_flat_cmds[pc].type) {
         case CMD_BEGIN:
             if (in_begin) { glEnd(); in_begin = 0; }
@@ -2803,24 +2808,6 @@ void execute_commands(void) {
             break;
         case CMD_SHADE_MODEL:
             glShadeModel(g_flat_cmds[pc].mode);
-            break;
-        case CMD_TRANSLATE3F:
-            glTranslatef(g_flat_cmds[pc].args[0], g_flat_cmds[pc].args[1],
-                         g_flat_cmds[pc].args[2]);
-            break;
-        case CMD_SCALEF:
-            glScalef(g_flat_cmds[pc].args[0], g_flat_cmds[pc].args[1],
-                     g_flat_cmds[pc].args[2]);
-            break;
-        case CMD_ROTATEF:
-            glRotatef(g_flat_cmds[pc].args[0], g_flat_cmds[pc].args[1],
-                      g_flat_cmds[pc].args[2], g_flat_cmds[pc].args[3]);
-            break;
-        case CMD_PUSH_MATRIX:
-            glPushMatrix();
-            break;
-        case CMD_POP_MATRIX:
-            glPopMatrix();
             break;
         case CMD_COLOR_MATERIAL:
             glColorMaterial(g_flat_cmds[pc].mode, (GLenum)g_flat_cmds[pc].args[0]);
@@ -2976,6 +2963,9 @@ void execute_commands(void) {
                 g_predef_vars[vi].value = g_flat_cmds[pc].args[0];
             break;
         }
+        /* Transforms handled by is_transform_cmd() early-continue above */
+        case CMD_TRANSLATE3F: case CMD_SCALEF: case CMD_ROTATEF:
+        case CMD_PUSH_MATRIX: case CMD_POP_MATRIX:
         /* These are resolved during flatten and shouldn't appear in flat_cmds */
         case CMD_FOR_BEGIN: case CMD_FOR_END:
         case CMD_FUNC_DEF: case CMD_FUNC_END: case CMD_CALL:
