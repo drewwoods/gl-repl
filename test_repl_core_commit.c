@@ -17,6 +17,23 @@ int main(void) {
     init_predef_vars();
 
     repl_reset_state();
+    repl_feed_line_public("z = -0.55;");
+    ASSERT_TRUE("var assign cmd count", g_num_cmds == 1);
+    ASSERT_TRUE("var assign type", g_cmds[0].type == CMD_VAR_ASSIGN);
+    {
+        int z_idx = -1;
+        for (int i = 0; i < g_num_predef_vars; i++) {
+            if (strcmp(g_predef_vars[i].name, "z") == 0) {
+                z_idx = i;
+                break;
+            }
+        }
+        ASSERT_TRUE("z predef exists", z_idx >= 0);
+        if (z_idx >= 0)
+            ASSERT_TRUE("z updated", fabsf(g_predef_vars[z_idx].value - (-0.55f)) < 1e-6f);
+    }
+
+    repl_reset_state();
     repl_feed_line_public("for(i, 0, 3) {");
     repl_feed_line_public("glVertex3f(i, 0, 0);");
     repl_feed_line_public("}");
