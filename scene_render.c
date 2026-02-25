@@ -926,6 +926,7 @@ void render_3d_scene(void) {
     int scene_w = g_win_w - panel_w;
     if (scene_w < 1) scene_w = 1;
 
+    glPushAttrib(GL_ALL_ATTRIB_BITS);
     glViewport(panel_w, 0, scene_w, g_win_h);
 
     glMatrixMode(GL_PROJECTION);
@@ -1103,4 +1104,5 @@ void render_3d_scene(void) {
 
     if (g_show_vnums)   draw_vertex_numbers();
     if (g_show_normals) draw_normal_vectors();
+    glPopAttrib();
 }
