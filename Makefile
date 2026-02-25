@@ -68,3 +68,10 @@ clean:
 		test_repl_core_commit test_repl_core_commit.dSYM \
 		test_repl_core_io test_repl_core_io.dSYM \
 		*.o
+
+.PHONY: glut
+glut:
+	$(MAKE) clean
+	$(MAKE) all \
+		CFLAGS="$(CFLAGS) -DUSE_GLUT" \
+		GL_LDFLAGS="-L/opt/homebrew/lib -lm -lpthread -framework IOKit -framework Cocoa -framework OpenGL -framework GLUT"
