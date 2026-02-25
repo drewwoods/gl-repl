@@ -178,6 +178,7 @@ extern int    g_win_w, g_win_h;
 
 /* Code panel */
 extern float  g_panel_frac;
+extern int    g_resizing_panel;
 extern int    g_scroll;
 extern int    g_scroll_follow_cursor;
 

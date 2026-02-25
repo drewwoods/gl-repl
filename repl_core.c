@@ -469,6 +469,7 @@ int    g_win_w = 1200, g_win_h = 800;
 
 /* Code panel */
 float  g_panel_frac = 0.42f;
+int    g_resizing_panel = 0;
 int    g_scroll = 0;
 int    g_scroll_follow_cursor = 0;
 
@@ -4769,11 +4770,19 @@ static void special_func(int key, int x, int y) {
 }
 
 static void mouse_func(int button, int state, int x, int y) {
-    /* Release: end any variable drag */
-    if (state == GLUT_UP && g_drag_var >= 0) {
-        g_drag_var = -1;
-        glutPostRedisplay();
-        return;
+    /* Release: end any variable drag or panel resize */
+    if (state == GLUT_UP) {
+        if (g_drag_var >= 0) {
+            g_drag_var = -1;
+            glutPostRedisplay();
+            return;
+        }
+        if (g_resizing_panel) {
+            g_resizing_panel = 0;
+            glutSetCursor(GLUT_CURSOR_INHERIT);
+            glutPostRedisplay();
+            return;
+        }
     }
 
     if (button == GLUT_LEFT_BUTTON && state == GLUT_DOWN) {
@@ -4808,6 +4817,11 @@ static void mouse_func(int button, int state, int x, int y) {
 
         /* Left-click in code panel: navigate to line + column */
         int panel_w = (int)(g_win_w * g_panel_frac);
+        if (abs(x - panel_w) < 10) {
+            g_resizing_panel = 1;
+            glutSetCursor(GLUT_CURSOR_LEFT_RIGHT);
+            return;
+        }
         if (x < panel_w) {
             handle_code_panel_click(x, y);
             return;   /* don't start camera drag */
@@ -4882,11 +4896,26 @@ static void passive_motion_func(int x, int y) {
         g_config_hover = cfg_hit_row(x, y);
         if (g_config_hover != prev) glutPostRedisplay();
     }
+
+    int panel_w = (int)(g_win_w * g_panel_frac);
+    if (abs(x - panel_w) < 10) {
+        glutSetCursor(GLUT_CURSOR_LEFT_RIGHT);
+    } else {
+        glutSetCursor(GLUT_CURSOR_INHERIT);
+    }
 }
 
 static void motion_func(int x, int y) {
     int dx = x - g_mouse_x;
     int dy = y - g_mouse_y;
+
+    if (g_resizing_panel) {
+        g_panel_frac = (float)x / g_win_w;
+        if (g_panel_frac < 0.1f) g_panel_frac = 0.1f;
+        if (g_panel_frac > 0.9f) g_panel_frac = 0.9f;
+        glutPostRedisplay();
+        return;
+    }
 
     /* Variable drag */
     if (g_drag_var >= 0) {
