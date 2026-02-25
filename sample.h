@@ -84,6 +84,7 @@ typedef enum {
     CMD_TESS_NORMAL,
     CMD_TESS_COLOR,
     CMD_TESS_VERTEX,
+    CMD_MATERIALF,
     CMD_TYPE_COUNT
 } CmdType;
 
