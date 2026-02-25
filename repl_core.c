@@ -124,6 +124,12 @@ const EnumEntry g_face_types[] = {
     { NULL, 0 }
 };
 
+const EnumEntry g_front_face[] = {
+    { "GL_CW",              GL_CW },
+    { "GL_CCW",             GL_CCW },
+    { NULL, 0 }
+};
+
 const EnumEntry g_material_params[] = {
     { "GL_AMBIENT",             GL_AMBIENT },
     { "GL_DIFFUSE",             GL_DIFFUSE },
@@ -163,6 +169,7 @@ const char *g_func_completions[] = {
     "glPopMatrix()",
     "glColorMaterial(",
     "glLightModeli(",
+    "glFrontFace(",
     "gluSphere(",
     "gluCylinder(",
     "gluDisk(",
@@ -519,7 +526,7 @@ const char *g_axes_names[] = {
     "Axes OFF", "Axes: Classic", "Axes: Pulse", "Axes: Neon", "Axes: Compass"
 };
 int    g_show_vnums   = 1;
-int    g_show_normals = 1;
+int    g_show_normals = 0;
 int    g_show_indices = 1;
 int    g_show_guides  = 1;
 int    g_autonormal   = 0;
@@ -1920,6 +1927,29 @@ void navigate_to_line(int target) {
 /* Autocomplete                                                               */
 /* ========================================================================= */
 
+typedef struct {
+    const char *name;
+    CmdType     type;
+    int         num_args;
+    const EnumEntry *enums1;
+    const EnumEntry *enums2;
+    const char *fmt;
+    const char *usage1;
+    const char *usage2;
+    int         indent_type; /* 0: normal, 1: begin/end style */
+} EnumCmdDef;
+
+static const EnumCmdDef g_enum_cmds[] = {
+    { "glBegin",         CMD_BEGIN,         1, g_begin_modes,        NULL,              "%sglBegin(%s);",             "Unknown mode. Try GL_TRIANGLES, GL_TRIANGLE_STRIP, ...", NULL, 1 },
+    { "glEnable",        CMD_ENABLE,        1, g_enable_caps,        NULL,              "%sglEnable(%s);",            "Try GL_DEPTH_TEST, GL_LIGHTING, GL_COLOR_MATERIAL", NULL, 0 },
+    { "glDisable",       CMD_DISABLE,       1, g_enable_caps,        NULL,              "%sglDisable(%s);",           "Try GL_DEPTH_TEST, GL_LIGHTING, GL_COLOR_MATERIAL", NULL, 0 },
+    { "glShadeModel",    CMD_SHADE_MODEL,   1, g_shade_models,       NULL,              "%sglShadeModel(%s);",        "Try GL_SMOOTH or GL_FLAT", NULL, 0 },
+    { "glFrontFace",     CMD_FRONT_FACE,    1, g_front_face,         NULL,              "%sglFrontFace(%s);",         "Try GL_CW or GL_CCW", NULL, 0 },
+    { "glColorMaterial", CMD_COLOR_MATERIAL,2, g_face_types,         g_material_params, "%sglColorMaterial(%s, %s);", "face: GL_FRONT, GL_BACK, GL_FRONT_AND_BACK", "mode: GL_AMBIENT, GL_DIFFUSE, GL_AMBIENT_AND_DIFFUSE...", 0 },
+    { "glLightModeli",   CMD_LIGHT_MODEL_I, 2, g_light_model_params, g_bool_vals,       "%sglLightModeli(%s, %s);",   "pname: GL_LIGHT_MODEL_TWO_SIDE, GL_LIGHT_MODEL_LOCAL_VIEWER", "param: GL_TRUE, GL_FALSE, or integer", 0 },
+    { NULL, 0, 0, NULL, NULL, NULL, NULL, NULL, 0 }
+};
+
 static void update_autocomplete(void) {
     g_ac_count = 0;
     g_ac_sel = 0;
@@ -1930,57 +1960,53 @@ static void update_autocomplete(void) {
     /* Only offer completions when cursor is at the end of input */
     if (g_cursor_pos != g_input_len) return;
 
-    /* If inside glBegin(...), complete mode names */
-    if (strncmp(g_input, "glBegin(", 8) == 0 && g_input_len > 8) {
-        const char *after = g_input + 8;
-        int alen = g_input_len - 8;
-        for (int i = 0; g_begin_modes[i].name && g_ac_count < MAX_AC_MATCHES; i++) {
-            if (strncmp(g_begin_modes[i].name, after, alen) == 0 &&
-                (int)strlen(g_begin_modes[i].name) > alen) {
-                g_ac_matches[g_ac_count++] = g_begin_modes[i].name;
-            }
-        }
-        if (g_ac_count > 0) {
-            const char *m = g_ac_matches[0];
-            snprintf(g_ac_ghost, sizeof(g_ac_ghost), "%s)", m + alen);
-        }
-        return;
-    }
+    /* Enum-based commands completion */
+    for (int i = 0; g_enum_cmds[i].name; i++) {
+        char prefix[64];
+        snprintf(prefix, sizeof(prefix), "%s(", g_enum_cmds[i].name);
+        int plen = (int)strlen(prefix);
 
-    /* If inside glShadeModel(...), complete model names */
-    if (strncmp(g_input, "glShadeModel(", 13) == 0 && g_input_len > 13) {
-        const char *after = g_input + 13;
-        int alen = g_input_len - 13;
-        for (int i = 0; g_shade_models[i].name && g_ac_count < MAX_AC_MATCHES; i++) {
-            if (strncmp(g_shade_models[i].name, after, alen) == 0 &&
-                (int)strlen(g_shade_models[i].name) > alen) {
-                g_ac_matches[g_ac_count++] = g_shade_models[i].name;
-            }
-        }
-        if (g_ac_count > 0) {
-            const char *m = g_ac_matches[0];
-            snprintf(g_ac_ghost, sizeof(g_ac_ghost), "%s)", m + alen);
-        }
-        return;
-    }
+        if (strncmp(g_input, prefix, plen) == 0 && g_input_len > plen) {
+            const char *after = g_input + plen;
+            int alen = g_input_len - plen;
+            char *comma = strchr(after, ',');
 
-    /* If inside glEnable/glDisable(...), complete cap names */
-    if ((strncmp(g_input, "glEnable(", 9) == 0 && g_input_len > 9) ||
-        (strncmp(g_input, "glDisable(", 10) == 0 && g_input_len > 10)) {
-        int prefix = (g_input[2] == 'E') ? 9 : 10;
-        const char *after = g_input + prefix;
-        int alen = g_input_len - prefix;
-        for (int i = 0; g_enable_caps[i].name && g_ac_count < MAX_AC_MATCHES; i++) {
-            if (strncmp(g_enable_caps[i].name, after, alen) == 0 &&
-                (int)strlen(g_enable_caps[i].name) > alen) {
-                g_ac_matches[g_ac_count++] = g_enable_caps[i].name;
+            if (!comma) {
+                /* Complete enum1 */
+                for (int j = 0; g_enum_cmds[i].enums1 && g_enum_cmds[i].enums1[j].name && g_ac_count < MAX_AC_MATCHES; j++) {
+                    if (strncmp(g_enum_cmds[i].enums1[j].name, after, alen) == 0 &&
+                        (int)strlen(g_enum_cmds[i].enums1[j].name) > alen) {
+                        g_ac_matches[g_ac_count++] = g_enum_cmds[i].enums1[j].name;
+                    }
+                }
+                if (g_ac_count > 0) {
+                    if (g_enum_cmds[i].num_args == 1) {
+                        snprintf(g_ac_ghost, sizeof(g_ac_ghost), "%s)", g_ac_matches[0] + alen);
+                    } else if (g_enum_cmds[i].num_args == 2) {
+                        snprintf(g_ac_ghost, sizeof(g_ac_ghost), "%s, ", g_ac_matches[0] + alen);
+                    }
+                }
+                return;
+            } else {
+                /* Complete enum2 */
+                if (g_enum_cmds[i].num_args == 2 && g_enum_cmds[i].enums2) {
+                    const char *arg2 = comma + 1;
+                    while (*arg2 == ' ') arg2++;
+                    int arg2_len = g_input_len - (int)(arg2 - g_input);
+
+                    for (int j = 0; g_enum_cmds[i].enums2[j].name && g_ac_count < MAX_AC_MATCHES; j++) {
+                        if (strncmp(g_enum_cmds[i].enums2[j].name, arg2, arg2_len) == 0 &&
+                            (int)strlen(g_enum_cmds[i].enums2[j].name) > arg2_len) {
+                            g_ac_matches[g_ac_count++] = g_enum_cmds[i].enums2[j].name;
+                        }
+                    }
+                    if (g_ac_count > 0) {
+                        snprintf(g_ac_ghost, sizeof(g_ac_ghost), "%s)", g_ac_matches[0] + arg2_len);
+                    }
+                    return;
+                }
             }
         }
-        if (g_ac_count > 0) {
-            const char *m = g_ac_matches[0];
-            snprintf(g_ac_ghost, sizeof(g_ac_ghost), "%s)", m + alen);
-        }
-        return;
     }
 
     /* Complete function names */
@@ -2122,24 +2148,74 @@ static int parse_command_internal(const char *line, GLCmd *cmd,
         strncpy(func, p, sizeof(func) - 1);
     }
 
-    /* glBegin(MODE) */
-    if (strcmp(func, "glBegin") == 0) {
-        char *a = args;
-        while (*a && isspace((unsigned char)*a)) a++;
-        int al = (int)strlen(a);
-        while (al > 0 && isspace((unsigned char)a[al - 1])) a[--al] = '\0';
+    /* Table-driven parsing for enum commands */
+    for (const EnumCmdDef *def = g_enum_cmds; def->name; def++) {
+        if (strcmp(func, def->name) == 0) {
+            if (def->num_args == 1) {
+                char *a = args;
+                while (*a && isspace((unsigned char)*a)) a++;
+                int al = (int)strlen(a);
+                while (al > 0 && isspace((unsigned char)a[al - 1])) a[--al] = '\0';
+                for (int i = 0; def->enums1[i].name; i++) {
+                    if (strcmp(a, def->enums1[i].name) == 0) {
+                        cmd->type = def->type;
+                        cmd->mode = def->enums1[i].value;
+                        cmd->valid = 1;
+                        if (def->indent_type == 1) {
+                            char _bi[32]; int _td=tess_scope_depth_at(g_edit_line),_sp=2+2*_td;
+                            if(_sp>(int)sizeof(_bi)-1)_sp=(int)sizeof(_bi)-1; memset(_bi,' ',_sp);_bi[_sp]='\0';
+                            snprintf(cmd->source,sizeof(cmd->source), def->fmt, _bi, def->enums1[i].name);
+                        } else {
+                            char _ind[32]; cmd_indent(g_edit_line,_ind,sizeof(_ind));
+                            snprintf(cmd->source,sizeof(cmd->source), def->fmt, _ind, def->enums1[i].name);
+                        }
+                        return 1;
+                    }
+                }
+                set_status(def->usage1);
+                return 0;
+            } else if (def->num_args == 2) {
+                char a1[64] = "", a2[64] = "";
+                char *comma = strchr(args, ',');
+                if (!comma) { set_status(def->usage1 ? def->usage1 : "Invalid arguments"); return 0; }
+                int l1 = (int)(comma - args);
+                if (l1 >= (int)sizeof(a1)) l1 = (int)sizeof(a1) - 1;
+                strncpy(a1, args, l1); a1[l1] = '\0';
+                strncpy(a2, comma + 1, sizeof(a2) - 1);
 
-        for (int i = 0; g_begin_modes[i].name; i++) {
-            if (strcmp(a, g_begin_modes[i].name) == 0) {
-                cmd->type = CMD_BEGIN;
-                cmd->mode = g_begin_modes[i].value;
+                char *p1 = a1; while (*p1 == ' ') p1++;
+                int e1 = (int)strlen(p1); while (e1 > 0 && p1[e1-1] == ' ') p1[--e1] = '\0';
+                char *p2 = a2; while (*p2 == ' ') p2++;
+                int e2 = (int)strlen(p2); while (e2 > 0 && p2[e2-1] == ' ') p2[--e2] = '\0';
+                
+                GLenum val1 = 0;
+                int found1 = 0, found2 = 0;
+                float val2_f = 0.0f;
+                
+                for (int i = 0; def->enums1[i].name; i++) {
+                    if (strcmp(p1, def->enums1[i].name) == 0) { val1 = def->enums1[i].value; found1 = 1; break; }
+                }
+                for (int i = 0; def->enums2[i].name; i++) {
+                    if (strcmp(p2, def->enums2[i].name) == 0) { val2_f = (float)def->enums2[i].value; found2 = 1; break; }
+                }
+                if (!found1) { set_status(def->usage1); return 0; }
+                
+                if (!found2 && def->type == CMD_LIGHT_MODEL_I) {
+                    float fv; if (parse_exprs(p2, &fv, 1, vars, num_vars) == 1) { val2_f = fv; found2 = 1; }
+                }
+                
+                if (!found2) { set_status(def->usage2); return 0; }
+                
+                cmd->type = def->type;
                 cmd->valid = 1;
-                { char _bi[32]; int _td=tess_scope_depth_at(g_edit_line),_sp=2+2*_td; if(_sp>(int)sizeof(_bi)-1)_sp=(int)sizeof(_bi)-1; memset(_bi,' ',_sp);_bi[_sp]='\0'; snprintf(cmd->source,sizeof(cmd->source),"%sglBegin(%s);",_bi,g_begin_modes[i].name); }
+                cmd->mode = val1;
+                cmd->args[0] = val2_f;
+                cmd->num_args = 1;
+                char _ind[32]; cmd_indent(g_edit_line,_ind,sizeof(_ind));
+                snprintf(cmd->source, sizeof(cmd->source), def->fmt, _ind, p1, p2);
                 return 1;
             }
         }
-        set_status("Unknown mode. Try GL_TRIANGLES, GL_TRIANGLE_STRIP, ...");
-        return 0;
     }
 
     /* glEnd() — aligns with its matching glBegin (begin depth not added) */
@@ -2156,63 +2232,6 @@ static int parse_command_internal(const char *line, GLCmd *cmd,
             snprintf(cmd->source, sizeof(cmd->source), "%sglEnd();", _ei);
         }
         return 1;
-    }
-
-    /* glEnable(CAP) */
-    if (strcmp(func, "glEnable") == 0) {
-        char *a = args;
-        while (*a && isspace((unsigned char)*a)) a++;
-        int al = (int)strlen(a);
-        while (al > 0 && isspace((unsigned char)a[al - 1])) a[--al] = '\0';
-        for (int i = 0; g_enable_caps[i].name; i++) {
-            if (strcmp(a, g_enable_caps[i].name) == 0) {
-                cmd->type = CMD_ENABLE;
-                cmd->mode = g_enable_caps[i].value;
-                cmd->valid = 1;
-                { char _ii[32]; cmd_indent(g_edit_line,_ii,sizeof(_ii)); snprintf(cmd->source,sizeof(cmd->source),"%sglEnable(%s);",_ii,g_enable_caps[i].name); }
-                return 1;
-            }
-        }
-        set_status("Try GL_DEPTH_TEST, GL_LIGHTING, GL_COLOR_MATERIAL");
-        return 0;
-    }
-
-    /* glDisable(CAP) */
-    if (strcmp(func, "glDisable") == 0) {
-        char *a = args;
-        while (*a && isspace((unsigned char)*a)) a++;
-        int al = (int)strlen(a);
-        while (al > 0 && isspace((unsigned char)a[al - 1])) a[--al] = '\0';
-        for (int i = 0; g_enable_caps[i].name; i++) {
-            if (strcmp(a, g_enable_caps[i].name) == 0) {
-                cmd->type = CMD_DISABLE;
-                cmd->mode = g_enable_caps[i].value;
-                cmd->valid = 1;
-                { char _di[32]; cmd_indent(g_edit_line,_di,sizeof(_di)); snprintf(cmd->source,sizeof(cmd->source),"%sglDisable(%s);",_di,g_enable_caps[i].name); }
-                return 1;
-            }
-        }
-        set_status("Try GL_DEPTH_TEST, GL_LIGHTING, GL_COLOR_MATERIAL");
-        return 0;
-    }
-
-    /* glShadeModel(MODE) */
-    if (strcmp(func, "glShadeModel") == 0) {
-        char *a = args;
-        while (*a && isspace((unsigned char)*a)) a++;
-        int al = (int)strlen(a);
-        while (al > 0 && isspace((unsigned char)a[al - 1])) a[--al] = '\0';
-        for (int i = 0; g_shade_models[i].name; i++) {
-            if (strcmp(a, g_shade_models[i].name) == 0) {
-                cmd->type = CMD_SHADE_MODEL;
-                cmd->mode = g_shade_models[i].value;
-                cmd->valid = 1;
-                { char _si[32]; cmd_indent(g_edit_line,_si,sizeof(_si)); snprintf(cmd->source,sizeof(cmd->source),"%sglShadeModel(%s);",_si,g_shade_models[i].name); }
-                return 1;
-            }
-        }
-        set_status("Try GL_SMOOTH or GL_FLAT");
-        return 0;
     }
 
     /* Indent for gl commands: 2 + 2*tess + 2*begin */
@@ -2285,70 +2304,7 @@ static int parse_command_internal(const char *line, GLCmd *cmd,
         return 1;
     }
 
-    /* glColorMaterial(face, mode) */
-    if (strcmp(func, "glColorMaterial") == 0) {
-        char a1[64] = "", a2[64] = "";
-        char *comma = strchr(args, ',');
-        if (!comma) { set_status("Usage: glColorMaterial(face, mode)"); return 0; }
-        int l1 = (int)(comma - args);
-        strncpy(a1, args, l1); a1[l1] = '\0';
-        strncpy(a2, comma + 1, sizeof(a2) - 1);
-        /* trim */
-        char *p1 = a1; while (*p1 == ' ') p1++;
-        int e1 = (int)strlen(p1); while (e1 > 0 && p1[e1-1] == ' ') p1[--e1] = '\0';
-        char *p2 = a2; while (*p2 == ' ') p2++;
-        int e2 = (int)strlen(p2); while (e2 > 0 && p2[e2-1] == ' ') p2[--e2] = '\0';
-        GLenum face = 0, mat = 0;
-        int found1 = 0, found2 = 0;
-        for (int i = 0; g_face_types[i].name; i++)
-            if (strcmp(p1, g_face_types[i].name) == 0) { face = g_face_types[i].value; found1 = 1; break; }
-        for (int i = 0; g_material_params[i].name; i++)
-            if (strcmp(p2, g_material_params[i].name) == 0) { mat = g_material_params[i].value; found2 = 1; break; }
-        if (!found1) { set_status("face: GL_FRONT, GL_BACK, GL_FRONT_AND_BACK"); return 0; }
-        if (!found2) { set_status("mode: GL_AMBIENT, GL_DIFFUSE, GL_AMBIENT_AND_DIFFUSE..."); return 0; }
-        cmd->type = CMD_COLOR_MATERIAL;
-        cmd->valid = 1;
-        cmd->mode = face;
-        cmd->args[0] = (float)mat;
-        cmd->num_args = 1;
-        snprintf(cmd->source, sizeof(cmd->source),
-                 "%sglColorMaterial(%s, %s);", indent, p1, p2);
-        return 1;
-    }
 
-    /* glLightModeli(pname, param) */
-    if (strcmp(func, "glLightModeli") == 0) {
-        char a1[64] = "", a2[64] = "";
-        char *comma = strchr(args, ',');
-        if (!comma) { set_status("Usage: glLightModeli(pname, param)"); return 0; }
-        int l1 = (int)(comma - args);
-        strncpy(a1, args, l1); a1[l1] = '\0';
-        strncpy(a2, comma + 1, sizeof(a2) - 1);
-        char *p1 = a1; while (*p1 == ' ') p1++;
-        int e1 = (int)strlen(p1); while (e1 > 0 && p1[e1-1] == ' ') p1[--e1] = '\0';
-        char *p2 = a2; while (*p2 == ' ') p2++;
-        int e2 = (int)strlen(p2); while (e2 > 0 && p2[e2-1] == ' ') p2[--e2] = '\0';
-        GLenum pname = 0; int found1 = 0;
-        for (int i = 0; g_light_model_params[i].name; i++)
-            if (strcmp(p1, g_light_model_params[i].name) == 0) { pname = g_light_model_params[i].value; found1 = 1; break; }
-        if (!found1) { set_status("pname: GL_LIGHT_MODEL_TWO_SIDE, GL_LIGHT_MODEL_LOCAL_VIEWER"); return 0; }
-        /* param: try GL_TRUE/GL_FALSE by name, then numeric */
-        GLint param = 0; int found2 = 0;
-        for (int i = 0; g_bool_vals[i].name; i++)
-            if (strcmp(p2, g_bool_vals[i].name) == 0) { param = (GLint)g_bool_vals[i].value; found2 = 1; break; }
-        if (!found2) {
-            float fv; if (parse_exprs(p2, &fv, 1, vars, num_vars) == 1) { param = (GLint)fv; found2 = 1; }
-        }
-        if (!found2) { set_status("param: GL_TRUE, GL_FALSE, or integer"); return 0; }
-        cmd->type = CMD_LIGHT_MODEL_I;
-        cmd->valid = 1;
-        cmd->mode = pname;
-        cmd->args[0] = (float)param;
-        cmd->num_args = 1;
-        snprintf(cmd->source, sizeof(cmd->source),
-                 "%sglLightModeli(%s, %s);", indent, p1, p2);
-        return 1;
-    }
 
     /* funcN() — function call */
     if (strncmp(func, "func", 4) == 0 && func[4] >= '0' && func[4] <= '9' && func[5] == '\0') {
@@ -2938,6 +2894,9 @@ void execute_commands(void) {
         case CMD_VERTEX2F:
             if (in_begin)
                 glVertex2f(g_flat_cmds[pc].args[0], g_flat_cmds[pc].args[1]);
+            break;
+        case CMD_FRONT_FACE:
+            glFrontFace(g_flat_cmds[pc].mode);
             break;
         case CMD_GLU_SPHERE:
             if (in_begin) { glEnd(); in_begin = 0; }
@@ -5055,9 +5014,9 @@ static const char *g_example_cube[] = {
     "//glEnable(GL_LINE_SMOOTH);",
     "glColor3f(1, 1, 1);",
     "glBegin(GL_QUAD_STRIP);",
-    "glNormal3f(0, 0, 1);",
+    "glNormal3f(0, 1, 0);",
     "glVertex3f(1, 1, 1);",
-    "glNormal3f(0, 0, 1);",
+    "glNormal3f(0, 1, 0);",
     "glVertex3f(-1, 1, 1);",
     "glNormal3f(0, 0, 1);",
     "glVertex3f(1, -1, 1);",
@@ -5082,10 +5041,6 @@ static const char *g_example_cube[] = {
 /* Example 1: Animated ring — for-loop + t variable */
 static const char *g_example_ring[] = {
     "glEnable(GL_DEPTH_TEST);",
-    "glEnable(GL_LIGHTING);",
-    "glEnable(GL_COLOR_MATERIAL);",
-    "glEnable(GL_NORMALIZE);",
-    "glEnable(GL_LIGHT3);",
     "glBegin(GL_LINE_LOOP);",
     "for(i, 0, 48) {",
         "glColor3f(sin(i*TAU/48)*0.5+0.5, cos(i*TAU/48)*0.5+0.5, 0.5);",
@@ -5106,10 +5061,7 @@ static const char *g_example_ring[] = {
 /* Example 2: Function demo — define reusable triangle, call with transforms */
 static const char *g_example_func[] = {
     "glEnable(GL_DEPTH_TEST);",
-    "glEnable(GL_LIGHTING);",
     "glEnable(GL_COLOR_MATERIAL);",
-    "glEnable(GL_NORMALIZE);",
-    "glEnable(GL_LIGHT3);",
     "func0 {",
         "glBegin(GL_TRIANGLES);",
         "glNormal3f(0, 0, 1);",
@@ -5166,7 +5118,7 @@ static const char *g_example_cond[] = {
 /* Example 4: Parametric torus — nested for-loops */
 static const char *g_example_torus[] = {
     "glEnable(GL_DEPTH_TEST);",
-    "glEnable(GL_LIGHTING);",
+    "//glEnable(GL_LIGHTING);",
     "glEnable(GL_COLOR_MATERIAL);",
     "glEnable(GL_NORMALIZE);",
     "glEnable(GL_LIGHT3);",
