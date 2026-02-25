@@ -23,7 +23,8 @@ static void color_for_type(CmdType t) {
     case CMD_ROTATEF:
     case CMD_PUSH_MATRIX:
     case CMD_POP_MATRIX:    glColor3f(0.95f, 0.65f, 0.40f); break; /* orange */
-    case CMD_COLOR_MATERIAL:glColor3f(0.95f, 0.85f, 0.30f); break; /* yellow */
+    case CMD_COLOR_MATERIAL:
+    case CMD_MATERIALF:     glColor3f(0.95f, 0.85f, 0.30f); break; /* yellow */
     case CMD_LIGHT_MODEL_I: glColor3f(0.80f, 0.70f, 0.95f); break; /* lavender */
     case CMD_COLOR3F:
     case CMD_COLOR4F:  glColor3f(0.95f, 0.85f, 0.30f); break;
