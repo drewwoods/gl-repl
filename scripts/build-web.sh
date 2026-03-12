@@ -14,6 +14,10 @@ GL4ES_LIB="${SRC_DIR}/gl4es/lib/libGL.a"
 GL4ES_GL_H="${GL4ES_INCLUDE}/GL/gl.h"
 GLU_DIR="${SCRIPT_DIR}/GLU"
 GLU_LIB="${GLU_DIR}/.libs/libGLU.a"
+FREEGLUT_DIR="${SCRIPT_DIR}/freeglut"
+FREEGLUT_LIB="${FREEGLUT_DIR}/build_wasm/lib/libglut.a"
+FREEGLUT_INCLUDE="${FREEGLUT_DIR}/include"
+FREEGLUT_PATCH="${SCRIPT_DIR}/0001-feat-add-Emscripten-WebAssembly-platform-support.patch"
 
 # Colors
 RED='\033[0;31m'
@@ -117,6 +121,60 @@ build_glu() {
     fi
 }
 
+check_freeglut() {
+    if [[ ! -f "${FREEGLUT_LIB}" ]]; then
+        echo -e "${YELLOW}freeglut not found locally at ${FREEGLUT_DIR}/${NC}"
+        read -rp "Build freeglut now? [y/N] " answer
+        if [[ "${answer}" != [yY] ]]; then
+            echo "freeglut is required for glutSolid*/glutWire* geometry. Exiting."
+            exit 1
+        fi
+        build_freeglut
+    fi
+}
+
+build_freeglut() {
+    echo -e "${CYAN}── Building freeglut ──${NC}"
+
+    if [[ ! -d "${FREEGLUT_DIR}" ]]; then
+        echo "Cloning freeglut..."
+        git clone https://github.com/freeglut/freeglut.git "${FREEGLUT_DIR}"
+    fi
+
+    echo "Applying Emscripten support patch..."
+    pushd "${FREEGLUT_DIR}" > /dev/null
+    if ! git apply --check "${FREEGLUT_PATCH}" 2>/dev/null; then
+        echo "Patch already applied or not needed, skipping."
+    else
+        git apply "${FREEGLUT_PATCH}"
+    fi
+    popd > /dev/null
+
+    mkdir -p "${FREEGLUT_DIR}/build_wasm"
+    pushd "${FREEGLUT_DIR}/build_wasm" > /dev/null
+
+    echo "Configuring freeglut..."
+    emcmake cmake .. \
+        -DFREEGLUT_BUILD_DEMOS=OFF \
+        -DFREEGLUT_BUILD_SHARED_LIBS=OFF \
+        -DFREEGLUT_BUILD_STATIC_LIBS=ON \
+        -DFREEGLUT_REPLACE_GLUT=ON \
+        -DCMAKE_C_FLAGS="-include ${GL4ES_GL_H} -I${GL4ES_INCLUDE}" \
+        -DCMAKE_INSTALL_PREFIX="${FREEGLUT_DIR}/install"
+
+    echo "Building freeglut..."
+    emmake make
+
+    popd > /dev/null
+
+    if [[ -f "${FREEGLUT_LIB}" ]]; then
+        echo -e "${GREEN}freeglut built successfully.${NC}"
+    else
+        echo -e "${RED}freeglut build failed.${NC}"
+        exit 1
+    fi
+}
+
 # ── Build ────────────────────────────────────────────────────────────────────
 
 build_one() {
@@ -152,12 +210,13 @@ build_one() {
         "${GL4ES_LIB}" \
         "${GLU_LIB}" \
         -I "${GL4ES_INCLUDE}" \
+        -I "${FREEGLUT_INCLUDE}" \
         -I "${PROJECT_INCLUDE}" \
         -s USE_WEBGL2=1 \
         -s FULL_ES2=1 \
         -lglut \
+        "${FREEGLUT_LIB}" \
         -o "${out_path}/index.html"
-
     if [[ $? -eq 0 ]]; then
         echo -e "${GREEN}  ✓ ${sample_name}${NC}"
         return 0
@@ -242,6 +301,7 @@ fi
 check_emsdk
 check_gl4es
 check_glu
+check_freeglut
 
 LAST_SAMPLE=""
 
