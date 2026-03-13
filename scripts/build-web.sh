@@ -8,6 +8,10 @@ PROJECT_INCLUDE="${SCRIPT_DIR}/../include"
 BOOTSTRAP="./gl4es_bootstrap.c"
 OUT_DIR="${SCRIPT_DIR}/out"
 
+# -- Emscripten environment -------------------------------
+STACK_SIZE=$((1024*1024)) # 1MB stack size for complex samples
+INITIAL_MEMORY=$((1024 * 1024 * 128)) # 128MB initial memory for complex samples
+
 # ── Library Paths (edit these if your layout differs) ────────────────────────
 GL4ES_INCLUDE="${SRC_DIR}/gl4es/include"
 GL4ES_LIB="${SRC_DIR}/gl4es/lib/libGL.a"
@@ -214,6 +218,8 @@ build_one() {
         -I "${PROJECT_INCLUDE}" \
         -s USE_WEBGL2=1 \
         -s FULL_ES2=1 \
+        -s INITIAL_MEMORY=${INITIAL_MEMORY} \
+        -s STACK_SIZE=${STACK_SIZE} \
         -lglut \
         "${FREEGLUT_LIB}" \
         -o "${out_path}/index.html"
