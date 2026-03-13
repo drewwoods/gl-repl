@@ -5,7 +5,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SRC_DIR="${SRC_DIR:-${HOME}/src}"
 PROJECT_SRC="${SCRIPT_DIR}/../src"
 PROJECT_INCLUDE="${SCRIPT_DIR}/../include"
-BOOTSTRAP="${PROJECT_SRC}/gl4es_bootstrap.c"
+BOOTSTRAP="./gl4es_bootstrap.c"
 OUT_DIR="${SCRIPT_DIR}/out"
 
 # ── Library Paths (edit these if your layout differs) ────────────────────────
