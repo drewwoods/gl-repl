@@ -7,6 +7,7 @@
 #ifndef SAMPLE_H
 #define SAMPLE_H
 
+#define SKIP_IMPLEMENTATIONS
 #include <gl_includes.h>
 #include <stdio.h>
 #include <stdlib.h>

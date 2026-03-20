@@ -1,4 +1,12 @@
 #include "sample.h"
+
+/* Pull in stb-style implementations in this translation unit only */
+#define PROCEDURAL_ROCK_IMPLEMENTATION
+#include "procedural_rock.h"
+#define PROCEDURAL_SHAPES_IMPLEMENTATION
+#include "procedural_shapes.h"
+#define GL_MATRIX_DEBUG_IMPLEMENTATION
+#include "gl_matrix_debug.h"
 #include "repl_core.h"
 
 static void display_func(void) {
