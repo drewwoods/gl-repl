@@ -51,6 +51,11 @@ int main(void) {
     ASSERT_TRUE("if begin", g_cmds[0].type == CMD_IF_BEGIN);
     ASSERT_TRUE("if body", g_cmds[1].type == CMD_COLOR3F);
     ASSERT_TRUE("if end", g_cmds[2].type == CMD_IF_END);
+    repl_flatten_commands();
+    ASSERT_TRUE("top-level if flat count", g_num_flat_cmds == 3);
+    ASSERT_TRUE("top-level if flat begin", g_flat_cmds[0].type == CMD_IF_BEGIN);
+    ASSERT_TRUE("top-level if flat body", g_flat_cmds[1].type == CMD_COLOR3F);
+    ASSERT_TRUE("top-level if flat end", g_flat_cmds[2].type == CMD_IF_END);
 
     repl_reset_state();
     repl_feed_line_public("func0 {");
@@ -62,6 +67,118 @@ int main(void) {
     ASSERT_TRUE("func body", g_cmds[1].type == CMD_VERTEX3F);
     ASSERT_TRUE("func end", g_cmds[2].type == CMD_FUNC_END);
     ASSERT_TRUE("func call", g_cmds[3].type == CMD_CALL);
+
+    repl_reset_state();
+    repl_feed_line_public("func0(radius, yoff) {");
+    repl_feed_line_public("glVertex3f(radius, yoff, 0);");
+    repl_feed_line_public("}");
+    repl_feed_line_public("func0(1.5, x + 2);");
+    ASSERT_TRUE("param func cmd count", g_num_cmds == 4);
+    ASSERT_TRUE("param func def", g_cmds[0].type == CMD_FUNC_DEF);
+    ASSERT_TRUE("param func header keeps names",
+                strstr(g_cmds[0].source, "radius") != NULL &&
+                strstr(g_cmds[0].source, "yoff") != NULL);
+    ASSERT_TRUE("param func body keeps radius",
+                strstr(g_cmds[1].source, "radius") != NULL);
+    ASSERT_TRUE("param func body keeps yoff",
+                strstr(g_cmds[1].source, "yoff") != NULL);
+    ASSERT_TRUE("param func call type", g_cmds[3].type == CMD_CALL);
+    ASSERT_TRUE("param func call keeps expr",
+                strstr(g_cmds[3].source, "x + 2") != NULL);
+
+    repl_reset_state();
+    repl_feed_line_public("func1(a, b) {");
+    repl_feed_line_public("glBegin(GL_POINTS);");
+    repl_feed_line_public("glVertex3f(a, b, 0);");
+    repl_feed_line_public("glEnd();");
+    repl_feed_line_public("}");
+    repl_feed_line_public("func0(scale) {");
+    repl_feed_line_public("func1(scale, scale + 1);");
+    repl_feed_line_public("}");
+    repl_feed_line_public("func0(2);");
+    repl_feed_line_public("func0(4);");
+    repl_flatten_commands();
+    ASSERT_TRUE("nested func flatten count", g_num_flat_cmds == 6);
+    ASSERT_TRUE("nested func flatten first begin", g_flat_cmds[0].type == CMD_BEGIN);
+    ASSERT_TRUE("nested func flatten first vertex", g_flat_cmds[1].type == CMD_VERTEX3F);
+    ASSERT_TRUE("nested func flatten first x", fabsf(g_flat_cmds[1].args[0] - 2.0f) < 1e-6f);
+    ASSERT_TRUE("nested func flatten first y", fabsf(g_flat_cmds[1].args[1] - 3.0f) < 1e-6f);
+    ASSERT_TRUE("nested func flatten second x", fabsf(g_flat_cmds[4].args[0] - 4.0f) < 1e-6f);
+    ASSERT_TRUE("nested func flatten second y", fabsf(g_flat_cmds[4].args[1] - 5.0f) < 1e-6f);
+    ASSERT_TRUE("nested func call provenance immediate", g_flat_cmds[1].call_src_cmd_idx == 6);
+    ASSERT_TRUE("nested func call provenance root first", g_flat_cmds[1].root_call_src_cmd_idx == 8);
+    ASSERT_TRUE("nested func call provenance root second", g_flat_cmds[4].root_call_src_cmd_idx == 9);
+    ASSERT_TRUE("nested func scope mask includes both", (g_flat_cmds[1].func_scope_mask & 0x3u) == 0x3u);
+    {
+        int matched = 0;
+        g_edit_line = 8;
+        for (int i = 0; i < g_num_flat_cmds; i++)
+            matched += repl_flat_cmd_matches_cursor(i);
+        ASSERT_TRUE("nested func call line highlights one invocation", matched == 3);
+    }
+    {
+        int matched = 0;
+        g_edit_line = 6;
+        for (int i = 0; i < g_num_flat_cmds; i++)
+            matched += repl_flat_cmd_matches_cursor(i);
+        ASSERT_TRUE("nested inner call line highlights all invocations", matched == 6);
+    }
+    {
+        int matched = 0;
+        g_edit_line = 2;
+        for (int i = 0; i < g_num_flat_cmds; i++)
+            matched += repl_flat_cmd_matches_cursor(i);
+        ASSERT_TRUE("nested function body highlights all invocations", matched == 6);
+    }
+    {
+        int matched = 0;
+        g_edit_line = 5;
+        for (int i = 0; i < g_num_flat_cmds; i++)
+            matched += repl_flat_cmd_matches_cursor(i);
+        ASSERT_TRUE("outer function header highlights nested invocations", matched == 6);
+    }
+
+    repl_reset_state();
+    repl_feed_line_public("func0(n) {");
+    repl_feed_line_public("for(i, 0, n) {");
+    repl_feed_line_public("glVertex3f(i, 0, 0);");
+    repl_feed_line_public("}");
+    repl_feed_line_public("glColor3f(1, 0, 0);");
+    repl_feed_line_public("}");
+    ASSERT_TRUE("nested block trailing cmd count", g_num_cmds == 6);
+    ASSERT_TRUE("nested block trailing cmd order body", g_cmds[4].type == CMD_COLOR3F);
+    ASSERT_TRUE("nested block trailing cmd order end", g_cmds[5].type == CMD_FUNC_END);
+
+    repl_reset_state();
+    repl_feed_line_public("func0(n) {");
+    repl_feed_line_public("for(i, 0, n) glVertex3f(i, n, 0);");
+    repl_feed_line_public("}");
+    repl_feed_line_public("func0(3);");
+    ASSERT_TRUE("local for begin type", g_cmds[1].type == CMD_FOR_BEGIN);
+    ASSERT_TRUE("local for body type", g_cmds[2].type == CMD_VERTEX3F);
+    ASSERT_TRUE("local for end type", g_cmds[3].type == CMD_FOR_END);
+    ASSERT_TRUE("local for header keeps n", strstr(g_cmds[1].source, "n") != NULL);
+    ASSERT_TRUE("local for body keeps n", strstr(g_cmds[2].source, "n") != NULL);
+    repl_flatten_commands();
+    ASSERT_TRUE("local for flatten count", g_num_flat_cmds == 3);
+    ASSERT_TRUE("local for first x", fabsf(g_flat_cmds[0].args[0] - 0.0f) < 1e-6f);
+    ASSERT_TRUE("local for second x", fabsf(g_flat_cmds[1].args[0] - 1.0f) < 1e-6f);
+    ASSERT_TRUE("local for third x", fabsf(g_flat_cmds[2].args[0] - 2.0f) < 1e-6f);
+    ASSERT_TRUE("local for body uses param", fabsf(g_flat_cmds[2].args[1] - 3.0f) < 1e-6f);
+
+    repl_reset_state();
+    repl_feed_line_public("func0(scale) {");
+    repl_feed_line_public("if(scale > 1) {");
+    repl_feed_line_public("glVertex3f(scale, 0, 0);");
+    repl_feed_line_public("}");
+    repl_feed_line_public("}");
+    repl_feed_line_public("func0(2);");
+    repl_feed_line_public("func0(0.5);");
+    ASSERT_TRUE("local if header keeps scale", strstr(g_cmds[1].source, "scale > 1") != NULL);
+    repl_flatten_commands();
+    ASSERT_TRUE("local if flatten count", g_num_flat_cmds == 1);
+    ASSERT_TRUE("local if flatten type", g_flat_cmds[0].type == CMD_VERTEX3F);
+    ASSERT_TRUE("local if flatten x", fabsf(g_flat_cmds[0].args[0] - 2.0f) < 1e-6f);
 
     printf("repl_core_commit: %d/%d passed\n", g_pass, g_run);
     return (g_run == g_pass) ? 0 : 1;

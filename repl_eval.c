@@ -351,9 +351,10 @@ void c_expr_to_repl(const char *in, char *out, int out_sz) {
 /* For-loop header parsers                                                    */
 /* ========================================================================= */
 
-int parse_for_header(const char *input, char *var_name, int var_sz,
-                     float *start, float *end, float *step,
-                     const char **body_start) {
+int parse_for_header_with_vars(const char *input, char *var_name, int var_sz,
+                               float *start, float *end, float *step,
+                               ExprVar *vars, int num_vars,
+                               const char **body_start) {
     const char *p = input;
     while (*p && isspace((unsigned char)*p)) p++;
     if (strncmp(p, "for(", 4) != 0 && strncmp(p, "for (", 5) != 0)
@@ -376,7 +377,7 @@ int parse_for_header(const char *input, char *var_name, int var_sz,
     p++;
 
     /* Start value (expression) */
-    ExprCtx ctx = { p, NULL, 0 };
+    ExprCtx ctx = { p, vars, num_vars };
     *start = eval_expr(&ctx);
     p = ctx.p;
     while (*p && isspace((unsigned char)*p)) p++;
@@ -385,6 +386,8 @@ int parse_for_header(const char *input, char *var_name, int var_sz,
 
     /* End value (expression) */
     ctx.p = p;
+    ctx.vars = vars;
+    ctx.num_vars = num_vars;
     *end = eval_expr(&ctx);
     p = ctx.p;
     while (*p && isspace((unsigned char)*p)) p++;
@@ -394,6 +397,8 @@ int parse_for_header(const char *input, char *var_name, int var_sz,
     if (*p == ',') {
         p++;
         ctx.p = p;
+        ctx.vars = vars;
+        ctx.num_vars = num_vars;
         *step = eval_expr(&ctx);
         p = ctx.p;
         while (*p && isspace((unsigned char)*p)) p++;
@@ -404,6 +409,14 @@ int parse_for_header(const char *input, char *var_name, int var_sz,
 
     if (body_start) *body_start = p;
     return 1;
+}
+
+int parse_for_header(const char *input, char *var_name, int var_sz,
+                     float *start, float *end, float *step,
+                     const char **body_start) {
+    return parse_for_header_with_vars(input, var_name, var_sz,
+                                      start, end, step,
+                                      NULL, 0, body_start);
 }
 
 int parse_c_for_header(const char *input, char *var_name, int var_sz,

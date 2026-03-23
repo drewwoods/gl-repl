@@ -70,6 +70,10 @@ void c_expr_to_repl(const char *in, char *out, int out_sz);
 int parse_for_header(const char *input, char *var_name, int var_sz,
                      float *start, float *end, float *step,
                      const char **body_start);
+int parse_for_header_with_vars(const char *input, char *var_name, int var_sz,
+                               float *start, float *end, float *step,
+                               ExprVar *vars, int num_vars,
+                               const char **body_start);
 
 /* C form: for (float var = start; var < end; var += step) {
  * Returns 1 on success. */

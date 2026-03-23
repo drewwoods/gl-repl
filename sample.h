@@ -41,7 +41,7 @@
 #define ACCUM_STEP_COUNT  5
 #define GRID_THEME_COUNT  7
 #define AXES_THEME_COUNT  5
-#define NUM_EXAMPLES      7
+#define NUM_EXAMPLES      9
 #define MAX_LIGHTS        4
 #define TESS_VERT_BUF_SIZE 256
 
@@ -103,6 +103,9 @@ typedef struct {
     int      is_auto;
     int      has_vars;
     int      src_cmd_idx;
+    int      call_src_cmd_idx;
+    int      root_call_src_cmd_idx;
+    unsigned int func_scope_mask;
 } GLCmd;
 
 typedef struct {
