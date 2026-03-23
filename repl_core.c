@@ -544,6 +544,7 @@ int    g_show_outlines = 1; /* draw black wireframe over filled polygons */
 int    g_highlight_current_poly = 1; /* highlight glBegin block under cursor */
 int    g_current_block_begin = -1;  /* flat cmd index of cursor's glBegin */
 int    g_current_block_end   = -1;  /* flat cmd index of cursor's glEnd */
+static int g_current_block_line = -1; /* g_edit_line used to compute block */
 int    g_ortho_mode = 0;  /* 0=perspective, 1=2D orthographic */
 
 /* Variable slider panel (4.8) */
@@ -3039,6 +3040,52 @@ static void flat_cmd_set_provenance(GLCmd *cmd, int src_cmd_idx,
     cmd->func_scope_mask = func_scope_mask;
 }
 
+static void refresh_current_block_highlight(void) {
+    g_current_block_begin = -1;
+    g_current_block_end   = -1;
+    g_current_block_line  = g_edit_line;
+
+    /* Walk flat cmds: track which source line each cmd came from via g_cmds index */
+    /* Approximate: find last BEGIN at or before g_edit_line, then matching END */
+    int found_begin = -1;
+    for (int i = 0; i < g_num_flat_cmds; i++) {
+        if (!g_flat_cmds[i].valid) continue;
+        if (g_flat_cmds[i].type == CMD_BEGIN) { found_begin = i; }
+        else if (g_flat_cmds[i].type == CMD_END && found_begin >= 0) {
+            found_begin = -1;
+        }
+    }
+
+    /* Better approach: scan g_cmds for the innermost BEGIN/END containing g_edit_line */
+    {
+        int begin_src = -1, begin_flat = -1;
+        int fcur = 0;
+        for (int ci = 0; ci < g_num_cmds && fcur < g_num_flat_cmds; ci++) {
+            if (!g_cmds[ci].valid) continue;
+            if (g_cmds[ci].type == CMD_FUNC_DEF || g_cmds[ci].type == CMD_FUNC_END ||
+                g_cmds[ci].type == CMD_FOR_BEGIN || g_cmds[ci].type == CMD_FOR_END ||
+                g_cmds[ci].type == CMD_IF_BEGIN  || g_cmds[ci].type == CMD_IF_END  ||
+                g_cmds[ci].type == CMD_CALL)
+                continue;
+            while (fcur < g_num_flat_cmds && !g_flat_cmds[fcur].valid) fcur++;
+            if (fcur >= g_num_flat_cmds) break;
+            if (g_cmds[ci].type == CMD_BEGIN) {
+                if (ci <= g_edit_line) { begin_src = ci; begin_flat = fcur; }
+            } else if (g_cmds[ci].type == CMD_END) {
+                if (begin_src >= 0 && ci > g_edit_line) {
+                    g_current_block_begin = begin_flat;
+                    g_current_block_end   = fcur;
+                    begin_src = -1; begin_flat = -1;
+                    break;
+                } else if (begin_src >= 0 && ci <= g_edit_line) {
+                    begin_src = -1; begin_flat = -1;
+                }
+            }
+            fcur++;
+        }
+    }
+}
+
 /* Flatten g_cmds (with for-loops) into g_flat_cmds (concrete commands) */
 static void flatten_range(int start, int end_idx, ExprVar *vars, int nv,
                           int call_src_cmd_idx, int root_call_src_cmd_idx,
@@ -3343,58 +3390,15 @@ void flatten_commands(void) {
             g_user_lighting_enabled = 0;
     }
 
-    /* Find glBegin/glEnd block containing the cursor line (g_edit_line) */
-    g_current_block_begin = -1;
-    g_current_block_end   = -1;
-    /* Walk flat cmds: track which source line each cmd came from via g_cmds index */
-    /* Approximate: find last BEGIN at or before g_edit_line, then matching END */
-    int found_begin = -1;
-    for (int i = 0; i < g_num_flat_cmds; i++) {
-        if (!g_flat_cmds[i].valid) continue;
-        if (g_flat_cmds[i].type == CMD_BEGIN) { found_begin = i; }
-        else if (g_flat_cmds[i].type == CMD_END && found_begin >= 0) {
-            /* Check if g_edit_line is between the source lines of these */
-            /* We check g_cmds array for a rough match using the flat cmd
-               index position relative to what lines have been committed */
-            found_begin = -1;
-        }
-    }
-    /* Better approach: scan g_cmds for the innermost BEGIN/END containing g_edit_line */
-    {
-        int begin_src = -1, begin_flat = -1;
-        /* Simple: track BEGIN positions in g_flat_cmds that correspond to g_cmds before g_edit_line */
-        int fcur = 0;
-        for (int ci = 0; ci < g_num_cmds && fcur < g_num_flat_cmds; ci++) {
-            if (!g_cmds[ci].valid) continue;
-            if (g_cmds[ci].type == CMD_FUNC_DEF || g_cmds[ci].type == CMD_FUNC_END ||
-                g_cmds[ci].type == CMD_FOR_BEGIN || g_cmds[ci].type == CMD_FOR_END ||
-                g_cmds[ci].type == CMD_IF_BEGIN  || g_cmds[ci].type == CMD_IF_END  ||
-                g_cmds[ci].type == CMD_CALL)
-                continue; /* these expand or skip */
-            /* match next flat cmd */
-            while (fcur < g_num_flat_cmds && !g_flat_cmds[fcur].valid) fcur++;
-            if (fcur >= g_num_flat_cmds) break;
-            if (g_cmds[ci].type == CMD_BEGIN) {
-                if (ci <= g_edit_line) { begin_src = ci; begin_flat = fcur; }
-            } else if (g_cmds[ci].type == CMD_END) {
-                if (begin_src >= 0 && ci > g_edit_line) {
-                    g_current_block_begin = begin_flat;
-                    g_current_block_end   = fcur;
-                    begin_src = -1; begin_flat = -1;
-                    break;
-                } else if (begin_src >= 0 && ci <= g_edit_line) {
-                    begin_src = -1; begin_flat = -1;
-                }
-            }
-            fcur++;
-        }
-    }
+    refresh_current_block_highlight();
 }
 
 int repl_flat_cmd_matches_cursor(int flat_idx) {
     if (flat_idx < 0 || flat_idx >= g_num_flat_cmds) return 0;
     if (g_edit_line < 0 || g_edit_line >= g_num_cmds) return 0;
     if (!g_flat_cmds[flat_idx].valid) return 0;
+    if (g_current_block_line != g_edit_line)
+        refresh_current_block_highlight();
 
     GLCmd *cmd = &g_flat_cmds[flat_idx];
     GLCmd *cursor_cmd = &g_cmds[g_edit_line];
@@ -3413,7 +3417,101 @@ int repl_flat_cmd_matches_cursor(int flat_idx) {
     if (g_current_block_begin >= 0 && g_current_block_end >= g_current_block_begin)
         return flat_idx >= g_current_block_begin && flat_idx <= g_current_block_end;
 
+    /* Top-level color/normal commands outside glBegin/glEnd still affect later
+     * vertices. Match those vertices to the most recent applicable state line
+     * so block highlighting also works when the state is set before the block. */
+    switch (cursor_cmd->type) {
+    case CMD_COLOR3F:
+    case CMD_COLOR4F: {
+        if (cmd->type == CMD_VERTEX3F) {
+            int last_color_src = -1;
+            for (int i = 0; i <= flat_idx; i++) {
+                if (!g_flat_cmds[i].valid) continue;
+                if (g_flat_cmds[i].type == CMD_COLOR3F ||
+                    g_flat_cmds[i].type == CMD_COLOR4F)
+                    last_color_src = g_flat_cmds[i].src_cmd_idx;
+            }
+            if (last_color_src == g_edit_line)
+                return 1;
+        }
+        break;
+    }
+    case CMD_NORMAL3F: {
+        if (cmd->type == CMD_VERTEX3F) {
+            int last_normal_src = -1;
+            for (int i = 0; i <= flat_idx; i++) {
+                if (!g_flat_cmds[i].valid) continue;
+                if (g_flat_cmds[i].type == CMD_NORMAL3F)
+                    last_normal_src = g_flat_cmds[i].src_cmd_idx;
+            }
+            if (last_normal_src == g_edit_line)
+                return 1;
+        }
+        break;
+    }
+    case CMD_TESS_COLOR: {
+        if (cmd->type == CMD_TESS_VERTEX) {
+            int last_tess_color_src = -1;
+            for (int i = 0; i <= flat_idx; i++) {
+                if (!g_flat_cmds[i].valid) continue;
+                if (g_flat_cmds[i].type == CMD_TESS_COLOR)
+                    last_tess_color_src = g_flat_cmds[i].src_cmd_idx;
+            }
+            if (last_tess_color_src == g_edit_line)
+                return 1;
+        }
+        break;
+    }
+    case CMD_TESS_NORMAL: {
+        if (cmd->type == CMD_TESS_VERTEX) {
+            int last_tess_normal_src = -1;
+            for (int i = 0; i <= flat_idx; i++) {
+                if (!g_flat_cmds[i].valid) continue;
+                if (g_flat_cmds[i].type == CMD_TESS_NORMAL)
+                    last_tess_normal_src = g_flat_cmds[i].src_cmd_idx;
+            }
+            if (last_tess_normal_src == g_edit_line)
+                return 1;
+        }
+        break;
+    }
+    default:
+        break;
+    }
+
     return cmd->src_cmd_idx == g_edit_line;
+}
+
+static int find_feeding_state_cmd(int line_idx, int want_normal) {
+    if (line_idx < 0 || line_idx >= g_num_cmds) return -1;
+    if (!g_cmds[line_idx].valid) return -1;
+
+    CmdType target = g_cmds[line_idx].type;
+    int is_gl_vtx = (target == CMD_VERTEX3F || target == CMD_VERTEX2F);
+    int is_tess_vtx = (target == CMD_TESS_VERTEX);
+    if (!is_gl_vtx && !is_tess_vtx) return -1;
+
+    for (int i = line_idx - 1; i >= 0; i--) {
+        if (!g_cmds[i].valid) continue;
+        CmdType t = g_cmds[i].type;
+        if (want_normal) {
+            if (is_gl_vtx && t == CMD_NORMAL3F) return i;
+            if (is_tess_vtx && t == CMD_TESS_NORMAL) return i;
+        } else {
+            if (is_gl_vtx && (t == CMD_COLOR3F || t == CMD_COLOR4F)) return i;
+            if (is_tess_vtx && t == CMD_TESS_COLOR) return i;
+        }
+    }
+
+    return -1;
+}
+
+int repl_find_feeding_normal_cmd(int line_idx) {
+    return find_feeding_state_cmd(line_idx, 1);
+}
+
+int repl_find_feeding_color_cmd(int line_idx) {
+    return find_feeding_state_cmd(line_idx, 0);
 }
 
 /* ========================================================================= */
