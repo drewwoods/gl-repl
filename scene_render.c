@@ -4,6 +4,7 @@
  * Extracted from sample.c for maintainability.
  */
 #include "sample.h"
+#include "repl_core.h"
 #include "scene_render.h"
 
 /* ========================================================================= */
@@ -443,48 +444,36 @@ static void draw_axes(void) {
     if (g_user_lighting_enabled) glEnable(GL_LIGHTING);
 }
 
+static int flat_block_matches_cursor(int begin_idx, int is_tess) {
+    int depth = is_tess ? 1 : 0;
+
+    for (int i = begin_idx; i < g_num_flat_cmds; i++) {
+        if (!g_flat_cmds[i].valid) continue;
+        if (repl_flat_cmd_matches_cursor(i))
+            return 1;
+        if (!is_tess && i > begin_idx && g_flat_cmds[i].type == CMD_END)
+            break;
+        if (is_tess && i > begin_idx) {
+            if (g_flat_cmds[i].type == CMD_TESS_BEGIN_POLYGON) depth++;
+            else if (g_flat_cmds[i].type == CMD_TESS_END) {
+                depth--;
+                if (depth == 0) break;
+            }
+        }
+    }
+
+    return 0;
+}
+
 static void draw_vertex_numbers(void) {
     glDisable(GL_LIGHTING);
     glDisable(GL_DEPTH_TEST);
     glColor3f(1.0f, 1.0f, 0.30f);
 
-    /* Find which glBegin/glEnd or gluBegin(GLU_POLYGON) block the cursor is in */
-    int target_block = -1;
-    {
-        int block = -1;
-        int in_block = 0;
-        int tess_depth = 0;
-        for (int i = 0; i < g_num_cmds; i++) {
-            if (!g_cmds[i].valid) continue;
-            if (g_cmds[i].type == CMD_BEGIN) {
-                block++;
-                in_block = 1;
-            } else if (g_cmds[i].type == CMD_TESS_BEGIN_POLYGON) {
-                block++;
-                in_block = 1;
-                tess_depth = 1;
-            } else if (g_cmds[i].type == CMD_TESS_BEGIN_CONTOUR && tess_depth == 1) {
-                tess_depth = 2;
-            }
-            if (in_block && i == g_edit_line) {
-                target_block = block;
-                break;
-            }
-            if (g_cmds[i].type == CMD_END) {
-                if (i == g_edit_line) { target_block = block; break; }
-                in_block = 0;
-            } else if (g_cmds[i].type == CMD_TESS_END && tess_depth > 0) {
-                if (i == g_edit_line) { target_block = block; break; }
-                tess_depth--;
-                if (tess_depth == 0) in_block = 0;
-            }
-        }
-    }
-
     /* Draw vertex labels only for the target block, replaying transforms */
     glPushMatrix();
-    int block = -1;
     int in_block = 0;
+    int block_selected = 0;
     int vn = 0;
     int tess_depth = 0;
     for (int i = 0; i < g_num_flat_cmds; i++) {
@@ -492,25 +481,26 @@ static void draw_vertex_numbers(void) {
         if (!in_block && is_transform_cmd(g_flat_cmds[i].type)) {
             apply_transform_cmd(&g_flat_cmds[i]);
         } else if (g_flat_cmds[i].type == CMD_BEGIN) {
-            block++;
             in_block = 1;
+            block_selected = flat_block_matches_cursor(i, 0);
             vn = 0;
             tess_depth = 0;
         } else if (g_flat_cmds[i].type == CMD_END) {
             in_block = 0;
+            block_selected = 0;
         } else if (g_flat_cmds[i].type == CMD_TESS_BEGIN_POLYGON) {
-            block++;
             in_block = 1;
+            block_selected = flat_block_matches_cursor(i, 1);
             vn = 0;
             tess_depth = 1;
         } else if (g_flat_cmds[i].type == CMD_TESS_BEGIN_CONTOUR) {
             tess_depth = 2;
         } else if (g_flat_cmds[i].type == CMD_TESS_END && tess_depth > 0) {
             tess_depth--;
-            if (tess_depth == 0) in_block = 0;
+            if (tess_depth == 0) { in_block = 0; block_selected = 0; }
         } else if (g_flat_cmds[i].type == CMD_VERTEX3F ||
                    g_flat_cmds[i].type == CMD_TESS_VERTEX) {
-            if (in_block && block == target_block) {
+            if (in_block && block_selected) {
                 char label[16];
                 snprintf(label, sizeof(label), " v%d", vn);
                 glRasterPos3f(g_flat_cmds[i].args[0], g_flat_cmds[i].args[1],
@@ -988,8 +978,9 @@ void render_3d_scene(void) {
     if (g_show_outlines || g_highlight_current_poly) {
         glPushMatrix();
         int in_begin = 0;
-        int block_begin_idx = -1; /* flat index of current block's CMD_BEGIN */
+        int block_is_current = 0;
         int tess_in_contour = 0;  /* drawing a tess contour as GL_LINE_LOOP */
+        int tess_poly_is_current = 0;
         for (int i = 0; i < g_num_flat_cmds; i++) {
             if (!g_flat_cmds[i].valid) continue;
 
@@ -1001,9 +992,12 @@ void render_3d_scene(void) {
             switch (g_flat_cmds[i].type) {
             case CMD_TESS_BEGIN_CONTOUR:
                 if (tess_in_contour) { glEnd(); glLineWidth(1.0f); }
-                if (g_show_outlines) {
+                if (g_show_outlines || tess_poly_is_current) {
                     glLineWidth(1.5f);
-                    glColor3f(0.55f, 0.20f, 0.70f); /* violet — matches syntax color */
+                    if (tess_poly_is_current)
+                        glColor3f(0.0f, 0.9f, 0.9f);
+                    else
+                        glColor3f(0.55f, 0.20f, 0.70f); /* violet — matches syntax color */
                     glBegin(GL_LINE_LOOP);
                     tess_in_contour = 1;
                 }
@@ -1018,14 +1012,15 @@ void render_3d_scene(void) {
                     glEnd(); glLineWidth(1.0f);
                     tess_in_contour = 0;
                 }
+                if (!tess_in_contour)
+                    tess_poly_is_current = 0;
                 break;
             case CMD_BEGIN: {
                 if (in_begin) glEnd();
                 /* Choose outline color: bright cyan for highlighted block, black otherwise */
-                int is_current = (g_highlight_current_poly &&
-                                  g_current_block_begin >= 0 &&
-                                  i == g_current_block_begin);
-                if (is_current) {
+                block_is_current = g_highlight_current_poly &&
+                                   flat_block_matches_cursor(i, 0);
+                if (block_is_current) {
                     glLineWidth(3.0f);
                     glColor3f(0.0f, 0.9f, 0.9f); /* bright cyan */
                 } else if (g_show_outlines) {
@@ -1033,11 +1028,10 @@ void render_3d_scene(void) {
                     glColor3f(0.0f, 0.0f, 0.0f);
                 } else {
                     /* outlines off but current poly highlight enabled — skip non-current */
-                    if (!is_current) { glBegin(g_flat_cmds[i].mode); in_begin = 1; block_begin_idx = i; break; }
+                    if (!block_is_current) { glBegin(g_flat_cmds[i].mode); in_begin = 1; break; }
                 }
                 glBegin(g_flat_cmds[i].mode);
                 in_begin = 1;
-                block_begin_idx = i;
                 break;
             }
             case CMD_END:
@@ -1046,17 +1040,18 @@ void render_3d_scene(void) {
                     glLineWidth(1.0f);
                     glColor3f(0.0f, 0.0f, 0.0f);
                 }
-                block_begin_idx = -1;
+                block_is_current = 0;
                 break;
             case CMD_VERTEX3F:
                 if (in_begin) {
-                    int is_cur_blk = (g_highlight_current_poly &&
-                                      g_current_block_begin >= 0 &&
-                                      block_begin_idx == g_current_block_begin);
-                    if (is_cur_blk || g_show_outlines)
+                    if (block_is_current || g_show_outlines)
                         glVertex3f(g_flat_cmds[i].args[0], g_flat_cmds[i].args[1],
                                    g_flat_cmds[i].args[2]);
                 }
+                break;
+            case CMD_TESS_BEGIN_POLYGON:
+                tess_poly_is_current = g_highlight_current_poly &&
+                                       flat_block_matches_cursor(i, 1);
                 break;
             default: break;
             }

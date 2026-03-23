@@ -69,6 +69,17 @@ int main(void) {
         ASSERT_TRUE("public parse_command type", cmd.type == CMD_BEGIN);
     }
 
+    {
+        repl_reset_state();
+        g_edit_line = 0;
+        GLCmd cmd;
+        memset(&cmd, 0, sizeof(cmd));
+        int ok = repl_parse_command("func0(x + 1, 2)", &cmd);
+        ASSERT_TRUE("public parse_command func call", ok == 1);
+        ASSERT_TRUE("public parse_command func type", cmd.type == CMD_CALL);
+        ASSERT_TRUE("func call keeps raw expr", strstr(cmd.source, "x + 1") != NULL);
+    }
+
     printf("repl_core_parse: %d/%d passed\n", g_pass, g_run);
     return (g_run == g_pass) ? 0 : 1;
 }

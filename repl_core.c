@@ -26,7 +26,9 @@
  *
  * Functions (define + call reusable blocks):
  *   func0 { body... }          Define function 0
+ *   func0(radius, yoff) { ... } Define function 0 with arguments
  *   func0()                    Call function 0
+ *   func0(1.5, x + 2)          Call function 0 with expressions
  *   Up to func0..func9
  *
  * Conditionals:
@@ -187,6 +189,7 @@ const char *g_func_completions[] = {
     "if(",
     "goto ",
     "func0 {",
+    "func0(radius, yoff) {",
     "func1 {",
     "func2 {",
     "func3 {",
@@ -620,8 +623,17 @@ int sel_hi(void) {
 static int parse_command(const char *line, GLCmd *cmd);
 static int parse_command_with_vars(const char *line, GLCmd *cmd,
                                    ExprVar *vars, int num_vars);
-static int collect_for_vars(int pos, ExprVar *vars, int max_vars);
-static int for_loop_depth_at(int pos);
+static int collect_visible_vars(int pos, ExprVar *vars, int max_vars);
+static int parse_expr_list_exact(const char *src, float *out_vals, int max_vals,
+                                 ExprVar *vars, int num_vars, int *out_count);
+static int parse_repl_func_signature(const char *src, int *fn,
+                                     char param_names[][16], int max_params,
+                                     int *param_count);
+static int extract_func_call_args_text(const char *src, int *fn,
+                                       char *args, int args_sz);
+static void format_func_header(char *out, int out_sz, const char *indent,
+                               int fn, char param_names[][16], int param_count);
+static unsigned int line_func_scope_mask(int line);
 static int block_depth_at(int pos);
 static void get_for_var_name(const GLCmd *cmd, char *var, int var_sz);
 static int try_commit_for_loop(void);
@@ -913,7 +925,11 @@ static void write_func_body_range_as_c(FILE *f, int start, int end_idx) {
         case CMD_FUNC_DEF: case CMD_FUNC_END:
             break; /* nested func defs not supported */
         case CMD_CALL:
-            fprintf(f, "  func%d();\n", (int)g_cmds[i].args[0]);
+            {
+                char c_src[MAX_LINE_LEN];
+                repl_expr_to_c(g_cmds[i].source, c_src, sizeof(c_src));
+                fprintf(f, "%s\n", c_src);
+            }
             break;
         default:
             if (for_depth > 0 || g_cmds[i].has_vars) {
@@ -933,6 +949,9 @@ static void write_func_defs_as_c(FILE *f) {
     for (int i = 0; i < g_num_cmds; i++) {
         if (!g_cmds[i].valid || g_cmds[i].type != CMD_FUNC_DEF) continue;
         int fn = (int)g_cmds[i].args[0];
+        int parsed_fn = fn;
+        int param_count = 0;
+        char param_names[MAX_EXPR_VARS][16];
         /* find the matching CMD_FUNC_END */
         int depth = 1, fe = g_num_cmds;
         for (int j = i + 1; j < g_num_cmds; j++) {
@@ -942,7 +961,16 @@ static void write_func_defs_as_c(FILE *f) {
                 if (--depth == 0) { fe = j; break; }
             }
         }
-        fprintf(f, "\nstatic void func%d(void) {\n", fn);
+        if (parse_repl_func_signature(g_cmds[i].source, &parsed_fn,
+                                      param_names, MAX_EXPR_VARS,
+                                      &param_count) && param_count > 0) {
+            fprintf(f, "\nstatic void func%d(", parsed_fn);
+            for (int p = 0; p < param_count; p++)
+                fprintf(f, "%sfloat %s", p == 0 ? "" : ", ", param_names[p]);
+            fprintf(f, ") {\n");
+        } else {
+            fprintf(f, "\nstatic void func%d(void) {\n", fn);
+        }
         write_func_body_range_as_c(f, i + 1, fe);
         fprintf(f, "}\n");
     }
@@ -1201,6 +1229,188 @@ static int extract_for_args_text(const char *src,
     return 1;
 }
 
+static int parse_identifier_list(const char *src,
+                                 char names[][16], int max_names) {
+    const char *p = src;
+    int count = 0;
+
+    while (*p) {
+        while (*p && isspace((unsigned char)*p)) p++;
+        if (!*p) break;
+        if (count >= max_names) return -1;
+        if (!isalpha((unsigned char)*p) && *p != '_') return -1;
+
+        int ni = 0;
+        while (*p && (isalnum((unsigned char)*p) || *p == '_')) {
+            if (ni >= 15) return -1;
+            names[count][ni++] = *p++;
+        }
+        names[count][ni] = '\0';
+        count++;
+
+        while (*p && isspace((unsigned char)*p)) p++;
+        if (!*p) break;
+        if (*p != ',') return -1;
+        p++;
+    }
+
+    return count;
+}
+
+static int parse_expr_list_exact(const char *src, float *out_vals, int max_vals,
+                                 ExprVar *vars, int num_vars, int *out_count) {
+    const char *p = src;
+    int count = 0;
+
+    while (*p && isspace((unsigned char)*p)) p++;
+    if (!*p) {
+        if (out_count) *out_count = 0;
+        return 1;
+    }
+
+    for (;;) {
+        ExprCtx ctx = { p, vars, num_vars };
+        float value = eval_expr(&ctx);
+        if (ctx.p == p) return 0;
+        if (count >= max_vals) return 0;
+        if (out_vals) out_vals[count] = value;
+        count++;
+
+        p = ctx.p;
+        while (*p && isspace((unsigned char)*p)) p++;
+        if (!*p) break;
+        if (*p != ',') return 0;
+        p++;
+        while (*p && isspace((unsigned char)*p)) p++;
+        if (!*p) return 0;
+    }
+
+    if (out_count) *out_count = count;
+    return 1;
+}
+
+static int parse_repl_func_signature(const char *src, int *fn,
+                                     char param_names[][16], int max_params,
+                                     int *param_count) {
+    const char *p = src;
+    while (*p && isspace((unsigned char)*p)) p++;
+    if (strncmp(p, "func", 4) != 0) return 0;
+    p += 4;
+    if (*p < '0' || *p > '9') return 0;
+    if (fn) *fn = *p - '0';
+    p++;
+
+    while (*p && isspace((unsigned char)*p)) p++;
+    if (*p == '{' || *p == '\0') {
+        if (param_count) *param_count = 0;
+        return 1;
+    }
+    if (*p != '(') return 0;
+
+    const char *payload_start = ++p;
+    int depth = 1;
+    while (*p && depth > 0) {
+        if (*p == '(') depth++;
+        else if (*p == ')') depth--;
+        if (depth > 0) p++;
+    }
+    if (depth != 0) return 0;
+
+    char payload[MAX_LINE_LEN];
+    int n = (int)(p - payload_start);
+    if (n > (int)sizeof(payload) - 1) n = (int)sizeof(payload) - 1;
+    memcpy(payload, payload_start, (size_t)n);
+    payload[n] = '\0';
+    trim_in_place(payload);
+
+    while (*p == ')') p++;
+    while (*p && isspace((unsigned char)*p)) p++;
+    if (*p != '{' && *p != '\0') return 0;
+
+    if (!payload[0]) {
+        if (param_count) *param_count = 0;
+        return 1;
+    }
+
+    int count = parse_identifier_list(payload, param_names, max_params);
+    if (count < 0) return 0;
+    if (param_count) *param_count = count;
+    return 1;
+}
+
+static int extract_func_call_args_text(const char *src, int *fn,
+                                       char *args, int args_sz) {
+    const char *p = src;
+    while (*p && isspace((unsigned char)*p)) p++;
+    if (strncmp(p, "func", 4) != 0) return 0;
+    p += 4;
+    if (*p < '0' || *p > '9') return 0;
+    if (fn) *fn = *p - '0';
+    p++;
+
+    while (*p && isspace((unsigned char)*p)) p++;
+    if (*p != '(') return 0;
+    p++;
+    const char *start = p;
+    int depth = 1;
+    while (*p && depth > 0) {
+        if (*p == '(') depth++;
+        else if (*p == ')') depth--;
+        if (depth > 0) p++;
+    }
+    if (depth != 0) return 0;
+
+    int n = (int)(p - start);
+    if (n > args_sz - 1) n = args_sz - 1;
+    memcpy(args, start, (size_t)n);
+    args[n] = '\0';
+    trim_in_place(args);
+
+    p++;
+    while (*p && isspace((unsigned char)*p)) p++;
+    if (*p != '\0' && *p != ';') return 0;
+    return 1;
+}
+
+static void format_func_header(char *out, int out_sz, const char *indent,
+                               int fn, char param_names[][16], int param_count) {
+    int written = snprintf(out, out_sz, "%sfunc%d", indent, fn);
+    if (written < 0 || written >= out_sz) {
+        if (out_sz > 0) out[out_sz - 1] = '\0';
+        return;
+    }
+    if (param_count > 0) {
+        written += snprintf(out + written, out_sz - written, "(");
+        for (int i = 0; i < param_count && written < out_sz; i++) {
+            written += snprintf(out + written, out_sz - written, "%s%s",
+                                i == 0 ? "" : ", ", param_names[i]);
+        }
+        if (written < out_sz)
+            written += snprintf(out + written, out_sz - written, ")");
+    }
+    if (written < out_sz)
+        snprintf(out + written, out_sz - written, " {");
+}
+
+static int input_has_expr_vars(const char *s, ExprVar *vars, int num_vars) {
+    while (*s) {
+        if (!isalpha((unsigned char)*s) && *s != '_') { s++; continue; }
+        const char *start = s;
+        while (*s && (isalnum((unsigned char)*s) || *s == '_')) s++;
+        int len = (int)(s - start);
+        for (int i = 0; i < num_vars; i++) {
+            int nlen = (int)strlen(vars[i].name);
+            if (nlen == len && strncmp(start, vars[i].name, len) == 0)
+                return 1;
+        }
+    }
+    return 0;
+}
+
+static int input_has_any_visible_vars(const char *s, ExprVar *vars, int num_vars) {
+    return input_has_predef_vars(s) || input_has_expr_vars(s, vars, num_vars);
+}
+
 static int extract_label_name(const char *src, char *name, int name_sz) {
     const char *p = src;
     while (*p && isspace((unsigned char)*p)) p++;
@@ -1345,6 +1555,84 @@ static int import_make_repl_for_header(const char *line, char *out, int out_sz) 
     return 1;
 }
 
+static int import_make_repl_func_header(const char *line, char *out, int out_sz) {
+    const char *p = line;
+    while (*p && isspace((unsigned char)*p)) p++;
+    if (strncmp(p, "static void func", 16) != 0)
+        return 0;
+    p += 16;
+
+    if (*p < '0' || *p > '9')
+        return 0;
+    int fn = *p - '0';
+    p++;
+
+    while (*p && isspace((unsigned char)*p)) p++;
+    if (*p != '(')
+        return 0;
+    p++;
+    const char *start = p;
+    int depth = 1;
+    while (*p && depth > 0) {
+        if (*p == '(') depth++;
+        else if (*p == ')') depth--;
+        if (depth > 0) p++;
+    }
+    if (depth != 0)
+        return 0;
+
+    char payload[MAX_LINE_LEN];
+    int n = (int)(p - start);
+    if (n > (int)sizeof(payload) - 1) n = (int)sizeof(payload) - 1;
+    memcpy(payload, start, (size_t)n);
+    payload[n] = '\0';
+    trim_in_place(payload);
+
+    p++;
+    while (*p && isspace((unsigned char)*p)) p++;
+    if (*p != '{')
+        return 0;
+
+    if (!payload[0] || strcmp(payload, "void") == 0) {
+        snprintf(out, out_sz, "func%d {", fn);
+        return 1;
+    }
+
+    char names[MAX_EXPR_VARS][16];
+    int count = 0;
+    char *cursor = payload;
+    while (*cursor) {
+        while (*cursor && isspace((unsigned char)*cursor)) cursor++;
+        if (strncmp(cursor, "float", 5) != 0 || !isspace((unsigned char)cursor[5]))
+            return 0;
+        cursor += 5;
+        while (*cursor && isspace((unsigned char)*cursor)) cursor++;
+        if (count >= MAX_EXPR_VARS) return 0;
+        if (!isalpha((unsigned char)*cursor) && *cursor != '_') return 0;
+
+        int ni = 0;
+        while (*cursor && (isalnum((unsigned char)*cursor) || *cursor == '_')) {
+            if (ni >= 15) return 0;
+            names[count][ni++] = *cursor++;
+        }
+        names[count][ni] = '\0';
+        count++;
+
+        while (*cursor && isspace((unsigned char)*cursor)) cursor++;
+        if (!*cursor) break;
+        if (*cursor != ',') return 0;
+        cursor++;
+    }
+
+    int written = snprintf(out, out_sz, "func%d(", fn);
+    for (int i = 0; i < count && written < out_sz; i++)
+        written += snprintf(out + written, out_sz - written, "%s%s",
+                            i == 0 ? "" : ", ", names[i]);
+    if (written < out_sz)
+        snprintf(out + written, out_sz - written, ") {");
+    return 1;
+}
+
 static int import_make_repl_label(const char *line, char *out, int out_sz) {
     const char *p = line;
     while (*p && isspace((unsigned char)*p)) p++;
@@ -1428,6 +1716,28 @@ static int import_make_repl_tess_line(const char *line, char *out, int out_sz) {
     }
 
     return 0;
+}
+
+static void import_feed_one_line(const char *line, int *loaded, int *warnings) {
+    char repl_line[MAX_LINE_LEN];
+    int before = g_num_cmds;
+    int handled = 0;
+
+    if (import_make_repl_for_header(line, repl_line, sizeof(repl_line))) {
+        handled = feed_line(repl_line);
+    } else if (import_make_repl_tess_line(line, repl_line, sizeof(repl_line)) ||
+               import_make_repl_label(line, repl_line, sizeof(repl_line))) {
+        handled = feed_line(repl_line);
+    } else {
+        c_expr_to_repl(line, repl_line, sizeof(repl_line));
+        handled = feed_line(repl_line);
+    }
+
+    if (g_num_cmds > before) *loaded += (g_num_cmds - before);
+    if (!handled) {
+        fprintf(stderr, "Warning: could not parse line: %s\n", line);
+        (*warnings)++;
+    }
 }
 
 int repl_parse_and_normalize(const char *line, int pos,
@@ -1521,7 +1831,16 @@ void repl_reformat_commands(void) {
         }
         case CMD_FUNC_DEF: {
             int fn = (int)orig.args[0];
-            snprintf(fmt.source, sizeof(fmt.source), "%sfunc%d {", ind_s, fn);
+            int parsed_fn = fn;
+            int param_count = 0;
+            char param_names[MAX_EXPR_VARS][16];
+            if (parse_repl_func_signature(orig.source, &parsed_fn,
+                                          param_names, MAX_EXPR_VARS,
+                                          &param_count))
+                format_func_header(fmt.source, sizeof(fmt.source), ind_s,
+                                   parsed_fn, param_names, param_count);
+            else
+                snprintf(fmt.source, sizeof(fmt.source), "%sfunc%d {", ind_s, fn);
             g_cmds[i] = fmt;
             break;
         }
@@ -1584,16 +1903,14 @@ void repl_reformat_commands(void) {
             break;
         }
         default: {
-            int in_loop = for_loop_depth_at(i) > 0;
             ExprVar dvars[MAX_EXPR_VARS];
-            int dnv = 0;
-            if (in_loop) dnv = collect_for_vars(i, dvars, MAX_EXPR_VARS);
-            int preserve_expr = in_loop || orig.has_vars;
+            int dnv = collect_visible_vars(i, dvars, MAX_EXPR_VARS);
+            int preserve_expr = (dnv > 0) || orig.has_vars;
             GLCmd parsed;
             memset(&parsed, 0, sizeof(parsed));
             if (repl_parse_and_normalize(orig.source, i,
-                                         in_loop ? dvars : NULL,
-                                         in_loop ? dnv : 0,
+                                         dnv > 0 ? dvars : NULL,
+                                         dnv > 0 ? dnv : 0,
                                          preserve_expr, &parsed) &&
                 parsed.type == orig.type) {
                 parsed.is_auto = orig.is_auto;
@@ -1698,7 +2015,11 @@ static void save_output(const char *filename) {
         case CMD_FUNC_END:
             break; /* shouldn't be reached due to above skip */
         case CMD_CALL:
-            fprintf(f, "  func%d();\n", (int)g_cmds[i].args[0]);
+            {
+                char c_src[MAX_LINE_LEN];
+                repl_expr_to_c(g_cmds[i].source, c_src, sizeof(c_src));
+                fprintf(f, "%s\n", c_src);
+            }
             break;
         case CMD_TESS_BEGIN_POLYGON:
             fprintf(f, "  { _tv_n=0; gluTessBeginPolygon(g_tess,NULL); }\n");
@@ -1766,6 +2087,7 @@ static int load_from_file(const char *filename) {
 
     char line[MAX_LINE_LEN];
     int in_snippet = 0;
+    int import_func_depth = 0;
     int loaded = 0;
     int warnings = 0;
 
@@ -1774,19 +2096,39 @@ static int load_from_file(const char *filename) {
         int len = (int)strlen(line);
         while (len > 0 && (line[len-1] == '\n' || line[len-1] == '\r'))
             line[--len] = '\0';
+        const char *p = line;
+        while (*p && isspace((unsigned char)*p)) p++;
 
         if (!in_snippet) {
+            if (import_func_depth > 0) {
+                import_feed_one_line(p, &loaded, &warnings);
+                for (const char *bp = p; *bp; bp++) {
+                    if (*bp == '{') import_func_depth++;
+                    else if (*bp == '}') import_func_depth--;
+                }
+                continue;
+            }
+
+            char repl_func_line[MAX_LINE_LEN];
+            if (import_make_repl_func_header(p, repl_func_line, sizeof(repl_func_line))) {
+                int before = g_num_cmds;
+                int handled = feed_line(repl_func_line);
+                if (g_num_cmds > before) loaded += (g_num_cmds - before);
+                if (!handled) {
+                    fprintf(stderr, "Warning: could not parse line: %s\n", line);
+                    warnings++;
+                }
+                import_func_depth = 1;
+                continue;
+            }
+
             /* Look for start marker */
-            const char *p = line;
-            while (*p && isspace((unsigned char)*p)) p++;
             if (strncmp(p, "// Snippet start", 16) == 0)
                 in_snippet = 1;
             continue;
         }
 
         /* Check for end marker */
-        const char *p = line;
-        while (*p && isspace((unsigned char)*p)) p++;
         if (strncmp(p, "// Snippet end", 14) == 0)
             break;
 
@@ -1794,42 +2136,7 @@ static int load_from_file(const char *filename) {
         if (len == 0 || *p == '\0') continue;
         if (import_parse_predef_decl(p))
             continue;
-
-        char repl_line[MAX_LINE_LEN];
-        if (import_make_repl_for_header(p, repl_line, sizeof(repl_line))) {
-            int before = g_num_cmds;
-            int handled = feed_line(repl_line);
-            if (g_num_cmds > before) loaded += (g_num_cmds - before);
-            if (!handled) {
-                fprintf(stderr, "Warning: could not parse line: %s\n", line);
-                warnings++;
-            }
-            continue;
-        }
-
-        if (import_make_repl_tess_line(p, repl_line, sizeof(repl_line)) ||
-            import_make_repl_label(p, repl_line, sizeof(repl_line))) {
-            int before = g_num_cmds;
-            int handled = feed_line(repl_line);
-            if (g_num_cmds > before) loaded += (g_num_cmds - before);
-            if (!handled) {
-                fprintf(stderr, "Warning: could not parse line: %s\n", line);
-                warnings++;
-            }
-            continue;
-        }
-
-        /* Default path: translate C expression names to REPL equivalents. */
-        c_expr_to_repl(p, repl_line, sizeof(repl_line));
-        {
-            int before = g_num_cmds;
-            int handled = feed_line(repl_line);
-            if (g_num_cmds > before) loaded += (g_num_cmds - before);
-            if (!handled) {
-                fprintf(stderr, "Warning: could not parse line: %s\n", line);
-                warnings++;
-            }
-        }
+        import_feed_one_line(p, &loaded, &warnings);
     }
 
     fclose(f);
@@ -2058,12 +2365,11 @@ static void accept_autocomplete(void) {
 /* Forward declarations */
 static int parse_command_with_vars(const char *line, GLCmd *cmd,
                                    ExprVar *vars, int num_vars);
-static int for_loop_depth_at(int pos);
+static unsigned int line_func_scope_mask(int line);
 static int find_block_end(int begin_idx);
 static int block_depth_at(int pos);
 static CmdType nearest_open_block_at(int pos);
 static void get_for_var_name(const GLCmd *cmd, char *var, int var_sz);
-static int collect_for_vars(int pos, ExprVar *vars, int max_vars);
 
 /* ========================================================================= */
 /* Command Definitions (Table-Driven)                                         */
@@ -2372,12 +2678,24 @@ static int parse_command_internal(const char *line, GLCmd *cmd,
 
 
 
-    /* funcN() — function call */
-    if (strncmp(func, "func", 4) == 0 && func[4] >= '0' && func[4] <= '9' && func[5] == '\0') {
+    /* funcN([expr, ...]) — function call */
+    if (strncmp(func, "func", 4) == 0 && func[4] >= '0' && func[4] <= '9' &&
+        func[5] == '\0' && open_p && close_p) {
         int fn = func[4] - '0';
+        float dummy_vals[MAX_EXPR_VARS];
+        int arg_count = 0;
+        if (!parse_expr_list_exact(args, dummy_vals, MAX_EXPR_VARS,
+                                   vars, num_vars, &arg_count)) {
+            set_status("Invalid function call arguments");
+            return 0;
+        }
+
         cmd->type = CMD_CALL;
         cmd->valid = 1;
         cmd->args[0] = (float)fn;
+        cmd->num_args = arg_count;
+        cmd->has_vars = (num_vars > 0) || input_has_predef_vars(args);
+
         int fdepth = block_depth_at(g_edit_line);
         int bb = in_begin_block_at(g_edit_line);
         int ind_v = (bb ? 4 : 2) + fdepth * 2;
@@ -2385,7 +2703,16 @@ static int parse_command_internal(const char *line, GLCmd *cmd,
         if (ind_v > (int)sizeof(ind_str) - 1) ind_v = (int)sizeof(ind_str) - 1;
         memset(ind_str, ' ', ind_v);
         ind_str[ind_v] = '\0';
-        snprintf(cmd->source, sizeof(cmd->source), "%sfunc%d();", ind_str, fn);
+
+        char raw_args[MAX_LINE_LEN];
+        strncpy(raw_args, args, sizeof(raw_args) - 1);
+        raw_args[sizeof(raw_args) - 1] = '\0';
+        trim_in_place(raw_args);
+        if (arg_count > 0)
+            snprintf(cmd->source, sizeof(cmd->source), "%sfunc%d(%s);",
+                     ind_str, fn, raw_args);
+        else
+            snprintf(cmd->source, sizeof(cmd->source), "%sfunc%d();", ind_str, fn);
         return 1;
     }
 
@@ -2684,8 +3011,23 @@ void recompute_autonormals(void) {
 /* Flatten for-loops into concrete commands                                    */
 /* ========================================================================= */
 
+static int g_flatten_call_stack[32];
+static int g_flatten_call_depth = 0;
+
+static void flat_cmd_set_provenance(GLCmd *cmd, int src_cmd_idx,
+                                    int call_src_cmd_idx,
+                                    int root_call_src_cmd_idx,
+                                    unsigned int func_scope_mask) {
+    cmd->src_cmd_idx = src_cmd_idx;
+    cmd->call_src_cmd_idx = call_src_cmd_idx;
+    cmd->root_call_src_cmd_idx = root_call_src_cmd_idx;
+    cmd->func_scope_mask = func_scope_mask;
+}
+
 /* Flatten g_cmds (with for-loops) into g_flat_cmds (concrete commands) */
-static void flatten_range(int start, int end_idx, ExprVar *vars, int nv) {
+static void flatten_range(int start, int end_idx, ExprVar *vars, int nv,
+                          int call_src_cmd_idx, int root_call_src_cmd_idx,
+                          unsigned int func_scope_mask) {
     int i = start;
     while (i < end_idx && i < g_num_cmds) {
         if (!g_cmds[i].valid) { i++; continue; }
@@ -2702,8 +3044,9 @@ static void flatten_range(int start, int end_idx, ExprVar *vars, int nv) {
                 const char *unused_body;
                 float rs, re, rst;
                 char rv[16];
-                if (parse_for_header(fb_cmd->source, rv, sizeof(rv),
-                                     &rs, &re, &rst, &unused_body)) {
+                if (parse_for_header_with_vars(fb_cmd->source, rv, sizeof(rv),
+                                               &rs, &re, &rst,
+                                               vars, nv, &unused_body)) {
                     s = rs; e = re; st = rst;
                 }
             }
@@ -2717,9 +3060,6 @@ static void flatten_range(int start, int end_idx, ExprVar *vars, int nv) {
                     if (--max_iters < 0) break;
                     ExprVar lvars[MAX_EXPR_VARS];
                     int lnv = 0;
-                    if (vars)
-                        for (int v = 0; v < nv && lnv < MAX_EXPR_VARS; v++)
-                            lvars[lnv++] = vars[v];
                     if (lnv < MAX_EXPR_VARS) {
                         strncpy(lvars[lnv].name, var_name,
                                 sizeof(lvars[lnv].name) - 1);
@@ -2727,7 +3067,12 @@ static void flatten_range(int start, int end_idx, ExprVar *vars, int nv) {
                         lvars[lnv].value = val;
                         lnv++;
                     }
-                    flatten_range(i + 1, fe, lvars, lnv);
+                    if (vars)
+                        for (int v = 0; v < nv && lnv < MAX_EXPR_VARS; v++)
+                            lvars[lnv++] = vars[v];
+                    flatten_range(i + 1, fe, lvars, lnv,
+                                  call_src_cmd_idx, root_call_src_cmd_idx,
+                                  func_scope_mask);
                 }
             }
             i = (fe < g_num_cmds) ? fe + 1 : g_num_cmds;
@@ -2747,10 +3092,73 @@ static void flatten_range(int start, int end_idx, ExprVar *vars, int nv) {
         /* Function calls: find definition and expand body inline */
         if (g_cmds[i].type == CMD_CALL) {
             int fn = (int)g_cmds[i].args[0];
+            int recursive = 0;
+            for (int s = 0; s < g_flatten_call_depth; s++) {
+                if (g_flatten_call_stack[s] == fn) {
+                    recursive = 1;
+                    break;
+                }
+            }
+            if (recursive) {
+                set_status("Recursive function calls are not supported yet");
+                i++;
+                continue;
+            }
+
             for (int k = 0; k < g_num_cmds; k++) {
                 if (g_cmds[k].type == CMD_FUNC_DEF && (int)g_cmds[k].args[0] == fn) {
                     int fe = find_block_end(k);
-                    flatten_range(k + 1, fe, vars, nv);
+                    int def_fn = fn;
+                    int param_count = 0;
+                    char param_names[MAX_EXPR_VARS][16];
+                    char arg_text[MAX_LINE_LEN];
+                    float arg_vals[MAX_EXPR_VARS];
+                    int arg_count = 0;
+
+                    if (!parse_repl_func_signature(g_cmds[k].source, &def_fn,
+                                                   param_names, MAX_EXPR_VARS,
+                                                   &param_count))
+                        break;
+                    if (!extract_func_call_args_text(g_cmds[i].source, NULL,
+                                                     arg_text, sizeof(arg_text)))
+                        break;
+                    if (!parse_expr_list_exact(arg_text, arg_vals, MAX_EXPR_VARS,
+                                               vars, nv, &arg_count))
+                        break;
+                    if (arg_count != param_count) {
+                        char msg[128];
+                        snprintf(msg, sizeof(msg),
+                                 "func%d expects %d args, got %d",
+                                 fn, param_count, arg_count);
+                        set_status(msg);
+                        break;
+                    }
+
+                    ExprVar lvars[MAX_EXPR_VARS];
+                    int lnv = 0;
+                    for (int p = 0; p < param_count && lnv < MAX_EXPR_VARS; p++) {
+                        strncpy(lvars[lnv].name, param_names[p],
+                                sizeof(lvars[lnv].name) - 1);
+                        lvars[lnv].name[sizeof(lvars[lnv].name) - 1] = '\0';
+                        lvars[lnv].value = arg_vals[p];
+                        lnv++;
+                    }
+                    for (int v = 0; vars && v < nv && lnv < MAX_EXPR_VARS; v++)
+                        lvars[lnv++] = vars[v];
+
+                    unsigned int nested_func_mask = func_scope_mask;
+                    if (fn >= 0 && fn < 32)
+                        nested_func_mask |= (1u << fn);
+                    int nested_root_call = (root_call_src_cmd_idx >= 0)
+                                         ? root_call_src_cmd_idx : i;
+
+                    if (g_flatten_call_depth < (int)(sizeof(g_flatten_call_stack) /
+                                                     sizeof(g_flatten_call_stack[0])))
+                        g_flatten_call_stack[g_flatten_call_depth++] = fn;
+                    flatten_range(k + 1, fe, lvars, lnv,
+                                  i, nested_root_call, nested_func_mask);
+                    if (g_flatten_call_depth > 0)
+                        g_flatten_call_depth--;
                     break;
                 }
             }
@@ -2758,13 +3166,48 @@ static void flatten_range(int start, int end_idx, ExprVar *vars, int nv) {
             continue;
         }
 
-        /* Conditionals: pass through to flat_cmds unchanged.
-         * Conditions are evaluated at execute time so that goto loops
-         * see updated variable values on each iteration. */
-        if (g_cmds[i].type == CMD_IF_BEGIN || g_cmds[i].type == CMD_IF_END) {
+        if (g_cmds[i].type == CMD_IF_BEGIN) {
+            int fe = find_block_end(i);
+            char cond_text[MAX_LINE_LEN];
+            int needs_local_eval = 0;
+
+            if (vars && nv > 0 &&
+                extract_paren_payload(g_cmds[i].source, cond_text, sizeof(cond_text)) &&
+                input_has_expr_vars(cond_text, vars, nv)) {
+                needs_local_eval = 1;
+            }
+
+            if (needs_local_eval) {
+                ExprCtx ctx = { cond_text, vars, nv };
+                float cond = eval_expr(&ctx);
+                if (cond != 0.0f)
+                    flatten_range(i + 1, fe, vars, nv,
+                                  call_src_cmd_idx, root_call_src_cmd_idx,
+                                  func_scope_mask);
+                i = (fe < g_num_cmds) ? fe + 1 : g_num_cmds;
+                continue;
+            }
+
             if (g_num_flat_cmds < MAX_COMMANDS) {
                 g_flat_cmds[g_num_flat_cmds] = g_cmds[i];
-                g_flat_cmds[g_num_flat_cmds++].src_cmd_idx = i;
+                flat_cmd_set_provenance(&g_flat_cmds[g_num_flat_cmds],
+                                        i, call_src_cmd_idx,
+                                        root_call_src_cmd_idx,
+                                        func_scope_mask);
+                g_num_flat_cmds++;
+            }
+            i++;
+            continue;
+        }
+
+        if (g_cmds[i].type == CMD_IF_END) {
+            if (g_num_flat_cmds < MAX_COMMANDS) {
+                g_flat_cmds[g_num_flat_cmds] = g_cmds[i];
+                flat_cmd_set_provenance(&g_flat_cmds[g_num_flat_cmds],
+                                        i, call_src_cmd_idx,
+                                        root_call_src_cmd_idx,
+                                        func_scope_mask);
+                g_num_flat_cmds++;
             }
             i++;
             continue;
@@ -2774,7 +3217,11 @@ static void flatten_range(int start, int end_idx, ExprVar *vars, int nv) {
         if (g_cmds[i].type == CMD_COMMENT) {
             if (g_num_flat_cmds < MAX_COMMANDS) {
                 g_flat_cmds[g_num_flat_cmds] = g_cmds[i];
-                g_flat_cmds[g_num_flat_cmds++].src_cmd_idx = i;
+                flat_cmd_set_provenance(&g_flat_cmds[g_num_flat_cmds],
+                                        i, call_src_cmd_idx,
+                                        root_call_src_cmd_idx,
+                                        func_scope_mask);
+                g_num_flat_cmds++;
             }
             i++;
             continue;
@@ -2787,7 +3234,11 @@ static void flatten_range(int start, int end_idx, ExprVar *vars, int nv) {
                 g_predef_vars[vi].value = g_cmds[i].args[0];
             if (g_num_flat_cmds < MAX_COMMANDS) {
                 g_flat_cmds[g_num_flat_cmds] = g_cmds[i];
-                g_flat_cmds[g_num_flat_cmds++].src_cmd_idx = i;
+                flat_cmd_set_provenance(&g_flat_cmds[g_num_flat_cmds],
+                                        i, call_src_cmd_idx,
+                                        root_call_src_cmd_idx,
+                                        func_scope_mask);
+                g_num_flat_cmds++;
             }
             i++;
             continue;
@@ -2803,9 +3254,11 @@ static void flatten_range(int start, int end_idx, ExprVar *vars, int nv) {
             g_edit_line = g_num_flat_cmds;
             if (parse_command_with_vars(g_cmds[i].source, &tmp, vars, nv)) {
                 tmp.has_vars = g_cmds[i].has_vars;
-                tmp.src_cmd_idx = i;
                 strncpy(tmp.source, g_cmds[i].source, sizeof(tmp.source) - 1);
                 tmp.source[sizeof(tmp.source) - 1] = '\0';
+                flat_cmd_set_provenance(&tmp, i, call_src_cmd_idx,
+                                        root_call_src_cmd_idx,
+                                        func_scope_mask);
                 g_flat_cmds[g_num_flat_cmds++] = tmp;
             }
             g_edit_line = saved;
@@ -2815,14 +3268,20 @@ static void flatten_range(int start, int end_idx, ExprVar *vars, int nv) {
             memset(&tmp, 0, sizeof(tmp));
             if (parse_command(g_cmds[i].source, &tmp)) {
                 tmp.has_vars = 1;
-                tmp.src_cmd_idx = i;
                 strncpy(tmp.source, g_cmds[i].source, sizeof(tmp.source) - 1);
                 tmp.source[sizeof(tmp.source) - 1] = '\0';
+                flat_cmd_set_provenance(&tmp, i, call_src_cmd_idx,
+                                        root_call_src_cmd_idx,
+                                        func_scope_mask);
                 g_flat_cmds[g_num_flat_cmds++] = tmp;
             }
         } else {
             g_flat_cmds[g_num_flat_cmds] = g_cmds[i];
-            g_flat_cmds[g_num_flat_cmds++].src_cmd_idx = i;
+            flat_cmd_set_provenance(&g_flat_cmds[g_num_flat_cmds],
+                                    i, call_src_cmd_idx,
+                                    root_call_src_cmd_idx,
+                                    func_scope_mask);
+            g_num_flat_cmds++;
         }
         i++;
     }
@@ -2830,7 +3289,8 @@ static void flatten_range(int start, int end_idx, ExprVar *vars, int nv) {
 
 void flatten_commands(void) {
     g_num_flat_cmds = 0;
-    flatten_range(0, g_num_cmds, NULL, 0);
+    g_flatten_call_depth = 0;
+    flatten_range(0, g_num_cmds, NULL, 0, -1, -1, 0);
 
     /* Track whether user enabled lighting (for correct default state) */
     g_user_lighting_enabled = 0;
@@ -2889,6 +3349,31 @@ void flatten_commands(void) {
             fcur++;
         }
     }
+}
+
+int repl_flat_cmd_matches_cursor(int flat_idx) {
+    if (flat_idx < 0 || flat_idx >= g_num_flat_cmds) return 0;
+    if (g_edit_line < 0 || g_edit_line >= g_num_cmds) return 0;
+    if (!g_flat_cmds[flat_idx].valid) return 0;
+
+    GLCmd *cmd = &g_flat_cmds[flat_idx];
+    GLCmd *cursor_cmd = &g_cmds[g_edit_line];
+
+    if (cursor_cmd->valid && cursor_cmd->type == CMD_CALL) {
+        return cmd->call_src_cmd_idx == g_edit_line ||
+               cmd->root_call_src_cmd_idx == g_edit_line;
+    }
+
+    {
+        unsigned int cursor_func_mask = line_func_scope_mask(g_edit_line);
+        if (cursor_func_mask != 0)
+            return (cmd->func_scope_mask & cursor_func_mask) != 0;
+    }
+
+    if (g_current_block_begin >= 0 && g_current_block_end >= g_current_block_begin)
+        return flat_idx >= g_current_block_begin && flat_idx <= g_current_block_end;
+
+    return cmd->src_cmd_idx == g_edit_line;
 }
 
 /* ========================================================================= */
@@ -3239,14 +3724,6 @@ static void reshape_func(int w, int h) {
 /* parse_for_header, parse_c_for_header: see repl_eval.c */
 
 
-/* Check for-loop nesting depth at a position in g_cmds */
-static int for_loop_depth_at(int pos) {
-    depth_cache_rebuild();
-    if (pos < 0) pos = 0;
-    if (pos > g_num_cmds) pos = g_num_cmds;
-    return g_for_depth_prefix[pos];
-}
-
 /* Find matching block end for any block-opening command (FOR/FUNC/IF).
  * Handles mixed nesting correctly. */
 static int find_block_end(int begin_idx) {
@@ -3297,25 +3774,95 @@ static void get_for_var_name(const GLCmd *cmd, char *var, int var_sz) {
     var[i] = '\0';
 }
 
-/* Collect loop variable names/dummy values from enclosing FOR_BEGINs */
-static int collect_for_vars(int pos, ExprVar *vars, int max_vars) {
-    ExprVar stack[MAX_LOOP_DEPTH];
+static int collect_visible_vars(int pos, ExprVar *vars, int max_vars) {
+    typedef struct {
+        CmdType type;
+        ExprVar vars[MAX_EXPR_VARS];
+        int count;
+    } ScopeFrame;
+
+    ScopeFrame frames[64];
     int depth = 0;
+
     for (int i = 0; i < pos && i < g_num_cmds; i++) {
-        if (g_cmds[i].type == CMD_FOR_BEGIN && depth < MAX_LOOP_DEPTH) {
-            char vn[16];
-            get_for_var_name(&g_cmds[i], vn, sizeof(vn));
-            strncpy(stack[depth].name, vn, sizeof(stack[depth].name) - 1);
-            stack[depth].name[sizeof(stack[depth].name) - 1] = '\0';
-            stack[depth].value = g_cmds[i].args[0];
+        CmdType t = g_cmds[i].type;
+        if (t == CMD_FOR_BEGIN || t == CMD_FUNC_DEF || t == CMD_IF_BEGIN) {
+            if (depth >= (int)(sizeof(frames) / sizeof(frames[0])))
+                break;
+
+            frames[depth].type = t;
+            frames[depth].count = 0;
+
+            if (t == CMD_FOR_BEGIN) {
+                char vn[16];
+                get_for_var_name(&g_cmds[i], vn, sizeof(vn));
+                strncpy(frames[depth].vars[0].name, vn,
+                        sizeof(frames[depth].vars[0].name) - 1);
+                frames[depth].vars[0].name[sizeof(frames[depth].vars[0].name) - 1] = '\0';
+                frames[depth].vars[0].value = g_cmds[i].args[0];
+                frames[depth].count = 1;
+            } else if (t == CMD_FUNC_DEF) {
+                int fn = -1;
+                int param_count = 0;
+                char param_names[MAX_EXPR_VARS][16];
+                if (parse_repl_func_signature(g_cmds[i].source, &fn,
+                                              param_names, MAX_EXPR_VARS,
+                                              &param_count)) {
+                    for (int p = 0; p < param_count; p++) {
+                        strncpy(frames[depth].vars[p].name, param_names[p],
+                                sizeof(frames[depth].vars[p].name) - 1);
+                        frames[depth].vars[p].name[sizeof(frames[depth].vars[p].name) - 1] = '\0';
+                        frames[depth].vars[p].value = 0.0f;
+                    }
+                    frames[depth].count = param_count;
+                }
+            }
             depth++;
-        } else if (g_cmds[i].type == CMD_FOR_END && depth > 0) {
-            depth--;
+        } else if (t == CMD_FOR_END || t == CMD_FUNC_END || t == CMD_IF_END) {
+            if (depth > 0) depth--;
         }
     }
-    int nv = depth < max_vars ? depth : max_vars;
-    for (int i = 0; i < nv; i++) vars[i] = stack[i];
-    return nv;
+
+    int count = 0;
+    for (int i = depth - 1; i >= 0 && count < max_vars; i--) {
+        for (int v = 0; v < frames[i].count && count < max_vars; v++)
+            vars[count++] = frames[i].vars[v];
+    }
+
+    return count;
+}
+
+static unsigned int line_func_scope_mask(int line) {
+    unsigned int mask = 0;
+    int stack[32];
+    int depth = 0;
+
+    if (line < 0) return 0;
+    if (line >= g_num_cmds) line = g_num_cmds - 1;
+
+    for (int i = 0; i <= line && i < g_num_cmds; i++) {
+        if (!g_cmds[i].valid) continue;
+
+        if (g_cmds[i].type == CMD_FUNC_DEF) {
+            int fn = (int)g_cmds[i].args[0];
+            if (fn >= 0 && fn < 32 && depth < (int)(sizeof(stack) / sizeof(stack[0]))) {
+                stack[depth++] = fn;
+                mask |= (1u << fn);
+            }
+            continue;
+        }
+
+        if (g_cmds[i].type == CMD_FUNC_END) {
+            if (i == line)
+                return mask;
+            if (depth > 0) {
+                int fn = stack[--depth];
+                mask &= ~(1u << fn);
+            }
+        }
+    }
+
+    return mask;
 }
 
 /*
@@ -3413,19 +3960,23 @@ static int try_commit_for_loop(void) {
     if (strncmp(p, "for(", 4) != 0 && strncmp(p, "for (", 5) != 0)
         return 0;
 
+    int pos = g_inserting ? g_edit_line :
+              (g_edit_line < g_num_cmds ? g_edit_line : g_num_cmds);
+    ExprVar visible_vars[MAX_EXPR_VARS];
+    int visible_nv = collect_visible_vars(pos, visible_vars, MAX_EXPR_VARS);
+
     char var_name[16];
     float start, end, step;
     const char *body_start;
-    if (!parse_for_header(p, var_name, sizeof(var_name),
-                          &start, &end, &step, &body_start)) {
+    if (!parse_for_header_with_vars(p, var_name, sizeof(var_name),
+                                    &start, &end, &step,
+                                    visible_vars, visible_nv, &body_start)) {
         set_status("for syntax: for(var, start, end[, step]) body;");
         return 1;
     }
 
     while (*body_start && isspace((unsigned char)*body_start)) body_start++;
 
-    int pos = g_inserting ? g_edit_line :
-              (g_edit_line < g_num_cmds ? g_edit_line : g_num_cmds);
     int fdepth = block_depth_at(pos);
     int bb = in_begin_block_at(pos);
     int ind = (bb ? 4 : 2) + fdepth * 2;
@@ -3472,7 +4023,7 @@ static int try_commit_for_loop(void) {
     char *ra = raw_args;
     while (*ra && isspace((unsigned char)*ra)) ra++;
 
-    if (input_has_predef_vars(ra)) {
+    if (input_has_any_visible_vars(ra, visible_vars, visible_nv)) {
         fb.has_vars = 1;
         snprintf(fb.source, sizeof(fb.source),
                  "%sfor(%s, %s) {", indent, var_name, ra);
@@ -3542,15 +4093,19 @@ static int try_commit_for_loop(void) {
     }
 
     /* Validate body with dummy vars */
-    ExprVar dv[1];
-    strncpy(dv[0].name, var_name, sizeof(dv[0].name) - 1);
-    dv[0].name[sizeof(dv[0].name) - 1] = '\0';
-    dv[0].value = start;
+    ExprVar dv[MAX_EXPR_VARS];
+    int dvn = 0;
+    strncpy(dv[dvn].name, var_name, sizeof(dv[dvn].name) - 1);
+    dv[dvn].name[sizeof(dv[dvn].name) - 1] = '\0';
+    dv[dvn].value = start;
+    dvn++;
+    for (int i = 0; i < visible_nv && dvn < MAX_EXPR_VARS; i++)
+        dv[dvn++] = visible_vars[i];
     GLCmd body_cmd;
     memset(&body_cmd, 0, sizeof(body_cmd));
     int saved = g_edit_line;
     g_edit_line = pos;
-    if (!parse_command_with_vars(body, &body_cmd, dv, 1)) {
+    if (!parse_command_with_vars(body, &body_cmd, dv, dvn)) {
         g_edit_line = saved;
         set_status("Invalid for-loop body command");
         return 1;
@@ -3596,14 +4151,17 @@ static int try_commit_for_loop(void) {
  * Inserts CMD_FUNC_DEF + CMD_FUNC_END, enters insert mode between them.
  */
 static int try_commit_func_def(void) {
-    const char *p = g_input;
-    while (*p && isspace((unsigned char)*p)) p++;
-    if (strncmp(p, "func", 4) != 0) return 0;
-    if (p[4] < '0' || p[4] > '9') return 0;
-    int fn = p[4] - '0';
-    const char *rest = p + 5;
-    while (*rest && isspace((unsigned char)*rest)) rest++;
-    if (*rest != '{' && *rest != '\0') return 0;
+    int fn = -1;
+    int param_count = 0;
+    char param_names[MAX_EXPR_VARS][16];
+    const char *trimmed = g_input;
+    while (*trimmed && isspace((unsigned char)*trimmed)) trimmed++;
+    if (strchr(trimmed, '(') && strchr(trimmed, '{') == NULL)
+        return 0;
+    if (!parse_repl_func_signature(g_input, &fn,
+                                   param_names, MAX_EXPR_VARS,
+                                   &param_count))
+        return 0;
 
     int pos = g_inserting ? g_edit_line :
               (g_edit_line < g_num_cmds ? g_edit_line : g_num_cmds);
@@ -3619,8 +4177,10 @@ static int try_commit_func_def(void) {
     if (!g_inserting && g_edit_line < g_num_cmds &&
         g_cmds[g_edit_line].type == CMD_FUNC_DEF) {
         g_cmds[g_edit_line].args[0] = (float)fn;
-        snprintf(g_cmds[g_edit_line].source, sizeof(g_cmds[g_edit_line].source),
-                 "%sfunc%d {", indent, fn);
+        g_cmds[g_edit_line].num_args = param_count;
+        format_func_header(g_cmds[g_edit_line].source,
+                           (int)sizeof(g_cmds[g_edit_line].source),
+                           indent, fn, param_names, param_count);
         g_edit_line++;
         g_inserting = 1;
         g_input[0] = '\0'; g_input_len = 0; g_cursor_pos = 0;
@@ -3635,8 +4195,10 @@ static int try_commit_func_def(void) {
     memset(&fd, 0, sizeof(fd));
     fd.type = CMD_FUNC_DEF;
     fd.args[0] = (float)fn;
+    fd.num_args = param_count;
     fd.valid = 1;
-    snprintf(fd.source, sizeof(fd.source), "%sfunc%d {", indent, fn);
+    format_func_header(fd.source, (int)sizeof(fd.source),
+                       indent, fn, param_names, param_count);
 
     GLCmd fe;
     memset(&fe, 0, sizeof(fe));
@@ -3672,6 +4234,11 @@ static int try_commit_if_block(void) {
     if (strncmp(p, "if(", 3) != 0 && strncmp(p, "if (", 4) != 0)
         return 0;
 
+    int pos = g_inserting ? g_edit_line :
+              (g_edit_line < g_num_cmds ? g_edit_line : g_num_cmds);
+    ExprVar visible_vars[MAX_EXPR_VARS];
+    int visible_nv = collect_visible_vars(pos, visible_vars, MAX_EXPR_VARS);
+
     /* Find opening paren */
     while (*p && *p != '(') p++;
     if (!*p) return 0;
@@ -3699,7 +4266,8 @@ static int try_commit_if_block(void) {
 
     /* Evaluate condition */
     float cond_args[1];
-    int neval = parse_exprs(cond_text, cond_args, 1, NULL, 0);
+    int neval = parse_exprs(cond_text, cond_args, 1,
+                            visible_nv > 0 ? visible_vars : NULL, visible_nv);
     float cond_val = (neval >= 1) ? cond_args[0] : 0.0f;
 
     /* Check for { after ) */
@@ -3710,8 +4278,6 @@ static int try_commit_if_block(void) {
         return 1;
     }
 
-    int pos = g_inserting ? g_edit_line :
-              (g_edit_line < g_num_cmds ? g_edit_line : g_num_cmds);
     int bdepth = block_depth_at(pos);
     int bb = in_begin_block_at(pos);
     int ind = (bb ? 4 : 2) + bdepth * 2;
@@ -3726,7 +4292,7 @@ static int try_commit_if_block(void) {
     ib.type = CMD_IF_BEGIN;
     ib.args[0] = cond_val;
     ib.valid = 1;
-    ib.has_vars = input_has_predef_vars(cond_text);
+    ib.has_vars = input_has_any_visible_vars(cond_text, visible_vars, visible_nv);
 
     /* Trim whitespace from condition text for display */
     char *ct = cond_text;
@@ -4272,11 +4838,10 @@ static void keyboard_func(unsigned char key, int x, int y) {
                 GLCmd cmd;
                 memset(&cmd, 0, sizeof(cmd));
                 int fpos = g_edit_line;
-                int in_loop = for_loop_depth_at(fpos) > 0;
                 int parsed;
-                if (in_loop) {
-                    ExprVar dvars[MAX_EXPR_VARS];
-                    int dnv = collect_for_vars(fpos, dvars, MAX_EXPR_VARS);
+                ExprVar dvars[MAX_EXPR_VARS];
+                int dnv = collect_visible_vars(fpos, dvars, MAX_EXPR_VARS);
+                if (dnv > 0) {
                     int saved_el = g_edit_line;
                     g_edit_line = fpos;
                     parsed = parse_command_with_vars(g_input, &cmd, dvars, dnv);
@@ -4344,11 +4909,10 @@ static void keyboard_func(unsigned char key, int x, int y) {
                 GLCmd cmd;
                 memset(&cmd, 0, sizeof(cmd));
                 int fpos = g_edit_line;
-                int in_loop = for_loop_depth_at(fpos) > 0;
                 int parsed = 0;
-                if (in_loop) {
-                    ExprVar dvars[MAX_EXPR_VARS];
-                    int dnv = collect_for_vars(fpos, dvars, MAX_EXPR_VARS);
+                ExprVar dvars[MAX_EXPR_VARS];
+                int dnv = collect_visible_vars(fpos, dvars, MAX_EXPR_VARS);
+                if (dnv > 0) {
                     int saved_el = g_edit_line;
                     g_edit_line = fpos;
                     parsed = parse_command_with_vars(g_input, &cmd, dvars, dnv);
@@ -4430,11 +4994,10 @@ static void keyboard_func(unsigned char key, int x, int y) {
                 GLCmd cmd;
                 memset(&cmd, 0, sizeof(cmd));
                 int fpos = g_num_cmds;
-                int in_loop = for_loop_depth_at(fpos) > 0;
                 int parsed;
-                if (in_loop) {
-                    ExprVar dvars[MAX_EXPR_VARS];
-                    int dnv = collect_for_vars(fpos, dvars, MAX_EXPR_VARS);
+                ExprVar dvars[MAX_EXPR_VARS];
+                int dnv = collect_visible_vars(fpos, dvars, MAX_EXPR_VARS);
+                if (dnv > 0) {
                     int saved_el = g_edit_line;
                     g_edit_line = fpos;
                     parsed = parse_command_with_vars(g_input, &cmd, dvars, dnv);
@@ -4536,11 +5099,10 @@ static void keyboard_func(unsigned char key, int x, int y) {
             memset(&cmd, 0, sizeof(cmd));
             int fpos = g_inserting ? g_edit_line :
                        (g_edit_line < g_num_cmds ? g_edit_line : g_num_cmds);
-            int in_loop = for_loop_depth_at(fpos) > 0;
             int parsed;
-            if (in_loop) {
-                ExprVar dvars[MAX_EXPR_VARS];
-                int dnv = collect_for_vars(fpos, dvars, MAX_EXPR_VARS);
+            ExprVar dvars[MAX_EXPR_VARS];
+            int dnv = collect_visible_vars(fpos, dvars, MAX_EXPR_VARS);
+            if (dnv > 0) {
                 parsed = repl_parse_and_normalize(g_input, fpos, dvars, dnv, 1, &cmd);
             } else {
                 int preserve = input_has_predef_vars(g_input);
@@ -5048,12 +5610,12 @@ static int feed_line(const char *line) {
     int handled = 0;
     GLCmd cmd;
     memset(&cmd, 0, sizeof(cmd));
-    int fpos = g_inserting ? g_edit_line : g_num_cmds;
-    int in_loop = for_loop_depth_at(fpos) > 0;
+    int fpos = g_inserting ? g_edit_line :
+               (g_edit_line < g_num_cmds ? g_edit_line : g_num_cmds);
     int parsed;
-    if (in_loop) {
-        ExprVar dvars[MAX_EXPR_VARS];
-        int dnv = collect_for_vars(fpos, dvars, MAX_EXPR_VARS);
+    ExprVar dvars[MAX_EXPR_VARS];
+    int dnv = collect_visible_vars(fpos, dvars, MAX_EXPR_VARS);
+    if (dnv > 0) {
         parsed = repl_parse_and_normalize(g_input, fpos, dvars, dnv, 1, &cmd);
     } else {
         int preserve = input_has_predef_vars(g_input);
@@ -5066,6 +5628,10 @@ static int feed_line(const char *line) {
                 g_cmds[j] = g_cmds[j - 1];
             g_cmds[g_edit_line] = cmd;
             g_num_cmds++;
+            g_edit_line++;
+        } else if (g_edit_line < g_num_cmds) {
+            /* Replace the current placeholder/end line, like interactive edit mode */
+            g_cmds[g_edit_line] = cmd;
             g_edit_line++;
         } else {
             g_cmds[g_num_cmds++] = cmd;
@@ -5184,7 +5750,77 @@ static const char *g_example_func[] = {
     NULL
 };
 
-/* Example 3: Conditional colors — if-blocks + t variable */
+/* Example 3: Parametric polygon helper — function args driving local for-loops */
+static const char *g_example_func_loop[] = {
+    "glEnable(GL_DEPTH_TEST);",
+    "glEnable(GL_COLOR_MATERIAL);",
+    "glEnable(GL_NORMALIZE);",
+    "func0(radius, sides, phase) {",
+        "glBegin(GL_TRIANGLE_FAN);",
+        "glNormal3f(0, 0, 1);",
+        "glColor3f(1, 1, 1);",
+        "glVertex3f(0, 0, 0);",
+        "for(i, 0, sides + 1) {",
+            "glColor3f(sin(i*TAU/sides + phase)*0.5+0.5, cos(i*TAU/sides + phase)*0.5+0.5, 0.8);",
+            "glVertex3f(cos(i*TAU/sides + phase)*radius, sin(i*TAU/sides + phase)*radius, 0);",
+        "}",
+        "glEnd();",
+    "}",
+    "glPushMatrix();",
+    "glTranslatef(-2.4, 0, 0);",
+    "func0(0.9, 3, t*0.4);",
+    "glPopMatrix();",
+    "glPushMatrix();",
+    "func0(0.9, 6, -t*0.25);",
+    "glPopMatrix();",
+    "glPushMatrix();",
+    "glTranslatef(2.4, 0, 0);",
+    "func0(0.9, 10, t*0.15);",
+    "glPopMatrix();",
+    NULL
+};
+
+/* Example 4: Branching helper — function args driving local if-blocks */
+static const char *g_example_func_if[] = {
+    "glEnable(GL_DEPTH_TEST);",
+    "glEnable(GL_COLOR_MATERIAL);",
+    "glEnable(GL_NORMALIZE);",
+    "func0(scale, phase) {",
+        "if(scale > 1) {",
+            "glColor3f(1, 0.35, 0.2);",
+            "glBegin(GL_QUADS);",
+            "glNormal3f(0, 0, 1);",
+            "glVertex3f(-0.7*scale, -0.7*scale, 0);",
+            "glVertex3f(0.7*scale, -0.7*scale, 0);",
+            "glVertex3f(0.7*scale, 0.7*scale, 0);",
+            "glVertex3f(-0.7*scale, 0.7*scale, 0);",
+            "glEnd();",
+        "}",
+        "if(scale <= 1) {",
+            "glColor3f(0.2, 0.75, 1);",
+            "glBegin(GL_TRIANGLES);",
+            "glNormal3f(0, 0, 1);",
+            "glVertex3f(cos(phase)*0.9*scale, sin(phase)*0.9*scale, 0);",
+            "glVertex3f(cos(phase+TAU/3)*0.9*scale, sin(phase+TAU/3)*0.9*scale, 0);",
+            "glVertex3f(cos(phase+2*TAU/3)*0.9*scale, sin(phase+2*TAU/3)*0.9*scale, 0);",
+            "glEnd();",
+        "}",
+    "}",
+    "glPushMatrix();",
+    "glTranslatef(-2.2, 0, 0);",
+    "func0(0.9, t);",
+    "glPopMatrix();",
+    "glPushMatrix();",
+    "func0(1.4, t*0.5);",
+    "glPopMatrix();",
+    "glPushMatrix();",
+    "glTranslatef(2.2, 0, 0);",
+    "func0(0.65, -t*0.8);",
+    "glPopMatrix();",
+    NULL
+};
+
+/* Example 5: Conditional colors — if-blocks + t variable */
 static const char *g_example_cond[] = {
     "glEnable(GL_DEPTH_TEST);",
     "glEnable(GL_LIGHTING);",
@@ -5218,7 +5854,7 @@ static const char *g_example_cond[] = {
     NULL
 };
 
-/* Example 4: Parametric torus — nested for-loops */
+/* Example 6: Parametric torus — nested for-loops */
 static const char *g_example_torus[] = {
     "glEnable(GL_DEPTH_TEST);",
     "//glEnable(GL_LIGHTING);",
@@ -5239,7 +5875,7 @@ static const char *g_example_torus[] = {
     NULL
 };
 
-/* Example 5: GLU tessellator — concave arrow polygon with per-vertex color */
+/* Example 7: GLU tessellator — concave arrow polygon with per-vertex color */
 static const char *g_example_tess[] = {
     "glEnable(GL_DEPTH_TEST);",
     "glEnable(GL_LIGHTING);",
@@ -5272,7 +5908,7 @@ static const char *g_example_tess[] = {
     NULL
 };
 
-/* Example 5: GLU tessellator — concave arrow polygon cutout */
+/* Example 8: GLU tessellator — concave arrow polygon cutout */
 static const char *g_example_tess_cutout[] = {
     "glEnable(GL_DEPTH_TEST);",
     "glEnable(GL_LIGHTING);",
@@ -5399,6 +6035,8 @@ static const char **g_examples[] = {
     g_example_cube,
     g_example_ring,
     g_example_func,
+    g_example_func_loop,
+    g_example_func_if,
     g_example_cond,
     g_example_torus,
     g_example_tess,
@@ -5408,6 +6046,8 @@ static const char *g_example_names[] = {
     "Lit cube",
     "Animated ring (for + t)",
     "Function demo (func0)",
+    "Function polygons (args + for)",
+    "Function branching (args + if)",
     "Conditional colors (if + t)",
     "Parametric torus (nested for)",
     "GLU tessellator (concave arrow)",
