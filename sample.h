@@ -41,7 +41,7 @@
 #define ACCUM_STEP_COUNT  5
 #define GRID_THEME_COUNT  7
 #define AXES_THEME_COUNT  5
-#define NUM_EXAMPLES      9
+#define NUM_EXAMPLES      10
 #define MAX_LIGHTS        4
 #define TESS_VERT_BUF_SIZE 256
 

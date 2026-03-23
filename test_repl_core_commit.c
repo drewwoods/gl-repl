@@ -180,6 +180,62 @@ int main(void) {
     ASSERT_TRUE("local if flatten type", g_flat_cmds[0].type == CMD_VERTEX3F);
     ASSERT_TRUE("local if flatten x", fabsf(g_flat_cmds[0].args[0] - 2.0f) < 1e-6f);
 
+    repl_reset_state();
+    repl_feed_line_public("func0(depth) {");
+    repl_feed_line_public("if(depth <= 0) {");
+    repl_feed_line_public("glVertex3f(0, 0, 0);");
+    repl_feed_line_public("}");
+    repl_feed_line_public("if(depth > 0) {");
+    repl_feed_line_public("glVertex3f(depth, 0, 0);");
+    repl_feed_line_public("func0(depth - 1);");
+    repl_feed_line_public("}");
+    repl_feed_line_public("}");
+    repl_feed_line_public("func0(3);");
+    repl_flatten_commands();
+    ASSERT_TRUE("recursive flatten count", g_num_flat_cmds == 4);
+    ASSERT_TRUE("recursive first x", fabsf(g_flat_cmds[0].args[0] - 3.0f) < 1e-6f);
+    ASSERT_TRUE("recursive second x", fabsf(g_flat_cmds[1].args[0] - 2.0f) < 1e-6f);
+    ASSERT_TRUE("recursive third x", fabsf(g_flat_cmds[2].args[0] - 1.0f) < 1e-6f);
+    ASSERT_TRUE("recursive base x", fabsf(g_flat_cmds[3].args[0] - 0.0f) < 1e-6f);
+
+    repl_reset_state();
+    repl_feed_line_public("func0(n) {");
+    repl_feed_line_public("if(n <= 0) {");
+    repl_feed_line_public("glVertex3f(0, 0, 0);");
+    repl_feed_line_public("}");
+    repl_feed_line_public("if(n > 0) {");
+    repl_feed_line_public("glVertex3f(n, 0, 0);");
+    repl_feed_line_public("func1(n - 1);");
+    repl_feed_line_public("}");
+    repl_feed_line_public("}");
+    repl_feed_line_public("func1(n) {");
+    repl_feed_line_public("if(n <= 0) {");
+    repl_feed_line_public("glVertex3f(-10, 0, 0);");
+    repl_feed_line_public("}");
+    repl_feed_line_public("if(n > 0) {");
+    repl_feed_line_public("glVertex3f(-n, 0, 0);");
+    repl_feed_line_public("func0(n - 1);");
+    repl_feed_line_public("}");
+    repl_feed_line_public("}");
+    repl_feed_line_public("func0(2);");
+    repl_flatten_commands();
+    ASSERT_TRUE("mutual recursion flatten count", g_num_flat_cmds == 3);
+    ASSERT_TRUE("mutual recursion first x", fabsf(g_flat_cmds[0].args[0] - 2.0f) < 1e-6f);
+    ASSERT_TRUE("mutual recursion second x", fabsf(g_flat_cmds[1].args[0] - (-1.0f)) < 1e-6f);
+    ASSERT_TRUE("mutual recursion base x", fabsf(g_flat_cmds[2].args[0] - 0.0f) < 1e-6f);
+
+    repl_reset_state();
+    g_status[0] = '\0';
+    repl_feed_line_public("func0(n) {");
+    repl_feed_line_public("func0(n + 1);");
+    repl_feed_line_public("}");
+    repl_feed_line_public("func0(0);");
+    repl_flatten_commands();
+    ASSERT_TRUE("runaway recursion emits no flat cmds", g_num_flat_cmds == 0);
+    ASSERT_TRUE("runaway recursion depth guard",
+                strstr(g_status, "depth limit") != NULL ||
+                strstr(g_status, "visit budget") != NULL);
+
     printf("repl_core_commit: %d/%d passed\n", g_pass, g_run);
     return (g_run == g_pass) ? 0 : 1;
 }

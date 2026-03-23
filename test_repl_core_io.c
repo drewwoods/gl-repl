@@ -34,6 +34,15 @@ int main(void) {
     for (int i = 0; i < before_n; i++) before_types[i] = g_cmds[i].type;
 
     repl_save_output(path);
+    {
+        FILE *saved = fopen(path, "r");
+        char buf[8192];
+        size_t nread = saved ? fread(buf, 1, sizeof(buf) - 1, saved) : 0;
+        if (saved) fclose(saved);
+        buf[nread] = '\0';
+        ASSERT_TRUE("saved t uses elapsed time",
+                    strstr(buf, "t = 0.001f * (float)glutGet(GLUT_ELAPSED_TIME)") != NULL);
+    }
 
     repl_reset_state();
     ASSERT_TRUE("load saved output", repl_load_from_file(path) == 1);

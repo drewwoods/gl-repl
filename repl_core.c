@@ -168,7 +168,7 @@ const char *g_func_completions[] = {
     "glTranslatef(",
     "glScalef(",
     "glRotatef(",
-    "glPushMatrix(GL_MODELVIEW)",
+    "glPushMatrix()",
     "glPopMatrix()",
     "glColorMaterial(",
     "glLightModeli(",
@@ -178,7 +178,6 @@ const char *g_func_completions[] = {
     "gluCylinder(",
     "gluDisk(",
     "gluPartialDisk(",
-    "glutSolidTorus(",
     "gluBegin(GLU_POLYGON)",
     "gluBegin(GLU_CONTOUR)",
     "gluEnd()",
@@ -254,7 +253,8 @@ const char *g_footer[] = {
     "}",
     "",
     "void idle() {",
-    "  if (g_rotating) { g_angle += 0.5f; glutPostRedisplay(); }",
+    "  if (g_rotating) g_angle += 0.5f;",
+    "  glutPostRedisplay();",
     "}",
     "",
     "void init() {",
@@ -1973,8 +1973,13 @@ static void save_output(const char *filename) {
         fprintf(f, "  float");
         int first = 1;
         for (int i = 0; i < g_num_predef_vars; i++) {
-            fprintf(f, "%s %s = %g", first ? "" : ",",
-                    g_predef_vars[i].name, g_predef_vars[i].value);
+            if (strcmp(g_predef_vars[i].name, "t") == 0) {
+                fprintf(f, "%s %s = 0.001f * (float)glutGet(GLUT_ELAPSED_TIME)",
+                        first ? "" : ",", g_predef_vars[i].name);
+            } else {
+                fprintf(f, "%s %s = %g", first ? "" : ",",
+                        g_predef_vars[i].name, g_predef_vars[i].value);
+            }
             first = 0;
         }
         fprintf(f, ";\n");
@@ -2664,7 +2669,7 @@ static int parse_command_internal(const char *line, GLCmd *cmd,
     if (strcmp(func, "glPushMatrix") == 0) {
         cmd->type = CMD_PUSH_MATRIX;
         cmd->valid = 1;
-        snprintf(cmd->source, sizeof(cmd->source), "%sglPushMatrix(GL_MODELVIEW);", indent);
+        snprintf(cmd->source, sizeof(cmd->source), "%sglPushMatrix();", indent);
         return 1;
     }
 
@@ -3011,8 +3016,18 @@ void recompute_autonormals(void) {
 /* Flatten for-loops into concrete commands                                    */
 /* ========================================================================= */
 
-static int g_flatten_call_stack[32];
+#define MAX_FLATTEN_CALL_DEPTH 64
+#define MAX_FLATTEN_VISIT_BUDGET 200000
+
 static int g_flatten_call_depth = 0;
+static int g_flatten_abort = 0;
+static int g_flatten_visit_budget = 0;
+
+static void flatten_fail(const char *msg) {
+    if (!g_flatten_abort)
+        set_status(msg);
+    g_flatten_abort = 1;
+}
 
 static void flat_cmd_set_provenance(GLCmd *cmd, int src_cmd_idx,
                                     int call_src_cmd_idx,
@@ -3030,6 +3045,11 @@ static void flatten_range(int start, int end_idx, ExprVar *vars, int nv,
                           unsigned int func_scope_mask) {
     int i = start;
     while (i < end_idx && i < g_num_cmds) {
+        if (g_flatten_abort) return;
+        if (--g_flatten_visit_budget < 0) {
+            flatten_fail("Recursive expansion exceeded visit budget");
+            return;
+        }
         if (!g_cmds[i].valid) { i++; continue; }
 
         if (g_cmds[i].type == CMD_FOR_BEGIN) {
@@ -3058,6 +3078,7 @@ static void flatten_range(int start, int end_idx, ExprVar *vars, int nv,
                      (st > 0) ? (val < e - 1e-6f) : (val > e + 1e-6f);
                      val += st) {
                     if (--max_iters < 0) break;
+                    if (g_flatten_abort) return;
                     ExprVar lvars[MAX_EXPR_VARS];
                     int lnv = 0;
                     if (lnv < MAX_EXPR_VARS) {
@@ -3092,15 +3113,12 @@ static void flatten_range(int start, int end_idx, ExprVar *vars, int nv,
         /* Function calls: find definition and expand body inline */
         if (g_cmds[i].type == CMD_CALL) {
             int fn = (int)g_cmds[i].args[0];
-            int recursive = 0;
-            for (int s = 0; s < g_flatten_call_depth; s++) {
-                if (g_flatten_call_stack[s] == fn) {
-                    recursive = 1;
-                    break;
-                }
-            }
-            if (recursive) {
-                set_status("Recursive function calls are not supported yet");
+            if (g_flatten_call_depth >= MAX_FLATTEN_CALL_DEPTH) {
+                char msg[128];
+                snprintf(msg, sizeof(msg),
+                         "Recursive expansion exceeded depth limit (%d) at func%d",
+                         MAX_FLATTEN_CALL_DEPTH, fn);
+                flatten_fail(msg);
                 i++;
                 continue;
             }
@@ -3152,13 +3170,10 @@ static void flatten_range(int start, int end_idx, ExprVar *vars, int nv,
                     int nested_root_call = (root_call_src_cmd_idx >= 0)
                                          ? root_call_src_cmd_idx : i;
 
-                    if (g_flatten_call_depth < (int)(sizeof(g_flatten_call_stack) /
-                                                     sizeof(g_flatten_call_stack[0])))
-                        g_flatten_call_stack[g_flatten_call_depth++] = fn;
+                    g_flatten_call_depth++;
                     flatten_range(k + 1, fe, lvars, lnv,
                                   i, nested_root_call, nested_func_mask);
-                    if (g_flatten_call_depth > 0)
-                        g_flatten_call_depth--;
+                    if (g_flatten_call_depth > 0) g_flatten_call_depth--;
                     break;
                 }
             }
@@ -3195,6 +3210,9 @@ static void flatten_range(int start, int end_idx, ExprVar *vars, int nv,
                                         root_call_src_cmd_idx,
                                         func_scope_mask);
                 g_num_flat_cmds++;
+            } else {
+                flatten_fail("Flattened command limit reached");
+                return;
             }
             i++;
             continue;
@@ -3208,9 +3226,18 @@ static void flatten_range(int start, int end_idx, ExprVar *vars, int nv,
                                         root_call_src_cmd_idx,
                                         func_scope_mask);
                 g_num_flat_cmds++;
+            } else {
+                flatten_fail("Flattened command limit reached");
+                return;
             }
             i++;
             continue;
+        }
+
+        if ((g_cmds[i].type == CMD_LABEL || g_cmds[i].type == CMD_GOTO) &&
+            func_scope_mask != 0) {
+            flatten_fail("goto and labels are not supported inside functions");
+            return;
         }
 
         /* Comments: pass through to flat array (skipped by execute, kept in save) */
@@ -3222,6 +3249,9 @@ static void flatten_range(int start, int end_idx, ExprVar *vars, int nv,
                                         root_call_src_cmd_idx,
                                         func_scope_mask);
                 g_num_flat_cmds++;
+            } else {
+                flatten_fail("Flattened command limit reached");
+                return;
             }
             i++;
             continue;
@@ -3239,13 +3269,19 @@ static void flatten_range(int start, int end_idx, ExprVar *vars, int nv,
                                         root_call_src_cmd_idx,
                                         func_scope_mask);
                 g_num_flat_cmds++;
+            } else {
+                flatten_fail("Flattened command limit reached");
+                return;
             }
             i++;
             continue;
         }
 
         /* Regular command */
-        if (g_num_flat_cmds >= MAX_COMMANDS) { i++; continue; }
+        if (g_num_flat_cmds >= MAX_COMMANDS) {
+            flatten_fail("Flattened command limit reached");
+            return;
+        }
 
         if (vars && nv > 0) {
             GLCmd tmp;
@@ -3290,7 +3326,11 @@ static void flatten_range(int start, int end_idx, ExprVar *vars, int nv,
 void flatten_commands(void) {
     g_num_flat_cmds = 0;
     g_flatten_call_depth = 0;
+    g_flatten_abort = 0;
+    g_flatten_visit_budget = MAX_FLATTEN_VISIT_BUDGET;
     flatten_range(0, g_num_cmds, NULL, 0, -1, -1, 0);
+    if (g_flatten_abort)
+        g_num_flat_cmds = 0;
 
     /* Track whether user enabled lighting (for correct default state) */
     g_user_lighting_enabled = 0;
@@ -5820,7 +5860,53 @@ static const char *g_example_func_if[] = {
     NULL
 };
 
-/* Example 5: Conditional colors — if-blocks + t variable */
+/* Example 5: Recursive helper — transformed child calls with depth countdown */
+static const char *g_example_func_recurse[] = {
+    "glEnable(GL_DEPTH_TEST);",
+    "glEnable(GL_COLOR_MATERIAL);",
+    "glEnable(GL_NORMALIZE);",
+    "// Recursive triangle tree: child calls shrink and rotate from the parent",
+    "func0(depth, size, spin) {",
+        "glColor3f(0.25 + depth*0.14, 0.45 + 0.2*sin(spin), 1 - depth*0.12);",
+        "glBegin(GL_LINE_LOOP);",
+        "glNormal3f(0, 0, 1);",
+        "glVertex3f(0, size, 0);",
+        "glVertex3f(-0.866*size, -0.5*size, 0);",
+        "glVertex3f(0.866*size, -0.5*size, 0);",
+        "glEnd();",
+        "if(depth <= 0) {",
+            "glColor3f(1, 0.8, 0.2);",
+            "glBegin(GL_TRIANGLES);",
+            "glNormal3f(0, 0, 1);",
+            "glVertex3f(0, size*0.55, 0);",
+            "glVertex3f(-0.48*size, -0.25*size, 0);",
+            "glVertex3f(0.48*size, -0.25*size, 0);",
+            "glEnd();",
+        "}",
+        "if(depth > 0) {",
+            "glPushMatrix();",
+            "glTranslatef(0, size*1.02, 0);",
+            "glRotatef(18 + spin*14, 0, 0, 1);",
+            "func0(depth - 1, size*0.62, spin + 0.15);",
+            "glPopMatrix();",
+            "glPushMatrix();",
+            "glTranslatef(-size*0.9, -size*0.38, 0);",
+            "glRotatef(-30 - spin*12, 0, 0, 1);",
+            "func0(depth - 1, size*0.58, spin + 0.12);",
+            "glPopMatrix();",
+            "glPushMatrix();",
+            "glTranslatef(size*0.9, -size*0.38, 0);",
+            "glRotatef(30 + spin*12, 0, 0, 1);",
+            "func0(depth - 1, size*0.58, spin + 0.12);",
+            "glPopMatrix();",
+        "}",
+    "}",
+    "glRotatef(sin(t*0.35)*12, 0, 0, 1);",
+    "func0(4, 1.05, sin(t*0.4));",
+    NULL
+};
+
+/* Example 6: Conditional colors — if-blocks + t variable */
 static const char *g_example_cond[] = {
     "glEnable(GL_DEPTH_TEST);",
     "glEnable(GL_LIGHTING);",
@@ -5854,7 +5940,7 @@ static const char *g_example_cond[] = {
     NULL
 };
 
-/* Example 6: Parametric torus — nested for-loops */
+/* Example 7: Parametric torus — nested for-loops */
 static const char *g_example_torus[] = {
     "glEnable(GL_DEPTH_TEST);",
     "//glEnable(GL_LIGHTING);",
@@ -5875,7 +5961,7 @@ static const char *g_example_torus[] = {
     NULL
 };
 
-/* Example 7: GLU tessellator — concave arrow polygon with per-vertex color */
+/* Example 8: GLU tessellator — concave arrow polygon with per-vertex color */
 static const char *g_example_tess[] = {
     "glEnable(GL_DEPTH_TEST);",
     "glEnable(GL_LIGHTING);",
@@ -5908,7 +5994,7 @@ static const char *g_example_tess[] = {
     NULL
 };
 
-/* Example 8: GLU tessellator — concave arrow polygon cutout */
+/* Example 9: GLU tessellator — concave arrow polygon cutout */
 static const char *g_example_tess_cutout[] = {
     "glEnable(GL_DEPTH_TEST);",
     "glEnable(GL_LIGHTING);",
@@ -6037,6 +6123,7 @@ static const char **g_examples[] = {
     g_example_func,
     g_example_func_loop,
     g_example_func_if,
+    g_example_func_recurse,
     g_example_cond,
     g_example_torus,
     g_example_tess,
@@ -6048,6 +6135,7 @@ static const char *g_example_names[] = {
     "Function demo (func0)",
     "Function polygons (args + for)",
     "Function branching (args + if)",
+    "Recursive triangle tree (func + recursion)",
     "Conditional colors (if + t)",
     "Parametric torus (nested for)",
     "GLU tessellator (concave arrow)",
