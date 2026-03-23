@@ -17,6 +17,8 @@ void repl_load_initial_commands(const char *import_file);
 void repl_reformat_commands(void);
 void repl_debug_dump_editor(FILE *out);
 int  repl_flat_cmd_matches_cursor(int flat_idx);
+int  repl_find_feeding_normal_cmd(int line_idx);
+int  repl_find_feeding_color_cmd(int line_idx);
 
 /* Runtime entry points used by sample.c callback wrappers */
 void repl_display_func(void);

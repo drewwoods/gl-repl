@@ -181,6 +181,83 @@ int main(void) {
     ASSERT_TRUE("local if flatten x", fabsf(g_flat_cmds[0].args[0] - 2.0f) < 1e-6f);
 
     repl_reset_state();
+    repl_feed_line_public("glColor3f(1, 0, 0);");
+    repl_feed_line_public("glBegin(GL_TRIANGLES);");
+    repl_feed_line_public("glVertex3f(0, 0, 0);");
+    repl_feed_line_public("glVertex3f(1, 0, 0);");
+    repl_feed_line_public("glEnd();");
+    repl_feed_line_public("glColor3f(0, 1, 0);");
+    repl_feed_line_public("glBegin(GL_TRIANGLES);");
+    repl_feed_line_public("glVertex3f(0, 1, 0);");
+    repl_feed_line_public("glVertex3f(1, 1, 0);");
+    repl_feed_line_public("glEnd();");
+    repl_flatten_commands();
+    {
+        int matched = 0;
+        g_edit_line = 0;
+        for (int i = 0; i < g_num_flat_cmds; i++)
+            if (g_flat_cmds[i].type == CMD_VERTEX3F)
+                matched += repl_flat_cmd_matches_cursor(i);
+        ASSERT_TRUE("top-level color before block matches first vertices", matched == 2);
+    }
+    {
+        int matched = 0;
+        g_edit_line = 5;
+        for (int i = 0; i < g_num_flat_cmds; i++)
+            if (g_flat_cmds[i].type == CMD_VERTEX3F)
+                matched += repl_flat_cmd_matches_cursor(i);
+        ASSERT_TRUE("top-level second color before block matches second vertices", matched == 2);
+    }
+    ASSERT_TRUE("feeding color for first block vertex", repl_find_feeding_color_cmd(2) == 0);
+    ASSERT_TRUE("feeding color for second block vertex", repl_find_feeding_color_cmd(7) == 5);
+
+    repl_reset_state();
+    repl_feed_line_public("glNormal3f(0, 0, 1);");
+    repl_feed_line_public("glBegin(GL_TRIANGLES);");
+    repl_feed_line_public("glVertex3f(0, 0, 0);");
+    repl_feed_line_public("glVertex3f(1, 0, 0);");
+    repl_feed_line_public("glEnd();");
+    repl_feed_line_public("glNormal3f(0, 1, 0);");
+    repl_feed_line_public("glBegin(GL_TRIANGLES);");
+    repl_feed_line_public("glVertex3f(0, 1, 0);");
+    repl_feed_line_public("glVertex3f(1, 1, 0);");
+    repl_feed_line_public("glEnd();");
+    repl_flatten_commands();
+    {
+        int matched = 0;
+        g_edit_line = 0;
+        for (int i = 0; i < g_num_flat_cmds; i++)
+            if (g_flat_cmds[i].type == CMD_VERTEX3F)
+                matched += repl_flat_cmd_matches_cursor(i);
+        ASSERT_TRUE("top-level normal before block matches first vertices", matched == 2);
+    }
+    {
+        int matched = 0;
+        g_edit_line = 5;
+        for (int i = 0; i < g_num_flat_cmds; i++)
+            if (g_flat_cmds[i].type == CMD_VERTEX3F)
+                matched += repl_flat_cmd_matches_cursor(i);
+        ASSERT_TRUE("top-level second normal before block matches second vertices", matched == 2);
+    }
+    ASSERT_TRUE("feeding normal for first block vertex", repl_find_feeding_normal_cmd(2) == 0);
+    ASSERT_TRUE("feeding normal for second block vertex", repl_find_feeding_normal_cmd(7) == 5);
+
+    repl_reset_state();
+    repl_feed_line_public("glBegin(GL_TRIANGLES);");
+    repl_feed_line_public("glVertex3f(0, 0, 0);");
+    repl_feed_line_public("glVertex3f(1, 0, 0);");
+    repl_feed_line_public("glEnd();");
+    repl_flatten_commands();
+    repl_navigate_to_line(1);
+    {
+        int matched = 0;
+        for (int i = 0; i < g_num_flat_cmds; i++)
+            if (g_flat_cmds[i].type == CMD_VERTEX3F)
+                matched += repl_flat_cmd_matches_cursor(i);
+        ASSERT_TRUE("navigate refreshes current block highlight", matched == 2);
+    }
+
+    repl_reset_state();
     repl_feed_line_public("func0(depth) {");
     repl_feed_line_public("if(depth <= 0) {");
     repl_feed_line_public("glVertex3f(0, 0, 0);");
