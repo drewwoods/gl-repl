@@ -242,6 +242,10 @@ void render_code_panel(void) {
 
     /* Commands + insert line + new-line slot */
     int vnum = 0; /* vertex counter within current glBegin/glEnd block */
+    int loop_depth = 0;
+    int in_tess_poly = 0;
+    int tess_depth = 0;
+    int primitive_vnums_exact = 1;
     for (int i = 0; i <= g_num_cmds; i++) {
         /* If inserting, render the virtual insert line before command[g_edit_line] */
         if (g_inserting && i == g_edit_line) {
@@ -259,8 +263,17 @@ void render_code_panel(void) {
 
         if (i < g_num_cmds) {
             /* Track vertex number for all commands regardless of visibility */
-            if (g_cmds[i].valid && (g_cmds[i].type == CMD_BEGIN ||
-                                    g_cmds[i].type == CMD_TESS_BEGIN_POLYGON)) vnum = 0;
+            if (g_cmds[i].valid) {
+                if (g_cmds[i].type == CMD_BEGIN) {
+                    vnum = 0;
+                    primitive_vnums_exact = (loop_depth == 0);
+                } else if (g_cmds[i].type == CMD_TESS_BEGIN_POLYGON) {
+                    vnum = 0;
+                    in_tess_poly = 1;
+                    tess_depth = 1;
+                    primitive_vnums_exact = (loop_depth == 0);
+                }
+            }
 
             int is_edit = (!g_inserting && i == g_edit_line);
             int is_vertex = g_cmds[i].valid && (g_cmds[i].type == CMD_VERTEX3F ||
@@ -272,7 +285,8 @@ void render_code_panel(void) {
                     { char ln[16]; snprintf(ln, sizeof(ln), "%3d", file_line);
                       draw_string(CODE_MARGIN_X, line_y, ln, FONT_MONO); }
                     if (g_show_indices && is_vertex) {
-                        char idx_s[16]; snprintf(idx_s, sizeof(idx_s), "v%d", vnum);
+                        char idx_s[16];
+                        snprintf(idx_s, sizeof(idx_s), primitive_vnums_exact ? "v%d" : "vn", vnum);
                         glColor3f(0.45f, 0.50f, 0.65f);
                         draw_string((float)idx_x, (float)line_y, idx_s, FONT_MONO);
                     }
@@ -308,7 +322,8 @@ void render_code_panel(void) {
                     { char ln[16]; snprintf(ln, sizeof(ln), "%3d", file_line);
                       draw_string(CODE_MARGIN_X, line_y, ln, FONT_MONO); }
                     if (g_show_indices && is_vertex) {
-                        char idx_s[16]; snprintf(idx_s, sizeof(idx_s), "v%d", vnum);
+                        char idx_s[16];
+                        snprintf(idx_s, sizeof(idx_s), primitive_vnums_exact ? "v%d" : "vn", vnum);
                         glColor3f(0.45f, 0.50f, 0.65f);
                         draw_string((float)idx_x, (float)line_y, idx_s, FONT_MONO);
                     }
@@ -323,6 +338,25 @@ void render_code_panel(void) {
 
             /* Advance vertex counter after rendering this command */
             if (is_vertex) vnum++;
+
+            if (g_cmds[i].valid) {
+                if (g_cmds[i].type == CMD_FOR_BEGIN) {
+                    loop_depth++;
+                    primitive_vnums_exact = 0;
+                } else if (g_cmds[i].type == CMD_FOR_END) {
+                    if (loop_depth > 0) loop_depth--;
+                } else if (g_cmds[i].type == CMD_END) {
+                    primitive_vnums_exact = 1;
+                } else if (g_cmds[i].type == CMD_TESS_BEGIN_CONTOUR && in_tess_poly) {
+                    tess_depth++;
+                } else if (g_cmds[i].type == CMD_TESS_END && in_tess_poly) {
+                    if (tess_depth > 0) tess_depth--;
+                    if (tess_depth == 0) {
+                        in_tess_poly = 0;
+                        primitive_vnums_exact = 1;
+                    }
+                }
+            }
         } else {
             /* i == g_num_cmds: new-line slot */
             int is_edit_nl = (!g_inserting && g_edit_line == g_num_cmds);
