@@ -33,6 +33,8 @@ int main(void) {
     CmdType before_types[MAX_COMMANDS];
     for (int i = 0; i < before_n; i++) before_types[i] = g_cmds[i].type;
 
+    g_multisample_enabled = 0;
+    g_line_smooth_enabled = 1;
     repl_save_output(path);
     {
         FILE *saved = fopen(path, "r");
@@ -42,6 +44,10 @@ int main(void) {
         buf[nread] = '\0';
         ASSERT_TRUE("saved t uses elapsed time",
                     strstr(buf, "t = 0.001f * (float)glutGet(GLUT_ELAPSED_TIME)") != NULL);
+        ASSERT_TRUE("saved multisample header state",
+                    strstr(buf, "glDisable(GL_MULTISAMPLE);") != NULL);
+        ASSERT_TRUE("saved line smooth header state",
+                    strstr(buf, "glEnable(GL_LINE_SMOOTH);") != NULL);
     }
 
     repl_reset_state();

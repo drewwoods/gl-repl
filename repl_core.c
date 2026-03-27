@@ -62,6 +62,8 @@
  *   F12            Cycle predefined examples
  *   PgUp/PgDn      Scroll code panel
  *   Ctrl+T         Toggle time variable 't' play/pause
+ *   Ctrl+U         Toggle multisample state
+ *   Ctrl+N         Toggle GL_LINE_SMOOTH state
  *   Ctrl+A         Toggle accumulation-buffer AA
  *   Ctrl+=         Increase AA jitter samples (1→2→4→8→16)
  *   Ctrl+-         Decrease AA jitter samples (16→8→4→2→1)
@@ -211,7 +213,7 @@ const char *g_header_pre[] = {
     "#endif",
     "",
     "static float g_angle = 0.0f;",
-    "static int   g_rotating = 1;",
+    "static int   g_rotating = 0;",
     "static GLUquadric *g_quadric = NULL;",
     "",
     "void display() {",
@@ -221,7 +223,12 @@ const char *g_header_pre[] = {
     NULL
 };
 
-char g_lookat[3][128] = {
+char g_render_state_lines[RENDER_STATE_LINE_COUNT][64] = {
+    "  glEnable(GL_MULTISAMPLE);",
+    "  glDisable(GL_LINE_SMOOTH);"
+};
+
+char g_lookat[LOOKAT_LINE_COUNT][128] = {
     "  gluLookAt(0.00, 0.00, 5.00,",
     "            0.00, 0.00, 0.00,",
     "            0.00, 1.00, 0.00);"
@@ -483,6 +490,8 @@ int    g_accum_aa_enabled = 1;  /* Ctrl+A toggles jitter AA on/off */
 int    g_accum_samples    = 4;  /* current sample count */
 float  g_accum_jitter_x   = 0.0f;
 float  g_accum_jitter_y   = 0.0f;
+int    g_multisample_enabled = 1;
+int    g_line_smooth_enabled = 0;
 
 /* Sub-pixel jitter offsets (units: fraction of one pixel).
  * Table is ordered so the first N entries form a good N-sample set.
@@ -661,6 +670,9 @@ CfgItem g_cfg_items[] = {
     { "Light indicators", "F10",    &g_show_lights,            2,               NULL          },
     { "Camera rotate",    "F11",    &g_cam_rotate,             2,               NULL          },
     { "Auto time",        "Ctrl+t", &g_t_playing,              2,               NULL          },
+    { "MSAA",             "Ctrl+u", &g_multisample_enabled,    2,               NULL          },
+    { "Line smooth",      "Ctrl+n", &g_line_smooth_enabled,    2,               NULL          },
+    { "Accum AA",         "Ctrl+a", &g_accum_aa_enabled,       2,               NULL          },
     { "Poly highlight",   "--",     &g_highlight_current_poly, 2,               NULL          },
     { "Variable panel",   "`",      &g_show_var_panel,         2,               NULL          },
 };
@@ -751,6 +763,15 @@ int count_vertices(void) {
 }
 
 /* Update the gluLookAt header lines from current camera orbit params */
+static void update_render_state_strings(void) {
+    snprintf(g_render_state_lines[0], sizeof(g_render_state_lines[0]),
+             "  gl%s(GL_MULTISAMPLE);",
+             g_multisample_enabled ? "Enable" : "Disable");
+    snprintf(g_render_state_lines[1], sizeof(g_render_state_lines[1]),
+             "  gl%s(GL_LINE_SMOOTH);",
+             g_line_smooth_enabled ? "Enable" : "Disable");
+}
+
 void update_lookat_strings(void) {
     float rx = g_cam_rx * (float)M_PI / 180.0f;
     float ry = g_cam_ry * (float)M_PI / 180.0f;
@@ -1955,6 +1976,7 @@ static void save_output(const char *filename) {
             has_tess = 1;
 
     /* Emit header, inserting func defs and optional tess preamble before void display() { */
+    update_render_state_strings();
     for (int i = 0; g_header_pre[i]; i++) {
         if (strcmp(g_header_pre[i], "void display() {") == 0) {
             write_func_defs_as_c(f);
@@ -1962,7 +1984,9 @@ static void save_output(const char *filename) {
         }
         fprintf(f, "%s\n", g_header_pre[i]);
     }
-    for (int i = 0; i < 3; i++)
+    for (int i = 0; i < RENDER_STATE_LINE_COUNT; i++)
+        fprintf(f, "%s\n", g_render_state_lines[i]);
+    for (int i = 0; i < LOOKAT_LINE_COUNT; i++)
         fprintf(f, "%s\n", g_lookat[i]);
     for (int i = 0; g_header_post[i]; i++)
         fprintf(f, "%s\n", g_header_post[i]);
@@ -3812,6 +3836,7 @@ static void display_func(void) {
         flatten_commands();
         g_flat_dirty = 0;
     }
+    update_render_state_strings();
     update_lookat_strings();
 
     /* Full-window clear */
@@ -4842,10 +4867,24 @@ static void keyboard_func(unsigned char key, int x, int y) {
         return;
     }
 
+    /* Ctrl+N: toggle GL_LINE_SMOOTH baseline state */
+    if (key == 14) {
+        g_line_smooth_enabled = !g_line_smooth_enabled;
+        set_status(g_line_smooth_enabled ? "Line smooth: ON" : "Line smooth: OFF");
+        return;
+    }
+
     /* Ctrl+T: toggle time ('t' variable) play / pause */
     if (key == 20) {
         g_t_playing = !g_t_playing;
         set_status(g_t_playing ? "Time: playing" : "Time: paused (set 't' manually)");
+        return;
+    }
+
+    /* Ctrl+U: toggle multisample baseline state */
+    if (key == 21) {
+        g_multisample_enabled = !g_multisample_enabled;
+        set_status(g_multisample_enabled ? "MSAA: ON" : "MSAA: OFF");
         return;
     }
 
@@ -6302,7 +6341,6 @@ static void tess_error_callback(GLenum err) {
 }
 
 static void init_gl(void) {
-    glEnable(GL_MULTISAMPLE);
     glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE);
 
     GLfloat lm_amb[] = { 0.15f, 0.15f, 0.20f, 1.0f };
@@ -6423,11 +6461,14 @@ void repl_reset_state(void) {
     g_newline_len = 0;
     g_scroll = 0;
     g_scroll_follow_cursor = 0;
+    g_multisample_enabled = 1;
+    g_line_smooth_enabled = 0;
     g_flat_dirty = 1;
     g_normals_dirty = 1;
     g_ac_count = 0;
     g_ac_sel = 0;
     g_ac_ghost[0] = '\0';
+    update_render_state_strings();
     depth_cache_invalidate();
     clear_selection();
 }

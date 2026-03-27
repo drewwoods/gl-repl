@@ -951,6 +951,11 @@ void render_3d_scene(void) {
     glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, mspec);
     glMaterialfv(GL_FRONT_AND_BACK, GL_SHININESS, mshin);
 
+    if (g_multisample_enabled) glEnable(GL_MULTISAMPLE);
+    else glDisable(GL_MULTISAMPLE);
+    if (g_line_smooth_enabled) glEnable(GL_LINE_SMOOTH);
+    else glDisable(GL_LINE_SMOOTH);
+
     glColor3f(0.70f, 0.70f, 0.80f);
     // Enable blending for line smoothing
     glEnable(GL_BLEND);
