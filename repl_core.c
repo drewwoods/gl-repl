@@ -4949,7 +4949,8 @@ static void keyboard_func(unsigned char key, int x, int y) {
             return;
         }
 
-        /* On existing line: if unmodified, just advance to insert mode */
+        /* On existing line: if unmodified, enter insert mode.
+         * At column 0, insert before the current line; otherwise insert after. */
         if (!g_inserting && g_edit_line < g_num_cmds) {
             int unmodified = 0;
             {
@@ -4965,7 +4966,8 @@ static void keyboard_func(unsigned char key, int x, int y) {
                     unmodified = 1;
             }
             if (unmodified) {
-                g_edit_line++;
+                if (g_cursor_pos > 0)
+                    g_edit_line++;
                 g_inserting = 1;
                 g_input[0] = '\0';
                 g_input_len = 0;

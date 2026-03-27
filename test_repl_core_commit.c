@@ -44,6 +44,30 @@ int main(void) {
     ASSERT_TRUE("for body keeps i", strstr(g_cmds[1].source, "i") != NULL);
 
     repl_reset_state();
+    repl_feed_line_public("glBegin(GL_POINTS);");
+    repl_feed_line_public("glEnd();");
+    repl_navigate_to_line(1);
+    g_cursor_pos = 0;
+    repl_keyboard_func('\r', 0, 0);
+    ASSERT_TRUE("enter at line start enters insert mode", g_inserting == 1);
+    ASSERT_TRUE("enter at line start keeps insertion index", g_edit_line == 1);
+    strcpy(g_input, "glColor3f(1, 0, 0)");
+    g_input_len = (int)strlen(g_input);
+    g_cursor_pos = g_input_len;
+    repl_keyboard_func('\r', 0, 0);
+    ASSERT_TRUE("inserted line before current cmd count", g_num_cmds == 3);
+    ASSERT_TRUE("inserted line before current type", g_cmds[1].type == CMD_COLOR3F);
+    ASSERT_TRUE("original current line shifted down", g_cmds[2].type == CMD_END);
+
+    repl_reset_state();
+    repl_feed_line_public("glBegin(GL_POINTS);");
+    repl_feed_line_public("glEnd();");
+    repl_navigate_to_line(0);
+    g_cursor_pos = g_input_len;
+    repl_keyboard_func('\r', 0, 0);
+    ASSERT_TRUE("enter away from line start still inserts after", g_inserting == 1 && g_edit_line == 1);
+
+    repl_reset_state();
     repl_feed_line_public("if(x > 0) {");
     repl_feed_line_public("glColor3f(1, 0, 0);");
     repl_feed_line_public("}");
