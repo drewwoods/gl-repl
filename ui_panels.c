@@ -124,7 +124,7 @@ void render_code_panel(void) {
     for (int i = 0; g_header_pre[i]; i++) n_hpre++;
     int n_hpost = 0;
     for (int i = 0; g_header_post[i]; i++) n_hpost++;
-    int n_header = n_hpre + 3 + n_hpost;  /* pre + gluLookAt + post */
+    int n_header = n_hpre + RENDER_STATE_LINE_COUNT + LOOKAT_LINE_COUNT + n_hpost;
     int n_footer = 0;
     for (int i = 0; g_footer[i]; i++) n_footer++;
     /* +1 for the new-line slot, +1 if inserting */
@@ -231,8 +231,12 @@ void render_code_panel(void) {
     for (int i = 0; g_header_pre[i]; i++) {
         RENDER_STATIC_LINE(g_header_pre[i], glColor3f(0.38f, 0.38f, 0.42f));
     }
+    /* Dynamic render-state lines */
+    for (int i = 0; i < RENDER_STATE_LINE_COUNT; i++) {
+        RENDER_STATIC_LINE(g_render_state_lines[i], glColor3f(0.50f, 0.45f, 0.55f));
+    }
     /* gluLookAt lines (slightly brighter - dynamic) */
-    for (int i = 0; i < 3; i++) {
+    for (int i = 0; i < LOOKAT_LINE_COUNT; i++) {
         RENDER_STATIC_LINE(g_lookat[i], glColor3f(0.50f, 0.45f, 0.55f));
     }
     /* Header post-lookAt */
@@ -623,6 +627,11 @@ void render_help(void) {
         "  Use it in any expression: glVertex3f(sin(t), cos(t), 0)",
         "  Ctrl+T               Play / pause time (shown as t=X.XX or t=X.XX[P])",
         "",
+        "Render-state header lines:",
+        "  Ctrl+U               Toggle glEnable/glDisable(GL_MULTISAMPLE)",
+        "  Ctrl+N               Toggle glEnable/glDisable(GL_LINE_SMOOTH)",
+        "  These show up above // Snippet start and are exported with Ctrl+S",
+        "",
         "Accumulation Buffer AA (requires accum buffer, on by default):",
         "  Ctrl+A               Toggle jitter AA on / off",
         "  Ctrl+=               Increase jitter samples (1->2->4->8->16)",
@@ -990,7 +999,7 @@ void handle_code_panel_click(int mx, int my) {
     for (int i = 0; g_header_pre[i]; i++) n_hpre++;
     int n_hpost = 0;
     for (int i = 0; g_header_post[i]; i++) n_hpost++;
-    int n_header = n_hpre + 3 + n_hpost;
+    int n_header = n_hpre + RENDER_STATE_LINE_COUNT + LOOKAT_LINE_COUNT + n_hpost;
 
     int doc_line = g_scroll + vis;
     int cmd_area = doc_line - n_header;

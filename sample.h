@@ -44,6 +44,8 @@
 #define NUM_EXAMPLES      10
 #define MAX_LIGHTS        4
 #define TESS_VERT_BUF_SIZE 256
+#define LOOKAT_LINE_COUNT 3
+#define RENDER_STATE_LINE_COUNT 2
 
 typedef struct {
     GLdouble pos[3];
@@ -191,6 +193,8 @@ extern int    g_accum_aa_enabled;
 extern int    g_accum_samples;
 extern float  g_accum_jitter_x;
 extern float  g_accum_jitter_y;
+extern int    g_multisample_enabled;
+extern int    g_line_smooth_enabled;
 
 /* Cursor blink */
 extern int    g_cursor_on;
@@ -269,7 +273,8 @@ extern const EnumEntry g_enable_caps[];
 extern const EnumEntry g_shade_models[];
 extern const char *g_func_completions[];
 extern const char *g_header_pre[];
-extern char        g_lookat[3][128];
+extern char        g_render_state_lines[RENDER_STATE_LINE_COUNT][64];
+extern char        g_lookat[LOOKAT_LINE_COUNT][128];
 extern const char *g_header_post[];
 extern const char *g_footer[];
 extern const char *g_grid_names[];
