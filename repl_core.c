@@ -43,9 +43,11 @@
  *   Backspace      Delete character before cursor
  *   Ctrl+/         Toggle comment (// prefix)
  *   Shift+Up/Down  Select multiple lines
+ *   Ctrl+A         Move cursor to start of input line
  *   Ctrl+C         Copy line/selection (whole for-loop on FOR_BEGIN)
  *   Ctrl+X         Cut line/selection (whole for-loop on FOR_BEGIN)
  *   Ctrl+V         Paste before current line
+ *   Ctrl+E         Move cursor to end of input line
  *   Ctrl+Z         Undo last command
  *   Ctrl+D         Delete line at cursor
  *   Ctrl+L         Clear all commands
@@ -64,7 +66,7 @@
  *   Ctrl+T         Toggle time variable 't' play/pause
  *   Ctrl+U         Toggle multisample state
  *   Ctrl+N         Toggle GL_LINE_SMOOTH state
- *   Ctrl+A         Toggle accumulation-buffer AA
+ *   Ctrl+B         Toggle accumulation-buffer AA
  *   Ctrl+=         Increase AA jitter samples (1→2→4→8→16)
  *   Ctrl+-         Decrease AA jitter samples (16→8→4→2→1)
  *
@@ -486,7 +488,7 @@ int    g_scroll_follow_cursor = 0;
 /* Accumulation buffer — enabled by default, disabled with --noaccum.
  * Designed to be forward-compatible with FBO-based accumulation later. */
 int    g_use_accum        = 1;  /* GLUT_ACCUM requested at init */
-int    g_accum_aa_enabled = 1;  /* Ctrl+A toggles jitter AA on/off */
+int    g_accum_aa_enabled = 1;  /* Ctrl+B toggles jitter AA on/off */
 int    g_accum_samples    = 4;  /* current sample count */
 float  g_accum_jitter_x   = 0.0f;
 float  g_accum_jitter_y   = 0.0f;
@@ -672,7 +674,7 @@ CfgItem g_cfg_items[] = {
     { "Auto time",        "Ctrl+t", &g_t_playing,              2,               NULL          },
     { "MSAA",             "Ctrl+u", &g_multisample_enabled,    2,               NULL          },
     { "Line smooth",      "Ctrl+n", &g_line_smooth_enabled,    2,               NULL          },
-    { "Accum AA",         "Ctrl+a", &g_accum_aa_enabled,       2,               NULL          },
+    { "Accum AA",         "Ctrl+b", &g_accum_aa_enabled,       2,               NULL          },
     { "Poly highlight",   "--",     &g_highlight_current_poly, 2,               NULL          },
     { "Variable panel",   "`",      &g_show_var_panel,         2,               NULL          },
 };
@@ -4630,6 +4632,18 @@ static void keyboard_func(unsigned char key, int x, int y) {
         return;
     }
 
+    /* Ctrl+A / Ctrl+E: line start / end */
+    if (key == 1) {
+        g_cursor_pos = 0;
+        update_autocomplete();
+        return;
+    }
+    if (key == 5) {
+        g_cursor_pos = g_input_len;
+        update_autocomplete();
+        return;
+    }
+
     /* Ctrl+Z: undo  /  Ctrl+Shift+Z: redo */
     if (key == 26) {
         if (glutGetModifiers() & GLUT_ACTIVE_SHIFT)
@@ -4856,8 +4870,8 @@ static void keyboard_func(unsigned char key, int x, int y) {
         return;
     }
 
-    /* Ctrl+A: toggle accumulation AA */
-    if (key == 1) {
+    /* Ctrl+B: toggle accumulation AA */
+    if (key == 2) {
         if (g_use_accum) {
             g_accum_aa_enabled = !g_accum_aa_enabled;
             set_status(g_accum_aa_enabled ? "Accum AA: ON" : "Accum AA: OFF");
