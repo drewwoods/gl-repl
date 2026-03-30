@@ -1,4 +1,5 @@
 #include "repl_core_internal.h"
+#include "ui_panels.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -12,6 +13,19 @@ static int g_pass = 0;
     if (cond) g_pass++; \
     else printf("FAIL [%s]\n", label); \
 } while (0)
+
+static int code_panel_mouse_y_for_cmd(int cmd_idx) {
+    int n_hpre = 0;
+    for (int i = 0; g_header_pre[i]; i++) n_hpre++;
+    int n_hpost = 0;
+    for (int i = 0; g_header_post[i]; i++) n_hpost++;
+    int n_header = n_hpre + RENDER_STATE_LINE_COUNT + LOOKAT_LINE_COUNT + n_hpost;
+    int doc_line = n_header + cmd_idx;
+    int vis = doc_line - g_scroll;
+    int line_y_start = g_win_h - CODE_MARGIN_Y - LINE_H - LINE_H;
+    int gl_y = line_y_start - vis * LINE_H + 1;
+    return g_win_h - gl_y;
+}
 
 int main(void) {
     init_predef_vars();
@@ -66,6 +80,20 @@ int main(void) {
     g_cursor_pos = g_input_len;
     repl_keyboard_func('\r', 0, 0);
     ASSERT_TRUE("enter away from line start still inserts after", g_inserting == 1 && g_edit_line == 1);
+
+    repl_reset_state();
+    repl_feed_line_public("glBegin(GL_POINTS);");
+    repl_feed_line_public("glColor3f(1, 0, 0);");
+    repl_feed_line_public("glEnd();");
+    handle_code_panel_press(CODE_MARGIN_X + 1, code_panel_mouse_y_for_cmd(0));
+    ASSERT_TRUE("mouse press selects current line for edit", g_edit_line == 0);
+    ASSERT_TRUE("mouse press starts with no selection", !sel_active());
+    handle_code_panel_drag(CODE_MARGIN_X + 1, code_panel_mouse_y_for_cmd(2));
+    ASSERT_TRUE("mouse drag activates selection", sel_active());
+    ASSERT_TRUE("mouse drag selection low", sel_lo() == 0);
+    ASSERT_TRUE("mouse drag selection high", sel_hi() == 2);
+    ASSERT_TRUE("mouse drag navigates to drag end", g_edit_line == 2);
+    handle_code_panel_release();
 
     repl_reset_state();
     repl_feed_line_public("glBegin(GL_POINTS);");

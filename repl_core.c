@@ -5527,6 +5527,7 @@ static void special_func(int key, int x, int y) {
 static void mouse_func(int button, int state, int x, int y) {
     /* Release: end any variable drag or panel resize */
     if (state == GLUT_UP) {
+        handle_code_panel_release();
         if (g_drag_var >= 0) {
             g_drag_var = -1;
             glutPostRedisplay();
@@ -5578,7 +5579,8 @@ static void mouse_func(int button, int state, int x, int y) {
             return;
         }
         if (x < panel_w) {
-            handle_code_panel_click(x, y);
+            handle_code_panel_press(x, y);
+            glutPostRedisplay();
             return;   /* don't start camera drag */
         }
     }
@@ -5690,6 +5692,13 @@ static void motion_func(int x, int y) {
         }
         g_flat_dirty = 1;
         g_mouse_x = x; g_mouse_y = y;
+        glutPostRedisplay();
+        return;
+    }
+
+    if (handle_code_panel_drag(x, y)) {
+        g_mouse_x = x;
+        g_mouse_y = y;
         glutPostRedisplay();
         return;
     }

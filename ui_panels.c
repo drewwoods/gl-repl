@@ -605,6 +605,7 @@ void render_help(void) {
         "  Backspace            Delete character before cursor",
         "  Ctrl+/               Toggle comment on current line",
         "  Shift+Up/Down        Select multiple lines",
+        "  Left-click + drag    Select multiple lines with the mouse",
         "  Ctrl+B               Toggle accumulation-buffer AA",
         "  Ctrl+C               Copy line/selection (for-loop on BEGIN)",
         "  Ctrl+X               Cut line/selection (for-loop on BEGIN)",
@@ -988,15 +989,24 @@ void render_config_menu(void) {
 /* Code panel click handler                                                   */
 /* ========================================================================= */
 
-/* Handle left-click in the code panel: navigate to line + column */
-void handle_code_panel_click(int mx, int my) {
+static int g_code_panel_drag_active = 0;
+static int g_code_panel_drag_anchor = -1;
+static int g_code_panel_drag_moved = 0;
+
+static int code_panel_hit_test(int mx, int my,
+                               int *out_target,
+                               int *out_on_insert_line,
+                               int *out_col) {
+    int panel_w = (int)(g_win_w * g_panel_frac);
+    if (mx < 0 || mx >= panel_w) return 0;
+
     /* Convert GLUT Y (top=0) to OpenGL Y (bottom=0) */
     int gl_y = g_win_h - my;
 
     /* Same layout constants as render_code_panel */
     int line_y_start = g_win_h - CODE_MARGIN_Y - LINE_H - LINE_H;
     int vis = (line_y_start + LINE_H - 3 - gl_y) / LINE_H;
-    if (vis < 0) return;   /* clicked in info bar */
+    if (vis < 0) return 0;   /* clicked in info bar */
 
     int n_hpre = 0;
     for (int i = 0; g_header_pre[i]; i++) n_hpre++;
@@ -1009,7 +1019,7 @@ void handle_code_panel_click(int mx, int my) {
 
     /* Ignore clicks on header or footer */
     int n_cmd_area = g_num_cmds + (g_inserting ? 1 : 0) + 1;
-    if (cmd_area < 0 || cmd_area >= n_cmd_area) return;
+    if (cmd_area < 0 || cmd_area >= n_cmd_area) return 0;
 
     /* Map cmd_area index to actual command index, accounting for insert line */
     int target;
@@ -1027,13 +1037,59 @@ void handle_code_panel_click(int mx, int my) {
         target = cmd_area;
     }
 
+    int linenum_w = 4 * FONT_W;
+    int idx_col_w = g_show_indices ? (6 * FONT_W) : 0;
+    int text_x = CODE_MARGIN_X + linenum_w + FONT_W + idx_col_w;
+    int edit_idx = on_insert_line ? g_edit_line : target;
+    int indent_chars = cmd_indent_chars(
+        edit_idx < g_num_cmds ? edit_idx : g_num_cmds);
+    int col = (mx - text_x - indent_chars * FONT_W + FONT_W / 2) / FONT_W;
+    if (col < 0) col = 0;
+    if (col > g_input_len) col = g_input_len;
+
+    if (out_target) *out_target = target;
+    if (out_on_insert_line) *out_on_insert_line = on_insert_line;
+    if (out_col) *out_col = col;
+    return 1;
+}
+
+static int code_panel_drag_target(int mx, int my, int *out_target) {
+    int gl_y = g_win_h - my;
+    int line_y_start = g_win_h - CODE_MARGIN_Y - LINE_H - LINE_H;
+    int vis = (line_y_start + LINE_H - 3 - gl_y) / LINE_H;
+
+    int visible_lines = (g_win_h - CODE_MARGIN_Y - LINE_H - CODE_MARGIN_Y) / LINE_H;
+    if (visible_lines < 1) visible_lines = 1;
+    if (vis < 0) vis = 0;
+    if (vis >= visible_lines) vis = visible_lines - 1;
+
+    int n_hpre = 0;
+    for (int i = 0; g_header_pre[i]; i++) n_hpre++;
+    int n_hpost = 0;
+    for (int i = 0; g_header_post[i]; i++) n_hpost++;
+    int n_header = n_hpre + RENDER_STATE_LINE_COUNT + LOOKAT_LINE_COUNT + n_hpost;
+
+    int doc_line = g_scroll + vis;
+    int cmd_area = doc_line - n_header;
+    int target = g_inserting ? cmd_area : cmd_area;
+    if (g_inserting && target > g_edit_line) target--;
+    if (target < 0) target = 0;
+    if (target >= g_num_cmds) target = g_num_cmds - 1;
+    if (out_target) *out_target = target;
+    return g_num_cmds > 0;
+}
+
+/* Handle left-click in the code panel: navigate to line + column */
+void handle_code_panel_click(int mx, int my) {
+    int target, on_insert_line;
+    if (!code_panel_hit_test(mx, my, &target, &on_insert_line, NULL)) return;
+
     if (!on_insert_line) {
         if (target < 0) target = 0;
         if (target > g_num_cmds) target = g_num_cmds;
         navigate_to_line(target);
     }
 
-    /* Compute cursor column from click X */
     int linenum_w = 4 * FONT_W;
     int idx_col_w = g_show_indices ? (6 * FONT_W) : 0;
     int text_x = CODE_MARGIN_X + linenum_w + FONT_W + idx_col_w;
@@ -1050,4 +1106,42 @@ void handle_code_panel_click(int mx, int my) {
     g_ac_count = 0;
     g_ac_ghost[0] = '\0';
     clear_selection();
+}
+
+int handle_code_panel_press(int mx, int my) {
+    int target, on_insert_line;
+    if (!code_panel_hit_test(mx, my, &target, &on_insert_line, NULL)) return 0;
+
+    handle_code_panel_click(mx, my);
+
+    g_code_panel_drag_active = 0;
+    g_code_panel_drag_anchor = -1;
+    g_code_panel_drag_moved = 0;
+    if (!on_insert_line && target >= 0 && target < g_num_cmds) {
+        g_code_panel_drag_active = 1;
+        g_code_panel_drag_anchor = target;
+    }
+    return 1;
+}
+
+int handle_code_panel_drag(int mx, int my) {
+    int target;
+    if (!g_code_panel_drag_active || g_code_panel_drag_anchor < 0) return 0;
+    if (!code_panel_drag_target(mx, my, &target)) return 0;
+
+    if (target != g_code_panel_drag_anchor || g_code_panel_drag_moved) {
+        g_code_panel_drag_moved = 1;
+        g_sel_anchor = g_code_panel_drag_anchor;
+        g_sel_end = target;
+        navigate_to_line(target);
+        g_cursor_on = 1;
+        g_blink_tick = 0;
+    }
+    return 1;
+}
+
+void handle_code_panel_release(void) {
+    g_code_panel_drag_active = 0;
+    g_code_panel_drag_anchor = -1;
+    g_code_panel_drag_moved = 0;
 }
