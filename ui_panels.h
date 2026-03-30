@@ -13,5 +13,8 @@ void render_config_menu(void);
 int  cfg_hit_row(int gx, int gy);
 int  var_panel_hit(int gx, int gy, int *out_row);
 void handle_code_panel_click(int mx, int my);
+int  handle_code_panel_press(int mx, int my);
+int  handle_code_panel_drag(int mx, int my);
+void handle_code_panel_release(void);
 
 #endif /* UI_PANELS_H */
