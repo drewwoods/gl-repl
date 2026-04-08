@@ -566,7 +566,7 @@ int    g_replay_mode = REPLAY_MODE_VERTEX;
 float  g_replay_speed = 4.0f;
 float  g_replay_accum = 0.0f;
 float  g_replay_fade_alpha = 1.0f;
-float  g_replay_fade_speed = 3.0f;
+float  g_replay_fade_speed = 2.0f;
 int    g_replay_fade_begin = -1;
 int    g_replay_fade_end = -1;
 int    g_replay_src_line = -1;
@@ -574,6 +574,19 @@ int    g_replay_total_flat = 0;
 static float g_replay_baseline_predef_vals[MAX_PREDEF_VARS];
 static int   g_replay_saved_t_playing = 1;
 static int   g_replay_last_src_line = -1;
+
+#define REPLAY_FADE_DURATION   0.5f
+#define REPLAY_FADE_BATCH_MAX  64
+
+typedef struct {
+    int   old_pc;
+    int   new_pc;
+    float age;
+} ReplayFadeBatch;
+
+static ReplayFadeBatch g_replay_fade_batches[REPLAY_FADE_BATCH_MAX];
+static int             g_replay_fade_batch_count = 0;
+static float           g_execute_alpha_scale = 1.0f;
 
 /* Variable slider panel (4.8) */
 int    g_show_var_panel  = 1;   /* show predefined-variable sliders */
@@ -3666,6 +3679,98 @@ static void replay_set_src_line(int src_line) {
     }
 }
 
+static float replay_batch_alpha(const ReplayFadeBatch *batch) {
+    float alpha = batch->age * g_replay_fade_speed;
+    if (alpha < 0.0f) alpha = 0.0f;
+    if (alpha > 1.0f) alpha = 1.0f;
+    return alpha;
+}
+
+static void replay_sync_legacy_fade_state(void) {
+    if (g_replay_fade_batch_count > 0) {
+        ReplayFadeBatch *batch = &g_replay_fade_batches[g_replay_fade_batch_count - 1];
+        g_replay_fade_begin = batch->old_pc;
+        g_replay_fade_end = batch->new_pc - 1;
+        g_replay_fade_alpha = replay_batch_alpha(batch);
+    } else {
+        g_replay_fade_begin = -1;
+        g_replay_fade_end = -1;
+        g_replay_fade_alpha = 1.0f;
+    }
+}
+
+static void replay_clear_fade_batches(void) {
+    g_replay_fade_batch_count = 0;
+    replay_sync_legacy_fade_state();
+}
+
+static void replay_push_fade_batch(int old_pc, int new_pc) {
+    ReplayFadeBatch *batch;
+
+    if (new_pc <= old_pc)
+        return;
+
+    if (g_replay_fade_batch_count >= REPLAY_FADE_BATCH_MAX) {
+        memmove(&g_replay_fade_batches[0], &g_replay_fade_batches[1],
+                (size_t)(REPLAY_FADE_BATCH_MAX - 1) * sizeof(g_replay_fade_batches[0]));
+        g_replay_fade_batch_count = REPLAY_FADE_BATCH_MAX - 1;
+    }
+
+    batch = &g_replay_fade_batches[g_replay_fade_batch_count++];
+    batch->old_pc = old_pc;
+    batch->new_pc = new_pc;
+    batch->age = 0.016f;
+    replay_sync_legacy_fade_state();
+}
+
+static void replay_clamp_fade_batches(int max_pc) {
+    int dst = 0;
+
+    for (int i = 0; i < g_replay_fade_batch_count; i++) {
+        ReplayFadeBatch batch = g_replay_fade_batches[i];
+
+        if (batch.old_pc > max_pc)
+            continue;
+        if (batch.new_pc > max_pc)
+            batch.new_pc = max_pc;
+        if (batch.new_pc <= batch.old_pc)
+            continue;
+        g_replay_fade_batches[dst++] = batch;
+    }
+
+    g_replay_fade_batch_count = dst;
+    replay_sync_legacy_fade_state();
+}
+
+static void replay_tick_fade_batches(float dt) {
+    int dst = 0;
+
+    for (int i = 0; i < g_replay_fade_batch_count; i++) {
+        ReplayFadeBatch batch = g_replay_fade_batches[i];
+        batch.age += dt;
+        if (batch.age >= REPLAY_FADE_DURATION)
+            continue;
+        g_replay_fade_batches[dst++] = batch;
+    }
+
+    g_replay_fade_batch_count = dst;
+    replay_sync_legacy_fade_state();
+}
+
+int replay_has_active_fades(void) {
+    return g_replay_active && g_replay_fade_batch_count > 0;
+}
+
+int replay_fill_base_limit(void) {
+    if (!replay_has_active_fades())
+        return g_num_flat_cmds;
+    if (g_replay_fade_batches[0].old_pc < 0)
+        return 0;
+    if (g_replay_fade_batches[0].old_pc > g_num_flat_cmds)
+        return g_num_flat_cmds;
+    return g_replay_fade_batches[0].old_pc;
+}
+
 static int replay_next_polygon_limit(int start, int *fade_begin, int *fade_end) {
     int saw_meaningful = 0;
 
@@ -3829,9 +3934,7 @@ static void replay_seek(int new_pc) {
 
     g_replay_pc = new_pc;
     g_replay_accum = 0.0f;
-    g_replay_fade_alpha = 1.0f;
-    g_replay_fade_begin = -1;
-    g_replay_fade_end = -1;
+    replay_clear_fade_batches();
     replay_set_src_line(replay_last_meaningful_src(0, new_pc));
     g_replay_state = (new_pc >= g_num_flat_cmds && g_num_flat_cmds > 0)
                    ? REPLAY_DONE
@@ -3861,9 +3964,7 @@ void replay_start(void) {
     g_replay_state = REPLAY_PLAYING;
     g_replay_pc = 0;
     g_replay_accum = 0.0f;
-    g_replay_fade_alpha = 1.0f;
-    g_replay_fade_begin = -1;
-    g_replay_fade_end = -1;
+    replay_clear_fade_batches();
     g_replay_src_line = -1;
     g_replay_total_flat = g_num_flat_cmds;
     g_replay_last_src_line = -1;
@@ -3876,9 +3977,7 @@ void replay_stop(void) {
     g_replay_state = REPLAY_OFF;
     g_replay_pc = 0;
     g_replay_accum = 0.0f;
-    g_replay_fade_alpha = 1.0f;
-    g_replay_fade_begin = -1;
-    g_replay_fade_end = -1;
+    replay_clear_fade_batches();
     g_replay_src_line = -1;
     g_replay_total_flat = 0;
     g_replay_last_src_line = -1;
@@ -3887,8 +3986,6 @@ void replay_stop(void) {
 void replay_advance(void) {
     int old_pc;
     int next_pc;
-    int fade_begin = -1;
-    int fade_end = -1;
     int src_line = -1;
 
     if (!replay_enabled())
@@ -3901,8 +3998,8 @@ void replay_advance(void) {
 
     old_pc = g_replay_pc;
     next_pc = (g_replay_mode == REPLAY_MODE_POLYGON)
-            ? replay_next_polygon_limit(old_pc, &fade_begin, &fade_end)
-            : replay_next_vertex_limit(old_pc, &fade_begin, &fade_end);
+            ? replay_next_polygon_limit(old_pc, &(int){ -1 }, &(int){ -1 })
+            : replay_next_vertex_limit(old_pc, &(int){ -1 }, &(int){ -1 });
 
     if (next_pc <= old_pc)
         next_pc = g_num_flat_cmds;
@@ -3910,9 +4007,7 @@ void replay_advance(void) {
         next_pc = g_num_flat_cmds;
 
     g_replay_pc = next_pc;
-    g_replay_fade_begin = fade_begin;
-    g_replay_fade_end = fade_end;
-    g_replay_fade_alpha = (fade_begin >= 0 && fade_end >= fade_begin) ? 0.0f : 1.0f;
+    replay_push_fade_batch(old_pc, next_pc);
 
     src_line = replay_last_meaningful_src(old_pc, next_pc);
     replay_set_src_line(src_line);
@@ -3952,17 +4047,11 @@ void execute_commands(void) {
     GLdouble tess_current_normal[3] = {0.0, 0.0, 1.0};
     GLdouble tess_current_color[4]  = {1.0, 1.0, 1.0, 1.0};
     int goto_count = 0; /* safety guard against infinite goto loops */
-    int replay_fading = replay_enabled() &&
-                        g_replay_fade_alpha < 1.0f &&
-                        g_replay_fade_begin >= 0 &&
-                        g_replay_fade_end >= g_replay_fade_begin;
+
+    tess_current_color[3] = g_execute_alpha_scale;
 
     int pc = 0;
     while (pc < g_num_flat_cmds) {
-        int fade_this_cmd = replay_fading &&
-                            pc >= g_replay_fade_begin &&
-                            pc <= g_replay_fade_end;
-
         if (!g_flat_cmds[pc].valid) { pc++; continue; }
         if (is_transform_cmd(g_flat_cmds[pc].type)) {
             apply_transform_cmd(&g_flat_cmds[pc]);
@@ -3972,8 +4061,6 @@ void execute_commands(void) {
         switch (g_flat_cmds[pc].type) {
         case CMD_BEGIN:
             if (in_begin) { glEnd(); in_begin = 0; }
-            if (fade_this_cmd)
-                glColor4f(0.70f, 0.70f, 0.80f, g_replay_fade_alpha);
             glBegin(g_flat_cmds[pc].mode);
             in_begin = 1;
             break;
@@ -3990,23 +4077,13 @@ void execute_commands(void) {
                        g_flat_cmds[pc].args[2]);
             break;
         case CMD_COLOR3F:
-            if (fade_this_cmd) {
-                glColor4f(g_flat_cmds[pc].args[0], g_flat_cmds[pc].args[1],
-                          g_flat_cmds[pc].args[2], g_replay_fade_alpha);
-            } else {
-                glColor3f(g_flat_cmds[pc].args[0], g_flat_cmds[pc].args[1],
-                          g_flat_cmds[pc].args[2]);
-            }
+            glColor4f(g_flat_cmds[pc].args[0], g_flat_cmds[pc].args[1],
+                      g_flat_cmds[pc].args[2], g_execute_alpha_scale);
             break;
         case CMD_COLOR4F:
-            if (fade_this_cmd) {
-                glColor4f(g_flat_cmds[pc].args[0], g_flat_cmds[pc].args[1],
-                          g_flat_cmds[pc].args[2],
-                          g_flat_cmds[pc].args[3] * g_replay_fade_alpha);
-            } else {
-                glColor4f(g_flat_cmds[pc].args[0], g_flat_cmds[pc].args[1],
-                          g_flat_cmds[pc].args[2], g_flat_cmds[pc].args[3]);
-            }
+            glColor4f(g_flat_cmds[pc].args[0], g_flat_cmds[pc].args[1],
+                      g_flat_cmds[pc].args[2],
+                      g_flat_cmds[pc].args[3] * g_execute_alpha_scale);
             break;
         case CMD_ENABLE:
             glEnable(g_flat_cmds[pc].mode);
@@ -4031,7 +4108,8 @@ void execute_commands(void) {
                 glMaterialf(g_flat_cmds[pc].mode, (GLenum)g_flat_cmds[pc].args[0], g_flat_cmds[pc].args[1]);
             } else if (g_flat_cmds[pc].num_args == 5) {
                 GLfloat mat[4] = { g_flat_cmds[pc].args[1], g_flat_cmds[pc].args[2],
-                                   g_flat_cmds[pc].args[3], g_flat_cmds[pc].args[4] };
+                                   g_flat_cmds[pc].args[3],
+                                   g_flat_cmds[pc].args[4] * g_execute_alpha_scale };
                 glMaterialfv(g_flat_cmds[pc].mode, (GLenum)g_flat_cmds[pc].args[0], mat);
             }
             break;
@@ -4110,9 +4188,9 @@ void execute_commands(void) {
             tess_current_color[0] = g_flat_cmds[pc].args[0];
             tess_current_color[1] = g_flat_cmds[pc].args[1];
             tess_current_color[2] = g_flat_cmds[pc].args[2];
-            tess_current_color[3] = (g_flat_cmds[pc].num_args >= 4) ? g_flat_cmds[pc].args[3] : 1.0;
-            if (fade_this_cmd)
-                tess_current_color[3] *= g_replay_fade_alpha;
+            tess_current_color[3] = ((g_flat_cmds[pc].num_args >= 4)
+                                   ? g_flat_cmds[pc].args[3] : 1.0)
+                                  * g_execute_alpha_scale;
             break;
         case CMD_TESS_VERTEX:
             if (g_tess && tess_depth == 2 && g_tess_vert_count < TESS_VERT_BUF_SIZE) {
@@ -4211,6 +4289,36 @@ execute_done:;
     }
 }
 
+void execute_replay_fade_batches(void) {
+    int saved_flat_count = g_num_flat_cmds;
+
+    if (!replay_has_active_fades())
+        return;
+
+    for (int i = 0; i < g_replay_fade_batch_count; i++) {
+        float alpha = replay_batch_alpha(&g_replay_fade_batches[i]);
+
+        if (alpha <= 0.0f)
+            continue;
+
+        restore_predef_values(g_replay_baseline_predef_vals);
+        g_num_flat_cmds = g_replay_fade_batches[i].new_pc;
+        g_execute_alpha_scale = alpha;
+
+        glPushAttrib(GL_ALL_ATTRIB_BITS);
+        glPushMatrix();
+        glEnable(GL_BLEND);
+        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+        glColor4f(0.70f, 0.70f, 0.80f, alpha);
+        execute_commands();
+        glPopMatrix();
+        glPopAttrib();
+    }
+
+    g_execute_alpha_scale = 1.0f;
+    g_num_flat_cmds = saved_flat_count;
+}
+
 /* ========================================================================= */
 /* 2D rendering helpers                                                       */
 /* ========================================================================= */
@@ -4278,6 +4386,7 @@ static void display_func(void) {
         if (g_replay_pc >= g_num_flat_cmds && g_num_flat_cmds > 0 &&
             g_replay_state == REPLAY_PLAYING)
             g_replay_state = REPLAY_DONE;
+        replay_clamp_fade_batches(g_replay_pc);
         g_num_flat_cmds = replay_exec_limit();
     }
 
@@ -5072,9 +5181,7 @@ static void keyboard_func(unsigned char key, int x, int y) {
             } else if (g_replay_state == REPLAY_DONE) {
                 g_replay_pc = 0;
                 g_replay_accum = 0.0f;
-                g_replay_fade_alpha = 1.0f;
-                g_replay_fade_begin = -1;
-                g_replay_fade_end = -1;
+                replay_clear_fade_batches();
                 g_replay_state = REPLAY_PLAYING;
                 g_replay_src_line = -1;
                 g_replay_last_src_line = -1;
@@ -5099,9 +5206,13 @@ static void keyboard_func(unsigned char key, int x, int y) {
             return;
         }
         if (key == 'm' || key == 'M') {
+            int was_playing = (g_replay_state == REPLAY_PLAYING);
             g_replay_mode = (g_replay_mode == REPLAY_MODE_VERTEX)
                           ? REPLAY_MODE_POLYGON
                           : REPLAY_MODE_VERTEX;
+            replay_seek(g_replay_pc);
+            if (was_playing && g_replay_state != REPLAY_DONE)
+                g_replay_state = REPLAY_PLAYING;
             set_status(g_replay_mode == REPLAY_MODE_VERTEX
                      ? "Replay: vertex mode"
                      : "Replay: polygon mode");
@@ -6285,12 +6396,10 @@ static void timer_func(int value) {
         g_flat_dirty = 1;   /* re-flatten so expressions referencing t update */
     }
 
+    if (g_replay_active)
+        replay_tick_fade_batches(0.016f);
+
     if (g_replay_active && g_replay_state == REPLAY_PLAYING) {
-        if (g_replay_fade_alpha < 1.0f) {
-            g_replay_fade_alpha += g_replay_fade_speed * 0.016f;
-            if (g_replay_fade_alpha > 1.0f)
-                g_replay_fade_alpha = 1.0f;
-        }
         g_replay_accum += g_replay_speed * 0.016f;
         while (g_replay_accum >= 1.0f && g_replay_state == REPLAY_PLAYING) {
             g_replay_accum -= 1.0f;

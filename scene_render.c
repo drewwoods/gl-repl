@@ -1084,9 +1084,38 @@ void render_3d_scene(void) {
 
     if (g_wireframe) glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
 
-    glPushMatrix();
-    execute_commands();
-    glPopMatrix();
+    {
+        int fill_limit = g_num_flat_cmds;
+
+        if (replay_has_active_fades())
+            g_num_flat_cmds = replay_fill_base_limit();
+
+        glPushMatrix();
+        execute_commands();
+        glPopMatrix();
+
+        g_num_flat_cmds = fill_limit;
+
+        if (replay_has_active_fades()) {
+            setup_lights();
+            glDisable(GL_LIGHTING);
+            glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, mspec);
+            glMaterialfv(GL_FRONT_AND_BACK, GL_SHININESS, mshin);
+            if (g_multisample_enabled) glEnable(GL_MULTISAMPLE);
+            else glDisable(GL_MULTISAMPLE);
+            if (g_line_smooth_enabled) glEnable(GL_LINE_SMOOTH);
+            else glDisable(GL_LINE_SMOOTH);
+            glEnable(GL_BLEND);
+            glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+            glColor4f(0.70f, 0.70f, 0.80f, 1.0f);
+            if (g_wireframe) glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+            else glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+
+            glPushMatrix();
+            execute_replay_fade_batches();
+            glPopMatrix();
+        }
+    }
 
     if (g_wireframe) glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
 
