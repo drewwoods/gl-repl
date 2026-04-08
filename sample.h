@@ -162,6 +162,33 @@ static inline void apply_transform_cmd(const GLCmd *cmd) {
     }
 }
 
+static inline void apply_tracked_transform_cmd(const GLCmd *cmd, int *matrix_depth) {
+    switch (cmd->type) {
+    case CMD_PUSH_MATRIX:
+        glPushMatrix();
+        if (matrix_depth) (*matrix_depth)++;
+        break;
+    case CMD_POP_MATRIX:
+        if (!matrix_depth || *matrix_depth > 0) {
+            glPopMatrix();
+            if (matrix_depth) (*matrix_depth)--;
+        }
+        break;
+    default:
+        apply_transform_cmd(cmd);
+        break;
+    }
+}
+
+static inline void unwind_tracked_transform_stack(int *matrix_depth) {
+    if (!matrix_depth)
+        return;
+    while (*matrix_depth > 0) {
+        glPopMatrix();
+        (*matrix_depth)--;
+    }
+}
+
 /* ========================================================================= */
 /* Extern globals                                                             */
 /* ========================================================================= */

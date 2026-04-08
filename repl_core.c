@@ -4044,6 +4044,7 @@ int replay_exec_limit(void) {
 void execute_commands(void) {
     int in_begin = 0;
     int tess_depth = 0; /* 0=outside, 1=in polygon, 2=in contour */
+    int matrix_depth = 0;
     GLdouble tess_current_normal[3] = {0.0, 0.0, 1.0};
     GLdouble tess_current_color[4]  = {1.0, 1.0, 1.0, 1.0};
     int goto_count = 0; /* safety guard against infinite goto loops */
@@ -4054,7 +4055,7 @@ void execute_commands(void) {
     while (pc < g_num_flat_cmds) {
         if (!g_flat_cmds[pc].valid) { pc++; continue; }
         if (is_transform_cmd(g_flat_cmds[pc].type)) {
-            apply_transform_cmd(&g_flat_cmds[pc]);
+            apply_tracked_transform_cmd(&g_flat_cmds[pc], &matrix_depth);
             pc++;
             continue;
         }
@@ -4287,6 +4288,7 @@ execute_done:;
         if (tess_depth == 2 && g_tess) { gluTessEndContour(g_tess); tess_depth = 1; }
         if (tess_depth == 1 && g_tess) { gluTessEndPolygon(g_tess); }
     }
+    unwind_tracked_transform_stack(&matrix_depth);
 }
 
 void execute_replay_fade_batches(void) {
