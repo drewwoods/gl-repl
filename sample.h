@@ -335,11 +335,14 @@ int  sel_hi(void);
 
 void navigate_to_line(int target);
 void execute_commands(void);
+void execute_replay_fade_batches(void);
 void flatten_commands(void);
 void replay_start(void);
 void replay_stop(void);
 void replay_advance(void);
 int  replay_exec_limit(void);
+int  replay_has_active_fades(void);
+int  replay_fill_base_limit(void);
 void recompute_autonormals(void);
 void update_lookat_strings(void);
 
