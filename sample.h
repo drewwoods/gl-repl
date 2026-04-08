@@ -90,6 +90,18 @@ typedef enum {
     CMD_TYPE_COUNT
 } CmdType;
 
+typedef enum {
+    REPLAY_OFF = 0,
+    REPLAY_PLAYING,
+    REPLAY_PAUSED,
+    REPLAY_DONE
+} ReplayState;
+
+typedef enum {
+    REPLAY_MODE_POLYGON = 0,
+    REPLAY_MODE_VERTEX
+} ReplayMode;
+
 typedef struct {
     const char *name;
     GLenum      value;
@@ -228,6 +240,20 @@ extern int    g_current_block_begin;
 extern int    g_current_block_end;
 extern int    g_ortho_mode;
 
+/* Replay */
+extern int    g_replay_active;
+extern int    g_replay_state;
+extern int    g_replay_pc;
+extern int    g_replay_mode;
+extern float  g_replay_speed;
+extern float  g_replay_accum;
+extern float  g_replay_fade_alpha;
+extern float  g_replay_fade_speed;
+extern int    g_replay_fade_begin;
+extern int    g_replay_fade_end;
+extern int    g_replay_src_line;
+extern int    g_replay_total_flat;
+
 /* Variable slider panel */
 extern int    g_show_var_panel;
 extern int    g_drag_var;
@@ -310,6 +336,10 @@ int  sel_hi(void);
 void navigate_to_line(int target);
 void execute_commands(void);
 void flatten_commands(void);
+void replay_start(void);
+void replay_stop(void);
+void replay_advance(void);
+int  replay_exec_limit(void);
 void recompute_autonormals(void);
 void update_lookat_strings(void);
 
