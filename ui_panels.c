@@ -133,6 +133,9 @@ void render_code_panel(void) {
 
     /* Which document line is the cursor on? (offset by header) */
     int cursor_doc_line = n_header + g_edit_line;
+    int follow_doc_line = cursor_doc_line;
+    if (g_replay_active && g_replay_state != REPLAY_OFF && g_replay_src_line >= 0)
+        follow_doc_line = n_header + g_replay_src_line;
 
     /* Clamp scroll */
     int max_scroll = total_lines - visible_lines;
@@ -142,10 +145,10 @@ void render_code_panel(void) {
 
     /* Only snap to cursor after an edit; manual scroll can stay off-cursor. */
     if (g_scroll_follow_cursor) {
-        if (cursor_doc_line < g_scroll)
-            g_scroll = cursor_doc_line;
-        if (cursor_doc_line >= g_scroll + visible_lines)
-            g_scroll = cursor_doc_line - visible_lines + 1;
+        if (follow_doc_line < g_scroll)
+            g_scroll = follow_doc_line;
+        if (follow_doc_line >= g_scroll + visible_lines)
+            g_scroll = follow_doc_line - visible_lines + 1;
         if (g_scroll > max_scroll) g_scroll = max_scroll;
         if (g_scroll < 0) g_scroll = 0;
         g_scroll_follow_cursor = 0;
@@ -303,6 +306,17 @@ void render_code_panel(void) {
             } else {
                 /* Existing command, not being edited */
                 if (cur >= g_scroll && cur < g_scroll + visible_lines) {
+                    if (g_replay_active && g_replay_state != REPLAY_OFF &&
+                        g_replay_src_line >= 0 && i == g_replay_src_line) {
+                        glEnable(GL_BLEND);
+                        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+                        glColor4f(0.10f, 0.35f, 0.15f, 0.55f);
+                        draw_quad(0, (float)(line_y - 3),
+                                  (float)panel_w, (float)LINE_H);
+                        glColor4f(0.20f, 0.90f, 0.30f, 0.85f);
+                        draw_quad(1.0f, (float)(line_y - 3), 3.0f, (float)LINE_H);
+                        glDisable(GL_BLEND);
+                    }
                     /* Selection highlight */
                     if (sel_active() && i >= sel_lo() && i <= sel_hi()) {
                         glEnable(GL_BLEND);
@@ -630,6 +644,14 @@ void render_help(void) {
         "  't' is a predefined var that auto-increments with elapsed time.",
         "  Use it in any expression: glVertex3f(sin(t), cos(t), 0)",
         "  Ctrl+T               Play / pause time (shown as t=X.XX or t=X.XX[P])",
+        "",
+        "Replay:",
+        "  Ctrl+G               Start / stop replay",
+        "  Space                Pause / resume replay (restart when done)",
+        "  + / -                Change replay speed",
+        "  m                    Toggle polygon / vertex replay mode",
+        "  Left / Right Arrow   Step backward / forward while paused",
+        "  Esc                  Stop replay immediately",
         "",
         "Render-state header lines:",
         "  Ctrl+U               Toggle glEnable/glDisable(GL_MULTISAMPLE)",

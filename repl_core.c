@@ -558,6 +558,23 @@ int    g_current_block_end   = -1;  /* flat cmd index of cursor's glEnd */
 static int g_current_block_line = -1; /* g_edit_line used to compute block */
 int    g_ortho_mode = 0;  /* 0=perspective, 1=2D orthographic */
 
+/* Replay */
+int    g_replay_active = 0;
+int    g_replay_state = REPLAY_OFF;
+int    g_replay_pc = 0;
+int    g_replay_mode = REPLAY_MODE_VERTEX;
+float  g_replay_speed = 4.0f;
+float  g_replay_accum = 0.0f;
+float  g_replay_fade_alpha = 1.0f;
+float  g_replay_fade_speed = 3.0f;
+int    g_replay_fade_begin = -1;
+int    g_replay_fade_end = -1;
+int    g_replay_src_line = -1;
+int    g_replay_total_flat = 0;
+static float g_replay_baseline_predef_vals[MAX_PREDEF_VARS];
+static int   g_replay_saved_t_playing = 1;
+static int   g_replay_last_src_line = -1;
+
 /* Variable slider panel (4.8) */
 int    g_show_var_panel  = 1;   /* show predefined-variable sliders */
 int    g_drag_var        = -1;  /* index of var being dragged, -1=none */
@@ -660,6 +677,8 @@ static int feed_line(const char *line);
 /* Configuration menu item table (4.10)                                       */
 /* ========================================================================= */
 
+static const char *replay_mode_names[] = { "Polygon", "Vertex" };
+
 CfgItem g_cfg_items[] = {
     { "Wireframe",        "F2",     &g_wireframe,              2,               NULL          },
     { "Grid",             "F3",     &g_grid_theme,             GRID_THEME_COUNT, g_grid_names },
@@ -677,6 +696,8 @@ CfgItem g_cfg_items[] = {
     { "Accum AA",         "Ctrl+b", &g_accum_aa_enabled,       2,               NULL          },
     { "Poly highlight",   "--",     &g_highlight_current_poly, 2,               NULL          },
     { "Variable panel",   "`",      &g_show_var_panel,         2,               NULL          },
+    { "Replay",           "Ctrl+g", &g_replay_active,          2,               NULL          },
+    { "Replay mode",      "m",      &g_replay_mode,            2,               replay_mode_names },
 };
 const int CFG_ITEM_COUNT = (int)(sizeof(g_cfg_items)/sizeof(g_cfg_items[0]));
 
@@ -3541,6 +3562,387 @@ int repl_find_feeding_color_cmd(int line_idx) {
 }
 
 /* ========================================================================= */
+/* Replay helpers                                                             */
+/* ========================================================================= */
+
+static void copy_predef_values(float *dst) {
+    for (int i = 0; i < g_num_predef_vars; i++)
+        dst[i] = g_predef_vars[i].value;
+}
+
+static void restore_predef_values(const float *src) {
+    for (int i = 0; i < g_num_predef_vars; i++)
+        g_predef_vars[i].value = src[i];
+}
+
+static int replay_enabled(void) {
+    return g_replay_active && g_replay_state != REPLAY_OFF;
+}
+
+static int replay_has_meaningful_cmds(void) {
+    for (int i = 0; i < g_num_flat_cmds; i++) {
+        if (!g_flat_cmds[i].valid) continue;
+        if (g_flat_cmds[i].type == CMD_COMMENT) continue;
+        return 1;
+    }
+    return 0;
+}
+
+static int replay_find_open_begin_before(int limit) {
+    int open_begin = -1;
+    int in_begin = 0;
+
+    for (int i = 0; i < limit && i < g_num_flat_cmds; i++) {
+        if (!g_flat_cmds[i].valid) continue;
+        if (g_flat_cmds[i].type == CMD_BEGIN) {
+            open_begin = i;
+            in_begin = 1;
+        } else if (g_flat_cmds[i].type == CMD_END && in_begin) {
+            open_begin = -1;
+            in_begin = 0;
+        }
+    }
+
+    return open_begin;
+}
+
+static int replay_find_open_tess_polygon_before(int limit, int *out_depth) {
+    int poly_start = -1;
+    int tess_depth = 0;
+
+    for (int i = 0; i < limit && i < g_num_flat_cmds; i++) {
+        if (!g_flat_cmds[i].valid) continue;
+        switch (g_flat_cmds[i].type) {
+        case CMD_TESS_BEGIN_POLYGON:
+            poly_start = i;
+            tess_depth = 1;
+            break;
+        case CMD_TESS_BEGIN_CONTOUR:
+            if (tess_depth == 1)
+                tess_depth = 2;
+            break;
+        case CMD_TESS_END:
+            if (tess_depth == 2) {
+                tess_depth = 1;
+            } else if (tess_depth == 1) {
+                tess_depth = 0;
+                poly_start = -1;
+            }
+            break;
+        default:
+            break;
+        }
+    }
+
+    if (out_depth) *out_depth = tess_depth;
+    return poly_start;
+}
+
+static int replay_find_matching_gl_end(int begin_idx) {
+    for (int i = begin_idx + 1; i < g_num_flat_cmds; i++) {
+        if (!g_flat_cmds[i].valid) continue;
+        if (g_flat_cmds[i].type == CMD_END)
+            return i;
+    }
+    return g_num_flat_cmds > 0 ? g_num_flat_cmds - 1 : begin_idx;
+}
+
+static int replay_last_meaningful_src(int begin, int end_exclusive) {
+    for (int i = end_exclusive - 1; i >= begin && i >= 0; i--) {
+        if (!g_flat_cmds[i].valid) continue;
+        if (g_flat_cmds[i].type == CMD_COMMENT) continue;
+        if (g_flat_cmds[i].src_cmd_idx >= 0)
+            return g_flat_cmds[i].src_cmd_idx;
+    }
+    return -1;
+}
+
+static void replay_set_src_line(int src_line) {
+    g_replay_src_line = src_line;
+    if (src_line != g_replay_last_src_line) {
+        g_replay_last_src_line = src_line;
+        if (src_line >= 0)
+            g_scroll_follow_cursor = 1;
+    }
+}
+
+static int replay_next_polygon_limit(int start, int *fade_begin, int *fade_end) {
+    int saw_meaningful = 0;
+
+    *fade_begin = -1;
+    *fade_end = -1;
+
+    for (int i = start; i < g_num_flat_cmds; i++) {
+        CmdType t;
+
+        if (!g_flat_cmds[i].valid || g_flat_cmds[i].type == CMD_COMMENT)
+            continue;
+
+        t = g_flat_cmds[i].type;
+        saw_meaningful = 1;
+
+        switch (t) {
+        case CMD_BEGIN: {
+            int end = replay_find_matching_gl_end(i);
+            *fade_begin = start;
+            *fade_end = end;
+            return end + 1;
+        }
+        case CMD_GLU_SPHERE:
+        case CMD_GLU_CYLINDER:
+        case CMD_GLU_DISK:
+        case CMD_GLU_PARTIAL_DISK:
+        case CMD_GLUT_TORUS:
+            *fade_begin = start;
+            *fade_end = i;
+            return i + 1;
+        case CMD_TESS_BEGIN_POLYGON: {
+            int tess_depth = 1;
+            for (int j = i + 1; j < g_num_flat_cmds; j++) {
+                if (!g_flat_cmds[j].valid) continue;
+                if (g_flat_cmds[j].type == CMD_TESS_BEGIN_POLYGON) {
+                    tess_depth = 1;
+                } else if (g_flat_cmds[j].type == CMD_TESS_BEGIN_CONTOUR) {
+                    if (tess_depth == 1)
+                        tess_depth = 2;
+                } else if (g_flat_cmds[j].type == CMD_TESS_END) {
+                    if (tess_depth == 2) {
+                        tess_depth = 1;
+                    } else if (tess_depth == 1) {
+                        *fade_begin = start;
+                        *fade_end = j;
+                        return j + 1;
+                    }
+                }
+            }
+            *fade_begin = start;
+            *fade_end = g_num_flat_cmds > 0 ? g_num_flat_cmds - 1 : i;
+            return g_num_flat_cmds;
+        }
+        default:
+            break;
+        }
+    }
+
+    if (saw_meaningful)
+        return g_num_flat_cmds;
+    return start;
+}
+
+static int replay_next_vertex_limit(int start, int *fade_begin, int *fade_end) {
+    int open_begin = replay_find_open_begin_before(start);
+    int tess_depth = 0;
+    int open_tess_poly = replay_find_open_tess_polygon_before(start, &tess_depth);
+    int saw_meaningful = 0;
+
+    *fade_begin = -1;
+    *fade_end = -1;
+
+    for (int i = start; i < g_num_flat_cmds; i++) {
+        CmdType t;
+
+        if (!g_flat_cmds[i].valid || g_flat_cmds[i].type == CMD_COMMENT)
+            continue;
+
+        t = g_flat_cmds[i].type;
+        saw_meaningful = 1;
+
+        switch (t) {
+        case CMD_BEGIN:
+            open_begin = i;
+            break;
+        case CMD_END:
+            open_begin = -1;
+            break;
+        case CMD_TESS_BEGIN_POLYGON:
+            open_tess_poly = i;
+            tess_depth = 1;
+            break;
+        case CMD_TESS_BEGIN_CONTOUR:
+            if (tess_depth == 1)
+                tess_depth = 2;
+            break;
+        case CMD_TESS_END:
+            if (tess_depth == 2) {
+                tess_depth = 1;
+            } else if (tess_depth == 1) {
+                *fade_begin = (open_tess_poly >= 0) ? open_tess_poly : start;
+                *fade_end = i;
+                return i + 1;
+            }
+            break;
+        case CMD_VERTEX3F:
+        case CMD_VERTEX2F:
+            *fade_begin = (open_begin >= 0) ? open_begin : start;
+            *fade_end = i;
+            return i + 1;
+        case CMD_TESS_VERTEX:
+            return i + 1;
+        case CMD_GLU_SPHERE:
+        case CMD_GLU_CYLINDER:
+        case CMD_GLU_DISK:
+        case CMD_GLU_PARTIAL_DISK:
+        case CMD_GLUT_TORUS:
+            *fade_begin = start;
+            *fade_end = i;
+            return i + 1;
+        default:
+            break;
+        }
+    }
+
+    if (saw_meaningful)
+        return g_num_flat_cmds;
+    return start;
+}
+
+static int replay_prev_limit(int current_pc) {
+    int pc = 0;
+    int prev_pc = 0;
+
+    if (current_pc <= 0)
+        return 0;
+
+    while (pc < current_pc) {
+        int fade_begin = -1;
+        int fade_end = -1;
+        int next_pc = (g_replay_mode == REPLAY_MODE_POLYGON)
+                    ? replay_next_polygon_limit(pc, &fade_begin, &fade_end)
+                    : replay_next_vertex_limit(pc, &fade_begin, &fade_end);
+
+        if (next_pc <= pc)
+            break;
+        if (next_pc >= current_pc)
+            return prev_pc;
+        prev_pc = pc;
+        pc = next_pc;
+    }
+
+    return prev_pc;
+}
+
+static void replay_seek(int new_pc) {
+    if (new_pc < 0)
+        new_pc = 0;
+    if (new_pc > g_num_flat_cmds)
+        new_pc = g_num_flat_cmds;
+
+    g_replay_pc = new_pc;
+    g_replay_accum = 0.0f;
+    g_replay_fade_alpha = 1.0f;
+    g_replay_fade_begin = -1;
+    g_replay_fade_end = -1;
+    replay_set_src_line(replay_last_meaningful_src(0, new_pc));
+    g_replay_state = (new_pc >= g_num_flat_cmds && g_num_flat_cmds > 0)
+                   ? REPLAY_DONE
+                   : REPLAY_PAUSED;
+}
+
+void replay_start(void) {
+    float live_predef_vals[MAX_PREDEF_VARS];
+
+    copy_predef_values(live_predef_vals);
+    if (g_flat_dirty) {
+        flatten_commands();
+        g_flat_dirty = 0;
+        restore_predef_values(live_predef_vals);
+    }
+
+    if (!replay_has_meaningful_cmds()) {
+        set_status("Replay: nothing to play");
+        return;
+    }
+
+    copy_predef_values(g_replay_baseline_predef_vals);
+    g_replay_saved_t_playing = g_t_playing;
+    g_t_playing = 0;
+
+    g_replay_active = 1;
+    g_replay_state = REPLAY_PLAYING;
+    g_replay_pc = 0;
+    g_replay_accum = 0.0f;
+    g_replay_fade_alpha = 1.0f;
+    g_replay_fade_begin = -1;
+    g_replay_fade_end = -1;
+    g_replay_src_line = -1;
+    g_replay_total_flat = g_num_flat_cmds;
+    g_replay_last_src_line = -1;
+    set_status("Replay: playing");
+}
+
+void replay_stop(void) {
+    g_t_playing = g_replay_saved_t_playing;
+    g_replay_active = 0;
+    g_replay_state = REPLAY_OFF;
+    g_replay_pc = 0;
+    g_replay_accum = 0.0f;
+    g_replay_fade_alpha = 1.0f;
+    g_replay_fade_begin = -1;
+    g_replay_fade_end = -1;
+    g_replay_src_line = -1;
+    g_replay_total_flat = 0;
+    g_replay_last_src_line = -1;
+}
+
+void replay_advance(void) {
+    int old_pc;
+    int next_pc;
+    int fade_begin = -1;
+    int fade_end = -1;
+    int src_line = -1;
+
+    if (!replay_enabled())
+        return;
+
+    if (g_replay_pc >= g_num_flat_cmds) {
+        g_replay_state = REPLAY_DONE;
+        return;
+    }
+
+    old_pc = g_replay_pc;
+    next_pc = (g_replay_mode == REPLAY_MODE_POLYGON)
+            ? replay_next_polygon_limit(old_pc, &fade_begin, &fade_end)
+            : replay_next_vertex_limit(old_pc, &fade_begin, &fade_end);
+
+    if (next_pc <= old_pc)
+        next_pc = g_num_flat_cmds;
+    if (next_pc > g_num_flat_cmds)
+        next_pc = g_num_flat_cmds;
+
+    g_replay_pc = next_pc;
+    g_replay_fade_begin = fade_begin;
+    g_replay_fade_end = fade_end;
+    g_replay_fade_alpha = (fade_begin >= 0 && fade_end >= fade_begin) ? 0.0f : 1.0f;
+
+    src_line = replay_last_meaningful_src(old_pc, next_pc);
+    replay_set_src_line(src_line);
+
+    if (g_replay_pc >= g_num_flat_cmds) {
+        g_replay_state = REPLAY_DONE;
+        set_status("Replay: done");
+    }
+}
+
+static void replay_step_back(void) {
+    if (!g_replay_active)
+        return;
+
+    if (g_replay_pc <= 0) {
+        replay_seek(0);
+        set_status("Replay: at start");
+        return;
+    }
+
+    replay_seek(replay_prev_limit(g_replay_pc));
+}
+
+int replay_exec_limit(void) {
+    if (replay_enabled())
+        return g_replay_pc;
+    return g_num_flat_cmds;
+}
+
+/* ========================================================================= */
 /* Command execution                                                          */
 /* ========================================================================= */
 
@@ -3550,9 +3952,17 @@ void execute_commands(void) {
     GLdouble tess_current_normal[3] = {0.0, 0.0, 1.0};
     GLdouble tess_current_color[4]  = {1.0, 1.0, 1.0, 1.0};
     int goto_count = 0; /* safety guard against infinite goto loops */
+    int replay_fading = replay_enabled() &&
+                        g_replay_fade_alpha < 1.0f &&
+                        g_replay_fade_begin >= 0 &&
+                        g_replay_fade_end >= g_replay_fade_begin;
 
     int pc = 0;
     while (pc < g_num_flat_cmds) {
+        int fade_this_cmd = replay_fading &&
+                            pc >= g_replay_fade_begin &&
+                            pc <= g_replay_fade_end;
+
         if (!g_flat_cmds[pc].valid) { pc++; continue; }
         if (is_transform_cmd(g_flat_cmds[pc].type)) {
             apply_transform_cmd(&g_flat_cmds[pc]);
@@ -3562,6 +3972,8 @@ void execute_commands(void) {
         switch (g_flat_cmds[pc].type) {
         case CMD_BEGIN:
             if (in_begin) { glEnd(); in_begin = 0; }
+            if (fade_this_cmd)
+                glColor4f(0.70f, 0.70f, 0.80f, g_replay_fade_alpha);
             glBegin(g_flat_cmds[pc].mode);
             in_begin = 1;
             break;
@@ -3578,12 +3990,23 @@ void execute_commands(void) {
                        g_flat_cmds[pc].args[2]);
             break;
         case CMD_COLOR3F:
-            glColor3f(g_flat_cmds[pc].args[0], g_flat_cmds[pc].args[1],
-                      g_flat_cmds[pc].args[2]);
+            if (fade_this_cmd) {
+                glColor4f(g_flat_cmds[pc].args[0], g_flat_cmds[pc].args[1],
+                          g_flat_cmds[pc].args[2], g_replay_fade_alpha);
+            } else {
+                glColor3f(g_flat_cmds[pc].args[0], g_flat_cmds[pc].args[1],
+                          g_flat_cmds[pc].args[2]);
+            }
             break;
         case CMD_COLOR4F:
-            glColor4f(g_flat_cmds[pc].args[0], g_flat_cmds[pc].args[1],
-                      g_flat_cmds[pc].args[2], g_flat_cmds[pc].args[3]);
+            if (fade_this_cmd) {
+                glColor4f(g_flat_cmds[pc].args[0], g_flat_cmds[pc].args[1],
+                          g_flat_cmds[pc].args[2],
+                          g_flat_cmds[pc].args[3] * g_replay_fade_alpha);
+            } else {
+                glColor4f(g_flat_cmds[pc].args[0], g_flat_cmds[pc].args[1],
+                          g_flat_cmds[pc].args[2], g_flat_cmds[pc].args[3]);
+            }
             break;
         case CMD_ENABLE:
             glEnable(g_flat_cmds[pc].mode);
@@ -3688,6 +4111,8 @@ void execute_commands(void) {
             tess_current_color[1] = g_flat_cmds[pc].args[1];
             tess_current_color[2] = g_flat_cmds[pc].args[2];
             tess_current_color[3] = (g_flat_cmds[pc].num_args >= 4) ? g_flat_cmds[pc].args[3] : 1.0;
+            if (fade_this_cmd)
+                tess_current_color[3] *= g_replay_fade_alpha;
             break;
         case CMD_TESS_VERTEX:
             if (g_tess && tess_depth == 2 && g_tess_vert_count < TESS_VERT_BUF_SIZE) {
@@ -3780,8 +4205,10 @@ void execute_commands(void) {
     }
 execute_done:;
     if (in_begin) glEnd();
-    if (tess_depth == 2 && g_tess) { gluTessEndContour(g_tess); tess_depth = 1; }
-    if (tess_depth == 1 && g_tess) { gluTessEndPolygon(g_tess); }
+    if (!(replay_enabled() && g_replay_mode == REPLAY_MODE_VERTEX)) {
+        if (tess_depth == 2 && g_tess) { gluTessEndContour(g_tess); tess_depth = 1; }
+        if (tess_depth == 1 && g_tess) { gluTessEndPolygon(g_tess); }
+    }
 }
 
 /* ========================================================================= */
@@ -3830,6 +4257,9 @@ void end_2d(void) {
 /* ========================================================================= */
 
 static void display_func(void) {
+    int saved_flat_count;
+    float live_predef_vals[MAX_PREDEF_VARS];
+
     if (g_normals_dirty) {
         recompute_autonormals();
         g_normals_dirty = 0;
@@ -3838,6 +4268,19 @@ static void display_func(void) {
         flatten_commands();
         g_flat_dirty = 0;
     }
+
+    saved_flat_count = g_num_flat_cmds;
+    copy_predef_values(live_predef_vals);
+    if (replay_enabled()) {
+        g_replay_total_flat = saved_flat_count;
+        if (g_replay_pc > g_num_flat_cmds)
+            g_replay_pc = g_num_flat_cmds;
+        if (g_replay_pc >= g_num_flat_cmds && g_num_flat_cmds > 0 &&
+            g_replay_state == REPLAY_PLAYING)
+            g_replay_state = REPLAY_DONE;
+        g_num_flat_cmds = replay_exec_limit();
+    }
+
     update_render_state_strings();
     update_lookat_strings();
 
@@ -3852,6 +4295,8 @@ static void display_func(void) {
         float weight = 1.0f / (float)g_accum_samples;
         for (int j = 0; j < g_accum_samples; j++) {
             glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+            if (replay_enabled())
+                restore_predef_values(g_replay_baseline_predef_vals);
             g_accum_jitter_x = g_jitter_table[j % MAX_ACCUM_SAMPLES][0];
             g_accum_jitter_y = g_jitter_table[j % MAX_ACCUM_SAMPLES][1];
             render_3d_scene();
@@ -3862,6 +4307,8 @@ static void display_func(void) {
         glAccum(GL_RETURN, 1.0f);
     } else {
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+        if (replay_enabled())
+            restore_predef_values(g_replay_baseline_predef_vals);
         render_3d_scene();
     }
 
@@ -3872,6 +4319,9 @@ static void display_func(void) {
     render_var_panel();
     render_config_menu();
     render_help();
+
+    g_num_flat_cmds = saved_flat_count;
+    restore_predef_values(live_predef_vals);
 
     glutSwapBuffers();
 }
@@ -4599,9 +5049,70 @@ static void keyboard_func(unsigned char key, int x, int y) {
 
     /* Backtick: toggle configuration menu */
     if (key == '`') {
+        if (g_replay_active)
+            replay_stop();
         g_show_config = !g_show_config;
         g_config_hover = -1;
         return;
+    }
+
+    if (g_replay_active) {
+        if (key == 7) {
+            replay_stop();
+            set_status("Replay: off");
+            return;
+        }
+        if (key == ' ') {
+            if (g_replay_state == REPLAY_PLAYING) {
+                g_replay_state = REPLAY_PAUSED;
+                set_status("Replay: paused");
+            } else if (g_replay_state == REPLAY_PAUSED) {
+                g_replay_state = REPLAY_PLAYING;
+                set_status("Replay: playing");
+            } else if (g_replay_state == REPLAY_DONE) {
+                g_replay_pc = 0;
+                g_replay_accum = 0.0f;
+                g_replay_fade_alpha = 1.0f;
+                g_replay_fade_begin = -1;
+                g_replay_fade_end = -1;
+                g_replay_state = REPLAY_PLAYING;
+                g_replay_src_line = -1;
+                g_replay_last_src_line = -1;
+                set_status("Replay: restarted");
+            }
+            return;
+        }
+        if (key == '+' || key == '=') {
+            char msg[64];
+            g_replay_speed *= 1.5f;
+            if (g_replay_speed > 200.0f) g_replay_speed = 200.0f;
+            snprintf(msg, sizeof(msg), "Replay: %.1f step/s", g_replay_speed);
+            set_status(msg);
+            return;
+        }
+        if (key == '-') {
+            char msg[64];
+            g_replay_speed /= 1.5f;
+            if (g_replay_speed < 0.5f) g_replay_speed = 0.5f;
+            snprintf(msg, sizeof(msg), "Replay: %.1f step/s", g_replay_speed);
+            set_status(msg);
+            return;
+        }
+        if (key == 'm' || key == 'M') {
+            g_replay_mode = (g_replay_mode == REPLAY_MODE_VERTEX)
+                          ? REPLAY_MODE_POLYGON
+                          : REPLAY_MODE_VERTEX;
+            set_status(g_replay_mode == REPLAY_MODE_VERTEX
+                     ? "Replay: vertex mode"
+                     : "Replay: polygon mode");
+            return;
+        }
+        if (key == 27) {
+            replay_stop();
+            set_status("Replay: off");
+            return;
+        }
+        replay_stop();
     }
 
     /* Escape */
@@ -4656,6 +5167,12 @@ static void keyboard_func(unsigned char key, int x, int y) {
     /* Ctrl+Y: redo */
     if (key == 25) {
         do_redo();
+        return;
+    }
+
+    /* Ctrl+G: replay */
+    if (key == 7) {
+        replay_start();
         return;
     }
 
@@ -5373,6 +5890,19 @@ static void special_func(int key, int x, int y) {
     g_cursor_on = 1;
     g_blink_tick = 0;
 
+    if (g_replay_active) {
+        if ((g_replay_state == REPLAY_PAUSED || g_replay_state == REPLAY_DONE) &&
+            key == GLUT_KEY_LEFT) {
+            replay_step_back();
+            return;
+        }
+        if (g_replay_state == REPLAY_PAUSED && key == GLUT_KEY_RIGHT) {
+            replay_advance();
+            return;
+        }
+        replay_stop();
+    }
+
     switch (key) {
     /* Cursor movement within line */
     case GLUT_KEY_LEFT:
@@ -5546,10 +6076,25 @@ static void mouse_func(int button, int state, int x, int y) {
         if (g_show_config) {
             int row = cfg_hit_row(x, y);
             if (row >= 0) {
-                *g_cfg_items[row].value =
-                    (*g_cfg_items[row].value + 1) % g_cfg_items[row].n_states;
-                if (g_cfg_items[row].value == &g_autonormal && g_autonormal)
-                    mark_normals_dirty();
+                if (g_cfg_items[row].value == &g_replay_active) {
+                    if (g_replay_active) {
+                        replay_stop();
+                        set_status("Replay: off");
+                    } else {
+                        replay_start();
+                    }
+                } else {
+                    if (g_replay_active)
+                        replay_stop();
+                    *g_cfg_items[row].value =
+                        (*g_cfg_items[row].value + 1) % g_cfg_items[row].n_states;
+                    if (g_cfg_items[row].value == &g_autonormal && g_autonormal)
+                        mark_normals_dirty();
+                    if (g_cfg_items[row].value == &g_replay_mode)
+                        set_status(g_replay_mode == REPLAY_MODE_VERTEX
+                                 ? "Replay: vertex mode"
+                                 : "Replay: polygon mode");
+                }
                 glutPostRedisplay();
                 return;
             }
@@ -5563,6 +6108,8 @@ static void mouse_func(int button, int state, int x, int y) {
         if (g_show_var_panel) {
             int row;
             if (var_panel_hit(x, y, &row)) {
+                if (g_replay_active)
+                    replay_stop();
                 g_drag_var       = row;
                 g_drag_start_val = g_predef_vars[row].value;
                 g_drag_start_x   = x;
@@ -5736,6 +6283,19 @@ static void timer_func(int value) {
     if (g_t_playing && g_t_var_idx >= 0) {
         g_predef_vars[g_t_var_idx].value = g_anim_time;
         g_flat_dirty = 1;   /* re-flatten so expressions referencing t update */
+    }
+
+    if (g_replay_active && g_replay_state == REPLAY_PLAYING) {
+        if (g_replay_fade_alpha < 1.0f) {
+            g_replay_fade_alpha += g_replay_fade_speed * 0.016f;
+            if (g_replay_fade_alpha > 1.0f)
+                g_replay_fade_alpha = 1.0f;
+        }
+        g_replay_accum += g_replay_speed * 0.016f;
+        while (g_replay_accum >= 1.0f && g_replay_state == REPLAY_PLAYING) {
+            g_replay_accum -= 1.0f;
+            replay_advance();
+        }
     }
 
     /* Apply momentum only while no button is held (coast after release).

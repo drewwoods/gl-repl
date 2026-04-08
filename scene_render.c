@@ -911,9 +911,127 @@ static void draw_lights(void) {
 /* 3D scene render (viewport offset to the right of the code panel)           */
 /* ========================================================================= */
 
+static const char *replay_state_name(void) {
+    switch ((ReplayState)g_replay_state) {
+    case REPLAY_PLAYING: return "PLAYING";
+    case REPLAY_PAUSED:  return "PAUSED";
+    case REPLAY_DONE:    return "DONE";
+    case REPLAY_OFF:
+    default:
+        return "OFF";
+    }
+}
+
+static void draw_replay_tess_preview(void) {
+    if (!g_replay_active || g_replay_state == REPLAY_OFF ||
+        g_replay_mode != REPLAY_MODE_VERTEX)
+        return;
+
+    glDisable(GL_LIGHTING);
+    glDisable(GL_DEPTH_TEST);
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    glColor4f(0.30f, 0.95f, 0.75f, 0.80f);
+    glLineWidth(2.0f);
+
+    glPushMatrix();
+    {
+        int in_contour = 0;
+        for (int i = 0; i < g_num_flat_cmds; i++) {
+            if (!g_flat_cmds[i].valid) continue;
+
+            if (is_transform_cmd(g_flat_cmds[i].type)) {
+                if (!in_contour)
+                    apply_transform_cmd(&g_flat_cmds[i]);
+                continue;
+            }
+
+            switch (g_flat_cmds[i].type) {
+            case CMD_TESS_BEGIN_CONTOUR:
+                if (in_contour)
+                    glEnd();
+                glBegin(GL_LINE_STRIP);
+                in_contour = 1;
+                break;
+            case CMD_TESS_VERTEX:
+                if (in_contour)
+                    glVertex3f(g_flat_cmds[i].args[0], g_flat_cmds[i].args[1],
+                               g_flat_cmds[i].args[2]);
+                break;
+            case CMD_TESS_END:
+                if (in_contour) {
+                    glEnd();
+                    in_contour = 0;
+                }
+                break;
+            default:
+                break;
+            }
+        }
+        if (in_contour)
+            glEnd();
+    }
+    glPopMatrix();
+
+    glLineWidth(1.0f);
+    glDisable(GL_BLEND);
+    glEnable(GL_DEPTH_TEST);
+    if (g_user_lighting_enabled) glEnable(GL_LIGHTING);
+}
+
+static void draw_replay_hud(int panel_w, int scene_w) {
+    char line1[128];
+    char line2[192];
+    float progress = 0.0f;
+    int hud_x = panel_w + 18;
+    int hud_y = 18;
+    int hud_w = scene_w - 36;
+
+    if (!g_replay_active || g_replay_state == REPLAY_OFF)
+        return;
+
+    if (hud_w < 220)
+        hud_w = 220;
+    if (g_replay_total_flat > 0)
+        progress = (float)g_replay_pc / (float)g_replay_total_flat;
+    if (progress < 0.0f) progress = 0.0f;
+    if (progress > 1.0f) progress = 1.0f;
+
+    glViewport(0, 0, g_win_w, g_win_h);
+    begin_2d();
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+    glColor4f(0.04f, 0.07f, 0.08f, 0.86f);
+    draw_quad((float)hud_x, (float)hud_y, (float)hud_w, 56.0f);
+    glColor4f(0.22f, 0.55f, 0.48f, 0.90f);
+    draw_quad((float)hud_x, (float)(hud_y + 36), (float)hud_w, 8.0f);
+    glColor4f(0.35f, 0.95f, 0.70f, 0.95f);
+    draw_quad((float)hud_x, (float)(hud_y + 36), (float)hud_w * progress, 8.0f);
+
+    snprintf(line1, sizeof(line1), "REPLAY %s | %d/%d | %.1f step/s | %s",
+             replay_state_name(), g_replay_pc, g_replay_total_flat,
+             g_replay_speed,
+             g_replay_mode == REPLAY_MODE_VERTEX ? "Vertex" : "Polygon");
+    snprintf(line2, sizeof(line2),
+             "[Space] play/pause  [+/-] speed  [m] mode  [Esc] stop  [Left/Right] step");
+
+    glColor3f(0.88f, 0.96f, 0.92f);
+    draw_string((float)(hud_x + 10), (float)(hud_y + 18), line1, FONT_SMALL);
+    glColor3f(0.60f, 0.78f, 0.72f);
+    draw_string((float)(hud_x + 10), (float)(hud_y + 4), line2, FONT_SMALL);
+
+    glDisable(GL_BLEND);
+    end_2d();
+}
+
 void render_3d_scene(void) {
     int panel_w = (int)(g_win_w * g_panel_frac);
     int scene_w = g_win_w - panel_w;
+    int replaying = g_replay_active && g_replay_state != REPLAY_OFF;
+    int show_current_poly = g_highlight_current_poly && !replaying;
+    int replay_tess_preview = replaying && g_replay_mode == REPLAY_MODE_VERTEX;
+    int replay_vertex_points = replaying && g_replay_mode == REPLAY_MODE_VERTEX;
     if (scene_w < 1) scene_w = 1;
 
     glPushAttrib(GL_ALL_ATTRIB_BITS);
@@ -980,7 +1098,7 @@ void render_3d_scene(void) {
     glEnable(GL_POLYGON_OFFSET_LINE);
     glPolygonOffset(-1.0f, -1.0f);
     glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
-    if (g_show_outlines || g_highlight_current_poly) {
+    if (g_show_outlines || show_current_poly) {
         glPushMatrix();
         int in_begin = 0;
         int block_is_current = 0;
@@ -996,6 +1114,8 @@ void render_3d_scene(void) {
             }
             switch (g_flat_cmds[i].type) {
             case CMD_TESS_BEGIN_CONTOUR:
+                if (replay_tess_preview)
+                    break;
                 if (tess_in_contour) { glEnd(); glLineWidth(1.0f); }
                 if (g_show_outlines || tess_poly_is_current) {
                     glLineWidth(1.5f);
@@ -1008,11 +1128,17 @@ void render_3d_scene(void) {
                 }
                 break;
             case CMD_TESS_VERTEX:
+                if (replay_tess_preview)
+                    break;
                 if (tess_in_contour)
                     glVertex3f(g_flat_cmds[i].args[0], g_flat_cmds[i].args[1],
                                g_flat_cmds[i].args[2]);
                 break;
             case CMD_TESS_END:
+                if (replay_tess_preview) {
+                    tess_poly_is_current = 0;
+                    break;
+                }
                 if (tess_in_contour) {
                     glEnd(); glLineWidth(1.0f);
                     tess_in_contour = 0;
@@ -1023,7 +1149,7 @@ void render_3d_scene(void) {
             case CMD_BEGIN: {
                 if (in_begin) glEnd();
                 /* Choose outline color: bright cyan for highlighted block, black otherwise */
-                block_is_current = g_highlight_current_poly &&
+                block_is_current = show_current_poly &&
                                    flat_block_matches_cursor(i, 0);
                 if (block_is_current) {
                     glLineWidth(3.0f);
@@ -1055,7 +1181,7 @@ void render_3d_scene(void) {
                 }
                 break;
             case CMD_TESS_BEGIN_POLYGON:
-                tess_poly_is_current = g_highlight_current_poly &&
+                tess_poly_is_current = show_current_poly &&
                                        flat_block_matches_cursor(i, 1);
                 break;
             default: break;
@@ -1070,8 +1196,11 @@ void render_3d_scene(void) {
 
     /* Vertex dots — replay transforms so dots match the filled geometry */
     glPushMatrix();
-    glPointSize(5.0f);
-    glColor3f(0.0f, 0.0f, 0.0f);
+    glPointSize(replay_vertex_points ? 9.0f : 5.0f);
+    if (replay_vertex_points)
+        glColor3f(1.0f, 0.88f, 0.20f);
+    else
+        glColor3f(0.0f, 0.0f, 0.0f);
     for (int i = 0; i < g_num_flat_cmds; i++) {
         if (!g_flat_cmds[i].valid) continue;
         int is_cursor = (g_flat_cmds[i].src_cmd_idx == g_edit_line);
@@ -1080,7 +1209,7 @@ void render_3d_scene(void) {
         // position. Do this inline so that the current model matrix is applied
         // to the guides, ensuring they are positioned correctly even when
         // transforms separate blocks.
-        if (is_cursor) {
+        if (is_cursor && !replaying) {
             draw_vertex_guides();
             draw_normal_guides();
         }
@@ -1100,9 +1229,14 @@ void render_3d_scene(void) {
     glDisable(GL_BLEND);
     if (g_user_lighting_enabled) glEnable(GL_LIGHTING);
 
+    if (replay_tess_preview)
+        draw_replay_tess_preview();
+
     draw_lights();
 
     if (g_show_vnums)   draw_vertex_numbers();
     if (g_show_normals) draw_normal_vectors();
+    if (replaying)
+        draw_replay_hud(panel_w, scene_w);
     glPopAttrib();
 }
