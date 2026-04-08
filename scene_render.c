@@ -476,10 +476,11 @@ static void draw_vertex_numbers(void) {
     int block_selected = 0;
     int vn = 0;
     int tess_depth = 0;
+    int matrix_depth = 0;
     for (int i = 0; i < g_num_flat_cmds; i++) {
         if (!g_flat_cmds[i].valid) continue;
         if (!in_block && is_transform_cmd(g_flat_cmds[i].type)) {
-            apply_transform_cmd(&g_flat_cmds[i]);
+            apply_tracked_transform_cmd(&g_flat_cmds[i], &matrix_depth);
         } else if (g_flat_cmds[i].type == CMD_BEGIN) {
             in_block = 1;
             block_selected = flat_block_matches_cursor(i, 0);
@@ -511,6 +512,7 @@ static void draw_vertex_numbers(void) {
             vn++;
         }
     }
+    unwind_tracked_transform_stack(&matrix_depth);
     glPopMatrix();
 
     glEnable(GL_DEPTH_TEST);
@@ -529,10 +531,11 @@ static void draw_normal_vectors(void) {
      * between blocks without being inside a begin/end. */
     glPushMatrix();
     int in_begin = 0;
+    int matrix_depth = 0;
     for (int i = 0; i < g_num_flat_cmds; i++) {
         if (!g_flat_cmds[i].valid) continue;
         if (!in_begin && is_transform_cmd(g_flat_cmds[i].type)) {
-            apply_transform_cmd(&g_flat_cmds[i]);
+            apply_tracked_transform_cmd(&g_flat_cmds[i], &matrix_depth);
         } else if (g_flat_cmds[i].type == CMD_BEGIN ||
                    g_flat_cmds[i].type == CMD_TESS_BEGIN_POLYGON) {
             in_begin = 1;
@@ -558,6 +561,7 @@ static void draw_normal_vectors(void) {
             glPointSize(1.0f);
         }
     }
+    unwind_tracked_transform_stack(&matrix_depth);
     glPopMatrix();
 
     glEnable(GL_DEPTH_TEST);
@@ -937,12 +941,13 @@ static void draw_replay_tess_preview(void) {
     glPushMatrix();
     {
         int in_contour = 0;
+        int matrix_depth = 0;
         for (int i = 0; i < g_num_flat_cmds; i++) {
             if (!g_flat_cmds[i].valid) continue;
 
             if (is_transform_cmd(g_flat_cmds[i].type)) {
                 if (!in_contour)
-                    apply_transform_cmd(&g_flat_cmds[i]);
+                    apply_tracked_transform_cmd(&g_flat_cmds[i], &matrix_depth);
                 continue;
             }
 
@@ -970,6 +975,7 @@ static void draw_replay_tess_preview(void) {
         }
         if (in_contour)
             glEnd();
+        unwind_tracked_transform_stack(&matrix_depth);
     }
     glPopMatrix();
 
@@ -1130,6 +1136,7 @@ void render_3d_scene(void) {
     if (g_show_outlines || show_current_poly) {
         glPushMatrix();
         int in_begin = 0;
+        int matrix_depth = 0;
         int block_is_current = 0;
         int tess_in_contour = 0;  /* drawing a tess contour as GL_LINE_LOOP */
         int tess_poly_is_current = 0;
@@ -1138,7 +1145,7 @@ void render_3d_scene(void) {
 
             if (is_transform_cmd(g_flat_cmds[i].type)) {
                 if (!in_begin && !tess_in_contour)
-                    apply_transform_cmd(&g_flat_cmds[i]);
+                    apply_tracked_transform_cmd(&g_flat_cmds[i], &matrix_depth);
                 continue;
             }
             switch (g_flat_cmds[i].type) {
@@ -1218,6 +1225,7 @@ void render_3d_scene(void) {
         }
         if (in_begin) { glEnd(); glLineWidth(1.0f); }
         if (tess_in_contour) { glEnd(); glLineWidth(1.0f); }
+        unwind_tracked_transform_stack(&matrix_depth);
         glPopMatrix();
     }
     glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
@@ -1225,7 +1233,9 @@ void render_3d_scene(void) {
 
     /* Vertex dots — replay transforms so dots match the filled geometry */
     glPushMatrix();
-    glPointSize(replay_vertex_points ? 9.0f : 5.0f);
+    {
+    int matrix_depth = 0;
+    glPointSize(5.0f);
     if (replay_vertex_points)
         glColor3f(1.0f, 0.88f, 0.20f);
     else
@@ -1244,7 +1254,7 @@ void render_3d_scene(void) {
         }
 
         if (is_transform_cmd(g_flat_cmds[i].type)) {
-            apply_transform_cmd(&g_flat_cmds[i]);
+            apply_tracked_transform_cmd(&g_flat_cmds[i], &matrix_depth);
         } else if (g_flat_cmds[i].type == CMD_VERTEX3F ||
                    g_flat_cmds[i].type == CMD_TESS_VERTEX) {
             glBegin(GL_POINTS);
@@ -1254,6 +1264,8 @@ void render_3d_scene(void) {
         }
     }
     glPointSize(1.0f);
+    unwind_tracked_transform_stack(&matrix_depth);
+    }
     glPopMatrix();
     glDisable(GL_BLEND);
     if (g_user_lighting_enabled) glEnable(GL_LIGHTING);
