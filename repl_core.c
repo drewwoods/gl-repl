@@ -529,6 +529,7 @@ int    g_t_var_idx = -1;   /* index of "t" in g_predef_vars[], cached at init */
 
 /* Toggles */
 int    g_show_help    = 0;
+int    g_help_tab     = 0;   /* 0=Commands, 1=Keys */
 int    g_help_scroll  = 0;
 int    g_wireframe    = 0;
 int    g_grid_theme   = 2;  /* 0=off, 1=classic, 2=fog, 3=tron, 4=ember, 5=faint, 6=focus */
@@ -5310,6 +5311,7 @@ static void keyboard_func(unsigned char key, int x, int y) {
         }
         if (g_show_help) {
             g_show_help = 0;
+            g_help_tab = 0;
             g_help_scroll = 0;
         } else if (g_ac_count > 0) {
             /* Dismiss autocomplete */
@@ -6093,10 +6095,18 @@ static void special_func(int key, int x, int y) {
     switch (key) {
     /* Cursor movement within line */
     case GLUT_KEY_LEFT:
+        if (g_show_help) {
+            if (g_help_tab > 0) { g_help_tab--; g_help_scroll = 0; }
+            break;
+        }
         if (g_cursor_pos > 0) g_cursor_pos--;
         update_autocomplete();
         break;
     case GLUT_KEY_RIGHT:
+        if (g_show_help) {
+            if (g_help_tab < 1) { g_help_tab++; g_help_scroll = 0; }
+            break;
+        }
         if (g_cursor_pos < g_input_len) g_cursor_pos++;
         update_autocomplete();
         break;
@@ -6176,6 +6186,7 @@ static void special_func(int key, int x, int y) {
     /* Toggle keys */
     case GLUT_KEY_F1:
         g_show_help = !g_show_help;
+        g_help_tab = 0;
         g_help_scroll = 0;
         break;
     case GLUT_KEY_F2:
