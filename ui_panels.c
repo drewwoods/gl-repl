@@ -693,9 +693,9 @@ void render_help(void) {
     int hx = g_win_w / 6, hy = g_win_h / 12;
     int hw = g_win_w * 2 / 3, hh = g_win_h * 5 / 6;
     int tab_bar_h = 28;
-    int pad_top = 32 + tab_bar_h + FONT_H + 4, pad_bot = 24;
+    int pad_top = 32 + tab_bar_h, pad_bot = 24;
     int content_h = hh - pad_top - pad_bot;
-    int visible_lines = content_h / LINE_H;
+    int visible_lines = (content_h - FONT_H - 4) / LINE_H;
     if (visible_lines < 1) visible_lines = 1;
 
     /* Clamp scroll */
@@ -775,7 +775,8 @@ void render_help(void) {
     glScissor(hx + 1, hy + pad_bot, hw - 2, content_h);
 
     int tx = hx + 24;
-    int ty_start = hy + hh - pad_top;
+    /* Lower baseline so first line's glyphs don't clip at scissor top */
+    int ty_start = hy + hh - pad_top - FONT_H - 4;
 
     for (int i = g_help_scroll; i < n_lines && i < g_help_scroll + visible_lines + 1; i++) {
         int ty = ty_start - (i - g_help_scroll) * LINE_H;
@@ -787,20 +788,46 @@ void render_help(void) {
         if (text[i][0] != ' ') {
             /* Section header — bright gold */
             glColor3f(0.95f, 0.80f, 0.40f);
+            draw_string((float)tx, (float)ty, text[i], FONT_MONO);
         } else if (text[i][0] == ' ' && text[i][1] == ' '
                    && text[i][2] == ' ' && text[i][3] == ' ') {
             /* 4+ space indent — code example, muted cyan */
             glColor3f(0.45f, 0.68f, 0.78f);
+            draw_string((float)tx, (float)ty, text[i], FONT_MONO);
         } else if (text[i][0] == ' ' && text[i][1] == ' '
                    && strstr(text[i] + 2, "    ")) {
-            /* 2-space indent with aligned columns — command/key entry, green */
-            glColor3f(0.55f, 0.90f, 0.55f);
+            /* 2-space indent with aligned columns — split colors:
+               command/key in green, description in muted blue */
+            const char *p = text[i] + 2;
+            int gap = 0;
+            while (p[gap]) {
+                if (p[gap] == ' ' && p[gap+1] == ' ' && p[gap+2] == ' ')
+                    break;
+                gap++;
+            }
+            int desc = gap;
+            while (p[desc] == ' ') desc++;
+
+            /* Draw command/key part (indent + name) in green */
+            char cmd_buf[256];
+            int cmd_n = gap + 2;
+            if (cmd_n > 255) cmd_n = 255;
+            memcpy(cmd_buf, text[i], cmd_n);
+            cmd_buf[cmd_n] = '\0';
+            glColor3f(0.45f, 0.90f, 0.50f);
+            draw_string((float)tx, (float)ty, cmd_buf, FONT_MONO);
+
+            /* Draw description part in muted blue-gray */
+            if (p[desc]) {
+                glColor3f(0.60f, 0.62f, 0.72f);
+                draw_string((float)(tx + (desc + 2) * FONT_W), (float)ty,
+                            text[i] + 2 + desc, FONT_MONO);
+            }
         } else {
             /* 2-space indent, prose description — muted gray-blue */
-            glColor3f(0.58f, 0.58f, 0.68f);
+            glColor3f(0.55f, 0.55f, 0.65f);
+            draw_string((float)tx, (float)ty, text[i], FONT_MONO);
         }
-
-        draw_string((float)tx, (float)ty, text[i], FONT_MONO);
     }
 
     glDisable(GL_SCISSOR_TEST);
