@@ -56,6 +56,174 @@ static void color_for_type(CmdType t) {
 }
 
 /* ========================================================================= */
+/* Replay variable display helpers                                            */
+/* ========================================================================= */
+
+/* Find the most recent flat command for a source line, at or before replay_pc */
+static int find_replay_flat_cmd(int src_line) {
+    if (g_replay_pc <= 0) return -1;
+    for (int j = g_replay_pc - 1; j >= 0; j--) {
+        if (g_flat_cmds[j].src_cmd_idx == src_line && g_flat_cmds[j].valid)
+            return j;
+    }
+    return -1;
+}
+
+/* Replace predefined variable identifiers with their formatted values.
+ * Returns the count of distinct variables substituted.
+ * Builds var_comment like " // t = 3.3, n = 12" */
+static int subst_predef_vars(const char *source, char *out, int out_size,
+                              char *var_comment, int comment_size) {
+    char used_names[MAX_PREDEF_VARS][16];
+    float used_vals[MAX_PREDEF_VARS];
+    int num_used = 0;
+
+    int oi = 0;
+    const char *p = source;
+    while (*p && oi < out_size - 20) {
+        if (isalpha((unsigned char)*p) || *p == '_') {
+            const char *start = p;
+            while (*p && (isalnum((unsigned char)*p) || *p == '_')) p++;
+            int len = (int)(p - start);
+
+            int found = -1;
+            for (int v = 0; v < g_num_predef_vars; v++) {
+                int nlen = (int)strlen(g_predef_vars[v].name);
+                if (nlen == len &&
+                    strncmp(start, g_predef_vars[v].name, len) == 0) {
+                    found = v;
+                    break;
+                }
+            }
+
+            if (found >= 0) {
+                oi += snprintf(out + oi, out_size - oi, "%g",
+                               g_predef_vars[found].value);
+                int dup = 0;
+                for (int u = 0; u < num_used; u++) {
+                    if (strcmp(used_names[u],
+                              g_predef_vars[found].name) == 0) {
+                        dup = 1; break;
+                    }
+                }
+                if (!dup && num_used < MAX_PREDEF_VARS) {
+                    strncpy(used_names[num_used],
+                            g_predef_vars[found].name, 15);
+                    used_names[num_used][15] = '\0';
+                    used_vals[num_used] = g_predef_vars[found].value;
+                    num_used++;
+                }
+            } else {
+                if (oi + len < out_size) {
+                    memcpy(out + oi, start, len);
+                    oi += len;
+                }
+            }
+        } else {
+            out[oi++] = *p++;
+        }
+    }
+    out[oi] = '\0';
+
+    var_comment[0] = '\0';
+    if (num_used > 0) {
+        int ci = snprintf(var_comment, comment_size, " // ");
+        for (int u = 0; u < num_used && ci < comment_size - 20; u++) {
+            if (u > 0)
+                ci += snprintf(var_comment + ci, comment_size - ci, ", ");
+            ci += snprintf(var_comment + ci, comment_size - ci, "%s = %g",
+                           used_names[u], used_vals[u]);
+        }
+    }
+
+    return num_used;
+}
+
+/* Get format string for a command type's evaluated display */
+static const char *eval_fmt_for_type(CmdType type, int *nargs_out) {
+    switch (type) {
+    case CMD_VERTEX3F:         *nargs_out = 3; return "glVertex3f(%g, %g, %g);";
+    case CMD_VERTEX2F:         *nargs_out = 2; return "glVertex2f(%g, %g);";
+    case CMD_NORMAL3F:         *nargs_out = 3; return "glNormal3f(%g, %g, %g);";
+    case CMD_COLOR3F:          *nargs_out = 3; return "glColor3f(%g, %g, %g);";
+    case CMD_COLOR4F:          *nargs_out = 4; return "glColor4f(%g, %g, %g, %g);";
+    case CMD_TRANSLATE3F:      *nargs_out = 3; return "glTranslatef(%g, %g, %g);";
+    case CMD_SCALEF:           *nargs_out = 3; return "glScalef(%g, %g, %g);";
+    case CMD_ROTATEF:          *nargs_out = 4; return "glRotatef(%g, %g, %g, %g);";
+    case CMD_GLU_SPHERE:       *nargs_out = 3; return "gluSphere(q, %g, %g, %g);";
+    case CMD_GLU_CYLINDER:     *nargs_out = 5; return "gluCylinder(q, %g, %g, %g, %g, %g);";
+    case CMD_GLU_DISK:         *nargs_out = 4; return "gluDisk(q, %g, %g, %g, %g);";
+    case CMD_GLU_PARTIAL_DISK: *nargs_out = 6; return "gluPartialDisk(q, %g, %g, %g, %g, %g, %g);";
+    case CMD_GLUT_TORUS:       *nargs_out = 4; return "glutSolidTorus(%g, %g, %g, %g);";
+    case CMD_TESS_NORMAL:      *nargs_out = 3; return "gluNormal(%g, %g, %g);";
+    case CMD_TESS_VERTEX:      *nargs_out = 3; return "gluVertex(%g, %g, %g);";
+    default:                   *nargs_out = 0; return NULL;
+    }
+}
+
+/* Format a command with evaluated numeric args.
+ * Preserves leading whitespace from the original source. */
+static int format_evaluated_cmd(const GLCmd *cmd, const char *orig_source,
+                                 char *out, int out_size) {
+    int indent = 0;
+    while (orig_source[indent] &&
+           isspace((unsigned char)orig_source[indent]))
+        indent++;
+
+    int oi = 0;
+    if (indent > 0) {
+        if (indent > out_size - 1) indent = out_size - 1;
+        memcpy(out, orig_source, indent);
+        oi = indent;
+    }
+
+    /* VAR_ASSIGN: show "var = value;" */
+    if (cmd->type == CMD_VAR_ASSIGN) {
+        const char *p = orig_source;
+        while (*p && isspace((unsigned char)*p)) p++;
+        char vname[16];
+        int ni = 0;
+        while (*p && (isalnum((unsigned char)*p) || *p == '_') && ni < 15)
+            vname[ni++] = *p++;
+        vname[ni] = '\0';
+        snprintf(out + oi, out_size - oi, "%s = %g;", vname, cmd->args[0]);
+        return 1;
+    }
+
+    int nargs;
+    const char *fmt = eval_fmt_for_type(cmd->type, &nargs);
+    if (!fmt || nargs < 1) return 0;
+
+    switch (nargs) {
+    case 2:
+        snprintf(out + oi, out_size - oi, fmt,
+                 cmd->args[0], cmd->args[1]);
+        break;
+    case 3:
+        snprintf(out + oi, out_size - oi, fmt,
+                 cmd->args[0], cmd->args[1], cmd->args[2]);
+        break;
+    case 4:
+        snprintf(out + oi, out_size - oi, fmt,
+                 cmd->args[0], cmd->args[1], cmd->args[2], cmd->args[3]);
+        break;
+    case 5:
+        snprintf(out + oi, out_size - oi, fmt,
+                 cmd->args[0], cmd->args[1], cmd->args[2], cmd->args[3],
+                 cmd->args[4]);
+        break;
+    case 6:
+        snprintf(out + oi, out_size - oi, fmt,
+                 cmd->args[0], cmd->args[1], cmd->args[2], cmd->args[3],
+                 cmd->args[4], cmd->args[5]);
+        break;
+    default:
+        return 0;
+    }
+    return 1;
+}
+
+/* ========================================================================= */
 /* Code panel                                                                 */
 /* ========================================================================= */
 
@@ -127,15 +295,22 @@ void render_code_panel(void) {
     int n_header = n_hpre + RENDER_STATE_LINE_COUNT + LOOKAT_LINE_COUNT + n_hpost;
     int n_footer = 0;
     for (int i = 0; g_footer[i]; i++) n_footer++;
+    /* Extra annotation lines for variable display during replay */
+    int replay_extra = 0;
+    if (g_replay_active && g_replay_state != REPLAY_OFF &&
+        g_replay_src_line >= 0 && g_replay_src_line < g_num_cmds &&
+        g_cmds[g_replay_src_line].has_vars)
+        replay_extra = 2;
+
     /* +1 for the new-line slot, +1 if inserting */
     int total_lines = n_header + g_num_cmds + (g_inserting ? 1 : 0)
-                    + 1 + n_footer;
+                    + 1 + n_footer + replay_extra;
 
     /* Which document line is the cursor on? (offset by header) */
     int cursor_doc_line = n_header + g_edit_line;
     int follow_doc_line = cursor_doc_line;
     if (g_replay_active && g_replay_state != REPLAY_OFF && g_replay_src_line >= 0)
-        follow_doc_line = n_header + g_replay_src_line;
+        follow_doc_line = n_header + g_replay_src_line + replay_extra;
 
     /* Clamp scroll */
     int max_scroll = total_lines - visible_lines;
@@ -352,6 +527,68 @@ void render_code_panel(void) {
                 }
                 file_line++;
                 cur++;
+
+                /* Replay annotation: variable-substituted and evaluated */
+                if (g_replay_active && g_replay_state != REPLAY_OFF &&
+                    g_replay_src_line >= 0 && i == g_replay_src_line &&
+                    g_cmds[i].has_vars) {
+                    int flat_idx = find_replay_flat_cmd(i);
+                    if (flat_idx >= 0) {
+                        /* Annotation 1: variable-substituted */
+                        char subst[MAX_LINE_LEN], var_comment[128];
+                        int nsubst = subst_predef_vars(
+                            g_cmds[i].source, subst, sizeof(subst),
+                            var_comment, sizeof(var_comment));
+                        if (nsubst > 0) {
+                            if (cur >= g_scroll &&
+                                cur < g_scroll + visible_lines) {
+                                glEnable(GL_BLEND);
+                                glBlendFunc(GL_SRC_ALPHA,
+                                            GL_ONE_MINUS_SRC_ALPHA);
+                                glColor4f(0.10f, 0.25f, 0.15f, 0.35f);
+                                draw_quad(0, (float)(line_y - 3),
+                                          (float)panel_w, (float)LINE_H);
+                                glDisable(GL_BLEND);
+                                glColor3f(0.50f, 0.75f, 0.50f);
+                                draw_string((float)text_x, (float)line_y,
+                                            subst, FONT_MONO);
+                                if (var_comment[0]) {
+                                    int sw = (int)strlen(subst) * FONT_W;
+                                    glColor3f(0.40f, 0.55f, 0.40f);
+                                    draw_string(
+                                        (float)(text_x + sw),
+                                        (float)line_y,
+                                        var_comment, FONT_MONO);
+                                }
+                                line_y -= LINE_H;
+                            }
+                            cur++;
+                        }
+
+                        /* Annotation 2: fully evaluated */
+                        char eval_buf[MAX_LINE_LEN];
+                        if (format_evaluated_cmd(
+                                &g_flat_cmds[flat_idx],
+                                g_cmds[i].source,
+                                eval_buf, sizeof(eval_buf))) {
+                            if (cur >= g_scroll &&
+                                cur < g_scroll + visible_lines) {
+                                glEnable(GL_BLEND);
+                                glBlendFunc(GL_SRC_ALPHA,
+                                            GL_ONE_MINUS_SRC_ALPHA);
+                                glColor4f(0.15f, 0.15f, 0.25f, 0.35f);
+                                draw_quad(0, (float)(line_y - 3),
+                                          (float)panel_w, (float)LINE_H);
+                                glDisable(GL_BLEND);
+                                glColor3f(0.50f, 0.60f, 0.80f);
+                                draw_string((float)text_x, (float)line_y,
+                                            eval_buf, FONT_MONO);
+                                line_y -= LINE_H;
+                            }
+                            cur++;
+                        }
+                    }
+                }
             }
 
             /* Advance vertex counter after rendering this command */
