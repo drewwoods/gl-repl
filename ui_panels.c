@@ -70,13 +70,16 @@ static int find_replay_flat_cmd(int src_line) {
 }
 
 /* Replace predefined variable identifiers with their formatted values.
+ * local_vars (loop variables) take priority over g_predef_vars.
  * Returns the count of distinct variables substituted.
  * Builds var_comment like " // t = 3.3, n = 12" */
 static int subst_predef_vars(const char *source, char *out, int out_size,
-                              char *var_comment, int comment_size) {
-    char used_names[MAX_PREDEF_VARS][16];
-    float used_vals[MAX_PREDEF_VARS];
+                              char *var_comment, int comment_size,
+                              const ExprVar *local_vars, int n_local_vars) {
+    char used_names[MAX_PREDEF_VARS + MAX_EXPR_VARS][16];
+    float used_vals[MAX_PREDEF_VARS + MAX_EXPR_VARS];
     int num_used = 0;
+    int max_used = MAX_PREDEF_VARS + MAX_EXPR_VARS;
 
     int oi = 0;
     const char *p = source;
@@ -86,31 +89,45 @@ static int subst_predef_vars(const char *source, char *out, int out_size,
             while (*p && (isalnum((unsigned char)*p) || *p == '_')) p++;
             int len = (int)(p - start);
 
-            int found = -1;
-            for (int v = 0; v < g_num_predef_vars; v++) {
+            int found = 0;
+            float found_val = 0.0f;
+            char found_name[16] = "";
+
+            /* Check local (loop) vars first — they shadow predefined vars */
+            for (int v = 0; !found && v < n_local_vars; v++) {
+                int nlen = (int)strlen(local_vars[v].name);
+                if (nlen == len &&
+                    strncmp(start, local_vars[v].name, len) == 0) {
+                    found = 1;
+                    found_val = local_vars[v].value;
+                    strncpy(found_name, local_vars[v].name, 15);
+                    found_name[15] = '\0';
+                }
+            }
+            /* Fall back to predefined (slider) vars */
+            for (int v = 0; !found && v < g_num_predef_vars; v++) {
                 int nlen = (int)strlen(g_predef_vars[v].name);
                 if (nlen == len &&
                     strncmp(start, g_predef_vars[v].name, len) == 0) {
-                    found = v;
-                    break;
+                    found = 1;
+                    found_val = g_predef_vars[v].value;
+                    strncpy(found_name, g_predef_vars[v].name, 15);
+                    found_name[15] = '\0';
                 }
             }
 
-            if (found >= 0) {
-                oi += snprintf(out + oi, out_size - oi, "%g",
-                               g_predef_vars[found].value);
+            if (found) {
+                oi += snprintf(out + oi, out_size - oi, "%g", found_val);
                 int dup = 0;
                 for (int u = 0; u < num_used; u++) {
-                    if (strcmp(used_names[u],
-                              g_predef_vars[found].name) == 0) {
+                    if (strcmp(used_names[u], found_name) == 0) {
                         dup = 1; break;
                     }
                 }
-                if (!dup && num_used < MAX_PREDEF_VARS) {
-                    strncpy(used_names[num_used],
-                            g_predef_vars[found].name, 15);
+                if (!dup && num_used < max_used) {
+                    strncpy(used_names[num_used], found_name, 15);
                     used_names[num_used][15] = '\0';
-                    used_vals[num_used] = g_predef_vars[found].value;
+                    used_vals[num_used] = found_val;
                     num_used++;
                 }
             } else {
@@ -536,9 +553,12 @@ void render_code_panel(void) {
                     if (flat_idx >= 0) {
                         /* Annotation 1: variable-substituted */
                         char subst[MAX_LINE_LEN], var_comment[128];
+                        const FlatCmdLocalVars *lcvars =
+                            &g_flat_cmd_local_vars[flat_idx];
                         int nsubst = subst_predef_vars(
                             g_cmds[i].source, subst, sizeof(subst),
-                            var_comment, sizeof(var_comment));
+                            var_comment, sizeof(var_comment),
+                            lcvars->vars, lcvars->num_vars);
                         if (nsubst > 0) {
                             if (cur >= g_scroll &&
                                 cur < g_scroll + visible_lines) {

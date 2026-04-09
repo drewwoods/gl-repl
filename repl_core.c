@@ -299,9 +299,10 @@ static const char *tempfile = "/tmp/temp-output.c";
 GLCmd  g_cmds[MAX_COMMANDS];
 int    g_num_cmds = 0;
 int    g_normals_dirty = 1;
-GLCmd  g_flat_cmds[MAX_COMMANDS];
-int    g_num_flat_cmds = 0;
-int    g_flat_dirty = 1;
+GLCmd           g_flat_cmds[MAX_COMMANDS];
+int             g_num_flat_cmds = 0;
+int             g_flat_dirty = 1;
+FlatCmdLocalVars g_flat_cmd_local_vars[MAX_COMMANDS];
 
 /* Lightweight prefix-depth caches for O(1) depth lookups at position `pos`. */
 static int g_depth_cache_dirty = 1;
@@ -3469,6 +3470,11 @@ static void flatten_range(int start, int end_idx, ExprVar *vars, int nv,
                 flat_cmd_set_provenance(&tmp, i, call_src_cmd_idx,
                                         root_call_src_cmd_idx,
                                         func_scope_mask);
+                /* Snapshot local vars so replay can show correct substitution */
+                int snap_n = nv < MAX_EXPR_VARS ? nv : MAX_EXPR_VARS;
+                g_flat_cmd_local_vars[g_num_flat_cmds].num_vars = snap_n;
+                memcpy(g_flat_cmd_local_vars[g_num_flat_cmds].vars, vars,
+                       (size_t)snap_n * sizeof(ExprVar));
                 g_flat_cmds[g_num_flat_cmds++] = tmp;
             }
             g_edit_line = saved;
@@ -3483,6 +3489,7 @@ static void flatten_range(int start, int end_idx, ExprVar *vars, int nv,
                 flat_cmd_set_provenance(&tmp, i, call_src_cmd_idx,
                                         root_call_src_cmd_idx,
                                         func_scope_mask);
+                g_flat_cmd_local_vars[g_num_flat_cmds].num_vars = 0;
                 g_flat_cmds[g_num_flat_cmds++] = tmp;
             }
         } else {
@@ -3491,6 +3498,7 @@ static void flatten_range(int start, int end_idx, ExprVar *vars, int nv,
                                     i, call_src_cmd_idx,
                                     root_call_src_cmd_idx,
                                     func_scope_mask);
+            g_flat_cmd_local_vars[g_num_flat_cmds].num_vars = 0;
             g_num_flat_cmds++;
         }
         i++;
