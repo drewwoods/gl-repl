@@ -693,7 +693,7 @@ void render_help(void) {
     int hx = g_win_w / 6, hy = g_win_h / 12;
     int hw = g_win_w * 2 / 3, hh = g_win_h * 5 / 6;
     int tab_bar_h = 28;
-    int pad_top = 32 + tab_bar_h, pad_bot = 24;
+    int pad_top = 32 + tab_bar_h + FONT_H + 4, pad_bot = 24;
     int content_h = hh - pad_top - pad_bot;
     int visible_lines = content_h / LINE_H;
     if (visible_lines < 1) visible_lines = 1;
@@ -783,10 +783,22 @@ void render_help(void) {
 
         if (text[i][0] == '\0')
             continue;   /* skip blank lines — still scrolls past them */
-        else if (text[i][0] == ' ' && text[i][1] == ' ')
-            glColor3f(0.65f, 0.90f, 0.65f);   /* indented = detail */
-        else
-            glColor3f(0.75f, 0.80f, 0.95f);   /* section header */
+
+        if (text[i][0] != ' ') {
+            /* Section header — bright gold */
+            glColor3f(0.95f, 0.80f, 0.40f);
+        } else if (text[i][0] == ' ' && text[i][1] == ' '
+                   && text[i][2] == ' ' && text[i][3] == ' ') {
+            /* 4+ space indent — code example, muted cyan */
+            glColor3f(0.45f, 0.68f, 0.78f);
+        } else if (text[i][0] == ' ' && text[i][1] == ' '
+                   && strstr(text[i] + 2, "    ")) {
+            /* 2-space indent with aligned columns — command/key entry, green */
+            glColor3f(0.55f, 0.90f, 0.55f);
+        } else {
+            /* 2-space indent, prose description — muted gray-blue */
+            glColor3f(0.58f, 0.58f, 0.68f);
+        }
 
         draw_string((float)tx, (float)ty, text[i], FONT_MONO);
     }
