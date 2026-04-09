@@ -246,6 +246,7 @@ extern int    g_t_var_idx;
 
 /* Toggles */
 extern int    g_show_help;
+extern int    g_help_tab;
 extern int    g_help_scroll;
 extern int    g_wireframe;
 extern int    g_grid_theme;
