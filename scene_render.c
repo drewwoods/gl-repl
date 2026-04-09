@@ -15,6 +15,12 @@ static void draw_grid(void) {
     if (g_grid_theme == 0) return;
 
     glDisable(GL_LIGHTING);
+    glEnable(GL_DEPTH_TEST);
+    glDepthMask(GL_FALSE);
+    if (g_multisample_enabled) glEnable(GL_MULTISAMPLE);
+    else glDisable(GL_MULTISAMPLE);
+    if (g_line_smooth_enabled) glEnable(GL_LINE_SMOOTH);
+    else glDisable(GL_LINE_SMOOTH);
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
@@ -219,6 +225,7 @@ static void draw_grid(void) {
     }
 
     glPopMatrix();
+    glDepthMask(GL_TRUE);
     glDisable(GL_BLEND);
     if (g_user_lighting_enabled) glEnable(GL_LIGHTING);
 }
@@ -235,7 +242,12 @@ static void draw_axes(void) {
     if (g_axes_theme == 0) return;
 
     glDisable(GL_LIGHTING);
-//    glDisable(GL_DEPTH_TEST);
+    glEnable(GL_DEPTH_TEST);
+    glDepthMask(GL_FALSE);
+    if (g_multisample_enabled) glEnable(GL_MULTISAMPLE);
+    else glDisable(GL_MULTISAMPLE);
+    if (g_line_smooth_enabled) glEnable(GL_LINE_SMOOTH);
+    else glDisable(GL_LINE_SMOOTH);
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
@@ -439,6 +451,7 @@ static void draw_axes(void) {
     default: break;
     }
 
+    glDepthMask(GL_TRUE);
     glDisable(GL_BLEND);
     glEnable(GL_DEPTH_TEST);
     if (g_user_lighting_enabled) glEnable(GL_LIGHTING);
@@ -926,6 +939,18 @@ static const char *replay_state_name(void) {
     }
 }
 
+static int begin_mode_has_outline_overlay(GLenum mode) {
+    switch (mode) {
+    case GL_POINTS:
+    case GL_LINES:
+    case GL_LINE_STRIP:
+    case GL_LINE_LOOP:
+        return 0;
+    default:
+        return 1;
+    }
+}
+
 static void draw_replay_tess_preview(void) {
     if (!g_replay_active || g_replay_state == REPLAY_OFF ||
         g_replay_mode != REPLAY_MODE_VERTEX)
@@ -1080,14 +1105,6 @@ void render_3d_scene(void) {
     if (g_line_smooth_enabled) glEnable(GL_LINE_SMOOTH);
     else glDisable(GL_LINE_SMOOTH);
 
-    glColor3f(0.70f, 0.70f, 0.80f);
-    // Enable blending for line smoothing
-    glEnable(GL_BLEND);
-    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-
-    draw_grid();
-    draw_axes();
-
     if (g_wireframe) glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
 
     {
@@ -1125,11 +1142,25 @@ void render_3d_scene(void) {
 
     if (g_wireframe) glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
 
+    /* Draw translucent scene helpers after the main geometry so antialiased
+     * edges blend against the final background color rather than the clear
+     * color from earlier in the frame. */
+    draw_grid();
+    draw_axes();
+
     /* Polygon outline overlay (optional) + current-block highlight.
      * Each overlay pass is wrapped in push/pop so transforms don't bleed
      * between passes.  CMD_TRANSLATE3F is replayed within each pass so
      * outlines are positioned correctly even when transforms separate blocks. */
     glDisable(GL_LIGHTING);
+    glEnable(GL_DEPTH_TEST);
+    glDepthMask(GL_FALSE);
+    if (g_multisample_enabled) glEnable(GL_MULTISAMPLE);
+    else glDisable(GL_MULTISAMPLE);
+    if (g_line_smooth_enabled) glEnable(GL_LINE_SMOOTH);
+    else glDisable(GL_LINE_SMOOTH);
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
     glEnable(GL_POLYGON_OFFSET_LINE);
     glPolygonOffset(-1.0f, -1.0f);
     glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
@@ -1183,6 +1214,7 @@ void render_3d_scene(void) {
                     tess_poly_is_current = 0;
                 break;
             case CMD_BEGIN: {
+                int draw_outline = begin_mode_has_outline_overlay(g_flat_cmds[i].mode);
                 if (in_begin) glEnd();
                 /* Choose outline color: bright cyan for highlighted block, black otherwise */
                 block_is_current = show_current_poly &&
@@ -1190,12 +1222,12 @@ void render_3d_scene(void) {
                 if (block_is_current) {
                     glLineWidth(3.0f);
                     glColor3f(0.0f, 0.9f, 0.9f); /* bright cyan */
-                } else if (g_show_outlines) {
+                } else if (g_show_outlines && draw_outline) {
                     glLineWidth(1.0f);
                     glColor3f(0.0f, 0.0f, 0.0f);
                 } else {
-                    /* outlines off but current poly highlight enabled — skip non-current */
-                    if (!block_is_current) { glBegin(g_flat_cmds[i].mode); in_begin = 1; break; }
+                    in_begin = 0;
+                    break;
                 }
                 glBegin(g_flat_cmds[i].mode);
                 in_begin = 1;
@@ -1230,6 +1262,8 @@ void render_3d_scene(void) {
     }
     glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
     glDisable(GL_POLYGON_OFFSET_LINE);
+    glDepthMask(GL_TRUE);
+    glDisable(GL_BLEND);
 
     /* Vertex dots — replay transforms so dots match the filled geometry */
     glPushMatrix();

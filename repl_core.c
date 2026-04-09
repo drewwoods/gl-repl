@@ -1493,6 +1493,52 @@ static int extract_goto_label(const char *src, char *name, int name_sz) {
     return n > 0;
 }
 
+static int extract_assignment_parts(const char *src,
+                                    char *name, int name_sz,
+                                    char *rhs, int rhs_sz) {
+    const char *p = src;
+    const char *rhs_start;
+    const char *rhs_end;
+    int n = 0;
+
+    while (*p && isspace((unsigned char)*p)) p++;
+    while (*p && (isalnum((unsigned char)*p) || *p == '_')) {
+        if (name && n < name_sz - 1)
+            name[n] = *p;
+        n++;
+        p++;
+    }
+    if (name && name_sz > 0)
+        name[n < name_sz - 1 ? n : name_sz - 1] = '\0';
+    if (n == 0)
+        return 0;
+
+    while (*p && isspace((unsigned char)*p)) p++;
+    if (*p != '=' || p[1] == '=')
+        return 0;
+    p++;
+    while (*p && isspace((unsigned char)*p)) p++;
+    if (!*p)
+        return 0;
+
+    rhs_start = p;
+    rhs_end = src + strlen(src);
+    while (rhs_end > rhs_start && isspace((unsigned char)rhs_end[-1])) rhs_end--;
+    if (rhs_end > rhs_start && rhs_end[-1] == ';') rhs_end--;
+    while (rhs_end > rhs_start && isspace((unsigned char)rhs_end[-1])) rhs_end--;
+    if (rhs_end <= rhs_start)
+        return 0;
+
+    if (rhs && rhs_sz > 0) {
+        int rn = (int)(rhs_end - rhs_start);
+        if (rn > rhs_sz - 1) rn = rhs_sz - 1;
+        memcpy(rhs, rhs_start, (size_t)rn);
+        rhs[rn] = '\0';
+        trim_in_place(rhs);
+    }
+    return 1;
+}
+
 static int import_parse_predef_decl(const char *line) {
     const char *p = line;
     while (*p && isspace((unsigned char)*p)) p++;
@@ -1912,6 +1958,7 @@ void repl_reformat_commands(void) {
         }
         case CMD_VAR_ASSIGN: {
             const char *name = NULL;
+            char rhs[MAX_LINE_LEN] = "";
             if (orig.num_args >= 0 && orig.num_args < g_num_predef_vars)
                 name = g_predef_vars[orig.num_args].name;
             char fallback[16] = "";
@@ -1925,7 +1972,10 @@ void repl_reformat_commands(void) {
                 fallback[n] = '\0';
                 if (fallback[0]) name = fallback;
             }
-            if (name)
+            extract_assignment_parts(orig.source, NULL, 0, rhs, sizeof(rhs));
+            if (name && rhs[0])
+                snprintf(fmt.source, sizeof(fmt.source), "%s%s = %s;", ind_s, name, rhs);
+            else if (name)
                 snprintf(fmt.source, sizeof(fmt.source), "%s%s = %g;", ind_s, name, orig.args[0]);
             g_cmds[i] = fmt;
             break;
@@ -2840,8 +2890,15 @@ static int parse_command_internal(const char *line, GLCmd *cmd,
         return 0;
     }
 
-
-    /* goto label — jump to a named label */
+    /* goto label — jump to a named label.
+     *
+     * Current limitations:
+     * - top-level only; flatten rejects labels/gotos inside functions
+     * - executor updates control flow, assignments, and if-conditions, but
+     *   variable-driven GL commands inside goto loops are still using their
+     *   flattened args rather than being re-evaluated per jump
+     * - replay intentionally does not model dynamic goto traces
+     */
     if (strncmp(p, "goto ", 5) == 0) {
         const char *lname = p + 5;
         while (*lname && isspace((unsigned char)*lname)) lname++;
@@ -3367,10 +3424,20 @@ static void flatten_range(int start, int end_idx, ExprVar *vars, int nv,
         /* Variable assignments: update predefined var and pass through */
         if (g_cmds[i].type == CMD_VAR_ASSIGN) {
             int vi = g_cmds[i].num_args; /* predef var index */
+            float value = g_cmds[i].args[0];
+            char rhs[MAX_LINE_LEN] = "";
+
+            if (extract_assignment_parts(g_cmds[i].source, NULL, 0,
+                                         rhs, sizeof(rhs)) && rhs[0]) {
+                ExprCtx ctx = { rhs, g_predef_vars, g_num_predef_vars };
+                value = eval_expr(&ctx);
+            }
             if (vi >= 0 && vi < g_num_predef_vars)
-                g_predef_vars[vi].value = g_cmds[i].args[0];
+                g_predef_vars[vi].value = value;
             if (g_num_flat_cmds < MAX_COMMANDS) {
-                g_flat_cmds[g_num_flat_cmds] = g_cmds[i];
+                GLCmd tmp = g_cmds[i];
+                tmp.args[0] = value;
+                g_flat_cmds[g_num_flat_cmds] = tmp;
                 flat_cmd_set_provenance(&g_flat_cmds[g_num_flat_cmds],
                                         i, call_src_cmd_idx,
                                         root_call_src_cmd_idx,
@@ -4207,7 +4274,12 @@ void execute_commands(void) {
         case CMD_LABEL:
             break; /* no-op marker */
         case CMD_GOTO: {
-            /* Find matching CMD_LABEL by name in source and set pc */
+            /* Experimental top-level control-flow only.
+             * This jumps the flat-command program counter, but it does not
+             * rebuild or re-specialize the flat stream, so goto loops are only
+             * reliable for control flow and assignments. Variable-driven GL
+             * commands still use the args baked into g_flat_cmds[]. Replay also
+             * cannot follow the dynamic jump trace. */
             const char *src = g_flat_cmds[pc].source;
             /* src is like "  goto labelname;" — skip past "goto " keyword */
             const char *goto_kw = strstr(src, "goto ");
@@ -4266,8 +4338,17 @@ void execute_commands(void) {
         case CMD_VAR_ASSIGN: {
             /* Re-apply variable assignment so goto loops see updated values */
             int vi = g_flat_cmds[pc].num_args;
+            float value = g_flat_cmds[pc].args[0];
+            if (g_flat_cmds[pc].has_vars) {
+                char rhs[MAX_LINE_LEN] = "";
+                if (extract_assignment_parts(g_flat_cmds[pc].source, NULL, 0,
+                                             rhs, sizeof(rhs)) && rhs[0]) {
+                    ExprCtx ctx = { rhs, g_predef_vars, g_num_predef_vars };
+                    value = eval_expr(&ctx);
+                }
+            }
             if (vi >= 0 && vi < g_num_predef_vars)
-                g_predef_vars[vi].value = g_flat_cmds[pc].args[0];
+                g_predef_vars[vi].value = value;
             break;
         }
         /* Transforms handled by is_transform_cmd() early-continue above */
@@ -4596,22 +4677,13 @@ static unsigned int line_func_scope_mask(int line) {
  * Returns 1 if handled (valid or invalid assignment), 0 if not an assignment.
  */
 static int try_assign_variable(void) {
-    const char *p = g_input;
-    while (*p && isspace((unsigned char)*p)) p++;
-
-    /* Collect identifier */
     char name[16];
-    int ni = 0;
-    while (*p && (isalpha((unsigned char)*p) || *p == '_') && ni < (int)sizeof(name) - 1)
-        name[ni++] = *p++;
-    name[ni] = '\0';
-    if (ni == 0) return 0;
+    char rhs[MAX_LINE_LEN];
+    int has_rhs_vars;
+    float val;
 
-    while (*p && isspace((unsigned char)*p)) p++;
-    if (*p != '=') return 0;
-    p++;
-    /* Reject '==' */
-    if (*p == '=') return 0;
+    if (!extract_assignment_parts(g_input, name, sizeof(name), rhs, sizeof(rhs)))
+        return 0;
 
     /* Check if it's a known predefined variable */
     int var_idx = -1;
@@ -4624,9 +4696,10 @@ static int try_assign_variable(void) {
     if (var_idx < 0) return 0;
 
     /* Evaluate RHS expression */
-    ExprCtx ctx = { p, NULL, 0 };
-    float val = eval_expr(&ctx);
+    ExprCtx ctx = { rhs, g_predef_vars, g_num_predef_vars };
+    val = eval_expr(&ctx);
     g_predef_vars[var_idx].value = val;
+    has_rhs_vars = input_has_predef_vars(rhs);
 
     /* Build a CMD_VAR_ASSIGN command so it appears in the code panel */
     GLCmd cmd;
@@ -4635,7 +4708,8 @@ static int try_assign_variable(void) {
     cmd.valid = 1;
     cmd.args[0] = val;
     cmd.num_args = var_idx; /* store predef var index */
-    snprintf(cmd.source, sizeof(cmd.source), "  %s = %g;", name, val);
+    cmd.has_vars = has_rhs_vars;
+    snprintf(cmd.source, sizeof(cmd.source), "  %s = %s;", name, rhs);
 
     int fpos = g_inserting ? g_edit_line :
                (g_edit_line < g_num_cmds ? g_edit_line : g_num_cmds);
@@ -6344,7 +6418,8 @@ static void motion_func(int x, int y) {
         const char *vname = g_predef_vars[g_drag_var].name;
         for (int i = 0; i < g_num_cmds; i++) {
             if (g_cmds[i].valid && g_cmds[i].type == CMD_VAR_ASSIGN &&
-                g_cmds[i].num_args == g_drag_var) {
+                g_cmds[i].num_args == g_drag_var &&
+                !g_cmds[i].has_vars) {
                 g_cmds[i].args[0] = new_val;
                 snprintf(g_cmds[i].source, sizeof(g_cmds[i].source),
                          "  %s = %g;", vname, (double)new_val);
@@ -6950,6 +7025,27 @@ static const char *g_example_tess_cutout[] = {
     NULL
 };
 
+/* Example 10: 2D assignment sketch — runtime assignment without goto.
+ * No predefined goto examples are shipped because goto support is partial:
+ * top-level only, not replay-safe, and not suitable for variable-driven
+ * geometry loops. Keep coverage in tests/docs instead of F12 examples. */
+static const char *g_example_assign_2d[] = {
+    "// 2D assignment sketch: tests runtime variable assignment without goto",
+    "glDisable(GL_LIGHTING);",
+    "glDisable(GL_DEPTH_TEST);",
+    "x = -1.7;",
+    "y = 0.12*sin(t*0.8);",
+    "glBegin(GL_LINE_STRIP);",
+    "for(i, 0, 48) {",
+    "  glColor3f(0.30 + i*0.010, 0.55 + 0.28*sin(i*0.20 + t), 0.95 - i*0.008);",
+    "  glVertex3f(x, y, 0);",
+    "  x = x + 0.07;",
+    "  y = sin(x*2.5 + t)*0.52 + cos(i*0.25 + t*0.6)*0.16;",
+    "}",
+    "glEnd();",
+    NULL
+};
+
 static const char **g_examples[] = {
     g_example_cube,
     g_example_ring,
@@ -6961,6 +7057,7 @@ static const char **g_examples[] = {
     g_example_torus,
     g_example_tess,
     g_example_tess_cutout,
+    g_example_assign_2d,
 };
 static const char *g_example_names[] = {
     "Lit cube",
@@ -6973,6 +7070,7 @@ static const char *g_example_names[] = {
     "Parametric torus (nested for)",
     "GLU tessellator (concave arrow)",
     "GLU tessellator (concave arrow cutout)",
+    "2D assignment sketch (vars only)",
 };
 /* NUM_EXAMPLES defined in forward declarations section */
 

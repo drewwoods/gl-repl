@@ -149,6 +149,24 @@ executable GL commands:
 Each flat command preserves `src_cmd_idx` pointing back to its origin in
 `g_cmds[]`, enabling source-line highlighting and debugging.
 
+### Goto / Label Limitations
+
+`CMD_LABEL` / `CMD_GOTO` exist, but they are only partially supported:
+
+- Top-level only. `flatten_range()` rejects labels/gotos inside functions.
+- Normal execution can jump between flat commands and re-apply
+  `CMD_VAR_ASSIGN` and `CMD_IF_BEGIN` using current predefined-variable
+  values.
+- Variable-driven GL commands inside a goto loop are **not** re-evaluated per
+  jump. Their numeric args are still the values baked into `g_flat_cmds[]`
+  during flattening, so goto loops are only reliable for control flow and
+  variable state, not for dynamic geometry generation.
+- Replay does not support goto/label traces. Replay stepping operates on the
+  static flat command list, so it cannot follow dynamic jumps.
+
+Because of those constraints, goto/label coverage lives in tests and internal
+docs rather than the shipped F12 example list.
+
 ### flatten_range() (repl_core.c)
 
 Recursive worker that processes a range of `g_cmds[]`. Handles nested

@@ -27,6 +27,133 @@ static int code_panel_mouse_y_for_cmd(int cmd_idx) {
     return g_win_h - gl_y;
 }
 
+static int predef_idx(const char *name) {
+    for (int i = 0; i < g_num_predef_vars; i++) {
+        if (strcmp(g_predef_vars[i].name, name) == 0)
+            return i;
+    }
+    return -1;
+}
+
+static int extract_assignment_rhs_for_test(const char *src, char *rhs, int rhs_sz) {
+    const char *eq = strchr(src, '=');
+    const char *end;
+    int n;
+    if (!eq) return 0;
+    eq++;
+    while (*eq == ' ' || *eq == '\t') eq++;
+    end = src + strlen(src);
+    while (end > eq && (end[-1] == ';' || end[-1] == ' ' || end[-1] == '\t'))
+        end--;
+    if (end <= eq) return 0;
+    n = (int)(end - eq);
+    if (n > rhs_sz - 1) n = rhs_sz - 1;
+    memcpy(rhs, eq, (size_t)n);
+    rhs[n] = '\0';
+    return 1;
+}
+
+static int extract_if_cond_for_test(const char *src, char *cond, int cond_sz) {
+    const char *p = strchr(src, '(');
+    const char *start;
+    int depth = 1;
+    int n;
+    if (!p) return 0;
+    start = ++p;
+    while (*p && depth > 0) {
+        if (*p == '(') depth++;
+        else if (*p == ')') depth--;
+        if (depth > 0) p++;
+    }
+    if (depth != 0) return 0;
+    n = (int)(p - start);
+    if (n > cond_sz - 1) n = cond_sz - 1;
+    memcpy(cond, start, (size_t)n);
+    cond[n] = '\0';
+    return 1;
+}
+
+static int extract_goto_label_for_test(const char *src, char *label, int label_sz) {
+    const char *p = strstr(src, "goto");
+    int n = 0;
+    if (!p) return 0;
+    p += 4;
+    while (*p == ' ' || *p == '\t') p++;
+    while (*p && *p != ';' && *p != ' ' && *p != '\t' && n < label_sz - 1)
+        label[n++] = *p++;
+    label[n] = '\0';
+    return n > 0;
+}
+
+static void run_flat_control_flow_only(void) {
+    int pc = 0;
+    int goto_count = 0;
+
+    while (pc < g_num_flat_cmds) {
+        if (!g_flat_cmds[pc].valid) {
+            pc++;
+            continue;
+        }
+
+        switch (g_flat_cmds[pc].type) {
+        case CMD_VAR_ASSIGN: {
+            int vi = g_flat_cmds[pc].num_args;
+            float value = g_flat_cmds[pc].args[0];
+            if (g_flat_cmds[pc].has_vars) {
+                char rhs[256];
+                if (extract_assignment_rhs_for_test(g_flat_cmds[pc].source, rhs, sizeof(rhs))) {
+                    ExprCtx ctx = { rhs, g_predef_vars, g_num_predef_vars };
+                    value = eval_expr(&ctx);
+                }
+            }
+            if (vi >= 0 && vi < g_num_predef_vars)
+                g_predef_vars[vi].value = value;
+            break;
+        }
+        case CMD_IF_BEGIN: {
+            float cond = g_flat_cmds[pc].args[0];
+            if (g_flat_cmds[pc].has_vars) {
+                char cond_text[256];
+                if (extract_if_cond_for_test(g_flat_cmds[pc].source, cond_text, sizeof(cond_text))) {
+                    ExprCtx ctx = { cond_text, g_predef_vars, g_num_predef_vars };
+                    cond = eval_expr(&ctx);
+                }
+            }
+            if (cond == 0.0f) {
+                int depth = 1;
+                while (depth > 0 && ++pc < g_num_flat_cmds) {
+                    if (g_flat_cmds[pc].type == CMD_IF_BEGIN) depth++;
+                    else if (g_flat_cmds[pc].type == CMD_IF_END) depth--;
+                }
+            }
+            break;
+        }
+        case CMD_GOTO: {
+            char label[64];
+            if (!extract_goto_label_for_test(g_flat_cmds[pc].source, label, sizeof(label)))
+                break;
+            if (goto_count++ > 100000)
+                return;
+            for (int li = 0; li < g_num_flat_cmds; li++) {
+                if (g_flat_cmds[li].valid &&
+                    g_flat_cmds[li].type == CMD_LABEL &&
+                    strncmp(g_flat_cmds[li].source, label, strlen(label)) == 0 &&
+                    g_flat_cmds[li].source[strlen(label)] == ':') {
+                    pc = li;
+                    goto next_pc;
+                }
+            }
+            break;
+        }
+        default:
+            break;
+        }
+
+next_pc:
+        pc++;
+    }
+}
+
 int main(void) {
     init_predef_vars();
 
@@ -46,6 +173,59 @@ int main(void) {
         if (z_idx >= 0)
             ASSERT_TRUE("z updated", fabsf(g_predef_vars[z_idx].value - (-0.55f)) < 1e-6f);
     }
+
+    repl_reset_state();
+    repl_feed_line_public("n = 0;");
+    repl_feed_line_public(":walk");
+    repl_feed_line_public("n = n + 1;");
+    repl_feed_line_public("if(n < 3) {");
+    repl_feed_line_public("goto walk;");
+    repl_feed_line_public("}");
+    ASSERT_TRUE("expr assign cmd count", g_num_cmds == 6);
+    ASSERT_TRUE("expr assign preserves source", strstr(g_cmds[2].source, "n + 1") != NULL);
+    ASSERT_TRUE("expr assign marked has_vars", g_cmds[2].has_vars == 1);
+    repl_flatten_commands();
+    execute_commands();
+    {
+        int n_idx = -1;
+        for (int i = 0; i < g_num_predef_vars; i++) {
+            if (strcmp(g_predef_vars[i].name, "n") == 0) {
+                n_idx = i;
+                break;
+            }
+        }
+        ASSERT_TRUE("n predef exists", n_idx >= 0);
+        if (n_idx >= 0)
+            ASSERT_TRUE("goto loop increments n to 3", fabsf(g_predef_vars[n_idx].value - 3.0f) < 1e-6f);
+    }
+
+    repl_reset_state();
+    repl_feed_line_public("n = 0;");
+    repl_feed_line_public("glBegin(GL_LINES);");
+    repl_feed_line_public(":stripe");
+    repl_feed_line_public("glVertex3f(-1.5 + 0.42*n, -0.9, 0);");
+    repl_feed_line_public("glVertex3f(-1.5 + 0.42*n, 0.9, 0);");
+    repl_feed_line_public("n = n + 1;");
+    repl_feed_line_public("if(n < 3) {");
+    repl_feed_line_public("goto stripe;");
+    repl_feed_line_public("}");
+    repl_feed_line_public("glEnd();");
+    ASSERT_TRUE("goto geom cmd count", g_num_cmds == 10);
+    ASSERT_TRUE("goto geom first vertex keeps expr",
+                strstr(g_cmds[3].source, "0.42*n") != NULL);
+    ASSERT_TRUE("goto geom first vertex has vars", g_cmds[3].has_vars == 1);
+    repl_flatten_commands();
+    ASSERT_TRUE("goto geom flat first vertex has vars", g_flat_cmds[3].has_vars == 1);
+    ASSERT_TRUE("goto geom flat second vertex has vars", g_flat_cmds[4].has_vars == 1);
+    run_flat_control_flow_only();
+    {
+        int n_idx = predef_idx("n");
+        ASSERT_TRUE("goto geom n predef exists", n_idx >= 0);
+        if (n_idx >= 0)
+            ASSERT_TRUE("goto geom loop increments n to 3", fabsf(g_predef_vars[n_idx].value - 3.0f) < 1e-6f);
+    }
+    ASSERT_TRUE("goto geom flat first vertex still at initial x",
+                fabsf(g_flat_cmds[3].args[0] - (-1.5f)) < 1e-5f);
 
     repl_reset_state();
     repl_feed_line_public("for(i, 0, 3) {");
