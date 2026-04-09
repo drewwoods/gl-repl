@@ -519,23 +519,26 @@ void render_autocomplete(void) {
 void render_help(void) {
     if (!g_show_help) return;
 
-    /* --- Tab 0: Commands --- */
+    /* --- Tab 0: Commands ---
+     * '\t' marks the boundary between left column (command) and
+     * right column (description).  Lines without '\t' render in
+     * a single colour based on indent level. */
     static const char *tab_commands[] = {
         "Supported Commands (type + ;):",
-        "  glBegin(MODE)        GL_TRIANGLES, GL_TRIANGLE_STRIP, ...",
-        "  glEnd()              End current primitive block",
-        "  glVertex3f(x,y,z)    Specify a vertex position",
-        "  glNormal3f(x,y,z)    Specify a vertex normal",
-        "  glColor3f(r,g,b)     Specify vertex color",
-        "  glColor4f(r,g,b,a)   Specify color with alpha",
-        "  glTranslatef(x,y,z)  Translate the modelview matrix",
-        "  glScalef(sx,sy,sz)   Scale the modelview matrix",
-        "  glRotatef(d,x,y,z)   Rotate the modelview matrix",
-        "  glPushMatrix()       Push current matrix onto stack",
-        "  glPopMatrix()        Pop matrix from stack",
-        "  glEnable(CAP)        GL_DEPTH_TEST, GL_LIGHTING, ...",
-        "  glDisable(CAP)       GL_COLOR_MATERIAL, GL_NORMALIZE",
-        "  glShadeModel(MODE)   GL_SMOOTH, GL_FLAT",
+        "  glBegin(MODE)        \tGL_TRIANGLES, GL_TRIANGLE_STRIP, ...",
+        "  glEnd()              \tEnd current primitive block",
+        "  glVertex3f(x,y,z)    \tSpecify a vertex position",
+        "  glNormal3f(x,y,z)    \tSpecify a vertex normal",
+        "  glColor3f(r,g,b)     \tSpecify vertex color",
+        "  glColor4f(r,g,b,a)   \tSpecify color with alpha",
+        "  glTranslatef(x,y,z)  \tTranslate the modelview matrix",
+        "  glScalef(sx,sy,sz)   \tScale the modelview matrix",
+        "  glRotatef(d,x,y,z)   \tRotate the modelview matrix",
+        "  glPushMatrix()       \tPush current matrix onto stack",
+        "  glPopMatrix()        \tPop matrix from stack",
+        "  glEnable(CAP)        \tGL_DEPTH_TEST, GL_LIGHTING, ...",
+        "  glDisable(CAP)       \tGL_COLOR_MATERIAL, GL_NORMALIZE",
+        "  glShadeModel(MODE)   \tGL_SMOOTH, GL_FLAT",
         "",
         "GLU / GLUT Primitives:",
         "  gluSphere(r, slices, stacks)",
@@ -545,48 +548,48 @@ void render_help(void) {
         "  glutSolidTorus(innerR, outerR, nsides, rings)",
         "",
         "GLU Tessellator (concave / complex polygons):",
-        "  gluBegin(GLU_POLYGON)  Start a tessellated polygon",
-        "  gluBegin(GLU_CONTOUR)  Start a contour within the polygon",
-        "  gluEnd()               End contour or polygon",
-        "  gluNormal(x,y,z)       Set per-vertex normal",
-        "  gluColor(r,g,b[,a])    Set per-vertex color",
-        "  gluVertex(x,y,z)       Add vertex to current contour",
+        "  gluBegin(GLU_POLYGON)  \tStart a tessellated polygon",
+        "  gluBegin(GLU_CONTOUR)  \tStart a contour within the polygon",
+        "  gluEnd()               \tEnd contour or polygon",
+        "  gluNormal(x,y,z)       \tSet per-vertex normal",
+        "  gluColor(r,g,b[,a])    \tSet per-vertex color",
+        "  gluVertex(x,y,z)       \tAdd vertex to current contour",
         "  Multiple contours in one polygon create holes (opposite winding)",
         "",
         "Math Expressions (use anywhere floats are expected):",
-        "  Constants:  PI, TAU          Functions: sin cos tan sqrt abs pow",
-        "  Operators:  + - * / % ( )    Also: min max floor ceil fmod",
+        "  Constants:  PI, TAU       \tFunctions: sin cos tan sqrt abs pow",
+        "  Operators:  + - * / % ( ) \tAlso: min max floor ceil fmod",
         "  Comparison: > < >= <= == !=  Logical: && || !",
         "  Example:    glVertex3f(cos(PI/4), sin(PI/4), 0)",
         "",
         "Variables (predefined: x, y, z, i, j, k, n, t):",
-        "  x = 1.5;                    Assign a value",
-        "  glVertex3f(x, y, z);        Use in expressions",
+        "  x = 1.5;                 \tAssign a value",
+        "  glVertex3f(x, y, z);     \tUse in expressions",
         "  Variables persist across commands and are saved/loaded",
         "",
         "For-Loops:",
         "  for(i, 0, 24) glVertex3f(cos(i*TAU/24), sin(i*TAU/24), 0);",
-        "  for(i, 0, N) {              Multi-line block:",
-        "    glVertex3f(...)              end with }",
+        "  for(i, 0, N) {           \tMulti-line block:",
+        "    glVertex3f(...)         \tend with }",
         "  }",
         "  Nesting supported up to 4 levels",
         "",
         "Functions (func0..func9):",
-        "  func0(radius, sides) {      Define with parameters",
+        "  func0(radius, sides) {   \tDefine with parameters",
         "    for(i, 0, sides) {",
         "      glVertex3f(radius*cos(i*TAU/sides), ...)",
         "    }",
         "  }",
-        "  func0(1.5, 6)               Call with args",
+        "  func0(1.5, 6)            \tCall with args",
         "  Recursion works with if(...) guard",
         "",
         "Conditionals:",
-        "  if(t > 1) {                 Body runs when condition is true",
+        "  if(t > 1) {              \tBody runs when condition is true",
         "    glColor3f(1, 0, 0)",
         "  }",
         "",
         "Comments:",
-        "  // text              Type directly to add a comment line",
+        "  // text                   \tType directly to add a comment line",
         "",
         "Save / Load:",
         "  Ctrl+S saves the session to output.c",
@@ -604,71 +607,72 @@ void render_help(void) {
         NULL
     };
 
-    /* --- Tab 1: Keys --- */
+    /* --- Tab 1: Keys ---
+     * Same '\t' convention: left column = key, right = action. */
     static const char *tab_keys[] = {
         "Editing:",
-        "  ;                    Commit current line",
-        "  Enter                Insert new line",
-        "  Backspace            Delete character before cursor",
-        "  Tab / Enter          Accept autocomplete suggestion",
-        "  Up / Down            Navigate lines",
-        "  Left / Right         Move cursor within line",
-        "  Home / Ctrl+A        Jump to start of line",
-        "  End / Ctrl+E         Jump to end of line",
-        "  Shift+Up/Down        Select multiple lines",
-        "  Click + drag         Select lines with mouse",
+        "  ;                    \tCommit current line",
+        "  Enter                \tInsert new line",
+        "  Backspace            \tDelete character before cursor",
+        "  Tab / Enter          \tAccept autocomplete suggestion",
+        "  Up / Down            \tNavigate lines",
+        "  Left / Right         \tMove cursor within line",
+        "  Home / Ctrl+A        \tJump to start of line",
+        "  End / Ctrl+E         \tJump to end of line",
+        "  Shift+Up/Down        \tSelect multiple lines",
+        "  Click + drag         \tSelect lines with mouse",
         "",
         "Clipboard & Undo:",
-        "  Ctrl+C               Copy line/selection",
-        "  Ctrl+X               Cut line/selection",
-        "  Ctrl+V               Paste before current line",
-        "  Ctrl+Z               Undo",
-        "  Ctrl+Y               Redo",
+        "  Ctrl+C               \tCopy line/selection",
+        "  Ctrl+X               \tCut line/selection",
+        "  Ctrl+V               \tPaste before current line",
+        "  Ctrl+Z               \tUndo",
+        "  Ctrl+Y               \tRedo",
         "",
         "Buffer Operations:",
-        "  Ctrl+D               Delete line at cursor",
-        "  Ctrl+L               Clear all commands",
-        "  Ctrl+R               Reformat buffer",
-        "  Ctrl+/               Toggle comment on line",
-        "  Ctrl+P               Dump code to stdout",
-        "  Ctrl+S               Save to output.c",
-        "  Ctrl+Q               Exit and save to temp file",
-        "  Escape               Clear input / close help",
+        "  Ctrl+D               \tDelete line at cursor",
+        "  Ctrl+L               \tClear all commands",
+        "  Ctrl+R               \tReformat buffer",
+        "  Ctrl+/               \tToggle comment on line",
+        "  Ctrl+P               \tDump code to stdout",
+        "  Ctrl+S               \tSave to output.c",
+        "  Ctrl+Q               \tExit and save to temp file",
+        "  Escape               \tClear input / close help",
         "",
         "Camera:",
-        "  Left-drag            Orbit",
-        "  Right-drag           Pan",
-        "  Scroll wheel         Zoom (viewport) / Scroll (code panel)",
+        "  Left-drag            \tOrbit",
+        "  Right-drag           \tPan",
+        "  Scroll wheel         \tZoom (viewport) / Scroll (code panel)",
         "",
         "Time & Replay:",
-        "  Ctrl+T               Play / pause time variable",
-        "  Ctrl+G               Start / stop replay",
-        "  Space                Pause / resume replay",
-        "  + / -                Change replay speed",
-        "  m                    Toggle polygon / vertex replay mode",
-        "  Left / Right         Step backward / forward (when paused)",
-        "  Esc                  Stop replay",
+        "  Ctrl+T               \tPlay / pause time variable",
+        "  Ctrl+G               \tStart / stop replay",
+        "  Space                \tPause / resume replay",
+        "  + / -                \tChange replay speed",
+        "  m                    \tToggle polygon / vertex replay mode",
+        "  Left / Right         \tStep backward / forward (when paused)",
+        "  Esc                  \tStop replay",
         "",
         "Render State:",
-        "  Ctrl+B               Toggle accumulation-buffer AA",
-        "  Ctrl+=               Increase jitter samples",
-        "  Ctrl+-               Decrease jitter samples",
-        "  Ctrl+U               Toggle GL_MULTISAMPLE",
-        "  Ctrl+N               Toggle GL_LINE_SMOOTH",
+        "  Ctrl+B               \tToggle accumulation-buffer AA",
+        "  Ctrl+=               \tIncrease jitter samples",
+        "  Ctrl+-               \tDecrease jitter samples",
+        "  Ctrl+U               \tToggle GL_MULTISAMPLE",
+        "  Ctrl+N               \tToggle GL_LINE_SMOOTH",
         "",
         "Configuration:",
-        "  `                    Open configuration menu",
+        "  `                    \tOpen configuration menu",
         "",
         "F-Key Toggles:",
-        "  F1  Help overlay     F2  Wireframe mode",
-        "  F3  Grid theme       F4  Axes theme",
-        "  F5  Vertex numbers   F6  Normal vectors",
-        "  F7  Vertex outlines  F8  Vertex guides",
-        "  F9  Auto-normals     F10 Light indicators",
-        "  F11 Camera rotate    F12 Cycle examples",
+        "  F1  \tHelp overlay       F2  Wireframe mode",
+        "  F3  \tGrid theme         F4  Axes theme",
+        "  F5  \tVertex numbers     F6  Normal vectors",
+        "  F7  \tVertex outlines    F8  Vertex guides",
+        "  F9  \tAuto-normals       F10 Light indicators",
+        "  F11 \tCamera rotate      F12 Cycle examples",
         "",
         "Navigation:",
-        "  PgUp / PgDn          Scroll code panel (or help)",
+        "  PgUp / PgDn          \tScroll code panel (or help)",
         "",
         NULL
     };
@@ -781,51 +785,35 @@ void render_help(void) {
     for (int i = g_help_scroll; i < n_lines && i < g_help_scroll + visible_lines + 1; i++) {
         int ty = ty_start - (i - g_help_scroll) * LINE_H;
         if (ty < hy + pad_bot - LINE_H) break;
+        if (text[i][0] == '\0') continue;
 
-        if (text[i][0] == '\0')
-            continue;   /* skip blank lines — still scrolls past them */
+        /* '\t' marks the left/right column boundary */
+        const char *tab = strchr(text[i], '\t');
+        if (tab) {
+            /* Left column (command / key) */
+            char left[256];
+            int ln = (int)(tab - text[i]);
+            if (ln > 255) ln = 255;
+            memcpy(left, text[i], ln);
+            left[ln] = '\0';
+            glColor3f(0.45f, 0.90f, 0.50f);
+            draw_string((float)tx, (float)ty, left, FONT_MONO);
 
-        if (text[i][0] != ' ') {
-            /* Section header — bright gold */
+            /* Right column (description) */
+            glColor3f(0.62f, 0.62f, 0.72f);
+            draw_string((float)(tx + ln * FONT_W), (float)ty,
+                        tab + 1, FONT_MONO);
+        } else if (text[i][0] != ' ') {
+            /* Section header */
             glColor3f(0.95f, 0.80f, 0.40f);
             draw_string((float)tx, (float)ty, text[i], FONT_MONO);
-        } else if (text[i][0] == ' ' && text[i][1] == ' '
-                   && text[i][2] == ' ' && text[i][3] == ' ') {
-            /* 4+ space indent — code example, muted cyan */
+        } else if (text[i][2] == ' ' && text[i][3] == ' ') {
+            /* 4+ space indent — code example */
             glColor3f(0.45f, 0.68f, 0.78f);
             draw_string((float)tx, (float)ty, text[i], FONT_MONO);
-        } else if (text[i][0] == ' ' && text[i][1] == ' '
-                   && strstr(text[i] + 2, "    ")) {
-            /* 2-space indent with aligned columns — split colors:
-               command/key in green, description in muted blue */
-            const char *p = text[i] + 2;
-            int gap = 0;
-            while (p[gap]) {
-                if (p[gap] == ' ' && p[gap+1] == ' ' && p[gap+2] == ' ')
-                    break;
-                gap++;
-            }
-            int desc = gap;
-            while (p[desc] == ' ') desc++;
-
-            /* Draw command/key part (indent + name) in green */
-            char cmd_buf[256];
-            int cmd_n = gap + 2;
-            if (cmd_n > 255) cmd_n = 255;
-            memcpy(cmd_buf, text[i], cmd_n);
-            cmd_buf[cmd_n] = '\0';
-            glColor3f(0.45f, 0.90f, 0.50f);
-            draw_string((float)tx, (float)ty, cmd_buf, FONT_MONO);
-
-            /* Draw description part in muted blue-gray */
-            if (p[desc]) {
-                glColor3f(0.60f, 0.62f, 0.72f);
-                draw_string((float)(tx + (desc + 2) * FONT_W), (float)ty,
-                            text[i] + 2 + desc, FONT_MONO);
-            }
         } else {
-            /* 2-space indent, prose description — muted gray-blue */
-            glColor3f(0.55f, 0.55f, 0.65f);
+            /* 2-space indent, no split — uniform green */
+            glColor3f(0.45f, 0.90f, 0.50f);
             draw_string((float)tx, (float)ty, text[i], FONT_MONO);
         }
     }
