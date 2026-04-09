@@ -519,13 +519,8 @@ void render_autocomplete(void) {
 void render_help(void) {
     if (!g_show_help) return;
 
-    static const char *text[] = {
-        "=== OpenGL REPL - Help ===",
-        "Press F1 or Escape to close.  Up/Down or PgUp/PgDn to scroll.",
-        "",
-        "Configuration Menu:",
-        "  `                    Open configuration menu",
-        "",
+    /* --- Tab 0: Commands --- */
+    static const char *tab_commands[] = {
         "Supported Commands (type + ;):",
         "  glBegin(MODE)        GL_TRIANGLES, GL_TRIANGLE_STRIP, ...",
         "  glEnd()              End current primitive block",
@@ -534,39 +529,29 @@ void render_help(void) {
         "  glColor3f(r,g,b)     Specify vertex color",
         "  glColor4f(r,g,b,a)   Specify color with alpha",
         "  glTranslatef(x,y,z)  Translate the modelview matrix",
+        "  glScalef(sx,sy,sz)   Scale the modelview matrix",
+        "  glRotatef(d,x,y,z)   Rotate the modelview matrix",
+        "  glPushMatrix()       Push current matrix onto stack",
+        "  glPopMatrix()        Pop matrix from stack",
         "  glEnable(CAP)        GL_DEPTH_TEST, GL_LIGHTING, ...",
         "  glDisable(CAP)       GL_COLOR_MATERIAL, GL_NORMALIZE",
         "  glShadeModel(MODE)   GL_SMOOTH, GL_FLAT",
-        "",
-        "GLU Tessellator Commands (for concave / complex polygons):",
-        "  Sequence:   gluBegin(GLU_POLYGON) → gluBegin(GLU_CONTOUR) → vertices → gluEnd() x2",
-        "  gluBegin(GLU_POLYGON)  Start a tessellated polygon",
-        "  gluBegin(GLU_CONTOUR)  Start a contour within the polygon",
-        "  gluEnd()               End contour (1st call) or polygon (2nd call)",
-        "  gluNormal(x,y,z)       Set per-vertex normal (persists until changed)",
-        "  gluColor(r,g,b[,a])    Set per-vertex color   (persists until changed)",
-        "  gluVertex(x,y,z)       Add vertex to current contour",
-        "  Note: multiple contours in one polygon create holes (opposite winding)",
-        "  Example:",
-        "    gluBegin(GLU_POLYGON);",
-        "    gluBegin(GLU_CONTOUR);",
-        "    gluNormal(0, 0, 1);",
-        "    gluColor(1, 0.5, 0, 1);",
-        "    gluVertex(-1, -1, 0);  gluVertex(1, -1, 0);",
-        "    gluVertex(0.5, 0.5, 0);  gluVertex(-0.5, 0.5, 0);",
-        "    gluEnd();",
-        "    gluEnd();",
         "",
         "GLU / GLUT Primitives:",
         "  gluSphere(r, slices, stacks)",
         "  gluCylinder(baseR, topR, h, slices, stacks)",
         "  gluDisk(innerR, outerR, slices, loops)",
-        "  gluPartialDisk(innerR, outerR, slices, loops, startAngle, sweepAngle)",
+        "  gluPartialDisk(innerR, outerR, slices, loops, start, sweep)",
         "  glutSolidTorus(innerR, outerR, nsides, rings)",
         "",
-        "Comments:",
-        "  // text              Type directly to add a comment line",
-        "  Ctrl+/               Toggle comment on current line",
+        "GLU Tessellator (concave / complex polygons):",
+        "  gluBegin(GLU_POLYGON)  Start a tessellated polygon",
+        "  gluBegin(GLU_CONTOUR)  Start a contour within the polygon",
+        "  gluEnd()               End contour or polygon",
+        "  gluNormal(x,y,z)       Set per-vertex normal",
+        "  gluColor(r,g,b[,a])    Set per-vertex color",
+        "  gluVertex(x,y,z)       Add vertex to current contour",
+        "  Multiple contours in one polygon create holes (opposite winding)",
         "",
         "Math Expressions (use anywhere floats are expected):",
         "  Constants:  PI, TAU          Functions: sin cos tan sqrt abs pow",
@@ -575,98 +560,106 @@ void render_help(void) {
         "  Example:    glVertex3f(cos(PI/4), sin(PI/4), 0)",
         "",
         "Variables (predefined: x, y, z, i, j, k, n, t):",
-        "  x = 1.5;                    Assign a value to a variable",
-        "  glVertex3f(x, y, z);        Use variables in expressions",
+        "  x = 1.5;                    Assign a value",
+        "  glVertex3f(x, y, z);        Use in expressions",
         "  Variables persist across commands and are saved/loaded",
         "",
-        "For-Loops (stored as editable blocks, saved as C for-loops):",
+        "For-Loops:",
         "  for(i, 0, 24) glVertex3f(cos(i*TAU/24), sin(i*TAU/24), 0);",
         "  for(i, 0, N) {              Multi-line block:",
-        "    glNormal3f(...)              type body lines, end with }",
-        "    glVertex3f(...)              or press Esc to exit",
+        "    glVertex3f(...)              end with }",
         "  }",
-        "  Nesting supported up to 4 levels (for spheres, tori, etc.)",
-        "  Ctrl+S preserves loop structure in output.c (not expanded)",
+        "  Nesting supported up to 4 levels",
         "",
-        "Functions (define reusable blocks, call with funcN(...)):",
-        "  func0(radius, sides) {      Define a parameterized function:",
-        "    for(i, 0, sides) {          args work in local for(...) / if(...)",
-        "      glVertex3f(radius*cos(i*TAU/sides), radius*sin(i*TAU/sides), 0)",
-        "    }                           type body lines, end with }",
+        "Functions (func0..func9):",
+        "  func0(radius, sides) {      Define with parameters",
+        "    for(i, 0, sides) {",
+        "      glVertex3f(radius*cos(i*TAU/sides), ...)",
+        "    }",
         "  }",
-        "  func0(1.5, 6)               Call with expressions or constants",
-        "  func0()                     still works for zero-arg helpers",
-        "  Recursion works when local if(...) eventually stops the calls",
-        "  Example: func0(depth) { if(depth > 0) func0(depth - 1); }",
-        "  Runaway recursion is capped; goto / labels are top-level only",
-        "  goto replay is unsupported; goto loops do not re-evaluate GL args",
-        "  Up to func0..func9 supported",
+        "  func0(1.5, 6)               Call with args",
+        "  Recursion works with if(...) guard",
         "",
         "Conditionals:",
-        "  if(t > 1) {                 Body included when condition is true",
+        "  if(t > 1) {                 Body runs when condition is true",
         "    glColor3f(1, 0, 0)",
         "  }",
-        "  Supports: > < >= <= == != && || !",
         "",
+        "Comments:",
+        "  // text              Type directly to add a comment line",
+        "",
+        "Save / Load:",
+        "  Ctrl+S saves the session to output.c",
+        "  Reload a saved file:  ./sample output.c",
+        "  (Commands between // Snippet start/end are imported)",
+        "",
+        "Time variable 't':",
+        "  Auto-increments with elapsed time when playing.",
+        "  Use in any expression: glVertex3f(sin(t), cos(t), 0)",
+        "",
+        "Accumulation Buffer AA:",
+        "  On by default; launch with --noaccum to disable.",
+        "  Status shown in info bar (AA:8x / AA:off).",
+        "",
+        NULL
+    };
+
+    /* --- Tab 1: Keys --- */
+    static const char *tab_keys[] = {
         "Editing:",
-        "  Up / Down            Navigate lines (scroll help when open)",
-        "  Left / Right         Move cursor within line",
-        "  Home / End           Jump to start / end of line",
-        "  Type + ;             Commit line (edit existing or append new)",
-        "  Enter                Insert new line (even in middle of list)",
-        "  Tab / Enter          Accept autocomplete suggestion",
-        "  Home / Ctrl+A        Move to start of input line",
-        "  End / Ctrl+E         Move to end of input line",
+        "  ;                    Commit current line",
+        "  Enter                Insert new line",
         "  Backspace            Delete character before cursor",
-        "  Ctrl+/               Toggle comment on current line",
+        "  Tab / Enter          Accept autocomplete suggestion",
+        "  Up / Down            Navigate lines",
+        "  Left / Right         Move cursor within line",
+        "  Home / Ctrl+A        Jump to start of line",
+        "  End / Ctrl+E         Jump to end of line",
         "  Shift+Up/Down        Select multiple lines",
-        "  Left-click + drag    Select multiple lines with the mouse",
-        "  Ctrl+B               Toggle accumulation-buffer AA",
-        "  Ctrl+C               Copy line/selection (for-loop on BEGIN)",
-        "  Ctrl+X               Cut line/selection (for-loop on BEGIN)",
+        "  Click + drag         Select lines with mouse",
+        "",
+        "Clipboard & Undo:",
+        "  Ctrl+C               Copy line/selection",
+        "  Ctrl+X               Cut line/selection",
         "  Ctrl+V               Paste before current line",
-        "  Ctrl+Z               Undo last command",
-        "  Ctrl+Y/Ctrl+Shift+Z  Redo last command",
+        "  Ctrl+Z               Undo",
+        "  Ctrl+Y               Redo",
+        "",
+        "Buffer Operations:",
         "  Ctrl+D               Delete line at cursor",
         "  Ctrl+L               Clear all commands",
-        "  Ctrl+R               Reformat command buffer",
-        "  Ctrl+P               Dump editor code to stdout",
+        "  Ctrl+R               Reformat buffer",
+        "  Ctrl+/               Toggle comment on line",
+        "  Ctrl+P               Dump code to stdout",
         "  Ctrl+S               Save to output.c",
-        "  Ctrl+Q               Exit and save to temporary file",
-        "  Escape               Clear input / exit insert / close help",
+        "  Ctrl+Q               Exit and save to temp file",
+        "  Escape               Clear input / close help",
         "",
         "Camera:",
         "  Left-drag            Orbit",
         "  Right-drag           Pan",
-        "  Scroll wheel         Zoom camera",
-        "  Scroll wheel (over code panel)  Scroll code panel",
+        "  Scroll wheel         Zoom (viewport) / Scroll (code panel)",
         "",
-        "Time variable 't':",
-        "  't' is a predefined var that auto-increments with elapsed time.",
-        "  Use it in any expression: glVertex3f(sin(t), cos(t), 0)",
-        "  Ctrl+T               Play / pause time (shown as t=X.XX or t=X.XX[P])",
-        "",
-        "Replay:",
+        "Time & Replay:",
+        "  Ctrl+T               Play / pause time variable",
         "  Ctrl+G               Start / stop replay",
-        "  Space                Pause / resume replay (restart when done)",
+        "  Space                Pause / resume replay",
         "  + / -                Change replay speed",
         "  m                    Toggle polygon / vertex replay mode",
-        "  Left / Right Arrow   Step backward / forward while paused",
-        "  Esc                  Stop replay immediately",
+        "  Left / Right         Step backward / forward (when paused)",
+        "  Esc                  Stop replay",
         "",
-        "Render-state header lines:",
-        "  Ctrl+U               Toggle glEnable/glDisable(GL_MULTISAMPLE)",
-        "  Ctrl+N               Toggle glEnable/glDisable(GL_LINE_SMOOTH)",
-        "  These show up above // Snippet start and are exported with Ctrl+S",
+        "Render State:",
+        "  Ctrl+B               Toggle accumulation-buffer AA",
+        "  Ctrl+=               Increase jitter samples",
+        "  Ctrl+-               Decrease jitter samples",
+        "  Ctrl+U               Toggle GL_MULTISAMPLE",
+        "  Ctrl+N               Toggle GL_LINE_SMOOTH",
         "",
-        "Accumulation Buffer AA (requires accum buffer, on by default):",
-        "  Ctrl+B               Toggle jitter AA on / off",
-        "  Ctrl+=               Increase jitter samples (1->2->4->8->16)",
-        "  Ctrl+-               Decrease jitter samples (16->8->4->2->1)",
-        "  Status shown in info bar (AA:8x / AA:off)",
-        "  Launch with --noaccum to disable the accum buffer entirely",
+        "Configuration:",
+        "  `                    Open configuration menu",
         "",
-        "Toggles:",
+        "F-Key Toggles:",
         "  F1  Help overlay     F2  Wireframe mode",
         "  F3  Grid theme       F4  Axes theme",
         "  F5  Vertex numbers   F6  Normal vectors",
@@ -674,15 +667,20 @@ void render_help(void) {
         "  F9  Auto-normals     F10 Light indicators",
         "  F11 Camera rotate    F12 Cycle examples",
         "",
-        "  PgUp / PgDn          Scroll code panel (or help when open)",
-        "",
-        "Save / Load:",
-        "  Ctrl+S saves the session to output.c",
-        "  Reload a saved file:  ./sample output.c",
-        "  (Commands between // Snippet start/end are imported)",
+        "Navigation:",
+        "  PgUp / PgDn          Scroll code panel (or help)",
         "",
         NULL
     };
+
+    static const char *tab_labels[] = { "Commands", "Keys" };
+    static const char **tabs[]      = { tab_commands, tab_keys };
+    #define HELP_NUM_TABS 2
+
+    if (g_help_tab < 0) g_help_tab = 0;
+    if (g_help_tab >= HELP_NUM_TABS) g_help_tab = HELP_NUM_TABS - 1;
+
+    const char **text = tabs[g_help_tab];
 
     /* Count total lines */
     int n_lines = 0;
@@ -694,7 +692,8 @@ void render_help(void) {
 
     int hx = g_win_w / 6, hy = g_win_h / 12;
     int hw = g_win_w * 2 / 3, hh = g_win_h * 5 / 6;
-    int pad_top = 32, pad_bot = 24;
+    int tab_bar_h = 28;
+    int pad_top = 32 + tab_bar_h, pad_bot = 24;
     int content_h = hh - pad_top - pad_bot;
     int visible_lines = content_h / LINE_H;
     if (visible_lines < 1) visible_lines = 1;
@@ -718,6 +717,59 @@ void render_help(void) {
     glVertex2f((float)hx, (float)(hy + hh));
     glEnd();
 
+    /* --- Title --- */
+    glColor3f(0.80f, 0.80f, 1.00f);
+    {
+        const char *title = "OpenGL REPL - Help";
+        int title_x = hx + (hw - (int)strlen(title) * FONT_W) / 2;
+        draw_string((float)title_x, (float)(hy + hh - 22), title, FONT_MONO);
+    }
+
+    /* --- Tab bar --- */
+    {
+        int tab_y = hy + hh - 32 - tab_bar_h;
+        int tab_w = hw / HELP_NUM_TABS;
+
+        for (int t = 0; t < HELP_NUM_TABS; t++) {
+            int tx_tab = hx + t * tab_w;
+
+            if (t == g_help_tab) {
+                /* Active tab background */
+                glColor4f(0.15f, 0.15f, 0.30f, 0.90f);
+                draw_quad((float)tx_tab, (float)tab_y, (float)tab_w, (float)tab_bar_h);
+                /* Active tab underline */
+                glColor4f(0.55f, 0.65f, 1.00f, 0.90f);
+                draw_quad((float)tx_tab, (float)tab_y, (float)tab_w, 2.0f);
+                /* Active tab text */
+                glColor3f(0.85f, 0.85f, 1.00f);
+            } else {
+                /* Inactive tab background */
+                glColor4f(0.08f, 0.08f, 0.14f, 0.70f);
+                draw_quad((float)tx_tab, (float)tab_y, (float)tab_w, (float)tab_bar_h);
+                /* Inactive tab text */
+                glColor3f(0.45f, 0.45f, 0.55f);
+            }
+
+            int lbl_len = (int)strlen(tab_labels[t]);
+            int lbl_x = tx_tab + (tab_w - lbl_len * FONT_W) / 2;
+            draw_string((float)lbl_x, (float)(tab_y + 8), tab_labels[t], FONT_MONO);
+        }
+
+        /* Separator line under tab bar */
+        glColor4f(0.35f, 0.35f, 0.55f, 0.60f);
+        glBegin(GL_LINES);
+        glVertex2f((float)hx, (float)tab_y);
+        glVertex2f((float)(hx + hw), (float)tab_y);
+        glEnd();
+
+        /* Tab switch hint */
+        glColor4f(0.40f, 0.40f, 0.55f, 0.60f);
+        const char *nav_hint = "Left/Right: switch tabs";
+        int nh_x = hx + hw - (int)strlen(nav_hint) * 8 - 12;
+        draw_string((float)nh_x, (float)(hy + hh - 22), nav_hint, FONT_SMALL);
+    }
+
+    /* --- Content --- */
     /* Scissor clip to content area */
     glEnable(GL_SCISSOR_TEST);
     glScissor(hx + 1, hy + pad_bot, hw - 2, content_h);
@@ -729,14 +781,12 @@ void render_help(void) {
         int ty = ty_start - (i - g_help_scroll) * LINE_H;
         if (ty < hy + pad_bot - LINE_H) break;
 
-        if (text[i][0] == '=')
-            glColor3f(0.80f, 0.80f, 1.00f);
+        if (text[i][0] == '\0')
+            continue;   /* skip blank lines — still scrolls past them */
         else if (text[i][0] == ' ' && text[i][1] == ' ')
-            glColor3f(0.65f, 0.90f, 0.65f);
-        else if (text[i][0] == '\0')
-            continue;   /* skip blank lines (save space) — still scrolls past them */
+            glColor3f(0.65f, 0.90f, 0.65f);   /* indented = detail */
         else
-            glColor3f(0.75f, 0.75f, 0.80f);
+            glColor3f(0.75f, 0.80f, 0.95f);   /* section header */
 
         draw_string((float)tx, (float)ty, text[i], FONT_MONO);
     }
@@ -775,6 +825,8 @@ void render_help(void) {
 
     glDisable(GL_BLEND);
     end_2d();
+
+    #undef HELP_NUM_TABS
 }
 
 /* ========================================================================= */
