@@ -549,6 +549,7 @@ int    g_show_vnums   = 1;
 int    g_show_normals = 0;
 int    g_show_indices = 1;
 int    g_wrap_at_comma = 0;
+int    g_layout_vertical = 0;  /* 0=left code panel, 1=top code panel */
 int    g_show_guides  = 1;
 int    g_autonormal   = 0;
 int    g_show_lights  = 1;
@@ -718,6 +719,7 @@ CfgItem g_cfg_items[] = {
     { "Variable panel",   "`",      &g_show_var_panel,         2,               NULL          },
     { "Replay",           "Ctrl+g", &g_replay_active,          2,               NULL          },
     { "Replay mode",      "m",      &g_replay_mode,            2,               replay_mode_names },
+    { "Top code panel",   "--",     &g_layout_vertical,        2,               NULL          },
 };
 const int CFG_ITEM_COUNT = (int)(sizeof(g_cfg_items)/sizeof(g_cfg_items[0]));
 
@@ -6547,6 +6549,11 @@ static void mouse_func(int button, int state, int x, int y) {
                         replay_stop();
                     *g_cfg_items[row].value =
                         (*g_cfg_items[row].value + 1) % g_cfg_items[row].n_states;
+                    if (g_cfg_items[row].value == &g_layout_vertical) {
+                        g_panel_frac = 0.3f;
+                        set_status(g_layout_vertical ? "Layout: top code panel"
+                                                     : "Layout: left code panel");
+                    }
                     if (g_cfg_items[row].value == &g_wrap_at_comma)
                         set_status(g_wrap_at_comma ? "Wrap at commas: ON"
                                                    : "Wrap at commas: OFF");
@@ -6581,16 +6588,30 @@ static void mouse_func(int button, int state, int x, int y) {
         }
 
         /* Left-click in code panel: navigate to line + column */
-        int panel_w = (int)(g_win_w * g_panel_frac);
-        if (abs(x - panel_w) < 10) {
-            g_resizing_panel = 1;
-            glutSetCursor(GLUT_CURSOR_LEFT_RIGHT);
-            return;
-        }
-        if (x < panel_w) {
-            handle_code_panel_press(x, y);
-            glutPostRedisplay();
-            return;   /* don't start camera drag */
+        if (g_layout_vertical) {
+            int panel_h_px = (int)(g_win_h * g_panel_frac);
+            if (abs(y - panel_h_px) < 10) {
+                g_resizing_panel = 1;
+                glutSetCursor(GLUT_CURSOR_UP_DOWN);
+                return;
+            }
+            if (y < panel_h_px) {
+                handle_code_panel_press(x, y);
+                glutPostRedisplay();
+                return;
+            }
+        } else {
+            int panel_w = (int)(g_win_w * g_panel_frac);
+            if (abs(x - panel_w) < 10) {
+                g_resizing_panel = 1;
+                glutSetCursor(GLUT_CURSOR_LEFT_RIGHT);
+                return;
+            }
+            if (x < panel_w) {
+                handle_code_panel_press(x, y);
+                glutPostRedisplay();
+                return;   /* don't start camera drag */
+            }
         }
     }
 
@@ -6615,8 +6636,10 @@ static void mouse_func(int button, int state, int x, int y) {
         if (g_show_help) {
             g_help_scroll--;
         } else {
-            int panel_w = (int)(g_win_w * g_panel_frac);
-            if (x < panel_w) g_scroll--;
+            int in_code_panel = g_layout_vertical
+                ? (y < (int)(g_win_h * g_panel_frac))
+                : (x < (int)(g_win_w * g_panel_frac));
+            if (in_code_panel) g_scroll--;
             else g_vel_zoom -= 0.3f;
         }
         glutPostRedisplay();
@@ -6624,8 +6647,10 @@ static void mouse_func(int button, int state, int x, int y) {
         if (g_show_help) {
             g_help_scroll++;
         } else {
-            int panel_w = (int)(g_win_w * g_panel_frac);
-            if (x < panel_w) g_scroll++;
+            int in_code_panel = g_layout_vertical
+                ? (y < (int)(g_win_h * g_panel_frac))
+                : (x < (int)(g_win_w * g_panel_frac));
+            if (in_code_panel) g_scroll++;
             else g_vel_zoom += 0.3f;
         }
         glutPostRedisplay();
@@ -6636,13 +6661,15 @@ static void mouse_func(int button, int state, int x, int y) {
 #ifndef USE_GLUT
 /* FreeGLUT mouse wheel callback */
 static void mousewheel_func(int wheel, int direction, int x, int y) {
-    (void)wheel; (void)y;
+    (void)wheel;
     if (g_show_help) {
         /* direction > 0 = scroll up (towards top of help) */
         g_help_scroll -= direction;
     } else {
-        int panel_w = (int)(g_win_w * g_panel_frac);
-        if (x < panel_w) {
+        int in_code_panel = g_layout_vertical
+            ? (y < (int)(g_win_h * g_panel_frac))
+            : (x < (int)(g_win_w * g_panel_frac));
+        if (in_code_panel) {
             g_scroll -= direction;
         } else {
             /* direction > 0 = wheel up = zoom in */
@@ -6663,11 +6690,20 @@ static void passive_motion_func(int x, int y) {
         if (g_config_hover != prev) glutPostRedisplay();
     }
 
-    int panel_w = (int)(g_win_w * g_panel_frac);
-    if (abs(x - panel_w) < 10) {
-        glutSetCursor(GLUT_CURSOR_LEFT_RIGHT);
+    if (g_layout_vertical) {
+        int panel_h_px = (int)(g_win_h * g_panel_frac);
+        if (abs(y - panel_h_px) < 10) {
+            glutSetCursor(GLUT_CURSOR_UP_DOWN);
+        } else {
+            glutSetCursor(GLUT_CURSOR_INHERIT);
+        }
     } else {
-        glutSetCursor(GLUT_CURSOR_INHERIT);
+        int panel_w = (int)(g_win_w * g_panel_frac);
+        if (abs(x - panel_w) < 10) {
+            glutSetCursor(GLUT_CURSOR_LEFT_RIGHT);
+        } else {
+            glutSetCursor(GLUT_CURSOR_INHERIT);
+        }
     }
 }
 
@@ -6676,7 +6712,12 @@ static void motion_func(int x, int y) {
     int dy = y - g_mouse_y;
 
     if (g_resizing_panel) {
-        g_panel_frac = (float)x / g_win_w;
+        if (g_layout_vertical) {
+            /* GLUT y=0 is at top; y directly maps to panel height fraction. */
+            g_panel_frac = (float)y / (float)g_win_h;
+        } else {
+            g_panel_frac = (float)x / (float)g_win_w;
+        }
         if (g_panel_frac < 0.1f) g_panel_frac = 0.1f;
         if (g_panel_frac > 0.9f) g_panel_frac = 0.9f;
         glutPostRedisplay();
@@ -7083,6 +7124,8 @@ void repl_reset_state(void) {
     g_multisample_enabled = 1;
     g_line_smooth_enabled = 0;
     g_wrap_at_comma = 0;
+    g_layout_vertical = 0;
+    g_panel_frac = 0.42f;
     g_flat_dirty = 1;
     g_normals_dirty = 1;
     g_ac_count = 0;

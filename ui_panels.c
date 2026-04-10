@@ -9,6 +9,50 @@
 #include "ui_panels.h"
 
 /* ========================================================================= */
+/* Layout geometry helpers                                                    */
+/* ========================================================================= */
+
+void code_panel_rect(int *x, int *y, int *w, int *h) {
+    if (g_layout_vertical) {
+        int panel_h = (int)(g_win_h * g_panel_frac);
+        if (panel_h < 1) panel_h = 1;
+        if (panel_h > g_win_h) panel_h = g_win_h;
+        if (x) *x = 0;
+        if (y) *y = g_win_h - panel_h;
+        if (w) *w = g_win_w;
+        if (h) *h = panel_h;
+    } else {
+        int panel_w = (int)(g_win_w * g_panel_frac);
+        if (panel_w < 1) panel_w = 1;
+        if (panel_w > g_win_w) panel_w = g_win_w;
+        if (x) *x = 0;
+        if (y) *y = 0;
+        if (w) *w = panel_w;
+        if (h) *h = g_win_h;
+    }
+}
+
+void scene_rect(int *x, int *y, int *w, int *h) {
+    if (g_layout_vertical) {
+        int panel_h = (int)(g_win_h * g_panel_frac);
+        if (panel_h < 1) panel_h = 1;
+        if (panel_h > g_win_h) panel_h = g_win_h;
+        if (x) *x = 0;
+        if (y) *y = 0;
+        if (w) *w = g_win_w;
+        if (h) *h = g_win_h - panel_h;
+    } else {
+        int panel_w = (int)(g_win_w * g_panel_frac);
+        if (panel_w < 1) panel_w = 1;
+        if (panel_w > g_win_w) panel_w = g_win_w;
+        if (x) *x = panel_w;
+        if (y) *y = 0;
+        if (w) *w = g_win_w - panel_w;
+        if (h) *h = g_win_h;
+    }
+}
+
+/* ========================================================================= */
 /* Syntax color helpers                                                       */
 /* ========================================================================= */
 
@@ -629,12 +673,16 @@ static void render_active_input_rows(int panel_w, int text_x, int idx_x,
 }
 
 void render_code_panel(void) {
-    int panel_w = (int)(g_win_w * g_panel_frac);
+    int cp_x, cp_y, cp_w, cp_h;
+    code_panel_rect(&cp_x, &cp_y, &cp_w, &cp_h);
+    int panel_w = cp_w;
+    int panel_top = cp_y + cp_h;  /* y of the panel's top edge (OpenGL coords) */
     int linenum_w = 4 * FONT_W;
     int idx_col_w = g_show_indices ? (6 * FONT_W) : 0;
     int idx_x = CODE_MARGIN_X + linenum_w + FONT_W;
     int text_x = idx_x + idx_col_w;
-    int visible_lines = (g_win_h - 2 * CODE_MARGIN_Y - LINE_H) / LINE_H;
+    int visible_lines = (cp_h - 2 * CODE_MARGIN_Y - LINE_H) / LINE_H;
+    if (visible_lines < 1) visible_lines = 1;
 
     /* When cursor is on a vertex, find which normal/color lines feed it so
      * we can draw a gutter accent bar on them below. */
@@ -718,13 +766,20 @@ void render_code_panel(void) {
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
     glColor4f(0.06f, 0.06f, 0.10f, 0.92f);
-    draw_quad(0, 0, (float)panel_w, (float)g_win_h);
+    draw_quad((float)cp_x, (float)cp_y, (float)cp_w, (float)cp_h);
 
-    /* Border */
+    /* Border: divider between code panel and scene */
     glColor4f(0.30f, 0.30f, 0.50f, 0.80f);
     glBegin(GL_LINES);
-    glVertex2f((float)panel_w, 0);
-    glVertex2f((float)panel_w, (float)g_win_h);
+    if (g_layout_vertical) {
+        /* Horizontal divider along bottom of code panel */
+        glVertex2f(0.0f, (float)cp_y);
+        glVertex2f((float)g_win_w, (float)cp_y);
+    } else {
+        /* Vertical divider along right edge of code panel */
+        glVertex2f((float)panel_w, 0.0f);
+        glVertex2f((float)panel_w, (float)g_win_h);
+    }
     glEnd();
     glDisable(GL_BLEND);
 
@@ -765,12 +820,12 @@ void render_code_panel(void) {
                      g_num_cmds, nv, g_edit_line + 1, t_tag, aa_tag);
         }
         glColor3f(0.50f, 0.55f, 0.65f);
-        draw_string(CODE_MARGIN_X, g_win_h - CODE_MARGIN_Y - 2, info,
+        draw_string(CODE_MARGIN_X, panel_top - CODE_MARGIN_Y - 2, info,
                     FONT_SMALL);
     }
 
     /* Code lines */
-    int line_y = g_win_h - CODE_MARGIN_Y - LINE_H - LINE_H;
+    int line_y = panel_top - CODE_MARGIN_Y - LINE_H - LINE_H;
     int cur = 0;
     int file_line = 1;
 
@@ -1044,29 +1099,30 @@ void render_code_panel(void) {
 
     /* Scroll indicator */
     if (total_lines > visible_lines) {
-        int bar_h = g_win_h - 2 * CODE_MARGIN_Y - LINE_H;
+        int bar_h = cp_h - 2 * CODE_MARGIN_Y - LINE_H;
         float frac = (float)visible_lines / (float)total_lines;
         float pos  = (float)g_scroll / (float)total_lines;
         int thumb_h = (int)(bar_h * frac);
         if (thumb_h < 12) thumb_h = 12;
-        int thumb_y = g_win_h - CODE_MARGIN_Y - LINE_H
+        int thumb_y = panel_top - CODE_MARGIN_Y - LINE_H
                       - (int)(bar_h * pos) - thumb_h;
 
         glEnable(GL_BLEND);
         glColor4f(0.50f, 0.50f, 0.65f, 0.35f);
-        draw_quad((float)(panel_w - 6), (float)thumb_y,
+        draw_quad((float)(cp_x + cp_w - 6), (float)thumb_y,
                   5.0f, (float)thumb_h);
         glDisable(GL_BLEND);
     }
 
-    /* Status bar */
+    /* Status bar: along the bottom edge of the code panel */
     if (g_status_ttl > 0) {
         float alpha = g_status_ttl > 60 ? 1.0f : (float)g_status_ttl / 60.0f;
         glEnable(GL_BLEND);
         glColor4f(0.12f, 0.12f, 0.05f, 0.92f * alpha);
-        draw_quad(0, 0, (float)panel_w, (float)(LINE_H + 6));
+        draw_quad((float)cp_x, (float)cp_y, (float)cp_w, (float)(LINE_H + 6));
         glColor4f(1.0f, 0.85f, 0.20f, alpha);
-        draw_string(CODE_MARGIN_X, 5, g_status, FONT_MONO);
+        draw_string((float)(cp_x + CODE_MARGIN_X), (float)(cp_y + 5),
+                    g_status, FONT_MONO);
         glDisable(GL_BLEND);
     }
 
@@ -1096,11 +1152,12 @@ void render_autocomplete(void) {
     int popup_w = max_w + 16;
     int popup_h = g_ac_count * LINE_H + 6;
 
-    /* Clamp to panel width */
-    int panel_w = (int)(g_win_w * g_panel_frac);
-    if (popup_x + popup_w > panel_w - 4)
-        popup_x = panel_w - popup_w - 4;
-    if (popup_x < 4) popup_x = 4;
+    /* Clamp to code panel width */
+    int cp_x, cp_y, cp_w, cp_h;
+    code_panel_rect(&cp_x, &cp_y, &cp_w, &cp_h);
+    if (popup_x + popup_w > cp_x + cp_w - 4)
+        popup_x = cp_x + cp_w - popup_w - 4;
+    if (popup_x < cp_x + 4) popup_x = cp_x + 4;
 
     /* Background */
     glColor4f(0.08f, 0.08f, 0.15f, 0.95f);
@@ -1498,12 +1555,13 @@ void render_help(void) {
 
 /* Geometry in render coords (y=0 at bottom). */
 static void var_panel_geom(int *px, int *py, int *pw, int *ph) {
+    int sc_x, sc_y, sc_w, sc_h;
+    scene_rect(&sc_x, &sc_y, &sc_w, &sc_h);
     *pw = VAR_PANEL_W;
     *ph = VAR_TITLE_H + g_num_predef_vars * VAR_ROW_H + 2 * VAR_PANEL_PAD;
-    int vp_left = (int)(g_win_w * g_panel_frac);
-    *px = g_win_w - *pw - 8;
-    if (*px < vp_left + 4) *px = vp_left + 4;
-    *py = 8;
+    *px = sc_x + sc_w - *pw - 8;
+    if (*px < sc_x + 4) *px = sc_x + 4;
+    *py = sc_y + 8;
 }
 
 /* Return 1 if GLUT screen coord (gx, gy) is in the panel; sets *out_row. */
@@ -1620,14 +1678,14 @@ void render_var_panel(void) {
 #define CFG_TITLE_H  24
 
 static void cfg_panel_geom(int *px, int *py, int *pw, int *ph) {
+    int sc_x, sc_y, sc_w, sc_h;
+    scene_rect(&sc_x, &sc_y, &sc_w, &sc_h);
     *pw = CFG_PANEL_W;
     *ph = CFG_TITLE_H + CFG_ITEM_COUNT * CFG_ROW_H + 2 * CFG_PAD;
-    int vp_left = (int)(g_win_w * g_panel_frac);
-    int vp_w    = g_win_w - vp_left;
-    *px = vp_left + (vp_w - *pw) / 2;
-    if (*px < vp_left + 4) *px = vp_left + 4;
-    *py = (g_win_h - *ph) / 2;
-    if (*py < 4) *py = 4;
+    *px = sc_x + (sc_w - *pw) / 2;
+    if (*px < sc_x + 4) *px = sc_x + 4;
+    *py = sc_y + (sc_h - *ph) / 2;
+    if (*py < sc_y + 4) *py = sc_y + 4;
 }
 
 /* Return config row index for GLUT coord, or -1 if outside panel. */
@@ -1730,14 +1788,17 @@ static int code_panel_hit_test(int mx, int my,
                                int *out_target,
                                int *out_on_insert_line,
                                int *out_row_offset) {
-    int panel_w = (int)(g_win_w * g_panel_frac);
-    if (mx < 0 || mx >= panel_w) return 0;
-
+    int cp_x, cp_y, cp_w, cp_h;
+    code_panel_rect(&cp_x, &cp_y, &cp_w, &cp_h);
+    int panel_w = cp_w;
+    int panel_top = cp_y + cp_h;
     /* Convert GLUT Y (top=0) to OpenGL Y (bottom=0) */
     int gl_y = g_win_h - my;
+    if (mx < cp_x || mx >= cp_x + cp_w) return 0;
+    if (gl_y < cp_y || gl_y >= cp_y + cp_h) return 0;
 
     /* Same layout constants as render_code_panel */
-    int line_y_start = g_win_h - CODE_MARGIN_Y - LINE_H - LINE_H;
+    int line_y_start = panel_top - CODE_MARGIN_Y - LINE_H - LINE_H;
     int vis = (line_y_start + LINE_H - 3 - gl_y) / LINE_H;
     if (vis < 0) return 0;   /* clicked in info bar */
 
@@ -1762,12 +1823,15 @@ static int code_panel_hit_test(int mx, int my,
 
 static int code_panel_drag_target(int mx, int my, int *out_target) {
     (void)mx;
-    int panel_w = (int)(g_win_w * g_panel_frac);
+    int cp_x, cp_y, cp_w, cp_h;
+    code_panel_rect(&cp_x, &cp_y, &cp_w, &cp_h);
+    int panel_w = cp_w;
+    int panel_top = cp_y + cp_h;
     int gl_y = g_win_h - my;
-    int line_y_start = g_win_h - CODE_MARGIN_Y - LINE_H - LINE_H;
+    int line_y_start = panel_top - CODE_MARGIN_Y - LINE_H - LINE_H;
     int vis = (line_y_start + LINE_H - 3 - gl_y) / LINE_H;
 
-    int visible_lines = (g_win_h - CODE_MARGIN_Y - LINE_H - CODE_MARGIN_Y) / LINE_H;
+    int visible_lines = (cp_h - CODE_MARGIN_Y - LINE_H - CODE_MARGIN_Y) / LINE_H;
     if (visible_lines < 1) visible_lines = 1;
     if (vis < 0) vis = 0;
     if (vis >= visible_lines) vis = visible_lines - 1;

@@ -6,6 +6,7 @@
 #include "sample.h"
 #include "repl_core.h"
 #include "scene_render.h"
+#include "ui_panels.h"
 
 /* ========================================================================= */
 /* 3D scene helpers                                                           */
@@ -1010,12 +1011,13 @@ static void draw_replay_tess_preview(void) {
     if (g_user_lighting_enabled) glEnable(GL_LIGHTING);
 }
 
-static void draw_replay_hud(int panel_w, int scene_w) {
+static void draw_replay_hud(int scene_x, int scene_y, int scene_w, int scene_h) {
+    (void)scene_h;
     char line1[128];
     char line2[192];
     float progress = 0.0f;
-    int hud_x = panel_w + 18;
-    int hud_y = 18;
+    int hud_x = scene_x + 18;
+    int hud_y = scene_y + 18;
     int hud_w = scene_w - 36;
 
     if (!g_replay_active || g_replay_state == REPLAY_OFF)
@@ -1057,16 +1059,17 @@ static void draw_replay_hud(int panel_w, int scene_w) {
 }
 
 void render_3d_scene(void) {
-    int panel_w = (int)(g_win_w * g_panel_frac);
-    int scene_w = g_win_w - panel_w;
+    int sc_x, sc_y, sc_w, sc_h;
+    scene_rect(&sc_x, &sc_y, &sc_w, &sc_h);
     int replaying = g_replay_active && g_replay_state != REPLAY_OFF;
     int show_current_poly = g_highlight_current_poly && !replaying;
     int replay_tess_preview = replaying && g_replay_mode == REPLAY_MODE_VERTEX;
     int replay_vertex_points = replaying && g_replay_mode == REPLAY_MODE_VERTEX;
-    if (scene_w < 1) scene_w = 1;
+    if (sc_w < 1) sc_w = 1;
+    if (sc_h < 1) sc_h = 1;
 
     glPushAttrib(GL_ALL_ATTRIB_BITS);
-    glViewport(panel_w, 0, scene_w, g_win_h);
+    glViewport(sc_x, sc_y, sc_w, sc_h);
 
     glMatrixMode(GL_PROJECTION);
     glLoadIdentity();
@@ -1075,12 +1078,12 @@ void render_3d_scene(void) {
          * When g_accum_jitter_x/y are both 0 this is identical to
          * gluPerspective(45, aspect, 0.1, 100). */
         double near_z = 0.1, far_z = 100.0;
-        double aspect  = (double)scene_w / (double)g_win_h;
+        double aspect  = (double)sc_w / (double)sc_h;
         double top_v   = near_z * tan(45.0 * M_PI / 360.0);
         double right_v = top_v * aspect;
         /* Convert sub-pixel offset (fraction of 1 pixel) -> frustum units */
-        double dx = (double)g_accum_jitter_x * 2.0 * right_v / (double)scene_w;
-        double dy = (double)g_accum_jitter_y * 2.0 * top_v   / (double)g_win_h;
+        double dx = (double)g_accum_jitter_x * 2.0 * right_v / (double)sc_w;
+        double dy = (double)g_accum_jitter_y * 2.0 * top_v   / (double)sc_h;
         glFrustum(-right_v + dx, right_v + dx,
                   -top_v   + dy, top_v   + dy,
                   near_z, far_z);
@@ -1312,6 +1315,6 @@ void render_3d_scene(void) {
     if (g_show_vnums)   draw_vertex_numbers();
     if (g_show_normals) draw_normal_vectors();
     if (replaying)
-        draw_replay_hud(panel_w, scene_w);
+        draw_replay_hud(sc_x, sc_y, sc_w, sc_h);
     glPopAttrib();
 }
