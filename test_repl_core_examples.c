@@ -3,15 +3,66 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 
 static int g_run = 0;
 static int g_pass = 0;
+static int g_verbose = 0;
+static int g_use_color = 0;
 
-#define ASSERT_TRUE(label, cond) do { \
-    g_run++; \
-    if (cond) g_pass++; \
-    else printf("FAIL [%s]\n", label); \
-} while (0)
+#define ANSI_GREEN "\033[32m"
+#define ANSI_RED   "\033[31m"
+#define ANSI_RESET "\033[0m"
+
+static const char *ansi_green(void) {
+    return g_use_color ? ANSI_GREEN : "";
+}
+
+static const char *ansi_red(void) {
+    return g_use_color ? ANSI_RED : "";
+}
+
+static const char *ansi_reset(void) {
+    return g_use_color ? ANSI_RESET : "";
+}
+
+static void assert_true_impl(const char *label, int cond) {
+    g_run++;
+    if (cond) {
+        g_pass++;
+        return;
+    }
+    printf("%sFAIL%s [%s]\n", ansi_red(), ansi_reset(), label);
+}
+
+#define ASSERT_TRUE(label, cond) assert_true_impl(label, (cond))
+
+static void log_example_step(int idx, const char *name,
+                             const char *step, const char *detail) {
+    if (!g_verbose)
+        return;
+    printf("example %02d [%s] %s", idx, name ? name : "(unnamed)", step);
+    if (detail && detail[0])
+        printf(": %s", detail);
+    printf("\n");
+    fflush(stdout);
+}
+
+static void log_example_result(int idx, const char *name, const char *step,
+                               int pass, const char *detail) {
+    if (!g_verbose && pass)
+        return;
+
+    printf("example %02d [%s] %s: %s%s%s",
+           idx, name ? name : "(unnamed)", step,
+           pass ? ansi_green() : ansi_red(),
+           pass ? "PASS" : "FAIL",
+           ansi_reset());
+    if (detail && detail[0])
+        printf(" (%s)", detail);
+    printf("\n");
+    fflush(stdout);
+}
 
 static void pin_code_panel_state(void) {
     g_cam_rx = 18.0f;
@@ -64,6 +115,51 @@ static char *dump_current_code_panel_text(void) {
     buf = slurp_stream(tmp);
     fclose(tmp);
     return buf;
+}
+
+static int compile_exported_source(int idx, const char *name,
+                                   const char *src_path,
+                                   char *detail, size_t detail_sz) {
+    const char *cc = getenv("REPL_EXPORT_CC");
+    const char *cflags = getenv("REPL_EXPORT_COMPILE_CFLAGS");
+    char obj_path[512];
+    char log_path[512];
+    char cmd[4096];
+    char *log;
+    int rc;
+
+    if (!cc || !cc[0])
+        cc = "cc";
+    if (!cflags || !cflags[0])
+        cflags = "-std=c2x -DGL_SILENCE_DEPRECATION -I../../../include";
+
+    snprintf(obj_path, sizeof(obj_path), "%s.o", src_path);
+    snprintf(log_path, sizeof(log_path), "%s.log", src_path);
+    snprintf(cmd, sizeof(cmd),
+             "%s %s -c \"%s\" -o \"%s\" >\"%s\" 2>&1",
+             cc, cflags, src_path, obj_path, log_path);
+    log_example_step(idx, name, "compile cmd", cmd);
+
+    rc = system(cmd);
+    if (rc == 0) {
+        log_example_result(idx, name, "compile result", 1, "ok");
+        remove(obj_path);
+        remove(log_path);
+        return 1;
+    }
+
+    log = slurp_path(log_path);
+    if (detail && detail_sz > 0) {
+        if (log && log[0])
+            snprintf(detail, detail_sz, "%s", log);
+        else
+            snprintf(detail, detail_sz, "command failed: %s", cmd);
+    }
+    log_example_result(idx, name, "compile result", 0, "see detail below");
+    free(log);
+    remove(obj_path);
+    remove(log_path);
+    return 0;
 }
 
 static void fixture_path_for_idx(int idx, char *out, int out_sz) {
@@ -128,24 +224,41 @@ static int dump_single_example_to_stdout(int idx) {
 }
 
 int main(int argc, char **argv) {
+    char temp_dir[] = "/tmp/repl_examples_export.XXXXXX";
+    const char *verbose_env = getenv("REPL_EXPORT_VERBOSE");
+
+    g_verbose = verbose_env && verbose_env[0] && strcmp(verbose_env, "0") != 0;
+    g_use_color = (isatty(STDOUT_FILENO) && getenv("NO_COLOR") == NULL);
+
     if (argc == 3 && strcmp(argv[1], "--dump-index") == 0)
         return dump_single_example_to_stdout(atoi(argv[2]));
+
+    if (!mkdtemp(temp_dir)) {
+        perror("mkdtemp");
+        return 1;
+    }
 
     init_predef_vars();
 
     for (int idx = 0; idx < repl_example_count(); idx++) {
         char fixture_path[256];
         char label[160];
+        const char *name;
         char *actual;
         char *expected;
+        char export_path[512];
+        char compile_detail[4096];
         int diff_line = 0;
         int exact;
+        int compiled;
 
         load_example_for_test(idx);
+        name = repl_example_name(idx);
+        log_example_step(idx, name, "verify", "loaded example into REPL state");
         snprintf(label, sizeof(label), "example %02d loads cmds", idx);
         ASSERT_TRUE(label, g_num_cmds > 0);
         snprintf(label, sizeof(label), "example %02d has public name", idx);
-        ASSERT_TRUE(label, repl_example_name(idx) != NULL);
+        ASSERT_TRUE(label, name != NULL);
         snprintf(label, sizeof(label), "example %02d has no invalid cmds", idx);
         ASSERT_TRUE(label, examples_have_no_invalid_cmds());
 
@@ -156,6 +269,7 @@ int main(int argc, char **argv) {
             continue;
 
         fixture_path_for_idx(idx, fixture_path, sizeof(fixture_path));
+        log_example_step(idx, name, "fixture", fixture_path);
         expected = slurp_path(fixture_path);
         snprintf(label, sizeof(label), "example %02d fixture exists", idx);
         ASSERT_TRUE(label, expected != NULL);
@@ -171,6 +285,22 @@ int main(int argc, char **argv) {
         }
         snprintf(label, sizeof(label), "example %02d fixture matches", idx);
         ASSERT_TRUE(label, exact);
+
+        snprintf(export_path, sizeof(export_path), "%s/example_%02d.c",
+                 temp_dir, idx);
+        log_example_step(idx, name, "export", export_path);
+        repl_save_output(export_path);
+        compile_detail[0] = '\0';
+        compiled = compile_exported_source(idx, name, export_path,
+                                           compile_detail,
+                                           sizeof(compile_detail));
+        if (!compiled) {
+            printf("DETAIL [example %02d export compile failed] name=%s file=%s\n%s\n",
+                   idx, name, export_path, compile_detail);
+        }
+        snprintf(label, sizeof(label), "example %02d export compiles", idx);
+        ASSERT_TRUE(label, compiled);
+        remove(export_path);
 
         free(expected);
         free(actual);
@@ -194,6 +324,10 @@ int main(int argc, char **argv) {
         }
     }
 
-    printf("repl_core_examples: %d/%d passed\n", g_pass, g_run);
+    rmdir(temp_dir);
+
+    printf("%srepl_core_examples: %d/%d passed%s\n",
+           (g_run == g_pass) ? ansi_green() : ansi_red(),
+           g_pass, g_run, ansi_reset());
     return (g_run == g_pass) ? 0 : 1;
 }
