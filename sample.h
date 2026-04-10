@@ -313,6 +313,16 @@ extern SceneLight g_lights[MAX_LIGHTS];
 extern char   g_status[256];
 extern int    g_status_ttl;
 
+/* Search */
+extern int    g_search_active;
+extern char   g_search_query[MAX_INPUT_LEN];
+extern int    g_search_query_len;
+extern int    g_search_cursor_pos;
+extern int    g_search_hit_line;
+extern int    g_search_hit_char;
+extern int    g_search_hit_ordinal;
+extern int    g_search_match_count;
+
 /* Autocomplete */
 extern const char *g_ac_matches[MAX_AC_MATCHES];
 extern int    g_ac_count;
@@ -368,6 +378,14 @@ void clear_selection(void);
 int  sel_active(void);
 int  sel_lo(void);
 int  sel_hi(void);
+
+int  repl_search_row_count(void);
+const char *repl_search_row_text(int row_idx);
+int  repl_search_row_for_cmd_index(int cmd_idx);
+int  repl_search_find_next_in_text(const char *text, const char *query,
+                                   int start_pos);
+int  repl_search_find_prev_in_text(const char *text, const char *query,
+                                   int start_pos);
 
 void navigate_to_line(int target);
 void execute_commands(void);

@@ -39,7 +39,7 @@ GL_LDFLAGS = \
 
 .PHONY: all clean test lines debug glut help
 
-all: sample test_eval test_format test_repl_core_parse test_repl_core_format test_repl_core_commit test_repl_core_io test_repl_core_examples ## Build the sample plus all test binaries using release flags.
+all: sample test_eval test_format test_repl_core_parse test_repl_core_format test_repl_core_commit test_repl_core_io test_repl_core_examples test_repl_core_search ## Build the sample plus all test binaries using release flags.
 
 SRCS = sample.c repl_core.c repl_examples.c scene_render.c ui_panels.c repl_eval.c cmd_format.c
 HDRS = sample.h repl_core.h repl_core_internal.h repl_examples.h scene_render.h ui_panels.h repl_eval.h cmd_format.h
@@ -69,7 +69,10 @@ test_repl_core_io: test_repl_core_io.c $(CORE_TEST_SRCS) $(HDRS) ## Build the RE
 test_repl_core_examples: test_repl_core_examples.c $(CORE_TEST_SRCS) $(HDRS) ## Build the predefined-example code-panel golden test binary.
 	$(CC) $(BUILD_CFLAGS) $(CFLAGS) -o $@ test_repl_core_examples.c $(CORE_TEST_SRCS) $(GL_LDFLAGS)
 
-test: test_eval test_format test_repl_core_parse test_repl_core_format test_repl_core_commit test_repl_core_io test_repl_core_examples ## Run the full automated test suite.
+test_repl_core_search: test_repl_core_search.c $(CORE_TEST_SRCS) $(HDRS) ## Build the REPL source-search regression test binary.
+	$(CC) $(BUILD_CFLAGS) $(CFLAGS) -o $@ test_repl_core_search.c $(CORE_TEST_SRCS) $(GL_LDFLAGS)
+
+test: test_eval test_format test_repl_core_parse test_repl_core_format test_repl_core_commit test_repl_core_io test_repl_core_examples test_repl_core_search ## Run the full automated test suite.
 	./test_eval --run-tests
 	./test_format
 	./test_repl_core_parse
@@ -77,6 +80,7 @@ test: test_eval test_format test_repl_core_parse test_repl_core_format test_repl
 	./test_repl_core_commit
 	./test_repl_core_io
 	./test_repl_core_examples
+	./test_repl_core_search
 
 # count lines: $(SRCS) $(HDRS)
 lines: $(SRCS) $(HDRS) ## Count lines across source and header files.
@@ -94,6 +98,7 @@ clean: ## Remove built binaries and object files.
 		test_repl_core_format test_repl_core_format.dSYM \
 		test_repl_core_commit test_repl_core_commit.dSYM \
 		test_repl_core_examples test_repl_core_examples.dSYM \
+		test_repl_core_search test_repl_core_search.dSYM \
 		test_repl_core_io test_repl_core_io.dSYM \
 		*.o
 
