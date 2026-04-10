@@ -317,19 +317,34 @@ static int code_panel_cont_indent_chars(const char *text) {
     return leading + 4;
 }
 
+/* Secondary break characters for long lines without commas. Preference order:
+ * comma > closing paren > space > operator. Commas are tried first in a
+ * separate pass so they always win when present. */
+static int is_secondary_break(char c) {
+    return c == ')' || c == ' ' || c == '+' || c == '*' || c == '-' || c == '/';
+}
+
 static int code_panel_find_wrap_break(const char *text, int start,
                                       int max_chars, int len) {
     int end = start + max_chars - 1;
     if (end >= len)
         end = len - 1;
 
+    /* Prefer a comma within the window. */
     for (int i = end; i > start; i--) {
         if (text[i] == ',')
             return i;
     }
 
+    /* Fall back to secondary break chars within the window. */
+    for (int i = end; i > start; i--) {
+        if (is_secondary_break(text[i]))
+            return i;
+    }
+
+    /* Last resort: extend past the window to the next comma or break. */
     for (int i = end + 1; i < len; i++) {
-        if (text[i] == ',')
+        if (text[i] == ',' || is_secondary_break(text[i]))
             return i;
     }
 
