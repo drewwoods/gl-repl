@@ -3707,18 +3707,29 @@ static void flatten_range(int start, int end_idx, ExprVar *vars, int nv,
             int vi = g_cmds[i].num_args; /* predef var index */
             float value = g_cmds[i].args[0];
             char rhs[MAX_LINE_LEN] = "";
+            int local_rhs_vars = 0;
 
             if (extract_assignment_parts(g_cmds[i].source, NULL, 0,
                                          rhs, sizeof(rhs)) && rhs[0]) {
-                ExprCtx ctx = { rhs, g_predef_vars, g_num_predef_vars };
+                ExprCtx ctx = { rhs, vars, nv };
                 value = eval_expr(&ctx);
+                if (vars && nv > 0)
+                    local_rhs_vars = input_has_expr_vars(rhs, vars, nv);
             }
             if (vi >= 0 && vi < g_num_predef_vars)
                 g_predef_vars[vi].value = value;
             if (g_num_flat_cmds < MAX_COMMANDS) {
                 GLCmd tmp = g_cmds[i];
                 tmp.args[0] = value;
+                tmp.has_vars = g_cmds[i].has_vars || local_rhs_vars;
                 g_flat_cmds[g_num_flat_cmds] = tmp;
+                g_flat_cmd_local_vars[g_num_flat_cmds].num_vars = 0;
+                if (vars && nv > 0) {
+                    int snap_n = nv < MAX_EXPR_VARS ? nv : MAX_EXPR_VARS;
+                    g_flat_cmd_local_vars[g_num_flat_cmds].num_vars = snap_n;
+                    memcpy(g_flat_cmd_local_vars[g_num_flat_cmds].vars, vars,
+                           (size_t)snap_n * sizeof(ExprVar));
+                }
                 flat_cmd_set_provenance(&g_flat_cmds[g_num_flat_cmds],
                                         i, call_src_cmd_idx,
                                         root_call_src_cmd_idx,
@@ -4605,9 +4616,15 @@ void execute_commands(void) {
             float cond = g_flat_cmds[pc].args[0];
             if (g_flat_cmds[pc].has_vars) {
                 const char *p = g_flat_cmds[pc].source;
+                ExprVar *eval_vars = g_predef_vars;
+                int eval_num_vars = g_num_predef_vars;
                 while (*p && *p != '(') p++;
                 if (*p) p++;
-                ExprCtx ctx = { p, g_predef_vars, g_num_predef_vars };
+                if (g_flat_cmd_local_vars[pc].num_vars > 0) {
+                    eval_vars = g_flat_cmd_local_vars[pc].vars;
+                    eval_num_vars = g_flat_cmd_local_vars[pc].num_vars;
+                }
+                ExprCtx ctx = { p, eval_vars, eval_num_vars };
                 cond = eval_expr(&ctx);
             }
             if (cond == 0.0f) {
@@ -4631,7 +4648,13 @@ void execute_commands(void) {
                 char rhs[MAX_LINE_LEN] = "";
                 if (extract_assignment_parts(g_flat_cmds[pc].source, NULL, 0,
                                              rhs, sizeof(rhs)) && rhs[0]) {
-                    ExprCtx ctx = { rhs, g_predef_vars, g_num_predef_vars };
+                    ExprVar *eval_vars = g_predef_vars;
+                    int eval_num_vars = g_num_predef_vars;
+                    if (g_flat_cmd_local_vars[pc].num_vars > 0) {
+                        eval_vars = g_flat_cmd_local_vars[pc].vars;
+                        eval_num_vars = g_flat_cmd_local_vars[pc].num_vars;
+                    }
+                    ExprCtx ctx = { rhs, eval_vars, eval_num_vars };
                     value = eval_expr(&ctx);
                 }
             }

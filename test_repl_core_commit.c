@@ -102,7 +102,13 @@ static void run_flat_control_flow_only(void) {
             if (g_flat_cmds[pc].has_vars) {
                 char rhs[256];
                 if (extract_assignment_rhs_for_test(g_flat_cmds[pc].source, rhs, sizeof(rhs))) {
-                    ExprCtx ctx = { rhs, g_predef_vars, g_num_predef_vars };
+                    ExprVar *eval_vars = g_predef_vars;
+                    int eval_num_vars = g_num_predef_vars;
+                    if (g_flat_cmd_local_vars[pc].num_vars > 0) {
+                        eval_vars = g_flat_cmd_local_vars[pc].vars;
+                        eval_num_vars = g_flat_cmd_local_vars[pc].num_vars;
+                    }
+                    ExprCtx ctx = { rhs, eval_vars, eval_num_vars };
                     value = eval_expr(&ctx);
                 }
             }
@@ -115,7 +121,13 @@ static void run_flat_control_flow_only(void) {
             if (g_flat_cmds[pc].has_vars) {
                 char cond_text[256];
                 if (extract_if_cond_for_test(g_flat_cmds[pc].source, cond_text, sizeof(cond_text))) {
-                    ExprCtx ctx = { cond_text, g_predef_vars, g_num_predef_vars };
+                    ExprVar *eval_vars = g_predef_vars;
+                    int eval_num_vars = g_num_predef_vars;
+                    if (g_flat_cmd_local_vars[pc].num_vars > 0) {
+                        eval_vars = g_flat_cmd_local_vars[pc].vars;
+                        eval_num_vars = g_flat_cmd_local_vars[pc].num_vars;
+                    }
+                    ExprCtx ctx = { cond_text, eval_vars, eval_num_vars };
                     cond = eval_expr(&ctx);
                 }
             }
@@ -425,6 +437,30 @@ int main(void) {
     ASSERT_TRUE("local if flatten count", g_num_flat_cmds == 1);
     ASSERT_TRUE("local if flatten type", g_flat_cmds[0].type == CMD_VERTEX3F);
     ASSERT_TRUE("local if flatten x", fabsf(g_flat_cmds[0].args[0] - 2.0f) < 1e-6f);
+
+    repl_reset_state();
+    repl_feed_line_public("func0(cols) {");
+    repl_feed_line_public("for(j, 0, cols + 1) {");
+    repl_feed_line_public("x = -1.5 + 3.0*j/cols;");
+    repl_feed_line_public("glVertex3f(x, 0, 0);");
+    repl_feed_line_public("}");
+    repl_feed_line_public("}");
+    repl_feed_line_public("func0(4);");
+    repl_flatten_commands();
+    ASSERT_TRUE("local assign flatten count", g_num_flat_cmds == 10);
+    ASSERT_TRUE("local assign first type", g_flat_cmds[0].type == CMD_VAR_ASSIGN);
+    ASSERT_TRUE("local assign first value", fabsf(g_flat_cmds[0].args[0] - (-1.5f)) < 1e-6f);
+    ASSERT_TRUE("local assign second value", fabsf(g_flat_cmds[2].args[0] - (-0.75f)) < 1e-6f);
+    ASSERT_TRUE("local assign third value", fabsf(g_flat_cmds[4].args[0] - 0.0f) < 1e-6f);
+    ASSERT_TRUE("local assign last value", fabsf(g_flat_cmds[8].args[0] - 1.5f) < 1e-6f);
+    ASSERT_TRUE("local assign vertex last x", fabsf(g_flat_cmds[9].args[0] - 1.5f) < 1e-6f);
+    run_flat_control_flow_only();
+    {
+        int x_idx = predef_idx("x");
+        ASSERT_TRUE("x predef exists", x_idx >= 0);
+        if (x_idx >= 0)
+            ASSERT_TRUE("local assign replay updates x", fabsf(g_predef_vars[x_idx].value - 1.5f) < 1e-6f);
+    }
 
     repl_reset_state();
     repl_feed_line_public("glColor3f(1, 0, 0);");
