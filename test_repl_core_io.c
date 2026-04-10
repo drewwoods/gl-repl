@@ -17,6 +17,7 @@ int main(void) {
     const char *path = "/tmp/repl_core_roundtrip_output.c";
     const char *func_path = "/tmp/repl_core_func_output.c";
     const char *quadric_path = "/tmp/repl_core_quadric_output.c";
+    const char *tess_path = "/tmp/repl_core_tess_output.c";
 
     init_predef_vars();
     repl_reset_state();
@@ -159,6 +160,34 @@ int main(void) {
         }
         ASSERT_TRUE("loaded quadric cmd count", quadric_cmds == 4);
         ASSERT_TRUE("loaded quadric sphere keeps expr source", sphere_seen == 1);
+    }
+
+    repl_reset_state();
+    repl_feed_line_public("func0(radius) {");
+    repl_feed_line_public("gluBegin(GLU_POLYGON);");
+    repl_feed_line_public("gluBegin(GLU_CONTOUR);");
+    repl_feed_line_public("for(i, 0, 4) {");
+    repl_feed_line_public("gluColor(0.25 + 0.15*sin(i), 0.3, 0.4);");
+    repl_feed_line_public("gluVertex(radius*cos(i), 0, radius*sin(i));");
+    repl_feed_line_public("}");
+    repl_feed_line_public("gluEnd();");
+    repl_feed_line_public("gluEnd();");
+    repl_feed_line_public("}");
+    repl_feed_line_public("func0(2.0);");
+    repl_save_output(tess_path);
+    {
+        FILE  *saved = fopen(tess_path, "r");
+        char   buf[16384];
+        size_t nread = saved ? fread(buf, 1, sizeof(buf) - 1, saved) : 0;
+        if (saved)
+            fclose(saved);
+        buf[nread] = '\0';
+        ASSERT_TRUE("saved tess color keeps loop expr",
+                    strstr(buf, "_tc[0]=0.25 + 0.15*sinf(i);") != NULL);
+        ASSERT_TRUE("saved tess vertex keeps param expr",
+                    strstr(buf, "_v->pos[0]=radius*cosf(i);") != NULL);
+        ASSERT_TRUE("saved tess vertex keeps z expr",
+                    strstr(buf, "_v->pos[2]=radius*sinf(i);") != NULL);
     }
 
     printf("repl_core_io: %d/%d passed\n", g_pass, g_run);

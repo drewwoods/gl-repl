@@ -692,6 +692,8 @@ static int cmd_type_is_quadric(CmdType t);
 static int import_make_repl_quadric_line(const char *line, char *out, int out_sz);
 static void load_line_to_input(int idx);
 static int feed_line(const char *line);
+static void         trim_in_place(char *s);
+static int          extract_paren_payload(const char *src, char *out, int out_sz);
 
 /* ========================================================================= */
 /* Configuration menu item table (4.10)                                       */
@@ -1005,6 +1007,103 @@ static void quadric_source_to_c(const char *src, char *out, int out_sz) {
         out[out_sz - 1] = '\0';
 }
 
+static int split_top_level_args(const char *src, char args[][MAX_LINE_LEN], int max_args) {
+    const char *p = src;
+    int         count = 0;
+
+    while (*p) {
+        while (*p && isspace((unsigned char)*p))
+            p++;
+        if (!*p)
+            break;
+        if (count >= max_args)
+            return -1;
+
+        const char *start = p;
+        int         depth = 0;
+        while (*p) {
+            if (*p == '(')
+                depth++;
+            else if (*p == ')') {
+                if (depth == 0)
+                    break;
+                depth--;
+            } else if (*p == ',' && depth == 0) {
+                break;
+            }
+            p++;
+        }
+
+        int n = (int)(p - start);
+        if (n > MAX_LINE_LEN - 1)
+            n = MAX_LINE_LEN - 1;
+        memcpy(args[count], start, (size_t)n);
+        args[count][n] = '\0';
+        trim_in_place(args[count]);
+        count++;
+
+        while (*p && isspace((unsigned char)*p))
+            p++;
+        if (*p == ',') {
+            p++;
+            continue;
+        }
+        if (*p == '\0')
+            break;
+        return -1;
+    }
+
+    return count;
+}
+
+static int write_tess_source_as_c(FILE *f, const GLCmd *cmd) {
+    char payload[MAX_LINE_LEN];
+    char raw_args[4][MAX_LINE_LEN];
+    char c_args[4][MAX_LINE_LEN];
+    int  arg_count;
+
+    if (!extract_paren_payload(cmd->source, payload, sizeof(payload)))
+        return 0;
+
+    arg_count = split_top_level_args(payload, raw_args, 4);
+    if (arg_count < 0)
+        return 0;
+
+    for (int i = 0; i < arg_count; i++)
+        repl_expr_to_c(raw_args[i], c_args[i], sizeof(c_args[i]));
+
+    switch (cmd->type) {
+    case CMD_TESS_NORMAL:
+        if (arg_count != 3)
+            return 0;
+        fprintf(f, "      { _tn[0]=%s; _tn[1]=%s; _tn[2]=%s; }\n", c_args[0], c_args[1], c_args[2]);
+        return 1;
+    case CMD_TESS_COLOR:
+        if (arg_count == 3) {
+            strncpy(c_args[3], "1", sizeof(c_args[3]) - 1);
+            c_args[3][sizeof(c_args[3]) - 1] = '\0';
+            arg_count = 4;
+        }
+        if (arg_count != 4)
+            return 0;
+        fprintf(f, "      { _tc[0]=%s; _tc[1]=%s; _tc[2]=%s; _tc[3]=%s; }\n", c_args[0], c_args[1],
+                c_args[2], c_args[3]);
+        return 1;
+    case CMD_TESS_VERTEX:
+        if (arg_count != 3)
+            return 0;
+        fprintf(f,
+                "      { TessVertex *_v=&_tv[_tv_n++];"
+                " _v->pos[0]=%s;_v->pos[1]=%s;_v->pos[2]=%s;"
+                " memcpy(_v->normal,_tn,24); memcpy(_v->color,_tc,32);"
+                " gluTessVertex(g_tess,_v->pos,_v); }\n",
+                c_args[0], c_args[1], c_args[2]);
+        return 1;
+    default:
+        return 0;
+    }
+}
+
 static void write_cmd_source_as_c(FILE *f, const GLCmd *cmd, int translate_exprs) {
     char c_src[MAX_LINE_LEN];
     char quadric_src[MAX_LINE_LEN];
@@ -1062,19 +1161,26 @@ static void write_display_cmd_as_c(FILE *f, const GLCmd *cmd, int for_depth,
         }
         break;
     case CMD_TESS_NORMAL:
-        fprintf(f, "      { _tn[0]=%g; _tn[1]=%g; _tn[2]=%g; }\n",
-                cmd->args[0], cmd->args[1], cmd->args[2]);
+        if (!write_tess_source_as_c(f, cmd)) {
+            fprintf(f, "      { _tn[0]=%g; _tn[1]=%g; _tn[2]=%g; }\n", cmd->args[0], cmd->args[1],
+                    cmd->args[2]);
+        }
         break;
     case CMD_TESS_COLOR:
-        fprintf(f, "      { _tc[0]=%g; _tc[1]=%g; _tc[2]=%g; _tc[3]=%g; }\n",
-                cmd->args[0], cmd->args[1], cmd->args[2], cmd->args[3]);
+        if (!write_tess_source_as_c(f, cmd)) {
+            fprintf(f, "      { _tc[0]=%g; _tc[1]=%g; _tc[2]=%g; _tc[3]=%g; }\n", cmd->args[0],
+                    cmd->args[1], cmd->args[2], cmd->args[3]);
+        }
         break;
     case CMD_TESS_VERTEX:
-        fprintf(f, "      { TessVertex *_v=&_tv[_tv_n++];"
-                   " _v->pos[0]=%g;_v->pos[1]=%g;_v->pos[2]=%g;"
-                   " memcpy(_v->normal,_tn,24); memcpy(_v->color,_tc,32);"
-                   " gluTessVertex(g_tess,_v->pos,_v); }\n",
-                cmd->args[0], cmd->args[1], cmd->args[2]);
+        if (!write_tess_source_as_c(f, cmd)) {
+            fprintf(f,
+                    "      { TessVertex *_v=&_tv[_tv_n++];"
+                    " _v->pos[0]=%g;_v->pos[1]=%g;_v->pos[2]=%g;"
+                    " memcpy(_v->normal,_tn,24); memcpy(_v->color,_tc,32);"
+                    " gluTessVertex(g_tess,_v->pos,_v); }\n",
+                    cmd->args[0], cmd->args[1], cmd->args[2]);
+        }
         break;
     default:
         write_cmd_source_as_c(f, cmd, for_depth > 0 || cmd->has_vars);
