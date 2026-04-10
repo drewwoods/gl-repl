@@ -11,6 +11,7 @@ static int g_verbose = 0;
 static int g_use_color = 0;
 
 #define ANSI_GREEN "\033[32m"
+#define ANSI_YELLOW "\033[33m"
 #define ANSI_RED   "\033[31m"
 #define ANSI_RESET "\033[0m"
 
@@ -20,6 +21,10 @@ static const char *ansi_green(void) {
 
 static const char *ansi_red(void) {
     return g_use_color ? ANSI_RED : "";
+}
+
+static const char *ansi_yellow(void) {
+    return g_use_color ? ANSI_YELLOW : "";
 }
 
 static const char *ansi_reset(void) {
@@ -246,17 +251,25 @@ int main(int argc, char **argv) {
         const char *name;
         char *actual;
         char *expected;
+        char *imported;
         char export_path[512];
+        char reexport_path[512];
         char compile_detail[4096];
+        char reexport_detail[4096];
         int diff_line = 0;
         int exact;
         int compiled;
+        int roundtrip_loaded;
+        int roundtrip_exact;
+        int roundtrip_compiled;
+        int original_cmd_count;
 
         load_example_for_test(idx);
         name = repl_example_name(idx);
         log_example_step(idx, name, "verify", "loaded example into REPL state");
         snprintf(label, sizeof(label), "example %02d loads cmds", idx);
         ASSERT_TRUE(label, g_num_cmds > 0);
+        original_cmd_count = g_num_cmds;
         snprintf(label, sizeof(label), "example %02d has public name", idx);
         ASSERT_TRUE(label, name != NULL);
         snprintf(label, sizeof(label), "example %02d has no invalid cmds", idx);
@@ -300,6 +313,54 @@ int main(int argc, char **argv) {
         }
         snprintf(label, sizeof(label), "example %02d export compiles", idx);
         ASSERT_TRUE(label, compiled);
+
+        repl_reset_state();
+        pin_code_panel_state();
+        roundtrip_loaded = repl_load_from_file(export_path);
+        snprintf(label, sizeof(label), "example %02d export imports", idx);
+        ASSERT_TRUE(label, roundtrip_loaded == 1);
+
+        roundtrip_exact = 0;
+        imported = NULL;
+        roundtrip_compiled = 0;
+        if (roundtrip_loaded == 1) {
+            snprintf(label, sizeof(label), "example %02d import cmd count", idx);
+            ASSERT_TRUE(label, g_num_cmds == original_cmd_count);
+            snprintf(label, sizeof(label), "example %02d import has no invalid cmds", idx);
+            ASSERT_TRUE(label, examples_have_no_invalid_cmds());
+
+            imported = dump_current_code_panel_text();
+            snprintf(label, sizeof(label), "example %02d import dump alloc", idx);
+            ASSERT_TRUE(label, imported != NULL);
+            if (imported) {
+                roundtrip_exact = compare_exact_text(actual, imported, &diff_line);
+                if (!roundtrip_exact) {
+                    printf("%sDETAIL [example %02d export/import mismatch] name=%s line=%d export=%s%s\n",
+                           ansi_yellow(), idx, name, diff_line, export_path,
+                           ansi_reset());
+                }
+
+                snprintf(reexport_path, sizeof(reexport_path),
+                         "%s/example_%02d_roundtrip.c", temp_dir, idx);
+                log_example_step(idx, name, "re-export", reexport_path);
+                repl_save_output(reexport_path);
+                reexport_detail[0] = '\0';
+                roundtrip_compiled = compile_exported_source(idx, name, reexport_path,
+                                                             reexport_detail,
+                                                             sizeof(reexport_detail));
+                if (!roundtrip_compiled) {
+                    printf("DETAIL [example %02d re-export compile failed] name=%s file=%s\n%s\n",
+                           idx, name, reexport_path, reexport_detail);
+                }
+                snprintf(label, sizeof(label), "example %02d re-export compiles", idx);
+                ASSERT_TRUE(label, roundtrip_compiled);
+                snprintf(label, sizeof(label), "example %02d exact or re-export compiles", idx);
+                ASSERT_TRUE(label, roundtrip_exact || roundtrip_compiled);
+                remove(reexport_path);
+                free(imported);
+            }
+        }
+
         remove(export_path);
 
         free(expected);

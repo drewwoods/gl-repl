@@ -774,6 +774,7 @@ static int try_commit_if_block(void);
 static int try_commit_close_brace(void);
 static void load_example(int idx);
 static int cmd_type_is_quadric(CmdType t);
+static int import_make_repl_point_parameter_line(const char *line, char *out, int out_sz);
 static int import_make_repl_quadric_line(const char *line, char *out, int out_sz);
 static void load_line_to_input(int idx);
 static int feed_line(const char *line);
@@ -3049,6 +3050,72 @@ static int import_make_repl_tess_line(const char *line, char *out, int out_sz) {
     return 0;
 }
 
+static int import_make_repl_point_parameter_line(const char *line, char *out, int out_sz) {
+    const char *p = line;
+    const char *open;
+    const char *close;
+    const char *comma;
+    const char *brace_open;
+    const char *brace_close;
+    char payload[MAX_LINE_LEN];
+    char pname[64];
+    char coeffs[MAX_LINE_LEN];
+    char raw_args[4][MAX_LINE_LEN];
+    char repl_args[4][MAX_LINE_LEN];
+    int payload_len;
+    int pname_len;
+    int coeff_len;
+    int count;
+
+    while (*p && isspace((unsigned char)*p))
+        p++;
+    if (strncmp(p, "glPointParameterfv(", 19) != 0)
+        return 0;
+
+    open = strchr(p, '(');
+    close = strrchr(p, ')');
+    if (!open || !close || close <= open + 1)
+        return 0;
+
+    payload_len = (int)(close - open - 1);
+    if (payload_len <= 0 || payload_len >= (int)sizeof(payload))
+        return 0;
+    memcpy(payload, open + 1, (size_t)payload_len);
+    payload[payload_len] = '\0';
+
+    comma = strchr(payload, ',');
+    if (!comma)
+        return 0;
+    pname_len = (int)(comma - payload);
+    if (pname_len <= 0 || pname_len >= (int)sizeof(pname))
+        return 0;
+    memcpy(pname, payload, (size_t)pname_len);
+    pname[pname_len] = '\0';
+    trim_in_place(pname);
+
+    brace_open = strchr(comma + 1, '{');
+    brace_close = strrchr(comma + 1, '}');
+    if (!brace_open || !brace_close || brace_close <= brace_open + 1)
+        return 0;
+
+    coeff_len = (int)(brace_close - brace_open - 1);
+    if (coeff_len <= 0 || coeff_len >= (int)sizeof(coeffs))
+        return 0;
+    memcpy(coeffs, brace_open + 1, (size_t)coeff_len);
+    coeffs[coeff_len] = '\0';
+
+    count = split_top_level_args(coeffs, raw_args, 4);
+    if (count != 3)
+        return 0;
+
+    for (int i = 0; i < count; i++)
+        c_expr_to_repl(raw_args[i], repl_args[i], sizeof(repl_args[i]));
+
+    snprintf(out, out_sz, "glPointParameterfv(%s, %s, %s, %s);",
+             pname, repl_args[0], repl_args[1], repl_args[2]);
+    return 1;
+}
+
 static int import_make_repl_quadric_line(const char *line, char *out, int out_sz) {
     static const char *const names[] = {
         "gluSphere",
@@ -3111,6 +3178,7 @@ static void import_feed_one_line(const char *line, int *loaded, int *warnings) {
     if (import_make_repl_for_header(line, repl_line, sizeof(repl_line))) {
         handled = feed_line(repl_line);
     } else if (import_make_repl_tess_line(line, repl_line, sizeof(repl_line)) ||
+               import_make_repl_point_parameter_line(line, repl_line, sizeof(repl_line)) ||
                import_make_repl_quadric_line(line, repl_line, sizeof(repl_line)) ||
                import_make_repl_label(line, repl_line, sizeof(repl_line))) {
         handled = feed_line(repl_line);
@@ -3265,16 +3333,19 @@ void repl_reformat_commands(void) {
         case CMD_COMMENT: {
             const char *p = orig.source;
             while (*p && isspace((unsigned char)*p)) p++;
-            if (p[0] == '/' && p[1] == '/') p += 2;
-            while (*p == ' ') p++;
-            char body[MAX_LINE_LEN];
-            strncpy(body, p, sizeof(body) - 1);
-            body[sizeof(body) - 1] = '\0';
-            trim_in_place(body);
-            if (body[0])
-                snprintf(fmt.source, sizeof(fmt.source), "%s// %s", ind_s, body);
-            else
+            if (p[0] == '/' && p[1] == '/') {
+                char suffix[MAX_LINE_LEN];
+                p += 2;
+                strncpy(suffix, p, sizeof(suffix) - 1);
+                suffix[sizeof(suffix) - 1] = '\0';
+                int suffix_len = (int)strlen(suffix);
+                while (suffix_len > 0 &&
+                       isspace((unsigned char)suffix[suffix_len - 1]))
+                    suffix[--suffix_len] = '\0';
+                snprintf(fmt.source, sizeof(fmt.source), "%s//%s", ind_s, suffix);
+            } else {
                 snprintf(fmt.source, sizeof(fmt.source), "%s//", ind_s);
+            }
             g_cmds[i] = fmt;
             break;
         }
