@@ -3066,7 +3066,7 @@ static int parse_command_internal(const char *line, GLCmd *cmd,
             if (cmd->num_args == def->num_args) {
                 cmd->type = def->type;
                 cmd->valid = 1;
-                cmd->has_vars = (num_vars > 0); /* Approximate */
+                cmd->has_vars = input_has_any_visible_vars(args, vars, num_vars);
 
                 const char *ind = def->is_tess ? tess_indent : indent;
                 snprintf(cmd->source, sizeof(cmd->source), "%s", ind);
@@ -3150,7 +3150,7 @@ static int parse_command_internal(const char *line, GLCmd *cmd,
         cmd->args[0] = (float)pname;
         for (int k = 0; k < num_parsed; k++) cmd->args[k + 1] = parsed_args[k];
         cmd->num_args = num_parsed + 1;
-        cmd->has_vars = (num_vars > 0);
+        cmd->has_vars = input_has_any_visible_vars(a3, vars, num_vars);
 
         if (num_parsed == 1) {
             snprintf(cmd->source, sizeof(cmd->source), "%sglMaterialf(%s, %s, %g);", indent, p1, p2, parsed_args[0]);
@@ -3196,7 +3196,7 @@ static int parse_command_internal(const char *line, GLCmd *cmd,
         cmd->valid = 1;
         cmd->args[0] = (float)fn;
         cmd->num_args = arg_count;
-        cmd->has_vars = (num_vars > 0) || input_has_predef_vars(args);
+        cmd->has_vars = input_has_any_visible_vars(args, vars, num_vars);
 
         int fdepth = block_depth_at(g_edit_line);
         int bb = in_begin_block_at(g_edit_line);
@@ -3266,7 +3266,7 @@ static int parse_command_internal(const char *line, GLCmd *cmd,
             cmd->num_args = 4;
             cmd->type = CMD_TESS_COLOR;
             cmd->valid = 1;
-            cmd->has_vars = (num_vars > 0);
+            cmd->has_vars = input_has_any_visible_vars(args, vars, num_vars);
             snprintf(cmd->source, sizeof(cmd->source),
                      "%sgluColor(%g, %g, %g, %g);",
                      tess_indent, cmd->args[0], cmd->args[1], cmd->args[2], cmd->args[3]);
