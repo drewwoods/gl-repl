@@ -5007,10 +5007,10 @@ static int replay_prev_limit(int current_pc) {
                     ? replay_next_polygon_limit(pc, &fade_begin, &fade_end)
                     : replay_next_vertex_limit(pc, &fade_begin, &fade_end);
 
-        if (next_pc <= pc)
+        // used next_pc to make sure we didnt somehow go backwards
+        if (next_pc <= pc) /* Shouldn't happen */
             break;
-        if (next_pc >= current_pc)
-            return prev_pc;
+
         prev_pc = pc;
         pc = next_pc;
     }
