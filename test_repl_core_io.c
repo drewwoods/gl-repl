@@ -16,6 +16,7 @@ static int g_pass = 0;
 int main(void) {
     const char *path = "/tmp/repl_core_roundtrip_output.c";
     const char *func_path = "/tmp/repl_core_func_output.c";
+    const char *quadric_path = "/tmp/repl_core_quadric_output.c";
 
     init_predef_vars();
     repl_reset_state();
@@ -112,6 +113,53 @@ int main(void) {
                 fabsf(g_flat_cmds[g_num_flat_cmds - 1].args[0] - 1.5f) < 1e-6f);
     ASSERT_TRUE("param func flatten y",
                 fabsf(g_flat_cmds[g_num_flat_cmds - 1].args[1] - 3.0f) < 1e-6f);
+
+    repl_reset_state();
+    repl_feed_line_public("x = 0.25;");
+    repl_feed_line_public("gluSphere(x, 16, 12);");
+    repl_feed_line_public("gluCylinder(0.15, 0.05, 1.5, 8, 1);");
+    repl_feed_line_public("gluDisk(0, 0.35, 12, 1);");
+    repl_feed_line_public("gluPartialDisk(0.1, 0.5, 12, 4, 30, 180);");
+    repl_save_output(quadric_path);
+    {
+        FILE *saved = fopen(quadric_path, "r");
+        char buf[16384];
+        size_t nread = saved ? fread(buf, 1, sizeof(buf) - 1, saved) : 0;
+        if (saved) fclose(saved);
+        buf[nread] = '\0';
+        ASSERT_TRUE("saved quadric sphere includes g_quadric",
+                    strstr(buf, "gluSphere(g_quadric, x, 16, 12);") != NULL);
+        ASSERT_TRUE("saved quadric cylinder includes g_quadric",
+                    strstr(buf, "gluCylinder(g_quadric, 0.15, 0.05, 1.5, 8, 1);") != NULL);
+        ASSERT_TRUE("saved quadric disk includes g_quadric",
+                    strstr(buf, "gluDisk(g_quadric, 0, 0.35, 12, 1);") != NULL);
+        ASSERT_TRUE("saved quadric partial disk includes g_quadric",
+                    strstr(buf, "gluPartialDisk(g_quadric, 0.1, 0.5, 12, 4, 30, 180);") != NULL);
+    }
+
+    repl_reset_state();
+    ASSERT_TRUE("load saved quadric output", repl_load_from_file(quadric_path) == 1);
+    {
+        int sphere_seen = 0;
+        int quadric_cmds = 0;
+        for (int i = 0; i < g_num_cmds; i++) {
+            if (!g_cmds[i].valid)
+                continue;
+            if (g_cmds[i].type == CMD_GLU_SPHERE ||
+                g_cmds[i].type == CMD_GLU_CYLINDER ||
+                g_cmds[i].type == CMD_GLU_DISK ||
+                g_cmds[i].type == CMD_GLU_PARTIAL_DISK) {
+                quadric_cmds++;
+                ASSERT_TRUE("loaded quadric source omits g_quadric",
+                            strstr(g_cmds[i].source, "g_quadric") == NULL);
+                if (g_cmds[i].type == CMD_GLU_SPHERE &&
+                    strstr(g_cmds[i].source, "gluSphere(x, 16, 12);") != NULL)
+                    sphere_seen = 1;
+            }
+        }
+        ASSERT_TRUE("loaded quadric cmd count", quadric_cmds == 4);
+        ASSERT_TRUE("loaded quadric sphere keeps expr source", sphere_seen == 1);
+    }
 
     printf("repl_core_io: %d/%d passed\n", g_pass, g_run);
     return (g_run == g_pass) ? 0 : 1;

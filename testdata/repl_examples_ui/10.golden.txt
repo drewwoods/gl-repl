@@ -1,0 +1,39 @@
+--- header_pre ---
+#include <gl_includes.h>
+#include <math.h>
+
+#ifndef M_PI
+#define M_PI 3.14159265358979323846
+#endif
+
+static float g_angle = 0.0f;
+static int   g_rotating = 0;
+static GLUquadric *g_quadric = NULL;
+
+void display() {
+  glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+  glLoadIdentity();
+  glPushAttrib(GL_ALL_ATTRIB_BITS);
+--- render_state ---
+  glEnable(GL_MULTISAMPLE);
+  glDisable(GL_LINE_SMOOTH);
+--- lookat ---
+  gluLookAt(-2.77, 1.70, 4.44,
+            -0.00, -0.00, 0.00,
+            0.0, 1.0, 0.0);
+--- header_post ---
+  glRotatef(g_angle, 0.0f, 1.0f, 0.0f);
+--- source ---
+  // 2D assignment sketch: tests runtime variable assignment without goto
+  glDisable(GL_LIGHTING);
+  glDisable(GL_DEPTH_TEST);
+  x = -1.7;
+  y = 0.12*sin(t*0.8);
+  glBegin(GL_LINE_STRIP);
+    for(i, 0, 48) {
+      glColor3f(0.30 + i*0.010, 0.55 + 0.28*sin(i*0.20 + t), 0.95 - i*0.008);
+      glVertex3f(x, y, 0);
+      x = x + 0.07;
+      y = sin(x*2.5 + t)*0.52 + cos(i*0.25 + t*0.6)*0.16;
+    }
+  glEnd();

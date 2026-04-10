@@ -83,6 +83,7 @@
 #include "repl_core.h"
 #include "repl_core_internal.h"
 #include "cmd_format.h"
+#include "repl_examples.h"
 #include "scene_render.h"
 #include "ui_panels.h"
 
@@ -685,6 +686,8 @@ static int try_commit_func_def(void);
 static int try_commit_if_block(void);
 static int try_commit_close_brace(void);
 static void load_example(int idx);
+static int cmd_type_is_quadric(CmdType t);
+static int import_make_repl_quadric_line(const char *line, char *out, int out_sz);
 static void load_line_to_input(int idx);
 static int feed_line(const char *line);
 
@@ -963,6 +966,60 @@ static void write_for_begin_as_c(FILE *f, const GLCmd *cmd) {
     }
 }
 
+static void quadric_source_to_c(const char *src, char *out, int out_sz) {
+    const char *p = src;
+    const char *open;
+    int indent = 0;
+    int prefix_len;
+    int written;
+
+    if (out_sz <= 0) return;
+    out[0] = '\0';
+
+    while (p[indent] == ' ' || p[indent] == '\t')
+        indent++;
+    p += indent;
+
+    open = strchr(p, '(');
+    if (!open) {
+        strncpy(out, src, (size_t)out_sz - 1);
+        out[out_sz - 1] = '\0';
+        return;
+    }
+
+    prefix_len = indent + (int)(open - p);
+    if (prefix_len > out_sz - 1)
+        prefix_len = out_sz - 1;
+    memcpy(out, src, (size_t)prefix_len);
+    out[prefix_len] = '\0';
+
+    written = snprintf(out + prefix_len, (size_t)(out_sz - prefix_len),
+                       "(g_quadric%s%s",
+                       open[1] == ')' ? "" : ", ",
+                       open + 1);
+    if (written < 0 || prefix_len + written >= out_sz)
+        out[out_sz - 1] = '\0';
+}
+
+static void write_cmd_source_as_c(FILE *f, const GLCmd *cmd, int translate_exprs) {
+    char c_src[MAX_LINE_LEN];
+    char quadric_src[MAX_LINE_LEN];
+
+    if (translate_exprs)
+        repl_expr_to_c(cmd->source, c_src, sizeof(c_src));
+    else {
+        strncpy(c_src, cmd->source, sizeof(c_src) - 1);
+        c_src[sizeof(c_src) - 1] = '\0';
+    }
+
+    if (cmd_type_is_quadric(cmd->type)) {
+        quadric_source_to_c(c_src, quadric_src, sizeof(quadric_src));
+        fprintf(f, "%s\n", quadric_src);
+    } else {
+        fprintf(f, "%s\n", c_src);
+    }
+}
+
 /* Write the body of a func def block (start..end exclusive) as C.
  * Used by write_func_defs_as_c to emit static helper functions. */
 static void write_func_body_range_as_c(FILE *f, int start, int end_idx) {
@@ -985,20 +1042,10 @@ static void write_func_body_range_as_c(FILE *f, int start, int end_idx) {
         case CMD_FUNC_DEF: case CMD_FUNC_END:
             break; /* nested func defs not supported */
         case CMD_CALL:
-            {
-                char c_src[MAX_LINE_LEN];
-                repl_expr_to_c(g_cmds[i].source, c_src, sizeof(c_src));
-                fprintf(f, "%s\n", c_src);
-            }
+            write_cmd_source_as_c(f, &g_cmds[i], 1);
             break;
         default:
-            if (for_depth > 0 || g_cmds[i].has_vars) {
-                char c_src[MAX_LINE_LEN];
-                repl_expr_to_c(g_cmds[i].source, c_src, sizeof(c_src));
-                fprintf(f, "%s\n", c_src);
-            } else {
-                fprintf(f, "%s\n", g_cmds[i].source);
-            }
+            write_cmd_source_as_c(f, &g_cmds[i], for_depth > 0 || g_cmds[i].has_vars);
             break;
         }
     }
@@ -1824,6 +1871,60 @@ static int import_make_repl_tess_line(const char *line, char *out, int out_sz) {
     return 0;
 }
 
+static int import_make_repl_quadric_line(const char *line, char *out, int out_sz) {
+    static const char *const names[] = {
+        "gluSphere",
+        "gluCylinder",
+        "gluDisk",
+        "gluPartialDisk",
+        NULL
+    };
+    const char *p = line;
+    int indent = 0;
+
+    while (p[indent] == ' ' || p[indent] == '\t')
+        indent++;
+    p += indent;
+
+    for (int i = 0; names[i]; i++) {
+        const char *name = names[i];
+        int name_len = (int)strlen(name);
+        const char *open;
+        const char *args;
+        char tmp[MAX_LINE_LEN];
+        int prefix_len;
+
+        if (strncmp(p, name, (size_t)name_len) != 0 || p[name_len] != '(')
+            continue;
+
+        open = p + name_len;
+        args = open + 1;
+        while (*args == ' ' || *args == '\t')
+            args++;
+        if (strncmp(args, "g_quadric", 9) != 0)
+            return 0;
+        args += 9;
+        while (*args == ' ' || *args == '\t')
+            args++;
+        if (*args == ',')
+            args++;
+        while (*args == ' ' || *args == '\t')
+            args++;
+
+        prefix_len = indent + name_len + 1;
+        if (prefix_len >= (int)sizeof(tmp))
+            prefix_len = (int)sizeof(tmp) - 1;
+        memcpy(tmp, line, (size_t)prefix_len);
+        tmp[prefix_len] = '\0';
+        strncat(tmp, args, sizeof(tmp) - 1 - strlen(tmp));
+
+        c_expr_to_repl(tmp, out, out_sz);
+        return 1;
+    }
+
+    return 0;
+}
+
 static void import_feed_one_line(const char *line, int *loaded, int *warnings) {
     char repl_line[MAX_LINE_LEN];
     int before = g_num_cmds;
@@ -1832,6 +1933,7 @@ static void import_feed_one_line(const char *line, int *loaded, int *warnings) {
     if (import_make_repl_for_header(line, repl_line, sizeof(repl_line))) {
         handled = feed_line(repl_line);
     } else if (import_make_repl_tess_line(line, repl_line, sizeof(repl_line)) ||
+               import_make_repl_quadric_line(line, repl_line, sizeof(repl_line)) ||
                import_make_repl_label(line, repl_line, sizeof(repl_line))) {
         handled = feed_line(repl_line);
     } else {
@@ -2133,11 +2235,7 @@ static void save_output(const char *filename) {
         case CMD_FUNC_END:
             break; /* shouldn't be reached due to above skip */
         case CMD_CALL:
-            {
-                char c_src[MAX_LINE_LEN];
-                repl_expr_to_c(g_cmds[i].source, c_src, sizeof(c_src));
-                fprintf(f, "%s\n", c_src);
-            }
+            write_cmd_source_as_c(f, &g_cmds[i], 1);
             break;
         case CMD_TESS_BEGIN_POLYGON:
             fprintf(f, "  { _tv_n=0; gluTessBeginPolygon(g_tess,NULL); }\n");
@@ -2164,15 +2262,7 @@ static void save_output(const char *filename) {
                        " gluTessVertex(g_tess,_v->pos,_v); }\n",
                     g_cmds[i].args[0], g_cmds[i].args[1], g_cmds[i].args[2]); break;
         default:
-            if (for_depth > 0 || g_cmds[i].has_vars) {
-                /* Has expressions: translate REPL names to C */
-                char c_src[MAX_LINE_LEN];
-                repl_expr_to_c(g_cmds[i].source, c_src, sizeof(c_src));
-                fprintf(f, "%s\n", c_src);
-            } else {
-                /* Outside for-loop, concrete values */
-                fprintf(f, "%s\n", g_cmds[i].source);
-            }
+            write_cmd_source_as_c(f, &g_cmds[i], for_depth > 0 || g_cmds[i].has_vars);
             break;
         }
     }
@@ -2300,6 +2390,37 @@ void repl_debug_dump_editor(FILE *out) {
         fprintf(dst, "%s\n", g_cmds[i].source);
     }
     fprintf(dst, "=== End REPL Editor Dump ===\n");
+    fflush(dst);
+}
+
+void repl_dump_code_panel_text(FILE *out) {
+    FILE *dst = out ? out : stdout;
+
+    update_render_state_strings();
+    update_lookat_strings();
+
+    fprintf(dst, "--- header_pre ---\n");
+    for (int i = 0; g_header_pre[i]; i++)
+        fprintf(dst, "%s\n", g_header_pre[i]);
+
+    fprintf(dst, "--- render_state ---\n");
+    for (int i = 0; i < RENDER_STATE_LINE_COUNT; i++)
+        fprintf(dst, "%s\n", g_render_state_lines[i]);
+
+    fprintf(dst, "--- lookat ---\n");
+    for (int i = 0; i < LOOKAT_LINE_COUNT; i++)
+        fprintf(dst, "%s\n", g_lookat[i]);
+
+    fprintf(dst, "--- header_post ---\n");
+    for (int i = 0; g_header_post[i]; i++)
+        fprintf(dst, "%s\n", g_header_post[i]);
+
+    fprintf(dst, "--- source ---\n");
+    for (int i = 0; i < g_num_cmds; i++) {
+        if (!g_cmds[i].valid) continue;
+        fprintf(dst, "%s\n", g_cmds[i].source);
+    }
+
     fflush(dst);
 }
 
@@ -2488,6 +2609,10 @@ static int find_block_end(int begin_idx);
 static int block_depth_at(int pos);
 static CmdType nearest_open_block_at(int pos);
 static void get_for_var_name(const GLCmd *cmd, char *var, int var_sz);
+static int cmd_type_is_quadric(CmdType t);
+static void quadric_source_to_c(const char *src, char *out, int out_sz);
+static int import_make_repl_quadric_line(const char *line, char *out, int out_sz);
+static void write_cmd_source_as_c(FILE *f, const GLCmd *cmd, int translate_exprs);
 
 /* ========================================================================= */
 /* Command Definitions (Table-Driven)                                         */
@@ -2511,15 +2636,22 @@ static const StdCmdDef g_std_cmds[] = {
     { "glScalef",       CMD_SCALEF,           3, "glScalef(%g, %g, %g);",           "Usage: glScalef(x, y, z)", 0 },
     { "glRotatef",      CMD_ROTATEF,          4, "glRotatef(%g, %g, %g, %g);",      "Usage: glRotatef(angle, x, y, z)", 0 },
     { "glVertex2f",     CMD_VERTEX2F,         2, "glVertex2f(%g, %g);",             "Usage: glVertex2f(x, y)", 0 },
-    { "gluSphere",      CMD_GLU_SPHERE,       3, "gluSphere(g_quadric, %g, %g, %g);", "Usage: gluSphere(radius, slices, stacks)", 0 },
-    { "gluCylinder",    CMD_GLU_CYLINDER,     5, "gluCylinder(g_quadric, %g, %g, %g, %g, %g);", "Usage: gluCylinder(baseR, topR, height, slices, stacks)", 0 },
-    { "gluDisk",        CMD_GLU_DISK,         4, "gluDisk(g_quadric, %g, %g, %g, %g);", "Usage: gluDisk(innerR, outerR, slices, loops)", 0 },
-    { "gluPartialDisk", CMD_GLU_PARTIAL_DISK, 6, "gluPartialDisk(g_quadric, %g, %g, %g, %g, %g, %g);", "Usage: gluPartialDisk(innerR, outerR, slices, loops, startAngle, sweepAngle)", 0 },
+    { "gluSphere",      CMD_GLU_SPHERE,       3, "gluSphere(%g, %g, %g);", "Usage: gluSphere(radius, slices, stacks)", 0 },
+    { "gluCylinder",    CMD_GLU_CYLINDER,     5, "gluCylinder(%g, %g, %g, %g, %g);", "Usage: gluCylinder(baseR, topR, height, slices, stacks)", 0 },
+    { "gluDisk",        CMD_GLU_DISK,         4, "gluDisk(%g, %g, %g, %g);", "Usage: gluDisk(innerR, outerR, slices, loops)", 0 },
+    { "gluPartialDisk", CMD_GLU_PARTIAL_DISK, 6, "gluPartialDisk(%g, %g, %g, %g, %g, %g);", "Usage: gluPartialDisk(innerR, outerR, slices, loops, startAngle, sweepAngle)", 0 },
     { "glutSolidTorus", CMD_GLUT_TORUS,       4, "glutSolidTorus(%g, %g, %g, %g);", "Usage: glutSolidTorus(innerR, outerR, nsides, rings)", 0 },
     { "gluNormal",      CMD_TESS_NORMAL,      3, "gluNormal(%g, %g, %g);",          "Usage: gluNormal(x, y, z)", 1 },
     { "gluVertex",      CMD_TESS_VERTEX,      3, "gluVertex(%g, %g, %g);",          "Usage: gluVertex(x, y, z)", 1 },
     { NULL, 0, 0, NULL, NULL, 0 }
 };
+
+static int cmd_type_is_quadric(CmdType t) {
+    return t == CMD_GLU_SPHERE ||
+           t == CMD_GLU_CYLINDER ||
+           t == CMD_GLU_DISK ||
+           t == CMD_GLU_PARTIAL_DISK;
+}
 
 static int parse_command_internal(const char *line, GLCmd *cmd,
                                   ExprVar *vars, int num_vars) {
@@ -4690,6 +4822,8 @@ static int try_assign_variable(void) {
     char rhs[MAX_LINE_LEN];
     int has_rhs_vars;
     float val;
+    char indent[32];
+    int ind;
 
     if (!extract_assignment_parts(g_input, name, sizeof(name), rhs, sizeof(rhs)))
         return 0;
@@ -4718,10 +4852,15 @@ static int try_assign_variable(void) {
     cmd.args[0] = val;
     cmd.num_args = var_idx; /* store predef var index */
     cmd.has_vars = has_rhs_vars;
-    snprintf(cmd.source, sizeof(cmd.source), "  %s = %s;", name, rhs);
 
     int fpos = g_inserting ? g_edit_line :
                (g_edit_line < g_num_cmds ? g_edit_line : g_num_cmds);
+    ind = (in_begin_block_at(fpos) ? 4 : 2) + block_depth_at(fpos) * 2;
+    if (ind > (int)sizeof(indent) - 1) ind = (int)sizeof(indent) - 1;
+    memset(indent, ' ', (size_t)ind);
+    indent[ind] = '\0';
+    snprintf(cmd.source, sizeof(cmd.source), "%s%s = %s;", indent, name, rhs);
+
     if (g_inserting) {
         if (g_num_cmds < MAX_COMMANDS) {
             for (int j = g_num_cmds; j > fpos; j--)
@@ -6243,7 +6382,8 @@ static void special_func(int key, int x, int y) {
         set_status(g_cam_rotate ? "Camera rotate ON" : "Camera rotate OFF");
         break;
     case GLUT_KEY_F12:
-        load_example((g_example_idx + 1) % NUM_EXAMPLES);
+        if (repl_examples_count() > 0)
+            load_example((g_example_idx + 1) % repl_examples_count());
         break;
 
     /* Scroll */
@@ -6545,17 +6685,6 @@ static void timer_func(int value) {
 /* Predefined examples (F12 to cycle)                                         */
 /* ========================================================================= */
 
-/* Each example is an array of source lines terminated by NULL.
- * Lines are processed sequentially:
- *   "for(...) {"  → CMD_FOR_BEGIN + CMD_FOR_END, enters block
- *   "funcN {"     → CMD_FUNC_DEF + CMD_FUNC_END, enters block
- *   "if(...) {"   → CMD_IF_BEGIN + CMD_IF_END, enters block
- *   "}"           → closes current block
- *   "x = expr;"   → CMD_VAR_ASSIGN
- *   "funcN()"     → CMD_CALL
- *   anything else → parse_command() as a regular GL command
- */
-
 /* Helper: feed one line through the commit pipeline, as if the user typed it
  * and pressed ';'.  This reuses the existing try_commit_* functions so that
  * source strings, indentation, has_vars, and block nesting are handled
@@ -6614,7 +6743,7 @@ static int feed_line(const char *line) {
 }
 
 /* Load an example from an array of source lines */
-static void load_example_lines(const char **lines) {
+static void load_example_lines(const char *const *lines) {
     /* Clear state */
     g_num_cmds = 0;
     g_num_flat_cmds = 0;
@@ -6638,685 +6767,21 @@ static void load_example_lines(const char **lines) {
     mark_normals_dirty();
 }
 
-/* Example 0: Lit cube (default) */
-static const char *g_example_cube[] = {
-    "glEnable(GL_DEPTH_TEST);",
-    "glEnable(GL_LIGHTING);",
-    "glEnable(GL_COLOR_MATERIAL);",
-    "glEnable(GL_NORMALIZE);",
-    "glShadeModel(GL_SMOOTH);",
-    "glEnable(GL_LIGHT3);",
-    "glEnable(GL_LIGHT2);",
-    "//glEnable(GL_LINE_SMOOTH);",
-    "glColor3f(1, 1, 1);",
-    "glBegin(GL_QUAD_STRIP);",
-    "glNormal3f(0, 1, 0);",
-    "glVertex3f(1, 1, 1);",
-    "glNormal3f(0, 1, 0);",
-    "glVertex3f(-1, 1, 1);",
-    "glNormal3f(0, 0, 1);",
-    "glVertex3f(1, -1, 1);",
-    "glNormal3f(0, 0, 1);",
-    "glVertex3f(-1, -1, 1);",
-    "glNormal3f(-0, -1, -0);",
-    "glVertex3f(1, -1, -1);",
-    "glNormal3f(-0, -1, -0);",
-    "glVertex3f(-1, -1, -1);",
-    "glNormal3f(0, 0, -1);",
-    "glVertex3f(1, 1, -1);",
-    "glNormal3f(0, 0, -1);",
-    "glVertex3f(-1, 1, -1);",
-    "glNormal3f(0, 1, -0);",
-    "glVertex3f(1, 1, 1);",
-    "glNormal3f(0, 1, -0);",
-    "glVertex3f(-1, 1, 1);",
-    "glEnd();",
-    NULL
-};
-
-/* Example 1: Animated ring — for-loop + t variable */
-static const char *g_example_ring[] = {
-    "glEnable(GL_DEPTH_TEST);",
-    "glBegin(GL_LINE_LOOP);",
-    "for(i, 0, 48) {",
-        "glColor3f(sin(i*TAU/48)*0.5+0.5, cos(i*TAU/48)*0.5+0.5, 0.5);",
-        "glVertex3f(cos(i*TAU/48+t)*2, sin(i*TAU/48+t)*2, sin(i*TAU/12+t)*0.5);",
-    "}",
-    "glEnd();",
-    "glBegin(GL_TRIANGLE_FAN);",
-    "glColor3f(0.2, 0.5, 1);",
-    "glVertex3f(0, 0, 0);",
-    "for(i, 0, 25) {",
-        "glColor3f(sin(i*TAU/24+t)*0.5+0.5, 0.3, cos(i*TAU/24+t)*0.5+0.5);",
-        "glVertex3f(cos(i*TAU/24)*1.5, sin(i*TAU/24)*1.5, 0);",
-    "}",
-    "glEnd();",
-    NULL
-};
-
-/* Example 2: Function demo — define reusable triangle, call with transforms */
-static const char *g_example_func[] = {
-    "glEnable(GL_DEPTH_TEST);",
-    "glEnable(GL_COLOR_MATERIAL);",
-    "func0 {",
-        "glBegin(GL_TRIANGLES);",
-        "glNormal3f(0, 0, 1);",
-        "glVertex3f(0, 0.8, 0);",
-        "glVertex3f(-0.7, -0.4, 0);",
-        "glVertex3f(0.7, -0.4, 0);",
-        "glEnd();",
-    "}",
-    "glColor3f(1, 0.3, 0.3);",
-    "func0();",
-    "glTranslatef(2, 0, 0);",
-    "glColor3f(0.3, 1, 0.3);",
-    "func0();",
-    "glTranslatef(-4, 0, 0);",
-    "glColor3f(0.3, 0.3, 1);",
-    "func0();",
-    NULL
-};
-
-/* Example 3: Parametric polygon helper — function args driving local for-loops */
-static const char *g_example_func_loop[] = {
-    "glEnable(GL_DEPTH_TEST);",
-    "glEnable(GL_COLOR_MATERIAL);",
-    "glEnable(GL_NORMALIZE);",
-    "func0(radius, sides, phase) {",
-        "glBegin(GL_TRIANGLE_FAN);",
-        "glNormal3f(0, 0, 1);",
-        "glColor3f(1, 1, 1);",
-        "glVertex3f(0, 0, 0);",
-        "for(i, 0, sides + 1) {",
-            "glColor3f(sin(i*TAU/sides + phase)*0.5+0.5, cos(i*TAU/sides + phase)*0.5+0.5, 0.8);",
-            "glVertex3f(cos(i*TAU/sides + phase)*radius, sin(i*TAU/sides + phase)*radius, 0);",
-        "}",
-        "glEnd();",
-    "}",
-    "glPushMatrix();",
-    "glTranslatef(-2.4, 0, 0);",
-    "func0(0.9, 3, t*0.4);",
-    "glPopMatrix();",
-    "glPushMatrix();",
-    "func0(0.9, 6, -t*0.25);",
-    "glPopMatrix();",
-    "glPushMatrix();",
-    "glTranslatef(2.4, 0, 0);",
-    "func0(0.9, 10, t*0.15);",
-    "glPopMatrix();",
-    NULL
-};
-
-/* Example 4: Branching helper — function args driving local if-blocks */
-static const char *g_example_func_if[] = {
-    "glEnable(GL_DEPTH_TEST);",
-    "glEnable(GL_COLOR_MATERIAL);",
-    "glEnable(GL_NORMALIZE);",
-    "func0(scale, phase) {",
-        "if(scale > 1) {",
-            "glColor3f(1, 0.35, 0.2);",
-            "glBegin(GL_QUADS);",
-            "glNormal3f(0, 0, 1);",
-            "glVertex3f(-0.7*scale, -0.7*scale, 0);",
-            "glVertex3f(0.7*scale, -0.7*scale, 0);",
-            "glVertex3f(0.7*scale, 0.7*scale, 0);",
-            "glVertex3f(-0.7*scale, 0.7*scale, 0);",
-            "glEnd();",
-        "}",
-        "if(scale <= 1) {",
-            "glColor3f(0.2, 0.75, 1);",
-            "glBegin(GL_TRIANGLES);",
-            "glNormal3f(0, 0, 1);",
-            "glVertex3f(cos(phase)*0.9*scale, sin(phase)*0.9*scale, 0);",
-            "glVertex3f(cos(phase+TAU/3)*0.9*scale, sin(phase+TAU/3)*0.9*scale, 0);",
-            "glVertex3f(cos(phase+2*TAU/3)*0.9*scale, sin(phase+2*TAU/3)*0.9*scale, 0);",
-            "glEnd();",
-        "}",
-    "}",
-    "glPushMatrix();",
-    "glTranslatef(-2.2, 0, 0);",
-    "func0(0.9, t);",
-    "glPopMatrix();",
-    "glPushMatrix();",
-    "func0(1.4, t*0.5);",
-    "glPopMatrix();",
-    "glPushMatrix();",
-    "glTranslatef(2.2, 0, 0);",
-    "func0(0.65, -t*0.8);",
-    "glPopMatrix();",
-    NULL
-};
-
-/* Example 5: Recursive helper — transformed child calls with depth countdown */
-static const char *g_example_func_recurse[] = {
-    "glEnable(GL_DEPTH_TEST);",
-    "glEnable(GL_COLOR_MATERIAL);",
-    "glEnable(GL_NORMALIZE);",
-    "// Recursive triangle tree: child calls shrink and rotate from the parent",
-    "func0(depth, size, spin) {",
-        "glColor3f(0.25 + depth*0.14, 0.45 + 0.2*sin(spin), 1 - depth*0.12);",
-        "glBegin(GL_LINE_LOOP);",
-        "glNormal3f(0, 0, 1);",
-        "glVertex3f(0, size, 0);",
-        "glVertex3f(-0.866*size, -0.5*size, 0);",
-        "glVertex3f(0.866*size, -0.5*size, 0);",
-        "glEnd();",
-        "if(depth <= 0) {",
-            "glColor3f(1, 0.8, 0.2);",
-            "glBegin(GL_TRIANGLES);",
-            "glNormal3f(0, 0, 1);",
-            "glVertex3f(0, size*0.55, 0);",
-            "glVertex3f(-0.48*size, -0.25*size, 0);",
-            "glVertex3f(0.48*size, -0.25*size, 0);",
-            "glEnd();",
-        "}",
-        "if(depth > 0) {",
-            "glPushMatrix();",
-            "glTranslatef(0, size*1.02, 0);",
-            "glRotatef(18 + spin*14, 0, 0, 1);",
-            "func0(depth - 1, size*0.62, spin + 0.15);",
-            "glPopMatrix();",
-            "glPushMatrix();",
-            "glTranslatef(-size*0.9, -size*0.38, 0);",
-            "glRotatef(-30 - spin*12, 0, 0, 1);",
-            "func0(depth - 1, size*0.58, spin + 0.12);",
-            "glPopMatrix();",
-            "glPushMatrix();",
-            "glTranslatef(size*0.9, -size*0.38, 0);",
-            "glRotatef(30 + spin*12, 0, 0, 1);",
-            "func0(depth - 1, size*0.58, spin + 0.12);",
-            "glPopMatrix();",
-        "}",
-    "}",
-    "glRotatef(sin(t*0.35)*12, 0, 0, 1);",
-    "func0(4, 1.05, sin(t*0.4));",
-    NULL
-};
-
-/* Example 6: Conditional colors — if-blocks + t variable */
-static const char *g_example_cond[] = {
-    "glEnable(GL_DEPTH_TEST);",
-    "glEnable(GL_LIGHTING);",
-    "glEnable(GL_COLOR_MATERIAL);",
-    "glEnable(GL_NORMALIZE);",
-    "glEnable(GL_LIGHT3);",
-    "glBegin(GL_QUADS);",
-    "if(sin(t) > 0) {",
-        "glColor3f(1, 0.2, 0.2);",
-    "}",
-    "if(sin(t) <= 0) {",
-        "glColor3f(0.2, 0.2, 1);",
-    "}",
-    "glNormal3f(0, 0, 1);",
-    "glVertex3f(-1, -1, 0);",
-    "glVertex3f(1, -1, 0);",
-    "glVertex3f(1, 1, 0);",
-    "glVertex3f(-1, 1, 0);",
-    "if(cos(t) > 0) {",
-        "glColor3f(0.2, 1, 0.2);",
-    "}",
-    "if(cos(t) <= 0) {",
-        "glColor3f(1, 1, 0.2);",
-    "}",
-    "glNormal3f(0, 0, -1);",
-    "glVertex3f(-1, -1, -1);",
-    "glVertex3f(-1, 1, -1);",
-    "glVertex3f(1, 1, -1);",
-    "glVertex3f(1, -1, -1);",
-    "glEnd();",
-    NULL
-};
-
-/* Example 7: Parametric torus — nested for-loops */
-static const char *g_example_torus[] = {
-    "glEnable(GL_DEPTH_TEST);",
-    "//glEnable(GL_LIGHTING);",
-    "glEnable(GL_COLOR_MATERIAL);",
-    "glEnable(GL_NORMALIZE);",
-    "glEnable(GL_LIGHT3);",
-    "glEnable(GL_LIGHT2);",
-    "glShadeModel(GL_SMOOTH);",
-    "for(i, 0, 24) {",
-        "glBegin(GL_QUAD_STRIP);",
-        "for(j, 0, 25) {",
-            "glColor3f(sin(i*TAU/24)*0.4+0.6, cos(j*TAU/24)*0.4+0.6, 0.5);",
-            "glVertex3f((2+cos(j*TAU/24))*cos(i*TAU/24), (2+cos(j*TAU/24))*sin(i*TAU/24), sin(j*TAU/24));",
-            "glVertex3f((2+cos(j*TAU/24))*cos((i+1)*TAU/24), (2+cos(j*TAU/24))*sin((i+1)*TAU/24), sin(j*TAU/24));",
-        "}",
-        "glEnd();",
-    "}",
-    NULL
-};
-
-/* Example 8: GLU tessellator — concave arrow polygon with per-vertex color */
-static const char *g_example_tess[] = {
-    "glEnable(GL_DEPTH_TEST);",
-    "glEnable(GL_LIGHTING);",
-    "glEnable(GL_COLOR_MATERIAL);",
-    "glEnable(GL_NORMALIZE);",
-    "glEnable(GL_LIGHT3);",
-    "glEnable(GL_LIGHT2);",
-    "glShadeModel(GL_SMOOTH);",
-    "glFrontFace(GL_CW);",
-    "// Arrow shape - concave, tessellated with per-vertex color",
-    "gluBegin(GLU_POLYGON);",
-    "gluBegin(GLU_CONTOUR);",
-    "gluNormal(0, 0, 1);",
-    "gluColor(0.2, 0.4, 1, 1);",
-    "gluVertex(-1.2, -0.45, 0);",
-    "gluColor(0.2, 0.4, 1, 1);",
-    "gluVertex(-1.2, 0.45, 0);",
-    "gluColor(0.55, 0.3, 1, 1);",
-    "gluVertex(0, 0.45, 0);",
-    "gluColor(1, 0.45, 0.05, 1);",
-    "gluVertex(0, 1.1, 0);",
-    "gluColor(1, 0.9, 0.1, 1);",
-    "gluVertex(1.3, 0, 0);",
-    "gluColor(1, 0.45, 0.05, 1);",
-    "gluVertex(0, -1.1, 0);",
-    "gluColor(0.55, 0.3, 1, 1);",
-    "gluVertex(0, -0.45, 0);",
-    "gluEnd();",
-    "gluEnd();",
-    NULL
-};
-
-/* Example 9: GLU tessellator — concave arrow polygon cutout */
-static const char *g_example_tess_cutout[] = {
-    "glEnable(GL_DEPTH_TEST);",
-    "glEnable(GL_LIGHTING);",
-    "glEnable(GL_COLOR_MATERIAL);",
-    "glEnable(GL_NORMALIZE);",
-    "glEnable(GL_LIGHT3);",
-    "glEnable(GL_LIGHT2);",
-    "glShadeModel(GL_SMOOTH);",
-    "glFrontFace(GL_CW);",
-    "z = -0.55;",
-    "glRotatef(10*t, 0, 0, 1);",
-    "glScalef(0.5, 0.5, 0.5);",
-    "// Arrow shape - concave, tessellated with per-vertex color",
-    "gluBegin(GLU_POLYGON);",
-    "  gluBegin(GLU_CONTOUR);",
-    "    glBegin(GL_QUAD_STRIP);",
-    "    gluNormal(0, 0, 1);",
-    "  // Side 0",
-    "    gluColor(0.2, 0.4, 1, 1);",
-    "      glColor3f(0.2, 0.4, 1);",
-    "      glNormal3f(-1, 0, 0);",
-    "      glVertex3f(-1.2, -0.45, 0);",
-    "      glVertex3f(-1.2, -0.45, z);",
-    "    gluVertex(-1.2, -0.45, 0);",
-    "  // Side 1",
-    "    gluColor(0.2, 0.4, 1, 1);",
-    "      glColor3f(0.2, 0.4, 1);",
-    "      glNormal3f(0, 1, 0);",
-    "      glVertex3f(-1.2, 0.45, 0);",
-    "      glVertex3f(-1.2, 0.45, z);",
-    "    gluVertex(-1.2, 0.45, 0);",
-    "  // Side 2",
-    "    gluColor(0.55, 0.3, 1, 1);",
-    "      glColor3f(0.55, 0.3, 1);",
-    "      glNormal3f(-1, 1, 0);",
-    "      glVertex3f(0, 0.45, 0);",
-    "      glVertex3f(0, 0.45, z);",
-    "    gluVertex(0, 0.45, 0);",
-    "  // Side 3",
-    "    gluColor(1, 0.45, 0.05, 1);",
-    "      glColor3f(1, 0.45, 0.05);",
-    "      glNormal3f(-1, 0, 0);",
-    "      glVertex3f(0, 1.1, 0);",
-    "      glVertex3f(0, 1.1, z);",
-    "    gluVertex(0, 1.1, 0);",
-    "  // Side 4",
-    "    gluColor(1, 0.9, 0.1, 1);",
-    "      glColor3f(1, 0.9, 0.1);",
-    "      glNormal3f(1, 0, 0);",
-    "      glVertex3f(1.3, 0, 0);",
-    "      glVertex3f(1.3, 0, z);",
-    "    gluVertex(1.3, 0, 0);",
-    "  // Side 5",
-    "    gluColor(1, 0.45, 0.05, 1);",
-    "      glColor3f(1, 0.45, 0.05);",
-    "      glNormal3f(-1, 0, 0);",
-    "      glVertex3f(0, -1.1, 0);",
-    "      glVertex3f(0, -1.1, z);",
-    "    gluVertex(0, -1.1, 0);",
-    "  // Side 6",
-    "    gluColor(0.55, 0.3, 1, 1);",
-    "      glColor3f(0.55, 0.3, 1);",
-    "      glNormal3f(-1, -1, 0);",
-    "      glVertex3f(0, -0.45, 0);",
-    "      glVertex3f(0, -0.45, z);",
-    "    gluVertex(0, -0.45, 0);",
-    "  // Quade side 7",
-    "      glColor3f(0.2, 0.4, 1);",
-    "      glNormal3f(0, -1, 0);",
-    "      glVertex3f(-1.2, -0.45, 0);",
-    "      glVertex3f(-1.2, -0.45, z);",
-    "    glEnd();",
-    "  gluEnd();",
-    "  gluBegin(GLU_CONTOUR);",
-    "    glBegin(GL_QUAD_STRIP);",
-    "      glColor3f(0.5, 0.5, 0.5);",
-    "    gluNormal(0, 0, 1);",
-    "  // Side 0",
-    "      glNormal3f(-1, 0, 0);",
-    "      glVertex3f(-0.6, -0.225, 0);",
-    "      glVertex3f(-0.6, -0.225, z);",
-    "    gluVertex(-0.6, -0.225, 0);",
-    "  // Side 1",
-    "      glNormal3f(0, 1, 0);",
-    "      glVertex3f(-0.6, 0.225, 0);",
-    "      glVertex3f(-1.2/2, 0.45/2, z);",
-    "    gluVertex(-0.6, 0.225, 0);",
-    "  // Side 2",
-    "      glNormal3f(-1, 1, 0);",
-    "      glVertex3f(0.2, 0.225, 0);",
-    "      glVertex3f(0.2, 0.45/2, z);",
-    "    gluVertex(0.2, 0.225, 0);",
-    "  // Side 3",
-    "      glNormal3f(-1, 0, 0);",
-    "      glVertex3f(0.2, 0.55, 0);",
-    "      glVertex3f(0.2, 1.1/2, z);",
-    "    gluVertex(0.2, 0.55, 0);",
-    "  // Side 4",
-    "      glNormal3f(1, 0, 0);",
-    "      glVertex3f(0.85, 0, 0);",
-    "      glVertex3f(1.7/2, 0, z);",
-    "    gluVertex(0.85, 0, 0);",
-    "  // Side 5",
-    "      glNormal3f(-1, 0, 0);",
-    "      glVertex3f(0.2, -0.55, 0);",
-    "      glVertex3f(0.2, -1.1/2, z);",
-    "    gluVertex(0.2, -0.55, 0);",
-    "  // Side 6",
-    "      glNormal3f(-1, -1, 0);",
-    "      glVertex3f(0.2, -0.225, 0);",
-    "      glVertex3f(0.2, -0.45/2, z);",
-    "    gluVertex(0.2, -0.225, 0);",
-    "  // Quad side 7",
-    "      glNormal3f(0, -1, 0);",
-    "      glVertex3f(-0.6, -0.225, 0);",
-    "      glVertex3f(-1.2/2, -0.45/2, z);",
-    "    glEnd();",
-    "  gluEnd();",
-    "gluEnd();",
-    NULL
-};
-
-/* Example 10: 2D assignment sketch — runtime assignment without goto.
- * No predefined goto examples are shipped because goto support is partial:
- * top-level only, not replay-safe, and not suitable for variable-driven
- * geometry loops. Keep coverage in tests/docs instead of F12 examples. */
-static const char *g_example_assign_2d[] = {
-    "// 2D assignment sketch: tests runtime variable assignment without goto",
-    "glDisable(GL_LIGHTING);",
-    "glDisable(GL_DEPTH_TEST);",
-    "x = -1.7;",
-    "y = 0.12*sin(t*0.8);",
-    "glBegin(GL_LINE_STRIP);",
-    "for(i, 0, 48) {",
-    "  glColor3f(0.30 + i*0.010, 0.55 + 0.28*sin(i*0.20 + t), 0.95 - i*0.008);",
-    "  glVertex3f(x, y, 0);",
-    "  x = x + 0.07;",
-    "  y = sin(x*2.5 + t)*0.52 + cos(i*0.25 + t*0.6)*0.16;",
-    "}",
-    "glEnd();",
-    NULL
-};
-
-/* Example 11: Stress test — exercises parser, code UI, nested structures,
- * multiple functions, recursion, conditionals, variables, tessellation,
- * GLU primitives, matrix stack, animation, and long line count.
- *
- * Builds an animated scene with:
- *   - func0: parametric surface patch (nested for, trig, normals)
- *   - func1: recursive branching tree (recursion + if + transforms)
- *   - func2: tessellated star floor with cutout hole
- *   - func3: orbiting glu-quadric satellites (sphere + cylinder + disk)
- *   - Main scene: composes all four, with animated variables and comments
- */
-static const char *g_example_stress[] = {
-    "// ===== Stress-test scene: parser + code UI torture =====",
-    "glEnable(GL_DEPTH_TEST);",
-    "glEnable(GL_LIGHTING);",
-    "glEnable(GL_COLOR_MATERIAL);",
-    "glEnable(GL_NORMALIZE);",
-    "glEnable(GL_LIGHT2);",
-    "glEnable(GL_LIGHT3);",
-    "glShadeModel(GL_SMOOTH);",
-    "glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE);",
-    "glLightModeli(GL_LIGHT_MODEL_TWO_SIDE, 1);",
-    "",
-    "// --- func0: parametric surface patch (nested for + math) ---",
-    "func0(rows, cols, amp, phase) {",
-        "for(i, 0, rows) {",
-            "glBegin(GL_TRIANGLE_STRIP);",
-            "for(j, 0, cols + 1) {",
-                "x = -1.5 + 3.0*j/cols;",
-                "z = -1.5 + 3.0*i/rows;",
-                "y = amp*sin(x*2.5 + phase)*cos(z*2.5 + phase*0.7);",
-                "n = 1.0/sqrt(1 + amp*amp*6.25*(cos(x*2.5 + phase)*cos(x*2.5 + phase)*cos(z*2.5 + phase*0.7)*cos(z*2.5 + phase*0.7) + sin(x*2.5 + phase)*sin(x*2.5 + phase)*sin(z*2.5 + phase*0.7)*sin(z*2.5 + phase*0.7)));",
-                "glNormal3f(-amp*2.5*cos(x*2.5 + phase)*cos(z*2.5 + phase*0.7)*n, n, amp*2.5*sin(x*2.5 + phase)*sin(z*2.5 + phase*0.7)*n);",
-                "glColor3f(0.35 + 0.35*sin(x + phase), 0.5 + 0.3*cos(z + phase*0.5), 0.65 + 0.25*sin(x*z + phase));",
-                "glVertex3f(x, y, z);",
-                "z = -1.5 + 3.0*(i + 1)/rows;",
-                "y = amp*sin(x*2.5 + phase)*cos(z*2.5 + phase*0.7);",
-                "n = 1.0/sqrt(1 + amp*amp*6.25*(cos(x*2.5 + phase)*cos(x*2.5 + phase)*cos(z*2.5 + phase*0.7)*cos(z*2.5 + phase*0.7) + sin(x*2.5 + phase)*sin(x*2.5 + phase)*sin(z*2.5 + phase*0.7)*sin(z*2.5 + phase*0.7)));",
-                "glNormal3f(-amp*2.5*cos(x*2.5 + phase)*cos(z*2.5 + phase*0.7)*n, n, amp*2.5*sin(x*2.5 + phase)*sin(z*2.5 + phase*0.7)*n);",
-                "glColor3f(0.35 + 0.35*sin(x + phase), 0.5 + 0.3*cos(z + phase*0.5), 0.65 + 0.25*sin(x*z + phase));",
-                "glVertex3f(x, y, z);",
-            "}",
-            "glEnd();",
-        "}",
-    "}",
-    "",
-    "// --- func1: recursive branching tree (recursion + if + matrix stack) ---",
-    "func1(depth, len, twist) {",
-        "glColor3f(0.35 + depth*0.12, 0.25 + 0.15*sin(twist), 0.15);",
-        "glBegin(GL_LINES);",
-        "glNormal3f(0, 0, 1);",
-        "glVertex3f(0, 0, 0);",
-        "glVertex3f(0, len, 0);",
-        "glEnd();",
-        "if(depth > 0) {",
-            "// Right branch",
-            "glPushMatrix();",
-            "glTranslatef(0, len, 0);",
-            "glRotatef(25 + twist*8, 0, 0, 1);",
-            "glScalef(0.72, 0.72, 0.72);",
-            "func1(depth - 1, len, twist + 0.3);",
-            "glPopMatrix();",
-            "// Left branch",
-            "glPushMatrix();",
-            "glTranslatef(0, len, 0);",
-            "glRotatef(-30 - twist*6, 0, 0, 1);",
-            "glScalef(0.68, 0.68, 0.68);",
-            "func1(depth - 1, len, twist + 0.25);",
-            "glPopMatrix();",
-            "// Forward branch (z-axis splay)",
-            "glPushMatrix();",
-            "glTranslatef(0, len*0.9, 0);",
-            "glRotatef(15 + twist*4, 1, 0, 0);",
-            "glScalef(0.6, 0.6, 0.6);",
-            "func1(depth - 1, len*0.85, twist + 0.2);",
-            "glPopMatrix();",
-        "}",
-        "if(depth <= 0) {",
-            "// Leaf: small filled triangle",
-            "glColor3f(0.2, 0.7 + 0.3*sin(twist*5), 0.15);",
-            "glBegin(GL_TRIANGLES);",
-            "glNormal3f(0, 0, 1);",
-            "glVertex3f(0, len, 0);",
-            "glVertex3f(-len*0.3, len*1.3, 0);",
-            "glVertex3f(len*0.3, len*1.3, 0);",
-            "glEnd();",
-        "}",
-    "}",
-    "",
-    "// --- func2: tessellated star floor with circular cutout ---",
-    "func2(radius, hole) {",
-        "glFrontFace(GL_CW);",
-        "gluBegin(GLU_POLYGON);",
-        "// Outer contour: 10-pointed star",
-        "gluBegin(GLU_CONTOUR);",
-        "gluNormal(0, 1, 0);",
-        "for(i, 0, 20) {",
-            "k = radius;",
-            "if(i % 2 > 0) {",
-                "k = radius*0.5;",
-            "}",
-            "gluColor(0.25 + 0.15*sin(i*0.6), 0.3 + 0.15*cos(i*0.8), 0.55 + 0.1*sin(i));",
-            "gluVertex(k*cos(i*TAU/20), 0, k*sin(i*TAU/20));",
-        "}",
-        "gluEnd();",
-        "// Inner contour: circular cutout (tessellator infers hole from overlap)",
-        "gluBegin(GLU_CONTOUR);",
-        "for(i, 0, 24) {",
-            "gluColor(0.1, 0.1, 0.15);",
-            "gluVertex(hole*cos(-i*TAU/24), 0, hole*sin(-i*TAU/24));",
-        "}",
-        "gluEnd();",
-        "gluEnd();",
-        "glFrontFace(GL_CCW);",
-    "}",
-    "",
-    "// --- func3: orbiting GLU quadric satellites ---",
-    "func3(count, orbit_r, sat_size, spin) {",
-        "for(i, 0, count) {",
-            "glPushMatrix();",
-            "glRotatef(i*360/count + spin, 0, 1, 0);",
-            "glTranslatef(orbit_r, 0, 0);",
-            "// Sphere body",
-            "glColor3f(0.8 + 0.2*sin(i + spin*0.02), 0.5, 0.3 + 0.2*cos(i));",
-            "gluSphere(sat_size, 12, 8);",
-            "// Antenna cylinder",
-            "glColor3f(0.5, 0.5, 0.6);",
-            "glTranslatef(0, sat_size, 0);",
-            "glRotatef(-90, 1, 0, 0);",
-            "gluCylinder(sat_size*0.15, sat_size*0.05, sat_size*1.5, 8, 1);",
-            "// Dish at top",
-            "glTranslatef(0, 0, sat_size*1.5);",
-            "glColor3f(0.9, 0.85, 0.5);",
-            "gluDisk(0, sat_size*0.35, 12, 1);",
-            "glPopMatrix();",
-        "}",
-    "}",
-    "",
-    "// ===== Main scene composition =====",
-    "",
-    "// Animated variables",
-    "n = 8;",
-    "x = 0.4*sin(t*0.6);",
-    "y = 0.15*cos(t*0.8);",
-    "",
-    "// Ground: tessellated star floor",
-    "glPushMatrix();",
-    "glTranslatef(0, -1.8, 0);",
-    "func2(3.0, 0.8);",
-    "glPopMatrix();",
-    "",
-    "// Wavy parametric surface",
-    "glPushMatrix();",
-    "glTranslatef(0, x, 0);",
-    "glRotatef(t*12, 0, 1, 0);",
-    "func0(n, n, 0.35 + 0.15*sin(t), t*0.5);",
-    "glPopMatrix();",
-    "",
-    "// Fractal tree (recursive)",
-    "glPushMatrix();",
-    "glTranslatef(-2.5, -1.8, 0);",
-    "glRotatef(-5*sin(t*0.3), 0, 0, 1);",
-    "func1(3, 0.7, t*0.2);",
-    "glPopMatrix();",
-    "",
-    "// Second tree, mirrored",
-    "glPushMatrix();",
-    "glTranslatef(2.5, -1.8, 0);",
-    "glScalef(-1, 1, 1);",
-    "glRotatef(-5*cos(t*0.25), 0, 0, 1);",
-    "func1(3, 0.65, t*0.15 + 1);",
-    "glPopMatrix();",
-    "",
-    "// Orbiting satellites",
-    "glPushMatrix();",
-    "glTranslatef(0, y + 1.0, 0);",
-    "func3(5, 2.8, 0.18, t*35);",
-    "glPopMatrix();",
-    "",
-    "// Central decoration: torus + sphere",
-    "glPushMatrix();",
-    "glTranslatef(0, 0.5 + 0.3*sin(t*1.2), 0);",
-    "glRotatef(t*45, 0, 1, 0);",
-    "glRotatef(t*20, 1, 0, 0);",
-    "glColor3f(0.85, 0.6, 0.25);",
-    "glutSolidTorus(0.12, 0.55, 16, 24);",
-    "glColor3f(0.95, 0.90, 0.70);",
-    "gluSphere(0.25, 16, 12);",
-    "glPopMatrix();",
-    "",
-    "// Wireframe accent ring",
-    "glDisable(GL_LIGHTING);",
-    "glBegin(GL_LINE_LOOP);",
-    "for(i, 0, 64) {",
-        "glColor3f(0.3 + 0.3*sin(i*TAU/64 + t), 0.5 + 0.2*cos(i*TAU/32 + t*0.7), 0.8);",
-        "glVertex3f(3.5*cos(i*TAU/64), -1.75, 3.5*sin(i*TAU/64));",
-    "}",
-    "glEnd();",
-    "glEnable(GL_LIGHTING);",
-    "",
-    "// Long expression stress: animated vertex spiral",
-    "glDisable(GL_LIGHTING);",
-    "glBegin(GL_LINE_STRIP);",
-    "for(i, 0, 120) {",
-        "x = (1.5 + 0.4*sin(i*TAU/30 + t*2))*cos(i*TAU/60 + t*0.3);",
-        "y = -1.75 + i*0.025 + 0.08*sin(i*0.5 + t*3);",
-        "z = (1.5 + 0.4*sin(i*TAU/30 + t*2))*sin(i*TAU/60 + t*0.3);",
-        "glColor3f(0.1 + 0.5*sin(i*0.08 + t), 0.9 - 0.4*cos(i*0.06), 0.5 + 0.3*sin(i*0.12 + t*0.5));",
-        "glVertex3f(x, y, z);",
-    "}",
-    "glEnd();",
-    "glEnable(GL_LIGHTING);",
-    NULL
-};
-
-static const char **g_examples[] = {
-    g_example_cube,
-    g_example_ring,
-    g_example_func,
-    g_example_func_loop,
-    g_example_func_if,
-    g_example_func_recurse,
-    g_example_cond,
-    g_example_torus,
-    g_example_tess,
-    g_example_tess_cutout,
-    g_example_assign_2d,
-    g_example_stress,
-};
-static const char *g_example_names[] = {
-    "Lit cube",
-    "Animated ring (for + t)",
-    "Function demo (func0)",
-    "Function polygons (args + for)",
-    "Function branching (args + if)",
-    "Recursive triangle tree (func + recursion)",
-    "Conditional colors (if + t)",
-    "Parametric torus (nested for)",
-    "GLU tessellator (concave arrow)",
-    "GLU tessellator (concave arrow cutout)",
-    "2D assignment sketch (vars only)",
-    "Stress test (all features)",
-};
-/* NUM_EXAMPLES defined in forward declarations section */
-
 static void load_example(int idx) {
-    if (idx < 0 || idx >= NUM_EXAMPLES) return;
-    load_example_lines(g_examples[idx]);
+    int count = repl_examples_count();
+    const char *const *lines;
+    const char *name;
+
+    if (idx < 0 || idx >= count) return;
+    lines = repl_examples_lines(idx);
+    name = repl_examples_name(idx);
+    if (!lines || !name) return;
+
+    load_example_lines(lines);
     g_example_idx = idx;
     char msg[128];
     snprintf(msg, sizeof(msg), "Example %d/%d: %s (F12 for next)",
-             idx + 1, NUM_EXAMPLES, g_example_names[idx]);
+             idx + 1, count, name);
     set_status(msg);
 }
 
@@ -7423,6 +6888,14 @@ void repl_flatten_commands(void) {
 
 void repl_recompute_autonormals(void) {
     recompute_autonormals();
+}
+
+int repl_example_count(void) {
+    return repl_examples_count();
+}
+
+const char *repl_example_name(int idx) {
+    return repl_examples_name(idx);
 }
 
 void repl_load_example(int idx) {
