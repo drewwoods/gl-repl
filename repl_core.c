@@ -112,6 +112,8 @@ const EnumEntry g_enable_caps[] = {
     { "GL_COLOR_MATERIAL",  GL_COLOR_MATERIAL },
     { "GL_NORMALIZE",       GL_NORMALIZE },
     { "GL_LINE_SMOOTH",     GL_LINE_SMOOTH },
+    { "GL_POINT_SMOOTH",    GL_POINT_SMOOTH },
+    { "GL_BLEND",           GL_BLEND },
     { "GL_LIGHT0",          GL_LIGHT0 },
     { "GL_LIGHT1",          GL_LIGHT1 },
     { "GL_LIGHT2",          GL_LIGHT2 },
@@ -165,6 +167,17 @@ const EnumEntry g_point_param_pnames[] = {
     { NULL, 0 }
 };
 
+const EnumEntry g_blend_src_factors[] = {
+    { "GL_SRC_ALPHA", GL_SRC_ALPHA },
+    { NULL, 0 }
+};
+
+const EnumEntry g_blend_dst_factors[] = {
+    { "GL_ONE_MINUS_SRC_ALPHA", GL_ONE_MINUS_SRC_ALPHA },
+    { "GL_ONE",                 GL_ONE },
+    { NULL, 0 }
+};
+
 const char *g_func_completions[] = {
     "glVertex3f(",
     "glVertex2f(",
@@ -178,6 +191,7 @@ const char *g_func_completions[] = {
     "glShadeModel(",
     "glPointSize(",
     "glPointParameterfv(",
+    "glBlendFunc(",
     "glTranslatef(",
     "glScalef(",
     "glRotatef(",
@@ -1901,7 +1915,8 @@ static const char *cmd_type_name(CmdType t) {
         "CMD_TESS_VERTEX",
         "CMD_MATERIALF",
         "CMD_POINT_SIZE",
-        "CMD_POINT_PARAMETER_FV"
+        "CMD_POINT_PARAMETER_FV",
+        "CMD_BLEND_FUNC"
     };
 
     if (t >= 0 && t < CMD_TYPE_COUNT)
@@ -3273,6 +3288,7 @@ static const EnumCmdDef g_enum_cmds[] = {
     { "glColorMaterial", CMD_COLOR_MATERIAL,2, g_face_types,         g_material_params, "%sglColorMaterial(%s, %s);", "face: GL_FRONT, GL_BACK, GL_FRONT_AND_BACK", "mode: GL_AMBIENT, GL_DIFFUSE, GL_AMBIENT_AND_DIFFUSE...", 0 },
     { "glMaterialf",     CMD_MATERIALF,    -2, g_face_types,         g_material_params, NULL,                         "face: GL_FRONT, GL_BACK, GL_FRONT_AND_BACK", "pname: GL_DIFFUSE, GL_AMBIENT, GL_SPECULAR, GL_SHININESS", 0 },
     { "glLightModeli",   CMD_LIGHT_MODEL_I, 2, g_light_model_params, g_bool_vals,       "%sglLightModeli(%s, %s);",   "pname: GL_LIGHT_MODEL_TWO_SIDE, GL_LIGHT_MODEL_LOCAL_VIEWER", "param: GL_TRUE, GL_FALSE, or integer", 0 },
+    { "glBlendFunc",     CMD_BLEND_FUNC,    2, g_blend_src_factors,  g_blend_dst_factors, "%sglBlendFunc(%s, %s);",  "sfactor: GL_SRC_ALPHA", "dfactor: GL_ONE_MINUS_SRC_ALPHA, GL_ONE", 0 },
     { NULL, 0, 0, NULL, NULL, NULL, NULL, NULL, 0 }
 };
 
@@ -3711,12 +3727,13 @@ static int parse_command_internal(const char *line, GLCmd *cmd,
         return 1;
     }
 
-    /* glPointParameterfv(pname, a, b, c) — only GL_POINT_DISTANCE_ATTENUATION */
+    /* glPointParameterfv(pname, const, linear, quadratic) —
+     * only GL_POINT_DISTANCE_ATTENUATION (size *= 1 / sqrt(const + linear*d + quadratic*d*d)) */
     if (strcmp(func, "glPointParameterfv") == 0) {
         char a1[64] = "", rest[MAX_LINE_LEN] = "";
         char *comma = strchr(args, ',');
         if (!comma) {
-            set_status("Usage: glPointParameterfv(GL_POINT_DISTANCE_ATTENUATION, a, b, c)");
+            set_status("Usage: glPointParameterfv(GL_POINT_DISTANCE_ATTENUATION, const, linear, quadratic)");
             return 0;
         }
         int l1 = (int)(comma - args);
@@ -3744,7 +3761,7 @@ static int parse_command_internal(const char *line, GLCmd *cmd,
         float parsed_args[4];
         int num_parsed = parse_exprs(rest, parsed_args, 4, vars, num_vars);
         if (num_parsed != 3) {
-            set_status("Expected 3 float values (constant, linear, quadratic)");
+            set_status("Expected 3 floats: const, linear, quadratic attenuation coefficients");
             return 0;
         }
 
@@ -5211,6 +5228,10 @@ void execute_commands(void) {
             glPointParameterfv(g_flat_cmds[pc].mode, params);
             break;
         }
+        case CMD_BLEND_FUNC:
+            if (in_begin) { glEnd(); in_begin = 0; }
+            glBlendFunc(g_flat_cmds[pc].mode, (GLenum)g_flat_cmds[pc].args[0]);
+            break;
         case CMD_GLU_SPHERE:
             if (in_begin) { glEnd(); in_begin = 0; }
             if (g_quadric)

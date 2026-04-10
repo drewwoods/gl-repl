@@ -88,6 +88,7 @@ typedef enum {
     CMD_MATERIALF,
     CMD_POINT_SIZE,
     CMD_POINT_PARAMETER_FV,
+    CMD_BLEND_FUNC,
     CMD_TYPE_COUNT
 } CmdType;
 
