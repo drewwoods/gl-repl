@@ -110,15 +110,15 @@ typedef struct {
     CmdType  type;
     GLenum   mode;
     float    args[8];
-    int      num_args;
-    char     source[MAX_LINE_LEN];
-    int      valid;
-    int      is_auto;
-    int      has_vars;
-    int      src_cmd_idx;
-    int      call_src_cmd_idx;
-    int      root_call_src_cmd_idx;
-    unsigned int func_scope_mask;
+    int      num_args;              /* Number of meaningful entries in args[] */
+    char     source[MAX_LINE_LEN];  /* Normalized source text shown in the editor */
+    int      valid;                 /* Deleted commands remain allocated but skipped */
+    int      is_auto;               /* Auto-generated helper, e.g. synthesized normals */
+    int      has_vars;              /* Source must be preserved/re-evaluated from text */
+    int      src_cmd_idx;           /* Owning source command for flat->source mapping */
+    int      call_src_cmd_idx;      /* Immediate call site that expanded this command */
+    int      root_call_src_cmd_idx; /* Outermost call site in nested expansion */
+    unsigned int func_scope_mask;   /* Function scopes active when command was flattened */
 } GLCmd;
 
 typedef struct {

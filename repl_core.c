@@ -693,7 +693,6 @@ static int import_make_repl_quadric_line(const char *line, char *out, int out_sz
 static void load_line_to_input(int idx);
 static int feed_line(const char *line);
 static void         trim_in_place(char *s);
-static int          extract_paren_payload(const char *src, char *out, int out_sz);
 
 /* ========================================================================= */
 /* Configuration menu item table (4.10)                                       */
@@ -1062,7 +1061,7 @@ static int write_tess_source_as_c(FILE *f, const GLCmd *cmd) {
     char c_args[4][MAX_LINE_LEN];
     int  arg_count;
 
-    if (!extract_paren_payload(cmd->source, payload, sizeof(payload)))
+    if (!repl_extract_paren_payload(cmd->source, payload, sizeof(payload)))
         return 0;
 
     arg_count = split_top_level_args(payload, raw_args, 4);
@@ -1450,7 +1449,7 @@ static void trim_in_place(char *s) {
     s[len - start] = '\0';
 }
 
-static int extract_paren_payload(const char *src, char *out, int out_sz) {
+int repl_extract_paren_payload(const char *src, char *out, int out_sz) {
     const char *p = strchr(src, '(');
     if (!p) return 0;
     p++;
@@ -1691,7 +1690,7 @@ static int input_has_any_visible_vars(const char *s, ExprVar *vars, int num_vars
     return input_has_predef_vars(s) || input_has_expr_vars(s, vars, num_vars);
 }
 
-static int extract_label_name(const char *src, char *name, int name_sz) {
+int repl_extract_label_name(const char *src, char *name, int name_sz) {
     const char *p = src;
     while (*p && isspace((unsigned char)*p)) p++;
     if (*p == ':') p++;
@@ -1702,7 +1701,7 @@ static int extract_label_name(const char *src, char *name, int name_sz) {
     return n > 0;
 }
 
-static int extract_goto_label(const char *src, char *name, int name_sz) {
+int repl_extract_goto_label(const char *src, char *name, int name_sz) {
     const char *p = strstr(src, "goto");
     if (!p) p = src;
     else p += 4;
@@ -1715,9 +1714,9 @@ static int extract_goto_label(const char *src, char *name, int name_sz) {
     return n > 0;
 }
 
-static int extract_assignment_parts(const char *src,
-                                    char *name, int name_sz,
-                                    char *rhs, int rhs_sz) {
+int repl_extract_assignment_parts(const char *src,
+                                  char *name, int name_sz,
+                                  char *rhs, int rhs_sz) {
     const char *p = src;
     const char *rhs_start;
     const char *rhs_end;
@@ -2227,7 +2226,7 @@ void repl_reformat_commands(void) {
         }
         case CMD_IF_BEGIN: {
             char cond[MAX_LINE_LEN] = "";
-            if (!extract_paren_payload(orig.source, cond, sizeof(cond)))
+            if (!repl_extract_paren_payload(orig.source, cond, sizeof(cond)))
                 snprintf(cond, sizeof(cond), "%g", orig.args[0]);
             snprintf(fmt.source, sizeof(fmt.source), "%sif(%s) {", ind_s, cond);
             g_cmds[i] = fmt;
@@ -2249,7 +2248,7 @@ void repl_reformat_commands(void) {
                 fallback[n] = '\0';
                 if (fallback[0]) name = fallback;
             }
-            extract_assignment_parts(orig.source, NULL, 0, rhs, sizeof(rhs));
+            repl_extract_assignment_parts(orig.source, NULL, 0, rhs, sizeof(rhs));
             if (name && rhs[0])
                 snprintf(fmt.source, sizeof(fmt.source), "%s%s = %s;", ind_s, name, rhs);
             else if (name)
@@ -2275,14 +2274,14 @@ void repl_reformat_commands(void) {
         }
         case CMD_LABEL: {
             char label[64] = "";
-            if (extract_label_name(orig.source, label, sizeof(label)))
+            if (repl_extract_label_name(orig.source, label, sizeof(label)))
                 snprintf(fmt.source, sizeof(fmt.source), "%s:", label);
             g_cmds[i] = fmt;
             break;
         }
         case CMD_GOTO: {
             char label[64] = "";
-            if (extract_goto_label(orig.source, label, sizeof(label)))
+            if (repl_extract_goto_label(orig.source, label, sizeof(label)))
                 snprintf(fmt.source, sizeof(fmt.source), "%sgoto %s;", ind_s, label);
             g_cmds[i] = fmt;
             break;
@@ -3738,7 +3737,7 @@ static void flatten_range(int start, int end_idx, ExprVar *vars, int nv,
             int needs_local_eval = 0;
 
             if (vars && nv > 0 &&
-                extract_paren_payload(g_cmds[i].source, cond_text, sizeof(cond_text)) &&
+                repl_extract_paren_payload(g_cmds[i].source, cond_text, sizeof(cond_text)) &&
                 input_has_expr_vars(cond_text, vars, nv)) {
                 needs_local_eval = 1;
             }
@@ -3815,8 +3814,8 @@ static void flatten_range(int start, int end_idx, ExprVar *vars, int nv,
             char rhs[MAX_LINE_LEN] = "";
             int local_rhs_vars = 0;
 
-            if (extract_assignment_parts(g_cmds[i].source, NULL, 0,
-                                         rhs, sizeof(rhs)) && rhs[0]) {
+            if (repl_extract_assignment_parts(g_cmds[i].source, NULL, 0,
+                                              rhs, sizeof(rhs)) && rhs[0]) {
                 ExprCtx ctx = { rhs, vars, nv };
                 value = eval_expr(&ctx);
                 if (vars && nv > 0)
@@ -4685,20 +4684,9 @@ void execute_commands(void) {
              * reliable for control flow and assignments. Variable-driven GL
              * commands still use the args baked into g_flat_cmds[]. Replay also
              * cannot follow the dynamic jump trace. */
-            const char *src = g_flat_cmds[pc].source;
-            /* src is like "  goto labelname;" — skip past "goto " keyword */
-            const char *goto_kw = strstr(src, "goto ");
-            if (!goto_kw) break;
-            const char *gname = goto_kw + 5;
-            while (*gname == ' ') gname++; /* skip any extra spaces */
             char lname[64];
-            int llen = 0;
-            while (llen < 63 && gname[llen] && gname[llen] != ';' && !isspace((unsigned char)gname[llen])) {
-                lname[llen] = gname[llen];
-                llen++;
-            }
-            lname[llen] = '\0';
-            if (llen == 0) break;
+            if (!repl_extract_goto_label(g_flat_cmds[pc].source, lname, sizeof(lname)))
+                break;
             /* Search for matching CMD_LABEL; guard against infinite loops */
             if (goto_count++ > 100000) {
                 set_status("goto: loop limit reached");
@@ -4706,9 +4694,11 @@ void execute_commands(void) {
             }
             for (int li = 0; li < g_num_flat_cmds; li++) {
                 if (g_flat_cmds[li].valid && g_flat_cmds[li].type == CMD_LABEL) {
-                    const char *lsrc = g_flat_cmds[li].source;
-                    /* source is "labelname:" */
-                    if (strncmp(lsrc, lname, llen) == 0 && lsrc[llen] == ':') {
+                    char target_label[64];
+                    if (repl_extract_label_name(g_flat_cmds[li].source,
+                                                target_label,
+                                                sizeof(target_label)) &&
+                        strcmp(target_label, lname) == 0) {
                         pc = li; /* will be incremented at end of loop */
                         goto goto_done;
                     }
@@ -4721,17 +4711,19 @@ void execute_commands(void) {
             /* Evaluate condition at execute time so goto loops see updated vars */
             float cond = g_flat_cmds[pc].args[0];
             if (g_flat_cmds[pc].has_vars) {
-                const char *p = g_flat_cmds[pc].source;
+                char cond_text[MAX_LINE_LEN] = "";
                 ExprVar *eval_vars = g_predef_vars;
                 int eval_num_vars = g_num_predef_vars;
-                while (*p && *p != '(') p++;
-                if (*p) p++;
                 if (g_flat_cmd_local_vars[pc].num_vars > 0) {
                     eval_vars = g_flat_cmd_local_vars[pc].vars;
                     eval_num_vars = g_flat_cmd_local_vars[pc].num_vars;
                 }
-                ExprCtx ctx = { p, eval_vars, eval_num_vars };
-                cond = eval_expr(&ctx);
+                if (repl_extract_paren_payload(g_flat_cmds[pc].source,
+                                              cond_text, sizeof(cond_text)) &&
+                    cond_text[0]) {
+                    ExprCtx ctx = { cond_text, eval_vars, eval_num_vars };
+                    cond = eval_expr(&ctx);
+                }
             }
             if (cond == 0.0f) {
                 /* Skip to matching CMD_IF_END */
@@ -4752,8 +4744,8 @@ void execute_commands(void) {
             float value = g_flat_cmds[pc].args[0];
             if (g_flat_cmds[pc].has_vars) {
                 char rhs[MAX_LINE_LEN] = "";
-                if (extract_assignment_parts(g_flat_cmds[pc].source, NULL, 0,
-                                             rhs, sizeof(rhs)) && rhs[0]) {
+                if (repl_extract_assignment_parts(g_flat_cmds[pc].source, NULL, 0,
+                                                  rhs, sizeof(rhs)) && rhs[0]) {
                     ExprVar *eval_vars = g_predef_vars;
                     int eval_num_vars = g_num_predef_vars;
                     if (g_flat_cmd_local_vars[pc].num_vars > 0) {
@@ -5101,7 +5093,7 @@ static int try_assign_variable(void) {
     char indent[32];
     int ind;
 
-    if (!extract_assignment_parts(g_input, name, sizeof(name), rhs, sizeof(rhs)))
+    if (!repl_extract_assignment_parts(g_input, name, sizeof(name), rhs, sizeof(rhs)))
         return 0;
 
     /* Check if it's a known predefined variable */

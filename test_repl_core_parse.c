@@ -24,6 +24,44 @@ int main(void) {
     repl_reset_state();
 
     {
+        char payload[128];
+        memset(payload, 0, sizeof(payload));
+        ASSERT_TRUE("extract nested paren payload",
+                    repl_extract_paren_payload("  if(max(x, y + 1) > sin(z)) {",
+                                               payload, sizeof(payload)) == 1);
+        ASSERT_TRUE("extract nested paren payload text",
+                    strcmp(payload, "max(x, y + 1) > sin(z)") == 0);
+    }
+
+    {
+        char name[32];
+        char rhs[128];
+        memset(name, 0, sizeof(name));
+        memset(rhs, 0, sizeof(rhs));
+        ASSERT_TRUE("extract assignment parts",
+                    repl_extract_assignment_parts("  radius = sin(x + 1);  ",
+                                                  name, sizeof(name),
+                                                  rhs, sizeof(rhs)) == 1);
+        ASSERT_TRUE("assignment name", strcmp(name, "radius") == 0);
+        ASSERT_TRUE("assignment rhs", strcmp(rhs, "sin(x + 1)") == 0);
+        ASSERT_TRUE("assignment rejects equality",
+                    repl_extract_assignment_parts("x == 1", name, sizeof(name),
+                                                  rhs, sizeof(rhs)) == 0);
+    }
+
+    {
+        char label[64];
+        memset(label, 0, sizeof(label));
+        ASSERT_TRUE("extract label name",
+                    repl_extract_label_name("  :walk_2", label, sizeof(label)) == 1);
+        ASSERT_TRUE("extract label text", strcmp(label, "walk_2") == 0);
+        ASSERT_TRUE("extract goto label",
+                    repl_extract_goto_label("  goto walk_2;  ",
+                                            label, sizeof(label)) == 1);
+        ASSERT_TRUE("extract goto text", strcmp(label, "walk_2") == 0);
+    }
+
+    {
         GLCmd cmd;
         memset(&cmd, 0, sizeof(cmd));
         int ok = repl_parse_and_normalize("glVertex3f(x+1, y, z)", 0,
