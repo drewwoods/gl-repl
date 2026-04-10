@@ -160,6 +160,11 @@ const EnumEntry g_bool_vals[] = {
     { NULL, 0 }
 };
 
+const EnumEntry g_point_param_pnames[] = {
+    { "GL_POINT_DISTANCE_ATTENUATION", GL_POINT_DISTANCE_ATTENUATION },
+    { NULL, 0 }
+};
+
 const char *g_func_completions[] = {
     "glVertex3f(",
     "glVertex2f(",
@@ -171,6 +176,8 @@ const char *g_func_completions[] = {
     "glEnable(",
     "glDisable(",
     "glShadeModel(",
+    "glPointSize(",
+    "glPointParameterfv(",
     "glTranslatef(",
     "glScalef(",
     "glRotatef(",
@@ -184,6 +191,7 @@ const char *g_func_completions[] = {
     "gluCylinder(",
     "gluDisk(",
     "gluPartialDisk(",
+    "glutSolidTorus(",
     "gluBegin(GLU_POLYGON)",
     "gluBegin(GLU_CONTOUR)",
     "gluEnd()",
@@ -1892,7 +1900,8 @@ static const char *cmd_type_name(CmdType t) {
         "CMD_TESS_COLOR",
         "CMD_TESS_VERTEX",
         "CMD_MATERIALF",
-        "CMD_POINT_SIZE"
+        "CMD_POINT_SIZE",
+        "CMD_POINT_PARAMETER_FV"
     };
 
     if (t >= 0 && t < CMD_TYPE_COUNT)
@@ -3277,6 +3286,27 @@ static void update_autocomplete(void) {
     /* Only offer completions when cursor is at the end of input */
     if (g_cursor_pos != g_input_len) return;
 
+    /* glPointParameterfv enum completion (custom: 1 enum + 3 floats) */
+    {
+        static const char prefix[] = "glPointParameterfv(";
+        int plen = (int)sizeof(prefix) - 1;
+        if (strncmp(g_input, prefix, plen) == 0 && g_input_len > plen &&
+            strchr(g_input + plen, ',') == NULL) {
+            const char *after = g_input + plen;
+            int alen = g_input_len - plen;
+            for (int j = 0; g_point_param_pnames[j].name && g_ac_count < MAX_AC_MATCHES; j++) {
+                if (strncmp(g_point_param_pnames[j].name, after, alen) == 0 &&
+                    (int)strlen(g_point_param_pnames[j].name) > alen) {
+                    g_ac_matches[g_ac_count++] = g_point_param_pnames[j].name;
+                }
+            }
+            if (g_ac_count > 0) {
+                snprintf(g_ac_ghost, sizeof(g_ac_ghost), "%s, ", g_ac_matches[0] + alen);
+                return;
+            }
+        }
+    }
+
     /* Enum-based commands completion */
     for (int i = 0; g_enum_cmds[i].name; i++) {
         char prefix[64];
@@ -3678,6 +3708,59 @@ static int parse_command_internal(const char *line, GLCmd *cmd,
                      indent, p1, p2, parsed_args[0], parsed_args[1], parsed_args[2], parsed_args[3]);
         }
 
+        return 1;
+    }
+
+    /* glPointParameterfv(pname, a, b, c) — only GL_POINT_DISTANCE_ATTENUATION */
+    if (strcmp(func, "glPointParameterfv") == 0) {
+        char a1[64] = "", rest[MAX_LINE_LEN] = "";
+        char *comma = strchr(args, ',');
+        if (!comma) {
+            set_status("Usage: glPointParameterfv(GL_POINT_DISTANCE_ATTENUATION, a, b, c)");
+            return 0;
+        }
+        int l1 = (int)(comma - args);
+        if (l1 >= (int)sizeof(a1)) l1 = (int)sizeof(a1) - 1;
+        strncpy(a1, args, l1); a1[l1] = '\0';
+        strncpy(rest, comma + 1, sizeof(rest) - 1);
+
+        char *p1 = a1; while (*p1 == ' ') p1++;
+        int e1 = (int)strlen(p1); while (e1 > 0 && p1[e1 - 1] == ' ') p1[--e1] = '\0';
+
+        GLenum pname = 0;
+        int found = 0;
+        for (int i = 0; g_point_param_pnames[i].name; i++) {
+            if (strcmp(p1, g_point_param_pnames[i].name) == 0) {
+                pname = g_point_param_pnames[i].value;
+                found = 1;
+                break;
+            }
+        }
+        if (!found) {
+            set_status("pname: GL_POINT_DISTANCE_ATTENUATION");
+            return 0;
+        }
+
+        float parsed_args[4];
+        int num_parsed = parse_exprs(rest, parsed_args, 4, vars, num_vars);
+        if (num_parsed != 3) {
+            set_status("Expected 3 float values (constant, linear, quadratic)");
+            return 0;
+        }
+
+        cmd->type = CMD_POINT_PARAMETER_FV;
+        cmd->valid = 1;
+        cmd->mode = pname;
+        cmd->args[0] = parsed_args[0];
+        cmd->args[1] = parsed_args[1];
+        cmd->args[2] = parsed_args[2];
+        cmd->num_args = 3;
+        cmd->has_vars = (num_vars > 0);
+
+        char _ind[32]; cmd_indent(g_edit_line, _ind, sizeof(_ind));
+        snprintf(cmd->source, sizeof(cmd->source),
+                 "%sglPointParameterfv(%s, (GLfloat[]){%g, %g, %g});",
+                 _ind, p1, parsed_args[0], parsed_args[1], parsed_args[2]);
         return 1;
     }
 
@@ -5118,6 +5201,16 @@ void execute_commands(void) {
             if (in_begin) { glEnd(); in_begin = 0; }
             glPointSize(g_flat_cmds[pc].args[0]);
             break;
+        case CMD_POINT_PARAMETER_FV: {
+            if (in_begin) { glEnd(); in_begin = 0; }
+            GLfloat params[3] = {
+                g_flat_cmds[pc].args[0],
+                g_flat_cmds[pc].args[1],
+                g_flat_cmds[pc].args[2],
+            };
+            glPointParameterfv(g_flat_cmds[pc].mode, params);
+            break;
+        }
         case CMD_GLU_SPHERE:
             if (in_begin) { glEnd(); in_begin = 0; }
             if (g_quadric)
