@@ -1,0 +1,137 @@
+#include "repl_core_internal.h"
+
+#include <stdio.h>
+#include <string.h>
+
+static int g_run = 0;
+static int g_pass = 0;
+
+#define ASSERT_TRUE(label, cond) do { \
+    g_run++; \
+    if (cond) g_pass++; \
+    else printf("FAIL [%s]\n", label); \
+} while (0)
+
+static void open_search(void) {
+    repl_keyboard_func(6, 0, 0); /* Ctrl+F */
+}
+
+static void type_search_text(const char *text) {
+    while (*text) {
+        repl_keyboard_func((unsigned char)*text, 0, 0);
+        text++;
+    }
+}
+
+static void set_live_input(const char *text) {
+    strncpy(g_input, text, MAX_INPUT_LEN - 1);
+    g_input[MAX_INPUT_LEN - 1] = '\0';
+    g_input_len = (int)strlen(g_input);
+    g_cursor_pos = g_input_len;
+}
+
+int main(void) {
+    init_predef_vars();
+
+    repl_reset_state();
+    repl_feed_line_public("glColor3f(1, 0, 0);");
+    repl_feed_line_public("glEnd();");
+    {
+        char before0[MAX_LINE_LEN];
+        int before_num = g_num_cmds;
+
+        strncpy(before0, g_cmds[0].source, sizeof(before0) - 1);
+        before0[sizeof(before0) - 1] = '\0';
+
+        open_search();
+        ASSERT_TRUE("ctrl-f activates search", g_search_active == 1);
+        ASSERT_TRUE("ctrl-f leaves query empty", g_search_query_len == 0);
+        ASSERT_TRUE("ctrl-f leaves cmd count unchanged", g_num_cmds == before_num);
+        ASSERT_TRUE("ctrl-f leaves source unchanged",
+                    strcmp(g_cmds[0].source, before0) == 0);
+    }
+
+    repl_reset_state();
+    repl_feed_line_public("// color COLOR");
+    repl_feed_line_public("glColor3f(1, 0, 0);");
+    repl_feed_line_public("glVertex3f(0, 0, 0);");
+    open_search();
+    type_search_text("CoLoR");
+    {
+        int first = repl_search_find_next_in_text(repl_search_row_text(0),
+                                                  g_search_query, 0);
+        int second = repl_search_find_next_in_text(repl_search_row_text(0),
+                                                   g_search_query, first + 1);
+
+        ASSERT_TRUE("search matches case-insensitively", g_search_match_count == 3);
+        ASSERT_TRUE("search jumps to first hit line", g_edit_line == 0);
+        ASSERT_TRUE("search first hit line", g_search_hit_line == 0);
+        ASSERT_TRUE("search first hit char", g_search_hit_char == first);
+        ASSERT_TRUE("search first ordinal", g_search_hit_ordinal == 1);
+
+        repl_keyboard_func('\n', 0, 0);
+        ASSERT_TRUE("enter navigates next same-line hit", g_edit_line == 0);
+        ASSERT_TRUE("enter next hit char", g_search_hit_char == second);
+        ASSERT_TRUE("enter next ordinal", g_search_hit_ordinal == 2);
+
+        repl_special_func(GLUT_KEY_DOWN, 0, 0);
+        ASSERT_TRUE("down navigates next line", g_edit_line == 1);
+        ASSERT_TRUE("down hit line", g_search_hit_line == 1);
+        ASSERT_TRUE("down hit ordinal", g_search_hit_ordinal == 3);
+        ASSERT_TRUE("down hit char",
+                    g_search_hit_char ==
+                    repl_search_find_next_in_text(repl_search_row_text(1),
+                                                  g_search_query, 0));
+
+        repl_special_func(GLUT_KEY_DOWN, 0, 0);
+        ASSERT_TRUE("down wraps to first hit", g_edit_line == 0);
+        ASSERT_TRUE("down wrap line", g_search_hit_line == 0);
+        ASSERT_TRUE("down wrap char", g_search_hit_char == first);
+        ASSERT_TRUE("down wrap ordinal", g_search_hit_ordinal == 1);
+
+        repl_special_func(GLUT_KEY_UP, 0, 0);
+        ASSERT_TRUE("up wraps to last hit", g_edit_line == 1);
+        ASSERT_TRUE("up wrap line", g_search_hit_line == 1);
+        ASSERT_TRUE("up wrap ordinal", g_search_hit_ordinal == 3);
+    }
+
+    repl_reset_state();
+    repl_feed_line_public("glBegin(GL_POINTS);");
+    repl_feed_line_public("glEnd();");
+    repl_navigate_to_line(1);
+    open_search();
+    type_search_text("#include");
+    ASSERT_TRUE("header text is not searched", g_search_match_count == 0);
+    ASSERT_TRUE("header search has no current hit", g_search_hit_line == -1);
+    ASSERT_TRUE("zero-hit search leaves line unchanged", g_edit_line == 1);
+
+    repl_reset_state();
+    repl_feed_line_public("glBegin(GL_POINTS);");
+    repl_navigate_to_line(0);
+    set_live_input("NeedleLine");
+    open_search();
+    type_search_text("needle");
+    ASSERT_TRUE("active edit line buffer is searchable", g_search_match_count == 1);
+    ASSERT_TRUE("active edit line hit line", g_search_hit_line == 0);
+    ASSERT_TRUE("active edit line hit char", g_search_hit_char == 0);
+    ASSERT_TRUE("active edit line search uses live input",
+                strcmp(repl_search_row_text(0), "NeedleLine") == 0);
+
+    repl_reset_state();
+    set_live_input("ColorProbe");
+    open_search();
+    type_search_text("color");
+    ASSERT_TRUE("newline buffer is searchable", g_search_match_count == 1);
+    ASSERT_TRUE("newline hit line", g_search_hit_line == 0);
+    ASSERT_TRUE("newline hit char", g_search_hit_char == 0);
+    ASSERT_TRUE("newline search keeps current line", g_edit_line == 0);
+
+    repl_keyboard_func(27, 0, 0);
+    ASSERT_TRUE("escape closes search", g_search_active == 0);
+    ASSERT_TRUE("escape clears search query", g_search_query_len == 0);
+    ASSERT_TRUE("escape clears search hit", g_search_hit_line == -1);
+    ASSERT_TRUE("escape clears match count", g_search_match_count == 0);
+
+    printf("repl_core_search: %d/%d passed\n", g_pass, g_run);
+    return (g_run == g_pass) ? 0 : 1;
+}

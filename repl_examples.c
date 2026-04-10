@@ -464,7 +464,36 @@ static const char *const g_example_particles_stateless[] = {
     NULL
 };
 
-/* Example 12: Stress test — exercises parser, code UI, nested structures,
+/* Example 12: Additive glow particles — glPointSize + distance attenuation + blend */
+static const char *const g_example_glow_particles[] = {
+    "// Glow sprites: additive blend + distance-attenuated point size",
+    "glDisable(GL_LIGHTING);",
+    "glDisable(GL_DEPTH_TEST);",
+    "glEnable(GL_BLEND);",
+    "glBlendFunc(GL_SRC_ALPHA, GL_ONE);",
+    "glEnable(GL_POINT_SMOOTH);",
+    "glPointSize(24);",
+    "glPointParameterfv(GL_POINT_DISTANCE_ATTENUATION, 0.2, 0, 0.15);",
+    "n = 160;",
+    "glBegin(GL_POINTS);",
+    "for(i, 0, n) {",
+    "  k = rand(i, 0)*TAU;",
+    "  j = 0.4 + rand(i, 1)*1.8;",
+    "  x = cos(k + t*0.4)*j;",
+    "  y = sin(k*1.3 + t*0.6)*0.9;",
+    "  z = sin(k + t*0.4)*j;",
+    "  glColor4f(0.4 + 0.6*rand(i, 2), 0.3 + 0.5*rand(i, 3), 0.8 + 0.2*rand(i, 4), 0.55);",
+    "  glVertex3f(x, y, z);",
+    "}",
+    "glEnd();",
+    "glDisable(GL_POINT_SMOOTH);",
+    "glDisable(GL_BLEND);",
+    "glEnable(GL_DEPTH_TEST);",
+    "glEnable(GL_LIGHTING);",
+    NULL
+};
+
+/* Example 13: Stress test — exercises parser, code UI, nested structures,
  * multiple functions, recursion, conditionals, variables, tessellation,
  * GLU primitives, matrix stack, animation, and long line count. */
 static const char *const g_example_stress[] = {
@@ -684,6 +713,7 @@ static const char *const *const g_examples[] = {
     g_example_tess_cutout,
     g_example_assign_2d,
     g_example_particles_stateless,
+    g_example_glow_particles,
     g_example_stress,
 };
 
@@ -700,6 +730,7 @@ static const char *const g_example_names[] = {
     "GLU tessellator (concave arrow cutout)",
     "2D assignment sketch (vars only)",
     "Stateless particles (rand seed+iter)",
+    "Glow sprites (blend + point attenuation)",
     "Stress test (all features)",
 };
 
