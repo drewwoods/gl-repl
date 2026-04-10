@@ -580,6 +580,7 @@ int    g_cam_rotate   = 0;  /* auto-rotate camera around Y */
 int    g_example_idx  = -1; /* current predefined example (-1 = none loaded yet) */
 int    g_user_lighting_enabled = 0; /* tracks if user typed glEnable(GL_LIGHTING) */
 int    g_show_outlines = 1; /* draw black wireframe over filled polygons */
+int    g_show_vpoints  = 1; /* draw black dots at each vertex position */
 int    g_highlight_current_poly = 1; /* highlight glBegin block under cursor */
 int    g_current_block_begin = -1;  /* flat cmd index of cursor's glBegin */
 int    g_current_block_end   = -1;  /* flat cmd index of cursor's glEnd */
@@ -757,7 +758,8 @@ CfgItem g_cfg_items[] = {
     { "Axes",             "F4",     &g_axes_theme,             AXES_THEME_COUNT, g_axes_names },
     { "Vertex labels",    "F5",     &g_show_vnums,             2,               NULL          },
     { "Normal vectors",   "F6",     &g_show_normals,           2,               NULL          },
-    { "Outlines",         "F7",     &g_show_outlines,          2,               NULL          },
+    { "Vertex outlines",  "F7",     &g_show_outlines,          2,               NULL          },
+    { "Vertex points",    "--",     &g_show_vpoints,           2,               NULL          },
     { "Wrap at commas",   "--",     &g_wrap_at_comma,          2,               NULL          },
     { "Vertex guides",    "F8",     &g_show_guides,            2,               NULL          },
     { "Auto-normals",     "F9",     &g_autonormal,             2,               NULL          },

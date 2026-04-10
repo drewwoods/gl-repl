@@ -1292,8 +1292,9 @@ void render_3d_scene(void) {
 
         if (is_transform_cmd(g_flat_cmds[i].type)) {
             apply_tracked_transform_cmd(&g_flat_cmds[i], &matrix_depth);
-        } else if (g_flat_cmds[i].type == CMD_VERTEX3F ||
-                   g_flat_cmds[i].type == CMD_TESS_VERTEX) {
+        } else if ((g_show_vpoints || replay_vertex_points) &&
+                   (g_flat_cmds[i].type == CMD_VERTEX3F ||
+                    g_flat_cmds[i].type == CMD_TESS_VERTEX)) {
             glBegin(GL_POINTS);
             glVertex3f(g_flat_cmds[i].args[0], g_flat_cmds[i].args[1],
                        g_flat_cmds[i].args[2]);

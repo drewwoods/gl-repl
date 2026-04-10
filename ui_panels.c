@@ -1557,6 +1557,7 @@ void render_help(void) {
         "  F3  \tGrid theme         F4  Axes theme",
         "  F5  \tVertex numbers     F6  Normal vectors",
         "  F7  \tVertex outlines    F8  Vertex guides",
+        "  `   \tVertex points (config menu toggle)",
         "  F9  \tAuto-normals       F10 Light indicators",
         "  F11 \tCamera rotate      F12 Cycle examples",
         "",
