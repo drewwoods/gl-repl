@@ -11,7 +11,9 @@
       "Bash(./test_format)",
       "Bash(grep -n \"execute_commands\\\\|flatten_commands\" /Users/drew/Documents/Work/Code/openGL/samples/gen-ai/OpenGL-Vibe/src/immediate-mode-repl/claude4.6-opus-thinking/*.c 2>/dev/null | head -20)",
       "Bash(ls -la /Users/drew/Documents/Work/Code/openGL/samples/gen-ai/OpenGL-Vibe/src/immediate-mode-repl/claude4.6-opus-thinking/*.c)",
-      "Bash(cd:*)"
+      "Bash(cd:*)",
+      "Bash(./test_repl_core_format)",
+      "Bash(./test_repl_core_examples)"
     ]
   }
 }

@@ -4,6 +4,10 @@
 #ifndef UI_PANELS_H
 #define UI_PANELS_H
 
+/* Geometry helpers: rects are in OpenGL coordinates (y=0 at bottom). */
+void code_panel_rect(int *x, int *y, int *w, int *h);
+void scene_rect(int *x, int *y, int *w, int *h);
+
 void render_code_panel(void);
 void render_autocomplete(void);
 void render_help(void);
