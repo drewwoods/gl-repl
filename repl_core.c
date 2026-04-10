@@ -7833,6 +7833,10 @@ int repl_load_from_file(const char *filename) {
     return load_from_file(filename);
 }
 
+void repl_save_default_output(void) {
+    save_output(outfile);
+}
+
 void repl_save_output(const char *filename) {
     save_output(filename);
 }

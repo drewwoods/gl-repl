@@ -499,6 +499,25 @@ static int code_panel_header_row_count(int panel_w, int text_x) {
     return rows;
 }
 
+static void code_panel_export_button_rect(int *x, int *y, int *w, int *h) {
+    int cp_x, cp_y, cp_w, cp_h;
+    const char *label = "Save C";
+
+    code_panel_rect(&cp_x, &cp_y, &cp_w, &cp_h);
+    if (w) *w = (int)strlen(label) * 8 + 18;
+    if (h) *h = LINE_H + 4;
+    if (x) *x = cp_x + cp_w - ((int)strlen(label) * 8 + 18) - CODE_MARGIN_X;
+    if (y) *y = cp_y + cp_h - CODE_MARGIN_Y - (LINE_H + 4) + 2;
+}
+
+static int code_panel_export_button_hit(int gx, int gy) {
+    int bx, by, bw, bh;
+    int ry = g_win_h - gy;
+
+    code_panel_export_button_rect(&bx, &by, &bw, &bh);
+    return gx >= bx && gx < bx + bw && ry >= by && ry < by + bh;
+}
+
 static int code_panel_footer_row_count(int panel_w, int text_x) {
     int rows = 0;
 
@@ -964,6 +983,8 @@ void render_code_panel(void) {
     {
         char info[256];
         int nv = count_vertices();
+        int bx, by, bw, bh;
+        int button_hover = code_panel_export_button_hit(g_mouse_x, g_mouse_y);
         /* Accumulation AA indicator suffix */
         char aa_tag[24] = "";
         if (g_use_accum) {
@@ -999,6 +1020,25 @@ void render_code_panel(void) {
         glColor3f(0.50f, 0.55f, 0.65f);
         draw_string(CODE_MARGIN_X, panel_top - CODE_MARGIN_Y - 2, info,
                     FONT_SMALL);
+
+        code_panel_export_button_rect(&bx, &by, &bw, &bh);
+        glEnable(GL_BLEND);
+        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+        if (button_hover)
+            glColor4f(0.20f, 0.38f, 0.60f, 0.95f);
+        else
+            glColor4f(0.14f, 0.20f, 0.30f, 0.88f);
+        draw_quad((float)bx, (float)by, (float)bw, (float)bh);
+        glColor4f(0.55f, 0.72f, 0.95f, 0.95f);
+        glBegin(GL_LINE_LOOP);
+        glVertex2f((float)bx, (float)by);
+        glVertex2f((float)(bx + bw), (float)by);
+        glVertex2f((float)(bx + bw), (float)(by + bh));
+        glVertex2f((float)bx, (float)(by + bh));
+        glEnd();
+        glColor3f(0.88f, 0.93f, 1.0f);
+        draw_string((float)(bx + 9), (float)(by + 5), "Save C", FONT_SMALL);
+        glDisable(GL_BLEND);
     }
 
     render_code_panel_search_overlay(cp_x, panel_w, panel_top);
@@ -1480,7 +1520,7 @@ void render_help(void) {
         "  // text                   \tType directly to add a comment line",
         "",
         "Save / Load:",
-        "  Ctrl+S saves the session to output.c",
+        "  Click Save C or press Ctrl+S to export output.c",
         "  Reload a saved file:  ./sample output.c",
         "  (Commands between // Snippet start/end are imported)",
         "",
@@ -2106,6 +2146,11 @@ void handle_code_panel_click(int mx, int my) {
 }
 
 int handle_code_panel_press(int mx, int my) {
+    if (code_panel_export_button_hit(mx, my)) {
+        repl_save_default_output();
+        return 1;
+    }
+
     int target, on_insert_line;
     if (!code_panel_hit_test(mx, my, &target, &on_insert_line, NULL)) return 0;
 

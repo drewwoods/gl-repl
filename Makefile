@@ -1,4 +1,6 @@
 CC = gcc
+PROJECT_ROOT := $(abspath ../../..)
+REPO_INCLUDE := $(PROJECT_ROOT)/include
 
 COMMON_CFLAGS = \
 	-Wall -ggdb -g3 \
@@ -7,7 +9,7 @@ COMMON_CFLAGS = \
 	-I/usr/include \
 	-I/opt/homebrew/include \
 	-I$(HOME)/src/freeglut-fork/include \
-	-I$(HOME)/code/openGL/samples/gen-ai/OpenGL-Vibe/include
+	-I$(REPO_INCLUDE)
 
 RELEASE_CFLAGS = \
 	$(COMMON_CFLAGS) \
@@ -37,7 +39,25 @@ GL_LDFLAGS = \
 	-lglut -lm -lpthread \
 	-framework IOKit -framework Cocoa -framework OpenGL
 
-.PHONY: all clean test lines debug glut help
+.PHONY: all clean test test-detailed test_detailed lines debug glut help
+
+define run_named_test
+	@{ \
+		if [ -t 1 ] && [ -z "$$NO_COLOR" ]; then \
+			green='\033[32m'; red='\033[31m'; cyan='\033[36m'; reset='\033[0m'; \
+		else \
+			green=''; red=''; cyan=''; reset=''; \
+		fi; \
+		printf "%b==> $(1)%b\n" "$$cyan" "$$reset"; \
+		if $(2); then \
+			printf "%bPASS%b $(1)\n" "$$green" "$$reset"; \
+		else \
+			rc=$$?; \
+			printf "%bFAIL%b $(1)\n" "$$red" "$$reset"; \
+			exit $$rc; \
+		fi; \
+	}
+endef
 
 all: sample test_eval test_format test_repl_core_parse test_repl_core_format test_repl_core_commit test_repl_core_io test_repl_core_examples test_repl_core_search ## Build the sample plus all test binaries using release flags.
 
@@ -73,14 +93,26 @@ test_repl_core_search: test_repl_core_search.c $(CORE_TEST_SRCS) $(HDRS) ## Buil
 	$(CC) $(BUILD_CFLAGS) $(CFLAGS) -o $@ test_repl_core_search.c $(CORE_TEST_SRCS) $(GL_LDFLAGS)
 
 test: test_eval test_format test_repl_core_parse test_repl_core_format test_repl_core_commit test_repl_core_io test_repl_core_examples test_repl_core_search ## Run the full automated test suite.
-	./test_eval --run-tests
-	./test_format
-	./test_repl_core_parse
-	./test_repl_core_format
-	./test_repl_core_commit
-	./test_repl_core_io
-	./test_repl_core_examples
-	./test_repl_core_search
+	$(call run_named_test,test_eval,./test_eval --run-tests)
+	$(call run_named_test,test_format,./test_format)
+	$(call run_named_test,test_repl_core_parse,./test_repl_core_parse)
+	$(call run_named_test,test_repl_core_format,./test_repl_core_format)
+	$(call run_named_test,test_repl_core_commit,./test_repl_core_commit)
+	$(call run_named_test,test_repl_core_io,./test_repl_core_io)
+	$(call run_named_test,test_repl_core_examples,REPL_EXPORT_CC="$(CC)" REPL_EXPORT_COMPILE_CFLAGS='$(BUILD_CFLAGS) $(CFLAGS)' ./test_repl_core_examples)
+	$(call run_named_test,test_repl_core_search,./test_repl_core_search)
+
+test-detailed: test_eval test_format test_repl_core_parse test_repl_core_format test_repl_core_commit test_repl_core_io test_repl_core_examples test_repl_core_search ## Run the full test suite with verbose example export/compile logging.
+	$(call run_named_test,test_eval,./test_eval --run-tests)
+	$(call run_named_test,test_format,./test_format)
+	$(call run_named_test,test_repl_core_parse,./test_repl_core_parse)
+	$(call run_named_test,test_repl_core_format,./test_repl_core_format)
+	$(call run_named_test,test_repl_core_commit,./test_repl_core_commit)
+	$(call run_named_test,test_repl_core_io,./test_repl_core_io)
+	$(call run_named_test,test_repl_core_examples,REPL_EXPORT_CC="$(CC)" REPL_EXPORT_COMPILE_CFLAGS='$(BUILD_CFLAGS) $(CFLAGS)' REPL_EXPORT_VERBOSE=1 ./test_repl_core_examples)
+	$(call run_named_test,test_repl_core_search,./test_repl_core_search)
+
+test_detailed: test-detailed ## Alias for test-detailed.
 
 # count lines: $(SRCS) $(HDRS)
 lines: $(SRCS) $(HDRS) ## Count lines across source and header files.

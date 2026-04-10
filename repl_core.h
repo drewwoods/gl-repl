@@ -7,6 +7,7 @@
 int  repl_parse_command(const char *line, GLCmd *cmd);
 int  repl_parse_command_with_vars(const char *line, GLCmd *cmd,
                                   ExprVar *vars, int num_vars);
+void repl_save_default_output(void);
 int  repl_load_from_file(const char *filename);
 void repl_save_output(const char *filename);
 void repl_flatten_commands(void);
