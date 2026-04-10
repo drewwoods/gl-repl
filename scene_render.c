@@ -1272,7 +1272,7 @@ void render_3d_scene(void) {
     glPushMatrix();
     {
     int matrix_depth = 0;
-    glPointSize(5.0f);
+    glPointSize(8.0f);
     if (replay_vertex_points)
         glColor3f(1.0f, 0.88f, 0.20f);
     else
