@@ -265,7 +265,41 @@ const char *g_header_post[] = {
     NULL
 };
 
-const char *g_footer[] = {
+typedef struct {
+    const char *repl_line;
+    const int  *toggle;
+} InitBootstrapEntry;
+
+int g_init_attenuate_points = 1;
+
+static const InitBootstrapEntry g_init_bootstrap_repl[] = {
+    { "glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE);", NULL },
+    { "glLightModeli(GL_LIGHT_MODEL_TWO_SIDE, GL_TRUE);", NULL },
+    { "glPointParameterfv(GL_POINT_DISTANCE_ATTENUATION, 1.0, 0.0, 0.02);",
+      &g_init_attenuate_points },
+};
+#define NUM_INIT_BOOTSTRAP \
+    ((int)(sizeof(g_init_bootstrap_repl) / sizeof(g_init_bootstrap_repl[0])))
+
+static GLCmd g_init_bootstrap_cmds[NUM_INIT_BOOTSTRAP];
+static int   g_init_bootstrap_ready = 0;
+
+static const char *g_init_host_only_c[] = {
+    "  GLfloat lm_amb[] = { 0.15f, 0.15f, 0.20f, 1.0f };",
+    "  glLightModelfv(GL_LIGHT_MODEL_AMBIENT, lm_amb);",
+    "  g_quadric = gluNewQuadric();",
+    "  gluQuadricNormals(g_quadric, GLU_SMOOTH);",
+    "  gluQuadricTexture(g_quadric, GL_FALSE);",
+    "  g_tess = gluNewTess();",
+    "  gluTessCallback(g_tess, GLU_TESS_BEGIN, (void (*)())_tess_vtx_begin_cb);",
+    "  gluTessCallback(g_tess, GLU_TESS_END, (void (*)())_tess_vtx_end_cb);",
+    "  gluTessCallback(g_tess, GLU_TESS_VERTEX, (void (*)())_tess_vtx_cb);",
+    "  gluTessCallback(g_tess, GLU_TESS_COMBINE, (void (*)())_tess_comb_cb);",
+    "  gluTessCallback(g_tess, GLU_TESS_ERROR, (void (*)())_tess_err_cb);",
+    NULL
+};
+
+const char *g_footer_pre_init[] = {
     "",
     "  glPopAttrib();",
     "  glutSwapBuffers();",
@@ -291,11 +325,10 @@ const char *g_footer[] = {
     "}",
     "",
     "void init() {",
-    "  glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE);",
-    "  glLightModeli(GL_LIGHT_MODEL_TWO_SIDE, GL_TRUE);",
-    "  g_quadric = gluNewQuadric();",
-    "  gluQuadricNormals(g_quadric, GLU_SMOOTH);",
-    "  glPointParameterfv(GL_POINT_DISTANCE_ATTENUATION, (float[]){ 1.0f, 0.0f, 0.02f });",
+    NULL
+};
+
+const char *g_footer_post_init[] = {
     "}",
     "",
     "int main(int argc, char **argv) {",
@@ -728,6 +761,8 @@ static int parse_repl_func_signature(const char *src, int *fn,
                                      int *param_count);
 static int extract_func_call_args_text(const char *src, int *fn,
                                        char *args, int args_sz);
+static void format_cmd_source_as_c(char *out, size_t out_sz,
+                                   const GLCmd *cmd, int translate_exprs);
 static void format_func_header(char *out, int out_sz, const char *indent,
                                int fn, char param_names[][16], int param_count);
 static unsigned int line_func_scope_mask(int line);
@@ -759,6 +794,10 @@ static int search_find_backward(int start_row, int start_char,
 static void search_refresh_query(void);
 static void search_navigate(int direction);
 static void delete_cmd_range(int start, int count, const char *what);
+static void ensure_init_bootstrap_ready(void);
+static void apply_init_bootstrap(void);
+static int apply_state_cmd(const GLCmd *cmd, float alpha_scale);
+static void emit_init_section_to_file(FILE *f);
 static void search_open(void);
 static int handle_search_key(unsigned char key);
 static int handle_search_special(int key);
@@ -786,6 +825,7 @@ CfgItem g_cfg_items[] = {
     { "MSAA",             "Ctrl+u", &g_multisample_enabled,    2,               NULL          },
     { "Line smooth",      "Ctrl+n", &g_line_smooth_enabled,    2,               NULL          },
     { "Accum AA",         "Ctrl+b", &g_accum_aa_enabled,       2,               NULL          },
+    { "Point attenuation","--",     &g_init_attenuate_points,  2,               NULL          },
     { "Poly highlight",   "--",     &g_highlight_current_poly, 2,               NULL          },
     { "Variable panel",   "`",      &g_show_var_panel,         2,               NULL          },
     { "Replay",           "Ctrl+g", &g_replay_active,          2,               NULL          },
@@ -1233,6 +1273,115 @@ static void delete_cmd_range(int start, int count, const char *what) {
     set_status(msg);
 }
 
+static int init_host_only_line_count(void) {
+    int count = 0;
+    while (g_init_host_only_c[count])
+        count++;
+    return count;
+}
+
+static void parse_init_bootstrap(void) {
+    int saved_edit_line = g_edit_line;
+
+    if (g_init_bootstrap_ready)
+        return;
+
+    g_edit_line = 0;
+    for (int i = 0; i < NUM_INIT_BOOTSTRAP; i++) {
+        GLCmd cmd;
+        memset(&cmd, 0, sizeof(cmd));
+        if (!parse_command(g_init_bootstrap_repl[i].repl_line, &cmd)) {
+            fprintf(stderr, "init bootstrap parse failed: %s\n",
+                    g_init_bootstrap_repl[i].repl_line);
+            abort();
+        }
+        g_init_bootstrap_cmds[i] = cmd;
+    }
+    g_edit_line = saved_edit_line;
+    g_init_bootstrap_ready = 1;
+}
+
+static void ensure_init_bootstrap_ready(void) {
+    if (!g_init_bootstrap_ready)
+        parse_init_bootstrap();
+}
+
+static void apply_init_bootstrap(void) {
+    ensure_init_bootstrap_ready();
+
+    for (int i = 0; i < NUM_INIT_BOOTSTRAP; i++) {
+        if (g_init_bootstrap_repl[i].toggle &&
+            *g_init_bootstrap_repl[i].toggle == 0) {
+            if (g_init_bootstrap_cmds[i].type == CMD_POINT_PARAMETER_FV &&
+                g_init_bootstrap_cmds[i].mode == GL_POINT_DISTANCE_ATTENUATION) {
+                GLCmd disabled = g_init_bootstrap_cmds[i];
+                disabled.args[0] = 1.0f;
+                disabled.args[1] = 0.0f;
+                disabled.args[2] = 0.0f;
+                apply_state_cmd(&disabled, 1.0f);
+            }
+            continue;
+        }
+        apply_state_cmd(&g_init_bootstrap_cmds[i], 1.0f);
+    }
+}
+
+int init_section_line_count(void) {
+    int count = init_host_only_line_count();
+
+    ensure_init_bootstrap_ready();
+    for (int i = 0; i < NUM_INIT_BOOTSTRAP; i++) {
+        if (g_init_bootstrap_repl[i].toggle &&
+            *g_init_bootstrap_repl[i].toggle == 0)
+            continue;
+        count++;
+    }
+
+    return count;
+}
+
+void init_section_line(int i, char *buf, size_t n) {
+    int host_count = init_host_only_line_count();
+    int enabled_idx = 0;
+
+    if (!buf || n == 0)
+        return;
+
+    ensure_init_bootstrap_ready();
+    if (i < 0 || i >= init_section_line_count()) {
+        buf[0] = '\0';
+        return;
+    }
+
+    if (i < host_count) {
+        snprintf(buf, n, "%s", g_init_host_only_c[i]);
+        return;
+    }
+
+    i -= host_count;
+    for (int idx = 0; idx < NUM_INIT_BOOTSTRAP; idx++) {
+        if (g_init_bootstrap_repl[idx].toggle &&
+            *g_init_bootstrap_repl[idx].toggle == 0)
+            continue;
+        if (enabled_idx == i) {
+            format_cmd_source_as_c(buf, n, &g_init_bootstrap_cmds[idx], 0);
+            return;
+        }
+        enabled_idx++;
+    }
+
+    buf[0] = '\0';
+}
+
+static void emit_init_section_to_file(FILE *f) {
+    char line[MAX_LINE_LEN];
+
+    for (int i = 0; i < init_section_line_count(); i++) {
+        init_section_line(i, line, sizeof(line));
+        fprintf(f, "%s\n", line);
+    }
+}
+
 static void search_open(void) {
     if (g_search_active)
         return;
@@ -1667,9 +1816,13 @@ static int write_tess_source_as_c(FILE *f, const GLCmd *cmd) {
     }
 }
 
-static void write_cmd_source_as_c(FILE *f, const GLCmd *cmd, int translate_exprs) {
+static void format_cmd_source_as_c(char *out, size_t out_sz,
+                                   const GLCmd *cmd, int translate_exprs) {
     char c_src[MAX_LINE_LEN];
     char quadric_src[MAX_LINE_LEN];
+
+    if (!out || out_sz == 0)
+        return;
 
     if (translate_exprs)
         repl_expr_to_c(cmd->source, c_src, sizeof(c_src));
@@ -1680,10 +1833,17 @@ static void write_cmd_source_as_c(FILE *f, const GLCmd *cmd, int translate_exprs
 
     if (cmd_type_is_quadric(cmd->type)) {
         quadric_source_to_c(c_src, quadric_src, sizeof(quadric_src));
-        fprintf(f, "%s\n", quadric_src);
+        snprintf(out, out_sz, "%s", quadric_src);
     } else {
-        fprintf(f, "%s\n", c_src);
+        snprintf(out, out_sz, "%s", c_src);
     }
+}
+
+static void write_cmd_source_as_c(FILE *f, const GLCmd *cmd, int translate_exprs) {
+    char out[MAX_LINE_LEN];
+
+    format_cmd_source_as_c(out, sizeof(out), cmd, translate_exprs);
+    fprintf(f, "%s\n", out);
 }
 
 typedef enum {
@@ -2111,6 +2271,8 @@ static void write_tess_preamble(FILE *f) {
         "static GLdouble _tn[3] = {0.0, 0.0, 1.0};\n"
         "static GLdouble _tc[4] = {1.0, 1.0, 1.0, 1.0};\n"
         "static GLUtesselator *g_tess = NULL;\n"
+        "static void _tess_vtx_begin_cb(GLenum mode) { glBegin(mode); }\n"
+        "static void _tess_vtx_end_cb(void) { glEnd(); }\n"
         "static void _tess_vtx_cb(void *vd) {\n"
         "    TessVertex *v=(TessVertex*)vd;\n"
         "    glNormal3dv(v->normal); glColor4dv(v->color); glVertex3dv(v->pos);\n"
@@ -2131,13 +2293,7 @@ static void write_tess_preamble(FILE *f) {
         "    if(len>1e-9){v->normal[0]/=len;v->normal[1]/=len;v->normal[2]/=len;}\n"
         "    *out=v;\n"
         "}\n"
-        "__attribute__((constructor)) static void _init_tess(void) {\n"
-        "    g_tess=gluNewTess();\n"
-        "    gluTessCallback(g_tess,GLU_TESS_BEGIN,(void(*)())glBegin);\n"
-        "    gluTessCallback(g_tess,GLU_TESS_END,(void(*)())glEnd);\n"
-        "    gluTessCallback(g_tess,GLU_TESS_VERTEX,(void(*)())_tess_vtx_cb);\n"
-        "    gluTessCallback(g_tess,GLU_TESS_COMBINE,(void(*)())_tess_comb_cb);\n"
-        "}\n"
+        "static void _tess_err_cb(GLenum err) { (void)err; }\n"
     );
 }
 
@@ -3180,14 +3336,9 @@ static void save_output(const char *filename) {
         return;
     }
 
-    /* Detect whether any tess commands are present */
-    int has_tess = 0;
     int needs_rand = 0;
     for (int i = 0; i < g_num_cmds; i++)
-        if (g_cmds[i].valid && g_cmds[i].type >= CMD_TESS_BEGIN_POLYGON
-                            && g_cmds[i].type <= CMD_TESS_VERTEX)
-            has_tess = 1;
-        else if (g_cmds[i].valid && strstr(g_cmds[i].source, "rand(") != NULL)
+        if (g_cmds[i].valid && strstr(g_cmds[i].source, "rand(") != NULL)
             needs_rand = 1;
 
     update_render_state_strings();
@@ -3201,7 +3352,7 @@ static void save_output(const char *filename) {
     write_predef_var_globals(f);
     if (needs_rand)
         write_rand_helper(f);
-    if (has_tess) write_tess_preamble(f);
+    write_tess_preamble(f);
     write_predef_var_reset_func(f);
     write_func_defs_as_c(f, EXPORT_RENDER_CANONICAL);
     if (g_show_outlines)
@@ -3268,11 +3419,11 @@ static void save_output(const char *filename) {
         fprintf(f, "  glPointSize(1.0f);\n");
     }
 
-    fprintf(f, "\n  glPopAttrib();\n");
-    fprintf(f, "  glutSwapBuffers();\n");
-    fprintf(f, "}\n");
-    for (int i = 4; g_footer[i]; i++)
-        fprintf(f, "%s\n", g_footer[i]);
+    for (int i = 0; g_footer_pre_init[i]; i++)
+        fprintf(f, "%s\n", g_footer_pre_init[i]);
+    emit_init_section_to_file(f);
+    for (int i = 0; g_footer_post_init[i]; i++)
+        fprintf(f, "%s\n", g_footer_post_init[i]);
 
     fclose(f);
 
@@ -3382,6 +3533,12 @@ void repl_debug_dump_editor(FILE *out) {
     for (int i = 0; i < g_num_cmds; i++) {
         if (!g_cmds[i].valid) continue;
         fprintf(dst, "%s\n", g_cmds[i].source);
+    }
+    fprintf(dst, "--- init ---\n");
+    for (int i = 0; i < init_section_line_count(); i++) {
+        char line[MAX_LINE_LEN];
+        init_section_line(i, line, sizeof(line));
+        fprintf(dst, "%s\n", line);
     }
     fprintf(dst, "=== End REPL Editor Dump ===\n");
     fflush(dst);
@@ -5672,6 +5829,59 @@ int replay_exec_limit(void) {
 /* Command execution                                                          */
 /* ========================================================================= */
 
+static int apply_state_cmd(const GLCmd *cmd, float alpha_scale) {
+    if (!cmd)
+        return 0;
+
+    switch (cmd->type) {
+    case CMD_ENABLE:
+        glEnable(cmd->mode);
+        for (int li = 0; li < MAX_LIGHTS; li++)
+            if (g_lights[li].id == cmd->mode)
+                g_lights[li].enabled = 1;
+        return 1;
+    case CMD_DISABLE:
+        glDisable(cmd->mode);
+        for (int li = 0; li < MAX_LIGHTS; li++)
+            if (g_lights[li].id == cmd->mode)
+                g_lights[li].enabled = 0;
+        return 1;
+    case CMD_SHADE_MODEL:
+        glShadeModel(cmd->mode);
+        return 1;
+    case CMD_COLOR_MATERIAL:
+        glColorMaterial(cmd->mode, (GLenum)cmd->args[0]);
+        return 1;
+    case CMD_MATERIALF:
+        if (cmd->num_args == 2) {
+            glMaterialf(cmd->mode, (GLenum)cmd->args[0], cmd->args[1]);
+        } else if (cmd->num_args == 5) {
+            GLfloat mat[4] = {
+                cmd->args[1], cmd->args[2], cmd->args[3],
+                cmd->args[4] * alpha_scale
+            };
+            glMaterialfv(cmd->mode, (GLenum)cmd->args[0], mat);
+        }
+        return 1;
+    case CMD_LIGHT_MODEL_I:
+        glLightModeli(cmd->mode, (GLint)cmd->args[0]);
+        return 1;
+    case CMD_FRONT_FACE:
+        glFrontFace(cmd->mode);
+        return 1;
+    case CMD_POINT_PARAMETER_FV: {
+        GLfloat params[3] = { cmd->args[0], cmd->args[1], cmd->args[2] };
+        glPointParameterfv(cmd->mode, params);
+        return 1;
+    }
+    case CMD_BLEND_FUNC:
+        glBlendFunc(cmd->mode, (GLenum)cmd->args[0]);
+        return 1;
+    default:
+        return 0;
+    }
+}
+
 void execute_commands(void) {
     int in_begin = 0;
     int tess_depth = 0; /* 0=outside, 1=in polygon, 2=in contour */
@@ -5718,60 +5928,28 @@ void execute_commands(void) {
                       g_flat_cmds[pc].args[3] * g_execute_alpha_scale);
             break;
         case CMD_ENABLE:
-            glEnable(g_flat_cmds[pc].mode);
-            for (int li = 0; li < MAX_LIGHTS; li++)
-                if (g_lights[li].id == g_flat_cmds[pc].mode)
-                    g_lights[li].enabled = 1;
-            break;
         case CMD_DISABLE:
-            glDisable(g_flat_cmds[pc].mode);
-            for (int li = 0; li < MAX_LIGHTS; li++)
-                if (g_lights[li].id == g_flat_cmds[pc].mode)
-                    g_lights[li].enabled = 0;
-            break;
         case CMD_SHADE_MODEL:
-            glShadeModel(g_flat_cmds[pc].mode);
-            break;
         case CMD_COLOR_MATERIAL:
-            glColorMaterial(g_flat_cmds[pc].mode, (GLenum)g_flat_cmds[pc].args[0]);
-            break;
         case CMD_MATERIALF:
-            if (g_flat_cmds[pc].num_args == 2) {
-                glMaterialf(g_flat_cmds[pc].mode, (GLenum)g_flat_cmds[pc].args[0], g_flat_cmds[pc].args[1]);
-            } else if (g_flat_cmds[pc].num_args == 5) {
-                GLfloat mat[4] = { g_flat_cmds[pc].args[1], g_flat_cmds[pc].args[2],
-                                   g_flat_cmds[pc].args[3],
-                                   g_flat_cmds[pc].args[4] * g_execute_alpha_scale };
-                glMaterialfv(g_flat_cmds[pc].mode, (GLenum)g_flat_cmds[pc].args[0], mat);
-            }
-            break;
         case CMD_LIGHT_MODEL_I:
-            glLightModeli(g_flat_cmds[pc].mode, (GLint)g_flat_cmds[pc].args[0]);
+            apply_state_cmd(&g_flat_cmds[pc], g_execute_alpha_scale);
             break;
         case CMD_VERTEX2F:
             if (in_begin)
                 glVertex2f(g_flat_cmds[pc].args[0], g_flat_cmds[pc].args[1]);
             break;
         case CMD_FRONT_FACE:
-            glFrontFace(g_flat_cmds[pc].mode);
+            apply_state_cmd(&g_flat_cmds[pc], g_execute_alpha_scale);
             break;
         case CMD_POINT_SIZE:
             if (in_begin) { glEnd(); in_begin = 0; }
             glPointSize(g_flat_cmds[pc].args[0]);
             break;
-        case CMD_POINT_PARAMETER_FV: {
-            if (in_begin) { glEnd(); in_begin = 0; }
-            GLfloat params[3] = {
-                g_flat_cmds[pc].args[0],
-                g_flat_cmds[pc].args[1],
-                g_flat_cmds[pc].args[2],
-            };
-            glPointParameterfv(g_flat_cmds[pc].mode, params);
-            break;
-        }
+        case CMD_POINT_PARAMETER_FV:
         case CMD_BLEND_FUNC:
             if (in_begin) { glEnd(); in_begin = 0; }
-            glBlendFunc(g_flat_cmds[pc].mode, (GLenum)g_flat_cmds[pc].args[0]);
+            apply_state_cmd(&g_flat_cmds[pc], g_execute_alpha_scale);
             break;
         case CMD_GLU_SPHERE:
             if (in_begin) { glEnd(); in_begin = 0; }
@@ -7868,6 +8046,12 @@ static void mouse_func(int button, int state, int x, int y) {
                                                    : "Wrap at commas: OFF");
                     if (g_cfg_items[row].value == &g_autonormal && g_autonormal)
                         mark_normals_dirty();
+                    if (g_cfg_items[row].value == &g_init_attenuate_points) {
+                        apply_init_bootstrap();
+                        set_status(g_init_attenuate_points
+                                 ? "Point attenuation: ON"
+                                 : "Point attenuation: OFF");
+                    }
                     if (g_cfg_items[row].value == &g_replay_mode)
                         set_status(g_replay_mode == REPLAY_MODE_VERTEX
                                  ? "Replay: vertex mode"
@@ -8268,17 +8452,25 @@ static void load_initial_commands(const char *import_file) {
 }
 
 /* GLU tessellator callbacks for explicit gluBegin/gluEnd tessellation */
-static void tess_vertex_callback(void *vertex_data) {
+static void _tess_vtx_begin_cb(GLenum mode) {
+    glBegin(mode);
+}
+
+static void _tess_vtx_end_cb(void) {
+    glEnd();
+}
+
+static void _tess_vtx_cb(void *vertex_data) {
     TessVertex *v = (TessVertex *)vertex_data;
     glNormal3dv(v->normal);
     glColor4dv(v->color);
     glVertex3dv(v->pos);
 }
 
-static void tess_combine_callback(GLdouble coords[3],
-                                   void *vertex_data[4],
-                                   GLfloat weight[4],
-                                   void **out_data) {
+static void _tess_comb_cb(GLdouble coords[3],
+                          void *vertex_data[4],
+                          GLfloat weight[4],
+                          void **out_data) {
     if (g_tess_vert_count >= TESS_VERT_BUF_SIZE) { *out_data = NULL; return; }
     TessVertex *v = &g_tess_verts[g_tess_vert_count++];
     v->pos[0] = coords[0]; v->pos[1] = coords[1]; v->pos[2] = coords[2];
@@ -8297,16 +8489,13 @@ static void tess_combine_callback(GLdouble coords[3],
     *out_data = v;
 }
 
-static void tess_error_callback(GLenum err) {
+static void _tess_err_cb(GLenum err) {
     (void)err; /* silently ignore tessellation errors */
 }
 
 static void init_gl(void) {
-    glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE);
-
     GLfloat lm_amb[] = { 0.15f, 0.15f, 0.20f, 1.0f };
     glLightModelfv(GL_LIGHT_MODEL_AMBIENT, lm_amb);
-    glLightModeli(GL_LIGHT_MODEL_TWO_SIDE, GL_TRUE);
 
     /* Init GLU quadric for gluSphere/gluCylinder/gluDisk */
     g_quadric = gluNewQuadric();
@@ -8316,17 +8505,17 @@ static void init_gl(void) {
     /* Init GLU tessellator for concave polygon support */
     g_tess = gluNewTess();
     gluTessCallback(g_tess, GLU_TESS_BEGIN,
-                    (void (*)())glBegin);
+                    (void (*)())_tess_vtx_begin_cb);
     gluTessCallback(g_tess, GLU_TESS_END,
-                    (void (*)())glEnd);
+                    (void (*)())_tess_vtx_end_cb);
     gluTessCallback(g_tess, GLU_TESS_VERTEX,
-                    (void (*)())tess_vertex_callback);
+                    (void (*)())_tess_vtx_cb);
     gluTessCallback(g_tess, GLU_TESS_COMBINE,
-                    (void (*)())tess_combine_callback);
+                    (void (*)())_tess_comb_cb);
     gluTessCallback(g_tess, GLU_TESS_ERROR,
-                    (void (*)())tess_error_callback);
+                    (void (*)())_tess_err_cb);
 
-    glPointParameterfv(GL_POINT_DISTANCE_ATTENUATION, (GLfloat[]){ 1.0f, 0.0f, 0.02f });
+    apply_init_bootstrap();
 }
 
 /* ========================================================================= */
@@ -8421,6 +8610,7 @@ void repl_timer_func(int value) {
 }
 
 void repl_init_gl(void) {
+    ensure_init_bootstrap_ready();
     init_gl();
 }
 
@@ -8438,6 +8628,7 @@ void repl_reset_state(void) {
     g_scroll_follow_cursor = 0;
     g_multisample_enabled = 1;
     g_line_smooth_enabled = 0;
+    g_init_attenuate_points = 1;
     g_wrap_at_comma = 0;
     g_layout_vertical = 0;
     g_panel_frac = 0.42f;

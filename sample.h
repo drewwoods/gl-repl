@@ -362,9 +362,14 @@ extern const char *g_header_pre[];
 extern char        g_render_state_lines[RENDER_STATE_LINE_COUNT][64];
 extern char        g_lookat[LOOKAT_LINE_COUNT][128];
 extern const char *g_header_post[];
-extern const char *g_footer[];
+extern const char *g_footer_pre_init[];
+extern const char *g_footer_post_init[];
 extern const char *g_grid_names[];
 extern const char *g_axes_names[];
+extern int         g_init_attenuate_points;
+
+int  init_section_line_count(void);
+void init_section_line(int i, char *buf, size_t n);
 
 static inline void clear_autocomplete_state(void) {
     g_ac_count = 0;
