@@ -87,6 +87,7 @@ typedef enum {
     CMD_TESS_VERTEX,
     CMD_MATERIALF,
     CMD_POINT_SIZE,
+    CMD_POINT_PARAMETER_FV,
     CMD_TYPE_COUNT
 } CmdType;
 
