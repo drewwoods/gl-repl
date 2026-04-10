@@ -109,6 +109,15 @@ typedef struct {
     GLenum      value;
 } EnumEntry;
 
+#define MAX_FUNC_HINT_PARAMS 6
+
+typedef struct {
+    const char *insert_text;
+    const char *display_text;
+    int         param_count;
+    const char *params[MAX_FUNC_HINT_PARAMS];
+} FuncCompletion;
+
 typedef struct {
     CmdType  type;
     GLenum   mode;
@@ -332,6 +341,7 @@ extern const char *g_ac_matches[MAX_AC_MATCHES];
 extern int    g_ac_count;
 extern int    g_ac_sel;
 extern char   g_ac_ghost[MAX_LINE_LEN];
+extern char   g_ac_hint[MAX_LINE_LEN];
 extern int    g_cursor_px;
 extern int    g_cursor_py;
 
@@ -347,7 +357,7 @@ extern int    g_clipboard_count;
 extern const EnumEntry g_begin_modes[];
 extern const EnumEntry g_enable_caps[];
 extern const EnumEntry g_shade_models[];
-extern const char *g_func_completions[];
+extern const FuncCompletion g_func_completions[];
 extern const char *g_header_pre[];
 extern char        g_render_state_lines[RENDER_STATE_LINE_COUNT][64];
 extern char        g_lookat[LOOKAT_LINE_COUNT][128];
@@ -355,6 +365,13 @@ extern const char *g_header_post[];
 extern const char *g_footer[];
 extern const char *g_grid_names[];
 extern const char *g_axes_names[];
+
+static inline void clear_autocomplete_state(void) {
+    g_ac_count = 0;
+    g_ac_sel = 0;
+    g_ac_ghost[0] = '\0';
+    g_ac_hint[0] = '\0';
+}
 
 /* Config items */
 extern CfgItem g_cfg_items[];

@@ -263,6 +263,52 @@ int main(void) {
     }
 
     repl_reset_state();
+    {
+        const char *prefix = "glVer";
+        for (int i = 0; prefix[i]; i++)
+            repl_keyboard_func((unsigned char)prefix[i], 0, 0);
+    }
+    ASSERT_TRUE("autocomplete popup shows signature text",
+                strcmp(g_ac_matches[0], "glVertex3f(x, y, z)") == 0);
+    ASSERT_TRUE("autocomplete ghost inserts callable suffix",
+                strcmp(g_ac_ghost, "tex3f(") == 0);
+    ASSERT_TRUE("autocomplete hint shows parameter names",
+                strcmp(g_ac_hint, "x, y, z)") == 0);
+    repl_keyboard_func('\t', 0, 0);
+    ASSERT_TRUE("tab inserts function call prefix only",
+                strcmp(g_input, "glVertex3f(") == 0);
+    ASSERT_TRUE("function call hint starts at first parameter",
+                strcmp(g_ac_hint, "x, y, z)") == 0);
+    repl_keyboard_func('1', 0, 0);
+    ASSERT_TRUE("function call hint advances after first arg text",
+                strcmp(g_ac_hint, ", y, z)") == 0);
+    repl_keyboard_func(',', 0, 0);
+    repl_keyboard_func(' ', 0, 0);
+    ASSERT_TRUE("function call hint shows second parameter at comma",
+                strcmp(g_ac_hint, "y, z)") == 0);
+    repl_keyboard_func('2', 0, 0);
+    ASSERT_TRUE("function call hint advances to remaining args",
+                strcmp(g_ac_hint, ", z)") == 0);
+    repl_keyboard_func(',', 0, 0);
+    repl_keyboard_func(' ', 0, 0);
+    repl_keyboard_func('3', 0, 0);
+    ASSERT_TRUE("function call hint ends with closing paren",
+                strcmp(g_ac_hint, ")") == 0);
+
+    repl_reset_state();
+    repl_feed_line_public("func0(radius, yoff) {");
+    repl_feed_line_public("}");
+    {
+        const char *call = "func0(";
+        for (int i = 0; call[i]; i++)
+            repl_keyboard_func((unsigned char)call[i], 0, 0);
+    }
+    ASSERT_TRUE("user function hint uses declared parameter names",
+                strcmp(g_ac_hint, "radius, yoff)") == 0);
+    ASSERT_TRUE("user function hint suppresses stale no-arg ghost",
+                g_ac_ghost[0] == '\0');
+
+    repl_reset_state();
     repl_feed_line_public("if(x > 0) {");
     repl_feed_line_public("glColor3f(1, 0, 0);");
     repl_feed_line_public("}");
