@@ -193,13 +193,20 @@ static inline void unwind_tracked_transform_stack(int *matrix_depth) {
 /* Extern globals                                                             */
 /* ========================================================================= */
 
+/* Per-flat-command local variable snapshot (loop vars at time of flattening) */
+typedef struct {
+    int     num_vars;
+    ExprVar vars[MAX_EXPR_VARS];
+} FlatCmdLocalVars;
+
 /* Command arrays */
-extern GLCmd  g_cmds[MAX_COMMANDS];
-extern int    g_num_cmds;
-extern int    g_normals_dirty;
-extern GLCmd  g_flat_cmds[MAX_COMMANDS];
-extern int    g_num_flat_cmds;
-extern int    g_flat_dirty;
+extern GLCmd           g_cmds[MAX_COMMANDS];
+extern int             g_num_cmds;
+extern int             g_normals_dirty;
+extern GLCmd           g_flat_cmds[MAX_COMMANDS];
+extern int             g_num_flat_cmds;
+extern int             g_flat_dirty;
+extern FlatCmdLocalVars g_flat_cmd_local_vars[MAX_COMMANDS];
 
 /* Editor */
 extern char   g_input[MAX_INPUT_LEN];
