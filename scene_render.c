@@ -1223,7 +1223,7 @@ void render_3d_scene(void) {
                     glLineWidth(3.0f);
                     glColor3f(0.0f, 0.9f, 0.9f); /* bright cyan */
                 } else if (g_show_outlines && draw_outline) {
-                    glLineWidth(1.0f);
+                    glLineWidth(1.2f); // thinker lines work better for line smoothing
                     glColor3f(0.0f, 0.0f, 0.0f);
                 } else {
                     in_begin = 0;
