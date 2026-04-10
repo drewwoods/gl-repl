@@ -758,6 +758,7 @@ static int search_find_backward(int start_row, int start_char,
                                 int *out_row, int *out_char);
 static void search_refresh_query(void);
 static void search_navigate(int direction);
+static void delete_cmd_range(int start, int count, const char *what);
 static void search_open(void);
 static int handle_search_key(unsigned char key);
 static int handle_search_special(int key);
@@ -1207,6 +1208,29 @@ static void search_navigate(int direction) {
         }
     }
     search_store_hit(row, char_pos);
+}
+
+static void delete_cmd_range(int start, int count, const char *what) {
+    char msg[64];
+
+    if (count <= 0 || start < 0 || start >= g_num_cmds)
+        return;
+    if (start + count > g_num_cmds)
+        count = g_num_cmds - start;
+
+    push_undo_snapshot();
+    memmove(&g_cmds[start], &g_cmds[start + count],
+            (g_num_cmds - start - count) * sizeof(GLCmd));
+    g_num_cmds -= count;
+    g_edit_line = start;
+    if (g_edit_line > g_num_cmds)
+        g_edit_line = g_num_cmds;
+    load_line_to_input(g_edit_line);
+    mark_normals_dirty();
+    clear_selection();
+    snprintf(msg, sizeof(msg), "%s %d line%s",
+             what, count, count > 1 ? "s" : "");
+    set_status(msg);
 }
 
 static void search_open(void) {
@@ -6794,8 +6818,8 @@ static void keyboard_func(unsigned char key, int x, int y) {
     g_cursor_on = 1;
     g_blink_tick = 0;
 
-    /* Clear selection on any key except Ctrl+C/X (which consume it) */
-    if (key != 3 && key != 24)
+    /* Clear selection on any key except commands that consume it directly. */
+    if (key != 3 && key != 8 && key != 24 && key != 127)
         clear_selection();
 
     /* Any keyboard input re-reveals the cursor line on next render. */
@@ -6944,16 +6968,13 @@ static void keyboard_func(unsigned char key, int x, int y) {
             if (g_edit_line <= g_num_cmds)
                 load_line_to_input(g_edit_line);
             set_status("Insert mode exited");
+        } else if (sel_active()) {
+            int start = sel_lo();
+            int hi = sel_hi();
+            if (hi >= g_num_cmds) hi = g_num_cmds - 1;
+            delete_cmd_range(start, hi - start + 1, "Deleted");
         } else if (g_edit_line < g_num_cmds) {
-            push_undo_snapshot();
-            for (int i = g_edit_line; i < g_num_cmds - 1; i++)
-                g_cmds[i] = g_cmds[i + 1];
-            g_num_cmds--;
-                        if (g_edit_line > g_num_cmds)
-                g_edit_line = g_num_cmds;
-            load_line_to_input(g_edit_line);
-            mark_normals_dirty();
-            set_status("Line deleted");
+            delete_cmd_range(g_edit_line, 1, "Deleted");
         }
         return;
     }
@@ -7213,6 +7234,13 @@ static void keyboard_func(unsigned char key, int x, int y) {
 
     /* Backspace: delete character before cursor */
     if (key == 8 || key == 127) {
+        if (sel_active() && !g_inserting) {
+            int start = sel_lo();
+            int hi = sel_hi();
+            if (hi >= g_num_cmds) hi = g_num_cmds - 1;
+            delete_cmd_range(start, hi - start + 1, "Deleted");
+            return;
+        }
         if (g_cursor_pos > 0 && g_input_len > 0) {
             memmove(&g_input[g_cursor_pos - 1], &g_input[g_cursor_pos],
                     g_input_len - g_cursor_pos + 1);

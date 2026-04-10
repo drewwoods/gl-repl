@@ -247,6 +247,10 @@ int main(void) {
     ASSERT_TRUE("mouse drag selection high", sel_hi() == 2);
     ASSERT_TRUE("mouse drag navigates to drag end", g_edit_line == 2);
     handle_code_panel_release();
+    repl_keyboard_func(8, 0, 0);
+    ASSERT_TRUE("backspace deletes selected lines", g_num_cmds == 0);
+    ASSERT_TRUE("backspace clears selection after delete", !sel_active());
+    ASSERT_TRUE("backspace keeps edit line at start after delete", g_edit_line == 0);
 
     repl_reset_state();
     repl_feed_line_public("glBegin(GL_POINTS);");
