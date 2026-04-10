@@ -64,6 +64,41 @@ int main(void) {
     {
         GLCmd cmd;
         memset(&cmd, 0, sizeof(cmd));
+        int ok = repl_parse_command("glVertex3f(x + 1, 0, 0)", &cmd);
+        ASSERT_TRUE("public parse_command detects predef vars", ok == 1);
+        ASSERT_TRUE("public parse_command has_vars for predef", cmd.has_vars == 1);
+    }
+
+    {
+        ExprVar vars[1] = { { "radius", 2.0f } };
+        GLCmd cmd;
+        memset(&cmd, 0, sizeof(cmd));
+        int ok = repl_parse_command_with_vars("glVertex3f(1, 2, 3)", &cmd, vars, 1);
+        ASSERT_TRUE("parse with locals constant ok", ok == 1);
+        ASSERT_TRUE("parse with locals constant has_vars off", cmd.has_vars == 0);
+    }
+
+    {
+        ExprVar vars[1] = { { "radius", 2.0f } };
+        GLCmd cmd;
+        memset(&cmd, 0, sizeof(cmd));
+        int ok = repl_parse_command_with_vars("glVertex3f(radius, 0, 0)", &cmd, vars, 1);
+        ASSERT_TRUE("parse with locals referenced ok", ok == 1);
+        ASSERT_TRUE("parse with locals referenced has_vars on", cmd.has_vars == 1);
+    }
+
+    {
+        ExprVar vars[1] = { { "radius", 2.0f } };
+        GLCmd cmd;
+        memset(&cmd, 0, sizeof(cmd));
+        int ok = repl_parse_command_with_vars("func0(1, 2)", &cmd, vars, 1);
+        ASSERT_TRUE("func call with locals constant ok", ok == 1);
+        ASSERT_TRUE("func call with locals constant has_vars off", cmd.has_vars == 0);
+    }
+
+    {
+        GLCmd cmd;
+        memset(&cmd, 0, sizeof(cmd));
         int ok = repl_parse_and_normalize("glVertex3f(x+1, y, z)", 0,
                                           NULL, 0, 1, &cmd);
         ASSERT_TRUE("parse normalize vars ok", ok == 1);
