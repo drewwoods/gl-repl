@@ -548,6 +548,7 @@ const char *g_axes_names[] = {
 int    g_show_vnums   = 1;
 int    g_show_normals = 0;
 int    g_show_indices = 1;
+int    g_wrap_at_comma = 0;
 int    g_show_guides  = 1;
 int    g_autonormal   = 0;
 int    g_show_lights  = 1;
@@ -704,6 +705,7 @@ CfgItem g_cfg_items[] = {
     { "Vertex labels",    "F5",     &g_show_vnums,             2,               NULL          },
     { "Normal vectors",   "F6",     &g_show_normals,           2,               NULL          },
     { "Outlines",         "F7",     &g_show_outlines,          2,               NULL          },
+    { "Wrap at commas",   "--",     &g_wrap_at_comma,          2,               NULL          },
     { "Vertex guides",    "F8",     &g_show_guides,            2,               NULL          },
     { "Auto-normals",     "F9",     &g_autonormal,             2,               NULL          },
     { "Light indicators", "F10",    &g_show_lights,            2,               NULL          },
@@ -2393,6 +2395,81 @@ void repl_debug_dump_editor(FILE *out) {
     fflush(dst);
 }
 
+static int dump_code_panel_available_chars(int panel_w, int x) {
+    int avail_px = panel_w - x - 4;
+    if (avail_px < FONT_W)
+        return 0;
+    return avail_px / FONT_W;
+}
+
+static int dump_code_panel_cont_indent_chars(const char *text) {
+    const char *src = text ? text : "";
+    const char *paren = strchr(src, '(');
+    if (paren && paren[1] != '\0')
+        return (int)(paren - src) + 1;
+
+    int leading = 0;
+    while (src[leading] && isspace((unsigned char)src[leading]))
+        leading++;
+    return leading + 4;
+}
+
+static int dump_code_panel_find_wrap_break(const char *text, int start,
+                                           int max_chars, int len) {
+    int end = start + max_chars - 1;
+    if (end >= len)
+        end = len - 1;
+
+    for (int i = end; i > start; i--) {
+        if (text[i] == ',')
+            return i;
+    }
+
+    for (int i = end + 1; i < len; i++) {
+        if (text[i] == ',')
+            return i;
+    }
+
+    return -1;
+}
+
+static void dump_code_panel_wrapped_line(FILE *dst, const char *text,
+                                         int first_x, int panel_w) {
+    const char *src = text ? text : "";
+    int len = (int)strlen(src);
+    int pos = 0;
+    int x = first_x;
+    int cont_indent_chars = dump_code_panel_cont_indent_chars(src);
+    int cont_x = first_x + cont_indent_chars * FONT_W;
+
+    if (len == 0) {
+        fputc('\n', dst);
+        return;
+    }
+
+    for (;;) {
+        int width_chars = dump_code_panel_available_chars(panel_w, x);
+        int remaining = len - pos;
+        int seg_len = remaining;
+        int prefix_chars = (x - first_x) / FONT_W;
+
+        if (g_wrap_at_comma && width_chars >= 1 && remaining > width_chars) {
+            int break_idx = dump_code_panel_find_wrap_break(src, pos,
+                                                            width_chars, len);
+            if (break_idx >= 0)
+                seg_len = break_idx - pos + 1;
+        }
+
+        fprintf(dst, "%*s%.*s\n", prefix_chars, "", seg_len, src + pos);
+
+        if (!g_wrap_at_comma || width_chars < 1 || seg_len == remaining)
+            break;
+
+        pos += seg_len;
+        x = cont_x;
+    }
+}
+
 void repl_dump_code_panel_text(FILE *out) {
     FILE *dst = out ? out : stdout;
 
@@ -2419,6 +2496,42 @@ void repl_dump_code_panel_text(FILE *out) {
     for (int i = 0; i < g_num_cmds; i++) {
         if (!g_cmds[i].valid) continue;
         fprintf(dst, "%s\n", g_cmds[i].source);
+    }
+
+    fflush(dst);
+}
+
+void repl_dump_code_panel_visual_text(FILE *out) {
+    FILE *dst = out ? out : stdout;
+    int panel_w = (int)(g_win_w * g_panel_frac);
+    int linenum_w = 4 * FONT_W;
+    int idx_col_w = g_show_indices ? (6 * FONT_W) : 0;
+    int idx_x = CODE_MARGIN_X + linenum_w + FONT_W;
+    int text_x = idx_x + idx_col_w;
+
+    update_render_state_strings();
+    update_lookat_strings();
+
+    fprintf(dst, "--- header_pre ---\n");
+    for (int i = 0; g_header_pre[i]; i++)
+        dump_code_panel_wrapped_line(dst, g_header_pre[i], text_x, panel_w);
+
+    fprintf(dst, "--- render_state ---\n");
+    for (int i = 0; i < RENDER_STATE_LINE_COUNT; i++)
+        dump_code_panel_wrapped_line(dst, g_render_state_lines[i], text_x, panel_w);
+
+    fprintf(dst, "--- lookat ---\n");
+    for (int i = 0; i < LOOKAT_LINE_COUNT; i++)
+        dump_code_panel_wrapped_line(dst, g_lookat[i], text_x, panel_w);
+
+    fprintf(dst, "--- header_post ---\n");
+    for (int i = 0; g_header_post[i]; i++)
+        dump_code_panel_wrapped_line(dst, g_header_post[i], text_x, panel_w);
+
+    fprintf(dst, "--- source ---\n");
+    for (int i = 0; i < g_num_cmds; i++) {
+        if (!g_cmds[i].valid) continue;
+        dump_code_panel_wrapped_line(dst, g_cmds[i].source, text_x, panel_w);
     }
 
     fflush(dst);
@@ -6434,6 +6547,9 @@ static void mouse_func(int button, int state, int x, int y) {
                         replay_stop();
                     *g_cfg_items[row].value =
                         (*g_cfg_items[row].value + 1) % g_cfg_items[row].n_states;
+                    if (g_cfg_items[row].value == &g_wrap_at_comma)
+                        set_status(g_wrap_at_comma ? "Wrap at commas: ON"
+                                                   : "Wrap at commas: OFF");
                     if (g_cfg_items[row].value == &g_autonormal && g_autonormal)
                         mark_normals_dirty();
                     if (g_cfg_items[row].value == &g_replay_mode)
@@ -6966,6 +7082,7 @@ void repl_reset_state(void) {
     g_scroll_follow_cursor = 0;
     g_multisample_enabled = 1;
     g_line_smooth_enabled = 0;
+    g_wrap_at_comma = 0;
     g_flat_dirty = 1;
     g_normals_dirty = 1;
     g_ac_count = 0;

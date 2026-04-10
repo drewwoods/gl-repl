@@ -244,48 +244,388 @@ static int format_evaluated_cmd(const GLCmd *cmd, const char *orig_source,
 /* Code panel                                                                 */
 /* ========================================================================= */
 
-static void render_edit_line(int x, int y, int indent_chars) {
-    int indent_px = indent_chars * FONT_W;
+typedef struct {
+    const char *text;
+    int         len;
+    int         panel_w;
+    int         pos;
+    int         x;
+    int         cont_x;
+    int         done;
+} CodeWrapIter;
 
-    /* Highlight background for active line */
-    glEnable(GL_BLEND);
-    glColor4f(0.15f, 0.18f, 0.28f, 0.70f);
-    int panel_w = (int)(g_win_w * g_panel_frac);
-    draw_quad(0, (float)(y - 3), (float)panel_w, (float)(LINE_H));
-    glDisable(GL_BLEND);
+static int code_panel_available_chars(int panel_w, int x) {
+    int avail_px = panel_w - x - 4;
+    if (avail_px < FONT_W)
+        return 0;
+    return avail_px / FONT_W;
+}
 
-    /* Indent (dimmed) */
-    glColor3f(0.30f, 0.30f, 0.38f);
-    { char spaces[16];
-      memset(spaces, ' ', indent_chars);
-      spaces[indent_chars] = '\0';
-      draw_string((float)x, (float)y, spaces, FONT_MONO); }
+static int code_panel_cont_indent_chars(const char *text) {
+    const char *src = text ? text : "";
+    const char *paren = strchr(src, '(');
+    if (paren && paren[1] != '\0')
+        return (int)(paren - src) + 1;
 
-    /* User-typed text */
-    glColor3f(0.95f, 0.95f, 0.90f);
-    draw_string((float)(x + indent_px), (float)y, g_input, FONT_MONO);
+    int leading = 0;
+    while (src[leading] && isspace((unsigned char)src[leading]))
+        leading++;
+    return leading + 4;
+}
 
-    /* Ghost autocomplete text (only when cursor is at end) */
-    if (g_ac_ghost[0] && g_cursor_pos == g_input_len) {
-        glEnable(GL_BLEND);
-        glColor4f(0.50f, 0.55f, 0.65f, 0.55f);
-        draw_string((float)(x + indent_px + g_input_len * FONT_W),
-                    (float)y, g_ac_ghost, FONT_MONO);
-        glDisable(GL_BLEND);
+static int code_panel_find_wrap_break(const char *text, int start,
+                                      int max_chars, int len) {
+    int end = start + max_chars - 1;
+    if (end >= len)
+        end = len - 1;
+
+    for (int i = end; i > start; i--) {
+        if (text[i] == ',')
+            return i;
     }
 
-    /* Blinking cursor at g_cursor_pos */
-    if (g_cursor_on) {
-        int cx = x + indent_px + g_cursor_pos * FONT_W;
-        glEnable(GL_BLEND);
-        glColor4f(0.90f, 0.80f, 0.25f, 0.85f);
-        draw_quad((float)cx, (float)(y - 2), 2.0f, (float)(FONT_H + 2));
-        glDisable(GL_BLEND);
+    for (int i = end + 1; i < len; i++) {
+        if (text[i] == ',')
+            return i;
     }
 
-    /* Save cursor screen position for autocomplete popup */
-    g_cursor_px = x + indent_px;
-    g_cursor_py = y;
+    return -1;
+}
+
+static void code_wrap_iter_init(CodeWrapIter *it, const char *text,
+                                int first_x, int panel_w) {
+    it->text = text ? text : "";
+    it->len = (int)strlen(it->text);
+    it->panel_w = panel_w;
+    it->pos = 0;
+    it->x = first_x;
+    it->cont_x = first_x + code_panel_cont_indent_chars(it->text) * FONT_W;
+    it->done = 0;
+}
+
+static int code_wrap_iter_next(CodeWrapIter *it, int *out_start,
+                               int *out_len, int *out_x) {
+    if (it->done)
+        return 0;
+
+    *out_start = it->pos;
+    *out_x = it->x;
+
+    if (it->len == 0) {
+        *out_len = 0;
+        it->done = 1;
+        return 1;
+    }
+
+    {
+        int width_chars = code_panel_available_chars(it->panel_w, it->x);
+        int remaining = it->len - it->pos;
+
+        if (!g_wrap_at_comma || width_chars < 1 || remaining <= width_chars) {
+            *out_len = remaining;
+            it->done = 1;
+            return 1;
+        }
+
+        {
+            int break_idx = code_panel_find_wrap_break(it->text, it->pos,
+                                                       width_chars, it->len);
+            if (break_idx < 0) {
+                *out_len = remaining;
+                it->done = 1;
+                return 1;
+            }
+
+            *out_len = break_idx - it->pos + 1;
+            it->pos = break_idx + 1;
+            it->x = it->cont_x;
+            return 1;
+        }
+    }
+}
+
+static int code_panel_row_count_for_text(const char *text, int first_x,
+                                         int panel_w) {
+    CodeWrapIter it;
+    int rows = 0;
+    int start, len, x;
+
+    code_wrap_iter_init(&it, text, first_x, panel_w);
+    while (code_wrap_iter_next(&it, &start, &len, &x))
+        rows++;
+
+    return rows > 0 ? rows : 1;
+}
+
+static int code_panel_segment_for_row(const char *text, int first_x, int panel_w,
+                                      int want_row, int *out_start,
+                                      int *out_len, int *out_x) {
+    CodeWrapIter it;
+    int row = 0;
+    int start, len, x;
+
+    code_wrap_iter_init(&it, text, first_x, panel_w);
+    while (code_wrap_iter_next(&it, &start, &len, &x)) {
+        if (row == want_row) {
+            if (out_start) *out_start = start;
+            if (out_len) *out_len = len;
+            if (out_x) *out_x = x;
+            return 1;
+        }
+        row++;
+    }
+
+    return 0;
+}
+
+static int code_panel_cursor_row_for_text(const char *text, int first_x,
+                                          int panel_w, int cursor_pos,
+                                          int *out_seg_start,
+                                          int *out_seg_len,
+                                          int *out_seg_x) {
+    CodeWrapIter it;
+    int row = 0;
+    int start, len, x;
+    int text_len = (int)strlen(text ? text : "");
+
+    if (cursor_pos < 0)
+        cursor_pos = 0;
+    if (cursor_pos > text_len)
+        cursor_pos = text_len;
+
+    code_wrap_iter_init(&it, text, first_x, panel_w);
+    while (code_wrap_iter_next(&it, &start, &len, &x)) {
+        int next_start = start + len;
+        if (next_start >= text_len || cursor_pos < next_start) {
+            if (out_seg_start) *out_seg_start = start;
+            if (out_seg_len) *out_seg_len = len;
+            if (out_seg_x) *out_seg_x = x;
+            return row;
+        }
+        row++;
+    }
+
+    if (out_seg_start) *out_seg_start = text_len;
+    if (out_seg_len) *out_seg_len = 0;
+    if (out_seg_x) *out_seg_x = first_x;
+    return 0;
+}
+
+static void code_panel_draw_segment(int x, int y, const char *text,
+                                    int start, int len, void *font) {
+    char buf[MAX_INPUT_LEN];
+
+    if (len <= 0)
+        return;
+    if (len >= (int)sizeof(buf))
+        len = (int)sizeof(buf) - 1;
+
+    memcpy(buf, text + start, (size_t)len);
+    buf[len] = '\0';
+    draw_string((float)x, (float)y, buf, font);
+}
+
+static int code_panel_header_row_count(int panel_w, int text_x) {
+    int rows = 0;
+
+    for (int i = 0; g_header_pre[i]; i++)
+        rows += code_panel_row_count_for_text(g_header_pre[i], text_x, panel_w);
+    for (int i = 0; i < RENDER_STATE_LINE_COUNT; i++)
+        rows += code_panel_row_count_for_text(g_render_state_lines[i], text_x, panel_w);
+    for (int i = 0; i < LOOKAT_LINE_COUNT; i++)
+        rows += code_panel_row_count_for_text(g_lookat[i], text_x, panel_w);
+    for (int i = 0; g_header_post[i]; i++)
+        rows += code_panel_row_count_for_text(g_header_post[i], text_x, panel_w);
+
+    return rows;
+}
+
+static int code_panel_footer_row_count(int panel_w, int text_x) {
+    int rows = 0;
+
+    for (int i = 0; g_footer[i]; i++)
+        rows += code_panel_row_count_for_text(g_footer[i], text_x, panel_w);
+
+    return rows;
+}
+
+static int code_panel_replay_extra_rows_for_line(int cmd_idx) {
+    if (!g_replay_active || g_replay_state == REPLAY_OFF)
+        return 0;
+    if (cmd_idx < 0 || cmd_idx >= g_num_cmds)
+        return 0;
+    if (cmd_idx != g_replay_src_line)
+        return 0;
+    if (!g_cmds[cmd_idx].has_vars)
+        return 0;
+    return 2;
+}
+
+static int code_panel_command_main_rows(int cmd_idx, int panel_w, int text_x) {
+    if (!g_inserting && cmd_idx == g_edit_line) {
+        int indent_chars = cmd_indent_chars(cmd_idx);
+        return code_panel_row_count_for_text(g_input,
+                                             text_x + indent_chars * FONT_W,
+                                             panel_w);
+    }
+
+    return code_panel_row_count_for_text(g_cmds[cmd_idx].source, text_x, panel_w);
+}
+
+static int code_panel_insert_rows(int panel_w, int text_x) {
+    int indent_chars = cmd_indent_chars(g_edit_line);
+    return code_panel_row_count_for_text(g_input,
+                                         text_x + indent_chars * FONT_W,
+                                         panel_w);
+}
+
+static int code_panel_newline_rows(int panel_w, int text_x) {
+    if (!g_inserting && g_edit_line == g_num_cmds) {
+        int indent_chars = cmd_indent_chars(g_num_cmds);
+        return code_panel_row_count_for_text(g_input,
+                                             text_x + indent_chars * FONT_W,
+                                             panel_w);
+    }
+    return 1;
+}
+
+static int code_panel_target_for_doc_line(int doc_line, int panel_w, int text_x,
+                                          int *out_target,
+                                          int *out_on_insert_line,
+                                          int *out_row_offset) {
+    int row = doc_line - code_panel_header_row_count(panel_w, text_x);
+
+    if (row < 0)
+        return 0;
+
+    for (int i = 0; i <= g_num_cmds; i++) {
+        if (g_inserting && i == g_edit_line) {
+            int insert_rows = code_panel_insert_rows(panel_w, text_x);
+            if (row < insert_rows) {
+                if (out_target) *out_target = -1;
+                if (out_on_insert_line) *out_on_insert_line = 1;
+                if (out_row_offset) *out_row_offset = row;
+                return 1;
+            }
+            row -= insert_rows;
+        }
+
+        if (i < g_num_cmds) {
+            int main_rows = code_panel_command_main_rows(i, panel_w, text_x);
+            if (row < main_rows) {
+                if (out_target) *out_target = i;
+                if (out_on_insert_line) *out_on_insert_line = 0;
+                if (out_row_offset) *out_row_offset = row;
+                return 1;
+            }
+            row -= main_rows;
+
+            {
+                int replay_rows = code_panel_replay_extra_rows_for_line(i);
+                if (row < replay_rows) {
+                    if (out_target) *out_target = i;
+                    if (out_on_insert_line) *out_on_insert_line = 0;
+                    if (out_row_offset) *out_row_offset = 0;
+                    return 1;
+                }
+                row -= replay_rows;
+            }
+        } else {
+            int newline_rows = code_panel_newline_rows(panel_w, text_x);
+            if (row < newline_rows) {
+                if (out_target) *out_target = g_num_cmds;
+                if (out_on_insert_line) *out_on_insert_line = 0;
+                if (out_row_offset) *out_row_offset = row;
+                return 1;
+            }
+            return 0;
+        }
+    }
+
+    return 0;
+}
+
+static void render_active_input_rows(int panel_w, int text_x, int idx_x,
+                                     int visible_lines, int file_line,
+                                     int indent_chars, const char *idx_text,
+                                     int *io_cur, int *io_line_y) {
+    CodeWrapIter wrap_it;
+    int wrap_row = 0;
+    int wrap_start, wrap_len, wrap_x;
+    int input_x = text_x + indent_chars * FONT_W;
+    int cursor_seg_start = 0;
+    int cursor_seg_len = 0;
+    int cursor_seg_x = input_x;
+    int cursor_row = code_panel_cursor_row_for_text(g_input, input_x, panel_w,
+                                                    g_cursor_pos,
+                                                    &cursor_seg_start,
+                                                    &cursor_seg_len,
+                                                    &cursor_seg_x);
+    int cursor_col = g_cursor_pos - cursor_seg_start;
+
+    code_wrap_iter_init(&wrap_it, g_input, input_x, panel_w);
+    while (code_wrap_iter_next(&wrap_it, &wrap_start, &wrap_len, &wrap_x)) {
+        if (*io_cur >= g_scroll && *io_cur < g_scroll + visible_lines) {
+            glColor3f(0.55f, 0.55f, 0.30f);
+            if (wrap_row == 0) {
+                char ln[16];
+                snprintf(ln, sizeof(ln), "%3d", file_line);
+                draw_string((float)CODE_MARGIN_X, (float)(*io_line_y), ln, FONT_MONO);
+                if (idx_text) {
+                    glColor3f(0.45f, 0.50f, 0.65f);
+                    draw_string((float)idx_x, (float)(*io_line_y), idx_text, FONT_MONO);
+                }
+            }
+
+            glEnable(GL_BLEND);
+            glColor4f(0.15f, 0.18f, 0.28f, 0.70f);
+            draw_quad(0, (float)(*io_line_y - 3), (float)panel_w, (float)LINE_H);
+            glDisable(GL_BLEND);
+
+            if (wrap_row == 0 && indent_chars > 0) {
+                char spaces[32];
+                int draw_indent = indent_chars;
+                if (draw_indent > (int)sizeof(spaces) - 1)
+                    draw_indent = (int)sizeof(spaces) - 1;
+                memset(spaces, ' ', (size_t)draw_indent);
+                spaces[draw_indent] = '\0';
+                glColor3f(0.30f, 0.30f, 0.38f);
+                draw_string((float)text_x, (float)(*io_line_y), spaces, FONT_MONO);
+            }
+
+            glColor3f(0.95f, 0.95f, 0.90f);
+            code_panel_draw_segment(wrap_x, *io_line_y, g_input,
+                                    wrap_start, wrap_len, FONT_MONO);
+
+            if (wrap_row == cursor_row) {
+                int cursor_x = wrap_x + cursor_col * FONT_W;
+
+                if (g_ac_ghost[0] && g_cursor_pos == g_input_len) {
+                    glEnable(GL_BLEND);
+                    glColor4f(0.50f, 0.55f, 0.65f, 0.55f);
+                    draw_string((float)cursor_x, (float)(*io_line_y),
+                                g_ac_ghost, FONT_MONO);
+                    glDisable(GL_BLEND);
+                }
+
+                if (g_cursor_on) {
+                    glEnable(GL_BLEND);
+                    glColor4f(0.90f, 0.80f, 0.25f, 0.85f);
+                    draw_quad((float)cursor_x, (float)(*io_line_y - 2),
+                              2.0f, (float)(FONT_H + 2));
+                    glDisable(GL_BLEND);
+                }
+
+                g_cursor_px = cursor_x;
+                g_cursor_py = *io_line_y;
+            }
+
+            *io_line_y -= LINE_H;
+        }
+
+        (*io_cur)++;
+        wrap_row++;
+    }
 }
 
 void render_code_panel(void) {
@@ -305,29 +645,55 @@ void render_code_panel(void) {
         highlight_color_idx  = repl_find_feeding_color_cmd(g_edit_line);
     }
 
-    int n_hpre = 0;
-    for (int i = 0; g_header_pre[i]; i++) n_hpre++;
-    int n_hpost = 0;
-    for (int i = 0; g_header_post[i]; i++) n_hpost++;
-    int n_header = n_hpre + RENDER_STATE_LINE_COUNT + LOOKAT_LINE_COUNT + n_hpost;
-    int n_footer = 0;
-    for (int i = 0; g_footer[i]; i++) n_footer++;
-    /* Extra annotation lines for variable display during replay */
-    int replay_extra = 0;
+    int header_rows = code_panel_header_row_count(panel_w, text_x);
+    int footer_rows = code_panel_footer_row_count(panel_w, text_x);
+    int total_lines = header_rows + footer_rows + code_panel_newline_rows(panel_w, text_x);
+    for (int i = 0; i < g_num_cmds; i++) {
+        if (g_inserting && i == g_edit_line)
+            total_lines += code_panel_insert_rows(panel_w, text_x);
+        total_lines += code_panel_command_main_rows(i, panel_w, text_x);
+        total_lines += code_panel_replay_extra_rows_for_line(i);
+    }
+
+    int cursor_doc_line = header_rows;
+    if (g_inserting) {
+        for (int i = 0; i < g_edit_line && i < g_num_cmds; i++) {
+            cursor_doc_line += code_panel_command_main_rows(i, panel_w, text_x);
+            cursor_doc_line += code_panel_replay_extra_rows_for_line(i);
+        }
+        cursor_doc_line += code_panel_cursor_row_for_text(
+            g_input, text_x + cmd_indent_chars(g_edit_line) * FONT_W,
+            panel_w, g_cursor_pos, NULL, NULL, NULL);
+    } else if (g_edit_line < g_num_cmds) {
+        for (int i = 0; i < g_edit_line; i++) {
+            cursor_doc_line += code_panel_command_main_rows(i, panel_w, text_x);
+            cursor_doc_line += code_panel_replay_extra_rows_for_line(i);
+        }
+        cursor_doc_line += code_panel_cursor_row_for_text(
+            g_input, text_x + cmd_indent_chars(g_edit_line) * FONT_W,
+            panel_w, g_cursor_pos, NULL, NULL, NULL);
+    } else {
+        for (int i = 0; i < g_num_cmds; i++) {
+            cursor_doc_line += code_panel_command_main_rows(i, panel_w, text_x);
+            cursor_doc_line += code_panel_replay_extra_rows_for_line(i);
+        }
+        cursor_doc_line += code_panel_cursor_row_for_text(
+            g_input, text_x + cmd_indent_chars(g_num_cmds) * FONT_W,
+            panel_w, g_cursor_pos, NULL, NULL, NULL);
+    }
+
+    int follow_doc_line = cursor_doc_line;
     if (g_replay_active && g_replay_state != REPLAY_OFF &&
         g_replay_src_line >= 0 && g_replay_src_line < g_num_cmds &&
-        g_cmds[g_replay_src_line].has_vars)
-        replay_extra = 2;
-
-    /* +1 for the new-line slot, +1 if inserting */
-    int total_lines = n_header + g_num_cmds + (g_inserting ? 1 : 0)
-                    + 1 + n_footer + replay_extra;
-
-    /* Which document line is the cursor on? (offset by header) */
-    int cursor_doc_line = n_header + g_edit_line;
-    int follow_doc_line = cursor_doc_line;
-    if (g_replay_active && g_replay_state != REPLAY_OFF && g_replay_src_line >= 0)
-        follow_doc_line = n_header + g_replay_src_line + replay_extra;
+        g_cmds[g_replay_src_line].has_vars) {
+        follow_doc_line = header_rows;
+        for (int i = 0; i < g_replay_src_line; i++) {
+            follow_doc_line += code_panel_command_main_rows(i, panel_w, text_x);
+            follow_doc_line += code_panel_replay_extra_rows_for_line(i);
+        }
+        follow_doc_line += code_panel_command_main_rows(g_replay_src_line, panel_w, text_x);
+        follow_doc_line += code_panel_replay_extra_rows_for_line(g_replay_src_line) - 1;
+    }
 
     /* Clamp scroll */
     int max_scroll = total_lines - visible_lines;
@@ -410,16 +776,27 @@ void render_code_panel(void) {
 
     /* Macro for rendering a static line (header/footer) */
     #define RENDER_STATIC_LINE(text, set_color) do {                           \
-        if (cur >= g_scroll && cur < g_scroll + visible_lines) {               \
-            glColor3f(0.30f, 0.30f, 0.38f);                                   \
-            { char ln[16]; snprintf(ln, sizeof(ln), "%3d", file_line);         \
-              draw_string(CODE_MARGIN_X, line_y, ln, FONT_MONO); }             \
-            set_color;                                                          \
-            draw_string(text_x, line_y, text, FONT_MONO);                      \
-            line_y -= LINE_H;                                                   \
-        }                                                                       \
+        CodeWrapIter wrap_it;                                                   \
+        int wrap_row = 0;                                                       \
+        int wrap_start, wrap_len, wrap_x;                                       \
+        code_wrap_iter_init(&wrap_it, text, text_x, panel_w);                   \
+        while (code_wrap_iter_next(&wrap_it, &wrap_start, &wrap_len, &wrap_x)) {\
+            if (cur >= g_scroll && cur < g_scroll + visible_lines) {            \
+                if (wrap_row == 0) {                                             \
+                    glColor3f(0.30f, 0.30f, 0.38f);                            \
+                    { char ln[16]; snprintf(ln, sizeof(ln), "%3d", file_line);  \
+                      draw_string((float)CODE_MARGIN_X, (float)line_y,          \
+                                  ln, FONT_MONO); }                             \
+                }                                                               \
+                set_color;                                                       \
+                code_panel_draw_segment(wrap_x, line_y, text,                   \
+                                        wrap_start, wrap_len, FONT_MONO);       \
+                line_y -= LINE_H;                                                \
+            }                                                                    \
+            cur++;                                                               \
+            wrap_row++;                                                          \
+        }                                                                        \
         file_line++;                                                            \
-        cur++;                                                                  \
     } while (0)
 
     /* Header pre-lookAt (dimmed) */
@@ -448,16 +825,11 @@ void render_code_panel(void) {
     for (int i = 0; i <= g_num_cmds; i++) {
         /* If inserting, render the virtual insert line before command[g_edit_line] */
         if (g_inserting && i == g_edit_line) {
-            if (cur >= g_scroll && cur < g_scroll + visible_lines) {
-                glColor3f(0.55f, 0.55f, 0.30f);
-                { char ln[16]; snprintf(ln, sizeof(ln), "%3d", file_line);
-                  draw_string(CODE_MARGIN_X, line_y, ln, FONT_MONO); }
-                int ind = cmd_indent_chars(i);
-                render_edit_line(text_x, line_y, ind);
-                line_y -= LINE_H;
-            }
+                        render_active_input_rows(panel_w, text_x, idx_x,
+                                                                         visible_lines, file_line,
+                                                                         cmd_indent_chars(i), NULL,
+                                                                         &cur, &line_y);
             file_line++;
-            cur++;
         }
 
         if (i < g_num_cmds) {
@@ -479,71 +851,77 @@ void render_code_panel(void) {
                                                 g_cmds[i].type == CMD_TESS_VERTEX);
             if (is_edit) {
                 /* Active editing line */
-                if (cur >= g_scroll && cur < g_scroll + visible_lines) {
-                    glColor3f(0.55f, 0.55f, 0.30f);
-                    { char ln[16]; snprintf(ln, sizeof(ln), "%3d", file_line);
-                      draw_string(CODE_MARGIN_X, line_y, ln, FONT_MONO); }
-                    if (g_show_indices && is_vertex) {
-                        char idx_s[16];
-                        snprintf(idx_s, sizeof(idx_s), primitive_vnums_exact ? "v%d" : "vn", vnum);
-                        glColor3f(0.45f, 0.50f, 0.65f);
-                        draw_string((float)idx_x, (float)line_y, idx_s, FONT_MONO);
-                    }
-                    int ind = cmd_indent_chars(i);
-                    render_edit_line(text_x, line_y, ind);
-                    line_y -= LINE_H;
+                char idx_s[16];
+                const char *idx_text = NULL;
+                if (g_show_indices && is_vertex) {
+                    snprintf(idx_s, sizeof(idx_s),
+                             primitive_vnums_exact ? "v%d" : "vn", vnum);
+                    idx_text = idx_s;
                 }
+                render_active_input_rows(panel_w, text_x, idx_x,
+                                         visible_lines, file_line,
+                                         cmd_indent_chars(i), idx_text,
+                                         &cur, &line_y);
                 file_line++;
-                cur++;
             } else {
                 /* Existing command, not being edited */
-                if (cur >= g_scroll && cur < g_scroll + visible_lines) {
-                    if (g_replay_active && g_replay_state != REPLAY_OFF &&
-                        g_replay_src_line >= 0 && i == g_replay_src_line) {
-                        glEnable(GL_BLEND);
-                        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-                        glColor4f(0.10f, 0.35f, 0.15f, 0.55f);
-                        draw_quad(0, (float)(line_y - 3),
-                                  (float)panel_w, (float)LINE_H);
-                        glColor4f(0.20f, 0.90f, 0.30f, 0.85f);
-                        draw_quad(1.0f, (float)(line_y - 3), 3.0f, (float)LINE_H);
-                        glDisable(GL_BLEND);
+                CodeWrapIter wrap_it;
+                int wrap_row = 0;
+                int wrap_start, wrap_len, wrap_x;
+                code_wrap_iter_init(&wrap_it, g_cmds[i].source, text_x, panel_w);
+                while (code_wrap_iter_next(&wrap_it, &wrap_start, &wrap_len, &wrap_x)) {
+                    if (cur >= g_scroll && cur < g_scroll + visible_lines) {
+                        if (g_replay_active && g_replay_state != REPLAY_OFF &&
+                            g_replay_src_line >= 0 && i == g_replay_src_line) {
+                            glEnable(GL_BLEND);
+                            glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+                            glColor4f(0.10f, 0.35f, 0.15f, 0.55f);
+                            draw_quad(0, (float)(line_y - 3),
+                                      (float)panel_w, (float)LINE_H);
+                            glColor4f(0.20f, 0.90f, 0.30f, 0.85f);
+                            draw_quad(1.0f, (float)(line_y - 3), 3.0f, (float)LINE_H);
+                            glDisable(GL_BLEND);
+                        }
+                        if (sel_active() && i >= sel_lo() && i <= sel_hi()) {
+                            glEnable(GL_BLEND);
+                            glColor4f(0.20f, 0.30f, 0.50f, 0.55f);
+                            draw_quad(0, (float)(line_y - 3),
+                                      (float)panel_w, (float)LINE_H);
+                            glDisable(GL_BLEND);
+                        }
+                        if (i == highlight_normal_idx || i == highlight_color_idx) {
+                            glEnable(GL_BLEND);
+                            glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+                            if (i == highlight_normal_idx)
+                                glColor4f(0.40f, 0.80f, 0.95f, 0.85f);
+                            else
+                                glColor4f(0.95f, 0.85f, 0.30f, 0.85f);
+                            draw_quad(1.0f, (float)(line_y - 3), 3.0f, (float)LINE_H);
+                            glDisable(GL_BLEND);
+                        }
+                        if (wrap_row == 0) {
+                            glColor3f(0.30f, 0.30f, 0.38f);
+                            { char ln[16]; snprintf(ln, sizeof(ln), "%3d", file_line);
+                              draw_string((float)CODE_MARGIN_X, (float)line_y,
+                                          ln, FONT_MONO); }
+                            if (g_show_indices && is_vertex) {
+                                char idx_s[16];
+                                snprintf(idx_s, sizeof(idx_s),
+                                         primitive_vnums_exact ? "v%d" : "vn", vnum);
+                                glColor3f(0.45f, 0.50f, 0.65f);
+                                draw_string((float)idx_x, (float)line_y,
+                                            idx_s, FONT_MONO);
+                            }
+                        }
+                        color_for_type(g_cmds[i].type);
+                        code_panel_draw_segment(wrap_x, line_y, g_cmds[i].source,
+                                                wrap_start, wrap_len, FONT_MONO);
+                        line_y -= LINE_H;
                     }
-                    /* Selection highlight */
-                    if (sel_active() && i >= sel_lo() && i <= sel_hi()) {
-                        glEnable(GL_BLEND);
-                        glColor4f(0.20f, 0.30f, 0.50f, 0.55f);
-                        draw_quad(0, (float)(line_y - 3),
-                                  (float)panel_w, (float)LINE_H);
-                        glDisable(GL_BLEND);
-                    }
-                    /* Gutter accent: show which normal/color feeds the cursor vertex */
-                    if (i == highlight_normal_idx || i == highlight_color_idx) {
-                        glEnable(GL_BLEND);
-                        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-                        if (i == highlight_normal_idx)
-                            glColor4f(0.40f, 0.80f, 0.95f, 0.85f); /* cyan — normal */
-                        else
-                            glColor4f(0.95f, 0.85f, 0.30f, 0.85f); /* yellow — color */
-                        draw_quad(1.0f, (float)(line_y - 3), 3.0f, (float)LINE_H);
-                        glDisable(GL_BLEND);
-                    }
-                    glColor3f(0.30f, 0.30f, 0.38f);
-                    { char ln[16]; snprintf(ln, sizeof(ln), "%3d", file_line);
-                      draw_string(CODE_MARGIN_X, line_y, ln, FONT_MONO); }
-                    if (g_show_indices && is_vertex) {
-                        char idx_s[16];
-                        snprintf(idx_s, sizeof(idx_s), primitive_vnums_exact ? "v%d" : "vn", vnum);
-                        glColor3f(0.45f, 0.50f, 0.65f);
-                        draw_string((float)idx_x, (float)line_y, idx_s, FONT_MONO);
-                    }
-                    color_for_type(g_cmds[i].type);
-                    draw_string((float)text_x, (float)line_y,
-                                g_cmds[i].source, FONT_MONO);
-                    line_y -= LINE_H;
+                    cur++;
+                    wrap_row++;
                 }
                 file_line++;
-                cur++;
 
                 /* Replay annotation: variable-substituted and evaluated */
                 if (g_replay_active && g_replay_state != REPLAY_OFF &&
@@ -636,14 +1014,10 @@ void render_code_panel(void) {
             /* i == g_num_cmds: new-line slot */
             int is_edit_nl = (!g_inserting && g_edit_line == g_num_cmds);
             if (is_edit_nl) {
-                if (cur >= g_scroll && cur < g_scroll + visible_lines) {
-                    glColor3f(0.55f, 0.55f, 0.30f);
-                    { char ln[16]; snprintf(ln, sizeof(ln), "%3d", file_line);
-                      draw_string(CODE_MARGIN_X, line_y, ln, FONT_MONO); }
-                    int ind = cmd_indent_chars(g_num_cmds);
-                    render_edit_line(text_x, line_y, ind);
-                    line_y -= LINE_H;
-                }
+                render_active_input_rows(panel_w, text_x, idx_x,
+                                         visible_lines, file_line,
+                                         cmd_indent_chars(g_num_cmds), NULL,
+                                         &cur, &line_y);
             } else {
                 if (cur >= g_scroll && cur < g_scroll + visible_lines) {
                     glColor3f(0.30f, 0.30f, 0.38f);
@@ -1355,7 +1729,7 @@ static int g_code_panel_drag_moved = 0;
 static int code_panel_hit_test(int mx, int my,
                                int *out_target,
                                int *out_on_insert_line,
-                               int *out_col) {
+                               int *out_row_offset) {
     int panel_w = (int)(g_win_w * g_panel_frac);
     if (mx < 0 || mx >= panel_w) return 0;
 
@@ -1367,52 +1741,28 @@ static int code_panel_hit_test(int mx, int my,
     int vis = (line_y_start + LINE_H - 3 - gl_y) / LINE_H;
     if (vis < 0) return 0;   /* clicked in info bar */
 
-    int n_hpre = 0;
-    for (int i = 0; g_header_pre[i]; i++) n_hpre++;
-    int n_hpost = 0;
-    for (int i = 0; g_header_post[i]; i++) n_hpost++;
-    int n_header = n_hpre + RENDER_STATE_LINE_COUNT + LOOKAT_LINE_COUNT + n_hpost;
-
-    int doc_line = g_scroll + vis;
-    int cmd_area = doc_line - n_header;
-
-    /* Ignore clicks on header or footer */
-    int n_cmd_area = g_num_cmds + (g_inserting ? 1 : 0) + 1;
-    if (cmd_area < 0 || cmd_area >= n_cmd_area) return 0;
-
-    /* Map cmd_area index to actual command index, accounting for insert line */
-    int target;
-    int on_insert_line = 0;
-    if (g_inserting) {
-        if (cmd_area < g_edit_line) {
-            target = cmd_area;
-        } else if (cmd_area == g_edit_line) {
-            target = -1;
-            on_insert_line = 1;
-        } else {
-            target = cmd_area - 1;
-        }
-    } else {
-        target = cmd_area;
-    }
-
     int linenum_w = 4 * FONT_W;
     int idx_col_w = g_show_indices ? (6 * FONT_W) : 0;
     int text_x = CODE_MARGIN_X + linenum_w + FONT_W + idx_col_w;
-    int edit_idx = on_insert_line ? g_edit_line : target;
-    int indent_chars = cmd_indent_chars(
-        edit_idx < g_num_cmds ? edit_idx : g_num_cmds);
-    int col = (mx - text_x - indent_chars * FONT_W + FONT_W / 2) / FONT_W;
-    if (col < 0) col = 0;
-    if (col > g_input_len) col = g_input_len;
+    int doc_line = g_scroll + vis;
+    int target;
+    int on_insert_line;
+    int row_offset;
+
+    if (!code_panel_target_for_doc_line(doc_line, panel_w, text_x,
+                                        &target, &on_insert_line,
+                                        &row_offset))
+        return 0;
 
     if (out_target) *out_target = target;
     if (out_on_insert_line) *out_on_insert_line = on_insert_line;
-    if (out_col) *out_col = col;
+    if (out_row_offset) *out_row_offset = row_offset;
     return 1;
 }
 
 static int code_panel_drag_target(int mx, int my, int *out_target) {
+    (void)mx;
+    int panel_w = (int)(g_win_w * g_panel_frac);
     int gl_y = g_win_h - my;
     int line_y_start = g_win_h - CODE_MARGIN_Y - LINE_H - LINE_H;
     int vis = (line_y_start + LINE_H - 3 - gl_y) / LINE_H;
@@ -1422,16 +1772,28 @@ static int code_panel_drag_target(int mx, int my, int *out_target) {
     if (vis < 0) vis = 0;
     if (vis >= visible_lines) vis = visible_lines - 1;
 
-    int n_hpre = 0;
-    for (int i = 0; g_header_pre[i]; i++) n_hpre++;
-    int n_hpost = 0;
-    for (int i = 0; g_header_post[i]; i++) n_hpost++;
-    int n_header = n_hpre + RENDER_STATE_LINE_COUNT + LOOKAT_LINE_COUNT + n_hpost;
-
+    int linenum_w = 4 * FONT_W;
+    int idx_col_w = g_show_indices ? (6 * FONT_W) : 0;
+    int text_x = CODE_MARGIN_X + linenum_w + FONT_W + idx_col_w;
     int doc_line = g_scroll + vis;
-    int cmd_area = doc_line - n_header;
-    int target = g_inserting ? cmd_area : cmd_area;
-    if (g_inserting && target > g_edit_line) target--;
+    int target;
+    int on_insert_line;
+
+    if (!code_panel_target_for_doc_line(doc_line, panel_w, text_x,
+                                        &target, &on_insert_line, NULL))
+        return 0;
+
+    if (on_insert_line) {
+        if (g_edit_line < g_num_cmds)
+            target = g_edit_line;
+        else if (g_num_cmds > 0)
+            target = g_num_cmds - 1;
+        else
+            return 0;
+    } else if (target >= g_num_cmds) {
+        target = g_num_cmds - 1;
+    }
+
     if (target < 0) target = 0;
     if (target >= g_num_cmds) target = g_num_cmds - 1;
     if (out_target) *out_target = target;
@@ -1440,8 +1802,8 @@ static int code_panel_drag_target(int mx, int my, int *out_target) {
 
 /* Handle left-click in the code panel: navigate to line + column */
 void handle_code_panel_click(int mx, int my) {
-    int target, on_insert_line;
-    if (!code_panel_hit_test(mx, my, &target, &on_insert_line, NULL)) return;
+    int target, on_insert_line, row_offset;
+    if (!code_panel_hit_test(mx, my, &target, &on_insert_line, &row_offset)) return;
 
     if (!on_insert_line) {
         if (target < 0) target = 0;
@@ -1449,16 +1811,26 @@ void handle_code_panel_click(int mx, int my) {
         navigate_to_line(target);
     }
 
+    int panel_w = (int)(g_win_w * g_panel_frac);
     int linenum_w = 4 * FONT_W;
     int idx_col_w = g_show_indices ? (6 * FONT_W) : 0;
     int text_x = CODE_MARGIN_X + linenum_w + FONT_W + idx_col_w;
     int edit_idx = on_insert_line ? g_edit_line : target;
     int indent_chars = cmd_indent_chars(
         edit_idx < g_num_cmds ? edit_idx : g_num_cmds);
-    int col = (mx - text_x - indent_chars * FONT_W + FONT_W / 2) / FONT_W;
+    int seg_start = g_input_len;
+    int seg_len = 0;
+    int seg_x = text_x + indent_chars * FONT_W;
+    int col;
+
+    code_panel_segment_for_row(g_input, seg_x, panel_w, row_offset,
+                               &seg_start, &seg_len, &seg_x);
+
+    col = (mx - seg_x + FONT_W / 2) / FONT_W;
     if (col < 0) col = 0;
-    if (col > g_input_len) col = g_input_len;
-    g_cursor_pos = col;
+    if (col > seg_len) col = seg_len;
+    g_cursor_pos = seg_start + col;
+    if (g_cursor_pos > g_input_len) g_cursor_pos = g_input_len;
 
     g_cursor_on = 1;
     g_blink_tick = 0;

@@ -160,6 +160,86 @@ int main(void) {
         }
     }
 
+    {
+        const char *wrapped = "  glColor4f(0.125, 0.250, 0.500, 1.000);";
+        char visual_buf[8192];
+        FILE *dump_f = fopen(tmp_dump_path, "w");
+
+        repl_reset_state();
+        g_wrap_at_comma = 1;
+        g_show_indices = 0;
+        g_win_w = 360;
+        g_panel_frac = 0.75f;
+
+        memset(&g_cmds[0], 0, sizeof(g_cmds[0]));
+        g_cmds[0].type = CMD_COLOR4F;
+        g_cmds[0].valid = 1;
+        strncpy(g_cmds[0].source, wrapped, sizeof(g_cmds[0].source) - 1);
+        g_cmds[0].source[sizeof(g_cmds[0].source) - 1] = '\0';
+        g_num_cmds = 1;
+
+        ASSERT_TRUE("open visual dump file", dump_f != NULL);
+        if (dump_f) {
+            repl_dump_code_panel_visual_text(dump_f);
+            fclose(dump_f);
+        }
+
+        dump_f = fopen(tmp_dump_path, "r");
+        ASSERT_TRUE("read visual dump file", dump_f != NULL);
+        if (dump_f) {
+            size_t n = fread(visual_buf, 1, sizeof(visual_buf) - 1, dump_f);
+            visual_buf[n] = '\0';
+            fclose(dump_f);
+            ASSERT_TRUE("visual dump wraps first comma",
+                        strstr(visual_buf, "glColor4f(0.125,\n") != NULL);
+            ASSERT_TRUE("visual dump has continuation row",
+                        strstr(visual_buf, "\n             0.250,\n") != NULL);
+            ASSERT_TRUE("visual dump omits unwrapped full row",
+                        strstr(visual_buf, "glColor4f(0.125, 0.250") == NULL);
+        }
+    }
+
+    {
+        const char *wrapped = "  glVertex3f(123456789012345678901234567890, 0.250, 0.500);";
+        char visual_buf[8192];
+        FILE *dump_f = fopen(tmp_dump_path, "w");
+
+        repl_reset_state();
+        g_wrap_at_comma = 1;
+        g_show_indices = 0;
+        g_win_w = 360;
+        g_panel_frac = 0.75f;
+
+        memset(&g_cmds[0], 0, sizeof(g_cmds[0]));
+        g_cmds[0].type = CMD_VERTEX3F;
+        g_cmds[0].valid = 1;
+        strncpy(g_cmds[0].source, wrapped, sizeof(g_cmds[0].source) - 1);
+        g_cmds[0].source[sizeof(g_cmds[0].source) - 1] = '\0';
+        g_num_cmds = 1;
+
+        ASSERT_TRUE("open overflow visual dump file", dump_f != NULL);
+        if (dump_f) {
+            repl_dump_code_panel_visual_text(dump_f);
+            fclose(dump_f);
+        }
+
+        dump_f = fopen(tmp_dump_path, "r");
+        ASSERT_TRUE("read overflow visual dump file", dump_f != NULL);
+        if (dump_f) {
+            size_t n = fread(visual_buf, 1, sizeof(visual_buf) - 1, dump_f);
+            visual_buf[n] = '\0';
+            fclose(dump_f);
+            ASSERT_TRUE("visual dump wraps at first offscreen comma",
+                        strstr(visual_buf,
+                               "glVertex3f(123456789012345678901234567890,\n") != NULL);
+            ASSERT_TRUE("visual dump keeps continuation after overflow comma",
+                       strstr(visual_buf, "\n              0.250,\n") != NULL);
+            ASSERT_TRUE("visual dump omits overflow-comma row from staying flat",
+                        strstr(visual_buf,
+                               "123456789012345678901234567890, 0.250") == NULL);
+        }
+    }
+
     printf("repl_core_format: %d/%d passed\n", g_pass, g_run);
     return (g_run == g_pass) ? 0 : 1;
 }

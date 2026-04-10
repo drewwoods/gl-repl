@@ -12,5 +12,6 @@ void repl_normalize_from_parsed(const char *parsed_source,
                                 int ensure_semicolon,
                                 char *out, int out_sz);
 void repl_dump_code_panel_text(FILE *out);
+void repl_dump_code_panel_visual_text(FILE *out);
 
 #endif /* REPL_CORE_INTERNAL_H */

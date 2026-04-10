@@ -262,6 +262,7 @@ extern int    g_focus_vtx_valid;
 extern int    g_show_vnums;
 extern int    g_show_normals;
 extern int    g_show_indices;
+extern int    g_wrap_at_comma;
 extern int    g_show_guides;
 extern int    g_autonormal;
 extern int    g_show_lights;
