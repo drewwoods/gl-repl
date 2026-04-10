@@ -12,7 +12,8 @@
  *   glEnable(CAP)        glDisable(CAP)
  *   glShadeModel(MODE)
  *
- * Math expressions: sin, cos, tan, sqrt, abs, pow, min, max, PI, TAU
+ * Math expressions: sin, cos, tan, sqrt, abs, pow, min, max, floor, ceil,
+ *                   fmod, rand(seed[, iter]), PI, TAU
  *   Operators: + - * / % ( )   Comparison: > < >= <= == !=   Logical: && || !
  *   Example: glVertex3f(cos(PI/4), sin(PI/4), 0)
  *
@@ -1723,6 +1724,17 @@ static void write_predef_var_globals(FILE *f) {
     }
 }
 
+/* Emit deterministic stateless random helper used by translated rand(...). */
+static void write_rand_helper(FILE *f) {
+    fprintf(f,
+        "\nstatic float repl_randf(float seed, float iter) {\n"
+        "  float h = sinf(seed * 12.9898f + iter * 78.233f) * 43758.5453f;\n"
+        "  float frac = h - floorf(h);\n"
+        "  if (frac < 0.0f) frac += 1.0f;\n"
+        "  return frac;\n"
+        "}\n");
+}
+
 /* Emit all user-defined functions as static C functions (before display()) */
 static void write_func_defs_as_c(FILE *f) {
     for (int i = 0; i < g_num_cmds; i++) {
@@ -2842,6 +2854,7 @@ static void save_output(const char *filename) {
     for (int i = 0; g_header_pre[i]; i++) {
         if (strcmp(g_header_pre[i], "void display() {") == 0) {
             write_predef_var_globals(f);
+            write_rand_helper(f);
             /* Tess preamble must precede func defs: func bodies may reference
              * g_tess / TessVertex / _tv / _tn / _tc that the preamble declares. */
             if (has_tess) write_tess_preamble(f);
