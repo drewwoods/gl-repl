@@ -240,6 +240,85 @@ int main(void) {
         }
     }
 
+    {
+        const char *wrapped =
+            "  glPointParameterfv(GL_POINT_DISTANCE_ATTENUATION, (GLfloat[]){0.2, 0, 0.15});";
+        char visual_buf[8192];
+        FILE *dump_f = fopen(tmp_dump_path, "w");
+
+        repl_reset_state();
+        g_wrap_at_comma = 1;
+        g_show_indices = 0;
+        g_win_w = 360;
+        g_panel_frac = 0.75f;
+
+        memset(&g_cmds[0], 0, sizeof(g_cmds[0]));
+        g_cmds[0].type = CMD_POINT_PARAMETER_FV;
+        g_cmds[0].valid = 1;
+        strncpy(g_cmds[0].source, wrapped, sizeof(g_cmds[0].source) - 1);
+        g_cmds[0].source[sizeof(g_cmds[0].source) - 1] = '\0';
+        g_num_cmds = 1;
+
+        ASSERT_TRUE("open point-parameter visual dump file", dump_f != NULL);
+        if (dump_f) {
+            repl_dump_code_panel_visual_text(dump_f);
+            fclose(dump_f);
+        }
+
+        dump_f = fopen(tmp_dump_path, "r");
+        ASSERT_TRUE("read point-parameter visual dump file", dump_f != NULL);
+        if (dump_f) {
+            size_t n = fread(visual_buf, 1, sizeof(visual_buf) - 1, dump_f);
+            visual_buf[n] = '\0';
+            fclose(dump_f);
+            ASSERT_TRUE("point-parameter visual dump wraps long enum arg",
+                        strstr(visual_buf,
+                               "glPointParameterfv(GL_POINT_DISTANCE_ATTENUATION,\n") != NULL);
+            ASSERT_TRUE("point-parameter continuation uses capped hang indent",
+                        strstr(visual_buf, "\n               (GLfloat[])\n") != NULL);
+            ASSERT_TRUE("point-parameter continuation avoids extreme indent",
+                        strstr(visual_buf, "\n                      (GLfloat[])\n") == NULL);
+        }
+    }
+
+    {
+        const char *wrapped =
+            "  glPointParameterfv(GL_POINT_DISTANCE_ATTENUATION, (GLfloat[]){0.2, 0, 0.15});";
+        char visual_buf[8192];
+        FILE *dump_f = fopen(tmp_dump_path, "w");
+
+        repl_reset_state();
+        g_wrap_at_comma = 1;
+        g_show_indices = 0;
+        g_win_w = 260;
+        g_panel_frac = 0.75f;
+
+        memset(&g_cmds[0], 0, sizeof(g_cmds[0]));
+        g_cmds[0].type = CMD_POINT_PARAMETER_FV;
+        g_cmds[0].valid = 1;
+        strncpy(g_cmds[0].source, wrapped, sizeof(g_cmds[0].source) - 1);
+        g_cmds[0].source[sizeof(g_cmds[0].source) - 1] = '\0';
+        g_num_cmds = 1;
+
+        ASSERT_TRUE("open narrow point-parameter visual dump file", dump_f != NULL);
+        if (dump_f) {
+            repl_dump_code_panel_visual_text(dump_f);
+            fclose(dump_f);
+        }
+
+        dump_f = fopen(tmp_dump_path, "r");
+        ASSERT_TRUE("read narrow point-parameter visual dump file", dump_f != NULL);
+        if (dump_f) {
+            size_t n = fread(visual_buf, 1, sizeof(visual_buf) - 1, dump_f);
+            visual_buf[n] = '\0';
+            fclose(dump_f);
+            ASSERT_TRUE("narrow point-parameter source starts with command text",
+                        strstr(visual_buf, "--- source ---\n  glPointParameterfv(") != NULL);
+            ASSERT_TRUE("narrow point-parameter source avoids blank first wrap row",
+                        strstr(visual_buf, "--- source ---\n  \n") == NULL);
+        }
+    }
+
     printf("repl_core_format: %d/%d passed\n", g_pass, g_run);
     return (g_run == g_pass) ? 0 : 1;
 }
