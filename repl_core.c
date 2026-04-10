@@ -4272,8 +4272,16 @@ static void insert_cmd_at(int pos, const GLCmd *cmd) {
 
 
 /* Compute per-vertex normals for a block and store into norms[] */
-static void compute_block_normals(GLenum mode, int *vi, int nv,
-                                  float norms[][3]) {
+static void apply_front_face_to_normal(GLenum front_face, float *n) {
+    if (front_face == GL_CW) {
+        n[0] = -n[0];
+        n[1] = -n[1];
+        n[2] = -n[2];
+    }
+}
+
+static void compute_block_normals(GLenum mode, GLenum front_face,
+                                  int *vi, int nv, float norms[][3]) {
     /* Default: zero (will be overwritten for valid faces) */
     for (int i = 0; i < nv; i++)
         norms[i][0] = norms[i][1] = norms[i][2] = 0;
@@ -4284,6 +4292,7 @@ static void compute_block_normals(GLenum mode, int *vi, int nv,
         for (int i = 0; i + 2 < nv; i += 3) {
             face_normal(g_cmds[vi[i]].args, g_cmds[vi[i+1]].args,
                         g_cmds[vi[i+2]].args, n);
+            apply_front_face_to_normal(front_face, n);
             for (int j = 0; j < 3; j++)
                 memcpy(norms[i+j], n, sizeof(n));
         }
@@ -4296,6 +4305,7 @@ static void compute_block_normals(GLenum mode, int *vi, int nv,
             else
                 face_normal(g_cmds[vi[i]].args, g_cmds[vi[i+2]].args,
                             g_cmds[vi[i+1]].args, n);
+            apply_front_face_to_normal(front_face, n);
             memcpy(norms[i+2], n, sizeof(n));
             if (i == 0) {
                 memcpy(norms[0], n, sizeof(n));
@@ -4307,6 +4317,7 @@ static void compute_block_normals(GLenum mode, int *vi, int nv,
         for (int i = 1; i + 1 < nv; i++) {
             face_normal(g_cmds[vi[0]].args, g_cmds[vi[i]].args,
                         g_cmds[vi[i+1]].args, n);
+            apply_front_face_to_normal(front_face, n);
             memcpy(norms[i+1], n, sizeof(n));
             if (i == 1) {
                 memcpy(norms[0], n, sizeof(n));
@@ -4318,6 +4329,7 @@ static void compute_block_normals(GLenum mode, int *vi, int nv,
         for (int i = 0; i + 3 < nv; i += 4) {
             face_normal(g_cmds[vi[i]].args, g_cmds[vi[i+1]].args,
                         g_cmds[vi[i+2]].args, n);
+            apply_front_face_to_normal(front_face, n);
             for (int j = 0; j < 4; j++)
                 memcpy(norms[i+j], n, sizeof(n));
         }
@@ -4326,6 +4338,7 @@ static void compute_block_normals(GLenum mode, int *vi, int nv,
         for (int i = 0; i + 3 < nv; i += 2) {
             face_normal(g_cmds[vi[i]].args, g_cmds[vi[i+1]].args,
                         g_cmds[vi[i+2]].args, n);
+            apply_front_face_to_normal(front_face, n);
             memcpy(norms[i+2], n, sizeof(n));
             memcpy(norms[i+3], n, sizeof(n));
             if (i == 0) {
@@ -4338,6 +4351,7 @@ static void compute_block_normals(GLenum mode, int *vi, int nv,
         if (nv >= 3) {
             face_normal(g_cmds[vi[0]].args, g_cmds[vi[1]].args,
                         g_cmds[vi[2]].args, n);
+            apply_front_face_to_normal(front_face, n);
             for (int i = 0; i < nv; i++)
                 memcpy(norms[i], n, sizeof(n));
         }
@@ -4351,15 +4365,21 @@ static void compute_block_normals(GLenum mode, int *vi, int nv,
  * Scan the entire command list: for every vertex inside a begin/end block
  * that does not already have a normal command (auto or manual) immediately
  * before it, insert a new auto-normal with the computed face normal.
- * Existing normals (whether auto-generated or manually edited) are never
- * overwritten, so the user can freely modify them.
+ * Existing manual normals are preserved; existing auto-generated normals are
+ * refreshed so geometry or state changes can update them in place.
  */
 void recompute_autonormals(void) {
     if (!g_autonormal) return;
 
     /* Process each begin/end block (skip for-loop regions) */
     int i = 0;
+    GLenum front_face = GL_CCW;
     while (i < g_num_cmds) {
+        if (g_cmds[i].valid && g_cmds[i].type == CMD_FRONT_FACE) {
+            front_face = g_cmds[i].mode;
+            i++;
+            continue;
+        }
         if (g_cmds[i].type == CMD_FOR_BEGIN ||
             g_cmds[i].type == CMD_FUNC_DEF ||
             g_cmds[i].type == CMD_IF_BEGIN) {
@@ -4386,18 +4406,21 @@ void recompute_autonormals(void) {
 
         /* Compute desired normals */
         float norms[MAX_COMMANDS][3];
-        compute_block_normals(mode, vi, nv, norms);
+        compute_block_normals(mode, front_face, vi, nv, norms);
 
-        /* For each vertex, insert an auto-normal only if none precedes it */
+        /* For each vertex, insert an auto-normal if none precedes it.
+           Existing manual normals are preserved; existing auto-normals are
+           refreshed so state changes like glFrontFace take effect. */
         int offset = 0; /* tracks insertions shifting indices */
         for (int v = 0; v < nv; v++) {
             int vidx = vi[v] + offset;
             float nx = norms[v][0], ny = norms[v][1], nz = norms[v][2];
 
-            /* Skip if there is already any normal (auto or manual) before
-               this vertex — the user may have edited it */
+            /* Preserve manual normals, but keep auto-generated ones current. */
             if (vidx > 0 && g_cmds[vidx - 1].valid &&
                 g_cmds[vidx - 1].type == CMD_NORMAL3F) {
+                if (g_cmds[vidx - 1].is_auto)
+                    g_cmds[vidx - 1] = make_auto_normal(nx, ny, nz, vidx - 1);
                 continue;
             }
 
