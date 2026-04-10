@@ -298,6 +298,8 @@ typedef struct {
     int         done;
 } CodeWrapIter;
 
+#define CODE_PANEL_MAX_HANG_INDENT_CHARS 12
+
 static int code_panel_available_chars(int panel_w, int x) {
     int avail_px = panel_w - x - 4;
     if (avail_px < FONT_W)
@@ -307,13 +309,20 @@ static int code_panel_available_chars(int panel_w, int x) {
 
 static int code_panel_cont_indent_chars(const char *text) {
     const char *src = text ? text : "";
-    const char *paren = strchr(src, '(');
-    if (paren && paren[1] != '\0')
-        return (int)(paren - src) + 1;
-
     int leading = 0;
+
     while (src[leading] && isspace((unsigned char)src[leading]))
         leading++;
+
+    const char *paren = strchr(src, '(');
+    if (paren && paren[1] != '\0') {
+        int align = (int)(paren - src) + 1;
+        int max_align = leading + CODE_PANEL_MAX_HANG_INDENT_CHARS;
+        if (align > max_align)
+            align = max_align;
+        return align;
+    }
+
     return leading + 4;
 }
 
@@ -327,24 +336,30 @@ static int is_secondary_break(char c) {
 static int code_panel_find_wrap_break(const char *text, int start,
                                       int max_chars, int len) {
     int end = start + max_chars - 1;
+    int search_start = start;
     if (end >= len)
         end = len - 1;
 
+    while (search_start < len &&
+           isspace((unsigned char)text[search_start]))
+        search_start++;
+
     /* Prefer a comma within the window. */
-    for (int i = end; i > start; i--) {
+    for (int i = end; i > search_start; i--) {
         if (text[i] == ',')
             return i;
     }
 
     /* Fall back to secondary break chars within the window. */
-    for (int i = end; i > start; i--) {
+    for (int i = end; i > search_start; i--) {
         if (is_secondary_break(text[i]))
             return i;
     }
 
     /* Last resort: extend past the window to the next comma or break. */
     for (int i = end + 1; i < len; i++) {
-        if (text[i] == ',' || is_secondary_break(text[i]))
+        if (text[i] == ',' ||
+            (i > search_start && is_secondary_break(text[i])))
             return i;
     }
 
