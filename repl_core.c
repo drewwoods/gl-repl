@@ -1891,7 +1891,8 @@ static const char *cmd_type_name(CmdType t) {
         "CMD_TESS_NORMAL",
         "CMD_TESS_COLOR",
         "CMD_TESS_VERTEX",
-        "CMD_MATERIALF"
+        "CMD_MATERIALF",
+        "CMD_POINT_SIZE"
     };
 
     if (t >= 0 && t < CMD_TYPE_COUNT)
@@ -3406,6 +3407,7 @@ static const StdCmdDef g_std_cmds[] = {
     { "gluDisk",        CMD_GLU_DISK,         4, "gluDisk(%g, %g, %g, %g);", "Usage: gluDisk(innerR, outerR, slices, loops)", 0 },
     { "gluPartialDisk", CMD_GLU_PARTIAL_DISK, 6, "gluPartialDisk(%g, %g, %g, %g, %g, %g);", "Usage: gluPartialDisk(innerR, outerR, slices, loops, startAngle, sweepAngle)", 0 },
     { "glutSolidTorus", CMD_GLUT_TORUS,       4, "glutSolidTorus(%g, %g, %g, %g);", "Usage: glutSolidTorus(innerR, outerR, nsides, rings)", 0 },
+    { "glPointSize",    CMD_POINT_SIZE,       1, "glPointSize(%g);",                "Usage: glPointSize(size)", 0 },
     { "gluNormal",      CMD_TESS_NORMAL,      3, "gluNormal(%g, %g, %g);",          "Usage: gluNormal(x, y, z)", 1 },
     { "gluVertex",      CMD_TESS_VERTEX,      3, "gluVertex(%g, %g, %g);",          "Usage: gluVertex(x, y, z)", 1 },
     { NULL, 0, 0, NULL, NULL, 0 }
@@ -3586,6 +3588,10 @@ static int parse_command_internal(const char *line, GLCmd *cmd,
                 size_t current_len = strlen(cmd->source);
 
                 switch (def->num_args) {
+                case 1:
+                    snprintf(cmd->source + current_len, sizeof(cmd->source) - current_len,
+                             def->fmt, cmd->args[0]);
+                    break;
                 case 2:
                     snprintf(cmd->source + current_len, sizeof(cmd->source) - current_len,
                              def->fmt, cmd->args[0], cmd->args[1]);
@@ -5107,6 +5113,10 @@ void execute_commands(void) {
             break;
         case CMD_FRONT_FACE:
             glFrontFace(g_flat_cmds[pc].mode);
+            break;
+        case CMD_POINT_SIZE:
+            if (in_begin) { glEnd(); in_begin = 0; }
+            glPointSize(g_flat_cmds[pc].args[0]);
             break;
         case CMD_GLU_SPHERE:
             if (in_begin) { glEnd(); in_begin = 0; }
