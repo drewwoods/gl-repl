@@ -35,56 +35,11 @@ static int predef_idx(const char *name) {
     return -1;
 }
 
-static int extract_assignment_rhs_for_test(const char *src, char *rhs, int rhs_sz) {
-    const char *eq = strchr(src, '=');
-    const char *end;
-    int n;
-    if (!eq) return 0;
-    eq++;
-    while (*eq == ' ' || *eq == '\t') eq++;
-    end = src + strlen(src);
-    while (end > eq && (end[-1] == ';' || end[-1] == ' ' || end[-1] == '\t'))
-        end--;
-    if (end <= eq) return 0;
-    n = (int)(end - eq);
-    if (n > rhs_sz - 1) n = rhs_sz - 1;
-    memcpy(rhs, eq, (size_t)n);
-    rhs[n] = '\0';
-    return 1;
-}
-
-static int extract_if_cond_for_test(const char *src, char *cond, int cond_sz) {
-    const char *p = strchr(src, '(');
-    const char *start;
-    int depth = 1;
-    int n;
-    if (!p) return 0;
-    start = ++p;
-    while (*p && depth > 0) {
-        if (*p == '(') depth++;
-        else if (*p == ')') depth--;
-        if (depth > 0) p++;
-    }
-    if (depth != 0) return 0;
-    n = (int)(p - start);
-    if (n > cond_sz - 1) n = cond_sz - 1;
-    memcpy(cond, start, (size_t)n);
-    cond[n] = '\0';
-    return 1;
-}
-
-static int extract_goto_label_for_test(const char *src, char *label, int label_sz) {
-    const char *p = strstr(src, "goto");
-    int n = 0;
-    if (!p) return 0;
-    p += 4;
-    while (*p == ' ' || *p == '\t') p++;
-    while (*p && *p != ';' && *p != ' ' && *p != '\t' && n < label_sz - 1)
-        label[n++] = *p++;
-    label[n] = '\0';
-    return n > 0;
-}
-
+/*
+ * Mirror only the execute-time control-flow pieces that affect variables.
+ * This lets the tests exercise goto/if/assignment replay rules without
+ * needing a live GL context for the geometry commands in the same flat stream.
+ */
 static void run_flat_control_flow_only(void) {
     int pc = 0;
     int goto_count = 0;
@@ -101,7 +56,9 @@ static void run_flat_control_flow_only(void) {
             float value = g_flat_cmds[pc].args[0];
             if (g_flat_cmds[pc].has_vars) {
                 char rhs[256];
-                if (extract_assignment_rhs_for_test(g_flat_cmds[pc].source, rhs, sizeof(rhs))) {
+                if (repl_extract_assignment_parts(g_flat_cmds[pc].source,
+                                                  NULL, 0,
+                                                  rhs, sizeof(rhs))) {
                     ExprVar *eval_vars = g_predef_vars;
                     int eval_num_vars = g_num_predef_vars;
                     if (g_flat_cmd_local_vars[pc].num_vars > 0) {
@@ -120,7 +77,8 @@ static void run_flat_control_flow_only(void) {
             float cond = g_flat_cmds[pc].args[0];
             if (g_flat_cmds[pc].has_vars) {
                 char cond_text[256];
-                if (extract_if_cond_for_test(g_flat_cmds[pc].source, cond_text, sizeof(cond_text))) {
+                if (repl_extract_paren_payload(g_flat_cmds[pc].source,
+                                               cond_text, sizeof(cond_text))) {
                     ExprVar *eval_vars = g_predef_vars;
                     int eval_num_vars = g_num_predef_vars;
                     if (g_flat_cmd_local_vars[pc].num_vars > 0) {
@@ -142,15 +100,18 @@ static void run_flat_control_flow_only(void) {
         }
         case CMD_GOTO: {
             char label[64];
-            if (!extract_goto_label_for_test(g_flat_cmds[pc].source, label, sizeof(label)))
+            if (!repl_extract_goto_label(g_flat_cmds[pc].source, label, sizeof(label)))
                 break;
             if (goto_count++ > 100000)
                 return;
             for (int li = 0; li < g_num_flat_cmds; li++) {
+                char target_label[64];
                 if (g_flat_cmds[li].valid &&
                     g_flat_cmds[li].type == CMD_LABEL &&
-                    strncmp(g_flat_cmds[li].source, label, strlen(label)) == 0 &&
-                    g_flat_cmds[li].source[strlen(label)] == ':') {
+                    repl_extract_label_name(g_flat_cmds[li].source,
+                                            target_label,
+                                            sizeof(target_label)) &&
+                    strcmp(target_label, label) == 0) {
                     pc = li;
                     goto next_pc;
                 }
