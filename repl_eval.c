@@ -270,6 +270,90 @@ void repl_expr_to_c(const char *in, char *out, int out_sz) {
         }
     }
     *dst = '\0';
+
+    /* Second pass: rewrite `LHS % RHS` into `fmodf(LHS, RHS)`. C's `%`
+     * operator is integer-only, but REPL uses float semantics (matches
+     * eval_expr in this file). We operate on the already-translated buffer
+     * in-place via a temp copy. Operands may be parenthesized expressions,
+     * identifier+call (e.g. `func(x)`), or plain ident/number tokens. */
+    {
+        char src[MAX_LINE_LEN];
+        strncpy(src, out, sizeof(src) - 1);
+        src[sizeof(src) - 1] = '\0';
+        char *o = out;
+        char *oend = out + out_sz - 1;
+        int n = (int)strlen(src);
+        int ix = 0;
+        while (ix < n && o < oend) {
+            if (src[ix] != '%') { *o++ = src[ix++]; continue; }
+            /* Find LHS in already-written out buffer */
+            char *lhs_end = o;
+            while (lhs_end > out && isspace((unsigned char)lhs_end[-1])) lhs_end--;
+            char *lhs_start = lhs_end;
+            if (lhs_start > out && lhs_start[-1] == ')') {
+                int depth = 1;
+                lhs_start--;
+                while (lhs_start > out && depth > 0) {
+                    lhs_start--;
+                    if (*lhs_start == ')') depth++;
+                    else if (*lhs_start == '(') depth--;
+                }
+                while (lhs_start > out &&
+                       (isalnum((unsigned char)lhs_start[-1]) || lhs_start[-1] == '_'))
+                    lhs_start--;
+            } else {
+                while (lhs_start > out &&
+                       (isalnum((unsigned char)lhs_start[-1]) ||
+                        lhs_start[-1] == '_' || lhs_start[-1] == '.'))
+                    lhs_start--;
+            }
+            int lhs_len = (int)(lhs_end - lhs_start);
+            char lhs[MAX_LINE_LEN];
+            if (lhs_len < 0) lhs_len = 0;
+            if (lhs_len >= (int)sizeof(lhs)) lhs_len = sizeof(lhs) - 1;
+            memcpy(lhs, lhs_start, lhs_len);
+            lhs[lhs_len] = '\0';
+
+            /* Advance past '%' and scan RHS */
+            ix++;
+            while (ix < n && isspace((unsigned char)src[ix])) ix++;
+            int rhs_start = ix;
+            if (ix < n && (src[ix] == '-' || src[ix] == '+')) ix++;
+            if (ix < n && src[ix] == '(') {
+                int depth = 1; ix++;
+                while (ix < n && depth > 0) {
+                    if (src[ix] == '(') depth++;
+                    else if (src[ix] == ')') depth--;
+                    ix++;
+                }
+            } else {
+                while (ix < n && (isalnum((unsigned char)src[ix]) ||
+                                  src[ix] == '_' || src[ix] == '.'))
+                    ix++;
+                if (ix < n && src[ix] == '(') {
+                    int depth = 1; ix++;
+                    while (ix < n && depth > 0) {
+                        if (src[ix] == '(') depth++;
+                        else if (src[ix] == ')') depth--;
+                        ix++;
+                    }
+                }
+            }
+            int rhs_len = ix - rhs_start;
+            char rhs[MAX_LINE_LEN];
+            if (rhs_len < 0) rhs_len = 0;
+            if (rhs_len >= (int)sizeof(rhs)) rhs_len = sizeof(rhs) - 1;
+            memcpy(rhs, src + rhs_start, rhs_len);
+            rhs[rhs_len] = '\0';
+
+            /* Rewind output to lhs_start and emit fmodf(lhs, rhs) */
+            o = lhs_start;
+            int w = snprintf(o, (size_t)(oend - o), "fmodf(%s, %s)", lhs, rhs);
+            if (w > 0 && o + w < oend) o += w;
+            else o = oend;
+        }
+        *o = '\0';
+    }
 }
 
 void c_expr_to_repl(const char *in, char *out, int out_sz) {

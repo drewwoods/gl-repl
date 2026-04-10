@@ -1024,10 +1024,69 @@ static void write_cmd_source_as_c(FILE *f, const GLCmd *cmd, int translate_exprs
     }
 }
 
+/* Emit a single command as C with GLU-tessellator translation and
+ * REPL→C expression translation for var assignments. Shared between
+ * display() body emission and func-body emission so func defs get the
+ * same tess translation as the top-level snippet. tess_depth tracks
+ * polygon/contour nesting across successive calls. */
+static void write_display_cmd_as_c(FILE *f, const GLCmd *cmd, int for_depth,
+                                   int *tess_depth) {
+    switch (cmd->type) {
+    case CMD_COMMENT:
+        fprintf(f, "%s\n", cmd->source);
+        break;
+    case CMD_VAR_ASSIGN: {
+        char c_src[MAX_LINE_LEN];
+        repl_expr_to_c(cmd->source, c_src, sizeof(c_src));
+        fprintf(f, "%s\n", c_src);
+        break;
+    }
+    case CMD_CALL:
+        write_cmd_source_as_c(f, cmd, 1);
+        break;
+    case CMD_TESS_BEGIN_POLYGON:
+        fprintf(f, "  { _tv_n=0; gluTessBeginPolygon(g_tess,NULL); }\n");
+        *tess_depth = 1;
+        break;
+    case CMD_TESS_BEGIN_CONTOUR:
+        fprintf(f, "    gluTessBeginContour(g_tess);\n");
+        *tess_depth = 2;
+        break;
+    case CMD_TESS_END:
+        if (*tess_depth == 2) {
+            fprintf(f, "    gluTessEndContour(g_tess);\n");
+            *tess_depth = 1;
+        } else {
+            fprintf(f, "  gluTessEndPolygon(g_tess);\n");
+            *tess_depth = 0;
+        }
+        break;
+    case CMD_TESS_NORMAL:
+        fprintf(f, "      { _tn[0]=%g; _tn[1]=%g; _tn[2]=%g; }\n",
+                cmd->args[0], cmd->args[1], cmd->args[2]);
+        break;
+    case CMD_TESS_COLOR:
+        fprintf(f, "      { _tc[0]=%g; _tc[1]=%g; _tc[2]=%g; _tc[3]=%g; }\n",
+                cmd->args[0], cmd->args[1], cmd->args[2], cmd->args[3]);
+        break;
+    case CMD_TESS_VERTEX:
+        fprintf(f, "      { TessVertex *_v=&_tv[_tv_n++];"
+                   " _v->pos[0]=%g;_v->pos[1]=%g;_v->pos[2]=%g;"
+                   " memcpy(_v->normal,_tn,24); memcpy(_v->color,_tc,32);"
+                   " gluTessVertex(g_tess,_v->pos,_v); }\n",
+                cmd->args[0], cmd->args[1], cmd->args[2]);
+        break;
+    default:
+        write_cmd_source_as_c(f, cmd, for_depth > 0 || cmd->has_vars);
+        break;
+    }
+}
+
 /* Write the body of a func def block (start..end exclusive) as C.
  * Used by write_func_defs_as_c to emit static helper functions. */
 static void write_func_body_range_as_c(FILE *f, int start, int end_idx) {
     int for_depth = 0;
+    int tess_depth = 0;
     for (int i = start; i < end_idx && i < g_num_cmds; i++) {
         if (!g_cmds[i].valid) continue;
         switch (g_cmds[i].type) {
@@ -1039,19 +1098,23 @@ static void write_func_body_range_as_c(FILE *f, int start, int end_idx) {
             for_depth--;
             fprintf(f, "%s\n", g_cmds[i].source);
             break;
-        case CMD_COMMENT:
-        case CMD_VAR_ASSIGN:
-            fprintf(f, "%s\n", g_cmds[i].source);
-            break;
         case CMD_FUNC_DEF: case CMD_FUNC_END:
             break; /* nested func defs not supported */
-        case CMD_CALL:
-            write_cmd_source_as_c(f, &g_cmds[i], 1);
-            break;
         default:
-            write_cmd_source_as_c(f, &g_cmds[i], for_depth > 0 || g_cmds[i].has_vars);
+            write_display_cmd_as_c(f, &g_cmds[i], for_depth, &tess_depth);
             break;
         }
+    }
+}
+
+/* Emit predefined variables as file-scope statics, so that user-defined
+ * functions (written above display()) can access them. display() re-assigns
+ * them on each call to refresh the values from the current slider state. */
+static void write_predef_var_globals(FILE *f) {
+    if (g_num_predef_vars <= 0) return;
+    fprintf(f, "\n/* Predefined REPL variables (file scope for func access) */\n");
+    for (int i = 0; i < g_num_predef_vars; i++) {
+        fprintf(f, "static float %s = 0.0f;\n", g_predef_vars[i].name);
     }
 }
 
@@ -2173,8 +2236,11 @@ static void save_output(const char *filename) {
     update_render_state_strings();
     for (int i = 0; g_header_pre[i]; i++) {
         if (strcmp(g_header_pre[i], "void display() {") == 0) {
-            write_func_defs_as_c(f);
+            write_predef_var_globals(f);
+            /* Tess preamble must precede func defs: func bodies may reference
+             * g_tess / TessVertex / _tv / _tn / _tc that the preamble declares. */
             if (has_tess) write_tess_preamble(f);
+            write_func_defs_as_c(f);
         }
         fprintf(f, "%s\n", g_header_pre[i]);
     }
@@ -2185,24 +2251,23 @@ static void save_output(const char *filename) {
     for (int i = 0; g_header_post[i]; i++)
         fprintf(f, "%s\n", g_header_post[i]);
     write_light_setup(f);
-    fprintf(f, "\n// Snippet start\n");
 
-    /* Always emit predefined variable declarations */
+    /* Initialize predefined variables (declared as file-scope statics above so
+     * functions can see them). Emitted BEFORE the snippet markers so the
+     * loader doesn't re-import them as user var assignments. */
     if (g_num_predef_vars > 0) {
-        fprintf(f, "  float");
-        int first = 1;
         for (int i = 0; i < g_num_predef_vars; i++) {
             if (strcmp(g_predef_vars[i].name, "t") == 0) {
-                fprintf(f, "%s %s = 0.001f * (float)glutGet(GLUT_ELAPSED_TIME)",
-                        first ? "" : ",", g_predef_vars[i].name);
+                fprintf(f, "  %s = 0.001f * (float)glutGet(GLUT_ELAPSED_TIME);\n",
+                        g_predef_vars[i].name);
             } else {
-                fprintf(f, "%s %s = %g", first ? "" : ",",
+                fprintf(f, "  %s = %g;\n",
                         g_predef_vars[i].name, g_predef_vars[i].value);
             }
-            first = 0;
         }
-        fprintf(f, ";\n");
     }
+
+    fprintf(f, "\n// Snippet start\n");
 
     /* Write g_cmds[] preserving for-loop structure; skip func defs, emit calls */
     int for_depth = 0;
@@ -2216,12 +2281,6 @@ static void save_output(const char *filename) {
             break;
         case CMD_FOR_END:
             for_depth--;
-            fprintf(f, "%s\n", g_cmds[i].source);
-            break;
-        case CMD_COMMENT:
-            fprintf(f, "%s\n", g_cmds[i].source);
-            break;
-        case CMD_VAR_ASSIGN:
             fprintf(f, "%s\n", g_cmds[i].source);
             break;
         case CMD_FUNC_DEF: {
@@ -2238,35 +2297,8 @@ static void save_output(const char *filename) {
         }
         case CMD_FUNC_END:
             break; /* shouldn't be reached due to above skip */
-        case CMD_CALL:
-            write_cmd_source_as_c(f, &g_cmds[i], 1);
-            break;
-        case CMD_TESS_BEGIN_POLYGON:
-            fprintf(f, "  { _tv_n=0; gluTessBeginPolygon(g_tess,NULL); }\n");
-            save_tess_depth = 1; break;
-        case CMD_TESS_BEGIN_CONTOUR:
-            fprintf(f, "    gluTessBeginContour(g_tess);\n");
-            save_tess_depth = 2; break;
-        case CMD_TESS_END:
-            if (save_tess_depth == 2) {
-                fprintf(f, "    gluTessEndContour(g_tess);\n"); save_tess_depth = 1;
-            } else {
-                fprintf(f, "  gluTessEndPolygon(g_tess);\n"); save_tess_depth = 0;
-            } break;
-        case CMD_TESS_NORMAL:
-            fprintf(f, "      { _tn[0]=%g; _tn[1]=%g; _tn[2]=%g; }\n",
-                    g_cmds[i].args[0], g_cmds[i].args[1], g_cmds[i].args[2]); break;
-        case CMD_TESS_COLOR:
-            fprintf(f, "      { _tc[0]=%g; _tc[1]=%g; _tc[2]=%g; _tc[3]=%g; }\n",
-                    g_cmds[i].args[0], g_cmds[i].args[1], g_cmds[i].args[2], g_cmds[i].args[3]); break;
-        case CMD_TESS_VERTEX:
-            fprintf(f, "      { TessVertex *_v=&_tv[_tv_n++];"
-                       " _v->pos[0]=%g;_v->pos[1]=%g;_v->pos[2]=%g;"
-                       " memcpy(_v->normal,_tn,24); memcpy(_v->color,_tc,32);"
-                       " gluTessVertex(g_tess,_v->pos,_v); }\n",
-                    g_cmds[i].args[0], g_cmds[i].args[1], g_cmds[i].args[2]); break;
         default:
-            write_cmd_source_as_c(f, &g_cmds[i], for_depth > 0 || g_cmds[i].has_vars);
+            write_display_cmd_as_c(f, &g_cmds[i], for_depth, &save_tess_depth);
             break;
         }
     }

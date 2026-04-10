@@ -13,7 +13,17 @@
       "Bash(ls -la /Users/drew/Documents/Work/Code/openGL/samples/gen-ai/OpenGL-Vibe/src/immediate-mode-repl/claude4.6-opus-thinking/*.c)",
       "Bash(cd:*)",
       "Bash(./test_repl_core_format)",
-      "Bash(./test_repl_core_examples)"
+      "Bash(./test_repl_core_examples)",
+      "Bash(./sample --help)",
+      "Bash(/tmp/export_stress)",
+      "Bash(./test_repl_core_io)",
+      "Bash(./sample --example stress --dump-code)",
+      "Bash(Grep -rn \"stress\" --include=\"*.c\" -l)",
+      "Read(//Users/drew/Documents/Work/Code/openGL/samples/gen-ai/include/**)",
+      "Read(//Users/drew/Documents/Work/Code/openGL/samples/gen-ai/OpenGL-Vibe/include/**)",
+      "Bash(/tmp/save_stress)",
+      "Bash(Grep -n \"init_predef_vars\\\\|main\" /Users/drew/Documents/Work/Code/openGL/samples/gen-ai/OpenGL-Vibe/src/immediate-mode-repl/claude4.6-opus-thinking/test_repl_core_io.c)",
+      "Bash(Grep -n \"repl_example\" repl_core.h)"
     ]
   }
 }
