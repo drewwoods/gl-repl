@@ -178,56 +178,56 @@ const EnumEntry g_blend_dst_factors[] = {
     { NULL, 0 }
 };
 
-const char *g_func_completions[] = {
-    "glVertex3f(",
-    "glVertex2f(",
-    "glNormal3f(",
-    "glColor3f(",
-    "glColor4f(",
-    "glBegin(",
-    "glEnd()",
-    "glEnable(",
-    "glDisable(",
-    "glShadeModel(",
-    "glPointSize(",
-    "glPointParameterfv(",
-    "glBlendFunc(",
-    "glTranslatef(",
-    "glScalef(",
-    "glRotatef(",
-    "glPushMatrix()",
-    "glPopMatrix()",
-    "glColorMaterial(",
-    "glLightModeli(",
-    "glFrontFace(",
-    "glMaterialf(",
-    "gluSphere(",
-    "gluCylinder(",
-    "gluDisk(",
-    "gluPartialDisk(",
-    "glutSolidTorus(",
-    "gluBegin(GLU_POLYGON)",
-    "gluBegin(GLU_CONTOUR)",
-    "gluEnd()",
-    "gluNormal(",
-    "gluColor(",
-    "gluVertex(",
-    "for(",
-    "if(",
-    "goto ",
-    "func0 {",
-    "func0(radius, yoff) {",
-    "func1 {",
-    "func2 {",
-    "func3 {",
-    "func0()",
-    "func1()",
-    "func2()",
-    "func3()",
-    "x = ",
-    "y = ",
-    "z = ",
-    NULL
+const FuncCompletion g_func_completions[] = {
+    { "glVertex3f(",         "glVertex3f(x, y, z)",                                      3, { "x", "y", "z" } },
+    { "glVertex2f(",         "glVertex2f(x, y)",                                         2, { "x", "y" } },
+    { "glNormal3f(",         "glNormal3f(nx, ny, nz)",                                   3, { "nx", "ny", "nz" } },
+    { "glColor3f(",          "glColor3f(r, g, b)",                                       3, { "r", "g", "b" } },
+    { "glColor4f(",          "glColor4f(r, g, b, a)",                                    4, { "r", "g", "b", "a" } },
+    { "glBegin(",            "glBegin(mode)",                                            1, { "mode" } },
+    { "glEnd()",             "glEnd()",                                                  0, { NULL } },
+    { "glEnable(",           "glEnable(cap)",                                            1, { "cap" } },
+    { "glDisable(",          "glDisable(cap)",                                           1, { "cap" } },
+    { "glShadeModel(",       "glShadeModel(mode)",                                       1, { "mode" } },
+    { "glPointSize(",        "glPointSize(size)",                                        1, { "size" } },
+    { "glPointParameterfv(", "glPointParameterfv(pname, a, b, c)",                       4, { "pname", "a", "b", "c" } },
+    { "glBlendFunc(",        "glBlendFunc(sfactor, dfactor)",                            2, { "sfactor", "dfactor" } },
+    { "glTranslatef(",       "glTranslatef(x, y, z)",                                    3, { "x", "y", "z" } },
+    { "glScalef(",           "glScalef(x, y, z)",                                        3, { "x", "y", "z" } },
+    { "glRotatef(",          "glRotatef(angle, x, y, z)",                                4, { "angle", "x", "y", "z" } },
+    { "glPushMatrix()",      "glPushMatrix()",                                           0, { NULL } },
+    { "glPopMatrix()",       "glPopMatrix()",                                            0, { NULL } },
+    { "glColorMaterial(",    "glColorMaterial(face, mode)",                              2, { "face", "mode" } },
+    { "glLightModeli(",      "glLightModeli(pname, param)",                              2, { "pname", "param" } },
+    { "glFrontFace(",        "glFrontFace(mode)",                                        1, { "mode" } },
+    { "glMaterialf(",        "glMaterialf(face, pname, value[, g, b, a])",               6, { "face", "pname", "value", "g", "b", "a" } },
+    { "gluSphere(",          "gluSphere(radius, slices, stacks)",                        3, { "radius", "slices", "stacks" } },
+    { "gluCylinder(",        "gluCylinder(base_r, top_r, height, slices, stacks)",       5, { "base_r", "top_r", "height", "slices", "stacks" } },
+    { "gluDisk(",            "gluDisk(inner_r, outer_r, slices, loops)",                 4, { "inner_r", "outer_r", "slices", "loops" } },
+    { "gluPartialDisk(",     "gluPartialDisk(inner_r, outer_r, slices, loops, start, sweep)", 6, { "inner_r", "outer_r", "slices", "loops", "start", "sweep" } },
+    { "glutSolidTorus(",     "glutSolidTorus(inner_r, outer_r, nsides, rings)",          4, { "inner_r", "outer_r", "nsides", "rings" } },
+    { "gluBegin(GLU_POLYGON)", "gluBegin(GLU_POLYGON)",                                  0, { NULL } },
+    { "gluBegin(GLU_CONTOUR)", "gluBegin(GLU_CONTOUR)",                                  0, { NULL } },
+    { "gluEnd()",            "gluEnd()",                                                 0, { NULL } },
+    { "gluNormal(",          "gluNormal(nx, ny, nz)",                                    3, { "nx", "ny", "nz" } },
+    { "gluColor(",           "gluColor(r, g, b, a)",                                     4, { "r", "g", "b", "a" } },
+    { "gluVertex(",          "gluVertex(x, y, z)",                                       3, { "x", "y", "z" } },
+    { "for(",                "for(var, start, end[, step])",                             4, { "var", "start", "end", "step" } },
+    { "if(",                 "if(expr)",                                                 1, { "expr" } },
+    { "goto ",               "goto label",                                               0, { NULL } },
+    { "func0 {",             "func0 {",                                                  0, { NULL } },
+    { "func0(radius, yoff) {", "func0(radius, yoff) {",                                  0, { NULL } },
+    { "func1 {",             "func1 {",                                                  0, { NULL } },
+    { "func2 {",             "func2 {",                                                  0, { NULL } },
+    { "func3 {",             "func3 {",                                                  0, { NULL } },
+    { "func0()",             "func0()",                                                  0, { NULL } },
+    { "func1()",             "func1()",                                                  0, { NULL } },
+    { "func2()",             "func2()",                                                  0, { NULL } },
+    { "func3()",             "func3()",                                                  0, { NULL } },
+    { "x = ",                "x = value",                                                0, { NULL } },
+    { "y = ",                "y = value",                                                0, { NULL } },
+    { "z = ",                "z = value",                                                0, { NULL } },
+    { NULL, NULL, 0, { NULL } }
 };
 
 const char *g_header_pre[] = {
@@ -681,6 +681,21 @@ const char *g_ac_matches[MAX_AC_MATCHES];
 int    g_ac_count = 0;
 int    g_ac_sel = 0;
 char   g_ac_ghost[MAX_LINE_LEN] = "";
+char   g_ac_hint[MAX_LINE_LEN] = "";
+static const char *g_ac_insert_matches[MAX_AC_MATCHES];
+static const FuncCompletion *g_ac_func_matches[MAX_AC_MATCHES];
+
+typedef enum {
+    AC_MODE_NONE = 0,
+    AC_MODE_POINT_PARAM,
+    AC_MODE_ENUM_ARG1,
+    AC_MODE_ENUM_ARG2,
+    AC_MODE_FUNC_PREFIX
+} AutocompleteMode;
+
+static AutocompleteMode g_ac_mode = AC_MODE_NONE;
+static int g_ac_token_len = 0;
+static char g_ac_suffix[8] = "";
 int    g_cursor_px = 0;     /* screen pos of cursor, set during render */
 int    g_cursor_py = 0;
 
@@ -1204,8 +1219,7 @@ static void search_open(void) {
     g_help_tab = 0;
     g_help_scroll = 0;
     g_show_config = 0;
-    g_ac_count = 0;
-    g_ac_ghost[0] = '\0';
+    clear_autocomplete_state();
 }
 
 static int handle_search_key(unsigned char key) {
@@ -3536,8 +3550,7 @@ void navigate_to_line(int target) {
     g_edit_line = target;
     g_inserting = 0;
     load_line_to_input(target);
-    g_ac_count = 0;
-    g_ac_ghost[0] = '\0';
+    clear_autocomplete_state();
 }
 
 /* ========================================================================= */
@@ -3569,10 +3582,189 @@ static const EnumCmdDef g_enum_cmds[] = {
     { NULL, 0, 0, NULL, NULL, NULL, NULL, NULL, 0 }
 };
 
-static void update_autocomplete(void) {
-    g_ac_count = 0;
-    g_ac_sel = 0;
+static void hint_append(char *out, int out_sz, const char *text) {
+    int len = (int)strlen(out);
+    if (len >= out_sz - 1)
+        return;
+    snprintf(out + len, (size_t)(out_sz - len), "%s", text);
+}
+
+static void build_param_hint_text(const char *const *params, int param_count,
+                                  const char *after, char *out, int out_sz) {
+    int arg_index = 0;
+    int arg_has_text = 0;
+    int depth = 0;
+
+    out[0] = '\0';
+    if (!after || !params || param_count <= 0)
+        return;
+
+    for (const char *p = after; *p; p++) {
+        unsigned char ch = (unsigned char)*p;
+
+        if (depth == 0 && ch == ')')
+            return;
+        if (depth == 0 && ch == ',') {
+            arg_index++;
+            arg_has_text = 0;
+            continue;
+        }
+
+        if (ch == '(') depth++;
+        else if (ch == ')' && depth > 0) depth--;
+
+        if (!isspace(ch))
+            arg_has_text = 1;
+    }
+
+    if (arg_index < 0 || arg_index > param_count)
+        return;
+
+    int next_param = arg_has_text ? arg_index + 1 : arg_index;
+    if (next_param < 0 || next_param > param_count)
+        return;
+
+    if (next_param == param_count) {
+        if (arg_has_text)
+            snprintf(out, (size_t)out_sz, ")");
+        return;
+    }
+
+    if (arg_has_text)
+        hint_append(out, out_sz, ", ");
+
+    for (int i = next_param; i < param_count; i++) {
+        if (i > next_param)
+            hint_append(out, out_sz, ", ");
+        hint_append(out, out_sz, params[i]);
+    }
+    hint_append(out, out_sz, ")");
+}
+
+static const FuncCompletion *find_builtin_completion_for_input(const char *input,
+                                                               const char **after_out) {
+    for (int i = 0; g_func_completions[i].insert_text; i++) {
+        int plen = (int)strlen(g_func_completions[i].insert_text);
+        if (g_func_completions[i].param_count <= 0)
+            continue;
+        if (strncmp(input, g_func_completions[i].insert_text, (size_t)plen) == 0) {
+            if (after_out)
+                *after_out = input + plen;
+            return &g_func_completions[i];
+        }
+    }
+    return NULL;
+}
+
+static int find_defined_func_call_params(const char *input, const char **after_out,
+                                         const char *params_out[MAX_EXPR_VARS],
+                                         int *count_out,
+                                         char param_storage[MAX_EXPR_VARS][16]) {
+    const char *p = input;
+    int fn = 0;
+
+    if (strncmp(p, "func", 4) != 0)
+        return 0;
+    p += 4;
+    if (!isdigit((unsigned char)*p))
+        return 0;
+
+    while (isdigit((unsigned char)*p)) {
+        fn = fn * 10 + (*p - '0');
+        p++;
+    }
+    if (*p != '(')
+        return 0;
+
+    if (after_out)
+        *after_out = p + 1;
+
+    for (int i = 0; i < g_num_cmds; i++) {
+        int parsed_fn = -1;
+        int param_count = 0;
+        if (!g_cmds[i].valid || g_cmds[i].type != CMD_FUNC_DEF)
+            continue;
+        if ((int)g_cmds[i].args[0] != fn)
+            continue;
+        if (!parse_repl_func_signature(g_cmds[i].source, &parsed_fn,
+                                       param_storage, MAX_EXPR_VARS,
+                                       &param_count))
+            continue;
+        if (parsed_fn != fn || param_count <= 0)
+            continue;
+        for (int j = 0; j < param_count; j++)
+            params_out[j] = param_storage[j];
+        if (count_out)
+            *count_out = param_count;
+        return 1;
+    }
+
+    return 0;
+}
+
+static void update_input_param_hint(void) {
+    const char *after = NULL;
+    const FuncCompletion *builtin = find_builtin_completion_for_input(g_input, &after);
+    if (builtin) {
+        build_param_hint_text(builtin->params, builtin->param_count,
+                              after, g_ac_hint, (int)sizeof(g_ac_hint));
+        return;
+    }
+
+    {
+        const char *params[MAX_EXPR_VARS];
+        char param_storage[MAX_EXPR_VARS][16];
+        int param_count = 0;
+
+        if (find_defined_func_call_params(g_input, &after, params,
+                                          &param_count, param_storage)) {
+            build_param_hint_text(params, param_count, after,
+                                  g_ac_hint, (int)sizeof(g_ac_hint));
+        }
+    }
+}
+
+static void update_selected_autocomplete_preview(void) {
     g_ac_ghost[0] = '\0';
+    g_ac_hint[0] = '\0';
+
+    if (g_ac_count <= 0 || !g_ac_insert_matches[g_ac_sel])
+        return;
+
+    if (g_ac_mode == AC_MODE_FUNC_PREFIX) {
+        const char *after = NULL;
+        const char *params[MAX_EXPR_VARS];
+        char param_storage[MAX_EXPR_VARS][16];
+        int param_count = 0;
+
+        snprintf(g_ac_ghost, sizeof(g_ac_ghost), "%s",
+                 g_ac_insert_matches[g_ac_sel] + g_input_len);
+        if (g_ac_func_matches[g_ac_sel] && g_ac_func_matches[g_ac_sel]->param_count > 0) {
+            build_param_hint_text(g_ac_func_matches[g_ac_sel]->params,
+                                  g_ac_func_matches[g_ac_sel]->param_count,
+                                  "", g_ac_hint, (int)sizeof(g_ac_hint));
+        } else if (find_defined_func_call_params(g_input, &after, params,
+                                                 &param_count, param_storage)) {
+            g_ac_ghost[0] = '\0';
+            build_param_hint_text(params, param_count, after,
+                                  g_ac_hint, (int)sizeof(g_ac_hint));
+        }
+        return;
+    }
+
+    if (g_ac_mode == AC_MODE_POINT_PARAM ||
+        g_ac_mode == AC_MODE_ENUM_ARG1 ||
+        g_ac_mode == AC_MODE_ENUM_ARG2) {
+        snprintf(g_ac_ghost, sizeof(g_ac_ghost), "%s%s",
+                 g_ac_insert_matches[g_ac_sel] + g_ac_token_len, g_ac_suffix);
+    }
+}
+
+static void update_autocomplete(void) {
+    clear_autocomplete_state();
+    g_ac_mode = AC_MODE_NONE;
+    g_ac_token_len = 0;
+    g_ac_suffix[0] = '\0';
 
     if (g_input_len == 0) return;
 
@@ -3590,11 +3782,17 @@ static void update_autocomplete(void) {
             for (int j = 0; g_point_param_pnames[j].name && g_ac_count < MAX_AC_MATCHES; j++) {
                 if (strncmp(g_point_param_pnames[j].name, after, alen) == 0 &&
                     (int)strlen(g_point_param_pnames[j].name) > alen) {
-                    g_ac_matches[g_ac_count++] = g_point_param_pnames[j].name;
+                    g_ac_matches[g_ac_count] = g_point_param_pnames[j].name;
+                    g_ac_insert_matches[g_ac_count] = g_point_param_pnames[j].name;
+                    g_ac_func_matches[g_ac_count] = NULL;
+                    g_ac_count++;
                 }
             }
             if (g_ac_count > 0) {
-                snprintf(g_ac_ghost, sizeof(g_ac_ghost), "%s, ", g_ac_matches[0] + alen);
+                g_ac_mode = AC_MODE_POINT_PARAM;
+                g_ac_token_len = alen;
+                snprintf(g_ac_suffix, sizeof(g_ac_suffix), ", ");
+                update_selected_autocomplete_preview();
                 return;
             }
         }
@@ -3616,15 +3814,20 @@ static void update_autocomplete(void) {
                 for (int j = 0; g_enum_cmds[i].enums1 && g_enum_cmds[i].enums1[j].name && g_ac_count < MAX_AC_MATCHES; j++) {
                     if (strncmp(g_enum_cmds[i].enums1[j].name, after, alen) == 0 &&
                         (int)strlen(g_enum_cmds[i].enums1[j].name) > alen) {
-                        g_ac_matches[g_ac_count++] = g_enum_cmds[i].enums1[j].name;
+                        g_ac_matches[g_ac_count] = g_enum_cmds[i].enums1[j].name;
+                        g_ac_insert_matches[g_ac_count] = g_enum_cmds[i].enums1[j].name;
+                        g_ac_func_matches[g_ac_count] = NULL;
+                        g_ac_count++;
                     }
                 }
                 if (g_ac_count > 0) {
-                    if (abs(g_enum_cmds[i].num_args) == 1) {
-                        snprintf(g_ac_ghost, sizeof(g_ac_ghost), "%s)", g_ac_matches[0] + alen);
-                    } else if (abs(g_enum_cmds[i].num_args) == 2) {
-                        snprintf(g_ac_ghost, sizeof(g_ac_ghost), "%s, ", g_ac_matches[0] + alen);
-                    }
+                    g_ac_mode = AC_MODE_ENUM_ARG1;
+                    g_ac_token_len = alen;
+                    if (abs(g_enum_cmds[i].num_args) == 1)
+                        snprintf(g_ac_suffix, sizeof(g_ac_suffix), ")");
+                    else if (abs(g_enum_cmds[i].num_args) == 2)
+                        snprintf(g_ac_suffix, sizeof(g_ac_suffix), ", ");
+                    update_selected_autocomplete_preview();
                 }
                 return;
             } else {
@@ -3637,11 +3840,17 @@ static void update_autocomplete(void) {
                     for (int j = 0; g_enum_cmds[i].enums2[j].name && g_ac_count < MAX_AC_MATCHES; j++) {
                         if (strncmp(g_enum_cmds[i].enums2[j].name, arg2, arg2_len) == 0 &&
                             (int)strlen(g_enum_cmds[i].enums2[j].name) > arg2_len) {
-                            g_ac_matches[g_ac_count++] = g_enum_cmds[i].enums2[j].name;
+                            g_ac_matches[g_ac_count] = g_enum_cmds[i].enums2[j].name;
+                            g_ac_insert_matches[g_ac_count] = g_enum_cmds[i].enums2[j].name;
+                            g_ac_func_matches[g_ac_count] = NULL;
+                            g_ac_count++;
                         }
                     }
                     if (g_ac_count > 0) {
-                        snprintf(g_ac_ghost, sizeof(g_ac_ghost), "%s)", g_ac_matches[0] + arg2_len);
+                        g_ac_mode = AC_MODE_ENUM_ARG2;
+                        g_ac_token_len = arg2_len;
+                        snprintf(g_ac_suffix, sizeof(g_ac_suffix), ")");
+                        update_selected_autocomplete_preview();
                     }
                     return;
                 }
@@ -3650,16 +3859,22 @@ static void update_autocomplete(void) {
     }
 
     /* Complete function names */
-    for (int i = 0; g_func_completions[i] && g_ac_count < MAX_AC_MATCHES; i++) {
-        if (strncmp(g_func_completions[i], g_input, g_input_len) == 0 &&
-            (int)strlen(g_func_completions[i]) > g_input_len) {
-            g_ac_matches[g_ac_count++] = g_func_completions[i];
+    for (int i = 0; g_func_completions[i].insert_text && g_ac_count < MAX_AC_MATCHES; i++) {
+        if (strncmp(g_func_completions[i].insert_text, g_input, (size_t)g_input_len) == 0 &&
+            (int)strlen(g_func_completions[i].insert_text) > g_input_len) {
+            g_ac_matches[g_ac_count] = g_func_completions[i].display_text;
+            g_ac_insert_matches[g_ac_count] = g_func_completions[i].insert_text;
+            g_ac_func_matches[g_ac_count] = &g_func_completions[i];
+            g_ac_count++;
         }
     }
     if (g_ac_count > 0) {
-        const char *m = g_ac_matches[0];
-        snprintf(g_ac_ghost, sizeof(g_ac_ghost), "%s", m + g_input_len);
+        g_ac_mode = AC_MODE_FUNC_PREFIX;
+        update_selected_autocomplete_preview();
+        return;
     }
+
+    update_input_param_hint();
 }
 
 static void accept_autocomplete(void) {
@@ -3671,8 +3886,10 @@ static void accept_autocomplete(void) {
         g_input_len += ghost_len;
         g_cursor_pos = g_input_len;
     }
-    g_ac_count = 0;
-    g_ac_ghost[0] = '\0';
+    clear_autocomplete_state();
+    g_ac_mode = AC_MODE_NONE;
+    g_ac_token_len = 0;
+    g_ac_suffix[0] = '\0';
 }
 
 /* ========================================================================= */
@@ -6206,8 +6423,7 @@ static int try_commit_for_loop(void) {
             g_input[0] = '\0';
             g_input_len = 0;
             g_cursor_pos = 0;
-            g_ac_count = 0;
-            g_ac_ghost[0] = '\0';
+            clear_autocomplete_state();
             set_status("for-loop header updated");
             mark_normals_dirty();
             return 1;
@@ -6338,7 +6554,7 @@ static int try_commit_func_def(void) {
         g_edit_line++;
         g_inserting = 1;
         g_input[0] = '\0'; g_input_len = 0; g_cursor_pos = 0;
-        g_ac_count = 0; g_ac_ghost[0] = '\0';
+        clear_autocomplete_state();
         set_status("func def header updated");
         mark_normals_dirty();
         return 1;
@@ -6462,7 +6678,7 @@ static int try_commit_if_block(void) {
         g_edit_line++;
         g_inserting = 1;
         g_input[0] = '\0'; g_input_len = 0; g_cursor_pos = 0;
-        g_ac_count = 0; g_ac_ghost[0] = '\0';
+        clear_autocomplete_state();
         set_status("if condition updated");
         mark_normals_dirty();
         return 1;
@@ -6671,8 +6887,7 @@ static void keyboard_func(unsigned char key, int x, int y) {
             g_help_scroll = 0;
         } else if (g_ac_count > 0) {
             /* Dismiss autocomplete */
-            g_ac_count = 0;
-            g_ac_ghost[0] = '\0';
+            clear_autocomplete_state();
         } else if (g_inserting) {
             /* Exit insert mode */
             g_inserting = 0;
@@ -7048,8 +7263,7 @@ static void keyboard_func(unsigned char key, int x, int y) {
                 g_input[0] = '\0';
                 g_input_len = 0;
                 g_cursor_pos = 0;
-                g_ac_count = 0;
-                g_ac_ghost[0] = '\0';
+                clear_autocomplete_state();
                 set_status("Insert mode");
                 mark_normals_dirty();
                 return;
@@ -7061,29 +7275,25 @@ static void keyboard_func(unsigned char key, int x, int y) {
         /* Check for } closing a block (only for insert/new-line, not existing lines) */
         if ((g_inserting || g_edit_line >= g_num_cmds) &&
             g_input_len > 0 && try_commit_close_brace()) {
-            g_ac_count = 0;
-            g_ac_ghost[0] = '\0';
+            clear_autocomplete_state();
             return;
         }
         /* Check for for-loop (only for insert/new-line, not existing lines) */
         if ((g_inserting || g_edit_line >= g_num_cmds) &&
             g_input_len > 0 && try_commit_for_loop()) {
-            g_ac_count = 0;
-            g_ac_ghost[0] = '\0';
+            clear_autocomplete_state();
             return;
         }
         /* Check for func def (only for insert/new-line, not existing lines) */
         if ((g_inserting || g_edit_line >= g_num_cmds) &&
             g_input_len > 0 && try_commit_func_def()) {
-            g_ac_count = 0;
-            g_ac_ghost[0] = '\0';
+            clear_autocomplete_state();
             return;
         }
         /* Check for if-block (only for insert/new-line, not existing lines) */
         if ((g_inserting || g_edit_line >= g_num_cmds) &&
             g_input_len > 0 && try_commit_if_block()) {
-            g_ac_count = 0;
-            g_ac_ghost[0] = '\0';
+            clear_autocomplete_state();
             return;
         }
         if (g_inserting) {
@@ -7200,8 +7410,7 @@ static void keyboard_func(unsigned char key, int x, int y) {
                         g_input[0] = '\0';
                         g_input_len = 0;
                         g_cursor_pos = 0;
-                        g_ac_count = 0;
-                        g_ac_ghost[0] = '\0';
+                        clear_autocomplete_state();
                         set_status("Insert mode");
                         mark_normals_dirty();
                         return;
@@ -7310,8 +7519,7 @@ static void keyboard_func(unsigned char key, int x, int y) {
                 }
             }
         }
-        g_ac_count = 0;
-        g_ac_ghost[0] = '\0';
+        clear_autocomplete_state();
         mark_normals_dirty();
         return;
     }
@@ -7322,32 +7530,27 @@ static void keyboard_func(unsigned char key, int x, int y) {
             push_undo_snapshot();
             /* Check for variable assignment (x = expr) */
             if (try_assign_variable()) {
-                g_ac_count = 0;
-                g_ac_ghost[0] = '\0';
+                clear_autocomplete_state();
                 return;
             }
             /* Check for } closing a loop block */
             if (try_commit_close_brace()) {
-                g_ac_count = 0;
-                g_ac_ghost[0] = '\0';
+                clear_autocomplete_state();
                 return;
             }
             /* Check for for-loop */
             if (try_commit_for_loop()) {
-                g_ac_count = 0;
-                g_ac_ghost[0] = '\0';
+                clear_autocomplete_state();
                 return;
             }
             /* Check for func def */
             if (try_commit_func_def()) {
-                g_ac_count = 0;
-                g_ac_ghost[0] = '\0';
+                clear_autocomplete_state();
                 return;
             }
             /* Check for if-block */
             if (try_commit_if_block()) {
-                g_ac_count = 0;
-                g_ac_ghost[0] = '\0';
+                clear_autocomplete_state();
                 return;
             }
             GLCmd cmd;
@@ -7405,8 +7608,7 @@ static void keyboard_func(unsigned char key, int x, int y) {
             }
             /* On parse failure, leave input for the user to fix */
         }
-        g_ac_count = 0;
-        g_ac_ghost[0] = '\0';
+        clear_autocomplete_state();
         mark_normals_dirty();
         return;
     }
@@ -7487,17 +7689,7 @@ static void special_func(int key, int x, int y) {
         if (g_ac_count > 1) {
             /* Navigate autocomplete popup */
             g_ac_sel = (g_ac_sel - 1 + g_ac_count) % g_ac_count;
-            /* Update ghost to selected match */
-            const char *m = g_ac_matches[g_ac_sel];
-            /* Find the prefix length inside parentheses for enum completions */
-            char *paren = strchr(g_input, '(');
-            if (paren && (int)(paren - g_input + 1) < g_input_len) {
-                int alen = g_input_len - (int)(paren - g_input + 1);
-                snprintf(g_ac_ghost, sizeof(g_ac_ghost), "%s)", m + alen);
-            } else {
-                snprintf(g_ac_ghost, sizeof(g_ac_ghost), "%s",
-                         m + g_input_len);
-            }
+            update_selected_autocomplete_preview();
         } else if (glutGetModifiers() & GLUT_ACTIVE_SHIFT) {
             /* Shift+Up: extend selection */
             if (!sel_active()) {
@@ -7519,15 +7711,7 @@ static void special_func(int key, int x, int y) {
         }
         if (g_ac_count > 1) {
             g_ac_sel = (g_ac_sel + 1) % g_ac_count;
-            const char *m2 = g_ac_matches[g_ac_sel];
-            char *paren2 = strchr(g_input, '(');
-            if (paren2 && (int)(paren2 - g_input + 1) < g_input_len) {
-                int alen = g_input_len - (int)(paren2 - g_input + 1);
-                snprintf(g_ac_ghost, sizeof(g_ac_ghost), "%s)", m2 + alen);
-            } else {
-                snprintf(g_ac_ghost, sizeof(g_ac_ghost), "%s",
-                         m2 + g_input_len);
-            }
+            update_selected_autocomplete_preview();
         } else if (glutGetModifiers() & GLUT_ACTIVE_SHIFT) {
             /* Shift+Down: extend selection */
             if (!sel_active()) {
@@ -8231,9 +8415,7 @@ void repl_reset_state(void) {
     g_panel_frac = 0.42f;
     g_flat_dirty = 1;
     g_normals_dirty = 1;
-    g_ac_count = 0;
-    g_ac_sel = 0;
-    g_ac_ghost[0] = '\0';
+    clear_autocomplete_state();
     search_clear_all();
     update_render_state_strings();
     depth_cache_invalidate();

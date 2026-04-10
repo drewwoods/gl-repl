@@ -882,12 +882,22 @@ static void render_active_input_rows(int panel_w, int text_x, int idx_x,
 
             if (wrap_row == cursor_row) {
                 int cursor_x = wrap_x + cursor_col * FONT_W;
+                int hint_x = cursor_x;
 
                 if (g_ac_ghost[0] && g_cursor_pos == g_input_len) {
                     glEnable(GL_BLEND);
                     glColor4f(0.50f, 0.55f, 0.65f, 0.55f);
                     draw_string((float)cursor_x, (float)(*io_line_y),
                                 g_ac_ghost, FONT_MONO);
+                    glDisable(GL_BLEND);
+                    hint_x += (int)strlen(g_ac_ghost) * FONT_W;
+                }
+
+                if (g_ac_hint[0] && g_cursor_pos == g_input_len) {
+                    glEnable(GL_BLEND);
+                    glColor4f(0.56f, 0.62f, 0.72f, 0.38f);
+                    draw_string((float)hint_x, (float)(*io_line_y),
+                                g_ac_hint, FONT_MONO);
                     glDisable(GL_BLEND);
                 }
 
@@ -2256,8 +2266,7 @@ void handle_code_panel_click(int mx, int my) {
 
     g_cursor_on = 1;
     g_blink_tick = 0;
-    g_ac_count = 0;
-    g_ac_ghost[0] = '\0';
+    clear_autocomplete_state();
     clear_selection();
 }
 
