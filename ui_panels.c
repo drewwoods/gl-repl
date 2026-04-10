@@ -604,9 +604,168 @@ static int code_panel_target_for_doc_line(int doc_line, int panel_w, int text_x,
     return 0;
 }
 
+static void code_panel_draw_search_highlights(const char *text, int search_row_idx,
+                                              int seg_start, int seg_len,
+                                              int seg_x, int y) {
+    int drew = 0;
+
+    if (!g_search_active || g_search_query_len <= 0 || search_row_idx < 0 ||
+        !text || seg_len <= 0)
+        return;
+
+    for (int pos = repl_search_find_next_in_text(text, g_search_query, 0);
+         pos >= 0;
+         pos = repl_search_find_next_in_text(text, g_search_query, pos + 1)) {
+        int match_end = pos + g_search_query_len;
+        int seg_end = seg_start + seg_len;
+        int draw_start = pos > seg_start ? pos : seg_start;
+        int draw_end = match_end < seg_end ? match_end : seg_end;
+
+        if (draw_start >= draw_end)
+            continue;
+
+        if (!drew) {
+            glEnable(GL_BLEND);
+            glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+            drew = 1;
+        }
+
+        if (search_row_idx == g_search_hit_line && pos == g_search_hit_char)
+            glColor4f(0.95f, 0.65f, 0.18f, 0.55f);
+        else
+            glColor4f(0.25f, 0.45f, 0.85f, 0.30f);
+
+        draw_quad((float)(seg_x + (draw_start - seg_start) * FONT_W),
+                  (float)(y - 2),
+                  (float)((draw_end - draw_start) * FONT_W),
+                  (float)(FONT_H + 4));
+    }
+
+    if (drew)
+        glDisable(GL_BLEND);
+}
+
+static void code_panel_format_search_query(char *out, int out_sz,
+                                           int max_chars,
+                                           int *out_cursor_col) {
+    int start = 0;
+    int take = 0;
+
+    if (out_sz <= 0)
+        return;
+
+    out[0] = '\0';
+    if (out_cursor_col)
+        *out_cursor_col = 0;
+
+    if (max_chars <= 0 || g_search_query_len <= 0)
+        return;
+
+    if (g_search_query_len > max_chars) {
+        start = g_search_cursor_pos - max_chars + 1;
+        if (start < 0)
+            start = 0;
+        if (start > g_search_query_len - max_chars)
+            start = g_search_query_len - max_chars;
+    }
+
+    take = g_search_query_len - start;
+    if (take > max_chars)
+        take = max_chars;
+    if (take >= out_sz)
+        take = out_sz - 1;
+    if (take < 0)
+        take = 0;
+
+    if (take > 0)
+        memcpy(out, g_search_query + start, (size_t)take);
+    out[take] = '\0';
+
+    if (out_cursor_col) {
+        int col = g_search_cursor_pos - start;
+        if (col < 0)
+            col = 0;
+        if (col > take)
+            col = take;
+        *out_cursor_col = col;
+    }
+}
+
+static void render_code_panel_search_overlay(int cp_x, int panel_w, int panel_top) {
+    char count_buf[32];
+    char query_buf[128];
+    int pad_x = 8;
+    int box_h = LINE_H + 8;
+    int box_w;
+    int box_x;
+    int box_y;
+    int count_w;
+    int label_w = 8 * FONT_W;
+    int max_query_chars;
+    int cursor_col = 0;
+    int text_y;
+    int count_x;
+    int query_x;
+
+    if (!g_search_active)
+        return;
+
+    if (g_search_query_len <= 0)
+        snprintf(count_buf, sizeof(count_buf), "type");
+    else if (g_search_match_count <= 0)
+        snprintf(count_buf, sizeof(count_buf), "0 matches");
+    else
+        snprintf(count_buf, sizeof(count_buf), "%d/%d",
+                 g_search_hit_ordinal, g_search_match_count);
+
+    box_w = panel_w / 2;
+    if (box_w < 220) box_w = 220;
+    if (box_w > panel_w - 20) box_w = panel_w - 20;
+    if (box_w < 120) box_w = panel_w - 8;
+
+    box_x = cp_x + panel_w - box_w - 8;
+    box_y = panel_top - CODE_MARGIN_Y - box_h + 2;
+    text_y = box_y + 6;
+    count_w = (int)strlen(count_buf) * FONT_W;
+    count_x = box_x + box_w - pad_x - count_w;
+    query_x = box_x + pad_x + label_w;
+    max_query_chars = (count_x - query_x - pad_x) / FONT_W;
+    code_panel_format_search_query(query_buf, sizeof(query_buf),
+                                   max_query_chars, &cursor_col);
+
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    glColor4f(0.08f, 0.09f, 0.16f, 0.94f);
+    draw_quad((float)box_x, (float)box_y, (float)box_w, (float)box_h);
+    glColor4f(0.48f, 0.56f, 0.82f, 0.85f);
+    glBegin(GL_LINE_LOOP);
+    glVertex2f((float)box_x, (float)box_y);
+    glVertex2f((float)(box_x + box_w), (float)box_y);
+    glVertex2f((float)(box_x + box_w), (float)(box_y + box_h));
+    glVertex2f((float)box_x, (float)(box_y + box_h));
+    glEnd();
+
+    glColor3f(0.62f, 0.70f, 0.88f);
+    draw_string((float)(box_x + pad_x), (float)text_y, "Search:", FONT_MONO);
+    glColor3f(0.96f, 0.96f, 0.92f);
+    draw_string((float)query_x, (float)text_y, query_buf, FONT_MONO);
+    glColor3f(0.62f, 0.70f, 0.88f);
+    draw_string((float)count_x, (float)text_y, count_buf, FONT_MONO);
+
+    if (g_cursor_on) {
+        int cursor_x = query_x + cursor_col * FONT_W;
+        glColor4f(0.95f, 0.80f, 0.24f, 0.85f);
+        draw_quad((float)cursor_x, (float)(text_y - 2), 2.0f,
+                  (float)(FONT_H + 2));
+    }
+
+    glDisable(GL_BLEND);
+}
+
 static void render_active_input_rows(int panel_w, int text_x, int idx_x,
                                      int visible_lines, int file_line,
                                      int indent_chars, const char *idx_text,
+                                     int search_row_idx,
                                      int *io_cur, int *io_line_y) {
     CodeWrapIter wrap_it;
     int wrap_row = 0;
@@ -653,6 +812,9 @@ static void render_active_input_rows(int panel_w, int text_x, int idx_x,
             }
 
             glColor3f(0.95f, 0.95f, 0.90f);
+            code_panel_draw_search_highlights(g_input, search_row_idx,
+                                              wrap_start, wrap_len,
+                                              wrap_x, *io_line_y);
             code_panel_draw_segment(wrap_x, *io_line_y, g_input,
                                     wrap_start, wrap_len, FONT_MONO);
 
@@ -667,7 +829,7 @@ static void render_active_input_rows(int panel_w, int text_x, int idx_x,
                     glDisable(GL_BLEND);
                 }
 
-                if (g_cursor_on) {
+                if (g_cursor_on && !g_search_active) {
                     glEnable(GL_BLEND);
                     glColor4f(0.90f, 0.80f, 0.25f, 0.85f);
                     draw_quad((float)cursor_x, (float)(*io_line_y - 2),
@@ -839,6 +1001,8 @@ void render_code_panel(void) {
                     FONT_SMALL);
     }
 
+    render_code_panel_search_overlay(cp_x, panel_w, panel_top);
+
     /* Code lines */
     int line_y = panel_top - CODE_MARGIN_Y - LINE_H - LINE_H;
     int cur = 0;
@@ -898,6 +1062,7 @@ void render_code_panel(void) {
                         render_active_input_rows(panel_w, text_x, idx_x,
                                                                          visible_lines, file_line,
                                                                          cmd_indent_chars(i), NULL,
+                                                                         g_edit_line,
                                                                          &cur, &line_y);
             file_line++;
         }
@@ -931,6 +1096,7 @@ void render_code_panel(void) {
                 render_active_input_rows(panel_w, text_x, idx_x,
                                          visible_lines, file_line,
                                          cmd_indent_chars(i), idx_text,
+                                         g_edit_line,
                                          &cur, &line_y);
                 file_line++;
             } else {
@@ -938,6 +1104,7 @@ void render_code_panel(void) {
                 CodeWrapIter wrap_it;
                 int wrap_row = 0;
                 int wrap_start, wrap_len, wrap_x;
+                int search_row_idx = repl_search_row_for_cmd_index(i);
                 code_wrap_iter_init(&wrap_it, g_cmds[i].source, text_x, panel_w);
                 while (code_wrap_iter_next(&wrap_it, &wrap_start, &wrap_len, &wrap_x)) {
                     if (cur >= g_scroll && cur < g_scroll + visible_lines) {
@@ -984,6 +1151,10 @@ void render_code_panel(void) {
                             }
                         }
                         color_for_type(g_cmds[i].type);
+                        code_panel_draw_search_highlights(g_cmds[i].source,
+                                                          search_row_idx,
+                                                          wrap_start, wrap_len,
+                                                          wrap_x, line_y);
                         code_panel_draw_segment(wrap_x, line_y, g_cmds[i].source,
                                                 wrap_start, wrap_len, FONT_MONO);
                         line_y -= LINE_H;
@@ -1087,6 +1258,7 @@ void render_code_panel(void) {
                 render_active_input_rows(panel_w, text_x, idx_x,
                                          visible_lines, file_line,
                                          cmd_indent_chars(g_num_cmds), NULL,
+                                         g_edit_line,
                                          &cur, &line_y);
             } else {
                 if (cur >= g_scroll && cur < g_scroll + visible_lines) {
@@ -1333,6 +1505,7 @@ void render_help(void) {
         "  Ctrl+Y               \tRedo",
         "",
         "Buffer Operations:",
+        "  Ctrl+F               \tSearch source buffer",
         "  Ctrl+D               \tDelete line at cursor",
         "  Ctrl+L               \tClear all commands",
         "  Ctrl+R               \tReformat buffer",
