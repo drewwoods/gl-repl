@@ -27,6 +27,45 @@ static size_t read_text_file(const char *path, char *buf, size_t buf_sz) {
     return nread;
 }
 
+static int count_substr(const char *haystack, const char *needle) {
+    int count = 0;
+    size_t needle_len;
+    const char *p;
+
+    if (!haystack || !needle || !needle[0])
+        return 0;
+
+    needle_len = strlen(needle);
+    p = haystack;
+    while ((p = strstr(p, needle)) != NULL) {
+        count++;
+        p += needle_len;
+    }
+    return count;
+}
+
+static int find_init_line(const char *needle) {
+    char line[256];
+
+    for (int i = 0; i < init_section_line_count(); i++) {
+        init_section_line(i, line, sizeof(line));
+        if (strcmp(line, needle) == 0)
+            return i;
+    }
+    return -1;
+}
+
+static int find_init_line_substr(const char *needle) {
+    char line[256];
+
+    for (int i = 0; i < init_section_line_count(); i++) {
+        init_section_line(i, line, sizeof(line));
+        if (strstr(line, needle) != NULL)
+            return i;
+    }
+    return -1;
+}
+
 int main(void) {
     const char *path = "/tmp/repl_core_roundtrip_output.c";
     const char *func_path = "/tmp/repl_core_func_output.c";
@@ -44,6 +83,18 @@ int main(void) {
     repl_feed_line_public("glEnd();");
 
     ASSERT_TRUE("pre-save cmds", g_num_cmds > 0);
+    ASSERT_TRUE("init has host-only ambient line",
+                find_init_line("  glLightModelfv(GL_LIGHT_MODEL_AMBIENT, lm_amb);") >= 0);
+    ASSERT_TRUE("init has quadric texture line",
+                find_init_line("  gluQuadricTexture(g_quadric, GL_FALSE);") >= 0);
+    ASSERT_TRUE("init has tess init line",
+                find_init_line("  g_tess = gluNewTess();") >= 0);
+    ASSERT_TRUE("init has color material bootstrap",
+                find_init_line_substr("glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE);") >= 0);
+    ASSERT_TRUE("init has two-side bootstrap",
+                find_init_line_substr("glLightModeli(GL_LIGHT_MODEL_TWO_SIDE, GL_TRUE);") >= 0);
+    ASSERT_TRUE("init has point attenuation bootstrap",
+                find_init_line_substr("glPointParameterfv(GL_POINT_DISTANCE_ATTENUATION") >= 0);
 
     int before_n = g_num_cmds;
     CmdType before_types[MAX_COMMANDS];
@@ -73,7 +124,31 @@ int main(void) {
                     strstr(buf, "render_repl_outline_overlay") == NULL);
         ASSERT_TRUE("saved vertex points helper omitted when disabled",
                     strstr(buf, "render_repl_vertex_points_overlay") == NULL);
+        ASSERT_TRUE("saved init ambient model line",
+                    strstr(buf, "glLightModelfv(GL_LIGHT_MODEL_AMBIENT, lm_amb);") != NULL);
+        ASSERT_TRUE("saved init quadric texture line",
+                    strstr(buf, "gluQuadricTexture(g_quadric, GL_FALSE);") != NULL);
+        ASSERT_TRUE("saved init tess setup line",
+                    strstr(buf, "g_tess = gluNewTess();") != NULL);
+        ASSERT_TRUE("saved init color material line once",
+                    count_substr(buf, "glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE);") == 1);
+        ASSERT_TRUE("saved init light model line once",
+                    count_substr(buf, "glLightModeli(GL_LIGHT_MODEL_TWO_SIDE, GL_TRUE);") == 1);
+        ASSERT_TRUE("saved init point attenuation line once",
+                    count_substr(buf, "glPointParameterfv(GL_POINT_DISTANCE_ATTENUATION") == 1);
     }
+
+    g_init_attenuate_points = 0;
+    ASSERT_TRUE("init hides point attenuation when disabled",
+                find_init_line_substr("glPointParameterfv(GL_POINT_DISTANCE_ATTENUATION") < 0);
+    repl_save_output(path);
+    {
+        char buf[16384];
+        read_text_file(path, buf, sizeof(buf));
+        ASSERT_TRUE("saved init omits point attenuation when disabled",
+                    strstr(buf, "glPointParameterfv(GL_POINT_DISTANCE_ATTENUATION") == NULL);
+    }
+    g_init_attenuate_points = 1;
 
     repl_reset_state();
     ASSERT_TRUE("load saved output", repl_load_from_file(path) == 1);

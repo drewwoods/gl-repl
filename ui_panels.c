@@ -563,9 +563,16 @@ static int example_dropdown_item_hit(int gx, int gy) {
 
 static int code_panel_footer_row_count(int panel_w, int text_x) {
     int rows = 0;
+    char line[MAX_LINE_LEN];
 
-    for (int i = 0; g_footer[i]; i++)
-        rows += code_panel_row_count_for_text(g_footer[i], text_x, panel_w);
+    for (int i = 0; g_footer_pre_init[i]; i++)
+        rows += code_panel_row_count_for_text(g_footer_pre_init[i], text_x, panel_w);
+    for (int i = 0; i < init_section_line_count(); i++) {
+        init_section_line(i, line, sizeof(line));
+        rows += code_panel_row_count_for_text(line, text_x, panel_w);
+    }
+    for (int i = 0; g_footer_post_init[i]; i++)
+        rows += code_panel_row_count_for_text(g_footer_post_init[i], text_x, panel_w);
 
     return rows;
 }
@@ -1382,8 +1389,16 @@ void render_code_panel(void) {
     }
 
     /* Footer (dimmed) */
-    for (int i = 0; g_footer[i]; i++) {
-        RENDER_STATIC_LINE(g_footer[i], glColor3f(0.38f, 0.38f, 0.42f));
+    for (int i = 0; g_footer_pre_init[i]; i++) {
+        RENDER_STATIC_LINE(g_footer_pre_init[i], glColor3f(0.38f, 0.38f, 0.42f));
+    }
+    for (int i = 0; i < init_section_line_count(); i++) {
+        char line[MAX_LINE_LEN];
+        init_section_line(i, line, sizeof(line));
+        RENDER_STATIC_LINE(line, glColor3f(0.38f, 0.38f, 0.42f));
+    }
+    for (int i = 0; g_footer_post_init[i]; i++) {
+        RENDER_STATIC_LINE(g_footer_post_init[i], glColor3f(0.38f, 0.38f, 0.42f));
     }
 
     #undef RENDER_STATIC_LINE
