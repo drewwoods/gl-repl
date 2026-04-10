@@ -295,6 +295,7 @@ const char *g_footer[] = {
     "  glLightModeli(GL_LIGHT_MODEL_TWO_SIDE, GL_TRUE);",
     "  g_quadric = gluNewQuadric();",
     "  gluQuadricNormals(g_quadric, GLU_SMOOTH);",
+    "  glPointParameterfv(GL_POINT_DISTANCE_ATTENUATION, (float[]){ 1.0f, 0.0f, 0.02f });",
     "}",
     "",
     "int main(int argc, char **argv) {",
@@ -1647,13 +1648,138 @@ static void write_cmd_source_as_c(FILE *f, const GLCmd *cmd, int translate_exprs
     }
 }
 
+typedef enum {
+    EXPORT_RENDER_CANONICAL = 0,
+    EXPORT_RENDER_OUTLINE,
+    EXPORT_RENDER_VPOINTS
+} ExportRenderMode;
+
+static int find_export_block_end(int begin_idx) {
+    int depth = 1;
+
+    for (int i = begin_idx + 1; i < g_num_cmds; i++) {
+        CmdType t = g_cmds[i].type;
+        if (t == CMD_FOR_BEGIN || t == CMD_FUNC_DEF || t == CMD_IF_BEGIN) depth++;
+        else if (t == CMD_FOR_END || t == CMD_FUNC_END || t == CMD_IF_END) {
+            if (--depth == 0)
+                return i;
+        }
+    }
+
+    return g_num_cmds;
+}
+
+static int cmd_source_indent(const char *src) {
+    int indent = 0;
+    while (src[indent] == ' ' || src[indent] == '\t')
+        indent++;
+    return indent;
+}
+
+static void fprint_indent(FILE *f, int indent) {
+    for (int i = 0; i < indent; i++)
+        fputc(' ', f);
+}
+
+static void build_export_func_name(char *out, int out_sz, int fn,
+                                   ExportRenderMode mode) {
+    switch (mode) {
+    case EXPORT_RENDER_OUTLINE:
+        snprintf(out, out_sz, "render_repl_outline_func%d", fn);
+        break;
+    case EXPORT_RENDER_VPOINTS:
+        snprintf(out, out_sz, "render_repl_vpoints_func%d", fn);
+        break;
+    case EXPORT_RENDER_CANONICAL:
+    default:
+        snprintf(out, out_sz, "func%d", fn);
+        break;
+    }
+}
+
+static int export_begin_mode_has_outline_overlay(GLenum mode) {
+    switch (mode) {
+    case GL_POINTS:
+    case GL_LINES:
+    case GL_LINE_STRIP:
+    case GL_LINE_LOOP:
+        return 0;
+    default:
+        return 1;
+    }
+}
+
+static int write_translated_vertex_call_as_c(FILE *f, const GLCmd *cmd,
+                                             const char *func_name) {
+    char payload[MAX_LINE_LEN];
+    char raw_args[4][MAX_LINE_LEN];
+    char c_args[4][MAX_LINE_LEN];
+    int expected = 0;
+    int count;
+    int indent = cmd_source_indent(cmd->source);
+
+    switch (cmd->type) {
+    case CMD_VERTEX3F:
+    case CMD_TESS_VERTEX:
+        expected = 3;
+        break;
+    case CMD_VERTEX2F:
+        expected = 2;
+        break;
+    default:
+        return 0;
+    }
+
+    if (repl_extract_paren_payload(cmd->source, payload, sizeof(payload))) {
+        count = split_top_level_args(payload, raw_args, 4);
+        if (count == expected) {
+            for (int i = 0; i < count; i++)
+                repl_expr_to_c(raw_args[i], c_args[i], sizeof(c_args[i]));
+            fprint_indent(f, indent);
+            if (expected == 3)
+                fprintf(f, "%s(%s, %s, %s);\n",
+                        func_name, c_args[0], c_args[1], c_args[2]);
+            else
+                fprintf(f, "%s(%s, %s);\n", func_name, c_args[0], c_args[1]);
+            return 1;
+        }
+    }
+
+    fprint_indent(f, indent);
+    if (expected == 3)
+        fprintf(f, "%s(%g, %g, %g);\n",
+                func_name, cmd->args[0], cmd->args[1], cmd->args[2]);
+    else
+        fprintf(f, "%s(%g, %g);\n", func_name, cmd->args[0], cmd->args[1]);
+    return 1;
+}
+
+static void write_export_func_call_as_c(FILE *f, const GLCmd *cmd,
+                                        ExportRenderMode mode) {
+    char args[MAX_LINE_LEN] = "";
+    char c_args[MAX_LINE_LEN] = "";
+    char func_name[64];
+    int indent = cmd_source_indent(cmd->source);
+    int fn = (int)cmd->args[0];
+
+    build_export_func_name(func_name, sizeof(func_name), fn, mode);
+    if (extract_func_call_args_text(cmd->source, &fn, args, sizeof(args)) && args[0]) {
+        repl_expr_to_c(args, c_args, sizeof(c_args));
+        fprint_indent(f, indent);
+        fprintf(f, "%s(%s);\n", func_name, c_args);
+        return;
+    }
+
+    fprint_indent(f, indent);
+    fprintf(f, "%s();\n", func_name);
+}
+
 /* Emit a single command as C with GLU-tessellator translation and
  * REPL→C expression translation for var assignments. Shared between
- * display() body emission and func-body emission so func defs get the
- * same tess translation as the top-level snippet. tess_depth tracks
+ * render_repl_geometry() and canonical func-body emission. tess_depth tracks
  * polygon/contour nesting across successive calls. */
-static void write_display_cmd_as_c(FILE *f, const GLCmd *cmd, int for_depth,
-                                   int *tess_depth) {
+static void write_canonical_cmd_as_c(FILE *f, const GLCmd *cmd, int for_depth,
+                                     int *tess_depth) {
     switch (cmd->type) {
     case CMD_COMMENT:
         fprintf(f, "%s\n", cmd->source);
@@ -1712,11 +1838,119 @@ static void write_display_cmd_as_c(FILE *f, const GLCmd *cmd, int for_depth,
     }
 }
 
-/* Write the body of a func def block (start..end exclusive) as C.
- * Used by write_func_defs_as_c to emit static helper functions. */
-static void write_func_body_range_as_c(FILE *f, int start, int end_idx) {
+static void write_overlay_cmd_as_c(FILE *f, const GLCmd *cmd, int for_depth,
+                                   ExportRenderMode mode, int *in_begin,
+                                   int *tess_depth) {
+    switch (cmd->type) {
+    case CMD_COMMENT:
+        fprintf(f, "%s\n", cmd->source);
+        break;
+    case CMD_VAR_ASSIGN: {
+        char c_src[MAX_LINE_LEN];
+        repl_expr_to_c(cmd->source, c_src, sizeof(c_src));
+        fprintf(f, "%s\n", c_src);
+        break;
+    }
+    case CMD_CALL:
+    case CMD_LABEL:
+    case CMD_GOTO:
+    case CMD_IF_BEGIN:
+    case CMD_IF_END:
+    case CMD_TRANSLATE3F:
+    case CMD_SCALEF:
+    case CMD_ROTATEF:
+    case CMD_PUSH_MATRIX:
+    case CMD_POP_MATRIX:
+        if (cmd->type == CMD_CALL)
+            write_export_func_call_as_c(f, cmd, mode);
+        else
+            write_cmd_source_as_c(f, cmd, for_depth > 0 || cmd->has_vars);
+        break;
+    case CMD_BEGIN:
+        if (mode != EXPORT_RENDER_OUTLINE)
+            break;
+        if (*in_begin) {
+            fprint_indent(f, cmd_source_indent(cmd->source));
+            fprintf(f, "glEnd();\n");
+            *in_begin = 0;
+        }
+        if (export_begin_mode_has_outline_overlay(cmd->mode)) {
+            write_cmd_source_as_c(f, cmd, 0);
+            *in_begin = 1;
+        }
+        break;
+    case CMD_END:
+        if (mode == EXPORT_RENDER_OUTLINE && *in_begin) {
+            write_cmd_source_as_c(f, cmd, 0);
+            *in_begin = 0;
+        }
+        break;
+    case CMD_VERTEX3F:
+        if (mode == EXPORT_RENDER_OUTLINE) {
+            if (*in_begin)
+                write_translated_vertex_call_as_c(f, cmd, "glVertex3f");
+        } else {
+            int indent = cmd_source_indent(cmd->source);
+            fprint_indent(f, indent);
+            fprintf(f, "glBegin(GL_POINTS);\n");
+            write_translated_vertex_call_as_c(f, cmd, "glVertex3f");
+            fprint_indent(f, indent);
+            fprintf(f, "glEnd();\n");
+        }
+        break;
+    case CMD_TESS_BEGIN_POLYGON:
+        if (mode == EXPORT_RENDER_OUTLINE)
+            *tess_depth = 1;
+        break;
+    case CMD_TESS_BEGIN_CONTOUR:
+        if (mode == EXPORT_RENDER_OUTLINE) {
+            int indent = cmd_source_indent(cmd->source);
+            if (*tess_depth == 2) {
+                fprint_indent(f, indent);
+                fprintf(f, "glEnd();\n");
+            }
+            fprint_indent(f, indent);
+            fprintf(f, "glBegin(GL_LINE_LOOP);\n");
+            *tess_depth = 2;
+        }
+        break;
+    case CMD_TESS_END:
+        if (mode == EXPORT_RENDER_OUTLINE) {
+            if (*tess_depth == 2) {
+                int indent = cmd_source_indent(cmd->source);
+                fprint_indent(f, indent);
+                fprintf(f, "glEnd();\n");
+                *tess_depth = 1;
+            } else if (*tess_depth == 1) {
+                *tess_depth = 0;
+            }
+        }
+        break;
+    case CMD_TESS_VERTEX:
+        if (mode == EXPORT_RENDER_OUTLINE) {
+            if (*tess_depth == 2)
+                write_translated_vertex_call_as_c(f, cmd, "glVertex3f");
+        } else {
+            int indent = cmd_source_indent(cmd->source);
+            fprint_indent(f, indent);
+            fprintf(f, "glBegin(GL_POINTS);\n");
+            write_translated_vertex_call_as_c(f, cmd, "glVertex3f");
+            fprint_indent(f, indent);
+            fprintf(f, "glEnd();\n");
+        }
+        break;
+    default:
+        break;
+    }
+}
+
+static void write_render_body_range_as_c(FILE *f, int start, int end_idx,
+                                         ExportRenderMode mode,
+                                         int skip_func_defs) {
     int for_depth = 0;
     int tess_depth = 0;
+    int in_begin = 0;
+
     for (int i = start; i < end_idx && i < g_num_cmds; i++) {
         if (!g_cmds[i].valid) continue;
         switch (g_cmds[i].type) {
@@ -1728,10 +1962,18 @@ static void write_func_body_range_as_c(FILE *f, int start, int end_idx) {
             for_depth--;
             fprintf(f, "%s\n", g_cmds[i].source);
             break;
-        case CMD_FUNC_DEF: case CMD_FUNC_END:
-            break; /* nested func defs not supported */
+        case CMD_FUNC_DEF:
+            if (skip_func_defs)
+                i = find_export_block_end(i);
+            break;
+        case CMD_FUNC_END:
+            break;
         default:
-            write_display_cmd_as_c(f, &g_cmds[i], for_depth, &tess_depth);
+            if (mode == EXPORT_RENDER_CANONICAL)
+                write_canonical_cmd_as_c(f, &g_cmds[i], for_depth, &tess_depth);
+            else
+                write_overlay_cmd_as_c(f, &g_cmds[i], for_depth, mode,
+                                       &in_begin, &tess_depth);
             break;
         }
     }
@@ -1748,6 +1990,20 @@ static void write_predef_var_globals(FILE *f) {
     }
 }
 
+static void write_predef_var_reset_func(FILE *f) {
+    fprintf(f, "\nstatic void reset_repl_vars(void) {\n");
+    for (int i = 0; i < g_num_predef_vars; i++) {
+        if (strcmp(g_predef_vars[i].name, "t") == 0) {
+            fprintf(f, "  %s = 0.001f * (float)glutGet(GLUT_ELAPSED_TIME);\n",
+                    g_predef_vars[i].name);
+        } else {
+            fprintf(f, "  %s = %g;\n",
+                    g_predef_vars[i].name, g_predef_vars[i].value);
+        }
+    }
+    fprintf(f, "}\n");
+}
+
 /* Emit deterministic stateless random helper used by translated rand(...). */
 static void write_rand_helper(FILE *f) {
     fprintf(f,
@@ -1759,34 +2015,51 @@ static void write_rand_helper(FILE *f) {
         "}\n");
 }
 
+static void write_render_helper_as_c(FILE *f, const char *name,
+                                     ExportRenderMode mode,
+                                     int include_snippet_markers) {
+    fprintf(f, "\nstatic void %s(void) {\n", name);
+    if (include_snippet_markers)
+        fprintf(f, "  // Snippet start\n");
+    write_render_body_range_as_c(f, 0, g_num_cmds, mode, 1);
+    if (mode == EXPORT_RENDER_CANONICAL) {
+        int bb = 0;
+        for (int i = 0; i < g_num_cmds; i++) {
+            if (g_cmds[i].valid && g_cmds[i].type == CMD_BEGIN) bb++;
+            else if (g_cmds[i].valid && g_cmds[i].type == CMD_END) bb--;
+        }
+        if (bb > 0)
+            fprintf(f, "  glEnd();\n");
+    }
+    if (include_snippet_markers)
+        fprintf(f, "  // Snippet end\n");
+    fprintf(f, "}\n");
+}
+
 /* Emit all user-defined functions as static C functions (before display()) */
-static void write_func_defs_as_c(FILE *f) {
+static void write_func_defs_as_c(FILE *f, ExportRenderMode mode) {
     for (int i = 0; i < g_num_cmds; i++) {
         if (!g_cmds[i].valid || g_cmds[i].type != CMD_FUNC_DEF) continue;
         int fn = (int)g_cmds[i].args[0];
         int parsed_fn = fn;
         int param_count = 0;
         char param_names[MAX_EXPR_VARS][16];
+        char func_name[64];
+        build_export_func_name(func_name, sizeof(func_name), fn, mode);
         /* find the matching CMD_FUNC_END */
-        int depth = 1, fe = g_num_cmds;
-        for (int j = i + 1; j < g_num_cmds; j++) {
-            CmdType t = g_cmds[j].type;
-            if (t == CMD_FOR_BEGIN || t == CMD_FUNC_DEF || t == CMD_IF_BEGIN) depth++;
-            else if (t == CMD_FOR_END || t == CMD_FUNC_END || t == CMD_IF_END) {
-                if (--depth == 0) { fe = j; break; }
-            }
-        }
+        int fe = find_export_block_end(i);
         if (parse_repl_func_signature(g_cmds[i].source, &parsed_fn,
                                       param_names, MAX_EXPR_VARS,
                                       &param_count) && param_count > 0) {
-            fprintf(f, "\nstatic void func%d(", parsed_fn);
+            build_export_func_name(func_name, sizeof(func_name), parsed_fn, mode);
+            fprintf(f, "\nstatic void %s(", func_name);
             for (int p = 0; p < param_count; p++)
                 fprintf(f, "%sfloat %s", p == 0 ? "" : ", ", param_names[p]);
             fprintf(f, ") {\n");
         } else {
-            fprintf(f, "\nstatic void func%d(void) {\n", fn);
+            fprintf(f, "\nstatic void %s(void) {\n", func_name);
         }
-        write_func_body_range_as_c(f, i + 1, fe);
+        write_render_body_range_as_c(f, i + 1, fe, mode, 0);
         fprintf(f, "}\n");
     }
 }
@@ -2871,24 +3144,45 @@ static void save_output(const char *filename) {
 
     /* Detect whether any tess commands are present */
     int has_tess = 0;
+    int needs_rand = 0;
     for (int i = 0; i < g_num_cmds; i++)
         if (g_cmds[i].valid && g_cmds[i].type >= CMD_TESS_BEGIN_POLYGON
                             && g_cmds[i].type <= CMD_TESS_VERTEX)
             has_tess = 1;
+        else if (g_cmds[i].valid && strstr(g_cmds[i].source, "rand(") != NULL)
+            needs_rand = 1;
 
-    /* Emit header, inserting func defs and optional tess preamble before void display() { */
     update_render_state_strings();
+    update_lookat_strings();
+
     for (int i = 0; g_header_pre[i]; i++) {
-        if (strcmp(g_header_pre[i], "void display() {") == 0) {
-            write_predef_var_globals(f);
-            write_rand_helper(f);
-            /* Tess preamble must precede func defs: func bodies may reference
-             * g_tess / TessVertex / _tv / _tn / _tc that the preamble declares. */
-            if (has_tess) write_tess_preamble(f);
-            write_func_defs_as_c(f);
-        }
+        if (strcmp(g_header_pre[i], "void display() {") == 0)
+            break;
         fprintf(f, "%s\n", g_header_pre[i]);
     }
+    write_predef_var_globals(f);
+    if (needs_rand)
+        write_rand_helper(f);
+    if (has_tess) write_tess_preamble(f);
+    write_predef_var_reset_func(f);
+    write_func_defs_as_c(f, EXPORT_RENDER_CANONICAL);
+    if (g_show_outlines)
+        write_func_defs_as_c(f, EXPORT_RENDER_OUTLINE);
+    if (g_show_vpoints)
+        write_func_defs_as_c(f, EXPORT_RENDER_VPOINTS);
+    write_render_helper_as_c(f, "render_repl_geometry",
+                             EXPORT_RENDER_CANONICAL, 1);
+    if (g_show_outlines)
+        write_render_helper_as_c(f, "render_repl_outline_overlay",
+                                 EXPORT_RENDER_OUTLINE, 0);
+    if (g_show_vpoints)
+        write_render_helper_as_c(f, "render_repl_vertex_points_overlay",
+                                 EXPORT_RENDER_VPOINTS, 0);
+
+    fprintf(f, "\nvoid display() {\n");
+    fprintf(f, "  glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);\n");
+    fprintf(f, "  glLoadIdentity();\n");
+    fprintf(f, "  glPushAttrib(GL_ALL_ATTRIB_BITS);\n");
     for (int i = 0; i < RENDER_STATE_LINE_COUNT; i++)
         fprintf(f, "%s\n", g_render_state_lines[i]);
     for (int i = 0; i < LOOKAT_LINE_COUNT; i++)
@@ -2897,68 +3191,49 @@ static void save_output(const char *filename) {
         fprintf(f, "%s\n", g_header_post[i]);
     write_light_setup(f);
 
-    /* Initialize predefined variables (declared as file-scope statics above so
-     * functions can see them). Emitted BEFORE the snippet markers so the
-     * loader doesn't re-import them as user var assignments. */
-    if (g_num_predef_vars > 0) {
-        for (int i = 0; i < g_num_predef_vars; i++) {
-            if (strcmp(g_predef_vars[i].name, "t") == 0) {
-                fprintf(f, "  %s = 0.001f * (float)glutGet(GLUT_ELAPSED_TIME);\n",
-                        g_predef_vars[i].name);
-            } else {
-                fprintf(f, "  %s = %g;\n",
-                        g_predef_vars[i].name, g_predef_vars[i].value);
-            }
-        }
+    fprintf(f, "  glPushMatrix();\n");
+    fprintf(f, "  reset_repl_vars();\n");
+    fprintf(f, "  render_repl_geometry();\n");
+    fprintf(f, "  glPopMatrix();\n");
+
+    if (g_show_outlines) {
+        fprintf(f, "\n  glDisable(GL_LIGHTING);\n");
+        fprintf(f, "  glEnable(GL_DEPTH_TEST);\n");
+        fprintf(f, "  glDepthMask(GL_FALSE);\n");
+        fprintf(f, "  glEnable(GL_BLEND);\n");
+        fprintf(f, "  glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);\n");
+        fprintf(f, "  glEnable(GL_POLYGON_OFFSET_LINE);\n");
+        fprintf(f, "  glPolygonOffset(-1.0f, -1.0f);\n");
+        fprintf(f, "  glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);\n");
+        fprintf(f, "  glColor3f(0.0f, 0.0f, 0.0f);\n");
+        fprintf(f, "  glLineWidth(1.2f);\n");
+        fprintf(f, "  glPushMatrix();\n");
+        fprintf(f, "  reset_repl_vars();\n");
+        fprintf(f, "  render_repl_outline_overlay();\n");
+        fprintf(f, "  glPopMatrix();\n");
+        fprintf(f, "  glLineWidth(1.0f);\n");
+        fprintf(f, "  glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);\n");
+        fprintf(f, "  glDisable(GL_POLYGON_OFFSET_LINE);\n");
+        fprintf(f, "  glDepthMask(GL_TRUE);\n");
+        fprintf(f, "  glDisable(GL_BLEND);\n");
     }
 
-    fprintf(f, "\n// Snippet start\n");
-
-    /* Write g_cmds[] preserving for-loop structure; skip func defs, emit calls */
-    int for_depth = 0;
-    int save_tess_depth = 0; /* tracks polygon/contour nesting for gluEnd translation */
-    for (int i = 0; i < g_num_cmds; i++) {
-        if (!g_cmds[i].valid) continue;
-        switch (g_cmds[i].type) {
-        case CMD_FOR_BEGIN:
-            write_for_begin_as_c(f, &g_cmds[i]);
-            for_depth++;
-            break;
-        case CMD_FOR_END:
-            for_depth--;
-            fprintf(f, "%s\n", g_cmds[i].source);
-            break;
-        case CMD_FUNC_DEF: {
-            /* Skip entire function definition — already emitted above display() */
-            int depth = 1;
-            for (int j = i + 1; j < g_num_cmds; j++) {
-                CmdType t = g_cmds[j].type;
-                if (t == CMD_FOR_BEGIN || t == CMD_FUNC_DEF || t == CMD_IF_BEGIN) depth++;
-                else if (t == CMD_FOR_END || t == CMD_FUNC_END || t == CMD_IF_END) {
-                    if (--depth == 0) { i = j; break; }
-                }
-            }
-            break;
-        }
-        case CMD_FUNC_END:
-            break; /* shouldn't be reached due to above skip */
-        default:
-            write_display_cmd_as_c(f, &g_cmds[i], for_depth, &save_tess_depth);
-            break;
-        }
+    if (g_show_vpoints) {
+        fprintf(f, "\n  glDisable(GL_LIGHTING);\n");
+        fprintf(f, "  glEnable(GL_DEPTH_TEST);\n");
+        fprintf(f, "  glColor3f(0.0f, 0.0f, 0.0f);\n");
+        fprintf(f, "  glPointSize(8.0f);\n");
+        fprintf(f, "  glPushMatrix();\n");
+        fprintf(f, "  reset_repl_vars();\n");
+        fprintf(f, "  render_repl_vertex_points_overlay();\n");
+        fprintf(f, "  glPopMatrix();\n");
+        fprintf(f, "  glPointSize(1.0f);\n");
     }
 
-    /* Safety: close unclosed glBegin */
-    {
-        int bb = 0;
-        for (int i = 0; i < g_num_cmds; i++) {
-            if (g_cmds[i].valid && g_cmds[i].type == CMD_BEGIN) bb++;
-            else if (g_cmds[i].valid && g_cmds[i].type == CMD_END) bb--;
-        }
-        if (bb > 0) fprintf(f, "  glEnd();\n");
-    }
-    fprintf(f, "// Snippet end\n");
-    for (int i = 0; g_footer[i]; i++)
+    fprintf(f, "\n  glPopAttrib();\n");
+    fprintf(f, "  glutSwapBuffers();\n");
+    fprintf(f, "}\n");
+    for (int i = 4; g_footer[i]; i++)
         fprintf(f, "%s\n", g_footer[i]);
 
     fclose(f);
@@ -7815,6 +8090,8 @@ static void init_gl(void) {
                     (void (*)())tess_combine_callback);
     gluTessCallback(g_tess, GLU_TESS_ERROR,
                     (void (*)())tess_error_callback);
+
+    glPointParameterfv(GL_POINT_DISTANCE_ATTENUATION, (GLfloat[]){ 1.0f, 0.0f, 0.02f });
 }
 
 /* ========================================================================= */

@@ -13,6 +13,20 @@ static int g_pass = 0;
     else printf("FAIL [%s]\n", label); \
 } while (0)
 
+static size_t read_text_file(const char *path, char *buf, size_t buf_sz) {
+    FILE *f = fopen(path, "r");
+    size_t nread = 0;
+
+    if (buf_sz == 0)
+        return 0;
+    if (f) {
+        nread = fread(buf, 1, buf_sz - 1, f);
+        fclose(f);
+    }
+    buf[nread] = '\0';
+    return nread;
+}
+
 int main(void) {
     const char *path = "/tmp/repl_core_roundtrip_output.c";
     const char *func_path = "/tmp/repl_core_func_output.c";
@@ -37,19 +51,28 @@ int main(void) {
 
     g_multisample_enabled = 0;
     g_line_smooth_enabled = 1;
+    g_show_outlines = 0;
+    g_show_vpoints = 0;
     repl_save_output(path);
     {
-        FILE *saved = fopen(path, "r");
-        char buf[8192];
-        size_t nread = saved ? fread(buf, 1, sizeof(buf) - 1, saved) : 0;
-        if (saved) fclose(saved);
-        buf[nread] = '\0';
+        char buf[16384];
+        read_text_file(path, buf, sizeof(buf));
         ASSERT_TRUE("saved t uses elapsed time",
                     strstr(buf, "t = 0.001f * (float)glutGet(GLUT_ELAPSED_TIME)") != NULL);
         ASSERT_TRUE("saved multisample header state",
                     strstr(buf, "glDisable(GL_MULTISAMPLE);") != NULL);
         ASSERT_TRUE("saved line smooth header state",
                     strstr(buf, "glEnable(GL_LINE_SMOOTH);") != NULL);
+        ASSERT_TRUE("saved geometry helper",
+                    strstr(buf, "static void render_repl_geometry(void)") != NULL);
+        ASSERT_TRUE("saved snippet marker start",
+                    strstr(buf, "// Snippet start") != NULL);
+        ASSERT_TRUE("saved snippet marker end",
+                    strstr(buf, "// Snippet end") != NULL);
+        ASSERT_TRUE("saved outline helper omitted when disabled",
+                    strstr(buf, "render_repl_outline_overlay") == NULL);
+        ASSERT_TRUE("saved vertex points helper omitted when disabled",
+                    strstr(buf, "render_repl_vertex_points_overlay") == NULL);
     }
 
     repl_reset_state();
@@ -75,17 +98,32 @@ int main(void) {
     before_n = g_num_cmds;
     for (int i = 0; i < before_n; i++) before_types[i] = g_cmds[i].type;
 
+    g_show_outlines = 1;
+    g_show_vpoints = 1;
     repl_save_output(func_path);
     {
-        FILE *saved = fopen(func_path, "r");
-        char buf[8192];
-        size_t nread = saved ? fread(buf, 1, sizeof(buf) - 1, saved) : 0;
-        if (saved) fclose(saved);
-        buf[nread] = '\0';
+        char buf[32768];
+        read_text_file(func_path, buf, sizeof(buf));
         ASSERT_TRUE("saved func signature",
                     strstr(buf, "static void func0(float radius, float yoff)") != NULL);
-        ASSERT_TRUE("saved func call",
+        ASSERT_TRUE("saved geometry helper func call",
                     strstr(buf, "func0(1.5, x + 2);") != NULL);
+        ASSERT_TRUE("saved outline helper present",
+                    strstr(buf, "static void render_repl_outline_overlay(void)") != NULL);
+        ASSERT_TRUE("saved point helper present",
+                    strstr(buf, "static void render_repl_vertex_points_overlay(void)") != NULL);
+        ASSERT_TRUE("saved outline func variant",
+                    strstr(buf, "static void render_repl_outline_func0(float radius, float yoff)") != NULL);
+        ASSERT_TRUE("saved point func variant",
+                    strstr(buf, "static void render_repl_vpoints_func0(float radius, float yoff)") != NULL);
+        ASSERT_TRUE("saved outline func call",
+                    strstr(buf, "render_repl_outline_func0(1.5, x + 2);") != NULL);
+        ASSERT_TRUE("saved point func call",
+                    strstr(buf, "render_repl_vpoints_func0(1.5, x + 2);") != NULL);
+        ASSERT_TRUE("saved outline helper call in display",
+                    strstr(buf, "render_repl_outline_overlay();") != NULL);
+        ASSERT_TRUE("saved point helper call in display",
+                    strstr(buf, "render_repl_vertex_points_overlay();") != NULL);
     }
 
     repl_reset_state();
@@ -121,13 +159,12 @@ int main(void) {
     repl_feed_line_public("gluCylinder(0.15, 0.05, 1.5, 8, 1);");
     repl_feed_line_public("gluDisk(0, 0.35, 12, 1);");
     repl_feed_line_public("gluPartialDisk(0.1, 0.5, 12, 4, 30, 180);");
+    g_show_outlines = 0;
+    g_show_vpoints = 0;
     repl_save_output(quadric_path);
     {
-        FILE *saved = fopen(quadric_path, "r");
         char buf[16384];
-        size_t nread = saved ? fread(buf, 1, sizeof(buf) - 1, saved) : 0;
-        if (saved) fclose(saved);
-        buf[nread] = '\0';
+        read_text_file(quadric_path, buf, sizeof(buf));
         ASSERT_TRUE("saved quadric sphere includes g_quadric",
                     strstr(buf, "gluSphere(g_quadric, x, 16, 12);") != NULL);
         ASSERT_TRUE("saved quadric cylinder includes g_quadric",
@@ -174,20 +211,26 @@ int main(void) {
     repl_feed_line_public("gluEnd();");
     repl_feed_line_public("}");
     repl_feed_line_public("func0(2.0);");
+    g_show_outlines = 1;
+    g_show_vpoints = 1;
     repl_save_output(tess_path);
     {
-        FILE  *saved = fopen(tess_path, "r");
-        char   buf[16384];
-        size_t nread = saved ? fread(buf, 1, sizeof(buf) - 1, saved) : 0;
-        if (saved)
-            fclose(saved);
-        buf[nread] = '\0';
+        char buf[65536];
+        read_text_file(tess_path, buf, sizeof(buf));
         ASSERT_TRUE("saved tess color keeps loop expr",
                     strstr(buf, "_tc[0]=0.25 + 0.15*sinf(i);") != NULL);
         ASSERT_TRUE("saved tess vertex keeps param expr",
                     strstr(buf, "_v->pos[0]=radius*cosf(i);") != NULL);
         ASSERT_TRUE("saved tess vertex keeps z expr",
                     strstr(buf, "_v->pos[2]=radius*sinf(i);") != NULL);
+        ASSERT_TRUE("saved tess outline helper uses line loop",
+                    strstr(buf, "glBegin(GL_LINE_LOOP);") != NULL);
+        ASSERT_TRUE("saved tess point helper uses points",
+                    strstr(buf, "glBegin(GL_POINTS);") != NULL);
+        ASSERT_TRUE("saved tess outline func call",
+                    strstr(buf, "render_repl_outline_func0(2.0);") != NULL);
+        ASSERT_TRUE("saved tess point func call",
+                    strstr(buf, "render_repl_vpoints_func0(2.0);") != NULL);
     }
 
     printf("repl_core_io: %d/%d passed\n", g_pass, g_run);
