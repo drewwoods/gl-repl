@@ -113,6 +113,6 @@ var = expr;
 
 ## Math
 
-Functions: `sin`, `cos`, `tan`, `sqrt`, `abs`, `pow`, `min`, `max`
+Functions: `sin`, `cos`, `tan`, `sqrt`, `abs`, `pow`, `min`, `max`, `floor`, `ceil`, `fmod`, `rand(seed[, iter])`
 Constants: `PI`, `TAU`
 Variables: `x`, `y`, `z`, `i`, `j`, `k`, `n`, `t`

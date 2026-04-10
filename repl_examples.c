@@ -440,7 +440,31 @@ static const char *const g_example_assign_2d[] = {
     NULL
 };
 
-/* Example 11: Stress test — exercises parser, code UI, nested structures,
+/* Example 11: Stateless particle field using deterministic rand(seed, iter) */
+static const char *const g_example_particles_stateless[] = {
+    "// Stateless particle field: deterministic rand(seed, iter)",
+    "glDisable(GL_LIGHTING);",
+    "glPointSize(3);",
+    "n = 260;",
+    "glBegin(GL_POINTS);",
+    "for(i, 0, n) {",
+    "  x = rand(i, 0)*2 - 1;",
+    "  y = rand(i, 1)*2 - 1;",
+    "  z = rand(i, 2)*2 - 1;",
+    "  k = rand(i, 3)*TAU;",
+    "  j = 0.35 + rand(i, 4)*1.25;",
+    "  x = x + cos(k)*j*t*0.25;",
+    "  y = y + sin(k)*j*t*0.25;",
+    "  z = z + (rand(i, 5)*2 - 1)*t*0.35;",
+    "  glColor3f(0.3 + 0.7*rand(i, 6), 0.35 + 0.65*rand(i, 7), 0.5 + 0.5*rand(i, 8));",
+    "  glVertex3f(x, y, z);",
+    "}",
+    "glEnd();",
+    "glEnable(GL_LIGHTING);",
+    NULL
+};
+
+/* Example 12: Stress test — exercises parser, code UI, nested structures,
  * multiple functions, recursion, conditionals, variables, tessellation,
  * GLU primitives, matrix stack, animation, and long line count. */
 static const char *const g_example_stress[] = {
@@ -659,6 +683,7 @@ static const char *const *const g_examples[] = {
     g_example_tess,
     g_example_tess_cutout,
     g_example_assign_2d,
+    g_example_particles_stateless,
     g_example_stress,
 };
 
@@ -674,6 +699,7 @@ static const char *const g_example_names[] = {
     "GLU tessellator (concave arrow)",
     "GLU tessellator (concave arrow cutout)",
     "2D assignment sketch (vars only)",
+    "Stateless particles (rand seed+iter)",
     "Stress test (all features)",
 };
 

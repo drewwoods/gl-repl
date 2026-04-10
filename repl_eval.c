@@ -50,6 +50,13 @@ static void expr_skip_ws(ExprCtx *ctx) {
     while (*ctx->p && isspace((unsigned char)*ctx->p)) ctx->p++;
 }
 
+static float expr_rand01(float seed, float iter) {
+    float h = sinf(seed * 12.9898f + iter * 78.233f) * 43758.5453f;
+    float frac = h - floorf(h);
+    if (frac < 0.0f) frac += 1.0f;
+    return frac;
+}
+
 static float eval_primary(ExprCtx *ctx) {
     expr_skip_ws(ctx);
 
@@ -123,6 +130,7 @@ static float eval_primary(ExprCtx *ctx) {
             if (strcmp(name, "floor") == 0) return floorf(a);
             if (strcmp(name, "ceil") == 0)  return ceilf(a);
             if (strcmp(name, "fmod") == 0 && has_b) return fmodf(a, b);
+            if (strcmp(name, "rand") == 0) return has_b ? expr_rand01(a, b) : expr_rand01(a, 0.0f);
         }
 
         return 0.0f;   /* unknown identifier */
@@ -233,6 +241,7 @@ void repl_expr_to_c(const char *in, char *out, int out_sz) {
         { "floor", "floorf", 1 },
         { "ceil",  "ceilf",  1 },
         { "fmod",  "fmodf",  1 },
+        { "rand",  "repl_randf", 1 },
         { "TAU",   "(2*M_PI)", 0 },
         { "PI",    "M_PI",     0 },
     };
@@ -393,6 +402,7 @@ void c_expr_to_repl(const char *in, char *out, int out_sz) {
         { "floorf", "floor" },
         { "ceilf",  "ceil"  },
         { "fmodf",  "fmod"  },
+        { "repl_randf", "rand" },
         { "M_PI",   "PI"    },
     };
     int nmap = (int)(sizeof(map) / sizeof(map[0]));

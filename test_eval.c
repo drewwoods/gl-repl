@@ -156,6 +156,9 @@ static void run_tests(void) {
     ASSERT_FLOAT("floor(2.7)", 2.0f);
     ASSERT_FLOAT("ceil(2.3)", 3.0f);
     ASSERT_FLOAT("fmod(7,3)", 1.0f);
+    ASSERT_FLOAT("rand(7,11)", 0.564453f);
+    ASSERT_FLOAT("rand(7,11)", 0.564453f); /* deterministic */
+    ASSERT_FLOAT("rand(3)", 0.589844f);    /* implicit iter=0 */
     ASSERT_FLOAT("sin(PI/2)", 1.0f);
     ASSERT_FLOAT("cos(TAU)", 1.0f);
     ASSERT_FLOAT("10/0", 0.0f);  /* div by zero returns 0 */
@@ -199,6 +202,7 @@ static void run_tests(void) {
     ASSERT_TO_C("glVertex3f(1,2,3)", "glVertex3f(1,2,3)");  /* unchanged */
     ASSERT_TO_C("pow(x,2)", "powf(x,2)");
     ASSERT_TO_C("min(x,y)", "fminf(x,y)");
+    ASSERT_TO_C("rand(i,3)", "repl_randf(i,3)");
 
     printf("c_expr_to_repl:\n");
     ASSERT_TO_REPL("sinf(x)", "sin(x)");
@@ -208,6 +212,7 @@ static void run_tests(void) {
     ASSERT_TO_REPL("fabsf(-1)", "abs(-1)");
     ASSERT_TO_REPL("glVertex3f(1,2,3)", "glVertex3f(1,2,3)");
     ASSERT_TO_REPL("powf(x,2)", "pow(x,2)");
+    ASSERT_TO_REPL("repl_randf(i,3)", "rand(i,3)");
 
     /* Roundtrip */
     printf("Roundtrip (repl->c->repl):\n");
