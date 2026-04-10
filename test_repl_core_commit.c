@@ -486,6 +486,38 @@ int main(void) {
     ASSERT_TRUE("feeding normal for second block vertex", repl_find_feeding_normal_cmd(7) == 5);
 
     repl_reset_state();
+    g_autonormal = 1;
+    repl_feed_line_public("glBegin(GL_TRIANGLES);");
+    repl_feed_line_public("glVertex3f(0, 0, 0);");
+    repl_feed_line_public("glVertex3f(1, 0, 0);");
+    repl_feed_line_public("glVertex3f(0, 1, 0);");
+    repl_feed_line_public("glEnd();");
+    repl_recompute_autonormals();
+    ASSERT_TRUE("autonormal inserts before each triangle vertex", g_num_cmds == 8);
+    ASSERT_TRUE("autonormal default front-face first cmd type", g_cmds[1].type == CMD_NORMAL3F);
+    ASSERT_TRUE("autonormal default front-face first cmd auto", g_cmds[1].is_auto == 1);
+    ASSERT_TRUE("autonormal default front-face keeps +z", fabsf(g_cmds[1].args[2] - 1.0f) < 1e-6f);
+
+    repl_reset_state();
+    g_autonormal = 1;
+    repl_feed_line_public("glFrontFace(GL_CW);");
+    repl_feed_line_public("glBegin(GL_TRIANGLES);");
+    repl_feed_line_public("glVertex3f(0, 0, 0);");
+    repl_feed_line_public("glVertex3f(1, 0, 0);");
+    repl_feed_line_public("glVertex3f(0, 1, 0);");
+    repl_feed_line_public("glEnd();");
+    repl_recompute_autonormals();
+    ASSERT_TRUE("autonormal front-face cw inserts before each triangle vertex", g_num_cmds == 9);
+    ASSERT_TRUE("autonormal front-face cw first cmd type", g_cmds[2].type == CMD_NORMAL3F);
+    ASSERT_TRUE("autonormal front-face cw first cmd auto", g_cmds[2].is_auto == 1);
+    ASSERT_TRUE("autonormal front-face cw flips z", fabsf(g_cmds[2].args[2] - (-1.0f)) < 1e-6f);
+
+    g_cmds[0].mode = GL_CCW;
+    repl_recompute_autonormals();
+    ASSERT_TRUE("autonormal front-face update flips auto normal back", fabsf(g_cmds[2].args[2] - 1.0f) < 1e-6f);
+
+    repl_reset_state();
+    g_autonormal = 0;
     repl_feed_line_public("glBegin(GL_TRIANGLES);");
     repl_feed_line_public("glVertex3f(0, 0, 0);");
     repl_feed_line_public("glVertex3f(1, 0, 0);");
