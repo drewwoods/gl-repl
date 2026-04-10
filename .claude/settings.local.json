@@ -26,7 +26,8 @@
       "Bash(Grep -n \"repl_example\" repl_core.h)",
       "Bash(./test_repl_core_examples --dump-index 11)",
       "Read(//tmp/**)",
-      "Bash(./test_repl_core_examples --dump-index 12)"
+      "Bash(./test_repl_core_examples --dump-index 12)",
+      "Bash(./test_repl_core_commit)"
     ]
   }
 }
