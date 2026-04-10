@@ -274,6 +274,7 @@ extern int    g_cam_rotate;
 extern int    g_example_idx;
 extern int    g_user_lighting_enabled;
 extern int    g_show_outlines;
+extern int    g_show_vpoints;
 extern int    g_highlight_current_poly;
 extern int    g_current_block_begin;
 extern int    g_current_block_end;
