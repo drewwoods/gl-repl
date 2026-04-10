@@ -1,6 +1,22 @@
 #include "sample.h"
 #include "repl_core.h"
 
+static void print_usage(const char *prog) {
+    const char *name = (prog && prog[0]) ? prog : "sample";
+
+    fprintf(stdout,
+            "Usage: %s [options] [input.c]\n"
+            "\n"
+            "Options:\n"
+            "  -h, --help   Show this help text and exit\n"
+            "  --noaccum    Disable accumulation buffer antialiasing\n"
+            "  --dump-code  Load the session and print the editor buffer\n"
+            "\n"
+            "Arguments:\n"
+            "  input.c      Optional saved session to load at startup\n",
+            name);
+}
+
 static void display_func(void) {
     repl_display_func();
 }
@@ -43,7 +59,10 @@ int main(int argc, char **argv) {
     const char *input_file = NULL;
     int dump_code = 0;
     for (int i = 1; i < argc; i++) {
-        if (strcmp(argv[i], "--noaccum") == 0)
+        if (strcmp(argv[i], "-h") == 0 || strcmp(argv[i], "--help") == 0) {
+            print_usage(argv[0]);
+            return 0;
+        } else if (strcmp(argv[i], "--noaccum") == 0)
             g_use_accum = 0;
         else if (strcmp(argv[i], "--dump-code") == 0)
             dump_code = 1;
