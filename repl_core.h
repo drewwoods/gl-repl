@@ -15,6 +15,8 @@ void repl_recompute_autonormals(void);
 int  repl_example_count(void);
 const char *repl_example_name(int idx);
 void repl_load_example(int idx);
+void replay_start(void);
+void replay_stop(void);
 void repl_navigate_to_line(int target);
 void repl_load_initial_commands(const char *import_file);
 void repl_reformat_commands(void);

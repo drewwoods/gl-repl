@@ -499,23 +499,66 @@ static int code_panel_header_row_count(int panel_w, int text_x) {
     return rows;
 }
 
-static void code_panel_export_button_rect(int *x, int *y, int *w, int *h) {
-    int cp_x, cp_y, cp_w, cp_h;
-    const char *label = "Save C";
+/* Header button bar: Save C | Example | Config | Replay */
+#define NUM_HEADER_BTNS 4
+static const char *g_header_btn_labels[NUM_HEADER_BTNS] = {
+    "Save C", "Example", "Config", "Replay"
+};
 
+/* Example dropdown state */
+static int g_example_dropdown_open  = 0;
+static int g_example_dropdown_hover = -1;
+
+static void header_btn_rects(int bx[NUM_HEADER_BTNS], int *by, int *bw, int *bh) {
+    int cp_x, cp_y, cp_w, cp_h;
     code_panel_rect(&cp_x, &cp_y, &cp_w, &cp_h);
-    if (w) *w = (int)strlen(label) * 8 + 18;
-    if (h) *h = LINE_H + 4;
-    if (x) *x = cp_x + cp_w - ((int)strlen(label) * 8 + 18) - CODE_MARGIN_X;
-    if (y) *y = cp_y + cp_h - CODE_MARGIN_Y - (LINE_H + 4) + 2;
+    int panel_top = cp_y + cp_h;
+    /* Sit between info bar (row 0) and first code line (row 2) */
+    if (by) *by = panel_top - CODE_MARGIN_Y - 2 * LINE_H;
+    if (bh) *bh = LINE_H;
+    /* Left-align buttons */
+    int x = cp_x + CODE_MARGIN_X;
+    for (int i = 0; i < NUM_HEADER_BTNS; i++) {
+        bx[i] = x;
+        x += (int)strlen(g_header_btn_labels[i]) * 8 + 12 + 4;
+    }
+    (void)bw; /* widths vary per button; callers compute per-label */
 }
 
-static int code_panel_export_button_hit(int gx, int gy) {
-    int bx, by, bw, bh;
+static int header_btn_hit(int gx, int gy) {
+    int bx[NUM_HEADER_BTNS], by, bh;
     int ry = g_win_h - gy;
+    header_btn_rects(bx, &by, NULL, &bh);
+    for (int i = 0; i < NUM_HEADER_BTNS; i++) {
+        int w = (int)strlen(g_header_btn_labels[i]) * 8 + 12;
+        if (gx >= bx[i] && gx < bx[i] + w && ry >= by && ry < by + bh)
+            return i;
+    }
+    return -1;
+}
 
-    code_panel_export_button_rect(&bx, &by, &bw, &bh);
-    return gx >= bx && gx < bx + bw && ry >= by && ry < by + bh;
+/* Returns dropdown item index under (gx, gy), or -1 if none */
+static int example_dropdown_item_hit(int gx, int gy) {
+    if (!g_example_dropdown_open) return -1;
+    int n = repl_example_count();
+    if (n == 0) return -1;
+    int bx[NUM_HEADER_BTNS], by, bh;
+    int ry = g_win_h - gy;
+    header_btn_rects(bx, &by, NULL, &bh);
+    int dx = bx[1];
+    /* Width: widest label + padding */
+    int max_w = 0;
+    for (int i = 0; i < n; i++) {
+        int w = (int)strlen(repl_example_name(i)) * FONT_W;
+        if (w > max_w) max_w = w;
+    }
+    int dw = max_w + 20;
+    int dh = n * LINE_H + 6;
+    int dy = by - dh;  /* drops below the button row */
+    if (gx < dx || gx >= dx + dw || ry < dy || ry >= dy + dh) return -1;
+    int row = (dy + dh - 3 - ry) / LINE_H;
+    if (row < 0 || row >= n) return -1;
+    return row;
 }
 
 static int code_panel_footer_row_count(int panel_w, int text_x) {
@@ -877,7 +920,7 @@ void render_code_panel(void) {
     int idx_col_w = g_show_indices ? (6 * FONT_W) : 0;
     int idx_x = CODE_MARGIN_X + linenum_w + FONT_W;
     int text_x = idx_x + idx_col_w;
-    int visible_lines = (cp_h - 2 * CODE_MARGIN_Y - LINE_H) / LINE_H;
+    int visible_lines = (cp_h - 2 * CODE_MARGIN_Y - 2 * LINE_H) / LINE_H;
     if (visible_lines < 1) visible_lines = 1;
 
     /* When cursor is on a vertex, find which normal/color lines feed it so
@@ -982,9 +1025,7 @@ void render_code_panel(void) {
     /* Top info bar */
     {
         char info[256];
-        int nv = count_vertices();
-        int bx, by, bw, bh;
-        int button_hover = code_panel_export_button_hit(g_mouse_x, g_mouse_y);
+        int hover_btn = header_btn_hit(g_mouse_x, g_mouse_y);
         /* Accumulation AA indicator suffix */
         char aa_tag[24] = "";
         if (g_use_accum) {
@@ -1005,46 +1046,59 @@ void render_code_panel(void) {
         }
         if (g_inserting) {
             snprintf(info, sizeof(info),
-                     "F1:Help | %d cmds | %d verts | Ln %d [INSERT]%s%s",
-                     g_num_cmds, nv, g_edit_line + 1, t_tag, aa_tag);
+                     "F1:Help | %d cmds | Ln %d [INSERT]%s%s",
+                     g_num_cmds, g_edit_line + 1, t_tag, aa_tag);
         } else if (in_begin_block()) {
             snprintf(info, sizeof(info),
-                     "F1:Help | %d cmds | %d verts | %s | Ln %d%s%s",
-                     g_num_cmds, nv, mode_name(current_begin_mode()),
+                     "F1:Help | %d cmds | %s | Ln %d%s%s",
+                     g_num_cmds, mode_name(current_begin_mode()),
                      g_edit_line + 1, t_tag, aa_tag);
         } else {
             snprintf(info, sizeof(info),
-                     "F1:Help | %d cmds | %d verts | Ln %d%s%s",
-                     g_num_cmds, nv, g_edit_line + 1, t_tag, aa_tag);
+                     "F1:Help | %d cmds | Ln %d%s%s",
+                     g_num_cmds, g_edit_line + 1, t_tag, aa_tag);
         }
         glColor3f(0.50f, 0.55f, 0.65f);
         draw_string(CODE_MARGIN_X, panel_top - CODE_MARGIN_Y - 2, info,
                     FONT_SMALL);
 
-        code_panel_export_button_rect(&bx, &by, &bw, &bh);
-        glEnable(GL_BLEND);
-        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-        if (button_hover)
-            glColor4f(0.20f, 0.38f, 0.60f, 0.95f);
-        else
-            glColor4f(0.14f, 0.20f, 0.30f, 0.88f);
-        draw_quad((float)bx, (float)by, (float)bw, (float)bh);
-        glColor4f(0.55f, 0.72f, 0.95f, 0.95f);
-        glBegin(GL_LINE_LOOP);
-        glVertex2f((float)bx, (float)by);
-        glVertex2f((float)(bx + bw), (float)by);
-        glVertex2f((float)(bx + bw), (float)(by + bh));
-        glVertex2f((float)bx, (float)(by + bh));
-        glEnd();
-        glColor3f(0.88f, 0.93f, 1.0f);
-        draw_string((float)(bx + 9), (float)(by + 5), "Save C", FONT_SMALL);
-        glDisable(GL_BLEND);
+        /* Header button bar */
+        {
+            int bx[NUM_HEADER_BTNS], by, bh;
+            header_btn_rects(bx, &by, NULL, &bh);
+            glEnable(GL_BLEND);
+            glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+            for (int i = 0; i < NUM_HEADER_BTNS; i++) {
+                int bw = (int)strlen(g_header_btn_labels[i]) * 8 + 12;
+                /* Active state highlight for toggle buttons */
+                int active = (i == 2 && g_show_config) ||
+                             (i == 3 && g_replay_active);
+                if (i == hover_btn)
+                    glColor4f(0.20f, 0.38f, 0.60f, 0.95f);
+                else if (active)
+                    glColor4f(0.18f, 0.35f, 0.18f, 0.90f);
+                else
+                    glColor4f(0.14f, 0.20f, 0.30f, 0.88f);
+                draw_quad((float)bx[i], (float)by, (float)bw, (float)bh);
+                glColor4f(0.55f, 0.72f, 0.95f, 0.95f);
+                glBegin(GL_LINE_LOOP);
+                glVertex2f((float)bx[i],        (float)by);
+                glVertex2f((float)(bx[i] + bw), (float)by);
+                glVertex2f((float)(bx[i] + bw), (float)(by + bh));
+                glVertex2f((float)bx[i],        (float)(by + bh));
+                glEnd();
+                glColor3f(0.88f, 0.93f, 1.0f);
+                draw_string((float)(bx[i] + 6), (float)(by + 3),
+                            g_header_btn_labels[i], FONT_SMALL);
+            }
+            glDisable(GL_BLEND);
+        }
     }
 
     render_code_panel_search_overlay(cp_x, panel_w, panel_top);
 
-    /* Code lines */
-    int line_y = panel_top - CODE_MARGIN_Y - LINE_H - LINE_H;
+    /* Code lines: row 0 = info bar, row 1 = button bar, row 2+ = code */
+    int line_y = panel_top - CODE_MARGIN_Y - 3 * LINE_H;
     int cur = 0;
     int file_line = 1;
 
@@ -1326,12 +1380,12 @@ void render_code_panel(void) {
 
     /* Scroll indicator */
     if (total_lines > visible_lines) {
-        int bar_h = cp_h - 2 * CODE_MARGIN_Y - LINE_H;
+        int bar_h = cp_h - 2 * CODE_MARGIN_Y - 2 * LINE_H;
         float frac = (float)visible_lines / (float)total_lines;
         float pos  = (float)g_scroll / (float)total_lines;
         int thumb_h = (int)(bar_h * frac);
         if (thumb_h < 12) thumb_h = 12;
-        int thumb_y = panel_top - CODE_MARGIN_Y - LINE_H
+        int thumb_y = panel_top - CODE_MARGIN_Y - 2 * LINE_H
                       - (int)(bar_h * pos) - thumb_h;
 
         glEnable(GL_BLEND);
@@ -1422,6 +1476,68 @@ void render_autocomplete(void) {
     draw_string((float)(popup_x + 4),
                 (float)(popup_y - popup_h - FONT_H - 2),
                 "Tab to accept", FONT_SMALL);
+
+    glDisable(GL_BLEND);
+    end_2d();
+}
+
+void render_example_dropdown(void) {
+    if (!g_example_dropdown_open) return;
+    int n = repl_example_count();
+    if (n == 0) { g_example_dropdown_open = 0; return; }
+
+    /* Position: drops down from the Example button */
+    int bx[NUM_HEADER_BTNS], by, bh;
+    header_btn_rects(bx, &by, NULL, &bh);
+    int dx = bx[1];
+
+    /* Width: widest example name + padding */
+    int max_w = 0;
+    for (int i = 0; i < n; i++) {
+        int w = (int)strlen(repl_example_name(i)) * FONT_W;
+        if (w > max_w) max_w = w;
+    }
+    int dw = max_w + 20;
+    int dh = n * LINE_H + 6;
+    int dy = by - dh;   /* OpenGL Y: drops below the button row */
+
+    /* Update hover from current mouse position */
+    g_example_dropdown_hover = example_dropdown_item_hit(g_mouse_x, g_mouse_y);
+
+    begin_2d();
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+    /* Background */
+    glColor4f(0.08f, 0.10f, 0.18f, 0.96f);
+    draw_quad((float)dx, (float)dy, (float)dw, (float)dh);
+
+    /* Border */
+    glColor4f(0.55f, 0.72f, 0.95f, 0.85f);
+    glBegin(GL_LINE_LOOP);
+    glVertex2f((float)dx,        (float)dy);
+    glVertex2f((float)(dx + dw), (float)dy);
+    glVertex2f((float)(dx + dw), (float)(dy + dh));
+    glVertex2f((float)dx,        (float)(dy + dh));
+    glEnd();
+
+    /* Entries (index 0 at top) */
+    int ey = dy + dh - LINE_H + 1;
+    for (int i = 0; i < n; i++) {
+        if (i == g_example_dropdown_hover) {
+            glColor4f(0.20f, 0.25f, 0.45f, 0.90f);
+            draw_quad((float)(dx + 1), (float)(ey - 2),
+                      (float)(dw - 2), (float)LINE_H);
+            glColor3f(1.0f, 1.0f, 0.90f);
+        } else if (i == g_example_idx) {
+            glColor3f(0.60f, 1.0f, 0.60f);
+        } else {
+            glColor3f(0.65f, 0.65f, 0.72f);
+        }
+        draw_string((float)(dx + 8), (float)ey,
+                    repl_example_name(i), FONT_MONO);
+        ey -= LINE_H;
+    }
 
     glDisable(GL_BLEND);
     end_2d();
@@ -2040,9 +2156,9 @@ static int code_panel_hit_test(int mx, int my,
     if (gl_y < cp_y || gl_y >= cp_y + cp_h) return 0;
 
     /* Same layout constants as render_code_panel */
-    int line_y_start = panel_top - CODE_MARGIN_Y - LINE_H - LINE_H;
+    int line_y_start = panel_top - CODE_MARGIN_Y - 3 * LINE_H;
     int vis = (line_y_start + LINE_H - 3 - gl_y) / LINE_H;
-    if (vis < 0) return 0;   /* clicked in info bar */
+    if (vis < 0) return 0;   /* clicked in header */
 
     int linenum_w = 4 * FONT_W;
     int idx_col_w = g_show_indices ? (6 * FONT_W) : 0;
@@ -2070,10 +2186,10 @@ static int code_panel_drag_target(int mx, int my, int *out_target) {
     int panel_w = cp_w;
     int panel_top = cp_y + cp_h;
     int gl_y = g_win_h - my;
-    int line_y_start = panel_top - CODE_MARGIN_Y - LINE_H - LINE_H;
+    int line_y_start = panel_top - CODE_MARGIN_Y - 3 * LINE_H;
     int vis = (line_y_start + LINE_H - 3 - gl_y) / LINE_H;
 
-    int visible_lines = (cp_h - CODE_MARGIN_Y - LINE_H - CODE_MARGIN_Y) / LINE_H;
+    int visible_lines = (cp_h - CODE_MARGIN_Y - 2 * LINE_H - CODE_MARGIN_Y) / LINE_H;
     if (visible_lines < 1) visible_lines = 1;
     if (vis < 0) vis = 0;
     if (vis >= visible_lines) vis = visible_lines - 1;
@@ -2146,8 +2262,29 @@ void handle_code_panel_click(int mx, int my) {
 }
 
 int handle_code_panel_press(int mx, int my) {
-    if (code_panel_export_button_hit(mx, my)) {
-        repl_save_default_output();
+    /* Check example dropdown first (it floats over code) */
+    if (g_example_dropdown_open) {
+        int item = example_dropdown_item_hit(mx, my);
+        if (item >= 0) {
+            repl_load_example(item);
+            g_example_dropdown_open = 0;
+            return 1;
+        }
+        g_example_dropdown_open = 0;
+        /* fall through so clicks still navigate code */
+    }
+
+    int btn = header_btn_hit(mx, my);
+    if (btn >= 0) {
+        switch (btn) {
+        case 0: repl_save_default_output(); break;
+        case 1: g_example_dropdown_open ^= 1; break;
+        case 2: g_show_config ^= 1; break;
+        case 3:
+            if (g_replay_active) replay_stop();
+            else                 replay_start();
+            break;
+        }
         return 1;
     }
 

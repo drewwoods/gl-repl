@@ -10,6 +10,7 @@ void scene_rect(int *x, int *y, int *w, int *h);
 
 void render_code_panel(void);
 void render_autocomplete(void);
+void render_example_dropdown(void);
 void render_help(void);
 void render_var_panel(void);
 void render_config_menu(void);

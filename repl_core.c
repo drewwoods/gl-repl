@@ -5556,6 +5556,7 @@ static void display_func(void) {
     glViewport(0, 0, g_win_w, g_win_h);
     render_code_panel();
     render_autocomplete();
+    render_example_dropdown();
     render_var_panel();
     render_config_menu();
     render_help();
