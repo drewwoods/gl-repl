@@ -95,12 +95,55 @@ int main(void) {
         ASSERT_TRUE("reformat close brace indent", strcmp(g_cmds[2].source, "  }") == 0);
     }
 
+    repl_reset_state();
+    repl_feed_line_public("for(i, 0, 3) {");
+    repl_feed_line_public("x = i + 1;");
+    repl_feed_line_public("}");
+    ASSERT_TRUE("assign in loop cmd count", g_num_cmds == 3);
+    ASSERT_TRUE("assign in loop type", g_cmds[1].type == CMD_VAR_ASSIGN);
+    ASSERT_TRUE("assign in loop indent", strncmp(g_cmds[1].source, "    ", 4) == 0);
+    ASSERT_TRUE("assign in loop keeps expression", strstr(g_cmds[1].source, "i + 1") != NULL);
+    {
+        strncpy(g_cmds[1].source, "x=i+1", sizeof(g_cmds[1].source) - 1);
+        g_cmds[1].source[sizeof(g_cmds[1].source) - 1] = '\0';
+        repl_reformat_commands();
+        ASSERT_TRUE("reformat assign in loop indent", strncmp(g_cmds[1].source, "    ", 4) == 0);
+        ASSERT_TRUE("reformat assign in loop semicolon",
+                    g_cmds[1].source[strlen(g_cmds[1].source) - 1] == ';');
+    }
+
+    {
+        GLCmd cmd;
+        memset(&cmd, 0, sizeof(cmd));
+        ASSERT_TRUE("glu sphere constant parse",
+                    repl_parse_and_normalize("gluSphere(0.25, 16, 12);", 0, NULL, 0, 0, &cmd) == 1);
+        ASSERT_TRUE("glu sphere constant no quadric",
+                    strstr(cmd.source, "g_quadric") == NULL);
+        ASSERT_TRUE("glu sphere constant syntax",
+                    strstr(cmd.source, "gluSphere(0.25, 16, 12);") != NULL);
+    }
+
+    {
+        GLCmd cmd;
+        ExprVar vars[2] = {
+            { "radius", 0.5f },
+            { "stacks", 12.0f }
+        };
+        memset(&cmd, 0, sizeof(cmd));
+        ASSERT_TRUE("glu sphere var parse",
+                    repl_parse_and_normalize("gluSphere(radius, 16, stacks);",
+                                             0, vars, 2, 1, &cmd) == 1);
+        ASSERT_TRUE("glu sphere var keeps radius", strstr(cmd.source, "radius") != NULL);
+        ASSERT_TRUE("glu sphere var keeps stacks", strstr(cmd.source, "stacks") != NULL);
+        ASSERT_TRUE("glu sphere var no quadric", strstr(cmd.source, "g_quadric") == NULL);
+    }
+
     {
         char dump_buf[8192];
         FILE *dump_f = fopen(tmp_dump_path, "w");
         ASSERT_TRUE("open dump file", dump_f != NULL);
         if (dump_f) {
-            repl_debug_dump_editor(dump_f);
+            repl_dump_code_panel_text(dump_f);
             fclose(dump_f);
         }
 
@@ -112,8 +155,8 @@ int main(void) {
             fclose(dump_f);
             ASSERT_TRUE("dump has source section",
                         strstr(dump_buf, "--- source ---") != NULL);
-            ASSERT_TRUE("dump includes formatted body",
-                        strstr(dump_buf, "    glVertex3f(i+x, 0, 0);") != NULL);
+            ASSERT_TRUE("dump includes current formatted assignment",
+                        strstr(dump_buf, "    x = i+1;") != NULL);
         }
     }
 

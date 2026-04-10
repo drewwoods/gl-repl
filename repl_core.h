@@ -11,6 +11,8 @@ int  repl_load_from_file(const char *filename);
 void repl_save_output(const char *filename);
 void repl_flatten_commands(void);
 void repl_recompute_autonormals(void);
+int  repl_example_count(void);
+const char *repl_example_name(int idx);
 void repl_load_example(int idx);
 void repl_navigate_to_line(int target);
 void repl_load_initial_commands(const char *import_file);

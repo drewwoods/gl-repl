@@ -1,0 +1,41 @@
+--- header_pre ---
+#include <gl_includes.h>
+#include <math.h>
+
+#ifndef M_PI
+#define M_PI 3.14159265358979323846
+#endif
+
+static float g_angle = 0.0f;
+static int   g_rotating = 0;
+static GLUquadric *g_quadric = NULL;
+
+void display() {
+  glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+  glLoadIdentity();
+  glPushAttrib(GL_ALL_ATTRIB_BITS);
+--- render_state ---
+  glEnable(GL_MULTISAMPLE);
+  glDisable(GL_LINE_SMOOTH);
+--- lookat ---
+  gluLookAt(-2.77, 1.70, 4.44,
+            -0.00, -0.00, 0.00,
+            0.0, 1.0, 0.0);
+--- header_post ---
+  glRotatef(g_angle, 0.0f, 1.0f, 0.0f);
+--- source ---
+  glEnable(GL_DEPTH_TEST);
+  glBegin(GL_LINE_LOOP);
+    for(i, 0, 48) {
+      glColor3f(sin(i*TAU/48)*0.5+0.5, cos(i*TAU/48)*0.5+0.5, 0.5);
+      glVertex3f(cos(i*TAU/48+t)*2, sin(i*TAU/48+t)*2, sin(i*TAU/12+t)*0.5);
+    }
+  glEnd();
+  glBegin(GL_TRIANGLE_FAN);
+    glColor3f(0.2, 0.5, 1);
+    glVertex3f(0, 0, 0);
+    for(i, 0, 25) {
+      glColor3f(sin(i*TAU/24+t)*0.5+0.5, 0.3, cos(i*TAU/24+t)*0.5+0.5);
+      glVertex3f(cos(i*TAU/24)*1.5, sin(i*TAU/24)*1.5, 0);
+    }
+  glEnd();

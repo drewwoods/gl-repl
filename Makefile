@@ -1,7 +1,7 @@
 CC = gcc
 
 CFLAGS = \
-	-Wall -ggdb -O0 -g3 \
+	-Wall -ggdb -O3 -g3 \
 	-Wno-deprecated-declarations -Wfloat-conversion \
 	-fsanitize=address -fno-omit-frame-pointer \
 	-std=c2x -DGL_SILENCE_DEPRECATION \
@@ -20,11 +20,12 @@ GL_LDFLAGS = \
 .PHONY: all clean test lines
 
 all: sample test_eval test_format \
-	test_repl_core_parse test_repl_core_format test_repl_core_commit test_repl_core_io
+	test_repl_core_parse test_repl_core_format test_repl_core_commit test_repl_core_io \
+	test_repl_core_examples
 
-SRCS = sample.c repl_core.c scene_render.c ui_panels.c repl_eval.c cmd_format.c
-HDRS = sample.h repl_core.h repl_core_internal.h scene_render.h ui_panels.h repl_eval.h cmd_format.h
-CORE_TEST_SRCS = repl_core.c scene_render.c ui_panels.c repl_eval.c cmd_format.c
+SRCS = sample.c repl_core.c repl_examples.c scene_render.c ui_panels.c repl_eval.c cmd_format.c
+HDRS = sample.h repl_core.h repl_core_internal.h repl_examples.h scene_render.h ui_panels.h repl_eval.h cmd_format.h
+CORE_TEST_SRCS = repl_core.c repl_examples.c scene_render.c ui_panels.c repl_eval.c cmd_format.c
 
 sample: $(SRCS) $(HDRS)
 	$(CC) $(CFLAGS) -o $@ $(SRCS) $(GL_LDFLAGS)
@@ -47,13 +48,17 @@ test_repl_core_commit: test_repl_core_commit.c $(CORE_TEST_SRCS) $(HDRS)
 test_repl_core_io: test_repl_core_io.c $(CORE_TEST_SRCS) $(HDRS)
 	$(CC) $(CFLAGS) -o $@ test_repl_core_io.c $(CORE_TEST_SRCS) $(GL_LDFLAGS)
 
-test: test_eval test_format test_repl_core_parse test_repl_core_format test_repl_core_commit test_repl_core_io
+test_repl_core_examples: test_repl_core_examples.c $(CORE_TEST_SRCS) $(HDRS)
+	$(CC) $(CFLAGS) -o $@ test_repl_core_examples.c $(CORE_TEST_SRCS) $(GL_LDFLAGS)
+
+test: test_eval test_format test_repl_core_parse test_repl_core_format test_repl_core_commit test_repl_core_io test_repl_core_examples
 	./test_eval --run-tests
 	./test_format
 	./test_repl_core_parse
 	./test_repl_core_format
 	./test_repl_core_commit
 	./test_repl_core_io
+	./test_repl_core_examples
 
 # count lines: $(SRCS) $(HDRS)
 lines: $(SRCS) $(HDRS)
@@ -66,6 +71,7 @@ clean:
 		test_repl_core_parse test_repl_core_parse.dSYM \
 		test_repl_core_format test_repl_core_format.dSYM \
 		test_repl_core_commit test_repl_core_commit.dSYM \
+		test_repl_core_examples test_repl_core_examples.dSYM \
 		test_repl_core_io test_repl_core_io.dSYM \
 		*.o
 
