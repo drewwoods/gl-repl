@@ -491,11 +491,11 @@ int    g_scroll_follow_cursor = 0;
  * Designed to be forward-compatible with FBO-based accumulation later. */
 int    g_use_accum        = 1;  /* GLUT_ACCUM requested at init */
 int    g_accum_aa_enabled = 1;  /* Ctrl+B toggles jitter AA on/off */
-int    g_accum_samples    = 4;  /* current sample count */
+int    g_accum_samples    = 2;  /* current sample count */
 float  g_accum_jitter_x   = 0.0f;
 float  g_accum_jitter_y   = 0.0f;
 int    g_multisample_enabled = 1;
-int    g_line_smooth_enabled = 0;
+int    g_line_smooth_enabled = 1; /* GL_LINE_SMOOTH state, looks nice with correct blending */
 
 /* Sub-pixel jitter offsets (units: fraction of one pixel).
  * Table is ordered so the first N entries form a good N-sample set.
