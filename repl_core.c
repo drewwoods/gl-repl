@@ -3812,6 +3812,20 @@ static void load_initial_commands(const char *import_file) {
     scroll_to_display_function();
 }
 
+static void ensure_t_var_idx_cached(void) {
+    if (g_t_var_idx >= 0 && g_t_var_idx < g_num_predef_vars &&
+        strcmp(g_predef_vars[g_t_var_idx].name, "t") == 0)
+        return;
+
+    g_t_var_idx = -1;
+    for (int i = 0; i < g_num_predef_vars; i++) {
+        if (strcmp(g_predef_vars[i].name, "t") == 0) {
+            g_t_var_idx = i;
+            break;
+        }
+    }
+}
+
 /* GLU tessellator callbacks for explicit gluBegin/gluEnd tessellation */
 static void _tess_vtx_begin_cb(GLenum mode) {
     glBegin(mode);
@@ -3943,6 +3957,27 @@ void repl_init_gl(void) {
     init_gl();
 }
 
+void repl_advance_time(float dt) {
+    if (dt <= 0.0f)
+        return;
+
+    g_anim_time += dt;
+    ensure_t_var_idx_cached();
+    if (g_t_playing && g_t_var_idx >= 0) {
+        g_predef_vars[g_t_var_idx].value += dt;
+        g_flat_dirty = 1;
+    }
+}
+
+void repl_reset_time_to_zero(void) {
+    ensure_t_var_idx_cached();
+    if (g_t_var_idx < 0)
+        return;
+
+    g_predef_vars[g_t_var_idx].value = 0.0f;
+    g_flat_dirty = 1;
+}
+
 void repl_reset_state(void) {
     g_num_cmds = 0;
     g_num_flat_cmds = 0;
@@ -3961,8 +3996,12 @@ void repl_reset_state(void) {
     g_wrap_at_comma = 1;
     g_layout_vertical = 0;
     g_panel_frac = 0.42f;
+    g_anim_time = 0.0f;
     g_flat_dirty = 1;
     g_normals_dirty = 1;
+    ensure_t_var_idx_cached();
+    if (g_t_var_idx >= 0)
+        g_predef_vars[g_t_var_idx].value = 0.0f;
     clear_autocomplete_state();
     search_clear_all();
     update_render_state_strings();

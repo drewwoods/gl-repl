@@ -1312,8 +1312,13 @@ static void keyboard_func(unsigned char key, int x, int y) {
     }
 
     if (key == 20) {
-        g_t_playing = !g_t_playing;
-        set_status(g_t_playing ? "Time: playing" : "Time: paused (set 't' manually)");
+        if (glutGetModifiers() & GLUT_ACTIVE_SHIFT) {
+            repl_reset_time_to_zero();
+            set_status(g_t_playing ? "Time: reset to 0" : "Time: reset to 0 (paused)");
+        } else {
+            g_t_playing = !g_t_playing;
+            set_status(g_t_playing ? "Time: playing" : "Time: paused (set 't' manually)");
+        }
         return;
     }
 
@@ -2251,12 +2256,7 @@ static void motion_func(int x, int y) {
 static void timer_func(int value) {
     (void)value;
 
-    g_anim_time += 0.016f;
-
-    if (g_t_playing && g_t_var_idx >= 0) {
-        g_predef_vars[g_t_var_idx].value = g_anim_time;
-        g_flat_dirty = 1;
-    }
+    repl_advance_time(0.016f);
 
     if (g_replay_active)
         replay_tick_fade_batches(0.016f);

@@ -267,6 +267,26 @@ int main(void) {
     init_predef_vars();
 
     repl_reset_state();
+    {
+        int t_idx = predef_idx("t");
+        ASSERT_TRUE("t predef exists", t_idx >= 0);
+        if (t_idx >= 0) {
+            g_predef_vars[t_idx].value = 3.0f;
+            g_t_playing = 1;
+            repl_advance_time(0.25f);
+            ASSERT_TRUE("t advances from current value",
+                        fabsf(g_predef_vars[t_idx].value - 3.25f) < 1e-6f);
+            g_t_playing = 0;
+            repl_advance_time(0.50f);
+            ASSERT_TRUE("paused t does not advance",
+                        fabsf(g_predef_vars[t_idx].value - 3.25f) < 1e-6f);
+            repl_reset_time_to_zero();
+            ASSERT_TRUE("reset time sets t to zero",
+                        fabsf(g_predef_vars[t_idx].value) < 1e-6f);
+        }
+    }
+
+    repl_reset_state();
     repl_feed_line_public("z = -0.55;");
     ASSERT_TRUE("var assign cmd count", g_num_cmds == 1);
     ASSERT_TRUE("var assign type", g_cmds[0].type == CMD_VAR_ASSIGN);
