@@ -1,6 +1,7 @@
 #include "repl_core_internal.h"
 #include "ui_panels.h"
 
+#include <ctype.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -14,13 +15,138 @@ static int g_pass = 0;
     else printf("FAIL [%s]\n", label); \
 } while (0)
 
+#define TEST_CODE_PANEL_MAX_HANG_INDENT_CHARS 12
+
+static int test_code_panel_available_chars(int panel_w, int x) {
+    int avail_px = panel_w - x - 4;
+    if (avail_px < FONT_W)
+        return 0;
+    return avail_px / FONT_W;
+}
+
+static int test_code_panel_cont_indent_chars(const char *text) {
+    const char *src = text ? text : "";
+    int leading = 0;
+
+    while (src[leading] && isspace((unsigned char)src[leading]))
+        leading++;
+
+    {
+        const char *paren = strchr(src, '(');
+        if (paren && paren[1] != '\0') {
+            int align = (int)(paren - src) + 1;
+            int max_align = leading + TEST_CODE_PANEL_MAX_HANG_INDENT_CHARS;
+            if (align > max_align)
+                align = max_align;
+            return align;
+        }
+    }
+
+    return leading + 4;
+}
+
+static int test_code_panel_is_secondary_break(char c) {
+    return c == ')' || c == ' ' || c == '+' || c == '*' || c == '-' || c == '/';
+}
+
+static int test_code_panel_find_wrap_break(const char *text, int start,
+                                           int max_chars, int len) {
+    int end = start + max_chars - 1;
+    int search_start = start;
+
+    if (end >= len)
+        end = len - 1;
+
+    while (search_start < len &&
+           isspace((unsigned char)text[search_start]))
+        search_start++;
+
+    for (int i = end; i > search_start; i--) {
+        if (text[i] == ',')
+            return i;
+    }
+
+    for (int i = end; i > search_start; i--) {
+        if (test_code_panel_is_secondary_break(text[i]))
+            return i;
+    }
+
+    for (int i = end + 1; i < len; i++) {
+        if (text[i] == ',' ||
+            (i > search_start && test_code_panel_is_secondary_break(text[i])))
+            return i;
+    }
+
+    return -1;
+}
+
+static int test_code_panel_row_count_for_text(const char *text, int first_x,
+                                              int panel_w) {
+    const char *src = text ? text : "";
+    int len = (int)strlen(src);
+    int pos = 0;
+    int x = first_x;
+    int cont_x = first_x + test_code_panel_cont_indent_chars(src) * FONT_W;
+    int rows = 0;
+    int done = 0;
+
+    while (!done) {
+        rows++;
+        if (len == 0) {
+            done = 1;
+        } else {
+            int width_chars = test_code_panel_available_chars(panel_w, x);
+            int remaining = len - pos;
+
+            if (!g_wrap_at_comma || width_chars < 1 || remaining <= width_chars) {
+                done = 1;
+            } else {
+                int break_idx = test_code_panel_find_wrap_break(src, pos,
+                                                                width_chars, len);
+                if (break_idx < 0) {
+                    done = 1;
+                } else {
+                    pos = break_idx + 1;
+                    x = cont_x;
+                }
+            }
+        }
+    }
+
+    return rows;
+}
+
+static int code_panel_header_row_count(void) {
+    int panel_w = (int)(g_win_w * g_panel_frac);
+    int linenum_w = 4 * FONT_W;
+    int idx_col_w = g_show_indices ? (6 * FONT_W) : 0;
+    int text_x = CODE_MARGIN_X + linenum_w + FONT_W + idx_col_w;
+    int rows = 0;
+
+    for (int i = 0; g_header_pre[i]; i++)
+        rows += test_code_panel_row_count_for_text(g_header_pre[i], text_x, panel_w);
+    for (int i = 0; i < RENDER_STATE_LINE_COUNT; i++)
+        rows += test_code_panel_row_count_for_text(g_render_state_lines[i], text_x, panel_w);
+    for (int i = 0; i < LOOKAT_LINE_COUNT; i++)
+        rows += test_code_panel_row_count_for_text(g_lookat[i], text_x, panel_w);
+    for (int i = 0; g_header_post[i]; i++)
+        rows += test_code_panel_row_count_for_text(g_header_post[i], text_x, panel_w);
+
+    return rows;
+}
+
 static int code_panel_mouse_y_for_cmd(int cmd_idx) {
-    int n_hpre = 0;
-    for (int i = 0; g_header_pre[i]; i++) n_hpre++;
-    int n_hpost = 0;
-    for (int i = 0; g_header_post[i]; i++) n_hpost++;
-    int n_header = n_hpre + RENDER_STATE_LINE_COUNT + LOOKAT_LINE_COUNT + n_hpost;
-    int doc_line = n_header + cmd_idx;
+    int panel_w = (int)(g_win_w * g_panel_frac);
+    int linenum_w = 4 * FONT_W;
+    int idx_col_w = g_show_indices ? (6 * FONT_W) : 0;
+    int text_x = CODE_MARGIN_X + linenum_w + FONT_W + idx_col_w;
+    int doc_line = code_panel_header_row_count();
+
+    for (int i = 0; i < cmd_idx && i < g_num_cmds; i++) {
+        doc_line += test_code_panel_row_count_for_text(g_cmds[i].source,
+                                                       text_x, panel_w);
+    }
+
     int vis = doc_line - g_scroll;
     int line_y_start = g_win_h - CODE_MARGIN_Y - 3 * LINE_H;
     int gl_y = line_y_start - vis * LINE_H + 1;
