@@ -283,6 +283,63 @@ commands.
    the same scaffold for tests/debugging, so their output matches what the code
    panel is built from.
 
+### Screenshot Walkthrough
+
+The figure below is a repo-local annotated redraw of the screenshot discussed
+in the thread so this document remains self-contained. The editable source for
+the figure is [repl-code-panel-annotated.svg](/Users/drew/src/code/opengl/samples/gen-ai/OpenGL-Vibe/src/immediate-mode-repl/claude4.6-opus-thinking/repl-code-panel-annotated.svg).
+
+![Annotated REPL code panel](./repl-code-panel-annotated.png)
+
+Line ranges in that image map to state and generation paths like this:
+
+- Lines `1-15`: fixed scaffold preview from `g_header_pre[]`
+  (`repl_core.c:233-249`). `render_code_panel()` draws these first, and
+  `save_output()` writes the pre-`display()` portion directly into exported C.
+- Lines `16-17`: dynamic scaffold lines from `g_render_state_lines[]`
+  (`repl_core.c:252-255`). `update_render_state_strings()`
+  (`repl_core.c:1530-1537`) regenerates them from `g_multisample_enabled` and
+  `g_line_smooth_enabled` before both UI rendering and export.
+- Lines `18-20`: dynamic camera preview from `g_lookat[]`
+  (`repl_core.c:257-261`). `update_lookat_strings()`
+  (`repl_core.c:1539-1561`) regenerates them from `g_cam_rx`, `g_cam_ry`,
+  `g_cam_dist`, `g_cam_px`, and `g_cam_py`.
+- Line `21`: fixed post-camera scaffold from `g_header_post[]`
+  (`repl_core.c:263-265`). It is rendered in the panel as preview text and
+  emitted into exported `display()`.
+- Lines `22+`: editable REPL commands. Their authoritative state is
+  `g_cmds[]` / `g_num_cmds` (`repl_core.c:361-367`, `sample.h:214-220`), and
+  the exact visible text is `g_cmds[i].source`. Interactive commits parse and
+  store them via the normal commit path (`repl_core.c:8210-8239`). Those lines
+  can come from direct typing, imported files, or the built-in example tables.
+  In the current screenshot they come from `repl_examples.c`: startup falls
+  back to `load_example(0)` in `load_initial_commands()`
+  (`repl_core.c:8295-8304`), `load_example()` fetches the line array via
+  `repl_examples_lines(idx)` (`repl_core.c:8273-8288`,
+  `repl_examples.c:737-740`), and `load_example_lines()` feeds those source
+  strings into `g_cmds[]` (`repl_core.c:8249-8271`).
+- `v0`, `v1` in the gutter are not commands. They are UI-only labels computed
+  from `vnum` inside `render_code_panel()` (`ui_panels.c:1180-1285`).
+
+For the same visible command block, the REPL and exporter use different
+representations:
+
+- In the live REPL, the code panel reads the source-oriented `g_cmds[]`, while
+  rendering executes the flattened/evaluated `g_flat_cmds[]` built by
+  `flatten_commands()` / `flatten_range()` (`repl_core.c:4762-5082`).
+- In export, `save_output()` (`repl_core.c:3174-3259`) does not keep the
+  visible user lines inline in `display()`. Instead it writes them from
+  `g_cmds[]` into generated helpers such as `render_repl_geometry()` via
+  `write_render_helper_as_c()` and `write_render_body_range_as_c()`
+  (`repl_core.c:1933-2035`), then calls that helper from exported `display()`.
+
+One subtlety in the screenshot: some visible state commands may look similar to
+the hidden bootstrap defaults in `g_init_bootstrap_repl[]`
+(`repl_core.c:275-283`), but the visible lines themselves still come from
+`g_cmds[]`. Bootstrap state is separate runtime/export setup parsed into
+`g_init_bootstrap_cmds[]` and applied through `apply_init_bootstrap()`
+(`repl_core.c:1288-1385`).
+
 ## Lighting System
 
 - `g_lights[MAX_LIGHTS]` (MAX_LIGHTS=4) — `SceneLight` structs
