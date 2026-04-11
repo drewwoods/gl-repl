@@ -25,7 +25,6 @@ void display() {
   glRotatef(g_angle, 0.0f, 1.0f, 0.0f);
 --- source ---
   glEnable(GL_DEPTH_TEST);
-  glEnable(GL_COLOR_MATERIAL);
   func0 {
   glBegin(GL_TRIANGLES);
     glNormal3f(0, 0, 1);

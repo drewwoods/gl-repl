@@ -27,7 +27,12 @@
       "Bash(./test_repl_core_examples --dump-index 11)",
       "Read(//tmp/**)",
       "Bash(./test_repl_core_examples --dump-index 12)",
-      "Bash(./test_repl_core_commit)"
+      "Bash(./test_repl_core_commit)",
+      "Bash(git stash:*)",
+      "Bash(./test_eval)",
+      "Bash(./test_repl_core_parse)",
+      "Bash(./test_repl_core_search)",
+      "Bash(awk '/^void display/,/^}/' /tmp/repl_core_func_output.c)"
     ]
   }
 }

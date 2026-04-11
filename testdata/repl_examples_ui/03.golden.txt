@@ -25,7 +25,6 @@ void display() {
   glRotatef(g_angle, 0.0f, 1.0f, 0.0f);
 --- source ---
   glEnable(GL_DEPTH_TEST);
-  glEnable(GL_COLOR_MATERIAL);
   glEnable(GL_NORMALIZE);
   func0(radius, sides, phase) {
     glBegin(GL_TRIANGLE_FAN);
