@@ -1728,7 +1728,8 @@ void save_output(const char *filename) {
         fprintf(f, "  glColor3f(0.0f, 0.0f, 0.0f);\n");
         fprintf(f, "  glDisable(GL_COLOR_MATERIAL);\n");
         fprintf(f, "  glEnable(GL_POLYGON_OFFSET_LINE);\n");
-        fprintf(f, "  glPolygonOffset(-1.0f, -1.0f);\n");
+        fprintf(f, "  glPolygonOffset(%#.6gf, %#.6gf);\n",
+                      (double)REPL_OUTLINE_POLYGON_OFFSET_FACTOR, (double)REPL_OUTLINE_POLYGON_OFFSET_UNITS);
         fprintf(f, "  glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);\n");
         fprintf(f, "  glLineWidth(1.2f);\n");
         fprintf(f, "  glEnable(GL_LIGHTING);\n");
