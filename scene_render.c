@@ -1047,7 +1047,7 @@ static void draw_replay_hud(int scene_x, int scene_y, int scene_w, int scene_h) 
              g_replay_speed,
              g_replay_mode == REPLAY_MODE_VERTEX ? "Vertex" : "Polygon");
     snprintf(line2, sizeof(line2),
-             "[Space] play/pause  [+/-] speed  [m] mode  [Esc] stop  [Left/Right] step");
+             "[Space] play/pause  [+/-] speed  [m] mode  [Esc] stop  [Left/Right] step [Ctrl-K] jump to cursor");
 
     glColor3f(0.88f, 0.96f, 0.92f);
     draw_string((float)(hud_x + 10), (float)(hud_y + 18), line1, FONT_SMALL);

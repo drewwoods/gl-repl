@@ -2960,6 +2960,45 @@ void replay_seek(int new_pc) {
                    : REPLAY_PAUSED;
 }
 
+int replay_seek_to_src_line(int target_line) {
+    int pc = 0;
+    int landed_pc = -1;
+    int landed_src = -1;
+
+    if (g_flat_dirty) {
+        float live_predef_vals[MAX_PREDEF_VARS];
+        copy_predef_values(live_predef_vals);
+        flatten_commands();
+        g_flat_dirty = 0;
+        restore_predef_values(live_predef_vals);
+    }
+
+    while (pc < g_num_flat_cmds) {
+        int fade_begin = -1;
+        int fade_end = -1;
+        int next_pc = (g_replay_mode == REPLAY_MODE_POLYGON)
+                    ? replay_next_polygon_limit(pc, &fade_begin, &fade_end)
+                    : replay_next_vertex_limit(pc, &fade_begin, &fade_end);
+
+        if (next_pc <= pc)
+            break;
+
+        int step_src = replay_last_meaningful_src(pc, next_pc);
+        if (step_src >= target_line) {
+            landed_pc = next_pc;
+            landed_src = step_src;
+            break;
+        }
+        pc = next_pc;
+    }
+
+    if (landed_pc < 0)
+        return -1;
+
+    replay_seek(landed_pc);
+    return landed_src;
+}
+
 void replay_restart_from_beginning(void) {
     g_replay_pc = 0;
     g_replay_accum = 0.0f;

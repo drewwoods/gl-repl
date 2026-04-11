@@ -910,6 +910,18 @@ static void keyboard_func(unsigned char key, int x, int y) {
             set_status("Replay: off");
             return;
         }
+        if (key == 11) {
+            int landed = replay_seek_to_src_line(g_edit_line);
+            if (landed < 0) {
+                set_status("Jump: no geometry at or after cursor");
+            } else {
+                g_replay_state = REPLAY_PAUSED;
+                char msg[64];
+                snprintf(msg, sizeof(msg), "Jump: paused at line %d", landed + 1);
+                set_status(msg);
+            }
+            return;
+        }
         if (key == ' ') {
             if (g_replay_state == REPLAY_PLAYING) {
                 g_replay_state = REPLAY_PAUSED;
@@ -1016,6 +1028,25 @@ static void keyboard_func(unsigned char key, int x, int y) {
 
     if (key == 7) {
         replay_start();
+        return;
+    }
+
+    if (key == 11) {
+        int target_line = g_edit_line;
+        if (!g_replay_active) {
+            replay_start();
+            if (!g_replay_active)
+                return;
+        }
+        int landed = replay_seek_to_src_line(target_line);
+        if (landed < 0) {
+            set_status("Jump: no geometry at or after cursor");
+        } else {
+            g_replay_state = REPLAY_PAUSED;
+            char msg[64];
+            snprintf(msg, sizeof(msg), "Jump: paused at line %d", landed + 1);
+            set_status(msg);
+        }
         return;
     }
 
