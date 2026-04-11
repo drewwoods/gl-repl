@@ -1437,6 +1437,10 @@ static void keyboard_func(unsigned char key, int x, int y) {
 
                 memset(&cmd, 0, sizeof(cmd));
                 if (dnv > 0) {
+                    if (try_assign_variable()) {
+                        clear_autocomplete_state();
+                        return;
+                    }
                     int saved_el = g_edit_line;
                     g_edit_line = fpos;
                     parsed = repl_parse_command_with_vars(g_input, &cmd, dvars, dnv);
@@ -1517,6 +1521,16 @@ static void keyboard_func(unsigned char key, int x, int y) {
                 memset(&cmd, 0, sizeof(cmd));
                 dnv = collect_visible_vars(fpos, dvars, MAX_EXPR_VARS);
                 if (dnv > 0) {
+                    if (try_assign_variable()) {
+                        g_inserting = 1;
+                        g_input[0] = '\0';
+                        g_input_len = 0;
+                        g_cursor_pos = 0;
+                        clear_autocomplete_state();
+                        set_status("Insert mode");
+                        mark_normals_dirty();
+                        return;
+                    }
                     int saved_el = g_edit_line;
                     g_edit_line = fpos;
                     parsed = repl_parse_command_with_vars(g_input, &cmd, dvars, dnv);
