@@ -32,7 +32,8 @@
       "Bash(./test_eval)",
       "Bash(./test_repl_core_parse)",
       "Bash(./test_repl_core_search)",
-      "Bash(awk '/^void display/,/^}/' /tmp/repl_core_func_output.c)"
+      "Bash(awk '/^void display/,/^}/' /tmp/repl_core_func_output.c)",
+      "Bash(./sample --dump-code /tmp/repl_test_save.c)"
     ]
   }
 }

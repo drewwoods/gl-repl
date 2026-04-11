@@ -20,6 +20,111 @@ const char *g_header_pre[] = {
     NULL
 };
 
+char g_workspace_header_lines[MAX_WORKSPACE_HEADER_LINES][WORKSPACE_HEADER_LINE_LEN];
+int  g_workspace_header_line_count = 0;
+
+static void workspace_slug_from_name(const char *name, char *out, size_t out_sz) {
+    size_t j = 0;
+    for (size_t i = 0; name[i] && j + 1 < out_sz; i++) {
+        unsigned char c = (unsigned char)name[i];
+        if (isspace(c) || c == '-' || c == '/') out[j++] = '_';
+        else if (isalnum(c))                    out[j++] = (char)tolower(c);
+        else if (c == '_')                      out[j++] = '_';
+    }
+    out[j] = '\0';
+}
+
+static void workspace_format_float(char *buf, size_t n, float v) {
+    snprintf(buf, n, "%g", (double)v);
+}
+
+void refresh_workspace_header_lines(void) {
+    int n = 0;
+    if (n < MAX_WORKSPACE_HEADER_LINES) {
+        snprintf(g_workspace_header_lines[n++], WORKSPACE_HEADER_LINE_LEN,
+                 "// @workspace: REPL state (auto-saved)");
+    }
+    for (int i = 0; i < g_num_predef_vars && n < MAX_WORKSPACE_HEADER_LINES; i++) {
+        char vbuf[32];
+        workspace_format_float(vbuf, sizeof(vbuf), g_predef_vars[i].value);
+        snprintf(g_workspace_header_lines[n++], WORKSPACE_HEADER_LINE_LEN,
+                 "// @var %s = %s", g_predef_vars[i].name, vbuf);
+    }
+    for (int i = 0; i < CFG_ITEM_COUNT && n < MAX_WORKSPACE_HEADER_LINES; i++) {
+        char slug[32];
+        workspace_slug_from_name(g_cfg_items[i].label, slug, sizeof(slug));
+        snprintf(g_workspace_header_lines[n++], WORKSPACE_HEADER_LINE_LEN,
+                 "// @cfg %s = %d", slug, *g_cfg_items[i].value);
+    }
+    g_workspace_header_line_count = n;
+}
+
+int parse_workspace_header_line(const char *line) {
+    const char *p = line;
+    while (*p && isspace((unsigned char)*p)) p++;
+    if (p[0] != '/' || p[1] != '/') return 0;
+    p += 2;
+    while (*p && isspace((unsigned char)*p)) p++;
+    if (*p != '@') return 0;
+    p++;
+
+    if (strncmp(p, "workspace", 9) == 0) return 1;
+
+    if (strncmp(p, "var", 3) == 0 && isspace((unsigned char)p[3])) {
+        p += 4;
+        while (*p && isspace((unsigned char)*p)) p++;
+        char name[16];
+        int ni = 0;
+        while (*p && (isalnum((unsigned char)*p) || *p == '_') &&
+               ni < (int)sizeof(name) - 1)
+            name[ni++] = *p++;
+        name[ni] = '\0';
+        while (*p && isspace((unsigned char)*p)) p++;
+        if (*p != '=') return 0;
+        p++;
+        ExprCtx ctx = { p, NULL, 0 };
+        float val = eval_expr(&ctx);
+        for (int i = 0; i < g_num_predef_vars; i++) {
+            if (strcmp(g_predef_vars[i].name, name) == 0) {
+                g_predef_vars[i].value = val;
+                return 1;
+            }
+        }
+        return 1;
+    }
+
+    if (strncmp(p, "cfg", 3) == 0 && isspace((unsigned char)p[3])) {
+        p += 4;
+        while (*p && isspace((unsigned char)*p)) p++;
+        char slug[32];
+        int si = 0;
+        while (*p && (isalnum((unsigned char)*p) || *p == '_') &&
+               si < (int)sizeof(slug) - 1)
+            slug[si++] = *p++;
+        slug[si] = '\0';
+        while (*p && isspace((unsigned char)*p)) p++;
+        if (*p != '=') return 0;
+        p++;
+        while (*p && isspace((unsigned char)*p)) p++;
+        int val = (int)strtol(p, NULL, 10);
+        for (int i = 0; i < CFG_ITEM_COUNT; i++) {
+            char item_slug[32];
+            workspace_slug_from_name(g_cfg_items[i].label, item_slug, sizeof(item_slug));
+            if (strcmp(item_slug, slug) == 0) {
+                int max_v = g_cfg_items[i].n_states > 0
+                            ? g_cfg_items[i].n_states - 1 : 1;
+                if (val < 0) val = 0;
+                if (val > max_v) val = max_v;
+                *g_cfg_items[i].value = val;
+                return 1;
+            }
+        }
+        return 1;
+    }
+
+    return 0;
+}
+
 char g_render_state_lines[RENDER_STATE_LINE_COUNT][64] = {
     "  glEnable(GL_MULTISAMPLE);",
     "  glDisable(GL_LINE_SMOOTH);"
@@ -1527,6 +1632,12 @@ void save_output(const char *filename) {
 
     update_render_state_strings();
     update_lookat_strings();
+    refresh_workspace_header_lines();
+
+    for (int i = 0; i < g_workspace_header_line_count; i++)
+        fprintf(f, "%s\n", g_workspace_header_lines[i]);
+    if (g_workspace_header_line_count > 0)
+        fprintf(f, "\n");
 
     for (int i = 0; g_header_pre[i]; i++) {
         if (strcmp(g_header_pre[i], "void display() {") == 0)
@@ -1623,6 +1734,8 @@ int load_from_file(const char *filename) {
         while (*p && isspace((unsigned char)*p)) p++;
 
         if (!in_snippet) {
+            if (parse_workspace_header_line(p))
+                continue;
             if (import_func_depth > 0) {
                 import_feed_one_line(p, &loaded, &warnings);
                 for (const char *bp = p; *bp; bp++) {
