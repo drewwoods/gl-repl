@@ -271,12 +271,18 @@ static void write_light_setup(FILE *f) {
         "GL_LIGHT0", "GL_LIGHT1", "GL_LIGHT2", "GL_LIGHT3"
     };
 
-    fprintf(f, "\n  /* Light setup */\n");
+    int first_light = 1;
+
     for (int i = 0; i < MAX_LIGHTS; i++) {
         const SceneLight *l = &g_lights[i];
         const char *ln = light_names[i];
 
         if (!l->enabled) continue;
+
+        if (first_light) {
+            fprintf(f, "\n  /* Light setup */\n");
+            first_light = 0;
+        }
 
         fprintf(f, "  {\n");
         fprintf(f, "    GLfloat pos[]  = { %.2ff, %.2ff, %.2ff, %.2ff };\n",
@@ -1547,18 +1553,21 @@ void save_output(const char *filename) {
         fprintf(f, "%s\n", g_header_post[i]);
     write_light_setup(f);
 
+    fprintf(f, "\n  /* Vertex Fill Pass */\n");
     fprintf(f, "  glPushMatrix();\n");
     fprintf(f, "  reset_repl_vars();\n");
     fprintf(f, "  render_repl_geometry();\n");
     fprintf(f, "  glPopMatrix();\n");
 
     if (g_show_outlines) {
-        fprintf(f, "\n  glColor3f(0.0f, 0.0f, 0.0f);\n");
+        fprintf(f, "\n  /* Vertex Outline Pass */\n");
+        fprintf(f, "  glColor3f(0.0f, 0.0f, 0.0f);\n");
         fprintf(f, "  glDisable(GL_COLOR_MATERIAL);\n");
         fprintf(f, "  glEnable(GL_POLYGON_OFFSET_LINE);\n");
         fprintf(f, "  glPolygonOffset(-1.0f, -1.0f);\n");
         fprintf(f, "  glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);\n");
         fprintf(f, "  glLineWidth(1.2f);\n");
+        fprintf(f, "  glEnable(GL_LIGHTING);\n");
         fprintf(f, "  glPushMatrix();\n");
         fprintf(f, "  reset_repl_vars();\n");
         fprintf(f, "  render_repl_geometry();\n");
@@ -1569,10 +1578,12 @@ void save_output(const char *filename) {
     }
 
     if (g_show_vpoints) {
-        fprintf(f, "\n  glColor3f(0.0f, 0.0f, 0.0f);\n");
+        fprintf(f, "\n  /* Vertex Point Pass */\n");
+        fprintf(f, "  glColor3f(0.0f, 0.0f, 0.0f);\n");
         fprintf(f, "  glDisable(GL_COLOR_MATERIAL);\n");
         fprintf(f, "  glPointSize(8.0f);\n");
         fprintf(f, "  glPolygonMode(GL_FRONT_AND_BACK, GL_POINT);\n");
+        fprintf(f, "  glEnable(GL_LIGHTING);\n");
         fprintf(f, "  glPushMatrix();\n");
         fprintf(f, "  reset_repl_vars();\n");
         fprintf(f, "  render_repl_geometry();\n");
