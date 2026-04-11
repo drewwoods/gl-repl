@@ -3725,16 +3725,30 @@ static void load_example(int idx) {
 /* Initialization                                                             */
 /* ========================================================================= */
 
+static void scroll_to_display_function(void) {
+    refresh_workspace_header_lines();
+    int target = g_workspace_header_line_count;
+    for (int i = 0; g_header_pre[i]; i++) {
+        if (strcmp(g_header_pre[i], "void display() {") == 0)
+            break;
+        target++;
+    }
+    g_scroll = target;
+    g_scroll_follow_cursor = 0;
+}
+
 static void load_initial_commands(const char *import_file) {
     /* Try importing from file first */
     if (import_file && load_from_file(import_file)) {
         g_edit_line = g_num_cmds;
+        scroll_to_display_function();
         return;
     }
 
     /* Fall back to default example (cube) */
     load_example(0);
     set_status("Ready - type GL commands, press ; to execute. F1 for help. F12 for examples.");
+    scroll_to_display_function();
 }
 
 /* GLU tessellator callbacks for explicit gluBegin/gluEnd tessellation */
