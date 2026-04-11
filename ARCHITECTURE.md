@@ -245,6 +245,44 @@ All 2D overlays rendered in `display_func()` after the 3D scene:
 - Resizable left edge via drag
 - Click-to-navigate to source lines
 
+### Fixed Code Scaffold Generation
+
+The dimmed, non-editable C shown in the REPL code panel is not synthesized
+from `g_cmds[]` or `g_flat_cmds[]`. It is assembled from a small set of global
+string buffers in `repl_core.c`, then rendered ahead of the editable REPL
+commands.
+
+#### Variables involved
+
+- `g_header_pre[]` — static preamble lines: includes, `M_PI` guard, generated
+  globals such as `g_angle`, `g_rotating`, `g_quadric`, and the opening
+  `display()` boilerplate through `glPushAttrib(...)`.
+- `g_render_state_lines[RENDER_STATE_LINE_COUNT][64]` — dynamic fixed lines for
+  current render toggles. Today these are the `GL_MULTISAMPLE` and
+  `GL_LINE_SMOOTH` enable/disable lines.
+- `g_lookat[LOOKAT_LINE_COUNT][128]` — dynamic fixed `gluLookAt(...)` lines.
+- `g_header_post[]` — static fixed lines after `gluLookAt`, currently the
+  `glRotatef(g_angle, ...)` line.
+- `g_cmds[i].source` — the user-editable lines appended after the fixed
+  scaffold.
+
+#### Functions involved
+
+1. `display_func()` calls `update_render_state_strings()` and
+   `update_lookat_strings()` before drawing the UI.
+2. `update_render_state_strings()` formats `g_render_state_lines[]` from
+   `g_multisample_enabled` and `g_line_smooth_enabled`.
+3. `update_lookat_strings()` formats `g_lookat[]` from the live camera state:
+   `g_cam_rx`, `g_cam_ry`, `g_cam_dist`, `g_cam_px`, and `g_cam_py`.
+4. `render_code_panel()` iterates `g_header_pre[]`,
+   `g_render_state_lines[]`, `g_lookat[]`, `g_header_post[]`, and then the
+   editable command sources in `g_cmds[]`.
+5. `code_panel_header_row_count()` uses the same fixed arrays to compute scroll
+   height and layout for the panel.
+6. `repl_dump_code_panel_text()` and `repl_dump_code_panel_visual_text()` dump
+   the same scaffold for tests/debugging, so their output matches what the code
+   panel is built from.
+
 ## Lighting System
 
 - `g_lights[MAX_LIGHTS]` (MAX_LIGHTS=4) — `SceneLight` structs
@@ -262,6 +300,19 @@ Generates standalone C code:
 - User commands translated to C (REPL expressions → C math)
 - For-loops preserved as C `for()` statements
 - Snippet markers for re-import
+
+The exporter reuses the same fixed-code sources that the REPL panel shows:
+
+- `save_output()` first calls `update_render_state_strings()` and
+  `update_lookat_strings()` so the generated file matches the current camera and
+  render toggles.
+- It writes the pre-`display()` part of `g_header_pre[]`, then inserts helper
+  code via `write_predef_var_globals()`, `write_rand_helper()`,
+  `write_tess_preamble()`, `write_predef_var_reset_func()`,
+  `write_func_defs_as_c()`, and `write_render_helper_as_c()`.
+- It then emits a fresh `display()` function body using
+  `g_render_state_lines[]`, `g_lookat[]`, `g_header_post[]`, and
+  `write_light_setup()`, followed by calls into the generated geometry helpers.
 
 ### Import (./sample file.c)
 
