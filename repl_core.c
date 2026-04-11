@@ -609,7 +609,7 @@ const char *g_axes_names[] = {
 int    g_show_vnums   = 1;
 int    g_show_normals = 0;
 int    g_show_indices = 1;
-int    g_wrap_at_comma = 0;
+int    g_wrap_at_comma = 1;
 int    g_layout_vertical = 0;  /* 0=left code panel, 1=top code panel */
 int    g_show_guides  = 1;
 int    g_autonormal   = 0;
