@@ -134,7 +134,6 @@ char g_cam_lines[CAM_LINE_COUNT][96] = {
     "  glTranslatef(0.0000f, 0.0000f, -5.0000f);",
     "  glRotatef(20.0000f, 1.0f, 0.0f, 0.0f);",
     "  glRotatef(30.0000f, 0.0f, 1.0f, 0.0f);",
-    "  glRotatef(g_angle, 0.0f, 1.0f, 0.0f);",
     "  glTranslatef(0.0000f, 0.0000f, 0.0000f);"
 };
 
@@ -352,6 +351,31 @@ static void emit_export_init_section_to_file(FILE *f, int include_tess) {
     }
 }
 
+static void emit_export_header_pre(FILE *f) {
+    char angle_line[64];
+
+    snprintf(angle_line, sizeof(angle_line),
+             "static float g_angle = %.4ff;", g_cam_ry);
+
+    for (int i = 0; g_header_pre[i]; i++) {
+        if (strcmp(g_header_pre[i], "void display() {") == 0)
+            break;
+        if (strcmp(g_header_pre[i], "static float g_angle = 0.0f;") == 0) {
+            fprintf(f, "%s\n", angle_line);
+            continue;
+        }
+        fprintf(f, "%s\n", g_header_pre[i]);
+    }
+}
+
+static void emit_export_cam_lines(FILE *f) {
+    fprintf(f, "  glTranslatef(0.0000f, 0.0000f, %.4ff);\n", -g_cam_dist);
+    fprintf(f, "  glRotatef(%.4ff, 1.0f, 0.0f, 0.0f);\n", g_cam_rx);
+    fprintf(f, "  glRotatef(g_angle, 0.0f, 1.0f, 0.0f);\n");
+    fprintf(f, "  glTranslatef(%.4ff, %.4ff, %.4ff);\n",
+            -g_cam_tx, -g_cam_ty, -g_cam_tz);
+}
+
 void update_render_state_strings(void) {
     snprintf(g_render_state_lines[0], sizeof(g_render_state_lines[0]),
              "  gl%s(GL_MULTISAMPLE);",
@@ -428,15 +452,39 @@ static int cam_line_read_floats(const char *p, float *out, int n) {
     return 1;
 }
 
-/* Camera-block parser state: the 5 camera lines always appear in the same
- * order and contiguously inside display() — translate(dist), rotate(rx),
- * rotate(ry), rotate(g_angle), translate(target). We walk a tiny state
+/* Camera-block parser state: exported camera lines appear contiguously inside
+ * display(). Older exports use translate(dist), rotate(rx), rotate(ry),
+ * rotate(g_angle), translate(target); newer exports fold ry into the initial
+ * g_angle value and omit the literal rotate(ry) line. We walk a tiny state
  * machine so the parser only consumes lines during the expected sequence,
  * and never bites into user code elsewhere in the file. Reset at load. */
 static int g_cam_parse_state = 0;    /* 0..5, stops consuming at 5 */
 
 void import_cam_parser_reset(void) {
     g_cam_parse_state = 0;
+}
+
+static int import_parse_export_angle_init(const char *text) {
+    const char *p = text;
+    const char *eq;
+    char *end = NULL;
+    float v;
+
+    while (*p == ' ' || *p == '\t') p++;
+    if (strncmp(p, "static float g_angle", 20) != 0)
+        return 0;
+
+    eq = strchr(p, '=');
+    if (!eq)
+        return 0;
+    eq++;
+
+    v = strtof(eq, &end);
+    if (end == eq)
+        return 0;
+
+    g_cam_ry = v;
+    return 1;
 }
 
 /* Per-line sniffer for the new 4-line camera block emitted into output.c.
@@ -472,6 +520,12 @@ int import_parse_cam_line(const char *text) {
     }
 
     if (g_cam_parse_state == 2 && strncmp(p, "glRotatef", 9) == 0) {
+        const char *q = strchr(p, '(');
+        if (q && strstr(q, "g_angle")) {
+            g_cam_parse_state = 4;
+            return 1;
+        }
+
         p = strchr(p, '(');
         if (!p) return 0;
         p++;
@@ -519,12 +573,7 @@ void update_cam_lines(void) {
              "  glRotatef(%.4ff, 1.0f, 0.0f, 0.0f);", g_cam_rx);
     snprintf(g_cam_lines[2], sizeof(g_cam_lines[2]),
              "  glRotatef(%.4ff, 0.0f, 1.0f, 0.0f);", g_cam_ry);
-    /* slot 3 is the literal `glRotatef(g_angle, 0,1,0)` animation hook —
-     * it pivots around the orbit target because it sits between the ry
-     * rotate and the target translate. Never overwritten. */
     snprintf(g_cam_lines[3], sizeof(g_cam_lines[3]),
-             "  glRotatef(g_angle, 0.0f, 1.0f, 0.0f);");
-    snprintf(g_cam_lines[4], sizeof(g_cam_lines[4]),
              "  glTranslatef(%.4ff, %.4ff, %.4ff);",
              -g_cam_tx, -g_cam_ty, -g_cam_tz);
 }
@@ -1818,11 +1867,7 @@ void save_output(const char *filename) {
     if (g_workspace_header_line_count > 0)
         fprintf(f, "\n");
 
-    for (int i = 0; g_header_pre[i]; i++) {
-        if (strcmp(g_header_pre[i], "void display() {") == 0)
-            break;
-        fprintf(f, "%s\n", g_header_pre[i]);
-    }
+    emit_export_header_pre(f);
     write_predef_var_globals(f);
     if (needs_rand)
         write_rand_helper(f);
@@ -1838,8 +1883,7 @@ void save_output(const char *filename) {
     fprintf(f, "  glPushAttrib(GL_ALL_ATTRIB_BITS);\n");
     for (int i = 0; i < RENDER_STATE_LINE_COUNT; i++)
         fprintf(f, "%s\n", g_render_state_lines[i]);
-    for (int i = 0; i < CAM_LINE_COUNT; i++)
-        fprintf(f, "%s\n", g_cam_lines[i]);
+    emit_export_cam_lines(f);
     for (int i = 0; g_header_post[i]; i++)
         fprintf(f, "%s\n", g_header_post[i]);
     write_light_setup(f);
@@ -1943,7 +1987,10 @@ int load_from_file(const char *filename) {
             continue;
         }
 
-        /* New camera format: 4 plain glTranslatef/glRotatef lines in display() */
+        if (!in_snippet && import_parse_export_angle_init(p))
+            continue;
+
+        /* Export camera format: compact glTranslatef/glRotatef lines in display() */
         if (!in_snippet && import_parse_cam_line(p))
             continue;
 

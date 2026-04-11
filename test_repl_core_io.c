@@ -188,6 +188,16 @@ int main(void) {
     g_cam_tz   = -2.00f;
     repl_save_output(path);
     {
+        char buf[16384];
+        read_text_file(path, buf, sizeof(buf));
+        ASSERT_TRUE("camera export seeds g_angle from camera ry",
+                    strstr(buf, "static float g_angle = 31.4799f;") != NULL);
+        ASSERT_TRUE("camera export omits literal y rotate",
+                    strstr(buf, "glRotatef(31.4799f, 0.0f, 1.0f, 0.0f);") == NULL);
+        ASSERT_TRUE("camera export keeps one animated y rotate",
+                    count_substr(buf, "glRotatef(g_angle, 0.0f, 1.0f, 0.0f);") == 1);
+    }
+    {
         float saved_rx = g_cam_rx, saved_ry = g_cam_ry, saved_dist = g_cam_dist;
         float saved_tx = g_cam_tx, saved_ty = g_cam_ty, saved_tz = g_cam_tz;
         g_cam_rx = 20.0f; g_cam_ry = 30.0f; g_cam_dist = 5.0f;
