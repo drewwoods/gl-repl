@@ -710,6 +710,13 @@ void repl_debug_dump_editor(FILE *out) {
         if (!g_cmds[i].valid) continue;
         fprintf(dst, "%s\n", g_cmds[i].source);
     }
+    fprintf(dst, "--- camera ---\n");
+    fprintf(dst, "rx=%g ry=%g dist=%g px=%g py=%g\n",
+            (double)g_cam_rx, (double)g_cam_ry, (double)g_cam_dist,
+            (double)g_cam_px, (double)g_cam_py);
+    update_lookat_strings();
+    for (int i = 0; i < LOOKAT_LINE_COUNT; i++)
+        fprintf(dst, "%s\n", g_lookat[i]);
     fprintf(dst, "--- init ---\n");
     for (int i = 0; i < init_section_line_count(); i++) {
         char line[MAX_LINE_LEN];

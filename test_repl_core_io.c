@@ -171,6 +171,31 @@ int main(void) {
     repl_flatten_commands();
     ASSERT_TRUE("flatten produced cmds", g_num_flat_cmds > 0);
 
+    /* Camera state round-trip: non-default eye/center must survive save+load. */
+    repl_reset_state();
+    repl_feed_line_public("glBegin(GL_POINTS);");
+    repl_feed_line_public("glVertex3f(0, 0, 0);");
+    repl_feed_line_public("glEnd();");
+    g_cam_rx   = 31.523f;
+    g_cam_ry   = 31.4799f;
+    g_cam_dist = 7.59313f;
+    g_cam_px   = -2.00036f;
+    g_cam_py   = -0.234623f;
+    repl_save_output(path);
+    {
+        float saved_rx = g_cam_rx, saved_ry = g_cam_ry, saved_dist = g_cam_dist;
+        float saved_px = g_cam_px, saved_py = g_cam_py;
+        g_cam_rx = 20.0f; g_cam_ry = 30.0f; g_cam_dist = 5.0f;
+        g_cam_px = 0.0f;  g_cam_py = 0.0f;
+        repl_reset_state();
+        ASSERT_TRUE("load camera output", repl_load_from_file(path) == 1);
+        ASSERT_TRUE("camera rx restored",   fabsf(g_cam_rx   - saved_rx)   < 1e-2f);
+        ASSERT_TRUE("camera ry restored",   fabsf(g_cam_ry   - saved_ry)   < 1e-2f);
+        ASSERT_TRUE("camera dist restored", fabsf(g_cam_dist - saved_dist) < 1e-2f);
+        ASSERT_TRUE("camera px restored",   fabsf(g_cam_px   - saved_px)   < 1e-2f);
+        ASSERT_TRUE("camera py restored",   fabsf(g_cam_py   - saved_py)   < 1e-2f);
+    }
+
     repl_reset_state();
     repl_feed_line_public("x = 1;");
     repl_feed_line_public("func0(radius, yoff) {");
