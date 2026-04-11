@@ -1058,6 +1058,55 @@ static void draw_replay_hud(int scene_x, int scene_y, int scene_w, int scene_h) 
     end_2d();
 }
 
+/* Ground-plane crosshair gizmo at the orbit target. Visible only while the
+ * camera is moving (during drag or while momentum carries it); fades out.
+ * REPL-only — never exported. Styled to match the other scene helpers:
+ * soft halo line under a bright core, alpha driven by g_cam_motion_glow. */
+static void draw_orbit_target(void) {
+    float glow = g_cam_motion_glow;
+    if (glow <= 0.0f) return;
+    if (glow > 1.0f) glow = 1.0f;
+
+    glDisable(GL_LIGHTING);
+    glEnable(GL_DEPTH_TEST);
+    glDepthMask(GL_FALSE);
+    if (g_line_smooth_enabled) glEnable(GL_LINE_SMOOTH);
+    else glDisable(GL_LINE_SMOOTH);
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+    float r = 0.08f * g_cam_dist;
+    float tx = g_cam_tx, ty = g_cam_ty, tz = g_cam_tz;
+
+    /* Halo pass: wide, translucent warm amber under the crosshair */
+    glLineWidth(6.0f);
+    glColor4f(1.00f, 0.70f, 0.25f, 0.18f * glow);
+    glBegin(GL_LINES);
+    glVertex3f(tx - r, ty, tz); glVertex3f(tx + r, ty, tz);
+    glVertex3f(tx, ty, tz - r); glVertex3f(tx, ty, tz + r);
+    glEnd();
+
+    /* Core pass: thin bright crosshair */
+    glLineWidth(1.5f);
+    glColor4f(1.00f, 0.90f, 0.55f, 0.90f * glow);
+    glBegin(GL_LINES);
+    glVertex3f(tx - r, ty, tz); glVertex3f(tx + r, ty, tz);
+    glVertex3f(tx, ty, tz - r); glVertex3f(tx, ty, tz + r);
+    glEnd();
+    glLineWidth(1.0f);
+
+    /* Center dot */
+    glPointSize(5.0f);
+    glColor4f(1.00f, 0.95f, 0.75f, 0.95f * glow);
+    glBegin(GL_POINTS);
+    glVertex3f(tx, ty, tz);
+    glEnd();
+    glPointSize(1.0f);
+
+    glDepthMask(GL_TRUE);
+    glDisable(GL_BLEND);
+}
+
 void render_3d_scene(void) {
     int sc_x, sc_y, sc_w, sc_h;
     scene_rect(&sc_x, &sc_y, &sc_w, &sc_h);
@@ -1091,9 +1140,10 @@ void render_3d_scene(void) {
     glMatrixMode(GL_MODELVIEW);
     glLoadIdentity();
 
-    glTranslatef(g_cam_px, g_cam_py, -g_cam_dist);
+    glTranslatef(0.0f, 0.0f, -g_cam_dist);
     glRotatef(g_cam_rx, 1, 0, 0);
     glRotatef(g_cam_ry, 0, 1, 0);
+    glTranslatef(-g_cam_tx, -g_cam_ty, -g_cam_tz);
 
     setup_lights();
     glDisable(GL_LIGHTING); /* baseline: disabled; execute_commands() enables if user typed it */
@@ -1150,6 +1200,7 @@ void render_3d_scene(void) {
      * color from earlier in the frame. */
     draw_grid();
     draw_axes();
+    draw_orbit_target();
 
     /* Polygon outline overlay (optional) + current-block highlight.
      * Each overlay pass is wrapped in push/pop so transforms don't bleed

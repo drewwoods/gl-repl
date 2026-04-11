@@ -40,8 +40,8 @@ int g_mouse_btn = -1;
 
 static float g_vel_ry = 0.0f;
 static float g_vel_rx = 0.0f;
-static float g_vel_px = 0.0f;
-static float g_vel_py = 0.0f;
+static float g_vel_tx = 0.0f;
+static float g_vel_tz = 0.0f;
 static float g_vel_zoom = 0.0f;
 
 #define CAM_DECAY 0.88f
@@ -2095,12 +2095,12 @@ static void mouse_func(int button, int state, int x, int y) {
         g_mouse_btn = button;
         g_mouse_x = x;
         g_mouse_y = y;
-        g_vel_ry = g_vel_rx = g_vel_px = g_vel_py = g_vel_zoom = 0.0f;
+        g_vel_ry = g_vel_rx = g_vel_tx = g_vel_tz = g_vel_zoom = 0.0f;
     } else {
         g_vel_ry = fabsf(g_vel_ry) > CAM_MOMENTUM_THRESHOLD ? g_vel_ry : 0.0f;
         g_vel_rx = fabsf(g_vel_rx) > CAM_MOMENTUM_THRESHOLD ? g_vel_rx : 0.0f;
-        g_vel_px = fabsf(g_vel_px) > CAM_MOMENTUM_THRESHOLD ? g_vel_px : 0.0f;
-        g_vel_py = fabsf(g_vel_py) > CAM_MOMENTUM_THRESHOLD ? g_vel_py : 0.0f;
+        g_vel_tx = fabsf(g_vel_tx) > CAM_MOMENTUM_THRESHOLD ? g_vel_tx : 0.0f;
+        g_vel_tz = fabsf(g_vel_tz) > CAM_MOMENTUM_THRESHOLD ? g_vel_tz : 0.0f;
         g_vel_zoom = fabsf(g_vel_zoom) > CAM_MOMENTUM_THRESHOLD ? g_vel_zoom : 0.0f;
         g_mouse_btn = -1;
     }
@@ -2230,6 +2230,7 @@ static void motion_func(int x, int y) {
     if (g_mouse_btn == GLUT_LEFT_BUTTON) {
         g_cam_ry += (float)dx * 0.5f;
         g_cam_rx += (float)dy * 0.5f;
+        g_cam_ry = fmodf(g_cam_ry, 360.0f);
         if (g_cam_rx > 89.0f)
             g_cam_rx = 89.0f;
         if (g_cam_rx < -89.0f)
@@ -2239,8 +2240,30 @@ static void motion_func(int x, int y) {
         g_vel_ry += (float)dx * 0.25f;
         g_vel_rx += (float)dy * 0.25f;
     } else if (g_mouse_btn == GLUT_RIGHT_BUTTON) {
-        g_cam_px += (float)dx * 0.01f;
-        g_cam_py -= (float)dy * 0.01f;
+        /* Pan the orbit target along the world XZ ground plane.
+         *
+         * Camera transform is Rx(rx)·Ry(ry)·T(-target), so a view-space
+         * direction v maps back to world by Ry(-ry)·Rx(-rx)·v. Projected
+         * onto the ground (Y=0):
+         *   right_xz   = (+cos ry, 0, +sin ry)   (screen +X)
+         *   forward_xz = (+sin ry, 0, -cos ry)   (screen -Y / mouse-up)
+         *
+         * Mouse-down (dy < 0) pulls the target back toward the camera,
+         * so we subtract forward_xz * dy. World Y is preserved. */
+        float ry_rad = g_cam_ry * (float)M_PI / 180.0f;
+        float cry = cosf(ry_rad), sry = sinf(ry_rad);
+        float scale = 0.005f * g_cam_dist;
+        float fdx = (float)dx;
+        float fdy = (float)dy;
+        float wdx = ( fdx * cry - fdy * sry) * scale;
+        float wdz = ( fdx * sry + fdy * cry) * scale;
+        g_cam_tx -= wdx;
+        g_cam_tz -= wdz;
+        g_vel_tx *= CAM_DECAY;
+        g_vel_tz *= CAM_DECAY;
+        g_vel_tx += wdx * 0.5f;
+        g_vel_tz += wdz * 0.5f;
+        g_cam_motion_glow = 1.0f;
     } else if (g_mouse_btn == GLUT_MIDDLE_BUTTON) {
         g_cam_dist += (float)dy * 0.02f;
         if (g_cam_dist < 0.5f)
@@ -2272,6 +2295,7 @@ static void timer_func(int value) {
     if (g_mouse_btn == -1) {
         g_cam_ry += g_vel_ry;
         g_cam_rx += g_vel_rx;
+        g_cam_ry = fmodf(g_cam_ry, 360.0f);
         if (g_cam_rx > 89.0f) {
             g_cam_rx = 89.0f;
             g_vel_rx = 0.0f;
@@ -2280,8 +2304,8 @@ static void timer_func(int value) {
             g_cam_rx = -89.0f;
             g_vel_rx = 0.0f;
         }
-        g_cam_px += g_vel_px;
-        g_cam_py += g_vel_py;
+        g_cam_tx += g_vel_tx;
+        g_cam_tz += g_vel_tz;
         g_cam_dist += g_vel_zoom;
         if (g_cam_dist < 0.5f) {
             g_cam_dist = 0.5f;
@@ -2295,12 +2319,22 @@ static void timer_func(int value) {
 
     g_vel_ry *= CAM_DECAY;
     g_vel_rx *= CAM_DECAY;
-    g_vel_px *= CAM_DECAY;
-    g_vel_py *= CAM_DECAY;
+    g_vel_tx *= CAM_DECAY;
+    g_vel_tz *= CAM_DECAY;
     g_vel_zoom *= CAM_DECAY_ZOOM;
 
-    if (g_cam_rotate)
+    /* Gizmo is a pan-only affordance. Keep it lit while pan momentum
+     * carries the target, then fade out. Rotate/zoom do not trigger it. */
+    float pan_vel = fabsf(g_vel_tx) + fabsf(g_vel_tz);
+    if (pan_vel > 0.01f && g_cam_motion_glow < 0.6f)
+        g_cam_motion_glow = 0.6f;
+    g_cam_motion_glow *= 0.94f;
+    if (g_cam_motion_glow < 0.005f) g_cam_motion_glow = 0.0f;
+
+    if (g_cam_rotate) {
         g_cam_ry += 0.3f;
+        g_cam_ry = fmodf(g_cam_ry, 360.0f);
+    }
 
     g_blink_tick++;
     if (g_blink_tick >= 30) {

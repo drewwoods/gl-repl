@@ -130,14 +130,15 @@ char g_render_state_lines[RENDER_STATE_LINE_COUNT][64] = {
     "  glDisable(GL_LINE_SMOOTH);"
 };
 
-char g_lookat[LOOKAT_LINE_COUNT][128] = {
-    "  gluLookAt(0.00, 0.00, 5.00,",
-    "            0.00, 0.00, 0.00,",
-    "            0.00, 1.00, 0.00);"
+char g_cam_lines[CAM_LINE_COUNT][96] = {
+    "  glTranslatef(0.0000f, 0.0000f, -5.0000f);",
+    "  glRotatef(20.0000f, 1.0f, 0.0f, 0.0f);",
+    "  glRotatef(30.0000f, 0.0f, 1.0f, 0.0f);",
+    "  glRotatef(g_angle, 0.0f, 1.0f, 0.0f);",
+    "  glTranslatef(0.0000f, 0.0000f, 0.0000f);"
 };
 
 const char *g_header_post[] = {
-    "  glRotatef(g_angle, 0.0f, 1.0f, 0.0f);",
     NULL
 };
 
@@ -360,11 +361,11 @@ void update_render_state_strings(void) {
              g_line_smooth_enabled ? "Enable" : "Disable");
 }
 
-/* Invert the forward transform in update_lookat_strings(): given eye/center
- * from a gluLookAt call (up assumed to be (0,1,0)), solve for the camera
- * state (rx, ry, dist, px, py). Returns 1 on success, 0 if degenerate. */
-static int lookat_to_cam_state(float ex, float ey, float ez,
-                               float cx, float cy, float cz) {
+/* Legacy: invert the old gluLookAt-based forward transform so pre-refactor
+ * output.c files keep loading. Recovers (rx, ry, dist, tx, ty, tz) from eye
+ * and center, assuming up = (0, 1, 0). Returns 1 on success. */
+static int legacy_lookat_to_cam_state(float ex, float ey, float ez,
+                                      float cx, float cy, float cz) {
     float vx = ex - cx, vy = ey - cy, vz = ez - cz;
     float d = sqrtf(vx * vx + vy * vy + vz * vz);
     if (d < 1e-6f) return 0;
@@ -373,26 +374,21 @@ static int lookat_to_cam_state(float ex, float ey, float ez,
     if (srx >  1.0f) srx =  1.0f;
     if (srx < -1.0f) srx = -1.0f;
     float rx = asinf(srx);
-    float crx = cosf(rx);
-    if (fabsf(crx) < 1e-6f) return 0;
 
-    float ry = atan2f(-vx, vz);
-    float cry = cosf(ry), sry = sinf(ry);
-
-    float px = -(cx * cry + cz * sry);
-    float py = -cy / crx;
+    float ry = atan2f(vx, vz);
 
     g_cam_rx   = rx * 180.0f / (float)M_PI;
     g_cam_ry   = ry * 180.0f / (float)M_PI;
     g_cam_dist = d;
-    g_cam_px   = px;
-    g_cam_py   = py;
+    g_cam_tx   = cx;
+    g_cam_ty   = cy;
+    g_cam_tz   = cz;
     return 1;
 }
 
 /* Extracts the first 6 floats (eye xyz + center xyz) from text containing
- * a gluLookAt(...) call and applies them to the camera state. Returns 1
- * if parsed+applied, 0 otherwise. */
+ * a gluLookAt(...) call and applies them to the camera state via the
+ * legacy inversion. Returns 1 if parsed+applied, 0 otherwise. */
 int import_parse_lookat_block(const char *text) {
     const char *p = strstr(text, "gluLookAt");
     if (!p) return 0;
@@ -410,30 +406,127 @@ int import_parse_lookat_block(const char *text) {
         p = end;
     }
 
-    return lookat_to_cam_state(v[0], v[1], v[2], v[3], v[4], v[5]);
+    return legacy_lookat_to_cam_state(v[0], v[1], v[2], v[3], v[4], v[5]);
 }
 
-void update_lookat_strings(void) {
-    float rx = g_cam_rx * (float)M_PI / 180.0f;
-    float ry = g_cam_ry * (float)M_PI / 180.0f;
-    float crx = cosf(rx), srx = sinf(rx);
-    float cry = cosf(ry), sry = sinf(ry);
-    float d = g_cam_dist, px = g_cam_px, py = g_cam_py;
+/* Skip whitespace, commas, and trailing 'f' / 'F' float suffixes so strtof
+ * can march through a call like `glTranslatef(0.0f, 0.0f, -5.0f);`. */
+static const char *cam_line_skip_sep(const char *p) {
+    while (*p == 'f' || *p == 'F' || *p == ',' || *p == ' ' || *p == '\t')
+        p++;
+    return p;
+}
 
-    float ex = -px * cry - py * srx * sry - d * crx * sry;
-    float ey = -py * crx + d * srx;
-    float ez = -px * sry + py * srx * cry + d * crx * cry;
+static int cam_line_read_floats(const char *p, float *out, int n) {
+    for (int i = 0; i < n; i++) {
+        p = cam_line_skip_sep(p);
+        char *end = NULL;
+        out[i] = strtof(p, &end);
+        if (end == p) return 0;
+        p = end;
+    }
+    return 1;
+}
 
-    float cx = -px * cry - py * srx * sry;
-    float cy = -py * crx;
-    float cz = -px * sry + py * srx * cry;
+/* Camera-block parser state: the 5 camera lines always appear in the same
+ * order and contiguously inside display() — translate(dist), rotate(rx),
+ * rotate(ry), rotate(g_angle), translate(target). We walk a tiny state
+ * machine so the parser only consumes lines during the expected sequence,
+ * and never bites into user code elsewhere in the file. Reset at load. */
+static int g_cam_parse_state = 0;    /* 0..5, stops consuming at 5 */
 
-    snprintf(g_lookat[0], sizeof(g_lookat[0]),
-             "  gluLookAt(%.2f, %.2f, %.2f,", ex, ey, ez);
-    snprintf(g_lookat[1], sizeof(g_lookat[1]),
-             "            %.2f, %.2f, %.2f,", cx, cy, cz);
-    snprintf(g_lookat[2], sizeof(g_lookat[2]),
-             "            0.0, 1.0, 0.0);");
+void import_cam_parser_reset(void) {
+    g_cam_parse_state = 0;
+}
+
+/* Per-line sniffer for the new 4-line camera block emitted into output.c.
+ * Each call updates at most one camera scalar; the caller invokes this for
+ * every line in the loaded file. Returns 1 if a camera line was consumed. */
+int import_parse_cam_line(const char *text) {
+    if (g_cam_parse_state >= 5) return 0;
+
+    const char *p = text;
+    while (*p == ' ' || *p == '\t') p++;
+
+    if (g_cam_parse_state == 0 && strncmp(p, "glTranslatef", 12) == 0) {
+        p = strchr(p, '(');
+        if (!p) return 0;
+        p++;
+        float v[3];
+        if (!cam_line_read_floats(p, v, 3)) return 0;
+        g_cam_dist = -v[2];
+        g_cam_parse_state = 1;
+        return 1;
+    }
+
+    if (g_cam_parse_state == 1 && strncmp(p, "glRotatef", 9) == 0) {
+        p = strchr(p, '(');
+        if (!p) return 0;
+        p++;
+        float v[4];
+        if (!cam_line_read_floats(p, v, 4)) return 0;
+        if (v[1] != 1.0f || v[2] != 0.0f || v[3] != 0.0f) return 0;
+        g_cam_rx = v[0];
+        g_cam_parse_state = 2;
+        return 1;
+    }
+
+    if (g_cam_parse_state == 2 && strncmp(p, "glRotatef", 9) == 0) {
+        p = strchr(p, '(');
+        if (!p) return 0;
+        p++;
+        float v[4];
+        if (!cam_line_read_floats(p, v, 4)) return 0;
+        if (v[1] != 0.0f || v[2] != 1.0f || v[3] != 0.0f) return 0;
+        g_cam_ry = v[0];
+        g_cam_parse_state = 3;
+        return 1;
+    }
+
+    if (g_cam_parse_state == 3 && strncmp(p, "glRotatef", 9) == 0) {
+        /* Literal `glRotatef(g_angle, 0,1,0)` animation hook — no scalars
+         * to extract, just advance past it. We also tolerate its absence
+         * (fall through to state 4) for files saved before it existed. */
+        const char *q = strchr(p, '(');
+        if (q && strstr(q, "g_angle")) {
+            g_cam_parse_state = 4;
+            return 1;
+        }
+        g_cam_parse_state = 4;
+        /* fall through to try target translate on the same line */
+    }
+
+    if (g_cam_parse_state == 4 && strncmp(p, "glTranslatef", 12) == 0) {
+        p = strchr(p, '(');
+        if (!p) return 0;
+        p++;
+        float v[3];
+        if (!cam_line_read_floats(p, v, 3)) return 0;
+        g_cam_tx = -v[0];
+        g_cam_ty = -v[1];
+        g_cam_tz = -v[2];
+        g_cam_parse_state = 5;
+        return 1;
+    }
+
+    return 0;
+}
+
+void update_cam_lines(void) {
+    snprintf(g_cam_lines[0], sizeof(g_cam_lines[0]),
+             "  glTranslatef(0.0000f, 0.0000f, %.4ff);", -g_cam_dist);
+    snprintf(g_cam_lines[1], sizeof(g_cam_lines[1]),
+             "  glRotatef(%.4ff, 1.0f, 0.0f, 0.0f);", g_cam_rx);
+    snprintf(g_cam_lines[2], sizeof(g_cam_lines[2]),
+             "  glRotatef(%.4ff, 0.0f, 1.0f, 0.0f);", g_cam_ry);
+    /* slot 3 is the literal `glRotatef(g_angle, 0,1,0)` animation hook —
+     * it pivots around the orbit target because it sits between the ry
+     * rotate and the target translate. Never overwritten. */
+    snprintf(g_cam_lines[3], sizeof(g_cam_lines[3]),
+             "  glRotatef(g_angle, 0.0f, 1.0f, 0.0f);");
+    snprintf(g_cam_lines[4], sizeof(g_cam_lines[4]),
+             "  glTranslatef(%.4ff, %.4ff, %.4ff);",
+             -g_cam_tx, -g_cam_ty, -g_cam_tz);
 }
 
 static void write_light_setup(FILE *f) {
@@ -1717,7 +1810,7 @@ void save_output(const char *filename) {
             needs_rand = 1;
 
     update_render_state_strings();
-    update_lookat_strings();
+    update_cam_lines();
     refresh_workspace_header_lines();
 
     for (int i = 0; i < g_workspace_header_line_count; i++)
@@ -1745,8 +1838,8 @@ void save_output(const char *filename) {
     fprintf(f, "  glPushAttrib(GL_ALL_ATTRIB_BITS);\n");
     for (int i = 0; i < RENDER_STATE_LINE_COUNT; i++)
         fprintf(f, "%s\n", g_render_state_lines[i]);
-    for (int i = 0; i < LOOKAT_LINE_COUNT; i++)
-        fprintf(f, "%s\n", g_lookat[i]);
+    for (int i = 0; i < CAM_LINE_COUNT; i++)
+        fprintf(f, "%s\n", g_cam_lines[i]);
     for (int i = 0; g_header_post[i]; i++)
         fprintf(f, "%s\n", g_header_post[i]);
     write_light_setup(f);
@@ -1819,6 +1912,8 @@ int load_from_file(const char *filename) {
     int  lookat_active = 0;
     int  lookat_len = 0;
 
+    import_cam_parser_reset();
+
     while (fgets(line, sizeof(line), f)) {
         int len = (int)strlen(line);
         while (len > 0 && (line[len - 1] == '\n' || line[len - 1] == '\r'))
@@ -1826,6 +1921,7 @@ int load_from_file(const char *filename) {
         const char *p = line;
         while (*p && isspace((unsigned char)*p)) p++;
 
+        /* Legacy gluLookAt format: accumulate 3 lines then invert */
         if (lookat_active || strstr(p, "gluLookAt") != NULL) {
             if (!lookat_active) {
                 lookat_active = 1;
@@ -1846,6 +1942,10 @@ int load_from_file(const char *filename) {
             }
             continue;
         }
+
+        /* New camera format: 4 plain glTranslatef/glRotatef lines in display() */
+        if (!in_snippet && import_parse_cam_line(p))
+            continue;
 
         if (past_snippet)
             continue;
@@ -2012,7 +2112,7 @@ void repl_dump_code_panel_text(FILE *out) {
     FILE *dst = out ? out : stdout;
 
     update_render_state_strings();
-    update_lookat_strings();
+    update_cam_lines();
 
     fprintf(dst, "--- header_pre ---\n");
     for (int i = 0; g_header_pre[i]; i++)
@@ -2022,9 +2122,9 @@ void repl_dump_code_panel_text(FILE *out) {
     for (int i = 0; i < RENDER_STATE_LINE_COUNT; i++)
         fprintf(dst, "%s\n", g_render_state_lines[i]);
 
-    fprintf(dst, "--- lookat ---\n");
-    for (int i = 0; i < LOOKAT_LINE_COUNT; i++)
-        fprintf(dst, "%s\n", g_lookat[i]);
+    fprintf(dst, "--- camera ---\n");
+    for (int i = 0; i < CAM_LINE_COUNT; i++)
+        fprintf(dst, "%s\n", g_cam_lines[i]);
 
     fprintf(dst, "--- header_post ---\n");
     for (int i = 0; g_header_post[i]; i++)
@@ -2048,7 +2148,7 @@ void repl_dump_code_panel_visual_text(FILE *out) {
     int text_x = idx_x + idx_col_w;
 
     update_render_state_strings();
-    update_lookat_strings();
+    update_cam_lines();
 
     fprintf(dst, "--- header_pre ---\n");
     for (int i = 0; g_header_pre[i]; i++)
@@ -2058,9 +2158,9 @@ void repl_dump_code_panel_visual_text(FILE *out) {
     for (int i = 0; i < RENDER_STATE_LINE_COUNT; i++)
         dump_code_panel_wrapped_line(dst, g_render_state_lines[i], text_x, panel_w);
 
-    fprintf(dst, "--- lookat ---\n");
-    for (int i = 0; i < LOOKAT_LINE_COUNT; i++)
-        dump_code_panel_wrapped_line(dst, g_lookat[i], text_x, panel_w);
+    fprintf(dst, "--- camera ---\n");
+    for (int i = 0; i < CAM_LINE_COUNT; i++)
+        dump_code_panel_wrapped_line(dst, g_cam_lines[i], text_x, panel_w);
 
     fprintf(dst, "--- header_post ---\n");
     for (int i = 0; g_header_post[i]; i++)

@@ -183,21 +183,23 @@ int main(void) {
     g_cam_rx   = 31.523f;
     g_cam_ry   = 31.4799f;
     g_cam_dist = 7.59313f;
-    g_cam_px   = -2.00036f;
-    g_cam_py   = -0.234623f;
+    g_cam_tx   = 1.50f;
+    g_cam_ty   = 0.0f;
+    g_cam_tz   = -2.00f;
     repl_save_output(path);
     {
         float saved_rx = g_cam_rx, saved_ry = g_cam_ry, saved_dist = g_cam_dist;
-        float saved_px = g_cam_px, saved_py = g_cam_py;
+        float saved_tx = g_cam_tx, saved_ty = g_cam_ty, saved_tz = g_cam_tz;
         g_cam_rx = 20.0f; g_cam_ry = 30.0f; g_cam_dist = 5.0f;
-        g_cam_px = 0.0f;  g_cam_py = 0.0f;
+        g_cam_tx = 0.0f;  g_cam_ty = 0.0f;  g_cam_tz = 0.0f;
         repl_reset_state();
         ASSERT_TRUE("load camera output", repl_load_from_file(path) == 1);
         ASSERT_TRUE("camera rx restored",   fabsf(g_cam_rx   - saved_rx)   < 1e-2f);
         ASSERT_TRUE("camera ry restored",   fabsf(g_cam_ry   - saved_ry)   < 1e-2f);
         ASSERT_TRUE("camera dist restored", fabsf(g_cam_dist - saved_dist) < 1e-2f);
-        ASSERT_TRUE("camera px restored",   fabsf(g_cam_px   - saved_px)   < 1e-2f);
-        ASSERT_TRUE("camera py restored",   fabsf(g_cam_py   - saved_py)   < 1e-2f);
+        ASSERT_TRUE("camera tx restored",   fabsf(g_cam_tx   - saved_tx)   < 1e-2f);
+        ASSERT_TRUE("camera ty restored",   fabsf(g_cam_ty   - saved_ty)   < 1e-2f);
+        ASSERT_TRUE("camera tz restored",   fabsf(g_cam_tz   - saved_tz)   < 1e-2f);
     }
 
     repl_reset_state();

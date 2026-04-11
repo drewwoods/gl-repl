@@ -129,8 +129,8 @@ static int code_panel_header_row_count(void) {
         rows += test_code_panel_row_count_for_text(g_header_pre[i], text_x, panel_w);
     for (int i = 0; i < RENDER_STATE_LINE_COUNT; i++)
         rows += test_code_panel_row_count_for_text(g_render_state_lines[i], text_x, panel_w);
-    for (int i = 0; i < LOOKAT_LINE_COUNT; i++)
-        rows += test_code_panel_row_count_for_text(g_lookat[i], text_x, panel_w);
+    for (int i = 0; i < CAM_LINE_COUNT; i++)
+        rows += test_code_panel_row_count_for_text(g_cam_lines[i], text_x, panel_w);
     for (int i = 0; g_header_post[i]; i++)
         rows += test_code_panel_row_count_for_text(g_header_post[i], text_x, panel_w);
 

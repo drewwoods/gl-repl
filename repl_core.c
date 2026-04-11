@@ -332,7 +332,8 @@ void mark_normals_dirty(void) {
 float  g_cam_rx = 20.0f;
 float  g_cam_ry = 30.0f;
 float  g_cam_dist = 5.0f;
-float  g_cam_px = 0.0f, g_cam_py = 0.0f;
+float  g_cam_tx = 0.0f, g_cam_ty = 0.0f, g_cam_tz = 0.0f;
+float  g_cam_motion_glow = 0.0f;  /* 0..1, pulses to 1 on camera input, decays each tick */
 
 /* Window */
 int    g_win_w = 1200, g_win_h = 800;
@@ -711,12 +712,12 @@ void repl_debug_dump_editor(FILE *out) {
         fprintf(dst, "%s\n", g_cmds[i].source);
     }
     fprintf(dst, "--- camera ---\n");
-    fprintf(dst, "rx=%g ry=%g dist=%g px=%g py=%g\n",
+    fprintf(dst, "rx=%g ry=%g dist=%g tx=%g ty=%g tz=%g\n",
             (double)g_cam_rx, (double)g_cam_ry, (double)g_cam_dist,
-            (double)g_cam_px, (double)g_cam_py);
-    update_lookat_strings();
-    for (int i = 0; i < LOOKAT_LINE_COUNT; i++)
-        fprintf(dst, "%s\n", g_lookat[i]);
+            (double)g_cam_tx, (double)g_cam_ty, (double)g_cam_tz);
+    update_cam_lines();
+    for (int i = 0; i < CAM_LINE_COUNT; i++)
+        fprintf(dst, "%s\n", g_cam_lines[i]);
     fprintf(dst, "--- init ---\n");
     for (int i = 0; i < init_section_line_count(); i++) {
         char line[MAX_LINE_LEN];
@@ -3540,7 +3541,7 @@ static void display_func(void) {
     }
 
     update_render_state_strings();
-    update_lookat_strings();
+    update_cam_lines();
 
     /* Full-window clear */
     glViewport(0, 0, g_win_w, g_win_h);

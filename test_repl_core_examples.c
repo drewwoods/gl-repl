@@ -73,8 +73,9 @@ static void pin_code_panel_state(void) {
     g_cam_rx = 18.0f;
     g_cam_ry = 32.0f;
     g_cam_dist = 5.5f;
-    g_cam_px = 0.0f;
-    g_cam_py = 0.0f;
+    g_cam_tx = 0.0f;
+    g_cam_ty = 0.0f;
+    g_cam_tz = 0.0f;
     g_multisample_enabled = 1;
     g_line_smooth_enabled = 0;
 }

@@ -46,7 +46,7 @@
 #define REPL_OUTLINE_POLYGON_OFFSET_FACTOR (-0.01f)
 #define REPL_OUTLINE_POLYGON_OFFSET_UNITS  (-100.0f)
 #define TESS_VERT_BUF_SIZE 256
-#define LOOKAT_LINE_COUNT 3
+#define CAM_LINE_COUNT 5
 #define RENDER_STATE_LINE_COUNT 2
 
 typedef struct {
@@ -231,10 +231,11 @@ extern char   g_newline_buf[MAX_INPUT_LEN];
 extern int    g_newline_len;
 extern int    g_inserting;
 
-/* Camera */
+/* Camera — orbit target (world-space pivot) + yaw/pitch/distance */
 extern float  g_cam_rx, g_cam_ry;
 extern float  g_cam_dist;
-extern float  g_cam_px, g_cam_py;
+extern float  g_cam_tx, g_cam_ty, g_cam_tz;
+extern float  g_cam_motion_glow;
 extern int    g_mouse_x, g_mouse_y;
 extern int    g_mouse_btn;
 
@@ -374,7 +375,7 @@ void refresh_workspace_header_lines(void);
 int  parse_workspace_header_line(const char *line);
 
 extern char        g_render_state_lines[RENDER_STATE_LINE_COUNT][64];
-extern char        g_lookat[LOOKAT_LINE_COUNT][128];
+extern char        g_cam_lines[CAM_LINE_COUNT][96];
 extern const char *g_header_post[];
 extern const char *g_footer_pre_init[];
 extern const char *g_footer_post_init[];
@@ -438,6 +439,6 @@ int  replay_exec_limit(void);
 int  replay_has_active_fades(void);
 int  replay_fill_base_limit(void);
 void recompute_autonormals(void);
-void update_lookat_strings(void);
+void update_cam_lines(void);
 
 #endif /* SAMPLE_H */
