@@ -1067,28 +1067,19 @@ void render_code_panel(void) {
                 snprintf(aa_tag, sizeof(aa_tag), " | AA:off");
         }
         /* Time variable indicator */
-        char t_tag[32] = "";
-        if (g_t_var_idx >= 0) {
-            if (g_t_playing)
-                snprintf(t_tag, sizeof(t_tag), " | t=%.2f",
-                         g_predef_vars[g_t_var_idx].value);
-            else
-                snprintf(t_tag, sizeof(t_tag), " | t=%.2f[P]",
-                         g_predef_vars[g_t_var_idx].value);
-        }
         if (g_inserting) {
             snprintf(info, sizeof(info),
-                     "F1:Help | %d cmds | Ln %d [INSERT]%s%s",
-                     g_num_cmds, g_edit_line + 1, t_tag, aa_tag);
+                     "F1:Help | %d cmds | Ln %d [INSERT]%s",
+                     g_num_cmds, g_edit_line + 1, aa_tag);
         } else if (in_begin_block()) {
             snprintf(info, sizeof(info),
-                     "F1:Help | %d cmds | %s | Ln %d%s%s",
+                     "F1:Help | %d cmds | %s | Ln %d%s",
                      g_num_cmds, mode_name(current_begin_mode()),
-                     g_edit_line + 1, t_tag, aa_tag);
+                     g_edit_line + 1, aa_tag);
         } else {
             snprintf(info, sizeof(info),
-                     "F1:Help | %d cmds | Ln %d%s%s",
-                     g_num_cmds, g_edit_line + 1, t_tag, aa_tag);
+                     "F1:Help | %d cmds | Ln %d%s",
+                     g_num_cmds, g_edit_line + 1, aa_tag);
         }
         glColor3f(0.50f, 0.55f, 0.65f);
         draw_string(CODE_MARGIN_X, panel_top - CODE_MARGIN_Y - 2, info,
