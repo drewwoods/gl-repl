@@ -1730,6 +1730,7 @@ void render_help(void) {
         "Time & Replay:",
         "  Ctrl+T               \tPlay / pause time variable",
         "  Ctrl+G               \tStart / stop replay",
+        "  Ctrl+K               \tJump replay to cursor line (first geometry at/after)",
         "  Space                \tPause / resume replay",
         "  + / -                \tChange replay speed",
         "  m                    \tToggle polygon / vertex replay mode",

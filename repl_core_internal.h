@@ -55,6 +55,7 @@ CmdType nearest_open_block_at(int pos);
 int  collect_visible_vars(int pos, ExprVar *vars, int max_vars);
 void replay_tick_fade_batches(float dt);
 void replay_seek(int new_pc);
+int  replay_seek_to_src_line(int target_line);
 void replay_step_back(void);
 void replay_restart_from_beginning(void);
 int  feed_line(const char *line);
