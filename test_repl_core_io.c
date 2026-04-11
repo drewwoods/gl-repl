@@ -89,12 +89,20 @@ int main(void) {
                 find_init_line("  gluQuadricTexture(g_quadric, GL_FALSE);") >= 0);
     ASSERT_TRUE("init has tess init line",
                 find_init_line("  g_tess = gluNewTess();") >= 0);
+    ASSERT_TRUE("init has color material enable bootstrap",
+                find_init_line_substr("glEnable(GL_COLOR_MATERIAL);") >= 0);
     ASSERT_TRUE("init has color material bootstrap",
                 find_init_line_substr("glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE);") >= 0);
     ASSERT_TRUE("init has two-side bootstrap",
                 find_init_line_substr("glLightModeli(GL_LIGHT_MODEL_TWO_SIDE, GL_TRUE);") >= 0);
+    ASSERT_TRUE("init has blend enable bootstrap",
+                find_init_line_substr("glEnable(GL_BLEND);") >= 0);
+    ASSERT_TRUE("init has blend func bootstrap",
+                find_init_line_substr("glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);") >= 0);
     ASSERT_TRUE("init has point attenuation bootstrap",
                 find_init_line_substr("glPointParameterfv(GL_POINT_DISTANCE_ATTENUATION") >= 0);
+    ASSERT_TRUE("init has tess edge-flag callback",
+                find_init_line_substr("GLU_TESS_EDGE_FLAG") >= 0);
 
     int before_n = g_num_cmds;
     CmdType before_types[MAX_COMMANDS];
@@ -181,24 +189,24 @@ int main(void) {
         read_text_file(func_path, buf, sizeof(buf));
         ASSERT_TRUE("saved func signature",
                     strstr(buf, "static void func0(float radius, float yoff)") != NULL);
+        ASSERT_TRUE("saved func emitted only once",
+                    count_substr(buf, "static void func0(float radius, float yoff) {") == 1);
         ASSERT_TRUE("saved geometry helper func call",
                     strstr(buf, "func0(1.5, x + 2);") != NULL);
-        ASSERT_TRUE("saved outline helper present",
-                    strstr(buf, "static void render_repl_outline_overlay(void)") != NULL);
-        ASSERT_TRUE("saved point helper present",
-                    strstr(buf, "static void render_repl_vertex_points_overlay(void)") != NULL);
-        ASSERT_TRUE("saved outline func variant",
-                    strstr(buf, "static void render_repl_outline_func0(float radius, float yoff)") != NULL);
-        ASSERT_TRUE("saved point func variant",
-                    strstr(buf, "static void render_repl_vpoints_func0(float radius, float yoff)") != NULL);
-        ASSERT_TRUE("saved outline func call",
-                    strstr(buf, "render_repl_outline_func0(1.5, x + 2);") != NULL);
-        ASSERT_TRUE("saved point func call",
-                    strstr(buf, "render_repl_vpoints_func0(1.5, x + 2);") != NULL);
-        ASSERT_TRUE("saved outline helper call in display",
-                    strstr(buf, "render_repl_outline_overlay();") != NULL);
-        ASSERT_TRUE("saved point helper call in display",
-                    strstr(buf, "render_repl_vertex_points_overlay();") != NULL);
+        ASSERT_TRUE("saved geometry helper once",
+                    count_substr(buf, "static void render_repl_geometry(void)") == 1);
+        ASSERT_TRUE("saved no outline helper variants",
+                    strstr(buf, "render_repl_outline_") == NULL);
+        ASSERT_TRUE("saved no vpoint helper variants",
+                    strstr(buf, "render_repl_vpoints_") == NULL);
+        ASSERT_TRUE("saved geometry called thrice in display",
+                    count_substr(buf, "render_repl_geometry();") == 3);
+        ASSERT_TRUE("saved outline pass polygon mode",
+                    strstr(buf, "glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);") != NULL);
+        ASSERT_TRUE("saved vpoints pass polygon mode",
+                    strstr(buf, "glPolygonMode(GL_FRONT_AND_BACK, GL_POINT);") != NULL);
+        ASSERT_TRUE("saved overlay disables color material",
+                    strstr(buf, "glDisable(GL_COLOR_MATERIAL);") != NULL);
     }
 
     repl_reset_state();
@@ -298,14 +306,14 @@ int main(void) {
                     strstr(buf, "_v->pos[0]=radius*cosf(i);") != NULL);
         ASSERT_TRUE("saved tess vertex keeps z expr",
                     strstr(buf, "_v->pos[2]=radius*sinf(i);") != NULL);
-        ASSERT_TRUE("saved tess outline helper uses line loop",
-                    strstr(buf, "glBegin(GL_LINE_LOOP);") != NULL);
-        ASSERT_TRUE("saved tess point helper uses points",
-                    strstr(buf, "glBegin(GL_POINTS);") != NULL);
-        ASSERT_TRUE("saved tess outline func call",
-                    strstr(buf, "render_repl_outline_func0(2.0);") != NULL);
-        ASSERT_TRUE("saved tess point func call",
-                    strstr(buf, "render_repl_vpoints_func0(2.0);") != NULL);
+        ASSERT_TRUE("saved tess func emitted only once",
+                    count_substr(buf, "static void func0(float radius) {") == 1);
+        ASSERT_TRUE("saved tess func call once",
+                    count_substr(buf, "func0(2.0);") == 1);
+        ASSERT_TRUE("saved tess no outline helper variants",
+                    strstr(buf, "render_repl_outline_") == NULL);
+        ASSERT_TRUE("saved tess no vpoint helper variants",
+                    strstr(buf, "render_repl_vpoints_") == NULL);
     }
 
     printf("repl_core_io: %d/%d passed\n", g_pass, g_run);

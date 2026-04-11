@@ -17,7 +17,6 @@
 static const char *const g_example_cube[] = {
     "glEnable(GL_DEPTH_TEST);",
     "glEnable(GL_LIGHTING);",
-    "glEnable(GL_COLOR_MATERIAL);",
     "glEnable(GL_NORMALIZE);",
     "glShadeModel(GL_SMOOTH);",
     "glEnable(GL_LIGHT3);",
@@ -72,7 +71,6 @@ static const char *const g_example_ring[] = {
 /* Example 2: Function demo — define reusable triangle, call with transforms */
 static const char *const g_example_func[] = {
     "glEnable(GL_DEPTH_TEST);",
-    "glEnable(GL_COLOR_MATERIAL);",
     "func0 {",
         "glBegin(GL_TRIANGLES);",
         "glNormal3f(0, 0, 1);",
@@ -95,7 +93,6 @@ static const char *const g_example_func[] = {
 /* Example 3: Parametric polygon helper — function args driving local for-loops */
 static const char *const g_example_func_loop[] = {
     "glEnable(GL_DEPTH_TEST);",
-    "glEnable(GL_COLOR_MATERIAL);",
     "glEnable(GL_NORMALIZE);",
     "func0(radius, sides, phase) {",
         "glBegin(GL_TRIANGLE_FAN);",
@@ -125,7 +122,6 @@ static const char *const g_example_func_loop[] = {
 /* Example 4: Branching helper — function args driving local if-blocks */
 static const char *const g_example_func_if[] = {
     "glEnable(GL_DEPTH_TEST);",
-    "glEnable(GL_COLOR_MATERIAL);",
     "glEnable(GL_NORMALIZE);",
     "func0(scale, phase) {",
         "if(scale > 1) {",
@@ -165,7 +161,6 @@ static const char *const g_example_func_if[] = {
 /* Example 5: Recursive helper — transformed child calls with depth countdown */
 static const char *const g_example_func_recurse[] = {
     "glEnable(GL_DEPTH_TEST);",
-    "glEnable(GL_COLOR_MATERIAL);",
     "glEnable(GL_NORMALIZE);",
     "// Recursive triangle tree: child calls shrink and rotate from the parent",
     "func0(depth, size, spin) {",
@@ -212,7 +207,6 @@ static const char *const g_example_func_recurse[] = {
 static const char *const g_example_cond[] = {
     "glEnable(GL_DEPTH_TEST);",
     "glEnable(GL_LIGHTING);",
-    "glEnable(GL_COLOR_MATERIAL);",
     "glEnable(GL_NORMALIZE);",
     "glEnable(GL_LIGHT3);",
     "glBegin(GL_QUADS);",
@@ -246,7 +240,6 @@ static const char *const g_example_cond[] = {
 static const char *const g_example_torus[] = {
     "glEnable(GL_DEPTH_TEST);",
     "//glEnable(GL_LIGHTING);",
-    "glEnable(GL_COLOR_MATERIAL);",
     "glEnable(GL_NORMALIZE);",
     "glEnable(GL_LIGHT3);",
     "glEnable(GL_LIGHT2);",
@@ -267,7 +260,6 @@ static const char *const g_example_torus[] = {
 static const char *const g_example_tess[] = {
     "glEnable(GL_DEPTH_TEST);",
     "glEnable(GL_LIGHTING);",
-    "glEnable(GL_COLOR_MATERIAL);",
     "glEnable(GL_NORMALIZE);",
     "glEnable(GL_LIGHT3);",
     "glEnable(GL_LIGHT2);",
@@ -300,7 +292,6 @@ static const char *const g_example_tess[] = {
 static const char *const g_example_tess_cutout[] = {
     "glEnable(GL_DEPTH_TEST);",
     "glEnable(GL_LIGHTING);",
-    "glEnable(GL_COLOR_MATERIAL);",
     "glEnable(GL_NORMALIZE);",
     "glEnable(GL_LIGHT3);",
     "glEnable(GL_LIGHT2);",
@@ -500,7 +491,6 @@ static const char *const g_example_stress[] = {
     "// ===== Stress-test scene: parser + code UI torture =====",
     "glEnable(GL_DEPTH_TEST);",
     "glEnable(GL_LIGHTING);",
-    "glEnable(GL_COLOR_MATERIAL);",
     "glEnable(GL_NORMALIZE);",
     "glEnable(GL_LIGHT2);",
     "glEnable(GL_LIGHT3);",
