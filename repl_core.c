@@ -1840,12 +1840,27 @@ static int parse_command_internal(const char *line, GLCmd *cmd,
         }
     }
 
-    /* :label — define a label */
-    if (p[0] == ':' && p[1] && !isspace((unsigned char)p[1])) {
+    /* :label or label: — define a label */
+    if ((p[0] == ':' && p[1] && !isspace((unsigned char)p[1])) ||
+        (len > 1 && p[len - 1] == ':' && !isspace((unsigned char)p[0]))) {
         cmd->type = CMD_LABEL;
         cmd->valid = 1;
         /* labels go at column 0 in C */
-        snprintf(cmd->source, sizeof(cmd->source), "%s:", p + 1);
+        if (p[0] == ':') {
+            snprintf(cmd->source, sizeof(cmd->source), "%s:", p + 1);
+        } else {
+            char label[64];
+            int n = 0;
+            while (n < (int)sizeof(label) - 1 &&
+                   p[n] && p[n] != ':' && !isspace((unsigned char)p[n])) {
+                label[n] = p[n];
+                n++;
+            }
+            label[n] = '\0';
+            if (n <= 0)
+                return 0;
+            snprintf(cmd->source, sizeof(cmd->source), "%s:", label);
+        }
         return 1;
     }
 

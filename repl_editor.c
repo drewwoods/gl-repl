@@ -228,6 +228,22 @@ void load_line_to_input(int idx) {
         const char *s = g_cmds[idx].source;
         while (*s && isspace((unsigned char)*s))
             s++;
+
+        if (g_cmds[idx].type == CMD_LABEL) {
+            int len = (int)strlen(s);
+            while (len > 0 &&
+                   (s[len - 1] == ':' || isspace((unsigned char)s[len - 1])))
+                len--;
+            if (len > MAX_INPUT_LEN - 2)
+                len = MAX_INPUT_LEN - 2;
+            g_input[0] = ':';
+            memcpy(g_input + 1, s, (size_t)len);
+            g_input[len + 1] = '\0';
+            g_input_len = len + 1;
+            g_cursor_pos = g_input_len;
+            return;
+        }
+
         int len = (int)strlen(s);
         while (len > 0 &&
                (s[len - 1] == ';' || isspace((unsigned char)s[len - 1])))

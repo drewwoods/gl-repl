@@ -337,6 +337,17 @@ int main(void) {
                 fabsf(g_flat_cmds[3].args[0] - (-1.5f)) < 1e-5f);
 
     repl_reset_state();
+    repl_feed_line_public(":walk");
+    ASSERT_TRUE("label cmd count", g_num_cmds == 1);
+    ASSERT_TRUE("label stored as C label", strcmp(g_cmds[0].source, "walk:") == 0);
+    repl_navigate_to_line(0);
+    ASSERT_TRUE("label loads back into editor as repl syntax",
+                strcmp(g_input, ":walk") == 0);
+    repl_keyboard_func(';', 0, 0);
+    ASSERT_TRUE("recommitting loaded label keeps label type", g_cmds[0].type == CMD_LABEL);
+    ASSERT_TRUE("recommitting loaded label keeps source", strcmp(g_cmds[0].source, "walk:") == 0);
+
+    repl_reset_state();
     repl_feed_line_public("for(i, 0, 3) {");
     repl_feed_line_public("glVertex3f(i, 0, 0);");
     repl_feed_line_public("}");
