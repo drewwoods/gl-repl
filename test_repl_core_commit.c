@@ -163,6 +163,14 @@ static int predef_idx(const char *name) {
     return -1;
 }
 
+static int test_leading_ws_chars(const char *text) {
+    int n = 0;
+
+    while (text && text[n] && isspace((unsigned char)text[n]))
+        n++;
+    return n;
+}
+
 /*
  * Mirror only the execute-time control-flow pieces that affect variables.
  * This lets the tests exercise goto/if/assignment replay rules without
@@ -379,6 +387,23 @@ int main(void) {
     ASSERT_TRUE("backspace deletes selected lines", g_num_cmds == 0);
     ASSERT_TRUE("backspace clears selection after delete", !sel_active());
     ASSERT_TRUE("backspace keeps edit line at start after delete", g_edit_line == 0);
+
+    repl_reset_state();
+    repl_feed_line_public("if(x > 0) {");
+    repl_feed_line_public("glColor3f(1, 0, 0);");
+    repl_feed_line_public("}");
+    {
+        int linenum_w = 4 * FONT_W;
+        int idx_col_w = g_show_indices ? (6 * FONT_W) : 0;
+        int text_x = CODE_MARGIN_X + linenum_w + FONT_W + idx_col_w;
+        int indent = test_leading_ws_chars(g_cmds[1].source);
+        handle_code_panel_click(text_x + indent * FONT_W + 1,
+                                code_panel_mouse_y_for_cmd(1));
+        ASSERT_TRUE("clicking indented active line keeps cursor at first char",
+                    g_cursor_pos == 0);
+        ASSERT_TRUE("clicking indented active line selects correct line",
+                    g_edit_line == 1);
+    }
 
     repl_reset_state();
     repl_feed_line_public("glBegin(GL_POINTS);");

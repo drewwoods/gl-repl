@@ -606,9 +606,25 @@ static int code_panel_replay_extra_rows_for_line(int cmd_idx) {
     return 2;
 }
 
+static int code_panel_leading_ws_chars(const char *text) {
+    int n = 0;
+
+    while (text && text[n] && isspace((unsigned char)text[n]))
+        n++;
+    return n;
+}
+
+static int code_panel_active_indent_chars(void) {
+    if (g_inserting)
+        return cmd_indent_chars(g_edit_line);
+    if (g_edit_line >= 0 && g_edit_line < g_num_cmds)
+        return code_panel_leading_ws_chars(g_cmds[g_edit_line].source);
+    return cmd_indent_chars(g_num_cmds);
+}
+
 static int code_panel_command_main_rows(int cmd_idx, int panel_w, int text_x) {
     if (!g_inserting && cmd_idx == g_edit_line) {
-        int indent_chars = cmd_indent_chars(cmd_idx);
+        int indent_chars = code_panel_active_indent_chars();
         return code_panel_row_count_for_text(g_input,
                                              text_x + indent_chars * FONT_W,
                                              panel_w);
@@ -618,7 +634,7 @@ static int code_panel_command_main_rows(int cmd_idx, int panel_w, int text_x) {
 }
 
 static int code_panel_insert_rows(int panel_w, int text_x) {
-    int indent_chars = cmd_indent_chars(g_edit_line);
+    int indent_chars = code_panel_active_indent_chars();
     return code_panel_row_count_for_text(g_input,
                                          text_x + indent_chars * FONT_W,
                                          panel_w);
@@ -626,7 +642,7 @@ static int code_panel_insert_rows(int panel_w, int text_x) {
 
 static int code_panel_newline_rows(int panel_w, int text_x) {
     if (!g_inserting && g_edit_line == g_num_cmds) {
-        int indent_chars = cmd_indent_chars(g_num_cmds);
+        int indent_chars = code_panel_active_indent_chars();
         return code_panel_row_count_for_text(g_input,
                                              text_x + indent_chars * FONT_W,
                                              panel_w);
@@ -984,7 +1000,7 @@ void render_code_panel(void) {
             cursor_doc_line += code_panel_replay_extra_rows_for_line(i);
         }
         cursor_doc_line += code_panel_cursor_row_for_text(
-            g_input, text_x + cmd_indent_chars(g_edit_line) * FONT_W,
+            g_input, text_x + code_panel_active_indent_chars() * FONT_W,
             panel_w, g_cursor_pos, NULL, NULL, NULL);
     } else if (g_edit_line < g_num_cmds) {
         for (int i = 0; i < g_edit_line; i++) {
@@ -992,7 +1008,7 @@ void render_code_panel(void) {
             cursor_doc_line += code_panel_replay_extra_rows_for_line(i);
         }
         cursor_doc_line += code_panel_cursor_row_for_text(
-            g_input, text_x + cmd_indent_chars(g_edit_line) * FONT_W,
+            g_input, text_x + code_panel_active_indent_chars() * FONT_W,
             panel_w, g_cursor_pos, NULL, NULL, NULL);
     } else {
         for (int i = 0; i < g_num_cmds; i++) {
@@ -1000,7 +1016,7 @@ void render_code_panel(void) {
             cursor_doc_line += code_panel_replay_extra_rows_for_line(i);
         }
         cursor_doc_line += code_panel_cursor_row_for_text(
-            g_input, text_x + cmd_indent_chars(g_num_cmds) * FONT_W,
+            g_input, text_x + code_panel_active_indent_chars() * FONT_W,
             panel_w, g_cursor_pos, NULL, NULL, NULL);
     }
 
@@ -1185,7 +1201,7 @@ void render_code_panel(void) {
         if (g_inserting && i == g_edit_line) {
                         render_active_input_rows(panel_w, text_x, idx_x,
                                                                          visible_lines, file_line,
-                                                                         cmd_indent_chars(i), NULL,
+                                                                         code_panel_active_indent_chars(), NULL,
                                                                          g_edit_line,
                                                                          &cur, &line_y);
             file_line++;
@@ -1219,7 +1235,7 @@ void render_code_panel(void) {
                 }
                 render_active_input_rows(panel_w, text_x, idx_x,
                                          visible_lines, file_line,
-                                         cmd_indent_chars(i), idx_text,
+                                         code_panel_active_indent_chars(), idx_text,
                                          g_edit_line,
                                          &cur, &line_y);
                 file_line++;
@@ -1381,7 +1397,7 @@ void render_code_panel(void) {
             if (is_edit_nl) {
                 render_active_input_rows(panel_w, text_x, idx_x,
                                          visible_lines, file_line,
-                                         cmd_indent_chars(g_num_cmds), NULL,
+                                         code_panel_active_indent_chars(), NULL,
                                          g_edit_line,
                                          &cur, &line_y);
             } else {
@@ -2276,9 +2292,7 @@ void handle_code_panel_click(int mx, int my) {
     int linenum_w = 4 * FONT_W;
     int idx_col_w = g_show_indices ? (6 * FONT_W) : 0;
     int text_x = CODE_MARGIN_X + linenum_w + FONT_W + idx_col_w;
-    int edit_idx = on_insert_line ? g_edit_line : target;
-    int indent_chars = cmd_indent_chars(
-        edit_idx < g_num_cmds ? edit_idx : g_num_cmds);
+    int indent_chars = code_panel_active_indent_chars();
     int seg_start = g_input_len;
     int seg_len = 0;
     int seg_x = text_x + indent_chars * FONT_W;
