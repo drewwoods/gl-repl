@@ -359,6 +359,17 @@ extern const EnumEntry g_enable_caps[];
 extern const EnumEntry g_shade_models[];
 extern const FuncCompletion g_func_completions[];
 extern const char *g_header_pre[];
+
+/* Workspace state header — saved as comments at top of exported files, parsed
+ * at launch to restore variable values and config toggles, and displayed as
+ * the topmost block in the code panel. */
+#define MAX_WORKSPACE_HEADER_LINES 48
+#define WORKSPACE_HEADER_LINE_LEN  96
+extern char g_workspace_header_lines[MAX_WORKSPACE_HEADER_LINES][WORKSPACE_HEADER_LINE_LEN];
+extern int  g_workspace_header_line_count;
+void refresh_workspace_header_lines(void);
+int  parse_workspace_header_line(const char *line);
+
 extern char        g_render_state_lines[RENDER_STATE_LINE_COUNT][64];
 extern char        g_lookat[LOOKAT_LINE_COUNT][128];
 extern const char *g_header_post[];

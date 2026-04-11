@@ -502,6 +502,8 @@ static void code_panel_draw_segment(int x, int y, const char *text,
 static int code_panel_header_row_count(int panel_w, int text_x) {
     int rows = 0;
 
+    for (int i = 0; i < g_workspace_header_line_count; i++)
+        rows += code_panel_row_count_for_text(g_workspace_header_lines[i], text_x, panel_w);
     for (int i = 0; g_header_pre[i]; i++)
         rows += code_panel_row_count_for_text(g_header_pre[i], text_x, panel_w);
     for (int i = 0; i < RENDER_STATE_LINE_COUNT; i++)
@@ -944,6 +946,7 @@ static void render_active_input_rows(int panel_w, int text_x, int idx_x,
 }
 
 void render_code_panel(void) {
+    refresh_workspace_header_lines();
     int cp_x, cp_y, cp_w, cp_h;
     code_panel_rect(&cp_x, &cp_y, &cp_w, &cp_h);
     int panel_w = cp_w;
@@ -1150,6 +1153,10 @@ void render_code_panel(void) {
         file_line++;                                                            \
     } while (0)
 
+    /* Workspace state (saved var values + config toggles) */
+    for (int i = 0; i < g_workspace_header_line_count; i++) {
+        RENDER_STATIC_LINE(g_workspace_header_lines[i], glColor3f(0.45f, 0.55f, 0.42f));
+    }
     /* Header pre-lookAt (dimmed) */
     for (int i = 0; g_header_pre[i]; i++) {
         RENDER_STATIC_LINE(g_header_pre[i], glColor3f(0.38f, 0.38f, 0.42f));
