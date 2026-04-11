@@ -179,6 +179,8 @@ static const char *g_init_host_only_c[] = {
     NULL
 };
 
+#define INIT_HOST_ONLY_TESS_START 5
+
 static void format_cmd_source_as_c(char *out, size_t out_sz,
                                    const GLCmd *cmd, int translate_exprs);
 
@@ -330,11 +332,21 @@ void init_section_line(int i, char *buf, size_t n) {
     buf[0] = '\0';
 }
 
-static void emit_init_section_to_file(FILE *f) {
+static void emit_export_init_section_to_file(FILE *f, int include_tess) {
     char line[MAX_LINE_LEN];
 
-    for (int i = 0; i < init_section_line_count(); i++) {
-        init_section_line(i, line, sizeof(line));
+    for (int i = 0; g_init_host_only_c[i]; i++) {
+        if (!include_tess && i >= INIT_HOST_ONLY_TESS_START)
+            break;
+        fprintf(f, "%s\n", g_init_host_only_c[i]);
+    }
+
+    ensure_init_bootstrap_ready();
+    for (int idx = 0; idx < NUM_INIT_BOOTSTRAP; idx++) {
+        if (g_init_bootstrap_repl[idx].toggle &&
+            *g_init_bootstrap_repl[idx].toggle == 0)
+            continue;
+        format_cmd_source_as_c(line, sizeof(line), &g_init_bootstrap_cmds[idx], 0);
         fprintf(f, "%s\n", line);
     }
 }
@@ -552,6 +564,26 @@ static int cmd_type_is_quadric(CmdType t) {
            t == CMD_GLU_CYLINDER ||
            t == CMD_GLU_DISK ||
            t == CMD_GLU_PARTIAL_DISK;
+}
+
+static int cmd_type_is_tess(CmdType t) {
+    return t == CMD_TESS_BEGIN_POLYGON ||
+           t == CMD_TESS_BEGIN_CONTOUR ||
+           t == CMD_TESS_END ||
+           t == CMD_TESS_NORMAL ||
+           t == CMD_TESS_COLOR ||
+           t == CMD_TESS_VERTEX;
+}
+
+static int export_uses_tess_commands(void) {
+    for (int i = 0; i < g_num_cmds; i++) {
+        if (!g_cmds[i].valid)
+            continue;
+        if (cmd_type_is_tess(g_cmds[i].type))
+            return 1;
+    }
+
+    return 0;
 }
 
 static void quadric_source_to_c(const char *src, char *out, int out_sz) {
@@ -1678,6 +1710,7 @@ void save_output(const char *filename) {
         return;
     }
 
+    int needs_tess = export_uses_tess_commands();
     int needs_rand = 0;
     for (int i = 0; i < g_num_cmds; i++)
         if (g_cmds[i].valid && strstr(g_cmds[i].source, "rand(") != NULL)
@@ -1700,7 +1733,8 @@ void save_output(const char *filename) {
     write_predef_var_globals(f);
     if (needs_rand)
         write_rand_helper(f);
-    write_tess_preamble(f);
+    if (needs_tess)
+        write_tess_preamble(f);
     write_predef_var_reset_func(f);
     write_func_defs_as_c(f);
     write_render_helper_as_c(f, "render_repl_geometry");
@@ -1759,7 +1793,7 @@ void save_output(const char *filename) {
 
     for (int i = 0; g_footer_pre_init[i]; i++)
         fprintf(f, "%s\n", g_footer_pre_init[i]);
-    emit_init_section_to_file(f);
+    emit_export_init_section_to_file(f, needs_tess);
     for (int i = 0; g_footer_post_init[i]; i++)
         fprintf(f, "%s\n", g_footer_post_init[i]);
 

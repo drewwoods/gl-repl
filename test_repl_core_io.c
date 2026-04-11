@@ -136,8 +136,12 @@ int main(void) {
                     strstr(buf, "glLightModelfv(GL_LIGHT_MODEL_AMBIENT, lm_amb);") != NULL);
         ASSERT_TRUE("saved init quadric texture line",
                     strstr(buf, "gluQuadricTexture(g_quadric, GL_FALSE);") != NULL);
-        ASSERT_TRUE("saved init tess setup line",
-                    strstr(buf, "g_tess = gluNewTess();") != NULL);
+        ASSERT_TRUE("saved non-tess export omits tess global",
+                    strstr(buf, "static GLUtesselator *g_tess = NULL;") == NULL);
+        ASSERT_TRUE("saved non-tess export omits tess setup line",
+                    strstr(buf, "g_tess = gluNewTess();") == NULL);
+        ASSERT_TRUE("saved non-tess export omits tess callback line",
+                    strstr(buf, "GLU_TESS_EDGE_FLAG") == NULL);
         ASSERT_TRUE("saved init color material line once",
                     count_substr(buf, "glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE);") == 1);
         ASSERT_TRUE("saved init light model line once",
@@ -335,6 +339,12 @@ int main(void) {
                     count_substr(buf, "static void func0(float radius) {") == 1);
         ASSERT_TRUE("saved tess func call once",
                     count_substr(buf, "func0(2.0);") == 1);
+        ASSERT_TRUE("saved tess export includes tess global",
+                    strstr(buf, "static GLUtesselator *g_tess = NULL;") != NULL);
+        ASSERT_TRUE("saved tess export includes tess init",
+                    strstr(buf, "g_tess = gluNewTess();") != NULL);
+        ASSERT_TRUE("saved tess export includes tess callback",
+                    strstr(buf, "GLU_TESS_EDGE_FLAG") != NULL);
         ASSERT_TRUE("saved tess no outline helper variants",
                     strstr(buf, "render_repl_outline_") == NULL);
         ASSERT_TRUE("saved tess no vpoint helper variants",
