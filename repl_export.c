@@ -348,6 +348,59 @@ void update_render_state_strings(void) {
              g_line_smooth_enabled ? "Enable" : "Disable");
 }
 
+/* Invert the forward transform in update_lookat_strings(): given eye/center
+ * from a gluLookAt call (up assumed to be (0,1,0)), solve for the camera
+ * state (rx, ry, dist, px, py). Returns 1 on success, 0 if degenerate. */
+static int lookat_to_cam_state(float ex, float ey, float ez,
+                               float cx, float cy, float cz) {
+    float vx = ex - cx, vy = ey - cy, vz = ez - cz;
+    float d = sqrtf(vx * vx + vy * vy + vz * vz);
+    if (d < 1e-6f) return 0;
+
+    float srx = vy / d;
+    if (srx >  1.0f) srx =  1.0f;
+    if (srx < -1.0f) srx = -1.0f;
+    float rx = asinf(srx);
+    float crx = cosf(rx);
+    if (fabsf(crx) < 1e-6f) return 0;
+
+    float ry = atan2f(-vx, vz);
+    float cry = cosf(ry), sry = sinf(ry);
+
+    float px = -(cx * cry + cz * sry);
+    float py = -cy / crx;
+
+    g_cam_rx   = rx * 180.0f / (float)M_PI;
+    g_cam_ry   = ry * 180.0f / (float)M_PI;
+    g_cam_dist = d;
+    g_cam_px   = px;
+    g_cam_py   = py;
+    return 1;
+}
+
+/* Extracts the first 6 floats (eye xyz + center xyz) from text containing
+ * a gluLookAt(...) call and applies them to the camera state. Returns 1
+ * if parsed+applied, 0 otherwise. */
+int import_parse_lookat_block(const char *text) {
+    const char *p = strstr(text, "gluLookAt");
+    if (!p) return 0;
+    p = strchr(p, '(');
+    if (!p) return 0;
+    p++;
+
+    float v[6];
+    for (int i = 0; i < 6; i++) {
+        while (*p && (isspace((unsigned char)*p) || *p == ',')) p++;
+        if (!*p) return 0;
+        char *end = NULL;
+        v[i] = strtof(p, &end);
+        if (end == p) return 0;
+        p = end;
+    }
+
+    return lookat_to_cam_state(v[0], v[1], v[2], v[3], v[4], v[5]);
+}
+
 void update_lookat_strings(void) {
     float rx = g_cam_rx * (float)M_PI / 180.0f;
     float ry = g_cam_ry * (float)M_PI / 180.0f;
@@ -1722,9 +1775,14 @@ int load_from_file(const char *filename) {
 
     char line[MAX_LINE_LEN];
     int in_snippet = 0;
+    int past_snippet = 0;
     int import_func_depth = 0;
     int loaded = 0;
     int warnings = 0;
+
+    char lookat_buf[512];
+    int  lookat_active = 0;
+    int  lookat_len = 0;
 
     while (fgets(line, sizeof(line), f)) {
         int len = (int)strlen(line);
@@ -1732,6 +1790,30 @@ int load_from_file(const char *filename) {
             line[--len] = '\0';
         const char *p = line;
         while (*p && isspace((unsigned char)*p)) p++;
+
+        if (lookat_active || strstr(p, "gluLookAt") != NULL) {
+            if (!lookat_active) {
+                lookat_active = 1;
+                lookat_len = 0;
+                lookat_buf[0] = '\0';
+            }
+            int add = (int)strlen(p);
+            if (lookat_len + add + 2 < (int)sizeof(lookat_buf)) {
+                memcpy(lookat_buf + lookat_len, p, (size_t)add);
+                lookat_len += add;
+                lookat_buf[lookat_len++] = ' ';
+                lookat_buf[lookat_len] = '\0';
+            }
+            if (strchr(p, ';')) {
+                import_parse_lookat_block(lookat_buf);
+                lookat_active = 0;
+                lookat_len = 0;
+            }
+            continue;
+        }
+
+        if (past_snippet)
+            continue;
 
         if (!in_snippet) {
             if (parse_workspace_header_line(p))
@@ -1763,8 +1845,11 @@ int load_from_file(const char *filename) {
             continue;
         }
 
-        if (strncmp(p, "// Snippet end", 14) == 0)
-            break;
+        if (strncmp(p, "// Snippet end", 14) == 0) {
+            in_snippet = 0;
+            past_snippet = 1;
+            continue;
+        }
 
         if (len == 0 || *p == '\0') continue;
         if (import_parse_predef_decl(p))
