@@ -42,6 +42,9 @@
 #define GRID_THEME_COUNT  7
 #define AXES_THEME_COUNT  5
 #define MAX_LIGHTS        4
+/* Shared by live scene overlays and generated output.c outline passes. */
+#define REPL_OUTLINE_POLYGON_OFFSET_FACTOR (-0.01f)
+#define REPL_OUTLINE_POLYGON_OFFSET_UNITS  (-100.0f)
 #define TESS_VERT_BUF_SIZE 256
 #define LOOKAT_LINE_COUNT 3
 #define RENDER_STATE_LINE_COUNT 2

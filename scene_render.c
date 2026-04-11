@@ -1165,7 +1165,8 @@ void render_3d_scene(void) {
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
     glEnable(GL_POLYGON_OFFSET_LINE);
-    glPolygonOffset(-1.0f, -1.0f);
+    glPolygonOffset(REPL_OUTLINE_POLYGON_OFFSET_FACTOR,
+                    REPL_OUTLINE_POLYGON_OFFSET_UNITS);
     glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
     if (g_show_outlines || show_current_poly) {
         glPushMatrix();
