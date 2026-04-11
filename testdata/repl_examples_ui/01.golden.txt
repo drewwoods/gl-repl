@@ -21,7 +21,6 @@ void display() {
   glTranslatef(0.0000f, 0.0000f, -5.5000f);
   glRotatef(18.0000f, 1.0f, 0.0f, 0.0f);
   glRotatef(32.0000f, 0.0f, 1.0f, 0.0f);
-  glRotatef(g_angle, 0.0f, 1.0f, 0.0f);
   glTranslatef(-0.0000f, -0.0000f, -0.0000f);
 --- header_post ---
 --- source ---
