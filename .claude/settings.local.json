@@ -35,7 +35,12 @@
       "Bash(awk '/^void display/,/^}/' /tmp/repl_core_func_output.c)",
       "Bash(./sample --dump-code /tmp/repl_test_save.c)",
       "Bash(./sample --dump-code /tmp/cam_test.c)",
-      "Bash(./sample --dump-code ./output.c)"
+      "Bash(./sample --dump-code ./output.c)",
+      "Bash(./test_repl_core_examples --dump-index 0)",
+      "Bash(./test_repl_core_examples --dump-index 2)",
+      "Bash(sed -n '25,32p' /tmp/ex2_actual.txt)",
+      "Bash(./test_repl_core_examples --example-only 2)",
+      "Bash(./test_repl_core_examples 2)"
     ]
   }
 }

@@ -508,8 +508,8 @@ static int code_panel_header_row_count(int panel_w, int text_x) {
         rows += code_panel_row_count_for_text(g_header_pre[i], text_x, panel_w);
     for (int i = 0; i < RENDER_STATE_LINE_COUNT; i++)
         rows += code_panel_row_count_for_text(g_render_state_lines[i], text_x, panel_w);
-    for (int i = 0; i < LOOKAT_LINE_COUNT; i++)
-        rows += code_panel_row_count_for_text(g_lookat[i], text_x, panel_w);
+    for (int i = 0; i < CAM_LINE_COUNT; i++)
+        rows += code_panel_row_count_for_text(g_cam_lines[i], text_x, panel_w);
     for (int i = 0; g_header_post[i]; i++)
         rows += code_panel_row_count_for_text(g_header_post[i], text_x, panel_w);
 
@@ -1181,11 +1181,11 @@ void render_code_panel(void) {
     for (int i = 0; i < RENDER_STATE_LINE_COUNT; i++) {
         RENDER_STATIC_LINE(g_render_state_lines[i], glColor3f(0.50f, 0.45f, 0.55f));
     }
-    /* gluLookAt lines (slightly brighter - dynamic) */
-    for (int i = 0; i < LOOKAT_LINE_COUNT; i++) {
-        RENDER_STATIC_LINE(g_lookat[i], glColor3f(0.50f, 0.45f, 0.55f));
+    /* Camera transform lines (dynamic — updated every frame) */
+    for (int i = 0; i < CAM_LINE_COUNT; i++) {
+        RENDER_STATIC_LINE(g_cam_lines[i], glColor3f(0.50f, 0.45f, 0.55f));
     }
-    /* Header post-lookAt */
+    /* Header post-camera */
     for (int i = 0; g_header_post[i]; i++) {
         RENDER_STATIC_LINE(g_header_post[i], glColor3f(0.38f, 0.38f, 0.42f));
     }
