@@ -87,8 +87,8 @@ int main(void) {
                 find_init_line("  glLightModelfv(GL_LIGHT_MODEL_AMBIENT, lm_amb);") >= 0);
     ASSERT_TRUE("init has quadric texture line",
                 find_init_line("  gluQuadricTexture(g_quadric, GL_FALSE);") >= 0);
-    ASSERT_TRUE("init has tess init line",
-                find_init_line("  g_tess = gluNewTess();") >= 0);
+    ASSERT_TRUE("init omits tess init line",
+                find_init_line("  g_tess = gluNewTess();") < 0);
     ASSERT_TRUE("init has color material enable bootstrap",
                 find_init_line_substr("glEnable(GL_COLOR_MATERIAL);") >= 0);
     ASSERT_TRUE("init has color material bootstrap",
@@ -101,8 +101,8 @@ int main(void) {
                 find_init_line_substr("glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);") >= 0);
     ASSERT_TRUE("init has point attenuation bootstrap",
                 find_init_line_substr("glPointParameterfv(GL_POINT_DISTANCE_ATTENUATION") >= 0);
-    ASSERT_TRUE("init has tess edge-flag callback",
-                find_init_line_substr("GLU_TESS_EDGE_FLAG") >= 0);
+    ASSERT_TRUE("init omits tess edge-flag callback",
+                find_init_line_substr("GLU_TESS_EDGE_FLAG") < 0);
 
     int before_n = g_num_cmds;
     CmdType before_types[MAX_COMMANDS];

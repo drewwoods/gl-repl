@@ -163,12 +163,16 @@ static const InitBootstrapEntry g_init_bootstrap_repl[] = {
 static GLCmd g_init_bootstrap_cmds[NUM_INIT_BOOTSTRAP];
 static int   g_init_bootstrap_ready = 0;
 
-static const char *g_init_host_only_c[] = {
+static const char *g_init_host_only_visible_c[] = {
     "  GLfloat lm_amb[] = { 0.15f, 0.15f, 0.20f, 1.0f };",
     "  glLightModelfv(GL_LIGHT_MODEL_AMBIENT, lm_amb);",
     "  g_quadric = gluNewQuadric();",
     "  gluQuadricNormals(g_quadric, GLU_SMOOTH);",
     "  gluQuadricTexture(g_quadric, GL_FALSE);",
+    NULL
+};
+
+static const char *g_init_host_only_tess_c[] = {
     "  g_tess = gluNewTess();",
     "  gluTessCallback(g_tess, GLU_TESS_BEGIN, (void (*)())_tess_vtx_begin_cb);",
     "  gluTessCallback(g_tess, GLU_TESS_END, (void (*)())_tess_vtx_end_cb);",
@@ -178,8 +182,6 @@ static const char *g_init_host_only_c[] = {
     "  gluTessCallback(g_tess, GLU_TESS_EDGE_FLAG, (void (*)())glEdgeFlag);",
     NULL
 };
-
-#define INIT_HOST_ONLY_TESS_START 5
 
 static void format_cmd_source_as_c(char *out, size_t out_sz,
                                    const GLCmd *cmd, int translate_exprs);
@@ -234,7 +236,7 @@ const char *g_footer_post_init[] = {
 
 static int init_host_only_line_count(void) {
     int count = 0;
-    while (g_init_host_only_c[count])
+    while (g_init_host_only_visible_c[count])
         count++;
     return count;
 }
@@ -313,7 +315,7 @@ void init_section_line(int i, char *buf, size_t n) {
     }
 
     if (i < host_count) {
-        snprintf(buf, n, "%s", g_init_host_only_c[i]);
+        snprintf(buf, n, "%s", g_init_host_only_visible_c[i]);
         return;
     }
 
@@ -335,11 +337,11 @@ void init_section_line(int i, char *buf, size_t n) {
 static void emit_export_init_section_to_file(FILE *f, int include_tess) {
     char line[MAX_LINE_LEN];
 
-    for (int i = 0; g_init_host_only_c[i]; i++) {
-        if (!include_tess && i >= INIT_HOST_ONLY_TESS_START)
-            break;
-        fprintf(f, "%s\n", g_init_host_only_c[i]);
-    }
+    for (int i = 0; g_init_host_only_visible_c[i]; i++)
+        fprintf(f, "%s\n", g_init_host_only_visible_c[i]);
+    if (include_tess)
+        for (int i = 0; g_init_host_only_tess_c[i]; i++)
+            fprintf(f, "%s\n", g_init_host_only_tess_c[i]);
 
     ensure_init_bootstrap_ready();
     for (int idx = 0; idx < NUM_INIT_BOOTSTRAP; idx++) {
