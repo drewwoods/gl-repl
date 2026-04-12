@@ -1287,15 +1287,15 @@ static void draw_replay_hud(int scene_x, int scene_y, int scene_w, int scene_h) 
     char line1[128];
     char line2[192];
     float progress = 0.0f;
-    int hud_x = scene_x + 18;
-    int hud_y = scene_y + 18;
-    int hud_w = scene_w - 36;
+    int hud_x = scene_x + REPLAY_HUD_MARGIN_X;
+    int hud_y = scene_y + REPLAY_HUD_MARGIN_Y;
+    int hud_w = scene_w - 2 * REPLAY_HUD_MARGIN_X;
 
     if (!g_replay_active || g_replay_state == REPLAY_OFF)
         return;
 
-    if (hud_w < 220)
-        hud_w = 220;
+    if (hud_w < REPLAY_HUD_MIN_WIDTH)
+        hud_w = REPLAY_HUD_MIN_WIDTH;
     if (g_replay_total_flat > 0)
         progress = (float)g_replay_pc / (float)g_replay_total_flat;
     if (progress < 0.0f) progress = 0.0f;
@@ -1307,11 +1307,13 @@ static void draw_replay_hud(int scene_x, int scene_y, int scene_w, int scene_h) 
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
     glColor4f(0.04f, 0.07f, 0.08f, 0.86f);
-    draw_quad((float)hud_x, (float)hud_y, (float)hud_w, 56.0f);
+    draw_quad((float)hud_x, (float)hud_y, (float)hud_w, (float)REPLAY_HUD_HEIGHT);
     glColor4f(0.22f, 0.55f, 0.48f, 0.90f);
-    draw_quad((float)hud_x, (float)(hud_y + 36), (float)hud_w, 8.0f);
+    draw_quad((float)hud_x, (float)(hud_y + REPLAY_HUD_PROGRESS_Y),
+              (float)hud_w, (float)REPLAY_HUD_PROGRESS_H);
     glColor4f(0.35f, 0.95f, 0.70f, 0.95f);
-    draw_quad((float)hud_x, (float)(hud_y + 36), (float)hud_w * progress, 8.0f);
+    draw_quad((float)hud_x, (float)(hud_y + REPLAY_HUD_PROGRESS_Y),
+              (float)hud_w * progress, (float)REPLAY_HUD_PROGRESS_H);
 
     snprintf(line1, sizeof(line1), "REPLAY %s | %d/%d | %.1f step/s | %s",
              replay_state_name(), g_replay_pc, g_replay_total_flat,
@@ -1321,9 +1323,11 @@ static void draw_replay_hud(int scene_x, int scene_y, int scene_w, int scene_h) 
              "[Space] play/pause  [+/-] speed  [m] mode  [Esc] stop  [Left/Right] step [Ctrl-K] jump to cursor");
 
     glColor3f(0.88f, 0.96f, 0.92f);
-    draw_string((float)(hud_x + 10), (float)(hud_y + 18), line1, FONT_SMALL);
+    draw_string((float)(hud_x + REPLAY_HUD_TEXT_PAD_X),
+                (float)(hud_y + REPLAY_HUD_TEXT_LINE1_Y), line1, FONT_SMALL);
     glColor3f(0.60f, 0.78f, 0.72f);
-    draw_string((float)(hud_x + 10), (float)(hud_y + 4), line2, FONT_SMALL);
+    draw_string((float)(hud_x + REPLAY_HUD_TEXT_PAD_X),
+                (float)(hud_y + REPLAY_HUD_TEXT_LINE2_Y), line2, FONT_SMALL);
 
     glDisable(GL_BLEND);
     end_2d();
