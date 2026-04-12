@@ -39,8 +39,8 @@
 
 #define MAX_ACCUM_SAMPLES 16
 #define ACCUM_STEP_COUNT  5
-#define GRID_THEME_COUNT  8
-#define AXES_THEME_COUNT  5
+#define GRID_THEME_COUNT  10
+#define AXES_THEME_COUNT  6
 #define MAX_LIGHTS        4
 /* Shared by live scene overlays and generated output.c outline passes. */
 #define REPL_OUTLINE_POLYGON_OFFSET_FACTOR (-0.01f)

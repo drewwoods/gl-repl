@@ -299,6 +299,125 @@ static void draw_grid(void) {
         break;
     }
 
+    case 8: { /* XZ Ruler — warm X direction, cool Z direction, ruler ticks */
+        float extent = 5.0f, step = 0.5f;
+
+        /* Non-origin grid lines with directional colour coding */
+        glBegin(GL_LINES);
+        for (float v = -extent; v <= extent + 0.01f; v += step) {
+            if (fabsf(v) < 0.01f) continue;
+            float dist_frac = fabsf(v) / extent;
+            float fade = 1.0f - dist_frac * dist_frac;
+            int is_major = (fabsf(fmodf(fabsf(v) + 0.01f, 1.0f)) < 0.1f);
+            float a = (is_major ? 0.18f : 0.07f) * fade;
+            /* Lines along Z (constant X = v) — warm amber/red, show X spacing */
+            glColor4f(0.82f, 0.42f, 0.18f, a);
+            glVertex3f(v, 0, -extent); glVertex3f(v, 0, extent);
+            /* Lines along X (constant Z = v) — cool blue, show Z spacing */
+            glColor4f(0.22f, 0.42f, 0.88f, a);
+            glVertex3f(-extent, 0, v); glVertex3f(extent, 0, v);
+        }
+        glEnd();
+
+        /* Origin axes — bright, wider */
+        glLineWidth(2.0f);
+        glBegin(GL_LINES);
+        /* X axis (z=0, runs along X) */
+        glColor4f(0.88f, 0.28f, 0.12f, 0.70f);
+        glVertex3f(-extent, 0, 0); glVertex3f(extent, 0, 0);
+        /* Z axis (x=0, runs along Z) */
+        glColor4f(0.12f, 0.32f, 0.88f, 0.70f);
+        glVertex3f(0, 0, -extent); glVertex3f(0, 0, extent);
+        glEnd();
+        glLineWidth(1.0f);
+
+        /* Ruler tick marks at integer intervals on both axes */
+        float tick = 0.06f;
+        glBegin(GL_LINES);
+        for (float v = -extent; v <= extent + 0.01f; v += 1.0f) {
+            if (fabsf(v) < 0.01f) continue;
+            float ta = (fabsf(v) <= 2.5f) ? 0.48f : 0.22f;
+            /* Ticks crossing the X axis in the Z direction */
+            glColor4f(0.88f, 0.28f, 0.12f, ta);
+            glVertex3f(v, 0, -tick); glVertex3f(v, 0, tick);
+            /* Ticks crossing the Z axis in the X direction */
+            glColor4f(0.12f, 0.32f, 0.88f, ta);
+            glVertex3f(-tick, 0, v); glVertex3f(tick, 0, v);
+        }
+        glEnd();
+        break;
+    }
+
+    case 9: { /* Adaptive Planes — floor grid + camera-facing vertical plane blend */
+        float extent = 5.0f, step = 0.5f;
+
+        /* Determine which vertical plane is most face-on to the camera.
+         * Camera horizontal look direction: (sin(ry), 0, -cos(ry))
+         * XY plane (z=0, normal Z): face-on weight = cos²(ry)
+         * ZY plane (x=0, normal X): face-on weight = sin²(ry)
+         * These sum to 1, giving a natural blend between the two. */
+        float ry_rad = g_cam_ry * (float)M_PI / 180.0f;
+        float rx_rad = g_cam_rx * (float)M_PI / 180.0f;
+        float cos_ry = cosf(ry_rad), sin_ry = sinf(ry_rad);
+        float xy_w = cos_ry * cos_ry;
+        float zy_w = sin_ry * sin_ry;
+
+        /* Fade vertical planes out when the camera is near top/bottom view */
+        float vert_fade = cosf(rx_rad);
+        vert_fade = vert_fade * vert_fade;
+        xy_w *= vert_fade;
+        zy_w *= vert_fade;
+
+        /* --- Floor grid (XZ plane, always present) --- */
+        glBegin(GL_LINES);
+        for (float v = -extent; v <= extent + 0.01f; v += step) {
+            int is_origin = (fabsf(v) < 0.01f);
+            int is_major  = (fabsf(fmodf(fabsf(v) + 0.01f, 1.0f)) < 0.1f);
+            float a = is_origin ? 0.30f : (is_major ? 0.10f : 0.04f);
+            glColor4f(0.50f, 0.52f, 0.65f, a);
+            glVertex3f(v,       0, -extent); glVertex3f(v,      0, extent);
+            glVertex3f(-extent, 0, v);       glVertex3f(extent, 0, v);
+        }
+        glEnd();
+
+        /* --- XY plane (z=0): visible when camera looks along Z axis --- */
+        if (xy_w > 0.01f) {
+            glBegin(GL_LINES);
+            for (float v = -extent; v <= extent + 0.01f; v += step) {
+                int is_origin = (fabsf(v) < 0.01f);
+                int is_major  = (fabsf(fmodf(fabsf(v) + 0.01f, 1.0f)) < 0.1f);
+                float base = is_origin ? 0.42f : (is_major ? 0.14f : 0.05f);
+                float a = base * xy_w;
+                /* Lines along X (constant Y = v, at z=0) */
+                glColor4f(0.35f, 0.62f, 0.88f, a);
+                glVertex3f(-extent, v, 0); glVertex3f(extent, v, 0);
+                /* Lines along Y (constant X = v, at z=0) */
+                glColor4f(0.35f, 0.62f, 0.88f, a * 0.75f);
+                glVertex3f(v, -extent, 0); glVertex3f(v, extent, 0);
+            }
+            glEnd();
+        }
+
+        /* --- ZY plane (x=0): visible when camera looks along X axis --- */
+        if (zy_w > 0.01f) {
+            glBegin(GL_LINES);
+            for (float v = -extent; v <= extent + 0.01f; v += step) {
+                int is_origin = (fabsf(v) < 0.01f);
+                int is_major  = (fabsf(fmodf(fabsf(v) + 0.01f, 1.0f)) < 0.1f);
+                float base = is_origin ? 0.42f : (is_major ? 0.14f : 0.05f);
+                float a = base * zy_w;
+                /* Lines along Z (constant Y = v, at x=0) */
+                glColor4f(0.82f, 0.52f, 0.28f, a);
+                glVertex3f(0, v, -extent); glVertex3f(0, v, extent);
+                /* Lines along Y (constant Z = v, at x=0) */
+                glColor4f(0.82f, 0.52f, 0.28f, a * 0.75f);
+                glVertex3f(0, -extent, v); glVertex3f(0, extent, v);
+            }
+            glEnd();
+        }
+        break;
+    }
+
     default: break;
     }
 
@@ -523,6 +642,81 @@ static void draw_axes(void) {
         draw_axis_label(-len - 0.15f, 0, 0, 'x', 0.55f, 0.25f, 0.25f);
         draw_axis_label(0, -len - 0.15f, 0, 'y', 0.25f, 0.55f, 0.25f);
         draw_axis_label(0, 0, -len - 0.15f, 'z', 0.25f, 0.25f, 0.55f);
+        break;
+    }
+
+    case 5: { /* Gizmo — axis lines + camera-weighted plane fills */
+        float len  = 2.0f;
+        float fill = len / 2.0f;
+
+        /* Camera-facing weight for each vertical plane:
+         * XY (z=0) is face-on when camera looks along Z  → weight = cos²(ry)
+         * ZY (x=0) is face-on when camera looks along X  → weight = sin²(ry) */
+        float ry_rad = g_cam_ry * (float)M_PI / 180.0f;
+        float cos_ry = cosf(ry_rad), sin_ry = sinf(ry_rad);
+        float xy_w = cos_ry * cos_ry;
+        float zy_w = sin_ry * sin_ry;
+
+        /* Axis lines (same palette as Classic) */
+        glLineWidth(2.0f);
+        glBegin(GL_LINES);
+        glColor4f(0.90f, 0.20f, 0.20f, 0.85f);
+        glVertex3f(0, 0, 0); glVertex3f(len, 0, 0);
+        glColor4f(0.20f, 0.90f, 0.20f, 0.85f);
+        glVertex3f(0, 0, 0); glVertex3f(0, len, 0);
+        glColor4f(0.20f, 0.20f, 0.90f, 0.85f);
+        glVertex3f(0, 0, 0); glVertex3f(0, 0, len);
+        glEnd();
+        glLineWidth(1.0f);
+
+        /* XZ floor plane quadrant — always shown */
+        glBegin(GL_QUADS);
+        glColor4f(0.58f, 0.60f, 0.72f, 0.07f);
+        glVertex3f(0,    0, 0);    glVertex3f(fill, 0, 0);
+        glVertex3f(fill, 0, fill); glVertex3f(0,    0, fill);
+        glEnd();
+
+        /* XY plane quadrant (z=0) — fades in when looking along Z */
+        float xy_a = 0.11f * xy_w;
+        if (xy_a > 0.004f) {
+            glBegin(GL_QUADS);
+            glColor4f(0.80f, 0.50f, 0.25f, xy_a);
+            glVertex3f(0,    0,    0); glVertex3f(fill, 0,    0);
+            glVertex3f(fill, fill, 0); glVertex3f(0,    fill, 0);
+            glEnd();
+            glBegin(GL_LINE_LOOP);
+            glColor4f(0.92f, 0.66f, 0.42f, xy_a * 2.2f);
+            glVertex3f(0,    0,    0); glVertex3f(fill, 0,    0);
+            glVertex3f(fill, fill, 0); glVertex3f(0,    fill, 0);
+            glEnd();
+        }
+
+        /* ZY plane quadrant (x=0) — fades in when looking along X */
+        float zy_a = 0.11f * zy_w;
+        if (zy_a > 0.004f) {
+            glBegin(GL_QUADS);
+            glColor4f(0.32f, 0.58f, 0.88f, zy_a);
+            glVertex3f(0, 0,    0);    glVertex3f(0, 0,    fill);
+            glVertex3f(0, fill, fill); glVertex3f(0, fill, 0);
+            glEnd();
+            glBegin(GL_LINE_LOOP);
+            glColor4f(0.48f, 0.72f, 0.95f, zy_a * 2.2f);
+            glVertex3f(0, 0,    0);    glVertex3f(0, 0,    fill);
+            glVertex3f(0, fill, fill); glVertex3f(0, fill, 0);
+            glEnd();
+        }
+
+        /* Origin dot */
+        glPointSize(5.0f);
+        glBegin(GL_POINTS);
+        glColor4f(0.95f, 0.95f, 0.95f, 0.72f);
+        glVertex3f(0, 0, 0);
+        glEnd();
+        glPointSize(1.0f);
+
+        draw_axis_label(len + 0.15f, 0, 0, 'X', 0.90f, 0.25f, 0.25f);
+        draw_axis_label(0, len + 0.15f, 0, 'Y', 0.25f, 0.90f, 0.25f);
+        draw_axis_label(0, 0, len + 0.15f, 'Z', 0.25f, 0.25f, 0.90f);
         break;
     }
 

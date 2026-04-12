@@ -380,16 +380,16 @@ int    g_show_help    = 0;
 int    g_help_tab     = 0;   /* 0=Commands, 1=Keys */
 int    g_help_scroll  = 0;
 int    g_wireframe    = 0;
-int    g_grid_theme   = 2;  /* 0=off, 1=classic, 2=fog, 3=tron, 4=ember, 5=faint, 6=focus, 7=ocean */
+int    g_grid_theme   = 2;  /* 0=off, 1=classic, 2=fog, 3=tron, 4=ember, 5=faint, 6=focus, 7=ocean, 8=xzruler, 9=planes */
 const char *g_grid_names[] = {
     "Grid OFF", "Grid: Classic", "Grid: Fog", "Grid: Tron", "Grid: Ember",
-    "Grid: Faint", "Grid: Focus", "Grid: Ocean"
+    "Grid: Faint", "Grid: Focus", "Grid: Ocean", "Grid: XZ Ruler", "Grid: Adaptive Planes"
 };
 float  g_focus_vtx[3] = { 0.0f, 0.0f, 0.0f };  /* last vertex pos for focus grid */
 int    g_focus_vtx_valid = 0;
-int    g_axes_theme   = 3;  /* 0=off, 1=classic, 2=pulse, 3=neon, 4=compass */
+int    g_axes_theme   = 3;  /* 0=off, 1=classic, 2=pulse, 3=neon, 4=compass, 5=gizmo */
 const char *g_axes_names[] = {
-    "Axes OFF", "Axes: Classic", "Axes: Pulse", "Axes: Neon", "Axes: Compass"
+    "Axes OFF", "Axes: Classic", "Axes: Pulse", "Axes: Neon", "Axes: Compass", "Axes: Gizmo"
 };
 int    g_show_vnums   = 1;
 int    g_show_normals = 0;
