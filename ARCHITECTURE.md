@@ -182,6 +182,39 @@ Replay state and stepping remain in `repl_core.c`, but editor callbacks in
    truth.
 3. Preserve round-tripping through `load_from_file()` whenever possible.
 
+### Add a new predefined variable
+
+There are two variable classes in the REPL:
+
+- predefined globals stored in `g_predef_vars[]`
+- scoped locals introduced by `for(...)` loop indices and `funcN(...)`
+  parameters
+
+Top-level assignments like `foo = 1;` only target predefined globals. Loop
+indices and function parameters are collected as local `ExprVar` scopes during
+flattening; they are not added to the global variable table.
+
+To add a new predefined global:
+
+1. Increase `MAX_PREDEF_VARS` in `repl_eval.h` if you need more slots.
+2. Add the new variable name to the `names[]` array in `init_predef_vars()` in
+   `repl_eval.c`.
+3. Keep names within the `ExprVar.name[16]` storage limit.
+4. If you add many globals, also check `MAX_WORKSPACE_HEADER_LINES` in
+   `sample.h`, because workspace save/load persists globals through `// @var`
+   header lines.
+
+Existing export/import and persistence paths already iterate
+`g_predef_vars[]`, so new predefined globals automatically:
+
+- participate in expression evaluation
+- round-trip through workspace headers in `repl_export.c`
+- emit as file-scope globals in exported C
+- reset in exported `reset_repl_vars()`
+
+Special case: `t` is wired into animation/time helpers in `repl_core.c`. New
+variables are plain globals unless you add similar runtime plumbing.
+
 ## Current Split Intent
 
 The split is structural, not behavioral.
