@@ -1969,10 +1969,20 @@ static void special_func(int key, int x, int y) {
         g_cam_rotate = !g_cam_rotate;
         set_status(g_cam_rotate ? "Camera rotate ON" : "Camera rotate OFF");
         break;
-    case GLUT_KEY_F12:
-        if (repl_example_count() > 0)
-            repl_load_example((g_example_idx + 1) % repl_example_count());
+    case GLUT_KEY_F12: {
+        int count = repl_example_count();
+        if (count <= 0) break;
+        int next = g_example_idx + 1;
+        if (next >= count) {
+            if (repl_user_scene_valid()) {
+                repl_load_user_scene();
+                break;
+            }
+            next = 0;
+        }
+        repl_load_example(next);
         break;
+    }
     case GLUT_KEY_PAGE_UP:
         if (g_show_help)
             g_help_scroll -= 5;

@@ -517,9 +517,9 @@ static int code_panel_header_row_count(int panel_w, int text_x) {
 }
 
 /* Header button bar: Save C | Example | Config | Replay */
-#define NUM_HEADER_BTNS 4
+#define NUM_HEADER_BTNS 5
 static const char *g_header_btn_labels[NUM_HEADER_BTNS] = {
-    "Save C", "Example", "Config", "Replay"
+    "Save C", "Example", "Config", "Replay", "Scene"
 };
 
 /* Example dropdown state */
@@ -554,10 +554,22 @@ static int header_btn_hit(int gx, int gy) {
     return -1;
 }
 
+static const char *USER_SCENE_LABEL = "Your Scene";
+
+/* Total dropdown entries: predefined examples + user scene (when saved) */
+static int dropdown_total_count(void) {
+    return repl_example_count() + (repl_user_scene_valid() ? 1 : 0);
+}
+
+static const char *dropdown_item_name(int i) {
+    if (i < repl_example_count()) return repl_example_name(i);
+    return USER_SCENE_LABEL;
+}
+
 /* Returns dropdown item index under (gx, gy), or -1 if none */
 static int example_dropdown_item_hit(int gx, int gy) {
     if (!g_example_dropdown_open) return -1;
-    int n = repl_example_count();
+    int n = dropdown_total_count();
     if (n == 0) return -1;
     int bx[NUM_HEADER_BTNS], by, bh;
     int ry = g_win_h - gy;
@@ -566,7 +578,7 @@ static int example_dropdown_item_hit(int gx, int gy) {
     /* Width: widest label + padding */
     int max_w = 0;
     for (int i = 0; i < n; i++) {
-        int w = (int)strlen(repl_example_name(i)) * FONT_W;
+        int w = (int)strlen(dropdown_item_name(i)) * FONT_W;
         if (w > max_w) max_w = w;
     }
     int dw = max_w + 20;
@@ -1114,7 +1126,8 @@ void render_code_panel(void) {
                 int bw = (int)strlen(g_header_btn_labels[i]) * 8 + 12;
                 /* Active state highlight for toggle buttons */
                 int active = (i == 2 && g_show_config) ||
-                             (i == 3 && g_replay_active);
+                             (i == 3 && g_replay_active) ||
+                             (i == 4 && repl_user_scene_valid());
                 if (i == hover_btn)
                     glColor4f(0.20f, 0.38f, 0.60f, 0.95f);
                 else if (active)
@@ -1537,7 +1550,8 @@ void render_autocomplete(void) {
 
 void render_example_dropdown(void) {
     if (!g_example_dropdown_open) return;
-    int n = repl_example_count();
+    int n = dropdown_total_count();
+    int ne = repl_example_count();
     if (n == 0) { g_example_dropdown_open = 0; return; }
 
     /* Position: drops down from the Example button */
@@ -1545,10 +1559,10 @@ void render_example_dropdown(void) {
     header_btn_rects(bx, &by, NULL, &bh);
     int dx = bx[1];
 
-    /* Width: widest example name + padding */
+    /* Width: widest item name + padding */
     int max_w = 0;
     for (int i = 0; i < n; i++) {
-        int w = (int)strlen(repl_example_name(i)) * FONT_W;
+        int w = (int)strlen(dropdown_item_name(i)) * FONT_W;
         if (w > max_w) max_w = w;
     }
     int dw = max_w + 20;
@@ -1578,18 +1592,31 @@ void render_example_dropdown(void) {
     /* Entries (index 0 at top) */
     int ey = dy + dh - LINE_H + 1;
     for (int i = 0; i < n; i++) {
+        int is_user_scene = (i >= ne);
+
+        /* Separator line before user scene entry */
+        if (is_user_scene && ne > 0) {
+            glColor4f(0.40f, 0.45f, 0.60f, 0.50f);
+            glBegin(GL_LINES);
+            glVertex2f((float)(dx + 4), (float)(ey + LINE_H - 2));
+            glVertex2f((float)(dx + dw - 4), (float)(ey + LINE_H - 2));
+            glEnd();
+        }
+
         if (i == g_example_dropdown_hover) {
             glColor4f(0.20f, 0.25f, 0.45f, 0.90f);
             draw_quad((float)(dx + 1), (float)(ey - 2),
                       (float)(dw - 2), (float)LINE_H);
             glColor3f(1.0f, 1.0f, 0.90f);
+        } else if (is_user_scene) {
+            glColor3f(0.55f, 0.85f, 1.0f);
         } else if (i == g_example_idx) {
             glColor3f(0.60f, 1.0f, 0.60f);
         } else {
             glColor3f(0.65f, 0.65f, 0.72f);
         }
         draw_string((float)(dx + 8), (float)ey,
-                    repl_example_name(i), FONT_MONO);
+                    dropdown_item_name(i), FONT_MONO);
         ey -= LINE_H;
     }
 
@@ -2320,7 +2347,10 @@ int handle_code_panel_press(int mx, int my) {
     if (g_example_dropdown_open) {
         int item = example_dropdown_item_hit(mx, my);
         if (item >= 0) {
-            repl_load_example(item);
+            if (item >= repl_example_count())
+                repl_load_user_scene();
+            else
+                repl_load_example(item);
             g_example_dropdown_open = 0;
             return 1;
         }
@@ -2337,6 +2367,9 @@ int handle_code_panel_press(int mx, int my) {
         case 3:
             if (g_replay_active) replay_stop();
             else                 replay_start();
+            break;
+        case 4:
+            if (repl_user_scene_valid()) repl_load_user_scene();
             break;
         }
         return 1;

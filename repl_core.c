@@ -401,6 +401,19 @@ int    g_autonormal   = 0;
 int    g_show_lights  = 1;
 int    g_cam_rotate   = 0;  /* auto-rotate camera around Y */
 int    g_example_idx  = -1; /* current predefined example (-1 = none loaded yet) */
+
+/* User scene — saved when switching to an example, restored via F12 cycle or
+ * dropdown.  Stored independently from predefined examples so multiple user
+ * scenes can be supported in the future. */
+typedef struct {
+    GLCmd cmds[MAX_COMMANDS];
+    int   num_cmds;
+    int   edit_line;
+    float predef_vals[MAX_PREDEF_VARS];
+} UserScene;
+
+static UserScene g_user_scene;
+static int       g_user_scene_valid = 0;
 int    g_user_lighting_enabled = 0; /* tracks if user typed glEnable(GL_LIGHTING) */
 int    g_show_outlines = 1; /* draw black wireframe over filled polygons */
 int    g_show_vpoints  = 1; /* draw black dots at each vertex position */
@@ -3740,6 +3753,32 @@ static unsigned int line_func_scope_mask(int line) {
     return mask;
 }
 
+static void save_user_scene(void) {
+    memcpy(g_user_scene.cmds, g_cmds, (size_t)g_num_cmds * sizeof(GLCmd));
+    g_user_scene.num_cmds  = g_num_cmds;
+    g_user_scene.edit_line = g_edit_line;
+    for (int i = 0; i < g_num_predef_vars; i++)
+        g_user_scene.predef_vals[i] = g_predef_vars[i].value;
+    g_user_scene_valid = 1;
+}
+
+static void restore_user_scene(void) {
+    if (!g_user_scene_valid) return;
+    memcpy(g_cmds, g_user_scene.cmds,
+           (size_t)g_user_scene.num_cmds * sizeof(GLCmd));
+    g_num_cmds     = g_user_scene.num_cmds;
+    g_num_flat_cmds = 0;
+    g_edit_line    = g_user_scene.edit_line;
+    for (int i = 0; i < g_num_predef_vars; i++)
+        g_predef_vars[i].value = g_user_scene.predef_vals[i];
+    g_inserting = 0;
+    load_line_to_input(g_edit_line);
+    mark_normals_dirty();
+    g_user_scene_valid = 0;
+    g_example_idx = -1;
+    set_status("Restored your scene");
+}
+
 /* Load an example from an array of source lines */
 static void load_example_lines(const char *const *lines) {
     /* Clear state */
@@ -3774,6 +3813,10 @@ static void load_example(int idx) {
     lines = repl_examples_lines(idx);
     name = repl_examples_name(idx);
     if (!lines || !name) return;
+
+    /* Preserve the user's work before overwriting with an example */
+    if (!g_user_scene_valid)
+        save_user_scene();
 
     load_example_lines(lines);
     g_example_idx = idx;
@@ -3939,6 +3982,14 @@ const char *repl_example_name(int idx) {
 
 void repl_load_example(int idx) {
     load_example(idx);
+}
+
+int repl_user_scene_valid(void) {
+    return g_user_scene_valid;
+}
+
+void repl_load_user_scene(void) {
+    restore_user_scene();
 }
 
 void repl_load_initial_commands(const char *import_file) {
