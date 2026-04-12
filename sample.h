@@ -49,6 +49,22 @@
 #define CAM_LINE_COUNT 4
 #define RENDER_STATE_LINE_COUNT 2
 
+/*
+ * Replay HUD layout shared by scene_render.c and ui_panels.c.
+ * Keep replay HUD drawing and variable-panel replay lift anchored to this
+ * single geometry contract.
+ */
+#define REPLAY_HUD_MARGIN_X      18
+#define REPLAY_HUD_MARGIN_Y      18
+#define REPLAY_HUD_MIN_WIDTH     220
+#define REPLAY_HUD_HEIGHT        56
+#define REPLAY_HUD_PROGRESS_Y    36
+#define REPLAY_HUD_PROGRESS_H     8
+#define REPLAY_HUD_TEXT_PAD_X    10
+#define REPLAY_HUD_TEXT_LINE1_Y  18
+#define REPLAY_HUD_TEXT_LINE2_Y   4
+#define REPLAY_HUD_BOTTOM_Y (REPLAY_HUD_MARGIN_Y + REPLAY_HUD_HEIGHT)
+
 typedef struct {
     GLdouble pos[3];
     GLdouble normal[3]; /* per-vertex normal, default (0,0,1) */

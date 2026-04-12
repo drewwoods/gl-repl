@@ -1997,6 +1997,31 @@ void render_help(void) {
 #define VAR_PANEL_PAD   6
 #define VAR_TITLE_H    20
 #define VAR_ROW_H      20
+#define VAR_PANEL_BASE_Y 8
+/* Extra gap above REPLAY_HUD_BOTTOM_Y while replay HUD is active. */
+#define VAR_REPLAY_CLEARANCE 10
+
+static float g_var_panel_replay_lift_px = 0.0f;
+
+static float var_panel_replay_target_lift_px(void) {
+    float target = (float)((REPLAY_HUD_BOTTOM_Y + VAR_REPLAY_CLEARANCE)
+                         - VAR_PANEL_BASE_Y);
+    if (target < 0.0f) target = 0.0f;
+    return target;
+}
+
+static float var_panel_replay_lift(void) {
+    float target = 0.0f;
+    if (g_replay_active && g_replay_state != REPLAY_OFF)
+        target = var_panel_replay_target_lift_px();
+
+    /* Exponential-decay style easing toward target (and back to 0 when replay ends). */
+    g_var_panel_replay_lift_px += (target - g_var_panel_replay_lift_px) * 0.22f;
+    if (fabsf(target - g_var_panel_replay_lift_px) < 0.25f)
+        g_var_panel_replay_lift_px = target;
+
+    return g_var_panel_replay_lift_px;
+}
 
 /* Geometry in render coords (y=0 at bottom). */
 static void var_panel_geom(int *px, int *py, int *pw, int *ph) {
@@ -2006,7 +2031,7 @@ static void var_panel_geom(int *px, int *py, int *pw, int *ph) {
     *ph = VAR_TITLE_H + g_num_predef_vars * VAR_ROW_H + 2 * VAR_PANEL_PAD;
     *px = sc_x + sc_w - *pw - 8;
     if (*px < sc_x + 4) *px = sc_x + 4;
-    *py = sc_y + 8;
+    *py = sc_y + VAR_PANEL_BASE_Y + (int)lroundf(var_panel_replay_lift());
 }
 
 /* Return 1 if GLUT screen coord (gx, gy) is in the panel; sets *out_row. */
