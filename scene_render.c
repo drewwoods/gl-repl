@@ -222,6 +222,83 @@ static void draw_grid(void) {
         break;
     }
 
+    case 7: { /* Ocean — underwater surface plane with caustics */
+        float extent = 12.0f, step = 0.5f;
+
+        /* Underwater fog — slightly breathing density */
+        GLfloat fog_col[] = { 0.01f, 0.06f, 0.10f, 1.0f };
+        glEnable(GL_FOG);
+        glFogi(GL_FOG_MODE, GL_EXP2);
+        glFogfv(GL_FOG_COLOR, fog_col);
+        glFogf(GL_FOG_DENSITY, 0.045f + breath * 0.015f);
+
+        /* Ocean floor grid with animated caustic highlights */
+        glBegin(GL_LINES);
+        for (float v = -extent; v <= extent + 0.01f; v += step) {
+            int is_origin = (fabsf(v) < 0.01f);
+            int is_major  = (fabsf(fmodf(fabsf(v) + 0.01f, 2.0f)) < 0.1f);
+            float base_a  = is_origin ? 0.45f : (is_major ? 0.22f : 0.08f);
+
+            /* Two overlapping sine waves create a caustic shimmer */
+            float c1 = sinf(v * 3.0f + g_anim_time * 1.3f);
+            float c2 = cosf(v * 2.3f - g_anim_time * 0.9f);
+            float caustic = (c1 * c2) * 0.5f + 0.5f;   /* 0..1 */
+            float a = base_a * (0.5f + caustic * 0.5f);
+
+            float r = 0.10f + caustic * 0.15f;
+            float g = 0.35f + caustic * 0.20f;
+            float b = 0.45f + caustic * 0.10f;
+            glColor4f(r, g, b, a);
+            glVertex3f(v, 0, -extent);  glVertex3f(v, 0, extent);
+            glVertex3f(-extent, 0, v);  glVertex3f(extent, 0, v);
+        }
+        glEnd();
+
+        glDisable(GL_FOG);
+
+        /* ---- Water surface plane ----
+         * A semi-transparent rippling mesh at Y ≈ 0.  Because draw_grid()
+         * runs after execute_commands(), this overlay tints everything the
+         * user drew below the surface, producing the underwater look.
+         * Depth-test is on but depth-write is off (set at the top of
+         * draw_grid), so the surface correctly occludes only geometry that
+         * sits behind it from the camera's point of view. */
+        float surf_step = 0.75f;
+        float surf_y    = 0.01f;   /* tiny offset above grid floor */
+
+        for (float sz = -extent; sz < extent - 0.01f; sz += surf_step) {
+            glBegin(GL_TRIANGLE_STRIP);
+            for (float sx = -extent; sx <= extent + 0.01f; sx += surf_step) {
+                for (int row = 0; row < 2; row++) {
+                    float zz = sz + row * surf_step;
+
+                    /* Composite wave displacement (3 octaves) */
+                    float w = sinf(sx * 1.5f + g_anim_time * 0.7f) * 0.025f
+                            + cosf(zz * 1.8f + g_anim_time * 0.5f) * 0.018f
+                            + sinf((sx + zz) * 0.8f + g_anim_time * 1.0f) * 0.012f;
+                    float y = surf_y + w;
+
+                    /* Smooth edge fade so the surface has no hard border */
+                    float dx = fabsf(sx) / extent;
+                    float dz = fabsf(zz) / extent;
+                    float edge = (1.0f - dx * dx) * (1.0f - dz * dz);
+                    if (edge < 0.0f) edge = 0.0f;
+
+                    float alpha = 0.22f * edge;
+
+                    /* Subtle colour variation across surface */
+                    float cr = sinf(sx * 0.4f + g_anim_time * 0.3f) * 0.04f;
+                    float cg = cosf(zz * 0.3f + g_anim_time * 0.25f) * 0.04f;
+                    glColor4f(0.05f + cr, 0.25f + cg, 0.35f + cr, alpha);
+                    glVertex3f(sx, y, zz);
+                }
+            }
+            glEnd();
+        }
+
+        break;
+    }
+
     default: break;
     }
 
