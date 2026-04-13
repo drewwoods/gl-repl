@@ -37,6 +37,9 @@ int  g_inserting = 0;
 
 int g_mouse_x, g_mouse_y;
 int g_mouse_btn = -1;
+int g_mouse_mods = -1; /* Modifiers at the time of the last mouse event.
+                          Can't call glutGetModifiers() from mouse outside
+                          keyboard, special, or mouse callbacks */
 
 static float g_vel_ry = 0.0f;
 static float g_vel_rx = 0.0f;
@@ -2102,6 +2105,9 @@ static void mouse_func(int button, int state, int x, int y) {
         }
     }
 
+    // cache modifiers since can't be queried outside of an input event callback
+    g_mouse_mods = glutGetModifiers();
+
     if (state == GLUT_DOWN) {
         g_mouse_btn = button;
         g_mouse_x = x;
@@ -2254,7 +2260,7 @@ static void motion_func(int x, int y) {
     } else if (g_mouse_btn == GLUT_RIGHT_BUTTON) {
         float scale = 0.005f * g_cam_dist;
         float fdy = (float)dy;
-        if (glutGetModifiers() & GLUT_ACTIVE_SHIFT) {
+        if (g_mouse_mods & GLUT_ACTIVE_SHIFT) {
             /* Shift + right-drag: pan the orbit target along world Y. */
             float wdy = fdy * scale;
             g_cam_ty -= wdy;
