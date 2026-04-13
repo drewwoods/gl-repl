@@ -41,6 +41,7 @@ int g_mouse_btn = -1;
 static float g_vel_ry = 0.0f;
 static float g_vel_rx = 0.0f;
 static float g_vel_tx = 0.0f;
+static float g_vel_ty = 0.0f;
 static float g_vel_tz = 0.0f;
 static float g_vel_zoom = 0.0f;
 
@@ -2105,11 +2106,12 @@ static void mouse_func(int button, int state, int x, int y) {
         g_mouse_btn = button;
         g_mouse_x = x;
         g_mouse_y = y;
-        g_vel_ry = g_vel_rx = g_vel_tx = g_vel_tz = g_vel_zoom = 0.0f;
+        g_vel_ry = g_vel_rx = g_vel_tx = g_vel_ty = g_vel_tz = g_vel_zoom = 0.0f;
     } else {
         g_vel_ry = fabsf(g_vel_ry) > CAM_MOMENTUM_THRESHOLD ? g_vel_ry : 0.0f;
         g_vel_rx = fabsf(g_vel_rx) > CAM_MOMENTUM_THRESHOLD ? g_vel_rx : 0.0f;
         g_vel_tx = fabsf(g_vel_tx) > CAM_MOMENTUM_THRESHOLD ? g_vel_tx : 0.0f;
+        g_vel_ty = fabsf(g_vel_ty) > CAM_MOMENTUM_THRESHOLD ? g_vel_ty : 0.0f;
         g_vel_tz = fabsf(g_vel_tz) > CAM_MOMENTUM_THRESHOLD ? g_vel_tz : 0.0f;
         g_vel_zoom = fabsf(g_vel_zoom) > CAM_MOMENTUM_THRESHOLD ? g_vel_zoom : 0.0f;
         g_mouse_btn = -1;
@@ -2250,30 +2252,39 @@ static void motion_func(int x, int y) {
         g_vel_ry += (float)dx * 0.25f;
         g_vel_rx += (float)dy * 0.25f;
     } else if (g_mouse_btn == GLUT_RIGHT_BUTTON) {
-        /* Pan the orbit target along the world XZ ground plane.
-         *
-         * Camera transform is Rx(rx)·Ry(ry)·T(-target), so a view-space
-         * direction v maps back to world by Ry(-ry)·Rx(-rx)·v. Projected
-         * onto the ground (Y=0):
-         *   right_xz   = (+cos ry, 0, +sin ry)   (screen +X)
-         *   forward_xz = (+sin ry, 0, -cos ry)   (screen -Y / mouse-up)
-         *
-         * Mouse-down (dy < 0) pulls the target back toward the camera,
-         * so we subtract forward_xz * dy. World Y is preserved. */
-        float ry_rad = g_cam_ry * (float)M_PI / 180.0f;
-        float cry = cosf(ry_rad), sry = sinf(ry_rad);
         float scale = 0.005f * g_cam_dist;
-        float fdx = (float)dx;
         float fdy = (float)dy;
-        float wdx = ( fdx * cry - fdy * sry) * scale;
-        float wdz = ( fdx * sry + fdy * cry) * scale;
-        g_cam_tx -= wdx;
-        g_cam_tz -= wdz;
-        g_vel_tx *= CAM_DECAY;
-        g_vel_tz *= CAM_DECAY;
-        g_vel_tx += wdx * 0.5f;
-        g_vel_tz += wdz * 0.5f;
-        g_cam_motion_glow = 1.0f;
+        if (glutGetModifiers() & GLUT_ACTIVE_SHIFT) {
+            /* Shift + right-drag: pan the orbit target along world Y. */
+            float wdy = fdy * scale;
+            g_cam_ty -= wdy;
+            g_vel_ty *= CAM_DECAY;
+            g_vel_ty += wdy * 0.5f;
+            g_cam_motion_glow = 1.0f;
+        } else {
+            /* Pan the orbit target along the world XZ ground plane.
+             *
+             * Camera transform is Rx(rx)·Ry(ry)·T(-target), so a view-space
+             * direction v maps back to world by Ry(-ry)·Rx(-rx)·v. Projected
+             * onto the ground (Y=0):
+             *   right_xz   = (+cos ry, 0, +sin ry)   (screen +X)
+             *   forward_xz = (+sin ry, 0, -cos ry)   (screen -Y / mouse-up)
+             *
+             * Mouse-down (dy < 0) pulls the target back toward the camera,
+             * so we subtract forward_xz * dy. World Y is preserved. */
+            float ry_rad = g_cam_ry * (float)M_PI / 180.0f;
+            float cry = cosf(ry_rad), sry = sinf(ry_rad);
+            float fdx = (float)dx;
+            float wdx = ( fdx * cry - fdy * sry) * scale;
+            float wdz = ( fdx * sry + fdy * cry) * scale;
+            g_cam_tx -= wdx;
+            g_cam_tz -= wdz;
+            g_vel_tx *= CAM_DECAY;
+            g_vel_tz *= CAM_DECAY;
+            g_vel_tx += wdx * 0.5f;
+            g_vel_tz += wdz * 0.5f;
+            g_cam_motion_glow = 1.0f;
+        }
     } else if (g_mouse_btn == GLUT_MIDDLE_BUTTON) {
         g_cam_dist += (float)dy * 0.02f;
         if (g_cam_dist < 0.5f)
@@ -2315,6 +2326,7 @@ static void timer_func(int value) {
             g_vel_rx = 0.0f;
         }
         g_cam_tx += g_vel_tx;
+        g_cam_ty += g_vel_ty;
         g_cam_tz += g_vel_tz;
         g_cam_dist += g_vel_zoom;
         if (g_cam_dist < 0.5f) {
@@ -2330,12 +2342,13 @@ static void timer_func(int value) {
     g_vel_ry *= CAM_DECAY;
     g_vel_rx *= CAM_DECAY;
     g_vel_tx *= CAM_DECAY;
+    g_vel_ty *= CAM_DECAY;
     g_vel_tz *= CAM_DECAY;
     g_vel_zoom *= CAM_DECAY_ZOOM;
 
     /* Gizmo is a pan-only affordance. Keep it lit while pan momentum
      * carries the target, then fade out. Rotate/zoom do not trigger it. */
-    float pan_vel = fabsf(g_vel_tx) + fabsf(g_vel_tz);
+    float pan_vel = fabsf(g_vel_tx) + fabsf(g_vel_ty) + fabsf(g_vel_tz);
     if (pan_vel > 0.01f && g_cam_motion_glow < 0.6f)
         g_cam_motion_glow = 0.6f;
     g_cam_motion_glow *= 0.94f;
