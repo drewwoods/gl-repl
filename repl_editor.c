@@ -71,23 +71,46 @@ int g_sel_anchor = -1;
 int g_sel_end = -1;
 
 static const char *replay_mode_names[] = { "Polygon", "Vertex" };
-static const char *audio_mute_names[]  = { "On",      "Muted"  };
-static const char *audio_loop_names[]  = { "Off", "Song", "All" };
 
-/* Audio mute state is owned here so the CfgItem pattern can point at it.
- * The actual volume change is applied in the cfg-menu click handler
- * below (search for audio_mute_names). */
-int g_audio_muted = 0;
-
-/* Audio loop mode: 0=Off (play playlist through, stop), 1=Song (repeat
- * current track forever), 2=All (play playlist, wrap to first). Kept
- * in sync with repl_audio_get_loop_mode()'s default (LOOP_ALL). */
-int g_audio_loop_mode = 2;  /* REPL_AUDIO_LOOP_ALL */
+/* Unified audio cfg: collapses mute + loop mode into one cycling
+ * menu entry. Indices:
+ *   0 = Mute    — muted, loop mode untouched
+ *   1 = Once    — playing, loop mode OFF  (playlist plays through)
+ *   2 = Song    — playing, loop mode SONG (repeat current track)
+ *   3 = All     — playing, loop mode ALL  (playlist, wrap forever)
+ * Default 3 matches repl_audio.c's LOOP_ALL default with volume on. */
+#define AUDIO_CFG_MUTE 0
+#define AUDIO_CFG_ONCE 1
+#define AUDIO_CFG_SONG 2
+#define AUDIO_CFG_ALL  3
+static int g_audio_cfg_mode = AUDIO_CFG_ALL;
+static const char *audio_cfg_names[] = { "Mute", "Once", "Song", "All" };
 
 /* Browser autoplay policy: the Web Audio context stays suspended until
  * a user gesture. We call repl_audio_on_user_gesture() the first time
  * a key or mouse event arrives; native builds make this a no-op. */
 static int g_audio_gesture_sent = 0;
+
+static void apply_audio_cfg_mode(int mode) {
+    switch (mode) {
+    case AUDIO_CFG_MUTE:
+        repl_audio_set_muted(1);
+        break;
+    case AUDIO_CFG_ONCE:
+        repl_audio_set_muted(0);
+        repl_audio_set_loop_mode(REPL_AUDIO_LOOP_OFF);
+        break;
+    case AUDIO_CFG_SONG:
+        repl_audio_set_muted(0);
+        repl_audio_set_loop_mode(REPL_AUDIO_LOOP_SONG);
+        break;
+    case AUDIO_CFG_ALL:
+    default:
+        repl_audio_set_muted(0);
+        repl_audio_set_loop_mode(REPL_AUDIO_LOOP_ALL);
+        break;
+    }
+}
 
 CfgItem g_cfg_items[] = {
     { "Wireframe",        "F2",     &g_wireframe,              2,                NULL              },
@@ -112,8 +135,7 @@ CfgItem g_cfg_items[] = {
     { "Replay",           "Ctrl+g", &g_replay_active,          2,                NULL              },
     { "Replay mode",      "m",      &g_replay_mode,            2,                replay_mode_names },
     { "Top code panel",   "--",     &g_layout_vertical,        2,                NULL              },
-    { "Audio",            "--",     &g_audio_muted,            2,                audio_mute_names  },
-    { "Audio loop",       "--",     &g_audio_loop_mode,        3,                audio_loop_names  },
+    { "Audio",            "--",     &g_audio_cfg_mode,         4,                audio_cfg_names   },
 };
 
 const int CFG_ITEM_COUNT = (int)(sizeof(g_cfg_items) / sizeof(g_cfg_items[0]));
@@ -1865,6 +1887,10 @@ static void special_func(int key, int x, int y) {
 
     switch (key) {
     case GLUT_KEY_LEFT:
+        if (glutGetModifiers() & GLUT_ACTIVE_CTRL) {
+            repl_audio_prev_track();
+            break;
+        }
         if (g_show_help) {
             if (g_help_tab > 0) {
                 g_help_tab--;
@@ -1877,6 +1903,10 @@ static void special_func(int key, int x, int y) {
         update_autocomplete();
         break;
     case GLUT_KEY_RIGHT:
+        if (glutGetModifiers() & GLUT_ACTIVE_CTRL) {
+            repl_audio_next_track();
+            break;
+        }
         if (g_show_help) {
             if (g_help_tab < 1) {
                 g_help_tab++;
@@ -2021,6 +2051,65 @@ static void special_func(int key, int x, int y) {
     }
 }
 
+/* Cycle a config row by `delta` (+1 for forward, -1 for reverse) and
+ * apply any per-item side effects. Right-click in the config menu
+ * reuses this with delta=-1 so the user can seek back after
+ * overshooting an entry like Grid or Axes. */
+static void cfg_cycle_row(int row, int delta) {
+    if (row < 0 || row >= CFG_ITEM_COUNT) return;
+
+    /* Replay is special-cased: its cfg toggle kicks off/ends the
+     * replay machinery rather than flipping the int directly. Both
+     * directions collapse to "toggle". */
+    if (g_cfg_items[row].value == &g_replay_active) {
+        if (g_replay_active) {
+            replay_stop();
+            set_status("Replay: off");
+        } else {
+            replay_start();
+        }
+        return;
+    }
+
+    if (g_replay_active)
+        replay_stop();
+
+    int n = g_cfg_items[row].n_states;
+    if (n < 2) return;
+    int v = (*g_cfg_items[row].value + delta) % n;
+    if (v < 0) v += n;
+    *g_cfg_items[row].value = v;
+
+    if (g_cfg_items[row].value == &g_layout_vertical) {
+        g_panel_frac = 0.3f;
+        set_status(g_layout_vertical ? "Layout: top code panel"
+                                     : "Layout: left code panel");
+    }
+    if (g_cfg_items[row].value == &g_wrap_at_comma)
+        set_status(g_wrap_at_comma ? "Wrap at commas: ON"
+                                   : "Wrap at commas: OFF");
+    if (g_cfg_items[row].value == &g_autonormal && g_autonormal)
+        mark_normals_dirty();
+    if (g_cfg_items[row].value == &g_init_attenuate_points) {
+        apply_init_bootstrap();
+        set_status(g_init_attenuate_points ? "Point attenuation: ON"
+                                           : "Point attenuation: OFF");
+    }
+    if (g_cfg_items[row].value == &g_replay_mode)
+        set_status(g_replay_mode == REPLAY_MODE_VERTEX ? "Replay: vertex mode"
+                                                       : "Replay: polygon mode");
+    if (g_cfg_items[row].value == &g_audio_cfg_mode) {
+        apply_audio_cfg_mode(g_audio_cfg_mode);
+        static const char *labels[] = {
+            "Audio: muted",
+            "Audio: play once",
+            "Audio: loop song",
+            "Audio: loop all",
+        };
+        set_status(labels[g_audio_cfg_mode]);
+    }
+}
+
 static void mouse_func(int button, int state, int x, int y) {
     if (state == GLUT_UP) {
         handle_code_panel_release();
@@ -2041,52 +2130,7 @@ static void mouse_func(int button, int state, int x, int y) {
         if (g_show_config) {
             int row = cfg_hit_row(x, y);
             if (row >= 0) {
-                if (g_cfg_items[row].value == &g_replay_active) {
-                    if (g_replay_active) {
-                        replay_stop();
-                        set_status("Replay: off");
-                    } else {
-                        replay_start();
-                    }
-                } else {
-                    if (g_replay_active)
-                        replay_stop();
-                    *g_cfg_items[row].value =
-                        (*g_cfg_items[row].value + 1) % g_cfg_items[row].n_states;
-                    if (g_cfg_items[row].value == &g_layout_vertical) {
-                        g_panel_frac = 0.3f;
-                        set_status(g_layout_vertical ? "Layout: top code panel"
-                                                     : "Layout: left code panel");
-                    }
-                    if (g_cfg_items[row].value == &g_wrap_at_comma)
-                        set_status(g_wrap_at_comma ? "Wrap at commas: ON"
-                                                   : "Wrap at commas: OFF");
-                    if (g_cfg_items[row].value == &g_autonormal && g_autonormal)
-                        mark_normals_dirty();
-                    if (g_cfg_items[row].value == &g_init_attenuate_points) {
-                        apply_init_bootstrap();
-                        set_status(g_init_attenuate_points
-                                 ? "Point attenuation: ON"
-                                 : "Point attenuation: OFF");
-                    }
-                    if (g_cfg_items[row].value == &g_replay_mode)
-                        set_status(g_replay_mode == REPLAY_MODE_VERTEX
-                                 ? "Replay: vertex mode"
-                                 : "Replay: polygon mode");
-                    if (g_cfg_items[row].value == &g_audio_muted) {
-                        repl_audio_set_muted(g_audio_muted);
-                        set_status(g_audio_muted ? "Audio: muted"
-                                                 : "Audio: on");
-                    }
-                    if (g_cfg_items[row].value == &g_audio_loop_mode) {
-                        repl_audio_set_loop_mode(g_audio_loop_mode);
-                        const char *label =
-                            (g_audio_loop_mode == 0) ? "Audio loop: off"  :
-                            (g_audio_loop_mode == 1) ? "Audio loop: song" :
-                                                       "Audio loop: all";
-                        set_status(label);
-                    }
-                }
+                cfg_cycle_row(row, +1);
                 glutPostRedisplay();
                 return;
             }
@@ -2142,6 +2186,19 @@ static void mouse_func(int button, int state, int x, int y) {
                 return;
             }
         }
+    }
+
+    /* Right-click inside the config menu cycles the item backward.
+     * Handled before the generic right-button-drags-camera path so
+     * the click doesn't also start a camera rotation. Misses leave
+     * the menu open so the user can keep seeking. */
+    if (button == GLUT_RIGHT_BUTTON && state == GLUT_DOWN && g_show_config) {
+        int row = cfg_hit_row(x, y);
+        if (row >= 0) {
+            cfg_cycle_row(row, -1);
+            glutPostRedisplay();
+        }
+        return;
     }
 
     // cache modifiers since can't be queried outside of an input event callback
@@ -2348,6 +2405,26 @@ static void timer_func(int value) {
     /* Advance the audio playlist if the current song reached its end
      * (no-op under loop=Song; see repl_audio_tick). */
     repl_audio_tick();
+
+    /* When the playing track changes (either auto-advance from tick
+     * or manual next/prev), surface the song name in the status bar.
+     * Tracking by generation avoids needing a callback hook into
+     * the audio module. */
+    {
+        static unsigned int last_track_gen = 0;
+        unsigned int gen = repl_audio_track_generation();
+        if (gen != last_track_gen) {
+            last_track_gen = gen;
+            const char *path = repl_audio_get_current_track();
+            if (path && *path) {
+                const char *base = strrchr(path, '/');
+                base = base ? base + 1 : path;
+                char msg[128];
+                snprintf(msg, sizeof(msg), "Now playing: %s", base);
+                set_status(msg);
+            }
+        }
+    }
 
     repl_advance_time(0.016f);
 

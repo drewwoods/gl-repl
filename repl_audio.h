@@ -63,6 +63,13 @@ int  repl_audio_play_music(const char *path);
 
 void repl_audio_stop_music(void);
 
+/* Skip to the next / previous track in the playlist. Both wrap at
+ * the ends regardless of loop mode (so the user can always seek).
+ * No-op when the playlist is empty or the audio engine never
+ * initialized. Return 0 on success, -1 otherwise. */
+int  repl_audio_next_track(void);
+int  repl_audio_prev_track(void);
+
 /* Poll once per frame. When the current track is finished and the
  * loop mode is OFF or ALL, advances to the next track (or wraps, or
  * stops, depending on mode). No-op when loop mode is SONG. */
@@ -73,6 +80,17 @@ int  repl_audio_get_loop_mode(void);
 
 void repl_audio_set_muted(int muted);
 int  repl_audio_is_muted(void);
+
+/* Returns the path of the currently-loaded track, or NULL if nothing
+ * is playing. The returned pointer is owned by the audio module and
+ * stays valid until the next start_track call. */
+const char *repl_audio_get_current_track(void);
+
+/* Monotonic counter bumped each time a new track actually starts
+ * playing. Callers remember the last value they saw to detect track
+ * changes (e.g. to display the song name in a status bar). Starts at
+ * 0; the first successful start advances it to 1. */
+unsigned int repl_audio_track_generation(void);
 
 void repl_audio_on_user_gesture(void);
 
