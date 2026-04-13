@@ -109,6 +109,10 @@ TEST_REPL_CORE_IO_OBJS = $(OBJDIR)/test_repl_core_io.o $(CORE_TEST_OBJS)
 TEST_REPL_CORE_EXAMPLES_OBJS = $(OBJDIR)/test_repl_core_examples.o $(CORE_TEST_OBJS)
 TEST_REPL_CORE_SEARCH_OBJS = $(OBJDIR)/test_repl_core_search.o $(CORE_TEST_OBJS)
 TEST_REPL_CORE_SEARCH_EXTRA_OBJS = $(OBJDIR)/test_repl_core_search_extra.o $(CORE_TEST_OBJS)
+TEST_REPL_CORE_INTERNAL_OBJS = $(OBJDIR)/test_repl_core_internal.o $(CORE_TEST_OBJS)
+TEST_REPL_AUTOCOMPLETE_OBJS = $(OBJDIR)/test_repl_autocomplete.o $(CORE_TEST_OBJS)
+TEST_REPL_EDITOR_OBJS = $(OBJDIR)/test_repl_editor.o $(CORE_TEST_OBJS)
+TEST_REPL_AUDIO_OBJS = $(OBJDIR)/test_repl_audio.o $(OBJDIR)/repl_audio.o
 
 ALL_OBJS = \
 	$(SAMPLE_OBJS) \
@@ -120,7 +124,11 @@ ALL_OBJS = \
 	$(TEST_REPL_CORE_IO_OBJS) \
 	$(TEST_REPL_CORE_EXAMPLES_OBJS) \
 	$(TEST_REPL_CORE_SEARCH_OBJS) \
-	$(TEST_REPL_CORE_SEARCH_EXTRA_OBJS)
+	$(TEST_REPL_CORE_SEARCH_EXTRA_OBJS) \
+	$(TEST_REPL_CORE_INTERNAL_OBJS) \
+	$(TEST_REPL_AUTOCOMPLETE_OBJS) \
+	$(TEST_REPL_EDITOR_OBJS) \
+	$(TEST_REPL_AUDIO_OBJS)
 
 DEPS = $(ALL_OBJS:.o=.d)
 
@@ -158,7 +166,19 @@ test_repl_core_search: $(TEST_REPL_CORE_SEARCH_OBJS) ## Build the REPL source-se
 test_repl_core_search_extra: $(TEST_REPL_CORE_SEARCH_EXTRA_OBJS) ## Build extra REPL source-search regression test binary.
 	$(CC) $(OBJ_CFLAGS) -o $@ $(TEST_REPL_CORE_SEARCH_EXTRA_OBJS) $(GL_LDFLAGS) $(COVERAGE_LDFLAGS)
 
-test: test_eval test_format test_repl_core_parse test_repl_core_format test_repl_core_commit test_repl_core_io test_repl_core_examples test_repl_core_search test_repl_core_search_extra ## Run the full automated test suite.
+test_repl_audio: $(TEST_REPL_AUDIO_OBJS) ## Build the REPL audio unit test binary.
+	$(CC) $(OBJ_CFLAGS) -o $@ $(TEST_REPL_AUDIO_OBJS) $(GL_LDFLAGS) $(COVERAGE_LDFLAGS)
+
+test_repl_core_internal: $(TEST_REPL_CORE_INTERNAL_OBJS) ## Build the REPL core internal unit test binary.
+	$(CC) $(OBJ_CFLAGS) -o $@ $(TEST_REPL_CORE_INTERNAL_OBJS) $(GL_LDFLAGS) $(COVERAGE_LDFLAGS)
+
+test_repl_autocomplete: $(TEST_REPL_AUTOCOMPLETE_OBJS) ## Build the REPL autocomplete unit test binary.
+	$(CC) $(OBJ_CFLAGS) -o $@ $(TEST_REPL_AUTOCOMPLETE_OBJS) $(GL_LDFLAGS) $(COVERAGE_LDFLAGS)
+
+test_repl_editor: $(TEST_REPL_EDITOR_OBJS) ## Build the REPL editor unit test binary.
+	$(CC) $(OBJ_CFLAGS) -o $@ $(TEST_REPL_EDITOR_OBJS) $(GL_LDFLAGS) $(COVERAGE_LDFLAGS)
+
+test: test_eval test_format test_repl_core_parse test_repl_core_format test_repl_core_commit test_repl_core_io test_repl_core_examples test_repl_core_search test_repl_core_search_extra test_repl_audio test_repl_core_internal test_repl_autocomplete test_repl_editor ## Run the full automated test suite.
 	$(call run_named_test,test_eval,./test_eval --run-tests)
 	$(call run_named_test,test_format,./test_format)
 	$(call run_named_test,test_repl_core_parse,./test_repl_core_parse)
@@ -168,8 +188,12 @@ test: test_eval test_format test_repl_core_parse test_repl_core_format test_repl
 	$(call run_named_test,test_repl_core_examples,REPL_EXPORT_CC="$(CC)" REPL_EXPORT_COMPILE_CFLAGS='$(BUILD_CFLAGS) $(CFLAGS)' ./test_repl_core_examples)
 	$(call run_named_test,test_repl_core_search,./test_repl_core_search)
 	$(call run_named_test,test_repl_core_search_extra,./test_repl_core_search_extra)
+	$(call run_named_test,test_repl_audio,./test_repl_audio)
+	$(call run_named_test,test_repl_core_internal,./test_repl_core_internal)
+	$(call run_named_test,test_repl_autocomplete,./test_repl_autocomplete)
+	$(call run_named_test,test_repl_editor,./test_repl_editor)
 
-test-detailed: test_eval test_format test_repl_core_parse test_repl_core_format test_repl_core_commit test_repl_core_io test_repl_core_examples test_repl_core_search test_repl_core_search_extra ## Run the full test suite with verbose example export/compile logging.
+test-detailed: test_eval test_format test_repl_core_parse test_repl_core_format test_repl_core_commit test_repl_core_io test_repl_core_examples test_repl_core_search test_repl_core_search_extra test_repl_audio test_repl_core_internal test_repl_autocomplete test_repl_editor ## Run the full test suite with verbose example export/compile logging.
 	$(call run_named_test,test_eval,./test_eval --run-tests)
 	$(call run_named_test,test_format,./test_format)
 	$(call run_named_test,test_repl_core_parse,./test_repl_core_parse)
@@ -179,6 +203,10 @@ test-detailed: test_eval test_format test_repl_core_parse test_repl_core_format 
 	$(call run_named_test,test_repl_core_examples,REPL_EXPORT_CC="$(CC)" REPL_EXPORT_COMPILE_CFLAGS='$(BUILD_CFLAGS) $(CFLAGS)' REPL_EXPORT_VERBOSE=1 ./test_repl_core_examples)
 	$(call run_named_test,test_repl_core_search,./test_repl_core_search)
 	$(call run_named_test,test_repl_core_search_extra,./test_repl_core_search_extra)
+	$(call run_named_test,test_repl_audio,./test_repl_audio)
+	$(call run_named_test,test_repl_core_internal,./test_repl_core_internal)
+	$(call run_named_test,test_repl_autocomplete,./test_repl_autocomplete)
+	$(call run_named_test,test_repl_editor,./test_repl_editor)
 
 test_detailed: test-detailed ## Alias for test-detailed.
 
@@ -237,6 +265,10 @@ clean: ## Remove built binaries and object files.
 		test_repl_core_search test_repl_core_search.dSYM \
 		test_repl_core_search_extra test_repl_core_search_extra.dSYM \
 		test_repl_core_io test_repl_core_io.dSYM \
+		test_repl_audio test_repl_audio.dSYM \
+		test_repl_core_internal test_repl_core_internal.dSYM \
+		test_repl_autocomplete test_repl_autocomplete.dSYM \
+		test_repl_editor test_repl_editor.dSYM \
 		build/coverage/lcov.info build/coverage/html \
 		build
 

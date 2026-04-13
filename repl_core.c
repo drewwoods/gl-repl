@@ -530,7 +530,7 @@ int    g_ac_count = 0;
 int    g_ac_sel = 0;
 char   g_ac_ghost[MAX_LINE_LEN] = "";
 char   g_ac_hint[MAX_LINE_LEN] = "";
-static const char *g_ac_insert_matches[MAX_AC_MATCHES];
+const char *g_ac_insert_matches[MAX_AC_MATCHES];
 static const FuncCompletion *g_ac_func_matches[MAX_AC_MATCHES];
 
 typedef enum {

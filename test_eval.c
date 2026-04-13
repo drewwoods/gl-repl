@@ -178,11 +178,13 @@ static void run_tests(void) {
     ASSERT_FLOAT("(2+3)*4", 20.0f);
     ASSERT_FLOAT("-5", -5.0f);
     ASSERT_FLOAT("--5", 5.0f);
+    ASSERT_FLOAT("+5", 5.0f);
     ASSERT_FLOAT("1.5+0.5", 2.0f);
     ASSERT_FLOAT("PI", (float)M_PI);
     ASSERT_FLOAT("TAU", (float)(2.0 * M_PI));
     ASSERT_FLOAT("sin(0)", 0.0f);
     ASSERT_FLOAT("cos(0)", 1.0f);
+    ASSERT_FLOAT("tan(0)", 0.0f);
     ASSERT_FLOAT("sqrt(4)", 2.0f);
     ASSERT_FLOAT("abs(-3)", 3.0f);
     ASSERT_FLOAT("pow(2,3)", 8.0f);
@@ -197,6 +199,35 @@ static void run_tests(void) {
     ASSERT_FLOAT("sin(PI/2)", 1.0f);
     ASSERT_FLOAT("cos(TAU)", 1.0f);
     ASSERT_FLOAT("10/0", 0.0f);  /* div by zero returns 0 */
+    ASSERT_FLOAT("10%3", 1.0f);
+    ASSERT_FLOAT("10%0", 0.0f);  /* mod by zero returns 0 */
+
+    /* Logical and comparison */
+    ASSERT_FLOAT("1 == 1", 1.0f);
+    ASSERT_FLOAT("1 == 0", 0.0f);
+    ASSERT_FLOAT("1 != 0", 1.0f);
+    ASSERT_FLOAT("1 != 1", 0.0f);
+    ASSERT_FLOAT("5 > 3", 1.0f);
+    ASSERT_FLOAT("3 > 5", 0.0f);
+    ASSERT_FLOAT("5 >= 5", 1.0f);
+    ASSERT_FLOAT("5 >= 6", 0.0f);
+    ASSERT_FLOAT("3 < 5", 1.0f);
+    ASSERT_FLOAT("5 < 3", 0.0f);
+    ASSERT_FLOAT("5 <= 5", 1.0f);
+    ASSERT_FLOAT("4 <= 5", 1.0f);
+    ASSERT_FLOAT("6 <= 5", 0.0f);
+    ASSERT_FLOAT("!1", 0.0f);
+    ASSERT_FLOAT("!0", 1.0f);
+    ASSERT_FLOAT("1 && 1", 1.0f);
+    ASSERT_FLOAT("1 && 0", 0.0f);
+    ASSERT_FLOAT("0 && 1", 0.0f);
+    ASSERT_FLOAT("0 && 0", 0.0f);
+    ASSERT_FLOAT("1 || 1", 1.0f);
+    ASSERT_FLOAT("1 || 0", 1.0f);
+    ASSERT_FLOAT("0 || 1", 1.0f);
+    ASSERT_FLOAT("0 || 0", 0.0f);
+    ASSERT_FLOAT("unknown_var", 0.0f);
+    ASSERT_FLOAT("unknown_func(1,2)", 0.0f);
 
     printf("predefined vars:\n");
     {
@@ -303,6 +334,10 @@ static void run_tests(void) {
     ASSERT_TO_C("pow(x,2)", "powf(x,2)");
     ASSERT_TO_C("min(x,y)", "fminf(x,y)");
     ASSERT_TO_C("rand(i,3)", "repl_randf(i,3)");
+    ASSERT_TO_C("x % 2", "fmodf(x, 2)");
+    ASSERT_TO_C("10 % 3", "fmodf(10, 3)");
+    ASSERT_TO_C("(x+y) % (z*2)", "fmodf((x+y), (z*2))");
+    ASSERT_TO_C("sin(x) % 1", "fmodf(sinf(x), 1)");
 
     printf("c_expr_to_repl:\n");
     ASSERT_TO_REPL("sinf(x)", "sin(x)");

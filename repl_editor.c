@@ -4,15 +4,15 @@
 #include "repl_audio.h"
 
 static void save_newline_buf(void);
-static void push_undo_snapshot(void);
-static void pop_undo_snapshot(void);
-static void do_redo(void);
-static void delete_cmd_range(int start, int count, const char *what);
-static int try_assign_variable(void);
-static int try_commit_for_loop(void);
-static int try_commit_func_def(void);
-static int try_commit_if_block(void);
-static int try_commit_close_brace(void);
+void push_undo_snapshot(void);
+void pop_undo_snapshot(void);
+void do_redo(void);
+void delete_cmd_range(int start, int count, const char *what);
+int try_assign_variable(void);
+int try_commit_for_loop(void);
+int try_commit_func_def(void);
+int try_commit_if_block(void);
+int try_commit_close_brace(void);
 static void keyboard_func(unsigned char key, int x, int y);
 static void special_func(int key, int x, int y);
 static void mouse_func(int button, int state, int x, int y);
@@ -180,7 +180,7 @@ static void snapshot_restore(const UndoSnapshot *s) {
     mark_normals_dirty();
 }
 
-static void push_undo_snapshot(void) {
+void push_undo_snapshot(void) {
     snapshot_save(&g_undo_buf[g_undo_head]);
     g_undo_head = (g_undo_head + 1) % UNDO_DEPTH;
     if (g_undo_count < UNDO_DEPTH)
@@ -189,7 +189,7 @@ static void push_undo_snapshot(void) {
     g_redo_head = 0;
 }
 
-static void pop_undo_snapshot(void) {
+void pop_undo_snapshot(void) {
     if (g_undo_count == 0) {
         set_status("Nothing to undo");
         return;
@@ -208,7 +208,7 @@ static void pop_undo_snapshot(void) {
     }
 }
 
-static void do_redo(void) {
+void do_redo(void) {
     if (g_redo_count == 0) {
         set_status("Nothing to redo");
         return;
@@ -243,7 +243,7 @@ int sel_hi(void) {
     return g_sel_anchor > g_sel_end ? g_sel_anchor : g_sel_end;
 }
 
-static void delete_cmd_range(int start, int count, const char *what) {
+void delete_cmd_range(int start, int count, const char *what) {
     char msg[64];
 
     if (count <= 0 || start < 0 || start >= g_num_cmds)
@@ -326,7 +326,7 @@ void navigate_to_line(int target) {
     clear_autocomplete_state();
 }
 
-static int try_assign_variable(void) {
+int try_assign_variable(void) {
     char name[16];
     char rhs[MAX_LINE_LEN];
     int has_rhs_vars;
@@ -412,7 +412,7 @@ static int try_assign_variable(void) {
     return 1;
 }
 
-static int try_commit_for_loop(void) {
+int try_commit_for_loop(void) {
     const char *p = g_input;
     while (*p && isspace((unsigned char)*p))
         p++;
@@ -637,7 +637,7 @@ static int try_commit_for_loop(void) {
     }
 }
 
-static int try_commit_func_def(void) {
+int try_commit_func_def(void) {
     int fn = -1;
     int param_count = 0;
     char param_names[MAX_EXPR_VARS][16];
@@ -719,7 +719,7 @@ static int try_commit_func_def(void) {
     }
 }
 
-static int try_commit_if_block(void) {
+int try_commit_if_block(void) {
     const char *p = g_input;
     while (*p && isspace((unsigned char)*p))
         p++;
@@ -852,7 +852,7 @@ static int try_commit_if_block(void) {
     }
 }
 
-static int try_commit_close_brace(void) {
+int try_commit_close_brace(void) {
     const char *p = g_input;
     while (*p && isspace((unsigned char)*p))
         p++;
@@ -943,7 +943,7 @@ static int try_commit_close_brace(void) {
     }
 }
 
-static void keyboard_func(unsigned char key, int x, int y) {
+void keyboard_func(unsigned char key, int x, int y) {
     (void)x;
     (void)y;
 
