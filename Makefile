@@ -22,10 +22,17 @@ DEBUG_CFLAGS = \
 	-O0 \
 	-fsanitize=address -fno-omit-frame-pointer
 
+COVERAGE_CFLAGS = \
+	$(COMMON_CFLAGS) \
+	-O0 \
+	--coverage -fprofile-arcs -ftest-coverage
+
 BUILD ?= release
 
 ifeq ($(BUILD),debug)
 BUILD_CFLAGS = $(DEBUG_CFLAGS)
+else ifeq ($(BUILD),coverage)
+BUILD_CFLAGS = $(COVERAGE_CFLAGS)
 else
 BUILD_CFLAGS = $(RELEASE_CFLAGS)
 endif
@@ -54,7 +61,13 @@ GL_LDFLAGS = \
 	-lglut -lGL -lGLU -lm -lpthread -ldl
 endif
 
-.PHONY: all clean test test-detailed test_detailed lines debug glut help
+ifeq ($(BUILD),coverage)
+COVERAGE_LDFLAGS = --coverage
+else
+COVERAGE_LDFLAGS =
+endif
+
+.PHONY: all clean test test-detailed test_detailed lines debug coverage glut help
 
 define run_named_test
 	@{ \
@@ -117,28 +130,28 @@ sample: $(SAMPLE_OBJS) ## Build the main REPL sample using release flags by defa
 	$(CC) $(OBJ_CFLAGS) -o $@ $(SAMPLE_OBJS) $(GL_LDFLAGS)
 
 test_eval: $(TEST_EVAL_OBJS) ## Build the expression evaluator unit test binary.
-	$(CC) $(OBJ_CFLAGS) -o $@ $(TEST_EVAL_OBJS) -lm -lpthread
+	$(CC) $(OBJ_CFLAGS) -o $@ $(TEST_EVAL_OBJS) -lm -lpthread $(COVERAGE_LDFLAGS)
 
 test_format: $(TEST_FORMAT_OBJS) ## Build the command formatting unit test binary.
-	$(CC) $(OBJ_CFLAGS) -o $@ $(TEST_FORMAT_OBJS) -lm
+	$(CC) $(OBJ_CFLAGS) -o $@ $(TEST_FORMAT_OBJS) -lm $(COVERAGE_LDFLAGS)
 
 test_repl_core_parse: $(TEST_REPL_CORE_PARSE_OBJS) ## Build the REPL parser regression test binary.
-	$(CC) $(OBJ_CFLAGS) -o $@ $(TEST_REPL_CORE_PARSE_OBJS) $(GL_LDFLAGS)
+	$(CC) $(OBJ_CFLAGS) -o $@ $(TEST_REPL_CORE_PARSE_OBJS) $(GL_LDFLAGS) $(COVERAGE_LDFLAGS)
 
 test_repl_core_format: $(TEST_REPL_CORE_FORMAT_OBJS) ## Build the REPL formatting regression test binary.
-	$(CC) $(OBJ_CFLAGS) -o $@ $(TEST_REPL_CORE_FORMAT_OBJS) $(GL_LDFLAGS)
+	$(CC) $(OBJ_CFLAGS) -o $@ $(TEST_REPL_CORE_FORMAT_OBJS) $(GL_LDFLAGS) $(COVERAGE_LDFLAGS)
 
 test_repl_core_commit: $(TEST_REPL_CORE_COMMIT_OBJS) ## Build the REPL commit/editing regression test binary.
-	$(CC) $(OBJ_CFLAGS) -o $@ $(TEST_REPL_CORE_COMMIT_OBJS) $(GL_LDFLAGS)
+	$(CC) $(OBJ_CFLAGS) -o $@ $(TEST_REPL_CORE_COMMIT_OBJS) $(GL_LDFLAGS) $(COVERAGE_LDFLAGS)
 
 test_repl_core_io: $(TEST_REPL_CORE_IO_OBJS) ## Build the REPL import/export roundtrip regression test binary.
-	$(CC) $(OBJ_CFLAGS) -o $@ $(TEST_REPL_CORE_IO_OBJS) $(GL_LDFLAGS)
+	$(CC) $(OBJ_CFLAGS) -o $@ $(TEST_REPL_CORE_IO_OBJS) $(GL_LDFLAGS) $(COVERAGE_LDFLAGS)
 
 test_repl_core_examples: $(TEST_REPL_CORE_EXAMPLES_OBJS) ## Build the predefined-example code-panel golden test binary.
-	$(CC) $(OBJ_CFLAGS) -o $@ $(TEST_REPL_CORE_EXAMPLES_OBJS) $(GL_LDFLAGS)
+	$(CC) $(OBJ_CFLAGS) -o $@ $(TEST_REPL_CORE_EXAMPLES_OBJS) $(GL_LDFLAGS) $(COVERAGE_LDFLAGS)
 
 test_repl_core_search: $(TEST_REPL_CORE_SEARCH_OBJS) ## Build the REPL source-search regression test binary.
-	$(CC) $(OBJ_CFLAGS) -o $@ $(TEST_REPL_CORE_SEARCH_OBJS) $(GL_LDFLAGS)
+	$(CC) $(OBJ_CFLAGS) -o $@ $(TEST_REPL_CORE_SEARCH_OBJS) $(GL_LDFLAGS) $(COVERAGE_LDFLAGS)
 
 test: test_eval test_format test_repl_core_parse test_repl_core_format test_repl_core_commit test_repl_core_io test_repl_core_examples test_repl_core_search ## Run the full automated test suite.
 	$(call run_named_test,test_eval,./test_eval --run-tests)
@@ -171,6 +184,21 @@ debug: ## Clean and rebuild everything with debug/ASan flags.
 	$(MAKE) clean
 	$(MAKE) all BUILD=debug
 
+coverage: ## Clean, rebuild tests with coverage, run suite, generate HTML report.
+	$(MAKE) clean
+	$(MAKE) test BUILD=coverage
+	lcov --capture \
+		--directory build/coverage \
+		--output-file build/coverage/lcov.info \
+		--ignore-errors mismatch,empty \
+		--exclude '*/test_*.c' \
+		--rc branch_coverage=1
+	genhtml build/coverage/lcov.info \
+		--output-directory build/coverage/html \
+		--branch-coverage \
+		--title "REPL coverage"
+	@echo "Coverage report: build/coverage/html/index.html"
+
 SANITIZER_CHECKERS ?= core,deadcode,unix,cplusplus,osx
 # Files to exclude from static analysis (e.g., third-party library includes)
 ANALYZE_EXCLUDE ?= repl_audio.c
@@ -200,6 +228,7 @@ clean: ## Remove built binaries and object files.
 		test_repl_core_examples test_repl_core_examples.dSYM \
 		test_repl_core_search test_repl_core_search.dSYM \
 		test_repl_core_io test_repl_core_io.dSYM \
+		build/coverage/lcov.info build/coverage/html \
 		build
 
 glut: ## Rebuild using the Apple GLUT framework instead of freeglut.
@@ -214,7 +243,8 @@ help: ## Show available targets and build-mode notes.
 	@printf "Build modes:\n"
 	@printf "  common flags:  %s\n" "$(COMMON_CFLAGS)" | fold -s -w 100 | sed '1!s/^/                 /'
 	@printf "  default:       \$$(common_flags) %s \n" "$(filter-out $(COMMON_CFLAGS),$(RELEASE_CFLAGS))"
-	@printf "  debug:         \$$(common_flags) %s \n\n" "$(filter-out $(COMMON_CFLAGS),$(DEBUG_CFLAGS))"
+	@printf "  debug:         \$$(common_flags) %s \n" "$(filter-out $(COMMON_CFLAGS),$(DEBUG_CFLAGS))"
+	@printf "  coverage:      \$$(common_flags) %s \n\n" "$(filter-out $(COMMON_CFLAGS),$(COVERAGE_CFLAGS))"
 	@printf "User CFLAGS are appended to the selected build mode.\n\n"
 	@awk 'BEGIN {FS = ":.*## "}; /^[a-zA-Z0-9_.-]+:.*## / {printf "  %-24s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
 
