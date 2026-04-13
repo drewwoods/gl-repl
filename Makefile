@@ -74,7 +74,7 @@ define run_named_test
 	}
 endef
 
-all: sample test_eval test_format test_repl_core_parse test_repl_core_format test_repl_core_commit test_repl_core_io test_repl_core_examples test_repl_core_search ## Build the sample plus all test binaries using release flags.
+all: sample
 
 SRCS = sample.c repl_core.c repl_search.c repl_export.c repl_editor.c repl_examples.c scene_render.c ui_panels.c repl_eval.c cmd_format.c repl_audio.c
 HDRS = sample.h repl_core.h repl_core_internal.h repl_examples.h scene_render.h ui_panels.h repl_eval.h cmd_format.h repl_audio.h
