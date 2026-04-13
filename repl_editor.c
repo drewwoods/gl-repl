@@ -72,11 +72,17 @@ int g_sel_end = -1;
 
 static const char *replay_mode_names[] = { "Polygon", "Vertex" };
 static const char *audio_mute_names[]  = { "On",      "Muted"  };
+static const char *audio_loop_names[]  = { "Off", "Song", "All" };
 
 /* Audio mute state is owned here so the CfgItem pattern can point at it.
  * The actual volume change is applied in the cfg-menu click handler
  * below (search for audio_mute_names). */
 int g_audio_muted = 0;
+
+/* Audio loop mode: 0=Off (play playlist through, stop), 1=Song (repeat
+ * current track forever), 2=All (play playlist, wrap to first). Kept
+ * in sync with repl_audio_get_loop_mode()'s default (LOOP_ALL). */
+int g_audio_loop_mode = 2;  /* REPL_AUDIO_LOOP_ALL */
 
 /* Browser autoplay policy: the Web Audio context stays suspended until
  * a user gesture. We call repl_audio_on_user_gesture() the first time
@@ -107,6 +113,7 @@ CfgItem g_cfg_items[] = {
     { "Replay mode",      "m",      &g_replay_mode,            2,                replay_mode_names },
     { "Top code panel",   "--",     &g_layout_vertical,        2,                NULL              },
     { "Audio",            "--",     &g_audio_muted,            2,                audio_mute_names  },
+    { "Audio loop",       "--",     &g_audio_loop_mode,        3,                audio_loop_names  },
 };
 
 const int CFG_ITEM_COUNT = (int)(sizeof(g_cfg_items) / sizeof(g_cfg_items[0]));
@@ -2071,6 +2078,14 @@ static void mouse_func(int button, int state, int x, int y) {
                         set_status(g_audio_muted ? "Audio: muted"
                                                  : "Audio: on");
                     }
+                    if (g_cfg_items[row].value == &g_audio_loop_mode) {
+                        repl_audio_set_loop_mode(g_audio_loop_mode);
+                        const char *label =
+                            (g_audio_loop_mode == 0) ? "Audio loop: off"  :
+                            (g_audio_loop_mode == 1) ? "Audio loop: song" :
+                                                       "Audio loop: all";
+                        set_status(label);
+                    }
                 }
                 glutPostRedisplay();
                 return;
@@ -2329,6 +2344,10 @@ static void motion_func(int x, int y) {
 
 static void timer_func(int value) {
     (void)value;
+
+    /* Advance the audio playlist if the current song reached its end
+     * (no-op under loop=Song; see repl_audio_tick). */
+    repl_audio_tick();
 
     repl_advance_time(0.016f);
 
