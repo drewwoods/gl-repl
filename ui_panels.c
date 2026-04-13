@@ -1100,17 +1100,17 @@ void render_code_panel(void) {
         /* Time variable indicator */
         if (g_inserting) {
             snprintf(info, sizeof(info),
-                     "F1:Help | %d cmds | Ln %d [INSERT]%s",
-                     g_num_cmds, g_edit_line + 1, aa_tag);
+                     "F1:Help | %4d/%4d cmds | Ln %d [INSERT]%s",
+                     g_num_flat_cmds, MAX_COMMANDS, g_edit_line + 1, aa_tag);
         } else if (in_begin_block()) {
             snprintf(info, sizeof(info),
-                     "F1:Help | %d cmds | %s | Ln %d%s",
-                     g_num_cmds, mode_name(current_begin_mode()),
+                     "F1:Help | %4d/%4d cmds | %s | Ln %d%s",
+                     g_num_flat_cmds, MAX_COMMANDS, mode_name(current_begin_mode()),
                      g_edit_line + 1, aa_tag);
         } else {
             snprintf(info, sizeof(info),
-                     "F1:Help | %d cmds | Ln %d%s",
-                     g_num_cmds, g_edit_line + 1, aa_tag);
+                     "F1:Help | %4d/%4d cmds | Ln %d%s",
+                     g_num_flat_cmds, MAX_COMMANDS, g_edit_line + 1, aa_tag);
         }
         glColor3f(0.50f, 0.55f, 0.65f);
         draw_string(CODE_MARGIN_X, panel_top - CODE_MARGIN_Y - 2, info,
