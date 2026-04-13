@@ -132,6 +132,71 @@ int main(void) {
     ASSERT_TRUE("escape clears search hit", g_search_hit_line == -1);
     ASSERT_TRUE("escape clears match count", g_search_match_count == 0);
 
+    {
+        const char *text = "abcabc";
+        ASSERT_TRUE("find next empty query",
+                    repl_search_find_next_in_text(text, "", 0) == -1);
+        ASSERT_TRUE("find next empty text",
+                    repl_search_find_next_in_text("", "a", 0) == -1);
+        ASSERT_TRUE("find next start at strlen",
+                    repl_search_find_next_in_text(text, "a", (int)strlen(text)) == -1);
+        ASSERT_TRUE("find next query longer than text",
+                    repl_search_find_next_in_text("ab", "abcd", 0) == -1);
+        ASSERT_TRUE("find next single char at zero",
+                    repl_search_find_next_in_text("z", "z", 0) == 0);
+        ASSERT_TRUE("find next match at start pos",
+                    repl_search_find_next_in_text(text, "abc", 3) == 3);
+    }
+
+    {
+        ASSERT_TRUE("find prev empty query",
+                    repl_search_find_prev_in_text("abc", "", 0) == -1);
+        ASSERT_TRUE("find prev empty text",
+                    repl_search_find_prev_in_text("", "a", 0) == -1);
+        ASSERT_TRUE("find prev start larger than strlen",
+                    repl_search_find_prev_in_text("abc abc", "abc", 999) == 4);
+        ASSERT_TRUE("find prev single character",
+                    repl_search_find_prev_in_text("xyz", "y", 2) == 1);
+        ASSERT_TRUE("find prev last occurrence with past start",
+                    repl_search_find_prev_in_text("abaaba", "aba", 99) == 3);
+    }
+
+    repl_reset_state();
+    repl_feed_line_public("abc");
+    open_search();
+    type_search_text("abc");
+    ASSERT_TRUE("search cursor starts at query len", g_search_cursor_pos == 3);
+    repl_special_func(GLUT_KEY_LEFT, 0, 0);
+    ASSERT_TRUE("search cursor left", g_search_cursor_pos == 2);
+    repl_special_func(GLUT_KEY_HOME, 0, 0);
+    ASSERT_TRUE("search cursor home", g_search_cursor_pos == 0);
+    repl_special_func(GLUT_KEY_RIGHT, 0, 0);
+    ASSERT_TRUE("search cursor right", g_search_cursor_pos == 1);
+    repl_special_func(GLUT_KEY_END, 0, 0);
+    ASSERT_TRUE("search cursor end", g_search_cursor_pos == g_search_query_len);
+
+    repl_reset_state();
+    repl_feed_line_public("abcd");
+    open_search();
+    type_search_text("abcd");
+    ASSERT_TRUE("search backspace initial len", g_search_query_len == 4);
+    repl_keyboard_func(127, 0, 0);
+    ASSERT_TRUE("search backspace decrements len", g_search_query_len == 3);
+    ASSERT_TRUE("search backspace removes last char",
+                strcmp(g_search_query, "abc") == 0);
+
+    repl_reset_state();
+    repl_feed_line_public("glBegin(GL_POINTS);");
+    repl_feed_line_public("glEnd();");
+    g_inserting = 1;
+    g_edit_line = 1;
+    ASSERT_TRUE("row count inserting includes input row",
+                repl_search_row_count() == g_num_cmds + 1);
+    ASSERT_TRUE("row map inserting shifts at edit line",
+                repl_search_row_for_cmd_index(1) == 2);
+    ASSERT_TRUE("row map inserting keeps prior rows",
+                repl_search_row_for_cmd_index(0) == 0);
+
     printf("repl_core_search: %d/%d passed\n", g_pass, g_run);
     return (g_run == g_pass) ? 0 : 1;
 }
