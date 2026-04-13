@@ -2163,7 +2163,6 @@ static void refresh_current_block_highlight(void) {
                 if (begin_src >= 0 && ci > g_edit_line) {
                     g_current_block_begin = begin_flat;
                     g_current_block_end   = fcur;
-                    begin_src = -1; begin_flat = -1;
                     break;
                 } else if (begin_src >= 0 && ci <= g_edit_line) {
                     begin_src = -1; begin_flat = -1;
@@ -3003,7 +3002,7 @@ int replay_seek_to_src_line(int target_line) {
     int landed_src = -1;
 
     if (g_flat_dirty) {
-        float live_predef_vals[MAX_PREDEF_VARS];
+        float live_predef_vals[MAX_PREDEF_VARS] = { 0 };
         copy_predef_values(live_predef_vals);
         flatten_commands();
         g_flat_dirty = 0;
@@ -3218,7 +3217,7 @@ void execute_commands(void) {
         }
         switch (g_flat_cmds[pc].type) {
         case CMD_BEGIN:
-            if (in_begin) { glEnd(); in_begin = 0; }
+            if (in_begin) glEnd();
             glBegin(g_flat_cmds[pc].mode);
             in_begin = 1;
             break;
@@ -3530,7 +3529,7 @@ void end_2d(void) {
 
 static void display_func(void) {
     int saved_flat_count;
-    float live_predef_vals[MAX_PREDEF_VARS];
+    float live_predef_vals[MAX_PREDEF_VARS] = { 0 };
 
     if (g_normals_dirty) {
         recompute_autonormals();

@@ -171,6 +171,26 @@ debug: ## Clean and rebuild everything with debug/ASan flags.
 	$(MAKE) clean
 	$(MAKE) all BUILD=debug
 
+SANITIZER_CHECKERS ?= core,deadcode,unix,cplusplus,osx
+# Files to exclude from static analysis (e.g., third-party library includes)
+ANALYZE_EXCLUDE ?= repl_audio.c
+ANALYZE_SRCS = $(filter-out $(ANALYZE_EXCLUDE),$(SRCS))
+
+analyze: ## Run static analyzer (clang on macOS, gcc on Linux).
+ifeq ($(UNAME_S),Darwin)
+	@echo "Running clang static analyzer (macOS)..."
+	@for src in $(ANALYZE_SRCS); do \
+		echo "Analyzing $$src..."; \
+		$(CC) $(OBJ_CFLAGS) --analyze -Xanalyzer -analyzer-output=text -Xclang -analyzer-checker=$(SANITIZER_CHECKERS) $$src || true; \
+	done
+else
+	@echo "Running gcc static analyzer (Linux)..."
+	@for src in $(ANALYZE_SRCS); do \
+		echo "Analyzing $$src..."; \
+		$(CC) $(OBJ_CFLAGS) -fanalyzer -S -o /dev/null $$src || true; \
+	done
+endif
+
 clean: ## Remove built binaries and object files.
 	rm -rf sample sample.dSYM \
 		test_eval test_eval.dSYM test_format test_format.dSYM \
