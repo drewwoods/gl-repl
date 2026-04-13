@@ -66,6 +66,11 @@ static int g_loop_mode = REPL_AUDIO_LOOP_ALL;
  * requested so we can start it on the first gesture. */
 static int g_pending_start = 0;
 
+/* Bumped on every successful start_track_now(). Callers poll this to
+ * notice that the current track has changed without needing a
+ * callback. */
+static unsigned int g_track_generation = 0;
+
 /* ------------------------------------------------------------------ */
 /* Internal helpers                                                    */
 /* ------------------------------------------------------------------ */
@@ -117,6 +122,7 @@ static int start_track_now(int idx) {
 
     g_music_loaded = 1;
     g_playlist_pos = idx;
+    g_track_generation++;
     return 0;
 }
 
@@ -213,6 +219,20 @@ void repl_audio_stop_music(void) {
     ma_sound_stop(&g_music);
 }
 
+int repl_audio_next_track(void) {
+    if (!g_inited || g_playlist_count == 0) return -1;
+    int next = g_playlist_pos + 1;
+    if (next >= g_playlist_count) next = 0;
+    return start_track(next);
+}
+
+int repl_audio_prev_track(void) {
+    if (!g_inited || g_playlist_count == 0) return -1;
+    int prev = g_playlist_pos - 1;
+    if (prev < 0) prev = g_playlist_count - 1;
+    return start_track(prev);
+}
+
 void repl_audio_tick(void) {
     if (!g_inited || !g_music_loaded) return;
 
@@ -270,6 +290,16 @@ void repl_audio_set_muted(int muted) {
 
 int repl_audio_is_muted(void) {
     return g_muted;
+}
+
+const char *repl_audio_get_current_track(void) {
+    if (!g_music_loaded) return NULL;
+    if (g_playlist_pos < 0 || g_playlist_pos >= g_playlist_count) return NULL;
+    return g_playlist[g_playlist_pos];
+}
+
+unsigned int repl_audio_track_generation(void) {
+    return g_track_generation;
 }
 
 void repl_audio_on_user_gesture(void) {
