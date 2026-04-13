@@ -80,32 +80,65 @@ SRCS = sample.c repl_core.c repl_search.c repl_export.c repl_editor.c repl_examp
 HDRS = sample.h repl_core.h repl_core_internal.h repl_examples.h scene_render.h ui_panels.h repl_eval.h cmd_format.h repl_audio.h
 CORE_TEST_SRCS = repl_core.c repl_search.c repl_export.c repl_editor.c repl_examples.c scene_render.c ui_panels.c repl_eval.c cmd_format.c repl_audio.c
 
-sample: $(SRCS) $(HDRS) ## Build the main REPL sample using release flags by default.
-	$(CC) $(BUILD_CFLAGS) $(CFLAGS) -o $@ $(SRCS) $(GL_LDFLAGS)
+OBJDIR = build/$(BUILD)
+OBJ_CFLAGS = $(BUILD_CFLAGS) $(CFLAGS)
+DEPFLAGS = -MMD -MP
 
-test_eval: test_eval.c repl_eval.c repl_eval.h ## Build the expression evaluator unit test binary.
-	$(CC) $(BUILD_CFLAGS) $(CFLAGS) -o $@ test_eval.c repl_eval.c -lm -lpthread
+SAMPLE_OBJS = $(addprefix $(OBJDIR)/,$(SRCS:.c=.o))
+CORE_TEST_OBJS = $(addprefix $(OBJDIR)/,$(CORE_TEST_SRCS:.c=.o))
 
-test_format: test_format.c cmd_format.c cmd_format.h ## Build the command formatting unit test binary.
-	$(CC) $(BUILD_CFLAGS) $(CFLAGS) -o $@ test_format.c cmd_format.c -lm
+TEST_EVAL_OBJS = $(OBJDIR)/test_eval.o $(OBJDIR)/repl_eval.o
+TEST_FORMAT_OBJS = $(OBJDIR)/test_format.o $(OBJDIR)/cmd_format.o
+TEST_REPL_CORE_PARSE_OBJS = $(OBJDIR)/test_repl_core_parse.o $(CORE_TEST_OBJS)
+TEST_REPL_CORE_FORMAT_OBJS = $(OBJDIR)/test_repl_core_format.o $(CORE_TEST_OBJS)
+TEST_REPL_CORE_COMMIT_OBJS = $(OBJDIR)/test_repl_core_commit.o $(CORE_TEST_OBJS)
+TEST_REPL_CORE_IO_OBJS = $(OBJDIR)/test_repl_core_io.o $(CORE_TEST_OBJS)
+TEST_REPL_CORE_EXAMPLES_OBJS = $(OBJDIR)/test_repl_core_examples.o $(CORE_TEST_OBJS)
+TEST_REPL_CORE_SEARCH_OBJS = $(OBJDIR)/test_repl_core_search.o $(CORE_TEST_OBJS)
 
-test_repl_core_parse: test_repl_core_parse.c $(CORE_TEST_SRCS) $(HDRS) ## Build the REPL parser regression test binary.
-	$(CC) $(BUILD_CFLAGS) $(CFLAGS) -o $@ test_repl_core_parse.c $(CORE_TEST_SRCS) $(GL_LDFLAGS)
+ALL_OBJS = \
+	$(SAMPLE_OBJS) \
+	$(TEST_EVAL_OBJS) \
+	$(TEST_FORMAT_OBJS) \
+	$(TEST_REPL_CORE_PARSE_OBJS) \
+	$(TEST_REPL_CORE_FORMAT_OBJS) \
+	$(TEST_REPL_CORE_COMMIT_OBJS) \
+	$(TEST_REPL_CORE_IO_OBJS) \
+	$(TEST_REPL_CORE_EXAMPLES_OBJS) \
+	$(TEST_REPL_CORE_SEARCH_OBJS)
 
-test_repl_core_format: test_repl_core_format.c $(CORE_TEST_SRCS) $(HDRS) ## Build the REPL formatting regression test binary.
-	$(CC) $(BUILD_CFLAGS) $(CFLAGS) -o $@ test_repl_core_format.c $(CORE_TEST_SRCS) $(GL_LDFLAGS)
+DEPS = $(ALL_OBJS:.o=.d)
 
-test_repl_core_commit: test_repl_core_commit.c $(CORE_TEST_SRCS) $(HDRS) ## Build the REPL commit/editing regression test binary.
-	$(CC) $(BUILD_CFLAGS) $(CFLAGS) -o $@ test_repl_core_commit.c $(CORE_TEST_SRCS) $(GL_LDFLAGS)
+$(OBJDIR)/%.o: %.c
+	@mkdir -p $(dir $@)
+	$(CC) $(OBJ_CFLAGS) $(DEPFLAGS) -c -o $@ $<
 
-test_repl_core_io: test_repl_core_io.c $(CORE_TEST_SRCS) $(HDRS) ## Build the REPL import/export roundtrip regression test binary.
-	$(CC) $(BUILD_CFLAGS) $(CFLAGS) -o $@ test_repl_core_io.c $(CORE_TEST_SRCS) $(GL_LDFLAGS)
+sample: $(SAMPLE_OBJS) ## Build the main REPL sample using release flags by default.
+	$(CC) $(OBJ_CFLAGS) -o $@ $(SAMPLE_OBJS) $(GL_LDFLAGS)
 
-test_repl_core_examples: test_repl_core_examples.c $(CORE_TEST_SRCS) $(HDRS) ## Build the predefined-example code-panel golden test binary.
-	$(CC) $(BUILD_CFLAGS) $(CFLAGS) -o $@ test_repl_core_examples.c $(CORE_TEST_SRCS) $(GL_LDFLAGS)
+test_eval: $(TEST_EVAL_OBJS) ## Build the expression evaluator unit test binary.
+	$(CC) $(OBJ_CFLAGS) -o $@ $(TEST_EVAL_OBJS) -lm -lpthread
 
-test_repl_core_search: test_repl_core_search.c $(CORE_TEST_SRCS) $(HDRS) ## Build the REPL source-search regression test binary.
-	$(CC) $(BUILD_CFLAGS) $(CFLAGS) -o $@ test_repl_core_search.c $(CORE_TEST_SRCS) $(GL_LDFLAGS)
+test_format: $(TEST_FORMAT_OBJS) ## Build the command formatting unit test binary.
+	$(CC) $(OBJ_CFLAGS) -o $@ $(TEST_FORMAT_OBJS) -lm
+
+test_repl_core_parse: $(TEST_REPL_CORE_PARSE_OBJS) ## Build the REPL parser regression test binary.
+	$(CC) $(OBJ_CFLAGS) -o $@ $(TEST_REPL_CORE_PARSE_OBJS) $(GL_LDFLAGS)
+
+test_repl_core_format: $(TEST_REPL_CORE_FORMAT_OBJS) ## Build the REPL formatting regression test binary.
+	$(CC) $(OBJ_CFLAGS) -o $@ $(TEST_REPL_CORE_FORMAT_OBJS) $(GL_LDFLAGS)
+
+test_repl_core_commit: $(TEST_REPL_CORE_COMMIT_OBJS) ## Build the REPL commit/editing regression test binary.
+	$(CC) $(OBJ_CFLAGS) -o $@ $(TEST_REPL_CORE_COMMIT_OBJS) $(GL_LDFLAGS)
+
+test_repl_core_io: $(TEST_REPL_CORE_IO_OBJS) ## Build the REPL import/export roundtrip regression test binary.
+	$(CC) $(OBJ_CFLAGS) -o $@ $(TEST_REPL_CORE_IO_OBJS) $(GL_LDFLAGS)
+
+test_repl_core_examples: $(TEST_REPL_CORE_EXAMPLES_OBJS) ## Build the predefined-example code-panel golden test binary.
+	$(CC) $(OBJ_CFLAGS) -o $@ $(TEST_REPL_CORE_EXAMPLES_OBJS) $(GL_LDFLAGS)
+
+test_repl_core_search: $(TEST_REPL_CORE_SEARCH_OBJS) ## Build the REPL source-search regression test binary.
+	$(CC) $(OBJ_CFLAGS) -o $@ $(TEST_REPL_CORE_SEARCH_OBJS) $(GL_LDFLAGS)
 
 test: test_eval test_format test_repl_core_parse test_repl_core_format test_repl_core_commit test_repl_core_io test_repl_core_examples test_repl_core_search ## Run the full automated test suite.
 	$(call run_named_test,test_eval,./test_eval --run-tests)
@@ -147,7 +180,7 @@ clean: ## Remove built binaries and object files.
 		test_repl_core_examples test_repl_core_examples.dSYM \
 		test_repl_core_search test_repl_core_search.dSYM \
 		test_repl_core_io test_repl_core_io.dSYM \
-		*.o
+		build
 
 glut: ## Rebuild using the Apple GLUT framework instead of freeglut.
 	$(MAKE) clean
@@ -164,3 +197,5 @@ help: ## Show available targets and build-mode notes.
 	@printf "  debug:         \$$(common_flags) %s \n\n" "$(filter-out $(COMMON_CFLAGS),$(DEBUG_CFLAGS))"
 	@printf "User CFLAGS are appended to the selected build mode.\n\n"
 	@awk 'BEGIN {FS = ":.*## "}; /^[a-zA-Z0-9_.-]+:.*## / {printf "  %-24s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
+
+-include $(DEPS)
