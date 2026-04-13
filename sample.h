@@ -207,6 +207,9 @@ static inline void unwind_tracked_transform_stack(int *matrix_depth) {
 /* Extern globals                                                             */
 /* ========================================================================= */
 
+/* TODO: Globals are definitions are scattered across multiple files, should be consolidated into a
+ * single globals.c or similar. */
+
 /* Per-flat-command local variable snapshot (loop vars at time of flattening) */
 typedef struct {
     int     num_vars;
@@ -363,6 +366,9 @@ extern const EnumEntry g_enable_caps[];
 extern const EnumEntry g_shade_models[];
 extern const FuncCompletion g_func_completions[];
 extern const char *g_header_pre[];
+
+/* Scratch buffer */
+extern char   g_scratch_buf[256];
 
 /* Workspace state header — saved as comments at top of exported files, parsed
  * at launch to restore variable values and config toggles, and displayed as

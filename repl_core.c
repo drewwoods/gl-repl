@@ -382,14 +382,14 @@ int    g_help_scroll  = 0;
 int    g_wireframe    = 0;
 int    g_grid_theme   = 2;  /* 0=off, 1=classic, 2=fog, 3=tron, 4=ember, 5=faint, 6=focus, 7=ocean, 8=xzruler, 9=planes */
 const char *g_grid_names[] = {
-    "Grid OFF", "Grid: Classic", "Grid: Fog", "Grid: Tron", "Grid: Ember",
-    "Grid: Faint", "Grid: Focus", "Grid: Ocean", "Grid: XZ Ruler", "Grid: Adaptive Planes"
+    "OFF", "Classic", "Fog", "Tron", "Ember",
+    "Faint", "Focus", "Ocean", "XZ Ruler", "Adaptive Planes"
 };
 float  g_focus_vtx[3] = { 0.0f, 0.0f, 0.0f };  /* last vertex pos for focus grid */
 int    g_focus_vtx_valid = 0;
 int    g_axes_theme   = 3;  /* 0=off, 1=classic, 2=pulse, 3=neon, 4=compass, 5=gizmo */
 const char *g_axes_names[] = {
-    "Axes OFF", "Axes: Classic", "Axes: Pulse", "Axes: Neon", "Axes: Compass", "Axes: Gizmo"
+    "OFF", "Classic", "Pulse", "Neon", "Compass", "Gizmo"
 };
 int    g_show_vnums   = 1;
 int    g_show_normals = 0;
@@ -401,6 +401,7 @@ int    g_autonormal   = 0;
 int    g_show_lights  = 1;
 int    g_cam_rotate   = 0;  /* auto-rotate camera around Y */
 int    g_example_idx  = -1; /* current predefined example (-1 = none loaded yet) */
+char   g_scratch_buf[256];  /* shared scratch space for formatting strings, etc. */
 
 /* User scene — saved when switching to an example, restored via F12 cycle or
  * dropdown.  Stored independently from predefined examples so multiple user
