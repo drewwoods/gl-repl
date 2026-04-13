@@ -2262,7 +2262,7 @@ static void motion_func(int x, int y) {
         float fdy = (float)dy;
         if (g_mouse_mods & GLUT_ACTIVE_SHIFT) {
             /* Shift + right-drag: pan the orbit target along world Y. */
-            float wdy = fdy * scale;
+            float wdy = -fdy * scale;
             g_cam_ty -= wdy;
             g_vel_ty *= CAM_DECAY;
             g_vel_ty += wdy * 0.5f;
