@@ -385,6 +385,38 @@ const char *g_grid_names[] = {
     "OFF", "Classic", "Fog", "Tron", "Ember",
     "Faint", "Focus", "Ocean", "XZ Ruler", "Adaptive Planes"
 };
+
+/* Grid major tick spacing in world units. Includes 1 and 5 per request;
+ * 2 and 10 fill in the common orders of magnitude. The minor step is
+ * derived as major * 0.2 so every major cell holds five subdivisions. */
+const float g_grid_major_steps[GRID_MAJOR_COUNT] = {
+    [GRID_MAJOR_1]  = 1.0f,
+    [GRID_MAJOR_2]  = 2.0f,
+    [GRID_MAJOR_5]  = 5.0f,
+    [GRID_MAJOR_10] = 10.0f,
+};
+const char *g_grid_major_names[GRID_MAJOR_COUNT] = {
+    [GRID_MAJOR_1]  = "1",
+    [GRID_MAJOR_2]  = "2",
+    [GRID_MAJOR_5]  = "5",
+    [GRID_MAJOR_10] = "10",
+};
+int g_grid_major_idx = GRID_MAJOR_1;
+
+/* Grid half-extent. Close keeps the grid tight around origin (good for
+ * small scenes and the Classic theme); Far lets themes like Fog and
+ * Tron stretch to the horizon. */
+const float g_grid_extents[GRID_EXTENT_COUNT] = {
+    [GRID_EXTENT_CLOSE] = 5.0f,
+    [GRID_EXTENT_MID]   = 15.0f,
+    [GRID_EXTENT_FAR]   = 30.0f,
+};
+const char *g_grid_extent_names[GRID_EXTENT_COUNT] = {
+    [GRID_EXTENT_CLOSE] = "Close",
+    [GRID_EXTENT_MID]   = "Mid",
+    [GRID_EXTENT_FAR]   = "Far",
+};
+int g_grid_extent_idx = GRID_EXTENT_MID;  /* matches pre-existing Fog extent */
 float  g_focus_vtx[3] = { 0.0f, 0.0f, 0.0f };  /* last vertex pos for focus grid */
 int    g_focus_vtx_valid = 0;
 int    g_axes_theme   = 3;  /* 0=off, 1=classic, 2=pulse, 3=neon, 4=compass, 5=gizmo */

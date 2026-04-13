@@ -1792,6 +1792,7 @@ void render_help(void) {
         "  Ctrl+-               \tDecrease jitter samples",
         "  Ctrl+U               \tToggle GL_MULTISAMPLE",
         "  Ctrl+N               \tToggle GL_LINE_SMOOTH",
+        "  Ctrl+O               \tCycle grid major tick spacing (1 / 2 / 5 / 10)",
         "",
         "Configuration:",
         "  `                    \tOpen configuration menu",

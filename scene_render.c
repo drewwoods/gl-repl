@@ -12,6 +12,13 @@
 /* 3D scene helpers                                                           */
 /* ========================================================================= */
 
+/* Returns non-zero when v is close enough to a multiple of `major`
+ * to be treated as a major line. `tol` is derived from the minor
+ * step so the check stays robust as the step changes. */
+static int grid_is_major_line(float v, float major, float tol) {
+    return (fabsf(fmodf(fabsf(v) + tol, major)) < (tol * 2.0f));
+}
+
 static void draw_grid(void) {
     if (g_grid_theme == 0) return;
 
@@ -31,13 +38,26 @@ static void draw_grid(void) {
 
     float breath = sinf(g_anim_time * 0.8f) * 0.5f + 0.5f; /* 0..1 */
 
+    /* Configurable extent / major-tick spacing. Minor step is the
+     * major cell divided into 5 subdivisions, which keeps the look
+     * consistent across the {1, 2, 5, 10} major options. */
+    int ex_i = g_grid_extent_idx;
+    if (ex_i < 0 || ex_i >= GRID_EXTENT_COUNT) ex_i = GRID_EXTENT_MID;
+    int mj_i = g_grid_major_idx;
+    if (mj_i < 0 || mj_i >= GRID_MAJOR_COUNT) mj_i = GRID_MAJOR_1;
+    float extent = g_grid_extents[ex_i];
+    float major  = g_grid_major_steps[mj_i];
+    float step   = major * 0.2f;
+    float major_tol = step * 0.25f;
+
     switch (g_grid_theme) {
 
     case 1: { /* Classic */
-        float extent = 5.0f, step = 0.5f;
         glBegin(GL_LINES);
         for (float v = -extent; v <= extent + 0.01f; v += step) {
-            float a = (fabsf(v) < 0.01f) ? 0.45f : 0.12f;
+            int is_origin = (fabsf(v) < 0.01f);
+            int is_major  = grid_is_major_line(v, major, major_tol);
+            float a = is_origin ? 0.45f : (is_major ? 0.22f : 0.08f);
             glColor4f(0.50f, 0.50f, 0.60f, a);
             glVertex3f(v, 0, -extent); glVertex3f(v, 0, extent);
             glVertex3f(-extent, 0, v); glVertex3f(extent, 0, v);
@@ -47,7 +67,6 @@ static void draw_grid(void) {
     }
 
     case 2: { /* Fog — large grid, breathing fog density */
-        float extent = 15.0f, step = 0.5f;
         float fog_density = 0.06f + breath * 0.04f;
         GLfloat fog_col[] = { 0.10f, 0.10f, 0.13f, 1.0f };
         glEnable(GL_FOG);
@@ -57,7 +76,7 @@ static void draw_grid(void) {
 
         glBegin(GL_LINES);
         for (float v = -extent; v <= extent + 0.01f; v += step) {
-            int is_major = (fabsf(fmodf(fabsf(v) + 0.01f, 2.0f)) < 0.1f);
+            int is_major  = grid_is_major_line(v, major, major_tol);
             int is_origin = (fabsf(v) < 0.01f);
             float a = is_origin ? 0.55f : (is_major ? 0.25f : 0.10f);
             glColor4f(0.45f, 0.50f, 0.65f, a);
@@ -71,7 +90,6 @@ static void draw_grid(void) {
     }
 
     case 3: { /* Tron — cyan/blue glow, distance fade */
-        float extent = 12.0f, step = 0.5f;
         float glow = 0.7f + breath * 0.3f;
 
         glLineWidth(1.0f);
@@ -81,7 +99,7 @@ static void draw_grid(void) {
             float fade = (1.0f - dist * dist);
             if (fade < 0.0f) fade = 0.0f;
             int is_origin = (fabsf(v) < 0.01f);
-            int is_major = (fabsf(fmodf(fabsf(v) + 0.01f, 2.0f)) < 0.1f);
+            int is_major = grid_is_major_line(v, major, major_tol);
             float base = is_origin ? 0.8f : (is_major ? 0.35f : 0.12f);
             float a = base * fade * glow;
             float r = 0.05f, g = is_origin ? 0.9f : 0.55f, b = 0.95f;
@@ -105,8 +123,6 @@ static void draw_grid(void) {
     }
 
     case 4: { /* Ember — warm orange/red, pulsing ripple */
-        float extent = 12.0f, step = 0.5f;
-
         glBegin(GL_LINES);
         for (float v = -extent; v <= extent + 0.01f; v += step) {
             float dist = fabsf(v) / extent;
@@ -116,7 +132,7 @@ static void draw_grid(void) {
             float fade = 1.0f - dist;
             if (fade < 0.0f) fade = 0.0f;
             int is_origin = (fabsf(v) < 0.01f);
-            int is_major = (fabsf(fmodf(fabsf(v) + 0.01f, 2.0f)) < 0.1f);
+            int is_major = grid_is_major_line(v, major, major_tol);
             float base = is_origin ? 0.7f : (is_major ? 0.30f : 0.10f);
             float a = base * fade * (0.6f + ripple * 0.4f);
             float r = 0.95f, g = 0.35f + ripple * 0.25f, b = 0.05f;
@@ -128,12 +144,11 @@ static void draw_grid(void) {
         break;
     }
 
-    case 5: { /* Faint — very subtle 0.5 reference lines */
-        float extent = 5.0f, step = 0.5f;
+    case 5: { /* Faint — very subtle reference lines */
         glBegin(GL_LINES);
         for (float v = -extent; v <= extent + 0.01f; v += step) {
             int is_origin = (fabsf(v) < 0.01f);
-            int is_major = (fabsf(fmodf(fabsf(v) + 0.01f, 1.0f)) < 0.1f);
+            int is_major = grid_is_major_line(v, major, major_tol);
             float a = is_origin ? 0.18f : (is_major ? 0.07f : 0.03f);
             glColor4f(0.50f, 0.50f, 0.60f, a);
             glVertex3f(v, 0, -extent); glVertex3f(v, 0, extent);
@@ -169,13 +184,12 @@ static void draw_grid(void) {
         }
 
         float cx = g_focus_vtx[0], cz = g_focus_vtx[2];
-        float extent = 8.0f, step = 0.5f;
         float radius = 3.0f;  /* fade-out radius */
 
         glBegin(GL_LINES);
         for (float v = -extent; v <= extent + 0.01f; v += step) {
             int is_origin = (fabsf(v) < 0.01f);
-            int is_major = (fabsf(fmodf(fabsf(v) + 0.01f, 1.0f)) < 0.1f);
+            int is_major = grid_is_major_line(v, major, major_tol);
             float base = is_origin ? 0.40f : (is_major ? 0.18f : 0.06f);
 
             /* Vertical line at x=v: fade based on distance from cx */
@@ -223,8 +237,6 @@ static void draw_grid(void) {
     }
 
     case 7: { /* Ocean — underwater surface plane with caustics */
-        float extent = 12.0f, step = 0.5f;
-
         /* Underwater fog — slightly breathing density */
         GLfloat fog_col[] = { 0.01f, 0.06f, 0.10f, 1.0f };
         glEnable(GL_FOG);
@@ -236,7 +248,7 @@ static void draw_grid(void) {
         glBegin(GL_LINES);
         for (float v = -extent; v <= extent + 0.01f; v += step) {
             int is_origin = (fabsf(v) < 0.01f);
-            int is_major  = (fabsf(fmodf(fabsf(v) + 0.01f, 2.0f)) < 0.1f);
+            int is_major  = grid_is_major_line(v, major, major_tol);
             float base_a  = is_origin ? 0.45f : (is_major ? 0.22f : 0.08f);
 
             /* Two overlapping sine waves create a caustic shimmer */
@@ -300,15 +312,13 @@ static void draw_grid(void) {
     }
 
     case 8: { /* XZ Ruler — warm X direction, cool Z direction, ruler ticks */
-        float extent = 5.0f, step = 0.5f;
-
         /* Non-origin grid lines with directional colour coding */
         glBegin(GL_LINES);
         for (float v = -extent; v <= extent + 0.01f; v += step) {
             if (fabsf(v) < 0.01f) continue;
             float dist_frac = fabsf(v) / extent;
             float fade = 1.0f - dist_frac * dist_frac;
-            int is_major = (fabsf(fmodf(fabsf(v) + 0.01f, 1.0f)) < 0.1f);
+            int is_major = grid_is_major_line(v, major, major_tol);
             float a = (is_major ? 0.18f : 0.07f) * fade;
             /* Lines along Z (constant X = v) — warm amber/red, show X spacing */
             glColor4f(0.82f, 0.42f, 0.18f, a);
@@ -331,12 +341,12 @@ static void draw_grid(void) {
         glEnd();
         glLineWidth(1.0f);
 
-        /* Ruler tick marks at integer intervals on both axes */
+        /* Ruler tick marks at major-line intervals on both axes */
         float tick = 0.06f;
         glBegin(GL_LINES);
-        for (float v = -extent; v <= extent + 0.01f; v += 1.0f) {
+        for (float v = -extent; v <= extent + 0.01f; v += major) {
             if (fabsf(v) < 0.01f) continue;
-            float ta = (fabsf(v) <= 2.5f) ? 0.48f : 0.22f;
+            float ta = (fabsf(v) <= major * 2.5f) ? 0.48f : 0.22f;
             /* Ticks crossing the X axis in the Z direction */
             glColor4f(0.88f, 0.28f, 0.12f, ta);
             glVertex3f(v, 0, -tick); glVertex3f(v, 0, tick);
@@ -349,8 +359,6 @@ static void draw_grid(void) {
     }
 
     case 9: { /* Adaptive Planes — floor grid + camera-facing vertical plane blend */
-        float extent = 5.0f, step = 0.5f;
-
         /* Determine which vertical plane is most face-on to the camera.
          * Camera horizontal look direction: (sin(ry), 0, -cos(ry))
          * XY plane (z=0, normal Z): face-on weight = cos²(ry)
@@ -372,7 +380,7 @@ static void draw_grid(void) {
         glBegin(GL_LINES);
         for (float v = -extent; v <= extent + 0.01f; v += step) {
             int is_origin = (fabsf(v) < 0.01f);
-            int is_major  = (fabsf(fmodf(fabsf(v) + 0.01f, 1.0f)) < 0.1f);
+            int is_major  = grid_is_major_line(v, major, major_tol);
             float a = is_origin ? 0.30f : (is_major ? 0.10f : 0.04f);
             glColor4f(0.50f, 0.52f, 0.65f, a);
             glVertex3f(v,       0, -extent); glVertex3f(v,      0, extent);
@@ -385,7 +393,7 @@ static void draw_grid(void) {
             glBegin(GL_LINES);
             for (float v = -extent; v <= extent + 0.01f; v += step) {
                 int is_origin = (fabsf(v) < 0.01f);
-                int is_major  = (fabsf(fmodf(fabsf(v) + 0.01f, 1.0f)) < 0.1f);
+                int is_major  = grid_is_major_line(v, major, major_tol);
                 float base = is_origin ? 0.42f : (is_major ? 0.14f : 0.05f);
                 float a = base * xy_w;
                 /* Lines along X (constant Y = v, at z=0) */
@@ -403,7 +411,7 @@ static void draw_grid(void) {
             glBegin(GL_LINES);
             for (float v = -extent; v <= extent + 0.01f; v += step) {
                 int is_origin = (fabsf(v) < 0.01f);
-                int is_major  = (fabsf(fmodf(fabsf(v) + 0.01f, 1.0f)) < 0.1f);
+                int is_major  = grid_is_major_line(v, major, major_tol);
                 float base = is_origin ? 0.42f : (is_major ? 0.14f : 0.05f);
                 float a = base * zy_w;
                 /* Lines along Z (constant Y = v, at x=0) */

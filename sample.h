@@ -41,6 +41,25 @@
 #define ACCUM_STEP_COUNT  5
 #define GRID_THEME_COUNT  10
 #define AXES_THEME_COUNT  6
+
+/* Grid major tick spacing. Values live in g_grid_major_steps[] and
+ * must match this enum order. */
+typedef enum {
+    GRID_MAJOR_1  = 0,
+    GRID_MAJOR_2,
+    GRID_MAJOR_5,
+    GRID_MAJOR_10,
+    GRID_MAJOR_COUNT
+} GridMajorIdx;
+
+/* Grid half-extent from origin along each axis. Values live in
+ * g_grid_extents[] and must match this enum order. */
+typedef enum {
+    GRID_EXTENT_CLOSE = 0,
+    GRID_EXTENT_MID,
+    GRID_EXTENT_FAR,
+    GRID_EXTENT_COUNT
+} GridExtentIdx;
 #define MAX_LIGHTS        4
 /* Shared by live scene overlays and generated output.c outline passes. */
 #define REPL_OUTLINE_POLYGON_OFFSET_FACTOR (-0.01f)
@@ -291,7 +310,11 @@ extern int    g_help_tab;
 extern int    g_help_scroll;
 extern int    g_wireframe;
 extern int    g_grid_theme;
+extern int    g_grid_major_idx;  /* index into g_grid_major_steps[] */
+extern int    g_grid_extent_idx; /* index into g_grid_extents[] */
 extern int    g_axes_theme;
+extern const float g_grid_major_steps[GRID_MAJOR_COUNT];
+extern const float g_grid_extents[GRID_EXTENT_COUNT];
 extern float  g_focus_vtx[3];
 extern int    g_focus_vtx_valid;
 extern int    g_show_vnums;
@@ -402,6 +425,8 @@ extern const char *g_header_post[];
 extern const char *g_footer_pre_init[];
 extern const char *g_footer_post_init[];
 extern const char *g_grid_names[];
+extern const char *g_grid_major_names[GRID_MAJOR_COUNT];
+extern const char *g_grid_extent_names[GRID_EXTENT_COUNT];
 extern const char *g_axes_names[];
 extern int         g_init_attenuate_points;
 
