@@ -209,13 +209,26 @@ build_one() {
 
     local out_html="${out_path}/index.html"
 
+    # If the sample ships an assets/ folder (e.g. background music for
+    # samples using repl_audio / miniaudio), bundle it into the .data
+    # package under /assets so relative paths used by the native build
+    # resolve the same way under Emscripten's MEMFS. Silently skipped
+    # when the folder doesn't exist.
+    local preload_args=()
+    local preload_flag=""
+    if [[ -d "${sample_dir}/assets" ]]; then
+        preload_args+=(--preload-file "${sample_dir}/assets@/assets")
+        preload_flag="--preload-file ${sample_dir}/assets@/assets"
+        echo -e "${CYAN}  bundling ${sample_dir}/assets → /assets${NC}"
+    fi
+
     # --- Makefile Project Handling ---
     if [[ "$(basename "${input_file_abs}")" == "Makefile" ]]; then
         echo -e "${CYAN}Building via Makefile: ${input_file} → ${out_html}${NC}"
 
         # Common variables that Makefiles use for libraries
         local em_flags="-include ${GL4ES_GL_H} -I${GL4ES_INCLUDE} -I${GLU_DIR}/include -I${FREEGLUT_INCLUDE} -I${PROJECT_INCLUDE} -DGL_SILENCE_DEPRECATION -DUSE_MGL_NAMESPACE"
-        local em_libs="${BOOTSTRAP} ${GL4ES_LIB} ${GLU_LIB} ${FREEGLUT_LIB} -lglut -s USE_WEBGL2=1 -s FULL_ES2=1 -s INITIAL_MEMORY=${INITIAL_MEMORY} -s STACK_SIZE=${STACK_SIZE}"
+        local em_libs="${BOOTSTRAP} ${GL4ES_LIB} ${GLU_LIB} ${FREEGLUT_LIB} -lglut -s USE_WEBGL2=1 -s FULL_ES2=1 -s INITIAL_MEMORY=${INITIAL_MEMORY} -s STACK_SIZE=${STACK_SIZE} ${preload_flag}"
 
         pushd "${sample_dir}" > /dev/null
         # Attempt to build 'sample' or 'best' target if they exist, else just default 'make'
@@ -285,6 +298,7 @@ build_one() {
         -s STACK_SIZE=${STACK_SIZE} \
         -lglut \
         "${FREEGLUT_LIB}" \
+        "${preload_args[@]}" \
         -o "${out_html}"
 
     if [[ $? -eq 0 ]]; then
