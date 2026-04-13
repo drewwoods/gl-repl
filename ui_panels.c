@@ -169,8 +169,8 @@ static int subst_predef_vars(const char *source, char *out, int out_size,
                     }
                 }
                 if (!dup && num_used < max_used) {
-                    strncpy(used_names[num_used], found_name, 15);
-                    used_names[num_used][15] = '\0';
+                    snprintf(used_names[num_used], sizeof(used_names[num_used]), "%.15s",
+                             found_name);
                     used_vals[num_used] = found_val;
                     num_used++;
                 }
@@ -1422,7 +1422,8 @@ void render_code_panel(void) {
                       draw_string(CODE_MARGIN_X, line_y, ln, FONT_MONO); }
                     glColor3f(0.28f, 0.28f, 0.35f);
                     { char ind_s[32]; int nc = cmd_indent_chars(g_num_cmds);
-                      if (nc > 31) nc = 31; memset(ind_s, ' ', nc); ind_s[nc] = '\0';
+                      if (nc > 31) nc = 31;
+                      memset(ind_s, ' ', nc); ind_s[nc] = '\0';
                       draw_string((float)text_x, (float)line_y, ind_s, FONT_MONO); }
                     line_y -= LINE_H;
                 }
