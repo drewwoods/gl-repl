@@ -526,6 +526,8 @@ static const char *g_header_btn_labels[NUM_HEADER_BTNS] = {
 static int g_example_dropdown_open  = 0;
 static int g_example_dropdown_hover = -1;
 
+int example_dropdown_is_open(void) { return g_example_dropdown_open; }
+
 static void header_btn_rects(int bx[NUM_HEADER_BTNS], int *by, int *bw, int *bh) {
     int cp_x, cp_y, cp_w, cp_h;
     code_panel_rect(&cp_x, &cp_y, &cp_w, &cp_h);

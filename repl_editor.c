@@ -1,11 +1,6 @@
 #include "sample.h"
 #include "repl_core_internal.h"
-
-int cfg_hit_row(int gx, int gy);
-int var_panel_hit(int gx, int gy, int *out_row);
-int handle_code_panel_press(int mx, int my);
-int handle_code_panel_drag(int mx, int my);
-void handle_code_panel_release(void);
+#include "ui_panels.h"
 
 static void save_newline_buf(void);
 static void push_undo_snapshot(void);
@@ -2078,6 +2073,15 @@ static void mouse_func(int button, int state, int x, int y) {
                 glutPostRedisplay();
                 return;
             }
+        }
+
+        /* The example dropdown can extend outside the code panel bounds (e.g.
+         * below the panel in vertical layout).  Handle it before the
+         * panel-area gate so clicks on any part of the dropdown register. */
+        if (example_dropdown_is_open()) {
+            handle_code_panel_press(x, y);
+            glutPostRedisplay();
+            return;
         }
 
         if (g_layout_vertical) {
