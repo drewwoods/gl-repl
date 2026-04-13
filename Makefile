@@ -108,6 +108,7 @@ TEST_REPL_CORE_COMMIT_OBJS = $(OBJDIR)/test_repl_core_commit.o $(CORE_TEST_OBJS)
 TEST_REPL_CORE_IO_OBJS = $(OBJDIR)/test_repl_core_io.o $(CORE_TEST_OBJS)
 TEST_REPL_CORE_EXAMPLES_OBJS = $(OBJDIR)/test_repl_core_examples.o $(CORE_TEST_OBJS)
 TEST_REPL_CORE_SEARCH_OBJS = $(OBJDIR)/test_repl_core_search.o $(CORE_TEST_OBJS)
+TEST_REPL_CORE_SEARCH_EXTRA_OBJS = $(OBJDIR)/test_repl_core_search_extra.o $(CORE_TEST_OBJS)
 
 ALL_OBJS = \
 	$(SAMPLE_OBJS) \
@@ -118,7 +119,8 @@ ALL_OBJS = \
 	$(TEST_REPL_CORE_COMMIT_OBJS) \
 	$(TEST_REPL_CORE_IO_OBJS) \
 	$(TEST_REPL_CORE_EXAMPLES_OBJS) \
-	$(TEST_REPL_CORE_SEARCH_OBJS)
+	$(TEST_REPL_CORE_SEARCH_OBJS) \
+	$(TEST_REPL_CORE_SEARCH_EXTRA_OBJS)
 
 DEPS = $(ALL_OBJS:.o=.d)
 
@@ -153,7 +155,10 @@ test_repl_core_examples: $(TEST_REPL_CORE_EXAMPLES_OBJS) ## Build the predefined
 test_repl_core_search: $(TEST_REPL_CORE_SEARCH_OBJS) ## Build the REPL source-search regression test binary.
 	$(CC) $(OBJ_CFLAGS) -o $@ $(TEST_REPL_CORE_SEARCH_OBJS) $(GL_LDFLAGS) $(COVERAGE_LDFLAGS)
 
-test: test_eval test_format test_repl_core_parse test_repl_core_format test_repl_core_commit test_repl_core_io test_repl_core_examples test_repl_core_search ## Run the full automated test suite.
+test_repl_core_search_extra: $(TEST_REPL_CORE_SEARCH_EXTRA_OBJS) ## Build extra REPL source-search regression test binary.
+	$(CC) $(OBJ_CFLAGS) -o $@ $(TEST_REPL_CORE_SEARCH_EXTRA_OBJS) $(GL_LDFLAGS) $(COVERAGE_LDFLAGS)
+
+test: test_eval test_format test_repl_core_parse test_repl_core_format test_repl_core_commit test_repl_core_io test_repl_core_examples test_repl_core_search test_repl_core_search_extra ## Run the full automated test suite.
 	$(call run_named_test,test_eval,./test_eval --run-tests)
 	$(call run_named_test,test_format,./test_format)
 	$(call run_named_test,test_repl_core_parse,./test_repl_core_parse)
@@ -162,8 +167,9 @@ test: test_eval test_format test_repl_core_parse test_repl_core_format test_repl
 	$(call run_named_test,test_repl_core_io,./test_repl_core_io)
 	$(call run_named_test,test_repl_core_examples,REPL_EXPORT_CC="$(CC)" REPL_EXPORT_COMPILE_CFLAGS='$(BUILD_CFLAGS) $(CFLAGS)' ./test_repl_core_examples)
 	$(call run_named_test,test_repl_core_search,./test_repl_core_search)
+	$(call run_named_test,test_repl_core_search_extra,./test_repl_core_search_extra)
 
-test-detailed: test_eval test_format test_repl_core_parse test_repl_core_format test_repl_core_commit test_repl_core_io test_repl_core_examples test_repl_core_search ## Run the full test suite with verbose example export/compile logging.
+test-detailed: test_eval test_format test_repl_core_parse test_repl_core_format test_repl_core_commit test_repl_core_io test_repl_core_examples test_repl_core_search test_repl_core_search_extra ## Run the full test suite with verbose example export/compile logging.
 	$(call run_named_test,test_eval,./test_eval --run-tests)
 	$(call run_named_test,test_format,./test_format)
 	$(call run_named_test,test_repl_core_parse,./test_repl_core_parse)
@@ -172,6 +178,7 @@ test-detailed: test_eval test_format test_repl_core_parse test_repl_core_format 
 	$(call run_named_test,test_repl_core_io,./test_repl_core_io)
 	$(call run_named_test,test_repl_core_examples,REPL_EXPORT_CC="$(CC)" REPL_EXPORT_COMPILE_CFLAGS='$(BUILD_CFLAGS) $(CFLAGS)' REPL_EXPORT_VERBOSE=1 ./test_repl_core_examples)
 	$(call run_named_test,test_repl_core_search,./test_repl_core_search)
+	$(call run_named_test,test_repl_core_search_extra,./test_repl_core_search_extra)
 
 test_detailed: test-detailed ## Alias for test-detailed.
 
@@ -228,6 +235,7 @@ clean: ## Remove built binaries and object files.
 		test_repl_core_commit test_repl_core_commit.dSYM \
 		test_repl_core_examples test_repl_core_examples.dSYM \
 		test_repl_core_search test_repl_core_search.dSYM \
+		test_repl_core_search_extra test_repl_core_search_extra.dSYM \
 		test_repl_core_io test_repl_core_io.dSYM \
 		build/coverage/lcov.info build/coverage/html \
 		build

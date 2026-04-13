@@ -23,6 +23,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <math.h>
+#include <ctype.h>
 
 /* ---- Built-in test suite ---------------------------------------------- */
 
@@ -129,6 +130,40 @@ static int g_tests_passed = 0;
     else { printf("  FAIL: has_vars(\"%s\") = %d, expected %d\n", input, _got, expected); } \
 } while(0)
 
+static int predef_idx(const char *name) {
+    for (int i = 0; i < g_num_predef_vars; i++) {
+        if (strcmp(g_predef_vars[i].name, name) == 0)
+            return i;
+    }
+    return -1;
+}
+
+static void strip_ws(const char *in, char *out, int out_sz) {
+    int oi = 0;
+    if (!in || !out || out_sz <= 0)
+        return;
+    for (int i = 0; in[i] && oi < out_sz - 1; i++) {
+        if (!isspace((unsigned char)in[i]))
+            out[oi++] = in[i];
+    }
+    out[oi] = '\0';
+}
+
+#define ASSERT_ROUNDTRIP_WS(in) do { \
+    char _cbuf[512], _rbuf[512], _n_in[512], _n_out[512]; \
+    repl_expr_to_c((in), _cbuf, sizeof(_cbuf)); \
+    c_expr_to_repl(_cbuf, _rbuf, sizeof(_rbuf)); \
+    strip_ws((in), _n_in, sizeof(_n_in)); \
+    strip_ws(_rbuf, _n_out, sizeof(_n_out)); \
+    g_tests_run++; \
+    if (strcmp(_n_in, _n_out) == 0) { \
+        g_tests_passed++; \
+    } else { \
+        printf("  FAIL: roundtrip_ws \"%s\" -> \"%s\" -> \"%s\" (norm \"%s\" != \"%s\")\n", \
+               (in), _cbuf, _rbuf, _n_in, _n_out); \
+    } \
+} while(0)
+
 static void run_tests(void) {
     printf("Running tests...\n\n");
 
@@ -163,12 +198,62 @@ static void run_tests(void) {
     ASSERT_FLOAT("cos(TAU)", 1.0f);
     ASSERT_FLOAT("10/0", 0.0f);  /* div by zero returns 0 */
 
+    printf("predefined vars:\n");
+    {
+        int t_idx;
+        int x_idx;
+        int y_idx;
+        int z_idx;
+        init_predef_vars();
+        t_idx = predef_idx("t");
+        x_idx = predef_idx("x");
+        y_idx = predef_idx("y");
+        z_idx = predef_idx("z");
+
+        g_tests_run++;
+        if (t_idx >= 0) g_tests_passed++;
+        else printf("  FAIL: predefined var t missing\n");
+        g_tests_run++;
+        if (x_idx >= 0) g_tests_passed++;
+        else printf("  FAIL: predefined var x missing\n");
+        g_tests_run++;
+        if (y_idx >= 0) g_tests_passed++;
+        else printf("  FAIL: predefined var y missing\n");
+        g_tests_run++;
+        if (z_idx >= 0) g_tests_passed++;
+        else printf("  FAIL: predefined var z missing\n");
+
+        g_tests_run++;
+        if (t_idx >= 0 && fabsf(g_predef_vars[t_idx].value - 0.0f) < 1e-6f) g_tests_passed++;
+        else printf("  FAIL: predefined var t initial value not zero\n");
+        g_tests_run++;
+        if (x_idx >= 0 && fabsf(g_predef_vars[x_idx].value - 0.0f) < 1e-6f) g_tests_passed++;
+        else printf("  FAIL: predefined var x initial value not zero\n");
+        g_tests_run++;
+        if (y_idx >= 0 && fabsf(g_predef_vars[y_idx].value - 0.0f) < 1e-6f) g_tests_passed++;
+        else printf("  FAIL: predefined var y initial value not zero\n");
+        g_tests_run++;
+        if (z_idx >= 0 && fabsf(g_predef_vars[z_idx].value - 0.0f) < 1e-6f) g_tests_passed++;
+        else printf("  FAIL: predefined var z initial value not zero\n");
+
+        g_tests_run++;
+        if (predef_idx("not_a_predef") == -1) g_tests_passed++;
+        else printf("  FAIL: unknown predefined var lookup did not return -1\n");
+    }
+
     /* Variables */
     g_predef_vars[0].value = 1.5f;  /* x = 1.5 */
+    g_predef_vars[1].value = 2.5f;  /* y = 2.5 */
+    g_predef_vars[2].value = 3.5f;  /* z = 3.5 */
     g_predef_vars[6].value = 24.0f; /* n = 24 */
+    g_predef_vars[7].value = 4.0f;  /* t = 4 */
     ASSERT_FLOAT("x", 1.5f);
+    ASSERT_FLOAT("y", 2.5f);
+    ASSERT_FLOAT("z", 3.5f);
     ASSERT_FLOAT("n", 24.0f);
+    ASSERT_FLOAT("t", 4.0f);
     ASSERT_FLOAT("x+1", 2.5f);
+    ASSERT_FLOAT("x+y+z+t", 11.5f);
     ASSERT_FLOAT("n*2", 48.0f);
     ASSERT_FLOAT("TAU/n", (float)(2.0 * M_PI / 24.0));
 
@@ -184,13 +269,28 @@ static void run_tests(void) {
 
     /* Reset */
     g_predef_vars[0].value = 0.0f;
+    g_predef_vars[1].value = 0.0f;
+    g_predef_vars[2].value = 0.0f;
     g_predef_vars[6].value = 0.0f;
+    g_predef_vars[7].value = 0.0f;
 
     /* ---- parse_exprs ---- */
     printf("parse_exprs:\n");
     ASSERT_EXPRS("1, 2, 3", 3, 1.0f, 2.0f, 3.0f);
     ASSERT_EXPRS("1+2, 3*4", 2, 3.0f, 12.0f);
     ASSERT_EXPRS("sin(0), cos(0)", 2, 0.0f, 1.0f);
+    {
+        ExprVar vars[2] = { { "radius", 3.0f }, { "height", 4.0f } };
+        float vals[4];
+        int n = parse_exprs("radius + height, 0", vals, 4, vars, 2);
+        g_tests_run++;
+        if (n == 2 && fabsf(vals[0] - 7.0f) < 1e-4f && fabsf(vals[1]) < 1e-4f) {
+            g_tests_passed++;
+        } else {
+            printf("  FAIL: parse_exprs with vars returned n=%d vals=(%g,%g)\n",
+                   n, vals[0], vals[1]);
+        }
+    }
 
     /* ---- Expression translation ---- */
     printf("repl_expr_to_c:\n");
@@ -213,6 +313,32 @@ static void run_tests(void) {
     ASSERT_TO_REPL("glVertex3f(1,2,3)", "glVertex3f(1,2,3)");
     ASSERT_TO_REPL("powf(x,2)", "pow(x,2)");
     ASSERT_TO_REPL("repl_randf(i,3)", "rand(i,3)");
+    {
+        char buf[8];
+        strip_ws(" \t a b \n", buf, sizeof(buf));
+        g_tests_run++;
+        if (strcmp(buf, "ab") == 0) g_tests_passed++;
+        else printf("  FAIL: strip_ws mixed whitespace -> \"%s\"\n", buf);
+
+        strip_ws("   \n\t", buf, sizeof(buf));
+        g_tests_run++;
+        if (strcmp(buf, "") == 0) g_tests_passed++;
+        else printf("  FAIL: strip_ws whitespace-only -> \"%s\"\n", buf);
+
+        strip_ws("a b c d", buf, 4);
+        g_tests_run++;
+        if (strcmp(buf, "abc") == 0) g_tests_passed++;
+        else printf("  FAIL: strip_ws truncation -> \"%s\"\n", buf);
+
+        strcpy(buf, "keep");
+        strip_ws(NULL, buf, sizeof(buf));
+        g_tests_run++;
+        if (strcmp(buf, "keep") == 0) g_tests_passed++;
+        else printf("  FAIL: strip_ws null input changed output -> \"%s\"\n", buf);
+    }
+    ASSERT_ROUNDTRIP_WS("sin( TAU / n )");
+    ASSERT_ROUNDTRIP_WS("pow( radius + 1, height )");
+    ASSERT_ROUNDTRIP_WS("min( x , y )");
 
     /* Roundtrip */
     printf("Roundtrip (repl->c->repl):\n");
@@ -250,6 +376,31 @@ static void run_tests(void) {
     g_predef_vars[6].value = 24.0f; /* n = 24 */
     ASSERT_FOR("for(i, 0, n)", 1, "i", 0.0f, 24.0f, 1.0f);
     g_predef_vars[6].value = 0.0f;
+    {
+        ExprVar vars[2] = { { "radius", 7.5f }, { "stepv", 0.5f } };
+        char vn[16];
+        float s, e, st;
+        const char *body = NULL;
+        const char *bp = NULL;
+        int ok = parse_for_header_with_vars(
+            "for(i, 0, radius, stepv) glVertex3f(i, 0, 0);",
+            vn, sizeof(vn), &s, &e, &st, vars, 2, &body);
+        bp = body;
+        while (bp && *bp && isspace((unsigned char)*bp))
+            bp++;
+        g_tests_run++;
+        if (ok == 1 &&
+            strcmp(vn, "i") == 0 &&
+            fabsf(s - 0.0f) < 1e-4f &&
+            fabsf(e - 7.5f) < 1e-4f &&
+            fabsf(st - 0.5f) < 1e-4f &&
+            bp != NULL &&
+            strncmp(bp, "glVertex3f(", 11) == 0) {
+            g_tests_passed++;
+        } else {
+            printf("  FAIL: parse_for_header_with_vars did not resolve local vars\n");
+        }
+    }
 
     printf("parse_c_for_header:\n");
     ASSERT_CFOR("  for (float i = 0; i < 10; i += 1.0f) {", 1, "i", 0.0f, 10.0f, 1.0f);
@@ -267,6 +418,11 @@ static void run_tests(void) {
     ASSERT_HAS_VARS("sin(n*PI)", 1);      /* n is */
     ASSERT_HAS_VARS("glVertex3f(1,2,3)", 0);
     ASSERT_HAS_VARS("i+j*k", 1);
+    ASSERT_HAS_VARS("t + 1", 1);
+    ASSERT_HAS_VARS("x * 2", 1);
+    ASSERT_HAS_VARS("y - 3", 1);
+    ASSERT_HAS_VARS("z / 4", 1);
+    ASSERT_HAS_VARS("alpha + beta", 0);
 
     /* ---- Summary ---- */
     printf("\n%d / %d tests passed", g_tests_passed, g_tests_run);
