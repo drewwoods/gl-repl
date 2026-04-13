@@ -196,7 +196,8 @@ coverage: ## Clean, rebuild tests with coverage, run suite, generate HTML report
 	genhtml build/coverage/lcov.info \
 		--output-directory build/coverage/html \
 		--branch-coverage \
-		--title "REPL coverage"
+		--title "REPL coverage" \
+		--ignore-errors inconsistent
 	@echo "Coverage report: build/coverage/html/index.html"
 
 SANITIZER_CHECKERS ?= core,deadcode,unix,cplusplus,osx

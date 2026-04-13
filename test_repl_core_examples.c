@@ -1,5 +1,7 @@
-#include "repl_core_internal.h"
+// For linux mkdtemp
+#define _DEFAULT_SOURCE
 
+#include "repl_core_internal.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
