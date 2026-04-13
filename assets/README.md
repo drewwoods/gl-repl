@@ -5,27 +5,41 @@ Runtime data for the REPL sample. The audio backend (`repl_audio.c` via
 
 ## Music
 
-`sample.c` plays a single looped track on startup. The default path is
-compiled in as:
+`sample.c` scans this folder at startup for files matching `*.mp3`,
+sorts them by filename, and plays them as a playlist. Drop one file,
+drop ten — the REPL just picks them up in alphabetical order.
 
-```c
-#define REPL_AUDIO_DEFAULT_MUSIC "assets/song.mp3"
+```
+assets/
+  01-intro.mp3
+  02-main-theme.mp3
+  03-outro.mp3
 ```
 
-Drop your file at `assets/song.mp3`, or override the default by passing
-`-DREPL_AUDIO_DEFAULT_MUSIC='"assets/yourfile.mp3"'` to `CFLAGS` when
-building. Supported formats (via miniaudio's built-in decoders):
-
-- WAV
-- MP3
-- FLAC
-
-If the file is missing or fails to load, the REPL still runs — you'll
-see a single `repl_audio:` warning on stderr and no sound. There are no
-hard audio dependencies.
-
 The `Audio` entry in the Config menu (gear icon) toggles between
-`On` and `Muted` without stopping playback.
+`On` and `Muted` without stopping playback. The adjacent `Audio loop`
+entry cycles the loop mode:
+
+| Mode | Behavior |
+|---|---|
+| `Off`  | Plays the playlist through once, then stops |
+| `Song` | Repeats the current track forever |
+| `All`  | Plays the playlist, wraps back to the first track at the end (default) |
+
+If `assets/` contains no `.mp3` files, the sample falls back to the
+legacy single-file default `assets/song.mp3` — so older setups with
+one dropped-in track keep working unchanged. The same fallback is
+overridable via `-DREPL_AUDIO_DEFAULT_MUSIC='"assets/yourfile.mp3"'`
+in `CFLAGS`.
+
+miniaudio's built-in decoders also support WAV and FLAC, but the
+startup scanner is deliberately restricted to `*.mp3`. If you need
+other formats, either rename them or call `repl_audio_set_playlist()`
+yourself from `main()`.
+
+If the files are missing or fail to load, the REPL still runs — you'll
+see a single `repl_audio:` warning on stderr per failure and no sound.
+There are no hard audio dependencies.
 
 ## Web build
 
