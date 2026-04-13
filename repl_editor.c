@@ -115,6 +115,8 @@ static void apply_audio_cfg_mode(int mode) {
 CfgItem g_cfg_items[] = {
     { "Wireframe",        "F2",     &g_wireframe,              2,                NULL              },
     { "Grid",             "F3",     &g_grid_theme,             GRID_THEME_COUNT, g_grid_names      },
+    { "Grid major",       "Ctrl+o", &g_grid_major_idx,         GRID_MAJOR_COUNT, g_grid_major_names  },
+    { "Grid extent",      "--",     &g_grid_extent_idx,        GRID_EXTENT_COUNT, g_grid_extent_names },
     { "Axes",             "F4",     &g_axes_theme,             AXES_THEME_COUNT, g_axes_names      },
     { "Vertex labels",    "F5",     &g_show_vnums,             2,                NULL              },
     { "Normal vectors",   "F6",     &g_show_normals,           2,                NULL              },
@@ -1366,6 +1368,17 @@ static void keyboard_func(unsigned char key, int x, int y) {
     if (key == 21) {
         g_multisample_enabled = !g_multisample_enabled;
         set_status(g_multisample_enabled ? "MSAA: ON" : "MSAA: OFF");
+        return;
+    }
+
+    /* Ctrl+O cycles the grid major-tick spacing. Pairs with the
+     * "Grid major" config entry; the status bar echoes the new
+     * value so it's clear which spacing is active. */
+    if (key == 15) {
+        g_grid_major_idx = (g_grid_major_idx + 1) % GRID_MAJOR_COUNT;
+        snprintf(g_scratch_buf, sizeof(g_scratch_buf),
+                 "Grid major: %s", g_grid_major_names[g_grid_major_idx]);
+        set_status(g_scratch_buf);
         return;
     }
 
