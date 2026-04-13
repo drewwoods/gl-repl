@@ -1,5 +1,15 @@
 #include "sample.h"
 #include "repl_core.h"
+#include "repl_audio.h"
+
+/* Default background music path. Relative to the sample's working
+ * directory on native, and to the Emscripten virtual FS mount point
+ * set up by --preload-file in emscripten/build.sh. Drop your one audio
+ * file (mp3/wav/flac) into assets/ alongside the binary, or change
+ * this string if you prefer a different name. */
+#ifndef REPL_AUDIO_DEFAULT_MUSIC
+#define REPL_AUDIO_DEFAULT_MUSIC "assets/song.mp3"
+#endif
 
 static void print_usage(const char *prog) {
     const char *name = (prog && prog[0]) ? prog : "sample";
@@ -90,6 +100,13 @@ int main(int argc, char **argv) {
     for (int i = 0; i < g_num_predef_vars; i++)
         if (strcmp(g_predef_vars[i].name, "t") == 0) { g_t_var_idx = i; break; }
     repl_load_initial_commands(input_file);
+
+    /* Audio: init once, play the default music on loop, shutdown on exit.
+     * Failures here are non-fatal: the REPL keeps running without sound. */
+    if (repl_audio_init() == 0) {
+        repl_audio_play_music(REPL_AUDIO_DEFAULT_MUSIC);
+        atexit(repl_audio_shutdown);
+    }
 
     glutDisplayFunc(display_func);
     glutReshapeFunc(reshape_func);

@@ -2,6 +2,8 @@ CC = gcc
 PROJECT_ROOT := $(abspath ../../..)
 REPO_INCLUDE := $(PROJECT_ROOT)/include
 
+UNAME_S := $(shell uname -s)
+
 COMMON_CFLAGS = \
 	-Wall -ggdb -g3 \
 	-Wno-deprecated-declarations -Wfloat-conversion \
@@ -28,16 +30,29 @@ else
 BUILD_CFLAGS = $(RELEASE_CFLAGS)
 endif
 
+ifeq ($(UNAME_S),Darwin)
+# macOS: system frameworks + homebrew / local freeglut fork.
 GLUT_GL_LDFLAGS = \
 	-L/opt/homebrew/lib -lm -lpthread \
-	-framework IOKit -framework Cocoa -framework OpenGL -framework GLUT
+	-framework IOKit -framework Cocoa -framework OpenGL -framework GLUT \
+	-framework CoreAudio -framework CoreFoundation -framework AudioToolbox
 
 GL_LDFLAGS = \
 	-L/opt/homebrew/lib \
 	-L$(HOME)/src/freeglut-fork/build/lib \
 	-Wl,-rpath,$(HOME)/src/freeglut-fork/build/lib \
 	-lglut -lm -lpthread \
-	-framework IOKit -framework Cocoa -framework OpenGL
+	-framework IOKit -framework Cocoa -framework OpenGL \
+	-framework CoreAudio -framework CoreFoundation -framework AudioToolbox
+else
+# Linux: system freeglut + GL/GLU. miniaudio dlopen()s pulseaudio/alsa
+# at runtime, so we only need -ldl (plus the existing -lpthread -lm).
+GLUT_GL_LDFLAGS = \
+	-lglut -lGL -lGLU -lm -lpthread -ldl
+
+GL_LDFLAGS = \
+	-lglut -lGL -lGLU -lm -lpthread -ldl
+endif
 
 .PHONY: all clean test test-detailed test_detailed lines debug glut help
 
@@ -61,9 +76,9 @@ endef
 
 all: sample test_eval test_format test_repl_core_parse test_repl_core_format test_repl_core_commit test_repl_core_io test_repl_core_examples test_repl_core_search ## Build the sample plus all test binaries using release flags.
 
-SRCS = sample.c repl_core.c repl_search.c repl_export.c repl_editor.c repl_examples.c scene_render.c ui_panels.c repl_eval.c cmd_format.c
-HDRS = sample.h repl_core.h repl_core_internal.h repl_examples.h scene_render.h ui_panels.h repl_eval.h cmd_format.h
-CORE_TEST_SRCS = repl_core.c repl_search.c repl_export.c repl_editor.c repl_examples.c scene_render.c ui_panels.c repl_eval.c cmd_format.c
+SRCS = sample.c repl_core.c repl_search.c repl_export.c repl_editor.c repl_examples.c scene_render.c ui_panels.c repl_eval.c cmd_format.c repl_audio.c
+HDRS = sample.h repl_core.h repl_core_internal.h repl_examples.h scene_render.h ui_panels.h repl_eval.h cmd_format.h repl_audio.h
+CORE_TEST_SRCS = repl_core.c repl_search.c repl_export.c repl_editor.c repl_examples.c scene_render.c ui_panels.c repl_eval.c cmd_format.c repl_audio.c
 
 sample: $(SRCS) $(HDRS) ## Build the main REPL sample using release flags by default.
 	$(CC) $(BUILD_CFLAGS) $(CFLAGS) -o $@ $(SRCS) $(GL_LDFLAGS)

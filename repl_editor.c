@@ -1,6 +1,7 @@
 #include "sample.h"
 #include "repl_core_internal.h"
 #include "ui_panels.h"
+#include "repl_audio.h"
 
 static void save_newline_buf(void);
 static void push_undo_snapshot(void);
@@ -70,6 +71,17 @@ int g_sel_anchor = -1;
 int g_sel_end = -1;
 
 static const char *replay_mode_names[] = { "Polygon", "Vertex" };
+static const char *audio_mute_names[]  = { "On",      "Muted"  };
+
+/* Audio mute state is owned here so the CfgItem pattern can point at it.
+ * The actual volume change is applied in the cfg-menu click handler
+ * below (search for audio_mute_names). */
+int g_audio_muted = 0;
+
+/* Browser autoplay policy: the Web Audio context stays suspended until
+ * a user gesture. We call repl_audio_on_user_gesture() the first time
+ * a key or mouse event arrives; native builds make this a no-op. */
+static int g_audio_gesture_sent = 0;
 
 CfgItem g_cfg_items[] = {
     { "Wireframe",        "F2",     &g_wireframe,              2,                NULL              },
@@ -94,6 +106,7 @@ CfgItem g_cfg_items[] = {
     { "Replay",           "Ctrl+g", &g_replay_active,          2,                NULL              },
     { "Replay mode",      "m",      &g_replay_mode,            2,                replay_mode_names },
     { "Top code panel",   "--",     &g_layout_vertical,        2,                NULL              },
+    { "Audio",            "--",     &g_audio_muted,            2,                audio_mute_names  },
 };
 
 const int CFG_ITEM_COUNT = (int)(sizeof(g_cfg_items) / sizeof(g_cfg_items[0]));
@@ -2053,6 +2066,11 @@ static void mouse_func(int button, int state, int x, int y) {
                         set_status(g_replay_mode == REPLAY_MODE_VERTEX
                                  ? "Replay: vertex mode"
                                  : "Replay: polygon mode");
+                    if (g_cfg_items[row].value == &g_audio_muted) {
+                        repl_audio_set_muted(g_audio_muted);
+                        set_status(g_audio_muted ? "Audio: muted"
+                                                 : "Audio: on");
+                    }
                 }
                 glutPostRedisplay();
                 return;
@@ -2445,15 +2463,24 @@ void repl_navigate_to_line(int target) {
     navigate_to_line(target);
 }
 
+static void notify_audio_gesture_once(void) {
+    if (g_audio_gesture_sent) return;
+    g_audio_gesture_sent = 1;
+    repl_audio_on_user_gesture();
+}
+
 void repl_keyboard_func(unsigned char key, int x, int y) {
+    notify_audio_gesture_once();
     keyboard_func(key, x, y);
 }
 
 void repl_special_func(int key, int x, int y) {
+    notify_audio_gesture_once();
     special_func(key, x, y);
 }
 
 void repl_mouse_func(int button, int state, int x, int y) {
+    notify_audio_gesture_once();
     mouse_func(button, state, x, y);
 }
 
