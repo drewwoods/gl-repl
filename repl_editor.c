@@ -1934,11 +1934,13 @@ static void special_func(int key, int x, int y) {
         break;
     case GLUT_KEY_F3:
         g_grid_theme = (g_grid_theme + 1) % GRID_THEME_COUNT;
-        set_status(g_grid_names[g_grid_theme]);
+        snprintf(g_scratch_buf, sizeof(g_scratch_buf), "Grid: %s", g_grid_names[g_grid_theme]);
+        set_status(g_scratch_buf);
         break;
     case GLUT_KEY_F4:
         g_axes_theme = (g_axes_theme + 1) % AXES_THEME_COUNT;
-        set_status(g_axes_names[g_axes_theme]);
+        snprintf(g_scratch_buf, sizeof(g_scratch_buf), "Axes: %s", g_axes_names[g_axes_theme]);
+        set_status(g_scratch_buf);
         break;
     case GLUT_KEY_F5:
         g_show_vnums = !g_show_vnums;
