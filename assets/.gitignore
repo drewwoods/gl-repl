@@ -1,0 +1,7 @@
+# Binary audio assets are not checked in; drop them here locally.
+*.mp3
+*.wav
+*.ogg
+*.flac
+*.mid
+*.midi
