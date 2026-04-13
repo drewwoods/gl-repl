@@ -5,12 +5,12 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SRC_DIR="${SRC_DIR:-${HOME}/src}"
 PROJECT_SRC="${SCRIPT_DIR}/../src"
 PROJECT_INCLUDE="${SCRIPT_DIR}/../include"
-BOOTSTRAP="./gl4es_bootstrap.c"
+BOOTSTRAP="${SCRIPT_DIR}/gl4es_bootstrap.c"
 OUT_DIR="${SCRIPT_DIR}/out"
 
 # -- Emscripten environment -------------------------------
 STACK_SIZE=$((1024*1024)) # 1MB stack size for complex samples
-INITIAL_MEMORY=$((1024 * 1024 * 128)) # 128MB initial memory for complex samples
+INITIAL_MEMORY=$((1024 * 1024 * 256)) # 256MB initial memory for REPL/Complex samples
 
 # ── Library Paths (edit these if your layout differs) ────────────────────────
 GL4ES_INCLUDE="${SRC_DIR}/gl4es/include"
@@ -31,17 +31,18 @@ CYAN='\033[0;36m'
 NC='\033[0m'
 
 usage() {
-    echo "Usage: $(basename "$0") [OPTIONS] <source.c>"
+    echo "Usage: $(basename "$0") [OPTIONS] <source.c | Makefile>"
     echo ""
     echo "Compile OpenGL C samples to WebAssembly using Emscripten + gl4es + GLU"
     echo ""
     echo "Options:"
-    echo "  --all       Build all best.c files from ../src/*/"
+    echo "  --all       Build all best.c and sample.c files from ../src/** (direct emcc)"
     echo "  --no-serve  Build only, don't start HTTP server"
     echo "  --help      Show this help message"
     echo ""
     echo "Examples:"
     echo "  $(basename "$0") ../src/sine-spin/best.c"
+    echo "  $(basename "$0") ../src/immediate-mode-repl/claude4.6-opus-thinking/Makefile"
     echo "  $(basename "$0") --all"
     exit 0
 }
@@ -182,47 +183,110 @@ build_freeglut() {
 # ── Build ────────────────────────────────────────────────────────────────────
 
 build_one() {
-    local src_file="$1"
-    local src_file_abs
-    src_file_abs="$(cd "$(dirname "$src_file")" && pwd)/$(basename "$src_file")"
+    local input_file="$1"
+    local input_file_abs
+    input_file_abs="$(cd "$(dirname "$input_file")" && pwd)/$(basename "$input_file")"
 
-    if [[ ! -f "${src_file_abs}" ]]; then
-        echo -e "${RED}Error: Source file not found: ${src_file}${NC}"
+    if [[ ! -f "${input_file_abs}" ]]; then
+        echo -e "${RED}Error: File not found: ${input_file}${NC}"
         return 1
     fi
 
     # Derive sample name from parent directory
     local sample_dir
-    sample_dir="$(dirname "${src_file_abs}")"
-    # Walk up to find the directory directly under PROJECT_SRC
+    sample_dir="$(dirname "${input_file_abs}")"
     local project_src_abs
     project_src_abs="$(cd "${PROJECT_SRC}" && pwd)"
     local rel_path="${sample_dir#"${project_src_abs}"/}"
-    local sample_name="${rel_path%%/*}"
-
-    if [[ -z "${sample_name}" ]]; then
+    # Use nested path as name (replace / with -)
+    local sample_name="${rel_path//\//-}"
+    if [[ -z "${sample_name}" || "${sample_name}" == "." ]]; then
         sample_name="$(basename "${sample_dir}")"
     fi
 
     local out_path="${OUT_DIR}/${sample_name}"
     mkdir -p "${out_path}"
 
-    echo -e "${CYAN}Building: ${src_file} → ${out_path}/index.html${NC}"
+    local out_html="${out_path}/index.html"
 
-    emcc "${src_file_abs}" "${BOOTSTRAP}" \
+    # --- Makefile Project Handling ---
+    if [[ "$(basename "${input_file_abs}")" == "Makefile" ]]; then
+        echo -e "${CYAN}Building via Makefile: ${input_file} → ${out_html}${NC}"
+
+        # Common variables that Makefiles use for libraries
+        local em_flags="-include ${GL4ES_GL_H} -I${GL4ES_INCLUDE} -I${GLU_DIR}/include -I${FREEGLUT_INCLUDE} -I${PROJECT_INCLUDE} -DGL_SILENCE_DEPRECATION -DUSE_MGL_NAMESPACE"
+        local em_libs="${BOOTSTRAP} ${GL4ES_LIB} ${GLU_LIB} ${FREEGLUT_LIB} -lglut -s USE_WEBGL2=1 -s FULL_ES2=1 -s INITIAL_MEMORY=${INITIAL_MEMORY} -s STACK_SIZE=${STACK_SIZE}"
+
+        pushd "${sample_dir}" > /dev/null
+        # Attempt to build 'sample' or 'best' target if they exist, else just default 'make'
+        local make_target=""
+        if grep -q "^sample:" Makefile; then
+            make_target="sample"
+        elif grep -q "^best:" Makefile; then
+            make_target="best"
+        fi
+
+        emmake make ${make_target} \
+            CC=emcc \
+            CXX=em++ \
+            COMMON_CFLAGS="-O2 ${em_flags}" \
+            BUILD_CFLAGS="-O2 ${em_flags}" \
+            CFLAGS="-O2 ${em_flags}" \
+            LDFLAGS="${em_libs} -o ${out_html}" \
+            LIBS="${em_libs} -o ${out_html}" \
+            LDLIBS="${em_libs} -o ${out_html}" \
+            GL_LDFLAGS="${em_libs} -o ${out_html}" \
+            GLUT_GL_LDFLAGS="${em_libs} -o ${out_html}"
+
+        local res=$?
+        popd > /dev/null
+
+        if [[ ${res} -eq 0 && -f "${out_html}" ]]; then
+            echo -e "${GREEN}  ✓ ${sample_name}${NC}"
+            return 0
+        fi
+        echo -e "${RED}  ✗ ${sample_name} (Makefile build failed)${NC}"
+        return 1
+    fi
+
+    # --- Standard emcc Build (Single-File or multi-file discovery) ---
+    echo -e "${CYAN}Building: ${input_file} → ${out_html}${NC}"
+
+    local all_srcs=("${input_file_abs}")
+    if ls "${sample_dir}"/*.c >/dev/null 2>&1; then
+        local count
+        count=$(ls "${sample_dir}"/*.c | wc -l)
+        if [[ ${count} -gt 1 ]]; then
+             echo -e "${YELLOW}  Multiple .c files found, including all except test_...${NC}"
+             all_srcs=()
+             for f in "${sample_dir}"/*.c; do
+                 local b
+                 b=$(basename "$f")
+                 if [[ "${b}" != test_* ]]; then
+                     all_srcs+=("$f")
+                 fi
+             done
+        fi
+    fi
+
+    emcc "${all_srcs[@]}" "${BOOTSTRAP}" \
         -include "${GL4ES_GL_H}" \
         "${GL4ES_LIB}" \
         "${GLU_LIB}" \
         -I "${GL4ES_INCLUDE}" \
+        -I "${GLU_DIR}/include" \
         -I "${FREEGLUT_INCLUDE}" \
         -I "${PROJECT_INCLUDE}" \
+        -I "${sample_dir}" \
+        -DUSE_MGL_NAMESPACE \
         -s USE_WEBGL2=1 \
         -s FULL_ES2=1 \
         -s INITIAL_MEMORY=${INITIAL_MEMORY} \
         -s STACK_SIZE=${STACK_SIZE} \
         -lglut \
         "${FREEGLUT_LIB}" \
-        -o "${out_path}/index.html"
+        -o "${out_html}"
+
     if [[ $? -eq 0 ]]; then
         echo -e "${GREEN}  ✓ ${sample_name}${NC}"
         return 0
@@ -237,7 +301,8 @@ build_all() {
     local failed=0
     local failures=()
 
-    for best in "${PROJECT_SRC}"/*/best.c; do
+    # Find all best.c and sample.c files up to 3 levels deep
+    find "${PROJECT_SRC}" -maxdepth 3 \( -name "best.c" -o -name "sample.c" \) | while read -r best; do
         if [[ ! -f "${best}" ]]; then
             continue
         fi
@@ -251,11 +316,11 @@ build_all() {
 
     echo ""
     echo -e "${CYAN}── Build Summary ──${NC}"
-    echo -e "${GREEN}  Succeeded: ${succeeded}${NC}"
+    echo -e "  Succeeded: ${succeeded}"
     if [[ ${failed} -gt 0 ]]; then
-        echo -e "${RED}  Failed:    ${failed}${NC}"
+        echo -e "  Failed:    ${failed}"
         for f in "${failures[@]}"; do
-            echo -e "${RED}    - ${f}${NC}"
+            echo -e "    - ${f}"
         done
     fi
 }
@@ -316,9 +381,13 @@ if [[ ${BUILD_ALL} -eq 1 ]]; then
 else
     # Derive sample name for serve URL
     local_src="$(cd "$(dirname "${SOURCE_FILE}")" && pwd)/$(basename "${SOURCE_FILE}")"
+    local_dir="$(dirname "${local_src}")"
     project_src_abs="$(cd "${PROJECT_SRC}" && pwd)"
-    rel="${local_src#"${project_src_abs}"/}"
-    LAST_SAMPLE="${rel%%/*}"
+    rel_dir="${local_dir#"${project_src_abs}"/}"
+    LAST_SAMPLE="${rel_dir//\//-}"
+    if [[ -z "${LAST_SAMPLE}" || "${LAST_SAMPLE}" == "." ]]; then
+        LAST_SAMPLE="$(basename "${local_dir}")"
+    fi
 
     build_one "${SOURCE_FILE}"
 fi

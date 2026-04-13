@@ -1,8 +1,12 @@
+#define _GNU_SOURCE
 #include <stdio.h>
 #include <stdlib.h>
 
 // Forward declaration of a initialization function
-void initialize_gl4es(void);
+// This can be optionally defined in the sample code.
+__attribute__((weak)) void initialize_gl4es(void) {
+    // Default empty implementation
+}
 
 // This attribute tells the linker to execute this function
 // before main() is called.
