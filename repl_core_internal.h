@@ -43,6 +43,7 @@ int  repl_extract_assignment_parts(const char *src,
                                    char *rhs, int rhs_sz);
 void repl_dump_code_panel_text(FILE *out);
 void repl_dump_code_panel_visual_text(FILE *out);
+extern const char *g_ac_insert_matches[MAX_AC_MATCHES];
 void depth_cache_invalidate(void);
 int  apply_state_cmd(const GLCmd *cmd, float alpha_scale);
 void load_line_to_input(int idx);
@@ -65,4 +66,13 @@ void search_clear_all(void);
 int  handle_search_key(unsigned char key);
 int  handle_search_special(int key);
 
+void push_undo_snapshot(void);
+void pop_undo_snapshot(void);
+void do_redo(void);
+void delete_cmd_range(int start, int count, const char *what);
+int try_assign_variable(void);
+int try_commit_for_loop(void);
+int try_commit_func_def(void);
+int try_commit_if_block(void);
+int try_commit_close_brace(void);
 #endif /* REPL_CORE_INTERNAL_H */
