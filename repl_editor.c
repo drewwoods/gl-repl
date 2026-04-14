@@ -1877,6 +1877,14 @@ void keyboard_func(unsigned char key, int x, int y) {
     }
 }
 
+static int is_modifier_key(int key) {
+    return key == GLUT_KEY_NUM_LOCK ||
+           key == GLUT_KEY_SHIFT_L || key == GLUT_KEY_SHIFT_R ||
+           key == GLUT_KEY_CTRL_L || key == GLUT_KEY_CTRL_R ||
+           key == GLUT_KEY_ALT_L || key == GLUT_KEY_ALT_R ||
+           key == GLUT_KEY_SUPER_L || key == GLUT_KEY_SUPER_R;
+}
+
 static void special_func(int key, int x, int y) {
     (void)x;
     (void)y;
@@ -1894,7 +1902,8 @@ static void special_func(int key, int x, int y) {
             replay_advance();
             return;
         }
-        replay_stop();
+
+        if (!is_modifier_key(key)) replay_stop();
     }
 
     if (handle_search_special(key))
