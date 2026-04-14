@@ -18,6 +18,7 @@ void render_config_menu(void);
 int  cfg_hit_row(int gx, int gy);
 int  var_panel_hit(int gx, int gy, int *out_row);
 int  example_dropdown_is_open(void);
+int  code_panel_get_command_display_text(int cmd_idx, char *out, int out_size);
 void handle_code_panel_click(int mx, int my);
 enum {
 	UI_PANEL_PRESS_NONE = 0,

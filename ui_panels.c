@@ -6,6 +6,7 @@
  */
 #include "sample.h"
 #include "repl_core.h"
+#include "repl_core_internal.h"
 #include "ui_panels.h"
 
 /* ========================================================================= */
@@ -113,13 +114,179 @@ static int find_replay_flat_cmd(int src_line) {
     return -1;
 }
 
-/* Replace predefined variable identifiers with their formatted values.
- * local_vars (loop variables) take priority over g_predef_vars.
- * Returns the count of distinct variables substituted.
- * Builds var_comment like " // t = 3.3, n = 12" */
-static int subst_predef_vars(const char *source, char *out, int out_size,
+static int replay_current_flat_cmd(void) {
+    if (g_replay_src_line < 0)
+        return -1;
+    return find_replay_flat_cmd(g_replay_src_line);
+}
+
+static int format_evaluated_cmd(const GLCmd *cmd, const char *orig_source,
+                                char *out, int out_size);
+
+static const char *skip_leading_ws(const char *s) {
+    while (s && *s && isspace((unsigned char)*s))
+        s++;
+    return s ? s : "";
+}
+
+static const char *skip_numeric_literal(const char *s) {
+    const char *p = s;
+    int saw_digits = 0;
+
+    if (!p)
+        return s;
+
+    if (*p == '.') {
+        if (!isdigit((unsigned char)p[1]))
+            return s;
+        p++;
+    }
+
+    while (isdigit((unsigned char)*p)) {
+        p++;
+        saw_digits = 1;
+    }
+
+    if (*p == '.') {
+        p++;
+        while (isdigit((unsigned char)*p)) {
+            p++;
+            saw_digits = 1;
+        }
+    }
+
+    if (!saw_digits)
+        return s;
+
+    if (*p == 'e' || *p == 'E') {
+        const char *q = p + 1;
+        if (*q == '+' || *q == '-')
+            q++;
+        if (isdigit((unsigned char)*q)) {
+            p = q + 1;
+            while (isdigit((unsigned char)*p))
+                p++;
+        }
+    }
+
+    return p;
+}
+
+static int expr_has_visible_vars(const char *s, const ExprVar *vars, int num_vars) {
+    while (s && *s) {
+        const char *start;
+        int len;
+        const char *num_end = skip_numeric_literal(s);
+
+        if (num_end != s) {
+            s = num_end;
+            continue;
+        }
+
+        if (!isalpha((unsigned char)*s) && *s != '_') {
+            s++;
+            continue;
+        }
+
+        start = s;
+        while (*s && (isalnum((unsigned char)*s) || *s == '_'))
+            s++;
+        len = (int)(s - start);
+
+        for (int i = 0; i < num_vars; i++) {
+            int nlen = (int)strlen(vars[i].name);
+            if (nlen == len && strncmp(start, vars[i].name, len) == 0)
+                return 1;
+        }
+    }
+    return 0;
+}
+
+static int visible_var_index(const ExprVar *vars, int num_vars, const char *name) {
+    for (int i = 0; i < num_vars; i++) {
+        if (strcmp(vars[i].name, name) == 0)
+            return i;
+    }
+    return -1;
+}
+
+static int replay_flat_cmd_context_matches(int flat_idx, int current_flat_idx) {
+    const FlatCmdLocalVars *flat_vars;
+    const FlatCmdLocalVars *cur_vars;
+
+    if (flat_idx < 0 || current_flat_idx < 0)
+        return 1;
+
+    if (g_flat_cmds[flat_idx].func_scope_mask !=
+        g_flat_cmds[current_flat_idx].func_scope_mask)
+        return 0;
+
+    flat_vars = &g_flat_cmd_local_vars[flat_idx];
+    cur_vars = &g_flat_cmd_local_vars[current_flat_idx];
+
+    for (int i = 0; i < flat_vars->num_vars; i++) {
+        int ci = visible_var_index(cur_vars->vars, cur_vars->num_vars,
+                                   flat_vars->vars[i].name);
+        if (ci >= 0 &&
+            fabsf(flat_vars->vars[i].value - cur_vars->vars[ci].value) > 1e-6f)
+            return 0;
+    }
+
+    return 1;
+}
+
+static int find_replay_assignment_flat_cmd(int src_line) {
+    int current_flat_idx = replay_current_flat_cmd();
+
+    if (g_replay_pc <= 0)
+        return -1;
+
+    for (int j = g_replay_pc - 1; j >= 0; j--) {
+        if (g_flat_cmds[j].src_cmd_idx != src_line || !g_flat_cmds[j].valid)
+            continue;
+        if (current_flat_idx < 0 ||
+            j == current_flat_idx ||
+            replay_flat_cmd_context_matches(j, current_flat_idx))
+            return j;
+    }
+
+    return -1;
+}
+
+static int build_visible_vars_from_predef_values(int flat_idx,
+                                                 const float *predef_vals,
+                                                 ExprVar *out, int max_out) {
+    int nv = 0;
+
+    if (!out || max_out <= 0)
+        return 0;
+
+    if (flat_idx >= 0 && flat_idx < g_num_flat_cmds) {
+        const FlatCmdLocalVars *lcvars = &g_flat_cmd_local_vars[flat_idx];
+        for (int i = 0; i < lcvars->num_vars && nv < max_out; i++)
+            out[nv++] = lcvars->vars[i];
+    }
+
+    if (predef_vals) {
+        for (int i = 0; i < g_num_predef_vars && nv < max_out; i++) {
+            if (visible_var_index(out, nv, g_predef_vars[i].name) >= 0)
+                continue;
+            strncpy(out[nv].name, g_predef_vars[i].name,
+                    sizeof(out[nv].name) - 1);
+            out[nv].name[sizeof(out[nv].name) - 1] = '\0';
+            out[nv].value = predef_vals[i];
+            nv++;
+        }
+    }
+
+    return nv;
+}
+
+/* Replace visible variable identifiers with their formatted values.
+ * Optionally builds var_comment like " // t = 3.3, n = 12". */
+static int subst_visible_vars(const char *source, char *out, int out_size,
                               char *var_comment, int comment_size,
-                              const ExprVar *local_vars, int n_local_vars) {
+                              const ExprVar *vars, int num_vars) {
     char used_names[MAX_PREDEF_VARS + MAX_EXPR_VARS][16];
     float used_vals[MAX_PREDEF_VARS + MAX_EXPR_VARS];
     int num_used = 0;
@@ -128,6 +295,18 @@ static int subst_predef_vars(const char *source, char *out, int out_size,
     int oi = 0;
     const char *p = source;
     while (*p && oi < out_size - 20) {
+        const char *num_end = skip_numeric_literal(p);
+
+        if (num_end != p) {
+            int len = (int)(num_end - p);
+            if (oi + len < out_size) {
+                memcpy(out + oi, p, (size_t)len);
+                oi += len;
+            }
+            p = num_end;
+            continue;
+        }
+
         if (isalpha((unsigned char)*p) || *p == '_') {
             const char *start = p;
             while (*p && (isalnum((unsigned char)*p) || *p == '_')) p++;
@@ -137,25 +316,13 @@ static int subst_predef_vars(const char *source, char *out, int out_size,
             float found_val = 0.0f;
             char found_name[16] = "";
 
-            /* Check local (loop) vars first — they shadow predefined vars */
-            for (int v = 0; !found && v < n_local_vars; v++) {
-                int nlen = (int)strlen(local_vars[v].name);
+            for (int v = 0; !found && v < num_vars; v++) {
+                int nlen = (int)strlen(vars[v].name);
                 if (nlen == len &&
-                    strncmp(start, local_vars[v].name, len) == 0) {
+                    strncmp(start, vars[v].name, len) == 0) {
                     found = 1;
-                    found_val = local_vars[v].value;
-                    strncpy(found_name, local_vars[v].name, 15);
-                    found_name[15] = '\0';
-                }
-            }
-            /* Fall back to predefined (slider) vars */
-            for (int v = 0; !found && v < g_num_predef_vars; v++) {
-                int nlen = (int)strlen(g_predef_vars[v].name);
-                if (nlen == len &&
-                    strncmp(start, g_predef_vars[v].name, len) == 0) {
-                    found = 1;
-                    found_val = g_predef_vars[v].value;
-                    strncpy(found_name, g_predef_vars[v].name, 15);
+                    found_val = vars[v].value;
+                    strncpy(found_name, vars[v].name, 15);
                     found_name[15] = '\0';
                 }
             }
@@ -186,18 +353,271 @@ static int subst_predef_vars(const char *source, char *out, int out_size,
     }
     out[oi] = '\0';
 
-    var_comment[0] = '\0';
-    if (num_used > 0) {
-        int ci = snprintf(var_comment, comment_size, " // ");
-        for (int u = 0; u < num_used && ci < comment_size - 20; u++) {
-            if (u > 0)
-                ci += snprintf(var_comment + ci, comment_size - ci, ", ");
-            ci += snprintf(var_comment + ci, comment_size - ci, "%s = %g",
-                           used_names[u], used_vals[u]);
+    if (var_comment && comment_size > 0) {
+        var_comment[0] = '\0';
+        if (num_used > 0) {
+            int ci = snprintf(var_comment, comment_size, " // ");
+            for (int u = 0; u < num_used && ci < comment_size - 20; u++) {
+                if (u > 0)
+                    ci += snprintf(var_comment + ci, comment_size - ci, ", ");
+                ci += snprintf(var_comment + ci, comment_size - ci, "%s = %g",
+                               used_names[u], used_vals[u]);
+            }
         }
     }
 
     return num_used;
+}
+
+static int replay_eval_expr_with_predefs(int flat_idx, const char *expr,
+                                         const float *predef_vals,
+                                         float *out_value) {
+    char repl_expr[MAX_LINE_LEN];
+    ExprVar vars[MAX_PREDEF_VARS + MAX_EXPR_VARS];
+    int nv;
+    ExprCtx ctx;
+
+    if (!expr || !out_value)
+        return 0;
+
+    c_expr_to_repl(expr, repl_expr, sizeof(repl_expr));
+    nv = build_visible_vars_from_predef_values(flat_idx, predef_vals,
+                                               vars,
+                                               (int)(sizeof(vars) / sizeof(vars[0])));
+    ctx.p = repl_expr;
+    ctx.vars = vars;
+    ctx.num_vars = nv;
+    *out_value = eval_expr(&ctx);
+    return 1;
+}
+
+static int replay_copy_predef_values_before_flat_cmd(int target_pc,
+                                                     float *out_vals,
+                                                     int max_vals) {
+    int pc = 0;
+    int goto_count = 0;
+
+    if (!out_vals || max_vals < g_num_predef_vars)
+        return 0;
+
+    if (g_replay_active && g_replay_state != REPLAY_OFF)
+        repl_copy_replay_baseline_predef_values(out_vals, max_vals);
+    else
+        for (int i = 0; i < g_num_predef_vars && i < max_vals; i++)
+            out_vals[i] = g_predef_vars[i].value;
+
+    if (target_pc < 0)
+        target_pc = 0;
+    if (target_pc > g_num_flat_cmds)
+        target_pc = g_num_flat_cmds;
+
+    while (pc < target_pc) {
+        if (!g_flat_cmds[pc].valid) {
+            pc++;
+            continue;
+        }
+
+        switch (g_flat_cmds[pc].type) {
+        case CMD_VAR_ASSIGN: {
+            int vi = g_flat_cmds[pc].num_args;
+            float value = g_flat_cmds[pc].args[0];
+            if (g_flat_cmds[pc].has_vars) {
+                char rhs[MAX_LINE_LEN];
+                if (repl_extract_assignment_parts(g_flat_cmds[pc].source,
+                                                  NULL, 0,
+                                                  rhs, sizeof(rhs)) &&
+                    rhs[0]) {
+                    replay_eval_expr_with_predefs(pc, rhs, out_vals, &value);
+                }
+            }
+            if (vi >= 0 && vi < g_num_predef_vars)
+                out_vals[vi] = value;
+            break;
+        }
+        case CMD_IF_BEGIN: {
+            float cond = g_flat_cmds[pc].args[0];
+            if (g_flat_cmds[pc].has_vars) {
+                char cond_text[MAX_LINE_LEN];
+                if (repl_extract_paren_payload(g_flat_cmds[pc].source,
+                                               cond_text, sizeof(cond_text)) &&
+                    cond_text[0]) {
+                    replay_eval_expr_with_predefs(pc, cond_text, out_vals, &cond);
+                }
+            }
+            if (cond == 0.0f) {
+                int depth = 1;
+                while (depth > 0 && ++pc < target_pc) {
+                    if (g_flat_cmds[pc].type == CMD_IF_BEGIN) depth++;
+                    else if (g_flat_cmds[pc].type == CMD_IF_END) depth--;
+                }
+            }
+            break;
+        }
+        case CMD_GOTO: {
+            char label[64];
+            if (!repl_extract_goto_label(g_flat_cmds[pc].source,
+                                         label, sizeof(label)))
+                break;
+            if (goto_count++ > 100000)
+                return 0;
+            for (int li = 0; li < g_num_flat_cmds; li++) {
+                char target_label[64];
+                if (g_flat_cmds[li].valid &&
+                    g_flat_cmds[li].type == CMD_LABEL &&
+                    repl_extract_label_name(g_flat_cmds[li].source,
+                                            target_label,
+                                            sizeof(target_label)) &&
+                    strcmp(target_label, label) == 0) {
+                    pc = li;
+                    goto next_pc;
+                }
+            }
+            break;
+        }
+        default:
+            break;
+        }
+
+        pc++;
+next_pc:
+        ;
+    }
+
+    return 1;
+}
+
+static int build_replay_assignment_inline_comment(int cmd_idx, int flat_idx,
+                                                  char *out, int out_size) {
+    float predef_vals[MAX_PREDEF_VARS];
+    ExprVar visible_vars[MAX_PREDEF_VARS + MAX_EXPR_VARS];
+    char rhs_subst[MAX_LINE_LEN];
+    char name[16];
+    char rhs[MAX_LINE_LEN];
+    int nv;
+
+    if (!out || out_size <= 0)
+        return 0;
+    out[0] = '\0';
+
+    if (!replay_copy_predef_values_before_flat_cmd(flat_idx,
+                                                   predef_vals,
+                                                   MAX_PREDEF_VARS))
+        return 0;
+
+    nv = build_visible_vars_from_predef_values(flat_idx, predef_vals,
+                                               visible_vars,
+                                               (int)(sizeof(visible_vars) / sizeof(visible_vars[0])));
+    if (!repl_extract_assignment_parts(g_cmds[cmd_idx].source,
+                                       name, sizeof(name),
+                                       rhs, sizeof(rhs)) ||
+        !name[0] || !rhs[0])
+        return 0;
+
+    {
+        float value = g_flat_cmds[flat_idx].args[0];
+        subst_visible_vars(rhs, rhs_subst, sizeof(rhs_subst),
+                           NULL, 0, visible_vars, nv);
+        replay_eval_expr_with_predefs(flat_idx, rhs, predef_vals, &value);
+
+        if (rhs_subst[0] &&
+            strcmp(skip_leading_ws(rhs_subst), skip_leading_ws(rhs)) != 0 &&
+            !expr_has_visible_vars(rhs_subst, visible_vars, nv)) {
+            snprintf(out, out_size, " // %s = %s = %g",
+                     name, skip_leading_ws(rhs_subst), value);
+        } else {
+            snprintf(out, out_size, " // %s = %g", name, value);
+        }
+        return 1;
+    }
+
+    return 0;
+}
+
+int code_panel_get_command_display_text(int cmd_idx, char *out, int out_size) {
+    int flat_idx;
+    char comment[MAX_INPUT_LEN];
+
+    if (!out || out_size <= 0)
+        return 0;
+    out[0] = '\0';
+
+    if (cmd_idx < 0 || cmd_idx >= g_num_cmds)
+        return 0;
+
+    snprintf(out, out_size, "%s", g_cmds[cmd_idx].source);
+
+    if (!g_replay_active || g_replay_state == REPLAY_OFF ||
+        !g_cmds[cmd_idx].has_vars)
+        return 1;
+
+    if (g_cmds[cmd_idx].type != CMD_VAR_ASSIGN)
+        return 1;
+
+    flat_idx = find_replay_assignment_flat_cmd(cmd_idx);
+    if (flat_idx < 0)
+        return 1;
+
+    if (build_replay_assignment_inline_comment(cmd_idx, flat_idx,
+                                               comment, sizeof(comment)) &&
+        comment[0]) {
+        snprintf(out, out_size, "%s%s", g_cmds[cmd_idx].source, comment);
+    }
+
+    return 1;
+}
+
+static int build_replay_subst_annotation(int cmd_idx, int flat_idx,
+                                         char *subst, int subst_size,
+                                         char *var_comment, int comment_size) {
+    float predef_vals[MAX_PREDEF_VARS];
+    ExprVar visible_vars[MAX_PREDEF_VARS + MAX_EXPR_VARS];
+    int nv;
+
+    if (!subst || subst_size <= 0)
+        return 0;
+    subst[0] = '\0';
+    if (var_comment && comment_size > 0)
+        var_comment[0] = '\0';
+
+    if (!replay_copy_predef_values_before_flat_cmd(flat_idx,
+                                                   predef_vals,
+                                                   MAX_PREDEF_VARS))
+        return 0;
+
+    nv = build_visible_vars_from_predef_values(flat_idx, predef_vals,
+                                               visible_vars,
+                                               (int)(sizeof(visible_vars) / sizeof(visible_vars[0])));
+    return subst_visible_vars(g_cmds[cmd_idx].source, subst, subst_size,
+                              var_comment, comment_size,
+                              visible_vars, nv);
+}
+
+static int build_replay_eval_annotation(int cmd_idx, int flat_idx,
+                                        char *eval_buf, int eval_size) {
+    float predef_vals[MAX_PREDEF_VARS];
+    ExprVar visible_vars[MAX_PREDEF_VARS + MAX_EXPR_VARS];
+    GLCmd eval_cmd;
+    int nv;
+
+    if (!eval_buf || eval_size <= 0)
+        return 0;
+    eval_buf[0] = '\0';
+
+    if (!replay_copy_predef_values_before_flat_cmd(flat_idx,
+                                                   predef_vals,
+                                                   MAX_PREDEF_VARS))
+        return 0;
+
+    nv = build_visible_vars_from_predef_values(flat_idx, predef_vals,
+                                               visible_vars,
+                                               (int)(sizeof(visible_vars) / sizeof(visible_vars[0])));
+    memset(&eval_cmd, 0, sizeof(eval_cmd));
+    if (!repl_parse_command_with_vars(g_cmds[cmd_idx].source,
+                                      &eval_cmd, visible_vars, nv))
+        return 0;
+
+    return format_evaluated_cmd(&eval_cmd, g_cmds[cmd_idx].source,
+                                eval_buf, eval_size);
 }
 
 /* Get format string for a command type's evaluated display */
@@ -617,6 +1037,8 @@ static int code_panel_replay_extra_rows_for_line(int cmd_idx) {
         return 0;
     if (!g_cmds[cmd_idx].has_vars)
         return 0;
+    if (g_cmds[cmd_idx].type == CMD_VAR_ASSIGN)
+        return 0;
     return 2;
 }
 
@@ -644,7 +1066,24 @@ static int code_panel_command_main_rows(int cmd_idx, int panel_w, int text_x) {
                                              panel_w);
     }
 
-    return code_panel_row_count_for_text(g_cmds[cmd_idx].source, text_x, panel_w);
+    {
+        char display_text[MAX_INPUT_LEN];
+        if (!code_panel_get_command_display_text(cmd_idx, display_text,
+                                                 sizeof(display_text)))
+            return 1;
+        return code_panel_row_count_for_text(display_text, text_x, panel_w);
+    }
+}
+
+static void code_panel_precompute_layout_rows(int panel_w, int text_x,
+                                              int *main_rows,
+                                              int *replay_extra_rows) {
+    for (int i = 0; i < g_num_cmds; i++) {
+        if (main_rows)
+            main_rows[i] = code_panel_command_main_rows(i, panel_w, text_x);
+        if (replay_extra_rows)
+            replay_extra_rows[i] = code_panel_replay_extra_rows_for_line(i);
+    }
 }
 
 static int code_panel_insert_rows(int panel_w, int text_x) {
@@ -1280,6 +1719,8 @@ static int color_picker_close(void) {
 
 void render_code_panel(void) {
     refresh_workspace_header_lines();
+    int cmd_main_rows[MAX_COMMANDS];
+    int replay_extra_rows[MAX_COMMANDS];
     int cp_x, cp_y, cp_w, cp_h;
     code_panel_rect(&cp_x, &cp_y, &cp_w, &cp_h);
     int panel_w = cp_w;
@@ -1302,35 +1743,37 @@ void render_code_panel(void) {
 
     int header_rows = code_panel_header_row_count(panel_w, text_x);
     int footer_rows = code_panel_footer_row_count(panel_w, text_x);
+    code_panel_precompute_layout_rows(panel_w, text_x,
+                                      cmd_main_rows, replay_extra_rows);
     int total_lines = header_rows + footer_rows + code_panel_newline_rows(panel_w, text_x);
     for (int i = 0; i < g_num_cmds; i++) {
         if (g_inserting && i == g_edit_line)
             total_lines += code_panel_insert_rows(panel_w, text_x);
-        total_lines += code_panel_command_main_rows(i, panel_w, text_x);
-        total_lines += code_panel_replay_extra_rows_for_line(i);
+        total_lines += cmd_main_rows[i];
+        total_lines += replay_extra_rows[i];
     }
 
     int cursor_doc_line = header_rows;
     if (g_inserting) {
         for (int i = 0; i < g_edit_line && i < g_num_cmds; i++) {
-            cursor_doc_line += code_panel_command_main_rows(i, panel_w, text_x);
-            cursor_doc_line += code_panel_replay_extra_rows_for_line(i);
+            cursor_doc_line += cmd_main_rows[i];
+            cursor_doc_line += replay_extra_rows[i];
         }
         cursor_doc_line += code_panel_cursor_row_for_text(
             g_input, text_x + code_panel_active_indent_chars() * FONT_W,
             panel_w, g_cursor_pos, NULL, NULL, NULL);
     } else if (g_edit_line < g_num_cmds) {
         for (int i = 0; i < g_edit_line; i++) {
-            cursor_doc_line += code_panel_command_main_rows(i, panel_w, text_x);
-            cursor_doc_line += code_panel_replay_extra_rows_for_line(i);
+            cursor_doc_line += cmd_main_rows[i];
+            cursor_doc_line += replay_extra_rows[i];
         }
         cursor_doc_line += code_panel_cursor_row_for_text(
             g_input, text_x + code_panel_active_indent_chars() * FONT_W,
             panel_w, g_cursor_pos, NULL, NULL, NULL);
     } else {
         for (int i = 0; i < g_num_cmds; i++) {
-            cursor_doc_line += code_panel_command_main_rows(i, panel_w, text_x);
-            cursor_doc_line += code_panel_replay_extra_rows_for_line(i);
+            cursor_doc_line += cmd_main_rows[i];
+            cursor_doc_line += replay_extra_rows[i];
         }
         cursor_doc_line += code_panel_cursor_row_for_text(
             g_input, text_x + code_panel_active_indent_chars() * FONT_W,
@@ -1343,11 +1786,11 @@ void render_code_panel(void) {
         g_cmds[g_replay_src_line].has_vars) {
         follow_doc_line = header_rows;
         for (int i = 0; i < g_replay_src_line; i++) {
-            follow_doc_line += code_panel_command_main_rows(i, panel_w, text_x);
-            follow_doc_line += code_panel_replay_extra_rows_for_line(i);
+            follow_doc_line += cmd_main_rows[i];
+            follow_doc_line += replay_extra_rows[i];
         }
-        follow_doc_line += code_panel_command_main_rows(g_replay_src_line, panel_w, text_x);
-        follow_doc_line += code_panel_replay_extra_rows_for_line(g_replay_src_line) - 1;
+        follow_doc_line += cmd_main_rows[g_replay_src_line];
+        follow_doc_line += replay_extra_rows[g_replay_src_line] - 1;
     }
 
     /* Clamp scroll */
@@ -1560,10 +2003,13 @@ void render_code_panel(void) {
             } else {
                 /* Existing command, not being edited */
                 CodeWrapIter wrap_it;
+                char display_text[MAX_INPUT_LEN];
                 int wrap_row = 0;
                 int wrap_start, wrap_len, wrap_x;
                 int search_row_idx = repl_search_row_for_cmd_index(i);
-                code_wrap_iter_init(&wrap_it, g_cmds[i].source, text_x, panel_w);
+                code_panel_get_command_display_text(i, display_text,
+                                                    sizeof(display_text));
+                code_wrap_iter_init(&wrap_it, display_text, text_x, panel_w);
                 while (code_wrap_iter_next(&wrap_it, &wrap_start, &wrap_len, &wrap_x)) {
                     if (cur >= g_scroll && cur < g_scroll + visible_lines) {
                         if (g_replay_active && g_replay_state != REPLAY_OFF &&
@@ -1647,7 +2093,7 @@ void render_code_panel(void) {
                                                           search_row_idx,
                                                           wrap_start, wrap_len,
                                                           wrap_x, line_y);
-                        code_panel_draw_segment(wrap_x, line_y, g_cmds[i].source,
+                        code_panel_draw_segment(wrap_x, line_y, display_text,
                                                 wrap_start, wrap_len, FONT_MONO);
                         line_y -= LINE_H;
                     }
@@ -1656,21 +2102,16 @@ void render_code_panel(void) {
                 }
                 file_line++;
 
-                /* Replay annotation: variable-substituted and evaluated */
                 if (g_replay_active && g_replay_state != REPLAY_OFF &&
                     g_replay_src_line >= 0 && i == g_replay_src_line &&
-                    g_cmds[i].has_vars) {
+                    g_cmds[i].has_vars &&
+                    g_cmds[i].type != CMD_VAR_ASSIGN) {
                     int flat_idx = find_replay_flat_cmd(i);
                     if (flat_idx >= 0) {
-                        /* Annotation 1: variable-substituted */
                         char subst[MAX_LINE_LEN], var_comment[128];
-                        const FlatCmdLocalVars *lcvars =
-                            &g_flat_cmd_local_vars[flat_idx];
-                        int nsubst = subst_predef_vars(
-                            g_cmds[i].source, subst, sizeof(subst),
-                            var_comment, sizeof(var_comment),
-                            lcvars->vars, lcvars->num_vars);
-                        if (nsubst > 0) {
+                        if (build_replay_subst_annotation(i, flat_idx,
+                                                          subst, sizeof(subst),
+                                                          var_comment, sizeof(var_comment)) > 0) {
                             if (cur >= g_scroll &&
                                 cur < g_scroll + visible_lines) {
                                 glEnable(GL_BLEND);
@@ -1686,37 +2127,35 @@ void render_code_panel(void) {
                                 if (var_comment[0]) {
                                     int sw = (int)strlen(subst) * FONT_W;
                                     glColor3f(0.40f, 0.55f, 0.40f);
-                                    draw_string(
-                                        (float)(text_x + sw),
-                                        (float)line_y,
-                                        var_comment, FONT_MONO);
+                                    draw_string((float)(text_x + sw),
+                                                (float)line_y,
+                                                var_comment, FONT_MONO);
                                 }
                                 line_y -= LINE_H;
                             }
                             cur++;
                         }
 
-                        /* Annotation 2: fully evaluated */
-                        char eval_buf[MAX_LINE_LEN];
-                        if (format_evaluated_cmd(
-                                &g_flat_cmds[flat_idx],
-                                g_cmds[i].source,
-                                eval_buf, sizeof(eval_buf))) {
-                            if (cur >= g_scroll &&
-                                cur < g_scroll + visible_lines) {
-                                glEnable(GL_BLEND);
-                                glBlendFunc(GL_SRC_ALPHA,
-                                            GL_ONE_MINUS_SRC_ALPHA);
-                                glColor4f(0.15f, 0.15f, 0.25f, 0.35f);
-                                draw_quad(0, (float)(line_y - 3),
-                                          (float)panel_w, (float)LINE_H);
-                                glDisable(GL_BLEND);
-                                glColor3f(0.50f, 0.60f, 0.80f);
-                                draw_string((float)text_x, (float)line_y,
-                                            eval_buf, FONT_MONO);
-                                line_y -= LINE_H;
+                        {
+                            char eval_buf[MAX_LINE_LEN];
+                            if (build_replay_eval_annotation(i, flat_idx,
+                                                             eval_buf, sizeof(eval_buf))) {
+                                if (cur >= g_scroll &&
+                                    cur < g_scroll + visible_lines) {
+                                    glEnable(GL_BLEND);
+                                    glBlendFunc(GL_SRC_ALPHA,
+                                                GL_ONE_MINUS_SRC_ALPHA);
+                                    glColor4f(0.15f, 0.15f, 0.25f, 0.35f);
+                                    draw_quad(0, (float)(line_y - 3),
+                                              (float)panel_w, (float)LINE_H);
+                                    glDisable(GL_BLEND);
+                                    glColor3f(0.50f, 0.60f, 0.80f);
+                                    draw_string((float)text_x, (float)line_y,
+                                                eval_buf, FONT_MONO);
+                                    line_y -= LINE_H;
+                                }
+                                cur++;
                             }
-                            cur++;
                         }
                     }
                 }
