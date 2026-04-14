@@ -19,6 +19,13 @@
 #define REPL_AUDIO_DEFAULT_MUSIC "assets/song.mp3"
 #endif
 
+/* Persists current track + playback offset so the session resumes where it
+ * left off.  Managed entirely by repl_audio; not shown in any config UI.
+ * Lives alongside output.c in the working directory. */
+#ifndef REPL_AUDIO_STATE_FILE
+#define REPL_AUDIO_STATE_FILE "audio_state.ini"
+#endif
+
 #define REPL_AUDIO_MUSIC_MAX_PATHS 64
 #define REPL_AUDIO_MUSIC_MAX_LEN   512
 
@@ -158,6 +165,10 @@ int main(int argc, char **argv) {
      * first track, shutdown on exit. Failures here are non-fatal: the
      * REPL keeps running without sound. */
     if (repl_audio_init() == 0) {
+        repl_audio_set_state_file(REPL_AUDIO_STATE_FILE);
+        /* Apply cfg defaults (including mute) BEFORE starting the playlist
+         * so the engine volume is correct from the very first frame. */
+        repl_editor_apply_defaults();
         static char music_paths[REPL_AUDIO_MUSIC_MAX_PATHS]
                                [REPL_AUDIO_MUSIC_MAX_LEN];
         int n = scan_mp3_playlist(music_paths, REPL_AUDIO_MUSIC_MAX_PATHS);
@@ -174,7 +185,6 @@ int main(int argc, char **argv) {
         }
         atexit(repl_audio_shutdown);
     }
-    repl_editor_apply_defaults();
 
     glutDisplayFunc(display_func);
     glutReshapeFunc(reshape_func);
