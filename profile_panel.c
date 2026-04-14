@@ -46,7 +46,7 @@ static double g_prof_avg_us[PROF_SECTION_COUNT];   /* EMA in µs            */
 static int    g_prof_stale[PROF_SECTION_COUNT];    /* frames since last sample */
 static int    g_prof_initialized = 0;
 
-int g_show_profile_panel = 0;
+int g_show_profile_panel = PROFILE_PANEL_OFF;
 
 /* ========================================================================= */
 /* Helpers                                                                    */
@@ -115,6 +115,10 @@ static const char *section_label(ProfSection s) {
     switch (s) {
     case PROF_SCENE_3D:    return "Scene 3D";
     case PROF_CODE_PANEL:  return "Code Panel";
+    case PROF_CODE_PANEL_LAYOUT:   return "  layout";
+    case PROF_CODE_PANEL_CHROME:   return "  chrome";
+    case PROF_CODE_PANEL_LINES:    return "  lines";
+    case PROF_CODE_PANEL_OVERLAYS: return "  overlays";
     case PROF_UI_PANELS:   return "UI Panels";
     case PROF_FLATTEN:     return "Flatten";
     case PROF_REFORMAT:    return "Reformat";
@@ -131,15 +135,43 @@ static void fmt_us(char *buf, int buf_sz, double us) {
         snprintf(buf, (size_t)buf_sz, "%.2f ms", us / 1000.0);
 }
 
+int prof_code_panel_details_enabled(void) {
+    return g_show_profile_panel == PROFILE_PANEL_DETAILS;
+}
+
+static int is_code_panel_detail_section(ProfSection s) {
+    return (s == PROF_CODE_PANEL_LAYOUT ||
+            s == PROF_CODE_PANEL_CHROME ||
+            s == PROF_CODE_PANEL_LINES ||
+            s == PROF_CODE_PANEL_OVERLAYS);
+}
+
+static int section_visible(ProfSection s) {
+    if (!prof_code_panel_details_enabled() && is_code_panel_detail_section(s))
+        return 0;
+    return 1;
+}
+
+static int visible_section_count(void) {
+    int count = 0;
+    for (int i = 0; i < PROF_SECTION_COUNT; i++) {
+        if (section_visible((ProfSection)i))
+            count++;
+    }
+    return count;
+}
+
 void render_profile_panel(void) {
-    if (!g_show_profile_panel) return;
+    if (g_show_profile_panel == PROFILE_PANEL_OFF) return;
     init_if_needed();
+
+    int row_count = visible_section_count();
 
     /* Panel total height: header + column headings + one row per section +
      * divider before FRAME_TOTAL + bottom padding */
     int panel_h  = PROF_HEADER_H
                  + 18                           /* column heading row */
-                 + PROF_SECTION_COUNT * PROF_ROW_H
+                 + row_count * PROF_ROW_H
                  + 4                            /* divider before FRAME_TOTAL */
                  + PROF_BOTTOM_PAD
                  + PROF_PANEL_MARGIN;
@@ -203,6 +235,7 @@ void render_profile_panel(void) {
     /* One row per section.  Insert a separator line before FRAME_TOTAL. */
     for (int i = 0; i < PROF_SECTION_COUNT; i++) {
         ProfSection s = (ProfSection)i;
+        if (!section_visible(s)) continue;
 
         if (s == PROF_FRAME_TOTAL) {
             /* Divider above totals row */
@@ -223,6 +256,8 @@ void render_profile_panel(void) {
             glColor3f(0.80f, 0.85f, 1.00f);
         else if (stale >= PROF_STALE_FRAMES)
             glColor3f(0.35f, 0.35f, 0.42f);
+        else if (is_code_panel_detail_section(s))
+            glColor3f(0.62f, 0.68f, 0.80f);
         else
             glColor3f(0.72f, 0.78f, 0.90f);
         draw_string((float)tx, (float)ty, section_label(s), FONT_SMALL);

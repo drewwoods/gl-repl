@@ -155,6 +155,13 @@ typedef enum {
     REPLAY_MODE_VERTEX
 } ReplayMode;
 
+typedef enum {
+    PROFILE_PANEL_OFF = 0,
+    PROFILE_PANEL_ON,
+    PROFILE_PANEL_DETAILS,
+    PROFILE_PANEL_MODE_COUNT
+} ProfilePanelMode;
+
 typedef struct {
     const char *name;
     GLenum      value;

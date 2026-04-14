@@ -2,7 +2,6 @@
 #include "repl_core_internal.h"
 #include "ui_panels.h"
 #include "repl_audio.h"
-#include "profile_panel.h"
 
 static void save_newline_buf(void);
 void push_undo_snapshot(void);
@@ -73,6 +72,7 @@ int g_sel_end = -1;
 
 static const char *replay_mode_names[] = { "Polygon", "Vertex" };
 static const char *backdrop_mode_names[] = { "Off", "Cityscape" };
+static const char *profile_panel_mode_names[] = { "Off", "On", "Details" };
 
 /* Unified audio cfg: collapses mute + loop mode into one cycling
  * menu entry. Indices:
@@ -137,7 +137,7 @@ CfgItem g_cfg_items[] = {
     { "Point attenuation","--",     &g_init_attenuate_points,  2,                NULL              },
     { "Poly highlight",   "--",     &g_highlight_current_poly, 2,                NULL              },
     { "Variable panel",   "`",      &g_show_var_panel,         2,                NULL              },
-    { "CPU profile",      "Ctrl+w", &g_show_profile_panel,     2,                NULL              },
+    { "CPU profile",      "Ctrl+w", &g_show_profile_panel,     PROFILE_PANEL_MODE_COUNT, profile_panel_mode_names },
     { "Replay",           "Ctrl+g", &g_replay_active,          2,                NULL              },
     { "Replay mode",      "m",      &g_replay_mode,            2,                replay_mode_names },
     { "Top code panel",   "--",     &g_layout_vertical,        2,                NULL              },
@@ -1424,10 +1424,12 @@ void keyboard_func(unsigned char key, int x, int y) {
         return;
     }
 
-    /* Ctrl+W (ASCII 23) — toggle CPU profile panel */
+    /* Ctrl+W (ASCII 23) — cycle CPU profile panel mode */
     if (key == 23) {
-        g_show_profile_panel = !g_show_profile_panel;
-        set_status(g_show_profile_panel ? "CPU profile: ON" : "CPU profile: OFF");
+        g_show_profile_panel = (g_show_profile_panel + 1) % PROFILE_PANEL_MODE_COUNT;
+        snprintf(g_scratch_buf, sizeof(g_scratch_buf),
+                 "CPU profile: %s", profile_panel_mode_names[g_show_profile_panel]);
+        set_status(g_scratch_buf);
         return;
     }
 

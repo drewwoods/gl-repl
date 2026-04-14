@@ -12,6 +12,10 @@
 typedef enum {
     PROF_SCENE_3D = 0,  /* render_3d_scene() */
     PROF_CODE_PANEL,    /* render_code_panel() */
+    PROF_CODE_PANEL_LAYOUT,   /* render_code_panel() layout/precompute */
+    PROF_CODE_PANEL_CHROME,   /* background, border, header/search chrome */
+    PROF_CODE_PANEL_LINES,    /* header/body/footer line rendering */
+    PROF_CODE_PANEL_OVERLAYS, /* scroll/status/color-picker overlays */
     PROF_UI_PANELS,     /* autocomplete + dropdown + var + config + help */
     PROF_FLATTEN,       /* flatten_commands() (only when dirty) */
     PROF_REFORMAT,      /* repl_reformat_commands() (on demand) */
@@ -29,7 +33,10 @@ void prof_end(ProfSection s);
 void prof_frame_tick(void);
 
 /* Render the profile panel overlay.  Draws nothing when
- * g_show_profile_panel == 0. */
+ * g_show_profile_panel == PROFILE_PANEL_OFF. */
 void render_profile_panel(void);
+
+/* Whether detail rows should be rendered/timed for PROF_CODE_PANEL. */
+int prof_code_panel_details_enabled(void);
 
 #endif /* PROFILE_PANEL_H */
