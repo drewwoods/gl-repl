@@ -78,6 +78,13 @@ void repl_audio_tick(void);
 void repl_audio_set_loop_mode(int mode);   /* ReplAudioLoopMode */
 int  repl_audio_get_loop_mode(void);
 
+/* Pause/resume without losing the playback position.  Pausing calls
+ * ma_sound_stop() (cursor preserved); resuming calls ma_sound_start().
+ * Safe to call before a track is loaded — the flag is honoured when the
+ * next track starts. */
+void repl_audio_set_paused(int paused);
+int  repl_audio_is_paused(void);
+
 void repl_audio_set_muted(int muted);
 int  repl_audio_is_muted(void);
 
@@ -93,6 +100,13 @@ const char *repl_audio_get_current_track(void);
 unsigned int repl_audio_track_generation(void);
 
 void repl_audio_on_user_gesture(void);
+
+/* Set the path for the INI state file used to persist track + offset across
+ * restarts.  Call before repl_audio_play_playlist().  Pass NULL to disable.
+ * The file is written at shutdown and every ~30 s by repl_audio_tick().
+ * On startup, if the saved track is present in the current playlist the
+ * cursor is restored; otherwise playback starts from track 0 as normal. */
+void repl_audio_set_state_file(const char *path);
 
 #ifdef __cplusplus
 }

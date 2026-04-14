@@ -80,12 +80,12 @@ static const char *backdrop_mode_names[] = { "Off", "Cityscape" };
  *   2 = Song    — playing, loop mode SONG (repeat current track)
  *   3 = All     — playing, loop mode ALL  (playlist, wrap forever)
  * Default 3 matches repl_audio.c's LOOP_ALL default with volume on. */
-#define AUDIO_CFG_MUTE 0
-#define AUDIO_CFG_ONCE 1
-#define AUDIO_CFG_SONG 2
-#define AUDIO_CFG_ALL  3
-static int g_audio_cfg_mode = AUDIO_CFG_MUTE;
-static const char *audio_cfg_names[] = { "Mute", "Once", "Song", "All" };
+#define AUDIO_CFG_PAUSE 0
+#define AUDIO_CFG_ONCE  1
+#define AUDIO_CFG_SONG  2
+#define AUDIO_CFG_ALL   3
+static int g_audio_cfg_mode = AUDIO_CFG_PAUSE;
+static const char *audio_cfg_names[] = { "Pause", "Once", "Song", "All" };
 
 /* Browser autoplay policy: the Web Audio context stays suspended until
  * a user gesture. We call repl_audio_on_user_gesture() the first time
@@ -94,20 +94,20 @@ static int g_audio_gesture_sent = 0;
 
 static void apply_audio_cfg_mode(int mode) {
     switch (mode) {
-    case AUDIO_CFG_MUTE:
-        repl_audio_set_muted(1);
+    case AUDIO_CFG_PAUSE:
+        repl_audio_set_paused(1);
         break;
     case AUDIO_CFG_ONCE:
-        repl_audio_set_muted(0);
+        repl_audio_set_paused(0);
         repl_audio_set_loop_mode(REPL_AUDIO_LOOP_OFF);
         break;
     case AUDIO_CFG_SONG:
-        repl_audio_set_muted(0);
+        repl_audio_set_paused(0);
         repl_audio_set_loop_mode(REPL_AUDIO_LOOP_SONG);
         break;
     case AUDIO_CFG_ALL:
     default:
-        repl_audio_set_muted(0);
+        repl_audio_set_paused(0);
         repl_audio_set_loop_mode(REPL_AUDIO_LOOP_ALL);
         break;
     }
@@ -2116,7 +2116,7 @@ static void cfg_cycle_row(int row, int delta) {
     if (g_cfg_items[row].value == &g_audio_cfg_mode) {
         apply_audio_cfg_mode(g_audio_cfg_mode);
         static const char *labels[] = {
-            "Audio: muted",
+            "Audio: paused",
             "Audio: play once",
             "Audio: loop song",
             "Audio: loop all",

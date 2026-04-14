@@ -9,7 +9,9 @@
 #include "repl_audio.h"
 
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
+#include <time.h>
 
 /* Silence a few benign warnings from miniaudio's ~100k-line header under
  * -Wall -Wfloat-conversion without polluting the rest of the build. */
@@ -42,6 +44,7 @@ static ma_sound  g_music;
 static int g_inited       = 0;  /* engine init succeeded */
 static int g_music_loaded = 0;  /* g_music holds a valid sound */
 static int g_muted        = 0;
+static int g_paused       = 0;  /* paused: track loaded but stopped, cursor held */
 static int g_gesture_done = 0;  /* have we satisfied browser autoplay policy? */
 
 /* Playlist: caller-registered tracks, in play order. */
@@ -70,6 +73,82 @@ static int g_pending_start = 0;
  * notice that the current track has changed without needing a
  * callback. */
 static unsigned int g_track_generation = 0;
+
+/* ------------------------------------------------------------------ */
+/* State persistence (track + offset across restarts)                  */
+/* ------------------------------------------------------------------ */
+
+/* Path of the INI file, or empty string when disabled. */
+static char  g_state_file[REPL_AUDIO_MAX_PATH] = "";
+
+/* When >= 0, apply this seek (seconds) inside the next start_track_now()
+ * call.  Set by repl_audio_play_playlist() after finding a saved state;
+ * cleared immediately once the seek is issued. */
+static float g_pending_seek_secs = -1.0f;
+
+/* Timestamp of the last successful state-file write. */
+static time_t g_last_save_time = 0;
+#define STATE_SAVE_INTERVAL_SECS 30
+
+/* ------------------------------------------------------------------ */
+/* State-file helpers                                                  */
+/* ------------------------------------------------------------------ */
+
+static float cursor_seconds(void) {
+    if (!g_music_loaded || !g_inited) return 0.0f;
+    ma_uint64 frames = 0;
+    if (ma_sound_get_cursor_in_pcm_frames(&g_music, &frames) != MA_SUCCESS)
+        return 0.0f;
+    ma_uint32 sr = ma_engine_get_sample_rate(&g_engine);
+    return sr > 0 ? (float)frames / (float)sr : 0.0f;
+}
+
+static void save_state(void) {
+    if (!g_state_file[0] || !g_music_loaded) return;
+    FILE *f = fopen(g_state_file, "w");
+    if (!f) return;
+    fprintf(f, "track=%s\n", g_playlist[g_playlist_pos]);
+    fprintf(f, "offset=%.3f\n", cursor_seconds());
+    fclose(f);
+    g_last_save_time = time(NULL);
+}
+
+/* Returns the playlist index of the saved track, or -1 if the state file
+ * is absent / unreadable / track no longer in playlist.  Sets *out_offset
+ * to the saved cursor position in seconds (0 on failure). */
+static int load_state(float *out_offset) {
+    *out_offset = 0.0f;
+    if (!g_state_file[0]) return -1;
+    FILE *f = fopen(g_state_file, "r");
+    if (!f) return -1;
+
+    char saved_track[REPL_AUDIO_MAX_PATH] = "";
+    float offset = 0.0f;
+    char line[REPL_AUDIO_MAX_PATH + 16];
+
+    while (fgets(line, (int)sizeof(line), f)) {
+        if (strncmp(line, "track=", 6) == 0) {
+            char *p = line + 6;
+            size_t len = strlen(p);
+            while (len > 0 && (p[len-1] == '\n' || p[len-1] == '\r')) len--;
+            if (len >= REPL_AUDIO_MAX_PATH) len = REPL_AUDIO_MAX_PATH - 1;
+            memcpy(saved_track, p, len);
+            saved_track[len] = '\0';
+        } else if (strncmp(line, "offset=", 7) == 0) {
+            offset = (float)atof(line + 7);
+        }
+    }
+    fclose(f);
+
+    if (!saved_track[0]) return -1;
+    for (int i = 0; i < g_playlist_count; i++) {
+        if (strcmp(g_playlist[i], saved_track) == 0) {
+            *out_offset = (offset > 0.0f ? offset : 0.0f);
+            return i;
+        }
+    }
+    return -1;  /* track not found in current playlist — start fresh */
+}
 
 /* ------------------------------------------------------------------ */
 /* Internal helpers                                                    */
@@ -123,6 +202,26 @@ static int start_track_now(int idx) {
     g_music_loaded = 1;
     g_playlist_pos = idx;
     g_track_generation++;
+
+    /* Apply a saved cursor position if one was staged (e.g. by
+     * repl_audio_play_playlist() restoring persisted state).
+     * miniaudio queues seek operations for ASYNC stream sounds, so
+     * issuing it immediately is safe — it will be processed once the
+     * background init job completes. */
+    if (g_pending_seek_secs >= 0.0f) {
+        ma_uint32 sr = ma_engine_get_sample_rate(&g_engine);
+        if (sr > 0) {
+            ma_uint64 frame = (ma_uint64)(g_pending_seek_secs * (float)sr);
+            ma_sound_seek_to_pcm_frame(&g_music, frame);
+        }
+        g_pending_seek_secs = -1.0f;
+    }
+
+    /* Honour the paused state: stop without moving the cursor so that
+     * repl_audio_set_paused(0) / ma_sound_start() resumes from here. */
+    if (g_paused)
+        ma_sound_stop(&g_music);
+
     return 0;
 }
 
@@ -170,6 +269,7 @@ int repl_audio_init(void) {
 
 void repl_audio_shutdown(void) {
     if (!g_inited) return;
+    save_state();
     uninit_music();
     ma_engine_uninit(&g_engine);
     g_inited = 0;
@@ -204,6 +304,17 @@ int repl_audio_set_playlist(const char *const *paths, int count) {
 
 int repl_audio_play_playlist(void) {
     if (!g_inited || g_playlist_count == 0) return -1;
+
+    /* Try to resume from a persisted state.  If the saved track is in the
+     * current playlist, stage the seek offset BEFORE start_track() so
+     * start_track_now() can apply it immediately.  On any failure (file
+     * absent, track not found) fall back to track 0. */
+    float offset;
+    int idx = load_state(&offset);
+    if (idx >= 0) {
+        g_pending_seek_secs = offset;
+        return start_track(idx);
+    }
     return start_track(0);
 }
 
@@ -235,6 +346,14 @@ int repl_audio_prev_track(void) {
 
 void repl_audio_tick(void) {
     if (!g_inited || !g_music_loaded) return;
+
+    /* Periodically persist track + offset so a crash or forced quit
+     * still leaves a reasonably up-to-date state file. */
+    if (g_state_file[0]) {
+        time_t now = time(NULL);
+        if (difftime(now, g_last_save_time) >= STATE_SAVE_INTERVAL_SECS)
+            save_state();
+    }
 
     /* In SONG mode miniaudio handles looping internally; there is no
      * end to detect so tick() is a no-op. */
@@ -282,6 +401,20 @@ int repl_audio_get_loop_mode(void) {
     return g_loop_mode;
 }
 
+void repl_audio_set_paused(int paused) {
+    int was_paused = g_paused;
+    g_paused = paused ? 1 : 0;
+    if (!g_inited || !g_music_loaded) return;
+    if (g_paused && !was_paused)
+        ma_sound_stop(&g_music);
+    else if (!g_paused && was_paused)
+        ma_sound_start(&g_music);
+}
+
+int repl_audio_is_paused(void) {
+    return g_paused;
+}
+
 void repl_audio_set_muted(int muted) {
     g_muted = muted ? 1 : 0;
     if (!g_inited) return;
@@ -300,6 +433,15 @@ const char *repl_audio_get_current_track(void) {
 
 unsigned int repl_audio_track_generation(void) {
     return g_track_generation;
+}
+
+void repl_audio_set_state_file(const char *path) {
+    if (!path) { g_state_file[0] = '\0'; return; }
+    size_t len = strlen(path);
+    if (len >= REPL_AUDIO_MAX_PATH) len = REPL_AUDIO_MAX_PATH - 1;
+    memcpy(g_state_file, path, len);
+    g_state_file[len] = '\0';
+    g_last_save_time = 0;  /* force a write on the next tick after first play */
 }
 
 void repl_audio_on_user_gesture(void) {
