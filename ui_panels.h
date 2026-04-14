@@ -19,8 +19,19 @@ int  cfg_hit_row(int gx, int gy);
 int  var_panel_hit(int gx, int gy, int *out_row);
 int  example_dropdown_is_open(void);
 void handle_code_panel_click(int mx, int my);
-int  handle_code_panel_press(int mx, int my);
+enum {
+	UI_PANEL_PRESS_NONE = 0,
+	UI_PANEL_PRESS_CONSUMED = 1 << 0,
+	UI_PANEL_PRESS_OPENED_COLOR_PICKER = 1 << 1
+};
+int  handle_code_panel_press(int mx, int my);      /* returns UI_PANEL_PRESS_* bitmask */
 int  handle_code_panel_drag(int mx, int my);
 void handle_code_panel_release(void);
+
+/* Input bridge helpers so editor code does not touch color-picker internals. */
+int  ui_panels_handle_escape(void);                  /* returns 1 if consumed */
+int  ui_panels_handle_scene_press(int mx, int my);  /* returns 1 if consumed */
+int  ui_panels_handle_motion(int mx, int my);       /* returns 1 if consumed */
+void ui_panels_handle_mouse_release(void);
 
 #endif /* UI_PANELS_H */

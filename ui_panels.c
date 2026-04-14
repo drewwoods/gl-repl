@@ -975,6 +975,294 @@ static void render_active_input_rows(int panel_w, int text_x, int idx_x,
     }
 }
 
+/* ========================================================================= */
+/* Color picker                                                               */
+/* ========================================================================= */
+
+#define CP_SV_SZ    150   /* SV square side */
+#define CP_HUE_W     18   /* hue bar width  */
+#define CP_ALPHA_W   18   /* alpha bar width (COLOR4F only) */
+#define CP_GAP        6   /* gap between elements */
+#define CP_PREV_H    16   /* preview strip height */
+#define SWATCH_W     12   /* inline swatch width in code panel */
+
+/* g_cp_line >= 0: picker is open for that cmd index */
+static int   g_cp_line     = -1;
+static float g_cp_hue      = 0.0f, g_cp_sat = 1.0f, g_cp_val = 1.0f;
+static float g_cp_alpha    = 1.0f;
+static int   g_cp_px       = 0, g_cp_py = 0;  /* top-left (OpenGL y-up) */
+static int   g_cp_drag     = 0;    /* 0=none 1=SV 2=hue 3=alpha */
+static int   g_cp_has_alpha= 0;    /* 1 when editing CMD_COLOR4F */
+
+/* Hit-rects in y-up OpenGL coords, updated each frame in render_color_picker */
+static int g_cp_sv_x, g_cp_sv_y, g_cp_sv_sz;
+static int g_cp_hue_x, g_cp_hue_y, g_cp_hue_h;
+static int g_cp_alp_x, g_cp_alp_y, g_cp_alp_h;
+
+static void cp_hsv_to_rgb(float h, float s, float v,
+                           float *r, float *g, float *b) {
+    int i = (int)(h*6.0f);
+    float f=h*6.0f-i, p=v*(1-s), q=v*(1-f*s), t=v*(1-(1-f)*s);
+    switch (i%6) {
+    case 0:*r=v;*g=t;*b=p;break; case 1:*r=q;*g=v;*b=p;break;
+    case 2:*r=p;*g=v;*b=t;break; case 3:*r=p;*g=q;*b=v;break;
+    case 4:*r=t;*g=p;*b=v;break; default:*r=v;*g=p;*b=q;break;
+    }
+}
+static void cp_rgb_to_hsv(float r, float g, float b,
+                           float *h, float *s, float *v) {
+    float mx=r>g?(r>b?r:b):(g>b?g:b), mn=r<g?(r<b?r:b):(g<b?g:b), d=mx-mn;
+    *v=mx; *s=(mx!=0.0f)?d/mx:0.0f;
+    if (d==0.0f){*h=0.0f;return;}
+    if      (mx==r)*h=fmodf((g-b)/d,6.0f)/6.0f;
+    else if (mx==g)*h=((b-r)/d+2.0f)/6.0f;
+    else           *h=((r-g)/d+4.0f)/6.0f;
+    if(*h<0.0f)*h+=1.0f;
+}
+static void cp_ring(float cx, float cy, float r, int n) {
+    glBegin(GL_LINE_LOOP);
+    for (int i=0;i<n;i++){float a=(float)i/(float)n*6.28318f;
+        glVertex2f(cx+cosf(a)*r, cy+sinf(a)*r);}
+    glEnd();
+}
+
+static void color_picker_write_cmd(void) {
+    if (g_cp_line<0 || g_cp_line>=g_num_cmds) return;
+    float r,g,b;
+    const char *old_src = g_cmds[g_cp_line].source;
+    int indent_len = 0;
+    char indent_prefix[sizeof(g_cmds[g_cp_line].source)];
+    cp_hsv_to_rgb(g_cp_hue, g_cp_sat, g_cp_val, &r, &g, &b);
+    while (old_src[indent_len] == ' ' || old_src[indent_len] == '\t')
+        indent_len++;
+    if ((size_t)indent_len >= sizeof(indent_prefix))
+        indent_len = (int)sizeof(indent_prefix) - 1;
+    for (int i = 0; i < indent_len; i++)
+        indent_prefix[i] = old_src[i];
+    indent_prefix[indent_len] = '\0';
+    g_cmds[g_cp_line].args[0]=r;
+    g_cmds[g_cp_line].args[1]=g;
+    g_cmds[g_cp_line].args[2]=b;
+    if (g_cp_has_alpha) {
+        g_cmds[g_cp_line].args[3]=g_cp_alpha;
+        snprintf(g_cmds[g_cp_line].source, sizeof(g_cmds[g_cp_line].source),
+                 "%sglColor4f(%g, %g, %g, %g);",
+                 indent_prefix, r, g, b, g_cp_alpha);
+    } else {
+        snprintf(g_cmds[g_cp_line].source, sizeof(g_cmds[g_cp_line].source),
+                 "%sglColor3f(%g, %g, %g);",
+                 indent_prefix, r, g, b);
+    }
+    g_flat_dirty = 1;
+}
+
+/* Open (or switch) the picker for cmd_idx.  my is GLUT screen y coord. */
+static void color_picker_open(int cmd_idx, int my) {
+    int cp_x, cp_w;
+    code_panel_rect(&cp_x, NULL, &cp_w, NULL);
+    g_cp_line      = cmd_idx;
+    g_cp_has_alpha = (g_cmds[cmd_idx].type == CMD_COLOR4F);
+    g_cp_alpha     = g_cp_has_alpha ? g_cmds[cmd_idx].args[3] : 1.0f;
+    cp_rgb_to_hsv(g_cmds[cmd_idx].args[0],
+                  g_cmds[cmd_idx].args[1],
+                  g_cmds[cmd_idx].args[2],
+                  &g_cp_hue, &g_cp_sat, &g_cp_val);
+    /* Position to the right of the panel, near the click y */
+    int pw = CP_SV_SZ + CP_GAP + CP_HUE_W
+           + (g_cp_has_alpha ? CP_GAP + CP_ALPHA_W : 0) + CP_GAP;
+    int ph = CP_SV_SZ + CP_GAP + CP_PREV_H + CP_GAP;
+    int ppx = cp_x + cp_w + 8;
+    if (ppx + pw > g_win_w - 4) ppx = cp_x - pw - 4;
+    if (ppx < 4) ppx = 4;
+    if (ppx + pw > g_win_w - 4) ppx = g_win_w - pw - 4;
+    if (ppx < 4) ppx = 4;
+    int ppy = (g_win_h - my) + ph / 2;
+    if (ppy > g_win_h - 4) ppy = g_win_h - 4;
+    if (ppy - ph < 4)       ppy = ph + 4;
+    g_cp_px = ppx;  g_cp_py = ppy;
+}
+
+static void render_color_picker(void) {
+    if (g_cp_line < 0) return;
+    int px = g_cp_px, py = g_cp_py, sz = CP_SV_SZ;
+    int pw = sz + CP_GAP + CP_HUE_W
+           + (g_cp_has_alpha ? CP_GAP + CP_ALPHA_W : 0) + CP_GAP;
+    int ph = sz + CP_GAP + CP_PREV_H + CP_GAP;
+
+    /* Background */
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    glColor4f(0.08f, 0.08f, 0.12f, 0.94f);
+    draw_quad((float)(px-CP_GAP), (float)(py-ph), (float)(pw+CP_GAP), (float)(ph+CP_GAP));
+    glColor4f(0.30f, 0.30f, 0.50f, 0.80f);
+    glBegin(GL_LINE_LOOP);
+    glVertex2f(px-CP_GAP,        py-ph);
+    glVertex2f(px-CP_GAP+pw+CP_GAP, py-ph);
+    glVertex2f(px-CP_GAP+pw+CP_GAP, py+CP_GAP);
+    glVertex2f(px-CP_GAP,        py+CP_GAP);
+    glEnd();
+    glDisable(GL_BLEND);
+
+    /* SV square: white→hue left-right, hue→black top-bottom */
+    g_cp_sv_x=px; g_cp_sv_y=py-sz; g_cp_sv_sz=sz;
+    float hr,hg,hb; cp_hsv_to_rgb(g_cp_hue,1,1,&hr,&hg,&hb);
+    glBegin(GL_QUADS);
+    glColor3f(1,1,1);    glVertex2f(px,    py);
+    glColor3f(hr,hg,hb); glVertex2f(px+sz, py);
+    glColor3f(hr,hg,hb); glVertex2f(px+sz, py-sz);
+    glColor3f(1,1,1);    glVertex2f(px,    py-sz);
+    glEnd();
+    glEnable(GL_BLEND); glBlendFunc(GL_SRC_ALPHA,GL_ONE_MINUS_SRC_ALPHA);
+    glBegin(GL_QUADS);
+    glColor4f(0,0,0,0); glVertex2f(px,    py);
+    glColor4f(0,0,0,0); glVertex2f(px+sz, py);
+    glColor4f(0,0,0,1); glVertex2f(px+sz, py-sz);
+    glColor4f(0,0,0,1); glVertex2f(px,    py-sz);
+    glEnd();
+    glDisable(GL_BLEND);
+    /* SV cursor */
+    float cx=px+g_cp_sat*sz, cy=py-(1.0f-g_cp_val)*sz;
+    glColor3f(1,1,1); glLineWidth(1.5f); cp_ring(cx,cy,5.0f,16);
+    glColor3f(0,0,0); glLineWidth(1.0f); cp_ring(cx,cy,6.5f,16);
+
+    /* Hue bar: hue=0 at top, hue=1 at bottom */
+    int hx=px+sz+CP_GAP;
+    g_cp_hue_x=hx; g_cp_hue_y=py-sz; g_cp_hue_h=sz;
+    for (int i=0;i<40;i++) {
+        float h1=(float)i/40.0f, h2=(float)(i+1)/40.0f;
+        float r1,g1,b1,r2,g2,b2;
+        cp_hsv_to_rgb(h1,1,1,&r1,&g1,&b1); cp_hsv_to_rgb(h2,1,1,&r2,&g2,&b2);
+        glBegin(GL_QUADS);
+        glColor3f(r1,g1,b1); glVertex2f(hx,          py-h1*sz);
+        glColor3f(r1,g1,b1); glVertex2f(hx+CP_HUE_W, py-h1*sz);
+        glColor3f(r2,g2,b2); glVertex2f(hx+CP_HUE_W, py-h2*sz);
+        glColor3f(r2,g2,b2); glVertex2f(hx,          py-h2*sz);
+        glEnd();
+    }
+    glColor3f(1,1,1); glLineWidth(2.0f);
+    float hy=py-g_cp_hue*sz;
+    glBegin(GL_LINES); glVertex2f(hx-2,hy); glVertex2f(hx+CP_HUE_W+2,hy); glEnd();
+    glLineWidth(1.0f);
+
+    /* Alpha bar (COLOR4F only): alpha=1 at top */
+    if (g_cp_has_alpha) {
+        int ax=hx+CP_HUE_W+CP_GAP;
+        g_cp_alp_x=ax; g_cp_alp_y=py-sz; g_cp_alp_h=sz;
+        float cr,cg,cb; cp_hsv_to_rgb(g_cp_hue,g_cp_sat,g_cp_val,&cr,&cg,&cb);
+        int ck=5;
+        for (int iy=0;iy<sz;iy+=ck) for (int ix=0;ix<CP_ALPHA_W;ix+=ck) {
+            float gv=((ix/ck+iy/ck)%2)?0.35f:0.55f; glColor3f(gv,gv,gv);
+            int tw=(ix+ck<CP_ALPHA_W)?ck:CP_ALPHA_W-ix, th=(iy+ck<sz)?ck:sz-iy;
+            draw_quad((float)(ax+ix),(float)(py-iy-th),(float)tw,(float)th);
+        }
+        glEnable(GL_BLEND); glBlendFunc(GL_SRC_ALPHA,GL_ONE_MINUS_SRC_ALPHA);
+        for (int i=0;i<40;i++) {
+            float a1=1.0f-(float)i/40.0f, a2=1.0f-(float)(i+1)/40.0f;
+            float y1=py-(float)i/40.0f*sz,  y2=py-(float)(i+1)/40.0f*sz;
+            glBegin(GL_QUADS);
+            glColor4f(cr,cg,cb,a1); glVertex2f(ax,            y1);
+            glColor4f(cr,cg,cb,a1); glVertex2f(ax+CP_ALPHA_W, y1);
+            glColor4f(cr,cg,cb,a2); glVertex2f(ax+CP_ALPHA_W, y2);
+            glColor4f(cr,cg,cb,a2); glVertex2f(ax,            y2);
+            glEnd();
+        }
+        glDisable(GL_BLEND);
+        float ay=py-(1.0f-g_cp_alpha)*sz;
+        glColor3f(1,1,1); glLineWidth(2.0f);
+        glBegin(GL_LINES); glVertex2f(ax-2,ay); glVertex2f(ax+CP_ALPHA_W+2,ay); glEnd();
+        glLineWidth(1.0f);
+    }
+
+    /* Preview swatch */
+    float pr,pg,pb; cp_hsv_to_rgb(g_cp_hue,g_cp_sat,g_cp_val,&pr,&pg,&pb);
+    int total_w=sz+CP_GAP+CP_HUE_W+(g_cp_has_alpha?CP_GAP+CP_ALPHA_W:0);
+    int swy=py-sz-CP_GAP;
+    if (g_cp_has_alpha) {
+        int ck=4;
+        for (int iy=0;iy<CP_PREV_H;iy+=ck) for (int ix=0;ix<total_w;ix+=ck) {
+            float gv=((ix/ck+iy/ck)%2)?0.35f:0.55f; glColor3f(gv,gv,gv);
+            int tw=(ix+ck<total_w)?ck:total_w-ix, th=(iy+ck<CP_PREV_H)?ck:CP_PREV_H-iy;
+            draw_quad((float)(px+ix),(float)(swy-CP_PREV_H+iy),(float)tw,(float)th);
+        }
+        glEnable(GL_BLEND); glBlendFunc(GL_SRC_ALPHA,GL_ONE_MINUS_SRC_ALPHA);
+        glColor4f(pr,pg,pb,g_cp_alpha);
+    } else {
+        glColor3f(pr,pg,pb);
+    }
+    draw_quad((float)px,(float)(swy-CP_PREV_H),(float)total_w,(float)CP_PREV_H);
+    if (g_cp_has_alpha) glDisable(GL_BLEND);
+    glColor3f(0.4f,0.4f,0.5f);
+    glBegin(GL_LINE_LOOP);
+    glVertex2f(px,         swy-CP_PREV_H); glVertex2f(px+total_w, swy-CP_PREV_H);
+    glVertex2f(px+total_w, swy);           glVertex2f(px,         swy);
+    glEnd();
+}
+
+static int color_picker_press(int mx, int my) {
+    if (g_cp_line < 0) return 0;
+    int gl_y = g_win_h - my;
+
+    /* SV square */
+    if (mx >= g_cp_sv_x && mx < g_cp_sv_x+g_cp_sv_sz &&
+        gl_y >= g_cp_sv_y && gl_y < g_cp_sv_y+g_cp_sv_sz) {
+        g_cp_drag = 1;
+        g_cp_sat = (float)(mx-g_cp_sv_x)/(float)g_cp_sv_sz;
+        g_cp_val = (float)(gl_y-g_cp_sv_y)/(float)g_cp_sv_sz;
+        if (g_cp_sat<0)g_cp_sat=0; if (g_cp_sat>1)g_cp_sat=1;
+        if (g_cp_val<0)g_cp_val=0; if (g_cp_val>1)g_cp_val=1;
+        color_picker_write_cmd(); return 1;
+    }
+    /* Hue bar */
+    if (mx >= g_cp_hue_x && mx < g_cp_hue_x+CP_HUE_W &&
+        gl_y >= g_cp_hue_y && gl_y < g_cp_hue_y+g_cp_hue_h) {
+        g_cp_drag = 2;
+        g_cp_hue = 1.0f-(float)(gl_y-g_cp_hue_y)/(float)g_cp_hue_h;
+        if (g_cp_hue<0)g_cp_hue=0; if (g_cp_hue>=1)g_cp_hue=0.999f;
+        color_picker_write_cmd(); return 1;
+    }
+    /* Alpha bar */
+    if (g_cp_has_alpha &&
+        mx >= g_cp_alp_x && mx < g_cp_alp_x+CP_ALPHA_W &&
+        gl_y >= g_cp_alp_y && gl_y < g_cp_alp_y+g_cp_alp_h) {
+        g_cp_drag = 3;
+        g_cp_alpha = (float)(gl_y-g_cp_alp_y)/(float)g_cp_alp_h;
+        if (g_cp_alpha<0)g_cp_alpha=0; if (g_cp_alpha>1)g_cp_alpha=1;
+        color_picker_write_cmd(); return 1;
+    }
+
+    /* Click outside picker: close and let the event fall through */
+    g_cp_line = -1;  g_cp_drag = 0;
+    return 0;
+}
+
+static int color_picker_motion(int mx, int my) {
+    if (g_cp_drag == 0) return 0;
+    int gl_y = g_win_h - my;
+    if (g_cp_drag == 1) {
+        g_cp_sat = (float)(mx-g_cp_sv_x)/(float)g_cp_sv_sz;
+        g_cp_val = (float)(gl_y-g_cp_sv_y)/(float)g_cp_sv_sz;
+        if (g_cp_sat<0)g_cp_sat=0; if (g_cp_sat>1)g_cp_sat=1;
+        if (g_cp_val<0)g_cp_val=0; if (g_cp_val>1)g_cp_val=1;
+    } else if (g_cp_drag == 2) {
+        g_cp_hue = 1.0f-(float)(gl_y-g_cp_hue_y)/(float)g_cp_hue_h;
+        if (g_cp_hue<0)g_cp_hue=0; if (g_cp_hue>=1)g_cp_hue=0.999f;
+    } else if (g_cp_drag == 3) {
+        g_cp_alpha = (float)(gl_y-g_cp_alp_y)/(float)g_cp_alp_h;
+        if (g_cp_alpha<0)g_cp_alpha=0; if (g_cp_alpha>1)g_cp_alpha=1;
+    }
+    color_picker_write_cmd();
+    return 1;
+}
+
+static void color_picker_release(void) { g_cp_drag = 0; }
+
+/* Close the picker.  Returns 1 if it was open (caller should redisplay). */
+static int color_picker_close(void) {
+    if (g_cp_line < 0) return 0;
+    g_cp_line = -1;  g_cp_drag = 0;
+    return 1;
+}
+
 void render_code_panel(void) {
     refresh_workspace_header_lines();
     int cp_x, cp_y, cp_w, cp_h;
@@ -1304,6 +1592,38 @@ void render_code_panel(void) {
                                 draw_string((float)idx_x, (float)line_y,
                                             idx_s, FONT_MONO);
                             }
+                            /* Color swatch for glColor3f/glColor4f */
+                            if ((g_cmds[i].type == CMD_COLOR3F ||
+                                 g_cmds[i].type == CMD_COLOR4F) &&
+                                g_cmds[i].valid && !g_cmds[i].has_vars) {
+                                int sw = SWATCH_W;
+                                int sx = cp_x + cp_w - CODE_MARGIN_X - sw - 2;
+                                int sy = line_y + (LINE_H - sw) / 2 - 1;
+                                glEnable(GL_BLEND);
+                                glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+                                float sa = (g_cmds[i].type == CMD_COLOR4F)
+                                           ? g_cmds[i].args[3] : 1.0f;
+                                glColor4f(g_cmds[i].args[0], g_cmds[i].args[1],
+                                          g_cmds[i].args[2], sa);
+                                draw_quad((float)sx, (float)sy, (float)sw, (float)sw);
+                                /* Border */
+                                glColor4f(0.55f, 0.55f, 0.65f, 0.9f);
+                                glBegin(GL_LINE_LOOP);
+                                glVertex2f(sx,    sy);    glVertex2f(sx+sw, sy);
+                                glVertex2f(sx+sw, sy+sw); glVertex2f(sx,    sy+sw);
+                                glEnd();
+                                /* Highlight when picker is open for this line */
+                                if (g_cp_line == i) {
+                                    glColor4f(1.0f, 1.0f, 1.0f, 0.9f);
+                                    glBegin(GL_LINE_LOOP);
+                                    glVertex2f(sx-1,    sy-1);
+                                    glVertex2f(sx+sw+1, sy-1);
+                                    glVertex2f(sx+sw+1, sy+sw+1);
+                                    glVertex2f(sx-1,    sy+sw+1);
+                                    glEnd();
+                                }
+                                glDisable(GL_BLEND);
+                            }
                         }
                         color_for_type(g_cmds[i].type);
                         code_panel_draw_search_highlights(g_cmds[i].source,
@@ -1476,6 +1796,8 @@ void render_code_panel(void) {
                     g_status, FONT_MONO);
         glDisable(GL_BLEND);
     }
+
+    render_color_picker();
 
     end_2d();
 }
@@ -2379,6 +2701,8 @@ void handle_code_panel_click(int mx, int my) {
 }
 
 int handle_code_panel_press(int mx, int my) {
+    int actions = UI_PANEL_PRESS_NONE;
+
     /* Check example dropdown first (it floats over code) */
     if (g_example_dropdown_open) {
         int item = example_dropdown_item_hit(mx, my);
@@ -2388,7 +2712,7 @@ int handle_code_panel_press(int mx, int my) {
             else
                 repl_load_example(item);
             g_example_dropdown_open = 0;
-            return 1;
+            return UI_PANEL_PRESS_CONSUMED;
         }
         g_example_dropdown_open = 0;
         /* fall through so clicks still navigate code */
@@ -2408,11 +2732,38 @@ int handle_code_panel_press(int mx, int my) {
             if (repl_user_scene_valid()) repl_load_user_scene();
             break;
         }
-        return 1;
+        return UI_PANEL_PRESS_CONSUMED;
     }
 
-    int target, on_insert_line;
-    if (!code_panel_hit_test(mx, my, &target, &on_insert_line, NULL)) return 0;
+    int target, on_insert_line, row_offset;
+    if (!code_panel_hit_test(mx, my, &target, &on_insert_line, &row_offset))
+        return UI_PANEL_PRESS_NONE;
+
+    /* Check for swatch click on a glColor line */
+    if (!on_insert_line && row_offset == 0 && target >= 0 && target < g_num_cmds) {
+        CmdType ct = g_cmds[target].type;
+        if ((ct == CMD_COLOR3F || ct == CMD_COLOR4F) &&
+            g_cmds[target].valid && !g_cmds[target].has_vars) {
+            int cp_x2, cp_w2;
+            code_panel_rect(&cp_x2, NULL, &cp_w2, NULL);
+            int sx = cp_x2 + cp_w2 - CODE_MARGIN_X - SWATCH_W - 2;
+            if (mx >= sx && mx < sx + SWATCH_W) {
+                if (g_cp_line == target) {
+                    g_cp_line = -1;   /* toggle: close picker */
+                } else {
+                    actions |= UI_PANEL_PRESS_OPENED_COLOR_PICKER;
+                    color_picker_open(target, my);
+                }
+                glutPostRedisplay();
+                return actions | UI_PANEL_PRESS_CONSUMED;
+            }
+        }
+    }
+    /* Any non-swatch code-panel click closes the picker */
+    if (g_cp_line >= 0) {
+        g_cp_line = -1;
+        g_cp_drag = 0;
+    }
 
     handle_code_panel_click(mx, my);
 
@@ -2423,7 +2774,7 @@ int handle_code_panel_press(int mx, int my) {
         g_code_panel_drag_active = 1;
         g_code_panel_drag_anchor = target;
     }
-    return 1;
+    return actions | UI_PANEL_PRESS_CONSUMED;
 }
 
 int handle_code_panel_drag(int mx, int my) {
@@ -2446,4 +2797,21 @@ void handle_code_panel_release(void) {
     g_code_panel_drag_active = 0;
     g_code_panel_drag_anchor = -1;
     g_code_panel_drag_moved = 0;
+}
+
+int ui_panels_handle_escape(void) {
+    return color_picker_close();
+}
+
+int ui_panels_handle_scene_press(int mx, int my) {
+    return color_picker_press(mx, my);
+}
+
+int ui_panels_handle_motion(int mx, int my) {
+    return color_picker_motion(mx, my);
+}
+
+void ui_panels_handle_mouse_release(void) {
+    color_picker_release();
+    handle_code_panel_release();
 }
