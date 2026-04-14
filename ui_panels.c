@@ -105,9 +105,52 @@ static void color_for_type(CmdType t) {
 /* Replay variable display helpers                                            */
 /* ========================================================================= */
 
+/* Per-frame replay annotation cache.
+ * Rebuilt once at the start of render_code_panel to avoid O(N × replay_pc)
+ * work when annotating variable assignments during replay. */
+static int   s_replay_cache_pc = -2;                 /* replay_pc when built */
+static int   s_replay_flat_map[MAX_COMMANDS];         /* src_cmd_idx → flat_idx */
+static int   s_replay_current_flat_idx = -1;          /* flat cmd for src_line */
+static float s_replay_predef_cache[MAX_PREDEF_VARS];
+static int   s_replay_predef_cache_valid = 0;
+
+static int replay_copy_predef_values_before_flat_cmd(int target_pc,
+                                                     float *out_vals,
+                                                     int max_vals);
+
+static void rebuild_replay_annotation_cache(void) {
+    memset(s_replay_flat_map, 0xff, sizeof(int) * (size_t)g_num_cmds);
+
+    /* Backward pass: first match per src_cmd_idx = most recent execution */
+    for (int j = g_replay_pc - 1; j >= 0; j--) {
+        int src = g_flat_cmds[j].src_cmd_idx;
+        if (src >= 0 && src < g_num_cmds &&
+            s_replay_flat_map[src] == -1 && g_flat_cmds[j].valid)
+            s_replay_flat_map[src] = j;
+    }
+
+    s_replay_current_flat_idx = (g_replay_src_line >= 0 &&
+                                 g_replay_src_line < g_num_cmds)
+                                ? s_replay_flat_map[g_replay_src_line] : -1;
+
+    /* Single forward simulation to get predef values at replay_pc */
+    s_replay_predef_cache_valid = replay_copy_predef_values_before_flat_cmd(
+        g_replay_pc, s_replay_predef_cache, MAX_PREDEF_VARS);
+
+    s_replay_cache_pc = g_replay_pc;
+}
+
+static void invalidate_replay_annotation_cache(void) {
+    s_replay_cache_pc = -2;
+}
+
 /* Find the most recent flat command for a source line, at or before replay_pc */
 static int find_replay_flat_cmd(int src_line) {
     if (g_replay_pc <= 0) return -1;
+    /* Use per-frame cache when available */
+    if (s_replay_cache_pc == g_replay_pc &&
+        src_line >= 0 && src_line < g_num_cmds)
+        return s_replay_flat_map[src_line];
     for (int j = g_replay_pc - 1; j >= 0; j--) {
         if (g_flat_cmds[j].src_cmd_idx == src_line && g_flat_cmds[j].valid)
             return j;
@@ -118,6 +161,8 @@ static int find_replay_flat_cmd(int src_line) {
 static int replay_current_flat_cmd(void) {
     if (g_replay_src_line < 0)
         return -1;
+    if (s_replay_cache_pc == g_replay_pc)
+        return s_replay_current_flat_idx;
     return find_replay_flat_cmd(g_replay_src_line);
 }
 
@@ -242,6 +287,18 @@ static int find_replay_assignment_flat_cmd(int src_line) {
     if (g_replay_pc <= 0)
         return -1;
 
+    /* Try cached map: O(1) lookup + context check */
+    if (s_replay_cache_pc == g_replay_pc &&
+        src_line >= 0 && src_line < g_num_cmds) {
+        int cached = s_replay_flat_map[src_line];
+        if (cached >= 0 &&
+            (current_flat_idx < 0 ||
+             cached == current_flat_idx ||
+             replay_flat_cmd_context_matches(cached, current_flat_idx)))
+            return cached;
+    }
+
+    /* Fallback: full scan (only for context mismatch in function bodies) */
     for (int j = g_replay_pc - 1; j >= 0; j--) {
         if (g_flat_cmds[j].src_cmd_idx != src_line || !g_flat_cmds[j].valid)
             continue;
@@ -500,9 +557,13 @@ static int build_replay_assignment_inline_comment(int cmd_idx, int flat_idx,
         return 0;
     out[0] = '\0';
 
-    if (!replay_copy_predef_values_before_flat_cmd(flat_idx,
-                                                   predef_vals,
-                                                   MAX_PREDEF_VARS))
+    /* Use per-frame cached predef values when available */
+    if (s_replay_cache_pc == g_replay_pc && s_replay_predef_cache_valid)
+        memcpy(predef_vals, s_replay_predef_cache,
+               sizeof(float) * (size_t)g_num_predef_vars);
+    else if (!replay_copy_predef_values_before_flat_cmd(flat_idx,
+                                                        predef_vals,
+                                                        MAX_PREDEF_VARS))
         return 0;
 
     nv = build_visible_vars_from_predef_values(flat_idx, predef_vals,
@@ -580,9 +641,12 @@ static int build_replay_subst_annotation(int cmd_idx, int flat_idx,
     if (var_comment && comment_size > 0)
         var_comment[0] = '\0';
 
-    if (!replay_copy_predef_values_before_flat_cmd(flat_idx,
-                                                   predef_vals,
-                                                   MAX_PREDEF_VARS))
+    if (s_replay_cache_pc == g_replay_pc && s_replay_predef_cache_valid)
+        memcpy(predef_vals, s_replay_predef_cache,
+               sizeof(float) * (size_t)g_num_predef_vars);
+    else if (!replay_copy_predef_values_before_flat_cmd(flat_idx,
+                                                        predef_vals,
+                                                        MAX_PREDEF_VARS))
         return 0;
 
     nv = build_visible_vars_from_predef_values(flat_idx, predef_vals,
@@ -604,9 +668,12 @@ static int build_replay_eval_annotation(int cmd_idx, int flat_idx,
         return 0;
     eval_buf[0] = '\0';
 
-    if (!replay_copy_predef_values_before_flat_cmd(flat_idx,
-                                                   predef_vals,
-                                                   MAX_PREDEF_VARS))
+    if (s_replay_cache_pc == g_replay_pc && s_replay_predef_cache_valid)
+        memcpy(predef_vals, s_replay_predef_cache,
+               sizeof(float) * (size_t)g_num_predef_vars);
+    else if (!replay_copy_predef_values_before_flat_cmd(flat_idx,
+                                                        predef_vals,
+                                                        MAX_PREDEF_VARS))
         return 0;
 
     nv = build_visible_vars_from_predef_values(flat_idx, predef_vals,
@@ -1748,6 +1815,13 @@ void render_code_panel(void) {
 
     prof_end(PROF_CODE_PANEL_LAYOUT_GEOM_SETUP);
     prof_begin(PROF_CODE_PANEL_LAYOUT_GEOM_PRECOMPUTE);
+
+    /* Build per-frame replay annotation cache before any annotation work */
+    if (g_replay_active && g_replay_state != REPLAY_OFF &&
+        s_replay_cache_pc != g_replay_pc)
+        rebuild_replay_annotation_cache();
+    else if (!g_replay_active || g_replay_state == REPLAY_OFF)
+        invalidate_replay_annotation_cache();
 
     int header_rows = code_panel_header_row_count(panel_w, text_x);
     int footer_rows = code_panel_footer_row_count(panel_w, text_x);
