@@ -409,7 +409,7 @@ int g_grid_major_idx = GRID_MAJOR_1;
 const float g_grid_extents[GRID_EXTENT_COUNT] = {
     [GRID_EXTENT_CLOSE] = 5.0f,
     [GRID_EXTENT_MID]   = 15.0f,
-    [GRID_EXTENT_FAR]   = 30.0f,
+    [GRID_EXTENT_FAR]   = 40.0f,
 };
 const char *g_grid_extent_names[GRID_EXTENT_COUNT] = {
     [GRID_EXTENT_CLOSE] = "Close",
