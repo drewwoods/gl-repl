@@ -167,7 +167,7 @@ typedef struct {
     GLenum      value;
 } EnumEntry;
 
-#define MAX_FUNC_HINT_PARAMS 6
+#define MAX_FUNC_HINT_PARAMS 10
 
 typedef struct {
     const char *insert_text;
