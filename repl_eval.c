@@ -17,7 +17,8 @@ ExprVar g_predef_vars[MAX_PREDEF_VARS];
 int     g_num_predef_vars = 0;
 
 void init_predef_vars(void) {
-    static const char *names[] = { "x", "y", "z", "i", "j", "k", "n", "t" };
+    static const char *names[] = { "x", "y", "z", "i", "j", "k", "a", "b", "c", "n", "t" };
+    static_assert((int)(sizeof(names) / sizeof(names[0])) <= MAX_PREDEF_VARS);
     g_num_predef_vars = MAX_PREDEF_VARS;
     for (int i = 0; i < MAX_PREDEF_VARS; i++) {
         strncpy(g_predef_vars[i].name, names[i],

@@ -161,7 +161,7 @@ int main(int argc, char **argv) {
         if (strcmp(g_predef_vars[i].name, "t") == 0) { g_t_var_idx = i; break; }
     repl_load_initial_commands(input_file);
 
-    /* Audio: init once, scan assets/*.mp3 for a playlist, play the
+    /* Audio: init once, scan assets/ *.mp3 for a playlist, play the
      * first track, shutdown on exit. Failures here are non-fatal: the
      * REPL keeps running without sound. */
     if (repl_audio_init() == 0) {
