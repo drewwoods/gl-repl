@@ -345,8 +345,8 @@ int    g_accum_aa_enabled = 1;  /* Ctrl+B toggles jitter AA on/off */
 int    g_accum_samples    = 2;  /* current sample count */
 float  g_accum_jitter_x   = 0.0f;
 float  g_accum_jitter_y   = 0.0f;
-int    g_multisample_enabled = 1;
-int    g_line_smooth_enabled = 1; /* GL_LINE_SMOOTH state, looks nice with correct blending */
+int    g_multisample_enabled = CFG_DEFAULT_MULTISAMPLE;
+int    g_line_smooth_enabled = CFG_DEFAULT_LINE_SMOOTH;
 
 /* Sub-pixel jitter offsets (units: fraction of one pixel).
  * Table is ordered so the first N entries form a good N-sample set.
@@ -426,8 +426,8 @@ const char *g_axes_names[] = {
 int    g_show_vnums   = 1;
 int    g_show_normals = 0;
 int    g_show_indices = 1;
-int    g_wrap_at_comma = 1;
-int    g_layout_vertical = 0;  /* 0=left code panel, 1=top code panel */
+int    g_wrap_at_comma = CFG_DEFAULT_WRAP_AT_COMMA;
+int    g_layout_vertical = CFG_DEFAULT_LAYOUT_VERTICAL;  /* 0=left code panel, 1=top code panel */
 int    g_show_guides  = 1;
 int    g_autonormal   = 0;
 int    g_show_lights  = 1;
@@ -4074,12 +4074,12 @@ void repl_reset_state(void) {
     g_newline_len = 0;
     g_scroll = 0;
     g_scroll_follow_cursor = 0;
-    g_multisample_enabled = 1;
-    g_line_smooth_enabled = 0;
-    g_init_attenuate_points = 1;
-    g_wrap_at_comma = 1;
-    g_layout_vertical = 0;
-    g_panel_frac = 0.42f;
+    g_multisample_enabled = CFG_DEFAULT_MULTISAMPLE;
+    g_line_smooth_enabled = CFG_DEFAULT_LINE_SMOOTH;
+    g_init_attenuate_points = CFG_DEFAULT_ATTENUATE_POINTS;
+    g_wrap_at_comma = CFG_DEFAULT_WRAP_AT_COMMA;
+    g_layout_vertical = CFG_DEFAULT_LAYOUT_VERTICAL;
+    g_panel_frac = CFG_DEFAULT_PANEL_FRAC;
     g_anim_time = 0.0f;
     g_flat_dirty = 1;
     g_normals_dirty = 1;
