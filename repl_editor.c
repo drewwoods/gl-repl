@@ -2,6 +2,7 @@
 #include "repl_core_internal.h"
 #include "ui_panels.h"
 #include "repl_audio.h"
+#include "profile_panel.h"
 
 static void save_newline_buf(void);
 void push_undo_snapshot(void);
@@ -136,6 +137,7 @@ CfgItem g_cfg_items[] = {
     { "Point attenuation","--",     &g_init_attenuate_points,  2,                NULL              },
     { "Poly highlight",   "--",     &g_highlight_current_poly, 2,                NULL              },
     { "Variable panel",   "`",      &g_show_var_panel,         2,                NULL              },
+    { "CPU profile",      "Ctrl+w", &g_show_profile_panel,     2,                NULL              },
     { "Replay",           "Ctrl+g", &g_replay_active,          2,                NULL              },
     { "Replay mode",      "m",      &g_replay_mode,            2,                replay_mode_names },
     { "Top code panel",   "--",     &g_layout_vertical,        2,                NULL              },
@@ -1419,6 +1421,13 @@ void keyboard_func(unsigned char key, int x, int y) {
                 set_status(msg);
             }
         }
+        return;
+    }
+
+    /* Ctrl+W (ASCII 23) — toggle CPU profile panel */
+    if (key == 23) {
+        g_show_profile_panel = !g_show_profile_panel;
+        set_status(g_show_profile_panel ? "CPU profile: ON" : "CPU profile: OFF");
         return;
     }
 
