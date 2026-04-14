@@ -24,7 +24,7 @@
 #endif
 
 #ifndef MAX_PREDEF_VARS
-#define MAX_PREDEF_VARS 8
+#define MAX_PREDEF_VARS 11
 #endif
 
 #ifndef M_PI

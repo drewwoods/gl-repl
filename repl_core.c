@@ -382,7 +382,8 @@ int    g_show_help    = 0;
 int    g_help_tab     = 0;   /* 0=Commands, 1=Keys */
 int    g_help_scroll  = 0;
 int    g_wireframe    = 0;
-int    g_grid_theme   = 2;  /* 0=off, 1=classic, 2=fog, 3=tron, 4=ember, 5=faint, 6=focus, 7=ocean, 8=xzruler, 9=planes */
+// TODO: use enum for grid/axes themes
+int    g_grid_theme   = 8;  /* 0=off, 1=classic, 2=fog, 3=tron, 4=ember, 5=faint, 6=focus, 7=ocean, 8=xzruler, 9=planes */
 const char *g_grid_names[] = {
     "OFF", "Classic", "Fog", "Tron", "Ember",
     "Faint", "Focus", "Ocean", "XZ Ruler", "Adaptive Planes"
@@ -410,18 +411,18 @@ int g_grid_major_idx = GRID_MAJOR_1;
  * Tron stretch to the horizon. */
 const float g_grid_extents[GRID_EXTENT_COUNT] = {
     [GRID_EXTENT_CLOSE] = 5.0f,
-    [GRID_EXTENT_MID]   = 15.0f,
-    [GRID_EXTENT_FAR]   = 40.0f,
+    [GRID_EXTENT_MID]   = 25.0f,
+    [GRID_EXTENT_FAR]   = 100.0f,
 };
 const char *g_grid_extent_names[GRID_EXTENT_COUNT] = {
     [GRID_EXTENT_CLOSE] = "Close",
     [GRID_EXTENT_MID]   = "Mid",
     [GRID_EXTENT_FAR]   = "Far",
 };
-int g_grid_extent_idx = GRID_EXTENT_MID;  /* matches pre-existing Fog extent */
+int g_grid_extent_idx = GRID_EXTENT_FAR;  /* matches pre-existing Fog extent */
 float  g_focus_vtx[3] = { 0.0f, 0.0f, 0.0f };  /* last vertex pos for focus grid */
 int    g_focus_vtx_valid = 0;
-int    g_axes_theme   = 3;  /* 0=off, 1=classic, 2=pulse, 3=neon, 4=compass, 5=gizmo */
+int    g_axes_theme   = 0;  /* 0=off, 1=classic, 2=pulse, 3=neon, 4=compass, 5=gizmo */
 const char *g_axes_names[] = {
     "OFF", "Classic", "Pulse", "Neon", "Compass", "Gizmo"
 };
@@ -433,7 +434,7 @@ int    g_layout_vertical = CFG_DEFAULT_LAYOUT_VERTICAL;  /* 0=left code panel, 1
 int    g_show_guides  = 1;
 int    g_autonormal   = 0;
 int    g_show_lights  = 1;
-int    g_backdrop_mode = 1; /* 0=off, 1=cityscape */
+int    g_backdrop_mode = 0; /* 0=off, 1=cityscape */
 int    g_cam_rotate   = 0;  /* auto-rotate camera around Y */
 int    g_example_idx  = -1; /* current predefined example (-1 = none loaded yet) */
 char   g_scratch_buf[256];  /* shared scratch space for formatting strings, etc. */

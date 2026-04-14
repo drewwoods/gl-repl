@@ -50,6 +50,18 @@ static void draw_grid(void) {
     float step   = major * 0.2f;
     float major_tol = step * 0.25f;
 
+    if (g_grid_extent_idx == GRID_EXTENT_FAR) {
+        // enable linear fog, get the color from clear color. Start at half extent,
+        // fully fogged at extent. This gives a nice fade-out of the grid lines
+        float clear_col[4];
+        glGetFloatv(GL_COLOR_CLEAR_VALUE, clear_col);
+        glFogfv(GL_FOG_COLOR, clear_col);
+        glEnable(GL_FOG);
+        glFogi(GL_FOG_MODE, GL_LINEAR);
+        glFogf(GL_FOG_START, extent * 0.7f);
+        glFogf(GL_FOG_END, extent);
+    }
+
     switch (g_grid_theme) {
 
     case 1: { /* Classic */
@@ -68,10 +80,8 @@ static void draw_grid(void) {
 
     case 2: { /* Fog — large grid, breathing fog density */
         float fog_density = 0.06f + breath * 0.04f;
-        GLfloat fog_col[] = { 0.10f, 0.10f, 0.13f, 1.0f };
         glEnable(GL_FOG);
         glFogi(GL_FOG_MODE, GL_EXP2);
-        glFogfv(GL_FOG_COLOR, fog_col);
         glFogf(GL_FOG_DENSITY, fog_density);
 
         glBegin(GL_LINES);
@@ -238,18 +248,30 @@ static void draw_grid(void) {
 
     case 7: { /* Ocean — underwater surface plane with caustics */
         /* Underwater fog — slightly breathing density */
-        GLfloat fog_col[] = { 0.01f, 0.06f, 0.10f, 1.0f };
-        glEnable(GL_FOG);
-        glFogi(GL_FOG_MODE, GL_EXP2);
-        glFogfv(GL_FOG_COLOR, fog_col);
-        glFogf(GL_FOG_DENSITY, 0.045f + breath * 0.015f);
+
+        // Think there is a bug here. TODO fix
+        float rx_rad = g_cam_rx * (float)M_PI / 180.0f;
+        float cam_y  = g_cam_ty - sinf(rx_rad) * g_cam_dist;
+
+        if (cam_y > 0.0f) { // camera is underwater, use denser fog
+            glDisable(GL_DEPTH_TEST);
+            glColor4f(0.05f, 0.25f, 0.35f, 0.75f);
+            begin_2d();
+            glRectf(0, 0, g_win_w, g_win_h);
+            end_2d();
+            glEnable(GL_DEPTH_TEST);
+        } else {
+            glEnable(GL_FOG);
+            glFogi(GL_FOG_MODE, GL_EXP2);
+            glFogf(GL_FOG_DENSITY, 0.045f + breath * 0.015f);
+        }
 
         /* Ocean floor grid with animated caustic highlights */
         glBegin(GL_LINES);
         for (float v = -extent; v <= extent + 0.01f; v += step) {
             int is_origin = (fabsf(v) < 0.01f);
             int is_major  = grid_is_major_line(v, major, major_tol);
-            float base_a  = is_origin ? 0.45f : (is_major ? 0.22f : 0.08f);
+            float base_a  = is_origin ? 0.95f : (is_major ? 0.55f : 0.28f);
 
             /* Two overlapping sine waves create a caustic shimmer */
             float c1 = sinf(v * 3.0f + g_anim_time * 1.3f);
@@ -257,9 +279,9 @@ static void draw_grid(void) {
             float caustic = (c1 * c2) * 0.5f + 0.5f;   /* 0..1 */
             float a = base_a * (0.5f + caustic * 0.5f);
 
-            float r = 0.10f + caustic * 0.15f;
-            float g = 0.35f + caustic * 0.20f;
-            float b = 0.45f + caustic * 0.10f;
+            float r = 0.10f + caustic * 0.35f;
+            float g = 0.35f + caustic * 0.60f;
+            float b = 0.45f + caustic * 0.50f;
             glColor4f(r, g, b, a);
             glVertex3f(v, 0, -extent);  glVertex3f(v, 0, extent);
             glVertex3f(-extent, 0, v);  glVertex3f(extent, 0, v);
@@ -296,7 +318,7 @@ static void draw_grid(void) {
                     float edge = (1.0f - dx * dx) * (1.0f - dz * dz);
                     if (edge < 0.0f) edge = 0.0f;
 
-                    float alpha = 0.22f * edge;
+                    float alpha = 0.62f * edge;
 
                     /* Subtle colour variation across surface */
                     float cr = sinf(sx * 0.4f + g_anim_time * 0.3f) * 0.04f;
@@ -432,6 +454,7 @@ static void draw_grid(void) {
     glPopMatrix();
     glDepthMask(GL_TRUE);
     glDisable(GL_BLEND);
+    glDisable(GL_FOG);
     if (g_user_lighting_enabled) glEnable(GL_LIGHTING);
 }
 
