@@ -66,3 +66,48 @@ mapping instead of scanning each frame, (2) cache predef values at
 `g_replay_pc` instead of replaying from scratch per-command, and (3) avoid
 calling `code_panel_get_command_display_text` twice (once in precompute, once
 in render).
+
+## Implementation
+
+Three per-frame caches are built once in `render_code_panel` when replay is
+active (inside `rebuild_replay_annotation_cache()`), reducing the hot path from
+O(N × replay_pc) to O(replay_pc) + O(N):
+
+### 1. Flat-cmd index map (`s_replay_flat_map[MAX_COMMANDS]`)
+
+A single backward pass from `g_replay_pc` builds a src_cmd_idx → flat_idx
+lookup table. `find_replay_flat_cmd` and `find_replay_assignment_flat_cmd` now
+do O(1) map lookups instead of O(replay_pc) backward scans per call. Fallback
+to full scan is preserved for the rare context-mismatch case in function bodies.
+
+### 2. Per-source predef snapshots (`s_replay_predef_snap[MAX_COMMANDS][MAX_PREDEF_VARS]`)
+
+A single O(replay_pc) forward simulation (`replay_build_predef_snapshots()`)
+replicates the full `replay_copy_predef_values_before_flat_cmd` control-flow
+logic (var-assign updates, if-block skipping, goto handling) and snapshots
+predef values at each flat position referenced by `s_replay_flat_map`. Each
+snapshot captures the state **before** that flat command executes — matching
+the exact semantics of the original per-call function.
+
+`build_replay_assignment_inline_comment`, `build_replay_subst_annotation`, and
+`build_replay_eval_annotation` use `memcpy` from the per-source snapshot when
+the cache covers the exact cmd_idx/flat_idx pair, falling back to the full
+forward simulation only for the rare context-mismatch fallback path.
+
+An earlier version used a single snapshot at `g_replay_pc` for all commands,
+but PR review correctly identified that as semantically wrong: each annotation
+needs values "before flat_idx", which varies per source command.
+
+### 3. Cached `s_replay_current_flat_idx`
+
+Caches `replay_current_flat_cmd()` so `find_replay_assignment_flat_cmd`
+doesn't trigger an additional backward scan on every call.
+
+### Complexity
+
+**Before**: For K var-assign commands at replay position P, cost was
+~K × 3 × O(P) per frame. At command 2000 with 20 var-assigns, that's ~120,000
+iterations per frame in precompute alone, then repeated in the render loop.
+
+**After**: One O(P) backward pass + one O(P) forward simulation, then O(1) per
+annotation. Total per frame: O(P + N) instead of O(N × P).

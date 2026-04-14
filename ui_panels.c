@@ -111,12 +111,14 @@ static void color_for_type(CmdType t) {
 static int   s_replay_cache_pc = -2;                 /* replay_pc when built */
 static int   s_replay_flat_map[MAX_COMMANDS];         /* src_cmd_idx → flat_idx */
 static int   s_replay_current_flat_idx = -1;          /* flat cmd for src_line */
-static float s_replay_predef_cache[MAX_PREDEF_VARS];
-static int   s_replay_predef_cache_valid = 0;
+/* Predef-variable snapshots: one per source command, taken at the flat_idx
+ * stored in s_replay_flat_map[src].  Built by a single O(replay_pc) forward
+ * simulation so each snapshot reflects the correct variable state BEFORE
+ * executing that specific flat command. */
+static float s_replay_predef_snap[MAX_COMMANDS][MAX_PREDEF_VARS];
+static int   s_replay_predef_snap_valid[MAX_COMMANDS];
 
-static int replay_copy_predef_values_before_flat_cmd(int target_pc,
-                                                     float *out_vals,
-                                                     int max_vals);
+static void replay_build_predef_snapshots(void);
 
 static void rebuild_replay_annotation_cache(void) {
     memset(s_replay_flat_map, 0xff, sizeof(int) * (size_t)g_num_cmds);
@@ -133,9 +135,8 @@ static void rebuild_replay_annotation_cache(void) {
                                  g_replay_src_line < g_num_cmds)
                                 ? s_replay_flat_map[g_replay_src_line] : -1;
 
-    /* Single forward simulation to get predef values at replay_pc */
-    s_replay_predef_cache_valid = replay_copy_predef_values_before_flat_cmd(
-        g_replay_pc, s_replay_predef_cache, MAX_PREDEF_VARS);
+    /* Single forward pass builds per-src predef snapshots */
+    replay_build_predef_snapshots();
 
     s_replay_cache_pc = g_replay_pc;
 }
@@ -544,6 +545,114 @@ next_pc:
     return 1;
 }
 
+/* Single-pass forward simulation that builds predef snapshots for every
+ * source command whose flat_idx appears in s_replay_flat_map.  Each snapshot
+ * captures the predef variable state BEFORE the command at that flat_idx
+ * executes, matching replay_copy_predef_values_before_flat_cmd semantics.
+ * Total cost: O(replay_pc), called once per frame during cache rebuild. */
+static void replay_build_predef_snapshots(void) {
+    float vals[MAX_PREDEF_VARS];
+    int pc = 0, goto_count = 0;
+    int target_pc = g_replay_pc;
+
+    memset(s_replay_predef_snap_valid, 0, sizeof(int) * (size_t)g_num_cmds);
+
+    if (g_replay_active && g_replay_state != REPLAY_OFF)
+        repl_copy_replay_baseline_predef_values(vals, MAX_PREDEF_VARS);
+    else
+        for (int i = 0; i < g_num_predef_vars && i < MAX_PREDEF_VARS; i++)
+            vals[i] = g_predef_vars[i].value;
+
+    if (target_pc < 0) target_pc = 0;
+    if (target_pc > g_num_flat_cmds) target_pc = g_num_flat_cmds;
+
+    /* Macro: snapshot predef vals for a flat position's source command */
+    #define SNAP_IF_MAPPED(flat_pc) do {                                    \
+        int _src = g_flat_cmds[flat_pc].src_cmd_idx;                        \
+        if (_src >= 0 && _src < g_num_cmds &&                               \
+            s_replay_flat_map[_src] == (flat_pc) &&                         \
+            !s_replay_predef_snap_valid[_src]) {                            \
+            memcpy(s_replay_predef_snap[_src], vals,                        \
+                   sizeof(float) * (size_t)g_num_predef_vars);              \
+            s_replay_predef_snap_valid[_src] = 1;                           \
+        }                                                                   \
+    } while (0)
+
+    while (pc < target_pc) {
+        SNAP_IF_MAPPED(pc);
+
+        if (!g_flat_cmds[pc].valid) { pc++; continue; }
+
+        switch (g_flat_cmds[pc].type) {
+        case CMD_VAR_ASSIGN: {
+            int vi = g_flat_cmds[pc].num_args;
+            float value = g_flat_cmds[pc].args[0];
+            if (g_flat_cmds[pc].has_vars) {
+                char rhs[MAX_LINE_LEN];
+                if (repl_extract_assignment_parts(g_flat_cmds[pc].source,
+                                                  NULL, 0,
+                                                  rhs, sizeof(rhs)) &&
+                    rhs[0])
+                    replay_eval_expr_with_predefs(pc, rhs, vals, &value);
+            }
+            if (vi >= 0 && vi < g_num_predef_vars)
+                vals[vi] = value;
+            break;
+        }
+        case CMD_IF_BEGIN: {
+            float cond = g_flat_cmds[pc].args[0];
+            if (g_flat_cmds[pc].has_vars) {
+                char cond_text[MAX_LINE_LEN];
+                if (repl_extract_paren_payload(g_flat_cmds[pc].source,
+                                               cond_text, sizeof(cond_text)) &&
+                    cond_text[0])
+                    replay_eval_expr_with_predefs(pc, cond_text, vals, &cond);
+            }
+            if (cond == 0.0f) {
+                int depth = 1;
+                while (depth > 0 && ++pc < target_pc) {
+                    SNAP_IF_MAPPED(pc);
+                    if (g_flat_cmds[pc].type == CMD_IF_BEGIN) depth++;
+                    else if (g_flat_cmds[pc].type == CMD_IF_END) depth--;
+                }
+            }
+            break;
+        }
+        case CMD_GOTO: {
+            char label[64];
+            if (!repl_extract_goto_label(g_flat_cmds[pc].source,
+                                         label, sizeof(label)))
+                break;
+            if (goto_count++ > 100000)
+                goto snap_done;
+            for (int li = 0; li < g_num_flat_cmds; li++) {
+                char target_label[64];
+                if (g_flat_cmds[li].valid &&
+                    g_flat_cmds[li].type == CMD_LABEL &&
+                    repl_extract_label_name(g_flat_cmds[li].source,
+                                            target_label,
+                                            sizeof(target_label)) &&
+                    strcmp(target_label, label) == 0) {
+                    pc = li;
+                    goto snap_next_pc;
+                }
+            }
+            break;
+        }
+        default:
+            break;
+        }
+
+        pc++;
+snap_next_pc:
+        ;
+    }
+snap_done:
+    ;
+
+    #undef SNAP_IF_MAPPED
+}
+
 static int build_replay_assignment_inline_comment(int cmd_idx, int flat_idx,
                                                   char *out, int out_size) {
     float predef_vals[MAX_PREDEF_VARS];
@@ -557,9 +666,12 @@ static int build_replay_assignment_inline_comment(int cmd_idx, int flat_idx,
         return 0;
     out[0] = '\0';
 
-    /* Use per-frame cached predef values when available */
-    if (s_replay_cache_pc == g_replay_pc && s_replay_predef_cache_valid)
-        memcpy(predef_vals, s_replay_predef_cache,
+    /* Use per-src predef snapshot when cache covers this cmd/flat pair */
+    if (s_replay_cache_pc == g_replay_pc &&
+        cmd_idx >= 0 && cmd_idx < g_num_cmds &&
+        s_replay_predef_snap_valid[cmd_idx] &&
+        s_replay_flat_map[cmd_idx] == flat_idx)
+        memcpy(predef_vals, s_replay_predef_snap[cmd_idx],
                sizeof(float) * (size_t)g_num_predef_vars);
     else if (!replay_copy_predef_values_before_flat_cmd(flat_idx,
                                                         predef_vals,
@@ -641,8 +753,11 @@ static int build_replay_subst_annotation(int cmd_idx, int flat_idx,
     if (var_comment && comment_size > 0)
         var_comment[0] = '\0';
 
-    if (s_replay_cache_pc == g_replay_pc && s_replay_predef_cache_valid)
-        memcpy(predef_vals, s_replay_predef_cache,
+    if (s_replay_cache_pc == g_replay_pc &&
+        cmd_idx >= 0 && cmd_idx < g_num_cmds &&
+        s_replay_predef_snap_valid[cmd_idx] &&
+        s_replay_flat_map[cmd_idx] == flat_idx)
+        memcpy(predef_vals, s_replay_predef_snap[cmd_idx],
                sizeof(float) * (size_t)g_num_predef_vars);
     else if (!replay_copy_predef_values_before_flat_cmd(flat_idx,
                                                         predef_vals,
@@ -668,8 +783,11 @@ static int build_replay_eval_annotation(int cmd_idx, int flat_idx,
         return 0;
     eval_buf[0] = '\0';
 
-    if (s_replay_cache_pc == g_replay_pc && s_replay_predef_cache_valid)
-        memcpy(predef_vals, s_replay_predef_cache,
+    if (s_replay_cache_pc == g_replay_pc &&
+        cmd_idx >= 0 && cmd_idx < g_num_cmds &&
+        s_replay_predef_snap_valid[cmd_idx] &&
+        s_replay_flat_map[cmd_idx] == flat_idx)
+        memcpy(predef_vals, s_replay_predef_snap[cmd_idx],
                sizeof(float) * (size_t)g_num_predef_vars);
     else if (!replay_copy_predef_values_before_flat_cmd(flat_idx,
                                                         predef_vals,
