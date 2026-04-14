@@ -1520,33 +1520,56 @@ static void draw_cityscape(void) {
         /* Per-building warmth: determines amber (residential) vs. white (office) */
         float warmth = city_rng(base + 200u);
 
+        /* Timezone fraction for this building's angle, plus a small building-level
+         * phase nudge so adjacent buildings aren't perfectly in sync. */
+        float tz         = angle / (2.0f * (float)M_PI);
+        float bldg_phase = (city_rng(base + 50u) - 0.5f) * 0.06f; /* ±0.03 cycle ≈ ±18 s */
+
         for (int wc = 0; wc < wcols; wc++) {
             for (int wr = 0; wr < wrows; wr++) {
-                /* Unique window hash — varies phase, brightness cap, on/off */
+                /* Unique window hash — varies phase, threshold, brightness cap */
                 unsigned int wid = base + 300u + (unsigned int)(wc * 17 + wr);
                 float wrng = city_rng(wid);
 
-                /* 10 % of windows are structurally dark (no occupant / blind drawn) */
+                /* ~10 % of windows are structurally dark (no occupant / blind drawn) */
                 if (wrng < 0.10f) continue;
 
-                /* Per-window timezone phase offset: ± half a transition width so
-                 * windows in the same building stagger their turn-on/off time
-                 * rather than all snapping at once.  Keep it tiny — 0.02 cycle
-                 * units ≈ 12 seconds at the 10-minute cycle. */
-                float phase_jitter = (city_rng(wid + 7u) - 0.5f) * 0.04f;
-                float tz    = angle / (2.0f * (float)M_PI);
-                float lt    = fmodf(g_anim_time / CITY_CYCLE_SECS + tz + phase_jitter, 1.0f);
+                /* Each window has its own personal time offset — the primary
+                 * source of organic individuality.  This is larger than the old
+                 * phase_jitter so you see windows turn on/off one by one over
+                 * several minutes rather than all at the same instant.
+                 * ±0.06 cycle ≈ ±36 seconds at the 10-minute cycle. */
+                float win_phase = (city_rng(wid + 7u) - 0.5f) * 0.12f;
+                float lt = fmodf(g_anim_time / CITY_CYCLE_SECS + tz + bldg_phase + win_phase,
+                                 1.0f);
                 if (lt < 0.0f) lt += 1.0f;
-                float win_night = 0.5f + 0.5f * cosf(lt * 2.0f * (float)M_PI);
 
-                /* A small fraction (~10 %) represent always-on office lights
-                 * that stay dimly lit even during the day. */
-                float always_on = (wrng > 0.90f) ? 1.0f : 0.0f;
+                /* Narrow the lit arc with cos²: the midnight peak is preserved
+                 * but the flanks fall off faster, shrinking the lit zone.
+                 *   ±90° from midnight: raw=0.50, night_sq=0.25  (dim twilight)
+                 *   ±60° from midnight: raw=0.75, night_sq=0.56
+                 *   midnight (0°):      raw=1.00, night_sq=1.00               */
+                float raw     = 0.5f + 0.5f * cosf(lt * 2.0f * (float)M_PI);
+                float night_sq = raw * raw;
+
+                /* Per-window on-threshold: windows turn on at different night
+                 * depths, so they flick on one by one as darkness deepens —
+                 * not all at once.  Range 0.20–0.72 gives a lit zone spreading
+                 * from ~±68° (late risers) to ~±96° (eager early birds). */
+                float thresh = 0.20f + city_rng(wid + 11u) * 0.52f;
+
+                /* ~8 % are always-on office/corridor lights — dimly lit even at noon */
+                int always_on = (wrng > 0.92f);
                 float lit;
-                if (always_on > 0.5f)
-                    lit = 0.15f + win_night * 0.55f;
-                else
-                    lit = win_night * (0.65f + city_rng(wid + 1u) * 0.35f);
+                if (always_on) {
+                    lit = 0.12f + night_sq * 0.45f;
+                } else if (night_sq > thresh) {
+                    /* Ramp from 0 → individual max as night_sq exceeds threshold */
+                    lit = (night_sq - thresh) / (1.0f - thresh);
+                    lit *= 0.70f + city_rng(wid + 1u) * 0.30f;
+                } else {
+                    lit = 0.0f;
+                }
 
                 if (lit < 0.03f) continue; /* skip essentially-dark windows */
 
@@ -1585,6 +1608,15 @@ static void draw_cityscape(void) {
     glDepthMask(GL_TRUE);
     glDisable(GL_BLEND);
     if (g_user_lighting_enabled) glEnable(GL_LIGHTING);
+}
+
+/* Backdrop dispatcher — routes to the active backdrop mode.
+ * 0 = off, 1 = cityscape.  New modes can be added here. */
+static void draw_backdrop(void) {
+    switch (g_backdrop_mode) {
+    case 1: draw_cityscape(); break;
+    default: break;
+    }
 }
 
 /* Ground-plane crosshair gizmo at the orbit target. Visible only while the
@@ -1727,7 +1759,7 @@ void render_3d_scene(void) {
     /* Draw translucent scene helpers after the main geometry so antialiased
      * edges blend against the final background color rather than the clear
      * color from earlier in the frame. */
-    draw_cityscape();
+    draw_backdrop();
     draw_grid();
     draw_axes();
     draw_orbit_target();
