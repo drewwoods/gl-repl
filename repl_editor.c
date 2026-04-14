@@ -71,6 +71,7 @@ int g_sel_anchor = -1;
 int g_sel_end = -1;
 
 static const char *replay_mode_names[] = { "Polygon", "Vertex" };
+static const char *backdrop_mode_names[] = { "Off", "Cityscape" };
 
 /* Unified audio cfg: collapses mute + loop mode into one cycling
  * menu entry. Indices:
@@ -126,6 +127,7 @@ CfgItem g_cfg_items[] = {
     { "Vertex guides",    "F8",     &g_show_guides,            2,                NULL              },
     { "Auto-normals",     "F9",     &g_autonormal,             2,                NULL              },
     { "Light indicators", "F10",    &g_show_lights,            2,                NULL              },
+    { "Backdrop",         "--",     &g_backdrop_mode,          2,                backdrop_mode_names },
     { "Camera rotate",    "F11",    &g_cam_rotate,             2,                NULL              },
     { "Auto time",        "Ctrl+t", &g_t_playing,              2,                NULL              },
     { "MSAA",             "Ctrl+u", &g_multisample_enabled,    2,                NULL              },

@@ -336,6 +336,7 @@ extern int    g_layout_vertical;
 extern int    g_show_guides;
 extern int    g_autonormal;
 extern int    g_show_lights;
+extern int    g_backdrop_mode;
 extern int    g_cam_rotate;
 extern int    g_example_idx;
 extern int    g_user_lighting_enabled;

@@ -431,6 +431,7 @@ int    g_layout_vertical = CFG_DEFAULT_LAYOUT_VERTICAL;  /* 0=left code panel, 1
 int    g_show_guides  = 1;
 int    g_autonormal   = 0;
 int    g_show_lights  = 1;
+int    g_backdrop_mode = 1; /* 0=off, 1=cityscape */
 int    g_cam_rotate   = 0;  /* auto-rotate camera around Y */
 int    g_example_idx  = -1; /* current predefined example (-1 = none loaded yet) */
 char   g_scratch_buf[256];  /* shared scratch space for formatting strings, etc. */
