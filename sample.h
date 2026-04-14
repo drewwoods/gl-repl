@@ -33,6 +33,8 @@
 #define FONT_SMALL      GLUT_BITMAP_8_BY_13
 #define FONT_W          9
 #define FONT_H          15
+#define FONT_SMALL_W    8
+#define FONT_SMALL_H    13
 #define LINE_H          18
 #define CODE_MARGIN_X   10
 #define CODE_MARGIN_Y   8
