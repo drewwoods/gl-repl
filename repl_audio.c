@@ -12,6 +12,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
+#include <unistd.h>   /* fsync, fileno */
 
 /* Silence a few benign warnings from miniaudio's ~100k-line header under
  * -Wall -Wfloat-conversion without polluting the rest of the build. */
@@ -88,7 +89,7 @@ static float g_pending_seek_secs = -1.0f;
 
 /* Timestamp of the last successful state-file write. */
 static time_t g_last_save_time = 0;
-#define STATE_SAVE_INTERVAL_SECS 30
+#define STATE_SAVE_INTERVAL_SECS 5
 
 /* ------------------------------------------------------------------ */
 /* State-file helpers                                                  */
@@ -105,12 +106,28 @@ static float cursor_seconds(void) {
 
 static void save_state(void) {
     if (!g_state_file[0] || !g_music_loaded) return;
-    FILE *f = fopen(g_state_file, "w");
+
+    /* Write to a temp file first, then rename() over the real path.
+     * rename() is a single atomic syscall on POSIX: the destination
+     * always contains either the old content or the new content, never
+     * a partial write — safe even if interrupted during shutdown. */
+    char tmp[REPL_AUDIO_MAX_PATH];
+    if (snprintf(tmp, sizeof(tmp), ".%s.tmp", g_state_file) >= (int)sizeof(tmp))
+        return;
+
+    FILE *f = fopen(tmp, "w");
     if (!f) return;
+
     fprintf(f, "track=%s\n", g_playlist[g_playlist_pos]);
     fprintf(f, "offset=%.3f\n", cursor_seconds());
+    fflush(f);
+    fsync(fileno(f));
     fclose(f);
-    g_last_save_time = time(NULL);
+
+    if (rename(tmp, g_state_file) != 0)
+        remove(tmp);  /* rename failed — discard temp, old file untouched */
+    else
+        g_last_save_time = time(NULL);
 }
 
 /* Returns the playlist index of the saved track, or -1 if the state file
