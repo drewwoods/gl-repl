@@ -84,7 +84,7 @@ static const char *backdrop_mode_names[] = { "Off", "Cityscape" };
 #define AUDIO_CFG_ONCE  1
 #define AUDIO_CFG_SONG  2
 #define AUDIO_CFG_ALL   3
-static int g_audio_cfg_mode = AUDIO_CFG_PAUSE;
+static int g_audio_cfg_mode = AUDIO_CFG_ALL;
 static const char *audio_cfg_names[] = { "Pause", "Once", "Song", "All" };
 
 /* Browser autoplay policy: the Web Audio context stays suspended until
@@ -1041,6 +1041,10 @@ void keyboard_func(unsigned char key, int x, int y) {
     if (key == 27) {
         if (g_show_config) {
             g_show_config = 0;
+            return;
+        }
+        if (ui_panels_handle_escape()) {
+            glutPostRedisplay();
             return;
         }
         if (g_show_help) {
@@ -2136,7 +2140,7 @@ static void cfg_cycle_row(int row, int delta) {
 
 static void mouse_func(int button, int state, int x, int y) {
     if (state == GLUT_UP) {
-        handle_code_panel_release();
+        ui_panels_handle_mouse_release();
         if (g_drag_var >= 0) {
             g_drag_var = -1;
             glutPostRedisplay();
@@ -2180,7 +2184,9 @@ static void mouse_func(int button, int state, int x, int y) {
          * below the panel in vertical layout).  Handle it before the
          * panel-area gate so clicks on any part of the dropdown register. */
         if (example_dropdown_is_open()) {
-            handle_code_panel_press(x, y);
+            int panel_actions = handle_code_panel_press(x, y);
+            if (panel_actions & UI_PANEL_PRESS_OPENED_COLOR_PICKER)
+                push_undo_snapshot();
             glutPostRedisplay();
             return;
         }
@@ -2193,7 +2199,9 @@ static void mouse_func(int button, int state, int x, int y) {
                 return;
             }
             if (y < panel_h_px) {
-                handle_code_panel_press(x, y);
+                int panel_actions = handle_code_panel_press(x, y);
+                if (panel_actions & UI_PANEL_PRESS_OPENED_COLOR_PICKER)
+                    push_undo_snapshot();
                 glutPostRedisplay();
                 return;
             }
@@ -2205,10 +2213,17 @@ static void mouse_func(int button, int state, int x, int y) {
                 return;
             }
             if (x < panel_w) {
-                handle_code_panel_press(x, y);
+                int panel_actions = handle_code_panel_press(x, y);
+                if (panel_actions & UI_PANEL_PRESS_OPENED_COLOR_PICKER)
+                    push_undo_snapshot();
                 glutPostRedisplay();
                 return;
             }
+        }
+        /* Scene-area click: let the color picker intercept before camera. */
+        if (ui_panels_handle_scene_press(x, y)) {
+            glutPostRedisplay();
+            return;
         }
     }
 
@@ -2319,6 +2334,12 @@ static void passive_motion_func(int x, int y) {
 }
 
 static void motion_func(int x, int y) {
+    if (ui_panels_handle_motion(x, y)) {
+        g_mouse_x = x;  g_mouse_y = y;
+        glutPostRedisplay();
+        return;
+    }
+
     int dx = x - g_mouse_x;
     int dy = y - g_mouse_y;
 
