@@ -42,6 +42,17 @@
 #define GRID_THEME_COUNT  10
 #define AXES_THEME_COUNT  6
 
+/* Default values for runtime-configurable state.
+ * Used at both the variable definition site and in repl_reset_state() so the
+ * two cannot drift.  Add a new entry here whenever a global's default appears
+ * in more than one place. */
+#define CFG_DEFAULT_MULTISAMPLE       1
+#define CFG_DEFAULT_LINE_SMOOTH       0
+#define CFG_DEFAULT_ATTENUATE_POINTS  1
+#define CFG_DEFAULT_WRAP_AT_COMMA     1
+#define CFG_DEFAULT_LAYOUT_VERTICAL   0
+#define CFG_DEFAULT_PANEL_FRAC        0.42f
+
 /* Grid major tick spacing. Values live in g_grid_major_steps[] and
  * must match this enum order. */
 typedef enum {

@@ -48,7 +48,7 @@ static float g_vel_zoom = 0.0f;
 #define CAM_DECAY_ZOOM 0.65f
 #define CAM_MOMENTUM_THRESHOLD 1.0f
 
-float g_panel_frac = 0.42f;
+float g_panel_frac = CFG_DEFAULT_PANEL_FRAC;
 int   g_resizing_panel = 0;
 int   g_scroll = 0;
 int   g_scroll_follow_cursor = 0;
