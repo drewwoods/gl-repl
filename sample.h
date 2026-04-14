@@ -443,6 +443,7 @@ static inline void clear_autocomplete_state(void) {
 /* Config items */
 extern CfgItem g_cfg_items[];
 extern const int CFG_ITEM_COUNT;
+void repl_editor_apply_defaults(void);
 
 /* ========================================================================= */
 /* Shared utility functions                                                   */

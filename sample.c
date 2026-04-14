@@ -174,6 +174,7 @@ int main(int argc, char **argv) {
         }
         atexit(repl_audio_shutdown);
     }
+    repl_editor_apply_defaults();
 
     glutDisplayFunc(display_func);
     glutReshapeFunc(reshape_func);
