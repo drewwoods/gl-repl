@@ -1616,9 +1616,7 @@ static void render_active_input_rows(int panel_w, int text_x, int idx_x,
 #define CP_GAP        6   /* gap between elements */
 #define CP_PREV_H    16   /* preview strip height */
 #define SWATCH_W     12   /* inline swatch width in code panel */
-/* Max V (brightness) allowed when editing a glClearColor command.
- * Since max(r,g,b) == V in HSV, capping V caps all channels. */
-#define CP_CLEAR_MAX_V  0.15f
+/* CP_CLEAR_MAX_V is defined in sample.h */
 
 /* g_cp_line >= 0: picker is open for that cmd index */
 static int   g_cp_line     = -1;
@@ -1686,9 +1684,15 @@ static void color_picker_write_cmd(void) {
                      "%sgluColor(%g, %g, %g, %g);",
                      indent_prefix, r, g, b, g_cp_alpha);
         } else if (cmd_type == CMD_CLEAR_COLOR) {
+            float cr=r<CP_CLEAR_MAX_V?r:CP_CLEAR_MAX_V;
+            float cg=g<CP_CLEAR_MAX_V?g:CP_CLEAR_MAX_V;
+            float cb=b<CP_CLEAR_MAX_V?b:CP_CLEAR_MAX_V;
+            g_cmds[g_cp_line].args[0]=cr;
+            g_cmds[g_cp_line].args[1]=cg;
+            g_cmds[g_cp_line].args[2]=cb;
             snprintf(g_cmds[g_cp_line].source, sizeof(g_cmds[g_cp_line].source),
                      "%sglClearColor(%g, %g, %g, %g);",
-                     indent_prefix, r, g, b, g_cp_alpha);
+                     indent_prefix, cr, cg, cb, g_cp_alpha);
         } else {
             snprintf(g_cmds[g_cp_line].source, sizeof(g_cmds[g_cp_line].source),
                      "%sglColor4f(%g, %g, %g, %g);",
@@ -1721,6 +1725,8 @@ static void color_picker_open(int cmd_idx, int my) {
                   g_cmds[cmd_idx].args[1],
                   g_cmds[cmd_idx].args[2],
                   &g_cp_hue, &g_cp_sat, &g_cp_val);
+    if (g_cmds[cmd_idx].type == CMD_CLEAR_COLOR &&
+        g_cp_val > CP_CLEAR_MAX_V) g_cp_val = CP_CLEAR_MAX_V;
     /* Position to the right of the panel, near the click y */
     int pw = CP_SV_SZ + CP_GAP + CP_HUE_W
            + (g_cp_has_alpha ? CP_GAP + CP_ALPHA_W : 0) + CP_GAP;
@@ -1878,6 +1884,9 @@ static int color_picker_press(int mx, int my) {
         g_cp_val = (float)(gl_y-g_cp_sv_y)/(float)g_cp_sv_sz;
         if (g_cp_sat<0)g_cp_sat=0; if (g_cp_sat>1)g_cp_sat=1;
         if (g_cp_val<0)g_cp_val=0; if (g_cp_val>1)g_cp_val=1;
+        if (g_cp_line>=0 && g_cp_line<g_num_cmds &&
+            g_cmds[g_cp_line].type==CMD_CLEAR_COLOR &&
+            g_cp_val>CP_CLEAR_MAX_V) g_cp_val=CP_CLEAR_MAX_V;
         color_picker_write_cmd(); return 1;
     }
     /* Hue bar */
@@ -1911,6 +1920,9 @@ static int color_picker_motion(int mx, int my) {
         g_cp_val = (float)(gl_y-g_cp_sv_y)/(float)g_cp_sv_sz;
         if (g_cp_sat<0)g_cp_sat=0; if (g_cp_sat>1)g_cp_sat=1;
         if (g_cp_val<0)g_cp_val=0; if (g_cp_val>1)g_cp_val=1;
+        if (g_cp_line>=0 && g_cp_line<g_num_cmds &&
+            g_cmds[g_cp_line].type==CMD_CLEAR_COLOR &&
+            g_cp_val>CP_CLEAR_MAX_V) g_cp_val=CP_CLEAR_MAX_V;
     } else if (g_cp_drag == 2) {
         g_cp_hue = 1.0f-(float)(gl_y-g_cp_hue_y)/(float)g_cp_hue_h;
         if (g_cp_hue<0)g_cp_hue=0; if (g_cp_hue>=1)g_cp_hue=0.999f;

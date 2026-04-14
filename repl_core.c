@@ -1629,6 +1629,25 @@ static int parse_command_internal(const char *line, GLCmd *cmd,
                              def->fmt, cmd->args[0], cmd->args[1], cmd->args[2], cmd->args[3], cmd->args[4], cmd->args[5]);
                     break;
                 }
+                /* glClearColor: clamp each RGB channel and rebuild source */
+                if (def->type == CMD_CLEAR_COLOR) {
+                    int clamped = 0;
+                    for (int ci = 0; ci < 3; ci++) {
+                        if (cmd->args[ci] > CP_CLEAR_MAX_V) {
+                            cmd->args[ci] = CP_CLEAR_MAX_V;
+                            clamped = 1;
+                        }
+                    }
+                    if (clamped) {
+                        snprintf(cmd->source, sizeof(cmd->source), "%s", ind);
+                        size_t cl = strlen(cmd->source);
+                        snprintf(cmd->source + cl, sizeof(cmd->source) - cl,
+                                 def->fmt, cmd->args[0], cmd->args[1],
+                                 cmd->args[2], cmd->args[3]);
+                        if (!cmd->has_vars)
+                            set_status("glClearColor: channels clamped to 0.15 max");
+                    }
+                }
                 return 1;
             }
             set_status(def->usage);
