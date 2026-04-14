@@ -3985,6 +3985,16 @@ int repl_parse_command_with_vars(const char *line, GLCmd *cmd,
     return parse_command_with_vars(line, cmd, vars, num_vars);
 }
 
+void repl_copy_replay_baseline_predef_values(float *dst, int max_vals) {
+    int n;
+
+    if (!dst || max_vals <= 0)
+        return;
+
+    n = max_vals < MAX_PREDEF_VARS ? max_vals : MAX_PREDEF_VARS;
+    memcpy(dst, g_replay_baseline_predef_vals, (size_t)n * sizeof(float));
+}
+
 int repl_load_from_file(const char *filename) {
     return load_from_file(filename);
 }
