@@ -371,6 +371,9 @@ extern int    g_drag_start_x;
 extern int    g_show_config;
 extern int    g_config_hover;
 
+/* CPU profile panel */
+extern int    g_show_profile_panel;
+
 /* GLU quadric & tessellator */
 extern GLUquadric    *g_quadric;
 extern GLUtesselator *g_tess;

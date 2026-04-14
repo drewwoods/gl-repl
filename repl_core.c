@@ -87,6 +87,7 @@
 #include "repl_examples.h"
 #include "scene_render.h"
 #include "ui_panels.h"
+#include "profile_panel.h"
 
 /* ========================================================================= */
 /* Constants                                                                  */
@@ -860,6 +861,7 @@ int repl_parse_and_normalize(const char *line, int pos,
 }
 
 void repl_reformat_commands(void) {
+    prof_begin(PROF_REFORMAT);
     int saved_edit_line = g_edit_line;
     int saved_inserting = g_inserting;
     char saved_input[MAX_INPUT_LEN];
@@ -1032,6 +1034,7 @@ void repl_reformat_commands(void) {
     } else {
         load_line_to_input(g_edit_line);
     }
+    prof_end(PROF_REFORMAT);
 }
 
 /* ========================================================================= */
@@ -3564,13 +3567,18 @@ static void display_func(void) {
     int saved_flat_count;
     float live_predef_vals[MAX_PREDEF_VARS] = { 0 };
 
+    prof_frame_tick();
+    prof_begin(PROF_FRAME_TOTAL);
+
     if (g_normals_dirty) {
         recompute_autonormals();
         g_normals_dirty = 0;
     }
     if (g_flat_dirty) {
+        prof_begin(PROF_FLATTEN);
         flatten_commands();
         g_flat_dirty = 0;
+        prof_end(PROF_FLATTEN);
     }
 
     saved_flat_count = g_num_flat_cmds;
@@ -3594,6 +3602,7 @@ static void display_func(void) {
     glClearColor(0.10f, 0.10f, 0.13f, 1.0f);
 
     /* 3D scene — with optional accumulation-buffer jitter AA */
+    prof_begin(PROF_SCENE_3D);
     if (g_use_accum && g_accum_aa_enabled && g_accum_samples > 1) {
         /* Clear the accumulation buffer once per frame */
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_ACCUM_BUFFER_BIT);
@@ -3616,18 +3625,28 @@ static void display_func(void) {
             restore_predef_values(g_replay_baseline_predef_vals);
         render_3d_scene();
     }
+    prof_end(PROF_SCENE_3D);
 
     /* 2D overlays in full window coords */
     glViewport(0, 0, g_win_w, g_win_h);
+    prof_begin(PROF_CODE_PANEL);
     render_code_panel();
+    prof_end(PROF_CODE_PANEL);
+
+    prof_begin(PROF_UI_PANELS);
     render_autocomplete();
     render_example_dropdown();
     render_var_panel();
     render_config_menu();
     render_help();
+    prof_end(PROF_UI_PANELS);
+
+    render_profile_panel();
 
     g_num_flat_cmds = saved_flat_count;
     restore_predef_values(live_predef_vals);
+
+    prof_end(PROF_FRAME_TOTAL);
 
     glutSwapBuffers();
 }
