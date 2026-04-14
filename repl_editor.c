@@ -83,7 +83,7 @@ static const char *replay_mode_names[] = { "Polygon", "Vertex" };
 #define AUDIO_CFG_ONCE 1
 #define AUDIO_CFG_SONG 2
 #define AUDIO_CFG_ALL  3
-static int g_audio_cfg_mode = AUDIO_CFG_ALL;
+static int g_audio_cfg_mode = AUDIO_CFG_MUTE;
 static const char *audio_cfg_names[] = { "Mute", "Once", "Song", "All" };
 
 /* Browser autoplay policy: the Web Audio context stays suspended until
@@ -2613,4 +2613,13 @@ void repl_timer_func(int value) {
 
 void repl_feed_line_public(const char *line) {
     feed_line(line);
+}
+
+/* Apply side effects for all cfg items whose defaults need honouring at
+ * startup.  Call this once after every subsystem (audio, GL, etc.) has
+ * finished initialising so the initial values of g_cfg_items entries take
+ * effect immediately.  Add a new branch here whenever a CfgItem is added
+ * whose backing variable alone is not enough to drive the desired state. */
+void repl_editor_apply_defaults(void) {
+    apply_audio_cfg_mode(g_audio_cfg_mode);
 }
