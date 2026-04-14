@@ -79,6 +79,7 @@ static void color_for_type(CmdType t) {
     case CMD_LIGHT_MODEL_I: glColor3f(0.80f, 0.70f, 0.95f); break; /* lavender */
     case CMD_COLOR3F:
     case CMD_COLOR4F:  glColor3f(0.95f, 0.85f, 0.30f); break;
+    case CMD_CLEAR_COLOR: glColor3f(0.50f, 0.85f, 0.95f); break; /* sky blue */
     case CMD_FOR_BEGIN:
     case CMD_FOR_END:  glColor3f(0.95f, 0.60f, 0.30f); break;
     case CMD_FUNC_DEF:
@@ -818,6 +819,7 @@ static const char *eval_fmt_for_type(CmdType type, int *nargs_out) {
     case CMD_NORMAL3F:         *nargs_out = 3; return "glNormal3f(%g, %g, %g);";
     case CMD_COLOR3F:          *nargs_out = 3; return "glColor3f(%g, %g, %g);";
     case CMD_COLOR4F:          *nargs_out = 4; return "glColor4f(%g, %g, %g, %g);";
+    case CMD_CLEAR_COLOR:      *nargs_out = 4; return "glClearColor(%g, %g, %g, %g);";
     case CMD_TRANSLATE3F:      *nargs_out = 3; return "glTranslatef(%g, %g, %g);";
     case CMD_SCALEF:           *nargs_out = 3; return "glScalef(%g, %g, %g);";
     case CMD_ROTATEF:          *nargs_out = 4; return "glRotatef(%g, %g, %g, %g);";
@@ -1614,6 +1616,9 @@ static void render_active_input_rows(int panel_w, int text_x, int idx_x,
 #define CP_GAP        6   /* gap between elements */
 #define CP_PREV_H    16   /* preview strip height */
 #define SWATCH_W     12   /* inline swatch width in code panel */
+/* Max V (brightness) allowed when editing a glClearColor command.
+ * Since max(r,g,b) == V in HSV, capping V caps all channels. */
+#define CP_CLEAR_MAX_V  0.15f
 
 /* g_cp_line >= 0: picker is open for that cmd index */
 static int   g_cp_line     = -1;
@@ -1680,6 +1685,10 @@ static void color_picker_write_cmd(void) {
             snprintf(g_cmds[g_cp_line].source, sizeof(g_cmds[g_cp_line].source),
                      "%sgluColor(%g, %g, %g, %g);",
                      indent_prefix, r, g, b, g_cp_alpha);
+        } else if (cmd_type == CMD_CLEAR_COLOR) {
+            snprintf(g_cmds[g_cp_line].source, sizeof(g_cmds[g_cp_line].source),
+                     "%sglClearColor(%g, %g, %g, %g);",
+                     indent_prefix, r, g, b, g_cp_alpha);
         } else {
             snprintf(g_cmds[g_cp_line].source, sizeof(g_cmds[g_cp_line].source),
                      "%sglColor4f(%g, %g, %g, %g);",
@@ -1705,7 +1714,8 @@ static void color_picker_open(int cmd_idx, int my) {
     code_panel_rect(&cp_x, NULL, &cp_w, NULL);
     g_cp_line      = cmd_idx;
     g_cp_has_alpha = (g_cmds[cmd_idx].type == CMD_COLOR4F ||
-                      g_cmds[cmd_idx].type == CMD_TESS_COLOR);
+                      g_cmds[cmd_idx].type == CMD_TESS_COLOR ||
+                      g_cmds[cmd_idx].type == CMD_CLEAR_COLOR);
     g_cp_alpha     = g_cp_has_alpha ? g_cmds[cmd_idx].args[3] : 1.0f;
     cp_rgb_to_hsv(g_cmds[cmd_idx].args[0],
                   g_cmds[cmd_idx].args[1],
@@ -1764,6 +1774,20 @@ static void render_color_picker(void) {
     glColor4f(0,0,0,1); glVertex2f(px,    py-sz);
     glEnd();
     glDisable(GL_BLEND);
+    /* glClearColor: shade the V > CP_CLEAR_MAX_V zone to show it's off-limits */
+    if (g_cp_line >= 0 && g_cp_line < g_num_cmds &&
+        g_cmds[g_cp_line].type == CMD_CLEAR_COLOR) {
+        float lim_y = py - (1.0f - CP_CLEAR_MAX_V) * (float)sz;
+        glEnable(GL_BLEND); glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+        glColor4f(0.0f, 0.0f, 0.0f, 0.72f);
+        draw_quad((float)px, lim_y, (float)sz, py - lim_y);
+        glDisable(GL_BLEND);
+        glColor3f(0.85f, 0.85f, 0.50f); glLineWidth(1.5f);
+        glBegin(GL_LINES);
+        glVertex2f((float)px, lim_y); glVertex2f((float)(px+sz), lim_y);
+        glEnd();
+        glLineWidth(1.0f);
+    }
     /* SV cursor */
     float cx=px+g_cp_sat*sz, cy=py-(1.0f-g_cp_val)*sz;
     glColor3f(1,1,1); glLineWidth(1.5f); cp_ring(cx,cy,5.0f,16);
@@ -2281,10 +2305,11 @@ void render_code_panel(void) {
                                 draw_string((float)idx_x, (float)line_y,
                                             idx_s, FONT_MONO);
                             }
-                               /* Color swatch for glColor*/
+                               /* Color swatch for glColor / glClearColor */
                                if ((g_cmds[i].type == CMD_COLOR3F ||
                                    g_cmds[i].type == CMD_COLOR4F ||
-                                   g_cmds[i].type == CMD_TESS_COLOR) &&
+                                   g_cmds[i].type == CMD_TESS_COLOR ||
+                                   g_cmds[i].type == CMD_CLEAR_COLOR) &&
                                 g_cmds[i].valid && !g_cmds[i].has_vars) {
                                 int sw = SWATCH_W;
                                 int sx = cp_x + cp_w - CODE_MARGIN_X - sw - 2;
@@ -2292,7 +2317,8 @@ void render_code_panel(void) {
                                 glEnable(GL_BLEND);
                                 glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
                                   float sa = (g_cmds[i].type == CMD_COLOR4F ||
-                                            g_cmds[i].type == CMD_TESS_COLOR)
+                                            g_cmds[i].type == CMD_TESS_COLOR ||
+                                            g_cmds[i].type == CMD_CLEAR_COLOR)
                                            ? g_cmds[i].args[3] : 1.0f;
                                 glColor4f(g_cmds[i].args[0], g_cmds[i].args[1],
                                           g_cmds[i].args[2], sa);
@@ -3444,7 +3470,8 @@ int handle_code_panel_press(int mx, int my) {
     /* Check for swatch click on a color line */
     if (!on_insert_line && row_offset == 0 && target >= 0 && target < g_num_cmds) {
         CmdType ct = g_cmds[target].type;
-        if ((ct == CMD_COLOR3F || ct == CMD_COLOR4F || ct == CMD_TESS_COLOR) &&
+        if ((ct == CMD_COLOR3F || ct == CMD_COLOR4F || ct == CMD_TESS_COLOR ||
+             ct == CMD_CLEAR_COLOR) &&
             g_cmds[target].valid && !g_cmds[target].has_vars) {
             int cp_x2, cp_w2;
             code_panel_rect(&cp_x2, NULL, &cp_w2, NULL);

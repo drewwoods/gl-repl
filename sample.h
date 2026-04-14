@@ -140,6 +140,7 @@ typedef enum {
     CMD_POINT_SIZE,
     CMD_POINT_PARAMETER_FV,
     CMD_BLEND_FUNC,
+    CMD_CLEAR_COLOR,
     CMD_TYPE_COUNT
 } CmdType;
 
@@ -391,6 +392,9 @@ extern int            g_tess_vert_count;
 
 /* Lights */
 extern SceneLight g_lights[MAX_LIGHTS];
+
+/* Clear color (user-settable via glClearColor command) */
+extern float  g_clear_color[4];
 
 /* Status bar */
 extern char   g_status[256];
