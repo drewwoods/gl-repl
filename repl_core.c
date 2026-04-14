@@ -185,6 +185,7 @@ const FuncCompletion g_func_completions[] = {
     { "glNormal3f(",         "glNormal3f(nx, ny, nz)",                                   3, { "nx", "ny", "nz" } },
     { "glColor3f(",          "glColor3f(r, g, b)",                                       3, { "r", "g", "b" } },
     { "glColor4f(",          "glColor4f(r, g, b, a)",                                    4, { "r", "g", "b", "a" } },
+    { "glClearColor(",       "glClearColor(r, g, b, a)",                                 4, { "r", "g", "b", "a" } },
     { "glBegin(",            "glBegin(mode)",                                            1, { "mode" } },
     { "glEnd()",             "glEnd()",                                                  0, { NULL } },
     { "glEnable(",           "glEnable(cap)",                                            1, { "cap" } },
@@ -522,6 +523,9 @@ SceneLight g_lights[MAX_LIGHTS] = {
       { 0.20f, 0.20f, 0.25f, 1.0f } },
 };
 
+/* Clear color (user-settable via glClearColor command) */
+float  g_clear_color[4] = {0.10f, 0.10f, 0.13f, 1.0f};
+
 /* Status bar */
 char   g_status[256] = "";
 int    g_status_ttl = 0;
@@ -730,7 +734,8 @@ static const char *cmd_type_name(CmdType t) {
         "CMD_MATERIALF",
         "CMD_POINT_SIZE",
         "CMD_POINT_PARAMETER_FV",
-        "CMD_BLEND_FUNC"
+        "CMD_BLEND_FUNC",
+        "CMD_CLEAR_COLOR"
     };
 
     if (t >= 0 && t < CMD_TYPE_COUNT)
@@ -1415,6 +1420,7 @@ static const StdCmdDef g_std_cmds[] = {
     { "glNormal3f",     CMD_NORMAL3F,         3, "glNormal3f(%g, %g, %g);",         "Usage: glNormal3f(nx, ny, nz)", 0 },
     { "glColor3f",      CMD_COLOR3F,          3, "glColor3f(%g, %g, %g);",          "Usage: glColor3f(r, g, b)", 0 },
     { "glColor4f",      CMD_COLOR4F,          4, "glColor4f(%g, %g, %g, %g);",      "Usage: glColor4f(r, g, b, a)", 0 },
+    { "glClearColor",   CMD_CLEAR_COLOR,      4, "glClearColor(%g, %g, %g, %g);",   "Usage: glClearColor(r, g, b, a)", 0 },
     { "glTranslatef",   CMD_TRANSLATE3F,      3, "glTranslatef(%g, %g, %g);",       "Usage: glTranslatef(x, y, z)", 0 },
     { "glScalef",       CMD_SCALEF,           3, "glScalef(%g, %g, %g);",           "Usage: glScalef(x, y, z)", 0 },
     { "glRotatef",      CMD_ROTATEF,          4, "glRotatef(%g, %g, %g, %g);",      "Usage: glRotatef(angle, x, y, z)", 0 },
@@ -3302,6 +3308,13 @@ void execute_commands(void) {
             if (in_begin) { glEnd(); in_begin = 0; }
             apply_state_cmd(&g_flat_cmds[pc], g_execute_alpha_scale);
             break;
+        case CMD_CLEAR_COLOR:
+            if (in_begin) { glEnd(); in_begin = 0; }
+            g_clear_color[0] = g_flat_cmds[pc].args[0];
+            g_clear_color[1] = g_flat_cmds[pc].args[1];
+            g_clear_color[2] = g_flat_cmds[pc].args[2];
+            g_clear_color[3] = g_flat_cmds[pc].args[3];
+            break;
         case CMD_GLU_SPHERE:
             if (in_begin) { glEnd(); in_begin = 0; }
             if (g_quadric)
@@ -3597,9 +3610,21 @@ static void display_func(void) {
     update_render_state_strings();
     update_cam_lines();
 
-    /* Full-window clear */
+    /* Full-window clear — use last glClearColor cmd if present, else default */
     glViewport(0, 0, g_win_w, g_win_h);
-    glClearColor(0.10f, 0.10f, 0.13f, 1.0f);
+    {
+        float cr = 0.10f, cg = 0.10f, cb = 0.13f, ca = 1.0f;
+        for (int _ci = 0; _ci < g_num_flat_cmds; _ci++) {
+            if (g_flat_cmds[_ci].valid &&
+                g_flat_cmds[_ci].type == CMD_CLEAR_COLOR) {
+                cr = g_flat_cmds[_ci].args[0];
+                cg = g_flat_cmds[_ci].args[1];
+                cb = g_flat_cmds[_ci].args[2];
+                ca = g_flat_cmds[_ci].args[3];
+            }
+        }
+        glClearColor(cr, cg, cb, ca);
+    }
 
     /* 3D scene — with optional accumulation-buffer jitter AA */
     prof_begin(PROF_SCENE_3D);
@@ -4113,6 +4138,8 @@ void repl_reset_state(void) {
     g_anim_time = 0.0f;
     g_flat_dirty = 1;
     g_normals_dirty = 1;
+    g_clear_color[0] = 0.10f; g_clear_color[1] = 0.10f;
+    g_clear_color[2] = 0.13f; g_clear_color[3] = 1.0f;
     ensure_t_var_idx_cached();
     if (g_t_var_idx >= 0)
         g_predef_vars[g_t_var_idx].value = 0.0f;
