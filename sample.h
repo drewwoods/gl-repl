@@ -393,6 +393,10 @@ extern int            g_tess_vert_count;
 /* Lights */
 extern SceneLight g_lights[MAX_LIGHTS];
 
+/* Max brightness (V in HSV) allowed for glClearColor channels.
+ * Since max(r,g,b) == V, capping V caps all channels. */
+#define CP_CLEAR_MAX_V  0.1f
+
 /* Clear color (user-settable via glClearColor command) */
 extern float  g_clear_color[4];
 
