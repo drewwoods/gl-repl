@@ -188,7 +188,7 @@ static void format_cmd_source_as_c(char *out, size_t out_sz,
 
 const char *g_footer_pre_init[] = {
     "",
-    "  glPopAttrib();",
+    "  glEnable(GL_COLOR_MATERIAL);",
     "  glutSwapBuffers();",
     "}",
     "",
@@ -1882,7 +1882,6 @@ void save_output(const char *filename) {
     fprintf(f, "\nvoid display() {\n");
     fprintf(f, "  glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);\n");
     fprintf(f, "  glLoadIdentity();\n");
-    fprintf(f, "  glPushAttrib(GL_ALL_ATTRIB_BITS);\n");
     for (int i = 0; i < RENDER_STATE_LINE_COUNT; i++)
         fprintf(f, "%s\n", g_render_state_lines[i]);
     emit_export_cam_lines(f);
