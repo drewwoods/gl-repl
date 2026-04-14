@@ -10,6 +10,10 @@
 #include "profile_panel.h"
 #include "ui_panels.h"
 
+/* Compile-time stringify for embedding macro values in string literals */
+#define _HELP_STR2(x) #x
+#define _HELP_STR(x)  _HELP_STR2(x)
+
 /* ========================================================================= */
 /* Layout geometry helpers                                                    */
 /* ========================================================================= */
@@ -2721,7 +2725,7 @@ void render_help(void) {
         "  }",
         "  Nesting supported up to 4 levels",
         "",
-        "Functions (func0..func9):",
+        "Functions (func0..func9, up to " _HELP_STR(MAX_FUNC_HINT_PARAMS) " params):",
         "  func0(radius, sides) {   \tDefine with parameters",
         "    for(i, 0, sides) {",
         "      glVertex3f(radius*cos(i*TAU/sides), ...)",
@@ -2729,6 +2733,7 @@ void render_help(void) {
         "  }",
         "  func0(1.5, 6)            \tCall with args",
         "  Recursion works with if(...) guard",
+        "  Up to " _HELP_STR(MAX_FUNC_HINT_PARAMS) " parameters per function",
         "",
         "Conditionals:",
         "  if(t > 1) {              \tBody runs when condition is true",

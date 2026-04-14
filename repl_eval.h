@@ -20,7 +20,7 @@
 #endif
 
 #ifndef MAX_EXPR_VARS
-#define MAX_EXPR_VARS 8
+#define MAX_EXPR_VARS 16
 #endif
 
 #ifndef MAX_PREDEF_VARS
