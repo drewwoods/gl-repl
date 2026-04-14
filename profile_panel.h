@@ -13,8 +13,19 @@ typedef enum {
     PROF_SCENE_3D = 0,  /* render_3d_scene() */
     PROF_CODE_PANEL,    /* render_code_panel() */
     PROF_CODE_PANEL_LAYOUT,   /* render_code_panel() layout/precompute */
+    PROF_CODE_PANEL_LAYOUT_GEOM,   /* panel geom + row precompute + line totals */
+    PROF_CODE_PANEL_LAYOUT_GEOM_SETUP,      /* workspace refresh + panel geometry */
+    PROF_CODE_PANEL_LAYOUT_GEOM_PRECOMPUTE, /* wrap/precompute row counts */
+    PROF_CODE_PANEL_LAYOUT_GEOM_TOTALS,     /* total line accumulation pass */
+    PROF_CODE_PANEL_LAYOUT_CURSOR, /* cursor/replay doc-line mapping */
+    PROF_CODE_PANEL_LAYOUT_SCROLL, /* scroll clamping + follow-cursor updates */
     PROF_CODE_PANEL_CHROME,   /* background, border, header/search chrome */
     PROF_CODE_PANEL_LINES,    /* header/body/footer line rendering */
+    PROF_CODE_PANEL_LINES_STATIC,  /* workspace/header static rows */
+    PROF_CODE_PANEL_LINES_BODY,    /* command + insert/newline body rows */
+    PROF_CODE_PANEL_LINES_BODY_CMDS,    /* command loop body */
+    PROF_CODE_PANEL_LINES_BODY_NEWLINE, /* newline slot body */
+    PROF_CODE_PANEL_LINES_FOOTER,  /* footer/static trailing rows */
     PROF_CODE_PANEL_OVERLAYS, /* scroll/status/color-picker overlays */
     PROF_UI_PANELS,     /* autocomplete + dropdown + var + config + help */
     PROF_FLATTEN,       /* flatten_commands() (only when dirty) */

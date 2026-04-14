@@ -1720,6 +1720,8 @@ static int color_picker_close(void) {
 
 void render_code_panel(void) {
     prof_begin(PROF_CODE_PANEL_LAYOUT);
+    prof_begin(PROF_CODE_PANEL_LAYOUT_GEOM);
+    prof_begin(PROF_CODE_PANEL_LAYOUT_GEOM_SETUP);
 
     refresh_workspace_header_lines();
     int cmd_main_rows[MAX_COMMANDS];
@@ -1744,10 +1746,16 @@ void render_code_panel(void) {
         highlight_color_idx  = repl_find_feeding_color_cmd(g_edit_line);
     }
 
+    prof_end(PROF_CODE_PANEL_LAYOUT_GEOM_SETUP);
+    prof_begin(PROF_CODE_PANEL_LAYOUT_GEOM_PRECOMPUTE);
+
     int header_rows = code_panel_header_row_count(panel_w, text_x);
     int footer_rows = code_panel_footer_row_count(panel_w, text_x);
     code_panel_precompute_layout_rows(panel_w, text_x,
                                       cmd_main_rows, replay_extra_rows);
+    prof_end(PROF_CODE_PANEL_LAYOUT_GEOM_PRECOMPUTE);
+    prof_begin(PROF_CODE_PANEL_LAYOUT_GEOM_TOTALS);
+
     int total_lines = header_rows + footer_rows + code_panel_newline_rows(panel_w, text_x);
     for (int i = 0; i < g_num_cmds; i++) {
         if (g_inserting && i == g_edit_line)
@@ -1755,6 +1763,11 @@ void render_code_panel(void) {
         total_lines += cmd_main_rows[i];
         total_lines += replay_extra_rows[i];
     }
+
+    prof_end(PROF_CODE_PANEL_LAYOUT_GEOM_TOTALS);
+
+    prof_end(PROF_CODE_PANEL_LAYOUT_GEOM);
+    prof_begin(PROF_CODE_PANEL_LAYOUT_CURSOR);
 
     int cursor_doc_line = header_rows;
     if (g_inserting) {
@@ -1782,6 +1795,9 @@ void render_code_panel(void) {
             g_input, text_x + code_panel_active_indent_chars() * FONT_W,
             panel_w, g_cursor_pos, NULL, NULL, NULL);
     }
+
+    prof_end(PROF_CODE_PANEL_LAYOUT_CURSOR);
+    prof_begin(PROF_CODE_PANEL_LAYOUT_SCROLL);
 
     int follow_doc_line = cursor_doc_line;
     if (g_replay_active && g_replay_state != REPLAY_OFF &&
@@ -1812,6 +1828,8 @@ void render_code_panel(void) {
         if (g_scroll < 0) g_scroll = 0;
         g_scroll_follow_cursor = 0;
     }
+
+    prof_end(PROF_CODE_PANEL_LAYOUT_SCROLL);
 
     prof_end(PROF_CODE_PANEL_LAYOUT);
     prof_begin(PROF_CODE_PANEL_CHROME);
@@ -1908,6 +1926,7 @@ void render_code_panel(void) {
 
     prof_end(PROF_CODE_PANEL_CHROME);
     prof_begin(PROF_CODE_PANEL_LINES);
+    prof_begin(PROF_CODE_PANEL_LINES_STATIC);
 
     /* Code lines: row 0 = info bar, row 1 = button bar, row 2+ = code */
     int line_y = panel_top - CODE_MARGIN_Y - 3 * LINE_H;
@@ -1960,13 +1979,17 @@ void render_code_panel(void) {
         RENDER_STATIC_LINE(g_header_post[i], glColor3f(0.38f, 0.38f, 0.42f));
     }
 
+    prof_end(PROF_CODE_PANEL_LINES_STATIC);
+    prof_begin(PROF_CODE_PANEL_LINES_BODY);
+    prof_begin(PROF_CODE_PANEL_LINES_BODY_CMDS);
+
     /* Commands + insert line + new-line slot */
     int vnum = 0; /* vertex counter within current glBegin/glEnd block */
     int loop_depth = 0;
     int in_tess_poly = 0;
     int tess_depth = 0;
     int primitive_vnums_exact = 1;
-    for (int i = 0; i <= g_num_cmds; i++) {
+    for (int i = 0; i < g_num_cmds; i++) {
         /* If inserting, render the virtual insert line before command[g_edit_line] */
         if (g_inserting && i == g_edit_line) {
                         render_active_input_rows(panel_w, text_x, idx_x,
@@ -2191,32 +2214,42 @@ void render_code_panel(void) {
                     }
                 }
             }
-        } else {
-            /* i == g_num_cmds: new-line slot */
-            int is_edit_nl = (!g_inserting && g_edit_line == g_num_cmds);
-            if (is_edit_nl) {
-                render_active_input_rows(panel_w, text_x, idx_x,
-                                         visible_lines, file_line,
-                                         code_panel_active_indent_chars(), NULL,
-                                         g_edit_line,
-                                         &cur, &line_y);
-            } else {
-                if (cur >= g_scroll && cur < g_scroll + visible_lines) {
-                    glColor3f(0.30f, 0.30f, 0.38f);
-                    { char ln[16]; snprintf(ln, sizeof(ln), "%3d", file_line);
-                      draw_string(CODE_MARGIN_X, line_y, ln, FONT_MONO); }
-                    glColor3f(0.28f, 0.28f, 0.35f);
-                    { char ind_s[32]; int nc = cmd_indent_chars(g_num_cmds);
-                      if (nc > 31) nc = 31;
-                      memset(ind_s, ' ', nc); ind_s[nc] = '\0';
-                      draw_string((float)text_x, (float)line_y, ind_s, FONT_MONO); }
-                    line_y -= LINE_H;
-                }
-            }
-            file_line++;
-            cur++;
         }
     }
+
+    prof_end(PROF_CODE_PANEL_LINES_BODY_CMDS);
+    prof_begin(PROF_CODE_PANEL_LINES_BODY_NEWLINE);
+
+    /* New-line slot after the last command */
+    {
+        int is_edit_nl = (!g_inserting && g_edit_line == g_num_cmds);
+        if (is_edit_nl) {
+            render_active_input_rows(panel_w, text_x, idx_x,
+                                     visible_lines, file_line,
+                                     code_panel_active_indent_chars(), NULL,
+                                     g_edit_line,
+                                     &cur, &line_y);
+        } else {
+            if (cur >= g_scroll && cur < g_scroll + visible_lines) {
+                glColor3f(0.30f, 0.30f, 0.38f);
+                { char ln[16]; snprintf(ln, sizeof(ln), "%3d", file_line);
+                  draw_string(CODE_MARGIN_X, line_y, ln, FONT_MONO); }
+                glColor3f(0.28f, 0.28f, 0.35f);
+                { char ind_s[32]; int nc = cmd_indent_chars(g_num_cmds);
+                  if (nc > 31) nc = 31;
+                  memset(ind_s, ' ', nc); ind_s[nc] = '\0';
+                  draw_string((float)text_x, (float)line_y, ind_s, FONT_MONO); }
+                line_y -= LINE_H;
+            }
+        }
+        file_line++;
+        cur++;
+    }
+
+    prof_end(PROF_CODE_PANEL_LINES_BODY_NEWLINE);
+
+    prof_end(PROF_CODE_PANEL_LINES_BODY);
+    prof_begin(PROF_CODE_PANEL_LINES_FOOTER);
 
     /* Footer (dimmed) */
     for (int i = 0; g_footer_pre_init[i]; i++) {
@@ -2230,6 +2263,8 @@ void render_code_panel(void) {
     for (int i = 0; g_footer_post_init[i]; i++) {
         RENDER_STATIC_LINE(g_footer_post_init[i], glColor3f(0.38f, 0.38f, 0.42f));
     }
+
+    prof_end(PROF_CODE_PANEL_LINES_FOOTER);
 
     prof_end(PROF_CODE_PANEL_LINES);
     prof_begin(PROF_CODE_PANEL_OVERLAYS);

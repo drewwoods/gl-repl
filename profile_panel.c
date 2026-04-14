@@ -28,12 +28,12 @@
 #define PROF_STALE_FRAMES   180
 
 /* Panel geometry (pixels). */
-#define PROF_PANEL_W        300
+#define PROF_PANEL_W        320
 #define PROF_PANEL_MARGIN    12
 #define PROF_ROW_H           16
 #define PROF_HEADER_H        20
 #define PROF_BOTTOM_PAD      14
-#define PROF_COL_LABEL_W    120
+#define PROF_COL_LABEL_W    150
 #define PROF_COL_LAST_W      72
 
 /* ========================================================================= */
@@ -116,8 +116,19 @@ static const char *section_label(ProfSection s) {
     case PROF_SCENE_3D:    return "Scene 3D";
     case PROF_CODE_PANEL:  return "Code Panel";
     case PROF_CODE_PANEL_LAYOUT:   return "  layout";
+    case PROF_CODE_PANEL_LAYOUT_GEOM:   return "    geom+rows";
+    case PROF_CODE_PANEL_LAYOUT_GEOM_SETUP:      return "      setup";
+    case PROF_CODE_PANEL_LAYOUT_GEOM_PRECOMPUTE: return "      precompute";
+    case PROF_CODE_PANEL_LAYOUT_GEOM_TOTALS:     return "      totals";
+    case PROF_CODE_PANEL_LAYOUT_CURSOR: return "    cursor map";
+    case PROF_CODE_PANEL_LAYOUT_SCROLL: return "    scroll/follow";
     case PROF_CODE_PANEL_CHROME:   return "  chrome";
     case PROF_CODE_PANEL_LINES:    return "  lines";
+    case PROF_CODE_PANEL_LINES_STATIC: return "    static";
+    case PROF_CODE_PANEL_LINES_BODY:   return "    body";
+    case PROF_CODE_PANEL_LINES_BODY_CMDS:    return "      commands";
+    case PROF_CODE_PANEL_LINES_BODY_NEWLINE: return "      newline";
+    case PROF_CODE_PANEL_LINES_FOOTER: return "    footer";
     case PROF_CODE_PANEL_OVERLAYS: return "  overlays";
     case PROF_UI_PANELS:   return "UI Panels";
     case PROF_FLATTEN:     return "Flatten";
@@ -141,8 +152,19 @@ int prof_code_panel_details_enabled(void) {
 
 static int is_code_panel_detail_section(ProfSection s) {
     return (s == PROF_CODE_PANEL_LAYOUT ||
+            s == PROF_CODE_PANEL_LAYOUT_GEOM ||
+            s == PROF_CODE_PANEL_LAYOUT_GEOM_SETUP ||
+            s == PROF_CODE_PANEL_LAYOUT_GEOM_PRECOMPUTE ||
+            s == PROF_CODE_PANEL_LAYOUT_GEOM_TOTALS ||
+            s == PROF_CODE_PANEL_LAYOUT_CURSOR ||
+            s == PROF_CODE_PANEL_LAYOUT_SCROLL ||
             s == PROF_CODE_PANEL_CHROME ||
             s == PROF_CODE_PANEL_LINES ||
+            s == PROF_CODE_PANEL_LINES_STATIC ||
+            s == PROF_CODE_PANEL_LINES_BODY ||
+            s == PROF_CODE_PANEL_LINES_BODY_CMDS ||
+            s == PROF_CODE_PANEL_LINES_BODY_NEWLINE ||
+            s == PROF_CODE_PANEL_LINES_FOOTER ||
             s == PROF_CODE_PANEL_OVERLAYS);
 }
 
