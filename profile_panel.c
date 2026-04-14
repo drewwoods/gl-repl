@@ -167,13 +167,14 @@ void render_profile_panel(void) {
 
     int tx = px + 8;
     int ty = py + panel_h - PROF_HEADER_H + 2;
+    const char *HINT = "Ctrl+W:hide";
+    const int hint_width = FONT_SMALL_W * (int)strlen(HINT) + 2;
 
     /* Title */
     glColor3f(0.85f, 0.90f, 1.00f);
     draw_string((float)tx, (float)ty, "CPU Profile", FONT_SMALL);
     glColor3f(0.40f, 0.42f, 0.50f);
-    draw_string((float)(px + PROF_PANEL_W - 82), (float)ty,
-                "Ctrl+W:hide", FONT_SMALL);
+    draw_string((float)(px + PROF_PANEL_W - hint_width), (float)ty, HINT, FONT_SMALL);
 
     ty -= PROF_HEADER_H;
 
