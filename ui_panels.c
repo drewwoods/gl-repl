@@ -7,6 +7,7 @@
 #include "sample.h"
 #include "repl_core.h"
 #include "repl_core_internal.h"
+#include "profile_panel.h"
 #include "ui_panels.h"
 
 /* ========================================================================= */
@@ -1718,6 +1719,8 @@ static int color_picker_close(void) {
 }
 
 void render_code_panel(void) {
+    prof_begin(PROF_CODE_PANEL_LAYOUT);
+
     refresh_workspace_header_lines();
     int cmd_main_rows[MAX_COMMANDS];
     int replay_extra_rows[MAX_COMMANDS];
@@ -1810,6 +1813,9 @@ void render_code_panel(void) {
         g_scroll_follow_cursor = 0;
     }
 
+    prof_end(PROF_CODE_PANEL_LAYOUT);
+    prof_begin(PROF_CODE_PANEL_CHROME);
+
     begin_2d();
 
     /* Background */
@@ -1899,6 +1905,9 @@ void render_code_panel(void) {
     }
 
     render_code_panel_search_overlay(cp_x, panel_w, panel_top);
+
+    prof_end(PROF_CODE_PANEL_CHROME);
+    prof_begin(PROF_CODE_PANEL_LINES);
 
     /* Code lines: row 0 = info bar, row 1 = button bar, row 2+ = code */
     int line_y = panel_top - CODE_MARGIN_Y - 3 * LINE_H;
@@ -2222,6 +2231,9 @@ void render_code_panel(void) {
         RENDER_STATIC_LINE(g_footer_post_init[i], glColor3f(0.38f, 0.38f, 0.42f));
     }
 
+    prof_end(PROF_CODE_PANEL_LINES);
+    prof_begin(PROF_CODE_PANEL_OVERLAYS);
+
     #undef RENDER_STATIC_LINE
 
     /* Scroll indicator */
@@ -2254,6 +2266,8 @@ void render_code_panel(void) {
     }
 
     render_color_picker();
+
+    prof_end(PROF_CODE_PANEL_OVERLAYS);
 
     end_2d();
 }
