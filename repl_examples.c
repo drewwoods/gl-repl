@@ -482,7 +482,91 @@ static const char *const g_example_glow_particles[] = {
     NULL
 };
 
-/* Example 13: Stress test — exercises parser, code UI, nested structures,
+/* Example 13: Procedural terrain — rand(x,z) samples heights at each grid vertex,
+ * building GL_QUAD_STRIP rows via nested for-loops. An animated sine ripple
+ * (k = 0.25*sin(t/2 * ...)) is added to alternate columns each frame, giving
+ * the flat random field a rolling wave motion. Lit with GL_LIGHT0 + GL_LIGHT3,
+ * smooth-shaded. */
+
+static const char *const g_example_random_surface[] = {
+  "glEnable(GL_DEPTH_TEST);",
+  "glEnable(GL_LIGHTING);",
+  "glEnable(GL_NORMALIZE);",
+  "glShadeModel(GL_SMOOTH);",
+  "glEnable(GL_LIGHT3);",
+  "// glEnable(GL_LIGHT1)",
+  "glEnable(GL_LIGHT0);",
+  "//glEnable(GL_LINE_SMOOTH)",
+  "// glDisable(GL_LIGHTING)",
+  "glPointSize(4);",
+  "glEnable(GL_BLEND);",
+  "glColor4f(0.176, 0.51392, 0.88, 0.713333);",
+  "n = 10;",
+  "glTranslatef(0, -0.25, 0);",
+  "for (x, -n, n) {",
+  "  glBegin(GL_QUAD_STRIP);",
+  "    for (z, -n, n) {",
+  "      i = rand(x,z);",
+  "      j = rand(x+1,z);",
+  "      k = 0.25 * sinf((100+t/2) * (z/200+4));",
+  "      if(fmodf(x, 2) == 0) {",
+  "        i = i + k;",
+  "        j = j + k;",
+  "      }",
+  "      if(fabsf(fmodf(x,2)) == 1) {",
+  "        j = j + k;",
+  "        i = i +k;",
+  "      }",
+  "      glVertex3f(x, i, z);",
+  "      glVertex3f(x+1, j, z);",
+  "    }",
+  "  glEnd();",
+  "}",
+    NULL
+};
+
+
+/* Example 14: Animated wave surface — y = sin(x*2.5+t)*cos(z*2.5+t*0.7)*0.4
+ * rendered as GL_TRIANGLE_STRIP rows. Normals are the exact analytic partial
+ * derivatives of the wave function (no finite-difference approximation), giving
+ * correct smooth lighting across all four lights. Per-vertex color varies with
+ * position and t for a shifting iridescent look. */
+
+static const char *const g_example_waves[] = {
+    "// Waves: nested for-loops + math",
+    "glEnable(GL_DEPTH_TEST);",
+    "glEnable(GL_LIGHTING);",
+    "glEnable(GL_NORMALIZE);",
+    "glEnable(GL_LIGHT3);",
+    "glEnable(GL_LIGHT2);",
+    "glEnable(GL_LIGHT1);",
+    "glEnable(GL_LIGHT0);",
+    "glShadeModel(GL_SMOOTH);",
+    "n = 24;",
+    "b = 3.0; // breath",
+    "for(i, 0, n) {",
+        "glBegin(GL_TRIANGLE_STRIP);",
+        "for(j, 0, n+1) {",
+            "x = -b/2 + b*j/n;",
+            "z = -b/2 + b*i/n;",
+            "y = sin(x*2.5 + t)*cos(z*2.5 + t*0.7)*0.4;",
+            "a = 1.0/sqrt(1 + 0.4*0.4*6.25*(cos(x*2.5 + t)*cos(x*2.5 + t)*cos(z*2.5 + t*0.7)*cos(z*2.5 + t*0.7) + sin(x*2.5 + t)*sin(x*2.5 + t)*sin(z*2.5 + t*0.7)*sin(z*2.5 + t*0.7)));",
+            "glNormal3f(-0.4*2.5*cos(x*2.5 + t)*cos(z*2.5 + t*0.7)*a, a, 0.4*2.5*sin(x*2.5 + t)*sin(z*2.5 + t*0.7)*a);",
+            "glColor3f(0.35 + 0.35*sin(x + t), 0.5 + 0.3*cos(z + t*0.5), 0.65 + 0.25*sin(x*z + t));",
+            "glVertex3f(x, y, z);",
+            "z = -b/2 + b*(i + 1)/n;",
+            "y = sin(x*2.5 + t)*cos(z*2.5 + t*0.7)*0.4;",
+            "a = 1.0/sqrt(1 + 0.4*0.4*6.25*(cos(x*2.5 + t)*cos(x*2.5 + t)*cos(z*2.5 + t*0.7)*cos(z*2.5 + t*0.7) + sin(x*2.5 + t)*sin(x*2.5 + t)*sin(z*2.5 + t*0.7)*sin(z*2.5 + t*0.7)));",
+            "glNormal3f(-0.4*2.5*cos(x*2.5 + t)*cos(z*2.5 + t*0.7)*a, a, 0.4*2.5*sin(x*2.5 + t)*sin(z*2.5 + t*0.7)*a);",
+            "glColor3f(0.35 + 0.35*sin(x + t), 0.5 + 0.3*cos(z + t*0.5), 0.65 + 0.25*sin(x*z + t));",
+            "glVertex3f(x, y, z);",
+        "}",
+        "glEnd();",
+    "}",
+    NULL
+};
+
+/* Example 15: Stress test — exercises parser, code UI, nested structures,
  * multiple functions, recursion, conditionals, variables, tessellation,
  * GLU primitives, matrix stack, animation, and long line count. */
 static const char *const g_example_stress[] = {
@@ -702,6 +786,8 @@ static const char *const *const g_examples[] = {
     g_example_assign_2d,
     g_example_particles_stateless,
     g_example_glow_particles,
+    g_example_random_surface,
+    g_example_waves,
     g_example_stress,
 };
 
@@ -719,6 +805,8 @@ static const char *const g_example_names[] = {
     "2D assignment sketch (vars only)",
     "Stateless particles (rand seed+iter)",
     "Glow sprites (blend + point attenuation)",
+    "Procedural terrain (rand grid + sin ripple)",
+    "Animated wave surface (analytic normals)",
     "Stress test (all features)",
 };
 
