@@ -718,6 +718,7 @@ static const char *cmd_type_name(CmdType t) {
         "CMD_POP_MATRIX",
         "CMD_COLOR_MATERIAL",
         "CMD_LIGHT_MODEL_I",
+        "CMD_FRONT_FACE",
         "CMD_FOR_BEGIN", "CMD_FOR_END",
         "CMD_FUNC_DEF", "CMD_FUNC_END", "CMD_CALL",
         "CMD_IF_BEGIN", "CMD_IF_END",
