@@ -161,11 +161,16 @@ Replay state and stepping remain in `repl_core.c`, but editor callbacks in
 ### Add a new command
 
 1. Add the `CmdType` in `sample.h`.
-2. Extend parser handling in `repl_core.c`.
-3. Extend execution handling in `repl_core.c`.
-4. Extend flattening if the command affects control flow or local scope.
-5. Extend export/import in `repl_export.c` if the command must round-trip.
-6. Extend autocomplete or editor affordances in `repl_core.c` /
+2. Add the matching name to the `cmd_type_name()` table in `repl_core.c` in
+   the same order as the enum — `repl_debug_dump_editor()` and
+   `repl_debug_dump_flat_commands()` index into it, so a missing or
+   misordered entry silently mislabels every subsequent command in the
+   debug dump (see commit `abccf5c` for `CMD_FRONT_FACE`).
+3. Extend parser handling in `repl_core.c`.
+4. Extend execution handling in `repl_core.c`.
+5. Extend flattening if the command affects control flow or local scope.
+6. Extend export/import in `repl_export.c` if the command must round-trip.
+7. Extend autocomplete or editor affordances in `repl_core.c` /
    `repl_editor.c` if needed.
 
 ### Add a new editor interaction
