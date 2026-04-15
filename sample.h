@@ -374,6 +374,7 @@ extern int    g_replay_total_flat;
 /* Variable slider panel */
 extern int    g_show_var_panel;
 extern int    g_drag_var;
+extern int    g_drag_log_mode;   /* 0=linear (LMB), 1=logarithmic (RMB) */
 extern float  g_drag_start_val;
 extern int    g_drag_start_x;
 

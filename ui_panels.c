@@ -3063,6 +3063,30 @@ void render_help(void) {
 /* Variable slider panel (4.8)                                               */
 /* ========================================================================= */
 
+/* Compute a shared logarithmic display scale from all variable absolute values.
+ * All sliders use the same scale so their handles are normalized relative to
+ * each other (a var at 100 shows near the extreme, one at 0.01 still visible). */
+static float var_panel_log_scale(void) {
+    float max_abs = 0.1f;   /* minimum display range */
+    for (int i = 0; i < g_num_predef_vars; i++) {
+        float av = fabsf(g_predef_vars[i].value);
+        if (av > max_abs) max_abs = av;
+    }
+    return max_abs * 1.25f; /* 25% headroom so handle doesn't hug the edge */
+}
+
+/* Map a value to slider t in [0,1] using a symmetric asinh (log-like) scale.
+ * The "knee" epsilon = 5% of scale is the linear region; beyond that the
+ * response is logarithmic.  Zero always maps to 0.5 (centre). */
+static float val_to_slider_t(float val, float scale) {
+    float eps  = scale * 0.05f;               /* linear knee */
+    float norm = asinhf(scale / eps);          /* ≈ asinh(20) ≈ 4.0 – fixed for scale */
+    float t    = 0.5f + 0.5f * asinhf(val / eps) / norm;
+    if (t < 0.0f) t = 0.0f;
+    if (t > 1.0f) t = 1.0f;
+    return t;
+}
+
 #define VAR_PANEL_W   200
 #define VAR_PANEL_PAD   6
 #define VAR_TITLE_H    20
@@ -3152,7 +3176,9 @@ void render_var_panel(void) {
     int track_x  = px + 88;       /* label + 8-char value */
     int track_w  = pw - 88 - 8;
     int handle_w = 10;
-    float vmin = -5.0f, vmax = 5.0f;
+
+    /* Shared logarithmic scale: all handles normalized relative to each other. */
+    float log_scale = var_panel_log_scale();
 
     int inner_top = py + ph - VAR_PANEL_PAD - VAR_TITLE_H;
 
@@ -3161,9 +3187,12 @@ void render_var_panel(void) {
         int text_y = row_y + 4;
         float val  = g_predef_vars[i].value;
 
-        /* Drag highlight */
+        /* Drag highlight — amber tint for log mode, blue for linear */
         if (g_drag_var == i) {
-            glColor4f(0.20f, 0.20f, 0.40f, 0.60f);
+            if (g_drag_log_mode)
+                glColor4f(0.30f, 0.20f, 0.05f, 0.60f);
+            else
+                glColor4f(0.20f, 0.20f, 0.40f, 0.60f);
             draw_quad((float)(px + 1), (float)row_y,
                       (float)(pw - 2), (float)VAR_ROW_H);
         }
@@ -3183,7 +3212,7 @@ void render_var_panel(void) {
         draw_quad((float)track_x, (float)(row_y + 6),
                   (float)track_w, (float)(VAR_ROW_H - 12));
 
-        /* Centre tick */
+        /* Centre tick (marks zero on the log scale) */
         float cx = (float)track_x + (float)track_w * 0.5f;
         glColor4f(0.35f, 0.35f, 0.50f, 0.70f);
         glBegin(GL_LINES);
@@ -3191,15 +3220,18 @@ void render_var_panel(void) {
         glVertex2f(cx, (float)(row_y + VAR_ROW_H - 5));
         glEnd();
 
-        /* Handle */
-        float t = (val - vmin) / (vmax - vmin);
-        if (t < 0.0f) t = 0.0f;
-        if (t > 1.0f) t = 1.0f;
+        /* Handle — position computed via shared log-normalized scale.
+         * Yellow = linear drag, orange = log drag, blue = idle. */
+        float t  = val_to_slider_t(val, log_scale);
         float hx = (float)track_x + t * (float)(track_w - handle_w);
-        if (g_drag_var == i)
-            glColor4f(1.00f, 0.80f, 0.20f, 0.95f);
-        else
-            glColor4f(0.55f, 0.70f, 1.00f, 0.90f);
+        if (g_drag_var == i) {
+            if (g_drag_log_mode)
+                glColor4f(1.00f, 0.55f, 0.10f, 0.95f);  /* orange: log mode */
+            else
+                glColor4f(1.00f, 0.80f, 0.20f, 0.95f);  /* yellow: linear mode */
+        } else {
+            glColor4f(0.55f, 0.70f, 1.00f, 0.90f);      /* blue: idle */
+        }
         draw_quad(hx, (float)(row_y + 4),
                   (float)handle_w, (float)(VAR_ROW_H - 8));
     }
