@@ -44,7 +44,17 @@
       "Bash(./sample --dump-flat /tmp/output.c)",
       "Bash(./sample --dump-code /tmp/output.c)",
       "Bash(./test_eval_auto)",
-      "Bash(/tmp/dump_ex10)"
+      "Bash(/tmp/dump_ex10)",
+      "Bash(gcov --version)",
+      "Bash(lcov --version)",
+      "Bash(genhtml --version)",
+      "Bash(lcov *)",
+      "Bash(sort -t'|' -k3 -n)",
+      "Bash(awk '/^        0:/{print NR\": \"$0}' repl_core.c.gcov)",
+      "Bash(awk NR<=10{print NR\": \"$0} *)",
+      "Bash(./test_repl_editor)",
+      "Bash(gh pr *)",
+      "Bash(gh api *)"
     ]
   }
 }

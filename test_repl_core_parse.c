@@ -153,6 +153,116 @@ int main(void) {
         ASSERT_TRUE("func call keeps raw expr", strstr(cmd.source, "x + 1") != NULL);
     }
 
+    /* 4-arg commands (glRotatef, gluDisk, glutSolidTorus) — exercise case 4 in fmt switch */
+    {
+        repl_reset_state();
+        GLCmd cmd;
+        memset(&cmd, 0, sizeof(cmd));
+        int ok = repl_parse_command("glRotatef(45, 0, 1, 0)", &cmd);
+        ASSERT_TRUE("glRotatef parse ok", ok == 1);
+        ASSERT_TRUE("glRotatef type", cmd.type == CMD_ROTATEF);
+        ASSERT_TRUE("glRotatef source has 45", strstr(cmd.source, "45") != NULL);
+    }
+
+    {
+        repl_reset_state();
+        GLCmd cmd;
+        memset(&cmd, 0, sizeof(cmd));
+        int ok = repl_parse_command("gluDisk(0.2, 0.5, 16, 2)", &cmd);
+        ASSERT_TRUE("gluDisk parse ok", ok == 1);
+        ASSERT_TRUE("gluDisk type", cmd.type == CMD_GLU_DISK);
+    }
+
+    {
+        repl_reset_state();
+        GLCmd cmd;
+        memset(&cmd, 0, sizeof(cmd));
+        int ok = repl_parse_command("glutSolidTorus(0.1, 0.4, 8, 16)", &cmd);
+        ASSERT_TRUE("glutSolidTorus parse ok", ok == 1);
+        ASSERT_TRUE("glutSolidTorus type", cmd.type == CMD_GLUT_TORUS);
+    }
+
+    /* 5-arg command: gluCylinder — exercise case 5 */
+    {
+        repl_reset_state();
+        GLCmd cmd;
+        memset(&cmd, 0, sizeof(cmd));
+        int ok = repl_parse_command("gluCylinder(0.3, 0.3, 1.0, 12, 4)", &cmd);
+        ASSERT_TRUE("gluCylinder parse ok", ok == 1);
+        ASSERT_TRUE("gluCylinder type", cmd.type == CMD_GLU_CYLINDER);
+        ASSERT_TRUE("gluCylinder source has height", cmd.args[2] == 1.0f);
+    }
+
+    /* 6-arg command: gluPartialDisk — exercise case 6 */
+    {
+        repl_reset_state();
+        GLCmd cmd;
+        memset(&cmd, 0, sizeof(cmd));
+        int ok = repl_parse_command("gluPartialDisk(0.1, 0.5, 16, 2, 0, 180)", &cmd);
+        ASSERT_TRUE("gluPartialDisk parse ok", ok == 1);
+        ASSERT_TRUE("gluPartialDisk type", cmd.type == CMD_GLU_PARTIAL_DISK);
+    }
+
+    /* glMaterialf — scalar and vector (4-value) forms */
+    {
+        repl_reset_state();
+        GLCmd cmd;
+        memset(&cmd, 0, sizeof(cmd));
+        int ok = repl_parse_command("glMaterialf(GL_FRONT, GL_SHININESS, 64)", &cmd);
+        ASSERT_TRUE("glMaterialf scalar parse ok", ok == 1);
+        ASSERT_TRUE("glMaterialf scalar type", cmd.type == CMD_MATERIALF);
+        ASSERT_TRUE("glMaterialf scalar source has SHININESS",
+                    strstr(cmd.source, "GL_SHININESS") != NULL);
+    }
+
+    {
+        repl_reset_state();
+        GLCmd cmd;
+        memset(&cmd, 0, sizeof(cmd));
+        int ok = repl_parse_command("glMaterialf(GL_FRONT, GL_DIFFUSE, 0.8, 0.2, 0.2, 1.0)", &cmd);
+        ASSERT_TRUE("glMaterialf vector parse ok", ok == 1);
+        ASSERT_TRUE("glMaterialf vector type", cmd.type == CMD_MATERIALF);
+        ASSERT_TRUE("glMaterialf vector num_args", cmd.num_args == 5); /* pname + 4 vals */
+    }
+
+    /* glMaterialf — bad face name */
+    {
+        repl_reset_state();
+        GLCmd cmd;
+        memset(&cmd, 0, sizeof(cmd));
+        int ok = repl_parse_command("glMaterialf(FRONT, GL_DIFFUSE, 0.5)", &cmd);
+        ASSERT_TRUE("glMaterialf bad face returns 0", ok == 0);
+    }
+
+    /* glPointParameterfv */
+    {
+        repl_reset_state();
+        GLCmd cmd;
+        memset(&cmd, 0, sizeof(cmd));
+        int ok = repl_parse_command("glPointParameterfv(GL_POINT_DISTANCE_ATTENUATION, 1, 0, 0)", &cmd);
+        ASSERT_TRUE("glPointParameterfv parse ok", ok == 1);
+        ASSERT_TRUE("glPointParameterfv type", cmd.type == CMD_POINT_PARAMETER_FV);
+    }
+
+    /* gluBegin/gluEnd via parse_command */
+    {
+        repl_reset_state();
+        GLCmd cmd;
+        memset(&cmd, 0, sizeof(cmd));
+        int ok = repl_parse_command("gluBegin(GLU_POLYGON)", &cmd);
+        ASSERT_TRUE("gluBegin POLYGON parse ok", ok == 1);
+        ASSERT_TRUE("gluBegin POLYGON type", cmd.type == CMD_TESS_BEGIN_POLYGON);
+    }
+
+    {
+        repl_reset_state();
+        GLCmd cmd;
+        memset(&cmd, 0, sizeof(cmd));
+        int ok = repl_parse_command("gluBegin(GLU_CONTOUR)", &cmd);
+        ASSERT_TRUE("gluBegin CONTOUR parse ok", ok == 1);
+        ASSERT_TRUE("gluBegin CONTOUR type", cmd.type == CMD_TESS_BEGIN_CONTOUR);
+    }
+
     printf("repl_core_parse: %d/%d passed\n", g_pass, g_run);
     return (g_run == g_pass) ? 0 : 1;
 }
