@@ -892,20 +892,77 @@ static void draw_normal_vectors(void) {
 /* Vertex input guides — plane / line / point for partial glVertex3f args     */
 /* ========================================================================= */
 
-/* Draw a semi-transparent plane perpendicular to the X axis at x=v */
+/* Draw a semi-transparent plane perpendicular to the X axis at x=v (red) */
 static void draw_guide_yz_plane(float v, float sz) {
-    glColor4f(0.9f, 0.65f, 0.6f, 0.72f);
+    glColor4f(0.90f, 0.65f, 0.60f, 0.72f);
     glBegin(GL_QUADS);
     glVertex3f(v, -sz, -sz); glVertex3f(v,  sz, -sz);
     glVertex3f(v,  sz,  sz); glVertex3f(v, -sz,  sz);
     glEnd();
-    glColor4f(0.9f, 0.3f, 0.3f, 0.45f);
+    glColor4f(0.90f, 0.30f, 0.30f, 0.45f);
     glBegin(GL_LINE_LOOP);
     glVertex3f(v, -sz, -sz); glVertex3f(v,  sz, -sz);
     glVertex3f(v,  sz,  sz); glVertex3f(v, -sz,  sz);
     glEnd();
 }
 
+/* Draw a semi-transparent plane perpendicular to the Y axis at y=v (green) */
+static void draw_guide_xz_plane(float v, float sz) {
+    glColor4f(0.65f, 0.90f, 0.60f, 0.72f);
+    glBegin(GL_QUADS);
+    glVertex3f(-sz, v, -sz); glVertex3f( sz, v, -sz);
+    glVertex3f( sz, v,  sz); glVertex3f(-sz, v,  sz);
+    glEnd();
+    glColor4f(0.30f, 0.70f, 0.30f, 0.45f);
+    glBegin(GL_LINE_LOOP);
+    glVertex3f(-sz, v, -sz); glVertex3f( sz, v, -sz);
+    glVertex3f( sz, v,  sz); glVertex3f(-sz, v,  sz);
+    glEnd();
+}
+
+/* Draw a semi-transparent plane perpendicular to the Z axis at z=v (blue) */
+static void draw_guide_xy_plane(float v, float sz) {
+    glColor4f(0.60f, 0.65f, 0.90f, 0.72f);
+    glBegin(GL_QUADS);
+    glVertex3f(-sz, -sz, v); glVertex3f( sz, -sz, v);
+    glVertex3f( sz,  sz, v); glVertex3f(-sz,  sz, v);
+    glEnd();
+    glColor4f(0.30f, 0.30f, 0.80f, 0.45f);
+    glBegin(GL_LINE_LOOP);
+    glVertex3f(-sz, -sz, v); glVertex3f( sz, -sz, v);
+    glVertex3f( sz,  sz, v); glVertex3f(-sz,  sz, v);
+    glEnd();
+}
+
+/* Parse up to 3 comma-separated glVertex argument slots, recording which
+ * positions are actually present.  parse_exprs() skips leading commas so
+ * ",1," and "1," look identical to it; this version tracks slot indices.
+ * Empty slots (e.g. x in ",1,") leave filled[i]=0, out[i] unchanged. */
+static int parse_vertex_slots(const char *s, float out[3], int filled[3]) {
+    filled[0] = filled[1] = filled[2] = 0;
+    int n_filled = 0;
+    for (int slot = 0; slot < 3; slot++) {
+        while (*s == ' ' || *s == '\t') s++;
+        const char *start = s;
+        while (*s && *s != ',' && *s != ')') s++;
+        const char *end = s;
+        /* check for non-whitespace content */
+        const char *c = start;
+        while (c < end && (*c == ' ' || *c == '\t')) c++;
+        if (c < end) {
+            ExprCtx ctx = { start, g_predef_vars, g_num_predef_vars };
+            float val = eval_expr(&ctx);
+            if (ctx.p > start) {
+                out[slot] = val;
+                filled[slot] = 1;
+                n_filled++;
+            }
+        }
+        if (*s == ',') s++;
+        else break;
+    }
+    return n_filled;
+}
 
 static void draw_vertex_guides(void) {
     if (!g_show_guides) return;
@@ -918,8 +975,9 @@ static void draw_vertex_guides(void) {
         args_str = g_input + 10;
     if (!args_str) return;
 
-    float vals[3];
-    int n = parse_exprs(args_str, vals, 3, NULL, 0);
+    float vals[3] = {0};
+    int filled[3];
+    int n = parse_vertex_slots(args_str, vals, filled);
     if (n < 1) return;
 
     float sz = 3.0f;  /* half-size of guide geometry */
@@ -929,21 +987,40 @@ static void draw_vertex_guides(void) {
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
     if (n == 1) {
-        /* One value (x) known — draw YZ plane at x=vals[0] */
-        draw_guide_yz_plane(vals[0], sz);
+        /* One axis known — draw the plane perpendicular to that axis */
+        if      (filled[0]) draw_guide_yz_plane(vals[0], sz);  /* x → YZ plane */
+        else if (filled[1]) draw_guide_xz_plane(vals[1], sz);  /* y → XZ plane */
+        else if (filled[2]) draw_guide_xy_plane(vals[2], sz);  /* z → XY plane */
     } else if (n == 2) {
-        /* Two values (x,y) known — draw line parallel to Z at (x,y) */
-        glColor4f(1.0f, 0.8f, 0.2f, 0.9f);
+        /* Two axes known — draw the line parallel to the missing axis */
         glLineWidth(2.0f);
-        glBegin(GL_LINES);
-        glVertex3f(vals[0], vals[1], -sz);
-        glVertex3f(vals[0], vals[1],  sz);
-        glEnd();
+        if (!filled[2]) {
+            /* x,y known → line || Z  (yellow) */
+            glColor4f(1.0f, 0.80f, 0.20f, 0.9f);
+            glBegin(GL_LINES);
+            glVertex3f(vals[0], vals[1], -sz);
+            glVertex3f(vals[0], vals[1],  sz);
+            glEnd();
+        } else if (!filled[1]) {
+            /* x,z known → line || Y  (green) */
+            glColor4f(0.30f, 0.90f, 0.30f, 0.9f);
+            glBegin(GL_LINES);
+            glVertex3f(vals[0], -sz, vals[2]);
+            glVertex3f(vals[0],  sz, vals[2]);
+            glEnd();
+        } else {
+            /* y,z known → line || X  (red) */
+            glColor4f(1.0f, 0.35f, 0.35f, 0.9f);
+            glBegin(GL_LINES);
+            glVertex3f(-sz, vals[1], vals[2]);
+            glVertex3f( sz, vals[1], vals[2]);
+            glEnd();
+        }
         glLineWidth(1.0f);
     } else {
+        /* All three values known — draw a point */
         int depth = glIsEnabled(GL_DEPTH_TEST);
         if (depth) glDisable(GL_DEPTH_TEST);
-        /* All three values known — draw a point */
         glColor4f(1.0f, 0.3f, 0.3f, 0.9f);
         glPointSize(8.0f);
         glBegin(GL_POINTS);
