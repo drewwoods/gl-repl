@@ -74,6 +74,7 @@
  * Command-line flags:
  *   --noaccum      Disable accumulation buffer (enabled by default)
  *   --dump-code    Print loaded editor buffer to stdout at startup
+ *   --dump-flat    Print flattened command stream to stdout at startup
  *
  * Import/Export:
  *   Ctrl+S saves to output.c with snippet markers.
@@ -779,6 +780,28 @@ void repl_debug_dump_editor(FILE *out) {
         fprintf(dst, "%s\n", line);
     }
     fprintf(dst, "=== End REPL Editor Dump ===\n");
+    fflush(dst);
+}
+
+void repl_debug_dump_flat_commands(FILE *out) {
+    FILE *dst = out ? out : stdout;
+
+    if (g_flat_dirty)
+        flatten_commands();
+
+    fprintf(dst, "=== REPL Flattened Commands Dump ===\n");
+    fprintf(dst, "num_flat_cmds=%d\n", g_num_flat_cmds);
+
+    for (int i = 0; i < g_num_flat_cmds; i++) {
+        const GLCmd *cmd = &g_flat_cmds[i];
+        fprintf(dst,
+                "%4d | %-22s | valid=%d has_vars=%d src_idx=%d call_src_idx=%d root_call_src_idx=%d func_scope=0x%08x | %s\n",
+                i, cmd_type_name(cmd->type), cmd->valid, cmd->has_vars,
+                cmd->src_cmd_idx, cmd->call_src_cmd_idx,
+                cmd->root_call_src_cmd_idx, cmd->func_scope_mask,
+                cmd->source);
+    }
+    fprintf(dst, "=== End REPL Flattened Commands Dump ===\n");
     fflush(dst);
 }
 
