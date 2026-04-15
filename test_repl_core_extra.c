@@ -211,17 +211,25 @@ void test_debug_dump_flat_commands() {
      * to /dev/null via dup2 so the test output stays clean. */
     fflush(stdout);
     int saved_stdout = dup(STDOUT_FILENO);
-    int devnull_fd = open("/dev/null", O_WRONLY);
-    if (devnull_fd >= 0) {
-        dup2(devnull_fd, STDOUT_FILENO);
-        close(devnull_fd);
+    int stdout_redirected = 0;
+    if (saved_stdout >= 0) {
+        int devnull_fd = open("/dev/null", O_WRONLY);
+        if (devnull_fd >= 0) {
+            if (dup2(devnull_fd, STDOUT_FILENO) >= 0) {
+                stdout_redirected = 1;
+            }
+            close(devnull_fd);
+        }
     }
     repl_debug_dump_flat_commands(NULL);
     fflush(stdout);
-    if (saved_stdout >= 0) {
-        dup2(saved_stdout, STDOUT_FILENO);
+    if (stdout_redirected) {
+        if (dup2(saved_stdout, STDOUT_FILENO) >= 0) {
+            clearerr(stdout);
+        }
         close(saved_stdout);
-        clearerr(stdout);
+    } else if (saved_stdout >= 0) {
+        close(saved_stdout);
     }
     ASSERT_TRUE("NULL out falls back to stdout", 1);
 
