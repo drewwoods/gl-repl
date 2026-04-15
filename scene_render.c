@@ -64,6 +64,10 @@ static void draw_grid(void) {
 
     switch (g_grid_theme) {
 
+    // TODO: Adjust some of the line colors to better suit black background.
+    // Experiment with using darker lines but with higher alpha to get lines to
+    // work better with both light and dark themes.
+
     case 1: { /* Classic */
         glBegin(GL_LINES);
         for (float v = -extent; v <= extent + 0.01f; v += step) {
