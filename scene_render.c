@@ -71,14 +71,22 @@ static void draw_grid(void) {
     case 1: { /* Classic */
         glBegin(GL_LINES);
         for (float v = -extent; v <= extent + 0.01f; v += step) {
-            int is_origin = (fabsf(v) < 0.01f);
+            if (fabsf(v) < 0.01f) continue;
             int is_major  = grid_is_major_line(v, major, major_tol);
-            float a = is_origin ? 0.45f : (is_major ? 0.22f : 0.08f);
+            float a = is_major ? 0.22f : 0.08f;
             glColor4f(0.50f, 0.50f, 0.60f, a);
             glVertex3f(v, 0, -extent); glVertex3f(v, 0, extent);
             glVertex3f(-extent, 0, v); glVertex3f(extent, 0, v);
         }
         glEnd();
+        /* Origin axes — write to depth buffer */
+        glDepthMask(GL_TRUE);
+        glBegin(GL_LINES);
+        glColor4f(0.50f, 0.50f, 0.60f, 0.45f);
+        glVertex3f(-extent, 0, 0); glVertex3f(extent, 0, 0);
+        glVertex3f(0, 0, -extent); glVertex3f(0, 0, extent);
+        glEnd();
+        glDepthMask(GL_FALSE);
         break;
     }
 
@@ -90,14 +98,22 @@ static void draw_grid(void) {
 
         glBegin(GL_LINES);
         for (float v = -extent; v <= extent + 0.01f; v += step) {
+            if (fabsf(v) < 0.01f) continue;
             int is_major  = grid_is_major_line(v, major, major_tol);
-            int is_origin = (fabsf(v) < 0.01f);
-            float a = is_origin ? 0.55f : (is_major ? 0.25f : 0.10f);
+            float a = is_major ? 0.25f : 0.10f;
             glColor4f(0.45f, 0.50f, 0.65f, a);
             glVertex3f(v, 0, -extent); glVertex3f(v, 0, extent);
             glVertex3f(-extent, 0, v); glVertex3f(extent, 0, v);
         }
         glEnd();
+        /* Origin axes — write to depth buffer (within fog effect) */
+        glDepthMask(GL_TRUE);
+        glBegin(GL_LINES);
+        glColor4f(0.45f, 0.50f, 0.65f, 0.55f);
+        glVertex3f(-extent, 0, 0); glVertex3f(extent, 0, 0);
+        glVertex3f(0, 0, -extent); glVertex3f(0, 0, extent);
+        glEnd();
+        glDepthMask(GL_FALSE);
 
         glDisable(GL_FOG);
         break;
@@ -109,22 +125,21 @@ static void draw_grid(void) {
         glLineWidth(1.0f);
         glBegin(GL_LINES);
         for (float v = -extent; v <= extent + 0.01f; v += step) {
+            if (fabsf(v) < 0.01f) continue;
             float dist = fabsf(v) / extent;
             float fade = (1.0f - dist * dist);
             if (fade < 0.0f) fade = 0.0f;
-            int is_origin = (fabsf(v) < 0.01f);
             int is_major = grid_is_major_line(v, major, major_tol);
-            float base = is_origin ? 0.8f : (is_major ? 0.35f : 0.12f);
+            float base = is_major ? 0.35f : 0.12f;
             float a = base * fade * glow;
-            float r = 0.05f, g = is_origin ? 0.9f : 0.55f, b = 0.95f;
-            glColor4f(r, g, b, a);
-            /* Draw both directions with distance fade per-endpoint */
+            glColor4f(0.05f, 0.55f, 0.95f, a);
             glVertex3f(v, 0, -extent); glVertex3f(v, 0, extent);
             glVertex3f(-extent, 0, v); glVertex3f(extent, 0, v);
         }
         glEnd();
 
-        /* Subtle glow line on axes */
+        /* Origin axes — write to depth buffer; bright glow */
+        glDepthMask(GL_TRUE);
         glLineWidth(2.0f);
         float ga = 0.25f * glow;
         glBegin(GL_LINES);
@@ -133,21 +148,21 @@ static void draw_grid(void) {
         glVertex3f(-extent, 0, 0); glVertex3f(extent, 0, 0);
         glEnd();
         glLineWidth(1.0f);
+        glDepthMask(GL_FALSE);
         break;
     }
 
     case 4: { /* Ember — warm orange/red, pulsing ripple */
         glBegin(GL_LINES);
         for (float v = -extent; v <= extent + 0.01f; v += step) {
+            if (fabsf(v) < 0.01f) continue;
             float dist = fabsf(v) / extent;
-            /* Ripple: wave traveling outward from center */
             float ripple = sinf(dist * 12.0f - g_anim_time * 2.5f);
             ripple = ripple * 0.5f + 0.5f; /* 0..1 */
             float fade = 1.0f - dist;
             if (fade < 0.0f) fade = 0.0f;
-            int is_origin = (fabsf(v) < 0.01f);
             int is_major = grid_is_major_line(v, major, major_tol);
-            float base = is_origin ? 0.7f : (is_major ? 0.30f : 0.10f);
+            float base = is_major ? 0.30f : 0.10f;
             float a = base * fade * (0.6f + ripple * 0.4f);
             float r = 0.95f, g = 0.35f + ripple * 0.25f, b = 0.05f;
             glColor4f(r, g, b, a);
@@ -155,20 +170,41 @@ static void draw_grid(void) {
             glVertex3f(-extent, 0, v); glVertex3f(extent, 0, v);
         }
         glEnd();
+        /* Origin axes — write to depth buffer; colour evaluated at v=0 */
+        {
+            float ripple0 = -sinf(g_anim_time * 2.5f) * 0.5f + 0.5f;
+            float a0 = 0.7f * (0.6f + ripple0 * 0.4f);
+            float r0 = 0.95f, g0 = 0.35f + ripple0 * 0.25f, b0 = 0.05f;
+            glDepthMask(GL_TRUE);
+            glBegin(GL_LINES);
+            glColor4f(r0, g0, b0, a0);
+            glVertex3f(-extent, 0, 0); glVertex3f(extent, 0, 0);
+            glVertex3f(0, 0, -extent); glVertex3f(0, 0, extent);
+            glEnd();
+            glDepthMask(GL_FALSE);
+        }
         break;
     }
 
     case 5: { /* Faint — very subtle reference lines */
         glBegin(GL_LINES);
         for (float v = -extent; v <= extent + 0.01f; v += step) {
-            int is_origin = (fabsf(v) < 0.01f);
+            if (fabsf(v) < 0.01f) continue;
             int is_major = grid_is_major_line(v, major, major_tol);
-            float a = is_origin ? 0.18f : (is_major ? 0.07f : 0.03f);
+            float a = is_major ? 0.07f : 0.03f;
             glColor4f(0.50f, 0.50f, 0.60f, a);
             glVertex3f(v, 0, -extent); glVertex3f(v, 0, extent);
             glVertex3f(-extent, 0, v); glVertex3f(extent, 0, v);
         }
         glEnd();
+        /* Origin axes — write to depth buffer */
+        glDepthMask(GL_TRUE);
+        glBegin(GL_LINES);
+        glColor4f(0.50f, 0.50f, 0.60f, 0.18f);
+        glVertex3f(-extent, 0, 0); glVertex3f(extent, 0, 0);
+        glVertex3f(0, 0, -extent); glVertex3f(0, 0, extent);
+        glEnd();
+        glDepthMask(GL_FALSE);
         break;
     }
 
@@ -202,9 +238,9 @@ static void draw_grid(void) {
 
         glBegin(GL_LINES);
         for (float v = -extent; v <= extent + 0.01f; v += step) {
-            int is_origin = (fabsf(v) < 0.01f);
+            if (fabsf(v) < 0.01f) continue;
             int is_major = grid_is_major_line(v, major, major_tol);
-            float base = is_origin ? 0.40f : (is_major ? 0.18f : 0.06f);
+            float base = is_major ? 0.18f : 0.06f;
 
             /* Vertical line at x=v: fade based on distance from cx */
             float dx = v - cx;
@@ -247,6 +283,14 @@ static void draw_grid(void) {
             glEnd();
             glLineWidth(1.0f);
         }
+        /* Origin axes — write to depth buffer */
+        glDepthMask(GL_TRUE);
+        glBegin(GL_LINES);
+        glColor4f(0.50f, 0.55f, 0.70f, 0.40f);
+        glVertex3f(-extent, 0, 0); glVertex3f(extent, 0, 0);
+        glVertex3f(0, 0, -extent); glVertex3f(0, 0, extent);
+        glEnd();
+        glDepthMask(GL_FALSE);
         break;
     }
 
@@ -273,11 +317,10 @@ static void draw_grid(void) {
         /* Ocean floor grid with animated caustic highlights */
         glBegin(GL_LINES);
         for (float v = -extent; v <= extent + 0.01f; v += step) {
-            int is_origin = (fabsf(v) < 0.01f);
+            if (fabsf(v) < 0.01f) continue;
             int is_major  = grid_is_major_line(v, major, major_tol);
-            float base_a  = is_origin ? 0.95f : (is_major ? 0.55f : 0.28f);
+            float base_a  = is_major ? 0.55f : 0.28f;
 
-            /* Two overlapping sine waves create a caustic shimmer */
             float c1 = sinf(v * 3.0f + g_anim_time * 1.3f);
             float c2 = cosf(v * 2.3f - g_anim_time * 0.9f);
             float caustic = (c1 * c2) * 0.5f + 0.5f;   /* 0..1 */
@@ -291,6 +334,23 @@ static void draw_grid(void) {
             glVertex3f(-extent, 0, v);  glVertex3f(extent, 0, v);
         }
         glEnd();
+        /* Origin axes — write to depth buffer; colour evaluated at v=0 */
+        {
+            float c1_o = sinf(g_anim_time * 1.3f);
+            float c2_o = cosf(-g_anim_time * 0.9f);
+            float caustic_o = (c1_o * c2_o) * 0.5f + 0.5f;
+            float a_o = 0.95f * (0.5f + caustic_o * 0.5f);
+            float r_o = 0.10f + caustic_o * 0.35f;
+            float g_o = 0.35f + caustic_o * 0.60f;
+            float b_o = 0.45f + caustic_o * 0.50f;
+            glDepthMask(GL_TRUE);
+            glBegin(GL_LINES);
+            glColor4f(r_o, g_o, b_o, a_o);
+            glVertex3f(-extent, 0, 0); glVertex3f(extent, 0, 0);
+            glVertex3f(0, 0, -extent); glVertex3f(0, 0, extent);
+            glEnd();
+            glDepthMask(GL_FALSE);
+        }
 
         glDisable(GL_FOG);
 
@@ -356,6 +416,7 @@ static void draw_grid(void) {
         glEnd();
 
         /* Origin axes — bright, wider */
+        glDepthMask(GL_TRUE);
         glLineWidth(2.0f);
         glBegin(GL_LINES);
         /* X axis (z=0, runs along X) */
@@ -366,6 +427,7 @@ static void draw_grid(void) {
         glVertex3f(0, 0, -extent); glVertex3f(0, 0, extent);
         glEnd();
         glLineWidth(1.0f);
+        glDepthMask(GL_FALSE);
 
         /* Ruler tick marks at major-line intervals on both axes */
         float tick = 0.06f;
@@ -405,49 +467,69 @@ static void draw_grid(void) {
         /* --- Floor grid (XZ plane, always present) --- */
         glBegin(GL_LINES);
         for (float v = -extent; v <= extent + 0.01f; v += step) {
-            int is_origin = (fabsf(v) < 0.01f);
+            if (fabsf(v) < 0.01f) continue;
             int is_major  = grid_is_major_line(v, major, major_tol);
-            float a = is_origin ? 0.30f : (is_major ? 0.10f : 0.04f);
+            float a = is_major ? 0.10f : 0.04f;
             glColor4f(0.50f, 0.52f, 0.65f, a);
             glVertex3f(v,       0, -extent); glVertex3f(v,      0, extent);
             glVertex3f(-extent, 0, v);       glVertex3f(extent, 0, v);
         }
         glEnd();
+        /* Floor origin axes — write to depth buffer */
+        glDepthMask(GL_TRUE);
+        glBegin(GL_LINES);
+        glColor4f(0.50f, 0.52f, 0.65f, 0.30f);
+        glVertex3f(-extent, 0, 0); glVertex3f(extent, 0, 0);
+        glVertex3f(0, 0, -extent); glVertex3f(0, 0, extent);
+        glEnd();
+        glDepthMask(GL_FALSE);
 
         /* --- XY plane (z=0): visible when camera looks along Z axis --- */
         if (xy_w > 0.01f) {
             glBegin(GL_LINES);
             for (float v = -extent; v <= extent + 0.01f; v += step) {
-                int is_origin = (fabsf(v) < 0.01f);
+                if (fabsf(v) < 0.01f) continue;
                 int is_major  = grid_is_major_line(v, major, major_tol);
-                float base = is_origin ? 0.42f : (is_major ? 0.14f : 0.05f);
+                float base = is_major ? 0.14f : 0.05f;
                 float a = base * xy_w;
-                /* Lines along X (constant Y = v, at z=0) */
                 glColor4f(0.35f, 0.62f, 0.88f, a);
                 glVertex3f(-extent, v, 0); glVertex3f(extent, v, 0);
-                /* Lines along Y (constant X = v, at z=0) */
                 glColor4f(0.35f, 0.62f, 0.88f, a * 0.75f);
                 glVertex3f(v, -extent, 0); glVertex3f(v, extent, 0);
             }
             glEnd();
+            /* XY plane origin axes — write to depth buffer */
+            glDepthMask(GL_TRUE);
+            glBegin(GL_LINES);
+            glColor4f(0.35f, 0.62f, 0.88f, 0.42f * xy_w);
+            glVertex3f(-extent, 0, 0); glVertex3f(extent, 0, 0);  /* X axis */
+            glVertex3f(0, -extent, 0); glVertex3f(0, extent, 0);  /* Y axis */
+            glEnd();
+            glDepthMask(GL_FALSE);
         }
 
         /* --- ZY plane (x=0): visible when camera looks along X axis --- */
         if (zy_w > 0.01f) {
             glBegin(GL_LINES);
             for (float v = -extent; v <= extent + 0.01f; v += step) {
-                int is_origin = (fabsf(v) < 0.01f);
+                if (fabsf(v) < 0.01f) continue;
                 int is_major  = grid_is_major_line(v, major, major_tol);
-                float base = is_origin ? 0.42f : (is_major ? 0.14f : 0.05f);
+                float base = is_major ? 0.14f : 0.05f;
                 float a = base * zy_w;
-                /* Lines along Z (constant Y = v, at x=0) */
                 glColor4f(0.82f, 0.52f, 0.28f, a);
                 glVertex3f(0, v, -extent); glVertex3f(0, v, extent);
-                /* Lines along Y (constant Z = v, at x=0) */
                 glColor4f(0.82f, 0.52f, 0.28f, a * 0.75f);
                 glVertex3f(0, -extent, v); glVertex3f(0, extent, v);
             }
             glEnd();
+            /* ZY plane origin axes — write to depth buffer */
+            glDepthMask(GL_TRUE);
+            glBegin(GL_LINES);
+            glColor4f(0.82f, 0.52f, 0.28f, 0.42f * zy_w);
+            glVertex3f(0, 0, -extent); glVertex3f(0, 0, extent);  /* Z axis */
+            glVertex3f(0, -extent, 0); glVertex3f(0, extent, 0);  /* Y axis */
+            glEnd();
+            glDepthMask(GL_FALSE);
         }
         break;
     }
