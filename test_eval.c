@@ -276,8 +276,8 @@ static void run_tests(void) {
     g_predef_vars[0].value = 1.5f;  /* x = 1.5 */
     g_predef_vars[1].value = 2.5f;  /* y = 2.5 */
     g_predef_vars[2].value = 3.5f;  /* z = 3.5 */
-    g_predef_vars[6].value = 24.0f; /* n = 24 */
-    g_predef_vars[7].value = 4.0f;  /* t = 4 */
+    g_predef_vars[predef_idx("n")].value = 24.0f; /* n = 24 */
+    g_predef_vars[predef_idx("t")].value = 4.0f;  /* t = 4 */
     ASSERT_FLOAT("x", 1.5f);
     ASSERT_FLOAT("y", 2.5f);
     ASSERT_FLOAT("z", 3.5f);
@@ -302,8 +302,8 @@ static void run_tests(void) {
     g_predef_vars[0].value = 0.0f;
     g_predef_vars[1].value = 0.0f;
     g_predef_vars[2].value = 0.0f;
-    g_predef_vars[6].value = 0.0f;
-    g_predef_vars[7].value = 0.0f;
+    g_predef_vars[predef_idx("n")].value = 0.0f;
+    g_predef_vars[predef_idx("t")].value = 0.0f;
 
     /* ---- parse_exprs ---- */
     printf("parse_exprs:\n");
@@ -408,9 +408,9 @@ static void run_tests(void) {
     ASSERT_FOR("for(i 0 10)", 0, "", 0, 0, 0);  /* missing commas */
 
     /* For with variables */
-    g_predef_vars[6].value = 24.0f; /* n = 24 */
+    g_predef_vars[predef_idx("n")].value = 24.0f; /* n = 24 */
     ASSERT_FOR("for(i, 0, n)", 1, "i", 0.0f, 24.0f, 1.0f);
-    g_predef_vars[6].value = 0.0f;
+    g_predef_vars[predef_idx("n")].value = 0.0f;
     {
         ExprVar vars[2] = { { "radius", 7.5f }, { "stepv", 0.5f } };
         char vn[16];
