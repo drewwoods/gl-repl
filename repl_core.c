@@ -2384,12 +2384,15 @@ static void flatten_range(int start, int end_idx, ExprVar *vars, int nv,
 
             if (vars && nv > 0 &&
                 repl_extract_paren_payload(g_cmds[i].source, cond_text, sizeof(cond_text)) &&
-                input_has_expr_vars(cond_text, vars, nv)) {
+                (input_has_expr_vars(cond_text, vars, nv) ||
+                 input_has_predef_vars(cond_text))) {
                 needs_local_eval = 1;
             }
 
             if (needs_local_eval) {
-                ExprCtx ctx = { cond_text, vars, nv };
+                char repl_cond[MAX_LINE_LEN];
+                c_expr_to_repl(cond_text, repl_cond, sizeof(repl_cond));
+                ExprCtx ctx = { repl_cond, vars, nv };
                 float cond = eval_expr(&ctx);
                 if (cond != 0.0f)
                     flatten_range(i + 1, fe, vars, nv,
@@ -2462,7 +2465,9 @@ static void flatten_range(int start, int end_idx, ExprVar *vars, int nv,
 
             if (repl_extract_assignment_parts(g_cmds[i].source, NULL, 0,
                                               rhs, sizeof(rhs)) && rhs[0]) {
-                ExprCtx ctx = { rhs, vars, nv };
+                char repl_rhs[MAX_LINE_LEN];
+                c_expr_to_repl(rhs, repl_rhs, sizeof(repl_rhs));
+                ExprCtx ctx = { repl_rhs, vars, nv };
                 value = eval_expr(&ctx);
                 if (vars && nv > 0)
                     local_rhs_vars = input_has_expr_vars(rhs, vars, nv);
@@ -3461,7 +3466,9 @@ void execute_commands(void) {
                 if (repl_extract_paren_payload(g_flat_cmds[pc].source,
                                               cond_text, sizeof(cond_text)) &&
                     cond_text[0]) {
-                    ExprCtx ctx = { cond_text, eval_vars, eval_num_vars };
+                    char repl_cond[MAX_LINE_LEN];
+                    c_expr_to_repl(cond_text, repl_cond, sizeof(repl_cond));
+                    ExprCtx ctx = { repl_cond, eval_vars, eval_num_vars };
                     cond = eval_expr(&ctx);
                 }
             }
@@ -3492,7 +3499,9 @@ void execute_commands(void) {
                         eval_vars = g_flat_cmd_local_vars[pc].vars;
                         eval_num_vars = g_flat_cmd_local_vars[pc].num_vars;
                     }
-                    ExprCtx ctx = { rhs, eval_vars, eval_num_vars };
+                    char repl_rhs[MAX_LINE_LEN];
+                    c_expr_to_repl(rhs, repl_rhs, sizeof(repl_rhs));
+                    ExprCtx ctx = { repl_rhs, eval_vars, eval_num_vars };
                     value = eval_expr(&ctx);
                 }
             }

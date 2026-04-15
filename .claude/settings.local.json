@@ -40,7 +40,10 @@
       "Bash(./test_repl_core_examples --dump-index 2)",
       "Bash(sed -n '25,32p' /tmp/ex2_actual.txt)",
       "Bash(./test_repl_core_examples --example-only 2)",
-      "Bash(./test_repl_core_examples 2)"
+      "Bash(./test_repl_core_examples 2)",
+      "Bash(./sample --dump-flat /tmp/output.c)",
+      "Bash(./sample --dump-code /tmp/output.c)",
+      "Bash(./test_eval_auto)"
     ]
   }
 }
