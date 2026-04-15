@@ -1893,12 +1893,37 @@ void keyboard_func(unsigned char key, int x, int y) {
     }
 }
 
+/* Return non-zero if key is a pure modifier key (Shift/Ctrl/Alt/Command/Super).
+ *
+ * Branching behavior here is controlled by which toolkit we are building
+ * against, not by whether we are trying to follow the original GLUT spec.
+ *
+ *   USE_GLUT defined:
+ *     We are building against Apple's GLUT. In this configuration, modifier-only
+ *     presses/releases are kept out of the Special/SpecialUp callback path,
+ *     because Apple's GLUT does not expose those standalone modifier transitions
+ *     as special-key callbacks.
+ *
+ *   USE_GLUT not defined:
+ *     We are building against freeglut. In this configuration, modifier-only
+ *     presses/releases are allowed through the Special/SpecialUp path for
+ *     compatibility with freeglut behavior, where standalone modifiers can be
+ *     reported as GLUT_KEY_SHIFT_*, GLUT_KEY_CTRL_*, GLUT_KEY_ALT_*, and
+ *     GLUT_KEY_SUPER_* events.
+ *
+ * In other words, this helper exists to split Apple GLUT behavior from
+ * freeglut behavior for modifier keys.
+ */
 static int is_modifier_key(int key) {
+#ifdef USE_GLUT
+    return 0;
+#else
     return key == GLUT_KEY_NUM_LOCK ||
            key == GLUT_KEY_SHIFT_L || key == GLUT_KEY_SHIFT_R ||
            key == GLUT_KEY_CTRL_L || key == GLUT_KEY_CTRL_R ||
            key == GLUT_KEY_ALT_L || key == GLUT_KEY_ALT_R ||
            key == GLUT_KEY_SUPER_L || key == GLUT_KEY_SUPER_R;
+#endif
 }
 
 static void special_func(int key, int x, int y) {
