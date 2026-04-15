@@ -24,7 +24,7 @@
 /* Configuration                                                              */
 /* ========================================================================= */
 
-#define MAX_COMMANDS    4096
+#define MAX_COMMANDS    (2*4096)
 #define MAX_LINE_LEN    256
 #define MAX_INPUT_LEN   1024
 #define MAX_AC_MATCHES  10
