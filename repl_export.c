@@ -1047,6 +1047,7 @@ int repl_extract_assignment_parts(const char *src,
     const char *p = src;
     const char *rhs_start;
     const char *rhs_end;
+    const char *comment_start;
     int n = 0;
 
     while (*p && isspace((unsigned char)*p)) p++;
@@ -1071,6 +1072,9 @@ int repl_extract_assignment_parts(const char *src,
 
     rhs_start = p;
     rhs_end = src + strlen(src);
+    comment_start = strstr(rhs_start, "//");
+    if (comment_start && comment_start < rhs_end)
+        rhs_end = comment_start;
     while (rhs_end > rhs_start && isspace((unsigned char)rhs_end[-1])) rhs_end--;
     if (rhs_end > rhs_start && rhs_end[-1] == ';') rhs_end--;
     while (rhs_end > rhs_start && isspace((unsigned char)rhs_end[-1])) rhs_end--;

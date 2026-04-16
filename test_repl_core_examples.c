@@ -2,6 +2,7 @@
 #define _DEFAULT_SOURCE
 
 #include "repl_core_internal.h"
+#include "repl_examples.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -221,6 +222,147 @@ static int compare_exact_text(const char *expected, const char *actual, int *lin
     return 0;
 }
 
+static int is_definition_source_line(const char *line) {
+    char rhs[MAX_LINE_LEN];
+    const char *p = line;
+
+    while (*p && isspace((unsigned char)*p))
+        p++;
+    if (strncmp(p, "float", 5) == 0 &&
+        !isalnum((unsigned char)p[5]) && p[5] != '_')
+        return 1;
+    return repl_extract_assignment_parts(p, NULL, 0, rhs, sizeof(rhs));
+}
+
+static int cmp_string_ptrs(const void *lhs, const void *rhs) {
+    const char *const *left = (const char *const *)lhs;
+    const char *const *right = (const char *const *)rhs;
+    return strcmp(*left, *right);
+}
+
+static char *canonicalize_definition_line(const char *line) {
+    char repl_line[MAX_LINE_LEN];
+    char *comment;
+    char *out;
+
+    c_expr_to_repl(line, repl_line, sizeof(repl_line));
+    trim_in_place(repl_line);
+
+    comment = strstr(repl_line, "//");
+    if (comment) {
+        while (comment > repl_line && isspace((unsigned char)comment[-1]))
+            comment--;
+        *comment = '\0';
+        trim_in_place(repl_line);
+    }
+
+    out = (char *)malloc(strlen(repl_line) + 1);
+    if (!out)
+        return NULL;
+    strcpy(out, repl_line);
+    return out;
+}
+
+static char *join_canonical_definition_lines(char **lines, int count) {
+    size_t total = 1;
+    size_t off = 0;
+    char *buf;
+
+    qsort(lines, (size_t)count, sizeof(*lines), cmp_string_ptrs);
+    for (int i = 0; i < count; i++)
+        total += strlen(lines[i]) + 1;
+
+    buf = (char *)malloc(total);
+    if (!buf)
+        return NULL;
+    buf[0] = '\0';
+
+    for (int i = 0; i < count; i++) {
+        size_t len = strlen(lines[i]);
+        memcpy(buf + off, lines[i], len);
+        off += len;
+        buf[off++] = '\n';
+    }
+    buf[off] = '\0';
+    return buf;
+}
+
+static char *collect_example_definition_lines(int idx) {
+    const char *const *lines = repl_examples_lines(idx);
+    char **canon_lines;
+    int count = 0;
+    char *joined;
+
+    if (!lines)
+        return NULL;
+
+    for (int i = 0; lines[i]; i++) {
+        if (!is_definition_source_line(lines[i]))
+            continue;
+        count++;
+    }
+
+    canon_lines = (char **)malloc((size_t)(count > 0 ? count : 1) * sizeof(*canon_lines));
+    if (!canon_lines)
+        return NULL;
+
+    count = 0;
+    for (int i = 0; lines[i]; i++) {
+        if (!is_definition_source_line(lines[i]))
+            continue;
+        canon_lines[count] = canonicalize_definition_line(lines[i]);
+        if (!canon_lines[count]) {
+            for (int j = 0; j < count; j++)
+                free(canon_lines[j]);
+            free(canon_lines);
+            return NULL;
+        }
+        count++;
+    }
+
+    joined = join_canonical_definition_lines(canon_lines, count);
+    for (int i = 0; i < count; i++)
+        free(canon_lines[i]);
+    free(canon_lines);
+    return joined;
+}
+
+static char *collect_loaded_definition_lines(void) {
+    char **canon_lines;
+    int count = 0;
+    char *joined;
+
+    for (int i = 0; i < g_num_cmds; i++) {
+        if (g_cmds[i].type != CMD_VAR_DECLARE && g_cmds[i].type != CMD_VAR_ASSIGN)
+            continue;
+        count++;
+    }
+
+    canon_lines = (char **)malloc((size_t)(count > 0 ? count : 1) * sizeof(*canon_lines));
+    if (!canon_lines)
+        return NULL;
+
+    count = 0;
+    for (int i = 0; i < g_num_cmds; i++) {
+        if (g_cmds[i].type != CMD_VAR_DECLARE && g_cmds[i].type != CMD_VAR_ASSIGN)
+            continue;
+        canon_lines[count] = canonicalize_definition_line(g_cmds[i].source);
+        if (!canon_lines[count]) {
+            for (int j = 0; j < count; j++)
+                free(canon_lines[j]);
+            free(canon_lines);
+            return NULL;
+        }
+        count++;
+    }
+
+    joined = join_canonical_definition_lines(canon_lines, count);
+    for (int i = 0; i < count; i++)
+        free(canon_lines[i]);
+    free(canon_lines);
+    return joined;
+}
+
 static void load_example_for_test(int idx) {
     repl_reset_state(); declare_test_vars();
     pin_code_panel_state();
@@ -269,6 +411,9 @@ int main(int argc, char **argv) {
         char *actual;
         char *expected;
         char *imported;
+        char *expected_defs;
+        char *loaded_defs;
+        char *imported_defs;
         char export_path[512];
         char reexport_path[512];
         char compile_detail[4096];
@@ -280,6 +425,8 @@ int main(int argc, char **argv) {
         int roundtrip_exact;
         int roundtrip_compiled;
         int original_cmd_count;
+        int defs_exact;
+        int imported_defs_exact;
 
         load_example_for_test(idx);
         name = repl_example_name(idx);
@@ -292,11 +439,33 @@ int main(int argc, char **argv) {
         snprintf(label, sizeof(label), "example %02d has no invalid cmds", idx);
         ASSERT_TRUE(label, examples_have_no_invalid_cmds());
 
+        expected_defs = collect_example_definition_lines(idx);
+        snprintf(label, sizeof(label), "example %02d expected defs alloc", idx);
+        ASSERT_TRUE(label, expected_defs != NULL);
+        loaded_defs = collect_loaded_definition_lines();
+        snprintf(label, sizeof(label), "example %02d loaded defs alloc", idx);
+        ASSERT_TRUE(label, loaded_defs != NULL);
+        defs_exact = 0;
+        if (expected_defs && loaded_defs) {
+            defs_exact = compare_exact_text(expected_defs, loaded_defs, &diff_line);
+            if (!defs_exact) {
+                printf("DETAIL [example %02d definition mismatch] name=%s line=%d\nEXPECTED DEFS:\n%sACTUAL DEFS:\n%s\n",
+                       idx, name, diff_line, expected_defs, loaded_defs);
+            }
+        }
+        snprintf(label, sizeof(label), "example %02d definitions match source arrays", idx);
+        ASSERT_TRUE(label, defs_exact);
+        free(loaded_defs);
+        loaded_defs = NULL;
+
         actual = dump_current_code_panel_text();
         snprintf(label, sizeof(label), "example %02d dump alloc", idx);
         ASSERT_TRUE(label, actual != NULL);
         if (!actual)
+        {
+            free(expected_defs);
             continue;
+        }
 
         fixture_path_for_idx(idx, fixture_path, sizeof(fixture_path));
         log_example_step(idx, name, "fixture", fixture_path);
@@ -339,12 +508,30 @@ int main(int argc, char **argv) {
 
         roundtrip_exact = 0;
         imported = NULL;
+        imported_defs = NULL;
         roundtrip_compiled = 0;
+        imported_defs_exact = 0;
         if (roundtrip_loaded == 1) {
             snprintf(label, sizeof(label), "example %02d import cmd count", idx);
             ASSERT_TRUE(label, g_num_cmds == original_cmd_count);
             snprintf(label, sizeof(label), "example %02d import has no invalid cmds", idx);
             ASSERT_TRUE(label, examples_have_no_invalid_cmds());
+
+            imported_defs = collect_loaded_definition_lines();
+            snprintf(label, sizeof(label), "example %02d imported defs alloc", idx);
+            ASSERT_TRUE(label, imported_defs != NULL);
+            if (expected_defs && imported_defs) {
+                imported_defs_exact = compare_exact_text(expected_defs, imported_defs,
+                                                         &diff_line);
+                if (!imported_defs_exact) {
+                    printf("DETAIL [example %02d definition roundtrip mismatch] name=%s line=%d export=%s\nEXPECTED DEFS:\n%sIMPORTED DEFS:\n%s\n",
+                           idx, name, diff_line, export_path, expected_defs, imported_defs);
+                }
+            }
+            snprintf(label, sizeof(label), "example %02d definitions roundtrip", idx);
+            ASSERT_TRUE(label, imported_defs_exact);
+            free(imported_defs);
+            imported_defs = NULL;
 
             imported = dump_current_code_panel_text();
             snprintf(label, sizeof(label), "example %02d import dump alloc", idx);
@@ -380,6 +567,7 @@ int main(int argc, char **argv) {
 
         remove(export_path);
 
+        free(expected_defs);
         free(expected);
         free(actual);
     }
