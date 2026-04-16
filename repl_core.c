@@ -728,6 +728,7 @@ static const char *cmd_type_name(CmdType t) {
         "CMD_IF_BEGIN", "CMD_IF_END",
         "CMD_COMMENT",
         "CMD_VAR_ASSIGN",
+        "CMD_VAR_DECLARE",
         "CMD_LABEL", "CMD_GOTO",
         "CMD_GLU_SPHERE", "CMD_GLU_CYLINDER", "CMD_GLU_DISK",
         "CMD_GLU_PARTIAL_DISK",
@@ -745,6 +746,8 @@ static const char *cmd_type_name(CmdType t) {
         "CMD_CLEAR_COLOR"
     };
 
+    _Static_assert(sizeof(names) / sizeof(names[0]) == CMD_TYPE_COUNT,
+                    "cmd_type_name table must have exactly CMD_TYPE_COUNT entries");
     if (t >= 0 && t < CMD_TYPE_COUNT)
         return names[t];
     return "CMD_UNKNOWN";
