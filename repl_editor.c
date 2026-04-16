@@ -508,6 +508,31 @@ int try_commit_float_decl(void) {
                 g_edit_line++;
             }
         } else if (fpos < g_num_cmds) {
+            if (g_cmds[fpos].type == CMD_VAR_DECLARE) {
+                for (int d = 0; d < g_cmds[fpos].var_decl_count; d++) {
+                    const char *nm = g_cmds[fpos].var_names[d];
+                    for (int j = 0; j < g_num_cmds; j++) {
+                        if (j == fpos) continue;
+                        if (source_uses_ident(g_cmds[j].source, nm)) {
+                            char buf[128];
+                            snprintf(buf, sizeof(buf),
+                                     "variable '%s' is in use, cannot overwrite", nm);
+                            set_status(buf);
+                            return 1;
+                        }
+                    }
+                }
+                for (int d = 0; d < g_cmds[fpos].var_decl_count; d++) {
+                    const char *nm = g_cmds[fpos].var_names[d];
+                    int slot = find_predef_var_idx(nm);
+                    if (slot < 0) continue;
+                    undeclare_predef_var(nm);
+                    for (int j = 0; j < g_num_cmds; j++) {
+                        if (g_cmds[j].type == CMD_VAR_ASSIGN && g_cmds[j].num_args > slot)
+                            g_cmds[j].num_args--;
+                    }
+                }
+            }
             g_cmds[fpos] = cmd;
             g_edit_line++;
             load_line_to_input(g_edit_line);
@@ -614,6 +639,31 @@ int try_assign_variable(void) {
                     g_edit_line++;
                 }
             } else if (fpos < g_num_cmds) {
+                if (g_cmds[fpos].type == CMD_VAR_DECLARE) {
+                    for (int d = 0; d < g_cmds[fpos].var_decl_count; d++) {
+                        const char *nm = g_cmds[fpos].var_names[d];
+                        for (int j = 0; j < g_num_cmds; j++) {
+                            if (j == fpos) continue;
+                            if (source_uses_ident(g_cmds[j].source, nm)) {
+                                char buf[128];
+                                snprintf(buf, sizeof(buf),
+                                         "variable '%s' is in use, cannot overwrite", nm);
+                                set_status(buf);
+                                return 1;
+                            }
+                        }
+                    }
+                    for (int d = 0; d < g_cmds[fpos].var_decl_count; d++) {
+                        const char *nm = g_cmds[fpos].var_names[d];
+                        int slot = find_predef_var_idx(nm);
+                        if (slot < 0) continue;
+                        undeclare_predef_var(nm);
+                        for (int j = 0; j < g_num_cmds; j++) {
+                            if (g_cmds[j].type == CMD_VAR_ASSIGN && g_cmds[j].num_args > slot)
+                                g_cmds[j].num_args--;
+                        }
+                    }
+                }
                 g_cmds[fpos] = cmd;
                 g_edit_line++;
                 load_line_to_input(g_edit_line);
