@@ -97,6 +97,12 @@ int source_uses_ident(const char *src, const char *name) {
     int nlen = (int)strlen(name);
     const char *s = src;
     while (*s) {
+        if (isdigit((unsigned char)*s) ||
+            (*s == '.' && isdigit((unsigned char)s[1]))) {
+            char *end;
+            (void)strtof(s, &end);
+            if (end != s) { s = end; continue; }
+        }
         if (!isalpha((unsigned char)*s) && *s != '_') { s++; continue; }
         const char *start = s;
         while (*s && (isalnum((unsigned char)*s) || *s == '_')) s++;
@@ -113,6 +119,13 @@ int validate_expression_idents(const char *src, const ExprVar *vars,
     while (*s) {
         /* Stop at inline comments */
         if (s[0] == '/' && s[1] == '/') break;
+        /* Skip numeric literals including scientific notation (e.g. 1e-06) */
+        if (isdigit((unsigned char)*s) ||
+            (*s == '.' && isdigit((unsigned char)s[1]))) {
+            char *end;
+            (void)strtof(s, &end);
+            if (end != s) { s = end; continue; }
+        }
         if (!isalpha((unsigned char)*s) && *s != '_') { s++; continue; }
         const char *start = s;
         while (*s && (isalnum((unsigned char)*s) || *s == '_')) s++;

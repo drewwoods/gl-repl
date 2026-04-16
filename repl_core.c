@@ -996,10 +996,15 @@ void repl_reformat_commands(void) {
                 if (fallback[0]) name = fallback;
             }
             repl_extract_assignment_parts(orig.source, NULL, 0, rhs, sizeof(rhs));
-            if (name && rhs[0])
-                snprintf(fmt.source, sizeof(fmt.source), "%s%s = %s;", ind_s, name, rhs);
-            else if (name)
-                snprintf(fmt.source, sizeof(fmt.source), "%s%s = %g;", ind_s, name, orig.args[0]);
+            {
+                char comment[MAX_LINE_LEN] = "";
+                const char *cp = strstr(orig.source, "//");
+                if (cp) snprintf(comment, sizeof(comment), " %s", cp);
+                if (name && rhs[0])
+                    snprintf(fmt.source, sizeof(fmt.source), "%s%s = %s;%s", ind_s, name, rhs, comment);
+                else if (name)
+                    snprintf(fmt.source, sizeof(fmt.source), "%s%s = %g;%s", ind_s, name, orig.args[0], comment);
+            }
             g_cmds[i] = fmt;
             break;
         }
