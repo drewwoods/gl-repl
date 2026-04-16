@@ -11,6 +11,16 @@
  *   "x = expr;"   -> CMD_VAR_ASSIGN
  *   "funcN()"     -> CMD_CALL
  *   anything else -> parse_command() as a regular GL command
+ *
+ * Predefined examples can optionally reserve their first five lines for a
+ * camera preset:
+ *   "// camera"
+ *   "glTranslatef(0.0f, 0.0f, -dist);"
+ *   "glRotatef(rx, 1.0f, 0.0f, 0.0f);"
+ *   "glRotatef(ry, 0.0f, 1.0f, 0.0f);"
+ *   "glTranslatef(-tx, -ty, -tz);"
+ * Those metadata lines are consumed by the example loader and are not shown
+ * in the code panel.
  */
 
 /* Example 0: Lit cube (default) */
@@ -576,6 +586,11 @@ static const char *const g_example_waves[] = {
  * multiple functions, recursion, conditionals, variables, tessellation,
  * GLU primitives, matrix stack, animation, and long line count. */
 static const char *const g_example_stress[] = {
+    "// camera",
+    "glTranslatef(0.0f, 0.0f, -12.5f);",
+    "glRotatef(27.5f, 1.0f, 0.0f, 0.0f);",
+    "glRotatef(-24.0f, 0.0f, 1.0f, 0.0f);",
+    "glTranslatef(-0.6f, -0.1f, -0.4f);",
     "float n, x, y, z, k;",
     "// ===== Stress-test scene: parser + code UI torture =====",
     "glEnable(GL_DEPTH_TEST);",
