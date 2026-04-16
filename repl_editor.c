@@ -441,10 +441,13 @@ int try_commit_float_decl(void) {
                 set_status("expected expression after '='");
                 return 1;
             }
-            int fpos = g_inserting ? g_edit_line :
-                       (g_edit_line < g_num_cmds ? g_edit_line : g_num_cmds);
+            /* Declarations are placed at the top of non-decl code; visible
+             * scope vars at that position are always empty (decls live at
+             * block depth 0), so the init expression may only reference
+             * already-declared predef vars. */
             ExprVar vis[MAX_EXPR_VARS];
-            int vis_n = collect_visible_vars(fpos, vis, MAX_EXPR_VARS);
+            int vis_n = 0;
+            (void)vis;
             /* Extract the initializer expression up to ',' or ';' or end */
             char init_expr[MAX_LINE_LEN];
             const char *expr_start = p;
@@ -544,9 +547,21 @@ int try_commit_float_decl(void) {
     {
         int fpos = g_inserting ? g_edit_line :
                    (g_edit_line < g_num_cmds ? g_edit_line : g_num_cmds);
-        int ind = 2 + block_depth_at(fpos) * 2;
+
+        /* Declarations live at the top of the code, above any non-decl
+         * commands, so every reference is guaranteed to follow its
+         * declaration. Editing an existing CMD_VAR_DECLARE line keeps
+         * the overwrite-in-place path; everything else inserts at the
+         * first non-decl index. */
+        int overwriting_decl = (!g_inserting && fpos < g_num_cmds &&
+                                g_cmds[fpos].type == CMD_VAR_DECLARE);
+        int decl_pos = 0;
+        while (decl_pos < g_num_cmds &&
+               g_cmds[decl_pos].type == CMD_VAR_DECLARE)
+            decl_pos++;
+
+        int ind = 2;  /* decls always at block depth 0 (top-level) */
         char indent[32];
-        if (ind > (int)sizeof(indent) - 1) ind = (int)sizeof(indent) - 1;
         memset(indent, ' ', (size_t)ind);
         indent[ind] = '\0';
 
@@ -561,8 +576,7 @@ int try_commit_float_decl(void) {
         snprintf(cmd.source + off, sizeof(cmd.source) - off, ";");
 
         /* Check overwrite feasibility BEFORE registering new names */
-        if (!g_inserting && fpos < g_num_cmds &&
-            g_cmds[fpos].type == CMD_VAR_DECLARE) {
+        if (overwriting_decl) {
             for (int d = 0; d < g_cmds[fpos].var_decl_count; d++) {
                 const char *nm = g_cmds[fpos].var_names[d];
                 for (int j = 0; j < g_num_cmds; j++) {
@@ -589,8 +603,7 @@ int try_commit_float_decl(void) {
         }
 
         /* Undeclare old names when overwriting a CMD_VAR_DECLARE */
-        if (!g_inserting && fpos < g_num_cmds &&
-            g_cmds[fpos].type == CMD_VAR_DECLARE) {
+        if (overwriting_decl) {
             for (int d = 0; d < g_cmds[fpos].var_decl_count; d++) {
                 const char *nm = g_cmds[fpos].var_names[d];
                 int slot = find_predef_var_idx(nm);
@@ -603,22 +616,18 @@ int try_commit_float_decl(void) {
             }
         }
 
-        if (g_inserting) {
-            if (g_num_cmds < MAX_COMMANDS) {
-                for (int j = g_num_cmds; j > fpos; j--)
-                    g_cmds[j] = g_cmds[j - 1];
-                g_cmds[fpos] = cmd;
-                g_num_cmds++;
-                g_edit_line++;
-            }
-        } else if (fpos < g_num_cmds) {
+        if (overwriting_decl) {
             g_cmds[fpos] = cmd;
             g_edit_line++;
             load_line_to_input(g_edit_line);
-        } else {
-            if (g_num_cmds < MAX_COMMANDS)
-                g_cmds[g_num_cmds++] = cmd;
-            g_edit_line = g_num_cmds;
+        } else if (g_num_cmds < MAX_COMMANDS) {
+            for (int j = g_num_cmds; j > decl_pos; j--)
+                g_cmds[j] = g_cmds[j - 1];
+            g_cmds[decl_pos] = cmd;
+            g_num_cmds++;
+            if (g_edit_line >= decl_pos) g_edit_line++;
+            if (!g_inserting && g_edit_line < g_num_cmds)
+                load_line_to_input(g_edit_line);
         }
     }
 

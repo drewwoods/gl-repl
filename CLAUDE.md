@@ -204,6 +204,13 @@ and initializers (`float x = 1;`), but there is an open design
 question about simplifying to single-name, no-initializer only.
 
 Key details:
+- **Placement rule:** new `CMD_VAR_DECLARE` lines are inserted at the
+  top of non-decl code (index of first non-`CMD_VAR_DECLARE` cmd),
+  regardless of cursor position. This guarantees every reference
+  follows its declaration (no `n = tmp` before `float tmp`). Editing
+  an existing decl still overwrites in place. Init expressions can
+  therefore only reference already-declared predef vars — no scope
+  locals are visible at block depth 0.
 - `CMD_VAR_DECLARE` is a no-op in `execute_commands()` and
   `flatten_range()` — registration into `g_predef_vars[]` happens at
   commit time via `declare_predef_var()`
