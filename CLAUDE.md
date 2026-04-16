@@ -141,10 +141,28 @@ The core data flow is **source commands → flat commands → GL calls**:
 ### Command Lifecycle
 
 1. **Input** — user types into `g_input[]` (max 1024 chars)
-2. **Commit** — pressing `;` calls `feed_line()` in `repl_editor.c`,
-   which dispatches to `try_commit_*()` handlers for special forms
-   (for-loops, functions, if-blocks, assignments, labels), or
-   `repl_parse_and_normalize()` for GL commands
+2. **Commit** — pressing `;` calls the commit dispatch chain in
+   `keyboard_func()` in `repl_editor.c`. There are TWO distinct paths:
+   - **Interactive `;` key** (`repl_editor.c`, `key == ';'` block):
+     `g_input` does NOT include the `;` — the keystroke triggers the
+     commit but is not appended. Commit handlers must accept input
+     without a trailing `;`.
+   - **`feed_line()`** (`repl_editor.c`): copies the full line
+     (including `;`) into `g_input`, then runs the same dispatch chain.
+     Used by file loading and example loading.
+   - **Enter key** (insert mode): `g_input` may or may not have `;`
+     depending on what the user typed.
+   The dispatch chain calls `try_commit_*()` handlers in order:
+   `try_commit_float_decl` → `try_assign_variable` → `try_commit_close_brace`
+   → `try_commit_for_loop` → `try_commit_func_def` → `try_commit_if_block`
+   → `repl_parse_and_normalize()` (general GL commands).
+   **Ordering matters**: `try_commit_float_decl` MUST run before
+   `try_assign_variable`, otherwise `float x` is misread as an
+   assignment. Each handler returns 1 if it consumed the input
+   (success or error with status message), 0 if it didn't match.
+   If all handlers return 0, `parse_command_internal()` in `repl_core.c`
+   sets `"Unknown cmd."` status (`repl_core.c`, end of
+   `parse_command_internal`).
 3. **Parse** — `parse_command()` in `repl_core.c` matches the line to a
    `CmdType`, evaluates argument expressions via `eval_expr()`, stores
    result in `GLCmd.args[]` and normalized text in `GLCmd.source[]`
@@ -155,6 +173,58 @@ The core data flow is **source commands → flat commands → GL calls**:
 5. **Execute** — `execute_commands()` walks `g_flat_cmds[]` emitting GL
    calls. Re-evaluates expressions with `has_vars` flag each frame
    (for animated `t`, etc.)
+
+### Commit Dispatch Sites
+
+The `try_commit_*` handler chain is duplicated at 5 sites in
+`repl_editor.c`. When adding or reordering handlers, ALL sites must
+be updated consistently:
+1. **`;` key handler** — `key == ';'` block in `keyboard_func()`
+2. **Enter key, insert mode, with visible vars** — `g_inserting` +
+   `dnv > 0` path
+3. **Enter key, insert mode, no visible vars** — `g_inserting` +
+   `dnv == 0` path
+4. **Enter key, overwrite mode** — `!g_inserting` path with the
+   for/func/if special-case checks first
+5. **`feed_line()`** — the programmatic entry point
+
+### Editing Existing Lines
+
+When the user navigates to an existing line, `load_line_to_input()`
+strips the trailing `;` and whitespace from `cmd.source` before
+loading into `g_input`. This means re-committing the line goes
+through the no-semicolon path. Commit handlers that check for `;`
+must also accept end-of-string as a valid terminator.
+
+### Float Variable Declarations (`CMD_VAR_DECLARE`)
+
+`try_commit_float_decl()` in `repl_editor.c` handles `float name;`
+syntax. Current implementation supports multi-name (`float a, b, c;`)
+and initializers (`float x = 1;`), but there is an open design
+question about simplifying to single-name, no-initializer only.
+
+Key details:
+- `CMD_VAR_DECLARE` is a no-op in `execute_commands()` and
+  `flatten_range()` — registration into `g_predef_vars[]` happens at
+  commit time via `declare_predef_var()`
+- `GLCmd` fields: `var_names[MAX_NAMES_PER_DECL][16]`, `var_decl_count`
+- The function has overwrite logic for editing an existing
+  `CMD_VAR_DECLARE` line, but the "already declared" validation
+  currently fires BEFORE the overwrite check — this means editing
+  `float tmp;` back to `float tmp;` (or changing its value) fails
+  with "'tmp' already declared". The fix is to detect same-line
+  overwrites before the duplicate check.
+- `delete_cmd_range()` guards against deleting a declaration whose
+  variable is still referenced elsewhere (uses `source_uses_ident()`)
+- C export writes `// @declare name` markers; import via
+  `import_parse_declare_marker()` in `repl_export.c` reconstructs
+  the `CMD_VAR_DECLARE` commands, bypassing `try_commit_float_decl`
+- `repl_examples.c` has multi-name declarations (e.g. `"float n, x, y, z, j, k;"`)
+  — if simplifying to single-name, these must be split into separate lines
+- Related helpers in `repl_eval.c`: `declare_predef_var()`,
+  `undeclare_predef_var()`, `find_predef_var_idx()`,
+  `is_reserved_ident()`, `source_uses_ident()`,
+  `validate_expression_idents()`
 
 ### Save/Load (output.c)
 
@@ -264,6 +334,7 @@ for(var, start, end[, step]) { body }
 func0..func9[(params)] { body }
 if(expr) { body }
 // comment
+float name[, name2, ...];  (variable declaration)
 var = expr;
 ```
 
@@ -271,4 +342,6 @@ var = expr;
 
 Functions: `sin`, `cos`, `tan`, `sqrt`, `abs`, `pow`, `min`, `max`, `floor`, `ceil`, `fmod`, `rand(seed[, iter])`
 Constants: `PI`, `TAU`
-Variables: `x`, `y`, `z`, `i`, `j`, `k`, `n`, `t`
+Variables: declared via `float name;` — only `t` is predefined (Ctrl+T toggles animation).
+Other names (`x`, `y`, `z`, etc.) must be declared before use.
+`MAX_PREDEF_VARS` = 16 (1 reserved for `t`, 15 user-declarable slots).
