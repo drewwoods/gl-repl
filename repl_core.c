@@ -4089,6 +4089,22 @@ static int try_apply_example_camera_header(const char *const *lines) {
     return 1;
 }
 
+static void reset_example_presentation_defaults(void) {
+    g_wireframe = 0;
+    g_grid_theme = 8;
+    g_grid_major_idx = GRID_MAJOR_1;
+    g_grid_extent_idx = GRID_EXTENT_FAR;
+    g_axes_theme = 0;
+    g_show_vnums = 1;
+    g_show_normals = 0;
+    g_show_outlines = 1;
+    g_show_vpoints = 1;
+    g_show_guides = 1;
+    g_show_lights = 1;
+    g_backdrop_mode = 0;
+    g_cam_rotate = 0;
+}
+
 static int example_cfg_extract_slug(const char *text,
                                     char *slug, int slug_sz) {
     const char *p = text;
@@ -4183,6 +4199,7 @@ static void load_example_lines(const char *const *lines) {
     g_newline_buf[0] = '\0';
     g_newline_len = 0;
     init_predef_vars();
+    reset_example_presentation_defaults();
 
     if (body)
         body += consume_example_cfg_header(body);
