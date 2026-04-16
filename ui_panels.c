@@ -88,7 +88,8 @@ static void color_for_type(CmdType t) {
     case CMD_IF_BEGIN:
     case CMD_IF_END:   glColor3f(0.95f, 0.75f, 0.50f); break;
     case CMD_COMMENT:    glColor3f(0.45f, 0.50f, 0.45f); break;
-    case CMD_VAR_ASSIGN: glColor3f(0.55f, 0.80f, 0.95f); break;
+    case CMD_VAR_ASSIGN:
+    case CMD_VAR_DECLARE: glColor3f(0.55f, 0.80f, 0.95f); break;
     case CMD_LABEL:
     case CMD_GOTO:       glColor3f(0.85f, 0.55f, 0.85f); break;
     case CMD_GLU_SPHERE:

@@ -173,6 +173,25 @@ Replay state and stepping remain in `repl_core.c`, but editor callbacks in
 7. Extend autocomplete or editor affordances in `repl_core.c` /
    `repl_editor.c` if needed.
 
+#### Impact of missing new command in `cmd_type_name()`
+1. Every type name after CMD_VAR_DECLARE in the enum would be shifted by one.
+   The names[] array is positional — indexed by the integer value of CmdType.
+   With the entry missing, CMD_LABEL (enum value 27) would print as
+   "CMD_VAR_DECLARE", CMD_GOTO as "CMD_LABEL", CMD_GLU_SPHERE as "CMD_GOTO",
+   and so on down the line. Debug dumps would show the wrong type for ~18
+   command types.
+2. Out-of-bounds read on the last enum value. The bounds check at
+   repl_core.c:751 is if (t >= 0 && t < CMD_TYPE_COUNT), which allows index
+   CMD_TYPE_COUNT - 1 (i.e. CMD_CLEAR_COLOR). But the array only had
+   CMD_TYPE_COUNT - 1 elements, so that access reads one past the end —
+   undefined behavior, likely garbage or a crash.
+
+No effect on rendering, parsing, or command execution — cmd_type_name is only
+called from repl_debug_dump_editor() and repl_debug_dump_flat_commands(). So
+the REPL would work fine until someone hit Ctrl+D to debug, at which point the
+output would be misleading (wrong names) and potentially crash on the last
+command type.
+
 ### Add a new editor interaction
 
 1. Add state and handlers in `repl_editor.c`.
