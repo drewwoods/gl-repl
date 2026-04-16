@@ -1832,7 +1832,6 @@ void keyboard_func(unsigned char key, int x, int y) {
                 memset(&cmd, 0, sizeof(cmd));
                 if (dnv > 0) {
                     /* float decl must be checked before assignment */
-                    push_undo_snapshot();
                     if (try_commit_float_decl()) {
                         clear_autocomplete_state();
                         return;
@@ -1922,7 +1921,6 @@ void keyboard_func(unsigned char key, int x, int y) {
                 dnv = collect_visible_vars(fpos, dvars, MAX_EXPR_VARS);
                 if (dnv > 0) {
                     /* float decl must be checked before assignment */
-                    push_undo_snapshot();
                     if (try_commit_float_decl()) {
                         g_inserting = 1;
                         g_input[0] = '\0';
@@ -1974,7 +1972,6 @@ void keyboard_func(unsigned char key, int x, int y) {
                     }
                 } else {
                     /* float decl must be checked before assignment */
-                    push_undo_snapshot();
                     if (try_commit_float_decl()) {
                         g_inserting = 1;
                         g_input[0] = '\0';
