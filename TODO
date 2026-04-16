@@ -1,0 +1,40 @@
+TODO:
+   - ability to switch between 2D orth where use glVertex2d
+   - when glEnable(GL_LIGHTING) is commented I expected the lighting to be disabled, since that is the default state. 
+   - address the limitation of only 8 scope visible globals
+
+
+• The limitation was the REPL’s local variable visibility cap, not the names themselves.
+
+  Inside the loop body, the evaluator needs all visible variables:
+
+  i
+  angle
+  ripplephase
+  ripplewidth
+  rippledelta
+  rippleamp
+  samples
+  ringx
+  ringy
+
+  That is 9 visible variables: the loop variable i plus the 8 declared locals. The REPL’s local expression variable buffer is capped at MAX_EXPR_VARS, which appears to be 8 in this code path. When the example
+  was exported to C and imported back, the import/normalization path only preserved the first 8 visible variables, so ringy fell out of scope.
+
+  That made this line fail during import:
+
+  glVertex3f(ringx, ringy, 0);
+
+  The importer could still see ringx, but not ringy, so it warned that it could not parse the line and dropped part of the example. That caused the example round-trip test to fail.
+
+  So the fix was to reduce the number of simultaneously visible variables. I removed angle and samples by inlining their expressions and kept the more meaningful ripple names:
+
+  ripplephase
+  ripplewidth
+  rippledelta
+  rippleamp
+  x
+  y
+
+  Inside the loop that gives 7 visible variables including i, which stays under the cap and round-trips cleanly.
+

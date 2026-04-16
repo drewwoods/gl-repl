@@ -589,7 +589,57 @@ static const char *const g_example_waves[] = {
     NULL
 };
 
-/* Example 15: Stress test — exercises parser, code UI, nested structures,
+/* Example 15: Animated spirograph curve — closed parametric line loop
+ * driven by t, showing dense iteration and trig-heavy vertex generation. */
+static const char *const g_example_spirograph_curve[] = {
+    "// camera",
+    "glTranslatef(0.0f, 0.0f, -7.5f);",
+    "glRotatef(0.0f, 1.0f, 0.0f, 0.0f);",
+    "glRotatef(0.0f, 0.0f, 1.0f, 0.0f);",
+    "glTranslatef(0.0f, -0.5f, 0.0f);",
+    "float dist, n, x, y, ang;",
+    "dist = 1.4;",
+    "n = 400;",
+    "glBegin(GL_LINE_LOOP);",
+    "  for(i, 0, n) {",
+    "    ang = TAU * i/n;",
+    "    x = dist * cos(t*ang) + cos(ang);",
+    "    y = dist * sin(t*ang) + sin(ang);",
+    "    glVertex3f(x, y, 0);",
+    "  }",
+    "glEnd();",
+    NULL
+};
+
+/* Example 16: Traveling ripple ring — circular line loop with a narrow
+ * modulo-selected radial wave, exercising fmod math and conditional edits. */
+static const char *const g_example_traveling_ripple_ring[] = {
+    "// camera",
+    "glTranslatef(0.0f, 0.0f, -7.5f);",
+    "glRotatef(0.0f, 1.0f, 0.0f, 0.0f);",
+    "glRotatef(0.0f, 0.0f, 1.0f, 0.0f);",
+    "glTranslatef(0.0f, -0.5f, 0.0f);",
+    "// Traveling ripple ring: nested for + fmod + conditional deformation",
+    "float ripplephase, ripplewidth, rippledelta, rippleamp, x, y;",
+    "rippleamp = 0.1 * sin(t * TAU);",
+    "ripplephase = fmod(t / 3, TAU);",
+    "ripplewidth = PI / 8;",
+    "glBegin(GL_LINE_LOOP);",
+    "  for(i, 0, 400) {",
+    "    x = cos(TAU * i / 400);",
+    "    y = sin(TAU * i / 400);",
+    "    rippledelta = fmod(TAU * i / 400 - ripplephase + TAU, TAU);",
+    "    if(rippledelta < ripplewidth) {",
+    "      x = x + rippleamp * x * sin(rippledelta * TAU / ripplewidth);",
+    "      y = y + rippleamp * y * sin(rippledelta * TAU / ripplewidth);",
+    "    }",
+    "    glVertex3f(x, y, 0);",
+    "  }",
+    "glEnd();",
+    NULL
+};
+
+/* Example 17: Stress test — exercises parser, code UI, nested structures,
  * multiple functions, recursion, conditionals, variables, tessellation,
  * GLU primitives, matrix stack, animation, and long line count. */
 static const char *const g_example_stress[] = {
@@ -820,6 +870,8 @@ static const char *const *const g_examples[] = {
     g_example_glow_particles,
     g_example_random_surface,
     g_example_waves,
+    g_example_spirograph_curve,
+    g_example_traveling_ripple_ring,
     g_example_stress,
 };
 
@@ -839,6 +891,8 @@ static const char *const g_example_names[] = {
     "Glow sprites (blend + point attenuation)",
     "Procedural terrain (rand grid + sin ripple)",
     "Animated wave surface (analytic normals)",
+    "Animated spirograph curve",
+    "Traveling ripple ring",
     "Stress test (all features)",
 };
 
