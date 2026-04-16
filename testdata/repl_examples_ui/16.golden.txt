@@ -24,14 +24,20 @@ void display() {
   glTranslatef(0.0000f, -0.5000f, 0.0000f);
 --- header_post ---
 --- source ---
-  float dist, n, x, y, ang;
-  dist = 1.4;
-  n = 400;
+  float ripplephase, ripplewidth, rippledelta, rippleamp, x, y;
+  // Traveling ripple ring: nested for + fmod + conditional deformation
+  rippleamp = 0.1 * sin(t * TAU);
+  ripplephase = fmod(t / 3, TAU);
+  ripplewidth = PI / 8;
   glBegin(GL_LINE_LOOP);
-    for(i, 0, n) {
-      ang = TAU * i/n;
-      x = dist * cos(t*ang) + cos(ang);
-      y = dist * sin(t*ang) + sin(ang);
+    for(i, 0, 400) {
+      x = cos(TAU * i / 400);
+      y = sin(TAU * i / 400);
+      rippledelta = fmod(TAU * i / 400 - ripplephase + TAU, TAU);
+      if(rippledelta < ripplewidth) {
+        x = x + rippleamp * x * sin(rippledelta * TAU / ripplewidth);
+        y = y + rippleamp * y * sin(rippledelta * TAU / ripplewidth);
+      }
       glVertex3f(x, y, 0);
     }
   glEnd();
