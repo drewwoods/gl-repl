@@ -130,19 +130,15 @@ int validate_expression_idents(const char *src, const ExprVar *vars,
                 continue;
             }
         }
-        /* Skip numeric literals including scientific notation (e.g. 1e-06) */
-        if (isdigit((unsigned char)*s) ||
-            (*s == '.' && isdigit((unsigned char)s[1]))) {
-            char *end;
-            (void)strtof(s, &end);
-            if (end != s) { s = end; continue; }
-        }
         if (!isalpha((unsigned char)*s) && *s != '_') { s++; continue; }
         const char *start = s;
         while (*s && (isalnum((unsigned char)*s) || *s == '_')) s++;
         int len = (int)(s - start);
         char name[16];
-        if (len >= (int)sizeof(name)) len = (int)sizeof(name) - 1;
+        if (len >= (int)sizeof(name)) {
+            if (err) snprintf(err, errsz, "identifier too long");
+            return 0;
+        }
         memcpy(name, start, len);
         name[len] = '\0';
 

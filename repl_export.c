@@ -1546,8 +1546,14 @@ static int import_parse_declare_marker(const char *line, int *loaded,
         memcpy(name, start, (size_t)len);
         name[len] = '\0';
         /* Declare the var if not yet registered (noop if already there). */
-        if (find_predef_var_idx(name) < 0)
-            declare_predef_var(name, NULL, 0);
+        int var_idx = find_predef_var_idx(name);
+        if (var_idx < 0) {
+            var_idx = declare_predef_var(name, NULL, 0);
+            if (var_idx < 0) {
+                if (warnings) (*warnings)++;
+                continue;
+            }
+        }
         strncpy(cmd.var_names[count], name, 15);
         off += snprintf(cmd.source + off, sizeof(cmd.source) - (size_t)off,
                         count == 0 ? " %.*s" : ", %.*s", len, start);
