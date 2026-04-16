@@ -1372,7 +1372,8 @@ void keyboard_func(unsigned char key, int x, int y) {
 
     if (key == 16) {
         repl_debug_dump_editor(stdout);
-        set_status("Dumped editor code to stdout");
+        repl_debug_dump_flat_commands(stdout);
+        set_status("Dumped editor + flat commands to stdout");
         return;
     }
 
