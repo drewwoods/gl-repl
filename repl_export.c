@@ -237,6 +237,7 @@ const char *g_footer_pre_init[] = {
     "}",
     "",
     "void init() {",
+    "  glLineWidth(1.5f);",
     NULL
 };
 

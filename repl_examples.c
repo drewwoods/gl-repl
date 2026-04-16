@@ -555,6 +555,7 @@ static const char *const g_example_random_surface[] = {
  * position and t for a shifting iridescent look. */
 
 static const char *const g_example_waves[] = {
+    "// @cfg vertex_points = 0",
     "float n, b, x, y, z, a;",
     "// Waves: nested for-loops + math",
     "glEnable(GL_DEPTH_TEST);",
@@ -592,6 +593,8 @@ static const char *const g_example_waves[] = {
 /* Example 15: Animated spirograph curve — closed parametric line loop
  * driven by t, showing dense iteration and trig-heavy vertex generation. */
 static const char *const g_example_spirograph_curve[] = {
+    "// @cfg vertex_outlines = 0",
+    "// @cfg vertex_points = 0",
     "// camera",
     "glTranslatef(0.0f, 0.0f, -7.5f);",
     "glRotatef(0.0f, 1.0f, 0.0f, 0.0f);",
@@ -614,6 +617,8 @@ static const char *const g_example_spirograph_curve[] = {
 /* Example 16: Traveling ripple ring — circular line loop with a narrow
  * modulo-selected radial wave, exercising fmod math and conditional edits. */
 static const char *const g_example_traveling_ripple_ring[] = {
+    "// @cfg vertex_outlines = 0",
+    "// @cfg vertex_points = 0",
     "// camera",
     "glTranslatef(0.0f, 0.0f, -7.5f);",
     "glRotatef(0.0f, 1.0f, 0.0f, 0.0f);",
