@@ -1265,7 +1265,10 @@ int try_commit_close_brace(void) {
             return 0;
         }
 
-        if (g_inserting && pos < g_num_cmds && g_cmds[pos].type == end_type) {
+        /* Reuse an existing synthesized end marker even if we're no longer
+         * in insert mode (e.g. after closing an inner block). Otherwise a
+         * function/if/for close brace can duplicate the trailing end command. */
+        if (pos < g_num_cmds && g_cmds[pos].type == end_type) {
             g_edit_line = pos + 1;
             g_inserting = 0;
             g_input[0] = '\0';

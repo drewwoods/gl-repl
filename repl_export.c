@@ -2138,8 +2138,14 @@ int load_from_file(const char *filename) {
                 continue;
             }
 
-            if (strncmp(p, "// Snippet start", 16) == 0)
+            if (strncmp(p, "// Snippet start", 16) == 0) {
                 in_snippet = 1;
+                /* Function/header import may leave the editor cursor in an
+                 * insertion slot inside existing commands. Force snippet
+                 * lines to start appending from the end of the command list. */
+                g_inserting = 0;
+                g_edit_line = g_num_cmds;
+            }
             continue;
         }
 
