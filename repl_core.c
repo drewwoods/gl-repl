@@ -382,9 +382,9 @@ int    g_t_var_idx = -1;   /* index of "t" in g_predef_vars[], cached at init */
 int    g_show_help    = 0;
 int    g_help_tab     = 0;   /* 0=Commands, 1=Keys */
 int    g_help_scroll  = 0;
-int    g_wireframe    = 0;
+int    g_wireframe    = CFG_DEFAULT_WIREFRAME;
 // TODO: use enum for grid/axes themes
-int    g_grid_theme   = 8;  /* 0=off, 1=classic, 2=fog, 3=tron, 4=ember, 5=faint, 6=focus, 7=ocean, 8=xzruler, 9=planes */
+int    g_grid_theme   = CFG_DEFAULT_GRID_THEME;  /* 0=off, 1=classic, 2=fog, 3=tron, 4=ember, 5=faint, 6=focus, 7=ocean, 8=xzruler, 9=planes */
 const char *g_grid_names[] = {
     "OFF", "Classic", "Fog", "Tron", "Ember",
     "Faint", "Focus", "Ocean", "XZ Ruler", "Adaptive Planes"
@@ -405,7 +405,7 @@ const char *g_grid_major_names[GRID_MAJOR_COUNT] = {
     [GRID_MAJOR_5]  = "5",
     [GRID_MAJOR_10] = "10",
 };
-int g_grid_major_idx = GRID_MAJOR_1;
+int g_grid_major_idx = CFG_DEFAULT_GRID_MAJOR_IDX;
 
 /* Grid half-extent. Close keeps the grid tight around origin (good for
  * small scenes and the Classic theme); Far lets themes like Fog and
@@ -420,23 +420,23 @@ const char *g_grid_extent_names[GRID_EXTENT_COUNT] = {
     [GRID_EXTENT_MID]   = "Mid",
     [GRID_EXTENT_FAR]   = "Far",
 };
-int g_grid_extent_idx = GRID_EXTENT_FAR;  /* matches pre-existing Fog extent */
+int g_grid_extent_idx = CFG_DEFAULT_GRID_EXTENT_IDX;  /* matches pre-existing Fog extent */
 float  g_focus_vtx[3] = { 0.0f, 0.0f, 0.0f };  /* last vertex pos for focus grid */
 int    g_focus_vtx_valid = 0;
-int    g_axes_theme   = 0;  /* 0=off, 1=classic, 2=pulse, 3=neon, 4=compass, 5=gizmo */
+int    g_axes_theme   = CFG_DEFAULT_AXES_THEME;  /* 0=off, 1=classic, 2=pulse, 3=neon, 4=compass, 5=gizmo */
 const char *g_axes_names[] = {
     "OFF", "Classic", "Pulse", "Neon", "Compass", "Gizmo"
 };
-int    g_show_vnums   = 1;
-int    g_show_normals = 0;
+int    g_show_vnums   = CFG_DEFAULT_VERTEX_LABELS;
+int    g_show_normals = CFG_DEFAULT_NORMAL_VECTORS;
 int    g_show_indices = 1;
 int    g_wrap_at_comma = CFG_DEFAULT_WRAP_AT_COMMA;
 int    g_layout_vertical = CFG_DEFAULT_LAYOUT_VERTICAL;  /* 0=left code panel, 1=top code panel */
-int    g_show_guides  = 1;
+int    g_show_guides  = CFG_DEFAULT_VERTEX_GUIDES;
 int    g_autonormal   = 0;
-int    g_show_lights  = 1;
-int    g_backdrop_mode = 0; /* 0=off, 1=cityscape */
-int    g_cam_rotate   = 0;  /* auto-rotate camera around Y */
+int    g_show_lights  = CFG_DEFAULT_LIGHT_INDICATORS;
+int    g_backdrop_mode = CFG_DEFAULT_BACKDROP_MODE; /* 0=off, 1=cityscape */
+int    g_cam_rotate   = CFG_DEFAULT_CAMERA_ROTATE;  /* auto-rotate camera around Y */
 int    g_example_idx  = -1; /* current predefined example (-1 = none loaded yet) */
 char   g_scratch_buf[256];  /* shared scratch space for formatting strings, etc. */
 
@@ -455,8 +455,8 @@ typedef struct {
 static UserScene g_user_scene;
 static int       g_user_scene_valid = 0;
 int    g_user_lighting_enabled = 0; /* tracks if user typed glEnable(GL_LIGHTING) */
-int    g_show_outlines = 1; /* draw black wireframe over filled polygons */
-int    g_show_vpoints  = 1; /* draw black dots at each vertex position */
+int    g_show_outlines = CFG_DEFAULT_VERTEX_OUTLINES; /* draw black wireframe over filled polygons */
+int    g_show_vpoints  = CFG_DEFAULT_VERTEX_POINTS; /* draw black dots at each vertex position */
 int    g_highlight_current_poly = 1; /* highlight glBegin block under cursor */
 int    g_current_block_begin = -1;  /* flat cmd index of cursor's glBegin */
 int    g_current_block_end   = -1;  /* flat cmd index of cursor's glEnd */
@@ -4090,19 +4090,19 @@ static int try_apply_example_camera_header(const char *const *lines) {
 }
 
 static void reset_example_presentation_defaults(void) {
-    g_wireframe = 0;
-    g_grid_theme = 8;
-    g_grid_major_idx = GRID_MAJOR_1;
-    g_grid_extent_idx = GRID_EXTENT_FAR;
-    g_axes_theme = 0;
-    g_show_vnums = 1;
-    g_show_normals = 0;
-    g_show_outlines = 1;
-    g_show_vpoints = 1;
-    g_show_guides = 1;
-    g_show_lights = 1;
-    g_backdrop_mode = 0;
-    g_cam_rotate = 0;
+    g_wireframe = CFG_DEFAULT_WIREFRAME;
+    g_grid_theme = CFG_DEFAULT_GRID_THEME;
+    g_grid_major_idx = CFG_DEFAULT_GRID_MAJOR_IDX;
+    g_grid_extent_idx = CFG_DEFAULT_GRID_EXTENT_IDX;
+    g_axes_theme = CFG_DEFAULT_AXES_THEME;
+    g_show_vnums = CFG_DEFAULT_VERTEX_LABELS;
+    g_show_normals = CFG_DEFAULT_NORMAL_VECTORS;
+    g_show_outlines = CFG_DEFAULT_VERTEX_OUTLINES;
+    g_show_vpoints = CFG_DEFAULT_VERTEX_POINTS;
+    g_show_guides = CFG_DEFAULT_VERTEX_GUIDES;
+    g_show_lights = CFG_DEFAULT_LIGHT_INDICATORS;
+    g_backdrop_mode = CFG_DEFAULT_BACKDROP_MODE;
+    g_cam_rotate = CFG_DEFAULT_CAMERA_ROTATE;
 }
 
 static int example_cfg_extract_slug(const char *text,

@@ -73,6 +73,25 @@ typedef enum {
     GRID_EXTENT_FAR,
     GRID_EXTENT_COUNT
 } GridExtentIdx;
+
+/* Default values for scene-presentation state that examples are allowed to
+ * override via leading metadata. Keep these aligned with the global
+ * definitions in repl_core.c and reuse them from reset helpers/tests to avoid
+ * drift. */
+#define CFG_DEFAULT_WIREFRAME         0
+#define CFG_DEFAULT_GRID_THEME        8
+#define CFG_DEFAULT_GRID_MAJOR_IDX    GRID_MAJOR_1
+#define CFG_DEFAULT_GRID_EXTENT_IDX   GRID_EXTENT_FAR
+#define CFG_DEFAULT_AXES_THEME        0
+#define CFG_DEFAULT_VERTEX_LABELS     1
+#define CFG_DEFAULT_NORMAL_VECTORS    0
+#define CFG_DEFAULT_VERTEX_OUTLINES   1
+#define CFG_DEFAULT_VERTEX_POINTS     1
+#define CFG_DEFAULT_VERTEX_GUIDES     1
+#define CFG_DEFAULT_LIGHT_INDICATORS  1
+#define CFG_DEFAULT_BACKDROP_MODE     0
+#define CFG_DEFAULT_CAMERA_ROTATE     0
+
 #define MAX_LIGHTS        4
 /* Shared by live scene overlays and generated output.c outline passes. */
 #define REPL_OUTLINE_POLYGON_OFFSET_FACTOR (-0.01f)
