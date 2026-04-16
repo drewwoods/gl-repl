@@ -453,6 +453,121 @@ int main() {
         g_show_profile_panel = PROFILE_PANEL_OFF;  /* restore */
     }
 
+    /* ---- Float declaration parsing (regression tests) ---- */
+
+    /* 26. float decl without trailing semicolon (interactive ';' key path) */
+    {
+        repl_reset_state();
+        extern int try_commit_float_decl(void);
+
+        /* Simulate the interactive ';' key handler: g_input has no ';' */
+        strncpy(g_input, "float tmp", MAX_INPUT_LEN - 1);
+        g_input_len = (int)strlen(g_input);
+        g_cursor_pos = g_input_len;
+        g_edit_line = g_num_cmds;
+        g_inserting = 0;
+
+        int result = try_commit_float_decl();
+        ASSERT_INT("float_decl no-semi: accepted", result, 1);
+        ASSERT_INT("float_decl no-semi: cmd added", g_num_cmds, 1);
+        ASSERT_INT("float_decl no-semi: type", g_cmds[0].type, CMD_VAR_DECLARE);
+        ASSERT_INT("float_decl no-semi: var_decl_count", g_cmds[0].var_decl_count, 1);
+        ASSERT_STR("float_decl no-semi: var name", g_cmds[0].var_names[0], "tmp");
+        ASSERT_TRUE("float_decl no-semi: predef registered",
+                     find_predef_var_idx("tmp") >= 0);
+    }
+
+    /* 27. float decl WITH trailing semicolon (feed_line path) */
+    {
+        repl_reset_state();
+        repl_feed_line_public("float abc;");
+        ASSERT_INT("float_decl with-semi: cmd added", g_num_cmds, 1);
+        ASSERT_INT("float_decl with-semi: type", g_cmds[0].type, CMD_VAR_DECLARE);
+        ASSERT_STR("float_decl with-semi: var name", g_cmds[0].var_names[0], "abc");
+        ASSERT_TRUE("float_decl with-semi: predef registered",
+                     find_predef_var_idx("abc") >= 0);
+    }
+
+    /* 28. float decl with initializer, no trailing semicolon */
+    {
+        repl_reset_state();
+        extern int try_commit_float_decl(void);
+
+        strncpy(g_input, "float tmp = 0", MAX_INPUT_LEN - 1);
+        g_input_len = (int)strlen(g_input);
+        g_cursor_pos = g_input_len;
+        g_edit_line = g_num_cmds;
+        g_inserting = 0;
+
+        int result = try_commit_float_decl();
+        ASSERT_INT("float_decl init no-semi: accepted", result, 1);
+        ASSERT_INT("float_decl init no-semi: cmd added", g_num_cmds, 1);
+        ASSERT_INT("float_decl init no-semi: type", g_cmds[0].type, CMD_VAR_DECLARE);
+        ASSERT_STR("float_decl init no-semi: var name", g_cmds[0].var_names[0], "tmp");
+        int idx = find_predef_var_idx("tmp");
+        ASSERT_TRUE("float_decl init no-semi: predef registered", idx >= 0);
+        if (idx >= 0)
+            ASSERT_TRUE("float_decl init no-semi: value is 0",
+                         g_predef_vars[idx].value == 0.0f);
+    }
+
+    /* 29. float decl with initializer expression */
+    {
+        repl_reset_state();
+        repl_feed_line_public("float radius = 2.5;");
+        ASSERT_INT("float_decl init expr: cmd added", g_num_cmds, 1);
+        ASSERT_INT("float_decl init expr: type", g_cmds[0].type, CMD_VAR_DECLARE);
+        ASSERT_STR("float_decl init expr: var name", g_cmds[0].var_names[0], "radius");
+        int idx = find_predef_var_idx("radius");
+        ASSERT_TRUE("float_decl init expr: registered", idx >= 0);
+        if (idx >= 0)
+            ASSERT_TRUE("float_decl init expr: value is 2.5",
+                         g_predef_vars[idx].value == 2.5f);
+    }
+
+    /* 30. multi-name float decl without semicolon */
+    {
+        repl_reset_state();
+        extern int try_commit_float_decl(void);
+
+        strncpy(g_input, "float a, b, c", MAX_INPUT_LEN - 1);
+        g_input_len = (int)strlen(g_input);
+        g_cursor_pos = g_input_len;
+        g_edit_line = g_num_cmds;
+        g_inserting = 0;
+
+        int result = try_commit_float_decl();
+        ASSERT_INT("float_decl multi no-semi: accepted", result, 1);
+        ASSERT_INT("float_decl multi no-semi: cmd added", g_num_cmds, 1);
+        ASSERT_INT("float_decl multi no-semi: var_decl_count",
+                   g_cmds[0].var_decl_count, 3);
+        ASSERT_TRUE("float_decl multi no-semi: a registered",
+                     find_predef_var_idx("a") >= 0);
+        ASSERT_TRUE("float_decl multi no-semi: b registered",
+                     find_predef_var_idx("b") >= 0);
+        ASSERT_TRUE("float_decl multi no-semi: c registered",
+                     find_predef_var_idx("c") >= 0);
+    }
+
+    /* 31. multi-name float decl with initializers */
+    {
+        repl_reset_state();
+        repl_feed_line_public("float x = 1, y = 2;");
+        ASSERT_INT("float_decl multi init: cmd added", g_num_cmds, 1);
+        ASSERT_INT("float_decl multi init: var_decl_count",
+                   g_cmds[0].var_decl_count, 2);
+        int xi = find_predef_var_idx("x");
+        int yi = find_predef_var_idx("y");
+        ASSERT_TRUE("float_decl multi init: x registered", xi >= 0);
+        ASSERT_TRUE("float_decl multi init: y registered", yi >= 0);
+        if (xi >= 0)
+            ASSERT_TRUE("float_decl multi init: x value is 1",
+                         g_predef_vars[xi].value == 1.0f);
+        if (yi >= 0)
+            ASSERT_TRUE("float_decl multi init: y value is 2",
+                         g_predef_vars[yi].value == 2.0f);
+    }
+
     printf("\n%d / %d tests passed\n", g_pass, g_run);
     return (g_pass == g_run) ? 0 : 1;
 }
