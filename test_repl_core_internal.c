@@ -23,6 +23,17 @@ static int g_pass = 0;
     else printf("FAIL [%s] got \"%s\", expected \"%s\"\n", label, got, exp); \
 } while (0)
 
+static void declare_test_vars(void) {
+    char err[128];
+    declare_predef_var("x", err, sizeof(err));
+    declare_predef_var("y", err, sizeof(err));
+    declare_predef_var("z", err, sizeof(err));
+    declare_predef_var("i", err, sizeof(err));
+    declare_predef_var("j", err, sizeof(err));
+    declare_predef_var("k", err, sizeof(err));
+    declare_predef_var("n", err, sizeof(err));
+}
+
 int main() {
     init_predef_vars();
     printf("--- repl_core internal tests ---\n");
@@ -104,7 +115,7 @@ int main() {
 
     /* 6. Block helpers */
     {
-        repl_reset_state();
+        repl_reset_state(); declare_test_vars();
         repl_feed_line_public("for(i, 0, 1) {");     /* 0 */
         repl_feed_line_public("  glVertex3f(0,0,0);"); /* 1 */
         repl_feed_line_public("}");                    /* 2 */
@@ -117,7 +128,7 @@ int main() {
 
     /* 7. collect_visible_vars */
     {
-        repl_reset_state();
+        repl_reset_state(); declare_test_vars();
         repl_feed_line_public("for(i, 0, 1) {");
         repl_feed_line_public("  for(j, 0, 1) {");
         

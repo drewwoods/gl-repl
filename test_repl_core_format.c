@@ -13,6 +13,14 @@ static int g_pass = 0;
     else printf("FAIL [%s]\n", label); \
 } while (0)
 
+static void declare_test_vars(void) {
+    char err[128];
+    declare_predef_var("x", err, sizeof(err));
+    declare_predef_var("y", err, sizeof(err));
+    declare_predef_var("z", err, sizeof(err));
+    declare_predef_var("i", err, sizeof(err));
+}
+
 int main(void) {
     const char *line = "glVertex3f(x+1, y, z);";
     const char *tmp_path = "/tmp/repl_core_format_input.c";
@@ -21,6 +29,7 @@ int main(void) {
 
     init_predef_vars();
     repl_reset_state();
+    declare_test_vars();
 
     GLCmd interactive_cmd;
     memset(&interactive_cmd, 0, sizeof(interactive_cmd));
@@ -28,6 +37,7 @@ int main(void) {
                 repl_parse_and_normalize(line, 0, NULL, 0, 1, &interactive_cmd) == 1);
 
     repl_reset_state();
+    declare_test_vars();
     repl_feed_line_public(line);
     ASSERT_TRUE("feed inserted one", g_num_cmds == 1);
     ASSERT_TRUE("feed matches interactive",
@@ -45,6 +55,7 @@ int main(void) {
     }
 
     repl_reset_state();
+    declare_test_vars();
     ASSERT_TRUE("load from file", repl_load_from_file(tmp_path) == 1);
     ASSERT_TRUE("load inserted one", g_num_cmds == 1);
     ASSERT_TRUE("load matches interactive",
@@ -74,6 +85,7 @@ int main(void) {
     }
 
     repl_reset_state();
+    declare_test_vars();
     ASSERT_TRUE("load loop file", repl_load_from_file(tmp_loop_path) == 1);
     ASSERT_TRUE("loop imported 3 cmds", g_num_cmds == 3);
     ASSERT_TRUE("loop header type", g_cmds[0].type == CMD_FOR_BEGIN);
@@ -96,6 +108,7 @@ int main(void) {
     }
 
     repl_reset_state();
+    declare_test_vars();
     repl_feed_line_public("for(i, 0, 3) {");
     repl_feed_line_public("x = i + 1;");
     repl_feed_line_public("}");
@@ -166,6 +179,7 @@ int main(void) {
         FILE *dump_f = fopen(tmp_dump_path, "w");
 
         repl_reset_state();
+        declare_test_vars();
         g_wrap_at_comma = 1;
         g_show_indices = 0;
         g_win_w = 360;
@@ -205,6 +219,7 @@ int main(void) {
         FILE *dump_f = fopen(tmp_dump_path, "w");
 
         repl_reset_state();
+        declare_test_vars();
         g_wrap_at_comma = 1;
         g_show_indices = 0;
         g_win_w = 360;
@@ -247,6 +262,7 @@ int main(void) {
         FILE *dump_f = fopen(tmp_dump_path, "w");
 
         repl_reset_state();
+        declare_test_vars();
         g_wrap_at_comma = 1;
         g_show_indices = 0;
         g_win_w = 360;
@@ -288,6 +304,7 @@ int main(void) {
         FILE *dump_f = fopen(tmp_dump_path, "w");
 
         repl_reset_state();
+        declare_test_vars();
         g_wrap_at_comma = 1;
         g_show_indices = 0;
         g_win_w = 260;

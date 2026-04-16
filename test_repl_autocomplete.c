@@ -24,13 +24,24 @@ static int g_pass = 0;
     else printf("FAIL [%s] got \"%s\", expected \"%s\"\n", label, got, exp); \
 } while (0)
 
+static void declare_test_vars(void) {
+    char err[128];
+    declare_predef_var("x", err, sizeof(err));
+    declare_predef_var("y", err, sizeof(err));
+    declare_predef_var("z", err, sizeof(err));
+    declare_predef_var("i", err, sizeof(err));
+    declare_predef_var("j", err, sizeof(err));
+    declare_predef_var("k", err, sizeof(err));
+    declare_predef_var("n", err, sizeof(err));
+}
+
 int main() {
     init_predef_vars();
     printf("--- repl_autocomplete tests ---\n");
 
     /* 1. Basic function completion */
     {
-        repl_reset_state();
+        repl_reset_state(); declare_test_vars();
         strcpy(g_input, "glVer");
         g_input_len = (int)strlen(g_input);
         g_cursor_pos = g_input_len;
@@ -47,7 +58,7 @@ int main() {
 
     /* 2. Enum completion - glBegin */
     {
-        repl_reset_state();
+        repl_reset_state(); declare_test_vars();
         strcpy(g_input, "glBegin(GL_TRI");
         g_input_len = (int)strlen(g_input);
         g_cursor_pos = g_input_len;
@@ -63,7 +74,7 @@ int main() {
 
     /* 3. Multi-argument enum completion - glColorMaterial */
     {
-        repl_reset_state();
+        repl_reset_state(); declare_test_vars();
         strcpy(g_input, "glColorMaterial(GL_FR");
         g_input_len = (int)strlen(g_input);
         g_cursor_pos = g_input_len;
@@ -86,7 +97,7 @@ int main() {
 
     /* 4. glPointParameterfv custom completion */
     {
-        repl_reset_state();
+        repl_reset_state(); declare_test_vars();
         strcpy(g_input, "glPointParameterfv(GL_POINT_DIST");
         g_input_len = (int)strlen(g_input);
         g_cursor_pos = g_input_len;
@@ -100,7 +111,7 @@ int main() {
 
     /* 5. User-defined function completion */
     {
-        repl_reset_state();
+        repl_reset_state(); declare_test_vars();
         repl_feed_line_public("func0(radius, height) {");
         repl_feed_line_public("}");
         

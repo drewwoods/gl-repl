@@ -24,6 +24,7 @@ void display() {
   glTranslatef(-0.0000f, -0.0000f, -0.0000f);
 --- header_post ---
 --- source ---
+  float n, b, x, y, z, a;
   // Waves: nested for-loops + math
   glEnable(GL_DEPTH_TEST);
   glEnable(GL_LIGHTING);
@@ -34,7 +35,6 @@ void display() {
   glEnable(GL_LIGHT0);
   glShadeModel(GL_SMOOTH);
   n = 24;
-  b = 3.0; // breath;
   for(i, 0, n) {
     glBegin(GL_TRIANGLE_STRIP);
       for(j, 0, n+1) {

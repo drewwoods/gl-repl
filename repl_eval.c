@@ -17,15 +17,128 @@ ExprVar g_predef_vars[MAX_PREDEF_VARS];
 int     g_num_predef_vars = 0;
 
 void init_predef_vars(void) {
-    static const char *names[] = { "x", "y", "z", "i", "j", "k", "a", "b", "c", "n", "t" };
-    static_assert((int)(sizeof(names) / sizeof(names[0])) <= MAX_PREDEF_VARS);
-    g_num_predef_vars = MAX_PREDEF_VARS;
-    for (int i = 0; i < MAX_PREDEF_VARS; i++) {
-        strncpy(g_predef_vars[i].name, names[i],
-                sizeof(g_predef_vars[i].name) - 1);
-        g_predef_vars[i].name[sizeof(g_predef_vars[i].name) - 1] = '\0';
-        g_predef_vars[i].value = 0.0f;
+    g_num_predef_vars = 1;
+    strncpy(g_predef_vars[0].name, "t", sizeof(g_predef_vars[0].name) - 1);
+    g_predef_vars[0].name[sizeof(g_predef_vars[0].name) - 1] = '\0';
+    g_predef_vars[0].value = 0.0f;
+}
+
+int find_predef_var_idx(const char *name) {
+    for (int i = 0; i < g_num_predef_vars; i++)
+        if (strcmp(name, g_predef_vars[i].name) == 0)
+            return i;
+    return -1;
+}
+
+/* Keep in sync with eval_primary()'s function dispatch below */
+static const char *s_reserved_idents[] = {
+    "t", "PI", "TAU", "float", "var",
+    "sin", "cos", "tan", "sqrt", "abs", "pow",
+    "min", "max", "floor", "ceil", "fmod", "rand",
+    NULL
+};
+
+int is_reserved_ident(const char *name) {
+    for (const char **r = s_reserved_idents; *r; r++)
+        if (strcmp(name, *r) == 0) return 1;
+    return 0;
+}
+
+int declare_predef_var(const char *name, char *err, int errsz) {
+    if (!name || !name[0]) {
+        if (err) snprintf(err, errsz, "empty variable name");
+        return 0;
     }
+    if (!(isalpha((unsigned char)name[0]) || name[0] == '_')) {
+        if (err) snprintf(err, errsz, "invalid identifier '%s'", name);
+        return 0;
+    }
+    for (const char *p = name; *p; p++) {
+        if (!isalnum((unsigned char)*p) && *p != '_') {
+            if (err) snprintf(err, errsz, "invalid identifier '%s'", name);
+            return 0;
+        }
+    }
+    if (strlen(name) >= sizeof(g_predef_vars[0].name)) {
+        if (err) snprintf(err, errsz, "name '%s' too long (max %d chars)",
+                          name, (int)sizeof(g_predef_vars[0].name) - 1);
+        return 0;
+    }
+    if (is_reserved_ident(name)) {
+        if (err) snprintf(err, errsz, "'%s' is reserved", name);
+        return 0;
+    }
+    if (find_predef_var_idx(name) >= 0) {
+        if (err) snprintf(err, errsz, "'%s' already declared", name);
+        return 0;
+    }
+    if (g_num_predef_vars >= MAX_PREDEF_VARS) {
+        if (err) snprintf(err, errsz, "variable table full (max %d)", MAX_PREDEF_VARS);
+        return 0;
+    }
+    strncpy(g_predef_vars[g_num_predef_vars].name, name,
+            sizeof(g_predef_vars[0].name) - 1);
+    g_predef_vars[g_num_predef_vars].name[sizeof(g_predef_vars[0].name) - 1] = '\0';
+    g_predef_vars[g_num_predef_vars].value = 0.0f;
+    g_num_predef_vars++;
+    return 1;
+}
+
+void undeclare_predef_var(const char *name) {
+    int idx = find_predef_var_idx(name);
+    if (idx < 0) return;
+    for (int i = idx; i < g_num_predef_vars - 1; i++)
+        g_predef_vars[i] = g_predef_vars[i + 1];
+    g_num_predef_vars--;
+    memset(&g_predef_vars[g_num_predef_vars], 0, sizeof(ExprVar));
+}
+
+int source_uses_ident(const char *src, const char *name) {
+    int nlen = (int)strlen(name);
+    const char *s = src;
+    while (*s) {
+        if (!isalpha((unsigned char)*s) && *s != '_') { s++; continue; }
+        const char *start = s;
+        while (*s && (isalnum((unsigned char)*s) || *s == '_')) s++;
+        int len = (int)(s - start);
+        if (len == nlen && strncmp(start, name, nlen) == 0)
+            return 1;
+    }
+    return 0;
+}
+
+int validate_expression_idents(const char *src, const ExprVar *vars,
+                               int num_vars, char *err, int errsz) {
+    const char *s = src;
+    while (*s) {
+        if (!isalpha((unsigned char)*s) && *s != '_') { s++; continue; }
+        const char *start = s;
+        while (*s && (isalnum((unsigned char)*s) || *s == '_')) s++;
+        int len = (int)(s - start);
+        char name[16];
+        if (len >= (int)sizeof(name)) len = (int)sizeof(name) - 1;
+        memcpy(name, start, len);
+        name[len] = '\0';
+
+        if (strcmp(name, "PI") == 0 || strcmp(name, "TAU") == 0) continue;
+
+        /* Skip function calls (identifier followed by '(') */
+        const char *q = s;
+        while (*q && isspace((unsigned char)*q)) q++;
+        if (*q == '(') continue;
+
+        /* Check loop/function locals */
+        int found = 0;
+        for (int i = 0; i < num_vars; i++)
+            if (strcmp(name, vars[i].name) == 0) { found = 1; break; }
+        if (found) continue;
+
+        if (find_predef_var_idx(name) >= 0) continue;
+
+        if (err) snprintf(err, errsz, "undeclared variable '%s'", name);
+        return 0;
+    }
+    return 1;
 }
 
 int input_has_predef_vars(const char *s) {

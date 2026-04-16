@@ -25,6 +25,17 @@ static int g_pass = 0;
     else printf("FAIL [%s] got \"%s\", expected \"%s\"\n", label, got, exp); \
 } while (0)
 
+static void declare_test_vars(void) {
+    char err[128];
+    declare_predef_var("x", err, sizeof(err));
+    declare_predef_var("y", err, sizeof(err));
+    declare_predef_var("z", err, sizeof(err));
+    declare_predef_var("i", err, sizeof(err));
+    declare_predef_var("j", err, sizeof(err));
+    declare_predef_var("k", err, sizeof(err));
+    declare_predef_var("n", err, sizeof(err));
+}
+
 int main() {
     init_predef_vars();
     printf("--- repl_editor tests ---\n");
@@ -48,7 +59,7 @@ int main() {
 
     /* 3. Undo/Redo basic */
     {
-        repl_reset_state();
+        repl_reset_state(); declare_test_vars();
         repl_feed_line_public("glVertex3f(1,1,1)");
         ASSERT_INT("num_cmds 1", g_num_cmds, 1);
 
@@ -67,7 +78,7 @@ int main() {
 
     /* 4. Deleting commands — basic */
     {
-        repl_reset_state();
+        repl_reset_state(); declare_test_vars();
         repl_feed_line_public("glVertex3f(0,0,0)");
         repl_feed_line_public("glVertex3f(1,1,1)");
         repl_feed_line_public("glVertex3f(2,2,2)");
@@ -150,7 +161,7 @@ int main() {
 
     /* 12. try_assign_variable — append to end (existing tests cover this) */
     {
-        repl_reset_state();
+        repl_reset_state(); declare_test_vars();
         strcpy(g_input, "n = 10.5");
         g_input_len = (int)strlen(g_input);
 
@@ -197,7 +208,7 @@ int main() {
 
     /* 15. Committing for loops — basic open brace form */
     {
-        repl_reset_state();
+        repl_reset_state(); declare_test_vars();
         strcpy(g_input, "for(i, 0, 5) {");
         g_input_len = (int)strlen(g_input);
 
@@ -261,7 +272,7 @@ int main() {
 
     /* 19. Committing func defs — basic */
     {
-        repl_reset_state();
+        repl_reset_state(); declare_test_vars();
         strcpy(g_input, "func0(x, y) {");
         g_input_len = (int)strlen(g_input);
 
@@ -295,7 +306,7 @@ int main() {
 
     /* 21. Committing if blocks — basic */
     {
-        repl_reset_state();
+        repl_reset_state(); declare_test_vars();
         strcpy(g_input, "if(x > 0) {");
         g_input_len = (int)strlen(g_input);
 
@@ -327,7 +338,7 @@ int main() {
 
     /* 23. Committing close brace — for-loop */
     {
-        repl_reset_state();
+        repl_reset_state(); declare_test_vars();
         repl_feed_line_public("for(i, 0, 1) {");
         strcpy(g_input, "}");
         g_input_len = (int)strlen(g_input);

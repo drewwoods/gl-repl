@@ -23,6 +23,17 @@ static void type_search_text(const char *text) {
     }
 }
 
+static void declare_test_vars(void) {
+    char err[128];
+    declare_predef_var("x", err, sizeof(err));
+    declare_predef_var("y", err, sizeof(err));
+    declare_predef_var("z", err, sizeof(err));
+    declare_predef_var("i", err, sizeof(err));
+    declare_predef_var("j", err, sizeof(err));
+    declare_predef_var("k", err, sizeof(err));
+    declare_predef_var("n", err, sizeof(err));
+}
+
 static void set_live_input(const char *text) {
     strncpy(g_input, text, MAX_INPUT_LEN - 1);
     g_input[MAX_INPUT_LEN - 1] = '\0';
@@ -52,7 +63,7 @@ int main(void) {
                     repl_search_find_prev_in_text("abc", "zzz", 2) == -1);
     }
 
-    repl_reset_state();
+    repl_reset_state(); declare_test_vars();
     set_live_input("NeedleLine");
     open_search();
     type_search_text("needle");
@@ -70,7 +81,7 @@ int main(void) {
     ASSERT_TRUE("search clear resets hit ordinal", g_search_hit_ordinal == 0);
     ASSERT_TRUE("search clear resets match count", g_search_match_count == 0);
 
-    repl_reset_state();
+    repl_reset_state(); declare_test_vars();
     repl_feed_line_public("glBegin(GL_POINTS);");
     repl_feed_line_public("glEnd();");
     open_search();

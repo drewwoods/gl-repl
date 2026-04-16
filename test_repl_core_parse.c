@@ -19,9 +19,17 @@ static int leading_spaces(const char *s) {
     return n;
 }
 
+static void declare_test_vars(void) {
+    char err[128];
+    declare_predef_var("x", err, sizeof(err));
+    declare_predef_var("y", err, sizeof(err));
+    declare_predef_var("z", err, sizeof(err));
+}
+
 int main(void) {
     init_predef_vars();
     repl_reset_state();
+    declare_test_vars();
 
     {
         char payload[128];
@@ -110,6 +118,7 @@ int main(void) {
 
     {
         repl_reset_state();
+        declare_test_vars();
         repl_feed_line_public("gluBegin(GLU_POLYGON);");
         repl_feed_line_public("gluBegin(GLU_CONTOUR);");
         repl_feed_line_public("glBegin(GL_TRIANGLES);");
@@ -134,6 +143,7 @@ int main(void) {
 
     {
         repl_reset_state();
+        declare_test_vars();
         g_edit_line = 0;
         GLCmd cmd;
         memset(&cmd, 0, sizeof(cmd));
@@ -144,6 +154,7 @@ int main(void) {
 
     {
         repl_reset_state();
+        declare_test_vars();
         g_edit_line = 0;
         GLCmd cmd;
         memset(&cmd, 0, sizeof(cmd));

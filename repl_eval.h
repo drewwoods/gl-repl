@@ -24,7 +24,11 @@
 #endif
 
 #ifndef MAX_PREDEF_VARS
-#define MAX_PREDEF_VARS 11
+#define MAX_PREDEF_VARS 16
+#endif
+
+#ifndef MAX_NAMES_PER_DECL
+#define MAX_NAMES_PER_DECL 8
 #endif
 
 #ifndef M_PI
@@ -51,6 +55,13 @@ extern int     g_num_predef_vars;
 
 void init_predef_vars(void);
 int  input_has_predef_vars(const char *s);
+int  find_predef_var_idx(const char *name);
+int  declare_predef_var(const char *name, char *err, int errsz);
+void undeclare_predef_var(const char *name);
+int  is_reserved_ident(const char *name);
+int  source_uses_ident(const char *src, const char *name);
+int  validate_expression_idents(const char *src, const ExprVar *vars,
+                                int num_vars, char *err, int errsz);
 
 /* ---- Expression evaluator --------------------------------------------- */
 

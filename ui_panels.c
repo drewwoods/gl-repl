@@ -2751,7 +2751,8 @@ void render_help(void) {
         "  Comparison: > < >= <= == !=  Logical: && || !",
         "  Example:    glVertex3f(cos(PI/4), sin(PI/4), 0)",
         "",
-        "Variables (predefined: x, y, z, i, j, k, n, t):",
+        "Variables (declare before use):",
+        "  float x, y, z;           \tDeclare variables",
         "  x = 1.5;                 \tAssign a value",
         "  glVertex3f(x, y, z);     \tUse in expressions",
         "  Variables persist across commands and are saved/loaded",
@@ -3168,13 +3169,19 @@ void render_var_panel(void) {
     glColor3f(0.75f, 0.75f, 1.00f);
     draw_string((float)(px + 6),
                 (float)(py + ph - VAR_PANEL_PAD - 4),
-                "Variables", FONT_SMALL);
+                "Variables (declared)", FONT_SMALL);
 
-    /* Column offsets within the panel */
+    /* Column offsets within the panel — sized for multi-char var names */
+    int max_name_len = 1;
+    for (int i = 0; i < g_num_predef_vars; i++) {
+        int len = (int)strlen(g_predef_vars[i].name);
+        if (len > max_name_len) max_name_len = len;
+    }
+    int label_w  = max_name_len * 8 + 8;
     int label_x  = px + 6;
-    int val_x    = px + 22;       /* 1 char label + space */
-    int track_x  = px + 88;       /* label + 8-char value */
-    int track_w  = pw - 88 - 8;
+    int val_x    = px + 6 + label_w;
+    int track_x  = val_x + 66;
+    int track_w  = pw - (track_x - px) - 8;
     int handle_w = 10;
 
     /* Shared logarithmic scale: all handles normalized relative to each other. */
