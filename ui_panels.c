@@ -3180,11 +3180,13 @@ void render_var_panel(void) {
         if (len > max_name_len) max_name_len = len;
     }
     int label_w  = max_name_len * 8 + 8;
+    if (label_w > pw / 3) label_w = pw / 3;
     int label_x  = px + 6;
     int val_x    = px + 6 + label_w;
     int track_x  = val_x + 66;
     int track_w  = pw - (track_x - px) - 8;
     int handle_w = 10;
+    if (track_w < handle_w + 4) track_w = handle_w + 4;
 
     /* Shared logarithmic scale: all handles normalized relative to each other. */
     float log_scale = var_panel_log_scale();
