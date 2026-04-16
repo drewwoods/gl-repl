@@ -290,6 +290,7 @@ static const char *const g_example_tess[] = {
 
 /* Example 9: GLU tessellator — concave arrow polygon cutout */
 static const char *const g_example_tess_cutout[] = {
+    "float z;",
     "glEnable(GL_DEPTH_TEST);",
     "glEnable(GL_LIGHTING);",
     "glEnable(GL_NORMALIZE);",
@@ -415,6 +416,7 @@ static const char *const g_example_tess_cutout[] = {
  * top-level only, not replay-safe, and not suitable for variable-driven
  * geometry loops. Keep coverage in tests/docs instead of F12 examples. */
 static const char *const g_example_assign_2d[] = {
+    "float x, y;",
     "// 2D assignment sketch: tests runtime variable assignment without goto",
     "glDisable(GL_LIGHTING);",
     "x = -1.7;",
@@ -431,6 +433,7 @@ static const char *const g_example_assign_2d[] = {
 
 /* Example 11: Stateless particle field using deterministic rand(seed, iter) */
 static const char *const g_example_particles_stateless[] = {
+    "float n, x, y, z, j, k;",
     "// Stateless particle field: deterministic rand(seed, iter)",
     "glDisable(GL_LIGHTING);",
     "glPointSize(3);",
@@ -455,6 +458,7 @@ static const char *const g_example_particles_stateless[] = {
 
 /* Example 12: Additive glow particles — glPointSize + distance attenuation + blend */
 static const char *const g_example_glow_particles[] = {
+    "float n, x, y, z, j, k;",
     "// Glow sprites: additive blend + distance-attenuated point size",
     "glDisable(GL_LIGHTING);",
     "glDisable(GL_DEPTH_TEST);",
@@ -489,6 +493,7 @@ static const char *const g_example_glow_particles[] = {
  * smooth-shaded. */
 
 static const char *const g_example_random_surface[] = {
+  "float n, i, j, k;",
   "glEnable(GL_DEPTH_TEST);",
   "glEnable(GL_LIGHTING);",
   "glEnable(GL_NORMALIZE);",
@@ -533,6 +538,7 @@ static const char *const g_example_random_surface[] = {
  * position and t for a shifting iridescent look. */
 
 static const char *const g_example_waves[] = {
+    "float n, b, x, y, z, a;",
     "// Waves: nested for-loops + math",
     "glEnable(GL_DEPTH_TEST);",
     "glEnable(GL_LIGHTING);",
@@ -570,6 +576,7 @@ static const char *const g_example_waves[] = {
  * multiple functions, recursion, conditionals, variables, tessellation,
  * GLU primitives, matrix stack, animation, and long line count. */
 static const char *const g_example_stress[] = {
+    "float n, x, y, z, k;",
     "// ===== Stress-test scene: parser + code UI torture =====",
     "glEnable(GL_DEPTH_TEST);",
     "glEnable(GL_LIGHTING);",

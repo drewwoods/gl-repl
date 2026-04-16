@@ -8,6 +8,7 @@ void push_undo_snapshot(void);
 void pop_undo_snapshot(void);
 void do_redo(void);
 void delete_cmd_range(int start, int count, const char *what);
+int try_commit_float_decl(void);
 int try_assign_variable(void);
 int try_commit_for_loop(void);
 int try_commit_func_def(void);
@@ -154,6 +155,8 @@ typedef struct {
     int   num_cmds;
     int   edit_line;
     float predef_vals[MAX_PREDEF_VARS];
+    char  predef_names[MAX_PREDEF_VARS][16];
+    int   num_predef_vars;
 } UndoSnapshot;
 
 static UndoSnapshot g_undo_buf[UNDO_DEPTH];
@@ -170,16 +173,22 @@ static void snapshot_save(UndoSnapshot *s) {
     memcpy(s->cmds, g_cmds, (size_t)g_num_cmds * sizeof(GLCmd));
     s->num_cmds = g_num_cmds;
     s->edit_line = g_edit_line;
-    for (int i = 0; i < g_num_predef_vars; i++)
+    s->num_predef_vars = g_num_predef_vars;
+    for (int i = 0; i < g_num_predef_vars; i++) {
         s->predef_vals[i] = g_predef_vars[i].value;
+        memcpy(s->predef_names[i], g_predef_vars[i].name, 16);
+    }
 }
 
 static void snapshot_restore(const UndoSnapshot *s) {
     memcpy(g_cmds, s->cmds, (size_t)s->num_cmds * sizeof(GLCmd));
     g_num_cmds = s->num_cmds;
     g_edit_line = s->edit_line;
-    for (int i = 0; i < g_num_predef_vars; i++)
+    g_num_predef_vars = s->num_predef_vars;
+    for (int i = 0; i < s->num_predef_vars; i++) {
         g_predef_vars[i].value = s->predef_vals[i];
+        memcpy(g_predef_vars[i].name, s->predef_names[i], 16);
+    }
     g_inserting = 0;
     load_line_to_input(g_edit_line);
     mark_normals_dirty();
@@ -249,17 +258,56 @@ int sel_hi(void) {
 }
 
 void delete_cmd_range(int start, int count, const char *what) {
-    char msg[64];
+    char msg[128];
 
     if (count <= 0 || start < 0 || start >= g_num_cmds)
         return;
     if (start + count > g_num_cmds)
         count = g_num_cmds - start;
+    int end = start + count;
+
+    /* Refuse if any var-decl in the range declares a name used outside it */
+    for (int i = start; i < end; i++) {
+        if (g_cmds[i].type != CMD_VAR_DECLARE) continue;
+        for (int n = 0; n < g_cmds[i].var_decl_count; n++) {
+            const char *nm = g_cmds[i].var_names[n];
+            for (int j = 0; j < g_num_cmds; j++) {
+                if (j >= start && j < end) continue;
+                if (source_uses_ident(g_cmds[j].source, nm)) {
+                    snprintf(msg, sizeof(msg),
+                             "variable '%s' is in use, cannot delete", nm);
+                    set_status(msg);
+                    return;
+                }
+            }
+        }
+    }
+
+    /* Snapshot names to undeclare after the memmove */
+    char removed_names[MAX_PREDEF_VARS][16];
+    int n_removed = 0;
+    for (int i = start; i < end; i++) {
+        if (g_cmds[i].type != CMD_VAR_DECLARE) continue;
+        for (int n = 0; n < g_cmds[i].var_decl_count && n_removed < MAX_PREDEF_VARS; n++)
+            strncpy(removed_names[n_removed++], g_cmds[i].var_names[n], 15);
+    }
 
     push_undo_snapshot();
     memmove(&g_cmds[start], &g_cmds[start + count],
             (g_num_cmds - start - count) * sizeof(GLCmd));
     g_num_cmds -= count;
+
+    /* Compact g_predef_vars and shift CMD_VAR_ASSIGN indices */
+    for (int r = 0; r < n_removed; r++) {
+        int slot = find_predef_var_idx(removed_names[r]);
+        if (slot < 0) continue;
+        undeclare_predef_var(removed_names[r]);
+        for (int j = 0; j < g_num_cmds; j++) {
+            if (g_cmds[j].type == CMD_VAR_ASSIGN && g_cmds[j].num_args > slot)
+                g_cmds[j].num_args--;
+        }
+    }
+
     g_edit_line = start;
     if (g_edit_line > g_num_cmds)
         g_edit_line = g_num_cmds;
@@ -331,6 +379,139 @@ void navigate_to_line(int target) {
     clear_autocomplete_state();
 }
 
+int try_commit_float_decl(void) {
+    const char *p = g_input;
+    while (*p && isspace((unsigned char)*p)) p++;
+    if (strncmp(p, "float", 5) != 0) return 0;
+    if (isalnum((unsigned char)p[5]) || p[5] == '_') return 0;
+    p += 5;
+
+    char names[MAX_NAMES_PER_DECL][16];
+    int count = 0;
+    while (*p) {
+        while (*p && isspace((unsigned char)*p)) p++;
+        if (*p == ';') break;
+        if (count > 0) {
+            if (*p != ',') return 0;
+            p++;
+            while (*p && isspace((unsigned char)*p)) p++;
+        }
+        if (!isalpha((unsigned char)*p) && *p != '_') return 0;
+        const char *start = p;
+        while (*p && (isalnum((unsigned char)*p) || *p == '_')) p++;
+        int len = (int)(p - start);
+        if (len <= 0 || len >= 16) {
+            set_status("invalid identifier (max 15 chars)");
+            return 1;
+        }
+        if (count >= MAX_NAMES_PER_DECL) {
+            char buf[128];
+            snprintf(buf, sizeof(buf),
+                     "too many names per declaration (max %d); split across lines",
+                     MAX_NAMES_PER_DECL);
+            set_status(buf);
+            return 1;
+        }
+        memcpy(names[count], start, len);
+        names[count][len] = '\0';
+        count++;
+    }
+    if (*p != ';' || count == 0) return 0;
+
+    /* Validate all names atomically before registering any */
+    for (int i = 0; i < count; i++) {
+        if (find_predef_var_idx(names[i]) >= 0) continue;
+        if (is_reserved_ident(names[i])) {
+            char buf[128];
+            snprintf(buf, sizeof(buf), "'%s' is reserved", names[i]);
+            set_status(buf);
+            return 1;
+        }
+        if (!(isalpha((unsigned char)names[i][0]) || names[i][0] == '_')) {
+            char buf[128];
+            snprintf(buf, sizeof(buf), "invalid identifier '%s'", names[i]);
+            set_status(buf);
+            return 1;
+        }
+    }
+
+    /* Count how many are genuinely new */
+    int new_count = 0;
+    for (int i = 0; i < count; i++)
+        if (find_predef_var_idx(names[i]) < 0) new_count++;
+    if (g_num_predef_vars + new_count > MAX_PREDEF_VARS) {
+        char buf[128];
+        snprintf(buf, sizeof(buf), "variable table full (max %d)", MAX_PREDEF_VARS);
+        set_status(buf);
+        return 1;
+    }
+
+    push_undo_snapshot();
+
+    /* Register new names */
+    for (int i = 0; i < count; i++)
+        declare_predef_var(names[i], NULL, 0);
+
+    /* Build the GLCmd */
+    GLCmd cmd;
+    memset(&cmd, 0, sizeof(cmd));
+    cmd.type = CMD_VAR_DECLARE;
+    cmd.valid = 1;
+    cmd.var_decl_count = count;
+    for (int i = 0; i < count; i++)
+        strncpy(cmd.var_names[i], names[i], 15);
+
+    {
+        int fpos = g_inserting ? g_edit_line :
+                   (g_edit_line < g_num_cmds ? g_edit_line : g_num_cmds);
+        int ind = 2 + block_depth_at(fpos) * 2;
+        char indent[32];
+        if (ind > (int)sizeof(indent) - 1) ind = (int)sizeof(indent) - 1;
+        memset(indent, ' ', (size_t)ind);
+        indent[ind] = '\0';
+
+        int off = snprintf(cmd.source, sizeof(cmd.source), "%sfloat ", indent);
+        for (int i = 0; i < count && off < (int)sizeof(cmd.source) - 4; i++) {
+            if (i > 0) off += snprintf(cmd.source + off, sizeof(cmd.source) - off, ", ");
+            off += snprintf(cmd.source + off, sizeof(cmd.source) - off, "%s", names[i]);
+        }
+        snprintf(cmd.source + off, sizeof(cmd.source) - off, ";");
+
+        if (g_inserting) {
+            if (g_num_cmds < MAX_COMMANDS) {
+                for (int j = g_num_cmds; j > fpos; j--)
+                    g_cmds[j] = g_cmds[j - 1];
+                g_cmds[fpos] = cmd;
+                g_num_cmds++;
+                g_edit_line++;
+            }
+        } else if (fpos < g_num_cmds) {
+            g_cmds[fpos] = cmd;
+            g_edit_line++;
+            load_line_to_input(g_edit_line);
+        } else {
+            if (g_num_cmds < MAX_COMMANDS)
+                g_cmds[g_num_cmds++] = cmd;
+            g_edit_line = g_num_cmds;
+        }
+    }
+
+    {
+        char msg[128];
+        int off = snprintf(msg, sizeof(msg), "declared ");
+        for (int i = 0; i < count && off < (int)sizeof(msg) - 4; i++) {
+            if (i > 0) off += snprintf(msg + off, sizeof(msg) - off, ", ");
+            off += snprintf(msg + off, sizeof(msg) - off, "%s", names[i]);
+        }
+        set_status(msg);
+    }
+    g_input[0] = '\0';
+    g_input_len = 0;
+    g_cursor_pos = 0;
+    mark_normals_dirty();
+    return 1;
+}
+
 int try_assign_variable(void) {
     char name[16];
     char rhs[MAX_LINE_LEN];
@@ -342,16 +523,26 @@ int try_assign_variable(void) {
     if (!repl_extract_assignment_parts(g_input, name, sizeof(name), rhs, sizeof(rhs)))
         return 0;
 
-    int var_idx = -1;
-    for (int i = 0; i < g_num_predef_vars; i++) {
-        if (strcmp(name, g_predef_vars[i].name) == 0) {
-            var_idx = i;
-            break;
+    int var_idx = find_predef_var_idx(name);
+    if (var_idx < 0) {
+        char buf[128];
+        snprintf(buf, sizeof(buf),
+                 "undeclared variable '%s' — use 'float %s;' first", name, name);
+        set_status(buf);
+        return 1;
+    }
+
+    {
+        int fpos = g_inserting ? g_edit_line :
+                   (g_edit_line < g_num_cmds ? g_edit_line : g_num_cmds);
+        ExprVar vis[MAX_EXPR_VARS];
+        int vis_n = collect_visible_vars(fpos, vis, MAX_EXPR_VARS);
+        char verr[128];
+        if (!validate_expression_idents(rhs, vis_n > 0 ? vis : NULL, vis_n, verr, sizeof(verr))) {
+            set_status(verr);
+            return 1;
         }
     }
-    if (var_idx < 0)
-        return 0;
-
     {
         ExprCtx ctx = { rhs, g_predef_vars, g_num_predef_vars };
         val = eval_expr(&ctx);
@@ -506,6 +697,14 @@ int try_commit_for_loop(void) {
                         char *ra = raw_args;
                         while (*ra && isspace((unsigned char)*ra))
                             ra++;
+
+                        {
+                            char verr[128];
+                            if (!validate_expression_idents(ra, visible_vars, visible_nv, verr, sizeof(verr))) {
+                                set_status(verr);
+                                return 1;
+                            }
+                        }
 
                         if (input_has_any_visible_vars(ra, visible_vars, visible_nv)) {
                             fb.has_vars = 1;
@@ -777,6 +976,15 @@ int try_commit_if_block(void) {
             cond_text[clen] = '\0';
         }
 
+        {
+            char verr[128];
+            if (!validate_expression_idents(cond_text,
+                                            visible_nv > 0 ? visible_vars : NULL, visible_nv,
+                                            verr, sizeof(verr))) {
+                set_status(verr);
+                return 1;
+            }
+        }
         {
             int neval = parse_exprs(cond_text, cond_args, 1,
                                     visible_nv > 0 ? visible_vars : NULL, visible_nv);
@@ -1530,6 +1738,11 @@ void keyboard_func(unsigned char key, int x, int y) {
 
                 memset(&cmd, 0, sizeof(cmd));
                 if (dnv > 0) {
+                    /* float decl must be checked before assignment */
+                    if (try_commit_float_decl()) {
+                        clear_autocomplete_state();
+                        return;
+                    }
                     if (try_assign_variable()) {
                         clear_autocomplete_state();
                         return;
@@ -1614,6 +1827,15 @@ void keyboard_func(unsigned char key, int x, int y) {
                 memset(&cmd, 0, sizeof(cmd));
                 dnv = collect_visible_vars(fpos, dvars, MAX_EXPR_VARS);
                 if (dnv > 0) {
+                    /* float decl must be checked before assignment */
+                    if (try_commit_float_decl()) {
+                        g_inserting = 1;
+                        g_input[0] = '\0';
+                        g_input_len = 0;
+                        g_cursor_pos = 0;
+                        clear_autocomplete_state();
+                        return;
+                    }
                     if (try_assign_variable()) {
                         g_inserting = 1;
                         g_input[0] = '\0';
@@ -1656,6 +1878,15 @@ void keyboard_func(unsigned char key, int x, int y) {
                         snprintf(cmd.source, sizeof(cmd.source), "%s%s;", indent_v, stripped);
                     }
                 } else {
+                    /* float decl must be checked before assignment */
+                    if (try_commit_float_decl()) {
+                        g_inserting = 1;
+                        g_input[0] = '\0';
+                        g_input_len = 0;
+                        g_cursor_pos = 0;
+                        clear_autocomplete_state();
+                        return;
+                    }
                     if (try_assign_variable()) {
                         g_inserting = 1;
                         g_input[0] = '\0';
@@ -1800,6 +2031,11 @@ void keyboard_func(unsigned char key, int x, int y) {
     if (key == ';') {
         if (g_input_len > 0) {
             push_undo_snapshot();
+            /* float decl must be checked before assignment */
+            if (try_commit_float_decl()) {
+                clear_autocomplete_state();
+                return;
+            }
             if (try_assign_variable()) {
                 clear_autocomplete_state();
                 return;
@@ -2624,6 +2860,9 @@ int feed_line(const char *line) {
     if (try_commit_func_def())
         return 1;
     if (try_commit_if_block())
+        return 1;
+    /* float decl must be checked before assignment */
+    if (try_commit_float_decl())
         return 1;
     if (try_assign_variable())
         return 1;

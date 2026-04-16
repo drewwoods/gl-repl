@@ -27,6 +27,17 @@ static int g_pass = 0;
     else printf("FAIL [%s] got \"%s\", expected \"%s\"\n", label, got, exp); \
 } while (0)
 
+static void declare_test_vars(void) {
+    char err[128];
+    declare_predef_var("x", err, sizeof(err));
+    declare_predef_var("y", err, sizeof(err));
+    declare_predef_var("z", err, sizeof(err));
+    declare_predef_var("i", err, sizeof(err));
+    declare_predef_var("j", err, sizeof(err));
+    declare_predef_var("k", err, sizeof(err));
+    declare_predef_var("n", err, sizeof(err));
+}
+
 /* Some functions are not in internal header but are non-static */
 const char *mode_name(GLenum mode);
 int in_begin_block(void);
@@ -70,7 +81,7 @@ void test_utils() {
     ASSERT_STR("mode_name(GL_TRIANGLES)", mode_name(GL_TRIANGLES), "GL_TRIANGLES");
     ASSERT_STR("mode_name(unknown)", mode_name(9999), "???");
 
-    repl_reset_state();
+    repl_reset_state(); declare_test_vars();
     ASSERT_INT("count_vertices initial", count_vertices(), 0);
     ASSERT_INT("current_begin_mode initial", current_begin_mode(), GL_TRIANGLES);
     ASSERT_INT("in_begin_block initial", in_begin_block(), 0);
@@ -104,7 +115,7 @@ void test_utils() {
 
 void test_replay_advanced() {
     printf("--- Replay advanced functions ---\n");
-    repl_reset_state();
+    repl_reset_state(); declare_test_vars();
     repl_feed_line_public("glVertex3f(0,0,0);");
     repl_feed_line_public("glVertex3f(1,1,1);");
     repl_feed_line_public("glVertex3f(2,2,2);");
@@ -133,13 +144,13 @@ void test_replay_advanced() {
 
 void test_io() {
     printf("--- IO functions ---\n");
-    repl_reset_state();
+    repl_reset_state(); declare_test_vars();
     repl_feed_line_public("glVertex3f(1,2,3);");
 
     const char *tmpf = "test_extra_io.c";
     repl_save_output(tmpf);
 
-    repl_reset_state();
+    repl_reset_state(); declare_test_vars();
     ASSERT_INT("num_cmds after reset", count_vertices(), 0);
 
     int r = repl_load_from_file(tmpf);
@@ -155,7 +166,7 @@ void test_io() {
 
 void test_execution() {
     printf("--- Execution functions ---\n");
-    repl_reset_state();
+    repl_reset_state(); declare_test_vars();
     repl_feed_line_public("n = 1;");
     repl_flatten_commands();
 
@@ -176,7 +187,7 @@ void test_examples() {
 
 void test_user_scene() {
     printf("--- User scene functions ---\n");
-    repl_reset_state();
+    repl_reset_state(); declare_test_vars();
     repl_feed_line_public("glVertex3f(1,1,1);");
 
     /* Loading an example should save the user scene if it's the first time */
@@ -193,7 +204,7 @@ void test_debug_dump_flat_commands() {
     printf("--- Debug dump flat commands ---\n");
 
     /* Empty state: header, count=0, end marker — and no crash on NULL out. */
-    repl_reset_state();
+    repl_reset_state(); declare_test_vars();
     repl_flatten_commands();
     char *empty = capture_flat_dump();
     ASSERT_TRUE("empty dump captured", empty != NULL);
@@ -235,7 +246,7 @@ void test_debug_dump_flat_commands() {
 
     /* Basic source commands: each type name should appear in the flattened
      * dump, with one row per flat command. */
-    repl_reset_state();
+    repl_reset_state(); declare_test_vars();
     repl_feed_line_public("glFrontFace(GL_CW);");
     repl_feed_line_public("glColor3f(1,0,0);");
     repl_feed_line_public("glBegin(GL_TRIANGLES);");
@@ -294,7 +305,7 @@ void test_debug_dump_flat_commands() {
 
     /* For-loop expansion: flattening unrolls the loop body and records a
      * stable src_cmd_idx pointing back at the source line. */
-    repl_reset_state();
+    repl_reset_state(); declare_test_vars();
     repl_feed_line_public("for(i, 0, 3) {");
     repl_feed_line_public("glVertex3f(i,0,0);");
     repl_feed_line_public("}");
@@ -325,7 +336,7 @@ void test_debug_dump_flat_commands() {
 
     /* Function call inlining: flat commands inside the inlined call should
      * carry a non-zero func_scope_mask. */
-    repl_reset_state();
+    repl_reset_state(); declare_test_vars();
     repl_feed_line_public("func0() {");
     repl_feed_line_public("glVertex3f(0,0,0);");
     repl_feed_line_public("}");
@@ -360,7 +371,7 @@ void test_debug_dump_flat_commands() {
 
     /* Implicit flatten: even if the caller leaves g_flat_dirty set and stale
      * flat state behind, the dump should rebuild g_flat_cmds[] on demand. */
-    repl_reset_state();
+    repl_reset_state(); declare_test_vars();
     repl_feed_line_public("glVertex3f(0,0,0);");
     g_flat_dirty = 1;
     g_num_flat_cmds = 0;
@@ -374,7 +385,7 @@ void test_debug_dump_flat_commands() {
 
 void test_time() {
     printf("--- Time functions ---\n");
-    repl_reset_state();
+    repl_reset_state(); declare_test_vars();
     g_anim_time = 0.0f;
     repl_advance_time(0.5f);
     ASSERT_TRUE("g_anim_time advanced", g_anim_time == 0.5f);

@@ -127,6 +127,7 @@ typedef enum {
     CMD_IF_BEGIN, CMD_IF_END,
     CMD_COMMENT,
     CMD_VAR_ASSIGN,
+    CMD_VAR_DECLARE,
     CMD_LABEL, CMD_GOTO,
     CMD_GLU_SPHERE, CMD_GLU_CYLINDER, CMD_GLU_DISK, CMD_GLU_PARTIAL_DISK,
     CMD_GLUT_TORUS,
@@ -186,6 +187,8 @@ typedef struct {
     int      valid;                 /* Deleted commands remain allocated but skipped */
     int      is_auto;               /* Auto-generated helper, e.g. synthesized normals */
     int      has_vars;              /* Source must be preserved/re-evaluated from text */
+    char     var_names[MAX_NAMES_PER_DECL][16];
+    int      var_decl_count;        /* Number of names in a CMD_VAR_DECLARE line */
     int      src_cmd_idx;           /* Owning source command for flat->source mapping */
     int      call_src_cmd_idx;      /* Immediate call site that expanded this command */
     int      root_call_src_cmd_idx; /* Outermost call site in nested expansion */

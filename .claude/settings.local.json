@@ -54,7 +54,12 @@
       "Bash(awk NR<=10{print NR\": \"$0} *)",
       "Bash(./test_repl_editor)",
       "Bash(gh pr *)",
-      "Bash(gh api *)"
+      "Bash(gh api *)",
+      "Bash(awk '/Variable assignment.*[xy] =|if.*strchr.*\"=\"/{found=1} found && /^[}]/{print NR\": \"$0; found=0; exit} found{print NR\": \"$0}' /Users/drew/src/code/opengl/samples/gen-ai/OpenGL-Vibe/src/immediate-mode-repl/claude4.6-opus-thinking/repl_core.c)",
+      "Bash(awk *)",
+      "Bash(./test_eval --run-tests)",
+      "Bash(./test_repl_core_examples --dump-index 10)",
+      "Bash(/tmp/repl_debug_example)"
     ]
   }
 }

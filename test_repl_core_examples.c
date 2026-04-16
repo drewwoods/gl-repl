@@ -71,6 +71,20 @@ static void log_example_result(int idx, const char *name, const char *step,
     fflush(stdout);
 }
 
+static void declare_test_vars(void) {
+    char err[128];
+    declare_predef_var("x", err, sizeof(err));
+    declare_predef_var("y", err, sizeof(err));
+    declare_predef_var("z", err, sizeof(err));
+    declare_predef_var("i", err, sizeof(err));
+    declare_predef_var("j", err, sizeof(err));
+    declare_predef_var("k", err, sizeof(err));
+    declare_predef_var("a", err, sizeof(err));
+    declare_predef_var("b", err, sizeof(err));
+    declare_predef_var("c", err, sizeof(err));
+    declare_predef_var("n", err, sizeof(err));
+}
+
 static void pin_code_panel_state(void) {
     g_cam_rx = 18.0f;
     g_cam_ry = 32.0f;
@@ -208,7 +222,7 @@ static int compare_exact_text(const char *expected, const char *actual, int *lin
 }
 
 static void load_example_for_test(int idx) {
-    repl_reset_state();
+    repl_reset_state(); declare_test_vars();
     pin_code_panel_state();
     repl_load_example(idx);
 }
@@ -317,7 +331,7 @@ int main(int argc, char **argv) {
         snprintf(label, sizeof(label), "example %02d export compiles", idx);
         ASSERT_TRUE(label, compiled);
 
-        repl_reset_state();
+        repl_reset_state(); declare_test_vars();
         pin_code_panel_state();
         roundtrip_loaded = repl_load_from_file(export_path);
         snprintf(label, sizeof(label), "example %02d export imports", idx);

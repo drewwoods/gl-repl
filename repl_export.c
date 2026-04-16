@@ -84,12 +84,14 @@ int parse_workspace_header_line(const char *line) {
         p++;
         ExprCtx ctx = { p, NULL, 0 };
         float val = eval_expr(&ctx);
-        for (int i = 0; i < g_num_predef_vars; i++) {
-            if (strcmp(g_predef_vars[i].name, name) == 0) {
-                g_predef_vars[i].value = val;
-                return 1;
-            }
+        int idx = find_predef_var_idx(name);
+        if (idx < 0) {
+            char err[128];
+            if (declare_predef_var(name, err, sizeof(err)))
+                idx = find_predef_var_idx(name);
         }
+        if (idx >= 0)
+            g_predef_vars[idx].value = val;
         return 1;
     }
 
@@ -1232,6 +1234,9 @@ static void write_canonical_cmd_as_c(FILE *f, const GLCmd *cmd, int for_depth,
                                      int *tess_depth) {
     switch (cmd->type) {
     case CMD_COMMENT:
+        fprintf(f, "%s\n", cmd->source);
+        break;
+    case CMD_VAR_DECLARE:
         fprintf(f, "%s\n", cmd->source);
         break;
     case CMD_VAR_ASSIGN: {

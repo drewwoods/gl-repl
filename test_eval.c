@@ -138,6 +138,15 @@ static int predef_idx(const char *name) {
     return -1;
 }
 
+static void set_predef(const char *name, float val) {
+    int idx = predef_idx(name);
+    if (idx < 0) {
+        printf("  BUG: set_predef(\"%s\") — var not declared\n", name);
+        return;
+    }
+    g_predef_vars[idx].value = val;
+}
+
 static void strip_ws(const char *in, char *out, int out_sz) {
     int oi = 0;
     if (!in || !out || out_sz <= 0)
@@ -232,52 +241,54 @@ static void run_tests(void) {
     printf("predefined vars:\n");
     {
         int t_idx;
-        int x_idx;
-        int y_idx;
-        int z_idx;
+        char err[128];
         init_predef_vars();
-        t_idx = predef_idx("t");
-        x_idx = predef_idx("x");
-        y_idx = predef_idx("y");
-        z_idx = predef_idx("z");
 
+        t_idx = predef_idx("t");
         g_tests_run++;
         if (t_idx >= 0) g_tests_passed++;
         else printf("  FAIL: predefined var t missing\n");
-        g_tests_run++;
-        if (x_idx >= 0) g_tests_passed++;
-        else printf("  FAIL: predefined var x missing\n");
-        g_tests_run++;
-        if (y_idx >= 0) g_tests_passed++;
-        else printf("  FAIL: predefined var y missing\n");
-        g_tests_run++;
-        if (z_idx >= 0) g_tests_passed++;
-        else printf("  FAIL: predefined var z missing\n");
 
         g_tests_run++;
         if (t_idx >= 0 && fabsf(g_predef_vars[t_idx].value - 0.0f) < 1e-6f) g_tests_passed++;
         else printf("  FAIL: predefined var t initial value not zero\n");
+
         g_tests_run++;
-        if (x_idx >= 0 && fabsf(g_predef_vars[x_idx].value - 0.0f) < 1e-6f) g_tests_passed++;
-        else printf("  FAIL: predefined var x initial value not zero\n");
-        g_tests_run++;
-        if (y_idx >= 0 && fabsf(g_predef_vars[y_idx].value - 0.0f) < 1e-6f) g_tests_passed++;
-        else printf("  FAIL: predefined var y initial value not zero\n");
-        g_tests_run++;
-        if (z_idx >= 0 && fabsf(g_predef_vars[z_idx].value - 0.0f) < 1e-6f) g_tests_passed++;
-        else printf("  FAIL: predefined var z initial value not zero\n");
+        if (g_num_predef_vars == 1) g_tests_passed++;
+        else printf("  FAIL: init_predef_vars should register only t, got %d\n", g_num_predef_vars);
 
         g_tests_run++;
         if (predef_idx("not_a_predef") == -1) g_tests_passed++;
         else printf("  FAIL: unknown predefined var lookup did not return -1\n");
+
+        declare_predef_var("x", err, sizeof(err));
+        declare_predef_var("y", err, sizeof(err));
+        declare_predef_var("z", err, sizeof(err));
+        declare_predef_var("n", err, sizeof(err));
+        declare_predef_var("i", err, sizeof(err));
+        declare_predef_var("j", err, sizeof(err));
+        declare_predef_var("k", err, sizeof(err));
+
+        g_tests_run++;
+        if (predef_idx("x") >= 0) g_tests_passed++;
+        else printf("  FAIL: declared var x missing\n");
+        g_tests_run++;
+        if (predef_idx("y") >= 0) g_tests_passed++;
+        else printf("  FAIL: declared var y missing\n");
+        g_tests_run++;
+        if (predef_idx("z") >= 0) g_tests_passed++;
+        else printf("  FAIL: declared var z missing\n");
+        g_tests_run++;
+        if (predef_idx("n") >= 0) g_tests_passed++;
+        else printf("  FAIL: declared var n missing\n");
     }
 
     /* Variables */
-    g_predef_vars[0].value = 1.5f;  /* x = 1.5 */
-    g_predef_vars[1].value = 2.5f;  /* y = 2.5 */
-    g_predef_vars[2].value = 3.5f;  /* z = 3.5 */
-    g_predef_vars[predef_idx("n")].value = 24.0f; /* n = 24 */
-    g_predef_vars[predef_idx("t")].value = 4.0f;  /* t = 4 */
+    set_predef("x", 1.5f);
+    set_predef("y", 2.5f);
+    set_predef("z", 3.5f);
+    set_predef("n", 24.0f);
+    set_predef("t", 4.0f);
     ASSERT_FLOAT("x", 1.5f);
     ASSERT_FLOAT("y", 2.5f);
     ASSERT_FLOAT("z", 3.5f);
@@ -299,11 +310,11 @@ static void run_tests(void) {
     }
 
     /* Reset */
-    g_predef_vars[0].value = 0.0f;
-    g_predef_vars[1].value = 0.0f;
-    g_predef_vars[2].value = 0.0f;
-    g_predef_vars[predef_idx("n")].value = 0.0f;
-    g_predef_vars[predef_idx("t")].value = 0.0f;
+    set_predef("x", 0.0f);
+    set_predef("y", 0.0f);
+    set_predef("z", 0.0f);
+    set_predef("n", 0.0f);
+    set_predef("t", 0.0f);
 
     /* ---- parse_exprs ---- */
     printf("parse_exprs:\n");
@@ -408,9 +419,9 @@ static void run_tests(void) {
     ASSERT_FOR("for(i 0 10)", 0, "", 0, 0, 0);  /* missing commas */
 
     /* For with variables */
-    g_predef_vars[predef_idx("n")].value = 24.0f; /* n = 24 */
+    set_predef("n", 24.0f);
     ASSERT_FOR("for(i, 0, n)", 1, "i", 0.0f, 24.0f, 1.0f);
-    g_predef_vars[predef_idx("n")].value = 0.0f;
+    set_predef("n", 0.0f);
     {
         ExprVar vars[2] = { { "radius", 7.5f }, { "stepv", 0.5f } };
         char vn[16];

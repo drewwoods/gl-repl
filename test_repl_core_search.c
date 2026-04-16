@@ -23,6 +23,17 @@ static void type_search_text(const char *text) {
     }
 }
 
+static void declare_test_vars(void) {
+    char err[128];
+    declare_predef_var("x", err, sizeof(err));
+    declare_predef_var("y", err, sizeof(err));
+    declare_predef_var("z", err, sizeof(err));
+    declare_predef_var("i", err, sizeof(err));
+    declare_predef_var("j", err, sizeof(err));
+    declare_predef_var("k", err, sizeof(err));
+    declare_predef_var("n", err, sizeof(err));
+}
+
 static void set_live_input(const char *text) {
     strncpy(g_input, text, MAX_INPUT_LEN - 1);
     g_input[MAX_INPUT_LEN - 1] = '\0';
@@ -33,7 +44,7 @@ static void set_live_input(const char *text) {
 int main(void) {
     init_predef_vars();
 
-    repl_reset_state();
+    repl_reset_state(); declare_test_vars();
     repl_feed_line_public("glColor3f(1, 0, 0);");
     repl_feed_line_public("glEnd();");
     {
@@ -51,7 +62,7 @@ int main(void) {
                     strcmp(g_cmds[0].source, before0) == 0);
     }
 
-    repl_reset_state();
+    repl_reset_state(); declare_test_vars();
     repl_feed_line_public("// color COLOR");
     repl_feed_line_public("glColor3f(1, 0, 0);");
     repl_feed_line_public("glVertex3f(0, 0, 0);");
@@ -95,7 +106,7 @@ int main(void) {
         ASSERT_TRUE("up wrap ordinal", g_search_hit_ordinal == 3);
     }
 
-    repl_reset_state();
+    repl_reset_state(); declare_test_vars();
     repl_feed_line_public("glBegin(GL_POINTS);");
     repl_feed_line_public("glEnd();");
     repl_navigate_to_line(1);
@@ -105,7 +116,7 @@ int main(void) {
     ASSERT_TRUE("header search has no current hit", g_search_hit_line == -1);
     ASSERT_TRUE("zero-hit search leaves line unchanged", g_edit_line == 1);
 
-    repl_reset_state();
+    repl_reset_state(); declare_test_vars();
     repl_feed_line_public("glBegin(GL_POINTS);");
     repl_navigate_to_line(0);
     set_live_input("NeedleLine");
@@ -117,7 +128,7 @@ int main(void) {
     ASSERT_TRUE("active edit line search uses live input",
                 strcmp(repl_search_row_text(0), "NeedleLine") == 0);
 
-    repl_reset_state();
+    repl_reset_state(); declare_test_vars();
     set_live_input("ColorProbe");
     open_search();
     type_search_text("color");
@@ -161,7 +172,7 @@ int main(void) {
                     repl_search_find_prev_in_text("abaaba", "aba", 99) == 3);
     }
 
-    repl_reset_state();
+    repl_reset_state(); declare_test_vars();
     repl_feed_line_public("abc");
     open_search();
     type_search_text("abc");
@@ -175,7 +186,7 @@ int main(void) {
     repl_special_func(GLUT_KEY_END, 0, 0);
     ASSERT_TRUE("search cursor end", g_search_cursor_pos == g_search_query_len);
 
-    repl_reset_state();
+    repl_reset_state(); declare_test_vars();
     repl_feed_line_public("abcd");
     open_search();
     type_search_text("abcd");
@@ -185,7 +196,7 @@ int main(void) {
     ASSERT_TRUE("search backspace removes last char",
                 strcmp(g_search_query, "abc") == 0);
 
-    repl_reset_state();
+    repl_reset_state(); declare_test_vars();
     repl_feed_line_public("glBegin(GL_POINTS);");
     repl_feed_line_public("glEnd();");
     g_inserting = 1;

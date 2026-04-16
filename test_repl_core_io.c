@@ -13,6 +13,14 @@ static int g_pass = 0;
     else printf("FAIL [%s]\n", label); \
 } while (0)
 
+static void declare_test_vars(void) {
+    char err[128];
+    declare_predef_var("x", err, sizeof(err));
+    declare_predef_var("i", err, sizeof(err));
+    declare_predef_var("j", err, sizeof(err));
+    declare_predef_var("n", err, sizeof(err));
+}
+
 static size_t read_text_file(const char *path, char *buf, size_t buf_sz) {
     FILE *f = fopen(path, "r");
     size_t nread = 0;
@@ -73,7 +81,7 @@ int main(void) {
     const char *tess_path = "/tmp/repl_core_tess_output.c";
 
     init_predef_vars();
-    repl_reset_state();
+    repl_reset_state(); declare_test_vars();
 
     repl_feed_line_public("x = 1.25;");
     repl_feed_line_public("glBegin(GL_LINE_STRIP);");
@@ -162,7 +170,7 @@ int main(void) {
     }
     g_init_attenuate_points = 1;
 
-    repl_reset_state();
+    repl_reset_state(); declare_test_vars();
     ASSERT_TRUE("load saved output", repl_load_from_file(path) == 1);
     ASSERT_TRUE("roundtrip cmd count", g_num_cmds == before_n);
 
@@ -176,7 +184,7 @@ int main(void) {
     ASSERT_TRUE("flatten produced cmds", g_num_flat_cmds > 0);
 
     /* Camera state round-trip: non-default eye/center must survive save+load. */
-    repl_reset_state();
+    repl_reset_state(); declare_test_vars();
     repl_feed_line_public("glBegin(GL_POINTS);");
     repl_feed_line_public("glVertex3f(0, 0, 0);");
     repl_feed_line_public("glEnd();");
@@ -202,7 +210,7 @@ int main(void) {
         float saved_tx = g_cam_tx, saved_ty = g_cam_ty, saved_tz = g_cam_tz;
         g_cam_rx = 20.0f; g_cam_ry = 30.0f; g_cam_dist = 5.0f;
         g_cam_tx = 0.0f;  g_cam_ty = 0.0f;  g_cam_tz = 0.0f;
-        repl_reset_state();
+        repl_reset_state(); declare_test_vars();
         ASSERT_TRUE("load camera output", repl_load_from_file(path) == 1);
         ASSERT_TRUE("camera rx restored",   fabsf(g_cam_rx   - saved_rx)   < 1e-2f);
         ASSERT_TRUE("camera ry restored",   fabsf(g_cam_ry   - saved_ry)   < 1e-2f);
@@ -212,7 +220,7 @@ int main(void) {
         ASSERT_TRUE("camera tz restored",   fabsf(g_cam_tz   - saved_tz)   < 1e-2f);
     }
 
-    repl_reset_state();
+    repl_reset_state(); declare_test_vars();
     repl_feed_line_public("x = 1;");
     repl_feed_line_public("func0(radius, yoff) {");
     repl_feed_line_public("glVertex3f(radius, yoff, 0);");
@@ -250,7 +258,7 @@ int main(void) {
                     strstr(buf, "glDisable(GL_COLOR_MATERIAL);") != NULL);
     }
 
-    repl_reset_state();
+    repl_reset_state(); declare_test_vars();
     ASSERT_TRUE("load saved param func output", repl_load_from_file(func_path) == 1);
     ASSERT_TRUE("param func roundtrip cmd count", g_num_cmds == before_n);
     {
@@ -277,7 +285,7 @@ int main(void) {
     ASSERT_TRUE("param func flatten y",
                 fabsf(g_flat_cmds[g_num_flat_cmds - 1].args[1] - 3.0f) < 1e-6f);
 
-    repl_reset_state();
+    repl_reset_state(); declare_test_vars();
     repl_feed_line_public("x = 0.25;");
     repl_feed_line_public("gluSphere(x, 16, 12);");
     repl_feed_line_public("gluCylinder(0.15, 0.05, 1.5, 8, 1);");
@@ -299,7 +307,7 @@ int main(void) {
                     strstr(buf, "gluPartialDisk(g_quadric, 0.1, 0.5, 12, 4, 30, 180);") != NULL);
     }
 
-    repl_reset_state();
+    repl_reset_state(); declare_test_vars();
     ASSERT_TRUE("load saved quadric output", repl_load_from_file(quadric_path) == 1);
     {
         int sphere_seen = 0;
@@ -323,7 +331,7 @@ int main(void) {
         ASSERT_TRUE("loaded quadric sphere keeps expr source", sphere_seen == 1);
     }
 
-    repl_reset_state();
+    repl_reset_state(); declare_test_vars();
     repl_feed_line_public("func0(radius) {");
     repl_feed_line_public("gluBegin(GLU_POLYGON);");
     repl_feed_line_public("gluBegin(GLU_CONTOUR);");

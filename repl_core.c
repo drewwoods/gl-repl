@@ -448,6 +448,8 @@ typedef struct {
     int   num_cmds;
     int   edit_line;
     float predef_vals[MAX_PREDEF_VARS];
+    char  predef_names[MAX_PREDEF_VARS][16];
+    int   num_predef_vars;
 } UserScene;
 
 static UserScene g_user_scene;
@@ -678,6 +680,7 @@ static int cmd_type_needs_semicolon(CmdType t) {
     switch (t) {
     case CMD_COMMENT:
     case CMD_LABEL:
+    case CMD_VAR_DECLARE:
         return 0;
     default:
         return 1;
@@ -697,6 +700,7 @@ static int cmd_type_needs_block_indent(CmdType t) {
     case CMD_IF_BEGIN:
     case CMD_IF_END:
     case CMD_VAR_ASSIGN:
+    case CMD_VAR_DECLARE:
         return 0;
     default:
         return 1;
@@ -1012,6 +1016,16 @@ void repl_reformat_commands(void) {
             } else {
                 snprintf(fmt.source, sizeof(fmt.source), "%s//", ind_s);
             }
+            g_cmds[i] = fmt;
+            break;
+        }
+        case CMD_VAR_DECLARE: {
+            int off = snprintf(fmt.source, sizeof(fmt.source), "%sfloat ", ind_s);
+            for (int n = 0; n < orig.var_decl_count && off < (int)sizeof(fmt.source) - 4; n++) {
+                if (n > 0) off += snprintf(fmt.source + off, sizeof(fmt.source) - off, ", ");
+                off += snprintf(fmt.source + off, sizeof(fmt.source) - off, "%s", orig.var_names[n]);
+            }
+            snprintf(fmt.source + off, sizeof(fmt.source) - off, ";");
             g_cmds[i] = fmt;
             break;
         }
@@ -1570,6 +1584,10 @@ static int parse_command_internal(const char *line, GLCmd *cmd,
                 if (!found1) { set_status(def->usage1); return 0; }
 
                 if (!found2 && def->type == CMD_LIGHT_MODEL_I) {
+                    char verr[128];
+                    if (!validate_expression_idents(p2, vars, num_vars, verr, sizeof(verr))) {
+                        set_status(verr); return 0;
+                    }
                     float fv; if (parse_exprs(p2, &fv, 1, vars, num_vars) == 1) { val2_f = fv; found2 = 1; }
                 }
 
@@ -1618,6 +1636,12 @@ static int parse_command_internal(const char *line, GLCmd *cmd,
     /* Table-driven parsing for standard commands */
     for (const StdCmdDef *def = g_std_cmds; def->name; def++) {
         if (strcmp(func, def->name) == 0) {
+            {
+                char verr[128];
+                if (!validate_expression_idents(args, vars, num_vars, verr, sizeof(verr))) {
+                    set_status(verr); return 0;
+                }
+            }
             cmd->num_args = parse_exprs(args, cmd->args, def->num_args, vars, num_vars);
             if (cmd->num_args == def->num_args) {
                 cmd->type = def->type;
@@ -1716,6 +1740,12 @@ static int parse_command_internal(const char *line, GLCmd *cmd,
         if (!found1) { set_status("face: GL_FRONT, GL_BACK, GL_FRONT_AND_BACK"); return 0; }
         if (!found2) { set_status("pname: GL_DIFFUSE, GL_AMBIENT, GL_SPECULAR, GL_SHININESS..."); return 0; }
 
+        {
+            char verr[128];
+            if (!validate_expression_idents(a3, vars, num_vars, verr, sizeof(verr))) {
+                set_status(verr); return 0;
+            }
+        }
         float parsed_args[8];
         int num_parsed = parse_exprs(a3, parsed_args, 8, vars, num_vars);
         if (num_parsed != 1 && num_parsed != 4) {
@@ -1772,6 +1802,12 @@ static int parse_command_internal(const char *line, GLCmd *cmd,
             return 0;
         }
 
+        {
+            char verr[128];
+            if (!validate_expression_idents(rest, vars, num_vars, verr, sizeof(verr))) {
+                set_status(verr); return 0;
+            }
+        }
         float parsed_args[4];
         int num_parsed = parse_exprs(rest, parsed_args, 4, vars, num_vars);
         if (num_parsed != 3) {
@@ -1819,6 +1855,12 @@ static int parse_command_internal(const char *line, GLCmd *cmd,
         int fn = func[4] - '0';
         float dummy_vals[MAX_EXPR_VARS];
         int arg_count = 0;
+        if (args[0] != '\0') {
+            char verr[128];
+            if (!validate_expression_idents(args, vars, num_vars, verr, sizeof(verr))) {
+                set_status(verr); return 0;
+            }
+        }
         if (!parse_expr_list_exact(args, dummy_vals, MAX_EXPR_VARS,
                                    vars, num_vars, &arg_count)) {
             set_status("Invalid function call arguments");
@@ -1893,6 +1935,12 @@ static int parse_command_internal(const char *line, GLCmd *cmd,
 
     /* gluColor(r, g, b[, a]) — set per-vertex color for tessellator */
     if (strcmp(func, "gluColor") == 0) {
+        {
+            char verr[128];
+            if (!validate_expression_idents(args, vars, num_vars, verr, sizeof(verr))) {
+                set_status(verr); return 0;
+            }
+        }
         cmd->num_args = parse_exprs(args, cmd->args, 4, vars, num_vars);
         if (cmd->num_args >= 3) {
             if (cmd->num_args < 4) cmd->args[3] = 1.0f;
@@ -2479,6 +2527,8 @@ static void flatten_range(int start, int end_idx, ExprVar *vars, int nv,
             i++;
             continue;
         }
+
+        if (g_cmds[i].type == CMD_VAR_DECLARE) { i++; continue; }
 
         /* Variable assignments: update predefined var and pass through */
         if (g_cmds[i].type == CMD_VAR_ASSIGN) {
@@ -3540,6 +3590,7 @@ void execute_commands(void) {
         case CMD_FOR_BEGIN: case CMD_FOR_END:
         case CMD_FUNC_DEF: case CMD_FUNC_END: case CMD_CALL:
         case CMD_COMMENT:
+        case CMD_VAR_DECLARE:
         case CMD_TYPE_COUNT:
             break;
         }
@@ -3887,8 +3938,11 @@ static void save_user_scene(void) {
     memcpy(g_user_scene.cmds, g_cmds, (size_t)g_num_cmds * sizeof(GLCmd));
     g_user_scene.num_cmds  = g_num_cmds;
     g_user_scene.edit_line = g_edit_line;
-    for (int i = 0; i < g_num_predef_vars; i++)
+    g_user_scene.num_predef_vars = g_num_predef_vars;
+    for (int i = 0; i < g_num_predef_vars; i++) {
         g_user_scene.predef_vals[i] = g_predef_vars[i].value;
+        memcpy(g_user_scene.predef_names[i], g_predef_vars[i].name, 16);
+    }
     g_user_scene_valid = 1;
 }
 
@@ -3899,8 +3953,11 @@ static void restore_user_scene(void) {
     g_num_cmds     = g_user_scene.num_cmds;
     g_num_flat_cmds = 0;
     g_edit_line    = g_user_scene.edit_line;
-    for (int i = 0; i < g_num_predef_vars; i++)
+    g_num_predef_vars = g_user_scene.num_predef_vars;
+    for (int i = 0; i < g_user_scene.num_predef_vars; i++) {
         g_predef_vars[i].value = g_user_scene.predef_vals[i];
+        memcpy(g_predef_vars[i].name, g_user_scene.predef_names[i], 16);
+    }
     g_inserting = 0;
     load_line_to_input(g_edit_line);
     mark_normals_dirty();
@@ -3921,6 +3978,7 @@ static void load_example_lines(const char *const *lines) {
     g_cursor_pos = 0;
     g_newline_buf[0] = '\0';
     g_newline_len = 0;
+    init_predef_vars();
 
     for (int i = 0; lines[i]; i++)
         feed_line(lines[i]);
@@ -4193,9 +4251,8 @@ void repl_reset_state(void) {
     g_normals_dirty = 1;
     g_clear_color[0] = 0.10f; g_clear_color[1] = 0.10f;
     g_clear_color[2] = 0.13f; g_clear_color[3] = 1.0f;
+    init_predef_vars();
     ensure_t_var_idx_cached();
-    if (g_t_var_idx >= 0)
-        g_predef_vars[g_t_var_idx].value = 0.0f;
     clear_autocomplete_state();
     search_clear_all();
     update_render_state_strings();
