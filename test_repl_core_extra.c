@@ -40,7 +40,6 @@ static void declare_test_vars(void) {
 
 /* Some functions are not in internal header but are non-static */
 const char *mode_name(GLenum mode);
-const char *cmd_type_name(CmdType t);
 int in_begin_block(void);
 int cmd_indent_chars(int pos);
 GLenum current_begin_mode(void);

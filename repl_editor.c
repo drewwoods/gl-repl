@@ -284,12 +284,15 @@ void delete_cmd_range(int start, int count, const char *what) {
     }
 
     /* Snapshot names to undeclare after the memmove */
-    char removed_names[MAX_PREDEF_VARS][16];
+    char removed_names[MAX_PREDEF_VARS][16] = {{0}};
     int n_removed = 0;
     for (int i = start; i < end; i++) {
         if (g_cmds[i].type != CMD_VAR_DECLARE) continue;
-        for (int n = 0; n < g_cmds[i].var_decl_count && n_removed < MAX_PREDEF_VARS; n++)
-            strncpy(removed_names[n_removed++], g_cmds[i].var_names[n], 15);
+        for (int n = 0; n < g_cmds[i].var_decl_count && n_removed < MAX_PREDEF_VARS; n++) {
+            strncpy(removed_names[n_removed], g_cmds[i].var_names[n], 15);
+            removed_names[n_removed][15] = '\0';
+            n_removed++;
+        }
     }
 
     push_undo_snapshot();
@@ -417,10 +420,31 @@ int try_commit_float_decl(void) {
         count++;
     }
     if (*p != ';' || count == 0) return 0;
+    p++;
+    while (*p && isspace((unsigned char)*p)) p++;
+    if (*p != '\0' && !(p[0] == '/' && p[1] == '/')) {
+        set_status("syntax error: unexpected trailing text after declaration");
+        return 1;
+    }
 
     /* Validate all names atomically before registering any */
     for (int i = 0; i < count; i++) {
-        if (find_predef_var_idx(names[i]) >= 0) continue;
+        /* Reject duplicates within the same declaration (e.g. float a, a;) */
+        for (int j = 0; j < i; j++) {
+            if (strcmp(names[i], names[j]) == 0) {
+                char buf[128];
+                snprintf(buf, sizeof(buf), "duplicate name '%s' in declaration", names[i]);
+                set_status(buf);
+                return 1;
+            }
+        }
+        /* Reject re-declaring an already-declared variable */
+        if (find_predef_var_idx(names[i]) >= 0) {
+            char buf[128];
+            snprintf(buf, sizeof(buf), "'%s' is already declared", names[i]);
+            set_status(buf);
+            return 1;
+        }
         if (is_reserved_ident(names[i])) {
             char buf[128];
             snprintf(buf, sizeof(buf), "'%s' is reserved", names[i]);
@@ -435,10 +459,8 @@ int try_commit_float_decl(void) {
         }
     }
 
-    /* Count how many are genuinely new */
-    int new_count = 0;
-    for (int i = 0; i < count; i++)
-        if (find_predef_var_idx(names[i]) < 0) new_count++;
+    /* Count how many are genuinely new (all of them, since we reject duplicates above) */
+    int new_count = count;
     if (g_num_predef_vars + new_count > MAX_PREDEF_VARS) {
         char buf[128];
         snprintf(buf, sizeof(buf), "variable table full (max %d)", MAX_PREDEF_VARS);

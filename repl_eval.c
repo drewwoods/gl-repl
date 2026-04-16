@@ -111,6 +111,8 @@ int validate_expression_idents(const char *src, const ExprVar *vars,
                                int num_vars, char *err, int errsz) {
     const char *s = src;
     while (*s) {
+        /* Stop at inline comments */
+        if (s[0] == '/' && s[1] == '/') break;
         if (!isalpha((unsigned char)*s) && *s != '_') { s++; continue; }
         const char *start = s;
         while (*s && (isalnum((unsigned char)*s) || *s == '_')) s++;
