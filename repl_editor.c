@@ -468,12 +468,6 @@ int try_commit_float_decl(void) {
         return 1;
     }
 
-    push_undo_snapshot();
-
-    /* Register new names */
-    for (int i = 0; i < count; i++)
-        declare_predef_var(names[i], NULL, 0);
-
     /* Build the GLCmd */
     GLCmd cmd;
     memset(&cmd, 0, sizeof(cmd));
@@ -499,6 +493,43 @@ int try_commit_float_decl(void) {
         }
         snprintf(cmd.source + off, sizeof(cmd.source) - off, ";");
 
+        /* Check overwrite feasibility BEFORE registering new names */
+        if (!g_inserting && fpos < g_num_cmds &&
+            g_cmds[fpos].type == CMD_VAR_DECLARE) {
+            for (int d = 0; d < g_cmds[fpos].var_decl_count; d++) {
+                const char *nm = g_cmds[fpos].var_names[d];
+                for (int j = 0; j < g_num_cmds; j++) {
+                    if (j == fpos) continue;
+                    if (source_uses_ident(g_cmds[j].source, nm)) {
+                        char buf[128];
+                        snprintf(buf, sizeof(buf),
+                                 "variable '%s' is in use, cannot overwrite", nm);
+                        set_status(buf);
+                        return 1;
+                    }
+                }
+            }
+        }
+
+        /* Register new names (safe — overwrite check passed) */
+        for (int i = 0; i < count; i++)
+            declare_predef_var(names[i], NULL, 0);
+
+        /* Undeclare old names when overwriting a CMD_VAR_DECLARE */
+        if (!g_inserting && fpos < g_num_cmds &&
+            g_cmds[fpos].type == CMD_VAR_DECLARE) {
+            for (int d = 0; d < g_cmds[fpos].var_decl_count; d++) {
+                const char *nm = g_cmds[fpos].var_names[d];
+                int slot = find_predef_var_idx(nm);
+                if (slot < 0) continue;
+                undeclare_predef_var(nm);
+                for (int j = 0; j < g_num_cmds; j++) {
+                    if (g_cmds[j].type == CMD_VAR_ASSIGN && g_cmds[j].num_args > slot)
+                        g_cmds[j].num_args--;
+                }
+            }
+        }
+
         if (g_inserting) {
             if (g_num_cmds < MAX_COMMANDS) {
                 for (int j = g_num_cmds; j > fpos; j--)
@@ -508,31 +539,6 @@ int try_commit_float_decl(void) {
                 g_edit_line++;
             }
         } else if (fpos < g_num_cmds) {
-            if (g_cmds[fpos].type == CMD_VAR_DECLARE) {
-                for (int d = 0; d < g_cmds[fpos].var_decl_count; d++) {
-                    const char *nm = g_cmds[fpos].var_names[d];
-                    for (int j = 0; j < g_num_cmds; j++) {
-                        if (j == fpos) continue;
-                        if (source_uses_ident(g_cmds[j].source, nm)) {
-                            char buf[128];
-                            snprintf(buf, sizeof(buf),
-                                     "variable '%s' is in use, cannot overwrite", nm);
-                            set_status(buf);
-                            return 1;
-                        }
-                    }
-                }
-                for (int d = 0; d < g_cmds[fpos].var_decl_count; d++) {
-                    const char *nm = g_cmds[fpos].var_names[d];
-                    int slot = find_predef_var_idx(nm);
-                    if (slot < 0) continue;
-                    undeclare_predef_var(nm);
-                    for (int j = 0; j < g_num_cmds; j++) {
-                        if (g_cmds[j].type == CMD_VAR_ASSIGN && g_cmds[j].num_args > slot)
-                            g_cmds[j].num_args--;
-                    }
-                }
-            }
             g_cmds[fpos] = cmd;
             g_edit_line++;
             load_line_to_input(g_edit_line);
@@ -1826,6 +1832,7 @@ void keyboard_func(unsigned char key, int x, int y) {
                 memset(&cmd, 0, sizeof(cmd));
                 if (dnv > 0) {
                     /* float decl must be checked before assignment */
+                    push_undo_snapshot();
                     if (try_commit_float_decl()) {
                         clear_autocomplete_state();
                         return;
@@ -1915,6 +1922,7 @@ void keyboard_func(unsigned char key, int x, int y) {
                 dnv = collect_visible_vars(fpos, dvars, MAX_EXPR_VARS);
                 if (dnv > 0) {
                     /* float decl must be checked before assignment */
+                    push_undo_snapshot();
                     if (try_commit_float_decl()) {
                         g_inserting = 1;
                         g_input[0] = '\0';
@@ -1966,6 +1974,7 @@ void keyboard_func(unsigned char key, int x, int y) {
                     }
                 } else {
                     /* float decl must be checked before assignment */
+                    push_undo_snapshot();
                     if (try_commit_float_decl()) {
                         g_inserting = 1;
                         g_input[0] = '\0';
