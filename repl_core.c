@@ -707,7 +707,7 @@ static int cmd_type_needs_block_indent(CmdType t) {
     }
 }
 
-static const char *cmd_type_name(CmdType t) {
+const char *cmd_type_name(CmdType t) {
     static const char *const names[] = {
         "CMD_BEGIN", "CMD_END",
         "CMD_VERTEX3F", "CMD_VERTEX2F",
