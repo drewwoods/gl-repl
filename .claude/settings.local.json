@@ -25,7 +25,8 @@
       "Bash(gh api *)",
       "Bash(git stash *)",
       "Bash(./test_repl_autocomplete)",
-      "Bash(./test_repl_core_extra)"
+      "Bash(./test_repl_core_extra)",
+      "Bash(git restore *)"
     ]
   }
 }

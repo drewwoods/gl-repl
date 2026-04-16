@@ -568,6 +568,60 @@ int main() {
                          g_predef_vars[yi].value == 2.0f);
     }
 
+    /* 32. float decl inserted above existing non-decl commands.
+     * Regression: previously `float tmp = 40;` committed after
+     * `n = tmp;` could land below its reference, producing
+     *     n = tmp;
+     *     float tmp = 40;
+     * which is semantically wrong. New behavior pushes decls to
+     * the top of non-decl code. */
+    {
+        repl_reset_state();
+        repl_feed_line_public("float n;");
+        repl_feed_line_public("n = 5;");
+        repl_feed_line_public("glBegin(GL_POINTS);");
+        ASSERT_INT("decl-top baseline: 3 cmds", g_num_cmds, 3);
+
+        repl_feed_line_public("float tmp = 40;");
+        ASSERT_INT("decl-top: 4 cmds after float tmp", g_num_cmds, 4);
+        ASSERT_INT("decl-top: g_cmds[0] is float n", g_cmds[0].type, CMD_VAR_DECLARE);
+        ASSERT_STR("decl-top: g_cmds[0] name", g_cmds[0].var_names[0], "n");
+        ASSERT_INT("decl-top: g_cmds[1] is float tmp", g_cmds[1].type, CMD_VAR_DECLARE);
+        ASSERT_STR("decl-top: g_cmds[1] name", g_cmds[1].var_names[0], "tmp");
+        ASSERT_INT("decl-top: g_cmds[2] is assign", g_cmds[2].type, CMD_VAR_ASSIGN);
+        ASSERT_INT("decl-top: g_cmds[3] is glBegin", g_cmds[3].type, CMD_BEGIN);
+    }
+
+    /* 33. float decl from edit position in middle of code still
+     * lands at the top (not at the cursor). */
+    {
+        repl_reset_state();
+        repl_feed_line_public("glBegin(GL_LINES);");
+        repl_feed_line_public("glEnd();");
+        ASSERT_INT("decl-top mid: 2 cmds", g_num_cmds, 2);
+
+        /* Simulate being on line 1 in overwrite mode when committing
+         * a float decl through the ';' key (no trailing ';'). */
+        extern int try_commit_float_decl(void);
+        strncpy(g_input, "float radius = 3", MAX_INPUT_LEN - 1);
+        g_input_len = (int)strlen(g_input);
+        g_cursor_pos = g_input_len;
+        g_edit_line = 1;
+        g_inserting = 0;
+
+        int result = try_commit_float_decl();
+        ASSERT_INT("decl-top mid: accepted", result, 1);
+        ASSERT_INT("decl-top mid: 3 cmds", g_num_cmds, 3);
+        ASSERT_INT("decl-top mid: g_cmds[0] is decl",
+                   g_cmds[0].type, CMD_VAR_DECLARE);
+        ASSERT_STR("decl-top mid: g_cmds[0] name",
+                   g_cmds[0].var_names[0], "radius");
+        ASSERT_INT("decl-top mid: g_cmds[1] preserved glBegin",
+                   g_cmds[1].type, CMD_BEGIN);
+        ASSERT_INT("decl-top mid: g_cmds[2] preserved glEnd",
+                   g_cmds[2].type, CMD_END);
+    }
+
     printf("\n%d / %d tests passed\n", g_pass, g_run);
     return (g_pass == g_run) ? 0 : 1;
 }
