@@ -363,10 +363,27 @@ static char *collect_loaded_definition_lines(void) {
     return joined;
 }
 
+static int find_example_index_by_name(const char *name) {
+    for (int idx = 0; idx < repl_example_count(); idx++) {
+        const char *example_name = repl_example_name(idx);
+
+        if (example_name && strcmp(example_name, name) == 0)
+            return idx;
+    }
+
+    return -1;
+}
+
 static void load_example_for_test(int idx) {
     repl_reset_state(); declare_test_vars();
     pin_code_panel_state();
     repl_load_example(idx);
+}
+
+static void load_custom_example_lines_for_test(const char *const *lines) {
+    repl_reset_state(); declare_test_vars();
+    pin_code_panel_state();
+    repl_load_example_lines_for_test(lines);
 }
 
 static int dump_single_example_to_stdout(int idx) {
@@ -403,6 +420,84 @@ int main(int argc, char **argv) {
     }
 
     init_predef_vars();
+
+    {
+        int idx = find_example_index_by_name("Stress test (all features)");
+        char *dump;
+
+        ASSERT_TRUE("stress example index found", idx >= 0);
+        if (idx >= 0) {
+            load_example_for_test(idx);
+            ASSERT_TRUE("stress example camera rx preset",
+                        fabsf(g_cam_rx - 27.5f) < 1e-4f);
+            ASSERT_TRUE("stress example camera ry preset",
+                        fabsf(g_cam_ry - (-24.0f)) < 1e-4f);
+            ASSERT_TRUE("stress example camera dist preset",
+                        fabsf(g_cam_dist - 12.5f) < 1e-4f);
+            ASSERT_TRUE("stress example camera tx preset",
+                        fabsf(g_cam_tx - 0.6f) < 1e-4f);
+            ASSERT_TRUE("stress example camera ty preset",
+                        fabsf(g_cam_ty - 0.1f) < 1e-4f);
+            ASSERT_TRUE("stress example camera tz preset",
+                        fabsf(g_cam_tz - 0.4f) < 1e-4f);
+
+            dump = dump_current_code_panel_text();
+            ASSERT_TRUE("stress example camera dump alloc", dump != NULL);
+            if (dump) {
+                ASSERT_TRUE("stress example camera marker hidden",
+                            strstr(dump, "// camera") == NULL);
+                ASSERT_TRUE("stress example camera rotate hidden",
+                            strstr(dump,
+                                   "glRotatef(27.5f, 1.0f, 0.0f, 0.0f);") == NULL);
+                free(dump);
+            }
+        }
+    }
+
+    {
+        static const char *const invalid_camera_example[] = {
+            "// camera",
+            "glTranslatef(1.0f, 0.0f, -9.0f);",
+            "glRotatef(20.0f, 1.0f, 0.0f, 0.0f);",
+            "glRotatef(91.0f, 0.0f, 1.0f, 0.0f);",
+            "glTranslatef(-0.5f, 0.0f, 0.0f);",
+            "glBegin(GL_POINTS);",
+            "glVertex3f(1, 2, 3);",
+            "glEnd();",
+            NULL
+        };
+        char *dump;
+
+        load_custom_example_lines_for_test(invalid_camera_example);
+        ASSERT_TRUE("invalid camera header loads body cmds", g_num_cmds == 3);
+        ASSERT_TRUE("invalid camera header keeps cmds valid",
+                    examples_have_no_invalid_cmds());
+        ASSERT_TRUE("invalid camera header preserves rx",
+                    fabsf(g_cam_rx - 18.0f) < 1e-4f);
+        ASSERT_TRUE("invalid camera header preserves ry",
+                    fabsf(g_cam_ry - 32.0f) < 1e-4f);
+        ASSERT_TRUE("invalid camera header preserves dist",
+                    fabsf(g_cam_dist - 5.5f) < 1e-4f);
+        ASSERT_TRUE("invalid camera header preserves tx",
+                    fabsf(g_cam_tx - 0.0f) < 1e-4f);
+        ASSERT_TRUE("invalid camera header preserves ty",
+                    fabsf(g_cam_ty - 0.0f) < 1e-4f);
+        ASSERT_TRUE("invalid camera header preserves tz",
+                    fabsf(g_cam_tz - 0.0f) < 1e-4f);
+
+        dump = dump_current_code_panel_text();
+        ASSERT_TRUE("invalid camera header dump alloc", dump != NULL);
+        if (dump) {
+            ASSERT_TRUE("invalid camera marker hidden",
+                        strstr(dump, "// camera") == NULL);
+            ASSERT_TRUE("invalid camera rotate hidden",
+                        strstr(dump,
+                               "glRotatef(91.0f, 0.0f, 1.0f, 0.0f);") == NULL);
+            ASSERT_TRUE("invalid camera body kept",
+                        strstr(dump, "glVertex3f(1, 2, 3);") != NULL);
+            free(dump);
+        }
+    }
 
     for (int idx = 0; idx < repl_example_count(); idx++) {
         char fixture_path[256];

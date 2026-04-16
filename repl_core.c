@@ -3974,8 +3974,125 @@ static void restore_user_scene(void) {
     set_status("Restored your scene");
 }
 
+static const char *example_cam_skip_ws(const char *text) {
+    while (*text && isspace((unsigned char)*text))
+        text++;
+    return text;
+}
+
+static const char *example_cam_skip_sep(const char *text) {
+    while (*text == ' ' || *text == '\t' || *text == ',' ||
+           *text == 'f' || *text == 'F')
+        text++;
+    return text;
+}
+
+static int example_cam_read_floats(const char *text, float *out_vals,
+                                   int out_count, const char **end_out) {
+    for (int i = 0; i < out_count; i++) {
+        char *end = NULL;
+
+        text = example_cam_skip_sep(text);
+        out_vals[i] = strtof(text, &end);
+        if (end == text)
+            return 0;
+        text = end;
+    }
+
+    if (end_out)
+        *end_out = text;
+    return 1;
+}
+
+static int example_cam_finish_call(const char *text) {
+    text = example_cam_skip_sep(text);
+    while (*text == ')' || *text == ';' || isspace((unsigned char)*text))
+        text++;
+    return *text == '\0';
+}
+
+static int example_cam_parse_translate(const char *text,
+                                       float *x, float *y, float *z) {
+    const char *end = NULL;
+    float vals[3];
+
+    text = example_cam_skip_ws(text);
+    if (strncmp(text, "glTranslatef", 12) != 0)
+        return 0;
+
+    text = strchr(text, '(');
+    if (!text)
+        return 0;
+    text++;
+
+    if (!example_cam_read_floats(text, vals, 3, &end) ||
+        !example_cam_finish_call(end))
+        return 0;
+
+    *x = vals[0];
+    *y = vals[1];
+    *z = vals[2];
+    return 1;
+}
+
+static int example_cam_parse_rotate(const char *text,
+                                    float axis_x, float axis_y, float axis_z,
+                                    float *angle_out) {
+    const char *end = NULL;
+    float vals[4];
+
+    text = example_cam_skip_ws(text);
+    if (strncmp(text, "glRotatef", 9) != 0)
+        return 0;
+
+    text = strchr(text, '(');
+    if (!text)
+        return 0;
+    text++;
+
+    if (!example_cam_read_floats(text, vals, 4, &end) ||
+        !example_cam_finish_call(end))
+        return 0;
+
+    if (fabsf(vals[1] - axis_x) > 1e-4f ||
+        fabsf(vals[2] - axis_y) > 1e-4f ||
+        fabsf(vals[3] - axis_z) > 1e-4f)
+        return 0;
+
+    *angle_out = vals[0];
+    return 1;
+}
+
+static int try_apply_example_camera_header(const char *const *lines) {
+    float dist_x, dist_y, dist_z;
+    float rx, ry;
+    float tx, ty, tz;
+
+    if (!lines || !lines[0] || strcmp(lines[0], "// camera") != 0)
+        return 0;
+    if (!lines[1] || !lines[2] || !lines[3] || !lines[4])
+        return 0;
+
+    if (!example_cam_parse_translate(lines[1], &dist_x, &dist_y, &dist_z) ||
+        fabsf(dist_x) > 1e-4f || fabsf(dist_y) > 1e-4f ||
+        !example_cam_parse_rotate(lines[2], 1.0f, 0.0f, 0.0f, &rx) ||
+        !example_cam_parse_rotate(lines[3], 0.0f, 1.0f, 0.0f, &ry) ||
+        !example_cam_parse_translate(lines[4], &tx, &ty, &tz))
+        return 0;
+
+    g_cam_dist = -dist_z;
+    g_cam_rx = rx;
+    g_cam_ry = ry;
+    g_cam_tx = -tx;
+    g_cam_ty = -ty;
+    g_cam_tz = -tz;
+    return 1;
+}
+
 /* Load an example from an array of source lines */
 static void load_example_lines(const char *const *lines) {
+    int line_start = 0;
+
     /* Clear state */
     g_num_cmds = 0;
     g_num_flat_cmds = 0;
@@ -3988,7 +4105,12 @@ static void load_example_lines(const char *const *lines) {
     g_newline_len = 0;
     init_predef_vars();
 
-    for (int i = 0; lines[i]; i++)
+    if (lines && lines[0] && strcmp(lines[0], "// camera") == 0) {
+        try_apply_example_camera_header(lines);
+        line_start = 5;
+    }
+
+    for (int i = line_start; lines[i]; i++)
         feed_line(lines[i]);
 
     /* Clean up: exit insert mode if still active */
@@ -4188,6 +4310,10 @@ const char *repl_example_name(int idx) {
 
 void repl_load_example(int idx) {
     load_example(idx);
+}
+
+void repl_load_example_lines_for_test(const char *const *lines) {
+    load_example_lines(lines);
 }
 
 int repl_user_scene_valid(void) {
