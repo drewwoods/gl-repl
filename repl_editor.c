@@ -395,11 +395,17 @@ int try_commit_float_decl(void) {
         while (*p && isspace((unsigned char)*p)) p++;
         if (*p == ';') break;
         if (count > 0) {
-            if (*p != ',') return 0;
+            if (*p != ',') {
+                set_status("expected ',' or ';' in float declaration");
+                return 1;
+            }
             p++;
             while (*p && isspace((unsigned char)*p)) p++;
         }
-        if (!isalpha((unsigned char)*p) && *p != '_') return 0;
+        if (!isalpha((unsigned char)*p) && *p != '_') {
+            set_status("syntax error in float declaration: expected identifier");
+            return 1;
+        }
         const char *start = p;
         while (*p && (isalnum((unsigned char)*p) || *p == '_')) p++;
         int len = (int)(p - start);
@@ -419,7 +425,14 @@ int try_commit_float_decl(void) {
         names[count][len] = '\0';
         count++;
     }
-    if (*p != ';' || count == 0) return 0;
+    if (count == 0) {
+        set_status("float declaration requires at least one identifier");
+        return 1;
+    }
+    if (*p != ';') {
+        set_status("missing ';' in float declaration");
+        return 1;
+    }
     p++;
     while (*p && isspace((unsigned char)*p)) p++;
     if (*p != '\0' && !(p[0] == '/' && p[1] == '/')) {
