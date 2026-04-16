@@ -60,6 +60,7 @@ int  replay_seek_to_src_line(int target_line);
 void replay_step_back(void);
 void replay_restart_from_beginning(void);
 int  feed_line(const char *line);
+const char *cmd_type_name(CmdType t);
 void repl_advance_time(float dt);
 void repl_reset_time_to_zero(void);
 void search_clear_all(void);

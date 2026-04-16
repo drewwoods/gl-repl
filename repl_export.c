@@ -1241,7 +1241,8 @@ static void write_canonical_cmd_as_c(FILE *f, const GLCmd *cmd, int for_depth,
         fprintf(f, "%s\n", cmd->source);
         break;
     case CMD_VAR_DECLARE:
-        fprintf(f, "%s\n", cmd->source);
+        /* Variables are emitted as file-scope statics by write_predef_var_globals().
+         * Skip local declarations here to avoid shadowing those globals. */
         break;
     case CMD_VAR_ASSIGN: {
         char c_src[MAX_LINE_LEN];
