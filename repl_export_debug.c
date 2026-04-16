@@ -1558,13 +1558,13 @@ static int import_parse_declare_marker(const char *line, int *loaded,
     cmd.var_decl_count = count;
 
     /* Append the command directly, bypassing try_commit_float_decl so we
-     * don't reject vars that are already registered.
-     * Also advance g_edit_line so subsequent feed_line() calls in the
-     * load loop do not overwrite this newly-inserted slot. */
+     * don't reject vars that are already registered. */
+    fprintf(stderr, "DEBUG @declare: count=%d name[0]=%s g_num_cmds=%d MAX=%d\n",
+            count, count > 0 ? cmd.var_names[0] : "none", g_num_cmds, MAX_COMMANDS);
     if (g_num_cmds < MAX_COMMANDS) {
         g_cmds[g_num_cmds++] = cmd;
-        g_edit_line = g_num_cmds;
         (*loaded)++;
+        fprintf(stderr, "DEBUG @declare: appended CMD_VAR_DECLARE, g_num_cmds now=%d\n", g_num_cmds);
     } else if (warnings) {
         (*warnings)++;
     }
@@ -2152,7 +2152,13 @@ int load_from_file(const char *filename) {
         if (len == 0 || *p == '\0') continue;
         if (import_parse_predef_decl(p))
             continue;
-        import_feed_one_line(p, &loaded, &warnings);
+        {
+            int before_line = g_num_cmds;
+            import_feed_one_line(p, &loaded, &warnings);
+            if (g_num_cmds == before_line) {
+                fprintf(stderr, "DEBUG: snippet line added 0 cmds: '%s'\n", p);
+            }
+        }
     }
 
     fclose(f);
@@ -2170,7 +2176,9 @@ int load_from_file(const char *filename) {
 
     if (loaded > 0) {
         depth_cache_invalidate();
+        fprintf(stderr, "DEBUG: before reformat loaded=%d g_num_cmds=%d\n", loaded, g_num_cmds);
         repl_reformat_commands();
+        fprintf(stderr, "DEBUG: after reformat g_num_cmds=%d\n", g_num_cmds);
         char msg[256];
         if (warnings > 0)
             snprintf(msg, sizeof(msg),

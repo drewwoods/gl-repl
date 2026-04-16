@@ -3179,7 +3179,7 @@ void render_var_panel(void) {
         int len = (int)strlen(g_predef_vars[i].name);
         if (len > max_name_len) max_name_len = len;
     }
-    int label_w  = max_name_len * 8 + 8;
+    int label_w  = max_name_len * FONT_SMALL_W + FONT_SMALL_W;
     if (label_w > pw / 3) label_w = pw / 3;
     int label_x  = px + 6;
     int val_x    = px + 6 + label_w;
