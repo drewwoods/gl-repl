@@ -22,7 +22,10 @@
       "Bash(./sample --dump-code *)",
       "Bash(./sample --dump-flat *)",
       "Bash(gh pr *)",
-      "Bash(gh api *)"
+      "Bash(gh api *)",
+      "Bash(git stash *)",
+      "Bash(./test_repl_autocomplete)",
+      "Bash(./test_repl_core_extra)"
     ]
   }
 }

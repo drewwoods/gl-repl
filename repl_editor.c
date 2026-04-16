@@ -390,14 +390,22 @@ int try_commit_float_decl(void) {
     p += 5;
 
     char names[MAX_NAMES_PER_DECL][16];
-    int count = 0;
+    float init_vals[MAX_NAMES_PER_DECL];
+    int has_init[MAX_NAMES_PER_DECL];
+    int var_count = 0;
+    memset(has_init, 0, sizeof(has_init));
     while (*p) {
         while (*p && isspace((unsigned char)*p)) p++;
-        if (*p == ';') break;
-        if (count > 0) {
+        /* Accept ';' or end-of-string as terminator (';' key doesn't
+         * append to g_input, so interactive commits lack the ';'). */
+        if (*p == ';' || *p == '\0') break;
+        if (var_count > 0) {
             if (*p != ',') {
-                set_status("expected ',' or ';' in float declaration");
-                return 1;
+                /* Not a comma — might be '=' handled below, or junk.
+                 * If we already consumed at least one name and the
+                 * previous iteration didn't end with '=', this is
+                 * not a valid float declaration. */
+                return 0;
             }
             p++;
             while (*p && isspace((unsigned char)*p)) p++;
@@ -413,7 +421,7 @@ int try_commit_float_decl(void) {
             set_status("invalid identifier (max 15 chars)");
             return 1;
         }
-        if (count >= MAX_NAMES_PER_DECL) {
+        if (var_count >= MAX_NAMES_PER_DECL) {
             char buf[128];
             snprintf(buf, sizeof(buf),
                      "too many names per declaration (max %d); split across lines",
@@ -421,19 +429,62 @@ int try_commit_float_decl(void) {
             set_status(buf);
             return 1;
         }
-        memcpy(names[count], start, len);
-        names[count][len] = '\0';
-        count++;
+        memcpy(names[var_count], start, len);
+        names[var_count][len] = '\0';
+
+        /* Check for optional initializer: float name = expr */
+        while (*p && isspace((unsigned char)*p)) p++;
+        if (*p == '=' && p[1] != '=') {
+            p++;  /* skip '=' */
+            while (*p && isspace((unsigned char)*p)) p++;
+            if (*p == '\0' || *p == ';' || *p == ',') {
+                set_status("expected expression after '='");
+                return 1;
+            }
+            int fpos = g_inserting ? g_edit_line :
+                       (g_edit_line < g_num_cmds ? g_edit_line : g_num_cmds);
+            ExprVar vis[MAX_EXPR_VARS];
+            int vis_n = collect_visible_vars(fpos, vis, MAX_EXPR_VARS);
+            /* Extract the initializer expression up to ',' or ';' or end */
+            char init_expr[MAX_LINE_LEN];
+            const char *expr_start = p;
+            int depth = 0;
+            while (*p && *p != ';') {
+                if (*p == '(') depth++;
+                else if (*p == ')') depth--;
+                else if (*p == ',' && depth == 0) break;
+                p++;
+            }
+            int elen = (int)(p - expr_start);
+            if (elen >= (int)sizeof(init_expr)) elen = (int)sizeof(init_expr) - 1;
+            memcpy(init_expr, expr_start, elen);
+            init_expr[elen] = '\0';
+            /* Trim trailing whitespace */
+            while (elen > 0 && isspace((unsigned char)init_expr[elen - 1]))
+                init_expr[--elen] = '\0';
+            if (elen == 0) {
+                set_status("expected expression after '='");
+                return 1;
+            }
+            char verr[128];
+            if (!validate_expression_idents(init_expr, vis_n > 0 ? vis : NULL,
+                                            vis_n, verr, sizeof(verr))) {
+                set_status(verr);
+                return 1;
+            }
+            ExprCtx ctx = { init_expr, g_predef_vars, g_num_predef_vars };
+            init_vals[var_count] = eval_expr(&ctx);
+            has_init[var_count] = 1;
+        }
+
+        var_count++;
     }
-    if (count == 0) {
+    if (var_count == 0) {
         set_status("float declaration requires at least one identifier");
         return 1;
     }
-    if (*p != ';') {
-        set_status("missing ';' in float declaration");
-        return 1;
-    }
-    p++;
+    /* Accept ';' or end-of-string as valid terminator */
+    if (*p == ';') p++;
     while (*p && isspace((unsigned char)*p)) p++;
     if (*p != '\0' && !(p[0] == '/' && p[1] == '/')) {
         set_status("syntax error: unexpected trailing text after declaration");
@@ -441,7 +492,7 @@ int try_commit_float_decl(void) {
     }
 
     /* Validate all names atomically before registering any */
-    for (int i = 0; i < count; i++) {
+    for (int i = 0; i < var_count; i++) {
         /* Reject duplicates within the same declaration (e.g. float a, a;) */
         for (int j = 0; j < i; j++) {
             if (strcmp(names[i], names[j]) == 0) {
@@ -473,7 +524,7 @@ int try_commit_float_decl(void) {
     }
 
     /* Count how many are genuinely new (all of them, since we reject duplicates above) */
-    int new_count = count;
+    int new_count = var_count;
     if (g_num_predef_vars + new_count > MAX_PREDEF_VARS) {
         char buf[128];
         snprintf(buf, sizeof(buf), "variable table full (max %d)", MAX_PREDEF_VARS);
@@ -486,8 +537,8 @@ int try_commit_float_decl(void) {
     memset(&cmd, 0, sizeof(cmd));
     cmd.type = CMD_VAR_DECLARE;
     cmd.valid = 1;
-    cmd.var_decl_count = count;
-    for (int i = 0; i < count; i++)
+    cmd.var_decl_count = var_count;
+    for (int i = 0; i < var_count; i++)
         strncpy(cmd.var_names[i], names[i], 15);
 
     {
@@ -500,9 +551,12 @@ int try_commit_float_decl(void) {
         indent[ind] = '\0';
 
         int off = snprintf(cmd.source, sizeof(cmd.source), "%sfloat ", indent);
-        for (int i = 0; i < count && off < (int)sizeof(cmd.source) - 4; i++) {
+        for (int i = 0; i < var_count && off < (int)sizeof(cmd.source) - 4; i++) {
             if (i > 0) off += snprintf(cmd.source + off, sizeof(cmd.source) - off, ", ");
             off += snprintf(cmd.source + off, sizeof(cmd.source) - off, "%s", names[i]);
+            if (has_init[i])
+                off += snprintf(cmd.source + off, sizeof(cmd.source) - off,
+                                " = %g", init_vals[i]);
         }
         snprintf(cmd.source + off, sizeof(cmd.source) - off, ";");
 
@@ -525,8 +579,14 @@ int try_commit_float_decl(void) {
         }
 
         /* Register new names (safe — overwrite check passed) */
-        for (int i = 0; i < count; i++)
+        for (int i = 0; i < var_count; i++) {
             declare_predef_var(names[i], NULL, 0);
+            if (has_init[i]) {
+                int idx = find_predef_var_idx(names[i]);
+                if (idx >= 0)
+                    g_predef_vars[idx].value = init_vals[i];
+            }
+        }
 
         /* Undeclare old names when overwriting a CMD_VAR_DECLARE */
         if (!g_inserting && fpos < g_num_cmds &&
@@ -565,7 +625,7 @@ int try_commit_float_decl(void) {
     {
         char msg[128];
         int off = snprintf(msg, sizeof(msg), "declared ");
-        for (int i = 0; i < count && off < (int)sizeof(msg) - 4; i++) {
+        for (int i = 0; i < var_count && off < (int)sizeof(msg) - 4; i++) {
             if (i > 0) off += snprintf(msg + off, sizeof(msg) - off, ", ");
             off += snprintf(msg + off, sizeof(msg) - off, "%s", names[i]);
         }
