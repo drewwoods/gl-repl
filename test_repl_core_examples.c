@@ -93,13 +93,13 @@ static void pin_code_panel_state(void) {
     g_cam_tx = 0.0f;
     g_cam_ty = 0.0f;
     g_cam_tz = 0.0f;
-    g_axes_theme = 0;
-    g_backdrop_mode = 0;
-    g_show_outlines = 1;
+    g_axes_theme = CFG_DEFAULT_AXES_THEME;
+    g_backdrop_mode = CFG_DEFAULT_BACKDROP_MODE;
+    g_show_outlines = CFG_DEFAULT_VERTEX_OUTLINES;
     g_accum_aa_enabled = 1;
-    g_layout_vertical = 0;
-    g_multisample_enabled = 1;
-    g_line_smooth_enabled = 0;
+    g_layout_vertical = CFG_DEFAULT_LAYOUT_VERTICAL;
+    g_multisample_enabled = CFG_DEFAULT_MULTISAMPLE;
+    g_line_smooth_enabled = CFG_DEFAULT_LINE_SMOOTH;
 }
 
 static void seed_nondefault_example_presentation_state(void) {
@@ -461,31 +461,31 @@ int main(int argc, char **argv) {
         repl_load_example_lines_for_test(no_cfg_reset_example);
 
         ASSERT_TRUE("no cfg reset wireframe default",
-                    g_wireframe == 0);
+                    g_wireframe == CFG_DEFAULT_WIREFRAME);
         ASSERT_TRUE("no cfg reset grid default",
-                    g_grid_theme == 8);
+                    g_grid_theme == CFG_DEFAULT_GRID_THEME);
         ASSERT_TRUE("no cfg reset grid major default",
-                    g_grid_major_idx == GRID_MAJOR_1);
+                    g_grid_major_idx == CFG_DEFAULT_GRID_MAJOR_IDX);
         ASSERT_TRUE("no cfg reset grid extent default",
-                    g_grid_extent_idx == GRID_EXTENT_FAR);
+                    g_grid_extent_idx == CFG_DEFAULT_GRID_EXTENT_IDX);
         ASSERT_TRUE("no cfg reset axes default",
-                    g_axes_theme == 0);
+                    g_axes_theme == CFG_DEFAULT_AXES_THEME);
         ASSERT_TRUE("no cfg reset labels default",
-                    g_show_vnums == 1);
+                    g_show_vnums == CFG_DEFAULT_VERTEX_LABELS);
         ASSERT_TRUE("no cfg reset normals default",
-                    g_show_normals == 0);
+                    g_show_normals == CFG_DEFAULT_NORMAL_VECTORS);
         ASSERT_TRUE("no cfg reset outlines default",
-                    g_show_outlines == 1);
+                    g_show_outlines == CFG_DEFAULT_VERTEX_OUTLINES);
         ASSERT_TRUE("no cfg reset points default",
-                    g_show_vpoints == 1);
+                    g_show_vpoints == CFG_DEFAULT_VERTEX_POINTS);
         ASSERT_TRUE("no cfg reset guides default",
-                    g_show_guides == 1);
+                    g_show_guides == CFG_DEFAULT_VERTEX_GUIDES);
         ASSERT_TRUE("no cfg reset lights default",
-                    g_show_lights == 1);
+                    g_show_lights == CFG_DEFAULT_LIGHT_INDICATORS);
         ASSERT_TRUE("no cfg reset backdrop default",
-                    g_backdrop_mode == 0);
+                    g_backdrop_mode == CFG_DEFAULT_BACKDROP_MODE);
         ASSERT_TRUE("no cfg reset camera rotate default",
-                    g_cam_rotate == 0);
+                    g_cam_rotate == CFG_DEFAULT_CAMERA_ROTATE);
         ASSERT_TRUE("no cfg keeps camera rx",
                     fabsf(g_cam_rx - (-41.0f)) < 1e-4f);
         ASSERT_TRUE("no cfg keeps camera ry",
@@ -522,25 +522,25 @@ int main(int argc, char **argv) {
         ASSERT_TRUE("partial cfg backdrop applied",
                     g_backdrop_mode == 1);
         ASSERT_TRUE("partial cfg grid reset default",
-                    g_grid_theme == 8);
+                    g_grid_theme == CFG_DEFAULT_GRID_THEME);
         ASSERT_TRUE("partial cfg grid major reset default",
-                    g_grid_major_idx == GRID_MAJOR_1);
+                    g_grid_major_idx == CFG_DEFAULT_GRID_MAJOR_IDX);
         ASSERT_TRUE("partial cfg grid extent reset default",
-                    g_grid_extent_idx == GRID_EXTENT_FAR);
+                    g_grid_extent_idx == CFG_DEFAULT_GRID_EXTENT_IDX);
         ASSERT_TRUE("partial cfg axes reset default",
-                    g_axes_theme == 0);
+                    g_axes_theme == CFG_DEFAULT_AXES_THEME);
         ASSERT_TRUE("partial cfg normals reset default",
-                    g_show_normals == 0);
+                    g_show_normals == CFG_DEFAULT_NORMAL_VECTORS);
         ASSERT_TRUE("partial cfg outlines reset default",
-                    g_show_outlines == 1);
+                    g_show_outlines == CFG_DEFAULT_VERTEX_OUTLINES);
         ASSERT_TRUE("partial cfg points reset default",
-                    g_show_vpoints == 1);
+                    g_show_vpoints == CFG_DEFAULT_VERTEX_POINTS);
         ASSERT_TRUE("partial cfg guides reset default",
-                    g_show_guides == 1);
+                    g_show_guides == CFG_DEFAULT_VERTEX_GUIDES);
         ASSERT_TRUE("partial cfg lights reset default",
-                    g_show_lights == 1);
+                    g_show_lights == CFG_DEFAULT_LIGHT_INDICATORS);
         ASSERT_TRUE("partial cfg camera rotate reset default",
-                    g_cam_rotate == 0);
+                    g_cam_rotate == CFG_DEFAULT_CAMERA_ROTATE);
         ASSERT_TRUE("partial cfg keeps camera rx",
                     fabsf(g_cam_rx - (-41.0f)) < 1e-4f);
     }
