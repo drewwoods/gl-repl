@@ -87,11 +87,13 @@ int parse_workspace_header_line(const char *line) {
         int idx = find_predef_var_idx(name);
         if (idx < 0) {
             char err[128];
-            if (declare_predef_var(name, err, sizeof(err)))
-                idx = find_predef_var_idx(name);
+            if (!declare_predef_var(name, err, sizeof(err)))
+                return 0;
+            idx = find_predef_var_idx(name);
+            if (idx < 0)
+                return 0;
         }
-        if (idx >= 0)
-            g_predef_vars[idx].value = val;
+        g_predef_vars[idx].value = val;
         return 1;
     }
 

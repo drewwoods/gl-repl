@@ -119,6 +119,17 @@ int validate_expression_idents(const char *src, const ExprVar *vars,
     while (*s) {
         /* Stop at inline comments */
         if (s[0] == '/' && s[1] == '/') break;
+
+        /* Skip number literals, including scientific notation like 1e-06. */
+        if (isdigit((unsigned char)*s) ||
+            (*s == '.' && isdigit((unsigned char)s[1]))) {
+            char *end;
+            (void)strtof(s, &end);
+            if (end != s) {
+                s = end;
+                continue;
+            }
+        }
         /* Skip numeric literals including scientific notation (e.g. 1e-06) */
         if (isdigit((unsigned char)*s) ||
             (*s == '.' && isdigit((unsigned char)s[1]))) {
