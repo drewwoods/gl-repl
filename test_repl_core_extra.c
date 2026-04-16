@@ -40,6 +40,7 @@ static void declare_test_vars(void) {
 
 /* Some functions are not in internal header but are non-static */
 const char *mode_name(GLenum mode);
+const char *cmd_type_name(CmdType t);
 int in_begin_block(void);
 int cmd_indent_chars(int pos);
 GLenum current_begin_mode(void);
@@ -383,6 +384,79 @@ void test_debug_dump_flat_commands() {
     ASSERT_TRUE("dump re-flattens commands", g_num_flat_cmds >= 1);
 }
 
+/* Capture the output of repl_debug_dump_editor() into a malloc'd string. */
+static char *capture_editor_dump(void) {
+    FILE *tmp = tmpfile();
+    char *buf = NULL;
+    long len;
+    size_t nread;
+
+    if (!tmp)
+        return NULL;
+    repl_debug_dump_editor(tmp);
+    fflush(tmp);
+    if (fseek(tmp, 0, SEEK_END) != 0) goto done;
+    len = ftell(tmp);
+    if (len < 0) goto done;
+    if (fseek(tmp, 0, SEEK_SET) != 0) goto done;
+    buf = (char *)malloc((size_t)len + 1);
+    if (!buf) goto done;
+    nread = fread(buf, 1, (size_t)len, tmp);
+    buf[nread] = '\0';
+done:
+    fclose(tmp);
+    return buf;
+}
+
+void test_var_declare_cmd() {
+    printf("--- CMD_VAR_DECLARE coverage ---\n");
+
+    /* Feed a float declaration and verify it produces CMD_VAR_DECLARE */
+    repl_reset_state();
+    repl_feed_line_public("float a, b, c;");
+
+    /* 1. The source array should have exactly one CMD_VAR_DECLARE entry */
+    int found_decl = 0;
+    for (int i = 0; i < g_num_cmds; i++) {
+        if (g_cmds[i].type == CMD_VAR_DECLARE)
+            found_decl++;
+    }
+    ASSERT_INT("float decl produces CMD_VAR_DECLARE", found_decl, 1);
+
+    /* 2. The declared variables should exist in g_predef_vars */
+    ASSERT_TRUE("var 'a' declared", find_predef_var_idx("a") >= 0);
+    ASSERT_TRUE("var 'b' declared", find_predef_var_idx("b") >= 0);
+    ASSERT_TRUE("var 'c' declared", find_predef_var_idx("c") >= 0);
+
+    /* 3. cmd_type_name returns the right string (catches positional table bugs) */
+    ASSERT_STR("cmd_type_name(CMD_VAR_DECLARE)",
+               cmd_type_name(CMD_VAR_DECLARE), "CMD_VAR_DECLARE");
+
+    /* 4. Editor dump contains CMD_VAR_DECLARE (catches cmd_type_name omissions) */
+    char *dump = capture_editor_dump();
+    ASSERT_TRUE("editor dump captured", dump != NULL);
+    if (dump) {
+        ASSERT_TRUE("dump contains CMD_VAR_DECLARE",
+                     strstr(dump, "CMD_VAR_DECLARE") != NULL);
+        /* Should NOT contain CMD_UNKNOWN for any line */
+        ASSERT_TRUE("dump has no CMD_UNKNOWN",
+                     strstr(dump, "CMD_UNKNOWN") == NULL);
+        free(dump);
+    }
+
+    /* 5. Every CmdType value has a non-UNKNOWN name (exhaustive table check) */
+    for (int t = 0; t < CMD_TYPE_COUNT; t++) {
+        const char *name = cmd_type_name((CmdType)t);
+        if (strcmp(name, "CMD_UNKNOWN") == 0) {
+            printf("FAIL [cmd_type_name completeness] CmdType %d -> CMD_UNKNOWN\n", t);
+            g_run++;
+        } else {
+            g_run++;
+            g_pass++;
+        }
+    }
+}
+
 void test_time() {
     printf("--- Time functions ---\n");
     repl_reset_state(); declare_test_vars();
@@ -403,6 +477,7 @@ int main(int argc, char **argv) {
     test_examples();
     test_user_scene();
     test_debug_dump_flat_commands();
+    test_var_declare_cmd();
     test_time();
 
     printf("\n%d / %d tests passed\n", g_pass, g_run);
