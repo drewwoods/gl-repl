@@ -93,6 +93,11 @@ static void pin_code_panel_state(void) {
     g_cam_tx = 0.0f;
     g_cam_ty = 0.0f;
     g_cam_tz = 0.0f;
+    g_axes_theme = 0;
+    g_backdrop_mode = 0;
+    g_show_outlines = 1;
+    g_accum_aa_enabled = 1;
+    g_layout_vertical = 0;
     g_multisample_enabled = 1;
     g_line_smooth_enabled = 0;
 }
@@ -428,6 +433,12 @@ int main(int argc, char **argv) {
         ASSERT_TRUE("stress example index found", idx >= 0);
         if (idx >= 0) {
             load_example_for_test(idx);
+            ASSERT_TRUE("stress example axes preset",
+                        g_axes_theme == 4);
+            ASSERT_TRUE("stress example outlines preset",
+                        g_show_outlines == 0);
+            ASSERT_TRUE("stress example backdrop preset",
+                        g_backdrop_mode == 1);
             ASSERT_TRUE("stress example camera rx preset",
                         fabsf(g_cam_rx - 27.5f) < 1e-4f);
             ASSERT_TRUE("stress example camera ry preset",
@@ -444,6 +455,13 @@ int main(int argc, char **argv) {
             dump = dump_current_code_panel_text();
             ASSERT_TRUE("stress example camera dump alloc", dump != NULL);
             if (dump) {
+                  ASSERT_TRUE("stress example cfg axes hidden",
+                        strstr(dump, "// @cfg axes = 4") == NULL);
+                  ASSERT_TRUE("stress example cfg outlines hidden",
+                        strstr(dump,
+                            "// @cfg vertex_outlines = 0") == NULL);
+                  ASSERT_TRUE("stress example cfg backdrop hidden",
+                        strstr(dump, "// @cfg backdrop = 1") == NULL);
                 ASSERT_TRUE("stress example camera marker hidden",
                             strstr(dump, "// camera") == NULL);
                 ASSERT_TRUE("stress example camera rotate hidden",
@@ -451,6 +469,85 @@ int main(int argc, char **argv) {
                                    "glRotatef(27.5f, 1.0f, 0.0f, 0.0f);") == NULL);
                 free(dump);
             }
+        }
+    }
+
+    {
+        static const char *const mixed_cfg_camera_example[] = {
+            "// @cfg axes = 5",
+            "// @cfg accum_aa = 0",
+            "// @cfg top_code_panel = 1",
+            "// camera",
+            "glTranslatef(0.0f, 0.0f, -9.0f);",
+            "glRotatef(11.0f, 1.0f, 0.0f, 0.0f);",
+            "glRotatef(-17.0f, 0.0f, 1.0f, 0.0f);",
+            "glTranslatef(-0.2f, -0.3f, 0.4f);",
+            "glBegin(GL_POINTS);",
+            "glVertex3f(0, 0, 0);",
+            "glEnd();",
+            NULL
+        };
+        char *dump;
+
+        load_custom_example_lines_for_test(mixed_cfg_camera_example);
+        ASSERT_TRUE("mixed cfg camera allowed axes applied",
+                    g_axes_theme == 5);
+        ASSERT_TRUE("mixed cfg camera disallowed accum aa ignored",
+                    g_accum_aa_enabled == 1);
+        ASSERT_TRUE("mixed cfg camera disallowed layout ignored",
+                    g_layout_vertical == 0);
+        ASSERT_TRUE("mixed cfg camera rx preset",
+                    fabsf(g_cam_rx - 11.0f) < 1e-4f);
+        ASSERT_TRUE("mixed cfg camera ry preset",
+                    fabsf(g_cam_ry - (-17.0f)) < 1e-4f);
+        ASSERT_TRUE("mixed cfg camera dist preset",
+                    fabsf(g_cam_dist - 9.0f) < 1e-4f);
+        ASSERT_TRUE("mixed cfg camera tx preset",
+                    fabsf(g_cam_tx - 0.2f) < 1e-4f);
+        ASSERT_TRUE("mixed cfg camera ty preset",
+                    fabsf(g_cam_ty - 0.3f) < 1e-4f);
+        ASSERT_TRUE("mixed cfg camera tz preset",
+                    fabsf(g_cam_tz - (-0.4f)) < 1e-4f);
+        ASSERT_TRUE("mixed cfg camera body cmds loaded", g_num_cmds == 3);
+
+        dump = dump_current_code_panel_text();
+        ASSERT_TRUE("mixed cfg camera dump alloc", dump != NULL);
+        if (dump) {
+            ASSERT_TRUE("mixed cfg camera allowed cfg hidden",
+                        strstr(dump, "// @cfg axes = 5") == NULL);
+            ASSERT_TRUE("mixed cfg camera disallowed cfg hidden",
+                        strstr(dump, "// @cfg accum_aa = 0") == NULL);
+            ASSERT_TRUE("mixed cfg camera marker hidden",
+                        strstr(dump, "// camera") == NULL);
+            ASSERT_TRUE("mixed cfg camera body kept",
+                        strstr(dump, "glVertex3f(0, 0, 0);") != NULL);
+            free(dump);
+        }
+    }
+
+    {
+        static const char *const nonleading_cfg_example[] = {
+            "// plain comment",
+            "// @cfg axes = 4",
+            "glBegin(GL_POINTS);",
+            "glVertex3f(1, 0, 0);",
+            "glEnd();",
+            NULL
+        };
+        char *dump;
+
+        load_custom_example_lines_for_test(nonleading_cfg_example);
+        ASSERT_TRUE("nonleading cfg leaves axes unchanged",
+                    g_axes_theme == 0);
+        ASSERT_TRUE("nonleading cfg comments preserved",
+                g_num_cmds == 5);
+
+        dump = dump_current_code_panel_text();
+        ASSERT_TRUE("nonleading cfg dump alloc", dump != NULL);
+        if (dump) {
+            ASSERT_TRUE("nonleading cfg comment remains visible",
+                        strstr(dump, "// @cfg axes = 4") != NULL);
+            free(dump);
         }
     }
 

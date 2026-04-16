@@ -12,15 +12,22 @@
  *   "funcN()"     -> CMD_CALL
  *   anything else -> parse_command() as a regular GL command
  *
- * Predefined examples can optionally reserve their first five lines for a
- * camera preset:
+ * Predefined examples can optionally start with contiguous scene-presentation
+ * config metadata lines using the exported-file format:
+ *   "// @cfg axes = 4"
+ *   "// @cfg vertex_outlines = 0"
+ * Supported slugs are limited to visual scene settings such as wireframe,
+ * grid, axes, vertex overlays, backdrop, and camera_rotate. These metadata
+ * lines are consumed by the example loader and are not shown in the code panel.
+ *
+ * A camera preset may then follow immediately after the cfg lines:
  *   "// camera"
  *   "glTranslatef(0.0f, 0.0f, -dist);"
  *   "glRotatef(rx, 1.0f, 0.0f, 0.0f);"
  *   "glRotatef(ry, 0.0f, 1.0f, 0.0f);"
  *   "glTranslatef(-tx, -ty, -tz);"
- * Those metadata lines are consumed by the example loader and are not shown
- * in the code panel.
+ * Both cfg and camera metadata are consumed by the example loader and are not
+ * shown in the code panel.
  */
 
 /* Example 0: Lit cube (default) */
@@ -586,6 +593,9 @@ static const char *const g_example_waves[] = {
  * multiple functions, recursion, conditionals, variables, tessellation,
  * GLU primitives, matrix stack, animation, and long line count. */
 static const char *const g_example_stress[] = {
+    "// @cfg axes = 4",
+    "// @cfg vertex_outlines = 0",
+    "// @cfg backdrop = 1",
     "// camera",
     "glTranslatef(0.0f, 0.0f, -12.5f);",
     "glRotatef(27.5f, 1.0f, 0.0f, 0.0f);",
