@@ -35,6 +35,7 @@ void display() {
   glEnable(GL_LIGHT0);
   glShadeModel(GL_SMOOTH);
   n = 24;
+  b = 3.0; // breath
   for(i, 0, n) {
     glBegin(GL_TRIANGLE_STRIP);
       for(j, 0, n+1) {

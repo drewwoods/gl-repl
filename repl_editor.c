@@ -515,6 +515,7 @@ int try_commit_float_decl(void) {
 int try_assign_variable(void) {
     char name[16];
     char rhs[MAX_LINE_LEN];
+    char comment[MAX_LINE_LEN];
     int has_rhs_vars;
     float val;
     char indent[32];
@@ -522,6 +523,18 @@ int try_assign_variable(void) {
 
     if (!repl_extract_assignment_parts(g_input, name, sizeof(name), rhs, sizeof(rhs)))
         return 0;
+
+    comment[0] = '\0';
+    {
+        const char *comment_p = strstr(g_input, "//");
+        if (comment_p) {
+            while (*comment_p && isspace((unsigned char)*comment_p))
+                comment_p++;
+            if (comment_p[0] == '/' && comment_p[1] == '/') {
+                snprintf(comment, sizeof(comment), " %s", comment_p);
+            }
+        }
+    }
 
     int var_idx = find_predef_var_idx(name);
     if (var_idx < 0) {
@@ -567,7 +580,8 @@ int try_assign_variable(void) {
                 ind = (int)sizeof(indent) - 1;
             memset(indent, ' ', (size_t)ind);
             indent[ind] = '\0';
-            snprintf(cmd.source, sizeof(cmd.source), "%s%s = %s;", indent, name, rhs);
+            snprintf(cmd.source, sizeof(cmd.source), "%s%s = %s;%s",
+                     indent, name, rhs, comment);
 
             if (g_inserting) {
                 if (g_num_cmds < MAX_COMMANDS) {

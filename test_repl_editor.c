@@ -173,7 +173,7 @@ int main() {
 
     /* 13. try_assign_variable — inserting mode (inserts before cursor) */
     {
-        repl_reset_state();
+        repl_reset_state(); declare_test_vars();
         repl_feed_line_public("glVertex3f(1,1,1)");
         repl_feed_line_public("glVertex3f(2,2,2)");
         /* Put cursor at line 1, inserting mode */
@@ -191,7 +191,7 @@ int main() {
 
     /* 14. try_assign_variable — overwrite existing cmd */
     {
-        repl_reset_state();
+        repl_reset_state(); declare_test_vars();
         repl_feed_line_public("n = 1.0");
         repl_feed_line_public("glVertex3f(1,1,1)");
         /* Navigate to the assignment line and overwrite */
@@ -319,7 +319,7 @@ int main() {
 
     /* 22. try_commit_if_block — update existing if-begin */
     {
-        repl_reset_state();
+        repl_reset_state(); declare_test_vars();
         strcpy(g_input, "if(x > 0) {");
         g_input_len = (int)strlen(g_input);
         try_commit_if_block();
@@ -386,7 +386,7 @@ int main() {
 
     /* 28. Committing close brace — if-block */
     {
-        repl_reset_state();
+        repl_reset_state(); declare_test_vars();
         strcpy(g_input, "if(x > 0) {");
         g_input_len = (int)strlen(g_input);
         try_commit_if_block();
