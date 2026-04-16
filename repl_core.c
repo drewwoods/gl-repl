@@ -4089,9 +4089,88 @@ static int try_apply_example_camera_header(const char *const *lines) {
     return 1;
 }
 
+static int example_cfg_extract_slug(const char *text,
+                                    char *slug, int slug_sz) {
+    const char *p = text;
+    int slug_len = 0;
+
+    if (!text || !slug || slug_sz < 2)
+        return 0;
+
+    p = example_cam_skip_ws(p);
+    if (p[0] != '/' || p[1] != '/')
+        return 0;
+    p += 2;
+    while (*p && isspace((unsigned char)*p))
+        p++;
+    if (*p != '@')
+        return 0;
+    p++;
+
+    if (strncmp(p, "cfg", 3) != 0 || !isspace((unsigned char)p[3]))
+        return 0;
+    p += 4;
+    while (*p && isspace((unsigned char)*p))
+        p++;
+    if (*p != '_' && !isalnum((unsigned char)*p))
+        return 0;
+
+    while ((*p == '_' || isalnum((unsigned char)*p)) &&
+           slug_len < slug_sz - 1)
+        slug[slug_len++] = *p++;
+    slug[slug_len] = '\0';
+    if (slug_len == 0)
+        return 0;
+
+    while (*p && isspace((unsigned char)*p))
+        p++;
+    return *p == '=';
+}
+
+static int example_cfg_slug_allowed(const char *slug) {
+    static const char *const allowed_slugs[] = {
+        "wireframe",
+        "grid",
+        "grid_major",
+        "grid_extent",
+        "axes",
+        "vertex_labels",
+        "normal_vectors",
+        "vertex_outlines",
+        "vertex_points",
+        "vertex_guides",
+        "light_indicators",
+        "backdrop",
+        "camera_rotate",
+        NULL
+    };
+
+    for (int i = 0; allowed_slugs[i]; i++) {
+        if (strcmp(allowed_slugs[i], slug) == 0)
+            return 1;
+    }
+    return 0;
+}
+
+static int consume_example_cfg_header(const char *const *lines) {
+    int count = 0;
+
+    while (lines && lines[count]) {
+        char slug[32];
+
+        if (!example_cfg_extract_slug(lines[count], slug, sizeof(slug)))
+            break;
+        if (example_cfg_slug_allowed(slug))
+            parse_workspace_header_line(lines[count]);
+        count++;
+    }
+
+    return count;
+}
+
 /* Load an example from an array of source lines */
 static void load_example_lines(const char *const *lines) {
-    int line_start = 0;
+    const char *const *body = lines;
 
     /* Clear state */
     g_num_cmds = 0;
@@ -4105,13 +4184,17 @@ static void load_example_lines(const char *const *lines) {
     g_newline_len = 0;
     init_predef_vars();
 
-    if (lines && lines[0] && strcmp(lines[0], "// camera") == 0) {
-        try_apply_example_camera_header(lines);
-        line_start = 5;
+    if (body)
+        body += consume_example_cfg_header(body);
+
+    if (body && body[0] && strcmp(body[0], "// camera") == 0) {
+        try_apply_example_camera_header(body);
+        for (int skip = 0; skip < 5 && body[0]; skip++)
+            body++;
     }
 
-    for (int i = line_start; lines[i]; i++)
-        feed_line(lines[i]);
+    for (; body && *body; body++)
+        feed_line(*body);
 
     /* Clean up: exit insert mode if still active */
     g_inserting = 0;
