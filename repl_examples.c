@@ -32,6 +32,7 @@
 
 /* Example 0: Lit cube (default) */
 static const char *const g_example_cube[] = {
+    "glClearColor(0.1, 0.1, 0.1, 1.0);",
     "glEnable(GL_DEPTH_TEST);",
     "glEnable(GL_LIGHTING);",
     "glEnable(GL_NORMALIZE);",
@@ -67,6 +68,7 @@ static const char *const g_example_cube[] = {
 
 /* Example 1: Animated ring — for-loop + t variable */
 static const char *const g_example_ring[] = {
+    "glClearColor(0.1, 0.1, 0.1, 1.0);",
     "glEnable(GL_DEPTH_TEST);",
     "glBegin(GL_LINE_LOOP);",
     "for(i, 0, 48) {",
@@ -87,6 +89,7 @@ static const char *const g_example_ring[] = {
 
 /* Example 2: Function demo — define reusable triangle, call with transforms */
 static const char *const g_example_func[] = {
+    "glClearColor(0.1, 0.1, 0.1, 1.0);",
     "glEnable(GL_DEPTH_TEST);",
     "func0 {",
         "glBegin(GL_TRIANGLES);",
@@ -109,6 +112,7 @@ static const char *const g_example_func[] = {
 
 /* Example 3: Parametric polygon helper — function args driving local for-loops */
 static const char *const g_example_func_loop[] = {
+    "glClearColor(0.1, 0.1, 0.1, 1.0);",
     "glEnable(GL_DEPTH_TEST);",
     "glEnable(GL_NORMALIZE);",
     "func0(radius, sides, phase) {",
@@ -138,6 +142,7 @@ static const char *const g_example_func_loop[] = {
 
 /* Example 4: Branching helper — function args driving local if-blocks */
 static const char *const g_example_func_if[] = {
+    "glClearColor(0.1, 0.1, 0.1, 1.0);",
     "glEnable(GL_DEPTH_TEST);",
     "glEnable(GL_NORMALIZE);",
     "func0(scale, phase) {",
@@ -177,6 +182,7 @@ static const char *const g_example_func_if[] = {
 
 /* Example 5: Recursive helper — transformed child calls with depth countdown */
 static const char *const g_example_func_recurse[] = {
+    "glClearColor(0.1, 0.1, 0.1, 1.0);",
     "glEnable(GL_DEPTH_TEST);",
     "glEnable(GL_NORMALIZE);",
     "// Recursive triangle tree: child calls shrink and rotate from the parent",
@@ -222,6 +228,7 @@ static const char *const g_example_func_recurse[] = {
 
 /* Example 6: Conditional colors — if-blocks + t variable */
 static const char *const g_example_cond[] = {
+    "glClearColor(0.1, 0.1, 0.1, 1.0);",
     "glEnable(GL_DEPTH_TEST);",
     "glEnable(GL_LIGHTING);",
     "glEnable(GL_NORMALIZE);",
@@ -255,6 +262,7 @@ static const char *const g_example_cond[] = {
 
 /* Example 7: Parametric torus — nested for-loops */
 static const char *const g_example_torus[] = {
+    "glClearColor(0.1, 0.1, 0.1, 1.0);",
     "glEnable(GL_DEPTH_TEST);",
     "//glEnable(GL_LIGHTING);",
     "glEnable(GL_NORMALIZE);",
@@ -275,6 +283,7 @@ static const char *const g_example_torus[] = {
 
 /* Example 8: GLU tessellator — concave arrow polygon with per-vertex color */
 static const char *const g_example_tess[] = {
+    "glClearColor(0.1, 0.1, 0.1, 1.0);",
     "glEnable(GL_DEPTH_TEST);",
     "glEnable(GL_LIGHTING);",
     "glEnable(GL_NORMALIZE);",
@@ -308,6 +317,7 @@ static const char *const g_example_tess[] = {
 /* Example 9: GLU tessellator — concave arrow polygon cutout */
 static const char *const g_example_tess_cutout[] = {
     "float z;",
+    "glClearColor(0.1, 0.1, 0.1, 1.0);",
     "glEnable(GL_DEPTH_TEST);",
     "glEnable(GL_LIGHTING);",
     "glEnable(GL_NORMALIZE);",
@@ -434,6 +444,7 @@ static const char *const g_example_tess_cutout[] = {
  * geometry loops. Keep coverage in tests/docs instead of F12 examples. */
 static const char *const g_example_assign_2d[] = {
     "float x, y;",
+    "glClearColor(0.1, 0.1, 0.1, 1.0);",
     "// 2D assignment sketch: tests runtime variable assignment without goto",
     "glDisable(GL_LIGHTING);",
     "x = -1.7;",
@@ -451,6 +462,7 @@ static const char *const g_example_assign_2d[] = {
 /* Example 11: Stateless particle field using deterministic rand(seed, iter) */
 static const char *const g_example_particles_stateless[] = {
     "float n, x, y, z, j, k;",
+    "glClearColor(0.1, 0.1, 0.1, 1.0);",
     "// Stateless particle field: deterministic rand(seed, iter)",
     "glDisable(GL_LIGHTING);",
     "glPointSize(3);",
@@ -476,6 +488,7 @@ static const char *const g_example_particles_stateless[] = {
 /* Example 12: Additive glow particles — glPointSize + distance attenuation + blend */
 static const char *const g_example_glow_particles[] = {
     "float n, x, y, z, j, k;",
+    "glClearColor(0.1, 0.1, 0.1, 1.0);",
     "// Glow sprites: additive blend + distance-attenuated point size",
     "glDisable(GL_LIGHTING);",
     "glDisable(GL_DEPTH_TEST);",
@@ -511,6 +524,7 @@ static const char *const g_example_glow_particles[] = {
 
 static const char *const g_example_random_surface[] = {
   "float n, i, j, k;",
+    "glClearColor(0.1, 0.1, 0.1, 1.0);",
   "glEnable(GL_DEPTH_TEST);",
   "glEnable(GL_LIGHTING);",
   "glEnable(GL_NORMALIZE);",
@@ -557,6 +571,7 @@ static const char *const g_example_random_surface[] = {
 static const char *const g_example_waves[] = {
     "// @cfg vertex_points = 0",
     "float n, b, x, y, z, a;",
+    "glClearColor(0.1, 0.1, 0.1, 1.0);",
     "// Waves: nested for-loops + math",
     "glEnable(GL_DEPTH_TEST);",
     "glEnable(GL_LIGHTING);",
@@ -601,6 +616,7 @@ static const char *const g_example_spirograph_curve[] = {
     "glRotatef(0.0f, 0.0f, 1.0f, 0.0f);",
     "glTranslatef(0.0f, -0.5f, 0.0f);",
     "float dist, n, x, y, ang;",
+    "glClearColor(0.1, 0.1, 0.1, 1.0);",
     "dist = 1.4;",
     "n = 400;",
     "glBegin(GL_LINE_LOOP);",
@@ -626,6 +642,7 @@ static const char *const g_example_traveling_ripple_ring[] = {
     "glTranslatef(0.0f, -0.5f, 0.0f);",
     "// Traveling ripple ring: nested for + fmod + conditional deformation",
     "float ripplephase, ripplewidth, rippledelta, rippleamp, x, y;",
+    "glClearColor(0.1, 0.1, 0.1, 1.0);",
     "rippleamp = 0.1 * sin(t * TAU);",
     "ripplephase = fmod(t / 3, TAU);",
     "ripplewidth = PI / 8;",
@@ -657,6 +674,7 @@ static const char *const g_example_stress[] = {
     "glRotatef(-24.0f, 0.0f, 1.0f, 0.0f);",
     "glTranslatef(-0.6f, -0.1f, -0.4f);",
     "float n, x, y, z, k;",
+    "glClearColor(0.1, 0.1, 0.1, 1.0);",
     "// ===== Stress-test scene: parser + code UI torture =====",
     "glEnable(GL_DEPTH_TEST);",
     "glEnable(GL_LIGHTING);",

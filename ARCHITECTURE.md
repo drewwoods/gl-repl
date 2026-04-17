@@ -107,6 +107,10 @@ Owns generated scaffold and import/export plumbing.
 - `sample.h` remains the single shared runtime/UI header.
 - `repl_core_internal.h` is the internal bridge for non-public helpers needed by
   tests or sibling `.c` files.
+- The `CFG_DEFAULT_*` macro block in `sample.h` is also the shared source of
+   truth for example-owned scene-presentation defaults. Reuse those macros from
+   `repl_core.c` initializers, example reset helpers, and focused tests instead
+   of duplicating literals.
 - No extra per-module headers are required for the split.
 - Parser/execution internals stay in `repl_core.c`; editor/search/export call
   into them rather than duplicating logic.
@@ -153,8 +157,26 @@ Replay state and stepping remain in `repl_core.c`, but editor callbacks in
 - If an import file is provided and `load_from_file()` succeeds, startup uses
   the imported session.
 - Otherwise core loads a built-in example.
-- Example lines are still committed through `feed_line()`, so examples,
-  imported files, and interactive editing share the same commit pipeline.
+- `load_example_lines()` performs a metadata pre-pass before feeding the
+   remaining source through `feed_line()`.
+- Built-in examples can begin with contiguous leading `// @cfg slug = value`
+   lines, followed optionally by a 5-line `// camera` preset block.
+- Leading example `@cfg` lines are parsed through
+   `parse_workspace_header_line()` from `repl_export.c`, but only for
+   scene-presentation slugs allowed by the example loader.
+- That leading metadata is consumed as loader-only state and does not appear in
+   the code panel.
+- On each example load, core resets the allowed non-camera scene-presentation
+   settings to the `CFG_DEFAULT_*` values from `sample.h` before applying any
+   leading example `@cfg` metadata. This keeps unspecified settings from leaking
+   between examples.
+- Camera is intentionally excluded from that reset; examples keep the current
+   `g_cam_*` state unless the explicit `// camera` block is present.
+- `restore_user_scene()` still restores commands and predefined variables only,
+   so leaving an example does not restore prior camera or presentation state.
+- Example geometry lines are still committed through `feed_line()`, so
+   examples, imported files, and interactive editing share the same commit
+   pipeline once loader metadata has been consumed.
 
 ## Extension Guide
 

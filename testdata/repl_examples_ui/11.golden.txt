@@ -25,6 +25,7 @@ void display() {
 --- header_post ---
 --- source ---
   float n, x, y, z, j, k;
+  glClearColor(0.1, 0.1, 0.1, 1);
   // Stateless particle field: deterministic rand(seed, iter)
   glDisable(GL_LIGHTING);
   glPointSize(3);

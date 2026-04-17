@@ -25,6 +25,7 @@ void display() {
 --- header_post ---
 --- source ---
   float n, x, y, z, j, k;
+  glClearColor(0.1, 0.1, 0.1, 1);
   // Glow sprites: additive blend + distance-attenuated point size
   glDisable(GL_LIGHTING);
   glDisable(GL_DEPTH_TEST);

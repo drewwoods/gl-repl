@@ -26,6 +26,7 @@ void display() {
 --- source ---
   float ripplephase, ripplewidth, rippledelta, rippleamp, x, y;
   // Traveling ripple ring: nested for + fmod + conditional deformation
+  glClearColor(0.1, 0.1, 0.1, 1);
   rippleamp = 0.1 * sin(t * TAU);
   ripplephase = fmod(t / 3, TAU);
   ripplewidth = PI / 8;
