@@ -1524,7 +1524,7 @@ static int command_name_matches_or_prefixes(const char *func, const char *known)
         return 1;
 
     flen = strlen(func);
-    return flen >= 4 && strncmp(known, func, flen) == 0;
+    return flen >= 4 && flen <= strlen(known) && strncmp(known, func, flen) == 0;
 }
 
 static int is_known_incomplete_func_name(const char *func) {
