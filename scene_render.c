@@ -1254,6 +1254,31 @@ static int is_geometry_emit_cmd(CmdType t) {
             t == CMD_TESS_BEGIN_POLYGON);
 }
 
+/* Walk flat cmds strictly before cursor_flat_idx, applying only transform
+ * cmds to a fresh identity matrix. Returns the scene-world position of the
+ * local origin at the cursor line — i.e. where the previous translations
+ * have carried the frame. Rotations contribute to the walk but are absorbed
+ * into the translation accumulator, so the returned point is just the
+ * "where am I in world" anchor. */
+static void compute_before_cursor_origin(int cursor_flat_idx, float out[3]) {
+    out[0] = out[1] = out[2] = 0.0f;
+    glPushMatrix();
+    glLoadIdentity();
+    int depth = 0;
+    for (int i = 0; i < cursor_flat_idx; i++) {
+        if (!g_flat_cmds[i].valid) continue;
+        if (is_transform_cmd(g_flat_cmds[i].type))
+            apply_tracked_transform_cmd(&g_flat_cmds[i], &depth);
+    }
+    float m[16];
+    glGetFloatv(GL_MODELVIEW_MATRIX, m);
+    out[0] = m[12];
+    out[1] = m[13];
+    out[2] = m[14];
+    unwind_tracked_transform_stack(&depth);
+    glPopMatrix();
+}
+
 /* Walk flat cmds forward from first_after_idx, applying only transform cmds
  * to a fresh identity matrix (keeps its own push/pop depth so nested blocks
  * don't leak). Stops at the first rendering action so transforms that come
@@ -1279,9 +1304,10 @@ static void compute_after_cursor_origin(int first_after_idx, float out[3]) {
     glPopMatrix();
 }
 
-/* Arrow from p_before to p_after in the current local frame. A solid
- * arrowhead at the tip and a hollow ring at the tail make the direction
- * unambiguous even when the view is side-on. */
+/* Arrow starting at p_after in the current local frame and extending by the
+ * translate command's vector. A solid 4-fin arrowhead at the tip plus a
+ * small tail point make the direction unambiguous even when the view is
+ * side-on. */
 static void draw_translate_guide(const GLCmd *cmd, const float p_after[3]) {
     float tx = cmd->args[0], ty = cmd->args[1], tz = cmd->args[2];
     float p0[3] = { p_after[0], p_after[1], p_after[2] };
@@ -2284,9 +2310,13 @@ void render_3d_scene(void) {
 
     /* Transform-guide setup: when the cursor is on a committed glTranslatef
      * or glRotatef source line, find the first flat cmd matching that source
-     * line (so we know where to render "before" the cursor transform) and the
-     * first flat cmd whose source index is strictly greater (so we can trace
-     * the post-cursor modelview). Gates on cmd->valid. */
+     * line and the next flat cmd in execution order whose source index
+     * differs (the starting point for the post-cursor modelview walk).
+     *
+     * Using flat execution order — rather than src_cmd_idx > g_edit_line —
+     * is important because flat cmds expanded from a function call carry
+     * the function body's src_cmd_idx, not the call site's; a numeric
+     * comparison against g_edit_line would skip right past them. */
     int tg_want = 0;
     int tg_first_cursor_flat = -1;
     int tg_first_after_flat  = -1;
@@ -2294,20 +2324,40 @@ void render_3d_scene(void) {
     if (!replaying && g_show_guides &&
         g_edit_line >= 0 && g_edit_line < g_num_cmds) {
         const GLCmd *sc = &g_cmds[g_edit_line];
-        if (sc->valid &&
+
+        /* "Only when complete and correct" — require the committed parse to
+         * be valid AND the live input buffer to match the normalized source,
+         * so we don't keep rendering a stale guide while the user is editing
+         * the line into an invalid/partial state. Mirrors the `unmodified`
+         * check in repl_editor.c. */
+        int unmodified = 0;
+        {
+            const char *s = sc->source;
+            while (*s && isspace((unsigned char)*s)) s++;
+            int slen = (int)strlen(s);
+            while (slen > 0 &&
+                   (s[slen - 1] == ';' || isspace((unsigned char)s[slen - 1])))
+                slen--;
+            if ((slen == g_input_len && strncmp(g_input, s, (size_t)slen) == 0) ||
+                g_input_len == 0)
+                unmodified = 1;
+        }
+
+        if (sc->valid && unmodified &&
             (sc->type == CMD_TRANSLATE3F || sc->type == CMD_ROTATEF)) {
             for (int j = 0; j < g_num_flat_cmds; j++) {
                 if (!g_flat_cmds[j].valid) continue;
-                if (tg_first_cursor_flat < 0 &&
-                    g_flat_cmds[j].src_cmd_idx == g_edit_line) {
-                    tg_first_cursor_flat = j;
-                }
-                if (g_flat_cmds[j].src_cmd_idx > g_edit_line) {
-                    tg_first_after_flat = j;
-                    break;
+                if (g_flat_cmds[j].src_cmd_idx == g_edit_line) {
+                    if (tg_first_cursor_flat < 0) tg_first_cursor_flat = j;
                 }
             }
             if (tg_first_cursor_flat >= 0) {
+                for (int j = tg_first_cursor_flat + 1; j < g_num_flat_cmds; j++) {
+                    if (!g_flat_cmds[j].valid) continue;
+                    if (g_flat_cmds[j].src_cmd_idx == g_edit_line) continue;
+                    tg_first_after_flat = j;
+                    break;
+                }
                 if (tg_first_after_flat < 0) tg_first_after_flat = g_num_flat_cmds;
                 tg_src_cmd = sc;
                 tg_want = 1;

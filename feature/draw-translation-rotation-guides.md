@@ -79,9 +79,11 @@ Gate the new guides on:
 - `g_cmds[g_edit_line].valid` is true (committed, parsed cleanly).
 - `type` is `CMD_TRANSLATE3F` or `CMD_ROTATEF`.
 - `!replaying` (match existing vertex-guide gating).
-- The cursor line is **not** currently being edited mid-keystroke (skip if
-  `g_input_len > 0` and `g_input[]` differs from `g_cmds[g_edit_line].source`
-  — i.e., respect the user's explicit "only when complete and correct" ask).
+- The cursor line is **not** currently being edited mid-keystroke. Enforced
+  by comparing `g_input` against the normalized `g_cmds[g_edit_line].source`
+  (ignoring leading whitespace and the trailing `;`) using the same
+  `unmodified` pattern as `repl_editor.c:2067-2080`. An empty input buffer
+  (`g_input_len == 0`) is also treated as unmodified.
 
 ### 3. Draw the translate guide
 
