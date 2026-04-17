@@ -20,7 +20,7 @@ static int grid_is_major_line(float v, float major, float tol) {
 }
 
 static void draw_grid(void) {
-    if (g_grid_theme == 0) return;
+    if (g_grid_theme == GRID_THEME_OFF) return;
 
     glDisable(GL_LIGHTING);
     glEnable(GL_DEPTH_TEST);
@@ -68,7 +68,7 @@ static void draw_grid(void) {
     // Experiment with using darker lines but with higher alpha to get lines to
     // work better with both light and dark themes.
 
-    case 1: { /* Classic */
+    case GRID_THEME_CLASSIC: {
         glBegin(GL_LINES);
         for (float v = -extent; v <= extent + 0.01f; v += step) {
             if (fabsf(v) < 0.01f) continue;
@@ -90,7 +90,7 @@ static void draw_grid(void) {
         break;
     }
 
-    case 2: { /* Fog — large grid, breathing fog density */
+    case GRID_THEME_FOG: {
         float fog_density = 0.06f + breath * 0.04f;
         glEnable(GL_FOG);
         glFogi(GL_FOG_MODE, GL_EXP2);
@@ -119,7 +119,7 @@ static void draw_grid(void) {
         break;
     }
 
-    case 3: { /* Tron — cyan/blue glow, distance fade */
+    case GRID_THEME_TRON: {
         float glow = 0.7f + breath * 0.3f;
 
         glLineWidth(1.0f);
@@ -152,7 +152,7 @@ static void draw_grid(void) {
         break;
     }
 
-    case 4: { /* Ember — warm orange/red, pulsing ripple */
+    case GRID_THEME_EMBER: {
         glBegin(GL_LINES);
         for (float v = -extent; v <= extent + 0.01f; v += step) {
             if (fabsf(v) < 0.01f) continue;
@@ -186,7 +186,7 @@ static void draw_grid(void) {
         break;
     }
 
-    case 5: { /* Faint — very subtle reference lines */
+    case GRID_THEME_FAINT: {
         glBegin(GL_LINES);
         for (float v = -extent; v <= extent + 0.01f; v += step) {
             if (fabsf(v) < 0.01f) continue;
@@ -208,7 +208,7 @@ static void draw_grid(void) {
         break;
     }
 
-    case 6: { /* Focus — fades rapidly around selected vertex */
+    case GRID_THEME_FOCUS: {
         /* Update focus vertex from current or nearest vertex line */
         if (g_edit_line < g_num_cmds &&
             g_cmds[g_edit_line].valid &&
@@ -294,7 +294,7 @@ static void draw_grid(void) {
         break;
     }
 
-    case 7: { /* Ocean — underwater surface plane with caustics */
+    case GRID_THEME_OCEAN: {
         /* Underwater fog — slightly breathing density */
 
         // Think there is a bug here. TODO fix
@@ -397,7 +397,7 @@ static void draw_grid(void) {
         break;
     }
 
-    case 8: { /* XZ Ruler — warm X direction, cool Z direction, ruler ticks */
+    case GRID_THEME_XZRULER: {
         /* Non-origin grid lines with directional colour coding */
         glBegin(GL_LINES);
         for (float v = -extent; v <= extent + 0.01f; v += step) {
@@ -446,7 +446,7 @@ static void draw_grid(void) {
         break;
     }
 
-    case 9: { /* Adaptive Planes — floor grid + camera-facing vertical plane blend */
+    case GRID_THEME_PLANES: {
         /* Determine which vertical plane is most face-on to the camera.
          * Camera horizontal look direction: (sin(ry), 0, -cos(ry))
          * XY plane (z=0, normal Z): face-on weight = cos²(ry)
@@ -553,7 +553,7 @@ static void draw_axis_label(float x, float y, float z, char ch,
 }
 
 static void draw_axes(void) {
-    if (g_axes_theme == 0) return;
+    if (g_axes_theme == AXES_THEME_OFF) return;
 
     glDisable(GL_LIGHTING);
     glEnable(GL_DEPTH_TEST);
@@ -569,7 +569,7 @@ static void draw_axes(void) {
 
     switch (g_axes_theme) {
 
-    case 1: { /* Classic */
+    case AXES_THEME_CLASSIC: {
         float len = 2.0f;
         glLineWidth(2.0f);
         glBegin(GL_LINES);
@@ -588,7 +588,7 @@ static void draw_axes(void) {
         break;
     }
 
-    case 2: { /* Pulse — dot traveling outward along each axis */
+    case AXES_THEME_PULSE: {
         float len = 3.0f;
         /* Solid dim axes */
         glLineWidth(1.5f);
@@ -648,7 +648,7 @@ static void draw_axes(void) {
         break;
     }
 
-    case 3: { /* Neon — bright glowing axes with breathing intensity */
+    case AXES_THEME_NEON: {
         float len = 2.5f;
         float glow = 0.6f + breath * 0.4f;
 
@@ -694,7 +694,7 @@ static void draw_axes(void) {
         break;
     }
 
-    case 4: { /* Compass — positive and negative axes, dashed negative */
+    case AXES_THEME_COMPASS: {
         float len = 2.5f;
 
         /* Positive axes (solid) */
@@ -762,7 +762,7 @@ static void draw_axes(void) {
         break;
     }
 
-    case 5: { /* Gizmo — axis lines + camera-weighted plane fills */
+    case AXES_THEME_GIZMO: {
         float len  = 2.0f;
         float fill = len / 2.0f;
 

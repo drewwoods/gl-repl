@@ -383,11 +383,19 @@ int    g_show_help    = 0;
 int    g_help_tab     = 0;   /* 0=Commands, 1=Keys */
 int    g_help_scroll  = 0;
 int    g_wireframe    = CFG_DEFAULT_WIREFRAME;
-// TODO: use enum for grid/axes themes
-int    g_grid_theme   = CFG_DEFAULT_GRID_THEME;  /* 0=off, 1=classic, 2=fog, 3=tron, 4=ember, 5=faint, 6=focus, 7=ocean, 8=xzruler, 9=planes */
-const char *g_grid_names[] = {
-    "OFF", "Classic", "Fog", "Tron", "Ember",
-    "Faint", "Focus", "Ocean", "XZ Ruler", "Adaptive Planes"
+/* Names must match the GridTheme enum in sample.h. */
+int    g_grid_theme   = CFG_DEFAULT_GRID_THEME;
+const char *g_grid_names[GRID_THEME_COUNT] = {
+    [GRID_THEME_OFF]     = "OFF",
+    [GRID_THEME_CLASSIC] = "Classic",
+    [GRID_THEME_FOG]     = "Fog",
+    [GRID_THEME_TRON]    = "Tron",
+    [GRID_THEME_EMBER]   = "Ember",
+    [GRID_THEME_FAINT]   = "Faint",
+    [GRID_THEME_FOCUS]   = "Focus",
+    [GRID_THEME_OCEAN]   = "Ocean",
+    [GRID_THEME_XZRULER] = "XZ Ruler",
+    [GRID_THEME_PLANES]  = "Adaptive Planes",
 };
 
 /* Grid major tick spacing in world units. Includes 1 and 5 per request;
@@ -423,9 +431,15 @@ const char *g_grid_extent_names[GRID_EXTENT_COUNT] = {
 int g_grid_extent_idx = CFG_DEFAULT_GRID_EXTENT_IDX;  /* matches pre-existing Fog extent */
 float  g_focus_vtx[3] = { 0.0f, 0.0f, 0.0f };  /* last vertex pos for focus grid */
 int    g_focus_vtx_valid = 0;
-int    g_axes_theme   = CFG_DEFAULT_AXES_THEME;  /* 0=off, 1=classic, 2=pulse, 3=neon, 4=compass, 5=gizmo */
-const char *g_axes_names[] = {
-    "OFF", "Classic", "Pulse", "Neon", "Compass", "Gizmo"
+/* Names must match the AxesTheme enum in sample.h. */
+int    g_axes_theme   = CFG_DEFAULT_AXES_THEME;
+const char *g_axes_names[AXES_THEME_COUNT] = {
+    [AXES_THEME_OFF]     = "OFF",
+    [AXES_THEME_CLASSIC] = "Classic",
+    [AXES_THEME_PULSE]   = "Pulse",
+    [AXES_THEME_NEON]    = "Neon",
+    [AXES_THEME_COMPASS] = "Compass",
+    [AXES_THEME_GIZMO]   = "Gizmo",
 };
 int    g_show_vnums   = CFG_DEFAULT_VERTEX_LABELS;
 int    g_show_normals = CFG_DEFAULT_NORMAL_VECTORS;
