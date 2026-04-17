@@ -413,6 +413,28 @@ static void load_custom_example_lines_for_test(const char *const *lines) {
     repl_load_example_lines_for_test(lines);
 }
 
+static void print_usage(const char *prog) {
+    printf("Usage: %s [OPTIONS]\n\n", prog);
+    printf("Options:\n");
+    printf("  --help, -h             Show this help message\n");
+    printf("  --dump-index N         Dump code-panel text for example N to stdout\n");
+    printf("                         (used to regenerate golden fixture files)\n\n");
+    printf("Environment:\n");
+    printf("  REPL_EXPORT_VERBOSE=1  Print per-example step details\n");
+    printf("  REPL_EXPORT_CC         C compiler to use (default: cc)\n");
+    printf("  REPL_EXPORT_COMPILE_CFLAGS  Extra compiler flags\n");
+    printf("  NO_COLOR               Disable ANSI color output\n\n");
+    printf("Golden fixture files: testdata/repl_examples_ui/NN.golden.txt\n\n");
+    printf("To regenerate all golden fixtures after intentional changes:\n");
+    printf("  for i in $(seq -f '%%02g' 0 N); do\n");
+    printf("    %s --dump-index $i > testdata/repl_examples_ui/$i.golden.txt\n",
+           prog);
+    printf("  done\n");
+    printf("Or to regenerate a single fixture for example N:\n");
+    printf("  %s --dump-index N > testdata/repl_examples_ui/NN.golden.txt\n\n",
+           prog);
+}
+
 static int dump_single_example_to_stdout(int idx) {
     char *dump;
 
@@ -437,6 +459,11 @@ int main(int argc, char **argv) {
 
     g_verbose = verbose_env && verbose_env[0] && strcmp(verbose_env, "0") != 0;
     g_use_color = (isatty(STDOUT_FILENO) && getenv("NO_COLOR") == NULL);
+
+    if (argc == 2 && (strcmp(argv[1], "--help") == 0 || strcmp(argv[1], "-h") == 0)) {
+        print_usage(argv[0]);
+        return 0;
+    }
 
     if (argc == 3 && strcmp(argv[1], "--dump-index") == 0)
         return dump_single_example_to_stdout(atoi(argv[2]));
@@ -792,6 +819,9 @@ int main(int argc, char **argv) {
         if (!exact) {
             printf("DETAIL [example %02d fixture mismatch] name=%s line=%d fixture=%s\n",
                    idx, repl_example_name(idx), diff_line, fixture_path);
+            printf("NOTE: if this change is intentional, regenerate the golden file:\n"
+                   "  %s --dump-index %d > %s\n",
+                   argv[0], idx, fixture_path);
         }
         snprintf(label, sizeof(label), "example %02d fixture matches", idx);
         ASSERT_TRUE(label, exact);
