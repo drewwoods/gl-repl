@@ -1207,6 +1207,72 @@ int main() {
                     find_predef_var_idx("anchor") >= 0);
     }
 
+    /* 42. Expanding a multi-name decl (float a,b,c → float a,b,c,d) must
+     * preserve the live values of kept variables. Regression: the old
+     * overwrite path undeclared ALL names then re-declared them with
+     * value 0.0f, silently zeroing a, b, and c. */
+    {
+        repl_reset_state();
+        repl_feed_line_public("float a, b, c;");
+        repl_feed_line_public("a = 1;");
+        repl_feed_line_public("b = 2;");
+        repl_feed_line_public("c = 3;");
+        ASSERT_INT("expand decl: baseline cmd count", g_num_cmds, 4);
+
+        int ai = find_predef_var_idx("a");
+        int bi = find_predef_var_idx("b");
+        int ci = find_predef_var_idx("c");
+        ASSERT_TRUE("expand decl: a registered before", ai >= 0);
+        ASSERT_TRUE("expand decl: b registered before", bi >= 0);
+        ASSERT_TRUE("expand decl: c registered before", ci >= 0);
+        if (ai >= 0) ASSERT_TRUE("expand decl: a value is 1 before",
+                                  g_predef_vars[ai].value == 1.0f);
+        if (bi >= 0) ASSERT_TRUE("expand decl: b value is 2 before",
+                                  g_predef_vars[bi].value == 2.0f);
+        if (ci >= 0) ASSERT_TRUE("expand decl: c value is 3 before",
+                                  g_predef_vars[ci].value == 3.0f);
+
+        /* Overwrite decl to add d */
+        extern int try_commit_float_decl(void);
+        strncpy(g_input, "float a, b, c, d", MAX_INPUT_LEN - 1);
+        g_input_len = (int)strlen(g_input);
+        g_cursor_pos = g_input_len;
+        g_edit_line = 0;
+        g_inserting = 0;
+
+        int result = try_commit_float_decl();
+        ASSERT_INT("expand decl: accepted", result, 1);
+        ASSERT_INT("expand decl: still 4 cmds", g_num_cmds, 4);
+        ASSERT_INT("expand decl: var_decl_count is 4", g_cmds[0].var_decl_count, 4);
+
+        ai = find_predef_var_idx("a");
+        bi = find_predef_var_idx("b");
+        ci = find_predef_var_idx("c");
+        int di = find_predef_var_idx("d");
+        ASSERT_TRUE("expand decl: a still registered", ai >= 0);
+        ASSERT_TRUE("expand decl: b still registered", bi >= 0);
+        ASSERT_TRUE("expand decl: c still registered", ci >= 0);
+        ASSERT_TRUE("expand decl: d newly registered", di >= 0);
+
+        if (ai >= 0)
+            ASSERT_TRUE("expand decl: a value preserved (1)",
+                        g_predef_vars[ai].value == 1.0f);
+        if (bi >= 0)
+            ASSERT_TRUE("expand decl: b value preserved (2)",
+                        g_predef_vars[bi].value == 2.0f);
+        if (ci >= 0)
+            ASSERT_TRUE("expand decl: c value preserved (3)",
+                        g_predef_vars[ci].value == 3.0f);
+        if (di >= 0)
+            ASSERT_TRUE("expand decl: d value is 0",
+                        g_predef_vars[di].value == 0.0f);
+
+        /* CMD_VAR_ASSIGN slot refs must still point to the right variables */
+        ASSERT_INT("expand decl: assign a slot correct", g_cmds[1].num_args, ai);
+        ASSERT_INT("expand decl: assign b slot correct", g_cmds[2].num_args, bi);
+        ASSERT_INT("expand decl: assign c slot correct", g_cmds[3].num_args, ci);
+    }
+
     printf("\n%d / %d tests passed\n", g_pass, g_run);
     return (g_pass == g_run) ? 0 : 1;
 }
