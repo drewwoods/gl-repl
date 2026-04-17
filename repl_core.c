@@ -1058,14 +1058,14 @@ void repl_reformat_commands(void) {
             break;
         }
         default: {
-            ExprVar dvars[MAX_EXPR_VARS];
-            int dnv = collect_visible_vars(i, dvars, MAX_EXPR_VARS);
-            int preserve_expr = (dnv > 0) || orig.has_vars;
+            ExprVar vis_vars[MAX_EXPR_VARS];
+            int num_vis_vars = collect_visible_vars(i, vis_vars, MAX_EXPR_VARS);
+            int preserve_expr = (num_vis_vars > 0) || orig.has_vars;
             GLCmd parsed;
             memset(&parsed, 0, sizeof(parsed));
             if (repl_parse_and_normalize(orig.source, i,
-                                         dnv > 0 ? dvars : NULL,
-                                         dnv > 0 ? dnv : 0,
+                                         num_vis_vars > 0 ? vis_vars : NULL,
+                                         num_vis_vars > 0 ? num_vis_vars : 0,
                                          preserve_expr, &parsed) &&
                 parsed.type == orig.type) {
                 parsed.is_auto = orig.is_auto;

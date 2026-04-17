@@ -19,12 +19,7 @@
  */
 #include "sample.h"
 #include "repl_core_internal.h"
-
-/* ASCII control keys consumed by the search overlay. */
-#define SEARCH_KEY_CTRL_F     6   /* open search */
-#define SEARCH_KEY_ESC       27   /* close / cancel */
-#define SEARCH_KEY_BACKSPACE  8   /* some platforms */
-#define SEARCH_KEY_DELETE   127   /* macOS terminal backspace */
+#include "repl_keys.h"
 
 int  g_search_active = 0;
 char g_search_query[MAX_INPUT_LEN] = "";
@@ -423,14 +418,14 @@ static void search_open(void) {
 }
 
 int handle_search_key(unsigned char key) {
-    if (key == SEARCH_KEY_CTRL_F) {
+    if (key == KEY_CTRL_F) {
         search_open();
         return 1;
     }
     if (!g_search_active)
         return 0;
 
-    if (key == SEARCH_KEY_ESC) {
+    if (key == KEY_ESC) {
         search_clear_all();
         return 1;
     }
@@ -440,7 +435,7 @@ int handle_search_key(unsigned char key) {
         return 1;
     }
 
-    if (key == SEARCH_KEY_BACKSPACE || key == SEARCH_KEY_DELETE) {
+    if (key == KEY_BACKSPACE || key == KEY_DELETE) {
         if (g_search_cursor_pos > 0 && g_search_query_len > 0) {
             memmove(&g_search_query[g_search_cursor_pos - 1],
                     &g_search_query[g_search_cursor_pos],
