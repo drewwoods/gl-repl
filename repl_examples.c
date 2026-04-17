@@ -882,6 +882,63 @@ static const char *const g_example_stress[] = {
     NULL
 };
 
+/* Transformation stress test — exercises translate/rotate/scale guides in
+ * varied contexts: nested push/pop, time-varying args, for-loop unrolling,
+ * function scopes, scale-of-origin (gizmo fallback), and rotate-on-axis
+ * (synthetic-perpendicular fallback). Park the cursor on any transform line
+ * to see its guide overlay. */
+static const char *const g_example_xform_stress[] = {
+    "glClearColor(0.08, 0.08, 0.1, 1);",
+    "glEnable(GL_DEPTH_TEST);",
+    "glEnable(GL_LIGHTING);",
+    "glEnable(GL_LIGHT0);",
+    "glEnable(GL_NORMALIZE);",
+    "glEnable(GL_COLOR_MATERIAL);",
+    "func0 {",
+        "glBegin(GL_TRIANGLES);",
+        "glNormal3f(0, 0, 1);",
+        "glVertex3f(-0.3, -0.3, 0);",
+        "glVertex3f(0.3, -0.3, 0);",
+        "glVertex3f(0, 0.4, 0);",
+        "glEnd();",
+    "}",
+    "glColor3f(1, 0.6, 0.3);",
+    "glPushMatrix();",
+    "glTranslatef(0, 0, 2);",
+    "glRotatef(45, 0, 1, 0);",
+    "glTranslatef(0, 0, -2);",
+    "func0();",
+    "glPopMatrix();",
+    "glColor3f(0.4, 0.9, 0.6);",
+    "glPushMatrix();",
+    "glTranslatef(-2, 0, 0);",
+    "glRotatef(3*t, 0, 1, 0);",
+    "glScalef(1.5, 0.5, 1);",
+    "func0();",
+    "glPopMatrix();",
+    "glColor3f(0.6, 0.7, 1);",
+    "for(i, 0, 6) {",
+        "glPushMatrix();",
+        "glRotatef(i*60, 0, 1, 0);",
+        "glTranslatef(2.5, 0, 0);",
+        "glScalef(0.6, 0.6, 0.6);",
+        "func0();",
+        "glPopMatrix();",
+    "}",
+    "glColor3f(1, 0.4, 0.8);",
+    "glPushMatrix();",
+    "glTranslatef(0, 2, 0);",
+    "glScalef(0.8, 0.8, 0.8);",
+    "func0();",
+    "glPopMatrix();",
+    "glColor3f(1, 1, 0.4);",
+    "glPushMatrix();",
+    "glRotatef(t*30, 0, 1, 0);",
+    "func0();",
+    "glPopMatrix();",
+    NULL
+};
+
 static const char *const *const g_examples[] = {
     g_example_cube,
     g_example_ring,
@@ -901,6 +958,7 @@ static const char *const *const g_examples[] = {
     g_example_spirograph_curve,
     g_example_traveling_ripple_ring,
     g_example_stress,
+    g_example_xform_stress,
 };
 
 static const char *const g_example_names[] = {
@@ -922,6 +980,7 @@ static const char *const g_example_names[] = {
     "Animated spirograph curve",
     "Traveling ripple ring",
     "Stress test (all features)",
+    "Transform stress (translate/rotate/scale guides)",
 };
 
 int repl_examples_count(void) {
