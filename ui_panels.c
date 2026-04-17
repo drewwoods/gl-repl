@@ -465,7 +465,7 @@ static int replay_copy_predef_values_before_flat_cmd(int target_pc,
     if (!out_vals || max_vals < g_num_predef_vars)
         return 0;
 
-    if (g_replay_active && g_replay_state != REPLAY_OFF)
+    if (g_replay_active)
         repl_copy_replay_baseline_predef_values(out_vals, max_vals);
     else
         for (int i = 0; i < g_num_predef_vars && i < max_vals; i++)
@@ -563,7 +563,7 @@ static void replay_build_predef_snapshots(void) {
 
     memset(s_replay_predef_snap_valid, 0, sizeof(int) * (size_t)g_num_cmds);
 
-    if (g_replay_active && g_replay_state != REPLAY_OFF)
+    if (g_replay_active)
         repl_copy_replay_baseline_predef_values(vals, MAX_PREDEF_VARS);
     else
         for (int i = 0; i < g_num_predef_vars && i < MAX_PREDEF_VARS; i++)
@@ -726,7 +726,7 @@ int code_panel_get_command_display_text(int cmd_idx, char *out, int out_size) {
 
     snprintf(out, out_size, "%s", g_cmds[cmd_idx].source);
 
-    if (!g_replay_active || g_replay_state == REPLAY_OFF ||
+    if (!g_replay_active ||
         !g_cmds[cmd_idx].has_vars)
         return 1;
 
@@ -1222,7 +1222,7 @@ static int code_panel_footer_row_count(int panel_w, int text_x) {
 }
 
 static int code_panel_replay_extra_rows_for_line(int cmd_idx) {
-    if (!g_replay_active || g_replay_state == REPLAY_OFF)
+    if (!g_replay_active)
         return 0;
     if (cmd_idx < 0 || cmd_idx >= g_num_cmds)
         return 0;
@@ -1976,10 +1976,10 @@ void render_code_panel(void) {
     prof_begin(PROF_CODE_PANEL_LAYOUT_GEOM_PRECOMPUTE);
 
     /* Build per-frame replay annotation cache before any annotation work */
-    if (g_replay_active && g_replay_state != REPLAY_OFF &&
+    if (g_replay_active &&
         s_replay_cache_pc != g_replay_pc)
         rebuild_replay_annotation_cache();
-    else if (!g_replay_active || g_replay_state == REPLAY_OFF)
+    else if (!g_replay_active)
         invalidate_replay_annotation_cache();
 
     int header_rows = code_panel_header_row_count(panel_w, text_x);
@@ -2033,7 +2033,7 @@ void render_code_panel(void) {
     prof_begin(PROF_CODE_PANEL_LAYOUT_SCROLL);
 
     int follow_doc_line = cursor_doc_line;
-    if (g_replay_active && g_replay_state != REPLAY_OFF &&
+    if (g_replay_active &&
         g_replay_src_line >= 0 && g_replay_src_line < g_num_cmds &&
         g_cmds[g_replay_src_line].has_vars) {
         follow_doc_line = header_rows;
@@ -2277,7 +2277,7 @@ void render_code_panel(void) {
                 code_wrap_iter_init(&wrap_it, display_text, text_x, panel_w);
                 while (code_wrap_iter_next(&wrap_it, &wrap_start, &wrap_len, &wrap_x)) {
                     if (cur >= g_scroll && cur < g_scroll + visible_lines) {
-                        if (g_replay_active && g_replay_state != REPLAY_OFF &&
+                        if (g_replay_active &&
                             g_replay_src_line >= 0 && i == g_replay_src_line) {
                             glEnable(GL_BLEND);
                             glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
@@ -2369,7 +2369,7 @@ void render_code_panel(void) {
                 }
                 file_line++;
 
-                if (g_replay_active && g_replay_state != REPLAY_OFF &&
+                if (g_replay_active &&
                     g_replay_src_line >= 0 && i == g_replay_src_line &&
                     g_cmds[i].has_vars &&
                     g_cmds[i].type != CMD_VAR_ASSIGN) {
@@ -3109,7 +3109,7 @@ static float var_panel_replay_target_lift_px(void) {
 
 static float var_panel_replay_lift(void) {
     float target = 0.0f;
-    if (g_replay_active && g_replay_state != REPLAY_OFF)
+    if (g_replay_active)
         target = var_panel_replay_target_lift_px();
 
     /* Exponential-decay style easing toward target (and back to 0 when replay ends). */
