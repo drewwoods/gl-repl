@@ -97,6 +97,7 @@ int g_sel_end = -1;
 
 static const char *replay_mode_names[] = { "Polygon", "Vertex" };
 static const char *backdrop_mode_names[] = { "Off", "Cityscape" };
+static const char *xform_guide_mode_names[] = { "World", "Frame" };
 static const char *profile_panel_mode_names[] = { "Off", "On", "Details" };
 
 /* Unified audio cfg: collapses mute + loop mode into one cycling
@@ -151,6 +152,7 @@ CfgItem g_cfg_items[] = {
     { "Vertex points",    "--",     &g_show_vpoints,           2,                NULL              },
     { "Wrap at commas",   "--",     &g_wrap_at_comma,          2,                NULL              },
     { "Vertex guides",    "F8",     &g_show_guides,            2,                NULL              },
+    { "Xform guide mode", "--",     &g_xform_guide_mode,       2,                xform_guide_mode_names },
     { "Auto-normals",     "F9",     &g_autonormal,             2,                NULL              },
     { "Light indicators", "F10",    &g_show_lights,            2,                NULL              },
     { "Backdrop",         "--",     &g_backdrop_mode,          2,                backdrop_mode_names },

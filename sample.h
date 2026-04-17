@@ -392,6 +392,7 @@ extern int    g_show_indices;
 extern int    g_wrap_at_comma;
 extern int    g_layout_vertical;
 extern int    g_show_guides;
+extern int    g_xform_guide_mode;     /* 0=World, 1=Frame */
 extern int    g_autonormal;
 extern int    g_show_lights;
 extern int    g_backdrop_mode;

@@ -1254,6 +1254,29 @@ static int is_geometry_emit_cmd(CmdType t) {
             t == CMD_TESS_BEGIN_POLYGON);
 }
 
+/* Walk flat cmds strictly before cursor_flat_idx, applying only transform
+ * cmds to a fresh identity matrix. Returns the scene-world position of the
+ * local origin at the cursor line — used by the "Frame" guide mode to
+ * anchor the guide where prior translations have carried the frame. */
+static void compute_before_cursor_origin(int cursor_flat_idx, float out[3]) {
+    out[0] = out[1] = out[2] = 0.0f;
+    glPushMatrix();
+    glLoadIdentity();
+    int depth = 0;
+    for (int i = 0; i < cursor_flat_idx; i++) {
+        if (!g_flat_cmds[i].valid) continue;
+        if (is_transform_cmd(g_flat_cmds[i].type))
+            apply_tracked_transform_cmd(&g_flat_cmds[i], &depth);
+    }
+    float m[16];
+    glGetFloatv(GL_MODELVIEW_MATRIX, m);
+    out[0] = m[12];
+    out[1] = m[13];
+    out[2] = m[14];
+    unwind_tracked_transform_stack(&depth);
+    glPopMatrix();
+}
+
 /* Walk flat cmds forward from first_after_idx, applying only transform cmds
  * to a fresh identity matrix (keeps its own push/pop depth so nested blocks
  * don't leak). Stops at the first rendering action so transforms that come
@@ -2358,20 +2381,29 @@ void render_3d_scene(void) {
             draw_normal_guides();
         }
 
-        /* Transform guide: render in world axes at world origin.
+        /* Transform guide: two modes, selectable via the config menu
+         * ("Xform guide mode"):
          *
-         * OpenGL applies transforms to vertices in reverse source order
-         * (M_1 · M_2 · ... · M_n · v), so the cursor command C_k acts on the
-         * point that C_{k+1..n} have already placed. That point is
-         * p_after = M_after · origin in world space. For a translate, the
-         * guide arrow runs p_after → p_after + (tx,ty,tz); for a rotate, the
-         * arc sweeps p_after around the axis through world origin. Pre-cursor
-         * transforms wrap this sub-expression later and don't move the guide. */
+         *   World (0): render in world axes at world origin. Matches strict
+         *     OpenGL reverse-order semantics — for cursor command C_k,
+         *     p_after = M_after·origin is the point C_k acts on, and
+         *     pre-cursor transforms (which wrap this sub-expression) don't
+         *     move the guide.
+         *
+         *   Frame (1): render at a scene-world anchor derived from pre-cursor
+         *     translations only (rotations ignored), so the guide visually
+         *     tracks "where the live frame currently is" — matches the
+         *     rendered output for code like T(2,0,0); func0(); T(-4,0,0);. */
         if (tg_want && i == tg_first_cursor_flat) {
             float p_after[3];
             compute_after_cursor_origin(tg_first_after_flat, p_after);
             glPushMatrix();
             glLoadMatrixf(tg_cam_view);
+            if (g_xform_guide_mode == 1) {
+                float anchor[3];
+                compute_before_cursor_origin(tg_first_cursor_flat, anchor);
+                glTranslatef(anchor[0], anchor[1], anchor[2]);
+            }
             if (tg_src_cmd->type == CMD_TRANSLATE3F)
                 draw_translate_guide(tg_src_cmd, p_after);
             else
