@@ -1302,10 +1302,62 @@ static void compute_after_cursor_origin(int first_after_idx, float out[3]) {
     glPopMatrix();
 }
 
+/* Color from the normalized absolute component values of a vector. Maps
+ * (|x|,|y|,|z|) / max to RGB so an axis-aligned translation reads as a pure
+ * axis color (X=red, Y=green, Z=blue) and diagonals blend. Falls back to a
+ * neutral gray for zero vectors. */
+static void xform_axis_color(float x, float y, float z, float out[3]) {
+    float ax = fabsf(x), ay = fabsf(y), az = fabsf(z);
+    float m = ax; if (ay > m) m = ay; if (az > m) m = az;
+    if (m < 1e-6f) { out[0] = out[1] = out[2] = 0.85f; return; }
+    out[0] = ax / m;
+    out[1] = ay / m;
+    out[2] = az / m;
+}
+
+/* Pulse shader for a straight segment in the axes-pulse style: a dim solid
+ * base line, a bright dot traveling a→b, and a short trail behind the dot. */
+static void draw_pulse_segment(const float a[3], const float b[3],
+                               const float rgb[3]) {
+    /* Dim solid base */
+    glLineWidth(2.0f);
+    glBegin(GL_LINES);
+    glColor4f(rgb[0], rgb[1], rgb[2], 0.30f);
+    glVertex3f(a[0], a[1], a[2]);
+    glVertex3f(b[0], b[1], b[2]);
+    glEnd();
+
+    float ph = fmodf(g_anim_time * 0.6f, 1.0f);
+    float glow = sinf(ph * (float)M_PI) * 0.8f + 0.2f;
+    float pos[3] = {
+        a[0] + (b[0]-a[0])*ph, a[1] + (b[1]-a[1])*ph, a[2] + (b[2]-a[2])*ph
+    };
+    float tp = ph - 0.25f; if (tp < 0) tp = 0;
+    float trail[3] = {
+        a[0] + (b[0]-a[0])*tp, a[1] + (b[1]-a[1])*tp, a[2] + (b[2]-a[2])*tp
+    };
+
+    glLineWidth(3.5f);
+    glBegin(GL_LINES);
+    glColor4f(rgb[0], rgb[1], rgb[2], 0.05f);
+    glVertex3f(trail[0], trail[1], trail[2]);
+    glColor4f(rgb[0], rgb[1], rgb[2], glow * 0.75f);
+    glVertex3f(pos[0], pos[1], pos[2]);
+    glEnd();
+    glLineWidth(1.0f);
+
+    glPointSize(8.0f);
+    glBegin(GL_POINTS);
+    glColor4f(rgb[0], rgb[1], rgb[2], glow);
+    glVertex3f(pos[0], pos[1], pos[2]);
+    glEnd();
+    glPointSize(1.0f);
+}
+
 /* Arrow starting at p_after in the current local frame and extending by the
- * translate command's vector. A solid 4-fin arrowhead at the tip plus a
- * small tail point make the direction unambiguous even when the view is
- * side-on. */
+ * translate command's vector. Shaft is an axes-pulse-style traveling dot
+ * over a dim base line; the solid 4-fin arrowhead at the tip keeps the
+ * direction unambiguous. Shaft color is (|tx|,|ty|,|tz|)/max mapped to RGB. */
 static void draw_translate_guide(const GLCmd *cmd, const float p_after[3]) {
     float tx = cmd->args[0], ty = cmd->args[1], tz = cmd->args[2];
     float p0[3] = { p_after[0], p_after[1], p_after[2] };
@@ -1336,25 +1388,20 @@ static void draw_translate_guide(const GLCmd *cmd, const float p_after[3]) {
 
     float base[3] = { p1[0] - dx*head_len, p1[1] - dy*head_len, p1[2] - dz*head_len };
 
+    float rgb[3]; xform_axis_color(tx, ty, tz, rgb);
+    float head_rgb[3] = {
+        rgb[0]*0.6f + 0.4f, rgb[1]*0.6f + 0.4f, rgb[2]*0.6f + 0.4f
+    };
+
     glDisable(GL_LIGHTING);
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
-    /* Shaft — dashed from tail to the arrowhead base so the solid head
-     * stands out cleanly. */
-    glEnable(GL_LINE_STIPPLE);
-    glLineStipple(1, 0xAAAA);
-    glLineWidth(4.0f);
-    glColor4f(1.0f, 0.75f, 0.20f, 0.85f);
-    glBegin(GL_LINES);
-    glVertex3f(p0[0], p0[1], p0[2]);
-    glVertex3f(base[0], base[1], base[2]);
-    glEnd();
-    glDisable(GL_LINE_STIPPLE);
+    draw_pulse_segment(p0, base, rgb);
 
     /* Arrowhead — four fins from the tip back to the base ring. */
     glLineWidth(3.0f);
-    glColor4f(1.0f, 0.85f, 0.30f, 0.95f);
+    glColor4f(head_rgb[0], head_rgb[1], head_rgb[2], 0.95f);
     glBegin(GL_LINES);
     for (int i = 0; i < 4; i++) {
         float sx = (i == 0 ?  rx : i == 1 ? -rx : i == 2 ?  bx : -bx);
@@ -1375,15 +1422,15 @@ static void draw_translate_guide(const GLCmd *cmd, const float p_after[3]) {
     glEnd();
     glLineWidth(1.0f);
 
-    /* Tail dot (hollow-feeling small) and tip dot (bright, solid). */
+    /* Tail dot and tip dot. */
     glPointSize(6.0f);
     glBegin(GL_POINTS);
-    glColor4f(1.0f, 0.75f, 0.20f, 0.7f);
+    glColor4f(rgb[0], rgb[1], rgb[2], 0.7f);
     glVertex3f(p0[0], p0[1], p0[2]);
     glEnd();
     glPointSize(9.0f);
     glBegin(GL_POINTS);
-    glColor4f(1.0f, 0.90f, 0.40f, 1.0f);
+    glColor4f(head_rgb[0], head_rgb[1], head_rgb[2], 1.0f);
     glVertex3f(p1[0], p1[1], p1[2]);
     glEnd();
     glPointSize(1.0f);
@@ -1432,38 +1479,34 @@ static void draw_scale_guide(const GLCmd *cmd, const float p_start[3]) {
     glDisable(GL_LIGHTING);
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-    glColor4f(0.85f, 0.45f, 1.0f, 0.95f); /* magenta — distinct from translate/rotate */
 
     if (dlen > 1e-4f) {
+        float rgb[3]; xform_axis_color(sx - 1.0f, sy - 1.0f, sz - 1.0f, rgb);
+        float head_rgb[3] = {
+            rgb[0]*0.6f + 0.4f, rgb[1]*0.6f + 0.4f, rgb[2]*0.6f + 0.4f
+        };
+
         float dir[3] = { delta[0]/dlen, delta[1]/dlen, delta[2]/dlen };
         float head_len = dlen * 0.22f;
         if (head_len > 0.25f) head_len = 0.25f;
         if (head_len < 0.06f) head_len = (dlen < 0.06f ? dlen * 0.5f : 0.06f);
         float base[3] = { p1[0] - dir[0]*head_len, p1[1] - dir[1]*head_len, p1[2] - dir[2]*head_len };
 
-        glEnable(GL_LINE_STIPPLE);
-        glLineStipple(1, 0xAAAA);
-        glLineWidth(4.0f);
-        glColor4f(0.75f, 0.40f, 0.95f, 0.85f);
-        glBegin(GL_LINES);
-        glVertex3f(p0[0], p0[1], p0[2]);
-        glVertex3f(base[0], base[1], base[2]);
-        glEnd();
-        glDisable(GL_LINE_STIPPLE);
+        draw_pulse_segment(p0, base, rgb);
 
         glLineWidth(3.0f);
-        glColor4f(0.90f, 0.55f, 1.0f, 0.95f);
+        glColor4f(head_rgb[0], head_rgb[1], head_rgb[2], 0.95f);
         draw_arrow_head(p1, dir, head_len);
         glLineWidth(1.0f);
 
         glPointSize(6.0f);
         glBegin(GL_POINTS);
-        glColor4f(0.75f, 0.40f, 0.95f, 0.7f);
+        glColor4f(rgb[0], rgb[1], rgb[2], 0.7f);
         glVertex3f(p0[0], p0[1], p0[2]);
         glEnd();
         glPointSize(9.0f);
         glBegin(GL_POINTS);
-        glColor4f(0.95f, 0.65f, 1.0f, 1.0f);
+        glColor4f(head_rgb[0], head_rgb[1], head_rgb[2], 1.0f);
         glVertex3f(p1[0], p1[1], p1[2]);
         glEnd();
         glPointSize(1.0f);
@@ -1471,8 +1514,11 @@ static void draw_scale_guide(const GLCmd *cmd, const float p_start[3]) {
         /* Degenerate: p_start at origin — show three axis arrows from origin
          * to (sx,0,0), (0,sy,0), (0,0,sz) so the per-component scaling is
          * still visible. A unit reference segment (gray) on each axis hints
-         * at the identity baseline. */
+         * at the identity baseline. Each axis pulses in its own axis color. */
         const float axes[3][3] = { {1,0,0}, {0,1,0}, {0,0,1} };
+        const float axis_rgb[3][3] = {
+            {1.0f, 0.3f, 0.3f}, {0.3f, 1.0f, 0.3f}, {0.3f, 0.3f, 1.0f}
+        };
         const float factors[3] = { sx, sy, sz };
         for (int a = 0; a < 3; a++) {
             float f = factors[a];
@@ -1487,7 +1533,6 @@ static void draw_scale_guide(const GLCmd *cmd, const float p_start[3]) {
             glVertex3f(axes[a][0], axes[a][1], axes[a][2]);
             glEnd();
 
-            /* Scaled arrow — dashed shaft, solid head. */
             float dir[3] = {
                 (f >= 0 ? axes[a][0] : -axes[a][0]),
                 (f >= 0 ? axes[a][1] : -axes[a][1]),
@@ -1497,26 +1542,23 @@ static void draw_scale_guide(const GLCmd *cmd, const float p_start[3]) {
             float head_len = tlen * 0.22f;
             if (head_len > 0.2f) head_len = 0.2f;
             if (head_len < 0.05f) head_len = (tlen < 0.05f ? tlen * 0.5f : 0.05f);
+            float origin[3] = { 0.0f, 0.0f, 0.0f };
             float base[3] = { tip[0] - dir[0]*head_len, tip[1] - dir[1]*head_len, tip[2] - dir[2]*head_len };
 
-            glEnable(GL_LINE_STIPPLE);
-            glLineStipple(1, 0xAAAA);
-            glLineWidth(3.5f);
-            glColor4f(0.75f, 0.40f, 0.95f, 0.85f);
-            glBegin(GL_LINES);
-            glVertex3f(0.0f, 0.0f, 0.0f);
-            glVertex3f(base[0], base[1], base[2]);
-            glEnd();
-            glDisable(GL_LINE_STIPPLE);
+            draw_pulse_segment(origin, base, axis_rgb[a]);
 
             glLineWidth(2.5f);
-            glColor4f(0.90f, 0.55f, 1.0f, 0.95f);
+            glColor4f(axis_rgb[a][0]*0.6f + 0.4f,
+                      axis_rgb[a][1]*0.6f + 0.4f,
+                      axis_rgb[a][2]*0.6f + 0.4f, 0.95f);
             draw_arrow_head(tip, dir, head_len);
             glLineWidth(1.0f);
 
             glPointSize(7.0f);
             glBegin(GL_POINTS);
-            glColor4f(0.95f, 0.65f, 1.0f, 1.0f);
+            glColor4f(axis_rgb[a][0]*0.6f + 0.4f,
+                      axis_rgb[a][1]*0.6f + 0.4f,
+                      axis_rgb[a][2]*0.6f + 0.4f, 1.0f);
             glVertex3f(tip[0], tip[1], tip[2]);
             glEnd();
             glPointSize(1.0f);
@@ -1533,6 +1575,13 @@ static void draw_rotate_guide(const GLCmd *cmd, const float p_start[3]) {
     float alen = sqrtf(ax*ax + ay*ay + az*az);
     if (alen < 1e-6f) return;
     if (fabsf(angle_deg) < 1e-4f) return;
+
+    /* Color from the rotation axis: (|ax|,|ay|,|az|)/max → RGB. */
+    float rgb[3]; xform_axis_color(ax, ay, az, rgb);
+    float bright[3] = {
+        rgb[0]*0.6f + 0.4f, rgb[1]*0.6f + 0.4f, rgb[2]*0.6f + 0.4f
+    };
+
     ax /= alen; ay /= alen; az /= alen;
 
     float plen = sqrtf(p_start[0]*p_start[0] + p_start[1]*p_start[1]
@@ -1546,56 +1595,92 @@ static void draw_rotate_guide(const GLCmd *cmd, const float p_start[3]) {
      * visible even when p_start is near origin. */
     float axis_len = (plen > 0.5f ? plen : 0.5f) * 1.1f;
     glLineWidth(2.0f);
-    glColor4f(0.30f, 0.85f, 1.0f, 0.55f);
+    glColor4f(rgb[0], rgb[1], rgb[2], 0.55f);
     glBegin(GL_LINES);
     glVertex3f(-ax*axis_len, -ay*axis_len, -az*axis_len);
     glVertex3f( ax*axis_len,  ay*axis_len,  az*axis_len);
     glEnd();
 
     /* Arc — Rodrigues rotation of p_start about axis, sampled in segments. */
-    glEnable(GL_LINE_STIPPLE);
-    glLineStipple(1, 0xAAAA);
-    glLineWidth(4.0f);
-    glColor4f(0.30f, 0.85f, 1.0f, 0.9f);
-
     const int segs = 48;
     float angle_rad = angle_deg * (float)(3.14159265358979323846 / 180.0);
-    glBegin(GL_LINE_STRIP);
+
+    /* Sample arc points once into a local buffer so we can draw the dim base
+     * and the pulse overlay without recomputing the rotation. */
+    float arc[49][3];
     for (int i = 0; i <= segs; i++) {
         float t = (float)i / (float)segs;
         float th = angle_rad * t;
         float c = cosf(th), s = sinf(th), k = 1.0f - c;
-        /* R(axis, th) * p_start */
         float px = p_start[0], py = p_start[1], pz = p_start[2];
-        float rx = (c + ax*ax*k)      * px + (ax*ay*k - az*s) * py + (ax*az*k + ay*s) * pz;
-        float ry = (ay*ax*k + az*s)   * px + (c + ay*ay*k)    * py + (ay*az*k - ax*s) * pz;
-        float rz = (az*ax*k - ay*s)   * px + (az*ay*k + ax*s) * py + (c + az*az*k)    * pz;
-        glVertex3f(rx, ry, rz);
+        arc[i][0] = (c + ax*ax*k)    * px + (ax*ay*k - az*s) * py + (ax*az*k + ay*s) * pz;
+        arc[i][1] = (ay*ax*k + az*s) * px + (c + ay*ay*k)    * py + (ay*az*k - ax*s) * pz;
+        arc[i][2] = (az*ax*k - ay*s) * px + (az*ay*k + ax*s) * py + (c + az*az*k)    * pz;
     }
+
+    /* Dim solid base arc. */
+    glLineWidth(2.0f);
+    glColor4f(rgb[0], rgb[1], rgb[2], 0.30f);
+    glBegin(GL_LINE_STRIP);
+    for (int i = 0; i <= segs; i++) glVertex3fv(arc[i]);
     glEnd();
-    glDisable(GL_LINE_STIPPLE);
+
+    /* Pulse — bright dot sweeps along the arc with a short fading trail. */
+    float ph = fmodf(g_anim_time * 0.6f, 1.0f);
+    float glow = sinf(ph * (float)M_PI) * 0.8f + 0.2f;
+    float fpos = ph * (float)segs;
+    int i_pos = (int)fpos; if (i_pos >= segs) i_pos = segs - 1;
+    float fr = fpos - (float)i_pos;
+    float pos[3] = {
+        arc[i_pos][0] + (arc[i_pos+1][0] - arc[i_pos][0]) * fr,
+        arc[i_pos][1] + (arc[i_pos+1][1] - arc[i_pos][1]) * fr,
+        arc[i_pos][2] + (arc[i_pos+1][2] - arc[i_pos][2]) * fr,
+    };
+    float tp = ph - 0.25f; if (tp < 0) tp = 0;
+    float ftp = tp * (float)segs;
+    int i_tp = (int)ftp; if (i_tp >= segs) i_tp = segs - 1;
+    float ftr = ftp - (float)i_tp;
+    float trail[3] = {
+        arc[i_tp][0] + (arc[i_tp+1][0] - arc[i_tp][0]) * ftr,
+        arc[i_tp][1] + (arc[i_tp+1][1] - arc[i_tp][1]) * ftr,
+        arc[i_tp][2] + (arc[i_tp+1][2] - arc[i_tp][2]) * ftr,
+    };
+
+    /* Trail as a short bright strip between trail→pos, following arc samples
+     * in between so curvature is preserved. */
+    glLineWidth(3.5f);
+    glBegin(GL_LINE_STRIP);
+    glColor4f(rgb[0], rgb[1], rgb[2], 0.05f);
+    glVertex3f(trail[0], trail[1], trail[2]);
+    for (int i = i_tp + 1; i <= i_pos; i++) {
+        float u = (float)(i - i_tp) / (float)(i_pos - i_tp + 1);
+        glColor4f(rgb[0], rgb[1], rgb[2], 0.05f + (glow * 0.7f) * u);
+        glVertex3fv(arc[i]);
+    }
+    glColor4f(rgb[0], rgb[1], rgb[2], glow * 0.75f);
+    glVertex3f(pos[0], pos[1], pos[2]);
+    glEnd();
     glLineWidth(1.0f);
 
-    /* Compute final rotated point for endpoint dot. */
-    {
-        float c = cosf(angle_rad), s = sinf(angle_rad), k = 1.0f - c;
-        float px = p_start[0], py = p_start[1], pz = p_start[2];
-        float fx = (c + ax*ax*k)    * px + (ax*ay*k - az*s) * py + (ax*az*k + ay*s) * pz;
-        float fy = (ay*ax*k + az*s) * px + (c + ay*ay*k)    * py + (ay*az*k - ax*s) * pz;
-        float fz = (az*ax*k - ay*s) * px + (az*ay*k + ax*s) * py + (c + az*az*k)    * pz;
+    glPointSize(8.0f);
+    glBegin(GL_POINTS);
+    glColor4f(bright[0], bright[1], bright[2], glow);
+    glVertex3f(pos[0], pos[1], pos[2]);
+    glEnd();
+    glPointSize(1.0f);
 
-        glPointSize(6.0f);
-        glBegin(GL_POINTS);
-        glColor4f(0.30f, 0.85f, 1.0f, 0.7f);
-        glVertex3f(p_start[0], p_start[1], p_start[2]);
-        glEnd();
-        glPointSize(10.0f);
-        glBegin(GL_POINTS);
-        glColor4f(0.45f, 0.95f, 1.0f, 0.95f);
-        glVertex3f(fx, fy, fz);
-        glEnd();
-        glPointSize(1.0f);
-    }
+    /* Start/end endpoint dots. */
+    glPointSize(6.0f);
+    glBegin(GL_POINTS);
+    glColor4f(rgb[0], rgb[1], rgb[2], 0.7f);
+    glVertex3f(p_start[0], p_start[1], p_start[2]);
+    glEnd();
+    glPointSize(10.0f);
+    glBegin(GL_POINTS);
+    glColor4f(bright[0], bright[1], bright[2], 0.95f);
+    glVertex3fv(arc[segs]);
+    glEnd();
+    glPointSize(1.0f);
 
     glDisable(GL_BLEND);
     if (g_user_lighting_enabled) glEnable(GL_LIGHTING);
