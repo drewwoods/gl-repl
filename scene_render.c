@@ -1418,7 +1418,7 @@ static int begin_mode_has_outline_overlay(GLenum mode) {
 }
 
 static void draw_replay_tess_preview(void) {
-    if (!g_replay_active || g_replay_state == REPLAY_OFF ||
+    if (!g_replay_active ||
         g_replay_mode != REPLAY_MODE_VERTEX)
         return;
 
@@ -1485,7 +1485,7 @@ static void draw_replay_hud(int scene_x, int scene_y, int scene_w, int scene_h) 
     int hud_y = scene_y + REPLAY_HUD_MARGIN_Y;
     int hud_w = scene_w - 2 * REPLAY_HUD_MARGIN_X;
 
-    if (!g_replay_active || g_replay_state == REPLAY_OFF)
+    if (!g_replay_active)
         return;
 
     if (hud_w < REPLAY_HUD_MIN_WIDTH)
@@ -1857,7 +1857,7 @@ static void draw_orbit_target(void) {
 void render_3d_scene(void) {
     int sc_x, sc_y, sc_w, sc_h;
     scene_rect(&sc_x, &sc_y, &sc_w, &sc_h);
-    int replaying = g_replay_active && g_replay_state != REPLAY_OFF;
+    int replaying = g_replay_active;
     int show_current_poly = g_highlight_current_poly && !replaying;
     int replay_tess_preview = replaying && g_replay_mode == REPLAY_MODE_VERTEX;
     int replay_vertex_points = replaying && g_replay_mode == REPLAY_MODE_VERTEX;

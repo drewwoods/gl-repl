@@ -470,10 +470,7 @@ int    g_replay_pc = 0;
 int    g_replay_mode = REPLAY_MODE_VERTEX;
 float  g_replay_speed = 4.0f;
 float  g_replay_accum = 0.0f;
-float  g_replay_fade_alpha = 1.0f;
 float  g_replay_fade_speed = 2.0f;
-int    g_replay_fade_begin = -1;
-int    g_replay_fade_end = -1;
 int    g_replay_src_line = -1;
 int    g_replay_total_flat = 0;
 static float g_replay_baseline_predef_vals[MAX_PREDEF_VARS];
@@ -2793,7 +2790,7 @@ static void restore_predef_values(const float *src) {
 }
 
 static int replay_enabled(void) {
-    return g_replay_active && g_replay_state != REPLAY_OFF;
+    return g_replay_active;
 }
 
 static int replay_has_meaningful_cmds(void) {
@@ -2890,22 +2887,8 @@ static float replay_batch_alpha(const ReplayFadeBatch *batch) {
     return alpha;
 }
 
-static void replay_sync_legacy_fade_state(void) {
-    if (g_replay_fade_batch_count > 0) {
-        ReplayFadeBatch *batch = &g_replay_fade_batches[g_replay_fade_batch_count - 1];
-        g_replay_fade_begin = batch->old_pc;
-        g_replay_fade_end = batch->new_pc - 1;
-        g_replay_fade_alpha = replay_batch_alpha(batch);
-    } else {
-        g_replay_fade_begin = -1;
-        g_replay_fade_end = -1;
-        g_replay_fade_alpha = 1.0f;
-    }
-}
-
 static void replay_clear_fade_batches(void) {
     g_replay_fade_batch_count = 0;
-    replay_sync_legacy_fade_state();
 }
 
 static void replay_push_fade_batch(int old_pc, int new_pc) {
@@ -2924,7 +2907,6 @@ static void replay_push_fade_batch(int old_pc, int new_pc) {
     batch->old_pc = old_pc;
     batch->new_pc = new_pc;
     batch->age = 0.016f;
-    replay_sync_legacy_fade_state();
 }
 
 static void replay_clamp_fade_batches(int max_pc) {
@@ -2943,7 +2925,6 @@ static void replay_clamp_fade_batches(int max_pc) {
     }
 
     g_replay_fade_batch_count = dst;
-    replay_sync_legacy_fade_state();
 }
 
 void replay_tick_fade_batches(float dt) {
@@ -2958,7 +2939,6 @@ void replay_tick_fade_batches(float dt) {
     }
 
     g_replay_fade_batch_count = dst;
-    replay_sync_legacy_fade_state();
 }
 
 int replay_has_active_fades(void) {

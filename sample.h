@@ -386,10 +386,7 @@ extern int    g_replay_pc;
 extern int    g_replay_mode;
 extern float  g_replay_speed;
 extern float  g_replay_accum;
-extern float  g_replay_fade_alpha;
 extern float  g_replay_fade_speed;
-extern int    g_replay_fade_begin;
-extern int    g_replay_fade_end;
 extern int    g_replay_src_line;
 extern int    g_replay_total_flat;
 
