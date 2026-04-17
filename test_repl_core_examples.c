@@ -499,6 +499,8 @@ int main(int argc, char **argv) {
                     g_axes_theme == CFG_DEFAULT_AXES_THEME);
         ASSERT_TRUE("no cfg reset labels default",
                     g_show_vnums == CFG_DEFAULT_VERTEX_LABELS);
+        ASSERT_TRUE("no cfg reset indices default",
+                    g_show_indices == CFG_DEFAULT_VERTEX_INDICES);
         ASSERT_TRUE("no cfg reset normals default",
                     g_show_normals == CFG_DEFAULT_NORMAL_VECTORS);
         ASSERT_TRUE("no cfg reset outlines default",
