@@ -164,9 +164,9 @@ The core data flow is **source commands → flat commands → GL calls**:
    `try_assign_variable`, otherwise `float x` is misread as an
    assignment. Each handler returns 1 if it consumed the input
    (success or error with status message), 0 if it didn't match.
-   If all handlers return 0, `parse_command_internal()` in `repl_core.c`
+   If all handlers return 0, `parse_command()` in `repl_core.c`
    sets `"Unknown cmd."` status (`repl_core.c`, end of
-   `parse_command_internal`).
+   `parse_command`).
 3. **Parse** — `parse_command()` in `repl_core.c` matches the line to a
    `CmdType`, evaluates argument expressions via `eval_expr()`, stores
    result in `GLCmd.args[]` and normalized text in `GLCmd.source[]`

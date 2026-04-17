@@ -569,9 +569,8 @@ int    g_cursor_px = 0;     /* screen pos of cursor, set during render */
 int    g_cursor_py = 0;
 
 /* Forward declarations (eval_expr, parse_for_header, etc. are in repl_eval.h) */
-static int parse_command(const char *line, GLCmd *cmd);
-static int parse_command_with_vars(const char *line, GLCmd *cmd,
-                                   ExprVar *vars, int num_vars);
+static int parse_command(const char *line, GLCmd *cmd,
+                         ExprVar *vars, int num_vars);
 static unsigned int line_func_scope_mask(int line);
 static void get_for_var_name(const GLCmd *cmd, char *var, int var_sz);
 static void load_example(int idx);
@@ -882,11 +881,7 @@ int repl_parse_and_normalize(const char *line, int pos,
                              int preserve_expr, GLCmd *out_cmd) {
     int saved = g_edit_line;
     g_edit_line = pos;
-    int parsed;
-    if (vars && num_vars > 0)
-        parsed = parse_command_with_vars(line, out_cmd, vars, num_vars);
-    else
-        parsed = parse_command(line, out_cmd);
+    int parsed = parse_command(line, out_cmd, vars, num_vars);
     g_edit_line = saved;
 
     if (!parsed) return 0;
@@ -1488,8 +1483,8 @@ static const StdCmdDef g_std_cmds[] = {
     { NULL, 0, 0, NULL, NULL, 0 }
 };
 
-static int parse_command_internal(const char *line, GLCmd *cmd,
-                                  ExprVar *vars, int num_vars) {
+static int parse_command(const char *line, GLCmd *cmd,
+                         ExprVar *vars, int num_vars) {
     char buf[MAX_LINE_LEN];
     strncpy(buf, line, sizeof(buf) - 1);
     buf[sizeof(buf) - 1] = '\0';
@@ -2028,15 +2023,6 @@ static int parse_command_internal(const char *line, GLCmd *cmd,
 
     set_status("Unknown cmd. Try glVertex3f, glBegin, glEnable, glShadeModel, ...");
     return 0;
-}
-
-static int parse_command(const char *line, GLCmd *cmd) {
-    return parse_command_internal(line, cmd, NULL, 0);
-}
-
-static int parse_command_with_vars(const char *line, GLCmd *cmd,
-                                   ExprVar *vars, int num_vars) {
-    return parse_command_internal(line, cmd, vars, num_vars);
 }
 
 /* ========================================================================= */
@@ -2597,7 +2583,7 @@ static void flatten_range(int start, int end_idx, ExprVar *vars, int nv,
             memset(&tmp, 0, sizeof(tmp));
             int saved = g_edit_line;
             g_edit_line = g_num_flat_cmds;
-            if (parse_command_with_vars(g_cmds[i].source, &tmp, vars, nv)) {
+            if (parse_command(g_cmds[i].source, &tmp, vars, nv)) {
                 tmp.has_vars = g_cmds[i].has_vars;
                 strncpy(tmp.source, g_cmds[i].source, sizeof(tmp.source) - 1);
                 tmp.source[sizeof(tmp.source) - 1] = '\0';
@@ -2616,7 +2602,7 @@ static void flatten_range(int start, int end_idx, ExprVar *vars, int nv,
             /* Outside loop but has predefined var references: re-evaluate */
             GLCmd tmp;
             memset(&tmp, 0, sizeof(tmp));
-            if (parse_command(g_cmds[i].source, &tmp)) {
+            if (parse_command(g_cmds[i].source, &tmp, NULL, 0)) {
                 tmp.has_vars = 1;
                 strncpy(tmp.source, g_cmds[i].source, sizeof(tmp.source) - 1);
                 tmp.source[sizeof(tmp.source) - 1] = '\0';
@@ -4351,12 +4337,12 @@ static void init_gl(void) {
 /* ========================================================================= */
 
 int repl_parse_command(const char *line, GLCmd *cmd) {
-    return parse_command(line, cmd);
+    return parse_command(line, cmd, NULL, 0);
 }
 
 int repl_parse_command_with_vars(const char *line, GLCmd *cmd,
                                  ExprVar *vars, int num_vars) {
-    return parse_command_with_vars(line, cmd, vars, num_vars);
+    return parse_command(line, cmd, vars, num_vars);
 }
 
 void repl_copy_replay_baseline_predef_values(float *dst, int max_vals) {
