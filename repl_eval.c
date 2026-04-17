@@ -1,11 +1,18 @@
 /*
- * repl_eval.c — Expression evaluator, translators, and for-loop parsers
+ * repl_eval.c — Expression evaluator, REPL<->C translators, for-loop parsers.
  *
- * Compile standalone test:
- *   gcc -Wall -std=c2x -o test_eval test_eval.c repl_eval.c -lm
+ * Responsibilities:
+ *  - Recursive-descent float evaluator for REPL expressions with support for
+ *    variables (predef table `g_predef_vars` plus per-call loop locals),
+ *    arithmetic, comparison, and logical operators, and the built-in math
+ *    funcs listed in s_reserved_idents[] below.
+ *  - Bidirectional text translation between REPL syntax (sin, PI, a%b) and
+ *    C syntax (sinf, M_PI, fmodf(a,b)) for save/load round-tripping.
+ *  - Header parsing for REPL `for(var, start, end[, step])` and imported
+ *    C-style `for (float i = 0; i < N; i++)` loops.
  *
- * Or include directly into sample.c via:
- *   #include "repl_eval.c"
+ * Intentionally isolated from GL and from the command/editor layers so the
+ * evaluator has its own unit tests (see test_eval.c).
  */
 #include "repl_eval.h"
 
@@ -181,6 +188,18 @@ int input_has_predef_vars(const char *s) {
 /* ========================================================================= */
 /* Expression evaluator — recursive descent with variables                    */
 /* ========================================================================= */
+/*
+ * Grammar, loosest to tightest precedence:
+ *   expr       := comparison ( ("&&" | "||") comparison )*
+ *   comparison := additive ( ("<" | ">" | "<=" | ">=" | "==" | "!=") additive )*
+ *   additive   := term ( ("+" | "-") term )*
+ *   term       := primary ( ("*" | "/" | "%") primary )*
+ *   primary    := number | "(" expr ")" | "-" primary | "+" primary | "!" primary
+ *               | identifier [ "(" arg-list ")" ]
+ *
+ * Unknown identifiers and unrecognized function calls return 0.0f rather than
+ * raise an error; validation happens upstream in validate_expression_idents().
+ */
 
 static void expr_skip_ws(ExprCtx *ctx) {
     while (*ctx->p && isspace((unsigned char)*ctx->p)) ctx->p++;
@@ -221,11 +240,11 @@ static float eval_primary(ExprCtx *ctx) {
     /* Identifier: constant, variable, or function */
     if (isalpha((unsigned char)*ctx->p) || *ctx->p == '_') {
         char name[32];
-        int ni = 0;
+        int name_len = 0;
         while ((isalnum((unsigned char)*ctx->p) || *ctx->p == '_') &&
-               ni < (int)sizeof(name) - 1)
-            name[ni++] = *ctx->p++;
-        name[ni] = '\0';
+               name_len < (int)sizeof(name) - 1)
+            name[name_len++] = *ctx->p++;
+        name[name_len] = '\0';
 
         /* Constants */
         if (strcmp(name, "PI") == 0)  return (float)M_PI;
@@ -596,17 +615,18 @@ int parse_for_header_with_vars(const char *input, char *var_name, int var_sz,
 
     /* Variable name */
     while (*p && isspace((unsigned char)*p)) p++;
-    int ni = 0;
-    while (*p && (isalnum((unsigned char)*p) || *p == '_') && ni < var_sz - 1)
-        var_name[ni++] = *p++;
-    var_name[ni] = '\0';
-    if (ni == 0) return 0;
+    int name_len = 0;
+    while (*p && (isalnum((unsigned char)*p) || *p == '_') && name_len < var_sz - 1)
+        var_name[name_len++] = *p++;
+    var_name[name_len] = '\0';
+    if (name_len == 0) return 0;
 
     while (*p && isspace((unsigned char)*p)) p++;
     if (*p != ',') return 0;
     p++;
 
-    /* Start value (expression) */
+    /* Start and end expressions share the same ExprCtx; we only need to
+     * re-seat ctx.p at each argument boundary since eval_expr advances it. */
     ExprCtx ctx = { p, vars, num_vars };
     *start = eval_expr(&ctx);
     p = ctx.p;
@@ -614,21 +634,16 @@ int parse_for_header_with_vars(const char *input, char *var_name, int var_sz,
     if (*p != ',') return 0;
     p++;
 
-    /* End value (expression) */
     ctx.p = p;
-    ctx.vars = vars;
-    ctx.num_vars = num_vars;
     *end = eval_expr(&ctx);
     p = ctx.p;
     while (*p && isspace((unsigned char)*p)) p++;
 
-    /* Optional step */
+    /* Optional step (defaults to 1). */
     *step = 1.0f;
     if (*p == ',') {
         p++;
         ctx.p = p;
-        ctx.vars = vars;
-        ctx.num_vars = num_vars;
         *step = eval_expr(&ctx);
         p = ctx.p;
         while (*p && isspace((unsigned char)*p)) p++;
@@ -667,11 +682,11 @@ int parse_c_for_header(const char *input, char *var_name, int var_sz,
     while (*p && isspace((unsigned char)*p)) p++;
 
     /* Variable name */
-    int ni = 0;
-    while (*p && (isalnum((unsigned char)*p) || *p == '_') && ni < var_sz - 1)
-        var_name[ni++] = *p++;
-    var_name[ni] = '\0';
-    if (ni == 0) return 0;
+    int name_len = 0;
+    while (*p && (isalnum((unsigned char)*p) || *p == '_') && name_len < var_sz - 1)
+        var_name[name_len++] = *p++;
+    var_name[name_len] = '\0';
+    if (name_len == 0) return 0;
 
     while (*p && isspace((unsigned char)*p)) p++;
     if (*p != '=') return 0;
@@ -687,25 +702,27 @@ int parse_c_for_header(const char *input, char *var_name, int var_sz,
     p++;
     while (*p && isspace((unsigned char)*p)) p++;
 
-    /* Skip variable name in condition */
-    const char *cond_var = p;
+    /* Skip the loop variable in the condition (we don't validate it matches
+     * the declared one — REPL trusts the imported C is well-formed). */
     while (*p && (isalnum((unsigned char)*p) || *p == '_')) p++;
-    (void)cond_var;
     while (*p && isspace((unsigned char)*p)) p++;
 
-    /* Comparison operator */
-    int eq = 0;
-    int gt = 0;
-    if (*p == '<') { p++; gt = 0; }
-    else if (*p == '>') { p++; gt = 1; }
+    /* Comparison operator:
+     *   is_greater=1  when condition is `>` or `>=` (loop counts down)
+     *   include_end=1 when condition is `<=` or `>=` (inclusive bound) */
+    int include_end = 0;
+    int is_greater = 0;
+    if (*p == '<') { p++; is_greater = 0; }
+    else if (*p == '>') { p++; is_greater = 1; }
     else return 0;
-    if (*p == '=') { p++; eq = 1; }
+    if (*p == '=') { p++; include_end = 1; }
 
-    /* End value */
+    /* End value. REPL loops are half-open, so convert inclusive C bounds by
+     * nudging the limit by one step in the iteration direction. */
     ctx.p = p;
     *end = eval_expr(&ctx);
-    if (eq && !gt) *end += 1.0f;
-    if (eq && gt) *end -= 1.0f;
+    if (include_end && !is_greater) *end += 1.0f;
+    if (include_end && is_greater)  *end -= 1.0f;
     p = ctx.p;
     if (*p == 'f' || *p == 'F') p++;
     while (*p && isspace((unsigned char)*p)) p++;
@@ -713,7 +730,7 @@ int parse_c_for_header(const char *input, char *var_name, int var_sz,
     p++;
     while (*p && isspace((unsigned char)*p)) p++;
 
-    /* Increment: skip variable name */
+    /* Increment: skip variable name, then decode the step form. */
     while (*p && (isalnum((unsigned char)*p) || *p == '_')) p++;
     while (*p && isspace((unsigned char)*p)) p++;
 
@@ -739,7 +756,10 @@ int parse_c_for_header(const char *input, char *var_name, int var_sz,
     } else {
         return 0;
     }
-    if (gt && *step > 0) *step = -*step;
+    /* A `>` condition with a positive step would never terminate — flip sign
+     * so it counts down toward the bound. This helps termination when the
+     * loop runs, but does not guarantee any iterations. */
+    if (is_greater && *step > 0) *step = -*step;
 
     while (*p && isspace((unsigned char)*p)) p++;
     if (*p != ')') return 0;

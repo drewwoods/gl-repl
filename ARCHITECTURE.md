@@ -23,6 +23,52 @@ The public API is still `repl_core.h`. Cross-module runtime/test helpers live in
 `repl_core_internal.h`. Shared globals and UI-visible state still live in
 `sample.h`.
 
+## Two-Level Command Model
+
+The REPL keeps **source commands** and **flattened commands** as separate
+arrays. Everything else (execution, replay, normal recomputation, overlays)
+reads from the flattened array.
+
+- `g_cmds[MAX_COMMANDS]` — source-level. One entry per line visible in the
+  code panel. Holds parsed type/args, the normalized `source[]` text, and
+  flags (`has_vars`, `valid`, `is_auto`). Editor mutations touch only this
+  array.
+- `g_flat_cmds[MAX_COMMANDS]` — expanded. For-loops unrolled, function calls
+  inlined, if-conditions resolved. Each flat cmd carries `src_cmd_idx`
+  (owning source line), `call_src_cmd_idx` (immediate call site), and
+  `func_scope_mask` (active function scopes) so the editor can highlight
+  the right source line when the cursor lands on a flattened command.
+- **Rebuild trigger:** every mutation sets `g_flat_dirty = 1` (via
+  `mark_normals_dirty()`); `flatten_commands()` rebuilds the flat array on
+  the next frame before rendering.
+
+Keeping the two levels separate means edits are cheap, execution reads a
+flat stream, and replay can step by flat-command without worrying about
+loop/function structure.
+
+## Command Lifecycle
+
+A single REPL line progresses through five stages, owned by different
+modules:
+
+1. **Input** — `repl_editor.c` accumulates characters into `g_input`.
+2. **Commit** — `;` (or Enter in overwrite mode, or programmatic
+   `feed_line()`) runs the commit handler chain (see
+   [Structured block commits](#structured-block-commits) below).
+3. **Parse** — `repl_parse_command()` in `repl_core.c` matches the line to
+   a `CmdType`, evaluates argument expressions via `repl_eval.c`, and
+   stores results into `GLCmd.args[]` / `GLCmd.source[]`.
+4. **Flatten** — `flatten_range()` recursively expands source commands,
+   capped at 100k visits and recursion depth 32.
+5. **Execute** — `execute_commands()` walks `g_flat_cmds[]` and emits GL
+   calls. Commands flagged `has_vars` are re-evaluated each frame so
+   animated expressions (e.g. `t`) stay live.
+
+Stages 1–2 live in `repl_editor.c`; 3–5 live in `repl_core.c`. This is the
+load-bearing boundary — outside code that needs to inject commands should
+do so through `feed_line()` rather than poking `g_cmds[]` directly, so
+every path shares the same parse/normalize/flatten guarantees.
+
 ## Data Flow
 
 ### Edit and commit path
@@ -125,9 +171,68 @@ Owns generated scaffold and import/export plumbing.
 - `funcN(...) { ... }`
 - `if(...) { ... }`
 - closing `}`
+- `float name[, ...];` declarations
+- `name = expr;` assignments to predefined variables
 
-These helpers update `g_cmds[]` directly, but they still rely on parser and
-scope helpers from `repl_core.c` for validation and normalization.
+Historically each dispatch site (`;` key, Enter in insert mode, Enter in
+overwrite mode, `feed_line()`) open-coded the handler chain. That is now
+consolidated into four helpers at the top of `repl_editor.c`:
+
+- `try_commit_var_statements()` — float decl, then assign
+- `try_commit_block_structs()` — close-brace, for, func, if
+- `try_commit_any()` — both groups in canonical order
+- `try_commit_var_statements_then_insert()` — var variant that flips to
+  insert mode on success, used by the overwrite-mode Enter key
+
+Adding a new statement handler means extending the right helper, not
+chasing the call sites. Ordering within a helper is load-bearing:
+`try_commit_float_decl` must precede `try_assign_variable` so that
+`float x;` is not misread as an assignment to an identifier named
+`"float"`.
+
+These helpers update `g_cmds[]` directly, but they still rely on parser
+and scope helpers from `repl_core.c` for validation and normalization.
+
+### Float variable declarations
+
+`float name[, ...];` lines commit to a dedicated `CMD_VAR_DECLARE` entry
+rather than running through the general parser. Two structural choices
+live here:
+
+- **Placement rule:** new declarations are inserted at the top of
+  non-decl code (index of the first non-`CMD_VAR_DECLARE` cmd), regardless
+  of cursor position. That guarantees every reference in source order
+  follows its declaration, so init expressions only see predef vars
+  declared above them. Editing an existing decl still overwrites in
+  place.
+- **No-op at execution time:** `execute_commands()` and `flatten_range()`
+  skip `CMD_VAR_DECLARE`. Registration into `g_predef_vars[]` happens at
+  commit time via `declare_predef_var()` in `repl_eval.c`, so the
+  evaluator sees the variable before the flat stream references it.
+
+`delete_cmd_range()` in `repl_editor.c` refuses to remove a declaration
+whose name is still referenced elsewhere (via `source_uses_ident()` in
+`repl_eval.c`).
+
+### Editing existing lines
+
+Navigating onto an existing line loads `g_cmds[i].source` into `g_input`
+with the trailing `;` and whitespace stripped, so re-committing goes
+through the no-semicolon code path. Every commit handler that looks for
+`;` must also accept end-of-string as a valid terminator. This invariant
+is shared by all dispatch sites.
+
+### Undo / redo
+
+`repl_editor.c` owns fixed-size circular buffers of editor snapshots.
+
+- `UndoSnapshot` captures `g_cmds[]`, `g_num_cmds`, `g_edit_line`, and
+  `g_predef_vars[]` values — enough to restore the full editor state.
+- Any mutation (delete, paste, reformat, etc.) calls
+  `push_undo_snapshot()` before changing state. Pushing clears the redo
+  stack, which is the usual "diverged history" rule.
+- Ctrl+Z pops the undo stack and moves the current state to the redo
+  stack; Ctrl+Y does the reverse.
 
 ### Flattening
 
@@ -149,6 +254,20 @@ Replay state and stepping remain in `repl_core.c`, but editor callbacks in
 - editor input toggles replay modes and stepping
 - replay helpers rebuild source-line highlighting state
 - `scene_render.c` consumes replay state to draw the HUD and replay overlays
+
+Under the hood, replay works by clamping how much of `g_flat_cmds[]`
+`execute_commands()` will emit on each frame:
+
+- `g_replay_state` is OFF / PLAYING / PAUSED / DONE; `g_replay_pc` is a
+  program counter into `g_flat_cmds[]`; `g_replay_speed` is a playback
+  multiplier.
+- During playback, `g_num_flat_cmds` is clamped to `replay_exec_limit()`
+  so only commands up to the PC contribute to the fill pass.
+- `g_replay_fade_batches[]` is a circular buffer of recent geometry
+  snapshots. Old batches fade out as new geometry appears and are drawn
+  in a separate blended pass (`execute_replay_fade_batches()`) after the
+  main fill. This is what produces the trailing-ghost look without
+  changing how the main executor walks the flat array.
 
 ## Startup and Examples
 
