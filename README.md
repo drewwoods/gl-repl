@@ -20,17 +20,30 @@ When your cursor sits on a committed `glTranslatef`, `glRotatef`, or
 only appear when the line parsed cleanly and your current input matches
 the committed source — partial or mid-edit lines are skipped.
 
-- **Translate** — dashed orange arrow with a 4-fin arrowhead, from the
-  "before" point to `before + (tx, ty, tz)`.
-- **Rotate** — cyan axis stub through the rotation pivot plus a dashed
-  arc sweeping from the "before" point by the command's angle. If the
-  point lies on the rotation axis (degenerate case), a unit-radius
-  reference point is synthesized so the sweep is still visible.
-- **Scale** — magenta arrow from the "before" point to the
-  component-wise scaled result. If the "before" point is at the
-  origin, a 3-axis gizmo is drawn instead: a gray unit reference
-  segment per axis and a magenta arrow to `(sx, 0, 0)`, `(0, sy, 0)`,
-  `(0, 0, sz)`.
+All guides share an "axes pulse" visual language: a dim solid base
+line or arc with a bright dot traveling along it and a short fading
+trail behind. The color is derived from the command's vector so the
+shape of the motion reads at a glance:
+
+- **Translate** — shaft color is `(|tx|, |ty|, |tz|)` normalized by
+  its max component, mapped to `RGB`. A pure-axis translation reads
+  as a pure axis color (`glTranslatef(2, 0, 0)` → red,
+  `glTranslatef(0, 0, -3)` → blue); diagonals blend. The 4-fin
+  pyramid arrowhead at the tip is kept, tinted from the same color.
+- **Rotate** — shaft color is `(|ax|, |ay|, |az|)` normalized, so a
+  Y-axis rotation reads green, an X-axis rotation reads red, etc.
+  The axis stub through the rotation pivot shares the color. The
+  arc is sampled by Rodrigues rotation; the pulse dot sweeps along
+  the curve so arc direction is unambiguous. (When `p_after` lies
+  on the rotation axis the arc collapses to a point — hover over
+  a rotate line where the pivot isn't on the axis to see the sweep.)
+- **Scale** — shaft color is `(|sx-1|, |sy-1|, |sz-1|)` normalized,
+  so the color highlights which axes deviate from identity
+  (`glScalef(2, 1, 1)` reads red). Arrow runs from the "before"
+  point to the component-wise scaled result. If the "before" point
+  is at the origin, a 3-axis gizmo is drawn instead: a gray unit
+  reference segment per axis and a pulsing arrow per axis in that
+  axis's color (X=red, Y=green, Z=blue).
 
 ### What is the "before" point?
 
@@ -66,10 +79,14 @@ The config menu (Config button on the code panel header) has an
   Shows an arrow from `(0, 0, 0)` to `(0, 0, -2)` along world Z.
 
 - **Frame** — guide is anchored at the scene-world position that
-  pre-cursor **translations** have carried you to (pre-cursor
-  rotations are ignored). Use this mode when you want the guide to
-  line up visually with geometry drawn by earlier `func0()` /
-  `glBegin` blocks.
+  the full pre-cursor modelview (translations, rotations, and
+  scales) has carried the origin to. Use this mode when you want
+  the guide to line up visually with geometry drawn by earlier
+  `func0()` / `glBegin` blocks: the anchor tracks where that
+  geometry actually rendered, even when pre-cursor rotations are
+  in play. Only the anchor position is taken from the pre-cursor
+  matrix — the guide is still drawn with world-axis orientation,
+  so a translate arrow still reads along world axes at the anchor.
 
   Example — cursor on the second translate in:
 

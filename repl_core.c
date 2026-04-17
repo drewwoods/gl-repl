@@ -460,7 +460,7 @@ int    g_show_indices = CFG_DEFAULT_VERTEX_INDICES;
 int    g_wrap_at_comma = CFG_DEFAULT_WRAP_AT_COMMA;
 int    g_layout_vertical = CFG_DEFAULT_LAYOUT_VERTICAL;  /* 0=left code panel, 1=top code panel */
 int    g_show_guides  = CFG_DEFAULT_VERTEX_GUIDES;
-int    g_xform_guide_mode = 0; /* 0=World (strict OpenGL reverse-order), 1=Frame (anchor at pre-cursor translations) */
+int    g_xform_guide_mode = CFG_DEFAULT_XFORM_GUIDE_MODE; /* 0=World (strict OpenGL reverse-order), 1=Frame (anchor at pre-cursor translations) */
 int    g_autonormal   = 0;
 int    g_show_lights  = CFG_DEFAULT_LIGHT_INDICATORS;
 int    g_backdrop_mode = CFG_DEFAULT_BACKDROP_MODE; /* 0=off, 1=cityscape */
@@ -4165,6 +4165,7 @@ static void reset_example_presentation_defaults(void) {
     g_show_outlines = CFG_DEFAULT_VERTEX_OUTLINES;
     g_show_vpoints = CFG_DEFAULT_VERTEX_POINTS;
     g_show_guides = CFG_DEFAULT_VERTEX_GUIDES;
+    g_xform_guide_mode = CFG_DEFAULT_XFORM_GUIDE_MODE;
     g_show_lights = CFG_DEFAULT_LIGHT_INDICATORS;
     g_backdrop_mode = CFG_DEFAULT_BACKDROP_MODE;
     g_cam_rotate = CFG_DEFAULT_CAMERA_ROTATE;

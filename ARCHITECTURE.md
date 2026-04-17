@@ -284,28 +284,52 @@ Two render modes, chosen via the `g_xform_guide_mode` config toggle
   camera-view matrix is snapshotted before any user transforms and
   reloaded via `glLoadMatrixf(tg_cam_view)` when drawing the guide.
 
-- **Frame (1)** — render at a scene-world anchor derived from
-  **pre-cursor translations only** (rotations ignored). The anchor
-  is computed by `compute_before_cursor_origin()`, which walks all
-  flat cmds before the cursor in a fresh identity matrix and reads
-  `(m[12], m[13], m[14])`. This tracks "where the live frame is" so
-  the guide lines up visually with rendered geometry from prior
-  `func0()` / draw calls.
+- **Frame (1)** — render at a scene-world anchor derived from the
+  **full pre-cursor modelview** (translations, rotations, and
+  scales). The anchor is computed by
+  `compute_before_cursor_origin()`, which walks all flat cmds
+  before the cursor in a fresh identity matrix (via
+  `apply_tracked_transform_cmd` so push/pop scopes correctly) and
+  reads `(m[12], m[13], m[14])` — i.e. where the pre-cursor
+  modelview places the origin. Only the position is used; the
+  guide itself is still drawn with world-axis orientation
+  (`glTranslatef(anchor)` after `glLoadMatrixf(tg_cam_view)`), so
+  arrows/arcs still read along world axes. This lines up the
+  anchor with geometry rendered by prior `func0()` / draw calls
+  even when pre-cursor rotations rotate the sub-frame.
 
 Per-command helpers:
 
-- `draw_translate_guide` — dashed orange shaft from `p_after` to
-  `p_after + (tx,ty,tz)` with a 4-fin arrowhead at the tip.
-- `draw_rotate_guide` — cyan axis stub through the local origin plus
-  a 48-segment dashed arc swept by Rodrigues rotation. If `p_after`
-  lies on the rotation axis (perpendicular component < 0.05), a
-  synthetic unit perpendicular point is substituted so the arc is
-  visible; the on-axis component of `p_after` is preserved.
-- `draw_scale_guide` — magenta dashed shaft from `p_after` to
-  `(sx·x, sy·y, sz·z)` with arrowhead. Degenerate case (`p_after`
-  at origin) falls back to a 3-axis gizmo: gray unit reference
-  segment plus a magenta arrow per axis to `(sx,0,0)`, `(0,sy,0)`,
-  `(0,0,sz)`.
+Shared visual style: shafts and arcs use an **axes-pulse-style**
+overlay — a dim solid base line (or arc) at `alpha≈0.30`, with a
+bright `sin(π·phase)` dot sweeping `a→b` and a short trail behind
+it, driven by `g_anim_time`. Helpers live alongside the per-command
+helpers: `xform_axis_color()` maps `(|x|,|y|,|z|)/max` → RGB, and
+`draw_pulse_segment()` renders the dim base + traveling dot + trail
+for a straight segment. The rotate guide inlines an arc-based
+variant that walks the pre-sampled Rodrigues arc points.
+
+Per-command helpers:
+
+- `draw_translate_guide` — pulse shaft from `p_after` to
+  `p_after + (tx,ty,tz)` with a 4-fin arrowhead at the tip. Shaft
+  color comes from the translation vector via `xform_axis_color`;
+  arrowhead uses a brighter tint of the same color.
+- `draw_rotate_guide` — axis stub through the local origin plus a
+  48-segment arc swept by Rodrigues rotation. Arc, axis stub, and
+  endpoint dots are tinted from the rotation axis
+  (`xform_axis_color(ax,ay,az)`). The pulse dot sweeps along the
+  arc; the trail is a short strip of arc samples between the
+  trail-phase and dot-phase points so curvature is preserved. The
+  on-axis degenerate case (where `p_after` lies on the rotation
+  axis) is not specially handled — the arc simply collapses.
+- `draw_scale_guide` — pulse shaft from `p_after` to
+  `(sx·x, sy·y, sz·z)` with arrowhead. Shaft color comes from
+  `xform_axis_color(sx-1, sy-1, sz-1)` so the color highlights the
+  axes that deviate from identity. Degenerate case (`p_after` at
+  origin) falls back to a 3-axis gizmo: gray unit reference segment
+  plus a pulsing arrow per axis in that axis's own color (X=red,
+  Y=green, Z=blue) to `(sx,0,0)`, `(0,sy,0)`, `(0,0,sz)`.
 
 Adding a new transform-guide type: extend the cmd-type gate in the
 setup block and the dispatch switch at the draw site in
