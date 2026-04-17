@@ -89,6 +89,7 @@ static const char *const g_example_ring[] = {
 
 /* Example 2: Function demo — define reusable triangle, call with transforms */
 static const char *const g_example_func[] = {
+    "// @cfg vertex_points = 0",
     "glClearColor(0.1, 0.1, 0.1, 1.0);",
     "glEnable(GL_DEPTH_TEST);",
     "func0 {",
@@ -182,6 +183,8 @@ static const char *const g_example_func_if[] = {
 
 /* Example 5: Recursive helper — transformed child calls with depth countdown */
 static const char *const g_example_func_recurse[] = {
+    "// @cfg vertex_outlines = 0",
+    "// @cfg vertex_points = 0",
     "glClearColor(0.1, 0.1, 0.1, 1.0);",
     "glEnable(GL_DEPTH_TEST);",
     "glEnable(GL_NORMALIZE);",
@@ -230,7 +233,6 @@ static const char *const g_example_func_recurse[] = {
 static const char *const g_example_cond[] = {
     "glClearColor(0.1, 0.1, 0.1, 1.0);",
     "glEnable(GL_DEPTH_TEST);",
-    "glEnable(GL_LIGHTING);",
     "glEnable(GL_NORMALIZE);",
     "glEnable(GL_LIGHT3);",
     "glBegin(GL_QUADS);",
@@ -487,6 +489,8 @@ static const char *const g_example_particles_stateless[] = {
 
 /* Example 12: Additive glow particles — glPointSize + distance attenuation + blend */
 static const char *const g_example_glow_particles[] = {
+    "// @cfg vertex_outlines = 0",
+    "// @cfg vertex_points = 0",
     "float n, x, y, z, j, k;",
     "glClearColor(0.1, 0.1, 0.1, 1.0);",
     "// Glow sprites: additive blend + distance-attenuated point size",
@@ -614,7 +618,7 @@ static const char *const g_example_spirograph_curve[] = {
     "glTranslatef(0.0f, 0.0f, -7.5f);",
     "glRotatef(0.0f, 1.0f, 0.0f, 0.0f);",
     "glRotatef(0.0f, 0.0f, 1.0f, 0.0f);",
-    "glTranslatef(0.0f, -0.5f, 0.0f);",
+    "glTranslatef(0.0f, -0.25f, 0.0f);",
     "float dist, n, x, y, ang;",
     "glClearColor(0.1, 0.1, 0.1, 1.0);",
     "dist = 1.4;",
@@ -636,10 +640,10 @@ static const char *const g_example_traveling_ripple_ring[] = {
     "// @cfg vertex_outlines = 0",
     "// @cfg vertex_points = 0",
     "// camera",
-    "glTranslatef(0.0f, 0.0f, -7.5f);",
+    "glTranslatef(0.0f, 0.0f, -3.5f);",
     "glRotatef(0.0f, 1.0f, 0.0f, 0.0f);",
     "glRotatef(0.0f, 0.0f, 1.0f, 0.0f);",
-    "glTranslatef(0.0f, -0.5f, 0.0f);",
+    "glTranslatef(0.0f, -0.15f, 0.0f);",
     "// Traveling ripple ring: nested for + fmod + conditional deformation",
     "float ripplephase, ripplewidth, rippledelta, rippleamp, x, y;",
     "glClearColor(0.1, 0.1, 0.1, 1.0);",
@@ -667,6 +671,7 @@ static const char *const g_example_traveling_ripple_ring[] = {
 static const char *const g_example_stress[] = {
     "// @cfg axes = 4",
     "// @cfg vertex_outlines = 0",
+    "// @cfg vertex_points = 0",
     "// @cfg backdrop = 1",
     "// camera",
     "glTranslatef(0.0f, 0.0f, -12.5f);",
