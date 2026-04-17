@@ -1333,6 +1333,86 @@ int try_commit_close_brace(void) {
     }
 }
 
+/* Rewrite cmd->source from g_input with proper indentation.
+ * Strips leading whitespace and trailing `;`/whitespace from g_input,
+ * prefixes indent (2 outside a glBegin block, 4 inside), then appends `;`.
+ * With include_block_depth, adds 2 spaces per open for/func/if scope at pos. */
+static void rewrite_cmd_source_with_indent(GLCmd *cmd, int pos,
+                                           int include_block_depth) {
+    char stripped[MAX_LINE_LEN];
+    const char *sp = g_input;
+    while (*sp && isspace((unsigned char)*sp)) sp++;
+    strncpy(stripped, sp, MAX_LINE_LEN - 1);
+    stripped[MAX_LINE_LEN - 1] = '\0';
+    int slen = (int)strlen(stripped);
+    while (slen > 0 &&
+           (stripped[slen - 1] == ';' ||
+            isspace((unsigned char)stripped[slen - 1])))
+        stripped[--slen] = '\0';
+    int ind = in_begin_block_at(pos) ? 4 : 2;
+    if (include_block_depth)
+        ind += block_depth_at(pos) * 2;
+    char indent[32];
+    if (ind > (int)sizeof(indent) - 1)
+        ind = (int)sizeof(indent) - 1;
+    memset(indent, ' ', (size_t)ind);
+    indent[ind] = '\0';
+    snprintf(cmd->source, sizeof(cmd->source), "%s%s;", indent, stripped);
+}
+
+/* Block-structural commit handlers: `}`, `for(`, `funcN`, `if(`.
+ * These inspect the start of g_input and are mutually exclusive with
+ * var-statement handlers. */
+static int try_commit_block_structs(void) {
+    if (try_commit_close_brace()) return 1;
+    if (try_commit_for_loop())    return 1;
+    if (try_commit_func_def())    return 1;
+    if (try_commit_if_block())    return 1;
+    return 0;
+}
+
+/* Statement-level commit handlers. float decl MUST precede assign so that
+ * `float x` is not misread as an assignment to an identifier named "float". */
+static int try_commit_var_statements(void) {
+    if (try_commit_float_decl())  return 1;
+    if (try_assign_variable())    return 1;
+    return 0;
+}
+
+/* Canonical order: var statements first (float/assign), then block structs.
+ * Handlers are mutually exclusive on input prefix, so the relative ordering
+ * of the two groups doesn't affect observed behavior. */
+static int try_commit_any(void) {
+    if (try_commit_var_statements()) return 1;
+    if (try_commit_block_structs())  return 1;
+    return 0;
+}
+
+/* Overwrite-mode Enter variant: on successful var-statement commit, enter
+ * insert mode and clear the input. Assign additionally publishes the
+ * "Insert mode" status and marks normals dirty (float decl does not). */
+static int try_commit_var_statements_then_insert(void) {
+    if (try_commit_float_decl()) {
+        g_inserting = 1;
+        g_input[0] = '\0';
+        g_input_len = 0;
+        g_cursor_pos = 0;
+        clear_autocomplete_state();
+        return 1;
+    }
+    if (try_assign_variable()) {
+        g_inserting = 1;
+        g_input[0] = '\0';
+        g_input_len = 0;
+        g_cursor_pos = 0;
+        clear_autocomplete_state();
+        set_status("Insert mode");
+        mark_normals_dirty();
+        return 1;
+    }
+    return 0;
+}
+
 void keyboard_func(unsigned char key, int x, int y) {
     (void)x;
     (void)y;
@@ -1886,22 +1966,7 @@ void keyboard_func(unsigned char key, int x, int y) {
             push_undo_snapshot();
 
         if ((g_inserting || g_edit_line >= g_num_cmds) &&
-            g_input_len > 0 && try_commit_close_brace()) {
-            clear_autocomplete_state();
-            return;
-        }
-        if ((g_inserting || g_edit_line >= g_num_cmds) &&
-            g_input_len > 0 && try_commit_for_loop()) {
-            clear_autocomplete_state();
-            return;
-        }
-        if ((g_inserting || g_edit_line >= g_num_cmds) &&
-            g_input_len > 0 && try_commit_func_def()) {
-            clear_autocomplete_state();
-            return;
-        }
-        if ((g_inserting || g_edit_line >= g_num_cmds) &&
-            g_input_len > 0 && try_commit_if_block()) {
+            g_input_len > 0 && try_commit_block_structs()) {
             clear_autocomplete_state();
             return;
         }
@@ -1916,12 +1981,7 @@ void keyboard_func(unsigned char key, int x, int y) {
 
                 memset(&cmd, 0, sizeof(cmd));
                 if (dnv > 0) {
-                    /* float decl must be checked before assignment */
-                    if (try_commit_float_decl()) {
-                        clear_autocomplete_state();
-                        return;
-                    }
-                    if (try_assign_variable()) {
+                    if (try_commit_var_statements()) {
                         clear_autocomplete_state();
                         return;
                     }
@@ -1929,33 +1989,8 @@ void keyboard_func(unsigned char key, int x, int y) {
                     g_edit_line = fpos;
                     parsed = repl_parse_command_with_vars(g_input, &cmd, dvars, dnv);
                     g_edit_line = saved_el;
-                    if (parsed) {
-                        char stripped[MAX_LINE_LEN];
-                        const char *sp = g_input;
-                        int slen;
-                        int fdepth;
-                        int bb_v;
-                        int ind_v;
-                        char indent_v[32];
-
-                        while (*sp && isspace((unsigned char)*sp))
-                            sp++;
-                        strncpy(stripped, sp, MAX_LINE_LEN - 1);
-                        stripped[MAX_LINE_LEN - 1] = '\0';
-                        slen = (int)strlen(stripped);
-                        while (slen > 0 &&
-                               (stripped[slen - 1] == ';' ||
-                                isspace((unsigned char)stripped[slen - 1])))
-                            stripped[--slen] = '\0';
-                        fdepth = block_depth_at(fpos);
-                        bb_v = in_begin_block_at(fpos);
-                        ind_v = (bb_v ? 4 : 2) + fdepth * 2;
-                        if (ind_v > (int)sizeof(indent_v) - 1)
-                            ind_v = (int)sizeof(indent_v) - 1;
-                        memset(indent_v, ' ', (size_t)ind_v);
-                        indent_v[ind_v] = '\0';
-                        snprintf(cmd.source, sizeof(cmd.source), "%s%s;", indent_v, stripped);
-                    }
+                    if (parsed)
+                        rewrite_cmd_source_with_indent(&cmd, fpos, 1);
                 } else {
                     parsed = repl_parse_command(g_input, &cmd);
                 }
@@ -2004,103 +2039,20 @@ void keyboard_func(unsigned char key, int x, int y) {
 
                 memset(&cmd, 0, sizeof(cmd));
                 dnv = collect_visible_vars(fpos, dvars, MAX_EXPR_VARS);
+                if (try_commit_var_statements_then_insert())
+                    return;
                 if (dnv > 0) {
-                    /* float decl must be checked before assignment */
-                    if (try_commit_float_decl()) {
-                        g_inserting = 1;
-                        g_input[0] = '\0';
-                        g_input_len = 0;
-                        g_cursor_pos = 0;
-                        clear_autocomplete_state();
-                        return;
-                    }
-                    if (try_assign_variable()) {
-                        g_inserting = 1;
-                        g_input[0] = '\0';
-                        g_input_len = 0;
-                        g_cursor_pos = 0;
-                        clear_autocomplete_state();
-                        set_status("Insert mode");
-                        mark_normals_dirty();
-                        return;
-                    }
                     int saved_el = g_edit_line;
                     g_edit_line = fpos;
                     parsed = repl_parse_command_with_vars(g_input, &cmd, dvars, dnv);
                     g_edit_line = saved_el;
-                    if (parsed) {
-                        char stripped[MAX_LINE_LEN];
-                        const char *sp = g_input;
-                        int slen;
-                        int fdepth;
-                        int bb_v;
-                        int ind_v;
-                        char indent_v[32];
-
-                        while (*sp && isspace((unsigned char)*sp))
-                            sp++;
-                        strncpy(stripped, sp, MAX_LINE_LEN - 1);
-                        stripped[MAX_LINE_LEN - 1] = '\0';
-                        slen = (int)strlen(stripped);
-                        while (slen > 0 &&
-                               (stripped[slen - 1] == ';' ||
-                                isspace((unsigned char)stripped[slen - 1])))
-                            stripped[--slen] = '\0';
-                        fdepth = block_depth_at(fpos);
-                        bb_v = in_begin_block_at(fpos);
-                        ind_v = (bb_v ? 4 : 2) + fdepth * 2;
-                        if (ind_v > (int)sizeof(indent_v) - 1)
-                            ind_v = (int)sizeof(indent_v) - 1;
-                        memset(indent_v, ' ', (size_t)ind_v);
-                        indent_v[ind_v] = '\0';
-                        snprintf(cmd.source, sizeof(cmd.source), "%s%s;", indent_v, stripped);
-                    }
+                    if (parsed)
+                        rewrite_cmd_source_with_indent(&cmd, fpos, 1);
                 } else {
-                    /* float decl must be checked before assignment */
-                    if (try_commit_float_decl()) {
-                        g_inserting = 1;
-                        g_input[0] = '\0';
-                        g_input_len = 0;
-                        g_cursor_pos = 0;
-                        clear_autocomplete_state();
-                        return;
-                    }
-                    if (try_assign_variable()) {
-                        g_inserting = 1;
-                        g_input[0] = '\0';
-                        g_input_len = 0;
-                        g_cursor_pos = 0;
-                        clear_autocomplete_state();
-                        set_status("Insert mode");
-                        mark_normals_dirty();
-                        return;
-                    }
                     parsed = repl_parse_command(g_input, &cmd);
                     if (parsed && input_has_predef_vars(g_input)) {
-                        char stripped[MAX_LINE_LEN];
-                        const char *sp = g_input;
-                        int slen;
-                        int bb_v;
-                        int ind_v;
-                        char indent_v[32];
-
                         cmd.has_vars = 1;
-                        while (*sp && isspace((unsigned char)*sp))
-                            sp++;
-                        strncpy(stripped, sp, MAX_LINE_LEN - 1);
-                        stripped[MAX_LINE_LEN - 1] = '\0';
-                        slen = (int)strlen(stripped);
-                        while (slen > 0 &&
-                               (stripped[slen - 1] == ';' ||
-                                isspace((unsigned char)stripped[slen - 1])))
-                            stripped[--slen] = '\0';
-                        bb_v = in_begin_block_at(fpos);
-                        ind_v = bb_v ? 4 : 2;
-                        if (ind_v > (int)sizeof(indent_v) - 1)
-                            ind_v = (int)sizeof(indent_v) - 1;
-                        memset(indent_v, ' ', (size_t)ind_v);
-                        indent_v[ind_v] = '\0';
-                        snprintf(cmd.source, sizeof(cmd.source), "%s%s;", indent_v, stripped);
+                        rewrite_cmd_source_with_indent(&cmd, fpos, 0);
                     }
                 }
 
@@ -2132,60 +2084,13 @@ void keyboard_func(unsigned char key, int x, int y) {
                     g_edit_line = fpos;
                     parsed = repl_parse_command_with_vars(g_input, &cmd, dvars, dnv);
                     g_edit_line = saved_el;
-                    if (parsed) {
-                        char stripped[MAX_LINE_LEN];
-                        const char *sp = g_input;
-                        int slen;
-                        int fdepth;
-                        int bb_v;
-                        int ind_v;
-                        char indent_v[32];
-
-                        while (*sp && isspace((unsigned char)*sp))
-                            sp++;
-                        strncpy(stripped, sp, MAX_LINE_LEN - 1);
-                        stripped[MAX_LINE_LEN - 1] = '\0';
-                        slen = (int)strlen(stripped);
-                        while (slen > 0 &&
-                               (stripped[slen - 1] == ';' ||
-                                isspace((unsigned char)stripped[slen - 1])))
-                            stripped[--slen] = '\0';
-                        fdepth = block_depth_at(fpos);
-                        bb_v = in_begin_block_at(fpos);
-                        ind_v = (bb_v ? 4 : 2) + fdepth * 2;
-                        if (ind_v > (int)sizeof(indent_v) - 1)
-                            ind_v = (int)sizeof(indent_v) - 1;
-                        memset(indent_v, ' ', (size_t)ind_v);
-                        indent_v[ind_v] = '\0';
-                        snprintf(cmd.source, sizeof(cmd.source), "%s%s;", indent_v, stripped);
-                    }
+                    if (parsed)
+                        rewrite_cmd_source_with_indent(&cmd, fpos, 1);
                 } else {
                     parsed = repl_parse_command(g_input, &cmd);
                     if (parsed && input_has_predef_vars(g_input)) {
-                        char stripped[MAX_LINE_LEN];
-                        const char *sp = g_input;
-                        int slen;
-                        int bb_v;
-                        int ind_v;
-                        char indent_v[32];
-
                         cmd.has_vars = 1;
-                        while (*sp && isspace((unsigned char)*sp))
-                            sp++;
-                        strncpy(stripped, sp, MAX_LINE_LEN - 1);
-                        stripped[MAX_LINE_LEN - 1] = '\0';
-                        slen = (int)strlen(stripped);
-                        while (slen > 0 &&
-                               (stripped[slen - 1] == ';' ||
-                                isspace((unsigned char)stripped[slen - 1])))
-                            stripped[--slen] = '\0';
-                        bb_v = in_begin_block_at(fpos);
-                        ind_v = bb_v ? 4 : 2;
-                        if (ind_v > (int)sizeof(indent_v) - 1)
-                            ind_v = (int)sizeof(indent_v) - 1;
-                        memset(indent_v, ' ', (size_t)ind_v);
-                        indent_v[ind_v] = '\0';
-                        snprintf(cmd.source, sizeof(cmd.source), "%s%s;", indent_v, stripped);
+                        rewrite_cmd_source_with_indent(&cmd, fpos, 0);
                     }
                 }
 
@@ -2209,28 +2114,7 @@ void keyboard_func(unsigned char key, int x, int y) {
     if (key == ';') {
         if (g_input_len > 0) {
             push_undo_snapshot();
-            /* float decl must be checked before assignment */
-            if (try_commit_float_decl()) {
-                clear_autocomplete_state();
-                return;
-            }
-            if (try_assign_variable()) {
-                clear_autocomplete_state();
-                return;
-            }
-            if (try_commit_close_brace()) {
-                clear_autocomplete_state();
-                return;
-            }
-            if (try_commit_for_loop()) {
-                clear_autocomplete_state();
-                return;
-            }
-            if (try_commit_func_def()) {
-                clear_autocomplete_state();
-                return;
-            }
-            if (try_commit_if_block()) {
+            if (try_commit_any()) {
                 clear_autocomplete_state();
                 return;
             }
@@ -3031,18 +2915,7 @@ int feed_line(const char *line) {
     g_input_len = (int)strlen(g_input);
     g_cursor_pos = g_input_len;
 
-    if (try_commit_close_brace())
-        return 1;
-    if (try_commit_for_loop())
-        return 1;
-    if (try_commit_func_def())
-        return 1;
-    if (try_commit_if_block())
-        return 1;
-    /* float decl must be checked before assignment */
-    if (try_commit_float_decl())
-        return 1;
-    if (try_assign_variable())
+    if (try_commit_any())
         return 1;
 
     {
