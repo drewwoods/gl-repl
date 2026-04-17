@@ -144,6 +144,7 @@ void delete_cmd_range(int start, int count, const char *what);
  * Each handler inspects g_input. Returns 1 if it consumed the line
  * (success or handled error), 0 if the input wasn't in its grammar.
  * Ordering matters: see CLAUDE.md "Commit Dispatch Sites". */
+int try_commit_float_decl(void);
 int try_assign_variable(void);
 int try_commit_for_loop(void);
 int try_commit_func_def(void);

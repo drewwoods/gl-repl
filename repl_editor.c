@@ -303,7 +303,7 @@ static int delete_cmd_range_allowed(int start, int count) {
                 if (j >= start && j < end) continue;
                 if (source_uses_ident(g_cmds[j].source, nm)) {
                     snprintf(msg, sizeof(msg),
-                             "variable '%s' is in use, cannot delete", nm);
+                             "variable '%s' is in use, cannot remove", nm);
                     set_status(msg);
                     return 0;
                 }

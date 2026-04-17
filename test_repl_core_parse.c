@@ -305,6 +305,17 @@ int main(void) {
         assert_status_contains("complete unknown command status", "Unknown cmd");
     }
 
+    {
+        repl_reset_state();
+        GLCmd cmd;
+        memset(&cmd, 0, sizeof(cmd));
+        int ok = repl_parse_command("glTotallyUnknown(1, 2", &cmd);
+        ASSERT_TRUE("unterminated unknown command returns 0", ok == 0);
+        assert_status_contains("unterminated unknown command status", "Unknown cmd");
+        ASSERT_TRUE("unterminated unknown command not incomplete",
+                    strstr(g_status, "Incomplete command") == NULL);
+    }
+
     /* gluBegin/gluEnd via parse_command */
     {
         repl_reset_state();

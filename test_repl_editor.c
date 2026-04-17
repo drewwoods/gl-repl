@@ -4,8 +4,6 @@
 #include <stdio.h>
 #include <string.h>
 
-int try_commit_float_decl(void);
-
 static int g_run = 0;
 static int g_pass = 0;
 
@@ -784,7 +782,6 @@ int main() {
     /* 26. float decl without trailing semicolon (interactive ';' key path) */
     {
         repl_reset_state();
-        extern int try_commit_float_decl(void);
 
         /* Simulate the interactive ';' key handler: g_input has no ';' */
         strncpy(g_input, "float tmp", MAX_INPUT_LEN - 1);
@@ -817,7 +814,6 @@ int main() {
     /* 28. float decl with initializer, no trailing semicolon */
     {
         repl_reset_state();
-        extern int try_commit_float_decl(void);
 
         strncpy(g_input, "float tmp = 0", MAX_INPUT_LEN - 1);
         g_input_len = (int)strlen(g_input);
@@ -854,7 +850,6 @@ int main() {
     /* 30. multi-name float decl without semicolon */
     {
         repl_reset_state();
-        extern int try_commit_float_decl(void);
 
         strncpy(g_input, "float a, b, c", MAX_INPUT_LEN - 1);
         g_input_len = (int)strlen(g_input);
@@ -928,7 +923,6 @@ int main() {
 
         /* Simulate being on line 1 in overwrite mode when committing
          * a float decl through the ';' key (no trailing ';'). */
-        extern int try_commit_float_decl(void);
         strncpy(g_input, "float radius = 3", MAX_INPUT_LEN - 1);
         g_input_len = (int)strlen(g_input);
         g_cursor_pos = g_input_len;
@@ -961,7 +955,6 @@ int main() {
         ASSERT_TRUE("overwrite shared: b registered",
                     find_predef_var_idx("b") >= 0);
 
-        extern int try_commit_float_decl(void);
         strncpy(g_input, "float a, c", MAX_INPUT_LEN - 1);
         g_input_len = (int)strlen(g_input);
         g_cursor_pos = g_input_len;
@@ -992,7 +985,6 @@ int main() {
         repl_feed_line_public("n = 5;");
         ASSERT_INT("drop b: baseline cmd count", g_num_cmds, 2);
 
-        extern int try_commit_float_decl(void);
         strncpy(g_input, "float n", MAX_INPUT_LEN - 1);
         g_input_len = (int)strlen(g_input);
         g_cursor_pos = g_input_len;
@@ -1018,7 +1010,6 @@ int main() {
         repl_feed_line_public("b = 7;");
         ASSERT_INT("drop referenced b: baseline", g_num_cmds, 2);
 
-        extern int try_commit_float_decl(void);
         strncpy(g_input, "float n", MAX_INPUT_LEN - 1);
         g_input_len = (int)strlen(g_input);
         g_cursor_pos = g_input_len;
@@ -1075,6 +1066,7 @@ int main() {
         ASSERT_INT("cut referenced decl: clipboard count preserved", g_clipboard_count, 1);
         ASSERT_STR("cut referenced decl: clipboard source preserved", g_clipboard[0].source, "  n = 5;");
         assert_status_contains("cut referenced decl: status", "variable 'n' is in use");
+        assert_status_contains("cut referenced decl: action", "cannot remove");
     }
 
     /* 37b. Ctrl+X of a declaration and all uses removes the variable cleanly */
