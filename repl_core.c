@@ -443,7 +443,7 @@ const char *g_axes_names[AXES_THEME_COUNT] = {
 };
 int    g_show_vnums   = CFG_DEFAULT_VERTEX_LABELS;
 int    g_show_normals = CFG_DEFAULT_NORMAL_VECTORS;
-int    g_show_indices = 1;
+int    g_show_indices = CFG_DEFAULT_VERTEX_INDICES;
 int    g_wrap_at_comma = CFG_DEFAULT_WRAP_AT_COMMA;
 int    g_layout_vertical = CFG_DEFAULT_LAYOUT_VERTICAL;  /* 0=left code panel, 1=top code panel */
 int    g_show_guides  = CFG_DEFAULT_VERTEX_GUIDES;
@@ -4084,6 +4084,7 @@ static void reset_example_presentation_defaults(void) {
     g_grid_extent_idx = CFG_DEFAULT_GRID_EXTENT_IDX;
     g_axes_theme = CFG_DEFAULT_AXES_THEME;
     g_show_vnums = CFG_DEFAULT_VERTEX_LABELS;
+    g_show_indices = CFG_DEFAULT_VERTEX_INDICES;
     g_show_normals = CFG_DEFAULT_NORMAL_VECTORS;
     g_show_outlines = CFG_DEFAULT_VERTEX_OUTLINES;
     g_show_vpoints = CFG_DEFAULT_VERTEX_POINTS;
