@@ -2457,7 +2457,6 @@ void render_3d_scene(void) {
     int tg_want = 0;
     int tg_first_cursor_flat = -1;
     int tg_first_after_flat  = -1;
-    const GLCmd *tg_src_cmd  = NULL;
     if (!replaying && g_show_guides &&
         g_edit_line >= 0 && g_edit_line < g_num_cmds) {
         const GLCmd *sc = &g_cmds[g_edit_line];
@@ -2497,7 +2496,6 @@ void render_3d_scene(void) {
                     break;
                 }
                 if (tg_first_after_flat < 0) tg_first_after_flat = g_num_flat_cmds;
-                tg_src_cmd = sc;
                 tg_want = 1;
             }
         }
@@ -2530,6 +2528,11 @@ void render_3d_scene(void) {
          *     tracks "where the live frame currently is" — matches the
          *     rendered output for code like T(2,0,0); func0(); T(-4,0,0);. */
         if (tg_want && i == tg_first_cursor_flat) {
+            /* Read args from the flat cmd, not the source cmd — when the
+             * command uses variables (e.g. glRotatef(3*t, 0,1,0)), flatten
+             * re-evaluates into g_flat_cmds[].args[] each frame, while
+             * g_cmds[].args[] keeps its initial-parse value. */
+            const GLCmd *live_cmd = &g_flat_cmds[i];
             float p_after[3];
             compute_after_cursor_origin(tg_first_after_flat, p_after);
             glPushMatrix();
@@ -2539,12 +2542,12 @@ void render_3d_scene(void) {
                 compute_before_cursor_origin(tg_first_cursor_flat, anchor);
                 glTranslatef(anchor[0], anchor[1], anchor[2]);
             }
-            if (tg_src_cmd->type == CMD_TRANSLATE3F)
-                draw_translate_guide(tg_src_cmd, p_after);
-            else if (tg_src_cmd->type == CMD_SCALEF)
-                draw_scale_guide(tg_src_cmd, p_after);
+            if (live_cmd->type == CMD_TRANSLATE3F)
+                draw_translate_guide(live_cmd, p_after);
+            else if (live_cmd->type == CMD_SCALEF)
+                draw_scale_guide(live_cmd, p_after);
             else
-                draw_rotate_guide(tg_src_cmd, p_after);
+                draw_rotate_guide(live_cmd, p_after);
             glPopMatrix();
             tg_want = 0;
         }
