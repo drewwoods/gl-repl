@@ -92,24 +92,6 @@ endif
 
 .PHONY: all clean test test-detailed test_detailed test-stubs lines debug coverage glut help
 
-define run_named_test
-	@{ \
-		if [ -t 1 ] && [ -z "$$NO_COLOR" ]; then \
-			green='\033[32m'; red='\033[31m'; cyan='\033[36m'; reset='\033[0m'; \
-		else \
-			green=''; red=''; cyan=''; reset=''; \
-		fi; \
-		printf "%b==> $(1)%b\n" "$$cyan" "$$reset"; \
-		if $(2); then \
-			printf "%bPASS%b $(1)\n" "$$green" "$$reset"; \
-		else \
-			rc=$$?; \
-			printf "%bFAIL%b $(1)\n" "$$red" "$$reset"; \
-			exit $$rc; \
-		fi; \
-	}
-endef
-
 all: sample
 
 SRCS = sample.c repl_core.c repl_search.c repl_export.c repl_editor.c repl_examples.c scene_render.c ui_panels.c repl_eval.c cmd_format.c repl_audio.c profile_panel.c
@@ -123,37 +105,50 @@ DEPFLAGS = -MMD -MP
 SAMPLE_OBJS = $(addprefix $(OBJDIR)/,$(SRCS:.c=.o))
 CORE_TEST_OBJS = $(addprefix $(OBJDIR)/,$(CORE_TEST_SRCS:.c=.o))
 
-TEST_EVAL_OBJS = $(OBJDIR)/test_eval.o $(OBJDIR)/repl_eval.o
-TEST_FORMAT_OBJS = $(OBJDIR)/test_format.o $(OBJDIR)/cmd_format.o
-TEST_REPL_CORE_PARSE_OBJS = $(OBJDIR)/test_repl_core_parse.o $(CORE_TEST_OBJS)
-TEST_REPL_CORE_FORMAT_OBJS = $(OBJDIR)/test_repl_core_format.o $(CORE_TEST_OBJS)
-TEST_REPL_CORE_COMMIT_OBJS = $(OBJDIR)/test_repl_core_commit.o $(CORE_TEST_OBJS)
-TEST_REPL_CORE_IO_OBJS = $(OBJDIR)/test_repl_core_io.o $(CORE_TEST_OBJS)
-TEST_REPL_CORE_EXAMPLES_OBJS = $(OBJDIR)/test_repl_core_examples.o $(CORE_TEST_OBJS)
-TEST_REPL_CORE_SEARCH_OBJS = $(OBJDIR)/test_repl_core_search.o $(CORE_TEST_OBJS)
-TEST_REPL_CORE_SEARCH_EXTRA_OBJS = $(OBJDIR)/test_repl_core_search_extra.o $(CORE_TEST_OBJS)
-TEST_REPL_CORE_INTERNAL_OBJS = $(OBJDIR)/test_repl_core_internal.o $(CORE_TEST_OBJS)
-TEST_REPL_AUTOCOMPLETE_OBJS = $(OBJDIR)/test_repl_autocomplete.o $(CORE_TEST_OBJS)
-TEST_REPL_EDITOR_OBJS = $(OBJDIR)/test_repl_editor.o $(CORE_TEST_OBJS)
-TEST_REPL_CORE_EXTRA_OBJS = $(OBJDIR)/test_repl_core_extra.o $(CORE_TEST_OBJS)
-TEST_REPL_AUDIO_OBJS = $(OBJDIR)/test_repl_audio.o $(OBJDIR)/repl_audio.o
+TEST_BINS = \
+	test_eval \
+	test_format \
+	test_repl_core_parse \
+	test_repl_core_format \
+	test_repl_core_commit \
+	test_repl_core_io \
+	test_repl_core_examples \
+	test_repl_core_search \
+	test_repl_core_search_extra \
+	test_repl_audio \
+	test_repl_core_internal \
+	test_repl_autocomplete \
+	test_repl_editor \
+	test_repl_core_extra
 
-ALL_OBJS = \
-	$(SAMPLE_OBJS) \
-	$(TEST_EVAL_OBJS) \
-	$(TEST_FORMAT_OBJS) \
-	$(TEST_REPL_CORE_PARSE_OBJS) \
-	$(TEST_REPL_CORE_FORMAT_OBJS) \
-	$(TEST_REPL_CORE_COMMIT_OBJS) \
-	$(TEST_REPL_CORE_IO_OBJS) \
-	$(TEST_REPL_CORE_EXAMPLES_OBJS) \
-	$(TEST_REPL_CORE_SEARCH_OBJS) \
-	$(TEST_REPL_CORE_SEARCH_EXTRA_OBJS) \
-	$(TEST_REPL_CORE_INTERNAL_OBJS) \
-	$(TEST_REPL_AUTOCOMPLETE_OBJS) \
-	$(TEST_REPL_EDITOR_OBJS) \
-	$(TEST_REPL_CORE_EXTRA_OBJS) \
-	$(TEST_REPL_AUDIO_OBJS)
+CORE_TEST_BINS = $(filter-out test_eval test_format test_repl_audio,$(TEST_BINS))
+
+define core_test_binary
+$(1)_OBJS = $$(OBJDIR)/$(1).o $$(CORE_TEST_OBJS)
+$(1)_LDLIBS = $$(GL_LDFLAGS)
+$(1)_RUN ?= ./$(1)
+endef
+
+$(foreach test,$(CORE_TEST_BINS),$(eval $(call core_test_binary,$(test))))
+
+test_eval_OBJS = $(OBJDIR)/test_eval.o $(OBJDIR)/repl_eval.o
+test_eval_LDLIBS = -lm -lpthread
+test_eval_RUN = ./test_eval --run-tests
+
+test_format_OBJS = $(OBJDIR)/test_format.o $(OBJDIR)/cmd_format.o
+test_format_LDLIBS = -lm
+test_format_RUN ?= ./test_format
+
+test_repl_audio_OBJS = $(OBJDIR)/test_repl_audio.o $(OBJDIR)/repl_audio.o
+test_repl_audio_LDLIBS = $(GL_LDFLAGS)
+test_repl_audio_RUN ?= ./test_repl_audio
+
+TEST_OBJS = $(foreach test,$(TEST_BINS),$($(test)_OBJS))
+TEST_RUNNER_CASES = $(foreach test,$(TEST_BINS),'$(test):::$($(test)_RUN)')
+
+TEST_JOBS ?=
+
+ALL_OBJS = $(sort $(SAMPLE_OBJS) $(TEST_OBJS))
 
 DEPS = $(ALL_OBJS:.o=.d)
 
@@ -164,79 +159,28 @@ $(OBJDIR)/%.o: %.c
 sample: $(SAMPLE_OBJS) ## Build the main REPL sample using release flags by default.
 	$(CC) $(OBJ_CFLAGS) -o $@ $(SAMPLE_OBJS) $(GL_LDFLAGS)
 
-test_eval: $(TEST_EVAL_OBJS) ## Build the expression evaluator unit test binary.
-	$(CC) $(OBJ_CFLAGS) -o $@ $(TEST_EVAL_OBJS) -lm -lpthread $(COVERAGE_LDFLAGS)
+.SECONDEXPANSION:
 
-test_format: $(TEST_FORMAT_OBJS) ## Build the command formatting unit test binary.
-	$(CC) $(OBJ_CFLAGS) -o $@ $(TEST_FORMAT_OBJS) -lm $(COVERAGE_LDFLAGS)
+# GNU make normally expands prerequisites before it knows the concrete target.
+# .SECONDEXPANSION adds a second pass after `$@` is known, so this one rule can
+# turn `test_eval` into `$(test_eval_OBJS)`, `test_repl_core_io` into
+# `$(test_repl_core_io_OBJS)`, etc. The doubled dollars delay that lookup until
+# the second pass.
+$(TEST_BINS): %: $$($$@_OBJS)
+	$(CC) $(OBJ_CFLAGS) -o $@ $^ $($@_LDLIBS) $(COVERAGE_LDFLAGS)
 
-test_repl_core_parse: $(TEST_REPL_CORE_PARSE_OBJS) ## Build the REPL parser regression test binary.
-	$(CC) $(OBJ_CFLAGS) -o $@ $(TEST_REPL_CORE_PARSE_OBJS) $(GL_LDFLAGS) $(COVERAGE_LDFLAGS)
+test: $(TEST_BINS) ## Run the full automated test suite.
+	@REPL_EXPORT_CC="$(CC)" \
+	REPL_EXPORT_COMPILE_CFLAGS='$(BUILD_CFLAGS) $(CFLAGS)' \
+	TEST_JOBS="$(TEST_JOBS)" \
+	sh scripts/run-tests.sh $(TEST_RUNNER_CASES)
 
-test_repl_core_format: $(TEST_REPL_CORE_FORMAT_OBJS) ## Build the REPL formatting regression test binary.
-	$(CC) $(OBJ_CFLAGS) -o $@ $(TEST_REPL_CORE_FORMAT_OBJS) $(GL_LDFLAGS) $(COVERAGE_LDFLAGS)
-
-test_repl_core_commit: $(TEST_REPL_CORE_COMMIT_OBJS) ## Build the REPL commit/editing regression test binary.
-	$(CC) $(OBJ_CFLAGS) -o $@ $(TEST_REPL_CORE_COMMIT_OBJS) $(GL_LDFLAGS) $(COVERAGE_LDFLAGS)
-
-test_repl_core_io: $(TEST_REPL_CORE_IO_OBJS) ## Build the REPL import/export roundtrip regression test binary.
-	$(CC) $(OBJ_CFLAGS) -o $@ $(TEST_REPL_CORE_IO_OBJS) $(GL_LDFLAGS) $(COVERAGE_LDFLAGS)
-
-test_repl_core_examples: $(TEST_REPL_CORE_EXAMPLES_OBJS) ## Build the predefined-example code-panel golden test binary.
-	$(CC) $(OBJ_CFLAGS) -o $@ $(TEST_REPL_CORE_EXAMPLES_OBJS) $(GL_LDFLAGS) $(COVERAGE_LDFLAGS)
-
-test_repl_core_search: $(TEST_REPL_CORE_SEARCH_OBJS) ## Build the REPL source-search regression test binary.
-	$(CC) $(OBJ_CFLAGS) -o $@ $(TEST_REPL_CORE_SEARCH_OBJS) $(GL_LDFLAGS) $(COVERAGE_LDFLAGS)
-
-test_repl_core_search_extra: $(TEST_REPL_CORE_SEARCH_EXTRA_OBJS) ## Build extra REPL source-search regression test binary.
-	$(CC) $(OBJ_CFLAGS) -o $@ $(TEST_REPL_CORE_SEARCH_EXTRA_OBJS) $(GL_LDFLAGS) $(COVERAGE_LDFLAGS)
-
-test_repl_audio: $(TEST_REPL_AUDIO_OBJS) ## Build the REPL audio unit test binary.
-	$(CC) $(OBJ_CFLAGS) -o $@ $(TEST_REPL_AUDIO_OBJS) $(GL_LDFLAGS) $(COVERAGE_LDFLAGS)
-
-test_repl_core_internal: $(TEST_REPL_CORE_INTERNAL_OBJS) ## Build the REPL core internal unit test binary.
-	$(CC) $(OBJ_CFLAGS) -o $@ $(TEST_REPL_CORE_INTERNAL_OBJS) $(GL_LDFLAGS) $(COVERAGE_LDFLAGS)
-
-test_repl_autocomplete: $(TEST_REPL_AUTOCOMPLETE_OBJS) ## Build the REPL autocomplete unit test binary.
-	$(CC) $(OBJ_CFLAGS) -o $@ $(TEST_REPL_AUTOCOMPLETE_OBJS) $(GL_LDFLAGS) $(COVERAGE_LDFLAGS)
-
-test_repl_editor: $(TEST_REPL_EDITOR_OBJS) ## Build the REPL editor unit test binary.
-	$(CC) $(OBJ_CFLAGS) -o $@ $(TEST_REPL_EDITOR_OBJS) $(GL_LDFLAGS) $(COVERAGE_LDFLAGS)
-
-test_repl_core_extra: $(TEST_REPL_CORE_EXTRA_OBJS) ## Build the REPL core extra utility test binary.
-	$(CC) $(OBJ_CFLAGS) -o $@ $(TEST_REPL_CORE_EXTRA_OBJS) $(GL_LDFLAGS) $(COVERAGE_LDFLAGS)
-
-test: test_eval test_format test_repl_core_parse test_repl_core_format test_repl_core_commit test_repl_core_io test_repl_core_examples test_repl_core_search test_repl_core_search_extra test_repl_audio test_repl_core_internal test_repl_autocomplete test_repl_editor test_repl_core_extra ## Run the full automated test suite.
-	$(call run_named_test,test_eval,./test_eval --run-tests)
-	$(call run_named_test,test_format,./test_format)
-	$(call run_named_test,test_repl_core_parse,./test_repl_core_parse)
-	$(call run_named_test,test_repl_core_format,./test_repl_core_format)
-	$(call run_named_test,test_repl_core_commit,./test_repl_core_commit)
-	$(call run_named_test,test_repl_core_io,./test_repl_core_io)
-	$(call run_named_test,test_repl_core_examples,REPL_EXPORT_CC="$(CC)" REPL_EXPORT_COMPILE_CFLAGS='$(BUILD_CFLAGS) $(CFLAGS)' ./test_repl_core_examples)
-	$(call run_named_test,test_repl_core_search,./test_repl_core_search)
-	$(call run_named_test,test_repl_core_search_extra,./test_repl_core_search_extra)
-	$(call run_named_test,test_repl_audio,./test_repl_audio)
-	$(call run_named_test,test_repl_core_internal,./test_repl_core_internal)
-	$(call run_named_test,test_repl_autocomplete,./test_repl_autocomplete)
-	$(call run_named_test,test_repl_editor,./test_repl_editor)
-	$(call run_named_test,test_repl_core_extra,./test_repl_core_extra)
-
-test-detailed: test_eval test_format test_repl_core_parse test_repl_core_format test_repl_core_commit test_repl_core_io test_repl_core_examples test_repl_core_search test_repl_core_search_extra test_repl_audio test_repl_core_internal test_repl_autocomplete test_repl_editor test_repl_core_extra ## Run the full test suite with verbose example export/compile logging.
-	$(call run_named_test,test_eval,./test_eval --run-tests)
-	$(call run_named_test,test_format,./test_format)
-	$(call run_named_test,test_repl_core_parse,./test_repl_core_parse)
-	$(call run_named_test,test_repl_core_format,./test_repl_core_format)
-	$(call run_named_test,test_repl_core_commit,./test_repl_core_commit)
-	$(call run_named_test,test_repl_core_io,./test_repl_core_io)
-	$(call run_named_test,test_repl_core_examples,REPL_EXPORT_CC="$(CC)" REPL_EXPORT_COMPILE_CFLAGS='$(BUILD_CFLAGS) $(CFLAGS)' REPL_EXPORT_VERBOSE=1 ./test_repl_core_examples)
-	$(call run_named_test,test_repl_core_search,./test_repl_core_search)
-	$(call run_named_test,test_repl_core_search_extra,./test_repl_core_search_extra)
-	$(call run_named_test,test_repl_audio,./test_repl_audio)
-	$(call run_named_test,test_repl_core_internal,./test_repl_core_internal)
-	$(call run_named_test,test_repl_autocomplete,./test_repl_autocomplete)
-	$(call run_named_test,test_repl_editor,./test_repl_editor)
-	$(call run_named_test,test_repl_core_extra,./test_repl_core_extra)
+test-detailed: $(TEST_BINS) ## Run the full test suite with verbose example export/compile logging.
+	@REPL_EXPORT_CC="$(CC)" \
+	REPL_EXPORT_COMPILE_CFLAGS='$(BUILD_CFLAGS) $(CFLAGS)' \
+	REPL_EXPORT_VERBOSE=1 \
+	TEST_JOBS="$(TEST_JOBS)" \
+	sh scripts/run-tests.sh $(TEST_RUNNER_CASES)
 
 test_detailed: test-detailed ## Alias for test-detailed.
 
@@ -254,7 +198,7 @@ debug: ## Clean and rebuild everything with debug/ASan flags.
 
 coverage: ## Clean, rebuild tests with coverage, run suite, generate HTML report.
 	$(MAKE) clean
-	$(MAKE) test BUILD=coverage
+	$(MAKE) test BUILD=coverage TEST_JOBS=1
 	lcov --capture \
 		--directory build/coverage \
 		--output-file build/coverage/lcov.info \
@@ -290,19 +234,7 @@ endif
 
 clean: ## Remove built binaries and object files.
 	rm -rf sample sample.dSYM \
-		test_eval test_eval.dSYM test_format test_format.dSYM \
-		test_repl_core_parse test_repl_core_parse.dSYM \
-		test_repl_core_format test_repl_core_format.dSYM \
-		test_repl_core_commit test_repl_core_commit.dSYM \
-		test_repl_core_examples test_repl_core_examples.dSYM \
-		test_repl_core_search test_repl_core_search.dSYM \
-		test_repl_core_search_extra test_repl_core_search_extra.dSYM \
-		test_repl_core_io test_repl_core_io.dSYM \
-		test_repl_audio test_repl_audio.dSYM \
-		test_repl_core_internal test_repl_core_internal.dSYM \
-		test_repl_autocomplete test_repl_autocomplete.dSYM \
-		test_repl_editor test_repl_editor.dSYM \
-		test_repl_core_extra test_repl_core_extra.dSYM \
+		$(TEST_BINS) $(addsuffix .dSYM,$(TEST_BINS)) \
 		build/coverage/lcov.info build/coverage/html \
 		build
 
@@ -322,6 +254,8 @@ help: ## Show available targets and build-mode notes.
 	@printf "  coverage:      \$$(common_flags) %s \n\n" "$(filter-out $(COMMON_CFLAGS),$(COVERAGE_CFLAGS))"
 	@printf "GL stubs:        make test-stubs, or add USE_GL_STUBS=1 to any target.\n"
 	@printf "User CFLAGS are appended to the selected build mode.\n\n"
+	@printf "Tests:           make test runs test binaries in parallel; set TEST_JOBS=N to limit jobs.\n\n"
+	@printf "Individual tests can still be built directly, e.g. make test_eval or make test_repl_core_io.\n\n"
 	@awk 'BEGIN {FS = ":.*## "}; /^[a-zA-Z0-9_.-]+:.*## / {printf "  %-24s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
 
 -include $(DEPS)
