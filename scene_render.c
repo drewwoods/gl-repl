@@ -1240,6 +1240,210 @@ static void draw_normal_guides(void) {
 }
 
 /* ========================================================================= */
+/* Transform edit guides — arrow for glTranslatef, arc for glRotatef          */
+/* ========================================================================= */
+
+/* Cmds that emit geometry — hitting one of these means "something just got
+ * drawn with the current modelview", so further transforms shouldn't factor
+ * into the cursor-line's guide. */
+static int is_geometry_emit_cmd(CmdType t) {
+    return (t == CMD_BEGIN ||
+            t == CMD_GLU_SPHERE || t == CMD_GLU_CYLINDER ||
+            t == CMD_GLU_DISK   || t == CMD_GLU_PARTIAL_DISK ||
+            t == CMD_GLUT_TORUS ||
+            t == CMD_TESS_BEGIN_POLYGON);
+}
+
+/* Walk flat cmds forward from first_after_idx, applying only transform cmds
+ * to a fresh identity matrix (keeps its own push/pop depth so nested blocks
+ * don't leak). Stops at the first rendering action so transforms that come
+ * after an intervening draw don't bleed into the guide. Returns the origin
+ * transformed by the accumulated matrix. */
+static void compute_after_cursor_origin(int first_after_idx, float out[3]) {
+    out[0] = out[1] = out[2] = 0.0f;
+    glPushMatrix();
+    glLoadIdentity();
+    int depth = 0;
+    for (int i = first_after_idx; i < g_num_flat_cmds; i++) {
+        if (!g_flat_cmds[i].valid) continue;
+        if (is_geometry_emit_cmd(g_flat_cmds[i].type)) break;
+        if (is_transform_cmd(g_flat_cmds[i].type))
+            apply_tracked_transform_cmd(&g_flat_cmds[i], &depth);
+    }
+    float m[16];
+    glGetFloatv(GL_MODELVIEW_MATRIX, m);
+    out[0] = m[12];
+    out[1] = m[13];
+    out[2] = m[14];
+    unwind_tracked_transform_stack(&depth);
+    glPopMatrix();
+}
+
+/* Arrow from p_before to p_after in the current local frame. A solid
+ * arrowhead at the tip and a hollow ring at the tail make the direction
+ * unambiguous even when the view is side-on. */
+static void draw_translate_guide(const GLCmd *cmd, const float p_after[3]) {
+    float tx = cmd->args[0], ty = cmd->args[1], tz = cmd->args[2];
+    float p0[3] = { p_after[0], p_after[1], p_after[2] };
+    float p1[3] = { p0[0] + tx, p0[1] + ty, p0[2] + tz };
+
+    float dlen = sqrtf(tx*tx + ty*ty + tz*tz);
+    if (dlen < 1e-6f) return;
+    float dx = tx/dlen, dy = ty/dlen, dz = tz/dlen;
+
+    /* Orthonormal basis perpendicular to the arrow direction, used to splay
+     * the four arrowhead fins. */
+    float ux, uy, uz;
+    if (fabsf(dy) < 0.9f) { ux = 0.0f; uy = 1.0f; uz = 0.0f; }
+    else                  { ux = 1.0f; uy = 0.0f; uz = 0.0f; }
+    float rx = dy*uz - dz*uy;
+    float ry = dz*ux - dx*uz;
+    float rz = dx*uy - dy*ux;
+    float rlen = sqrtf(rx*rx + ry*ry + rz*rz);
+    if (rlen > 1e-8f) { rx/=rlen; ry/=rlen; rz/=rlen; }
+    float bx = ry*dz - rz*dy;
+    float by = rz*dx - rx*dz;
+    float bz = rx*dy - ry*dx;
+
+    float head_len = dlen * 0.22f;
+    if (head_len > 0.25f) head_len = 0.25f;
+    if (head_len < 0.06f) head_len = (dlen < 0.06f ? dlen * 0.5f : 0.06f);
+    float fin = head_len * 0.45f;
+
+    float base[3] = { p1[0] - dx*head_len, p1[1] - dy*head_len, p1[2] - dz*head_len };
+
+    glDisable(GL_LIGHTING);
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+    /* Shaft — dashed from tail to the arrowhead base so the solid head
+     * stands out cleanly. */
+    glEnable(GL_LINE_STIPPLE);
+    glLineStipple(1, 0xAAAA);
+    glLineWidth(4.0f);
+    glColor4f(1.0f, 0.75f, 0.20f, 0.85f);
+    glBegin(GL_LINES);
+    glVertex3f(p0[0], p0[1], p0[2]);
+    glVertex3f(base[0], base[1], base[2]);
+    glEnd();
+    glDisable(GL_LINE_STIPPLE);
+
+    /* Arrowhead — four fins from the tip back to the base ring. */
+    glLineWidth(3.0f);
+    glColor4f(1.0f, 0.85f, 0.30f, 0.95f);
+    glBegin(GL_LINES);
+    for (int i = 0; i < 4; i++) {
+        float sx = (i == 0 ?  rx : i == 1 ? -rx : i == 2 ?  bx : -bx);
+        float sy = (i == 0 ?  ry : i == 1 ? -ry : i == 2 ?  by : -by);
+        float sz = (i == 0 ?  rz : i == 1 ? -rz : i == 2 ?  bz : -bz);
+        glVertex3f(p1[0], p1[1], p1[2]);
+        glVertex3f(base[0] + sx*fin, base[1] + sy*fin, base[2] + sz*fin);
+    }
+    /* Connect the fins around the base so the head reads as a pyramid. */
+    glVertex3f(base[0] + rx*fin, base[1] + ry*fin, base[2] + rz*fin);
+    glVertex3f(base[0] + bx*fin, base[1] + by*fin, base[2] + bz*fin);
+    glVertex3f(base[0] + bx*fin, base[1] + by*fin, base[2] + bz*fin);
+    glVertex3f(base[0] - rx*fin, base[1] - ry*fin, base[2] - rz*fin);
+    glVertex3f(base[0] - rx*fin, base[1] - ry*fin, base[2] - rz*fin);
+    glVertex3f(base[0] - bx*fin, base[1] - by*fin, base[2] - bz*fin);
+    glVertex3f(base[0] - bx*fin, base[1] - by*fin, base[2] - bz*fin);
+    glVertex3f(base[0] + rx*fin, base[1] + ry*fin, base[2] + rz*fin);
+    glEnd();
+    glLineWidth(1.0f);
+
+    /* Tail dot (hollow-feeling small) and tip dot (bright, solid). */
+    glPointSize(6.0f);
+    glBegin(GL_POINTS);
+    glColor4f(1.0f, 0.75f, 0.20f, 0.7f);
+    glVertex3f(p0[0], p0[1], p0[2]);
+    glEnd();
+    glPointSize(9.0f);
+    glBegin(GL_POINTS);
+    glColor4f(1.0f, 0.90f, 0.40f, 1.0f);
+    glVertex3f(p1[0], p1[1], p1[2]);
+    glEnd();
+    glPointSize(1.0f);
+
+    glDisable(GL_BLEND);
+    if (g_user_lighting_enabled) glEnable(GL_LIGHTING);
+}
+
+/* Arc from p_start swept by glRotatef(angle, ax,ay,az) about local origin. */
+static void draw_rotate_guide(const GLCmd *cmd, const float p_start[3]) {
+    float angle_deg = cmd->args[0];
+    float ax = cmd->args[1], ay = cmd->args[2], az = cmd->args[3];
+    float alen = sqrtf(ax*ax + ay*ay + az*az);
+    if (alen < 1e-6f) return;
+    if (fabsf(angle_deg) < 1e-4f) return;
+    ax /= alen; ay /= alen; az /= alen;
+
+    float plen = sqrtf(p_start[0]*p_start[0] + p_start[1]*p_start[1]
+                      + p_start[2]*p_start[2]);
+
+    glDisable(GL_LIGHTING);
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+    /* Axis stub through local origin — length scales with arc radius so it's
+     * visible even when p_start is near origin. */
+    float axis_len = (plen > 0.5f ? plen : 0.5f) * 1.1f;
+    glLineWidth(2.0f);
+    glColor4f(0.30f, 0.85f, 1.0f, 0.55f);
+    glBegin(GL_LINES);
+    glVertex3f(-ax*axis_len, -ay*axis_len, -az*axis_len);
+    glVertex3f( ax*axis_len,  ay*axis_len,  az*axis_len);
+    glEnd();
+
+    /* Arc — Rodrigues rotation of p_start about axis, sampled in segments. */
+    glEnable(GL_LINE_STIPPLE);
+    glLineStipple(1, 0xAAAA);
+    glLineWidth(4.0f);
+    glColor4f(0.30f, 0.85f, 1.0f, 0.9f);
+
+    const int segs = 48;
+    float angle_rad = angle_deg * (float)(3.14159265358979323846 / 180.0);
+    glBegin(GL_LINE_STRIP);
+    for (int i = 0; i <= segs; i++) {
+        float t = (float)i / (float)segs;
+        float th = angle_rad * t;
+        float c = cosf(th), s = sinf(th), k = 1.0f - c;
+        /* R(axis, th) * p_start */
+        float px = p_start[0], py = p_start[1], pz = p_start[2];
+        float rx = (c + ax*ax*k)      * px + (ax*ay*k - az*s) * py + (ax*az*k + ay*s) * pz;
+        float ry = (ay*ax*k + az*s)   * px + (c + ay*ay*k)    * py + (ay*az*k - ax*s) * pz;
+        float rz = (az*ax*k - ay*s)   * px + (az*ay*k + ax*s) * py + (c + az*az*k)    * pz;
+        glVertex3f(rx, ry, rz);
+    }
+    glEnd();
+    glDisable(GL_LINE_STIPPLE);
+    glLineWidth(1.0f);
+
+    /* Compute final rotated point for endpoint dot. */
+    {
+        float c = cosf(angle_rad), s = sinf(angle_rad), k = 1.0f - c;
+        float px = p_start[0], py = p_start[1], pz = p_start[2];
+        float fx = (c + ax*ax*k)    * px + (ax*ay*k - az*s) * py + (ax*az*k + ay*s) * pz;
+        float fy = (ay*ax*k + az*s) * px + (c + ay*ay*k)    * py + (ay*az*k - ax*s) * pz;
+        float fz = (az*ax*k - ay*s) * px + (az*ay*k + ax*s) * py + (c + az*az*k)    * pz;
+
+        glPointSize(6.0f);
+        glBegin(GL_POINTS);
+        glColor4f(0.30f, 0.85f, 1.0f, 0.7f);
+        glVertex3f(p_start[0], p_start[1], p_start[2]);
+        glEnd();
+        glPointSize(10.0f);
+        glBegin(GL_POINTS);
+        glColor4f(0.45f, 0.95f, 1.0f, 0.95f);
+        glVertex3f(fx, fy, fz);
+        glEnd();
+        glPointSize(1.0f);
+    }
+
+    glDisable(GL_BLEND);
+    if (g_user_lighting_enabled) glEnable(GL_LIGHTING);
+}
+
+/* ========================================================================= */
 /* Scene lights — setup and visualization                                     */
 /* ========================================================================= */
 
@@ -2077,6 +2281,40 @@ void render_3d_scene(void) {
         glColor3f(1.0f, 0.88f, 0.20f);
     else
         glColor3f(0.0f, 0.0f, 0.0f);
+
+    /* Transform-guide setup: when the cursor is on a committed glTranslatef
+     * or glRotatef source line, find the first flat cmd matching that source
+     * line (so we know where to render "before" the cursor transform) and the
+     * first flat cmd whose source index is strictly greater (so we can trace
+     * the post-cursor modelview). Gates on cmd->valid. */
+    int tg_want = 0;
+    int tg_first_cursor_flat = -1;
+    int tg_first_after_flat  = -1;
+    const GLCmd *tg_src_cmd  = NULL;
+    if (!replaying && g_show_guides &&
+        g_edit_line >= 0 && g_edit_line < g_num_cmds) {
+        const GLCmd *sc = &g_cmds[g_edit_line];
+        if (sc->valid &&
+            (sc->type == CMD_TRANSLATE3F || sc->type == CMD_ROTATEF)) {
+            for (int j = 0; j < g_num_flat_cmds; j++) {
+                if (!g_flat_cmds[j].valid) continue;
+                if (tg_first_cursor_flat < 0 &&
+                    g_flat_cmds[j].src_cmd_idx == g_edit_line) {
+                    tg_first_cursor_flat = j;
+                }
+                if (g_flat_cmds[j].src_cmd_idx > g_edit_line) {
+                    tg_first_after_flat = j;
+                    break;
+                }
+            }
+            if (tg_first_cursor_flat >= 0) {
+                if (tg_first_after_flat < 0) tg_first_after_flat = g_num_flat_cmds;
+                tg_src_cmd = sc;
+                tg_want = 1;
+            }
+        }
+    }
+
     for (int i = 0; i < g_num_flat_cmds; i++) {
         if (!g_flat_cmds[i].valid) continue;
         int is_cursor = (g_flat_cmds[i].src_cmd_idx == g_edit_line);
@@ -2088,6 +2326,18 @@ void render_3d_scene(void) {
         if (is_cursor && !replaying) {
             draw_vertex_guides();
             draw_normal_guides();
+        }
+
+        /* Transform guide: render before applying the cursor's own transform
+         * so the current modelview == product of strictly-earlier transforms. */
+        if (tg_want && i == tg_first_cursor_flat) {
+            float p_after[3];
+            compute_after_cursor_origin(tg_first_after_flat, p_after);
+            if (tg_src_cmd->type == CMD_TRANSLATE3F)
+                draw_translate_guide(tg_src_cmd, p_after);
+            else
+                draw_rotate_guide(tg_src_cmd, p_after);
+            tg_want = 0;
         }
 
         if (is_transform_cmd(g_flat_cmds[i].type)) {
