@@ -1496,6 +1496,25 @@ static const StdCmdDef g_std_cmds[] = {
     { NULL, 0, 0, NULL, NULL, 0 }
 };
 
+static void set_incomplete_missing_paren_status(const char *func) {
+    char msg[128];
+
+    if (func && func[0])
+        snprintf(msg, sizeof(msg), "Incomplete command: missing ')' in %s(...)", func);
+    else
+        snprintf(msg, sizeof(msg), "Incomplete command: missing ')'");
+    set_status(msg);
+}
+
+static void set_incomplete_arg_count_status(const char *func, int expected, int got) {
+    char msg[128];
+
+    snprintf(msg, sizeof(msg),
+             "Incomplete command: %s expects %d argument%s (got %d)",
+             func, expected, expected == 1 ? "" : "s", got);
+    set_status(msg);
+}
+
 static int parse_command(const char *line, GLCmd *cmd,
                          ExprVar *vars, int num_vars) {
     char buf[MAX_LINE_LEN];
@@ -1537,12 +1556,18 @@ static int parse_command(const char *line, GLCmd *cmd,
     char func[64] = "";
     char args[MAX_LINE_LEN] = "";
 
-    if (open_p && close_p && close_p > open_p) {
+    if (open_p) {
         int flen = (int)(open_p - p);
         if (flen > 0 && flen < (int)sizeof(func)) {
             strncpy(func, p, flen);
             func[flen] = '\0';
         }
+
+        if (!close_p || close_p < open_p) {
+            set_incomplete_missing_paren_status(func);
+            return 0;
+        }
+
         int alen = (int)(close_p - open_p - 1);
         if (alen > 0 && alen < (int)sizeof(args)) {
             strncpy(args, open_p + 1, alen);
@@ -1720,7 +1745,10 @@ static int parse_command(const char *line, GLCmd *cmd,
                 }
                 return 1;
             }
-            set_status(def->usage);
+            if (cmd->num_args < def->num_args)
+                set_incomplete_arg_count_status(def->name, def->num_args, cmd->num_args);
+            else
+                set_status(def->usage);
             return 0;
         }
     }

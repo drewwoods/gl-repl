@@ -4,6 +4,8 @@
 #include <stdio.h>
 #include <string.h>
 
+int try_commit_float_decl(void);
+
 static int g_run = 0;
 static int g_pass = 0;
 
@@ -40,6 +42,45 @@ static void declare_test_vars(void) {
     ASSERT_DECL_OK("declare_predef_var j", declare_predef_var("j", err, sizeof(err)), err);
     ASSERT_DECL_OK("declare_predef_var k", declare_predef_var("k", err, sizeof(err)), err);
     ASSERT_DECL_OK("declare_predef_var n", declare_predef_var("n", err, sizeof(err)), err);
+}
+
+static void set_editor_input(const char *s) {
+    strncpy(g_input, s, MAX_INPUT_LEN - 1);
+    g_input[MAX_INPUT_LEN - 1] = '\0';
+    g_input_len = (int)strlen(g_input);
+    g_cursor_pos = g_input_len;
+}
+
+static void assert_status_contains(const char *label, const char *needle) {
+    ASSERT_TRUE(label, strstr(g_status, needle) != NULL);
+}
+
+static void assert_float_decl_rejected_atomic(const char *label,
+                                              const char *src,
+                                              const char *rejected_name,
+                                              const char *status_part) {
+    char detail[160];
+    int old_num_cmds = g_num_cmds;
+    int old_num_predef_vars = g_num_predef_vars;
+
+    set_editor_input(src);
+    g_edit_line = g_num_cmds;
+    g_inserting = 0;
+
+    int result = try_commit_float_decl();
+
+    snprintf(detail, sizeof(detail), "%s: handler consumed input", label);
+    ASSERT_INT(detail, result, 1);
+    snprintf(detail, sizeof(detail), "%s: cmd count unchanged", label);
+    ASSERT_INT(detail, g_num_cmds, old_num_cmds);
+    snprintf(detail, sizeof(detail), "%s: var count unchanged", label);
+    ASSERT_INT(detail, g_num_predef_vars, old_num_predef_vars);
+    snprintf(detail, sizeof(detail), "%s: rejected name not registered", label);
+    ASSERT_TRUE(detail, find_predef_var_idx(rejected_name) < 0);
+    snprintf(detail, sizeof(detail), "%s: status", label);
+    assert_status_contains(detail, status_part);
+    ASSERT_TRUE("atomic failure preserves anchor",
+                old_num_predef_vars <= 1 || find_predef_var_idx("anchor") >= 0);
 }
 
 int main() {
@@ -132,6 +173,291 @@ int main() {
         delete_cmd_range(1, 1, "elclamp");
         /* g_edit_line should be clamped to g_num_cmds (1) */
         ASSERT_INT("delete edit_line clamp: edit_line<=num_cmds", g_edit_line <= g_num_cmds, 1);
+    }
+
+    /* 8a. delete_cmd_range — interior multi-line block */
+    {
+        repl_reset_state();
+        repl_feed_line_public("glVertex3f(0,0,0)");
+        repl_feed_line_public("glVertex3f(1,1,1)");
+        repl_feed_line_public("glVertex3f(2,2,2)");
+        repl_feed_line_public("glVertex3f(3,3,3)");
+        repl_feed_line_public("glVertex3f(4,4,4)");
+        g_sel_anchor = 1;
+        g_sel_end = 3;
+
+        delete_cmd_range(1, 3, "Deleted");
+
+        ASSERT_INT("delete block: leaves 2 cmds", g_num_cmds, 2);
+        ASSERT_STR("delete block: first survives", g_cmds[0].source, "  glVertex3f(0, 0, 0);");
+        ASSERT_STR("delete block: last survives", g_cmds[1].source, "  glVertex3f(4, 4, 4);");
+        ASSERT_INT("delete block: edit_line at deletion start", g_edit_line, 1);
+        ASSERT_STR("delete block: input reloaded", g_input, "glVertex3f(4, 4, 4)");
+        ASSERT_TRUE("delete block: selection cleared", !sel_active());
+        assert_status_contains("delete block: status line count", "Deleted 3 lines");
+    }
+
+    /* 8b. Backspace deletes a reversed selection */
+    {
+        repl_reset_state();
+        repl_feed_line_public("glVertex3f(0,0,0)");
+        repl_feed_line_public("glVertex3f(1,1,1)");
+        repl_feed_line_public("glVertex3f(2,2,2)");
+        repl_feed_line_public("glVertex3f(3,3,3)");
+        repl_feed_line_public("glVertex3f(4,4,4)");
+        g_sel_anchor = 4;
+        g_sel_end = 2;
+        g_edit_line = 4;
+
+        repl_keyboard_func(8, 0, 0);
+
+        ASSERT_INT("backspace reversed selection: leaves 2 cmds", g_num_cmds, 2);
+        ASSERT_STR("backspace reversed selection: first survives", g_cmds[0].source, "  glVertex3f(0, 0, 0);");
+        ASSERT_STR("backspace reversed selection: second survives", g_cmds[1].source, "  glVertex3f(1, 1, 1);");
+        ASSERT_INT("backspace reversed selection: edit_line", g_edit_line, 2);
+        ASSERT_TRUE("backspace reversed selection: selection cleared", !sel_active());
+    }
+
+    /* 8b2. Ctrl+D deletes a selected range through its own key path */
+    {
+        repl_reset_state();
+        repl_feed_line_public("glVertex3f(0,0,0)");
+        repl_feed_line_public("glVertex3f(1,1,1)");
+        repl_feed_line_public("glVertex3f(2,2,2)");
+        repl_feed_line_public("glVertex3f(3,3,3)");
+        repl_feed_line_public("glVertex3f(4,4,4)");
+        g_sel_anchor = 3;
+        g_sel_end = 1;
+        g_edit_line = 3;
+
+        repl_keyboard_func(4, 0, 0);
+
+        ASSERT_INT("ctrl-d selection: leaves 2 cmds", g_num_cmds, 2);
+        ASSERT_STR("ctrl-d selection: first survives", g_cmds[0].source, "  glVertex3f(0, 0, 0);");
+        ASSERT_STR("ctrl-d selection: last survives", g_cmds[1].source, "  glVertex3f(4, 4, 4);");
+        ASSERT_INT("ctrl-d selection: edit_line", g_edit_line, 1);
+        ASSERT_TRUE("ctrl-d selection: selection cleared", !sel_active());
+        assert_status_contains("ctrl-d selection: status", "Deleted 3 lines");
+    }
+
+    /* 8c. Undo/redo after a multi-line delete */
+    {
+        repl_reset_state();
+        repl_feed_line_public("glVertex3f(0,0,0)");
+        repl_feed_line_public("glVertex3f(1,1,1)");
+        repl_feed_line_public("glVertex3f(2,2,2)");
+        repl_feed_line_public("glVertex3f(3,3,3)");
+        repl_feed_line_public("glVertex3f(4,4,4)");
+
+        delete_cmd_range(1, 3, "Deleted");
+        ASSERT_INT("delete undo setup: leaves 2 cmds", g_num_cmds, 2);
+
+        pop_undo_snapshot();
+        ASSERT_INT("delete undo: restores 5 cmds", g_num_cmds, 5);
+        ASSERT_STR("delete undo: middle restored", g_cmds[2].source, "  glVertex3f(2, 2, 2);");
+
+        do_redo();
+        ASSERT_INT("delete redo: leaves 2 cmds", g_num_cmds, 2);
+        ASSERT_STR("delete redo: last survives", g_cmds[1].source, "  glVertex3f(4, 4, 4);");
+    }
+
+    /* 8d. Copy selected block and paste inside a later block */
+    {
+        repl_reset_state(); declare_test_vars();
+        repl_feed_line_public("glBegin(GL_POINTS);");
+        repl_feed_line_public("glVertex3f(0,0,0);");
+        repl_feed_line_public("glVertex3f(1,1,1);");
+        repl_feed_line_public("glEnd();");
+        repl_feed_line_public("if(x > 0) {");
+        repl_feed_line_public("glColor3f(1,0,0);");
+        repl_feed_line_public("}");
+        g_sel_anchor = 1;
+        g_sel_end = 2;
+
+        repl_keyboard_func(3, 0, 0);
+        ASSERT_INT("copy block: clipboard count", g_clipboard_count, 2);
+        ASSERT_STR("copy block: first copied", g_clipboard[0].source, "    glVertex3f(0, 0, 0);");
+        ASSERT_STR("copy block: second copied", g_clipboard[1].source, "    glVertex3f(1, 1, 1);");
+        ASSERT_TRUE("copy block: selection cleared", !sel_active());
+
+        g_edit_line = 5;
+        g_inserting = 0;
+        repl_keyboard_func(22, 0, 0);
+        ASSERT_INT("paste block: cmd count", g_num_cmds, 9);
+        ASSERT_STR("paste block: if preserved", g_cmds[4].source, "  if(x > 0) {");
+        ASSERT_STR("paste block: first inserted", g_cmds[5].source, "    glVertex3f(0, 0, 0);");
+        ASSERT_STR("paste block: second inserted", g_cmds[6].source, "    glVertex3f(1, 1, 1);");
+        ASSERT_STR("paste block: original body shifted", g_cmds[7].source, "  glColor3f(1, 0, 0);");
+        ASSERT_STR("paste block: close brace preserved", g_cmds[8].source, "  }");
+        ASSERT_INT("paste block: edit_line after pasted block", g_edit_line, 7);
+        ASSERT_STR("paste block: input reloaded after paste", g_input, "glColor3f(1, 0, 0)");
+        assert_status_contains("paste block: status", "Pasted 2 lines");
+
+        pop_undo_snapshot();
+        ASSERT_INT("paste undo: restores original count", g_num_cmds, 7);
+        ASSERT_STR("paste undo: original body restored", g_cmds[5].source, "  glColor3f(1, 0, 0);");
+        ASSERT_STR("paste undo: close brace restored", g_cmds[6].source, "  }");
+
+        do_redo();
+        ASSERT_INT("paste redo: restores pasted count", g_num_cmds, 9);
+        ASSERT_STR("paste redo: first pasted line", g_cmds[5].source, "    glVertex3f(0, 0, 0);");
+        ASSERT_STR("paste redo: original body shifted again", g_cmds[7].source, "  glColor3f(1, 0, 0);");
+    }
+
+    /* 8e. Cut selected block, then undo/redo */
+    {
+        repl_reset_state();
+        repl_feed_line_public("glVertex3f(0,0,0)");
+        repl_feed_line_public("glVertex3f(1,1,1)");
+        repl_feed_line_public("glVertex3f(2,2,2)");
+        repl_feed_line_public("glVertex3f(3,3,3)");
+        g_sel_anchor = 1;
+        g_sel_end = 2;
+
+        repl_keyboard_func(24, 0, 0);
+        ASSERT_INT("cut block: clipboard count", g_clipboard_count, 2);
+        ASSERT_STR("cut block: first copied", g_clipboard[0].source, "  glVertex3f(1, 1, 1);");
+        ASSERT_STR("cut block: second copied", g_clipboard[1].source, "  glVertex3f(2, 2, 2);");
+        ASSERT_INT("cut block: leaves 2 cmds", g_num_cmds, 2);
+        ASSERT_STR("cut block: first survivor", g_cmds[0].source, "  glVertex3f(0, 0, 0);");
+        ASSERT_STR("cut block: second survivor", g_cmds[1].source, "  glVertex3f(3, 3, 3);");
+        ASSERT_TRUE("cut block: selection cleared", !sel_active());
+
+        pop_undo_snapshot();
+        ASSERT_INT("cut undo: restores 4 cmds", g_num_cmds, 4);
+        ASSERT_STR("cut undo: first cut line restored", g_cmds[1].source, "  glVertex3f(1, 1, 1);");
+
+        do_redo();
+        ASSERT_INT("cut redo: leaves 2 cmds", g_num_cmds, 2);
+        ASSERT_STR("cut redo: second survivor", g_cmds[1].source, "  glVertex3f(3, 3, 3);");
+    }
+
+    /* 8f. Copy/cut from a for-begin line captures the whole block */
+    {
+        repl_reset_state(); declare_test_vars();
+        repl_feed_line_public("for(i, 0, 2) {");
+        repl_feed_line_public("glVertex3f(i,0,0);");
+        repl_feed_line_public("}");
+        g_edit_line = 0;
+
+        repl_keyboard_func(3, 0, 0);
+        ASSERT_INT("copy for block: clipboard count", g_clipboard_count, 3);
+        ASSERT_INT("copy for block: first type", g_clipboard[0].type, CMD_FOR_BEGIN);
+        ASSERT_INT("copy for block: last type", g_clipboard[2].type, CMD_FOR_END);
+        ASSERT_INT("copy for block: source unchanged", g_num_cmds, 3);
+
+        repl_reset_state(); declare_test_vars();
+        repl_feed_line_public("for(i, 0, 2) {");
+        repl_feed_line_public("glVertex3f(i,0,0);");
+        repl_feed_line_public("}");
+        g_edit_line = 0;
+
+        repl_keyboard_func(24, 0, 0);
+        ASSERT_INT("cut for block: clipboard count", g_clipboard_count, 3);
+        ASSERT_INT("cut for block: first type", g_clipboard[0].type, CMD_FOR_BEGIN);
+        ASSERT_INT("cut for block: last type", g_clipboard[2].type, CMD_FOR_END);
+        ASSERT_INT("cut for block: buffer empty", g_num_cmds, 0);
+        ASSERT_INT("cut for block: edit line at start", g_edit_line, 0);
+    }
+
+    /* 8g. Paste with empty clipboard */
+    {
+        repl_reset_state();
+        repl_feed_line_public("glVertex3f(1,1,1)");
+        g_clipboard_count = 0;
+
+        repl_keyboard_func(22, 0, 0);
+
+        ASSERT_INT("paste empty: no mutation", g_num_cmds, 1);
+        ASSERT_STR("paste empty: source unchanged", g_cmds[0].source, "  glVertex3f(1, 1, 1);");
+        assert_status_contains("paste empty: status", "Clipboard empty");
+    }
+
+    /* 8h. Paste refuses to overflow the command buffer */
+    {
+        repl_reset_state();
+        repl_feed_line_public("glVertex3f(1,1,1)");
+        g_clipboard[0] = g_cmds[0];
+        g_clipboard_count = 1;
+        g_num_cmds = MAX_COMMANDS;
+
+        repl_keyboard_func(22, 0, 0);
+
+        ASSERT_INT("paste full: no mutation", g_num_cmds, MAX_COMMANDS);
+        ASSERT_INT("paste full: clipboard preserved", g_clipboard_count, 1);
+        assert_status_contains("paste full: status", "Command buffer full");
+    }
+
+    /* 8i. Copy/cut in insert mode clear selection without touching clipboard */
+    {
+        repl_reset_state();
+        repl_feed_line_public("glVertex3f(1,1,1)");
+        repl_feed_line_public("glVertex3f(2,2,2)");
+        g_clipboard[0] = g_cmds[1];
+        g_clipboard_count = 1;
+        g_sel_anchor = 0;
+        g_sel_end = 1;
+        g_edit_line = 1;
+        g_inserting = 1;
+
+        repl_keyboard_func(3, 0, 0);
+        ASSERT_INT("copy insert mode: cmd count unchanged", g_num_cmds, 2);
+        ASSERT_INT("copy insert mode: clipboard unchanged", g_clipboard_count, 1);
+        ASSERT_STR("copy insert mode: clipboard source unchanged", g_clipboard[0].source, "  glVertex3f(2, 2, 2);");
+        ASSERT_TRUE("copy insert mode: selection cleared", !sel_active());
+
+        g_sel_anchor = 0;
+        g_sel_end = 1;
+        g_inserting = 1;
+        repl_keyboard_func(24, 0, 0);
+        ASSERT_INT("cut insert mode: cmd count unchanged", g_num_cmds, 2);
+        ASSERT_INT("cut insert mode: clipboard unchanged", g_clipboard_count, 1);
+        ASSERT_STR("cut insert mode: clipboard source unchanged", g_clipboard[0].source, "  glVertex3f(2, 2, 2);");
+        ASSERT_TRUE("cut insert mode: selection cleared", !sel_active());
+    }
+
+    /* 8j. Backspace in insert mode edits input instead of selected source lines */
+    {
+        repl_reset_state();
+        repl_feed_line_public("glVertex3f(1,1,1)");
+        repl_feed_line_public("glVertex3f(2,2,2)");
+        g_sel_anchor = 0;
+        g_sel_end = 1;
+        g_edit_line = 1;
+        g_inserting = 1;
+        set_editor_input("abcd");
+        g_cursor_pos = 3;
+
+        repl_keyboard_func(8, 0, 0);
+
+        ASSERT_INT("backspace insert mode: cmd count unchanged", g_num_cmds, 2);
+        ASSERT_STR("backspace insert mode: input edited", g_input, "abd");
+        ASSERT_INT("backspace insert mode: cursor moved", g_cursor_pos, 2);
+        ASSERT_INT("backspace insert mode: still inserting", g_inserting, 1);
+    }
+
+    /* 8k. Committing incomplete commands reports incomplete, not unknown */
+    {
+        repl_reset_state();
+        set_editor_input("glColor3f(1, 1");
+
+        repl_keyboard_func(';', 0, 0);
+
+        ASSERT_INT("commit incomplete glColor3f: no cmd added", g_num_cmds, 0);
+        assert_status_contains("commit incomplete glColor3f: status", "Incomplete command");
+        assert_status_contains("commit incomplete glColor3f: missing paren", "missing ')'");
+        ASSERT_TRUE("commit incomplete glColor3f: not unknown",
+                    strstr(g_status, "Unknown cmd") == NULL);
+    }
+
+    {
+        repl_reset_state();
+        set_editor_input("glTotallyUnknown(1, 2, 3)");
+
+        repl_keyboard_func(';', 0, 0);
+
+        ASSERT_INT("commit unknown command: no cmd added", g_num_cmds, 0);
+        assert_status_contains("commit unknown command: status", "Unknown cmd");
     }
 
     /* 9. load_line_to_input — CMD_LABEL path */
@@ -710,6 +1036,154 @@ int main() {
                     strstr(g_status, "'b'") != NULL);
         ASSERT_TRUE("drop referenced b: status does not mention 'n'",
                     strstr(g_status, "'n'") == NULL);
+    }
+
+    /* 37. Deleting a referenced declaration is rejected */
+    {
+        repl_reset_state();
+        repl_feed_line_public("float n;");
+        repl_feed_line_public("n = 5;");
+        ASSERT_TRUE("delete referenced decl setup: n registered",
+                    find_predef_var_idx("n") >= 0);
+
+        delete_cmd_range(0, 1, "Deleted");
+
+        ASSERT_INT("delete referenced decl: cmd count unchanged", g_num_cmds, 2);
+        ASSERT_INT("delete referenced decl: first still decl", g_cmds[0].type, CMD_VAR_DECLARE);
+        ASSERT_INT("delete referenced decl: second still assign", g_cmds[1].type, CMD_VAR_ASSIGN);
+        ASSERT_TRUE("delete referenced decl: n still registered",
+                    find_predef_var_idx("n") >= 0);
+        assert_status_contains("delete referenced decl: status", "variable 'n' is in use");
+    }
+
+    /* 37a. Ctrl+X rejects cutting a declaration still used outside the cut */
+    {
+        repl_reset_state();
+        repl_feed_line_public("float n;");
+        repl_feed_line_public("n = 5;");
+        g_clipboard[0] = g_cmds[1];
+        g_clipboard_count = 1;
+        g_edit_line = 0;
+
+        repl_keyboard_func(24, 0, 0);
+
+        ASSERT_INT("cut referenced decl: cmd count unchanged", g_num_cmds, 2);
+        ASSERT_INT("cut referenced decl: first still decl", g_cmds[0].type, CMD_VAR_DECLARE);
+        ASSERT_INT("cut referenced decl: second still assign", g_cmds[1].type, CMD_VAR_ASSIGN);
+        ASSERT_TRUE("cut referenced decl: n still registered",
+                    find_predef_var_idx("n") >= 0);
+        ASSERT_INT("cut referenced decl: clipboard count preserved", g_clipboard_count, 1);
+        ASSERT_STR("cut referenced decl: clipboard source preserved", g_clipboard[0].source, "  n = 5;");
+        assert_status_contains("cut referenced decl: status", "variable 'n' is in use");
+    }
+
+    /* 37b. Ctrl+X of a declaration and all uses removes the variable cleanly */
+    {
+        repl_reset_state();
+        repl_feed_line_public("float n;");
+        repl_feed_line_public("n = 5;");
+        ASSERT_TRUE("cut decl block setup: n registered",
+                    find_predef_var_idx("n") >= 0);
+        g_sel_anchor = 0;
+        g_sel_end = 1;
+
+        repl_keyboard_func(24, 0, 0);
+
+        ASSERT_INT("cut decl block: buffer empty", g_num_cmds, 0);
+        ASSERT_TRUE("cut decl block: n unregistered",
+                    find_predef_var_idx("n") < 0);
+        ASSERT_INT("cut decl block: clipboard count", g_clipboard_count, 2);
+        ASSERT_INT("cut decl block: first copied type", g_clipboard[0].type, CMD_VAR_DECLARE);
+        ASSERT_INT("cut decl block: second copied type", g_clipboard[1].type, CMD_VAR_ASSIGN);
+        assert_status_contains("cut decl block: status", "Cut 2 lines");
+    }
+
+    /* 38. Deleting a declaration with all its uses undeclares the variable */
+    {
+        repl_reset_state();
+        repl_feed_line_public("float n;");
+        repl_feed_line_public("n = 5;");
+        ASSERT_TRUE("delete decl block setup: n registered",
+                    find_predef_var_idx("n") >= 0);
+
+        delete_cmd_range(0, 2, "Deleted");
+
+        ASSERT_INT("delete decl block: buffer empty", g_num_cmds, 0);
+        ASSERT_TRUE("delete decl block: n unregistered",
+                    find_predef_var_idx("n") < 0);
+        assert_status_contains("delete decl block: status", "Deleted 2 lines");
+    }
+
+    /* 39. Per-declaration name limit rejects atomically */
+    {
+        repl_reset_state();
+        set_editor_input("float v0, v1, v2, v3, v4, v5, v6, v7, v8");
+        g_edit_line = g_num_cmds;
+        g_inserting = 0;
+
+        int result = try_commit_float_decl();
+
+        ASSERT_INT("decl per-line overflow: handler consumed input", result, 1);
+        ASSERT_INT("decl per-line overflow: no cmd added", g_num_cmds, 0);
+        ASSERT_INT("decl per-line overflow: only t registered", g_num_predef_vars, 1);
+        for (int i = 0; i <= MAX_NAMES_PER_DECL; i++) {
+            char name[16];
+            char label[128];
+            snprintf(name, sizeof(name), "v%d", i);
+            snprintf(label, sizeof(label), "decl per-line overflow: %s not registered", name);
+            ASSERT_TRUE(label, find_predef_var_idx(name) < 0);
+        }
+        assert_status_contains("decl per-line overflow: status count", "too many names per declaration");
+        assert_status_contains("decl per-line overflow: status max", "max 8");
+    }
+
+    /* 40. Total variable table limit rejects atomically */
+    {
+        repl_reset_state();
+        repl_feed_line_public("float v0, v1, v2, v3, v4, v5, v6, v7;");
+        repl_feed_line_public("float v8, v9, v10, v11, v12, v13, v14;");
+        ASSERT_INT("decl table full setup: two decl cmds", g_num_cmds, 2);
+        ASSERT_INT("decl table full setup: all slots used", g_num_predef_vars, MAX_PREDEF_VARS);
+
+        set_editor_input("float overflow");
+        g_edit_line = g_num_cmds;
+        g_inserting = 0;
+        int result = try_commit_float_decl();
+
+        ASSERT_INT("decl table full: handler consumed input", result, 1);
+        ASSERT_INT("decl table full: cmd count unchanged", g_num_cmds, 2);
+        ASSERT_INT("decl table full: var count unchanged", g_num_predef_vars, MAX_PREDEF_VARS);
+        ASSERT_TRUE("decl table full: overflow not registered",
+                    find_predef_var_idx("overflow") < 0);
+        ASSERT_TRUE("decl table full: first existing var remains",
+                    find_predef_var_idx("v0") >= 0);
+        ASSERT_TRUE("decl table full: last existing var remains",
+                    find_predef_var_idx("v14") >= 0);
+        assert_status_contains("decl table full: status full", "variable table full");
+        assert_status_contains("decl table full: status max", "max 16");
+    }
+
+    /* 41. Declaration validation failures are atomic */
+    {
+        repl_reset_state();
+        repl_feed_line_public("float anchor;");
+        ASSERT_INT("decl atomic setup: one decl", g_num_cmds, 1);
+        ASSERT_TRUE("decl atomic setup: anchor registered",
+                    find_predef_var_idx("anchor") >= 0);
+
+        assert_float_decl_rejected_atomic("decl duplicate", "float dup, dup",
+                                          "dup", "duplicate name 'dup'");
+        assert_float_decl_rejected_atomic("decl reserved", "float sin",
+                                          "sin", "'sin' is reserved");
+        assert_float_decl_rejected_atomic("decl invalid", "float 1bad",
+                                          "1bad", "expected identifier");
+        assert_float_decl_rejected_atomic("decl overlong", "float abcdefghijklmnop",
+                                          "abcdefghijklmnop", "max 15");
+
+        ASSERT_INT("decl atomic: only anchor cmd remains", g_num_cmds, 1);
+        ASSERT_INT("decl atomic: only t plus anchor registered", g_num_predef_vars, 2);
+        ASSERT_TRUE("decl atomic: anchor still registered",
+                    find_predef_var_idx("anchor") >= 0);
     }
 
     printf("\n%d / %d tests passed\n", g_pass, g_run);

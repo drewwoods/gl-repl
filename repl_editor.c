@@ -280,13 +280,18 @@ int sel_hi(void) {
     return g_sel_anchor > g_sel_end ? g_sel_anchor : g_sel_end;
 }
 
-void delete_cmd_range(int start, int count, const char *what) {
-    char msg[128];
-
+static int normalize_cmd_range(int start, int count, int *out_start, int *out_count) {
     if (count <= 0 || start < 0 || start >= g_num_cmds)
-        return;
+        return 0;
     if (start + count > g_num_cmds)
         count = g_num_cmds - start;
+    *out_start = start;
+    *out_count = count;
+    return 1;
+}
+
+static int delete_cmd_range_allowed(int start, int count) {
+    char msg[128];
     int end = start + count;
 
     /* Refuse if any var-decl in the range declares a name used outside it */
@@ -300,11 +305,18 @@ void delete_cmd_range(int start, int count, const char *what) {
                     snprintf(msg, sizeof(msg),
                              "variable '%s' is in use, cannot delete", nm);
                     set_status(msg);
-                    return;
+                    return 0;
                 }
             }
         }
     }
+
+    return 1;
+}
+
+static void remove_cmd_range_unchecked(int start, int count, const char *what) {
+    char msg[128];
+    int end = start + count;
 
     /* Snapshot names to undeclare after the memmove */
     char removed_names[MAX_PREDEF_VARS][16] = {{0}};
@@ -343,6 +355,14 @@ void delete_cmd_range(int start, int count, const char *what) {
     snprintf(msg, sizeof(msg), "%s %d line%s",
              what, count, count > 1 ? "s" : "");
     set_status(msg);
+}
+
+void delete_cmd_range(int start, int count, const char *what) {
+    if (!normalize_cmd_range(start, count, &start, &count))
+        return;
+    if (!delete_cmd_range_allowed(start, count))
+        return;
+    remove_cmd_range_unchecked(start, count, what);
 }
 
 void load_line_to_input(int idx) {
@@ -1496,7 +1516,7 @@ void keyboard_func(unsigned char key, int x, int y) {
 
     /* Cut / copy / backspace / delete preserve any active line-range
      * selection; everything else clears it before processing the key. */
-    if (key != KEY_CTRL_C && key != KEY_BACKSPACE &&
+    if (key != KEY_CTRL_C && key != KEY_CTRL_D && key != KEY_BACKSPACE &&
         key != KEY_CTRL_X && key != KEY_DELETE)
         clear_selection();
 
@@ -1763,7 +1783,6 @@ void keyboard_func(unsigned char key, int x, int y) {
             clear_selection();
             return;
         }
-        g_clipboard_count = 0;
         {
             int start;
             int count;
@@ -1785,28 +1804,20 @@ void keyboard_func(unsigned char key, int x, int y) {
                     count = 1;
                 }
             } else {
+                g_clipboard_count = 0;
                 clear_selection();
                 return;
             }
 
-            push_undo_snapshot();
+            if (!normalize_cmd_range(start, count, &start, &count))
+                return;
+            if (!delete_cmd_range_allowed(start, count))
+                return;
+
+            g_clipboard_count = 0;
             for (int i = 0; i < count && g_clipboard_count < MAX_COMMANDS; i++)
                 g_clipboard[g_clipboard_count++] = g_cmds[start + i];
-            memmove(&g_cmds[start], &g_cmds[start + count],
-                    (g_num_cmds - start - count) * sizeof(GLCmd));
-            g_num_cmds -= count;
-            g_edit_line = start;
-            if (g_edit_line > g_num_cmds)
-                g_edit_line = g_num_cmds;
-            load_line_to_input(g_edit_line);
-            mark_normals_dirty();
-            {
-                char msg[64];
-                snprintf(msg, sizeof(msg), "Cut %d line%s",
-                         count, count > 1 ? "s" : "");
-                set_status(msg);
-            }
-            clear_selection();
+            remove_cmd_range_unchecked(start, count, "Cut");
         }
         return;
     }

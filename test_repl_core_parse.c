@@ -26,6 +26,10 @@ static void declare_test_vars(void) {
     declare_predef_var("z", err, sizeof(err));
 }
 
+static void assert_status_contains(const char *label, const char *needle) {
+    ASSERT_TRUE(label, strstr(g_status, needle) != NULL);
+}
+
 int main(void) {
     init_predef_vars();
     repl_reset_state();
@@ -253,6 +257,52 @@ int main(void) {
         int ok = repl_parse_command("glPointParameterfv(GL_POINT_DISTANCE_ATTENUATION, 1, 0, 0)", &cmd);
         ASSERT_TRUE("glPointParameterfv parse ok", ok == 1);
         ASSERT_TRUE("glPointParameterfv type", cmd.type == CMD_POINT_PARAMETER_FV);
+    }
+
+    /* Incomplete commands should not be reported as unknown commands. */
+    {
+        repl_reset_state();
+        GLCmd cmd;
+        memset(&cmd, 0, sizeof(cmd));
+        int ok = repl_parse_command("glColor3f(1, 1", &cmd);
+        ASSERT_TRUE("incomplete glColor3f returns 0", ok == 0);
+        assert_status_contains("incomplete glColor3f status", "Incomplete command");
+        assert_status_contains("incomplete glColor3f missing paren", "missing ')'");
+        ASSERT_TRUE("incomplete glColor3f not unknown",
+                    strstr(g_status, "Unknown cmd") == NULL);
+    }
+
+    {
+        repl_reset_state();
+        GLCmd cmd;
+        memset(&cmd, 0, sizeof(cmd));
+        int ok = repl_parse_command("glVertex(1,", &cmd);
+        ASSERT_TRUE("incomplete glVertex returns 0", ok == 0);
+        assert_status_contains("incomplete glVertex status", "Incomplete command");
+        assert_status_contains("incomplete glVertex missing paren", "missing ')'");
+        ASSERT_TRUE("incomplete glVertex not unknown",
+                    strstr(g_status, "Unknown cmd") == NULL);
+    }
+
+    {
+        repl_reset_state();
+        GLCmd cmd;
+        memset(&cmd, 0, sizeof(cmd));
+        int ok = repl_parse_command("glColor3f(1, 1)", &cmd);
+        ASSERT_TRUE("short glColor3f returns 0", ok == 0);
+        assert_status_contains("short glColor3f status", "Incomplete command");
+        assert_status_contains("short glColor3f expected count", "expects 3 arguments");
+        ASSERT_TRUE("short glColor3f not unknown",
+                    strstr(g_status, "Unknown cmd") == NULL);
+    }
+
+    {
+        repl_reset_state();
+        GLCmd cmd;
+        memset(&cmd, 0, sizeof(cmd));
+        int ok = repl_parse_command("glTotallyUnknown(1, 2, 3)", &cmd);
+        ASSERT_TRUE("complete unknown command returns 0", ok == 0);
+        assert_status_contains("complete unknown command status", "Unknown cmd");
     }
 
     /* gluBegin/gluEnd via parse_command */
