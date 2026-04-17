@@ -1393,6 +1393,140 @@ static void draw_translate_guide(const GLCmd *cmd, const float p_after[3]) {
 }
 
 /* Arc from p_start swept by glRotatef(angle, ax,ay,az) about local origin. */
+/* Helper: small 4-fin arrowhead from `tip` pointing along `dir` (unit). */
+static void draw_arrow_head(const float tip[3], const float dir[3], float head_len) {
+    float ux, uy, uz;
+    if (fabsf(dir[1]) < 0.9f) { ux = 0.0f; uy = 1.0f; uz = 0.0f; }
+    else                      { ux = 1.0f; uy = 0.0f; uz = 0.0f; }
+    float rx = dir[1]*uz - dir[2]*uy;
+    float ry = dir[2]*ux - dir[0]*uz;
+    float rz = dir[0]*uy - dir[1]*ux;
+    float rlen = sqrtf(rx*rx + ry*ry + rz*rz);
+    if (rlen > 1e-8f) { rx/=rlen; ry/=rlen; rz/=rlen; }
+    float bx = ry*dir[2] - rz*dir[1];
+    float by = rz*dir[0] - rx*dir[2];
+    float bz = rx*dir[1] - ry*dir[0];
+    float base[3] = { tip[0] - dir[0]*head_len, tip[1] - dir[1]*head_len, tip[2] - dir[2]*head_len };
+    float fin = head_len * 0.45f;
+    glBegin(GL_LINES);
+    for (int k = 0; k < 4; k++) {
+        float sx = (k == 0 ?  rx : k == 1 ? -rx : k == 2 ?  bx : -bx);
+        float sy = (k == 0 ?  ry : k == 1 ? -ry : k == 2 ?  by : -by);
+        float sz = (k == 0 ?  rz : k == 1 ? -rz : k == 2 ?  bz : -bz);
+        glVertex3f(tip[0], tip[1], tip[2]);
+        glVertex3f(base[0] + sx*fin, base[1] + sy*fin, base[2] + sz*fin);
+    }
+    glEnd();
+}
+
+/* Arrow from p_start to (sx·x, sy·y, sz·z) in the guide frame. When p_start
+ * is degenerate (at origin) the scale-of-origin collapses, so fall back to
+ * three axis arrows showing unit-axis scaling for each component. */
+static void draw_scale_guide(const GLCmd *cmd, const float p_start[3]) {
+    float sx = cmd->args[0], sy = cmd->args[1], sz = cmd->args[2];
+    float p0[3] = { p_start[0], p_start[1], p_start[2] };
+    float p1[3] = { p0[0]*sx, p0[1]*sy, p0[2]*sz };
+    float delta[3] = { p1[0]-p0[0], p1[1]-p0[1], p1[2]-p0[2] };
+    float dlen = sqrtf(delta[0]*delta[0] + delta[1]*delta[1] + delta[2]*delta[2]);
+
+    glDisable(GL_LIGHTING);
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    glColor4f(0.85f, 0.45f, 1.0f, 0.95f); /* magenta — distinct from translate/rotate */
+
+    if (dlen > 1e-4f) {
+        float dir[3] = { delta[0]/dlen, delta[1]/dlen, delta[2]/dlen };
+        float head_len = dlen * 0.22f;
+        if (head_len > 0.25f) head_len = 0.25f;
+        if (head_len < 0.06f) head_len = (dlen < 0.06f ? dlen * 0.5f : 0.06f);
+        float base[3] = { p1[0] - dir[0]*head_len, p1[1] - dir[1]*head_len, p1[2] - dir[2]*head_len };
+
+        glEnable(GL_LINE_STIPPLE);
+        glLineStipple(1, 0xAAAA);
+        glLineWidth(4.0f);
+        glColor4f(0.75f, 0.40f, 0.95f, 0.85f);
+        glBegin(GL_LINES);
+        glVertex3f(p0[0], p0[1], p0[2]);
+        glVertex3f(base[0], base[1], base[2]);
+        glEnd();
+        glDisable(GL_LINE_STIPPLE);
+
+        glLineWidth(3.0f);
+        glColor4f(0.90f, 0.55f, 1.0f, 0.95f);
+        draw_arrow_head(p1, dir, head_len);
+        glLineWidth(1.0f);
+
+        glPointSize(6.0f);
+        glBegin(GL_POINTS);
+        glColor4f(0.75f, 0.40f, 0.95f, 0.7f);
+        glVertex3f(p0[0], p0[1], p0[2]);
+        glEnd();
+        glPointSize(9.0f);
+        glBegin(GL_POINTS);
+        glColor4f(0.95f, 0.65f, 1.0f, 1.0f);
+        glVertex3f(p1[0], p1[1], p1[2]);
+        glEnd();
+        glPointSize(1.0f);
+    } else {
+        /* Degenerate: p_start at origin — show three axis arrows from origin
+         * to (sx,0,0), (0,sy,0), (0,0,sz) so the per-component scaling is
+         * still visible. A unit reference segment (gray) on each axis hints
+         * at the identity baseline. */
+        const float axes[3][3] = { {1,0,0}, {0,1,0}, {0,0,1} };
+        const float factors[3] = { sx, sy, sz };
+        for (int a = 0; a < 3; a++) {
+            float f = factors[a];
+            if (fabsf(f) < 1e-6f) continue;
+            float tip[3] = { axes[a][0]*f, axes[a][1]*f, axes[a][2]*f };
+
+            /* Identity reference — thin gray segment from origin to unit tip. */
+            glLineWidth(1.5f);
+            glColor4f(0.55f, 0.55f, 0.55f, 0.45f);
+            glBegin(GL_LINES);
+            glVertex3f(0.0f, 0.0f, 0.0f);
+            glVertex3f(axes[a][0], axes[a][1], axes[a][2]);
+            glEnd();
+
+            /* Scaled arrow — dashed shaft, solid head. */
+            float dir[3] = {
+                (f >= 0 ? axes[a][0] : -axes[a][0]),
+                (f >= 0 ? axes[a][1] : -axes[a][1]),
+                (f >= 0 ? axes[a][2] : -axes[a][2])
+            };
+            float tlen = fabsf(f);
+            float head_len = tlen * 0.22f;
+            if (head_len > 0.2f) head_len = 0.2f;
+            if (head_len < 0.05f) head_len = (tlen < 0.05f ? tlen * 0.5f : 0.05f);
+            float base[3] = { tip[0] - dir[0]*head_len, tip[1] - dir[1]*head_len, tip[2] - dir[2]*head_len };
+
+            glEnable(GL_LINE_STIPPLE);
+            glLineStipple(1, 0xAAAA);
+            glLineWidth(3.5f);
+            glColor4f(0.75f, 0.40f, 0.95f, 0.85f);
+            glBegin(GL_LINES);
+            glVertex3f(0.0f, 0.0f, 0.0f);
+            glVertex3f(base[0], base[1], base[2]);
+            glEnd();
+            glDisable(GL_LINE_STIPPLE);
+
+            glLineWidth(2.5f);
+            glColor4f(0.90f, 0.55f, 1.0f, 0.95f);
+            draw_arrow_head(tip, dir, head_len);
+            glLineWidth(1.0f);
+
+            glPointSize(7.0f);
+            glBegin(GL_POINTS);
+            glColor4f(0.95f, 0.65f, 1.0f, 1.0f);
+            glVertex3f(tip[0], tip[1], tip[2]);
+            glEnd();
+            glPointSize(1.0f);
+        }
+    }
+
+    glDisable(GL_BLEND);
+    if (g_user_lighting_enabled) glEnable(GL_LIGHTING);
+}
+
 static void draw_rotate_guide(const GLCmd *cmd, const float p_start[3]) {
     float angle_deg = cmd->args[0];
     float ax = cmd->args[1], ay = cmd->args[2], az = cmd->args[3];
@@ -2347,7 +2481,8 @@ void render_3d_scene(void) {
         }
 
         if (sc->valid && unmodified &&
-            (sc->type == CMD_TRANSLATE3F || sc->type == CMD_ROTATEF)) {
+            (sc->type == CMD_TRANSLATE3F || sc->type == CMD_ROTATEF ||
+             sc->type == CMD_SCALEF)) {
             for (int j = 0; j < g_num_flat_cmds; j++) {
                 if (!g_flat_cmds[j].valid) continue;
                 if (g_flat_cmds[j].src_cmd_idx == g_edit_line) {
@@ -2406,6 +2541,8 @@ void render_3d_scene(void) {
             }
             if (tg_src_cmd->type == CMD_TRANSLATE3F)
                 draw_translate_guide(tg_src_cmd, p_after);
+            else if (tg_src_cmd->type == CMD_SCALEF)
+                draw_scale_guide(tg_src_cmd, p_after);
             else
                 draw_rotate_guide(tg_src_cmd, p_after);
             glPopMatrix();
