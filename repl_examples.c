@@ -883,10 +883,9 @@ static const char *const g_example_stress[] = {
 };
 
 /* Transformation stress test — exercises translate/rotate/scale guides in
- * varied contexts: nested push/pop, time-varying args, for-loop unrolling,
- * function scopes, scale-of-origin (gizmo fallback), and rotate-on-axis
- * (synthetic-perpendicular fallback). Park the cursor on any transform line
- * to see its guide overlay. */
+ * varied contexts: nested push/pop, time-varying args (t), for-loop
+ * unrolling, function scopes, and scale-of-origin (3-axis gizmo fallback).
+ * Park the cursor on any transform line to see its guide overlay. */
 static const char *const g_example_xform_stress[] = {
     "glClearColor(0.08, 0.08, 0.1, 1);",
     "glEnable(GL_DEPTH_TEST);",
@@ -957,8 +956,8 @@ static const char *const *const g_examples[] = {
     g_example_waves,
     g_example_spirograph_curve,
     g_example_traveling_ripple_ring,
-    g_example_stress,
     g_example_xform_stress,
+    g_example_stress,
 };
 
 static const char *const g_example_names[] = {
@@ -979,8 +978,8 @@ static const char *const g_example_names[] = {
     "Animated wave surface (analytic normals)",
     "Animated spirograph curve",
     "Traveling ripple ring",
-    "Stress test (all features)",
     "Transform stress (translate/rotate/scale guides)",
+    "Stress test (all features)",
 };
 
 int repl_examples_count(void) {

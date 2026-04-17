@@ -109,8 +109,11 @@ New helper `draw_rotate_guide(const GLCmd *cmd, const float p_start[3])`:
   no new math libs needed.)
 - Draw a short axis stub through the local origin along `(ax,ay,az)` so the
   rotation axis is visible.
-- Dot at `p_start` (pre-rotation), dot + small tangent stub at the final point.
-- Dashed stipple, rotate-tinted color (e.g. cyan) to differ from translate.
+- Small dot at `p_start` (pre-rotation), larger dot at the final point.
+  No tangent stub at the end — the larger dot is sufficient.
+- Color derived from the rotation axis via `xform_axis_color(ax,ay,az)`.
+  The shaft/arc uses the axes-pulse visual style (dim base + traveling
+  pulse dot).
 
 ### 5. Integrate into the guide pass
 
@@ -119,8 +122,12 @@ matching `src_cmd_idx == g_edit_line` is about to be applied and the source cmd
 is a transform:
 
 - Compute `p_after` via `compute_after_cursor_origin(i_after)`, where
-  `i_after` is the index of the first flat cmd with `src_cmd_idx >
-  g_edit_line`.
+  `i_after` is found by first locating the first flat cmd with
+  `src_cmd_idx == g_edit_line`, then scanning forward in flat
+  execution order for the next valid flat cmd whose `src_cmd_idx`
+  differs. `src_cmd_idx` is **not** monotonic — function-call
+  expansions carry the callee's body line — so a numeric `>` compare
+  would skip past them.
 - Before applying the cursor transform (so modelview = `M_before`), call
   `draw_translate_guide` or `draw_rotate_guide`.
 - Continue the existing loop unchanged.
@@ -132,13 +139,11 @@ lines.
 
 | File | Change |
 |------|--------|
-| `scene_render.c` | Add `compute_after_cursor_origin`, `draw_translate_guide`, `draw_rotate_guide`; extend the cursor branch in the flat-cmd replay pass (~line 2082) |
+| `scene_render.c` | Add `compute_before_cursor_origin`, `compute_after_cursor_origin`, `is_geometry_emit_cmd`, `xform_axis_color`, `draw_pulse_segment`, `draw_translate_guide`, `draw_rotate_guide`, `draw_scale_guide`; extend the cursor branch in the flat-cmd replay pass |
 | `scene_render.h` | No external API change needed |
-
-No changes required in `repl_core.c`, `sample.h`, or `repl_editor.c` —
-everything keys off existing globals (`g_edit_line`, `g_cmds`, `g_flat_cmds`,
-`g_num_flat_cmds`) and existing helpers (`is_transform_cmd`,
-`apply_tracked_transform_cmd`).
+| `sample.h` | `extern int g_xform_guide_mode;` + `CFG_DEFAULT_XFORM_GUIDE_MODE` |
+| `repl_core.c` | Backing storage for `g_xform_guide_mode` (initialized to `CFG_DEFAULT_XFORM_GUIDE_MODE`) and reset entry in `reset_example_presentation_defaults()` |
+| `repl_editor.c` | CfgItem entry for the "Xform guide mode" toggle (World/Frame) |
 
 ## Verification
 

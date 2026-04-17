@@ -1265,6 +1265,12 @@ static void compute_before_cursor_origin(int cursor_flat_idx, float out[3]) {
     int depth = 0;
     for (int i = 0; i < cursor_flat_idx; i++) {
         if (!g_flat_cmds[i].valid) continue;
+        /* Apply the full pre-cursor modelview — translations, rotations,
+         * and scales — so the anchor lines up with where earlier blocks
+         * (func0(), glBegin...) actually rendered. A "translations only"
+         * anchor looks right when the scene is translation-only, but once
+         * a pre-cursor rotation is in play it diverges from where geometry
+         * actually drew, which is the opposite of what Frame mode is for. */
         if (is_transform_cmd(g_flat_cmds[i].type))
             apply_tracked_transform_cmd(&g_flat_cmds[i], &depth);
     }
