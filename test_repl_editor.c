@@ -386,7 +386,36 @@ int main() {
         assert_status_contains("paste full: status", "Command buffer full");
     }
 
-    /* 8i. Copy/cut in insert mode clear selection without touching clipboard */
+    /* 8i. Clipboard operations reject float declarations */
+    {
+        repl_reset_state();
+        repl_feed_line_public("float n;");
+        repl_feed_line_public("n = 5;");
+        g_clipboard[0] = g_cmds[1];
+        g_clipboard_count = 1;
+        g_edit_line = 0;
+
+        repl_keyboard_func(3, 0, 0);
+
+        ASSERT_INT("copy decl line: cmd count unchanged", g_num_cmds, 2);
+        ASSERT_INT("copy decl line: clipboard count preserved", g_clipboard_count, 1);
+        ASSERT_STR("copy decl line: clipboard source preserved", g_clipboard[0].source, "  n = 5;");
+        assert_status_contains("copy decl line: status", "Cannot copy float declarations");
+
+        g_clipboard[0] = g_cmds[0];
+        g_clipboard_count = 1;
+        g_edit_line = g_num_cmds;
+
+        repl_keyboard_func(22, 0, 0);
+
+        ASSERT_INT("paste decl line: cmd count unchanged", g_num_cmds, 2);
+        ASSERT_INT("paste decl line: clipboard count preserved", g_clipboard_count, 1);
+        ASSERT_INT("paste decl line: first still decl", g_cmds[0].type, CMD_VAR_DECLARE);
+        ASSERT_INT("paste decl line: second still assign", g_cmds[1].type, CMD_VAR_ASSIGN);
+        assert_status_contains("paste decl line: status", "Cannot paste float declarations");
+    }
+
+    /* 8j. Copy/cut in insert mode clear selection without touching clipboard */
     {
         repl_reset_state();
         repl_feed_line_public("glVertex3f(1,1,1)");
@@ -414,7 +443,7 @@ int main() {
         ASSERT_TRUE("cut insert mode: selection cleared", !sel_active());
     }
 
-    /* 8j. Backspace in insert mode edits input instead of selected source lines */
+    /* 8k. Backspace in insert mode edits input instead of selected source lines */
     {
         repl_reset_state();
         repl_feed_line_public("glVertex3f(1,1,1)");
@@ -1029,7 +1058,7 @@ int main() {
                     strstr(g_status, "'n'") == NULL);
     }
 
-    /* 37. Deleting a referenced declaration is rejected */
+    /* 37. Deleting a declaration line is rejected */
     {
         repl_reset_state();
         repl_feed_line_public("float n;");
@@ -1044,10 +1073,10 @@ int main() {
         ASSERT_INT("delete referenced decl: second still assign", g_cmds[1].type, CMD_VAR_ASSIGN);
         ASSERT_TRUE("delete referenced decl: n still registered",
                     find_predef_var_idx("n") >= 0);
-        assert_status_contains("delete referenced decl: status", "variable 'n' is in use");
+        assert_status_contains("delete referenced decl: status", "Cannot remove float declarations");
     }
 
-    /* 37a. Ctrl+X rejects cutting a declaration still used outside the cut */
+    /* 37a. Ctrl+X rejects cutting declaration lines */
     {
         repl_reset_state();
         repl_feed_line_public("float n;");
@@ -1065,32 +1094,32 @@ int main() {
                     find_predef_var_idx("n") >= 0);
         ASSERT_INT("cut referenced decl: clipboard count preserved", g_clipboard_count, 1);
         ASSERT_STR("cut referenced decl: clipboard source preserved", g_clipboard[0].source, "  n = 5;");
-        assert_status_contains("cut referenced decl: status", "variable 'n' is in use");
-        assert_status_contains("cut referenced decl: action", "cannot remove");
+        assert_status_contains("cut referenced decl: status", "Cannot remove float declarations");
     }
 
-    /* 37b. Ctrl+X of a declaration and all uses removes the variable cleanly */
+    /* 37b. Ctrl+X rejects blocks that include a declaration and all uses */
     {
         repl_reset_state();
         repl_feed_line_public("float n;");
         repl_feed_line_public("n = 5;");
         ASSERT_TRUE("cut decl block setup: n registered",
                     find_predef_var_idx("n") >= 0);
+        g_clipboard[0] = g_cmds[1];
+        g_clipboard_count = 1;
         g_sel_anchor = 0;
         g_sel_end = 1;
 
         repl_keyboard_func(24, 0, 0);
 
-        ASSERT_INT("cut decl block: buffer empty", g_num_cmds, 0);
-        ASSERT_TRUE("cut decl block: n unregistered",
-                    find_predef_var_idx("n") < 0);
-        ASSERT_INT("cut decl block: clipboard count", g_clipboard_count, 2);
-        ASSERT_INT("cut decl block: first copied type", g_clipboard[0].type, CMD_VAR_DECLARE);
-        ASSERT_INT("cut decl block: second copied type", g_clipboard[1].type, CMD_VAR_ASSIGN);
-        assert_status_contains("cut decl block: status", "Cut 2 lines");
+        ASSERT_INT("cut decl block: cmd count unchanged", g_num_cmds, 2);
+        ASSERT_TRUE("cut decl block: n still registered",
+                    find_predef_var_idx("n") >= 0);
+        ASSERT_INT("cut decl block: clipboard count preserved", g_clipboard_count, 1);
+        ASSERT_STR("cut decl block: clipboard source preserved", g_clipboard[0].source, "  n = 5;");
+        assert_status_contains("cut decl block: status", "Cannot remove float declarations");
     }
 
-    /* 38. Deleting a declaration with all its uses undeclares the variable */
+    /* 38. Deleting a declaration with all its uses is still rejected */
     {
         repl_reset_state();
         repl_feed_line_public("float n;");
@@ -1100,10 +1129,10 @@ int main() {
 
         delete_cmd_range(0, 2, "Deleted");
 
-        ASSERT_INT("delete decl block: buffer empty", g_num_cmds, 0);
-        ASSERT_TRUE("delete decl block: n unregistered",
-                    find_predef_var_idx("n") < 0);
-        assert_status_contains("delete decl block: status", "Deleted 2 lines");
+        ASSERT_INT("delete decl block: cmd count unchanged", g_num_cmds, 2);
+        ASSERT_TRUE("delete decl block: n still registered",
+                    find_predef_var_idx("n") >= 0);
+        assert_status_contains("delete decl block: status", "Cannot remove float declarations");
     }
 
     /* 39. Per-declaration name limit rejects atomically */
