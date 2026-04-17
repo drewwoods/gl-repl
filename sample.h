@@ -41,8 +41,33 @@
 
 #define MAX_ACCUM_SAMPLES 16
 #define ACCUM_STEP_COUNT  5
-#define GRID_THEME_COUNT  10
-#define AXES_THEME_COUNT  6
+/* Grid themes. g_grid_names[] in repl_core.c and the switch in draw_grid()
+ * in scene_render.c must stay in sync with this enum. */
+typedef enum {
+    GRID_THEME_OFF = 0,
+    GRID_THEME_CLASSIC,
+    GRID_THEME_FOG,
+    GRID_THEME_TRON,
+    GRID_THEME_EMBER,
+    GRID_THEME_FAINT,
+    GRID_THEME_FOCUS,
+    GRID_THEME_OCEAN,
+    GRID_THEME_XZRULER,
+    GRID_THEME_PLANES,
+    GRID_THEME_COUNT
+} GridTheme;
+
+/* Axes themes. g_axes_names[] in repl_core.c and the switch in draw_axes()
+ * in scene_render.c must stay in sync with this enum. */
+typedef enum {
+    AXES_THEME_OFF = 0,
+    AXES_THEME_CLASSIC,
+    AXES_THEME_PULSE,
+    AXES_THEME_NEON,
+    AXES_THEME_COMPASS,
+    AXES_THEME_GIZMO,
+    AXES_THEME_COUNT
+} AxesTheme;
 
 /* Default values for runtime-configurable state.
  * Used at both the variable definition site and in repl_reset_state() so the

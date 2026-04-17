@@ -76,9 +76,13 @@ Run all: `make test`
 ## Adding Grid/Axes Themes
 
 Grids and axes are themeable via a `switch` in `scene_render.c`:
-1. Increment `GRID_THEME_COUNT` (or `AXES_THEME_COUNT`) in `sample.h`
-2. Add the name string to `g_grid_names[]` (or `g_axes_names[]`) in `repl_core.c`
-3. Add a new `case N:` in `draw_grid()` (or `draw_axes()`) in `scene_render.c`
+1. Add a new entry to the `GridTheme` (or `AxesTheme`) enum in `sample.h`
+   before the trailing `_COUNT` sentinel
+2. Add the name string at that enum's index in `g_grid_names[]`
+   (or `g_axes_names[]`) in `repl_core.c` — both arrays use designated
+   initializers keyed on the enum, so order is validated at compile time
+3. Add a new `case GRID_THEME_XXX:` in `draw_grid()` (or `draw_axes()`)
+   in `scene_render.c`
 4. The theme cycles via F3 (grid) / F4 (axes) in `repl_editor.c`
 
 ## Adding Header Buttons
