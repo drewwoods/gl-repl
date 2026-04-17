@@ -2614,10 +2614,12 @@ void render_3d_scene(void) {
          *     pre-cursor transforms (which wrap this sub-expression) don't
          *     move the guide.
          *
-         *   Frame (1): render at a scene-world anchor derived from pre-cursor
-         *     translations only (rotations ignored), so the guide visually
-         *     tracks "where the live frame currently is" — matches the
-         *     rendered output for code like T(2,0,0); func0(); T(-4,0,0);. */
+         *   Frame (1): render at a scene-world anchor taken from the
+         *     translation components of the full pre-cursor modelview
+         *     (after applying all pre-cursor transforms, including
+         *     rotations/scales), so the guide visually tracks "where the
+         *     live frame currently is" — matches the rendered output for
+         *     code like T(2,0,0); func0(); T(-4,0,0);. */
         if (tg_want && i == tg_first_cursor_flat) {
             /* Read args from the flat cmd, not the source cmd — when the
              * command uses variables (e.g. glRotatef(3*t, 0,1,0)), flatten
