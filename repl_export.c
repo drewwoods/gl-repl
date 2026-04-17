@@ -413,54 +413,6 @@ void update_render_state_strings(void) {
              g_line_smooth_enabled ? "Enable" : "Disable");
 }
 
-/* Legacy: invert the old gluLookAt-based forward transform so pre-refactor
- * output.c files keep loading. Recovers (rx, ry, dist, tx, ty, tz) from eye
- * and center, assuming up = (0, 1, 0). Returns 1 on success. */
-static int legacy_lookat_to_cam_state(float ex, float ey, float ez,
-                                      float cx, float cy, float cz) {
-    float vx = ex - cx, vy = ey - cy, vz = ez - cz;
-    float d = sqrtf(vx * vx + vy * vy + vz * vz);
-    if (d < 1e-6f) return 0;
-
-    float srx = vy / d;
-    if (srx >  1.0f) srx =  1.0f;
-    if (srx < -1.0f) srx = -1.0f;
-    float rx = asinf(srx);
-
-    float ry = atan2f(vx, vz);
-
-    g_cam_rx   = rx * 180.0f / (float)M_PI;
-    g_cam_ry   = ry * 180.0f / (float)M_PI;
-    g_cam_dist = d;
-    g_cam_tx   = cx;
-    g_cam_ty   = cy;
-    g_cam_tz   = cz;
-    return 1;
-}
-
-/* Extracts the first 6 floats (eye xyz + center xyz) from text containing
- * a gluLookAt(...) call and applies them to the camera state via the
- * legacy inversion. Returns 1 if parsed+applied, 0 otherwise. */
-int import_parse_lookat_block(const char *text) {
-    const char *p = strstr(text, "gluLookAt");
-    if (!p) return 0;
-    p = strchr(p, '(');
-    if (!p) return 0;
-    p++;
-
-    float v[6];
-    for (int i = 0; i < 6; i++) {
-        while (*p && (isspace((unsigned char)*p) || *p == ',')) p++;
-        if (!*p) return 0;
-        char *end = NULL;
-        v[i] = strtof(p, &end);
-        if (end == p) return 0;
-        p = end;
-    }
-
-    return legacy_lookat_to_cam_state(v[0], v[1], v[2], v[3], v[4], v[5]);
-}
-
 /* Skip whitespace, commas, and trailing 'f' / 'F' float suffixes so strtof
  * can march through a call like `glTranslatef(0.0f, 0.0f, -5.0f);`. */
 static const char *cam_line_skip_sep(const char *p) {
@@ -2076,10 +2028,6 @@ int load_from_file(const char *filename) {
     int loaded = 0;
     int warnings = 0;
 
-    char lookat_buf[512];
-    int  lookat_active = 0;
-    int  lookat_len = 0;
-
     import_cam_parser_reset();
 
     while (fgets(line, sizeof(line), f)) {
@@ -2088,28 +2036,6 @@ int load_from_file(const char *filename) {
             line[--len] = '\0';
         const char *p = line;
         while (*p && isspace((unsigned char)*p)) p++;
-
-        /* Legacy gluLookAt format: accumulate 3 lines then invert */
-        if (lookat_active || strstr(p, "gluLookAt") != NULL) {
-            if (!lookat_active) {
-                lookat_active = 1;
-                lookat_len = 0;
-                lookat_buf[0] = '\0';
-            }
-            int add = (int)strlen(p);
-            if (lookat_len + add + 2 < (int)sizeof(lookat_buf)) {
-                memcpy(lookat_buf + lookat_len, p, (size_t)add);
-                lookat_len += add;
-                lookat_buf[lookat_len++] = ' ';
-                lookat_buf[lookat_len] = '\0';
-            }
-            if (strchr(p, ';')) {
-                import_parse_lookat_block(lookat_buf);
-                lookat_active = 0;
-                lookat_len = 0;
-            }
-            continue;
-        }
 
         if (!in_snippet && import_parse_export_angle_init(p))
             continue;

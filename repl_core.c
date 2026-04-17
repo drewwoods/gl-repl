@@ -1454,12 +1454,6 @@ void accept_autocomplete(void) {
 
 #define MAX_LOOP_DEPTH  4
 
-/* Forward declarations */
-static int parse_command_with_vars(const char *line, GLCmd *cmd,
-                                   ExprVar *vars, int num_vars);
-static unsigned int line_func_scope_mask(int line);
-static void get_for_var_name(const GLCmd *cmd, char *var, int var_sz);
-
 /* ========================================================================= */
 /* Command Definitions (Table-Driven)                                         */
 /* ========================================================================= */

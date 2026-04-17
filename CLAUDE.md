@@ -242,9 +242,10 @@ Key details:
 `repl_export.c` handles bidirectional text format:
 - **Export** (`save_output()`): writes a standalone C file with header
   comments embedding workspace state (`@var name=value`,
-  `@cfg setting=value`), camera position as `gluLookAt()`, predefined
-  vars as globals, REPL functions as C functions, and `display()` body
-  containing the user's geometry commands
+  `@cfg setting=value`), camera state as the raw `glTranslatef`/`glRotatef`
+  sequence the REPL uses internally, predefined vars as globals, REPL
+  functions as C functions, and `display()` body containing the user's
+  geometry commands
 - **Import** (`load_from_file()`): line-by-line scan parses camera
   state, detects function definitions (converts C syntax back to REPL),
   and feeds geometry lines through `feed_line()`. The text format is
