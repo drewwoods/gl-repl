@@ -35,6 +35,21 @@ static void declare_test_vars(void) {
     declare_predef_var("n", err, sizeof(err));
 }
 
+static void set_input_text(const char *text) {
+    strcpy(g_input, text);
+    g_input_len = (int)strlen(g_input);
+    g_cursor_pos = g_input_len;
+}
+
+static int has_insert_match(const char *text) {
+    for (int i = 0; i < g_ac_count; i++) {
+        if (g_ac_insert_matches[i] &&
+            strcmp(g_ac_insert_matches[i], text) == 0)
+            return 1;
+    }
+    return 0;
+}
+
 int main() {
     init_predef_vars();
     printf("--- repl_autocomplete tests ---\n");
@@ -42,9 +57,7 @@ int main() {
     /* 1. Basic function completion */
     {
         repl_reset_state(); declare_test_vars();
-        strcpy(g_input, "glVer");
-        g_input_len = (int)strlen(g_input);
-        g_cursor_pos = g_input_len;
+        set_input_text("glVer");
         
         update_autocomplete();
         ASSERT_TRUE("ac_count > 0", g_ac_count > 0);
@@ -59,9 +72,7 @@ int main() {
     /* 2. Enum completion - glBegin */
     {
         repl_reset_state(); declare_test_vars();
-        strcpy(g_input, "glBegin(GL_TRI");
-        g_input_len = (int)strlen(g_input);
-        g_cursor_pos = g_input_len;
+        set_input_text("glBegin(GL_TRI");
         
         update_autocomplete();
         ASSERT_TRUE("ac_count > 0", g_ac_count > 0);
@@ -75,9 +86,7 @@ int main() {
     /* 3. Multi-argument enum completion - glColorMaterial */
     {
         repl_reset_state(); declare_test_vars();
-        strcpy(g_input, "glColorMaterial(GL_FR");
-        g_input_len = (int)strlen(g_input);
-        g_cursor_pos = g_input_len;
+        set_input_text("glColorMaterial(GL_FR");
         
         update_autocomplete();
         ASSERT_STR("first match arg1", g_ac_insert_matches[0], "GL_FRONT");
@@ -85,9 +94,7 @@ int main() {
         accept_autocomplete();
         ASSERT_STR("input after arg1", g_input, "glColorMaterial(GL_FRONT, ");
         
-        strcat(g_input, "GL_AMB");
-        g_input_len = (int)strlen(g_input);
-        g_cursor_pos = g_input_len;
+        set_input_text("glColorMaterial(GL_FRONT, GL_AMB");
         update_autocomplete();
         ASSERT_STR("first match arg2", g_ac_insert_matches[0], "GL_AMBIENT");
         ASSERT_STR("ghost text arg2", g_ac_ghost, "IENT)");
@@ -98,9 +105,7 @@ int main() {
     /* 4. glPointParameterfv custom completion */
     {
         repl_reset_state(); declare_test_vars();
-        strcpy(g_input, "glPointParameterfv(GL_POINT_DIST");
-        g_input_len = (int)strlen(g_input);
-        g_cursor_pos = g_input_len;
+        set_input_text("glPointParameterfv(GL_POINT_DIST");
         
         update_autocomplete();
         ASSERT_STR("match", g_ac_insert_matches[0], "GL_POINT_DISTANCE_ATTENUATION");
@@ -115,18 +120,51 @@ int main() {
         repl_feed_line_public("func0(radius, height) {");
         repl_feed_line_public("}");
         
-        strcpy(g_input, "func0(");
-        g_input_len = (int)strlen(g_input);
-        g_cursor_pos = g_input_len;
+        set_input_text("func0(");
         
         update_autocomplete();
         ASSERT_STR("user func hint", g_ac_hint, "radius, height)");
         
-        strcat(g_input, "10, ");
-        g_input_len = (int)strlen(g_input);
-        g_cursor_pos = g_input_len;
+        set_input_text("func0(10, ");
         update_autocomplete();
         ASSERT_STR("user func hint arg2", g_ac_hint, "height)");
+    }
+
+    /* 6. Statement keyword completion - float declarations */
+    {
+        repl_reset_state(); declare_test_vars();
+        set_input_text("flo");
+
+        update_autocomplete();
+        ASSERT_TRUE("float completion present", has_insert_match("float "));
+        ASSERT_STR("float match", g_ac_insert_matches[0], "float ");
+        ASSERT_STR("float ghost", g_ac_ghost, "at ");
+
+        accept_autocomplete();
+        ASSERT_STR("float input after accept", g_input, "float ");
+    }
+
+    /* 7. Supported funcN completions cover func0..func9 */
+    {
+        for (int fn = 0; fn <= 9; fn++) {
+            char prefix[16];
+            char def_text[16];
+            char call_text[16];
+            char label[64];
+
+            repl_reset_state(); declare_test_vars();
+            snprintf(prefix, sizeof(prefix), "func%d", fn);
+            snprintf(def_text, sizeof(def_text), "func%d {", fn);
+            snprintf(call_text, sizeof(call_text), "func%d()", fn);
+            set_input_text(prefix);
+
+            update_autocomplete();
+
+            snprintf(label, sizeof(label), "func%d def completion", fn);
+            ASSERT_TRUE(label, has_insert_match(def_text));
+            snprintf(label, sizeof(label), "func%d call completion", fn);
+            ASSERT_TRUE(label, has_insert_match(call_text));
+        }
     }
 
     printf("\n%d / %d tests passed\n", g_pass, g_run);
