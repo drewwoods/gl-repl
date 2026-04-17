@@ -494,6 +494,16 @@ int try_commit_float_decl(void) {
         return 1;
     }
 
+    /* Detect overwrite-in-place (editing an existing CMD_VAR_DECLARE) early
+     * so validation can exempt the line's own names from the "already
+     * declared" check. Without this, re-committing `float tmp;` after
+     * editing — even unchanged — reports "'tmp' already declared". */
+    int fpos = g_inserting ? g_edit_line :
+               (g_edit_line < g_num_cmds ? g_edit_line : g_num_cmds);
+    int overwriting_decl = (!g_inserting && fpos < g_num_cmds &&
+                            g_cmds[fpos].type == CMD_VAR_DECLARE);
+    const GLCmd *old_decl = overwriting_decl ? &g_cmds[fpos] : NULL;
+
     /* Validate all names atomically before registering any */
     for (int i = 0; i < var_count; i++) {
         /* Reject duplicates within the same declaration (e.g. float a, a;) */
@@ -505,12 +515,25 @@ int try_commit_float_decl(void) {
                 return 1;
             }
         }
-        /* Reject re-declaring an already-declared variable */
+        /* Reject re-declaring an already-declared variable — but exempt
+         * names carried over from the decl we're overwriting, since those
+         * will be undeclared before the new registration runs. */
         if (find_predef_var_idx(names[i]) >= 0) {
-            char buf[128];
-            snprintf(buf, sizeof(buf), "'%s' is already declared", names[i]);
-            set_status(buf);
-            return 1;
+            int in_old_decl = 0;
+            if (old_decl) {
+                for (int d = 0; d < old_decl->var_decl_count; d++) {
+                    if (strcmp(old_decl->var_names[d], names[i]) == 0) {
+                        in_old_decl = 1;
+                        break;
+                    }
+                }
+            }
+            if (!in_old_decl) {
+                char buf[128];
+                snprintf(buf, sizeof(buf), "'%s' is already declared", names[i]);
+                set_status(buf);
+                return 1;
+            }
         }
         if (is_reserved_ident(names[i])) {
             char buf[128];
@@ -526,9 +549,11 @@ int try_commit_float_decl(void) {
         }
     }
 
-    /* Count how many are genuinely new (all of them, since we reject duplicates above) */
-    int new_count = var_count;
-    if (g_num_predef_vars + new_count > MAX_PREDEF_VARS) {
+    /* Capacity check: in overwrite mode the old decl's slots will be freed
+     * before the new ones are registered, so the net delta is
+     * new_count - old_count. */
+    int old_count = old_decl ? old_decl->var_decl_count : 0;
+    if (g_num_predef_vars + var_count - old_count > MAX_PREDEF_VARS) {
         char buf[128];
         snprintf(buf, sizeof(buf), "variable table full (max %d)", MAX_PREDEF_VARS);
         set_status(buf);
@@ -545,16 +570,6 @@ int try_commit_float_decl(void) {
         strncpy(cmd.var_names[i], names[i], 15);
 
     {
-        int fpos = g_inserting ? g_edit_line :
-                   (g_edit_line < g_num_cmds ? g_edit_line : g_num_cmds);
-
-        /* Declarations live at the top of the code, above any non-decl
-         * commands, so every reference is guaranteed to follow its
-         * declaration. Editing an existing CMD_VAR_DECLARE line keeps
-         * the overwrite-in-place path; everything else inserts at the
-         * first non-decl index. */
-        int overwriting_decl = (!g_inserting && fpos < g_num_cmds &&
-                                g_cmds[fpos].type == CMD_VAR_DECLARE);
         int decl_pos = 0;
         while (decl_pos < g_num_cmds &&
                g_cmds[decl_pos].type == CMD_VAR_DECLARE)
@@ -575,10 +590,17 @@ int try_commit_float_decl(void) {
         }
         snprintf(cmd.source + off, sizeof(cmd.source) - off, ";");
 
-        /* Check overwrite feasibility BEFORE registering new names */
+        /* Check overwrite feasibility BEFORE registering new names. Only
+         * names being REMOVED (present in old decl, absent from new) need
+         * the "in use" check — names being kept stay valid throughout. */
         if (overwriting_decl) {
             for (int d = 0; d < g_cmds[fpos].var_decl_count; d++) {
                 const char *nm = g_cmds[fpos].var_names[d];
+                int kept = 0;
+                for (int k = 0; k < var_count; k++) {
+                    if (strcmp(names[k], nm) == 0) { kept = 1; break; }
+                }
+                if (kept) continue;
                 for (int j = 0; j < g_num_cmds; j++) {
                     if (j == fpos) continue;
                     if (source_uses_ident(g_cmds[j].source, nm)) {
@@ -592,17 +614,8 @@ int try_commit_float_decl(void) {
             }
         }
 
-        /* Register new names (safe — overwrite check passed) */
-        for (int i = 0; i < var_count; i++) {
-            declare_predef_var(names[i], NULL, 0);
-            if (has_init[i]) {
-                int idx = find_predef_var_idx(names[i]);
-                if (idx >= 0)
-                    g_predef_vars[idx].value = init_vals[i];
-            }
-        }
-
-        /* Undeclare old names when overwriting a CMD_VAR_DECLARE */
+        /* Undeclare old names first so shared names in the new decl don't
+         * collide with existing registrations. */
         if (overwriting_decl) {
             for (int d = 0; d < g_cmds[fpos].var_decl_count; d++) {
                 const char *nm = g_cmds[fpos].var_names[d];
@@ -613,6 +626,16 @@ int try_commit_float_decl(void) {
                     if (g_cmds[j].type == CMD_VAR_ASSIGN && g_cmds[j].num_args > slot)
                         g_cmds[j].num_args--;
                 }
+            }
+        }
+
+        /* Register new names (safe — overwrite check passed, capacity verified) */
+        for (int i = 0; i < var_count; i++) {
+            declare_predef_var(names[i], NULL, 0);
+            if (has_init[i]) {
+                int idx = find_predef_var_idx(names[i]);
+                if (idx >= 0)
+                    g_predef_vars[idx].value = init_vals[i];
             }
         }
 

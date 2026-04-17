@@ -622,6 +622,96 @@ int main() {
                    g_cmds[2].type, CMD_END);
     }
 
+    /* 34. Overwriting a multi-name decl that shares a name with the new
+     * decl must not fail with "already declared". Regression: previously
+     * `declare_predef_var` ran before `undeclare_predef_var`, so shared
+     * names (still registered from the old decl) collided. */
+    {
+        repl_reset_state();
+        repl_feed_line_public("float a, b;");
+        ASSERT_INT("overwrite shared: baseline cmd count", g_num_cmds, 1);
+        ASSERT_TRUE("overwrite shared: a registered",
+                    find_predef_var_idx("a") >= 0);
+        ASSERT_TRUE("overwrite shared: b registered",
+                    find_predef_var_idx("b") >= 0);
+
+        extern int try_commit_float_decl(void);
+        strncpy(g_input, "float a, c", MAX_INPUT_LEN - 1);
+        g_input_len = (int)strlen(g_input);
+        g_cursor_pos = g_input_len;
+        g_edit_line = 0;
+        g_inserting = 0;
+
+        int result = try_commit_float_decl();
+        ASSERT_INT("overwrite shared: accepted", result, 1);
+        ASSERT_INT("overwrite shared: still 1 cmd", g_num_cmds, 1);
+        ASSERT_INT("overwrite shared: var_decl_count", g_cmds[0].var_decl_count, 2);
+        ASSERT_STR("overwrite shared: slot 0 is a", g_cmds[0].var_names[0], "a");
+        ASSERT_STR("overwrite shared: slot 1 is c", g_cmds[0].var_names[1], "c");
+        ASSERT_TRUE("overwrite shared: a still registered",
+                    find_predef_var_idx("a") >= 0);
+        ASSERT_TRUE("overwrite shared: c registered",
+                    find_predef_var_idx("c") >= 0);
+        ASSERT_TRUE("overwrite shared: b unregistered",
+                    find_predef_var_idx("b") < 0);
+    }
+
+    /* 35. Overwriting `float n, b;` → `float n;` with `n` referenced
+     * elsewhere must succeed (only `b` is being dropped, and `b` is not
+     * referenced). Regression: previously the check iterated ALL old
+     * names and errored on `n is in use` even though `n` is being kept. */
+    {
+        repl_reset_state();
+        repl_feed_line_public("float n, b;");
+        repl_feed_line_public("n = 5;");
+        ASSERT_INT("drop b: baseline cmd count", g_num_cmds, 2);
+
+        extern int try_commit_float_decl(void);
+        strncpy(g_input, "float n", MAX_INPUT_LEN - 1);
+        g_input_len = (int)strlen(g_input);
+        g_cursor_pos = g_input_len;
+        g_edit_line = 0;
+        g_inserting = 0;
+
+        int result = try_commit_float_decl();
+        ASSERT_INT("drop b: accepted", result, 1);
+        ASSERT_INT("drop b: var_decl_count now 1", g_cmds[0].var_decl_count, 1);
+        ASSERT_STR("drop b: slot 0 is n", g_cmds[0].var_names[0], "n");
+        ASSERT_TRUE("drop b: n still registered",
+                    find_predef_var_idx("n") >= 0);
+        ASSERT_TRUE("drop b: b unregistered",
+                    find_predef_var_idx("b") < 0);
+    }
+
+    /* 36. Attempting to drop a name that IS referenced elsewhere must
+     * fail, and the error must name the dropped variable (not a
+     * different name in the same decl). */
+    {
+        repl_reset_state();
+        repl_feed_line_public("float n, b;");
+        repl_feed_line_public("b = 7;");
+        ASSERT_INT("drop referenced b: baseline", g_num_cmds, 2);
+
+        extern int try_commit_float_decl(void);
+        strncpy(g_input, "float n", MAX_INPUT_LEN - 1);
+        g_input_len = (int)strlen(g_input);
+        g_cursor_pos = g_input_len;
+        g_edit_line = 0;
+        g_inserting = 0;
+
+        int result = try_commit_float_decl();
+        ASSERT_INT("drop referenced b: handler consumed input", result, 1);
+        /* Overwrite must have been rejected: decl still has both names */
+        ASSERT_INT("drop referenced b: decl unchanged",
+                   g_cmds[0].var_decl_count, 2);
+        ASSERT_STR("drop referenced b: b preserved",
+                   g_cmds[0].var_names[1], "b");
+        ASSERT_TRUE("drop referenced b: status mentions 'b'",
+                    strstr(g_status, "'b'") != NULL);
+        ASSERT_TRUE("drop referenced b: status does not mention 'n'",
+                    strstr(g_status, "'n'") == NULL);
+    }
+
     printf("\n%d / %d tests passed\n", g_pass, g_run);
     return (g_pass == g_run) ? 0 : 1;
 }
