@@ -180,17 +180,29 @@ The core data flow is **source commands → flat commands → GL calls**:
 
 ### Commit Dispatch Sites
 
-The `try_commit_*` handler chain is duplicated at 5 sites in
-`repl_editor.c`. When adding or reordering handlers, ALL sites must
-be updated consistently:
-1. **`;` key handler** — `key == ';'` block in `keyboard_func()`
-2. **Enter key, insert mode, with visible vars** — `g_inserting` +
-   `dnv > 0` path
-3. **Enter key, insert mode, no visible vars** — `g_inserting` +
-   `dnv == 0` path
-4. **Enter key, overwrite mode** — `!g_inserting` path with the
-   for/func/if special-case checks first
-5. **`feed_line()`** — the programmatic entry point
+The `try_commit_*` handler chain is consolidated into four helpers in
+`repl_editor.c` (around line 1385):
+- `try_commit_var_statements()` — float decl, then assign
+- `try_commit_block_structs()` — close-brace, for, func, if
+- `try_commit_any()` — both groups in canonical order
+- `try_commit_var_statements_then_insert()` — var variant used by the
+  overwrite-mode Enter key, which must flip to insert mode on success
+
+Dispatch sites then call these helpers instead of open-coding the chain:
+1. **`;` key handler** — `key == ';'` block in `keyboard_func()` calls
+   `try_commit_any()`
+2. **Enter key, insert mode** — calls `try_commit_var_statements()` and
+   `try_commit_block_structs()` to maintain the insert-mode behavior
+3. **Enter key, overwrite mode** — uses
+   `try_commit_var_statements_then_insert()` plus
+   `try_commit_block_structs()`
+4. **`feed_line()`** — the programmatic entry point calls
+   `try_commit_any()`
+
+When adding a new handler, add it to the right helper rather than all
+call sites. Ordering inside each helper is load-bearing:
+`try_commit_float_decl` MUST run before `try_assign_variable`, otherwise
+`float x;` is misread as an assignment to an identifier named "float".
 
 ### Editing Existing Lines
 
@@ -219,12 +231,10 @@ Key details:
   `flatten_range()` — registration into `g_predef_vars[]` happens at
   commit time via `declare_predef_var()`
 - `GLCmd` fields: `var_names[MAX_NAMES_PER_DECL][16]`, `var_decl_count`
-- The function has overwrite logic for editing an existing
-  `CMD_VAR_DECLARE` line, but the "already declared" validation
-  currently fires BEFORE the overwrite check — this means editing
-  `float tmp;` back to `float tmp;` (or changing its value) fails
-  with "'tmp' already declared". The fix is to detect same-line
-  overwrites before the duplicate check.
+- Editing an existing `CMD_VAR_DECLARE` line works: the overwrite
+  detection runs before the "already declared" validation loop, and
+  names carried over from the old decl are exempted from the duplicate
+  check (they get undeclared before the new registration runs).
 - `delete_cmd_range()` guards against deleting a declaration whose
   variable is still referenced elsewhere (uses `source_uses_ident()`)
 - C export writes `// @declare name` markers; import via

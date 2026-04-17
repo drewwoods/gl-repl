@@ -1,5 +1,30 @@
+/*
+ * repl_search.c — Case-insensitive incremental search over code-panel rows.
+ *
+ * A "row" is one visible line in the code panel. It usually maps 1:1 to a
+ * GLCmd in g_cmds[], except while inserting: an extra synthetic row holds
+ * the live g_input at g_edit_line, and real g_cmds[] entries at or beyond
+ * that index are shifted down by one row.
+ *
+ *   row_count = g_num_cmds         (overwrite mode)
+ *             = g_num_cmds + 1     (insert mode, or past-end edit line)
+ *
+ * A "hit" is (row, char_pos); an "ordinal" is the 1-based hit number among
+ * all matches (shown to the user as "3 / 12"). Public helpers preserve
+ * ordinals across navigation by remembering the per-row occurrence index
+ * and remapping it after a navigation shifts the row mapping.
+ *
+ * The module owns g_search_* state; outside code only reads it for
+ * rendering (ui_panels.c) and clears via search_clear_all().
+ */
 #include "sample.h"
 #include "repl_core_internal.h"
+
+/* ASCII control keys consumed by the search overlay. */
+#define SEARCH_KEY_CTRL_F     6   /* open search */
+#define SEARCH_KEY_ESC       27   /* close / cancel */
+#define SEARCH_KEY_BACKSPACE  8   /* some platforms */
+#define SEARCH_KEY_DELETE   127   /* macOS terminal backspace */
 
 int  g_search_active = 0;
 char g_search_query[MAX_INPUT_LEN] = "";
@@ -308,11 +333,33 @@ static int search_find_backward(int start_row, int start_char,
     return 0;
 }
 
+/* Move cursor to the row holding (row, char_pos), then re-resolve the hit
+ * in terms of the row's n-th occurrence. Navigating may shift rows (e.g.
+ * exiting insert mode collapses the synthetic row), so we remember the
+ * occurrence ordinal and look up its new char position afterwards. */
+static void search_apply_hit(int row, int char_pos) {
+    int row_occurrence = search_row_occurrence_index(row, char_pos);
+    int nav_line = search_row_to_nav_line(row);
+    if (nav_line >= 0) {
+        g_scroll_follow_cursor = 1;
+        navigate_to_line(nav_line);
+        row = g_edit_line;
+        if (row_occurrence >= 0) {
+            int remapped_char = search_char_for_row_occurrence(row, row_occurrence);
+            if (remapped_char >= 0)
+                char_pos = remapped_char;
+        }
+    }
+    search_store_hit(row, char_pos);
+}
+
+/* Re-seed the search after the query text changed. Always anchors to
+ * g_edit_line rather than the previous hit, so typing another character
+ * jumps to the nearest match from the cursor instead of chaining from
+ * wherever the last match landed. */
 static void search_refresh_query(void) {
     int row;
     int char_pos;
-    int row_occurrence;
-    int nav_line;
 
     if (!g_search_active)
         return;
@@ -329,47 +376,29 @@ static void search_refresh_query(void) {
         search_clear_matches();
         return;
     }
-
-    row_occurrence = search_row_occurrence_index(row, char_pos);
-    nav_line = search_row_to_nav_line(row);
-    if (nav_line >= 0) {
-        g_scroll_follow_cursor = 1;
-        navigate_to_line(nav_line);
-        row = g_edit_line;
-        if (row_occurrence >= 0) {
-            int remapped_char = search_char_for_row_occurrence(row, row_occurrence);
-            if (remapped_char >= 0)
-                char_pos = remapped_char;
-        }
-    }
-    search_store_hit(row, char_pos);
+    search_apply_hit(row, char_pos);
 }
 
+/* Jump to the next (+1) or previous (-1) match, wrapping at document ends.
+ * If a hit is already active, we step one char past/before it; otherwise we
+ * anchor the scan at g_edit_line. */
 static void search_navigate(int direction) {
     int row;
     int char_pos;
-    int row_occurrence;
     int found;
-    int nav_line;
+    int have_hit = (g_search_hit_line >= 0 && g_search_hit_char >= 0);
 
     if (!g_search_active || g_search_query_len <= 0)
         return;
 
     if (direction < 0) {
-        if (g_search_hit_line >= 0 && g_search_hit_char >= 0)
-            found = search_find_backward(g_search_hit_line,
-                                         g_search_hit_char - 1,
-                                         &row, &char_pos);
-        else
-            found = search_find_backward(g_edit_line, MAX_INPUT_LEN,
-                                         &row, &char_pos);
+        int start_row  = have_hit ? g_search_hit_line      : g_edit_line;
+        int start_char = have_hit ? g_search_hit_char - 1  : MAX_INPUT_LEN;
+        found = search_find_backward(start_row, start_char, &row, &char_pos);
     } else {
-        if (g_search_hit_line >= 0 && g_search_hit_char >= 0)
-            found = search_find_forward(g_search_hit_line,
-                                        g_search_hit_char + 1,
-                                        &row, &char_pos);
-        else
-            found = search_find_forward(g_edit_line, 0, &row, &char_pos);
+        int start_row  = have_hit ? g_search_hit_line      : g_edit_line;
+        int start_char = have_hit ? g_search_hit_char + 1  : 0;
+        found = search_find_forward(start_row, start_char, &row, &char_pos);
     }
 
     if (!found) {
@@ -377,19 +406,7 @@ static void search_navigate(int direction) {
         return;
     }
 
-    row_occurrence = search_row_occurrence_index(row, char_pos);
-    nav_line = search_row_to_nav_line(row);
-    if (nav_line >= 0) {
-        g_scroll_follow_cursor = 1;
-        navigate_to_line(nav_line);
-        row = g_edit_line;
-        if (row_occurrence >= 0) {
-            int remapped_char = search_char_for_row_occurrence(row, row_occurrence);
-            if (remapped_char >= 0)
-                char_pos = remapped_char;
-        }
-    }
-    search_store_hit(row, char_pos);
+    search_apply_hit(row, char_pos);
 }
 
 static void search_open(void) {
@@ -406,14 +423,14 @@ static void search_open(void) {
 }
 
 int handle_search_key(unsigned char key) {
-    if (key == 6) {
+    if (key == SEARCH_KEY_CTRL_F) {
         search_open();
         return 1;
     }
     if (!g_search_active)
         return 0;
 
-    if (key == 27) {
+    if (key == SEARCH_KEY_ESC) {
         search_clear_all();
         return 1;
     }
@@ -423,7 +440,7 @@ int handle_search_key(unsigned char key) {
         return 1;
     }
 
-    if (key == 8 || key == 127) {
+    if (key == SEARCH_KEY_BACKSPACE || key == SEARCH_KEY_DELETE) {
         if (g_search_cursor_pos > 0 && g_search_query_len > 0) {
             memmove(&g_search_query[g_search_cursor_pos - 1],
                     &g_search_query[g_search_cursor_pos],

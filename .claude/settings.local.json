@@ -27,7 +27,8 @@
       "Bash(./test_repl_autocomplete)",
       "Bash(./test_repl_core_extra)",
       "Bash(git restore *)",
-      "Bash(./test_repl_core_examples *)"
+      "Bash(./test_repl_core_examples *)",
+      "Bash(./test_repl_core_search_extra)"
     ]
   }
 }
