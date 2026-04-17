@@ -1,16 +1,27 @@
 CC = gcc
 PROJECT_ROOT := $(abspath ../../..)
 REPO_INCLUDE := $(PROJECT_ROOT)/include
+LOCAL_INCLUDE := $(abspath include)
 
 UNAME_S := $(shell uname -s)
+
+ifeq ($(USE_GL_STUBS),1)
+GL_HEADER_CFLAGS = \
+	-DOPENGL_VIBE_USE_GL_STUBS \
+	-I$(LOCAL_INCLUDE)
+else
+GL_HEADER_CFLAGS = \
+	-I/usr/include \
+	-I/opt/homebrew/include \
+	-I$(HOME)/src/freeglut-fork/include \
+	-I$(LOCAL_INCLUDE)
+endif
 
 COMMON_CFLAGS = \
 	-Wall -ggdb -g3 \
 	-Wno-deprecated-declarations -Wfloat-conversion \
 	-std=c2x -DGL_SILENCE_DEPRECATION \
-	-I/usr/include \
-	-I/opt/homebrew/include \
-	-I$(HOME)/src/freeglut-fork/include \
+	$(GL_HEADER_CFLAGS) \
 	-I$(REPO_INCLUDE)
 
 RELEASE_CFLAGS = \
@@ -51,6 +62,10 @@ GL_LDFLAGS = \
 	-lglut -lm -lpthread \
 	-framework IOKit -framework Cocoa -framework OpenGL \
 	-framework CoreAudio -framework CoreFoundation -framework AudioToolbox
+
+GL_STUB_LDFLAGS = \
+	-lm -lpthread \
+	-framework CoreAudio -framework CoreFoundation -framework AudioToolbox
 else
 # Linux: system freeglut + GL/GLU. miniaudio dlopen()s pulseaudio/alsa
 # at runtime, so we only need -ldl (plus the existing -lpthread -lm).
@@ -59,6 +74,14 @@ GLUT_GL_LDFLAGS = \
 
 GL_LDFLAGS = \
 	-lglut -lGL -lGLU -lm -lpthread -ldl
+
+GL_STUB_LDFLAGS = \
+	-lm -lpthread -ldl
+endif
+
+ifeq ($(USE_GL_STUBS),1)
+GLUT_GL_LDFLAGS = $(GL_STUB_LDFLAGS)
+GL_LDFLAGS = $(GL_STUB_LDFLAGS)
 endif
 
 ifeq ($(BUILD),coverage)
@@ -67,7 +90,7 @@ else
 COVERAGE_LDFLAGS =
 endif
 
-.PHONY: all clean test test-detailed test_detailed lines debug coverage glut help
+.PHONY: all clean test test-detailed test_detailed test-stubs lines debug coverage glut help
 
 define run_named_test
 	@{ \
@@ -93,7 +116,7 @@ SRCS = sample.c repl_core.c repl_search.c repl_export.c repl_editor.c repl_examp
 HDRS = sample.h repl_core.h repl_core_internal.h repl_examples.h scene_render.h ui_panels.h repl_eval.h cmd_format.h repl_audio.h profile_panel.h
 CORE_TEST_SRCS = repl_core.c repl_search.c repl_export.c repl_editor.c repl_examples.c scene_render.c ui_panels.c repl_eval.c cmd_format.c repl_audio.c profile_panel.c
 
-OBJDIR = build/$(BUILD)
+OBJDIR = build/$(BUILD)$(if $(filter 1,$(USE_GL_STUBS)),-gl-stubs,)
 OBJ_CFLAGS = $(BUILD_CFLAGS) $(CFLAGS)
 DEPFLAGS = -MMD -MP
 
@@ -217,6 +240,9 @@ test-detailed: test_eval test_format test_repl_core_parse test_repl_core_format 
 
 test_detailed: test-detailed ## Alias for test-detailed.
 
+test-stubs: ## Build and run tests using local GL/GLU/GLUT stubs, without GL libs.
+	$(MAKE) test USE_GL_STUBS=1
+
 # count lines: $(SRCS) $(HDRS)
 lines: $(SRCS) $(HDRS) ## Count lines across source and header files.
 	@echo "Counting lines of code in source and header files..."
@@ -294,6 +320,7 @@ help: ## Show available targets and build-mode notes.
 	@printf "  default:       \$$(common_flags) %s \n" "$(filter-out $(COMMON_CFLAGS),$(RELEASE_CFLAGS))"
 	@printf "  debug:         \$$(common_flags) %s \n" "$(filter-out $(COMMON_CFLAGS),$(DEBUG_CFLAGS))"
 	@printf "  coverage:      \$$(common_flags) %s \n\n" "$(filter-out $(COMMON_CFLAGS),$(COVERAGE_CFLAGS))"
+	@printf "GL stubs:        make test-stubs, or add USE_GL_STUBS=1 to any target.\n"
 	@printf "User CFLAGS are appended to the selected build mode.\n\n"
 	@awk 'BEGIN {FS = ":.*## "}; /^[a-zA-Z0-9_.-]+:.*## / {printf "  %-24s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
 
