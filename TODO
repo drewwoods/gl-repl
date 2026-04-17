@@ -1,6 +1,7 @@
 TODO:
    - ability to switch between 2D orth where use glVertex2d
    - when glEnable(GL_LIGHTING) is commented I expected the lighting to be disabled, since that is the default state. 
+   - vertex points dont function correctly in the exported code when lighting is not enabled
    - address the limitation of only 8 scope visible globals
 
 
