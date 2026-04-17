@@ -34,6 +34,11 @@ static const char *ansi_reset(void) {
     return g_use_color ? ANSI_RESET : "";
 }
 
+static int env_truthy(const char *name) {
+    const char *value = getenv(name);
+    return value && value[0] && strcmp(value, "0") != 0;
+}
+
 static void assert_true_impl(const char *label, int cond) {
     g_run++;
     if (cond) {
@@ -458,7 +463,10 @@ int main(int argc, char **argv) {
     const char *verbose_env = getenv("REPL_EXPORT_VERBOSE");
 
     g_verbose = verbose_env && verbose_env[0] && strcmp(verbose_env, "0") != 0;
-    g_use_color = (isatty(STDOUT_FILENO) && getenv("NO_COLOR") == NULL);
+    g_use_color = getenv("NO_COLOR") == NULL &&
+                  (isatty(STDOUT_FILENO) ||
+                   env_truthy("FORCE_COLOR") ||
+                   env_truthy("CLICOLOR_FORCE"));
 
     if (argc == 2 && (strcmp(argv[1], "--help") == 0 || strcmp(argv[1], "-h") == 0)) {
         print_usage(argv[0]);

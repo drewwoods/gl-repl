@@ -297,6 +297,46 @@ Under the hood, replay works by clamping how much of `g_flat_cmds[]`
    examples, imported files, and interactive editing share the same commit
    pipeline once loader metadata has been consumed.
 
+## Test Orchestration
+
+The Makefile builds each standalone `test_*` binary normally, then delegates
+suite execution to `scripts/run-tests.sh`.
+
+- `TEST_BINS` is the canonical ordered list for the full suite.
+- `CORE_TEST_BINS` is derived from `TEST_BINS` by filtering out the lightweight
+  standalone tests (`test_eval`, `test_format`, and `test_repl_audio`).
+- Per-test `*_OBJS`, `*_LDLIBS`, and `*_RUN` variables feed a single
+  `.SECONDEXPANSION` link recipe for all test binaries.
+- `TEST_RUNNER_CASES` is generated from `TEST_BINS` and each test's `*_RUN`
+  command, so build output, replayed logs, and final summaries stay in one
+  predictable order.
+- `make test` and `make test-detailed` export shared environment needed by the
+  example export/compile tests, then call the runner.
+- `TEST_JOBS=N` limits concurrent test binaries. Leaving it empty runs all
+  test binaries concurrently.
+
+The runner prevents interleaved output by redirecting each test binary's
+stdout/stderr into `build/test-logs/run-*/<name>.log`, recording its exit status
+beside that log, and replaying logs in Makefile order after all launched jobs
+finish. This keeps parallel execution fast while preserving the readable
+per-suite transcript expected from the old serial runner.
+
+Global stats are collected from the final `passed/total` line emitted by each
+test binary. The runner reports both binary-level status and assertion-level
+totals, for example:
+
+- `test binaries: 14 total, 14 passed, 0 failed`
+- `tests: 1501 total, 1501 passed, 0 failed`
+
+If a binary exits nonzero, the runner still prints its buffered log and includes
+the binary in the global failure count. If a binary lacks a parseable
+`passed/total` summary, it is counted at the binary level and called out as an
+unknown assertion-count source.
+
+Coverage builds intentionally run tests serially via `make test BUILD=coverage
+TEST_JOBS=1`. Do not parallelize coverage unless the coverage output paths are
+made safe for concurrent `.gcda` writes.
+
 ## Extension Guide
 
 ### Add a new command
