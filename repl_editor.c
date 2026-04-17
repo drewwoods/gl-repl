@@ -1,8 +1,31 @@
+/*
+ * repl_editor.c — Editor state, commit handlers, and GLUT input dispatch.
+ *
+ * Subsystems in this file (top to bottom):
+ *  - Editor state (g_input, undo stack, clipboard, selection, camera
+ *    inertia, config-item table)
+ *  - Undo / redo snapshot ring
+ *  - Cmd-range deletion with var-decl guards
+ *  - Line-input load/save and line navigation
+ *  - Commit handlers: float decl, assign, for, func, if, close-brace
+ *  - Consolidated commit-helper chain (try_commit_any et al.)
+ *  - GLUT keyboard / special / mouse / wheel / motion / timer callbacks
+ *  - feed_line() — the programmatic commit entry point
+ *  - Public repl_*_func() wrappers forwarded from sample.c
+ *
+ * Shared state (g_input, g_edit_line, g_num_cmds, g_cmds[], etc.) is
+ * declared in sample.h. This file OWNS the editor-side globals listed
+ * above; the parser/executor side lives in repl_core.c.
+ */
 #include "sample.h"
 #include "repl_core_internal.h"
+#include "repl_keys.h"
 #include "ui_panels.h"
 #include "repl_audio.h"
 
+/* ========================================================================= */
+/* Forward declarations                                                      */
+/* ========================================================================= */
 static void save_newline_buf(void);
 void push_undo_snapshot(void);
 void pop_undo_snapshot(void);
@@ -444,11 +467,8 @@ int try_commit_float_decl(void) {
             /* Declarations are placed at the top of non-decl code; visible
              * scope vars at that position are always empty (decls live at
              * block depth 0), so the init expression may only reference
-             * already-declared predef vars. */
-            ExprVar vis[MAX_EXPR_VARS];
-            int vis_n = 0;
-            (void)vis;
-            /* Extract the initializer expression up to ',' or ';' or end */
+             * already-declared predef vars — no loop/function locals.
+             * Extract the initializer expression up to ',' or ';' or end. */
             char init_expr[MAX_LINE_LEN];
             const char *expr_start = p;
             int depth = 0;
@@ -470,8 +490,8 @@ int try_commit_float_decl(void) {
                 return 1;
             }
             char verr[128];
-            if (!validate_expression_idents(init_expr, vis_n > 0 ? vis : NULL,
-                                            vis_n, verr, sizeof(verr))) {
+            if (!validate_expression_idents(init_expr, NULL, 0,
+                                            verr, sizeof(verr))) {
                 set_status(verr);
                 return 1;
             }
@@ -498,11 +518,11 @@ int try_commit_float_decl(void) {
      * so validation can exempt the line's own names from the "already
      * declared" check. Without this, re-committing `float tmp;` after
      * editing — even unchanged — reports "'tmp' already declared". */
-    int fpos = g_inserting ? g_edit_line :
+    int insert_idx = g_inserting ? g_edit_line :
                (g_edit_line < g_num_cmds ? g_edit_line : g_num_cmds);
-    int overwriting_decl = (!g_inserting && fpos < g_num_cmds &&
-                            g_cmds[fpos].type == CMD_VAR_DECLARE);
-    const GLCmd *old_decl = overwriting_decl ? &g_cmds[fpos] : NULL;
+    int overwriting_decl = (!g_inserting && insert_idx < g_num_cmds &&
+                            g_cmds[insert_idx].type == CMD_VAR_DECLARE);
+    const GLCmd *old_decl = overwriting_decl ? &g_cmds[insert_idx] : NULL;
 
     /* Validate all names atomically before registering any */
     for (int i = 0; i < var_count; i++) {
@@ -594,15 +614,15 @@ int try_commit_float_decl(void) {
          * names being REMOVED (present in old decl, absent from new) need
          * the "in use" check — names being kept stay valid throughout. */
         if (overwriting_decl) {
-            for (int d = 0; d < g_cmds[fpos].var_decl_count; d++) {
-                const char *nm = g_cmds[fpos].var_names[d];
+            for (int d = 0; d < g_cmds[insert_idx].var_decl_count; d++) {
+                const char *nm = g_cmds[insert_idx].var_names[d];
                 int kept = 0;
                 for (int k = 0; k < var_count; k++) {
                     if (strcmp(names[k], nm) == 0) { kept = 1; break; }
                 }
                 if (kept) continue;
                 for (int j = 0; j < g_num_cmds; j++) {
-                    if (j == fpos) continue;
+                    if (j == insert_idx) continue;
                     if (source_uses_ident(g_cmds[j].source, nm)) {
                         char buf[128];
                         snprintf(buf, sizeof(buf),
@@ -617,8 +637,8 @@ int try_commit_float_decl(void) {
         /* Undeclare old names first so shared names in the new decl don't
          * collide with existing registrations. */
         if (overwriting_decl) {
-            for (int d = 0; d < g_cmds[fpos].var_decl_count; d++) {
-                const char *nm = g_cmds[fpos].var_names[d];
+            for (int d = 0; d < g_cmds[insert_idx].var_decl_count; d++) {
+                const char *nm = g_cmds[insert_idx].var_names[d];
                 int slot = find_predef_var_idx(nm);
                 if (slot < 0) continue;
                 undeclare_predef_var(nm);
@@ -640,7 +660,7 @@ int try_commit_float_decl(void) {
         }
 
         if (overwriting_decl) {
-            g_cmds[fpos] = cmd;
+            g_cmds[insert_idx] = cmd;
             g_edit_line++;
             load_line_to_input(g_edit_line);
         } else if (g_num_cmds < MAX_COMMANDS) {
@@ -704,10 +724,10 @@ int try_assign_variable(void) {
     }
 
     {
-        int fpos = g_inserting ? g_edit_line :
+        int insert_idx = g_inserting ? g_edit_line :
                    (g_edit_line < g_num_cmds ? g_edit_line : g_num_cmds);
         ExprVar vis[MAX_EXPR_VARS];
-        int vis_n = collect_visible_vars(fpos, vis, MAX_EXPR_VARS);
+        int vis_n = collect_visible_vars(insert_idx, vis, MAX_EXPR_VARS);
         char verr[128];
         if (!validate_expression_idents(rhs, vis_n > 0 ? vis : NULL, vis_n, verr, sizeof(verr))) {
             set_status(verr);
@@ -731,9 +751,9 @@ int try_assign_variable(void) {
         cmd.has_vars = has_rhs_vars;
 
         {
-            int fpos = g_inserting ? g_edit_line :
+            int insert_idx = g_inserting ? g_edit_line :
                        (g_edit_line < g_num_cmds ? g_edit_line : g_num_cmds);
-            ind = (in_begin_block_at(fpos) ? 4 : 2) + block_depth_at(fpos) * 2;
+            ind = (in_begin_block_at(insert_idx) ? 4 : 2) + block_depth_at(insert_idx) * 2;
             if (ind > (int)sizeof(indent) - 1)
                 ind = (int)sizeof(indent) - 1;
             memset(indent, ' ', (size_t)ind);
@@ -743,18 +763,18 @@ int try_assign_variable(void) {
 
             if (g_inserting) {
                 if (g_num_cmds < MAX_COMMANDS) {
-                    for (int j = g_num_cmds; j > fpos; j--)
+                    for (int j = g_num_cmds; j > insert_idx; j--)
                         g_cmds[j] = g_cmds[j - 1];
-                    g_cmds[fpos] = cmd;
+                    g_cmds[insert_idx] = cmd;
                     g_num_cmds++;
                     g_edit_line++;
                 }
-            } else if (fpos < g_num_cmds) {
-                if (g_cmds[fpos].type == CMD_VAR_DECLARE) {
-                    for (int d = 0; d < g_cmds[fpos].var_decl_count; d++) {
-                        const char *nm = g_cmds[fpos].var_names[d];
+            } else if (insert_idx < g_num_cmds) {
+                if (g_cmds[insert_idx].type == CMD_VAR_DECLARE) {
+                    for (int d = 0; d < g_cmds[insert_idx].var_decl_count; d++) {
+                        const char *nm = g_cmds[insert_idx].var_names[d];
                         for (int j = 0; j < g_num_cmds; j++) {
-                            if (j == fpos) continue;
+                            if (j == insert_idx) continue;
                             if (source_uses_ident(g_cmds[j].source, nm)) {
                                 char buf[128];
                                 snprintf(buf, sizeof(buf),
@@ -764,8 +784,8 @@ int try_assign_variable(void) {
                             }
                         }
                     }
-                    for (int d = 0; d < g_cmds[fpos].var_decl_count; d++) {
-                        const char *nm = g_cmds[fpos].var_names[d];
+                    for (int d = 0; d < g_cmds[insert_idx].var_decl_count; d++) {
+                        const char *nm = g_cmds[insert_idx].var_names[d];
                         int slot = find_predef_var_idx(nm);
                         if (slot < 0) continue;
                         undeclare_predef_var(nm);
@@ -775,7 +795,7 @@ int try_assign_variable(void) {
                         }
                     }
                 }
-                g_cmds[fpos] = cmd;
+                g_cmds[insert_idx] = cmd;
                 g_edit_line++;
                 load_line_to_input(g_edit_line);
                 {
@@ -1436,6 +1456,37 @@ static int try_commit_var_statements_then_insert(void) {
     return 0;
 }
 
+/* Parse g_input into `cmd` as if it were being committed at source-line
+ * `insert_idx`. Handles the three-way fan-out used by the overwrite-Enter
+ * and append-at-end Enter paths:
+ *   - loop/function locals visible at that line → parse_with_vars +
+ *     reindent
+ *   - else, predef vars referenced → plain parse, mark has_vars, reindent
+ *     without vars
+ *   - else, plain parse only
+ * Returns 1 if parsing succeeded. */
+static int parse_for_overwrite_enter(GLCmd *cmd, int insert_idx) {
+    ExprVar vis_vars[MAX_EXPR_VARS];
+    int num_vis_vars = collect_visible_vars(insert_idx, vis_vars, MAX_EXPR_VARS);
+    memset(cmd, 0, sizeof(*cmd));
+    int parsed;
+    if (num_vis_vars > 0) {
+        int saved_el = g_edit_line;
+        g_edit_line = insert_idx;
+        parsed = repl_parse_command_with_vars(g_input, cmd, vis_vars, num_vis_vars);
+        g_edit_line = saved_el;
+        if (parsed)
+            rewrite_cmd_source_with_indent(cmd, insert_idx, 1);
+    } else {
+        parsed = repl_parse_command(g_input, cmd);
+        if (parsed && input_has_predef_vars(g_input)) {
+            cmd->has_vars = 1;
+            rewrite_cmd_source_with_indent(cmd, insert_idx, 0);
+        }
+    }
+    return parsed;
+}
+
 void keyboard_func(unsigned char key, int x, int y) {
     (void)x;
     (void)y;
@@ -1443,7 +1494,10 @@ void keyboard_func(unsigned char key, int x, int y) {
     g_cursor_on = 1;
     g_blink_tick = 0;
 
-    if (key != 3 && key != 8 && key != 24 && key != 127)
+    /* Cut / copy / backspace / delete preserve any active line-range
+     * selection; everything else clears it before processing the key. */
+    if (key != KEY_CTRL_C && key != KEY_BACKSPACE &&
+        key != KEY_CTRL_X && key != KEY_DELETE)
         clear_selection();
 
     g_scroll_follow_cursor = 1;
@@ -1457,12 +1511,12 @@ void keyboard_func(unsigned char key, int x, int y) {
     }
 
     if (g_replay_active) {
-        if (key == 7) {
+        if (key == KEY_CTRL_G) {
             replay_stop();
             set_status("Replay: off");
             return;
         }
-        if (key == 11) {
+        if (key == KEY_CTRL_K) {
             int landed = replay_seek_to_src_line(g_edit_line);
             if (landed < 0) {
                 set_status("Jump: no geometry at or after cursor");
@@ -1518,7 +1572,7 @@ void keyboard_func(unsigned char key, int x, int y) {
                      : "Replay: polygon mode");
             return;
         }
-        if (key == 27) {
+        if (key == KEY_ESC) {
             replay_stop();
             set_status("Replay: off");
             return;
@@ -1529,7 +1583,7 @@ void keyboard_func(unsigned char key, int x, int y) {
     if (handle_search_key(key))
         return;
 
-    if (key == 27) {
+    if (key == KEY_ESC) {
         if (g_show_config) {
             g_show_config = 0;
             return;
@@ -1558,18 +1612,18 @@ void keyboard_func(unsigned char key, int x, int y) {
         return;
     }
 
-    if (key == 1) {
+    if (key == KEY_CTRL_A) {
         g_cursor_pos = 0;
         update_autocomplete();
         return;
     }
-    if (key == 5) {
+    if (key == KEY_CTRL_E) {
         g_cursor_pos = g_input_len;
         update_autocomplete();
         return;
     }
 
-    if (key == 26) {
+    if (key == KEY_CTRL_Z) {
         if (glutGetModifiers() & GLUT_ACTIVE_SHIFT)
             do_redo();
         else
@@ -1577,17 +1631,17 @@ void keyboard_func(unsigned char key, int x, int y) {
         return;
     }
 
-    if (key == 25) {
+    if (key == KEY_CTRL_Y) {
         do_redo();
         return;
     }
 
-    if (key == 7) {
+    if (key == KEY_CTRL_G) {
         replay_start();
         return;
     }
 
-    if (key == 11) {
+    if (key == KEY_CTRL_K) {
         int target_line = g_edit_line;
         if (!g_replay_active) {
             replay_start();
@@ -1606,7 +1660,7 @@ void keyboard_func(unsigned char key, int x, int y) {
         return;
     }
 
-    if (key == 4) {
+    if (key == KEY_CTRL_D) {
         if (g_inserting) {
             g_inserting = 0;
             if (g_edit_line <= g_num_cmds)
@@ -1624,7 +1678,7 @@ void keyboard_func(unsigned char key, int x, int y) {
         return;
     }
 
-    if (key == 12) {
+    if (key == KEY_CTRL_L) {
         push_undo_snapshot();
         g_num_cmds = 0;
         g_edit_line = 0;
@@ -1639,7 +1693,7 @@ void keyboard_func(unsigned char key, int x, int y) {
         return;
     }
 
-    if (key == 18) {
+    if (key == KEY_CTRL_R) {
         if (g_num_cmds > 0) {
             push_undo_snapshot();
             repl_reformat_commands();
@@ -1650,19 +1704,19 @@ void keyboard_func(unsigned char key, int x, int y) {
         return;
     }
 
-    if (key == 16) {
+    if (key == KEY_CTRL_P) {
         repl_debug_dump_editor(stdout);
         repl_debug_dump_flat_commands(stdout);
         set_status("Dumped editor + flat commands to stdout");
         return;
     }
 
-    if (key == 19) {
+    if (key == KEY_CTRL_S) {
         repl_save_default_output();
         return;
     }
 
-    if (key == 3) {
+    if (key == KEY_CTRL_C) {
         if (g_inserting) {
             clear_selection();
             return;
@@ -1704,7 +1758,7 @@ void keyboard_func(unsigned char key, int x, int y) {
         return;
     }
 
-    if (key == 24) {
+    if (key == KEY_CTRL_X) {
         if (g_inserting) {
             clear_selection();
             return;
@@ -1757,7 +1811,7 @@ void keyboard_func(unsigned char key, int x, int y) {
         return;
     }
 
-    if (key == 22) {
+    if (key == KEY_CTRL_V) {
         if (g_clipboard_count > 0) {
             if (g_num_cmds + g_clipboard_count > MAX_COMMANDS) {
                 set_status("Command buffer full!");
@@ -1836,7 +1890,7 @@ void keyboard_func(unsigned char key, int x, int y) {
         return;
     }
 
-    if (key == 2) {
+    if (key == KEY_CTRL_B) {
         if (g_use_accum) {
             g_accum_aa_enabled = !g_accum_aa_enabled;
             set_status(g_accum_aa_enabled ? "Accum AA: ON" : "Accum AA: OFF");
@@ -1846,13 +1900,13 @@ void keyboard_func(unsigned char key, int x, int y) {
         return;
     }
 
-    if (key == 14) {
+    if (key == KEY_CTRL_N) {
         g_line_smooth_enabled = !g_line_smooth_enabled;
         set_status(g_line_smooth_enabled ? "Line smooth: ON" : "Line smooth: OFF");
         return;
     }
 
-    if (key == 20) {
+    if (key == KEY_CTRL_T) {
         if (glutGetModifiers() & GLUT_ACTIVE_SHIFT) {
             repl_reset_time_to_zero();
             set_status(g_t_playing ? "Time: reset to 0" : "Time: reset to 0 (paused)");
@@ -1863,7 +1917,7 @@ void keyboard_func(unsigned char key, int x, int y) {
         return;
     }
 
-    if (key == 21) {
+    if (key == KEY_CTRL_U) {
         g_multisample_enabled = !g_multisample_enabled;
         set_status(g_multisample_enabled ? "MSAA: ON" : "MSAA: OFF");
         return;
@@ -1872,7 +1926,7 @@ void keyboard_func(unsigned char key, int x, int y) {
     /* Ctrl+O cycles the grid major-tick spacing. Pairs with the
      * "Grid major" config entry; the status bar echoes the new
      * value so it's clear which spacing is active. */
-    if (key == 15) {
+    if (key == KEY_CTRL_O) {
         g_grid_major_idx = (g_grid_major_idx + 1) % GRID_MAJOR_COUNT;
         snprintf(g_scratch_buf, sizeof(g_scratch_buf),
                  "Grid major: %s", g_grid_major_names[g_grid_major_idx]);
@@ -1897,7 +1951,7 @@ void keyboard_func(unsigned char key, int x, int y) {
         return;
     }
 
-    if (key == 31 || (key == '-' && (glutGetModifiers() & GLUT_ACTIVE_CTRL))) {
+    if (key == KEY_CTRL_DASH || (key == '-' && (glutGetModifiers() & GLUT_ACTIVE_CTRL))) {
         if (g_use_accum) {
             for (int i = ACCUM_STEP_COUNT - 1; i > 0; i--) {
                 if (g_accum_samples >= g_accum_steps[i]) {
@@ -1914,8 +1968,8 @@ void keyboard_func(unsigned char key, int x, int y) {
         return;
     }
 
-    /* Ctrl+W (ASCII 23) — cycle CPU profile panel mode */
-    if (key == 23) {
+    /* Ctrl+W — cycle CPU profile panel mode */
+    if (key == KEY_CTRL_W) {
         g_show_profile_panel = (g_show_profile_panel + 1) % PROFILE_PANEL_MODE_COUNT;
         snprintf(g_scratch_buf, sizeof(g_scratch_buf),
                  "CPU profile: %s", profile_panel_mode_names[g_show_profile_panel]);
@@ -1923,7 +1977,7 @@ void keyboard_func(unsigned char key, int x, int y) {
         return;
     }
 
-    if (key == 8 || key == 127) {
+    if (key == KEY_BACKSPACE || key == KEY_DELETE) {
         if (sel_active() && !g_inserting) {
             int start = sel_lo();
             int hi = sel_hi();
@@ -1998,22 +2052,22 @@ void keyboard_func(unsigned char key, int x, int y) {
             if (g_input_len > 0) {
                 GLCmd cmd;
                 int parsed;
-                int fpos = g_edit_line;
-                ExprVar dvars[MAX_EXPR_VARS];
-                int dnv = collect_visible_vars(fpos, dvars, MAX_EXPR_VARS);
+                int insert_idx = g_edit_line;
+                ExprVar vis_vars[MAX_EXPR_VARS];
+                int num_vis_vars = collect_visible_vars(insert_idx, vis_vars, MAX_EXPR_VARS);
 
                 memset(&cmd, 0, sizeof(cmd));
-                if (dnv > 0) {
+                if (num_vis_vars > 0) {
                     if (try_commit_var_statements()) {
                         clear_autocomplete_state();
                         return;
                     }
                     int saved_el = g_edit_line;
-                    g_edit_line = fpos;
-                    parsed = repl_parse_command_with_vars(g_input, &cmd, dvars, dnv);
+                    g_edit_line = insert_idx;
+                    parsed = repl_parse_command_with_vars(g_input, &cmd, vis_vars, num_vis_vars);
                     g_edit_line = saved_el;
                     if (parsed)
-                        rewrite_cmd_source_with_indent(&cmd, fpos, 1);
+                        rewrite_cmd_source_with_indent(&cmd, insert_idx, 1);
                 } else {
                     parsed = repl_parse_command(g_input, &cmd);
                 }
@@ -2038,12 +2092,6 @@ void keyboard_func(unsigned char key, int x, int y) {
             int can_advance = 1;
 
             if (g_input_len > 0) {
-                GLCmd cmd;
-                int fpos = g_edit_line;
-                int parsed = 0;
-                ExprVar dvars[MAX_EXPR_VARS];
-                int dnv;
-
                 if (g_cmds[g_edit_line].type == CMD_FOR_BEGIN) {
                     if (try_commit_for_loop())
                         return;
@@ -2059,26 +2107,11 @@ void keyboard_func(unsigned char key, int x, int y) {
                         return;
                     can_advance = 0;
                 }
-
-                memset(&cmd, 0, sizeof(cmd));
-                dnv = collect_visible_vars(fpos, dvars, MAX_EXPR_VARS);
                 if (try_commit_var_statements_then_insert())
                     return;
-                if (dnv > 0) {
-                    int saved_el = g_edit_line;
-                    g_edit_line = fpos;
-                    parsed = repl_parse_command_with_vars(g_input, &cmd, dvars, dnv);
-                    g_edit_line = saved_el;
-                    if (parsed)
-                        rewrite_cmd_source_with_indent(&cmd, fpos, 1);
-                } else {
-                    parsed = repl_parse_command(g_input, &cmd);
-                    if (parsed && input_has_predef_vars(g_input)) {
-                        cmd.has_vars = 1;
-                        rewrite_cmd_source_with_indent(&cmd, fpos, 0);
-                    }
-                }
 
+                GLCmd cmd;
+                int parsed = parse_for_overwrite_enter(&cmd, g_edit_line);
                 if (parsed)
                     g_cmds[g_edit_line] = cmd;
                 else
@@ -2096,26 +2129,7 @@ void keyboard_func(unsigned char key, int x, int y) {
         } else {
             if (g_input_len > 0) {
                 GLCmd cmd;
-                int fpos = g_num_cmds;
-                int parsed;
-                ExprVar dvars[MAX_EXPR_VARS];
-                int dnv = collect_visible_vars(fpos, dvars, MAX_EXPR_VARS);
-
-                memset(&cmd, 0, sizeof(cmd));
-                if (dnv > 0) {
-                    int saved_el = g_edit_line;
-                    g_edit_line = fpos;
-                    parsed = repl_parse_command_with_vars(g_input, &cmd, dvars, dnv);
-                    g_edit_line = saved_el;
-                    if (parsed)
-                        rewrite_cmd_source_with_indent(&cmd, fpos, 1);
-                } else {
-                    parsed = repl_parse_command(g_input, &cmd);
-                    if (parsed && input_has_predef_vars(g_input)) {
-                        cmd.has_vars = 1;
-                        rewrite_cmd_source_with_indent(&cmd, fpos, 0);
-                    }
-                }
+                int parsed = parse_for_overwrite_enter(&cmd, g_num_cmds);
 
                 if (parsed && g_num_cmds < MAX_COMMANDS) {
                     g_cmds[g_num_cmds++] = cmd;
@@ -2143,17 +2157,17 @@ void keyboard_func(unsigned char key, int x, int y) {
             }
             {
                 GLCmd cmd;
-                int fpos = g_inserting ? g_edit_line :
+                int insert_idx = g_inserting ? g_edit_line :
                            (g_edit_line < g_num_cmds ? g_edit_line : g_num_cmds);
                 int parsed;
-                ExprVar dvars[MAX_EXPR_VARS];
-                int dnv = collect_visible_vars(fpos, dvars, MAX_EXPR_VARS);
+                ExprVar vis_vars[MAX_EXPR_VARS];
+                int num_vis_vars = collect_visible_vars(insert_idx, vis_vars, MAX_EXPR_VARS);
 
                 memset(&cmd, 0, sizeof(cmd));
-                if (dnv > 0)
-                    parsed = repl_parse_and_normalize(g_input, fpos, dvars, dnv, 1, &cmd);
+                if (num_vis_vars > 0)
+                    parsed = repl_parse_and_normalize(g_input, insert_idx, vis_vars, num_vis_vars, 1, &cmd);
                 else
-                    parsed = repl_parse_and_normalize(g_input, fpos, NULL, 0,
+                    parsed = repl_parse_and_normalize(g_input, insert_idx, NULL, 0,
                                                       input_has_predef_vars(g_input), &cmd);
 
                 if (parsed) {
@@ -2198,7 +2212,7 @@ void keyboard_func(unsigned char key, int x, int y) {
         return;
     }
 
-    if (key == 0x11) {
+    if (key == KEY_CTRL_Q) {
         repl_save_output(quit_tempfile);
         printf("Saved to %s\n", quit_tempfile);
         exit(0);
@@ -2944,17 +2958,17 @@ int feed_line(const char *line) {
     {
         int handled = 0;
         GLCmd cmd;
-        int fpos = g_inserting ? g_edit_line :
+        int insert_idx = g_inserting ? g_edit_line :
                    (g_edit_line < g_num_cmds ? g_edit_line : g_num_cmds);
         int parsed;
-        ExprVar dvars[MAX_EXPR_VARS];
-        int dnv = collect_visible_vars(fpos, dvars, MAX_EXPR_VARS);
+        ExprVar vis_vars[MAX_EXPR_VARS];
+        int num_vis_vars = collect_visible_vars(insert_idx, vis_vars, MAX_EXPR_VARS);
 
         memset(&cmd, 0, sizeof(cmd));
-        if (dnv > 0)
-            parsed = repl_parse_and_normalize(g_input, fpos, dvars, dnv, 1, &cmd);
+        if (num_vis_vars > 0)
+            parsed = repl_parse_and_normalize(g_input, insert_idx, vis_vars, num_vis_vars, 1, &cmd);
         else
-            parsed = repl_parse_and_normalize(g_input, fpos, NULL, 0,
+            parsed = repl_parse_and_normalize(g_input, insert_idx, NULL, 0,
                                               input_has_predef_vars(g_input), &cmd);
 
         if (parsed && g_num_cmds < MAX_COMMANDS) {
