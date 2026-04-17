@@ -657,11 +657,16 @@ int try_commit_float_decl(void) {
             }
         }
 
-        /* Undeclare old names first so shared names in the new decl don't
-         * collide with existing registrations. */
+        /* Undeclare only names being removed (absent from new decl) so kept
+         * names retain their slot indices and live values. */
         if (overwriting_decl) {
             for (int d = 0; d < g_cmds[insert_idx].var_decl_count; d++) {
                 const char *nm = g_cmds[insert_idx].var_names[d];
+                int kept = 0;
+                for (int k = 0; k < var_count; k++) {
+                    if (strcmp(names[k], nm) == 0) { kept = 1; break; }
+                }
+                if (kept) continue;
                 int slot = find_predef_var_idx(nm);
                 if (slot < 0) continue;
                 undeclare_predef_var(nm);
@@ -672,8 +677,16 @@ int try_commit_float_decl(void) {
             }
         }
 
-        /* Register new names (safe — overwrite check passed, capacity verified) */
+        /* Register new names (safe — overwrite check passed, capacity verified).
+         * Skip names already registered (kept from old decl) to preserve values. */
         for (int i = 0; i < var_count; i++) {
+            if (overwriting_decl && find_predef_var_idx(names[i]) >= 0) {
+                if (has_init[i]) {
+                    int idx = find_predef_var_idx(names[i]);
+                    g_predef_vars[idx].value = init_vals[i];
+                }
+                continue;
+            }
             declare_predef_var(names[i], NULL, 0);
             if (has_init[i]) {
                 int idx = find_predef_var_idx(names[i]);
