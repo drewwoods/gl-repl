@@ -290,25 +290,28 @@ static int normalize_cmd_range(int start, int count, int *out_start, int *out_co
     return 1;
 }
 
-static int delete_cmd_range_allowed(int start, int count) {
-    char msg[128];
-    int end = start + count;
+static int cmds_contain_var_decl(const GLCmd *cmds, int count) {
+    for (int i = 0; i < count; i++) {
+        if (cmds[i].type == CMD_VAR_DECLARE)
+            return 1;
+    }
+    return 0;
+}
 
-    /* Refuse if any var-decl in the range declares a name used outside it */
-    for (int i = start; i < end; i++) {
-        if (g_cmds[i].type != CMD_VAR_DECLARE) continue;
-        for (int n = 0; n < g_cmds[i].var_decl_count; n++) {
-            const char *nm = g_cmds[i].var_names[n];
-            for (int j = 0; j < g_num_cmds; j++) {
-                if (j >= start && j < end) continue;
-                if (source_uses_ident(g_cmds[j].source, nm)) {
-                    snprintf(msg, sizeof(msg),
-                             "variable '%s' is in use, cannot remove", nm);
-                    set_status(msg);
-                    return 0;
-                }
-            }
-        }
+static int cmd_range_contains_var_decl(int start, int count) {
+    return cmds_contain_var_decl(&g_cmds[start], count);
+}
+
+static void set_var_decl_action_status(const char *action) {
+    char msg[96];
+    snprintf(msg, sizeof(msg), "Cannot %s float declarations", action);
+    set_status(msg);
+}
+
+static int delete_cmd_range_allowed(int start, int count) {
+    if (cmd_range_contains_var_decl(start, count)) {
+        set_var_decl_action_status("remove");
+        return 0;
     }
 
     return 1;
@@ -1741,13 +1744,21 @@ void keyboard_func(unsigned char key, int x, int y) {
             clear_selection();
             return;
         }
-        g_clipboard_count = 0;
         if (sel_active()) {
-            int lo = sel_lo();
+            int start = sel_lo();
+            int count;
             int hi = sel_hi();
             if (hi >= g_num_cmds)
                 hi = g_num_cmds - 1;
-            for (int i = lo; i <= hi && g_clipboard_count < MAX_COMMANDS; i++)
+            count = hi - start + 1;
+            if (!normalize_cmd_range(start, count, &start, &count))
+                return;
+            if (cmd_range_contains_var_decl(start, count)) {
+                set_var_decl_action_status("copy");
+                return;
+            }
+            g_clipboard_count = 0;
+            for (int i = start; i < start + count && g_clipboard_count < MAX_COMMANDS; i++)
                 g_clipboard[g_clipboard_count++] = g_cmds[i];
             {
                 char msg[64];
@@ -1756,12 +1767,24 @@ void keyboard_func(unsigned char key, int x, int y) {
                 set_status(msg);
             }
         } else if (g_edit_line < g_num_cmds) {
-            if (g_cmds[g_edit_line].type == CMD_FOR_BEGIN) {
-                int fe = find_block_end(g_edit_line);
+            int start = g_edit_line;
+            int count = 1;
+            int copying_for = (g_cmds[start].type == CMD_FOR_BEGIN);
+            if (copying_for) {
+                int fe = find_block_end(start);
                 int end_idx = (fe < g_num_cmds) ? fe + 1 : g_num_cmds;
-                for (int i = g_edit_line; i < end_idx &&
-                                g_clipboard_count < MAX_COMMANDS; i++)
-                    g_clipboard[g_clipboard_count++] = g_cmds[i];
+                count = end_idx - start;
+            }
+            if (!normalize_cmd_range(start, count, &start, &count))
+                return;
+            if (cmd_range_contains_var_decl(start, count)) {
+                set_var_decl_action_status("copy");
+                return;
+            }
+            g_clipboard_count = 0;
+            for (int i = start; i < start + count && g_clipboard_count < MAX_COMMANDS; i++)
+                g_clipboard[g_clipboard_count++] = g_cmds[i];
+            if (copying_for) {
                 {
                     char msg[64];
                     snprintf(msg, sizeof(msg), "Copied for-loop (%d lines)",
@@ -1773,6 +1796,8 @@ void keyboard_func(unsigned char key, int x, int y) {
                 g_clipboard_count = 1;
                 set_status("Copied line");
             }
+        } else {
+            g_clipboard_count = 0;
         }
         clear_selection();
         return;
@@ -1824,6 +1849,10 @@ void keyboard_func(unsigned char key, int x, int y) {
 
     if (key == KEY_CTRL_V) {
         if (g_clipboard_count > 0) {
+            if (cmds_contain_var_decl(g_clipboard, g_clipboard_count)) {
+                set_var_decl_action_status("paste");
+                return;
+            }
             if (g_num_cmds + g_clipboard_count > MAX_COMMANDS) {
                 set_status("Command buffer full!");
                 return;
