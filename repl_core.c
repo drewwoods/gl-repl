@@ -1515,6 +1515,51 @@ static void set_incomplete_arg_count_status(const char *func, int expected, int 
     set_status(msg);
 }
 
+static int command_name_matches_or_prefixes(const char *func, const char *known) {
+    size_t flen;
+
+    if (!func || !func[0] || !known || !known[0])
+        return 0;
+    if (strcmp(func, known) == 0)
+        return 1;
+
+    flen = strlen(func);
+    return flen >= 4 && strncmp(known, func, flen) == 0;
+}
+
+static int is_known_incomplete_func_name(const char *func) {
+    static const char *const special_funcs[] = {
+        "glEnd",
+        "glPointParameterfv",
+        "glPushMatrix",
+        "glPopMatrix",
+        "gluBegin",
+        "gluEnd",
+        "gluColor",
+        NULL
+    };
+
+    if (!func || !func[0])
+        return 0;
+
+    for (const EnumCmdDef *def = g_enum_cmds; def->name; def++) {
+        if (command_name_matches_or_prefixes(func, def->name))
+            return 1;
+    }
+    for (const StdCmdDef *def = g_std_cmds; def->name; def++) {
+        if (command_name_matches_or_prefixes(func, def->name))
+            return 1;
+    }
+    for (int i = 0; special_funcs[i]; i++) {
+        if (command_name_matches_or_prefixes(func, special_funcs[i]))
+            return 1;
+    }
+
+    return strncmp(func, "func", 4) == 0 &&
+           func[4] >= '0' && func[4] <= '9' &&
+           func[5] == '\0';
+}
+
 static int parse_command(const char *line, GLCmd *cmd,
                          ExprVar *vars, int num_vars) {
     char buf[MAX_LINE_LEN];
@@ -1564,6 +1609,8 @@ static int parse_command(const char *line, GLCmd *cmd,
         }
 
         if (!close_p || close_p < open_p) {
+            if (!is_known_incomplete_func_name(func))
+                goto unknown_command;
             set_incomplete_missing_paren_status(func);
             return 0;
         }
@@ -2062,6 +2109,7 @@ static int parse_command(const char *line, GLCmd *cmd,
         return 1;
     }
 
+unknown_command:
     set_status("Unknown cmd. Try glVertex3f, glBegin, glEnable, glShadeModel, ...");
     return 0;
 }
