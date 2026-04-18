@@ -327,8 +327,9 @@ static void remove_cmd_range_unchecked(int start, int count, const char *what) {
     for (int i = start; i < end; i++) {
         if (g_cmds[i].type != CMD_VAR_DECLARE) continue;
         for (int n = 0; n < g_cmds[i].var_decl_count && n_removed < MAX_PREDEF_VARS; n++) {
-            strncpy(removed_names[n_removed], g_cmds[i].var_names[n], 15);
-            removed_names[n_removed][15] = '\0';
+            repl_copy_string_fits(removed_names[n_removed],
+                                  sizeof(removed_names[n_removed]),
+                                  g_cmds[i].var_names[n]);
             n_removed++;
         }
     }
@@ -609,8 +610,13 @@ int try_commit_float_decl(void) {
     cmd.type = CMD_VAR_DECLARE;
     cmd.valid = 1;
     cmd.var_decl_count = var_count;
-    for (int i = 0; i < var_count; i++)
-        strncpy(cmd.var_names[i], names[i], 15);
+    for (int i = 0; i < var_count; i++) {
+        if (!repl_copy_string_fits(cmd.var_names[i], sizeof(cmd.var_names[i]),
+                                   names[i])) {
+            set_status("invalid identifier (max 15 chars)");
+            return 1;
+        }
+    }
 
     {
         int decl_pos = 0;
@@ -1049,8 +1055,8 @@ int try_commit_for_loop(void) {
                     return 1;
                 }
 
-                strncpy(dv[dvn].name, var_name, sizeof(dv[dvn].name) - 1);
-                dv[dvn].name[sizeof(dv[dvn].name) - 1] = '\0';
+                repl_copy_string_fits(dv[dvn].name, sizeof(dv[dvn].name),
+                                      var_name);
                 dv[dvn].value = start;
                 dvn++;
                 for (int i = 0; i < visible_nv && dvn < MAX_EXPR_VARS; i++)

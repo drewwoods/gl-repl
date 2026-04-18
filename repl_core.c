@@ -2479,9 +2479,9 @@ static void flatten_range(int start, int end_idx, ExprVar *vars, int nv,
                     ExprVar lvars[MAX_EXPR_VARS];
                     int lnv = 0;
                     if (lnv < MAX_EXPR_VARS) {
-                        strncpy(lvars[lnv].name, var_name,
-                                sizeof(lvars[lnv].name) - 1);
-                        lvars[lnv].name[sizeof(lvars[lnv].name) - 1] = '\0';
+                        repl_copy_string_fits(lvars[lnv].name,
+                                              sizeof(lvars[lnv].name),
+                                              var_name);
                         lvars[lnv].value = val;
                         lnv++;
                     }
@@ -2552,9 +2552,9 @@ static void flatten_range(int start, int end_idx, ExprVar *vars, int nv,
                     ExprVar lvars[MAX_EXPR_VARS];
                     int lnv = 0;
                     for (int p = 0; p < param_count && lnv < MAX_EXPR_VARS; p++) {
-                        strncpy(lvars[lnv].name, param_names[p],
-                                sizeof(lvars[lnv].name) - 1);
-                        lvars[lnv].name[sizeof(lvars[lnv].name) - 1] = '\0';
+                        repl_copy_string_fits(lvars[lnv].name,
+                                              sizeof(lvars[lnv].name),
+                                              param_names[p]);
                         lvars[lnv].value = arg_vals[p];
                         lnv++;
                     }
@@ -3985,9 +3985,9 @@ int collect_visible_vars(int pos, ExprVar *vars, int max_vars) {
             if (t == CMD_FOR_BEGIN) {
                 char vn[16];
                 get_for_var_name(&g_cmds[i], vn, sizeof(vn));
-                strncpy(frames[depth].vars[0].name, vn,
-                        sizeof(frames[depth].vars[0].name) - 1);
-                frames[depth].vars[0].name[sizeof(frames[depth].vars[0].name) - 1] = '\0';
+                repl_copy_string_fits(frames[depth].vars[0].name,
+                                      sizeof(frames[depth].vars[0].name),
+                                      vn);
                 frames[depth].vars[0].value = g_cmds[i].args[0];
                 frames[depth].count = 1;
             } else if (t == CMD_FUNC_DEF) {
@@ -3998,9 +3998,9 @@ int collect_visible_vars(int pos, ExprVar *vars, int max_vars) {
                                               param_names, MAX_EXPR_VARS,
                                               &param_count)) {
                     for (int p = 0; p < param_count; p++) {
-                        strncpy(frames[depth].vars[p].name, param_names[p],
-                                sizeof(frames[depth].vars[p].name) - 1);
-                        frames[depth].vars[p].name[sizeof(frames[depth].vars[p].name) - 1] = '\0';
+                        repl_copy_string_fits(frames[depth].vars[p].name,
+                                              sizeof(frames[depth].vars[p].name),
+                                              param_names[p]);
                         frames[depth].vars[p].value = 0.0f;
                     }
                     frames[depth].count = param_count;
