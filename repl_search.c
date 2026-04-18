@@ -413,7 +413,6 @@ static void search_open(void) {
     g_show_help = 0;
     g_help_tab = 0;
     g_help_scroll = 0;
-    g_show_config = 0;
     clear_autocomplete_state();
 }
 

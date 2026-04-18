@@ -1179,7 +1179,7 @@ static int menu_item_count(int menu_id) {
     switch (menu_id) {
     case MENU_FILE:     return FILE_ITEM_COUNT;
     case MENU_EXAMPLES: return repl_example_count();
-    case MENU_CONFIG:   return 0;  /* blank for now */
+    case MENU_CONFIG:   return CFG_ITEM_COUNT;
     case MENU_SCENES:   return repl_user_scene_valid() ? 1 : 0;
     }
     return 0;
@@ -1199,13 +1199,81 @@ static const char *menu_item_label(int menu_id, int i) {
         if (i == 0) return USER_SCENE_LABEL;
         return NULL;
     }
+    if (menu_id == MENU_CONFIG) {
+        if (i >= 0 && i < CFG_ITEM_COUNT) return g_cfg_items[i].label;
+        return NULL;
+    }
     return NULL;
 }
 
 static const char *menu_item_shortcut(int menu_id, int i) {
     if (menu_id == MENU_FILE && i == FILE_ITEM_EXPORT) return "Ctrl+S";
+    if (menu_id == MENU_CONFIG && i >= 0 && i < CFG_ITEM_COUNT) {
+        const char *k = g_cfg_items[i].key_hint;
+        if (k && strcmp(k, "--") != 0) return k;
+        return NULL;
+    }
     (void)i;
     return NULL;
+}
+
+static int menu_max_shortcut_px(int menu_id) {
+    int n = menu_item_count(menu_id);
+    int max_sc = 0;
+    for (int i = 0; i < n; i++) {
+        const char *sc = menu_item_shortcut(menu_id, i);
+        if (sc) {
+            int w = (int)strlen(sc) * FONT_SMALL_W;
+            if (w > max_sc) max_sc = w;
+        }
+    }
+    return max_sc;
+}
+
+#define CFG_STATE_MAX_CHARS 20
+
+/* Fills `out` with the current state label, truncated to CFG_STATE_MAX_CHARS
+ * (with a trailing ellipsis). Returns `out`. */
+static const char *cfg_state_str(int i, char *out, int out_size) {
+    const char *s = "";
+    if (i >= 0 && i < CFG_ITEM_COUNT) {
+        if (g_cfg_items[i].state_names)
+            s = g_cfg_items[i].state_names[*g_cfg_items[i].value];
+        else
+            s = *g_cfg_items[i].value ? "ON" : "OFF";
+    }
+    int n = (int)strlen(s);
+    int cap = out_size - 1;
+    if (cap > CFG_STATE_MAX_CHARS) cap = CFG_STATE_MAX_CHARS;
+    if (n <= cap) {
+        memcpy(out, s, (size_t)n);
+        out[n] = '\0';
+    } else {
+        int keep = cap - 3;
+        if (keep < 0) keep = 0;
+        memcpy(out, s, (size_t)keep);
+        int dots = cap - keep;
+        for (int k = 0; k < dots; k++) out[keep + k] = '.';
+        out[cap] = '\0';
+    }
+    return out;
+}
+
+/* Widest possible state label across all items & all their possible values,
+ * clamped to CFG_STATE_MAX_CHARS. Used to keep the menu width stable as
+ * values cycle. */
+static int cfg_max_state_chars(void) {
+    int max_chars = 3;  /* "OFF" */
+    for (int i = 0; i < CFG_ITEM_COUNT; i++) {
+        const char *const *names = g_cfg_items[i].state_names;
+        if (!names) continue;
+        for (int k = 0; k < g_cfg_items[i].n_states; k++) {
+            int n = (int)strlen(names[k]);
+            if (n > max_chars) max_chars = n;
+        }
+    }
+    if (max_chars > CFG_STATE_MAX_CHARS) max_chars = CFG_STATE_MAX_CHARS;
+    return max_chars;
 }
 
 /* Returns 1 if the menu should close after activation, 0 to keep it open
@@ -1220,6 +1288,9 @@ static int menu_item_activate(int menu_id, int i) {
     } else if (menu_id == MENU_SCENES) {
         if (i == 0 && repl_user_scene_valid()) repl_load_user_scene();
         return 1;
+    } else if (menu_id == MENU_CONFIG) {
+        repl_cfg_cycle_row(i, +1);
+        return 0;  /* cycle in place; keep menu open */
     }
     return 1;
 }
@@ -1291,14 +1362,23 @@ static int menu_dropdown_rect(int *dx, int *dy, int *dw, int *dh) {
     menubar_rects(menu_x, menu_w, pin_x, pin_w, &by, &bh);
     int n = menu_item_count(g_open_menu);
 
-    int max_w = 80;
+    int max_lbl = 0, max_state = 0, max_sc = 0;
     for (int i = 0; i < n; i++) {
         const char *lbl = menu_item_label(g_open_menu, i);
         const char *sc  = menu_item_shortcut(g_open_menu, i);
-        int w = (int)(lbl ? strlen(lbl) : 0) * FONT_SMALL_W;
-        if (sc) w += (int)strlen(sc) * FONT_SMALL_W + 16;
-        if (w > max_w) max_w = w;
+        int lw = (int)(lbl ? strlen(lbl) : 0) * FONT_SMALL_W;
+        if (lw > max_lbl) max_lbl = lw;
+        if (sc) {
+            int cw = (int)strlen(sc) * FONT_SMALL_W;
+            if (cw > max_sc) max_sc = cw;
+        }
     }
+    if (g_open_menu == MENU_CONFIG)
+        max_state = cfg_max_state_chars() * FONT_SMALL_W;
+    int max_w = max_lbl;
+    if (max_state > 0) max_w += max_state + 20;
+    if (max_sc > 0)    max_w += max_sc + 16;
+    if (max_w < 80) max_w = 80;
     int width  = max_w + 28;
     int rows   = (n > 0) ? n : 1;  /* reserve one row for "(empty)" */
     int height = rows * LINE_H + 8;
@@ -2972,6 +3052,10 @@ void render_example_dropdown(void) {
         return;
     }
 
+    int max_sc_px = menu_max_shortcut_px(menu_id);
+    int state_right = dx + dw - 14;
+    if (max_sc_px > 0) state_right -= max_sc_px + 16;
+
     int ey = dy + dh - LINE_H + 1;
     for (int i = 0; i < n; i++) {
         int is_user_scene = (menu_id == MENU_EXAMPLES && ne >= 0 && i >= ne);
@@ -3006,6 +3090,17 @@ void render_example_dropdown(void) {
             glColor4f(0.533f, 0.533f, 0.533f, alpha);  /* #888 */
             draw_string((float)(dx + dw - 14 - sc_px), (float)ey,
                         sc, FONT_SMALL);
+        }
+        if (menu_id == MENU_CONFIG) {
+            char st_buf[CFG_STATE_MAX_CHARS + 1];
+            const char *st = cfg_state_str(i, st_buf, sizeof(st_buf));
+            int st_px = (int)strlen(st) * FONT_SMALL_W;
+            int val = *g_cfg_items[i].value;
+            if (val)
+                glColor4f(UI_ACCENT_GREEN_R, UI_ACCENT_GREEN_G, UI_ACCENT_GREEN_B, alpha);
+            else
+                glColor4f(0.533f, 0.533f, 0.533f, alpha);
+            draw_string((float)(state_right - st_px), (float)ey, st, FONT_SMALL);
         }
         ey -= LINE_H;
     }
@@ -3643,111 +3738,25 @@ void render_var_panel(void) {
 }
 
 /* ========================================================================= */
-/* Configuration menu (4.10)                                                  */
+/* Configuration menu — now hosted inside the MENU_CONFIG dropdown            */
 /* ========================================================================= */
 
-#define CFG_ROW_H   22
-#define CFG_PANEL_W 380
-#define CFG_PAD      10
-#define CFG_TITLE_H  24
-
-static void cfg_panel_geom(int *px, int *py, int *pw, int *ph) {
-    int sc_x, sc_y, sc_w, sc_h;
-    scene_rect(&sc_x, &sc_y, &sc_w, &sc_h);
-    *pw = CFG_PANEL_W;
-    *ph = CFG_TITLE_H + CFG_ITEM_COUNT * CFG_ROW_H + 2 * CFG_PAD;
-    *px = sc_x + (sc_w - *pw) / 2;
-    if (*px < sc_x + 4) *px = sc_x + 4;
-    *py = sc_y + (sc_h - *ph) / 2;
-    if (*py < sc_y + 4) *py = sc_y + 4;
+int ui_panels_handle_right_press(int mx, int my) {
+    if (g_open_menu != MENU_CONFIG) return 0;
+    int item = menu_dropdown_item_hit(mx, my);
+    if (item < 0) return 0;
+    repl_cfg_cycle_row(item, -1);
+    return 1;
 }
 
-/* Return config row index for GLUT coord, or -1 if outside panel. */
-int cfg_hit_row(int gx, int gy) {
-    int px, py, pw, ph;
-    cfg_panel_geom(&px, &py, &pw, &ph);
-    int ry = g_win_h - gy;
-    if (gx < px || gx >= px + pw || ry < py || ry >= py + ph) return -1;
-    int inner_top = py + ph - CFG_PAD - CFG_TITLE_H;
-    int row = (inner_top - ry) / CFG_ROW_H;
-    if (row < 0 || row >= CFG_ITEM_COUNT) return -1;
-    return row;
-}
-
-void render_config_menu(void) {
-    if (!g_show_config) return;
-
-    int px, py, pw, ph;
-    cfg_panel_geom(&px, &py, &pw, &ph);
-
-    begin_2d();
-    glEnable(GL_BLEND);
-    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-
-    /* Background */
-    glColor4f(0.04f, 0.04f, 0.08f, 0.93f);
-    draw_quad((float)px, (float)py, (float)pw, (float)ph);
-
-    /* Border */
-    glColor4f(0.50f, 0.50f, 0.80f, 0.80f);
-    glBegin(GL_LINE_LOOP);
-    glVertex2f((float)px,        (float)py);
-    glVertex2f((float)(px + pw), (float)py);
-    glVertex2f((float)(px + pw), (float)(py + ph));
-    glVertex2f((float)px,        (float)(py + ph));
-    glEnd();
-
-    /* Title */
-    glColor3f(0.80f, 0.80f, 1.00f);
-    draw_string((float)(px + 10),
-                (float)(py + ph - CFG_PAD - 4),
-                "Configuration  ( ` to close )", FONT_MONO);
-
-    /* Column x positions */
-    int col_label = px + 10;
-    int col_state = px + pw - 190;
-    int col_key   = px + pw - 56;
-
-    int inner_top = py + ph - CFG_PAD - CFG_TITLE_H;
-
-    for (int i = 0; i < CFG_ITEM_COUNT; i++) {
-        int row_y  = inner_top - (i + 1) * CFG_ROW_H;
-        int text_y = row_y + 5;
-
-        /* Hover highlight */
-        if (g_config_hover == i) {
-            glColor4f(0.20f, 0.20f, 0.45f, 0.65f);
-            draw_quad((float)(px + 1), (float)row_y,
-                      (float)(pw - 2), (float)CFG_ROW_H);
-        }
-
-        /* Label */
-        glColor3f(0.80f, 0.80f, 0.85f);
-        draw_string((float)col_label, (float)text_y,
-                    g_cfg_items[i].label, FONT_SMALL);
-
-        /* Current state */
-        int val = *g_cfg_items[i].value;
-        const char *state_str;
-        if (g_cfg_items[i].state_names) {
-            state_str = g_cfg_items[i].state_names[val];
-        } else {
-            state_str = val ? "ON" : "OFF";
-        }
-        if (val)
-            glColor3f(0.50f, 1.00f, 0.50f);
-        else
-            glColor3f(0.60f, 0.60f, 0.65f);
-        draw_string((float)col_state, (float)text_y, state_str, FONT_SMALL);
-
-        /* Key hint */
-        glColor3f(0.50f, 0.60f, 0.75f);
-        draw_string((float)col_key, (float)text_y,
-                    g_cfg_items[i].key_hint, FONT_SMALL);
+void ui_panels_open_config(void) {
+    if (g_open_menu == MENU_CONFIG) {
+        g_open_menu = -1;
+        return;
     }
-
-    glDisable(GL_BLEND);
-    end_2d();
+    g_open_menu = MENU_CONFIG;
+    g_menu_open_time = g_anim_time;
+    g_menu_item_hover = -1;
 }
 
 /* ========================================================================= */

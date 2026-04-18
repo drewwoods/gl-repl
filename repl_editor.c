@@ -86,8 +86,6 @@ int   g_drag_log_mode = 0;  /* 0=linear (LMB drag), 1=logarithmic (RMB drag) */
 float g_drag_start_val = 0.0f;
 int   g_drag_start_x = 0;
 
-int g_show_config = 0;
-int g_config_hover = -1;
 
 GLCmd g_clipboard[MAX_COMMANDS];
 int   g_clipboard_count = 0;
@@ -1543,8 +1541,7 @@ void keyboard_func(unsigned char key, int x, int y) {
     if (!g_search_active && key == '`') {
         if (g_replay_active)
             replay_stop();
-        g_show_config = !g_show_config;
-        g_config_hover = -1;
+        ui_panels_open_config();
         return;
     }
 
@@ -1622,10 +1619,6 @@ void keyboard_func(unsigned char key, int x, int y) {
         return;
 
     if (key == KEY_ESC) {
-        if (g_show_config) {
-            g_show_config = 0;
-            return;
-        }
         if (ui_panels_handle_escape()) {
             glutPostRedisplay();
             return;
@@ -2510,7 +2503,7 @@ static void special_func(int key, int x, int y) {
  * apply any per-item side effects. Right-click in the config menu
  * reuses this with delta=-1 so the user can seek back after
  * overshooting an entry like Grid or Axes. */
-static void cfg_cycle_row(int row, int delta) {
+void repl_cfg_cycle_row(int row, int delta) {
     if (row < 0 || row >= CFG_ITEM_COUNT) return;
 
     /* Replay is special-cased: its cfg toggle kicks off/ends the
@@ -2583,18 +2576,6 @@ static void mouse_func(int button, int state, int x, int y) {
     }
 
     if (button == GLUT_LEFT_BUTTON && state == GLUT_DOWN) {
-        if (g_show_config) {
-            int row = cfg_hit_row(x, y);
-            if (row >= 0) {
-                cfg_cycle_row(row, +1);
-                glutPostRedisplay();
-                return;
-            }
-            g_show_config = 0;
-            glutPostRedisplay();
-            return;
-        }
-
         if (g_show_var_panel) {
             int row;
             if (var_panel_hit(x, y, &row)) {
@@ -2655,17 +2636,13 @@ static void mouse_func(int button, int state, int x, int y) {
         }
     }
 
-    /* Right-click inside the config menu cycles the item backward.
-     * Handled before the generic right-button-drags-camera path so
-     * the click doesn't also start a camera rotation. Misses leave
-     * the menu open so the user can keep seeking. */
-    if (button == GLUT_RIGHT_BUTTON && state == GLUT_DOWN && g_show_config) {
-        int row = cfg_hit_row(x, y);
-        if (row >= 0) {
-            cfg_cycle_row(row, -1);
+    /* Right-click inside the Config dropdown cycles the item backward;
+     * missed clicks leave the menu open so the user can keep seeking. */
+    if (button == GLUT_RIGHT_BUTTON && state == GLUT_DOWN) {
+        if (ui_panels_handle_right_press(x, y)) {
             glutPostRedisplay();
+            return;
         }
-        return;
     }
 
     /* Right-click on var panel: logarithmic drag mode. */
@@ -2753,13 +2730,6 @@ static void mousewheel_func(int wheel, int direction, int x, int y) {
 static void passive_motion_func(int x, int y) {
     g_mouse_x = x;
     g_mouse_y = y;
-
-    if (g_show_config) {
-        int prev = g_config_hover;
-        g_config_hover = cfg_hit_row(x, y);
-        if (g_config_hover != prev)
-            glutPostRedisplay();
-    }
 
     if (g_layout_vertical) {
         int panel_h_px = (int)(g_win_h * g_panel_frac);
