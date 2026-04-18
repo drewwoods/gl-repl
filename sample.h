@@ -143,6 +143,11 @@ typedef enum {
 #define REPLAY_HUD_TEXT_LINE2_Y   4
 #define REPLAY_HUD_BOTTOM_Y (REPLAY_HUD_MARGIN_Y + REPLAY_HUD_HEIGHT)
 
+/* Height of the amber status strip along the bottom of the scene — used by
+ * both ui_panels.c (var panel lift, code panel statusbar) and scene_render.c
+ * (replay HUD lift) so the HUD clears the strip. */
+#define STATUSBAR_H 22
+
 typedef struct {
     GLdouble pos[3];
     GLdouble normal[3]; /* per-vertex normal, default (0,0,1) */

@@ -16,7 +16,8 @@
 #define _HELP_STR(x)  _HELP_STR2(x)
 
 /* Status footer height — design: 22px strip flush against code panel bottom */
-#define STATUSBAR_H   22
+/* STATUSBAR_H lives in sample.h now so scene_render.c can lift the
+ * replay HUD above the amber status strip.  */
 
 /* ========================================================================= */
 /* Layout geometry helpers                                                    */
@@ -1245,9 +1246,10 @@ static void menubar_rects(int menu_x[NUM_MENUS], int menu_w[NUM_MENUS],
 
     int right_edge = cp_x + cp_w - CODE_MARGIN_X;
 
-    /* PIN_REPLAY — fixed width on the far right. */
-    int replay_label_w = (int)strlen(g_pin_btn_labels[PIN_REPLAY]) * FONT_SMALL_W;
-    pin_w[PIN_REPLAY] = replay_label_w + 18;
+    /* PIN_REPLAY — width reserves room for the widest state label plus a
+     * 12px state icon (triangle / pause-bars) and padding. */
+    int replay_label_w = (int)strlen("Replaying") * FONT_SMALL_W;
+    pin_w[PIN_REPLAY] = replay_label_w + 12 /* icon */ + 22 /* pads */;
     pin_x[PIN_REPLAY] = right_edge - pin_w[PIN_REPLAY];
 
     /* PIN_SEARCH — fills the gap between the last menu and PIN_REPLAY. */
@@ -2295,7 +2297,15 @@ void render_code_panel(void) {
                         g_menu_labels[i], FONT_SMALL);
         }
 
-        /* Right-side pins: Scene | Search | Replay */
+        /* Mask the combined pin area with the menubar bg so a long menu
+         * label in a narrow window can't bleed through transparent pin
+         * slots (pins must stay visible and take hit-test priority). */
+        int pin_block_x = pin_x[PIN_SEARCH];
+        int pin_block_w = cp_x + cp_w - CODE_MARGIN_X - pin_block_x;
+        glColor4f(0.114f, 0.114f, 0.114f, 1.0f); /* #1d1d1d, fully opaque */
+        draw_quad((float)pin_block_x, (float)by, (float)pin_block_w, (float)bh);
+
+        /* Right-side pins: Search | Replay (always rendered on top) */
         for (int i = 0; i < NUM_PIN_BTNS; i++) {
             int hover = (hover_pin == i);
             int active = (i == PIN_REPLAY && g_replay_active);
@@ -2340,10 +2350,46 @@ void render_code_panel(void) {
                 glColor3f(0.667f, 0.667f, 0.667f); /* #aaa */
                 draw_string((float)(kx + 5), (float)(ky + 2),
                             SEARCH_KBD_LABEL, FONT_SMALL);
+            } else if (i == PIN_REPLAY) {
+                /* Green accent (#6fb36f), state icon + dynamic label */
+                const char *label = "Replay";
+                if (g_replay_state == REPLAY_PLAYING) label = "Replaying";
+                else if (g_replay_state == REPLAY_PAUSED) label = "Paused";
+                else if (g_replay_state == REPLAY_DONE)   label = "Done";
+
+                int icon_x = pin_x[i] + 10;
+                int icon_cy = by + bh / 2;
+                int icon_sz = 8;
+
+                glColor3f(0.435f, 0.702f, 0.435f); /* #6fb36f */
+
+                if (g_replay_state == REPLAY_PLAYING) {
+                    /* Two vertical bars (pause glyph) */
+                    float bw = 2.5f, gap = 2.0f;
+                    float by0 = (float)icon_cy - (float)icon_sz * 0.5f;
+                    float bh0 = (float)icon_sz;
+                    draw_quad((float)icon_x,                    by0, bw, bh0);
+                    draw_quad((float)icon_x + bw + gap,         by0, bw, bh0);
+                } else if (g_replay_state == REPLAY_PAUSED) {
+                    /* Play triangle — click to resume */
+                    float x0 = (float)icon_x;
+                    float cy = (float)icon_cy;
+                    glBegin(GL_TRIANGLES);
+                    glVertex2f(x0,             cy - (float)icon_sz * 0.5f);
+                    glVertex2f(x0,             cy + (float)icon_sz * 0.5f);
+                    glVertex2f(x0 + icon_sz,   cy);
+                    glEnd();
+                } else {
+                    /* Square — stopped (OFF / DONE) */
+                    float sx = (float)icon_x;
+                    float sy = (float)icon_cy - (float)icon_sz * 0.5f;
+                    draw_quad(sx, sy, (float)icon_sz, (float)icon_sz);
+                }
+
+                int tx = icon_x + 12 + 6;
+                draw_string((float)tx, (float)(by + 3), label, FONT_SMALL);
             } else {
-                if (i == PIN_REPLAY)
-                    glColor3f(0.851f, 0.424f, 0.310f); /* #d96c4f */
-                else if (hover || active)
+                if (hover || active)
                     glColor3f(1.0f, 1.0f, 1.0f);
                 else
                     glColor3f(0.847f, 0.847f, 0.847f);
@@ -3849,7 +3895,26 @@ void handle_code_panel_click(int mx, int my) {
 int handle_code_panel_press(int mx, int my) {
     int actions = UI_PANEL_PRESS_NONE;
 
-    /* Menu dropdown has priority (floats over code) */
+    /* Pins (Search, Replay) take priority over menu labels and dropdown items
+     * so they remain clickable even when a menu label visually overlaps them
+     * in a narrow window — matches the render order (pins drawn on top). */
+    int pin = menubar_pin_hit(mx, my);
+    if (pin >= 0) {
+        if (g_open_menu >= 0) g_open_menu = -1;
+        switch (pin) {
+        case PIN_REPLAY:
+            if (g_replay_active) replay_stop();
+            else                 replay_start();
+            break;
+        case PIN_SEARCH:
+            handle_search_key(KEY_CTRL_F);
+            g_search_open_time = g_anim_time;
+            break;
+        }
+        return UI_PANEL_PRESS_CONSUMED;
+    }
+
+    /* Menu dropdown (floats over code) */
     if (g_open_menu >= 0) {
         /* Clicking the same top-level menu toggles closed; clicking another
          * switches to it. */
@@ -3877,21 +3942,6 @@ int handle_code_panel_press(int mx, int my) {
     if (menu >= 0) {
         g_open_menu = menu;
         g_menu_open_time = g_anim_time;
-        return UI_PANEL_PRESS_CONSUMED;
-    }
-
-    int pin = menubar_pin_hit(mx, my);
-    if (pin >= 0) {
-        switch (pin) {
-        case PIN_REPLAY:
-            if (g_replay_active) replay_stop();
-            else                 replay_start();
-            break;
-        case PIN_SEARCH:
-            handle_search_key(KEY_CTRL_F);
-            g_search_open_time = g_anim_time;
-            break;
-        }
         return UI_PANEL_PRESS_CONSUMED;
     }
 
