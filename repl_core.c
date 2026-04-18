@@ -3880,6 +3880,7 @@ static void display_func(void) {
     render_autocomplete();
     render_example_dropdown();
     render_var_panel();
+    render_scene_status();
     render_config_menu();
     render_help();
     prof_end(PROF_UI_PANELS);

@@ -2737,26 +2737,8 @@ void render_code_panel(void) {
             tx += (int)strlen(aa_buf) * FONT_SMALL_W;
         }
 
-        /* Amber error/status slot (shown when g_status is active) */
-        if (g_status_ttl > 0 && g_status[0]) {
-            STATUSBAR_SEP();
-            float alpha = g_status_ttl > 60 ? 1.0f : (float)g_status_ttl / 60.0f;
-            int max_px = cp_x + cp_w - 90 - tx;  /* reserve F1 help slot */
-            int max_chars = max_px / FONT_SMALL_W;
-            if (max_chars < 8) max_chars = 8;
-            char err[256];
-            snprintf(err, sizeof(err), "! %s", g_status);
-            if ((int)strlen(err) > max_chars) {
-                if (max_chars > 3) {
-                    err[max_chars - 3] = '.';
-                    err[max_chars - 2] = '.';
-                    err[max_chars - 1] = '.';
-                    err[max_chars] = '\0';
-                }
-            }
-            glColor4f(0.910f, 0.690f, 0.376f, alpha); /* #e8b060 */
-            draw_string((float)tx, (float)text_y, err, FONT_SMALL);
-        }
+        /* The amber g_status message renders at the bottom of the scene panel
+         * (see render_scene_status()) — the statusbar has limited width. */
 
         /* Right-aligned F1 help affordance */
         {
@@ -3395,6 +3377,72 @@ int var_panel_hit(int gx, int gy, int *out_row) {
     if (row < 0 || row >= g_num_predef_vars) return 0;
     if (out_row) *out_row = row;
     return 1;
+}
+
+/* Amber status/error strip along the bottom of the scene panel.  The scene
+ * is much wider than the code-panel statusbar slot, so long diagnostics
+ * (~80 chars) fit here without truncation. */
+void render_scene_status(void) {
+    if (g_status_ttl <= 0 || !g_status[0]) return;
+
+    int sc_x, sc_y, sc_w, sc_h;
+    scene_rect(&sc_x, &sc_y, &sc_w, &sc_h);
+    if (sc_w <= 0 || sc_h <= 0) return;
+
+    int bar_h = STATUSBAR_H;
+    int bar_y = sc_y;
+
+    float alpha = g_status_ttl > 60 ? 1.0f : (float)g_status_ttl / 60.0f;
+
+    begin_2d();
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+    /* Design ref: amber error banner — bg #3a2a10, top rule #1a1208, text
+     * #f0c070, "!" in bordered circle. */
+    glColor4f(0.227f, 0.165f, 0.063f, 0.92f * alpha);
+    draw_quad((float)sc_x, (float)bar_y, (float)sc_w, (float)bar_h);
+    glColor4f(0.102f, 0.071f, 0.031f, alpha);
+    glBegin(GL_LINES);
+    glVertex2f((float)sc_x,          (float)(bar_y + bar_h));
+    glVertex2f((float)(sc_x + sc_w), (float)(bar_y + bar_h));
+    glEnd();
+
+    int text_y = bar_y + (bar_h - FONT_SMALL_H) / 2 + 1;
+
+    /* Bordered "!" badge on the left */
+    int badge_d = 14;
+    int badge_x = sc_x + CODE_MARGIN_X;
+    int badge_y = bar_y + (bar_h - badge_d) / 2;
+    glColor4f(0.941f, 0.753f, 0.439f, alpha);
+    glBegin(GL_LINE_LOOP);
+    for (int i = 0; i < 16; i++) {
+        float a = (float)i * (6.2831853f / 16.0f);
+        glVertex2f(badge_x + badge_d * 0.5f + cosf(a) * (badge_d * 0.5f),
+                   badge_y + badge_d * 0.5f + sinf(a) * (badge_d * 0.5f));
+    }
+    glEnd();
+    draw_string((float)(badge_x + badge_d / 2 - FONT_SMALL_W / 2 + 1),
+                (float)text_y, "!", FONT_SMALL);
+
+    int tx = badge_x + badge_d + 8;
+    int max_px = sc_x + sc_w - CODE_MARGIN_X - tx;
+    int max_chars = max_px / FONT_SMALL_W;
+    if (max_chars < 8) max_chars = 8;
+    if (max_chars > 255) max_chars = 255;
+
+    char msg[256];
+    int n = (int)strlen(g_status);
+    if (n > max_chars) {
+        snprintf(msg, sizeof(msg), "%.*s...", max_chars - 3, g_status);
+    } else {
+        snprintf(msg, sizeof(msg), "%s", g_status);
+    }
+    glColor4f(0.941f, 0.753f, 0.439f, alpha); /* #f0c070 */
+    draw_string((float)tx, (float)text_y, msg, FONT_SMALL);
+
+    glDisable(GL_BLEND);
+    end_2d();
 }
 
 void render_var_panel(void) {

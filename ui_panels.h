@@ -13,6 +13,7 @@ void render_autocomplete(void);
 void render_example_dropdown(void);
 void render_help(void);
 void render_var_panel(void);
+void render_scene_status(void);
 void render_config_menu(void);
 
 int  cfg_hit_row(int gx, int gy);
