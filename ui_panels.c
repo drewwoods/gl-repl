@@ -1136,78 +1136,162 @@ static int code_panel_header_row_count(int panel_w, int text_x) {
     return rows;
 }
 
-/* Header button bar: Save C | Example | Config | Replay */
-#define NUM_HEADER_BTNS 5
-static const char *g_header_btn_labels[NUM_HEADER_BTNS] = {
-    "Save C", "Example", "Config", "Replay", "Scene"
+/* Menu bar — styled after Header Wireframes v2.
+ * Left: top-level menus (File, Examples, Config).
+ * Right: pinned buttons (Replay, Scene) — retained in flat form until the
+ * right-side redesign lands. */
+
+enum { MENU_FILE = 0, MENU_EXAMPLES, MENU_CONFIG, NUM_MENUS };
+
+static const char *g_menu_labels[NUM_MENUS] = {
+    "File", "Examples", "Config"
 };
 
-/* Example dropdown state */
-static int g_example_dropdown_open  = 0;
-static int g_example_dropdown_hover = -1;
+enum { PIN_REPLAY = 0, PIN_SCENE, NUM_PIN_BTNS };
+static const char *g_pin_btn_labels[NUM_PIN_BTNS] = {
+    "Replay", "Scene"
+};
 
-int example_dropdown_is_open(void) { return g_example_dropdown_open; }
+static int g_open_menu = -1;      /* index into g_menu_labels; -1 = none */
+static int g_menu_item_hover = -1;
 
-static void header_btn_rects(int bx[NUM_HEADER_BTNS], int *by, int *bw, int *bh) {
-    int cp_x, cp_y, cp_w, cp_h;
-    code_panel_rect(&cp_x, &cp_y, &cp_w, &cp_h);
-    int panel_top = cp_y + cp_h;
-    /* Sit between info bar (row 0) and first code line (row 2) */
-    if (by) *by = panel_top - CODE_MARGIN_Y - 2 * LINE_H;
-    if (bh) *bh = LINE_H;
-    /* Left-align buttons */
-    int x = cp_x + CODE_MARGIN_X;
-    for (int i = 0; i < NUM_HEADER_BTNS; i++) {
-        bx[i] = x;
-        x += (int)strlen(g_header_btn_labels[i]) * 8 + 12 + 4;
-    }
-    (void)bw; /* widths vary per button; callers compute per-label */
-}
-
-static int header_btn_hit(int gx, int gy) {
-    int bx[NUM_HEADER_BTNS], by, bh;
-    int ry = g_win_h - gy;
-    header_btn_rects(bx, &by, NULL, &bh);
-    for (int i = 0; i < NUM_HEADER_BTNS; i++) {
-        int w = (int)strlen(g_header_btn_labels[i]) * 8 + 12;
-        if (gx >= bx[i] && gx < bx[i] + w && ry >= by && ry < by + bh)
-            return i;
-    }
-    return -1;
-}
+int menu_dropdown_is_open(void) { return g_open_menu >= 0; }
+int example_dropdown_is_open(void) { return menu_dropdown_is_open(); }
 
 static const char *USER_SCENE_LABEL = "Your Scene";
 
-/* Total dropdown entries: predefined examples + user scene (when saved) */
-static int dropdown_total_count(void) {
-    return repl_example_count() + (repl_user_scene_valid() ? 1 : 0);
+enum { FILE_ITEM_EXPORT = 0, FILE_ITEM_IMPORT, FILE_ITEM_COUNT };
+
+static int menu_item_count(int menu_id) {
+    switch (menu_id) {
+    case MENU_FILE:     return FILE_ITEM_COUNT;
+    case MENU_EXAMPLES: return repl_example_count() + (repl_user_scene_valid() ? 1 : 0);
+    case MENU_CONFIG:   return 0;  /* blank for now */
+    }
+    return 0;
 }
 
-static const char *dropdown_item_name(int i) {
-    if (i < repl_example_count()) return repl_example_name(i);
-    return USER_SCENE_LABEL;
+static const char *menu_item_label(int menu_id, int i) {
+    if (menu_id == MENU_FILE) {
+        if (i == FILE_ITEM_EXPORT) return "Export";
+        if (i == FILE_ITEM_IMPORT) return "Import";
+        return NULL;
+    }
+    if (menu_id == MENU_EXAMPLES) {
+        if (i < repl_example_count()) return repl_example_name(i);
+        return USER_SCENE_LABEL;
+    }
+    return NULL;
 }
 
-/* Returns dropdown item index under (gx, gy), or -1 if none */
-static int example_dropdown_item_hit(int gx, int gy) {
-    if (!g_example_dropdown_open) return -1;
-    int n = dropdown_total_count();
-    if (n == 0) return -1;
-    int bx[NUM_HEADER_BTNS], by, bh;
+static const char *menu_item_shortcut(int menu_id, int i) {
+    if (menu_id == MENU_FILE && i == FILE_ITEM_EXPORT) return "Ctrl+S";
+    (void)i;
+    return NULL;
+}
+
+/* Returns 1 if the menu should close after activation, 0 to keep it open
+ * (for cycle/toggle-style items that will live in Config later). */
+static int menu_item_activate(int menu_id, int i) {
+    if (menu_id == MENU_FILE) {
+        if (i == FILE_ITEM_EXPORT) { repl_save_default_output(); return 1; }
+        if (i == FILE_ITEM_IMPORT) { set_status("Import not implemented yet"); return 1; }
+    } else if (menu_id == MENU_EXAMPLES) {
+        if (i < repl_example_count()) repl_load_example(i);
+        else if (repl_user_scene_valid()) repl_load_user_scene();
+        return 1;
+    }
+    return 1;
+}
+
+static void menubar_rects(int menu_x[NUM_MENUS], int menu_w[NUM_MENUS],
+                          int pin_x[NUM_PIN_BTNS], int pin_w[NUM_PIN_BTNS],
+                          int *row_y, int *row_h) {
+    int cp_x, cp_y, cp_w, cp_h;
+    code_panel_rect(&cp_x, &cp_y, &cp_w, &cp_h);
+    int panel_top = cp_y + cp_h;
+    int by = panel_top - CODE_MARGIN_Y - 2 * LINE_H;
+    int bh = LINE_H;
+    if (row_y) *row_y = by;
+    if (row_h) *row_h = bh;
+
+    int x = cp_x + CODE_MARGIN_X;
+    for (int i = 0; i < NUM_MENUS; i++) {
+        int label_w = (int)strlen(g_menu_labels[i]) * FONT_SMALL_W;
+        menu_w[i] = label_w + 18;  /* ~9px padding each side */
+        menu_x[i] = x;
+        x += menu_w[i];
+    }
+
+    int rx = cp_x + cp_w - CODE_MARGIN_X;
+    for (int i = NUM_PIN_BTNS - 1; i >= 0; i--) {
+        int label_w = (int)strlen(g_pin_btn_labels[i]) * FONT_SMALL_W;
+        pin_w[i] = label_w + 18;
+        rx -= pin_w[i];
+        pin_x[i] = rx;
+    }
+}
+
+static int menubar_menu_hit(int gx, int gy) {
+    int menu_x[NUM_MENUS], menu_w[NUM_MENUS];
+    int pin_x[NUM_PIN_BTNS], pin_w[NUM_PIN_BTNS];
+    int by, bh;
     int ry = g_win_h - gy;
-    header_btn_rects(bx, &by, NULL, &bh);
-    int dx = bx[1];
-    /* Width: widest label + padding */
-    int max_w = 0;
+    menubar_rects(menu_x, menu_w, pin_x, pin_w, &by, &bh);
+    if (ry < by || ry >= by + bh) return -1;
+    for (int i = 0; i < NUM_MENUS; i++)
+        if (gx >= menu_x[i] && gx < menu_x[i] + menu_w[i]) return i;
+    return -1;
+}
+
+static int menubar_pin_hit(int gx, int gy) {
+    int menu_x[NUM_MENUS], menu_w[NUM_MENUS];
+    int pin_x[NUM_PIN_BTNS], pin_w[NUM_PIN_BTNS];
+    int by, bh;
+    int ry = g_win_h - gy;
+    menubar_rects(menu_x, menu_w, pin_x, pin_w, &by, &bh);
+    if (ry < by || ry >= by + bh) return -1;
+    for (int i = 0; i < NUM_PIN_BTNS; i++)
+        if (gx >= pin_x[i] && gx < pin_x[i] + pin_w[i]) return i;
+    return -1;
+}
+
+static int menu_dropdown_rect(int *dx, int *dy, int *dw, int *dh) {
+    if (g_open_menu < 0) return 0;
+    int menu_x[NUM_MENUS], menu_w[NUM_MENUS];
+    int pin_x[NUM_PIN_BTNS], pin_w[NUM_PIN_BTNS];
+    int by, bh;
+    menubar_rects(menu_x, menu_w, pin_x, pin_w, &by, &bh);
+    int n = menu_item_count(g_open_menu);
+
+    int max_w = 80;
     for (int i = 0; i < n; i++) {
-        int w = (int)strlen(dropdown_item_name(i)) * FONT_W;
+        const char *lbl = menu_item_label(g_open_menu, i);
+        const char *sc  = menu_item_shortcut(g_open_menu, i);
+        int w = (int)(lbl ? strlen(lbl) : 0) * FONT_SMALL_W;
+        if (sc) w += (int)strlen(sc) * FONT_SMALL_W + 16;
         if (w > max_w) max_w = w;
     }
-    int dw = max_w + 20;
-    int dh = n * LINE_H + 6;
-    int dy = by - dh;  /* drops below the button row */
+    int width  = max_w + 28;
+    int rows   = (n > 0) ? n : 1;  /* reserve one row for "(empty)" */
+    int height = rows * LINE_H + 8;
+
+    if (dx) *dx = menu_x[g_open_menu];
+    if (dy) *dy = by - height;
+    if (dw) *dw = width;
+    if (dh) *dh = height;
+    return 1;
+}
+
+static int menu_dropdown_item_hit(int gx, int gy) {
+    if (g_open_menu < 0) return -1;
+    int n = menu_item_count(g_open_menu);
+    if (n == 0) return -1;
+    int dx, dy, dw, dh;
+    if (!menu_dropdown_rect(&dx, &dy, &dw, &dh)) return -1;
+    int ry = g_win_h - gy;
     if (gx < dx || gx >= dx + dw || ry < dy || ry >= dy + dh) return -1;
-    int row = (dy + dh - 3 - ry) / LINE_H;
+    int row = (dy + dh - 4 - ry) / LINE_H;
     if (row < 0 || row >= n) return -1;
     return row;
 }
@@ -2100,7 +2184,6 @@ void render_code_panel(void) {
     /* Top info bar */
     {
         char info[256];
-        int hover_btn = header_btn_hit(g_mouse_x, g_mouse_y);
         /* Accumulation AA indicator suffix */
         char aa_tag[24] = "";
         if (g_use_accum) {
@@ -2128,36 +2211,80 @@ void render_code_panel(void) {
         draw_string(CODE_MARGIN_X, panel_top - CODE_MARGIN_Y - 2, info,
                     FONT_SMALL);
 
-        /* Header button bar */
+        /* Menu bar — design ref: Header Wireframes v2 */
         {
-            int bx[NUM_HEADER_BTNS], by, bh;
-            header_btn_rects(bx, &by, NULL, &bh);
+            int menu_x[NUM_MENUS], menu_w[NUM_MENUS];
+            int pin_x[NUM_PIN_BTNS], pin_w[NUM_PIN_BTNS];
+            int by, bh;
+            menubar_rects(menu_x, menu_w, pin_x, pin_w, &by, &bh);
+
             glEnable(GL_BLEND);
             glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-            for (int i = 0; i < NUM_HEADER_BTNS; i++) {
-                int bw = (int)strlen(g_header_btn_labels[i]) * 8 + 12;
-                /* Active state highlight for toggle buttons */
-                int active = (i == 2 && g_show_config) ||
-                             (i == 3 && g_replay_active) ||
-                             (i == 4 && repl_user_scene_valid());
-                if (i == hover_btn)
-                    glColor4f(0.20f, 0.38f, 0.60f, 0.95f);
-                else if (active)
-                    glColor4f(0.18f, 0.35f, 0.18f, 0.90f);
+
+            /* Full-width strip: #1d1d1d */
+            glColor4f(0.114f, 0.114f, 0.114f, 0.98f);
+            draw_quad((float)cp_x, (float)by, (float)cp_w, (float)bh);
+
+            int hover_menu = menubar_menu_hit(g_mouse_x, g_mouse_y);
+            int hover_pin  = menubar_pin_hit(g_mouse_x, g_mouse_y);
+
+            /* Left-side menu labels */
+            for (int i = 0; i < NUM_MENUS; i++) {
+                int active = (g_open_menu == i);
+                int hover  = (hover_menu == i);
+                if (active) {
+                    glColor4f(0.149f, 0.149f, 0.149f, 1.0f); /* #262626 */
+                    draw_quad((float)menu_x[i], (float)by, (float)menu_w[i], (float)bh);
+                } else if (hover) {
+                    glColor4f(0.165f, 0.165f, 0.165f, 1.0f); /* #2a2a2a */
+                    draw_quad((float)menu_x[i], (float)by, (float)menu_w[i], (float)bh);
+                }
+                if (active || hover)
+                    glColor3f(1.0f, 1.0f, 1.0f);
                 else
-                    glColor4f(0.14f, 0.20f, 0.30f, 0.88f);
-                draw_quad((float)bx[i], (float)by, (float)bw, (float)bh);
-                glColor4f(0.55f, 0.72f, 0.95f, 0.95f);
-                glBegin(GL_LINE_LOOP);
-                glVertex2f((float)bx[i],        (float)by);
-                glVertex2f((float)(bx[i] + bw), (float)by);
-                glVertex2f((float)(bx[i] + bw), (float)(by + bh));
-                glVertex2f((float)bx[i],        (float)(by + bh));
-                glEnd();
-                glColor3f(0.88f, 0.93f, 1.0f);
-                draw_string((float)(bx[i] + 6), (float)(by + 3),
-                            g_header_btn_labels[i], FONT_SMALL);
+                    glColor3f(0.847f, 0.847f, 0.847f);       /* #d8d8d8 */
+                int tx = menu_x[i] + 9;
+                draw_string((float)tx, (float)(by + 3),
+                            g_menu_labels[i], FONT_SMALL);
             }
+
+            /* Right-side pinned buttons (Replay accent + Scene) */
+            for (int i = 0; i < NUM_PIN_BTNS; i++) {
+                int hover = (hover_pin == i);
+                int active = (i == PIN_REPLAY && g_replay_active) ||
+                             (i == PIN_SCENE  && repl_user_scene_valid());
+                if (hover) {
+                    glColor4f(0.165f, 0.165f, 0.165f, 1.0f);
+                    draw_quad((float)pin_x[i], (float)by, (float)pin_w[i], (float)bh);
+                } else if (active) {
+                    glColor4f(0.149f, 0.149f, 0.149f, 1.0f);
+                    draw_quad((float)pin_x[i], (float)by, (float)pin_w[i], (float)bh);
+                }
+                /* Left separator rule (#2a2a2a) */
+                glColor4f(0.165f, 0.165f, 0.165f, 1.0f);
+                glBegin(GL_LINES);
+                glVertex2f((float)pin_x[i], (float)by);
+                glVertex2f((float)pin_x[i], (float)(by + bh));
+                glEnd();
+                /* Replay gets the accent color */
+                if (i == PIN_REPLAY)
+                    glColor3f(0.851f, 0.424f, 0.310f); /* #d96c4f */
+                else if (hover || active)
+                    glColor3f(1.0f, 1.0f, 1.0f);
+                else
+                    glColor3f(0.847f, 0.847f, 0.847f);
+                int tx = pin_x[i] + 9;
+                draw_string((float)tx, (float)(by + 3),
+                            g_pin_btn_labels[i], FONT_SMALL);
+            }
+
+            /* Bottom divider (#000) */
+            glColor4f(0.0f, 0.0f, 0.0f, 1.0f);
+            glBegin(GL_LINES);
+            glVertex2f((float)cp_x,         (float)by);
+            glVertex2f((float)(cp_x + cp_w),(float)by);
+            glEnd();
+
             glDisable(GL_BLEND);
         }
     }
@@ -2621,39 +2748,24 @@ void render_autocomplete(void) {
 }
 
 void render_example_dropdown(void) {
-    if (!g_example_dropdown_open) return;
-    int n = dropdown_total_count();
-    int ne = repl_example_count();
-    if (n == 0) { g_example_dropdown_open = 0; return; }
+    if (g_open_menu < 0) return;
+    int menu_id = g_open_menu;
+    int n  = menu_item_count(menu_id);
+    int ne = (menu_id == MENU_EXAMPLES) ? repl_example_count() : -1;
 
-    /* Position: drops down from the Example button */
-    int bx[NUM_HEADER_BTNS], by, bh;
-    header_btn_rects(bx, &by, NULL, &bh);
-    int dx = bx[1];
+    int dx, dy, dw, dh;
+    if (!menu_dropdown_rect(&dx, &dy, &dw, &dh)) return;
 
-    /* Width: widest item name + padding */
-    int max_w = 0;
-    for (int i = 0; i < n; i++) {
-        int w = (int)strlen(dropdown_item_name(i)) * FONT_W;
-        if (w > max_w) max_w = w;
-    }
-    int dw = max_w + 20;
-    int dh = n * LINE_H + 6;
-    int dy = by - dh;   /* OpenGL Y: drops below the button row */
-
-    /* Update hover from current mouse position */
-    g_example_dropdown_hover = example_dropdown_item_hit(g_mouse_x, g_mouse_y);
+    g_menu_item_hover = menu_dropdown_item_hit(g_mouse_x, g_mouse_y);
 
     begin_2d();
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
-    /* Background */
-    glColor4f(0.08f, 0.10f, 0.18f, 0.96f);
+    /* Dropdown bg (#222) + border (#3a3a3a) — design ref */
+    glColor4f(0.133f, 0.133f, 0.133f, 0.98f);
     draw_quad((float)dx, (float)dy, (float)dw, (float)dh);
-
-    /* Border */
-    glColor4f(0.55f, 0.72f, 0.95f, 0.85f);
+    glColor4f(0.227f, 0.227f, 0.227f, 1.0f);
     glBegin(GL_LINE_LOOP);
     glVertex2f((float)dx,        (float)dy);
     glVertex2f((float)(dx + dw), (float)dy);
@@ -2661,34 +2773,50 @@ void render_example_dropdown(void) {
     glVertex2f((float)dx,        (float)(dy + dh));
     glEnd();
 
-    /* Entries (index 0 at top) */
+    if (n == 0) {
+        int ey = dy + dh - LINE_H + 1;
+        glColor3f(0.478f, 0.518f, 0.580f);  /* #7a8494 (header style) */
+        draw_string((float)(dx + 14), (float)ey, "(empty)", FONT_SMALL);
+        glDisable(GL_BLEND);
+        end_2d();
+        return;
+    }
+
     int ey = dy + dh - LINE_H + 1;
     for (int i = 0; i < n; i++) {
-        int is_user_scene = (i >= ne);
+        int is_user_scene = (menu_id == MENU_EXAMPLES && ne >= 0 && i >= ne);
 
-        /* Separator line before user scene entry */
+        /* Separator before user scene entry */
         if (is_user_scene && ne > 0) {
-            glColor4f(0.40f, 0.45f, 0.60f, 0.50f);
+            glColor4f(0.20f, 0.20f, 0.20f, 1.0f);  /* #333 */
             glBegin(GL_LINES);
-            glVertex2f((float)(dx + 4), (float)(ey + LINE_H - 2));
-            glVertex2f((float)(dx + dw - 4), (float)(ey + LINE_H - 2));
+            glVertex2f((float)(dx + 6),       (float)(ey + LINE_H - 2));
+            glVertex2f((float)(dx + dw - 6),  (float)(ey + LINE_H - 2));
             glEnd();
         }
 
-        if (i == g_example_dropdown_hover) {
-            glColor4f(0.20f, 0.25f, 0.45f, 0.90f);
+        if (i == g_menu_item_hover) {
+            glColor4f(0.180f, 0.290f, 0.431f, 1.0f);  /* #2e4a6e */
             draw_quad((float)(dx + 1), (float)(ey - 2),
                       (float)(dw - 2), (float)LINE_H);
-            glColor3f(1.0f, 1.0f, 0.90f);
-        } else if (is_user_scene) {
-            glColor3f(0.55f, 0.85f, 1.0f);
-        } else if (i == g_example_idx) {
-            glColor3f(0.60f, 1.0f, 0.60f);
+            glColor3f(1.0f, 1.0f, 1.0f);
+        } else if (menu_id == MENU_EXAMPLES && !is_user_scene && i == g_example_idx) {
+            glColor3f(0.851f, 0.424f, 0.310f);  /* accent for current example */
         } else {
-            glColor3f(0.65f, 0.65f, 0.72f);
+            glColor3f(0.847f, 0.847f, 0.847f);  /* #d8d8d8 */
         }
-        draw_string((float)(dx + 8), (float)ey,
-                    dropdown_item_name(i), FONT_MONO);
+
+        const char *lbl = menu_item_label(menu_id, i);
+        if (lbl)
+            draw_string((float)(dx + 14), (float)ey, lbl, FONT_SMALL);
+
+        const char *sc = menu_item_shortcut(menu_id, i);
+        if (sc) {
+            int sc_px = (int)strlen(sc) * FONT_SMALL_W;
+            glColor3f(0.533f, 0.533f, 0.533f);  /* #888 */
+            draw_string((float)(dx + dw - 14 - sc_px), (float)ey,
+                        sc, FONT_SMALL);
+        }
         ey -= LINE_H;
     }
 
@@ -3493,32 +3621,41 @@ void handle_code_panel_click(int mx, int my) {
 int handle_code_panel_press(int mx, int my) {
     int actions = UI_PANEL_PRESS_NONE;
 
-    /* Check example dropdown first (it floats over code) */
-    if (g_example_dropdown_open) {
-        int item = example_dropdown_item_hit(mx, my);
-        if (item >= 0) {
-            if (item >= repl_example_count())
-                repl_load_user_scene();
-            else
-                repl_load_example(item);
-            g_example_dropdown_open = 0;
+    /* Menu dropdown has priority (floats over code) */
+    if (g_open_menu >= 0) {
+        /* Clicking the same top-level menu toggles closed; clicking another
+         * switches to it. */
+        int over_menu = menubar_menu_hit(mx, my);
+        if (over_menu >= 0) {
+            g_open_menu = (over_menu == g_open_menu) ? -1 : over_menu;
             return UI_PANEL_PRESS_CONSUMED;
         }
-        g_example_dropdown_open = 0;
-        /* fall through so clicks still navigate code */
+        int item = menu_dropdown_item_hit(mx, my);
+        if (item >= 0) {
+            int close = menu_item_activate(g_open_menu, item);
+            if (close) g_open_menu = -1;
+            return UI_PANEL_PRESS_CONSUMED;
+        }
+        /* Click outside dropdown: dismiss, fall through for code nav */
+        g_open_menu = -1;
     }
 
-    int btn = header_btn_hit(mx, my);
-    if (btn >= 0) {
-        switch (btn) {
-        case 0: repl_save_default_output(); break;
-        case 1: g_example_dropdown_open ^= 1; break;
-        case 2: g_show_config ^= 1; break;
-        case 3:
+    int menu = menubar_menu_hit(mx, my);
+    if (menu >= 0) {
+        g_open_menu = menu;
+        /* Config also drives the existing separate config panel for now */
+        if (menu == MENU_CONFIG) { /* reserved: no-op until items added */ }
+        return UI_PANEL_PRESS_CONSUMED;
+    }
+
+    int pin = menubar_pin_hit(mx, my);
+    if (pin >= 0) {
+        switch (pin) {
+        case PIN_REPLAY:
             if (g_replay_active) replay_stop();
             else                 replay_start();
             break;
-        case 4:
+        case PIN_SCENE:
             if (repl_user_scene_valid()) repl_load_user_scene();
             break;
         }

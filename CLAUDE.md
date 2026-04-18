@@ -85,13 +85,28 @@ Grids and axes are themeable via a `switch` in `scene_render.c`:
    in `scene_render.c`
 4. The theme cycles via F3 (grid) / F4 (axes) in `repl_editor.c`
 
-## Adding Header Buttons
+## Adding Menu Bar Items
 
-Header buttons live in `ui_panels.c`:
-1. Increment `NUM_HEADER_BTNS`
-2. Add label to `g_header_btn_labels[]`
-3. Add active-state condition in the render loop (`int active = ...`)
-4. Add `case N:` in `handle_code_panel_press()` switch
+The top row is a menu bar in `ui_panels.c` styled after the Header Wireframes
+v2 mock. Left side has top-level menus (File / Examples / Config); right side
+has pinned buttons (Replay / Scene).
+
+To add an **item** to an existing top-level menu:
+1. Extend the per-menu enum (e.g. `FILE_ITEM_*`) and bump `*_ITEM_COUNT`
+2. Add the label in `menu_item_label()` and shortcut (if any) in
+   `menu_item_shortcut()`
+3. Add the action branch in `menu_item_activate()`; return `1` for
+   action items (menu closes), `0` for cycle/toggle items (menu stays
+   open — only click-outside dismisses)
+
+To add a **new top-level menu**: extend the `MENU_*` enum (before
+`NUM_MENUS`), add a label in `g_menu_labels[]`, and handle the new id in
+`menu_item_count` / `menu_item_label` / `menu_item_shortcut` /
+`menu_item_activate`.
+
+To add a **pinned right-side button**: extend `PIN_*` enum, append a label
+to `g_pin_btn_labels[]`, and add a `case` in `handle_code_panel_press()`
+inside the `menubar_pin_hit` block.
 
 ## User Scene System
 
