@@ -331,8 +331,7 @@ int main(void) {
         memset(&cmd, 0, sizeof(cmd));
         int ok = repl_parse_command("glColor3f(1,, 3)", &cmd);
         ASSERT_TRUE("malformed glColor3f returns 0", ok == 0);
-        ASSERT_TRUE("malformed glColor3f incomplete",
-                    strstr(g_status, "Incomplete command") != NULL);
+        assert_status_contains("malformed glColor3f incomplete", "Incomplete command");
         ASSERT_TRUE("malformed glColor3f not unknown",
                     strstr(g_status, "Unknown cmd") == NULL);
     }
