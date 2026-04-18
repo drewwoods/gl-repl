@@ -360,6 +360,19 @@ static void run_tests(void) {
     ASSERT_TO_REPL("powf(x,2)", "pow(x,2)");
     ASSERT_TO_REPL("repl_randf(i,3)", "rand(i,3)");
     {
+        char tiny[5];
+        c_expr_to_repl("sinf(x)", tiny, sizeof(tiny));
+        g_tests_run++;
+        if (strcmp(tiny, "sin(") == 0) g_tests_passed++;
+        else printf("  FAIL: c_expr_to_repl truncation -> \"%s\"\n", tiny);
+
+        strcpy(tiny, "keep");
+        c_expr_to_repl("sinf(x)", tiny, 0);
+        g_tests_run++;
+        if (strcmp(tiny, "keep") == 0) g_tests_passed++;
+        else printf("  FAIL: c_expr_to_repl out_sz=0 changed output -> \"%s\"\n", tiny);
+    }
+    {
         char buf[8];
         strip_ws(" \t a b \n", buf, sizeof(buf));
         g_tests_run++;
