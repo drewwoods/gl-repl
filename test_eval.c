@@ -130,6 +130,46 @@ static int g_tests_passed = 0;
     else { printf("  FAIL: has_vars(\"%s\") = %d, expected %d\n", input, _got, expected); } \
 } while(0)
 
+#define ASSERT_DECLARE_OK(name) do { \
+    char _err[128] = {0}; \
+    int _ok = declare_predef_var(name, _err, sizeof(_err)); \
+    g_tests_run++; \
+    if (_ok) { g_tests_passed++; } \
+    else { printf("  FAIL: declare_predef_var(\"%s\") should succeed, got: %s\n", name, _err); } \
+} while(0)
+
+#define ASSERT_DECLARE_FAIL(name) do { \
+    char _err[128] = {0}; \
+    int _ok = declare_predef_var(name, _err, sizeof(_err)); \
+    g_tests_run++; \
+    if (!_ok) { g_tests_passed++; } \
+    else { printf("  FAIL: declare_predef_var(\"%s\") should fail\n", name); } \
+} while(0)
+
+#define ASSERT_VALIDATE_OK(src, vars, nv) do { \
+    char _err[128] = {0}; \
+    int _ok = validate_expression_idents(src, vars, nv, _err, sizeof(_err)); \
+    g_tests_run++; \
+    if (_ok) { g_tests_passed++; } \
+    else { printf("  FAIL: validate_expr(\"%s\") should pass, got: %s\n", src, _err); } \
+} while(0)
+
+#define ASSERT_VALIDATE_FAIL(src, vars, nv) do { \
+    char _err[128] = {0}; \
+    int _ok = validate_expression_idents(src, vars, nv, _err, sizeof(_err)); \
+    g_tests_run++; \
+    if (!_ok) { g_tests_passed++; } \
+    else { printf("  FAIL: validate_expr(\"%s\") should fail\n", src); } \
+} while(0)
+
+#define ASSERT_SOURCE_USES(src, name, expected) do { \
+    int _got = source_uses_ident(src, name); \
+    g_tests_run++; \
+    if (_got == expected) { g_tests_passed++; } \
+    else { printf("  FAIL: source_uses_ident(\"%s\", \"%s\") = %d, expected %d\n", \
+                  src, name, _got, expected); } \
+} while(0)
+
 static int predef_idx(const char *name) {
     for (int i = 0; i < g_num_predef_vars; i++) {
         if (strcmp(g_predef_vars[i].name, name) == 0)
@@ -485,6 +525,253 @@ static void run_tests(void) {
     ASSERT_HAS_VARS("y - 3", 1);
     ASSERT_HAS_VARS("z / 4", 1);
     ASSERT_HAS_VARS("alpha + beta", 0);
+
+    /* ---- Expression evaluator — additional coverage ---- */
+    printf("Expression evaluator (additional):\n");
+
+    /* Math functions with less obvious inputs */
+    ASSERT_FLOAT("sin(PI)", 0.0f);                     /* sin(π) ≈ 0 */
+    ASSERT_FLOAT("sqrt(9)", 3.0f);
+    ASSERT_FLOAT("sqrt(0)", 0.0f);
+    ASSERT_FLOAT("abs(-3.5)", 3.5f);
+    ASSERT_FLOAT("ceil(-2.3)", -2.0f);
+    ASSERT_FLOAT("floor(-2.3)", -3.0f);
+    ASSERT_FLOAT("min(5,3)", 3.0f);                    /* reversed arg order */
+    ASSERT_FLOAT("max(5,3)", 5.0f);
+    ASSERT_FLOAT("pow(2,0)", 1.0f);
+    ASSERT_FLOAT("fmod(-7,3)", fmodf(-7.0f, 3.0f));   /* sign follows dividend */
+    ASSERT_FLOAT("fmod(0,5)", 0.0f);
+
+    /* Operator precedence and nesting */
+    ASSERT_FLOAT("1+2*3-4/2", 5.0f);                  /* 1+(2*3)-(4/2) */
+    ASSERT_FLOAT("(1+2)*(3+4)", 21.0f);
+    ASSERT_FLOAT("((2+3))*((4-1)+2)", 25.0f);          /* deeply nested */
+    ASSERT_FLOAT("---5", -5.0f);                       /* triple unary minus */
+    ASSERT_FLOAT("--5", 5.0f);                         /* double unary minus (exists) */
+    ASSERT_FLOAT("1.5f", 1.5f);                        /* C-style float literal */
+
+    /* Logical operators with non-integer truth values */
+    ASSERT_FLOAT("!0.5", 0.0f);                        /* 0.5 is truthy */
+    ASSERT_FLOAT("!0.0", 1.0f);
+    ASSERT_FLOAT("1==1 && 2>1", 1.0f);
+    ASSERT_FLOAT("1==0 || 2>1", 1.0f);
+    ASSERT_FLOAT("5>=5 && 5<=5", 1.0f);
+    ASSERT_FLOAT("0 || 0 || 1", 1.0f);
+    ASSERT_FLOAT("1 && 1 && 0", 0.0f);
+
+    /* Functions with wrong arg count — fall through to 0.0 */
+    ASSERT_FLOAT("pow(2)", 0.0f);                      /* needs 2 args */
+    ASSERT_FLOAT("min(3)", 0.0f);
+    ASSERT_FLOAT("max(7)", 0.0f);
+
+    /* ---- declare_predef_var error paths ---- */
+    printf("declare_predef_var (error paths):\n");
+    {
+        char err[128];
+        int ok;
+
+        /* Empty name */
+        ok = declare_predef_var("", err, sizeof(err));
+        g_tests_run++;
+        if (!ok) g_tests_passed++;
+        else printf("  FAIL: empty name should fail\n");
+
+        /* Name starts with a digit */
+        ok = declare_predef_var("3x", err, sizeof(err));
+        g_tests_run++;
+        if (!ok) g_tests_passed++;
+        else printf("  FAIL: digit-start name should fail\n");
+
+        /* Name contains invalid character */
+        ok = declare_predef_var("x@y", err, sizeof(err));
+        g_tests_run++;
+        if (!ok) g_tests_passed++;
+        else printf("  FAIL: invalid char name should fail\n");
+
+        /* Reserved built-in name */
+        ok = declare_predef_var("sin", err, sizeof(err));
+        g_tests_run++;
+        if (!ok) g_tests_passed++;
+        else printf("  FAIL: reserved name 'sin' should fail\n");
+
+        ok = declare_predef_var("PI", err, sizeof(err));
+        g_tests_run++;
+        if (!ok) g_tests_passed++;
+        else printf("  FAIL: reserved name 'PI' should fail\n");
+
+        ok = declare_predef_var("t", err, sizeof(err));
+        g_tests_run++;
+        if (!ok) g_tests_passed++;
+        else printf("  FAIL: reserved name 't' should fail (already declared)\n");
+
+        /* Already declared */
+        ok = declare_predef_var("x", err, sizeof(err));
+        g_tests_run++;
+        if (!ok) g_tests_passed++;
+        else printf("  FAIL: re-declaring 'x' should fail\n");
+
+        /* Name too long (>= 16 chars) */
+        ok = declare_predef_var("averylongvarname1", err, sizeof(err));
+        g_tests_run++;
+        if (!ok) g_tests_passed++;
+        else printf("  FAIL: too-long name should fail\n");
+
+        /* Valid new declaration */
+        ASSERT_DECLARE_OK("alpha");
+        ASSERT_DECLARE_OK("_beta");
+
+        /* Undeclare and re-declare */
+        undeclare_predef_var("alpha");
+        g_tests_run++;
+        if (find_predef_var_idx("alpha") == -1) g_tests_passed++;
+        else printf("  FAIL: 'alpha' should be gone after undeclare\n");
+
+        ASSERT_DECLARE_OK("alpha");   /* re-declare after undeclare */
+
+        /* Undeclare non-existent — no-op, count unchanged */
+        int count_before = g_num_predef_vars;
+        undeclare_predef_var("nosuchvar");
+        g_tests_run++;
+        if (g_num_predef_vars == count_before) g_tests_passed++;
+        else printf("  FAIL: undeclare non-existent changed count\n");
+
+        /* Clean up extras so later tests aren't affected */
+        undeclare_predef_var("alpha");
+        undeclare_predef_var("_beta");
+    }
+
+    /* ---- validate_expression_idents ---- */
+    printf("validate_expression_idents:\n");
+    {
+        ExprVar lv[2] = { { "r", 1.0f }, { "h", 2.0f } };
+
+        /* Pure number — no identifiers at all */
+        ASSERT_VALIDATE_OK("3.14", NULL, 0);
+        ASSERT_VALIDATE_OK("42 + 1", NULL, 0);
+
+        /* Constants PI and TAU are always allowed */
+        ASSERT_VALIDATE_OK("PI * 2", NULL, 0);
+        ASSERT_VALIDATE_OK("TAU / 4", NULL, 0);
+
+        /* Function calls are allowed (identifier followed by '(') */
+        ASSERT_VALIDATE_OK("sin(x)", lv, 2);   /* sin is a function call */
+        ASSERT_VALIDATE_OK("sqrt(r*r + h*h)", lv, 2);
+
+        /* Declared predefined var */
+        ASSERT_VALIDATE_OK("x + 1", NULL, 0);  /* x is a predef var */
+
+        /* Loop-local var provided in vars array */
+        ASSERT_VALIDATE_OK("r + h", lv, 2);
+
+        /* Undeclared variable — should fail */
+        ASSERT_VALIDATE_FAIL("undefined_var", NULL, 0);
+        ASSERT_VALIDATE_FAIL("r + unknown", lv, 2);
+
+        /* Inline comment — scanner stops before it */
+        ASSERT_VALIDATE_OK("x + 1 // comment with undefined_var", NULL, 0);
+
+        /* Identifier too long (>= 16 chars) */
+        ASSERT_VALIDATE_FAIL("averylongnamethatoverflows", NULL, 0);
+    }
+
+    /* ---- source_uses_ident ---- */
+    printf("source_uses_ident:\n");
+    ASSERT_SOURCE_USES("sin(x) + y", "x", 1);
+    ASSERT_SOURCE_USES("sin(x) + y", "y", 1);
+    ASSERT_SOURCE_USES("sin(x) + y", "z", 0);
+    ASSERT_SOURCE_USES("glVertex3f(1,2,3)", "x", 0);
+    /* Substring — "foo" must not match inside "foobar" */
+    ASSERT_SOURCE_USES("foobar + 1", "foo", 0);
+    ASSERT_SOURCE_USES("foo + foobar", "foo", 1);
+    /* Numeric literal that starts with digits — "3" in "3.14" */
+    ASSERT_SOURCE_USES("3.14 + x", "x", 1);
+    ASSERT_SOURCE_USES("3.14", "x", 0);
+    /* Empty source */
+    ASSERT_SOURCE_USES("", "x", 0);
+
+    /* ---- parse_exprs edge cases ---- */
+    printf("parse_exprs (edge cases):\n");
+    ASSERT_EXPRS("", 0);                               /* empty string */
+    ASSERT_EXPRS("   ", 0);                            /* whitespace only */
+    ASSERT_EXPRS("42", 1, 42.0f);                      /* single value */
+    ASSERT_EXPRS("1, 2", 2, 1.0f, 2.0f);              /* basic two-arg */
+    ASSERT_EXPRS("sin(0), cos(0), sqrt(4)", 3, 0.0f, 1.0f, 2.0f);
+
+    /* ---- repl_expr_to_c additional translations ---- */
+    printf("repl_expr_to_c (additional):\n");
+    ASSERT_TO_C("max(x,y)", "fmaxf(x,y)");
+    ASSERT_TO_C("floor(x/2)", "floorf(x/2)");
+    ASSERT_TO_C("ceil(x+1)", "ceilf(x+1)");
+    ASSERT_TO_C("PI", "M_PI");
+    ASSERT_TO_C("", "");
+    ASSERT_TO_C("x + y", "x + y");                    /* passthrough, no substitution */
+    ASSERT_TO_C("fmod(x, 3)", "fmodf(x, 3)");   /* fmod keyword -> fmodf */
+
+    /* ---- c_expr_to_repl additional translations ---- */
+    printf("c_expr_to_repl (additional):\n");
+    ASSERT_TO_REPL("fmaxf(x,y)", "max(x,y)");
+    ASSERT_TO_REPL("floorf(x/2)", "floor(x/2)");
+    ASSERT_TO_REPL("ceilf(x+1)", "ceil(x+1)");
+    ASSERT_TO_REPL("M_PI", "PI");
+    ASSERT_TO_REPL("", "");
+    ASSERT_TO_REPL("x + y", "x + y");
+
+    /* ---- parse_for_header additional ---- */
+    printf("parse_for_header (additional):\n");
+    /* Step expressed as a constant */
+    ASSERT_FOR("for(i, 0, 10, PI)", 1, "i", 0.0f, 10.0f, (float)M_PI);
+    /* Float start/end */
+    ASSERT_FOR("for(i, 0.5, 3.0)", 1, "i", 0.5f, 3.0f, 1.0f);
+    /* Negative step */
+    ASSERT_FOR("for(i, 10, 0, -1)", 1, "i", 10.0f, 0.0f, -1.0f);
+    /* Missing end (only one value after var) — should fail */
+    ASSERT_FOR("for(i, 0)", 0, "", 0, 0, 0);
+    /* Empty var name */
+    ASSERT_FOR("for(, 0, 10)", 0, "", 0, 0, 0);
+    /* Nested expression in end */
+    ASSERT_FOR("for(i, 0, sin(0)+5)", 1, "i", 0.0f, 5.0f, 1.0f);
+
+    /* body_start points right after the closing ')' */
+    {
+        char vn[16]; float s, e, st;
+        const char *body = NULL;
+        int ok = parse_for_header("for(i, 0, 5) glVertex3f(0,0,0);",
+                                  vn, sizeof(vn), &s, &e, &st, &body);
+        g_tests_run++;
+        if (ok && body != NULL && strncmp(body, " glVertex3f", 11) == 0)
+            g_tests_passed++;
+        else
+            printf("  FAIL: for body_start: ok=%d body=\"%s\"\n",
+                   ok, body ? body : "(null)");
+    }
+
+    /* ---- parse_c_for_header additional ---- */
+    printf("parse_c_for_header (additional):\n");
+    /* double type */
+    ASSERT_CFOR("for (double i = 0.5; i < 3.5; i += 1.0f) {", 1, "i", 0.5f, 3.5f, 1.0f);
+    /* No space before '(' */
+    ASSERT_CFOR("for(float k = 0; k < 8; k++) {", 1, "k", 0.0f, 8.0f, 1.0f);
+    /* Inclusive upper bound: <= nudges end up by 1 */
+    ASSERT_CFOR("for (float i = 0; i <= 9; i++) {", 1, "i", 0.0f, 10.0f, 1.0f);
+    /* Count-down with -= */
+    ASSERT_CFOR("for (float i = 5; i > 0; i -= 1.5f) {", 1, "i", 5.0f, 0.0f, -1.5f);
+    /* Inclusive lower bound with >=: nudges end down by 1 */
+    ASSERT_CFOR("for (float i = 10; i >= 2; i -= 2.0f) {", 1, "i", 10.0f, 1.0f, -2.0f);
+
+    /* ---- input_has_predef_vars after undeclare ---- */
+    printf("input_has_predef_vars (after undeclare):\n");
+    {
+        /* 'x' is currently declared — should be found */
+        ASSERT_HAS_VARS("x + 1", 1);
+
+        /* undeclare 'x', then it should no longer match */
+        undeclare_predef_var("x");
+        ASSERT_HAS_VARS("x + 1", 0);
+
+        /* restore 'x' for any follow-on code */
+        declare_predef_var("x", NULL, 0);
+        set_predef("x", 0.0f);
+    }
 
     /* ---- Summary ---- */
     printf("\n%d / %d tests passed", g_tests_passed, g_tests_run);
