@@ -2389,18 +2389,7 @@ static void refresh_current_block_highlight(void) {
     g_current_block_end   = -1;
     g_current_block_line  = g_edit_line;
 
-    /* Pass 1 (unused result, kept for fallback safety): walk flat cmds and
-     * remember the last open BEGIN before g_edit_line. */
-    int found_begin = -1;
-    for (int i = 0; i < g_num_flat_cmds; i++) {
-        if (!g_flat_cmds[i].valid) continue;
-        if (g_flat_cmds[i].type == CMD_BEGIN) { found_begin = i; }
-        else if (g_flat_cmds[i].type == CMD_END && found_begin >= 0) {
-            found_begin = -1;
-        }
-    }
-
-    /* Pass 2: scan g_cmds alongside g_flat_cmds to find the innermost
+    /* Scan g_cmds alongside g_flat_cmds to find the innermost
      * BEGIN/END block (in flat-cmd indices) that contains g_edit_line
      * in source-cmd space.  Skips for/func/if structural commands that
      * don't appear in the flat stream. */
@@ -3228,7 +3217,7 @@ static int replay_prev_limit(int current_pc) {
                     ? replay_next_polygon_limit(pc, &fade_begin, &fade_end)
                     : replay_next_vertex_limit(pc, &fade_begin, &fade_end);
 
-        /* Guard: next_pc must advance to avoid an infinite loop */
+        /* Guard: break if next_pc doesn't advance to avoid an infinite loop */
         if (next_pc <= pc)
             break;
 
