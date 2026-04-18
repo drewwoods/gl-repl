@@ -521,10 +521,12 @@ void repl_expr_to_c(const char *in, char *out, int out_sz) {
 }
 
 void c_expr_to_repl(const char *in, char *out, int out_sz) {
+    if (!in || !out || out_sz <= 0)
+        return;
+
     /* First pass: substring replacement for (2*M_PI) -> TAU */
     char tmp[MAX_LINE_LEN];
-    strncpy(tmp, in, sizeof(tmp) - 1);
-    tmp[sizeof(tmp) - 1] = '\0';
+    snprintf(tmp, sizeof(tmp), "%s", in);
 
     {
         char buf[MAX_LINE_LEN];
@@ -540,8 +542,7 @@ void c_expr_to_repl(const char *in, char *out, int out_sz) {
             }
         }
         *dst = '\0';
-        strncpy(tmp, buf, sizeof(tmp) - 1);
-        tmp[sizeof(tmp) - 1] = '\0';
+        snprintf(tmp, sizeof(tmp), "%s", buf);
     }
 
     /* Identifier-aware replacement: sinf->sin, M_PI->PI, etc. */

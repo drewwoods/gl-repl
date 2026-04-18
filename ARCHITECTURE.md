@@ -519,3 +519,15 @@ The split is structural, not behavioral.
 - Import/export and example loading still go through the same command-commit
   path used by live editing.
 - Tests remain the behavioral contract for the refactor.
+
+## test_eval Harness Learnings (2026-04-18)
+
+- `make test_eval USE_GL_STUBS=1` is the fastest no-GL regression loop for
+  evaluator/parser/translation behavior.
+- Translation helpers should be treated like public utility functions: guard
+  null pointers and `out_sz <= 0` explicitly before touching output buffers.
+- Prefer bounded formatting (`snprintf`) over `strncpy` for internal staging
+  buffers to avoid truncation warnings and make NUL-termination guarantees
+  obvious during maintenance.
+- Keep at least one tiny-buffer test in `test_eval.c` for translation helpers
+  to ensure truncation behavior is deterministic and safe.
