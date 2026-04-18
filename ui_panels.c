@@ -76,10 +76,17 @@ static void color_for_type(CmdType t) {
     case CMD_POP_MATRIX:    glColor3f(0.95f, 0.65f, 0.40f); break; /* orange */
     case CMD_COLOR_MATERIAL:
     case CMD_MATERIALF:     glColor3f(0.95f, 0.85f, 0.30f); break; /* yellow */
-    case CMD_LIGHT_MODEL_I: glColor3f(0.80f, 0.70f, 0.95f); break; /* lavender */
     case CMD_COLOR3F:
-    case CMD_COLOR4F:  glColor3f(0.95f, 0.85f, 0.30f); break;
-    case CMD_CLEAR_COLOR: glColor3f(0.50f, 0.85f, 0.95f); break; /* sky blue */
+    case CMD_COLOR4F:
+    case CMD_CLEAR_COLOR: glColor3f(0.95f, 0.85f, 0.30f); break; /* yellow */
+    case CMD_ENABLE:
+    case CMD_DISABLE:
+    case CMD_SHADE_MODEL:
+    case CMD_LIGHT_MODEL_I:
+    case CMD_FRONT_FACE:
+    case CMD_POINT_SIZE:
+    case CMD_POINT_PARAMETER_FV:
+    case CMD_BLEND_FUNC: glColor3f(0.80f, 0.70f, 0.95f); break; /* lavender */
     case CMD_FOR_BEGIN:
     case CMD_FOR_END:  glColor3f(0.95f, 0.60f, 0.30f); break;
     case CMD_FUNC_DEF:
