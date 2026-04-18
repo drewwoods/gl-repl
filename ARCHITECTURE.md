@@ -271,6 +271,11 @@ edits suppress the guide).
 - **String copy warning hygiene:** use explicit bounded formatting for internal
   translation buffers where practical to avoid `-Wstringop-truncation`
   false-positives from `strncpy`.
+- **GL-stub parity matters for test-stubs.** The transform-guide renderer now
+  uses `glLoadMatrixf` and `glVertex3fv`; missing these no-op declarations in
+  `include/GL/gl.h` breaks `make test-stubs` at link time even though normal GL
+  builds succeed. When adding fixed-function calls in rendering code, mirror
+  them in the local stubs immediately.
 
 Flat-cmd scan: the matching flat cmd is found by flat execution order
 — **not** by comparing `src_cmd_idx > g_edit_line`. Function-call
