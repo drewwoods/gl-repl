@@ -220,6 +220,7 @@ static BenchResult bench_flatten_examples(int iters) {
      * to amortize the surrounding loop overhead. The timer is started
      * after the load so the flatten loop is the only thing being timed. */
     int inner = 32;
+    float saved_vals[MAX_PREDEF_VARS];
 
     for (int it = 0; it < iters; it++) {
         double iter_sec = 0.0;
@@ -228,8 +229,24 @@ static BenchResult bench_flatten_examples(int iters) {
              * fresh_repl() is needed. */
             repl_load_example_lines_for_test(repl_examples_lines(e));
 
+            /* Snapshot post-load predef values. flatten_range() writes
+             * g_predef_vars[].value on CMD_VAR_ASSIGN (repl_core.c:2624),
+             * so without restoring each iter sees drifted values and
+             * measures a different workload than the first — several
+             * examples have self-referential-looking assignments whose
+             * RHS depends on other predef vars. */
+            int saved_n = g_num_predef_vars;
+            for (int i = 0; i < saved_n; i++)
+                saved_vals[i] = g_predef_vars[i].value;
+
             double t0 = now_seconds();
             for (int k = 0; k < inner; k++) {
+                /* Restore the post-load values before each flatten so
+                 * every inner iteration measures the same expression
+                 * evaluation workload. The restore is a 16-float copy,
+                 * dwarfed by flatten itself. */
+                for (int i = 0; i < saved_n; i++)
+                    g_predef_vars[i].value = saved_vals[i];
                 /* repl_flatten_commands() -> flatten_commands() rebuilds
                  * unconditionally (resets g_num_flat_cmds and walks
                  * g_cmds[]), so we don't need to toggle any dirty flag
@@ -331,13 +348,32 @@ static BenchResult bench_replay_long(int iters) {
      * flatten itself and clears g_flat_dirty, so calling
      * repl_flatten_commands() explicitly here would flatten twice. */
     repl_load_example_lines_for_test(k_long_replay_scene);
+
+    /* Warm up via replay_start/replay_stop (not a bare
+     * repl_flatten_commands) so the flatten's CMD_VAR_ASSIGN writes
+     * to g_predef_vars don't leak into the timed iterations —
+     * replay_start does its own predef snapshot/restore around the
+     * flatten (repl_core.c:3264-3268). */
     mark_normals_dirty();
-    repl_flatten_commands();
+    replay_start();
     int flat_cmds = g_num_flat_cmds;
+    replay_stop();
+
+    /* Snapshot post-load predef values. replay_advance() writes
+     * g_predef_vars on CMD_VAR_ASSIGN during playback
+     * (repl_core.c:3655-3656), so without restoring, each iteration
+     * would start replay_start()'s baseline capture from progressively
+     * drifted values. */
+    float saved_vals[MAX_PREDEF_VARS];
+    int saved_n = g_num_predef_vars;
+    for (int i = 0; i < saved_n; i++)
+        saved_vals[i] = g_predef_vars[i].value;
 
     for (int it = 0; it < iters; it++) {
         long long steps = 0;
 
+        for (int i = 0; i < saved_n; i++)
+            g_predef_vars[i].value = saved_vals[i];
         mark_normals_dirty();
         double t0 = now_seconds();
 

@@ -80,10 +80,13 @@ be added without root or special build flags by going through
    print the new columns; keep CSV column order stable by appending,
    not inserting, new fields.
 
-3. Detect availability at runtime. If `perf_event_open` returns `-EACCES`
-   (paranoid mode) or `-ENOSYS` (older kernel without HW counters),
-   fall back to wall-time-only reporting and print a one-line warning
-   to stderr. Do not fail the run.
+3. Detect availability at runtime. `perf_event_open(2)` returns `-1`
+   on failure and sets `errno`; if `errno == EACCES` (paranoid mode)
+   or `errno == ENOSYS` (older kernel without HW counters), fall back
+   to wall-time-only reporting and print a one-line warning to stderr.
+   Do not fail the run. Note that `perf_event_open` is not wrapped by
+   glibc and must be invoked via `syscall(SYS_perf_event_open, ...)`,
+   which still sets `errno` the usual way.
 
 4. Document the kernel knob in `README.md`: unprivileged perf counter
    access requires `kernel.perf_event_paranoid <= 1` (or `<= 2` for
