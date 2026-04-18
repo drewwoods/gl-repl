@@ -23,7 +23,36 @@
 #ifndef REPL_CORE_INTERNAL_H
 #define REPL_CORE_INTERNAL_H
 
+#include <stdarg.h>
+
 #include "repl_core.h"
+
+#if defined(__GNUC__) || defined(__clang__)
+#define REPL_PRINTF_LIKE(fmt_idx, arg_idx) __attribute__((format(printf, fmt_idx, arg_idx)))
+#else
+#define REPL_PRINTF_LIKE(fmt_idx, arg_idx)
+#endif
+
+static inline int repl_format_fits(char *out, size_t out_sz,
+                                   const char *fmt, ...) REPL_PRINTF_LIKE(3, 4);
+static inline int repl_format_fits(char *out, size_t out_sz,
+                                   const char *fmt, ...) {
+    va_list ap;
+    int written;
+
+    if (!out || out_sz == 0)
+        return 0;
+
+    va_start(ap, fmt);
+    written = vsnprintf(out, out_sz, fmt, ap);
+    va_end(ap);
+
+    if (written < 0 || (size_t)written >= out_sz) {
+        out[0] = '\0';
+        return 0;
+    }
+    return 1;
+}
 
 /* ---- Normalize / commit pipeline -------------------------------------- */
 
