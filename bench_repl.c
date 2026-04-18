@@ -4,13 +4,16 @@
  *
  * The benchmark binary links against the same CORE_TEST_OBJS the unit tests
  * use, so it works under both the normal GL-headers build and the GL-stubs
- * build (`make bench USE_GL_STUBS=1`). It does NOT open a window or talk to
- * a real GL driver — every call goes through `apply_state_cmd` /
- * `execute_commands` against the linked GL stubs, just like the existing
- * tests.
+ * build (`make bench USE_GL_STUBS=1`). It is intentionally non-rendering:
+ * it measures parsing, loading/flattening, and replay state-machine
+ * advancement. It does NOT drive `execute_commands()` or
+ * `execute_replay_fade_batches()` — those are the GL-emit paths and are
+ * out of scope for a parser/replay benchmark.
  *
- * Sub-benchmarks:
- *   parse_examples    — feed every example line through repl_feed_line_public
+ * Sub-benchmarks (names match the `--only` filter strings and the printed
+ * labels):
+ *   parse_lines       — repl_parse_command on every example line
+ *   feed_examples     — full feed_line path on every example
  *   flatten_examples  — load each example then call repl_flatten_commands
  *   replay_examples   — start a replay and step it to completion
  *   replay_long       — feed a synthetic large scene and step replay to end
@@ -182,10 +185,14 @@ static BenchResult bench_feed_examples(int iters) {
     BenchResult r = { .name = "feed_examples", .unit = "lines",
                       .min_sec = 1e18 };
 
+    /* load_example_lines() already resets g_cmds / g_num_flat_cmds and
+     * calls init_predef_vars(), so an extra fresh_repl() before each
+     * load would just bill duplicate reset work to this benchmark.
+     * Examples declare their own float vars, so we don't need
+     * declare_test_idents() here either. */
     for (int it = 0; it < iters; it++) {
         double t0 = now_seconds();
         for (int e = 0; e < n_examples; e++) {
-            fresh_repl();
             repl_load_example_lines_for_test(repl_examples_lines(e));
         }
         double dt = now_seconds() - t0;
@@ -207,25 +214,29 @@ static BenchResult bench_flatten_examples(int iters) {
 
     /* Pre-load each example fresh so we are timing flatten alone, not
      * feed_line plus flatten. We re-run flatten `inner` times per example
-     * to amortize the surrounding loop overhead. */
+     * to amortize the surrounding loop overhead. The timer is started
+     * after the load so the flatten loop is the only thing being timed. */
     int inner = 32;
 
     for (int it = 0; it < iters; it++) {
-        double t0 = now_seconds();
+        double iter_sec = 0.0;
         for (int e = 0; e < n_examples; e++) {
-            fresh_repl();
+            /* load_example_lines() resets cmd state itself; no separate
+             * fresh_repl() is needed. */
             repl_load_example_lines_for_test(repl_examples_lines(e));
+
+            double t0 = now_seconds();
             for (int k = 0; k < inner; k++) {
-                /* mark_normals_dirty() flips g_flat_dirty so that the next
-                 * call actually rebuilds; otherwise flatten is a no-op
-                 * after the first invocation. */
+                /* mark_normals_dirty() flips g_flat_dirty so that the
+                 * next call actually rebuilds; otherwise flatten is a
+                 * no-op after the first invocation. */
                 mark_normals_dirty();
                 repl_flatten_commands();
             }
+            iter_sec += now_seconds() - t0;
         }
-        double dt = now_seconds() - t0;
-        if (dt < r.min_sec) r.min_sec = dt;
-        r.total_sec += dt;
+        if (iter_sec < r.min_sec) r.min_sec = iter_sec;
+        r.total_sec += iter_sec;
         r.ops += (long long)n_examples * inner;
         r.iters++;
     }
@@ -240,14 +251,15 @@ static BenchResult bench_replay_examples(int iters) {
     BenchResult r = { .name = "replay_examples", .unit = "steps",
                       .min_sec = 1e18 };
 
+    /* load_example_lines() leaves g_flat_dirty=1, and replay_start() will
+     * flatten once on its own — calling repl_flatten_commands() explicitly
+     * beforehand would flatten twice, because repl_flatten_commands() does
+     * NOT clear g_flat_dirty (see repl_core.c:4462-4464 vs. :3265-3269). */
     for (int it = 0; it < iters; it++) {
         long long steps = 0;
         double t0 = now_seconds();
         for (int e = 0; e < n_examples; e++) {
-            fresh_repl();
             repl_load_example_lines_for_test(repl_examples_lines(e));
-            mark_normals_dirty();
-            repl_flatten_commands();
 
             replay_start();
             int safety = g_num_flat_cmds + 1;
@@ -308,11 +320,11 @@ static BenchResult bench_replay_long(int iters) {
     /* Load once outside the inner loop — feed_line is not what we are
      * measuring here. Re-using the same g_cmds[] across iterations is
      * fine because replay only mutates the replay state, not the source
-     * commands. We do call mark_normals_dirty + flatten between each
-     * iteration so the cached flat array would be rebuilt in a real
-     * editing session; this keeps the benchmark closer to "what happens
-     * the first time you press play". */
-    fresh_repl();
+     * commands. We mark g_flat_dirty between iterations so replay_start()
+     * does a fresh flatten each time — that matches "what happens the
+     * first time you press play". Note: replay_start() handles the
+     * flatten itself and clears g_flat_dirty, so calling
+     * repl_flatten_commands() explicitly here would flatten twice. */
     repl_load_example_lines_for_test(k_long_replay_scene);
     mark_normals_dirty();
     repl_flatten_commands();
@@ -320,10 +332,10 @@ static BenchResult bench_replay_long(int iters) {
 
     for (int it = 0; it < iters; it++) {
         long long steps = 0;
-        double t0 = now_seconds();
 
         mark_normals_dirty();
-        repl_flatten_commands();
+        double t0 = now_seconds();
+
         replay_start();
         int safety = g_num_flat_cmds + 1;
         while (g_replay_state == REPLAY_PLAYING && safety-- > 0) {
@@ -339,8 +351,12 @@ static BenchResult bench_replay_long(int iters) {
         r.iters++;
     }
 
-    fprintf(stderr, "  (replay_long scene flattened to %d flat cmds)\n",
-            flat_cmds);
+    /* Diagnostic aside — useful for confirming the scene size, but gated
+     * behind !g_csv so machine-parseable output stays clean on stderr too. */
+    if (!g_csv) {
+        fprintf(stderr, "  (replay_long scene flattened to %d flat cmds)\n",
+                flat_cmds);
+    }
     return r;
 }
 
