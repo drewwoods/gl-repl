@@ -794,8 +794,12 @@ int try_assign_variable(void) {
                 ind = (int)sizeof(indent) - 1;
             memset(indent, ' ', (size_t)ind);
             indent[ind] = '\0';
-            snprintf(cmd.source, sizeof(cmd.source), "%s%s = %s;%s",
-                     indent, name, rhs, comment);
+            if (!repl_format_fits(cmd.source, sizeof(cmd.source),
+                                  "%s%s = %s;%s",
+                                  indent, name, rhs, comment)) {
+                set_status("Command too long");
+                return 1;
+            }
 
             if (g_inserting) {
                 if (g_num_cmds < MAX_COMMANDS) {
@@ -961,16 +965,26 @@ int try_commit_for_loop(void) {
 
                         if (input_has_any_visible_vars(ra, visible_vars, visible_nv)) {
                             fb.has_vars = 1;
-                            snprintf(fb.source, sizeof(fb.source),
-                                     "%sfor(%s, %s) {", indent, var_name, ra);
+                            if (!repl_format_fits(fb.source, sizeof(fb.source),
+                                                  "%sfor(%s, %s) {",
+                                                  indent, var_name, ra)) {
+                                set_status("Command too long");
+                                return 1;
+                            }
                         } else if (step != 1.0f) {
-                            snprintf(fb.source, sizeof(fb.source),
-                                     "%sfor(%s, %g, %g, %g) {",
-                                     indent, var_name, start, end, step);
+                            if (!repl_format_fits(fb.source, sizeof(fb.source),
+                                                  "%sfor(%s, %g, %g, %g) {",
+                                                  indent, var_name, start, end, step)) {
+                                set_status("Command too long");
+                                return 1;
+                            }
                         } else {
-                            snprintf(fb.source, sizeof(fb.source),
-                                     "%sfor(%s, %g, %g) {",
-                                     indent, var_name, start, end);
+                            if (!repl_format_fits(fb.source, sizeof(fb.source),
+                                                  "%sfor(%s, %g, %g) {",
+                                                  indent, var_name, start, end)) {
+                                set_status("Command too long");
+                                return 1;
+                            }
                         }
                     }
                 }

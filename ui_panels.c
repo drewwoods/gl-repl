@@ -1911,6 +1911,8 @@ static void color_picker_write_cmd(void) {
     const char *old_src = g_cmds[g_cp_line].source;
     int indent_len = 0;
     char indent_prefix[sizeof(g_cmds[g_cp_line].source)];
+    char new_source[sizeof(g_cmds[g_cp_line].source)];
+    int formatted = 0;
     cp_hsv_to_rgb(g_cp_hue, g_cp_sat, g_cp_val, &r, &g, &b);
     while (old_src[indent_len] == ' ' || old_src[indent_len] == '\t')
         indent_len++;
@@ -1919,42 +1921,57 @@ static void color_picker_write_cmd(void) {
     for (int i = 0; i < indent_len; i++)
         indent_prefix[i] = old_src[i];
     indent_prefix[indent_len] = '\0';
-    g_cmds[g_cp_line].args[0]=r;
-    g_cmds[g_cp_line].args[1]=g;
-    g_cmds[g_cp_line].args[2]=b;
-    g_cmds[g_cp_line].num_args = g_cp_has_alpha ? 4 : 3;
     if (g_cp_has_alpha) {
-        g_cmds[g_cp_line].args[3]=g_cp_alpha;
         if (cmd_type == CMD_TESS_COLOR) {
-            snprintf(g_cmds[g_cp_line].source, sizeof(g_cmds[g_cp_line].source),
-                     "%sgluColor(%g, %g, %g, %g);",
-                     indent_prefix, r, g, b, g_cp_alpha);
+            formatted = repl_format_fits(new_source, sizeof(new_source),
+                                         "%sgluColor(%g, %g, %g, %g);",
+                                         indent_prefix, r, g, b, g_cp_alpha);
         } else if (cmd_type == CMD_CLEAR_COLOR) {
             float cr=r<CP_CLEAR_MAX_V?r:CP_CLEAR_MAX_V;
             float cg=g<CP_CLEAR_MAX_V?g:CP_CLEAR_MAX_V;
             float cb=b<CP_CLEAR_MAX_V?b:CP_CLEAR_MAX_V;
+            formatted = repl_format_fits(new_source, sizeof(new_source),
+                                         "%sglClearColor(%g, %g, %g, %g);",
+                                         indent_prefix, cr, cg, cb, g_cp_alpha);
+            if (!formatted) {
+                set_status("Command too long");
+                return;
+            }
             g_cmds[g_cp_line].args[0]=cr;
             g_cmds[g_cp_line].args[1]=cg;
             g_cmds[g_cp_line].args[2]=cb;
-            snprintf(g_cmds[g_cp_line].source, sizeof(g_cmds[g_cp_line].source),
-                     "%sglClearColor(%g, %g, %g, %g);",
-                     indent_prefix, cr, cg, cb, g_cp_alpha);
+            g_cmds[g_cp_line].args[3]=g_cp_alpha;
+            g_cmds[g_cp_line].num_args = 4;
+            memcpy(g_cmds[g_cp_line].source, new_source, sizeof(new_source));
+            g_flat_dirty = 1;
+            return;
         } else {
-            snprintf(g_cmds[g_cp_line].source, sizeof(g_cmds[g_cp_line].source),
-                     "%sglColor4f(%g, %g, %g, %g);",
-                     indent_prefix, r, g, b, g_cp_alpha);
+            formatted = repl_format_fits(new_source, sizeof(new_source),
+                                         "%sglColor4f(%g, %g, %g, %g);",
+                                         indent_prefix, r, g, b, g_cp_alpha);
         }
     } else {
         if (cmd_type == CMD_TESS_COLOR) {
-            snprintf(g_cmds[g_cp_line].source, sizeof(g_cmds[g_cp_line].source),
-                     "%sgluColor(%g, %g, %g);",
-                     indent_prefix, r, g, b);
+            formatted = repl_format_fits(new_source, sizeof(new_source),
+                                         "%sgluColor(%g, %g, %g);",
+                                         indent_prefix, r, g, b);
         } else {
-            snprintf(g_cmds[g_cp_line].source, sizeof(g_cmds[g_cp_line].source),
-                     "%sglColor3f(%g, %g, %g);",
-                     indent_prefix, r, g, b);
+            formatted = repl_format_fits(new_source, sizeof(new_source),
+                                         "%sglColor3f(%g, %g, %g);",
+                                         indent_prefix, r, g, b);
         }
     }
+    if (!formatted) {
+        set_status("Command too long");
+        return;
+    }
+    g_cmds[g_cp_line].args[0]=r;
+    g_cmds[g_cp_line].args[1]=g;
+    g_cmds[g_cp_line].args[2]=b;
+    g_cmds[g_cp_line].num_args = g_cp_has_alpha ? 4 : 3;
+    if (g_cp_has_alpha)
+        g_cmds[g_cp_line].args[3]=g_cp_alpha;
+    memcpy(g_cmds[g_cp_line].source, new_source, sizeof(new_source));
     g_flat_dirty = 1;
 }
 

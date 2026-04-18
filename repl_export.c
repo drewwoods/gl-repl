@@ -1831,9 +1831,9 @@ static int import_make_repl_point_parameter_line(const char *line, char *out, in
     for (int i = 0; i < count; i++)
         c_expr_to_repl(raw_args[i], repl_args[i], sizeof(repl_args[i]));
 
-    snprintf(out, out_sz, "glPointParameterfv(%s, %s, %s, %s);",
-             pname, repl_args[0], repl_args[1], repl_args[2]);
-    return 1;
+    return repl_format_fits(out, (size_t)out_sz,
+                            "glPointParameterfv(%s, %s, %s, %s);",
+                            pname, repl_args[0], repl_args[1], repl_args[2]);
 }
 
 static int import_make_repl_quadric_line(const char *line, char *out, int out_sz) {

@@ -2002,11 +2002,17 @@ static int parse_command(const char *line, GLCmd *cmd,
         strncpy(raw_args, args, sizeof(raw_args) - 1);
         raw_args[sizeof(raw_args) - 1] = '\0';
         trim_in_place(raw_args);
-        if (arg_count > 0)
-            snprintf(cmd->source, sizeof(cmd->source), "%sfunc%d(%s);",
-                     ind_str, fn, raw_args);
-        else
-            snprintf(cmd->source, sizeof(cmd->source), "%sfunc%d();", ind_str, fn);
+        if (arg_count > 0) {
+            if (!repl_format_fits(cmd->source, sizeof(cmd->source),
+                                  "%sfunc%d(%s);", ind_str, fn, raw_args)) {
+                set_status("Command too long");
+                return 0;
+            }
+        } else if (!repl_format_fits(cmd->source, sizeof(cmd->source),
+                                     "%sfunc%d();", ind_str, fn)) {
+            set_status("Command too long");
+            return 0;
+        }
         return 1;
     }
 
