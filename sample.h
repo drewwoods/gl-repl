@@ -441,10 +441,6 @@ extern int    g_drag_log_mode;   /* 0=linear (LMB), 1=logarithmic (RMB) */
 extern float  g_drag_start_val;
 extern int    g_drag_start_x;
 
-/* Configuration menu */
-extern int    g_show_config;
-extern int    g_config_hover;
-
 /* CPU profile panel */
 extern int    g_show_profile_panel;
 
@@ -540,6 +536,7 @@ static inline void clear_autocomplete_state(void) {
 extern CfgItem g_cfg_items[];
 extern const int CFG_ITEM_COUNT;
 void repl_editor_apply_defaults(void);
+void repl_cfg_cycle_row(int row, int delta);
 
 /* ========================================================================= */
 /* Shared utility functions                                                   */
