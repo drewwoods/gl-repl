@@ -78,7 +78,7 @@ typedef enum {
 #define CFG_DEFAULT_ATTENUATE_POINTS  1
 #define CFG_DEFAULT_WRAP_AT_COMMA     1
 #define CFG_DEFAULT_LAYOUT_VERTICAL   0
-#define CFG_DEFAULT_PANEL_FRAC        0.42f
+#define CFG_DEFAULT_PANEL_FRAC        0.45f
 
 /* Grid major tick spacing. Values live in g_grid_major_steps[] and
  * must match this enum order. */
@@ -136,10 +136,14 @@ typedef enum {
 #define REPLAY_HUD_MARGIN_Y      18
 #define REPLAY_HUD_MIN_WIDTH     220
 #define REPLAY_HUD_HEIGHT        56
-#define REPLAY_HUD_PROGRESS_Y    36
-#define REPLAY_HUD_PROGRESS_H     8
+/* y positions measured from hud_y (bottom edge), top-to-bottom:
+ *   line1 (status)   @ 36 — icon row, above progress
+ *   progress groove  @ 22
+ *   line2 (kbd)      @  4 */
+#define REPLAY_HUD_PROGRESS_Y    22
+#define REPLAY_HUD_PROGRESS_H     6
 #define REPLAY_HUD_TEXT_PAD_X    10
-#define REPLAY_HUD_TEXT_LINE1_Y  18
+#define REPLAY_HUD_TEXT_LINE1_Y  36
 #define REPLAY_HUD_TEXT_LINE2_Y   4
 #define REPLAY_HUD_BOTTOM_Y (REPLAY_HUD_MARGIN_Y + REPLAY_HUD_HEIGHT)
 
@@ -147,6 +151,13 @@ typedef enum {
  * both ui_panels.c (var panel lift, code panel statusbar) and scene_render.c
  * (replay HUD lift) so the HUD clears the strip. */
 #define STATUSBAR_H 22
+
+/* Shared UI accent palette — kept here so menubar (ui_panels.c) and HUD
+ * (scene_render.c) use identical values.  #6fb36f is the design-bundle
+ * green used for the Replay button, progress fill, and active example. */
+#define UI_ACCENT_GREEN_R 0.435f
+#define UI_ACCENT_GREEN_G 0.702f
+#define UI_ACCENT_GREEN_B 0.435f
 
 typedef struct {
     GLdouble pos[3];

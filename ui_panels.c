@@ -1161,7 +1161,6 @@ static const char *g_pin_btn_labels[NUM_PIN_BTNS] = {
 };
 
 #define PIN_SEARCH_MIN_W 140
-#define SEARCH_KBD_LABEL "Ctrl+F"
 
 static int g_open_menu = -1;      /* index into g_menu_labels; -1 = none */
 static int g_menu_item_hover = -1;
@@ -2328,28 +2327,11 @@ void render_code_panel(void) {
                     /* render_code_panel_search_overlay() fills this slot */
                     continue;
                 }
-                /* "search..." label in muted gray + kbd hint on the right */
+                /* "search..." label in muted gray */
                 glColor3f(0.478f, 0.478f, 0.478f); /* #7a7a7a */
                 int tx = pin_x[i] + 12;
                 draw_string((float)tx, (float)(by + 3),
                             g_pin_btn_labels[i], FONT_SMALL);
-
-                int kbd_w = (int)strlen(SEARCH_KBD_LABEL) * FONT_SMALL_W + 10;
-                int kx = pin_x[i] + pin_w[i] - kbd_w - 8;
-                int ky = by + 2;
-                int kh = bh - 4;
-                glColor4f(0.078f, 0.078f, 0.078f, 1.0f); /* #141414 */
-                draw_quad((float)kx, (float)ky, (float)kbd_w, (float)kh);
-                glColor4f(0.227f, 0.227f, 0.227f, 1.0f); /* #3a3a3a */
-                glBegin(GL_LINE_LOOP);
-                glVertex2f((float)kx,           (float)ky);
-                glVertex2f((float)(kx + kbd_w), (float)ky);
-                glVertex2f((float)(kx + kbd_w), (float)(ky + kh));
-                glVertex2f((float)kx,           (float)(ky + kh));
-                glEnd();
-                glColor3f(0.667f, 0.667f, 0.667f); /* #aaa */
-                draw_string((float)(kx + 5), (float)(ky + 2),
-                            SEARCH_KBD_LABEL, FONT_SMALL);
             } else if (i == PIN_REPLAY) {
                 /* Green accent (#6fb36f), state icon + dynamic label */
                 const char *label = "Replay";
@@ -2361,7 +2343,7 @@ void render_code_panel(void) {
                 int icon_cy = by + bh / 2;
                 int icon_sz = 8;
 
-                glColor3f(0.435f, 0.702f, 0.435f); /* #6fb36f */
+                glColor3f(UI_ACCENT_GREEN_R, UI_ACCENT_GREEN_G, UI_ACCENT_GREEN_B);
 
                 if (g_replay_state == REPLAY_PLAYING) {
                     /* Two vertical bars (pause glyph) */
@@ -2370,8 +2352,13 @@ void render_code_panel(void) {
                     float bh0 = (float)icon_sz;
                     draw_quad((float)icon_x,                    by0, bw, bh0);
                     draw_quad((float)icon_x + bw + gap,         by0, bw, bh0);
-                } else if (g_replay_state == REPLAY_PAUSED) {
-                    /* Play triangle — click to resume */
+                } else if (g_replay_state == REPLAY_DONE) {
+                    /* Square — run complete */
+                    float sx = (float)icon_x;
+                    float sy = (float)icon_cy - (float)icon_sz * 0.5f;
+                    draw_quad(sx, sy, (float)icon_sz, (float)icon_sz);
+                } else {
+                    /* Play triangle — stopped (OFF) or paused, click to start */
                     float x0 = (float)icon_x;
                     float cy = (float)icon_cy;
                     glBegin(GL_TRIANGLES);
@@ -2379,11 +2366,6 @@ void render_code_panel(void) {
                     glVertex2f(x0,             cy + (float)icon_sz * 0.5f);
                     glVertex2f(x0 + icon_sz,   cy);
                     glEnd();
-                } else {
-                    /* Square — stopped (OFF / DONE) */
-                    float sx = (float)icon_x;
-                    float sy = (float)icon_cy - (float)icon_sz * 0.5f;
-                    draw_quad(sx, sy, (float)icon_sz, (float)icon_sz);
                 }
 
                 int tx = icon_x + 12 + 6;
@@ -3009,7 +2991,7 @@ void render_example_dropdown(void) {
                       (float)(dw - 2), (float)LINE_H);
             glColor4f(1.0f, 1.0f, 1.0f, alpha);
         } else if (menu_id == MENU_EXAMPLES && !is_user_scene && i == g_example_idx) {
-            glColor4f(0.851f, 0.424f, 0.310f, alpha);  /* accent for current example */
+            glColor4f(UI_ACCENT_GREEN_R, UI_ACCENT_GREEN_G, UI_ACCENT_GREEN_B, alpha);
         } else {
             glColor4f(0.847f, 0.847f, 0.847f, alpha);  /* #d8d8d8 */
         }
@@ -3903,8 +3885,15 @@ int handle_code_panel_press(int mx, int my) {
         if (g_open_menu >= 0) g_open_menu = -1;
         switch (pin) {
         case PIN_REPLAY:
-            if (g_replay_active) replay_stop();
-            else                 replay_start();
+            /* Button mirrors its glyph: pause when playing, resume when
+             * paused, (re)start when stopped or done. */
+            if (g_replay_state == REPLAY_PLAYING) {
+                g_replay_state = REPLAY_PAUSED;
+            } else if (g_replay_state == REPLAY_PAUSED) {
+                g_replay_state = REPLAY_PLAYING;
+            } else {
+                replay_start();
+            }
             break;
         case PIN_SEARCH:
             handle_search_key(KEY_CTRL_F);

@@ -1957,17 +1957,26 @@ static void draw_replay_hud(int scene_x, int scene_y, int scene_w, int scene_h) 
     glVertex2f((float)hud_x + 0.5f,                      (float)(hud_y + REPLAY_HUD_HEIGHT) - 0.5f);
     glEnd();
 
-    /* State icon (same glyphs as the Replay menubar button) on the left */
-    int icon_cx = hud_x + 14;
-    int icon_cy = hud_y + REPLAY_HUD_HEIGHT - 20;  /* aligned with line1 */
-    int icon_sz = 10;
-    glColor4f(0.435f, 0.702f, 0.435f, 1.0f); /* #6fb36f */
+    /* Column layout: icon in a fixed gutter, both text rows share one
+     * left edge so line1 (green status) and line2 (kbd hints) align. */
+    int text_col_x = hud_x + REPLAY_HUD_TEXT_PAD_X + 18;   /* after 18px icon gutter */
+    int icon_cx    = hud_x + REPLAY_HUD_TEXT_PAD_X + 7;    /* centered in gutter */
+    int icon_cy    = hud_y + REPLAY_HUD_TEXT_LINE1_Y + FONT_SMALL_H / 2;
+    int icon_sz    = 10;
+
+    glColor4f(UI_ACCENT_GREEN_R, UI_ACCENT_GREEN_G, UI_ACCENT_GREEN_B, 1.0f);
     if (g_replay_state == REPLAY_PLAYING) {
         float bw = 3.0f, gap = 3.0f;
         float by0 = (float)icon_cy - (float)icon_sz * 0.5f;
         draw_quad((float)icon_cx - bw - gap * 0.5f, by0, bw, (float)icon_sz);
         draw_quad((float)icon_cx + gap * 0.5f,      by0, bw, (float)icon_sz);
-    } else if (g_replay_state == REPLAY_PAUSED) {
+    } else if (g_replay_state == REPLAY_DONE) {
+        /* Square — run complete */
+        float sx = (float)icon_cx - (float)icon_sz * 0.5f;
+        float sy = (float)icon_cy - (float)icon_sz * 0.5f;
+        draw_quad(sx, sy, (float)icon_sz, (float)icon_sz);
+    } else {
+        /* Play triangle — paused / stopped, click to (re)start */
         float x0 = (float)icon_cx - (float)icon_sz * 0.5f;
         float cy = (float)icon_cy;
         glBegin(GL_TRIANGLES);
@@ -1975,22 +1984,26 @@ static void draw_replay_hud(int scene_x, int scene_y, int scene_w, int scene_h) 
         glVertex2f(x0,              cy + (float)icon_sz * 0.5f);
         glVertex2f(x0 + icon_sz,    cy);
         glEnd();
-    } else {
-        /* Square — stopped / done */
-        float sx = (float)icon_cx - (float)icon_sz * 0.5f;
-        float sy = (float)icon_cy - (float)icon_sz * 0.5f;
-        draw_quad(sx, sy, (float)icon_sz, (float)icon_sz);
     }
 
-    /* Line 1 — "Replay  64/128  4.0 cmd/s  · Polygon" in green */
+    /* Line 1 — "Replay  4.0 cmd/s | Polygon" in green; command count
+     * is right-aligned so 4-digit totals don't push other fields around. */
     snprintf(progress_txt, sizeof(progress_txt),
-             "Replay  %d/%d  %.1f cmd/s  |  %s",
-             g_replay_pc, g_replay_total_flat, g_replay_speed,
+             "Replay  %.1f cmd/s  |  %s",
+             g_replay_speed,
              g_replay_mode == REPLAY_MODE_VERTEX ? "Vertex" : "Polygon");
-    glColor3f(0.435f, 0.702f, 0.435f);  /* #6fb36f */
-    draw_string((float)(hud_x + 32),
+    glColor3f(UI_ACCENT_GREEN_R, UI_ACCENT_GREEN_G, UI_ACCENT_GREEN_B);
+    draw_string((float)text_col_x,
                 (float)(hud_y + REPLAY_HUD_TEXT_LINE1_Y),
                 progress_txt, FONT_SMALL);
+
+    char count_txt[32];
+    snprintf(count_txt, sizeof(count_txt), "%d / %d",
+             g_replay_pc, g_replay_total_flat);
+    int count_w = (int)strlen(count_txt) * FONT_SMALL_W;
+    draw_string((float)(hud_x + hud_w - REPLAY_HUD_TEXT_PAD_X - count_w),
+                (float)(hud_y + REPLAY_HUD_TEXT_LINE1_Y),
+                count_txt, FONT_SMALL);
 
     /* Progress groove + green fill */
     int groove_x = hud_x + REPLAY_HUD_TEXT_PAD_X;
@@ -1999,7 +2012,7 @@ static void draw_replay_hud(int scene_x, int scene_y, int scene_w, int scene_h) 
     glColor4f(0.094f, 0.118f, 0.102f, 1.0f);  /* #181e1a */
     draw_quad((float)groove_x, (float)groove_y,
               (float)groove_w, (float)REPLAY_HUD_PROGRESS_H);
-    glColor4f(0.435f, 0.702f, 0.435f, 1.0f);  /* #6fb36f */
+    glColor4f(UI_ACCENT_GREEN_R, UI_ACCENT_GREEN_G, UI_ACCENT_GREEN_B, 1.0f);
     draw_quad((float)groove_x, (float)groove_y,
               (float)groove_w * progress, (float)REPLAY_HUD_PROGRESS_H);
     glColor4f(0.227f, 0.298f, 0.243f, 1.0f);  /* #3a4c3e border */
@@ -2014,7 +2027,7 @@ static void draw_replay_hud(int scene_x, int scene_y, int scene_w, int scene_h) 
     snprintf(kbd_txt, sizeof(kbd_txt),
              "Space pause  |  +/- speed  |  m mode  |  <> step  |  Esc stop");
     glColor3f(0.533f, 0.533f, 0.533f);  /* #888 */
-    draw_string((float)(hud_x + REPLAY_HUD_TEXT_PAD_X),
+    draw_string((float)text_col_x,
                 (float)(hud_y + REPLAY_HUD_TEXT_LINE2_Y),
                 kbd_txt, FONT_SMALL);
 
