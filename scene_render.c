@@ -1847,16 +1847,6 @@ static void draw_lights(void) {
 /* 3D scene render (viewport offset to the right of the code panel)           */
 /* ========================================================================= */
 
-static const char *replay_state_name(void) {
-    switch ((ReplayState)g_replay_state) {
-    case REPLAY_PLAYING: return "PLAYING";
-    case REPLAY_PAUSED:  return "PAUSED";
-    case REPLAY_DONE:    return "DONE";
-    case REPLAY_OFF:
-    default:
-        return "OFF";
-    }
-}
 
 static int begin_mode_has_outline_overlay(GLenum mode) {
     switch (mode) {
@@ -1931,11 +1921,13 @@ static void draw_replay_tess_preview(void) {
 
 static void draw_replay_hud(int scene_x, int scene_y, int scene_w, int scene_h) {
     (void)scene_h;
-    char line1[128];
-    char line2[192];
+    char progress_txt[64];
+    char kbd_txt[128];
     float progress = 0.0f;
     int hud_x = scene_x + REPLAY_HUD_MARGIN_X;
-    int hud_y = scene_y + REPLAY_HUD_MARGIN_Y;
+    /* Lifted by STATUSBAR_H so the HUD clears the amber status strip along
+     * the bottom of the scene. */
+    int hud_y = scene_y + REPLAY_HUD_MARGIN_Y + STATUSBAR_H;
     int hud_w = scene_w - 2 * REPLAY_HUD_MARGIN_X;
 
     if (!g_replay_active)
@@ -1953,28 +1945,78 @@ static void draw_replay_hud(int scene_x, int scene_y, int scene_w, int scene_h) 
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
-    glColor4f(0.04f, 0.07f, 0.08f, 0.86f);
+    /* Panel bg matches the menubar palette: #1d1d1d with subtle green tint
+     * on the border so the HUD reads as paired with the green Replay button. */
+    glColor4f(0.114f, 0.118f, 0.114f, 0.94f); /* #1d1e1d */
     draw_quad((float)hud_x, (float)hud_y, (float)hud_w, (float)REPLAY_HUD_HEIGHT);
-    glColor4f(0.22f, 0.55f, 0.48f, 0.90f);
-    draw_quad((float)hud_x, (float)(hud_y + REPLAY_HUD_PROGRESS_Y),
-              (float)hud_w, (float)REPLAY_HUD_PROGRESS_H);
-    glColor4f(0.35f, 0.95f, 0.70f, 0.95f);
-    draw_quad((float)hud_x, (float)(hud_y + REPLAY_HUD_PROGRESS_Y),
-              (float)hud_w * progress, (float)REPLAY_HUD_PROGRESS_H);
+    glColor4f(0.188f, 0.298f, 0.220f, 0.95f); /* #304c38 */
+    glBegin(GL_LINE_LOOP);
+    glVertex2f((float)hud_x + 0.5f,                      (float)hud_y + 0.5f);
+    glVertex2f((float)(hud_x + hud_w) - 0.5f,            (float)hud_y + 0.5f);
+    glVertex2f((float)(hud_x + hud_w) - 0.5f,            (float)(hud_y + REPLAY_HUD_HEIGHT) - 0.5f);
+    glVertex2f((float)hud_x + 0.5f,                      (float)(hud_y + REPLAY_HUD_HEIGHT) - 0.5f);
+    glEnd();
 
-    snprintf(line1, sizeof(line1), "REPLAY %s | %d/%d | %.1f step/s | %s",
-             replay_state_name(), g_replay_pc, g_replay_total_flat,
-             g_replay_speed,
+    /* State icon (same glyphs as the Replay menubar button) on the left */
+    int icon_cx = hud_x + 14;
+    int icon_cy = hud_y + REPLAY_HUD_HEIGHT - 20;  /* aligned with line1 */
+    int icon_sz = 10;
+    glColor4f(0.435f, 0.702f, 0.435f, 1.0f); /* #6fb36f */
+    if (g_replay_state == REPLAY_PLAYING) {
+        float bw = 3.0f, gap = 3.0f;
+        float by0 = (float)icon_cy - (float)icon_sz * 0.5f;
+        draw_quad((float)icon_cx - bw - gap * 0.5f, by0, bw, (float)icon_sz);
+        draw_quad((float)icon_cx + gap * 0.5f,      by0, bw, (float)icon_sz);
+    } else if (g_replay_state == REPLAY_PAUSED) {
+        float x0 = (float)icon_cx - (float)icon_sz * 0.5f;
+        float cy = (float)icon_cy;
+        glBegin(GL_TRIANGLES);
+        glVertex2f(x0,              cy - (float)icon_sz * 0.5f);
+        glVertex2f(x0,              cy + (float)icon_sz * 0.5f);
+        glVertex2f(x0 + icon_sz,    cy);
+        glEnd();
+    } else {
+        /* Square — stopped / done */
+        float sx = (float)icon_cx - (float)icon_sz * 0.5f;
+        float sy = (float)icon_cy - (float)icon_sz * 0.5f;
+        draw_quad(sx, sy, (float)icon_sz, (float)icon_sz);
+    }
+
+    /* Line 1 — "Replay  64/128  4.0 cmd/s  · Polygon" in green */
+    snprintf(progress_txt, sizeof(progress_txt),
+             "Replay  %d/%d  %.1f cmd/s  |  %s",
+             g_replay_pc, g_replay_total_flat, g_replay_speed,
              g_replay_mode == REPLAY_MODE_VERTEX ? "Vertex" : "Polygon");
-    snprintf(line2, sizeof(line2),
-             "[Space] play/pause  [+/-] speed  [m] mode  [Esc] stop  [Left/Right] step [Ctrl-K] jump to cursor");
+    glColor3f(0.435f, 0.702f, 0.435f);  /* #6fb36f */
+    draw_string((float)(hud_x + 32),
+                (float)(hud_y + REPLAY_HUD_TEXT_LINE1_Y),
+                progress_txt, FONT_SMALL);
 
-    glColor3f(0.88f, 0.96f, 0.92f);
+    /* Progress groove + green fill */
+    int groove_x = hud_x + REPLAY_HUD_TEXT_PAD_X;
+    int groove_w = hud_w - 2 * REPLAY_HUD_TEXT_PAD_X;
+    int groove_y = hud_y + REPLAY_HUD_PROGRESS_Y;
+    glColor4f(0.094f, 0.118f, 0.102f, 1.0f);  /* #181e1a */
+    draw_quad((float)groove_x, (float)groove_y,
+              (float)groove_w, (float)REPLAY_HUD_PROGRESS_H);
+    glColor4f(0.435f, 0.702f, 0.435f, 1.0f);  /* #6fb36f */
+    draw_quad((float)groove_x, (float)groove_y,
+              (float)groove_w * progress, (float)REPLAY_HUD_PROGRESS_H);
+    glColor4f(0.227f, 0.298f, 0.243f, 1.0f);  /* #3a4c3e border */
+    glBegin(GL_LINE_LOOP);
+    glVertex2f((float)groove_x + 0.5f,                     (float)groove_y + 0.5f);
+    glVertex2f((float)(groove_x + groove_w) - 0.5f,        (float)groove_y + 0.5f);
+    glVertex2f((float)(groove_x + groove_w) - 0.5f,        (float)(groove_y + REPLAY_HUD_PROGRESS_H) - 0.5f);
+    glVertex2f((float)groove_x + 0.5f,                     (float)(groove_y + REPLAY_HUD_PROGRESS_H) - 0.5f);
+    glEnd();
+
+    /* Line 2 — compact kbd hints along the bottom in muted gray */
+    snprintf(kbd_txt, sizeof(kbd_txt),
+             "Space pause  |  +/- speed  |  m mode  |  <> step  |  Esc stop");
+    glColor3f(0.533f, 0.533f, 0.533f);  /* #888 */
     draw_string((float)(hud_x + REPLAY_HUD_TEXT_PAD_X),
-                (float)(hud_y + REPLAY_HUD_TEXT_LINE1_Y), line1, FONT_SMALL);
-    glColor3f(0.60f, 0.78f, 0.72f);
-    draw_string((float)(hud_x + REPLAY_HUD_TEXT_PAD_X),
-                (float)(hud_y + REPLAY_HUD_TEXT_LINE2_Y), line2, FONT_SMALL);
+                (float)(hud_y + REPLAY_HUD_TEXT_LINE2_Y),
+                kbd_txt, FONT_SMALL);
 
     glDisable(GL_BLEND);
     end_2d();
