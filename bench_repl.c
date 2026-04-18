@@ -150,9 +150,12 @@ static BenchResult bench_parse_lines(int iters) {
             flat[flat_n++] = ls[i];
     }
 
-    /* Make every identifier the examples use available to the parser so
-     * the validator does not reject `x` etc. The parser also accepts
-     * unknown idents but emits a status string we'd be timing. */
+    /* Predeclare a common subset of identifiers so the validator does
+     * not reject `x` etc. on the lines that use them. This is NOT
+     * exhaustive — examples that reference other locals/params will
+     * still fail validation, but the parser work we're measuring
+     * (tokenize, expression parse, normalize) runs regardless of that
+     * result. */
     fresh_repl();
 
     BenchResult r = { .name = "parse_lines", .unit = "lines",
@@ -227,10 +230,12 @@ static BenchResult bench_flatten_examples(int iters) {
 
             double t0 = now_seconds();
             for (int k = 0; k < inner; k++) {
-                /* mark_normals_dirty() flips g_flat_dirty so that the
-                 * next call actually rebuilds; otherwise flatten is a
-                 * no-op after the first invocation. */
-                mark_normals_dirty();
+                /* repl_flatten_commands() -> flatten_commands() rebuilds
+                 * unconditionally (resets g_num_flat_cmds and walks
+                 * g_cmds[]), so we don't need to toggle any dirty flag
+                 * here — doing so would just add unrelated side effects
+                 * (g_normals_dirty, depth cache invalidation) into the
+                 * timed region. */
                 repl_flatten_commands();
             }
             iter_sec += now_seconds() - t0;
