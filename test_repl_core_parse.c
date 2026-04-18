@@ -43,6 +43,9 @@ int main(void) {
                                                payload, sizeof(payload)) == 1);
         ASSERT_TRUE("extract nested paren payload text",
                     strcmp(payload, "max(x, y + 1) > sin(z)") == 0);
+        ASSERT_TRUE("extract paren payload rejects missing close",
+                    repl_extract_paren_payload("glColor3f(1, 2, 3", payload,
+                                               sizeof(payload)) == 0);
     }
 
     {
@@ -59,6 +62,15 @@ int main(void) {
         ASSERT_TRUE("assignment rejects equality",
                     repl_extract_assignment_parts("x == 1", name, sizeof(name),
                                                   rhs, sizeof(rhs)) == 0);
+        ASSERT_TRUE("assignment rejects empty rhs",
+                    repl_extract_assignment_parts("radius =", name, sizeof(name),
+                                                  rhs, sizeof(rhs)) == 0);
+        ASSERT_TRUE("assignment trims trailing comment",
+                    repl_extract_assignment_parts("radius = sin(x); // keep",
+                                                  name, sizeof(name),
+                                                  rhs, sizeof(rhs)) == 1);
+        ASSERT_TRUE("assignment rhs strips semicolon and comment",
+                    strcmp(rhs, "sin(x)") == 0);
     }
 
     {
@@ -71,6 +83,10 @@ int main(void) {
                     repl_extract_goto_label("  goto walk_2;  ",
                                             label, sizeof(label)) == 1);
         ASSERT_TRUE("extract goto text", strcmp(label, "walk_2") == 0);
+        ASSERT_TRUE("extract goto rejects missing target",
+                    repl_extract_goto_label("goto   ;", label, sizeof(label)) == 0);
+        ASSERT_TRUE("extract label rejects empty identifier",
+                    repl_extract_label_name("  :   ", label, sizeof(label)) == 0);
     }
 
     {
@@ -313,6 +329,18 @@ int main(void) {
         repl_reset_state();
         GLCmd cmd;
         memset(&cmd, 0, sizeof(cmd));
+        int ok = repl_parse_command("glColor3f(1,, 3)", &cmd);
+        ASSERT_TRUE("malformed glColor3f returns 0", ok == 0);
+        ASSERT_TRUE("malformed glColor3f incomplete",
+                    strstr(g_status, "Incomplete command") != NULL);
+        ASSERT_TRUE("malformed glColor3f not unknown",
+                    strstr(g_status, "Unknown cmd") == NULL);
+    }
+
+    {
+        repl_reset_state();
+        GLCmd cmd;
+        memset(&cmd, 0, sizeof(cmd));
         int ok = repl_parse_command("glTotallyUnknown(1, 2, 3)", &cmd);
         ASSERT_TRUE("complete unknown command returns 0", ok == 0);
         assert_status_contains("complete unknown command status", "Unknown cmd");
@@ -358,6 +386,18 @@ int main(void) {
         ASSERT_TRUE("trimmed glColor3f type", cmd.type == CMD_COLOR3F);
         ASSERT_TRUE("trimmed glColor3f source normalized",
                     strstr(cmd.source, "glColor3f(1, 2, 3);") != NULL);
+    }
+
+    {
+        repl_reset_state();
+        GLCmd cmd;
+        memset(&cmd, 0, sizeof(cmd));
+        int ok = repl_parse_command("glColor3f(1 + 2, sin(0.5), -3)", &cmd);
+        ASSERT_TRUE("expr glColor3f parse ok", ok == 1);
+        ASSERT_TRUE("expr glColor3f type", cmd.type == CMD_COLOR3F);
+        ASSERT_TRUE("expr glColor3f source canonicalized",
+                    strstr(cmd.source, "glColor3f(") != NULL);
+        ASSERT_TRUE("expr glColor3f computes first arg", cmd.args[0] == 3.0f);
     }
 
     /* zero-arg commands can be written with or without () */
@@ -420,6 +460,27 @@ int main(void) {
         int ok = repl_parse_command("func2(1,)", &cmd);
         ASSERT_TRUE("func2 malformed arglist returns 0", ok == 0);
         ASSERT_TRUE("func2 malformed arglist status",
+                    strstr(g_status, "Invalid function call arguments") != NULL);
+    }
+
+    {
+        repl_reset_state();
+        GLCmd cmd;
+        memset(&cmd, 0, sizeof(cmd));
+        int ok = repl_parse_command("func2(1 + sin(2), max(3, 4))", &cmd);
+        ASSERT_TRUE("func2 nested args parse ok", ok == 1);
+        ASSERT_TRUE("func2 nested args type", cmd.type == CMD_CALL);
+        ASSERT_TRUE("func2 nested args preserves nested expr",
+                    strstr(cmd.source, "max(3, 4)") != NULL);
+    }
+
+    {
+        repl_reset_state();
+        GLCmd cmd;
+        memset(&cmd, 0, sizeof(cmd));
+        int ok = repl_parse_command("func2(1 2)", &cmd);
+        ASSERT_TRUE("func2 missing comma invalid", ok == 0);
+        ASSERT_TRUE("func2 missing comma status",
                     strstr(g_status, "Invalid function call arguments") != NULL);
     }
 
