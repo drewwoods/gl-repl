@@ -23,6 +23,16 @@
 ExprVar g_predef_vars[MAX_PREDEF_VARS];
 int     g_num_predef_vars = 0;
 
+static const char *skip_numeric_literal(const char *s) {
+    char *end = NULL;
+    (void)strtof(s, &end);
+    if (end == s)
+        return s;
+    if (*end == 'f' || *end == 'F')
+        end++;
+    return end;
+}
+
 void init_predef_vars(void) {
     g_num_predef_vars = 1;
     strncpy(g_predef_vars[0].name, "t", sizeof(g_predef_vars[0].name) - 1);
@@ -106,8 +116,7 @@ int source_uses_ident(const char *src, const char *name) {
     while (*s) {
         if (isdigit((unsigned char)*s) ||
             (*s == '.' && isdigit((unsigned char)s[1]))) {
-            char *end;
-            (void)strtof(s, &end);
+            const char *end = skip_numeric_literal(s);
             if (end != s) { s = end; continue; }
         }
         if (!isalpha((unsigned char)*s) && *s != '_') { s++; continue; }
@@ -130,8 +139,7 @@ int validate_expression_idents(const char *src, const ExprVar *vars,
         /* Skip number literals, including scientific notation like 1e-06. */
         if (isdigit((unsigned char)*s) ||
             (*s == '.' && isdigit((unsigned char)s[1]))) {
-            char *end;
-            (void)strtof(s, &end);
+            const char *end = skip_numeric_literal(s);
             if (end != s) {
                 s = end;
                 continue;
@@ -234,6 +242,8 @@ static float eval_primary(ExprCtx *ctx) {
         char *end;
         float v = strtof(ctx->p, &end);
         ctx->p = end;
+        if (*ctx->p == 'f' || *ctx->p == 'F')
+            ctx->p++;
         return v;
     }
 

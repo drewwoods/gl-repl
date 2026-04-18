@@ -258,6 +258,20 @@ and the input buffer still matches the normalized committed source
 (mirrors the `unmodified` check in `repl_editor.c` so mid-keystroke
 edits suppress the guide).
 
+## Evaluator / translation learnings
+
+- **C float-literal suffixes must remain evaluator-safe.** The importer can
+  produce expressions containing literals like `1.0f`. The evaluator and
+  identifier validator now treat `f`/`F` as a numeric suffix when it appears
+  immediately after a parsed number literal, rather than as an identifier.
+  This keeps imported expressions executable without requiring manual cleanup.
+- **Harness gap that caught this:** translating `powf(1.0f,2.0f)` to REPL
+  produced `pow(1.0f,2.0f)`, which previously failed evaluation because parsing
+  stopped at the first `f`. Keep this pattern covered in `test_eval.c`.
+- **String copy warning hygiene:** use explicit bounded formatting for internal
+  translation buffers where practical to avoid `-Wstringop-truncation`
+  false-positives from `strncpy`.
+
 Flat-cmd scan: the matching flat cmd is found by flat execution order
 — **not** by comparing `src_cmd_idx > g_edit_line`. Function-call
 expansions carry the callee's `src_cmd_idx`, so a numeric comparison

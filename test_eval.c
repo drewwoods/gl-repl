@@ -189,6 +189,7 @@ static void run_tests(void) {
     ASSERT_FLOAT("--5", 5.0f);
     ASSERT_FLOAT("+5", 5.0f);
     ASSERT_FLOAT("1.5+0.5", 2.0f);
+    ASSERT_FLOAT("1.5f+0.5f", 2.0f);
     ASSERT_FLOAT("PI", (float)M_PI);
     ASSERT_FLOAT("TAU", (float)(2.0 * M_PI));
     ASSERT_FLOAT("sin(0)", 0.0f);
@@ -358,7 +359,9 @@ static void run_tests(void) {
     ASSERT_TO_REPL("fabsf(-1)", "abs(-1)");
     ASSERT_TO_REPL("glVertex3f(1,2,3)", "glVertex3f(1,2,3)");
     ASSERT_TO_REPL("powf(x,2)", "pow(x,2)");
+    ASSERT_TO_REPL("powf(1.0f,2.0f)", "pow(1.0f,2.0f)");
     ASSERT_TO_REPL("repl_randf(i,3)", "rand(i,3)");
+    ASSERT_FLOAT("pow(1.0f,2.0f)", 1.0f);
     {
         char tiny[5];
         c_expr_to_repl("sinf(x)", tiny, sizeof(tiny));
