@@ -202,6 +202,7 @@ static inline void glLightModeli(GLenum pname, GLint param) { (void)pname; (void
 static inline void glLineStipple(GLint factor, GLushort pattern) { (void)factor; (void)pattern; }
 static inline void glLineWidth(GLfloat width) { (void)width; }
 static inline void glLoadIdentity(void) {}
+static inline void glLoadMatrixf(const GLfloat *m) { (void)m; }
 static inline void glMaterialf(GLenum face, GLenum pname, GLfloat param) { (void)face; (void)pname; (void)param; }
 static inline void glMaterialfv(GLenum face, GLenum pname, const GLfloat *params) { (void)face; (void)pname; (void)params; }
 static inline void glMatrixMode(GLenum mode) { (void)mode; }
@@ -228,6 +229,7 @@ static inline void glTranslatef(GLfloat x, GLfloat y, GLfloat z) { (void)x; (voi
 static inline void glVertex2f(GLfloat x, GLfloat y) { (void)x; (void)y; }
 static inline void glVertex3dv(const GLdouble *v) { (void)v; }
 static inline void glVertex3f(GLfloat x, GLfloat y, GLfloat z) { (void)x; (void)y; (void)z; }
+static inline void glVertex3fv(const GLfloat *v) { (void)v; }
 static inline void glViewport(GLint x, GLint y, GLsizei width, GLsizei height) { (void)x; (void)y; (void)width; (void)height; }
 
 #ifdef __cplusplus
