@@ -1737,8 +1737,11 @@ static int parse_command(const char *line, GLCmd *cmd,
                     set_status(verr); return 0;
                 }
             }
-            cmd->num_args = parse_exprs(args, cmd->args, def->num_args, vars, num_vars);
-            if (cmd->num_args == def->num_args) {
+            int exact_count = 0;
+            if (parse_expr_list_exact(args, cmd->args, def->num_args,
+                                      vars, num_vars, &exact_count) &&
+                exact_count == def->num_args) {
+                cmd->num_args = exact_count;
                 cmd->type = def->type;
                 cmd->valid = 1;
                 cmd->has_vars = input_has_any_visible_vars(args, vars, num_vars);
@@ -1794,6 +1797,7 @@ static int parse_command(const char *line, GLCmd *cmd,
                 }
                 return 1;
             }
+            cmd->num_args = parse_exprs(args, cmd->args, def->num_args, vars, num_vars);
             if (cmd->num_args < def->num_args)
                 set_incomplete_arg_count_status(def->name, def->num_args, cmd->num_args);
             else

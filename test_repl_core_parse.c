@@ -348,6 +348,124 @@ int main(void) {
         ASSERT_TRUE("gluBegin CONTOUR type", cmd.type == CMD_TESS_BEGIN_CONTOUR);
     }
 
+    /* whitespace + semicolon trimming stays predictable */
+    {
+        repl_reset_state();
+        GLCmd cmd;
+        memset(&cmd, 0, sizeof(cmd));
+        int ok = repl_parse_command("   glColor3f( 1 , 2 , 3 )   ;   ", &cmd);
+        ASSERT_TRUE("trimmed glColor3f parse ok", ok == 1);
+        ASSERT_TRUE("trimmed glColor3f type", cmd.type == CMD_COLOR3F);
+        ASSERT_TRUE("trimmed glColor3f source normalized",
+                    strstr(cmd.source, "glColor3f(1, 2, 3);") != NULL);
+    }
+
+    /* zero-arg commands can be written with or without () */
+    {
+        repl_reset_state();
+        GLCmd cmd;
+        memset(&cmd, 0, sizeof(cmd));
+        int ok = repl_parse_command("glPushMatrix", &cmd);
+        ASSERT_TRUE("glPushMatrix without parens parse ok", ok == 1);
+        ASSERT_TRUE("glPushMatrix without parens type", cmd.type == CMD_PUSH_MATRIX);
+    }
+
+    {
+        repl_reset_state();
+        GLCmd cmd;
+        memset(&cmd, 0, sizeof(cmd));
+        int ok = repl_parse_command("glPopMatrix()", &cmd);
+        ASSERT_TRUE("glPopMatrix with parens parse ok", ok == 1);
+        ASSERT_TRUE("glPopMatrix with parens type", cmd.type == CMD_POP_MATRIX);
+    }
+
+    /* fixed-arity command with extra args should be rejected predictably */
+    {
+        repl_reset_state();
+        GLCmd cmd;
+        memset(&cmd, 0, sizeof(cmd));
+        int ok = repl_parse_command("glColor3f(1, 2, 3, 4)", &cmd);
+        ASSERT_TRUE("long glColor3f returns 0", ok == 0);
+        ASSERT_TRUE("long glColor3f reports usage", strstr(g_status, "Usage:") != NULL);
+        ASSERT_TRUE("long glColor3f not incomplete",
+                    strstr(g_status, "Incomplete command") == NULL);
+    }
+
+    /* undeclared identifier should fail when visible vars are provided */
+    {
+        ExprVar vars[1] = { { "radius", 2.0f } };
+        GLCmd cmd;
+        memset(&cmd, 0, sizeof(cmd));
+        int ok = repl_parse_command_with_vars("glVertex3f(unknown_name, 0, 0)", &cmd, vars, 1);
+        ASSERT_TRUE("unknown local var returns 0", ok == 0);
+        ASSERT_TRUE("unknown local var message",
+                    strstr(g_status, "undeclared variable 'unknown_name'") != NULL);
+    }
+
+    /* function calls: empty arglist valid, malformed arglist invalid */
+    {
+        repl_reset_state();
+        GLCmd cmd;
+        memset(&cmd, 0, sizeof(cmd));
+        int ok = repl_parse_command("func2()", &cmd);
+        ASSERT_TRUE("func2 empty arglist parse ok", ok == 1);
+        ASSERT_TRUE("func2 empty arglist type", cmd.type == CMD_CALL);
+        ASSERT_TRUE("func2 empty arglist num_args", cmd.num_args == 0);
+    }
+
+    {
+        repl_reset_state();
+        GLCmd cmd;
+        memset(&cmd, 0, sizeof(cmd));
+        int ok = repl_parse_command("func2(1,)", &cmd);
+        ASSERT_TRUE("func2 malformed arglist returns 0", ok == 0);
+        ASSERT_TRUE("func2 malformed arglist status",
+                    strstr(g_status, "Invalid function call arguments") != NULL);
+    }
+
+    /* supported arities for specialized commands */
+    {
+        repl_reset_state();
+        GLCmd cmd;
+        memset(&cmd, 0, sizeof(cmd));
+        int ok = repl_parse_command("glMaterialf(GL_FRONT, GL_AMBIENT, 0.1, 0.2, 0.3)", &cmd);
+        ASSERT_TRUE("glMaterialf 3-float vector invalid", ok == 0);
+        ASSERT_TRUE("glMaterialf 3-float status", strstr(g_status, "Expected 1 or 4 float values") != NULL);
+    }
+
+    {
+        repl_reset_state();
+        GLCmd cmd;
+        memset(&cmd, 0, sizeof(cmd));
+        int ok = repl_parse_command("glPointParameterfv(GL_POINT_DISTANCE_ATTENUATION, 1, 0)", &cmd);
+        ASSERT_TRUE("glPointParameterfv short arglist invalid", ok == 0);
+        ASSERT_TRUE("glPointParameterfv short arglist status",
+                    strstr(g_status, "Expected 3 floats") != NULL);
+    }
+
+    {
+        repl_reset_state();
+        GLCmd cmd;
+        memset(&cmd, 0, sizeof(cmd));
+        int ok = repl_parse_command("glPointParameterfv(GL_POINT_FADE_THRESHOLD_SIZE, 1, 0, 0)", &cmd);
+        ASSERT_TRUE("glPointParameterfv bad pname invalid", ok == 0);
+        ASSERT_TRUE("glPointParameterfv bad pname status",
+                    strstr(g_status, "GL_POINT_DISTANCE_ATTENUATION") != NULL);
+    }
+
+    /* known command prefix + missing close paren remains "incomplete", even with ';' */
+    {
+        repl_reset_state();
+        GLCmd cmd;
+        memset(&cmd, 0, sizeof(cmd));
+        int ok = repl_parse_command("glTranslatef(1, 2, 3;", &cmd);
+        ASSERT_TRUE("unterminated known command returns 0", ok == 0);
+        ASSERT_TRUE("unterminated known command incomplete",
+                    strstr(g_status, "Incomplete command") != NULL);
+        ASSERT_TRUE("unterminated known command not unknown",
+                    strstr(g_status, "Unknown cmd") == NULL);
+    }
+
     printf("repl_core_parse: %d/%d passed\n", g_pass, g_run);
     return (g_run == g_pass) ? 0 : 1;
 }
