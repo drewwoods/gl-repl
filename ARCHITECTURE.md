@@ -276,6 +276,10 @@ edits suppress the guide).
   `include/GL/gl.h` breaks `make test-stubs` at link time even though normal GL
   builds succeed. When adding fixed-function calls in rendering code, mirror
   them in the local stubs immediately.
+- **Bounded copies still need explicit NUL termination.** In parser paths that
+  trim/copy function identifiers into fixed buffers, always terminate manually
+  after `strncpy(..., size-1)`; otherwise long unknown commands can leave
+  unterminated stack strings and make command-dispatch comparisons undefined.
 
 Flat-cmd scan: the matching flat cmd is found by flat execution order
 — **not** by comparing `src_cmd_idx > g_edit_line`. Function-call

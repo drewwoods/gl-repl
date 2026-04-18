@@ -1623,6 +1623,7 @@ static int parse_command(const char *line, GLCmd *cmd,
         }
     } else {
         strncpy(func, p, sizeof(func) - 1);
+        func[sizeof(func) - 1] = '\0';
     }
 
     /* Table-driven parsing for enum commands */
