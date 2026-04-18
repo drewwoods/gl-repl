@@ -1,84 +1,48 @@
 /*
- * OpenGL REPL - Dynamic Display List Rendering
+ * repl_core.c — Parser, flattener, executor, and supporting infrastructure.
  *
- * A real-time OpenGL command interpreter. Type GL commands and watch the
- * geometry build up as each line is parsed when you press ';'.
+ * Division of labor
+ * -----------------
+ * This file owns everything that transforms text into renderable GL state:
  *
- * Supported commands:
- *   glBegin(MODE)        glEnd()
- *   glVertex3f(x,y,z)    glNormal3f(x,y,z)
- *   glColor3f(r,g,b)     glColor4f(r,g,b,a)
- *   glTranslatef(x,y,z)
- *   glEnable(CAP)        glDisable(CAP)
- *   glShadeModel(MODE)
+ *   - Enum tables & completion metadata (g_begin_modes, g_func_completions, …)
+ *   - Global state: command arrays (g_cmds / g_flat_cmds), camera, toggles,
+ *     replay, autocomplete, accumulation-buffer settings, etc.
+ *   - Parsing      — parse_command(): text → GLCmd
+ *   - Normalization — repl_parse_and_normalize(), repl_reformat_commands()
+ *   - Autocomplete  — update_autocomplete(), accept_autocomplete()
+ *                     (straddles editor and parser: reads g_input from
+ *                      repl_editor.c, matches against the completion tables
+ *                      defined here, and writes g_ac_* state rendered by
+ *                      ui_panels.c — kept here because it's tightly coupled
+ *                      to the parser tables)
+ *   - Flattening   — flatten_range() / flatten_commands(): expand for-loops,
+ *                     function calls, and if-blocks into g_flat_cmds[]
+ *   - Auto-normals — recompute_autonormals()
+ *   - Execution    — execute_commands(): walk g_flat_cmds[], issue GL calls
+ *   - Replay       — replay_start/stop/advance/seek, fade-batch management
+ *   - GLUT display / reshape callbacks
+ *   - Example / user-scene management
+ *   - Depth-cache  — prefix-sum arrays for O(1) block-depth queries
+ *   - 2D helpers   — draw_string(), draw_quad(), begin_2d(), end_2d()
+ *   - Public API wrappers forwarded from sample.c
  *
- * Math expressions: sin, cos, tan, sqrt, abs, pow, min, max, floor, ceil,
- *                   fmod, rand(seed[, iter]), PI, TAU
- *   Operators: + - * / % ( )   Comparison: > < >= <= == !=   Logical: && || !
- *   Example: glVertex3f(cos(PI/4), sin(PI/4), 0)
+ * repl_editor.c owns the interactive editing layer:
+ *   - Editor state (g_input, cursor, undo/redo ring, clipboard, selection)
+ *   - Commit handlers that decide *where* a parsed command goes in g_cmds[]
+ *   - GLUT keyboard / special / mouse / motion / timer dispatch
+ *   - Camera momentum and panel resizing
+ *   - feed_line() — the programmatic commit entry point used by file loading
+ *     and test harnesses
  *
- * Predefined variables: x, y, z, i, j, k, n, t
- *   Assignment: x = 1.5;
- *   't' auto-increments with time (Ctrl+T to play/pause)
- *
- * For-loops (saved as C for-loops, imported back as loops):
- *   for(i, 0, 24) glVertex3f(cos(i*TAU/24), sin(i*TAU/24), 0);
- *   for(i, 0, N) { body... }   Multi-line block
- *
- * Functions (define + call reusable blocks):
- *   func0 { body... }          Define function 0
- *   func0(radius, yoff) { ... } Define function 0 with arguments
- *   func0()                    Call function 0
- *   func0(1.5, x + 2)          Call function 0 with expressions
- *   Up to func0..func9
- *
- * Conditionals:
- *   if(expr) { body... }       Body included when expr is non-zero
- *
- * Controls:
- *   Type + ;       Execute / commit line
- *   Enter          Insert new line (works in middle of list)
- *   Up/Down        Navigate between command lines
- *   Left/Right     Move cursor within input line
- *   Home/End       Jump to start/end of input line
- *   Backspace      Delete character before cursor
- *   Ctrl+/         Toggle comment (// prefix)
- *   Shift+Up/Down  Select multiple lines
- *   Ctrl+A         Move cursor to start of input line
- *   Ctrl+C         Copy line/selection (whole for-loop on FOR_BEGIN)
- *   Ctrl+X         Cut line/selection (whole for-loop on FOR_BEGIN)
- *   Ctrl+V         Paste before current line
- *   Ctrl+E         Move cursor to end of input line
- *   Ctrl+Z         Undo last command
- *   Ctrl+D         Delete line at cursor
- *   Ctrl+L         Clear all commands
- *   Ctrl+R         Reformat all command lines
- *   Ctrl+P         Dump current editor code to stdout
- *   Ctrl+S         Save to output.c
- *   Ctrl+Q         Exit
- *   Escape         Clear input / exit insert mode / close help
- *   Tab            Accept autocomplete suggestion
- *   Left-drag      Orbit camera
- *   Right-drag     Pan camera
- *   Scroll wheel   Zoom (or scroll code panel when cursor is over panel)
- *   F1-F10         Toggle overlays (help/wire/grid/axes/vnums/normals/indices/guides/autonorm/lights)
- *   F12            Cycle predefined examples
- *   PgUp/PgDn      Scroll code panel
- *   Ctrl+T         Toggle time variable 't' play/pause
- *   Ctrl+U         Toggle multisample state
- *   Ctrl+N         Toggle GL_LINE_SMOOTH state
- *   Ctrl+B         Toggle accumulation-buffer AA
- *   Ctrl+=         Increase AA jitter samples (1→2→4→8→16)
- *   Ctrl+-         Decrease AA jitter samples (16→8→4→2→1)
- *
- * Command-line flags:
- *   --noaccum      Disable accumulation buffer (enabled by default)
- *   --dump-code    Print loaded editor buffer to stdout at startup
- *   --dump-flat    Print flattened command stream to stdout at startup
- *
- * Import/Export:
- *   Ctrl+S saves to output.c with snippet markers.
- *   Run ./sample output.c to reload a saved session.
+ * Other translation units:
+ *   repl_eval.c    — expression evaluator, for-loop header parsers
+ *   repl_export.c  — save / load  (output.c round-tripping)
+ *   repl_search.c  — incremental search overlay
+ *   cmd_format.c   — source-text formatting helpers
+ *   scene_render.c — 3D scene setup, grid / axes / overlay drawing
+ *   ui_panels.c    — code panel, autocomplete popup, config menu, var panel
+ *   repl_examples.c— predefined example scene data
  */
 
 #include "sample.h"
@@ -290,6 +254,17 @@ void depth_cache_invalidate(void) {
     g_depth_cache_dirty = 1;
 }
 
+/* Rebuild prefix-sum depth arrays so that depth_prefix[pos] gives the
+ * nesting depth *before* command `pos`.  Each array tracks one kind of
+ * scope opener/closer:
+ *
+ *   g_for_depth_prefix   — for-loop nesting only
+ *   g_block_depth_prefix — any block (for/func/if) nesting (used for indent)
+ *   g_begin_depth_prefix — glBegin/glEnd nesting
+ *   g_tess_depth_prefix  — gluBegin/gluEnd nesting
+ *
+ * All queries (block_depth_at, in_begin_block_at, etc.) call this first;
+ * the dirty flag is set by depth_cache_invalidate(). */
 static void depth_cache_rebuild(void) {
     if (!g_depth_cache_dirty) return;
 
@@ -299,36 +274,36 @@ static void depth_cache_rebuild(void) {
     g_tess_depth_prefix[0] = 0;
 
     for (int i = 0; i < g_num_cmds; i++) {
-        int fd = g_for_depth_prefix[i];
-        int bd = g_block_depth_prefix[i];
-        int gd = g_begin_depth_prefix[i];
-        int td = g_tess_depth_prefix[i];
+        int for_depth   = g_for_depth_prefix[i];
+        int block_depth = g_block_depth_prefix[i];
+        int begin_depth = g_begin_depth_prefix[i];
+        int tess_depth  = g_tess_depth_prefix[i];
 
         if (g_cmds[i].valid) {
             CmdType t = g_cmds[i].type;
 
-            if (t == CMD_FOR_BEGIN) fd++;
-            else if (t == CMD_FOR_END) fd--;
+            if (t == CMD_FOR_BEGIN) for_depth++;
+            else if (t == CMD_FOR_END) for_depth--;
 
-            if (t == CMD_FOR_BEGIN || t == CMD_FUNC_DEF || t == CMD_IF_BEGIN) bd++;
-            else if (t == CMD_FOR_END || t == CMD_FUNC_END || t == CMD_IF_END) bd--;
+            if (t == CMD_FOR_BEGIN || t == CMD_FUNC_DEF || t == CMD_IF_BEGIN) block_depth++;
+            else if (t == CMD_FOR_END || t == CMD_FUNC_END || t == CMD_IF_END) block_depth--;
 
-            if (t == CMD_BEGIN) gd++;
-            else if (t == CMD_END) gd--;
+            if (t == CMD_BEGIN) begin_depth++;
+            else if (t == CMD_END) begin_depth--;
 
-            if (t == CMD_TESS_BEGIN_POLYGON || t == CMD_TESS_BEGIN_CONTOUR) td++;
-            else if (t == CMD_TESS_END) td--;
+            if (t == CMD_TESS_BEGIN_POLYGON || t == CMD_TESS_BEGIN_CONTOUR) tess_depth++;
+            else if (t == CMD_TESS_END) tess_depth--;
         }
 
-        if (fd < 0) fd = 0;
-        if (bd < 0) bd = 0;
-        if (gd < 0) gd = 0;
-        if (td < 0) td = 0;
+        if (for_depth < 0)   for_depth = 0;
+        if (block_depth < 0) block_depth = 0;
+        if (begin_depth < 0) begin_depth = 0;
+        if (tess_depth < 0)  tess_depth = 0;
 
-        g_for_depth_prefix[i + 1] = fd;
-        g_block_depth_prefix[i + 1] = bd;
-        g_begin_depth_prefix[i + 1] = gd;
-        g_tess_depth_prefix[i + 1] = td;
+        g_for_depth_prefix[i + 1]   = for_depth;
+        g_block_depth_prefix[i + 1] = block_depth;
+        g_begin_depth_prefix[i + 1] = begin_depth;
+        g_tess_depth_prefix[i + 1]  = tess_depth;
     }
 
     g_depth_cache_dirty = 0;
@@ -700,6 +675,9 @@ void repl_normalize_from_parsed(const char *parsed_source,
     out[out_sz - 1] = '\0';
 }
 
+/* Does this command type get a trailing ';' when reformatted?
+ * Comments and labels have their own syntax, and float declarations
+ * already include one. */
 static int cmd_type_needs_semicolon(CmdType t) {
     switch (t) {
     case CMD_COMMENT:
@@ -711,6 +689,9 @@ static int cmd_type_needs_semicolon(CmdType t) {
     }
 }
 
+/* Should this command type be indented deeper when inside a
+ * for/func/if block?  Block structural commands (openers, closers)
+ * and comments/labels/gotos handle their own indent logic. */
 static int cmd_type_needs_block_indent(CmdType t) {
     switch (t) {
     case CMD_COMMENT:
@@ -837,6 +818,11 @@ void repl_debug_dump_flat_commands(FILE *out) {
     fflush(dst);
 }
 
+/* Strip leading/trailing whitespace from `raw_expr`, normalize comma
+ * spacing (remove space before comma, ensure one space after), optionally
+ * append a semicolon, and prepend `indent_spaces` spaces.  Used by
+ * repl_parse_and_normalize() and repl_reformat_commands() to produce
+ * canonical source text for a command. */
 static void normalize_with_indent(const char *raw_expr, int indent_spaces,
                                   int ensure_semicolon, char *out, int out_sz) {
     if (out_sz <= 0) return;
@@ -1111,6 +1097,13 @@ void repl_reformat_commands(void) {
 
 /* ========================================================================= */
 /* Autocomplete                                                               */
+/*                                                                             */
+/* NOTE on placement: the autocomplete system sits at the boundary between    */
+/* repl_core.c and repl_editor.c.  It reads g_input (owned by the editor)    */
+/* and matches against the enum/function completion tables (defined here).    */
+/* It's kept in repl_core.c because the match tables are parser-specific     */
+/* metadata that would otherwise need to be exported. The g_ac_* outputs     */
+/* are rendered by ui_panels.c.                                              */
 /* ========================================================================= */
 
 typedef struct {
@@ -1561,6 +1554,21 @@ static int is_known_incomplete_func_name(const char *func) {
            func[5] == '\0';
 }
 
+/*
+ * parse_command — Convert a single REPL text line into a GLCmd.
+ *
+ * This is the main entry point for the parser. It tries each command
+ * grammar in order:
+ *
+ *   1. Comments (// …)
+ *   2. Table-driven enum commands (glBegin, glEnable, glShadeModel, …)
+ *   3. glEnd
+ *   4. Table-driven standard commands (glVertex3f, glColor3f, glTranslatef, …)
+ *   5. Ad-hoc commands (glMaterialf, glPointParameterfv, glPush/PopMatrix,
+ *      funcN calls, glu* tessellator commands, goto/label)
+ *
+ * Returns 1 on success (cmd populated), 0 on parse failure (status set).
+ */
 static int parse_command(const char *line, GLCmd *cmd,
                          ExprVar *vars, int num_vars) {
     char buf[MAX_LINE_LEN];
@@ -1630,22 +1638,28 @@ static int parse_command(const char *line, GLCmd *cmd,
     for (const EnumCmdDef *def = g_enum_cmds; def->name; def++) {
         if (strcmp(func, def->name) == 0) {
             if (def->num_args == 1) {
-                char *a = args;
-                while (*a && isspace((unsigned char)*a)) a++;
-                int al = (int)strlen(a);
-                while (al > 0 && isspace((unsigned char)a[al - 1])) a[--al] = '\0';
+                char *arg_str = args;
+                while (*arg_str && isspace((unsigned char)*arg_str)) arg_str++;
+                int arg_len = (int)strlen(arg_str);
+                while (arg_len > 0 && isspace((unsigned char)arg_str[arg_len - 1])) arg_str[--arg_len] = '\0';
                 for (int i = 0; def->enums1[i].name; i++) {
-                    if (strcmp(a, def->enums1[i].name) == 0) {
+                    if (strcmp(arg_str, def->enums1[i].name) == 0) {
                         cmd->type = def->type;
                         cmd->mode = def->enums1[i].value;
                         cmd->valid = 1;
                         if (def->indent_type == 1) {
-                            char _bi[32]; int _td=tess_scope_depth_at(g_edit_line),_sp=2+2*_td;
-                            if(_sp>(int)sizeof(_bi)-1)_sp=(int)sizeof(_bi)-1; memset(_bi,' ',_sp);_bi[_sp]='\0';
-                            snprintf(cmd->source,sizeof(cmd->source), def->fmt, _bi, def->enums1[i].name);
+                            /* glBegin-style indent: tess depth only, no begin depth */
+                            char ind[32];
+                            int td = tess_scope_depth_at(g_edit_line);
+                            int spaces = 2 + 2 * td;
+                            if (spaces > (int)sizeof(ind) - 1) spaces = (int)sizeof(ind) - 1;
+                            memset(ind, ' ', (size_t)spaces);
+                            ind[spaces] = '\0';
+                            snprintf(cmd->source, sizeof(cmd->source), def->fmt, ind, def->enums1[i].name);
                         } else {
-                            char _ind[32]; cmd_indent(g_edit_line,_ind,sizeof(_ind));
-                            snprintf(cmd->source,sizeof(cmd->source), def->fmt, _ind, def->enums1[i].name);
+                            char ind[32];
+                            cmd_indent(g_edit_line, ind, sizeof(ind));
+                            snprintf(cmd->source, sizeof(cmd->source), def->fmt, ind, def->enums1[i].name);
                         }
                         return 1;
                     }
@@ -1653,37 +1667,38 @@ static int parse_command(const char *line, GLCmd *cmd,
                 set_status(def->usage1);
                 return 0;
             } else if (def->num_args == 2) {
-                char a1[64] = "", a2[64] = "";
+                char raw_arg1[64] = "", raw_arg2[64] = "";
                 char *comma = strchr(args, ',');
                 if (!comma) { set_status(def->usage1 ? def->usage1 : "Invalid arguments"); return 0; }
-                int l1 = (int)(comma - args);
-                if (l1 >= (int)sizeof(a1)) l1 = (int)sizeof(a1) - 1;
-                strncpy(a1, args, l1); a1[l1] = '\0';
-                strncpy(a2, comma + 1, sizeof(a2) - 1);
+                int len1 = (int)(comma - args);
+                if (len1 >= (int)sizeof(raw_arg1)) len1 = (int)sizeof(raw_arg1) - 1;
+                strncpy(raw_arg1, args, len1); raw_arg1[len1] = '\0';
+                strncpy(raw_arg2, comma + 1, sizeof(raw_arg2) - 1);
 
-                char *p1 = a1; while (*p1 == ' ') p1++;
-                int e1 = (int)strlen(p1); while (e1 > 0 && p1[e1-1] == ' ') p1[--e1] = '\0';
-                char *p2 = a2; while (*p2 == ' ') p2++;
-                int e2 = (int)strlen(p2); while (e2 > 0 && p2[e2-1] == ' ') p2[--e2] = '\0';
+                /* Trim whitespace from both arguments */
+                char *trimmed1 = raw_arg1; while (*trimmed1 == ' ') trimmed1++;
+                int tlen1 = (int)strlen(trimmed1); while (tlen1 > 0 && trimmed1[tlen1-1] == ' ') trimmed1[--tlen1] = '\0';
+                char *trimmed2 = raw_arg2; while (*trimmed2 == ' ') trimmed2++;
+                int tlen2 = (int)strlen(trimmed2); while (tlen2 > 0 && trimmed2[tlen2-1] == ' ') trimmed2[--tlen2] = '\0';
 
                 GLenum val1 = 0;
                 int found1 = 0, found2 = 0;
                 float val2_f = 0.0f;
 
                 for (int i = 0; def->enums1[i].name; i++) {
-                    if (strcmp(p1, def->enums1[i].name) == 0) { val1 = def->enums1[i].value; found1 = 1; break; }
+                    if (strcmp(trimmed1, def->enums1[i].name) == 0) { val1 = def->enums1[i].value; found1 = 1; break; }
                 }
                 for (int i = 0; def->enums2[i].name; i++) {
-                    if (strcmp(p2, def->enums2[i].name) == 0) { val2_f = (float)def->enums2[i].value; found2 = 1; break; }
+                    if (strcmp(trimmed2, def->enums2[i].name) == 0) { val2_f = (float)def->enums2[i].value; found2 = 1; break; }
                 }
                 if (!found1) { set_status(def->usage1); return 0; }
 
                 if (!found2 && def->type == CMD_LIGHT_MODEL_I) {
                     char verr[128];
-                    if (!validate_expression_idents(p2, vars, num_vars, verr, sizeof(verr))) {
+                    if (!validate_expression_idents(trimmed2, vars, num_vars, verr, sizeof(verr))) {
                         set_status(verr); return 0;
                     }
-                    float fv; if (parse_exprs(p2, &fv, 1, vars, num_vars) == 1) { val2_f = fv; found2 = 1; }
+                    float fv; if (parse_exprs(trimmed2, &fv, 1, vars, num_vars) == 1) { val2_f = fv; found2 = 1; }
                 }
 
                 if (!found2) { set_status(def->usage2); return 0; }
@@ -1693,8 +1708,8 @@ static int parse_command(const char *line, GLCmd *cmd,
                 cmd->mode = val1;
                 cmd->args[0] = val2_f;
                 cmd->num_args = 1;
-                char _ind[32]; cmd_indent(g_edit_line,_ind,sizeof(_ind));
-                snprintf(cmd->source, sizeof(cmd->source), def->fmt, _ind, p1, p2);
+                char ind[32]; cmd_indent(g_edit_line, ind, sizeof(ind));
+                snprintf(cmd->source, sizeof(cmd->source), def->fmt, ind, trimmed1, trimmed2);
                 return 1;
             }
         }
@@ -1705,13 +1720,13 @@ static int parse_command(const char *line, GLCmd *cmd,
         cmd->type = CMD_END;
         cmd->valid = 1;
         {
-            int td = tess_scope_depth_at(g_edit_line);
-            int spaces = 2 + 2 * td;
-            char _ei[32];
-            if (spaces > (int)sizeof(_ei) - 1) spaces = (int)sizeof(_ei) - 1;
-            memset(_ei, ' ', (size_t)spaces);
-            _ei[spaces] = '\0';
-            snprintf(cmd->source, sizeof(cmd->source), "%sglEnd();", _ei);
+            int tess_depth = tess_scope_depth_at(g_edit_line);
+            int spaces = 2 + 2 * tess_depth;
+            char end_ind[32];
+            if (spaces > (int)sizeof(end_ind) - 1) spaces = (int)sizeof(end_ind) - 1;
+            memset(end_ind, ' ', (size_t)spaces);
+            end_ind[spaces] = '\0';
+            snprintf(cmd->source, sizeof(cmd->source), "%sglEnd();", end_ind);
         }
         return 1;
     }
@@ -1926,10 +1941,10 @@ static int parse_command(const char *line, GLCmd *cmd,
         cmd->num_args = 3;
         cmd->has_vars = (num_vars > 0);
 
-        char _ind[32]; cmd_indent(g_edit_line, _ind, sizeof(_ind));
+        char ind[32]; cmd_indent(g_edit_line, ind, sizeof(ind));
         snprintf(cmd->source, sizeof(cmd->source),
                  "%sglPointParameterfv(%s, (GLfloat[]){%g, %g, %g});",
-                 _ind, p1, parsed_args[0], parsed_args[1], parsed_args[2]);
+                 ind, p1, parsed_args[0], parsed_args[1], parsed_args[2]);
         return 1;
     }
 
@@ -2346,6 +2361,14 @@ static void flatten_fail(const char *msg) {
     g_flatten_abort = 1;
 }
 
+/* Tag a flat command with its origin so cursor-highlighting, replay, and
+ * debug dumps can trace each expanded command back to:
+ *   src_cmd_idx          — the g_cmds[] line this command came from
+ *   call_src_cmd_idx     — the funcN() call site that triggered expansion
+ *                          (-1 if top-level)
+ *   root_call_src_cmd_idx— the outermost call site in nested func calls
+ *                          (-1 if top-level)
+ *   func_scope_mask      — bitmask of which func bodies this cmd is inside */
 static void flat_cmd_set_provenance(GLCmd *cmd, int src_cmd_idx,
                                     int call_src_cmd_idx,
                                     int root_call_src_cmd_idx,
@@ -2356,13 +2379,18 @@ static void flat_cmd_set_provenance(GLCmd *cmd, int src_cmd_idx,
     cmd->func_scope_mask = func_scope_mask;
 }
 
+/* Determine which flat-command range corresponds to the innermost
+ * glBegin/glEnd block containing g_edit_line.  The result is stored in
+ * g_current_block_begin / g_current_block_end and used by
+ * repl_flat_cmd_matches_cursor() to highlight the active geometry
+ * batch in the 3D view. */
 static void refresh_current_block_highlight(void) {
     g_current_block_begin = -1;
     g_current_block_end   = -1;
     g_current_block_line  = g_edit_line;
 
-    /* Walk flat cmds: track which source line each cmd came from via g_cmds index */
-    /* Approximate: find last BEGIN at or before g_edit_line, then matching END */
+    /* Pass 1 (unused result, kept for fallback safety): walk flat cmds and
+     * remember the last open BEGIN before g_edit_line. */
     int found_begin = -1;
     for (int i = 0; i < g_num_flat_cmds; i++) {
         if (!g_flat_cmds[i].valid) continue;
@@ -2372,7 +2400,10 @@ static void refresh_current_block_highlight(void) {
         }
     }
 
-    /* Better approach: scan g_cmds for the innermost BEGIN/END containing g_edit_line */
+    /* Pass 2: scan g_cmds alongside g_flat_cmds to find the innermost
+     * BEGIN/END block (in flat-cmd indices) that contains g_edit_line
+     * in source-cmd space.  Skips for/func/if structural commands that
+     * don't appear in the flat stream. */
     {
         int begin_src = -1, begin_flat = -1;
         int fcur = 0;
@@ -2401,7 +2432,11 @@ static void refresh_current_block_highlight(void) {
     }
 }
 
-/* Flatten g_cmds (with for-loops) into g_flat_cmds (concrete commands) */
+/* Recursively expand the source commands in g_cmds[start..end_idx) into
+ * the flat command array g_flat_cmds[].  For-loops are unrolled, function
+ * calls are inlined, and if-blocks with loop-variable conditions are
+ * evaluated.  `vars`/`nv` carry loop-variable and function-parameter
+ * bindings from enclosing scopes. */
 static void flatten_range(int start, int end_idx, ExprVar *vars, int nv,
                           int call_src_cmd_idx, int root_call_src_cmd_idx,
                           unsigned int func_scope_mask) {
@@ -2415,30 +2450,35 @@ static void flatten_range(int start, int end_idx, ExprVar *vars, int nv,
         if (!g_cmds[i].valid) { i++; continue; }
 
         if (g_cmds[i].type == CMD_FOR_BEGIN) {
-            int fe = find_block_end(i);
-            GLCmd *fb_cmd = &g_cmds[i];
+            int loop_end = find_block_end(i);
+            GLCmd *loop_cmd = &g_cmds[i];
             char var_name[16];
-            get_for_var_name(fb_cmd, var_name, sizeof(var_name));
-            float s = fb_cmd->args[0], e = fb_cmd->args[1], st = fb_cmd->args[2];
+            get_for_var_name(loop_cmd, var_name, sizeof(var_name));
+            float start_val = loop_cmd->args[0];
+            float end_val   = loop_cmd->args[1];
+            float step_val  = loop_cmd->args[2];
 
             /* Re-evaluate for-loop bounds from source if they contain variables */
-            if (fb_cmd->has_vars) {
+            if (loop_cmd->has_vars) {
                 const char *unused_body;
-                float rs, re, rst;
+                float re_start, re_end, re_step;
                 char rv[16];
-                if (parse_for_header_with_vars(fb_cmd->source, rv, sizeof(rv),
-                                               &rs, &re, &rst,
+                if (parse_for_header_with_vars(loop_cmd->source, rv, sizeof(rv),
+                                               &re_start, &re_end, &re_step,
                                                vars, nv, &unused_body)) {
-                    s = rs; e = re; st = rst;
+                    start_val = re_start;
+                    end_val   = re_end;
+                    step_val  = re_step;
                 }
             }
 
-            if (fabsf(st) > 1e-9f &&
-                !((st > 0 && s >= e) || (st < 0 && s <= e))) {
+            if (fabsf(step_val) > 1e-9f &&
+                !((step_val > 0 && start_val >= end_val) ||
+                  (step_val < 0 && start_val <= end_val))) {
                 int max_iters = 100000;
-                for (float val = s;
-                     (st > 0) ? (val < e - 1e-6f) : (val > e + 1e-6f);
-                     val += st) {
+                for (float val = start_val;
+                     (step_val > 0) ? (val < end_val - 1e-6f) : (val > end_val + 1e-6f);
+                     val += step_val) {
                     if (--max_iters < 0) break;
                     if (g_flatten_abort) return;
                     ExprVar lvars[MAX_EXPR_VARS];
@@ -2453,12 +2493,12 @@ static void flatten_range(int start, int end_idx, ExprVar *vars, int nv,
                     if (vars)
                         for (int v = 0; v < nv && lnv < MAX_EXPR_VARS; v++)
                             lvars[lnv++] = vars[v];
-                    flatten_range(i + 1, fe, lvars, lnv,
+                    flatten_range(i + 1, loop_end, lvars, lnv,
                                   call_src_cmd_idx, root_call_src_cmd_idx,
                                   func_scope_mask);
                 }
             }
-            i = (fe < g_num_cmds) ? fe + 1 : g_num_cmds;
+            i = (loop_end < g_num_cmds) ? loop_end + 1 : g_num_cmds;
             continue;
         }
 
@@ -2466,29 +2506,29 @@ static void flatten_range(int start, int end_idx, ExprVar *vars, int nv,
 
         /* Function definitions: skip body (expanded at call sites) */
         if (g_cmds[i].type == CMD_FUNC_DEF) {
-            int fe = find_block_end(i);
-            i = (fe < g_num_cmds) ? fe + 1 : g_num_cmds;
+            int func_end = find_block_end(i);
+            i = (func_end < g_num_cmds) ? func_end + 1 : g_num_cmds;
             continue;
         }
         if (g_cmds[i].type == CMD_FUNC_END) { i++; continue; }
 
         /* Function calls: find definition and expand body inline */
         if (g_cmds[i].type == CMD_CALL) {
-            int fn = (int)g_cmds[i].args[0];
+            int func_num = (int)g_cmds[i].args[0];
             if (g_flatten_call_depth >= MAX_FLATTEN_CALL_DEPTH) {
                 char msg[128];
                 snprintf(msg, sizeof(msg),
                          "Recursive expansion exceeded depth limit (%d) at func%d",
-                         MAX_FLATTEN_CALL_DEPTH, fn);
+                         MAX_FLATTEN_CALL_DEPTH, func_num);
                 flatten_fail(msg);
                 i++;
                 continue;
             }
 
             for (int k = 0; k < g_num_cmds; k++) {
-                if (g_cmds[k].type == CMD_FUNC_DEF && (int)g_cmds[k].args[0] == fn) {
-                    int fe = find_block_end(k);
-                    int def_fn = fn;
+                if (g_cmds[k].type == CMD_FUNC_DEF && (int)g_cmds[k].args[0] == func_num) {
+                    int body_end = find_block_end(k);
+                    int def_fn = func_num;
                     int param_count = 0;
                     char param_names[MAX_EXPR_VARS][16];
                     char arg_text[MAX_LINE_LEN];
@@ -2509,7 +2549,7 @@ static void flatten_range(int start, int end_idx, ExprVar *vars, int nv,
                         char msg[128];
                         snprintf(msg, sizeof(msg),
                                  "func%d expects %d args, got %d",
-                                 fn, param_count, arg_count);
+                                 func_num, param_count, arg_count);
                         set_status(msg);
                         break;
                     }
@@ -2527,13 +2567,13 @@ static void flatten_range(int start, int end_idx, ExprVar *vars, int nv,
                         lvars[lnv++] = vars[v];
 
                     unsigned int nested_func_mask = func_scope_mask;
-                    if (fn >= 0 && fn < 32)
-                        nested_func_mask |= (1u << fn);
+                    if (func_num >= 0 && func_num < 32)
+                        nested_func_mask |= (1u << func_num);
                     int nested_root_call = (root_call_src_cmd_idx >= 0)
                                          ? root_call_src_cmd_idx : i;
 
                     g_flatten_call_depth++;
-                    flatten_range(k + 1, fe, lvars, lnv,
+                    flatten_range(k + 1, body_end, lvars, lnv,
                                   i, nested_root_call, nested_func_mask);
                     if (g_flatten_call_depth > 0) g_flatten_call_depth--;
                     break;
@@ -2544,7 +2584,7 @@ static void flatten_range(int start, int end_idx, ExprVar *vars, int nv,
         }
 
         if (g_cmds[i].type == CMD_IF_BEGIN) {
-            int fe = find_block_end(i);
+            int if_end = find_block_end(i);
             char cond_text[MAX_LINE_LEN];
             int needs_local_eval = 0;
 
@@ -2561,10 +2601,10 @@ static void flatten_range(int start, int end_idx, ExprVar *vars, int nv,
                 ExprCtx ctx = { repl_cond, vars, nv };
                 float cond = eval_expr(&ctx);
                 if (cond != 0.0f)
-                    flatten_range(i + 1, fe, vars, nv,
+                    flatten_range(i + 1, if_end, vars, nv,
                                   call_src_cmd_idx, root_call_src_cmd_idx,
                                   func_scope_mask);
-                i = (fe < g_num_cmds) ? fe + 1 : g_num_cmds;
+                i = (if_end < g_num_cmds) ? if_end + 1 : g_num_cmds;
                 continue;
             }
 
@@ -2626,7 +2666,7 @@ static void flatten_range(int start, int end_idx, ExprVar *vars, int nv,
 
         /* Variable assignments: update predefined var and pass through */
         if (g_cmds[i].type == CMD_VAR_ASSIGN) {
-            int vi = g_cmds[i].num_args; /* predef var index */
+            int var_idx = g_cmds[i].num_args; /* predef var index */
             float value = g_cmds[i].args[0];
             char rhs[MAX_LINE_LEN] = "";
             int local_rhs_vars = 0;
@@ -2640,8 +2680,8 @@ static void flatten_range(int start, int end_idx, ExprVar *vars, int nv,
                 if (vars && nv > 0)
                     local_rhs_vars = input_has_expr_vars(rhs, vars, nv);
             }
-            if (vi >= 0 && vi < g_num_predef_vars)
-                g_predef_vars[vi].value = value;
+            if (var_idx >= 0 && var_idx < g_num_predef_vars)
+                g_predef_vars[var_idx].value = value;
             if (g_num_flat_cmds < MAX_COMMANDS) {
                 GLCmd tmp = g_cmds[i];
                 tmp.args[0] = value;
@@ -3188,8 +3228,8 @@ static int replay_prev_limit(int current_pc) {
                     ? replay_next_polygon_limit(pc, &fade_begin, &fade_end)
                     : replay_next_vertex_limit(pc, &fade_begin, &fade_end);
 
-        // used next_pc to make sure we didnt somehow go backwards
-        if (next_pc <= pc) /* Shouldn't happen */
+        /* Guard: next_pc must advance to avoid an infinite loop */
+        if (next_pc <= pc)
             break;
 
         prev_pc = pc;
@@ -3415,6 +3455,14 @@ int apply_state_cmd(const GLCmd *cmd, float alpha_scale) {
     }
 }
 
+/* Walk g_flat_cmds[0..g_num_flat_cmds) and issue the corresponding GL
+ * calls.  Handles vertex submission, state changes (enable, material,
+ * blend, etc.), GLU quadrics and tessellator commands, transforms,
+ * goto/label control flow, if-block evaluation, and variable assignments.
+ *
+ * Called once per frame from display_func (or twice when accumulation AA
+ * is active) with g_num_flat_cmds optionally clamped by the replay
+ * subsystem. */
 void execute_commands(void) {
     int in_begin = 0;
     int tess_depth = 0; /* 0=outside, 1=in polygon, 2=in contour */
@@ -3638,7 +3686,7 @@ void execute_commands(void) {
             break; /* body executed; just step past */
         case CMD_VAR_ASSIGN: {
             /* Re-apply variable assignment so goto loops see updated values */
-            int vi = g_flat_cmds[pc].num_args;
+            int var_idx = g_flat_cmds[pc].num_args;
             float value = g_flat_cmds[pc].args[0];
             if (g_flat_cmds[pc].has_vars) {
                 char rhs[MAX_LINE_LEN] = "";
@@ -3656,8 +3704,8 @@ void execute_commands(void) {
                     value = eval_expr(&ctx);
                 }
             }
-            if (vi >= 0 && vi < g_num_predef_vars)
-                g_predef_vars[vi].value = value;
+            if (var_idx >= 0 && var_idx < g_num_predef_vars)
+                g_predef_vars[var_idx].value = value;
             break;
         }
         /* Transforms handled by is_transform_cmd() early-continue above */
@@ -3795,13 +3843,13 @@ static void display_func(void) {
     glViewport(0, 0, g_win_w, g_win_h);
     {
         float cr = 0.10f, cg = 0.10f, cb = 0.13f, ca = 1.0f;
-        for (int _ci = 0; _ci < g_num_flat_cmds; _ci++) {
-            if (g_flat_cmds[_ci].valid &&
-                g_flat_cmds[_ci].type == CMD_CLEAR_COLOR) {
-                cr = g_flat_cmds[_ci].args[0];
-                cg = g_flat_cmds[_ci].args[1];
-                cb = g_flat_cmds[_ci].args[2];
-                ca = g_flat_cmds[_ci].args[3];
+        for (int ci = 0; ci < g_num_flat_cmds; ci++) {
+            if (g_flat_cmds[ci].valid &&
+                g_flat_cmds[ci].type == CMD_CLEAR_COLOR) {
+                cr = g_flat_cmds[ci].args[0];
+                cg = g_flat_cmds[ci].args[1];
+                cb = g_flat_cmds[ci].args[2];
+                ca = g_flat_cmds[ci].args[3];
             }
         }
         glClearColor(cr, cg, cb, ca);
