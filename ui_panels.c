@@ -7,12 +7,16 @@
 #include "sample.h"
 #include "repl_core.h"
 #include "repl_core_internal.h"
+#include "repl_keys.h"
 #include "profile_panel.h"
 #include "ui_panels.h"
 
 /* Compile-time stringify for embedding macro values in string literals */
 #define _HELP_STR2(x) #x
 #define _HELP_STR(x)  _HELP_STR2(x)
+
+/* Status footer height — design: 22px strip flush against code panel bottom */
+#define STATUSBAR_H   22
 
 /* ========================================================================= */
 /* Layout geometry helpers                                                    */
@@ -1147,10 +1151,16 @@ static const char *g_menu_labels[NUM_MENUS] = {
     "File", "Examples", "Config"
 };
 
-enum { PIN_REPLAY = 0, PIN_SCENE, NUM_PIN_BTNS };
+/* Right-to-left the pins render from highest index first, so PIN_REPLAY sits
+ * at the far right matching the design (Replay pinned, search immediately to
+ * its left, Scene further left). */
+enum { PIN_SCENE = 0, PIN_SEARCH, PIN_REPLAY, NUM_PIN_BTNS };
 static const char *g_pin_btn_labels[NUM_PIN_BTNS] = {
-    "Replay", "Scene"
+    "Scene", "search...", "Replay"
 };
+
+#define PIN_SEARCH_MIN_W 140
+#define SEARCH_KBD_LABEL "Ctrl+F"
 
 static int g_open_menu = -1;      /* index into g_menu_labels; -1 = none */
 static int g_menu_item_hover = -1;
@@ -1210,7 +1220,7 @@ static void menubar_rects(int menu_x[NUM_MENUS], int menu_w[NUM_MENUS],
     int cp_x, cp_y, cp_w, cp_h;
     code_panel_rect(&cp_x, &cp_y, &cp_w, &cp_h);
     int panel_top = cp_y + cp_h;
-    int by = panel_top - CODE_MARGIN_Y - 2 * LINE_H;
+    int by = panel_top - CODE_MARGIN_Y - LINE_H;
     int bh = LINE_H;
     if (row_y) *row_y = by;
     if (row_h) *row_h = bh;
@@ -1226,7 +1236,13 @@ static void menubar_rects(int menu_x[NUM_MENUS], int menu_w[NUM_MENUS],
     int rx = cp_x + cp_w - CODE_MARGIN_X;
     for (int i = NUM_PIN_BTNS - 1; i >= 0; i--) {
         int label_w = (int)strlen(g_pin_btn_labels[i]) * FONT_SMALL_W;
-        pin_w[i] = label_w + 18;
+        int w = label_w + 18;
+        if (i == PIN_SEARCH) {
+            int kbd_w = (int)strlen(SEARCH_KBD_LABEL) * FONT_SMALL_W + 10;
+            w = label_w + kbd_w + 24;
+            if (w < PIN_SEARCH_MIN_W) w = PIN_SEARCH_MIN_W;
+        }
+        pin_w[i] = w;
         rx -= pin_w[i];
         pin_x[i] = rx;
     }
@@ -2051,7 +2067,10 @@ void render_code_panel(void) {
     int idx_col_w = g_show_indices ? (6 * FONT_W) : 0;
     int idx_x = CODE_MARGIN_X + linenum_w + FONT_W;
     int text_x = idx_x + idx_col_w;
-    int visible_lines = (cp_h - 2 * CODE_MARGIN_Y - 2 * LINE_H) / LINE_H;
+    /* Vertical budget: menu bar occupies 1 LINE_H at top, status bar sits
+     * flush against the bottom for STATUSBAR_H pixels (no CODE_MARGIN_Y
+     * below, since the bar replaces it). */
+    int visible_lines = (cp_h - CODE_MARGIN_Y - LINE_H - STATUSBAR_H) / LINE_H;
     if (visible_lines < 1) visible_lines = 1;
 
     /* When cursor is on a vertex, find which normal/color lines feed it so
@@ -2181,92 +2200,87 @@ void render_code_panel(void) {
     glEnd();
     glDisable(GL_BLEND);
 
-    /* Top info bar */
+    /* Menu bar — design ref: Header Wireframes v2 (now at the very top of
+     * the code panel; the old info bar moved into the bottom status strip). */
     {
-        char info[256];
-        /* Accumulation AA indicator suffix */
-        char aa_tag[24] = "";
-        if (g_use_accum) {
-            if (g_accum_aa_enabled && g_accum_samples > 1)
-                snprintf(aa_tag, sizeof(aa_tag), " | AA:%dx", g_accum_samples);
-            else
-                snprintf(aa_tag, sizeof(aa_tag), " | AA:off");
-        }
-        /* Time variable indicator */
-        if (g_inserting) {
-            snprintf(info, sizeof(info),
-                     "F1:Help | %4d/%4d cmds | Ln %d [INSERT]%s",
-                     g_num_flat_cmds, MAX_COMMANDS, g_edit_line + 1, aa_tag);
-        } else if (in_begin_block()) {
-            snprintf(info, sizeof(info),
-                     "F1:Help | %4d/%4d cmds | %s | Ln %d%s",
-                     g_num_flat_cmds, MAX_COMMANDS, mode_name(current_begin_mode()),
-                     g_edit_line + 1, aa_tag);
-        } else {
-            snprintf(info, sizeof(info),
-                     "F1:Help | %4d/%4d cmds | Ln %d%s",
-                     g_num_flat_cmds, MAX_COMMANDS, g_edit_line + 1, aa_tag);
-        }
-        glColor3f(0.50f, 0.55f, 0.65f);
-        draw_string(CODE_MARGIN_X, panel_top - CODE_MARGIN_Y - 2, info,
-                    FONT_SMALL);
+        int menu_x[NUM_MENUS], menu_w[NUM_MENUS];
+        int pin_x[NUM_PIN_BTNS], pin_w[NUM_PIN_BTNS];
+        int by, bh;
+        menubar_rects(menu_x, menu_w, pin_x, pin_w, &by, &bh);
 
-        /* Menu bar — design ref: Header Wireframes v2 */
-        {
-            int menu_x[NUM_MENUS], menu_w[NUM_MENUS];
-            int pin_x[NUM_PIN_BTNS], pin_w[NUM_PIN_BTNS];
-            int by, bh;
-            menubar_rects(menu_x, menu_w, pin_x, pin_w, &by, &bh);
+        glEnable(GL_BLEND);
+        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
-            glEnable(GL_BLEND);
-            glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+        /* Full-width strip: #1d1d1d */
+        glColor4f(0.114f, 0.114f, 0.114f, 0.98f);
+        draw_quad((float)cp_x, (float)by, (float)cp_w, (float)bh);
 
-            /* Full-width strip: #1d1d1d */
-            glColor4f(0.114f, 0.114f, 0.114f, 0.98f);
-            draw_quad((float)cp_x, (float)by, (float)cp_w, (float)bh);
+        int hover_menu = menubar_menu_hit(g_mouse_x, g_mouse_y);
+        int hover_pin  = menubar_pin_hit(g_mouse_x, g_mouse_y);
 
-            int hover_menu = menubar_menu_hit(g_mouse_x, g_mouse_y);
-            int hover_pin  = menubar_pin_hit(g_mouse_x, g_mouse_y);
-
-            /* Left-side menu labels */
-            for (int i = 0; i < NUM_MENUS; i++) {
-                int active = (g_open_menu == i);
-                int hover  = (hover_menu == i);
-                if (active) {
-                    glColor4f(0.149f, 0.149f, 0.149f, 1.0f); /* #262626 */
-                    draw_quad((float)menu_x[i], (float)by, (float)menu_w[i], (float)bh);
-                } else if (hover) {
-                    glColor4f(0.165f, 0.165f, 0.165f, 1.0f); /* #2a2a2a */
-                    draw_quad((float)menu_x[i], (float)by, (float)menu_w[i], (float)bh);
-                }
-                if (active || hover)
-                    glColor3f(1.0f, 1.0f, 1.0f);
-                else
-                    glColor3f(0.847f, 0.847f, 0.847f);       /* #d8d8d8 */
-                int tx = menu_x[i] + 9;
-                draw_string((float)tx, (float)(by + 3),
-                            g_menu_labels[i], FONT_SMALL);
+        /* Left-side menu labels */
+        for (int i = 0; i < NUM_MENUS; i++) {
+            int active = (g_open_menu == i);
+            int hover  = (hover_menu == i);
+            if (active) {
+                glColor4f(0.149f, 0.149f, 0.149f, 1.0f); /* #262626 */
+                draw_quad((float)menu_x[i], (float)by, (float)menu_w[i], (float)bh);
+            } else if (hover) {
+                glColor4f(0.165f, 0.165f, 0.165f, 1.0f); /* #2a2a2a */
+                draw_quad((float)menu_x[i], (float)by, (float)menu_w[i], (float)bh);
             }
+            if (active || hover)
+                glColor3f(1.0f, 1.0f, 1.0f);
+            else
+                glColor3f(0.847f, 0.847f, 0.847f);       /* #d8d8d8 */
+            int tx = menu_x[i] + 9;
+            draw_string((float)tx, (float)(by + 3),
+                        g_menu_labels[i], FONT_SMALL);
+        }
 
-            /* Right-side pinned buttons (Replay accent + Scene) */
-            for (int i = 0; i < NUM_PIN_BTNS; i++) {
-                int hover = (hover_pin == i);
-                int active = (i == PIN_REPLAY && g_replay_active) ||
-                             (i == PIN_SCENE  && repl_user_scene_valid());
-                if (hover) {
-                    glColor4f(0.165f, 0.165f, 0.165f, 1.0f);
-                    draw_quad((float)pin_x[i], (float)by, (float)pin_w[i], (float)bh);
-                } else if (active) {
-                    glColor4f(0.149f, 0.149f, 0.149f, 1.0f);
-                    draw_quad((float)pin_x[i], (float)by, (float)pin_w[i], (float)bh);
-                }
-                /* Left separator rule (#2a2a2a) */
+        /* Right-side pins: Scene | Search | Replay */
+        for (int i = 0; i < NUM_PIN_BTNS; i++) {
+            int hover = (hover_pin == i);
+            int active = (i == PIN_REPLAY && g_replay_active) ||
+                         (i == PIN_SCENE  && repl_user_scene_valid());
+            if (hover) {
                 glColor4f(0.165f, 0.165f, 0.165f, 1.0f);
-                glBegin(GL_LINES);
-                glVertex2f((float)pin_x[i], (float)by);
-                glVertex2f((float)pin_x[i], (float)(by + bh));
+                draw_quad((float)pin_x[i], (float)by, (float)pin_w[i], (float)bh);
+            } else if (active) {
+                glColor4f(0.149f, 0.149f, 0.149f, 1.0f);
+                draw_quad((float)pin_x[i], (float)by, (float)pin_w[i], (float)bh);
+            }
+            /* Left separator rule (#2a2a2a) */
+            glColor4f(0.165f, 0.165f, 0.165f, 1.0f);
+            glBegin(GL_LINES);
+            glVertex2f((float)pin_x[i], (float)by);
+            glVertex2f((float)pin_x[i], (float)(by + bh));
+            glEnd();
+
+            if (i == PIN_SEARCH) {
+                /* "search..." label in muted gray + kbd hint on the right */
+                glColor3f(0.478f, 0.478f, 0.478f); /* #7a7a7a */
+                int tx = pin_x[i] + 12;
+                draw_string((float)tx, (float)(by + 3),
+                            g_pin_btn_labels[i], FONT_SMALL);
+
+                int kbd_w = (int)strlen(SEARCH_KBD_LABEL) * FONT_SMALL_W + 10;
+                int kx = pin_x[i] + pin_w[i] - kbd_w - 8;
+                int ky = by + 2;
+                int kh = bh - 4;
+                glColor4f(0.078f, 0.078f, 0.078f, 1.0f); /* #141414 */
+                draw_quad((float)kx, (float)ky, (float)kbd_w, (float)kh);
+                glColor4f(0.227f, 0.227f, 0.227f, 1.0f); /* #3a3a3a */
+                glBegin(GL_LINE_LOOP);
+                glVertex2f((float)kx,           (float)ky);
+                glVertex2f((float)(kx + kbd_w), (float)ky);
+                glVertex2f((float)(kx + kbd_w), (float)(ky + kh));
+                glVertex2f((float)kx,           (float)(ky + kh));
                 glEnd();
-                /* Replay gets the accent color */
+                glColor3f(0.667f, 0.667f, 0.667f); /* #aaa */
+                draw_string((float)(kx + 5), (float)(ky + 2),
+                            SEARCH_KBD_LABEL, FONT_SMALL);
+            } else {
                 if (i == PIN_REPLAY)
                     glColor3f(0.851f, 0.424f, 0.310f); /* #d96c4f */
                 else if (hover || active)
@@ -2277,16 +2291,16 @@ void render_code_panel(void) {
                 draw_string((float)tx, (float)(by + 3),
                             g_pin_btn_labels[i], FONT_SMALL);
             }
-
-            /* Bottom divider (#000) */
-            glColor4f(0.0f, 0.0f, 0.0f, 1.0f);
-            glBegin(GL_LINES);
-            glVertex2f((float)cp_x,         (float)by);
-            glVertex2f((float)(cp_x + cp_w),(float)by);
-            glEnd();
-
-            glDisable(GL_BLEND);
         }
+
+        /* Bottom divider (#000) */
+        glColor4f(0.0f, 0.0f, 0.0f, 1.0f);
+        glBegin(GL_LINES);
+        glVertex2f((float)cp_x,          (float)by);
+        glVertex2f((float)(cp_x + cp_w), (float)by);
+        glEnd();
+
+        glDisable(GL_BLEND);
     }
 
     render_code_panel_search_overlay(cp_x, panel_w, panel_top);
@@ -2295,8 +2309,8 @@ void render_code_panel(void) {
     prof_begin(PROF_CODE_PANEL_LINES);
     prof_begin(PROF_CODE_PANEL_LINES_STATIC);
 
-    /* Code lines: row 0 = info bar, row 1 = button bar, row 2+ = code */
-    int line_y = panel_top - CODE_MARGIN_Y - 3 * LINE_H;
+    /* Code lines begin immediately below the menu bar (row 0). */
+    int line_y = panel_top - CODE_MARGIN_Y - 2 * LINE_H;
     int cur = 0;
     int file_line = 1;
 
@@ -2642,12 +2656,12 @@ void render_code_panel(void) {
 
     /* Scroll indicator */
     if (total_lines > visible_lines) {
-        int bar_h = cp_h - 2 * CODE_MARGIN_Y - 2 * LINE_H;
+        int bar_h = cp_h - CODE_MARGIN_Y - LINE_H - STATUSBAR_H;
         float frac = (float)visible_lines / (float)total_lines;
         float pos  = (float)g_scroll / (float)total_lines;
         int thumb_h = (int)(bar_h * frac);
         if (thumb_h < 12) thumb_h = 12;
-        int thumb_y = panel_top - CODE_MARGIN_Y - 2 * LINE_H
+        int thumb_y = panel_top - CODE_MARGIN_Y - LINE_H
                       - (int)(bar_h * pos) - thumb_h;
 
         glEnable(GL_BLEND);
@@ -2657,15 +2671,119 @@ void render_code_panel(void) {
         glDisable(GL_BLEND);
     }
 
-    /* Status bar: along the bottom edge of the code panel */
-    if (g_status_ttl > 0) {
-        float alpha = g_status_ttl > 60 ? 1.0f : (float)g_status_ttl / 60.0f;
+    /* Bottom status strip — design ref: Header Wireframes v2 statusbar.
+     * Always drawn; shows cmd counts, cursor location, AA indicator, and the
+     * transient `g_status` message (when set) in amber "err" style. */
+    {
+        int sy = cp_y;
+        int sh = STATUSBAR_H;
         glEnable(GL_BLEND);
-        glColor4f(0.12f, 0.12f, 0.05f, 0.92f * alpha);
-        draw_quad((float)cp_x, (float)cp_y, (float)cp_w, (float)(LINE_H + 6));
-        glColor4f(1.0f, 0.85f, 0.20f, alpha);
-        draw_string((float)(cp_x + CODE_MARGIN_X), (float)(cp_y + 5),
-                    g_status, FONT_MONO);
+        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+        /* Strip bg (#181818) + top divider (#000) */
+        glColor4f(0.094f, 0.094f, 0.094f, 0.98f);
+        draw_quad((float)cp_x, (float)sy, (float)cp_w, (float)sh);
+        glColor4f(0.0f, 0.0f, 0.0f, 1.0f);
+        glBegin(GL_LINES);
+        glVertex2f((float)cp_x,          (float)(sy + sh));
+        glVertex2f((float)(cp_x + cp_w), (float)(sy + sh));
+        glEnd();
+
+        int text_y = sy + (sh - FONT_SMALL_H) / 2 + 1;
+        int tx = cp_x + CODE_MARGIN_X;
+
+        /* cmd count */
+        char cmds_buf[48];
+        snprintf(cmds_buf, sizeof(cmds_buf), "%d/%d cmds",
+                 g_num_flat_cmds, MAX_COMMANDS);
+        glColor3f(0.878f, 0.878f, 0.878f); /* #e0e0e0 — stronger for counts */
+        draw_string((float)tx, (float)text_y, cmds_buf, FONT_SMALL);
+        tx += (int)strlen(cmds_buf) * FONT_SMALL_W;
+
+        #define STATUSBAR_SEP() do {                                    \
+            tx += 8;                                                    \
+            glColor4f(0.20f, 0.20f, 0.20f, 1.0f); /* #333 */            \
+            glBegin(GL_LINES);                                          \
+            glVertex2f((float)tx, (float)(sy + 4));                     \
+            glVertex2f((float)tx, (float)(sy + sh - 4));                \
+            glEnd();                                                    \
+            tx += 8;                                                    \
+        } while (0)
+
+        STATUSBAR_SEP();
+
+        /* Line / insert-mode / begin-mode */
+        char ln_buf[64];
+        if (g_inserting)
+            snprintf(ln_buf, sizeof(ln_buf), "Ln %d [INSERT]", g_edit_line + 1);
+        else if (in_begin_block())
+            snprintf(ln_buf, sizeof(ln_buf), "Ln %d  %s",
+                     g_edit_line + 1, mode_name(current_begin_mode()));
+        else
+            snprintf(ln_buf, sizeof(ln_buf), "Ln %d", g_edit_line + 1);
+        glColor3f(0.627f, 0.627f, 0.627f); /* #a0a0a0 */
+        draw_string((float)tx, (float)text_y, ln_buf, FONT_SMALL);
+        tx += (int)strlen(ln_buf) * FONT_SMALL_W;
+
+        /* AA indicator */
+        if (g_use_accum) {
+            STATUSBAR_SEP();
+            char aa_buf[24];
+            if (g_accum_aa_enabled && g_accum_samples > 1)
+                snprintf(aa_buf, sizeof(aa_buf), "AA %dx", g_accum_samples);
+            else
+                snprintf(aa_buf, sizeof(aa_buf), "AA off");
+            draw_string((float)tx, (float)text_y, aa_buf, FONT_SMALL);
+            tx += (int)strlen(aa_buf) * FONT_SMALL_W;
+        }
+
+        /* Amber error/status slot (shown when g_status is active) */
+        if (g_status_ttl > 0 && g_status[0]) {
+            STATUSBAR_SEP();
+            float alpha = g_status_ttl > 60 ? 1.0f : (float)g_status_ttl / 60.0f;
+            int max_px = cp_x + cp_w - 90 - tx;  /* reserve F1 help slot */
+            int max_chars = max_px / FONT_SMALL_W;
+            if (max_chars < 8) max_chars = 8;
+            char err[256];
+            snprintf(err, sizeof(err), "! %s", g_status);
+            if ((int)strlen(err) > max_chars) {
+                if (max_chars > 3) {
+                    err[max_chars - 3] = '.';
+                    err[max_chars - 2] = '.';
+                    err[max_chars - 1] = '.';
+                    err[max_chars] = '\0';
+                }
+            }
+            glColor4f(0.910f, 0.690f, 0.376f, alpha); /* #e8b060 */
+            draw_string((float)tx, (float)text_y, err, FONT_SMALL);
+        }
+
+        /* Right-aligned F1 help affordance */
+        {
+            const char *help_kbd = "F1";
+            const char *help_lbl = "help";
+            int kbd_w = (int)strlen(help_kbd) * FONT_SMALL_W + 10;
+            int lbl_w = (int)strlen(help_lbl) * FONT_SMALL_W;
+            int rx = cp_x + cp_w - CODE_MARGIN_X - lbl_w;
+            glColor3f(0.627f, 0.627f, 0.627f);
+            draw_string((float)rx, (float)text_y, help_lbl, FONT_SMALL);
+            int kx = rx - kbd_w - 6;
+            int ky = sy + 3;
+            int kh = sh - 6;
+            glColor4f(0.078f, 0.078f, 0.078f, 1.0f); /* #141414 */
+            draw_quad((float)kx, (float)ky, (float)kbd_w, (float)kh);
+            glColor4f(0.20f, 0.20f, 0.20f, 1.0f); /* #333 */
+            glBegin(GL_LINE_LOOP);
+            glVertex2f((float)kx,           (float)ky);
+            glVertex2f((float)(kx + kbd_w), (float)ky);
+            glVertex2f((float)(kx + kbd_w), (float)(ky + kh));
+            glVertex2f((float)kx,           (float)(ky + kh));
+            glEnd();
+            glColor3f(0.733f, 0.733f, 0.733f); /* #bbb */
+            draw_string((float)(kx + 5), (float)(ky + 2), help_kbd, FONT_SMALL);
+        }
+
+        #undef STATUSBAR_SEP
         glDisable(GL_BLEND);
     }
 
@@ -3516,7 +3634,7 @@ static int code_panel_hit_test(int mx, int my,
     if (gl_y < cp_y || gl_y >= cp_y + cp_h) return 0;
 
     /* Same layout constants as render_code_panel */
-    int line_y_start = panel_top - CODE_MARGIN_Y - 3 * LINE_H;
+    int line_y_start = panel_top - CODE_MARGIN_Y - 2 * LINE_H;
     int vis = (line_y_start + LINE_H - 3 - gl_y) / LINE_H;
     if (vis < 0) return 0;   /* clicked in header */
 
@@ -3546,10 +3664,10 @@ static int code_panel_drag_target(int mx, int my, int *out_target) {
     int panel_w = cp_w;
     int panel_top = cp_y + cp_h;
     int gl_y = g_win_h - my;
-    int line_y_start = panel_top - CODE_MARGIN_Y - 3 * LINE_H;
+    int line_y_start = panel_top - CODE_MARGIN_Y - 2 * LINE_H;
     int vis = (line_y_start + LINE_H - 3 - gl_y) / LINE_H;
 
-    int visible_lines = (cp_h - CODE_MARGIN_Y - 2 * LINE_H - CODE_MARGIN_Y) / LINE_H;
+    int visible_lines = (cp_h - CODE_MARGIN_Y - LINE_H - STATUSBAR_H) / LINE_H;
     if (visible_lines < 1) visible_lines = 1;
     if (vis < 0) vis = 0;
     if (vis >= visible_lines) vis = visible_lines - 1;
@@ -3657,6 +3775,9 @@ int handle_code_panel_press(int mx, int my) {
             break;
         case PIN_SCENE:
             if (repl_user_scene_valid()) repl_load_user_scene();
+            break;
+        case PIN_SEARCH:
+            handle_search_key(KEY_CTRL_F);
             break;
         }
         return UI_PANEL_PRESS_CONSUMED;
