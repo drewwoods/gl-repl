@@ -1,0 +1,542 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>REPL Header — Wireframes</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Kalam:wght@300;400;700&family=Caveat:wght@400;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --paper: #f7f3ea;
+    --ink: #1a1a1a;
+    --ink-2: #555;
+    --ink-3: #9a928a;
+    --accent: #c9442e;     /* muted red/orange */
+    --accent-2: #2e6fc9;   /* muted blue */
+    --rule: #2a2a2a;
+    --grid: rgba(26,26,26,0.06);
+    --card: #fffdf7;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; background: var(--paper); color: var(--ink); font-family: 'Kalam', cursive; }
+  body {
+    background-image:
+      linear-gradient(var(--grid) 1px, transparent 1px),
+      linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+    background-size: 24px 24px;
+    padding: 40px 48px 80px;
+    min-height: 100vh;
+  }
+  .mono { font-family: 'JetBrains Mono', ui-monospace, monospace; }
+
+  /* page header */
+  h1 { font-family: 'Caveat', cursive; font-weight: 700; font-size: 42px; margin: 0 0 4px; }
+  .sub { font-family: 'Kalam', cursive; color: var(--ink-2); max-width: 780px; margin: 0 0 28px; font-size: 17px; line-height: 1.4; }
+
+  /* tweaks bar */
+  .tweaks {
+    position: sticky; top: 16px; z-index: 10;
+    display: inline-flex; gap: 12px; align-items: center;
+    background: var(--card);
+    border: 1.5px solid var(--rule);
+    border-radius: 3px;
+    padding: 8px 14px;
+    font-family: 'Kalam', cursive;
+    font-size: 15px;
+    box-shadow: 3px 3px 0 var(--rule);
+    margin-bottom: 28px;
+  }
+  .tweaks label { display: inline-flex; align-items: center; gap: 6px; }
+  .tweaks select, .tweaks input[type=range] {
+    font-family: 'Kalam', cursive; font-size: 14px;
+    background: var(--paper); border: 1px dashed var(--rule); padding: 2px 6px; border-radius: 2px;
+  }
+  .tweaks .divider { width: 1px; height: 20px; background: var(--ink-3); }
+  .tweaks .swatches { display: inline-flex; gap: 6px; }
+  .tweaks .sw { width: 22px; height: 22px; border-radius: 50%; border: 1.5px solid var(--rule); cursor: pointer; }
+  .tweaks .sw.active { outline: 2px dashed var(--ink); outline-offset: 2px; }
+
+  /* variation grid */
+  .grid { display: grid; grid-template-columns: 1fr; gap: 56px; max-width: 1280px; }
+
+  .variation { }
+  .v-head {
+    display: grid; grid-template-columns: auto 1fr; column-gap: 18px; row-gap: 2px;
+    align-items: baseline; margin-bottom: 14px;
+  }
+  .v-num {
+    font-family: 'Caveat', cursive; font-size: 52px; line-height: 1;
+    color: var(--accent); font-weight: 700;
+    grid-row: span 2;
+  }
+  .v-title { font-family: 'Caveat', cursive; font-size: 32px; font-weight: 700; line-height: 1.1; }
+  .v-desc { font-size: 15px; color: var(--ink-2); max-width: 780px; }
+
+  /* mock REPL frame */
+  .repl {
+    background: var(--card);
+    border: 2px solid var(--rule);
+    border-radius: 8px;
+    overflow: hidden;
+    box-shadow: 6px 6px 0 var(--rule);
+    position: relative;
+  }
+
+  /* body of REPL (shared) — shows code panel + scene hint */
+  .repl-body { display: grid; grid-template-columns: 44% 56%; min-height: 340px; background: #111; color: #c8c8c8; }
+  .code-panel {
+    padding: 14px 16px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12.5px;
+    line-height: 1.55;
+    border-right: 1px dashed #333;
+    background: #0f0f10;
+  }
+  .code-panel .ln { color: #555; margin-right: 10px; }
+  .code-panel .kw { color: #bb7bd0; }
+  .code-panel .fn { color: #7bb8e0; }
+  .code-panel .num { color: #d0a060; }
+  .code-panel .cmt { color: #566; }
+  .code-panel .var { color: #7bb8e0; }
+  .scene-panel {
+    position: relative;
+    background:
+      radial-gradient(ellipse at 30% 40%, #303e55 0%, #12161f 70%);
+    display: flex; align-items: center; justify-content: center;
+    color: #7a88a0;
+    font-family: 'Caveat', cursive;
+    font-size: 22px;
+  }
+  .scene-panel .cube {
+    width: 150px; height: 150px;
+    border: 1.5px dashed #6a7890; opacity: 0.55;
+    transform: rotateX(20deg) rotateY(-25deg); transform-style: preserve-3d;
+    position: relative;
+  }
+  .scene-panel .tag {
+    position: absolute; bottom: 10px; right: 14px; font-size: 14px; opacity: 0.45;
+    font-family: 'JetBrains Mono', monospace;
+  }
+
+  /* ================== HEADER VARIATIONS ================== */
+
+  /* V1 — One command bar */
+  .v1-header {
+    display: flex; align-items: center; gap: 12px;
+    padding: 8px 14px;
+    background: #1d1d1d;
+    color: #ddd;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12.5px;
+    border-bottom: 1px solid #000;
+    white-space: nowrap;
+    flex-wrap: nowrap;
+    min-width: 0;
+    overflow: hidden;
+  }
+  .v1-header > * { flex: none; }
+  .v1-traffic { display: inline-flex; gap: 6px; margin-right: 8px; }
+  .v1-traffic span { width: 11px; height: 11px; border-radius: 50%; display: inline-block; background: #555; }
+  .v1-traffic span:nth-child(1) { background: #e06060; }
+  .v1-traffic span:nth-child(2) { background: #e0b040; }
+  .v1-traffic span:nth-child(3) { background: #70c070; }
+  .v1-brand { font-weight: 500; color: #fff; letter-spacing: 0.5px; }
+  .v1-brand .dim { color: #888; }
+  .v1-status { display: inline-flex; gap: 16px; color: #9a9a9a; }
+  .v1-status b { color: #e0e0e0; font-weight: 500; }
+  .v1-status .kbd { border: 1px solid #444; border-radius: 3px; padding: 1px 5px; font-size: 11px; color: #bbb; }
+  .v1-spacer { flex: 1; }
+  .v1-search {
+    display: inline-flex; align-items: center; gap: 6px;
+    background: #2a2a2a; border: 1px solid #3a3a3a;
+    padding: 3px 10px; border-radius: 3px;
+    color: #888; min-width: 140px;
+  }
+  .v1-search .kbd { margin-left: auto; border: 1px solid #3a3a3a; background: #1a1a1a; border-radius: 3px; padding: 0 5px; font-size: 10.5px; }
+  .v1-actions { display: inline-flex; gap: 2px; }
+  .v1-actions button {
+    background: transparent; border: 1px solid transparent;
+    color: #ccc; padding: 4px 10px; border-radius: 3px;
+    font-family: 'JetBrains Mono', monospace; font-size: 12px; cursor: pointer;
+  }
+  .v1-actions button:hover { background: #2a2a2a; border-color: #3a3a3a; }
+  .v1-actions button.primary { color: var(--accent-h, #e88a6a); border-color: #3a2a25; }
+
+  /* V2 — Menu bar + thin footer */
+  .v2-titlebar {
+    background: #2a2a2a; color: #ccc;
+    padding: 6px 14px;
+    display: flex; align-items: center; gap: 14px;
+    font-family: 'JetBrains Mono', monospace; font-size: 12px;
+    border-bottom: 1px solid #000;
+  }
+  .v2-traffic { display: inline-flex; gap: 6px; }
+  .v2-traffic span { width: 11px; height: 11px; border-radius: 50%; display: inline-block; }
+  .v2-traffic span:nth-child(1) { background: #e06060; }
+  .v2-traffic span:nth-child(2) { background: #e0b040; }
+  .v2-traffic span:nth-child(3) { background: #70c070; }
+  .v2-title-center { flex: 1; text-align: center; color: #999; font-size: 11.5px; }
+  .v2-menubar {
+    background: #222; color: #d8d8d8;
+    padding: 3px 10px;
+    display: flex; align-items: center; gap: 2px;
+    font-family: 'JetBrains Mono', monospace; font-size: 12.5px;
+    border-bottom: 1px solid #111;
+  }
+  .v2-menubar .item { padding: 3px 10px; cursor: pointer; border-radius: 3px; }
+  .v2-menubar .item:hover, .v2-menubar .item.hot { background: #3a3a3a; }
+  .v2-menubar .search {
+    margin-left: auto;
+    display: inline-flex; align-items: center; gap: 6px;
+    background: #171717; border: 1px solid #333;
+    padding: 2px 8px; border-radius: 3px; color: #777;
+    min-width: 160px;
+  }
+  .v2-menubar .search .kbd { margin-left: auto; font-size: 10px; color: #999; }
+
+  .v2-statusfoot {
+    background: #191919; color: #8a8a8a;
+    padding: 4px 14px;
+    display: flex; align-items: center; gap: 16px;
+    font-family: 'JetBrains Mono', monospace; font-size: 11.5px;
+    border-top: 1px solid #000;
+  }
+  .v2-statusfoot .dot { width: 7px; height: 7px; background: #70c070; border-radius: 50%; display: inline-block; margin-right: 4px; }
+  .v2-statusfoot b { color: #d0d0d0; font-weight: 500; }
+  .v2-statusfoot .spacer { flex: 1; }
+
+  /* V3 — Status as chrome, floating action chips */
+  .v3-wrap { position: relative; }
+  .v3-header {
+    background: linear-gradient(#1a1a1a, #161616);
+    color: #bbb;
+    padding: 10px 16px 10px;
+    display: flex; align-items: center; gap: 20px;
+    font-family: 'JetBrains Mono', monospace; font-size: 12.5px;
+    border-bottom: 1px solid #000;
+  }
+  .v3-traffic { display: inline-flex; gap: 6px; margin-right: 4px; }
+  .v3-traffic span { width: 11px; height: 11px; border-radius: 50%; display: inline-block; }
+  .v3-traffic span:nth-child(1) { background: #e06060; }
+  .v3-traffic span:nth-child(2) { background: #e0b040; }
+  .v3-traffic span:nth-child(3) { background: #70c070; }
+  .v3-brand-mark {
+    width: 22px; height: 22px; border: 1.5px solid var(--accent-h, #d96c4f); display: inline-flex;
+    align-items: center; justify-content: center; font-weight: 700; color: var(--accent-h, #d96c4f);
+    border-radius: 3px; font-size: 12px;
+  }
+  .v3-status-flow { display: inline-flex; align-items: center; gap: 18px; color: #a0a0a0; }
+  .v3-status-flow b { color: #e8e8e8; font-weight: 500; }
+  .v3-status-flow .sep { width: 4px; height: 4px; background: #444; border-radius: 50%; display: inline-block; }
+  .v3-slash {
+    margin-left: auto;
+    display: inline-flex; align-items: center; gap: 8px;
+    color: #777;
+  }
+  .v3-slash .kbd {
+    border: 1px solid #3a3a3a; background: #222;
+    border-radius: 3px; padding: 1px 7px; font-size: 11px; color: #ccc;
+  }
+  .v3-chips {
+    display: inline-flex; gap: 6px;
+  }
+  .v3-chip {
+    display: inline-flex; align-items: center; gap: 6px;
+    background: transparent; border: 1px solid #333; color: #ccc;
+    padding: 3px 9px; border-radius: 999px;
+    font-family: 'JetBrains Mono', monospace; font-size: 11.5px;
+    cursor: pointer;
+  }
+  .v3-chip:hover { border-color: #555; background: #222; }
+  .v3-chip.primary { border-color: var(--accent-h, #d96c4f); color: var(--accent-h, #d96c4f); }
+  .v3-chip .ic {
+    width: 10px; height: 10px; border: 1.5px solid currentColor; border-radius: 2px; display: inline-block;
+  }
+  .v3-chip.primary .ic {
+    border: none; width: 0; height: 0;
+    border-left: 8px solid currentColor; border-top: 5px solid transparent; border-bottom: 5px solid transparent;
+    border-radius: 0;
+  }
+
+  /* annotations — hand-drawn labels */
+  .annot {
+    position: relative;
+    margin-top: 10px;
+    font-family: 'Caveat', cursive;
+    font-size: 19px;
+    color: var(--ink-2);
+    display: flex; flex-wrap: wrap; gap: 18px 32px;
+  }
+  .annot b { color: var(--ink); font-weight: 600; }
+  .annot .pt { display: inline-flex; gap: 8px; align-items: flex-start; }
+  .annot .pt::before {
+    content: ""; width: 10px; height: 10px; border: 1.5px solid var(--accent);
+    border-radius: 50%; margin-top: 4px; flex: none;
+  }
+
+  /* density modifiers via body attribute */
+  body[data-density="compact"] .v1-header { padding: 5px 12px; font-size: 11.5px; }
+  body[data-density="compact"] .v1-actions button { padding: 2px 8px; font-size: 11.5px; }
+  body[data-density="compact"] .v2-titlebar { padding: 4px 12px; font-size: 11px; }
+  body[data-density="compact"] .v2-menubar { padding: 1px 8px; font-size: 11.5px; }
+  body[data-density="compact"] .v3-header { padding: 6px 14px; font-size: 11.5px; }
+  body[data-density="compact"] .v3-chip { padding: 2px 8px; font-size: 11px; }
+
+  body[data-density="spacious"] .v1-header { padding: 12px 18px; font-size: 13.5px; }
+  body[data-density="spacious"] .v2-titlebar { padding: 9px 16px; }
+  body[data-density="spacious"] .v2-menubar { padding: 6px 12px; font-size: 13.5px; }
+  body[data-density="spacious"] .v3-header { padding: 14px 18px; font-size: 13.5px; }
+
+  /* accent color — applied via custom property override on body */
+  body { --accent-h: #d96c4f; }
+  body[data-accent="cyan"] { --accent-h: #5ab0c2; }
+  body[data-accent="amber"] { --accent-h: #e0a13a; }
+  body[data-accent="violet"] { --accent-h: #a984d4; }
+  body[data-accent="mono"]  { --accent-h: #cccccc; }
+
+  /* button-style toggle for V1 */
+  body[data-btnstyle="iconlabel"] .v1-actions button::before {
+    content: ""; display: inline-block; width: 8px; height: 8px;
+    border: 1.5px solid currentColor; margin-right: 6px; vertical-align: -1px;
+  }
+  body[data-btnstyle="iconlabel"] .v3-chip .ic { display: inline-block; }
+  body[data-btnstyle="labelonly"] .v3-chip .ic { display: none; }
+  body[data-btnstyle="labelonly"] .v1-actions button::before { display: none; }
+
+  /* small legend callouts lines */
+  .callout-arrow {
+    position: absolute; font-family: 'Caveat', cursive; font-size: 18px; color: var(--accent);
+    pointer-events: none;
+  }
+</style>
+</head>
+<body data-density="regular" data-accent="warm" data-btnstyle="labelonly">
+
+<h1>Header redesign — wireframe exploration</h1>
+<p class="sub">
+  Three directions for unifying the OS title, status strip, and action buttons. Low-fi on purpose —
+  focus on structure, hierarchy, and where the eye lands. Code panel + scene are shown as context so the
+  header reads in situ. Added a <span class="mono">Search</span> affordance to each per your note.
+</p>
+
+<div class="tweaks" role="toolbar" aria-label="Wireframe tweaks">
+  <label>Density
+    <select id="t-density">
+      <option value="compact">compact</option>
+      <option value="regular" selected>regular</option>
+      <option value="spacious">spacious</option>
+    </select>
+  </label>
+  <div class="divider"></div>
+  <label>Accent
+    <span class="swatches">
+      <span class="sw active" data-accent="warm"  style="background:#d96c4f"></span>
+      <span class="sw"        data-accent="cyan"  style="background:#5ab0c2"></span>
+      <span class="sw"        data-accent="amber" style="background:#e0a13a"></span>
+      <span class="sw"        data-accent="violet" style="background:#a984d4"></span>
+      <span class="sw"        data-accent="mono"  style="background:#cccccc"></span>
+    </span>
+  </label>
+  <div class="divider"></div>
+  <label>Buttons
+    <select id="t-btnstyle">
+      <option value="labelonly" selected>label only</option>
+      <option value="iconlabel">icon + label</option>
+    </select>
+  </label>
+</div>
+
+<div class="grid">
+
+  <!-- ============ VARIATION 1 ============ -->
+  <section class="variation">
+    <div class="v-head">
+      <div class="v-num">01</div>
+      <div class="v-title">One command bar</div>
+      <div class="v-desc">Kill the OS title line. Brand, status, search, and actions live in one 32–36px strip. Traffic lights absorb the OS role.</div>
+    </div>
+
+    <div class="repl">
+      <div class="v1-header">
+        <span class="v1-traffic"><span></span><span></span><span></span></span>
+        <span class="v1-brand">GL REPL</span>
+        <span class="v1-status">
+          <span><b>31</b>/8192</span>
+          <span>Ln <b>32</b></span>
+        </span>
+        <span class="v1-spacer"></span>
+        <span class="v1-search">
+          <span>search…</span>
+          <span class="kbd">/</span>
+        </span>
+        <span class="v1-actions">
+          <button>example</button>
+          <button>config</button>
+          <button>scene</button>
+          <button>save</button>
+          <button class="primary">▸ replay</button>
+        </span>
+      </div>
+
+      <div class="repl-body">
+        <div class="code-panel">
+          <div><span class="ln">42</span><span class="kw">void</span> <span class="fn">display</span>() {</div>
+          <div><span class="ln">43</span>  <span class="fn">glClear</span>(<span class="kw">GL_COLOR_BUFFER_BIT</span>);</div>
+          <div><span class="ln">44</span>  <span class="fn">glLoadIdentity</span>();</div>
+          <div><span class="ln">45</span>  <span class="fn">glTranslatef</span>(<span class="num">0</span>, <span class="num">0</span>, <span class="num">-5</span>);</div>
+          <div><span class="ln">46</span>  <span class="fn">glRotatef</span>(<span class="num">20</span>, <span class="num">1</span>, <span class="num">0</span>, <span class="num">0</span>);</div>
+          <div><span class="ln">47</span>  <span class="cmt">// lit cube…</span></div>
+          <div><span class="ln">48</span>  <span class="fn">glBegin</span>(<span class="kw">GL_QUAD_STRIP</span>);</div>
+          <div><span class="ln">49</span>  <span class="fn">glColor3f</span>(<span class="num">1</span>, <span class="num">1</span>, <span class="num">1</span>);</div>
+        </div>
+        <div class="scene-panel">
+          <div class="cube"></div>
+          <div class="tag">scene</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="annot">
+      <span class="pt"><span><b>Info density:</b> one row, left→right reads brand · state · actions</span></span>
+      <span class="pt"><span><b>Search front & center</b> — always-visible input with <span class="mono">/</span> shortcut</span></span>
+      <span class="pt"><span><b>Replay</b> is primary (accent); other actions are tertiary text buttons</span></span>
+    </div>
+  </section>
+
+  <!-- ============ VARIATION 2 ============ -->
+  <section class="variation">
+    <div class="v-head">
+      <div class="v-num">02</div>
+      <div class="v-title">Menu bar + footer status</div>
+      <div class="v-desc">Classic app shell. Native title stays; a menu bar replaces buttons; status drops to a thin footer strip under the code panel where it belongs.</div>
+    </div>
+
+    <div class="repl">
+      <div class="v2-titlebar">
+        <span class="v2-traffic"><span></span><span></span><span></span></span>
+        <span class="v2-title-center">GL REPL — display list dynamic rendering</span>
+      </div>
+      <div class="v2-menubar">
+        <span class="item">File</span>
+        <span class="item hot">Edit</span>
+        <span class="item">View</span>
+        <span class="item">Scene</span>
+        <span class="item">Run</span>
+        <span class="item">Help</span>
+        <span class="search">
+          <span>search…</span>
+          <span class="kbd">⌘ /</span>
+        </span>
+      </div>
+
+      <div class="repl-body">
+        <div class="code-panel">
+          <div><span class="ln">42</span><span class="kw">void</span> <span class="fn">display</span>() {</div>
+          <div><span class="ln">43</span>  <span class="fn">glClear</span>(<span class="kw">GL_COLOR_BUFFER_BIT</span>);</div>
+          <div><span class="ln">44</span>  <span class="fn">glLoadIdentity</span>();</div>
+          <div><span class="ln">45</span>  <span class="fn">glTranslatef</span>(<span class="num">0</span>, <span class="num">0</span>, <span class="num">-5</span>);</div>
+          <div><span class="ln">46</span>  <span class="fn">glRotatef</span>(<span class="num">20</span>, <span class="num">1</span>, <span class="num">0</span>, <span class="num">0</span>);</div>
+          <div><span class="ln">47</span>  <span class="cmt">// lit cube…</span></div>
+          <div><span class="ln">48</span>  <span class="fn">glBegin</span>(<span class="kw">GL_QUAD_STRIP</span>);</div>
+          <div><span class="ln">49</span>  <span class="fn">glColor3f</span>(<span class="num">1</span>, <span class="num">1</span>, <span class="num">1</span>);</div>
+        </div>
+        <div class="scene-panel">
+          <div class="cube"></div>
+          <div class="tag">scene</div>
+        </div>
+      </div>
+
+      <div class="v2-statusfoot">
+        <span><span class="dot"></span><b>ready</b></span>
+        <span><b>31</b>/8192 cmds</span>
+        <span>Ln <b>32</b>, Col <b>14</b></span>
+        <span>AA 2×</span>
+        <span class="spacer"></span>
+        <span>F1 help</span>
+      </div>
+    </div>
+
+    <div class="annot">
+      <span class="pt"><span><b>Feels native</b> — familiar menu grammar hides the less-used actions (config, example)</span></span>
+      <span class="pt"><span><b>Status as footer</b> — VS Code style, out of the way, always readable</span></span>
+      <span class="pt"><span><b>Trade-off:</b> two bars of chrome (title + menu), and run/replay is hidden in a menu</span></span>
+    </div>
+  </section>
+
+  <!-- ============ VARIATION 3 ============ -->
+  <section class="variation">
+    <div class="v-head">
+      <div class="v-num">03</div>
+      <div class="v-title">Status IS the chrome</div>
+      <div class="v-desc">Skip the OS title entirely. The header reads as a monospace status line with floating chip-style actions on the right. Search is keyboard-first.</div>
+    </div>
+
+    <div class="repl">
+      <div class="v3-header">
+        <span class="v3-traffic"><span></span><span></span><span></span></span>
+        <span class="v3-brand-mark">GL</span>
+        <span class="v3-status-flow">
+          <span><b>31</b>/8192 cmds</span>
+          <span class="sep"></span>
+          <span>Ln <b>32</b></span>
+          <span class="sep"></span>
+          <span>AA 2×</span>
+        </span>
+        <span class="v3-slash">
+          <span class="kbd">/</span><span>search</span>
+          <span class="kbd" style="margin-left:8px">F1</span><span>help</span>
+        </span>
+        <span class="v3-chips">
+          <button class="v3-chip"><span class="ic"></span>scene</button>
+          <button class="v3-chip"><span class="ic"></span>example</button>
+          <button class="v3-chip"><span class="ic"></span>save</button>
+          <button class="v3-chip primary"><span class="ic"></span>replay</button>
+        </span>
+      </div>
+
+      <div class="repl-body">
+        <div class="code-panel">
+          <div><span class="ln">42</span><span class="kw">void</span> <span class="fn">display</span>() {</div>
+          <div><span class="ln">43</span>  <span class="fn">glClear</span>(<span class="kw">GL_COLOR_BUFFER_BIT</span>);</div>
+          <div><span class="ln">44</span>  <span class="fn">glLoadIdentity</span>();</div>
+          <div><span class="ln">45</span>  <span class="fn">glTranslatef</span>(<span class="num">0</span>, <span class="num">0</span>, <span class="num">-5</span>);</div>
+          <div><span class="ln">46</span>  <span class="fn">glRotatef</span>(<span class="num">20</span>, <span class="num">1</span>, <span class="num">0</span>, <span class="num">0</span>);</div>
+          <div><span class="ln">47</span>  <span class="cmt">// lit cube…</span></div>
+          <div><span class="ln">48</span>  <span class="fn">glBegin</span>(<span class="kw">GL_QUAD_STRIP</span>);</div>
+          <div><span class="ln">49</span>  <span class="fn">glColor3f</span>(<span class="num">1</span>, <span class="num">1</span>, <span class="num">1</span>);</div>
+        </div>
+        <div class="scene-panel">
+          <div class="cube"></div>
+          <div class="tag">scene</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="annot">
+      <span class="pt"><span><b>Tall, breathable single row</b> — status is typography, not a strip of chrome</span></span>
+      <span class="pt"><span><b>Pill chips</b> feel light vs the old rectangular teal buttons; accent only on the primary action</span></span>
+      <span class="pt"><span><b>Search is a hint</b> (<span class="mono">/</span> to open) — no permanent input stealing space</span></span>
+    </div>
+  </section>
+
+</div>
+
+<script>
+  const body = document.body;
+  document.getElementById('t-density').addEventListener('change', e => {
+    body.setAttribute('data-density', e.target.value);
+  });
+  document.getElementById('t-btnstyle').addEventListener('change', e => {
+    body.setAttribute('data-btnstyle', e.target.value);
+  });
+  document.querySelectorAll('.tweaks .sw').forEach(sw => {
+    sw.addEventListener('click', () => {
+      document.querySelectorAll('.tweaks .sw').forEach(s => s.classList.remove('active'));
+      sw.classList.add('active');
+      body.setAttribute('data-accent', sw.dataset.accent);
+    });
+  });
+</script>
+</body>
+</html>
