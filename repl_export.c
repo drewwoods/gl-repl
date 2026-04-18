@@ -108,10 +108,9 @@ int parse_workspace_header_line(const char *line) {
          * undeclares and re-declares this var, the value is restored
          * afterwards (see load_from_file deferred-apply step). */
         if (g_deferred_var_count < MAX_DEFERRED_VAR_VALUES) {
-            strncpy(g_deferred_var_values[g_deferred_var_count].name,
-                    name, sizeof(g_deferred_var_values[0].name) - 1);
-            g_deferred_var_values[g_deferred_var_count].name[
-                sizeof(g_deferred_var_values[0].name) - 1] = '\0';
+            repl_copy_string_fits(g_deferred_var_values[g_deferred_var_count].name,
+                                  sizeof(g_deferred_var_values[0].name),
+                                  name);
             g_deferred_var_values[g_deferred_var_count].value = val;
             g_deferred_var_count++;
         }
@@ -1507,7 +1506,11 @@ static int import_parse_declare_marker(const char *line, int *loaded,
                 continue;
             }
         }
-        strncpy(cmd.var_names[count], name, 15);
+        if (!repl_copy_string_fits(cmd.var_names[count],
+                                   sizeof(cmd.var_names[count]), name)) {
+            if (warnings) (*warnings)++;
+            continue;
+        }
         off += snprintf(cmd.source + off, sizeof(cmd.source) - (size_t)off,
                         count == 0 ? " %.*s" : ", %.*s", len, start);
         count++;

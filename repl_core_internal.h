@@ -54,6 +54,27 @@ static inline int repl_format_fits(char *out, size_t out_sz,
     return 1;
 }
 
+static inline int repl_copy_string_fits(char *dst, size_t dst_sz,
+                                        const char *src) {
+    size_t len;
+
+    if (!dst || dst_sz == 0)
+        return 0;
+    if (!src) {
+        dst[0] = '\0';
+        return 1;
+    }
+
+    len = strlen(src);
+    if (len >= dst_sz) {
+        dst[0] = '\0';
+        return 0;
+    }
+
+    memcpy(dst, src, len + 1);
+    return 1;
+}
+
 /* ---- Normalize / commit pipeline -------------------------------------- */
 
 /* Parse `line` into `out_cmd` and also write the canonical (normalized)
