@@ -170,7 +170,7 @@ static int code_panel_mouse_y_for_cmd(int cmd_idx) {
     }
 
     int vis = doc_line - g_scroll;
-    int line_y_start = g_win_h - CODE_MARGIN_Y - 3 * LINE_H;
+    int line_y_start = g_win_h - CODE_MARGIN_Y - 2 * LINE_H;
     int gl_y = line_y_start - vis * LINE_H + 1;
     return g_win_h - gl_y;
 }
