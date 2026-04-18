@@ -90,7 +90,7 @@ else
 COVERAGE_LDFLAGS =
 endif
 
-.PHONY: all clean test test-detailed test_detailed test-stubs lines debug coverage glut help
+.PHONY: all clean test test-detailed test_detailed test-stubs lines debug coverage glut help bench bench-csv
 
 all: sample
 
@@ -123,6 +123,12 @@ TEST_BINS = \
 
 CORE_TEST_BINS = $(filter-out test_eval test_format test_repl_audio,$(TEST_BINS))
 
+# Benchmark binaries follow the same linking pattern as core test binaries
+# (they reuse CORE_TEST_OBJS so they work in both real-GL and stubs builds),
+# but they are intentionally NOT in TEST_BINS so `make test` does not run
+# them — benchmarks are timing-sensitive and should be invoked explicitly.
+BENCH_BINS = bench_repl
+
 define core_test_binary
 $(1)_OBJS = $$(OBJDIR)/$(1).o $$(CORE_TEST_OBJS)
 $(1)_LDLIBS = $$(GL_LDFLAGS)
@@ -130,6 +136,7 @@ $(1)_RUN ?= ./$(1)
 endef
 
 $(foreach test,$(CORE_TEST_BINS),$(eval $(call core_test_binary,$(test))))
+$(foreach bin,$(BENCH_BINS),$(eval $(call core_test_binary,$(bin))))
 
 test_eval_OBJS = $(OBJDIR)/test_eval.o $(OBJDIR)/repl_eval.o
 test_eval_LDLIBS = -lm -lpthread
@@ -145,10 +152,11 @@ test_repl_audio_RUN ?= ./test_repl_audio
 
 TEST_OBJS = $(foreach test,$(TEST_BINS),$($(test)_OBJS))
 TEST_RUNNER_CASES = $(foreach test,$(TEST_BINS),'$(test):::$($(test)_RUN)')
+BENCH_OBJS = $(foreach bin,$(BENCH_BINS),$($(bin)_OBJS))
 
 TEST_JOBS ?=
 
-ALL_OBJS = $(sort $(SAMPLE_OBJS) $(TEST_OBJS))
+ALL_OBJS = $(sort $(SAMPLE_OBJS) $(TEST_OBJS) $(BENCH_OBJS))
 
 DEPS = $(ALL_OBJS:.o=.d)
 
@@ -166,7 +174,7 @@ sample: $(SAMPLE_OBJS) ## Build the main REPL sample using release flags by defa
 # turn `test_eval` into `$(test_eval_OBJS)`, `test_repl_core_io` into
 # `$(test_repl_core_io_OBJS)`, etc. The doubled dollars delay that lookup until
 # the second pass.
-$(TEST_BINS): %: $$($$@_OBJS)
+$(TEST_BINS) $(BENCH_BINS): %: $$($$@_OBJS)
 	$(CC) $(OBJ_CFLAGS) -o $@ $^ $($@_LDLIBS) $(COVERAGE_LDFLAGS)
 
 test: $(TEST_BINS) ## Run the full automated test suite.
@@ -186,6 +194,23 @@ test_detailed: test-detailed ## Alias for test-detailed.
 
 test-stubs: ## Build and run tests using local GL/GLU/GLUT stubs, without GL libs.
 	$(MAKE) test USE_GL_STUBS=1
+
+# Benchmark targets ------------------------------------------------------
+# Built and invoked separately from `make test` because timing is sensitive
+# to system load and we don't want a stray slow run failing CI. Use
+# BENCH_ARGS to pass through flags, e.g. `make bench BENCH_ARGS="--iters 20"`.
+BENCH_ARGS ?=
+
+bench: $(BENCH_BINS) ## Build and run the REPL runtime benchmarks.
+	@for b in $(BENCH_BINS); do \
+		echo "==> $$b $(BENCH_ARGS)"; \
+		./$$b $(BENCH_ARGS) || exit $$?; \
+	done
+
+bench-csv: $(BENCH_BINS) ## Run benchmarks with --csv output (machine readable).
+	@for b in $(BENCH_BINS); do \
+		./$$b --csv $(BENCH_ARGS) || exit $$?; \
+	done
 
 # count lines: $(SRCS) $(HDRS)
 lines: $(SRCS) $(HDRS) ## Count lines across source and header files.
@@ -235,6 +260,7 @@ endif
 clean: ## Remove built binaries and object files.
 	rm -rf sample sample.dSYM \
 		$(TEST_BINS) $(addsuffix .dSYM,$(TEST_BINS)) \
+		$(BENCH_BINS) $(addsuffix .dSYM,$(BENCH_BINS)) \
 		build/coverage/lcov.info build/coverage/html \
 		build
 
