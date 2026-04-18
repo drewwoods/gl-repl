@@ -1,7 +1,9 @@
 TODO:
    - ability to switch between 2D orth where use glVertex2d
    - when glEnable(GL_LIGHTING) is commented I expected the lighting to be disabled, since that is the default state. 
-   - vertex points dont function correctly in the exported code when lighting is not enabled
+   - outlines dont function correctly if using GL_LINES or POINTS in the exported code
+   - replay doesnt jump code panel focus to glu lines.  The replay jump focus
+     doesnt always find the correct lines
    - address the limitation of only 8 scope visible globals
 
 
