@@ -168,6 +168,19 @@ int main(void) {
         ASSERT_TRUE("func call keeps raw expr", strstr(cmd.source, "x + 1") != NULL);
     }
 
+    {
+        repl_reset_state();
+        GLCmd cmd;
+        char long_cmd[256];
+        memset(&cmd, 0, sizeof(cmd));
+        memset(long_cmd, 'a', sizeof(long_cmd) - 1);
+        long_cmd[sizeof(long_cmd) - 1] = '\0';
+        int ok = repl_parse_command(long_cmd, &cmd);
+        ASSERT_TRUE("long unknown command parse fails", ok == 0);
+        ASSERT_TRUE("long unknown command reports status",
+                    strstr(g_status, "Unknown cmd") != NULL);
+    }
+
     /* 4-arg commands (glRotatef, gluDisk, glutSolidTorus) — exercise case 4 in fmt switch */
     {
         repl_reset_state();
