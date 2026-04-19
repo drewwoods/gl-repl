@@ -3756,6 +3756,34 @@ void execute_replay_fade_batches(void) {
     g_num_flat_cmds = saved_flat_count;
 }
 
+/* Bench-only: install a fixed set of fade batches without advancing the
+ * replay state machine. The caller is expected to have populated
+ * g_flat_cmds[] first. Returns the number of batches actually installed
+ * (capped at REPLAY_FADE_BATCH_MAX). */
+int repl_bench_fade_install(const int *old_pcs, const int *new_pcs,
+                            int count, float age) {
+    if (count < 0) count = 0;
+    if (count > REPLAY_FADE_BATCH_MAX) count = REPLAY_FADE_BATCH_MAX;
+
+    for (int i = 0; i < count; i++) {
+        g_replay_fade_batches[i].old_pc = old_pcs[i];
+        g_replay_fade_batches[i].new_pc = new_pcs[i];
+        g_replay_fade_batches[i].age = age;
+    }
+    g_replay_fade_batch_count = count;
+
+    for (int i = 0; i < g_num_predef_vars; i++)
+        g_replay_baseline_predef_vals[i] = g_predef_vars[i].value;
+
+    g_replay_active = (count > 0);
+    return count;
+}
+
+void repl_bench_fade_clear(void) {
+    g_replay_fade_batch_count = 0;
+    g_replay_active = 0;
+}
+
 /* ========================================================================= */
 /* 2D rendering helpers                                                       */
 /* ========================================================================= */

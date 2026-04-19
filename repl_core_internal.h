@@ -158,6 +158,15 @@ int  replay_seek_to_src_line(int target_line);
 void replay_step_back(void);
 void replay_restart_from_beginning(void);
 
+/* ---- Bench helpers (populate replay fade state without stepping) -------
+ * These exist solely for bench_repl.c to drive
+ * `execute_replay_fade_batches()` on a deterministic workload. They bypass
+ * the full replay state machine: the caller is responsible for having
+ * populated `g_flat_cmds[]` first (e.g. via repl_flatten_commands()). */
+int  repl_bench_fade_install(const int *old_pcs, const int *new_pcs,
+                             int count, float age);
+void repl_bench_fade_clear(void);
+
 /* ---- Line feeding (test entry) ---------------------------------------- */
 
 /* Programmatic entry point equivalent to typing `line` and pressing ';'.
