@@ -575,20 +575,23 @@ int try_commit_float_decl(void) {
             }
             if (!in_old_decl) {
                 char buf[128];
-                snprintf(buf, sizeof(buf), "'%s' is already declared", names[i]);
+                if (!repl_format_fits(buf, sizeof(buf), "'%s' is already declared", names[i]))
+                    repl_format_fits(buf, sizeof(buf), "identifier is already declared");
                 set_status(buf);
                 return 1;
             }
         }
         if (is_reserved_ident(names[i])) {
             char buf[128];
-            snprintf(buf, sizeof(buf), "'%s' is reserved", names[i]);
+            if (!repl_format_fits(buf, sizeof(buf), "'%s' is reserved", names[i]))
+                repl_format_fits(buf, sizeof(buf), "identifier is reserved");
             set_status(buf);
             return 1;
         }
         if (!(isalpha((unsigned char)names[i][0]) || names[i][0] == '_')) {
             char buf[128];
-            snprintf(buf, sizeof(buf), "invalid identifier '%s'", names[i]);
+            if (!repl_format_fits(buf, sizeof(buf), "invalid identifier '%s'", names[i]))
+                repl_format_fits(buf, sizeof(buf), "invalid identifier");
             set_status(buf);
             return 1;
         }
@@ -1952,8 +1955,7 @@ void keyboard_func(unsigned char key, int x, int y) {
                     snprintf(new_src, sizeof(new_src), "%.*s// %s", ind, s, s + ind);
                     cur->type = CMD_COMMENT;
                     cur->valid = 1;
-                    strncpy(cur->source, new_src, sizeof(cur->source) - 1);
-                    cur->source[sizeof(cur->source) - 1] = '\0';
+                    repl_copy_string_fits(cur->source, sizeof(cur->source), new_src);
                     load_line_to_input(g_edit_line);
                     mark_normals_dirty();
                     set_status("Commented out");

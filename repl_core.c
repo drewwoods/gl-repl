@@ -832,8 +832,11 @@ static void normalize_with_indent(const char *raw_expr, int indent_spaces,
     while (*p == ' ' || *p == '\t') p++;
 
     char body[MAX_LINE_LEN];
-    strncpy(body, p, sizeof(body) - 1);
-    body[sizeof(body) - 1] = '\0';
+    size_t body_len = strlen(p);
+    if (body_len >= sizeof(body))
+        body_len = sizeof(body) - 1;
+    memcpy(body, p, body_len);
+    body[body_len] = '\0';
 
     int len = (int)strlen(body);
     while (len > 0 && isspace((unsigned char)body[len - 1]))
@@ -866,15 +869,18 @@ static void normalize_with_indent(const char *raw_expr, int indent_spaces,
             spaced[si++] = c;
         }
         spaced[si] = '\0';
-        strncpy(body, spaced, sizeof(body) - 1);
-        body[sizeof(body) - 1] = '\0';
+        memcpy(body, spaced, (size_t)si + 1);
     }
 
     if (indent_spaces < 0) indent_spaces = 0;
     if (indent_spaces > out_sz - 1) indent_spaces = out_sz - 1;
     memset(out, ' ', (size_t)indent_spaces);
-    out[indent_spaces] = '\0';
-    strncat(out, body, (size_t)(out_sz - 1 - indent_spaces));
+    size_t body_copy_len = strlen(body);
+    size_t body_cap = (size_t)(out_sz - 1 - indent_spaces);
+    if (body_copy_len > body_cap)
+        body_copy_len = body_cap;
+    memcpy(out + indent_spaces, body, body_copy_len);
+    out[indent_spaces + (int)body_copy_len] = '\0';
 }
 
 int repl_parse_and_normalize(const char *line, int pos,
@@ -1614,7 +1620,7 @@ static int parse_command(const char *line, GLCmd *cmd,
     if (open_p) {
         int flen = (int)(open_p - p);
         if (flen > 0 && flen < (int)sizeof(func)) {
-            strncpy(func, p, flen);
+            memcpy(func, p, (size_t)flen);
             func[flen] = '\0';
         }
 
@@ -1627,12 +1633,12 @@ static int parse_command(const char *line, GLCmd *cmd,
 
         int alen = (int)(close_p - open_p - 1);
         if (alen > 0 && alen < (int)sizeof(args)) {
-            strncpy(args, open_p + 1, alen);
+            memcpy(args, open_p + 1, (size_t)alen);
             args[alen] = '\0';
         }
     } else {
-        strncpy(func, p, sizeof(func) - 1);
-        func[sizeof(func) - 1] = '\0';
+        if (!repl_copy_string_fits(func, sizeof(func), p))
+            goto unknown_command;
     }
 
     /* Table-driven parsing for enum commands */
