@@ -18,6 +18,7 @@
 #define _POSIX_C_SOURCE 200809L
 #include "sample.h"
 #include "profile_panel.h"
+#include "ui_panels.h"
 
 #include <time.h>
 
@@ -44,6 +45,45 @@
 #define PROF_BOTTOM_PAD      14
 #define PROF_COL_LABEL_W    150
 #define PROF_COL_LAST_W      72
+
+static int clamp_int(int v, int lo, int hi) {
+    if (hi < lo) return lo;
+    if (v < lo) return lo;
+    if (v > hi) return hi;
+    return v;
+}
+
+static int clamp_profile_y(int y, int scene_y, int scene_h, int panel_h) {
+    int min_y = scene_y + 4;
+    int max_y = scene_y + scene_h - panel_h - 4;
+
+    if (max_y >= min_y)
+        return clamp_int(y, min_y, max_y);
+    return g_code_panel_layout == CODE_PANEL_LAYOUT_TOP ? max_y : min_y;
+}
+
+static void profile_panel_rect_for_height(int panel_h, int *out_x, int *out_y) {
+    int sc_x, sc_y, sc_w, sc_h;
+    int px, py;
+
+    scene_rect(&sc_x, &sc_y, &sc_w, &sc_h);
+
+    if (g_show_var_panel) {
+        px = sc_x + sc_w - PROF_PANEL_W - PROF_PANEL_MARGIN;
+        py = sc_y + sc_h - panel_h - PROF_PANEL_MARGIN;
+    } else {
+        int vx, vy, vw, vh;
+        var_panel_rect(&vx, &vy, &vw, &vh);
+        px = vx + vw - PROF_PANEL_W;
+        py = vy;
+    }
+
+    px = clamp_int(px, sc_x + 4, sc_x + sc_w - PROF_PANEL_W - 4);
+    py = clamp_profile_y(py, sc_y, sc_h, panel_h);
+
+    if (out_x) *out_x = px;
+    if (out_y) *out_y = py;
+}
 
 /* ========================================================================= */
 /* State                                                                      */
@@ -273,8 +313,8 @@ void render_profile_panel(void) {
                  + PROF_BOTTOM_PAD
                  + PROF_PANEL_MARGIN;
 
-    int px = g_win_w - PROF_PANEL_W - PROF_PANEL_MARGIN;
-    int py = g_win_h - panel_h - PROF_PANEL_MARGIN;
+    int px, py;
+    profile_panel_rect_for_height(panel_h, &px, &py);
 
     begin_2d();
 

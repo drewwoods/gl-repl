@@ -336,6 +336,48 @@ int main(void) {
         }
     }
 
+    {
+        const char *src = "  glVertex3f(1, 2, 3);";
+        char visual_buf[8192];
+        FILE *dump_f = fopen(tmp_dump_path, "w");
+
+        repl_reset_state();
+        declare_test_vars();
+        g_wrap_at_comma = 1;
+        g_show_indices = 0;
+        g_win_w = 360;
+        g_win_h = 800;
+        g_panel_frac = 0.5f;
+        g_code_panel_layout = CODE_PANEL_LAYOUT_BOTTOM;
+
+        memset(&g_cmds[0], 0, sizeof(g_cmds[0]));
+        g_cmds[0].type = CMD_VERTEX3F;
+        g_cmds[0].valid = 1;
+        strncpy(g_cmds[0].source, src, sizeof(g_cmds[0].source) - 1);
+        g_cmds[0].source[sizeof(g_cmds[0].source) - 1] = '\0';
+        g_num_cmds = 1;
+
+        ASSERT_TRUE("open bottom-layout visual dump file", dump_f != NULL);
+        if (dump_f) {
+            repl_dump_code_panel_visual_text(dump_f);
+            fclose(dump_f);
+        }
+
+        dump_f = fopen(tmp_dump_path, "r");
+        ASSERT_TRUE("read bottom-layout visual dump file", dump_f != NULL);
+        if (dump_f) {
+            size_t n = fread(visual_buf, 1, sizeof(visual_buf) - 1, dump_f);
+            visual_buf[n] = '\0';
+            fclose(dump_f);
+            ASSERT_TRUE("bottom visual dump uses full panel width",
+                        strstr(visual_buf, "--- source ---\n  glVertex3f(1, 2, 3);\n") != NULL);
+            ASSERT_TRUE("bottom visual dump does not use side-panel width",
+                        strstr(visual_buf, "--- source ---\n  glVertex3f(1,\n") == NULL);
+        }
+        g_code_panel_layout = CFG_DEFAULT_CODE_PANEL_LAYOUT;
+        g_panel_frac = CFG_DEFAULT_PANEL_FRAC;
+    }
+
     printf("repl_core_format: %d/%d passed\n", g_pass, g_run);
     return (g_run == g_pass) ? 0 : 1;
 }

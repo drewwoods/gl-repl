@@ -1921,7 +1921,6 @@ static void draw_replay_tess_preview(void) {
 }
 
 static void draw_replay_hud(int scene_x, int scene_y, int scene_w, int scene_h) {
-    (void)scene_h;
     char progress_txt[64];
     char kbd_txt[128];
     float progress = 0.0f;
@@ -1930,12 +1929,22 @@ static void draw_replay_hud(int scene_x, int scene_y, int scene_w, int scene_h) 
      * the bottom of the scene. */
     int hud_y = scene_y + REPLAY_HUD_MARGIN_Y + STATUSBAR_H;
     int hud_w = scene_w - 2 * REPLAY_HUD_MARGIN_X;
+    int min_y = scene_y + STATUSBAR_H + 4;
+    int max_y = scene_y + scene_h - REPLAY_HUD_HEIGHT - 4;
 
     if (!g_replay_active)
         return;
 
     if (hud_w < REPLAY_HUD_MIN_WIDTH)
         hud_w = REPLAY_HUD_MIN_WIDTH;
+    if (max_y >= min_y) {
+        if (hud_y < min_y) hud_y = min_y;
+        if (hud_y > max_y) hud_y = max_y;
+    } else {
+        hud_y = g_code_panel_layout == CODE_PANEL_LAYOUT_TOP
+              ? scene_y + scene_h - REPLAY_HUD_HEIGHT - 4
+              : scene_y + 4;
+    }
     if (g_replay_total_flat > 0)
         progress = (float)g_replay_pc / (float)g_replay_total_flat;
     if (progress < 0.0f) progress = 0.0f;

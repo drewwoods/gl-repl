@@ -97,6 +97,7 @@ static const char *replay_mode_names[] = { "Polygon", "Vertex" };
 static const char *backdrop_mode_names[] = { "Off", "Cityscape" };
 static const char *xform_guide_mode_names[] = { "World", "Frame" };
 static const char *profile_panel_mode_names[] = { "Off", "On", "Details" };
+static const char *code_panel_layout_names[] = { "Left", "Top", "Bottom" };
 
 /* Unified audio cfg: collapses mute + loop mode into one cycling
  * menu entry. Indices:
@@ -166,7 +167,7 @@ CfgItem g_cfg_items[] = {
     { "Replay",           "Ctrl+g", &g_replay_active,          2,                NULL              },
     { "Replay mode",      "m",      &g_replay_mode,            2,                replay_mode_names },
     { "Replay expand",    "--",     &g_replay_expand_args,     2,                NULL              },
-    { "Top code panel",   "--",     &g_layout_vertical,        2,                NULL              },
+    { "Code panel",       "--",     &g_code_panel_layout,      CODE_PANEL_LAYOUT_COUNT, code_panel_layout_names },
     { "Audio",            "--",     &g_audio_cfg_mode,         4,                audio_cfg_names   },
 };
 
@@ -2552,10 +2553,14 @@ void repl_cfg_cycle_row(int row, int delta) {
     if (v < 0) v += n;
     *g_cfg_items[row].value = v;
 
-    if (g_cfg_items[row].value == &g_layout_vertical) {
+    if (g_cfg_items[row].value == &g_code_panel_layout) {
         g_panel_frac = 0.3f;
-        set_status(g_layout_vertical ? "Layout: top code panel"
-                                     : "Layout: left code panel");
+        if (g_code_panel_layout == CODE_PANEL_LAYOUT_TOP)
+            set_status("Layout: top code panel");
+        else if (g_code_panel_layout == CODE_PANEL_LAYOUT_BOTTOM)
+            set_status("Layout: bottom code panel");
+        else
+            set_status("Layout: left code panel");
     }
     if (g_cfg_items[row].value == &g_wrap_at_comma)
         set_status(g_wrap_at_comma ? "Wrap at commas: ON"
@@ -2580,6 +2585,60 @@ void repl_cfg_cycle_row(int row, int delta) {
         };
         set_status(labels[g_audio_cfg_mode]);
     }
+}
+
+static int editor_code_panel_layout(void) {
+    if (g_code_panel_layout < 0 || g_code_panel_layout >= CODE_PANEL_LAYOUT_COUNT)
+        return CODE_PANEL_LAYOUT_LEFT;
+    return g_code_panel_layout;
+}
+
+static int editor_point_in_code_panel(int x, int y) {
+    int cp_x, cp_y, cp_w, cp_h;
+    int gl_y = g_win_h - y;
+
+    code_panel_rect(&cp_x, &cp_y, &cp_w, &cp_h);
+    return x >= cp_x && x < cp_x + cp_w &&
+           gl_y >= cp_y && gl_y < cp_y + cp_h;
+}
+
+static int editor_point_on_code_panel_divider(int x, int y) {
+    int cp_x, cp_y, cp_w, cp_h;
+    int gl_y = g_win_h - y;
+    int layout = editor_code_panel_layout();
+
+    code_panel_rect(&cp_x, &cp_y, &cp_w, &cp_h);
+    if (layout == CODE_PANEL_LAYOUT_TOP)
+        return abs(gl_y - cp_y) < 10;
+    if (layout == CODE_PANEL_LAYOUT_BOTTOM)
+        return abs(gl_y - (cp_y + cp_h)) < 10;
+    return abs(x - (cp_x + cp_w)) < 10;
+}
+
+static int editor_code_panel_resize_cursor(void) {
+    return editor_code_panel_layout() == CODE_PANEL_LAYOUT_LEFT
+         ? GLUT_CURSOR_LEFT_RIGHT
+         : GLUT_CURSOR_UP_DOWN;
+}
+
+static void editor_update_panel_frac_from_mouse(int x, int y) {
+    int layout = editor_code_panel_layout();
+
+    if (layout == CODE_PANEL_LAYOUT_TOP) {
+        if (g_win_h > 0)
+            g_panel_frac = (float)y / (float)g_win_h;
+    } else if (layout == CODE_PANEL_LAYOUT_BOTTOM) {
+        if (g_win_h > 0)
+            g_panel_frac = (float)(g_win_h - y) / (float)g_win_h;
+    } else {
+        if (g_win_w > 0)
+            g_panel_frac = (float)x / (float)g_win_w;
+    }
+
+    if (g_panel_frac < 0.1f)
+        g_panel_frac = 0.1f;
+    if (g_panel_frac > 0.9f)
+        g_panel_frac = 0.9f;
 }
 
 static void mouse_func(int button, int state, int x, int y) {
@@ -2624,34 +2683,17 @@ static void mouse_func(int button, int state, int x, int y) {
             return;
         }
 
-        if (g_layout_vertical) {
-            int panel_h_px = (int)(g_win_h * g_panel_frac);
-            if (abs(y - panel_h_px) < 10) {
-                g_resizing_panel = 1;
-                glutSetCursor(GLUT_CURSOR_UP_DOWN);
-                return;
-            }
-            if (y < panel_h_px) {
-                int panel_actions = handle_code_panel_press(x, y);
-                if (panel_actions & UI_PANEL_PRESS_OPENED_COLOR_PICKER)
-                    push_undo_snapshot();
-                glutPostRedisplay();
-                return;
-            }
-        } else {
-            int panel_w = (int)(g_win_w * g_panel_frac);
-            if (abs(x - panel_w) < 10) {
-                g_resizing_panel = 1;
-                glutSetCursor(GLUT_CURSOR_LEFT_RIGHT);
-                return;
-            }
-            if (x < panel_w) {
-                int panel_actions = handle_code_panel_press(x, y);
-                if (panel_actions & UI_PANEL_PRESS_OPENED_COLOR_PICKER)
-                    push_undo_snapshot();
-                glutPostRedisplay();
-                return;
-            }
+        if (editor_point_on_code_panel_divider(x, y)) {
+            g_resizing_panel = 1;
+            glutSetCursor(editor_code_panel_resize_cursor());
+            return;
+        }
+        if (editor_point_in_code_panel(x, y)) {
+            int panel_actions = handle_code_panel_press(x, y);
+            if (panel_actions & UI_PANEL_PRESS_OPENED_COLOR_PICKER)
+                push_undo_snapshot();
+            glutPostRedisplay();
+            return;
         }
         /* Scene-area click: let the color picker intercept before camera. */
         if (ui_panels_handle_scene_press(x, y)) {
@@ -2707,10 +2749,7 @@ static void mouse_func(int button, int state, int x, int y) {
         if (g_show_help) {
             g_help_scroll--;
         } else {
-            int in_code_panel = g_layout_vertical
-                ? (y < (int)(g_win_h * g_panel_frac))
-                : (x < (int)(g_win_w * g_panel_frac));
-            if (in_code_panel)
+            if (editor_point_in_code_panel(x, y))
                 g_scroll--;
             else
                 g_vel_zoom -= 0.3f;
@@ -2720,10 +2759,7 @@ static void mouse_func(int button, int state, int x, int y) {
         if (g_show_help) {
             g_help_scroll++;
         } else {
-            int in_code_panel = g_layout_vertical
-                ? (y < (int)(g_win_h * g_panel_frac))
-                : (x < (int)(g_win_w * g_panel_frac));
-            if (in_code_panel)
+            if (editor_point_in_code_panel(x, y))
                 g_scroll++;
             else
                 g_vel_zoom += 0.3f;
@@ -2739,10 +2775,7 @@ static void mousewheel_func(int wheel, int direction, int x, int y) {
     if (g_show_help) {
         g_help_scroll -= direction;
     } else {
-        int in_code_panel = g_layout_vertical
-            ? (y < (int)(g_win_h * g_panel_frac))
-            : (x < (int)(g_win_w * g_panel_frac));
-        if (in_code_panel)
+        if (editor_point_in_code_panel(x, y))
             g_scroll -= direction;
         else
             g_vel_zoom -= direction * 0.1f;
@@ -2755,19 +2788,10 @@ static void passive_motion_func(int x, int y) {
     g_mouse_x = x;
     g_mouse_y = y;
 
-    if (g_layout_vertical) {
-        int panel_h_px = (int)(g_win_h * g_panel_frac);
-        if (abs(y - panel_h_px) < 10)
-            glutSetCursor(GLUT_CURSOR_UP_DOWN);
-        else
-            glutSetCursor(GLUT_CURSOR_INHERIT);
-    } else {
-        int panel_w = (int)(g_win_w * g_panel_frac);
-        if (abs(x - panel_w) < 10)
-            glutSetCursor(GLUT_CURSOR_LEFT_RIGHT);
-        else
-            glutSetCursor(GLUT_CURSOR_INHERIT);
-    }
+    if (editor_point_on_code_panel_divider(x, y))
+        glutSetCursor(editor_code_panel_resize_cursor());
+    else
+        glutSetCursor(GLUT_CURSOR_INHERIT);
 }
 
 static void motion_func(int x, int y) {
@@ -2781,14 +2805,7 @@ static void motion_func(int x, int y) {
     int dy = y - g_mouse_y;
 
     if (g_resizing_panel) {
-        if (g_layout_vertical)
-            g_panel_frac = (float)y / (float)g_win_h;
-        else
-            g_panel_frac = (float)x / (float)g_win_w;
-        if (g_panel_frac < 0.1f)
-            g_panel_frac = 0.1f;
-        if (g_panel_frac > 0.9f)
-            g_panel_frac = 0.9f;
+        editor_update_panel_frac_from_mouse(x, y);
         glutPostRedisplay();
         return;
     }

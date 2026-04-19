@@ -23,19 +23,36 @@
 /* Layout geometry helpers                                                    */
 /* ========================================================================= */
 
+static int code_panel_layout_mode(void) {
+    if (g_code_panel_layout < 0 || g_code_panel_layout >= CODE_PANEL_LAYOUT_COUNT)
+        return CODE_PANEL_LAYOUT_LEFT;
+    return g_code_panel_layout;
+}
+
+static int panel_span_px(int total_px) {
+    int span = (int)((float)total_px * g_panel_frac);
+    if (span < 1) span = 1;
+    if (span > total_px) span = total_px;
+    return span;
+}
+
 void code_panel_rect(int *x, int *y, int *w, int *h) {
-    if (g_layout_vertical) {
-        int panel_h = (int)(g_win_h * g_panel_frac);
-        if (panel_h < 1) panel_h = 1;
-        if (panel_h > g_win_h) panel_h = g_win_h;
+    int layout = code_panel_layout_mode();
+
+    if (layout == CODE_PANEL_LAYOUT_TOP) {
+        int panel_h = panel_span_px(g_win_h);
         if (x) *x = 0;
         if (y) *y = g_win_h - panel_h;
         if (w) *w = g_win_w;
         if (h) *h = panel_h;
+    } else if (layout == CODE_PANEL_LAYOUT_BOTTOM) {
+        int panel_h = panel_span_px(g_win_h);
+        if (x) *x = 0;
+        if (y) *y = 0;
+        if (w) *w = g_win_w;
+        if (h) *h = panel_h;
     } else {
-        int panel_w = (int)(g_win_w * g_panel_frac);
-        if (panel_w < 1) panel_w = 1;
-        if (panel_w > g_win_w) panel_w = g_win_w;
+        int panel_w = panel_span_px(g_win_w);
         if (x) *x = 0;
         if (y) *y = 0;
         if (w) *w = panel_w;
@@ -44,18 +61,22 @@ void code_panel_rect(int *x, int *y, int *w, int *h) {
 }
 
 void scene_rect(int *x, int *y, int *w, int *h) {
-    if (g_layout_vertical) {
-        int panel_h = (int)(g_win_h * g_panel_frac);
-        if (panel_h < 1) panel_h = 1;
-        if (panel_h > g_win_h) panel_h = g_win_h;
+    int layout = code_panel_layout_mode();
+
+    if (layout == CODE_PANEL_LAYOUT_TOP) {
+        int panel_h = panel_span_px(g_win_h);
         if (x) *x = 0;
         if (y) *y = 0;
         if (w) *w = g_win_w;
         if (h) *h = g_win_h - panel_h;
+    } else if (layout == CODE_PANEL_LAYOUT_BOTTOM) {
+        int panel_h = panel_span_px(g_win_h);
+        if (x) *x = 0;
+        if (y) *y = panel_h;
+        if (w) *w = g_win_w;
+        if (h) *h = g_win_h - panel_h;
     } else {
-        int panel_w = (int)(g_win_w * g_panel_frac);
-        if (panel_w < 1) panel_w = 1;
-        if (panel_w > g_win_w) panel_w = g_win_w;
+        int panel_w = panel_span_px(g_win_w);
         if (x) *x = panel_w;
         if (y) *y = 0;
         if (w) *w = g_win_w - panel_w;
@@ -2345,14 +2366,18 @@ void render_code_panel(void) {
     /* Border: divider between code panel and scene */
     glColor4f(0.30f, 0.30f, 0.50f, 0.80f);
     glBegin(GL_LINES);
-    if (g_layout_vertical) {
-        /* Horizontal divider along bottom of code panel */
+    if (code_panel_layout_mode() == CODE_PANEL_LAYOUT_TOP) {
+        /* Horizontal divider along bottom of code panel. */
         glVertex2f(0.0f, (float)cp_y);
         glVertex2f((float)g_win_w, (float)cp_y);
+    } else if (code_panel_layout_mode() == CODE_PANEL_LAYOUT_BOTTOM) {
+        /* Horizontal divider along top of code panel. */
+        glVertex2f(0.0f, (float)(cp_y + cp_h));
+        glVertex2f((float)g_win_w, (float)(cp_y + cp_h));
     } else {
         /* Vertical divider along right edge of code panel */
-        glVertex2f((float)panel_w, 0.0f);
-        glVertex2f((float)panel_w, (float)g_win_h);
+        glVertex2f((float)(cp_x + cp_w), 0.0f);
+        glVertex2f((float)(cp_x + cp_w), (float)g_win_h);
     }
     glEnd();
     glDisable(GL_BLEND);
@@ -3539,6 +3564,8 @@ static float val_to_slider_t(float val, float scale) {
 #define VAR_REPLAY_CLEARANCE 10
 
 static float g_var_panel_replay_lift_px = 0.0f;
+static float g_var_panel_lift_update_time = -1.0f;
+static float g_var_panel_lift_update_target = -1.0f;
 
 static float var_panel_replay_target_lift_px(void) {
     float target = (float)((REPLAY_HUD_BOTTOM_Y + VAR_REPLAY_CLEARANCE)
@@ -3552,6 +3579,12 @@ static float var_panel_replay_lift(void) {
     if (g_replay_active)
         target = var_panel_replay_target_lift_px();
 
+    if (g_var_panel_lift_update_time == g_anim_time &&
+        g_var_panel_lift_update_target == target)
+        return g_var_panel_replay_lift_px;
+    g_var_panel_lift_update_time = g_anim_time;
+    g_var_panel_lift_update_target = target;
+
     /* Exponential-decay style easing toward target (and back to 0 when replay ends). */
     g_var_panel_replay_lift_px += (target - g_var_panel_replay_lift_px) * 0.22f;
     if (fabsf(target - g_var_panel_replay_lift_px) < 0.25f)
@@ -3561,20 +3594,40 @@ static float var_panel_replay_lift(void) {
 }
 
 /* Geometry in render coords (y=0 at bottom). */
-static void var_panel_geom(int *px, int *py, int *pw, int *ph) {
+void var_panel_rect(int *px, int *py, int *pw, int *ph) {
     int sc_x, sc_y, sc_w, sc_h;
+    int panel_w, panel_h, panel_x, panel_y;
+    int min_y, max_y;
+
     scene_rect(&sc_x, &sc_y, &sc_w, &sc_h);
-    *pw = VAR_PANEL_W;
-    *ph = VAR_TITLE_H + g_num_predef_vars * VAR_ROW_H + 2 * VAR_PANEL_PAD;
-    *px = sc_x + sc_w - *pw - 8;
-    if (*px < sc_x + 4) *px = sc_x + 4;
-    *py = sc_y + VAR_PANEL_BASE_Y + STATUSBAR_H + (int)lroundf(var_panel_replay_lift());
+    panel_w = VAR_PANEL_W;
+    panel_h = VAR_TITLE_H + g_num_predef_vars * VAR_ROW_H + 2 * VAR_PANEL_PAD;
+    panel_x = sc_x + sc_w - panel_w - 8;
+    if (panel_x < sc_x + 4) panel_x = sc_x + 4;
+
+    panel_y = sc_y + VAR_PANEL_BASE_Y + STATUSBAR_H
+            + (int)lroundf(var_panel_replay_lift());
+    min_y = sc_y + STATUSBAR_H + 4;
+    max_y = sc_y + sc_h - panel_h - 4;
+    if (max_y >= min_y) {
+        if (panel_y < min_y) panel_y = min_y;
+        if (panel_y > max_y) panel_y = max_y;
+    } else {
+        panel_y = code_panel_layout_mode() == CODE_PANEL_LAYOUT_TOP
+                ? sc_y + sc_h - panel_h - 4
+                : sc_y + 4;
+    }
+
+    if (px) *px = panel_x;
+    if (py) *py = panel_y;
+    if (pw) *pw = panel_w;
+    if (ph) *ph = panel_h;
 }
 
 /* Return 1 if GLUT screen coord (gx, gy) is in the panel; sets *out_row. */
 int var_panel_hit(int gx, int gy, int *out_row) {
     int px, py, pw, ph;
-    var_panel_geom(&px, &py, &pw, &ph);
+    var_panel_rect(&px, &py, &pw, &ph);
     int ry = g_win_h - gy;
     if (gx < px || gx >= px + pw || ry < py || ry >= py + ph) return 0;
     int inner_top = py + ph - VAR_PANEL_PAD - VAR_TITLE_H;
@@ -3654,7 +3707,7 @@ void render_var_panel(void) {
     if (!g_show_var_panel) return;
 
     int px, py, pw, ph;
-    var_panel_geom(&px, &py, &pw, &ph);
+    var_panel_rect(&px, &py, &pw, &ph);
 
     begin_2d();
     glEnable(GL_BLEND);
@@ -3878,7 +3931,9 @@ void handle_code_panel_click(int mx, int my) {
         navigate_to_line(target);
     }
 
-    int panel_w = (int)(g_win_w * g_panel_frac);
+    int cp_w;
+    code_panel_rect(NULL, NULL, &cp_w, NULL);
+    int panel_w = cp_w;
     int linenum_w = 4 * FONT_W;
     int idx_col_w = g_show_indices ? (6 * FONT_W) : 0;
     int text_x = CODE_MARGIN_X + linenum_w + FONT_W + idx_col_w;

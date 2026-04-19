@@ -137,12 +137,13 @@ static int test_code_panel_row_count_for_text(const char *text, int first_x,
 }
 
 static int code_panel_header_row_count(void) {
-    int panel_w = (int)(g_win_w * g_panel_frac);
+    int panel_w;
     int linenum_w = 4 * FONT_W;
     int idx_col_w = g_show_indices ? (6 * FONT_W) : 0;
     int text_x = CODE_MARGIN_X + linenum_w + FONT_W + idx_col_w;
     int rows = 0;
 
+    code_panel_rect(NULL, NULL, &panel_w, NULL);
     for (int i = 0; i < g_workspace_header_line_count; i++)
         rows += test_code_panel_row_count_for_text(g_workspace_header_lines[i], text_x, panel_w);
     for (int i = 0; g_header_pre[i]; i++)
@@ -158,19 +159,20 @@ static int code_panel_header_row_count(void) {
 }
 
 static int code_panel_mouse_y_for_cmd(int cmd_idx) {
-    int panel_w = (int)(g_win_w * g_panel_frac);
+    int cp_y, cp_h, panel_w;
     int linenum_w = 4 * FONT_W;
     int idx_col_w = g_show_indices ? (6 * FONT_W) : 0;
     int text_x = CODE_MARGIN_X + linenum_w + FONT_W + idx_col_w;
     int doc_line = code_panel_header_row_count();
 
+    code_panel_rect(NULL, &cp_y, &panel_w, &cp_h);
     for (int i = 0; i < cmd_idx && i < g_num_cmds; i++) {
         doc_line += test_code_panel_row_count_for_text(g_cmds[i].source,
                                                        text_x, panel_w);
     }
 
     int vis = doc_line - g_scroll;
-    int line_y_start = g_win_h - CODE_MARGIN_Y - 2 * LINE_H;
+    int line_y_start = cp_y + cp_h - CODE_MARGIN_Y - 2 * LINE_H;
     int gl_y = line_y_start - vis * LINE_H + 1;
     return g_win_h - gl_y;
 }

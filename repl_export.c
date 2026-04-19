@@ -1,5 +1,6 @@
 #include "sample.h"
 #include "repl_core_internal.h"
+#include "ui_panels.h"
 
 const char *g_header_pre[] = {
     "#include <gl_includes.h>",
@@ -132,6 +133,11 @@ int parse_workspace_header_line(const char *line) {
         p++;
         while (*p && isspace((unsigned char)*p)) p++;
         int val = (int)strtol(p, NULL, 10);
+        if (strcmp(slug, "top_code_panel") == 0) {
+            g_code_panel_layout = val ? CODE_PANEL_LAYOUT_TOP
+                                      : CODE_PANEL_LAYOUT_LEFT;
+            return 1;
+        }
         for (int i = 0; i < CFG_ITEM_COUNT; i++) {
             char item_slug[32];
             workspace_slug_from_name(g_cfg_items[i].label, item_slug, sizeof(item_slug));
@@ -2262,12 +2268,13 @@ void repl_dump_code_panel_text(FILE *out) {
 
 void repl_dump_code_panel_visual_text(FILE *out) {
     FILE *dst = out ? out : stdout;
-    int panel_w = (int)(g_win_w * g_panel_frac);
+    int panel_w;
     int linenum_w = 4 * FONT_W;
     int idx_col_w = g_show_indices ? (6 * FONT_W) : 0;
     int idx_x = CODE_MARGIN_X + linenum_w + FONT_W;
     int text_x = idx_x + idx_col_w;
 
+    code_panel_rect(NULL, NULL, &panel_w, NULL);
     update_render_state_strings();
     update_cam_lines();
 

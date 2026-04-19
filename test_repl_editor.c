@@ -1,6 +1,7 @@
 #include "repl_core_internal.h"
 #include "sample.h"
 #include "profile_panel.h"
+#include "ui_panels.h"
 #include <stdio.h>
 #include <string.h>
 
@@ -53,6 +54,14 @@ static void assert_status_contains(const char *label, const char *needle) {
     ASSERT_TRUE(label, strstr(g_status, needle) != NULL);
 }
 
+static int cfg_row_for_value(int *value) {
+    for (int i = 0; i < CFG_ITEM_COUNT; i++) {
+        if (g_cfg_items[i].value == value)
+            return i;
+    }
+    return -1;
+}
+
 static void assert_float_decl_rejected_atomic(const char *label,
                                               const char *src,
                                               const char *rejected_name,
@@ -85,7 +94,93 @@ int main() {
     init_predef_vars();
     printf("--- repl_editor tests ---\n");
 
-    /* 1. Undo when nothing to undo — must be first, before any push */
+    /* 0. Code/scene panel geometry supports left, top, and bottom layouts */
+    {
+        int x, y, w, h;
+        g_win_w = 1000;
+        g_win_h = 800;
+        g_panel_frac = 0.25f;
+
+        g_code_panel_layout = CODE_PANEL_LAYOUT_LEFT;
+        code_panel_rect(&x, &y, &w, &h);
+        ASSERT_INT("left code x", x, 0);
+        ASSERT_INT("left code y", y, 0);
+        ASSERT_INT("left code w", w, 250);
+        ASSERT_INT("left code h", h, 800);
+        scene_rect(&x, &y, &w, &h);
+        ASSERT_INT("left scene x", x, 250);
+        ASSERT_INT("left scene y", y, 0);
+        ASSERT_INT("left scene w", w, 750);
+        ASSERT_INT("left scene h", h, 800);
+
+        g_code_panel_layout = CODE_PANEL_LAYOUT_TOP;
+        code_panel_rect(&x, &y, &w, &h);
+        ASSERT_INT("top code x", x, 0);
+        ASSERT_INT("top code y", y, 600);
+        ASSERT_INT("top code w", w, 1000);
+        ASSERT_INT("top code h", h, 200);
+        scene_rect(&x, &y, &w, &h);
+        ASSERT_INT("top scene x", x, 0);
+        ASSERT_INT("top scene y", y, 0);
+        ASSERT_INT("top scene w", w, 1000);
+        ASSERT_INT("top scene h", h, 600);
+
+        g_code_panel_layout = CODE_PANEL_LAYOUT_BOTTOM;
+        code_panel_rect(&x, &y, &w, &h);
+        ASSERT_INT("bottom code x", x, 0);
+        ASSERT_INT("bottom code y", y, 0);
+        ASSERT_INT("bottom code w", w, 1000);
+        ASSERT_INT("bottom code h", h, 200);
+        scene_rect(&x, &y, &w, &h);
+        ASSERT_INT("bottom scene x", x, 0);
+        ASSERT_INT("bottom scene y", y, 200);
+        ASSERT_INT("bottom scene w", w, 1000);
+        ASSERT_INT("bottom scene h", h, 600);
+
+        g_win_w = 1200;
+        g_win_h = 800;
+        g_panel_frac = CFG_DEFAULT_PANEL_FRAC;
+        g_code_panel_layout = CFG_DEFAULT_CODE_PANEL_LAYOUT;
+    }
+
+    /* 0b. Code panel config cycles Left -> Top -> Bottom and imports legacy top layout */
+    {
+        int row = cfg_row_for_value(&g_code_panel_layout);
+        ASSERT_TRUE("code panel cfg row exists", row >= 0);
+        if (row >= 0) {
+            g_code_panel_layout = CODE_PANEL_LAYOUT_LEFT;
+            repl_cfg_cycle_row(row, +1);
+            ASSERT_INT("code panel cfg cycles to top",
+                       g_code_panel_layout, CODE_PANEL_LAYOUT_TOP);
+            repl_cfg_cycle_row(row, +1);
+            ASSERT_INT("code panel cfg cycles to bottom",
+                       g_code_panel_layout, CODE_PANEL_LAYOUT_BOTTOM);
+            repl_cfg_cycle_row(row, +1);
+            ASSERT_INT("code panel cfg wraps to left",
+                       g_code_panel_layout, CODE_PANEL_LAYOUT_LEFT);
+        }
+
+        g_code_panel_layout = CODE_PANEL_LAYOUT_LEFT;
+        ASSERT_INT("parse code_panel cfg",
+                   parse_workspace_header_line("// @cfg code_panel = 2"), 1);
+        ASSERT_INT("parse code_panel bottom",
+                   g_code_panel_layout, CODE_PANEL_LAYOUT_BOTTOM);
+
+        ASSERT_INT("parse legacy top_code_panel cfg",
+                   parse_workspace_header_line("// @cfg top_code_panel = 1"), 1);
+        ASSERT_INT("legacy top_code_panel maps to top",
+                   g_code_panel_layout, CODE_PANEL_LAYOUT_TOP);
+
+        ASSERT_INT("parse legacy top_code_panel off cfg",
+                   parse_workspace_header_line("// @cfg top_code_panel = 0"), 1);
+        ASSERT_INT("legacy top_code_panel off maps to left",
+                   g_code_panel_layout, CODE_PANEL_LAYOUT_LEFT);
+
+        g_panel_frac = CFG_DEFAULT_PANEL_FRAC;
+        g_code_panel_layout = CFG_DEFAULT_CODE_PANEL_LAYOUT;
+    }
+
+    /* 1. Undo when nothing to undo — must run before any undo push */
     {
         /* g_undo_count starts at 0 (global zero-init); repl_reset_state() does
          * NOT clear the undo buffer, so run this before touching undo at all. */

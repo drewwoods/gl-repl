@@ -15,6 +15,7 @@ void render_help(void);
 void render_var_panel(void);
 void render_scene_status(void);
 
+void var_panel_rect(int *x, int *y, int *w, int *h);
 int  var_panel_hit(int gx, int gy, int *out_row);
 void ui_panels_open_config(void);
 int  ui_panels_handle_right_press(int mx, int my);  /* returns 1 if consumed */
