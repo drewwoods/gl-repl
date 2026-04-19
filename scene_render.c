@@ -1989,9 +1989,11 @@ static void draw_replay_hud(int scene_x, int scene_y, int scene_w, int scene_h) 
     /* Line 1 — "Replay  4.0 cmd/s | Polygon" in green; command count
      * is right-aligned so 4-digit totals don't push other fields around. */
     snprintf(progress_txt, sizeof(progress_txt),
-             "Replay  %.1f cmd/s  |  %s",
+             "Replay  %11.1f cmd/s  | %7s  | %s",
              g_replay_speed,
-             g_replay_mode == REPLAY_MODE_VERTEX ? "Vertex" : "Polygon");
+             g_replay_mode == REPLAY_MODE_VERTEX ? "Vertex" : "Polygon",
+             g_replay_expand_args ? "Code Expanded" : ""
+             );
     glColor3f(UI_ACCENT_GREEN_R, UI_ACCENT_GREEN_G, UI_ACCENT_GREEN_B);
     draw_string((float)text_col_x,
                 (float)(hud_y + REPLAY_HUD_TEXT_LINE1_Y),
@@ -2025,7 +2027,7 @@ static void draw_replay_hud(int scene_x, int scene_y, int scene_w, int scene_h) 
 
     /* Line 2 — compact kbd hints along the bottom in muted gray */
     snprintf(kbd_txt, sizeof(kbd_txt),
-             "Space pause  |  +/- speed  |  m mode  |  <> step  |  Esc stop");
+             "Space pause  |  +/- speed  |  m mode  |  e expand |  %c %c step |  Esc stop", 0xAB, 0xBB);
     glColor3f(0.533f, 0.533f, 0.533f);  /* #888 */
     draw_string((float)text_col_x,
                 (float)(hud_y + REPLAY_HUD_TEXT_LINE2_Y),

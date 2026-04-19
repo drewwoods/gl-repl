@@ -1628,6 +1628,10 @@ void keyboard_func(unsigned char key, int x, int y) {
                      : "Replay: polygon mode");
             return;
         }
+        if (key == 'e' || key == 'E') {
+            g_replay_expand_args = !g_replay_expand_args;
+            return;
+        }
         if (key == KEY_ESC) {
             replay_stop();
             set_status("Replay: off");
