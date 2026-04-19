@@ -433,7 +433,7 @@ int    g_show_vnums   = CFG_DEFAULT_VERTEX_LABELS;
 int    g_show_normals = CFG_DEFAULT_NORMAL_VECTORS;
 int    g_show_indices = CFG_DEFAULT_VERTEX_INDICES;
 int    g_wrap_at_comma = CFG_DEFAULT_WRAP_AT_COMMA;
-int    g_layout_vertical = CFG_DEFAULT_LAYOUT_VERTICAL;  /* 0=left code panel, 1=top code panel */
+int    g_code_panel_layout = CFG_DEFAULT_CODE_PANEL_LAYOUT;
 int    g_show_guides  = CFG_DEFAULT_VERTEX_GUIDES;
 int    g_xform_guide_mode = CFG_DEFAULT_XFORM_GUIDE_MODE; /* 0=World (strict OpenGL reverse-order), 1=Frame (anchor at pre-cursor translations) */
 int    g_autonormal   = 0;
@@ -4771,7 +4771,7 @@ void repl_reset_state(void) {
     g_line_smooth_enabled = CFG_DEFAULT_LINE_SMOOTH;
     g_init_attenuate_points = CFG_DEFAULT_ATTENUATE_POINTS;
     g_wrap_at_comma = CFG_DEFAULT_WRAP_AT_COMMA;
-    g_layout_vertical = CFG_DEFAULT_LAYOUT_VERTICAL;
+    g_code_panel_layout = CFG_DEFAULT_CODE_PANEL_LAYOUT;
     g_panel_frac = CFG_DEFAULT_PANEL_FRAC;
     g_anim_time = 0.0f;
     g_flat_dirty = 1;

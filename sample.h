@@ -69,6 +69,13 @@ typedef enum {
     AXES_THEME_COUNT
 } AxesTheme;
 
+typedef enum {
+    CODE_PANEL_LAYOUT_LEFT = 0,
+    CODE_PANEL_LAYOUT_TOP,
+    CODE_PANEL_LAYOUT_BOTTOM,
+    CODE_PANEL_LAYOUT_COUNT
+} CodePanelLayout;
+
 /* Default values for runtime-configurable state.
  * Used at both the variable definition site and in repl_reset_state() so the
  * two cannot drift.  Add a new entry here whenever a global's default appears
@@ -77,7 +84,7 @@ typedef enum {
 #define CFG_DEFAULT_LINE_SMOOTH       0
 #define CFG_DEFAULT_ATTENUATE_POINTS  1
 #define CFG_DEFAULT_WRAP_AT_COMMA     1
-#define CFG_DEFAULT_LAYOUT_VERTICAL   0
+#define CFG_DEFAULT_CODE_PANEL_LAYOUT CODE_PANEL_LAYOUT_LEFT
 #define CFG_DEFAULT_PANEL_FRAC        0.45f
 
 /* Grid major tick spacing. Values live in g_grid_major_steps[] and
@@ -407,7 +414,7 @@ extern int    g_show_vnums;
 extern int    g_show_normals;
 extern int    g_show_indices;
 extern int    g_wrap_at_comma;
-extern int    g_layout_vertical;
+extern int    g_code_panel_layout;
 extern int    g_show_guides;
 extern int    g_xform_guide_mode;     /* 0=World, 1=Frame */
 extern int    g_autonormal;

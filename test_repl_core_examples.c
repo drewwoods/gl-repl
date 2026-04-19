@@ -102,7 +102,7 @@ static void pin_code_panel_state(void) {
     g_backdrop_mode = CFG_DEFAULT_BACKDROP_MODE;
     g_show_outlines = CFG_DEFAULT_VERTEX_OUTLINES;
     g_accum_aa_enabled = 1;
-    g_layout_vertical = CFG_DEFAULT_LAYOUT_VERTICAL;
+    g_code_panel_layout = CFG_DEFAULT_CODE_PANEL_LAYOUT;
     g_multisample_enabled = CFG_DEFAULT_MULTISAMPLE;
     g_line_smooth_enabled = CFG_DEFAULT_LINE_SMOOTH;
 }
@@ -633,6 +633,7 @@ int main(int argc, char **argv) {
             "// @cfg axes = 5",
             "// @cfg accum_aa = 0",
             "// @cfg top_code_panel = 1",
+            "// @cfg code_panel = 2",
             "// camera",
             "glTranslatef(0.0f, 0.0f, -9.0f);",
             "glRotatef(11.0f, 1.0f, 0.0f, 0.0f);",
@@ -651,7 +652,7 @@ int main(int argc, char **argv) {
         ASSERT_TRUE("mixed cfg camera disallowed accum aa ignored",
                     g_accum_aa_enabled == 1);
         ASSERT_TRUE("mixed cfg camera disallowed layout ignored",
-                    g_layout_vertical == 0);
+                    g_code_panel_layout == CODE_PANEL_LAYOUT_LEFT);
         ASSERT_TRUE("mixed cfg camera rx preset",
                     fabsf(g_cam_rx - 11.0f) < 1e-4f);
         ASSERT_TRUE("mixed cfg camera ry preset",
@@ -673,6 +674,8 @@ int main(int argc, char **argv) {
                         strstr(dump, "// @cfg axes = 5") == NULL);
             ASSERT_TRUE("mixed cfg camera disallowed cfg hidden",
                         strstr(dump, "// @cfg accum_aa = 0") == NULL);
+            ASSERT_TRUE("mixed cfg camera layout cfg hidden",
+                        strstr(dump, "// @cfg code_panel = 2") == NULL);
             ASSERT_TRUE("mixed cfg camera marker hidden",
                         strstr(dump, "// camera") == NULL);
             ASSERT_TRUE("mixed cfg camera body kept",
