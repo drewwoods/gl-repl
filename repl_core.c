@@ -476,6 +476,7 @@ float  g_replay_accum = 0.0f;
 float  g_replay_fade_speed = 2.0f;
 int    g_replay_src_line = -1;
 int    g_replay_total_flat = 0;
+int    g_replay_expand_args = 1;
 static float g_replay_baseline_predef_vals[MAX_PREDEF_VARS];
 static int   g_replay_saved_t_playing = 1;
 static int   g_replay_last_src_line = -1;

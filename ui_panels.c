@@ -739,6 +739,7 @@ int code_panel_get_command_display_text(int cmd_idx, char *out, int out_size) {
     snprintf(out, out_size, "%s", g_cmds[cmd_idx].source);
 
     if (!g_replay_active ||
+        !g_replay_expand_args ||
         !g_cmds[cmd_idx].has_vars)
         return 1;
 
@@ -2704,6 +2705,7 @@ void render_code_panel(void) {
                 file_line++;
 
                 if (g_replay_active &&
+                    g_replay_expand_args &&
                     g_replay_src_line >= 0 && i == g_replay_src_line &&
                     g_cmds[i].has_vars &&
                     g_cmds[i].type != CMD_VAR_ASSIGN) {
