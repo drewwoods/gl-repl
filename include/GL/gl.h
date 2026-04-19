@@ -5,7 +5,13 @@
  * Minimal fixed-function OpenGL header for remote build environments that do
  * not have GL development packages installed. It intentionally implements
  * no-op functions: use it for compiling/tests, not for real rendering.
+ *
+ * Each stub calls gl_stub_tick() so headless benchmarks can snapshot how
+ * many times each GL entry point was hit, even though the stubs
+ * themselves do no wall-clock work.
  */
+
+#include <GL/gl_stub_counts.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -149,28 +155,29 @@ typedef double GLclampd;
 #define GL_OPERAND0_ALPHA 0x8598
 #define GL_REPLACE 0x1E01
 
-static inline void glAccum(GLenum op, GLfloat value) { (void)op; (void)value; }
-static inline void glBegin(GLenum mode) { (void)mode; }
-static inline void glBindTexture(GLenum target, GLuint texture) { (void)target; (void)texture; }
-static inline void glBlendFunc(GLenum sfactor, GLenum dfactor) { (void)sfactor; (void)dfactor; }
-static inline void glClear(GLbitfield mask) { (void)mask; }
-static inline void glClearColor(GLclampf red, GLclampf green, GLclampf blue, GLclampf alpha) { (void)red; (void)green; (void)blue; (void)alpha; }
-static inline void glColor3f(GLfloat red, GLfloat green, GLfloat blue) { (void)red; (void)green; (void)blue; }
-static inline void glColor4dv(const GLdouble *v) { (void)v; }
-static inline void glColor4f(GLfloat red, GLfloat green, GLfloat blue, GLfloat alpha) { (void)red; (void)green; (void)blue; (void)alpha; }
-static inline void glColorMask(GLboolean red, GLboolean green, GLboolean blue, GLboolean alpha) { (void)red; (void)green; (void)blue; (void)alpha; }
-static inline void glColorMaterial(GLenum face, GLenum mode) { (void)face; (void)mode; }
-static inline void glDepthMask(GLboolean flag) { (void)flag; }
-static inline void glDisable(GLenum cap) { (void)cap; }
-static inline void glEdgeFlag(GLboolean flag) { (void)flag; }
-static inline void glEnable(GLenum cap) { (void)cap; }
-static inline void glEnd(void) {}
-static inline void glFogf(GLenum pname, GLfloat param) { (void)pname; (void)param; }
-static inline void glFogfv(GLenum pname, const GLfloat *params) { (void)pname; (void)params; }
-static inline void glFogi(GLenum pname, GLint param) { (void)pname; (void)param; }
-static inline void glFrontFace(GLenum mode) { (void)mode; }
-static inline void glFrustum(GLdouble left, GLdouble right, GLdouble bottom, GLdouble top, GLdouble z_near, GLdouble z_far) { (void)left; (void)right; (void)bottom; (void)top; (void)z_near; (void)z_far; }
+static inline void glAccum(GLenum op, GLfloat value) { gl_stub_tick(GL_STUB_glAccum); (void)op; (void)value; }
+static inline void glBegin(GLenum mode) { gl_stub_tick(GL_STUB_glBegin); (void)mode; }
+static inline void glBindTexture(GLenum target, GLuint texture) { gl_stub_tick(GL_STUB_glBindTexture); (void)target; (void)texture; }
+static inline void glBlendFunc(GLenum sfactor, GLenum dfactor) { gl_stub_tick(GL_STUB_glBlendFunc); (void)sfactor; (void)dfactor; }
+static inline void glClear(GLbitfield mask) { gl_stub_tick(GL_STUB_glClear); (void)mask; }
+static inline void glClearColor(GLclampf red, GLclampf green, GLclampf blue, GLclampf alpha) { gl_stub_tick(GL_STUB_glClearColor); (void)red; (void)green; (void)blue; (void)alpha; }
+static inline void glColor3f(GLfloat red, GLfloat green, GLfloat blue) { gl_stub_tick(GL_STUB_glColor3f); (void)red; (void)green; (void)blue; }
+static inline void glColor4dv(const GLdouble *v) { gl_stub_tick(GL_STUB_glColor4dv); (void)v; }
+static inline void glColor4f(GLfloat red, GLfloat green, GLfloat blue, GLfloat alpha) { gl_stub_tick(GL_STUB_glColor4f); (void)red; (void)green; (void)blue; (void)alpha; }
+static inline void glColorMask(GLboolean red, GLboolean green, GLboolean blue, GLboolean alpha) { gl_stub_tick(GL_STUB_glColorMask); (void)red; (void)green; (void)blue; (void)alpha; }
+static inline void glColorMaterial(GLenum face, GLenum mode) { gl_stub_tick(GL_STUB_glColorMaterial); (void)face; (void)mode; }
+static inline void glDepthMask(GLboolean flag) { gl_stub_tick(GL_STUB_glDepthMask); (void)flag; }
+static inline void glDisable(GLenum cap) { gl_stub_tick(GL_STUB_glDisable); (void)cap; }
+static inline void glEdgeFlag(GLboolean flag) { gl_stub_tick(GL_STUB_glEdgeFlag); (void)flag; }
+static inline void glEnable(GLenum cap) { gl_stub_tick(GL_STUB_glEnable); (void)cap; }
+static inline void glEnd(void) { gl_stub_tick(GL_STUB_glEnd); }
+static inline void glFogf(GLenum pname, GLfloat param) { gl_stub_tick(GL_STUB_glFogf); (void)pname; (void)param; }
+static inline void glFogfv(GLenum pname, const GLfloat *params) { gl_stub_tick(GL_STUB_glFogfv); (void)pname; (void)params; }
+static inline void glFogi(GLenum pname, GLint param) { gl_stub_tick(GL_STUB_glFogi); (void)pname; (void)param; }
+static inline void glFrontFace(GLenum mode) { gl_stub_tick(GL_STUB_glFrontFace); (void)mode; }
+static inline void glFrustum(GLdouble left, GLdouble right, GLdouble bottom, GLdouble top, GLdouble z_near, GLdouble z_far) { gl_stub_tick(GL_STUB_glFrustum); (void)left; (void)right; (void)bottom; (void)top; (void)z_near; (void)z_far; }
 static inline void glGetFloatv(GLenum pname, GLfloat *params) {
+    gl_stub_tick(GL_STUB_glGetFloatv);
     if (pname == GL_MODELVIEW_MATRIX || pname == GL_PROJECTION_MATRIX || pname == GL_TEXTURE_MATRIX) {
         for (int i = 0; i < 16; i++) params[i] = (i % 5) == 0 ? 1.0f : 0.0f;
     } else if (pname == GL_COLOR_CLEAR_VALUE) {
@@ -184,6 +191,7 @@ static inline void glGetFloatv(GLenum pname, GLfloat *params) {
 }
 
 static inline void glGetIntegerv(GLenum pname, GLint *params) {
+    gl_stub_tick(GL_STUB_glGetIntegerv);
     if (pname == GL_VIEWPORT) {
         params[0] = 0;
         params[1] = 0;
@@ -195,42 +203,42 @@ static inline void glGetIntegerv(GLenum pname, GLint *params) {
         params[0] = 0;
     }
 }
-static inline GLboolean glIsEnabled(GLenum cap) { (void)cap; return GL_FALSE; }
-static inline void glLightfv(GLenum light, GLenum pname, const GLfloat *params) { (void)light; (void)pname; (void)params; }
-static inline void glLightModelfv(GLenum pname, const GLfloat *params) { (void)pname; (void)params; }
-static inline void glLightModeli(GLenum pname, GLint param) { (void)pname; (void)param; }
-static inline void glLineStipple(GLint factor, GLushort pattern) { (void)factor; (void)pattern; }
-static inline void glLineWidth(GLfloat width) { (void)width; }
-static inline void glLoadIdentity(void) {}
-static inline void glLoadMatrixf(const GLfloat *m) { (void)m; }
-static inline void glMaterialf(GLenum face, GLenum pname, GLfloat param) { (void)face; (void)pname; (void)param; }
-static inline void glMaterialfv(GLenum face, GLenum pname, const GLfloat *params) { (void)face; (void)pname; (void)params; }
-static inline void glMatrixMode(GLenum mode) { (void)mode; }
-static inline void glNormal3dv(const GLdouble *v) { (void)v; }
-static inline void glNormal3f(GLfloat nx, GLfloat ny, GLfloat nz) { (void)nx; (void)ny; (void)nz; }
-static inline void glPointParameterfv(GLenum pname, const GLfloat *params) { (void)pname; (void)params; }
-static inline void glPointSize(GLfloat size) { (void)size; }
-static inline void glPolygonMode(GLenum face, GLenum mode) { (void)face; (void)mode; }
-static inline void glPolygonOffset(GLfloat factor, GLfloat units) { (void)factor; (void)units; }
-static inline void glPopAttrib(void) {}
-static inline void glPopMatrix(void) {}
-static inline void glPushAttrib(GLbitfield mask) { (void)mask; }
-static inline void glPushMatrix(void) {}
-static inline void glRasterPos2f(GLfloat x, GLfloat y) { (void)x; (void)y; }
-static inline void glRasterPos3f(GLfloat x, GLfloat y, GLfloat z) { (void)x; (void)y; (void)z; }
-static inline void glRectf(GLfloat x1, GLfloat y1, GLfloat x2, GLfloat y2) { (void)x1; (void)y1; (void)x2; (void)y2; }
-static inline void glRotatef(GLfloat angle, GLfloat x, GLfloat y, GLfloat z) { (void)angle; (void)x; (void)y; (void)z; }
-static inline void glScalef(GLfloat x, GLfloat y, GLfloat z) { (void)x; (void)y; (void)z; }
-static inline void glScissor(GLint x, GLint y, GLsizei width, GLsizei height) { (void)x; (void)y; (void)width; (void)height; }
-static inline void glShadeModel(GLenum mode) { (void)mode; }
-static inline void glTexCoord2f(GLfloat s, GLfloat t) { (void)s; (void)t; }
-static inline void glTexEnvi(GLenum target, GLenum pname, GLint param) { (void)target; (void)pname; (void)param; }
-static inline void glTranslatef(GLfloat x, GLfloat y, GLfloat z) { (void)x; (void)y; (void)z; }
-static inline void glVertex2f(GLfloat x, GLfloat y) { (void)x; (void)y; }
-static inline void glVertex3dv(const GLdouble *v) { (void)v; }
-static inline void glVertex3f(GLfloat x, GLfloat y, GLfloat z) { (void)x; (void)y; (void)z; }
-static inline void glVertex3fv(const GLfloat *v) { (void)v; }
-static inline void glViewport(GLint x, GLint y, GLsizei width, GLsizei height) { (void)x; (void)y; (void)width; (void)height; }
+static inline GLboolean glIsEnabled(GLenum cap) { gl_stub_tick(GL_STUB_glIsEnabled); (void)cap; return GL_FALSE; }
+static inline void glLightfv(GLenum light, GLenum pname, const GLfloat *params) { gl_stub_tick(GL_STUB_glLightfv); (void)light; (void)pname; (void)params; }
+static inline void glLightModelfv(GLenum pname, const GLfloat *params) { gl_stub_tick(GL_STUB_glLightModelfv); (void)pname; (void)params; }
+static inline void glLightModeli(GLenum pname, GLint param) { gl_stub_tick(GL_STUB_glLightModeli); (void)pname; (void)param; }
+static inline void glLineStipple(GLint factor, GLushort pattern) { gl_stub_tick(GL_STUB_glLineStipple); (void)factor; (void)pattern; }
+static inline void glLineWidth(GLfloat width) { gl_stub_tick(GL_STUB_glLineWidth); (void)width; }
+static inline void glLoadIdentity(void) { gl_stub_tick(GL_STUB_glLoadIdentity); }
+static inline void glLoadMatrixf(const GLfloat *m) { gl_stub_tick(GL_STUB_glLoadMatrixf); (void)m; }
+static inline void glMaterialf(GLenum face, GLenum pname, GLfloat param) { gl_stub_tick(GL_STUB_glMaterialf); (void)face; (void)pname; (void)param; }
+static inline void glMaterialfv(GLenum face, GLenum pname, const GLfloat *params) { gl_stub_tick(GL_STUB_glMaterialfv); (void)face; (void)pname; (void)params; }
+static inline void glMatrixMode(GLenum mode) { gl_stub_tick(GL_STUB_glMatrixMode); (void)mode; }
+static inline void glNormal3dv(const GLdouble *v) { gl_stub_tick(GL_STUB_glNormal3dv); (void)v; }
+static inline void glNormal3f(GLfloat nx, GLfloat ny, GLfloat nz) { gl_stub_tick(GL_STUB_glNormal3f); (void)nx; (void)ny; (void)nz; }
+static inline void glPointParameterfv(GLenum pname, const GLfloat *params) { gl_stub_tick(GL_STUB_glPointParameterfv); (void)pname; (void)params; }
+static inline void glPointSize(GLfloat size) { gl_stub_tick(GL_STUB_glPointSize); (void)size; }
+static inline void glPolygonMode(GLenum face, GLenum mode) { gl_stub_tick(GL_STUB_glPolygonMode); (void)face; (void)mode; }
+static inline void glPolygonOffset(GLfloat factor, GLfloat units) { gl_stub_tick(GL_STUB_glPolygonOffset); (void)factor; (void)units; }
+static inline void glPopAttrib(void) { gl_stub_tick(GL_STUB_glPopAttrib); }
+static inline void glPopMatrix(void) { gl_stub_tick(GL_STUB_glPopMatrix); }
+static inline void glPushAttrib(GLbitfield mask) { gl_stub_tick(GL_STUB_glPushAttrib); (void)mask; }
+static inline void glPushMatrix(void) { gl_stub_tick(GL_STUB_glPushMatrix); }
+static inline void glRasterPos2f(GLfloat x, GLfloat y) { gl_stub_tick(GL_STUB_glRasterPos2f); (void)x; (void)y; }
+static inline void glRasterPos3f(GLfloat x, GLfloat y, GLfloat z) { gl_stub_tick(GL_STUB_glRasterPos3f); (void)x; (void)y; (void)z; }
+static inline void glRectf(GLfloat x1, GLfloat y1, GLfloat x2, GLfloat y2) { gl_stub_tick(GL_STUB_glRectf); (void)x1; (void)y1; (void)x2; (void)y2; }
+static inline void glRotatef(GLfloat angle, GLfloat x, GLfloat y, GLfloat z) { gl_stub_tick(GL_STUB_glRotatef); (void)angle; (void)x; (void)y; (void)z; }
+static inline void glScalef(GLfloat x, GLfloat y, GLfloat z) { gl_stub_tick(GL_STUB_glScalef); (void)x; (void)y; (void)z; }
+static inline void glScissor(GLint x, GLint y, GLsizei width, GLsizei height) { gl_stub_tick(GL_STUB_glScissor); (void)x; (void)y; (void)width; (void)height; }
+static inline void glShadeModel(GLenum mode) { gl_stub_tick(GL_STUB_glShadeModel); (void)mode; }
+static inline void glTexCoord2f(GLfloat s, GLfloat t) { gl_stub_tick(GL_STUB_glTexCoord2f); (void)s; (void)t; }
+static inline void glTexEnvi(GLenum target, GLenum pname, GLint param) { gl_stub_tick(GL_STUB_glTexEnvi); (void)target; (void)pname; (void)param; }
+static inline void glTranslatef(GLfloat x, GLfloat y, GLfloat z) { gl_stub_tick(GL_STUB_glTranslatef); (void)x; (void)y; (void)z; }
+static inline void glVertex2f(GLfloat x, GLfloat y) { gl_stub_tick(GL_STUB_glVertex2f); (void)x; (void)y; }
+static inline void glVertex3dv(const GLdouble *v) { gl_stub_tick(GL_STUB_glVertex3dv); (void)v; }
+static inline void glVertex3f(GLfloat x, GLfloat y, GLfloat z) { gl_stub_tick(GL_STUB_glVertex3f); (void)x; (void)y; (void)z; }
+static inline void glVertex3fv(const GLfloat *v) { gl_stub_tick(GL_STUB_glVertex3fv); (void)v; }
+static inline void glViewport(GLint x, GLint y, GLsizei width, GLsizei height) { gl_stub_tick(GL_STUB_glViewport); (void)x; (void)y; (void)width; (void)height; }
 
 #ifdef __cplusplus
 }
