@@ -165,6 +165,7 @@ CfgItem g_cfg_items[] = {
     { "CPU profile",      "Ctrl+w", &g_show_profile_panel,     PROFILE_PANEL_MODE_COUNT, profile_panel_mode_names },
     { "Replay",           "Ctrl+g", &g_replay_active,          2,                NULL              },
     { "Replay mode",      "m",      &g_replay_mode,            2,                replay_mode_names },
+    { "Replay expand",    "--",     &g_replay_expand_args,     2,                NULL              },
     { "Top code panel",   "--",     &g_layout_vertical,        2,                NULL              },
     { "Audio",            "--",     &g_audio_cfg_mode,         4,                audio_cfg_names   },
 };

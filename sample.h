@@ -433,6 +433,7 @@ extern float  g_replay_accum;
 extern float  g_replay_fade_speed;
 extern int    g_replay_src_line;
 extern int    g_replay_total_flat;
+extern int    g_replay_expand_args;
 
 /* Variable slider panel */
 extern int    g_show_var_panel;
