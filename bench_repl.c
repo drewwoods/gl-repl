@@ -17,6 +17,10 @@
  *   flatten_examples  — load each example then call repl_flatten_commands
  *   replay_examples   — start a replay and step it to completion
  *   replay_long       — feed a synthetic large scene and step replay to end
+ *   fade_batches      — drive execute_replay_fade_batches() with a packed
+ *                       batch buffer whose old_pcs sit deep in a long flat
+ *                       command stream (exercises the per-batch prefix
+ *                       walk that dominates late-replay fade-in cost).
  *
  * Output is one line per sub-benchmark with mean / min / iterations / per-op
  * cost. CSV mode (`--csv`) is suitable for diffing across machines.
@@ -401,6 +405,133 @@ static BenchResult bench_replay_long(int iters) {
     return r;
 }
 
+/* ---- bench: replay fade-batch rendering path -------------------------- */
+
+/* Scene built to emit a long flat-command stream of many small primitives
+ * so we can exercise the fade-batch rendering pass with large old_pc
+ * indices. We unroll a for-loop that emits one triangle per iteration;
+ * flatten caps us at MAX_COMMANDS flat cmds regardless of the iteration
+ * count, which is what we want for this benchmark — we just need a large
+ * g_num_flat_cmds. */
+static const char *const k_fade_bench_scene[] = {
+    "glEnable(GL_DEPTH_TEST);",
+    "glEnable(GL_LIGHTING);",
+    "float a;",
+    "float b;",
+    "for(i, 0, 600) {",
+        "a = i * 0.01;",
+        "b = sin(a);",
+        "glPushMatrix();",
+        "glTranslatef(a, b, 0);",
+        "glColor3f(0.4, 0.6, 0.8);",
+        "glBegin(GL_TRIANGLES);",
+        "glVertex3f(0, 0, 0);",
+        "glVertex3f(1, 0, 0);",
+        "glVertex3f(0, 1, 0);",
+        "glEnd();",
+        "glPopMatrix();",
+    "}",
+    NULL,
+};
+
+/* Populate a packed set of fade batches spaced near the tail of the
+ * flattened command stream. This mirrors "step N is late in a long
+ * replay": every batch's old_pc is large, so the old per-batch
+ * replay_find_open_* scans pay the full prefix cost. */
+static int populate_late_batches(int flat_cmds, int *old_pcs, int *new_pcs,
+                                 int max_batches) {
+    /* Anchor batches in the final quarter of the stream. Cap at
+     * REPLAY_FADE_BATCH_MAX (the bench helper clamps too, but staying
+     * inside the limit here keeps reporting honest). */
+    int count = max_batches;
+    int tail_start = flat_cmds * 3 / 4;
+    int span = flat_cmds - tail_start;
+    if (span < count * 2) {
+        /* Fallback for tiny flat counts — keeps the bench usable even if
+         * MAX_COMMANDS is reduced. */
+        count = span / 2;
+        if (count < 1) count = 1;
+    }
+
+    int step = span / count;
+    if (step < 2) step = 2;
+
+    for (int i = 0; i < count; i++) {
+        int old_pc = tail_start + i * step;
+        int new_pc = old_pc + 2;
+        if (old_pc >= flat_cmds) old_pc = flat_cmds - 2;
+        if (new_pc > flat_cmds) new_pc = flat_cmds;
+        old_pcs[i] = old_pc;
+        new_pcs[i] = new_pc;
+    }
+    return count;
+}
+
+static BenchResult bench_fade_batches(int iters) {
+    BenchResult r = { .name = "fade_batches", .unit = "calls",
+                      .min_sec = 1e18 };
+
+    /* Build the long scene and flatten once. The flatten pass runs
+     * inside replay_start(); we piggy-back on that to also capture
+     * g_num_flat_cmds (replay_start clamps g_num_flat_cmds during
+     * playback, so we snapshot before/after). */
+    repl_load_example_lines_for_test(k_fade_bench_scene);
+    mark_normals_dirty();
+    replay_start();
+    int flat_cmds = g_num_flat_cmds;
+    replay_stop();
+
+    /* Re-flatten after replay_stop so g_num_flat_cmds is the full stream
+     * (replay's clamp might still be in effect otherwise — we observed
+     * flat_cmds via the post-start snapshot above). */
+    mark_normals_dirty();
+    repl_flatten_commands();
+    flat_cmds = g_num_flat_cmds;
+
+    /* 32 batches mirrors a typical in-flight count at the default 30fps
+     * replay speed (REPLAY_FADE_DURATION is 0.5s). age=0.25s → alpha≈0.5
+     * so replay_batch_alpha() returns a non-zero value and the per-batch
+     * body runs. */
+    enum { N_BATCHES = 32 };
+    int old_pcs[N_BATCHES];
+    int new_pcs[N_BATCHES];
+    int installed_count = populate_late_batches(flat_cmds, old_pcs, new_pcs, N_BATCHES);
+    float age = 0.25f;
+
+    /* Calls-per-iter stays fixed across runs so per-call numbers are
+     * comparable. Bump up inner so a single iteration reliably exceeds
+     * timer resolution even in stubbed / very fast builds. */
+    int inner = 200;
+
+    for (int it = 0; it < iters; it++) {
+        double t0 = now_seconds();
+        for (int k = 0; k < inner; k++) {
+            /* Reinstall on every call so a fade batch that ticks its
+             * age past REPLAY_FADE_DURATION doesn't silently reduce
+             * the measured workload (replay_tick_fade_batches isn't
+             * called here, but keeping the install call in-loop also
+             * amortizes a tiny fraction of the setup cost into each
+             * measurement — intentional, since a real replay frame
+             * also re-registers batches as new steps arrive). */
+            repl_bench_fade_install(old_pcs, new_pcs, installed_count, age);
+            execute_replay_fade_batches();
+        }
+        double dt = now_seconds() - t0;
+        if (dt < r.min_sec) r.min_sec = dt;
+        r.total_sec += dt;
+        r.ops += inner;
+        r.iters++;
+    }
+
+    repl_bench_fade_clear();
+
+    if (!g_csv) {
+        fprintf(stderr, "  (fade_batches: flat_cmds=%d, batches=%d, age=%.3f)\n",
+                flat_cmds, installed_count, age);
+    }
+    return r;
+}
+
 /* ---- main -------------------------------------------------------------- */
 
 static void print_csv_header(void) {
@@ -416,7 +547,8 @@ static void usage(const char *prog) {
         "    feed_examples     full feed_line path on every example\n"
         "    flatten_examples  repl_flatten_commands per example\n"
         "    replay_examples   step replay through every example\n"
-        "    replay_long       synthetic 600-iter for-loop replay\n",
+        "    replay_long       synthetic 600-iter for-loop replay\n"
+        "    fade_batches      replay fade-batch rendering with late old_pcs\n",
         prog);
 }
 
@@ -475,6 +607,8 @@ int main(int argc, char **argv) {
         report(bench_replay_examples(iters));
     if (wants(only, "replay_long"))
         report(bench_replay_long(iters));
+    if (wants(only, "fade_batches"))
+        report(bench_fade_batches(iters));
 
     return 0;
 }
