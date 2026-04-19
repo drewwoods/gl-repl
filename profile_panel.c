@@ -114,6 +114,13 @@ void prof_frame_tick(void) {
 static const char *section_label(ProfSection s) {
     switch (s) {
     case PROF_SCENE_3D:    return "Scene 3D";
+    case PROF_SCENE_3D_SETUP:    return "  setup";
+    case PROF_SCENE_3D_FILL:     return "  fill";
+    case PROF_SCENE_3D_FADE:     return "  fade batches";
+    case PROF_SCENE_3D_HELPERS:  return "  helpers";
+    case PROF_SCENE_3D_OUTLINES: return "  outlines";
+    case PROF_SCENE_3D_OVERLAYS: return "  overlays";
+    case PROF_SCENE_3D_HUD:      return "  hud";
     case PROF_CODE_PANEL:  return "Code Panel";
     case PROF_CODE_PANEL_LAYOUT:   return "  layout";
     case PROF_CODE_PANEL_LAYOUT_GEOM:   return "    geom+rows";
@@ -150,8 +157,15 @@ int prof_code_panel_details_enabled(void) {
     return g_show_profile_panel == PROFILE_PANEL_DETAILS;
 }
 
-static int is_code_panel_detail_section(ProfSection s) {
-    return (s == PROF_CODE_PANEL_LAYOUT ||
+static int is_detail_section(ProfSection s) {
+    return (s == PROF_SCENE_3D_SETUP ||
+            s == PROF_SCENE_3D_FILL ||
+            s == PROF_SCENE_3D_FADE ||
+            s == PROF_SCENE_3D_HELPERS ||
+            s == PROF_SCENE_3D_OUTLINES ||
+            s == PROF_SCENE_3D_OVERLAYS ||
+            s == PROF_SCENE_3D_HUD ||
+            s == PROF_CODE_PANEL_LAYOUT ||
             s == PROF_CODE_PANEL_LAYOUT_GEOM ||
             s == PROF_CODE_PANEL_LAYOUT_GEOM_SETUP ||
             s == PROF_CODE_PANEL_LAYOUT_GEOM_PRECOMPUTE ||
@@ -169,7 +183,7 @@ static int is_code_panel_detail_section(ProfSection s) {
 }
 
 static int section_visible(ProfSection s) {
-    if (!prof_code_panel_details_enabled() && is_code_panel_detail_section(s))
+    if (!prof_code_panel_details_enabled() && is_detail_section(s))
         return 0;
     return 1;
 }
@@ -278,7 +292,7 @@ void render_profile_panel(void) {
             glColor3f(0.80f, 0.85f, 1.00f);
         else if (stale >= PROF_STALE_FRAMES)
             glColor3f(0.35f, 0.35f, 0.42f);
-        else if (is_code_panel_detail_section(s))
+        else if (is_detail_section(s))
             glColor3f(0.62f, 0.68f, 0.80f);
         else
             glColor3f(0.72f, 0.78f, 0.90f);

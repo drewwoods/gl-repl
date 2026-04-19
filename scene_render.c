@@ -7,6 +7,7 @@
 #include "repl_core.h"
 #include "scene_render.h"
 #include "ui_panels.h"
+#include "profile_panel.h"
 
 /* ========================================================================= */
 /* 3D scene helpers                                                           */
@@ -2374,6 +2375,7 @@ void render_3d_scene(void) {
     if (sc_w < 1) sc_w = 1;
     if (sc_h < 1) sc_h = 1;
 
+    prof_begin(PROF_SCENE_3D_SETUP);
     glPushAttrib(GL_ALL_ATTRIB_BITS);
     glViewport(sc_x, sc_y, sc_w, sc_h);
 
@@ -2416,6 +2418,7 @@ void render_3d_scene(void) {
     else glDisable(GL_LINE_SMOOTH);
 
     if (g_wireframe) glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+    prof_end(PROF_SCENE_3D_SETUP);
 
     {
         int fill_limit = g_num_flat_cmds;
@@ -2423,13 +2426,16 @@ void render_3d_scene(void) {
         if (replay_has_active_fades())
             g_num_flat_cmds = replay_fill_base_limit();
 
+        prof_begin(PROF_SCENE_3D_FILL);
         glPushMatrix();
         execute_commands();
         glPopMatrix();
+        prof_end(PROF_SCENE_3D_FILL);
 
         g_num_flat_cmds = fill_limit;
 
         if (replay_has_active_fades()) {
+            prof_begin(PROF_SCENE_3D_FADE);
             setup_lights();
             glDisable(GL_LIGHTING);
             glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, mspec);
@@ -2447,6 +2453,7 @@ void render_3d_scene(void) {
             glPushMatrix();
             execute_replay_fade_batches();
             glPopMatrix();
+            prof_end(PROF_SCENE_3D_FADE);
         }
     }
 
@@ -2455,15 +2462,18 @@ void render_3d_scene(void) {
     /* Draw translucent scene helpers after the main geometry so antialiased
      * edges blend against the final background color rather than the clear
      * color from earlier in the frame. */
+    prof_begin(PROF_SCENE_3D_HELPERS);
     draw_backdrop();
     draw_grid();
     draw_axes();
     draw_orbit_target();
+    prof_end(PROF_SCENE_3D_HELPERS);
 
     /* Polygon outline overlay (optional) + current-block highlight.
      * Each overlay pass is wrapped in push/pop so transforms don't bleed
      * between passes.  CMD_TRANSLATE3F is replayed within each pass so
      * outlines are positioned correctly even when transforms separate blocks. */
+    prof_begin(PROF_SCENE_3D_OUTLINES);
     glDisable(GL_LIGHTING);
     glEnable(GL_DEPTH_TEST);
     glDepthMask(GL_FALSE);
@@ -2577,8 +2587,10 @@ void render_3d_scene(void) {
     glDisable(GL_POLYGON_OFFSET_LINE);
     glDepthMask(GL_TRUE);
     glDisable(GL_BLEND);
+    prof_end(PROF_SCENE_3D_OUTLINES);
 
     /* Vertex dots — replay transforms so dots match the filled geometry */
+    prof_begin(PROF_SCENE_3D_OVERLAYS);
     glPushMatrix();
     /* Snapshot the pure camera-view matrix (before any user transforms are
      * applied below) so the transform guide can render in world axes at an
@@ -2719,7 +2731,9 @@ void render_3d_scene(void) {
     glPopMatrix();
     glDisable(GL_BLEND);
     if (g_user_lighting_enabled) glEnable(GL_LIGHTING);
+    prof_end(PROF_SCENE_3D_OVERLAYS);
 
+    prof_begin(PROF_SCENE_3D_HUD);
     if (replay_tess_preview)
         draw_replay_tess_preview();
 
@@ -2730,4 +2744,5 @@ void render_3d_scene(void) {
     if (replaying)
         draw_replay_hud(sc_x, sc_y, sc_w, sc_h);
     glPopAttrib();
+    prof_end(PROF_SCENE_3D_HUD);
 }
