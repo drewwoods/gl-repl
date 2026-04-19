@@ -496,9 +496,10 @@ static float           g_execute_alpha_scale = 1.0f;
 /* Skip expensive geometry-emitting commands (vertices, quadrics, tess) for
  * pc < this value.  State-setting commands (transforms, color, enable, var
  * assign, etc.) still run so the GL state at pc == skip_before matches a
- * full walk from 0.  Used by the replay fade pass so each fade batch only
- * re-rasterizes its own [old_pc, new_pc] range instead of the whole prefix
- * already drawn by the main fill pass. */
+ * full walk from 0.  Used by the replay fade pass to skip all primitives
+ * that sit before the batch's active region; the caller pulls skip_before
+ * back to the enclosing CMD_BEGIN / CMD_TESS_BEGIN_POLYGON when vertex-mode
+ * batches land mid-primitive, so the full primitive still renders. */
 static int             g_execute_skip_geom_before_pc = 0;
 
 /* GLU quadric (shared for sphere/cylinder/disk drawing) */
@@ -3492,8 +3493,9 @@ void execute_commands(void) {
         }
         if (pc < g_execute_skip_geom_before_pc) {
             /* Prefix walk: accumulate state but skip the expensive geometry.
-             * Safe because fade batch boundaries are polygon-aligned, so the
-             * skipped range contains only complete begin/end and tess blocks. */
+             * The caller sets the skip limit to a point outside any open
+             * begin / tess polygon, so the skipped range contains only
+             * complete primitive blocks. */
             switch (g_flat_cmds[pc].type) {
             case CMD_BEGIN:
             case CMD_END:
@@ -3771,14 +3773,30 @@ void execute_replay_fade_batches(void) {
 
     for (int i = 0; i < g_replay_fade_batch_count; i++) {
         float alpha = replay_batch_alpha(&g_replay_fade_batches[i]);
+        int   old_pc = g_replay_fade_batches[i].old_pc;
+        int   skip_limit = old_pc;
+        int   open_begin;
+        int   open_tess;
 
         if (alpha <= 0.0f)
             continue;
 
+        /* In vertex mode, old_pc can land inside an open begin / tess block.
+         * Extend the render range back to the block's opening command so the
+         * full primitive (begin + all prior vertices + the new one) renders,
+         * matching the unoptimized walk. For polygon-mode batches and batches
+         * outside any block, skip_limit stays at old_pc. */
+        open_begin = replay_find_open_begin_before(old_pc);
+        if (open_begin >= 0 && open_begin < skip_limit)
+            skip_limit = open_begin;
+        open_tess = replay_find_open_tess_polygon_before(old_pc, NULL);
+        if (open_tess >= 0 && open_tess < skip_limit)
+            skip_limit = open_tess;
+
         restore_predef_values(g_replay_baseline_predef_vals);
         g_num_flat_cmds = g_replay_fade_batches[i].new_pc;
         g_execute_alpha_scale = alpha;
-        g_execute_skip_geom_before_pc = g_replay_fade_batches[i].old_pc;
+        g_execute_skip_geom_before_pc = skip_limit;
 
         glPushAttrib(GL_ALL_ATTRIB_BITS);
         glPushMatrix();
