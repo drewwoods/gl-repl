@@ -44,6 +44,7 @@ static double g_prof_start[PROF_SECTION_COUNT];
 static double g_prof_last_us[PROF_SECTION_COUNT];  /* last measured CPU µs */
 static double g_prof_avg_us[PROF_SECTION_COUNT];   /* EMA in µs            */
 static int    g_prof_stale[PROF_SECTION_COUNT];    /* frames since last sample */
+static double g_prof_accum_pending[PROF_SECTION_COUNT]; /* running total for accum-commit */
 static int    g_prof_initialized = 0;
 
 int g_show_profile_panel = PROFILE_PANEL_OFF;
@@ -61,10 +62,11 @@ static double cpu_now_us(void) {
 static void init_if_needed(void) {
     if (g_prof_initialized) return;
     for (int i = 0; i < PROF_SECTION_COUNT; i++) {
-        g_prof_start[i]   = 0.0;
-        g_prof_last_us[i] = 0.0;
-        g_prof_avg_us[i]  = 0.0;
-        g_prof_stale[i]   = PROF_STALE_FRAMES; /* treat as stale until first sample */
+        g_prof_start[i]         = 0.0;
+        g_prof_last_us[i]       = 0.0;
+        g_prof_avg_us[i]        = 0.0;
+        g_prof_stale[i]         = PROF_STALE_FRAMES; /* treat as stale until first sample */
+        g_prof_accum_pending[i] = 0.0;
     }
     g_prof_initialized = 1;
 }
@@ -93,6 +95,33 @@ void prof_end(ProfSection s) {
         g_prof_avg_us[s] = elapsed;  /* seed with first sample */
     else
         g_prof_avg_us[s] = PROF_EMA_ALPHA * elapsed
+                         + (1.0 - PROF_EMA_ALPHA) * g_prof_avg_us[s];
+}
+
+void prof_accum_reset(ProfSection s) {
+    if (s < 0 || s >= PROF_SECTION_COUNT) return;
+    init_if_needed();
+    g_prof_accum_pending[s] = 0.0;
+}
+
+void prof_accum_end(ProfSection s) {
+    if (s < 0 || s >= PROF_SECTION_COUNT) return;
+    init_if_needed();
+    double elapsed = cpu_now_us() - g_prof_start[s];
+    if (elapsed < 0.0) elapsed = 0.0;
+    g_prof_accum_pending[s] += elapsed;
+    g_prof_stale[s] = 0;
+}
+
+void prof_accum_commit(ProfSection s) {
+    if (s < 0 || s >= PROF_SECTION_COUNT) return;
+    init_if_needed();
+    double total = g_prof_accum_pending[s];
+    g_prof_last_us[s] = total;
+    if (g_prof_avg_us[s] == 0.0)
+        g_prof_avg_us[s] = total;
+    else
+        g_prof_avg_us[s] = PROF_EMA_ALPHA * total
                          + (1.0 - PROF_EMA_ALPHA) * g_prof_avg_us[s];
 }
 

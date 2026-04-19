@@ -3852,6 +3852,10 @@ static void display_func(void) {
     }
 
     /* 3D scene — with optional accumulation-buffer jitter AA */
+    /* Reset subsection accumulators so timings across all AA samples sum up
+     * correctly before the first (or only) render_3d_scene() call. */
+    for (ProfSection s = PROF_SCENE_3D_SETUP; s <= PROF_SCENE_3D_HUD; s++)
+        prof_accum_reset(s);
     prof_begin(PROF_SCENE_3D);
     if (g_use_accum && g_accum_aa_enabled && g_accum_samples > 1) {
         /* Clear the accumulation buffer once per frame */
@@ -3876,6 +3880,9 @@ static void display_func(void) {
         render_3d_scene();
     }
     prof_end(PROF_SCENE_3D);
+    /* Commit the accumulated subsection totals now that all AA samples are done. */
+    for (ProfSection s = PROF_SCENE_3D_SETUP; s <= PROF_SCENE_3D_HUD; s++)
+        prof_accum_commit(s);
 
     /* 2D overlays in full window coords */
     glViewport(0, 0, g_win_w, g_win_h);

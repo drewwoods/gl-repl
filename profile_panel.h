@@ -47,6 +47,24 @@ typedef enum {
 void prof_begin(ProfSection s);
 void prof_end(ProfSection s);
 
+/* Accumulation-aware timing helpers for sections called inside a multi-pass
+ * loop (e.g. accumulation-buffer AA).
+ *
+ * Usage:
+ *   prof_accum_reset(s);          // once, before the loop
+ *   for (...) {
+ *       prof_begin(s);
+ *       ...work...
+ *       prof_accum_end(s);        // adds elapsed to a running total
+ *   }
+ *   prof_accum_commit(s);         // stores total as last_us, updates EMA
+ *
+ * For single-pass callers the same pattern works correctly: the total equals
+ * the single elapsed time. */
+void prof_accum_reset(ProfSection s);
+void prof_accum_end(ProfSection s);
+void prof_accum_commit(ProfSection s);
+
 /* Mark the start of a new frame so per-frame sections can detect staleness. */
 void prof_frame_tick(void);
 
