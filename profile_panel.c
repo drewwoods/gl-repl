@@ -1,20 +1,29 @@
 /*
  * profile_panel.c — CPU overhead profiling overlay panel.
  *
- * Uses CLOCK_PROCESS_CPUTIME_ID so preemption and kernel time are excluded,
- * giving a cleaner picture of the process's own CPU burn per section.
+ * Uses a fast monotonic clock so sampling doesn't itself dominate the
+ * sections it measures:
+ *   - Linux:  clock_gettime(CLOCK_MONOTONIC) — served from the vDSO, no
+ *             syscall on modern kernels.
+ *   - macOS:  mach_absolute_time() — direct timer read, no syscall.
+ * Wall clock rather than CPU time; in a single-threaded render loop the
+ * two differ only when the process is preempted, which is exactly what a
+ * frame-budget profiler should surface anyway.
  *
  * Each section is timed with prof_begin/prof_end.  The last measured value
  * and an exponential moving average (EMA, alpha = 0.08) are maintained.
  * Sections that didn't run this frame are shown with their most recent value
  * dimmed; after PROF_STALE_FRAMES frames without a sample they show "--".
  */
-/* CLOCK_PROCESS_CPUTIME_ID requires _POSIX_C_SOURCE >= 199309L */
 #define _POSIX_C_SOURCE 200809L
 #include "sample.h"
 #include "profile_panel.h"
 
 #include <time.h>
+
+#ifdef __APPLE__
+#include <mach/mach_time.h>
+#endif
 
 /* ========================================================================= */
 /* Configuration                                                              */
@@ -53,11 +62,26 @@ int g_show_profile_panel = PROFILE_PANEL_OFF;
 /* Helpers                                                                    */
 /* ========================================================================= */
 
+#ifdef __APPLE__
+static double cpu_now_us(void) {
+    static mach_timebase_info_data_t tb = {0, 0};
+    if (tb.denom == 0) mach_timebase_info(&tb);
+    /* mach_absolute_time returns ticks; convert to nanoseconds via the
+     * timebase, then to microseconds. Division by 1000.0 is in double to
+     * keep sub-microsecond resolution for the EMA. */
+    uint64_t ticks = mach_absolute_time();
+    double nsec = (double)ticks * (double)tb.numer / (double)tb.denom;
+    return nsec / 1000.0;
+}
+#else
 static double cpu_now_us(void) {
     struct timespec ts;
-    clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &ts);
+    /* CLOCK_MONOTONIC is served by the vDSO on Linux, so this is a
+     * single register-load worth of overhead rather than a full syscall. */
+    clock_gettime(CLOCK_MONOTONIC, &ts);
     return (double)ts.tv_sec * 1e6 + (double)ts.tv_nsec / 1000.0;
 }
+#endif
 
 static void init_if_needed(void) {
     if (g_prof_initialized) return;
