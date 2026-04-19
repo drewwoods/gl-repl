@@ -1,5 +1,8 @@
 # Agent Notes
 
+This file captures durable repo guidance that came out of recent work on
+example metadata, presentation defaults, and camera behavior.
+
 ## Local GL Stub Headers
 
 This sample includes local no-op OpenGL, GLU, and GLUT headers under `include/`
@@ -50,3 +53,48 @@ make sample
 - `include/GL/glext.h`, `include/GL/glut.h`, `include/GLUT/glut.h`,
   `include/OpenGL/gl.h`, and `include/OpenGL/glu.h`: compatibility wrappers for
   the include styles used across platforms.
+
+## Example Metadata Invariants
+
+- Built-in examples in `repl_examples.c` can start with contiguous leading
+  `// @cfg slug = value` lines, followed optionally by a 5-line `// camera`
+  preset block.
+- `repl_core.c` consumes that leading metadata before feeding the remaining
+  example lines through the normal commit pipeline, so metadata stays hidden
+  from the code panel.
+- Example `@cfg` parsing reuses `parse_workspace_header_line()` from
+  `repl_export.c`, but only for scene-presentation slugs currently allowed by
+  the example loader:
+  `wireframe`, `grid`, `grid_major`, `grid_extent`, `axes`,
+  `vertex_labels`, `normal_vectors`, `vertex_outlines`, `vertex_points`,
+  `vertex_guides`, `light_indicators`, `backdrop`, `camera_rotate`.
+- Non-leading `@cfg` lines are not treated as metadata; they remain ordinary
+  comments.
+
+## Reset And Restore Rules
+
+- Every example load resets the allowed non-camera scene-presentation settings
+  to their built-in defaults before applying leading example `@cfg` metadata.
+  This prevents stale grid/axes/overlay/backdrop state from leaking between
+  examples.
+- Camera is intentionally excluded from that reset. Examples inherit the
+  current `g_cam_*` state unless they provide the explicit leading `// camera`
+  header.
+- `restore_user_scene()` still restores commands and predefined variables only.
+  Leaving an example does not restore camera or other presentation state.
+
+## Shared Defaults
+
+- Keep the single source of truth for example-owned presentation defaults in
+  the `CFG_DEFAULT_*` macro block in `sample.h`.
+- `repl_core.c` initializers, example reset helpers, and focused example tests
+  should reuse those macros instead of duplicating literals.
+
+## Touch Points And Validation
+
+- When changing example metadata behavior, inspect `repl_core.c`,
+  `repl_export.c`, `repl_examples.c`, `sample.h`, and
+  `test_repl_core_examples.c` together.
+- Use `make test_repl_core_examples` as the focused regression suite for this
+  area. Run `make test` if the change touches shared defaults or broader REPL
+  state.
