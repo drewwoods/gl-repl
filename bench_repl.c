@@ -43,6 +43,10 @@
 #include <string.h>
 #include <time.h>
 
+#ifdef OPENGL_VIBE_USE_GL_STUBS
+#include <GL/gl_stub_counts.h>
+#endif
+
 /* ---- Timekeeping ------------------------------------------------------- */
 
 static double now_seconds(void) {
@@ -503,6 +507,15 @@ static BenchResult bench_fade_batches(int iters) {
      * timer resolution even in stubbed / very fast builds. */
     int inner = 200;
 
+#ifdef OPENGL_VIBE_USE_GL_STUBS
+    /* Reset right before the timed region so the counter dump below
+     * reflects only the work driven by execute_replay_fade_batches()
+     * across the full iters×inner call count. repl_bench_fade_install
+     * doesn't invoke any GL stubs, so including it in the counted
+     * region is fine. */
+    gl_stub_counts_reset();
+#endif
+
     for (int it = 0; it < iters; it++) {
         double t0 = now_seconds();
         for (int k = 0; k < inner; k++) {
@@ -528,6 +541,10 @@ static BenchResult bench_fade_batches(int iters) {
     if (!g_csv) {
         fprintf(stderr, "  (fade_batches: flat_cmds=%d, batches=%d, age=%.3f)\n",
                 flat_cmds, installed_count, age);
+#ifdef OPENGL_VIBE_USE_GL_STUBS
+        fprintf(stderr, "  (GL stub calls per execute_replay_fade_batches():)\n");
+        gl_stub_counts_dump(stderr, "    ", r.ops);
+#endif
     }
     return r;
 }
