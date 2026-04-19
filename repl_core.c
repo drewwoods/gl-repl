@@ -3493,12 +3493,13 @@ void execute_commands(void) {
         }
         if (pc < g_execute_skip_geom_before_pc) {
             /* Prefix walk: accumulate state but skip the expensive geometry.
-             * The caller sets the skip limit to a point outside any open
-             * begin / tess polygon, so the skipped range contains only
-             * complete primitive blocks. */
+             * Structural commands (CMD_BEGIN, CMD_END, CMD_TESS_BEGIN_POLYGON,
+             * CMD_TESS_BEGIN_CONTOUR, CMD_TESS_END) are preserved so that in
+             * REPLAY_MODE_VERTEX - where old_pc/new_pc may fall inside an open
+             * begin/tess block - execute_commands still enters the right scope
+             * before emitting the incremental vertices that live at
+             * pc >= g_execute_skip_geom_before_pc. */
             switch (g_flat_cmds[pc].type) {
-            case CMD_BEGIN:
-            case CMD_END:
             case CMD_VERTEX3F:
             case CMD_VERTEX2F:
             case CMD_GLU_SPHERE:
@@ -3506,9 +3507,6 @@ void execute_commands(void) {
             case CMD_GLU_DISK:
             case CMD_GLU_PARTIAL_DISK:
             case CMD_GLUT_TORUS:
-            case CMD_TESS_BEGIN_POLYGON:
-            case CMD_TESS_BEGIN_CONTOUR:
-            case CMD_TESS_END:
             case CMD_TESS_VERTEX:
                 pc++;
                 continue;
@@ -3844,11 +3842,19 @@ void execute_replay_fade_batches(void) {
         glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
         glPolygonMode(GL_FRONT_AND_BACK, g_wireframe ? GL_LINE : GL_FILL);
         glColor4f(0.70f, 0.70f, 0.80f, alpha);
+        /* execute_commands() emits glTranslatef/glRotatef/glScalef directly into
+         * the current matrix, and unwind_tracked_transform_stack only pops
+         * explicit push/pop pairs.  Isolate each batch with a push/pop so later
+         * batches start from the caller's matrix rather than the previous
+         * batch's accumulated transform. */
+        glPushMatrix();
         prof_accum_end(PROF_SCENE_3D_FADE_BATCH_PREP);
 
         prof_begin(PROF_SCENE_3D_FADE_BATCH_EXEC);
         execute_commands();
         prof_accum_end(PROF_SCENE_3D_FADE_BATCH_EXEC);
+
+        glPopMatrix();
     }
 
     prof_begin(PROF_SCENE_3D_FADE_BATCH_POST);

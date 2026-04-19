@@ -14,10 +14,10 @@ typedef enum {
     PROF_SCENE_3D_SETUP,     /* projection/camera/lights/material setup */
     PROF_SCENE_3D_FILL,      /* execute_commands() main fill pass */
     PROF_SCENE_3D_FADE,      /* replay fade batches pass */
-    PROF_SCENE_3D_FADE_PROLOGUE,    /* setup_lights + outer state setup */
-    PROF_SCENE_3D_FADE_BATCH_PREP,  /* per-batch find-open + push_attrib + color */
+    PROF_SCENE_3D_FADE_PROLOGUE,    /* outer fade-pass state setup */
+    PROF_SCENE_3D_FADE_BATCH_PREP,  /* per-batch find-open + color */
     PROF_SCENE_3D_FADE_BATCH_EXEC,  /* per-batch execute_commands */
-    PROF_SCENE_3D_FADE_BATCH_POST,  /* per-batch pop_attrib + matrix restore */
+    PROF_SCENE_3D_FADE_BATCH_POST,  /* per-batch post-execute cleanup */
     PROF_SCENE_3D_HELPERS,   /* backdrop/grid/axes/orbit-target */
     PROF_SCENE_3D_OUTLINES,  /* polygon outline + current-block highlight */
     PROF_SCENE_3D_OVERLAYS,  /* vertex dots, vertex/normal/transform guides */
