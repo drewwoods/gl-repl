@@ -493,6 +493,13 @@ typedef struct {
 static ReplayFadeBatch g_replay_fade_batches[REPLAY_FADE_BATCH_MAX];
 static int             g_replay_fade_batch_count = 0;
 static float           g_execute_alpha_scale = 1.0f;
+/* Skip expensive geometry-emitting commands (vertices, quadrics, tess) for
+ * pc < this value.  State-setting commands (transforms, color, enable, var
+ * assign, etc.) still run so the GL state at pc == skip_before matches a
+ * full walk from 0.  Used by the replay fade pass so each fade batch only
+ * re-rasterizes its own [old_pc, new_pc] range instead of the whole prefix
+ * already drawn by the main fill pass. */
+static int             g_execute_skip_geom_before_pc = 0;
 
 /* GLU quadric (shared for sphere/cylinder/disk drawing) */
 GLUquadric *g_quadric = NULL;
@@ -3483,6 +3490,30 @@ void execute_commands(void) {
             pc++;
             continue;
         }
+        if (pc < g_execute_skip_geom_before_pc) {
+            /* Prefix walk: accumulate state but skip the expensive geometry.
+             * Safe because fade batch boundaries are polygon-aligned, so the
+             * skipped range contains only complete begin/end and tess blocks. */
+            switch (g_flat_cmds[pc].type) {
+            case CMD_BEGIN:
+            case CMD_END:
+            case CMD_VERTEX3F:
+            case CMD_VERTEX2F:
+            case CMD_GLU_SPHERE:
+            case CMD_GLU_CYLINDER:
+            case CMD_GLU_DISK:
+            case CMD_GLU_PARTIAL_DISK:
+            case CMD_GLUT_TORUS:
+            case CMD_TESS_BEGIN_POLYGON:
+            case CMD_TESS_BEGIN_CONTOUR:
+            case CMD_TESS_END:
+            case CMD_TESS_VERTEX:
+                pc++;
+                continue;
+            default:
+                break;
+            }
+        }
         switch (g_flat_cmds[pc].type) {
         case CMD_BEGIN:
             if (in_begin) glEnd();
@@ -3747,6 +3778,7 @@ void execute_replay_fade_batches(void) {
         restore_predef_values(g_replay_baseline_predef_vals);
         g_num_flat_cmds = g_replay_fade_batches[i].new_pc;
         g_execute_alpha_scale = alpha;
+        g_execute_skip_geom_before_pc = g_replay_fade_batches[i].old_pc;
 
         glPushAttrib(GL_ALL_ATTRIB_BITS);
         glPushMatrix();
@@ -3759,6 +3791,7 @@ void execute_replay_fade_batches(void) {
     }
 
     g_execute_alpha_scale = 1.0f;
+    g_execute_skip_geom_before_pc = 0;
     g_num_flat_cmds = saved_flat_count;
 }
 
