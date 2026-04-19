@@ -2418,7 +2418,7 @@ void render_3d_scene(void) {
     else glDisable(GL_LINE_SMOOTH);
 
     if (g_wireframe) glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
-    prof_end(PROF_SCENE_3D_SETUP);
+    prof_accum_end(PROF_SCENE_3D_SETUP);
 
     {
         int fill_limit = g_num_flat_cmds;
@@ -2430,7 +2430,7 @@ void render_3d_scene(void) {
         glPushMatrix();
         execute_commands();
         glPopMatrix();
-        prof_end(PROF_SCENE_3D_FILL);
+        prof_accum_end(PROF_SCENE_3D_FILL);
 
         g_num_flat_cmds = fill_limit;
 
@@ -2453,7 +2453,7 @@ void render_3d_scene(void) {
             glPushMatrix();
             execute_replay_fade_batches();
             glPopMatrix();
-            prof_end(PROF_SCENE_3D_FADE);
+            prof_accum_end(PROF_SCENE_3D_FADE);
         }
     }
 
@@ -2467,7 +2467,7 @@ void render_3d_scene(void) {
     draw_grid();
     draw_axes();
     draw_orbit_target();
-    prof_end(PROF_SCENE_3D_HELPERS);
+    prof_accum_end(PROF_SCENE_3D_HELPERS);
 
     /* Polygon outline overlay (optional) + current-block highlight.
      * Each overlay pass is wrapped in push/pop so transforms don't bleed
@@ -2587,7 +2587,7 @@ void render_3d_scene(void) {
     glDisable(GL_POLYGON_OFFSET_LINE);
     glDepthMask(GL_TRUE);
     glDisable(GL_BLEND);
-    prof_end(PROF_SCENE_3D_OUTLINES);
+    prof_accum_end(PROF_SCENE_3D_OUTLINES);
 
     /* Vertex dots — replay transforms so dots match the filled geometry */
     prof_begin(PROF_SCENE_3D_OVERLAYS);
@@ -2731,7 +2731,7 @@ void render_3d_scene(void) {
     glPopMatrix();
     glDisable(GL_BLEND);
     if (g_user_lighting_enabled) glEnable(GL_LIGHTING);
-    prof_end(PROF_SCENE_3D_OVERLAYS);
+    prof_accum_end(PROF_SCENE_3D_OVERLAYS);
 
     prof_begin(PROF_SCENE_3D_HUD);
     if (replay_tess_preview)
@@ -2744,5 +2744,5 @@ void render_3d_scene(void) {
     if (replaying)
         draw_replay_hud(sc_x, sc_y, sc_w, sc_h);
     glPopAttrib();
-    prof_end(PROF_SCENE_3D_HUD);
+    prof_accum_end(PROF_SCENE_3D_HUD);
 }
