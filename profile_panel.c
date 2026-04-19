@@ -170,6 +170,10 @@ static const char *section_label(ProfSection s) {
     case PROF_SCENE_3D_SETUP:    return "  setup";
     case PROF_SCENE_3D_FILL:     return "  fill";
     case PROF_SCENE_3D_FADE:     return "  fade batches";
+    case PROF_SCENE_3D_FADE_PROLOGUE:   return "    prologue";
+    case PROF_SCENE_3D_FADE_BATCH_PREP: return "    batch prep";
+    case PROF_SCENE_3D_FADE_BATCH_EXEC: return "    batch exec";
+    case PROF_SCENE_3D_FADE_BATCH_POST: return "    batch post";
     case PROF_SCENE_3D_HELPERS:  return "  helpers";
     case PROF_SCENE_3D_OUTLINES: return "  outlines";
     case PROF_SCENE_3D_OVERLAYS: return "  overlays";
@@ -214,6 +218,10 @@ static int is_detail_section(ProfSection s) {
     return (s == PROF_SCENE_3D_SETUP ||
             s == PROF_SCENE_3D_FILL ||
             s == PROF_SCENE_3D_FADE ||
+            s == PROF_SCENE_3D_FADE_PROLOGUE ||
+            s == PROF_SCENE_3D_FADE_BATCH_PREP ||
+            s == PROF_SCENE_3D_FADE_BATCH_EXEC ||
+            s == PROF_SCENE_3D_FADE_BATCH_POST ||
             s == PROF_SCENE_3D_HELPERS ||
             s == PROF_SCENE_3D_OUTLINES ||
             s == PROF_SCENE_3D_OVERLAYS ||

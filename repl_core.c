@@ -3767,50 +3767,96 @@ execute_done:;
 
 void execute_replay_fade_batches(void) {
     int saved_flat_count = g_num_flat_cmds;
+    int skip_limits[REPLAY_FADE_BATCH_MAX];
 
     if (!replay_has_active_fades())
         return;
 
+    prof_begin(PROF_SCENE_3D_FADE_PROLOGUE);
+
+    /* Compute per-batch skip_limit in a single linear sweep instead of the
+     * O(batches x old_pc) per-batch find_open_* scans.  Batches are stored
+     * newest-last and old_pc is monotonically non-decreasing, so we can walk
+     * g_flat_cmds[] once tracking the active begin / tess polygon and snapshot
+     * each batch's enclosing block as we cross its old_pc. */
+    {
+        int batch_idx = 0;
+        int open_begin = -1;
+        int open_tess = -1;
+        int tess_depth = 0;
+        int max_old_pc = g_replay_fade_batches[g_replay_fade_batch_count - 1].old_pc;
+        if (max_old_pc > g_num_flat_cmds) max_old_pc = g_num_flat_cmds;
+
+        for (int pc = 0; pc <= max_old_pc; pc++) {
+            while (batch_idx < g_replay_fade_batch_count &&
+                   g_replay_fade_batches[batch_idx].old_pc <= pc) {
+                int sl = g_replay_fade_batches[batch_idx].old_pc;
+                if (open_begin >= 0 && open_begin < sl) sl = open_begin;
+                if (open_tess  >= 0 && open_tess  < sl) sl = open_tess;
+                skip_limits[batch_idx++] = sl;
+            }
+            if (pc >= g_num_flat_cmds || !g_flat_cmds[pc].valid)
+                continue;
+            switch (g_flat_cmds[pc].type) {
+            case CMD_BEGIN: open_begin = pc; break;
+            case CMD_END:   open_begin = -1; break;
+            case CMD_TESS_BEGIN_POLYGON: open_tess = pc; tess_depth = 1; break;
+            case CMD_TESS_BEGIN_CONTOUR: if (tess_depth == 1) tess_depth = 2; break;
+            case CMD_TESS_END:
+                if (tess_depth == 2) tess_depth = 1;
+                else if (tess_depth == 1) { open_tess = -1; tess_depth = 0; }
+                break;
+            default: break;
+            }
+        }
+        while (batch_idx < g_replay_fade_batch_count) {
+            int sl = g_replay_fade_batches[batch_idx].old_pc;
+            if (open_begin >= 0 && open_begin < sl) sl = open_begin;
+            if (open_tess  >= 0 && open_tess  < sl) sl = open_tess;
+            skip_limits[batch_idx++] = sl;
+        }
+    }
+
+    /* Save outer GL state once.  Per-batch we re-apply just the small set of
+     * state we depend on (lighting/blend/polygon mode/color), which is far
+     * cheaper than glPushAttrib(GL_ALL_ATTRIB_BITS) per batch and still
+     * isolates user state changes inside execute_commands from leaking back
+     * to the outer scene pass. */
+    glPushAttrib(GL_ALL_ATTRIB_BITS);
+    prof_accum_end(PROF_SCENE_3D_FADE_PROLOGUE);
+
     for (int i = 0; i < g_replay_fade_batch_count; i++) {
         float alpha = replay_batch_alpha(&g_replay_fade_batches[i]);
-        int   old_pc = g_replay_fade_batches[i].old_pc;
-        int   skip_limit = old_pc;
-        int   open_begin;
-        int   open_tess;
 
         if (alpha <= 0.0f)
             continue;
 
-        /* In vertex mode, old_pc can land inside an open begin / tess block.
-         * Extend the render range back to the block's opening command so the
-         * full primitive (begin + all prior vertices + the new one) renders,
-         * matching the unoptimized walk. For polygon-mode batches and batches
-         * outside any block, skip_limit stays at old_pc. */
-        open_begin = replay_find_open_begin_before(old_pc);
-        if (open_begin >= 0 && open_begin < skip_limit)
-            skip_limit = open_begin;
-        open_tess = replay_find_open_tess_polygon_before(old_pc, NULL);
-        if (open_tess >= 0 && open_tess < skip_limit)
-            skip_limit = open_tess;
-
+        prof_begin(PROF_SCENE_3D_FADE_BATCH_PREP);
         restore_predef_values(g_replay_baseline_predef_vals);
         g_num_flat_cmds = g_replay_fade_batches[i].new_pc;
         g_execute_alpha_scale = alpha;
-        g_execute_skip_geom_before_pc = skip_limit;
+        g_execute_skip_geom_before_pc = skip_limits[i];
 
-        glPushAttrib(GL_ALL_ATTRIB_BITS);
-        glPushMatrix();
+        /* Re-establish only the GL state we depend on; cheap state calls
+         * instead of one push/pop attrib pair per batch. */
+        glDisable(GL_LIGHTING);
         glEnable(GL_BLEND);
         glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+        glPolygonMode(GL_FRONT_AND_BACK, g_wireframe ? GL_LINE : GL_FILL);
         glColor4f(0.70f, 0.70f, 0.80f, alpha);
+        prof_accum_end(PROF_SCENE_3D_FADE_BATCH_PREP);
+
+        prof_begin(PROF_SCENE_3D_FADE_BATCH_EXEC);
         execute_commands();
-        glPopMatrix();
-        glPopAttrib();
+        prof_accum_end(PROF_SCENE_3D_FADE_BATCH_EXEC);
     }
 
+    prof_begin(PROF_SCENE_3D_FADE_BATCH_POST);
     g_execute_alpha_scale = 1.0f;
     g_execute_skip_geom_before_pc = 0;
     g_num_flat_cmds = saved_flat_count;
+    glPopAttrib();
+    prof_accum_end(PROF_SCENE_3D_FADE_BATCH_POST);
 }
 
 /* Bench-only: install a fixed set of fade batches without advancing the
