@@ -11,6 +11,13 @@
 /* Sections that are timed each frame (or whenever they run). */
 typedef enum {
     PROF_SCENE_3D = 0,  /* render_3d_scene() */
+    PROF_SCENE_3D_SETUP,     /* projection/camera/lights/material setup */
+    PROF_SCENE_3D_FILL,      /* execute_commands() main fill pass */
+    PROF_SCENE_3D_FADE,      /* replay fade batches pass */
+    PROF_SCENE_3D_HELPERS,   /* backdrop/grid/axes/orbit-target */
+    PROF_SCENE_3D_OUTLINES,  /* polygon outline + current-block highlight */
+    PROF_SCENE_3D_OVERLAYS,  /* vertex dots, vertex/normal/transform guides */
+    PROF_SCENE_3D_HUD,       /* lights, vertex nums, normals, replay HUD */
     PROF_CODE_PANEL,    /* render_code_panel() */
     PROF_CODE_PANEL_LAYOUT,   /* render_code_panel() layout/precompute */
     PROF_CODE_PANEL_LAYOUT_GEOM,   /* panel geom + row precompute + line totals */
