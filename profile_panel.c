@@ -1,14 +1,14 @@
 /*
- * profile_panel.c — CPU overhead profiling overlay panel.
+ * profile_panel.c — per-section wall-time profiling overlay panel.
  *
  * Uses a fast monotonic clock so sampling doesn't itself dominate the
  * sections it measures:
  *   - Linux:  clock_gettime(CLOCK_MONOTONIC) — served from the vDSO, no
  *             syscall on modern kernels.
  *   - macOS:  mach_absolute_time() — direct timer read, no syscall.
- * Wall clock rather than CPU time; in a single-threaded render loop the
- * two differ only when the process is preempted, which is exactly what a
- * frame-budget profiler should surface anyway.
+ * This is wall clock (elapsed time), not CPU time; in a single-threaded
+ * render loop the two differ only when the process is preempted, which
+ * is exactly what a frame-budget profiler should surface anyway.
  *
  * Each section is timed with prof_begin/prof_end.  The last measured value
  * and an exponential moving average (EMA, alpha = 0.08) are maintained.
@@ -50,8 +50,8 @@
 /* ========================================================================= */
 
 static double g_prof_start[PROF_SECTION_COUNT];
-static double g_prof_last_us[PROF_SECTION_COUNT];  /* last measured CPU µs */
-static double g_prof_avg_us[PROF_SECTION_COUNT];   /* EMA in µs            */
+static double g_prof_last_us[PROF_SECTION_COUNT];  /* last measured wall µs */
+static double g_prof_avg_us[PROF_SECTION_COUNT];   /* EMA in µs             */
 static int    g_prof_stale[PROF_SECTION_COUNT];    /* frames since last sample */
 static double g_prof_accum_pending[PROF_SECTION_COUNT]; /* running total for accum-commit */
 static int    g_prof_initialized = 0;
@@ -63,7 +63,7 @@ int g_show_profile_panel = PROFILE_PANEL_OFF;
 /* ========================================================================= */
 
 #ifdef __APPLE__
-static double cpu_now_us(void) {
+static double prof_now_us(void) {
     static mach_timebase_info_data_t tb = {0, 0};
     if (tb.denom == 0) mach_timebase_info(&tb);
     /* mach_absolute_time returns ticks; convert to nanoseconds via the
@@ -74,7 +74,7 @@ static double cpu_now_us(void) {
     return nsec / 1000.0;
 }
 #else
-static double cpu_now_us(void) {
+static double prof_now_us(void) {
     struct timespec ts;
     /* CLOCK_MONOTONIC is served by the vDSO on Linux, so this is a
      * single register-load worth of overhead rather than a full syscall. */
@@ -102,14 +102,14 @@ static void init_if_needed(void) {
 void prof_begin(ProfSection s) {
     if (s < 0 || s >= PROF_SECTION_COUNT) return;
     init_if_needed();
-    g_prof_start[s] = cpu_now_us();
+    g_prof_start[s] = prof_now_us();
 }
 
 void prof_end(ProfSection s) {
     if (s < 0 || s >= PROF_SECTION_COUNT) return;
     init_if_needed();
 
-    double elapsed = cpu_now_us() - g_prof_start[s];
+    double elapsed = prof_now_us() - g_prof_start[s];
     if (elapsed < 0.0) elapsed = 0.0;
 
     g_prof_last_us[s] = elapsed;
@@ -131,7 +131,7 @@ void prof_accum_reset(ProfSection s) {
 void prof_accum_end(ProfSection s) {
     if (s < 0 || s >= PROF_SECTION_COUNT) return;
     init_if_needed();
-    double elapsed = cpu_now_us() - g_prof_start[s];
+    double elapsed = prof_now_us() - g_prof_start[s];
     if (elapsed < 0.0) elapsed = 0.0;
     g_prof_accum_pending[s] += elapsed;
     g_prof_stale[s] = 0;

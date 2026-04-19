@@ -4,11 +4,15 @@
  *
  * The benchmark binary links against the same CORE_TEST_OBJS the unit tests
  * use, so it works under both the normal GL-headers build and the GL-stubs
- * build (`make bench USE_GL_STUBS=1`). It is intentionally non-rendering:
- * it measures parsing, loading/flattening, and replay state-machine
- * advancement. It does NOT drive `execute_commands()` or
- * `execute_replay_fade_batches()` — those are the GL-emit paths and are
- * out of scope for a parser/replay benchmark.
+ * build (`make bench USE_GL_STUBS=1`).
+ *
+ * In the stubs build every gl* call is an inline no-op that only ticks a
+ * per-function counter (see include/GL/gl_stub_counts.h), so timings
+ * measure pure C-level cost. In the real-GL build we create a real GL
+ * context up front (via GLUT) so sub-benchmarks that drive actual draw
+ * calls — notably `fade_batches` via `execute_replay_fade_batches()` —
+ * have somewhere to emit to; without a current context those calls are
+ * undefined behaviour rather than measurable work.
  *
  * Sub-benchmarks (names match the `--only` filter strings and the printed
  * labels):
@@ -45,6 +49,12 @@
 
 #ifdef OPENGL_VIBE_USE_GL_STUBS
 #include <GL/gl_stub_counts.h>
+#else
+/* Real-GL build: pull in GLUT so we can create an actual current
+ * context before running sub-benchmarks that emit draw calls. The
+ * stub headers deliberately do NOT get included here — the Makefile
+ * picks between stub and system GL headers via -I ordering. */
+#include <gl_includes.h>
 #endif
 
 /* ---- Timekeeping ------------------------------------------------------- */
@@ -444,6 +454,12 @@ static const char *const k_fade_bench_scene[] = {
  * replay_find_open_* scans pay the full prefix cost. */
 static int populate_late_batches(int flat_cmds, int *old_pcs, int *new_pcs,
                                  int max_batches) {
+    /* Need at least two flat cmds to carve out an old_pc + new_pc pair.
+     * Below that the tail-anchored math produces negative indices, so
+     * bail out rather than installing bogus batch state. */
+    if (flat_cmds < 2 || max_batches < 1)
+        return 0;
+
     /* Anchor batches in the final quarter of the stream. Cap at
      * REPLAY_FADE_BATCH_MAX (the bench helper clamps too, but staying
      * inside the limit here keeps reporting honest). */
@@ -463,7 +479,7 @@ static int populate_late_batches(int flat_cmds, int *old_pcs, int *new_pcs,
     for (int i = 0; i < count; i++) {
         int old_pc = tail_start + i * step;
         int new_pc = old_pc + 2;
-        if (old_pc >= flat_cmds) old_pc = flat_cmds - 2;
+        if (old_pc > flat_cmds - 2) old_pc = flat_cmds - 2;
         if (new_pc > flat_cmds) new_pc = flat_cmds;
         old_pcs[i] = old_pc;
         new_pcs[i] = new_pc;
@@ -583,9 +599,38 @@ static int wants(const char *filter, const char *name) {
     return 0;
 }
 
+/* Real-GL build: create a minimal GLUT window so there is a current
+ * GL context for sub-benchmarks that actually emit draw calls.
+ * Without this, glBegin / glVertex / glEnd and friends hit whatever
+ * the driver does with no context current — typically a silent no-op,
+ * sometimes a segfault, never a representative timing.
+ *
+ * The stubs build skips this entirely: every gl* is an inline no-op
+ * that ticks a counter and returns, so no context is needed (or
+ * even available — the stub build intentionally has no GL libs).
+ *
+ * If the process has no display (e.g. headless CI without $DISPLAY),
+ * glutInit() will exit non-zero with its own error message; that's
+ * the cue to re-run with USE_GL_STUBS=1. */
+static void bench_gl_context_init(int *argc, char **argv) {
+#ifndef OPENGL_VIBE_USE_GL_STUBS
+    glutInit(argc, argv);
+    glutInitDisplayMode(GLUT_RGB | GLUT_DOUBLE | GLUT_DEPTH);
+    glutInitWindowSize(1, 1);
+    glutCreateWindow("bench_repl");
+#else
+    (void)argc; (void)argv;
+#endif
+}
+
 int main(int argc, char **argv) {
     int iters = 5;
     const char *only = NULL;
+
+    /* Parse flags first so we know `--csv` etc. before printing.
+     * glutInit() wants to see argv before we rewrite it, but it will
+     * just ignore our flags and leave them in place. */
+    bench_gl_context_init(&argc, argv);
 
     for (int i = 1; i < argc; i++) {
         if (strcmp(argv[i], "--iters") == 0 && i + 1 < argc) {
