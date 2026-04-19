@@ -57,8 +57,9 @@ void refresh_workspace_header_lines(void) {
     for (int i = 0; i < g_num_predef_vars && n < MAX_WORKSPACE_HEADER_LINES; i++) {
         char vbuf[32];
         workspace_format_float(vbuf, sizeof(vbuf), g_predef_vars[i].value);
-        snprintf(g_workspace_header_lines[n++], WORKSPACE_HEADER_LINE_LEN,
-                 "// @var %s = %s", g_predef_vars[i].name, vbuf);
+        if (repl_format_fits(g_workspace_header_lines[n], WORKSPACE_HEADER_LINE_LEN,
+                             "// @var %s = %s", g_predef_vars[i].name, vbuf))
+            n++;
     }
     for (int i = 0; i < CFG_ITEM_COUNT && n < MAX_WORKSPACE_HEADER_LINES; i++) {
         char slug[32];

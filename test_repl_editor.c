@@ -1289,7 +1289,8 @@ int main() {
         }
 
         char input[MAX_INPUT_LEN];
-        snprintf(input, sizeof(input), "n = %s", big_rhs);
+        ASSERT_TRUE("overlong assign: test input fits",
+                    repl_format_fits(input, sizeof(input), "n = %s", big_rhs));
         set_editor_input(input);
         g_edit_line = g_num_cmds;
         g_inserting = 0;
