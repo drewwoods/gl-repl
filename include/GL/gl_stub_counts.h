@@ -4,20 +4,18 @@
 /*
  * Per-function call counters for the stub GL/GLU/GLUT headers.
  *
- * Only active when OPENGL_VIBE_USE_GL_STUBS is defined (i.e. headless
- * builds). Every stub increments a single counter slot; callers (the
- * benchmark harness) snapshot and reset the array around the region of
- * interest to see which GL paths are actually exercised — the stubs
- * compile to no-ops so no wall-clock measurement tells you that on its
- * own.
+ * The stub headers (include/GL/gl.h etc.) reference gl_stub_tick() and
+ * the GL_STUB_* enum unconditionally, so the enum and tick function
+ * must always be visible — otherwise any build that falls back to the
+ * local stubs without defining OPENGL_VIBE_USE_GL_STUBS fails to
+ * compile. Real storage only exists in stub builds; in every other
+ * build gl_stub_tick() is a trivial no-op that the optimizer elides.
  *
- * Storage lives in gl_stub_counts.c; in non-stub builds the whole file
- * is empty and nothing links against it.
+ * Callers (the benchmark harness) snapshot and reset the array around
+ * the region of interest to see which GL paths are actually exercised
+ * — the stubs compile to no-ops so no wall-clock measurement tells you
+ * that on its own.
  */
-
-#ifdef OPENGL_VIBE_USE_GL_STUBS
-
-#include <stdio.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -118,6 +116,10 @@ enum {
     GL_STUB_COUNT_MAX
 };
 
+#ifdef OPENGL_VIBE_USE_GL_STUBS
+
+#include <stdio.h>
+
 extern unsigned long long gl_stub_counts[GL_STUB_COUNT_MAX];
 
 /* The tick is the only thing on the hot path. Keep it trivial so the
@@ -134,10 +136,17 @@ void         gl_stub_counts_reset(void);
  * averages, or 1 for raw totals. */
 void gl_stub_counts_dump(FILE *out, const char *prefix, long long divisor);
 
+#else  /* !OPENGL_VIBE_USE_GL_STUBS */
+
+/* Non-stub builds: no storage, and gl_stub_tick() is a no-op so the
+ * stub headers still compile if they happen to be picked up as a
+ * fallback on a system without real GL headers. */
+static inline void gl_stub_tick(int idx) { (void)idx; }
+
+#endif  /* OPENGL_VIBE_USE_GL_STUBS */
+
 #ifdef __cplusplus
 }
 #endif
-
-#endif /* OPENGL_VIBE_USE_GL_STUBS */
 
 #endif /* OPENGL_VIBE_GL_STUB_COUNTS_H */

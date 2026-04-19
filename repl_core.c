@@ -3759,24 +3759,48 @@ void execute_replay_fade_batches(void) {
 /* Bench-only: install a fixed set of fade batches without advancing the
  * replay state machine. The caller is expected to have populated
  * g_flat_cmds[] first. Returns the number of batches actually installed
- * (capped at REPLAY_FADE_BATCH_MAX). */
+ * (capped at REPLAY_FADE_BATCH_MAX, and after skipping any entries
+ * with invalid or degenerate [old_pc, new_pc] ranges).
+ *
+ * The real replay path relies on replay_clamp_fade_batches() to enforce
+ * 0 <= old_pc < new_pc <= g_num_flat_cmds before rendering; this helper
+ * applies the same invariants so a malformed test input can't walk
+ * execute_replay_fade_batches() off either end of g_flat_cmds[]. */
 int repl_bench_fade_install(const int *old_pcs, const int *new_pcs,
                             int count, float age) {
+    int installed = 0;
+
     if (count < 0) count = 0;
     if (count > REPLAY_FADE_BATCH_MAX) count = REPLAY_FADE_BATCH_MAX;
 
+    /* A non-zero count with a missing input array is a programming
+     * error; treat it as "install nothing" rather than dereferencing. */
+    if (count > 0 && (old_pcs == NULL || new_pcs == NULL))
+        count = 0;
+
     for (int i = 0; i < count; i++) {
-        g_replay_fade_batches[i].old_pc = old_pcs[i];
-        g_replay_fade_batches[i].new_pc = new_pcs[i];
-        g_replay_fade_batches[i].age = age;
+        int old_pc = old_pcs[i];
+        int new_pc = new_pcs[i];
+
+        if (old_pc < 0) old_pc = 0;
+        if (old_pc > g_num_flat_cmds) old_pc = g_num_flat_cmds;
+        if (new_pc < 0) new_pc = 0;
+        if (new_pc > g_num_flat_cmds) new_pc = g_num_flat_cmds;
+        if (new_pc <= old_pc)
+            continue;  /* degenerate range — skip, don't install. */
+
+        g_replay_fade_batches[installed].old_pc = old_pc;
+        g_replay_fade_batches[installed].new_pc = new_pc;
+        g_replay_fade_batches[installed].age = age;
+        installed++;
     }
-    g_replay_fade_batch_count = count;
+    g_replay_fade_batch_count = installed;
 
     for (int i = 0; i < g_num_predef_vars; i++)
         g_replay_baseline_predef_vals[i] = g_predef_vars[i].value;
 
-    g_replay_active = (count > 0);
-    return count;
+    g_replay_active = (installed > 0);
+    return installed;
 }
 
 void repl_bench_fade_clear(void) {
