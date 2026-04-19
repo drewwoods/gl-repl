@@ -1942,7 +1942,8 @@ static void color_picker_write_cmd(void) {
             g_cmds[g_cp_line].args[2]=cb;
             g_cmds[g_cp_line].args[3]=g_cp_alpha;
             g_cmds[g_cp_line].num_args = 4;
-            memcpy(g_cmds[g_cp_line].source, new_source, sizeof(new_source));
+            memcpy(g_cmds[g_cp_line].source, new_source,
+                   strlen(new_source) + 1);
             g_flat_dirty = 1;
             return;
         } else {
@@ -1971,7 +1972,7 @@ static void color_picker_write_cmd(void) {
     g_cmds[g_cp_line].num_args = g_cp_has_alpha ? 4 : 3;
     if (g_cp_has_alpha)
         g_cmds[g_cp_line].args[3]=g_cp_alpha;
-    memcpy(g_cmds[g_cp_line].source, new_source, sizeof(new_source));
+    memcpy(g_cmds[g_cp_line].source, new_source, strlen(new_source) + 1);
     g_flat_dirty = 1;
 }
 

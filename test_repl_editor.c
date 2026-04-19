@@ -1273,6 +1273,34 @@ int main() {
         ASSERT_INT("expand decl: assign c slot correct", g_cmds[3].num_args, ci);
     }
 
+    /* try_assign_variable — overlong formatted source is rejected with
+     * "Command too long" and does not mutate g_cmds / g_num_cmds. */
+    {
+        repl_reset_state(); declare_test_vars();
+        int old_num_cmds = g_num_cmds;
+        g_status[0] = '\0';
+
+        /* Build rhs padded out with parenthesized zeros so the final
+         * "  n = <rhs>;" comfortably exceeds MAX_LINE_LEN (256). */
+        char big_rhs[MAX_INPUT_LEN];
+        int off = snprintf(big_rhs, sizeof(big_rhs), "0");
+        while (off < 400 && off + 4 < (int)sizeof(big_rhs)) {
+            off += snprintf(big_rhs + off, sizeof(big_rhs) - off, "+(0)");
+        }
+
+        char input[MAX_INPUT_LEN];
+        snprintf(input, sizeof(input), "n = %s", big_rhs);
+        set_editor_input(input);
+        g_edit_line = g_num_cmds;
+        g_inserting = 0;
+
+        int r = try_assign_variable();
+        ASSERT_INT("overlong assign: handler consumed input", r, 1);
+        ASSERT_INT("overlong assign: num_cmds unchanged",
+                   g_num_cmds, old_num_cmds);
+        assert_status_contains("overlong assign: status", "Command too long");
+    }
+
     printf("\n%d / %d tests passed\n", g_pass, g_run);
     return (g_pass == g_run) ? 0 : 1;
 }

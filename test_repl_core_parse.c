@@ -526,6 +526,35 @@ int main(void) {
                     strstr(g_status, "Unknown cmd") == NULL);
     }
 
+    /* funcN(...) with args whose canonicalized source exceeds MAX_LINE_LEN
+     * fails parse with "Command too long" rather than silently truncating.
+     *
+     * parse_command truncates its input at MAX_LINE_LEN-1 (255) chars, so the
+     * line itself must stay under that limit while still producing a
+     * canonicalized "  funcN(args);" that overflows GLCmd.source (256). */
+    {
+        repl_reset_state();
+        g_status[0] = '\0';
+
+        /* 13 numeric args of 18 chars separated by ',' → 246 chars of args.
+         * Full input "func0(<246>)" = 253 chars (fits pre-truncation).
+         * Canonical "  func0(<246>);" = 256 chars — one past the buffer. */
+        char line[MAX_LINE_LEN];
+        int off = snprintf(line, sizeof(line), "func0(");
+        for (int i = 0; i < 13; i++) {
+            off += snprintf(line + off, sizeof(line) - off,
+                            i == 0 ? "123456789012345678"
+                                   : ",123456789012345678");
+        }
+        snprintf(line + off, sizeof(line) - off, ")");
+
+        GLCmd cmd;
+        memset(&cmd, 0, sizeof(cmd));
+        int ok = repl_parse_command(line, &cmd);
+        ASSERT_TRUE("overlong funcN: parse fails", ok == 0);
+        assert_status_contains("overlong funcN: status", "Command too long");
+    }
+
     printf("repl_core_parse: %d/%d passed\n", g_pass, g_run);
     return (g_run == g_pass) ? 0 : 1;
 }
