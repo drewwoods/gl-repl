@@ -207,8 +207,8 @@ static int compile_exported_source(int idx, const char *name,
     if (detail && detail_sz > 0) {
         if (log && log[0])
             snprintf(detail, detail_sz, "%s", log);
-        else
-            snprintf(detail, detail_sz, "command failed: %s", cmd);
+        else if (!repl_format_fits(detail, detail_sz, "command failed: %s", cmd))
+            repl_format_fits(detail, detail_sz, "command failed");
     }
     log_example_result(idx, name, "compile result", 0, "see detail below");
     free(log);
