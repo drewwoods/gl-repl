@@ -97,7 +97,7 @@ static void report(BenchResult r) {
     }
 
     printf("  %-22s  iters=%-5lld  ops=%-9lld  total=%8.3f ms  "
-           "min=%8.3f ms  per-iter=%8.3f ms  per-%s=%9.3f us  "
+           "min=%8.3f ms  per-iter=%8.3f ms  per-%-9s=%9.3f us  "
            "rate=%10.0f %s/s\n",
            r.name,
            r.iters, r.ops,
@@ -614,10 +614,13 @@ static int wants(const char *filter, const char *name) {
  * the cue to re-run with USE_GL_STUBS=1. */
 static void bench_gl_context_init(int *argc, char **argv) {
 #ifndef OPENGL_VIBE_USE_GL_STUBS
+    static int glut_inited = 0;
+    if (glut_inited) return;
     glutInit(argc, argv);
     glutInitDisplayMode(GLUT_RGB | GLUT_DOUBLE | GLUT_DEPTH);
     glutInitWindowSize(1, 1);
     glutCreateWindow("bench_repl");
+    glut_inited = 1;
 #else
     (void)argc; (void)argv;
 #endif
@@ -630,7 +633,6 @@ int main(int argc, char **argv) {
     /* Parse flags first so we know `--csv` etc. before printing.
      * glutInit() wants to see argv before we rewrite it, but it will
      * just ignore our flags and leave them in place. */
-    bench_gl_context_init(&argc, argv);
 
     for (int i = 1; i < argc; i++) {
         if (strcmp(argv[i], "--iters") == 0 && i + 1 < argc) {
@@ -669,8 +671,12 @@ int main(int argc, char **argv) {
         report(bench_replay_examples(iters));
     if (wants(only, "replay_long"))
         report(bench_replay_long(iters));
-    if (wants(only, "fade_batches"))
+
+    // GL benchmarks
+    if (wants(only, "fade_batches")) {
+        bench_gl_context_init(&argc, argv);
         report(bench_fade_batches(iters));
+    }
 
     return 0;
 }
