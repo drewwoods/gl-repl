@@ -724,8 +724,11 @@ static void quadric_source_to_c(const char *src, char *out, int out_sz) {
 
     open = strchr(p, '(');
     if (!open) {
-        strncpy(out, src, (size_t)out_sz - 1);
-        out[out_sz - 1] = '\0';
+        size_t copy_len = strlen(src);
+        if (copy_len >= (size_t)out_sz)
+            copy_len = (size_t)out_sz - 1;
+        memcpy(out, src, copy_len);
+        out[copy_len] = '\0';
         return;
     }
 
