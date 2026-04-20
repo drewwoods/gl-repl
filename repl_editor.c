@@ -512,11 +512,30 @@ static void apply_func_decl_resume(CmdType end_type) {
     g_func_decl_resume_delta = 0;
 }
 
+static int resolve_insert_exit_target(int target) {
+    if (!g_inserting ||
+        g_func_decl_resume_delta <= 0 ||
+        g_edit_line < 0 ||
+        g_edit_line >= g_num_cmds ||
+        g_cmds[g_edit_line].type != CMD_FUNC_END)
+        return target;
+
+    if (target == g_edit_line) {
+        target += g_func_decl_resume_delta;
+        if (target > g_num_cmds)
+            target = g_num_cmds;
+    }
+
+    g_func_decl_resume_delta = 0;
+    return target;
+}
+
 void repl_editor_reset_transients(void) {
     g_func_decl_resume_delta = 0;
 }
 
 void navigate_to_line(int target) {
+    target = resolve_insert_exit_target(target);
     if (target < 0)
         target = 0;
     if (target > g_num_cmds)
