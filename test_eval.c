@@ -38,7 +38,7 @@ static int g_tests_passed = 0;
     if (fabsf(_got - _exp) < 1e-4f) { \
         g_tests_passed++; \
     } else { \
-        printf("  FAIL: eval(\"%s\") = %g, expected %g\n", expr_str, _got, _exp); \
+        printf("  FAIL: eval(\"%s\") = %g, expected %g (line %d)\n", expr_str, _got, _exp, __LINE__); \
     } \
 } while(0)
 
@@ -48,15 +48,15 @@ static int g_tests_passed = 0;
     float _exp[] = { __VA_ARGS__ }; \
     g_tests_run++; \
     if (_n != n_expected) { \
-        printf("  FAIL: parse_exprs(\"%s\") returned %d args, expected %d\n", \
-               expr_str, _n, n_expected); \
+        printf("  FAIL: parse_exprs(\"%s\") returned %d args, expected %d (line %d)\n", \
+               expr_str, _n, n_expected, __LINE__); \
     } else { \
         int _ok = 1; \
         for (int _i = 0; _i < _n; _i++) \
             if (fabsf(_vals[_i] - _exp[_i]) > 1e-4f) _ok = 0; \
         if (_ok) g_tests_passed++; \
         else { \
-            printf("  FAIL: parse_exprs(\"%s\") values:", expr_str); \
+            printf("  FAIL: parse_exprs(\"%s\") values (line %d):", expr_str, __LINE__); \
             for (int _i = 0; _i < _n; _i++) printf(" %g", _vals[_i]); \
             printf(" (expected"); \
             for (int _i = 0; _i < n_expected; _i++) printf(" %g", _exp[_i]); \
@@ -72,7 +72,7 @@ static int g_tests_passed = 0;
     if (strcmp(_buf, expected) == 0) { \
         g_tests_passed++; \
     } else { \
-        printf("  FAIL: to_c(\"%s\") = \"%s\", expected \"%s\"\n", in, _buf, expected); \
+        printf("  FAIL: to_c(\"%s\") = \"%s\", expected \"%s\" (line %d)\n", in, _buf, expected, __LINE__); \
     } \
 } while(0)
 
@@ -83,7 +83,7 @@ static int g_tests_passed = 0;
     if (strcmp(_buf, expected) == 0) { \
         g_tests_passed++; \
     } else { \
-        printf("  FAIL: to_repl(\"%s\") = \"%s\", expected \"%s\"\n", in, _buf, expected); \
+        printf("  FAIL: to_repl(\"%s\") = \"%s\", expected \"%s\" (line %d)\n", in, _buf, expected, __LINE__); \
     } \
 } while(0)
 
@@ -92,14 +92,14 @@ static int g_tests_passed = 0;
     int _ok = parse_for_header(input, _vn, sizeof(_vn), &_s, &_e, &_st, &_b); \
     g_tests_run++; \
     if (_ok != expect_ok) { \
-        printf("  FAIL: for(\"%s\") returned %d, expected %d\n", input, _ok, expect_ok); \
+        printf("  FAIL: for(\"%s\") returned %d, expected %d (line %d)\n", input, _ok, expect_ok, __LINE__); \
     } else if (_ok && (strcmp(_vn, e_var) != 0 || \
                        fabsf(_s - (e_start)) > 1e-4f || \
                        fabsf(_e - (e_end)) > 1e-4f || \
                        fabsf(_st - (e_step)) > 1e-4f)) { \
         printf("  FAIL: for(\"%s\") -> var=%s s=%g e=%g st=%g" \
-               " (expected %s %g %g %g)\n", \
-               input, _vn, _s, _e, _st, e_var, (float)(e_start), (float)(e_end), (float)(e_step)); \
+               " (expected %s %g %g %g) (line %d)\n", \
+               input, _vn, _s, _e, _st, e_var, (float)(e_start), (float)(e_end), (float)(e_step), __LINE__); \
     } else { \
         g_tests_passed++; \
     } \
@@ -110,14 +110,14 @@ static int g_tests_passed = 0;
     int _ok = parse_c_for_header(input, _vn, sizeof(_vn), &_s, &_e, &_st); \
     g_tests_run++; \
     if (_ok != expect_ok) { \
-        printf("  FAIL: cfor(\"%s\") returned %d, expected %d\n", input, _ok, expect_ok); \
+        printf("  FAIL: cfor(\"%s\") returned %d, expected %d (line %d)\n", input, _ok, expect_ok, __LINE__); \
     } else if (_ok && (strcmp(_vn, e_var) != 0 || \
                        fabsf(_s - (e_start)) > 1e-4f || \
                        fabsf(_e - (e_end)) > 1e-4f || \
                        fabsf(_st - (e_step)) > 1e-4f)) { \
         printf("  FAIL: cfor(\"%s\") -> var=%s s=%g e=%g st=%g" \
-               " (expected %s %g %g %g)\n", \
-               input, _vn, _s, _e, _st, e_var, (float)(e_start), (float)(e_end), (float)(e_step)); \
+               " (expected %s %g %g %g) (line %d)\n", \
+               input, _vn, _s, _e, _st, e_var, (float)(e_start), (float)(e_end), (float)(e_step), __LINE__); \
     } else { \
         g_tests_passed++; \
     } \
@@ -127,7 +127,7 @@ static int g_tests_passed = 0;
     int _got = input_has_predef_vars(input); \
     g_tests_run++; \
     if (_got == expected) { g_tests_passed++; } \
-    else { printf("  FAIL: has_vars(\"%s\") = %d, expected %d\n", input, _got, expected); } \
+    else { printf("  FAIL: has_vars(\"%s\") = %d, expected %d (line %d)\n", input, _got, expected, __LINE__); } \
 } while(0)
 
 #define ASSERT_DECLARE_OK(name) do { \
@@ -135,7 +135,7 @@ static int g_tests_passed = 0;
     int _ok = declare_predef_var(name, _err, sizeof(_err)); \
     g_tests_run++; \
     if (_ok) { g_tests_passed++; } \
-    else { printf("  FAIL: declare_predef_var(\"%s\") should succeed, got: %s\n", name, _err); } \
+    else { printf("  FAIL: declare_predef_var(\"%s\") should succeed, got: %s (line %d)\n", name, _err, __LINE__); } \
 } while(0)
 
 #define ASSERT_DECLARE_FAIL(name) do { \
@@ -143,7 +143,7 @@ static int g_tests_passed = 0;
     int _ok = declare_predef_var(name, _err, sizeof(_err)); \
     g_tests_run++; \
     if (!_ok) { g_tests_passed++; } \
-    else { printf("  FAIL: declare_predef_var(\"%s\") should fail\n", name); } \
+    else { printf("  FAIL: declare_predef_var(\"%s\") should fail (line %d)\n", name, __LINE__); } \
 } while(0)
 
 #define ASSERT_VALIDATE_OK(src, vars, nv) do { \
@@ -151,7 +151,7 @@ static int g_tests_passed = 0;
     int _ok = validate_expression_idents(src, vars, nv, _err, sizeof(_err)); \
     g_tests_run++; \
     if (_ok) { g_tests_passed++; } \
-    else { printf("  FAIL: validate_expr(\"%s\") should pass, got: %s\n", src, _err); } \
+    else { printf("  FAIL: validate_expr(\"%s\") should pass, got: %s (line %d)\n", src, _err, __LINE__); } \
 } while(0)
 
 #define ASSERT_VALIDATE_FAIL(src, vars, nv) do { \
@@ -159,15 +159,15 @@ static int g_tests_passed = 0;
     int _ok = validate_expression_idents(src, vars, nv, _err, sizeof(_err)); \
     g_tests_run++; \
     if (!_ok) { g_tests_passed++; } \
-    else { printf("  FAIL: validate_expr(\"%s\") should fail\n", src); } \
+    else { printf("  FAIL: validate_expr(\"%s\") should fail (line %d)\n", src, __LINE__); } \
 } while(0)
 
 #define ASSERT_SOURCE_USES(src, name, expected) do { \
     int _got = source_uses_ident(src, name); \
     g_tests_run++; \
     if (_got == expected) { g_tests_passed++; } \
-    else { printf("  FAIL: source_uses_ident(\"%s\", \"%s\") = %d, expected %d\n", \
-                  src, name, _got, expected); } \
+    else { printf("  FAIL: source_uses_ident(\"%s\", \"%s\") = %d, expected %d (line %d)\n", \
+                  src, name, _got, expected, __LINE__); } \
 } while(0)
 
 static int predef_idx(const char *name) {
@@ -208,8 +208,8 @@ static void strip_ws(const char *in, char *out, int out_sz) {
     if (strcmp(_n_in, _n_out) == 0) { \
         g_tests_passed++; \
     } else { \
-        printf("  FAIL: roundtrip_ws \"%s\" -> \"%s\" -> \"%s\" (norm \"%s\" != \"%s\")\n", \
-               (in), _cbuf, _rbuf, _n_in, _n_out); \
+        printf("  FAIL: roundtrip_ws \"%s\" -> \"%s\" -> \"%s\" (norm \"%s\" != \"%s\") (line %d)\n", \
+               (in), _cbuf, _rbuf, _n_in, _n_out, __LINE__); \
     } \
 } while(0)
 

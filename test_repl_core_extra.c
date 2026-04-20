@@ -13,19 +13,19 @@ static int g_pass = 0;
 #define ASSERT_TRUE(label, cond) do { \
     g_run++; \
     if (cond) g_pass++; \
-    else printf("FAIL [%s]\n", label); \
+    else printf("FAIL [%s] (line %d)\n", label, __LINE__); \
 } while (0)
 
 #define ASSERT_INT(label, got, exp) do { \
     g_run++; \
     if ((got) == (exp)) g_pass++; \
-    else printf("FAIL [%s] got %d, expected %d\n", label, (int)(got), (int)(exp)); \
+    else printf("FAIL [%s] got %d, expected %d (line %d)\n", label, (int)(got), (int)(exp), __LINE__); \
 } while (0)
 
 #define ASSERT_STR(label, got, exp) do { \
     g_run++; \
     if (strcmp(got, exp) == 0) g_pass++; \
-    else printf("FAIL [%s] got \"%s\", expected \"%s\"\n", label, got, exp); \
+    else printf("FAIL [%s] got \"%s\", expected \"%s\" (line %d)\n", label, got, exp, __LINE__); \
 } while (0)
 
 static void declare_test_vars(void) {
@@ -162,7 +162,26 @@ void test_io() {
     unlink(tmpf);
 
     repl_load_initial_commands(NULL);
-    repl_save_default_output();
+    char cwd[1024];
+    char default_dir[] = "/tmp/repl_core_extra_default.XXXXXX";
+    char *made_dir = mkdtemp(default_dir);
+    int have_cwd = (getcwd(cwd, sizeof(cwd)) != NULL);
+    ASSERT_TRUE("mkdtemp default output dir", made_dir != NULL);
+    ASSERT_TRUE("getcwd before default output save", have_cwd);
+    if (made_dir && have_cwd) {
+        int cd_ok = chdir(made_dir);
+        ASSERT_INT("chdir default output dir", cd_ok, 0);
+        if (cd_ok == 0) {
+            repl_save_default_output();
+            ASSERT_INT("default output saved in temp dir",
+                       access("output.c", F_OK), 0);
+            unlink("output.c");
+            int restore_ok = chdir(cwd);
+            ASSERT_INT("restore cwd after default output save", restore_ok, 0);
+        }
+    }
+    if (made_dir)
+        rmdir(made_dir);
 }
 
 void test_execution() {

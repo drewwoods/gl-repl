@@ -8,19 +8,19 @@ static int g_pass = 0;
 #define ASSERT_TRUE(label, cond) do { \
     g_run++; \
     if (cond) g_pass++; \
-    else printf("FAIL [%s]\n", label); \
+    else printf("FAIL [%s] (line %d)\n", label, __LINE__); \
 } while (0)
 
 #define ASSERT_INT(label, got, exp) do { \
     g_run++; \
     if ((got) == (exp)) g_pass++; \
-    else printf("FAIL [%s] got %d, expected %d\n", label, (int)(got), (int)(exp)); \
+    else printf("FAIL [%s] got %d, expected %d (line %d)\n", label, (int)(got), (int)(exp), __LINE__); \
 } while (0)
 
 #define ASSERT_STR(label, got, exp) do { \
     g_run++; \
     if (strcmp(got, exp) == 0) g_pass++; \
-    else printf("FAIL [%s] got \"%s\", expected \"%s\"\n", label, got, exp); \
+    else printf("FAIL [%s] got \"%s\", expected \"%s\" (line %d)\n", label, got, exp, __LINE__); \
 } while (0)
 
 static void declare_test_vars(void) {

@@ -39,16 +39,16 @@ static int env_truthy(const char *name) {
     return value && value[0] && strcmp(value, "0") != 0;
 }
 
-static void assert_true_impl(const char *label, int cond) {
+static void assert_true_impl(const char *label, int cond, int line) {
     g_run++;
     if (cond) {
         g_pass++;
         return;
     }
-    printf("%sFAIL%s [%s]\n", ansi_red(), ansi_reset(), label);
+    printf("%sFAIL%s [%s] (line %d)\n", ansi_red(), ansi_reset(), label, line);
 }
 
-#define ASSERT_TRUE(label, cond) assert_true_impl(label, (cond))
+#define ASSERT_TRUE(label, cond) assert_true_impl(label, (cond), __LINE__)
 
 static void log_example_step(int idx, const char *name,
                              const char *step, const char *detail) {
