@@ -54,12 +54,12 @@ static int clamp_int(int v, int lo, int hi) {
 }
 
 static int clamp_profile_y(int y, int scene_y, int scene_h, int panel_h) {
-    int min_y = scene_y + 4;
+    int min_y = scene_y + STATUSBAR_H + 4;
     int max_y = scene_y + scene_h - panel_h - 4;
 
     if (max_y >= min_y)
         return clamp_int(y, min_y, max_y);
-    return g_code_panel_layout == CODE_PANEL_LAYOUT_TOP ? max_y : min_y;
+    return min_y;
 }
 
 static void profile_panel_rect_for_height(int panel_h, int *out_x, int *out_y) {

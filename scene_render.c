@@ -1943,7 +1943,7 @@ static void draw_replay_hud(int scene_x, int scene_y, int scene_w, int scene_h) 
     } else {
         hud_y = g_code_panel_layout == CODE_PANEL_LAYOUT_TOP
               ? scene_y + scene_h - REPLAY_HUD_HEIGHT - 4
-              : scene_y + 4;
+              : min_y;
     }
     if (g_replay_total_flat > 0)
         progress = (float)g_replay_pc / (float)g_replay_total_flat;

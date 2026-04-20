@@ -3615,7 +3615,7 @@ void var_panel_rect(int *px, int *py, int *pw, int *ph) {
     } else {
         panel_y = code_panel_layout_mode() == CODE_PANEL_LAYOUT_TOP
                 ? sc_y + sc_h - panel_h - 4
-                : sc_y + 4;
+                : min_y;
     }
 
     if (px) *px = panel_x;
