@@ -1705,17 +1705,7 @@ void keyboard_func(unsigned char key, int x, int y) {
     }
 
     if (key == KEY_CTRL_L) {
-        push_undo_snapshot();
-        g_num_cmds = 0;
-        g_edit_line = 0;
-        g_inserting = 0;
-        g_input[0] = '\0';
-        g_input_len = 0;
-        g_cursor_pos = 0;
-        g_newline_buf[0] = '\0';
-        g_newline_len = 0;
-        mark_normals_dirty();
-        set_status("All commands cleared");
+        repl_clear_all_cmds();
         return;
     }
 
