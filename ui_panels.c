@@ -1178,10 +1178,10 @@ static int code_panel_header_row_count(int panel_w, int text_x) {
  * Right: pinned buttons (Replay, Scene) — retained in flat form until the
  * right-side redesign lands. */
 
-enum { MENU_FILE = 0, MENU_EXAMPLES, MENU_CONFIG, MENU_SCENES, NUM_MENUS };
+enum { MENU_FILE = 0, MENU_SCENE, MENU_CONFIG, NUM_MENUS };
 
 static const char *g_menu_labels[NUM_MENUS] = {
-    "File", "Examples", "Config", "Scenes"
+    "File", "Scene", "Config"
 };
 
 /* Right-to-left the pins render from highest index first, so PIN_REPLAY sits
@@ -1206,16 +1206,14 @@ int menu_dropdown_is_open(void) {
 }
 int example_dropdown_is_open(void) { return menu_dropdown_is_open(); }
 
-static const char *USER_SCENE_LABEL = "Your Scene";
 
 enum { FILE_ITEM_EXPORT = 0, FILE_ITEM_IMPORT, FILE_ITEM_COUNT };
 
 static int menu_item_count(int menu_id) {
     switch (menu_id) {
     case MENU_FILE:     return FILE_ITEM_COUNT;
-    case MENU_EXAMPLES: return repl_example_count();
+    case MENU_SCENE:    return 1 + repl_example_count() + 1 + 1 + 2; /* ###, n, ---, ###, 2 cmds */
     case MENU_CONFIG:   return CFG_ITEM_COUNT;
-    case MENU_SCENES:   return repl_user_scene_valid() ? 1 : 0;
     }
     return 0;
 }
@@ -1226,12 +1224,14 @@ static const char *menu_item_label(int menu_id, int i) {
         if (i == FILE_ITEM_IMPORT) return "Import";
         return NULL;
     }
-    if (menu_id == MENU_EXAMPLES) {
-        if (i < repl_example_count()) return repl_example_name(i);
-        return NULL;
-    }
-    if (menu_id == MENU_SCENES) {
-        if (i == 0) return USER_SCENE_LABEL;
+    if (menu_id == MENU_SCENE) {
+        int e = repl_example_count();
+        if (i == 0) return "### EXAMPLES";
+        if (i >= 1 && i <= e) return repl_example_name(i - 1);
+        if (i == e + 1) return "---";
+        if (i == e + 2) return "### SCENE";
+        if (i == e + 3) return "New empty scene";
+        if (i == e + 4) return "Save to output.c";
         return NULL;
     }
     if (menu_id == MENU_CONFIG) {
@@ -1243,7 +1243,12 @@ static const char *menu_item_label(int menu_id, int i) {
 
 static const char *menu_item_shortcut(int menu_id, int i) {
     if (menu_id == MENU_FILE && i == FILE_ITEM_EXPORT) return "Ctrl+S";
-    if (menu_id == MENU_CONFIG && i >= 0 && i < CFG_ITEM_COUNT) {
+    if (menu_id == MENU_SCENE) {
+        int e = repl_example_count();
+        if (i == e + 4) return "Ctrl+S";
+        return NULL;
+    }
+    if (menu_id == MENU_CONFIG && i >= 0 && i < CFG_ITEM_COUNT && g_cfg_items[i].value != NULL) {
         const char *k = g_cfg_items[i].key_hint;
         if (k && strcmp(k, "--") != 0) return k;
         return NULL;
@@ -1271,7 +1276,7 @@ static int menu_max_shortcut_px(int menu_id) {
  * (with a trailing ellipsis). Returns `out`. */
 static const char *cfg_state_str(int i, char *out, int out_size) {
     const char *s = "";
-    if (i >= 0 && i < CFG_ITEM_COUNT) {
+    if (i >= 0 && i < CFG_ITEM_COUNT && g_cfg_items[i].value != NULL) {
         if (g_cfg_items[i].state_names)
             s = g_cfg_items[i].state_names[*g_cfg_items[i].value];
         else
@@ -1300,6 +1305,7 @@ static const char *cfg_state_str(int i, char *out, int out_size) {
 static int cfg_max_state_chars(void) {
     int max_chars = 3;  /* "OFF" */
     for (int i = 0; i < CFG_ITEM_COUNT; i++) {
+        if (g_cfg_items[i].value == NULL) continue;
         const char *const *names = g_cfg_items[i].state_names;
         if (!names) continue;
         for (int k = 0; k < g_cfg_items[i].n_states; k++) {
@@ -1317,14 +1323,22 @@ static int menu_item_activate(int menu_id, int i) {
     if (menu_id == MENU_FILE) {
         if (i == FILE_ITEM_EXPORT) { repl_save_default_output(); return 1; }
         if (i == FILE_ITEM_IMPORT) { set_status("Import not implemented yet"); return 1; }
-    } else if (menu_id == MENU_EXAMPLES) {
-        if (i < repl_example_count()) repl_load_example(i);
-        return 1;
-    } else if (menu_id == MENU_SCENES) {
-        if (i == 0 && repl_user_scene_valid()) repl_load_user_scene();
+    } else if (menu_id == MENU_SCENE) {
+        int e = repl_example_count();
+        if (i >= 1 && i <= e) { repl_load_example(i - 1); return 1; }
+        if (i == e + 3) {
+            // New empty scene - just load user scene and clear commands
+            if (g_example_idx >= 0) repl_load_user_scene();
+            extern void delete_cmd_range(int start, int count, const char *what);
+            delete_cmd_range(0, g_num_cmds, "Cleared scene");
+            return 1;
+        }
+        if (i == e + 4) { repl_save_default_output(); return 1; }
         return 1;
     } else if (menu_id == MENU_CONFIG) {
-        repl_cfg_cycle_row(i, +1);
+        if (g_cfg_items[i].value != NULL) {
+            repl_cfg_cycle_row(i, +1);
+        }
         return 0;  /* cycle in place; keep menu open */
     }
     return 1;
@@ -1436,6 +1450,8 @@ static int menu_dropdown_item_hit(int gx, int gy) {
     if (gx < dx || gx >= dx + dw || ry < dy || ry >= dy + dh) return -1;
     int row = (dy + dh - 4 - ry) / LINE_H;
     if (row < 0 || row >= n) return -1;
+    const char *lbl = menu_item_label(g_open_menu, row);
+    if (!lbl || strncmp(lbl, "###", 3) == 0 || strcmp(lbl, "---") == 0) return -1;
     return row;
 }
 
@@ -3177,7 +3193,7 @@ void render_example_dropdown(void) {
     if (g_open_menu < 0) return;
     int menu_id = g_open_menu;
     int n  = menu_item_count(menu_id);
-    int ne = (menu_id == MENU_EXAMPLES) ? repl_example_count() : -1;
+    int ne = (menu_id == MENU_SCENE) ? repl_example_count() : -1;
 
     int dx, dy, dw, dh;
     if (!menu_dropdown_rect(&dx, &dy, &dw, &dh)) return;
@@ -3216,15 +3232,24 @@ void render_example_dropdown(void) {
 
     int ey = dy + dh - LINE_H + 1;
     for (int i = 0; i < n; i++) {
-        int is_user_scene = (menu_id == MENU_EXAMPLES && ne >= 0 && i >= ne);
+        const char *lbl = menu_item_label(menu_id, i);
+        if (!lbl) continue;
 
-        /* Separator before user scene entry */
-        if (is_user_scene && ne > 0) {
+        if (strncmp(lbl, "### ", 4) == 0) {
+            glColor4f(0.478f, 0.518f, 0.580f, alpha);  /* #7a8494 (header style) */
+            draw_string((float)(dx + 14), (float)ey, lbl + 4, FONT_SMALL);
+            ey -= LINE_H;
+            continue;
+        }
+
+        if (strcmp(lbl, "---") == 0) {
             glColor4f(0.20f, 0.20f, 0.20f, alpha);  /* #333 */
             glBegin(GL_LINES);
-            glVertex2f((float)(dx + 6),       (float)(ey + LINE_H - 2));
-            glVertex2f((float)(dx + dw - 6),  (float)(ey + LINE_H - 2));
+            glVertex2f((float)(dx + 6),       (float)(ey + LINE_H / 2 - 2));
+            glVertex2f((float)(dx + dw - 6),  (float)(ey + LINE_H / 2 - 2));
             glEnd();
+            ey -= LINE_H;
+            continue;
         }
 
         if (i == g_menu_item_hover) {
@@ -3232,24 +3257,22 @@ void render_example_dropdown(void) {
             draw_quad((float)(dx + 1), (float)(ey - 2),
                       (float)(dw - 2), (float)LINE_H);
             glColor4f(1.0f, 1.0f, 1.0f, alpha);
-        } else if (menu_id == MENU_EXAMPLES && !is_user_scene && i == g_example_idx) {
+        } else if (menu_id == MENU_SCENE && ne >= 0 && i >= 1 && i <= ne && (i - 1) == g_example_idx) {
             glColor4f(UI_ACCENT_GREEN_R, UI_ACCENT_GREEN_G, UI_ACCENT_GREEN_B, alpha);
         } else {
             glColor4f(0.847f, 0.847f, 0.847f, alpha);  /* #d8d8d8 */
         }
 
-        const char *lbl = menu_item_label(menu_id, i);
-        if (lbl)
-            draw_string((float)(dx + 14), (float)ey, lbl, FONT_SMALL);
+        draw_string((float)(dx + 14), (float)ey, lbl, FONT_SMALL);
 
         const char *sc = menu_item_shortcut(menu_id, i);
         if (sc) {
             int sc_px = (int)strlen(sc) * FONT_SMALL_W;
             glColor4f(0.533f, 0.533f, 0.533f, alpha);  /* #888 */
-            draw_string((float)(dx + dw - 14 - sc_px), (float)ey,
-                        sc, FONT_SMALL);
+            draw_string((float)(dx + dw - 14 - sc_px), (float)ey, sc, FONT_SMALL);
         }
-        if (menu_id == MENU_CONFIG) {
+
+        if (menu_id == MENU_CONFIG && g_cfg_items[i].value != NULL) {
             char st_buf[CFG_STATE_MAX_CHARS + 1];
             const char *st = cfg_state_str(i, st_buf, sizeof(st_buf));
             int st_px = (int)strlen(st) * FONT_SMALL_W;
@@ -3260,6 +3283,7 @@ void render_example_dropdown(void) {
                 glColor4f(0.533f, 0.533f, 0.533f, alpha);
             draw_string((float)(state_right - st_px), (float)ey, st, FONT_SMALL);
         }
+
         ey -= LINE_H;
     }
 
