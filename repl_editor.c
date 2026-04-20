@@ -191,7 +191,7 @@ CfgItem g_cfg_items[] = {
     { "Vertex points",    0, 0,     &g_show_vpoints,           2,                NULL              },
     { "---",              0, 0,     NULL,                      0,                NULL              },
     { "### INTERFACE",    0, 0,     NULL,                      0,                NULL              },
-    { "Variable panel",   '`', 0,   &g_show_var_panel,         2,                NULL              },
+    { "Variable panel",   0, 0,   &g_show_var_panel,         2,                NULL              },
     { "CPU profile",      KEY_CTRL_W, 0, &g_show_profile_panel,     PROFILE_PANEL_MODE_COUNT, profile_panel_mode_names },
     { "Code panel",       KEY_CTRL_B, 0, &g_code_panel_layout,      CODE_PANEL_LAYOUT_COUNT, code_panel_layout_names },
     { "Wrap at commas",   0, 0,     &g_wrap_at_comma,          2,                NULL              },
@@ -410,6 +410,7 @@ void repl_clear_all_cmds(void) {
     g_cursor_pos = 0;
     g_newline_buf[0] = '\0';
     g_newline_len = 0;
+    init_predef_vars();
     mark_normals_dirty();
     set_status("All commands cleared");
 }

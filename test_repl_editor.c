@@ -1802,17 +1802,41 @@ int main() {
 
     /* repl_clear_all_cmds — clears scene including float declarations. */
     {
+        int base_num_predef_vars;
+        int i;
+        int found_tmp_before_clear = 0;
+        int found_tmp_after_clear = 0;
+
         repl_reset_state();
+        base_num_predef_vars = g_num_predef_vars;
         repl_feed_line_public("float tmp;");
         repl_feed_line_public("glVertex3f(1, 0, 0)");
         ASSERT_INT("clear_all: setup two cmds", g_num_cmds, 2);
         ASSERT_INT("clear_all: first is var decl", g_cmds[0].type, CMD_VAR_DECLARE);
+        ASSERT_INT("clear_all: decl registers one predef var",
+                   g_num_predef_vars, base_num_predef_vars + 1);
+        for (i = 0; i < g_num_predef_vars; i++) {
+            if (strcmp(g_predef_vars[i].name, "tmp") == 0) {
+                found_tmp_before_clear = 1;
+                break;
+            }
+        }
+        ASSERT_TRUE("clear_all: tmp is registered before clear", found_tmp_before_clear);
 
         repl_clear_all_cmds();
         ASSERT_INT("clear_all: num_cmds is 0", g_num_cmds, 0);
         ASSERT_INT("clear_all: edit_line is 0", g_edit_line, 0);
         ASSERT_INT("clear_all: inserting is 0", g_inserting, 0);
         ASSERT_INT("clear_all: input is empty", g_input[0], 0);
+        ASSERT_INT("clear_all: predef var count restored",
+                   g_num_predef_vars, base_num_predef_vars);
+        for (i = 0; i < g_num_predef_vars; i++) {
+            if (strcmp(g_predef_vars[i].name, "tmp") == 0) {
+                found_tmp_after_clear = 1;
+                break;
+            }
+        }
+        ASSERT_TRUE("clear_all: tmp is no longer registered", !found_tmp_after_clear);
     }
 
     printf("\n%d / %d tests passed\n", g_pass, g_run);
