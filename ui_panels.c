@@ -1499,6 +1499,142 @@ static void code_panel_precompute_layout_rows(int panel_w, int text_x,
     }
 }
 
+static int code_panel_insert_rows(int panel_w, int text_x);
+static int code_panel_newline_rows(int panel_w, int text_x);
+
+static int code_panel_cursor_doc_line_from_layout(int header_rows,
+                                                  const int *cmd_main_rows,
+                                                  const int *replay_extra_rows,
+                                                  int panel_w, int text_x) {
+    int cursor_doc_line = header_rows;
+
+    if (g_inserting) {
+        for (int i = 0; i < g_edit_line && i < g_num_cmds; i++) {
+            cursor_doc_line += cmd_main_rows[i];
+            cursor_doc_line += replay_extra_rows[i];
+        }
+        cursor_doc_line += code_panel_cursor_row_for_text(
+            g_input, text_x + code_panel_active_indent_chars() * FONT_W,
+            panel_w, g_cursor_pos, NULL, NULL, NULL);
+    } else if (g_edit_line < g_num_cmds) {
+        for (int i = 0; i < g_edit_line; i++) {
+            cursor_doc_line += cmd_main_rows[i];
+            cursor_doc_line += replay_extra_rows[i];
+        }
+        cursor_doc_line += code_panel_cursor_row_for_text(
+            g_input, text_x + code_panel_active_indent_chars() * FONT_W,
+            panel_w, g_cursor_pos, NULL, NULL, NULL);
+    } else {
+        for (int i = 0; i < g_num_cmds; i++) {
+            cursor_doc_line += cmd_main_rows[i];
+            cursor_doc_line += replay_extra_rows[i];
+        }
+        cursor_doc_line += code_panel_cursor_row_for_text(
+            g_input, text_x + code_panel_active_indent_chars() * FONT_W,
+            panel_w, g_cursor_pos, NULL, NULL, NULL);
+    }
+
+    return cursor_doc_line;
+}
+
+static int code_panel_follow_doc_line_from_layout(int cursor_doc_line,
+                                                  int header_rows,
+                                                  const int *cmd_main_rows,
+                                                  const int *replay_extra_rows) {
+    int follow_doc_line = cursor_doc_line;
+
+    if (g_replay_active &&
+        g_replay_src_line >= 0 && g_replay_src_line < g_num_cmds) {
+        follow_doc_line = header_rows;
+        for (int i = 0; i < g_replay_src_line; i++) {
+            follow_doc_line += cmd_main_rows[i];
+            follow_doc_line += replay_extra_rows[i];
+        }
+        if (replay_extra_rows[g_replay_src_line] > 0) {
+            follow_doc_line += cmd_main_rows[g_replay_src_line];
+            follow_doc_line += replay_extra_rows[g_replay_src_line] - 1;
+        } else if (cmd_main_rows[g_replay_src_line] > 0) {
+            follow_doc_line += cmd_main_rows[g_replay_src_line] - 1;
+        }
+    }
+
+    return follow_doc_line;
+}
+
+static void code_panel_apply_follow_scroll(int total_lines, int visible_lines,
+                                           int follow_doc_line) {
+    int max_scroll = total_lines - visible_lines;
+    if (max_scroll < 0) max_scroll = 0;
+    if (g_scroll > max_scroll) g_scroll = max_scroll;
+    if (g_scroll < 0) g_scroll = 0;
+
+    if (g_scroll_follow_cursor) {
+        if (follow_doc_line < g_scroll)
+            g_scroll = follow_doc_line;
+        if (follow_doc_line >= g_scroll + visible_lines)
+            g_scroll = follow_doc_line - visible_lines + 1;
+        if (g_scroll > max_scroll) g_scroll = max_scroll;
+        if (g_scroll < 0) g_scroll = 0;
+        g_scroll_follow_cursor = 0;
+    }
+}
+
+int code_panel_apply_scroll_follow_for_test(int *out_follow_doc_line,
+                                            int *out_visible_lines) {
+    int cmd_main_rows[MAX_COMMANDS];
+    int replay_extra_rows[MAX_COMMANDS];
+    int cp_x, cp_y, cp_w, cp_h;
+    int linenum_w = 4 * FONT_W;
+    int idx_col_w = g_show_indices ? (6 * FONT_W) : 0;
+    int idx_x = CODE_MARGIN_X + linenum_w + FONT_W;
+    int text_x = idx_x + idx_col_w;
+    int visible_lines;
+    int header_rows;
+    int footer_rows;
+    int total_lines;
+    int cursor_doc_line;
+    int follow_doc_line;
+
+    refresh_workspace_header_lines();
+    code_panel_rect(&cp_x, &cp_y, &cp_w, &cp_h);
+    (void)cp_x;
+    (void)cp_y;
+
+    visible_lines = (cp_h - CODE_MARGIN_Y - LINE_H - STATUSBAR_H) / LINE_H;
+    if (visible_lines < 1) visible_lines = 1;
+
+    if (g_replay_active &&
+        s_replay_cache_pc != g_replay_pc)
+        rebuild_replay_annotation_cache();
+    else if (!g_replay_active)
+        invalidate_replay_annotation_cache();
+
+    header_rows = code_panel_header_row_count(cp_w, text_x);
+    footer_rows = code_panel_footer_row_count(cp_w, text_x);
+    code_panel_precompute_layout_rows(cp_w, text_x,
+                                      cmd_main_rows, replay_extra_rows);
+
+    total_lines = header_rows + footer_rows + code_panel_newline_rows(cp_w, text_x);
+    for (int i = 0; i < g_num_cmds; i++) {
+        if (g_inserting && i == g_edit_line)
+            total_lines += code_panel_insert_rows(cp_w, text_x);
+        total_lines += cmd_main_rows[i];
+        total_lines += replay_extra_rows[i];
+    }
+
+    cursor_doc_line = code_panel_cursor_doc_line_from_layout(
+        header_rows, cmd_main_rows, replay_extra_rows, cp_w, text_x);
+    follow_doc_line = code_panel_follow_doc_line_from_layout(
+        cursor_doc_line, header_rows, cmd_main_rows, replay_extra_rows);
+
+    code_panel_apply_follow_scroll(total_lines, visible_lines, follow_doc_line);
+
+    if (out_follow_doc_line) *out_follow_doc_line = follow_doc_line;
+    if (out_visible_lines) *out_visible_lines = visible_lines;
+    return follow_doc_line >= g_scroll &&
+           follow_doc_line < g_scroll + visible_lines;
+}
+
 static int code_panel_insert_rows(int panel_w, int text_x) {
     int indent_chars = code_panel_active_indent_chars();
     return code_panel_row_count_for_text(g_input,
@@ -2290,65 +2426,18 @@ void render_code_panel(void) {
     prof_end(PROF_CODE_PANEL_LAYOUT_GEOM);
     prof_begin(PROF_CODE_PANEL_LAYOUT_CURSOR);
 
-    int cursor_doc_line = header_rows;
-    if (g_inserting) {
-        for (int i = 0; i < g_edit_line && i < g_num_cmds; i++) {
-            cursor_doc_line += cmd_main_rows[i];
-            cursor_doc_line += replay_extra_rows[i];
-        }
-        cursor_doc_line += code_panel_cursor_row_for_text(
-            g_input, text_x + code_panel_active_indent_chars() * FONT_W,
-            panel_w, g_cursor_pos, NULL, NULL, NULL);
-    } else if (g_edit_line < g_num_cmds) {
-        for (int i = 0; i < g_edit_line; i++) {
-            cursor_doc_line += cmd_main_rows[i];
-            cursor_doc_line += replay_extra_rows[i];
-        }
-        cursor_doc_line += code_panel_cursor_row_for_text(
-            g_input, text_x + code_panel_active_indent_chars() * FONT_W,
-            panel_w, g_cursor_pos, NULL, NULL, NULL);
-    } else {
-        for (int i = 0; i < g_num_cmds; i++) {
-            cursor_doc_line += cmd_main_rows[i];
-            cursor_doc_line += replay_extra_rows[i];
-        }
-        cursor_doc_line += code_panel_cursor_row_for_text(
-            g_input, text_x + code_panel_active_indent_chars() * FONT_W,
-            panel_w, g_cursor_pos, NULL, NULL, NULL);
-    }
+    int cursor_doc_line = code_panel_cursor_doc_line_from_layout(
+        header_rows, cmd_main_rows, replay_extra_rows, panel_w, text_x);
 
     prof_end(PROF_CODE_PANEL_LAYOUT_CURSOR);
     prof_begin(PROF_CODE_PANEL_LAYOUT_SCROLL);
 
-    int follow_doc_line = cursor_doc_line;
-    if (g_replay_active &&
-        g_replay_src_line >= 0 && g_replay_src_line < g_num_cmds &&
-        g_cmds[g_replay_src_line].has_vars) {
-        follow_doc_line = header_rows;
-        for (int i = 0; i < g_replay_src_line; i++) {
-            follow_doc_line += cmd_main_rows[i];
-            follow_doc_line += replay_extra_rows[i];
-        }
-        follow_doc_line += cmd_main_rows[g_replay_src_line];
-        follow_doc_line += replay_extra_rows[g_replay_src_line] - 1;
-    }
+    int follow_doc_line = code_panel_follow_doc_line_from_layout(
+        cursor_doc_line, header_rows, cmd_main_rows, replay_extra_rows);
 
-    /* Clamp scroll */
-    int max_scroll = total_lines - visible_lines;
-    if (max_scroll < 0) max_scroll = 0;
-    if (g_scroll > max_scroll) g_scroll = max_scroll;
-    if (g_scroll < 0) g_scroll = 0;
-
-    /* Only snap to cursor after an edit; manual scroll can stay off-cursor. */
-    if (g_scroll_follow_cursor) {
-        if (follow_doc_line < g_scroll)
-            g_scroll = follow_doc_line;
-        if (follow_doc_line >= g_scroll + visible_lines)
-            g_scroll = follow_doc_line - visible_lines + 1;
-        if (g_scroll > max_scroll) g_scroll = max_scroll;
-        if (g_scroll < 0) g_scroll = 0;
-        g_scroll_follow_cursor = 0;
-    }
+    /* Only snap to cursor/replay after an edit or replay step; manual scroll
+     * can stay off-target. */
+    code_panel_apply_follow_scroll(total_lines, visible_lines, follow_doc_line);
 
     prof_end(PROF_CODE_PANEL_LAYOUT_SCROLL);
 

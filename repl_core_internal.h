@@ -26,6 +26,7 @@
 #include <stdarg.h>
 
 #include "repl_core.h"
+#include "repl_replay.h"
 
 #if defined(__GNUC__) || defined(__clang__)
 #define REPL_PRINTF_LIKE(fmt_idx, arg_idx) __attribute__((format(printf, fmt_idx, arg_idx)))
@@ -142,6 +143,9 @@ void accept_autocomplete(void);
 
 void depth_cache_invalidate(void);
 int  apply_state_cmd(const GLCmd *cmd, float alpha_scale);
+void repl_copy_predef_values(float *dst, int max_vals);
+void repl_restore_predef_values(const float *src, int max_vals);
+void repl_execute_set_fade_context(float alpha_scale, int skip_geom_before_pc);
 void load_line_to_input(int idx);
 int  find_block_end(int begin_idx);
 int  block_depth_at(int pos);
@@ -152,12 +156,7 @@ int  collect_visible_vars(int pos, ExprVar *vars, int max_vars);
 
 /* ---- Replay state machine --------------------------------------------- */
 
-void replay_tick_fade_batches(float dt);
-void replay_seek(int new_pc);
-int  replay_seek_to_src_line(int target_line);
-void replay_step_back(void);
-void replay_restart_from_beginning(void);
-void replay_speed_adjust(float factor);
+/* Replay APIs live in repl_replay.h. */
 
 /* ---- Bench helpers (populate replay fade state without stepping) -------
  * These exist solely for bench_repl.c to drive

@@ -21,6 +21,8 @@ void ui_panels_open_config(void);
 int  ui_panels_handle_right_press(int mx, int my);  /* returns 1 if consumed */
 int  example_dropdown_is_open(void);
 int  code_panel_get_command_display_text(int cmd_idx, char *out, int out_size);
+int  code_panel_apply_scroll_follow_for_test(int *out_follow_doc_line,
+                                             int *out_visible_lines);
 void handle_code_panel_click(int mx, int my);
 enum {
 	UI_PANEL_PRESS_NONE = 0,

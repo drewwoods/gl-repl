@@ -19,6 +19,7 @@
  */
 #include "sample.h"
 #include "repl_core_internal.h"
+#include "repl_replay.h"
 #include "repl_keys.h"
 #include "ui_panels.h"
 #include "repl_audio.h"
@@ -1570,69 +1571,8 @@ void keyboard_func(unsigned char key, int x, int y) {
         return;
     }
 
-    if (g_replay_active) {
-        if (key == KEY_CTRL_G) {
-            replay_stop();
-            set_status("Replay: off");
-            return;
-        }
-        if (key == KEY_CTRL_K) {
-            int landed = replay_seek_to_src_line(g_edit_line);
-            if (landed < 0) {
-                set_status("Jump: no geometry at or after cursor");
-            } else {
-                g_replay_state = REPLAY_PAUSED;
-                char msg[64];
-                snprintf(msg, sizeof(msg), "Jump: paused at line %d", landed + 1);
-                set_status(msg);
-            }
-            return;
-        }
-        if (key == ' ') {
-            if (g_replay_state == REPLAY_PLAYING) {
-                g_replay_state = REPLAY_PAUSED;
-                set_status("Replay: paused");
-            } else if (g_replay_state == REPLAY_PAUSED) {
-                g_replay_state = REPLAY_PLAYING;
-                set_status("Replay: playing");
-            } else if (g_replay_state == REPLAY_DONE) {
-                replay_restart_from_beginning();
-                set_status("Replay: restarted");
-            }
-            return;
-        }
-        if (key == '+' || key == '=') {
-            replay_speed_adjust(1.5f);
-            return;
-        }
-        if (key == '-') {
-            replay_speed_adjust(0.67f);
-            return;
-        }
-        if (key == 'm' || key == 'M') {
-            int was_playing = (g_replay_state == REPLAY_PLAYING);
-            g_replay_mode = (g_replay_mode == REPLAY_MODE_VERTEX)
-                          ? REPLAY_MODE_POLYGON
-                          : REPLAY_MODE_VERTEX;
-            replay_seek(g_replay_pc);
-            if (was_playing && g_replay_state != REPLAY_DONE)
-                g_replay_state = REPLAY_PLAYING;
-            set_status(g_replay_mode == REPLAY_MODE_VERTEX
-                     ? "Replay: vertex mode"
-                     : "Replay: polygon mode");
-            return;
-        }
-        if (key == 'e' || key == 'E') {
-            g_replay_expand_args = !g_replay_expand_args;
-            return;
-        }
-        if (key == KEY_ESC) {
-            replay_stop();
-            set_status("Replay: off");
-            return;
-        }
-        replay_stop();
-    }
+    if (g_replay_active && replay_handle_key(key))
+        return;
 
     if (handle_search_key(key))
         return;
@@ -1686,29 +1626,8 @@ void keyboard_func(unsigned char key, int x, int y) {
         return;
     }
 
-    if (key == KEY_CTRL_G) {
-        replay_start();
+    if (replay_handle_key(key))
         return;
-    }
-
-    if (key == KEY_CTRL_K) {
-        int target_line = g_edit_line;
-        if (!g_replay_active) {
-            replay_start();
-            if (!g_replay_active)
-                return;
-        }
-        int landed = replay_seek_to_src_line(target_line);
-        if (landed < 0) {
-            set_status("Jump: no geometry at or after cursor");
-        } else {
-            g_replay_state = REPLAY_PAUSED;
-            char msg[64];
-            snprintf(msg, sizeof(msg), "Jump: paused at line %d", landed + 1);
-            set_status(msg);
-        }
-        return;
-    }
 
     if (key == KEY_CTRL_D) {
         if (g_inserting) {
@@ -2294,39 +2213,6 @@ void keyboard_func(unsigned char key, int x, int y) {
     }
 }
 
-/* Return non-zero if key is a pure modifier key (Shift/Ctrl/Alt/Command/Super).
- *
- * Branching behavior here is controlled by which toolkit we are building
- * against, not by whether we are trying to follow the original GLUT spec.
- *
- *   USE_GLUT defined:
- *     We are building against Apple's GLUT. In this configuration, modifier-only
- *     presses/releases are kept out of the Special/SpecialUp callback path,
- *     because Apple's GLUT does not expose those standalone modifier transitions
- *     as special-key callbacks.
- *
- *   USE_GLUT not defined:
- *     We are building against freeglut. In this configuration, modifier-only
- *     presses/releases are allowed through the Special/SpecialUp path for
- *     compatibility with freeglut behavior, where standalone modifiers can be
- *     reported as GLUT_KEY_SHIFT_*, GLUT_KEY_CTRL_*, GLUT_KEY_ALT_*, and
- *     GLUT_KEY_SUPER_* events.
- *
- * In other words, this helper exists to split Apple GLUT behavior from
- * freeglut behavior for modifier keys.
- */
-static int is_modifier_key(int key) {
-#ifdef USE_GLUT
-    return 0;
-#else
-    return key == GLUT_KEY_NUM_LOCK ||
-           key == GLUT_KEY_SHIFT_L || key == GLUT_KEY_SHIFT_R ||
-           key == GLUT_KEY_CTRL_L || key == GLUT_KEY_CTRL_R ||
-           key == GLUT_KEY_ALT_L || key == GLUT_KEY_ALT_R ||
-           key == GLUT_KEY_SUPER_L || key == GLUT_KEY_SUPER_R;
-#endif
-}
-
 static void special_func(int key, int x, int y) {
     (void)x;
     (void)y;
@@ -2334,26 +2220,8 @@ static void special_func(int key, int x, int y) {
     g_cursor_on = 1;
     g_blink_tick = 0;
 
-    if (g_replay_active) {
-        if (key == GLUT_KEY_LEFT) {
-            replay_step_back();
-            return;
-        }
-        if (key == GLUT_KEY_RIGHT) {
-            replay_advance();
-            return;
-        }
-        if (key == GLUT_KEY_UP) {
-            replay_speed_adjust(1.5f);
-            return;
-        }
-        if (key == GLUT_KEY_DOWN) {
-            replay_speed_adjust(0.67f);
-            return;
-        }
-
-        if (!is_modifier_key(key)) replay_stop();
-    }
+    if (replay_handle_special_key(key))
+        return;
 
     if (handle_search_special(key))
         return;
