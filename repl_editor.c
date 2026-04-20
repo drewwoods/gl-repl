@@ -158,34 +158,45 @@ static void apply_audio_cfg_mode(int mode) {
 }
 
 CfgItem g_cfg_items[] = {
+    { "### RENDERING",    NULL,     NULL,                      0,                NULL              },
+    { "MSAA",             "Ctrl+u", &g_multisample_enabled,    2,                NULL              },
+    { "Line smooth",      "Ctrl+n", &g_line_smooth_enabled,    2,                NULL              },
+    { "Accum AA",         "Ctrl+b", &g_accum_aa_enabled,       2,                NULL              },
     { "Wireframe",        "F2",     &g_wireframe,              2,                NULL              },
+    { "Point attenuation","--",     &g_init_attenuate_points,  2,                NULL              },
+    { "---",              NULL,     NULL,                      0,                NULL              },
+    { "### TIME & REPLAY",NULL,     NULL,                      0,                NULL              },
+    { "Auto time",        "Ctrl+t", &g_t_playing,              2,                NULL              },
+    { "Replay",           "Ctrl+g", &g_replay_active,          2,                NULL              },
+    { "Replay mode",      "m",      &g_replay_mode,            2,                replay_mode_names },
+    { "Replay expand",    "--",     &g_replay_expand_args,     2,                NULL              },
+    { "---",              NULL,     NULL,                      0,                NULL              },
+    { "### OVERLAYS & SCENE",NULL,  NULL,                      0,                NULL              },
     { "Grid",             "F3",     &g_grid_theme,             GRID_THEME_COUNT, g_grid_names      },
     { "Grid major",       "Ctrl+o", &g_grid_major_idx,         GRID_MAJOR_COUNT, g_grid_major_names  },
     { "Grid extent",      "--",     &g_grid_extent_idx,        GRID_EXTENT_COUNT, g_grid_extent_names },
     { "Axes",             "F4",     &g_axes_theme,             AXES_THEME_COUNT, g_axes_names      },
+    { "Vertex guides",    "F8",     &g_show_guides,            2,                NULL              },
+    { "Xform guide mode", "--",     &g_xform_guide_mode,       2,                xform_guide_mode_names },
+    { "Light indicators", "F10",    &g_show_lights,            2,                NULL              },
+    { "Poly highlight",   "--",     &g_highlight_current_poly, 2,                NULL              },
+    { "Backdrop",         "--",     &g_backdrop_mode,          2,                backdrop_mode_names },
+    { "Camera rotate",    "F11",    &g_cam_rotate,             2,                NULL              },
+    { "Auto-normals",     "F9",     &g_autonormal,             2,                NULL              },
+    { "---",              NULL,     NULL,                      0,                NULL              },
+    { "### GEOMETRY",     NULL,     NULL,                      0,                NULL              },
     { "Vertex labels",    "F5",     &g_show_vnums,             2,                NULL              },
     { "Normal vectors",   "F6",     &g_show_normals,           2,                NULL              },
     { "Vertex outlines",  "F7",     &g_show_outlines,          2,                NULL              },
     { "Vertex points",    "--",     &g_show_vpoints,           2,                NULL              },
-    { "Wrap at commas",   "--",     &g_wrap_at_comma,          2,                NULL              },
-    { "Vertex guides",    "F8",     &g_show_guides,            2,                NULL              },
-    { "Xform guide mode", "--",     &g_xform_guide_mode,       2,                xform_guide_mode_names },
-    { "Auto-normals",     "F9",     &g_autonormal,             2,                NULL              },
-    { "Light indicators", "F10",    &g_show_lights,            2,                NULL              },
-    { "Backdrop",         "--",     &g_backdrop_mode,          2,                backdrop_mode_names },
-    { "Camera rotate",    "F11",    &g_cam_rotate,             2,                NULL              },
-    { "Auto time",        "Ctrl+t", &g_t_playing,              2,                NULL              },
-    { "MSAA",             "Ctrl+u", &g_multisample_enabled,    2,                NULL              },
-    { "Line smooth",      "Ctrl+n", &g_line_smooth_enabled,    2,                NULL              },
-    { "Accum AA",         "Ctrl+b", &g_accum_aa_enabled,       2,                NULL              },
-    { "Point attenuation","--",     &g_init_attenuate_points,  2,                NULL              },
-    { "Poly highlight",   "--",     &g_highlight_current_poly, 2,                NULL              },
+    { "---",              NULL,     NULL,                      0,                NULL              },
+    { "### INTERFACE",    NULL,     NULL,                      0,                NULL              },
     { "Variable panel",   "`",      &g_show_var_panel,         2,                NULL              },
     { "CPU profile",      "Ctrl+w", &g_show_profile_panel,     PROFILE_PANEL_MODE_COUNT, profile_panel_mode_names },
-    { "Replay",           "Ctrl+g", &g_replay_active,          2,                NULL              },
-    { "Replay mode",      "m",      &g_replay_mode,            2,                replay_mode_names },
-    { "Replay expand",    "--",     &g_replay_expand_args,     2,                NULL              },
     { "Code panel",       "--",     &g_code_panel_layout,      CODE_PANEL_LAYOUT_COUNT, code_panel_layout_names },
+    { "Wrap at commas",   "--",     &g_wrap_at_comma,          2,                NULL              },
+    { "---",              NULL,     NULL,                      0,                NULL              },
+    { "### AUDIO",        NULL,     NULL,                      0,                NULL              },
     { "Audio",            "--",     &g_audio_cfg_mode,         4,                audio_cfg_names   },
 };
 
@@ -2447,6 +2458,8 @@ void repl_cfg_cycle_row(int row, int delta) {
 
     if (g_replay_active)
         replay_stop();
+
+    if (g_cfg_items[row].value == NULL) return;
 
     int n = g_cfg_items[row].n_states;
     if (n < 2) return;

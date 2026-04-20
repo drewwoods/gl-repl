@@ -63,6 +63,7 @@ void refresh_workspace_header_lines(void) {
             n++;
     }
     for (int i = 0; i < CFG_ITEM_COUNT && n < MAX_WORKSPACE_HEADER_LINES; i++) {
+        if (g_cfg_items[i].value == NULL) continue;
         char slug[32];
         workspace_slug_from_name(g_cfg_items[i].label, slug, sizeof(slug));
         snprintf(g_workspace_header_lines[n++], WORKSPACE_HEADER_LINE_LEN,
@@ -139,6 +140,7 @@ int parse_workspace_header_line(const char *line) {
             return 1;
         }
         for (int i = 0; i < CFG_ITEM_COUNT; i++) {
+            if (g_cfg_items[i].value == NULL) continue;
             char item_slug[32];
             workspace_slug_from_name(g_cfg_items[i].label, item_slug, sizeof(item_slug));
             if (strcmp(item_slug, slug) == 0) {
