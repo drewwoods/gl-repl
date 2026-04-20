@@ -1249,9 +1249,22 @@ static const char *menu_item_shortcut(int menu_id, int i) {
         return NULL;
     }
     if (menu_id == MENU_CONFIG && i >= 0 && i < CFG_ITEM_COUNT && g_cfg_items[i].value != NULL) {
-        const char *k = g_cfg_items[i].key_hint;
-        if (k && strcmp(k, "--") != 0) return k;
-        return NULL;
+        static char buf[16];
+        if (g_cfg_items[i].key_code == 0) return NULL;
+        if (g_cfg_items[i].is_special) {
+            snprintf(buf, sizeof(buf), "F%d", g_cfg_items[i].key_code - GLUT_KEY_F1 + 1);
+            return buf;
+        } else {
+            if (g_cfg_items[i].key_code > 0 && g_cfg_items[i].key_code <= 26) {
+                snprintf(buf, sizeof(buf), "Ctrl+%c", g_cfg_items[i].key_code - 1 + 'a');
+                return buf;
+            } else if (g_cfg_items[i].key_code == 28) {
+                return "Ctrl+\\";
+            } else {
+                snprintf(buf, sizeof(buf), "%c", g_cfg_items[i].key_code);
+                return buf;
+            }
+        }
     }
     (void)i;
     return NULL;

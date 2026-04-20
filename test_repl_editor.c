@@ -1489,9 +1489,9 @@ int main() {
         repl_feed_line_public("glVertex3f(1, 0, 0);");
         repl_flatten_commands();
 
-        ASSERT_INT("replay key ctrl-g consumed",
-                   replay_handle_key(KEY_CTRL_G), 1);
-        ASSERT_INT("replay key ctrl-g starts replay",
+        ASSERT_INT("replay key ctrl-r consumed",
+                   replay_handle_key(KEY_CTRL_R), 1);
+        ASSERT_INT("replay key ctrl-r starts replay",
                    g_replay_active, 1);
         ASSERT_INT("replay space consumed",
                    replay_handle_key(' '), 1);
