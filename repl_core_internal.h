@@ -227,8 +227,9 @@ void repl_clear_all_cmds(void);
  * editor state into it, and inherit the example's name (de-duplicated).
  * Returns the promoted slot index, or -1 if promotion was a no-op
  * (already viewing a user scene) or rejected (all slots full and no
- * workspace folder set for eviction — the LRU path lives in a later
- * task). */
+ * workspace folder set for eviction — the LRU path lives in a later task -
+ * repl_core.c already performs LRU eviction when g_workspace_dir is set but
+ * the full plumbing might not be there */
 int repl_promote_example_if_needed(void);
 
 /* ---- Commit handler chain (private to repl_editor.c, exposed for tests)

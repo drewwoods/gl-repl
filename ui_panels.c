@@ -1385,23 +1385,13 @@ static int menu_item_activate(int menu_id, int i) {
         if (i == FILE_ITEM_SAVE_WORKSPACE) {
             const char *dir = repl_workspace_dir();
             if (!dir || !dir[0]) dir = DEFAULT_WORKSPACE_DIR;
-            int n = repl_save_workspace(dir);
-            if (n >= 0) {
-                char buf[256];
-                snprintf(buf, sizeof(buf), "Saved %d scene(s) to %s", n, dir);
-                set_status(buf);
-            }
+            repl_save_workspace(dir); // errors are logged internally; no need to set status here
             return 1;
         }
         if (i == FILE_ITEM_LOAD_WORKSPACE) {
             const char *dir = repl_workspace_dir();
             if (!dir || !dir[0]) dir = DEFAULT_WORKSPACE_DIR;
-            int n = repl_load_workspace(dir);
-            if (n >= 0) {
-                char buf[256];
-                snprintf(buf, sizeof(buf), "Loaded %d scene(s) from %s", n, dir);
-                set_status(buf);
-            }
+            repl_load_workspace(dir); // errors are logged internally; no need to set status here
             return 1;
         }
     } else if (menu_id == MENU_SCENE) {
