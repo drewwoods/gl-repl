@@ -76,11 +76,17 @@ static int g_pending_start = 0;
 static unsigned int g_track_generation = 0;
 
 /* ------------------------------------------------------------------ */
-/* State persistence (track + offset across restarts)                  */
+/* State persistence (track + offset + audio cfg across restarts)      */
 /* ------------------------------------------------------------------ */
 
 /* Path of the INI file, or empty string when disabled. */
 static char  g_state_file[REPL_AUDIO_MAX_PATH] = "";
+
+/* Opaque integer owned by the editor layer (maps to AUDIO_CFG_* enum).
+ * Stored in the INI as cfg_mode= and handed back to the editor via
+ * repl_audio_get_cfg_mode() so apply_audio_cfg_mode() gets called with
+ * the right value.  -1 means "not yet loaded / not set". */
+static int g_cfg_mode = -1;
 
 /* When >= 0, apply this seek (seconds) inside the next start_track_now()
  * call.  Set by repl_audio_play_playlist() after finding a saved state;
@@ -105,7 +111,7 @@ static float cursor_seconds(void) {
 }
 
 static void save_state(void) {
-    if (!g_state_file[0] || !g_music_loaded) return;
+    if (!g_state_file[0]) return;
 
     /* Write to a temp file first, then rename() over the real path.
      * rename() is a single atomic syscall on POSIX: the destination
@@ -118,8 +124,16 @@ static void save_state(void) {
     FILE *f = fopen(tmp, "w");
     if (!f) return;
 
-    fprintf(f, "track=%s\n", g_playlist[g_playlist_pos]);
-    fprintf(f, "offset=%.3f\n", cursor_seconds());
+    /* Persist playback position only when a track is actually loaded. */
+    if (g_music_loaded) {
+        fprintf(f, "track=%s\n", g_playlist[g_playlist_pos]);
+        fprintf(f, "offset=%.3f\n", cursor_seconds());
+    }
+    /* cfg_mode is the authoritative audio preference: encodes pause/loop
+     * policy in a single int owned by the editor (AUDIO_CFG_* enum).
+     * Only write it when the editor has registered a value. */
+    if (g_cfg_mode >= 0)
+        fprintf(f, "cfg_mode=%d\n", g_cfg_mode);
     fflush(f);
     fsync(fileno(f));
     fclose(f);
@@ -130,9 +144,11 @@ static void save_state(void) {
         g_last_save_time = time(NULL);
 }
 
-/* Returns the playlist index of the saved track, or -1 if the state file
- * is absent / unreadable / track no longer in playlist.  Sets *out_offset
- * to the saved cursor position in seconds (0 on failure). */
+/* Loads persisted playback position and audio cfg from the state file.
+ * cfg_mode is stored in g_cfg_mode for the editor to pick up via
+ * repl_audio_get_cfg_mode() and apply via apply_audio_cfg_mode().
+ * Returns the playlist index of the saved track, or -1 on failure.
+ * Sets *out_offset to the saved cursor in seconds (0 on failure). */
 static int load_state(float *out_offset) {
     *out_offset = 0.0f;
     if (!g_state_file[0]) return -1;
@@ -140,7 +156,8 @@ static int load_state(float *out_offset) {
     if (!f) return -1;
 
     char saved_track[REPL_AUDIO_MAX_PATH] = "";
-    float offset = 0.0f;
+    float offset  = 0.0f;
+    int cfg_mode  = -1;   /* -1 = not found in file */
     char line[REPL_AUDIO_MAX_PATH + 16];
 
     while (fgets(line, (int)sizeof(line), f)) {
@@ -153,9 +170,15 @@ static int load_state(float *out_offset) {
             saved_track[len] = '\0';
         } else if (strncmp(line, "offset=", 7) == 0) {
             offset = (float)atof(line + 7);
+        } else if (strncmp(line, "cfg_mode=", 9) == 0) {
+            cfg_mode = atoi(line + 9);
         }
     }
     fclose(f);
+
+    /* Store cfg_mode for the editor to retrieve and apply. */
+    if (cfg_mode >= 0)
+        g_cfg_mode = cfg_mode;
 
     if (!saved_track[0]) return -1;
     for (int i = 0; i < g_playlist_count; i++) {
@@ -474,4 +497,12 @@ void repl_audio_on_user_gesture(void) {
         g_pending_start = 0;
         start_track_now(g_playlist_pos);
     }
+}
+
+void repl_audio_set_cfg_mode(int mode) {
+    g_cfg_mode = mode;
+}
+
+int repl_audio_get_cfg_mode(void) {
+    return g_cfg_mode;
 }

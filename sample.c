@@ -80,6 +80,7 @@ static void print_usage(const char *prog) {
             "Options:\n"
             "  -h, --help   Show this help text and exit\n"
             "  --noaccum    Disable accumulation buffer antialiasing\n"
+            "  --no-audio   Start without audio (disables music entirely)\n"
             "  --dump-code  Load the session and print the editor buffer\n"
             "  --dump-flat  Load the session and print flattened commands\n"
             "\n"
@@ -130,12 +131,15 @@ int main(int argc, char **argv) {
     const char *input_file = NULL;
     int dump_code = 0;
     int dump_flat = 0;
+    int no_audio  = 0;
     for (int i = 1; i < argc; i++) {
         if (strcmp(argv[i], "-h") == 0 || strcmp(argv[i], "--help") == 0) {
             print_usage(argv[0]);
             return 0;
         } else if (strcmp(argv[i], "--noaccum") == 0)
             g_use_accum = 0;
+        else if (strcmp(argv[i], "--no-audio") == 0)
+            no_audio = 1;
         else if (strcmp(argv[i], "--dump-code") == 0)
             dump_code = 1;
         else if (strcmp(argv[i], "--dump-flat") == 0)
@@ -170,12 +174,10 @@ int main(int argc, char **argv) {
 
     /* Audio: init once, scan assets/ *.mp3 for a playlist, play the
      * first track, shutdown on exit. Failures here are non-fatal: the
-     * REPL keeps running without sound. */
-    if (repl_audio_init() == 0) {
+     * REPL keeps running without sound.
+     * Skipped entirely when --no-audio was passed. */
+    if (!no_audio && repl_audio_init() == 0) {
         repl_audio_set_state_file(REPL_AUDIO_STATE_FILE);
-        /* Apply cfg defaults (including mute) BEFORE starting the playlist
-         * so the engine volume is correct from the very first frame. */
-        repl_editor_apply_defaults();
         static char music_paths[REPL_AUDIO_MUSIC_MAX_PATHS]
                                [REPL_AUDIO_MUSIC_MAX_LEN];
         int n = scan_mp3_playlist(music_paths, REPL_AUDIO_MUSIC_MAX_PATHS);
@@ -190,6 +192,11 @@ int main(int argc, char **argv) {
              * assets/song.mp3 keep working. */
             repl_audio_play_music(REPL_AUDIO_DEFAULT_MUSIC);
         }
+        /* Apply saved audio cfg AFTER play_playlist() so load_state() has
+         * already populated g_cfg_mode.  apply_defaults reads it back,
+         * sets g_audio_cfg_mode (UI) and calls apply_audio_cfg_mode()
+         * which pauses/unpauses and sets loop mode correctly. */
+        repl_editor_apply_defaults();
         atexit(repl_audio_shutdown);
     }
 

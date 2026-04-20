@@ -101,12 +101,20 @@ unsigned int repl_audio_track_generation(void);
 
 void repl_audio_on_user_gesture(void);
 
-/* Set the path for the INI state file used to persist track + offset across
- * restarts.  Call before repl_audio_play_playlist().  Pass NULL to disable.
- * The file is written at shutdown and every ~30 s by repl_audio_tick().
- * On startup, if the saved track is present in the current playlist the
- * cursor is restored; otherwise playback starts from track 0 as normal. */
+/* Set the path for the INI state file used to persist track, offset, and audio
+ * preferences across restarts.  Call before repl_audio_play_playlist().  Pass
+ * NULL to disable.  The file is written at shutdown and periodically by
+ * repl_audio_tick().
+ * On startup, if the saved track is present in the current playlist the cursor
+ * is restored; otherwise playback starts from track 0 as normal. */
 void repl_audio_set_state_file(const char *path);
+
+/* Opaque audio-config integer owned by the editor layer.  The audio module
+ * stores this value in the state file and restores it on load so the editor
+ * (repl_editor_apply_defaults) can call apply_audio_cfg_mode() with the
+ * right mode.  Pass -1 to clear (no cfg_mode= line written). */
+void repl_audio_set_cfg_mode(int mode);
+int  repl_audio_get_cfg_mode(void);  /* returns -1 when not yet loaded */
 
 #ifdef __cplusplus
 }

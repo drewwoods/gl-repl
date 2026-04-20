@@ -2445,6 +2445,7 @@ void repl_cfg_cycle_row(int row, int delta) {
                                                        : "Replay: polygon mode");
     if (g_cfg_items[row].value == &g_audio_cfg_mode) {
         apply_audio_cfg_mode(g_audio_cfg_mode);
+        repl_audio_set_cfg_mode(g_audio_cfg_mode);  /* keep INI in sync */
         static const char *labels[] = {
             "Audio: paused",
             "Audio: play once",
@@ -2982,5 +2983,15 @@ void repl_feed_line_public(const char *line) {
  * effect immediately.  Add a new branch here whenever a CfgItem is added
  * whose backing variable alone is not enough to drive the desired state. */
 void repl_editor_apply_defaults(void) {
+    /* Restore the audio mode persisted from the previous session.
+     * repl_audio_play_playlist() calls load_state() which stores the
+     * cfg_mode in the audio module; we pull it here so both g_audio_cfg_mode
+     * (the UI) and the actual audio engine agree before the first frame. */
+    int saved_mode = repl_audio_get_cfg_mode();
+    if (saved_mode >= AUDIO_CFG_PAUSE && saved_mode <= AUDIO_CFG_ALL)
+        g_audio_cfg_mode = saved_mode;
     apply_audio_cfg_mode(g_audio_cfg_mode);
+    /* Push the (possibly-restored) mode back so the audio module's copy
+     * is valid immediately and the next save reflects the current state. */
+    repl_audio_set_cfg_mode(g_audio_cfg_mode);
 }
