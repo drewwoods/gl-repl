@@ -34,6 +34,18 @@ typedef struct { char name[16]; float value; } DeferredVar;
 static DeferredVar g_deferred_var_values[MAX_DEFERRED_VAR_VALUES];
 static int         g_deferred_var_count = 0;
 
+/* Transient: set by repl_save_workspace during each slot's export so
+ * refresh_workspace_header_lines emits the slot's scene name.  Cleared
+ * by the exporter once the file is written. */
+const char *g_export_scene_name_hint = NULL;
+
+/* Parsed from the workspace header by parse_workspace_header_line; read
+ * by the caller of load_from_file once the file is fully consumed so the
+ * slot allocator can name the imported scene.  Reset at the start of
+ * each load_from_file call (along with g_deferred_var_count). */
+char g_pending_scene_name[USER_SCENE_NAME_MAX] = "";
+char g_pending_workspace_dir[1024] = "";
+
 static void workspace_slug_from_name(const char *name, char *out, size_t out_sz) {
     size_t j = 0;
     for (size_t i = 0; name[i] && j + 1 < out_sz; i++) {
@@ -54,6 +66,18 @@ void refresh_workspace_header_lines(void) {
     if (n < MAX_WORKSPACE_HEADER_LINES) {
         snprintf(g_workspace_header_lines[n++], WORKSPACE_HEADER_LINE_LEN,
                  "// @workspace: REPL state (auto-saved)");
+    }
+    /* Scene name hint: explicit export override > active user scene name. */
+    const char *scene_name = g_export_scene_name_hint;
+    if ((!scene_name || !*scene_name) && repl_active_user_scene() >= 0)
+        scene_name = repl_user_scene_name(repl_active_user_scene());
+    if (scene_name && *scene_name && n < MAX_WORKSPACE_HEADER_LINES) {
+        snprintf(g_workspace_header_lines[n++], WORKSPACE_HEADER_LINE_LEN,
+                 "// @scene-name %s", scene_name);
+    }
+    if (g_workspace_dir[0] && n < MAX_WORKSPACE_HEADER_LINES) {
+        snprintf(g_workspace_header_lines[n++], WORKSPACE_HEADER_LINE_LEN,
+                 "// @workspace-dir %s", g_workspace_dir);
     }
     for (int i = 0; i < g_num_predef_vars && n < MAX_WORKSPACE_HEADER_LINES; i++) {
         char vbuf[32];
@@ -81,7 +105,32 @@ int parse_workspace_header_line(const char *line) {
     if (*p != '@') return 0;
     p++;
 
+    if (strncmp(p, "workspace-dir", 13) == 0 && isspace((unsigned char)p[13])) {
+        p += 14;
+        while (*p && isspace((unsigned char)*p)) p++;
+        int i = 0;
+        while (*p && i < (int)sizeof(g_pending_workspace_dir) - 1)
+            g_pending_workspace_dir[i++] = *p++;
+        g_pending_workspace_dir[i] = '\0';
+        /* Trim trailing whitespace. */
+        while (i > 0 && isspace((unsigned char)g_pending_workspace_dir[i - 1]))
+            g_pending_workspace_dir[--i] = '\0';
+        return 1;
+    }
+
     if (strncmp(p, "workspace", 9) == 0) return 1;
+
+    if (strncmp(p, "scene-name", 10) == 0 && isspace((unsigned char)p[10])) {
+        p += 11;
+        while (*p && isspace((unsigned char)*p)) p++;
+        int i = 0;
+        while (*p && i < (int)sizeof(g_pending_scene_name) - 1)
+            g_pending_scene_name[i++] = *p++;
+        g_pending_scene_name[i] = '\0';
+        while (i > 0 && isspace((unsigned char)g_pending_scene_name[i - 1]))
+            g_pending_scene_name[--i] = '\0';
+        return 1;
+    }
 
     if (strncmp(p, "var", 3) == 0 && isspace((unsigned char)p[3])) {
         p += 4;
@@ -2036,7 +2085,9 @@ int load_from_file(const char *filename) {
 
     /* Reset the deferred-var list; it is populated by parse_workspace_header_line
      * and applied after the snippet is fully processed (see below). */
-    g_deferred_var_count = 0;
+    g_deferred_var_count       = 0;
+    g_pending_scene_name[0]    = '\0';
+    g_pending_workspace_dir[0] = '\0';
 
     char line[MAX_LINE_LEN];
     int in_snippet = 0;
