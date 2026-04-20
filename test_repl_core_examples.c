@@ -633,7 +633,7 @@ int main(int argc, char **argv) {
             "// @cfg axes = 5",
             "// @cfg accum_aa = 0",
             "// @cfg top_code_panel = 1",
-            "// @cfg code_panel = 2",
+            "// @cfg code_panel = 3",
             "// camera",
             "glTranslatef(0.0f, 0.0f, -9.0f);",
             "glRotatef(11.0f, 1.0f, 0.0f, 0.0f);",
@@ -675,7 +675,7 @@ int main(int argc, char **argv) {
             ASSERT_TRUE("mixed cfg camera disallowed cfg hidden",
                         strstr(dump, "// @cfg accum_aa = 0") == NULL);
             ASSERT_TRUE("mixed cfg camera layout cfg hidden",
-                        strstr(dump, "// @cfg code_panel = 2") == NULL);
+                        strstr(dump, "// @cfg code_panel = 3") == NULL);
             ASSERT_TRUE("mixed cfg camera marker hidden",
                         strstr(dump, "// camera") == NULL);
             ASSERT_TRUE("mixed cfg camera body kept",

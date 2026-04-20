@@ -40,6 +40,10 @@ int try_commit_if_block(void);
 int try_commit_close_brace(void);
 static void keyboard_func(unsigned char key, int x, int y);
 static void special_func(int key, int x, int y);
+static int editor_code_panel_hidden(void);
+static int editor_restore_hidden_code_panel(void);
+static int editor_key_restores_hidden_code_panel(unsigned char key, int mods);
+static int editor_special_restores_hidden_code_panel(int key, int mods);
 static void mouse_func(int button, int state, int x, int y);
 #ifndef USE_GLUT
 static void mousewheel_func(int wheel, int direction, int x, int y);
@@ -98,7 +102,9 @@ static const char *replay_mode_names[] = { "Polygon", "Vertex" };
 static const char *backdrop_mode_names[] = { "Off", "Cityscape" };
 static const char *xform_guide_mode_names[] = { "World", "Frame" };
 static const char *profile_panel_mode_names[] = { "Off", "On", "Details" };
-static const char *code_panel_layout_names[] = { "Left", "Top", "Bottom" };
+static const char *code_panel_layout_names[] = {
+    "Left", "Top", "Bottom", "Hidden"
+};
 
 /* Unified audio cfg: collapses mute + loop mode into one cycling
  * menu entry. Indices:
@@ -1567,8 +1573,15 @@ void keyboard_func(unsigned char key, int x, int y) {
     if (!g_search_active && key == '`') {
         if (g_replay_active)
             replay_stop();
+        editor_restore_hidden_code_panel();
         ui_panels_open_config();
         return;
+    }
+
+    if (editor_code_panel_hidden()) {
+        int key_mods = glutGetModifiers();
+        if (editor_key_restores_hidden_code_panel(key, key_mods))
+            editor_restore_hidden_code_panel();
     }
 
     if (g_replay_active && replay_handle_key(key))
@@ -2220,6 +2233,12 @@ static void special_func(int key, int x, int y) {
     g_cursor_on = 1;
     g_blink_tick = 0;
 
+    if (editor_code_panel_hidden()) {
+        int key_mods = glutGetModifiers();
+        if (editor_special_restores_hidden_code_panel(key, key_mods))
+            editor_restore_hidden_code_panel();
+    }
+
     if (replay_handle_special_key(key))
         return;
 
@@ -2427,7 +2446,10 @@ void repl_cfg_cycle_row(int row, int delta) {
             set_status("Layout: top code panel");
         else if (g_code_panel_layout == CODE_PANEL_LAYOUT_BOTTOM)
             set_status("Layout: bottom code panel");
-        else
+        else if (g_code_panel_layout == CODE_PANEL_LAYOUT_HIDDEN) {
+            ui_panels_close_menus();
+            set_status("Layout: code panel hidden");
+        } else
             set_status("Layout: left code panel");
     }
     if (g_cfg_items[row].value == &g_wrap_at_comma)
@@ -2462,6 +2484,42 @@ static int editor_code_panel_layout(void) {
     return g_code_panel_layout;
 }
 
+static int editor_code_panel_hidden(void) {
+    return editor_code_panel_layout() == CODE_PANEL_LAYOUT_HIDDEN;
+}
+
+static int editor_restore_hidden_code_panel(void) {
+    if (!editor_code_panel_hidden())
+        return 0;
+    g_code_panel_layout = CODE_PANEL_LAYOUT_LEFT;
+    ui_panels_close_menus();
+    return 1;
+}
+
+static int editor_key_restores_hidden_code_panel(unsigned char key, int mods) {
+    if (mods & (GLUT_ACTIVE_CTRL | GLUT_ACTIVE_ALT))
+        return 0;
+    return key == KEY_BACKSPACE ||
+           key == KEY_DELETE ||
+           key == '\t' ||
+           key == '\r' ||
+           key == '\n' ||
+           (key >= 32 && key < 127);
+}
+
+static int editor_special_restores_hidden_code_panel(int key, int mods) {
+    if (mods & (GLUT_ACTIVE_CTRL | GLUT_ACTIVE_ALT))
+        return 0;
+    return key == GLUT_KEY_LEFT ||
+           key == GLUT_KEY_RIGHT ||
+           key == GLUT_KEY_UP ||
+           key == GLUT_KEY_DOWN ||
+           key == GLUT_KEY_HOME ||
+           key == GLUT_KEY_END ||
+           key == GLUT_KEY_PAGE_UP ||
+           key == GLUT_KEY_PAGE_DOWN;
+}
+
 static int editor_point_in_code_panel(int x, int y) {
     int cp_x, cp_y, cp_w, cp_h;
     int gl_y = g_win_h - y;
@@ -2476,6 +2534,8 @@ static int editor_point_on_code_panel_divider(int x, int y) {
     int gl_y = g_win_h - y;
     int layout = editor_code_panel_layout();
 
+    if (layout == CODE_PANEL_LAYOUT_HIDDEN)
+        return 0;
     code_panel_rect(&cp_x, &cp_y, &cp_w, &cp_h);
     if (layout == CODE_PANEL_LAYOUT_TOP)
         return abs(gl_y - cp_y) < 10;
@@ -2493,7 +2553,9 @@ static int editor_code_panel_resize_cursor(void) {
 static void editor_update_panel_frac_from_mouse(int x, int y) {
     int layout = editor_code_panel_layout();
 
-    if (layout == CODE_PANEL_LAYOUT_TOP) {
+    if (layout == CODE_PANEL_LAYOUT_HIDDEN) {
+        return;
+    } else if (layout == CODE_PANEL_LAYOUT_TOP) {
         if (g_win_h > 0)
             g_panel_frac = (float)y / (float)g_win_h;
     } else if (layout == CODE_PANEL_LAYOUT_BOTTOM) {

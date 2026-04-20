@@ -39,7 +39,12 @@ static int panel_span_px(int total_px) {
 void code_panel_rect(int *x, int *y, int *w, int *h) {
     int layout = code_panel_layout_mode();
 
-    if (layout == CODE_PANEL_LAYOUT_TOP) {
+    if (layout == CODE_PANEL_LAYOUT_HIDDEN) {
+        if (x) *x = 0;
+        if (y) *y = 0;
+        if (w) *w = 0;
+        if (h) *h = 0;
+    } else if (layout == CODE_PANEL_LAYOUT_TOP) {
         int panel_h = panel_span_px(g_win_h);
         if (x) *x = 0;
         if (y) *y = g_win_h - panel_h;
@@ -63,7 +68,12 @@ void code_panel_rect(int *x, int *y, int *w, int *h) {
 void scene_rect(int *x, int *y, int *w, int *h) {
     int layout = code_panel_layout_mode();
 
-    if (layout == CODE_PANEL_LAYOUT_TOP) {
+    if (layout == CODE_PANEL_LAYOUT_HIDDEN) {
+        if (x) *x = 0;
+        if (y) *y = 0;
+        if (w) *w = g_win_w;
+        if (h) *h = g_win_h;
+    } else if (layout == CODE_PANEL_LAYOUT_TOP) {
         int panel_h = panel_span_px(g_win_h);
         if (x) *x = 0;
         if (y) *y = 0;
@@ -1190,7 +1200,10 @@ static float g_menu_open_time = -1.0f;   /* g_anim_time when current menu opened
 static float g_search_open_time = -1.0f; /* g_anim_time when search opened */
 #define UI_FADE_DURATION 0.18f
 
-int menu_dropdown_is_open(void) { return g_open_menu >= 0; }
+int menu_dropdown_is_open(void) {
+    return g_open_menu >= 0 &&
+           code_panel_layout_mode() != CODE_PANEL_LAYOUT_HIDDEN;
+}
 int example_dropdown_is_open(void) { return menu_dropdown_is_open(); }
 
 static const char *USER_SCENE_LABEL = "Your Scene";
@@ -1378,6 +1391,7 @@ static int menubar_pin_hit(int gx, int gy) {
 
 static int menu_dropdown_rect(int *dx, int *dy, int *dw, int *dh) {
     if (g_open_menu < 0) return 0;
+    if (code_panel_layout_mode() == CODE_PANEL_LAYOUT_HIDDEN) return 0;
     int menu_x[NUM_MENUS], menu_w[NUM_MENUS];
     int pin_x[NUM_PIN_BTNS], pin_w[NUM_PIN_BTNS];
     int by, bh;
@@ -2378,11 +2392,17 @@ void render_code_panel(void) {
     prof_begin(PROF_CODE_PANEL_LAYOUT_GEOM);
     prof_begin(PROF_CODE_PANEL_LAYOUT_GEOM_SETUP);
 
-    refresh_workspace_header_lines();
     int cmd_main_rows[MAX_COMMANDS];
     int replay_extra_rows[MAX_COMMANDS];
     int cp_x, cp_y, cp_w, cp_h;
     code_panel_rect(&cp_x, &cp_y, &cp_w, &cp_h);
+    if (cp_w <= 0 || cp_h <= 0) {
+        prof_end(PROF_CODE_PANEL_LAYOUT_GEOM_SETUP);
+        prof_end(PROF_CODE_PANEL_LAYOUT_GEOM);
+        prof_end(PROF_CODE_PANEL_LAYOUT);
+        return;
+    }
+    refresh_workspace_header_lines();
     int panel_w = cp_w;
     int panel_top = cp_y + cp_h;  /* y of the panel's top edge (OpenGL coords) */
     int linenum_w = 4 * FONT_W;
@@ -3915,6 +3935,11 @@ int ui_panels_handle_right_press(int mx, int my) {
     return 1;
 }
 
+void ui_panels_close_menus(void) {
+    g_open_menu = -1;
+    g_menu_item_hover = -1;
+}
+
 void ui_panels_open_config(void) {
     if (g_open_menu == MENU_CONFIG) {
         g_open_menu = -1;
@@ -3939,6 +3964,7 @@ static int code_panel_hit_test(int mx, int my,
                                int *out_row_offset) {
     int cp_x, cp_y, cp_w, cp_h;
     code_panel_rect(&cp_x, &cp_y, &cp_w, &cp_h);
+    if (cp_w <= 0 || cp_h <= 0) return 0;
     int panel_w = cp_w;
     int panel_top = cp_y + cp_h;
     /* Convert GLUT Y (top=0) to OpenGL Y (bottom=0) */
@@ -3975,6 +4001,7 @@ static int code_panel_drag_target(int mx, int my, int *out_target) {
     (void)mx;
     int cp_x, cp_y, cp_w, cp_h;
     code_panel_rect(&cp_x, &cp_y, &cp_w, &cp_h);
+    if (cp_w <= 0 || cp_h <= 0) return 0;
     int panel_w = cp_w;
     int panel_top = cp_y + cp_h;
     int gl_y = g_win_h - my;

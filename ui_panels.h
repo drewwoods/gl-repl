@@ -18,6 +18,7 @@ void render_scene_status(void);
 void var_panel_rect(int *x, int *y, int *w, int *h);
 int  var_panel_hit(int gx, int gy, int *out_row);
 void ui_panels_open_config(void);
+void ui_panels_close_menus(void);
 int  ui_panels_handle_right_press(int mx, int my);  /* returns 1 if consumed */
 int  example_dropdown_is_open(void);
 int  code_panel_get_command_display_text(int cmd_idx, char *out, int out_size);
