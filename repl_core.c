@@ -3408,6 +3408,16 @@ int replay_exec_limit(void) {
     return g_num_flat_cmds;
 }
 
+void replay_speed_adjust(float factor) {
+    char msg[64];
+    g_replay_speed *= factor;
+    if (g_replay_speed < 0.5f) g_replay_speed = 0.5f;
+    if (g_replay_speed > 200.0f) g_replay_speed = 200.0f;
+    snprintf(msg, sizeof(msg), "Replay: %.1f step/s", g_replay_speed);
+    set_status(msg);
+}
+
+
 /* ========================================================================= */
 /* Command execution                                                          */
 /* ========================================================================= */

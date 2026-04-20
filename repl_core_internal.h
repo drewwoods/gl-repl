@@ -157,6 +157,7 @@ void replay_seek(int new_pc);
 int  replay_seek_to_src_line(int target_line);
 void replay_step_back(void);
 void replay_restart_from_beginning(void);
+void replay_speed_adjust(float factor);
 
 /* ---- Bench helpers (populate replay fade state without stepping) -------
  * These exist solely for bench_repl.c to drive

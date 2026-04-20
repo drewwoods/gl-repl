@@ -1601,21 +1601,11 @@ void keyboard_func(unsigned char key, int x, int y) {
             return;
         }
         if (key == '+' || key == '=') {
-            char msg[64];
-            g_replay_speed *= 1.5f;
-            if (g_replay_speed > 200.0f)
-                g_replay_speed = 200.0f;
-            snprintf(msg, sizeof(msg), "Replay: %.1f step/s", g_replay_speed);
-            set_status(msg);
+            replay_speed_adjust(1.5f);
             return;
         }
         if (key == '-') {
-            char msg[64];
-            g_replay_speed /= 1.5f;
-            if (g_replay_speed < 0.5f)
-                g_replay_speed = 0.5f;
-            snprintf(msg, sizeof(msg), "Replay: %.1f step/s", g_replay_speed);
-            set_status(msg);
+            replay_speed_adjust(0.67f);
             return;
         }
         if (key == 'm' || key == 'M') {
@@ -2344,13 +2334,20 @@ static void special_func(int key, int x, int y) {
     g_blink_tick = 0;
 
     if (g_replay_active) {
-        if ((g_replay_state == REPLAY_PAUSED || g_replay_state == REPLAY_DONE) &&
-            key == GLUT_KEY_LEFT) {
+        if (key == GLUT_KEY_LEFT) {
             replay_step_back();
             return;
         }
-        if (g_replay_state == REPLAY_PAUSED && key == GLUT_KEY_RIGHT) {
+        if (key == GLUT_KEY_RIGHT) {
             replay_advance();
+            return;
+        }
+        if (key == GLUT_KEY_UP) {
+            replay_speed_adjust(1.5f);
+            return;
+        }
+        if (key == GLUT_KEY_DOWN) {
+            replay_speed_adjust(0.67f);
             return;
         }
 
