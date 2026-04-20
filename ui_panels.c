@@ -1238,7 +1238,10 @@ enum {
  *   [e + SCENE_OFF_HDR]      "### SCENE"
  *   [e + SCENE_OFF_NEW]      "New empty scene"
  *   [e + SCENE_OFF_SAVE]     "Save to output.c"
- *   [e + 5 .. e + 4 + n]     user scene names (n = repl_user_scene_count())
+ *   [e + SCENE_OFF_RENAME]   "Rename active scene"
+ *   [e + SCENE_OFF_SCENES ..
+ *      e + SCENE_OFF_SCENES + n - 1]  user scene names
+ *                                     (n = repl_user_scene_count())
  */
 enum {
     SCENE_OFF_DIVIDER = 1,
@@ -4156,22 +4159,17 @@ int ui_panels_handle_rename_key(unsigned char key) {
         return 1;
     }
     if (key == '\r' || key == '\n') {
-        /* Trim leading/trailing whitespace in place. */
-        char *s = g_rename_buf;
-        while (*s == ' ' || *s == '\t') s++;
-        int n = (int)strlen(s);
-        while (n > 0 && (s[n - 1] == ' ' || s[n - 1] == '\t')) n--;
-        s[n] = '\0';
-        if (n == 0) {
+        /* repl_user_scene_rename trims whitespace and rejects empty
+         * names at the API boundary.  A 0 return means reject-and-retry
+         * (keep the overlay open); non-zero means success and we close. */
+        if (!repl_user_scene_rename(g_rename_slot, g_rename_buf)) {
             set_status("Scene name cannot be empty");
             return 1;
         }
-        if (repl_user_scene_rename(g_rename_slot, s)) {
-            char msg[128];
-            snprintf(msg, sizeof(msg), "Renamed to: %s",
-                     repl_user_scene_name(g_rename_slot));
-            set_status(msg);
-        }
+        char msg[128];
+        snprintf(msg, sizeof(msg), "Renamed to: %s",
+                 repl_user_scene_name(g_rename_slot));
+        set_status(msg);
         ui_panels_cancel_rename();
         return 1;
     }

@@ -4505,10 +4505,24 @@ void repl_set_workspace_dir(const char *dir) {
 int repl_user_scene_rename(int slot, const char *new_name) {
     if (slot < 0 || slot >= MAX_USER_SCENES) return 0;
     if (!g_user_scenes[slot].used) return 0;
-    if (!new_name || !*new_name) return 0;
+    if (!new_name) return 0;
+
+    /* Trim leading/trailing whitespace and reject empty names at the
+     * API boundary so every caller (inline rename, future CLI, tests)
+     * gets the same invariant. */
+    while (*new_name == ' ' || *new_name == '\t') new_name++;
+    size_t n = strlen(new_name);
+    while (n > 0 && (new_name[n - 1] == ' ' || new_name[n - 1] == '\t')) n--;
+    if (n == 0) return 0;
+
+    char trimmed[USER_SCENE_NAME_MAX];
+    if (n >= sizeof(trimmed)) n = sizeof(trimmed) - 1;
+    memcpy(trimmed, new_name, n);
+    trimmed[n] = '\0';
+
     derive_unique_scene_name(g_user_scenes[slot].name,
                              sizeof(g_user_scenes[slot].name),
-                             new_name, slot);
+                             trimmed, slot);
     g_user_scenes[slot].last_touch = next_user_scene_tick();
     return 1;
 }
