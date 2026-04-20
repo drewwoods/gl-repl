@@ -14,25 +14,25 @@ static int g_mock_modifiers = 0;
 #define ASSERT_TRUE(label, cond) do { \
     g_run++; \
     if (cond) g_pass++; \
-    else printf("FAIL [%s]\n", label); \
+    else printf("FAIL [%s] (line %d)\n", label, __LINE__); \
 } while (0)
 
 #define ASSERT_INT(label, got, exp) do { \
     g_run++; \
     if ((got) == (exp)) g_pass++; \
-    else printf("FAIL [%s] got %d, expected %d\n", label, (int)(got), (int)(exp)); \
+    else printf("FAIL [%s] got %d, expected %d (line %d)\n", label, (int)(got), (int)(exp), __LINE__); \
 } while (0)
 
 #define ASSERT_STR(label, got, exp) do { \
     g_run++; \
     if (strcmp(got, exp) == 0) g_pass++; \
-    else printf("FAIL [%s] got \"%s\", expected \"%s\"\n", label, got, exp); \
+    else printf("FAIL [%s] got \"%s\", expected \"%s\" (line %d)\n", label, got, exp, __LINE__); \
 } while (0)
 
 #define ASSERT_DECL_OK(label, cond, err) do { \
     g_run++; \
     if (cond) g_pass++; \
-    else printf("FAIL [%s] %s\n", label, err); \
+    else printf("FAIL [%s] %s (line %d)\n", label, err, __LINE__); \
 } while (0)
 
 static void declare_test_vars(void) {
@@ -1674,6 +1674,130 @@ int main() {
         g_replay_state = REPLAY_OFF;
         g_replay_src_line = -1;
         g_replay_pc = 0;
+    }
+
+    /* Regression: pressing Enter on the last existing command must enter
+     * insert mode at g_edit_line == g_num_cmds.  Before the fix the
+     * cursor was invisible because the renderer guarded the active-input
+     * row with !g_inserting, so the slot drew a dimmed placeholder instead
+     * of the cursor. */
+    {
+        repl_reset_state();
+        repl_feed_line_public("glVertex3f(0,0,0)");
+        repl_feed_line_public("glVertex3f(1,1,1)");
+        repl_feed_line_public("glVertex3f(2,2,2)");
+        navigate_to_line(2);
+        ASSERT_INT("enter-at-last: setup edit_line", g_edit_line, 2);
+        ASSERT_INT("enter-at-last: setup not inserting", g_inserting, 0);
+
+        repl_keyboard_func('\r', 0, 0);
+
+        ASSERT_INT("enter-at-last: now inserting", g_inserting, 1);
+        ASSERT_INT("enter-at-last: edit_line == num_cmds", g_edit_line, g_num_cmds);
+    }
+
+    /* Regression: scroll follow for insert-at-end must track the cursor
+     * identically to overwrite-at-end.  Both were already computing the
+     * same cursor_doc_line, but total_lines differed for non-empty input
+     * before the code_panel_newline_rows fix. */
+    {
+        int follow_insert = -1, follow_overwrite = -1;
+        int visible_lines = -1;
+
+        repl_reset_state();
+        for (int i = 0; i < 20; i++) {
+            char line[64];
+            snprintf(line, sizeof(line), "glVertex3f(%d, 0, 0);", i);
+            repl_feed_line_public(line);
+        }
+
+        g_win_w = 800;
+        g_win_h = 230;
+        g_panel_frac = 0.5f;
+        g_code_panel_layout = CODE_PANEL_LAYOUT_LEFT;
+        g_show_indices = 0;
+        g_replay_active = 0;
+
+        g_edit_line = g_num_cmds;
+        g_inserting = 1;
+        g_input[0] = '\0';
+        g_input_len = 0;
+        g_cursor_pos = 0;
+        g_scroll = 0;
+        g_scroll_follow_cursor = 1;
+        code_panel_apply_scroll_follow_for_test(&follow_insert, &visible_lines);
+        ASSERT_TRUE("insert-at-end cursor in visible region",
+                    follow_insert >= g_scroll &&
+                    follow_insert < g_scroll + visible_lines);
+
+        g_edit_line = g_num_cmds;
+        g_inserting = 0;
+        g_scroll = 0;
+        g_scroll_follow_cursor = 1;
+        code_panel_apply_scroll_follow_for_test(&follow_overwrite, &visible_lines);
+
+        ASSERT_INT("insert-at-end follow matches overwrite-at-end follow",
+                   follow_insert, follow_overwrite);
+    }
+
+    /* Regression: special_func (arrow keys) must set g_scroll_follow_cursor
+     * so the viewport tracks cursor movement on each keypress.  Before the
+     * fix only keyboard_func set the flag, so Up/Down left the view stale. */
+    {
+        repl_reset_state();
+        repl_feed_line_public("glVertex3f(0,0,0)");
+        navigate_to_line(0);
+
+        g_scroll_follow_cursor = 0;
+        repl_special_func(GLUT_KEY_UP, 0, 0);
+        ASSERT_INT("up key sets scroll_follow_cursor", g_scroll_follow_cursor, 1);
+
+        g_scroll_follow_cursor = 0;
+        repl_special_func(GLUT_KEY_DOWN, 0, 0);
+        ASSERT_INT("down key sets scroll_follow_cursor", g_scroll_follow_cursor, 1);
+
+        /* Page Up/Down scroll the view manually and must NOT trigger cursor
+         * follow — that would snap the view back to the cursor position,
+         * defeating the purpose of the scroll. */
+        g_scroll_follow_cursor = 0;
+        repl_special_func(GLUT_KEY_PAGE_UP, 0, 0);
+        ASSERT_INT("page up cancels scroll_follow_cursor", g_scroll_follow_cursor, 0);
+
+        g_scroll_follow_cursor = 0;
+        repl_special_func(GLUT_KEY_PAGE_DOWN, 0, 0);
+        ASSERT_INT("page down cancels scroll_follow_cursor", g_scroll_follow_cursor, 0);
+    }
+
+    /* Regression: pressing Up when the cursor is below the visible area
+     * must scroll the viewport to reveal it. */
+    {
+        int follow_doc_line = -1;
+        int visible_lines = -1;
+
+        repl_reset_state();
+        for (int i = 0; i < 20; i++) {
+            char line[64];
+            snprintf(line, sizeof(line), "glVertex3f(%d, 0, 0);", i);
+            repl_feed_line_public(line);
+        }
+
+        g_win_w = 800;
+        g_win_h = 230;
+        g_panel_frac = 0.5f;
+        g_code_panel_layout = CODE_PANEL_LAYOUT_LEFT;
+        g_show_indices = 0;
+        g_replay_active = 0;
+
+        navigate_to_line(g_num_cmds - 1);
+        g_scroll = 0;
+        g_scroll_follow_cursor = 0;
+
+        repl_special_func(GLUT_KEY_UP, 0, 0);
+        ASSERT_INT("up nav: scroll_follow_cursor set", g_scroll_follow_cursor, 1);
+
+        ASSERT_TRUE("up nav: cursor visible after follow",
+                    code_panel_apply_scroll_follow_for_test(&follow_doc_line,
+                                                            &visible_lines));
     }
 
     printf("\n%d / %d tests passed\n", g_pass, g_run);

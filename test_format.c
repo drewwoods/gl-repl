@@ -24,7 +24,7 @@ static int g_tests_failed = 0;
         g_tests_passed++; \
     } else { \
         g_tests_failed++; \
-        printf("  FAIL [%s]: got %d, expected %d\n", (label), (got), (expected)); \
+        printf("  FAIL [%s]: got %d, expected %d (line %d)\n", (label), (got), (expected), __LINE__); \
     } \
 } while (0)
 
@@ -34,8 +34,8 @@ static int g_tests_failed = 0;
         g_tests_passed++; \
     } else { \
         g_tests_failed++; \
-        printf("  FAIL [%s]: got \"%s\" (%d spaces), expected \"%s\" (%d spaces)\n", \
-               (label), (got), (int)strlen(got), (expected), (int)strlen(expected)); \
+        printf("  FAIL [%s]: got \"%s\" (%d spaces), expected \"%s\" (%d spaces) (line %d)\n", \
+               (label), (got), (int)strlen(got), (expected), (int)strlen(expected), __LINE__); \
     } \
 } while (0)
 

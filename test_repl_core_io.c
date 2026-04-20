@@ -10,7 +10,7 @@ static int g_pass = 0;
 #define ASSERT_TRUE(label, cond) do { \
     g_run++; \
     if (cond) g_pass++; \
-    else printf("FAIL [%s]\n", label); \
+    else printf("FAIL [%s] (line %d)\n", label, __LINE__); \
 } while (0)
 
 static void declare_test_vars(void) {
