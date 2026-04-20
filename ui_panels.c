@@ -3593,9 +3593,23 @@ void render_help(void) {
     }
 
     /* --- Content --- */
-    glEnable(GL_SCISSOR_TEST);
-    glScissor(hx + 1, hy + pad_bot, hw - 2, content_h);
+    {
+        int scissor_x = hx + 1;
+        int scissor_y = hy + pad_bot;
+        int scissor_w = hw - 2;
+        int scissor_h = content_h;
+        int have_scissor = (scissor_w > 0 && scissor_h > 0);
 
+        if (scissor_w < 0) scissor_w = 0;
+        if (scissor_h < 0) scissor_h = 0;
+
+        if (have_scissor) {
+            glEnable(GL_SCISSOR_TEST);
+            glScissor(scissor_x, scissor_y, scissor_w, scissor_h);
+        } else {
+            glDisable(GL_SCISSOR_TEST);
+        }
+    }
     int tx      = hx + 14;
     int ty_start = hy + hh - pad_top - LINE_H + 3;
 
