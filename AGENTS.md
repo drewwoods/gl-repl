@@ -83,6 +83,23 @@ make sample
 - `restore_user_scene()` still restores commands and predefined variables only.
   Leaving an example does not restore camera or other presentation state.
 
+## Function Declaration Invariants
+
+- The REPL command list has a leading declaration area: `float` declarations
+  first, then complete user `funcN` definition blocks, then ordinary scene
+  commands. This mirrors the exporter, which emits user functions before
+  `render_repl_geometry()`.
+- When a function is typed after scene commands, `repl_editor.c` promotes the
+  function block into that declaration area and resumes editing after the
+  commands that were shifted behind it. Keep nearby top-level comments with the
+  promoted function when possible.
+- Imported `// @declare` markers must still recreate `CMD_VAR_DECLARE` entries
+  at the front of the command list, even though exported files encounter those
+  markers inside the snippet after static function definitions.
+- Focused coverage for this behavior lives in `test_repl_core_commit.c`,
+  `test_repl_core_io.c`, and the example 03 exact round-trip check in
+  `test_repl_core_examples.c`.
+
 ## Shared Defaults
 
 - Keep the single source of truth for example-owned presentation defaults in

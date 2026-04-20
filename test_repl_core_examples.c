@@ -1001,6 +1001,11 @@ int main(int argc, char **argv) {
                                         "imported code panel",
                                         actual, imported, diff_line);
                 }
+                if (idx == 3) {
+                    snprintf(label, sizeof(label),
+                             "example %02d func-loop exact roundtrip", idx);
+                    ASSERT_TRUE(label, roundtrip_exact);
+                }
 
                 snprintf(reexport_path, sizeof(reexport_path),
                          "%s/example_%02d_roundtrip.c", temp_dir, idx);

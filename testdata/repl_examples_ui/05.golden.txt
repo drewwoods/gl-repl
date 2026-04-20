@@ -25,9 +25,6 @@ void display() {
   glTranslatef(-0.0000f, -0.0000f, -0.0000f);
 --- header_post ---
 --- source ---
-  glClearColor(0.1, 0.1, 0.1, 1);
-  glEnable(GL_DEPTH_TEST);
-  glEnable(GL_NORMALIZE);
   // Recursive triangle tree: child calls shrink and rotate from the parent
   func0(depth, size, spin) {
     glColor3f(0.25 + depth*0.14, 0.45 + 0.2*sin(spin), 1 - depth*0.12);
@@ -64,5 +61,8 @@ void display() {
       glPopMatrix();
     }
   }
+  glClearColor(0.1, 0.1, 0.1, 1);
+  glEnable(GL_DEPTH_TEST);
+  glEnable(GL_NORMALIZE);
   glRotatef(sin(t*0.35)*12, 0, 0, 1);
   func0(4, 1.05, sin(t*0.4));

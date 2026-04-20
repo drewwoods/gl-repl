@@ -28,6 +28,8 @@
 /* Forward declarations                                                      */
 /* ========================================================================= */
 static void save_newline_buf(void);
+static int function_decl_insert_pos(void);
+static int function_leading_comment_start(int pos);
 void push_undo_snapshot(void);
 void pop_undo_snapshot(void);
 void do_redo(void);
@@ -59,6 +61,7 @@ int  g_edit_line = 0;
 char g_newline_buf[MAX_INPUT_LEN] = "";
 int  g_newline_len = 0;
 int  g_inserting = 0;
+static int g_func_decl_resume_delta = 0;
 
 int g_mouse_x, g_mouse_y;
 int g_mouse_btn = -1;
@@ -462,6 +465,55 @@ void load_line_to_input(int idx) {
 static void save_newline_buf(void) {
     memcpy(g_newline_buf, g_input, (size_t)g_input_len + 1);
     g_newline_len = g_input_len;
+}
+
+static int function_decl_insert_pos(void) {
+    int pos = 0;
+
+    while (pos < g_num_cmds && g_cmds[pos].type == CMD_VAR_DECLARE)
+        pos++;
+
+    while (pos < g_num_cmds) {
+        if (g_cmds[pos].type == CMD_COMMENT) {
+            pos++;
+            continue;
+        }
+        if (g_cmds[pos].type != CMD_FUNC_DEF)
+            break;
+
+        int end = find_block_end(pos);
+        if (end >= g_num_cmds)
+            return g_num_cmds;
+        pos = end + 1;
+    }
+
+    return pos;
+}
+
+static int function_leading_comment_start(int pos) {
+    int start = pos;
+
+    while (start > 0 &&
+           g_cmds[start - 1].valid &&
+           g_cmds[start - 1].type == CMD_COMMENT &&
+           block_depth_at(start - 1) == 0)
+        start--;
+
+    return start;
+}
+
+static void apply_func_decl_resume(CmdType end_type) {
+    if (end_type != CMD_FUNC_END || g_func_decl_resume_delta <= 0)
+        return;
+
+    g_edit_line += g_func_decl_resume_delta;
+    if (g_edit_line > g_num_cmds)
+        g_edit_line = g_num_cmds;
+    g_func_decl_resume_delta = 0;
+}
+
+void repl_editor_reset_transients(void) {
+    g_func_decl_resume_delta = 0;
 }
 
 void navigate_to_line(int target) {
@@ -1185,10 +1237,13 @@ int try_commit_func_def(void) {
         return 0;
 
     {
-        int pos = g_inserting ? g_edit_line :
-                  (g_edit_line < g_num_cmds ? g_edit_line : g_num_cmds);
-        int bdepth = block_depth_at(pos);
-        int bb = in_begin_block_at(pos);
+        int edit_pos = g_inserting ? g_edit_line :
+                       (g_edit_line < g_num_cmds ? g_edit_line : g_num_cmds);
+        int overwriting_func = (!g_inserting && edit_pos < g_num_cmds &&
+                                g_cmds[edit_pos].type == CMD_FUNC_DEF);
+        int pos = overwriting_func ? edit_pos : function_decl_insert_pos();
+        int bdepth = overwriting_func ? block_depth_at(pos) : 0;
+        int bb = overwriting_func ? in_begin_block_at(pos) : 0;
         int ind = (bb ? 4 : 2) + bdepth * 2;
         char indent[32];
         GLCmd fd;
@@ -1199,14 +1254,13 @@ int try_commit_func_def(void) {
         memset(indent, ' ', (size_t)ind);
         indent[ind] = '\0';
 
-        if (!g_inserting && g_edit_line < g_num_cmds &&
-            g_cmds[g_edit_line].type == CMD_FUNC_DEF) {
-            g_cmds[g_edit_line].args[0] = (float)fn;
-            g_cmds[g_edit_line].num_args = param_count;
-            format_func_header(g_cmds[g_edit_line].source,
-                               (int)sizeof(g_cmds[g_edit_line].source),
+        if (overwriting_func) {
+            g_cmds[edit_pos].args[0] = (float)fn;
+            g_cmds[edit_pos].num_args = param_count;
+            format_func_header(g_cmds[edit_pos].source,
+                               (int)sizeof(g_cmds[edit_pos].source),
                                indent, fn, param_names, param_count);
-            g_edit_line++;
+            g_edit_line = edit_pos + 1;
             g_inserting = 1;
             g_input[0] = '\0';
             g_input_len = 0;
@@ -1230,17 +1284,48 @@ int try_commit_func_def(void) {
         fe.valid = 1;
         snprintf(fe.source, sizeof(fe.source), "%s}", indent);
 
-        if (g_num_cmds + 2 > MAX_COMMANDS) {
+        int comment_start = edit_pos;
+        int comment_count = 0;
+        int resume_pos = edit_pos;
+        GLCmd *comments = NULL;
+
+        if (!overwriting_func) {
+            comment_start = function_leading_comment_start(edit_pos);
+            comment_count = edit_pos - comment_start;
+        }
+        if (comment_count > 0) {
+            comments = (GLCmd *)malloc((size_t)comment_count * sizeof(*comments));
+            if (comments) {
+                memcpy(comments, &g_cmds[comment_start],
+                       (size_t)comment_count * sizeof(*comments));
+                memmove(&g_cmds[comment_start], &g_cmds[edit_pos],
+                        (size_t)(g_num_cmds - edit_pos) * sizeof(GLCmd));
+                g_num_cmds -= comment_count;
+                resume_pos = edit_pos - comment_count;
+            } else {
+                comment_count = 0;
+            }
+        }
+
+        pos = function_decl_insert_pos();
+        int insert_count = comment_count + 2;
+        if (g_num_cmds + insert_count > MAX_COMMANDS) {
+            free(comments);
             set_status("Command buffer full!");
             return 1;
         }
-        memmove(&g_cmds[pos + 2], &g_cmds[pos],
+        memmove(&g_cmds[pos + insert_count], &g_cmds[pos],
                 (g_num_cmds - pos) * sizeof(GLCmd));
-        g_cmds[pos] = fd;
-        g_cmds[pos + 1] = fe;
-        g_num_cmds += 2;
+        if (comment_count > 0)
+            memcpy(&g_cmds[pos], comments,
+                   (size_t)comment_count * sizeof(*comments));
+        g_cmds[pos + comment_count] = fd;
+        g_cmds[pos + comment_count + 1] = fe;
+        g_num_cmds += insert_count;
+        g_func_decl_resume_delta = resume_pos > pos ? resume_pos - pos : 0;
+        free(comments);
 
-        g_edit_line = pos + 1;
+        g_edit_line = pos + comment_count + 1;
         g_inserting = 1;
         g_input[0] = '\0';
         g_input_len = 0;
@@ -1432,8 +1517,11 @@ int try_commit_close_brace(void) {
          * in insert mode (e.g. after closing an inner block). Otherwise a
          * function/if/for close brace can duplicate the trailing end command. */
         if (pos < g_num_cmds && g_cmds[pos].type == end_type) {
+            int keep_inserting = (g_func_decl_resume_delta > 0 &&
+                                  end_type != CMD_FUNC_END);
             g_edit_line = pos + 1;
-            g_inserting = 0;
+            apply_func_decl_resume(end_type);
+            g_inserting = keep_inserting ? 1 : 0;
             g_input[0] = '\0';
             g_input_len = 0;
             g_cursor_pos = 0;
@@ -1470,8 +1558,11 @@ int try_commit_close_brace(void) {
                 (g_num_cmds - pos) * sizeof(GLCmd));
         g_cmds[pos] = fe;
         g_num_cmds++;
+        int keep_inserting = (g_func_decl_resume_delta > 0 &&
+                              end_type != CMD_FUNC_END);
         g_edit_line = pos + 1;
-        g_inserting = 0;
+        apply_func_decl_resume(end_type);
+        g_inserting = keep_inserting ? 1 : 0;
         g_input[0] = '\0';
         g_input_len = 0;
         g_cursor_pos = 0;

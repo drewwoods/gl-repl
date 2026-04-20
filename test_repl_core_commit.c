@@ -562,6 +562,21 @@ int main(void) {
                 strstr(g_cmds[3].source, "x + 2") != NULL);
 
     repl_reset_state(); declare_test_vars();
+    repl_feed_line_public("glClearColor(0.1, 0.1, 0.1, 1);");
+    repl_feed_line_public("glEnable(GL_DEPTH_TEST);");
+    repl_feed_line_public("func0 {");
+    repl_feed_line_public("glVertex3f(1, 2, 3);");
+    repl_feed_line_public("}");
+    repl_feed_line_public("func0();");
+    ASSERT_TRUE("promoted func keeps cmd count", g_num_cmds == 6);
+    ASSERT_TRUE("promoted func def before commands", g_cmds[0].type == CMD_FUNC_DEF);
+    ASSERT_TRUE("promoted func body before commands", g_cmds[1].type == CMD_VERTEX3F);
+    ASSERT_TRUE("promoted func end before commands", g_cmds[2].type == CMD_FUNC_END);
+    ASSERT_TRUE("promoted prior clear command preserved", g_cmds[3].type == CMD_CLEAR_COLOR);
+    ASSERT_TRUE("promoted prior enable command preserved", g_cmds[4].type == CMD_ENABLE);
+    ASSERT_TRUE("promoted following call appends after prior commands", g_cmds[5].type == CMD_CALL);
+
+    repl_reset_state(); declare_test_vars();
     repl_feed_line_public("func1(a, b) {");
     repl_feed_line_public("glBegin(GL_POINTS);");
     repl_feed_line_public("glVertex3f(a, b, 0);");

@@ -4240,6 +4240,7 @@ static void load_example_lines(const char *const *lines) {
     g_cursor_pos = 0;
     g_newline_buf[0] = '\0';
     g_newline_len = 0;
+    repl_editor_reset_transients();
     init_predef_vars();
     reset_example_presentation_defaults();
 
@@ -4564,6 +4565,7 @@ void repl_reset_state(void) {
     g_cursor_pos = 0;
     g_newline_buf[0] = '\0';
     g_newline_len = 0;
+    repl_editor_reset_transients();
     g_scroll = 0;
     g_scroll_follow_cursor = 0;
     g_multisample_enabled = CFG_DEFAULT_MULTISAMPLE;
