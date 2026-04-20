@@ -1605,64 +1605,203 @@ static int import_parse_declare_marker(const char *line, int *loaded,
     return 1;
 }
 
+static int import_expr_has_symbolic_ident(const char *expr) {
+    const char *p = expr;
+    while (*p) {
+        if (isdigit((unsigned char)*p) ||
+            (*p == '.' && isdigit((unsigned char)p[1]))) {
+            char *end = NULL;
+            (void)strtof(p, &end);
+            if (end && end != p) {
+                p = end;
+                if (*p == 'f' || *p == 'F') p++;
+                continue;
+            }
+        }
+
+        if (!isalpha((unsigned char)*p) && *p != '_') {
+            p++;
+            continue;
+        }
+
+        const char *start = p;
+        while (*p && (isalnum((unsigned char)*p) || *p == '_')) p++;
+        int len = (int)(p - start);
+
+        char name[32];
+        if (len >= (int)sizeof(name))
+            return 1;
+        memcpy(name, start, (size_t)len);
+        name[len] = '\0';
+
+        const char *q = p;
+        while (*q && isspace((unsigned char)*q)) q++;
+        if (*q == '(' &&
+            (strcmp(name, "sin") == 0 ||
+             strcmp(name, "cos") == 0 ||
+             strcmp(name, "tan") == 0 ||
+             strcmp(name, "sqrt") == 0 ||
+             strcmp(name, "abs") == 0 ||
+             strcmp(name, "pow") == 0 ||
+             strcmp(name, "min") == 0 ||
+             strcmp(name, "max") == 0 ||
+             strcmp(name, "floor") == 0 ||
+             strcmp(name, "ceil") == 0 ||
+             strcmp(name, "fmod") == 0 ||
+             strcmp(name, "rand") == 0)) {
+            continue;
+        }
+
+        if (strcmp(name, "PI") == 0 ||
+            strcmp(name, "TAU") == 0 ||
+            strcmp(name, "float") == 0) {
+            continue;
+        }
+
+        return 1;
+    }
+    return 0;
+}
+
+static int import_copy_expr_until(const char **pp, char terminator,
+                                  char *out, int out_sz) {
+    const char *start = *pp;
+    const char *p = start;
+    int depth = 0;
+
+    while (*p) {
+        if (*p == '(') {
+            depth++;
+        } else if (*p == ')') {
+            if (terminator == ')' && depth == 0)
+                break;
+            if (depth > 0)
+                depth--;
+        }
+
+        if (*p == terminator && depth == 0)
+            break;
+        p++;
+    }
+
+    if (*p != terminator)
+        return 0;
+
+    int len = (int)(p - start);
+    if (len > out_sz - 1)
+        len = out_sz - 1;
+    memcpy(out, start, (size_t)len);
+    out[len] = '\0';
+    trim_in_place(out);
+    *pp = p;
+    return 1;
+}
+
+static int import_extract_c_for_exprs(const char *line,
+                                      char *start_expr, int start_sz,
+                                      char *end_expr, int end_sz,
+                                      char *step_expr, int step_sz,
+                                      int *include_end,
+                                      int *is_greater) {
+    char repl_line[MAX_LINE_LEN];
+    c_expr_to_repl(line, repl_line, sizeof(repl_line));
+
+    const char *p = repl_line;
+    while (*p && *p != '=') p++;
+    if (*p != '=') return 0;
+    p++;
+    while (*p && isspace((unsigned char)*p)) p++;
+
+    if (!import_copy_expr_until(&p, ';', start_expr, start_sz))
+        return 0;
+    p++;
+    while (*p && isspace((unsigned char)*p)) p++;
+
+    while (*p && (isalnum((unsigned char)*p) || *p == '_')) p++;
+    while (*p && isspace((unsigned char)*p)) p++;
+
+    if (*p == '<') {
+        *is_greater = 0;
+        p++;
+    } else if (*p == '>') {
+        *is_greater = 1;
+        p++;
+    } else {
+        return 0;
+    }
+    *include_end = 0;
+    if (*p == '=') {
+        *include_end = 1;
+        p++;
+    }
+    while (*p && isspace((unsigned char)*p)) p++;
+
+    if (!import_copy_expr_until(&p, ';', end_expr, end_sz))
+        return 0;
+    p++;
+    while (*p && isspace((unsigned char)*p)) p++;
+
+    while (*p && (isalnum((unsigned char)*p) || *p == '_')) p++;
+    while (*p && isspace((unsigned char)*p)) p++;
+
+    if (*p == '+' && p[1] == '+') {
+        snprintf(step_expr, (size_t)step_sz, "1");
+        return 1;
+    }
+    if (*p == '-' && p[1] == '-') {
+        snprintf(step_expr, (size_t)step_sz, "-1");
+        return 1;
+    }
+    if (*p == '+' && p[1] == '=') {
+        p += 2;
+        while (*p && isspace((unsigned char)*p)) p++;
+        return import_copy_expr_until(&p, ')', step_expr, step_sz);
+    }
+    if (*p == '-' && p[1] == '=') {
+        char raw_step[128];
+        p += 2;
+        while (*p && isspace((unsigned char)*p)) p++;
+        if (!import_copy_expr_until(&p, ')', raw_step, sizeof(raw_step)))
+            return 0;
+        snprintf(step_expr, (size_t)step_sz, "-(%s)", raw_step);
+        return 1;
+    }
+
+    return 0;
+}
+
 static int import_make_repl_for_header(const char *line, char *out, int out_sz) {
     char var[16];
     float start_v, end_v, step_v;
     if (!parse_c_for_header(line, var, sizeof(var), &start_v, &end_v, &step_v))
         return 0;
 
-    char repl_line[MAX_LINE_LEN];
-    c_expr_to_repl(line, repl_line, sizeof(repl_line));
-
-    if (input_has_predef_vars(repl_line)) {
-        const char *rp = repl_line;
-        while (*rp && *rp != '=') rp++;
-        if (!*rp) return 0;
-        rp++;
-        while (*rp && isspace((unsigned char)*rp)) rp++;
-
-        const char *se_start = rp;
-        int depth = 0;
-        while (*rp) {
-            if (*rp == '(') depth++;
-            else if (*rp == ')') depth--;
-            if (*rp == ';' && depth == 0) break;
-            rp++;
+    char start_expr[128];
+    char end_expr[128];
+    char step_expr[128];
+    int include_end = 0;
+    int is_greater = 0;
+    if (import_extract_c_for_exprs(line,
+                                   start_expr, sizeof(start_expr),
+                                   end_expr, sizeof(end_expr),
+                                   step_expr, sizeof(step_expr),
+                                   &include_end, &is_greater) &&
+        (import_expr_has_symbolic_ident(start_expr) ||
+         import_expr_has_symbolic_ident(end_expr) ||
+         import_expr_has_symbolic_ident(step_expr))) {
+        int symbolic_step = import_expr_has_symbolic_ident(step_expr);
+        if (include_end) {
+            char adjusted[128];
+            snprintf(adjusted, sizeof(adjusted), "(%s) %c 1",
+                     end_expr, is_greater ? '-' : '+');
+            strncpy(end_expr, adjusted, sizeof(end_expr) - 1);
+            end_expr[sizeof(end_expr) - 1] = '\0';
         }
-        if (*rp != ';') return 0;
 
-        char start_expr[96];
-        int sl = (int)(rp - se_start);
-        if (sl > (int)sizeof(start_expr) - 1) sl = (int)sizeof(start_expr) - 1;
-        memcpy(start_expr, se_start, (size_t)sl);
-        start_expr[sl] = '\0';
-        trim_in_place(start_expr);
-
-        rp++;
-        while (*rp && isspace((unsigned char)*rp)) rp++;
-        while (*rp && (isalnum((unsigned char)*rp) || *rp == '_')) rp++;
-        while (*rp && isspace((unsigned char)*rp)) rp++;
-        while (*rp && (*rp == '<' || *rp == '>' || *rp == '=' || *rp == '!')) rp++;
-        while (*rp && isspace((unsigned char)*rp)) rp++;
-
-        const char *ee_start = rp;
-        depth = 0;
-        while (*rp) {
-            if (*rp == '(') depth++;
-            else if (*rp == ')') depth--;
-            if (*rp == ';' && depth == 0) break;
-            rp++;
-        }
-        if (*rp != ';') return 0;
-
-        char end_expr[96];
-        int el = (int)(rp - ee_start);
-        if (el > (int)sizeof(end_expr) - 1) el = (int)sizeof(end_expr) - 1;
-        memcpy(end_expr, ee_start, (size_t)el);
-        end_expr[el] = '\0';
-        trim_in_place(end_expr);
-
-        if (step_v != 1.0f) {
+        if (symbolic_step) {
+            snprintf(out, out_sz, "for(%s, %s, %s, %s) {",
+                     var, start_expr, end_expr, step_expr);
+        } else if (step_v != 1.0f) {
             snprintf(out, out_sz, "for(%s, %s, %s, %g) {",
                      var, start_expr, end_expr, step_v);
         } else {
