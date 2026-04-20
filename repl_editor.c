@@ -1748,10 +1748,13 @@ static void capture_commit_attempt_state(CommitAttemptState *s) {
     s->newline_len = g_newline_len;
 }
 
-static void restore_commit_attempt_state(const CommitAttemptState *s) {
-    snapshot_restore(&s->undo);
+/* Navigation rejection reverts commands/predefs and the saved append-line
+ * buffer.  The transient typed input stays discarded by snapshot_restore()'s
+ * reload; captured input fields are used only to detect commit progress. */
+static void restore_commit_attempt_committed_state(const CommitAttemptState *s) {
     memcpy(g_newline_buf, s->newline_buf, sizeof(g_newline_buf));
     g_newline_len = s->newline_len;
+    snapshot_restore(&s->undo);
 }
 
 static void capture_undo_ring_state(UndoRingState *s) {
@@ -1975,7 +1978,7 @@ static CommitResult commit_before_navigation(void) {
 
     memcpy(rejected_status, g_status, sizeof(rejected_status));
     rejected_ttl = g_status_ttl;
-    restore_commit_attempt_state(before);
+    restore_commit_attempt_committed_state(before);
     restore_undo_ring_state(&undo_before);
     memcpy(g_status, rejected_status, sizeof(g_status));
     g_status[sizeof(g_status) - 1] = '\0';

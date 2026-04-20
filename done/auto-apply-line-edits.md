@@ -1,7 +1,7 @@
 # Auto-Commit Edited REPL Lines On Navigation
 
 ## Summary
-- Refactor the current Enter commit branch in [repl_editor.c](/Users/drew/src/code/openGL/samples/gen-ai/OpenGL-Vibe/src/immediate-mode-repl/claude4.6-opus-thinking/repl_editor.c) into a shared helper that can be used by both Enter and line navigation.
+- Refactor the current Enter commit branch in [repl_editor.c](../repl_editor.c) into a shared helper that can be used by both Enter and line navigation.
 - When Up/Down or a code-panel mouse click moves from one source line to another, first try to commit the current edited line if it differs from the committed source.
 - If that auto-commit fails, restore the previous committed state for that line, keep the parser error/status visible, and still complete the navigation to the requested line.
 
@@ -26,7 +26,7 @@
 - Code-panel clicks and drags will use the same navigation path, so a click away from a modified valid line commits it before loading the clicked line.
 
 ## Tests
-- Add focused coverage in [test_repl_editor.c](/Users/drew/src/code/openGL/samples/gen-ai/OpenGL-Vibe/src/immediate-mode-repl/claude4.6-opus-thinking/test_repl_editor.c):
+- Add focused coverage in [test_repl_editor.c](../test_repl_editor.c):
   - editing an existing command, pressing Down commits the valid edit and moves to the next line
   - editing an existing command to invalid text, pressing Down restores the old command, leaves command count unchanged, moves to the next line, and preserves an error status
   - typing a valid new append-at-end line, pressing Up commits it and moves upward
