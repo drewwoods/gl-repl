@@ -3379,8 +3379,10 @@ void render_help(void) {
     };
 
     /* --- Tab 1: Keys ---
-     * Same '\t' convention: left column = key, right = action. */
-    static const char *tab_keys[] = {
+     * Same '\t' convention: left column = key, right = action.
+     * The F-Key Toggles section is generated dynamically from g_cfg_items
+     * so it always reflects the actual bindings without manual sync. */
+    static const char *tab_keys_base[] = {
         "Editing:",
         "  ;                    \tCommit current line",
         "  Enter                \tInsert new line",
@@ -3392,6 +3394,7 @@ void render_help(void) {
         "  End / Ctrl+E         \tJump to end of line",
         "  Shift+Up/Down        \tSelect multiple lines",
         "  Click + drag         \tSelect lines with mouse",
+        "  PgUp / PgDn         \tScroll code panel",
         "",
         "Clipboard & Undo:",
         "  Ctrl+C               \tCopy line/selection",
@@ -3404,12 +3407,12 @@ void render_help(void) {
         "  Ctrl+F               \tSearch source buffer",
         "  Ctrl+D               \tDelete line or selection",
         "  Ctrl+L               \tClear all commands",
-        "  Ctrl+R               \tReformat buffer",
+        "  Ctrl+\\              \tReformat buffer",
         "  Ctrl+/               \tToggle comment on line",
         "  Ctrl+P               \tDump debug state to stdout",
         "  Ctrl+S               \tSave to output.c",
         "  Ctrl+Q               \tExit and save to temp file",
-        "  Escape               \tClear input / close help",
+        "  Escape               \tClear input / close overlay",
         "",
         "Camera:",
         "  Left-drag            \tOrbit",
@@ -3420,8 +3423,8 @@ void render_help(void) {
         "Time & Replay:",
         "  Ctrl+T               \tPlay / pause time variable",
         "  Ctrl+Shift+T         \tReset t to 0",
-        "  Ctrl+G               \tStart / stop replay",
-        "  Ctrl+K               \tJump replay to cursor line (first geometry at/after)",
+        "  Ctrl+R               \tStart / stop replay",
+        "  Ctrl+K               \tJump replay to cursor line",
         "  Space                \tPause / resume replay",
         "  + / -                \tChange replay speed",
         "  m                    \tToggle polygon / vertex replay mode",
@@ -3429,37 +3432,63 @@ void render_help(void) {
         "  Esc                  \tStop replay",
         "",
         "Render State:",
-        "  Ctrl+B               \tToggle accumulation-buffer AA",
-        "  Ctrl+=               \tIncrease jitter samples",
-        "  Ctrl+-               \tDecrease jitter samples",
+        "  Ctrl+=               \tIncrease accum jitter samples",
+        "  Ctrl+-               \tDecrease accum jitter samples",
         "  Ctrl+U               \tToggle GL_MULTISAMPLE",
-        "  Ctrl+N               \tToggle GL_LINE_SMOOTH",
-        "  Ctrl+O               \tCycle grid major tick spacing (1 / 2 / 5 / 10)",
+        "  Ctrl+O               \tCycle grid major tick spacing",
         "  Ctrl+W               \tCycle CPU profile panel",
+        "  Ctrl+B               \tCycle code panel layout",
         "",
-        "Configuration:",
-        "  `                    \tOpen configuration menu",
-        "  Left-click row       \tCycle config entry forward",
-        "  Right-click row      \tCycle config entry backward",
+        "Interface:",
+        "  `                    \tOpen Config menu",
+        "  Left-click item      \tCycle config entry forward",
+        "  Right-click item     \tCycle config entry backward",
         "",
         "Audio:",
         "  Ctrl+Left            \tPrevious track",
         "  Ctrl+Right           \tNext track",
         "",
         "F-Key Toggles:",
-        "  F1  \tHelp overlay       F2  Wireframe mode",
-        "  F3  \tGrid theme         F4  Axes theme",
-        "  F5  \tVertex numbers     F6  Normal vectors",
-        "  F7  \tVertex outlines    F8  Vertex guides",
-        "  `   \tVertex points (config menu toggle)",
-        "  F9  \tAuto-normals       F10 Light indicators",
-        "  F11 \tCamera rotate      F12 Cycle examples",
-        "",
-        "Navigation:",
-        "  PgUp / PgDn          \tScroll code panel (or help)",
-        "",
-        NULL
+        NULL  /* dynamic F-key lines follow */
     };
+
+    /* Build complete tab_keys array: static base + dynamic F-key entries */
+    #define HELP_FKEY_MAX 16
+    #define HELP_KEYS_MAX 128
+    static char      fkey_strbuf[HELP_FKEY_MAX][48];
+    static const char *tab_keys[HELP_KEYS_MAX];
+    {
+        int nk = 0;
+        for (int i = 0; tab_keys_base[i] != NULL && nk < HELP_KEYS_MAX - HELP_FKEY_MAX - 4; i++)
+            tab_keys[nk++] = tab_keys_base[i];
+
+        /* F1 — not in g_cfg_items */
+        snprintf(fkey_strbuf[0], sizeof(fkey_strbuf[0]), "  F1   \tHelp overlay");
+        tab_keys[nk++] = fkey_strbuf[0];
+
+        /* F2–F11 — pulled from g_cfg_items in numeric order */
+        int di = 1;
+        for (int fn = 2; fn <= 11 && di < HELP_FKEY_MAX - 1; fn++) {
+            int gk = GLUT_KEY_F1 + fn - 1;
+            for (int ci = 0; ci < CFG_ITEM_COUNT; ci++) {
+                if (g_cfg_items[ci].is_special && g_cfg_items[ci].key_code == gk) {
+                    snprintf(fkey_strbuf[di], sizeof(fkey_strbuf[di]),
+                             "  F%-2d  \t%s", fn, g_cfg_items[ci].label);
+                    tab_keys[nk++] = fkey_strbuf[di++];
+                    break;
+                }
+            }
+        }
+
+        /* F12 — not in g_cfg_items */
+        snprintf(fkey_strbuf[di], sizeof(fkey_strbuf[di]), "  F12  \tCycle examples");
+        tab_keys[nk++] = fkey_strbuf[di];
+
+        tab_keys[nk++] = "";
+        tab_keys[nk]   = NULL;
+    }
+    #undef HELP_FKEY_MAX
+    #undef HELP_KEYS_MAX
 
     static const char *tab_labels[] = { "Commands", "Keys" };
     static const char **tabs[]      = { tab_commands, tab_keys };
