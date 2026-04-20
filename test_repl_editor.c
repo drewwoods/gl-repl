@@ -96,7 +96,7 @@ int main() {
     init_predef_vars();
     printf("--- repl_editor tests ---\n");
 
-    /* 0. Code/scene panel geometry supports left, top, and bottom layouts */
+    /* 0. Code/scene panel geometry supports left, top, bottom, and hidden layouts */
     {
         int x, y, w, h;
         g_win_w = 1000;
@@ -139,13 +139,25 @@ int main() {
         ASSERT_INT("bottom scene w", w, 1000);
         ASSERT_INT("bottom scene h", h, 600);
 
+        g_code_panel_layout = CODE_PANEL_LAYOUT_HIDDEN;
+        code_panel_rect(&x, &y, &w, &h);
+        ASSERT_INT("hidden code x", x, 0);
+        ASSERT_INT("hidden code y", y, 0);
+        ASSERT_INT("hidden code w", w, 0);
+        ASSERT_INT("hidden code h", h, 0);
+        scene_rect(&x, &y, &w, &h);
+        ASSERT_INT("hidden scene x", x, 0);
+        ASSERT_INT("hidden scene y", y, 0);
+        ASSERT_INT("hidden scene w", w, 1000);
+        ASSERT_INT("hidden scene h", h, 800);
+
         g_win_w = 1200;
         g_win_h = 800;
         g_panel_frac = CFG_DEFAULT_PANEL_FRAC;
         g_code_panel_layout = CFG_DEFAULT_CODE_PANEL_LAYOUT;
     }
 
-    /* 0b. Code panel config cycles Left -> Top -> Bottom and imports legacy top layout */
+    /* 0b. Code panel config cycles Left -> Top -> Bottom -> Hidden and imports legacy top layout */
     {
         int row = cfg_row_for_value(&g_code_panel_layout);
         ASSERT_TRUE("code panel cfg row exists", row >= 0);
@@ -158,6 +170,9 @@ int main() {
             ASSERT_INT("code panel cfg cycles to bottom",
                        g_code_panel_layout, CODE_PANEL_LAYOUT_BOTTOM);
             repl_cfg_cycle_row(row, +1);
+            ASSERT_INT("code panel cfg cycles to hidden",
+                       g_code_panel_layout, CODE_PANEL_LAYOUT_HIDDEN);
+            repl_cfg_cycle_row(row, +1);
             ASSERT_INT("code panel cfg wraps to left",
                        g_code_panel_layout, CODE_PANEL_LAYOUT_LEFT);
         }
@@ -167,6 +182,23 @@ int main() {
                    parse_workspace_header_line("// @cfg code_panel = 2"), 1);
         ASSERT_INT("parse code_panel bottom",
                    g_code_panel_layout, CODE_PANEL_LAYOUT_BOTTOM);
+
+        ASSERT_INT("parse code_panel hidden cfg",
+                   parse_workspace_header_line("// @cfg code_panel = 3"), 1);
+        ASSERT_INT("parse code_panel hidden",
+                   g_code_panel_layout, CODE_PANEL_LAYOUT_HIDDEN);
+
+        {
+            int found_hidden_export = 0;
+            refresh_workspace_header_lines();
+            for (int i = 0; i < g_workspace_header_line_count; i++) {
+                if (strcmp(g_workspace_header_lines[i],
+                           "// @cfg code_panel = 3") == 0)
+                    found_hidden_export = 1;
+            }
+            ASSERT_TRUE("workspace header exports hidden code panel",
+                        found_hidden_export);
+        }
 
         ASSERT_INT("parse legacy top_code_panel cfg",
                    parse_workspace_header_line("// @cfg top_code_panel = 1"), 1);
@@ -182,7 +214,25 @@ int main() {
         g_code_panel_layout = CFG_DEFAULT_CODE_PANEL_LAYOUT;
     }
 
-    /* 0c. Cramped variable-panel fallback still preserves scene status strip */
+    /* 0c. Hidden code panel returns to the editor on ordinary input */
+    {
+        repl_reset_state();
+        g_code_panel_layout = CODE_PANEL_LAYOUT_HIDDEN;
+        repl_keyboard_func('v', 0, 0);
+        ASSERT_INT("typing restores hidden code panel",
+                   g_code_panel_layout, CODE_PANEL_LAYOUT_LEFT);
+        ASSERT_STR("typing after restore still reaches input", g_input, "v");
+
+        g_code_panel_layout = CODE_PANEL_LAYOUT_HIDDEN;
+        repl_keyboard_func('`', 0, 0);
+        ASSERT_INT("config shortcut restores hidden code panel",
+                   g_code_panel_layout, CODE_PANEL_LAYOUT_LEFT);
+        repl_keyboard_func('`', 0, 0);
+
+        g_code_panel_layout = CFG_DEFAULT_CODE_PANEL_LAYOUT;
+    }
+
+    /* 0d. Cramped variable-panel fallback still preserves scene status strip */
     {
         int x, y, w, h;
         g_win_w = 320;
