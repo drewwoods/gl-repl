@@ -3793,7 +3793,7 @@ static void scene_name_from_filename(const char *path,
 int repl_save_workspace(const char *dir) {
     if (!dir || !*dir) {
         set_status("Workspace save: no folder provided");
-        return 0;
+        return -1;
     }
 
     /* mkdir is idempotent-friendly: EEXIST is fine. */
@@ -3801,7 +3801,7 @@ int repl_save_workspace(const char *dir) {
         char msg[256];
         snprintf(msg, sizeof(msg), "Workspace save: cannot create %s", dir);
         set_status(msg);
-        return 0;
+        return -1;
     }
 
     /* Flush the active user scene's live edits back to its slot so the
@@ -3890,7 +3890,7 @@ int repl_load_workspace(const char *dir) {
         char msg[256];
         snprintf(msg, sizeof(msg), "Workspace load: cannot open %s", dir);
         set_status(msg);
-        return 0;
+        return -1;
     }
 
     /* Stash live state so the loader can scribble into globals freely. */

@@ -31,8 +31,13 @@ void repl_save_output(const char *filename);
 /* Workspace I/O: save every occupied user-scene slot to `<dir>/<slug>.c`.
  * repl_load_workspace scans `dir` for *.c and imports each into a fresh
  * slot.  Both remember `dir` so single-file exports carry a
- * `@workspace-dir` hint. */
+ * `@workspace-dir` hint.
+ * Sets status message on success or failure.
+ * returns -1 on error or the number of files saved */
 int  repl_save_workspace(const char *dir);
+/*
+ * Sets status message on success or failure.
+ * returns -1 on error or the number of files loaded. */
 int  repl_load_workspace(const char *dir);
 const char *repl_workspace_dir(void);         /* "" if not bound */
 void repl_set_workspace_dir(const char *dir); /* copies; NULL = clear */
