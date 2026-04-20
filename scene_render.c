@@ -1255,12 +1255,23 @@ static int is_geometry_emit_cmd(CmdType t) {
             t == CMD_TESS_BEGIN_POLYGON);
 }
 
+static void mat4_mul_col_major(const float a[16], const float b[16], float out[16]) {
+    for (int col = 0; col < 4; col++) {
+        for (int row = 0; row < 4; row++) {
+            out[col * 4 + row] =
+                a[0 * 4 + row] * b[col * 4 + 0] +
+                a[1 * 4 + row] * b[col * 4 + 1] +
+                a[2 * 4 + row] * b[col * 4 + 2] +
+                a[3 * 4 + row] * b[col * 4 + 3];
+        }
+    }
+}
+
 /* Walk flat cmds strictly before cursor_flat_idx, applying only transform
- * cmds to a fresh identity matrix. Returns the scene-world position of the
- * local origin at the cursor line — used by the "Frame" guide mode to
- * anchor the guide where prior translations have carried the frame. */
-static void compute_before_cursor_origin(int cursor_flat_idx, float out[3]) {
-    out[0] = out[1] = out[2] = 0.0f;
+ * cmds to a fresh identity matrix. Returns the full scene-world frame at the
+ * cursor line, so Frame guide mode can account for prior rotations as well as
+ * translations. */
+static void compute_before_cursor_matrix(int cursor_flat_idx, float out[16]) {
     glPushMatrix();
     glLoadIdentity();
     int depth = 0;
@@ -1275,13 +1286,19 @@ static void compute_before_cursor_origin(int cursor_flat_idx, float out[3]) {
         if (is_transform_cmd(g_flat_cmds[i].type))
             apply_tracked_transform_cmd(&g_flat_cmds[i], &depth);
     }
+    glGetFloatv(GL_MODELVIEW_MATRIX, out);
+    unwind_tracked_transform_stack(&depth);
+    glPopMatrix();
+}
+
+/* Position-only wrapper for non-rotating guides that still anchor in Frame
+ * mode without inheriting pre-cursor orientation. */
+static void compute_before_cursor_origin(int cursor_flat_idx, float out[3]) {
     float m[16];
-    glGetFloatv(GL_MODELVIEW_MATRIX, m);
+    compute_before_cursor_matrix(cursor_flat_idx, m);
     out[0] = m[12];
     out[1] = m[13];
     out[2] = m[14];
-    unwind_tracked_transform_stack(&depth);
-    glPopMatrix();
 }
 
 /* Walk flat cmds forward from first_after_idx, applying only transform cmds
@@ -1577,7 +1594,7 @@ static void draw_scale_guide(const GLCmd *cmd, const float p_start[3]) {
 }
 
 static void draw_rotate_guide(const GLCmd *cmd, const float p_start[3]) {
-    float angle_deg = cmd->args[0];
+    float angle_deg = fmodf(cmd->args[0], 360.0f); // Keep angle [-360,360]
     float ax = cmd->args[1], ay = cmd->args[2], az = cmd->args[3];
     float alen = sqrtf(ax*ax + ay*ay + az*az);
     if (alen < 1e-6f) return;
@@ -2686,7 +2703,7 @@ void render_3d_scene(void) {
         }
 
         /* Transform guide: two modes, selectable via the config menu
-         * ("Xform guide mode"):
+         * g_xform_guide_mode ("Xform guide mode"):
          *
          *   World (0): render in world axes at world origin. Matches strict
          *     OpenGL reverse-order semantics — for cursor command C_k,
@@ -2694,12 +2711,10 @@ void render_3d_scene(void) {
          *     pre-cursor transforms (which wrap this sub-expression) don't
          *     move the guide.
          *
-         *   Frame (1): render at a scene-world anchor taken from the
-         *     translation components of the full pre-cursor modelview
-         *     (after applying all pre-cursor transforms, including
-         *     rotations/scales), so the guide visually tracks "where the
-         *     live frame currently is" — matches the rendered output for
-         *     code like T(2,0,0); func0(); T(-4,0,0);. */
+         *   Frame (1): render at the live frame. Translation/scale guides
+         *     keep the existing position-anchor behavior; rotate guides use
+         *     the full pre-cursor modelview so prior rotations orient the
+         *     guide axis and arc with the frame being edited. */
         if (tg_want && i == tg_first_cursor_flat) {
             /* Read args from the flat cmd, not the source cmd — when the
              * command uses variables (e.g. glRotatef(3*t, 0,1,0)), flatten
@@ -2710,7 +2725,13 @@ void render_3d_scene(void) {
             compute_after_cursor_origin(tg_first_after_flat, p_after);
             glPushMatrix();
             glLoadMatrixf(tg_cam_view);
-            if (g_xform_guide_mode == 1) {
+            if (g_xform_guide_mode == 1 && live_cmd->type == CMD_ROTATEF) {
+                float frame[16];
+                float guide_mv[16];
+                compute_before_cursor_matrix(tg_first_cursor_flat, frame);
+                mat4_mul_col_major(tg_cam_view, frame, guide_mv);
+                glLoadMatrixf(guide_mv);
+            } else if (g_xform_guide_mode == 1) {
                 float anchor[3];
                 compute_before_cursor_origin(tg_first_cursor_flat, anchor);
                 glTranslatef(anchor[0], anchor[1], anchor[2]);
