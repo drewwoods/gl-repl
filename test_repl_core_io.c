@@ -77,6 +77,7 @@ static int find_init_line_substr(const char *needle) {
 int main(void) {
     const char *path = "/tmp/repl_core_roundtrip_output.c";
     const char *func_path = "/tmp/repl_core_func_output.c";
+    const char *param_loop_path = "/tmp/repl_core_param_loop_output.c";
     const char *decl_func_path = "/tmp/repl_core_decl_func_output.c";
     const char *quadric_path = "/tmp/repl_core_quadric_output.c";
     const char *tess_path = "/tmp/repl_core_tess_output.c";
@@ -294,6 +295,44 @@ int main(void) {
                 fabsf(g_flat_cmds[g_num_flat_cmds - 1].args[0] - 1.5f) < 1e-6f);
     ASSERT_TRUE("param func flatten y",
                 fabsf(g_flat_cmds[g_num_flat_cmds - 1].args[1] - 3.0f) < 1e-6f);
+
+    repl_reset_state();
+    repl_feed_line_public("func0(radius, sides, phase) {");
+    repl_feed_line_public("for(i, 0, sides + 1) {");
+    repl_feed_line_public("glVertex3f(cos(i*TAU/sides + phase)*radius, sin(i*TAU/sides + phase)*radius, 0);");
+    repl_feed_line_public("}");
+    repl_feed_line_public("}");
+    repl_feed_line_public("func0(1, 6, 0);");
+    repl_save_output(param_loop_path);
+    {
+        char buf[32768];
+        read_text_file(param_loop_path, buf, sizeof(buf));
+        ASSERT_TRUE("saved param loop keeps symbolic C bound",
+                    strstr(buf, "for (float i = 0; i < sides + 1; i += 1.0f)") != NULL);
+    }
+
+    repl_reset_state();
+    ASSERT_TRUE("load saved param loop output", repl_load_from_file(param_loop_path) == 1);
+    {
+        int have_bound = 0;
+        for (int i = 0; i < g_num_cmds; i++) {
+            if (g_cmds[i].type == CMD_FOR_BEGIN &&
+                strstr(g_cmds[i].source, "sides + 1") != NULL &&
+                g_cmds[i].has_vars) {
+                have_bound = 1;
+            }
+        }
+        ASSERT_TRUE("loaded param loop keeps function param bound", have_bound == 1);
+    }
+    repl_flatten_commands();
+    {
+        int vertex_count = 0;
+        for (int i = 0; i < g_num_flat_cmds; i++)
+            if (g_flat_cmds[i].type == CMD_VERTEX3F)
+                vertex_count++;
+        ASSERT_TRUE("loaded param loop iterates through sides plus center close",
+                    vertex_count == 7);
+    }
 
     repl_reset_state(); declare_test_vars();
     repl_feed_line_public("float r;");

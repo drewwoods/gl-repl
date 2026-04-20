@@ -100,6 +100,20 @@ make sample
   `test_repl_core_io.c`, and the example 03 exact round-trip check in
   `test_repl_core_examples.c`.
 
+## C Import Loop Bounds
+
+- When importing C `for` headers, preserve symbolic start/end/step expressions
+  instead of rebuilding them only from evaluated floats. Function parameters
+  such as `sides` are visible expression variables, not predefined REPL vars,
+  so checks that only use `input_has_predef_vars()` will silently collapse
+  bounds like `sides + 1` to numeric fallback values.
+- Numeric-only C loops can still round-trip through the evaluated float path.
+  Symbolic loop bounds should be fed back as REPL source text so normal
+  expression validation can decide whether the names are actually visible.
+- Keep focused coverage in `test_repl_core_io.c` for exported functions whose
+  loop bounds reference function parameters, and use
+  `./sample <exported.c> --dump-code` for a direct import sanity check.
+
 ## Shared Defaults
 
 - Keep the single source of truth for example-owned presentation defaults in
