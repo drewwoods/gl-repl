@@ -100,6 +100,10 @@ int main() {
         ASSERT_STR("ghost text arg2", g_ac_ghost, "IENT)");
         accept_autocomplete();
         ASSERT_STR("input after arg2", g_input, "glColorMaterial(GL_FRONT, GL_AMBIENT)");
+
+        set_input_text("glColorMaterial(GL_FRONT, GL_SH");
+        update_autocomplete();
+        ASSERT_INT("shininess is not a color-material mode", g_ac_count, 0);
     }
 
     /* 4. glPointParameterfv custom completion */

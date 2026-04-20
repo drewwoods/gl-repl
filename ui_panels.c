@@ -3361,7 +3361,7 @@ void render_help(void) {
         "",
         "Lighting / Material:",
         "  glColorMaterial(face, mode)",
-        "       \tface: GL_FRONT..., mode: GL_DIFFUSE...",
+        "       \tface: GL_FRONT..., mode: GL_AMBIENT / GL_DIFFUSE / GL_SPECULAR / GL_EMISSION",
         "  glMaterialf(face, pname, value | {r,g,b,a})",
         "  glLightModeli(pname, param)",
         "       \tGL_LIGHT_MODEL_TWO_SIDE, GL_LIGHT_MODEL_LOCAL_VIEWER",

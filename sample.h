@@ -133,7 +133,7 @@ typedef enum {
 #define REPL_OUTLINE_POLYGON_OFFSET_UNITS  (-100.0f)
 #define TESS_VERT_BUF_SIZE 256
 #define CAM_LINE_COUNT 4
-#define RENDER_STATE_LINE_COUNT 2
+#define RENDER_STATE_LINE_COUNT 3
 
 /*
  * Replay HUD layout shared by scene_render.c and ui_panels.c.

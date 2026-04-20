@@ -117,6 +117,15 @@ const EnumEntry g_material_params[] = {
     { NULL, 0 }
 };
 
+const EnumEntry g_color_material_modes[] = {
+    { "GL_AMBIENT",             GL_AMBIENT },
+    { "GL_DIFFUSE",             GL_DIFFUSE },
+    { "GL_SPECULAR",            GL_SPECULAR },
+    { "GL_EMISSION",            GL_EMISSION },
+    { "GL_AMBIENT_AND_DIFFUSE", GL_AMBIENT_AND_DIFFUSE },
+    { NULL, 0 }
+};
+
 const EnumEntry g_light_model_params[] = {
     { "GL_LIGHT_MODEL_LOCAL_VIEWER", GL_LIGHT_MODEL_LOCAL_VIEWER },
     { "GL_LIGHT_MODEL_TWO_SIDE",     GL_LIGHT_MODEL_TWO_SIDE },
@@ -1115,7 +1124,7 @@ static const EnumCmdDef g_enum_cmds[] = {
     { "glDisable",       CMD_DISABLE,       1, g_enable_caps,        NULL,              "%sglDisable(%s);",           "Try GL_DEPTH_TEST, GL_LIGHTING, GL_COLOR_MATERIAL", NULL, 0 },
     { "glShadeModel",    CMD_SHADE_MODEL,   1, g_shade_models,       NULL,              "%sglShadeModel(%s);",        "Try GL_SMOOTH or GL_FLAT", NULL, 0 },
     { "glFrontFace",     CMD_FRONT_FACE,    1, g_front_face,         NULL,              "%sglFrontFace(%s);",         "Try GL_CW or GL_CCW", NULL, 0 },
-    { "glColorMaterial", CMD_COLOR_MATERIAL,2, g_face_types,         g_material_params, "%sglColorMaterial(%s, %s);", "face: GL_FRONT, GL_BACK, GL_FRONT_AND_BACK", "mode: GL_AMBIENT, GL_DIFFUSE, GL_AMBIENT_AND_DIFFUSE...", 0 },
+    { "glColorMaterial", CMD_COLOR_MATERIAL,2, g_face_types,         g_color_material_modes, "%sglColorMaterial(%s, %s);", "face: GL_FRONT, GL_BACK, GL_FRONT_AND_BACK", "mode: GL_AMBIENT, GL_DIFFUSE, GL_SPECULAR, GL_EMISSION, GL_AMBIENT_AND_DIFFUSE", 0 },
     { "glMaterialf",     CMD_MATERIALF,    -2, g_face_types,         g_material_params, NULL,                         "face: GL_FRONT, GL_BACK, GL_FRONT_AND_BACK", "pname: GL_DIFFUSE, GL_AMBIENT, GL_SPECULAR, GL_SHININESS", 0 },
     { "glLightModeli",   CMD_LIGHT_MODEL_I, 2, g_light_model_params, g_bool_vals,       "%sglLightModeli(%s, %s);",   "pname: GL_LIGHT_MODEL_TWO_SIDE, GL_LIGHT_MODEL_LOCAL_VIEWER", "param: GL_TRUE, GL_FALSE, or integer", 0 },
     { "glBlendFunc",     CMD_BLEND_FUNC,    2, g_blend_src_factors,  g_blend_dst_factors, "%sglBlendFunc(%s, %s);",  "sfactor: GL_SRC_ALPHA", "dfactor: GL_ONE_MINUS_SRC_ALPHA, GL_ONE", 0 },

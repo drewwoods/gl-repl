@@ -455,17 +455,57 @@ made safe for concurrent `.gcda` writes.
 ### Add a new command
 
 1. Add the `CmdType` in `sample.h`.
-2. Add the matching name to the `cmd_type_name()` table in `repl_core.c` in
+2. Add the matching name to the `cmd_type_name()` table in `repl_core.c`, in
    the same order as the enum — `repl_debug_dump_editor()` and
    `repl_debug_dump_flat_commands()` index into it, so a missing or
    misordered entry silently mislabels every subsequent command in the
    debug dump (see commit `abccf5c` for `CMD_FRONT_FACE`).
 3. Extend parser handling in `repl_core.c`.
+   - Pure numeric calls usually belong in `g_std_cmds`.
+   - Enum-driven calls usually belong in `g_enum_cmds`; add a dedicated
+     `EnumEntry` table when the legal enum set differs from a similar command
+     (for example `glColorMaterial` modes are not the same as all
+     `glMaterialf` pnames).
+   - Special arity, vector/scalar alternatives, block commands, or commands
+     with custom validation should get an explicit parser branch.
 4. Extend execution handling in `repl_core.c`.
-5. Extend flattening if the command affects control flow or local scope.
+   - State-only commands normally go through `apply_state_cmd()`, then are
+     dispatched from `execute_commands()`.
+   - Geometry-emitting commands must respect open `glBegin` / tessellation
+     state and any replay/fade semantics.
+5. Extend flattening if the command affects control flow, local scope,
+   declarations, labels/gotos, or per-frame expression evaluation.
 6. Extend export/import in `repl_export.c` if the command must round-trip.
-7. Extend autocomplete or editor affordances in `repl_core.c` /
-   `repl_editor.c` if needed.
+   - Normal user commands should be emitted by `write_canonical_cmd_as_c()` /
+     `format_cmd_source_as_c()`.
+   - Commands that appear in generated scaffold, but are not user source,
+     must be skipped or parsed as scaffold during `load_from_file()`.
+   - If the command changes generated display setup, keep the code-panel
+     preview and exporter sharing the same source of truth. Display-scaffold
+     state belongs in `g_render_state_lines` plus `RENDER_STATE_LINE_COUNT`;
+     one-time init scaffold belongs in `g_init_bootstrap_repl` or host-only
+     init arrays.
+7. Extend autocomplete and parameter hints in `repl_core.c`.
+   - Add the callable signature to `g_func_completions`.
+   - Add enum-argument completion through `g_enum_cmds` when applicable.
+   - Add focused coverage in `test_repl_autocomplete.c` for ambiguous enum
+     sets and multi-argument completions.
+8. Extend editor/UI affordances and docs if the command is user-facing.
+   Common touch points are `ui_panels.c` help text, `README.md`, `CLAUDE.md`,
+   color swatches, command formatting, search/highlight behavior, and any
+   editor-specific validation in `repl_editor.c`.
+9. Update local stub headers when a new GL/GLU/GLUT symbol, enum, or callback
+   enters compiled code. Mirror symbols in `include/GL/`, `include/GLUT/`,
+   `include/OpenGL/`, and `include/GL/gl_stub_counts.h` as needed so
+   `USE_GL_STUBS=1` builds remain useful.
+10. Add tests at the narrowest useful level, then run the relevant suite.
+    Typical coverage:
+    - `test_repl_core_parse.c` for parser acceptance/rejection.
+    - `test_repl_autocomplete.c` for completion and hints.
+    - `test_repl_core_io.c` for export/import and scaffold placement.
+    - `test_repl_core_examples.c` and `testdata/repl_examples_ui/*.golden.txt`
+      when code-panel scaffold output changes.
+    - `make test-stubs` before considering the change complete.
 
 #### Impact of missing new command in `cmd_type_name()`
 1. Every type name after CMD_VAR_DECLARE in the enum would be shifted by one.

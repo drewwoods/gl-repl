@@ -2416,6 +2416,7 @@ void render_3d_scene(void) {
     setup_lights();
     glDisable(GL_LIGHTING); /* baseline: disabled; execute_commands() enables if user typed it */
 
+    glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE);
     GLfloat mspec[] = { 0.4f, 0.4f, 0.4f, 1.0f };
     GLfloat mshin[] = { 30.0f };
     glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, mspec);
@@ -2447,6 +2448,7 @@ void render_3d_scene(void) {
             prof_begin(PROF_SCENE_3D_FADE);
             setup_lights();
             glDisable(GL_LIGHTING);
+            glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE);
             glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, mspec);
             glMaterialfv(GL_FRONT_AND_BACK, GL_SHININESS, mshin);
             if (g_multisample_enabled) glEnable(GL_MULTISAMPLE);
