@@ -13,6 +13,19 @@
    current idea is to expose the expressiveness of geometry and color to the
    user and not hide it behind textures.
 
+## Supported Material Commands
+
+The REPL accepts fixed-function material state in the display body:
+
+```c
+glColorMaterial(face, mode);
+glMaterialf(face, pname, value);
+```
+
+`glColorMaterial` supports `GL_FRONT`, `GL_BACK`, and
+`GL_FRONT_AND_BACK` for `face`, and `GL_AMBIENT`, `GL_DIFFUSE`,
+`GL_SPECULAR`, `GL_EMISSION`, or `GL_AMBIENT_AND_DIFFUSE` for `mode`.
+
 ## Transform Guides
 
 When your cursor sits on a committed `glTranslatef`, `glRotatef`, or

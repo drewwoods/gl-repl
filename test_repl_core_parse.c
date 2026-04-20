@@ -247,6 +247,29 @@ int main(void) {
         ASSERT_TRUE("gluPartialDisk type", cmd.type == CMD_GLU_PARTIAL_DISK);
     }
 
+    /* glColorMaterial — face/mode enums */
+    {
+        repl_reset_state();
+        GLCmd cmd;
+        memset(&cmd, 0, sizeof(cmd));
+        int ok = repl_parse_command("glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE)", &cmd);
+        ASSERT_TRUE("glColorMaterial parse ok", ok == 1);
+        ASSERT_TRUE("glColorMaterial type", cmd.type == CMD_COLOR_MATERIAL);
+        ASSERT_TRUE("glColorMaterial face", cmd.mode == GL_FRONT_AND_BACK);
+        ASSERT_TRUE("glColorMaterial mode", (GLenum)cmd.args[0] == GL_AMBIENT_AND_DIFFUSE);
+        ASSERT_TRUE("glColorMaterial source",
+                    strstr(cmd.source, "glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE);") != NULL);
+    }
+
+    {
+        repl_reset_state();
+        GLCmd cmd;
+        memset(&cmd, 0, sizeof(cmd));
+        int ok = repl_parse_command("glColorMaterial(GL_FRONT, GL_SHININESS)", &cmd);
+        ASSERT_TRUE("glColorMaterial rejects shininess", ok == 0);
+        assert_status_contains("glColorMaterial bad mode status", "GL_AMBIENT_AND_DIFFUSE");
+    }
+
     /* glMaterialf — scalar and vector (4-value) forms */
     {
         repl_reset_state();

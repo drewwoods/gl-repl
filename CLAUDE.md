@@ -361,6 +361,7 @@ glPointSize(size)
 glPointParameterfv(GL_POINT_DISTANCE_ATTENUATION, const, linear, quadratic)
 glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA|GL_ONE)
 glColorMaterial(face, mode), glMaterialf(face, pname, value)
+  glColorMaterial mode: GL_AMBIENT, GL_DIFFUSE, GL_SPECULAR, GL_EMISSION, GL_AMBIENT_AND_DIFFUSE
 glLightModeli(pname, param), glFrontFace(mode)
 gluSphere(r, slices, stacks)
 gluCylinder(base, top, height, slices, stacks)

@@ -160,7 +160,8 @@ int parse_workspace_header_line(const char *line) {
 
 char g_render_state_lines[RENDER_STATE_LINE_COUNT][64] = {
     "  glEnable(GL_MULTISAMPLE);",
-    "  glDisable(GL_LINE_SMOOTH);"
+    "  glDisable(GL_LINE_SMOOTH);",
+    "  glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE);"
 };
 
 char g_cam_lines[CAM_LINE_COUNT][96] = {
@@ -183,7 +184,6 @@ int g_init_attenuate_points = CFG_DEFAULT_ATTENUATE_POINTS;
 
 static const InitBootstrapEntry g_init_bootstrap_repl[] = {
     { "glEnable(GL_COLOR_MATERIAL);", NULL },
-    { "glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE);", NULL },
     { "glLightModeli(GL_LIGHT_MODEL_TWO_SIDE, GL_TRUE);", NULL },
     { "glEnable(GL_BLEND);", NULL },
     { "glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);", NULL },
@@ -419,6 +419,8 @@ void update_render_state_strings(void) {
     snprintf(g_render_state_lines[1], sizeof(g_render_state_lines[1]),
              "  gl%s(GL_LINE_SMOOTH);",
              g_line_smooth_enabled ? "Enable" : "Disable");
+    snprintf(g_render_state_lines[2], sizeof(g_render_state_lines[2]),
+             "  glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE);");
 }
 
 /* Skip whitespace, commas, and trailing 'f' / 'F' float suffixes so strtof
