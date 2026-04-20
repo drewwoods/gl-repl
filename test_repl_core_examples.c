@@ -12,6 +12,7 @@ static int g_run = 0;
 static int g_pass = 0;
 static int g_verbose = 0;
 static int g_use_color = 0;
+static int g_show_mismatch = 0;
 
 #define ANSI_GREEN "\033[32m"
 #define ANSI_YELLOW "\033[33m"
@@ -254,6 +255,71 @@ static int compare_exact_text(const char *expected, const char *actual, int *lin
     return 0;
 }
 
+static int text_line_bounds(const char *text, int target_line,
+                            const char **start_out, int *len_out) {
+    const char *p = text;
+    int line = 1;
+
+    if (!text || target_line < 1)
+        return 0;
+
+    while (line < target_line && *p) {
+        if (*p == '\n')
+            line++;
+        p++;
+    }
+    if (line != target_line || !*p)
+        return 0;
+
+    const char *start = p;
+    while (*p && *p != '\n')
+        p++;
+    int len = (int)(p - start);
+    while (len > 0 && start[len - 1] == '\r')
+        len--;
+
+    if (start_out) *start_out = start;
+    if (len_out) *len_out = len;
+    return 1;
+}
+
+static void print_text_line(const char *side, int line_no, const char *text,
+                            int highlight) {
+    const char *start = NULL;
+    int len = 0;
+
+    printf("%c %-8s %4d | ", highlight ? '>' : ' ', side, line_no);
+    if (text_line_bounds(text, line_no, &start, &len))
+        printf("%.*s", len, start);
+    else
+        printf("<missing>");
+    printf("\n");
+}
+
+static void print_text_mismatch(const char *title,
+                                const char *expected_label,
+                                const char *actual_label,
+                                const char *expected,
+                                const char *actual,
+                                int diff_line) {
+    if (!g_show_mismatch || diff_line <= 0)
+        return;
+
+    int start = diff_line - 2;
+    int end = diff_line + 2;
+    if (start < 1)
+        start = 1;
+
+    printf("MISMATCH [%s] first differing line=%d\n", title, diff_line);
+    printf("  expected: %s\n", expected_label ? expected_label : "(expected)");
+    printf("  actual:   %s\n", actual_label ? actual_label : "(actual)");
+    for (int line = start; line <= end; line++) {
+        int highlight = line == diff_line;
+        print_text_line("expected", line, expected, highlight);
+        print_text_line("actual", line, actual, highlight);
+    }
+}
+
 static int is_definition_source_line(const char *line) {
     char rhs[MAX_LINE_LEN];
     const char *p = line;
@@ -424,6 +490,8 @@ static void print_usage(const char *prog) {
     printf("  --help, -h             Show this help message\n");
     printf("  --dump-index N         Dump code-panel text for example N to stdout\n");
     printf("                         (used to regenerate golden fixture files)\n\n");
+    printf("  --show-mismatch        Print expected/actual context around exact-text mismatches\n");
+    printf("                         (alias: --diff)\n\n");
     printf("Environment:\n");
     printf("  REPL_EXPORT_VERBOSE=1  Print per-example step details\n");
     printf("  REPL_EXPORT_CC         C compiler to use (default: cc)\n");
@@ -461,6 +529,7 @@ static int dump_single_example_to_stdout(int idx) {
 int main(int argc, char **argv) {
     char temp_dir[] = "/tmp/repl_examples_export.XXXXXX";
     const char *verbose_env = getenv("REPL_EXPORT_VERBOSE");
+    int dump_idx = -1;
 
     g_verbose = verbose_env && verbose_env[0] && strcmp(verbose_env, "0") != 0;
     g_use_color = getenv("NO_COLOR") == NULL &&
@@ -468,13 +537,33 @@ int main(int argc, char **argv) {
                    env_truthy("FORCE_COLOR") ||
                    env_truthy("CLICOLOR_FORCE"));
 
-    if (argc == 2 && (strcmp(argv[1], "--help") == 0 || strcmp(argv[1], "-h") == 0)) {
+    for (int argi = 1; argi < argc; argi++) {
+        if (strcmp(argv[argi], "--help") == 0 ||
+            strcmp(argv[argi], "-h") == 0) {
+            print_usage(argv[0]);
+            return 0;
+        }
+        if (strcmp(argv[argi], "--show-mismatch") == 0 ||
+            strcmp(argv[argi], "--diff") == 0) {
+            g_show_mismatch = 1;
+            continue;
+        }
+        if (strcmp(argv[argi], "--dump-index") == 0) {
+            if (argi + 1 >= argc) {
+                fprintf(stderr, "--dump-index requires an example index\n");
+                return 2;
+            }
+            dump_idx = atoi(argv[++argi]);
+            continue;
+        }
+
+        fprintf(stderr, "unknown option: %s\n", argv[argi]);
         print_usage(argv[0]);
-        return 0;
+        return 2;
     }
 
-    if (argc == 3 && strcmp(argv[1], "--dump-index") == 0)
-        return dump_single_example_to_stdout(atoi(argv[2]));
+    if (dump_idx >= 0)
+        return dump_single_example_to_stdout(dump_idx);
 
     if (!mkdtemp(temp_dir)) {
         perror("mkdtemp");
@@ -802,6 +891,10 @@ int main(int argc, char **argv) {
             if (!defs_exact) {
                 printf("DETAIL [example %02d definition mismatch] name=%s line=%d\nEXPECTED DEFS:\n%sACTUAL DEFS:\n%s\n",
                        idx, name, diff_line, expected_defs, loaded_defs);
+                print_text_mismatch("example definition mismatch",
+                                    "source example definitions",
+                                    "loaded command definitions",
+                                    expected_defs, loaded_defs, diff_line);
             }
         }
         snprintf(label, sizeof(label), "example %02d definitions match source arrays", idx);
@@ -832,6 +925,9 @@ int main(int argc, char **argv) {
         if (!exact) {
             printf("DETAIL [example %02d fixture mismatch] name=%s line=%d fixture=%s\n",
                    idx, repl_example_name(idx), diff_line, fixture_path);
+            print_text_mismatch("example fixture mismatch",
+                                fixture_path, "current code panel dump",
+                                expected, actual, diff_line);
             printf("NOTE: if this change is intentional, regenerate the golden file:\n"
                    "  %s --dump-index %d > %s\n",
                    argv[0], idx, fixture_path);
@@ -880,6 +976,10 @@ int main(int argc, char **argv) {
                 if (!imported_defs_exact) {
                     printf("DETAIL [example %02d definition roundtrip mismatch] name=%s line=%d export=%s\nEXPECTED DEFS:\n%sIMPORTED DEFS:\n%s\n",
                            idx, name, diff_line, export_path, expected_defs, imported_defs);
+                    print_text_mismatch("definition roundtrip mismatch",
+                                        "source example definitions",
+                                        "imported definitions",
+                                        expected_defs, imported_defs, diff_line);
                 }
             }
             snprintf(label, sizeof(label), "example %02d definitions roundtrip", idx);
@@ -896,6 +996,10 @@ int main(int argc, char **argv) {
                     printf("%sDETAIL [example %02d export/import mismatch] name=%s line=%d export=%s%s\n",
                            ansi_yellow(), idx, name, diff_line, export_path,
                            ansi_reset());
+                    print_text_mismatch("export/import mismatch",
+                                        "pre-export code panel",
+                                        "imported code panel",
+                                        actual, imported, diff_line);
                 }
 
                 snprintf(reexport_path, sizeof(reexport_path),
