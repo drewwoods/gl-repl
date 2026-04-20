@@ -307,19 +307,15 @@ Two render modes, chosen via the `g_xform_guide_mode` config toggle
   camera-view matrix is snapshotted before any user transforms and
   reloaded via `glLoadMatrixf(tg_cam_view)` when drawing the guide.
 
-- **Frame (1)** — render at a scene-world anchor derived from the
+- **Frame (1)** — render at a scene-world frame derived from the
   **full pre-cursor modelview** (translations, rotations, and
-  scales). The anchor is computed by
-  `compute_before_cursor_origin()`, which walks all flat cmds
+  scales). `compute_before_cursor_matrix()` walks all flat cmds
   before the cursor in a fresh identity matrix (via
-  `apply_tracked_transform_cmd` so push/pop scopes correctly) and
-  reads `(m[12], m[13], m[14])` — i.e. where the pre-cursor
-  modelview places the origin. Only the position is used; the
-  guide itself is still drawn with world-axis orientation
-  (`glTranslatef(anchor)` after `glLoadMatrixf(tg_cam_view)`), so
-  arrows/arcs still read along world axes. This lines up the
-  anchor with geometry rendered by prior `func0()` / draw calls
-  even when pre-cursor rotations rotate the sub-frame.
+  `apply_tracked_transform_cmd` so push/pop scopes correctly).
+  Rotate guides draw with `camera * pre_cursor`, so their axis and
+  arc inherit prior frame rotations. Translation/scale guides still
+  use `compute_before_cursor_origin()` to keep the existing
+  position-anchor behavior.
 
 Per-command helpers:
 
