@@ -180,6 +180,25 @@ int main() {
         g_code_panel_layout = CFG_DEFAULT_CODE_PANEL_LAYOUT;
     }
 
+    /* 0c. Cramped variable-panel fallback still preserves scene status strip */
+    {
+        int x, y, w, h;
+        g_win_w = 320;
+        g_win_h = 80;
+        g_panel_frac = 0.25f;
+        g_code_panel_layout = CODE_PANEL_LAYOUT_LEFT;
+        g_replay_active = 0;
+
+        var_panel_rect(&x, &y, &w, &h);
+        ASSERT_INT("cramped var panel clears status strip",
+                   y, STATUSBAR_H + 4);
+
+        g_win_w = 1200;
+        g_win_h = 800;
+        g_panel_frac = CFG_DEFAULT_PANEL_FRAC;
+        g_code_panel_layout = CFG_DEFAULT_CODE_PANEL_LAYOUT;
+    }
+
     /* 1. Undo when nothing to undo — must run before any undo push */
     {
         /* g_undo_count starts at 0 (global zero-init); repl_reset_state() does
