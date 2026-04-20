@@ -169,9 +169,17 @@ int main() {
             repl_cfg_cycle_row(row, +1);
             ASSERT_INT("code panel cfg cycles to bottom",
                        g_code_panel_layout, CODE_PANEL_LAYOUT_BOTTOM);
+            g_ac_count = 2;
+            g_ac_sel = 1;
+            strcpy(g_ac_ghost, "glVertex3f");
+            strcpy(g_ac_hint, "vertex");
             repl_cfg_cycle_row(row, +1);
             ASSERT_INT("code panel cfg cycles to hidden",
                        g_code_panel_layout, CODE_PANEL_LAYOUT_HIDDEN);
+            ASSERT_INT("hide clears autocomplete count", g_ac_count, 0);
+            ASSERT_INT("hide clears autocomplete selection", g_ac_sel, 0);
+            ASSERT_STR("hide clears autocomplete ghost", g_ac_ghost, "");
+            ASSERT_STR("hide clears autocomplete hint", g_ac_hint, "");
             repl_cfg_cycle_row(row, +1);
             ASSERT_INT("code panel cfg wraps to left",
                        g_code_panel_layout, CODE_PANEL_LAYOUT_LEFT);
@@ -1497,6 +1505,23 @@ int main() {
                    replay_handle_special_key(GLUT_KEY_LEFT), 1);
         ASSERT_INT("replay left steps back",
                    g_replay_pc, 0);
+
+        g_code_panel_layout = CODE_PANEL_LAYOUT_HIDDEN;
+        g_replay_state = REPLAY_PLAYING;
+        repl_keyboard_func(' ', 0, 0);
+        ASSERT_INT("replay space keeps hidden code panel",
+                   g_code_panel_layout, CODE_PANEL_LAYOUT_HIDDEN);
+        ASSERT_INT("replay space still pauses through editor",
+                   g_replay_state, REPLAY_PAUSED);
+
+        g_replay_state = REPLAY_PAUSED;
+        g_replay_pc = 0;
+        repl_special_func(GLUT_KEY_RIGHT, 0, 0);
+        ASSERT_INT("replay right keeps hidden code panel",
+                   g_code_panel_layout, CODE_PANEL_LAYOUT_HIDDEN);
+        ASSERT_INT("replay right still advances through editor",
+                   g_replay_pc, 1);
+        g_code_panel_layout = CFG_DEFAULT_CODE_PANEL_LAYOUT;
 
         ASSERT_INT("replay unknown key unconsumed",
                    replay_handle_key('x'), 0);

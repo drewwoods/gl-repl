@@ -3938,6 +3938,7 @@ int ui_panels_handle_right_press(int mx, int my) {
 void ui_panels_close_menus(void) {
     g_open_menu = -1;
     g_menu_item_hover = -1;
+    color_picker_close();
 }
 
 void ui_panels_open_config(void) {
