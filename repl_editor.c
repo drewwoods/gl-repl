@@ -1578,14 +1578,14 @@ void keyboard_func(unsigned char key, int x, int y) {
         return;
     }
 
+    if (g_replay_active && replay_handle_key(key))
+        return;
+
     if (editor_code_panel_hidden()) {
         int key_mods = glutGetModifiers();
         if (editor_key_restores_hidden_code_panel(key, key_mods))
             editor_restore_hidden_code_panel();
     }
-
-    if (g_replay_active && replay_handle_key(key))
-        return;
 
     if (handle_search_key(key))
         return;
@@ -2233,14 +2233,14 @@ static void special_func(int key, int x, int y) {
     g_cursor_on = 1;
     g_blink_tick = 0;
 
+    if (replay_handle_special_key(key))
+        return;
+
     if (editor_code_panel_hidden()) {
         int key_mods = glutGetModifiers();
         if (editor_special_restores_hidden_code_panel(key, key_mods))
             editor_restore_hidden_code_panel();
     }
-
-    if (replay_handle_special_key(key))
-        return;
 
     if (handle_search_special(key))
         return;
@@ -2448,6 +2448,7 @@ void repl_cfg_cycle_row(int row, int delta) {
             set_status("Layout: bottom code panel");
         else if (g_code_panel_layout == CODE_PANEL_LAYOUT_HIDDEN) {
             ui_panels_close_menus();
+            clear_autocomplete_state();
             set_status("Layout: code panel hidden");
         } else
             set_status("Layout: left code panel");
