@@ -94,6 +94,21 @@ void apply_init_bootstrap(void);
 void save_output(const char *filename);
 int  load_from_file(const char *filename);
 
+/* Workspace folder where multi-scene exports live.  Empty string = unset.
+ * Owned by repl_core.c. */
+extern char g_workspace_dir[1024];
+
+/* Set by repl_save_workspace before each slot's save_output call so the
+ * exported file's header advertises that slot's scene name.  Cleared
+ * between exports. */
+extern const char *g_export_scene_name_hint;
+
+/* Populated by parse_workspace_header_line during load_from_file.  The
+ * outer workspace-importer reads these after load_from_file returns to
+ * name the new scene slot.  Reset on each load_from_file entry. */
+extern char g_pending_scene_name[];
+extern char g_pending_workspace_dir[];
+
 /* ---- Text / expression parsing helpers -------------------------------- */
 
 void trim_in_place(char *s);
@@ -206,6 +221,15 @@ void delete_cmd_range(int start, int count, const char *what);
 
 /* Clear ALL commands unconditionally (same behaviour as Ctrl+L). */
 void repl_clear_all_cmds(void);
+
+/* Called before any mutation: if an example is currently viewed (no
+ * active user scene), allocate a new user-scene slot, copy the current
+ * editor state into it, and inherit the example's name (de-duplicated).
+ * Returns the promoted slot index, or -1 if promotion was a no-op
+ * (already viewing a user scene) or rejected (all slots full and no
+ * workspace folder set for eviction — the LRU path lives in a later
+ * task). */
+int repl_promote_example_if_needed(void);
 
 /* ---- Commit handler chain (private to repl_editor.c, exposed for tests)
  * Each handler inspects g_input. Returns 1 if it consumed the line

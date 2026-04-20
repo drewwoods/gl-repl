@@ -1,5 +1,6 @@
 #include "repl_core_internal.h"
 #include "repl_replay.h"
+#include <dirent.h>
 #include <fcntl.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -210,14 +211,222 @@ void test_user_scene() {
     repl_reset_state(); declare_test_vars();
     repl_feed_line_public("glVertex3f(1,1,1);");
 
-    /* Loading an example should save the user scene if it's the first time */
+    /* Loading an example should save slot 0 (home scene) if it's the first time */
     repl_load_example(0);
     ASSERT_INT("user_scene_valid after example load", repl_user_scene_valid(), 1);
+    ASSERT_INT("home slot used after example load",
+               repl_user_scene_slot_used(0), 1);
+    ASSERT_INT("active user scene == -1 while example loaded",
+               repl_active_user_scene(), -1);
 
+    /* Home slot stays populated after restore in the multi-scene model. */
     repl_load_user_scene();
     repl_flatten_commands();
     ASSERT_INT("count_vertices after restore", count_vertices(), 1);
-    ASSERT_INT("user_scene_valid after restore", repl_user_scene_valid(), 0);
+    ASSERT_INT("user_scene_valid after restore", repl_user_scene_valid(), 1);
+    ASSERT_INT("active user scene == 0 after restore",
+               repl_active_user_scene(), 0);
+}
+
+void test_user_scene_promote_on_edit() {
+    printf("--- User scene promotion on example edit ---\n");
+    repl_reset_state(); declare_test_vars();
+
+    /* Fresh session: no user scenes. Load an example → slot 0 captures
+     * the empty home scene; example is active, no user scene active. */
+    repl_load_example(0);
+    ASSERT_INT("slot 0 used (home)",           repl_user_scene_slot_used(0), 1);
+    ASSERT_INT("slot 1 unused before edit",    repl_user_scene_slot_used(1), 0);
+    ASSERT_INT("active user scene == -1",      repl_active_user_scene(), -1);
+
+    /* Any mutation while viewing the example promotes it.  We drive
+     * promotion directly rather than synthesize a keypress. */
+    int slot = repl_promote_example_if_needed();
+    ASSERT_INT("promoted into slot 1", slot, 1);
+    ASSERT_INT("active user scene == 1 after promotion",
+               repl_active_user_scene(), 1);
+
+    /* Promoted scene inherits the example's name. */
+    const char *ex_name = repl_example_name(0);
+    const char *sc_name = repl_user_scene_name(1);
+    ASSERT_TRUE("promoted scene name non-null", sc_name != NULL);
+    if (ex_name && sc_name)
+        ASSERT_STR("promoted scene name == example name", sc_name, ex_name);
+
+    /* Second call is a no-op (already on a user scene). */
+    ASSERT_INT("second promote returns -1",
+               repl_promote_example_if_needed(), -1);
+
+    /* Loading a second distinct example and promoting should land in a
+     * new slot with a different name. */
+    if (repl_example_count() > 1) {
+        repl_load_example(1);
+        ASSERT_INT("active user scene cleared after example load",
+                   repl_active_user_scene(), -1);
+        int slot2 = repl_promote_example_if_needed();
+        ASSERT_INT("second promotion into slot 2", slot2, 2);
+    }
+}
+
+void test_user_scene_promote_name_dedup() {
+    printf("--- User scene promotion name de-duplication ---\n");
+    repl_reset_state(); declare_test_vars();
+
+    /* Load and promote example 0 twice; second promotion must get a
+     * distinct "<name> (2)" since the first occupies the bare name. */
+    if (repl_example_count() < 1) return;
+    const char *ex_name = repl_example_name(0);
+    if (!ex_name) return;
+
+    repl_load_example(0);
+    int s1 = repl_promote_example_if_needed();
+    ASSERT_TRUE("first promotion succeeded", s1 >= 0);
+
+    repl_load_example(0);
+    int s2 = repl_promote_example_if_needed();
+    ASSERT_TRUE("second promotion succeeded", s2 >= 0);
+
+    const char *n1 = repl_user_scene_name(s1);
+    const char *n2 = repl_user_scene_name(s2);
+    ASSERT_TRUE("slot 1 name non-null", n1 != NULL);
+    ASSERT_TRUE("slot 2 name non-null", n2 != NULL);
+    if (n1 && n2)
+        ASSERT_TRUE("de-dup produced distinct names", strcmp(n1, n2) != 0);
+}
+
+void test_workspace_round_trip() {
+    printf("--- Workspace save/load round-trip ---\n");
+    repl_reset_state(); declare_test_vars();
+    if (repl_example_count() < 2) return;
+
+    /* Populate: home (from feed) + two promoted example scenes. */
+    repl_feed_line_public("glVertex3f(1,1,1);");
+    repl_load_example(0);
+    int p1 = repl_promote_example_if_needed();
+    ASSERT_TRUE("first promotion ok", p1 >= 1);
+
+    repl_load_example(1);
+    int p2 = repl_promote_example_if_needed();
+    ASSERT_TRUE("second promotion ok", p2 >= 1 && p2 != p1);
+
+    int slots_before = repl_user_scene_count();
+    ASSERT_INT("three scenes before save", slots_before, 3);
+
+    /* Save to a unique scratch directory. */
+    char dir[256];
+    snprintf(dir, sizeof(dir), "/tmp/repl_workspace_test.%d", (int)getpid());
+    int written = repl_save_workspace(dir);
+    ASSERT_INT("save_workspace wrote all slots", written, slots_before);
+    ASSERT_STR("workspace dir remembered", repl_workspace_dir(), dir);
+
+    /* Wipe slots, load back. */
+    repl_reset_state(); declare_test_vars();
+    ASSERT_INT("slots cleared by reset", repl_user_scene_count(), 0);
+
+    int loaded = repl_load_workspace(dir);
+    ASSERT_INT("load_workspace produced original count",
+               loaded, slots_before);
+    ASSERT_INT("slot count matches after load",
+               repl_user_scene_count(), slots_before);
+
+    /* Clean up scratch dir. */
+    DIR *d = opendir(dir);
+    if (d) {
+        struct dirent *ent;
+        while ((ent = readdir(d))) {
+            if (ent->d_name[0] == '.') continue;
+            char p[512];
+            snprintf(p, sizeof(p), "%s/%s", dir, ent->d_name);
+            unlink(p);
+        }
+        closedir(d);
+        rmdir(dir);
+    }
+}
+
+void test_user_scene_promote_all_slots_full() {
+    printf("--- User scene promotion when all slots full ---\n");
+    repl_reset_state(); declare_test_vars();
+    if (repl_example_count() < 1) return;
+
+    /* Fill slots 1..MAX_USER_SCENES-1 via repeated promotion. */
+    for (int k = 0; k < MAX_USER_SCENES - 1; k++) {
+        repl_load_example(0);
+        repl_promote_example_if_needed();
+    }
+    int occupied = repl_user_scene_count();
+    ASSERT_INT("all slots occupied", occupied, MAX_USER_SCENES);
+
+    /* Next promotion from an example should be refused (pre-LRU). */
+    repl_load_example(0);
+    int rejected = repl_promote_example_if_needed();
+    ASSERT_INT("promotion rejected when full", rejected, -1);
+    ASSERT_INT("active user scene still -1", repl_active_user_scene(), -1);
+}
+
+void test_user_scene_promote_lru_evict() {
+    printf("--- User scene promotion LRU eviction ---\n");
+    repl_reset_state(); declare_test_vars();
+    if (repl_example_count() < 1) return;
+
+    char dir[64];
+    snprintf(dir, sizeof(dir), "/tmp/repl_lru_test.%d", (int)getpid());
+    repl_set_workspace_dir(dir);
+
+    /* Fill slots 1..MAX_USER_SCENES-1 via repeated promotion. */
+    for (int k = 0; k < MAX_USER_SCENES - 1; k++) {
+        repl_load_example(0);
+        repl_promote_example_if_needed();
+    }
+    ASSERT_INT("all slots occupied", repl_user_scene_count(), MAX_USER_SCENES);
+
+    /* Capture the slot-1 name so we can verify its file was written. */
+    char evicted_name[USER_SCENE_NAME_MAX];
+    snprintf(evicted_name, sizeof(evicted_name), "%s",
+             repl_user_scene_name(1));
+
+    /* Ninth promotion should succeed now that a workspace dir is set:
+     * slot 1 (oldest non-home) is flushed to disk and reused. */
+    repl_load_example(0);
+    int promoted = repl_promote_example_if_needed();
+    ASSERT_INT("promotion reuses evicted slot", promoted, 1);
+    ASSERT_INT("active user scene is slot 1", repl_active_user_scene(), 1);
+    ASSERT_INT("slot count unchanged after eviction",
+               repl_user_scene_count(), MAX_USER_SCENES);
+
+    /* Check the evicted scene is present on disk. */
+    DIR *d = opendir(dir);
+    int found_evicted = 0;
+    int file_count = 0;
+    if (d) {
+        struct dirent *ent;
+        while ((ent = readdir(d)) != NULL) {
+            const char *n = ent->d_name;
+            size_t len = strlen(n);
+            if (len > 2 && strcmp(n + len - 2, ".c") == 0) {
+                file_count++;
+                char path[256];
+                snprintf(path, sizeof(path), "%s/%s", dir, n);
+                FILE *f = fopen(path, "r");
+                if (f) {
+                    char buf[512];
+                    while (fgets(buf, sizeof(buf), f)) {
+                        if (strstr(buf, evicted_name)) {
+                            found_evicted = 1;
+                            break;
+                        }
+                    }
+                    fclose(f);
+                }
+                unlink(path);
+            }
+        }
+        closedir(d);
+    }
+    ASSERT_INT("evicted scene written to disk", found_evicted, 1);
+    ASSERT_TRUE("at least one file written", file_count >= 1);
+    rmdir(dir);
+    repl_set_workspace_dir("");
 }
 
 void test_debug_dump_flat_commands() {
@@ -495,6 +704,11 @@ int main(int argc, char **argv) {
     test_execution();
     test_examples();
     test_user_scene();
+    test_user_scene_promote_on_edit();
+    test_user_scene_promote_name_dedup();
+    test_user_scene_promote_all_slots_full();
+    test_user_scene_promote_lru_evict();
+    test_workspace_round_trip();
     test_debug_dump_flat_commands();
     test_var_declare_cmd();
     test_time();

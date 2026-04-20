@@ -1207,7 +1207,15 @@ int menu_dropdown_is_open(void) {
 int example_dropdown_is_open(void) { return menu_dropdown_is_open(); }
 
 
-enum { FILE_ITEM_EXPORT = 0, FILE_ITEM_IMPORT, FILE_ITEM_COUNT };
+enum {
+    FILE_ITEM_EXPORT = 0,
+    FILE_ITEM_IMPORT,
+    FILE_ITEM_SAVE_WORKSPACE,
+    FILE_ITEM_LOAD_WORKSPACE,
+    FILE_ITEM_COUNT
+};
+
+#define DEFAULT_WORKSPACE_DIR "./workspace"
 
 /* SCENE menu layout:
  *   [0]                      "### EXAMPLES"
@@ -1216,22 +1224,34 @@ enum { FILE_ITEM_EXPORT = 0, FILE_ITEM_IMPORT, FILE_ITEM_COUNT };
  *   [e + SCENE_OFF_HDR]      "### SCENE"
  *   [e + SCENE_OFF_NEW]      "New empty scene"
  *   [e + SCENE_OFF_SAVE]     "Save to output.c"
- *   [e + SCENE_OFF_YOURS]    "Your scene"  (only when repl_user_scene_valid())
+ *   [e + 5 .. e + 4 + n]     user scene names (n = repl_user_scene_count())
  */
 enum {
     SCENE_OFF_DIVIDER = 1,
     SCENE_OFF_HDR     = 2,
     SCENE_OFF_NEW     = 3,
     SCENE_OFF_SAVE    = 4,
-    SCENE_OFF_YOURS   = 5,
-    SCENE_FIXED_COUNT = 5  /* items before the optional "Your scene" */
+    SCENE_OFF_SCENES  = 5,  /* first user-scene index */
+    SCENE_FIXED_COUNT = 5
 };
+
+/* Translate the i-th user-scene entry in the menu into the underlying
+ * slot index, skipping unused slots so the visual list stays dense. */
+static int scene_menu_nth_slot(int n) {
+    int seen = 0;
+    for (int s = 0; s < MAX_USER_SCENES; s++) {
+        if (!repl_user_scene_slot_used(s)) continue;
+        if (seen == n) return s;
+        seen++;
+    }
+    return -1;
+}
 
 static int menu_item_count(int menu_id) {
     switch (menu_id) {
     case MENU_FILE:   return FILE_ITEM_COUNT;
     case MENU_SCENE:  return 1 + repl_example_count() + SCENE_FIXED_COUNT
-                             - (repl_user_scene_valid() ? 0 : 1);
+                             + repl_user_scene_count();
     case MENU_CONFIG: return CFG_ITEM_COUNT;
     }
     return 0;
@@ -1241,6 +1261,8 @@ static const char *menu_item_label(int menu_id, int i) {
     if (menu_id == MENU_FILE) {
         if (i == FILE_ITEM_EXPORT) return "Export";
         if (i == FILE_ITEM_IMPORT) return "Import";
+        if (i == FILE_ITEM_SAVE_WORKSPACE) return "Save Workspace";
+        if (i == FILE_ITEM_LOAD_WORKSPACE) return "Load Workspace";
         return NULL;
     }
     if (menu_id == MENU_SCENE) {
@@ -1251,7 +1273,11 @@ static const char *menu_item_label(int menu_id, int i) {
         if (i == e + SCENE_OFF_HDR)                           return "### SCENE";
         if (i == e + SCENE_OFF_NEW)                           return "New empty scene";
         if (i == e + SCENE_OFF_SAVE)                          return "Save to output.c";
-        if (i == e + SCENE_OFF_YOURS && repl_user_scene_valid()) return "Your scene";
+        int scene_n = i - (e + SCENE_OFF_SCENES);
+        if (scene_n >= 0 && scene_n < repl_user_scene_count()) {
+            int slot = scene_menu_nth_slot(scene_n);
+            return (slot >= 0) ? repl_user_scene_name(slot) : NULL;
+        }
         return NULL;
     }
     if (menu_id == MENU_CONFIG) {
@@ -1356,6 +1382,28 @@ static int menu_item_activate(int menu_id, int i) {
     if (menu_id == MENU_FILE) {
         if (i == FILE_ITEM_EXPORT) { repl_save_default_output(); return 1; }
         if (i == FILE_ITEM_IMPORT) { set_status("Import not implemented yet"); return 1; }
+        if (i == FILE_ITEM_SAVE_WORKSPACE) {
+            const char *dir = repl_workspace_dir();
+            if (!dir || !dir[0]) dir = DEFAULT_WORKSPACE_DIR;
+            int n = repl_save_workspace(dir);
+            if (n >= 0) {
+                char buf[256];
+                snprintf(buf, sizeof(buf), "Saved %d scene(s) to %s", n, dir);
+                set_status(buf);
+            }
+            return 1;
+        }
+        if (i == FILE_ITEM_LOAD_WORKSPACE) {
+            const char *dir = repl_workspace_dir();
+            if (!dir || !dir[0]) dir = DEFAULT_WORKSPACE_DIR;
+            int n = repl_load_workspace(dir);
+            if (n >= 0) {
+                char buf[256];
+                snprintf(buf, sizeof(buf), "Loaded %d scene(s) from %s", n, dir);
+                set_status(buf);
+            }
+            return 1;
+        }
     } else if (menu_id == MENU_SCENE) {
         int e = repl_example_count();
         if (i >= 1 && i <= e) { repl_load_example(i - 1); return 1; }
@@ -1365,8 +1413,10 @@ static int menu_item_activate(int menu_id, int i) {
             return 1;
         }
         if (i == e + SCENE_OFF_SAVE) { repl_save_default_output(); return 1; }
-        if (i == e + SCENE_OFF_YOURS && repl_user_scene_valid()) {
-            repl_load_user_scene(); return 1;
+        int scene_n = i - (e + SCENE_OFF_SCENES);
+        if (scene_n >= 0 && scene_n < repl_user_scene_count()) {
+            int slot = scene_menu_nth_slot(scene_n);
+            if (slot >= 0) { repl_load_user_scene_idx(slot); return 1; }
         }
         return 1;
     } else if (menu_id == MENU_CONFIG) {
@@ -3286,12 +3336,24 @@ void render_example_dropdown(void) {
             continue;
         }
 
+        int scene_hit = -1;
+        if (menu_id == MENU_SCENE && ne >= 0) {
+            int scene_n = i - (ne + SCENE_OFF_SCENES);
+            if (scene_n >= 0 && scene_n < repl_user_scene_count())
+                scene_hit = scene_menu_nth_slot(scene_n);
+        }
+        int is_active_example = (menu_id == MENU_SCENE && ne >= 0 &&
+                                 i >= 1 && i <= ne &&
+                                 (i - 1) == g_example_idx);
+        int is_active_scene   = (scene_hit >= 0 &&
+                                 scene_hit == repl_active_user_scene());
+
         if (i == g_menu_item_hover) {
             glColor4f(0.180f, 0.290f, 0.431f, alpha);  /* #2e4a6e */
             draw_quad((float)(dx + 1), (float)(ey - 2),
                       (float)(dw - 2), (float)LINE_H);
             glColor4f(1.0f, 1.0f, 1.0f, alpha);
-        } else if (menu_id == MENU_SCENE && ne >= 0 && i >= 1 && i <= ne && (i - 1) == g_example_idx) {
+        } else if (is_active_example || is_active_scene) {
             glColor4f(UI_ACCENT_GREEN_R, UI_ACCENT_GREEN_G, UI_ACCENT_GREEN_B, alpha);
         } else {
             glColor4f(0.847f, 0.847f, 0.847f, alpha);  /* #d8d8d8 */

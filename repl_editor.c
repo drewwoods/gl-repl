@@ -249,6 +249,12 @@ static void snapshot_restore(const UndoSnapshot *s) {
 }
 
 void push_undo_snapshot(void) {
+    /* First mutation on a loaded example auto-promotes to a user scene,
+     * inheriting the example's name.  The undo snapshot captures the
+     * post-promotion state so Undo rewinds to the unedited example
+     * reference still visible in the Scene menu. */
+    repl_promote_example_if_needed();
+
     snapshot_save(&g_undo_buf[g_undo_head]);
     g_undo_head = (g_undo_head + 1) % UNDO_DEPTH;
     if (g_undo_count < UNDO_DEPTH)
@@ -2329,17 +2335,41 @@ static void special_func(int key, int x, int y) {
         break;
     /* F2 through F11 removed from here, handled via g_cfg_items loop */
     case GLUT_KEY_F12: {
+        /* F12 cycles: examples[0..N-1] → user scenes (in slot order) → back.
+         * Active example -> next example, or first user scene if we ran
+         * out of examples.  Active user scene -> next occupied user slot,
+         * or back to example 0 when all user slots seen. */
         int count = repl_example_count();
-        if (count <= 0) break;
-        int next = g_example_idx + 1;
-        if (next >= count) {
-            if (repl_user_scene_valid()) {
-                repl_load_user_scene();
-                break;
+        int active_scene = repl_active_user_scene();
+
+        if (active_scene >= 0) {
+            for (int s = active_scene + 1; s < MAX_USER_SCENES; s++) {
+                if (repl_user_scene_slot_used(s)) {
+                    repl_load_user_scene_idx(s);
+                    goto f12_done;
+                }
             }
-            next = 0;
+            if (count > 0) repl_load_example(0);
+            goto f12_done;
         }
-        repl_load_example(next);
+
+        if (count > 0) {
+            int next = g_example_idx + 1;
+            if (next < count) {
+                repl_load_example(next);
+                goto f12_done;
+            }
+        }
+
+        /* Past the last example: jump to first occupied user slot. */
+        for (int s = 0; s < MAX_USER_SCENES; s++) {
+            if (repl_user_scene_slot_used(s)) {
+                repl_load_user_scene_idx(s);
+                goto f12_done;
+            }
+        }
+        if (count > 0) repl_load_example(0);
+    f12_done:;
         break;
     }
     case GLUT_KEY_PAGE_UP:

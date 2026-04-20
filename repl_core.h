@@ -28,6 +28,15 @@ void repl_save_default_output(void);   /* writes ./output.c */
 int  repl_load_from_file(const char *filename);
 void repl_save_output(const char *filename);
 
+/* Workspace I/O: save every occupied user-scene slot to `<dir>/<slug>.c`.
+ * repl_load_workspace scans `dir` for *.c and imports each into a fresh
+ * slot.  Both remember `dir` so single-file exports carry a
+ * `@workspace-dir` hint. */
+int  repl_save_workspace(const char *dir);
+int  repl_load_workspace(const char *dir);
+const char *repl_workspace_dir(void);         /* "" if not bound */
+void repl_set_workspace_dir(const char *dir); /* copies; NULL = clear */
+
 /* --- Command pipeline -------------------------------------------------- */
 /* Rebuild g_flat_cmds from g_cmds (expanding for/func/if). Idempotent;
  * `mark_normals_dirty()` sets the rebuild flag. */
@@ -36,11 +45,25 @@ void repl_flatten_commands(void);
 void repl_recompute_autonormals(void);
 
 /* --- Example library & user scene -------------------------------------- */
+#define MAX_USER_SCENES      8
+#define USER_SCENE_NAME_MAX 64
+
 int  repl_example_count(void);
 const char *repl_example_name(int idx);
 void repl_load_example(int idx);
-int  repl_user_scene_valid(void);
-void repl_load_user_scene(void);
+
+/* User scenes: up to MAX_USER_SCENES slots. Slot 0 is the "home" scene
+ * (captured the first time an example is loaded) and is never evicted. The
+ * active slot is the one currently loaded into g_cmds[]; -1 means an
+ * example or fresh workspace is active instead. */
+int  repl_user_scene_valid(void);         /* any slot used? (back-compat) */
+void repl_load_user_scene(void);          /* loads slot 0 (back-compat) */
+int  repl_user_scene_count(void);         /* number of occupied slots */
+int  repl_user_scene_slot_used(int slot); /* 1 if occupied */
+const char *repl_user_scene_name(int slot);
+int  repl_user_scene_rename(int slot, const char *new_name);
+int  repl_load_user_scene_idx(int slot);  /* returns 1 on success */
+int  repl_active_user_scene(void);        /* -1 if none active */
 
 /* --- Replay ------------------------------------------------------------ */
 void replay_start(void);
