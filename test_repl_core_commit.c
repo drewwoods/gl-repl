@@ -467,9 +467,9 @@ int main(void) {
     repl_keyboard_func(5, 0, 0);
     ASSERT_TRUE("ctrl-e moves to line end", g_cursor_pos == g_input_len);
     {
-        int before = g_accum_aa_enabled;
+        int before = g_code_panel_layout;
         repl_keyboard_func(2, 0, 0);
-        ASSERT_TRUE("ctrl-b toggles accum aa", g_accum_aa_enabled != before);
+        ASSERT_TRUE("ctrl-b toggles code panel layout", g_code_panel_layout != before);
     }
 
     repl_reset_state(); declare_test_vars();

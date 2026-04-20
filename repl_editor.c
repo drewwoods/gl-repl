@@ -158,46 +158,46 @@ static void apply_audio_cfg_mode(int mode) {
 }
 
 CfgItem g_cfg_items[] = {
-    { "### RENDERING",    NULL,     NULL,                      0,                NULL              },
-    { "MSAA",             "Ctrl+u", &g_multisample_enabled,    2,                NULL              },
-    { "Line smooth",      "Ctrl+n", &g_line_smooth_enabled,    2,                NULL              },
-    { "Accum AA",         "Ctrl+b", &g_accum_aa_enabled,       2,                NULL              },
-    { "Wireframe",        "F2",     &g_wireframe,              2,                NULL              },
-    { "Point attenuation","--",     &g_init_attenuate_points,  2,                NULL              },
-    { "---",              NULL,     NULL,                      0,                NULL              },
-    { "### TIME & REPLAY",NULL,     NULL,                      0,                NULL              },
-    { "Auto time",        "Ctrl+t", &g_t_playing,              2,                NULL              },
-    { "Replay",           "Ctrl+g", &g_replay_active,          2,                NULL              },
-    { "Replay mode",      "m",      &g_replay_mode,            2,                replay_mode_names },
-    { "Replay expand",    "--",     &g_replay_expand_args,     2,                NULL              },
-    { "---",              NULL,     NULL,                      0,                NULL              },
-    { "### OVERLAYS & SCENE",NULL,  NULL,                      0,                NULL              },
-    { "Grid",             "F3",     &g_grid_theme,             GRID_THEME_COUNT, g_grid_names      },
-    { "Grid major",       "Ctrl+o", &g_grid_major_idx,         GRID_MAJOR_COUNT, g_grid_major_names  },
-    { "Grid extent",      "--",     &g_grid_extent_idx,        GRID_EXTENT_COUNT, g_grid_extent_names },
-    { "Axes",             "F4",     &g_axes_theme,             AXES_THEME_COUNT, g_axes_names      },
-    { "Vertex guides",    "F8",     &g_show_guides,            2,                NULL              },
-    { "Xform guide mode", "--",     &g_xform_guide_mode,       2,                xform_guide_mode_names },
-    { "Light indicators", "F10",    &g_show_lights,            2,                NULL              },
-    { "Poly highlight",   "--",     &g_highlight_current_poly, 2,                NULL              },
-    { "Backdrop",         "--",     &g_backdrop_mode,          2,                backdrop_mode_names },
-    { "Camera rotate",    "F11",    &g_cam_rotate,             2,                NULL              },
-    { "Auto-normals",     "F9",     &g_autonormal,             2,                NULL              },
-    { "---",              NULL,     NULL,                      0,                NULL              },
-    { "### GEOMETRY",     NULL,     NULL,                      0,                NULL              },
-    { "Vertex labels",    "F5",     &g_show_vnums,             2,                NULL              },
-    { "Normal vectors",   "F6",     &g_show_normals,           2,                NULL              },
-    { "Vertex outlines",  "F7",     &g_show_outlines,          2,                NULL              },
-    { "Vertex points",    "--",     &g_show_vpoints,           2,                NULL              },
-    { "---",              NULL,     NULL,                      0,                NULL              },
-    { "### INTERFACE",    NULL,     NULL,                      0,                NULL              },
-    { "Variable panel",   "`",      &g_show_var_panel,         2,                NULL              },
-    { "CPU profile",      "Ctrl+w", &g_show_profile_panel,     PROFILE_PANEL_MODE_COUNT, profile_panel_mode_names },
-    { "Code panel",       "--",     &g_code_panel_layout,      CODE_PANEL_LAYOUT_COUNT, code_panel_layout_names },
-    { "Wrap at commas",   "--",     &g_wrap_at_comma,          2,                NULL              },
-    { "---",              NULL,     NULL,                      0,                NULL              },
-    { "### AUDIO",        NULL,     NULL,                      0,                NULL              },
-    { "Audio",            "--",     &g_audio_cfg_mode,         4,                audio_cfg_names   },
+    { "### RENDERING",    0, 0,     NULL,                      0,                NULL              },
+    { "MSAA",             KEY_CTRL_U, 0, &g_multisample_enabled,    2,                NULL              },
+    { "Line smooth",      0, 0,     &g_line_smooth_enabled,    2,                NULL              },
+    { "Accum AA",         0, 0,     &g_accum_aa_enabled,       2,                NULL              },
+    { "Wireframe",        GLUT_KEY_F2, 1, &g_wireframe,              2,                NULL              },
+    { "Point attenuation",0, 0,     &g_init_attenuate_points,  2,                NULL              },
+    { "---",              0, 0,     NULL,                      0,                NULL              },
+    { "### TIME & REPLAY",0, 0,     NULL,                      0,                NULL              },
+    { "Auto time",        KEY_CTRL_T, 0, &g_t_playing,              2,                NULL              },
+    { "Replay",           KEY_CTRL_R, 0, &g_replay_active,          2,                NULL              },
+    { "Replay mode",      'm', 0,   &g_replay_mode,            2,                replay_mode_names },
+    { "Replay expand",    0, 0,     &g_replay_expand_args,     2,                NULL              },
+    { "---",              0, 0,     NULL,                      0,                NULL              },
+    { "### OVERLAYS & SCENE",0, 0,  NULL,                      0,                NULL              },
+    { "Grid",             GLUT_KEY_F3, 1, &g_grid_theme,             GRID_THEME_COUNT, g_grid_names      },
+    { "Grid major",       KEY_CTRL_O, 0, &g_grid_major_idx,         GRID_MAJOR_COUNT, g_grid_major_names  },
+    { "Grid extent",      0, 0,     &g_grid_extent_idx,        GRID_EXTENT_COUNT, g_grid_extent_names },
+    { "Axes",             GLUT_KEY_F4, 1, &g_axes_theme,             AXES_THEME_COUNT, g_axes_names      },
+    { "Vertex guides",    GLUT_KEY_F8, 1, &g_show_guides,            2,                NULL              },
+    { "Xform guide mode", 0, 0,     &g_xform_guide_mode,       2,                xform_guide_mode_names },
+    { "Light indicators", GLUT_KEY_F10, 1, &g_show_lights,            2,                NULL              },
+    { "Poly highlight",   0, 0,     &g_highlight_current_poly, 2,                NULL              },
+    { "Backdrop",         0, 0,     &g_backdrop_mode,          2,                backdrop_mode_names },
+    { "Camera rotate",    GLUT_KEY_F11, 1, &g_cam_rotate,             2,                NULL              },
+    { "Auto-normals",     GLUT_KEY_F9, 1, &g_autonormal,             2,                NULL              },
+    { "---",              0, 0,     NULL,                      0,                NULL              },
+    { "### GEOMETRY",     0, 0,     NULL,                      0,                NULL              },
+    { "Vertex labels",    GLUT_KEY_F5, 1, &g_show_vnums,             2,                NULL              },
+    { "Normal vectors",   GLUT_KEY_F6, 1, &g_show_normals,           2,                NULL              },
+    { "Vertex outlines",  GLUT_KEY_F7, 1, &g_show_outlines,          2,                NULL              },
+    { "Vertex points",    0, 0,     &g_show_vpoints,           2,                NULL              },
+    { "---",              0, 0,     NULL,                      0,                NULL              },
+    { "### INTERFACE",    0, 0,     NULL,                      0,                NULL              },
+    { "Variable panel",   '`', 0,   &g_show_var_panel,         2,                NULL              },
+    { "CPU profile",      KEY_CTRL_W, 0, &g_show_profile_panel,     PROFILE_PANEL_MODE_COUNT, profile_panel_mode_names },
+    { "Code panel",       KEY_CTRL_B, 0, &g_code_panel_layout,      CODE_PANEL_LAYOUT_COUNT, code_panel_layout_names },
+    { "Wrap at commas",   0, 0,     &g_wrap_at_comma,          2,                NULL              },
+    { "---",              0, 0,     NULL,                      0,                NULL              },
+    { "### AUDIO",        0, 0,     NULL,                      0,                NULL              },
+    { "Audio",            0, 0,     &g_audio_cfg_mode,         4,                audio_cfg_names   },
 };
 
 const int CFG_ITEM_COUNT = (int)(sizeof(g_cfg_items) / sizeof(g_cfg_items[0]));
@@ -1637,6 +1637,13 @@ void keyboard_func(unsigned char key, int x, int y) {
         return;
     }
 
+    for (int i = 0; i < CFG_ITEM_COUNT; i++) {
+        if (!g_cfg_items[i].is_special && g_cfg_items[i].key_code == key) {
+            repl_cfg_cycle_row(i, 1);
+            return;
+        }
+    }
+
     if (key == KEY_CTRL_A) {
         g_cursor_pos = 0;
         update_autocomplete();
@@ -1697,7 +1704,7 @@ void keyboard_func(unsigned char key, int x, int y) {
         return;
     }
 
-    if (key == KEY_CTRL_R) {
+    if (key == KEY_CTRL_BACKSLASH) {
         if (g_num_cmds > 0) {
             push_undo_snapshot();
             repl_reformat_commands();
@@ -1910,49 +1917,7 @@ void keyboard_func(unsigned char key, int x, int y) {
         return;
     }
 
-    if (key == KEY_CTRL_B) {
-        if (g_use_accum) {
-            g_accum_aa_enabled = !g_accum_aa_enabled;
-            set_status(g_accum_aa_enabled ? "Accum AA: ON" : "Accum AA: OFF");
-        } else {
-            set_status("Accum buffer disabled (remove --noaccum to enable)");
-        }
-        return;
-    }
-
-    if (key == KEY_CTRL_N) {
-        g_line_smooth_enabled = !g_line_smooth_enabled;
-        set_status(g_line_smooth_enabled ? "Line smooth: ON" : "Line smooth: OFF");
-        return;
-    }
-
-    if (key == KEY_CTRL_T) {
-        if (editor_get_modifiers() & GLUT_ACTIVE_SHIFT) {
-            repl_reset_time_to_zero();
-            set_status(g_t_playing ? "Time: reset to 0" : "Time: reset to 0 (paused)");
-        } else {
-            g_t_playing = !g_t_playing;
-            set_status(g_t_playing ? "Time: playing" : "Time: paused (set 't' manually)");
-        }
-        return;
-    }
-
-    if (key == KEY_CTRL_U) {
-        g_multisample_enabled = !g_multisample_enabled;
-        set_status(g_multisample_enabled ? "MSAA: ON" : "MSAA: OFF");
-        return;
-    }
-
-    /* Ctrl+O cycles the grid major-tick spacing. Pairs with the
-     * "Grid major" config entry; the status bar echoes the new
-     * value so it's clear which spacing is active. */
-    if (key == KEY_CTRL_O) {
-        g_grid_major_idx = (g_grid_major_idx + 1) % GRID_MAJOR_COUNT;
-        snprintf(g_scratch_buf, sizeof(g_scratch_buf),
-                 "Grid major: %s", g_grid_major_names[g_grid_major_idx]);
-        set_status(g_scratch_buf);
-        return;
-    }
+    /* Removed Ctrl-B, Ctrl-N, Ctrl-T, Ctrl-U, Ctrl-O, Ctrl-W — handled via g_cfg_items loop */
 
     if ((key == '=' || key == '+') && (editor_get_modifiers() & GLUT_ACTIVE_CTRL)) {
         if (g_use_accum) {
@@ -1988,14 +1953,7 @@ void keyboard_func(unsigned char key, int x, int y) {
         return;
     }
 
-    /* Ctrl+W — cycle CPU profile panel mode */
-    if (key == KEY_CTRL_W) {
-        g_show_profile_panel = (g_show_profile_panel + 1) % PROFILE_PANEL_MODE_COUNT;
-        snprintf(g_scratch_buf, sizeof(g_scratch_buf),
-                 "CPU profile: %s", profile_panel_mode_names[g_show_profile_panel]);
-        set_status(g_scratch_buf);
-        return;
-    }
+    /* Ctrl-W removed from here, handled via g_cfg_items loop */
 
     if (key == KEY_BACKSPACE || key == KEY_DELETE) {
         if (sel_active() && !g_inserting) {
@@ -2268,6 +2226,13 @@ static void special_func(int key, int x, int y) {
     if (handle_search_special(key))
         return;
 
+    for (int i = 0; i < CFG_ITEM_COUNT; i++) {
+        if (g_cfg_items[i].is_special && g_cfg_items[i].key_code == key) {
+            repl_cfg_cycle_row(i, 1);
+            return;
+        }
+    }
+
     switch (key) {
     case GLUT_KEY_LEFT:
         if (editor_get_modifiers() & GLUT_ACTIVE_CTRL) {
@@ -2356,53 +2321,7 @@ static void special_func(int key, int x, int y) {
         g_help_tab = 0;
         g_help_scroll = 0;
         break;
-    case GLUT_KEY_F2:
-        g_wireframe = !g_wireframe;
-        set_status(g_wireframe ? "Wireframe ON" : "Wireframe OFF");
-        break;
-    case GLUT_KEY_F3:
-        g_grid_theme = (g_grid_theme + 1) % GRID_THEME_COUNT;
-        snprintf(g_scratch_buf, sizeof(g_scratch_buf), "Grid: %s", g_grid_names[g_grid_theme]);
-        set_status(g_scratch_buf);
-        break;
-    case GLUT_KEY_F4:
-        g_axes_theme = (g_axes_theme + 1) % AXES_THEME_COUNT;
-        snprintf(g_scratch_buf, sizeof(g_scratch_buf), "Axes: %s", g_axes_names[g_axes_theme]);
-        set_status(g_scratch_buf);
-        break;
-    case GLUT_KEY_F5:
-        g_show_vnums = !g_show_vnums;
-        set_status(g_show_vnums ? "Vertex numbers ON" : "Vertex numbers OFF");
-        break;
-    case GLUT_KEY_F6:
-        g_show_normals = !g_show_normals;
-        set_status(g_show_normals ? "Normal vectors ON" : "Normal vectors OFF");
-        break;
-    case GLUT_KEY_F7:
-        g_show_outlines = !g_show_outlines;
-        set_status(g_show_outlines ? "Vertex outlines ON" : "Vertex outlines OFF");
-        break;
-    case GLUT_KEY_F8:
-        g_show_guides = !g_show_guides;
-        set_status(g_show_guides ? "Vertex guides ON" : "Vertex guides OFF");
-        break;
-    case GLUT_KEY_F9:
-        g_autonormal = !g_autonormal;
-        if (g_autonormal) {
-            mark_normals_dirty();
-            set_status("Auto-normals ON");
-        } else {
-            set_status("Auto-normals OFF (existing normals kept)");
-        }
-        break;
-    case GLUT_KEY_F10:
-        g_show_lights = !g_show_lights;
-        set_status(g_show_lights ? "Light indicators ON" : "Light indicators OFF");
-        break;
-    case GLUT_KEY_F11:
-        g_cam_rotate = !g_cam_rotate;
-        set_status(g_cam_rotate ? "Camera rotate ON" : "Camera rotate OFF");
-        break;
+    /* F2 through F11 removed from here, handled via g_cfg_items loop */
     case GLUT_KEY_F12: {
         int count = repl_example_count();
         if (count <= 0) break;
@@ -2456,6 +2375,14 @@ void repl_cfg_cycle_row(int row, int delta) {
         return;
     }
 
+    if (g_cfg_items[row].value == &g_t_playing) {
+        if (glutGetModifiers() & GLUT_ACTIVE_SHIFT) {
+            repl_reset_time_to_zero();
+            set_status(g_t_playing ? "Time: reset to 0" : "Time: reset to 0 (paused)");
+            return;
+        }
+    }
+
     if (g_replay_active)
         replay_stop();
 
@@ -2479,21 +2406,18 @@ void repl_cfg_cycle_row(int row, int delta) {
             set_status("Layout: code panel hidden");
         } else
             set_status("Layout: left code panel");
-    }
-    if (g_cfg_items[row].value == &g_wrap_at_comma)
-        set_status(g_wrap_at_comma ? "Wrap at commas: ON"
-                                   : "Wrap at commas: OFF");
-    if (g_cfg_items[row].value == &g_autonormal && g_autonormal)
-        mark_normals_dirty();
-    if (g_cfg_items[row].value == &g_init_attenuate_points) {
+    } else if (g_cfg_items[row].value == &g_autonormal) {
+        if (g_autonormal) {
+            mark_normals_dirty();
+            set_status("Auto-normals: ON");
+        } else {
+            set_status("Auto-normals: OFF (existing normals kept)");
+        }
+    } else if (g_cfg_items[row].value == &g_init_attenuate_points) {
         apply_init_bootstrap();
         set_status(g_init_attenuate_points ? "Point attenuation: ON"
                                            : "Point attenuation: OFF");
-    }
-    if (g_cfg_items[row].value == &g_replay_mode)
-        set_status(g_replay_mode == REPLAY_MODE_VERTEX ? "Replay: vertex mode"
-                                                       : "Replay: polygon mode");
-    if (g_cfg_items[row].value == &g_audio_cfg_mode) {
+    } else if (g_cfg_items[row].value == &g_audio_cfg_mode) {
         apply_audio_cfg_mode(g_audio_cfg_mode);
         repl_audio_set_cfg_mode(g_audio_cfg_mode);  /* keep INI in sync */
         static const char *labels[] = {
@@ -2503,6 +2427,14 @@ void repl_cfg_cycle_row(int row, int delta) {
             "Audio: loop all",
         };
         set_status(labels[g_audio_cfg_mode]);
+    } else if (g_cfg_items[row].state_names) {
+        snprintf(g_scratch_buf, sizeof(g_scratch_buf), "%s: %s",
+                 g_cfg_items[row].label, g_cfg_items[row].state_names[v]);
+        set_status(g_scratch_buf);
+    } else if (n == 2) {
+        snprintf(g_scratch_buf, sizeof(g_scratch_buf), "%s: %s",
+                 g_cfg_items[row].label, v ? "ON" : "OFF");
+        set_status(g_scratch_buf);
     }
 }
 

@@ -574,7 +574,7 @@ void repl_copy_replay_baseline_predef_values(float *dst, int max_vals) {
 
 int replay_handle_key(unsigned char key) {
     if (!g_replay_active) {
-        if (key == KEY_CTRL_G) {
+        if (key == KEY_CTRL_R) {
             replay_start();
             return 1;
         }
@@ -597,7 +597,7 @@ int replay_handle_key(unsigned char key) {
         return 0;
     }
 
-    if (key == KEY_CTRL_G) {
+    if (key == KEY_CTRL_R) {
         replay_stop();
         set_status("Replay: off");
         return 1;
