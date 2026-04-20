@@ -1469,7 +1469,7 @@ int main() {
         repl_flatten_commands();
 
         g_win_w = 800;
-        g_win_h = 240;
+        g_win_h = 230;
         g_panel_frac = 0.5f;
         g_code_panel_layout = CODE_PANEL_LAYOUT_LEFT;
         g_show_indices = 0;
@@ -1480,11 +1480,23 @@ int main() {
         g_replay_pc = g_num_flat_cmds;
         g_replay_src_line = 25;
         g_scroll = 0;
+        g_scroll_follow_cursor = 0;
+
+        (void)code_panel_apply_scroll_follow_for_test(&follow_doc_line,
+                                                      &visible_lines);
+        ASSERT_TRUE("replay follow helper computes target",
+                    follow_doc_line >= 0);
+        ASSERT_INT("code panel visible rows match rendered rows",
+                   visible_lines, 9);
+
+        g_scroll = follow_doc_line - 9;
         g_scroll_follow_cursor = 1;
 
         ASSERT_TRUE("replay follow helper reports visible",
                     code_panel_apply_scroll_follow_for_test(&follow_doc_line,
                                                             &visible_lines));
+        ASSERT_INT("replay follow scrolls row above status bar",
+                   g_scroll, follow_doc_line - visible_lines + 1);
         ASSERT_TRUE("replay follow line after scroll",
                     follow_doc_line >= g_scroll &&
                     follow_doc_line < g_scroll + visible_lines);
@@ -1492,6 +1504,91 @@ int main() {
         ASSERT_STR("replay follow leaves input alone",
                    g_input, "glVertex3f(0, 0, 0)");
 
+        g_replay_active = 0;
+        g_replay_state = REPLAY_OFF;
+        g_replay_src_line = -1;
+        g_replay_pc = 0;
+    }
+
+    /* Replay source focus should follow GLU tessellation vertices, not the
+     * structural gluBegin/gluEnd commands that wrap them. */
+    {
+        repl_reset_state(); declare_test_vars();
+        repl_feed_line_public("gluBegin(GLU_POLYGON);");
+        repl_feed_line_public("gluBegin(GLU_CONTOUR);");
+        repl_feed_line_public("gluVertex(0, 0, 0);");
+        repl_feed_line_public("gluVertex(1, 0, 0);");
+        repl_feed_line_public("gluVertex(0, 1, 0);");
+        repl_feed_line_public("gluEnd();");
+        repl_feed_line_public("gluEnd();");
+        repl_flatten_commands();
+
+        g_replay_mode = REPLAY_MODE_VERTEX;
+        replay_start();
+        replay_advance();
+        ASSERT_INT("replay vertex mode focuses first gluVertex",
+                   g_replay_src_line, 2);
+        replay_advance();
+        ASSERT_INT("replay vertex mode focuses next gluVertex",
+                   g_replay_src_line, 3);
+        replay_stop();
+
+        g_replay_mode = REPLAY_MODE_POLYGON;
+        replay_start();
+        replay_advance();
+        ASSERT_INT("replay polygon mode focuses tess vertex",
+                   g_replay_src_line, 4);
+        replay_stop();
+        g_replay_mode = REPLAY_MODE_VERTEX;
+    }
+
+    /* Replay follow rows must match whether variable expansion rows are
+     * actually rendered. Collapsed replay should follow the command row. */
+    {
+        int collapsed_follow = -1;
+        int expanded_follow = -1;
+        int visible_lines = -1;
+
+        repl_reset_state(); declare_test_vars();
+        repl_feed_line_public("glVertex3f(0, 0, 0);");
+        repl_feed_line_public("glVertex3f(x, y, z);");
+        repl_feed_line_public("glVertex3f(2, 0, 0);");
+        repl_flatten_commands();
+
+        g_win_w = 800;
+        g_win_h = 230;
+        g_panel_frac = 0.5f;
+        g_code_panel_layout = CODE_PANEL_LAYOUT_LEFT;
+        g_show_indices = 0;
+        navigate_to_line(0);
+
+        g_replay_active = 1;
+        g_replay_state = REPLAY_PAUSED;
+        g_replay_pc = g_num_flat_cmds;
+        g_replay_src_line = 1;
+        g_scroll = 0;
+        g_scroll_follow_cursor = 0;
+
+        g_replay_expand_args = 0;
+        (void)code_panel_apply_scroll_follow_for_test(&collapsed_follow,
+                                                      &visible_lines);
+        ASSERT_TRUE("collapsed replay follow resolves command row",
+                    collapsed_follow >= 0);
+
+        g_replay_expand_args = 1;
+        (void)code_panel_apply_scroll_follow_for_test(&expanded_follow,
+                                                      &visible_lines);
+        ASSERT_INT("expanded replay follows final annotation row",
+                   expanded_follow, collapsed_follow + 2);
+
+        g_replay_expand_args = 0;
+        expanded_follow = -1;
+        (void)code_panel_apply_scroll_follow_for_test(&expanded_follow,
+                                                      &visible_lines);
+        ASSERT_INT("collapsed replay removes annotation rows from follow",
+                   expanded_follow, collapsed_follow);
+
+        g_replay_expand_args = 1;
         g_replay_active = 0;
         g_replay_state = REPLAY_OFF;
         g_replay_src_line = -1;
