@@ -9,6 +9,7 @@
 
 static int g_run = 0;
 static int g_pass = 0;
+static int g_mock_modifiers = 0;
 
 #define ASSERT_TRUE(label, cond) do { \
     g_run++; \
@@ -50,6 +51,10 @@ static void set_editor_input(const char *s) {
     g_input[MAX_INPUT_LEN - 1] = '\0';
     g_input_len = (int)strlen(g_input);
     g_cursor_pos = g_input_len;
+}
+
+static int mock_get_modifiers(void) {
+    return g_mock_modifiers;
 }
 
 static void assert_status_contains(const char *label, const char *needle) {
@@ -94,6 +99,7 @@ static void assert_float_decl_rejected_atomic(const char *label,
 
 int main() {
     init_predef_vars();
+    repl_set_modifier_provider_for_test(mock_get_modifiers);
     printf("--- repl_editor tests ---\n");
 
     /* 0. Code/scene panel geometry supports left, top, bottom, and hidden layouts */

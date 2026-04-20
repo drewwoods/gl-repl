@@ -186,6 +186,11 @@ void search_clear_all(void);
 int  handle_search_key(unsigned char key);
 int  handle_search_special(int key);
 
+/* ---- Editor input dispatch test hooks --------------------------------- */
+
+typedef int (*ReplModifierProvider)(void);
+void repl_set_modifier_provider_for_test(ReplModifierProvider provider);
+
 /* ---- Undo / redo ------------------------------------------------------ */
 
 /* Snapshot the current editor state onto the undo stack. Call BEFORE any
