@@ -1,4 +1,6 @@
 #include "repl_core_internal.h"
+#include "repl_replay.h"
+#include "repl_keys.h"
 #include "sample.h"
 #include "profile_panel.h"
 #include "ui_panels.h"
@@ -1414,6 +1416,86 @@ int main() {
         ASSERT_INT("overlong assign: num_cmds unchanged",
                    g_num_cmds, old_num_cmds);
         assert_status_contains("overlong assign: status", "Command too long");
+    }
+
+    /* Replay keyboard dispatch is owned by repl_replay.c, not the editor. */
+    {
+        repl_reset_state(); declare_test_vars();
+        repl_feed_line_public("glVertex3f(0, 0, 0);");
+        repl_feed_line_public("glVertex3f(1, 0, 0);");
+        repl_flatten_commands();
+
+        ASSERT_INT("replay key ctrl-g consumed",
+                   replay_handle_key(KEY_CTRL_G), 1);
+        ASSERT_INT("replay key ctrl-g starts replay",
+                   g_replay_active, 1);
+        ASSERT_INT("replay space consumed",
+                   replay_handle_key(' '), 1);
+        ASSERT_INT("replay space pauses",
+                   g_replay_state, REPLAY_PAUSED);
+        ASSERT_INT("replay space resumes",
+                   replay_handle_key(' '), 1);
+        ASSERT_INT("replay resumed playing",
+                   g_replay_state, REPLAY_PLAYING);
+
+        g_replay_state = REPLAY_PAUSED;
+        ASSERT_INT("replay right consumed",
+                   replay_handle_special_key(GLUT_KEY_RIGHT), 1);
+        ASSERT_INT("replay right advances one step",
+                   g_replay_pc, 1);
+        ASSERT_INT("replay left consumed",
+                   replay_handle_special_key(GLUT_KEY_LEFT), 1);
+        ASSERT_INT("replay left steps back",
+                   g_replay_pc, 0);
+
+        ASSERT_INT("replay unknown key unconsumed",
+                   replay_handle_key('x'), 0);
+        ASSERT_INT("replay unknown key stops replay",
+                   g_replay_active, 0);
+    }
+
+    /* Replay scroll-follow should keep the replayed source command visible
+     * without moving the user's editor cursor/input. */
+    {
+        int follow_doc_line = -1;
+        int visible_lines = -1;
+
+        repl_reset_state(); declare_test_vars();
+        for (int i = 0; i < 30; i++) {
+            char line[64];
+            snprintf(line, sizeof(line), "glVertex3f(%d, 0, 0);", i);
+            repl_feed_line_public(line);
+        }
+        repl_flatten_commands();
+
+        g_win_w = 800;
+        g_win_h = 240;
+        g_panel_frac = 0.5f;
+        g_code_panel_layout = CODE_PANEL_LAYOUT_LEFT;
+        g_show_indices = 0;
+        navigate_to_line(0);
+
+        g_replay_active = 1;
+        g_replay_state = REPLAY_PAUSED;
+        g_replay_pc = g_num_flat_cmds;
+        g_replay_src_line = 25;
+        g_scroll = 0;
+        g_scroll_follow_cursor = 1;
+
+        ASSERT_TRUE("replay follow helper reports visible",
+                    code_panel_apply_scroll_follow_for_test(&follow_doc_line,
+                                                            &visible_lines));
+        ASSERT_TRUE("replay follow line after scroll",
+                    follow_doc_line >= g_scroll &&
+                    follow_doc_line < g_scroll + visible_lines);
+        ASSERT_INT("replay follow leaves edit line alone", g_edit_line, 0);
+        ASSERT_STR("replay follow leaves input alone",
+                   g_input, "glVertex3f(0, 0, 0)");
+
+        g_replay_active = 0;
+        g_replay_state = REPLAY_OFF;
+        g_replay_src_line = -1;
+        g_replay_pc = 0;
     }
 
     printf("\n%d / %d tests passed\n", g_pass, g_run);
