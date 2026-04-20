@@ -1444,6 +1444,8 @@ static int code_panel_footer_row_count(int panel_w, int text_x) {
 static int code_panel_replay_extra_rows_for_line(int cmd_idx) {
     if (!g_replay_active)
         return 0;
+    if (!g_replay_expand_args)
+        return 0;
     if (cmd_idx < 0 || cmd_idx >= g_num_cmds)
         return 0;
     if (cmd_idx != g_replay_src_line)
@@ -1561,6 +1563,13 @@ static int code_panel_follow_doc_line_from_layout(int cursor_doc_line,
     return follow_doc_line;
 }
 
+static int code_panel_visible_lines_for_height(int cp_h) {
+    int available = cp_h - CODE_MARGIN_Y - 2 * LINE_H - 3 - STATUSBAR_H;
+    if (available < 0)
+        return 1;
+    return available / LINE_H + 1;
+}
+
 static void code_panel_apply_follow_scroll(int total_lines, int visible_lines,
                                            int follow_doc_line) {
     int max_scroll = total_lines - visible_lines;
@@ -1600,8 +1609,7 @@ int code_panel_apply_scroll_follow_for_test(int *out_follow_doc_line,
     (void)cp_x;
     (void)cp_y;
 
-    visible_lines = (cp_h - CODE_MARGIN_Y - LINE_H - STATUSBAR_H) / LINE_H;
-    if (visible_lines < 1) visible_lines = 1;
+    visible_lines = code_panel_visible_lines_for_height(cp_h);
 
     if (g_replay_active &&
         s_replay_cache_pc != g_replay_pc)
@@ -2381,11 +2389,7 @@ void render_code_panel(void) {
     int idx_col_w = g_show_indices ? (6 * FONT_W) : 0;
     int idx_x = CODE_MARGIN_X + linenum_w + FONT_W;
     int text_x = idx_x + idx_col_w;
-    /* Vertical budget: menu bar occupies 1 LINE_H at top, status bar sits
-     * flush against the bottom for STATUSBAR_H pixels (no CODE_MARGIN_Y
-     * below, since the bar replaces it). */
-    int visible_lines = (cp_h - CODE_MARGIN_Y - LINE_H - STATUSBAR_H) / LINE_H;
-    if (visible_lines < 1) visible_lines = 1;
+    int visible_lines = code_panel_visible_lines_for_height(cp_h);
 
     /* When cursor is on a vertex, find which normal/color lines feed it so
      * we can draw a gutter accent bar on them below. */
@@ -3946,6 +3950,7 @@ static int code_panel_hit_test(int mx, int my,
     int line_y_start = panel_top - CODE_MARGIN_Y - 2 * LINE_H;
     int vis = (line_y_start + LINE_H - 3 - gl_y) / LINE_H;
     if (vis < 0) return 0;   /* clicked in header */
+    if (vis >= code_panel_visible_lines_for_height(cp_h)) return 0;
 
     int linenum_w = 4 * FONT_W;
     int idx_col_w = g_show_indices ? (6 * FONT_W) : 0;
@@ -3976,8 +3981,7 @@ static int code_panel_drag_target(int mx, int my, int *out_target) {
     int line_y_start = panel_top - CODE_MARGIN_Y - 2 * LINE_H;
     int vis = (line_y_start + LINE_H - 3 - gl_y) / LINE_H;
 
-    int visible_lines = (cp_h - CODE_MARGIN_Y - LINE_H - STATUSBAR_H) / LINE_H;
-    if (visible_lines < 1) visible_lines = 1;
+    int visible_lines = code_panel_visible_lines_for_height(cp_h);
     if (vis < 0) vis = 0;
     if (vis >= visible_lines) vis = visible_lines - 1;
 
