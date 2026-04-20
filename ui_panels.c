@@ -1258,7 +1258,7 @@ static const char *menu_item_shortcut(int menu_id, int i) {
             if (g_cfg_items[i].key_code > 0 && g_cfg_items[i].key_code <= 26) {
                 snprintf(buf, sizeof(buf), "Ctrl+%c", g_cfg_items[i].key_code - 1 + 'a');
                 return buf;
-            } else if (g_cfg_items[i].key_code == 28) {
+            } else if (g_cfg_items[i].key_code == KEY_CTRL_BACKSLASH) {
                 return "Ctrl+\\";
             } else {
                 snprintf(buf, sizeof(buf), "%c", g_cfg_items[i].key_code);
@@ -3462,6 +3462,7 @@ void render_help(void) {
         "  Ctrl+K               \tJump replay to cursor line (first geometry at/after)",
         "  Space                \tPause / resume replay",
         "  + / -                \tChange replay speed",
+        "  m / M                \tToggle polygon / vertex replay mode",
         "  Left / Right         \tStep backward / forward (when paused)",
         "  Esc                  \tStop replay",
         "",
