@@ -54,6 +54,12 @@ static void passive_motion_func(int x, int y);
 static void motion_func(int x, int y);
 static void timer_func(int value);
 
+typedef enum {
+    COMMIT_UNCHANGED,
+    COMMIT_OK,
+    COMMIT_REJECTED
+} CommitResult;
+
 char g_input[MAX_INPUT_LEN];
 int  g_input_len = 0;
 int  g_cursor_pos = 0;
@@ -534,12 +540,16 @@ void repl_editor_reset_transients(void) {
     g_func_decl_resume_delta = 0;
 }
 
-void navigate_to_line(int target) {
+static int normalize_navigation_target(int target) {
     target = resolve_insert_exit_target(target);
     if (target < 0)
         target = 0;
     if (target > g_num_cmds)
         target = g_num_cmds;
+    return target;
+}
+
+static void navigate_to_line_raw_resolved(int target) {
     if (target == g_edit_line && !g_inserting)
         return;
 
@@ -1708,6 +1718,285 @@ static int parse_for_overwrite_enter(GLCmd *cmd, int insert_idx) {
     return parsed;
 }
 
+typedef struct {
+    UndoSnapshot undo;
+    char input[MAX_INPUT_LEN];
+    int input_len;
+    int cursor_pos;
+    int inserting;
+    char newline_buf[MAX_INPUT_LEN];
+    int newline_len;
+} CommitAttemptState;
+
+typedef struct {
+    int undo_head;
+    int undo_count;
+    int redo_head;
+    int redo_count;
+} UndoRingState;
+
+static CommitAttemptState g_commit_attempt_before;
+static CommitAttemptState g_navigation_commit_before;
+
+static void capture_commit_attempt_state(CommitAttemptState *s) {
+    snapshot_save(&s->undo);
+    memcpy(s->input, g_input, sizeof(s->input));
+    s->input_len = g_input_len;
+    s->cursor_pos = g_cursor_pos;
+    s->inserting = g_inserting;
+    memcpy(s->newline_buf, g_newline_buf, sizeof(s->newline_buf));
+    s->newline_len = g_newline_len;
+}
+
+static void restore_commit_attempt_state(const CommitAttemptState *s) {
+    snapshot_restore(&s->undo);
+    memcpy(g_newline_buf, s->newline_buf, sizeof(g_newline_buf));
+    g_newline_len = s->newline_len;
+}
+
+static void capture_undo_ring_state(UndoRingState *s) {
+    s->undo_head = g_undo_head;
+    s->undo_count = g_undo_count;
+    s->redo_head = g_redo_head;
+    s->redo_count = g_redo_count;
+}
+
+static void restore_undo_ring_state(const UndoRingState *s) {
+    g_undo_head = s->undo_head;
+    g_undo_count = s->undo_count;
+    g_redo_head = s->redo_head;
+    g_redo_count = s->redo_count;
+}
+
+static int input_matches_committed_line(int line) {
+    if (line < 0 || line >= g_num_cmds)
+        return 0;
+
+    const char *s = g_cmds[line].source;
+    while (*s && isspace((unsigned char)*s))
+        s++;
+
+    int slen = (int)strlen(s);
+    while (slen > 0 &&
+           (s[slen - 1] == ';' || isspace((unsigned char)s[slen - 1])))
+        slen--;
+
+    return slen == g_input_len && strncmp(g_input, s, (size_t)slen) == 0;
+}
+
+static int commit_progressed_since(const CommitAttemptState *s) {
+    if (g_num_cmds != s->undo.num_cmds ||
+        g_edit_line != s->undo.edit_line ||
+        g_inserting != s->inserting ||
+        g_input_len != s->input_len ||
+        g_cursor_pos != s->cursor_pos)
+        return 1;
+
+    if (memcmp(g_input, s->input, (size_t)g_input_len + 1) != 0)
+        return 1;
+
+    if (g_num_cmds > 0 &&
+        memcmp(g_cmds, s->undo.cmds,
+               (size_t)g_num_cmds * sizeof(GLCmd)) != 0)
+        return 1;
+
+    return 0;
+}
+
+static int current_input_needs_navigation_commit(void) {
+    if (g_input_len <= 0)
+        return 0;
+    if (!g_inserting && g_edit_line < g_num_cmds &&
+        input_matches_committed_line(g_edit_line))
+        return 0;
+    return 1;
+}
+
+/* Shared line-commit path for Enter and navigation.  Enter keeps its
+ * line-advance/insert-mode behavior for unchanged lines; navigation treats
+ * unchanged input as a no-op and only uses this helper for modified text. */
+static CommitResult commit_current_input(int enter_mode) {
+    if (!enter_mode && !current_input_needs_navigation_commit())
+        return COMMIT_UNCHANGED;
+
+    if (!g_inserting && g_edit_line < g_num_cmds) {
+        int unmodified = (g_input_len == 0 ||
+                          input_matches_committed_line(g_edit_line));
+        if (unmodified) {
+            if (!enter_mode)
+                return COMMIT_UNCHANGED;
+            if (g_cursor_pos > 0)
+                g_edit_line++;
+            g_inserting = 1;
+            g_input[0] = '\0';
+            g_input_len = 0;
+            g_cursor_pos = 0;
+            clear_autocomplete_state();
+            set_status("Insert mode");
+            mark_normals_dirty();
+            return COMMIT_OK;
+        }
+    }
+
+    if (g_input_len > 0)
+        push_undo_snapshot();
+
+    CommitAttemptState *before = &g_commit_attempt_before;
+    capture_commit_attempt_state(before);
+
+    if ((g_inserting || g_edit_line >= g_num_cmds) &&
+        g_input_len > 0 && try_commit_block_structs()) {
+        return commit_progressed_since(before) ? COMMIT_OK : COMMIT_REJECTED;
+    }
+
+    if (g_inserting) {
+        if (g_input_len > 0) {
+            GLCmd cmd;
+            int parsed;
+            int insert_idx = g_edit_line;
+            ExprVar vis_vars[MAX_EXPR_VARS];
+            int num_vis_vars = collect_visible_vars(insert_idx, vis_vars, MAX_EXPR_VARS);
+
+            memset(&cmd, 0, sizeof(cmd));
+            if (num_vis_vars > 0) {
+                if (try_commit_var_statements())
+                    return commit_progressed_since(before) ? COMMIT_OK : COMMIT_REJECTED;
+                int saved_el = g_edit_line;
+                g_edit_line = insert_idx;
+                parsed = repl_parse_command_with_vars(g_input, &cmd, vis_vars, num_vis_vars);
+                g_edit_line = saved_el;
+                if (parsed)
+                    rewrite_cmd_source_with_indent(&cmd, insert_idx, 1);
+            } else {
+                parsed = repl_parse_command(g_input, &cmd);
+            }
+
+            if (parsed && g_num_cmds < MAX_COMMANDS) {
+                for (int j = g_num_cmds; j > g_edit_line; j--)
+                    g_cmds[j] = g_cmds[j - 1];
+                g_cmds[g_edit_line] = cmd;
+                g_num_cmds++;
+                g_edit_line++;
+                g_input[0] = '\0';
+                g_input_len = 0;
+                g_cursor_pos = 0;
+                set_status("Inserted");
+                return COMMIT_OK;
+            }
+            return COMMIT_REJECTED;
+        }
+
+        if (enter_mode) {
+            g_inserting = 0;
+            if (g_edit_line <= g_num_cmds)
+                load_line_to_input(g_edit_line);
+            return COMMIT_OK;
+        }
+        return COMMIT_UNCHANGED;
+    }
+
+    if (g_edit_line < g_num_cmds) {
+        int can_advance = 1;
+
+        if (g_input_len > 0) {
+            if (g_cmds[g_edit_line].type == CMD_FOR_BEGIN) {
+                if (try_commit_for_loop())
+                    return commit_progressed_since(before) ? COMMIT_OK : COMMIT_REJECTED;
+                can_advance = 0;
+            }
+            if (g_cmds[g_edit_line].type == CMD_FUNC_DEF) {
+                if (try_commit_func_def())
+                    return commit_progressed_since(before) ? COMMIT_OK : COMMIT_REJECTED;
+                can_advance = 0;
+            }
+            if (g_cmds[g_edit_line].type == CMD_IF_BEGIN) {
+                if (try_commit_if_block())
+                    return commit_progressed_since(before) ? COMMIT_OK : COMMIT_REJECTED;
+                can_advance = 0;
+            }
+            if (try_commit_var_statements_then_insert())
+                return commit_progressed_since(before) ? COMMIT_OK : COMMIT_REJECTED;
+
+            GLCmd cmd;
+            int parsed = parse_for_overwrite_enter(&cmd, g_edit_line);
+            if (parsed)
+                g_cmds[g_edit_line] = cmd;
+            else
+                can_advance = 0;
+        }
+
+        if (can_advance) {
+            g_edit_line++;
+            g_inserting = 1;
+            g_input[0] = '\0';
+            g_input_len = 0;
+            g_cursor_pos = 0;
+            set_status("Insert mode");
+            return COMMIT_OK;
+        }
+        return COMMIT_REJECTED;
+    }
+
+    if (g_input_len > 0) {
+        GLCmd cmd;
+        int parsed = parse_for_overwrite_enter(&cmd, g_num_cmds);
+
+        if (parsed && g_num_cmds < MAX_COMMANDS) {
+            g_cmds[g_num_cmds++] = cmd;
+            g_edit_line = g_num_cmds;
+            g_input[0] = '\0';
+            g_input_len = 0;
+            g_cursor_pos = 0;
+            g_newline_buf[0] = '\0';
+            g_newline_len = 0;
+            set_status("OK");
+            return COMMIT_OK;
+        }
+        return COMMIT_REJECTED;
+    }
+
+    return COMMIT_UNCHANGED;
+}
+
+static CommitResult commit_before_navigation(void) {
+    CommitAttemptState *before = &g_navigation_commit_before;
+    UndoRingState undo_before;
+    char rejected_status[sizeof(g_status)];
+    int rejected_ttl;
+
+    if (!current_input_needs_navigation_commit())
+        return COMMIT_UNCHANGED;
+
+    capture_commit_attempt_state(before);
+    capture_undo_ring_state(&undo_before);
+    CommitResult result = commit_current_input(0);
+    if (result != COMMIT_REJECTED)
+        return result;
+
+    memcpy(rejected_status, g_status, sizeof(rejected_status));
+    rejected_ttl = g_status_ttl;
+    restore_commit_attempt_state(before);
+    restore_undo_ring_state(&undo_before);
+    memcpy(g_status, rejected_status, sizeof(g_status));
+    g_status[sizeof(g_status) - 1] = '\0';
+    g_status_ttl = rejected_ttl;
+    clear_autocomplete_state();
+    return COMMIT_REJECTED;
+}
+
+void navigate_to_line(int target) {
+    target = normalize_navigation_target(target);
+    if (target == g_edit_line && !g_inserting)
+        return;
+
+    if (target != g_edit_line)
+        (void)commit_before_navigation();
+
+    if (target > g_num_cmds)
+        target = g_num_cmds;
+    navigate_to_line_raw_resolved(target);
+}
+
 void keyboard_func(unsigned char key, int x, int y) {
     (void)x;
     (void)y;
@@ -2118,138 +2407,7 @@ void keyboard_func(unsigned char key, int x, int y) {
             return;
         }
 
-        if (!g_inserting && g_edit_line < g_num_cmds) {
-            int unmodified = 0;
-            {
-                const char *s = g_cmds[g_edit_line].source;
-                while (*s && isspace((unsigned char)*s))
-                    s++;
-                int slen = (int)strlen(s);
-                while (slen > 0 &&
-                       (s[slen - 1] == ';' || isspace((unsigned char)s[slen - 1])))
-                    slen--;
-                if ((slen == g_input_len && strncmp(g_input, s, (size_t)slen) == 0) ||
-                    g_input_len == 0)
-                    unmodified = 1;
-            }
-            if (unmodified) {
-                if (g_cursor_pos > 0)
-                    g_edit_line++;
-                g_inserting = 1;
-                g_input[0] = '\0';
-                g_input_len = 0;
-                g_cursor_pos = 0;
-                clear_autocomplete_state();
-                set_status("Insert mode");
-                mark_normals_dirty();
-                return;
-            }
-        }
-
-        if (g_input_len > 0)
-            push_undo_snapshot();
-
-        if ((g_inserting || g_edit_line >= g_num_cmds) &&
-            g_input_len > 0 && try_commit_block_structs()) {
-            clear_autocomplete_state();
-            return;
-        }
-
-        if (g_inserting) {
-            if (g_input_len > 0) {
-                GLCmd cmd;
-                int parsed;
-                int insert_idx = g_edit_line;
-                ExprVar vis_vars[MAX_EXPR_VARS];
-                int num_vis_vars = collect_visible_vars(insert_idx, vis_vars, MAX_EXPR_VARS);
-
-                memset(&cmd, 0, sizeof(cmd));
-                if (num_vis_vars > 0) {
-                    if (try_commit_var_statements()) {
-                        clear_autocomplete_state();
-                        return;
-                    }
-                    int saved_el = g_edit_line;
-                    g_edit_line = insert_idx;
-                    parsed = repl_parse_command_with_vars(g_input, &cmd, vis_vars, num_vis_vars);
-                    g_edit_line = saved_el;
-                    if (parsed)
-                        rewrite_cmd_source_with_indent(&cmd, insert_idx, 1);
-                } else {
-                    parsed = repl_parse_command(g_input, &cmd);
-                }
-
-                if (parsed && g_num_cmds < MAX_COMMANDS) {
-                    for (int j = g_num_cmds; j > g_edit_line; j--)
-                        g_cmds[j] = g_cmds[j - 1];
-                    g_cmds[g_edit_line] = cmd;
-                    g_num_cmds++;
-                    g_edit_line++;
-                    g_input[0] = '\0';
-                    g_input_len = 0;
-                    g_cursor_pos = 0;
-                    set_status("Inserted");
-                }
-            } else {
-                g_inserting = 0;
-                if (g_edit_line <= g_num_cmds)
-                    load_line_to_input(g_edit_line);
-            }
-        } else if (g_edit_line < g_num_cmds) {
-            int can_advance = 1;
-
-            if (g_input_len > 0) {
-                if (g_cmds[g_edit_line].type == CMD_FOR_BEGIN) {
-                    if (try_commit_for_loop())
-                        return;
-                    can_advance = 0;
-                }
-                if (g_cmds[g_edit_line].type == CMD_FUNC_DEF) {
-                    if (try_commit_func_def())
-                        return;
-                    can_advance = 0;
-                }
-                if (g_cmds[g_edit_line].type == CMD_IF_BEGIN) {
-                    if (try_commit_if_block())
-                        return;
-                    can_advance = 0;
-                }
-                if (try_commit_var_statements_then_insert())
-                    return;
-
-                GLCmd cmd;
-                int parsed = parse_for_overwrite_enter(&cmd, g_edit_line);
-                if (parsed)
-                    g_cmds[g_edit_line] = cmd;
-                else
-                    can_advance = 0;
-            }
-
-            if (can_advance) {
-                g_edit_line++;
-                g_inserting = 1;
-                g_input[0] = '\0';
-                g_input_len = 0;
-                g_cursor_pos = 0;
-                set_status("Insert mode");
-            }
-        } else {
-            if (g_input_len > 0) {
-                GLCmd cmd;
-                int parsed = parse_for_overwrite_enter(&cmd, g_num_cmds);
-
-                if (parsed && g_num_cmds < MAX_COMMANDS) {
-                    g_cmds[g_num_cmds++] = cmd;
-                    g_edit_line = g_num_cmds;
-                    g_input[0] = '\0';
-                    g_input_len = 0;
-                    g_cursor_pos = 0;
-                    g_newline_buf[0] = '\0';
-                    g_newline_len = 0;
-                    set_status("OK");
-                }
-            }
-        }
+        (void)commit_current_input(1);
         clear_autocomplete_state();
         mark_normals_dirty();
         return;

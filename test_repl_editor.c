@@ -4,8 +4,11 @@
 #include "sample.h"
 #include "profile_panel.h"
 #include "ui_panels.h"
+#include <ctype.h>
 #include <stdio.h>
 #include <string.h>
+
+#define TEST_CODE_PANEL_MAX_HANG_INDENT_CHARS 12
 
 static int g_run = 0;
 static int g_pass = 0;
@@ -67,6 +70,148 @@ static int cfg_row_for_value(int *value) {
             return i;
     }
     return -1;
+}
+
+static int test_code_panel_available_chars(int panel_w, int x) {
+    int avail_px = panel_w - x - 4;
+    if (avail_px < FONT_W)
+        return 0;
+    return avail_px / FONT_W;
+}
+
+static int test_code_panel_cont_indent_chars(const char *text) {
+    const char *src = text ? text : "";
+    int leading = 0;
+
+    while (src[leading] && isspace((unsigned char)src[leading]))
+        leading++;
+
+    {
+        const char *paren = strchr(src, '(');
+        if (paren && paren[1] != '\0') {
+            int align = (int)(paren - src) + 1;
+            int max_align = leading + TEST_CODE_PANEL_MAX_HANG_INDENT_CHARS;
+            if (align > max_align)
+                align = max_align;
+            return align;
+        }
+    }
+
+    return leading + 4;
+}
+
+static int test_code_panel_is_secondary_break(char c) {
+    return c == ')' || c == ' ' || c == '+' || c == '*' || c == '-' || c == '/';
+}
+
+static int test_code_panel_find_wrap_break(const char *text, int start,
+                                           int max_chars, int len) {
+    int end = start + max_chars - 1;
+    int search_start = start;
+
+    if (end >= len)
+        end = len - 1;
+
+    while (search_start < len &&
+           isspace((unsigned char)text[search_start]))
+        search_start++;
+
+    for (int i = end; i > search_start; i--) {
+        if (text[i] == ',')
+            return i;
+    }
+
+    for (int i = end; i > search_start; i--) {
+        if (test_code_panel_is_secondary_break(text[i]))
+            return i;
+    }
+
+    for (int i = end + 1; i < len; i++) {
+        if (text[i] == ',' ||
+            (i > search_start && test_code_panel_is_secondary_break(text[i])))
+            return i;
+    }
+
+    return -1;
+}
+
+static int test_code_panel_row_count_for_text(const char *text, int first_x,
+                                              int panel_w) {
+    const char *src = text ? text : "";
+    int len = (int)strlen(src);
+    int pos = 0;
+    int x = first_x;
+    int cont_x = first_x + test_code_panel_cont_indent_chars(src) * FONT_W;
+    int rows = 0;
+    int done = 0;
+
+    while (!done) {
+        rows++;
+        if (len == 0) {
+            done = 1;
+        } else {
+            int width_chars = test_code_panel_available_chars(panel_w, x);
+            int remaining = len - pos;
+
+            if (!g_wrap_at_comma || width_chars < 1 || remaining <= width_chars) {
+                done = 1;
+            } else {
+                int break_idx = test_code_panel_find_wrap_break(src, pos,
+                                                                width_chars, len);
+                if (break_idx < 0) {
+                    done = 1;
+                } else {
+                    pos = break_idx + 1;
+                    x = cont_x;
+                }
+            }
+        }
+    }
+
+    return rows;
+}
+
+static int code_panel_header_row_count(void) {
+    int panel_w;
+    int linenum_w = 4 * FONT_W;
+    int idx_col_w = g_show_indices ? (6 * FONT_W) : 0;
+    int text_x = CODE_MARGIN_X + linenum_w + FONT_W + idx_col_w;
+    int rows = 0;
+
+    code_panel_rect(NULL, NULL, &panel_w, NULL);
+    refresh_workspace_header_lines();
+    for (int i = 0; i < g_workspace_header_line_count; i++)
+        rows += test_code_panel_row_count_for_text(g_workspace_header_lines[i],
+                                                   text_x, panel_w);
+    for (int i = 0; g_header_pre[i]; i++)
+        rows += test_code_panel_row_count_for_text(g_header_pre[i], text_x, panel_w);
+    for (int i = 0; i < RENDER_STATE_LINE_COUNT; i++)
+        rows += test_code_panel_row_count_for_text(g_render_state_lines[i],
+                                                   text_x, panel_w);
+    for (int i = 0; i < CAM_LINE_COUNT; i++)
+        rows += test_code_panel_row_count_for_text(g_cam_lines[i], text_x, panel_w);
+    for (int i = 0; g_header_post[i]; i++)
+        rows += test_code_panel_row_count_for_text(g_header_post[i], text_x, panel_w);
+    return rows;
+}
+
+static int code_panel_mouse_y_for_cmd(int cmd_idx) {
+    int cp_y, cp_h, panel_w;
+    int linenum_w = 4 * FONT_W;
+    int idx_col_w = g_show_indices ? (6 * FONT_W) : 0;
+    int text_x = CODE_MARGIN_X + linenum_w + FONT_W + idx_col_w;
+    int doc_line = code_panel_header_row_count();
+
+    code_panel_rect(NULL, &cp_y, &panel_w, &cp_h);
+    for (int i = 0; i < cmd_idx && i < g_num_cmds; i++) {
+        doc_line += test_code_panel_row_count_for_text(g_cmds[i].source,
+                                                       text_x, panel_w);
+    }
+
+    int vis = doc_line - g_scroll;
+    int line_y_start = cp_y + cp_h - CODE_MARGIN_Y - 2 * LINE_H;
+    int gl_y = line_y_start - vis * LINE_H + 1;
+    return g_win_h - gl_y;
 }
 
 static void assert_float_decl_rejected_atomic(const char *label,
@@ -1798,6 +1943,134 @@ int main() {
         ASSERT_TRUE("up nav: cursor visible after follow",
                     code_panel_apply_scroll_follow_for_test(&follow_doc_line,
                                                             &visible_lines));
+    }
+
+    /* Auto-commit modified lines before keyboard navigation. */
+    {
+        repl_reset_state();
+        repl_feed_line_public("glVertex3f(0,0,0)");
+        repl_feed_line_public("glVertex3f(1,1,1)");
+        navigate_to_line(0);
+        set_editor_input("glVertex3f(9, 0, 0)");
+
+        repl_special_func(GLUT_KEY_DOWN, 0, 0);
+
+        ASSERT_INT("nav auto-commit valid edit: cursor moved", g_edit_line, 1);
+        ASSERT_INT("nav auto-commit valid edit: first cmd type",
+                   g_cmds[0].type, CMD_VERTEX3F);
+        ASSERT_TRUE("nav auto-commit valid edit: x arg",
+                    fabsf(g_cmds[0].args[0] - 9.0f) < 1e-6f);
+        ASSERT_STR("nav auto-commit valid edit: input loaded next",
+                   g_input, "glVertex3f(1, 1, 1)");
+    }
+
+    /* Invalid auto-commit reverts the edited line and still navigates. */
+    {
+        char old_source[MAX_LINE_LEN];
+        int old_num_cmds;
+
+        repl_reset_state();
+        repl_feed_line_public("glColor3f(1,0,0)");
+        repl_feed_line_public("glVertex3f(1,1,1)");
+        navigate_to_line(0);
+        snprintf(old_source, sizeof(old_source), "%s", g_cmds[0].source);
+        old_num_cmds = g_num_cmds;
+        set_editor_input("glColor3f(1, 0");
+
+        repl_special_func(GLUT_KEY_DOWN, 0, 0);
+
+        ASSERT_INT("nav auto-commit invalid edit: cmd count unchanged",
+                   g_num_cmds, old_num_cmds);
+        ASSERT_STR("nav auto-commit invalid edit: source reverted",
+                   g_cmds[0].source, old_source);
+        ASSERT_INT("nav auto-commit invalid edit: cursor moved", g_edit_line, 1);
+        ASSERT_STR("nav auto-commit invalid edit: input loaded next",
+                   g_input, "glVertex3f(1, 1, 1)");
+        assert_status_contains("nav auto-commit invalid edit: status",
+                               "Incomplete command");
+    }
+
+    /* Auto-commit new end-of-buffer input before moving away. */
+    {
+        repl_reset_state();
+        repl_feed_line_public("glVertex3f(0,0,0)");
+        repl_feed_line_public("glVertex3f(1,1,1)");
+        navigate_to_line(g_num_cmds);
+        set_editor_input("glVertex3f(3, 3, 3)");
+
+        repl_special_func(GLUT_KEY_UP, 0, 0);
+
+        ASSERT_INT("nav auto-commit append: cmd count", g_num_cmds, 3);
+        ASSERT_INT("nav auto-commit append: cursor moved up", g_edit_line, 1);
+        ASSERT_INT("nav auto-commit append: new cmd type",
+                   g_cmds[2].type, CMD_VERTEX3F);
+        ASSERT_TRUE("nav auto-commit append: x arg",
+                    fabsf(g_cmds[2].args[0] - 3.0f) < 1e-6f);
+    }
+
+    /* Invalid new end-of-buffer input is discarded before moving away. */
+    {
+        int old_num_cmds;
+
+        repl_reset_state();
+        repl_feed_line_public("glVertex3f(0,0,0)");
+        repl_feed_line_public("glVertex3f(1,1,1)");
+        old_num_cmds = g_num_cmds;
+        navigate_to_line(g_num_cmds);
+        set_editor_input("glVertex3f(");
+
+        repl_special_func(GLUT_KEY_UP, 0, 0);
+
+        ASSERT_INT("nav auto-commit invalid append: cmd count unchanged",
+                   g_num_cmds, old_num_cmds);
+        ASSERT_INT("nav auto-commit invalid append: cursor moved up",
+                   g_edit_line, 1);
+        ASSERT_STR("nav auto-commit invalid append: input loaded target",
+                   g_input, "glVertex3f(1, 1, 1)");
+        assert_status_contains("nav auto-commit invalid append: status",
+                               "Incomplete command");
+    }
+
+    /* Code-panel clicks use the same auto-commit path. */
+    {
+        repl_reset_state();
+        repl_feed_line_public("glVertex3f(0,0,0)");
+        repl_feed_line_public("glVertex3f(1,1,1)");
+        repl_feed_line_public("glVertex3f(2,2,2)");
+        g_win_w = 800;
+        g_win_h = 600;
+        g_panel_frac = 0.5f;
+        g_code_panel_layout = CODE_PANEL_LAYOUT_LEFT;
+        g_show_indices = 0;
+        g_scroll = code_panel_header_row_count();
+        navigate_to_line(0);
+        set_editor_input("glVertex3f(8, 0, 0)");
+
+        handle_code_panel_click(CODE_MARGIN_X + 1, code_panel_mouse_y_for_cmd(2));
+
+        ASSERT_INT("mouse auto-commit valid edit: cursor moved", g_edit_line, 2);
+        ASSERT_TRUE("mouse auto-commit valid edit: x arg",
+                    fabsf(g_cmds[0].args[0] - 8.0f) < 1e-6f);
+        ASSERT_STR("mouse auto-commit valid edit: input loaded clicked",
+                   g_input, "glVertex3f(2, 2, 2)");
+    }
+
+    /* Autocomplete Up/Down keeps selection behavior and does not navigate. */
+    {
+        repl_reset_state();
+        repl_feed_line_public("glVertex3f(0,0,0)");
+        repl_feed_line_public("glVertex3f(1,1,1)");
+        navigate_to_line(0);
+        set_editor_input("glVertex3f(7, 0, 0)");
+        g_ac_count = 2;
+        g_ac_sel = 0;
+
+        repl_special_func(GLUT_KEY_DOWN, 0, 0);
+
+        ASSERT_INT("autocomplete down changes selection", g_ac_sel, 1);
+        ASSERT_INT("autocomplete down does not navigate", g_edit_line, 0);
+        ASSERT_TRUE("autocomplete down does not commit edit",
+                    fabsf(g_cmds[0].args[0] - 0.0f) < 1e-6f);
     }
 
     /* repl_clear_all_cmds — clears scene including float declarations. */
