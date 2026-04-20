@@ -4,6 +4,7 @@ TODO:
    - outlines dont function correctly if using GL_LINES or POINTS in the exported code
    - replay doesnt jump code panel focus to glu lines.  The replay jump focus
      doesnt always find the correct lines
+   - show user scene when currently selected
    - address the limitation of only 8 scope visible globals
 
 
