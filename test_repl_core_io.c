@@ -77,6 +77,7 @@ static int find_init_line_substr(const char *needle) {
 int main(void) {
     const char *path = "/tmp/repl_core_roundtrip_output.c";
     const char *func_path = "/tmp/repl_core_func_output.c";
+    const char *decl_func_path = "/tmp/repl_core_decl_func_output.c";
     const char *quadric_path = "/tmp/repl_core_quadric_output.c";
     const char *tess_path = "/tmp/repl_core_tess_output.c";
 
@@ -293,6 +294,28 @@ int main(void) {
                 fabsf(g_flat_cmds[g_num_flat_cmds - 1].args[0] - 1.5f) < 1e-6f);
     ASSERT_TRUE("param func flatten y",
                 fabsf(g_flat_cmds[g_num_flat_cmds - 1].args[1] - 3.0f) < 1e-6f);
+
+    repl_reset_state(); declare_test_vars();
+    repl_feed_line_public("float r;");
+    repl_feed_line_public("glClearColor(0.1, 0.1, 0.1, 1);");
+    repl_feed_line_public("func0 {");
+    repl_feed_line_public("glVertex3f(r, 0, 0);");
+    repl_feed_line_public("}");
+    repl_feed_line_public("r = 2;");
+    repl_feed_line_public("func0();");
+    repl_save_output(decl_func_path);
+
+    repl_reset_state(); declare_test_vars();
+    ASSERT_TRUE("load decl plus promoted func output",
+                repl_load_from_file(decl_func_path) == 1);
+    ASSERT_TRUE("decl plus func cmd count", g_num_cmds == 7);
+    ASSERT_TRUE("imported decl remains first", g_cmds[0].type == CMD_VAR_DECLARE);
+    ASSERT_TRUE("imported func follows decl", g_cmds[1].type == CMD_FUNC_DEF);
+    ASSERT_TRUE("imported func body follows header", g_cmds[2].type == CMD_VERTEX3F);
+    ASSERT_TRUE("imported func end follows body", g_cmds[3].type == CMD_FUNC_END);
+    ASSERT_TRUE("imported prior command follows func block", g_cmds[4].type == CMD_CLEAR_COLOR);
+    ASSERT_TRUE("imported var assign follows prior command", g_cmds[5].type == CMD_VAR_ASSIGN);
+    ASSERT_TRUE("imported call follows assign", g_cmds[6].type == CMD_CALL);
 
     repl_reset_state(); declare_test_vars();
     repl_feed_line_public("x = 0.25;");

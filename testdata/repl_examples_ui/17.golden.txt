@@ -25,12 +25,6 @@ void display() {
   glTranslatef(-0.0000f, -0.0000f, -0.0000f);
 --- header_post ---
 --- source ---
-  glClearColor(0.08, 0.08, 0.1, 1);
-  glEnable(GL_DEPTH_TEST);
-  glEnable(GL_LIGHTING);
-  glEnable(GL_LIGHT0);
-  glEnable(GL_NORMALIZE);
-  glEnable(GL_COLOR_MATERIAL);
   func0 {
   glBegin(GL_TRIANGLES);
     glNormal3f(0, 0, 1);
@@ -39,6 +33,12 @@ void display() {
     glVertex3f(0, 0.4, 0);
   glEnd();
   }
+  glClearColor(0.08, 0.08, 0.1, 1);
+  glEnable(GL_DEPTH_TEST);
+  glEnable(GL_LIGHTING);
+  glEnable(GL_LIGHT0);
+  glEnable(GL_NORMALIZE);
+  glEnable(GL_COLOR_MATERIAL);
   glColor3f(1, 0.6, 0.3);
   glPushMatrix();
   glTranslatef(0, 0, 2);

@@ -187,6 +187,7 @@ void repl_bench_fade_clear(void);
 /* Programmatic entry point equivalent to typing `line` and pressing ';'.
  * Used by file loading, example loading, and every test harness. */
 int  feed_line(const char *line);
+void repl_editor_reset_transients(void);
 void repl_load_example_lines_for_test(const char *const *lines);
 
 /* ---- Timekeeping ------------------------------------------------------ */

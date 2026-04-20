@@ -25,9 +25,6 @@ void display() {
   glTranslatef(-0.0000f, -0.0000f, -0.0000f);
 --- header_post ---
 --- source ---
-  glClearColor(0.1, 0.1, 0.1, 1);
-  glEnable(GL_DEPTH_TEST);
-  glEnable(GL_NORMALIZE);
   func0(radius, sides, phase) {
     glBegin(GL_TRIANGLE_FAN);
       glNormal3f(0, 0, 1);
@@ -39,6 +36,9 @@ void display() {
       }
     glEnd();
   }
+  glClearColor(0.1, 0.1, 0.1, 1);
+  glEnable(GL_DEPTH_TEST);
+  glEnable(GL_NORMALIZE);
   glPushMatrix();
   glTranslatef(-2.4, 0, 0);
   func0(0.9, 3, t*0.4);

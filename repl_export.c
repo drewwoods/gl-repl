@@ -1582,13 +1582,21 @@ static int import_parse_declare_marker(const char *line, int *loaded,
     snprintf(cmd.source + off, sizeof(cmd.source) - (size_t)off, ";");
     cmd.var_decl_count = count;
 
-    /* Append the command directly, bypassing try_commit_float_decl so we
-     * don't reject vars that are already registered.
-     * Also advance g_edit_line so subsequent feed_line() calls in the
-     * load loop do not overwrite this newly-inserted slot. */
+    /* Insert the command directly, bypassing try_commit_float_decl so we
+     * don't reject vars that are already registered.  Keep declarations in the
+     * same leading zone used by interactive float declarations, even though
+     * exported // @declare markers are encountered later in the snippet. */
     if (g_num_cmds < MAX_COMMANDS) {
-        g_cmds[g_num_cmds++] = cmd;
-        g_edit_line = g_num_cmds;
+        int decl_pos = 0;
+        while (decl_pos < g_num_cmds &&
+               g_cmds[decl_pos].type == CMD_VAR_DECLARE)
+            decl_pos++;
+        memmove(&g_cmds[decl_pos + 1], &g_cmds[decl_pos],
+                (size_t)(g_num_cmds - decl_pos) * sizeof(GLCmd));
+        g_cmds[decl_pos] = cmd;
+        g_num_cmds++;
+        if (g_edit_line >= decl_pos)
+            g_edit_line++;
         (*loaded)++;
     } else if (warnings) {
         (*warnings)++;
