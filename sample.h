@@ -276,7 +276,7 @@ typedef struct {
 
 typedef struct {
     const char  *label;
-    int          key_code;    /* Which key triggers this? e.g. '`', KEY_CTRL_G, GLUT_KEY_F2. 0 = none */
+    int          key_code;    /* Which key triggers this? e.g. '`', KEY_CTRL_R, GLUT_KEY_F2. 0 = none */
     int          is_special;  /* 1 if this is a GLUT_KEY_* special key instead of an ascii/ctrl key */
     int         *value;
     int          n_states;    /* 2 = ON/OFF toggle; >2 = cycle */
