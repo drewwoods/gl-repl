@@ -128,6 +128,33 @@ static void save_state(void) {
     if (g_music_loaded) {
         fprintf(f, "track=%s\n", g_playlist[g_playlist_pos]);
         fprintf(f, "offset=%.3f\n", cursor_seconds());
+    } else {
+        /* No track loaded: copy track/offset from the existing state file so
+         * a failed load, pre-gesture save, or post-playlist-end shutdown does
+         * not clobber a valid resume position. */
+        FILE *existing = fopen(g_state_file, "r");
+        if (existing) {
+            char line[REPL_AUDIO_MAX_PATH + 16];
+            char saved_track[REPL_AUDIO_MAX_PATH] = "";
+            float saved_offset = 0.0f;
+            while (fgets(line, (int)sizeof(line), existing)) {
+                if (strncmp(line, "track=", 6) == 0) {
+                    char *p = line + 6;
+                    size_t len = strlen(p);
+                    while (len > 0 && (p[len-1] == '\n' || p[len-1] == '\r')) len--;
+                    if (len >= REPL_AUDIO_MAX_PATH) len = REPL_AUDIO_MAX_PATH - 1;
+                    memcpy(saved_track, p, len);
+                    saved_track[len] = '\0';
+                } else if (strncmp(line, "offset=", 7) == 0) {
+                    saved_offset = (float)atof(line + 7);
+                }
+            }
+            fclose(existing);
+            if (saved_track[0]) {
+                fprintf(f, "track=%s\n", saved_track);
+                fprintf(f, "offset=%.3f\n", saved_offset);
+            }
+        }
     }
     /* cfg_mode is the authoritative audio preference: encodes pause/loop
      * policy in a single int owned by the editor (AUDIO_CFG_* enum).

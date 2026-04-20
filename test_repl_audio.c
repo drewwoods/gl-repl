@@ -57,7 +57,20 @@ int main() {
         ASSERT_TRUE("is_muted 0", repl_audio_is_muted() == 0);
     }
 
-    /* 4. Test engine-dependent functions before init (should fail gracefully) */
+    /* 4. cfg_mode getter/setter (no engine required) */
+    {
+        repl_audio_set_cfg_mode(2);
+        ASSERT_TRUE("cfg_mode set/get 2", repl_audio_get_cfg_mode() == 2);
+
+        repl_audio_set_cfg_mode(0);
+        ASSERT_TRUE("cfg_mode set/get 0", repl_audio_get_cfg_mode() == 0);
+
+        /* -1 is the sentinel "not set" value; the audio module accepts it */
+        repl_audio_set_cfg_mode(-1);
+        ASSERT_TRUE("cfg_mode set/get -1 (cleared)", repl_audio_get_cfg_mode() == -1);
+    }
+
+    /* 5. Test engine-dependent functions before init (should fail gracefully) */
     {
         ASSERT_TRUE("play_playlist fails before init", repl_audio_play_playlist() == -1);
         ASSERT_TRUE("play_music fails before init", repl_audio_play_music("test.mp3") == -1);
@@ -69,7 +82,7 @@ int main() {
         repl_audio_shutdown();
     }
 
-    /* 5. Initialize engine */
+    /* 6. Initialize engine */
     printf("Attempting repl_audio_init()...\n");
     int inited = repl_audio_init();
     printf("repl_audio_init returned %d\n", inited);
@@ -98,6 +111,41 @@ int main() {
         /* Shutdown should allow re-init */
         ASSERT_TRUE("re-init after shutdown", repl_audio_init() == 0);
         repl_audio_shutdown();
+
+        /* 7. cfg_mode round-trip through save_state / load_state */
+        {
+            const char *state_file = "test_audio_cfg_mode_rtrip.ini";
+            remove(state_file);
+
+            ASSERT_TRUE("cfg_mode rt: init", repl_audio_init() == 0);
+            repl_audio_set_state_file(state_file);
+            repl_audio_set_cfg_mode(2);   /* AUDIO_CFG_SONG (value 2) */
+            repl_audio_shutdown();        /* writes cfg_mode=2 to state file */
+
+            /* Restore: clear cfg_mode, then reload via play_playlist */
+            ASSERT_TRUE("cfg_mode rt: re-init", repl_audio_init() == 0);
+            repl_audio_set_cfg_mode(-1);  /* clear so we detect the restore */
+            const char *dummy[] = { "nonexistent_cfg.mp3" };
+            repl_audio_set_playlist(dummy, 1);
+            repl_audio_play_playlist();   /* calls load_state -> sets g_cfg_mode */
+            ASSERT_TRUE("cfg_mode rt: restored to 2", repl_audio_get_cfg_mode() == 2);
+
+            /* Out-of-range value: audio module preserves it raw; the editor
+             * (apply_defaults) is responsible for clamping to a valid range. */
+            repl_audio_set_cfg_mode(99);
+            repl_audio_shutdown();
+            ASSERT_TRUE("cfg_mode rt: re-init 2", repl_audio_init() == 0);
+            repl_audio_set_cfg_mode(-1);
+            repl_audio_set_playlist(dummy, 1);
+            repl_audio_play_playlist();
+            ASSERT_TRUE("cfg_mode rt: raw 99 preserved", repl_audio_get_cfg_mode() == 99);
+
+            repl_audio_set_state_file(NULL);
+            remove(state_file);
+            repl_audio_shutdown();
+            ASSERT_TRUE("cfg_mode rt: final re-init", repl_audio_init() == 0);
+            repl_audio_shutdown();
+        }
     } else {
         printf("Skipping engine-active tests as init failed.\n");
     }
