@@ -3480,10 +3480,12 @@ void render_help(void) {
 
     int hx = g_win_w / 6, hy = g_win_h / 12;
     int hw = g_win_w * 2 / 3, hh = g_win_h * 5 / 6;
-    int tab_bar_h = 28;
-    int pad_top = 32 + tab_bar_h, pad_bot = 24;
+    int tab_bar_h = LINE_H + 2;
+    int title_h   = LINE_H + 4;
+    int pad_top   = title_h + tab_bar_h + 6;
+    int pad_bot   = 20;
     int content_h = hh - pad_top - pad_bot;
-    int visible_lines = (content_h - FONT_H - 4) / LINE_H;
+    int visible_lines = content_h / LINE_H;
     if (visible_lines < 1) visible_lines = 1;
 
     /* Clamp scroll */
@@ -3492,79 +3494,78 @@ void render_help(void) {
     if (g_help_scroll > max_scroll) g_help_scroll = max_scroll;
     if (g_help_scroll < 0) g_help_scroll = 0;
 
-    /* Background */
-    glColor4f(0.03f, 0.03f, 0.06f, 0.94f);
+    /* Background — matches config menu #222 */
+    glColor4f(0.133f, 0.133f, 0.133f, 0.98f);
     draw_quad((float)hx, (float)hy, (float)hw, (float)hh);
 
-    /* Border */
-    glColor4f(0.45f, 0.45f, 0.75f, 0.80f);
+    /* Border — matches config menu #3a3a3a */
+    glColor4f(0.227f, 0.227f, 0.227f, 1.0f);
     glBegin(GL_LINE_LOOP);
-    glVertex2f((float)hx, (float)hy);
+    glVertex2f((float)hx,        (float)hy);
     glVertex2f((float)(hx + hw), (float)hy);
     glVertex2f((float)(hx + hw), (float)(hy + hh));
-    glVertex2f((float)hx, (float)(hy + hh));
+    glVertex2f((float)hx,        (float)(hy + hh));
     glEnd();
 
-    /* --- Title --- */
-    glColor3f(0.80f, 0.80f, 1.00f);
+    /* --- Title bar --- */
     {
-        const char *title = "OpenGL REPL - Help";
-        int title_x = hx + (hw - (int)strlen(title) * FONT_W) / 2;
-        draw_string((float)title_x, (float)(hy + hh - 22), title, FONT_MONO);
+        int title_y = hy + hh - title_h;
+        /* Title bar separator */
+        glColor4f(0.20f, 0.20f, 0.20f, 1.0f);
+        glBegin(GL_LINES);
+        glVertex2f((float)hx,        (float)title_y);
+        glVertex2f((float)(hx + hw), (float)title_y);
+        glEnd();
+
+        /* Title text — dim, left-aligned like config menu section headers */
+        glColor4f(0.478f, 0.518f, 0.580f, 1.0f);
+        draw_string((float)(hx + 14), (float)(title_y + 4), "HELP", FONT_SMALL);
+
+        /* Tab switch hint right-aligned */
+        const char *nav_hint = "Left/Right: switch tabs";
+        int nh_x = hx + hw - (int)strlen(nav_hint) * FONT_SMALL_W - 14;
+        glColor4f(0.533f, 0.533f, 0.533f, 0.70f);
+        draw_string((float)nh_x, (float)(title_y + 4), nav_hint, FONT_SMALL);
     }
 
     /* --- Tab bar --- */
     {
-        int tab_y = hy + hh - 32 - tab_bar_h;
-        int tab_w = hw / HELP_NUM_TABS;
+        int tab_y  = hy + hh - title_h - tab_bar_h;
+        int tab_w  = hw / HELP_NUM_TABS;
+
+        /* Tab bar background */
+        glColor4f(0.10f, 0.10f, 0.10f, 1.0f);
+        draw_quad((float)hx, (float)tab_y, (float)hw, (float)tab_bar_h);
 
         for (int t = 0; t < HELP_NUM_TABS; t++) {
             int tx_tab = hx + t * tab_w;
-
             if (t == g_help_tab) {
-                /* Active tab background */
-                glColor4f(0.15f, 0.15f, 0.30f, 0.90f);
-                draw_quad((float)tx_tab, (float)tab_y, (float)tab_w, (float)tab_bar_h);
-                /* Active tab underline */
-                glColor4f(0.55f, 0.65f, 1.00f, 0.90f);
+                /* Active tab: bottom accent bar + bright label */
+                glColor4f(UI_ACCENT_GREEN_R, UI_ACCENT_GREEN_G, UI_ACCENT_GREEN_B, 0.85f);
                 draw_quad((float)tx_tab, (float)tab_y, (float)tab_w, 2.0f);
-                /* Active tab text */
-                glColor3f(0.85f, 0.85f, 1.00f);
+                glColor4f(0.847f, 0.847f, 0.847f, 1.0f);
             } else {
-                /* Inactive tab background */
-                glColor4f(0.08f, 0.08f, 0.14f, 0.70f);
-                draw_quad((float)tx_tab, (float)tab_y, (float)tab_w, (float)tab_bar_h);
-                /* Inactive tab text */
-                glColor3f(0.45f, 0.45f, 0.55f);
+                glColor4f(0.533f, 0.533f, 0.533f, 1.0f);
             }
-
             int lbl_len = (int)strlen(tab_labels[t]);
-            int lbl_x = tx_tab + (tab_w - lbl_len * FONT_W) / 2;
-            draw_string((float)lbl_x, (float)(tab_y + 8), tab_labels[t], FONT_MONO);
+            int lbl_x   = tx_tab + (tab_w - lbl_len * FONT_SMALL_W) / 2;
+            draw_string((float)lbl_x, (float)(tab_y + 3), tab_labels[t], FONT_SMALL);
         }
 
-        /* Separator line under tab bar */
-        glColor4f(0.35f, 0.35f, 0.55f, 0.60f);
+        /* Separator line below tab bar */
+        glColor4f(0.20f, 0.20f, 0.20f, 1.0f);
         glBegin(GL_LINES);
-        glVertex2f((float)hx, (float)tab_y);
+        glVertex2f((float)hx,        (float)tab_y);
         glVertex2f((float)(hx + hw), (float)tab_y);
         glEnd();
-
-        /* Tab switch hint */
-        glColor4f(0.40f, 0.40f, 0.55f, 0.60f);
-        const char *nav_hint = "Left/Right: switch tabs";
-        int nh_x = hx + hw - (int)strlen(nav_hint) * 8 - 12;
-        draw_string((float)nh_x, (float)(hy + hh - 22), nav_hint, FONT_SMALL);
     }
 
     /* --- Content --- */
-    /* Scissor clip to content area */
     glEnable(GL_SCISSOR_TEST);
     glScissor(hx + 1, hy + pad_bot, hw - 2, content_h);
 
-    int tx = hx + 24;
-    /* Lower baseline so first line's glyphs don't clip at scissor top */
-    int ty_start = hy + hh - pad_top - FONT_H - 4;
+    int tx      = hx + 14;
+    int ty_start = hy + hh - pad_top - LINE_H + 3;
 
     for (int i = g_help_scroll; i < n_lines && i < g_help_scroll + visible_lines + 1; i++) {
         int ty = ty_start - (i - g_help_scroll) * LINE_H;
@@ -3574,31 +3575,31 @@ void render_help(void) {
         /* '\t' marks the left/right column boundary */
         const char *tab = strchr(text[i], '\t');
         if (tab) {
-            /* Left column (command / key) */
+            /* Left column (command / key) — #d8d8d8 */
             char left[256];
             int ln = (int)(tab - text[i]);
             if (ln > 255) ln = 255;
             memcpy(left, text[i], ln);
             left[ln] = '\0';
-            glColor3f(0.45f, 0.90f, 0.50f);
-            draw_string((float)tx, (float)ty, left, FONT_MONO);
+            glColor4f(0.847f, 0.847f, 0.847f, 1.0f);
+            draw_string((float)tx, (float)ty, left, FONT_SMALL);
 
-            /* Right column (description) */
-            glColor3f(0.62f, 0.62f, 0.72f);
-            draw_string((float)(tx + ln * FONT_W), (float)ty,
-                        tab + 1, FONT_MONO);
+            /* Right column (description) — #888 */
+            glColor4f(0.533f, 0.533f, 0.533f, 1.0f);
+            draw_string((float)(tx + ln * FONT_SMALL_W), (float)ty,
+                        tab + 1, FONT_SMALL);
         } else if (text[i][0] != ' ') {
-            /* Section header */
-            glColor3f(0.95f, 0.80f, 0.40f);
-            draw_string((float)tx, (float)ty, text[i], FONT_MONO);
+            /* Section header — dim gray-blue like config menu */
+            glColor4f(0.478f, 0.518f, 0.580f, 1.0f);
+            draw_string((float)tx, (float)ty, text[i], FONT_SMALL);
         } else if (text[i][2] == ' ' && text[i][3] == ' ') {
-            /* 4+ space indent — code example */
-            glColor3f(0.45f, 0.68f, 0.78f);
-            draw_string((float)tx, (float)ty, text[i], FONT_MONO);
+            /* 4+ space indent — code example, green accent */
+            glColor4f(UI_ACCENT_GREEN_R, UI_ACCENT_GREEN_G, UI_ACCENT_GREEN_B, 0.90f);
+            draw_string((float)tx, (float)ty, text[i], FONT_SMALL);
         } else {
-            /* 2-space indent, no split — uniform green */
-            glColor3f(0.45f, 0.90f, 0.50f);
-            draw_string((float)tx, (float)ty, text[i], FONT_MONO);
+            /* 2-space indent, no split — light label colour */
+            glColor4f(0.847f, 0.847f, 0.847f, 1.0f);
+            draw_string((float)tx, (float)ty, text[i], FONT_SMALL);
         }
     }
 
@@ -3606,31 +3607,31 @@ void render_help(void) {
 
     /* Scroll indicator (only if content overflows) */
     if (n_lines > visible_lines) {
-        int bar_x = hx + hw - 10;
+        int bar_x   = hx + hw - 8;
         int bar_top = hy + hh - pad_top;
-        int bar_h = content_h;
-        float frac = (float)visible_lines / (float)n_lines;
-        float pos  = (float)g_help_scroll / (float)n_lines;
+        int bar_h   = content_h;
+        float frac  = (float)visible_lines / (float)n_lines;
+        float pos   = (float)g_help_scroll / (float)n_lines;
         int thumb_h = (int)(bar_h * frac);
         if (thumb_h < 12) thumb_h = 12;
         int thumb_y = bar_top - (int)(bar_h * pos) - thumb_h;
 
-        /* Track */
-        glColor4f(0.20f, 0.20f, 0.35f, 0.40f);
-        draw_quad((float)bar_x, (float)(bar_top - bar_h), 5.0f, (float)bar_h);
+        /* Track — #333 */
+        glColor4f(0.20f, 0.20f, 0.20f, 0.60f);
+        draw_quad((float)bar_x, (float)(bar_top - bar_h), 4.0f, (float)bar_h);
 
-        /* Thumb */
-        glColor4f(0.55f, 0.55f, 0.80f, 0.65f);
-        draw_quad((float)bar_x, (float)thumb_y, 5.0f, (float)thumb_h);
+        /* Thumb — #888 */
+        glColor4f(0.533f, 0.533f, 0.533f, 0.80f);
+        draw_quad((float)bar_x, (float)thumb_y, 4.0f, (float)thumb_h);
 
         /* Scroll hint at bottom */
         if (g_help_scroll < max_scroll) {
-            glColor4f(0.50f, 0.50f, 0.65f, 0.50f);
             char hint[32];
             snprintf(hint, sizeof(hint), "v %d more v",
                      n_lines - g_help_scroll - visible_lines);
-            int hint_x = hx + (hw - (int)strlen(hint) * FONT_W) / 2;
-            draw_string((float)hint_x, (float)(hy + 6), hint, FONT_SMALL);
+            int hint_x = hx + (hw - (int)strlen(hint) * FONT_SMALL_W) / 2;
+            glColor4f(0.533f, 0.533f, 0.533f, 0.50f);
+            draw_string((float)hint_x, (float)(hy + 4), hint, FONT_SMALL);
         }
     }
 
