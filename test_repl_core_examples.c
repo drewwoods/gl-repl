@@ -950,7 +950,7 @@ int main(int argc, char **argv) {
         snprintf(label, sizeof(label), "example %02d export compiles", idx);
         ASSERT_TRUE(label, compiled);
 
-        repl_reset_state(); declare_test_vars();
+        repl_reset_state();
         pin_code_panel_state();
         roundtrip_loaded = repl_load_from_file(export_path);
         snprintf(label, sizeof(label), "example %02d export imports", idx);
@@ -1001,11 +1001,9 @@ int main(int argc, char **argv) {
                                         "imported code panel",
                                         actual, imported, diff_line);
                 }
-                if (idx == 3) {
-                    snprintf(label, sizeof(label),
-                             "example %02d func-loop exact roundtrip", idx);
-                    ASSERT_TRUE(label, roundtrip_exact);
-                }
+                snprintf(label, sizeof(label),
+                         "example %02d exact export/import roundtrip", idx);
+                ASSERT_TRUE(label, roundtrip_exact);
 
                 snprintf(reexport_path, sizeof(reexport_path),
                          "%s/example_%02d_roundtrip.c", temp_dir, idx);
@@ -1021,8 +1019,6 @@ int main(int argc, char **argv) {
                 }
                 snprintf(label, sizeof(label), "example %02d re-export compiles", idx);
                 ASSERT_TRUE(label, roundtrip_compiled);
-                snprintf(label, sizeof(label), "example %02d exact or re-export compiles", idx);
-                ASSERT_TRUE(label, roundtrip_exact || roundtrip_compiled);
                 remove(reexport_path);
                 free(imported);
             }

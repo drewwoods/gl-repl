@@ -1272,6 +1272,17 @@ static int find_export_block_end(int begin_idx) {
     return g_num_cmds;
 }
 
+static int comment_run_attached_func_idx(int start, int end_idx) {
+    int i = start;
+    while (i < end_idx && i < g_num_cmds &&
+           g_cmds[i].valid && g_cmds[i].type == CMD_COMMENT)
+        i++;
+    if (i > start && i < end_idx && i < g_num_cmds &&
+        g_cmds[i].valid && g_cmds[i].type == CMD_FUNC_DEF)
+        return i;
+    return -1;
+}
+
 static void write_canonical_cmd_as_c(FILE *f, const GLCmd *cmd, int for_depth,
                                      int *tess_depth) {
     switch (cmd->type) {
@@ -1352,6 +1363,13 @@ static void write_render_body_range_as_c(FILE *f, int start, int end_idx,
 
     for (int i = start; i < end_idx && i < g_num_cmds; i++) {
         if (!g_cmds[i].valid) continue;
+        if (skip_func_defs && g_cmds[i].type == CMD_COMMENT) {
+            int attached_func = comment_run_attached_func_idx(i, end_idx);
+            if (attached_func >= 0) {
+                i = find_export_block_end(attached_func);
+                continue;
+            }
+        }
         switch (g_cmds[i].type) {
         case CMD_FOR_BEGIN:
             write_for_begin_as_c(f, &g_cmds[i]);
@@ -1424,6 +1442,14 @@ static void write_render_helper_as_c(FILE *f, const char *name) {
 static void write_func_defs_as_c(FILE *f) {
     for (int i = 0; i < g_num_cmds; i++) {
         if (!g_cmds[i].valid || g_cmds[i].type != CMD_FUNC_DEF) continue;
+        int comment_start = i;
+        while (comment_start > 0 &&
+               g_cmds[comment_start - 1].valid &&
+               g_cmds[comment_start - 1].type == CMD_COMMENT)
+            comment_start--;
+        for (int c = comment_start; c < i; c++)
+            fprintf(f, "\n%s\n", g_cmds[c].source);
+
         int fn = (int)g_cmds[i].args[0];
         int parsed_fn = fn;
         int param_count = 0;
@@ -1914,6 +1940,25 @@ static int import_make_repl_label(const char *line, char *out, int out_sz) {
     return 1;
 }
 
+static int import_extract_assignment_expr(const char *line, const char *key,
+                                          char *out, int out_sz) {
+    const char *p = strstr(line, key);
+    if (!p)
+        return 0;
+    p = strchr(p, '=');
+    if (!p)
+        return 0;
+    p++;
+
+    char c_expr[MAX_LINE_LEN];
+    if (!import_copy_expr_until(&p, ';', c_expr, sizeof(c_expr)))
+        return 0;
+
+    c_expr_to_repl(c_expr, out, out_sz);
+    trim_in_place(out);
+    return out[0] != '\0';
+}
+
 static int import_make_repl_tess_line(const char *line, char *out, int out_sz) {
     const char *p = line;
     while (*p && isspace((unsigned char)*p)) p++;
@@ -1933,6 +1978,22 @@ static int import_make_repl_tess_line(const char *line, char *out, int out_sz) {
     }
 
     if (strncmp(p, "{ _tn[", 6) == 0) {
+        char exprs[3][MAX_LINE_LEN];
+        int have_exprs = 1;
+        for (int i = 0; i < 3; i++) {
+            char key[16];
+            snprintf(key, sizeof(key), "_tn[%d]", i);
+            if (!import_extract_assignment_expr(p, key, exprs[i], sizeof(exprs[i]))) {
+                have_exprs = 0;
+                break;
+            }
+        }
+        if (have_exprs) {
+            snprintf(out, out_sz, "gluNormal(%s, %s, %s);",
+                     exprs[0], exprs[1], exprs[2]);
+            return 1;
+        }
+
         float nv[3] = {0, 0, 1};
         const char *np = p;
         for (int i = 0; i < 3; i++) {
@@ -1948,6 +2009,27 @@ static int import_make_repl_tess_line(const char *line, char *out, int out_sz) {
     }
 
     if (strncmp(p, "{ _tc[", 6) == 0) {
+        char exprs[4][MAX_LINE_LEN];
+        int have_exprs = 1;
+        for (int i = 0; i < 4; i++) {
+            char key[16];
+            snprintf(key, sizeof(key), "_tc[%d]", i);
+            if (!import_extract_assignment_expr(p, key, exprs[i], sizeof(exprs[i]))) {
+                have_exprs = 0;
+                break;
+            }
+        }
+        if (have_exprs) {
+            if (strcmp(exprs[3], "1") == 0 || strcmp(exprs[3], "1.0") == 0) {
+                snprintf(out, out_sz, "gluColor(%s, %s, %s);",
+                         exprs[0], exprs[1], exprs[2]);
+            } else {
+                snprintf(out, out_sz, "gluColor(%s, %s, %s, %s);",
+                         exprs[0], exprs[1], exprs[2], exprs[3]);
+            }
+            return 1;
+        }
+
         float cv[4] = {1, 1, 1, 1};
         const char *cp = p;
         for (int i = 0; i < 4; i++) {
@@ -1964,6 +2046,22 @@ static int import_make_repl_tess_line(const char *line, char *out, int out_sz) {
     }
 
     if (strstr(p, "TessVertex") != NULL && strstr(p, "gluTessVertex") != NULL) {
+        char exprs[3][MAX_LINE_LEN];
+        int have_exprs = 1;
+        for (int i = 0; i < 3; i++) {
+            char key[24];
+            snprintf(key, sizeof(key), "_v->pos[%d]", i);
+            if (!import_extract_assignment_expr(p, key, exprs[i], sizeof(exprs[i]))) {
+                have_exprs = 0;
+                break;
+            }
+        }
+        if (have_exprs) {
+            snprintf(out, out_sz, "gluVertex(%s, %s, %s);",
+                     exprs[0], exprs[1], exprs[2]);
+            return 1;
+        }
+
         float vv[3] = {0, 0, 0};
         const char *vp = strstr(p, "_v->pos[0]");
         if (!vp) return 0;
@@ -2242,6 +2340,8 @@ int load_from_file(const char *filename) {
     int import_func_depth = 0;
     int loaded = 0;
     int warnings = 0;
+    char pending_func_comments[16][MAX_LINE_LEN];
+    int pending_func_comment_count = 0;
 
     import_cam_parser_reset();
 
@@ -2276,6 +2376,9 @@ int load_from_file(const char *filename) {
 
             char repl_func_line[MAX_LINE_LEN];
             if (import_make_repl_func_header(p, repl_func_line, sizeof(repl_func_line))) {
+                for (int c = 0; c < pending_func_comment_count; c++)
+                    import_feed_one_line(pending_func_comments[c], &loaded, &warnings);
+                pending_func_comment_count = 0;
                 int before = g_num_cmds;
                 int handled = feed_line(repl_func_line);
                 if (g_num_cmds > before) loaded += (g_num_cmds - before);
@@ -2288,12 +2391,21 @@ int load_from_file(const char *filename) {
             }
 
             if (strncmp(p, "// Snippet start", 16) == 0) {
+                pending_func_comment_count = 0;
                 in_snippet = 1;
                 /* Function/header import may leave the editor cursor in an
                  * insertion slot inside existing commands. Force snippet
                  * lines to start appending from the end of the command list. */
                 g_inserting = 0;
                 g_edit_line = g_num_cmds;
+                continue;
+            }
+            if (p[0] == '/' && p[1] == '/' && pending_func_comment_count <
+                (int)(sizeof(pending_func_comments) / sizeof(pending_func_comments[0]))) {
+                snprintf(pending_func_comments[pending_func_comment_count++],
+                         MAX_LINE_LEN, "%s", p);
+            } else if (*p != '\0') {
+                pending_func_comment_count = 0;
             }
             continue;
         }

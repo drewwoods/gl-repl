@@ -46,12 +46,12 @@ void display() {
       for(z, -n, n) {
         i = rand(x,z);
         j = rand(x+1,z);
-        k = 0.25 * sinf((100+t/2) * (z/200+4));
-        if(fmodf(x, 2) == 0) {
+        k = 0.25 * sin((100+t/2) * (z/200+4));
+        if(fmod(x, 2) == 0) {
           i = i + k;
           j = j + k;
         }
-        if(fabsf(fmodf(x,2)) == 1) {
+        if(abs(fmod(x,2)) == 1) {
           j = j + k;
           i = i +k;
         }
