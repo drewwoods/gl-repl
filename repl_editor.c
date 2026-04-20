@@ -1743,6 +1743,9 @@ void keyboard_func(unsigned char key, int x, int y) {
     if (handle_search_key(key))
         return;
 
+    if (ui_panels_handle_rename_key(key))
+        return;
+
     if (key == KEY_ESC) {
         if (ui_panels_handle_escape()) {
             glutPostRedisplay();

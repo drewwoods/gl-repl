@@ -17,11 +17,43 @@ by default in debug builds.
 
 Include path must reach `../../include` (the project-wide `gl_includes.h`).
 
+### Local GL Stub Headers
+
+This sample ships no-op OpenGL, GLU, and GLUT headers under `include/` so
+machines without system GL development packages can still compile and run
+non-rendering tests.
+
+```bash
+make test-stubs
+make sample USE_GL_STUBS=1
+```
+
+`USE_GL_STUBS=1` prefers this sample's local `include/` directory and drops
+`-lGL`, `-lGLU`, `-lglut` from the link flags. Stub-mode objects go to
+`build/*-gl-stubs` so they don't mix with rendering builds.
+
+Constraints:
+
+- Stubs are for compilation and non-rendering tests only. No window, no pixels,
+  no real GL context. Do not make stubs the default rendering path.
+- If the sample starts calling a new GL/GLU/GLUT symbol, extend the matching
+  stub in `include/GL/`, `include/GLUT/`, or `include/OpenGL/`.
+- Keep stubs minimal and no-op — model types, constants, and callable
+  signatures well enough for builds, not a fake renderer.
+- After touching stubs, verify both paths: `make test-stubs`, `make sample
+  USE_GL_STUBS=1`, `make sample`.
+
+Header layout: `include/GL/gl.h` (fixed-function GL), `include/GL/glu.h`
+(quadrics/projection/tessellator), `include/GL/freeglut.h` (GLUT/freeglut
+callbacks + shapes); `glext.h`, `glut.h`, `GLUT/glut.h`, `OpenGL/gl.h`,
+`OpenGL/glu.h` are compatibility wrappers.
+
 ## Run
 
 ```bash
 ./sample                  # Fresh session
-./sample output.c         # Reload saved session
+./sample output.c         # Reload saved session (single file)
+./sample workspace/       # Load every *.c under workspace/ as a user scene
 ./sample --noaccum        # Disable accumulation buffer AA
 ./sample --dump-code      # Print loaded buffer to stdout
 ```
@@ -29,12 +61,12 @@ Include path must reach `../../include` (the project-wide `gl_includes.h`).
 ## Test
 
 ```bash
-make test_eval            # Expression evaluator tests
-make test_format          # Indentation/formatting tests
-make test_repl_core_parse # Command parser tests
+make test_eval             # Expression evaluator tests
+make test_format           # Indentation/formatting tests
+make test_repl_core_parse  # Command parser tests
 make test_repl_core_format # Reformatter tests
 make test_repl_core_commit # Commit pipeline tests
-make test_repl_core_io    # Save/load round-trip tests
+make test_repl_core_io     # Save/load round-trip tests
 ```
 
 Run all: `make test`
@@ -44,17 +76,18 @@ Run all: `make test`
 | File | Responsibility |
 |------|----------------|
 | `sample.c` | GLUT callback wrappers, `main()`, window setup |
-| `sample.h` | Shared types (`GLCmd`, `CmdType`, `SceneLight`, `CfgItem`), extern globals, utility declarations |
-| `repl_core.c` | Parser, command execution, flattening, save/load, user scene storage |
-| `repl_core.h` | Public API for repl_core (parse, flatten, display, input callbacks, user scene) |
-| `repl_core_internal.h` | Test-visible internals (normalize/commit pipeline, `feed_line`, `load_line_to_input`) |
-| `repl_editor.c` | Keyboard/mouse handling, undo/redo (`UndoSnapshot`), `CfgItem` array, F-key dispatch |
+| `sample.h` | Shared types (`GLCmd`, `CmdType`, `SceneLight`, `CfgItem`), extern globals, utility declarations, `CFG_DEFAULT_*` macros |
+| `repl_core.c` | Parser, command execution, flattening, user scene storage, workspace I/O |
+| `repl_core.h` | Public API (parse, flatten, display, input callbacks, user scene + workspace) |
+| `repl_core_internal.h` | Test-visible internals (normalize/commit pipeline, `feed_line`, `load_line_to_input`, `repl_promote_example_if_needed`) |
+| `repl_editor.c` | Keyboard/mouse handling, undo/redo (`UndoSnapshot`), `CfgItem` array, F-key dispatch, auto-promote hook |
 | `repl_examples.c` | Predefined example data (`g_examples[]`, `g_example_names[]`) |
 | `repl_examples.h` | Example query API (`repl_examples_count/name/lines`) |
+| `repl_export.c` | `save_output` / `load_from_file`, workspace header directives, `@scene-name` / `@workspace-dir` markers |
 | `scene_render.c` | 3D scene: camera, grid themes, axes themes, lights, vertex overlays, outline pass |
 | `scene_render.h` | Declares `render_3d_scene()` |
-| `ui_panels.c` | Code panel, header buttons, example/scene dropdown, autocomplete, help overlay, config menu |
-| `ui_panels.h` | UI panel render + hit-test declarations |
+| `ui_panels.c` | Code panel, header buttons, Scene/File/Config menus, autocomplete, help overlay, inline rename state |
+| `ui_panels.h` | UI panel render + hit-test declarations, rename state API |
 | `repl_eval.c` | Expression evaluator (recursive descent), REPL<->C translators, for-loop parsers |
 | `repl_eval.h` | Evaluator types (`ExprVar`, `ExprCtx`), function declarations |
 | `cmd_format.c` | Pure indentation/depth computation (no GL dependency) |
@@ -92,7 +125,8 @@ v2 mock. Left side has top-level menus (File / Examples / Config); right side
 has pinned buttons (Replay / Scene).
 
 To add an **item** to an existing top-level menu:
-1. Extend the per-menu enum (e.g. `FILE_ITEM_*`) and bump `*_ITEM_COUNT`
+1. Extend the per-menu enum (e.g. `FILE_ITEM_*` or the `SCENE_OFF_*` block) and
+   bump the trailing `*_COUNT`
 2. Add the label in `menu_item_label()` and shortcut (if any) in
    `menu_item_shortcut()`
 3. Add the action branch in `menu_item_activate()`; return `1` for
@@ -110,16 +144,129 @@ inside the `menubar_pin_hit` block.
 
 ## User Scene System
 
-User scenes are stored independently from predefined examples (`repl_core.c`):
-- `UserScene` struct holds `GLCmd` array + `num_cmds` + `edit_line` + variable values
-- `save_user_scene()` — called automatically before first example load
-- `restore_user_scene()` — called from Scene button, F12 cycle, or dropdown
-- Public API: `repl_user_scene_valid()`, `repl_load_user_scene()` (in `repl_core.h`)
-- Example loading path: `repl_load_example()` → `load_example()` → saves user scene
-  if not already saved → `load_example_lines()` which calls `feed_line()` per line
-- F12 cycles: examples → user scene (if saved) → back to first example
-- Example dropdown in `ui_panels.c` appends user scene entry when saved
-- Designed for future expansion to multiple scene slots
+The REPL keeps up to `MAX_USER_SCENES` (= 8) independent scenes in
+`g_user_scenes[]` (in `repl_core.c`). Slot 0 is the pinned "home" scene — the
+pre-example editor state captured on first example load, never auto-evicted.
+Each `UserScene` stores `GLCmd` array + `num_cmds` + `edit_line` + predefined
+variable values + a scene `name` + `last_touch` tick for LRU.
+
+### Active slot and auto-promotion
+
+- `g_active_user_scene` (`-1` means an example or a fresh empty workspace is
+  loaded instead of a user scene).
+- `push_undo_snapshot()` in `repl_editor.c` calls
+  `repl_promote_example_if_needed()` before every mutation. If the user is
+  editing an example, that call allocates a fresh slot, copies the current
+  state into it, inherits the example's name (de-duplicated via
+  `derive_unique_scene_name`), and sets `g_active_user_scene`. The editor
+  keeps going — the user never sees the promotion directly, but subsequent
+  edits now accumulate into a user scene.
+
+### LRU eviction
+
+When every non-home slot is full *and* a workspace directory is bound, a 9th
+promotion picks the LRU non-pinned, non-active slot, flushes it to
+`<workspace_dir>/<slug>.c` via `evict_scene_to_workspace()`, and reuses the
+freed index. With no workspace bound the promotion is rejected with a status
+message (user has to save workspace first to unlock eviction).
+
+### Inline rename
+
+- `ui_panels_begin_rename(slot)` / `ui_panels_handle_rename_key(...)` /
+  `ui_panels_cancel_rename()` in `ui_panels.c`.
+- Triggered by the Scene → "Rename active scene" menu item; typing updates a
+  status-bar prompt; Enter commits via `repl_user_scene_rename` (which trims,
+  de-duplicates, and guards against an empty name), Esc cancels.
+- Path-unsafe chars (`/`, `\`, `:`) and non-printables are filtered at input
+  time since names become filesystem slugs on workspace export.
+- The key dispatcher in `repl_editor.c` forwards keys to
+  `ui_panels_handle_rename_key` right after `handle_search_key`, so rename
+  mode swallows input even when other overlays aren't open.
+
+### Workspace I/O
+
+- `repl_save_workspace(dir)` mkdirs `dir` (idempotent), flushes the active
+  slot, then iterates every occupied slot: `install_scene_into_live` + a
+  stash/restore pattern wraps each slot so `save_output()` sees that scene's
+  live state. `g_export_scene_name_hint` is set per-slot so the exported
+  header's `// @scene-name` reflects the correct name. The bound dir is
+  remembered in `g_workspace_dir` and stamped into every single-file export
+  as `// @workspace-dir <path>`.
+- `repl_load_workspace(dir)` opens `dir`, loads each `*.c` into a fresh slot
+  via `load_scene_file_into_slot`, and restores live editor state around the
+  iteration. Names come from `@scene-name` headers (or the filename stem as
+  fallback).
+- Single-file save/load still works unchanged. Files round-trip between
+  workspace and single-file modes because the header encodes both
+  `@scene-name` and `@workspace-dir`.
+
+### Scene menu layout
+
+`SCENE_OFF_*` offsets in `ui_panels.c` place fixed rows above the user-scene
+list (`New empty scene`, `Save to output.c`, `Rename active scene`). User
+scenes follow at `SCENE_OFF_SCENES`; rows are dense (unused slots skipped via
+`scene_menu_nth_slot`). The active scene row is drawn with accent color.
+
+### Public API touch points (in `repl_core.h`)
+
+`repl_user_scene_count`, `repl_user_scene_slot_used`, `repl_user_scene_name`,
+`repl_user_scene_rename`, `repl_load_user_scene_idx`, `repl_active_user_scene`,
+`repl_save_workspace`, `repl_load_workspace`, `repl_workspace_dir`,
+`repl_set_workspace_dir`. Back-compat helpers: `repl_user_scene_valid()` still
+reports "any slot occupied?", `repl_load_user_scene()` still loads slot 0.
+
+### F12 cycle
+
+`examples → user scenes (in slot order) → back to first example`. Handles both
+"active example" and "active scene" starting states.
+
+## Example Metadata
+
+Built-in examples in `repl_examples.c` can prefix their command list with:
+1. Contiguous `// @cfg <slug> = <value>` lines.
+2. An optional 5-line `// camera` preset block.
+
+`repl_core.c` consumes leading metadata before feeding remaining lines through
+the commit pipeline, so metadata stays hidden from the code panel. `@cfg`
+parsing reuses `parse_workspace_header_line()` from `repl_export.c`, restricted
+to these scene-presentation slugs:
+
+`wireframe`, `grid`, `grid_major`, `grid_extent`, `axes`, `vertex_labels`,
+`normal_vectors`, `vertex_outlines`, `vertex_points`, `vertex_guides`,
+`light_indicators`, `backdrop`, `camera_rotate`.
+
+Non-leading `@cfg` lines are not metadata — they stay as ordinary comments.
+
+### Reset and restore rules
+
+- Every example load resets the allowed non-camera scene-presentation settings
+  to built-in defaults *before* applying the example's leading `@cfg`
+  metadata. This prevents stale grid/axes/overlay/backdrop state from leaking
+  across examples.
+- Camera is intentionally excluded from that reset. Examples inherit the
+  current `g_cam_*` state unless they supply the explicit leading `// camera`
+  header.
+- `restore_user_scene()` restores commands and predefined variables only.
+  Leaving an example does not restore camera or other presentation state.
+
+### Shared defaults
+
+Keep the single source of truth for example-owned presentation defaults in
+the `CFG_DEFAULT_*` macro block in `sample.h`. `repl_core.c` initializers,
+example reset helpers, and focused example tests should reuse those macros
+instead of duplicating literals.
+
+When changing example-metadata behavior, inspect `repl_core.c`,
+`repl_export.c`, `repl_examples.c`, `sample.h`, and
+`test_repl_core_examples.c` together. `make test_repl_core_examples` is the
+focused regression suite for this area; `make test` for broader REPL state.
+
+### Open: desired vs. inherited @cfg
+
+`@cfg` settings currently can't distinguish "desired" (always apply) from
+"inherited" (only if unset). A desired/inherited split would let user scenes
+save their own presentation config without being overwritten on the next
+example switch. Deferred — see `feature/multi-user-scenes.md`.
 
 ## Architecture
 
@@ -267,14 +414,18 @@ Key details:
 `repl_export.c` handles bidirectional text format:
 - **Export** (`save_output()`): writes a standalone C file with header
   comments embedding workspace state (`@var name=value`,
-  `@cfg setting=value`), camera state as the raw `glTranslatef`/`glRotatef`
-  sequence the REPL uses internally, predefined vars as globals, REPL
-  functions as C functions, and `display()` body containing the user's
-  geometry commands
-- **Import** (`load_from_file()`): line-by-line scan parses camera
-  state, detects function definitions (converts C syntax back to REPL),
-  and feeds geometry lines through `feed_line()`. The text format is
-  human-editable and round-trips cleanly
+  `@cfg setting=value`, `@scene-name <name>`, `@workspace-dir <path>`),
+  camera state as the raw `glTranslatef`/`glRotatef` sequence the REPL
+  uses internally, predefined vars as globals, REPL functions as C
+  functions, and `display()` body containing the user's geometry commands.
+  The workspace iterator in `repl_core.c` sets `g_export_scene_name_hint`
+  before each slot's save so the hint wins over `g_active_user_scene`.
+- **Import** (`load_from_file()`): line-by-line scan parses camera state
+  and workspace directives, detects function definitions (converts C
+  syntax back to REPL), and feeds geometry lines through `feed_line()`.
+  Pending directives (`g_pending_scene_name`, `g_pending_workspace_dir`)
+  are read by the caller after `load_from_file` returns so the importer
+  can name the new slot and remember the workspace dir.
 
 ### Replay System
 
@@ -296,7 +447,8 @@ Circular snapshot buffers in `repl_editor.c`:
 - `g_undo_buf[32]` and `g_redo_buf[32]` with head/count tracking
 - `push_undo_snapshot()` called before any mutation (delete, paste,
   reformat, etc.); `pop_undo_snapshot()` on Ctrl+Z; `do_redo()` on
-  Ctrl+Y
+  Ctrl+Y. Also the hook where `repl_promote_example_if_needed()` fires
+  so editing an example auto-creates a user scene.
 - Pushing clears the redo stack; undo moves current state to redo
 
 ### Autocomplete
@@ -344,7 +496,7 @@ Declarative toggle system in `repl_editor.c`:
 | Ctrl+T | Toggle time variable `t` |
 | F1 | Help overlay |
 | F2-F11 | Toggle visual overlays |
-| F12 | Cycle examples (includes saved user scene) |
+| F12 | Cycle examples and user scenes |
 
 ## Supported Commands
 
