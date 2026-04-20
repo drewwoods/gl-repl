@@ -2029,6 +2029,12 @@ int main() {
                    g_input, "glVertex3f(1, 1, 1)");
         assert_status_contains("nav auto-commit invalid append: status",
                                "Incomplete command");
+        ASSERT_STR("nav auto-commit invalid append: newline buffer discarded",
+                   g_newline_buf, "");
+
+        navigate_to_line(g_num_cmds);
+        ASSERT_STR("nav auto-commit invalid append: return to end is empty",
+                   g_input, "");
     }
 
     /* Code-panel clicks use the same auto-commit path. */
