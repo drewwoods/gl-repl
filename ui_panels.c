@@ -1209,11 +1209,30 @@ int example_dropdown_is_open(void) { return menu_dropdown_is_open(); }
 
 enum { FILE_ITEM_EXPORT = 0, FILE_ITEM_IMPORT, FILE_ITEM_COUNT };
 
+/* SCENE menu layout:
+ *   [0]                      "### EXAMPLES"
+ *   [1..e]                   example names  (e = repl_example_count())
+ *   [e + SCENE_OFF_DIVIDER]  "---"
+ *   [e + SCENE_OFF_HDR]      "### SCENE"
+ *   [e + SCENE_OFF_NEW]      "New empty scene"
+ *   [e + SCENE_OFF_SAVE]     "Save to output.c"
+ *   [e + SCENE_OFF_YOURS]    "Your scene"  (only when repl_user_scene_valid())
+ */
+enum {
+    SCENE_OFF_DIVIDER = 1,
+    SCENE_OFF_HDR     = 2,
+    SCENE_OFF_NEW     = 3,
+    SCENE_OFF_SAVE    = 4,
+    SCENE_OFF_YOURS   = 5,
+    SCENE_FIXED_COUNT = 5  /* items before the optional "Your scene" */
+};
+
 static int menu_item_count(int menu_id) {
     switch (menu_id) {
-    case MENU_FILE:     return FILE_ITEM_COUNT;
-    case MENU_SCENE:    return 1 + repl_example_count() + 1 + 1 + 2; /* ###, n, ---, ###, 2 cmds */
-    case MENU_CONFIG:   return CFG_ITEM_COUNT;
+    case MENU_FILE:   return FILE_ITEM_COUNT;
+    case MENU_SCENE:  return 1 + repl_example_count() + SCENE_FIXED_COUNT
+                             + (repl_user_scene_valid() ? 1 : 0);
+    case MENU_CONFIG: return CFG_ITEM_COUNT;
     }
     return 0;
 }
@@ -1226,12 +1245,13 @@ static const char *menu_item_label(int menu_id, int i) {
     }
     if (menu_id == MENU_SCENE) {
         int e = repl_example_count();
-        if (i == 0) return "### EXAMPLES";
-        if (i >= 1 && i <= e) return repl_example_name(i - 1);
-        if (i == e + 1) return "---";
-        if (i == e + 2) return "### SCENE";
-        if (i == e + 3) return "New empty scene";
-        if (i == e + 4) return "Save to output.c";
+        if (i == 0)                                            return "### EXAMPLES";
+        if (i >= 1 && i <= e)                                 return repl_example_name(i - 1);
+        if (i == e + SCENE_OFF_DIVIDER)                       return "---";
+        if (i == e + SCENE_OFF_HDR)                           return "### SCENE";
+        if (i == e + SCENE_OFF_NEW)                           return "New empty scene";
+        if (i == e + SCENE_OFF_SAVE)                          return "Save to output.c";
+        if (i == e + SCENE_OFF_YOURS && repl_user_scene_valid()) return "Your scene";
         return NULL;
     }
     if (menu_id == MENU_CONFIG) {
@@ -1245,7 +1265,7 @@ static const char *menu_item_shortcut(int menu_id, int i) {
     if (menu_id == MENU_FILE && i == FILE_ITEM_EXPORT) return "Ctrl+S";
     if (menu_id == MENU_SCENE) {
         int e = repl_example_count();
-        if (i == e + 4) return "Ctrl+S";
+        if (i == e + SCENE_OFF_SAVE) return "Ctrl+S";
         return NULL;
     }
     if (menu_id == MENU_CONFIG && i >= 0 && i < CFG_ITEM_COUNT && g_cfg_items[i].value != NULL) {
@@ -1339,12 +1359,15 @@ static int menu_item_activate(int menu_id, int i) {
     } else if (menu_id == MENU_SCENE) {
         int e = repl_example_count();
         if (i >= 1 && i <= e) { repl_load_example(i - 1); return 1; }
-        if (i == e + 3) {
-            if (g_example_idx >= 0) repl_load_user_scene();
+        if (i == e + SCENE_OFF_NEW) {
+            if (g_example_idx >= 0) g_example_idx = -1;
             repl_clear_all_cmds();
             return 1;
         }
-        if (i == e + 4) { repl_save_default_output(); return 1; }
+        if (i == e + SCENE_OFF_SAVE) { repl_save_default_output(); return 1; }
+        if (i == e + SCENE_OFF_YOURS && repl_user_scene_valid()) {
+            repl_load_user_scene(); return 1;
+        }
         return 1;
     } else if (menu_id == MENU_CONFIG) {
         if (g_cfg_items[i].value != NULL) {
