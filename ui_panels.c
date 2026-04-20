@@ -1231,7 +1231,7 @@ static int menu_item_count(int menu_id) {
     switch (menu_id) {
     case MENU_FILE:   return FILE_ITEM_COUNT;
     case MENU_SCENE:  return 1 + repl_example_count() + SCENE_FIXED_COUNT
-                             + (repl_user_scene_valid() ? 1 : 0);
+                             - (repl_user_scene_valid() ? 0 : 1);
     case MENU_CONFIG: return CFG_ITEM_COUNT;
     }
     return 0;
