@@ -1195,6 +1195,20 @@ static const char *g_pin_btn_labels[NUM_PIN_BTNS] = {
 #define PIN_SEARCH_MIN_W 140
 
 static int g_open_menu = -1;      /* index into g_menu_labels; -1 = none */
+
+/* Inline scene rename state.  Keep near g_open_menu so both the menu
+ * activation branch and the rendering / key handlers can reach it
+ * without forward declarations. */
+static int  g_rename_slot = -1;
+static char g_rename_buf[USER_SCENE_NAME_MAX];
+static int  g_rename_len  = 0;
+
+static void rename_refresh_status(void) {
+    char msg[160];
+    snprintf(msg, sizeof(msg),
+             "Rename scene (Enter to save, Esc to cancel): %s", g_rename_buf);
+    set_status(msg);
+}
 static int g_menu_item_hover = -1;
 static float g_menu_open_time = -1.0f;   /* g_anim_time when current menu opened */
 static float g_search_open_time = -1.0f; /* g_anim_time when search opened */
@@ -1231,8 +1245,9 @@ enum {
     SCENE_OFF_HDR     = 2,
     SCENE_OFF_NEW     = 3,
     SCENE_OFF_SAVE    = 4,
-    SCENE_OFF_SCENES  = 5,  /* first user-scene index */
-    SCENE_FIXED_COUNT = 5
+    SCENE_OFF_RENAME  = 5,
+    SCENE_OFF_SCENES  = 6,  /* first user-scene index */
+    SCENE_FIXED_COUNT = 6
 };
 
 /* Translate the i-th user-scene entry in the menu into the underlying
@@ -1273,6 +1288,7 @@ static const char *menu_item_label(int menu_id, int i) {
         if (i == e + SCENE_OFF_HDR)                           return "### SCENE";
         if (i == e + SCENE_OFF_NEW)                           return "New empty scene";
         if (i == e + SCENE_OFF_SAVE)                          return "Save to output.c";
+        if (i == e + SCENE_OFF_RENAME)                        return "Rename active scene";
         int scene_n = i - (e + SCENE_OFF_SCENES);
         if (scene_n >= 0 && scene_n < repl_user_scene_count()) {
             int slot = scene_menu_nth_slot(scene_n);
@@ -1403,6 +1419,13 @@ static int menu_item_activate(int menu_id, int i) {
             return 1;
         }
         if (i == e + SCENE_OFF_SAVE) { repl_save_default_output(); return 1; }
+        if (i == e + SCENE_OFF_RENAME) {
+            int slot = repl_active_user_scene();
+            if (slot < 0) { set_status("No active scene to rename"); return 1; }
+            if (ui_panels_begin_rename(slot))
+                rename_refresh_status();
+            return 1;
+        }
         int scene_n = i - (e + SCENE_OFF_SCENES);
         if (scene_n >= 0 && scene_n < repl_user_scene_count()) {
             int slot = scene_menu_nth_slot(scene_n);
@@ -4093,6 +4116,86 @@ void ui_panels_close_menus(void) {
     g_open_menu = -1;
     g_menu_item_hover = -1;
     color_picker_close();
+}
+
+/* ========================================================================= */
+/* Inline scene rename                                                        */
+/* ========================================================================= */
+
+int ui_panels_rename_active(void) {
+    return g_rename_slot >= 0;
+}
+
+int ui_panels_begin_rename(int slot) {
+    if (slot < 0 || slot >= MAX_USER_SCENES) return 0;
+    if (!repl_user_scene_slot_used(slot))    return 0;
+    g_rename_slot = slot;
+    const char *cur = repl_user_scene_name(slot);
+    snprintf(g_rename_buf, sizeof(g_rename_buf), "%s", cur ? cur : "");
+    g_rename_len = (int)strlen(g_rename_buf);
+    return 1;
+}
+
+void ui_panels_cancel_rename(void) {
+    g_rename_slot = -1;
+    g_rename_buf[0] = '\0';
+    g_rename_len = 0;
+}
+
+static int rename_char_ok(unsigned char c) {
+    if (c < 32 || c >= 127) return 0;
+    if (c == '/' || c == '\\' || c == ':') return 0;
+    return 1;
+}
+
+int ui_panels_handle_rename_key(unsigned char key) {
+    if (g_rename_slot < 0) return 0;
+
+    if (key == KEY_ESC) {
+        ui_panels_cancel_rename();
+        return 1;
+    }
+    if (key == '\r' || key == '\n') {
+        /* Trim leading/trailing whitespace in place. */
+        char *s = g_rename_buf;
+        while (*s == ' ' || *s == '\t') s++;
+        int n = (int)strlen(s);
+        while (n > 0 && (s[n - 1] == ' ' || s[n - 1] == '\t')) n--;
+        s[n] = '\0';
+        if (n == 0) {
+            set_status("Scene name cannot be empty");
+            return 1;
+        }
+        if (repl_user_scene_rename(g_rename_slot, s)) {
+            char msg[128];
+            snprintf(msg, sizeof(msg), "Renamed to: %s",
+                     repl_user_scene_name(g_rename_slot));
+            set_status(msg);
+        }
+        ui_panels_cancel_rename();
+        return 1;
+    }
+    if (key == KEY_BACKSPACE || key == KEY_DELETE) {
+        if (g_rename_len > 0) {
+            g_rename_buf[--g_rename_len] = '\0';
+            rename_refresh_status();
+        }
+        return 1;
+    }
+    if (rename_char_ok(key) && g_rename_len < (int)sizeof(g_rename_buf) - 1) {
+        g_rename_buf[g_rename_len++] = (char)key;
+        g_rename_buf[g_rename_len] = '\0';
+        rename_refresh_status();
+        return 1;
+    }
+    /* Swallow everything else so no stray character hits the editor. */
+    return 1;
+}
+
+int ui_panels_handle_rename_special(int key) {
+    if (g_rename_slot < 0) return 0;
+    (void)key;
+    return 1;  /* swallow all specials while renaming */
 }
 
 void ui_panels_open_config(void) {

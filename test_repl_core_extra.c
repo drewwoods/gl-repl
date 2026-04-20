@@ -1,5 +1,6 @@
 #include "repl_core_internal.h"
 #include "repl_replay.h"
+#include "ui_panels.h"
 #include <dirent.h>
 #include <fcntl.h>
 #include <stdio.h>
@@ -429,6 +430,59 @@ void test_user_scene_promote_lru_evict() {
     repl_set_workspace_dir("");
 }
 
+void test_user_scene_rename_flow() {
+    printf("--- User scene rename flow ---\n");
+    repl_reset_state(); declare_test_vars();
+    if (repl_example_count() < 1) return;
+
+    repl_load_example(0);
+    int slot = repl_promote_example_if_needed();
+    ASSERT_TRUE("promoted on edit", slot >= 0);
+
+    /* Begin rename. */
+    ASSERT_INT("not renaming before begin", ui_panels_rename_active(), 0);
+    ASSERT_INT("begin_rename succeeds", ui_panels_begin_rename(slot), 1);
+    ASSERT_INT("rename active", ui_panels_rename_active(), 1);
+
+    /* Clear default and type a new name, including a path-unsafe char
+     * that must be filtered. */
+    for (int i = 0; i < 64; i++) ui_panels_handle_rename_key(8 /*BS*/);
+    const char *input = "My Scene/Bad:Name";
+    for (const char *p = input; *p; p++)
+        ui_panels_handle_rename_key((unsigned char)*p);
+
+    /* Commit. */
+    ui_panels_handle_rename_key('\r');
+    ASSERT_INT("rename cleared after commit", ui_panels_rename_active(), 0);
+    const char *new_name = repl_user_scene_name(slot);
+    ASSERT_TRUE("renamed to filtered text",
+                strcmp(new_name, "My SceneBadName") == 0);
+
+    /* Cancel path: begin again, type, then Esc. */
+    ASSERT_INT("begin_rename again", ui_panels_begin_rename(slot), 1);
+    ui_panels_handle_rename_key('Z');
+    ui_panels_handle_rename_key(27 /*ESC*/);
+    ASSERT_INT("cancel clears rename", ui_panels_rename_active(), 0);
+    ASSERT_TRUE("name unchanged after cancel",
+                strcmp(repl_user_scene_name(slot), "My SceneBadName") == 0);
+
+    /* Empty commit is rejected — rename stays active so user can retry. */
+    ASSERT_INT("begin_rename for empty test", ui_panels_begin_rename(slot), 1);
+    for (int i = 0; i < 64; i++) ui_panels_handle_rename_key(8 /*BS*/);
+    ui_panels_handle_rename_key('\r');
+    ASSERT_INT("empty commit keeps rename active",
+               ui_panels_rename_active(), 1);
+    ASSERT_TRUE("name unchanged after empty commit",
+                strcmp(repl_user_scene_name(slot), "My SceneBadName") == 0);
+    ui_panels_cancel_rename();
+
+    /* Invalid slot rejected. */
+    ASSERT_INT("begin_rename rejects -1",
+               ui_panels_begin_rename(-1), 0);
+    ASSERT_INT("begin_rename rejects unused",
+               ui_panels_begin_rename(MAX_USER_SCENES - 1), 0);
+}
+
 void test_debug_dump_flat_commands() {
     printf("--- Debug dump flat commands ---\n");
 
@@ -708,6 +762,7 @@ int main(int argc, char **argv) {
     test_user_scene_promote_name_dedup();
     test_user_scene_promote_all_slots_full();
     test_user_scene_promote_lru_evict();
+    test_user_scene_rename_flow();
     test_workspace_round_trip();
     test_debug_dump_flat_commands();
     test_var_declare_cmd();
