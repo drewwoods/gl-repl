@@ -6,15 +6,13 @@ I've implemented named separators and grouped similar items within the immediate
 > All unit tests have been run (using `make test-stubs`) and confirmed passing after the refactor.
 
 ### 1. `Scene` Menu Implementation
-I restructured the menu bar to use `"File", "Scene", "Config"`. The new **Scene** menu now serves as the centralized hub for both Examples and Scene actions, exactly matching the wireframe references:
+I restructured the menu bar to use `"File", "Scene", "Config"`. The new **Scene** menu now serves as the centralized hub for both Examples and Scene actions:
 
 - **EXAMPLES**
   - Various example scenes (Lit cube, Animated ring, etc.)
 - **SCENE**
   - `New empty scene`
   - `Save to output.c`
-  - `Reformat buffer`
-  - `Configuration...`
 
 ### 2. Built-in Separator UI Support
 The UI panel rendering logic in `ui_panels.c` has been enhanced to understand two semantic styles natively:
@@ -31,5 +29,5 @@ I added structural separators directly into the source-of-truth configuration to
 * **INTERFACE**
 * **AUDIO**
 
-All file serialization operations (`@cfg` saving in `repl_export.c`) and cyclic hotkey mappings safety-bypass these new `NULL` separator entries to avoid conflicts or segregation faults.
+All file serialization operations (`@cfg` saving in `repl_export.c`) and cyclic hotkey mappings safety-bypass these new `NULL` separator entries to avoid conflicts or segmentation faults.
 

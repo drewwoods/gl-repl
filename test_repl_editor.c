@@ -1800,6 +1800,21 @@ int main() {
                                                             &visible_lines));
     }
 
+    /* repl_clear_all_cmds — clears scene including float declarations. */
+    {
+        repl_reset_state();
+        repl_feed_line_public("float tmp;");
+        repl_feed_line_public("glVertex3f(1, 0, 0)");
+        ASSERT_INT("clear_all: setup two cmds", g_num_cmds, 2);
+        ASSERT_INT("clear_all: first is var decl", g_cmds[0].type, CMD_VAR_DECLARE);
+
+        repl_clear_all_cmds();
+        ASSERT_INT("clear_all: num_cmds is 0", g_num_cmds, 0);
+        ASSERT_INT("clear_all: edit_line is 0", g_edit_line, 0);
+        ASSERT_INT("clear_all: inserting is 0", g_inserting, 0);
+        ASSERT_INT("clear_all: input is empty", g_input[0], 0);
+    }
+
     printf("\n%d / %d tests passed\n", g_pass, g_run);
     return (g_pass == g_run) ? 0 : 1;
 }

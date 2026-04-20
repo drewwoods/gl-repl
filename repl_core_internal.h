@@ -204,6 +204,9 @@ void do_redo(void);
  * is still referenced elsewhere. */
 void delete_cmd_range(int start, int count, const char *what);
 
+/* Clear ALL commands unconditionally (same behaviour as Ctrl+L). */
+void repl_clear_all_cmds(void);
+
 /* ---- Commit handler chain (private to repl_editor.c, exposed for tests)
  * Each handler inspects g_input. Returns 1 if it consumed the line
  * (success or handled error), 0 if the input wasn't in its grammar.

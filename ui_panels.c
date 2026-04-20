@@ -1174,8 +1174,8 @@ static int code_panel_header_row_count(int panel_w, int text_x) {
 }
 
 /* Menu bar — styled after Header Wireframes v2.
- * Left: top-level menus (File, Examples, Config).
- * Right: pinned buttons (Replay, Scene) — retained in flat form until the
+ * Left: top-level menus (File, Scene, Config).
+ * Right: pinned buttons (Search, Replay) — retained in flat form until the
  * right-side redesign lands. */
 
 enum { MENU_FILE = 0, MENU_SCENE, MENU_CONFIG, NUM_MENUS };
@@ -1340,10 +1340,8 @@ static int menu_item_activate(int menu_id, int i) {
         int e = repl_example_count();
         if (i >= 1 && i <= e) { repl_load_example(i - 1); return 1; }
         if (i == e + 3) {
-            // New empty scene - just load user scene and clear commands
             if (g_example_idx >= 0) repl_load_user_scene();
-            extern void delete_cmd_range(int start, int count, const char *what);
-            delete_cmd_range(0, g_num_cmds, "Cleared scene");
+            repl_clear_all_cmds();
             return 1;
         }
         if (i == e + 4) { repl_save_default_output(); return 1; }

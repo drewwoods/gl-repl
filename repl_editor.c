@@ -168,7 +168,7 @@ CfgItem g_cfg_items[] = {
     { "### TIME & REPLAY",0, 0,     NULL,                      0,                NULL              },
     { "Auto time",        KEY_CTRL_T, 0, &g_t_playing,              2,                NULL              },
     { "Replay",           KEY_CTRL_R, 0, &g_replay_active,          2,                NULL              },
-    { "Replay mode",      'm', 0,   &g_replay_mode,            2,                replay_mode_names },
+    { "Replay mode",      0, 0,   &g_replay_mode,            2,                replay_mode_names },
     { "Replay expand",    0, 0,     &g_replay_expand_args,     2,                NULL              },
     { "---",              0, 0,     NULL,                      0,                NULL              },
     { "### OVERLAYS & SCENE",0, 0,  NULL,                      0,                NULL              },
@@ -398,6 +398,20 @@ void delete_cmd_range(int start, int count, const char *what) {
     if (!delete_cmd_range_allowed(start, count))
         return;
     remove_cmd_range_unchecked(start, count, what);
+}
+
+void repl_clear_all_cmds(void) {
+    push_undo_snapshot();
+    g_num_cmds = 0;
+    g_edit_line = 0;
+    g_inserting = 0;
+    g_input[0] = '\0';
+    g_input_len = 0;
+    g_cursor_pos = 0;
+    g_newline_buf[0] = '\0';
+    g_newline_len = 0;
+    mark_normals_dirty();
+    set_status("All commands cleared");
 }
 
 void load_line_to_input(int idx) {
@@ -1638,7 +1652,8 @@ void keyboard_func(unsigned char key, int x, int y) {
     }
 
     for (int i = 0; i < CFG_ITEM_COUNT; i++) {
-        if (!g_cfg_items[i].is_special && g_cfg_items[i].key_code == key) {
+        if (!g_cfg_items[i].is_special && g_cfg_items[i].key_code > 0
+                && g_cfg_items[i].key_code < 32 && g_cfg_items[i].key_code == key) {
             repl_cfg_cycle_row(i, 1);
             return;
         }
