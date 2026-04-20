@@ -3394,7 +3394,7 @@ void render_help(void) {
         "  End / Ctrl+E         \tJump to end of line",
         "  Shift+Up/Down        \tSelect multiple lines",
         "  Click + drag         \tSelect lines with mouse",
-        "  PgUp / PgDn         \tScroll code panel",
+        "  PgUp / PgDn         \tScroll active panel/overlay",
         "",
         "Clipboard & Undo:",
         "  Ctrl+C               \tCopy line/selection",
@@ -3407,7 +3407,7 @@ void render_help(void) {
         "  Ctrl+F               \tSearch source buffer",
         "  Ctrl+D               \tDelete line or selection",
         "  Ctrl+L               \tClear all commands",
-        "  Ctrl+\\              \tReformat buffer",
+        "  Ctrl+R               \tReformat buffer",
         "  Ctrl+/               \tToggle comment on line",
         "  Ctrl+P               \tDump debug state to stdout",
         "  Ctrl+S               \tSave to output.c",
@@ -3423,7 +3423,7 @@ void render_help(void) {
         "Time & Replay:",
         "  Ctrl+T               \tPlay / pause time variable",
         "  Ctrl+Shift+T         \tReset t to 0",
-        "  Ctrl+R               \tStart / stop replay",
+        "  Ctrl+G               \tStart / stop replay",
         "  Ctrl+K               \tJump replay to cursor line",
         "  Space                \tPause / resume replay",
         "  + / -                \tChange replay speed",
@@ -3435,9 +3435,10 @@ void render_help(void) {
         "  Ctrl+=               \tIncrease accum jitter samples",
         "  Ctrl+-               \tDecrease accum jitter samples",
         "  Ctrl+U               \tToggle GL_MULTISAMPLE",
+        "  Ctrl+N               \tToggle line smoothing",
         "  Ctrl+O               \tCycle grid major tick spacing",
         "  Ctrl+W               \tCycle CPU profile panel",
-        "  Ctrl+B               \tCycle code panel layout",
+        "  Ctrl+B               \tToggle Accum AA",
         "",
         "Interface:",
         "  `                    \tOpen Config menu",
@@ -3466,12 +3467,14 @@ void render_help(void) {
         snprintf(fkey_strbuf[0], sizeof(fkey_strbuf[0]), "  F1   \tHelp overlay");
         tab_keys[nk++] = fkey_strbuf[0];
 
-        /* F2–F11 — pulled from g_cfg_items in numeric order */
+        /* F2–F11 — pulled from g_cfg_items by matching key_hint string */
         int di = 1;
         for (int fn = 2; fn <= 11 && di < HELP_FKEY_MAX - 1; fn++) {
-            int gk = GLUT_KEY_F1 + fn - 1;
+            char fkey_str[6];
+            snprintf(fkey_str, sizeof(fkey_str), "F%d", fn);
             for (int ci = 0; ci < CFG_ITEM_COUNT; ci++) {
-                if (g_cfg_items[ci].is_special && g_cfg_items[ci].key_code == gk) {
+                if (g_cfg_items[ci].key_hint &&
+                    strcmp(g_cfg_items[ci].key_hint, fkey_str) == 0) {
                     snprintf(fkey_strbuf[di], sizeof(fkey_strbuf[di]),
                              "  F%-2d  \t%s", fn, g_cfg_items[ci].label);
                     tab_keys[nk++] = fkey_strbuf[di++];
