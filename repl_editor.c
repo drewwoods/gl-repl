@@ -1723,6 +1723,13 @@ void keyboard_func(unsigned char key, int x, int y) {
 
     g_scroll_follow_cursor = 1;
 
+    /* Rename overlay captures every keystroke while active, ahead of
+     * the backtick/config, replay, and search branches — otherwise
+     * typing `, or keys bound to replay would leak out of the rename
+     * buffer and trigger unrelated UI. */
+    if (ui_panels_handle_rename_key(key))
+        return;
+
     if (!g_search_active && key == '`') {
         if (g_replay_active)
             replay_stop();
@@ -1741,9 +1748,6 @@ void keyboard_func(unsigned char key, int x, int y) {
     }
 
     if (handle_search_key(key))
-        return;
-
-    if (ui_panels_handle_rename_key(key))
         return;
 
     if (key == KEY_ESC) {
@@ -2338,6 +2342,11 @@ static void special_func(int key, int x, int y) {
     g_cursor_on = 1;
     g_blink_tick = 0;
     g_scroll_follow_cursor = 1;
+
+    /* Swallow special keys (arrows, F-keys, etc.) while inline rename is
+     * active so navigation doesn't leak through the overlay. */
+    if (ui_panels_handle_rename_special(key))
+        return;
 
     if (replay_handle_special_key(key))
         return;
