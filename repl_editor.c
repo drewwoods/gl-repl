@@ -2232,6 +2232,7 @@ static void special_func(int key, int x, int y) {
 
     g_cursor_on = 1;
     g_blink_tick = 0;
+    g_scroll_follow_cursor = 1;
 
     if (replay_handle_special_key(key))
         return;
@@ -2399,12 +2400,14 @@ static void special_func(int key, int x, int y) {
             g_help_scroll -= 5;
         else
             g_scroll -= 5;
+        g_scroll_follow_cursor = 0;
         break;
     case GLUT_KEY_PAGE_DOWN:
         if (g_show_help)
             g_help_scroll += 5;
         else
             g_scroll += 5;
+        g_scroll_follow_cursor = 0;
         break;
     default:
         break;
