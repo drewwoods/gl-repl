@@ -3746,6 +3746,16 @@ void render_help(void) {
     int tx      = hx + 14;
     int ty_start = hy + hh - pad_top - LINE_H + 3;
 
+    /* Compute tab stop from widest left column so all right columns align */
+    int tab_stop = 0;
+    for (int i = 0; i < n_lines; i++) {
+        const char *t = strchr(text[i], '\t');
+        if (t) {
+            int ln = (int)(t - text[i]);
+            if (ln > tab_stop) tab_stop = ln;
+        }
+    }
+
     for (int i = g_help_scroll; i < n_lines && i < g_help_scroll + visible_lines + 1; i++) {
         int ty = ty_start - (i - g_help_scroll) * LINE_H;
         if (ty < hy + pad_bot - LINE_H) break;
@@ -3763,9 +3773,9 @@ void render_help(void) {
             glColor4f(0.847f, 0.847f, 0.847f, 1.0f);
             draw_string((float)tx, (float)ty, left, FONT_SMALL);
 
-            /* Right column (description) — #888 */
+            /* Right column (description) — aligned to shared tab stop */
             glColor4f(0.533f, 0.533f, 0.533f, 1.0f);
-            draw_string((float)(tx + ln * FONT_SMALL_W), (float)ty,
+            draw_string((float)(tx + tab_stop * FONT_SMALL_W), (float)ty,
                         tab + 1, FONT_SMALL);
         } else if (text[i][0] != ' ') {
             /* Section header — dim gray-blue like config menu */
