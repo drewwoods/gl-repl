@@ -1665,7 +1665,7 @@ static int code_panel_insert_rows(int panel_w, int text_x) {
 }
 
 static int code_panel_newline_rows(int panel_w, int text_x) {
-    if (!g_inserting && g_edit_line == g_num_cmds) {
+    if (g_edit_line == g_num_cmds) {
         int indent_chars = code_panel_active_indent_chars();
         return code_panel_row_count_for_text(g_input,
                                              text_x + indent_chars * FONT_W,
@@ -2931,7 +2931,7 @@ void render_code_panel(void) {
 
     /* New-line slot after the last command */
     {
-        int is_edit_nl = (!g_inserting && g_edit_line == g_num_cmds);
+        int is_edit_nl = (g_edit_line == g_num_cmds);
         if (is_edit_nl) {
             render_active_input_rows(panel_w, text_x, idx_x,
                                      visible_lines, file_line,
