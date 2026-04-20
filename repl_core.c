@@ -481,8 +481,8 @@ static float g_replay_baseline_predef_vals[MAX_PREDEF_VARS];
 static int   g_replay_saved_t_playing = 1;
 static int   g_replay_last_src_line = -1;
 
-#define REPLAY_FADE_DURATION   0.5f
-#define REPLAY_FADE_BATCH_MAX  64
+#define REPLAY_FADE_DURATION   0.20f
+#define REPLAY_FADE_BATCH_MAX  24
 
 typedef struct {
     int   old_pc;
