@@ -13,8 +13,7 @@ else
 GL_HEADER_CFLAGS = \
 	-I/usr/include \
 	-I/opt/homebrew/include \
-	-I$(HOME)/src/freeglut-fork/include \
-	-I$(LOCAL_INCLUDE)
+	-I$(HOME)/src/freeglut-fork/include
 endif
 
 COMMON_CFLAGS = \
