@@ -124,6 +124,17 @@ static const char *audio_cfg_names[] = { "Pause", "Once", "Song", "All" };
  * a user gesture. We call repl_audio_on_user_gesture() the first time
  * a key or mouse event arrives; native builds make this a no-op. */
 static int g_audio_gesture_sent = 0;
+static ReplModifierProvider g_modifier_provider_for_test = NULL;
+
+void repl_set_modifier_provider_for_test(ReplModifierProvider provider) {
+    g_modifier_provider_for_test = provider;
+}
+
+static int editor_get_modifiers(void) {
+    if (g_modifier_provider_for_test)
+        return g_modifier_provider_for_test();
+    return glutGetModifiers();
+}
 
 static void apply_audio_cfg_mode(int mode) {
     switch (mode) {
@@ -1582,7 +1593,7 @@ void keyboard_func(unsigned char key, int x, int y) {
         return;
 
     if (editor_code_panel_hidden()) {
-        int key_mods = glutGetModifiers();
+        int key_mods = editor_get_modifiers();
         if (editor_key_restores_hidden_code_panel(key, key_mods))
             editor_restore_hidden_code_panel();
     }
@@ -1627,7 +1638,7 @@ void keyboard_func(unsigned char key, int x, int y) {
     }
 
     if (key == KEY_CTRL_Z) {
-        if (glutGetModifiers() & GLUT_ACTIVE_SHIFT)
+        if (editor_get_modifiers() & GLUT_ACTIVE_SHIFT)
             do_redo();
         else
             pop_undo_snapshot();
@@ -1842,7 +1853,7 @@ void keyboard_func(unsigned char key, int x, int y) {
         return;
     }
 
-    if (key == '/' && (glutGetModifiers() & GLUT_ACTIVE_CTRL)) {
+    if (key == '/' && (editor_get_modifiers() & GLUT_ACTIVE_CTRL)) {
         if (g_edit_line < g_num_cmds && !g_inserting) {
             push_undo_snapshot();
             {
@@ -1905,7 +1916,7 @@ void keyboard_func(unsigned char key, int x, int y) {
     }
 
     if (key == KEY_CTRL_T) {
-        if (glutGetModifiers() & GLUT_ACTIVE_SHIFT) {
+        if (editor_get_modifiers() & GLUT_ACTIVE_SHIFT) {
             repl_reset_time_to_zero();
             set_status(g_t_playing ? "Time: reset to 0" : "Time: reset to 0 (paused)");
         } else {
@@ -1932,7 +1943,7 @@ void keyboard_func(unsigned char key, int x, int y) {
         return;
     }
 
-    if ((key == '=' || key == '+') && (glutGetModifiers() & GLUT_ACTIVE_CTRL)) {
+    if ((key == '=' || key == '+') && (editor_get_modifiers() & GLUT_ACTIVE_CTRL)) {
         if (g_use_accum) {
             for (int i = 0; i < ACCUM_STEP_COUNT - 1; i++) {
                 if (g_accum_samples <= g_accum_steps[i]) {
@@ -1949,7 +1960,7 @@ void keyboard_func(unsigned char key, int x, int y) {
         return;
     }
 
-    if (key == KEY_CTRL_DASH || (key == '-' && (glutGetModifiers() & GLUT_ACTIVE_CTRL))) {
+    if (key == KEY_CTRL_DASH || (key == '-' && (editor_get_modifiers() & GLUT_ACTIVE_CTRL))) {
         if (g_use_accum) {
             for (int i = ACCUM_STEP_COUNT - 1; i > 0; i--) {
                 if (g_accum_samples >= g_accum_steps[i]) {
@@ -2238,7 +2249,7 @@ static void special_func(int key, int x, int y) {
         return;
 
     if (editor_code_panel_hidden()) {
-        int key_mods = glutGetModifiers();
+        int key_mods = editor_get_modifiers();
         if (editor_special_restores_hidden_code_panel(key, key_mods))
             editor_restore_hidden_code_panel();
     }
@@ -2248,7 +2259,7 @@ static void special_func(int key, int x, int y) {
 
     switch (key) {
     case GLUT_KEY_LEFT:
-        if (glutGetModifiers() & GLUT_ACTIVE_CTRL) {
+        if (editor_get_modifiers() & GLUT_ACTIVE_CTRL) {
             repl_audio_prev_track();
             break;
         }
@@ -2264,7 +2275,7 @@ static void special_func(int key, int x, int y) {
         update_autocomplete();
         break;
     case GLUT_KEY_RIGHT:
-        if (glutGetModifiers() & GLUT_ACTIVE_CTRL) {
+        if (editor_get_modifiers() & GLUT_ACTIVE_CTRL) {
             repl_audio_next_track();
             break;
         }
@@ -2295,7 +2306,7 @@ static void special_func(int key, int x, int y) {
         if (g_ac_count > 1) {
             g_ac_sel = (g_ac_sel - 1 + g_ac_count) % g_ac_count;
             update_selected_autocomplete_preview();
-        } else if (glutGetModifiers() & GLUT_ACTIVE_SHIFT) {
+        } else if (editor_get_modifiers() & GLUT_ACTIVE_SHIFT) {
             if (!sel_active()) {
                 g_sel_anchor = g_edit_line;
                 g_sel_end = g_edit_line;
@@ -2316,7 +2327,7 @@ static void special_func(int key, int x, int y) {
         if (g_ac_count > 1) {
             g_ac_sel = (g_ac_sel + 1) % g_ac_count;
             update_selected_autocomplete_preview();
-        } else if (glutGetModifiers() & GLUT_ACTIVE_SHIFT) {
+        } else if (editor_get_modifiers() & GLUT_ACTIVE_SHIFT) {
             if (!sel_active()) {
                 g_sel_anchor = g_edit_line;
                 g_sel_end = g_edit_line;
@@ -2662,7 +2673,7 @@ static void mouse_func(int button, int state, int x, int y) {
     }
 
     // cache modifiers since can't be queried outside of an input event callback
-    g_mouse_mods = glutGetModifiers();
+    g_mouse_mods = editor_get_modifiers();
 
     if (state == GLUT_DOWN) {
         g_mouse_btn = button;
