@@ -109,10 +109,10 @@ void repl_audio_on_user_gesture(void);
  * is restored; otherwise playback starts from track 0 as normal. */
 void repl_audio_set_state_file(const char *path);
 
-/* Opaque audio-config integer owned by the editor layer.  The audio module
- * stores this value in the state file and restores it on load so the editor
- * (repl_editor_apply_defaults) can call apply_audio_cfg_mode() with the
- * right mode.  Pass -1 to clear (no cfg_mode= line written). */
+/* Opaque audio-config integer owned by the action/config layer. The audio
+ * module stores this value in the state file and restores it on load so
+ * startup can call repl_actions_apply_defaults() with the right mode. Pass -1
+ * to clear (no cfg_mode= line written). */
 void repl_audio_set_cfg_mode(int mode);
 int  repl_audio_get_cfg_mode(void);  /* returns -1 when not yet loaded */
 

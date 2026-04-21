@@ -347,9 +347,6 @@ static inline void clear_autocomplete_state(void) {
     g_ac_hint[0] = '\0';
 }
 
-void repl_editor_apply_defaults(void);
-void repl_cfg_cycle_row(int row, int delta);
-
 /* ========================================================================= */
 /* Shared utility functions                                                   */
 /* ========================================================================= */

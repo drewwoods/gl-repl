@@ -5,6 +5,7 @@
  * Extracted from sample.c for maintainability.
  */
 #include "sample.h"
+#include "repl_actions.h"
 #include "repl_core.h"
 #include "repl_core_internal.h"
 #include "repl_clipboard.h"
@@ -1179,7 +1180,12 @@ static int code_panel_header_row_count(int panel_w, int text_x) {
  * Right: pinned buttons (Search, Replay) — retained in flat form until the
  * right-side redesign lands. */
 
-enum { MENU_FILE = 0, MENU_SCENE, MENU_CONFIG, NUM_MENUS };
+enum {
+    MENU_FILE = REPL_MENU_FILE,
+    MENU_SCENE = REPL_MENU_SCENE,
+    MENU_CONFIG = REPL_MENU_CONFIG,
+    NUM_MENUS = REPL_MENU_COUNT
+};
 
 static const char *g_menu_labels[NUM_MENUS] = {
     "File", "Scene", "Config"
@@ -1197,9 +1203,9 @@ static const char *g_pin_btn_labels[NUM_PIN_BTNS] = {
 
 static int g_open_menu = -1;      /* index into g_menu_labels; -1 = none */
 
-/* Inline scene rename state.  Keep near g_open_menu so both the menu
- * activation branch and the rendering / key handlers can reach it
- * without forward declarations. */
+/* Inline scene rename state.  Keep near g_open_menu so rendering and key
+ * handlers can reach it without extra plumbing. Menu actions enter rename
+ * through ui_panels_begin_rename(). */
 static int  g_rename_slot = -1;
 static char g_rename_buf[USER_SCENE_NAME_MAX];
 static int  g_rename_len  = 0;
@@ -1223,14 +1229,12 @@ int example_dropdown_is_open(void) { return menu_dropdown_is_open(); }
 
 
 enum {
-    FILE_ITEM_EXPORT = 0,
-    FILE_ITEM_IMPORT,
-    FILE_ITEM_SAVE_WORKSPACE,
-    FILE_ITEM_LOAD_WORKSPACE,
-    FILE_ITEM_COUNT
+    FILE_ITEM_EXPORT = REPL_FILE_ITEM_EXPORT,
+    FILE_ITEM_IMPORT = REPL_FILE_ITEM_IMPORT,
+    FILE_ITEM_SAVE_WORKSPACE = REPL_FILE_ITEM_SAVE_WORKSPACE,
+    FILE_ITEM_LOAD_WORKSPACE = REPL_FILE_ITEM_LOAD_WORKSPACE,
+    FILE_ITEM_COUNT = REPL_FILE_ITEM_COUNT
 };
-
-#define DEFAULT_WORKSPACE_DIR "./workspace"
 
 /* SCENE menu layout:
  *   [0]                      "### EXAMPLES"
@@ -1245,26 +1249,14 @@ enum {
  *                                     (n = repl_user_scene_count())
  */
 enum {
-    SCENE_OFF_DIVIDER = 1,
-    SCENE_OFF_HDR     = 2,
-    SCENE_OFF_NEW     = 3,
-    SCENE_OFF_SAVE    = 4,
-    SCENE_OFF_RENAME  = 5,
-    SCENE_OFF_SCENES  = 6,  /* first user-scene index */
-    SCENE_FIXED_COUNT = 6
+    SCENE_OFF_DIVIDER = REPL_SCENE_OFF_DIVIDER,
+    SCENE_OFF_HDR     = REPL_SCENE_OFF_HDR,
+    SCENE_OFF_NEW     = REPL_SCENE_OFF_NEW,
+    SCENE_OFF_SAVE    = REPL_SCENE_OFF_SAVE,
+    SCENE_OFF_RENAME  = REPL_SCENE_OFF_RENAME,
+    SCENE_OFF_SCENES  = REPL_SCENE_OFF_SCENES,
+    SCENE_FIXED_COUNT = REPL_SCENE_FIXED_COUNT
 };
-
-/* Translate the i-th user-scene entry in the menu into the underlying
- * slot index, skipping unused slots so the visual list stays dense. */
-static int scene_menu_nth_slot(int n) {
-    int seen = 0;
-    for (int s = 0; s < MAX_USER_SCENES; s++) {
-        if (!repl_user_scene_slot_used(s)) continue;
-        if (seen == n) return s;
-        seen++;
-    }
-    return -1;
-}
 
 static int menu_item_count(int menu_id) {
     switch (menu_id) {
@@ -1295,7 +1287,7 @@ static const char *menu_item_label(int menu_id, int i) {
         if (i == e + SCENE_OFF_RENAME)                        return "Rename active scene";
         int scene_n = i - (e + SCENE_OFF_SCENES);
         if (scene_n >= 0 && scene_n < repl_user_scene_count()) {
-            int slot = scene_menu_nth_slot(scene_n);
+            int slot = repl_scene_menu_slot_for_dense_index(scene_n);
             return (slot >= 0) ? repl_user_scene_name(slot) : NULL;
         }
         return NULL;
@@ -1396,53 +1388,8 @@ static int cfg_max_state_chars(void) {
     return max_chars;
 }
 
-/* Returns 1 if the menu should close after activation, 0 to keep it open
- * (for cycle/toggle-style items that will live in Config later). */
 static int menu_item_activate(int menu_id, int i) {
-    if (menu_id == MENU_FILE) {
-        if (i == FILE_ITEM_EXPORT) { repl_save_default_output(); return 1; }
-        if (i == FILE_ITEM_IMPORT) { set_status("Import not implemented yet"); return 1; }
-        if (i == FILE_ITEM_SAVE_WORKSPACE) {
-            const char *dir = repl_workspace_dir();
-            if (!dir || !dir[0]) dir = DEFAULT_WORKSPACE_DIR;
-            repl_save_workspace(dir); // errors are logged internally; no need to set status here
-            return 1;
-        }
-        if (i == FILE_ITEM_LOAD_WORKSPACE) {
-            const char *dir = repl_workspace_dir();
-            if (!dir || !dir[0]) dir = DEFAULT_WORKSPACE_DIR;
-            repl_load_workspace(dir); // errors are logged internally; no need to set status here
-            return 1;
-        }
-    } else if (menu_id == MENU_SCENE) {
-        int e = repl_example_count();
-        if (i >= 1 && i <= e) { repl_load_example(i - 1); return 1; }
-        if (i == e + SCENE_OFF_NEW) {
-            if (g_example_idx >= 0) g_example_idx = -1;
-            repl_clear_all_cmds();
-            return 1;
-        }
-        if (i == e + SCENE_OFF_SAVE) { repl_save_default_output(); return 1; }
-        if (i == e + SCENE_OFF_RENAME) {
-            int slot = repl_active_user_scene();
-            if (slot < 0) { set_status("No active scene to rename"); return 1; }
-            if (ui_panels_begin_rename(slot))
-                rename_refresh_status();
-            return 1;
-        }
-        int scene_n = i - (e + SCENE_OFF_SCENES);
-        if (scene_n >= 0 && scene_n < repl_user_scene_count()) {
-            int slot = scene_menu_nth_slot(scene_n);
-            if (slot >= 0) { repl_load_user_scene_idx(slot); return 1; }
-        }
-        return 1;
-    } else if (menu_id == MENU_CONFIG) {
-        if (g_cfg_items[i].value != NULL) {
-            repl_cfg_cycle_row(i, +1);
-        }
-        return 0;  /* cycle in place; keep menu open */
-    }
-    return 1;
+    return repl_action_menu_item_activate(menu_id, i);
 }
 
 static void menubar_rects(int menu_x[NUM_MENUS], int menu_w[NUM_MENUS],
@@ -3357,7 +3304,7 @@ void render_example_dropdown(void) {
         if (menu_id == MENU_SCENE && ne >= 0) {
             int scene_n = i - (ne + SCENE_OFF_SCENES);
             if (scene_n >= 0 && scene_n < repl_user_scene_count())
-                scene_hit = scene_menu_nth_slot(scene_n);
+                scene_hit = repl_scene_menu_slot_for_dense_index(scene_n);
         }
         int is_active_example = (menu_id == MENU_SCENE && ne >= 0 &&
                                  i >= 1 && i <= ne &&
@@ -4147,6 +4094,7 @@ int ui_panels_begin_rename(int slot) {
     const char *cur = repl_user_scene_name(slot);
     snprintf(g_rename_buf, sizeof(g_rename_buf), "%s", cur ? cur : "");
     g_rename_len = (int)strlen(g_rename_buf);
+    rename_refresh_status();
     return 1;
 }
 

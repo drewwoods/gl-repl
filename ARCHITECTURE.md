@@ -33,6 +33,8 @@ of one monolithic `repl_core.c`.
   example promotion hook.
 - `repl_camera_controls.c`: scene camera pointer state, orbit/pan/zoom drags,
   wheel zoom velocity, and per-frame momentum decay.
+- `repl_actions.c`: config item table, config shortcut dispatch, menu item
+  actions, startup config defaults, and side effects for toggles/cycles.
 - `repl_eval.c`: expression parsing and evaluation.
 - `ui_panels.c`: 2D code/search/help/config/variable-panel rendering and panel
   hit-testing.
@@ -42,6 +44,9 @@ of one monolithic `repl_core.c`.
 The public API is still `repl_core.h`. Cross-module runtime/test helpers live in
 `repl_core_internal.h`. Shared globals and UI-visible state still live in
 `sample.h`.
+
+For a working diagram of the editor-adjacent refactor slices, see
+`REPL_REFACTOR_MAP.md`.
 
 ## Two-Level Command Model
 
@@ -206,6 +211,16 @@ Owns transient editor and interaction state.
 - variable-drag/config-menu interaction state
 - feed-line entrypoint and commit-attempt outcomes
 - keyboard, special-key, mouse, motion, and timer callbacks
+
+### `repl_actions.c`
+
+Owns side-effecting actions that start from editor shortcuts or menu rows.
+
+- `g_cfg_items[]`, `CFG_ITEM_COUNT`, and config state-label tables
+- F-key and Ctrl-key config shortcut lookup
+- `repl_cfg_cycle_row()` and per-item side effects
+- menu item activation for File, Scene, and Config menus
+- startup application of persisted audio config
 
 ### `repl_undo.c`
 

@@ -81,10 +81,11 @@ Run all: `make test`
 | `repl_commit.c` | Float declarations, variable assignments, structured block commits, close-brace commits |
 | `repl_core.h` | Public API (parse, flatten, display, input callbacks, user scene + workspace) |
 | `repl_core_internal.h` | Test-visible internals (normalize/commit pipeline, `feed_line`, `load_line_to_input`, `repl_promote_example_if_needed`) |
-| `repl_editor.c` | Keyboard/mouse handling, commit orchestration, `CfgItem` array, F-key dispatch |
+| `repl_editor.c` | Keyboard/mouse routing, commit orchestration, feed-line entrypoint |
 | `repl_clipboard.c` | Line selection anchors, command clipboard buffer, copy/cut/paste behavior |
 | `repl_undo.c` | Undo/redo snapshots, history rings, example auto-promote hook before mutation |
 | `repl_camera_controls.c` | Scene camera pointer state, orbit/pan/zoom drags, wheel zoom velocity, momentum tick |
+| `repl_actions.c` | Config item table, config shortcuts, menu actions, startup config defaults |
 | `repl_examples.c` | Predefined example data (`g_examples[]`, `g_example_names[]`) |
 | `repl_examples.h` | Example query API (`repl_examples_count/name/lines`) |
 | `repl_export.c` | `save_output` / `load_from_file`, workspace header directives, `@scene-name` / `@workspace-dir` markers |
@@ -96,13 +97,14 @@ Run all: `make test`
 | `repl_eval.h` | Evaluator types (`ExprVar`, `ExprCtx`), function declarations |
 | `cmd_format.c` | Pure indentation/depth computation (no GL dependency) |
 | `cmd_format.h` | Formatting types (`FmtCmd`, `FmtType`), indent functions |
+| `REPL_REFACTOR_MAP.md` | Mermaid ownership map for editor-adjacent refactor slices |
 
 ## Conventions
 
 - Global variables prefixed `g_` (e.g., `g_num_cmds`, `g_cam_rx`)
 - Static helpers are file-scoped; public API goes through `repl_core.h`
-- Config toggles use the `CfgItem` pattern: add entry to `g_cfg_items[]` array
-  in `repl_editor.c`, it auto-computes count via `sizeof`
+- Config toggles use the `CfgItem` pattern: add entries to `g_cfg_items[]` in
+  `repl_actions.c`; `CFG_ITEM_COUNT` auto-computes via `sizeof`
 - New GL commands: add to `CmdType` enum in `sample.h`, then handle in
   `parse_command()`, `execute_commands()`, and `flatten_range()` in `repl_core.c`
 - Keyboard bindings: `keyboard_func()` for ASCII keys (Ctrl+X = key code X-64),
@@ -209,7 +211,8 @@ message (user has to save workspace first to unlock eviction).
 `SCENE_OFF_*` offsets in `ui_panels.c` place fixed rows above the user-scene
 list (`New empty scene`, `Save to output.c`, `Rename active scene`). User
 scenes follow at `SCENE_OFF_SCENES`; rows are dense (unused slots skipped via
-`scene_menu_nth_slot`). The active scene row is drawn with accent color.
+`repl_scene_menu_slot_for_dense_index`). The active scene row is drawn with
+accent color.
 
 ### Public API touch points (in `repl_core.h`)
 
@@ -476,13 +479,13 @@ Case-insensitive text search in `repl_search.c`:
 
 ### Config Menu
 
-Declarative toggle system in `repl_editor.c`:
+Declarative toggle system in `repl_actions.c`:
 - `g_cfg_items[]` array of `CfgItem` structs: `{ label, key_hint,
   int *value, n_states, state_names[] }`
 - Each item is a toggle (2 states, default OFF/ON) or cycle (>2 states
   with named entries, e.g. grid themes)
-- Rendered by `render_config_menu()` in `ui_panels.c`; toggled via
-  `g_show_config` (Config header button)
+- Rendered by `render_config_menu()` in `ui_panels.c`; menu clicks and
+  F-key/Ctrl-key shortcuts dispatch through `repl_actions.c`
 - Adding a config item: append to `g_cfg_items[]` — count is
   auto-computed via `sizeof`
 

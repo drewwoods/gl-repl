@@ -2,7 +2,7 @@
  * repl_editor.c — Editor state, line routing, and GLUT input dispatch.
  *
  * Subsystems in this file (top to bottom):
- *  - Editor state (g_input, config-item table)
+ *  - Editor state (g_input, cursor, panel resize, variable dragging)
  *  - Cmd-range deletion with var-decl guards
  *  - Line-input load/save and line navigation
  *  - Commit attempt orchestration and Enter/navigation outcomes
@@ -16,6 +16,7 @@
  * lives in repl_core.c / repl_executor.c.
  */
 #include "sample.h"
+#include "repl_actions.h"
 #include "repl_core_internal.h"
 #include "repl_command_store.h"
 #include "repl_camera_controls.h"
@@ -73,28 +74,6 @@ int   g_drag_log_mode = 0;  /* 0=linear (LMB drag), 1=logarithmic (RMB drag) */
 float g_drag_start_val = 0.0f;
 int   g_drag_start_x = 0;
 
-static const char *replay_mode_names[] = { "Polygon", "Vertex" };
-static const char *backdrop_mode_names[] = { "Off", "Cityscape" };
-static const char *xform_guide_mode_names[] = { "World", "Frame" };
-static const char *profile_panel_mode_names[] = { "Off", "On", "Details" };
-static const char *code_panel_layout_names[] = {
-    "Left", "Top", "Bottom", "Hidden"
-};
-
-/* Unified audio cfg: collapses mute + loop mode into one cycling
- * menu entry. Indices:
- *   0 = Mute    — muted, loop mode untouched
- *   1 = Once    — playing, loop mode OFF  (playlist plays through)
- *   2 = Song    — playing, loop mode SONG (repeat current track)
- *   3 = All     — playing, loop mode ALL  (playlist, wrap forever)
- * Default 3 matches repl_audio.c's LOOP_ALL default with volume on. */
-#define AUDIO_CFG_PAUSE 0
-#define AUDIO_CFG_ONCE  1
-#define AUDIO_CFG_SONG  2
-#define AUDIO_CFG_ALL   3
-static int g_audio_cfg_mode = AUDIO_CFG_ALL;
-static const char *audio_cfg_names[] = { "Pause", "Once", "Song", "All" };
-
 /* Browser autoplay policy: the Web Audio context stays suspended until
  * a user gesture. We call repl_audio_on_user_gesture() the first time
  * a key or mouse event arrives; native builds make this a no-op. */
@@ -110,72 +89,6 @@ static int editor_get_modifiers(void) {
         return g_modifier_provider_for_test();
     return glutGetModifiers();
 }
-
-static void apply_audio_cfg_mode(int mode) {
-    switch (mode) {
-    case AUDIO_CFG_PAUSE:
-        repl_audio_set_paused(1);
-        break;
-    case AUDIO_CFG_ONCE:
-        repl_audio_set_paused(0);
-        repl_audio_set_loop_mode(REPL_AUDIO_LOOP_OFF);
-        break;
-    case AUDIO_CFG_SONG:
-        repl_audio_set_paused(0);
-        repl_audio_set_loop_mode(REPL_AUDIO_LOOP_SONG);
-        break;
-    case AUDIO_CFG_ALL:
-    default:
-        repl_audio_set_paused(0);
-        repl_audio_set_loop_mode(REPL_AUDIO_LOOP_ALL);
-        break;
-    }
-}
-
-CfgItem g_cfg_items[] = {
-    { "### RENDERING",    0, 0,     NULL,                      0,                NULL              },
-    { "MSAA",             KEY_CTRL_U, 0, &g_multisample_enabled,    2,                NULL              },
-    { "Line smooth",      0, 0,     &g_line_smooth_enabled,    2,                NULL              },
-    { "Accum AA",         0, 0,     &g_accum_aa_enabled,       2,                NULL              },
-    { "Wireframe",        GLUT_KEY_F2, 1, &g_wireframe,              2,                NULL              },
-    { "Point attenuation",0, 0,     &g_init_attenuate_points,  2,                NULL              },
-    { "---",              0, 0,     NULL,                      0,                NULL              },
-    { "### TIME & REPLAY",0, 0,     NULL,                      0,                NULL              },
-    { "Auto time",        KEY_CTRL_T, 0, &g_t_playing,              2,                NULL              },
-    { "Replay",           KEY_CTRL_R, 0, &g_replay_active,          2,                NULL              },
-    { "Replay mode",      0, 0,   &g_replay_mode,            2,                replay_mode_names },
-    { "Replay expand",    0, 0,     &g_replay_expand_args,     2,                NULL              },
-    { "---",              0, 0,     NULL,                      0,                NULL              },
-    { "### OVERLAYS & SCENE",0, 0,  NULL,                      0,                NULL              },
-    { "Grid",             GLUT_KEY_F3, 1, &g_grid_theme,             GRID_THEME_COUNT, g_grid_names      },
-    { "Grid major",       KEY_CTRL_O, 0, &g_grid_major_idx,         GRID_MAJOR_COUNT, g_grid_major_names  },
-    { "Grid extent",      0, 0,     &g_grid_extent_idx,        GRID_EXTENT_COUNT, g_grid_extent_names },
-    { "Axes",             GLUT_KEY_F4, 1, &g_axes_theme,             AXES_THEME_COUNT, g_axes_names      },
-    { "Vertex guides",    GLUT_KEY_F8, 1, &g_show_guides,            2,                NULL              },
-    { "Xform guide mode", 0, 0,     &g_xform_guide_mode,       2,                xform_guide_mode_names },
-    { "Light indicators", GLUT_KEY_F10, 1, &g_show_lights,            2,                NULL              },
-    { "Poly highlight",   0, 0,     &g_highlight_current_poly, 2,                NULL              },
-    { "Backdrop",         0, 0,     &g_backdrop_mode,          2,                backdrop_mode_names },
-    { "Camera rotate",    GLUT_KEY_F11, 1, &g_cam_rotate,             2,                NULL              },
-    { "Auto-normals",     GLUT_KEY_F9, 1, &g_autonormal,             2,                NULL              },
-    { "---",              0, 0,     NULL,                      0,                NULL              },
-    { "### GEOMETRY",     0, 0,     NULL,                      0,                NULL              },
-    { "Vertex labels",    GLUT_KEY_F5, 1, &g_show_vnums,             2,                NULL              },
-    { "Normal vectors",   GLUT_KEY_F6, 1, &g_show_normals,           2,                NULL              },
-    { "Vertex outlines",  GLUT_KEY_F7, 1, &g_show_outlines,          2,                NULL              },
-    { "Vertex points",    0, 0,     &g_show_vpoints,           2,                NULL              },
-    { "---",              0, 0,     NULL,                      0,                NULL              },
-    { "### INTERFACE",    0, 0,     NULL,                      0,                NULL              },
-    { "Variable panel",   0, 0,   &g_show_var_panel,         2,                NULL              },
-    { "CPU profile",      KEY_CTRL_W, 0, &g_show_profile_panel,     PROFILE_PANEL_MODE_COUNT, profile_panel_mode_names },
-    { "Code panel",       KEY_CTRL_B, 0, &g_code_panel_layout,      CODE_PANEL_LAYOUT_COUNT, code_panel_layout_names },
-    { "Wrap at commas",   0, 0,     &g_wrap_at_comma,          2,                NULL              },
-    { "---",              0, 0,     NULL,                      0,                NULL              },
-    { "### AUDIO",        0, 0,     NULL,                      0,                NULL              },
-    { "Audio",            0, 0,     &g_audio_cfg_mode,         4,                audio_cfg_names   },
-};
-
-const int CFG_ITEM_COUNT = (int)(sizeof(g_cfg_items) / sizeof(g_cfg_items[0]));
 
 static const int g_accum_steps[] = { 1, 2, 4, 8, 16 };
 static const char *quit_tempfile = "/tmp/temp-output.c";
@@ -731,14 +644,7 @@ static int handle_escape_key_route(unsigned char key) {
 }
 
 static int handle_cfg_shortcut_key_route(unsigned char key) {
-    for (int i = 0; i < CFG_ITEM_COUNT; i++) {
-        if (!g_cfg_items[i].is_special && g_cfg_items[i].key_code > 0
-                && g_cfg_items[i].key_code < 32 && g_cfg_items[i].key_code == key) {
-            repl_cfg_cycle_row(i, 1);
-            return 1;
-        }
-    }
-    return 0;
+    return repl_cfg_handle_ascii_shortcut(key);
 }
 
 static int handle_cursor_endpoint_key_route(unsigned char key) {
@@ -1141,13 +1047,7 @@ static int handle_search_special_route(int key) {
 }
 
 static int handle_cfg_special_shortcut_route(int key) {
-    for (int i = 0; i < CFG_ITEM_COUNT; i++) {
-        if (g_cfg_items[i].is_special && g_cfg_items[i].key_code == key) {
-            repl_cfg_cycle_row(i, 1);
-            return 1;
-        }
-    }
-    return 0;
+    return repl_cfg_handle_special_shortcut(key);
 }
 
 static int handle_horizontal_special_key_route(int key) {
@@ -1342,89 +1242,6 @@ static void special_func(int key, int x, int y) {
     if (handle_help_toggle_special_key_route(key)) return;
     if (handle_scene_cycle_special_key_route(key)) return;
     if (handle_page_scroll_special_key_route(key)) return;
-}
-
-/* Cycle a config row by `delta` (+1 for forward, -1 for reverse) and
- * apply any per-item side effects. Right-click in the config menu
- * reuses this with delta=-1 so the user can seek back after
- * overshooting an entry like Grid or Axes. */
-void repl_cfg_cycle_row(int row, int delta) {
-    if (row < 0 || row >= CFG_ITEM_COUNT) return;
-
-    /* Replay is special-cased: its cfg toggle kicks off/ends the
-     * replay machinery rather than flipping the int directly. Both
-     * directions collapse to "toggle". */
-    if (g_cfg_items[row].value == &g_replay_active) {
-        if (g_replay_active) {
-            replay_stop();
-            set_status("Replay: off");
-        } else {
-            replay_start();
-        }
-        return;
-    }
-
-    if (g_cfg_items[row].value == &g_t_playing) {
-        if (glutGetModifiers() & GLUT_ACTIVE_SHIFT) {
-            repl_reset_time_to_zero();
-            set_status(g_t_playing ? "Time: reset to 0" : "Time: reset to 0 (paused)");
-            return;
-        }
-    }
-
-    if (g_replay_active)
-        replay_stop();
-
-    if (g_cfg_items[row].value == NULL) return;
-
-    int n = g_cfg_items[row].n_states;
-    if (n < 2) return;
-    int v = (*g_cfg_items[row].value + delta) % n;
-    if (v < 0) v += n;
-    *g_cfg_items[row].value = v;
-
-    if (g_cfg_items[row].value == &g_code_panel_layout) {
-        g_panel_frac = 0.3f;
-        if (g_code_panel_layout == CODE_PANEL_LAYOUT_TOP)
-            set_status("Layout: top code panel");
-        else if (g_code_panel_layout == CODE_PANEL_LAYOUT_BOTTOM)
-            set_status("Layout: bottom code panel");
-        else if (g_code_panel_layout == CODE_PANEL_LAYOUT_HIDDEN) {
-            ui_panels_close_menus();
-            clear_autocomplete_state();
-            set_status("Layout: code panel hidden");
-        } else
-            set_status("Layout: left code panel");
-    } else if (g_cfg_items[row].value == &g_autonormal) {
-        if (g_autonormal) {
-            mark_normals_dirty();
-            set_status("Auto-normals: ON");
-        } else {
-            set_status("Auto-normals: OFF (existing normals kept)");
-        }
-    } else if (g_cfg_items[row].value == &g_init_attenuate_points) {
-        apply_init_bootstrap();
-        set_status(g_init_attenuate_points ? "Point attenuation: ON"
-                                           : "Point attenuation: OFF");
-    } else if (g_cfg_items[row].value == &g_audio_cfg_mode) {
-        apply_audio_cfg_mode(g_audio_cfg_mode);
-        repl_audio_set_cfg_mode(g_audio_cfg_mode);  /* keep INI in sync */
-        static const char *labels[] = {
-            "Audio: paused",
-            "Audio: play once",
-            "Audio: loop song",
-            "Audio: loop all",
-        };
-        set_status(labels[g_audio_cfg_mode]);
-    } else if (g_cfg_items[row].state_names) {
-        snprintf(g_scratch_buf, sizeof(g_scratch_buf), "%s: %s",
-                 g_cfg_items[row].label, g_cfg_items[row].state_names[v]);
-        set_status(g_scratch_buf);
-    } else if (n == 2) {
-        snprintf(g_scratch_buf, sizeof(g_scratch_buf), "%s: %s",
-                 g_cfg_items[row].label, v ? "ON" : "OFF");
-        set_status(g_scratch_buf);
-    }
 }
 
 static int editor_code_panel_layout(void) {
@@ -1867,23 +1684,4 @@ void repl_timer_func(int value) {
 
 void repl_feed_line_public(const char *line) {
     feed_line(line);
-}
-
-/* Apply side effects for all cfg items whose defaults need honouring at
- * startup.  Call this once after every subsystem (audio, GL, etc.) has
- * finished initialising so the initial values of g_cfg_items entries take
- * effect immediately.  Add a new branch here whenever a CfgItem is added
- * whose backing variable alone is not enough to drive the desired state. */
-void repl_editor_apply_defaults(void) {
-    /* Restore the audio mode persisted from the previous session.
-     * repl_audio_play_playlist() calls load_state() which stores the
-     * cfg_mode in the audio module; we pull it here so both g_audio_cfg_mode
-     * (the UI) and the actual audio engine agree before the first frame. */
-    int saved_mode = repl_audio_get_cfg_mode();
-    if (saved_mode >= AUDIO_CFG_PAUSE && saved_mode <= AUDIO_CFG_ALL)
-        g_audio_cfg_mode = saved_mode;
-    apply_audio_cfg_mode(g_audio_cfg_mode);
-    /* Push the (possibly-restored) mode back so the audio module's copy
-     * is valid immediately and the next save reflects the current state. */
-    repl_audio_set_cfg_mode(g_audio_cfg_mode);
 }

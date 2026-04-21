@@ -19,7 +19,7 @@
  *   - Editor state (g_input, cursor)
  *   - Commit handlers that decide *where* a parsed command goes in g_cmds[]
  *   - GLUT keyboard / special / mouse / motion / timer dispatch
- *   - Camera momentum and panel resizing
+ *   - Panel resizing and editor-side variable dragging
  *   - feed_line() — the programmatic commit entry point used by file loading
  *     and test harnesses
  *
@@ -28,6 +28,7 @@
  *   repl_export.c  — save / load  (output.c round-tripping)
  *   repl_undo.c    — undo/redo snapshots and history rings
  *   repl_camera_controls.c — viewport camera drag and momentum controls
+ *   repl_actions.c — config shortcuts, menu actions, startup config defaults
  *   repl_search.c  — incremental search overlay
  *   cmd_format.c   — source-text formatting helpers
  *   repl_flatten.c — flatten_range() / flatten_commands()
