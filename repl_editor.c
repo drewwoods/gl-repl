@@ -1426,83 +1426,98 @@ void keyboard_func(unsigned char key, int x, int y) {
     (void)handle_printable_input_key_route(key);
 }
 
-static void special_func(int key, int x, int y) {
-    (void)x;
-    (void)y;
-
+static void special_begin_key(int key) {
+    (void)key;
     g_cursor_on = 1;
     g_blink_tick = 0;
     g_scroll_follow_cursor = 1;
+}
 
-    /* Swallow special keys (arrows, F-keys, etc.) while inline rename is
-     * active so navigation doesn't leak through the overlay. */
-    if (ui_panels_handle_rename_special(key))
-        return;
+static int handle_rename_special_route(int key) {
+    /* Rename captures arrows and F-keys ahead of replay/search/navigation so
+     * modal text entry cannot leak actions into the editor. */
+    return ui_panels_handle_rename_special(key);
+}
 
-    if (replay_handle_special_key(key))
-        return;
+static int handle_replay_special_route(int key) {
+    return replay_handle_special_key(key);
+}
 
+static void restore_hidden_code_panel_for_special(int key) {
     if (editor_code_panel_hidden()) {
         int key_mods = editor_get_modifiers();
         if (editor_special_restores_hidden_code_panel(key, key_mods))
             editor_restore_hidden_code_panel();
     }
+}
 
-    if (handle_search_special(key))
-        return;
+static int handle_search_special_route(int key) {
+    return handle_search_special(key);
+}
 
+static int handle_cfg_special_shortcut_route(int key) {
     for (int i = 0; i < CFG_ITEM_COUNT; i++) {
         if (g_cfg_items[i].is_special && g_cfg_items[i].key_code == key) {
             repl_cfg_cycle_row(i, 1);
-            return;
+            return 1;
         }
     }
+    return 0;
+}
 
+static int handle_horizontal_special_key_route(int key) {
     switch (key) {
     case GLUT_KEY_LEFT:
         if (editor_get_modifiers() & GLUT_ACTIVE_CTRL) {
             repl_audio_prev_track();
-            break;
+            return 1;
         }
         if (g_show_help) {
             if (g_help_tab > 0) {
                 g_help_tab--;
                 g_help_scroll = 0;
             }
-            break;
+            return 1;
         }
         if (g_cursor_pos > 0)
             g_cursor_pos--;
         update_autocomplete();
-        break;
+        return 1;
     case GLUT_KEY_RIGHT:
         if (editor_get_modifiers() & GLUT_ACTIVE_CTRL) {
             repl_audio_next_track();
-            break;
+            return 1;
         }
         if (g_show_help) {
             if (g_help_tab < 1) {
                 g_help_tab++;
                 g_help_scroll = 0;
             }
-            break;
+            return 1;
         }
         if (g_cursor_pos < g_input_len)
             g_cursor_pos++;
         update_autocomplete();
-        break;
+        return 1;
     case GLUT_KEY_HOME:
         g_cursor_pos = 0;
         update_autocomplete();
-        break;
+        return 1;
     case GLUT_KEY_END:
         g_cursor_pos = g_input_len;
         update_autocomplete();
-        break;
+        return 1;
+    default:
+        return 0;
+    }
+}
+
+static int handle_vertical_special_key_route(int key) {
+    switch (key) {
     case GLUT_KEY_UP:
         if (g_show_help) {
             g_help_scroll--;
-            break;
+            return 1;
         }
         if (g_ac_count > 1) {
             g_ac_sel = (g_ac_sel - 1 + g_ac_count) % g_ac_count;
@@ -1519,11 +1534,11 @@ static void special_func(int key, int x, int y) {
             clear_selection();
             navigate_to_line(g_edit_line - 1);
         }
-        break;
+        return 1;
     case GLUT_KEY_DOWN:
         if (g_show_help) {
             g_help_scroll++;
-            break;
+            return 1;
         }
         if (g_ac_count > 1) {
             g_ac_sel = (g_ac_sel + 1) % g_ac_count;
@@ -1540,68 +1555,106 @@ static void special_func(int key, int x, int y) {
             clear_selection();
             navigate_to_line(g_edit_line + 1);
         }
-        break;
-    case GLUT_KEY_F1:
+        return 1;
+    default:
+        return 0;
+    }
+}
+
+static int handle_help_toggle_special_key_route(int key) {
+    if (key == GLUT_KEY_F1) {
         g_show_help = !g_show_help;
         g_help_tab = 0;
         g_help_scroll = 0;
-        break;
-    /* F2 through F11 removed from here, handled via g_cfg_items loop */
-    case GLUT_KEY_F12: {
-        /* F12 cycles: examples[0..N-1] → user scenes (in slot order) → back.
-         * Active example -> next example, or first user scene if we ran
-         * out of examples.  Active user scene -> next occupied user slot,
-         * or back to example 0 when all user slots seen. */
-        int count = repl_example_count();
-        int active_scene = repl_active_user_scene();
+        return 1;
+    }
+    return 0;
+}
 
-        if (active_scene >= 0) {
-            for (int s = active_scene + 1; s < MAX_USER_SCENES; s++) {
-                if (repl_user_scene_slot_used(s)) {
-                    repl_load_user_scene_idx(s);
-                    goto f12_done;
-                }
-            }
-            if (count > 0) repl_load_example(0);
-            goto f12_done;
-        }
+static void cycle_example_or_user_scene(void) {
+    /* F12 cycles: examples[0..N-1] -> user scenes (in slot order) -> back.
+     * Active example moves to the next example, then first user scene.
+     * Active user scene moves to the next occupied user slot, then example 0. */
+    int count = repl_example_count();
+    int active_scene = repl_active_user_scene();
 
-        if (count > 0) {
-            int next = g_example_idx + 1;
-            if (next < count) {
-                repl_load_example(next);
-                goto f12_done;
-            }
-        }
-
-        /* Past the last example: jump to first occupied user slot. */
-        for (int s = 0; s < MAX_USER_SCENES; s++) {
+    if (active_scene >= 0) {
+        for (int s = active_scene + 1; s < MAX_USER_SCENES; s++) {
             if (repl_user_scene_slot_used(s)) {
                 repl_load_user_scene_idx(s);
-                goto f12_done;
+                return;
             }
         }
-        if (count > 0) repl_load_example(0);
-    f12_done:;
-        break;
+        if (count > 0)
+            repl_load_example(0);
+        return;
     }
+
+    if (count > 0) {
+        int next = g_example_idx + 1;
+        if (next < count) {
+            repl_load_example(next);
+            return;
+        }
+    }
+
+    for (int s = 0; s < MAX_USER_SCENES; s++) {
+        if (repl_user_scene_slot_used(s)) {
+            repl_load_user_scene_idx(s);
+            return;
+        }
+    }
+    if (count > 0)
+        repl_load_example(0);
+}
+
+static int handle_scene_cycle_special_key_route(int key) {
+    if (key == GLUT_KEY_F12) {
+        cycle_example_or_user_scene();
+        return 1;
+    }
+    return 0;
+}
+
+static int handle_page_scroll_special_key_route(int key) {
+    switch (key) {
     case GLUT_KEY_PAGE_UP:
         if (g_show_help)
             g_help_scroll -= 5;
         else
             g_scroll -= 5;
         g_scroll_follow_cursor = 0;
-        break;
+        return 1;
     case GLUT_KEY_PAGE_DOWN:
         if (g_show_help)
             g_help_scroll += 5;
         else
             g_scroll += 5;
         g_scroll_follow_cursor = 0;
-        break;
+        return 1;
     default:
-        break;
+        return 0;
     }
+}
+
+static void special_func(int key, int x, int y) {
+    (void)x;
+    (void)y;
+
+    special_begin_key(key);
+
+    if (handle_rename_special_route(key))   return;
+    if (handle_replay_special_route(key))   return;
+
+    restore_hidden_code_panel_for_special(key);
+
+    if (handle_search_special_route(key))   return;
+    if (handle_cfg_special_shortcut_route(key)) return;
+    if (handle_horizontal_special_key_route(key)) return;
+    if (handle_vertical_special_key_route(key)) return;
+    if (handle_help_toggle_special_key_route(key)) return;
+    if (handle_scene_cycle_special_key_route(key)) return;
+    if (handle_page_scroll_special_key_route(key)) return;
 }
 
 /* Cycle a config row by `delta` (+1 for forward, -1 for reverse) and
