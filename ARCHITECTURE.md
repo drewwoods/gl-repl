@@ -84,9 +84,11 @@ every path shares the same parse/normalize/flatten guarantees.
 
 1. `flatten_commands()` in `repl_core.c` expands loops, functions, conditionals,
    and variable-driven commands into `g_flat_cmds[]`.
-2. `scene_render.c` prepares the frame and calls `execute_commands()`.
-3. `execute_commands()` issues fixed-function OpenGL calls against the flattened
-   command stream.
+2. `scene_render.c` prepares the frame and calls `repl_execute_program()` with
+   an explicit flat-command count for normal, replay, and fade passes.
+3. `repl_execute_program()` issues fixed-function OpenGL calls against the
+   flattened command stream. `execute_commands()` remains a full-range
+   compatibility wrapper.
 
 ### Search path
 
@@ -186,8 +188,8 @@ captures the intended behavior change.
   undo snapshots are taken, and how variable declarations register names.
 - **Flattener:** owns expansion of loops, functions, and conditionals into a
   flat program with source-line provenance.
-- **Executor:** owns OpenGL calls for a flat command stream and should receive
-  explicit execution ranges instead of mutating global flat counts for replay.
+- **Executor:** owns OpenGL calls for a flat command stream. Replay fill/fade
+  passes use `ReplExecutionOptions` to supply explicit execution ranges.
 - **Editor/input router:** owns modal dispatch, cursor/input buffers, selection,
   clipboard, and keyboard/mouse routing.
 - **UI layout:** owns pure code-panel wrapping, visible rows, hit-testing, and
@@ -415,8 +417,9 @@ Under the hood, replay works by clamping how much of `g_flat_cmds[]`
 - `g_replay_state` is OFF / PLAYING / PAUSED / DONE; `g_replay_pc` is a
   program counter into `g_flat_cmds[]`; `g_replay_speed` is a playback
   multiplier.
-- During playback, `g_num_flat_cmds` is clamped to `replay_exec_limit()`
-  so only commands up to the PC contribute to the fill pass.
+- During playback, `replay_prepare_frame()` still computes the active replay
+  PC, while scene rendering passes explicit `ReplExecutionOptions` limits so
+  the fill/fade executor does not temporarily rewrite `g_num_flat_cmds`.
 - `g_replay_fade_batches[]` is a circular buffer of recent geometry
   snapshots. Old batches fade out as new geometry appears and are drawn
   in a separate blended pass (`execute_replay_fade_batches()`) after the

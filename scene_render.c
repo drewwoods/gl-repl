@@ -2520,18 +2520,16 @@ void render_3d_scene(void) {
     prof_accum_end(PROF_SCENE_3D_SETUP);
 
     {
-        int fill_limit = g_num_flat_cmds;
+        ReplExecutionOptions exec_options = { g_num_flat_cmds };
 
         if (replay_has_active_fades())
-            g_num_flat_cmds = replay_fill_base_limit();
+            exec_options.flat_cmd_count = replay_fill_base_limit();
 
         prof_begin(PROF_SCENE_3D_FILL);
         glPushMatrix();
-        execute_commands();
+        repl_execute_program(&exec_options);
         glPopMatrix();
         prof_accum_end(PROF_SCENE_3D_FILL);
-
-        g_num_flat_cmds = fill_limit;
 
         if (replay_has_active_fades()) {
             prof_begin(PROF_SCENE_3D_FADE);
