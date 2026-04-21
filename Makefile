@@ -122,7 +122,8 @@ TEST_BINS = \
 	test_repl_core_internal \
 	test_repl_autocomplete \
 	test_repl_editor \
-	test_repl_core_extra
+	test_repl_core_extra \
+	test_repl_autonormal
 
 CORE_TEST_BINS = $(filter-out test_eval test_format test_repl_audio,$(TEST_BINS))
 
