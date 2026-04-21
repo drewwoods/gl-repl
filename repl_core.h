@@ -2,9 +2,10 @@
  * repl_core.h — Public API for the REPL core module.
  *
  * repl_core.c owns the source-command array (g_cmds), the flattened command
- * array (g_flat_cmds), and the parse/execute/flatten pipeline. Replay lives
- * in repl_replay.c. Everything listed here is safe to call from sample.c,
- * scene_render.c, ui_panels.c, and the test binaries.
+ * array (g_flat_cmds), parser entrypoints, display callback, and app-level
+ * lifecycle wrappers. Execution, flattening, replay, examples, and scenes live
+ * in focused repl_* modules behind this API. Everything listed here is safe to
+ * call from sample.c, scene_render.c, ui_panels.c, and the test binaries.
  *
  * Implementation-only helpers that share state across the repl_* translation
  * units (editor, export, search, etc.) live in repl_core_internal.h; keep

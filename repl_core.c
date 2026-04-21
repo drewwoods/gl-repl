@@ -11,7 +11,6 @@
  *   - Parsing      — parse_command(): text → GLCmd
  *   - Normalization — repl_parse_and_normalize(), repl_reformat_commands()
  *   - GLUT display / reshape callbacks
- *   - Example / user-scene management
  *   - Depth-cache  — prefix-sum arrays for O(1) block-depth queries
  *   - 2D helpers   — draw_string(), draw_quad(), begin_2d(), end_2d()
  *   - Public API wrappers forwarded from sample.c
@@ -33,6 +32,7 @@
  *   repl_executor.c— repl_execute_program() / execute_commands()
  *   repl_autocomplete.c — completions and parameter hints
  *   repl_autonormal.c — auto-generated normals and feeding-state lookup
+ *   repl_example_loader.c — built-in example loading and metadata
  *   repl_replay.c  — replay state machine and fade-batch rendering
  *   scene_render.c — 3D scene setup, grid / axes / overlay drawing
  *   ui_panels.c    — code panel, autocomplete popup, config menu, var panel
@@ -46,7 +46,6 @@
 #include "repl_command_store.h"
 #include "repl_replay.h"
 #include "cmd_format.h"
-#include "repl_examples.h"
 #include "scene_render.h"
 #include "ui_panels.h"
 #include "profile_panel.h"
@@ -269,7 +268,6 @@ int    g_autonormal   = 0;
 int    g_show_lights  = CFG_DEFAULT_LIGHT_INDICATORS;
 int    g_backdrop_mode = CFG_DEFAULT_BACKDROP_MODE; /* 0=off, 1=cityscape */
 int    g_cam_rotate   = CFG_DEFAULT_CAMERA_ROTATE;  /* auto-rotate camera around Y */
-int    g_example_idx  = -1; /* current predefined example (-1 = none loaded yet) */
 char   g_scratch_buf[256];  /* shared scratch space for formatting strings, etc. */
 
 int    g_user_lighting_enabled = 0; /* tracks if user typed glEnable(GL_LIGHTING) */
@@ -326,7 +324,6 @@ int    g_cursor_py = 0;
 static int parse_command(const char *line, GLCmd *cmd,
                          ExprVar *vars, int num_vars);
 static void get_for_var_name(const GLCmd *cmd, char *var, int var_sz);
-static void load_example(int idx);
 
 /* ========================================================================= */
 /* Utility                                                                    */
@@ -1726,280 +1723,6 @@ int collect_visible_vars(int pos, ExprVar *vars, int max_vars) {
     return count;
 }
 
-static const char *example_cam_skip_ws(const char *text) {
-    while (*text && isspace((unsigned char)*text))
-        text++;
-    return text;
-}
-
-static const char *example_cam_skip_sep(const char *text) {
-    while (*text == ' ' || *text == '\t' || *text == ',' ||
-           *text == 'f' || *text == 'F')
-        text++;
-    return text;
-}
-
-static int example_cam_read_floats(const char *text, float *out_vals,
-                                   int out_count, const char **end_out) {
-    for (int i = 0; i < out_count; i++) {
-        char *end = NULL;
-
-        text = example_cam_skip_sep(text);
-        out_vals[i] = strtof(text, &end);
-        if (end == text)
-            return 0;
-        text = end;
-    }
-
-    if (end_out)
-        *end_out = text;
-    return 1;
-}
-
-static int example_cam_finish_call(const char *text) {
-    text = example_cam_skip_sep(text);
-    while (*text == ')' || *text == ';' || isspace((unsigned char)*text))
-        text++;
-    return *text == '\0';
-}
-
-static int example_cam_parse_translate(const char *text,
-                                       float *x, float *y, float *z) {
-    const char *end = NULL;
-    float vals[3];
-
-    text = example_cam_skip_ws(text);
-    if (strncmp(text, "glTranslatef", 12) != 0)
-        return 0;
-
-    text = strchr(text, '(');
-    if (!text)
-        return 0;
-    text++;
-
-    if (!example_cam_read_floats(text, vals, 3, &end) ||
-        !example_cam_finish_call(end))
-        return 0;
-
-    *x = vals[0];
-    *y = vals[1];
-    *z = vals[2];
-    return 1;
-}
-
-static int example_cam_parse_rotate(const char *text,
-                                    float axis_x, float axis_y, float axis_z,
-                                    float *angle_out) {
-    const char *end = NULL;
-    float vals[4];
-
-    text = example_cam_skip_ws(text);
-    if (strncmp(text, "glRotatef", 9) != 0)
-        return 0;
-
-    text = strchr(text, '(');
-    if (!text)
-        return 0;
-    text++;
-
-    if (!example_cam_read_floats(text, vals, 4, &end) ||
-        !example_cam_finish_call(end))
-        return 0;
-
-    if (fabsf(vals[1] - axis_x) > 1e-4f ||
-        fabsf(vals[2] - axis_y) > 1e-4f ||
-        fabsf(vals[3] - axis_z) > 1e-4f)
-        return 0;
-
-    *angle_out = vals[0];
-    return 1;
-}
-
-static int try_apply_example_camera_header(const char *const *lines) {
-    float dist_x, dist_y, dist_z;
-    float rx, ry;
-    float tx, ty, tz;
-
-    if (!lines || !lines[0] || strcmp(lines[0], "// camera") != 0)
-        return 0;
-    if (!lines[1] || !lines[2] || !lines[3] || !lines[4])
-        return 0;
-
-    if (!example_cam_parse_translate(lines[1], &dist_x, &dist_y, &dist_z) ||
-        fabsf(dist_x) > 1e-4f || fabsf(dist_y) > 1e-4f ||
-        !example_cam_parse_rotate(lines[2], 1.0f, 0.0f, 0.0f, &rx) ||
-        !example_cam_parse_rotate(lines[3], 0.0f, 1.0f, 0.0f, &ry) ||
-        !example_cam_parse_translate(lines[4], &tx, &ty, &tz))
-        return 0;
-
-    g_cam_dist = -dist_z;
-    g_cam_rx = rx;
-    g_cam_ry = ry;
-    g_cam_tx = -tx;
-    g_cam_ty = -ty;
-    g_cam_tz = -tz;
-    return 1;
-}
-
-static void reset_example_presentation_defaults(void) {
-    g_wireframe = CFG_DEFAULT_WIREFRAME;
-    g_grid_theme = CFG_DEFAULT_GRID_THEME;
-    g_grid_major_idx = CFG_DEFAULT_GRID_MAJOR_IDX;
-    g_grid_extent_idx = CFG_DEFAULT_GRID_EXTENT_IDX;
-    g_axes_theme = CFG_DEFAULT_AXES_THEME;
-    g_show_vnums = CFG_DEFAULT_VERTEX_LABELS;
-    g_show_indices = CFG_DEFAULT_VERTEX_INDICES;
-    g_show_normals = CFG_DEFAULT_NORMAL_VECTORS;
-    g_show_outlines = CFG_DEFAULT_VERTEX_OUTLINES;
-    g_show_vpoints = CFG_DEFAULT_VERTEX_POINTS;
-    g_show_guides = CFG_DEFAULT_VERTEX_GUIDES;
-    g_xform_guide_mode = CFG_DEFAULT_XFORM_GUIDE_MODE;
-    g_show_lights = CFG_DEFAULT_LIGHT_INDICATORS;
-    g_backdrop_mode = CFG_DEFAULT_BACKDROP_MODE;
-    g_cam_rotate = CFG_DEFAULT_CAMERA_ROTATE;
-}
-
-static int example_cfg_extract_slug(const char *text,
-                                    char *slug, int slug_sz) {
-    const char *p = text;
-    int slug_len = 0;
-
-    if (!text || !slug || slug_sz < 2)
-        return 0;
-
-    p = example_cam_skip_ws(p);
-    if (p[0] != '/' || p[1] != '/')
-        return 0;
-    p += 2;
-    while (*p && isspace((unsigned char)*p))
-        p++;
-    if (*p != '@')
-        return 0;
-    p++;
-
-    if (strncmp(p, "cfg", 3) != 0 || !isspace((unsigned char)p[3]))
-        return 0;
-    p += 4;
-    while (*p && isspace((unsigned char)*p))
-        p++;
-    if (*p != '_' && !isalnum((unsigned char)*p))
-        return 0;
-
-    while ((*p == '_' || isalnum((unsigned char)*p)) &&
-           slug_len < slug_sz - 1)
-        slug[slug_len++] = *p++;
-    slug[slug_len] = '\0';
-    if (slug_len == 0)
-        return 0;
-
-    while (*p && isspace((unsigned char)*p))
-        p++;
-    return *p == '=';
-}
-
-static int example_cfg_slug_allowed(const char *slug) {
-    static const char *const allowed_slugs[] = {
-        "wireframe",
-        "grid",
-        "grid_major",
-        "grid_extent",
-        "axes",
-        "vertex_labels",
-        "normal_vectors",
-        "vertex_outlines",
-        "vertex_points",
-        "vertex_guides",
-        "light_indicators",
-        "backdrop",
-        "camera_rotate",
-        NULL
-    };
-
-    for (int i = 0; allowed_slugs[i]; i++) {
-        if (strcmp(allowed_slugs[i], slug) == 0)
-            return 1;
-    }
-    return 0;
-}
-
-static int consume_example_cfg_header(const char *const *lines) {
-    int count = 0;
-
-    while (lines && lines[count]) {
-        char slug[32];
-
-        if (!example_cfg_extract_slug(lines[count], slug, sizeof(slug)))
-            break;
-        if (example_cfg_slug_allowed(slug))
-            parse_workspace_header_line(lines[count]);
-        count++;
-    }
-
-    return count;
-}
-
-/* Load an example from an array of source lines */
-static void load_example_lines(const char *const *lines) {
-    const char *const *body = lines;
-
-    /* Clear state */
-    g_num_cmds = 0;
-    g_num_flat_cmds = 0;
-    g_edit_line = 0;
-    g_inserting = 0;
-    g_input[0] = '\0';
-    g_input_len = 0;
-    g_cursor_pos = 0;
-    g_newline_buf[0] = '\0';
-    g_newline_len = 0;
-    repl_editor_reset_transients();
-    init_predef_vars();
-    reset_example_presentation_defaults();
-
-    if (body)
-        body += consume_example_cfg_header(body);
-
-    if (body && body[0] && strcmp(body[0], "// camera") == 0) {
-        try_apply_example_camera_header(body);
-        for (int skip = 0; skip < 5 && body[0]; skip++)
-            body++;
-    }
-
-    for (; body && *body; body++)
-        feed_line(*body);
-
-    /* Clean up: exit insert mode if still active */
-    g_inserting = 0;
-    g_edit_line = g_num_cmds;
-    g_input[0] = '\0';
-    g_input_len = 0;
-    g_cursor_pos = 0;
-    mark_normals_dirty();
-}
-
-static void load_example(int idx) {
-    int count = repl_examples_count();
-    const char *const *lines;
-    const char *name;
-
-    if (idx < 0 || idx >= count) return;
-    lines = repl_examples_lines(idx);
-    name = repl_examples_name(idx);
-    if (!lines || !name) return;
-
-    /* Preserve the user's work (once, into slot 0) before overwriting with
-     * an example. Subsequent example loads leave the home slot untouched. */
-    repl_scenes_capture_home_if_needed();
-
-    load_example_lines(lines);
-    g_example_idx = idx;
-    repl_scenes_mark_example_active();
-    char msg[128];
-    snprintf(msg, sizeof(msg), "Example %d/%d: %s (F12 for next)",
-             idx + 1, count, name);
-    set_status(msg);
-}
-
 /* ========================================================================= */
 /* Initialization                                                             */
 /* ========================================================================= */
@@ -2033,7 +1756,7 @@ static void load_initial_commands(const char *import_file) {
     }
 
     /* Fall back to default example (cube) */
-    load_example(0);
+    repl_load_example(0);
     set_status("Ready - type GL commands, press ; to execute. F1 for help. F12 for examples.");
     scroll_to_display_function();
 }
@@ -2148,22 +1871,6 @@ void repl_save_output(const char *filename) {
 
 void repl_flatten_commands(void) {
     flatten_commands();
-}
-
-int repl_example_count(void) {
-    return repl_examples_count();
-}
-
-const char *repl_example_name(int idx) {
-    return repl_examples_name(idx);
-}
-
-void repl_load_example(int idx) {
-    load_example(idx);
-}
-
-void repl_load_example_lines_for_test(const char *const *lines) {
-    load_example_lines(lines);
 }
 
 void repl_load_initial_commands(const char *import_file) {
