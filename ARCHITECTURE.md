@@ -99,9 +99,10 @@ every path shares the same parse/normalize/flatten guarantees.
 1. `flatten_commands()` in `repl_flatten.c` expands loops, functions,
    conditionals, and variable-driven commands into `g_flat_cmds[]`.
 2. `scene_render.c` prepares the frame and calls `repl_execute_program()` with
-   an explicit flat-command count for normal, replay, and fade passes.
-3. `repl_executor.c` issues fixed-function OpenGL calls against the flattened
-   command stream. `execute_commands()` remains a full-range compatibility
+   an explicit `FlatProgramView`/flat-command limit for normal, replay, and
+   fade passes.
+3. `repl_executor.c` issues fixed-function OpenGL calls against the requested
+   flat program view. `execute_commands()` remains a full-range compatibility
    wrapper around `repl_execute_program(NULL)`.
 
 ### Search path
@@ -145,6 +146,7 @@ Owns flattening and flat-command cursor matching.
 Owns flat-program execution and execution-time state.
 
 - `repl_execute_program()`, `execute_commands()`
+- `FlatProgramView` resolution and execution-limit clamping
 - `apply_state_cmd()`
 - replay fade execution context
 - predefined-variable snapshot/restore helpers

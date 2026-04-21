@@ -124,6 +124,21 @@ void test_replay_advanced() {
     repl_feed_line_public("glVertex3f(2,2,2);");
     repl_flatten_commands();
 
+    int full_flat_count = g_num_flat_cmds;
+    FlatProgramView live_program = repl_flat_program_view_live();
+    ASSERT_INT("flat program view count", live_program.cmd_count, full_flat_count);
+    ASSERT_TRUE("flat program view cmds", live_program.cmds == g_flat_cmds);
+    ASSERT_TRUE("flat program view locals", live_program.local_vars == g_flat_cmd_local_vars);
+
+    ReplExecutionOptions limited_exec = { .flat_cmd_count = 1 };
+    repl_execute_program(&limited_exec);
+    ASSERT_INT("limited execute preserves flat count", g_num_flat_cmds, full_flat_count);
+
+    limited_exec.flat_cmd_count = full_flat_count + 100;
+    limited_exec.program = live_program;
+    repl_execute_program(&limited_exec);
+    ASSERT_INT("over-limit execute preserves flat count", g_num_flat_cmds, full_flat_count);
+
     replay_start();
     ASSERT_INT("replay_exec_limit start", replay_exec_limit(), 0);
 

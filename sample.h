@@ -384,7 +384,9 @@ int  repl_search_find_prev_in_text(const char *text, const char *query,
 void navigate_to_line(int target);
 typedef struct {
     int flat_cmd_count;
+    FlatProgramView program;
 } ReplExecutionOptions;
+FlatProgramView repl_flat_program_view_live(void);
 void repl_execute_program(const ReplExecutionOptions *options);
 void execute_commands(void);
 void execute_replay_fade_batches(void);

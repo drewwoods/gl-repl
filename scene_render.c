@@ -2520,7 +2520,11 @@ void render_3d_scene(void) {
     prof_accum_end(PROF_SCENE_3D_SETUP);
 
     {
-        ReplExecutionOptions exec_options = { g_num_flat_cmds };
+        FlatProgramView flat_program = repl_flat_program_view_live();
+        ReplExecutionOptions exec_options = {
+            .flat_cmd_count = flat_program.cmd_count,
+            .program = flat_program
+        };
 
         if (replay_has_active_fades())
             exec_options.flat_cmd_count = replay_fill_base_limit();

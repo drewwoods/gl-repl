@@ -21,6 +21,16 @@ typedef struct {
     ExprVar vars[MAX_EXPR_VARS];
 } FlatCmdLocalVars;
 
+/* View over an expanded command stream. The live view points at g_flat_cmds[]
+ * and its per-command local-variable snapshots, but tests and future
+ * replay/import paths can pass another flat stream without changing the
+ * executor's control flow. */
+typedef struct {
+    const GLCmd      *cmds;
+    FlatCmdLocalVars *local_vars;
+    int               cmd_count;
+} FlatProgramView;
+
 typedef struct {
     GLCmd            *cmds;
     int              *num_cmds;
