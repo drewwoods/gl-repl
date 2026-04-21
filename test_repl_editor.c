@@ -1,4 +1,5 @@
 #include "repl_core_internal.h"
+#include "repl_actions.h"
 #include "repl_camera_controls.h"
 #include "repl_clipboard.h"
 #include "repl_replay.h"
@@ -391,6 +392,33 @@ int main() {
 
         g_panel_frac = CFG_DEFAULT_PANEL_FRAC;
         g_code_panel_layout = CFG_DEFAULT_CODE_PANEL_LAYOUT;
+    }
+
+    /* 0b2. Config/action module owns shortcut and menu row dispatch. */
+    {
+        repl_reset_state();
+
+        g_wireframe = 0;
+        ASSERT_INT("config special shortcut consumed",
+                   repl_cfg_handle_special_shortcut(GLUT_KEY_F2), 1);
+        ASSERT_INT("config special shortcut toggles wireframe",
+                   g_wireframe, 1);
+
+        g_grid_major_idx = 0;
+        ASSERT_INT("config ascii shortcut consumed",
+                   repl_cfg_handle_ascii_shortcut(KEY_CTRL_O), 1);
+        ASSERT_INT("config ascii shortcut cycles grid major",
+                   g_grid_major_idx, 1);
+
+        int row = cfg_row_for_value(&g_code_panel_layout);
+        ASSERT_TRUE("config menu action row exists", row >= 0);
+        if (row >= 0) {
+            g_code_panel_layout = CODE_PANEL_LAYOUT_LEFT;
+            int close_menu = repl_action_menu_item_activate(REPL_MENU_CONFIG, row);
+            ASSERT_INT("config menu action keeps menu open", close_menu, 0);
+            ASSERT_INT("config menu action cycles code panel",
+                       g_code_panel_layout, CODE_PANEL_LAYOUT_TOP);
+        }
     }
 
     /* 0c. Hidden code panel returns to the editor on ordinary input */

@@ -1,4 +1,5 @@
 #include "sample.h"
+#include "repl_actions.h"
 #include "repl_core.h"
 #include "repl_audio.h"
 
@@ -193,11 +194,10 @@ int main(int argc, char **argv) {
              * assets/song.mp3 keep working. */
             repl_audio_play_music(REPL_AUDIO_DEFAULT_MUSIC);
         }
-        /* Apply saved audio cfg AFTER play_playlist() so load_state() has
-         * already populated g_cfg_mode.  apply_defaults reads it back,
-         * sets g_audio_cfg_mode (UI) and calls apply_audio_cfg_mode()
-         * which pauses/unpauses and sets loop mode correctly. */
-        repl_editor_apply_defaults();
+        /* Apply saved audio cfg after play_playlist() so load_state() has
+         * already populated g_cfg_mode. The action layer maps that UI config
+         * value back onto the audio engine before the first frame. */
+        repl_actions_apply_defaults();
         atexit(repl_audio_shutdown);
     }
 

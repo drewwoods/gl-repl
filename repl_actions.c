@@ -1,0 +1,306 @@
+/*
+ * repl_actions.c -- Side-effecting editor actions and config dispatch.
+ *
+ * Input modules decide which key or menu row was activated. UI modules decide
+ * what was clicked. This module owns the mutation that follows: config-row
+ * cycling, F-key/Ctrl-key config shortcuts, startup config defaults, and menu
+ * item actions that touch scenes, files, replay, audio, or presentation state.
+ */
+#include "sample.h"
+#include "repl_actions.h"
+#include "repl_audio.h"
+#include "repl_core.h"
+#include "repl_core_internal.h"
+#include "repl_keys.h"
+#include "ui_panels.h"
+
+static const char *replay_mode_names[] = { "Polygon", "Vertex" };
+static const char *backdrop_mode_names[] = { "Off", "Cityscape" };
+static const char *xform_guide_mode_names[] = { "World", "Frame" };
+static const char *profile_panel_mode_names[] = { "Off", "On", "Details" };
+static const char *code_panel_layout_names[] = {
+    "Left", "Top", "Bottom", "Hidden"
+};
+
+/* Unified audio cfg: collapses mute + loop mode into one cycling menu entry.
+ * Indices:
+ *   0 = Pause   - paused, loop mode untouched
+ *   1 = Once    - playing, loop mode OFF  (playlist plays through)
+ *   2 = Song    - playing, loop mode SONG (repeat current track)
+ *   3 = All     - playing, loop mode ALL  (playlist, wrap forever)
+ * Default 3 matches repl_audio.c's LOOP_ALL default with volume on. */
+#define AUDIO_CFG_PAUSE 0
+#define AUDIO_CFG_ONCE  1
+#define AUDIO_CFG_SONG  2
+#define AUDIO_CFG_ALL   3
+static int g_audio_cfg_mode = AUDIO_CFG_ALL;
+static const char *audio_cfg_names[] = { "Pause", "Once", "Song", "All" };
+
+CfgItem g_cfg_items[] = {
+    { "### RENDERING",    0, 0,     NULL,                      0,                NULL              },
+    { "MSAA",             KEY_CTRL_U, 0, &g_multisample_enabled,    2,                NULL              },
+    { "Line smooth",      0, 0,     &g_line_smooth_enabled,    2,                NULL              },
+    { "Accum AA",         0, 0,     &g_accum_aa_enabled,       2,                NULL              },
+    { "Wireframe",        GLUT_KEY_F2, 1, &g_wireframe,              2,                NULL              },
+    { "Point attenuation",0, 0,     &g_init_attenuate_points,  2,                NULL              },
+    { "---",              0, 0,     NULL,                      0,                NULL              },
+    { "### TIME & REPLAY",0, 0,     NULL,                      0,                NULL              },
+    { "Auto time",        KEY_CTRL_T, 0, &g_t_playing,              2,                NULL              },
+    { "Replay",           KEY_CTRL_R, 0, &g_replay_active,          2,                NULL              },
+    { "Replay mode",      0, 0,   &g_replay_mode,            2,                replay_mode_names },
+    { "Replay expand",    0, 0,     &g_replay_expand_args,     2,                NULL              },
+    { "---",              0, 0,     NULL,                      0,                NULL              },
+    { "### OVERLAYS & SCENE",0, 0,  NULL,                      0,                NULL              },
+    { "Grid",             GLUT_KEY_F3, 1, &g_grid_theme,             GRID_THEME_COUNT, g_grid_names      },
+    { "Grid major",       KEY_CTRL_O, 0, &g_grid_major_idx,         GRID_MAJOR_COUNT, g_grid_major_names  },
+    { "Grid extent",      0, 0,     &g_grid_extent_idx,        GRID_EXTENT_COUNT, g_grid_extent_names },
+    { "Axes",             GLUT_KEY_F4, 1, &g_axes_theme,             AXES_THEME_COUNT, g_axes_names      },
+    { "Vertex guides",    GLUT_KEY_F8, 1, &g_show_guides,            2,                NULL              },
+    { "Xform guide mode", 0, 0,     &g_xform_guide_mode,       2,                xform_guide_mode_names },
+    { "Light indicators", GLUT_KEY_F10, 1, &g_show_lights,            2,                NULL              },
+    { "Poly highlight",   0, 0,     &g_highlight_current_poly, 2,                NULL              },
+    { "Backdrop",         0, 0,     &g_backdrop_mode,          2,                backdrop_mode_names },
+    { "Camera rotate",    GLUT_KEY_F11, 1, &g_cam_rotate,             2,                NULL              },
+    { "Auto-normals",     GLUT_KEY_F9, 1, &g_autonormal,             2,                NULL              },
+    { "---",              0, 0,     NULL,                      0,                NULL              },
+    { "### GEOMETRY",     0, 0,     NULL,                      0,                NULL              },
+    { "Vertex labels",    GLUT_KEY_F5, 1, &g_show_vnums,             2,                NULL              },
+    { "Normal vectors",   GLUT_KEY_F6, 1, &g_show_normals,           2,                NULL              },
+    { "Vertex outlines",  GLUT_KEY_F7, 1, &g_show_outlines,          2,                NULL              },
+    { "Vertex points",    0, 0,     &g_show_vpoints,           2,                NULL              },
+    { "---",              0, 0,     NULL,                      0,                NULL              },
+    { "### INTERFACE",    0, 0,     NULL,                      0,                NULL              },
+    { "Variable panel",   0, 0,   &g_show_var_panel,         2,                NULL              },
+    { "CPU profile",      KEY_CTRL_W, 0, &g_show_profile_panel,     PROFILE_PANEL_MODE_COUNT, profile_panel_mode_names },
+    { "Code panel",       KEY_CTRL_B, 0, &g_code_panel_layout,      CODE_PANEL_LAYOUT_COUNT, code_panel_layout_names },
+    { "Wrap at commas",   0, 0,     &g_wrap_at_comma,          2,                NULL              },
+    { "---",              0, 0,     NULL,                      0,                NULL              },
+    { "### AUDIO",        0, 0,     NULL,                      0,                NULL              },
+    { "Audio",            0, 0,     &g_audio_cfg_mode,         4,                audio_cfg_names   },
+};
+
+const int CFG_ITEM_COUNT = (int)(sizeof(g_cfg_items) / sizeof(g_cfg_items[0]));
+
+static void apply_audio_cfg_mode(int mode) {
+    switch (mode) {
+    case AUDIO_CFG_PAUSE:
+        repl_audio_set_paused(1);
+        break;
+    case AUDIO_CFG_ONCE:
+        repl_audio_set_paused(0);
+        repl_audio_set_loop_mode(REPL_AUDIO_LOOP_OFF);
+        break;
+    case AUDIO_CFG_SONG:
+        repl_audio_set_paused(0);
+        repl_audio_set_loop_mode(REPL_AUDIO_LOOP_SONG);
+        break;
+    case AUDIO_CFG_ALL:
+    default:
+        repl_audio_set_paused(0);
+        repl_audio_set_loop_mode(REPL_AUDIO_LOOP_ALL);
+        break;
+    }
+}
+
+int repl_scene_menu_slot_for_dense_index(int scene_idx) {
+    int seen = 0;
+    for (int slot = 0; slot < MAX_USER_SCENES; slot++) {
+        if (!repl_user_scene_slot_used(slot))
+            continue;
+        if (seen == scene_idx)
+            return slot;
+        seen++;
+    }
+    return -1;
+}
+
+void repl_cfg_cycle_row(int row, int delta) {
+    if (row < 0 || row >= CFG_ITEM_COUNT)
+        return;
+
+    /* Replay is special-cased: its cfg toggle kicks off/ends the replay
+     * machinery rather than flipping the int directly. Both directions
+     * collapse to "toggle". */
+    if (g_cfg_items[row].value == &g_replay_active) {
+        if (g_replay_active) {
+            replay_stop();
+            set_status("Replay: off");
+        } else {
+            replay_start();
+        }
+        return;
+    }
+
+    if (g_cfg_items[row].value == &g_t_playing) {
+        if (glutGetModifiers() & GLUT_ACTIVE_SHIFT) {
+            repl_reset_time_to_zero();
+            set_status(g_t_playing ? "Time: reset to 0"
+                                   : "Time: reset to 0 (paused)");
+            return;
+        }
+    }
+
+    if (g_replay_active)
+        replay_stop();
+
+    if (g_cfg_items[row].value == NULL)
+        return;
+
+    int n = g_cfg_items[row].n_states;
+    if (n < 2)
+        return;
+
+    int v = (*g_cfg_items[row].value + delta) % n;
+    if (v < 0)
+        v += n;
+    *g_cfg_items[row].value = v;
+
+    if (g_cfg_items[row].value == &g_code_panel_layout) {
+        g_panel_frac = 0.3f;
+        if (g_code_panel_layout == CODE_PANEL_LAYOUT_TOP) {
+            set_status("Layout: top code panel");
+        } else if (g_code_panel_layout == CODE_PANEL_LAYOUT_BOTTOM) {
+            set_status("Layout: bottom code panel");
+        } else if (g_code_panel_layout == CODE_PANEL_LAYOUT_HIDDEN) {
+            ui_panels_close_menus();
+            clear_autocomplete_state();
+            set_status("Layout: code panel hidden");
+        } else {
+            set_status("Layout: left code panel");
+        }
+    } else if (g_cfg_items[row].value == &g_autonormal) {
+        if (g_autonormal) {
+            mark_normals_dirty();
+            set_status("Auto-normals: ON");
+        } else {
+            set_status("Auto-normals: OFF (existing normals kept)");
+        }
+    } else if (g_cfg_items[row].value == &g_init_attenuate_points) {
+        apply_init_bootstrap();
+        set_status(g_init_attenuate_points ? "Point attenuation: ON"
+                                           : "Point attenuation: OFF");
+    } else if (g_cfg_items[row].value == &g_audio_cfg_mode) {
+        apply_audio_cfg_mode(g_audio_cfg_mode);
+        repl_audio_set_cfg_mode(g_audio_cfg_mode);
+        static const char *labels[] = {
+            "Audio: paused",
+            "Audio: play once",
+            "Audio: loop song",
+            "Audio: loop all",
+        };
+        set_status(labels[g_audio_cfg_mode]);
+    } else if (g_cfg_items[row].state_names) {
+        snprintf(g_scratch_buf, sizeof(g_scratch_buf), "%s: %s",
+                 g_cfg_items[row].label, g_cfg_items[row].state_names[v]);
+        set_status(g_scratch_buf);
+    } else if (n == 2) {
+        snprintf(g_scratch_buf, sizeof(g_scratch_buf), "%s: %s",
+                 g_cfg_items[row].label, v ? "ON" : "OFF");
+        set_status(g_scratch_buf);
+    }
+}
+
+int repl_cfg_handle_ascii_shortcut(unsigned char key) {
+    for (int i = 0; i < CFG_ITEM_COUNT; i++) {
+        if (!g_cfg_items[i].is_special &&
+            g_cfg_items[i].key_code > 0 &&
+            g_cfg_items[i].key_code < 32 &&
+            g_cfg_items[i].key_code == key) {
+            repl_cfg_cycle_row(i, 1);
+            return 1;
+        }
+    }
+    return 0;
+}
+
+int repl_cfg_handle_special_shortcut(int key) {
+    for (int i = 0; i < CFG_ITEM_COUNT; i++) {
+        if (g_cfg_items[i].is_special && g_cfg_items[i].key_code == key) {
+            repl_cfg_cycle_row(i, 1);
+            return 1;
+        }
+    }
+    return 0;
+}
+
+int repl_action_menu_item_activate(int menu_id, int item_idx) {
+    if (menu_id == REPL_MENU_FILE) {
+        if (item_idx == REPL_FILE_ITEM_EXPORT) {
+            repl_save_default_output();
+            return 1;
+        }
+        if (item_idx == REPL_FILE_ITEM_IMPORT) {
+            set_status("Import not implemented yet");
+            return 1;
+        }
+        if (item_idx == REPL_FILE_ITEM_SAVE_WORKSPACE) {
+            const char *dir = repl_workspace_dir();
+            if (!dir || !dir[0])
+                dir = REPL_DEFAULT_WORKSPACE_DIR;
+            repl_save_workspace(dir);
+            return 1;
+        }
+        if (item_idx == REPL_FILE_ITEM_LOAD_WORKSPACE) {
+            const char *dir = repl_workspace_dir();
+            if (!dir || !dir[0])
+                dir = REPL_DEFAULT_WORKSPACE_DIR;
+            repl_load_workspace(dir);
+            return 1;
+        }
+    } else if (menu_id == REPL_MENU_SCENE) {
+        int example_count = repl_example_count();
+        if (item_idx >= 1 && item_idx <= example_count) {
+            repl_load_example(item_idx - 1);
+            return 1;
+        }
+        if (item_idx == example_count + REPL_SCENE_OFF_NEW) {
+            if (g_example_idx >= 0)
+                g_example_idx = -1;
+            repl_clear_all_cmds();
+            return 1;
+        }
+        if (item_idx == example_count + REPL_SCENE_OFF_SAVE) {
+            repl_save_default_output();
+            return 1;
+        }
+        if (item_idx == example_count + REPL_SCENE_OFF_RENAME) {
+            int slot = repl_active_user_scene();
+            if (slot < 0) {
+                set_status("No active scene to rename");
+                return 1;
+            }
+            ui_panels_begin_rename(slot);
+            return 1;
+        }
+
+        int scene_idx = item_idx - (example_count + REPL_SCENE_OFF_SCENES);
+        if (scene_idx >= 0 && scene_idx < repl_user_scene_count()) {
+            int slot = repl_scene_menu_slot_for_dense_index(scene_idx);
+            if (slot >= 0) {
+                repl_load_user_scene_idx(slot);
+                return 1;
+            }
+        }
+        return 1;
+    } else if (menu_id == REPL_MENU_CONFIG) {
+        if (item_idx >= 0 && item_idx < CFG_ITEM_COUNT &&
+            g_cfg_items[item_idx].value != NULL) {
+            repl_cfg_cycle_row(item_idx, 1);
+        }
+        return 0;
+    }
+
+    return 1;
+}
+
+void repl_actions_apply_defaults(void) {
+    /* Restore the audio mode persisted from the previous session.
+     * repl_audio_play_playlist() calls load_state() which stores the cfg_mode
+     * in the audio module; pull it here so both g_audio_cfg_mode (the UI) and
+     * the actual audio engine agree before the first frame. */
+    int saved_mode = repl_audio_get_cfg_mode();
+    if (saved_mode >= AUDIO_CFG_PAUSE && saved_mode <= AUDIO_CFG_ALL)
+        g_audio_cfg_mode = saved_mode;
+    apply_audio_cfg_mode(g_audio_cfg_mode);
+    repl_audio_set_cfg_mode(g_audio_cfg_mode);
+}

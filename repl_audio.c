@@ -82,10 +82,10 @@ static unsigned int g_track_generation = 0;
 /* Path of the INI file, or empty string when disabled. */
 static char  g_state_file[REPL_AUDIO_MAX_PATH] = "";
 
-/* Opaque integer owned by the editor layer (maps to AUDIO_CFG_* enum).
- * Stored in the INI as cfg_mode= and handed back to the editor via
- * repl_audio_get_cfg_mode() so apply_audio_cfg_mode() gets called with
- * the right value.  -1 means "not yet loaded / not set". */
+/* Opaque integer owned by repl_actions.c (maps to AUDIO_CFG_* enum).
+ * Stored in the INI as cfg_mode= and handed back through
+ * repl_audio_get_cfg_mode() so repl_actions_apply_defaults() can map it
+ * to paused/loop state. -1 means "not yet loaded / not set". */
 static int g_cfg_mode = -1;
 
 /* When >= 0, apply this seek (seconds) inside the next start_track_now()
@@ -157,8 +157,8 @@ static void save_state(void) {
         }
     }
     /* cfg_mode is the authoritative audio preference: encodes pause/loop
-     * policy in a single int owned by the editor (AUDIO_CFG_* enum).
-     * Only write it when the editor has registered a value. */
+     * policy in a single int owned by repl_actions.c (AUDIO_CFG_* enum).
+     * Only write it when the action layer has registered a value. */
     if (g_cfg_mode >= 0)
         fprintf(f, "cfg_mode=%d\n", g_cfg_mode);
     fflush(f);
@@ -172,8 +172,8 @@ static void save_state(void) {
 }
 
 /* Loads persisted playback position and audio cfg from the state file.
- * cfg_mode is stored in g_cfg_mode for the editor to pick up via
- * repl_audio_get_cfg_mode() and apply via apply_audio_cfg_mode().
+ * cfg_mode is stored in g_cfg_mode for repl_actions.c to pick up via
+ * repl_audio_get_cfg_mode() and apply via repl_actions_apply_defaults().
  * Returns the playlist index of the saved track, or -1 on failure.
  * Sets *out_offset to the saved cursor in seconds (0 on failure). */
 static int load_state(float *out_offset) {
