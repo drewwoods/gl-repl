@@ -48,6 +48,7 @@
 #include "sample.h"
 #include "repl_core.h"
 #include "repl_core_internal.h"
+#include "repl_command_spec.h"
 #include "repl_command_store.h"
 #include "repl_replay.h"
 #include "cmd_format.h"
@@ -696,87 +697,8 @@ void repl_normalize_from_parsed(const char *parsed_source,
     out[out_sz - 1] = '\0';
 }
 
-/* Does this command type get a trailing ';' when reformatted?
- * Comments and labels have their own syntax, and float declarations
- * already include one. */
-static int cmd_type_needs_semicolon(CmdType t) {
-    switch (t) {
-    case CMD_COMMENT:
-    case CMD_LABEL:
-    case CMD_VAR_DECLARE:
-        return 0;
-    default:
-        return 1;
-    }
-}
-
-/* Should this command type be indented deeper when inside a
- * for/func/if block?  Block structural commands (openers, closers)
- * and comments/labels/gotos handle their own indent logic. */
-static int cmd_type_needs_block_indent(CmdType t) {
-    switch (t) {
-    case CMD_COMMENT:
-    case CMD_LABEL:
-    case CMD_GOTO:
-    case CMD_CALL:
-    case CMD_FOR_BEGIN:
-    case CMD_FOR_END:
-    case CMD_FUNC_DEF:
-    case CMD_FUNC_END:
-    case CMD_IF_BEGIN:
-    case CMD_IF_END:
-    case CMD_VAR_ASSIGN:
-    case CMD_VAR_DECLARE:
-        return 0;
-    default:
-        return 1;
-    }
-}
-
 const char *cmd_type_name(CmdType t) {
-    static const char *const names[] = {
-        "CMD_BEGIN", "CMD_END",
-        "CMD_VERTEX3F", "CMD_VERTEX2F",
-        "CMD_NORMAL3F",
-        "CMD_COLOR3F", "CMD_COLOR4F",
-        "CMD_ENABLE", "CMD_DISABLE",
-        "CMD_SHADE_MODEL",
-        "CMD_TRANSLATE3F",
-        "CMD_SCALEF",
-        "CMD_ROTATEF",
-        "CMD_PUSH_MATRIX",
-        "CMD_POP_MATRIX",
-        "CMD_COLOR_MATERIAL",
-        "CMD_LIGHT_MODEL_I",
-        "CMD_FRONT_FACE",
-        "CMD_FOR_BEGIN", "CMD_FOR_END",
-        "CMD_FUNC_DEF", "CMD_FUNC_END", "CMD_CALL",
-        "CMD_IF_BEGIN", "CMD_IF_END",
-        "CMD_COMMENT",
-        "CMD_VAR_ASSIGN",
-        "CMD_VAR_DECLARE",
-        "CMD_LABEL", "CMD_GOTO",
-        "CMD_GLU_SPHERE", "CMD_GLU_CYLINDER", "CMD_GLU_DISK",
-        "CMD_GLU_PARTIAL_DISK",
-        "CMD_GLUT_TORUS",
-        "CMD_TESS_BEGIN_POLYGON",
-        "CMD_TESS_BEGIN_CONTOUR",
-        "CMD_TESS_END",
-        "CMD_TESS_NORMAL",
-        "CMD_TESS_COLOR",
-        "CMD_TESS_VERTEX",
-        "CMD_MATERIALF",
-        "CMD_POINT_SIZE",
-        "CMD_POINT_PARAMETER_FV",
-        "CMD_BLEND_FUNC",
-        "CMD_CLEAR_COLOR"
-    };
-
-    _Static_assert(sizeof(names) / sizeof(names[0]) == CMD_TYPE_COUNT,
-                    "cmd_type_name table must have exactly CMD_TYPE_COUNT entries");
-    if (t >= 0 && t < CMD_TYPE_COUNT)
-        return names[t];
-    return "CMD_UNKNOWN";
+    return repl_cmd_type_name(t);
 }
 
 void repl_debug_dump_editor(FILE *out) {
@@ -919,7 +841,7 @@ int repl_parse_and_normalize(const char *line, int pos,
             parsed_indent++;
 
         normalize_with_indent(line, parsed_indent,
-                              cmd_type_needs_semicolon(out_cmd->type),
+                              repl_cmd_type_needs_semicolon(out_cmd->type),
                               out_cmd->source, (int)sizeof(out_cmd->source));
         out_cmd->has_vars = 1;
     }
