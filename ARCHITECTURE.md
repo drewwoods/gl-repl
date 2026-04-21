@@ -23,8 +23,10 @@ of one monolithic `repl_core.c`.
   handling.
 - `repl_export.c`: fixed scaffold strings, init bootstrap tables, import/export
   translation, save/load, and code-panel dump helpers.
+- `repl_commit.c`: float declarations, variable assignments, structured block
+  commits, close-brace commits, and commit-order helpers.
 - `repl_editor.c`: editor state, undo/redo, selection, clipboard, commit
-  helpers, feed-line entrypoint, and GLUT input handlers.
+  orchestration, feed-line entrypoint, and GLUT input handlers.
 - `repl_eval.c`: expression parsing and evaluation.
 - `ui_panels.c`: 2D code/search/help/config/variable-panel rendering and panel
   hit-testing.
@@ -77,8 +79,9 @@ modules:
    `has_vars` are re-evaluated each frame so animated expressions (e.g. `t`)
    stay live.
 
-Stages 1–2 live in `repl_editor.c`; 3 lives in `repl_core.c`; 4 lives in
-`repl_flatten.c`; 5 lives in `repl_executor.c`. This is the
+Stage 1 and commit orchestration live in `repl_editor.c`; commit handlers
+live in `repl_commit.c`; parsing lives in `repl_core.c`; flattening lives in
+`repl_flatten.c`; execution lives in `repl_executor.c`. This is the
 load-bearing boundary — outside code that needs to inject commands should
 do so through `feed_line()` rather than poking `g_cmds[]` directly, so
 every path shares the same parse/normalize/flatten guarantees.
@@ -88,7 +91,7 @@ every path shares the same parse/normalize/flatten guarantees.
 ### Edit and commit path
 
 1. GLUT keyboard/mouse callbacks enter through `repl_editor.c`.
-2. Editor commit helpers convert input text into commands by calling
+2. Commit handlers in `repl_commit.c` convert input text into commands by calling
    `repl_parse_command*()` or `repl_parse_and_normalize()` in `repl_core.c`.
 3. Parsed commands are stored in `g_cmds[]`.
 4. `mark_normals_dirty()` and `g_flat_dirty` invalidate downstream derived
@@ -197,8 +200,19 @@ Owns transient editor and interaction state.
 - selection and clipboard state
 - code-panel scroll and resize state
 - variable-drag/config-menu interaction state
-- feed-line and block-commit helpers
+- feed-line entrypoint and commit-attempt outcomes
 - keyboard, special-key, mouse, motion, and timer callbacks
+
+### `repl_commit.c`
+
+Owns source-command mutations that happen before the general GL parser path.
+
+- `float` declarations and predefined-variable registration
+- predefined-variable assignments
+- `for`, `func`, and `if` structural block commits
+- explicit close-brace handling
+- canonical commit-handler ordering helpers
+- function-declaration resume state used when declarations move upward
 
 ### `repl_search.c`
 
@@ -280,7 +294,7 @@ baseline.
 
 ### Structured block commits
 
-`repl_editor.c` handles user-facing block syntax:
+`repl_commit.c` handles user-facing block syntax:
 
 - `for(...) { ... }`
 - `funcN(...) { ... }`
@@ -291,7 +305,7 @@ baseline.
 
 Historically each dispatch site (`;` key, Enter in insert mode, Enter in
 overwrite mode, `feed_line()`) open-coded the handler chain. That is now
-consolidated into four helpers at the top of `repl_editor.c`:
+consolidated into four helpers in `repl_commit.c`:
 
 - `try_commit_var_statements()` — float decl, then assign
 - `try_commit_block_structs()` — close-brace, for, func, if
