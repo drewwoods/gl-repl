@@ -2433,7 +2433,9 @@ void keyboard_func(unsigned char key, int x, int y) {
 
                 memset(&cmd, 0, sizeof(cmd));
                 if (num_vis_vars > 0)
-                    parsed = repl_parse_and_normalize(g_input, insert_idx, vis_vars, num_vis_vars, 1, &cmd);
+                    parsed = repl_parse_and_normalize(g_input, insert_idx, vis_vars, num_vis_vars,
+                                                      input_has_any_visible_vars(g_input, vis_vars, num_vis_vars),
+                                                      &cmd);
                 else
                     parsed = repl_parse_and_normalize(g_input, insert_idx, NULL, 0,
                                                       input_has_predef_vars(g_input), &cmd);
@@ -3242,7 +3244,9 @@ int feed_line(const char *line) {
 
         memset(&cmd, 0, sizeof(cmd));
         if (num_vis_vars > 0)
-            parsed = repl_parse_and_normalize(g_input, insert_idx, vis_vars, num_vis_vars, 1, &cmd);
+            parsed = repl_parse_and_normalize(g_input, insert_idx, vis_vars, num_vis_vars,
+                                              input_has_any_visible_vars(g_input, vis_vars, num_vis_vars),
+                                              &cmd);
         else
             parsed = repl_parse_and_normalize(g_input, insert_idx, NULL, 0,
                                               input_has_predef_vars(g_input), &cmd);
