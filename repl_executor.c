@@ -96,17 +96,47 @@ int apply_state_cmd(const GLCmd *cmd, float alpha_scale) {
     }
 }
 
-static int execution_flat_count_from_options(const ReplExecutionOptions *options) {
-    int flat_cmd_count = options ? options->flat_cmd_count : g_num_flat_cmds;
+FlatProgramView repl_flat_program_view_live(void) {
+    FlatProgramView view = {
+        g_flat_cmds,
+        g_flat_cmd_local_vars,
+        g_num_flat_cmds
+    };
+    return view;
+}
+
+static FlatProgramView execution_program_from_options(const ReplExecutionOptions *options) {
+    FlatProgramView program = repl_flat_program_view_live();
+
+    if (options && options->program.cmds) {
+        program = options->program;
+        if (program.cmd_count < 0)
+            program.cmd_count = 0;
+    }
+    if (!program.cmds)
+        program.cmd_count = 0;
+    return program;
+}
+
+static int execution_flat_count_from_options(const ReplExecutionOptions *options,
+                                             FlatProgramView program) {
+    int flat_cmd_count = options ? options->flat_cmd_count : program.cmd_count;
 
     if (flat_cmd_count < 0)
         flat_cmd_count = 0;
-    if (flat_cmd_count > g_num_flat_cmds)
-        flat_cmd_count = g_num_flat_cmds;
+    if (flat_cmd_count > program.cmd_count)
+        flat_cmd_count = program.cmd_count;
     return flat_cmd_count;
 }
 
-/* Walk g_flat_cmds[0..flat_cmd_count) and issue the corresponding GL
+static FlatCmdLocalVars *execution_local_vars_at(FlatProgramView program,
+                                                 int flat_cmd_idx) {
+    if (!program.local_vars || flat_cmd_idx < 0 || flat_cmd_idx >= program.cmd_count)
+        return NULL;
+    return &program.local_vars[flat_cmd_idx];
+}
+
+/* Walk flat_cmds[0..flat_cmd_count) and issue the corresponding GL
  * calls. Handles vertex submission, state changes, GLU quadrics and
  * tessellator commands, transforms, goto/label control flow, if-block
  * evaluation, and variable assignments.
@@ -114,7 +144,9 @@ static int execution_flat_count_from_options(const ReplExecutionOptions *options
  * Replay and fade passes provide an explicit limit instead of temporarily
  * mutating g_num_flat_cmds. */
 void repl_execute_program(const ReplExecutionOptions *options) {
-    int flat_cmd_count = execution_flat_count_from_options(options);
+    FlatProgramView program = execution_program_from_options(options);
+    const GLCmd *flat_cmds = program.cmds;
+    int flat_cmd_count = execution_flat_count_from_options(options, program);
     int in_begin = 0;
     int tess_depth = 0; /* 0=outside, 1=in polygon, 2=in contour */
     int matrix_depth = 0;
@@ -126,9 +158,9 @@ void repl_execute_program(const ReplExecutionOptions *options) {
 
     int pc = 0;
     while (pc < flat_cmd_count) {
-        if (!g_flat_cmds[pc].valid) { pc++; continue; }
-        if (is_transform_cmd(g_flat_cmds[pc].type)) {
-            apply_tracked_transform_cmd(&g_flat_cmds[pc], &matrix_depth);
+        if (!flat_cmds[pc].valid) { pc++; continue; }
+        if (is_transform_cmd(flat_cmds[pc].type)) {
+            apply_tracked_transform_cmd(&flat_cmds[pc], &matrix_depth);
             pc++;
             continue;
         }
@@ -140,7 +172,7 @@ void repl_execute_program(const ReplExecutionOptions *options) {
              * begin/tess block - execute_commands still enters the right scope
              * before emitting the incremental vertices that live at
              * pc >= g_execute_skip_geom_before_pc. */
-            switch (g_flat_cmds[pc].type) {
+            switch (flat_cmds[pc].type) {
             case CMD_VERTEX3F:
             case CMD_VERTEX2F:
             case CMD_GLU_SPHERE:
@@ -155,10 +187,10 @@ void repl_execute_program(const ReplExecutionOptions *options) {
                 break;
             }
         }
-        switch (g_flat_cmds[pc].type) {
+        switch (flat_cmds[pc].type) {
         case CMD_BEGIN:
             if (in_begin) glEnd();
-            glBegin(g_flat_cmds[pc].mode);
+            glBegin(flat_cmds[pc].mode);
             in_begin = 1;
             break;
         case CMD_END:
@@ -166,21 +198,21 @@ void repl_execute_program(const ReplExecutionOptions *options) {
             break;
         case CMD_VERTEX3F:
             if (in_begin)
-                glVertex3f(g_flat_cmds[pc].args[0], g_flat_cmds[pc].args[1],
-                           g_flat_cmds[pc].args[2]);
+                glVertex3f(flat_cmds[pc].args[0], flat_cmds[pc].args[1],
+                           flat_cmds[pc].args[2]);
             break;
         case CMD_NORMAL3F:
-            glNormal3f(g_flat_cmds[pc].args[0], g_flat_cmds[pc].args[1],
-                       g_flat_cmds[pc].args[2]);
+            glNormal3f(flat_cmds[pc].args[0], flat_cmds[pc].args[1],
+                       flat_cmds[pc].args[2]);
             break;
         case CMD_COLOR3F:
-            glColor4f(g_flat_cmds[pc].args[0], g_flat_cmds[pc].args[1],
-                      g_flat_cmds[pc].args[2], g_execute_alpha_scale);
+            glColor4f(flat_cmds[pc].args[0], flat_cmds[pc].args[1],
+                      flat_cmds[pc].args[2], g_execute_alpha_scale);
             break;
         case CMD_COLOR4F:
-            glColor4f(g_flat_cmds[pc].args[0], g_flat_cmds[pc].args[1],
-                      g_flat_cmds[pc].args[2],
-                      g_flat_cmds[pc].args[3] * g_execute_alpha_scale);
+            glColor4f(flat_cmds[pc].args[0], flat_cmds[pc].args[1],
+                      flat_cmds[pc].args[2],
+                      flat_cmds[pc].args[3] * g_execute_alpha_scale);
             break;
         case CMD_ENABLE:
         case CMD_DISABLE:
@@ -188,75 +220,75 @@ void repl_execute_program(const ReplExecutionOptions *options) {
         case CMD_COLOR_MATERIAL:
         case CMD_MATERIALF:
         case CMD_LIGHT_MODEL_I:
-            apply_state_cmd(&g_flat_cmds[pc], g_execute_alpha_scale);
+            apply_state_cmd(&flat_cmds[pc], g_execute_alpha_scale);
             break;
         case CMD_VERTEX2F:
             if (in_begin)
-                glVertex2f(g_flat_cmds[pc].args[0], g_flat_cmds[pc].args[1]);
+                glVertex2f(flat_cmds[pc].args[0], flat_cmds[pc].args[1]);
             break;
         case CMD_FRONT_FACE:
-            apply_state_cmd(&g_flat_cmds[pc], g_execute_alpha_scale);
+            apply_state_cmd(&flat_cmds[pc], g_execute_alpha_scale);
             break;
         case CMD_POINT_SIZE:
             if (in_begin) { glEnd(); in_begin = 0; }
-            glPointSize(g_flat_cmds[pc].args[0]);
+            glPointSize(flat_cmds[pc].args[0]);
             break;
         case CMD_POINT_PARAMETER_FV:
         case CMD_BLEND_FUNC:
             if (in_begin) { glEnd(); in_begin = 0; }
-            apply_state_cmd(&g_flat_cmds[pc], g_execute_alpha_scale);
+            apply_state_cmd(&flat_cmds[pc], g_execute_alpha_scale);
             break;
         case CMD_CLEAR_COLOR:
             if (in_begin) { glEnd(); in_begin = 0; }
-            g_clear_color[0] = g_flat_cmds[pc].args[0];
-            g_clear_color[1] = g_flat_cmds[pc].args[1];
-            g_clear_color[2] = g_flat_cmds[pc].args[2];
-            g_clear_color[3] = g_flat_cmds[pc].args[3];
+            g_clear_color[0] = flat_cmds[pc].args[0];
+            g_clear_color[1] = flat_cmds[pc].args[1];
+            g_clear_color[2] = flat_cmds[pc].args[2];
+            g_clear_color[3] = flat_cmds[pc].args[3];
             break;
         case CMD_GLU_SPHERE:
             if (in_begin) { glEnd(); in_begin = 0; }
             if (g_quadric)
                 gluSphere(g_quadric,
-                          (double)g_flat_cmds[pc].args[0],
-                          (int)g_flat_cmds[pc].args[1],
-                          (int)g_flat_cmds[pc].args[2]);
+                          (double)flat_cmds[pc].args[0],
+                          (int)flat_cmds[pc].args[1],
+                          (int)flat_cmds[pc].args[2]);
             break;
         case CMD_GLU_CYLINDER:
             if (in_begin) { glEnd(); in_begin = 0; }
             if (g_quadric)
                 gluCylinder(g_quadric,
-                            (double)g_flat_cmds[pc].args[0],
-                            (double)g_flat_cmds[pc].args[1],
-                            (double)g_flat_cmds[pc].args[2],
-                            (int)g_flat_cmds[pc].args[3],
-                            (int)g_flat_cmds[pc].args[4]);
+                            (double)flat_cmds[pc].args[0],
+                            (double)flat_cmds[pc].args[1],
+                            (double)flat_cmds[pc].args[2],
+                            (int)flat_cmds[pc].args[3],
+                            (int)flat_cmds[pc].args[4]);
             break;
         case CMD_GLU_DISK:
             if (in_begin) { glEnd(); in_begin = 0; }
             if (g_quadric)
                 gluDisk(g_quadric,
-                        (double)g_flat_cmds[pc].args[0],
-                        (double)g_flat_cmds[pc].args[1],
-                        (int)g_flat_cmds[pc].args[2],
-                        (int)g_flat_cmds[pc].args[3]);
+                        (double)flat_cmds[pc].args[0],
+                        (double)flat_cmds[pc].args[1],
+                        (int)flat_cmds[pc].args[2],
+                        (int)flat_cmds[pc].args[3]);
             break;
         case CMD_GLU_PARTIAL_DISK:
             if (in_begin) { glEnd(); in_begin = 0; }
             if (g_quadric)
                 gluPartialDisk(g_quadric,
-                               (double)g_flat_cmds[pc].args[0],
-                               (double)g_flat_cmds[pc].args[1],
-                               (int)g_flat_cmds[pc].args[2],
-                               (int)g_flat_cmds[pc].args[3],
-                               (double)g_flat_cmds[pc].args[4],
-                               (double)g_flat_cmds[pc].args[5]);
+                               (double)flat_cmds[pc].args[0],
+                               (double)flat_cmds[pc].args[1],
+                               (int)flat_cmds[pc].args[2],
+                               (int)flat_cmds[pc].args[3],
+                               (double)flat_cmds[pc].args[4],
+                               (double)flat_cmds[pc].args[5]);
             break;
         case CMD_GLUT_TORUS:
             if (in_begin) { glEnd(); in_begin = 0; }
-            glutSolidTorus((double)g_flat_cmds[pc].args[0],
-                           (double)g_flat_cmds[pc].args[1],
-                           (int)g_flat_cmds[pc].args[2],
-                           (int)g_flat_cmds[pc].args[3]);
+            glutSolidTorus((double)flat_cmds[pc].args[0],
+                           (double)flat_cmds[pc].args[1],
+                           (int)flat_cmds[pc].args[2],
+                           (int)flat_cmds[pc].args[3]);
             break;
         case CMD_TESS_BEGIN_POLYGON:
             if (in_begin) { glEnd(); in_begin = 0; }
@@ -270,24 +302,24 @@ void repl_execute_program(const ReplExecutionOptions *options) {
             else if (g_tess && tess_depth == 1) { gluTessEndPolygon(g_tess); tess_depth = 0; }
             break;
         case CMD_TESS_NORMAL:
-            tess_current_normal[0] = g_flat_cmds[pc].args[0];
-            tess_current_normal[1] = g_flat_cmds[pc].args[1];
-            tess_current_normal[2] = g_flat_cmds[pc].args[2];
+            tess_current_normal[0] = flat_cmds[pc].args[0];
+            tess_current_normal[1] = flat_cmds[pc].args[1];
+            tess_current_normal[2] = flat_cmds[pc].args[2];
             break;
         case CMD_TESS_COLOR:
-            tess_current_color[0] = g_flat_cmds[pc].args[0];
-            tess_current_color[1] = g_flat_cmds[pc].args[1];
-            tess_current_color[2] = g_flat_cmds[pc].args[2];
-            tess_current_color[3] = ((g_flat_cmds[pc].num_args >= 4)
-                                   ? g_flat_cmds[pc].args[3] : 1.0)
+            tess_current_color[0] = flat_cmds[pc].args[0];
+            tess_current_color[1] = flat_cmds[pc].args[1];
+            tess_current_color[2] = flat_cmds[pc].args[2];
+            tess_current_color[3] = ((flat_cmds[pc].num_args >= 4)
+                                   ? flat_cmds[pc].args[3] : 1.0)
                                   * g_execute_alpha_scale;
             break;
         case CMD_TESS_VERTEX:
             if (g_tess && tess_depth == 2 && g_tess_vert_count < TESS_VERT_BUF_SIZE) {
                 TessVertex *v = &g_tess_verts[g_tess_vert_count++];
-                v->pos[0] = g_flat_cmds[pc].args[0];
-                v->pos[1] = g_flat_cmds[pc].args[1];
-                v->pos[2] = g_flat_cmds[pc].args[2];
+                v->pos[0] = flat_cmds[pc].args[0];
+                v->pos[1] = flat_cmds[pc].args[1];
+                v->pos[2] = flat_cmds[pc].args[2];
                 memcpy(v->normal, tess_current_normal, sizeof(v->normal));
                 memcpy(v->color,  tess_current_color,  sizeof(v->color));
                 gluTessVertex(g_tess, v->pos, v);
@@ -300,10 +332,10 @@ void repl_execute_program(const ReplExecutionOptions *options) {
              * This jumps the flat-command program counter, but it does not
              * rebuild or re-specialize the flat stream, so goto loops are only
              * reliable for control flow and assignments. Variable-driven GL
-             * commands still use the args baked into g_flat_cmds[]. Replay also
+             * commands still use the args baked into flat_cmds[]. Replay also
              * cannot follow the dynamic jump trace. */
             char label_name[64];
-            if (!repl_extract_goto_label(g_flat_cmds[pc].source,
+            if (!repl_extract_goto_label(flat_cmds[pc].source,
                                          label_name, sizeof(label_name)))
                 break;
             if (goto_count++ > 100000) {
@@ -311,10 +343,10 @@ void repl_execute_program(const ReplExecutionOptions *options) {
                 goto execute_done;
             }
             for (int label_idx = 0; label_idx < flat_cmd_count; label_idx++) {
-                if (g_flat_cmds[label_idx].valid &&
-                    g_flat_cmds[label_idx].type == CMD_LABEL) {
+                if (flat_cmds[label_idx].valid &&
+                    flat_cmds[label_idx].type == CMD_LABEL) {
                     char target_label[64];
-                    if (repl_extract_label_name(g_flat_cmds[label_idx].source,
+                    if (repl_extract_label_name(flat_cmds[label_idx].source,
                                                 target_label,
                                                 sizeof(target_label)) &&
                         strcmp(target_label, label_name) == 0) {
@@ -328,16 +360,18 @@ void repl_execute_program(const ReplExecutionOptions *options) {
         }
         case CMD_IF_BEGIN: {
             /* Evaluate condition at execute time so goto loops see updated vars. */
-            float cond = g_flat_cmds[pc].args[0];
-            if (g_flat_cmds[pc].has_vars) {
+            float cond = flat_cmds[pc].args[0];
+            if (flat_cmds[pc].has_vars) {
                 char cond_text[MAX_LINE_LEN] = "";
+                FlatCmdLocalVars *local_vars =
+                    execution_local_vars_at(program, pc);
                 ExprVar *eval_vars = g_predef_vars;
                 int eval_num_vars = g_num_predef_vars;
-                if (g_flat_cmd_local_vars[pc].num_vars > 0) {
-                    eval_vars = g_flat_cmd_local_vars[pc].vars;
-                    eval_num_vars = g_flat_cmd_local_vars[pc].num_vars;
+                if (local_vars && local_vars->num_vars > 0) {
+                    eval_vars = local_vars->vars;
+                    eval_num_vars = local_vars->num_vars;
                 }
-                if (repl_extract_paren_payload(g_flat_cmds[pc].source,
+                if (repl_extract_paren_payload(flat_cmds[pc].source,
                                                cond_text, sizeof(cond_text)) &&
                     cond_text[0]) {
                     char repl_cond[MAX_LINE_LEN];
@@ -349,8 +383,8 @@ void repl_execute_program(const ReplExecutionOptions *options) {
             if (cond == 0.0f) {
                 int if_depth = 1;
                 while (if_depth > 0 && ++pc < flat_cmd_count) {
-                    if (g_flat_cmds[pc].type == CMD_IF_BEGIN) if_depth++;
-                    else if (g_flat_cmds[pc].type == CMD_IF_END) if_depth--;
+                    if (flat_cmds[pc].type == CMD_IF_BEGIN) if_depth++;
+                    else if (flat_cmds[pc].type == CMD_IF_END) if_depth--;
                 }
                 /* pc now points to CMD_IF_END; outer pc++ steps past it. */
             }
@@ -360,17 +394,19 @@ void repl_execute_program(const ReplExecutionOptions *options) {
             break; /* body executed; just step past */
         case CMD_VAR_ASSIGN: {
             /* Re-apply variable assignment so goto loops see updated values. */
-            int var_idx = g_flat_cmds[pc].num_args;
-            float value = g_flat_cmds[pc].args[0];
-            if (g_flat_cmds[pc].has_vars) {
+            int var_idx = flat_cmds[pc].num_args;
+            float value = flat_cmds[pc].args[0];
+            if (flat_cmds[pc].has_vars) {
                 char rhs[MAX_LINE_LEN] = "";
-                if (repl_extract_assignment_parts(g_flat_cmds[pc].source, NULL, 0,
+                if (repl_extract_assignment_parts(flat_cmds[pc].source, NULL, 0,
                                                   rhs, sizeof(rhs)) && rhs[0]) {
+                    FlatCmdLocalVars *local_vars =
+                        execution_local_vars_at(program, pc);
                     ExprVar *eval_vars = g_predef_vars;
                     int eval_num_vars = g_num_predef_vars;
-                    if (g_flat_cmd_local_vars[pc].num_vars > 0) {
-                        eval_vars = g_flat_cmd_local_vars[pc].vars;
-                        eval_num_vars = g_flat_cmd_local_vars[pc].num_vars;
+                    if (local_vars && local_vars->num_vars > 0) {
+                        eval_vars = local_vars->vars;
+                        eval_num_vars = local_vars->num_vars;
                     }
                     char repl_rhs[MAX_LINE_LEN];
                     c_expr_to_repl(rhs, repl_rhs, sizeof(repl_rhs));

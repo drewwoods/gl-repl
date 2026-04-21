@@ -756,8 +756,10 @@ void execute_replay_fade_batches(void) {
             continue;
 
         prof_begin(PROF_SCENE_3D_FADE_BATCH_PREP);
+        FlatProgramView flat_program = repl_flat_program_view_live();
         ReplExecutionOptions exec_options = {
-            .flat_cmd_count = g_replay_fade_batches[i].new_pc
+            .flat_cmd_count = g_replay_fade_batches[i].new_pc,
+            .program = flat_program
         };
         replay_restore_baseline_predef_values();
         repl_execute_set_fade_context(alpha, skip_limits[i]);
