@@ -934,6 +934,7 @@ void repl_reformat_commands(void) {
     int saved_input_len = g_input_len;
     int saved_cursor_pos = g_cursor_pos;
     memcpy(saved_input, g_input, sizeof(saved_input));
+    ReplCommandStore store = repl_command_store_live();
 
     for (int i = 0; i < g_num_cmds; i++) {
         if (!g_cmds[i].valid) continue;
@@ -967,7 +968,7 @@ void repl_reformat_commands(void) {
                 snprintf(fmt.source, sizeof(fmt.source), "%sfor(%s, %g, %g) {",
                          ind_s, var, orig.args[0], orig.args[1]);
             }
-            g_cmds[i] = fmt;
+            repl_command_store_replace_one(&store, i, &fmt);
             break;
         }
         case CMD_FOR_END:
@@ -982,7 +983,7 @@ void repl_reformat_commands(void) {
             memset(close_s, ' ', (size_t)close_ind);
             close_s[close_ind] = '\0';
             snprintf(fmt.source, sizeof(fmt.source), "%s}", close_s);
-            g_cmds[i] = fmt;
+            repl_command_store_replace_one(&store, i, &fmt);
             break;
         }
         case CMD_FUNC_DEF: {
@@ -997,7 +998,7 @@ void repl_reformat_commands(void) {
                                    parsed_fn, param_names, param_count);
             else
                 snprintf(fmt.source, sizeof(fmt.source), "%sfunc%d {", ind_s, fn);
-            g_cmds[i] = fmt;
+            repl_command_store_replace_one(&store, i, &fmt);
             break;
         }
         case CMD_IF_BEGIN: {
@@ -1005,7 +1006,7 @@ void repl_reformat_commands(void) {
             if (!repl_extract_paren_payload(orig.source, cond, sizeof(cond)))
                 snprintf(cond, sizeof(cond), "%g", orig.args[0]);
             snprintf(fmt.source, sizeof(fmt.source), "%sif(%s) {", ind_s, cond);
-            g_cmds[i] = fmt;
+            repl_command_store_replace_one(&store, i, &fmt);
             break;
         }
         case CMD_VAR_ASSIGN: {
@@ -1034,7 +1035,7 @@ void repl_reformat_commands(void) {
                 else if (name)
                     snprintf(fmt.source, sizeof(fmt.source), "%s%s = %g;%s", ind_s, name, orig.args[0], comment);
             }
-            g_cmds[i] = fmt;
+            repl_command_store_replace_one(&store, i, &fmt);
             break;
         }
         case CMD_COMMENT: {
@@ -1053,7 +1054,7 @@ void repl_reformat_commands(void) {
             } else {
                 snprintf(fmt.source, sizeof(fmt.source), "%s//", ind_s);
             }
-            g_cmds[i] = fmt;
+            repl_command_store_replace_one(&store, i, &fmt);
             break;
         }
         case CMD_VAR_DECLARE: {
@@ -1063,21 +1064,21 @@ void repl_reformat_commands(void) {
                 off += snprintf(fmt.source + off, sizeof(fmt.source) - off, "%s", orig.var_names[n]);
             }
             snprintf(fmt.source + off, sizeof(fmt.source) - off, ";");
-            g_cmds[i] = fmt;
+            repl_command_store_replace_one(&store, i, &fmt);
             break;
         }
         case CMD_LABEL: {
             char label[64] = "";
             if (repl_extract_label_name(orig.source, label, sizeof(label)))
                 snprintf(fmt.source, sizeof(fmt.source), "%s:", label);
-            g_cmds[i] = fmt;
+            repl_command_store_replace_one(&store, i, &fmt);
             break;
         }
         case CMD_GOTO: {
             char label[64] = "";
             if (repl_extract_goto_label(orig.source, label, sizeof(label)))
                 snprintf(fmt.source, sizeof(fmt.source), "%sgoto %s;", ind_s, label);
-            g_cmds[i] = fmt;
+            repl_command_store_replace_one(&store, i, &fmt);
             break;
         }
         default: {
@@ -1094,7 +1095,7 @@ void repl_reformat_commands(void) {
                 parsed.is_auto = orig.is_auto;
                 parsed.src_cmd_idx = orig.src_cmd_idx;
                 if (!preserve_expr) parsed.has_vars = orig.has_vars;
-                g_cmds[i] = parsed;
+                repl_command_store_replace_one(&store, i, &parsed);
             }
             break;
         }
@@ -2357,8 +2358,11 @@ void recompute_autonormals(void) {
             /* Preserve manual normals, but keep auto-generated ones current. */
             if (vidx > 0 && g_cmds[vidx - 1].valid &&
                 g_cmds[vidx - 1].type == CMD_NORMAL3F) {
-                if (g_cmds[vidx - 1].is_auto)
-                    g_cmds[vidx - 1] = make_auto_normal(nx, ny, nz, vidx - 1);
+                if (g_cmds[vidx - 1].is_auto) {
+                    ReplCommandStore store = repl_command_store_live();
+                    GLCmd auto_normal = make_auto_normal(nx, ny, nz, vidx - 1);
+                    repl_command_store_replace_one(&store, vidx - 1, &auto_normal);
+                }
                 continue;
             }
 

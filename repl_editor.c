@@ -1273,6 +1273,7 @@ int try_commit_func_def(void) {
         char indent[32];
         GLCmd fd;
         GLCmd fe;
+        ReplCommandStore store = repl_command_store_live();
 
         if (ind > (int)sizeof(indent) - 1)
             ind = (int)sizeof(indent) - 1;
@@ -1280,11 +1281,13 @@ int try_commit_func_def(void) {
         indent[ind] = '\0';
 
         if (overwriting_func) {
-            g_cmds[edit_pos].args[0] = (float)fn;
-            g_cmds[edit_pos].num_args = param_count;
-            format_func_header(g_cmds[edit_pos].source,
-                               (int)sizeof(g_cmds[edit_pos].source),
+            GLCmd updated = g_cmds[edit_pos];
+            updated.args[0] = (float)fn;
+            updated.num_args = param_count;
+            format_func_header(updated.source,
+                               (int)sizeof(updated.source),
                                indent, fn, param_names, param_count);
+            repl_command_store_replace_one(&store, edit_pos, &updated);
             g_edit_line = edit_pos + 1;
             g_inserting = 1;
             g_input[0] = '\0';
@@ -1312,43 +1315,36 @@ int try_commit_func_def(void) {
         int comment_start = edit_pos;
         int comment_count = 0;
         int resume_pos = edit_pos;
-        GLCmd *comments = NULL;
 
         if (!overwriting_func) {
             comment_start = function_leading_comment_start(edit_pos);
             comment_count = edit_pos - comment_start;
         }
+
+        int insert_count = comment_count + 2;
+        GLCmd *insert_cmds = (GLCmd *)malloc((size_t)insert_count * sizeof(*insert_cmds));
+        if (!insert_cmds) {
+            set_status("Out of memory");
+            return 1;
+        }
         if (comment_count > 0) {
-            comments = (GLCmd *)malloc((size_t)comment_count * sizeof(*comments));
-            if (comments) {
-                memcpy(comments, &g_cmds[comment_start],
-                       (size_t)comment_count * sizeof(*comments));
-                memmove(&g_cmds[comment_start], &g_cmds[edit_pos],
-                        (size_t)(g_num_cmds - edit_pos) * sizeof(GLCmd));
-                g_num_cmds -= comment_count;
-                resume_pos = edit_pos - comment_count;
-            } else {
-                comment_count = 0;
-            }
+            memcpy(insert_cmds, &g_cmds[comment_start],
+                   (size_t)comment_count * sizeof(*insert_cmds));
+            repl_command_store_delete_range(&store, comment_start, comment_count);
+            resume_pos = edit_pos - comment_count;
         }
 
         pos = function_decl_insert_pos();
-        int insert_count = comment_count + 2;
-        if (g_num_cmds + insert_count > MAX_COMMANDS) {
-            free(comments);
+        insert_cmds[comment_count] = fd;
+        insert_cmds[comment_count + 1] = fe;
+        if (!repl_command_store_insert_many(&store, pos, insert_cmds,
+                                            insert_count, 0)) {
+            free(insert_cmds);
             set_status("Command buffer full!");
             return 1;
         }
-        memmove(&g_cmds[pos + insert_count], &g_cmds[pos],
-                (g_num_cmds - pos) * sizeof(GLCmd));
-        if (comment_count > 0)
-            memcpy(&g_cmds[pos], comments,
-                   (size_t)comment_count * sizeof(*comments));
-        g_cmds[pos + comment_count] = fd;
-        g_cmds[pos + comment_count + 1] = fe;
-        g_num_cmds += insert_count;
         g_func_decl_resume_delta = resume_pos > pos ? resume_pos - pos : 0;
-        free(comments);
+        free(insert_cmds);
 
         g_edit_line = pos + comment_count + 1;
         g_inserting = 1;
@@ -2312,7 +2308,8 @@ void keyboard_func(unsigned char key, int x, int y) {
                         GLCmd new_cmd;
                         memset(&new_cmd, 0, sizeof(new_cmd));
                         if (repl_parse_command(s, &new_cmd)) {
-                            g_cmds[g_edit_line] = new_cmd;
+                            ReplCommandStore store = repl_command_store_live();
+                            repl_command_store_replace_one(&store, g_edit_line, &new_cmd);
                             load_line_to_input(g_edit_line);
                             mark_normals_dirty();
                             set_status("Uncommented");
