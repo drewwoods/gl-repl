@@ -2443,7 +2443,6 @@ void render_3d_scene(void) {
     else glDisable(GL_MULTISAMPLE);
     if (g_line_smooth_enabled) glEnable(GL_LINE_SMOOTH);
     else glDisable(GL_LINE_SMOOTH);
-
     if (g_wireframe) glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
     prof_accum_end(PROF_SCENE_3D_SETUP);
 

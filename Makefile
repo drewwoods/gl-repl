@@ -83,6 +83,10 @@ GLUT_GL_LDFLAGS = $(GL_STUB_LDFLAGS)
 GL_LDFLAGS = $(GL_STUB_LDFLAGS)
 endif
 
+ifeq ($(NO_POINT_PARAMETER),1)
+CFLAGS += -DNO_POINT_PARAMETER
+endif
+
 ifeq ($(BUILD),coverage)
 COVERAGE_LDFLAGS = --coverage
 else
@@ -278,6 +282,8 @@ help: ## Show available targets and build-mode notes.
 	@printf "  debug:         \$$(common_flags) %s \n" "$(filter-out $(COMMON_CFLAGS),$(DEBUG_CFLAGS))"
 	@printf "  coverage:      \$$(common_flags) %s \n\n" "$(filter-out $(COMMON_CFLAGS),$(COVERAGE_CFLAGS))"
 	@printf "GL stubs:        make test-stubs, or add USE_GL_STUBS=1 to any target.\n"
+	@printf "No PointParameter: add NO_POINT_PARAMETER=1 to disable glPointParameterfv and use\n"
+	@printf "                 glPointSize(5/cam_dist) as a per-frame distance-attenuation fallback.\n"
 	@printf "User CFLAGS are appended to the selected build mode.\n\n"
 	@printf "Tests:           make test runs test binaries in parallel; set TEST_JOBS=N to limit jobs.\n\n"
 	@printf "Individual tests can still be built directly, e.g. make test_eval or make test_repl_core_io.\n\n"

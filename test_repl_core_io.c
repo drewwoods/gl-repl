@@ -112,8 +112,10 @@ int main(void) {
                 find_init_line_substr("glEnable(GL_BLEND);") >= 0);
     ASSERT_TRUE("init has blend func bootstrap",
                 find_init_line_substr("glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);") >= 0);
+#ifndef NO_POINT_PARAMETER
     ASSERT_TRUE("init has point attenuation bootstrap",
                 find_init_line_substr("glPointParameterfv(GL_POINT_DISTANCE_ATTENUATION") >= 0);
+#endif
     ASSERT_TRUE("init omits tess edge-flag callback",
                 find_init_line_substr("GLU_TESS_EDGE_FLAG") < 0);
 
@@ -165,10 +167,13 @@ int main(void) {
                     color_material_line < init_func);
         ASSERT_TRUE("saved init light model line once",
                     count_substr(buf, "glLightModeli(GL_LIGHT_MODEL_TWO_SIDE, GL_TRUE);") == 1);
+#ifndef NO_POINT_PARAMETER
         ASSERT_TRUE("saved init point attenuation line once",
                     count_substr(buf, "glPointParameterfv(GL_POINT_DISTANCE_ATTENUATION") == 1);
+#endif
     }
 
+#ifndef NO_POINT_PARAMETER
     g_init_attenuate_points = 0;
     ASSERT_TRUE("init hides point attenuation when disabled",
                 find_init_line_substr("glPointParameterfv(GL_POINT_DISTANCE_ATTENUATION") < 0);
@@ -180,6 +185,7 @@ int main(void) {
                     strstr(buf, "glPointParameterfv(GL_POINT_DISTANCE_ATTENUATION") == NULL);
     }
     g_init_attenuate_points = 1;
+#endif
 
     repl_reset_state(); declare_test_vars();
     ASSERT_TRUE("load saved output", repl_load_from_file(path) == 1);
