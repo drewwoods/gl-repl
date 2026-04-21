@@ -247,6 +247,24 @@ int main() {
     repl_set_modifier_provider_for_test(mock_get_modifiers);
     printf("--- repl_editor tests ---\n");
 
+    /* Commit chain ordering: float declarations must run before assignment
+     * parsing, otherwise `float name` is misclassified as an assignment. */
+    {
+        repl_reset_state();
+        set_editor_input("float chain_order;");
+        g_edit_line = 0;
+        g_inserting = 0;
+
+        int result = try_commit_any();
+
+        ASSERT_INT("commit chain float decl consumed", result, 1);
+        ASSERT_INT("commit chain float decl inserted one cmd", g_num_cmds, 1);
+        ASSERT_INT("commit chain float decl cmd type",
+                   g_cmds[0].type, CMD_VAR_DECLARE);
+        ASSERT_TRUE("commit chain float decl registered var",
+                    find_predef_var_idx("chain_order") >= 0);
+    }
+
     /* 0. Code/scene panel geometry supports left, top, bottom, and hidden layouts */
     {
         int x, y, w, h;

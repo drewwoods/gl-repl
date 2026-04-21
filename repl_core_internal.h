@@ -21,7 +21,7 @@
  *   - Search input dispatch
  *   - Line feeding
  *   - Undo / redo
- *   - Commit handler chain (editor.c private handlers exposed to tests)
+ *   - Commit handler chain
  */
 #ifndef REPL_CORE_INTERNAL_H
 #define REPL_CORE_INTERNAL_H
@@ -241,15 +241,21 @@ void repl_scenes_capture_home_if_needed(void);
 void repl_scenes_mark_example_active(void);
 void repl_scenes_reset(void);
 
-/* ---- Commit handler chain (private to repl_editor.c, exposed for tests)
+/* ---- Commit handler chain (implemented in repl_commit.c)
  * Each handler inspects g_input. Returns 1 if it consumed the line
  * (success or handled error), 0 if the input wasn't in its grammar.
- * Ordering matters: see CLAUDE.md "Commit Dispatch Sites". */
+ * Ordering matters: see ARCHITECTURE.md "Structured block commits". */
+void repl_commit_reset_transients(void);
+int  repl_commit_resolve_insert_exit_target(int target);
 int try_commit_float_decl(void);
 int try_assign_variable(void);
 int try_commit_for_loop(void);
 int try_commit_func_def(void);
 int try_commit_if_block(void);
 int try_commit_close_brace(void);
+int try_commit_var_statements(void);
+int try_commit_block_structs(void);
+int try_commit_any(void);
+int try_commit_var_statements_then_insert(void);
 
 #endif /* REPL_CORE_INTERNAL_H */

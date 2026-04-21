@@ -77,10 +77,11 @@ Run all: `make test`
 |------|----------------|
 | `sample.c` | GLUT callback wrappers, `main()`, window setup |
 | `sample.h` | Shared types (`GLCmd`, `CmdType`, `SceneLight`, `CfgItem`), extern globals, utility declarations, `CFG_DEFAULT_*` macros |
-| `repl_core.c` | Parser, command execution, flattening, user scene storage, workspace I/O |
+| `repl_core.c` | Parser, normalization, display callback, GL init, source/depth queries |
+| `repl_commit.c` | Float declarations, variable assignments, structured block commits, close-brace commits |
 | `repl_core.h` | Public API (parse, flatten, display, input callbacks, user scene + workspace) |
 | `repl_core_internal.h` | Test-visible internals (normalize/commit pipeline, `feed_line`, `load_line_to_input`, `repl_promote_example_if_needed`) |
-| `repl_editor.c` | Keyboard/mouse handling, undo/redo (`UndoSnapshot`), `CfgItem` array, F-key dispatch, auto-promote hook |
+| `repl_editor.c` | Keyboard/mouse handling, commit orchestration, undo/redo (`UndoSnapshot`), `CfgItem` array, F-key dispatch, auto-promote hook |
 | `repl_examples.c` | Predefined example data (`g_examples[]`, `g_example_names[]`) |
 | `repl_examples.h` | Example query API (`repl_examples_count/name/lines`) |
 | `repl_export.c` | `save_output` / `load_from_file`, workspace header directives, `@scene-name` / `@workspace-dir` markers |
@@ -343,7 +344,7 @@ The core data flow is **source commands → flat commands → GL calls**:
 ### Commit Dispatch Sites
 
 The `try_commit_*` handler chain is consolidated into four helpers in
-`repl_editor.c` (around line 1385):
+`repl_commit.c`:
 - `try_commit_var_statements()` — float decl, then assign
 - `try_commit_block_structs()` — close-brace, for, func, if
 - `try_commit_any()` — both groups in canonical order
@@ -376,7 +377,7 @@ must also accept end-of-string as a valid terminator.
 
 ### Float Variable Declarations (`CMD_VAR_DECLARE`)
 
-`try_commit_float_decl()` in `repl_editor.c` handles `float name;`
+`try_commit_float_decl()` in `repl_commit.c` handles `float name;`
 syntax. Current implementation supports multi-name (`float a, b, c;`)
 and initializers (`float x = 1;`), but there is an open design
 question about simplifying to single-name, no-initializer only.
