@@ -665,9 +665,6 @@ int main(void) {
     printf("\n--- fmt_reindent_from_parsed ---\n\n");
     test_reindent_from_parsed();
 
-    printf("\n--- autonormal ---\n\n");
-    test_autonormal_indent();
-
     printf("\n--- fmt_reindent_expr ---\n\n");
     test_reindent_no_context();
     test_reindent_inside_gl_begin();
@@ -676,6 +673,9 @@ int main(void) {
     test_reindent_strips_any_leading_whitespace();
     test_reindent_for_loop_body();
     test_reindent_preserves_expression();
+
+    printf("\n--- autonormal ---\n\n");
+    test_autonormal_indent();
 
     printf("\n=== Results: %d/%d passed", g_tests_passed, g_tests_run);
     if (g_tests_failed > 0)
