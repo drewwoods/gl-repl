@@ -5,17 +5,16 @@
  * -----------------
  * This file owns everything that transforms text into renderable GL state:
  *
- *   - Enum tables & completion metadata (g_begin_modes, g_func_completions, …)
+ *   - Parser/control-flow state that is not pure command metadata
  *   - Global state: command arrays (g_cmds / g_flat_cmds), camera, toggles,
  *     autocomplete, accumulation-buffer settings, etc.
  *   - Parsing      — parse_command(): text → GLCmd
  *   - Normalization — repl_parse_and_normalize(), repl_reformat_commands()
  *   - Autocomplete  — update_autocomplete(), accept_autocomplete()
  *                     (straddles editor and parser: reads g_input from
- *                      repl_editor.c, matches against the completion tables
- *                      defined here, and writes g_ac_* state rendered by
- *                      ui_panels.c — kept here because it's tightly coupled
- *                      to the parser tables)
+ *                      repl_editor.c, matches against repl_command_spec.c
+ *                      metadata, and writes g_ac_* state rendered by
+ *                      ui_panels.c)
  *   - Flattening   — flatten_range() / flatten_commands(): expand for-loops,
  *                     function calls, and if-blocks into g_flat_cmds[]
  *   - Auto-normals — recompute_autonormals()
@@ -65,186 +64,6 @@
 /* ========================================================================= */
 /* Constants                                                                  */
 /* ========================================================================= */
-
-const EnumEntry g_begin_modes[] = {
-    { "GL_POINTS",         GL_POINTS },
-    { "GL_LINES",          GL_LINES },
-    { "GL_LINE_STRIP",     GL_LINE_STRIP },
-    { "GL_LINE_LOOP",      GL_LINE_LOOP },
-    { "GL_TRIANGLES",      GL_TRIANGLES },
-    { "GL_TRIANGLE_STRIP", GL_TRIANGLE_STRIP },
-    { "GL_TRIANGLE_FAN",   GL_TRIANGLE_FAN },
-    { "GL_QUADS",          GL_QUADS },
-    { "GL_QUAD_STRIP",     GL_QUAD_STRIP },
-    { "GL_POLYGON",        GL_POLYGON },
-    { NULL, 0 }
-};
-
-const EnumEntry g_enable_caps[] = {
-    { "GL_DEPTH_TEST",      GL_DEPTH_TEST },
-    { "GL_LIGHTING",        GL_LIGHTING },
-    { "GL_COLOR_MATERIAL",  GL_COLOR_MATERIAL },
-    { "GL_NORMALIZE",       GL_NORMALIZE },
-    { "GL_LINE_SMOOTH",     GL_LINE_SMOOTH },
-    { "GL_POINT_SMOOTH",    GL_POINT_SMOOTH },
-    { "GL_BLEND",           GL_BLEND },
-    { "GL_LIGHT0",          GL_LIGHT0 },
-    { "GL_LIGHT1",          GL_LIGHT1 },
-    { "GL_LIGHT2",          GL_LIGHT2 },
-    { "GL_LIGHT3",          GL_LIGHT3 },
-    { NULL, 0 }
-};
-
-const EnumEntry g_shade_models[] = {
-    { "GL_SMOOTH", GL_SMOOTH },
-    { "GL_FLAT",   GL_FLAT },
-    { NULL, 0 }
-};
-
-const EnumEntry g_face_types[] = {
-    { "GL_FRONT",            GL_FRONT },
-    { "GL_BACK",             GL_BACK },
-    { "GL_FRONT_AND_BACK",   GL_FRONT_AND_BACK },
-    { NULL, 0 }
-};
-
-const EnumEntry g_front_face[] = {
-    { "GL_CW",              GL_CW },
-    { "GL_CCW",             GL_CCW },
-    { NULL, 0 }
-};
-
-const EnumEntry g_material_params[] = {
-    { "GL_AMBIENT",             GL_AMBIENT },
-    { "GL_DIFFUSE",             GL_DIFFUSE },
-    { "GL_SPECULAR",            GL_SPECULAR },
-    { "GL_EMISSION",            GL_EMISSION },
-    { "GL_SHININESS",           GL_SHININESS },
-    { "GL_AMBIENT_AND_DIFFUSE", GL_AMBIENT_AND_DIFFUSE },
-    { NULL, 0 }
-};
-
-const EnumEntry g_color_material_modes[] = {
-    { "GL_AMBIENT",             GL_AMBIENT },
-    { "GL_DIFFUSE",             GL_DIFFUSE },
-    { "GL_SPECULAR",            GL_SPECULAR },
-    { "GL_EMISSION",            GL_EMISSION },
-    { "GL_AMBIENT_AND_DIFFUSE", GL_AMBIENT_AND_DIFFUSE },
-    { NULL, 0 }
-};
-
-const EnumEntry g_light_model_params[] = {
-    { "GL_LIGHT_MODEL_LOCAL_VIEWER", GL_LIGHT_MODEL_LOCAL_VIEWER },
-    { "GL_LIGHT_MODEL_TWO_SIDE",     GL_LIGHT_MODEL_TWO_SIDE },
-    { NULL, 0 }
-};
-
-const EnumEntry g_bool_vals[] = {
-    { "GL_TRUE",  GL_TRUE  },
-    { "GL_FALSE", GL_FALSE },
-    { NULL, 0 }
-};
-
-const EnumEntry g_point_param_pnames[] = {
-    { "GL_POINT_DISTANCE_ATTENUATION", GL_POINT_DISTANCE_ATTENUATION },
-    { NULL, 0 }
-};
-
-const EnumEntry g_blend_src_factors[] = {
-    { "GL_SRC_ALPHA", GL_SRC_ALPHA },
-    { NULL, 0 }
-};
-
-const EnumEntry g_blend_dst_factors[] = {
-    { "GL_ONE_MINUS_SRC_ALPHA", GL_ONE_MINUS_SRC_ALPHA },
-    { "GL_ONE",                 GL_ONE },
-    { NULL, 0 }
-};
-
-const FuncCompletion g_func_completions[] = {
-    { "glVertex3f(",         "glVertex3f(x, y, z)",                                      3, { "x", "y", "z" } },
-    { "glVertex2f(",         "glVertex2f(x, y)",                                         2, { "x", "y" } },
-    { "glNormal3f(",         "glNormal3f(nx, ny, nz)",                                   3, { "nx", "ny", "nz" } },
-    { "glColor3f(",          "glColor3f(r, g, b)",                                       3, { "r", "g", "b" } },
-    { "glColor4f(",          "glColor4f(r, g, b, a)",                                    4, { "r", "g", "b", "a" } },
-    { "glClearColor(",       "glClearColor(r, g, b, a)",                                 4, { "r", "g", "b", "a" } },
-    { "glBegin(",            "glBegin(mode)",                                            1, { "mode" } },
-    { "glEnd()",             "glEnd()",                                                  0, { NULL } },
-    { "glEnable(",           "glEnable(cap)",                                            1, { "cap" } },
-    { "glDisable(",          "glDisable(cap)",                                           1, { "cap" } },
-    { "glShadeModel(",       "glShadeModel(mode)",                                       1, { "mode" } },
-    { "glPointSize(",        "glPointSize(size)",                                        1, { "size" } },
-    { "glPointParameterfv(", "glPointParameterfv(pname, a, b, c)",                       4, { "pname", "a", "b", "c" } },
-    { "glBlendFunc(",        "glBlendFunc(sfactor, dfactor)",                            2, { "sfactor", "dfactor" } },
-    { "glTranslatef(",       "glTranslatef(x, y, z)",                                    3, { "x", "y", "z" } },
-    { "glScalef(",           "glScalef(x, y, z)",                                        3, { "x", "y", "z" } },
-    { "glRotatef(",          "glRotatef(angle, x, y, z)",                                4, { "angle", "x", "y", "z" } },
-    { "glPushMatrix()",      "glPushMatrix()",                                           0, { NULL } },
-    { "glPopMatrix()",       "glPopMatrix()",                                            0, { NULL } },
-    { "glColorMaterial(",    "glColorMaterial(face, mode)",                              2, { "face", "mode" } },
-    { "glLightModeli(",      "glLightModeli(pname, param)",                              2, { "pname", "param" } },
-    { "glFrontFace(",        "glFrontFace(mode)",                                        1, { "mode" } },
-    { "glMaterialf(",        "glMaterialf(face, pname, value[, g, b, a])",               6, { "face", "pname", "value", "g", "b", "a" } },
-    { "gluSphere(",          "gluSphere(radius, slices, stacks)",                        3, { "radius", "slices", "stacks" } },
-    { "gluCylinder(",        "gluCylinder(base_r, top_r, height, slices, stacks)",       5, { "base_r", "top_r", "height", "slices", "stacks" } },
-    { "gluDisk(",            "gluDisk(inner_r, outer_r, slices, loops)",                 4, { "inner_r", "outer_r", "slices", "loops" } },
-    { "gluPartialDisk(",     "gluPartialDisk(inner_r, outer_r, slices, loops, start, sweep)", 6, { "inner_r", "outer_r", "slices", "loops", "start", "sweep" } },
-    { "glutSolidTorus(",     "glutSolidTorus(inner_r, outer_r, nsides, rings)",          4, { "inner_r", "outer_r", "nsides", "rings" } },
-    { "gluBegin(GLU_POLYGON)", "gluBegin(GLU_POLYGON)",                                  0, { NULL } },
-    { "gluBegin(GLU_CONTOUR)", "gluBegin(GLU_CONTOUR)",                                  0, { NULL } },
-    { "gluEnd()",            "gluEnd()",                                                 0, { NULL } },
-    { "gluNormal(",          "gluNormal(nx, ny, nz)",                                    3, { "nx", "ny", "nz" } },
-    { "gluColor(",           "gluColor(r, g, b, a)",                                     4, { "r", "g", "b", "a" } },
-    { "gluVertex(",          "gluVertex(x, y, z)",                                       3, { "x", "y", "z" } },
-    { "float ",              "float name",                                               0, { NULL } },
-    { "for(",                "for(var, start, end[, step])",                             4, { "var", "start", "end", "step" } },
-    { "if(",                 "if(expr)",                                                 1, { "expr" } },
-    { "goto ",               "goto label",                                               0, { NULL } },
-    { "func0 {",             "func0 {",                                                  0, { NULL } },
-    { "func0(radius, yoff) {", "func0(radius, yoff) {",                                  0, { NULL } },
-    { "func1 {",             "func1 {",                                                  0, { NULL } },
-    { "func2 {",             "func2 {",                                                  0, { NULL } },
-    { "func3 {",             "func3 {",                                                  0, { NULL } },
-    { "func4 {",             "func4 {",                                                  0, { NULL } },
-    { "func5 {",             "func5 {",                                                  0, { NULL } },
-    { "func6 {",             "func6 {",                                                  0, { NULL } },
-    { "func7 {",             "func7 {",                                                  0, { NULL } },
-    { "func8 {",             "func8 {",                                                  0, { NULL } },
-    { "func9 {",             "func9 {",                                                  0, { NULL } },
-    { "func0()",             "func0()",                                                  0, { NULL } },
-    { "func1()",             "func1()",                                                  0, { NULL } },
-    { "func2()",             "func2()",                                                  0, { NULL } },
-    { "func3()",             "func3()",                                                  0, { NULL } },
-    { "func4()",             "func4()",                                                  0, { NULL } },
-    { "func5()",             "func5()",                                                  0, { NULL } },
-    { "func6()",             "func6()",                                                  0, { NULL } },
-    { "func7()",             "func7()",                                                  0, { NULL } },
-    { "func8()",             "func8()",                                                  0, { NULL } },
-    { "func9()",             "func9()",                                                  0, { NULL } },
-    { "x = ",                "x = value",                                                0, { NULL } },
-    { "y = ",                "y = value",                                                0, { NULL } },
-    { "z = ",                "z = value",                                                0, { NULL } },
-    { "i = ",                "i = value",                                                0, { NULL } },
-    { "j = ",                "j = value",                                                0, { NULL } },
-    { "k = ",                "k = value",                                                0, { NULL } },
-    { "n = ",                "n = value",                                                0, { NULL } },
-    { "t = ",                "t = value",                                                0, { NULL } },
-    { "sin(",                "sin(x)",                                                   1, { "x" } },
-    { "cos(",                "cos(x)",                                                   1, { "x" } },
-    { "tan(",                "tan(x)",                                                   1, { "x" } },
-    { "sqrt(",               "sqrt(x)",                                                  1, { "x" } },
-    { "abs(",                "abs(x)",                                                   1, { "x" } },
-    { "pow(",                "pow(base, exp)",                                           2, { "base", "exp" } },
-    { "min(",                "min(a, b)",                                                2, { "a", "b" } },
-    { "max(",                "max(a, b)",                                                2, { "a", "b" } },
-    { "floor(",              "floor(x)",                                                 1, { "x" } },
-    { "ceil(",               "ceil(x)",                                                  1, { "x" } },
-    { "fmod(",               "fmod(x, y)",                                               2, { "x", "y" } },
-    { "rand(",               "rand(seed[, iter])",                                       2, { "seed", "iter" } },
-    { "PI",                  "PI",                                                       0, { NULL } },
-    { "TAU",                 "TAU",                                                      0, { NULL } },
-    { NULL, NULL, 0, { NULL } }
-};
 
 static const char *outfile = "output.c";
 
@@ -594,9 +413,7 @@ void set_status(const char *msg) {
 }
 
 const char *mode_name(GLenum mode) {
-    for (int i = 0; g_begin_modes[i].name; i++)
-        if (g_begin_modes[i].value == mode) return g_begin_modes[i].name;
-    return "???";
+    return repl_begin_mode_name(mode);
 }
 
 int in_begin_block_at(int pos) {
@@ -1045,37 +862,10 @@ void repl_reformat_commands(void) {
 /* Autocomplete                                                               */
 /*                                                                             */
 /* NOTE on placement: the autocomplete system sits at the boundary between    */
-/* repl_core.c and repl_editor.c.  It reads g_input (owned by the editor)    */
-/* and matches against the enum/function completion tables (defined here).    */
-/* It's kept in repl_core.c because the match tables are parser-specific     */
-/* metadata that would otherwise need to be exported. The g_ac_* outputs     */
-/* are rendered by ui_panels.c.                                              */
+/* repl_core.c and repl_editor.c. It reads g_input (owned by the editor),     */
+/* matches against parser metadata from repl_command_spec.c, and writes      */
+/* g_ac_* state rendered by ui_panels.c.                                     */
 /* ========================================================================= */
-
-typedef struct {
-    const char *name;
-    CmdType     type;
-    int         num_args;
-    const EnumEntry *enums1;
-    const EnumEntry *enums2;
-    const char *fmt;
-    const char *usage1;
-    const char *usage2;
-    int         indent_type; /* 0: normal, 1: begin/end style */
-} EnumCmdDef;
-
-static const EnumCmdDef g_enum_cmds[] = {
-    { "glBegin",         CMD_BEGIN,         1, g_begin_modes,        NULL,              "%sglBegin(%s);",             "Unknown mode. Try GL_TRIANGLES, GL_TRIANGLE_STRIP, ...", NULL, 1 },
-    { "glEnable",        CMD_ENABLE,        1, g_enable_caps,        NULL,              "%sglEnable(%s);",            "Try GL_DEPTH_TEST, GL_LIGHTING, GL_COLOR_MATERIAL", NULL, 0 },
-    { "glDisable",       CMD_DISABLE,       1, g_enable_caps,        NULL,              "%sglDisable(%s);",           "Try GL_DEPTH_TEST, GL_LIGHTING, GL_COLOR_MATERIAL", NULL, 0 },
-    { "glShadeModel",    CMD_SHADE_MODEL,   1, g_shade_models,       NULL,              "%sglShadeModel(%s);",        "Try GL_SMOOTH or GL_FLAT", NULL, 0 },
-    { "glFrontFace",     CMD_FRONT_FACE,    1, g_front_face,         NULL,              "%sglFrontFace(%s);",         "Try GL_CW or GL_CCW", NULL, 0 },
-    { "glColorMaterial", CMD_COLOR_MATERIAL,2, g_face_types,         g_color_material_modes, "%sglColorMaterial(%s, %s);", "face: GL_FRONT, GL_BACK, GL_FRONT_AND_BACK", "mode: GL_AMBIENT, GL_DIFFUSE, GL_SPECULAR, GL_EMISSION, GL_AMBIENT_AND_DIFFUSE", 0 },
-    { "glMaterialf",     CMD_MATERIALF,    -2, g_face_types,         g_material_params, NULL,                         "face: GL_FRONT, GL_BACK, GL_FRONT_AND_BACK", "pname: GL_DIFFUSE, GL_AMBIENT, GL_SPECULAR, GL_SHININESS", 0 },
-    { "glLightModeli",   CMD_LIGHT_MODEL_I, 2, g_light_model_params, g_bool_vals,       "%sglLightModeli(%s, %s);",   "pname: GL_LIGHT_MODEL_TWO_SIDE, GL_LIGHT_MODEL_LOCAL_VIEWER", "param: GL_TRUE, GL_FALSE, or integer", 0 },
-    { "glBlendFunc",     CMD_BLEND_FUNC,    2, g_blend_src_factors,  g_blend_dst_factors, "%sglBlendFunc(%s, %s);",  "sfactor: GL_SRC_ALPHA", "dfactor: GL_ONE_MINUS_SRC_ALPHA, GL_ONE", 0 },
-    { NULL, 0, 0, NULL, NULL, NULL, NULL, NULL, 0 }
-};
 
 static void hint_append(char *out, int out_sz, const char *text) {
     int len = (int)strlen(out);
@@ -1138,14 +928,15 @@ static void build_param_hint_text(const char *const *params, int param_count,
 
 static const FuncCompletion *find_builtin_completion_for_input(const char *input,
                                                                const char **after_out) {
-    for (int i = 0; g_func_completions[i].insert_text; i++) {
-        int plen = (int)strlen(g_func_completions[i].insert_text);
-        if (g_func_completions[i].param_count <= 0)
+    const FuncCompletion *completions = repl_func_completions();
+    for (int i = 0; completions[i].insert_text; i++) {
+        int plen = (int)strlen(completions[i].insert_text);
+        if (completions[i].param_count <= 0)
             continue;
-        if (strncmp(input, g_func_completions[i].insert_text, (size_t)plen) == 0) {
+        if (strncmp(input, completions[i].insert_text, (size_t)plen) == 0) {
             if (after_out)
                 *after_out = input + plen;
-            return &g_func_completions[i];
+            return &completions[i];
         }
     }
     return NULL;
@@ -1269,16 +1060,17 @@ void update_autocomplete(void) {
     /* glPointParameterfv enum completion (custom: 1 enum + 3 floats) */
     {
         static const char prefix[] = "glPointParameterfv(";
+        const EnumEntry *point_param_pnames = repl_point_param_pname_entries();
         int plen = (int)sizeof(prefix) - 1;
         if (strncmp(g_input, prefix, plen) == 0 && g_input_len > plen &&
             strchr(g_input + plen, ',') == NULL) {
             const char *after = g_input + plen;
             int alen = g_input_len - plen;
-            for (int j = 0; g_point_param_pnames[j].name && g_ac_count < MAX_AC_MATCHES; j++) {
-                if (strncmp(g_point_param_pnames[j].name, after, alen) == 0 &&
-                    (int)strlen(g_point_param_pnames[j].name) > alen) {
-                    g_ac_matches[g_ac_count] = g_point_param_pnames[j].name;
-                    g_ac_insert_matches[g_ac_count] = g_point_param_pnames[j].name;
+            for (int j = 0; point_param_pnames[j].name && g_ac_count < MAX_AC_MATCHES; j++) {
+                if (strncmp(point_param_pnames[j].name, after, alen) == 0 &&
+                    (int)strlen(point_param_pnames[j].name) > alen) {
+                    g_ac_matches[g_ac_count] = point_param_pnames[j].name;
+                    g_ac_insert_matches[g_ac_count] = point_param_pnames[j].name;
                     g_ac_func_matches[g_ac_count] = NULL;
                     g_ac_count++;
                 }
@@ -1294,9 +1086,10 @@ void update_autocomplete(void) {
     }
 
     /* Enum-based commands completion */
-    for (int i = 0; g_enum_cmds[i].name; i++) {
+    const ReplEnumCommandSpec *enum_cmds = repl_enum_command_specs();
+    for (int i = 0; enum_cmds[i].name; i++) {
         char prefix[64];
-        snprintf(prefix, sizeof(prefix), "%s(", g_enum_cmds[i].name);
+        snprintf(prefix, sizeof(prefix), "%s(", enum_cmds[i].name);
         int plen = (int)strlen(prefix);
 
         if (strncmp(g_input, prefix, plen) == 0 && g_input_len > plen) {
@@ -1306,11 +1099,11 @@ void update_autocomplete(void) {
 
             if (!comma) {
                 /* Complete enum1 */
-                for (int j = 0; g_enum_cmds[i].enums1 && g_enum_cmds[i].enums1[j].name && g_ac_count < MAX_AC_MATCHES; j++) {
-                    if (strncmp(g_enum_cmds[i].enums1[j].name, after, alen) == 0 &&
-                        (int)strlen(g_enum_cmds[i].enums1[j].name) > alen) {
-                        g_ac_matches[g_ac_count] = g_enum_cmds[i].enums1[j].name;
-                        g_ac_insert_matches[g_ac_count] = g_enum_cmds[i].enums1[j].name;
+                for (int j = 0; enum_cmds[i].enums1 && enum_cmds[i].enums1[j].name && g_ac_count < MAX_AC_MATCHES; j++) {
+                    if (strncmp(enum_cmds[i].enums1[j].name, after, alen) == 0 &&
+                        (int)strlen(enum_cmds[i].enums1[j].name) > alen) {
+                        g_ac_matches[g_ac_count] = enum_cmds[i].enums1[j].name;
+                        g_ac_insert_matches[g_ac_count] = enum_cmds[i].enums1[j].name;
                         g_ac_func_matches[g_ac_count] = NULL;
                         g_ac_count++;
                     }
@@ -1318,25 +1111,25 @@ void update_autocomplete(void) {
                 if (g_ac_count > 0) {
                     g_ac_mode = AC_MODE_ENUM_ARG1;
                     g_ac_token_len = alen;
-                    if (abs(g_enum_cmds[i].num_args) == 1)
+                    if (abs(enum_cmds[i].num_args) == 1)
                         snprintf(g_ac_suffix, sizeof(g_ac_suffix), ")");
-                    else if (abs(g_enum_cmds[i].num_args) == 2)
+                    else if (abs(enum_cmds[i].num_args) == 2)
                         snprintf(g_ac_suffix, sizeof(g_ac_suffix), ", ");
                     update_selected_autocomplete_preview();
                 }
                 return;
             } else {
                 /* Complete enum2 */
-                if (abs(g_enum_cmds[i].num_args) == 2 && g_enum_cmds[i].enums2) {
+                if (abs(enum_cmds[i].num_args) == 2 && enum_cmds[i].enums2) {
                     const char *arg2 = comma + 1;
                     while (*arg2 == ' ') arg2++;
                     int arg2_len = g_input_len - (int)(arg2 - g_input);
 
-                    for (int j = 0; g_enum_cmds[i].enums2[j].name && g_ac_count < MAX_AC_MATCHES; j++) {
-                        if (strncmp(g_enum_cmds[i].enums2[j].name, arg2, arg2_len) == 0 &&
-                            (int)strlen(g_enum_cmds[i].enums2[j].name) > arg2_len) {
-                            g_ac_matches[g_ac_count] = g_enum_cmds[i].enums2[j].name;
-                            g_ac_insert_matches[g_ac_count] = g_enum_cmds[i].enums2[j].name;
+                    for (int j = 0; enum_cmds[i].enums2[j].name && g_ac_count < MAX_AC_MATCHES; j++) {
+                        if (strncmp(enum_cmds[i].enums2[j].name, arg2, arg2_len) == 0 &&
+                            (int)strlen(enum_cmds[i].enums2[j].name) > arg2_len) {
+                            g_ac_matches[g_ac_count] = enum_cmds[i].enums2[j].name;
+                            g_ac_insert_matches[g_ac_count] = enum_cmds[i].enums2[j].name;
                             g_ac_func_matches[g_ac_count] = NULL;
                             g_ac_count++;
                         }
@@ -1354,12 +1147,13 @@ void update_autocomplete(void) {
     }
 
     /* Complete function names */
-    for (int i = 0; g_func_completions[i].insert_text && g_ac_count < MAX_AC_MATCHES; i++) {
-        if (strncmp(g_func_completions[i].insert_text, g_input, (size_t)g_input_len) == 0 &&
-            (int)strlen(g_func_completions[i].insert_text) > g_input_len) {
-            g_ac_matches[g_ac_count] = g_func_completions[i].display_text;
-            g_ac_insert_matches[g_ac_count] = g_func_completions[i].insert_text;
-            g_ac_func_matches[g_ac_count] = &g_func_completions[i];
+    const FuncCompletion *completions = repl_func_completions();
+    for (int i = 0; completions[i].insert_text && g_ac_count < MAX_AC_MATCHES; i++) {
+        if (strncmp(completions[i].insert_text, g_input, (size_t)g_input_len) == 0 &&
+            (int)strlen(completions[i].insert_text) > g_input_len) {
+            g_ac_matches[g_ac_count] = completions[i].display_text;
+            g_ac_insert_matches[g_ac_count] = completions[i].insert_text;
+            g_ac_func_matches[g_ac_count] = &completions[i];
             g_ac_count++;
         }
     }
@@ -1405,36 +1199,6 @@ void accept_autocomplete(void) {
 /* ========================================================================= */
 /* Command Definitions (Table-Driven)                                         */
 /* ========================================================================= */
-
-typedef struct {
-    const char *name;
-    CmdType     type;
-    int         num_args;
-    const char *fmt;    /* e.g. "glVertex3f(%g, %g, %g);" */
-    const char *usage;
-    int         is_tess; /* 1 if uses tess_indent, 0 for regular indent */
-} StdCmdDef;
-
-static const StdCmdDef g_std_cmds[] = {
-    { "glVertex3f",     CMD_VERTEX3F,         3, "glVertex3f(%g, %g, %g);",         "Usage: glVertex3f(x, y, z)", 0 },
-    { "glNormal3f",     CMD_NORMAL3F,         3, "glNormal3f(%g, %g, %g);",         "Usage: glNormal3f(nx, ny, nz)", 0 },
-    { "glColor3f",      CMD_COLOR3F,          3, "glColor3f(%g, %g, %g);",          "Usage: glColor3f(r, g, b)", 0 },
-    { "glColor4f",      CMD_COLOR4F,          4, "glColor4f(%g, %g, %g, %g);",      "Usage: glColor4f(r, g, b, a)", 0 },
-    { "glClearColor",   CMD_CLEAR_COLOR,      4, "glClearColor(%g, %g, %g, %g);",   "Usage: glClearColor(r, g, b, a)", 0 },
-    { "glTranslatef",   CMD_TRANSLATE3F,      3, "glTranslatef(%g, %g, %g);",       "Usage: glTranslatef(x, y, z)", 0 },
-    { "glScalef",       CMD_SCALEF,           3, "glScalef(%g, %g, %g);",           "Usage: glScalef(x, y, z)", 0 },
-    { "glRotatef",      CMD_ROTATEF,          4, "glRotatef(%g, %g, %g, %g);",      "Usage: glRotatef(angle, x, y, z)", 0 },
-    { "glVertex2f",     CMD_VERTEX2F,         2, "glVertex2f(%g, %g);",             "Usage: glVertex2f(x, y)", 0 },
-    { "gluSphere",      CMD_GLU_SPHERE,       3, "gluSphere(%g, %g, %g);", "Usage: gluSphere(radius, slices, stacks)", 0 },
-    { "gluCylinder",    CMD_GLU_CYLINDER,     5, "gluCylinder(%g, %g, %g, %g, %g);", "Usage: gluCylinder(baseR, topR, height, slices, stacks)", 0 },
-    { "gluDisk",        CMD_GLU_DISK,         4, "gluDisk(%g, %g, %g, %g);", "Usage: gluDisk(innerR, outerR, slices, loops)", 0 },
-    { "gluPartialDisk", CMD_GLU_PARTIAL_DISK, 6, "gluPartialDisk(%g, %g, %g, %g, %g, %g);", "Usage: gluPartialDisk(innerR, outerR, slices, loops, startAngle, sweepAngle)", 0 },
-    { "glutSolidTorus", CMD_GLUT_TORUS,       4, "glutSolidTorus(%g, %g, %g, %g);", "Usage: glutSolidTorus(innerR, outerR, nsides, rings)", 0 },
-    { "glPointSize",    CMD_POINT_SIZE,       1, "glPointSize(%g);",                "Usage: glPointSize(size)", 0 },
-    { "gluNormal",      CMD_TESS_NORMAL,      3, "gluNormal(%g, %g, %g);",          "Usage: gluNormal(x, y, z)", 1 },
-    { "gluVertex",      CMD_TESS_VERTEX,      3, "gluVertex(%g, %g, %g);",          "Usage: gluVertex(x, y, z)", 1 },
-    { NULL, 0, 0, NULL, NULL, 0 }
-};
 
 static void set_incomplete_missing_paren_status(const char *func) {
     char msg[128];
@@ -1482,11 +1246,11 @@ static int is_known_incomplete_func_name(const char *func) {
     if (!func || !func[0])
         return 0;
 
-    for (const EnumCmdDef *def = g_enum_cmds; def->name; def++) {
+    for (const ReplEnumCommandSpec *def = repl_enum_command_specs(); def->name; def++) {
         if (command_name_matches_or_prefixes(func, def->name))
             return 1;
     }
-    for (const StdCmdDef *def = g_std_cmds; def->name; def++) {
+    for (const ReplStdCommandSpec *def = repl_std_command_specs(); def->name; def++) {
         if (command_name_matches_or_prefixes(func, def->name))
             return 1;
     }
@@ -1581,7 +1345,7 @@ static int parse_command(const char *line, GLCmd *cmd,
     }
 
     /* Table-driven parsing for enum commands */
-    for (const EnumCmdDef *def = g_enum_cmds; def->name; def++) {
+    for (const ReplEnumCommandSpec *def = repl_enum_command_specs(); def->name; def++) {
         if (strcmp(func, def->name) == 0) {
             if (def->num_args == 1) {
                 char *arg_str = args;
@@ -1692,7 +1456,7 @@ static int parse_command(const char *line, GLCmd *cmd,
     const char *tess_indent = tess_indent_buf;
 
     /* Table-driven parsing for standard commands */
-    for (const StdCmdDef *def = g_std_cmds; def->name; def++) {
+    for (const ReplStdCommandSpec *def = repl_std_command_specs(); def->name; def++) {
         if (strcmp(func, def->name) == 0) {
             {
                 char verr[128];
@@ -1795,11 +1559,13 @@ static int parse_command(const char *line, GLCmd *cmd,
         GLenum face = 0, pname = 0;
         int found1 = 0, found2 = 0;
 
-        for (int i = 0; g_face_types[i].name; i++) {
-            if (strcmp(p1, g_face_types[i].name) == 0) { face = g_face_types[i].value; found1 = 1; break; }
+        const EnumEntry *face_types = repl_face_type_entries();
+        const EnumEntry *material_params = repl_material_param_entries();
+        for (int i = 0; face_types[i].name; i++) {
+            if (strcmp(p1, face_types[i].name) == 0) { face = face_types[i].value; found1 = 1; break; }
         }
-        for (int i = 0; g_material_params[i].name; i++) {
-            if (strcmp(p2, g_material_params[i].name) == 0) { pname = g_material_params[i].value; found2 = 1; break; }
+        for (int i = 0; material_params[i].name; i++) {
+            if (strcmp(p2, material_params[i].name) == 0) { pname = material_params[i].value; found2 = 1; break; }
         }
 
         if (!found1) { set_status("face: GL_FRONT, GL_BACK, GL_FRONT_AND_BACK"); return 0; }
@@ -1855,9 +1621,10 @@ static int parse_command(const char *line, GLCmd *cmd,
 
         GLenum pname = 0;
         int found = 0;
-        for (int i = 0; g_point_param_pnames[i].name; i++) {
-            if (strcmp(p1, g_point_param_pnames[i].name) == 0) {
-                pname = g_point_param_pnames[i].value;
+        const EnumEntry *point_param_pnames = repl_point_param_pname_entries();
+        for (int i = 0; point_param_pnames[i].name; i++) {
+            if (strcmp(p1, point_param_pnames[i].name) == 0) {
+                pname = point_param_pnames[i].value;
                 found = 1;
                 break;
             }

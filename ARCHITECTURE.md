@@ -500,8 +500,8 @@ made safe for concurrent `.gcda` writes.
    This table owns command debug names plus reformatter traits such as
    semicolon and block-indent behavior.
 3. Extend parser handling in `repl_core.c`.
-   - Pure numeric calls usually belong in `g_std_cmds`.
-   - Enum-driven calls usually belong in `g_enum_cmds`; add a dedicated
+   - Pure numeric calls usually belong in `k_std_command_specs`.
+   - Enum-driven calls usually belong in `k_enum_command_specs`; add a dedicated
      `EnumEntry` table when the legal enum set differs from a similar command
      (for example `glColorMaterial` modes are not the same as all
      `glMaterialf` pnames).
@@ -525,8 +525,8 @@ made safe for concurrent `.gcda` writes.
      one-time init scaffold belongs in `g_init_bootstrap_repl` or host-only
      init arrays.
 7. Extend autocomplete and parameter hints in `repl_core.c`.
-   - Add the callable signature to `g_func_completions`.
-   - Add enum-argument completion through `g_enum_cmds` when applicable.
+   - Add the callable signature to `k_func_completions`.
+   - Add enum-argument completion through `k_enum_command_specs` when applicable.
    - Add focused coverage in `test_repl_autocomplete.c` for ambiguous enum
      sets and multi-argument completions.
 8. Extend editor/UI affordances and docs if the command is user-facing.
