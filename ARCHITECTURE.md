@@ -11,6 +11,8 @@ of one monolithic `repl_core.c`.
   matching.
 - `repl_executor.c`: flat-command execution, state-command dispatch, replay
   fade execution context, and predefined-variable snapshots.
+- `repl_autocomplete.c`: input completions and parameter hints derived from
+  parser command metadata plus user-defined function signatures.
 - `repl_search.c`: search state, match navigation, and search-mode keyboard
   handling.
 - `repl_export.c`: fixed scaffold strings, init bootstrap tables, import/export
@@ -140,6 +142,14 @@ Owns flat-program execution and execution-time state.
 - `apply_state_cmd()`
 - replay fade execution context
 - predefined-variable snapshot/restore helpers
+
+### `repl_autocomplete.c`
+
+Owns editor-input completions and parameter hints.
+
+- `g_ac_*` completion/ghost/hint state
+- builtin command and enum completions
+- user-defined `funcN(...)` parameter hints
 
 ### `repl_editor.c`
 
@@ -549,7 +559,7 @@ made safe for concurrent `.gcda` writes.
      state belongs in `g_render_state_lines` plus `RENDER_STATE_LINE_COUNT`;
      one-time init scaffold belongs in `g_init_bootstrap_repl` or host-only
      init arrays.
-7. Extend autocomplete and parameter hints in `repl_core.c`.
+7. Extend autocomplete and parameter hints in `repl_autocomplete.c`.
    - Add the callable signature to `k_func_completions`.
    - Add enum-argument completion through `k_enum_command_specs` when applicable.
    - Add focused coverage in `test_repl_autocomplete.c` for ambiguous enum
