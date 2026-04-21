@@ -2503,38 +2503,6 @@ static int color_picker_close(void) {
     return 1;
 }
 
-int ui_panels_color_picker_is_open(void) { return g_cp_line >= 0; }
-
-/* Opens the picker for cmd_idx using glut_y as if the user clicked there.
- * The command must be a color type with no variables. */
-int ui_panels_open_color_picker(int cmd_idx, int glut_y) {
-    if (cmd_idx < 0 || cmd_idx >= g_num_cmds) return 0;
-    CmdType ct = g_cmds[cmd_idx].type;
-    if (ct != CMD_COLOR3F && ct != CMD_COLOR4F &&
-        ct != CMD_TESS_COLOR && ct != CMD_CLEAR_COLOR) return 0;
-    if (!g_cmds[cmd_idx].valid || g_cmds[cmd_idx].has_vars) return 0;
-    color_picker_open(cmd_idx, glut_y);
-    return 1;
-}
-
-void ui_panels_setup_color_picker_rects(void) {
-    if (g_cp_line < 0) return;
-    int px = g_cp_px, py = g_cp_py, sz = CP_SV_SZ;
-    g_cp_sv_x = px; g_cp_sv_y = py - sz; g_cp_sv_sz = sz;
-    int hx = px + sz + CP_GAP;
-    g_cp_hue_x = hx; g_cp_hue_y = py - sz; g_cp_hue_h = sz;
-    if (g_cp_has_alpha) {
-        int ax = hx + CP_HUE_W + CP_GAP;
-        g_cp_alp_x = ax; g_cp_alp_y = py - sz; g_cp_alp_h = sz;
-    }
-}
-
-void ui_panels_color_picker_sv_rect(int *out_x, int *out_y, int *out_sz) {
-    if (out_x)  *out_x  = g_cp_sv_x;
-    if (out_y)  *out_y  = g_cp_sv_y;
-    if (out_sz) *out_sz = g_cp_sv_sz;
-}
-
 void render_code_panel(void) {
     prof_begin(PROF_CODE_PANEL_LAYOUT);
     prof_begin(PROF_CODE_PANEL_LAYOUT_GEOM);
