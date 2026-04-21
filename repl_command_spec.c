@@ -118,6 +118,7 @@ static const FuncCompletion k_func_completions[] = {
     { "glColorMaterial(",    "glColorMaterial(face, mode)",                              2, { "face", "mode" } },
     { "glLightModeli(",      "glLightModeli(pname, param)",                              2, { "pname", "param" } },
     { "glFrontFace(",        "glFrontFace(mode)",                                        1, { "mode" } },
+    { "glDepthMask(",        "glDepthMask(flag)",                                        1, { "flag" } },
     { "glMaterialf(",        "glMaterialf(face, pname, value[, g, b, a])",               6, { "face", "pname", "value", "g", "b", "a" } },
     { "gluSphere(",          "gluSphere(radius, slices, stacks)",                        3, { "radius", "slices", "stacks" } },
     { "gluCylinder(",        "gluCylinder(base_r, top_r, height, slices, stacks)",       5, { "base_r", "top_r", "height", "slices", "stacks" } },
@@ -186,6 +187,7 @@ static const ReplEnumCommandSpec k_enum_command_specs[] = {
     { "glDisable",       CMD_DISABLE,       1, k_enable_caps,        NULL,              "%sglDisable(%s);",           "Try GL_DEPTH_TEST, GL_LIGHTING, GL_COLOR_MATERIAL", NULL, 0 },
     { "glShadeModel",    CMD_SHADE_MODEL,   1, k_shade_models,       NULL,              "%sglShadeModel(%s);",        "Try GL_SMOOTH or GL_FLAT", NULL, 0 },
     { "glFrontFace",     CMD_FRONT_FACE,    1, k_front_face,         NULL,              "%sglFrontFace(%s);",         "Try GL_CW or GL_CCW", NULL, 0 },
+    { "glDepthMask",     CMD_DEPTH_MASK,    1, k_bool_vals,          NULL,              "%sglDepthMask(%s);",         "Try GL_TRUE or GL_FALSE", NULL, 0 },
     { "glColorMaterial", CMD_COLOR_MATERIAL,2, k_face_types,         k_color_material_modes, "%sglColorMaterial(%s, %s);", "face: GL_FRONT, GL_BACK, GL_FRONT_AND_BACK", "mode: GL_AMBIENT, GL_DIFFUSE, GL_SPECULAR, GL_EMISSION, GL_AMBIENT_AND_DIFFUSE", 0 },
     { "glMaterialf",     CMD_MATERIALF,    -2, k_face_types,         k_material_params, NULL,                         "face: GL_FRONT, GL_BACK, GL_FRONT_AND_BACK", "pname: GL_DIFFUSE, GL_AMBIENT, GL_SPECULAR, GL_SHININESS", 0 },
     { "glLightModeli",   CMD_LIGHT_MODEL_I, 2, k_light_model_params, k_bool_vals,       "%sglLightModeli(%s, %s);",   "pname: GL_LIGHT_MODEL_TWO_SIDE, GL_LIGHT_MODEL_LOCAL_VIEWER", "param: GL_TRUE, GL_FALSE, or integer", 0 },
@@ -264,6 +266,7 @@ static const ReplCommandTypeSpec g_command_type_specs[CMD_TYPE_COUNT] = {
     CMD_TYPE_SPEC(CMD_POINT_PARAMETER_FV, 1, 1),
     CMD_TYPE_SPEC(CMD_BLEND_FUNC, 1, 1),
     CMD_TYPE_SPEC(CMD_CLEAR_COLOR, 1, 1),
+    CMD_TYPE_SPEC(CMD_DEPTH_MASK, 1, 1),
 };
 
 const ReplCommandTypeSpec *repl_command_type_spec(CmdType type) {

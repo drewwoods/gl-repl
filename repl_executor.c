@@ -83,6 +83,9 @@ int apply_state_cmd(const GLCmd *cmd, float alpha_scale) {
     case CMD_FRONT_FACE:
         glFrontFace(cmd->mode);
         return 1;
+    case CMD_DEPTH_MASK:
+        glDepthMask((GLboolean)cmd->mode);
+        return 1;
     case CMD_POINT_PARAMETER_FV: {
         GLfloat params[3] = { cmd->args[0], cmd->args[1], cmd->args[2] };
         glPointParameterfv(cmd->mode, params);
@@ -227,6 +230,7 @@ void repl_execute_program(const ReplExecutionOptions *options) {
                 glVertex2f(flat_cmds[pc].args[0], flat_cmds[pc].args[1]);
             break;
         case CMD_FRONT_FACE:
+        case CMD_DEPTH_MASK:
             apply_state_cmd(&flat_cmds[pc], g_execute_alpha_scale);
             break;
         case CMD_POINT_SIZE:

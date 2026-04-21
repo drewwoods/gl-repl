@@ -124,7 +124,8 @@ static void color_for_type(CmdType t) {
     case CMD_FRONT_FACE:
     case CMD_POINT_SIZE:
     case CMD_POINT_PARAMETER_FV:
-    case CMD_BLEND_FUNC: glColor3f(0.80f, 0.70f, 0.95f); break; /* lavender */
+    case CMD_BLEND_FUNC:
+    case CMD_DEPTH_MASK: glColor3f(0.80f, 0.70f, 0.95f); break; /* lavender */
     case CMD_FOR_BEGIN:
     case CMD_FOR_END:  glColor3f(0.95f, 0.60f, 0.30f); break;
     case CMD_FUNC_DEF:
@@ -3367,9 +3368,11 @@ void render_help(void) {
         "  glBegin(MODE)        \tGL_TRIANGLES, GL_TRIANGLE_STRIP, ...",
         "  glEnd()              \tEnd current primitive block",
         "  glVertex3f(x,y,z)    \tSpecify a vertex position",
+        "  glVertex2f(x,y)      \tSpecify a 2D vertex (z=0)",
         "  glNormal3f(x,y,z)    \tSpecify a vertex normal",
         "  glColor3f(r,g,b)     \tSpecify vertex color",
         "  glColor4f(r,g,b,a)   \tSpecify color with alpha",
+        "  glClearColor(r,g,b,a)\tSet the background clear color",
         "  glTranslatef(x,y,z)  \tTranslate the modelview matrix",
         "  glScalef(sx,sy,sz)   \tScale the modelview matrix",
         "  glRotatef(d,x,y,z)   \tRotate the modelview matrix",
@@ -3379,6 +3382,7 @@ void render_help(void) {
         "  glDisable(CAP)       \tGL_COLOR_MATERIAL, GL_NORMALIZE",
         "  glShadeModel(MODE)   \tGL_SMOOTH, GL_FLAT",
         "  glFrontFace(MODE)    \tGL_CW, GL_CCW",
+        "  glDepthMask(FLAG)    \tGL_TRUE, GL_FALSE (depth-buffer writes)",
         "  glPointSize(size)    \tRasterized point diameter",
         "  glPointParameterfv(GL_POINT_DISTANCE_ATTENUATION, const, linear, quadratic)",
         "       \tDistance attenuation: size *= 1/sqrt(const + linear*d + quadratic*d*d)",
@@ -3441,6 +3445,10 @@ void render_help(void) {
         "  if(t > 1) {              \tBody runs when condition is true",
         "    glColor3f(1, 0, 0)",
         "  }",
+        "",
+        "Labels / Goto (experimental, top-level only):",
+        "  :loop                    \tDeclare a jump target",
+        "  goto loop                \tJump back; pair with if(...) to exit",
         "",
         "Comments:",
         "  // text                   \tType directly to add a comment line",
