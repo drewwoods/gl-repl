@@ -1661,21 +1661,58 @@ static void draw_rotate_guide(const GLCmd *cmd, const float p_start[3]) {
     glVertex3f( ax*axis_len,  ay*axis_len,  az*axis_len);
     glEnd();
 
-    /* Arc — Rodrigues rotation of p_start about axis, sampled in segments. */
+    /* Arc — Rodrigues rotation of p_start about axis, sampled in segments.
+     * When p_start sits on (or near) the pivot the arc collapses to a point,
+     * so fall back to a helix that winds around the axis itself. */
     const int segs = 48;
     float angle_rad = angle_deg * (float)(3.14159265358979323846 / 180.0);
+    int use_helix = (plen < 0.05f);
 
-    /* Sample arc points once into a local buffer so we can draw the dim base
-     * and the pulse overlay without recomputing the rotation. */
     float arc[49][3];
-    for (int i = 0; i <= segs; i++) {
-        float t = (float)i / (float)segs;
-        float th = angle_rad * t;
-        float c = cosf(th), s = sinf(th), k = 1.0f - c;
-        float px = p_start[0], py = p_start[1], pz = p_start[2];
-        arc[i][0] = (c + ax*ax*k)    * px + (ax*ay*k - az*s) * py + (ax*az*k + ay*s) * pz;
-        arc[i][1] = (ay*ax*k + az*s) * px + (c + ay*ay*k)    * py + (ay*az*k - ax*s) * pz;
-        arc[i][2] = (az*ax*k - ay*s) * px + (az*ay*k + ax*s) * py + (c + az*az*k)    * pz;
+    if (!use_helix) {
+        for (int i = 0; i <= segs; i++) {
+            float t = (float)i / (float)segs;
+            float th = angle_rad * t;
+            float c = cosf(th), s = sinf(th), k = 1.0f - c;
+            float px = p_start[0], py = p_start[1], pz = p_start[2];
+            arc[i][0] = (c + ax*ax*k)    * px + (ax*ay*k - az*s) * py + (ax*az*k + ay*s) * pz;
+            arc[i][1] = (ay*ax*k + az*s) * px + (c + ay*ay*k)    * py + (ay*az*k - ax*s) * pz;
+            arc[i][2] = (az*ax*k - ay*s) * px + (az*ay*k + ax*s) * py + (c + az*az*k)    * pz;
+        }
+    } else {
+        /* Orthonormal basis (u, v) perpendicular to the axis. */
+        float helper[3] = {1.0f, 0.0f, 0.0f};
+        if (fabsf(ax) > 0.9f) { helper[0] = 0.0f; helper[1] = 1.0f; }
+        float u[3] = {
+            helper[1]*az - helper[2]*ay,
+            helper[2]*ax - helper[0]*az,
+            helper[0]*ay - helper[1]*ax,
+        };
+        float ul = sqrtf(u[0]*u[0] + u[1]*u[1] + u[2]*u[2]);
+        if (ul < 1e-6f) ul = 1.0f;
+        u[0] /= ul; u[1] /= ul; u[2] /= ul;
+        float v[3] = {
+            ay*u[2] - az*u[1],
+            az*u[0] - ax*u[2],
+            ax*u[1] - ay*u[0],
+        };
+
+        float radius = axis_len * 0.28f;
+        float pitch  = axis_len * 0.30f; /* axial distance per 2π of sweep */
+        const float TAU = 6.28318530717958647692f;
+        float axial_span = pitch * (fabsf(angle_rad) / TAU);
+        if (axial_span > axis_len * 1.4f) axial_span = axis_len * 1.4f;
+        float axial_start = -axial_span * 0.5f;
+
+        for (int i = 0; i <= segs; i++) {
+            float t = (float)i / (float)segs;
+            float th = angle_rad * t;
+            float c = cosf(th), s = sinf(th);
+            float a = axial_start + axial_span * t;
+            arc[i][0] = ax*a + radius * (c*u[0] + s*v[0]);
+            arc[i][1] = ay*a + radius * (c*u[1] + s*v[1]);
+            arc[i][2] = az*a + radius * (c*u[2] + s*v[2]);
+        }
     }
 
     /* Dim solid base arc. */
