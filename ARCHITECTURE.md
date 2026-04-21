@@ -31,6 +31,8 @@ of one monolithic `repl_core.c`.
   copy/cut/paste range behavior.
 - `repl_undo.c`: undo/redo snapshots, history rings, and the mutation-time
   example promotion hook.
+- `repl_camera_controls.c`: scene camera pointer state, orbit/pan/zoom drags,
+  wheel zoom velocity, and per-frame momentum decay.
 - `repl_eval.c`: expression parsing and evaluation.
 - `ui_panels.c`: 2D code/search/help/config/variable-panel rendering and panel
   hit-testing.
@@ -213,6 +215,17 @@ Owns editor history snapshots and the undo/redo rings.
 - undo/redo ring heads and counts
 - snapshot save/restore helpers used by commit-attempt rollback
 - example-to-user-scene promotion before the first mutating snapshot
+
+### `repl_camera_controls.c`
+
+Owns scene-camera pointer and momentum behavior after editor/UI routing has
+decided an event belongs to the viewport.
+
+- `g_mouse_x`, `g_mouse_y`, `g_mouse_btn`
+- active mouse-drag modifiers for scene panning
+- orbit, ground-plane pan, vertical pan, and middle-button zoom math
+- wheel zoom velocity and per-frame velocity decay
+- camera auto-rotate and pan-target glow fade during the timer tick
 
 ### `repl_clipboard.c`
 

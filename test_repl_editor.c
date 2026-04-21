@@ -1,4 +1,5 @@
 #include "repl_core_internal.h"
+#include "repl_camera_controls.h"
 #include "repl_clipboard.h"
 #include "repl_replay.h"
 #include "repl_keys.h"
@@ -556,6 +557,46 @@ int main() {
         g_win_h = 800;
         g_panel_frac = CFG_DEFAULT_PANEL_FRAC;
         g_code_panel_layout = CFG_DEFAULT_CODE_PANEL_LAYOUT;
+    }
+
+    /* 0e. Camera control module owns scene drag and momentum behavior. */
+    {
+        repl_reset_state();
+        g_cam_rx = 0.0f;
+        g_cam_ry = 0.0f;
+        g_cam_dist = 10.0f;
+        repl_camera_mouse_event(GLUT_LEFT_BUTTON, GLUT_DOWN, 10, 10, 0);
+        repl_camera_drag_motion(20, 14);
+        ASSERT_TRUE("camera left drag yaws",
+                    fabsf(g_cam_ry - 5.0f) < 1e-6f);
+        ASSERT_TRUE("camera left drag pitches",
+                    fabsf(g_cam_rx - 2.0f) < 1e-6f);
+        repl_camera_mouse_event(GLUT_LEFT_BUTTON, GLUT_UP, 20, 14, 0);
+        repl_camera_tick();
+        ASSERT_TRUE("camera release keeps yaw momentum",
+                    fabsf(g_cam_ry - 7.5f) < 1e-6f);
+
+        repl_camera_controls_reset();
+        g_cam_rx = 0.0f;
+        g_cam_ry = 0.0f;
+        g_cam_tx = 0.0f;
+        g_cam_ty = 0.0f;
+        g_cam_tz = 0.0f;
+        g_cam_dist = 10.0f;
+        repl_camera_mouse_event(GLUT_RIGHT_BUTTON, GLUT_DOWN, 0, 0,
+                                GLUT_ACTIVE_SHIFT);
+        repl_camera_drag_motion(0, 20);
+        ASSERT_TRUE("camera shift-right drag pans y",
+                    fabsf(g_cam_ty - 1.0f) < 1e-6f);
+        ASSERT_TRUE("camera y pan lights motion glow",
+                    fabsf(g_cam_motion_glow - 1.0f) < 1e-6f);
+
+        repl_camera_controls_reset();
+        g_cam_dist = 0.6f;
+        repl_camera_mouse_event(GLUT_MIDDLE_BUTTON, GLUT_DOWN, 0, 0, 0);
+        repl_camera_drag_motion(0, -100);
+        ASSERT_TRUE("camera middle drag clamps near zoom",
+                    fabsf(g_cam_dist - 0.5f) < 1e-6f);
     }
 
     /* 1. Undo when nothing to undo — must run before any undo push */

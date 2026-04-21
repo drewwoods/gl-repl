@@ -27,6 +27,7 @@
  *   repl_eval.c    — expression evaluator, for-loop header parsers
  *   repl_export.c  — save / load  (output.c round-tripping)
  *   repl_undo.c    — undo/redo snapshots and history rings
+ *   repl_camera_controls.c — viewport camera drag and momentum controls
  *   repl_search.c  — incremental search overlay
  *   cmd_format.c   — source-text formatting helpers
  *   repl_flatten.c — flatten_range() / flatten_commands()

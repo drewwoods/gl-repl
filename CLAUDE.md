@@ -84,6 +84,7 @@ Run all: `make test`
 | `repl_editor.c` | Keyboard/mouse handling, commit orchestration, `CfgItem` array, F-key dispatch |
 | `repl_clipboard.c` | Line selection anchors, command clipboard buffer, copy/cut/paste behavior |
 | `repl_undo.c` | Undo/redo snapshots, history rings, example auto-promote hook before mutation |
+| `repl_camera_controls.c` | Scene camera pointer state, orbit/pan/zoom drags, wheel zoom velocity, momentum tick |
 | `repl_examples.c` | Predefined example data (`g_examples[]`, `g_example_names[]`) |
 | `repl_examples.h` | Example query API (`repl_examples_count/name/lines`) |
 | `repl_export.c` | `save_output` / `load_from_file`, workspace header directives, `@scene-name` / `@workspace-dir` markers |
