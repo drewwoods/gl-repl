@@ -5,8 +5,8 @@
 The immediate-mode REPL is now split across focused translation units instead
 of one monolithic `repl_core.c`.
 
-- `repl_core.c`: parser, normalization, example loading orchestration,
-  depth/cache queries, display callback, and OpenGL initialization.
+- `repl_core.c`: parser, normalization, depth/cache queries, display callback,
+  and OpenGL initialization.
 - `repl_flatten.c`: source-to-flat command expansion and flat-command cursor
   matching.
 - `repl_executor.c`: flat-command execution, state-command dispatch, replay
@@ -17,6 +17,8 @@ of one monolithic `repl_core.c`.
   feeding color/normal lookup for code-panel highlighting.
 - `repl_scenes.c`: user-scene slots, example promotion, workspace save/load,
   LRU eviction, and scene rename state.
+- `repl_example_loader.c`: built-in example loading, example metadata, camera
+  presets, and active example tracking.
 - `repl_search.c`: search state, match navigation, and search-mode keyboard
   handling.
 - `repl_export.c`: fixed scaffold strings, init bootstrap tables, import/export
@@ -127,7 +129,7 @@ Owns the semantic model and remaining parser/display infrastructure.
 - `g_flat_cmds[]`, `g_num_flat_cmds`
 - parser, normalization, scope/depth caches
 - display callback
-- example loading orchestration and GL init
+- GL init
 
 ### `repl_flatten.c`
 
@@ -172,6 +174,16 @@ Owns the multi-scene workspace model.
 - example-to-user-scene promotion
 - workspace save/load and LRU scene eviction
 - scene naming, slugging, and rename validation
+
+### `repl_example_loader.c`
+
+Owns built-in example loading and loader-only metadata.
+
+- `g_example_idx`
+- example `@cfg` metadata filtering and application
+- example camera preset parsing
+- example presentation-default reset before metadata application
+- example source replay through `feed_line()`
 
 ### `repl_editor.c`
 
@@ -482,11 +494,12 @@ Under the hood, replay works by clamping how much of `g_flat_cmds[]`
 
 ## Startup and Examples
 
-`load_initial_commands()` remains in `repl_core.c`.
+`load_initial_commands()` remains in `repl_core.c`, while example metadata
+and built-in example loading live in `repl_example_loader.c`.
 
 - If an import file is provided and `load_from_file()` succeeds, startup uses
   the imported session.
-- Otherwise core loads a built-in example.
+- Otherwise core asks the example loader to load a built-in example.
 - `load_example_lines()` performs a metadata pre-pass before feeding the
    remaining source through `feed_line()`.
 - Built-in examples can begin with contiguous leading `// @cfg slug = value`
@@ -496,7 +509,7 @@ Under the hood, replay works by clamping how much of `g_flat_cmds[]`
    scene-presentation slugs allowed by the example loader.
 - That leading metadata is consumed as loader-only state and does not appear in
    the code panel.
-- On each example load, core resets the allowed non-camera scene-presentation
+- On each example load, the loader resets the allowed non-camera scene-presentation
    settings to the `CFG_DEFAULT_*` values from `sample.h` before applying any
    leading example `@cfg` metadata. This keeps unspecified settings from leaking
    between examples.
