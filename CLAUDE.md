@@ -515,6 +515,9 @@ glColor3f(r,g,b), glColor4f(r,g,b,a)
 glTranslatef(x,y,z), glScalef(sx,sy,sz), glRotatef(deg,x,y,z)
 glPushMatrix(), glPopMatrix()
 glEnable(CAP), glDisable(CAP)
+  CAP: GL_DEPTH_TEST, GL_LIGHTING, GL_COLOR_MATERIAL, GL_NORMALIZE,
+       GL_LINE_SMOOTH, GL_POINT_SMOOTH, GL_BLEND, GL_CULL_FACE,
+       GL_LIGHT0, GL_LIGHT1, GL_LIGHT2, GL_LIGHT3
 glShadeModel(MODE)
 glPointSize(size)
 glPointParameterfv(GL_POINT_DISTANCE_ATTENUATION, const, linear, quadratic)
