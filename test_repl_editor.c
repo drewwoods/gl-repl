@@ -466,6 +466,78 @@ int main() {
                     find_predef_var_idx("keyboard_route") >= 0);
     }
 
+    /* 0c5. Special-key routing keeps rename ahead of replay/search/navigation. */
+    {
+        repl_reset_state();
+        repl_load_example(0);
+        int slot = repl_promote_example_if_needed();
+        ASSERT_TRUE("rename special route setup slot", slot >= 0);
+        ASSERT_INT("rename special route begin", ui_panels_begin_rename(slot), 1);
+
+        set_editor_input("abc");
+        g_cursor_pos = 2;
+        g_code_panel_layout = CODE_PANEL_LAYOUT_HIDDEN;
+        g_show_help = 0;
+        g_replay_active = 1;
+        g_replay_state = REPLAY_PAUSED;
+        g_replay_pc = 0;
+        g_search_active = 1;
+        snprintf(g_search_query, sizeof(g_search_query), "abc");
+        g_search_query_len = 3;
+        g_search_cursor_pos = 2;
+
+        repl_special_func(GLUT_KEY_LEFT, 0, 0);
+        ASSERT_INT("rename special swallows hidden restore",
+                   g_code_panel_layout, CODE_PANEL_LAYOUT_HIDDEN);
+        ASSERT_INT("rename special keeps editor cursor", g_cursor_pos, 2);
+        ASSERT_INT("rename special keeps search cursor", g_search_cursor_pos, 2);
+        ASSERT_INT("rename special keeps replay pc", g_replay_pc, 0);
+
+        repl_special_func(GLUT_KEY_F1, 0, 0);
+        ASSERT_INT("rename special swallows help toggle", g_show_help, 0);
+        ASSERT_INT("rename still active after special keys",
+                   ui_panels_rename_active(), 1);
+
+        ui_panels_cancel_rename();
+        search_clear_all();
+        g_replay_active = 0;
+        g_code_panel_layout = CFG_DEFAULT_CODE_PANEL_LAYOUT;
+    }
+
+    /* 0c6. Search mode captures special arrows before editor/help navigation. */
+    {
+        repl_reset_state();
+        repl_feed_line_public("glVertex3f(0,0,0)");
+        navigate_to_line(0);
+        set_editor_input("abc");
+        g_cursor_pos = 2;
+        g_show_help = 1;
+        g_help_tab = 1;
+        g_search_active = 1;
+        snprintf(g_search_query, sizeof(g_search_query), "abc");
+        g_search_query_len = 3;
+        g_search_cursor_pos = 2;
+
+        repl_special_func(GLUT_KEY_LEFT, 0, 0);
+
+        ASSERT_INT("search special moves search cursor", g_search_cursor_pos, 1);
+        ASSERT_INT("search special leaves editor cursor", g_cursor_pos, 2);
+        ASSERT_INT("search special leaves help tab", g_help_tab, 1);
+
+        search_clear_all();
+        g_show_help = 0;
+    }
+
+    /* 0c7. F12 special route still cycles built-in examples. */
+    {
+        repl_reset_state();
+        if (repl_example_count() > 1) {
+            repl_load_example(0);
+            repl_special_func(GLUT_KEY_F12, 0, 0);
+            ASSERT_INT("f12 special route advances example", g_example_idx, 1);
+        }
+    }
+
     /* 0d. Cramped variable-panel fallback still preserves scene status strip */
     {
         int x, y, w, h;
