@@ -4347,6 +4347,11 @@ void handle_code_panel_click(int mx, int my) {
 int handle_code_panel_press(int mx, int my) {
     int actions = UI_PANEL_PRESS_NONE;
 
+    /* Color picker floats and may overlap the code panel (e.g. top/bottom
+     * layouts).  Give it first crack so its hit rects take priority. */
+    if (color_picker_press(mx, my))
+        return UI_PANEL_PRESS_CONSUMED;
+
     /* Pins (Search, Replay) take priority over menu labels and dropdown items
      * so they remain clickable even when a menu label visually overlaps them
      * in a narrow window — matches the render order (pins drawn on top). */
