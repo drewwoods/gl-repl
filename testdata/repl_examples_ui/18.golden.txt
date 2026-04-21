@@ -109,7 +109,7 @@ void display() {
     // Inner contour: circular cutout (tessellator infers hole from overlap)
       gluBegin(GLU_CONTOUR);
     for(i, 0, 24) {
-          gluColor(0.1, 0.1, 0.15);
+          gluColor(0.1, 0.1, 0.15, 1);
           gluVertex(hole*cos(-i*TAU/24), 0, hole*sin(-i*TAU/24));
     }
       gluEnd();

@@ -610,7 +610,7 @@ int main() {
         ASSERT_STR("paste block: if preserved", g_cmds[4].source, "  if(x > 0) {");
         ASSERT_STR("paste block: first inserted", g_cmds[5].source, "    glVertex3f(0, 0, 0);");
         ASSERT_STR("paste block: second inserted", g_cmds[6].source, "    glVertex3f(1, 1, 1);");
-        ASSERT_STR("paste block: original body shifted", g_cmds[7].source, "  glColor3f(1, 0, 0);");
+        ASSERT_STR("paste block: original body shifted", g_cmds[7].source, "    glColor3f(1, 0, 0);");
         ASSERT_STR("paste block: close brace preserved", g_cmds[8].source, "  }");
         ASSERT_INT("paste block: edit_line after pasted block", g_edit_line, 7);
         ASSERT_STR("paste block: input reloaded after paste", g_input, "glColor3f(1, 0, 0)");
@@ -618,13 +618,13 @@ int main() {
 
         pop_undo_snapshot();
         ASSERT_INT("paste undo: restores original count", g_num_cmds, 7);
-        ASSERT_STR("paste undo: original body restored", g_cmds[5].source, "  glColor3f(1, 0, 0);");
+        ASSERT_STR("paste undo: original body restored", g_cmds[5].source, "    glColor3f(1, 0, 0);");
         ASSERT_STR("paste undo: close brace restored", g_cmds[6].source, "  }");
 
         do_redo();
         ASSERT_INT("paste redo: restores pasted count", g_num_cmds, 9);
         ASSERT_STR("paste redo: first pasted line", g_cmds[5].source, "    glVertex3f(0, 0, 0);");
-        ASSERT_STR("paste redo: original body shifted again", g_cmds[7].source, "  glColor3f(1, 0, 0);");
+        ASSERT_STR("paste redo: original body shifted again", g_cmds[7].source, "    glColor3f(1, 0, 0);");
     }
 
     /* 8e. Cut selected block, then undo/redo */
