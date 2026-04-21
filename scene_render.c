@@ -1480,86 +1480,132 @@ static void draw_arrow_head(const float tip[3], const float dir[3], float head_l
     glEnd();
 }
 
-/* Arrow from p_start to (sx·x, sy·y, sz·z) in the guide frame. When p_start
- * is degenerate (at origin) the scale-of-origin collapses, so fall back to
- * three axis arrows showing unit-axis scaling for each component. */
+/* Scale guide. Draws the identity reference (origin → axis·1, gray) with a
+ * bright tick at the 1.0 position on each axis, then a pulse arrow showing
+ * only the distortion — from the 1.0 tick to the scaled tip. Scale of 1 on
+ * an axis draws no pulse (identity); negative factors produce an arrow that
+ * passes through origin. The non-origin branch is the World-mode variant
+ * where p_start is the actual anchor point and the 1.0 reference is p_start
+ * itself; at exact scale (1,1,1) only the marker is drawn. */
 static void draw_scale_guide(const GLCmd *cmd, const float p_start[3]) {
     float sx = cmd->args[0], sy = cmd->args[1], sz = cmd->args[2];
     float p0[3] = { p_start[0], p_start[1], p_start[2] };
-    float p1[3] = { p0[0]*sx, p0[1]*sy, p0[2]*sz };
-    float delta[3] = { p1[0]-p0[0], p1[1]-p0[1], p1[2]-p0[2] };
-    float dlen = sqrtf(delta[0]*delta[0] + delta[1]*delta[1] + delta[2]*delta[2]);
+    float plen = sqrtf(p0[0]*p0[0] + p0[1]*p0[1] + p0[2]*p0[2]);
 
     glDisable(GL_LIGHTING);
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
-    if (dlen > 1e-4f) {
-        float rgb[3]; xform_axis_color(sx - 1.0f, sy - 1.0f, sz - 1.0f, rgb);
-        float head_rgb[3] = {
-            rgb[0]*0.6f + 0.4f, rgb[1]*0.6f + 0.4f, rgb[2]*0.6f + 0.4f
-        };
+    if (plen > 1e-4f) {
+        /* Non-origin anchor: 1.0 position is p_start itself. Draw a
+         * 3-axis cross marker there, then a pulse arrow for the distortion
+         * p_start → p_start·(sx,sy,sz). */
+        float p1[3] = { p0[0]*sx, p0[1]*sy, p0[2]*sz };
+        float delta[3] = { p1[0]-p0[0], p1[1]-p0[1], p1[2]-p0[2] };
+        float dlen = sqrtf(delta[0]*delta[0] + delta[1]*delta[1] + delta[2]*delta[2]);
 
-        float dir[3] = { delta[0]/dlen, delta[1]/dlen, delta[2]/dlen };
-        float head_len = dlen * 0.22f;
-        if (head_len > 0.25f) head_len = 0.25f;
-        if (head_len < 0.06f) head_len = (dlen < 0.06f ? dlen * 0.5f : 0.06f);
-        float base[3] = { p1[0] - dir[0]*head_len, p1[1] - dir[1]*head_len, p1[2] - dir[2]*head_len };
-
-        draw_pulse_segment(p0, base, rgb);
-
-        glLineWidth(3.0f);
-        glColor4f(head_rgb[0], head_rgb[1], head_rgb[2], 0.95f);
-        draw_arrow_head(p1, dir, head_len);
-        glLineWidth(1.0f);
-
+        float tick = 0.08f;
+        glLineWidth(2.0f);
+        glColor4f(0.9f, 0.9f, 0.9f, 0.9f);
+        glBegin(GL_LINES);
+        glVertex3f(p0[0]-tick, p0[1], p0[2]); glVertex3f(p0[0]+tick, p0[1], p0[2]);
+        glVertex3f(p0[0], p0[1]-tick, p0[2]); glVertex3f(p0[0], p0[1]+tick, p0[2]);
+        glVertex3f(p0[0], p0[1], p0[2]-tick); glVertex3f(p0[0], p0[1], p0[2]+tick);
+        glEnd();
         glPointSize(6.0f);
         glBegin(GL_POINTS);
-        glColor4f(rgb[0], rgb[1], rgb[2], 0.7f);
+        glColor4f(0.95f, 0.95f, 0.95f, 1.0f);
         glVertex3f(p0[0], p0[1], p0[2]);
         glEnd();
-        glPointSize(9.0f);
-        glBegin(GL_POINTS);
-        glColor4f(head_rgb[0], head_rgb[1], head_rgb[2], 1.0f);
-        glVertex3f(p1[0], p1[1], p1[2]);
-        glEnd();
         glPointSize(1.0f);
+
+        if (dlen > 1e-4f) {
+            float rgb[3]; xform_axis_color(sx - 1.0f, sy - 1.0f, sz - 1.0f, rgb);
+            float head_rgb[3] = {
+                rgb[0]*0.6f + 0.4f, rgb[1]*0.6f + 0.4f, rgb[2]*0.6f + 0.4f
+            };
+            float dir[3] = { delta[0]/dlen, delta[1]/dlen, delta[2]/dlen };
+            float head_len = dlen * 0.22f;
+            if (head_len > 0.25f) head_len = 0.25f;
+            if (head_len < 0.06f) head_len = (dlen < 0.06f ? dlen * 0.5f : 0.06f);
+            float base[3] = { p1[0] - dir[0]*head_len, p1[1] - dir[1]*head_len, p1[2] - dir[2]*head_len };
+
+            draw_pulse_segment(p0, base, rgb);
+
+            glLineWidth(3.0f);
+            glColor4f(head_rgb[0], head_rgb[1], head_rgb[2], 0.95f);
+            draw_arrow_head(p1, dir, head_len);
+            glLineWidth(1.0f);
+
+            glPointSize(9.0f);
+            glBegin(GL_POINTS);
+            glColor4f(head_rgb[0], head_rgb[1], head_rgb[2], 1.0f);
+            glVertex3f(p1[0], p1[1], p1[2]);
+            glEnd();
+            glPointSize(1.0f);
+        }
     } else {
-        /* Degenerate: p_start at origin — show three axis arrows from origin
-         * to (sx,0,0), (0,sy,0), (0,0,sz) so the per-component scaling is
-         * still visible. A unit reference segment (gray) on each axis hints
-         * at the identity baseline. Each axis pulses in its own axis color. */
+        /* Origin anchor — per-axis view. For each axis: gray identity segment
+         * (origin → axis·1), a perpendicular cross tick at axis·1 marking
+         * the 1.0 position, then (only when factor != 1) a pulse arrow from
+         * the 1.0 tick to axis·f showing just the distortion delta. */
         const float axes[3][3] = { {1,0,0}, {0,1,0}, {0,0,1} };
+        /* Two axes perpendicular to axis a, used to draw the 1.0 tick cross. */
+        const int perp_a[3] = { 1, 0, 0 };
+        const int perp_b[3] = { 2, 2, 1 };
         const float axis_rgb[3][3] = {
             {1.0f, 0.3f, 0.3f}, {0.3f, 1.0f, 0.3f}, {0.3f, 0.3f, 1.0f}
         };
         const float factors[3] = { sx, sy, sz };
+        const float tick = 0.06f;
         for (int a = 0; a < 3; a++) {
             float f = factors[a];
-            if (fabsf(f) < 1e-6f) continue;
-            float tip[3] = { axes[a][0]*f, axes[a][1]*f, axes[a][2]*f };
+            const float *ax = axes[a];
+            const float *pa = axes[perp_a[a]];
+            const float *pb = axes[perp_b[a]];
 
             /* Identity reference — thin gray segment from origin to unit tip. */
             glLineWidth(1.5f);
             glColor4f(0.55f, 0.55f, 0.55f, 0.45f);
             glBegin(GL_LINES);
             glVertex3f(0.0f, 0.0f, 0.0f);
-            glVertex3f(axes[a][0], axes[a][1], axes[a][2]);
+            glVertex3f(ax[0], ax[1], ax[2]);
             glEnd();
 
-            float dir[3] = {
-                (f >= 0 ? axes[a][0] : -axes[a][0]),
-                (f >= 0 ? axes[a][1] : -axes[a][1]),
-                (f >= 0 ? axes[a][2] : -axes[a][2])
-            };
-            float tlen = fabsf(f);
-            float head_len = tlen * 0.22f;
+            /* 1.0 tick — bright cross perpendicular to the axis. */
+            glLineWidth(2.0f);
+            glColor4f(0.9f, 0.9f, 0.9f, 0.9f);
+            glBegin(GL_LINES);
+            glVertex3f(ax[0] - pa[0]*tick, ax[1] - pa[1]*tick, ax[2] - pa[2]*tick);
+            glVertex3f(ax[0] + pa[0]*tick, ax[1] + pa[1]*tick, ax[2] + pa[2]*tick);
+            glVertex3f(ax[0] - pb[0]*tick, ax[1] - pb[1]*tick, ax[2] - pb[2]*tick);
+            glVertex3f(ax[0] + pb[0]*tick, ax[1] + pb[1]*tick, ax[2] + pb[2]*tick);
+            glEnd();
+            glPointSize(5.0f);
+            glBegin(GL_POINTS);
+            glColor4f(0.95f, 0.95f, 0.95f, 1.0f);
+            glVertex3f(ax[0], ax[1], ax[2]);
+            glEnd();
+            glPointSize(1.0f);
+
+            /* Identity on this axis — no distortion to draw. */
+            if (fabsf(f - 1.0f) < 1e-4f) continue;
+
+            /* Pulse shows only the distortion: 1.0 tick → axis·f. Negative
+             * f produces an arrow that passes through the origin; length
+             * scales with |f - 1|. */
+            float tip[3] = { ax[0]*f, ax[1]*f, ax[2]*f };
+            float from[3] = { ax[0], ax[1], ax[2] };
+            float delta[3] = { tip[0]-from[0], tip[1]-from[1], tip[2]-from[2] };
+            float dlen = sqrtf(delta[0]*delta[0] + delta[1]*delta[1] + delta[2]*delta[2]);
+            float dir[3] = { delta[0]/dlen, delta[1]/dlen, delta[2]/dlen };
+
+            float head_len = dlen * 0.22f;
             if (head_len > 0.2f) head_len = 0.2f;
-            if (head_len < 0.05f) head_len = (tlen < 0.05f ? tlen * 0.5f : 0.05f);
-            float origin[3] = { 0.0f, 0.0f, 0.0f };
+            if (head_len < 0.05f) head_len = (dlen < 0.05f ? dlen * 0.5f : 0.05f);
             float base[3] = { tip[0] - dir[0]*head_len, tip[1] - dir[1]*head_len, tip[2] - dir[2]*head_len };
 
-            draw_pulse_segment(origin, base, axis_rgb[a]);
+            draw_pulse_segment(from, base, axis_rgb[a]);
 
             glLineWidth(2.5f);
             glColor4f(axis_rgb[a][0]*0.6f + 0.4f,
