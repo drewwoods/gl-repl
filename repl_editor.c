@@ -2,9 +2,7 @@
  * repl_editor.c — Editor state, line routing, and GLUT input dispatch.
  *
  * Subsystems in this file (top to bottom):
- *  - Editor state (g_input, undo stack, clipboard, selection, camera
- *    inertia, config-item table)
- *  - Undo / redo snapshot ring
+ *  - Editor state (g_input, camera inertia, config-item table)
  *  - Cmd-range deletion with var-decl guards
  *  - Line-input load/save and line navigation
  *  - Commit attempt orchestration and Enter/navigation outcomes
@@ -21,6 +19,7 @@
 #include "repl_core_internal.h"
 #include "repl_command_store.h"
 #include "repl_clipboard.h"
+#include "repl_undo.h"
 #include "repl_replay.h"
 #include "repl_keys.h"
 #include "ui_panels.h"
@@ -30,9 +29,6 @@
 /* Forward declarations                                                      */
 /* ========================================================================= */
 static void save_newline_buf(void);
-void push_undo_snapshot(void);
-void pop_undo_snapshot(void);
-void do_redo(void);
 void delete_cmd_range(int start, int count, const char *what);
 static void keyboard_func(unsigned char key, int x, int y);
 static void special_func(int key, int x, int y);
@@ -197,104 +193,8 @@ CfgItem g_cfg_items[] = {
 
 const int CFG_ITEM_COUNT = (int)(sizeof(g_cfg_items) / sizeof(g_cfg_items[0]));
 
-#define UNDO_DEPTH 32
-
-typedef struct {
-    GLCmd cmds[MAX_COMMANDS];
-    int   num_cmds;
-    int   edit_line;
-    float predef_vals[MAX_PREDEF_VARS];
-    char  predef_names[MAX_PREDEF_VARS][16];
-    int   num_predef_vars;
-} UndoSnapshot;
-
-static UndoSnapshot g_undo_buf[UNDO_DEPTH];
-static int g_undo_head = 0;
-static int g_undo_count = 0;
-static UndoSnapshot g_redo_buf[UNDO_DEPTH];
-static int g_redo_head = 0;
-static int g_redo_count = 0;
-
 static const int g_accum_steps[] = { 1, 2, 4, 8, 16 };
 static const char *quit_tempfile = "/tmp/temp-output.c";
-
-static void snapshot_save(UndoSnapshot *s) {
-    memcpy(s->cmds, g_cmds, (size_t)g_num_cmds * sizeof(GLCmd));
-    s->num_cmds = g_num_cmds;
-    s->edit_line = g_edit_line;
-    s->num_predef_vars = g_num_predef_vars;
-    for (int i = 0; i < g_num_predef_vars; i++) {
-        s->predef_vals[i] = g_predef_vars[i].value;
-        memcpy(s->predef_names[i], g_predef_vars[i].name, 16);
-    }
-}
-
-static void snapshot_restore(const UndoSnapshot *s) {
-    memcpy(g_cmds, s->cmds, (size_t)s->num_cmds * sizeof(GLCmd));
-    g_num_cmds = s->num_cmds;
-    g_edit_line = s->edit_line;
-    g_num_predef_vars = s->num_predef_vars;
-    for (int i = 0; i < s->num_predef_vars; i++) {
-        g_predef_vars[i].value = s->predef_vals[i];
-        memcpy(g_predef_vars[i].name, s->predef_names[i], 16);
-    }
-    g_inserting = 0;
-    load_line_to_input(g_edit_line);
-    mark_normals_dirty();
-}
-
-void push_undo_snapshot(void) {
-    /* First mutation on a loaded example auto-promotes to a user scene,
-     * inheriting the example's name.  The undo snapshot captures the
-     * post-promotion state so Undo rewinds to the unedited example
-     * reference still visible in the Scene menu. */
-    repl_promote_example_if_needed();
-
-    snapshot_save(&g_undo_buf[g_undo_head]);
-    g_undo_head = (g_undo_head + 1) % UNDO_DEPTH;
-    if (g_undo_count < UNDO_DEPTH)
-        g_undo_count++;
-    g_redo_count = 0;
-    g_redo_head = 0;
-}
-
-void pop_undo_snapshot(void) {
-    if (g_undo_count == 0) {
-        set_status("Nothing to undo");
-        return;
-    }
-    snapshot_save(&g_redo_buf[g_redo_head]);
-    g_redo_head = (g_redo_head + 1) % UNDO_DEPTH;
-    if (g_redo_count < UNDO_DEPTH)
-        g_redo_count++;
-    g_undo_head = (g_undo_head + UNDO_DEPTH - 1) % UNDO_DEPTH;
-    g_undo_count--;
-    snapshot_restore(&g_undo_buf[g_undo_head]);
-    {
-        char msg[64];
-        snprintf(msg, sizeof(msg), "Undo (%d more)", g_undo_count);
-        set_status(msg);
-    }
-}
-
-void do_redo(void) {
-    if (g_redo_count == 0) {
-        set_status("Nothing to redo");
-        return;
-    }
-    snapshot_save(&g_undo_buf[g_undo_head]);
-    g_undo_head = (g_undo_head + 1) % UNDO_DEPTH;
-    if (g_undo_count < UNDO_DEPTH)
-        g_undo_count++;
-    g_redo_head = (g_redo_head + UNDO_DEPTH - 1) % UNDO_DEPTH;
-    g_redo_count--;
-    snapshot_restore(&g_redo_buf[g_redo_head]);
-    {
-        char msg[64];
-        snprintf(msg, sizeof(msg), "Redo (%d more)", g_redo_count);
-        set_status(msg);
-    }
-}
 
 static int delete_cmd_range_allowed(int start, int count) {
     if (repl_selection_cmd_range_contains_var_decl(start, count)) {
@@ -502,7 +402,7 @@ static int parse_for_overwrite_enter(GLCmd *cmd, int insert_idx) {
 }
 
 typedef struct {
-    UndoSnapshot undo;
+    ReplUndoSnapshot undo;
     char input[MAX_INPUT_LEN];
     int input_len;
     int cursor_pos;
@@ -511,18 +411,11 @@ typedef struct {
     int newline_len;
 } CommitAttemptState;
 
-typedef struct {
-    int undo_head;
-    int undo_count;
-    int redo_head;
-    int redo_count;
-} UndoRingState;
-
 static CommitAttemptState g_commit_attempt_before;
 static CommitAttemptState g_navigation_commit_before;
 
 static void capture_commit_attempt_state(CommitAttemptState *s) {
-    snapshot_save(&s->undo);
+    repl_undo_snapshot_save(&s->undo);
     memcpy(s->input, g_input, sizeof(s->input));
     s->input_len = g_input_len;
     s->cursor_pos = g_cursor_pos;
@@ -532,26 +425,12 @@ static void capture_commit_attempt_state(CommitAttemptState *s) {
 }
 
 /* Navigation rejection reverts commands/predefs and the saved append-line
- * buffer.  The transient typed input stays discarded by snapshot_restore()'s
- * reload; captured input fields are used only to detect commit progress. */
+ * buffer.  The transient typed input stays discarded by the undo snapshot
+ * restore; captured input fields are used only to detect commit progress. */
 static void restore_commit_attempt_committed_state(const CommitAttemptState *s) {
     memcpy(g_newline_buf, s->newline_buf, sizeof(g_newline_buf));
     g_newline_len = s->newline_len;
-    snapshot_restore(&s->undo);
-}
-
-static void capture_undo_ring_state(UndoRingState *s) {
-    s->undo_head = g_undo_head;
-    s->undo_count = g_undo_count;
-    s->redo_head = g_redo_head;
-    s->redo_count = g_redo_count;
-}
-
-static void restore_undo_ring_state(const UndoRingState *s) {
-    g_undo_head = s->undo_head;
-    g_undo_count = s->undo_count;
-    g_redo_head = s->redo_head;
-    g_redo_count = s->redo_count;
+    repl_undo_snapshot_restore(&s->undo);
 }
 
 static int input_matches_committed_line(int line) {
@@ -753,7 +632,7 @@ static CommitResult commit_current_input(int enter_mode) {
 
 static CommitResult commit_before_navigation(void) {
     CommitAttemptState *before = &g_navigation_commit_before;
-    UndoRingState undo_before;
+    ReplUndoRingState undo_before;
     char rejected_status[sizeof(g_status)];
     int rejected_ttl;
 
@@ -761,7 +640,7 @@ static CommitResult commit_before_navigation(void) {
         return COMMIT_UNCHANGED;
 
     capture_commit_attempt_state(before);
-    capture_undo_ring_state(&undo_before);
+    repl_undo_ring_state_capture(&undo_before);
     CommitResult result = commit_current_input(0);
     if (result != COMMIT_REJECTED)
         return result;
@@ -769,7 +648,7 @@ static CommitResult commit_before_navigation(void) {
     memcpy(rejected_status, g_status, sizeof(rejected_status));
     rejected_ttl = g_status_ttl;
     restore_commit_attempt_committed_state(before);
-    restore_undo_ring_state(&undo_before);
+    repl_undo_ring_state_restore(&undo_before);
     memcpy(g_status, rejected_status, sizeof(g_status));
     g_status[sizeof(g_status) - 1] = '\0';
     g_status_ttl = rejected_ttl;

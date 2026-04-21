@@ -16,7 +16,7 @@
  *   - Public API wrappers forwarded from sample.c
  *
  * repl_editor.c owns the interactive editing layer:
- *   - Editor state (g_input, cursor, undo/redo ring)
+ *   - Editor state (g_input, cursor)
  *   - Commit handlers that decide *where* a parsed command goes in g_cmds[]
  *   - GLUT keyboard / special / mouse / motion / timer dispatch
  *   - Camera momentum and panel resizing
@@ -26,6 +26,7 @@
  * Other translation units:
  *   repl_eval.c    — expression evaluator, for-loop header parsers
  *   repl_export.c  — save / load  (output.c round-tripping)
+ *   repl_undo.c    — undo/redo snapshots and history rings
  *   repl_search.c  — incremental search overlay
  *   cmd_format.c   — source-text formatting helpers
  *   repl_flatten.c — flatten_range() / flatten_commands()

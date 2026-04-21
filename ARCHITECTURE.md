@@ -25,10 +25,12 @@ of one monolithic `repl_core.c`.
   translation, save/load, and code-panel dump helpers.
 - `repl_commit.c`: float declarations, variable assignments, structured block
   commits, close-brace commits, and commit-order helpers.
-- `repl_editor.c`: editor state, undo/redo, commit orchestration, feed-line
-  entrypoint, and GLUT input handlers.
+- `repl_editor.c`: editor state, commit orchestration, feed-line entrypoint,
+  and GLUT input handlers.
 - `repl_clipboard.c`: line selection anchors, command clipboard buffer, and
   copy/cut/paste range behavior.
+- `repl_undo.c`: undo/redo snapshots, history rings, and the mutation-time
+  example promotion hook.
 - `repl_eval.c`: expression parsing and evaluation.
 - `ui_panels.c`: 2D code/search/help/config/variable-panel rendering and panel
   hit-testing.
@@ -198,11 +200,19 @@ Owns transient editor and interaction state.
 
 - `g_input`, `g_input_len`, `g_cursor_pos`
 - `g_edit_line`, `g_inserting`, newline buffer
-- undo/redo ring
 - code-panel scroll and resize state
 - variable-drag/config-menu interaction state
 - feed-line entrypoint and commit-attempt outcomes
 - keyboard, special-key, mouse, motion, and timer callbacks
+
+### `repl_undo.c`
+
+Owns editor history snapshots and the undo/redo rings.
+
+- source-command, edit-line, and predefined-variable snapshots
+- undo/redo ring heads and counts
+- snapshot save/restore helpers used by commit-attempt rollback
+- example-to-user-scene promotion before the first mutating snapshot
 
 ### `repl_clipboard.c`
 
@@ -366,15 +376,17 @@ is shared by all dispatch sites.
 
 ### Undo / redo
 
-`repl_editor.c` owns fixed-size circular buffers of editor snapshots.
+`repl_undo.c` owns fixed-size circular buffers of editor snapshots.
 
-- `UndoSnapshot` captures `g_cmds[]`, `g_num_cmds`, `g_edit_line`, and
+- `ReplUndoSnapshot` captures `g_cmds[]`, `g_num_cmds`, `g_edit_line`, and
   `g_predef_vars[]` values — enough to restore the full editor state.
 - Any mutation (delete, paste, reformat, etc.) calls
   `push_undo_snapshot()` before changing state. Pushing clears the redo
   stack, which is the usual "diverged history" rule.
 - Ctrl+Z pops the undo stack and moves the current state to the redo
   stack; Ctrl+Y does the reverse.
+- Rejected navigation commits use `ReplUndoRingState` to restore the history
+  counters after rolling back the attempted command/predef mutation.
 
 ### Flattening
 
