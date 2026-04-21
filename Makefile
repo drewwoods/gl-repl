@@ -97,9 +97,9 @@ endif
 
 all: sample
 
-SRCS = sample.c repl_core.c repl_state.c repl_command_spec.c repl_command_store.c repl_replay.c repl_search.c repl_export.c repl_editor.c repl_examples.c scene_render.c ui_panels.c repl_eval.c cmd_format.c repl_audio.c profile_panel.c gl_stub_counts.c
+SRCS = sample.c repl_core.c repl_state.c repl_command_spec.c repl_command_store.c repl_flatten.c repl_replay.c repl_search.c repl_export.c repl_editor.c repl_examples.c scene_render.c ui_panels.c repl_eval.c cmd_format.c repl_audio.c profile_panel.c gl_stub_counts.c
 HDRS = sample.h repl_state.h repl_core.h repl_core_internal.h repl_command_spec.h repl_command_store.h repl_replay.h repl_examples.h scene_render.h ui_panels.h repl_eval.h cmd_format.h repl_audio.h profile_panel.h
-CORE_TEST_SRCS = repl_core.c repl_state.c repl_command_spec.c repl_command_store.c repl_replay.c repl_search.c repl_export.c repl_editor.c repl_examples.c scene_render.c ui_panels.c repl_eval.c cmd_format.c repl_audio.c profile_panel.c gl_stub_counts.c
+CORE_TEST_SRCS = repl_core.c repl_state.c repl_command_spec.c repl_command_store.c repl_flatten.c repl_replay.c repl_search.c repl_export.c repl_editor.c repl_examples.c scene_render.c ui_panels.c repl_eval.c cmd_format.c repl_audio.c profile_panel.c gl_stub_counts.c
 
 OBJDIR = build/$(BUILD)$(if $(filter 1,$(USE_GL_STUBS)),-gl-stubs,)
 OBJ_CFLAGS = $(BUILD_CFLAGS) $(CFLAGS)

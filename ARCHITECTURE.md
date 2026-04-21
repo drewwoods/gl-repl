@@ -5,8 +5,10 @@
 The immediate-mode REPL is now split across focused translation units instead
 of one monolithic `repl_core.c`.
 
-- `repl_core.c`: parser, normalization, flattening, execution, replay, example
-  loading orchestration, and OpenGL initialization.
+- `repl_core.c`: parser, normalization, execution, example loading
+  orchestration, depth/cache queries, and OpenGL initialization.
+- `repl_flatten.c`: source-to-flat command expansion and flat-command cursor
+  matching.
 - `repl_search.c`: search state, match navigation, and search-mode keyboard
   handling.
 - `repl_export.c`: fixed scaffold strings, init bootstrap tables, import/export
@@ -64,7 +66,8 @@ modules:
    calls. Commands flagged `has_vars` are re-evaluated each frame so
    animated expressions (e.g. `t`) stay live.
 
-Stages 1–2 live in `repl_editor.c`; 3–5 live in `repl_core.c`. This is the
+Stages 1–2 live in `repl_editor.c`; 3 lives in `repl_core.c`; 4 lives in
+`repl_flatten.c`; 5 currently lives in `repl_core.c`. This is the
 load-bearing boundary — outside code that needs to inject commands should
 do so through `feed_line()` rather than poking `g_cmds[]` directly, so
 every path shares the same parse/normalize/flatten guarantees.
@@ -82,8 +85,8 @@ every path shares the same parse/normalize/flatten guarantees.
 
 ### Execution path
 
-1. `flatten_commands()` in `repl_core.c` expands loops, functions, conditionals,
-   and variable-driven commands into `g_flat_cmds[]`.
+1. `flatten_commands()` in `repl_flatten.c` expands loops, functions,
+   conditionals, and variable-driven commands into `g_flat_cmds[]`.
 2. `scene_render.c` prepares the frame and calls `repl_execute_program()` with
    an explicit flat-command count for normal, replay, and fade passes.
 3. `repl_execute_program()` issues fixed-function OpenGL calls against the
@@ -109,14 +112,22 @@ every path shares the same parse/normalize/flatten guarantees.
 
 ### `repl_core.c`
 
-Owns the semantic model and execution pipeline.
+Owns the semantic model and the remaining core parser/execution pipeline.
 
 - `g_cmds[]`, `g_num_cmds`
 - `g_flat_cmds[]`, `g_num_flat_cmds`
-- flattening helpers and scope/depth caches
-- parser tables and command normalization
-- replay engine and replay stepping
+- parser, normalization, scope/depth caches
+- executor and display callback
 - example orchestration and GL init
+
+### `repl_flatten.c`
+
+Owns flattening and flat-command cursor matching.
+
+- `flatten_commands()`
+- recursive loop/function/if expansion
+- flat-command provenance fields
+- `g_current_block_begin`, `g_current_block_end`
 
 ### `repl_editor.c`
 
@@ -171,8 +182,8 @@ Owns generated scaffold and import/export plumbing.
 - New per-module headers are introduced only when they establish a real
   ownership boundary. Avoid adding headers for cosmetic splits.
 - Parser/execution internals currently stay in `repl_core.c`; editor/search/
-  export call into them rather than duplicating logic. Future parser,
-  flattener, and executor extraction should preserve the same call direction.
+  export call into them rather than duplicating logic. Future parser and
+  executor extraction should preserve the same call direction.
 
 ## Refactoring Ownership Map
 
@@ -284,7 +295,7 @@ is shared by all dispatch sites.
 
 ### Flattening
 
-`flatten_range()` in `repl_core.c` is still the only place that expands:
+`flatten_range()` in `repl_flatten.c` is still the only place that expands:
 
 - `CMD_FOR_BEGIN .. CMD_FOR_END`
 - `CMD_FUNC_DEF .. CMD_FUNC_END`
@@ -405,7 +416,7 @@ alongside the existing three.
 
 ### Replay
 
-Replay state and stepping remain in `repl_core.c`, but editor callbacks in
+Replay state and stepping live in `repl_replay.c`, while editor callbacks in
 `repl_editor.c` drive it.
 
 - editor input toggles replay modes and stepping
