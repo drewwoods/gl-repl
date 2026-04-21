@@ -998,6 +998,63 @@ int main(void) {
                 strstr(g_status, "depth limit") != NULL ||
                 strstr(g_status, "visit budget") != NULL);
 
+    /* Regression: handle_code_panel_press must route through color_picker_press
+     * before its own "close picker on non-swatch click" logic, so that clicks
+     * landing inside the floating picker window are not dismissed when the
+     * picker overlaps the code panel region (top/bottom panel layouts).
+     *
+     * Scenario: TOP layout — panel spans full width, top 45% of the window.
+     * A swatch click near the top of the panel forces the picker window to
+     * clamp to x=4 (can't spill right), placing it entirely inside the panel.
+     */
+    {
+        int saved_layout = g_code_panel_layout;
+
+        g_code_panel_layout = CODE_PANEL_LAYOUT_TOP;
+        repl_reset_state();
+        repl_feed_line_public("glColor3f(1, 0, 0);");
+
+        /* Open the picker as if the user clicked near the top of the panel
+         * (GLUT y=10).  The picker window clamps inside the panel area. */
+        ASSERT_TRUE("picker opens (TOP layout)",
+                    ui_panels_open_color_picker(0, 10));
+        ASSERT_TRUE("picker is open after open call",
+                    ui_panels_color_picker_is_open());
+
+        /* Compute hit rects from the stored picker origin — skips GL calls. */
+        ui_panels_setup_color_picker_rects();
+
+        /* Get the SV-square hit rect and compute its centre in GLUT coords. */
+        {
+            int svx, svy, svsz;
+            ui_panels_color_picker_sv_rect(&svx, &svy, &svsz);
+            /* svy is the bottom edge (OpenGL y-up); centre is svy + svsz/2. */
+            int click_mx = svx + svsz / 2;
+            int click_my = g_win_h - (svy + svsz / 2);
+
+            /* Confirm this click falls inside the code panel (the bug scenario). */
+            {
+                int cp_x2, cp_y2, cp_w2, cp_h2;
+                int gl_click_y = g_win_h - click_my;
+                code_panel_rect(&cp_x2, &cp_y2, &cp_w2, &cp_h2);
+                ASSERT_TRUE("picker-centre click is inside code panel area (TOP layout)",
+                            click_mx >= cp_x2 && click_mx < cp_x2 + cp_w2 &&
+                            gl_click_y >= cp_y2 && gl_click_y < cp_y2 + cp_h2);
+            }
+
+            /* Before the fix, handle_code_panel_press closed the picker for any
+             * non-swatch code-panel click.  After the fix it calls
+             * color_picker_press first, which consumes the hit and keeps the
+             * picker open. */
+            handle_code_panel_press(click_mx, click_my);
+            ASSERT_TRUE("picker stays open after click inside picker window "
+                        "that overlaps the code panel (TOP layout)",
+                        ui_panels_color_picker_is_open());
+        }
+
+        g_code_panel_layout = saved_layout;
+    }
+
     printf("repl_core_commit: %d/%d passed\n", g_pass, g_run);
     return (g_run == g_pass) ? 0 : 1;
 }

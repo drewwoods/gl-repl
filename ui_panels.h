@@ -40,6 +40,13 @@ int  ui_panels_handle_scene_press(int mx, int my);  /* returns 1 if consumed */
 int  ui_panels_handle_motion(int mx, int my);       /* returns 1 if consumed */
 void ui_panels_handle_mouse_release(void);
 
+/* Test support: color picker state inspection and hit-rect setup without GL. */
+#define UI_PANELS_SWATCH_W 12   /* inline swatch width; mirrors SWATCH_W in ui_panels.c */
+int  ui_panels_color_picker_is_open(void);
+int  ui_panels_open_color_picker(int cmd_idx, int glut_y); /* returns 1 on success */
+void ui_panels_setup_color_picker_rects(void);     /* populate rects from g_cp_px/py */
+void ui_panels_color_picker_sv_rect(int *out_x, int *out_y, int *out_sz);
+
 /* Inline rename of a user-scene slot.  While active the keyboard dispatcher
  * forwards keystrokes into ui_panels_handle_rename_key/special; commit
  * (Enter) calls repl_user_scene_rename, cancel (Esc) discards. */
