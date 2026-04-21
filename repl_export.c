@@ -2271,13 +2271,18 @@ void save_output(const char *filename) {
     write_light_setup(f);
 
     fprintf(f, "\n  /* Vertex Fill Pass */\n");
+    fprintf(f, "  glPushAttrib(GL_ALL_ATTRIB_BITS);\n");
     fprintf(f, "  glPushMatrix();\n");
     fprintf(f, "  reset_repl_vars();\n");
     fprintf(f, "  render_repl_geometry();\n");
     fprintf(f, "  glPopMatrix();\n");
+    fprintf(f, "  glPopAttrib();\n");
 
     if (g_show_outlines) {
         fprintf(f, "\n  /* Vertex Outline Pass */\n");
+        fprintf(f, "  glPushAttrib(GL_ALL_ATTRIB_BITS);\n");
+        fprintf(f, "  glEnable(GL_COLOR_MATERIAL);\n");
+        fprintf(f, "  glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE);\n");
         fprintf(f, "  glColor3f(0.0f, 0.0f, 0.0f);\n");
         fprintf(f, "  glDisable(GL_COLOR_MATERIAL);\n");
         fprintf(f, "  glEnable(GL_POLYGON_OFFSET_LINE);\n");
@@ -2290,13 +2295,14 @@ void save_output(const char *filename) {
         fprintf(f, "  reset_repl_vars();\n");
         fprintf(f, "  render_repl_geometry();\n");
         fprintf(f, "  glPopMatrix();\n");
-        fprintf(f, "  glLineWidth(1.0f);\n");
-        fprintf(f, "  glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);\n");
-        fprintf(f, "  glDisable(GL_POLYGON_OFFSET_LINE);\n");
+        fprintf(f, "  glPopAttrib();\n");
     }
 
     if (g_show_vpoints) {
         fprintf(f, "\n  /* Vertex Point Pass */\n");
+        fprintf(f, "  glPushAttrib(GL_ALL_ATTRIB_BITS);\n");
+        fprintf(f, "  glEnable(GL_COLOR_MATERIAL);\n");
+        fprintf(f, "  glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE);\n");
         fprintf(f, "  glColor3f(0.0f, 0.0f, 0.0f);\n");
         fprintf(f, "  glDisable(GL_COLOR_MATERIAL);\n");
         fprintf(f, "  glPointSize(8.0f);\n");
@@ -2306,8 +2312,7 @@ void save_output(const char *filename) {
         fprintf(f, "  reset_repl_vars();\n");
         fprintf(f, "  render_repl_geometry();\n");
         fprintf(f, "  glPopMatrix();\n");
-        fprintf(f, "  glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);\n");
-        fprintf(f, "  glPointSize(1.0f);\n");
+        fprintf(f, "  glPopAttrib();\n");
     }
 
     for (int i = 0; g_footer_pre_init[i]; i++)
