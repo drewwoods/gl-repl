@@ -1291,16 +1291,6 @@ static void compute_before_cursor_matrix(int cursor_flat_idx, float out[16]) {
     glPopMatrix();
 }
 
-/* Position-only wrapper for non-rotating guides that still anchor in Frame
- * mode without inheriting pre-cursor orientation. */
-static void compute_before_cursor_origin(int cursor_flat_idx, float out[3]) {
-    float m[16];
-    compute_before_cursor_matrix(cursor_flat_idx, m);
-    out[0] = m[12];
-    out[1] = m[13];
-    out[2] = m[14];
-}
-
 /* Walk flat cmds forward from first_after_idx, applying only transform cmds
  * to a fresh identity matrix (keeps its own push/pop depth so nested blocks
  * don't leak). Stops at the first rendering action so transforms that come
@@ -2710,37 +2700,44 @@ void render_3d_scene(void) {
          *     pre-cursor transforms (which wrap this sub-expression) don't
          *     move the guide.
          *
-         *   Frame (1): render at the live frame. Translation/scale guides
-         *     keep the existing position-anchor behavior; rotate guides use
-         *     the full pre-cursor modelview so prior rotations orient the
-         *     guide axis and arc with the frame being edited. */
+         *   Frame (1): render at the live frame. Loads view · M_before as the
+         *     modelview so pre-cursor rotations orient translate arrows, scale
+         *     axes, and rotate arcs with the frame being edited. The cursor
+         *     command's "acts-on" point is the local origin. */
         if (tg_want && i == tg_first_cursor_flat) {
             /* Read args from the flat cmd, not the source cmd — when the
              * command uses variables (e.g. glRotatef(3*t, 0,1,0)), flatten
              * re-evaluates into g_flat_cmds[].args[] each frame, while
              * g_cmds[].args[] keeps its initial-parse value. */
             const GLCmd *live_cmd = &g_flat_cmds[i];
-            float p_after[3];
-            compute_after_cursor_origin(tg_first_after_flat, p_after);
+            float p_guide[3];
             glPushMatrix();
-            glLoadMatrixf(tg_cam_view);
-            if (g_xform_guide_mode == 1 && live_cmd->type == CMD_ROTATEF) {
+            if (g_xform_guide_mode == 1) {
+                /* Frame mode: load view · M_before so the guide renders in the
+                 * cursor's local frame — pre-cursor rotations re-orient the
+                 * translate arrow, scale axes, and rotate arc together. */
                 float frame[16];
                 float guide_mv[16];
                 compute_before_cursor_matrix(tg_first_cursor_flat, frame);
                 mat4_mul_col_major(tg_cam_view, frame, guide_mv);
                 glLoadMatrixf(guide_mv);
-            } else if (g_xform_guide_mode == 1) {
-                float anchor[3];
-                compute_before_cursor_origin(tg_first_cursor_flat, anchor);
-                glTranslatef(anchor[0], anchor[1], anchor[2]);
+                /* In local frame the "after" point the cursor command acts on
+                 * is the local origin. draw_scale_guide's origin fallback then
+                 * draws three per-axis arrows, which is what scale-of-origin
+                 * naturally collapses to. */
+                p_guide[0] = p_guide[1] = p_guide[2] = 0.0f;
+            } else {
+                /* World mode: render in world axes at the world-space point
+                 * the cursor command acts on. */
+                glLoadMatrixf(tg_cam_view);
+                compute_after_cursor_origin(tg_first_after_flat, p_guide);
             }
             if (live_cmd->type == CMD_TRANSLATE3F)
-                draw_translate_guide(live_cmd, p_after);
+                draw_translate_guide(live_cmd, p_guide);
             else if (live_cmd->type == CMD_SCALEF)
-                draw_scale_guide(live_cmd, p_after);
+                draw_scale_guide(live_cmd, p_guide);
             else
-                draw_rotate_guide(live_cmd, p_after);
+                draw_rotate_guide(live_cmd, p_guide);
             glPopMatrix();
             tg_want = 0;
         }
