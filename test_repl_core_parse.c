@@ -398,6 +398,36 @@ int main(void) {
         ASSERT_TRUE("gluBegin CONTOUR type", cmd.type == CMD_TESS_BEGIN_CONTOUR);
     }
 
+    /* glDepthMask — bool-enum state command */
+    {
+        repl_reset_state();
+        GLCmd cmd;
+        memset(&cmd, 0, sizeof(cmd));
+        int ok = repl_parse_command("glDepthMask(GL_FALSE)", &cmd);
+        ASSERT_TRUE("glDepthMask(GL_FALSE) parse ok", ok == 1);
+        ASSERT_TRUE("glDepthMask type", cmd.type == CMD_DEPTH_MASK);
+        ASSERT_TRUE("glDepthMask mode GL_FALSE", cmd.mode == GL_FALSE);
+        ASSERT_TRUE("glDepthMask source canonicalized",
+                    strstr(cmd.source, "glDepthMask(GL_FALSE);") != NULL);
+    }
+    {
+        repl_reset_state();
+        GLCmd cmd;
+        memset(&cmd, 0, sizeof(cmd));
+        int ok = repl_parse_command("glDepthMask(GL_TRUE)", &cmd);
+        ASSERT_TRUE("glDepthMask(GL_TRUE) parse ok", ok == 1);
+        ASSERT_TRUE("glDepthMask GL_TRUE mode", cmd.mode == GL_TRUE);
+    }
+    {
+        repl_reset_state();
+        GLCmd cmd;
+        memset(&cmd, 0, sizeof(cmd));
+        int ok = repl_parse_command("glDepthMask(1)", &cmd);
+        ASSERT_TRUE("glDepthMask rejects non-enum arg", ok == 0);
+        assert_status_contains("glDepthMask rejects non-enum status",
+                               "GL_TRUE");
+    }
+
     /* whitespace + semicolon trimming stays predictable */
     {
         repl_reset_state();

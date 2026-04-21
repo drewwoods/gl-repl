@@ -213,6 +213,7 @@ typedef enum {
     CMD_POINT_PARAMETER_FV,
     CMD_BLEND_FUNC,
     CMD_CLEAR_COLOR,
+    CMD_DEPTH_MASK,
     CMD_TYPE_COUNT
 } CmdType;
 

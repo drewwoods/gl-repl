@@ -522,6 +522,7 @@ glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA|GL_ONE)
 glColorMaterial(face, mode), glMaterialf(face, pname, value)
   glColorMaterial mode: GL_AMBIENT, GL_DIFFUSE, GL_SPECULAR, GL_EMISSION, GL_AMBIENT_AND_DIFFUSE
 glLightModeli(pname, param), glFrontFace(mode)
+glDepthMask(GL_TRUE|GL_FALSE)
 gluSphere(r, slices, stacks)
 gluCylinder(base, top, height, slices, stacks)
 gluDisk(inner, outer, slices, loops)
