@@ -7,6 +7,7 @@
 #include "sample.h"
 #include "repl_core.h"
 #include "repl_core_internal.h"
+#include "repl_clipboard.h"
 #include "repl_keys.h"
 #include "profile_panel.h"
 #include "ui_panels.h"
@@ -4459,8 +4460,8 @@ int handle_code_panel_drag(int mx, int my) {
 
     if (target != g_code_panel_drag_anchor || g_code_panel_drag_moved) {
         g_code_panel_drag_moved = 1;
-        g_sel_anchor = g_code_panel_drag_anchor;
-        g_sel_end = target;
+        repl_selection_start(g_code_panel_drag_anchor);
+        repl_selection_set_end(target);
         navigate_to_line(target);
         g_cursor_on = 1;
         g_blink_tick = 0;

@@ -1,4 +1,5 @@
 #include "repl_core_internal.h"
+#include "repl_clipboard.h"
 #include "repl_replay.h"
 #include "repl_keys.h"
 #include "sample.h"

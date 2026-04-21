@@ -368,11 +368,6 @@ GLenum current_begin_mode(void);
 int  count_vertices(void);
 void mark_normals_dirty(void);
 
-void clear_selection(void);
-int  sel_active(void);
-int  sel_lo(void);
-int  sel_hi(void);
-
 int  repl_search_row_count(void);
 const char *repl_search_row_text(int row_idx);
 int  repl_search_row_for_cmd_index(int cmd_idx);
