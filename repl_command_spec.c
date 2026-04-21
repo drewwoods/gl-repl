@@ -15,17 +15,18 @@ static const EnumEntry k_begin_modes[] = {
 };
 
 static const EnumEntry k_enable_caps[] = {
-    { "GL_DEPTH_TEST",      GL_DEPTH_TEST },
-    { "GL_LIGHTING",        GL_LIGHTING },
-    { "GL_COLOR_MATERIAL",  GL_COLOR_MATERIAL },
-    { "GL_NORMALIZE",       GL_NORMALIZE },
-    { "GL_LINE_SMOOTH",     GL_LINE_SMOOTH },
-    { "GL_POINT_SMOOTH",    GL_POINT_SMOOTH },
     { "GL_BLEND",           GL_BLEND },
+    { "GL_COLOR_MATERIAL",  GL_COLOR_MATERIAL },
+    { "GL_CULL_FACE",       GL_CULL_FACE },
+    { "GL_DEPTH_TEST",      GL_DEPTH_TEST },
     { "GL_LIGHT0",          GL_LIGHT0 },
     { "GL_LIGHT1",          GL_LIGHT1 },
     { "GL_LIGHT2",          GL_LIGHT2 },
     { "GL_LIGHT3",          GL_LIGHT3 },
+    { "GL_LIGHTING",        GL_LIGHTING },
+    { "GL_LINE_SMOOTH",     GL_LINE_SMOOTH },
+    { "GL_NORMALIZE",       GL_NORMALIZE },
+    { "GL_POINT_SMOOTH",    GL_POINT_SMOOTH },
     { NULL, 0 }
 };
 

@@ -638,14 +638,19 @@ made safe for concurrent `.gcda` writes.
 2. Add the matching `ReplCommandTypeSpec` entry in `repl_command_spec.c`.
    This table owns command debug names plus reformatter traits such as
    semicolon and block-indent behavior.
-3. Extend parser handling in `repl_core.c`.
+3. Extend parser handling.
+   - Table-driven entries live in `repl_command_spec.c`; the generic loop in
+     `parse_command()` (`repl_core.c`) walks those tables so most commands
+     need no changes to `repl_core.c` itself.
    - Pure numeric calls usually belong in `k_std_command_specs`.
    - Enum-driven calls usually belong in `k_enum_command_specs`; add a dedicated
      `EnumEntry` table when the legal enum set differs from a similar command
      (for example `glColorMaterial` modes are not the same as all
-     `glMaterialf` pnames).
+     `glMaterialf` pnames). Reuse `k_bool_vals` for `GL_TRUE` / `GL_FALSE`
+     arguments (see `glDepthMask`).
    - Special arity, vector/scalar alternatives, block commands, or commands
-     with custom validation should get an explicit parser branch.
+     with custom validation need an explicit parser branch in `repl_core.c`
+     (alongside `glMaterialf`, `glPointParameterfv`, `gluBegin`, `funcN`, etc.).
 4. Extend execution handling in `repl_executor.c`.
    - State-only commands normally go through `apply_state_cmd()`, then are
      dispatched from `execute_commands()`.
@@ -663,15 +668,20 @@ made safe for concurrent `.gcda` writes.
      state belongs in `g_render_state_lines` plus `RENDER_STATE_LINE_COUNT`;
      one-time init scaffold belongs in `g_init_bootstrap_repl` or host-only
      init arrays.
-7. Extend autocomplete and parameter hints in `repl_autocomplete.c`.
-   - Add the callable signature to `k_func_completions`.
-   - Add enum-argument completion through `k_enum_command_specs` when applicable.
+7. Extend autocomplete and parameter hints.
+   - Add the callable signature to `k_func_completions` in
+     `repl_command_spec.c`. `repl_autocomplete.c` only consumes these tables;
+     it rarely needs edits unless the command uses a bespoke completion mode
+     (e.g. `AC_MODE_POINT_PARAM`).
+   - Enum-argument completion is automatic once the command appears in
+     `k_enum_command_specs` with non-NULL `enums1` / `enums2`.
    - Add focused coverage in `test_repl_autocomplete.c` for ambiguous enum
      sets and multi-argument completions.
 8. Extend editor/UI affordances and docs if the command is user-facing.
-   Common touch points are `ui_panels.c` help text, `README.md`, `CLAUDE.md`,
-   color swatches, command formatting, search/highlight behavior, and any
-   editor-specific validation in `repl_editor.c`.
+   Common touch points are the `tab_commands[]` help overlay and
+   `color_for_type()` in `ui_panels.c`, `README.md`, `CLAUDE.md`, `AGENTS.md`,
+   command formatting, search/highlight behavior, and any editor-specific
+   validation in `repl_editor.c`.
 9. Update local stub headers when a new GL/GLU/GLUT symbol, enum, or callback
    enters compiled code. Mirror symbols in `include/GL/`, `include/GLUT/`,
    `include/OpenGL/`, and `include/GL/gl_stub_counts.h` as needed so
