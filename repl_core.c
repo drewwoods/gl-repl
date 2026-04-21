@@ -2703,15 +2703,26 @@ int apply_state_cmd(const GLCmd *cmd, float alpha_scale) {
     }
 }
 
-/* Walk g_flat_cmds[0..g_num_flat_cmds) and issue the corresponding GL
+static int execution_flat_count_from_options(const ReplExecutionOptions *options) {
+    int flat_cmd_count = options ? options->flat_cmd_count : g_num_flat_cmds;
+
+    if (flat_cmd_count < 0)
+        flat_cmd_count = 0;
+    if (flat_cmd_count > g_num_flat_cmds)
+        flat_cmd_count = g_num_flat_cmds;
+    return flat_cmd_count;
+}
+
+/* Walk g_flat_cmds[0..flat_cmd_count) and issue the corresponding GL
  * calls.  Handles vertex submission, state changes (enable, material,
  * blend, etc.), GLU quadrics and tessellator commands, transforms,
  * goto/label control flow, if-block evaluation, and variable assignments.
  *
  * Called once per frame from display_func (or twice when accumulation AA
- * is active) with g_num_flat_cmds optionally clamped by the replay
- * subsystem. */
-void execute_commands(void) {
+ * is active). Replay and fade passes provide an explicit limit instead of
+ * temporarily mutating g_num_flat_cmds. */
+void repl_execute_program(const ReplExecutionOptions *options) {
+    int flat_cmd_count = execution_flat_count_from_options(options);
     int in_begin = 0;
     int tess_depth = 0; /* 0=outside, 1=in polygon, 2=in contour */
     int matrix_depth = 0;
@@ -2722,7 +2733,7 @@ void execute_commands(void) {
     tess_current_color[3] = g_execute_alpha_scale;
 
     int pc = 0;
-    while (pc < g_num_flat_cmds) {
+    while (pc < flat_cmd_count) {
         if (!g_flat_cmds[pc].valid) { pc++; continue; }
         if (is_transform_cmd(g_flat_cmds[pc].type)) {
             apply_tracked_transform_cmd(&g_flat_cmds[pc], &matrix_depth);
@@ -2907,7 +2918,7 @@ void execute_commands(void) {
                 set_status("goto: loop limit reached");
                 goto execute_done;
             }
-            for (int li = 0; li < g_num_flat_cmds; li++) {
+            for (int li = 0; li < flat_cmd_count; li++) {
                 if (g_flat_cmds[li].valid && g_flat_cmds[li].type == CMD_LABEL) {
                     char target_label[64];
                     if (repl_extract_label_name(g_flat_cmds[li].source,
@@ -2945,7 +2956,7 @@ void execute_commands(void) {
             if (cond == 0.0f) {
                 /* Skip to matching CMD_IF_END */
                 int depth = 1;
-                while (depth > 0 && ++pc < g_num_flat_cmds) {
+                while (depth > 0 && ++pc < flat_cmd_count) {
                     if (g_flat_cmds[pc].type == CMD_IF_BEGIN) depth++;
                     else if (g_flat_cmds[pc].type == CMD_IF_END) depth--;
                 }
@@ -2999,6 +3010,10 @@ execute_done:;
         if (tess_depth == 1 && g_tess) { gluTessEndPolygon(g_tess); }
     }
     unwind_tracked_transform_stack(&matrix_depth);
+}
+
+void execute_commands(void) {
+    repl_execute_program(NULL);
 }
 
 /* ========================================================================= */

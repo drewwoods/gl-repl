@@ -701,7 +701,6 @@ int replay_handle_special_key(int key) {
 }
 
 void execute_replay_fade_batches(void) {
-    int saved_flat_count = g_num_flat_cmds;
     int skip_limits[REPLAY_FADE_BATCH_MAX];
 
     if (!replay_has_active_fades())
@@ -757,8 +756,10 @@ void execute_replay_fade_batches(void) {
             continue;
 
         prof_begin(PROF_SCENE_3D_FADE_BATCH_PREP);
+        ReplExecutionOptions exec_options = {
+            .flat_cmd_count = g_replay_fade_batches[i].new_pc
+        };
         replay_restore_baseline_predef_values();
-        g_num_flat_cmds = g_replay_fade_batches[i].new_pc;
         repl_execute_set_fade_context(alpha, skip_limits[i]);
 
         glDisable(GL_LIGHTING);
@@ -770,7 +771,7 @@ void execute_replay_fade_batches(void) {
         prof_accum_end(PROF_SCENE_3D_FADE_BATCH_PREP);
 
         prof_begin(PROF_SCENE_3D_FADE_BATCH_EXEC);
-        execute_commands();
+        repl_execute_program(&exec_options);
         prof_accum_end(PROF_SCENE_3D_FADE_BATCH_EXEC);
 
         glPopMatrix();
@@ -778,7 +779,6 @@ void execute_replay_fade_batches(void) {
 
     prof_begin(PROF_SCENE_3D_FADE_BATCH_POST);
     repl_execute_set_fade_context(1.0f, 0);
-    g_num_flat_cmds = saved_flat_count;
     glPopAttrib();
     prof_accum_end(PROF_SCENE_3D_FADE_BATCH_POST);
 }

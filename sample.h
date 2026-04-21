@@ -382,6 +382,10 @@ int  repl_search_find_prev_in_text(const char *text, const char *query,
                                    int start_pos);
 
 void navigate_to_line(int target);
+typedef struct {
+    int flat_cmd_count;
+} ReplExecutionOptions;
+void repl_execute_program(const ReplExecutionOptions *options);
 void execute_commands(void);
 void execute_replay_fade_batches(void);
 void flatten_commands(void);
