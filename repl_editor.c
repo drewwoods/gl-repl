@@ -2,7 +2,7 @@
  * repl_editor.c — Editor state, line routing, and GLUT input dispatch.
  *
  * Subsystems in this file (top to bottom):
- *  - Editor state (g_input, camera inertia, config-item table)
+ *  - Editor state (g_input, config-item table)
  *  - Cmd-range deletion with var-decl guards
  *  - Line-input load/save and line navigation
  *  - Commit attempt orchestration and Enter/navigation outcomes
@@ -18,6 +18,7 @@
 #include "sample.h"
 #include "repl_core_internal.h"
 #include "repl_command_store.h"
+#include "repl_camera_controls.h"
 #include "repl_clipboard.h"
 #include "repl_undo.h"
 #include "repl_replay.h"
@@ -57,23 +58,6 @@ int  g_edit_line = 0;
 char g_newline_buf[MAX_INPUT_LEN] = "";
 int  g_newline_len = 0;
 int  g_inserting = 0;
-
-int g_mouse_x, g_mouse_y;
-int g_mouse_btn = -1;
-int g_mouse_mods = -1; /* Modifiers at the time of the last mouse event.
-                          Can't call glutGetModifiers() from mouse outside
-                          keyboard, special, or mouse callbacks */
-
-static float g_vel_ry = 0.0f;
-static float g_vel_rx = 0.0f;
-static float g_vel_tx = 0.0f;
-static float g_vel_ty = 0.0f;
-static float g_vel_tz = 0.0f;
-static float g_vel_zoom = 0.0f;
-
-#define CAM_DECAY 0.88f
-#define CAM_DECAY_ZOOM 0.65f
-#define CAM_MOMENTUM_THRESHOLD 1.0f
 
 float g_panel_frac = CFG_DEFAULT_PANEL_FRAC;
 int   g_resizing_panel = 0;
@@ -317,6 +301,7 @@ static void save_newline_buf(void) {
 
 void repl_editor_reset_transients(void) {
     repl_commit_reset_transients();
+    repl_camera_controls_reset();
 }
 
 static int normalize_navigation_target(int target) {
@@ -1621,23 +1606,7 @@ static void mouse_func(int button, int state, int x, int y) {
         }
     }
 
-    // cache modifiers since can't be queried outside of an input event callback
-    g_mouse_mods = editor_get_modifiers();
-
-    if (state == GLUT_DOWN) {
-        g_mouse_btn = button;
-        g_mouse_x = x;
-        g_mouse_y = y;
-        g_vel_ry = g_vel_rx = g_vel_tx = g_vel_ty = g_vel_tz = g_vel_zoom = 0.0f;
-    } else {
-        g_vel_ry = fabsf(g_vel_ry) > CAM_MOMENTUM_THRESHOLD ? g_vel_ry : 0.0f;
-        g_vel_rx = fabsf(g_vel_rx) > CAM_MOMENTUM_THRESHOLD ? g_vel_rx : 0.0f;
-        g_vel_tx = fabsf(g_vel_tx) > CAM_MOMENTUM_THRESHOLD ? g_vel_tx : 0.0f;
-        g_vel_ty = fabsf(g_vel_ty) > CAM_MOMENTUM_THRESHOLD ? g_vel_ty : 0.0f;
-        g_vel_tz = fabsf(g_vel_tz) > CAM_MOMENTUM_THRESHOLD ? g_vel_tz : 0.0f;
-        g_vel_zoom = fabsf(g_vel_zoom) > CAM_MOMENTUM_THRESHOLD ? g_vel_zoom : 0.0f;
-        g_mouse_btn = -1;
-    }
+    repl_camera_mouse_event(button, state, x, y, editor_get_modifiers());
 
 #ifdef USE_GLUT
     if (button == 3 && state == GLUT_DOWN) {
@@ -1647,7 +1616,7 @@ static void mouse_func(int button, int state, int x, int y) {
             if (editor_point_in_code_panel(x, y))
                 g_scroll--;
             else
-                g_vel_zoom -= 0.3f;
+                repl_camera_add_zoom_velocity(-0.3f);
         }
         glutPostRedisplay();
     } else if (button == 4 && state == GLUT_DOWN) {
@@ -1657,7 +1626,7 @@ static void mouse_func(int button, int state, int x, int y) {
             if (editor_point_in_code_panel(x, y))
                 g_scroll++;
             else
-                g_vel_zoom += 0.3f;
+                repl_camera_add_zoom_velocity(0.3f);
         }
         glutPostRedisplay();
     }
@@ -1673,15 +1642,14 @@ static void mousewheel_func(int wheel, int direction, int x, int y) {
         if (editor_point_in_code_panel(x, y))
             g_scroll -= direction;
         else
-            g_vel_zoom -= direction * 0.1f;
+            repl_camera_add_zoom_velocity(-(float)direction * 0.1f);
     }
     glutPostRedisplay();
 }
 #endif
 
 static void passive_motion_func(int x, int y) {
-    g_mouse_x = x;
-    g_mouse_y = y;
+    repl_camera_pointer_set(x, y);
 
     if (editor_point_on_code_panel_divider(x, y))
         glutSetCursor(editor_code_panel_resize_cursor());
@@ -1691,13 +1659,10 @@ static void passive_motion_func(int x, int y) {
 
 static void motion_func(int x, int y) {
     if (ui_panels_handle_motion(x, y)) {
-        g_mouse_x = x;  g_mouse_y = y;
+        repl_camera_pointer_set(x, y);
         glutPostRedisplay();
         return;
     }
-
-    int dx = x - g_mouse_x;
-    int dy = y - g_mouse_y;
 
     if (g_resizing_panel) {
         editor_update_panel_frac_from_mouse(x, y);
@@ -1737,75 +1702,18 @@ static void motion_func(int x, int y) {
             }
         }
         g_flat_dirty = 1;
-        g_mouse_x = x;
-        g_mouse_y = y;
+        repl_camera_pointer_set(x, y);
         glutPostRedisplay();
         return;
     }
 
     if (handle_code_panel_drag(x, y)) {
-        g_mouse_x = x;
-        g_mouse_y = y;
+        repl_camera_pointer_set(x, y);
         glutPostRedisplay();
         return;
     }
 
-    if (g_mouse_btn == GLUT_LEFT_BUTTON) {
-        g_cam_ry += (float)dx * 0.5f;
-        g_cam_rx += (float)dy * 0.5f;
-        g_cam_ry = fmodf(g_cam_ry, 360.0f);
-        if (g_cam_rx > 89.0f)
-            g_cam_rx = 89.0f;
-        if (g_cam_rx < -89.0f)
-            g_cam_rx = -89.0f;
-        g_vel_rx *= CAM_DECAY;
-        g_vel_ry *= CAM_DECAY;
-        g_vel_ry += (float)dx * 0.25f;
-        g_vel_rx += (float)dy * 0.25f;
-    } else if (g_mouse_btn == GLUT_RIGHT_BUTTON) {
-        float scale = 0.005f * g_cam_dist;
-        float fdy = (float)dy;
-        if (g_mouse_mods & GLUT_ACTIVE_SHIFT) {
-            /* Shift + right-drag: pan the orbit target along world Y. */
-            float wdy = -fdy * scale;
-            g_cam_ty -= wdy;
-            g_vel_ty *= CAM_DECAY;
-            g_vel_ty += wdy * 0.5f;
-            g_cam_motion_glow = 1.0f;
-        } else {
-            /* Pan the orbit target along the world XZ ground plane.
-             *
-             * Camera transform is Rx(rx)·Ry(ry)·T(-target), so a view-space
-             * direction v maps back to world by Ry(-ry)·Rx(-rx)·v. Projected
-             * onto the ground (Y=0):
-             *   right_xz   = (+cos ry, 0, +sin ry)   (screen +X)
-             *   forward_xz = (+sin ry, 0, -cos ry)   (screen -Y / mouse-up)
-             *
-             * Mouse-down (dy < 0) pulls the target back toward the camera,
-             * so we subtract forward_xz * dy. World Y is preserved. */
-            float ry_rad = g_cam_ry * (float)M_PI / 180.0f;
-            float cry = cosf(ry_rad), sry = sinf(ry_rad);
-            float fdx = (float)dx;
-            float wdx = ( fdx * cry - fdy * sry) * scale;
-            float wdz = ( fdx * sry + fdy * cry) * scale;
-            g_cam_tx -= wdx;
-            g_cam_tz -= wdz;
-            g_vel_tx *= CAM_DECAY;
-            g_vel_tz *= CAM_DECAY;
-            g_vel_tx += wdx * 0.5f;
-            g_vel_tz += wdz * 0.5f;
-            g_cam_motion_glow = 1.0f;
-        }
-    } else if (g_mouse_btn == GLUT_MIDDLE_BUTTON) {
-        g_cam_dist += (float)dy * 0.02f;
-        if (g_cam_dist < 0.5f)
-            g_cam_dist = 0.5f;
-        if (g_cam_dist > 50.0f)
-            g_cam_dist = 50.0f;
-    }
-
-    g_mouse_x = x;
-    g_mouse_y = y;
+    repl_camera_drag_motion(x, y);
 }
 
 static void timer_func(int value) {
@@ -1848,51 +1756,7 @@ static void timer_func(int value) {
         }
     }
 
-    if (g_mouse_btn == -1) {
-        g_cam_ry += g_vel_ry;
-        g_cam_rx += g_vel_rx;
-        g_cam_ry = fmodf(g_cam_ry, 360.0f);
-        if (g_cam_rx > 89.0f) {
-            g_cam_rx = 89.0f;
-            g_vel_rx = 0.0f;
-        }
-        if (g_cam_rx < -89.0f) {
-            g_cam_rx = -89.0f;
-            g_vel_rx = 0.0f;
-        }
-        g_cam_tx += g_vel_tx;
-        g_cam_ty += g_vel_ty;
-        g_cam_tz += g_vel_tz;
-        g_cam_dist += g_vel_zoom;
-        if (g_cam_dist < 0.5f) {
-            g_cam_dist = 0.5f;
-            g_vel_zoom = 0.0f;
-        }
-        if (g_cam_dist > 50.0f) {
-            g_cam_dist = 50.0f;
-            g_vel_zoom = 0.0f;
-        }
-    }
-
-    g_vel_ry *= CAM_DECAY;
-    g_vel_rx *= CAM_DECAY;
-    g_vel_tx *= CAM_DECAY;
-    g_vel_ty *= CAM_DECAY;
-    g_vel_tz *= CAM_DECAY;
-    g_vel_zoom *= CAM_DECAY_ZOOM;
-
-    /* Gizmo is a pan-only affordance. Keep it lit while pan momentum
-     * carries the target, then fade out. Rotate/zoom do not trigger it. */
-    float pan_vel = fabsf(g_vel_tx) + fabsf(g_vel_ty) + fabsf(g_vel_tz);
-    if (pan_vel > 0.01f && g_cam_motion_glow < 0.6f)
-        g_cam_motion_glow = 0.6f;
-    g_cam_motion_glow *= 0.94f;
-    if (g_cam_motion_glow < 0.005f) g_cam_motion_glow = 0.0f;
-
-    if (g_cam_rotate) {
-        g_cam_ry += 0.3f;
-        g_cam_ry = fmodf(g_cam_ry, 360.0f);
-    }
+    repl_camera_tick();
 
     g_blink_tick++;
     if (g_blink_tick >= 30) {
