@@ -236,8 +236,10 @@ static const InitBootstrapEntry g_init_bootstrap_repl[] = {
     { "glLightModeli(GL_LIGHT_MODEL_TWO_SIDE, GL_TRUE);", NULL },
     { "glEnable(GL_BLEND);", NULL },
     { "glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);", NULL },
+#ifndef NO_POINT_PARAMETER
     { "glPointParameterfv(GL_POINT_DISTANCE_ATTENUATION, 1.0, 0.0, 0.02);",
       &g_init_attenuate_points },
+#endif
 };
 #define NUM_INIT_BOOTSTRAP \
     ((int)(sizeof(g_init_bootstrap_repl) / sizeof(g_init_bootstrap_repl[0])))

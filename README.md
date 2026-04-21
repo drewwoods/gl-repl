@@ -1,3 +1,18 @@
+## Compile-time Options
+
+### `NO_POINT_PARAMETER=1`
+
+Disables `glPointParameterfv(GL_POINT_DISTANCE_ATTENUATION, ...)` for drivers or
+platforms that don't support it. Every `glPointSize(sz)` call is transparently
+replaced with `glPointSize(sz * 5 / cam_dist)`, approximating distance attenuation
+globally — vertex overlays, outlines, replay geometry, and user commands all scale
+together.
+
+```bash
+make sample NO_POINT_PARAMETER=1
+make glut   NO_POINT_PARAMETER=1
+```
+
 ## Design Goals
 
  - Launch pad.  Make its easy to get something goaling quickly.
