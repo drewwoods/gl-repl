@@ -836,10 +836,7 @@ void navigate_to_line(int target) {
     navigate_to_line_raw_resolved(target);
 }
 
-void keyboard_func(unsigned char key, int x, int y) {
-    (void)x;
-    (void)y;
-
+static void keyboard_begin_key(unsigned char key) {
     g_cursor_on = 1;
     g_blink_tick = 0;
 
@@ -850,38 +847,48 @@ void keyboard_func(unsigned char key, int x, int y) {
         clear_selection();
 
     g_scroll_follow_cursor = 1;
+}
 
+static int handle_rename_key_route(unsigned char key) {
     /* Rename overlay captures every keystroke while active, ahead of
      * the backtick/config, replay, and search branches — otherwise
      * typing `, or keys bound to replay would leak out of the rename
      * buffer and trigger unrelated UI. */
-    if (ui_panels_handle_rename_key(key))
-        return;
+    return ui_panels_handle_rename_key(key);
+}
 
+static int handle_config_menu_key_route(unsigned char key) {
     if (!g_search_active && key == '`') {
         if (g_replay_active)
             replay_stop();
         editor_restore_hidden_code_panel();
         ui_panels_open_config();
-        return;
+        return 1;
     }
+    return 0;
+}
 
-    if (g_replay_active && replay_handle_key(key))
-        return;
+static int handle_active_replay_key_route(unsigned char key) {
+    return g_replay_active && replay_handle_key(key);
+}
 
+static void restore_hidden_code_panel_for_key(unsigned char key) {
     if (editor_code_panel_hidden()) {
         int key_mods = editor_get_modifiers();
         if (editor_key_restores_hidden_code_panel(key, key_mods))
             editor_restore_hidden_code_panel();
     }
+}
 
-    if (handle_search_key(key))
-        return;
+static int handle_search_key_route(unsigned char key) {
+    return handle_search_key(key);
+}
 
+static int handle_escape_key_route(unsigned char key) {
     if (key == KEY_ESC) {
         if (ui_panels_handle_escape()) {
             glutPostRedisplay();
-            return;
+            return 1;
         }
         if (g_show_help) {
             g_show_help = 0;
@@ -900,44 +907,57 @@ void keyboard_func(unsigned char key, int x, int y) {
             g_cursor_pos = 0;
             set_status("Input cleared");
         }
-        return;
+        return 1;
     }
+    return 0;
+}
 
+static int handle_cfg_shortcut_key_route(unsigned char key) {
     for (int i = 0; i < CFG_ITEM_COUNT; i++) {
         if (!g_cfg_items[i].is_special && g_cfg_items[i].key_code > 0
                 && g_cfg_items[i].key_code < 32 && g_cfg_items[i].key_code == key) {
             repl_cfg_cycle_row(i, 1);
-            return;
+            return 1;
         }
     }
+    return 0;
+}
 
+static int handle_cursor_endpoint_key_route(unsigned char key) {
     if (key == KEY_CTRL_A) {
         g_cursor_pos = 0;
         update_autocomplete();
-        return;
+        return 1;
     }
     if (key == KEY_CTRL_E) {
         g_cursor_pos = g_input_len;
         update_autocomplete();
-        return;
+        return 1;
     }
+    return 0;
+}
 
+static int handle_undo_redo_key_route(unsigned char key) {
     if (key == KEY_CTRL_Z) {
         if (editor_get_modifiers() & GLUT_ACTIVE_SHIFT)
             do_redo();
         else
             pop_undo_snapshot();
-        return;
+        return 1;
     }
 
     if (key == KEY_CTRL_Y) {
         do_redo();
-        return;
+        return 1;
     }
+    return 0;
+}
 
-    if (replay_handle_key(key))
-        return;
+static int handle_replay_key_route(unsigned char key) {
+    return replay_handle_key(key);
+}
 
+static int handle_line_delete_key_route(unsigned char key) {
     if (key == KEY_CTRL_D) {
         if (g_inserting) {
             g_inserting = 0;
@@ -953,12 +973,15 @@ void keyboard_func(unsigned char key, int x, int y) {
         } else if (g_edit_line < g_num_cmds) {
             delete_cmd_range(g_edit_line, 1, "Deleted");
         }
-        return;
+        return 1;
     }
+    return 0;
+}
 
+static int handle_buffer_command_key_route(unsigned char key) {
     if (key == KEY_CTRL_L) {
         repl_clear_all_cmds();
-        return;
+        return 1;
     }
 
     if (key == KEY_CTRL_BACKSLASH) {
@@ -969,25 +992,28 @@ void keyboard_func(unsigned char key, int x, int y) {
         } else {
             set_status("Nothing to reformat");
         }
-        return;
+        return 1;
     }
 
     if (key == KEY_CTRL_P) {
         repl_debug_dump_editor(stdout);
         repl_debug_dump_flat_commands(stdout);
         set_status("Dumped editor + flat commands to stdout");
-        return;
+        return 1;
     }
 
     if (key == KEY_CTRL_S) {
         repl_save_default_output();
-        return;
+        return 1;
     }
+    return 0;
+}
 
+static int handle_copy_key_route(unsigned char key) {
     if (key == KEY_CTRL_C) {
         if (g_inserting) {
             clear_selection();
-            return;
+            return 1;
         }
         if (sel_active()) {
             int start = sel_lo();
@@ -997,10 +1023,10 @@ void keyboard_func(unsigned char key, int x, int y) {
                 hi = g_num_cmds - 1;
             count = hi - start + 1;
             if (!normalize_cmd_range(start, count, &start, &count))
-                return;
+                return 1;
             if (cmd_range_contains_var_decl(start, count)) {
                 set_var_decl_action_status("copy");
-                return;
+                return 1;
             }
             g_clipboard_count = 0;
             for (int i = start; i < start + count && g_clipboard_count < MAX_COMMANDS; i++)
@@ -1021,10 +1047,10 @@ void keyboard_func(unsigned char key, int x, int y) {
                 count = end_idx - start;
             }
             if (!normalize_cmd_range(start, count, &start, &count))
-                return;
+                return 1;
             if (cmd_range_contains_var_decl(start, count)) {
                 set_var_decl_action_status("copy");
-                return;
+                return 1;
             }
             g_clipboard_count = 0;
             for (int i = start; i < start + count && g_clipboard_count < MAX_COMMANDS; i++)
@@ -1045,13 +1071,16 @@ void keyboard_func(unsigned char key, int x, int y) {
             g_clipboard_count = 0;
         }
         clear_selection();
-        return;
+        return 1;
     }
+    return 0;
+}
 
+static int handle_cut_key_route(unsigned char key) {
     if (key == KEY_CTRL_X) {
         if (g_inserting) {
             clear_selection();
-            return;
+            return 1;
         }
         {
             int start;
@@ -1076,33 +1105,36 @@ void keyboard_func(unsigned char key, int x, int y) {
             } else {
                 g_clipboard_count = 0;
                 clear_selection();
-                return;
+                return 1;
             }
 
             if (!normalize_cmd_range(start, count, &start, &count))
-                return;
+                return 1;
             if (!delete_cmd_range_allowed(start, count))
-                return;
+                return 1;
 
             g_clipboard_count = 0;
             for (int i = 0; i < count && g_clipboard_count < MAX_COMMANDS; i++)
                 g_clipboard[g_clipboard_count++] = g_cmds[start + i];
             remove_cmd_range_unchecked(start, count, "Cut");
         }
-        return;
+        return 1;
     }
+    return 0;
+}
 
+static int handle_paste_key_route(unsigned char key) {
     if (key == KEY_CTRL_V) {
         if (g_clipboard_count > 0) {
             if (cmds_contain_var_decl(g_clipboard, g_clipboard_count)) {
                 set_var_decl_action_status("paste");
-                return;
+                return 1;
             }
             {
                 ReplCommandStore store = repl_command_store_live();
                 if (!repl_command_store_can_insert(&store, g_clipboard_count)) {
                     set_status("Command buffer full!");
-                    return;
+                    return 1;
                 }
             }
             push_undo_snapshot();
@@ -1113,7 +1145,7 @@ void keyboard_func(unsigned char key, int x, int y) {
                 if (!repl_command_store_insert_many(&store, pos, g_clipboard,
                                                     g_clipboard_count, 0)) {
                     set_status("Command buffer full!");
-                    return;
+                    return 1;
                 }
                 g_edit_line = pos + g_clipboard_count;
                 g_inserting = 0;
@@ -1129,9 +1161,12 @@ void keyboard_func(unsigned char key, int x, int y) {
         } else {
             set_status("Clipboard empty");
         }
-        return;
+        return 1;
     }
+    return 0;
+}
 
+static int handle_comment_toggle_key_route(unsigned char key) {
     if (key == '/' && (editor_get_modifiers() & GLUT_ACTIVE_CTRL)) {
         if (g_edit_line < g_num_cmds && !g_inserting) {
             push_undo_snapshot();
@@ -1176,12 +1211,16 @@ void keyboard_func(unsigned char key, int x, int y) {
                 }
             }
         }
-        return;
+        return 1;
     }
+    return 0;
+}
 
-    /* Removed Ctrl-B, Ctrl-N, Ctrl-T, Ctrl-U, Ctrl-O, Ctrl-W — handled via g_cfg_items loop */
-
-    if ((key == '=' || key == '+') && (editor_get_modifiers() & GLUT_ACTIVE_CTRL)) {
+static int handle_accum_samples_key_route(unsigned char key) {
+    if (key == '=' || key == '+') {
+        int mods = editor_get_modifiers();
+        if (!(mods & GLUT_ACTIVE_CTRL))
+            return 0;
         if (g_use_accum) {
             for (int i = 0; i < ACCUM_STEP_COUNT - 1; i++) {
                 if (g_accum_samples <= g_accum_steps[i]) {
@@ -1195,10 +1234,11 @@ void keyboard_func(unsigned char key, int x, int y) {
                 set_status(msg);
             }
         }
-        return;
+        return 1;
     }
 
-    if (key == KEY_CTRL_DASH || (key == '-' && (editor_get_modifiers() & GLUT_ACTIVE_CTRL))) {
+    if (key == KEY_CTRL_DASH ||
+        (key == '-' && (editor_get_modifiers() & GLUT_ACTIVE_CTRL))) {
         if (g_use_accum) {
             for (int i = ACCUM_STEP_COUNT - 1; i > 0; i--) {
                 if (g_accum_samples >= g_accum_steps[i]) {
@@ -1212,11 +1252,12 @@ void keyboard_func(unsigned char key, int x, int y) {
                 set_status(msg);
             }
         }
-        return;
+        return 1;
     }
+    return 0;
+}
 
-    /* Ctrl-W removed from here, handled via g_cfg_items loop */
-
+static int handle_text_delete_key_route(unsigned char key) {
     if (key == KEY_BACKSPACE || key == KEY_DELETE) {
         if (sel_active() && !g_inserting) {
             int start = sel_lo();
@@ -1224,7 +1265,7 @@ void keyboard_func(unsigned char key, int x, int y) {
             if (hi >= g_num_cmds)
                 hi = g_num_cmds - 1;
             delete_cmd_range(start, hi - start + 1, "Deleted");
-            return;
+            return 1;
         }
         if (g_cursor_pos > 0 && g_input_len > 0) {
             memmove(&g_input[g_cursor_pos - 1], &g_input[g_cursor_pos],
@@ -1233,36 +1274,45 @@ void keyboard_func(unsigned char key, int x, int y) {
             g_cursor_pos--;
             update_autocomplete();
         }
-        return;
+        return 1;
     }
+    return 0;
+}
 
+static int handle_tab_key_route(unsigned char key) {
     if (key == '\t') {
         if (g_ac_count > 0) {
             accept_autocomplete();
             update_autocomplete();
         }
-        return;
+        return 1;
     }
+    return 0;
+}
 
+static int handle_enter_key_route(unsigned char key) {
     if (key == '\r' || key == '\n') {
         if (g_ac_count > 0) {
             accept_autocomplete();
             update_autocomplete();
-            return;
+            return 1;
         }
 
         (void)commit_current_input(1);
         clear_autocomplete_state();
         mark_normals_dirty();
-        return;
+        return 1;
     }
+    return 0;
+}
 
+static int handle_semicolon_commit_key_route(unsigned char key) {
     if (key == ';') {
         if (g_input_len > 0) {
             push_undo_snapshot();
             if (try_commit_any()) {
                 clear_autocomplete_state();
-                return;
+                return 1;
             }
             {
                 GLCmd cmd;
@@ -1316,15 +1366,21 @@ void keyboard_func(unsigned char key, int x, int y) {
         }
         clear_autocomplete_state();
         mark_normals_dirty();
-        return;
+        return 1;
     }
+    return 0;
+}
 
+static int handle_quit_key_route(unsigned char key) {
     if (key == KEY_CTRL_Q) {
         repl_save_output(quit_tempfile);
         printf("Saved to %s\n", quit_tempfile);
         exit(0);
     }
+    return 0;
+}
 
+static int handle_printable_input_key_route(unsigned char key) {
     if (key >= 32 && key < 127 && g_input_len < MAX_INPUT_LEN - 2) {
         memmove(&g_input[g_cursor_pos + 1], &g_input[g_cursor_pos],
                 (size_t)(g_input_len - g_cursor_pos + 1));
@@ -1332,7 +1388,42 @@ void keyboard_func(unsigned char key, int x, int y) {
         g_input_len++;
         g_cursor_pos++;
         update_autocomplete();
+        return 1;
     }
+    return 0;
+}
+
+void keyboard_func(unsigned char key, int x, int y) {
+    (void)x;
+    (void)y;
+
+    keyboard_begin_key(key);
+
+    if (handle_rename_key_route(key))       return;
+    if (handle_config_menu_key_route(key))  return;
+    if (handle_active_replay_key_route(key)) return;
+
+    restore_hidden_code_panel_for_key(key);
+
+    if (handle_search_key_route(key))       return;
+    if (handle_escape_key_route(key))       return;
+    if (handle_cfg_shortcut_key_route(key)) return;
+    if (handle_cursor_endpoint_key_route(key)) return;
+    if (handle_undo_redo_key_route(key))    return;
+    if (handle_replay_key_route(key))       return;
+    if (handle_line_delete_key_route(key))  return;
+    if (handle_buffer_command_key_route(key)) return;
+    if (handle_copy_key_route(key))         return;
+    if (handle_cut_key_route(key))          return;
+    if (handle_paste_key_route(key))        return;
+    if (handle_comment_toggle_key_route(key)) return;
+    if (handle_accum_samples_key_route(key)) return;
+    if (handle_text_delete_key_route(key))  return;
+    if (handle_tab_key_route(key))          return;
+    if (handle_enter_key_route(key))        return;
+    if (handle_semicolon_commit_key_route(key)) return;
+    if (handle_quit_key_route(key))         return;
+    (void)handle_printable_input_key_route(key);
 }
 
 static void special_func(int key, int x, int y) {
