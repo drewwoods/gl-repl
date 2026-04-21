@@ -9,6 +9,7 @@
 #include "repl_clipboard.h"
 #include "repl_command_store.h"
 #include "repl_core_internal.h"
+#include "repl_undo.h"
 
 GLCmd g_clipboard[MAX_COMMANDS];
 int   g_clipboard_count = 0;

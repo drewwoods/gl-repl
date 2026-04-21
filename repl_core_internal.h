@@ -30,6 +30,7 @@
 
 #include "repl_core.h"
 #include "repl_replay.h"
+#include "repl_undo.h"
 
 #if defined(__GNUC__) || defined(__clang__)
 #define REPL_PRINTF_LIKE(fmt_idx, arg_idx) __attribute__((format(printf, fmt_idx, arg_idx)))
@@ -215,14 +216,6 @@ int  handle_search_special(int key);
 
 typedef int (*ReplModifierProvider)(void);
 void repl_set_modifier_provider_for_test(ReplModifierProvider provider);
-
-/* ---- Undo / redo ------------------------------------------------------ */
-
-/* Snapshot the current editor state onto the undo stack. Call BEFORE any
- * mutation; pushing clears the redo stack. */
-void push_undo_snapshot(void);
-void pop_undo_snapshot(void);
-void do_redo(void);
 
 /* Delete cmds[start..start+count) with a status-bar message describing
  * what was removed. Guards against removing a `float` decl whose variable

@@ -81,8 +81,9 @@ Run all: `make test`
 | `repl_commit.c` | Float declarations, variable assignments, structured block commits, close-brace commits |
 | `repl_core.h` | Public API (parse, flatten, display, input callbacks, user scene + workspace) |
 | `repl_core_internal.h` | Test-visible internals (normalize/commit pipeline, `feed_line`, `load_line_to_input`, `repl_promote_example_if_needed`) |
-| `repl_editor.c` | Keyboard/mouse handling, commit orchestration, undo/redo (`UndoSnapshot`), `CfgItem` array, F-key dispatch, auto-promote hook |
+| `repl_editor.c` | Keyboard/mouse handling, commit orchestration, `CfgItem` array, F-key dispatch |
 | `repl_clipboard.c` | Line selection anchors, command clipboard buffer, copy/cut/paste behavior |
+| `repl_undo.c` | Undo/redo snapshots, history rings, example auto-promote hook before mutation |
 | `repl_examples.c` | Predefined example data (`g_examples[]`, `g_example_names[]`) |
 | `repl_examples.h` | Example query API (`repl_examples_count/name/lines`) |
 | `repl_export.c` | `save_output` / `load_from_file`, workspace header directives, `@scene-name` / `@workspace-dir` markers |
@@ -443,8 +444,8 @@ Step-by-step execution visualization in `repl_core.c`:
 
 ### Undo/Redo
 
-Circular snapshot buffers in `repl_editor.c`:
-- `UndoSnapshot` captures `cmds[]`, `num_cmds`, `edit_line`,
+Circular snapshot buffers in `repl_undo.c`:
+- `ReplUndoSnapshot` captures `cmds[]`, `num_cmds`, `edit_line`,
   `predef_vals[]` — full editor state
 - `g_undo_buf[32]` and `g_redo_buf[32]` with head/count tracking
 - `push_undo_snapshot()` called before any mutation (delete, paste,
