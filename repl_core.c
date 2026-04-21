@@ -2073,14 +2073,16 @@ void recompute_autonormals(void) {
 #define MAX_FLATTEN_CALL_DEPTH 64
 #define MAX_FLATTEN_VISIT_BUDGET 200000
 
-static int g_flatten_call_depth = 0;
-static int g_flatten_abort = 0;
-static int g_flatten_visit_budget = 0;
+typedef struct {
+    int call_depth;
+    int abort;
+    int visit_budget;
+} FlattenContext;
 
-static void flatten_fail(const char *msg) {
-    if (!g_flatten_abort)
+static void flatten_fail(FlattenContext *ctx, const char *msg) {
+    if (!ctx->abort)
         set_status(msg);
-    g_flatten_abort = 1;
+    ctx->abort = 1;
 }
 
 /* Tag a flat command with its origin so cursor-highlighting, replay, and
@@ -2148,14 +2150,15 @@ static void refresh_current_block_highlight(void) {
  * calls are inlined, and if-blocks with loop-variable conditions are
  * evaluated.  `vars`/`nv` carry loop-variable and function-parameter
  * bindings from enclosing scopes. */
-static void flatten_range(int start, int end_idx, ExprVar *vars, int nv,
+static void flatten_range(FlattenContext *ctx,
+                          int start, int end_idx, ExprVar *vars, int nv,
                           int call_src_cmd_idx, int root_call_src_cmd_idx,
                           unsigned int func_scope_mask) {
     int i = start;
     while (i < end_idx && i < g_num_cmds) {
-        if (g_flatten_abort) return;
-        if (--g_flatten_visit_budget < 0) {
-            flatten_fail("Recursive expansion exceeded visit budget");
+        if (ctx->abort) return;
+        if (--ctx->visit_budget < 0) {
+            flatten_fail(ctx, "Recursive expansion exceeded visit budget");
             return;
         }
         if (!g_cmds[i].valid) { i++; continue; }
@@ -2191,7 +2194,7 @@ static void flatten_range(int start, int end_idx, ExprVar *vars, int nv,
                      (step_val > 0) ? (val < end_val - 1e-6f) : (val > end_val + 1e-6f);
                      val += step_val) {
                     if (--max_iters < 0) break;
-                    if (g_flatten_abort) return;
+                    if (ctx->abort) return;
                     ExprVar lvars[MAX_EXPR_VARS];
                     int lnv = 0;
                     if (lnv < MAX_EXPR_VARS) {
@@ -2204,7 +2207,7 @@ static void flatten_range(int start, int end_idx, ExprVar *vars, int nv,
                     if (vars)
                         for (int v = 0; v < nv && lnv < MAX_EXPR_VARS; v++)
                             lvars[lnv++] = vars[v];
-                    flatten_range(i + 1, loop_end, lvars, lnv,
+                    flatten_range(ctx, i + 1, loop_end, lvars, lnv,
                                   call_src_cmd_idx, root_call_src_cmd_idx,
                                   func_scope_mask);
                 }
@@ -2226,12 +2229,12 @@ static void flatten_range(int start, int end_idx, ExprVar *vars, int nv,
         /* Function calls: find definition and expand body inline */
         if (g_cmds[i].type == CMD_CALL) {
             int func_num = (int)g_cmds[i].args[0];
-            if (g_flatten_call_depth >= MAX_FLATTEN_CALL_DEPTH) {
+            if (ctx->call_depth >= MAX_FLATTEN_CALL_DEPTH) {
                 char msg[128];
                 snprintf(msg, sizeof(msg),
                          "Recursive expansion exceeded depth limit (%d) at func%d",
                          MAX_FLATTEN_CALL_DEPTH, func_num);
-                flatten_fail(msg);
+                flatten_fail(ctx, msg);
                 i++;
                 continue;
             }
@@ -2283,10 +2286,10 @@ static void flatten_range(int start, int end_idx, ExprVar *vars, int nv,
                     int nested_root_call = (root_call_src_cmd_idx >= 0)
                                          ? root_call_src_cmd_idx : i;
 
-                    g_flatten_call_depth++;
-                    flatten_range(k + 1, body_end, lvars, lnv,
+                    ctx->call_depth++;
+                    flatten_range(ctx, k + 1, body_end, lvars, lnv,
                                   i, nested_root_call, nested_func_mask);
-                    if (g_flatten_call_depth > 0) g_flatten_call_depth--;
+                    if (ctx->call_depth > 0) ctx->call_depth--;
                     break;
                 }
             }
@@ -2309,10 +2312,10 @@ static void flatten_range(int start, int end_idx, ExprVar *vars, int nv,
             if (needs_local_eval) {
                 char repl_cond[MAX_LINE_LEN];
                 c_expr_to_repl(cond_text, repl_cond, sizeof(repl_cond));
-                ExprCtx ctx = { repl_cond, vars, nv };
-                float cond = eval_expr(&ctx);
+                ExprCtx expr_ctx = { repl_cond, vars, nv };
+                float cond = eval_expr(&expr_ctx);
                 if (cond != 0.0f)
-                    flatten_range(i + 1, if_end, vars, nv,
+                    flatten_range(ctx, i + 1, if_end, vars, nv,
                                   call_src_cmd_idx, root_call_src_cmd_idx,
                                   func_scope_mask);
                 i = (if_end < g_num_cmds) ? if_end + 1 : g_num_cmds;
@@ -2327,7 +2330,7 @@ static void flatten_range(int start, int end_idx, ExprVar *vars, int nv,
                                         func_scope_mask);
                 g_num_flat_cmds++;
             } else {
-                flatten_fail("Flattened command limit reached");
+                flatten_fail(ctx, "Flattened command limit reached");
                 return;
             }
             i++;
@@ -2343,7 +2346,7 @@ static void flatten_range(int start, int end_idx, ExprVar *vars, int nv,
                                         func_scope_mask);
                 g_num_flat_cmds++;
             } else {
-                flatten_fail("Flattened command limit reached");
+                flatten_fail(ctx, "Flattened command limit reached");
                 return;
             }
             i++;
@@ -2352,7 +2355,7 @@ static void flatten_range(int start, int end_idx, ExprVar *vars, int nv,
 
         if ((g_cmds[i].type == CMD_LABEL || g_cmds[i].type == CMD_GOTO) &&
             func_scope_mask != 0) {
-            flatten_fail("goto and labels are not supported inside functions");
+            flatten_fail(ctx, "goto and labels are not supported inside functions");
             return;
         }
 
@@ -2366,7 +2369,7 @@ static void flatten_range(int start, int end_idx, ExprVar *vars, int nv,
                                         func_scope_mask);
                 g_num_flat_cmds++;
             } else {
-                flatten_fail("Flattened command limit reached");
+                flatten_fail(ctx, "Flattened command limit reached");
                 return;
             }
             i++;
@@ -2386,8 +2389,8 @@ static void flatten_range(int start, int end_idx, ExprVar *vars, int nv,
                                               rhs, sizeof(rhs)) && rhs[0]) {
                 char repl_rhs[MAX_LINE_LEN];
                 c_expr_to_repl(rhs, repl_rhs, sizeof(repl_rhs));
-                ExprCtx ctx = { repl_rhs, vars, nv };
-                value = eval_expr(&ctx);
+                ExprCtx expr_ctx = { repl_rhs, vars, nv };
+                value = eval_expr(&expr_ctx);
                 if (vars && nv > 0)
                     local_rhs_vars = input_has_expr_vars(rhs, vars, nv);
             }
@@ -2411,7 +2414,7 @@ static void flatten_range(int start, int end_idx, ExprVar *vars, int nv,
                                         func_scope_mask);
                 g_num_flat_cmds++;
             } else {
-                flatten_fail("Flattened command limit reached");
+                flatten_fail(ctx, "Flattened command limit reached");
                 return;
             }
             i++;
@@ -2420,7 +2423,7 @@ static void flatten_range(int start, int end_idx, ExprVar *vars, int nv,
 
         /* Regular command */
         if (g_num_flat_cmds >= MAX_COMMANDS) {
-            flatten_fail("Flattened command limit reached");
+            flatten_fail(ctx, "Flattened command limit reached");
             return;
         }
 
@@ -2472,12 +2475,15 @@ static void flatten_range(int start, int end_idx, ExprVar *vars, int nv,
 }
 
 void flatten_commands(void) {
+    FlattenContext ctx = {
+        .call_depth = 0,
+        .abort = 0,
+        .visit_budget = MAX_FLATTEN_VISIT_BUDGET
+    };
+
     g_num_flat_cmds = 0;
-    g_flatten_call_depth = 0;
-    g_flatten_abort = 0;
-    g_flatten_visit_budget = MAX_FLATTEN_VISIT_BUDGET;
-    flatten_range(0, g_num_cmds, NULL, 0, -1, -1, 0);
-    if (g_flatten_abort)
+    flatten_range(&ctx, 0, g_num_cmds, NULL, 0, -1, -1, 0);
+    if (ctx.abort)
         g_num_flat_cmds = 0;
 
     /* Track whether user enabled lighting (for correct default state) */
