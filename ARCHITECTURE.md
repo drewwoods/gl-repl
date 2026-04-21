@@ -151,15 +151,55 @@ Owns generated scaffold and import/export plumbing.
 ## Shared State Rules
 
 - `sample.h` remains the single shared runtime/UI header.
+- `repl_command_store.h` is the first ownership boundary around source-command
+  array mechanics. Code that shifts, inserts, replaces, deletes, or clears
+  `g_cmds[]` should prefer `repl_command_store_*` helpers so capacity checks,
+  edit-line adjustment, and depth-cache invalidation stay consistent.
 - `repl_core_internal.h` is the internal bridge for non-public helpers needed by
   tests or sibling `.c` files.
 - The `CFG_DEFAULT_*` macro block in `sample.h` is also the shared source of
-   truth for example-owned scene-presentation defaults. Reuse those macros from
-   `repl_core.c` initializers, example reset helpers, and focused tests instead
-   of duplicating literals.
-- No extra per-module headers are required for the split.
-- Parser/execution internals stay in `repl_core.c`; editor/search/export call
-  into them rather than duplicating logic.
+  truth for example-owned scene-presentation defaults. Reuse those macros from
+  `repl_core.c` initializers, example reset helpers, and focused tests instead
+  of duplicating literals.
+- New per-module headers are introduced only when they establish a real
+  ownership boundary. Avoid adding headers for cosmetic splits.
+- Parser/execution internals currently stay in `repl_core.c`; editor/search/
+  export call into them rather than duplicating logic. Future parser,
+  flattener, and executor extraction should preserve the same call direction.
+
+## Refactoring Ownership Map
+
+This is the target responsibility split for cleanup work. Refactors should move
+one boundary at a time and keep behavior unchanged unless a test explicitly
+captures the intended behavior change.
+
+- **Command store:** owns source-command array mechanics, capacity checks,
+  edit-line adjustment for raw insertions, and depth-cache invalidation.
+- **Parser:** owns line-to-`GLCmd` translation, command metadata, expression
+  preservation, and normalized source text.
+- **Commit pipeline:** owns user intent: where a parsed command lands, when
+  undo snapshots are taken, and how variable declarations register names.
+- **Flattener:** owns expansion of loops, functions, and conditionals into a
+  flat program with source-line provenance.
+- **Executor:** owns OpenGL calls for a flat command stream and should receive
+  explicit execution ranges instead of mutating global flat counts for replay.
+- **Editor/input router:** owns modal dispatch, cursor/input buffers, selection,
+  clipboard, and keyboard/mouse routing.
+- **UI layout:** owns pure code-panel wrapping, visible rows, hit-testing, and
+  visual dump coordinates. Rendering should consume layout results.
+- **Scene renderer:** owns camera/view setup, grid/axes/overlay drawing, and GL
+  state discipline for a single frame.
+- **Import/export:** owns scaffold sections, workspace metadata, and
+  translation between exported C and REPL command text.
+
+### Current cleanup baseline
+
+After the latest revert and this command-store slice, `make test-stubs
+TEST_JOBS=4` builds all test binaries and passes 13 of 14 suites. The only
+remaining known failure is `test_repl_core_examples`, with fixture and
+export/import round-trip mismatches for examples 03, 04, 05, 07, 13, 14, 17,
+and 18. Treat those as baseline failures until separately fixed; new cleanup
+stages should not add additional compile failures or test failures.
 
 ## Key Pipelines
 

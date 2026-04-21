@@ -48,6 +48,7 @@
 #include "sample.h"
 #include "repl_core.h"
 #include "repl_core_internal.h"
+#include "repl_command_store.h"
 #include "repl_replay.h"
 #include "cmd_format.h"
 #include "repl_examples.h"
@@ -2202,13 +2203,9 @@ static GLCmd make_auto_normal(float nx, float ny, float nz,
 
 /* Insert a command at position pos, shifting everything after it */
 static void insert_cmd_at(int pos, const GLCmd *cmd) {
-    if (g_num_cmds >= MAX_COMMANDS) return;
-    memmove(&g_cmds[pos + 1], &g_cmds[pos],
-            (g_num_cmds - pos) * sizeof(GLCmd));
-    g_cmds[pos] = *cmd;
-    g_num_cmds++;
-    if (g_edit_line >= pos) g_edit_line++;
-    depth_cache_invalidate();
+    ReplCommandStore store = repl_command_store_live();
+    repl_command_store_insert_one(&store, pos, cmd,
+                                  REPL_COMMAND_STORE_ADJUST_EDIT_LINE);
 }
 
 

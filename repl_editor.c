@@ -19,6 +19,7 @@
  */
 #include "sample.h"
 #include "repl_core_internal.h"
+#include "repl_command_store.h"
 #include "repl_replay.h"
 #include "repl_keys.h"
 #include "ui_panels.h"
@@ -327,13 +328,9 @@ int sel_hi(void) {
 }
 
 static int normalize_cmd_range(int start, int count, int *out_start, int *out_count) {
-    if (count <= 0 || start < 0 || start >= g_num_cmds)
-        return 0;
-    if (start + count > g_num_cmds)
-        count = g_num_cmds - start;
-    *out_start = start;
-    *out_count = count;
-    return 1;
+    ReplCommandStore store = repl_command_store_live();
+    return repl_command_store_normalize_range(&store, start, count,
+                                             out_start, out_count);
 }
 
 static int cmds_contain_var_decl(const GLCmd *cmds, int count) {
@@ -381,9 +378,8 @@ static void remove_cmd_range_unchecked(int start, int count, const char *what) {
     }
 
     push_undo_snapshot();
-    memmove(&g_cmds[start], &g_cmds[start + count],
-            (g_num_cmds - start - count) * sizeof(GLCmd));
-    g_num_cmds -= count;
+    ReplCommandStore store = repl_command_store_live();
+    repl_command_store_delete_range(&store, start, count);
 
     /* Compact g_predef_vars and shift CMD_VAR_ASSIGN indices */
     for (int r = 0; r < n_removed; r++) {
@@ -417,7 +413,8 @@ void delete_cmd_range(int start, int count, const char *what) {
 
 void repl_clear_all_cmds(void) {
     push_undo_snapshot();
-    g_num_cmds = 0;
+    ReplCommandStore store = repl_command_store_live();
+    repl_command_store_clear(&store);
     g_edit_line = 0;
     g_inserting = 0;
     g_input[0] = '\0';
@@ -837,18 +834,19 @@ int try_commit_float_decl(void) {
             }
         }
 
+        ReplCommandStore store = repl_command_store_live();
         if (overwriting_decl) {
-            g_cmds[insert_idx] = cmd;
+            repl_command_store_replace_one(&store, insert_idx, &cmd);
             g_edit_line++;
             load_line_to_input(g_edit_line);
-        } else if (g_num_cmds < MAX_COMMANDS) {
-            for (int j = g_num_cmds; j > decl_pos; j--)
-                g_cmds[j] = g_cmds[j - 1];
-            g_cmds[decl_pos] = cmd;
-            g_num_cmds++;
-            if (g_edit_line >= decl_pos) g_edit_line++;
+        } else if (repl_command_store_insert_one(
+                       &store, decl_pos, &cmd,
+                       REPL_COMMAND_STORE_ADJUST_EDIT_LINE)) {
             if (!g_inserting && g_edit_line < g_num_cmds)
                 load_line_to_input(g_edit_line);
+        } else {
+            set_status("Command buffer full!");
+            return 1;
         }
     }
 
@@ -943,13 +941,13 @@ int try_assign_variable(void) {
                 return 1;
             }
 
+            ReplCommandStore store = repl_command_store_live();
             if (g_inserting) {
-                if (g_num_cmds < MAX_COMMANDS) {
-                    for (int j = g_num_cmds; j > insert_idx; j--)
-                        g_cmds[j] = g_cmds[j - 1];
-                    g_cmds[insert_idx] = cmd;
-                    g_num_cmds++;
+                if (repl_command_store_insert_one(&store, insert_idx, &cmd, 0))
                     g_edit_line++;
+                else {
+                    set_status("Command buffer full!");
+                    return 1;
                 }
             } else if (insert_idx < g_num_cmds) {
                 if (g_cmds[insert_idx].type == CMD_VAR_DECLARE) {
@@ -977,7 +975,7 @@ int try_assign_variable(void) {
                         }
                     }
                 }
-                g_cmds[insert_idx] = cmd;
+                repl_command_store_replace_one(&store, insert_idx, &cmd);
                 g_edit_line++;
                 load_line_to_input(g_edit_line);
                 {
@@ -988,8 +986,10 @@ int try_assign_variable(void) {
                 mark_normals_dirty();
                 return 1;
             } else {
-                if (g_num_cmds < MAX_COMMANDS)
-                    g_cmds[g_num_cmds++] = cmd;
+                if (!repl_command_store_insert_one(&store, g_num_cmds, &cmd, 0)) {
+                    set_status("Command buffer full!");
+                    return 1;
+                }
                 g_edit_line = g_num_cmds;
             }
         }
@@ -1140,7 +1140,8 @@ int try_commit_for_loop(void) {
             if (*body_start == '{' || *body_start == '\0') {
                 if (!g_inserting && g_edit_line < g_num_cmds &&
                     g_cmds[g_edit_line].type == CMD_FOR_BEGIN) {
-                    g_cmds[g_edit_line] = fb;
+                    ReplCommandStore store = repl_command_store_live();
+                    repl_command_store_replace_one(&store, g_edit_line, &fb);
                     g_edit_line++;
                     g_inserting = 1;
                     g_input[0] = '\0';
@@ -1152,15 +1153,13 @@ int try_commit_for_loop(void) {
                     return 1;
                 }
 
-                if (g_num_cmds + 2 > MAX_COMMANDS) {
+                ReplCommandStore store = repl_command_store_live();
+                GLCmd loop_cmds[2] = { fb, fe };
+                if (!repl_command_store_insert_many(&store, pos,
+                                                    loop_cmds, 2, 0)) {
                     set_status("Command buffer full!");
                     return 1;
                 }
-                memmove(&g_cmds[pos + 2], &g_cmds[pos],
-                        (g_num_cmds - pos) * sizeof(GLCmd));
-                g_cmds[pos] = fb;
-                g_cmds[pos + 1] = fe;
-                g_num_cmds += 2;
 
                 g_edit_line = pos + 1;
                 g_inserting = 1;
@@ -1218,16 +1217,13 @@ int try_commit_for_loop(void) {
                     snprintf(body_cmd.source, sizeof(body_cmd.source), "%s%s;", bind, body);
                 }
 
-                if (g_num_cmds + 3 > MAX_COMMANDS) {
+                ReplCommandStore store = repl_command_store_live();
+                GLCmd loop_cmds[3] = { fb, body_cmd, fe };
+                if (!repl_command_store_insert_many(&store, pos,
+                                                    loop_cmds, 3, 0)) {
                     set_status("Command buffer full!");
                     return 1;
                 }
-                memmove(&g_cmds[pos + 3], &g_cmds[pos],
-                        (g_num_cmds - pos) * sizeof(GLCmd));
-                g_cmds[pos] = fb;
-                g_cmds[pos + 1] = body_cmd;
-                g_cmds[pos + 2] = fe;
-                g_num_cmds += 3;
 
                 g_edit_line = pos + 3;
                 g_inserting = 0;
@@ -1469,7 +1465,8 @@ int try_commit_if_block(void) {
 
         if (!g_inserting && g_edit_line < g_num_cmds &&
             g_cmds[g_edit_line].type == CMD_IF_BEGIN) {
-            g_cmds[g_edit_line] = ib;
+            ReplCommandStore store = repl_command_store_live();
+            repl_command_store_replace_one(&store, g_edit_line, &ib);
             g_edit_line++;
             g_inserting = 1;
             g_input[0] = '\0';
@@ -1486,15 +1483,12 @@ int try_commit_if_block(void) {
         ie.valid = 1;
         snprintf(ie.source, sizeof(ie.source), "%s}", indent);
 
-        if (g_num_cmds + 2 > MAX_COMMANDS) {
+        ReplCommandStore store = repl_command_store_live();
+        GLCmd if_cmds[2] = { ib, ie };
+        if (!repl_command_store_insert_many(&store, pos, if_cmds, 2, 0)) {
             set_status("Command buffer full!");
             return 1;
         }
-        memmove(&g_cmds[pos + 2], &g_cmds[pos],
-                (g_num_cmds - pos) * sizeof(GLCmd));
-        g_cmds[pos] = ib;
-        g_cmds[pos + 1] = ie;
-        g_num_cmds += 2;
 
         g_edit_line = pos + 1;
         g_inserting = 1;
@@ -1579,14 +1573,11 @@ int try_commit_close_brace(void) {
         fe.valid = 1;
         snprintf(fe.source, sizeof(fe.source), "%s}", indent);
 
-        if (g_num_cmds >= MAX_COMMANDS) {
+        ReplCommandStore store = repl_command_store_live();
+        if (!repl_command_store_insert_one(&store, pos, &fe, 0)) {
             set_status("Command buffer full!");
             return 1;
         }
-        memmove(&g_cmds[pos + 1], &g_cmds[pos],
-                (g_num_cmds - pos) * sizeof(GLCmd));
-        g_cmds[pos] = fe;
-        g_num_cmds++;
         int keep_inserting = (g_func_decl_resume_delta > 0 &&
                               end_type != CMD_FUNC_END);
         g_edit_line = pos + 1;
@@ -1874,11 +1865,12 @@ static CommitResult commit_current_input(int enter_mode) {
                 parsed = repl_parse_command(g_input, &cmd);
             }
 
-            if (parsed && g_num_cmds < MAX_COMMANDS) {
-                for (int j = g_num_cmds; j > g_edit_line; j--)
-                    g_cmds[j] = g_cmds[j - 1];
-                g_cmds[g_edit_line] = cmd;
-                g_num_cmds++;
+            if (parsed) {
+                ReplCommandStore store = repl_command_store_live();
+                if (!repl_command_store_insert_one(&store, g_edit_line, &cmd, 0)) {
+                    set_status("Command buffer full!");
+                    return COMMIT_REJECTED;
+                }
                 g_edit_line++;
                 g_input[0] = '\0';
                 g_input_len = 0;
@@ -1922,10 +1914,12 @@ static CommitResult commit_current_input(int enter_mode) {
 
             GLCmd cmd;
             int parsed = parse_for_overwrite_enter(&cmd, g_edit_line);
-            if (parsed)
-                g_cmds[g_edit_line] = cmd;
-            else
+            if (parsed) {
+                ReplCommandStore store = repl_command_store_live();
+                repl_command_store_replace_one(&store, g_edit_line, &cmd);
+            } else {
                 can_advance = 0;
+            }
         }
 
         if (can_advance) {
@@ -1944,8 +1938,12 @@ static CommitResult commit_current_input(int enter_mode) {
         GLCmd cmd;
         int parsed = parse_for_overwrite_enter(&cmd, g_num_cmds);
 
-        if (parsed && g_num_cmds < MAX_COMMANDS) {
-            g_cmds[g_num_cmds++] = cmd;
+        if (parsed) {
+            ReplCommandStore store = repl_command_store_live();
+            if (!repl_command_store_insert_one(&store, g_num_cmds, &cmd, 0)) {
+                set_status("Command buffer full!");
+                return COMMIT_REJECTED;
+            }
             g_edit_line = g_num_cmds;
             g_input[0] = '\0';
             g_input_len = 0;
@@ -2262,19 +2260,23 @@ void keyboard_func(unsigned char key, int x, int y) {
                 set_var_decl_action_status("paste");
                 return;
             }
-            if (g_num_cmds + g_clipboard_count > MAX_COMMANDS) {
-                set_status("Command buffer full!");
-                return;
+            {
+                ReplCommandStore store = repl_command_store_live();
+                if (!repl_command_store_can_insert(&store, g_clipboard_count)) {
+                    set_status("Command buffer full!");
+                    return;
+                }
             }
             push_undo_snapshot();
             {
+                ReplCommandStore store = repl_command_store_live();
                 int pos = g_inserting ? g_edit_line :
                           (g_edit_line < g_num_cmds ? g_edit_line : g_num_cmds);
-                memmove(&g_cmds[pos + g_clipboard_count], &g_cmds[pos],
-                        (g_num_cmds - pos) * sizeof(GLCmd));
-                memcpy(&g_cmds[pos], g_clipboard,
-                       (size_t)g_clipboard_count * sizeof(GLCmd));
-                g_num_cmds += g_clipboard_count;
+                if (!repl_command_store_insert_many(&store, pos, g_clipboard,
+                                                    g_clipboard_count, 0)) {
+                    set_status("Command buffer full!");
+                    return;
+                }
                 g_edit_line = pos + g_clipboard_count;
                 g_inserting = 0;
                 load_line_to_input(g_edit_line);
@@ -2441,12 +2443,9 @@ void keyboard_func(unsigned char key, int x, int y) {
                                                       input_has_predef_vars(g_input), &cmd);
 
                 if (parsed) {
+                    ReplCommandStore store = repl_command_store_live();
                     if (g_inserting) {
-                        if (g_num_cmds < MAX_COMMANDS) {
-                            for (int j = g_num_cmds; j > g_edit_line; j--)
-                                g_cmds[j] = g_cmds[j - 1];
-                            g_cmds[g_edit_line] = cmd;
-                            g_num_cmds++;
+                        if (repl_command_store_insert_one(&store, g_edit_line, &cmd, 0)) {
                             g_edit_line++;
                             g_input[0] = '\0';
                             g_input_len = 0;
@@ -2456,13 +2455,12 @@ void keyboard_func(unsigned char key, int x, int y) {
                             set_status("Command buffer full!");
                         }
                     } else if (g_edit_line < g_num_cmds) {
-                        g_cmds[g_edit_line] = cmd;
+                        repl_command_store_replace_one(&store, g_edit_line, &cmd);
                         set_status("Line updated");
                         g_edit_line++;
                         load_line_to_input(g_edit_line);
                     } else {
-                        if (g_num_cmds < MAX_COMMANDS) {
-                            g_cmds[g_num_cmds++] = cmd;
+                        if (repl_command_store_insert_one(&store, g_num_cmds, &cmd, 0)) {
                             g_edit_line = g_num_cmds;
                             set_status("OK");
                             g_input[0] = '\0';
@@ -3251,23 +3249,23 @@ int feed_line(const char *line) {
             parsed = repl_parse_and_normalize(g_input, insert_idx, NULL, 0,
                                               input_has_predef_vars(g_input), &cmd);
 
-        if (parsed && g_num_cmds < MAX_COMMANDS) {
+        if (parsed) {
+            ReplCommandStore store = repl_command_store_live();
             if (g_inserting) {
-                for (int j = g_num_cmds; j > g_edit_line; j--)
-                    g_cmds[j] = g_cmds[j - 1];
-                g_cmds[g_edit_line] = cmd;
-                g_num_cmds++;
+                if (!repl_command_store_insert_one(&store, g_edit_line, &cmd, 0))
+                    goto feed_line_done;
                 g_edit_line++;
             } else if (g_edit_line < g_num_cmds) {
-                g_cmds[g_edit_line] = cmd;
+                repl_command_store_replace_one(&store, g_edit_line, &cmd);
                 g_edit_line++;
             } else {
-                g_cmds[g_num_cmds++] = cmd;
+                if (!repl_command_store_insert_one(&store, g_num_cmds, &cmd, 0))
+                    goto feed_line_done;
                 g_edit_line = g_num_cmds;
             }
-            depth_cache_invalidate();
             handled = 1;
         }
+feed_line_done:
         g_input[0] = '\0';
         g_input_len = 0;
         g_cursor_pos = 0;

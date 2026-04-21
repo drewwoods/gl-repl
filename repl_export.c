@@ -1,5 +1,6 @@
 #include "sample.h"
 #include "repl_core_internal.h"
+#include "repl_command_store.h"
 #include "ui_panels.h"
 
 const char *g_header_pre[] = {
@@ -1614,20 +1615,16 @@ static int import_parse_declare_marker(const char *line, int *loaded,
      * don't reject vars that are already registered.  Keep declarations in the
      * same leading zone used by interactive float declarations, even though
      * exported // @declare markers are encountered later in the snippet. */
-    if (g_num_cmds < MAX_COMMANDS) {
-        int decl_pos = 0;
-        while (decl_pos < g_num_cmds &&
-               g_cmds[decl_pos].type == CMD_VAR_DECLARE)
-            decl_pos++;
-        memmove(&g_cmds[decl_pos + 1], &g_cmds[decl_pos],
-                (size_t)(g_num_cmds - decl_pos) * sizeof(GLCmd));
-        g_cmds[decl_pos] = cmd;
-        g_num_cmds++;
-        if (g_edit_line >= decl_pos)
-            g_edit_line++;
+    {
+        ReplCommandStore store = repl_command_store_live();
+        int decl_pos = repl_command_store_first_non_decl(&store);
+        if (!repl_command_store_insert_one(
+                &store, decl_pos, &cmd,
+                REPL_COMMAND_STORE_ADJUST_EDIT_LINE)) {
+            if (warnings) (*warnings)++;
+            return 1;
+        }
         (*loaded)++;
-    } else if (warnings) {
-        (*warnings)++;
     }
     (void)warnings;
     return 1;
