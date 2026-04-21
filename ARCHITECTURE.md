@@ -187,7 +187,8 @@ captures the intended behavior change.
 - **Commit pipeline:** owns user intent: where a parsed command lands, when
   undo snapshots are taken, and how variable declarations register names.
 - **Flattener:** owns expansion of loops, functions, and conditionals into a
-  flat program with source-line provenance.
+  flat program with source-line provenance. Recursive flattening state lives
+  in `FlattenContext` rather than file-scope control globals.
 - **Executor:** owns OpenGL calls for a flat command stream. Replay fill/fade
   passes use `ReplExecutionOptions` to supply explicit execution ranges.
 - **Editor/input router:** owns modal dispatch, cursor/input buffers, selection,
