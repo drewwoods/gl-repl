@@ -13,6 +13,8 @@ of one monolithic `repl_core.c`.
   fade execution context, and predefined-variable snapshots.
 - `repl_autocomplete.c`: input completions and parameter hints derived from
   parser command metadata plus user-defined function signatures.
+- `repl_autonormal.c`: auto-generated `glNormal3f` command maintenance and
+  feeding color/normal lookup for code-panel highlighting.
 - `repl_search.c`: search state, match navigation, and search-mode keyboard
   handling.
 - `repl_export.c`: fixed scaffold strings, init bootstrap tables, import/export
@@ -150,6 +152,15 @@ Owns editor-input completions and parameter hints.
 - `g_ac_*` completion/ghost/hint state
 - builtin command and enum completions
 - user-defined `funcN(...)` parameter hints
+
+### `repl_autonormal.c`
+
+Owns auto-generated normals and feeding-state lookup.
+
+- `recompute_autonormals()`
+- `repl_find_feeding_normal_cmd()`
+- `repl_find_feeding_color_cmd()`
+- auto-normal command insertion/update through `ReplCommandStore`
 
 ### `repl_editor.c`
 
