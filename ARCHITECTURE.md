@@ -25,8 +25,10 @@ of one monolithic `repl_core.c`.
   translation, save/load, and code-panel dump helpers.
 - `repl_commit.c`: float declarations, variable assignments, structured block
   commits, close-brace commits, and commit-order helpers.
-- `repl_editor.c`: editor state, undo/redo, selection, clipboard, commit
-  orchestration, feed-line entrypoint, and GLUT input handlers.
+- `repl_editor.c`: editor state, undo/redo, commit orchestration, feed-line
+  entrypoint, and GLUT input handlers.
+- `repl_clipboard.c`: line selection anchors, command clipboard buffer, and
+  copy/cut/paste range behavior.
 - `repl_eval.c`: expression parsing and evaluation.
 - `ui_panels.c`: 2D code/search/help/config/variable-panel rendering and panel
   hit-testing.
@@ -197,11 +199,20 @@ Owns transient editor and interaction state.
 - `g_input`, `g_input_len`, `g_cursor_pos`
 - `g_edit_line`, `g_inserting`, newline buffer
 - undo/redo ring
-- selection and clipboard state
 - code-panel scroll and resize state
 - variable-drag/config-menu interaction state
 - feed-line entrypoint and commit-attempt outcomes
 - keyboard, special-key, mouse, motion, and timer callbacks
+
+### `repl_clipboard.c`
+
+Owns line selection and command clipboard behavior.
+
+- `g_sel_anchor`, `g_sel_end`
+- `g_clipboard[]`, `g_clipboard_count`
+- selected/current command-range resolution for copy and cut
+- var-declaration copy/cut/paste guards
+- paste insertion through `ReplCommandStore`
 
 ### `repl_commit.c`
 
@@ -274,8 +285,10 @@ captures the intended behavior change.
   in `FlattenContext` rather than file-scope control globals.
 - **Executor:** owns OpenGL calls for a flat command stream. Replay fill/fade
   passes use `ReplExecutionOptions` to supply explicit execution ranges.
-- **Editor/input router:** owns modal dispatch, cursor/input buffers, selection,
-  clipboard, and keyboard/mouse routing.
+- **Editor/input router:** owns modal dispatch, cursor/input buffers, and
+  keyboard/mouse routing.
+- **Clipboard/selection:** owns line-range selection state, clipboard storage,
+  and copy/cut/paste command mutations.
 - **UI layout:** owns pure code-panel wrapping, visible rows, hit-testing, and
   visual dump coordinates. Rendering should consume layout results.
 - **Scene renderer:** owns camera/view setup, grid/axes/overlay drawing, and GL

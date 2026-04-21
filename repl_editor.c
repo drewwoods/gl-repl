@@ -20,6 +20,7 @@
 #include "sample.h"
 #include "repl_core_internal.h"
 #include "repl_command_store.h"
+#include "repl_clipboard.h"
 #include "repl_replay.h"
 #include "repl_keys.h"
 #include "ui_panels.h"
@@ -91,13 +92,6 @@ int   g_drag_var = -1;
 int   g_drag_log_mode = 0;  /* 0=linear (LMB drag), 1=logarithmic (RMB drag) */
 float g_drag_start_val = 0.0f;
 int   g_drag_start_x = 0;
-
-
-GLCmd g_clipboard[MAX_COMMANDS];
-int   g_clipboard_count = 0;
-
-int g_sel_anchor = -1;
-int g_sel_end = -1;
 
 static const char *replay_mode_names[] = { "Polygon", "Vertex" };
 static const char *backdrop_mode_names[] = { "Off", "Cityscape" };
@@ -302,49 +296,9 @@ void do_redo(void) {
     }
 }
 
-void clear_selection(void) {
-    g_sel_anchor = g_sel_end = -1;
-}
-
-int sel_active(void) {
-    return g_sel_anchor >= 0 && g_sel_end >= 0;
-}
-
-int sel_lo(void) {
-    return g_sel_anchor < g_sel_end ? g_sel_anchor : g_sel_end;
-}
-
-int sel_hi(void) {
-    return g_sel_anchor > g_sel_end ? g_sel_anchor : g_sel_end;
-}
-
-static int normalize_cmd_range(int start, int count, int *out_start, int *out_count) {
-    ReplCommandStore store = repl_command_store_live();
-    return repl_command_store_normalize_range(&store, start, count,
-                                             out_start, out_count);
-}
-
-static int cmds_contain_var_decl(const GLCmd *cmds, int count) {
-    for (int i = 0; i < count; i++) {
-        if (cmds[i].type == CMD_VAR_DECLARE)
-            return 1;
-    }
-    return 0;
-}
-
-static int cmd_range_contains_var_decl(int start, int count) {
-    return cmds_contain_var_decl(&g_cmds[start], count);
-}
-
-static void set_var_decl_action_status(const char *action) {
-    char msg[96];
-    snprintf(msg, sizeof(msg), "Cannot %s float declarations", action);
-    set_status(msg);
-}
-
 static int delete_cmd_range_allowed(int start, int count) {
-    if (cmd_range_contains_var_decl(start, count)) {
-        set_var_decl_action_status("remove");
+    if (repl_selection_cmd_range_contains_var_decl(start, count)) {
+        repl_selection_set_var_decl_action_status("remove");
         return 0;
     }
 
@@ -395,7 +349,7 @@ static void remove_cmd_range_unchecked(int start, int count, const char *what) {
 }
 
 void delete_cmd_range(int start, int count, const char *what) {
-    if (!normalize_cmd_range(start, count, &start, &count))
+    if (!repl_selection_normalize_cmd_range(start, count, &start, &count))
         return;
     if (!delete_cmd_range_allowed(start, count))
         return;
@@ -1011,66 +965,7 @@ static int handle_buffer_command_key_route(unsigned char key) {
 
 static int handle_copy_key_route(unsigned char key) {
     if (key == KEY_CTRL_C) {
-        if (g_inserting) {
-            clear_selection();
-            return 1;
-        }
-        if (sel_active()) {
-            int start = sel_lo();
-            int count;
-            int hi = sel_hi();
-            if (hi >= g_num_cmds)
-                hi = g_num_cmds - 1;
-            count = hi - start + 1;
-            if (!normalize_cmd_range(start, count, &start, &count))
-                return 1;
-            if (cmd_range_contains_var_decl(start, count)) {
-                set_var_decl_action_status("copy");
-                return 1;
-            }
-            g_clipboard_count = 0;
-            for (int i = start; i < start + count && g_clipboard_count < MAX_COMMANDS; i++)
-                g_clipboard[g_clipboard_count++] = g_cmds[i];
-            {
-                char msg[64];
-                snprintf(msg, sizeof(msg), "Copied %d line%s",
-                         g_clipboard_count, g_clipboard_count > 1 ? "s" : "");
-                set_status(msg);
-            }
-        } else if (g_edit_line < g_num_cmds) {
-            int start = g_edit_line;
-            int count = 1;
-            int copying_for = (g_cmds[start].type == CMD_FOR_BEGIN);
-            if (copying_for) {
-                int fe = find_block_end(start);
-                int end_idx = (fe < g_num_cmds) ? fe + 1 : g_num_cmds;
-                count = end_idx - start;
-            }
-            if (!normalize_cmd_range(start, count, &start, &count))
-                return 1;
-            if (cmd_range_contains_var_decl(start, count)) {
-                set_var_decl_action_status("copy");
-                return 1;
-            }
-            g_clipboard_count = 0;
-            for (int i = start; i < start + count && g_clipboard_count < MAX_COMMANDS; i++)
-                g_clipboard[g_clipboard_count++] = g_cmds[i];
-            if (copying_for) {
-                {
-                    char msg[64];
-                    snprintf(msg, sizeof(msg), "Copied for-loop (%d lines)",
-                             g_clipboard_count);
-                    set_status(msg);
-                }
-            } else {
-                g_clipboard[0] = g_cmds[g_edit_line];
-                g_clipboard_count = 1;
-                set_status("Copied line");
-            }
-        } else {
-            g_clipboard_count = 0;
-        }
-        clear_selection();
+        repl_clipboard_copy_current();
         return 1;
     }
     return 0;
@@ -1078,46 +973,7 @@ static int handle_copy_key_route(unsigned char key) {
 
 static int handle_cut_key_route(unsigned char key) {
     if (key == KEY_CTRL_X) {
-        if (g_inserting) {
-            clear_selection();
-            return 1;
-        }
-        {
-            int start;
-            int count;
-
-            if (sel_active()) {
-                start = sel_lo();
-                {
-                    int hi = sel_hi();
-                    if (hi >= g_num_cmds)
-                        hi = g_num_cmds - 1;
-                    count = hi - start + 1;
-                }
-            } else if (g_edit_line < g_num_cmds) {
-                start = g_edit_line;
-                if (g_cmds[start].type == CMD_FOR_BEGIN) {
-                    int fe = find_block_end(start);
-                    count = ((fe < g_num_cmds) ? fe + 1 : g_num_cmds) - start;
-                } else {
-                    count = 1;
-                }
-            } else {
-                g_clipboard_count = 0;
-                clear_selection();
-                return 1;
-            }
-
-            if (!normalize_cmd_range(start, count, &start, &count))
-                return 1;
-            if (!delete_cmd_range_allowed(start, count))
-                return 1;
-
-            g_clipboard_count = 0;
-            for (int i = 0; i < count && g_clipboard_count < MAX_COMMANDS; i++)
-                g_clipboard[g_clipboard_count++] = g_cmds[start + i];
-            remove_cmd_range_unchecked(start, count, "Cut");
-        }
+        repl_clipboard_cut_current();
         return 1;
     }
     return 0;
@@ -1125,42 +981,7 @@ static int handle_cut_key_route(unsigned char key) {
 
 static int handle_paste_key_route(unsigned char key) {
     if (key == KEY_CTRL_V) {
-        if (g_clipboard_count > 0) {
-            if (cmds_contain_var_decl(g_clipboard, g_clipboard_count)) {
-                set_var_decl_action_status("paste");
-                return 1;
-            }
-            {
-                ReplCommandStore store = repl_command_store_live();
-                if (!repl_command_store_can_insert(&store, g_clipboard_count)) {
-                    set_status("Command buffer full!");
-                    return 1;
-                }
-            }
-            push_undo_snapshot();
-            {
-                ReplCommandStore store = repl_command_store_live();
-                int pos = g_inserting ? g_edit_line :
-                          (g_edit_line < g_num_cmds ? g_edit_line : g_num_cmds);
-                if (!repl_command_store_insert_many(&store, pos, g_clipboard,
-                                                    g_clipboard_count, 0)) {
-                    set_status("Command buffer full!");
-                    return 1;
-                }
-                g_edit_line = pos + g_clipboard_count;
-                g_inserting = 0;
-                load_line_to_input(g_edit_line);
-                mark_normals_dirty();
-            }
-            {
-                char msg[64];
-                snprintf(msg, sizeof(msg), "Pasted %d line%s",
-                         g_clipboard_count, g_clipboard_count > 1 ? "s" : "");
-                set_status(msg);
-            }
-        } else {
-            set_status("Clipboard empty");
-        }
+        repl_clipboard_paste_current();
         return 1;
     }
     return 0;
@@ -1524,12 +1345,13 @@ static int handle_vertical_special_key_route(int key) {
             update_selected_autocomplete_preview();
         } else if (editor_get_modifiers() & GLUT_ACTIVE_SHIFT) {
             if (!sel_active()) {
-                g_sel_anchor = g_edit_line;
-                g_sel_end = g_edit_line;
+                repl_selection_start(g_edit_line);
             }
-            if (g_sel_end > 0)
-                g_sel_end--;
-            navigate_to_line(g_sel_end);
+            int selection_end = repl_selection_end();
+            if (selection_end > 0)
+                selection_end--;
+            repl_selection_set_end(selection_end);
+            navigate_to_line(selection_end);
         } else {
             clear_selection();
             navigate_to_line(g_edit_line - 1);
@@ -1545,12 +1367,13 @@ static int handle_vertical_special_key_route(int key) {
             update_selected_autocomplete_preview();
         } else if (editor_get_modifiers() & GLUT_ACTIVE_SHIFT) {
             if (!sel_active()) {
-                g_sel_anchor = g_edit_line;
-                g_sel_end = g_edit_line;
+                repl_selection_start(g_edit_line);
             }
-            if (g_sel_end < g_num_cmds - 1)
-                g_sel_end++;
-            navigate_to_line(g_sel_end);
+            int selection_end = repl_selection_end();
+            if (selection_end < g_num_cmds - 1)
+                selection_end++;
+            repl_selection_set_end(selection_end);
+            navigate_to_line(selection_end);
         } else {
             clear_selection();
             navigate_to_line(g_edit_line + 1);

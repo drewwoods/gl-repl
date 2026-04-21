@@ -16,7 +16,7 @@
  *   - Public API wrappers forwarded from sample.c
  *
  * repl_editor.c owns the interactive editing layer:
- *   - Editor state (g_input, cursor, undo/redo ring, clipboard, selection)
+ *   - Editor state (g_input, cursor, undo/redo ring)
  *   - Commit handlers that decide *where* a parsed command goes in g_cmds[]
  *   - GLUT keyboard / special / mouse / motion / timer dispatch
  *   - Camera momentum and panel resizing
@@ -44,6 +44,7 @@
 #include "repl_core_internal.h"
 #include "repl_command_spec.h"
 #include "repl_command_store.h"
+#include "repl_clipboard.h"
 #include "repl_replay.h"
 #include "cmd_format.h"
 #include "scene_render.h"
