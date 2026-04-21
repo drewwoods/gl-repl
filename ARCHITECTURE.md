@@ -150,7 +150,12 @@ Owns generated scaffold and import/export plumbing.
 
 ## Shared State Rules
 
-- `sample.h` remains the single shared runtime/UI header.
+- `sample.h` remains the single shared type and compatibility header, but broad
+  runtime state declarations now live in `repl_state.h`.
+- `repl_state.h` groups the historical `g_*` globals into typed live views
+  (`ReplCommandState`, `ReplEditorState`, `ReplPresentationState`,
+  `ReplRenderState`, etc.). Storage is unchanged; this is an ownership layer
+  for future extraction, not a context-object rewrite.
 - `repl_command_store.h` is the first ownership boundary around source-command
   array mechanics. Code that shifts, inserts, replaces, deletes, or clears
   `g_cmds[]` should prefer `repl_command_store_*` helpers so capacity checks,

@@ -1,12 +1,15 @@
 #include "repl_command_store.h"
 #include "repl_core_internal.h"
+#include "repl_state.h"
 
 ReplCommandStore repl_command_store_live(void) {
+    ReplCommandState commands = repl_command_state_live();
+    ReplEditorState editor = repl_editor_state_live();
     ReplCommandStore store = {
-        g_cmds,
-        &g_num_cmds,
-        MAX_COMMANDS,
-        &g_edit_line
+        commands.cmds,
+        commands.num_cmds,
+        commands.capacity,
+        editor.edit_line
     };
     return store;
 }
