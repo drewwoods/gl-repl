@@ -409,6 +409,63 @@ int main() {
         g_code_panel_layout = CFG_DEFAULT_CODE_PANEL_LAYOUT;
     }
 
+    /* 0c2. Keyboard mode routing keeps rename ahead of config, replay, and search. */
+    {
+        repl_reset_state();
+        repl_load_example(0);
+        int slot = repl_promote_example_if_needed();
+        ASSERT_TRUE("rename route setup slot", slot >= 0);
+        ASSERT_INT("rename route begin", ui_panels_begin_rename(slot), 1);
+
+        g_code_panel_layout = CODE_PANEL_LAYOUT_HIDDEN;
+        repl_keyboard_func('`', 0, 0);
+        ASSERT_INT("rename swallows config hidden restore",
+                   g_code_panel_layout, CODE_PANEL_LAYOUT_HIDDEN);
+        ASSERT_INT("rename remains active after config key",
+                   ui_panels_rename_active(), 1);
+
+        repl_keyboard_func(KEY_CTRL_R, 0, 0);
+        ASSERT_INT("rename swallows replay toggle", g_replay_active, 0);
+
+        repl_keyboard_func(KEY_CTRL_F, 0, 0);
+        ASSERT_INT("rename swallows search open", g_search_active, 0);
+
+        ui_panels_cancel_rename();
+        g_code_panel_layout = CFG_DEFAULT_CODE_PANEL_LAYOUT;
+    }
+
+    /* 0c3. Search mode captures printable editing keys before text editing. */
+    {
+        repl_reset_state();
+        repl_feed_line_public("glVertex3f(0,0,0)");
+        set_editor_input("");
+
+        repl_keyboard_func(KEY_CTRL_F, 0, 0);
+        ASSERT_INT("search route opens", g_search_active, 1);
+
+        repl_keyboard_func('v', 0, 0);
+        ASSERT_STR("search route receives printable key", g_search_query, "v");
+        ASSERT_TRUE("search route does not type into editor input",
+                    strcmp(g_input, "v") != 0);
+        ASSERT_INT("search route does not commit", g_num_cmds, 1);
+
+        search_clear_all();
+    }
+
+    /* 0c4. Semicolon keyboard route still enters the commit handler chain. */
+    {
+        repl_reset_state();
+        set_editor_input("float keyboard_route");
+
+        repl_keyboard_func(';', 0, 0);
+
+        ASSERT_INT("semicolon route committed one command", g_num_cmds, 1);
+        ASSERT_INT("semicolon route used float declaration handler",
+                   g_cmds[0].type, CMD_VAR_DECLARE);
+        ASSERT_TRUE("semicolon route registered declared variable",
+                    find_predef_var_idx("keyboard_route") >= 0);
+    }
+
     /* 0d. Cramped variable-panel fallback still preserves scene status strip */
     {
         int x, y, w, h;
