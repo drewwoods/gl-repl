@@ -616,35 +616,38 @@ static int tess_scope_depth_at(int pos) {
 }
 
 
-/* Normal command indent: 2 + 2*tess + 2*begin */
+/* Normal command indent: 2 + 2*tess + 2*begin + 2*block */
 static void cmd_indent(int pos, char *buf, int buf_sz) {
     depth_cache_rebuild();
     if (pos < 0) pos = 0;
     if (pos > g_num_cmds) pos = g_num_cmds;
     int td = g_tess_depth_prefix[pos];
     int bd = g_begin_depth_prefix[pos];
-    int spaces = 2 + 2 * td + 2 * bd;
+    int kd = g_block_depth_prefix[pos];
+    int spaces = 2 + 2 * td + 2 * bd + 2 * kd;
     if (spaces > buf_sz - 1) spaces = buf_sz - 1;
     if (spaces < 0) spaces = 0;
     memset(buf, ' ', (size_t)spaces);
     buf[spaces] = '\0';
 }
 
-/* Returns indent character count for a normal command at pos: 2 + 2*tess + 2*begin */
+/* Returns indent character count for a normal command at pos: 2 + 2*tess + 2*begin + 2*block */
 int cmd_indent_chars(int pos) {
     depth_cache_rebuild();
     if (pos < 0) pos = 0;
     if (pos > g_num_cmds) pos = g_num_cmds;
-    return 2 + 2 * g_tess_depth_prefix[pos] + 2 * g_begin_depth_prefix[pos];
+    return 2 + 2 * g_tess_depth_prefix[pos] + 2 * g_begin_depth_prefix[pos]
+             + 2 * g_block_depth_prefix[pos];
 }
 
-/* Tessellator leaf command indent: 2 + 2*tess  (begin depth ignored) */
+/* Tessellator leaf command indent: 2 + 2*tess + 2*block  (begin depth ignored) */
 static void cmd_tess_indent(int pos, char *buf, int buf_sz) {
     depth_cache_rebuild();
     if (pos < 0) pos = 0;
     if (pos > g_num_cmds) pos = g_num_cmds;
     int td = g_tess_depth_prefix[pos];
-    int spaces = 2 + 2 * td;
+    int kd = g_block_depth_prefix[pos];
+    int spaces = 2 + 2 * td + 2 * kd;
     if (spaces > buf_sz - 1) spaces = buf_sz - 1;
     if (spaces < 0) spaces = 0;
     memset(buf, ' ', (size_t)spaces);
@@ -914,11 +917,7 @@ int repl_parse_and_normalize(const char *line, int pos,
                out_cmd->source[parsed_indent] == '\t')
             parsed_indent++;
 
-        int indent = parsed_indent;
-        if (cmd_type_needs_block_indent(out_cmd->type))
-            indent += block_depth_at(pos) * 2;
-
-        normalize_with_indent(line, indent,
+        normalize_with_indent(line, parsed_indent,
                               cmd_type_needs_semicolon(out_cmd->type),
                               out_cmd->source, (int)sizeof(out_cmd->source));
         out_cmd->has_vars = 1;
@@ -1671,10 +1670,11 @@ static int parse_command(const char *line, GLCmd *cmd,
                         cmd->mode = def->enums1[i].value;
                         cmd->valid = 1;
                         if (def->indent_type == 1) {
-                            /* glBegin-style indent: tess depth only, no begin depth */
+                            /* glBegin-style indent: 2 + 2*tess + 2*block  (begin depth excluded) */
                             char ind[32];
                             int td = tess_scope_depth_at(g_edit_line);
-                            int spaces = 2 + 2 * td;
+                            int kd = block_depth_at(g_edit_line);
+                            int spaces = 2 + 2 * td + 2 * kd;
                             if (spaces > (int)sizeof(ind) - 1) spaces = (int)sizeof(ind) - 1;
                             memset(ind, ' ', (size_t)spaces);
                             ind[spaces] = '\0';
@@ -1738,13 +1738,14 @@ static int parse_command(const char *line, GLCmd *cmd,
         }
     }
 
-    /* glEnd() — aligns with its matching glBegin (begin depth not added) */
+    /* glEnd() — aligns with its matching glBegin: 2 + 2*tess + 2*block (begin depth not added) */
     if (strcmp(func, "glEnd") == 0) {
         cmd->type = CMD_END;
         cmd->valid = 1;
         {
             int tess_depth = tess_scope_depth_at(g_edit_line);
-            int spaces = 2 + 2 * tess_depth;
+            int kd = block_depth_at(g_edit_line);
+            int spaces = 2 + 2 * tess_depth + 2 * kd;
             char end_ind[32];
             if (spaces > (int)sizeof(end_ind) - 1) spaces = (int)sizeof(end_ind) - 1;
             memset(end_ind, ' ', (size_t)spaces);
@@ -2061,14 +2062,16 @@ static int parse_command(const char *line, GLCmd *cmd,
 
     /* gluEnd() — end tessellator contour or polygon.
      * Indent at the *enclosing* level (tess_depth - 1), same logic as glEnd()
-     * always being at 2-space rather than the 4-space inside a glBegin block. */
+     * always being at 2-space rather than the 4-space inside a glBegin block.
+     * Formula: 2 + 2*(tess-1) + 2*block  (begin depth excluded). */
     if (strcmp(func, "gluEnd") == 0 || strcmp(p, "gluEnd()") == 0) {
         cmd->type = CMD_TESS_END;
         cmd->valid = 1;
         {
             int td = tess_scope_depth_at(g_edit_line);
             if (td > 0) td--;
-            int spaces = 2 + 2 * td;
+            int kd = block_depth_at(g_edit_line);
+            int spaces = 2 + 2 * td + 2 * kd;
             char close_ind[32];
             if (spaces > (int)sizeof(close_ind) - 1) spaces = (int)sizeof(close_ind) - 1;
             memset(close_ind, ' ', (size_t)spaces);

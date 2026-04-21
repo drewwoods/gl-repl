@@ -26,12 +26,12 @@ void display() {
 --- header_post ---
 --- source ---
   func0 {
-  glBegin(GL_TRIANGLES);
-    glNormal3f(0, 0, 1);
-    glVertex3f(0, 0.8, 0);
-    glVertex3f(-0.7, -0.4, 0);
-    glVertex3f(0.7, -0.4, 0);
-  glEnd();
+    glBegin(GL_TRIANGLES);
+      glNormal3f(0, 0, 1);
+      glVertex3f(0, 0.8, 0);
+      glVertex3f(-0.7, -0.4, 0);
+      glVertex3f(0.7, -0.4, 0);
+    glEnd();
   }
   glClearColor(0.1, 0.1, 0.1, 1);
   glEnable(GL_DEPTH_TEST);
