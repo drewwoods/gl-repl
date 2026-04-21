@@ -1,6 +1,7 @@
 /*
  * repl_core_internal.h — Cross-TU internals shared among repl_core.c,
- * repl_editor.c, repl_export.c, repl_search.c, and the unit tests.
+ * repl_editor.c, repl_executor.c, repl_export.c, repl_search.c, and the unit
+ * tests.
  *
  * These are intentionally NOT part of the public API in repl_core.h — they
  * are implementation details of the REPL that tests and sibling modules
@@ -13,6 +14,7 @@
  *   - Code-panel dumps (debug + visual)
  *   - Autocomplete
  *   - Block-depth / scope queries
+ *   - Executor helpers
  *   - Replay state machine
  *   - Timekeeping
  *   - Search input dispatch
@@ -157,10 +159,16 @@ void accept_autocomplete(void);
 /* ---- Block-depth / scope queries -------------------------------------- */
 
 void depth_cache_invalidate(void);
+
+/* ---- Executor helpers ------------------------------------------------- */
+
 int  apply_state_cmd(const GLCmd *cmd, float alpha_scale);
 void repl_copy_predef_values(float *dst, int max_vals);
 void repl_restore_predef_values(const float *src, int max_vals);
 void repl_execute_set_fade_context(float alpha_scale, int skip_geom_before_pc);
+
+/* ---- Line feeding / source structure ---------------------------------- */
+
 void load_line_to_input(int idx);
 int  find_block_end(int begin_idx);
 int  block_depth_at(int pos);

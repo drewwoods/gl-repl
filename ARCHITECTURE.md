@@ -5,10 +5,12 @@
 The immediate-mode REPL is now split across focused translation units instead
 of one monolithic `repl_core.c`.
 
-- `repl_core.c`: parser, normalization, execution, example loading
-  orchestration, depth/cache queries, and OpenGL initialization.
+- `repl_core.c`: parser, normalization, example loading orchestration,
+  depth/cache queries, display callback, and OpenGL initialization.
 - `repl_flatten.c`: source-to-flat command expansion and flat-command cursor
   matching.
+- `repl_executor.c`: flat-command execution, state-command dispatch, replay
+  fade execution context, and predefined-variable snapshots.
 - `repl_search.c`: search state, match navigation, and search-mode keyboard
   handling.
 - `repl_export.c`: fixed scaffold strings, init bootstrap tables, import/export
@@ -62,12 +64,13 @@ modules:
    stores results into `GLCmd.args[]` / `GLCmd.source[]`.
 4. **Flatten** — `flatten_range()` recursively expands source commands,
    capped at 100k visits and recursion depth 32.
-5. **Execute** — `execute_commands()` walks `g_flat_cmds[]` and emits GL
-   calls. Commands flagged `has_vars` are re-evaluated each frame so
-   animated expressions (e.g. `t`) stay live.
+5. **Execute** — `execute_commands()` / `repl_execute_program()` in
+   `repl_executor.c` walk `g_flat_cmds[]` and emit GL calls. Commands flagged
+   `has_vars` are re-evaluated each frame so animated expressions (e.g. `t`)
+   stay live.
 
 Stages 1–2 live in `repl_editor.c`; 3 lives in `repl_core.c`; 4 lives in
-`repl_flatten.c`; 5 currently lives in `repl_core.c`. This is the
+`repl_flatten.c`; 5 lives in `repl_executor.c`. This is the
 load-bearing boundary — outside code that needs to inject commands should
 do so through `feed_line()` rather than poking `g_cmds[]` directly, so
 every path shares the same parse/normalize/flatten guarantees.
@@ -89,9 +92,9 @@ every path shares the same parse/normalize/flatten guarantees.
    conditionals, and variable-driven commands into `g_flat_cmds[]`.
 2. `scene_render.c` prepares the frame and calls `repl_execute_program()` with
    an explicit flat-command count for normal, replay, and fade passes.
-3. `repl_execute_program()` issues fixed-function OpenGL calls against the
-   flattened command stream. `execute_commands()` remains a full-range
-   compatibility wrapper.
+3. `repl_executor.c` issues fixed-function OpenGL calls against the flattened
+   command stream. `execute_commands()` remains a full-range compatibility
+   wrapper around `repl_execute_program(NULL)`.
 
 ### Search path
 
@@ -112,12 +115,12 @@ every path shares the same parse/normalize/flatten guarantees.
 
 ### `repl_core.c`
 
-Owns the semantic model and the remaining core parser/execution pipeline.
+Owns the semantic model and remaining parser/display infrastructure.
 
 - `g_cmds[]`, `g_num_cmds`
 - `g_flat_cmds[]`, `g_num_flat_cmds`
 - parser, normalization, scope/depth caches
-- executor and display callback
+- display callback
 - example orchestration and GL init
 
 ### `repl_flatten.c`
@@ -128,6 +131,15 @@ Owns flattening and flat-command cursor matching.
 - recursive loop/function/if expansion
 - flat-command provenance fields
 - `g_current_block_begin`, `g_current_block_end`
+
+### `repl_executor.c`
+
+Owns flat-program execution and execution-time state.
+
+- `repl_execute_program()`, `execute_commands()`
+- `apply_state_cmd()`
+- replay fade execution context
+- predefined-variable snapshot/restore helpers
 
 ### `repl_editor.c`
 
@@ -181,9 +193,9 @@ Owns generated scaffold and import/export plumbing.
   of duplicating literals.
 - New per-module headers are introduced only when they establish a real
   ownership boundary. Avoid adding headers for cosmetic splits.
-- Parser/execution internals currently stay in `repl_core.c`; editor/search/
-  export call into them rather than duplicating logic. Future parser and
-  executor extraction should preserve the same call direction.
+- Parser internals currently stay in `repl_core.c`; editor/search/export call
+  into them rather than duplicating logic. Future parser extraction should
+  preserve the same call direction.
 
 ## Refactoring Ownership Map
 
@@ -213,12 +225,10 @@ captures the intended behavior change.
 
 ### Current cleanup baseline
 
-After the latest revert and this command-store slice, `make test-stubs
-TEST_JOBS=4` builds all test binaries and passes 13 of 14 suites. The only
-remaining known failure is `test_repl_core_examples`, with fixture and
-export/import round-trip mismatches for examples 03, 04, 05, 07, 13, 14, 17,
-and 18. Treat those as baseline failures until separately fixed; new cleanup
-stages should not add additional compile failures or test failures.
+After rebasing on `c6941c58fa6cfb5c22dc760fc29f60f5c716fede`,
+`make test-stubs TEST_JOBS=4` builds all test binaries and passes 14 of 14
+suites: 2186/2186 tests. New cleanup stages should preserve that green
+baseline.
 
 ## Key Pipelines
 
@@ -522,7 +532,7 @@ made safe for concurrent `.gcda` writes.
      `glMaterialf` pnames).
    - Special arity, vector/scalar alternatives, block commands, or commands
      with custom validation should get an explicit parser branch.
-4. Extend execution handling in `repl_core.c`.
+4. Extend execution handling in `repl_executor.c`.
    - State-only commands normally go through `apply_state_cmd()`, then are
      dispatched from `execute_commands()`.
    - Geometry-emitting commands must respect open `glBegin` / tessellation
