@@ -16,6 +16,7 @@
  *   - Block-depth / scope queries
  *   - Executor helpers
  *   - Replay state machine
+ *   - Scene/workspace state
  *   - Timekeeping
  *   - Search input dispatch
  *   - Line feeding
@@ -97,7 +98,7 @@ void save_output(const char *filename);
 int  load_from_file(const char *filename);
 
 /* Workspace folder where multi-scene exports live.  Empty string = unset.
- * Owned by repl_core.c. */
+ * Owned by repl_scenes.c. */
 extern char g_workspace_dir[1024];
 
 /* Set by repl_save_workspace before each slot's save_output call so the
@@ -231,15 +232,14 @@ void delete_cmd_range(int start, int count, const char *what);
 /* Clear ALL commands unconditionally (same behaviour as Ctrl+L). */
 void repl_clear_all_cmds(void);
 
-/* Called before any mutation: if an example is currently viewed (no
- * active user scene), allocate a new user-scene slot, copy the current
- * editor state into it, and inherit the example's name (de-duplicated).
- * Returns the promoted slot index, or -1 if promotion was a no-op
- * (already viewing a user scene) or rejected (all slots full and no
- * workspace folder set for eviction — the LRU path lives in a later task -
- * repl_core.c already performs LRU eviction when g_workspace_dir is set but
- * the full plumbing might not be there */
+/* Called before any mutation: if an example is currently viewed (no active
+ * user scene), allocate a scene slot, copy the current editor state into it,
+ * and inherit the example's name (de-duplicated). Returns the promoted slot
+ * index, or -1 if promotion was a no-op or rejected. */
 int repl_promote_example_if_needed(void);
+void repl_scenes_capture_home_if_needed(void);
+void repl_scenes_mark_example_active(void);
+void repl_scenes_reset(void);
 
 /* ---- Commit handler chain (private to repl_editor.c, exposed for tests)
  * Each handler inspects g_input. Returns 1 if it consumed the line

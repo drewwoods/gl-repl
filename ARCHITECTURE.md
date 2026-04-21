@@ -15,6 +15,8 @@ of one monolithic `repl_core.c`.
   parser command metadata plus user-defined function signatures.
 - `repl_autonormal.c`: auto-generated `glNormal3f` command maintenance and
   feeding color/normal lookup for code-panel highlighting.
+- `repl_scenes.c`: user-scene slots, example promotion, workspace save/load,
+  LRU eviction, and scene rename state.
 - `repl_search.c`: search state, match navigation, and search-mode keyboard
   handling.
 - `repl_export.c`: fixed scaffold strings, init bootstrap tables, import/export
@@ -125,7 +127,7 @@ Owns the semantic model and remaining parser/display infrastructure.
 - `g_flat_cmds[]`, `g_num_flat_cmds`
 - parser, normalization, scope/depth caches
 - display callback
-- example orchestration and GL init
+- example loading orchestration and GL init
 
 ### `repl_flatten.c`
 
@@ -161,6 +163,15 @@ Owns auto-generated normals and feeding-state lookup.
 - `repl_find_feeding_normal_cmd()`
 - `repl_find_feeding_color_cmd()`
 - auto-normal command insertion/update through `ReplCommandStore`
+
+### `repl_scenes.c`
+
+Owns the multi-scene workspace model.
+
+- `g_user_scenes[]` and active-scene tracking
+- example-to-user-scene promotion
+- workspace save/load and LRU scene eviction
+- scene naming, slugging, and rename validation
 
 ### `repl_editor.c`
 
