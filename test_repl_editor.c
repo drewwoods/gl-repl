@@ -2243,6 +2243,78 @@ int main() {
         ASSERT_TRUE("clear_all: tmp is no longer registered", !found_tmp_after_clear);
     }
 
+    /* Regression: Ctrl+/ on a commented-out variable assignment should
+     * uncomment it into a CMD_VAR_ASSIGN.  Before the fix the GL-command
+     * parser would reject the stripped "x = 1;" and the user would see
+     * "Cannot uncomment: not a valid command". */
+    {
+        int saved_mods = g_mock_modifiers;
+
+        repl_reset_state();
+        repl_feed_line_public("float x;");
+        repl_feed_line_public("x = 1;");
+        ASSERT_INT("uncomment setup: two cmds", g_num_cmds, 2);
+        ASSERT_INT("uncomment setup: line 1 is assign",
+                   g_cmds[1].type, CMD_VAR_ASSIGN);
+
+        /* Comment the assignment with Ctrl+/. */
+        g_edit_line = 1;
+        g_inserting = 0;
+        g_status[0] = '\0';
+        g_mock_modifiers = GLUT_ACTIVE_CTRL;
+        repl_keyboard_func('/', 0, 0);
+        ASSERT_INT("comment assignment: type became comment",
+                   g_cmds[1].type, CMD_COMMENT);
+        ASSERT_TRUE("comment assignment: source keeps x = 1",
+                    strstr(g_cmds[1].source, "x = 1") != NULL);
+        assert_status_contains("comment assignment: status", "Commented");
+
+        /* Uncomment with Ctrl+/ again.  Fallback path must rebuild the
+         * CMD_VAR_ASSIGN in place, not reject with "not a valid command". */
+        g_edit_line = 1;
+        g_inserting = 0;
+        g_status[0] = '\0';
+        repl_keyboard_func('/', 0, 0);
+        ASSERT_INT("uncomment assignment: type back to assign",
+                   g_cmds[1].type, CMD_VAR_ASSIGN);
+        ASSERT_TRUE("uncomment assignment: no error status",
+                    strstr(g_status, "Cannot uncomment") == NULL);
+        assert_status_contains("uncomment assignment: status", "Uncommented");
+        ASSERT_TRUE("uncomment assignment: value restored",
+                    g_cmds[1].num_args == find_predef_var_idx("x"));
+
+        g_mock_modifiers = saved_mods;
+    }
+
+    /* Regression: uncomment still errors on genuinely unparseable lines.
+     * Comment a valid line, mangle the source so neither the GL parser
+     * nor the assignment fallback can rebuild it, then Ctrl+/ again. */
+    {
+        int saved_mods = g_mock_modifiers;
+
+        repl_reset_state();
+        repl_feed_line_public("glVertex3f(0, 0, 0);");
+        g_edit_line = 0;
+        g_inserting = 0;
+        g_status[0] = '\0';
+        g_mock_modifiers = GLUT_ACTIVE_CTRL;
+        repl_keyboard_func('/', 0, 0);
+        ASSERT_INT("mangled setup: commented", g_cmds[0].type, CMD_COMMENT);
+
+        /* Replace the comment body with nonsense so the re-parse fails. */
+        repl_copy_string_fits(g_cmds[0].source, sizeof(g_cmds[0].source),
+                              "// !@#$not a command$@#!");
+        g_status[0] = '\0';
+        g_edit_line = 0;
+        repl_keyboard_func('/', 0, 0);
+        ASSERT_INT("uncomment genuinely bad: stays a comment",
+                   g_cmds[0].type, CMD_COMMENT);
+        assert_status_contains("uncomment genuinely bad: error status",
+                               "Cannot uncomment");
+
+        g_mock_modifiers = saved_mods;
+    }
+
     printf("\n%d / %d tests passed\n", g_pass, g_run);
     return (g_pass == g_run) ? 0 : 1;
 }

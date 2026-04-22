@@ -991,6 +991,61 @@ int main(void) {
                 strstr(g_status, "depth limit") != NULL ||
                 strstr(g_status, "visit budget") != NULL);
 
+    /* Regression: a second definition of func<N> is rejected with a
+     * status message instead of silently creating a duplicate that the
+     * flattener would ignore. */
+    repl_reset_state(); declare_test_vars();
+    g_status[0] = '\0';
+    repl_feed_line_public("func0 {");
+    repl_feed_line_public("glVertex3f(1, 2, 3);");
+    repl_feed_line_public("}");
+    int dupe_cmd_count_before = g_num_cmds;
+    repl_feed_line_public("func0(y) {");
+    ASSERT_TRUE("duplicate func def rejected: cmd count unchanged",
+                g_num_cmds == dupe_cmd_count_before);
+    ASSERT_TRUE("duplicate func def rejected: status names func0",
+                strstr(g_status, "func0 already defined") != NULL);
+
+    /* Cursor on the existing def: "overwrite" path, still allowed. */
+    repl_reset_state(); declare_test_vars();
+    repl_feed_line_public("func0 {");
+    repl_feed_line_public("glVertex3f(1, 2, 3);");
+    repl_feed_line_public("}");
+    g_edit_line = 0;
+    g_inserting = 0;
+    g_status[0] = '\0';
+    repl_feed_line_public("func0(z) {");
+    ASSERT_TRUE("func def overwrite: still CMD_FUNC_DEF",
+                g_cmds[0].type == CMD_FUNC_DEF);
+    ASSERT_TRUE("func def overwrite: header keeps new param",
+                strstr(g_cmds[0].source, "z") != NULL);
+    ASSERT_TRUE("func def overwrite: status not a duplicate rejection",
+                strstr(g_status, "already defined") == NULL);
+
+    /* Regression: calling func<N> with no definition is surfaced as a
+     * status warning during flatten (silent no-op before the fix). */
+    repl_reset_state(); declare_test_vars();
+    g_status[0] = '\0';
+    repl_feed_line_public("func5();");
+    repl_flatten_commands();
+    ASSERT_TRUE("undefined func call: produces no flat cmds",
+                g_num_flat_cmds == 0);
+    ASSERT_TRUE("undefined func call: status names func5",
+                strstr(g_status, "func5 not defined") != NULL);
+
+    /* Defining the function later makes the same call resolve cleanly
+     * (no stale "not defined" status); proves the warning tracks
+     * presence, not a one-time parse event. */
+    repl_feed_line_public("func5 {");
+    repl_feed_line_public("glVertex3f(0, 0, 0);");
+    repl_feed_line_public("}");
+    g_status[0] = '\0';
+    repl_flatten_commands();
+    ASSERT_TRUE("defined func call: flat body expands",
+                g_num_flat_cmds == 1 && g_flat_cmds[0].type == CMD_VERTEX3F);
+    ASSERT_TRUE("defined func call: no warning status",
+                strstr(g_status, "not defined") == NULL);
+
     printf("repl_core_commit: %d/%d passed\n", g_pass, g_run);
     return (g_run == g_pass) ? 0 : 1;
 }

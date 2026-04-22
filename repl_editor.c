@@ -778,9 +778,21 @@ static int handle_comment_toggle_key_route(unsigned char key) {
                         ReplParseContext parse_ctx = { g_edit_line, NULL, 0 };
                         memset(&new_cmd, 0, sizeof(new_cmd));
                         int built = 0;
+                        int fallback_set_status = 0;
+
+                        /* Clear any prior status (e.g. "Commented out" from the
+                         * previous key press) so we can tell whether the
+                         * fallback produced an actionable error of its own. */
+                        g_status[0] = '\0';
+
                         if (repl_parse_command_ctx(s, &new_cmd, &parse_ctx)) {
                             built = 1;
                         } else {
+                            /* Parser may have set its own error (e.g. "Unknown
+                             * cmd.") — drop it; the friendly "Cannot uncomment"
+                             * message below is clearer for this key path. */
+                            g_status[0] = '\0';
+
                             /* Fallback: variable assignments (`x = expr;`) live
                              * in the commit chain, not the GL-command parser.
                              * Build a CMD_VAR_ASSIGN in place so uncommenting
@@ -800,10 +812,12 @@ static int handle_comment_toggle_key_route(unsigned char key) {
                                              "undeclared variable '%s' — use 'float %s;' first",
                                              name, name);
                                     set_status(buf);
+                                    fallback_set_status = 1;
                                 } else if (!validate_expression_idents(
                                         rhs, vis_n > 0 ? vis : NULL, vis_n,
                                         verr, sizeof(verr))) {
                                     set_status(verr);
+                                    fallback_set_status = 1;
                                 } else {
                                     ExprCtx ectx = { rhs, g_predef_vars, g_num_predef_vars };
                                     float val = eval_expr(&ectx);
@@ -828,6 +842,7 @@ static int handle_comment_toggle_key_route(unsigned char key) {
                                         built = 1;
                                     } else {
                                         set_status("Command too long");
+                                        fallback_set_status = 1;
                                     }
                                 }
                             }
@@ -838,9 +853,7 @@ static int handle_comment_toggle_key_route(unsigned char key) {
                             load_line_to_input(g_edit_line);
                             mark_normals_dirty();
                             set_status("Uncommented");
-                        } else if (!g_status[0] || strcmp(g_status, "Commented out") == 0) {
-                            /* Only stamp the generic message if no more specific
-                             * error was set above. */
+                        } else if (!fallback_set_status) {
                             set_status("Cannot uncomment: not a valid command");
                         }
                     }
