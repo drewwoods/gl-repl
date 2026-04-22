@@ -63,38 +63,188 @@ static void workspace_format_float(char *buf, size_t n, float v) {
     snprintf(buf, n, "%g", (double)v);
 }
 
+/* ========================================================================= */
+/* Workspace header directive table                                           */
+/*                                                                            */
+/* Reader and writer share a directive table so every `@name` that            */
+/* load_from_file can parse has a matching emit step in                       */
+/* refresh_workspace_header_lines (and vice versa).  Each entry pairs a       */
+/* parse(args) with an emit(append into g_workspace_header_lines) step.       */
+/* Order in this table determines emit order.                                 */
+/* ========================================================================= */
+
+typedef int  (*WorkspaceParseFn)(const char *args);
+typedef void (*WorkspaceEmitFn)(int *n);
+
+typedef struct {
+    const char       *name;      /* directive name without leading `@` */
+    size_t            name_len;
+    WorkspaceParseFn  parse;     /* parse(args-after-name-and-space) */
+    WorkspaceEmitFn   emit;      /* append zero or more lines, bumping *n */
+} WorkspaceDirective;
+
+/* --- workspace-dir --------------------------------------------------------- */
+
+static int parse_workspace_dir(const char *args) {
+    size_t i = 0;
+    while (*args && i < sizeof(g_pending_workspace_dir) - 1)
+        g_pending_workspace_dir[i++] = *args++;
+    g_pending_workspace_dir[i] = '\0';
+    while (i > 0 && isspace((unsigned char)g_pending_workspace_dir[i - 1]))
+        g_pending_workspace_dir[--i] = '\0';
+    return 1;
+}
+
+static void emit_workspace_dir(int *n) {
+    if (g_workspace_dir[0] && *n < MAX_WORKSPACE_HEADER_LINES) {
+        snprintf(g_workspace_header_lines[(*n)++], WORKSPACE_HEADER_LINE_LEN,
+                 "// @workspace-dir %s", g_workspace_dir);
+    }
+}
+
+/* --- scene-name ------------------------------------------------------------ */
+
+static int parse_scene_name(const char *args) {
+    size_t i = 0;
+    while (*args && i < sizeof(g_pending_scene_name) - 1)
+        g_pending_scene_name[i++] = *args++;
+    g_pending_scene_name[i] = '\0';
+    while (i > 0 && isspace((unsigned char)g_pending_scene_name[i - 1]))
+        g_pending_scene_name[--i] = '\0';
+    return 1;
+}
+
+static void emit_scene_name(int *n) {
+    /* Explicit export hint overrides the active-slot name. */
+    const char *scene_name = g_export_scene_name_hint;
+    if ((!scene_name || !*scene_name) && repl_active_user_scene() >= 0)
+        scene_name = repl_user_scene_name(repl_active_user_scene());
+    if (scene_name && *scene_name && *n < MAX_WORKSPACE_HEADER_LINES) {
+        snprintf(g_workspace_header_lines[(*n)++], WORKSPACE_HEADER_LINE_LEN,
+                 "// @scene-name %s", scene_name);
+    }
+}
+
+/* --- var ------------------------------------------------------------------- */
+
+static int parse_var(const char *args) {
+    const char *p = args;
+    char name[16];
+    int ni = 0;
+    while (*p && (isalnum((unsigned char)*p) || *p == '_') &&
+           ni < (int)sizeof(name) - 1)
+        name[ni++] = *p++;
+    name[ni] = '\0';
+    while (*p && isspace((unsigned char)*p)) p++;
+    if (*p != '=') return 0;
+    p++;
+    ExprCtx ctx = { p, NULL, 0 };
+    float val = eval_expr(&ctx);
+    int idx = find_predef_var_idx(name);
+    if (idx < 0) {
+        char err[128];
+        if (!declare_predef_var(name, err, sizeof(err)))
+            return 0;
+        idx = find_predef_var_idx(name);
+        if (idx < 0)
+            return 0;
+    }
+    g_predef_vars[idx].value = val;
+    /* Also defer the value so that if a // @declare marker in the snippet
+     * undeclares and re-declares this var, the value is restored afterwards
+     * (see load_from_file deferred-apply step). */
+    if (g_deferred_var_count < MAX_DEFERRED_VAR_VALUES) {
+        repl_copy_string_fits(g_deferred_var_values[g_deferred_var_count].name,
+                              sizeof(g_deferred_var_values[0].name),
+                              name);
+        g_deferred_var_values[g_deferred_var_count].value = val;
+        g_deferred_var_count++;
+    }
+    return 1;
+}
+
+static void emit_vars(int *n) {
+    for (int i = 0; i < g_num_predef_vars && *n < MAX_WORKSPACE_HEADER_LINES; i++) {
+        char vbuf[32];
+        workspace_format_float(vbuf, sizeof(vbuf), g_predef_vars[i].value);
+        if (repl_format_fits(g_workspace_header_lines[*n], WORKSPACE_HEADER_LINE_LEN,
+                             "// @var %s = %s", g_predef_vars[i].name, vbuf))
+            (*n)++;
+    }
+}
+
+/* --- cfg ------------------------------------------------------------------- */
+
+static int parse_cfg(const char *args) {
+    const char *p = args;
+    char slug[32];
+    int si = 0;
+    while (*p && (isalnum((unsigned char)*p) || *p == '_') &&
+           si < (int)sizeof(slug) - 1)
+        slug[si++] = *p++;
+    slug[si] = '\0';
+    while (*p && isspace((unsigned char)*p)) p++;
+    if (*p != '=') return 0;
+    p++;
+    while (*p && isspace((unsigned char)*p)) p++;
+    int val = (int)strtol(p, NULL, 10);
+    if (strcmp(slug, "top_code_panel") == 0) {
+        g_code_panel_layout = val ? CODE_PANEL_LAYOUT_TOP
+                                  : CODE_PANEL_LAYOUT_LEFT;
+        return 1;
+    }
+    for (int i = 0; i < CFG_ITEM_COUNT; i++) {
+        if (g_cfg_items[i].value == NULL) continue;
+        char item_slug[32];
+        workspace_slug_from_name(g_cfg_items[i].label, item_slug, sizeof(item_slug));
+        if (strcmp(item_slug, slug) == 0) {
+            int max_v = g_cfg_items[i].n_states > 0
+                        ? g_cfg_items[i].n_states - 1 : 1;
+            if (val < 0) val = 0;
+            if (val > max_v) val = max_v;
+            *g_cfg_items[i].value = val;
+            return 1;
+        }
+    }
+    /* Unknown slug: still consume so unrelated directives don't claim it. */
+    return 1;
+}
+
+static void emit_cfgs(int *n) {
+    for (int i = 0; i < CFG_ITEM_COUNT && *n < MAX_WORKSPACE_HEADER_LINES; i++) {
+        if (g_cfg_items[i].value == NULL) continue;
+        char slug[32];
+        workspace_slug_from_name(g_cfg_items[i].label, slug, sizeof(slug));
+        snprintf(g_workspace_header_lines[(*n)++], WORKSPACE_HEADER_LINE_LEN,
+                 "// @cfg %s = %d", slug, *g_cfg_items[i].value);
+    }
+}
+
+/* --- directive table (source of truth) ------------------------------------- */
+
+#define WS_DIR(name, parse_fn, emit_fn) \
+    { name, sizeof(name) - 1, parse_fn, emit_fn }
+
+static const WorkspaceDirective WORKSPACE_DIRECTIVES[] = {
+    /* Emit order matches this array.  Reader dispatches by name. */
+    WS_DIR("scene-name",    parse_scene_name,    emit_scene_name),
+    WS_DIR("workspace-dir", parse_workspace_dir, emit_workspace_dir),
+    WS_DIR("var",           parse_var,           emit_vars),
+    WS_DIR("cfg",           parse_cfg,           emit_cfgs),
+};
+#define WORKSPACE_DIRECTIVE_COUNT \
+    ((int)(sizeof(WORKSPACE_DIRECTIVES) / sizeof(WORKSPACE_DIRECTIVES[0])))
+
+#undef WS_DIR
+
 void refresh_workspace_header_lines(void) {
     int n = 0;
     if (n < MAX_WORKSPACE_HEADER_LINES) {
         snprintf(g_workspace_header_lines[n++], WORKSPACE_HEADER_LINE_LEN,
                  "// @workspace: REPL state (auto-saved)");
     }
-    /* Scene name hint: explicit export override > active user scene name. */
-    const char *scene_name = g_export_scene_name_hint;
-    if ((!scene_name || !*scene_name) && repl_active_user_scene() >= 0)
-        scene_name = repl_user_scene_name(repl_active_user_scene());
-    if (scene_name && *scene_name && n < MAX_WORKSPACE_HEADER_LINES) {
-        snprintf(g_workspace_header_lines[n++], WORKSPACE_HEADER_LINE_LEN,
-                 "// @scene-name %s", scene_name);
-    }
-    if (g_workspace_dir[0] && n < MAX_WORKSPACE_HEADER_LINES) {
-        snprintf(g_workspace_header_lines[n++], WORKSPACE_HEADER_LINE_LEN,
-                 "// @workspace-dir %s", g_workspace_dir);
-    }
-    for (int i = 0; i < g_num_predef_vars && n < MAX_WORKSPACE_HEADER_LINES; i++) {
-        char vbuf[32];
-        workspace_format_float(vbuf, sizeof(vbuf), g_predef_vars[i].value);
-        if (repl_format_fits(g_workspace_header_lines[n], WORKSPACE_HEADER_LINE_LEN,
-                             "// @var %s = %s", g_predef_vars[i].name, vbuf))
-            n++;
-    }
-    for (int i = 0; i < CFG_ITEM_COUNT && n < MAX_WORKSPACE_HEADER_LINES; i++) {
-        if (g_cfg_items[i].value == NULL) continue;
-        char slug[32];
-        workspace_slug_from_name(g_cfg_items[i].label, slug, sizeof(slug));
-        snprintf(g_workspace_header_lines[n++], WORKSPACE_HEADER_LINE_LEN,
-                 "// @cfg %s = %d", slug, *g_cfg_items[i].value);
-    }
+    for (int i = 0; i < WORKSPACE_DIRECTIVE_COUNT; i++)
+        WORKSPACE_DIRECTIVES[i].emit(&n);
     g_workspace_header_line_count = n;
 }
 
@@ -107,105 +257,21 @@ int parse_workspace_header_line(const char *line) {
     if (*p != '@') return 0;
     p++;
 
-    if (strncmp(p, "workspace-dir", 13) == 0 && isspace((unsigned char)p[13])) {
-        p += 14;
-        while (*p && isspace((unsigned char)*p)) p++;
-        int i = 0;
-        while (*p && i < (int)sizeof(g_pending_workspace_dir) - 1)
-            g_pending_workspace_dir[i++] = *p++;
-        g_pending_workspace_dir[i] = '\0';
-        /* Trim trailing whitespace. */
-        while (i > 0 && isspace((unsigned char)g_pending_workspace_dir[i - 1]))
-            g_pending_workspace_dir[--i] = '\0';
+    /* Banner line: `// @workspace: REPL state ...` — recognised, no payload. */
+    if (strncmp(p, "workspace:", 10) == 0) return 1;
+    if (strncmp(p, "workspace", 9) == 0 &&
+        !isalnum((unsigned char)p[9]) && p[9] != '_' && p[9] != '-')
         return 1;
+
+    for (int i = 0; i < WORKSPACE_DIRECTIVE_COUNT; i++) {
+        const WorkspaceDirective *d = &WORKSPACE_DIRECTIVES[i];
+        if (strncmp(p, d->name, d->name_len) != 0) continue;
+        unsigned char follow = (unsigned char)p[d->name_len];
+        if (follow != '\0' && !isspace(follow)) continue;
+        const char *args = p + d->name_len;
+        while (*args && isspace((unsigned char)*args)) args++;
+        return d->parse(args);
     }
-
-    if (strncmp(p, "workspace", 9) == 0) return 1;
-
-    if (strncmp(p, "scene-name", 10) == 0 && isspace((unsigned char)p[10])) {
-        p += 11;
-        while (*p && isspace((unsigned char)*p)) p++;
-        int i = 0;
-        while (*p && i < (int)sizeof(g_pending_scene_name) - 1)
-            g_pending_scene_name[i++] = *p++;
-        g_pending_scene_name[i] = '\0';
-        while (i > 0 && isspace((unsigned char)g_pending_scene_name[i - 1]))
-            g_pending_scene_name[--i] = '\0';
-        return 1;
-    }
-
-    if (strncmp(p, "var", 3) == 0 && isspace((unsigned char)p[3])) {
-        p += 4;
-        while (*p && isspace((unsigned char)*p)) p++;
-        char name[16];
-        int ni = 0;
-        while (*p && (isalnum((unsigned char)*p) || *p == '_') &&
-               ni < (int)sizeof(name) - 1)
-            name[ni++] = *p++;
-        name[ni] = '\0';
-        while (*p && isspace((unsigned char)*p)) p++;
-        if (*p != '=') return 0;
-        p++;
-        ExprCtx ctx = { p, NULL, 0 };
-        float val = eval_expr(&ctx);
-        int idx = find_predef_var_idx(name);
-        if (idx < 0) {
-            char err[128];
-            if (!declare_predef_var(name, err, sizeof(err)))
-                return 0;
-            idx = find_predef_var_idx(name);
-            if (idx < 0)
-                return 0;
-        }
-        g_predef_vars[idx].value = val;
-        /* Also defer the value so that if a // @declare marker in the snippet
-         * undeclares and re-declares this var, the value is restored
-         * afterwards (see load_from_file deferred-apply step). */
-        if (g_deferred_var_count < MAX_DEFERRED_VAR_VALUES) {
-            repl_copy_string_fits(g_deferred_var_values[g_deferred_var_count].name,
-                                  sizeof(g_deferred_var_values[0].name),
-                                  name);
-            g_deferred_var_values[g_deferred_var_count].value = val;
-            g_deferred_var_count++;
-        }
-        return 1;
-    }
-
-    if (strncmp(p, "cfg", 3) == 0 && isspace((unsigned char)p[3])) {
-        p += 4;
-        while (*p && isspace((unsigned char)*p)) p++;
-        char slug[32];
-        int si = 0;
-        while (*p && (isalnum((unsigned char)*p) || *p == '_') &&
-               si < (int)sizeof(slug) - 1)
-            slug[si++] = *p++;
-        slug[si] = '\0';
-        while (*p && isspace((unsigned char)*p)) p++;
-        if (*p != '=') return 0;
-        p++;
-        while (*p && isspace((unsigned char)*p)) p++;
-        int val = (int)strtol(p, NULL, 10);
-        if (strcmp(slug, "top_code_panel") == 0) {
-            g_code_panel_layout = val ? CODE_PANEL_LAYOUT_TOP
-                                      : CODE_PANEL_LAYOUT_LEFT;
-            return 1;
-        }
-        for (int i = 0; i < CFG_ITEM_COUNT; i++) {
-            if (g_cfg_items[i].value == NULL) continue;
-            char item_slug[32];
-            workspace_slug_from_name(g_cfg_items[i].label, item_slug, sizeof(item_slug));
-            if (strcmp(item_slug, slug) == 0) {
-                int max_v = g_cfg_items[i].n_states > 0
-                            ? g_cfg_items[i].n_states - 1 : 1;
-                if (val < 0) val = 0;
-                if (val > max_v) val = max_v;
-                *g_cfg_items[i].value = val;
-                return 1;
-            }
-        }
-        return 1;
-    }
-
     return 0;
 }
 
