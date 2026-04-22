@@ -457,10 +457,11 @@ static void normalize_with_indent(const char *raw_expr, int indent_spaces,
     out[indent_spaces + (int)body_copy_len] = '\0';
 }
 
-int repl_parse_and_normalize(const char *line, int pos,
-                             ExprVar *vars, int num_vars,
-                             int preserve_expr, GLCmd *out_cmd) {
-    ReplParseContext parse_ctx = { pos, vars, num_vars };
+static int parse_and_normalize_impl(const char *line, int pos,
+                                    ExprVar *vars, int num_vars,
+                                    int preserve_expr, GLCmd *out_cmd,
+                                    int strict_refs) {
+    ReplParseContext parse_ctx = { pos, vars, num_vars, strict_refs };
     int parsed = repl_parse_command_ctx(line, out_cmd, &parse_ctx);
 
     if (!parsed) return 0;
@@ -476,6 +477,20 @@ int repl_parse_and_normalize(const char *line, int pos,
         out_cmd->has_vars = 1;
     }
     return 1;
+}
+
+int repl_parse_and_normalize(const char *line, int pos,
+                             ExprVar *vars, int num_vars,
+                             int preserve_expr, GLCmd *out_cmd) {
+    return parse_and_normalize_impl(line, pos, vars, num_vars,
+                                    preserve_expr, out_cmd, 0);
+}
+
+int repl_parse_and_normalize_strict(const char *line, int pos,
+                                    ExprVar *vars, int num_vars,
+                                    int preserve_expr, GLCmd *out_cmd) {
+    return parse_and_normalize_impl(line, pos, vars, num_vars,
+                                    preserve_expr, out_cmd, 1);
 }
 
 void repl_reformat_commands(void) {

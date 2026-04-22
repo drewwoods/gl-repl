@@ -10,6 +10,12 @@ typedef struct {
     int source_line_idx;
     ExprVar *vars;
     int num_vars;
+    /* When strict_refs != 0, the parser rejects a top-level CMD_CALL
+     * whose target funcN has no matching CMD_FUNC_DEF in g_cmds[],
+     * the same way it rejects an assignment to an undeclared variable.
+     * Default 0 for back-compat with unit tests / reformat paths that
+     * re-parse already-committed commands. */
+    int strict_refs;
 } ReplParseContext;
 
 /* Context-aware parser entrypoint. Pass this from internal callers when the

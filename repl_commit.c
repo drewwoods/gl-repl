@@ -718,7 +718,7 @@ int try_commit_for_loop(void) {
                     dv[dvn++] = visible_vars[i];
 
                 memset(&body_cmd, 0, sizeof(body_cmd));
-                ReplParseContext parse_ctx = { pos, dv, dvn };
+                ReplParseContext parse_ctx = { pos, dv, dvn, 1 };
                 if (!repl_parse_command_ctx(body, &body_cmd, &parse_ctx)) {
                     set_status("Invalid for-loop body command");
                     return 1;

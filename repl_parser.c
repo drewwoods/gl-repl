@@ -510,6 +510,28 @@ static int parse_command(const char *line, GLCmd *cmd,
             return 0;
         }
 
+        /* In strict mode (commit path), require a matching CMD_FUNC_DEF
+         * for top-level calls — same rule as `x = expr;` needing `float
+         * x;`.  Inside a function body (block depth > 0) forward refs
+         * are still allowed so mutual recursion keeps working. */
+        if (ctx && ctx->strict_refs && block_depth_at(source_line_idx) == 0) {
+            int def_exists = 0;
+            for (int di = 0; di < g_num_cmds; di++) {
+                if (!g_cmds[di].valid) continue;
+                if (g_cmds[di].type != CMD_FUNC_DEF) continue;
+                if ((int)g_cmds[di].args[0] != fn) continue;
+                def_exists = 1;
+                break;
+            }
+            if (!def_exists) {
+                char buf[96];
+                snprintf(buf, sizeof(buf),
+                         "undefined function 'func%d' — define it first", fn);
+                set_status(buf);
+                return 0;
+            }
+        }
+
         cmd->type = CMD_CALL;
         cmd->valid = 1;
         cmd->args[0] = (float)fn;
@@ -668,13 +690,13 @@ unknown_command:
 }
 
 int repl_parse_command(const char *line, GLCmd *cmd) {
-    ReplParseContext ctx = { g_edit_line, NULL, 0 };
+    ReplParseContext ctx = { g_edit_line, NULL, 0, 0 };
     return parse_command(line, cmd, &ctx);
 }
 
 int repl_parse_command_with_vars(const char *line, GLCmd *cmd,
                                  ExprVar *vars, int num_vars) {
-    ReplParseContext ctx = { g_edit_line, vars, num_vars };
+    ReplParseContext ctx = { g_edit_line, vars, num_vars, 0 };
     return parse_command(line, cmd, &ctx);
 }
 

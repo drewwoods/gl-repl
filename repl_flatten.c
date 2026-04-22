@@ -311,10 +311,6 @@ static void flatten_range(FlattenContext *ctx,
                 snprintf(msg, sizeof(msg),
                          "Error: func%d not defined", func_num);
                 flatten_note_status(ctx, msg);
-                /* Also log to stderr so the error is visible in the
-                 * terminal even if a later flatten pass clobbers the
-                 * status line. */
-                fprintf(stderr, "%s\n", msg);
             }
             i++;
             continue;
@@ -413,7 +409,7 @@ static void flatten_range(FlattenContext *ctx,
 
         if (vars && nv > 0) {
             GLCmd tmp;
-            ReplParseContext parse_ctx = { i, vars, nv };
+            ReplParseContext parse_ctx = { i, vars, nv, 0 };
             memset(&tmp, 0, sizeof(tmp));
             if (repl_parse_command_ctx(src_cmd->source, &tmp, &parse_ctx)) {
                 tmp.has_vars = src_cmd->has_vars;
@@ -427,7 +423,7 @@ static void flatten_range(FlattenContext *ctx,
         } else if (src_cmd->has_vars) {
             /* Outside loop but has predefined var references: re-evaluate */
             GLCmd tmp;
-            ReplParseContext parse_ctx = { i, NULL, 0 };
+            ReplParseContext parse_ctx = { i, NULL, 0, 0 };
             memset(&tmp, 0, sizeof(tmp));
             if (repl_parse_command_ctx(src_cmd->source, &tmp, &parse_ctx)) {
                 tmp.has_vars = 1;

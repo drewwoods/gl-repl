@@ -286,12 +286,12 @@ static int parse_for_overwrite_enter(GLCmd *cmd, int insert_idx) {
     memset(cmd, 0, sizeof(*cmd));
     int parsed;
     if (num_vis_vars > 0) {
-        ReplParseContext parse_ctx = { insert_idx, vis_vars, num_vis_vars };
+        ReplParseContext parse_ctx = { insert_idx, vis_vars, num_vis_vars, 0 };
         parsed = repl_parse_command_ctx(g_input, cmd, &parse_ctx);
         if (parsed)
             rewrite_cmd_source_with_indent(cmd, insert_idx, 1);
     } else {
-        ReplParseContext parse_ctx = { insert_idx, NULL, 0 };
+        ReplParseContext parse_ctx = { insert_idx, NULL, 0, 0 };
         parsed = repl_parse_command_ctx(g_input, cmd, &parse_ctx);
         if (parsed && input_has_predef_vars(g_input)) {
             cmd->has_vars = 1;
@@ -424,14 +424,14 @@ static CommitResult commit_current_input(int enter_mode) {
 
             memset(&cmd, 0, sizeof(cmd));
             if (num_vis_vars > 0) {
-                ReplParseContext parse_ctx = { insert_idx, vis_vars, num_vis_vars };
+                ReplParseContext parse_ctx = { insert_idx, vis_vars, num_vis_vars, 0 };
                 if (try_commit_var_statements())
                     return commit_progressed_since(before) ? COMMIT_OK : COMMIT_REJECTED;
                 parsed = repl_parse_command_ctx(g_input, &cmd, &parse_ctx);
                 if (parsed)
                     rewrite_cmd_source_with_indent(&cmd, insert_idx, 1);
             } else {
-                ReplParseContext parse_ctx = { insert_idx, NULL, 0 };
+                ReplParseContext parse_ctx = { insert_idx, NULL, 0, 0 };
                 parsed = repl_parse_command_ctx(g_input, &cmd, &parse_ctx);
             }
 
@@ -775,7 +775,7 @@ static int handle_comment_toggle_key_route(unsigned char key) {
                     }
                     {
                         GLCmd new_cmd;
-                        ReplParseContext parse_ctx = { g_edit_line, NULL, 0 };
+                        ReplParseContext parse_ctx = { g_edit_line, NULL, 0, 0 };
                         memset(&new_cmd, 0, sizeof(new_cmd));
                         int built = 0;
                         int fallback_set_status = 0;
@@ -987,12 +987,12 @@ static int handle_semicolon_commit_key_route(unsigned char key) {
 
                 memset(&cmd, 0, sizeof(cmd));
                 if (num_vis_vars > 0)
-                    parsed = repl_parse_and_normalize(g_input, insert_idx, vis_vars, num_vis_vars,
-                                                      input_has_any_visible_vars(g_input, vis_vars, num_vis_vars),
-                                                      &cmd);
+                    parsed = repl_parse_and_normalize_strict(g_input, insert_idx, vis_vars, num_vis_vars,
+                                                             input_has_any_visible_vars(g_input, vis_vars, num_vis_vars),
+                                                             &cmd);
                 else
-                    parsed = repl_parse_and_normalize(g_input, insert_idx, NULL, 0,
-                                                      input_has_predef_vars(g_input), &cmd);
+                    parsed = repl_parse_and_normalize_strict(g_input, insert_idx, NULL, 0,
+                                                             input_has_predef_vars(g_input), &cmd);
 
                 if (parsed) {
                     ReplCommandStore store = repl_command_store_live();
@@ -1644,12 +1644,12 @@ int feed_line(const char *line) {
 
         memset(&cmd, 0, sizeof(cmd));
         if (num_vis_vars > 0)
-            parsed = repl_parse_and_normalize(g_input, insert_idx, vis_vars, num_vis_vars,
-                                              input_has_any_visible_vars(g_input, vis_vars, num_vis_vars),
-                                              &cmd);
+            parsed = repl_parse_and_normalize_strict(g_input, insert_idx, vis_vars, num_vis_vars,
+                                                     input_has_any_visible_vars(g_input, vis_vars, num_vis_vars),
+                                                     &cmd);
         else
-            parsed = repl_parse_and_normalize(g_input, insert_idx, NULL, 0,
-                                              input_has_predef_vars(g_input), &cmd);
+            parsed = repl_parse_and_normalize_strict(g_input, insert_idx, NULL, 0,
+                                                     input_has_predef_vars(g_input), &cmd);
 
         if (parsed) {
             ReplCommandStore store = repl_command_store_live();
