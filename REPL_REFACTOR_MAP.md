@@ -17,6 +17,8 @@ flowchart LR
     store["repl_command_store.c<br/>source command mutation"]
 
     ui["ui_panels.c<br/>code/menu/help rendering<br/>hit testing<br/>rename UI"]
+    layout["repl_code_panel_layout.c<br/>pure wrap iterator<br/>row/segment lookup<br/>cursor row mapping"]
+    export["repl_export.c<br/>import/export<br/>visual code dump"]
     audio["repl_audio.c<br/>playlist engine<br/>persisted audio cfg"]
     replay["repl_replay.c<br/>replay state machine<br/>fade batches"]
     scenes["repl_scenes.c<br/>user scenes<br/>workspace slots"]
@@ -51,6 +53,8 @@ flowchart LR
     replay --> exec
     ui --> actions
     ui --> scenes
+    ui --> layout
+    export --> layout
 ```
 
 ## Current Boundaries
@@ -67,11 +71,16 @@ flowchart LR
   before mutating editor state.
 - `repl_clipboard.c` owns selection and clipboard buffers. It mutates commands
   through `ReplCommandStore` and takes snapshots through `repl_undo.c`.
+- `repl_code_panel_layout.c` owns pure text wrapping for code-panel rows:
+  continuation indent, wrap break choice, row counts, segment lookup, and cursor
+  row mapping. `ui_panels.c`, export visual dumps, and tests should consume this
+  instead of carrying local copies.
 
 ## Open Edges
 
-- `ui_panels.c` still owns menu layout, hit testing, and inline rename UI; only
-  the menu action side effects have moved into `repl_actions.c`.
+- `ui_panels.c` still owns menu layout, render-time code panel row iteration,
+  hit testing, and inline rename UI. Code-panel wrapping is shared, but the
+  broader document row model is still embedded in UI code.
 - `repl_editor.c` still owns variable slider dragging, hidden-code-panel restore
   rules, and the main keyboard/special/mouse route ordering.
 - `sample.h` and `repl_state.h` still expose broad globals for compatibility.

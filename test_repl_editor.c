@@ -2,16 +2,14 @@
 #include "repl_actions.h"
 #include "repl_camera_controls.h"
 #include "repl_clipboard.h"
+#include "repl_code_panel_layout.h"
 #include "repl_replay.h"
 #include "repl_keys.h"
 #include "sample.h"
 #include "profile_panel.h"
 #include "ui_panels.h"
-#include <ctype.h>
 #include <stdio.h>
 #include <string.h>
-
-#define TEST_CODE_PANEL_MAX_HANG_INDENT_CHARS 12
 
 static int g_run = 0;
 static int g_pass = 0;
@@ -75,103 +73,11 @@ static int cfg_row_for_value(int *value) {
     return -1;
 }
 
-static int test_code_panel_available_chars(int panel_w, int x) {
-    int avail_px = panel_w - x - 4;
-    if (avail_px < FONT_W)
-        return 0;
-    return avail_px / FONT_W;
-}
-
-static int test_code_panel_cont_indent_chars(const char *text) {
-    const char *src = text ? text : "";
-    int leading = 0;
-
-    while (src[leading] && isspace((unsigned char)src[leading]))
-        leading++;
-
-    {
-        const char *paren = strchr(src, '(');
-        if (paren && paren[1] != '\0') {
-            int align = (int)(paren - src) + 1;
-            int max_align = leading + TEST_CODE_PANEL_MAX_HANG_INDENT_CHARS;
-            if (align > max_align)
-                align = max_align;
-            return align;
-        }
-    }
-
-    return leading + 4;
-}
-
-static int test_code_panel_is_secondary_break(char c) {
-    return c == ')' || c == ' ' || c == '+' || c == '*' || c == '-' || c == '/';
-}
-
-static int test_code_panel_find_wrap_break(const char *text, int start,
-                                           int max_chars, int len) {
-    int end = start + max_chars - 1;
-    int search_start = start;
-
-    if (end >= len)
-        end = len - 1;
-
-    while (search_start < len &&
-           isspace((unsigned char)text[search_start]))
-        search_start++;
-
-    for (int i = end; i > search_start; i--) {
-        if (text[i] == ',')
-            return i;
-    }
-
-    for (int i = end; i > search_start; i--) {
-        if (test_code_panel_is_secondary_break(text[i]))
-            return i;
-    }
-
-    for (int i = end + 1; i < len; i++) {
-        if (text[i] == ',' ||
-            (i > search_start && test_code_panel_is_secondary_break(text[i])))
-            return i;
-    }
-
-    return -1;
-}
-
 static int test_code_panel_row_count_for_text(const char *text, int first_x,
                                               int panel_w) {
-    const char *src = text ? text : "";
-    int len = (int)strlen(src);
-    int pos = 0;
-    int x = first_x;
-    int cont_x = first_x + test_code_panel_cont_indent_chars(src) * FONT_W;
-    int rows = 0;
-    int done = 0;
-
-    while (!done) {
-        rows++;
-        if (len == 0) {
-            done = 1;
-        } else {
-            int width_chars = test_code_panel_available_chars(panel_w, x);
-            int remaining = len - pos;
-
-            if (!g_wrap_at_comma || width_chars < 1 || remaining <= width_chars) {
-                done = 1;
-            } else {
-                int break_idx = test_code_panel_find_wrap_break(src, pos,
-                                                                width_chars, len);
-                if (break_idx < 0) {
-                    done = 1;
-                } else {
-                    pos = break_idx + 1;
-                    x = cont_x;
-                }
-            }
-        }
-    }
-
-    return rows;
+    CodePanelTextLayout layout =
+        repl_code_panel_layout_make(panel_w, first_x, FONT_W, g_wrap_at_comma);
+    return repl_code_panel_row_count_for_text(text, &layout);
 }
 
 static int code_panel_header_row_count(void) {

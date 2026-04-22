@@ -1,4 +1,5 @@
 #include "sample.h"
+#include "repl_code_panel_layout.h"
 #include "repl_core_internal.h"
 #include "repl_command_store.h"
 #include "ui_panels.h"
@@ -2456,100 +2457,18 @@ int load_from_file(const char *filename) {
     return loaded > 0;
 }
 
-static int dump_code_panel_available_chars(int panel_w, int x) {
-    int avail_px = panel_w - x - 4;
-    if (avail_px < FONT_W)
-        return 0;
-    return avail_px / FONT_W;
-}
-
-static int dump_code_panel_cont_indent_chars(const char *text) {
-    const char *src = text ? text : "";
-    int leading = 0;
-
-    while (src[leading] && isspace((unsigned char)src[leading]))
-        leading++;
-
-    const char *paren = strchr(src, '(');
-    if (paren && paren[1] != '\0') {
-        int align = (int)(paren - src) + 1;
-        int max_align = leading + 12;
-        if (align > max_align)
-            align = max_align;
-        return align;
-    }
-
-    return leading + 4;
-}
-
-static int dump_code_panel_is_secondary_break(char c) {
-    return c == ')' || c == ' ' || c == '+' || c == '*' || c == '-' || c == '/';
-}
-
-static int dump_code_panel_find_wrap_break(const char *text, int start,
-                                           int max_chars, int len) {
-    int end = start + max_chars - 1;
-    int search_start = start;
-    if (end >= len)
-        end = len - 1;
-
-    while (search_start < len &&
-           isspace((unsigned char)text[search_start]))
-        search_start++;
-
-    for (int i = end; i > search_start; i--) {
-        if (text[i] == ',')
-            return i;
-    }
-
-    for (int i = end; i > search_start; i--) {
-        if (dump_code_panel_is_secondary_break(text[i]))
-            return i;
-    }
-
-    for (int i = end + 1; i < len; i++) {
-        if (text[i] == ',' ||
-            (i > search_start && dump_code_panel_is_secondary_break(text[i])))
-            return i;
-    }
-
-    return -1;
-}
-
 static void dump_code_panel_wrapped_line(FILE *dst, const char *text,
                                          int first_x, int panel_w) {
     const char *src = text ? text : "";
-    int len = (int)strlen(src);
-    int pos = 0;
-    int x = first_x;
-    int cont_indent_chars = dump_code_panel_cont_indent_chars(src);
-    int cont_x = first_x + cont_indent_chars * FONT_W;
+    CodePanelTextLayout layout =
+        repl_code_panel_layout_make(panel_w, first_x, FONT_W, g_wrap_at_comma);
+    CodePanelWrapIter it;
+    int start, len, x;
 
-    if (len == 0) {
-        fputc('\n', dst);
-        return;
-    }
-
-    for (;;) {
-        int width_chars = dump_code_panel_available_chars(panel_w, x);
-        int remaining = len - pos;
-        int seg_len = remaining;
+    repl_code_panel_wrap_iter_init(&it, src, &layout);
+    while (repl_code_panel_wrap_iter_next(&it, &start, &len, &x)) {
         int prefix_chars = (x - first_x) / FONT_W;
-
-        if (g_wrap_at_comma && width_chars >= 1 && remaining > width_chars) {
-            int break_idx = dump_code_panel_find_wrap_break(src, pos,
-                                                            width_chars, len);
-            if (break_idx >= 0)
-                seg_len = break_idx - pos + 1;
-        }
-
-        fprintf(dst, "%*s%.*s\n", prefix_chars, "", seg_len, src + pos);
-
-        if (!g_wrap_at_comma || width_chars < 1 || seg_len == remaining)
-            break;
-
-        pos += seg_len;
-        x = cont_x;
+        fprintf(dst, "%*s%.*s\n", prefix_chars, "", len, src + start);
     }
 }
 

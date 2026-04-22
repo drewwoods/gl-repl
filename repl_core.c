@@ -29,6 +29,7 @@
  *   repl_undo.c    — undo/redo snapshots and history rings
  *   repl_camera_controls.c — viewport camera drag and momentum controls
  *   repl_actions.c — config shortcuts, menu actions, startup config defaults
+ *   repl_code_panel_layout.c — pure code-panel wrapping and row lookup
  *   repl_search.c  — incremental search overlay
  *   cmd_format.c   — source-text formatting helpers
  *   repl_flatten.c — flatten_range() / flatten_commands()

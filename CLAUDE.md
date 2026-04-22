@@ -86,6 +86,8 @@ Run all: `make test`
 | `repl_undo.c` | Undo/redo snapshots, history rings, example auto-promote hook before mutation |
 | `repl_camera_controls.c` | Scene camera pointer state, orbit/pan/zoom drags, wheel zoom velocity, momentum tick |
 | `repl_actions.c` | Config item table, config shortcuts, menu actions, startup config defaults |
+| `repl_code_panel_layout.c` | Pure code-panel wrapping, row counts, segment lookup, cursor-row mapping |
+| `repl_code_panel_layout.h` | `CodePanelTextLayout` / `CodePanelWrapIter` API shared by UI, export dumps, tests |
 | `repl_examples.c` | Predefined example data (`g_examples[]`, `g_example_names[]`) |
 | `repl_examples.h` | Example query API (`repl_examples_count/name/lines`) |
 | `repl_export.c` | `save_output` / `load_from_file`, workspace header directives, `@scene-name` / `@workspace-dir` markers |
