@@ -96,12 +96,14 @@ Run all: `make test`
 | `repl_menu_bar.h` | Menu/pin hit-test and dropdown state API |
 | `repl_color_picker.c` | Floating color picker and literal color swatch rendering/mutation |
 | `repl_color_picker.h` | Color-picker input/render bridge API |
+| `repl_help_overlay.c` | Modal F1 help overlay (Commands / Keys tabs, dynamic F-key bindings) |
+| `repl_help_overlay.h` | Help overlay render entrypoint |
 | `repl_examples.c` | Predefined example data (`g_examples[]`, `g_example_names[]`) |
 | `repl_examples.h` | Example query API (`repl_examples_count/name/lines`) |
 | `repl_export.c` | `save_output` / `load_from_file`, workspace header directives, `@scene-name` / `@workspace-dir` markers |
 | `scene_render.c` | 3D scene: camera, grid themes, axes themes, lights, vertex overlays, outline pass |
 | `scene_render.h` | Declares `render_3d_scene()` |
-| `ui_panels.c` | Code-panel row rendering, autocomplete, help overlay, variable panel, panel hit routing, inline rename state |
+| `ui_panels.c` | Code-panel row rendering, autocomplete, variable panel, panel hit routing, inline rename state |
 | `ui_panels.h` | UI panel render + hit-test declarations, compatibility declarations, rename state API |
 | `repl_eval.c` | Expression evaluator (recursive descent), REPL<->C translators, for-loop parsers |
 | `repl_eval.h` | Evaluator types (`ExprVar`, `ExprCtx`), function declarations |
