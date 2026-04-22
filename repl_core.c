@@ -57,6 +57,7 @@
 #include "cmd_format.h"
 #include "scene_render.h"
 #include "ui_panels.h"
+#include "repl_autocomplete_panel.h"
 #include "repl_help_overlay.h"
 #include "repl_variable_panel.h"
 #include "profile_panel.h"
@@ -1596,7 +1597,7 @@ static void display_func(void) {
     prof_end(PROF_CODE_PANEL);
 
     prof_begin(PROF_UI_PANELS);
-    render_autocomplete();
+    repl_autocomplete_panel_render();
     render_example_dropdown();
     render_var_panel();
     render_scene_status();

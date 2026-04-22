@@ -100,12 +100,14 @@ Run all: `make test`
 | `repl_help_overlay.h` | Help overlay render entrypoint |
 | `repl_variable_panel.c` | Floating variable slider panel rendering, geometry, and hit-test |
 | `repl_variable_panel.h` | Variable panel render/rect/hit API |
+| `repl_autocomplete_panel.c` | Floating autocomplete popup renderer (reads `repl_autocomplete.c` model) |
+| `repl_autocomplete_panel.h` | Autocomplete popup render entrypoint |
 | `repl_examples.c` | Predefined example data (`g_examples[]`, `g_example_names[]`) |
 | `repl_examples.h` | Example query API (`repl_examples_count/name/lines`) |
 | `repl_export.c` | `save_output` / `load_from_file`, workspace header directives, `@scene-name` / `@workspace-dir` markers |
 | `scene_render.c` | 3D scene: camera, grid themes, axes themes, lights, vertex overlays, outline pass |
 | `scene_render.h` | Declares `render_3d_scene()` |
-| `ui_panels.c` | Code-panel row rendering, autocomplete, scene status banner, panel hit routing, inline rename state |
+| `ui_panels.c` | Code-panel row rendering (incl. inline ghost/hint text), scene status banner, panel hit routing, inline rename state |
 | `ui_panels.h` | UI panel render + hit-test declarations, compatibility declarations, rename state API |
 | `repl_eval.c` | Expression evaluator (recursive descent), REPL<->C translators, for-loop parsers |
 | `repl_eval.h` | Evaluator types (`ExprVar`, `ExprCtx`), function declarations |
