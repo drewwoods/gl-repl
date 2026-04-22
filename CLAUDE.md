@@ -102,12 +102,14 @@ Run all: `make test`
 | `repl_variable_panel.h` | Variable panel render/rect/hit API |
 | `repl_autocomplete_panel.c` | Floating autocomplete popup renderer (reads `repl_autocomplete.c` model) |
 | `repl_autocomplete_panel.h` | Autocomplete popup render entrypoint |
+| `repl_inline_rename.c` | Inline scene-rename input buffer and key handling (status-bar overlay) |
+| `repl_inline_rename.h` | Rename begin/active/cancel/key/special API |
 | `repl_examples.c` | Predefined example data (`g_examples[]`, `g_example_names[]`) |
 | `repl_examples.h` | Example query API (`repl_examples_count/name/lines`) |
 | `repl_export.c` | `save_output` / `load_from_file`, workspace header directives, `@scene-name` / `@workspace-dir` markers |
 | `scene_render.c` | 3D scene: camera, grid themes, axes themes, lights, vertex overlays, outline pass |
 | `scene_render.h` | Declares `render_3d_scene()` |
-| `ui_panels.c` | Code-panel row rendering (incl. inline ghost/hint text), scene status banner, panel hit routing, inline rename state |
+| `ui_panels.c` | Code-panel row rendering (incl. inline ghost/hint text), scene status banner, top-level panel hit routing |
 | `ui_panels.h` | UI panel render + hit-test declarations, compatibility declarations, rename state API |
 | `repl_eval.c` | Expression evaluator (recursive descent), REPL<->C translators, for-loop parsers |
 | `repl_eval.h` | Evaluator types (`ExprVar`, `ExprCtx`), function declarations |
@@ -195,15 +197,15 @@ message (user has to save workspace first to unlock eviction).
 
 ### Inline rename
 
-- `ui_panels_begin_rename(slot)` / `ui_panels_handle_rename_key(...)` /
-  `ui_panels_cancel_rename()` in `ui_panels.c`.
+- `repl_inline_rename_begin(slot)` / `repl_inline_rename_handle_key(...)` /
+  `repl_inline_rename_cancel()` in `repl_inline_rename.c`.
 - Triggered by the Scene → "Rename active scene" menu item; typing updates a
   status-bar prompt; Enter commits via `repl_user_scene_rename` (which trims,
   de-duplicates, and guards against an empty name), Esc cancels.
 - Path-unsafe chars (`/`, `\`, `:`) and non-printables are filtered at input
   time since names become filesystem slugs on workspace export.
 - The key dispatcher in `repl_editor.c` forwards keys to
-  `ui_panels_handle_rename_key` right after `handle_search_key`, so rename
+  `repl_inline_rename_handle_key` right after `handle_search_key`, so rename
   mode swallows input even when other overlays aren't open.
 
 ### Workspace I/O

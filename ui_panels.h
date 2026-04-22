@@ -35,13 +35,4 @@ int  ui_panels_handle_scene_press(int mx, int my);  /* returns 1 if consumed */
 int  ui_panels_handle_motion(int mx, int my);       /* returns 1 if consumed */
 void ui_panels_handle_mouse_release(void);
 
-/* Inline rename of a user-scene slot.  While active the keyboard dispatcher
- * forwards keystrokes into ui_panels_handle_rename_key/special; commit
- * (Enter) calls repl_user_scene_rename, cancel (Esc) discards. */
-int  ui_panels_rename_active(void);
-int  ui_panels_begin_rename(int slot);             /* 1 on start, 0 if slot invalid */
-int  ui_panels_handle_rename_key(unsigned char key);/* returns 1 if consumed */
-int  ui_panels_handle_rename_special(int key);      /* returns 1 if consumed */
-void ui_panels_cancel_rename(void);
-
 #endif /* UI_PANELS_H */

@@ -26,6 +26,7 @@
 #include "repl_keys.h"
 #include "ui_panels.h"
 #include "repl_variable_panel.h"
+#include "repl_inline_rename.h"
 #include "repl_audio.h"
 
 /* ========================================================================= */
@@ -586,7 +587,7 @@ static int handle_rename_key_route(unsigned char key) {
      * the backtick/config, replay, and search branches — otherwise
      * typing `, or keys bound to replay would leak out of the rename
      * buffer and trigger unrelated UI. */
-    return ui_panels_handle_rename_key(key);
+    return repl_inline_rename_handle_key(key);
 }
 
 static int handle_config_menu_key_route(unsigned char key) {
@@ -1028,7 +1029,7 @@ static void special_begin_key(int key) {
 static int handle_rename_special_route(int key) {
     /* Rename captures arrows and F-keys ahead of replay/search/navigation so
      * modal text entry cannot leak actions into the editor. */
-    return ui_panels_handle_rename_special(key);
+    return repl_inline_rename_handle_special(key);
 }
 
 static int handle_replay_special_route(int key) {
