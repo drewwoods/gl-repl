@@ -32,6 +32,8 @@ flowchart LR
     audio["repl_audio.c<br/>playlist engine<br/>persisted audio cfg"]
     replay["repl_replay.c<br/>replay state machine<br/>fade batches"]
     scene["scene_render.c<br/>3D scene frame<br/>FrameRenderContext<br/>guarded helper passes"]
+    backdrop["scene_backdrop.c<br/>backdrop modes<br/>cityscape renderer"]
+    lights["scene_lights.c<br/>light setup<br/>light indicators"]
     scene_theme["GridThemeSpec / AxesThemeSpec<br/>standard theme tables"]
     scene_overlay["vertex overlay walker<br/>flat traversal<br/>numbers + normals"]
     scenes["repl_scenes.c<br/>user scenes<br/>workspace slots"]
@@ -77,6 +79,8 @@ flowchart LR
     core --> scene
     scene --> exec
     scene --> replay
+    scene --> backdrop
+    scene --> lights
     scene --> scene_theme
     scene --> scene_overlay
     ui --> actions
@@ -139,7 +143,9 @@ flowchart LR
   Focus-grid vertex selection is prepared in `FrameRenderContext` before grid
   drawing, keeping the theme draw path read-only on focus state. Ocean-grid
   camera height/waterline classification is also derived once in frame prep
-  instead of recomputed inside the grid theme.
+  instead of recomputed inside the grid theme. Backdrop rendering now delegates
+  to `scene_backdrop.c`; per-pass light setup and light indicators delegate to
+  `scene_lights.c`.
 
 ## Open Edges
 

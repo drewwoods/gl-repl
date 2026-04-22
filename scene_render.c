@@ -5,6 +5,8 @@
  */
 #include "sample.h"
 #include "repl_core.h"
+#include "scene_backdrop.h"
+#include "scene_lights.h"
 #include "scene_render.h"
 #include "ui_panels.h"
 #include "profile_panel.h"
@@ -2073,159 +2075,6 @@ static void draw_rotate_guide(const GLCmd *cmd, const float p_start[3]) {
 }
 
 /* ========================================================================= */
-/* Scene lights — setup and visualization                                     */
-/* ========================================================================= */
-
-/* Set light properties (position/colors) only — enable/disable is driven
-   by the user's REPL commands via execute_commands(). */
-static void setup_lights(void) {
-    /* Reset all lights to disabled; execute_commands() will enable them */
-    for (int i = 0; i < MAX_LIGHTS; i++) {
-        glDisable(g_lights[i].id);
-        g_lights[i].enabled = 0;
-        glLightfv(g_lights[i].id, GL_POSITION, g_lights[i].pos);
-        glLightfv(g_lights[i].id, GL_DIFFUSE,  g_lights[i].diffuse);
-        glLightfv(g_lights[i].id, GL_AMBIENT,  g_lights[i].ambient);
-        glLightfv(g_lights[i].id, GL_SPECULAR, g_lights[i].specular);
-    }
-}
-
-static void draw_lights(void) {
-    if (!g_show_lights) return;
-
-    scene_render_push_state();
-    glDisable(GL_LIGHTING);
-    glDisable(GL_DEPTH_TEST);
-    glEnable(GL_BLEND);
-    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-
-    float breath = sinf(g_anim_time * 1.2f) * 0.5f + 0.5f;
-
-    for (int i = 0; i < MAX_LIGHTS; i++) {
-        float *d = g_lights[i].diffuse;
-        float *p = g_lights[i].pos;
-        int is_dir = (p[3] == 0.0f);
-        int on = g_lights[i].enabled;
-
-        /* Compute display position */
-        float lx, ly, lz;
-        if (is_dir) {
-            float len = sqrtf(p[0]*p[0] + p[1]*p[1] + p[2]*p[2]);
-            if (len < 1e-6f) continue;
-            lx = p[0] / len * 3.5f;
-            ly = p[1] / len * 3.5f;
-            lz = p[2] / len * 3.5f;
-        } else {
-            lx = p[0]; ly = p[1]; lz = p[2];
-        }
-
-        if (on) {
-            /* === ENABLED: bright, glowing, animated === */
-            float glow = 0.6f + breath * 0.4f;
-
-            /* Outer glow */
-            glPointSize(18.0f);
-            glBegin(GL_POINTS);
-            glColor4f(d[0], d[1], d[2], 0.15f * glow);
-            glVertex3f(lx, ly, lz);
-            glEnd();
-
-            /* Inner core */
-            glPointSize(8.0f);
-            glBegin(GL_POINTS);
-            glColor4f(d[0], d[1], d[2], 0.7f * glow);
-            glVertex3f(lx, ly, lz);
-            glEnd();
-
-            /* White hot center */
-            glPointSize(3.0f);
-            glBegin(GL_POINTS);
-            glColor4f(1.0f, 1.0f, 1.0f, 0.9f * glow);
-            glVertex3f(lx, ly, lz);
-            glEnd();
-
-            /* Directional: ray toward origin */
-            if (is_dir) {
-                glEnable(GL_LINE_STIPPLE);
-                glLineStipple(2, 0xAAAA);
-                glLineWidth(1.0f);
-                glBegin(GL_LINES);
-                glColor4f(d[0], d[1], d[2], 0.35f * glow);
-                glVertex3f(lx, ly, lz);
-                glColor4f(d[0], d[1], d[2], 0.05f);
-                glVertex3f(0, 0, 0);
-                glEnd();
-                glDisable(GL_LINE_STIPPLE);
-            } else {
-                /* Positional: radiating lines */
-                float rlen = 0.25f + breath * 0.1f;
-                glLineWidth(1.0f);
-                glBegin(GL_LINES);
-                float dirs[][3] = {
-                    {1,0,0},{-1,0,0},{0,1,0},{0,-1,0},{0,0,1},{0,0,-1}
-                };
-                for (int r = 0; r < 6; r++) {
-                    glColor4f(d[0], d[1], d[2], 0.4f * glow);
-                    glVertex3f(lx, ly, lz);
-                    glColor4f(d[0], d[1], d[2], 0.0f);
-                    glVertex3f(lx + dirs[r][0] * rlen,
-                               ly + dirs[r][1] * rlen,
-                               lz + dirs[r][2] * rlen);
-                }
-                glEnd();
-            }
-
-            /* Label */
-            char label[8];
-            snprintf(label, sizeof(label), " L%d", i);
-            glColor4f(d[0] * 0.7f + 0.3f, d[1] * 0.7f + 0.3f,
-                      d[2] * 0.7f + 0.3f, 0.8f);
-            glRasterPos3f(lx, ly, lz);
-            for (const char *c = label; *c; c++)
-                glutBitmapCharacter(FONT_SMALL, (unsigned char)*c);
-
-        } else {
-            /* === DISABLED: dim grey marker with X === */
-
-            /* Small grey dot */
-            glPointSize(6.0f);
-            glBegin(GL_POINTS);
-            glColor4f(0.4f, 0.4f, 0.4f, 0.3f);
-            glVertex3f(lx, ly, lz);
-            glEnd();
-
-            /* X cross through the light position */
-            float xsz = 0.12f;
-            glEnable(GL_LINE_STIPPLE);
-            glLineStipple(1, 0xAAAA);
-            glLineWidth(1.0f);
-            glBegin(GL_LINES);
-            glColor4f(0.7f, 0.2f, 0.2f, 0.45f);
-            glVertex3f(lx - xsz, ly - xsz, lz);
-            glVertex3f(lx + xsz, ly + xsz, lz);
-            glVertex3f(lx - xsz, ly + xsz, lz);
-            glVertex3f(lx + xsz, ly - xsz, lz);
-            glEnd();
-            glDisable(GL_LINE_STIPPLE);
-
-            /* Dimmed label */
-            char label[16];
-            snprintf(label, sizeof(label), " L%d off", i);
-            glColor4f(0.5f, 0.3f, 0.3f, 0.45f);
-            glRasterPos3f(lx, ly, lz);
-            for (const char *c = label; *c; c++)
-                glutBitmapCharacter(FONT_SMALL, (unsigned char)*c);
-        }
-    }
-
-    glPointSize(1.0f);
-    glDisable(GL_BLEND);
-    glEnable(GL_DEPTH_TEST);
-    if (g_user_lighting_enabled) glEnable(GL_LIGHTING);
-    scene_render_pop_state();
-}
-
-/* ========================================================================= */
 /* 3D scene render (viewport offset to the right of the code panel)           */
 /* ========================================================================= */
 
@@ -2432,286 +2281,6 @@ static void draw_replay_hud(int scene_x, int scene_y, int scene_w, int scene_h) 
     scene_render_pop_state();
 }
 
-/* ========================================================================= */
-/* Cityscape — distant city silhouette with timezone-driven day/night cycle  */
-/* ========================================================================= */
-
-/* Number of buildings ringing the horizon and key geometry constants. */
-#define CITY_BLDG_COUNT   150
-#define CITY_RADIUS       42.0f   /* base ring distance from origin          */
-#define CITY_RING_SPREAD   7.0f   /* ± radial variation for depth effect     */
-#define CITY_CYCLE_SECS  600.0f   /* 10-minute full day/night cycle          */
-
-/* Avalanche-mix integer hash → uniform float in [0, 1).
- * No state, no stdlib dependency — deterministic from seed alone. */
-static float city_rng(unsigned int s) {
-    s = ((s >> 16) ^ s) * 0x45d9f3bu;
-    s = ((s >> 16) ^ s) * 0x45d9f3bu;
-    s = (s >> 16) ^ s;
-    return (float)(s & 0xFFFFu) * (1.0f / 65536.0f);
-}
-
-/* Day/night brightness for a building at world-space angle `angle` (radians).
- * Returns 0 (full day, lights off) → 1 (midnight, lights fully on).
- * The angular position maps to a timezone offset so buildings in different
- * compass directions are at different points in the 10-minute cycle. */
-static float city_night_factor(float angle) {
-    /* angle/(2π) maps the full 360° horizon to the [0,1) timezone fraction. */
-    float tz = angle / (2.0f * (float)M_PI);
-    float local_t = fmodf(g_anim_time / CITY_CYCLE_SECS + tz, 1.0f);
-    if (local_t < 0.0f) local_t += 1.0f;
-    /* Cosine envelope: 1.0 at t=0 (midnight), 0.0 at t=0.5 (noon). */
-    return 0.5f + 0.5f * cosf(local_t * 2.0f * (float)M_PI);
-}
-
-static void draw_cityscape(void) {
-    scene_render_push_state();
-    glDisable(GL_LIGHTING);
-    glEnable(GL_DEPTH_TEST);
-    glDepthMask(GL_TRUE);
-    glEnable(GL_BLEND);
-    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-
-    for (int bi = 0; bi < CITY_BLDG_COUNT; bi++) {
-        unsigned int base = (unsigned int)bi * 13u;
-
-        /* --- Deterministic building properties ----------------------------- */
-        float h0 = city_rng(base + 1u);
-        float h1 = city_rng(base + 2u);
-        float h2 = city_rng(base + 3u);
-        float h3 = city_rng(base + 4u);
-        float h4 = city_rng(base + 5u);
-
-        /* Angular position: evenly spaced with small jitter */
-        float base_ang = ((float)bi / (float)CITY_BLDG_COUNT) * 2.0f * (float)M_PI;
-        float jitter   = (h0 - 0.5f) * (1.6f * (float)M_PI / (float)CITY_BLDG_COUNT);
-        float angle    = base_ang + jitter;
-
-        float radius = CITY_RADIUS + (h1 - 0.5f) * CITY_RING_SPREAD;
-        float cx     = sinf(angle) * radius;
-        float cz     = cosf(angle) * radius;
-
-        /* Building footprint and height */
-        float bw = 0.9f  + h2 * 1.8f;   /* width  (tangential)  */
-        float bd = 0.55f + h3 * 0.90f;  /* depth  (radial)      */
-        float bh = 1.4f  + h4 * 6.5f;  /* height               */
-
-        /* Optional setback tier (~40 % of buildings) */
-        int   has_tier2 = (city_rng(base + 6u) > 0.60f);
-        float t2_frac_h = 0.35f + city_rng(base + 7u) * 0.30f;
-        float t2_frac_w = 0.45f + city_rng(base + 8u) * 0.30f;
-        float t2_frac_d = 0.45f + city_rng(base + 9u) * 0.30f;
-        float t2_h  = bh * t2_frac_h;
-        float t2_bw = bw * t2_frac_w;
-        float t2_bd = bd * t2_frac_d;
-
-        /* --- Local coordinate frame for this building ---------------------- */
-        /* tangent: left-right along ring   inward: toward origin            */
-        float tang_x =  cosf(angle), tang_z = -sinf(angle);
-        float in_x   = -sinf(angle), in_z   = -cosf(angle);
-
-        float hw = bw * 0.5f, hd = bd * 0.5f;
-
-        /* Four base corners (ground level).  Naming: (inner|outer)(left|right) */
-        float ilx = cx + tang_x*hw + in_x*hd, ilz = cz + tang_z*hw + in_z*hd;
-        float irx = cx - tang_x*hw + in_x*hd, irz = cz - tang_z*hw + in_z*hd;
-        float olx = cx + tang_x*hw - in_x*hd, olz = cz + tang_z*hw - in_z*hd;
-        float orx = cx - tang_x*hw - in_x*hd, orz = cz - tang_z*hw - in_z*hd;
-
-        float y0 = -0.05f; /* slightly below grid to avoid z-fighting */
-        float y1 = bh;
-
-        /* --- Night factor for this building's timezone --------------------- */
-        float night = city_night_factor(angle);
-
-        /* Body color: dark charcoal/glass, barely brightened by night glow */
-        float bd_base = 0.07f + night * 0.035f;
-        float bd_r = bd_base;
-        float bd_g = bd_base;
-        float bd_b = bd_base + 0.04f; /* subtle blue glass tint */
-
-        /* --- Draw building body -------------------------------------------- */
-        glBegin(GL_QUADS);
-
-        /* Inner face (faces the viewer at origin) — slightly lighter */
-        glColor3f(bd_r * 1.25f, bd_g * 1.25f, bd_b * 1.45f);
-        glVertex3f(irx, y0, irz); glVertex3f(ilx, y0, ilz);
-        glVertex3f(ilx, y1, ilz); glVertex3f(irx, y1, irz);
-
-        /* Outer face */
-        glColor3f(bd_r * 0.55f, bd_g * 0.55f, bd_b * 0.60f);
-        glVertex3f(olx, y0, olz); glVertex3f(orx, y0, orz);
-        glVertex3f(orx, y1, orz); glVertex3f(olx, y1, olz);
-
-        /* Left side face */
-        glColor3f(bd_r * 0.80f, bd_g * 0.80f, bd_b * 0.90f);
-        glVertex3f(ilx, y0, ilz); glVertex3f(olx, y0, olz);
-        glVertex3f(olx, y1, olz); glVertex3f(ilx, y1, ilz);
-
-        /* Right side face */
-        glVertex3f(orx, y0, orz); glVertex3f(irx, y0, irz);
-        glVertex3f(irx, y1, irz); glVertex3f(orx, y1, orz);
-
-        /* Roof */
-        glColor3f(bd_r * 0.50f, bd_g * 0.50f, bd_b * 0.55f);
-        glVertex3f(ilx, y1, ilz); glVertex3f(olx, y1, olz);
-        glVertex3f(orx, y1, orz); glVertex3f(irx, y1, irz);
-
-        glEnd();
-
-        /* --- Optional setback tier ----------------------------------------- */
-        if (has_tier2) {
-            float hw2 = t2_bw * 0.5f, hd2 = t2_bd * 0.5f;
-            float il2x = cx + tang_x*hw2 + in_x*hd2, il2z = cz + tang_z*hw2 + in_z*hd2;
-            float ir2x = cx - tang_x*hw2 + in_x*hd2, ir2z = cz - tang_z*hw2 + in_z*hd2;
-            float ol2x = cx + tang_x*hw2 - in_x*hd2, ol2z = cz + tang_z*hw2 - in_z*hd2;
-            float or2x = cx - tang_x*hw2 - in_x*hd2, or2z = cz - tang_z*hw2 - in_z*hd2;
-            float y2a = y1, y2b = y1 + t2_h;
-
-            glBegin(GL_QUADS);
-            glColor3f(bd_r * 1.25f, bd_g * 1.25f, bd_b * 1.45f);
-            glVertex3f(ir2x, y2a, ir2z); glVertex3f(il2x, y2a, il2z);
-            glVertex3f(il2x, y2b, il2z); glVertex3f(ir2x, y2b, ir2z);
-
-            glColor3f(bd_r * 0.55f, bd_g * 0.55f, bd_b * 0.60f);
-            glVertex3f(ol2x, y2a, ol2z); glVertex3f(or2x, y2a, or2z);
-            glVertex3f(or2x, y2b, or2z); glVertex3f(ol2x, y2b, ol2z);
-
-            glColor3f(bd_r * 0.80f, bd_g * 0.80f, bd_b * 0.90f);
-            glVertex3f(il2x, y2a, il2z); glVertex3f(ol2x, y2a, ol2z);
-            glVertex3f(ol2x, y2b, ol2z); glVertex3f(il2x, y2b, il2z);
-            glVertex3f(or2x, y2a, or2z); glVertex3f(ir2x, y2a, ir2z);
-            glVertex3f(ir2x, y2b, ir2z); glVertex3f(or2x, y2b, or2z);
-
-            glColor3f(bd_r * 0.50f, bd_g * 0.50f, bd_b * 0.55f);
-            glVertex3f(il2x, y2b, il2z); glVertex3f(ol2x, y2b, ol2z);
-            glVertex3f(or2x, y2b, or2z); glVertex3f(ir2x, y2b, ir2z);
-            glEnd();
-        }
-
-        /* --- Windows on the inner face ------------------------------------- */
-        /* Window grid: roughly one column per 0.65 units wide, one row per
-         * 0.60 units tall.  Window size is a fixed fraction of the cell. */
-        int wcols = 1 + (int)(bw / 0.65f);
-        int wrows = 1 + (int)(bh / 0.60f);
-        if (wcols < 1) wcols = 1;
-        if (wcols > 9) wcols = 9;
-        if (wrows < 2) wrows = 2;
-        if (wrows > 14) wrows = 14;
-
-        float cell_w = bw / (float)wcols;
-        float cell_h = bh / (float)wrows;
-        float win_hw = cell_w * 0.20f;  /* half-width of each window  */
-        float win_hh = cell_h * 0.22f;  /* half-height of each window */
-
-        /* Push windows slightly proud of the inner face so they don't z-fight */
-        float protrude = 0.04f;
-        float face_ox = in_x * (hd + protrude);
-        float face_oz = in_z * (hd + protrude);
-
-        /* Per-building warmth: determines amber (residential) vs. white (office) */
-        float warmth = city_rng(base + 200u);
-
-        /* Timezone fraction for this building's angle, plus a small building-level
-         * phase nudge so adjacent buildings aren't perfectly in sync. */
-        float tz         = angle / (2.0f * (float)M_PI);
-        float bldg_phase = (city_rng(base + 50u) - 0.5f) * 0.06f; /* ±0.03 cycle ≈ ±18 s */
-
-        for (int wc = 0; wc < wcols; wc++) {
-            for (int wr = 0; wr < wrows; wr++) {
-                /* Unique window hash — varies phase, threshold, brightness cap */
-                unsigned int wid = base + 300u + (unsigned int)(wc * 17 + wr);
-                float wrng = city_rng(wid);
-
-                /* ~10 % of windows are structurally dark (no occupant / blind drawn) */
-                if (wrng < 0.10f) continue;
-
-                /* Each window has its own personal time offset — the primary
-                 * source of organic individuality.  This is larger than the old
-                 * phase_jitter so you see windows turn on/off one by one over
-                 * several minutes rather than all at the same instant.
-                 * ±0.06 cycle ≈ ±36 seconds at the 10-minute cycle. */
-                float win_phase = (city_rng(wid + 7u) - 0.5f) * 0.12f;
-                float lt = fmodf(g_anim_time / CITY_CYCLE_SECS + tz + bldg_phase + win_phase,
-                                 1.0f);
-                if (lt < 0.0f) lt += 1.0f;
-
-                /* Narrow the lit arc with cos²: the midnight peak is preserved
-                 * but the flanks fall off faster, shrinking the lit zone.
-                 *   ±90° from midnight: raw=0.50, night_sq=0.25  (dim twilight)
-                 *   ±60° from midnight: raw=0.75, night_sq=0.56
-                 *   midnight (0°):      raw=1.00, night_sq=1.00               */
-                float raw     = 0.5f + 0.5f * cosf(lt * 2.0f * (float)M_PI);
-                float night_sq = raw * raw;
-
-                /* Per-window on-threshold: windows turn on at different night
-                 * depths, so they flick on one by one as darkness deepens —
-                 * not all at once.  Range 0.20–0.72 gives a lit zone spreading
-                 * from ~±68° (late risers) to ~±96° (eager early birds). */
-                float thresh = 0.20f + city_rng(wid + 11u) * 0.52f;
-
-                /* ~8 % are always-on office/corridor lights — dimly lit even at noon */
-                int always_on = (wrng > 0.92f);
-                float lit;
-                if (always_on) {
-                    lit = 0.12f + night_sq * 0.45f;
-                } else if (night_sq > thresh) {
-                    /* Ramp from 0 → individual max as night_sq exceeds threshold */
-                    lit = (night_sq - thresh) / (1.0f - thresh);
-                    lit *= 0.70f + city_rng(wid + 1u) * 0.30f;
-                } else {
-                    lit = 0.0f;
-                }
-
-                if (lit < 0.03f) continue; /* skip essentially-dark windows */
-
-                /* Window world-space center on the inner face */
-                float u = ((float)wc + 0.5f) / (float)wcols; /* 0=right, 1=left */
-                float v = ((float)wr + 0.5f) / (float)wrows; /* 0=bottom, 1=top */
-
-                float wx = cx + tang_x * (u - 0.5f) * bw + face_ox;
-                float wz = cz + tang_z * (u - 0.5f) * bw + face_oz;
-                float wy = y0 + v * bh;
-
-                /* Color: warm amber/orange for residential, cooler white for office */
-                float wr_c = warmth > 0.5f ?
-                             (0.90f + warmth * 0.10f) :   /* warm: strong red   */
-                             (0.85f + warmth * 0.10f);    /* cool: moderate red */
-                float wg_c = warmth > 0.5f ?
-                             (0.62f + warmth * 0.20f) :   /* warm: mid green    */
-                             (0.80f + warmth * 0.10f);    /* cool: high green   */
-                float wb_c = warmth > 0.5f ?
-                             (0.10f + (1.0f - warmth) * 0.20f) :  /* warm: little blue  */
-                             (0.70f + (1.0f - warmth) * 0.20f);   /* cool: lots of blue */
-
-                glColor4f(wr_c * lit, wg_c * lit, wb_c * lit, 0.85f * lit + 0.05f);
-
-                /* Draw window quad aligned with the inner face plane */
-                glBegin(GL_QUADS);
-                glVertex3f(wx - tang_x*win_hw, wy - win_hh, wz - tang_z*win_hw);
-                glVertex3f(wx + tang_x*win_hw, wy - win_hh, wz + tang_z*win_hw);
-                glVertex3f(wx + tang_x*win_hw, wy + win_hh, wz + tang_z*win_hw);
-                glVertex3f(wx - tang_x*win_hw, wy + win_hh, wz - tang_z*win_hw);
-                glEnd();
-            }
-        }
-    }
-
-    glDepthMask(GL_TRUE);
-    glDisable(GL_BLEND);
-    if (g_user_lighting_enabled) glEnable(GL_LIGHTING);
-    scene_render_pop_state();
-}
-
-/* Backdrop dispatcher — routes to the active backdrop mode.
- * 0 = off, 1 = cityscape.  New modes can be added here. */
-static void draw_backdrop(void) {
-    switch (g_backdrop_mode) {
-    case 1: draw_cityscape(); break;
-    default: break;
-    }
-}
-
 /* Ground-plane crosshair gizmo at the orbit target. Visible only while the
  * camera is moving (during drag or while momentum carries it); fades out.
  * REPL-only — never exported. Styled to match the other scene helpers:
@@ -2804,7 +2373,7 @@ void render_3d_scene(void) {
     glRotatef(g_cam_ry, 0, 1, 0);
     glTranslatef(-g_cam_tx, -g_cam_ty, -g_cam_tz);
 
-    setup_lights();
+    scene_lights_setup();
     glDisable(GL_LIGHTING); /* baseline: disabled; execute_commands() enables if user typed it */
 
     glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE);
@@ -2838,7 +2407,7 @@ void render_3d_scene(void) {
 
         if (replay_has_active_fades()) {
             prof_begin(PROF_SCENE_3D_FADE);
-            setup_lights();
+            scene_lights_setup();
             glDisable(GL_LIGHTING);
             glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE);
             glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, mspec);
@@ -2866,7 +2435,7 @@ void render_3d_scene(void) {
      * edges blend against the final background color rather than the clear
      * color from earlier in the frame. */
     prof_begin(PROF_SCENE_3D_HELPERS);
-    draw_backdrop();
+    scene_backdrop_render();
     draw_grid(&frame_ctx);
     draw_axes();
     draw_orbit_target();
@@ -3151,7 +2720,7 @@ void render_3d_scene(void) {
     if (replay_tess_preview)
         draw_replay_tess_preview();
 
-    draw_lights();
+    scene_lights_render();
 
     if (g_show_vnums)   draw_vertex_numbers();
     if (g_show_normals) draw_normal_vectors();
