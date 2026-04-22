@@ -60,11 +60,13 @@ of one monolithic `repl_core.c`.
 - `ui_panels.c`: 2D code-panel row rendering, source search highlights, inline
   ghost/hint text, scene status banner, and top-level panel routing.
 - `scene_render.c`: 3D frame orchestration, frame render prep, grid/axes theme
-  specs, guarded outline/vertex-overlay passes, orbit target, and replay HUD.
+  specs, vertex-overlay passes, orbit target, and replay HUD.
 - `scene_backdrop.c`: backdrop mode dispatch and deterministic cityscape
   rendering.
 - `scene_lights.c`: per-pass light property setup and light indicator overlay
   rendering.
+- `scene_overlays.c`: polygon outline/current-block overlay rendering plus
+  shared flat-block cursor matching for geometry overlays.
 - `sample.c`: application entrypoint and GLUT callback wiring.
 
 The public API is still `repl_core.h`. Cross-module runtime/test helpers live in
