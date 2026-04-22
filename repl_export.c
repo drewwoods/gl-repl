@@ -2395,6 +2395,148 @@ void save_output(const char *filename) {
     set_status(msg);
 }
 
+/* ========================================================================= */
+/* Import state machine and per-stage handlers                                */
+/*                                                                            */
+/* load_from_file walks the file line by line and dispatches each line        */
+/* through an ordered chain of handlers.  Each handler returns 1 if it        */
+/* consumed the line, 0 to fall through to the next.  The state machine       */
+/* tracks where in the exported scaffold we are: outside any snippet,         */
+/* inside a function definition body, inside the geometry snippet, or         */
+/* past the snippet (ignored tail).                                           */
+/* ========================================================================= */
+
+#define IMPORT_MAX_PENDING_COMMENTS 16
+
+typedef struct {
+    int in_snippet;
+    int past_snippet;
+    int func_depth;                   /* depth inside a function definition */
+    int loaded;
+    int warnings;
+    char pending_comments[IMPORT_MAX_PENDING_COMMENTS][MAX_LINE_LEN];
+    int  pending_comment_count;
+} ImportState;
+
+static void import_state_init(ImportState *s) {
+    s->in_snippet = 0;
+    s->past_snippet = 0;
+    s->func_depth = 0;
+    s->loaded = 0;
+    s->warnings = 0;
+    s->pending_comment_count = 0;
+}
+
+/* --- pre-snippet handlers (camera, workspace header, function bodies) ----- */
+
+static int import_try_camera(const char *p) {
+    if (import_parse_export_angle_init(p)) return 1;
+    if (import_parse_cam_line(p))          return 1;
+    return 0;
+}
+
+static int import_try_function_body(ImportState *s, const char *p) {
+    if (s->func_depth <= 0) return 0;
+    import_feed_one_line(p, &s->loaded, &s->warnings);
+    for (const char *bp = p; *bp; bp++) {
+        if      (*bp == '{') s->func_depth++;
+        else if (*bp == '}') s->func_depth--;
+    }
+    return 1;
+}
+
+static int import_try_function_header(ImportState *s, const char *p, const char *raw) {
+    char repl_func_line[MAX_LINE_LEN];
+    if (!import_make_repl_func_header(p, repl_func_line, sizeof(repl_func_line)))
+        return 0;
+    for (int c = 0; c < s->pending_comment_count; c++)
+        import_feed_one_line(s->pending_comments[c], &s->loaded, &s->warnings);
+    s->pending_comment_count = 0;
+    int before = g_num_cmds;
+    int handled = feed_line(repl_func_line);
+    if (g_num_cmds > before) s->loaded += (g_num_cmds - before);
+    if (!handled) {
+        fprintf(stderr, "Warning: could not parse line: %s\n", raw);
+        s->warnings++;
+    }
+    s->func_depth = 1;
+    return 1;
+}
+
+static int import_try_snippet_start(ImportState *s, const char *p) {
+    if (strncmp(p, "// Snippet start", 16) != 0) return 0;
+    s->pending_comment_count = 0;
+    s->in_snippet = 1;
+    /* Function/header import may leave the editor cursor in an insertion slot
+     * inside existing commands.  Force snippet lines to start appending from
+     * the end of the command list. */
+    g_inserting = 0;
+    g_edit_line = g_num_cmds;
+    return 1;
+}
+
+static int import_try_pending_comment(ImportState *s, const char *p) {
+    if (p[0] == '/' && p[1] == '/' &&
+        s->pending_comment_count < IMPORT_MAX_PENDING_COMMENTS) {
+        snprintf(s->pending_comments[s->pending_comment_count++],
+                 MAX_LINE_LEN, "%s", p);
+    } else if (*p != '\0') {
+        /* Any non-empty, non-comment line resets the pending buffer so stray
+         * comments don't leak onto unrelated lines that follow. */
+        s->pending_comment_count = 0;
+    }
+    return 1; /* always consumes (including blank lines) */
+}
+
+/* --- snippet-body handlers -------------------------------------------------- */
+
+static int import_try_snippet_end(ImportState *s, const char *p) {
+    if (strncmp(p, "// Snippet end", 14) != 0) return 0;
+    s->in_snippet   = 0;
+    s->past_snippet = 1;
+    return 1;
+}
+
+static int import_try_blank(const char *p) {
+    return *p == '\0';
+}
+
+static int import_try_predef_decl(const char *p) {
+    return import_parse_predef_decl(p);
+}
+
+static int import_try_snippet_body_line(ImportState *s, const char *p) {
+    import_feed_one_line(p, &s->loaded, &s->warnings);
+    return 1;
+}
+
+/* --- dispatch --------------------------------------------------------------- */
+
+static void import_process_line(ImportState *s, const char *p, const char *raw) {
+    /* Camera-state lines appear both in the pre-snippet header and inside the
+     * display() body that wraps the snippet, so they are recognised any time
+     * we are not already inside a snippet. */
+    if (!s->in_snippet && import_try_camera(p))                return;
+
+    /* Everything after Snippet end is discarded. */
+    if (s->past_snippet)                                       return;
+
+    if (!s->in_snippet) {
+        if (parse_workspace_header_line(p))                    return;
+        if (import_try_function_body(s, p))                    return;
+        if (import_try_function_header(s, p, raw))             return;
+        if (import_try_snippet_start(s, p))                    return;
+        (void)import_try_pending_comment(s, p);
+        return;
+    }
+
+    /* In-snippet: */
+    if (import_try_snippet_end(s, p))                          return;
+    if (import_try_blank(p))                                   return;
+    if (import_try_predef_decl(p))                             return;
+    (void)import_try_snippet_body_line(s, p);
+}
+
 int load_from_file(const char *filename) {
     FILE *f = fopen(filename, "r");
     if (!f) return 0;
@@ -2405,92 +2547,18 @@ int load_from_file(const char *filename) {
     g_pending_scene_name[0]    = '\0';
     g_pending_workspace_dir[0] = '\0';
 
-    char line[MAX_LINE_LEN];
-    int in_snippet = 0;
-    int past_snippet = 0;
-    int import_func_depth = 0;
-    int loaded = 0;
-    int warnings = 0;
-    char pending_func_comments[16][MAX_LINE_LEN];
-    int pending_func_comment_count = 0;
-
+    ImportState state;
+    import_state_init(&state);
     import_cam_parser_reset();
 
+    char line[MAX_LINE_LEN];
     while (fgets(line, sizeof(line), f)) {
         int len = (int)strlen(line);
         while (len > 0 && (line[len - 1] == '\n' || line[len - 1] == '\r'))
             line[--len] = '\0';
         const char *p = line;
         while (*p && isspace((unsigned char)*p)) p++;
-
-        if (!in_snippet && import_parse_export_angle_init(p))
-            continue;
-
-        /* Export camera format: compact glTranslatef/glRotatef lines in display() */
-        if (!in_snippet && import_parse_cam_line(p))
-            continue;
-
-        if (past_snippet)
-            continue;
-
-        if (!in_snippet) {
-            if (parse_workspace_header_line(p))
-                continue;
-            if (import_func_depth > 0) {
-                import_feed_one_line(p, &loaded, &warnings);
-                for (const char *bp = p; *bp; bp++) {
-                    if (*bp == '{') import_func_depth++;
-                    else if (*bp == '}') import_func_depth--;
-                }
-                continue;
-            }
-
-            char repl_func_line[MAX_LINE_LEN];
-            if (import_make_repl_func_header(p, repl_func_line, sizeof(repl_func_line))) {
-                for (int c = 0; c < pending_func_comment_count; c++)
-                    import_feed_one_line(pending_func_comments[c], &loaded, &warnings);
-                pending_func_comment_count = 0;
-                int before = g_num_cmds;
-                int handled = feed_line(repl_func_line);
-                if (g_num_cmds > before) loaded += (g_num_cmds - before);
-                if (!handled) {
-                    fprintf(stderr, "Warning: could not parse line: %s\n", line);
-                    warnings++;
-                }
-                import_func_depth = 1;
-                continue;
-            }
-
-            if (strncmp(p, "// Snippet start", 16) == 0) {
-                pending_func_comment_count = 0;
-                in_snippet = 1;
-                /* Function/header import may leave the editor cursor in an
-                 * insertion slot inside existing commands. Force snippet
-                 * lines to start appending from the end of the command list. */
-                g_inserting = 0;
-                g_edit_line = g_num_cmds;
-                continue;
-            }
-            if (p[0] == '/' && p[1] == '/' && pending_func_comment_count <
-                (int)(sizeof(pending_func_comments) / sizeof(pending_func_comments[0]))) {
-                snprintf(pending_func_comments[pending_func_comment_count++],
-                         MAX_LINE_LEN, "%s", p);
-            } else if (*p != '\0') {
-                pending_func_comment_count = 0;
-            }
-            continue;
-        }
-
-        if (strncmp(p, "// Snippet end", 14) == 0) {
-            in_snippet = 0;
-            past_snippet = 1;
-            continue;
-        }
-
-        if (len == 0 || *p == '\0') continue;
-        if (import_parse_predef_decl(p))
-            continue;
-        import_feed_one_line(p, &loaded, &warnings);
+        import_process_line(&state, p, line);
     }
 
     fclose(f);
@@ -2506,21 +2574,21 @@ int load_from_file(const char *filename) {
     }
     g_deferred_var_count = 0;
 
-    if (loaded > 0) {
+    if (state.loaded > 0) {
         depth_cache_invalidate();
         repl_reformat_commands();
         char msg[256];
-        if (warnings > 0)
+        if (state.warnings > 0)
             snprintf(msg, sizeof(msg),
                      "Loaded %d commands from %s (%d warnings)",
-                     loaded, filename, warnings);
+                     state.loaded, filename, state.warnings);
         else
             snprintf(msg, sizeof(msg),
-                     "Loaded %d commands from %s", loaded, filename);
+                     "Loaded %d commands from %s", state.loaded, filename);
         set_status(msg);
         fprintf(stderr, "%s\n", msg);
     }
-    return loaded > 0;
+    return state.loaded > 0;
 }
 
 static void dump_code_panel_wrapped_line(FILE *dst, const char *text,
