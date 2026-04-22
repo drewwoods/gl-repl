@@ -13,8 +13,7 @@
  *   - Text / expression parsing helpers
  *   - Code-panel dumps (debug + visual)
  *   - Autocomplete
- *   - Block-depth / scope queries
- *   - Parser indentation helpers
+ *   - Source-scope helpers (via repl_source_scope.h)
  *   - Executor helpers
  *   - Replay state machine
  *   - Scene/workspace state
@@ -159,12 +158,10 @@ void update_selected_autocomplete_preview(void);
 void update_autocomplete(void);
 void accept_autocomplete(void);
 
-/* ---- Block-depth / scope queries -------------------------------------- */
+/* ---- Source-scope helpers --------------------------------------------- */
 
-void depth_cache_invalidate(void);
-int  tess_scope_depth_at(int pos);
-void cmd_indent(int pos, char *buf, int buf_sz);
-void cmd_tess_indent(int pos, char *buf, int buf_sz);
+/* Depth/cache, indentation, and block-boundary queries live in
+ * repl_source_scope.h. */
 
 /* ---- Executor helpers ------------------------------------------------- */
 
@@ -176,9 +173,6 @@ void repl_execute_set_fade_context(float alpha_scale, int skip_geom_before_pc);
 /* ---- Line feeding / source structure ---------------------------------- */
 
 void load_line_to_input(int idx);
-int  find_block_end(int begin_idx);
-int  block_depth_at(int pos);
-CmdType nearest_open_block_at(int pos);
 /* Populate `vars` with every loop/function-local visible at source line
  * `pos`. Returns the count (capped at max_vars). */
 int  collect_visible_vars(int pos, ExprVar *vars, int max_vars);

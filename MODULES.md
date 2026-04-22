@@ -20,9 +20,10 @@ The central data flow. Edits mutate `g_cmds[]`; everything downstream
 
 | Module | Role |
 |--------|------|
-| `repl_core` | Normalization, depth queries, display frame, GL init |
+| `repl_core` | Normalization, display frame, GL init |
 | `repl_command_spec` | Declarative descriptors for fixed-arity GL commands |
 | `repl_parser` | Source-line parser and canonical `GLCmd.source[]` generation |
+| `repl_source_scope` | Source prefix-depth cache, indent helpers, block lookup |
 | `repl_command_store` | Insert/delete/replace API over `g_cmds[]` |
 | `repl_commit` | Float decls, variable assignments, structured block commits |
 | `repl_flatten` | Source-to-flat expansion (loops, functions, `if`) |
@@ -116,6 +117,7 @@ flowchart LR
     subgraph pipeline["Command pipeline"]
         core["repl_core.c<br/>normalize · display frame"]
         parser["repl_parser.c<br/>source parser"]
+        scope["repl_source_scope.c<br/>depth · indent"]
         flatten["repl_flatten.c<br/>source to flat"]
         exec["repl_executor.c<br/>flat program execution"]
         commit["repl_commit.c<br/>decls · assigns · blocks"]
@@ -184,11 +186,13 @@ flowchart LR
     clipboard --> store
     commit --> undo
     commit --> parser
+    commit --> scope
     commit --> store
     undo --> scenes
     store --> core
 
     core --> parser
+    core --> scope
     core --> flatten
     core --> exec
     core --> sceneR
@@ -206,6 +210,9 @@ flowchart LR
     sceneR --> backdrop
     sceneR --> lights
     sceneR --> overlays
+
+    parser --> scope
+    flatten --> scope
 
     uicp --> actions
     uicp --> scenes

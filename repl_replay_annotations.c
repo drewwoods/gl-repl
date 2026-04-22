@@ -705,8 +705,9 @@ int repl_replay_build_eval_annotation(int cmd_idx, int flat_idx,
                                                visible_vars,
                                                (int)(sizeof(visible_vars) / sizeof(visible_vars[0])));
     memset(&eval_cmd, 0, sizeof(eval_cmd));
-    if (!repl_parse_command_with_vars(g_cmds[cmd_idx].source,
-                                      &eval_cmd, visible_vars, nv))
+    ReplParseContext parse_ctx = { cmd_idx, visible_vars, nv };
+    if (!repl_parse_command_ctx(g_cmds[cmd_idx].source,
+                                &eval_cmd, &parse_ctx))
         return 0;
 
     return format_evaluated_cmd(&eval_cmd, g_cmds[cmd_idx].source,

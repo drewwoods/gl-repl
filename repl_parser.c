@@ -1,10 +1,9 @@
 /*
  * repl_parser.c — REPL text command parser.
  *
- * Converts one source line into a GLCmd and canonical source text. Scope
- * depth/indent queries are still implemented in repl_core.c because the
- * prefix cache is command-store state, but the grammar and status handling
- * live here.
+ * Converts one source line into a GLCmd and canonical source text. The parse
+ * context carries the source-line index used for scope-sensitive indentation
+ * plus the loop/function locals visible at that line.
  */
 #include "repl_parser.h"
 
@@ -91,7 +90,10 @@ static int is_known_incomplete_func_name(const char *func) {
  * Returns 1 on success (cmd populated), 0 on parse failure (status set).
  */
 static int parse_command(const char *line, GLCmd *cmd,
-                         ExprVar *vars, int num_vars) {
+                         const ReplParseContext *ctx) {
+    int source_line_idx = ctx ? ctx->source_line_idx : g_edit_line;
+    ExprVar *vars = ctx ? ctx->vars : NULL;
+    int num_vars = ctx ? ctx->num_vars : 0;
     char buf[MAX_LINE_LEN];
     strncpy(buf, line, sizeof(buf) - 1);
     buf[sizeof(buf) - 1] = '\0';
@@ -115,8 +117,8 @@ static int parse_command(const char *line, GLCmd *cmd,
         cmd->valid = 1;
         cmd->is_auto = 0;
         cmd->num_args = 0;
-        int fdepth = block_depth_at(g_edit_line);
-        int bb = in_begin_block_at(g_edit_line);
+        int fdepth = block_depth_at(source_line_idx);
+        int bb = in_begin_block_at(source_line_idx);
         int ind = (bb ? 4 : 2) + fdepth * 2;
         char indent[32];
         if (ind > (int)sizeof(indent) - 1) ind = (int)sizeof(indent) - 1;
@@ -171,8 +173,8 @@ static int parse_command(const char *line, GLCmd *cmd,
                         if (def->indent_type == 1) {
                             /* glBegin-style indent: 2 + 2*tess + 2*block  (begin depth excluded) */
                             char ind[32];
-                            int td = tess_scope_depth_at(g_edit_line);
-                            int kd = block_depth_at(g_edit_line);
+                            int td = tess_scope_depth_at(source_line_idx);
+                            int kd = block_depth_at(source_line_idx);
                             int spaces = 2 + 2 * td + 2 * kd;
                             if (spaces > (int)sizeof(ind) - 1) spaces = (int)sizeof(ind) - 1;
                             memset(ind, ' ', (size_t)spaces);
@@ -180,7 +182,7 @@ static int parse_command(const char *line, GLCmd *cmd,
                             snprintf(cmd->source, sizeof(cmd->source), def->fmt, ind, def->enums1[i].name);
                         } else {
                             char ind[32];
-                            cmd_indent(g_edit_line, ind, sizeof(ind));
+                            cmd_indent(source_line_idx, ind, sizeof(ind));
                             snprintf(cmd->source, sizeof(cmd->source), def->fmt, ind, def->enums1[i].name);
                         }
                         return 1;
@@ -230,7 +232,7 @@ static int parse_command(const char *line, GLCmd *cmd,
                 cmd->mode = val1;
                 cmd->args[0] = val2_f;
                 cmd->num_args = 1;
-                char ind[32]; cmd_indent(g_edit_line, ind, sizeof(ind));
+                char ind[32]; cmd_indent(source_line_idx, ind, sizeof(ind));
                 snprintf(cmd->source, sizeof(cmd->source), def->fmt, ind, trimmed1, trimmed2);
                 return 1;
             }
@@ -242,8 +244,8 @@ static int parse_command(const char *line, GLCmd *cmd,
         cmd->type = CMD_END;
         cmd->valid = 1;
         {
-            int tess_depth = tess_scope_depth_at(g_edit_line);
-            int kd = block_depth_at(g_edit_line);
+            int tess_depth = tess_scope_depth_at(source_line_idx);
+            int kd = block_depth_at(source_line_idx);
             int spaces = 2 + 2 * tess_depth + 2 * kd;
             char end_ind[32];
             if (spaces > (int)sizeof(end_ind) - 1) spaces = (int)sizeof(end_ind) - 1;
@@ -256,14 +258,14 @@ static int parse_command(const char *line, GLCmd *cmd,
 
     /* Indent for gl commands: 2 + 2*tess + 2*begin */
     char indent_buf[32];
-    cmd_indent(g_edit_line, indent_buf, sizeof(indent_buf));
+    cmd_indent(source_line_idx, indent_buf, sizeof(indent_buf));
     const char *indent = indent_buf;
 
     /* Indent for glu (tessellator) commands: 2 + 2*tess only.
      * glu commands belong to the tessellator scope, not the GL vertex block,
      * so glBegin depth is intentionally excluded. */
     char tess_indent_buf[32];
-    cmd_tess_indent(g_edit_line, tess_indent_buf, sizeof(tess_indent_buf));
+    cmd_tess_indent(source_line_idx, tess_indent_buf, sizeof(tess_indent_buf));
     const char *tess_indent = tess_indent_buf;
 
     /* Table-driven parsing for standard commands */
@@ -467,7 +469,7 @@ static int parse_command(const char *line, GLCmd *cmd,
         cmd->num_args = 3;
         cmd->has_vars = (num_vars > 0);
 
-        char ind[32]; cmd_indent(g_edit_line, ind, sizeof(ind));
+        char ind[32]; cmd_indent(source_line_idx, ind, sizeof(ind));
         snprintf(cmd->source, sizeof(cmd->source),
                  "%sglPointParameterfv(%s, (GLfloat[]){%g, %g, %g});",
                  ind, p1, parsed_args[0], parsed_args[1], parsed_args[2]);
@@ -514,8 +516,8 @@ static int parse_command(const char *line, GLCmd *cmd,
         cmd->num_args = arg_count;
         cmd->has_vars = input_has_any_visible_vars(args, vars, num_vars);
 
-        int fdepth = block_depth_at(g_edit_line);
-        int bb = in_begin_block_at(g_edit_line);
+        int fdepth = block_depth_at(source_line_idx);
+        int bb = in_begin_block_at(source_line_idx);
         int ind_v = (bb ? 4 : 2) + fdepth * 2;
         char ind_str[32];
         if (ind_v > (int)sizeof(ind_str) - 1) ind_v = (int)sizeof(ind_str) - 1;
@@ -567,9 +569,9 @@ static int parse_command(const char *line, GLCmd *cmd,
         cmd->type = CMD_TESS_END;
         cmd->valid = 1;
         {
-            int td = tess_scope_depth_at(g_edit_line);
+            int td = tess_scope_depth_at(source_line_idx);
             if (td > 0) td--;
-            int kd = block_depth_at(g_edit_line);
+            int kd = block_depth_at(source_line_idx);
             int spaces = 2 + 2 * td + 2 * kd;
             char close_ind[32];
             if (spaces > (int)sizeof(close_ind) - 1) spaces = (int)sizeof(close_ind) - 1;
@@ -625,8 +627,8 @@ static int parse_command(const char *line, GLCmd *cmd,
         if (ll > 0) {
             cmd->type = CMD_GOTO;
             cmd->valid = 1;
-            int fdepth = block_depth_at(g_edit_line);
-            int bb_v = in_begin_block_at(g_edit_line);
+            int fdepth = block_depth_at(source_line_idx);
+            int bb_v = in_begin_block_at(source_line_idx);
             int ind_v = (bb_v ? 4 : 2) + fdepth * 2;
             char ind_str[32];
             if (ind_v > (int)sizeof(ind_str) - 1) ind_v = (int)sizeof(ind_str) - 1;
@@ -666,10 +668,17 @@ unknown_command:
 }
 
 int repl_parse_command(const char *line, GLCmd *cmd) {
-    return parse_command(line, cmd, NULL, 0);
+    ReplParseContext ctx = { g_edit_line, NULL, 0 };
+    return parse_command(line, cmd, &ctx);
 }
 
 int repl_parse_command_with_vars(const char *line, GLCmd *cmd,
                                  ExprVar *vars, int num_vars) {
-    return parse_command(line, cmd, vars, num_vars);
+    ReplParseContext ctx = { g_edit_line, vars, num_vars };
+    return parse_command(line, cmd, &ctx);
+}
+
+int repl_parse_command_ctx(const char *line, GLCmd *cmd,
+                           const ReplParseContext *ctx) {
+    return parse_command(line, cmd, ctx);
 }

@@ -285,14 +285,13 @@ static int parse_for_overwrite_enter(GLCmd *cmd, int insert_idx) {
     memset(cmd, 0, sizeof(*cmd));
     int parsed;
     if (num_vis_vars > 0) {
-        int saved_el = g_edit_line;
-        g_edit_line = insert_idx;
-        parsed = repl_parse_command_with_vars(g_input, cmd, vis_vars, num_vis_vars);
-        g_edit_line = saved_el;
+        ReplParseContext parse_ctx = { insert_idx, vis_vars, num_vis_vars };
+        parsed = repl_parse_command_ctx(g_input, cmd, &parse_ctx);
         if (parsed)
             rewrite_cmd_source_with_indent(cmd, insert_idx, 1);
     } else {
-        parsed = repl_parse_command(g_input, cmd);
+        ReplParseContext parse_ctx = { insert_idx, NULL, 0 };
+        parsed = repl_parse_command_ctx(g_input, cmd, &parse_ctx);
         if (parsed && input_has_predef_vars(g_input)) {
             cmd->has_vars = 1;
             rewrite_cmd_source_with_indent(cmd, insert_idx, 0);
@@ -424,16 +423,15 @@ static CommitResult commit_current_input(int enter_mode) {
 
             memset(&cmd, 0, sizeof(cmd));
             if (num_vis_vars > 0) {
+                ReplParseContext parse_ctx = { insert_idx, vis_vars, num_vis_vars };
                 if (try_commit_var_statements())
                     return commit_progressed_since(before) ? COMMIT_OK : COMMIT_REJECTED;
-                int saved_el = g_edit_line;
-                g_edit_line = insert_idx;
-                parsed = repl_parse_command_with_vars(g_input, &cmd, vis_vars, num_vis_vars);
-                g_edit_line = saved_el;
+                parsed = repl_parse_command_ctx(g_input, &cmd, &parse_ctx);
                 if (parsed)
                     rewrite_cmd_source_with_indent(&cmd, insert_idx, 1);
             } else {
-                parsed = repl_parse_command(g_input, &cmd);
+                ReplParseContext parse_ctx = { insert_idx, NULL, 0 };
+                parsed = repl_parse_command_ctx(g_input, &cmd, &parse_ctx);
             }
 
             if (parsed) {
@@ -776,8 +774,9 @@ static int handle_comment_toggle_key_route(unsigned char key) {
                     }
                     {
                         GLCmd new_cmd;
+                        ReplParseContext parse_ctx = { g_edit_line, NULL, 0 };
                         memset(&new_cmd, 0, sizeof(new_cmd));
-                        if (repl_parse_command(s, &new_cmd)) {
+                        if (repl_parse_command_ctx(s, &new_cmd, &parse_ctx)) {
                             ReplCommandStore store = repl_command_store_live();
                             repl_command_store_replace_one(&store, g_edit_line, &new_cmd);
                             load_line_to_input(g_edit_line);

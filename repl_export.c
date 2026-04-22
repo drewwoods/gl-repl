@@ -395,23 +395,21 @@ static int init_host_only_line_count(void) {
 }
 
 static void parse_init_bootstrap(void) {
-    int saved_edit_line = g_edit_line;
-
     if (g_init_bootstrap_ready)
         return;
 
-    g_edit_line = 0;
     for (int i = 0; i < NUM_INIT_BOOTSTRAP; i++) {
         GLCmd cmd;
+        ReplParseContext parse_ctx = { 0, NULL, 0 };
         memset(&cmd, 0, sizeof(cmd));
-        if (!repl_parse_command(g_init_bootstrap_repl[i].repl_line, &cmd)) {
+        if (!repl_parse_command_ctx(g_init_bootstrap_repl[i].repl_line,
+                                    &cmd, &parse_ctx)) {
             fprintf(stderr, "init bootstrap parse failed: %s\n",
                     g_init_bootstrap_repl[i].repl_line);
             abort();
         }
         g_init_bootstrap_cmds[i] = cmd;
     }
-    g_edit_line = saved_edit_line;
     g_init_bootstrap_ready = 1;
 }
 

@@ -698,7 +698,6 @@ int try_commit_for_loop(void) {
                 ExprVar dv[MAX_EXPR_VARS];
                 int dvn = 0;
                 GLCmd body_cmd;
-                int saved;
 
                 strncpy(body, body_start, MAX_LINE_LEN - 1);
                 body[MAX_LINE_LEN - 1] = '\0';
@@ -719,14 +718,11 @@ int try_commit_for_loop(void) {
                     dv[dvn++] = visible_vars[i];
 
                 memset(&body_cmd, 0, sizeof(body_cmd));
-                saved = g_edit_line;
-                g_edit_line = pos;
-                if (!repl_parse_command_with_vars(body, &body_cmd, dv, dvn)) {
-                    g_edit_line = saved;
+                ReplParseContext parse_ctx = { pos, dv, dvn };
+                if (!repl_parse_command_ctx(body, &body_cmd, &parse_ctx)) {
                     set_status("Invalid for-loop body command");
                     return 1;
                 }
-                g_edit_line = saved;
 
                 {
                     char bind[32];
