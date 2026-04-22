@@ -6,6 +6,7 @@
  */
 #include "sample.h"
 #include "repl_actions.h"
+#include "repl_code_panel_layout.h"
 #include "repl_core.h"
 #include "repl_core_internal.h"
 #include "repl_clipboard.h"
@@ -948,168 +949,34 @@ static int format_evaluated_cmd(const GLCmd *cmd, const char *orig_source,
 /* Code panel                                                                 */
 /* ========================================================================= */
 
-typedef struct {
-    const char *text;
-    int         len;
-    int         panel_w;
-    int         pos;
-    int         x;
-    int         cont_x;
-    int         done;
-} CodeWrapIter;
-
-#define CODE_PANEL_MAX_HANG_INDENT_CHARS 12
-
-static int code_panel_available_chars(int panel_w, int x) {
-    int avail_px = panel_w - x - 4;
-    if (avail_px < FONT_W)
-        return 0;
-    return avail_px / FONT_W;
+static CodePanelTextLayout code_panel_layout_for_text(int panel_w, int first_x) {
+    return repl_code_panel_layout_make(panel_w, first_x, FONT_W,
+                                       g_wrap_at_comma);
 }
 
-static int code_panel_cont_indent_chars(const char *text) {
-    const char *src = text ? text : "";
-    int leading = 0;
-
-    while (src[leading] && isspace((unsigned char)src[leading]))
-        leading++;
-
-    const char *paren = strchr(src, '(');
-    if (paren && paren[1] != '\0') {
-        int align = (int)(paren - src) + 1;
-        int max_align = leading + CODE_PANEL_MAX_HANG_INDENT_CHARS;
-        if (align > max_align)
-            align = max_align;
-        return align;
-    }
-
-    return leading + 4;
-}
-
-/* Secondary break characters for long lines without commas. Preference order:
- * comma > closing paren > space > operator. Commas are tried first in a
- * separate pass so they always win when present. */
-static int is_secondary_break(char c) {
-    return c == ')' || c == ' ' || c == '+' || c == '*' || c == '-' || c == '/';
-}
-
-static int code_panel_find_wrap_break(const char *text, int start,
-                                      int max_chars, int len) {
-    int end = start + max_chars - 1;
-    int search_start = start;
-    if (end >= len)
-        end = len - 1;
-
-    while (search_start < len &&
-           isspace((unsigned char)text[search_start]))
-        search_start++;
-
-    /* Prefer a comma within the window. */
-    for (int i = end; i > search_start; i--) {
-        if (text[i] == ',')
-            return i;
-    }
-
-    /* Fall back to secondary break chars within the window. */
-    for (int i = end; i > search_start; i--) {
-        if (is_secondary_break(text[i]))
-            return i;
-    }
-
-    /* Last resort: extend past the window to the next comma or break. */
-    for (int i = end + 1; i < len; i++) {
-        if (text[i] == ',' ||
-            (i > search_start && is_secondary_break(text[i])))
-            return i;
-    }
-
-    return -1;
-}
-
-static void code_wrap_iter_init(CodeWrapIter *it, const char *text,
+static void code_wrap_iter_init(CodePanelWrapIter *it, const char *text,
                                 int first_x, int panel_w) {
-    it->text = text ? text : "";
-    it->len = (int)strlen(it->text);
-    it->panel_w = panel_w;
-    it->pos = 0;
-    it->x = first_x;
-    it->cont_x = first_x + code_panel_cont_indent_chars(it->text) * FONT_W;
-    it->done = 0;
+    CodePanelTextLayout layout = code_panel_layout_for_text(panel_w, first_x);
+    repl_code_panel_wrap_iter_init(it, text, &layout);
 }
 
-static int code_wrap_iter_next(CodeWrapIter *it, int *out_start,
+static int code_wrap_iter_next(CodePanelWrapIter *it, int *out_start,
                                int *out_len, int *out_x) {
-    if (it->done)
-        return 0;
-
-    *out_start = it->pos;
-    *out_x = it->x;
-
-    if (it->len == 0) {
-        *out_len = 0;
-        it->done = 1;
-        return 1;
-    }
-
-    {
-        int width_chars = code_panel_available_chars(it->panel_w, it->x);
-        int remaining = it->len - it->pos;
-
-        if (!g_wrap_at_comma || width_chars < 1 || remaining <= width_chars) {
-            *out_len = remaining;
-            it->done = 1;
-            return 1;
-        }
-
-        {
-            int break_idx = code_panel_find_wrap_break(it->text, it->pos,
-                                                       width_chars, it->len);
-            if (break_idx < 0) {
-                *out_len = remaining;
-                it->done = 1;
-                return 1;
-            }
-
-            *out_len = break_idx - it->pos + 1;
-            it->pos = break_idx + 1;
-            it->x = it->cont_x;
-            return 1;
-        }
-    }
+    return repl_code_panel_wrap_iter_next(it, out_start, out_len, out_x);
 }
 
 static int code_panel_row_count_for_text(const char *text, int first_x,
                                          int panel_w) {
-    CodeWrapIter it;
-    int rows = 0;
-    int start, len, x;
-
-    code_wrap_iter_init(&it, text, first_x, panel_w);
-    while (code_wrap_iter_next(&it, &start, &len, &x))
-        rows++;
-
-    return rows > 0 ? rows : 1;
+    CodePanelTextLayout layout = code_panel_layout_for_text(panel_w, first_x);
+    return repl_code_panel_row_count_for_text(text, &layout);
 }
 
 static int code_panel_segment_for_row(const char *text, int first_x, int panel_w,
                                       int want_row, int *out_start,
                                       int *out_len, int *out_x) {
-    CodeWrapIter it;
-    int row = 0;
-    int start, len, x;
-
-    code_wrap_iter_init(&it, text, first_x, panel_w);
-    while (code_wrap_iter_next(&it, &start, &len, &x)) {
-        if (row == want_row) {
-            if (out_start) *out_start = start;
-            if (out_len) *out_len = len;
-            if (out_x) *out_x = x;
-            return 1;
-        }
-        row++;
-    }
-
-    return 0;
+    CodePanelTextLayout layout = code_panel_layout_for_text(panel_w, first_x);
+    return repl_code_panel_segment_for_row(text, &layout, want_row,
+                                           out_start, out_len, out_x);
 }
 
 static int code_panel_cursor_row_for_text(const char *text, int first_x,
@@ -1117,32 +984,10 @@ static int code_panel_cursor_row_for_text(const char *text, int first_x,
                                           int *out_seg_start,
                                           int *out_seg_len,
                                           int *out_seg_x) {
-    CodeWrapIter it;
-    int row = 0;
-    int start, len, x;
-    int text_len = (int)strlen(text ? text : "");
-
-    if (cursor_pos < 0)
-        cursor_pos = 0;
-    if (cursor_pos > text_len)
-        cursor_pos = text_len;
-
-    code_wrap_iter_init(&it, text, first_x, panel_w);
-    while (code_wrap_iter_next(&it, &start, &len, &x)) {
-        int next_start = start + len;
-        if (next_start >= text_len || cursor_pos < next_start) {
-            if (out_seg_start) *out_seg_start = start;
-            if (out_seg_len) *out_seg_len = len;
-            if (out_seg_x) *out_seg_x = x;
-            return row;
-        }
-        row++;
-    }
-
-    if (out_seg_start) *out_seg_start = text_len;
-    if (out_seg_len) *out_seg_len = 0;
-    if (out_seg_x) *out_seg_x = first_x;
-    return 0;
+    CodePanelTextLayout layout = code_panel_layout_for_text(panel_w, first_x);
+    return repl_code_panel_cursor_row_for_text(text, &layout, cursor_pos,
+                                               out_seg_start, out_seg_len,
+                                               out_seg_x);
 }
 
 static void code_panel_draw_segment(int x, int y, const char *text,
@@ -2005,7 +1850,7 @@ static void render_active_input_rows(int panel_w, int text_x, int idx_x,
                                      int indent_chars, const char *idx_text,
                                      int search_row_idx,
                                      int *io_cur, int *io_line_y) {
-    CodeWrapIter wrap_it;
+    CodePanelWrapIter wrap_it;
     int wrap_row = 0;
     int wrap_start, wrap_len, wrap_x;
     int input_x = text_x + indent_chars * FONT_W;
@@ -2706,7 +2551,7 @@ void render_code_panel(void) {
 
     /* Macro for rendering a static line (header/footer) */
     #define RENDER_STATIC_LINE(text, set_color) do {                           \
-        CodeWrapIter wrap_it;                                                   \
+        CodePanelWrapIter wrap_it;                                              \
         int wrap_row = 0;                                                       \
         int wrap_start, wrap_len, wrap_x;                                       \
         code_wrap_iter_init(&wrap_it, text, text_x, panel_w);                   \
@@ -2805,7 +2650,7 @@ void render_code_panel(void) {
                 file_line++;
             } else {
                 /* Existing command, not being edited */
-                CodeWrapIter wrap_it;
+                CodePanelWrapIter wrap_it;
                 char display_text[MAX_INPUT_LEN];
                 int wrap_row = 0;
                 int wrap_start, wrap_len, wrap_x;

@@ -35,6 +35,9 @@ of one monolithic `repl_core.c`.
   wheel zoom velocity, and per-frame momentum decay.
 - `repl_actions.c`: config item table, config shortcut dispatch, menu item
   actions, startup config defaults, and side effects for toggles/cycles.
+- `repl_code_panel_layout.c`: pure code-panel wrapping, row counts, row
+  segment lookup, and cursor-row mapping shared by UI rendering, hit-testing,
+  tests, and visual dumps.
 - `repl_eval.c`: expression parsing and evaluation.
 - `ui_panels.c`: 2D code/search/help/config/variable-panel rendering and panel
   hit-testing.
@@ -280,7 +283,19 @@ Owns generated scaffold and import/export plumbing.
 - init bootstrap tables and helpers
 - `save_output()`, `load_from_file()`
 - import translation helpers
-- code-panel dump helpers
+- code-panel visual dump plumbing, using `repl_code_panel_layout.c` for wrap
+  parity with the on-screen panel
+
+### `repl_code_panel_layout.c`
+
+Owns pure code-panel text wrapping and row lookup. It has no OpenGL, editor, or
+export side effects.
+
+- `CodePanelTextLayout`
+- continuation-indent and wrap-break decisions
+- `CodePanelWrapIter`
+- row count, row segment, and cursor-row lookup helpers
+- shared behavior for `ui_panels.c`, `repl_export.c`, and focused layout tests
 
 ## Shared State Rules
 
@@ -328,7 +343,9 @@ captures the intended behavior change.
 - **Clipboard/selection:** owns line-range selection state, clipboard storage,
   and copy/cut/paste command mutations.
 - **UI layout:** owns pure code-panel wrapping, visible rows, hit-testing, and
-  visual dump coordinates. Rendering should consume layout results.
+  visual dump coordinates. `repl_code_panel_layout.c` owns wrapping and segment
+  lookup today; `ui_panels.c` still owns the larger document row model and
+  rendering.
 - **Scene renderer:** owns camera/view setup, grid/axes/overlay drawing, and GL
   state discipline for a single frame.
 - **Import/export:** owns scaffold sections, workspace metadata, and
@@ -336,10 +353,9 @@ captures the intended behavior change.
 
 ### Current cleanup baseline
 
-After rebasing on `c6941c58fa6cfb5c22dc760fc29f60f5c716fede`,
-`make test-stubs TEST_JOBS=4` builds all test binaries and passes 14 of 14
-suites: 2186/2186 tests. New cleanup stages should preserve that green
-baseline.
+After the Phase 7 code-panel layout extraction, `make test-stubs TEST_JOBS=4`
+builds all test binaries and passes 16 of 16 suites: 2304/2304 tests. New
+cleanup stages should preserve that green baseline.
 
 ## Key Pipelines
 
