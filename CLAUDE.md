@@ -109,10 +109,10 @@ Run all: `make test`
 | `repl_examples.c` | Predefined example data (`g_examples[]`, `g_example_names[]`) |
 | `repl_examples.h` | Example query API (`repl_examples_count/name/lines`) |
 | `repl_export.c` | `save_output` / `load_from_file`, workspace header directives, `@scene-name` / `@workspace-dir` markers |
-| `scene_render.c` | 3D scene: camera, grid themes, axes themes, lights, vertex overlays, outline pass |
+| `scene_render.c` | 3D scene: camera, grid/axes theme specs, guarded helper passes, vertex overlays, outline pass |
 | `scene_render.h` | Declares `render_3d_scene()` |
 | `ui_panels.c` | Code-panel row rendering (incl. inline ghost/hint text), scene status banner, top-level panel hit routing |
-| `ui_panels.h` | UI panel render + hit-test declarations, compatibility declarations, rename state API |
+| `ui_panels.h` | Code-panel geometry, render, hit-test, and panel input bridge declarations |
 | `repl_eval.c` | Expression evaluator (recursive descent), REPL<->C translators, for-loop parsers |
 | `repl_eval.h` | Evaluator types (`ExprVar`, `ExprCtx`), function declarations |
 | `cmd_format.c` | Pure indentation/depth computation (no GL dependency) |
@@ -134,14 +134,15 @@ Run all: `make test`
 
 ## Adding Grid/Axes Themes
 
-Grids and axes are themeable via a `switch` in `scene_render.c`:
+Grids and axes are themeable through small specs in `scene_render.c`:
 1. Add a new entry to the `GridTheme` (or `AxesTheme`) enum in `sample.h`
    before the trailing `_COUNT` sentinel
 2. Add the name string at that enum's index in `g_grid_names[]`
    (or `g_axes_names[]`) in `repl_core.c` — both arrays use designated
    initializers keyed on the enum, so order is validated at compile time
-3. Add a new `case GRID_THEME_XXX:` in `draw_grid()` (or `draw_axes()`)
-   in `scene_render.c`
+3. Add a matching `GridThemeSpec` / `AxesThemeSpec` entry in
+   `scene_render.c` for standard line/color themes. Use a custom render path
+   only for themes that need extra geometry, such as focus, ocean, or planes.
 4. The theme cycles via F3 (grid) / F4 (axes) in `repl_editor.c`
 
 ## Adding Menu Bar Items

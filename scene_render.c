@@ -20,8 +20,243 @@ static int grid_is_major_line(float v, float major, float tol) {
     return (fabsf(fmodf(fabsf(v) + tol, major)) < (tol * 2.0f));
 }
 
+/* Scene helpers intentionally push their own attribute state even though the
+ * full frame has a top-level guard. This keeps blend/depth/line/point/fog
+ * side effects local to the helper that introduced them. */
+static void scene_render_push_state(void) {
+    glPushAttrib(GL_ALL_ATTRIB_BITS);
+}
+
+static void scene_render_pop_state(void) {
+    glPopAttrib();
+}
+
+typedef struct SceneRgba {
+    float r, g, b, a;
+} SceneRgba;
+
+typedef struct GridDrawContext {
+    float extent;
+    float major;
+    float step;
+    float major_tol;
+    float breath;
+} GridDrawContext;
+
+typedef struct GridLineColors {
+    SceneRgba x_const;
+    SceneRgba z_const;
+} GridLineColors;
+
+typedef void (*GridLineColorFn)(float v, int is_major,
+                                const GridDrawContext *ctx,
+                                GridLineColors *out);
+typedef SceneRgba (*GridOriginColorFn)(const GridDrawContext *ctx);
+typedef void (*GridPassFn)(const GridDrawContext *ctx);
+
+typedef struct GridThemeSpec {
+    GridLineColorFn line_color;
+    GridOriginColorFn origin_color;
+    GridPassFn begin_pass;
+    GridPassFn end_pass;
+    float origin_line_width;
+} GridThemeSpec;
+
+static SceneRgba rgba(float r, float g, float b, float a) {
+    SceneRgba c = { r, g, b, a };
+    return c;
+}
+
+static void gl_color_rgba(SceneRgba c) {
+    glColor4f(c.r, c.g, c.b, c.a);
+}
+
+static void grid_line_colors_same(GridLineColors *out, SceneRgba color) {
+    out->x_const = color;
+    out->z_const = color;
+}
+
+static void draw_grid_line_pair(float v, const GridDrawContext *ctx,
+                                GridLineColors colors) {
+    gl_color_rgba(colors.x_const);
+    glVertex3f(v, 0, -ctx->extent);
+    glVertex3f(v, 0,  ctx->extent);
+    gl_color_rgba(colors.z_const);
+    glVertex3f(-ctx->extent, 0, v);
+    glVertex3f( ctx->extent, 0, v);
+}
+
+static void draw_grid_origin_axes(const GridDrawContext *ctx, SceneRgba color,
+                                  float line_width) {
+    glDepthMask(GL_TRUE);
+    if (line_width != 1.0f)
+        glLineWidth(line_width);
+    glBegin(GL_LINES);
+    gl_color_rgba(color);
+    glVertex3f(-ctx->extent, 0, 0);
+    glVertex3f( ctx->extent, 0, 0);
+    glVertex3f(0, 0, -ctx->extent);
+    glVertex3f(0, 0,  ctx->extent);
+    glEnd();
+    if (line_width != 1.0f)
+        glLineWidth(1.0f);
+    glDepthMask(GL_FALSE);
+}
+
+static void draw_grid_standard_theme(const GridDrawContext *ctx,
+                                     const GridThemeSpec *spec) {
+    if (spec->begin_pass)
+        spec->begin_pass(ctx);
+
+    glBegin(GL_LINES);
+    for (float v = -ctx->extent; v <= ctx->extent + 0.01f; v += ctx->step) {
+        if (fabsf(v) < 0.01f) continue;
+        int is_major = grid_is_major_line(v, ctx->major, ctx->major_tol);
+        GridLineColors colors;
+        spec->line_color(v, is_major, ctx, &colors);
+        draw_grid_line_pair(v, ctx, colors);
+    }
+    glEnd();
+
+    draw_grid_origin_axes(ctx, spec->origin_color(ctx), spec->origin_line_width);
+
+    if (spec->end_pass)
+        spec->end_pass(ctx);
+}
+
+static void grid_classic_line_color(float v, int is_major,
+                                    const GridDrawContext *ctx,
+                                    GridLineColors *out) {
+    (void)v;
+    (void)ctx;
+    grid_line_colors_same(out, rgba(0.50f, 0.50f, 0.60f,
+                                    is_major ? 0.22f : 0.08f));
+}
+
+static SceneRgba grid_classic_origin_color(const GridDrawContext *ctx) {
+    (void)ctx;
+    return rgba(0.50f, 0.50f, 0.60f, 0.45f);
+}
+
+static void grid_fog_begin(const GridDrawContext *ctx) {
+    float fog_density = 0.06f + ctx->breath * 0.04f;
+    glEnable(GL_FOG);
+    glFogi(GL_FOG_MODE, GL_EXP2);
+    glFogf(GL_FOG_DENSITY, fog_density);
+}
+
+static void grid_fog_end(const GridDrawContext *ctx) {
+    (void)ctx;
+    glDisable(GL_FOG);
+}
+
+static void grid_fog_line_color(float v, int is_major,
+                                const GridDrawContext *ctx,
+                                GridLineColors *out) {
+    (void)v;
+    (void)ctx;
+    grid_line_colors_same(out, rgba(0.45f, 0.50f, 0.65f,
+                                    is_major ? 0.25f : 0.10f));
+}
+
+static SceneRgba grid_fog_origin_color(const GridDrawContext *ctx) {
+    (void)ctx;
+    return rgba(0.45f, 0.50f, 0.65f, 0.55f);
+}
+
+static void grid_tron_line_color(float v, int is_major,
+                                 const GridDrawContext *ctx,
+                                 GridLineColors *out) {
+    float glow = 0.7f + ctx->breath * 0.3f;
+    float dist = fabsf(v) / ctx->extent;
+    float fade = (1.0f - dist * dist);
+    if (fade < 0.0f) fade = 0.0f;
+    float base = is_major ? 0.35f : 0.12f;
+    grid_line_colors_same(out, rgba(0.05f, 0.55f, 0.95f,
+                                    base * fade * glow));
+}
+
+static SceneRgba grid_tron_origin_color(const GridDrawContext *ctx) {
+    float glow = 0.7f + ctx->breath * 0.3f;
+    return rgba(0.0f, 0.8f, 1.0f, 0.25f * glow);
+}
+
+static void grid_ember_line_color(float v, int is_major,
+                                  const GridDrawContext *ctx,
+                                  GridLineColors *out) {
+    float dist = fabsf(v) / ctx->extent;
+    float ripple = sinf(dist * 12.0f - g_anim_time * 2.5f);
+    ripple = ripple * 0.5f + 0.5f;
+    float fade = 1.0f - dist;
+    if (fade < 0.0f) fade = 0.0f;
+    float base = is_major ? 0.30f : 0.10f;
+    float a = base * fade * (0.6f + ripple * 0.4f);
+    grid_line_colors_same(out, rgba(0.95f, 0.35f + ripple * 0.25f,
+                                    0.05f, a));
+}
+
+static SceneRgba grid_ember_origin_color(const GridDrawContext *ctx) {
+    (void)ctx;
+    float ripple0 = -sinf(g_anim_time * 2.5f) * 0.5f + 0.5f;
+    return rgba(0.95f, 0.35f + ripple0 * 0.25f, 0.05f,
+                0.7f * (0.6f + ripple0 * 0.4f));
+}
+
+static void grid_faint_line_color(float v, int is_major,
+                                  const GridDrawContext *ctx,
+                                  GridLineColors *out) {
+    (void)v;
+    (void)ctx;
+    grid_line_colors_same(out, rgba(0.50f, 0.50f, 0.60f,
+                                    is_major ? 0.07f : 0.03f));
+}
+
+static SceneRgba grid_faint_origin_color(const GridDrawContext *ctx) {
+    (void)ctx;
+    return rgba(0.50f, 0.50f, 0.60f, 0.18f);
+}
+
+static void grid_ruler_line_color(float v, int is_major,
+                                  const GridDrawContext *ctx,
+                                  GridLineColors *out) {
+    float dist_frac = fabsf(v) / ctx->extent;
+    float fade = 1.0f - dist_frac * dist_frac;
+    float a = (is_major ? 0.18f : 0.07f) * fade;
+    out->x_const = rgba(0.82f, 0.42f, 0.18f, a);
+    out->z_const = rgba(0.22f, 0.42f, 0.88f, a);
+}
+
+static const GridThemeSpec g_grid_theme_specs[GRID_THEME_COUNT] = {
+    [GRID_THEME_CLASSIC] = {
+        grid_classic_line_color, grid_classic_origin_color, NULL, NULL, 1.0f
+    },
+    [GRID_THEME_FOG] = {
+        grid_fog_line_color, grid_fog_origin_color, grid_fog_begin,
+        grid_fog_end, 1.0f
+    },
+    [GRID_THEME_TRON] = {
+        grid_tron_line_color, grid_tron_origin_color, NULL, NULL, 2.0f
+    },
+    [GRID_THEME_EMBER] = {
+        grid_ember_line_color, grid_ember_origin_color, NULL, NULL, 1.0f
+    },
+    [GRID_THEME_FAINT] = {
+        grid_faint_line_color, grid_faint_origin_color, NULL, NULL, 1.0f
+    },
+};
+
+static const GridThemeSpec *grid_theme_spec(GridTheme theme) {
+    if (theme <= GRID_THEME_OFF || theme >= GRID_THEME_COUNT)
+        return NULL;
+    if (!g_grid_theme_specs[theme].line_color)
+        return NULL;
+    return &g_grid_theme_specs[theme];
+}
+
 static void draw_grid(void) {
     if (g_grid_theme == GRID_THEME_OFF) return;
+
+    scene_render_push_state();
 
     glDisable(GL_LIGHTING);
     glEnable(GL_DEPTH_TEST);
@@ -50,6 +285,13 @@ static void draw_grid(void) {
     float major  = g_grid_major_steps[mj_i];
     float step   = major * 0.2f;
     float major_tol = step * 0.25f;
+    GridDrawContext grid_ctx = {
+        .extent = extent,
+        .major = major,
+        .step = step,
+        .major_tol = major_tol,
+        .breath = breath,
+    };
 
     if (g_grid_extent_idx == GRID_EXTENT_FAR) {
         // enable linear fog, get the color from clear color. Start at half extent,
@@ -69,143 +311,14 @@ static void draw_grid(void) {
     // Experiment with using darker lines but with higher alpha to get lines to
     // work better with both light and dark themes.
 
-    case GRID_THEME_CLASSIC: {
-        glBegin(GL_LINES);
-        for (float v = -extent; v <= extent + 0.01f; v += step) {
-            if (fabsf(v) < 0.01f) continue;
-            int is_major  = grid_is_major_line(v, major, major_tol);
-            float a = is_major ? 0.22f : 0.08f;
-            glColor4f(0.50f, 0.50f, 0.60f, a);
-            glVertex3f(v, 0, -extent); glVertex3f(v, 0, extent);
-            glVertex3f(-extent, 0, v); glVertex3f(extent, 0, v);
-        }
-        glEnd();
-        /* Origin axes — write to depth buffer */
-        glDepthMask(GL_TRUE);
-        glBegin(GL_LINES);
-        glColor4f(0.50f, 0.50f, 0.60f, 0.45f);
-        glVertex3f(-extent, 0, 0); glVertex3f(extent, 0, 0);
-        glVertex3f(0, 0, -extent); glVertex3f(0, 0, extent);
-        glEnd();
-        glDepthMask(GL_FALSE);
-        break;
-    }
-
-    case GRID_THEME_FOG: {
-        float fog_density = 0.06f + breath * 0.04f;
-        glEnable(GL_FOG);
-        glFogi(GL_FOG_MODE, GL_EXP2);
-        glFogf(GL_FOG_DENSITY, fog_density);
-
-        glBegin(GL_LINES);
-        for (float v = -extent; v <= extent + 0.01f; v += step) {
-            if (fabsf(v) < 0.01f) continue;
-            int is_major  = grid_is_major_line(v, major, major_tol);
-            float a = is_major ? 0.25f : 0.10f;
-            glColor4f(0.45f, 0.50f, 0.65f, a);
-            glVertex3f(v, 0, -extent); glVertex3f(v, 0, extent);
-            glVertex3f(-extent, 0, v); glVertex3f(extent, 0, v);
-        }
-        glEnd();
-        /* Origin axes — write to depth buffer (within fog effect) */
-        glDepthMask(GL_TRUE);
-        glBegin(GL_LINES);
-        glColor4f(0.45f, 0.50f, 0.65f, 0.55f);
-        glVertex3f(-extent, 0, 0); glVertex3f(extent, 0, 0);
-        glVertex3f(0, 0, -extent); glVertex3f(0, 0, extent);
-        glEnd();
-        glDepthMask(GL_FALSE);
-
-        glDisable(GL_FOG);
-        break;
-    }
-
-    case GRID_THEME_TRON: {
-        float glow = 0.7f + breath * 0.3f;
-
-        glLineWidth(1.0f);
-        glBegin(GL_LINES);
-        for (float v = -extent; v <= extent + 0.01f; v += step) {
-            if (fabsf(v) < 0.01f) continue;
-            float dist = fabsf(v) / extent;
-            float fade = (1.0f - dist * dist);
-            if (fade < 0.0f) fade = 0.0f;
-            int is_major = grid_is_major_line(v, major, major_tol);
-            float base = is_major ? 0.35f : 0.12f;
-            float a = base * fade * glow;
-            glColor4f(0.05f, 0.55f, 0.95f, a);
-            glVertex3f(v, 0, -extent); glVertex3f(v, 0, extent);
-            glVertex3f(-extent, 0, v); glVertex3f(extent, 0, v);
-        }
-        glEnd();
-
-        /* Origin axes — write to depth buffer; bright glow */
-        glDepthMask(GL_TRUE);
-        glLineWidth(2.0f);
-        float ga = 0.25f * glow;
-        glBegin(GL_LINES);
-        glColor4f(0.0f, 0.8f, 1.0f, ga);
-        glVertex3f(0, 0, -extent); glVertex3f(0, 0, extent);
-        glVertex3f(-extent, 0, 0); glVertex3f(extent, 0, 0);
-        glEnd();
-        glLineWidth(1.0f);
-        glDepthMask(GL_FALSE);
-        break;
-    }
-
-    case GRID_THEME_EMBER: {
-        glBegin(GL_LINES);
-        for (float v = -extent; v <= extent + 0.01f; v += step) {
-            if (fabsf(v) < 0.01f) continue;
-            float dist = fabsf(v) / extent;
-            float ripple = sinf(dist * 12.0f - g_anim_time * 2.5f);
-            ripple = ripple * 0.5f + 0.5f; /* 0..1 */
-            float fade = 1.0f - dist;
-            if (fade < 0.0f) fade = 0.0f;
-            int is_major = grid_is_major_line(v, major, major_tol);
-            float base = is_major ? 0.30f : 0.10f;
-            float a = base * fade * (0.6f + ripple * 0.4f);
-            float r = 0.95f, g = 0.35f + ripple * 0.25f, b = 0.05f;
-            glColor4f(r, g, b, a);
-            glVertex3f(v, 0, -extent); glVertex3f(v, 0, extent);
-            glVertex3f(-extent, 0, v); glVertex3f(extent, 0, v);
-        }
-        glEnd();
-        /* Origin axes — write to depth buffer; colour evaluated at v=0 */
-        {
-            float ripple0 = -sinf(g_anim_time * 2.5f) * 0.5f + 0.5f;
-            float a0 = 0.7f * (0.6f + ripple0 * 0.4f);
-            float r0 = 0.95f, g0 = 0.35f + ripple0 * 0.25f, b0 = 0.05f;
-            glDepthMask(GL_TRUE);
-            glBegin(GL_LINES);
-            glColor4f(r0, g0, b0, a0);
-            glVertex3f(-extent, 0, 0); glVertex3f(extent, 0, 0);
-            glVertex3f(0, 0, -extent); glVertex3f(0, 0, extent);
-            glEnd();
-            glDepthMask(GL_FALSE);
-        }
-        break;
-    }
-
+    case GRID_THEME_CLASSIC:
+    case GRID_THEME_FOG:
+    case GRID_THEME_TRON:
+    case GRID_THEME_EMBER:
     case GRID_THEME_FAINT: {
-        glBegin(GL_LINES);
-        for (float v = -extent; v <= extent + 0.01f; v += step) {
-            if (fabsf(v) < 0.01f) continue;
-            int is_major = grid_is_major_line(v, major, major_tol);
-            float a = is_major ? 0.07f : 0.03f;
-            glColor4f(0.50f, 0.50f, 0.60f, a);
-            glVertex3f(v, 0, -extent); glVertex3f(v, 0, extent);
-            glVertex3f(-extent, 0, v); glVertex3f(extent, 0, v);
-        }
-        glEnd();
-        /* Origin axes — write to depth buffer */
-        glDepthMask(GL_TRUE);
-        glBegin(GL_LINES);
-        glColor4f(0.50f, 0.50f, 0.60f, 0.18f);
-        glVertex3f(-extent, 0, 0); glVertex3f(extent, 0, 0);
-        glVertex3f(0, 0, -extent); glVertex3f(0, 0, extent);
-        glEnd();
-        glDepthMask(GL_FALSE);
+        const GridThemeSpec *spec = grid_theme_spec((GridTheme)g_grid_theme);
+        if (spec)
+            draw_grid_standard_theme(&grid_ctx, spec);
         break;
     }
 
@@ -403,16 +516,10 @@ static void draw_grid(void) {
         glBegin(GL_LINES);
         for (float v = -extent; v <= extent + 0.01f; v += step) {
             if (fabsf(v) < 0.01f) continue;
-            float dist_frac = fabsf(v) / extent;
-            float fade = 1.0f - dist_frac * dist_frac;
             int is_major = grid_is_major_line(v, major, major_tol);
-            float a = (is_major ? 0.18f : 0.07f) * fade;
-            /* Lines along Z (constant X = v) — warm amber/red, show X spacing */
-            glColor4f(0.82f, 0.42f, 0.18f, a);
-            glVertex3f(v, 0, -extent); glVertex3f(v, 0, extent);
-            /* Lines along X (constant Z = v) — cool blue, show Z spacing */
-            glColor4f(0.22f, 0.42f, 0.88f, a);
-            glVertex3f(-extent, 0, v); glVertex3f(extent, 0, v);
+            GridLineColors colors;
+            grid_ruler_line_color(v, is_major, &grid_ctx, &colors);
+            draw_grid_line_pair(v, &grid_ctx, colors);
         }
         glEnd();
 
@@ -543,6 +650,7 @@ static void draw_grid(void) {
     glDisable(GL_BLEND);
     glDisable(GL_FOG);
     if (g_user_lighting_enabled) glEnable(GL_LIGHTING);
+    scene_render_pop_state();
 }
 
 /* Helper: draw an axis label at a 3D position */
@@ -553,8 +661,133 @@ static void draw_axis_label(float x, float y, float z, char ch,
     glutBitmapCharacter(FONT_MONO, ch);
 }
 
+enum {
+    SCENE_AXIS_X = 0,
+    SCENE_AXIS_Y = 1,
+    SCENE_AXIS_Z = 2,
+};
+
+typedef struct AxesThemeSpec {
+    float len;
+    SceneRgba axis[3];
+    SceneRgba label[3];
+} AxesThemeSpec;
+
+static const AxesThemeSpec g_axes_theme_specs[AXES_THEME_COUNT] = {
+    [AXES_THEME_CLASSIC] = {
+        .len = 2.0f,
+        .axis = {
+            {0.90f, 0.20f, 0.20f, 1.0f},
+            {0.20f, 0.90f, 0.20f, 1.0f},
+            {0.20f, 0.20f, 0.90f, 1.0f},
+        },
+        .label = {
+            {0.90f, 0.30f, 0.30f, 1.0f},
+            {0.30f, 0.90f, 0.30f, 1.0f},
+            {0.30f, 0.30f, 0.90f, 1.0f},
+        },
+    },
+    [AXES_THEME_PULSE] = {
+        .len = 3.0f,
+        .axis = {
+            {0.90f, 0.20f, 0.20f, 0.30f},
+            {0.20f, 0.90f, 0.20f, 0.30f},
+            {0.20f, 0.20f, 0.90f, 0.30f},
+        },
+        .label = {
+            {0.70f, 0.25f, 0.25f, 1.0f},
+            {0.25f, 0.70f, 0.25f, 1.0f},
+            {0.25f, 0.25f, 0.70f, 1.0f},
+        },
+    },
+    [AXES_THEME_COMPASS] = {
+        .len = 2.5f,
+        .axis = {
+            {1.0f, 0.30f, 0.30f, 0.85f},
+            {0.30f, 1.0f, 0.30f, 0.85f},
+            {0.30f, 0.30f, 1.0f, 0.85f},
+        },
+        .label = {
+            {0.90f, 0.30f, 0.30f, 1.0f},
+            {0.30f, 0.90f, 0.30f, 1.0f},
+            {0.30f, 0.30f, 0.90f, 1.0f},
+        },
+    },
+    [AXES_THEME_GIZMO] = {
+        .len = 2.0f,
+        .axis = {
+            {0.90f, 0.20f, 0.20f, 0.85f},
+            {0.20f, 0.90f, 0.20f, 0.85f},
+            {0.20f, 0.20f, 0.90f, 0.85f},
+        },
+        .label = {
+            {0.90f, 0.25f, 0.25f, 1.0f},
+            {0.25f, 0.90f, 0.25f, 1.0f},
+            {0.25f, 0.25f, 0.90f, 1.0f},
+        },
+    },
+};
+
+static const AxesThemeSpec *axes_theme_spec(AxesTheme theme) {
+    if (theme <= AXES_THEME_OFF || theme >= AXES_THEME_COUNT)
+        return NULL;
+    if (g_axes_theme_specs[theme].len <= 0.0f)
+        return NULL;
+    return &g_axes_theme_specs[theme];
+}
+
+static void draw_axis_line_triplet(float len, float width,
+                                   const SceneRgba colors[3],
+                                   int direction) {
+    float end = len * (float)direction;
+    glLineWidth(width);
+    glBegin(GL_LINES);
+    gl_color_rgba(colors[SCENE_AXIS_X]);
+    glVertex3f(0, 0, 0); glVertex3f(end, 0, 0);
+    gl_color_rgba(colors[SCENE_AXIS_Y]);
+    glVertex3f(0, 0, 0); glVertex3f(0, end, 0);
+    gl_color_rgba(colors[SCENE_AXIS_Z]);
+    glVertex3f(0, 0, 0); glVertex3f(0, 0, end);
+    glEnd();
+    glLineWidth(1.0f);
+}
+
+static void draw_axis_tip_triplet(float len, float point_size,
+                                  const SceneRgba colors[3],
+                                  int direction) {
+    float end = len * (float)direction;
+    glPointSize(point_size);
+    glBegin(GL_POINTS);
+    gl_color_rgba(colors[SCENE_AXIS_X]);
+    glVertex3f(end, 0, 0);
+    gl_color_rgba(colors[SCENE_AXIS_Y]);
+    glVertex3f(0, end, 0);
+    gl_color_rgba(colors[SCENE_AXIS_Z]);
+    glVertex3f(0, 0, end);
+    glEnd();
+    glPointSize(1.0f);
+}
+
+static void draw_axis_label_triplet(float len, float offset,
+                                    const SceneRgba colors[3],
+                                    const char labels[3],
+                                    int direction) {
+    float pos = (len + offset) * (float)direction;
+    draw_axis_label(pos, 0, 0, labels[SCENE_AXIS_X],
+                    colors[SCENE_AXIS_X].r, colors[SCENE_AXIS_X].g,
+                    colors[SCENE_AXIS_X].b);
+    draw_axis_label(0, pos, 0, labels[SCENE_AXIS_Y],
+                    colors[SCENE_AXIS_Y].r, colors[SCENE_AXIS_Y].g,
+                    colors[SCENE_AXIS_Y].b);
+    draw_axis_label(0, 0, pos, labels[SCENE_AXIS_Z],
+                    colors[SCENE_AXIS_Z].r, colors[SCENE_AXIS_Z].g,
+                    colors[SCENE_AXIS_Z].b);
+}
+
 static void draw_axes(void) {
     if (g_axes_theme == AXES_THEME_OFF) return;
+
+    scene_render_push_state();
 
     glDisable(GL_LIGHTING);
     glEnable(GL_DEPTH_TEST);
@@ -571,37 +804,17 @@ static void draw_axes(void) {
     switch (g_axes_theme) {
 
     case AXES_THEME_CLASSIC: {
-        float len = 2.0f;
-        glLineWidth(2.0f);
-        glBegin(GL_LINES);
-        glColor3f(0.90f, 0.20f, 0.20f);
-        glVertex3f(0, 0, 0); glVertex3f(len, 0, 0);
-        glColor3f(0.20f, 0.90f, 0.20f);
-        glVertex3f(0, 0, 0); glVertex3f(0, len, 0);
-        glColor3f(0.20f, 0.20f, 0.90f);
-        glVertex3f(0, 0, 0); glVertex3f(0, 0, len);
-        glEnd();
-        glLineWidth(1.0f);
-
-        draw_axis_label(2.15f, 0, 0, 'X', 0.90f, 0.30f, 0.30f);
-        draw_axis_label(0, 2.15f, 0, 'Y', 0.30f, 0.90f, 0.30f);
-        draw_axis_label(0, 0, 2.15f, 'Z', 0.30f, 0.30f, 0.90f);
+        const AxesThemeSpec *spec = axes_theme_spec(AXES_THEME_CLASSIC);
+        draw_axis_line_triplet(spec->len, 2.0f, spec->axis, 1);
+        draw_axis_label_triplet(spec->len, 0.15f, spec->label, "XYZ", 1);
         break;
     }
 
     case AXES_THEME_PULSE: {
-        float len = 3.0f;
+        const AxesThemeSpec *spec = axes_theme_spec(AXES_THEME_PULSE);
+        float len = spec->len;
         /* Solid dim axes */
-        glLineWidth(1.5f);
-        glBegin(GL_LINES);
-        glColor4f(0.90f, 0.20f, 0.20f, 0.30f);
-        glVertex3f(0, 0, 0); glVertex3f(len, 0, 0);
-        glColor4f(0.20f, 0.90f, 0.20f, 0.30f);
-        glVertex3f(0, 0, 0); glVertex3f(0, len, 0);
-        glColor4f(0.20f, 0.20f, 0.90f, 0.30f);
-        glVertex3f(0, 0, 0); glVertex3f(0, 0, len);
-        glEnd();
-        glLineWidth(1.0f);
+        draw_axis_line_triplet(len, 1.5f, spec->axis, 1);
 
         /* Pulsing dot position (loops 0..1) */
         float t = fmodf(g_anim_time * 0.6f, 1.0f);
@@ -643,108 +856,81 @@ static void draw_axes(void) {
         glEnd();
         glLineWidth(1.0f);
 
-        draw_axis_label(len + 0.15f, 0, 0, 'X', 0.70f, 0.25f, 0.25f);
-        draw_axis_label(0, len + 0.15f, 0, 'Y', 0.25f, 0.70f, 0.25f);
-        draw_axis_label(0, 0, len + 0.15f, 'Z', 0.25f, 0.25f, 0.70f);
+        draw_axis_label_triplet(len, 0.15f, spec->label, "XYZ", 1);
         break;
     }
 
     case AXES_THEME_NEON: {
         float len = 2.5f;
         float glow = 0.6f + breath * 0.4f;
+        SceneRgba outer[3] = {
+            rgba(1.0f, 0.1f, 0.1f, 0.12f * glow),
+            rgba(0.1f, 1.0f, 0.1f, 0.12f * glow),
+            rgba(0.1f, 0.1f, 1.0f, 0.12f * glow),
+        };
+        SceneRgba core[3] = {
+            rgba(1.0f, 0.4f, 0.4f, 1.0f * glow),
+            rgba(0.4f, 1.0f, 0.4f, 1.0f * glow),
+            rgba(0.4f, 0.4f, 1.0f, 1.0f * glow),
+        };
+        SceneRgba tips[3] = {
+            rgba(1.0f, 0.5f, 0.5f, glow),
+            rgba(0.5f, 1.0f, 0.5f, glow),
+            rgba(0.5f, 0.5f, 1.0f, glow),
+        };
 
         /* Outer glow (wide, dim) */
-        glLineWidth(6.0f);
-        glBegin(GL_LINES);
-        glColor4f(1.0f, 0.1f, 0.1f, 0.12f * glow);
-        glVertex3f(0, 0, 0); glVertex3f(len, 0, 0);
-        glColor4f(0.1f, 1.0f, 0.1f, 0.12f * glow);
-        glVertex3f(0, 0, 0); glVertex3f(0, len, 0);
-        glColor4f(0.1f, 0.1f, 1.0f, 0.12f * glow);
-        glVertex3f(0, 0, 0); glVertex3f(0, 0, len);
-        glEnd();
+        draw_axis_line_triplet(len, 6.0f, outer, 1);
 
         /* Core (narrow, bright) */
-        glLineWidth(2.0f);
-        glBegin(GL_LINES);
-        glColor4f(1.0f, 0.4f, 0.4f, 1.0f * glow);
-        glVertex3f(0, 0, 0); glVertex3f(len, 0, 0);
-        glColor4f(0.4f, 1.0f, 0.4f, 1.0f * glow);
-        glVertex3f(0, 0, 0); glVertex3f(0, len, 0);
-        glColor4f(0.4f, 0.4f, 1.0f, 1.0f * glow);
-        glVertex3f(0, 0, 0); glVertex3f(0, 0, len);
-        glEnd();
-        glLineWidth(1.0f);
+        draw_axis_line_triplet(len, 2.0f, core, 1);
 
         /* Bright tip dots */
-        glPointSize(6.0f);
-        glBegin(GL_POINTS);
-        glColor4f(1.0f, 0.5f, 0.5f, glow);
-        glVertex3f(len, 0, 0);
-        glColor4f(0.5f, 1.0f, 0.5f, glow);
-        glVertex3f(0, len, 0);
-        glColor4f(0.5f, 0.5f, 1.0f, glow);
-        glVertex3f(0, 0, len);
-        glEnd();
-        glPointSize(1.0f);
+        draw_axis_tip_triplet(len, 6.0f, tips, 1);
 
         float la = 0.5f + glow * 0.5f;
-        draw_axis_label(len + 0.15f, 0, 0, 'X', 1.0f * la, 0.3f * la, 0.3f * la);
-        draw_axis_label(0, len + 0.15f, 0, 'Y', 0.3f * la, 1.0f * la, 0.3f * la);
-        draw_axis_label(0, 0, len + 0.15f, 'Z', 0.3f * la, 0.3f * la, 1.0f * la);
+        SceneRgba labels[3] = {
+            rgba(1.0f * la, 0.3f * la, 0.3f * la, 1.0f),
+            rgba(0.3f * la, 1.0f * la, 0.3f * la, 1.0f),
+            rgba(0.3f * la, 0.3f * la, 1.0f * la, 1.0f),
+        };
+        draw_axis_label_triplet(len, 0.15f, labels, "XYZ", 1);
         break;
     }
 
     case AXES_THEME_COMPASS: {
-        float len = 2.5f;
+        const AxesThemeSpec *spec = axes_theme_spec(AXES_THEME_COMPASS);
+        float len = spec->len;
+        SceneRgba negative_axes[3] = {
+            rgba(1.0f, 0.30f, 0.30f, 0.35f),
+            rgba(0.30f, 1.0f, 0.30f, 0.35f),
+            rgba(0.30f, 0.30f, 1.0f, 0.35f),
+        };
+        SceneRgba positive_tips[3] = {
+            rgba(1.0f, 0.4f, 0.4f, 0.9f),
+            rgba(0.4f, 1.0f, 0.4f, 0.9f),
+            rgba(0.4f, 0.4f, 1.0f, 0.9f),
+        };
+        SceneRgba negative_tips[3] = {
+            rgba(1.0f, 0.3f, 0.3f, 0.30f),
+            rgba(0.3f, 1.0f, 0.3f, 0.30f),
+            rgba(0.3f, 0.3f, 1.0f, 0.30f),
+        };
 
         /* Positive axes (solid) */
-        glLineWidth(2.0f);
-        glBegin(GL_LINES);
-        glColor4f(1.0f, 0.30f, 0.30f, 0.85f);
-        glVertex3f(0, 0, 0); glVertex3f(len, 0, 0);
-        glColor4f(0.30f, 1.0f, 0.30f, 0.85f);
-        glVertex3f(0, 0, 0); glVertex3f(0, len, 0);
-        glColor4f(0.30f, 0.30f, 1.0f, 0.85f);
-        glVertex3f(0, 0, 0); glVertex3f(0, 0, len);
-        glEnd();
+        draw_axis_line_triplet(len, 2.0f, spec->axis, 1);
 
         /* Negative axes (stippled) */
         glEnable(GL_LINE_STIPPLE);
         glLineStipple(2, 0xAAAA);
-        glBegin(GL_LINES);
-        glColor4f(1.0f, 0.30f, 0.30f, 0.35f);
-        glVertex3f(0, 0, 0); glVertex3f(-len, 0, 0);
-        glColor4f(0.30f, 1.0f, 0.30f, 0.35f);
-        glVertex3f(0, 0, 0); glVertex3f(0, -len, 0);
-        glColor4f(0.30f, 0.30f, 1.0f, 0.35f);
-        glVertex3f(0, 0, 0); glVertex3f(0, 0, -len);
-        glEnd();
+        draw_axis_line_triplet(len, 2.0f, negative_axes, -1);
         glDisable(GL_LINE_STIPPLE);
-        glLineWidth(1.0f);
 
         /* Arrowheads at positive tips */
-        glPointSize(7.0f);
-        glBegin(GL_POINTS);
-        glColor4f(1.0f, 0.4f, 0.4f, 0.9f);
-        glVertex3f(len, 0, 0);
-        glColor4f(0.4f, 1.0f, 0.4f, 0.9f);
-        glVertex3f(0, len, 0);
-        glColor4f(0.4f, 0.4f, 1.0f, 0.9f);
-        glVertex3f(0, 0, len);
-        glEnd();
+        draw_axis_tip_triplet(len, 7.0f, positive_tips, 1);
 
         /* Small dots at negative tips */
-        glPointSize(4.0f);
-        glBegin(GL_POINTS);
-        glColor4f(1.0f, 0.3f, 0.3f, 0.30f);
-        glVertex3f(-len, 0, 0);
-        glColor4f(0.3f, 1.0f, 0.3f, 0.30f);
-        glVertex3f(0, -len, 0);
-        glColor4f(0.3f, 0.3f, 1.0f, 0.30f);
-        glVertex3f(0, 0, -len);
-        glEnd();
-        glPointSize(1.0f);
+        draw_axis_tip_triplet(len, 4.0f, negative_tips, -1);
 
         /* Origin sphere-ish dot */
         glPointSize(5.0f);
@@ -754,17 +940,19 @@ static void draw_axes(void) {
         glEnd();
         glPointSize(1.0f);
 
-        draw_axis_label(len + 0.15f, 0, 0, 'X', 0.90f, 0.30f, 0.30f);
-        draw_axis_label(0, len + 0.15f, 0, 'Y', 0.30f, 0.90f, 0.30f);
-        draw_axis_label(0, 0, len + 0.15f, 'Z', 0.30f, 0.30f, 0.90f);
-        draw_axis_label(-len - 0.15f, 0, 0, 'x', 0.55f, 0.25f, 0.25f);
-        draw_axis_label(0, -len - 0.15f, 0, 'y', 0.25f, 0.55f, 0.25f);
-        draw_axis_label(0, 0, -len - 0.15f, 'z', 0.25f, 0.25f, 0.55f);
+        draw_axis_label_triplet(len, 0.15f, spec->label, "XYZ", 1);
+        SceneRgba negative_labels[3] = {
+            rgba(0.55f, 0.25f, 0.25f, 1.0f),
+            rgba(0.25f, 0.55f, 0.25f, 1.0f),
+            rgba(0.25f, 0.25f, 0.55f, 1.0f),
+        };
+        draw_axis_label_triplet(len, 0.15f, negative_labels, "xyz", -1);
         break;
     }
 
     case AXES_THEME_GIZMO: {
-        float len  = 2.0f;
+        const AxesThemeSpec *spec = axes_theme_spec(AXES_THEME_GIZMO);
+        float len  = spec->len;
         float fill = len / 2.0f;
 
         /* Camera-facing weight for each vertical plane:
@@ -776,16 +964,7 @@ static void draw_axes(void) {
         float zy_w = sin_ry * sin_ry;
 
         /* Axis lines (same palette as Classic) */
-        glLineWidth(2.0f);
-        glBegin(GL_LINES);
-        glColor4f(0.90f, 0.20f, 0.20f, 0.85f);
-        glVertex3f(0, 0, 0); glVertex3f(len, 0, 0);
-        glColor4f(0.20f, 0.90f, 0.20f, 0.85f);
-        glVertex3f(0, 0, 0); glVertex3f(0, len, 0);
-        glColor4f(0.20f, 0.20f, 0.90f, 0.85f);
-        glVertex3f(0, 0, 0); glVertex3f(0, 0, len);
-        glEnd();
-        glLineWidth(1.0f);
+        draw_axis_line_triplet(len, 2.0f, spec->axis, 1);
 
         /* XZ floor plane quadrant — always shown */
         glBegin(GL_QUADS);
@@ -832,9 +1011,7 @@ static void draw_axes(void) {
         glEnd();
         glPointSize(1.0f);
 
-        draw_axis_label(len + 0.15f, 0, 0, 'X', 0.90f, 0.25f, 0.25f);
-        draw_axis_label(0, len + 0.15f, 0, 'Y', 0.25f, 0.90f, 0.25f);
-        draw_axis_label(0, 0, len + 0.15f, 'Z', 0.25f, 0.25f, 0.90f);
+        draw_axis_label_triplet(len, 0.15f, spec->label, "XYZ", 1);
         break;
     }
 
@@ -845,6 +1022,7 @@ static void draw_axes(void) {
     glDisable(GL_BLEND);
     glEnable(GL_DEPTH_TEST);
     if (g_user_lighting_enabled) glEnable(GL_LIGHTING);
+    scene_render_pop_state();
 }
 
 static int flat_block_matches_cursor(int begin_idx, int is_tess) {
@@ -868,107 +1046,167 @@ static int flat_block_matches_cursor(int begin_idx, int is_tess) {
     return 0;
 }
 
+typedef struct VertexOverlayState {
+    int flat_cmd_idx;
+    int vertex_idx;
+    int in_block;
+    int block_selected;
+    int tess_depth;
+    float normal[3];
+} VertexOverlayState;
+
+typedef void (*VertexOverlayVisitFn)(const GLCmd *cmd,
+                                     const VertexOverlayState *state,
+                                     void *user);
+
+/* Replays transform commands once while visiting vertex-emitting flat commands.
+ * Callers choose whether visits should be restricted to the cursor-selected
+ * block; the matrix tracking stays centralized so overlay features cannot
+ * drift from each other as flatten/execution rules evolve. */
+static void walk_vertex_overlay(int selected_block_only,
+                                VertexOverlayVisitFn on_vertex,
+                                void *user) {
+    VertexOverlayState state = {
+        .flat_cmd_idx = -1,
+        .vertex_idx = 0,
+        .in_block = 0,
+        .block_selected = selected_block_only ? 0 : 1,
+        .tess_depth = 0,
+        .normal = {0, 0, 1},
+    };
+    int matrix_depth = 0;
+
+    glPushMatrix();
+    for (int i = 0; i < g_num_flat_cmds; i++) {
+        if (!g_flat_cmds[i].valid) continue;
+
+        GLCmd *cmd = &g_flat_cmds[i];
+        if (!state.in_block && is_transform_cmd(cmd->type)) {
+            apply_tracked_transform_cmd(cmd, &matrix_depth);
+            continue;
+        }
+
+        switch (cmd->type) {
+        case CMD_BEGIN:
+            state.in_block = 1;
+            state.block_selected = selected_block_only
+                                 ? flat_block_matches_cursor(i, 0)
+                                 : 1;
+            state.vertex_idx = 0;
+            state.tess_depth = 0;
+            state.normal[0] = 0.0f;
+            state.normal[1] = 0.0f;
+            state.normal[2] = 1.0f;
+            break;
+        case CMD_END:
+            state.in_block = 0;
+            state.block_selected = selected_block_only ? 0 : 1;
+            state.tess_depth = 0;
+            break;
+        case CMD_TESS_BEGIN_POLYGON:
+            state.in_block = 1;
+            state.block_selected = selected_block_only
+                                 ? flat_block_matches_cursor(i, 1)
+                                 : 1;
+            state.vertex_idx = 0;
+            state.tess_depth = 1;
+            state.normal[0] = 0.0f;
+            state.normal[1] = 0.0f;
+            state.normal[2] = 1.0f;
+            break;
+        case CMD_TESS_BEGIN_CONTOUR:
+            if (state.tess_depth > 0)
+                state.tess_depth++;
+            break;
+        case CMD_TESS_END:
+            if (state.tess_depth > 0) {
+                state.tess_depth--;
+                if (state.tess_depth == 0) {
+                    state.in_block = 0;
+                    state.block_selected = selected_block_only ? 0 : 1;
+                }
+            }
+            break;
+        case CMD_NORMAL3F:
+        case CMD_TESS_NORMAL:
+            state.normal[0] = cmd->args[0];
+            state.normal[1] = cmd->args[1];
+            state.normal[2] = cmd->args[2];
+            break;
+        case CMD_VERTEX3F:
+        case CMD_TESS_VERTEX: {
+            int visit = selected_block_only
+                      ? (state.in_block && state.block_selected)
+                      : 1;
+            if (visit && on_vertex) {
+                state.flat_cmd_idx = i;
+                on_vertex(cmd, &state, user);
+            }
+            state.vertex_idx++;
+            break;
+        }
+        default:
+            break;
+        }
+    }
+    unwind_tracked_transform_stack(&matrix_depth);
+    glPopMatrix();
+}
+
+static void draw_vertex_number_label(const GLCmd *cmd,
+                                     const VertexOverlayState *state,
+                                     void *user) {
+    (void)user;
+    char label[16];
+    snprintf(label, sizeof(label), " v%d", state->vertex_idx);
+    glRasterPos3f(cmd->args[0], cmd->args[1], cmd->args[2]);
+    for (const char *c = label; *c; c++)
+        glutBitmapCharacter(FONT_MONO, (unsigned char)*c);
+}
+
+static void draw_normal_vector_at_vertex(const GLCmd *cmd,
+                                         const VertexOverlayState *state,
+                                         void *user) {
+    float scale = *(const float *)user;
+    float vx = cmd->args[0], vy = cmd->args[1], vz = cmd->args[2];
+    float nx = state->normal[0], ny = state->normal[1], nz = state->normal[2];
+
+    glBegin(GL_LINES);
+    glVertex3f(vx, vy, vz);
+    glVertex3f(vx + nx * scale, vy + ny * scale, vz + nz * scale);
+    glEnd();
+    glPointSize(4.0f);
+    glBegin(GL_POINTS);
+    glVertex3f(vx + nx * scale, vy + ny * scale, vz + nz * scale);
+    glEnd();
+    glPointSize(1.0f);
+}
+
 static void draw_vertex_numbers(void) {
+    scene_render_push_state();
     glDisable(GL_LIGHTING);
     glDisable(GL_DEPTH_TEST);
     glColor3f(1.0f, 1.0f, 0.30f);
 
-    /* Draw vertex labels only for the target block, replaying transforms */
-    glPushMatrix();
-    int in_block = 0;
-    int block_selected = 0;
-    int vn = 0;
-    int tess_depth = 0;
-    int matrix_depth = 0;
-    for (int i = 0; i < g_num_flat_cmds; i++) {
-        if (!g_flat_cmds[i].valid) continue;
-        if (!in_block && is_transform_cmd(g_flat_cmds[i].type)) {
-            apply_tracked_transform_cmd(&g_flat_cmds[i], &matrix_depth);
-        } else if (g_flat_cmds[i].type == CMD_BEGIN) {
-            in_block = 1;
-            block_selected = flat_block_matches_cursor(i, 0);
-            vn = 0;
-            tess_depth = 0;
-        } else if (g_flat_cmds[i].type == CMD_END) {
-            in_block = 0;
-            block_selected = 0;
-        } else if (g_flat_cmds[i].type == CMD_TESS_BEGIN_POLYGON) {
-            in_block = 1;
-            block_selected = flat_block_matches_cursor(i, 1);
-            vn = 0;
-            tess_depth = 1;
-        } else if (g_flat_cmds[i].type == CMD_TESS_BEGIN_CONTOUR) {
-            tess_depth = 2;
-        } else if (g_flat_cmds[i].type == CMD_TESS_END && tess_depth > 0) {
-            tess_depth--;
-            if (tess_depth == 0) { in_block = 0; block_selected = 0; }
-        } else if (g_flat_cmds[i].type == CMD_VERTEX3F ||
-                   g_flat_cmds[i].type == CMD_TESS_VERTEX) {
-            if (in_block && block_selected) {
-                char label[16];
-                snprintf(label, sizeof(label), " v%d", vn);
-                glRasterPos3f(g_flat_cmds[i].args[0], g_flat_cmds[i].args[1],
-                              g_flat_cmds[i].args[2]);
-                for (const char *c = label; *c; c++)
-                    glutBitmapCharacter(FONT_MONO, (unsigned char)*c);
-            }
-            vn++;
-        }
-    }
-    unwind_tracked_transform_stack(&matrix_depth);
-    glPopMatrix();
+    walk_vertex_overlay(1, draw_vertex_number_label, NULL);
 
     glEnable(GL_DEPTH_TEST);
     if (g_user_lighting_enabled) glEnable(GL_LIGHTING);
+    scene_render_pop_state();
 }
 
 static void draw_normal_vectors(void) {
+    scene_render_push_state();
     glDisable(GL_LIGHTING);
     glDisable(GL_DEPTH_TEST);
     glColor3f(0.80f, 0.80f, 0.30f);
     float scale = 0.35f;
-    float nx = 0, ny = 0, nz = 1;
 
-    /* Single pass — replay CMD_TRANSLATE3F so normals align with geometry.
-     * Use per-vertex glBegin/glEnd pairs so transforms can be applied
-     * between blocks without being inside a begin/end. */
-    glPushMatrix();
-    int in_begin = 0;
-    int matrix_depth = 0;
-    for (int i = 0; i < g_num_flat_cmds; i++) {
-        if (!g_flat_cmds[i].valid) continue;
-        if (!in_begin && is_transform_cmd(g_flat_cmds[i].type)) {
-            apply_tracked_transform_cmd(&g_flat_cmds[i], &matrix_depth);
-        } else if (g_flat_cmds[i].type == CMD_BEGIN ||
-                   g_flat_cmds[i].type == CMD_TESS_BEGIN_POLYGON) {
-            in_begin = 1;
-            nx = 0; ny = 0; nz = 1; /* reset normal per block */
-        } else if (g_flat_cmds[i].type == CMD_END) {
-            in_begin = 0;
-        } else if (g_flat_cmds[i].type == CMD_NORMAL3F ||
-                   g_flat_cmds[i].type == CMD_TESS_NORMAL) {
-            nx = g_flat_cmds[i].args[0]; ny = g_flat_cmds[i].args[1];
-            nz = g_flat_cmds[i].args[2];
-        } else if (g_flat_cmds[i].type == CMD_VERTEX3F ||
-                   g_flat_cmds[i].type == CMD_TESS_VERTEX) {
-            float vx = g_flat_cmds[i].args[0], vy = g_flat_cmds[i].args[1],
-                  vz = g_flat_cmds[i].args[2];
-            glBegin(GL_LINES);
-            glVertex3f(vx, vy, vz);
-            glVertex3f(vx + nx * scale, vy + ny * scale, vz + nz * scale);
-            glEnd();
-            glPointSize(4.0f);
-            glBegin(GL_POINTS);
-            glVertex3f(vx + nx * scale, vy + ny * scale, vz + nz * scale);
-            glEnd();
-            glPointSize(1.0f);
-        }
-    }
-    unwind_tracked_transform_stack(&matrix_depth);
-    glPopMatrix();
+    walk_vertex_overlay(0, draw_normal_vector_at_vertex, &scale);
 
     glEnable(GL_DEPTH_TEST);
     if (g_user_lighting_enabled) glEnable(GL_LIGHTING);
+    scene_render_pop_state();
 }
 
 /* ========================================================================= */
@@ -1065,6 +1303,7 @@ static void draw_vertex_guides(void) {
 
     float sz = 3.0f;  /* half-size of guide geometry */
 
+    scene_render_push_state();
     glDisable(GL_LIGHTING);
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
@@ -1115,6 +1354,7 @@ static void draw_vertex_guides(void) {
 
     glDisable(GL_BLEND);
     if (g_user_lighting_enabled) glEnable(GL_LIGHTING);
+    scene_render_pop_state();
 }
 
 /* ========================================================================= */
@@ -1185,6 +1425,7 @@ static void draw_normal_guides(void) {
 
     float scale = 0.45f;
 
+    scene_render_push_state();
     glDisable(GL_LIGHTING);
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
@@ -1238,6 +1479,7 @@ static void draw_normal_guides(void) {
 
     glDisable(GL_BLEND);
     if (g_user_lighting_enabled) glEnable(GL_LIGHTING);
+    scene_render_pop_state();
 }
 
 /* ========================================================================= */
@@ -1407,6 +1649,7 @@ static void draw_translate_guide(const GLCmd *cmd, const float p_after[3]) {
         rgb[0]*0.6f + 0.4f, rgb[1]*0.6f + 0.4f, rgb[2]*0.6f + 0.4f
     };
 
+    scene_render_push_state();
     glDisable(GL_LIGHTING);
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
@@ -1451,6 +1694,7 @@ static void draw_translate_guide(const GLCmd *cmd, const float p_after[3]) {
 
     glDisable(GL_BLEND);
     if (g_user_lighting_enabled) glEnable(GL_LIGHTING);
+    scene_render_pop_state();
 }
 
 /* Arc from p_start swept by glRotatef(angle, ax,ay,az) about local origin. */
@@ -1492,6 +1736,7 @@ static void draw_scale_guide(const GLCmd *cmd, const float p_start[3]) {
     float p0[3] = { p_start[0], p_start[1], p_start[2] };
     float plen = sqrtf(p0[0]*p0[0] + p0[1]*p0[1] + p0[2]*p0[2]);
 
+    scene_render_push_state();
     glDisable(GL_LIGHTING);
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
@@ -1627,6 +1872,7 @@ static void draw_scale_guide(const GLCmd *cmd, const float p_start[3]) {
 
     glDisable(GL_BLEND);
     if (g_user_lighting_enabled) glEnable(GL_LIGHTING);
+    scene_render_pop_state();
 }
 
 static void draw_rotate_guide(const GLCmd *cmd, const float p_start[3]) {
@@ -1647,6 +1893,7 @@ static void draw_rotate_guide(const GLCmd *cmd, const float p_start[3]) {
     float plen = sqrtf(p_start[0]*p_start[0] + p_start[1]*p_start[1]
                       + p_start[2]*p_start[2]);
 
+    scene_render_push_state();
     glDisable(GL_LIGHTING);
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
@@ -1781,6 +2028,7 @@ static void draw_rotate_guide(const GLCmd *cmd, const float p_start[3]) {
 
     glDisable(GL_BLEND);
     if (g_user_lighting_enabled) glEnable(GL_LIGHTING);
+    scene_render_pop_state();
 }
 
 /* ========================================================================= */
@@ -1804,6 +2052,7 @@ static void setup_lights(void) {
 static void draw_lights(void) {
     if (!g_show_lights) return;
 
+    scene_render_push_state();
     glDisable(GL_LIGHTING);
     glDisable(GL_DEPTH_TEST);
     glEnable(GL_BLEND);
@@ -1932,6 +2181,7 @@ static void draw_lights(void) {
     glDisable(GL_BLEND);
     glEnable(GL_DEPTH_TEST);
     if (g_user_lighting_enabled) glEnable(GL_LIGHTING);
+    scene_render_pop_state();
 }
 
 /* ========================================================================= */
@@ -1956,6 +2206,7 @@ static void draw_replay_tess_preview(void) {
         g_replay_mode != REPLAY_MODE_VERTEX)
         return;
 
+    scene_render_push_state();
     glDisable(GL_LIGHTING);
     glDisable(GL_DEPTH_TEST);
     glEnable(GL_BLEND);
@@ -2008,6 +2259,7 @@ static void draw_replay_tess_preview(void) {
     glDisable(GL_BLEND);
     glEnable(GL_DEPTH_TEST);
     if (g_user_lighting_enabled) glEnable(GL_LIGHTING);
+    scene_render_pop_state();
 }
 
 static void draw_replay_hud(int scene_x, int scene_y, int scene_w, int scene_h) {
@@ -2040,6 +2292,7 @@ static void draw_replay_hud(int scene_x, int scene_y, int scene_w, int scene_h) 
     if (progress < 0.0f) progress = 0.0f;
     if (progress > 1.0f) progress = 1.0f;
 
+    scene_render_push_state();
     glViewport(0, 0, g_win_w, g_win_h);
     begin_2d();
     glEnable(GL_BLEND);
@@ -2135,6 +2388,7 @@ static void draw_replay_hud(int scene_x, int scene_y, int scene_w, int scene_h) 
 
     glDisable(GL_BLEND);
     end_2d();
+    scene_render_pop_state();
 }
 
 /* ========================================================================= */
@@ -2170,6 +2424,7 @@ static float city_night_factor(float angle) {
 }
 
 static void draw_cityscape(void) {
+    scene_render_push_state();
     glDisable(GL_LIGHTING);
     glEnable(GL_DEPTH_TEST);
     glDepthMask(GL_TRUE);
@@ -2404,6 +2659,7 @@ static void draw_cityscape(void) {
     glDepthMask(GL_TRUE);
     glDisable(GL_BLEND);
     if (g_user_lighting_enabled) glEnable(GL_LIGHTING);
+    scene_render_pop_state();
 }
 
 /* Backdrop dispatcher — routes to the active backdrop mode.
@@ -2424,6 +2680,7 @@ static void draw_orbit_target(void) {
     if (glow <= 0.0f) return;
     if (glow > 1.0f) glow = 1.0f;
 
+    scene_render_push_state();
     glDisable(GL_LIGHTING);
     glEnable(GL_DEPTH_TEST);
     glDepthMask(GL_FALSE);
@@ -2462,6 +2719,7 @@ static void draw_orbit_target(void) {
 
     glDepthMask(GL_TRUE);
     glDisable(GL_BLEND);
+    scene_render_pop_state();
 }
 
 void render_3d_scene(void) {

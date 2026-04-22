@@ -1,5 +1,5 @@
 /*
- * ui_panels.h — Code panel, autocomplete/help/var overlays, panel input bridge
+ * ui_panels.h — Code-panel rows, scene status, and panel input bridge.
  */
 #ifndef UI_PANELS_H
 #define UI_PANELS_H

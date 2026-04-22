@@ -31,6 +31,9 @@ flowchart LR
     export["repl_export.c<br/>import/export<br/>visual code dump"]
     audio["repl_audio.c<br/>playlist engine<br/>persisted audio cfg"]
     replay["repl_replay.c<br/>replay state machine<br/>fade batches"]
+    scene["scene_render.c<br/>3D scene frame<br/>theme specs<br/>guarded helper passes"]
+    scene_theme["GridThemeSpec / AxesThemeSpec<br/>standard theme tables"]
+    scene_overlay["vertex overlay walker<br/>flat traversal<br/>numbers + normals"]
     scenes["repl_scenes.c<br/>user scenes<br/>workspace slots"]
     core["repl_core.c<br/>parser<br/>display frame<br/>shared helpers"]
     flatten["repl_flatten.c<br/>source to flat program"]
@@ -71,6 +74,11 @@ flowchart LR
     rename --> scenes
     varpanel --> vardrag
     replay --> exec
+    core --> scene
+    scene --> exec
+    scene --> replay
+    scene --> scene_theme
+    scene --> scene_overlay
     ui --> actions
     ui --> scenes
     ui --> docrows
@@ -123,6 +131,11 @@ flowchart LR
 - `repl_var_drag.c` owns the variable slider drag transaction: start/motion/
   reset, the linear-vs-log value mapping, and the writeback into
   `g_predef_vars` plus matching `CMD_VAR_ASSIGN` sources.
+- `scene_render.c` now keeps helper-pass GL state local with small
+  `glPushAttrib`/`glPopAttrib` wrappers. Standard grid/axes themes are table
+  entries, while focus/ocean/adaptive-plane grid themes remain custom render
+  paths. Vertex-number and normal-vector overlays share one flat-command
+  visitor so transform replay and tessellation block tracking stay consistent.
 
 ## Open Edges
 
