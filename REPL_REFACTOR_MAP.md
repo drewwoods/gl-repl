@@ -1,61 +1,83 @@
 # REPL Refactor Map
 
-This is a working ownership map for the editor-adjacent cleanup slices. It is
-not the full architecture; it tracks the modules split out of the old
-`repl_editor.c` and the nearby modules they coordinate with.
+A working ownership map for the editor-adjacent cleanup slices. For the
+one-page overview of all layers read [`MODULES.md`](MODULES.md); for per-module
+detail read [`ARCHITECTURE.md`](ARCHITECTURE.md). This doc tracks the modules
+split out of the old `repl_editor.c` and the nearby modules they coordinate
+with.
+
+Nodes are grouped by responsibility layer. The cluster boxes match the
+six layers in `MODULES.md`.
 
 ```mermaid
 flowchart LR
     sample["sample.c<br/>GLUT callback wiring"]
-    editor["repl_editor.c<br/>input router<br/>line navigation<br/>feed_line"]
 
-    actions["repl_actions.c<br/>config table<br/>shortcut dispatch<br/>menu actions"]
-    camera["repl_camera_controls.c<br/>viewport drag state<br/>orbit/pan/zoom<br/>momentum tick"]
-    undo["repl_undo.c<br/>undo/redo rings<br/>mutation snapshots"]
-    clipboard["repl_clipboard.c<br/>selection anchors<br/>copy/cut/paste"]
-    commit["repl_commit.c<br/>declarations<br/>assignments<br/>block commits"]
-    store["repl_command_store.c<br/>source command mutation"]
+    subgraph pipeline["Command pipeline"]
+        core["repl_core.c<br/>parser · display frame"]
+        flatten["repl_flatten.c<br/>source to flat"]
+        exec["repl_executor.c<br/>flat program execution"]
+        commit["repl_commit.c<br/>decls · assigns · blocks"]
+        store["repl_command_store.c<br/>source command mutation"]
+    end
 
-    ui["ui_panels.c<br/>code panel renderer<br/>hit routing + status banner"]
-    layout["repl_code_panel_layout.c<br/>pure wrap iterator<br/>row/segment lookup<br/>cursor row mapping"]
-    docrows["repl_code_panel_document.c<br/>document row model<br/>scroll follow<br/>hit-test targets"]
-    menu["repl_menu_bar.c<br/>menubar + dropdowns<br/>search slot rendering"]
-    color["repl_color_picker.c<br/>floating color picker<br/>literal color swatches"]
-    help["repl_help_overlay.c<br/>modal F1 help<br/>Commands/Keys tabs"]
-    varpanel["repl_variable_panel.c<br/>floating slider panel<br/>rect + hit + render"]
-    acmodel["repl_autocomplete.c<br/>completion model<br/>matches + hint state"]
-    acpanel["repl_autocomplete_panel.c<br/>completion popup renderer"]
-    rename["repl_inline_rename.c<br/>scene-rename input buffer"]
-    vardrag["repl_var_drag.c<br/>variable drag transaction<br/>linear/log writeback"]
-    replay_ann["repl_replay_annotations.c<br/>code-panel replay notes<br/>expanded/evaluated args"]
-    export["repl_export.c<br/>import/export<br/>visual code dump"]
-    audio["repl_audio.c<br/>playlist engine<br/>persisted audio cfg"]
-    replay["repl_replay.c<br/>replay state machine<br/>fade batches"]
-    scene["scene_render.c<br/>3D scene frame<br/>FrameRenderContext<br/>guarded helper passes"]
-    backdrop["scene_backdrop.c<br/>backdrop modes<br/>cityscape renderer"]
-    lights["scene_lights.c<br/>light setup<br/>light indicators"]
-    overlays["scene_overlays.c<br/>polygon outlines<br/>flat-block cursor match"]
-    scene_theme["GridThemeSpec / AxesThemeSpec<br/>standard theme tables"]
-    scene_overlay["vertex overlay walker<br/>flat traversal<br/>numbers + normals"]
-    scenes["repl_scenes.c<br/>user scenes<br/>workspace slots"]
-    core["repl_core.c<br/>parser<br/>display frame<br/>shared helpers"]
-    flatten["repl_flatten.c<br/>source to flat program"]
-    exec["repl_executor.c<br/>flat program execution"]
+    subgraph input["Editor + input"]
+        editor["repl_editor.c<br/>input router · feed_line"]
+        actions["repl_actions.c<br/>config + menu side effects"]
+        camera["repl_camera_controls.c<br/>orbit/pan/zoom + momentum"]
+        undo["repl_undo.c<br/>undo/redo rings"]
+        clipboard["repl_clipboard.c<br/>selection + copy/cut/paste"]
+        vardrag["repl_var_drag.c<br/>variable drag transaction"]
+        rename["repl_inline_rename.c<br/>scene-rename buffer"]
+    end
+
+    subgraph models["Domain models"]
+        scenes["repl_scenes.c<br/>user scenes + workspace"]
+        acmodel["repl_autocomplete.c<br/>completion model"]
+        replay["repl_replay.c<br/>replay state + fade batches"]
+        audio["repl_audio.c<br/>playlist engine"]
+    end
+
+    subgraph ui_layer["2D UI rendering"]
+        uicp["ui_panels.c<br/>code panel rows · status banner"]
+        layout["repl_code_panel_layout.c<br/>pure wrap iterator"]
+        docrows["repl_code_panel_document.c<br/>document row model"]
+        replay_ann["repl_replay_annotations.c<br/>code-panel replay text"]
+        menu["repl_menu_bar.c<br/>menubar + dropdowns"]
+        color["repl_color_picker.c<br/>floating color picker"]
+        help["repl_help_overlay.c<br/>modal F1 help"]
+        varpanel["repl_variable_panel.c<br/>slider panel (render only)"]
+        acpanel["repl_autocomplete_panel.c<br/>completion popup"]
+    end
+
+    subgraph scene_layer["3D scene rendering"]
+        sceneR["scene_render.c<br/>frame prep · theme specs · overlay walker"]
+        backdrop["scene_backdrop.c<br/>backdrop pass"]
+        lights["scene_lights.c<br/>light setup + indicators"]
+        overlays["scene_overlays.c<br/>outline overlays"]
+    end
+
+    export["repl_export.c<br/>import/export + visual dump"]
 
     sample --> editor
+
     editor --> actions
     editor --> camera
     editor --> undo
     editor --> clipboard
     editor --> commit
-    editor --> ui
+    editor --> uicp
     editor --> replay
+    editor --> varpanel
+    editor --> rename
+    editor --> vardrag
 
-    actions --> ui
     actions --> audio
     actions --> replay
     actions --> scenes
     actions --> core
+    actions --> rename
+    actions --> uicp
 
     clipboard --> undo
     clipboard --> store
@@ -66,31 +88,27 @@ flowchart LR
 
     core --> flatten
     core --> exec
+    core --> sceneR
     core --> help
     core --> varpanel
     core --> acpanel
-    editor --> varpanel
-    editor --> rename
-    editor --> vardrag
-    actions --> rename
+
     acpanel --> acmodel
     rename --> scenes
     varpanel --> vardrag
     replay --> exec
-    core --> scene
-    scene --> exec
-    scene --> replay
-    scene --> backdrop
-    scene --> lights
-    scene --> overlays
-    scene_overlay --> overlays
-    scene --> scene_theme
-    scene --> scene_overlay
-    ui --> actions
-    ui --> scenes
-    ui --> docrows
-    ui --> menu
-    ui --> color
+
+    sceneR --> exec
+    sceneR --> replay
+    sceneR --> backdrop
+    sceneR --> lights
+    sceneR --> overlays
+
+    uicp --> actions
+    uicp --> scenes
+    uicp --> docrows
+    uicp --> menu
+    uicp --> color
     docrows --> layout
     docrows --> replay_ann
     replay_ann --> replay

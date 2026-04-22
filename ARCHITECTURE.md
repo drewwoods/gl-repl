@@ -1,5 +1,8 @@
 # REPL Architecture
 
+> For a one-page layered overview of all modules, see
+> [`MODULES.md`](MODULES.md). This document is the per-module reference.
+
 ## Overview
 
 The immediate-mode REPL is now split across focused translation units instead
