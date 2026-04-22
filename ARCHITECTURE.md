@@ -425,7 +425,8 @@ captures the intended behavior change.
   `GridThemeSpec` entries, standard axes by `AxesThemeSpec` entries, and
   vertex-number/normal overlays share one flat-command traversal helper.
   `FrameRenderContext` prepares sticky per-frame state such as the Focus grid
-  vertex before helper renderers run.
+  vertex plus derived camera facts such as ocean-grid waterline classification
+  before helper renderers run.
 - **Import/export:** owns scaffold sections, workspace metadata, and
   translation between exported C and REPL command text.
 
@@ -437,8 +438,8 @@ latest slices extracted document rows, replay annotations, menu/dropdown
 rendering, the color picker, help overlay, variable panel, autocomplete popup,
 inline rename, and variable slider dragging while preserving behavior. The
 first Phase-8 scene-render pass then added grid/axes theme specs, local
-helper-pass GL state guards, a shared vertex-overlay traversal, and
-Focus-grid frame prep.
+helper-pass GL state guards, a shared vertex-overlay traversal, Focus-grid
+frame prep, and ocean-grid camera-height derivation.
 
 ## Key Pipelines
 

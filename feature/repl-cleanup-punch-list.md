@@ -8,7 +8,7 @@ counterpart: a prioritized set of concrete, behavior-preserving
 extractions that can each land as a single reviewable commit *today*,
 without committing to the larger context-object rewrite.
 
-Four files still dominate the codebase: `scene_render.c` (~3158, now with
+Four files still dominate the codebase: `scene_render.c` (~3162, now with
 frame prep/theme specs/state guards/overlay visitor helpers), `repl_export.c` (2541),
 `repl_core.c` (~1964), and `repl_editor.c` (~1653). `ui_panels.c`
 dropped to 1237 LoC (from 4452) after Phase-7
@@ -133,7 +133,9 @@ starts with table data instead of a copied switch body.
 The Focus grid no longer chooses or writes its focus vertex while drawing.
 `FrameRenderContext` prepares the sticky focus vertex before helper rendering,
 so the theme renderer consumes prepared state like the standard table-driven
-themes.
+themes. The Ocean grid also consumes prepared camera waterline state; the old
+inline camera-height TODO was replaced with a single frame-prep derivation of
+the orbit camera's world-space Y.
 
 ### 5. Vertex overlay visitor in `scene_render.c` ✅ DONE
 

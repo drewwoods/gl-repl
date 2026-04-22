@@ -42,6 +42,8 @@ typedef struct SceneFocusVertex {
 
 typedef struct FrameRenderContext {
     SceneFocusVertex focus;
+    float camera_world_y;
+    int camera_below_water_surface;
 } FrameRenderContext;
 
 typedef struct GridDrawContext {
@@ -309,6 +311,12 @@ static void scene_prepare_frame_context(FrameRenderContext *ctx) {
     ctx->focus.pos[2] = g_focus_vtx[2];
     ctx->focus.valid = g_focus_vtx_valid;
 
+    /* Modelview setup is T(-dist) * Rx * Ry * T(-target). Solving that for
+     * the eye position gives target.y + sin(rx) * dist; ry does not affect Y. */
+    float camera_rx_rad = g_cam_rx * (float)M_PI / 180.0f;
+    ctx->camera_world_y = g_cam_ty + sinf(camera_rx_rad) * g_cam_dist;
+    ctx->camera_below_water_surface = (ctx->camera_world_y < 0.0f);
+
     if (g_grid_theme == GRID_THEME_FOCUS)
         ctx->focus = scene_prepare_focus_vertex();
 }
@@ -448,11 +456,7 @@ static void draw_grid(const FrameRenderContext *frame_ctx) {
     case GRID_THEME_OCEAN: {
         /* Underwater fog — slightly breathing density */
 
-        // Think there is a bug here. TODO fix
-        float rx_rad = g_cam_rx * (float)M_PI / 180.0f;
-        float cam_y  = g_cam_ty - sinf(rx_rad) * g_cam_dist;
-
-        if (cam_y > 0.0f) { // camera is underwater, use denser fog
+        if (frame_ctx->camera_below_water_surface) {
             glDisable(GL_DEPTH_TEST);
             glColor4f(0.05f, 0.25f, 0.35f, 0.75f);
             begin_2d();

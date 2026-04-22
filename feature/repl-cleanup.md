@@ -68,7 +68,9 @@ failure should be treated as a regression unless explicitly rebaselined.
      shared draw helpers, helper passes have explicit GL attribute guards,
      vertex-number/normal overlays share one flat-command traversal helper, and
      Focus-grid vertex selection now happens in `FrameRenderContext`
-     preparation instead of inside `draw_grid()`.
+     preparation instead of inside `draw_grid()`. Ocean-grid camera
+     height/waterline classification is also prepared there instead of being
+     recomputed inside the theme renderer.
 
 9. **Refactor import/export around a shared scaffold model**
    - Represent the generated C scaffold as typed sections rather than duplicated string/layout logic.
