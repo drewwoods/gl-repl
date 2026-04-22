@@ -117,7 +117,7 @@ Run all: `make test`
 | `repl_examples.c` | Predefined example data (`g_examples[]`, `g_example_names[]`) |
 | `repl_examples.h` | Example query API (`repl_examples_count/name/lines`) |
 | `repl_export.c` | `save_output` / `load_from_file`, workspace header directives, `@scene-name` / `@workspace-dir` markers |
-| `scene_render.c` | 3D scene frame orchestration, frame render prep, grid/axes theme specs, vertex overlays, orbit target, replay HUD |
+| `scene_render.c` | 3D scene frame orchestration, `SceneRenderConfig` / `FrameRenderContext` prep, grid/axes theme specs, vertex overlays, orbit target, replay HUD |
 | `scene_render.h` | Declares `render_3d_scene()` |
 | `scene_backdrop.c` | Backdrop mode dispatch and deterministic cityscape renderer |
 | `scene_backdrop.h` | Backdrop render entrypoint |

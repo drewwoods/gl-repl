@@ -66,8 +66,9 @@ of one monolithic `repl_core.c`.
 - `repl_eval.c`: expression parsing and evaluation.
 - `ui_panels.c`: 2D code-panel row rendering, source search highlights, inline
   ghost/hint text, scene status banner, and top-level panel routing.
-- `scene_render.c`: 3D frame orchestration, frame render prep, grid/axes theme
-  specs, vertex-overlay passes, orbit target, and replay HUD.
+- `scene_render.c`: 3D frame orchestration, `SceneRenderConfig` /
+  `FrameRenderContext` prep, grid/axes theme specs, vertex-overlay passes,
+  orbit target, and replay HUD.
 - `scene_backdrop.c`: backdrop mode dispatch and deterministic cityscape
   rendering.
 - `scene_lights.c`: per-pass light property setup and light indicator overlay
@@ -473,25 +474,28 @@ captures the intended behavior change.
   code-panel row rendering, the scene-status banner, and top-level
   hit routing.
 - **Scene renderer:** owns camera/view setup, grid/axes/overlay drawing, and GL
-  state discipline for a single frame. Standard grid themes are described by
-  `GridThemeSpec` entries, standard axes by `AxesThemeSpec` entries, and
-  vertex-number/normal overlays share one flat-command traversal helper.
-  `FrameRenderContext` prepares sticky per-frame state such as the Focus grid
-  vertex plus derived camera facts such as ocean-grid waterline classification
-  before helper renderers run.
+  state discipline for a single frame. `SceneRenderConfig` snapshots the scene
+  rectangle, camera, accumulation jitter, quality toggles, grid/axes choices,
+  overlay toggles, and replay-derived limits once at frame start.
+  `FrameRenderContext` carries that config plus prepared derived state such as
+  the Focus-grid vertex and ocean-grid camera waterline classification before
+  helper renderers run. Standard grid themes are described by `GridThemeSpec`
+  entries, standard axes by `AxesThemeSpec` entries, and vertex-number/normal
+  overlays share one flat-command traversal helper.
 - **Import/export:** owns scaffold sections, workspace metadata, and
   translation between exported C and REPL command text.
 
 ### Current cleanup baseline
 
 After the Phase 7 code-panel responsibility split, `make test-stubs TEST_JOBS=4`
-builds all test binaries and passes 17 of 17 suites: 2355/2355 tests. The
+builds all test binaries and passes 17 of 17 suites: 2380/2380 tests. The
 latest slices extracted document rows, replay annotations, menu/dropdown
 rendering, the color picker, help overlay, variable panel, autocomplete popup,
 inline rename, and variable slider dragging while preserving behavior. Phase 8
 then added grid/axes theme specs, local helper-pass GL state guards, a shared
-vertex-overlay traversal, Focus/ocean frame prep, backdrop/light modules, and
-outline overlay extraction. Phase 9 paired workspace-header parsing/emission
+vertex-overlay traversal, explicit scene render config/frame context prep,
+Focus/ocean frame prep, backdrop/light modules, and outline overlay extraction.
+Phase 9 paired workspace-header parsing/emission
 through a directive table, split `load_from_file()` into ordered import
 handlers, confirmed visual dumps use the shared code-panel wrap iterator, and
 introduced typed top-level scaffold sections plus display/pass helpers for the
