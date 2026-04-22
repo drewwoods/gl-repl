@@ -783,6 +783,22 @@ int try_commit_func_def(void) {
                        (g_edit_line < g_num_cmds ? g_edit_line : g_num_cmds);
         int overwriting_func = (!g_inserting && edit_pos < g_num_cmds &&
                                 g_cmds[edit_pos].type == CMD_FUNC_DEF);
+
+        /* Reject duplicate func definitions: each func<N> may only be defined
+         * once.  Overwriting the existing definition (cursor already on that
+         * line) is still allowed. */
+        for (int ei = 0; ei < g_num_cmds; ei++) {
+            if (!g_cmds[ei].valid) continue;
+            if (g_cmds[ei].type != CMD_FUNC_DEF) continue;
+            if ((int)g_cmds[ei].args[0] != fn) continue;
+            if (overwriting_func && ei == edit_pos) continue;
+            char buf[64];
+            snprintf(buf, sizeof(buf),
+                     "func%d already defined (line %d)", fn, ei + 1);
+            set_status(buf);
+            return 1;
+        }
+
         int pos = overwriting_func ? edit_pos : function_decl_insert_pos();
         int bdepth = overwriting_func ? block_depth_at(pos) : 0;
         int bb = overwriting_func ? in_begin_block_at(pos) : 0;

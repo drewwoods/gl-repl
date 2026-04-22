@@ -19,6 +19,7 @@
 #include "repl_actions.h"
 #include "repl_core_internal.h"
 #include "repl_command_store.h"
+#include "repl_source_scope.h"
 #include "repl_camera_controls.h"
 #include "repl_clipboard.h"
 #include "repl_undo.h"
@@ -776,13 +777,70 @@ static int handle_comment_toggle_key_route(unsigned char key) {
                         GLCmd new_cmd;
                         ReplParseContext parse_ctx = { g_edit_line, NULL, 0 };
                         memset(&new_cmd, 0, sizeof(new_cmd));
+                        int built = 0;
                         if (repl_parse_command_ctx(s, &new_cmd, &parse_ctx)) {
+                            built = 1;
+                        } else {
+                            /* Fallback: variable assignments (`x = expr;`) live
+                             * in the commit chain, not the GL-command parser.
+                             * Build a CMD_VAR_ASSIGN in place so uncommenting
+                             * an assignment line works. */
+                            char name[16];
+                            char rhs[MAX_LINE_LEN];
+                            if (repl_extract_assignment_parts(s, name, sizeof(name),
+                                                              rhs, sizeof(rhs))) {
+                                int var_idx = find_predef_var_idx(name);
+                                ExprVar vis[MAX_EXPR_VARS];
+                                int vis_n = collect_visible_vars(g_edit_line,
+                                                                 vis, MAX_EXPR_VARS);
+                                char verr[128];
+                                if (var_idx < 0) {
+                                    char buf[128];
+                                    snprintf(buf, sizeof(buf),
+                                             "undeclared variable '%s' — use 'float %s;' first",
+                                             name, name);
+                                    set_status(buf);
+                                } else if (!validate_expression_idents(
+                                        rhs, vis_n > 0 ? vis : NULL, vis_n,
+                                        verr, sizeof(verr))) {
+                                    set_status(verr);
+                                } else {
+                                    ExprCtx ectx = { rhs, g_predef_vars, g_num_predef_vars };
+                                    float val = eval_expr(&ectx);
+                                    int ind = (in_begin_block_at(g_edit_line) ? 4 : 2)
+                                              + block_depth_at(g_edit_line) * 2;
+                                    char indent[32];
+                                    if (ind > (int)sizeof(indent) - 1)
+                                        ind = (int)sizeof(indent) - 1;
+                                    memset(indent, ' ', (size_t)ind);
+                                    indent[ind] = '\0';
+                                    memset(&new_cmd, 0, sizeof(new_cmd));
+                                    new_cmd.type     = CMD_VAR_ASSIGN;
+                                    new_cmd.valid    = 1;
+                                    new_cmd.args[0]  = val;
+                                    new_cmd.num_args = var_idx;
+                                    new_cmd.has_vars = input_has_predef_vars(rhs);
+                                    if (repl_format_fits(new_cmd.source,
+                                                         sizeof(new_cmd.source),
+                                                         "%s%s = %s;",
+                                                         indent, name, rhs)) {
+                                        g_predef_vars[var_idx].value = val;
+                                        built = 1;
+                                    } else {
+                                        set_status("Command too long");
+                                    }
+                                }
+                            }
+                        }
+                        if (built) {
                             ReplCommandStore store = repl_command_store_live();
                             repl_command_store_replace_one(&store, g_edit_line, &new_cmd);
                             load_line_to_input(g_edit_line);
                             mark_normals_dirty();
                             set_status("Uncommented");
-                        } else {
+                        } else if (!g_status[0] || strcmp(g_status, "Commented out") == 0) {
+                            /* Only stamp the generic message if no more specific
+                             * error was set above. */
                             set_status("Cannot uncomment: not a valid command");
                         }
                     }

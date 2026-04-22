@@ -189,8 +189,10 @@ static void flatten_range(FlattenContext *ctx,
                 continue;
             }
 
+            int def_found = 0;
             for (int k = 0; k < g_num_cmds; k++) {
                 if (g_cmds[k].type == CMD_FUNC_DEF && (int)g_cmds[k].args[0] == func_num) {
+                    def_found = 1;
                     int body_end = find_block_end(k);
                     int def_fn = func_num;
                     int param_count = 0;
@@ -242,6 +244,12 @@ static void flatten_range(FlattenContext *ctx,
                     if (ctx->call_depth > 0) ctx->call_depth--;
                     break;
                 }
+            }
+            if (!def_found) {
+                char msg[64];
+                snprintf(msg, sizeof(msg),
+                         "func%d not defined", func_num);
+                set_status(msg);
             }
             i++;
             continue;
