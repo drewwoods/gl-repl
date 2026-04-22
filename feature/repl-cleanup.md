@@ -80,14 +80,15 @@ failure should be treated as a regression unless explicitly rebaselined.
    - Move focus-vertex calculation out of grid drawing; drawing helpers should render from prepared state rather than update global editor state.
    - Add small GL state guard helpers or strict documented push/pop conventions for blend, lighting, depth mask, polygon mode, matrices, and line/point sizes.
    - Split large render helpers into grid themes, axes themes, overlays, lights, backdrop, and geometry execution support.
-   - Current progress: standard grid/axes themes now use local specs and
-     shared draw helpers, helper passes have explicit GL attribute guards,
-     vertex-number/normal overlays share one flat-command traversal helper, and
-     Focus-grid vertex selection now happens in `FrameRenderContext`
-     preparation instead of inside `draw_grid()`. Ocean-grid camera
-     height/waterline classification is also prepared there instead of being
-     recomputed inside the theme renderer. Backdrop/cityscape rendering now
-     lives in `scene_backdrop.c`, and light setup plus light indicators live in
+   - Current progress: `SceneRenderConfig` now snapshots the per-frame scene
+     rect, camera, jitter, quality toggles, grid/axes settings, overlay toggles,
+     and replay-derived limits before the frame renders. `FrameRenderContext`
+     carries that config plus prepared derived data such as Focus-grid vertex
+     state and ocean-grid camera waterline classification. Standard grid/axes
+     themes now use local specs and shared draw helpers, helper passes have
+     explicit GL attribute guards, and vertex-number/normal overlays share one
+     flat-command traversal helper. Backdrop/cityscape rendering now lives in
+     `scene_backdrop.c`, and light setup plus light indicators live in
      `scene_lights.c`. Polygon outline/current-block highlight rendering now
      lives in `scene_overlays.c`, with a shared flat-block cursor matcher for
      outline and vertex-overlay paths.

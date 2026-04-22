@@ -43,7 +43,42 @@ typedef struct SceneFocusVertex {
     int valid;
 } SceneFocusVertex;
 
+typedef struct SceneRenderConfig {
+    int scene_x;
+    int scene_y;
+    int scene_w;
+    int scene_h;
+    float cam_dist;
+    float cam_rx;
+    float cam_ry;
+    float cam_tx;
+    float cam_ty;
+    float cam_tz;
+    float cam_motion_glow;
+    float accum_jitter_x;
+    float accum_jitter_y;
+    int multisample_enabled;
+    int line_smooth_enabled;
+    int wireframe;
+    int grid_theme;
+    int grid_extent_idx;
+    int grid_major_idx;
+    int axes_theme;
+    int show_guides;
+    int show_vpoints;
+    int show_vnums;
+    int show_normals;
+    int replaying;
+    int replay_mode;
+    int replay_tess_preview;
+    int replay_vertex_points;
+    int replay_has_fades;
+    int replay_fill_base_limit;
+    int show_current_poly;
+} SceneRenderConfig;
+
 typedef struct FrameRenderContext {
+    SceneRenderConfig config;
     SceneFocusVertex focus;
     float camera_world_y;
     int camera_below_water_surface;
@@ -308,7 +343,88 @@ static SceneFocusVertex scene_prepare_focus_vertex(void) {
     return focus;
 }
 
-static void scene_prepare_frame_context(FrameRenderContext *ctx) {
+static void scene_render_config_init(SceneRenderConfig *config) {
+    scene_rect(&config->scene_x, &config->scene_y,
+               &config->scene_w, &config->scene_h);
+    if (config->scene_w < 1) config->scene_w = 1;
+    if (config->scene_h < 1) config->scene_h = 1;
+
+    config->cam_dist = g_cam_dist;
+    config->cam_rx = g_cam_rx;
+    config->cam_ry = g_cam_ry;
+    config->cam_tx = g_cam_tx;
+    config->cam_ty = g_cam_ty;
+    config->cam_tz = g_cam_tz;
+    config->cam_motion_glow = g_cam_motion_glow;
+    config->accum_jitter_x = g_accum_jitter_x;
+    config->accum_jitter_y = g_accum_jitter_y;
+    config->multisample_enabled = g_multisample_enabled;
+    config->line_smooth_enabled = g_line_smooth_enabled;
+    config->wireframe = g_wireframe;
+    config->grid_theme = g_grid_theme;
+    config->grid_extent_idx = g_grid_extent_idx;
+    config->grid_major_idx = g_grid_major_idx;
+    config->axes_theme = g_axes_theme;
+    config->show_guides = g_show_guides;
+    config->show_vpoints = g_show_vpoints;
+    config->show_vnums = g_show_vnums;
+    config->show_normals = g_show_normals;
+    config->replaying = g_replay_active;
+    config->replay_mode = g_replay_mode;
+    config->replay_tess_preview = config->replaying &&
+                                  config->replay_mode == REPLAY_MODE_VERTEX;
+    config->replay_vertex_points = config->replay_tess_preview;
+    config->replay_has_fades = replay_has_active_fades();
+    config->replay_fill_base_limit = config->replay_has_fades
+                                   ? replay_fill_base_limit()
+                                   : 0;
+    config->show_current_poly = g_highlight_current_poly && !config->replaying;
+}
+
+static void scene_apply_projection(const SceneRenderConfig *config) {
+    glMatrixMode(GL_PROJECTION);
+    glLoadIdentity();
+
+    /* Build a jitter-aware perspective frustum.  With zero jitter this is
+     * identical to gluPerspective(45, aspect, 0.1, 100). */
+    double near_z = 0.1, far_z = 100.0;
+    double aspect  = (double)config->scene_w / (double)config->scene_h;
+    double top_v   = near_z * tan(45.0 * M_PI / 360.0);
+    double right_v = top_v * aspect;
+    double dx = (double)config->accum_jitter_x * 2.0 * right_v /
+                (double)config->scene_w;
+    double dy = (double)config->accum_jitter_y * 2.0 * top_v /
+                (double)config->scene_h;
+
+    glFrustum(-right_v + dx, right_v + dx,
+              -top_v   + dy, top_v   + dy,
+              near_z, far_z);
+}
+
+static void scene_apply_camera_view(const SceneRenderConfig *config) {
+    glMatrixMode(GL_MODELVIEW);
+    glLoadIdentity();
+    glTranslatef(0.0f, 0.0f, -config->cam_dist);
+    glRotatef(config->cam_rx, 1, 0, 0);
+    glRotatef(config->cam_ry, 0, 1, 0);
+    glTranslatef(-config->cam_tx, -config->cam_ty, -config->cam_tz);
+}
+
+static void scene_apply_quality_config(const SceneRenderConfig *config) {
+    if (config->multisample_enabled) glEnable(GL_MULTISAMPLE);
+    else glDisable(GL_MULTISAMPLE);
+    if (config->line_smooth_enabled) glEnable(GL_LINE_SMOOTH);
+    else glDisable(GL_LINE_SMOOTH);
+}
+
+static void scene_apply_wireframe_config(const SceneRenderConfig *config) {
+    if (config->wireframe)
+        glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+}
+
+static void scene_prepare_frame_context(FrameRenderContext *ctx,
+                                        const SceneRenderConfig *config) {
+    ctx->config = *config;
     ctx->focus.pos[0] = g_focus_vtx[0];
     ctx->focus.pos[1] = g_focus_vtx[1];
     ctx->focus.pos[2] = g_focus_vtx[2];
@@ -316,26 +432,26 @@ static void scene_prepare_frame_context(FrameRenderContext *ctx) {
 
     /* Modelview setup is T(-dist) * Rx * Ry * T(-target). Solving that for
      * the eye position gives target.y + sin(rx) * dist; ry does not affect Y. */
-    float camera_rx_rad = g_cam_rx * (float)M_PI / 180.0f;
-    ctx->camera_world_y = g_cam_ty + sinf(camera_rx_rad) * g_cam_dist;
+    float camera_rx_rad = config->cam_rx * (float)M_PI / 180.0f;
+    ctx->camera_world_y = config->cam_ty +
+                          sinf(camera_rx_rad) * config->cam_dist;
     ctx->camera_below_water_surface = (ctx->camera_world_y < 0.0f);
 
-    if (g_grid_theme == GRID_THEME_FOCUS)
+    if (config->grid_theme == GRID_THEME_FOCUS)
         ctx->focus = scene_prepare_focus_vertex();
 }
 
 static void draw_grid(const FrameRenderContext *frame_ctx) {
-    if (g_grid_theme == GRID_THEME_OFF) return;
+    const SceneRenderConfig *config = &frame_ctx->config;
+    GridTheme grid_theme = (GridTheme)config->grid_theme;
+    if (grid_theme == GRID_THEME_OFF) return;
 
     scene_render_push_state();
 
     glDisable(GL_LIGHTING);
     glEnable(GL_DEPTH_TEST);
     glDepthMask(GL_FALSE);
-    if (g_multisample_enabled) glEnable(GL_MULTISAMPLE);
-    else glDisable(GL_MULTISAMPLE);
-    if (g_line_smooth_enabled) glEnable(GL_LINE_SMOOTH);
-    else glDisable(GL_LINE_SMOOTH);
+    scene_apply_quality_config(config);
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
@@ -348,9 +464,9 @@ static void draw_grid(const FrameRenderContext *frame_ctx) {
     /* Configurable extent / major-tick spacing. Minor step is the
      * major cell divided into 5 subdivisions, which keeps the look
      * consistent across the {1, 2, 5, 10} major options. */
-    int ex_i = g_grid_extent_idx;
+    int ex_i = config->grid_extent_idx;
     if (ex_i < 0 || ex_i >= GRID_EXTENT_COUNT) ex_i = GRID_EXTENT_MID;
-    int mj_i = g_grid_major_idx;
+    int mj_i = config->grid_major_idx;
     if (mj_i < 0 || mj_i >= GRID_MAJOR_COUNT) mj_i = GRID_MAJOR_1;
     float extent = g_grid_extents[ex_i];
     float major  = g_grid_major_steps[mj_i];
@@ -364,7 +480,7 @@ static void draw_grid(const FrameRenderContext *frame_ctx) {
         .breath = breath,
     };
 
-    if (g_grid_extent_idx == GRID_EXTENT_FAR) {
+    if (config->grid_extent_idx == GRID_EXTENT_FAR) {
         // enable linear fog, get the color from clear color. Start at half extent,
         // fully fogged at extent. This gives a nice fade-out of the grid lines
         float clear_col[4];
@@ -376,7 +492,7 @@ static void draw_grid(const FrameRenderContext *frame_ctx) {
         glFogf(GL_FOG_END, extent);
     }
 
-    switch (g_grid_theme) {
+    switch (grid_theme) {
 
     // TODO: Adjust some of the line colors to better suit black background.
     // Experiment with using darker lines but with higher alpha to get lines to
@@ -387,7 +503,7 @@ static void draw_grid(const FrameRenderContext *frame_ctx) {
     case GRID_THEME_TRON:
     case GRID_THEME_EMBER:
     case GRID_THEME_FAINT: {
-        const GridThemeSpec *spec = grid_theme_spec((GridTheme)g_grid_theme);
+        const GridThemeSpec *spec = grid_theme_spec(grid_theme);
         if (spec)
             draw_grid_standard_theme(&grid_ctx, spec);
         break;
@@ -604,8 +720,8 @@ static void draw_grid(const FrameRenderContext *frame_ctx) {
          * XY plane (z=0, normal Z): face-on weight = cos²(ry)
          * ZY plane (x=0, normal X): face-on weight = sin²(ry)
          * These sum to 1, giving a natural blend between the two. */
-        float ry_rad = g_cam_ry * (float)M_PI / 180.0f;
-        float rx_rad = g_cam_rx * (float)M_PI / 180.0f;
+        float ry_rad = config->cam_ry * (float)M_PI / 180.0f;
+        float rx_rad = config->cam_rx * (float)M_PI / 180.0f;
         float cos_ry = cosf(ry_rad), sin_ry = sinf(ry_rad);
         float xy_w = cos_ry * cos_ry;
         float zy_w = sin_ry * sin_ry;
@@ -828,24 +944,23 @@ static void draw_axis_label_triplet(float len, float offset,
                     colors[SCENE_AXIS_Z].b);
 }
 
-static void draw_axes(void) {
-    if (g_axes_theme == AXES_THEME_OFF) return;
+static void draw_axes(const FrameRenderContext *frame_ctx) {
+    const SceneRenderConfig *config = &frame_ctx->config;
+    AxesTheme axes_theme = (AxesTheme)config->axes_theme;
+    if (axes_theme == AXES_THEME_OFF) return;
 
     scene_render_push_state();
 
     glDisable(GL_LIGHTING);
     glEnable(GL_DEPTH_TEST);
     glDepthMask(GL_FALSE);
-    if (g_multisample_enabled) glEnable(GL_MULTISAMPLE);
-    else glDisable(GL_MULTISAMPLE);
-    if (g_line_smooth_enabled) glEnable(GL_LINE_SMOOTH);
-    else glDisable(GL_LINE_SMOOTH);
+    scene_apply_quality_config(config);
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
     float breath = sinf(g_anim_time * 0.8f) * 0.5f + 0.5f; /* 0..1 */
 
-    switch (g_axes_theme) {
+    switch (axes_theme) {
 
     case AXES_THEME_CLASSIC: {
         const AxesThemeSpec *spec = axes_theme_spec(AXES_THEME_CLASSIC);
@@ -1002,7 +1117,7 @@ static void draw_axes(void) {
         /* Camera-facing weight for each vertical plane:
          * XY (z=0) is face-on when camera looks along Z  → weight = cos²(ry)
          * ZY (x=0) is face-on when camera looks along X  → weight = sin²(ry) */
-        float ry_rad = g_cam_ry * (float)M_PI / 180.0f;
+        float ry_rad = config->cam_ry * (float)M_PI / 180.0f;
         float cos_ry = cosf(ry_rad), sin_ry = sinf(ry_rad);
         float xy_w = cos_ry * cos_ry;
         float zy_w = sin_ry * sin_ry;
@@ -1308,8 +1423,8 @@ static int parse_vertex_slots(const char *s, float out[3], int filled[3]) {
     return n_filled;
 }
 
-static void draw_vertex_guides(void) {
-    if (!g_show_guides) return;
+static void draw_vertex_guides(const SceneRenderConfig *config) {
+    if (!config->show_guides) return;
 
     /* Check current input for a partial glVertex3f( or gluVertex( */
     const char *args_str = NULL;
@@ -1384,8 +1499,8 @@ static void draw_vertex_guides(void) {
 /* Normal edit guides — show doubled/halved component impact                  */
 /* ========================================================================= */
 
-static void draw_normal_guides(void) {
-    if (!g_show_guides) return;
+static void draw_normal_guides(const SceneRenderConfig *config) {
+    if (!config->show_guides) return;
 
     /* Check current input for glNormal3f( or gluNormal( */
     const char *args_str = NULL;
@@ -2064,9 +2179,8 @@ static void draw_rotate_guide(const GLCmd *cmd, const float p_start[3]) {
 /* 3D scene render (viewport offset to the right of the code panel)           */
 /* ========================================================================= */
 
-static void draw_replay_tess_preview(void) {
-    if (!g_replay_active ||
-        g_replay_mode != REPLAY_MODE_VERTEX)
+static void draw_replay_tess_preview(const SceneRenderConfig *config) {
+    if (!config->replay_tess_preview)
         return;
 
     scene_render_push_state();
@@ -2125,10 +2239,14 @@ static void draw_replay_tess_preview(void) {
     scene_render_pop_state();
 }
 
-static void draw_replay_hud(int scene_x, int scene_y, int scene_w, int scene_h) {
+static void draw_replay_hud(const SceneRenderConfig *config) {
     char progress_txt[64];
     char kbd_txt[128];
     float progress = 0.0f;
+    int scene_x = config->scene_x;
+    int scene_y = config->scene_y;
+    int scene_w = config->scene_w;
+    int scene_h = config->scene_h;
     int hud_x = scene_x + REPLAY_HUD_MARGIN_X;
     /* Lifted by STATUSBAR_H so the HUD clears the amber status strip along
      * the bottom of the scene. */
@@ -2137,7 +2255,7 @@ static void draw_replay_hud(int scene_x, int scene_y, int scene_w, int scene_h) 
     int min_y = scene_y + STATUSBAR_H + 4;
     int max_y = scene_y + scene_h - REPLAY_HUD_HEIGHT - 4;
 
-    if (!g_replay_active)
+    if (!config->replaying)
         return;
 
     if (hud_w < REPLAY_HUD_MIN_WIDTH)
@@ -2207,7 +2325,7 @@ static void draw_replay_hud(int scene_x, int scene_y, int scene_w, int scene_h) 
     snprintf(progress_txt, sizeof(progress_txt),
              "Replay  %11.1f cmd/s  | %7s  | %s",
              g_replay_speed,
-             g_replay_mode == REPLAY_MODE_VERTEX ? "Vertex" : "Polygon",
+             config->replay_mode == REPLAY_MODE_VERTEX ? "Vertex" : "Polygon",
              g_replay_expand_args ? "Code Expanded" : ""
              );
     glColor3f(UI_ACCENT_GREEN_R, UI_ACCENT_GREEN_G, UI_ACCENT_GREEN_B);
@@ -2258,8 +2376,9 @@ static void draw_replay_hud(int scene_x, int scene_y, int scene_w, int scene_h) 
  * camera is moving (during drag or while momentum carries it); fades out.
  * REPL-only — never exported. Styled to match the other scene helpers:
  * soft halo line under a bright core, alpha driven by g_cam_motion_glow. */
-static void draw_orbit_target(void) {
-    float glow = g_cam_motion_glow;
+static void draw_orbit_target(const FrameRenderContext *frame_ctx) {
+    const SceneRenderConfig *config = &frame_ctx->config;
+    float glow = config->cam_motion_glow;
     if (glow <= 0.0f) return;
     if (glow > 1.0f) glow = 1.0f;
 
@@ -2267,13 +2386,13 @@ static void draw_orbit_target(void) {
     glDisable(GL_LIGHTING);
     glEnable(GL_DEPTH_TEST);
     glDepthMask(GL_FALSE);
-    if (g_line_smooth_enabled) glEnable(GL_LINE_SMOOTH);
+    if (config->line_smooth_enabled) glEnable(GL_LINE_SMOOTH);
     else glDisable(GL_LINE_SMOOTH);
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
-    float r = 0.08f * g_cam_dist;
-    float tx = g_cam_tx, ty = g_cam_ty, tz = g_cam_tz;
+    float r = 0.08f * config->cam_dist;
+    float tx = config->cam_tx, ty = config->cam_ty, tz = config->cam_tz;
 
     /* Halo pass: wide, translucent warm amber under the crosshair */
     glLineWidth(6.0f);
@@ -2306,45 +2425,17 @@ static void draw_orbit_target(void) {
 }
 
 void render_3d_scene(void) {
-    int sc_x, sc_y, sc_w, sc_h;
-    scene_rect(&sc_x, &sc_y, &sc_w, &sc_h);
+    SceneRenderConfig config;
     FrameRenderContext frame_ctx;
-    int replaying = g_replay_active;
-    int show_current_poly = g_highlight_current_poly && !replaying;
-    int replay_tess_preview = replaying && g_replay_mode == REPLAY_MODE_VERTEX;
-    int replay_vertex_points = replaying && g_replay_mode == REPLAY_MODE_VERTEX;
-    if (sc_w < 1) sc_w = 1;
-    if (sc_h < 1) sc_h = 1;
-    scene_prepare_frame_context(&frame_ctx);
+    scene_render_config_init(&config);
+    scene_prepare_frame_context(&frame_ctx, &config);
 
     prof_begin(PROF_SCENE_3D_SETUP);
     glPushAttrib(GL_ALL_ATTRIB_BITS);
-    glViewport(sc_x, sc_y, sc_w, sc_h);
+    glViewport(config.scene_x, config.scene_y, config.scene_w, config.scene_h);
 
-    glMatrixMode(GL_PROJECTION);
-    glLoadIdentity();
-    {
-        /* Build a jitter-aware perspective frustum.
-         * When g_accum_jitter_x/y are both 0 this is identical to
-         * gluPerspective(45, aspect, 0.1, 100). */
-        double near_z = 0.1, far_z = 100.0;
-        double aspect  = (double)sc_w / (double)sc_h;
-        double top_v   = near_z * tan(45.0 * M_PI / 360.0);
-        double right_v = top_v * aspect;
-        /* Convert sub-pixel offset (fraction of 1 pixel) -> frustum units */
-        double dx = (double)g_accum_jitter_x * 2.0 * right_v / (double)sc_w;
-        double dy = (double)g_accum_jitter_y * 2.0 * top_v   / (double)sc_h;
-        glFrustum(-right_v + dx, right_v + dx,
-                  -top_v   + dy, top_v   + dy,
-                  near_z, far_z);
-    }
-    glMatrixMode(GL_MODELVIEW);
-    glLoadIdentity();
-
-    glTranslatef(0.0f, 0.0f, -g_cam_dist);
-    glRotatef(g_cam_rx, 1, 0, 0);
-    glRotatef(g_cam_ry, 0, 1, 0);
-    glTranslatef(-g_cam_tx, -g_cam_ty, -g_cam_tz);
+    scene_apply_projection(&config);
+    scene_apply_camera_view(&config);
 
     scene_lights_setup();
     glDisable(GL_LIGHTING); /* baseline: disabled; execute_commands() enables if user typed it */
@@ -2355,11 +2446,8 @@ void render_3d_scene(void) {
     glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, mspec);
     glMaterialfv(GL_FRONT_AND_BACK, GL_SHININESS, mshin);
 
-    if (g_multisample_enabled) glEnable(GL_MULTISAMPLE);
-    else glDisable(GL_MULTISAMPLE);
-    if (g_line_smooth_enabled) glEnable(GL_LINE_SMOOTH);
-    else glDisable(GL_LINE_SMOOTH);
-    if (g_wireframe) glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+    scene_apply_quality_config(&config);
+    scene_apply_wireframe_config(&config);
     prof_accum_end(PROF_SCENE_3D_SETUP);
 
     {
@@ -2369,8 +2457,8 @@ void render_3d_scene(void) {
             .program = flat_program
         };
 
-        if (replay_has_active_fades())
-            exec_options.flat_cmd_count = replay_fill_base_limit();
+        if (config.replay_has_fades)
+            exec_options.flat_cmd_count = config.replay_fill_base_limit;
 
         prof_begin(PROF_SCENE_3D_FILL);
         glPushMatrix();
@@ -2378,21 +2466,18 @@ void render_3d_scene(void) {
         glPopMatrix();
         prof_accum_end(PROF_SCENE_3D_FILL);
 
-        if (replay_has_active_fades()) {
+        if (config.replay_has_fades) {
             prof_begin(PROF_SCENE_3D_FADE);
             scene_lights_setup();
             glDisable(GL_LIGHTING);
             glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE);
             glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, mspec);
             glMaterialfv(GL_FRONT_AND_BACK, GL_SHININESS, mshin);
-            if (g_multisample_enabled) glEnable(GL_MULTISAMPLE);
-            else glDisable(GL_MULTISAMPLE);
-            if (g_line_smooth_enabled) glEnable(GL_LINE_SMOOTH);
-            else glDisable(GL_LINE_SMOOTH);
+            scene_apply_quality_config(&config);
             glEnable(GL_BLEND);
             glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
             glColor4f(0.70f, 0.70f, 0.80f, 1.0f);
-            if (g_wireframe) glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+            if (config.wireframe) glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
             else glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
 
             glPushMatrix();
@@ -2402,7 +2487,7 @@ void render_3d_scene(void) {
         }
     }
 
-    if (g_wireframe) glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+    if (config.wireframe) glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
 
     /* Draw translucent scene helpers after the main geometry so antialiased
      * edges blend against the final background color rather than the clear
@@ -2410,8 +2495,8 @@ void render_3d_scene(void) {
     prof_begin(PROF_SCENE_3D_HELPERS);
     scene_backdrop_render();
     draw_grid(&frame_ctx);
-    draw_axes();
-    draw_orbit_target();
+    draw_axes(&frame_ctx);
+    draw_orbit_target(&frame_ctx);
     prof_accum_end(PROF_SCENE_3D_HELPERS);
 
     /* Polygon outline overlay (optional) + current-block highlight.
@@ -2419,7 +2504,8 @@ void render_3d_scene(void) {
      * between passes.  CMD_TRANSLATE3F is replayed within each pass so
      * outlines are positioned correctly even when transforms separate blocks. */
     prof_begin(PROF_SCENE_3D_OUTLINES);
-    scene_overlays_render_outlines(show_current_poly, replay_tess_preview);
+    scene_overlays_render_outlines(config.show_current_poly,
+                                   config.replay_tess_preview);
     prof_accum_end(PROF_SCENE_3D_OUTLINES);
 
     /* Vertex dots — replay transforms so dots match the filled geometry */
@@ -2433,7 +2519,7 @@ void render_3d_scene(void) {
     {
     int matrix_depth = 0;
     glPointSize(8.0f);
-    if (replay_vertex_points)
+    if (config.replay_vertex_points)
         glColor3f(1.0f, 0.88f, 0.20f);
     else
         glColor3f(0.0f, 0.0f, 0.0f);
@@ -2450,7 +2536,7 @@ void render_3d_scene(void) {
     int tg_want = 0;
     int tg_first_cursor_flat = -1;
     int tg_first_after_flat  = -1;
-    if (!replaying && g_show_guides &&
+    if (!config.replaying && config.show_guides &&
         g_edit_line >= 0 && g_edit_line < g_num_cmds) {
         const GLCmd *sc = &g_cmds[g_edit_line];
 
@@ -2502,9 +2588,9 @@ void render_3d_scene(void) {
         // position. Do this inline so that the current model matrix is applied
         // to the guides, ensuring they are positioned correctly even when
         // transforms separate blocks.
-        if (is_cursor && !replaying) {
-            draw_vertex_guides();
-            draw_normal_guides();
+        if (is_cursor && !config.replaying) {
+            draw_vertex_guides(&config);
+            draw_normal_guides(&config);
         }
 
         /* Transform guide: two modes, selectable via the config menu
@@ -2560,7 +2646,7 @@ void render_3d_scene(void) {
 
         if (is_transform_cmd(g_flat_cmds[i].type)) {
             apply_tracked_transform_cmd(&g_flat_cmds[i], &matrix_depth);
-        } else if ((g_show_vpoints || replay_vertex_points) &&
+        } else if ((config.show_vpoints || config.replay_vertex_points) &&
                    (g_flat_cmds[i].type == CMD_VERTEX3F ||
                     g_flat_cmds[i].type == CMD_TESS_VERTEX)) {
             glBegin(GL_POINTS);
@@ -2578,15 +2664,15 @@ void render_3d_scene(void) {
     prof_accum_end(PROF_SCENE_3D_OVERLAYS);
 
     prof_begin(PROF_SCENE_3D_HUD);
-    if (replay_tess_preview)
-        draw_replay_tess_preview();
+    if (config.replay_tess_preview)
+        draw_replay_tess_preview(&config);
 
     scene_lights_render();
 
-    if (g_show_vnums)   draw_vertex_numbers();
-    if (g_show_normals) draw_normal_vectors();
-    if (replaying)
-        draw_replay_hud(sc_x, sc_y, sc_w, sc_h);
+    if (config.show_vnums)   draw_vertex_numbers();
+    if (config.show_normals) draw_normal_vectors();
+    if (config.replaying)
+        draw_replay_hud(&config);
     glPopAttrib();
     prof_accum_end(PROF_SCENE_3D_HUD);
 }

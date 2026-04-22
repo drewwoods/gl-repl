@@ -84,12 +84,12 @@ as one visible region on screen.
 
 ### 5. 3D scene rendering
 
-The viewport. Shared `FrameRenderContext`, guarded helper passes,
-table-driven themes.
+The viewport. Shared `SceneRenderConfig` / `FrameRenderContext`, guarded
+helper passes, table-driven themes.
 
 | Module | Role |
 |--------|------|
-| `scene_render` | Camera, frame prep, grid/axes theme specs, overlay walker |
+| `scene_render` | Camera, render config/frame prep, grid/axes specs, overlay walker |
 | `scene_backdrop` | Backdrop pass (e.g. cityscape) |
 | `scene_lights` | Light setup + indicator drawing |
 | `scene_overlays` | Outline overlays and cursor-block detection |
@@ -286,19 +286,19 @@ render files.
 - `repl_var_drag.c` owns the variable slider drag transaction: start/motion/
   reset, the linear-vs-log value mapping, and the writeback into
   `g_predef_vars` plus matching `CMD_VAR_ASSIGN` sources.
-- `scene_render.c` now keeps helper-pass GL state local with small
+- `scene_render.c` now snapshots frame inputs in `SceneRenderConfig`: scene
+  rect, camera, jitter, quality toggles, grid/axes choices, guide/vertex
+  overlay toggles, and replay-derived limits. `FrameRenderContext` carries
+  that config plus derived state such as the Focus-grid vertex and ocean-grid
+  waterline classification. Helper-pass GL state stays local with small
   `glPushAttrib`/`glPopAttrib` wrappers. Standard grid/axes themes are table
   entries, while focus/ocean/adaptive-plane grid themes remain custom render
   paths. Vertex-number and normal-vector overlays share one flat-command
   visitor so transform replay and tessellation block tracking stay consistent.
-  Focus-grid vertex selection is prepared in `FrameRenderContext` before grid
-  drawing, keeping the theme draw path read-only on focus state. Ocean-grid
-  camera height/waterline classification is also derived once in frame prep
-  instead of recomputed inside the grid theme. Backdrop rendering now delegates
-  to `scene_backdrop.c`; per-pass light setup and light indicators delegate to
-  `scene_lights.c`. Polygon outline/current-block highlighting delegates to
-  `scene_overlays.c`, which also exposes the flat-block cursor matcher used by
-  vertex-number and normal-vector overlays.
+  Backdrop rendering now delegates to `scene_backdrop.c`; per-pass light setup
+  and light indicators delegate to `scene_lights.c`. Polygon outline/current-
+  block highlighting delegates to `scene_overlays.c`, which also exposes the
+  flat-block cursor matcher used by vertex-number and normal-vector overlays.
 
 ## Open Edges
 

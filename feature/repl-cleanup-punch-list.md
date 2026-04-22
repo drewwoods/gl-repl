@@ -29,7 +29,7 @@ This list is ordered by impact-per-effort. Pick one and execute it
 in isolation; each item is sized to land as one `refactor:` commit.
 
 > **Baseline note:** `make test-stubs TEST_JOBS=4` currently passes
-> all 17 suites / 2355 tests cleanly. Any new failure introduced by a
+> all 17 suites / 2380 tests cleanly. Any new failure introduced by a
 > punch-list item is a real regression unless the team explicitly
 > rebaselines it.
 
@@ -180,6 +180,18 @@ block highlight pass moved out of `render_3d_scene()` into
 explicit `scene_overlay_flat_block_matches_cursor()` helper shared by the
 outline pass and the remaining vertex-number/normal overlay visitor in
 `scene_render.c`.
+
+### 5f. Widen render config/frame context ✅ DONE
+
+Implemented in the Phase-8 residual render cleanup slice. `scene_render.c`
+now builds a private `SceneRenderConfig` at the start of `render_3d_scene()`
+for scene rectangle, camera, accumulation jitter, quality toggles, grid/axes
+choices, guide/vertex overlay toggles, replay mode, replay tess preview, and
+replay fill-base limit. `FrameRenderContext` carries that config plus prepared
+derived state such as Focus-grid vertex and ocean-grid waterline facts. The
+projection/camera setup, grid/axes helpers, orbit target, replay outlines,
+replay fade pass, guide drawing, vertex-point overlay, and replay HUD now
+consume the explicit config instead of independently sampling those globals.
 
 ### 6. Workspace header read/write symmetry in `repl_export.c` ✅ DONE
 
