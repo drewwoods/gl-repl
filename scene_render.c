@@ -1899,7 +1899,13 @@ static void draw_scale_guide(const GLCmd *cmd, const float p_start[3]) {
 }
 
 static void draw_rotate_guide(const GLCmd *cmd, const float p_start[3]) {
+#if 0 // Keep angle [-360,360]
     float angle_deg = fmodf(cmd->args[0], 360.0f); // Keep angle [-360,360]
+#else // Keep angle [-720,720], unlike the above, |angle| > 360 gets a full rotation + the offset
+    float angle_deg = cmd->args[0];
+    while (angle_deg > 720.0f) angle_deg -= 360.0f; // Handle large angles by wrapping to a single rotation
+    while (angle_deg < -720.0f) angle_deg += 360.0f;
+#endif
     float ax = cmd->args[1], ay = cmd->args[2], az = cmd->args[3];
     float alen = sqrtf(ax*ax + ay*ay + az*az);
     if (alen < 1e-6f) return;
@@ -1968,7 +1974,7 @@ static void draw_rotate_guide(const GLCmd *cmd, const float p_start[3]) {
         };
 
         float radius = axis_len * 0.28f;
-        float pitch  = axis_len * 0.30f; /* axial distance per 2π of sweep */
+        float pitch  = axis_len * 0.50f; /* axial distance per 2π of sweep */
         const float TAU = 6.28318530717958647692f;
         float axial_span = pitch * (fabsf(angle_rad) / TAU);
         if (axial_span > axis_len * 1.4f) axial_span = axis_len * 1.4f;
