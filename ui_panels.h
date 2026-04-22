@@ -9,7 +9,6 @@ void code_panel_rect(int *x, int *y, int *w, int *h);
 void scene_rect(int *x, int *y, int *w, int *h);
 
 void render_code_panel(void);
-void render_autocomplete(void);
 void render_example_dropdown(void);
 void render_scene_status(void);
 

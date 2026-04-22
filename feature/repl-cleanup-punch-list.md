@@ -9,9 +9,10 @@ extractions that can each land as a single reviewable commit *today*,
 without committing to the larger context-object rewrite.
 
 Five files still dominate the codebase: `scene_render.c` (2861),
-`repl_export.c` (2541), `ui_panels.c` (1399 — down from 4452 after
-Phase-7 extractions including help overlay and variable panel),
-`repl_core.c` (~1958), `repl_editor.c` (1688). The highest-value remaining refactors
+`repl_export.c` (2541), `repl_core.c` (~1958), `repl_editor.c`
+(1688), `ui_panels.c` (1327 — down from 4452 after Phase-7
+extractions including help overlay, variable panel, and
+autocomplete popup). The highest-value remaining refactors
 fall into two camps:
 
 1. **Mechanical extractions** — self-contained features still living in
@@ -52,6 +53,18 @@ editor's drag handler (`g_drag_var` in `repl_editor.c`), satisfying
 the "keep variable mutation outside the renderer" constraint.
 `render_scene_status()` got its own section header in `ui_panels.c`
 since the var-panel section that previously housed it is gone.
+
+### 1c. Extract autocomplete popup → `repl_autocomplete_panel.c` ✅ DONE
+
+Landed as `refactor: extract autocomplete popup renderer`. Pairs with
+the existing model-only `repl_autocomplete.c`: the new module owns
+*only* the floating popup render path; `repl_autocomplete.c` keeps
+match building, selection state, ghost text, and parameter hints.
+`ui_panels.c` 1399 → 1327 LoC. Inline ghost/hint text drawn next to
+the input line stays in `ui_panels.c` (it needs the surrounding
+code-panel row layout). Public entrypoint uses the newer module-
+prefix convention: `repl_autocomplete_panel_render()` (replacing
+the bare `render_autocomplete()`).
 
 ### 2. Extract color picker → `ui_color_picker.c`
 
