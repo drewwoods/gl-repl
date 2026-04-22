@@ -8,8 +8,9 @@ counterpart: a prioritized set of concrete, behavior-preserving
 extractions that can each land as a single reviewable commit *today*,
 without committing to the larger context-object rewrite.
 
-Four files still dominate the codebase: `scene_render.c` (~3162, now with
-frame prep/theme specs/state guards/overlay visitor helpers), `repl_export.c` (2541),
+Four files still dominate the codebase: `scene_render.c` (~2731, now with
+frame prep/theme specs/state guards/overlay visitor helpers while delegating
+backdrop and light helpers), `repl_export.c` (2541),
 `repl_core.c` (~1964), and `repl_editor.c` (~1653). `ui_panels.c`
 dropped to 1237 LoC (from 4452) after Phase-7
 extractions: document rows, replay annotations, menu/dropdowns, color
@@ -154,6 +155,22 @@ state now wrap their work in the local `scene_render_push_state()` /
 `scene_render_pop_state()` convention. The full frame still has its
 top-level `glPushAttrib(GL_ALL_ATTRIB_BITS)`, but helper guards keep
 side effects contained at the source.
+
+### 5c. Extract backdrop rendering → `scene_backdrop.c` ✅ DONE
+
+Implemented in the Phase-8 render cleanup slice. The backdrop mode dispatcher,
+deterministic city hash, day/night window timing, and cityscape geometry moved
+out of `scene_render.c` into `scene_backdrop.c`. The frame still invokes the
+backdrop at the same helper-pass point, but backdrop-specific GL state is now
+guarded inside the backdrop module.
+
+### 5d. Extract light setup/indicators → `scene_lights.c` ✅ DONE
+
+Implemented in the Phase-8 render cleanup slice. Light property reset/setup and
+the visible light indicator overlay moved out of `scene_render.c`. The normal
+fill and replay fade passes now call `scene_lights_setup()`, and the final HUD
+pass calls `scene_lights_render()`, preserving the old render order while
+making light side effects explicit.
 
 ### 6. Workspace header read/write symmetry in `repl_export.c`
 

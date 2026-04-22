@@ -70,7 +70,9 @@ failure should be treated as a regression unless explicitly rebaselined.
      Focus-grid vertex selection now happens in `FrameRenderContext`
      preparation instead of inside `draw_grid()`. Ocean-grid camera
      height/waterline classification is also prepared there instead of being
-     recomputed inside the theme renderer.
+     recomputed inside the theme renderer. Backdrop/cityscape rendering now
+     lives in `scene_backdrop.c`, and light setup plus light indicators live in
+     `scene_lights.c`.
 
 9. **Refactor import/export around a shared scaffold model**
    - Represent the generated C scaffold as typed sections rather than duplicated string/layout logic.

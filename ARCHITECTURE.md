@@ -59,8 +59,12 @@ of one monolithic `repl_core.c`.
 - `repl_eval.c`: expression parsing and evaluation.
 - `ui_panels.c`: 2D code-panel row rendering, source search highlights, inline
   ghost/hint text, scene status banner, and top-level panel routing.
-- `scene_render.c`: 3D scene rendering, frame render prep, grid/axes theme
-  specs, guarded helper passes, shared vertex-overlay traversal, and replay HUD.
+- `scene_render.c`: 3D frame orchestration, frame render prep, grid/axes theme
+  specs, guarded outline/vertex-overlay passes, orbit target, and replay HUD.
+- `scene_backdrop.c`: backdrop mode dispatch and deterministic cityscape
+  rendering.
+- `scene_lights.c`: per-pass light property setup and light indicator overlay
+  rendering.
 - `sample.c`: application entrypoint and GLUT callback wiring.
 
 The public API is still `repl_core.h`. Cross-module runtime/test helpers live in
@@ -134,9 +138,9 @@ every path shares the same parse/normalize/flatten guarantees.
 
 1. `flatten_commands()` in `repl_flatten.c` expands loops, functions,
    conditionals, and variable-driven commands into `g_flat_cmds[]`.
-2. `scene_render.c` prepares the frame and calls `repl_execute_program()` with
-   an explicit `FlatProgramView`/flat-command limit for normal, replay, and
-   fade passes.
+2. `scene_render.c` prepares the frame, delegates light setup to
+   `scene_lights.c`, and calls `repl_execute_program()` with an explicit
+   `FlatProgramView`/flat-command limit for normal, replay, and fade passes.
 3. `repl_executor.c` issues fixed-function OpenGL calls against the requested
    flat program view. `execute_commands()` remains a full-range compatibility
    wrapper around `repl_execute_program(NULL)`.
