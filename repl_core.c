@@ -30,6 +30,7 @@
  *   repl_camera_controls.c — viewport camera drag and momentum controls
  *   repl_actions.c — config shortcuts, menu actions, startup config defaults
  *   repl_code_panel_layout.c — pure code-panel wrapping and row lookup
+ *   repl_code_panel_document.c — code-panel document rows and hit targets
  *   repl_search.c  — incremental search overlay
  *   cmd_format.c   — source-text formatting helpers
  *   repl_flatten.c — flatten_range() / flatten_commands()
@@ -38,8 +39,11 @@
  *   repl_autonormal.c — auto-generated normals and feeding-state lookup
  *   repl_example_loader.c — built-in example loading and metadata
  *   repl_replay.c  — replay state machine and fade-batch rendering
+ *   repl_replay_annotations.c — code-panel replay variable annotations
  *   scene_render.c — 3D scene setup, grid / axes / overlay drawing
- *   ui_panels.c    — code panel, autocomplete popup, config menu, var panel
+ *   repl_menu_bar.c — code-panel menus, dropdowns, and search slot
+ *   repl_color_picker.c — floating literal-color editor
+ *   ui_panels.c    — code rows, autocomplete/help/var panels, hit routing
  *   repl_examples.c— predefined example scene data
  */
 

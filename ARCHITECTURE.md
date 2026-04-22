@@ -38,9 +38,20 @@ of one monolithic `repl_core.c`.
 - `repl_code_panel_layout.c`: pure code-panel wrapping, row counts, row
   segment lookup, and cursor-row mapping shared by UI rendering, hit-testing,
   tests, and visual dumps.
+- `repl_code_panel_document.c`: code-panel document row model: wrapped
+  header/body/footer counts, replay annotation rows, cursor-follow scrolling,
+  and document-line to command-line hit targets.
+- `repl_replay_annotations.c`: code-panel replay annotations, including
+  source-line to flat-command mapping, substituted variable comments, and
+  evaluated command display text.
+- `repl_menu_bar.c`: code-panel menu bar, dropdown rendering/hit-testing,
+  config-menu right-click cycling, and inline search-slot rendering.
+- `repl_color_picker.c`: floating color picker state, literal color swatches,
+  and HSV/alpha mutation of color commands.
 - `repl_eval.c`: expression parsing and evaluation.
-- `ui_panels.c`: 2D code/search/help/config/variable-panel rendering and panel
-  hit-testing.
+- `ui_panels.c`: 2D code-panel row rendering, source search highlights,
+  autocomplete/help/variable-panel rendering, top-level panel routing, and
+  inline rename UI.
 - `scene_render.c`: 3D scene rendering, overlays, and replay HUD.
 - `sample.c`: application entrypoint and GLUT callback wiring.
 
@@ -297,6 +308,50 @@ export side effects.
 - row count, row segment, and cursor-row lookup helpers
 - shared behavior for `ui_panels.c`, `repl_export.c`, and focused layout tests
 
+### `repl_code_panel_document.c`
+
+Owns the code-panel document row model that sits above pure text wrapping. It
+has no drawing code; it turns current REPL/editor state into row counts and
+targets consumed by rendering, scrolling tests, and mouse hit-testing.
+
+- wrapped header/body/footer row totals
+- per-command main rows plus replay annotation rows
+- cursor and replay follow-line calculation
+- scroll-follow clamping
+- document-line to command-line target mapping
+
+### `repl_replay_annotations.c`
+
+Owns the code-panel replay text shown beside source commands during replay.
+It reads replay/flat-command state, but keeps annotation caches and evaluated
+display formatting out of `ui_panels.c`.
+
+- source-command to latest flat-command mapping for the current replay PC
+- predef-variable snapshots before annotated flat commands
+- substituted variable comments and evaluated command strings
+- assignment inline comments used by code-panel display text
+
+### `repl_menu_bar.c`
+
+Owns the menu bar and dropdown UI state. It renders the File/Scene/Config
+menus, the Search/Replay pinned slots, and the menu-hosted search field.
+Action execution still flows through `repl_actions.c`.
+
+- menu/dropdown open state and hover state
+- menu and pin hit-testing
+- config dropdown right-click cycling
+- `render_example_dropdown()` for the floating dropdown layer
+
+### `repl_color_picker.c`
+
+Owns the floating color editor opened from literal color-command swatches.
+It mutates the selected command source/args directly today, but all picker
+state, hit rectangles, and rendering live outside `ui_panels.c`.
+
+- HSV/alpha picker state
+- swatch rendering for literal color commands
+- picker drag handling and command rewrite
+
 ## Shared State Rules
 
 - `sample.h` remains the single shared type and compatibility header, but broad
@@ -342,10 +397,13 @@ captures the intended behavior change.
   keyboard/mouse routing.
 - **Clipboard/selection:** owns line-range selection state, clipboard storage,
   and copy/cut/paste command mutations.
-- **UI layout:** owns pure code-panel wrapping, visible rows, hit-testing, and
-  visual dump coordinates. `repl_code_panel_layout.c` owns wrapping and segment
-  lookup today; `ui_panels.c` still owns the larger document row model and
-  rendering.
+- **UI layout:** owns pure code-panel wrapping, document rows, hit-testing, and
+  visual dump coordinates. `repl_code_panel_layout.c` owns wrapping/segment
+  lookup; `repl_code_panel_document.c` owns row totals, follow-scroll state, and
+  document-line targets; `ui_panels.c` consumes those models while rendering.
+- **UI overlays:** owns visible but non-core controls. `repl_menu_bar.c` owns
+  menus/dropdowns/search slot, `repl_color_picker.c` owns the floating color
+  editor, and `ui_panels.c` still owns help/autocomplete/variable-panel/rename.
 - **Scene renderer:** owns camera/view setup, grid/axes/overlay drawing, and GL
   state discipline for a single frame.
 - **Import/export:** owns scaffold sections, workspace metadata, and
@@ -353,9 +411,10 @@ captures the intended behavior change.
 
 ### Current cleanup baseline
 
-After the Phase 7 code-panel layout extraction, `make test-stubs TEST_JOBS=4`
-builds all test binaries and passes 16 of 16 suites: 2304/2304 tests. New
-cleanup stages should preserve that green baseline.
+After the Phase 7 code-panel responsibility split, `make test-stubs TEST_JOBS=4`
+builds all test binaries and passes 17 of 17 suites: 2315/2315 tests. The
+latest slices extracted document rows, replay annotations, the menu bar, and
+the color picker while preserving the code-panel layout behavior.
 
 ## Key Pipelines
 
@@ -721,7 +780,10 @@ before debug output or source normalization starts returning `CMD_UNKNOWN`.
 ### Add a new editor interaction
 
 1. Add state and handlers in `repl_editor.c`.
-2. Add rendering or hit-testing in `ui_panels.c` if the feature is visible.
+2. Add rendering or hit-testing in the owner for the visible feature:
+   `repl_menu_bar.c` for menu/dropdown/search-slot UI,
+   `repl_color_picker.c` for literal color editing, or `ui_panels.c` for the
+   remaining code/help/autocomplete/variable-panel surfaces.
 3. Only promote new helpers into `repl_core_internal.h` when another module
    truly needs them.
 
