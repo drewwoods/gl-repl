@@ -127,6 +127,10 @@ TEST_BINS = \
 	test_repl_core_extra \
 	test_repl_autonormal
 
+ifeq ($(USE_GL_STUBS),1)
+TEST_BINS += test_ui
+endif
+
 CORE_TEST_BINS = $(filter-out test_eval test_format test_repl_code_panel_layout test_repl_audio,$(TEST_BINS))
 
 # Benchmark binaries follow the same linking pattern as core test binaries
@@ -233,19 +237,20 @@ debug: ## Clean and rebuild everything with debug/ASan flags.
 
 coverage: ## Clean, rebuild tests with coverage, run suite, generate HTML report.
 	$(MAKE) clean
-	$(MAKE) test BUILD=coverage TEST_JOBS=1
+	$(MAKE) test BUILD=coverage TEST_JOBS=1 USE_GL_STUBS=1
+	mkdir -p build/coverage-gl-stubs
 	lcov --capture \
-		--directory build/coverage \
-		--output-file build/coverage/lcov.info \
+		--directory build/coverage-gl-stubs \
+		--output-file build/coverage-gl-stubs/lcov.info \
 		--ignore-errors mismatch,empty \
 		--exclude '*/test_*.c' \
 		--rc branch_coverage=1
-	genhtml build/coverage/lcov.info \
-		--output-directory build/coverage/html \
+	genhtml build/coverage-gl-stubs/lcov.info \
+		--output-directory build/coverage-gl-stubs/html \
 		--branch-coverage \
 		--title "REPL coverage" \
 		--ignore-errors inconsistent
-	@echo "Coverage report: build/coverage/html/index.html"
+	@echo "Coverage report: build/coverage-gl-stubs/html/index.html"
 
 SANITIZER_CHECKERS ?= core,deadcode,unix,cplusplus,osx
 # Files to exclude from static analysis (e.g., third-party library includes)
