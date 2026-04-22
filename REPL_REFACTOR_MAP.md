@@ -137,7 +137,9 @@ flowchart LR
   paths. Vertex-number and normal-vector overlays share one flat-command
   visitor so transform replay and tessellation block tracking stay consistent.
   Focus-grid vertex selection is prepared in `FrameRenderContext` before grid
-  drawing, keeping the theme draw path read-only on focus state.
+  drawing, keeping the theme draw path read-only on focus state. Ocean-grid
+  camera height/waterline classification is also derived once in frame prep
+  instead of recomputed inside the grid theme.
 
 ## Open Edges
 
