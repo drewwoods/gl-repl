@@ -140,7 +140,62 @@ int main() {
         ASSERT_STR("var1 name", vars[1].name, "i");
     }
 
-    /* 8. input_has_expr_vars */
+    /* 8. explicit flatten destination */
+    {
+        GLCmd temp_flat[8];
+        FlatCmdLocalVars temp_locals[8];
+        ReplFlattenOptions opts;
+        ReplFlattenResult result;
+        int live_count;
+        GLCmd live_first;
+
+        repl_reset_state(); declare_test_vars();
+        repl_feed_line_public("glEnable(GL_LIGHTING);");
+        repl_feed_line_public("func0(r) {");
+        repl_feed_line_public("  glVertex3f(r, 0, 0);");
+        repl_feed_line_public("}");
+        repl_feed_line_public("func0(2);");
+        repl_flatten_commands();
+        live_count = g_num_flat_cmds;
+        live_first = g_flat_cmds[0];
+
+        memset(temp_flat, 0, sizeof(temp_flat));
+        memset(temp_locals, 0, sizeof(temp_locals));
+        opts = (ReplFlattenOptions){
+            .source_cmds = g_cmds,
+            .source_cmd_count = g_num_cmds,
+            .flat_cmds = temp_flat,
+            .flat_local_vars = temp_locals,
+            .flat_capacity = 8
+        };
+        ASSERT_INT("flatten_program ok",
+                   repl_flatten_program(&opts, &result), 1);
+        ASSERT_INT("flatten_program result ok", result.ok, 1);
+        ASSERT_INT("flatten_program count", result.flat_cmd_count, 2);
+        ASSERT_INT("flatten_program lighting result",
+                   result.user_lighting_enabled, 1);
+        ASSERT_INT("flatten_program first type", temp_flat[0].type, CMD_ENABLE);
+        ASSERT_INT("flatten_program second type", temp_flat[1].type, CMD_VERTEX3F);
+        ASSERT_TRUE("flatten_program arg eval",
+                    fabsf(temp_flat[1].args[0] - 2.0f) < 1e-6f);
+        ASSERT_INT("flatten_program provenance source type",
+                   g_cmds[temp_flat[1].src_cmd_idx].type, CMD_VERTEX3F);
+        ASSERT_INT("flatten_program live count unchanged",
+                   g_num_flat_cmds, live_count);
+        ASSERT_INT("flatten_program live first unchanged",
+                   g_flat_cmds[0].type, live_first.type);
+
+        opts.flat_capacity = 1;
+        ASSERT_INT("flatten_program capacity fail",
+                   repl_flatten_program(&opts, &result), 0);
+        ASSERT_INT("flatten_program capacity count", result.flat_cmd_count, 0);
+        ASSERT_TRUE("flatten_program capacity status",
+                    strstr(result.status, "limit") != NULL);
+        ASSERT_INT("flatten_program fail leaves live count",
+                   g_num_flat_cmds, live_count);
+    }
+
+    /* 9. input_has_expr_vars */
     {
         ExprVar vars[2] = { { "radius", 1.0f }, { "height", 2.0f } };
         ASSERT_INT("has_expr_vars true", input_has_expr_vars("radius + 1", vars, 2), 1);

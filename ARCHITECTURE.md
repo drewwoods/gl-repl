@@ -101,6 +101,10 @@ reads from the flattened array.
 - **Rebuild trigger:** every mutation sets `g_flat_dirty = 1` (via
   `mark_normals_dirty()`); `flatten_commands()` rebuilds the flat array on
   the next frame before rendering.
+- `repl_flatten_program()` is the explicit builder underneath the live rebuild:
+  callers provide source commands, destination flat buffers, local-variable
+  snapshot storage, capacity, recursion limits, visit budget, and receive
+  flat count/status output.
 
 Keeping the two levels separate means edits are cheap, execution reads a
 flat stream, and replay can step by flat-command without worrying about
@@ -118,8 +122,9 @@ modules:
 3. **Parse** — `repl_parse_command()` in `repl_parser.c` matches the line to
    a `CmdType`, evaluates argument expressions via `repl_eval.c`, and
    stores results into `GLCmd.args[]` / `GLCmd.source[]`.
-4. **Flatten** — `flatten_range()` recursively expands source commands,
-   capped at 100k visits and recursion depth 32.
+4. **Flatten** — `repl_flatten_program()` recursively expands source commands
+   through `flatten_range()`, capped at 100k visits and recursion depth 64 by
+   the live wrapper.
 5. **Execute** — `execute_commands()` / `repl_execute_program()` in
    `repl_executor.c` walk `g_flat_cmds[]` and emit GL calls. Commands flagged
    `has_vars` are re-evaluated each frame so animated expressions (e.g. `t`)
@@ -146,8 +151,9 @@ every path shares the same parse/normalize/flatten guarantees.
 
 ### Execution path
 
-1. `flatten_commands()` in `repl_flatten.c` expands loops, functions,
-   conditionals, and variable-driven commands into `g_flat_cmds[]`.
+1. `flatten_commands()` in `repl_flatten.c` calls `repl_flatten_program()` to
+   expand loops, functions, conditionals, and variable-driven commands into
+   `g_flat_cmds[]`.
 2. `scene_render.c` prepares the frame, delegates light setup to
    `scene_lights.c`, and calls `repl_execute_program()` with an explicit
    `FlatProgramView`/flat-command limit for normal, replay, and fade passes.
@@ -209,6 +215,7 @@ Owns source-command scope/depth lookups.
 Owns flattening and flat-command cursor matching.
 
 - `flatten_commands()`
+- `repl_flatten_program()` explicit source/destination builder
 - recursive loop/function/if expansion
 - flat-command provenance fields
 - `g_current_block_begin`, `g_current_block_end`
@@ -435,8 +442,9 @@ captures the intended behavior change.
 - **Commit pipeline:** owns user intent: where a parsed command lands, when
   undo snapshots are taken, and how variable declarations register names.
 - **Flattener:** owns expansion of loops, functions, and conditionals into a
-  flat program with source-line provenance. Recursive flattening state lives
-  in `FlattenContext` rather than file-scope control globals.
+  flat program with source-line provenance. Recursive flattening state and
+  destination buffers live in `FlattenContext` / `ReplFlattenOptions` rather
+  than file-scope control globals.
 - **Executor:** owns OpenGL calls for a flat command stream. Replay fill/fade
   passes use `ReplExecutionOptions` to supply explicit execution ranges.
 - **Editor/input router:** owns modal dispatch, cursor/input buffers, and
@@ -471,7 +479,7 @@ captures the intended behavior change.
 ### Current cleanup baseline
 
 After the Phase 7 code-panel responsibility split, `make test-stubs TEST_JOBS=4`
-builds all test binaries and passes 17 of 17 suites: 2315/2315 tests. The
+builds all test binaries and passes 17 of 17 suites: 2342/2342 tests. The
 latest slices extracted document rows, replay annotations, menu/dropdown
 rendering, the color picker, help overlay, variable panel, autocomplete popup,
 inline rename, and variable slider dragging while preserving behavior. Phase 8
@@ -561,7 +569,8 @@ is shared by all dispatch sites.
 
 ### Flattening
 
-`flatten_range()` in `repl_flatten.c` is still the only place that expands:
+`repl_flatten_program()` / `flatten_range()` in `repl_flatten.c` are still the
+only places that expand:
 
 - `CMD_FOR_BEGIN .. CMD_FOR_END`
 - `CMD_FUNC_DEF .. CMD_FUNC_END`

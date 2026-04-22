@@ -29,7 +29,7 @@ This list is ordered by impact-per-effort. Pick one and execute it
 in isolation; each item is sized to land as one `refactor:` commit.
 
 > **Baseline note:** `make test-stubs TEST_JOBS=4` currently passes
-> all 17 suites / 2315 tests cleanly. Any new failure introduced by a
+> all 17 suites / 2342 tests cleanly. Any new failure introduced by a
 > punch-list item is a real regression unless the team explicitly
 > rebaselines it.
 
@@ -240,6 +240,17 @@ place. The next large mechanical extraction, parser ownership, is now done.
 - **Verify:** `make test_repl_core_parse`, `make test_repl_core_commit`,
   `make test_eval`, `make test-stubs TEST_JOBS=4`, `make sample
   USE_GL_STUBS=1`, and `make sample`.
+
+### 9. Finish Phase 5 flatten API ✅ DONE
+
+`repl_flatten.c` now exposes `repl_flatten_program()` with explicit source
+input, destination flat buffer, local-var snapshot buffer, capacity, recursion
+depth, visit budget, and result/status output. `repl_flatten_commands()` is
+now the compatibility wrapper that passes the live `g_cmds[]` / `g_flat_cmds[]`
+arrays, installs the returned flat count, updates lighting state, and refreshes
+cursor highlighting. Focused internal coverage proves a temporary flat
+destination can be built without changing the live `g_flat_cmds[]` /
+`g_num_flat_cmds` arrays, including the capacity-failure path.
 
 ---
 

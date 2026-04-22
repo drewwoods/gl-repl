@@ -37,6 +37,12 @@ const char *repl_workspace_dir(void);         /* "" if not bound */
 void repl_set_workspace_dir(const char *dir); /* copies; NULL = clear */
 
 /* --- Command pipeline -------------------------------------------------- */
+/* Expand a source program into caller-provided flat buffers. The live wrapper
+ * below uses this with g_cmds[] / g_flat_cmds[], but tests and future replay
+ * tools can flatten into temporary storage without mutating the live flat
+ * arrays. */
+int  repl_flatten_program(const ReplFlattenOptions *options,
+                          ReplFlattenResult *result);
 /* Rebuild g_flat_cmds from g_cmds (expanding for/func/if). Idempotent;
  * `mark_normals_dirty()` sets the rebuild flag. */
 void repl_flatten_commands(void);

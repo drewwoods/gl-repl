@@ -32,6 +32,23 @@ typedef struct {
 } FlatProgramView;
 
 typedef struct {
+    const GLCmd      *source_cmds;
+    int               source_cmd_count;
+    GLCmd            *flat_cmds;
+    FlatCmdLocalVars *flat_local_vars;
+    int               flat_capacity;
+    int               max_call_depth;
+    int               visit_budget;
+} ReplFlattenOptions;
+
+typedef struct {
+    int ok;
+    int flat_cmd_count;
+    int user_lighting_enabled;
+    char status[128];
+} ReplFlattenResult;
+
+typedef struct {
     GLCmd            *cmds;
     int              *num_cmds;
     int               capacity;
