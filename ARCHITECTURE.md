@@ -8,8 +8,10 @@
 The immediate-mode REPL is now split across focused translation units instead
 of one monolithic `repl_core.c`.
 
-- `repl_core.c`: parser, normalization, depth/cache queries, display callback,
-  and OpenGL initialization.
+- `repl_core.c`: normalization, depth/cache queries, display callback, and
+  OpenGL initialization.
+- `repl_parser.c`: source-line parser, expression validation against visible
+  variables, and canonical `GLCmd.source[]` generation for GL commands.
 - `repl_flatten.c`: source-to-flat command expansion and flat-command cursor
   matching.
 - `repl_executor.c`: flat-command execution, state-command dispatch, replay
@@ -111,7 +113,7 @@ modules:
 2. **Commit** — `;` (or Enter in overwrite mode, or programmatic
    `feed_line()`) runs the commit handler chain (see
    [Structured block commits](#structured-block-commits) below).
-3. **Parse** — `repl_parse_command()` in `repl_core.c` matches the line to
+3. **Parse** — `repl_parse_command()` in `repl_parser.c` matches the line to
    a `CmdType`, evaluates argument expressions via `repl_eval.c`, and
    stores results into `GLCmd.args[]` / `GLCmd.source[]`.
 4. **Flatten** — `flatten_range()` recursively expands source commands,
@@ -122,7 +124,7 @@ modules:
    stay live.
 
 Stage 1 and commit orchestration live in `repl_editor.c`; commit handlers
-live in `repl_commit.c`; parsing lives in `repl_core.c`; flattening lives in
+live in `repl_commit.c`; parsing lives in `repl_parser.c`; flattening lives in
 `repl_flatten.c`; execution lives in `repl_executor.c`. This is the
 load-bearing boundary — outside code that needs to inject commands should
 do so through `feed_line()` rather than poking `g_cmds[]` directly, so
@@ -134,7 +136,8 @@ every path shares the same parse/normalize/flatten guarantees.
 
 1. GLUT keyboard/mouse callbacks enter through `repl_editor.c`.
 2. Commit handlers in `repl_commit.c` convert input text into commands by calling
-   `repl_parse_command*()` or `repl_parse_and_normalize()` in `repl_core.c`.
+   `repl_parse_command*()` in `repl_parser.c` or
+   `repl_parse_and_normalize()` in `repl_core.c`.
 3. Parsed commands are stored in `g_cmds[]`.
 4. `mark_normals_dirty()` and `g_flat_dirty` invalidate downstream derived
    state.
@@ -169,13 +172,23 @@ every path shares the same parse/normalize/flatten guarantees.
 
 ### `repl_core.c`
 
-Owns the semantic model and remaining parser/display infrastructure.
+Owns the semantic model and display infrastructure.
 
 - `g_cmds[]`, `g_num_cmds`
 - `g_flat_cmds[]`, `g_num_flat_cmds`
-- parser, normalization, scope/depth caches
+- normalization and scope/depth caches
 - display callback
 - GL init
+
+### `repl_parser.c`
+
+Owns the general GL command parser.
+
+- `repl_parse_command()`
+- `repl_parse_command_with_vars()`
+- table-driven fixed-arity/enum command matching
+- custom parser branches for material, point-parameter, tessellator,
+  function-call, label, and goto syntax
 
 ### `repl_flatten.c`
 
@@ -390,9 +403,8 @@ state, hit rectangles, and rendering live outside `ui_panels.c`.
   of duplicating literals.
 - New per-module headers are introduced only when they establish a real
   ownership boundary. Avoid adding headers for cosmetic splits.
-- Parser internals currently stay in `repl_core.c`; editor/search/export call
-  into them rather than duplicating logic. Future parser extraction should
-  preserve the same call direction.
+- Parser internals live in `repl_parser.c`; editor/search/export/core call
+  into its public parser entrypoints rather than duplicating logic.
 
 ## Refactoring Ownership Map
 
@@ -484,7 +496,8 @@ chasing the call sites. Ordering within a helper is load-bearing:
 `"float"`.
 
 These helpers update `g_cmds[]` directly, but they still rely on parser
-and scope helpers from `repl_core.c` for validation and normalization.
+helpers from `repl_parser.c` and scope helpers from `repl_core.c` for
+validation and normalization.
 
 ### Float variable declarations
 
@@ -753,8 +766,8 @@ made safe for concurrent `.gcda` writes.
    semicolon and block-indent behavior.
 3. Extend parser handling.
    - Table-driven entries live in `repl_command_spec.c`; the generic loop in
-     `parse_command()` (`repl_core.c`) walks those tables so most commands
-     need no changes to `repl_core.c` itself.
+     `parse_command()` (`repl_parser.c`) walks those tables so most commands
+     need no changes to parser code itself.
    - Pure numeric calls usually belong in `k_std_command_specs`.
    - Enum-driven calls usually belong in `k_enum_command_specs`; add a dedicated
      `EnumEntry` table when the legal enum set differs from a similar command
@@ -762,7 +775,7 @@ made safe for concurrent `.gcda` writes.
      `glMaterialf` pnames). Reuse `k_bool_vals` for `GL_TRUE` / `GL_FALSE`
      arguments (see `glDepthMask`).
    - Special arity, vector/scalar alternatives, block commands, or commands
-     with custom validation need an explicit parser branch in `repl_core.c`
+     with custom validation need an explicit parser branch in `repl_parser.c`
      (alongside `glMaterialf`, `glPointParameterfv`, `gluBegin`, `funcN`, etc.).
 4. Extend execution handling in `repl_executor.c`.
    - State-only commands normally go through `apply_state_cmd()`, then are

@@ -20,8 +20,9 @@ The central data flow. Edits mutate `g_cmds[]`; everything downstream
 
 | Module | Role |
 |--------|------|
-| `repl_core` | Parser, normalization, display frame, GL init |
+| `repl_core` | Normalization, depth queries, display frame, GL init |
 | `repl_command_spec` | Declarative descriptors for fixed-arity GL commands |
+| `repl_parser` | Source-line parser and canonical `GLCmd.source[]` generation |
 | `repl_command_store` | Insert/delete/replace API over `g_cmds[]` |
 | `repl_commit` | Float decls, variable assignments, structured block commits |
 | `repl_flatten` | Source-to-flat expansion (loops, functions, `if`) |
@@ -113,7 +114,8 @@ flowchart LR
     sample["sample.c<br/>GLUT callback wiring"]
 
     subgraph pipeline["Command pipeline"]
-        core["repl_core.c<br/>parser · display frame"]
+        core["repl_core.c<br/>normalize · display frame"]
+        parser["repl_parser.c<br/>source parser"]
         flatten["repl_flatten.c<br/>source to flat"]
         exec["repl_executor.c<br/>flat program execution"]
         commit["repl_commit.c<br/>decls · assigns · blocks"]
@@ -181,10 +183,12 @@ flowchart LR
     clipboard --> undo
     clipboard --> store
     commit --> undo
+    commit --> parser
     commit --> store
     undo --> scenes
     store --> core
 
+    core --> parser
     core --> flatten
     core --> exec
     core --> sceneR
@@ -329,7 +333,7 @@ comment for the one-line charter.
 
 ## Where to put new code
 
-- Adding a GL command? Pipeline layer — start in `repl_core.c`
+- Adding a GL command? Pipeline layer — start in `repl_parser.c`
   (`parse_command`), then `repl_executor.c` (`execute_commands`),
   and `repl_flatten.c` if it needs expansion.
 - Adding a keyboard shortcut? Editor layer — `repl_editor.c` if

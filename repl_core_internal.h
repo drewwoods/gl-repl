@@ -1,7 +1,7 @@
 /*
  * repl_core_internal.h — Cross-TU internals shared among repl_core.c,
- * repl_editor.c, repl_executor.c, repl_export.c, repl_search.c, and the unit
- * tests.
+ * repl_editor.c, repl_executor.c, repl_export.c, repl_parser.c,
+ * repl_search.c, and the unit tests.
  *
  * These are intentionally NOT part of the public API in repl_core.h — they
  * are implementation details of the REPL that tests and sibling modules
@@ -14,6 +14,7 @@
  *   - Code-panel dumps (debug + visual)
  *   - Autocomplete
  *   - Block-depth / scope queries
+ *   - Parser indentation helpers
  *   - Executor helpers
  *   - Replay state machine
  *   - Scene/workspace state
@@ -161,6 +162,9 @@ void accept_autocomplete(void);
 /* ---- Block-depth / scope queries -------------------------------------- */
 
 void depth_cache_invalidate(void);
+int  tess_scope_depth_at(int pos);
+void cmd_indent(int pos, char *buf, int buf_sz);
+void cmd_tess_indent(int pos, char *buf, int buf_sz);
 
 /* ---- Executor helpers ------------------------------------------------- */
 
