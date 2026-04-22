@@ -24,7 +24,7 @@ failure should be treated as a regression unless explicitly rebaselined.
 
 ## Staged Refactor
 1. **Stabilize and document the baseline**
-   - Triage the existing stub-test failures first, or record them in a short baseline note with exact failing cases.
+   - Confirm the current stub-test baseline first, or record any accepted failing cases explicitly.
    - Update `ARCHITECTURE.md` with the intended ownership map: command store, parser, flattener, executor, editor, UI layout, scene renderer, import/export.
    - Acceptance: every later stage can compare against a known test baseline.
 
@@ -86,12 +86,12 @@ failure should be treated as a regression unless explicitly rebaselined.
      carries that config plus prepared derived data such as Focus-grid vertex
      state and ocean-grid camera waterline classification. Standard grid/axes
      themes now use local specs and shared draw helpers, helper passes have
-     explicit GL attribute guards, and vertex-number/normal overlays share one
-     flat-command traversal helper. Backdrop/cityscape rendering now lives in
+     explicit GL attribute guards. Backdrop/cityscape rendering now lives in
      `scene_backdrop.c`, and light setup plus light indicators live in
-     `scene_lights.c`. Polygon outline/current-block highlight rendering now
-     lives in `scene_overlays.c`, with a shared flat-block cursor matcher for
-     outline and vertex-overlay paths.
+     `scene_lights.c`. Polygon outline/current-block highlight rendering,
+     vertex-number overlays, and normal-vector overlays now live in
+     `scene_overlays.c`, sharing one flat-command traversal and cursor-block
+     matcher.
 
 9. **Refactor import/export around a shared scaffold model**
    - Represent the generated C scaffold as typed sections rather than duplicated string/layout logic.

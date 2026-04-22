@@ -67,14 +67,14 @@ of one monolithic `repl_core.c`.
 - `ui_panels.c`: 2D code-panel row rendering, source search highlights, inline
   ghost/hint text, scene status banner, and top-level panel routing.
 - `scene_render.c`: 3D frame orchestration, `SceneRenderConfig` /
-  `FrameRenderContext` prep, grid/axes theme specs, vertex-overlay passes,
-  orbit target, and replay HUD.
+  `FrameRenderContext` prep, grid/axes theme specs, edit guides, orbit target,
+  and replay HUD.
 - `scene_backdrop.c`: backdrop mode dispatch and deterministic cityscape
   rendering.
 - `scene_lights.c`: per-pass light property setup and light indicator overlay
   rendering.
-- `scene_overlays.c`: polygon outline/current-block overlay rendering plus
-  shared flat-block cursor matching for geometry overlays.
+- `scene_overlays.c`: polygon outline/current-block, vertex-number, and
+  normal-vector overlay rendering plus shared flat-block cursor matching.
 - `sample.c`: application entrypoint and GLUT callback wiring.
 
 The public API is still `repl_core.h`. Cross-module runtime/test helpers live in
@@ -480,8 +480,9 @@ captures the intended behavior change.
   `FrameRenderContext` carries that config plus prepared derived state such as
   the Focus-grid vertex and ocean-grid camera waterline classification before
   helper renderers run. Standard grid themes are described by `GridThemeSpec`
-  entries, standard axes by `AxesThemeSpec` entries, and vertex-number/normal
-  overlays share one flat-command traversal helper.
+  entries and standard axes by `AxesThemeSpec` entries. Flattened geometry
+  overlays live in `scene_overlays.c`, where outline, vertex-number, and
+  normal-vector passes share cursor-block matching and transform traversal.
 - **Import/export:** owns scaffold sections, workspace metadata, and
   translation between exported C and REPL command text.
 
@@ -494,7 +495,8 @@ rendering, the color picker, help overlay, variable panel, autocomplete popup,
 inline rename, and variable slider dragging while preserving behavior. Phase 8
 then added grid/axes theme specs, local helper-pass GL state guards, a shared
 vertex-overlay traversal, explicit scene render config/frame context prep,
-Focus/ocean frame prep, backdrop/light modules, and outline overlay extraction.
+Focus/ocean frame prep, backdrop/light modules, and geometry overlay
+extraction.
 Phase 9 paired workspace-header parsing/emission
 through a directive table, split `load_from_file()` into ordered import
 handlers, confirmed visual dumps use the shared code-panel wrap iterator, and

@@ -1,5 +1,5 @@
 /*
- * scene_render.c — 3D scene rendering (frame prep, grid, axes, overlays)
+ * scene_render.c — 3D scene rendering (frame prep, grid, axes, edit guides)
  *
  * Extracted from sample.c for maintainability.
  */
@@ -1179,169 +1179,6 @@ static void draw_axes(const FrameRenderContext *frame_ctx) {
 
     glDepthMask(GL_TRUE);
     glDisable(GL_BLEND);
-    glEnable(GL_DEPTH_TEST);
-    if (g_user_lighting_enabled) glEnable(GL_LIGHTING);
-    scene_render_pop_state();
-}
-
-typedef struct VertexOverlayState {
-    int flat_cmd_idx;
-    int vertex_idx;
-    int in_block;
-    int block_selected;
-    int tess_depth;
-    float normal[3];
-} VertexOverlayState;
-
-typedef void (*VertexOverlayVisitFn)(const GLCmd *cmd,
-                                     const VertexOverlayState *state,
-                                     void *user);
-
-/* Replays transform commands once while visiting vertex-emitting flat commands.
- * Callers choose whether visits should be restricted to the cursor-selected
- * block; the matrix tracking stays centralized so overlay features cannot
- * drift from each other as flatten/execution rules evolve. */
-static void walk_vertex_overlay(int selected_block_only,
-                                VertexOverlayVisitFn on_vertex,
-                                void *user) {
-    VertexOverlayState state = {
-        .flat_cmd_idx = -1,
-        .vertex_idx = 0,
-        .in_block = 0,
-        .block_selected = selected_block_only ? 0 : 1,
-        .tess_depth = 0,
-        .normal = {0, 0, 1},
-    };
-    int matrix_depth = 0;
-
-    glPushMatrix();
-    for (int i = 0; i < g_num_flat_cmds; i++) {
-        if (!g_flat_cmds[i].valid) continue;
-
-        GLCmd *cmd = &g_flat_cmds[i];
-        if (!state.in_block && is_transform_cmd(cmd->type)) {
-            apply_tracked_transform_cmd(cmd, &matrix_depth);
-            continue;
-        }
-
-        switch (cmd->type) {
-        case CMD_BEGIN:
-            state.in_block = 1;
-            state.block_selected = selected_block_only
-                                 ? scene_overlay_flat_block_matches_cursor(i, 0)
-                                 : 1;
-            state.vertex_idx = 0;
-            state.tess_depth = 0;
-            state.normal[0] = 0.0f;
-            state.normal[1] = 0.0f;
-            state.normal[2] = 1.0f;
-            break;
-        case CMD_END:
-            state.in_block = 0;
-            state.block_selected = selected_block_only ? 0 : 1;
-            state.tess_depth = 0;
-            break;
-        case CMD_TESS_BEGIN_POLYGON:
-            state.in_block = 1;
-            state.block_selected = selected_block_only
-                                 ? scene_overlay_flat_block_matches_cursor(i, 1)
-                                 : 1;
-            state.vertex_idx = 0;
-            state.tess_depth = 1;
-            state.normal[0] = 0.0f;
-            state.normal[1] = 0.0f;
-            state.normal[2] = 1.0f;
-            break;
-        case CMD_TESS_BEGIN_CONTOUR:
-            if (state.tess_depth > 0)
-                state.tess_depth++;
-            break;
-        case CMD_TESS_END:
-            if (state.tess_depth > 0) {
-                state.tess_depth--;
-                if (state.tess_depth == 0) {
-                    state.in_block = 0;
-                    state.block_selected = selected_block_only ? 0 : 1;
-                }
-            }
-            break;
-        case CMD_NORMAL3F:
-        case CMD_TESS_NORMAL:
-            state.normal[0] = cmd->args[0];
-            state.normal[1] = cmd->args[1];
-            state.normal[2] = cmd->args[2];
-            break;
-        case CMD_VERTEX3F:
-        case CMD_TESS_VERTEX: {
-            int visit = selected_block_only
-                      ? (state.in_block && state.block_selected)
-                      : 1;
-            if (visit && on_vertex) {
-                state.flat_cmd_idx = i;
-                on_vertex(cmd, &state, user);
-            }
-            state.vertex_idx++;
-            break;
-        }
-        default:
-            break;
-        }
-    }
-    unwind_tracked_transform_stack(&matrix_depth);
-    glPopMatrix();
-}
-
-static void draw_vertex_number_label(const GLCmd *cmd,
-                                     const VertexOverlayState *state,
-                                     void *user) {
-    (void)user;
-    char label[16];
-    snprintf(label, sizeof(label), " v%d", state->vertex_idx);
-    glRasterPos3f(cmd->args[0], cmd->args[1], cmd->args[2]);
-    for (const char *c = label; *c; c++)
-        glutBitmapCharacter(FONT_MONO, (unsigned char)*c);
-}
-
-static void draw_normal_vector_at_vertex(const GLCmd *cmd,
-                                         const VertexOverlayState *state,
-                                         void *user) {
-    float scale = *(const float *)user;
-    float vx = cmd->args[0], vy = cmd->args[1], vz = cmd->args[2];
-    float nx = state->normal[0], ny = state->normal[1], nz = state->normal[2];
-
-    glBegin(GL_LINES);
-    glVertex3f(vx, vy, vz);
-    glVertex3f(vx + nx * scale, vy + ny * scale, vz + nz * scale);
-    glEnd();
-    glPointSize(4.0f);
-    glBegin(GL_POINTS);
-    glVertex3f(vx + nx * scale, vy + ny * scale, vz + nz * scale);
-    glEnd();
-    glPointSize(1.0f);
-}
-
-static void draw_vertex_numbers(void) {
-    scene_render_push_state();
-    glDisable(GL_LIGHTING);
-    glDisable(GL_DEPTH_TEST);
-    glColor3f(1.0f, 1.0f, 0.30f);
-
-    walk_vertex_overlay(1, draw_vertex_number_label, NULL);
-
-    glEnable(GL_DEPTH_TEST);
-    if (g_user_lighting_enabled) glEnable(GL_LIGHTING);
-    scene_render_pop_state();
-}
-
-static void draw_normal_vectors(void) {
-    scene_render_push_state();
-    glDisable(GL_LIGHTING);
-    glDisable(GL_DEPTH_TEST);
-    glColor3f(0.80f, 0.80f, 0.30f);
-    float scale = 0.35f;
-
-    walk_vertex_overlay(0, draw_normal_vector_at_vertex, &scale);
-
     glEnable(GL_DEPTH_TEST);
     if (g_user_lighting_enabled) glEnable(GL_LIGHTING);
     scene_render_pop_state();
@@ -2669,8 +2506,8 @@ void render_3d_scene(void) {
 
     scene_lights_render();
 
-    if (config.show_vnums)   draw_vertex_numbers();
-    if (config.show_normals) draw_normal_vectors();
+    if (config.show_vnums)   scene_overlays_render_vertex_numbers();
+    if (config.show_normals) scene_overlays_render_normal_vectors();
     if (config.replaying)
         draw_replay_hud(&config);
     glPopAttrib();

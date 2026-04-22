@@ -89,10 +89,10 @@ helper passes, table-driven themes.
 
 | Module | Role |
 |--------|------|
-| `scene_render` | Camera, render config/frame prep, grid/axes specs, overlay walker |
+| `scene_render` | Camera, render config/frame prep, grid/axes specs, edit guides |
 | `scene_backdrop` | Backdrop pass (e.g. cityscape) |
 | `scene_lights` | Light setup + indicator drawing |
-| `scene_overlays` | Outline overlays and cursor-block detection |
+| `scene_overlays` | Outline, vertex-number, and normal-vector overlays |
 
 ### 6. Persistence, audio, lifecycle
 
@@ -154,10 +154,10 @@ flowchart LR
     end
 
     subgraph scene_layer["3D scene rendering"]
-        sceneR["scene_render.c<br/>frame prep · theme specs · overlay walker"]
+        sceneR["scene_render.c<br/>frame prep · theme specs · edit guides"]
         backdrop["scene_backdrop.c<br/>backdrop pass"]
         lights["scene_lights.c<br/>light setup + indicators"]
-        overlays["scene_overlays.c<br/>outline overlays"]
+        overlays["scene_overlays.c<br/>geometry overlays"]
     end
 
     export["repl_export.c<br/>typed scaffold · import/export · visual dump"]
@@ -293,12 +293,11 @@ render files.
   waterline classification. Helper-pass GL state stays local with small
   `glPushAttrib`/`glPopAttrib` wrappers. Standard grid/axes themes are table
   entries, while focus/ocean/adaptive-plane grid themes remain custom render
-  paths. Vertex-number and normal-vector overlays share one flat-command
-  visitor so transform replay and tessellation block tracking stay consistent.
-  Backdrop rendering now delegates to `scene_backdrop.c`; per-pass light setup
-  and light indicators delegate to `scene_lights.c`. Polygon outline/current-
-  block highlighting delegates to `scene_overlays.c`, which also exposes the
-  flat-block cursor matcher used by vertex-number and normal-vector overlays.
+  paths. Backdrop rendering now delegates to `scene_backdrop.c`; per-pass
+  light setup and light indicators delegate to `scene_lights.c`. Polygon
+  outline/current-block highlighting, vertex-number labels, and normal-vector
+  overlays delegate to `scene_overlays.c`, where one flat-command visitor keeps
+  transform replay and tessellation block tracking consistent.
 
 ## Open Edges
 
