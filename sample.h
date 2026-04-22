@@ -337,6 +337,7 @@ static inline void unwind_tracked_transform_stack(int *matrix_depth) {
 
 /* Runtime state globals and ownership facades live in repl_state.h. */
 #include "repl_state.h"
+#include "repl_source_scope.h"
 
 int  init_section_line_count(void);
 void init_section_line(int i, char *buf, size_t n);
@@ -359,9 +360,6 @@ void end_2d(void);
 
 void set_status(const char *msg);
 const char *mode_name(GLenum mode);
-int  in_begin_block_at(int line_idx);
-int  in_begin_block(void);
-int  cmd_indent_chars(int pos);
 GLenum current_begin_mode(void);
 int  count_vertices(void);
 void mark_normals_dirty(void);

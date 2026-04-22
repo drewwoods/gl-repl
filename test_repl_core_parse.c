@@ -139,6 +139,29 @@ int main(void) {
     {
         repl_reset_state();
         declare_test_vars();
+        repl_feed_line_public("glBegin(GL_TRIANGLES);");
+        g_edit_line = 0;
+
+        GLCmd cmd;
+        ReplParseContext ctx = { g_num_cmds, NULL, 0 };
+        memset(&cmd, 0, sizeof(cmd));
+        int ok = repl_parse_command_ctx("glVertex3f(1, 2, 3)", &cmd, &ctx);
+        ASSERT_TRUE("context parse ok", ok == 1);
+        ASSERT_TRUE("context parse uses source line indent",
+                    leading_spaces(cmd.source) == 4);
+        ASSERT_TRUE("context parse leaves edit line alone", g_edit_line == 0);
+
+        memset(&cmd, 0, sizeof(cmd));
+        ok = repl_parse_and_normalize("glColor3f(1, 0, 0)", g_num_cmds,
+                                      NULL, 0, 0, &cmd);
+        ASSERT_TRUE("normalize explicit line ok", ok == 1);
+        ASSERT_TRUE("normalize explicit line leaves edit line alone",
+                    g_edit_line == 0);
+    }
+
+    {
+        repl_reset_state();
+        declare_test_vars();
         repl_feed_line_public("gluBegin(GLU_POLYGON);");
         repl_feed_line_public("gluBegin(GLU_CONTOUR);");
         repl_feed_line_public("glBegin(GL_TRIANGLES);");

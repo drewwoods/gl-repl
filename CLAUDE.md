@@ -81,9 +81,11 @@ Run all: `make test`
 |------|----------------|
 | `sample.c` | GLUT callback wrappers, `main()`, window setup |
 | `sample.h` | Shared types (`GLCmd`, `CmdType`, `SceneLight`, `CfgItem`), extern globals, utility declarations, `CFG_DEFAULT_*` macros |
-| `repl_core.c` | Normalization, display callback, GL init, source/depth queries |
+| `repl_core.c` | Normalization, display callback, GL init |
 | `repl_parser.c` | REPL source-line parser, expression validation, canonical `GLCmd.source[]` generation |
-| `repl_parser.h` | Parser entrypoints (`repl_parse_command*`) |
+| `repl_parser.h` | Parser entrypoints (`repl_parse_command*`, `repl_parse_command_ctx`) and `ReplParseContext` |
+| `repl_source_scope.c` | Source prefix-depth cache, indentation helpers, block lookup |
+| `repl_source_scope.h` | Source-scope query API (`block_depth_at`, `find_block_end`, indent helpers) |
 | `repl_commit.c` | Float declarations, variable assignments, structured block commits, close-brace commits |
 | `repl_core.h` | Public API (parse, flatten, display, input callbacks, user scene + workspace) |
 | `repl_core_internal.h` | Test-visible internals (normalize/commit pipeline, `feed_line`, `load_line_to_input`, `repl_promote_example_if_needed`) |
@@ -373,7 +375,9 @@ The core data flow is **source commands → flat commands → GL calls**:
    `parse_command`).
 3. **Parse** — `parse_command()` in `repl_parser.c` matches the line to a
    `CmdType`, evaluates argument expressions via `eval_expr()`, stores
-   result in `GLCmd.args[]` and normalized text in `GLCmd.source[]`
+   result in `GLCmd.args[]` and normalized text in `GLCmd.source[]`.
+   Internal call sites pass `ReplParseContext.source_line_idx` instead of
+   temporarily changing `g_edit_line`.
 4. **Flatten** — `flatten_range()` recursively expands the source array:
    for-loops iterate (capped at 100k visits), function calls inline the
    body with actual args, if-blocks evaluate conditions. Recursion

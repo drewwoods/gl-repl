@@ -379,10 +379,9 @@ static void flatten_range(FlattenContext *ctx,
 
         if (vars && nv > 0) {
             GLCmd tmp;
+            ReplParseContext parse_ctx = { i, vars, nv };
             memset(&tmp, 0, sizeof(tmp));
-            int saved = g_edit_line;
-            g_edit_line = g_num_flat_cmds;
-            if (repl_parse_command_with_vars(g_cmds[i].source, &tmp, vars, nv)) {
+            if (repl_parse_command_ctx(g_cmds[i].source, &tmp, &parse_ctx)) {
                 tmp.has_vars = g_cmds[i].has_vars;
                 strncpy(tmp.source, g_cmds[i].source, sizeof(tmp.source) - 1);
                 tmp.source[sizeof(tmp.source) - 1] = '\0';
@@ -396,12 +395,12 @@ static void flatten_range(FlattenContext *ctx,
                        (size_t)snap_n * sizeof(ExprVar));
                 g_flat_cmds[g_num_flat_cmds++] = tmp;
             }
-            g_edit_line = saved;
         } else if (g_cmds[i].has_vars) {
             /* Outside loop but has predefined var references: re-evaluate */
             GLCmd tmp;
+            ReplParseContext parse_ctx = { i, NULL, 0 };
             memset(&tmp, 0, sizeof(tmp));
-            if (repl_parse_command(g_cmds[i].source, &tmp)) {
+            if (repl_parse_command_ctx(g_cmds[i].source, &tmp, &parse_ctx)) {
                 tmp.has_vars = 1;
                 strncpy(tmp.source, g_cmds[i].source, sizeof(tmp.source) - 1);
                 tmp.source[sizeof(tmp.source) - 1] = '\0';

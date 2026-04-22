@@ -228,8 +228,11 @@ place. The next large mechanical extraction, parser ownership, is now done.
 
 - `repl_parser.c` now owns the parser grammar and the public
   `repl_parse_command*()` entrypoints.
-- `repl_core.c` keeps normalization, display, GL init, and the depth/indent
-  helpers that are still tied to the source-command prefix cache.
+- `ReplParseContext` now carries the source-line index and visible locals for
+  parser calls that need source-sensitive indentation.
+- `repl_source_scope.c` owns the source-command prefix-depth cache, indentation
+  helpers, `find_block_end()`, and nearest-open-block queries.
+- `repl_core.c` keeps normalization, display, and GL init.
 - `Makefile`, `MODULES.md`, `ARCHITECTURE.md`, and the local agent docs now
   list parser ownership explicitly.
 - **Verify:** `make test_repl_core_parse`, `make test_repl_core_commit`,

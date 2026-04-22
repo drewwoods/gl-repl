@@ -8,10 +8,12 @@
 The immediate-mode REPL is now split across focused translation units instead
 of one monolithic `repl_core.c`.
 
-- `repl_core.c`: normalization, depth/cache queries, display callback, and
-  OpenGL initialization.
+- `repl_core.c`: normalization, display callback, and OpenGL initialization.
 - `repl_parser.c`: source-line parser, expression validation against visible
-  variables, and canonical `GLCmd.source[]` generation for GL commands.
+  variables, explicit `ReplParseContext`, and canonical `GLCmd.source[]`
+  generation for GL commands.
+- `repl_source_scope.c`: source-command prefix-depth cache, indentation
+  helpers, `find_block_end()`, and nearest-open-block queries.
 - `repl_flatten.c`: source-to-flat command expansion and flat-command cursor
   matching.
 - `repl_executor.c`: flat-command execution, state-command dispatch, replay
@@ -176,7 +178,7 @@ Owns the semantic model and display infrastructure.
 
 - `g_cmds[]`, `g_num_cmds`
 - `g_flat_cmds[]`, `g_num_flat_cmds`
-- normalization and scope/depth caches
+- normalization and reformat orchestration
 - display callback
 - GL init
 
@@ -184,11 +186,22 @@ Owns the semantic model and display infrastructure.
 
 Owns the general GL command parser.
 
+- `ReplParseContext` (`source_line_idx`, visible locals)
 - `repl_parse_command()`
 - `repl_parse_command_with_vars()`
+- `repl_parse_command_ctx()`
 - table-driven fixed-arity/enum command matching
 - custom parser branches for material, point-parameter, tessellator,
   function-call, label, and goto syntax
+
+### `repl_source_scope.c`
+
+Owns source-command scope/depth lookups.
+
+- prefix-depth cache invalidated through `depth_cache_invalidate()`
+- `block_depth_at()`, `in_begin_block_at()`, `tess_scope_depth_at()`
+- `cmd_indent()`, `cmd_tess_indent()`, `cmd_indent_chars()`
+- `find_block_end()`, `nearest_open_block_at()`
 
 ### `repl_flatten.c`
 
@@ -403,8 +416,9 @@ state, hit rectangles, and rendering live outside `ui_panels.c`.
   of duplicating literals.
 - New per-module headers are introduced only when they establish a real
   ownership boundary. Avoid adding headers for cosmetic splits.
-- Parser internals live in `repl_parser.c`; editor/search/export/core call
-  into its public parser entrypoints rather than duplicating logic.
+- Parser internals live in `repl_parser.c`; editor/search/export/core pass an
+  explicit `ReplParseContext` when the source-line index matters and otherwise
+  call the compatibility wrappers.
 
 ## Refactoring Ownership Map
 
@@ -496,7 +510,7 @@ chasing the call sites. Ordering within a helper is load-bearing:
 `"float"`.
 
 These helpers update `g_cmds[]` directly, but they still rely on parser
-helpers from `repl_parser.c` and scope helpers from `repl_core.c` for
+helpers from `repl_parser.c` and scope helpers from `repl_source_scope.c` for
 validation and normalization.
 
 ### Float variable declarations

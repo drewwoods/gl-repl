@@ -38,14 +38,15 @@ failure should be treated as a regression unless explicitly rebaselined.
    - Remove scattered direct mutation patterns such as manual `memmove`, direct `g_num_cmds++`, ad hoc declaration unregister/register, and forgotten dirty flags.
 
 4. **Separate command parsing from core state**
-   - Done: parser logic now lives in `repl_parser.c` behind the existing `repl_parse_command*()` entrypoints.
+   - Done: parser logic now lives in `repl_parser.c` behind the existing `repl_parse_command*()` entrypoints plus explicit `ReplParseContext` for source-line-sensitive parsing.
    - Done: `repl_command_spec.c` owns the command descriptor table for simple fixed-arity GL commands, enum arguments, normalized source formatting, and basic command properties.
+   - Done: source prefix-depth and indentation ownership now lives in `repl_source_scope.c`.
    - Keep complex forms custom but isolated: declarations, assignment, loops, functions, conditionals, tessellation, `glMaterialf`, point parameters, comments, labels, and goto/replay metadata.
    - Use command metadata later for autocomplete, export, display classification, and execution dispatch.
 
 5. **Split flattening and execution**
    - Move flattening into its own module with explicit inputs: source program, variable context, source-line provenance, recursion limits, and error/status output.
-   - Stop using unrelated globals such as `g_edit_line` as temporary parse context during flattening.
+   - Done: flattening no longer mutates `g_edit_line` as temporary parse context; it passes `ReplParseContext.source_line_idx`.
    - Move GL execution into a separate executor that receives a `FlatProgramView` and range/options object. Replay should pass an execution limit instead of temporarily mutating `g_num_flat_cmds`.
 
 6. **Make editor input a mode router**
