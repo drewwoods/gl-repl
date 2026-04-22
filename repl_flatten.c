@@ -309,8 +309,12 @@ static void flatten_range(FlattenContext *ctx,
             if (!def_found) {
                 char msg[64];
                 snprintf(msg, sizeof(msg),
-                         "func%d not defined", func_num);
+                         "Error: func%d not defined", func_num);
                 flatten_note_status(ctx, msg);
+                /* Also log to stderr so the error is visible in the
+                 * terminal even if a later flatten pass clobbers the
+                 * status line. */
+                fprintf(stderr, "%s\n", msg);
             }
             i++;
             continue;
