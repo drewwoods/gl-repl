@@ -8,6 +8,7 @@
 #include "sample.h"
 #include "profile_panel.h"
 #include "ui_panels.h"
+#include "repl_variable_panel.h"
 #include <stdio.h>
 #include <string.h>
 

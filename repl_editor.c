@@ -25,6 +25,7 @@
 #include "repl_replay.h"
 #include "repl_keys.h"
 #include "ui_panels.h"
+#include "repl_variable_panel.h"
 #include "repl_audio.h"
 
 /* ========================================================================= */
