@@ -9,9 +9,9 @@ extractions that can each land as a single reviewable commit *today*,
 without committing to the larger context-object rewrite.
 
 Five files still dominate the codebase: `scene_render.c` (2861),
-`repl_export.c` (2541), `ui_panels.c` (1610 — down from 4452 after
-several Phase-7 extractions including help overlay), `repl_core.c`
-(~1958), `repl_editor.c` (1687). The highest-value remaining refactors
+`repl_export.c` (2541), `ui_panels.c` (1399 — down from 4452 after
+Phase-7 extractions including help overlay and variable panel),
+`repl_core.c` (~1958), `repl_editor.c` (1688). The highest-value remaining refactors
 fall into two camps:
 
 1. **Mechanical extractions** — self-contained features still living in
@@ -41,6 +41,17 @@ Landed as `refactor: extract help overlay` on branch
 shrunk from 2051 → 1610 LoC). State globals (`g_show_help`,
 `g_help_tab`, `g_help_scroll`) stayed in `repl_state.h` because they
 are mutated from `repl_editor.c` and `repl_search.c`.
+
+### 1b. Extract variable panel → `repl_variable_panel.c` ✅ DONE
+
+Landed as `refactor: extract variable slider panel`. `render_var_panel()`,
+`var_panel_rect()`, `var_panel_hit()`, the asinh slider math, and the
+replay-lift easing state moved out of `ui_panels.c` (1610 → 1399 LoC).
+The renderer is read-only on `g_predef_vars`; mutation stays with the
+editor's drag handler (`g_drag_var` in `repl_editor.c`), satisfying
+the "keep variable mutation outside the renderer" constraint.
+`render_scene_status()` got its own section header in `ui_panels.c`
+since the var-panel section that previously housed it is gone.
 
 ### 2. Extract color picker → `ui_color_picker.c`
 

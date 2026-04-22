@@ -58,6 +58,7 @@
 #include "scene_render.h"
 #include "ui_panels.h"
 #include "repl_help_overlay.h"
+#include "repl_variable_panel.h"
 #include "profile_panel.h"
 
 #include <sys/stat.h>

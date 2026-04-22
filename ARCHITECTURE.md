@@ -403,8 +403,10 @@ captures the intended behavior change.
   document-line targets; `ui_panels.c` consumes those models while rendering.
 - **UI overlays:** owns visible but non-core controls. `repl_menu_bar.c` owns
   menus/dropdowns/search slot, `repl_color_picker.c` owns the floating color
-  editor, `repl_help_overlay.c` owns the modal F1 help overlay, and
-  `ui_panels.c` still owns autocomplete/variable-panel/rename.
+  editor, `repl_help_overlay.c` owns the modal F1 help overlay,
+  `repl_variable_panel.c` owns the floating variable slider panel
+  (rendering only — drag mutation lives in `repl_editor.c`), and
+  `ui_panels.c` still owns autocomplete/rename.
 - **Scene renderer:** owns camera/view setup, grid/axes/overlay drawing, and GL
   state discipline for a single frame.
 - **Import/export:** owns scaffold sections, workspace metadata, and
