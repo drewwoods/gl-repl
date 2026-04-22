@@ -37,7 +37,7 @@ in isolation; each item is sized to land as one `refactor:` commit.
 
 ## Tier 1 — Mechanical extractions (hours each, near-zero risk)
 
-### 1. Extract help overlay → `repl_help_overlay.c` ✅ DONE
+### 1. Extract help overlay → `ui_help_overlay.c` ✅ DONE
 
 Landed as `refactor: extract help overlay` on branch
 `immediate-mode-repl/repl-cleanup-2`. `render_help()` plus its
@@ -46,7 +46,7 @@ shrunk from 2051 → 1610 LoC). State globals (`g_show_help`,
 `g_help_tab`, `g_help_scroll`) stayed in `repl_state.h` because they
 are mutated from `repl_editor.c` and `repl_search.c`.
 
-### 1b. Extract variable panel → `repl_variable_panel.c` ✅ DONE
+### 1b. Extract variable panel → `ui_variable_panel.c` ✅ DONE
 
 Landed as `refactor: extract variable slider panel`. `render_var_panel()`,
 `var_panel_rect()`, `var_panel_hit()`, the asinh slider math, and the
@@ -57,7 +57,7 @@ the "keep variable mutation outside the renderer" constraint.
 `render_scene_status()` got its own section header in `ui_panels.c`
 since the var-panel section that previously housed it is gone.
 
-### 1c. Extract autocomplete popup → `repl_autocomplete_panel.c` ✅ DONE
+### 1c. Extract autocomplete popup → `ui_autocomplete_panel.c` ✅ DONE
 
 Landed as `refactor: extract autocomplete popup renderer`. Pairs with
 the existing model-only `repl_autocomplete.c`: the new module owns
@@ -66,7 +66,7 @@ match building, selection state, ghost text, and parameter hints.
 `ui_panels.c` 1399 → 1327 LoC. Inline ghost/hint text drawn next to
 the input line stays in `ui_panels.c` (it needs the surrounding
 code-panel row layout). Public entrypoint uses the newer module-
-prefix convention: `repl_autocomplete_panel_render()` (replacing
+prefix convention: `ui_autocomplete_panel_render()` (replacing
 the bare `render_autocomplete()`).
 
 ### 1d. Extract inline rename → `repl_inline_rename.c` ✅ DONE
@@ -98,25 +98,25 @@ convention: `repl_var_drag_begin(row, log_mode, x)`,
 `repl_var_drag_active()`, `repl_var_drag_active_var()`,
 `repl_var_drag_log_mode()`. `repl_editor.c`'s mouse_func and
 motion_func now call the API instead of touching state directly;
-`repl_variable_panel.c` reads drag state through the accessors.
+`ui_variable_panel.c` reads drag state through the accessors.
 The value-writeback logic (linear/log mapping, `g_predef_vars`
 write, matching `CMD_VAR_ASSIGN` source sync, `g_flat_dirty = 1`)
 is now in one place instead of split across mouse-begin and
 motion handlers.
 
-### 2. Extract color picker → `repl_color_picker.c` ✅ DONE
+### 2. Extract color picker → `ui_color_picker.c` ✅ DONE
 
 Landed as `refactor: split code panel UI responsibilities`. The floating
 HSV/alpha picker, literal color swatches, hit rectangles, and command
-rewrite logic live in `repl_color_picker.c`; `ui_panels.c` only invokes
+rewrite logic live in `ui_color_picker.c`; `ui_panels.c` only invokes
 the public input/render bridge.
 
-### 3. Extract menu/dropdown rendering → `repl_menu_bar.c` ✅ DONE
+### 3. Extract menu/dropdown rendering → `ui_menu_bar.c` ✅ DONE
 
 Landed as `refactor: split code panel UI responsibilities`. Top-level
 menu/dropdown state, menu hit-testing, right-click config cycling, pinned
 button hit-testing, the inline search slot, and example dropdown rendering
-live in `repl_menu_bar.c`. Side effects remain in `repl_actions.c`.
+live in `ui_menu_bar.c`. Side effects remain in `repl_actions.c`.
 
 ---
 

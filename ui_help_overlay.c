@@ -6,7 +6,7 @@
  * so the displayed bindings always match the actual config table.
  */
 #include "sample.h"
-#include "repl_help_overlay.h"
+#include "ui_help_overlay.h"
 
 /* Compile-time stringify for embedding macro values in string literals */
 #define _HELP_STR2(x) #x

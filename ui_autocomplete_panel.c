@@ -11,10 +11,10 @@
  * layout has the surrounding context.
  */
 #include "sample.h"
-#include "repl_autocomplete_panel.h"
+#include "ui_autocomplete_panel.h"
 #include "ui_panels.h"
 
-void repl_autocomplete_panel_render(void) {
+void ui_autocomplete_panel_render(void) {
     if (g_ac_count < 1) return;
 
     begin_2d();

@@ -6,15 +6,15 @@
  */
 #include "sample.h"
 #include "repl_actions.h"
-#include "repl_color_picker.h"
+#include "ui_color_picker.h"
 #include "repl_code_panel_document.h"
 #include "repl_core.h"
 #include "repl_core_internal.h"
 #include "repl_clipboard.h"
 #include "repl_keys.h"
-#include "repl_menu_bar.h"
+#include "ui_menu_bar.h"
 #include "repl_replay_annotations.h"
-#include "profile_panel.h"
+#include "ui_profile_panel.h"
 #include "ui_panels.h"
 
 /* Status footer height — design: 22px strip flush against code panel bottom */
@@ -429,8 +429,8 @@ void render_code_panel(void) {
     glEnd();
     glDisable(GL_BLEND);
 
-    repl_menu_bar_render();
-    repl_menu_bar_render_search_overlay(cp_x, panel_w, panel_top);
+    ui_menu_bar_render();
+    ui_menu_bar_render_search_overlay(cp_x, panel_w, panel_top);
 
     prof_end(PROF_CODE_PANEL_CHROME);
     prof_begin(PROF_CODE_PANEL_LINES);
@@ -594,11 +594,11 @@ void render_code_panel(void) {
                                             idx_s, FONT_MONO);
                             }
                             /* Color swatch for glColor / glClearColor */
-                            if (repl_color_picker_can_edit_cmd(i)) {
-                                int sw = REPL_COLOR_SWATCH_W;
+                            if (ui_color_picker_can_edit_cmd(i)) {
+                                int sw = UI_COLOR_SWATCH_W;
                                 int sx = cp_x + cp_w - CODE_MARGIN_X - sw - 2;
                                 int sy = line_y + (LINE_H - sw) / 2 - 1;
-                                repl_color_picker_render_swatch(i, sx, sy);
+                                ui_color_picker_render_swatch(i, sx, sy);
                             }
                         }
                         color_for_type(g_cmds[i].type);
@@ -868,7 +868,7 @@ void render_code_panel(void) {
         glDisable(GL_BLEND);
     }
 
-    repl_color_picker_render();
+    ui_color_picker_render();
 
     prof_end(PROF_CODE_PANEL_OVERLAYS);
 
@@ -951,15 +951,15 @@ void render_scene_status(void) {
 /* ========================================================================= */
 
 int ui_panels_handle_right_press(int mx, int my) {
-    return repl_menu_bar_handle_config_right_press(mx, my);
+    return ui_menu_bar_handle_config_right_press(mx, my);
 }
 
 void ui_panels_close_menus(void) {
-    repl_menu_bar_close();
-    repl_color_picker_close();
+    ui_menu_bar_close();
+    ui_color_picker_close();
 }
 void ui_panels_open_config(void) {
-    repl_menu_bar_open_config();
+    ui_menu_bar_open_config();
 }
 
 /* ========================================================================= */
@@ -1102,15 +1102,15 @@ int handle_code_panel_press(int mx, int my) {
 
     /* Color picker floats and may overlap the code panel (e.g. top/bottom
      * layouts).  Give it first crack so its hit rects take priority. */
-    if (repl_color_picker_press(mx, my))
+    if (ui_color_picker_press(mx, my))
         return UI_PANEL_PRESS_CONSUMED;
 
     /* Pins (Search, Replay) take priority over menu labels and dropdown items
      * so they remain clickable even when a menu label visually overlaps them
      * in a narrow window — matches the render order (pins drawn on top). */
-    int pin = repl_menu_bar_pin_hit(mx, my);
+    int pin = ui_menu_bar_pin_hit(mx, my);
     if (pin >= 0) {
-        repl_menu_bar_close();
+        ui_menu_bar_close();
         switch (pin) {
         case REPL_MENU_BAR_PIN_REPLAY:
             /* Button mirrors its glyph: pause when playing, resume when
@@ -1125,7 +1125,7 @@ int handle_code_panel_press(int mx, int my) {
             break;
         case REPL_MENU_BAR_PIN_SEARCH:
             handle_search_key(KEY_CTRL_F);
-            repl_menu_bar_note_search_opened();
+            ui_menu_bar_note_search_opened();
             break;
         }
         return UI_PANEL_PRESS_CONSUMED;
@@ -1135,28 +1135,28 @@ int handle_code_panel_press(int mx, int my) {
     if (menu_dropdown_is_open()) {
         /* Clicking the same top-level menu toggles closed; clicking another
          * switches to it. */
-        int open_menu = repl_menu_bar_open_menu_id();
-        int over_menu = repl_menu_bar_menu_hit(mx, my);
+        int open_menu = ui_menu_bar_open_menu_id();
+        int over_menu = ui_menu_bar_menu_hit(mx, my);
         if (over_menu >= 0) {
             if (over_menu == open_menu) {
-                repl_menu_bar_close();
+                ui_menu_bar_close();
             } else {
-                repl_menu_bar_set_open_menu(over_menu);
+                ui_menu_bar_set_open_menu(over_menu);
             }
             return UI_PANEL_PRESS_CONSUMED;
         }
-        int item = repl_menu_bar_dropdown_item_hit(mx, my);
+        int item = ui_menu_bar_dropdown_item_hit(mx, my);
         if (item >= 0) {
-            repl_menu_bar_activate_dropdown_item(item);
+            ui_menu_bar_activate_dropdown_item(item);
             return UI_PANEL_PRESS_CONSUMED;
         }
         /* Click outside dropdown: dismiss, fall through for code nav */
-        repl_menu_bar_close();
+        ui_menu_bar_close();
     }
 
-    int menu = repl_menu_bar_menu_hit(mx, my);
+    int menu = ui_menu_bar_menu_hit(mx, my);
     if (menu >= 0) {
-        repl_menu_bar_set_open_menu(menu);
+        ui_menu_bar_set_open_menu(menu);
         return UI_PANEL_PRESS_CONSUMED;
     }
 
@@ -1166,16 +1166,16 @@ int handle_code_panel_press(int mx, int my) {
 
     /* Check for swatch click on a color line */
     if (!on_insert_line && row_offset == 0 && target >= 0 && target < g_num_cmds) {
-        if (repl_color_picker_can_edit_cmd(target)) {
+        if (ui_color_picker_can_edit_cmd(target)) {
             int cp_x2, cp_w2;
             code_panel_rect(&cp_x2, NULL, &cp_w2, NULL);
-            int sx = cp_x2 + cp_w2 - CODE_MARGIN_X - REPL_COLOR_SWATCH_W - 2;
-            if (mx >= sx && mx < sx + REPL_COLOR_SWATCH_W) {
-                if (repl_color_picker_active_line() == target) {
-                    repl_color_picker_close();   /* toggle: close picker */
+            int sx = cp_x2 + cp_w2 - CODE_MARGIN_X - UI_COLOR_SWATCH_W - 2;
+            if (mx >= sx && mx < sx + UI_COLOR_SWATCH_W) {
+                if (ui_color_picker_active_line() == target) {
+                    ui_color_picker_close();   /* toggle: close picker */
                 } else {
                     actions |= UI_PANEL_PRESS_OPENED_COLOR_PICKER;
-                    repl_color_picker_open(target, my);
+                    ui_color_picker_open(target, my);
                 }
                 glutPostRedisplay();
                 return actions | UI_PANEL_PRESS_CONSUMED;
@@ -1183,7 +1183,7 @@ int handle_code_panel_press(int mx, int my) {
         }
     }
     /* Any non-swatch code-panel click closes the picker */
-    repl_color_picker_close();
+    ui_color_picker_close();
 
     handle_code_panel_click(mx, my);
 
@@ -1220,18 +1220,18 @@ void handle_code_panel_release(void) {
 }
 
 int ui_panels_handle_escape(void) {
-    return repl_color_picker_close();
+    return ui_color_picker_close();
 }
 
 int ui_panels_handle_scene_press(int mx, int my) {
-    return repl_color_picker_press(mx, my);
+    return ui_color_picker_press(mx, my);
 }
 
 int ui_panels_handle_motion(int mx, int my) {
-    return repl_color_picker_motion(mx, my);
+    return ui_color_picker_motion(mx, my);
 }
 
 void ui_panels_handle_mouse_release(void) {
-    repl_color_picker_release();
+    ui_color_picker_release();
     handle_code_panel_release();
 }

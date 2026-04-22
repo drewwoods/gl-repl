@@ -5,7 +5,7 @@
 #include "repl_actions.h"
 #include "repl_core.h"
 #include "repl_keys.h"
-#include "repl_menu_bar.h"
+#include "ui_menu_bar.h"
 #include "ui_panels.h"
 
 /* Menu bar — styled after Header Wireframes v2.
@@ -41,11 +41,11 @@ static float g_menu_open_time = -1.0f;   /* g_anim_time when current menu opened
 static float g_search_open_time = -1.0f; /* g_anim_time when search opened */
 #define UI_FADE_DURATION 0.18f
 
-static int repl_menu_bar_panel_visible(void);
+static int ui_menu_bar_panel_visible(void);
 
 int menu_dropdown_is_open(void) {
     return g_open_menu >= 0 &&
-           repl_menu_bar_panel_visible();
+           ui_menu_bar_panel_visible();
 }
 int example_dropdown_is_open(void) { return menu_dropdown_is_open(); }
 
@@ -249,7 +249,7 @@ static void menubar_rects(int menu_x[NUM_MENUS], int menu_w[NUM_MENUS],
     pin_x[PIN_SEARCH] = pin_x[PIN_REPLAY] - search_w;
 }
 
-int repl_menu_bar_menu_hit(int gx, int gy) {
+int ui_menu_bar_menu_hit(int gx, int gy) {
     int menu_x[NUM_MENUS], menu_w[NUM_MENUS];
     int pin_x[NUM_PIN_BTNS], pin_w[NUM_PIN_BTNS];
     int by, bh;
@@ -261,7 +261,7 @@ int repl_menu_bar_menu_hit(int gx, int gy) {
     return -1;
 }
 
-int repl_menu_bar_pin_hit(int gx, int gy) {
+int ui_menu_bar_pin_hit(int gx, int gy) {
     int menu_x[NUM_MENUS], menu_w[NUM_MENUS];
     int pin_x[NUM_PIN_BTNS], pin_w[NUM_PIN_BTNS];
     int by, bh;
@@ -275,7 +275,7 @@ int repl_menu_bar_pin_hit(int gx, int gy) {
 
 static int menu_dropdown_rect(int *dx, int *dy, int *dw, int *dh) {
     if (g_open_menu < 0) return 0;
-    if (!repl_menu_bar_panel_visible()) return 0;
+    if (!ui_menu_bar_panel_visible()) return 0;
     int menu_x[NUM_MENUS], menu_w[NUM_MENUS];
     int pin_x[NUM_PIN_BTNS], pin_w[NUM_PIN_BTNS];
     int by, bh;
@@ -310,7 +310,7 @@ static int menu_dropdown_rect(int *dx, int *dy, int *dw, int *dh) {
     return 1;
 }
 
-int repl_menu_bar_dropdown_item_hit(int gx, int gy) {
+int ui_menu_bar_dropdown_item_hit(int gx, int gy) {
     if (g_open_menu < 0) return -1;
     int n = menu_item_count(g_open_menu);
     if (n == 0) return -1;
@@ -326,24 +326,24 @@ int repl_menu_bar_dropdown_item_hit(int gx, int gy) {
 }
 
 
-static int repl_menu_bar_panel_visible(void) {
+static int ui_menu_bar_panel_visible(void) {
     int cp_w, cp_h;
     code_panel_rect(NULL, NULL, &cp_w, &cp_h);
     return cp_w > 0 && cp_h > 0;
 }
 
-int repl_menu_bar_open_menu_id(void) {
+int ui_menu_bar_open_menu_id(void) {
     return g_open_menu;
 }
 
-void repl_menu_bar_close(void) {
+void ui_menu_bar_close(void) {
     g_open_menu = -1;
     g_menu_item_hover = -1;
 }
 
-void repl_menu_bar_set_open_menu(int menu_id) {
+void ui_menu_bar_set_open_menu(int menu_id) {
     if (menu_id < 0 || menu_id >= NUM_MENUS) {
-        repl_menu_bar_close();
+        ui_menu_bar_close();
         return;
     }
     g_open_menu = menu_id;
@@ -351,32 +351,32 @@ void repl_menu_bar_set_open_menu(int menu_id) {
     g_menu_item_hover = -1;
 }
 
-void repl_menu_bar_open_config(void) {
+void ui_menu_bar_open_config(void) {
     if (g_open_menu == MENU_CONFIG) {
-        repl_menu_bar_close();
+        ui_menu_bar_close();
         return;
     }
-    repl_menu_bar_set_open_menu(MENU_CONFIG);
+    ui_menu_bar_set_open_menu(MENU_CONFIG);
 }
 
-int repl_menu_bar_handle_config_right_press(int mx, int my) {
+int ui_menu_bar_handle_config_right_press(int mx, int my) {
     if (g_open_menu != MENU_CONFIG) return 0;
-    int item = repl_menu_bar_dropdown_item_hit(mx, my);
+    int item = ui_menu_bar_dropdown_item_hit(mx, my);
     if (item < 0) return 0;
     repl_cfg_cycle_row(item, -1);
     return 1;
 }
 
-int repl_menu_bar_activate_dropdown_item(int item_idx) {
+int ui_menu_bar_activate_dropdown_item(int item_idx) {
     if (g_open_menu < 0)
         return 0;
     int close = menu_item_activate(g_open_menu, item_idx);
     if (close)
-        repl_menu_bar_close();
+        ui_menu_bar_close();
     return close;
 }
 
-void repl_menu_bar_note_search_opened(void) {
+void ui_menu_bar_note_search_opened(void) {
     g_search_open_time = g_anim_time;
 }
 
@@ -451,7 +451,7 @@ static void draw_search_icon(float cx, float cy, float r) {
     glEnd();
 }
 
-void repl_menu_bar_render_search_overlay(int cp_x, int panel_w, int panel_top) {
+void ui_menu_bar_render_search_overlay(int cp_x, int panel_w, int panel_top) {
     char count_buf[32];
     char query_buf[128];
     int cursor_col = 0;
@@ -545,7 +545,7 @@ void repl_menu_bar_render_search_overlay(int cp_x, int panel_w, int panel_top) {
 }
 
 
-void repl_menu_bar_render(void) {
+void ui_menu_bar_render(void) {
     int cp_x, cp_y, cp_w, cp_h;
     code_panel_rect(&cp_x, &cp_y, &cp_w, &cp_h);
     (void)cp_y;
@@ -565,8 +565,8 @@ void repl_menu_bar_render(void) {
         glColor4f(0.114f, 0.114f, 0.114f, 0.98f);
         draw_quad((float)cp_x, (float)by, (float)cp_w, (float)bh);
 
-        int hover_menu = repl_menu_bar_menu_hit(g_mouse_x, g_mouse_y);
-        int hover_pin  = repl_menu_bar_pin_hit(g_mouse_x, g_mouse_y);
+        int hover_menu = ui_menu_bar_menu_hit(g_mouse_x, g_mouse_y);
+        int hover_pin  = ui_menu_bar_pin_hit(g_mouse_x, g_mouse_y);
 
         /* Left-side menu labels */
         for (int i = 0; i < NUM_MENUS; i++) {
@@ -694,7 +694,7 @@ void render_example_dropdown(void) {
     int dx, dy, dw, dh;
     if (!menu_dropdown_rect(&dx, &dy, &dw, &dh)) return;
 
-    g_menu_item_hover = repl_menu_bar_dropdown_item_hit(g_mouse_x, g_mouse_y);
+    g_menu_item_hover = ui_menu_bar_dropdown_item_hit(g_mouse_x, g_mouse_y);
 
     float alpha = ui_fade_alpha(g_menu_open_time);
 

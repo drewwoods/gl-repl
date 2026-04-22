@@ -41,11 +41,11 @@
  *   repl_replay.c  — replay state machine and fade-batch rendering
  *   repl_replay_annotations.c — code-panel replay variable annotations
  *   scene_render.c — 3D scene setup, grid / axes / overlay drawing
- *   repl_menu_bar.c — code-panel menus, dropdowns, and search slot
- *   repl_color_picker.c — floating literal-color editor
- *   repl_autocomplete_panel.c — floating autocomplete popup renderer
- *   repl_help_overlay.c — modal F1 help overlay
- *   repl_variable_panel.c — floating variable panel renderer
+ *   ui_menu_bar.c — code-panel menus, dropdowns, and search slot
+ *   ui_color_picker.c — floating literal-color editor
+ *   ui_autocomplete_panel.c — floating autocomplete popup renderer
+ *   ui_help_overlay.c — modal F1 help overlay
+ *   ui_variable_panel.c — floating variable panel renderer
  *   repl_inline_rename.c — scene-rename input buffer
  *   repl_var_drag.c — variable slider drag state/writeback
  *   ui_panels.c    — code rows, scene status, hit routing
@@ -62,10 +62,10 @@
 #include "cmd_format.h"
 #include "scene_render.h"
 #include "ui_panels.h"
-#include "repl_autocomplete_panel.h"
-#include "repl_help_overlay.h"
-#include "repl_variable_panel.h"
-#include "profile_panel.h"
+#include "ui_autocomplete_panel.h"
+#include "ui_help_overlay.h"
+#include "ui_variable_panel.h"
+#include "ui_profile_panel.h"
 
 #include <sys/stat.h>
 #include <sys/types.h>
@@ -1602,7 +1602,7 @@ static void display_func(void) {
     prof_end(PROF_CODE_PANEL);
 
     prof_begin(PROF_UI_PANELS);
-    repl_autocomplete_panel_render();
+    ui_autocomplete_panel_render();
     render_example_dropdown();
     render_var_panel();
     render_scene_status();

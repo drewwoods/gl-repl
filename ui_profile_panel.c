@@ -1,5 +1,5 @@
 /*
- * profile_panel.c — per-section wall-time profiling overlay panel.
+ * ui_profile_panel.c — per-section wall-time profiling overlay panel.
  *
  * Uses a fast monotonic clock so sampling doesn't itself dominate the
  * sections it measures:
@@ -17,9 +17,9 @@
  */
 #define _POSIX_C_SOURCE 200809L
 #include "sample.h"
-#include "profile_panel.h"
+#include "ui_profile_panel.h"
 #include "ui_panels.h"
-#include "repl_variable_panel.h"
+#include "ui_variable_panel.h"
 
 #include <time.h>
 

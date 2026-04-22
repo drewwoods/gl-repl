@@ -5,8 +5,8 @@
  * compact overlay showing the last measured time and a smoothed average.
  * Toggle with Ctrl+W.
  */
-#ifndef PROFILE_PANEL_H
-#define PROFILE_PANEL_H
+#ifndef UI_PROFILE_PANEL_H
+#define UI_PROFILE_PANEL_H
 
 /* Sections that are timed each frame (or whenever they run). */
 typedef enum {
@@ -79,4 +79,4 @@ void render_profile_panel(void);
 /* Whether detail rows should be rendered/timed for PROF_CODE_PANEL. */
 int prof_code_panel_details_enabled(void);
 
-#endif /* PROFILE_PANEL_H */
+#endif /* UI_PROFILE_PANEL_H */

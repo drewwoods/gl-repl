@@ -1,9 +1,9 @@
 /*
- * repl_color_picker.c -- Floating color picker for literal color commands.
+ * ui_color_picker.c -- Floating color picker for literal color commands.
  */
 #include "sample.h"
 #include "repl_core_internal.h"
-#include "repl_color_picker.h"
+#include "ui_color_picker.h"
 #include "ui_panels.h"
 
 /* ========================================================================= */
@@ -129,7 +129,7 @@ static void color_picker_write_cmd(void) {
 }
 
 /* Open (or switch) the picker for cmd_idx.  my is GLUT screen y coord. */
-void repl_color_picker_open(int cmd_idx, int my) {
+void ui_color_picker_open(int cmd_idx, int my) {
     int cp_x, cp_w;
     code_panel_rect(&cp_x, NULL, &cp_w, NULL);
     g_cp_line      = cmd_idx;
@@ -158,7 +158,7 @@ void repl_color_picker_open(int cmd_idx, int my) {
     g_cp_px = ppx;  g_cp_py = ppy;
 }
 
-void repl_color_picker_render(void) {
+void ui_color_picker_render(void) {
     if (g_cp_line < 0) return;
     int px = g_cp_px, py = g_cp_py, sz = CP_SV_SZ;
     int pw = sz + CP_GAP + CP_HUE_W
@@ -288,7 +288,7 @@ void repl_color_picker_render(void) {
     glEnd();
 }
 
-int repl_color_picker_press(int mx, int my) {
+int ui_color_picker_press(int mx, int my) {
     if (g_cp_line < 0) return 0;
     int gl_y = g_win_h - my;
 
@@ -328,7 +328,7 @@ int repl_color_picker_press(int mx, int my) {
     return 0;
 }
 
-int repl_color_picker_motion(int mx, int my) {
+int ui_color_picker_motion(int mx, int my) {
     if (g_cp_drag == 0) return 0;
     int gl_y = g_win_h - my;
     if (g_cp_drag == 1) {
@@ -350,21 +350,21 @@ int repl_color_picker_motion(int mx, int my) {
     return 1;
 }
 
-void repl_color_picker_release(void) { g_cp_drag = 0; }
+void ui_color_picker_release(void) { g_cp_drag = 0; }
 
 /* Close the picker.  Returns 1 if it was open (caller should redisplay). */
-int repl_color_picker_close(void) {
+int ui_color_picker_close(void) {
     if (g_cp_line < 0) return 0;
     g_cp_line = -1;  g_cp_drag = 0;
     return 1;
 }
 
 
-int repl_color_picker_active_line(void) {
+int ui_color_picker_active_line(void) {
     return g_cp_line;
 }
 
-int repl_color_picker_can_edit_cmd(int cmd_idx) {
+int ui_color_picker_can_edit_cmd(int cmd_idx) {
     if (cmd_idx < 0 || cmd_idx >= g_num_cmds)
         return 0;
     if (!g_cmds[cmd_idx].valid || g_cmds[cmd_idx].has_vars)
@@ -375,11 +375,11 @@ int repl_color_picker_can_edit_cmd(int cmd_idx) {
            g_cmds[cmd_idx].type == CMD_CLEAR_COLOR;
 }
 
-void repl_color_picker_render_swatch(int cmd_idx, int sx, int sy) {
-    if (!repl_color_picker_can_edit_cmd(cmd_idx))
+void ui_color_picker_render_swatch(int cmd_idx, int sx, int sy) {
+    if (!ui_color_picker_can_edit_cmd(cmd_idx))
         return;
 
-    int sw = REPL_COLOR_SWATCH_W;
+    int sw = UI_COLOR_SWATCH_W;
     float alpha = (g_cmds[cmd_idx].type == CMD_COLOR4F ||
                    g_cmds[cmd_idx].type == CMD_TESS_COLOR ||
                    g_cmds[cmd_idx].type == CMD_CLEAR_COLOR)

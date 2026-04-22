@@ -10,7 +10,7 @@
  * variable mutation) and stays here.
  */
 #include "sample.h"
-#include "repl_variable_panel.h"
+#include "ui_variable_panel.h"
 #include "repl_var_drag.h"
 #include "ui_panels.h"
 

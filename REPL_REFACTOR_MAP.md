@@ -43,11 +43,11 @@ flowchart LR
         layout["repl_code_panel_layout.c<br/>pure wrap iterator"]
         docrows["repl_code_panel_document.c<br/>document row model"]
         replay_ann["repl_replay_annotations.c<br/>code-panel replay text"]
-        menu["repl_menu_bar.c<br/>menubar + dropdowns"]
-        color["repl_color_picker.c<br/>floating color picker"]
-        help["repl_help_overlay.c<br/>modal F1 help"]
-        varpanel["repl_variable_panel.c<br/>slider panel (render only)"]
-        acpanel["repl_autocomplete_panel.c<br/>completion popup"]
+        menu["ui_menu_bar.c<br/>menubar + dropdowns"]
+        color["ui_color_picker.c<br/>floating color picker"]
+        help["ui_help_overlay.c<br/>modal F1 help"]
+        varpanel["ui_variable_panel.c<br/>slider panel (render only)"]
+        acpanel["ui_autocomplete_panel.c<br/>completion popup"]
     end
 
     subgraph scene_layer["3D scene rendering"]
@@ -142,14 +142,14 @@ flowchart LR
 - `repl_replay_annotations.c` owns code-panel replay text expansion: source to
   flat-command mapping, variable substitution comments, and evaluated command
   display text.
-- `repl_menu_bar.c` owns top-level menu/dropdown state, menu hit-testing,
+- `ui_menu_bar.c` owns top-level menu/dropdown state, menu hit-testing,
   right-click config cycling, and the inline search slot in the menu bar.
-- `repl_color_picker.c` owns the floating HSV/alpha picker state and literal
+- `ui_color_picker.c` owns the floating HSV/alpha picker state and literal
   color swatch rendering/mutation for color commands.
-- `repl_help_overlay.c` owns the modal F1 help overlay.
-- `repl_variable_panel.c` owns the floating variable slider panel rendering,
+- `ui_help_overlay.c` owns the modal F1 help overlay.
+- `ui_variable_panel.c` owns the floating variable slider panel rendering,
   geometry, and hit-test; value mutation happens in `repl_var_drag.c`.
-- `repl_autocomplete_panel.c` owns the floating completion popup renderer;
+- `ui_autocomplete_panel.c` owns the floating completion popup renderer;
   match/selection/hint state lives in `repl_autocomplete.c`.
 - `repl_inline_rename.c` owns the inline scene-rename input buffer and key
   handling (surfaced through `set_status()`, no dedicated render pass).

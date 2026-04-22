@@ -4,7 +4,7 @@
 #include "repl_replay.h"
 #include "repl_core_internal.h"
 #include "repl_keys.h"
-#include "profile_panel.h"
+#include "ui_profile_panel.h"
 
 int    g_replay_active = 0;
 int    g_replay_state = REPLAY_OFF;
