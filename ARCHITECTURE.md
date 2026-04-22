@@ -408,7 +408,10 @@ captures the intended behavior change.
   (rendering only — drag mutation lives in `repl_editor.c`),
   `repl_autocomplete_panel.c` owns the floating completion popup
   (rendering only — match/selection state lives in
-  `repl_autocomplete.c`), and `ui_panels.c` still owns rename UI.
+  `repl_autocomplete.c`), and `repl_inline_rename.c` owns the inline
+  scene-rename buffer and key handling. `ui_panels.c` now focuses on
+  code-panel row rendering, the scene-status banner, and top-level
+  hit routing.
 - **Scene renderer:** owns camera/view setup, grid/axes/overlay drawing, and GL
   state discipline for a single frame.
 - **Import/export:** owns scaffold sections, workspace metadata, and

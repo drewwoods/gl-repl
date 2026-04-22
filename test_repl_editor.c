@@ -9,6 +9,7 @@
 #include "profile_panel.h"
 #include "ui_panels.h"
 #include "repl_variable_panel.h"
+#include "repl_inline_rename.h"
 #include <stdio.h>
 #include <string.h>
 
@@ -352,14 +353,14 @@ int main() {
         repl_load_example(0);
         int slot = repl_promote_example_if_needed();
         ASSERT_TRUE("rename route setup slot", slot >= 0);
-        ASSERT_INT("rename route begin", ui_panels_begin_rename(slot), 1);
+        ASSERT_INT("rename route begin", repl_inline_rename_begin(slot), 1);
 
         g_code_panel_layout = CODE_PANEL_LAYOUT_HIDDEN;
         repl_keyboard_func('`', 0, 0);
         ASSERT_INT("rename swallows config hidden restore",
                    g_code_panel_layout, CODE_PANEL_LAYOUT_HIDDEN);
         ASSERT_INT("rename remains active after config key",
-                   ui_panels_rename_active(), 1);
+                   repl_inline_rename_active(), 1);
 
         repl_keyboard_func(KEY_CTRL_R, 0, 0);
         ASSERT_INT("rename swallows replay toggle", g_replay_active, 0);
@@ -367,7 +368,7 @@ int main() {
         repl_keyboard_func(KEY_CTRL_F, 0, 0);
         ASSERT_INT("rename swallows search open", g_search_active, 0);
 
-        ui_panels_cancel_rename();
+        repl_inline_rename_cancel();
         g_code_panel_layout = CFG_DEFAULT_CODE_PANEL_LAYOUT;
     }
 
@@ -409,7 +410,7 @@ int main() {
         repl_load_example(0);
         int slot = repl_promote_example_if_needed();
         ASSERT_TRUE("rename special route setup slot", slot >= 0);
-        ASSERT_INT("rename special route begin", ui_panels_begin_rename(slot), 1);
+        ASSERT_INT("rename special route begin", repl_inline_rename_begin(slot), 1);
 
         set_editor_input("abc");
         g_cursor_pos = 2;
@@ -433,9 +434,9 @@ int main() {
         repl_special_func(GLUT_KEY_F1, 0, 0);
         ASSERT_INT("rename special swallows help toggle", g_show_help, 0);
         ASSERT_INT("rename still active after special keys",
-                   ui_panels_rename_active(), 1);
+                   repl_inline_rename_active(), 1);
 
-        ui_panels_cancel_rename();
+        repl_inline_rename_cancel();
         search_clear_all();
         g_replay_active = 0;
         g_code_panel_layout = CFG_DEFAULT_CODE_PANEL_LAYOUT;

@@ -13,6 +13,7 @@
 #include "repl_core_internal.h"
 #include "repl_keys.h"
 #include "ui_panels.h"
+#include "repl_inline_rename.h"
 
 static const char *replay_mode_names[] = { "Polygon", "Vertex" };
 static const char *backdrop_mode_names[] = { "Off", "Cityscape" };
@@ -269,7 +270,7 @@ int repl_action_menu_item_activate(int menu_id, int item_idx) {
                 set_status("No active scene to rename");
                 return 1;
             }
-            ui_panels_begin_rename(slot);
+            repl_inline_rename_begin(slot);
             return 1;
         }
 

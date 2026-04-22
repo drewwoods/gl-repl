@@ -8,11 +8,11 @@ counterpart: a prioritized set of concrete, behavior-preserving
 extractions that can each land as a single reviewable commit *today*,
 without committing to the larger context-object rewrite.
 
-Five files still dominate the codebase: `scene_render.c` (2861),
+Four files still dominate the codebase: `scene_render.c` (2861),
 `repl_export.c` (2541), `repl_core.c` (~1958), `repl_editor.c`
-(1688), `ui_panels.c` (1327 — down from 4452 after Phase-7
-extractions including help overlay, variable panel, and
-autocomplete popup). The highest-value remaining refactors
+(1688). `ui_panels.c` dropped to 1237 LoC (from 4452) after Phase-7
+extractions: help overlay, variable panel, autocomplete popup, and
+inline rename. The highest-value remaining refactors
 fall into two camps:
 
 1. **Mechanical extractions** — self-contained features still living in
@@ -65,6 +65,22 @@ the input line stays in `ui_panels.c` (it needs the surrounding
 code-panel row layout). Public entrypoint uses the newer module-
 prefix convention: `repl_autocomplete_panel_render()` (replacing
 the bare `render_autocomplete()`).
+
+### 1d. Extract inline rename → `repl_inline_rename.c` ✅ DONE
+
+Landed as `refactor: extract inline scene rename`. Rename state
+(`g_rename_slot`, `g_rename_buf`, `g_rename_len`), the filesystem-
+safe char filter, and the Enter/Esc/backspace/printable key handlers
+moved out of `ui_panels.c` (1327 → 1237 LoC). The five public
+entrypoints were renamed `ui_panels_*` → `repl_inline_rename_*` to
+match the newer module-prefix convention (`_active`, `_begin`,
+`_cancel`, `_handle_key`, `_handle_special`). Callers updated in
+`repl_editor.c`, `repl_actions.c`, and two test files
+(`test_repl_editor.c`, `test_repl_core_extra.c`). Rename has no
+dedicated render pass — the buffer is surfaced through
+`set_status()` into the existing status strip, so this is an input
+module, not a panel; that matches the model/render split rule
+(no OpenGL calls in the new file).
 
 ### 2. Extract color picker → `ui_color_picker.c`
 
