@@ -109,12 +109,14 @@ Run all: `make test`
 | `repl_examples.c` | Predefined example data (`g_examples[]`, `g_example_names[]`) |
 | `repl_examples.h` | Example query API (`repl_examples_count/name/lines`) |
 | `repl_export.c` | `save_output` / `load_from_file`, workspace header directives, `@scene-name` / `@workspace-dir` markers |
-| `scene_render.c` | 3D scene frame orchestration, frame render prep, grid/axes theme specs, guarded outline/vertex overlays, orbit target, replay HUD |
+| `scene_render.c` | 3D scene frame orchestration, frame render prep, grid/axes theme specs, vertex overlays, orbit target, replay HUD |
 | `scene_render.h` | Declares `render_3d_scene()` |
 | `scene_backdrop.c` | Backdrop mode dispatch and deterministic cityscape renderer |
 | `scene_backdrop.h` | Backdrop render entrypoint |
 | `scene_lights.c` | Light setup/reset and visible light indicator overlay |
 | `scene_lights.h` | Scene light setup/render entrypoints |
+| `scene_overlays.c` | Polygon outline/current-block overlay and shared flat-block cursor matching |
+| `scene_overlays.h` | Scene overlay render/helper API |
 | `ui_panels.c` | Code-panel row rendering (incl. inline ghost/hint text), scene status banner, top-level panel hit routing |
 | `ui_panels.h` | Code-panel geometry, render, hit-test, and panel input bridge declarations |
 | `repl_eval.c` | Expression evaluator (recursive descent), REPL<->C translators, for-loop parsers |

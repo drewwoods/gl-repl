@@ -34,6 +34,7 @@ flowchart LR
     scene["scene_render.c<br/>3D scene frame<br/>FrameRenderContext<br/>guarded helper passes"]
     backdrop["scene_backdrop.c<br/>backdrop modes<br/>cityscape renderer"]
     lights["scene_lights.c<br/>light setup<br/>light indicators"]
+    overlays["scene_overlays.c<br/>polygon outlines<br/>flat-block cursor match"]
     scene_theme["GridThemeSpec / AxesThemeSpec<br/>standard theme tables"]
     scene_overlay["vertex overlay walker<br/>flat traversal<br/>numbers + normals"]
     scenes["repl_scenes.c<br/>user scenes<br/>workspace slots"]
@@ -81,6 +82,8 @@ flowchart LR
     scene --> replay
     scene --> backdrop
     scene --> lights
+    scene --> overlays
+    scene_overlay --> overlays
     scene --> scene_theme
     scene --> scene_overlay
     ui --> actions
@@ -145,7 +148,9 @@ flowchart LR
   camera height/waterline classification is also derived once in frame prep
   instead of recomputed inside the grid theme. Backdrop rendering now delegates
   to `scene_backdrop.c`; per-pass light setup and light indicators delegate to
-  `scene_lights.c`.
+  `scene_lights.c`. Polygon outline/current-block highlighting delegates to
+  `scene_overlays.c`, which also exposes the flat-block cursor matcher used by
+  vertex-number and normal-vector overlays.
 
 ## Open Edges
 

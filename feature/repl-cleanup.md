@@ -72,7 +72,9 @@ failure should be treated as a regression unless explicitly rebaselined.
      height/waterline classification is also prepared there instead of being
      recomputed inside the theme renderer. Backdrop/cityscape rendering now
      lives in `scene_backdrop.c`, and light setup plus light indicators live in
-     `scene_lights.c`.
+     `scene_lights.c`. Polygon outline/current-block highlight rendering now
+     lives in `scene_overlays.c`, with a shared flat-block cursor matcher for
+     outline and vertex-overlay paths.
 
 9. **Refactor import/export around a shared scaffold model**
    - Represent the generated C scaffold as typed sections rather than duplicated string/layout logic.

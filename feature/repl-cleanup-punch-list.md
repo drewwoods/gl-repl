@@ -8,9 +8,9 @@ counterpart: a prioritized set of concrete, behavior-preserving
 extractions that can each land as a single reviewable commit *today*,
 without committing to the larger context-object rewrite.
 
-Four files still dominate the codebase: `scene_render.c` (~2731, now with
+Four files still dominate the codebase: `scene_render.c` (~2586, now with
 frame prep/theme specs/state guards/overlay visitor helpers while delegating
-backdrop and light helpers), `repl_export.c` (2541),
+backdrop, light, and outline helpers), `repl_export.c` (2541),
 `repl_core.c` (~1964), and `repl_editor.c` (~1653). `ui_panels.c`
 dropped to 1237 LoC (from 4452) after Phase-7
 extractions: document rows, replay annotations, menu/dropdowns, color
@@ -171,6 +171,15 @@ the visible light indicator overlay moved out of `scene_render.c`. The normal
 fill and replay fade passes now call `scene_lights_setup()`, and the final HUD
 pass calls `scene_lights_render()`, preserving the old render order while
 making light side effects explicit.
+
+### 5e. Extract polygon outline overlay → `scene_overlays.c` ✅ DONE
+
+Implemented in the Phase-8 render cleanup slice. The polygon outline/current-
+block highlight pass moved out of `render_3d_scene()` into
+`scene_overlays_render_outlines()`. The flat-block cursor matcher is now an
+explicit `scene_overlay_flat_block_matches_cursor()` helper shared by the
+outline pass and the remaining vertex-number/normal overlay visitor in
+`scene_render.c`.
 
 ### 6. Workspace header read/write symmetry in `repl_export.c`
 
