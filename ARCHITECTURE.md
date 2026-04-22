@@ -445,10 +445,13 @@ After the Phase 7 code-panel responsibility split, `make test-stubs TEST_JOBS=4`
 builds all test binaries and passes 17 of 17 suites: 2315/2315 tests. The
 latest slices extracted document rows, replay annotations, menu/dropdown
 rendering, the color picker, help overlay, variable panel, autocomplete popup,
-inline rename, and variable slider dragging while preserving behavior. The
-first Phase-8 scene-render pass then added grid/axes theme specs, local
-helper-pass GL state guards, a shared vertex-overlay traversal, Focus-grid
-frame prep, and ocean-grid camera-height derivation.
+inline rename, and variable slider dragging while preserving behavior. Phase 8
+then added grid/axes theme specs, local helper-pass GL state guards, a shared
+vertex-overlay traversal, Focus/ocean frame prep, backdrop/light modules, and
+outline overlay extraction. Phase 9 has started by pairing workspace-header
+parsing/emission through a directive table and splitting `load_from_file()`
+into ordered import handlers; visual dumps already use the shared code-panel
+wrap iterator.
 
 ## Key Pipelines
 

@@ -81,6 +81,11 @@ failure should be treated as a regression unless explicitly rebaselined.
    - Use the same code-panel layout/wrap engine for visual dumps and on-screen rendering.
    - Split import into ordered handlers: workspace headers, camera block, declarations, functions, display body commands, and fallback comments.
    - Preserve single-file and workspace round-trip behavior.
+   - Current progress: workspace header parsing/emission now share a
+     directive table, `load_from_file()` dispatches through ordered import
+     handlers, and visual dumps already use the shared code-panel wrap
+     iterator. The remaining high-value slice is the generated `display()`
+     scaffold/pass model in `save_output()`.
 
 10. **Final naming/comment pass**
    - Add comments only where they explain invariants, ordering, ownership, or non-obvious side effects: commit handler order, declaration placement, dirty flags, replay limits, import/export markers, and GL state assumptions.
