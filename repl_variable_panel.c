@@ -1,15 +1,17 @@
 /*
  * repl_variable_panel.c -- Floating slider panel for declared variables.
  *
- * Pure renderer: reads g_predef_vars, scene rect, and the editor's
- * drag highlight state (g_drag_var / g_drag_log_mode), and draws.
- * The actual value mutation lives with the editor's drag handler.
+ * Pure renderer: reads g_predef_vars, scene rect, and the drag-state
+ * accessors from repl_var_drag.c, and draws.  The actual value
+ * mutation lives in repl_var_drag.c; the editor's mouse handler
+ * begins/ends the drag transaction.
  *
  * The replay-lift easing state is panel-local animation (not
  * variable mutation) and stays here.
  */
 #include "sample.h"
 #include "repl_variable_panel.h"
+#include "repl_var_drag.h"
 #include "ui_panels.h"
 
 /* Local copy of the layout-mode clamp.  Duplicated by repl_editor.c and
@@ -181,8 +183,8 @@ void render_var_panel(void) {
         float val  = g_predef_vars[i].value;
 
         /* Drag highlight — amber tint for log mode, blue for linear */
-        if (g_drag_var == i) {
-            if (g_drag_log_mode)
+        if (repl_var_drag_active_var() == i) {
+            if (repl_var_drag_log_mode())
                 glColor4f(0.30f, 0.20f, 0.05f, 0.60f);
             else
                 glColor4f(0.20f, 0.20f, 0.40f, 0.60f);
@@ -217,8 +219,8 @@ void render_var_panel(void) {
          * Yellow = linear drag, orange = log drag, blue = idle. */
         float t  = val_to_slider_t(val, log_scale);
         float hx = (float)track_x + t * (float)(track_w - handle_w);
-        if (g_drag_var == i) {
-            if (g_drag_log_mode)
+        if (repl_var_drag_active_var() == i) {
+            if (repl_var_drag_log_mode())
                 glColor4f(1.00f, 0.55f, 0.10f, 0.95f);  /* orange: log mode */
             else
                 glColor4f(1.00f, 0.80f, 0.20f, 0.95f);  /* yellow: linear mode */

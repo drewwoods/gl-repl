@@ -66,6 +66,25 @@ code-panel row layout). Public entrypoint uses the newer module-
 prefix convention: `repl_autocomplete_panel_render()` (replacing
 the bare `render_autocomplete()`).
 
+### 1e. Extract variable dragging → `repl_var_drag.c` ✅ DONE
+
+Landed as `refactor: extract variable slider drag`. Closes the
+REPL_REFACTOR_MAP open edge *"repl_editor.c still owns variable
+slider dragging."* The four `g_drag_*` globals (storage) move to
+the new file; the externs in `repl_state.h` and the `ReplUiState`
+catalog entries in `repl_state.c` are unchanged, so the state-
+access contract is preserved. Public API uses the newer prefix
+convention: `repl_var_drag_begin(row, log_mode, x)`,
+`repl_var_drag_motion(x)`, `repl_var_drag_reset()`,
+`repl_var_drag_active()`, `repl_var_drag_active_var()`,
+`repl_var_drag_log_mode()`. `repl_editor.c`'s mouse_func and
+motion_func now call the API instead of touching state directly;
+`repl_variable_panel.c` reads drag state through the accessors.
+The value-writeback logic (linear/log mapping, `g_predef_vars`
+write, matching `CMD_VAR_ASSIGN` source sync, `g_flat_dirty = 1`)
+is now in one place instead of split across mouse-begin and
+motion handlers.
+
 ### 1d. Extract inline rename → `repl_inline_rename.c` ✅ DONE
 
 Landed as `refactor: extract inline scene rename`. Rename state

@@ -405,7 +405,7 @@ captures the intended behavior change.
   menus/dropdowns/search slot, `repl_color_picker.c` owns the floating color
   editor, `repl_help_overlay.c` owns the modal F1 help overlay,
   `repl_variable_panel.c` owns the floating variable slider panel
-  (rendering only — drag mutation lives in `repl_editor.c`),
+  (rendering only — drag mutation lives in `repl_var_drag.c`),
   `repl_autocomplete_panel.c` owns the floating completion popup
   (rendering only — match/selection state lives in
   `repl_autocomplete.c`), and `repl_inline_rename.c` owns the inline

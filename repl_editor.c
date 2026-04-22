@@ -26,6 +26,7 @@
 #include "repl_keys.h"
 #include "ui_panels.h"
 #include "repl_variable_panel.h"
+#include "repl_var_drag.h"
 #include "repl_inline_rename.h"
 #include "repl_audio.h"
 
@@ -71,10 +72,9 @@ int g_cursor_on = 1;
 int g_blink_tick = 0;
 
 int   g_show_var_panel = 1;
-int   g_drag_var = -1;
-int   g_drag_log_mode = 0;  /* 0=linear (LMB drag), 1=logarithmic (RMB drag) */
-float g_drag_start_val = 0.0f;
-int   g_drag_start_x = 0;
+/* Variable drag state (g_drag_var, g_drag_log_mode, g_drag_start_val,
+ * g_drag_start_x) lives in repl_var_drag.c.  Externs are declared in
+ * repl_state.h so the ReplUiState catalog keeps a pointer to each. */
 
 /* Browser autoplay policy: the Web Audio context stays suspended until
  * a user gesture. We call repl_audio_on_user_gesture() the first time
@@ -1343,9 +1343,8 @@ static void editor_update_panel_frac_from_mouse(int x, int y) {
 static void mouse_func(int button, int state, int x, int y) {
     if (state == GLUT_UP) {
         ui_panels_handle_mouse_release();
-        if (g_drag_var >= 0) {
-            g_drag_var = -1;
-            g_drag_log_mode = 0;
+        if (repl_var_drag_active()) {
+            repl_var_drag_reset();
             glutPostRedisplay();
             return;
         }
@@ -1363,9 +1362,7 @@ static void mouse_func(int button, int state, int x, int y) {
             if (var_panel_hit(x, y, &row)) {
                 if (g_replay_active)
                     replay_stop();
-                g_drag_var = row;
-                g_drag_start_val = g_predef_vars[row].value;
-                g_drag_start_x = x;
+                repl_var_drag_begin(row, 0, x);
                 glutPostRedisplay();
                 return;
             }
@@ -1416,10 +1413,7 @@ static void mouse_func(int button, int state, int x, int y) {
         if (var_panel_hit(x, y, &row)) {
             if (g_replay_active)
                 replay_stop();
-            g_drag_var = row;
-            g_drag_log_mode = 1;
-            g_drag_start_val = g_predef_vars[row].value;
-            g_drag_start_x = x;
+            repl_var_drag_begin(row, 1, x);
             glutPostRedisplay();
             return;
         }
@@ -1489,38 +1483,8 @@ static void motion_func(int x, int y) {
         return;
     }
 
-    if (g_drag_var >= 0) {
-        float new_val;
-        if (g_drag_log_mode) {
-            /* Logarithmic drag: ×10 / ÷10 per 200 pixels.
-             * Preserves sign; near-zero start falls back to linear bootstrap. */
-            float dx_total = (float)(x - g_drag_start_x);
-            float mag = fabsf(g_drag_start_val);
-            if (mag < 1e-6f) {
-                /* Bootstrap from zero: treat first pixels as linear, then log. */
-                new_val = dx_total * 0.001f;
-            } else {
-                float sign = (g_drag_start_val >= 0.0f) ? 1.0f : -1.0f;
-                new_val = sign * mag * expf(dx_total * (logf(10.0f) / 200.0f));
-            }
-        } else {
-            float delta = (float)(x - g_drag_start_x) * 0.05f;
-            new_val = g_drag_start_val + delta;
-        }
-        g_predef_vars[g_drag_var].value = new_val;
-        {
-            const char *vname = g_predef_vars[g_drag_var].name;
-            for (int i = 0; i < g_num_cmds; i++) {
-                if (g_cmds[i].valid && g_cmds[i].type == CMD_VAR_ASSIGN &&
-                    g_cmds[i].num_args == g_drag_var &&
-                    !g_cmds[i].has_vars) {
-                    g_cmds[i].args[0] = new_val;
-                    snprintf(g_cmds[i].source, sizeof(g_cmds[i].source),
-                             "  %s = %g;", vname, (double)new_val);
-                }
-            }
-        }
-        g_flat_dirty = 1;
+    if (repl_var_drag_active()) {
+        repl_var_drag_motion(x);
         repl_camera_pointer_set(x, y);
         glutPostRedisplay();
         return;

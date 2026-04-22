@@ -26,6 +26,7 @@ flowchart LR
     acmodel["repl_autocomplete.c<br/>completion model<br/>matches + hint state"]
     acpanel["repl_autocomplete_panel.c<br/>completion popup renderer"]
     rename["repl_inline_rename.c<br/>scene-rename input buffer"]
+    vardrag["repl_var_drag.c<br/>variable drag transaction<br/>linear/log writeback"]
     replay_ann["repl_replay_annotations.c<br/>code-panel replay notes<br/>expanded/evaluated args"]
     export["repl_export.c<br/>import/export<br/>visual code dump"]
     audio["repl_audio.c<br/>playlist engine<br/>persisted audio cfg"]
@@ -64,9 +65,11 @@ flowchart LR
     core --> acpanel
     editor --> varpanel
     editor --> rename
+    editor --> vardrag
     actions --> rename
     acpanel --> acmodel
     rename --> scenes
+    varpanel --> vardrag
     replay --> exec
     ui --> actions
     ui --> scenes
@@ -110,14 +113,24 @@ flowchart LR
   right-click config cycling, and the inline search slot in the menu bar.
 - `repl_color_picker.c` owns the floating HSV/alpha picker state and literal
   color swatch rendering/mutation for color commands.
+- `repl_help_overlay.c` owns the modal F1 help overlay.
+- `repl_variable_panel.c` owns the floating variable slider panel rendering,
+  geometry, and hit-test; value mutation happens in `repl_var_drag.c`.
+- `repl_autocomplete_panel.c` owns the floating completion popup renderer;
+  match/selection/hint state lives in `repl_autocomplete.c`.
+- `repl_inline_rename.c` owns the inline scene-rename input buffer and key
+  handling (surfaced through `set_status()`, no dedicated render pass).
+- `repl_var_drag.c` owns the variable slider drag transaction: start/motion/
+  reset, the linear-vs-log value mapping, and the writeback into
+  `g_predef_vars` plus matching `CMD_VAR_ASSIGN` sources.
 
 ## Open Edges
 
 - `ui_panels.c` still owns render-time iteration over code-panel rows, search
-  match highlights inside source lines, autocomplete/help/variable-panel
-  rendering, and inline rename UI.
-- `repl_editor.c` still owns variable slider dragging, hidden-code-panel restore
-  rules, and the main keyboard/special/mouse route ordering.
+  match highlights inside source lines, and inline ghost/hint text rendering
+  next to the input line.
+- `repl_editor.c` still owns hidden-code-panel restore rules and the main
+  keyboard/special/mouse route ordering.
 - `sample.h` and `repl_state.h` still expose broad globals for compatibility.
   The current module splits are ownership boundaries, not yet context-object
   rewrites.
