@@ -309,6 +309,7 @@ Owns generated scaffold and import/export plumbing.
 
 - `g_header_pre`, `g_render_state_lines`, `g_lookat`, `g_header_post`
 - init bootstrap tables and helpers
+- `ExportNeeds` and display-pass specs for generated `display()` sections
 - `save_output()`, `load_from_file()`
 - import translation helpers
 - code-panel visual dump plumbing, using `repl_code_panel_layout.c` for wrap
@@ -448,10 +449,10 @@ rendering, the color picker, help overlay, variable panel, autocomplete popup,
 inline rename, and variable slider dragging while preserving behavior. Phase 8
 then added grid/axes theme specs, local helper-pass GL state guards, a shared
 vertex-overlay traversal, Focus/ocean frame prep, backdrop/light modules, and
-outline overlay extraction. Phase 9 has started by pairing workspace-header
-parsing/emission through a directive table and splitting `load_from_file()`
-into ordered import handlers; visual dumps already use the shared code-panel
-wrap iterator.
+outline overlay extraction. Phase 9 paired workspace-header parsing/emission
+through a directive table, split `load_from_file()` into ordered import
+handlers, confirmed visual dumps use the shared code-panel wrap iterator, and
+introduced typed display/pass helpers for the exported `display()` scaffold.
 
 ## Key Pipelines
 

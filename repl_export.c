@@ -2294,6 +2294,112 @@ static void import_feed_one_line(const char *line, int *loaded, int *warnings) {
     }
 }
 
+typedef struct {
+    int needs_tess;
+    int needs_rand;
+} ExportNeeds;
+
+typedef void (*ExportDisplayPassSetupFn)(FILE *f);
+
+typedef struct {
+    const char                 *label;
+    int                         enabled;
+    ExportDisplayPassSetupFn    emit_setup;
+} ExportDisplayPassSpec;
+
+static ExportNeeds export_collect_needs(void) {
+    ExportNeeds needs = {
+        .needs_tess = export_uses_tess_commands(),
+        .needs_rand = 0,
+    };
+
+    for (int i = 0; i < g_num_cmds; i++) {
+        if (g_cmds[i].valid && strstr(g_cmds[i].source, "rand(") != NULL)
+            needs.needs_rand = 1;
+    }
+
+    return needs;
+}
+
+static void emit_export_outline_pass_setup(FILE *f) {
+    fprintf(f, "  glEnable(GL_COLOR_MATERIAL);\n");
+    fprintf(f, "  glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE);\n");
+    fprintf(f, "  glColor3f(0.0f, 0.0f, 0.0f);\n");
+    fprintf(f, "  glDisable(GL_COLOR_MATERIAL);\n");
+    fprintf(f, "  glEnable(GL_POLYGON_OFFSET_LINE);\n");
+    fprintf(f, "  glPolygonOffset(%#.6gf, %#.6gf);\n",
+                  (double)REPL_OUTLINE_POLYGON_OFFSET_FACTOR, (double)REPL_OUTLINE_POLYGON_OFFSET_UNITS);
+    fprintf(f, "  glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);\n");
+    fprintf(f, "  glLineWidth(1.2f);\n");
+    fprintf(f, "  glEnable(GL_LIGHTING);\n");
+}
+
+static void emit_export_point_pass_setup(FILE *f) {
+    fprintf(f, "  glEnable(GL_COLOR_MATERIAL);\n");
+    fprintf(f, "  glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE);\n");
+    fprintf(f, "  glColor3f(0.0f, 0.0f, 0.0f);\n");
+    fprintf(f, "  glDisable(GL_COLOR_MATERIAL);\n");
+    fprintf(f, "  glPointSize(8.0f);\n");
+    fprintf(f, "  glPolygonMode(GL_FRONT_AND_BACK, GL_POINT);\n");
+    fprintf(f, "  glEnable(GL_LIGHTING);\n");
+}
+
+static void emit_export_geometry_pass(FILE *f,
+                                      const ExportDisplayPassSpec *pass) {
+    if (!pass || !pass->enabled)
+        return;
+
+    fprintf(f, "\n  /* %s */\n", pass->label);
+    fprintf(f, "  glPushAttrib(GL_ALL_ATTRIB_BITS);\n");
+    if (pass->emit_setup)
+        pass->emit_setup(f);
+    fprintf(f, "  glPushMatrix();\n");
+    fprintf(f, "  reset_repl_vars();\n");
+    fprintf(f, "  render_repl_geometry();\n");
+    fprintf(f, "  glPopMatrix();\n");
+    fprintf(f, "  glPopAttrib();\n");
+}
+
+static void emit_export_display_begin(FILE *f) {
+    fprintf(f, "\nvoid display() {\n");
+    fprintf(f, "  glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);\n");
+    fprintf(f, "  glLoadIdentity();\n");
+    fprintf(f, "  glPushAttrib(GL_LIGHTING_BIT);\n");
+    for (int i = 0; i < RENDER_STATE_LINE_COUNT; i++)
+        fprintf(f, "%s\n", g_render_state_lines[i]);
+    emit_export_cam_lines(f);
+    for (int i = 0; g_header_post[i]; i++)
+        fprintf(f, "%s\n", g_header_post[i]);
+    write_light_setup(f);
+}
+
+static void emit_export_display_geometry(FILE *f) {
+    const ExportDisplayPassSpec passes[] = {
+        { "Vertex Fill Pass",    1,               NULL },
+        { "Vertex Outline Pass", g_show_outlines, emit_export_outline_pass_setup },
+        { "Vertex Point Pass",   g_show_vpoints,  emit_export_point_pass_setup },
+    };
+
+    for (size_t i = 0; i < sizeof(passes) / sizeof(passes[0]); i++)
+        emit_export_geometry_pass(f, &passes[i]);
+}
+
+static void emit_export_display_tail(FILE *f, const ExportNeeds *needs) {
+    int include_tess = needs ? needs->needs_tess : 0;
+
+    for (int i = 0; g_footer_pre_init[i]; i++)
+        fprintf(f, "%s\n", g_footer_pre_init[i]);
+    emit_export_init_section_to_file(f, include_tess);
+    for (int i = 0; g_footer_post_init[i]; i++)
+        fprintf(f, "%s\n", g_footer_post_init[i]);
+}
+
+static void emit_export_display(FILE *f, const ExportNeeds *needs) {
+    emit_export_display_begin(f);
+    emit_export_display_geometry(f);
+    emit_export_display_tail(f, needs);
+}
+
 void save_output(const char *filename) {
     FILE *f = fopen(filename, "w");
     if (!f) {
@@ -2301,11 +2407,7 @@ void save_output(const char *filename) {
         return;
     }
 
-    int needs_tess = export_uses_tess_commands();
-    int needs_rand = 0;
-    for (int i = 0; i < g_num_cmds; i++)
-        if (g_cmds[i].valid && strstr(g_cmds[i].source, "rand(") != NULL)
-            needs_rand = 1;
+    ExportNeeds needs = export_collect_needs();
 
     update_render_state_strings();
     update_cam_lines();
@@ -2318,75 +2420,14 @@ void save_output(const char *filename) {
 
     emit_export_header_pre(f);
     write_predef_var_globals(f);
-    if (needs_rand)
+    if (needs.needs_rand)
         write_rand_helper(f);
-    if (needs_tess)
+    if (needs.needs_tess)
         write_tess_preamble(f);
     write_predef_var_reset_func(f);
     write_func_defs_as_c(f);
     write_render_helper_as_c(f, "render_repl_geometry");
-
-    fprintf(f, "\nvoid display() {\n");
-    fprintf(f, "  glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);\n");
-    fprintf(f, "  glLoadIdentity();\n");
-    fprintf(f, "  glPushAttrib(GL_LIGHTING_BIT);\n");
-    for (int i = 0; i < RENDER_STATE_LINE_COUNT; i++)
-        fprintf(f, "%s\n", g_render_state_lines[i]);
-    emit_export_cam_lines(f);
-    for (int i = 0; g_header_post[i]; i++)
-        fprintf(f, "%s\n", g_header_post[i]);
-    write_light_setup(f);
-
-    fprintf(f, "\n  /* Vertex Fill Pass */\n");
-    fprintf(f, "  glPushAttrib(GL_ALL_ATTRIB_BITS);\n");
-    fprintf(f, "  glPushMatrix();\n");
-    fprintf(f, "  reset_repl_vars();\n");
-    fprintf(f, "  render_repl_geometry();\n");
-    fprintf(f, "  glPopMatrix();\n");
-    fprintf(f, "  glPopAttrib();\n");
-
-    if (g_show_outlines) {
-        fprintf(f, "\n  /* Vertex Outline Pass */\n");
-        fprintf(f, "  glPushAttrib(GL_ALL_ATTRIB_BITS);\n");
-        fprintf(f, "  glEnable(GL_COLOR_MATERIAL);\n");
-        fprintf(f, "  glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE);\n");
-        fprintf(f, "  glColor3f(0.0f, 0.0f, 0.0f);\n");
-        fprintf(f, "  glDisable(GL_COLOR_MATERIAL);\n");
-        fprintf(f, "  glEnable(GL_POLYGON_OFFSET_LINE);\n");
-        fprintf(f, "  glPolygonOffset(%#.6gf, %#.6gf);\n",
-                      (double)REPL_OUTLINE_POLYGON_OFFSET_FACTOR, (double)REPL_OUTLINE_POLYGON_OFFSET_UNITS);
-        fprintf(f, "  glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);\n");
-        fprintf(f, "  glLineWidth(1.2f);\n");
-        fprintf(f, "  glEnable(GL_LIGHTING);\n");
-        fprintf(f, "  glPushMatrix();\n");
-        fprintf(f, "  reset_repl_vars();\n");
-        fprintf(f, "  render_repl_geometry();\n");
-        fprintf(f, "  glPopMatrix();\n");
-        fprintf(f, "  glPopAttrib();\n");
-    }
-
-    if (g_show_vpoints) {
-        fprintf(f, "\n  /* Vertex Point Pass */\n");
-        fprintf(f, "  glPushAttrib(GL_ALL_ATTRIB_BITS);\n");
-        fprintf(f, "  glEnable(GL_COLOR_MATERIAL);\n");
-        fprintf(f, "  glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE);\n");
-        fprintf(f, "  glColor3f(0.0f, 0.0f, 0.0f);\n");
-        fprintf(f, "  glDisable(GL_COLOR_MATERIAL);\n");
-        fprintf(f, "  glPointSize(8.0f);\n");
-        fprintf(f, "  glPolygonMode(GL_FRONT_AND_BACK, GL_POINT);\n");
-        fprintf(f, "  glEnable(GL_LIGHTING);\n");
-        fprintf(f, "  glPushMatrix();\n");
-        fprintf(f, "  reset_repl_vars();\n");
-        fprintf(f, "  render_repl_geometry();\n");
-        fprintf(f, "  glPopMatrix();\n");
-        fprintf(f, "  glPopAttrib();\n");
-    }
-
-    for (int i = 0; g_footer_pre_init[i]; i++)
-        fprintf(f, "%s\n", g_footer_pre_init[i]);
-    emit_export_init_section_to_file(f, needs_tess);
-    for (int i = 0; g_footer_post_init[i]; i++)
-        fprintf(f, "%s\n", g_footer_post_init[i]);
+    emit_export_display(f, &needs);
 
     fclose(f);
 

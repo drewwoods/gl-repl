@@ -205,20 +205,14 @@ dump wrapping, continuation rows, overflow commas, point-parameter wrapping,
 and bottom-layout panel width. There is no separate Phase-9 extraction needed
 for this unless a narrower parity bug is found.
 
-### 6d. Typed display scaffold/pass model in `repl_export.c`
+### 6d. Typed display scaffold/pass model in `repl_export.c` ✅ DONE
 
-- **File:lines:** `save_output()` still emits the generated `display()` body
-  directly: frame setup, render-state lines, light setup, fill pass, optional
-  outline pass, optional vertex-point pass, and init/footer sections.
-- **Why:** This is the remaining Phase-9 duplication hotspot. A small typed
-  display/pass model makes exported scaffold sections explicit, keeps the
-  pass order reviewable, and reduces drift when adding future render passes.
-- **Extract:** introduce `ExportNeeds` / display-pass specs plus helpers for
-  display begin, geometry pass emission, and display tail emission. Preserve
-  the exact generated C output.
-- **Verify:** `make test_repl_core_io`, `make test_repl_core_format`,
-  `make test-stubs TEST_JOBS=4`, `make sample USE_GL_STUBS=1`, and
-  `make sample`.
+`save_output()` now collects export prerequisites in `ExportNeeds`, emits the
+generated `display()` body through display begin/geometry/tail helpers, and
+drives the fill/outline/vertex-point blocks through `ExportDisplayPassSpec`
+entries. The generated C text and pass order stay unchanged, but the scaffold
+sections are now explicit enough for future render-pass changes to review
+locally.
 
 ---
 
@@ -227,7 +221,8 @@ for this unless a narrower parity bug is found.
 The editor-adjacent Phase 7 mechanical extractions are now complete.
 `MODULES.md` (Open Edges) still lists smaller residual ownership edges in
 `ui_panels.c` and `repl_editor.c`, but they are mostly routing or inline
-row-rendering concerns. The next large mechanical extraction is parser-focused.
+row-rendering concerns. Phase 9 now has its main scaffold/import slices in
+place. The next large mechanical extraction is parser-focused.
 
 ### 8. Extract `parse_command()` → `repl_parser.c`
 
