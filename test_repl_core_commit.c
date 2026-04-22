@@ -1022,8 +1022,8 @@ int main(void) {
     ASSERT_TRUE("func def overwrite: status not a duplicate rejection",
                 strstr(g_status, "already defined") == NULL);
 
-    /* Regression: calling func<N> with no definition is surfaced as a
-     * status warning during flatten (silent no-op before the fix). */
+    /* Regression: calling func<N> with no definition is surfaced as an
+     * error during flatten (silent no-op before the fix). */
     repl_reset_state(); declare_test_vars();
     g_status[0] = '\0';
     repl_feed_line_public("func5();");
@@ -1032,6 +1032,8 @@ int main(void) {
                 g_num_flat_cmds == 0);
     ASSERT_TRUE("undefined func call: status names func5",
                 strstr(g_status, "func5 not defined") != NULL);
+    ASSERT_TRUE("undefined func call: status uses Error prefix",
+                strstr(g_status, "Error:") != NULL);
 
     /* Defining the function later makes the same call resolve cleanly
      * (no stale "not defined" status); proves the warning tracks
