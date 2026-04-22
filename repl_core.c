@@ -1074,9 +1074,9 @@ void repl_reset_time_to_zero(void) {
 }
 
 void repl_reset_state(void) {
-    g_num_cmds = 0;
+    ReplCommandStore store = repl_command_store_live();
+    repl_command_store_load(&store, NULL, 0, 0);
     g_num_flat_cmds = 0;
-    g_edit_line = 0;
     g_inserting = 0;
     repl_scenes_reset();
     g_example_idx       = -1;

@@ -29,7 +29,7 @@ This list is ordered by impact-per-effort. Pick one and execute it
 in isolation; each item is sized to land as one `refactor:` commit.
 
 > **Baseline note:** `make test-stubs TEST_JOBS=4` currently passes
-> all 17 suites / 2342 tests cleanly. Any new failure introduced by a
+> all 17 suites / 2355 tests cleanly. Any new failure introduced by a
 > punch-list item is a real regression unless the team explicitly
 > rebaselines it.
 
@@ -251,6 +251,23 @@ arrays, installs the returned flat count, updates lighting state, and refreshes
 cursor highlighting. Focused internal coverage proves a temporary flat
 destination can be built without changing the live `g_flat_cmds[]` /
 `g_num_flat_cmds` arrays, including the capacity-failure path.
+
+### 10. Audit command-store escape hatches ✅ DONE
+
+Array-level source-command restores now go through
+`repl_command_store_load()`, which centralizes command-buffer copying,
+`g_num_cmds` replacement, edit-line clamping, and depth-cache invalidation.
+Converted paths include undo/redo snapshot restore, scene switching,
+workspace save/load stashing, workspace file load reset, built-in example
+load reset, and full REPL reset. Focused internal coverage exercises successful
+bulk load, rejected invalid loads, edit-line clamping, empty loads, and
+depth-cache invalidation.
+
+Remaining direct `g_cmds[]` writes are not command-array escape hatches:
+`ui_color_picker.c` and `repl_var_drag.c` rewrite literal values inside an
+existing command, and declaration commit paths repair assignment variable-slot
+indices after predef declarations change. Those should only move if we add a
+future per-command semantic mutation API.
 
 ---
 

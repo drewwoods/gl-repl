@@ -2,6 +2,7 @@
  * repl_scenes.c -- User scene slots, promotion, and workspace save/load.
  */
 #include "sample.h"
+#include "repl_command_store.h"
 #include "repl_core_internal.h"
 #include "repl_examples.h"
 
@@ -101,14 +102,19 @@ static void save_scene_to_slot(int idx, const char *name) {
     s->last_touch = next_user_scene_tick();
 }
 
+static int load_commands_into_live(const GLCmd *cmds, int num_cmds,
+                                   int edit_line) {
+    ReplCommandStore store = repl_command_store_live();
+    return repl_command_store_load(&store, cmds, num_cmds, edit_line);
+}
+
 static void load_scene_from_slot(int idx) {
     if (idx < 0 || idx >= MAX_USER_SCENES) return;
     UserScene *s = &g_user_scenes[idx];
     if (!s->used) return;
-    memcpy(g_cmds, s->cmds, (size_t)s->num_cmds * sizeof(GLCmd));
-    g_num_cmds        = s->num_cmds;
+    if (!load_commands_into_live(s->cmds, s->num_cmds, s->edit_line))
+        return;
     g_num_flat_cmds   = 0;
-    g_edit_line       = s->edit_line;
     g_num_predef_vars = s->num_predef_vars;
     for (int i = 0; i < s->num_predef_vars; i++) {
         g_predef_vars[i].value = s->predef_vals[i];
@@ -144,9 +150,8 @@ static void install_scene_into_live(int slot) {
     if (slot < 0 || slot >= MAX_USER_SCENES) return;
     const UserScene *s = &g_user_scenes[slot];
     if (!s->used) return;
-    memcpy(g_cmds, s->cmds, (size_t)s->num_cmds * sizeof(GLCmd));
-    g_num_cmds        = s->num_cmds;
-    g_edit_line       = s->edit_line;
+    if (!load_commands_into_live(s->cmds, s->num_cmds, s->edit_line))
+        return;
     g_num_predef_vars = s->num_predef_vars;
     for (int i = 0; i < s->num_predef_vars; i++) {
         g_predef_vars[i].value = s->predef_vals[i];
@@ -167,9 +172,8 @@ static void stash_live_state(UserScene *dst) {
 }
 
 static void restore_live_from_stash(const UserScene *src) {
-    memcpy(g_cmds, src->cmds, (size_t)src->num_cmds * sizeof(GLCmd));
-    g_num_cmds        = src->num_cmds;
-    g_edit_line       = src->edit_line;
+    if (!load_commands_into_live(src->cmds, src->num_cmds, src->edit_line))
+        return;
     g_num_predef_vars = src->num_predef_vars;
     for (int i = 0; i < src->num_predef_vars; i++) {
         g_predef_vars[i].value = src->predef_vals[i];
@@ -253,8 +257,7 @@ int repl_save_workspace(const char *dir) {
 }
 
 static int load_scene_file_into_slot(const char *path) {
-    g_num_cmds        = 0;
-    g_edit_line       = 0;
+    load_commands_into_live(NULL, 0, 0);
     g_num_predef_vars = 0;
 
     if (!load_from_file(path)) return -1;

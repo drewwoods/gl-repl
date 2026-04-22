@@ -40,6 +40,8 @@ int  repl_command_store_replace_one(ReplCommandStore *store, int pos,
                                     const GLCmd *cmd);
 int  repl_command_store_delete_range(ReplCommandStore *store, int start,
                                      int count);
+int  repl_command_store_load(ReplCommandStore *store, const GLCmd *cmds,
+                             int count, int edit_line);
 void repl_command_store_clear(ReplCommandStore *store);
 
 #endif /* REPL_COMMAND_STORE_H */

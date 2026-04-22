@@ -6,6 +6,7 @@
  * happen; this module records and restores the state affected by that mutation.
  */
 #include "repl_undo.h"
+#include "repl_command_store.h"
 #include "repl_core_internal.h"
 
 #define REPL_UNDO_DEPTH 32
@@ -29,10 +30,11 @@ void repl_undo_snapshot_save(ReplUndoSnapshot *snapshot) {
 }
 
 void repl_undo_snapshot_restore(const ReplUndoSnapshot *snapshot) {
-    memcpy(g_cmds, snapshot->cmds,
-           (size_t)snapshot->num_cmds * sizeof(GLCmd));
-    g_num_cmds = snapshot->num_cmds;
-    g_edit_line = snapshot->edit_line;
+    ReplCommandStore store = repl_command_store_live();
+    if (!repl_command_store_load(&store, snapshot->cmds,
+                                 snapshot->num_cmds,
+                                 snapshot->edit_line))
+        return;
     g_num_predef_vars = snapshot->num_predef_vars;
     for (int i = 0; i < snapshot->num_predef_vars; i++) {
         g_predef_vars[i].value = snapshot->predef_vals[i];

@@ -1,4 +1,5 @@
 #include "repl_core_internal.h"
+#include "repl_command_store.h"
 #include <stdio.h>
 #include <string.h>
 
@@ -201,6 +202,49 @@ int main() {
         ASSERT_INT("has_expr_vars true", input_has_expr_vars("radius + 1", vars, 2), 1);
         ASSERT_INT("has_expr_vars false", input_has_expr_vars("x + 1", vars, 2), 0);
         ASSERT_INT("has_any_visible true (predef)", input_has_any_visible_vars("x + 1", vars, 2), 1);
+    }
+
+    /* 10. command-store bulk load */
+    {
+        GLCmd loaded[2];
+        ReplCommandStore store;
+
+        repl_reset_state(); declare_test_vars();
+        repl_feed_line_public("for(i, 0, 1) {");
+        repl_feed_line_public("}");
+        ASSERT_INT("command_store_load pre-cache depth", block_depth_at(1), 1);
+
+        memset(loaded, 0, sizeof(loaded));
+        loaded[0].type = CMD_VERTEX3F;
+        loaded[0].valid = 1;
+        snprintf(loaded[0].source, sizeof(loaded[0].source),
+                 "glVertex3f(1, 0, 0);");
+        loaded[1].type = CMD_COLOR3F;
+        loaded[1].valid = 1;
+        snprintf(loaded[1].source, sizeof(loaded[1].source),
+                 "glColor3f(1, 0, 0);");
+
+        store = repl_command_store_live();
+        ASSERT_INT("command_store_load ok",
+                   repl_command_store_load(&store, loaded, 2, 99), 1);
+        ASSERT_INT("command_store_load count", g_num_cmds, 2);
+        ASSERT_INT("command_store_load edit clamp", g_edit_line, 2);
+        ASSERT_STR("command_store_load source", g_cmds[1].source,
+                   "glColor3f(1, 0, 0);");
+        ASSERT_INT("command_store_load invalidates depth",
+                   block_depth_at(1), 0);
+
+        ASSERT_INT("command_store_load rejects missing cmds",
+                   repl_command_store_load(&store, NULL, 1, 0), 0);
+        ASSERT_INT("command_store_load reject keeps count", g_num_cmds, 2);
+        ASSERT_INT("command_store_load rejects overflow",
+                   repl_command_store_load(&store, loaded,
+                                           MAX_COMMANDS + 1, 0), 0);
+        ASSERT_INT("command_store_load overflow keeps count", g_num_cmds, 2);
+        ASSERT_INT("command_store_load empty ok",
+                   repl_command_store_load(&store, NULL, 0, -5), 1);
+        ASSERT_INT("command_store_load empty count", g_num_cmds, 0);
+        ASSERT_INT("command_store_load empty edit clamp", g_edit_line, 0);
     }
 
     printf("\n%d / %d tests passed\n", g_pass, g_run);
