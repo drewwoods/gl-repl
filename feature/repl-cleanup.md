@@ -85,8 +85,8 @@ failure should be treated as a regression unless explicitly rebaselined.
    - Current progress: workspace header parsing/emission now share a
      directive table, `load_from_file()` dispatches through ordered import
      handlers, visual dumps already use the shared code-panel wrap iterator,
-     and `save_output()` emits the generated `display()` body through typed
-     display/pass helpers.
+     and `save_output()` drives the generated file through a typed top-level
+     scaffold section table plus typed `display()` pass helpers.
 
 10. **Final naming/comment pass**
    - Add comments only where they explain invariants, ordering, ownership, or non-obvious side effects: commit handler order, declaration placement, dirty flags, replay limits, import/export markers, and GL state assumptions.

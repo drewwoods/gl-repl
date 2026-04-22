@@ -52,6 +52,13 @@ static int count_substr(const char *haystack, const char *needle) {
     return count;
 }
 
+static int appears_before(const char *haystack, const char *first,
+                          const char *second) {
+    const char *a = strstr(haystack, first);
+    const char *b = strstr(haystack, second);
+    return a && b && a < b;
+}
+
 static int find_init_line(const char *needle) {
     char line[256];
 
@@ -139,6 +146,23 @@ int main(void) {
                     strstr(buf, "glEnable(GL_LINE_SMOOTH);") != NULL);
         ASSERT_TRUE("saved geometry helper",
                     strstr(buf, "static void render_repl_geometry(void)") != NULL);
+        ASSERT_TRUE("scaffold metadata before includes",
+                    appears_before(buf, "// @workspace:",
+                                   "#include <gl_includes.h>"));
+        ASSERT_TRUE("scaffold header before globals",
+                    appears_before(buf, "#include <gl_includes.h>",
+                                   "static float x = 0.0f;"));
+        ASSERT_TRUE("scaffold globals before reset",
+                    appears_before(buf, "static float x = 0.0f;",
+                                   "static void reset_repl_vars(void)"));
+        ASSERT_TRUE("scaffold reset before render helper",
+                    appears_before(buf, "static void reset_repl_vars(void)",
+                                   "static void render_repl_geometry(void)"));
+        ASSERT_TRUE("scaffold render helper before display",
+                    appears_before(buf, "static void render_repl_geometry(void)",
+                                   "void display()"));
+        ASSERT_TRUE("scaffold display before init",
+                    appears_before(buf, "void display()", "void init()"));
         ASSERT_TRUE("saved snippet marker start",
                     strstr(buf, "// Snippet start") != NULL);
         ASSERT_TRUE("saved snippet marker end",
@@ -257,6 +281,9 @@ int main(void) {
                     strstr(buf, "static void func0(float radius, float yoff)") != NULL);
         ASSERT_TRUE("saved func emitted only once",
                     count_substr(buf, "static void func0(float radius, float yoff) {") == 1);
+        ASSERT_TRUE("saved func before geometry helper",
+                    appears_before(buf, "static void func0(float radius, float yoff) {",
+                                   "static void render_repl_geometry(void)"));
         ASSERT_TRUE("saved geometry helper func call",
                     strstr(buf, "func0(1.5, x + 2);") != NULL);
         ASSERT_TRUE("saved geometry helper once",
@@ -438,6 +465,9 @@ int main(void) {
                     count_substr(buf, "func0(2.0);") == 1);
         ASSERT_TRUE("saved tess export includes tess global",
                     strstr(buf, "static GLUtesselator *g_tess = NULL;") != NULL);
+        ASSERT_TRUE("saved tess preamble before reset",
+                    appears_before(buf, "static GLUtesselator *g_tess = NULL;",
+                                   "static void reset_repl_vars(void)"));
         ASSERT_TRUE("saved tess export includes tess init",
                     strstr(buf, "g_tess = gluNewTess();") != NULL);
         ASSERT_TRUE("saved tess export includes tess callback",

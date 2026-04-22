@@ -2297,6 +2297,10 @@ typedef struct {
     int needs_rand;
 } ExportNeeds;
 
+typedef struct {
+    ExportNeeds needs;
+} ExportScaffoldContext;
+
 typedef void (*ExportDisplayPassSetupFn)(FILE *f);
 
 typedef struct {
@@ -2398,6 +2402,107 @@ static void emit_export_display(FILE *f, const ExportNeeds *needs) {
     emit_export_display_tail(f, needs);
 }
 
+typedef int  (*ExportScaffoldSectionEnabledFn)(const ExportScaffoldContext *ctx);
+typedef void (*ExportScaffoldSectionEmitFn)(FILE *f,
+                                            const ExportScaffoldContext *ctx);
+
+typedef struct {
+    const char                       *name;
+    ExportScaffoldSectionEmitFn       emit;
+    ExportScaffoldSectionEnabledFn    enabled;
+} ExportScaffoldSectionSpec;
+
+static int export_section_always(const ExportScaffoldContext *ctx) {
+    (void)ctx;
+    return 1;
+}
+
+static int export_section_needs_rand(const ExportScaffoldContext *ctx) {
+    return ctx && ctx->needs.needs_rand;
+}
+
+static int export_section_needs_tess(const ExportScaffoldContext *ctx) {
+    return ctx && ctx->needs.needs_tess;
+}
+
+static void emit_export_workspace_metadata_section(FILE *f,
+                                                   const ExportScaffoldContext *ctx) {
+    (void)ctx;
+    for (int i = 0; i < g_workspace_header_line_count; i++)
+        fprintf(f, "%s\n", g_workspace_header_lines[i]);
+    if (g_workspace_header_line_count > 0)
+        fprintf(f, "\n");
+}
+
+static void emit_export_header_section(FILE *f,
+                                       const ExportScaffoldContext *ctx) {
+    (void)ctx;
+    emit_export_header_pre(f);
+}
+
+static void emit_export_predef_globals_section(FILE *f,
+                                               const ExportScaffoldContext *ctx) {
+    (void)ctx;
+    write_predef_var_globals(f);
+}
+
+static void emit_export_rand_helper_section(FILE *f,
+                                            const ExportScaffoldContext *ctx) {
+    (void)ctx;
+    write_rand_helper(f);
+}
+
+static void emit_export_tess_preamble_section(FILE *f,
+                                              const ExportScaffoldContext *ctx) {
+    (void)ctx;
+    write_tess_preamble(f);
+}
+
+static void emit_export_reset_vars_section(FILE *f,
+                                           const ExportScaffoldContext *ctx) {
+    (void)ctx;
+    write_predef_var_reset_func(f);
+}
+
+static void emit_export_functions_section(FILE *f,
+                                          const ExportScaffoldContext *ctx) {
+    (void)ctx;
+    write_func_defs_as_c(f);
+}
+
+static void emit_export_render_helper_section(FILE *f,
+                                              const ExportScaffoldContext *ctx) {
+    (void)ctx;
+    write_render_helper_as_c(f, "render_repl_geometry");
+}
+
+static void emit_export_display_section(FILE *f,
+                                        const ExportScaffoldContext *ctx) {
+    emit_export_display(f, &ctx->needs);
+}
+
+/* Section order is the exported C ABI: imports and compile tests assume it. */
+static const ExportScaffoldSectionSpec EXPORT_SCAFFOLD_SECTIONS[] = {
+    { "workspace metadata", emit_export_workspace_metadata_section, export_section_always },
+    { "header",             emit_export_header_section,             export_section_always },
+    { "predef globals",     emit_export_predef_globals_section,     export_section_always },
+    { "rand helper",        emit_export_rand_helper_section,        export_section_needs_rand },
+    { "tess preamble",      emit_export_tess_preamble_section,      export_section_needs_tess },
+    { "reset vars",         emit_export_reset_vars_section,         export_section_always },
+    { "functions",          emit_export_functions_section,          export_section_always },
+    { "render helper",      emit_export_render_helper_section,      export_section_always },
+    { "display",            emit_export_display_section,            export_section_always },
+};
+
+static void emit_export_scaffold(FILE *f, const ExportScaffoldContext *ctx) {
+    for (size_t i = 0; i < sizeof(EXPORT_SCAFFOLD_SECTIONS) /
+                           sizeof(EXPORT_SCAFFOLD_SECTIONS[0]); i++) {
+        const ExportScaffoldSectionSpec *section = &EXPORT_SCAFFOLD_SECTIONS[i];
+        if (!section->enabled || section->enabled(ctx))
+            section->emit(f, ctx);
+    }
+}
+
 void save_output(const char *filename) {
     FILE *f = fopen(filename, "w");
     if (!f) {
@@ -2405,27 +2510,15 @@ void save_output(const char *filename) {
         return;
     }
 
-    ExportNeeds needs = export_collect_needs();
+    ExportScaffoldContext scaffold = {
+        .needs = export_collect_needs(),
+    };
 
     update_render_state_strings();
     update_cam_lines();
     refresh_workspace_header_lines();
 
-    for (int i = 0; i < g_workspace_header_line_count; i++)
-        fprintf(f, "%s\n", g_workspace_header_lines[i]);
-    if (g_workspace_header_line_count > 0)
-        fprintf(f, "\n");
-
-    emit_export_header_pre(f);
-    write_predef_var_globals(f);
-    if (needs.needs_rand)
-        write_rand_helper(f);
-    if (needs.needs_tess)
-        write_tess_preamble(f);
-    write_predef_var_reset_func(f);
-    write_func_defs_as_c(f);
-    write_render_helper_as_c(f, "render_repl_geometry");
-    emit_export_display(f, &needs);
+    emit_export_scaffold(f, &scaffold);
 
     fclose(f);
 
