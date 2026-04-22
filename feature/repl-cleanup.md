@@ -37,6 +37,14 @@ failure should be treated as a regression unless explicitly rebaselined.
    - Introduce a command-store API for insert, replace, delete, range delete, load, clear, and reformat updates.
    - Convert commit handlers, clipboard, examples, import, workspace load, undo/redo, and reformat paths to use that API.
    - Remove scattered direct mutation patterns such as manual `memmove`, direct `g_num_cmds++`, ad hoc declaration unregister/register, and forgotten dirty flags.
+   - Current progress: `ReplCommandStore` owns insertion, replacement, range
+     deletion, clearing, and bulk source-array restore/load. Commit paths,
+     clipboard, autonormal updates, import declaration insertion, examples,
+     scene switching/workspace load, undo/redo restore, and global reset now
+     route array-level mutations through that boundary. Remaining direct writes
+     are field-level semantic rewrites inside existing commands, such as
+     color-picker/variable-drag value sync and declaration assignment-slot
+     repair.
 
 4. **Separate command parsing from core state**
    - Done: parser logic now lives in `repl_parser.c` behind the existing `repl_parse_command*()` entrypoints plus explicit `ReplParseContext` for source-line-sensitive parsing.

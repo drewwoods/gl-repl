@@ -62,6 +62,14 @@ static int clamp_insert_pos(const ReplCommandStore *store, int pos) {
     return pos;
 }
 
+static int clamp_edit_line_to_count(int edit_line, int count) {
+    if (edit_line < 0)
+        return 0;
+    if (edit_line > count)
+        return count;
+    return edit_line;
+}
+
 int repl_command_store_insert_many(ReplCommandStore *store, int pos,
                                    const GLCmd *cmds, int count, int flags) {
     if (!store || !store->cmds || !store->count || !cmds || count <= 0)
@@ -110,6 +118,25 @@ int repl_command_store_delete_range(ReplCommandStore *store, int start,
     memmove(&store->cmds[start], &store->cmds[start + count],
             (size_t)(*store->count - start - count) * sizeof(store->cmds[0]));
     *store->count -= count;
+    depth_cache_invalidate();
+    return 1;
+}
+
+int repl_command_store_load(ReplCommandStore *store, const GLCmd *cmds,
+                            int count, int edit_line) {
+    if (!store || !store->cmds || !store->count || count < 0)
+        return 0;
+    if (count > store->capacity)
+        return 0;
+    if (count > 0 && !cmds)
+        return 0;
+
+    if (count > 0)
+        memcpy(store->cmds, cmds, (size_t)count * sizeof(store->cmds[0]));
+    *store->count = count;
+    if (store->edit_line)
+        *store->edit_line = clamp_edit_line_to_count(edit_line, count);
+
     depth_cache_invalidate();
     return 1;
 }

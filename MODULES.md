@@ -24,7 +24,7 @@ The central data flow. Edits mutate `g_cmds[]`; everything downstream
 | `repl_command_spec` | Declarative descriptors for fixed-arity GL commands |
 | `repl_parser` | Source-line parser and canonical `GLCmd.source[]` generation |
 | `repl_source_scope` | Source prefix-depth cache, indent helpers, block lookup |
-| `repl_command_store` | Insert/delete/replace API over `g_cmds[]` |
+| `repl_command_store` | Insert/delete/replace/load API over `g_cmds[]` |
 | `repl_commit` | Float decls, variable assignments, structured block commits |
 | `repl_flatten` | Explicit source-to-flat program builder (loops, functions, `if`) |
 | `repl_executor` | Flat-program GL dispatch |
@@ -121,7 +121,7 @@ flowchart LR
         flatten["repl_flatten.c<br/>explicit source-to-flat builder"]
         exec["repl_executor.c<br/>flat program execution"]
         commit["repl_commit.c<br/>decls · assigns · blocks"]
-        store["repl_command_store.c<br/>source command mutation"]
+        store["repl_command_store.c<br/>source command mutation · restore"]
     end
 
     subgraph input["Editor + input"]
@@ -307,6 +307,10 @@ render files.
   next to the input line.
 - `repl_editor.c` still owns hidden-code-panel restore rules and the main
   keyboard/special/mouse route ordering.
+- A few semantic value editors still rewrite fields inside existing commands
+  directly (`ui_color_picker.c`, `repl_var_drag.c`, and declaration slot
+  repair in commit paths). Bulk source-array restores now go through
+  `repl_command_store_load()`.
 - `sample.h` and `repl_state.h` still expose broad globals for compatibility.
   The current module splits are ownership boundaries, not yet context-object
   rewrites.

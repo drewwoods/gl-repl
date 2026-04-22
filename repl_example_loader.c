@@ -2,6 +2,7 @@
  * repl_example_loader.c -- Built-in example loading and metadata handling.
  */
 #include "sample.h"
+#include "repl_command_store.h"
 #include "repl_core_internal.h"
 #include "repl_examples.h"
 
@@ -221,10 +222,10 @@ static int consume_example_cfg_header(const char *const *lines) {
 
 static void load_example_lines(const char *const *lines) {
     const char *const *body = lines;
+    ReplCommandStore store = repl_command_store_live();
 
-    g_num_cmds = 0;
+    repl_command_store_load(&store, NULL, 0, 0);
     g_num_flat_cmds = 0;
-    g_edit_line = 0;
     g_inserting = 0;
     g_input[0] = '\0';
     g_input_len = 0;

@@ -414,9 +414,14 @@ state, hit rectangles, and rendering live outside `ui_panels.c`.
   `ReplRenderState`, etc.). Storage is unchanged; this is an ownership layer
   for future extraction, not a context-object rewrite.
 - `repl_command_store.h` is the first ownership boundary around source-command
-  array mechanics. Code that shifts, inserts, replaces, deletes, or clears
-  `g_cmds[]` should prefer `repl_command_store_*` helpers so capacity checks,
-  edit-line adjustment, and depth-cache invalidation stay consistent.
+  array mechanics. Code that shifts, inserts, replaces, deletes, clears, or
+  bulk-restores `g_cmds[]` should prefer `repl_command_store_*` helpers so
+  capacity checks, edit-line adjustment, and depth-cache invalidation stay
+  consistent. Undo, scene switching, example load, workspace import, and global
+  reset all restore source-command arrays through `repl_command_store_load()`.
+  Remaining direct writes are localized semantic edits to fields inside an
+  existing command, such as color-picker/variable-drag rewrites and declaration
+  assignment-slot repair.
 - `repl_core_internal.h` is the internal bridge for non-public helpers needed by
   tests or sibling `.c` files.
 - The `CFG_DEFAULT_*` macro block in `sample.h` is also the shared source of
@@ -435,8 +440,9 @@ This is the target responsibility split for cleanup work. Refactors should move
 one boundary at a time and keep behavior unchanged unless a test explicitly
 captures the intended behavior change.
 
-- **Command store:** owns source-command array mechanics, capacity checks,
-  edit-line adjustment for raw insertions, and depth-cache invalidation.
+- **Command store:** owns source-command array mechanics, bulk snapshot loads,
+  capacity checks, edit-line adjustment for raw insertions/restores, and
+  depth-cache invalidation.
 - **Parser:** owns line-to-`GLCmd` translation, command metadata, expression
   preservation, and normalized source text.
 - **Commit pipeline:** owns user intent: where a parsed command lands, when
@@ -479,7 +485,7 @@ captures the intended behavior change.
 ### Current cleanup baseline
 
 After the Phase 7 code-panel responsibility split, `make test-stubs TEST_JOBS=4`
-builds all test binaries and passes 17 of 17 suites: 2342/2342 tests. The
+builds all test binaries and passes 17 of 17 suites: 2355/2355 tests. The
 latest slices extracted document rows, replay annotations, menu/dropdown
 rendering, the color picker, help overlay, variable panel, autocomplete popup,
 inline rename, and variable slider dragging while preserving behavior. Phase 8
@@ -520,9 +526,12 @@ chasing the call sites. Ordering within a helper is load-bearing:
 `float x;` is not misread as an assignment to an identifier named
 `"float"`.
 
-These helpers update `g_cmds[]` directly, but they still rely on parser
-helpers from `repl_parser.c` and scope helpers from `repl_source_scope.c` for
-validation and normalization.
+These helpers route source-array insert/replace/delete work through
+`ReplCommandStore`, but they still rely on parser helpers from
+`repl_parser.c` and scope helpers from `repl_source_scope.c` for validation and
+normalization. Declaration bookkeeping may still repair assignment variable-slot
+indices in place after the predef table changes; that is a semantic command
+field update rather than command-array ownership.
 
 ### Float variable declarations
 
@@ -564,6 +573,9 @@ is shared by all dispatch sites.
   stack, which is the usual "diverged history" rule.
 - Ctrl+Z pops the undo stack and moves the current state to the redo
   stack; Ctrl+Y does the reverse.
+- Snapshot restore loads `g_cmds[]`, `g_num_cmds`, and `g_edit_line` through
+  `repl_command_store_load()` so depth-cache invalidation and edit-line clamping
+  match scene/example/reset restores.
 - Rejected navigation commits use `ReplUndoRingState` to restore the history
   counters after rolling back the attempted command/predef mutation.
 
