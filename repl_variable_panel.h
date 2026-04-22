@@ -3,8 +3,8 @@
  *
  * Renders a read-only HUD of declared predefined variables with a
  * shared log-scale slider per row.  Mutation of variable values is
- * driven by the editor's drag handler (see g_drag_var in
- * repl_editor.c); this module only renders and reports geometry/hits.
+ * driven by repl_var_drag.c; this module only renders and reports
+ * geometry/hits.
  */
 #ifndef REPL_VARIABLE_PANEL_H
 #define REPL_VARIABLE_PANEL_H
