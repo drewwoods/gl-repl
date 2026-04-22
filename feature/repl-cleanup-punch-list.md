@@ -181,21 +181,44 @@ explicit `scene_overlay_flat_block_matches_cursor()` helper shared by the
 outline pass and the remaining vertex-number/normal overlay visitor in
 `scene_render.c`.
 
-### 6. Workspace header read/write symmetry in `repl_export.c`
+### 6. Workspace header read/write symmetry in `repl_export.c` ✅ DONE
 
-- **File:lines:** `save_output()` (~2230–2329) emits `@var`/`@cfg`/
-  `@scene-name`/`@workspace-dir` headers; `load_from_file()`
-  (~2331–2530) parses them. The directive set is duplicated by hand
-  on both sides — a header added on one side without the other goes
-  silently unused.
-- **Why:** Save/load asymmetry is a class of bug that's invisible at
-  diff-review time. A `WorkspaceHeader` struct + paired
-  `read_workspace_header()` / `write_workspace_header()` makes the
-  directive vocabulary explicit and forces both directions to stay
-  in sync.
-- **Verify:** `make test_repl_core_io`, then save → load round-trip
-  every example via `./sample`, confirm camera/cfg/scene-name
-  preserved.
+Landed as `refactor: drive workspace header I/O from a directive table`.
+`parse_workspace_header_line()` and `refresh_workspace_header_lines()` now
+share one `WorkspaceDirective` table for `@scene-name`, `@workspace-dir`,
+`@var`, and `@cfg`, so a directive's parser and emitter stay paired.
+
+### 6b. Ordered importer handlers in `repl_export.c` ✅ DONE
+
+Landed as `refactor: split load_from_file into ordered import handlers`.
+`load_from_file()` now drives an `ImportState` through focused
+`import_try_*` handlers. Dispatch order encodes the original priority:
+camera/workspace/function/snippet/comment handling before snippet body
+handling, then snippet-end/blank/predef-decl/feed-line inside the snippet.
+Deferred `@var` reapply and the final status message remain in the driver.
+
+### 6c. Visual dump wraps through `repl_code_panel_layout.c` ✅ ALREADY DONE
+
+`repl_dump_code_panel_visual_text()` already calls `CodePanelWrapIter` via
+`dump_code_panel_wrapped_line()`, and `test_repl_core_format.c` covers visual
+dump wrapping, continuation rows, overflow commas, point-parameter wrapping,
+and bottom-layout panel width. There is no separate Phase-9 extraction needed
+for this unless a narrower parity bug is found.
+
+### 6d. Typed display scaffold/pass model in `repl_export.c`
+
+- **File:lines:** `save_output()` still emits the generated `display()` body
+  directly: frame setup, render-state lines, light setup, fill pass, optional
+  outline pass, optional vertex-point pass, and init/footer sections.
+- **Why:** This is the remaining Phase-9 duplication hotspot. A small typed
+  display/pass model makes exported scaffold sections explicit, keeps the
+  pass order reviewable, and reduces drift when adding future render passes.
+- **Extract:** introduce `ExportNeeds` / display-pass specs plus helpers for
+  display begin, geometry pass emission, and display tail emission. Preserve
+  the exact generated C output.
+- **Verify:** `make test_repl_core_io`, `make test_repl_core_format`,
+  `make test-stubs TEST_JOBS=4`, `make sample USE_GL_STUBS=1`, and
+  `make sample`.
 
 ---
 
