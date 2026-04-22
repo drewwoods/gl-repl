@@ -89,6 +89,15 @@ int  repl_parse_and_normalize(const char *line, int pos,
                               ExprVar *vars, int num_vars,
                               int preserve_expr, GLCmd *out_cmd);
 
+/* Same as repl_parse_and_normalize() but rejects top-level CMD_CALL
+ * whose target funcN has no matching CMD_FUNC_DEF.  Used by the commit
+ * path so undefined calls surface at typing time like undeclared
+ * variables do; reformat/flatten/test paths keep the permissive
+ * variant above. */
+int  repl_parse_and_normalize_strict(const char *line, int pos,
+                                     ExprVar *vars, int num_vars,
+                                     int preserve_expr, GLCmd *out_cmd);
+
 void update_render_state_strings(void);
 void ensure_init_bootstrap_ready(void);
 void apply_init_bootstrap(void);

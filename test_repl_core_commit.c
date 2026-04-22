@@ -1022,31 +1022,62 @@ int main(void) {
     ASSERT_TRUE("func def overwrite: status not a duplicate rejection",
                 strstr(g_status, "already defined") == NULL);
 
-    /* Regression: calling func<N> with no definition is surfaced as an
-     * error during flatten (silent no-op before the fix). */
+    /* Regression: calling func<N> with no definition is rejected at
+     * commit time, the same way `x = 1;` is rejected before `float x;`
+     * is declared.  Call is never added to g_cmds and status names the
+     * function. */
     repl_reset_state(); declare_test_vars();
     g_status[0] = '\0';
+    int pre_call_cmd_count = g_num_cmds;
     repl_feed_line_public("func5();");
-    repl_flatten_commands();
-    ASSERT_TRUE("undefined func call: produces no flat cmds",
-                g_num_flat_cmds == 0);
-    ASSERT_TRUE("undefined func call: status names func5",
-                strstr(g_status, "func5 not defined") != NULL);
-    ASSERT_TRUE("undefined func call: status uses Error prefix",
-                strstr(g_status, "Error:") != NULL);
+    ASSERT_TRUE("undefined top-level call: not added to g_cmds",
+                g_num_cmds == pre_call_cmd_count);
+    ASSERT_TRUE("undefined top-level call: status names func5",
+                strstr(g_status, "func5") != NULL);
+    ASSERT_TRUE("undefined top-level call: status says undefined",
+                strstr(g_status, "undefined function") != NULL);
 
-    /* Defining the function later makes the same call resolve cleanly
-     * (no stale "not defined" status); proves the warning tracks
-     * presence, not a one-time parse event. */
+    /* Same call accepted once the definition exists. */
     repl_feed_line_public("func5 {");
     repl_feed_line_public("glVertex3f(0, 0, 0);");
     repl_feed_line_public("}");
+    int pre_retry_cmd_count = g_num_cmds;
     g_status[0] = '\0';
+    repl_feed_line_public("func5();");
+    ASSERT_TRUE("defined top-level call: commit adds a CMD_CALL",
+                g_num_cmds == pre_retry_cmd_count + 1);
+    ASSERT_TRUE("defined top-level call: last cmd is CMD_CALL",
+                g_cmds[g_num_cmds - 1].type == CMD_CALL);
     repl_flatten_commands();
-    ASSERT_TRUE("defined func call: flat body expands",
+    ASSERT_TRUE("defined top-level call: flat body expands",
                 g_num_flat_cmds == 1 && g_flat_cmds[0].type == CMD_VERTEX3F);
-    ASSERT_TRUE("defined func call: no warning status",
-                strstr(g_status, "not defined") == NULL);
+
+    /* Forward references inside a function body are still allowed so
+     * mutual recursion keeps working.  func0's body calls func1 before
+     * func1 is defined; top-level `func0(2)` only commits after both
+     * defs exist. */
+    repl_reset_state(); declare_test_vars();
+    repl_feed_line_public("func0(n) {");
+    repl_feed_line_public("if(n > 0) {");
+    repl_feed_line_public("glVertex3f(n, 0, 0);");
+    repl_feed_line_public("func1(n - 1);");   /* forward ref inside body */
+    repl_feed_line_public("}");
+    repl_feed_line_public("}");
+    repl_feed_line_public("func1(n) {");
+    repl_feed_line_public("if(n > 0) {");
+    repl_feed_line_public("glVertex3f(-n, 0, 0);");
+    repl_feed_line_public("func0(n - 1);");
+    repl_feed_line_public("}");
+    repl_feed_line_public("}");
+    int pre_mutual_call_count = g_num_cmds;
+    g_status[0] = '\0';
+    repl_feed_line_public("func0(2);");
+    ASSERT_TRUE("mutual recursion: top-level call accepted",
+                g_num_cmds == pre_mutual_call_count + 1 &&
+                g_cmds[g_num_cmds - 1].type == CMD_CALL);
+    repl_flatten_commands();
+    ASSERT_TRUE("mutual recursion: flatten reaches base case",
+                g_num_flat_cmds > 0);
 
     printf("repl_core_commit: %d/%d passed\n", g_pass, g_run);
     return (g_run == g_pass) ? 0 : 1;
