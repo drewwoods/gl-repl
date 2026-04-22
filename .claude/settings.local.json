@@ -32,7 +32,23 @@
       "WebFetch(domain:api.anthropic.com)",
       "WebFetch(domain:claude.ai)",
       "Bash(awk '/repl_autonormal\\\\.c/,/^end_of_record/' build/coverage/lcov.info)",
-      "Bash(./test_repl_autonormal *)"
+      "Bash(./test_repl_autonormal *)",
+      "Bash(awk 'NR==970,/^void [a-z]/{print NR\": \"$0; if \\(NR>970 && /^void [a-z]/\\) exit}' ui_panels.c)",
+      "Bash(awk 'NR>=970 && /^}/{print NR\": \"$0; n++; if\\(n==1\\) exit}' ui_panels.c)",
+      "Bash(sed -i '' '962,1398d' ui_panels.c)",
+      "Bash(sed -n '958,968p' ui_panels.c)",
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)",
+      "Bash(sed -i '' '1138,1243d' ui_panels.c)",
+      "Bash(sed -i '' '962,1070d' ui_panels.c)",
+      "Bash(sed -n '955,975p' ui_panels.c)",
+      "Bash(sed -i '' '891,961d' ui_panels.c)",
+      "Bash(sed -n '885,895p' ui_panels.c)",
+      "Bash(git push *)",
+      "Bash(git mv *)",
+      "Bash(sed -i '' -e 's|repl_menu_bar\\\\.c|ui_menu_bar.c|g' -e 's|repl_color_picker\\\\.c|ui_color_picker.c|g' -e 's|repl_autocomplete_panel\\\\.c|ui_autocomplete_panel.c|g' -e 's|repl_help_overlay\\\\.c|ui_help_overlay.c|g' -e 's|repl_variable_panel\\\\.c|ui_variable_panel.c|g' -e 's|profile_panel\\\\.c|ui_profile_panel.c|g' repl_core.c ui_color_picker.c repl_inline_rename.c ui_profile_panel.c)",
+      "Bash(sed -i '' -e 's|repl_color_picker\\\\.c|ui_color_picker.c|g' -e 's|repl_color_picker\\\\.h|ui_color_picker.h|g' -e 's|repl_help_overlay\\\\.c|ui_help_overlay.c|g' -e 's|repl_help_overlay\\\\.h|ui_help_overlay.h|g' -e 's|repl_menu_bar\\\\.c|ui_menu_bar.c|g' -e 's|repl_menu_bar\\\\.h|ui_menu_bar.h|g' -e 's|repl_variable_panel\\\\.c|ui_variable_panel.c|g' -e 's|repl_variable_panel\\\\.h|ui_variable_panel.h|g' -e 's|repl_autocomplete_panel\\\\.c|ui_autocomplete_panel.c|g' -e 's|repl_autocomplete_panel\\\\.h|ui_autocomplete_panel.h|g' -e 's|profile_panel\\\\.c|ui_profile_panel.c|g' -e 's|profile_panel\\\\.h|ui_profile_panel.h|g' -e 's|profile_panel\\\\.o|ui_profile_panel.o|g' Makefile)",
+      "Bash(git rm *)"
     ]
   }
 }
