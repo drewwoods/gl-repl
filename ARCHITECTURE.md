@@ -59,8 +59,8 @@ of one monolithic `repl_core.c`.
 - `repl_eval.c`: expression parsing and evaluation.
 - `ui_panels.c`: 2D code-panel row rendering, source search highlights, inline
   ghost/hint text, scene status banner, and top-level panel routing.
-- `scene_render.c`: 3D scene rendering, grid/axes theme specs, guarded helper
-  passes, shared vertex-overlay traversal, and replay HUD.
+- `scene_render.c`: 3D scene rendering, frame render prep, grid/axes theme
+  specs, guarded helper passes, shared vertex-overlay traversal, and replay HUD.
 - `sample.c`: application entrypoint and GLUT callback wiring.
 
 The public API is still `repl_core.h`. Cross-module runtime/test helpers live in
@@ -424,6 +424,8 @@ captures the intended behavior change.
   state discipline for a single frame. Standard grid themes are described by
   `GridThemeSpec` entries, standard axes by `AxesThemeSpec` entries, and
   vertex-number/normal overlays share one flat-command traversal helper.
+  `FrameRenderContext` prepares sticky per-frame state such as the Focus grid
+  vertex before helper renderers run.
 - **Import/export:** owns scaffold sections, workspace metadata, and
   translation between exported C and REPL command text.
 
@@ -435,7 +437,8 @@ latest slices extracted document rows, replay annotations, menu/dropdown
 rendering, the color picker, help overlay, variable panel, autocomplete popup,
 inline rename, and variable slider dragging while preserving behavior. The
 first Phase-8 scene-render pass then added grid/axes theme specs, local
-helper-pass GL state guards, and a shared vertex-overlay traversal.
+helper-pass GL state guards, a shared vertex-overlay traversal, and
+Focus-grid frame prep.
 
 ## Key Pipelines
 

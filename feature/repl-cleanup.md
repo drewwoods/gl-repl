@@ -65,8 +65,10 @@ failure should be treated as a regression unless explicitly rebaselined.
    - Add small GL state guard helpers or strict documented push/pop conventions for blend, lighting, depth mask, polygon mode, matrices, and line/point sizes.
    - Split large render helpers into grid themes, axes themes, overlays, lights, backdrop, and geometry execution support.
    - Current progress: standard grid/axes themes now use local specs and
-     shared draw helpers, helper passes have explicit GL attribute guards, and
-     vertex-number/normal overlays share one flat-command traversal helper.
+     shared draw helpers, helper passes have explicit GL attribute guards,
+     vertex-number/normal overlays share one flat-command traversal helper, and
+     Focus-grid vertex selection now happens in `FrameRenderContext`
+     preparation instead of inside `draw_grid()`.
 
 9. **Refactor import/export around a shared scaffold model**
    - Represent the generated C scaffold as typed sections rather than duplicated string/layout logic.

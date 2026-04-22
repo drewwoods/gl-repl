@@ -31,7 +31,7 @@ flowchart LR
     export["repl_export.c<br/>import/export<br/>visual code dump"]
     audio["repl_audio.c<br/>playlist engine<br/>persisted audio cfg"]
     replay["repl_replay.c<br/>replay state machine<br/>fade batches"]
-    scene["scene_render.c<br/>3D scene frame<br/>theme specs<br/>guarded helper passes"]
+    scene["scene_render.c<br/>3D scene frame<br/>FrameRenderContext<br/>guarded helper passes"]
     scene_theme["GridThemeSpec / AxesThemeSpec<br/>standard theme tables"]
     scene_overlay["vertex overlay walker<br/>flat traversal<br/>numbers + normals"]
     scenes["repl_scenes.c<br/>user scenes<br/>workspace slots"]
@@ -136,6 +136,8 @@ flowchart LR
   entries, while focus/ocean/adaptive-plane grid themes remain custom render
   paths. Vertex-number and normal-vector overlays share one flat-command
   visitor so transform replay and tessellation block tracking stay consistent.
+  Focus-grid vertex selection is prepared in `FrameRenderContext` before grid
+  drawing, keeping the theme draw path read-only on focus state.
 
 ## Open Edges
 
