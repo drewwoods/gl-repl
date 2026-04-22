@@ -2,7 +2,9 @@ TODO:
    - ability to switch between 2D orth where use glVertex2d
    - when glEnable(GL_LIGHTING) is commented I expected the lighting to be disabled, since that is the default state. 
    - Using the status bar to enter a new filename is not ideal as it disappears
-   - outlines dont function correctly if using GL_LINES or POINTS in the exported code
+   - outlines dont function correctly when not using lighting
+     - replace the exported code with a stencil test (color and depth mask false, stencil set, then color black where stencil set)
+   - add ability to reset the x,y,z translation of the camera
    - show user scene when currently selected
    - address the limitation of only 8 scope visible globals
 
