@@ -2,10 +2,15 @@ TODO:
    - ability to switch between 2D orth where use glVertex2d
    - when glEnable(GL_LIGHTING) is commented I expected the lighting to be disabled, since that is the default state. 
    - Using the status bar to enter a new filename is not ideal as it disappears
+   - remove emdash — from status bar output since not ascii
+   - See status bar history
+   - Think of how to handle music - maybe a menu?
+   - Have a tutorial or popup windows
    - outlines dont function correctly when not using lighting
      - replace the exported code with a stencil test (color and depth mask false, stencil set, then color black where stencil set)
    - add ability to reset the x,y,z translation of the camera
    - show user scene when currently selected
+   - grids don't look good with pure black -- i think the alpha is too low, black crushed, not using sRGB
    - address the limitation of only 8 scope visible globals
 
 
