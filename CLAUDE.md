@@ -81,7 +81,9 @@ Run all: `make test`
 |------|----------------|
 | `sample.c` | GLUT callback wrappers, `main()`, window setup |
 | `sample.h` | Shared types (`GLCmd`, `CmdType`, `SceneLight`, `CfgItem`), extern globals, utility declarations, `CFG_DEFAULT_*` macros |
-| `repl_core.c` | Parser, normalization, display callback, GL init, source/depth queries |
+| `repl_core.c` | Normalization, display callback, GL init, source/depth queries |
+| `repl_parser.c` | REPL source-line parser, expression validation, canonical `GLCmd.source[]` generation |
+| `repl_parser.h` | Parser entrypoints (`repl_parse_command*`) |
 | `repl_commit.c` | Float declarations, variable assignments, structured block commits, close-brace commits |
 | `repl_core.h` | Public API (parse, flatten, display, input callbacks, user scene + workspace) |
 | `repl_core_internal.h` | Test-visible internals (normalize/commit pipeline, `feed_line`, `load_line_to_input`, `repl_promote_example_if_needed`) |
@@ -136,7 +138,8 @@ Run all: `make test`
 - Config toggles use the `CfgItem` pattern: add entries to `g_cfg_items[]` in
   `repl_actions.c`; `CFG_ITEM_COUNT` auto-computes via `sizeof`
 - New GL commands: add to `CmdType` enum in `sample.h`, then handle in
-  `parse_command()`, `execute_commands()`, and `flatten_range()` in `repl_core.c`
+  `parse_command()` in `repl_parser.c`, `execute_commands()` in
+  `repl_executor.c`, and `flatten_range()` in `repl_flatten.c`
 - Keyboard bindings: `keyboard_func()` for ASCII keys (Ctrl+X = key code X-64),
   `special_func()` for F-keys/arrows in `repl_editor.c`
 - Expression variables: `ExprVar` struct in `repl_eval.h`, predefined set in
@@ -365,10 +368,10 @@ The core data flow is **source commands → flat commands → GL calls**:
    `try_assign_variable`, otherwise `float x` is misread as an
    assignment. Each handler returns 1 if it consumed the input
    (success or error with status message), 0 if it didn't match.
-   If all handlers return 0, `parse_command()` in `repl_core.c`
-   sets `"Unknown cmd."` status (`repl_core.c`, end of
+   If all handlers return 0, `parse_command()` in `repl_parser.c`
+   sets `"Unknown cmd."` status (`repl_parser.c`, end of
    `parse_command`).
-3. **Parse** — `parse_command()` in `repl_core.c` matches the line to a
+3. **Parse** — `parse_command()` in `repl_parser.c` matches the line to a
    `CmdType`, evaluates argument expressions via `eval_expr()`, stores
    result in `GLCmd.args[]` and normalized text in `GLCmd.source[]`
 4. **Flatten** — `flatten_range()` recursively expands the source array:
@@ -492,7 +495,7 @@ Circular snapshot buffers in `repl_undo.c`:
 
 ### Autocomplete
 
-Symbol matching and function parameter hints in `repl_core.c`:
+Symbol matching and function parameter hints in `repl_autocomplete.c`:
 - `g_ac_matches[]` — matched completions from GL command/constant tables
 - `g_ac_ghost[]` — suffix to append to input on Tab accept
 - `g_ac_hint[]` — parameter list hint shown below cursor

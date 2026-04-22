@@ -38,8 +38,8 @@ failure should be treated as a regression unless explicitly rebaselined.
    - Remove scattered direct mutation patterns such as manual `memmove`, direct `g_num_cmds++`, ad hoc declaration unregister/register, and forgotten dirty flags.
 
 4. **Separate command parsing from core state**
-   - Extract parser logic from `repl_core.c` into a parser-focused module.
-   - Introduce a `CommandSpec` table for simple fixed-arity GL commands, enum arguments, normalized source formatting, and basic command properties.
+   - Done: parser logic now lives in `repl_parser.c` behind the existing `repl_parse_command*()` entrypoints.
+   - Done: `repl_command_spec.c` owns the command descriptor table for simple fixed-arity GL commands, enum arguments, normalized source formatting, and basic command properties.
    - Keep complex forms custom but isolated: declarations, assignment, loops, functions, conditionals, tessellation, `glMaterialf`, point parameters, comments, labels, and goto/replay metadata.
    - Use command metadata later for autocomplete, export, display classification, and execution dispatch.
 

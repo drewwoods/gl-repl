@@ -222,28 +222,19 @@ The editor-adjacent Phase 7 mechanical extractions are now complete.
 `MODULES.md` (Open Edges) still lists smaller residual ownership edges in
 `ui_panels.c` and `repl_editor.c`, but they are mostly routing or inline
 row-rendering concerns. Phase 9 now has its main scaffold/import slices in
-place. The next large mechanical extraction is parser-focused.
+place. The next large mechanical extraction, parser ownership, is now done.
 
-### 8. Extract `parse_command()` → `repl_parser.c`
+### 8. Extract `parse_command()` → `repl_parser.c` — done
 
-- **File:lines:** `repl_core.c:886–1469` — 600-line giant switch on
-  command string, evaluating arg expressions, populating `GLCmd.args`.
-  Hot path for every keystroke that commits.
-- **Why:** `repl_core.c` is supposed to be "parser, normalization,
-  display, GL init, depth queries." Two of those (`flatten`,
-  `executor`) already moved out. The parser itself — by far the
-  biggest piece left — should follow. Purely organizational (no
-  behavior change, no signature change for the public
-  `repl_parse_command`), but it isolates 600 lines of a critical
-  path into its own module that can be tested and reasoned about
-  independently. Aligns with stage 4 of `repl-cleanup.md`.
-- **Extract:** `parse_command()` and any static helpers it owns
-  exclusively. `repl_core.c` keeps the public `repl_parse_command()`
-  shim if needed for back-compat, otherwise the new module exports
-  it directly.
+- `repl_parser.c` now owns the parser grammar and the public
+  `repl_parse_command*()` entrypoints.
+- `repl_core.c` keeps normalization, display, GL init, and the depth/indent
+  helpers that are still tied to the source-command prefix cache.
+- `Makefile`, `MODULES.md`, `ARCHITECTURE.md`, and the local agent docs now
+  list parser ownership explicitly.
 - **Verify:** `make test_repl_core_parse`, `make test_repl_core_commit`,
-  `make test_eval` (no new failures vs. baseline). Smoke-test
-  `./sample` with each example.
+  `make test_eval`, `make test-stubs TEST_JOBS=4`, `make sample
+  USE_GL_STUBS=1`, and `make sample`.
 
 ---
 

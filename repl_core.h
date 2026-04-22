@@ -2,10 +2,10 @@
  * repl_core.h — Public API for the REPL core module.
  *
  * repl_core.c owns the source-command array (g_cmds), the flattened command
- * array (g_flat_cmds), parser entrypoints, display callback, and app-level
- * lifecycle wrappers. Execution, flattening, replay, examples, and scenes live
- * in focused repl_* modules behind this API. Everything listed here is safe to
- * call from sample.c, scene_render.c, ui_panels.c, and the test binaries.
+ * array (g_flat_cmds), display callback, and app-level lifecycle wrappers.
+ * Parsing, execution, flattening, replay, examples, and scenes live in focused
+ * repl_* modules behind this API. Everything listed here is safe to call from
+ * sample.c, scene_render.c, ui_panels.c, and the test binaries.
  *
  * Implementation-only helpers that share state across the repl_* translation
  * units (editor, export, search, etc.) live in repl_core_internal.h; keep
@@ -15,14 +15,7 @@
 #define REPL_CORE_H
 
 #include "sample.h"
-
-/* --- Parsing & normalization ------------------------------------------- */
-/* Parse a single REPL line into `cmd`. Returns 1 on success, 0 otherwise.
- * The _with_vars variant makes loop/function locals visible to the
- * expression evaluator (for flattening contexts). */
-int  repl_parse_command(const char *line, GLCmd *cmd);
-int  repl_parse_command_with_vars(const char *line, GLCmd *cmd,
-                                  ExprVar *vars, int num_vars);
+#include "repl_parser.h"
 
 /* --- Save / load ------------------------------------------------------- */
 void repl_save_default_output(void);   /* writes ./output.c */
