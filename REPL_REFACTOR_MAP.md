@@ -16,11 +16,12 @@ flowchart LR
     commit["repl_commit.c<br/>declarations<br/>assignments<br/>block commits"]
     store["repl_command_store.c<br/>source command mutation"]
 
-    ui["ui_panels.c<br/>code panel renderer<br/>help/var/autocomplete<br/>hit routing + rename UI"]
+    ui["ui_panels.c<br/>code panel renderer<br/>var/autocomplete<br/>hit routing + rename UI"]
     layout["repl_code_panel_layout.c<br/>pure wrap iterator<br/>row/segment lookup<br/>cursor row mapping"]
     docrows["repl_code_panel_document.c<br/>document row model<br/>scroll follow<br/>hit-test targets"]
     menu["repl_menu_bar.c<br/>menubar + dropdowns<br/>search slot rendering"]
     color["repl_color_picker.c<br/>floating color picker<br/>literal color swatches"]
+    help["repl_help_overlay.c<br/>modal F1 help<br/>Commands/Keys tabs"]
     replay_ann["repl_replay_annotations.c<br/>code-panel replay notes<br/>expanded/evaluated args"]
     export["repl_export.c<br/>import/export<br/>visual code dump"]
     audio["repl_audio.c<br/>playlist engine<br/>persisted audio cfg"]
@@ -54,6 +55,7 @@ flowchart LR
 
     core --> flatten
     core --> exec
+    core --> help
     replay --> exec
     ui --> actions
     ui --> scenes

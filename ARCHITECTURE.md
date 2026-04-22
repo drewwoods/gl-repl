@@ -403,7 +403,8 @@ captures the intended behavior change.
   document-line targets; `ui_panels.c` consumes those models while rendering.
 - **UI overlays:** owns visible but non-core controls. `repl_menu_bar.c` owns
   menus/dropdowns/search slot, `repl_color_picker.c` owns the floating color
-  editor, and `ui_panels.c` still owns help/autocomplete/variable-panel/rename.
+  editor, `repl_help_overlay.c` owns the modal F1 help overlay, and
+  `ui_panels.c` still owns autocomplete/variable-panel/rename.
 - **Scene renderer:** owns camera/view setup, grid/axes/overlay drawing, and GL
   state discipline for a single frame.
 - **Import/export:** owns scaffold sections, workspace metadata, and
@@ -753,8 +754,9 @@ made safe for concurrent `.gcda` writes.
    - Add focused coverage in `test_repl_autocomplete.c` for ambiguous enum
      sets and multi-argument completions.
 8. Extend editor/UI affordances and docs if the command is user-facing.
-   Common touch points are the `tab_commands[]` help overlay and
-   `color_for_type()` in `ui_panels.c`, `README.md`, `CLAUDE.md`, `AGENTS.md`,
+   Common touch points are the `tab_commands[]` help overlay in
+   `repl_help_overlay.c`, `color_for_type()` in `ui_panels.c`,
+   `README.md`, `CLAUDE.md`, `AGENTS.md`,
    command formatting, search/highlight behavior, and any editor-specific
    validation in `repl_editor.c`.
 9. Update local stub headers when a new GL/GLU/GLUT symbol, enum, or callback
