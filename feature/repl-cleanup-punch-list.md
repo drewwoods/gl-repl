@@ -205,14 +205,16 @@ dump wrapping, continuation rows, overflow commas, point-parameter wrapping,
 and bottom-layout panel width. There is no separate Phase-9 extraction needed
 for this unless a narrower parity bug is found.
 
-### 6d. Typed display scaffold/pass model in `repl_export.c` ✅ DONE
+### 6d. Typed export scaffold/pass model in `repl_export.c` ✅ DONE
 
-`save_output()` now collects export prerequisites in `ExportNeeds`, emits the
-generated `display()` body through display begin/geometry/tail helpers, and
-drives the fill/outline/vertex-point blocks through `ExportDisplayPassSpec`
-entries. The generated C text and pass order stay unchanged, but the scaffold
-sections are now explicit enough for future render-pass changes to review
-locally.
+`save_output()` now collects export prerequisites in `ExportScaffoldContext`
+and emits the generated file through `ExportScaffoldSectionSpec` entries:
+workspace metadata, header, globals, optional rand/tess helpers, variable
+reset, user functions, render helper, and `display()`. The `display()` body
+then uses display begin/geometry/tail helpers and `ExportDisplayPassSpec`
+entries for fill/outline/vertex-point passes. The generated C text and pass
+order stay unchanged, but top-level scaffold, conditional helpers, and render
+passes are now explicit enough for future export changes to review locally.
 
 ---
 

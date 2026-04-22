@@ -28,8 +28,8 @@ of one monolithic `repl_core.c`.
   presets, and active example tracking.
 - `repl_search.c`: search state, match navigation, and search-mode keyboard
   handling.
-- `repl_export.c`: fixed scaffold strings, init bootstrap tables, import/export
-  translation, save/load, and code-panel dump helpers.
+- `repl_export.c`: typed export scaffold sections, init bootstrap tables,
+  import/export translation, save/load, and code-panel dump helpers.
 - `repl_commit.c`: float declarations, variable assignments, structured block
   commits, close-brace commits, and commit-order helpers.
 - `repl_editor.c`: editor state, commit orchestration, feed-line entrypoint,
@@ -163,9 +163,10 @@ every path shares the same parse/normalize/flatten guarantees.
 
 ### Import/export path
 
-1. `repl_export.c` owns the fixed scaffold shown in the code panel and emitted
-   to exported C.
-2. `save_output()` writes scaffold text plus translated command bodies.
+1. `repl_export.c` owns the scaffold shown in the code panel and emitted to
+   exported C.
+2. `save_output()` writes typed scaffold sections plus translated command
+   bodies.
 3. `load_from_file()` converts exported C back into REPL lines and replays them
    through `feed_line()` from `repl_editor.c`, so import uses the same commit
    rules as interactive editing.
@@ -335,7 +336,8 @@ Owns generated scaffold and import/export plumbing.
 
 - `g_header_pre`, `g_render_state_lines`, `g_lookat`, `g_header_post`
 - init bootstrap tables and helpers
-- `ExportNeeds` and display-pass specs for generated `display()` sections
+- `ExportScaffoldContext`, top-level scaffold sections, `ExportNeeds`, and
+  display-pass specs for generated export sections
 - `save_output()`, `load_from_file()`
 - import translation helpers
 - code-panel visual dump plumbing, using `repl_code_panel_layout.c` for wrap
@@ -478,7 +480,8 @@ vertex-overlay traversal, Focus/ocean frame prep, backdrop/light modules, and
 outline overlay extraction. Phase 9 paired workspace-header parsing/emission
 through a directive table, split `load_from_file()` into ordered import
 handlers, confirmed visual dumps use the shared code-panel wrap iterator, and
-introduced typed display/pass helpers for the exported `display()` scaffold.
+introduced typed top-level scaffold sections plus display/pass helpers for the
+generated export file.
 
 ## Key Pipelines
 
@@ -855,7 +858,8 @@ before debug output or source normalization starts returning `CMD_UNKNOWN`.
 
 ### Add a new exported scaffold feature
 
-1. Add or update the scaffold strings in `repl_export.c`.
+1. Add or update the scaffold strings and typed section entry in
+   `repl_export.c`.
 2. Keep the code-panel preview and file exporter using the same source of
    truth.
 3. Preserve round-tripping through `load_from_file()` whenever possible.

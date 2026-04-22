@@ -98,7 +98,7 @@ table-driven themes.
 
 | Module | Role |
 |--------|------|
-| `repl_export` | Save/load, workspace headers, code-panel dumps |
+| `repl_export` | Save/load, typed export scaffold, workspace headers, code-panel dumps |
 | `repl_audio` | Playlist engine + persisted audio config |
 | `sample` | `main()` + GLUT callback wiring |
 | `gl_stub_counts` | `USE_GL_STUBS` symbol tracking |
@@ -160,7 +160,7 @@ flowchart LR
         overlays["scene_overlays.c<br/>outline overlays"]
     end
 
-    export["repl_export.c<br/>import/export + visual dump"]
+    export["repl_export.c<br/>typed scaffold · import/export · visual dump"]
 
     sample --> editor
 
