@@ -7,9 +7,10 @@ it should read in under two minutes.
 
 ## Responsibility Layers
 
-Every source file belongs to one of six layers. The file-name prefix
-is a hint but not a contract — see *Naming Notes* below for the
-current gap.
+Every source file belongs to one of six layers. File-name prefixes
+follow the convention described in *Naming Notes* below:
+`repl_*` for pipeline/input/models, `ui_*` for 2D rendering, and
+`scene_*` for 3D rendering.
 
 ### 1. Command pipeline — source → flatten → execute
 
@@ -71,12 +72,12 @@ as one visible region on screen.
 | `repl_code_panel_layout` | Pure text wrapping (no GL) — shared with export dumps + tests |
 | `repl_code_panel_document` | Document row model (no GL) |
 | `repl_replay_annotations` | Source-line replay text expansion |
-| `repl_menu_bar` | Top-level menus, dropdowns, pinned buttons, search slot |
-| `repl_color_picker` | Floating HSV/alpha picker + literal colour swatches |
-| `repl_help_overlay` | Modal F1 help (Commands / Keys tabs) |
-| `repl_variable_panel` | Floating variable slider panel (render-only) |
-| `repl_autocomplete_panel` | Completion popup renderer |
-| `profile_panel` | CPU timing HUD |
+| `ui_menu_bar` | Top-level menus, dropdowns, pinned buttons, search slot |
+| `ui_color_picker` | Floating HSV/alpha picker + literal colour swatches |
+| `ui_help_overlay` | Modal F1 help (Commands / Keys tabs) |
+| `ui_variable_panel` | Floating variable slider panel (render-only) |
+| `ui_autocomplete_panel` | Completion popup renderer |
+| `ui_profile_panel` | CPU timing HUD |
 
 ### 5. 3D scene rendering
 
@@ -111,9 +112,9 @@ Concrete pairs today:
 
 | Model | Renderer |
 |-------|----------|
-| `repl_autocomplete` | `repl_autocomplete_panel` |
+| `repl_autocomplete` | `ui_autocomplete_panel` |
 | `repl_code_panel_layout` + `repl_code_panel_document` | `ui_panels` |
-| `repl_var_drag` (writeback) | `repl_variable_panel` |
+| `repl_var_drag` (writeback) | `ui_variable_panel` |
 
 The split is the boundary most likely to be violated by new code —
 keep GL calls out of the model files and keep mutations out of the
@@ -121,53 +122,30 @@ render files.
 
 ## Naming Notes
 
-File prefixes today:
+File prefixes partition the tree by responsibility:
 
-- `repl_*` — most modules. Originally meant *"part of the REPL
-  sample"*, now covers models, input, and some 2D UI.
-- `ui_*` — only `ui_panels` uses this prefix today.
-- `scene_*` — 3D viewport rendering (`scene_render`, `scene_backdrop`,
-  `scene_lights`, `scene_overlays`).
+- `repl_*` — pipeline, input, domain models. No OpenGL calls
+  (except `repl_core.c`, which owns GL init and the display
+  callback).
+- `ui_*` — 2D rendering (code panel + floating overlays/popups).
+  These files call OpenGL and read state from the `repl_*` models.
+- `scene_*` — 3D viewport rendering.
+- Bare (no prefix): `sample`, `cmd_format`, `gl_stub_counts`.
 
-Result: 2D UI renderers extracted from `ui_panels.c` ended up under
-`repl_*` (e.g. `repl_color_picker`, `repl_help_overlay`,
-`repl_menu_bar`, `repl_variable_panel`, `repl_autocomplete_panel`).
-Prefix alone doesn't tell you *renderer* vs *model* vs *input*.
+Deliberate exceptions that stay under `repl_*` even though they're
+UI-adjacent:
 
-### Known gap and the future rename
+- `repl_code_panel_layout` and `repl_code_panel_document` — pure
+  text-wrap and row-count models. No GL. Shared by `ui_panels.c`,
+  export dumps, and tests, so they belong with the models rather
+  than with the renderers.
+- `repl_replay_annotations` — source-to-flat-command text
+  expansion. Also pure (no GL); same argument.
+- `repl_inline_rename`, `repl_var_drag` — input buffers / drag
+  transactions. They mutate state; they don't render.
 
-A consistent scheme would be:
-
-- `ui_*` for 2D renderers (panels, overlays, popups)
-- `scene_*` for 3D rendering (already consistent)
-- `repl_*` for models, input, and pipeline
-
-Under that scheme the renames would be:
-
-| Current | Proposed |
-|---------|----------|
-| `repl_color_picker` | `ui_color_picker` |
-| `repl_help_overlay` | `ui_help_overlay` |
-| `repl_menu_bar` | `ui_menu_bar` |
-| `repl_variable_panel` | `ui_variable_panel` |
-| `repl_autocomplete_panel` | `ui_autocomplete_panel` |
-
-Edge cases to decide before executing:
-
-- `repl_code_panel_layout` / `repl_code_panel_document` — pure
-  models *for* UI but have no GL calls. Arguably `ui_*` (they're
-  UI-scoped) or stay `repl_*` (they're pure models reusable from
-  tests/export). Pick one.
-- `repl_replay_annotations` — model for UI replay text. Same
-  question.
-- `repl_inline_rename` / `repl_var_drag` — input handlers, not
-  renderers. Stay `repl_*`.
-- `profile_panel` — already has no prefix; optional rename to
-  `ui_profile_panel` for uniformity.
-
-The rename is cheap (grep + sed + Makefile SRCS update) but noisy in
-git history. Worth doing as a single commit after agreeing on the
-edge cases above, not as a side effect of another refactor.
+The prefix tells you the layer; read the file's top-of-file
+comment for the one-line charter.
 
 ## Where to put new code
 
@@ -177,10 +155,11 @@ edge cases above, not as a side effect of another refactor.
 - Adding a keyboard shortcut? Editor layer — `repl_editor.c` if
   it's a new route, `repl_actions.c` if it piggybacks an existing
   config toggle.
-- Adding a visual overlay? 2D UI layer (new `repl_*_panel.c` /
-  future `ui_*.c`) or scene layer (extend `scene_render.c`
-  overlays) depending on whether it lives in the code panel or the
-  viewport.
+- Adding a visual overlay? 2D UI layer (new `ui_*.c`) or scene
+  layer (extend `scene_render.c` overlays) depending on whether it
+  lives in the code panel or the viewport. If it has both a model
+  half and a render half, split them into a `repl_*` (model) and
+  `ui_*` (render) pair.
 - Adding example content? `repl_examples.c`.
 - Adding persisted state? Add the extern in `repl_state.h` and
   register the pointer in `repl_state.c`'s catalog.

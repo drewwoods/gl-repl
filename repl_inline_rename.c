@@ -6,7 +6,7 @@
  * strip.  This module owns the buffer, the filter for filesystem-
  * unsafe characters, and the Enter/Escape commit path.  The menu
  * item that enters rename mode lives in repl_actions.c /
- * repl_menu_bar.c; the editor's key dispatcher forwards keystrokes
+ * ui_menu_bar.c; the editor's key dispatcher forwards keystrokes
  * here ahead of its own routing while rename is active.
  */
 #include "sample.h"

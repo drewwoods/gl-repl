@@ -6,9 +6,9 @@
 #include "repl_replay.h"
 #include "repl_keys.h"
 #include "sample.h"
-#include "profile_panel.h"
+#include "ui_profile_panel.h"
 #include "ui_panels.h"
-#include "repl_variable_panel.h"
+#include "ui_variable_panel.h"
 #include "repl_inline_rename.h"
 #include <stdio.h>
 #include <string.h>

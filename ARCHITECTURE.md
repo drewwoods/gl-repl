@@ -47,16 +47,16 @@ of one monolithic `repl_core.c`.
 - `repl_replay_annotations.c`: code-panel replay annotations, including
   source-line to flat-command mapping, substituted variable comments, and
   evaluated command display text.
-- `repl_menu_bar.c`: code-panel menu bar, dropdown rendering/hit-testing,
+- `ui_menu_bar.c`: code-panel menu bar, dropdown rendering/hit-testing,
   config-menu right-click cycling, and inline search-slot rendering.
-- `repl_color_picker.c`: floating color picker state, literal color swatches,
+- `ui_color_picker.c`: floating color picker state, literal color swatches,
   and HSV/alpha mutation of color commands.
-- `repl_help_overlay.c`: modal F1 help overlay rendering.
-- `repl_variable_panel.c`: floating variable slider panel rendering, geometry,
+- `ui_help_overlay.c`: modal F1 help overlay rendering.
+- `ui_variable_panel.c`: floating variable slider panel rendering, geometry,
   and hit-testing.
 - `repl_var_drag.c`: variable slider drag transactions and writeback into
   predefined variables plus matching assignment source.
-- `repl_autocomplete_panel.c`: floating autocomplete popup rendering; match
+- `ui_autocomplete_panel.c`: floating autocomplete popup rendering; match
   building and selection state stay in `repl_autocomplete.c`.
 - `repl_inline_rename.c`: inline scene-rename input buffer and key handling.
 - `repl_eval.c`: expression parsing and evaluation.
@@ -348,7 +348,7 @@ display formatting out of `ui_panels.c`.
 - substituted variable comments and evaluated command strings
 - assignment inline comments used by code-panel display text
 
-### `repl_menu_bar.c`
+### `ui_menu_bar.c`
 
 Owns the menu bar and dropdown UI state. It renders the File/Scene/Config
 menus, the Search/Replay pinned slots, and the menu-hosted search field.
@@ -359,7 +359,7 @@ Action execution still flows through `repl_actions.c`.
 - config dropdown right-click cycling
 - `render_example_dropdown()` for the floating dropdown layer
 
-### `repl_color_picker.c`
+### `ui_color_picker.c`
 
 Owns the floating color editor opened from literal color-command swatches.
 It mutates the selected command source/args directly today, but all picker
@@ -418,12 +418,12 @@ captures the intended behavior change.
   visual dump coordinates. `repl_code_panel_layout.c` owns wrapping/segment
   lookup; `repl_code_panel_document.c` owns row totals, follow-scroll state, and
   document-line targets; `ui_panels.c` consumes those models while rendering.
-- **UI overlays:** owns visible but non-core controls. `repl_menu_bar.c` owns
-  menus/dropdowns/search slot, `repl_color_picker.c` owns the floating color
-  editor, `repl_help_overlay.c` owns the modal F1 help overlay,
-  `repl_variable_panel.c` owns the floating variable slider panel
+- **UI overlays:** owns visible but non-core controls. `ui_menu_bar.c` owns
+  menus/dropdowns/search slot, `ui_color_picker.c` owns the floating color
+  editor, `ui_help_overlay.c` owns the modal F1 help overlay,
+  `ui_variable_panel.c` owns the floating variable slider panel
   (rendering only — drag mutation lives in `repl_var_drag.c`),
-  `repl_autocomplete_panel.c` owns the floating completion popup
+  `ui_autocomplete_panel.c` owns the floating completion popup
   (rendering only — match/selection state lives in
   `repl_autocomplete.c`), and `repl_inline_rename.c` owns the inline
   scene-rename buffer and key handling. `ui_panels.c` now focuses on
@@ -788,7 +788,7 @@ made safe for concurrent `.gcda` writes.
      sets and multi-argument completions.
 8. Extend editor/UI affordances and docs if the command is user-facing.
    Common touch points are the `tab_commands[]` help overlay in
-   `repl_help_overlay.c`, `color_for_type()` in `ui_panels.c`,
+   `ui_help_overlay.c`, `color_for_type()` in `ui_panels.c`,
    `README.md`, `CLAUDE.md`, `AGENTS.md`,
    command formatting, search/highlight behavior, and any editor-specific
    validation in `repl_editor.c`.
@@ -816,8 +816,8 @@ before debug output or source normalization starts returning `CMD_UNKNOWN`.
 
 1. Add state and handlers in `repl_editor.c`.
 2. Add rendering or hit-testing in the owner for the visible feature:
-   `repl_menu_bar.c` for menu/dropdown/search-slot UI,
-   `repl_color_picker.c` for literal color editing, or `ui_panels.c` for the
+   `ui_menu_bar.c` for menu/dropdown/search-slot UI,
+   `ui_color_picker.c` for literal color editing, or `ui_panels.c` for the
    remaining code/help/autocomplete/variable-panel surfaces.
 3. Only promote new helpers into `repl_core_internal.h` when another module
    truly needs them.

@@ -10,7 +10,7 @@
 #include "scene_overlays.h"
 #include "scene_render.h"
 #include "ui_panels.h"
-#include "profile_panel.h"
+#include "ui_profile_panel.h"
 
 /* ========================================================================= */
 /* 3D scene helpers                                                           */
