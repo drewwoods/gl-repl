@@ -19,7 +19,7 @@
  *   - Editor state (g_input, cursor)
  *   - Commit handlers that decide *where* a parsed command goes in g_cmds[]
  *   - GLUT keyboard / special / mouse / motion / timer dispatch
- *   - Panel resizing and editor-side variable dragging
+ *   - Panel resizing and routing to variable-drag ownership
  *   - feed_line() — the programmatic commit entry point used by file loading
  *     and test harnesses
  *
@@ -43,7 +43,12 @@
  *   scene_render.c — 3D scene setup, grid / axes / overlay drawing
  *   repl_menu_bar.c — code-panel menus, dropdowns, and search slot
  *   repl_color_picker.c — floating literal-color editor
- *   ui_panels.c    — code rows, autocomplete/help/var panels, hit routing
+ *   repl_autocomplete_panel.c — floating autocomplete popup renderer
+ *   repl_help_overlay.c — modal F1 help overlay
+ *   repl_variable_panel.c — floating variable panel renderer
+ *   repl_inline_rename.c — scene-rename input buffer
+ *   repl_var_drag.c — variable slider drag state/writeback
+ *   ui_panels.c    — code rows, scene status, hit routing
  *   repl_examples.c— predefined example scene data
  */
 

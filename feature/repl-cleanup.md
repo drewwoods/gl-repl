@@ -5,7 +5,10 @@ The main cleanup target is not one bad file; it is the lack of clear ownership b
 
 Refactor in small behavior-preserving stages. The first goal is to make responsibilities explicit and contain side effects; only then split large files, rename internals, and add comments around real invariants.
 
-Baseline note: `make test-stubs TEST_JOBS=4` currently fails 3 suites before any refactor: `test_repl_core_format`, `test_repl_core_commit`, and `test_repl_core_examples`. Those failures should be fixed or explicitly documented as accepted baseline before judging cleanup regressions.
+Baseline note: the historical pre-refactor failures in `test_repl_core_format`,
+`test_repl_core_commit`, and `test_repl_core_examples` have been fixed on this
+branch. `make test-stubs TEST_JOBS=4` is now expected to pass cleanly; any new
+failure should be treated as a regression unless explicitly rebaselined.
 
 ## Key Interface Changes
 - Keep the user-facing REPL language, file format, GLUT entrypoint, and sample-local structure unchanged.
@@ -61,6 +64,9 @@ Baseline note: `make test-stubs TEST_JOBS=4` currently fails 3 suites before any
    - Move focus-vertex calculation out of grid drawing; drawing helpers should render from prepared state rather than update global editor state.
    - Add small GL state guard helpers or strict documented push/pop conventions for blend, lighting, depth mask, polygon mode, matrices, and line/point sizes.
    - Split large render helpers into grid themes, axes themes, overlays, lights, backdrop, and geometry execution support.
+   - Current progress: standard grid/axes themes now use local specs and
+     shared draw helpers, helper passes have explicit GL attribute guards, and
+     vertex-number/normal overlays share one flat-command traversal helper.
 
 9. **Refactor import/export around a shared scaffold model**
    - Represent the generated C scaffold as typed sections rather than duplicated string/layout logic.
@@ -87,4 +93,3 @@ Baseline note: `make test-stubs TEST_JOBS=4` currently fails 3 suites before any
 - Do not introduce a shared engine or cross-sample framework.
 - Keep output file compatibility unless a specific migration is planned.
 - Work in small reviewable stages; no stage should combine broad file movement with semantic behavior changes.
-

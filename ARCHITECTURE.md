@@ -48,11 +48,19 @@ of one monolithic `repl_core.c`.
   config-menu right-click cycling, and inline search-slot rendering.
 - `repl_color_picker.c`: floating color picker state, literal color swatches,
   and HSV/alpha mutation of color commands.
+- `repl_help_overlay.c`: modal F1 help overlay rendering.
+- `repl_variable_panel.c`: floating variable slider panel rendering, geometry,
+  and hit-testing.
+- `repl_var_drag.c`: variable slider drag transactions and writeback into
+  predefined variables plus matching assignment source.
+- `repl_autocomplete_panel.c`: floating autocomplete popup rendering; match
+  building and selection state stay in `repl_autocomplete.c`.
+- `repl_inline_rename.c`: inline scene-rename input buffer and key handling.
 - `repl_eval.c`: expression parsing and evaluation.
-- `ui_panels.c`: 2D code-panel row rendering, source search highlights,
-  autocomplete/help/variable-panel rendering, top-level panel routing, and
-  inline rename UI.
-- `scene_render.c`: 3D scene rendering, overlays, and replay HUD.
+- `ui_panels.c`: 2D code-panel row rendering, source search highlights, inline
+  ghost/hint text, scene status banner, and top-level panel routing.
+- `scene_render.c`: 3D scene rendering, grid/axes theme specs, guarded helper
+  passes, shared vertex-overlay traversal, and replay HUD.
 - `sample.c`: application entrypoint and GLUT callback wiring.
 
 The public API is still `repl_core.h`. Cross-module runtime/test helpers live in
@@ -413,7 +421,9 @@ captures the intended behavior change.
   code-panel row rendering, the scene-status banner, and top-level
   hit routing.
 - **Scene renderer:** owns camera/view setup, grid/axes/overlay drawing, and GL
-  state discipline for a single frame.
+  state discipline for a single frame. Standard grid themes are described by
+  `GridThemeSpec` entries, standard axes by `AxesThemeSpec` entries, and
+  vertex-number/normal overlays share one flat-command traversal helper.
 - **Import/export:** owns scaffold sections, workspace metadata, and
   translation between exported C and REPL command text.
 
@@ -421,8 +431,11 @@ captures the intended behavior change.
 
 After the Phase 7 code-panel responsibility split, `make test-stubs TEST_JOBS=4`
 builds all test binaries and passes 17 of 17 suites: 2315/2315 tests. The
-latest slices extracted document rows, replay annotations, the menu bar, and
-the color picker while preserving the code-panel layout behavior.
+latest slices extracted document rows, replay annotations, menu/dropdown
+rendering, the color picker, help overlay, variable panel, autocomplete popup,
+inline rename, and variable slider dragging while preserving behavior. The
+first Phase-8 scene-render pass then added grid/axes theme specs, local
+helper-pass GL state guards, and a shared vertex-overlay traversal.
 
 ## Key Pipelines
 

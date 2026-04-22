@@ -42,8 +42,8 @@
 
 #define MAX_ACCUM_SAMPLES 16
 #define ACCUM_STEP_COUNT  5
-/* Grid themes. g_grid_names[] in repl_core.c and the switch in draw_grid()
- * in scene_render.c must stay in sync with this enum. */
+/* Grid themes. g_grid_names[] in repl_core.c and the theme specs/custom
+ * render paths in scene_render.c must stay in sync with this enum. */
 typedef enum {
     GRID_THEME_OFF = 0,
     GRID_THEME_CLASSIC,
@@ -58,8 +58,8 @@ typedef enum {
     GRID_THEME_COUNT
 } GridTheme;
 
-/* Axes themes. g_axes_names[] in repl_core.c and the switch in draw_axes()
- * in scene_render.c must stay in sync with this enum. */
+/* Axes themes. g_axes_names[] in repl_core.c and the theme specs in
+ * scene_render.c must stay in sync with this enum. */
 typedef enum {
     AXES_THEME_OFF = 0,
     AXES_THEME_CLASSIC,
