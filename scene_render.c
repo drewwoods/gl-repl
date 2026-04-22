@@ -1,5 +1,5 @@
 /*
- * scene_render.c — 3D scene rendering (grid, axes, lights, vertex overlays)
+ * scene_render.c — 3D scene rendering (frame prep, grid, axes, overlays)
  *
  * Extracted from sample.c for maintainability.
  */
@@ -34,6 +34,15 @@ static void scene_render_pop_state(void) {
 typedef struct SceneRgba {
     float r, g, b, a;
 } SceneRgba;
+
+typedef struct SceneFocusVertex {
+    float pos[3];
+    int valid;
+} SceneFocusVertex;
+
+typedef struct FrameRenderContext {
+    SceneFocusVertex focus;
+} FrameRenderContext;
 
 typedef struct GridDrawContext {
     float extent;
@@ -253,7 +262,58 @@ static const GridThemeSpec *grid_theme_spec(GridTheme theme) {
     return &g_grid_theme_specs[theme];
 }
 
-static void draw_grid(void) {
+static int cmd_is_focus_vertex(const GLCmd *cmd) {
+    return cmd->valid &&
+           (cmd->type == CMD_VERTEX3F || cmd->type == CMD_TESS_VERTEX);
+}
+
+static void scene_focus_store(float x, float y, float z) {
+    g_focus_vtx[0] = x;
+    g_focus_vtx[1] = y;
+    g_focus_vtx[2] = z;
+    g_focus_vtx_valid = 1;
+}
+
+static SceneFocusVertex scene_prepare_focus_vertex(void) {
+    SceneFocusVertex focus = {
+        .pos = { g_focus_vtx[0], g_focus_vtx[1], g_focus_vtx[2] },
+        .valid = g_focus_vtx_valid,
+    };
+
+    if (g_edit_line >= 0 && g_edit_line < g_num_cmds &&
+        cmd_is_focus_vertex(&g_cmds[g_edit_line])) {
+        scene_focus_store(g_cmds[g_edit_line].args[0],
+                          g_cmds[g_edit_line].args[1],
+                          g_cmds[g_edit_line].args[2]);
+    } else if (!g_focus_vtx_valid) {
+        for (int i = g_edit_line - 1; i >= 0; i--) {
+            if (cmd_is_focus_vertex(&g_cmds[i])) {
+                scene_focus_store(g_cmds[i].args[0],
+                                  g_cmds[i].args[1],
+                                  g_cmds[i].args[2]);
+                break;
+            }
+        }
+    }
+
+    focus.pos[0] = g_focus_vtx[0];
+    focus.pos[1] = g_focus_vtx[1];
+    focus.pos[2] = g_focus_vtx[2];
+    focus.valid = g_focus_vtx_valid;
+    return focus;
+}
+
+static void scene_prepare_frame_context(FrameRenderContext *ctx) {
+    ctx->focus.pos[0] = g_focus_vtx[0];
+    ctx->focus.pos[1] = g_focus_vtx[1];
+    ctx->focus.pos[2] = g_focus_vtx[2];
+    ctx->focus.valid = g_focus_vtx_valid;
+
+    if (g_grid_theme == GRID_THEME_FOCUS)
+        ctx->focus = scene_prepare_focus_vertex();
+}
+
+static void draw_grid(const FrameRenderContext *frame_ctx) {
     if (g_grid_theme == GRID_THEME_OFF) return;
 
     scene_render_push_state();
@@ -323,31 +383,8 @@ static void draw_grid(void) {
     }
 
     case GRID_THEME_FOCUS: {
-        /* Update focus vertex from current or nearest vertex line */
-        if (g_edit_line < g_num_cmds &&
-            g_cmds[g_edit_line].valid &&
-            (g_cmds[g_edit_line].type == CMD_VERTEX3F ||
-             g_cmds[g_edit_line].type == CMD_TESS_VERTEX)) {
-            g_focus_vtx[0] = g_cmds[g_edit_line].args[0];
-            g_focus_vtx[1] = g_cmds[g_edit_line].args[1];
-            g_focus_vtx[2] = g_cmds[g_edit_line].args[2];
-            g_focus_vtx_valid = 1;
-        } else if (!g_focus_vtx_valid) {
-            /* Scan backwards from edit line for nearest vertex */
-            for (int i = g_edit_line - 1; i >= 0; i--) {
-                if (g_cmds[i].valid &&
-                    (g_cmds[i].type == CMD_VERTEX3F ||
-                     g_cmds[i].type == CMD_TESS_VERTEX)) {
-                    g_focus_vtx[0] = g_cmds[i].args[0];
-                    g_focus_vtx[1] = g_cmds[i].args[1];
-                    g_focus_vtx[2] = g_cmds[i].args[2];
-                    g_focus_vtx_valid = 1;
-                    break;
-                }
-            }
-        }
-
-        float cx = g_focus_vtx[0], cz = g_focus_vtx[2];
+        const SceneFocusVertex *focus = &frame_ctx->focus;
+        float cx = focus->pos[0], cz = focus->pos[2];
         float radius = 3.0f;  /* fade-out radius */
 
         glBegin(GL_LINES);
@@ -386,7 +423,7 @@ static void draw_grid(void) {
         glEnd();
 
         /* Crosshair at focus point */
-        if (g_focus_vtx_valid) {
+        if (focus->valid) {
             glLineWidth(1.5f);
             glBegin(GL_LINES);
             glColor4f(0.80f, 0.85f, 0.95f, 0.25f);
@@ -2725,12 +2762,14 @@ static void draw_orbit_target(void) {
 void render_3d_scene(void) {
     int sc_x, sc_y, sc_w, sc_h;
     scene_rect(&sc_x, &sc_y, &sc_w, &sc_h);
+    FrameRenderContext frame_ctx;
     int replaying = g_replay_active;
     int show_current_poly = g_highlight_current_poly && !replaying;
     int replay_tess_preview = replaying && g_replay_mode == REPLAY_MODE_VERTEX;
     int replay_vertex_points = replaying && g_replay_mode == REPLAY_MODE_VERTEX;
     if (sc_w < 1) sc_w = 1;
     if (sc_h < 1) sc_h = 1;
+    scene_prepare_frame_context(&frame_ctx);
 
     prof_begin(PROF_SCENE_3D_SETUP);
     glPushAttrib(GL_ALL_ATTRIB_BITS);
@@ -2824,7 +2863,7 @@ void render_3d_scene(void) {
      * color from earlier in the frame. */
     prof_begin(PROF_SCENE_3D_HELPERS);
     draw_backdrop();
-    draw_grid();
+    draw_grid(&frame_ctx);
     draw_axes();
     draw_orbit_target();
     prof_accum_end(PROF_SCENE_3D_HELPERS);

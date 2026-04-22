@@ -8,8 +8,8 @@ counterpart: a prioritized set of concrete, behavior-preserving
 extractions that can each land as a single reviewable commit *today*,
 without committing to the larger context-object rewrite.
 
-Four files still dominate the codebase: `scene_render.c` (~3119, now with
-theme specs/state guards/overlay visitor helpers), `repl_export.c` (2541),
+Four files still dominate the codebase: `scene_render.c` (~3158, now with
+frame prep/theme specs/state guards/overlay visitor helpers), `repl_export.c` (2541),
 `repl_core.c` (~1964), and `repl_editor.c` (~1653). `ui_panels.c`
 dropped to 1237 LoC (from 4452) after Phase-7
 extractions: document rows, replay annotations, menu/dropdowns, color
@@ -130,9 +130,10 @@ draw extra geometry. Axes now have `AxesThemeSpec` entries and shared
 triplet helpers for X/Y/Z lines, tips, and labels, so adding a normal theme
 starts with table data instead of a copied switch body.
 
-Follow-up still worth doing later: move focus-vertex selection out of
-`draw_grid()` and into prepared frame state so the focus theme has no
-editor-state side effect.
+The Focus grid no longer chooses or writes its focus vertex while drawing.
+`FrameRenderContext` prepares the sticky focus vertex before helper rendering,
+so the theme renderer consumes prepared state like the standard table-driven
+themes.
 
 ### 5. Vertex overlay visitor in `scene_render.c` ✅ DONE
 
