@@ -88,7 +88,7 @@ module, not a panel; that matches the model/render split rule
 ### 1e. Extract variable dragging → `repl_var_drag.c` ✅ DONE
 
 Landed as `refactor: extract variable slider drag`. Closes the
-REPL_REFACTOR_MAP open edge *"repl_editor.c still owns variable
+MODULES.md Open Edge *"repl_editor.c still owns variable
 slider dragging."* The four `g_drag_*` globals (storage) move to
 the new file; the externs in `repl_state.h` and the `ReplUiState`
 catalog entries in `repl_state.c` are unchanged, so the state-
@@ -202,7 +202,7 @@ outline pass and the remaining vertex-number/normal overlay visitor in
 ## Tier 3 — Remaining structural extraction
 
 The editor-adjacent Phase 7 mechanical extractions are now complete.
-`REPL_REFACTOR_MAP.md` still lists smaller residual ownership edges in
+`MODULES.md` (Open Edges) still lists smaller residual ownership edges in
 `ui_panels.c` and `repl_editor.c`, but they are mostly routing or inline
 row-rendering concerns. The next large mechanical extraction is parser-focused.
 

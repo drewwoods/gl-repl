@@ -127,7 +127,7 @@ Run all: `make test`
 | `repl_eval.h` | Evaluator types (`ExprVar`, `ExprCtx`), function declarations |
 | `cmd_format.c` | Pure indentation/depth computation (no GL dependency) |
 | `cmd_format.h` | Formatting types (`FmtCmd`, `FmtType`), indent functions |
-| `REPL_REFACTOR_MAP.md` | Mermaid ownership map for editor-adjacent refactor slices |
+| `MODULES.md` | One-page layered overview, ownership diagram, current boundaries, open edges |
 
 ## Conventions
 

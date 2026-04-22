@@ -76,8 +76,8 @@ The public API is still `repl_core.h`. Cross-module runtime/test helpers live in
 `repl_core_internal.h`. Shared globals and UI-visible state still live in
 `sample.h`.
 
-For a working diagram of the editor-adjacent refactor slices, see
-`REPL_REFACTOR_MAP.md`.
+For the layered overview and the editor-adjacent ownership diagram, see
+[`MODULES.md`](MODULES.md).
 
 ## Two-Level Command Model
 
