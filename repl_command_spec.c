@@ -137,7 +137,7 @@ static const FuncCompletion k_func_completions[] = {
     { "if(",                 "if(expr)",                                                 1, { "expr" } },
     { "goto ",               "goto label",                                               0, { NULL } },
     { "func0 {",             "func0 {",                                                  0, { NULL } },
-    { "func0(radius, yoff) {", "func0(radius, yoff) {",                                  0, { NULL } },
+    { "func0(var0) {",       "func0(var0, [var1], ...) {",                               0, { NULL } },
     { "func1 {",             "func1 {",                                                  0, { NULL } },
     { "func2 {",             "func2 {",                                                  0, { NULL } },
     { "func3 {",             "func3 {",                                                  0, { NULL } },
