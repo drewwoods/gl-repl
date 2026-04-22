@@ -33,7 +33,7 @@
  *   cmd_format.c   — source-text formatting helpers
  *   repl_parser.c  — parse_command(): text → GLCmd
  *   repl_source_scope.c — source block/depth queries and indent cache
- *   repl_flatten.c — flatten_range() / flatten_commands()
+ *   repl_flatten.c — repl_flatten_program() / flatten_commands()
  *   repl_executor.c— repl_execute_program() / execute_commands()
  *   repl_autocomplete.c — completions and parameter hints
  *   repl_autonormal.c — auto-generated normals and feeding-state lookup

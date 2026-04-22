@@ -13,14 +13,27 @@ int g_current_block_end   = -1; /* flat cmd index of cursor's glEnd */
 static int g_current_block_line = -1; /* g_edit_line used to compute block */
 
 typedef struct {
+    const GLCmd      *source_cmds;
+    int               source_count;
+    GLCmd            *flat_cmds;
+    FlatCmdLocalVars *flat_local_vars;
+    int               flat_capacity;
+    int               flat_count;
+    int               max_call_depth;
     int call_depth;
     int abort;
     int visit_budget;
+    char status[128];
 } FlattenContext;
 
+static void flatten_note_status(FlattenContext *ctx, const char *msg) {
+    if (!ctx || !msg || ctx->status[0])
+        return;
+    repl_copy_string_fits(ctx->status, sizeof(ctx->status), msg);
+}
+
 static void flatten_fail(FlattenContext *ctx, const char *msg) {
-    if (!ctx->abort)
-        set_status(msg);
+    flatten_note_status(ctx, msg);
     ctx->abort = 1;
 }
 
@@ -51,6 +64,52 @@ static void flat_cmd_set_provenance(GLCmd *cmd, int src_cmd_idx,
     cmd->call_src_cmd_idx = call_src_cmd_idx;
     cmd->root_call_src_cmd_idx = root_call_src_cmd_idx;
     cmd->func_scope_mask = func_scope_mask;
+}
+
+static int flatten_find_block_end(const FlattenContext *ctx, int begin_idx) {
+    int depth = 1;
+
+    for (int j = begin_idx + 1; j < ctx->source_count; j++) {
+        CmdType t = ctx->source_cmds[j].type;
+        if (t == CMD_FOR_BEGIN || t == CMD_FUNC_DEF || t == CMD_IF_BEGIN)
+            depth++;
+        else if (t == CMD_FOR_END || t == CMD_FUNC_END || t == CMD_IF_END) {
+            depth--;
+            if (depth == 0)
+                return j;
+        }
+    }
+    return ctx->source_count;
+}
+
+static int flatten_append_cmd(FlattenContext *ctx, const GLCmd *cmd,
+                              int src_cmd_idx, int call_src_cmd_idx,
+                              int root_call_src_cmd_idx,
+                              unsigned int func_scope_mask,
+                              const ExprVar *vars, int num_vars) {
+    int flat_cmd_idx;
+    int snap_count = 0;
+
+    if (ctx->flat_count >= ctx->flat_capacity) {
+        flatten_fail(ctx, "Flattened command limit reached");
+        return 0;
+    }
+
+    flat_cmd_idx = ctx->flat_count++;
+    ctx->flat_cmds[flat_cmd_idx] = *cmd;
+    flat_cmd_set_provenance(&ctx->flat_cmds[flat_cmd_idx],
+                            src_cmd_idx, call_src_cmd_idx,
+                            root_call_src_cmd_idx, func_scope_mask);
+
+    if (ctx->flat_local_vars) {
+        if (vars && num_vars > 0)
+            snap_count = num_vars < MAX_EXPR_VARS ? num_vars : MAX_EXPR_VARS;
+        ctx->flat_local_vars[flat_cmd_idx].num_vars = snap_count;
+        if (snap_count > 0)
+            memcpy(ctx->flat_local_vars[flat_cmd_idx].vars, vars,
+                   (size_t)snap_count * sizeof(ExprVar));
+    }
+    return 1;
 }
 
 /* Determine which flat-command range corresponds to the innermost
@@ -95,39 +154,40 @@ static void refresh_current_block_highlight(void) {
     }
 }
 
-/* Recursively expand the source commands in g_cmds[start..end_idx) into
- * the flat command array g_flat_cmds[]. For-loops are unrolled, function
- * calls are inlined, and if-blocks with loop-variable conditions are
- * evaluated. `vars`/`nv` carry loop-variable and function-parameter
- * bindings from enclosing scopes. */
+/* Recursively expand source_commands[start..end_idx) into the destination
+ * flat buffer named by FlattenContext. For-loops are unrolled, function calls
+ * are inlined, and if-blocks with loop-variable conditions are evaluated.
+ * `vars`/`nv` carry loop-variable and function-parameter bindings from
+ * enclosing scopes. */
 static void flatten_range(FlattenContext *ctx,
                           int start, int end_idx, ExprVar *vars, int nv,
                           int call_src_cmd_idx, int root_call_src_cmd_idx,
                           unsigned int func_scope_mask) {
     int i = start;
-    while (i < end_idx && i < g_num_cmds) {
+    while (i < end_idx && i < ctx->source_count) {
+        const GLCmd *src_cmd = &ctx->source_cmds[i];
+
         if (ctx->abort) return;
         if (--ctx->visit_budget < 0) {
             flatten_fail(ctx, "Recursive expansion exceeded visit budget");
             return;
         }
-        if (!g_cmds[i].valid) { i++; continue; }
+        if (!src_cmd->valid) { i++; continue; }
 
-        if (g_cmds[i].type == CMD_FOR_BEGIN) {
-            int loop_end = find_block_end(i);
-            GLCmd *loop_cmd = &g_cmds[i];
+        if (src_cmd->type == CMD_FOR_BEGIN) {
+            int loop_end = flatten_find_block_end(ctx, i);
             char var_name[16];
-            flatten_get_for_var_name(loop_cmd, var_name, sizeof(var_name));
-            float start_val = loop_cmd->args[0];
-            float end_val   = loop_cmd->args[1];
-            float step_val  = loop_cmd->args[2];
+            float start_val = src_cmd->args[0];
+            float end_val   = src_cmd->args[1];
+            float step_val  = src_cmd->args[2];
+            flatten_get_for_var_name(src_cmd, var_name, sizeof(var_name));
 
             /* Re-evaluate for-loop bounds from source if they contain variables */
-            if (loop_cmd->has_vars) {
+            if (src_cmd->has_vars) {
                 const char *unused_body;
                 float re_start, re_end, re_step;
                 char rv[16];
-                if (parse_for_header_with_vars(loop_cmd->source, rv, sizeof(rv),
+                if (parse_for_header_with_vars(src_cmd->source, rv, sizeof(rv),
                                                &re_start, &re_end, &re_step,
                                                vars, nv, &unused_body)) {
                     start_val = re_start;
@@ -162,38 +222,39 @@ static void flatten_range(FlattenContext *ctx,
                                   func_scope_mask);
                 }
             }
-            i = (loop_end < g_num_cmds) ? loop_end + 1 : g_num_cmds;
+            i = (loop_end < ctx->source_count) ? loop_end + 1 : ctx->source_count;
             continue;
         }
 
-        if (g_cmds[i].type == CMD_FOR_END) { i++; continue; }
+        if (src_cmd->type == CMD_FOR_END) { i++; continue; }
 
         /* Function definitions: skip body (expanded at call sites) */
-        if (g_cmds[i].type == CMD_FUNC_DEF) {
-            int func_end = find_block_end(i);
-            i = (func_end < g_num_cmds) ? func_end + 1 : g_num_cmds;
+        if (src_cmd->type == CMD_FUNC_DEF) {
+            int func_end = flatten_find_block_end(ctx, i);
+            i = (func_end < ctx->source_count) ? func_end + 1 : ctx->source_count;
             continue;
         }
-        if (g_cmds[i].type == CMD_FUNC_END) { i++; continue; }
+        if (src_cmd->type == CMD_FUNC_END) { i++; continue; }
 
         /* Function calls: find definition and expand body inline */
-        if (g_cmds[i].type == CMD_CALL) {
-            int func_num = (int)g_cmds[i].args[0];
-            if (ctx->call_depth >= MAX_FLATTEN_CALL_DEPTH) {
+        if (src_cmd->type == CMD_CALL) {
+            int func_num = (int)src_cmd->args[0];
+            if (ctx->call_depth >= ctx->max_call_depth) {
                 char msg[128];
                 snprintf(msg, sizeof(msg),
                          "Recursive expansion exceeded depth limit (%d) at func%d",
-                         MAX_FLATTEN_CALL_DEPTH, func_num);
+                         ctx->max_call_depth, func_num);
                 flatten_fail(ctx, msg);
                 i++;
                 continue;
             }
 
             int def_found = 0;
-            for (int k = 0; k < g_num_cmds; k++) {
-                if (g_cmds[k].type == CMD_FUNC_DEF && (int)g_cmds[k].args[0] == func_num) {
+            for (int k = 0; k < ctx->source_count; k++) {
+                const GLCmd *def_cmd = &ctx->source_cmds[k];
+                if (def_cmd->type == CMD_FUNC_DEF && (int)def_cmd->args[0] == func_num) {
                     def_found = 1;
-                    int body_end = find_block_end(k);
+                    int body_end = flatten_find_block_end(ctx, k);
                     int def_fn = func_num;
                     int param_count = 0;
                     char param_names[MAX_EXPR_VARS][16];
@@ -201,11 +262,11 @@ static void flatten_range(FlattenContext *ctx,
                     float arg_vals[MAX_EXPR_VARS];
                     int arg_count = 0;
 
-                    if (!parse_repl_func_signature(g_cmds[k].source, &def_fn,
+                    if (!parse_repl_func_signature(def_cmd->source, &def_fn,
                                                    param_names, MAX_EXPR_VARS,
                                                    &param_count))
                         break;
-                    if (!extract_func_call_args_text(g_cmds[i].source, NULL,
+                    if (!extract_func_call_args_text(src_cmd->source, NULL,
                                                      arg_text, sizeof(arg_text)))
                         break;
                     if (!parse_expr_list_exact(arg_text, arg_vals, MAX_EXPR_VARS,
@@ -216,7 +277,7 @@ static void flatten_range(FlattenContext *ctx,
                         snprintf(msg, sizeof(msg),
                                  "func%d expects %d args, got %d",
                                  func_num, param_count, arg_count);
-                        set_status(msg);
+                        flatten_note_status(ctx, msg);
                         break;
                     }
 
@@ -249,19 +310,19 @@ static void flatten_range(FlattenContext *ctx,
                 char msg[64];
                 snprintf(msg, sizeof(msg),
                          "func%d not defined", func_num);
-                set_status(msg);
+                flatten_note_status(ctx, msg);
             }
             i++;
             continue;
         }
 
-        if (g_cmds[i].type == CMD_IF_BEGIN) {
-            int if_end = find_block_end(i);
+        if (src_cmd->type == CMD_IF_BEGIN) {
+            int if_end = flatten_find_block_end(ctx, i);
             char cond_text[MAX_LINE_LEN];
             int needs_local_eval = 0;
 
             if (vars && nv > 0 &&
-                repl_extract_paren_payload(g_cmds[i].source, cond_text, sizeof(cond_text)) &&
+                repl_extract_paren_payload(src_cmd->source, cond_text, sizeof(cond_text)) &&
                 (input_has_expr_vars(cond_text, vars, nv) ||
                  input_has_predef_vars(cond_text))) {
                 needs_local_eval = 1;
@@ -276,74 +337,53 @@ static void flatten_range(FlattenContext *ctx,
                     flatten_range(ctx, i + 1, if_end, vars, nv,
                                   call_src_cmd_idx, root_call_src_cmd_idx,
                                   func_scope_mask);
-                i = (if_end < g_num_cmds) ? if_end + 1 : g_num_cmds;
+                i = (if_end < ctx->source_count) ? if_end + 1 : ctx->source_count;
                 continue;
             }
 
-            if (g_num_flat_cmds < MAX_COMMANDS) {
-                g_flat_cmds[g_num_flat_cmds] = g_cmds[i];
-                flat_cmd_set_provenance(&g_flat_cmds[g_num_flat_cmds],
-                                        i, call_src_cmd_idx,
-                                        root_call_src_cmd_idx,
-                                        func_scope_mask);
-                g_num_flat_cmds++;
-            } else {
-                flatten_fail(ctx, "Flattened command limit reached");
+            if (!flatten_append_cmd(ctx, src_cmd, i, call_src_cmd_idx,
+                                    root_call_src_cmd_idx, func_scope_mask,
+                                    NULL, 0))
                 return;
-            }
             i++;
             continue;
         }
 
-        if (g_cmds[i].type == CMD_IF_END) {
-            if (g_num_flat_cmds < MAX_COMMANDS) {
-                g_flat_cmds[g_num_flat_cmds] = g_cmds[i];
-                flat_cmd_set_provenance(&g_flat_cmds[g_num_flat_cmds],
-                                        i, call_src_cmd_idx,
-                                        root_call_src_cmd_idx,
-                                        func_scope_mask);
-                g_num_flat_cmds++;
-            } else {
-                flatten_fail(ctx, "Flattened command limit reached");
+        if (src_cmd->type == CMD_IF_END) {
+            if (!flatten_append_cmd(ctx, src_cmd, i, call_src_cmd_idx,
+                                    root_call_src_cmd_idx, func_scope_mask,
+                                    NULL, 0))
                 return;
-            }
             i++;
             continue;
         }
 
-        if ((g_cmds[i].type == CMD_LABEL || g_cmds[i].type == CMD_GOTO) &&
+        if ((src_cmd->type == CMD_LABEL || src_cmd->type == CMD_GOTO) &&
             func_scope_mask != 0) {
             flatten_fail(ctx, "goto and labels are not supported inside functions");
             return;
         }
 
         /* Comments: pass through to flat array (skipped by execute, kept in save) */
-        if (g_cmds[i].type == CMD_COMMENT) {
-            if (g_num_flat_cmds < MAX_COMMANDS) {
-                g_flat_cmds[g_num_flat_cmds] = g_cmds[i];
-                flat_cmd_set_provenance(&g_flat_cmds[g_num_flat_cmds],
-                                        i, call_src_cmd_idx,
-                                        root_call_src_cmd_idx,
-                                        func_scope_mask);
-                g_num_flat_cmds++;
-            } else {
-                flatten_fail(ctx, "Flattened command limit reached");
+        if (src_cmd->type == CMD_COMMENT) {
+            if (!flatten_append_cmd(ctx, src_cmd, i, call_src_cmd_idx,
+                                    root_call_src_cmd_idx, func_scope_mask,
+                                    NULL, 0))
                 return;
-            }
             i++;
             continue;
         }
 
-        if (g_cmds[i].type == CMD_VAR_DECLARE) { i++; continue; }
+        if (src_cmd->type == CMD_VAR_DECLARE) { i++; continue; }
 
         /* Variable assignments: update predefined var and pass through */
-        if (g_cmds[i].type == CMD_VAR_ASSIGN) {
-            int var_idx = g_cmds[i].num_args; /* predef var index */
-            float value = g_cmds[i].args[0];
+        if (src_cmd->type == CMD_VAR_ASSIGN) {
+            int var_idx = src_cmd->num_args; /* predef var index */
+            float value = src_cmd->args[0];
             char rhs[MAX_LINE_LEN] = "";
             int local_rhs_vars = 0;
 
-            if (repl_extract_assignment_parts(g_cmds[i].source, NULL, 0,
+            if (repl_extract_assignment_parts(src_cmd->source, NULL, 0,
                                               rhs, sizeof(rhs)) && rhs[0]) {
                 char repl_rhs[MAX_LINE_LEN];
                 c_expr_to_repl(rhs, repl_rhs, sizeof(repl_rhs));
@@ -354,105 +394,130 @@ static void flatten_range(FlattenContext *ctx,
             }
             if (var_idx >= 0 && var_idx < g_num_predef_vars)
                 g_predef_vars[var_idx].value = value;
-            if (g_num_flat_cmds < MAX_COMMANDS) {
-                GLCmd tmp = g_cmds[i];
+            {
+                GLCmd tmp = *src_cmd;
                 tmp.args[0] = value;
-                tmp.has_vars = g_cmds[i].has_vars || local_rhs_vars;
-                g_flat_cmds[g_num_flat_cmds] = tmp;
-                g_flat_cmd_local_vars[g_num_flat_cmds].num_vars = 0;
-                if (vars && nv > 0) {
-                    int snap_n = nv < MAX_EXPR_VARS ? nv : MAX_EXPR_VARS;
-                    g_flat_cmd_local_vars[g_num_flat_cmds].num_vars = snap_n;
-                    memcpy(g_flat_cmd_local_vars[g_num_flat_cmds].vars, vars,
-                           (size_t)snap_n * sizeof(ExprVar));
-                }
-                flat_cmd_set_provenance(&g_flat_cmds[g_num_flat_cmds],
-                                        i, call_src_cmd_idx,
-                                        root_call_src_cmd_idx,
-                                        func_scope_mask);
-                g_num_flat_cmds++;
-            } else {
-                flatten_fail(ctx, "Flattened command limit reached");
-                return;
+                tmp.has_vars = src_cmd->has_vars || local_rhs_vars;
+                if (!flatten_append_cmd(ctx, &tmp, i, call_src_cmd_idx,
+                                        root_call_src_cmd_idx, func_scope_mask,
+                                        vars, nv))
+                    return;
             }
             i++;
             continue;
-        }
-
-        /* Regular command */
-        if (g_num_flat_cmds >= MAX_COMMANDS) {
-            flatten_fail(ctx, "Flattened command limit reached");
-            return;
         }
 
         if (vars && nv > 0) {
             GLCmd tmp;
             ReplParseContext parse_ctx = { i, vars, nv };
             memset(&tmp, 0, sizeof(tmp));
-            if (repl_parse_command_ctx(g_cmds[i].source, &tmp, &parse_ctx)) {
-                tmp.has_vars = g_cmds[i].has_vars;
-                strncpy(tmp.source, g_cmds[i].source, sizeof(tmp.source) - 1);
+            if (repl_parse_command_ctx(src_cmd->source, &tmp, &parse_ctx)) {
+                tmp.has_vars = src_cmd->has_vars;
+                strncpy(tmp.source, src_cmd->source, sizeof(tmp.source) - 1);
                 tmp.source[sizeof(tmp.source) - 1] = '\0';
-                flat_cmd_set_provenance(&tmp, i, call_src_cmd_idx,
-                                        root_call_src_cmd_idx,
-                                        func_scope_mask);
-                /* Snapshot local vars so replay can show correct substitution */
-                int snap_n = nv < MAX_EXPR_VARS ? nv : MAX_EXPR_VARS;
-                g_flat_cmd_local_vars[g_num_flat_cmds].num_vars = snap_n;
-                memcpy(g_flat_cmd_local_vars[g_num_flat_cmds].vars, vars,
-                       (size_t)snap_n * sizeof(ExprVar));
-                g_flat_cmds[g_num_flat_cmds++] = tmp;
+                if (!flatten_append_cmd(ctx, &tmp, i, call_src_cmd_idx,
+                                        root_call_src_cmd_idx, func_scope_mask,
+                                        vars, nv))
+                    return;
             }
-        } else if (g_cmds[i].has_vars) {
+        } else if (src_cmd->has_vars) {
             /* Outside loop but has predefined var references: re-evaluate */
             GLCmd tmp;
             ReplParseContext parse_ctx = { i, NULL, 0 };
             memset(&tmp, 0, sizeof(tmp));
-            if (repl_parse_command_ctx(g_cmds[i].source, &tmp, &parse_ctx)) {
+            if (repl_parse_command_ctx(src_cmd->source, &tmp, &parse_ctx)) {
                 tmp.has_vars = 1;
-                strncpy(tmp.source, g_cmds[i].source, sizeof(tmp.source) - 1);
+                strncpy(tmp.source, src_cmd->source, sizeof(tmp.source) - 1);
                 tmp.source[sizeof(tmp.source) - 1] = '\0';
-                flat_cmd_set_provenance(&tmp, i, call_src_cmd_idx,
-                                        root_call_src_cmd_idx,
-                                        func_scope_mask);
-                g_flat_cmd_local_vars[g_num_flat_cmds].num_vars = 0;
-                g_flat_cmds[g_num_flat_cmds++] = tmp;
+                if (!flatten_append_cmd(ctx, &tmp, i, call_src_cmd_idx,
+                                        root_call_src_cmd_idx, func_scope_mask,
+                                        NULL, 0))
+                    return;
             }
         } else {
-            g_flat_cmds[g_num_flat_cmds] = g_cmds[i];
-            flat_cmd_set_provenance(&g_flat_cmds[g_num_flat_cmds],
-                                    i, call_src_cmd_idx,
-                                    root_call_src_cmd_idx,
-                                    func_scope_mask);
-            g_flat_cmd_local_vars[g_num_flat_cmds].num_vars = 0;
-            g_num_flat_cmds++;
+            if (!flatten_append_cmd(ctx, src_cmd, i, call_src_cmd_idx,
+                                    root_call_src_cmd_idx, func_scope_mask,
+                                    NULL, 0))
+                return;
         }
         i++;
     }
 }
 
-void flatten_commands(void) {
+static int flatten_source_lighting_enabled(const GLCmd *source_cmds,
+                                           int source_count) {
+    int user_lighting_enabled = 0;
+
+    for (int i = 0; i < source_count; i++) {
+        if (source_cmds[i].valid && source_cmds[i].type == CMD_ENABLE &&
+            source_cmds[i].mode == GL_LIGHTING)
+            user_lighting_enabled = 1;
+        if (source_cmds[i].valid && source_cmds[i].type == CMD_DISABLE &&
+            source_cmds[i].mode == GL_LIGHTING)
+            user_lighting_enabled = 0;
+    }
+    return user_lighting_enabled;
+}
+
+int repl_flatten_program(const ReplFlattenOptions *options,
+                         ReplFlattenResult *result) {
+    ReplFlattenResult local_result;
     FlattenContext ctx = {
+        .source_cmds = options ? options->source_cmds : NULL,
+        .source_count = options ? options->source_cmd_count : 0,
+        .flat_cmds = options ? options->flat_cmds : NULL,
+        .flat_local_vars = options ? options->flat_local_vars : NULL,
+        .flat_capacity = options ? options->flat_capacity : 0,
+        .flat_count = 0,
+        .max_call_depth = options && options->max_call_depth > 0
+                        ? options->max_call_depth : MAX_FLATTEN_CALL_DEPTH,
         .call_depth = 0,
         .abort = 0,
-        .visit_budget = MAX_FLATTEN_VISIT_BUDGET
+        .visit_budget = options && options->visit_budget > 0
+                      ? options->visit_budget : MAX_FLATTEN_VISIT_BUDGET
     };
 
-    g_num_flat_cmds = 0;
-    flatten_range(&ctx, 0, g_num_cmds, NULL, 0, -1, -1, 0);
-    if (ctx.abort)
-        g_num_flat_cmds = 0;
+    if (!result)
+        result = &local_result;
+    memset(result, 0, sizeof(*result));
 
-    /* Track whether user enabled lighting (for correct default state) */
-    g_user_lighting_enabled = 0;
-    for (int i = 0; i < g_num_cmds; i++) {
-        if (g_cmds[i].valid && g_cmds[i].type == CMD_ENABLE &&
-            g_cmds[i].mode == GL_LIGHTING)
-            g_user_lighting_enabled = 1;
-        if (g_cmds[i].valid && g_cmds[i].type == CMD_DISABLE &&
-            g_cmds[i].mode == GL_LIGHTING)
-            g_user_lighting_enabled = 0;
+    if (ctx.source_count < 0 || ctx.flat_capacity < 0 ||
+        (ctx.source_count > 0 && !ctx.source_cmds) ||
+        (ctx.flat_capacity > 0 && !ctx.flat_cmds)) {
+        repl_copy_string_fits(result->status, sizeof(result->status),
+                              "Invalid flatten program options");
+        return 0;
     }
+
+    flatten_range(&ctx, 0, ctx.source_count, NULL, 0, -1, -1, 0);
+    if (ctx.abort)
+        ctx.flat_count = 0;
+
+    result->ok = !ctx.abort;
+    result->flat_cmd_count = ctx.flat_count;
+    result->user_lighting_enabled =
+        flatten_source_lighting_enabled(ctx.source_cmds, ctx.source_count);
+    repl_copy_string_fits(result->status, sizeof(result->status), ctx.status);
+    return result->ok;
+}
+
+void flatten_commands(void) {
+    ReplFlattenOptions options = {
+        .source_cmds = g_cmds,
+        .source_cmd_count = g_num_cmds,
+        .flat_cmds = g_flat_cmds,
+        .flat_local_vars = g_flat_cmd_local_vars,
+        .flat_capacity = MAX_COMMANDS,
+        .max_call_depth = MAX_FLATTEN_CALL_DEPTH,
+        .visit_budget = MAX_FLATTEN_VISIT_BUDGET
+    };
+    ReplFlattenResult result;
+
+    repl_flatten_program(&options, &result);
+    g_num_flat_cmds = result.flat_cmd_count;
+    g_user_lighting_enabled = result.user_lighting_enabled;
+    if (result.status[0])
+        set_status(result.status);
 
     refresh_current_block_highlight();
 }

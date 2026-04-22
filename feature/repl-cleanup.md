@@ -16,7 +16,8 @@ failure should be treated as a regression unless explicitly rebaselined.
 - Add internal ownership APIs:
   - `ReplCommandStore` / `repl_command_store_*` for `g_cmds`, `g_num_cmds`, edit line, insertion, deletion, replacement, dirty invalidation, and declaration bookkeeping.
   - `repl_parse_line()` and command descriptor metadata for parser behavior.
-  - `repl_flatten_program()` with an explicit `FlattenContext`.
+  - `repl_flatten_program()` with explicit `ReplFlattenOptions` /
+    `ReplFlattenResult`.
   - `repl_execute_program()` with an explicit program range/options object.
   - `CodePanelLayout` for wrapping, hit-testing, rendering, and visual dump output.
   - `SceneRenderConfig` / `FrameRenderContext` for camera, toggles, replay limits, jitter, and render-time options.
@@ -45,9 +46,15 @@ failure should be treated as a regression unless explicitly rebaselined.
    - Use command metadata later for autocomplete, export, display classification, and execution dispatch.
 
 5. **Split flattening and execution**
-   - Move flattening into its own module with explicit inputs: source program, variable context, source-line provenance, recursion limits, and error/status output.
+   - Done: flattening lives in `repl_flatten.c`, and
+     `repl_flatten_program()` now accepts explicit source input, destination
+     flat buffer, local-var snapshot buffer, capacity, recursion limits, visit
+     budget, and result/status output. `repl_flatten_commands()` remains the
+     live-global compatibility wrapper.
    - Done: flattening no longer mutates `g_edit_line` as temporary parse context; it passes `ReplParseContext.source_line_idx`.
-   - Move GL execution into a separate executor that receives a `FlatProgramView` and range/options object. Replay should pass an execution limit instead of temporarily mutating `g_num_flat_cmds`.
+   - Done: GL execution lives in `repl_executor.c`; `repl_execute_program()`
+     receives a `FlatProgramView` and explicit range/options object. Replay
+     passes execution limits instead of temporarily mutating `g_num_flat_cmds`.
 
 6. **Make editor input a mode router**
    - Split `repl_editor.c` into focused areas: keyboard/mouse dispatch, commit pipeline, undo/redo, clipboard, camera controls, and config actions.
