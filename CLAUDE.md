@@ -3,6 +3,10 @@
 Interactive OpenGL command interpreter. Type GL commands, press `;` to execute,
 and watch geometry render in real-time with a live code panel.
 
+New to the tree? Start with [`MODULES.md`](MODULES.md) for the one-page
+layered overview of the source files. This file is the agent-facing project
+brief and goes deeper.
+
 ## Build
 
 ```bash
