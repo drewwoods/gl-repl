@@ -138,14 +138,15 @@ themes. The Ocean grid also consumes prepared camera waterline state; the old
 inline camera-height TODO was replaced with a single frame-prep derivation of
 the orbit camera's world-space Y.
 
-### 5. Vertex overlay visitor in `scene_render.c` ✅ DONE
+### 5. Vertex overlay visitor → `scene_overlays.c` ✅ DONE
 
-Implemented in the Phase-8 render cleanup slice. `walk_vertex_overlay()`
+Implemented in the Phase-8 render cleanup slices. `walk_vertex_overlay()`
 centralizes transform replay, begin/end/tessellation block tracking, current
-normal state, and cursor-selected block filtering. `draw_vertex_numbers()`
-and `draw_normal_vectors()` are now small callbacks over that traversal.
-The partial-input guides still have their own parsing/search logic because
-they are driven by live `g_input`, not by the flattened command stream.
+normal state, and cursor-selected block filtering. Ownership now lives in
+`scene_overlays.c` alongside polygon outlines, with public entrypoints for
+vertex-number and normal-vector rendering. The partial-input guides still have
+their own parsing/search logic in `scene_render.c` because they are driven by
+live `g_input`, not by the flattened command stream.
 
 ### 5b. Guard scene helper GL state ✅ DONE
 
@@ -177,9 +178,8 @@ making light side effects explicit.
 Implemented in the Phase-8 render cleanup slice. The polygon outline/current-
 block highlight pass moved out of `render_3d_scene()` into
 `scene_overlays_render_outlines()`. The flat-block cursor matcher is now an
-explicit `scene_overlay_flat_block_matches_cursor()` helper shared by the
-outline pass and the remaining vertex-number/normal overlay visitor in
-`scene_render.c`.
+explicit `scene_overlay_flat_block_matches_cursor()` helper shared by outline,
+vertex-number, and normal-vector overlay paths inside `scene_overlays.c`.
 
 ### 5f. Widen render config/frame context ✅ DONE
 
