@@ -16,8 +16,12 @@ flowchart LR
     commit["repl_commit.c<br/>declarations<br/>assignments<br/>block commits"]
     store["repl_command_store.c<br/>source command mutation"]
 
-    ui["ui_panels.c<br/>code/menu/help rendering<br/>hit testing<br/>rename UI"]
+    ui["ui_panels.c<br/>code panel renderer<br/>help/var/autocomplete<br/>hit routing + rename UI"]
     layout["repl_code_panel_layout.c<br/>pure wrap iterator<br/>row/segment lookup<br/>cursor row mapping"]
+    docrows["repl_code_panel_document.c<br/>document row model<br/>scroll follow<br/>hit-test targets"]
+    menu["repl_menu_bar.c<br/>menubar + dropdowns<br/>search slot rendering"]
+    color["repl_color_picker.c<br/>floating color picker<br/>literal color swatches"]
+    replay_ann["repl_replay_annotations.c<br/>code-panel replay notes<br/>expanded/evaluated args"]
     export["repl_export.c<br/>import/export<br/>visual code dump"]
     audio["repl_audio.c<br/>playlist engine<br/>persisted audio cfg"]
     replay["repl_replay.c<br/>replay state machine<br/>fade batches"]
@@ -53,7 +57,15 @@ flowchart LR
     replay --> exec
     ui --> actions
     ui --> scenes
-    ui --> layout
+    ui --> docrows
+    ui --> menu
+    ui --> color
+    docrows --> layout
+    docrows --> replay_ann
+    replay_ann --> replay
+    menu --> actions
+    menu --> scenes
+    color --> core
     export --> layout
 ```
 
@@ -75,12 +87,22 @@ flowchart LR
   continuation indent, wrap break choice, row counts, segment lookup, and cursor
   row mapping. `ui_panels.c`, export visual dumps, and tests should consume this
   instead of carrying local copies.
+- `repl_code_panel_document.c` owns the higher-level code-panel row model:
+  header/body/footer row counts, replay-extra rows, cursor-follow scrolling,
+  and document-line to command-line hit targets.
+- `repl_replay_annotations.c` owns code-panel replay text expansion: source to
+  flat-command mapping, variable substitution comments, and evaluated command
+  display text.
+- `repl_menu_bar.c` owns top-level menu/dropdown state, menu hit-testing,
+  right-click config cycling, and the inline search slot in the menu bar.
+- `repl_color_picker.c` owns the floating HSV/alpha picker state and literal
+  color swatch rendering/mutation for color commands.
 
 ## Open Edges
 
-- `ui_panels.c` still owns menu layout, render-time code panel row iteration,
-  hit testing, and inline rename UI. Code-panel wrapping is shared, but the
-  broader document row model is still embedded in UI code.
+- `ui_panels.c` still owns render-time iteration over code-panel rows, search
+  match highlights inside source lines, autocomplete/help/variable-panel
+  rendering, and inline rename UI.
 - `repl_editor.c` still owns variable slider dragging, hidden-code-panel restore
   rules, and the main keyboard/special/mouse route ordering.
 - `sample.h` and `repl_state.h` still expose broad globals for compatibility.

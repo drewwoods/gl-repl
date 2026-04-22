@@ -88,13 +88,21 @@ Run all: `make test`
 | `repl_actions.c` | Config item table, config shortcuts, menu actions, startup config defaults |
 | `repl_code_panel_layout.c` | Pure code-panel wrapping, row counts, segment lookup, cursor-row mapping |
 | `repl_code_panel_layout.h` | `CodePanelTextLayout` / `CodePanelWrapIter` API shared by UI, export dumps, tests |
+| `repl_code_panel_document.c` | Code-panel document row model, scroll-follow calculation, hit-test targets |
+| `repl_code_panel_document.h` | `CodePanelDocumentLayout` API consumed by UI and scrolling tests |
+| `repl_replay_annotations.c` | Replay-time source annotations, variable substitution, evaluated command display text |
+| `repl_replay_annotations.h` | Code-panel replay annotation API |
+| `repl_menu_bar.c` | Code-panel menu bar, dropdowns, config right-click handling, search slot |
+| `repl_menu_bar.h` | Menu/pin hit-test and dropdown state API |
+| `repl_color_picker.c` | Floating color picker and literal color swatch rendering/mutation |
+| `repl_color_picker.h` | Color-picker input/render bridge API |
 | `repl_examples.c` | Predefined example data (`g_examples[]`, `g_example_names[]`) |
 | `repl_examples.h` | Example query API (`repl_examples_count/name/lines`) |
 | `repl_export.c` | `save_output` / `load_from_file`, workspace header directives, `@scene-name` / `@workspace-dir` markers |
 | `scene_render.c` | 3D scene: camera, grid themes, axes themes, lights, vertex overlays, outline pass |
 | `scene_render.h` | Declares `render_3d_scene()` |
-| `ui_panels.c` | Code panel, header buttons, Scene/File/Config menus, autocomplete, help overlay, inline rename state |
-| `ui_panels.h` | UI panel render + hit-test declarations, rename state API |
+| `ui_panels.c` | Code-panel row rendering, autocomplete, help overlay, variable panel, panel hit routing, inline rename state |
+| `ui_panels.h` | UI panel render + hit-test declarations, compatibility declarations, rename state API |
 | `repl_eval.c` | Expression evaluator (recursive descent), REPL<->C translators, for-loop parsers |
 | `repl_eval.h` | Evaluator types (`ExprVar`, `ExprCtx`), function declarations |
 | `cmd_format.c` | Pure indentation/depth computation (no GL dependency) |
@@ -128,27 +136,28 @@ Grids and axes are themeable via a `switch` in `scene_render.c`:
 
 ## Adding Menu Bar Items
 
-The top row is a menu bar in `ui_panels.c` styled after the Header Wireframes
-v2 mock. Left side has top-level menus (File / Examples / Config); right side
-has pinned buttons (Replay / Scene).
+The top row is a menu bar in `repl_menu_bar.c` styled after the Header
+Wireframes v2 mock. Left side has top-level menus (File / Scene / Config);
+right side has pinned buttons (Search / Replay).
 
 To add an **item** to an existing top-level menu:
 1. Extend the per-menu enum (e.g. `FILE_ITEM_*` or the `SCENE_OFF_*` block) and
    bump the trailing `*_COUNT`
 2. Add the label in `menu_item_label()` and shortcut (if any) in
-   `menu_item_shortcut()`
-3. Add the action branch in `menu_item_activate()`; return `1` for
-   action items (menu closes), `0` for cycle/toggle items (menu stays
-   open — only click-outside dismisses)
+   `menu_item_shortcut()` in `repl_menu_bar.c`
+3. Add the action branch in `repl_action_menu_item_activate()` in
+   `repl_actions.c`; return `1` for action items (menu closes), `0` for
+   cycle/toggle items (menu stays open; click-outside dismisses)
 
 To add a **new top-level menu**: extend the `MENU_*` enum (before
 `NUM_MENUS`), add a label in `g_menu_labels[]`, and handle the new id in
-`menu_item_count` / `menu_item_label` / `menu_item_shortcut` /
-`menu_item_activate`.
+`menu_item_count` / `menu_item_label` / `menu_item_shortcut` in
+`repl_menu_bar.c`, plus `repl_action_menu_item_activate()` in
+`repl_actions.c` for side effects.
 
 To add a **pinned right-side button**: extend `PIN_*` enum, append a label
-to `g_pin_btn_labels[]`, and add a `case` in `handle_code_panel_press()`
-inside the `menubar_pin_hit` block.
+to `g_pin_btn_labels[]` in `repl_menu_bar.c`, and add a `case` in
+`handle_code_panel_press()` inside the `repl_menu_bar_pin_hit` block.
 
 ## User Scene System
 
@@ -210,7 +219,7 @@ message (user has to save workspace first to unlock eviction).
 
 ### Scene menu layout
 
-`SCENE_OFF_*` offsets in `ui_panels.c` place fixed rows above the user-scene
+`SCENE_OFF_*` offsets in `repl_menu_bar.c` place fixed rows above the user-scene
 list (`New empty scene`, `Save to output.c`, `Rename active scene`). User
 scenes follow at `SCENE_OFF_SCENES`; rows are dense (unused slots skipped via
 `repl_scene_menu_slot_for_dense_index`). The active scene row is drawn with
@@ -486,7 +495,7 @@ Declarative toggle system in `repl_actions.c`:
   int *value, n_states, state_names[] }`
 - Each item is a toggle (2 states, default OFF/ON) or cycle (>2 states
   with named entries, e.g. grid themes)
-- Rendered by `render_config_menu()` in `ui_panels.c`; menu clicks and
+- Rendered by the Config dropdown in `repl_menu_bar.c`; menu clicks and
   F-key/Ctrl-key shortcuts dispatch through `repl_actions.c`
 - Adding a config item: append to `g_cfg_items[]` — count is
   auto-computed via `sizeof`

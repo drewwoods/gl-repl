@@ -1,16 +1,19 @@
 /*
- * ui_panels.c — Code panel, autocomplete, help overlay, variable sliders,
- *               and configuration menu rendering.
+ * ui_panels.c — Code-panel row rendering, autocomplete/help/variable panels,
+ *               panel input routing, and inline scene rename UI.
  *
  * Extracted from sample.c for maintainability.
  */
 #include "sample.h"
 #include "repl_actions.h"
-#include "repl_code_panel_layout.h"
+#include "repl_color_picker.h"
+#include "repl_code_panel_document.h"
 #include "repl_core.h"
 #include "repl_core_internal.h"
 #include "repl_clipboard.h"
 #include "repl_keys.h"
+#include "repl_menu_bar.h"
+#include "repl_replay_annotations.h"
 #include "profile_panel.h"
 #include "ui_panels.h"
 
@@ -154,841 +157,11 @@ static void color_for_type(CmdType t) {
     }
 }
 
-/* ========================================================================= */
-/* Replay variable display helpers                                            */
-/* ========================================================================= */
-
-/* Per-frame replay annotation cache.
- * Rebuilt once at the start of render_code_panel to avoid O(N × replay_pc)
- * work when annotating variable assignments during replay. */
-static int   s_replay_cache_pc = -2;                 /* replay_pc when built */
-static int   s_replay_flat_map[MAX_COMMANDS];         /* src_cmd_idx → flat_idx */
-static int   s_replay_current_flat_idx = -1;          /* flat cmd for src_line */
-/* Predef-variable snapshots: one per source command, taken at the flat_idx
- * stored in s_replay_flat_map[src].  Built by a single O(replay_pc) forward
- * simulation so each snapshot reflects the correct variable state BEFORE
- * executing that specific flat command. */
-static float s_replay_predef_snap[MAX_COMMANDS][MAX_PREDEF_VARS];
-static int   s_replay_predef_snap_valid[MAX_COMMANDS];
-
-static void replay_build_predef_snapshots(void);
-
-static void rebuild_replay_annotation_cache(void) {
-    memset(s_replay_flat_map, 0xff, sizeof(int) * (size_t)g_num_cmds);
-
-    /* Backward pass: first match per src_cmd_idx = most recent execution */
-    for (int j = g_replay_pc - 1; j >= 0; j--) {
-        int src = g_flat_cmds[j].src_cmd_idx;
-        if (src >= 0 && src < g_num_cmds &&
-            s_replay_flat_map[src] == -1 && g_flat_cmds[j].valid)
-            s_replay_flat_map[src] = j;
-    }
-
-    s_replay_current_flat_idx = (g_replay_src_line >= 0 &&
-                                 g_replay_src_line < g_num_cmds)
-                                ? s_replay_flat_map[g_replay_src_line] : -1;
-
-    /* Single forward pass builds per-src predef snapshots */
-    replay_build_predef_snapshots();
-
-    s_replay_cache_pc = g_replay_pc;
-}
-
-static void invalidate_replay_annotation_cache(void) {
-    s_replay_cache_pc = -2;
-}
-
-/* Find the most recent flat command for a source line, at or before replay_pc */
-static int find_replay_flat_cmd(int src_line) {
-    if (g_replay_pc <= 0) return -1;
-    /* Use per-frame cache when available */
-    if (s_replay_cache_pc == g_replay_pc &&
-        src_line >= 0 && src_line < g_num_cmds)
-        return s_replay_flat_map[src_line];
-    for (int j = g_replay_pc - 1; j >= 0; j--) {
-        if (g_flat_cmds[j].src_cmd_idx == src_line && g_flat_cmds[j].valid)
-            return j;
-    }
-    return -1;
-}
-
-static int replay_current_flat_cmd(void) {
-    if (g_replay_src_line < 0)
-        return -1;
-    if (s_replay_cache_pc == g_replay_pc)
-        return s_replay_current_flat_idx;
-    return find_replay_flat_cmd(g_replay_src_line);
-}
-
-static int format_evaluated_cmd(const GLCmd *cmd, const char *orig_source,
-                                char *out, int out_size);
-
-static const char *skip_leading_ws(const char *s) {
-    while (s && *s && isspace((unsigned char)*s))
-        s++;
-    return s ? s : "";
-}
-
-static const char *skip_numeric_literal(const char *s) {
-    const char *p = s;
-    int saw_digits = 0;
-
-    if (!p)
-        return s;
-
-    if (*p == '.') {
-        if (!isdigit((unsigned char)p[1]))
-            return s;
-        p++;
-    }
-
-    while (isdigit((unsigned char)*p)) {
-        p++;
-        saw_digits = 1;
-    }
-
-    if (*p == '.') {
-        p++;
-        while (isdigit((unsigned char)*p)) {
-            p++;
-            saw_digits = 1;
-        }
-    }
-
-    if (!saw_digits)
-        return s;
-
-    if (*p == 'e' || *p == 'E') {
-        const char *q = p + 1;
-        if (*q == '+' || *q == '-')
-            q++;
-        if (isdigit((unsigned char)*q)) {
-            p = q + 1;
-            while (isdigit((unsigned char)*p))
-                p++;
-        }
-    }
-
-    return p;
-}
-
-static int expr_has_visible_vars(const char *s, const ExprVar *vars, int num_vars) {
-    while (s && *s) {
-        const char *start;
-        int len;
-        const char *num_end = skip_numeric_literal(s);
-
-        if (num_end != s) {
-            s = num_end;
-            continue;
-        }
-
-        if (!isalpha((unsigned char)*s) && *s != '_') {
-            s++;
-            continue;
-        }
-
-        start = s;
-        while (*s && (isalnum((unsigned char)*s) || *s == '_'))
-            s++;
-        len = (int)(s - start);
-
-        for (int i = 0; i < num_vars; i++) {
-            int nlen = (int)strlen(vars[i].name);
-            if (nlen == len && strncmp(start, vars[i].name, len) == 0)
-                return 1;
-        }
-    }
-    return 0;
-}
-
-static int visible_var_index(const ExprVar *vars, int num_vars, const char *name) {
-    for (int i = 0; i < num_vars; i++) {
-        if (strcmp(vars[i].name, name) == 0)
-            return i;
-    }
-    return -1;
-}
-
-static int replay_flat_cmd_context_matches(int flat_idx, int current_flat_idx) {
-    const FlatCmdLocalVars *flat_vars;
-    const FlatCmdLocalVars *cur_vars;
-
-    if (flat_idx < 0 || current_flat_idx < 0)
-        return 1;
-
-    if (g_flat_cmds[flat_idx].func_scope_mask !=
-        g_flat_cmds[current_flat_idx].func_scope_mask)
-        return 0;
-
-    flat_vars = &g_flat_cmd_local_vars[flat_idx];
-    cur_vars = &g_flat_cmd_local_vars[current_flat_idx];
-
-    for (int i = 0; i < flat_vars->num_vars; i++) {
-        int ci = visible_var_index(cur_vars->vars, cur_vars->num_vars,
-                                   flat_vars->vars[i].name);
-        if (ci >= 0 &&
-            fabsf(flat_vars->vars[i].value - cur_vars->vars[ci].value) > 1e-6f)
-            return 0;
-    }
-
-    return 1;
-}
-
-static int find_replay_assignment_flat_cmd(int src_line) {
-    int current_flat_idx = replay_current_flat_cmd();
-
-    if (g_replay_pc <= 0)
-        return -1;
-
-    /* Try cached map: O(1) lookup + context check */
-    if (s_replay_cache_pc == g_replay_pc &&
-        src_line >= 0 && src_line < g_num_cmds) {
-        int cached = s_replay_flat_map[src_line];
-        if (cached >= 0 &&
-            (current_flat_idx < 0 ||
-             cached == current_flat_idx ||
-             replay_flat_cmd_context_matches(cached, current_flat_idx)))
-            return cached;
-    }
-
-    /* Fallback: full scan (only for context mismatch in function bodies) */
-    for (int j = g_replay_pc - 1; j >= 0; j--) {
-        if (g_flat_cmds[j].src_cmd_idx != src_line || !g_flat_cmds[j].valid)
-            continue;
-        if (current_flat_idx < 0 ||
-            j == current_flat_idx ||
-            replay_flat_cmd_context_matches(j, current_flat_idx))
-            return j;
-    }
-
-    return -1;
-}
-
-static int build_visible_vars_from_predef_values(int flat_idx,
-                                                 const float *predef_vals,
-                                                 ExprVar *out, int max_out) {
-    int nv = 0;
-
-    if (!out || max_out <= 0)
-        return 0;
-
-    if (flat_idx >= 0 && flat_idx < g_num_flat_cmds) {
-        const FlatCmdLocalVars *lcvars = &g_flat_cmd_local_vars[flat_idx];
-        for (int i = 0; i < lcvars->num_vars && nv < max_out; i++)
-            out[nv++] = lcvars->vars[i];
-    }
-
-    if (predef_vals) {
-        for (int i = 0; i < g_num_predef_vars && nv < max_out; i++) {
-            if (visible_var_index(out, nv, g_predef_vars[i].name) >= 0)
-                continue;
-            strncpy(out[nv].name, g_predef_vars[i].name,
-                    sizeof(out[nv].name) - 1);
-            out[nv].name[sizeof(out[nv].name) - 1] = '\0';
-            out[nv].value = predef_vals[i];
-            nv++;
-        }
-    }
-
-    return nv;
-}
-
-/* Replace visible variable identifiers with their formatted values.
- * Optionally builds var_comment like " // t = 3.3, n = 12". */
-static int subst_visible_vars(const char *source, char *out, int out_size,
-                              char *var_comment, int comment_size,
-                              const ExprVar *vars, int num_vars) {
-    char used_names[MAX_PREDEF_VARS + MAX_EXPR_VARS][16];
-    float used_vals[MAX_PREDEF_VARS + MAX_EXPR_VARS];
-    int num_used = 0;
-    int max_used = MAX_PREDEF_VARS + MAX_EXPR_VARS;
-
-    int oi = 0;
-    const char *p = source;
-    while (*p && oi < out_size - 20) {
-        const char *num_end = skip_numeric_literal(p);
-
-        if (num_end != p) {
-            int len = (int)(num_end - p);
-            if (oi + len < out_size) {
-                memcpy(out + oi, p, (size_t)len);
-                oi += len;
-            }
-            p = num_end;
-            continue;
-        }
-
-        if (isalpha((unsigned char)*p) || *p == '_') {
-            const char *start = p;
-            while (*p && (isalnum((unsigned char)*p) || *p == '_')) p++;
-            int len = (int)(p - start);
-
-            int found = 0;
-            float found_val = 0.0f;
-            char found_name[16] = "";
-
-            for (int v = 0; !found && v < num_vars; v++) {
-                int nlen = (int)strlen(vars[v].name);
-                if (nlen == len &&
-                    strncmp(start, vars[v].name, len) == 0) {
-                    found = 1;
-                    found_val = vars[v].value;
-                    strncpy(found_name, vars[v].name, 15);
-                    found_name[15] = '\0';
-                }
-            }
-
-            if (found) {
-                oi += snprintf(out + oi, out_size - oi, "%g", found_val);
-                int dup = 0;
-                for (int u = 0; u < num_used; u++) {
-                    if (strcmp(used_names[u], found_name) == 0) {
-                        dup = 1; break;
-                    }
-                }
-                if (!dup && num_used < max_used) {
-                    snprintf(used_names[num_used], sizeof(used_names[num_used]), "%.15s",
-                             found_name);
-                    used_vals[num_used] = found_val;
-                    num_used++;
-                }
-            } else {
-                if (oi + len < out_size) {
-                    memcpy(out + oi, start, len);
-                    oi += len;
-                }
-            }
-        } else {
-            out[oi++] = *p++;
-        }
-    }
-    out[oi] = '\0';
-
-    if (var_comment && comment_size > 0) {
-        var_comment[0] = '\0';
-        if (num_used > 0) {
-            int ci = snprintf(var_comment, comment_size, " // ");
-            for (int u = 0; u < num_used && ci < comment_size - 20; u++) {
-                if (u > 0)
-                    ci += snprintf(var_comment + ci, comment_size - ci, ", ");
-                ci += snprintf(var_comment + ci, comment_size - ci, "%s = %g",
-                               used_names[u], used_vals[u]);
-            }
-        }
-    }
-
-    return num_used;
-}
-
-static int replay_eval_expr_with_predefs(int flat_idx, const char *expr,
-                                         const float *predef_vals,
-                                         float *out_value) {
-    char repl_expr[MAX_LINE_LEN];
-    ExprVar vars[MAX_PREDEF_VARS + MAX_EXPR_VARS];
-    int nv;
-    ExprCtx ctx;
-
-    if (!expr || !out_value)
-        return 0;
-
-    c_expr_to_repl(expr, repl_expr, sizeof(repl_expr));
-    nv = build_visible_vars_from_predef_values(flat_idx, predef_vals,
-                                               vars,
-                                               (int)(sizeof(vars) / sizeof(vars[0])));
-    ctx.p = repl_expr;
-    ctx.vars = vars;
-    ctx.num_vars = nv;
-    *out_value = eval_expr(&ctx);
-    return 1;
-}
-
-static int replay_copy_predef_values_before_flat_cmd(int target_pc,
-                                                     float *out_vals,
-                                                     int max_vals) {
-    int pc = 0;
-    int goto_count = 0;
-
-    if (!out_vals || max_vals < g_num_predef_vars)
-        return 0;
-
-    if (g_replay_active)
-        repl_copy_replay_baseline_predef_values(out_vals, max_vals);
-    else
-        for (int i = 0; i < g_num_predef_vars && i < max_vals; i++)
-            out_vals[i] = g_predef_vars[i].value;
-
-    if (target_pc < 0)
-        target_pc = 0;
-    if (target_pc > g_num_flat_cmds)
-        target_pc = g_num_flat_cmds;
-
-    while (pc < target_pc) {
-        if (!g_flat_cmds[pc].valid) {
-            pc++;
-            continue;
-        }
-
-        switch (g_flat_cmds[pc].type) {
-        case CMD_VAR_ASSIGN: {
-            int vi = g_flat_cmds[pc].num_args;
-            float value = g_flat_cmds[pc].args[0];
-            if (g_flat_cmds[pc].has_vars) {
-                char rhs[MAX_LINE_LEN];
-                if (repl_extract_assignment_parts(g_flat_cmds[pc].source,
-                                                  NULL, 0,
-                                                  rhs, sizeof(rhs)) &&
-                    rhs[0]) {
-                    replay_eval_expr_with_predefs(pc, rhs, out_vals, &value);
-                }
-            }
-            if (vi >= 0 && vi < g_num_predef_vars)
-                out_vals[vi] = value;
-            break;
-        }
-        case CMD_IF_BEGIN: {
-            float cond = g_flat_cmds[pc].args[0];
-            if (g_flat_cmds[pc].has_vars) {
-                char cond_text[MAX_LINE_LEN];
-                if (repl_extract_paren_payload(g_flat_cmds[pc].source,
-                                               cond_text, sizeof(cond_text)) &&
-                    cond_text[0]) {
-                    replay_eval_expr_with_predefs(pc, cond_text, out_vals, &cond);
-                }
-            }
-            if (cond == 0.0f) {
-                int depth = 1;
-                while (depth > 0 && ++pc < target_pc) {
-                    if (g_flat_cmds[pc].type == CMD_IF_BEGIN) depth++;
-                    else if (g_flat_cmds[pc].type == CMD_IF_END) depth--;
-                }
-            }
-            break;
-        }
-        case CMD_GOTO: {
-            char label[64];
-            if (!repl_extract_goto_label(g_flat_cmds[pc].source,
-                                         label, sizeof(label)))
-                break;
-            if (goto_count++ > 100000)
-                return 0;
-            for (int li = 0; li < g_num_flat_cmds; li++) {
-                char target_label[64];
-                if (g_flat_cmds[li].valid &&
-                    g_flat_cmds[li].type == CMD_LABEL &&
-                    repl_extract_label_name(g_flat_cmds[li].source,
-                                            target_label,
-                                            sizeof(target_label)) &&
-                    strcmp(target_label, label) == 0) {
-                    pc = li;
-                    goto next_pc;
-                }
-            }
-            break;
-        }
-        default:
-            break;
-        }
-
-        pc++;
-next_pc:
-        ;
-    }
-
-    return 1;
-}
-
-/* Single-pass forward simulation that builds predef snapshots for every
- * source command whose flat_idx appears in s_replay_flat_map.  Each snapshot
- * captures the predef variable state BEFORE the command at that flat_idx
- * executes, matching replay_copy_predef_values_before_flat_cmd semantics.
- * Total cost: O(replay_pc), called once per frame during cache rebuild. */
-static void replay_build_predef_snapshots(void) {
-    float vals[MAX_PREDEF_VARS];
-    int pc = 0, goto_count = 0;
-    int target_pc = g_replay_pc;
-
-    memset(s_replay_predef_snap_valid, 0, sizeof(int) * (size_t)g_num_cmds);
-
-    if (g_replay_active)
-        repl_copy_replay_baseline_predef_values(vals, MAX_PREDEF_VARS);
-    else
-        for (int i = 0; i < g_num_predef_vars && i < MAX_PREDEF_VARS; i++)
-            vals[i] = g_predef_vars[i].value;
-
-    if (target_pc < 0) target_pc = 0;
-    if (target_pc > g_num_flat_cmds) target_pc = g_num_flat_cmds;
-
-    /* Macro: snapshot predef vals for a flat position's source command */
-    #define SNAP_IF_MAPPED(flat_pc) do {                                    \
-        int _src = g_flat_cmds[flat_pc].src_cmd_idx;                        \
-        if (_src >= 0 && _src < g_num_cmds &&                               \
-            s_replay_flat_map[_src] == (flat_pc) &&                         \
-            !s_replay_predef_snap_valid[_src]) {                            \
-            memcpy(s_replay_predef_snap[_src], vals,                        \
-                   sizeof(float) * (size_t)g_num_predef_vars);              \
-            s_replay_predef_snap_valid[_src] = 1;                           \
-        }                                                                   \
-    } while (0)
-
-    while (pc < target_pc) {
-        SNAP_IF_MAPPED(pc);
-
-        if (!g_flat_cmds[pc].valid) { pc++; continue; }
-
-        switch (g_flat_cmds[pc].type) {
-        case CMD_VAR_ASSIGN: {
-            int vi = g_flat_cmds[pc].num_args;
-            float value = g_flat_cmds[pc].args[0];
-            if (g_flat_cmds[pc].has_vars) {
-                char rhs[MAX_LINE_LEN];
-                if (repl_extract_assignment_parts(g_flat_cmds[pc].source,
-                                                  NULL, 0,
-                                                  rhs, sizeof(rhs)) &&
-                    rhs[0])
-                    replay_eval_expr_with_predefs(pc, rhs, vals, &value);
-            }
-            if (vi >= 0 && vi < g_num_predef_vars)
-                vals[vi] = value;
-            break;
-        }
-        case CMD_IF_BEGIN: {
-            float cond = g_flat_cmds[pc].args[0];
-            if (g_flat_cmds[pc].has_vars) {
-                char cond_text[MAX_LINE_LEN];
-                if (repl_extract_paren_payload(g_flat_cmds[pc].source,
-                                               cond_text, sizeof(cond_text)) &&
-                    cond_text[0])
-                    replay_eval_expr_with_predefs(pc, cond_text, vals, &cond);
-            }
-            if (cond == 0.0f) {
-                int depth = 1;
-                while (depth > 0 && ++pc < target_pc) {
-                    SNAP_IF_MAPPED(pc);
-                    if (g_flat_cmds[pc].type == CMD_IF_BEGIN) depth++;
-                    else if (g_flat_cmds[pc].type == CMD_IF_END) depth--;
-                }
-            }
-            break;
-        }
-        case CMD_GOTO: {
-            char label[64];
-            if (!repl_extract_goto_label(g_flat_cmds[pc].source,
-                                         label, sizeof(label)))
-                break;
-            if (goto_count++ > 100000)
-                goto snap_done;
-            for (int li = 0; li < g_num_flat_cmds; li++) {
-                char target_label[64];
-                if (g_flat_cmds[li].valid &&
-                    g_flat_cmds[li].type == CMD_LABEL &&
-                    repl_extract_label_name(g_flat_cmds[li].source,
-                                            target_label,
-                                            sizeof(target_label)) &&
-                    strcmp(target_label, label) == 0) {
-                    pc = li;
-                    goto snap_next_pc;
-                }
-            }
-            break;
-        }
-        default:
-            break;
-        }
-
-        pc++;
-snap_next_pc:
-        ;
-    }
-snap_done:
-    ;
-
-    #undef SNAP_IF_MAPPED
-}
-
-static int build_replay_assignment_inline_comment(int cmd_idx, int flat_idx,
-                                                  char *out, int out_size) {
-    float predef_vals[MAX_PREDEF_VARS];
-    ExprVar visible_vars[MAX_PREDEF_VARS + MAX_EXPR_VARS];
-    char rhs_subst[MAX_LINE_LEN];
-    char name[16];
-    char rhs[MAX_LINE_LEN];
-    int nv;
-
-    if (!out || out_size <= 0)
-        return 0;
-    out[0] = '\0';
-
-    /* Use per-src predef snapshot when cache covers this cmd/flat pair */
-    if (s_replay_cache_pc == g_replay_pc &&
-        cmd_idx >= 0 && cmd_idx < g_num_cmds &&
-        s_replay_predef_snap_valid[cmd_idx] &&
-        s_replay_flat_map[cmd_idx] == flat_idx)
-        memcpy(predef_vals, s_replay_predef_snap[cmd_idx],
-               sizeof(float) * (size_t)g_num_predef_vars);
-    else if (!replay_copy_predef_values_before_flat_cmd(flat_idx,
-                                                        predef_vals,
-                                                        MAX_PREDEF_VARS))
-        return 0;
-
-    nv = build_visible_vars_from_predef_values(flat_idx, predef_vals,
-                                               visible_vars,
-                                               (int)(sizeof(visible_vars) / sizeof(visible_vars[0])));
-    if (!repl_extract_assignment_parts(g_cmds[cmd_idx].source,
-                                       name, sizeof(name),
-                                       rhs, sizeof(rhs)) ||
-        !name[0] || !rhs[0])
-        return 0;
-
-    {
-        float value = g_flat_cmds[flat_idx].args[0];
-        subst_visible_vars(rhs, rhs_subst, sizeof(rhs_subst),
-                           NULL, 0, visible_vars, nv);
-        replay_eval_expr_with_predefs(flat_idx, rhs, predef_vals, &value);
-
-        if (rhs_subst[0] &&
-            strcmp(skip_leading_ws(rhs_subst), skip_leading_ws(rhs)) != 0 &&
-            !expr_has_visible_vars(rhs_subst, visible_vars, nv)) {
-            snprintf(out, out_size, " // %s = %s = %g",
-                     name, skip_leading_ws(rhs_subst), value);
-        } else {
-            snprintf(out, out_size, " // %s = %g", name, value);
-        }
-        return 1;
-    }
-
-    return 0;
-}
-
-int code_panel_get_command_display_text(int cmd_idx, char *out, int out_size) {
-    int flat_idx;
-    char comment[MAX_INPUT_LEN];
-
-    if (!out || out_size <= 0)
-        return 0;
-    out[0] = '\0';
-
-    if (cmd_idx < 0 || cmd_idx >= g_num_cmds)
-        return 0;
-
-    snprintf(out, out_size, "%s", g_cmds[cmd_idx].source);
-
-    if (!g_replay_active ||
-        !g_replay_expand_args ||
-        !g_cmds[cmd_idx].has_vars)
-        return 1;
-
-    if (g_cmds[cmd_idx].type != CMD_VAR_ASSIGN)
-        return 1;
-
-    flat_idx = find_replay_assignment_flat_cmd(cmd_idx);
-    if (flat_idx < 0)
-        return 1;
-
-    if (build_replay_assignment_inline_comment(cmd_idx, flat_idx,
-                                               comment, sizeof(comment)) &&
-        comment[0]) {
-        snprintf(out, out_size, "%s%s", g_cmds[cmd_idx].source, comment);
-    }
-
-    return 1;
-}
-
-static int build_replay_subst_annotation(int cmd_idx, int flat_idx,
-                                         char *subst, int subst_size,
-                                         char *var_comment, int comment_size) {
-    float predef_vals[MAX_PREDEF_VARS];
-    ExprVar visible_vars[MAX_PREDEF_VARS + MAX_EXPR_VARS];
-    int nv;
-
-    if (!subst || subst_size <= 0)
-        return 0;
-    subst[0] = '\0';
-    if (var_comment && comment_size > 0)
-        var_comment[0] = '\0';
-
-    if (s_replay_cache_pc == g_replay_pc &&
-        cmd_idx >= 0 && cmd_idx < g_num_cmds &&
-        s_replay_predef_snap_valid[cmd_idx] &&
-        s_replay_flat_map[cmd_idx] == flat_idx)
-        memcpy(predef_vals, s_replay_predef_snap[cmd_idx],
-               sizeof(float) * (size_t)g_num_predef_vars);
-    else if (!replay_copy_predef_values_before_flat_cmd(flat_idx,
-                                                        predef_vals,
-                                                        MAX_PREDEF_VARS))
-        return 0;
-
-    nv = build_visible_vars_from_predef_values(flat_idx, predef_vals,
-                                               visible_vars,
-                                               (int)(sizeof(visible_vars) / sizeof(visible_vars[0])));
-    return subst_visible_vars(g_cmds[cmd_idx].source, subst, subst_size,
-                              var_comment, comment_size,
-                              visible_vars, nv);
-}
-
-static int build_replay_eval_annotation(int cmd_idx, int flat_idx,
-                                        char *eval_buf, int eval_size) {
-    float predef_vals[MAX_PREDEF_VARS];
-    ExprVar visible_vars[MAX_PREDEF_VARS + MAX_EXPR_VARS];
-    GLCmd eval_cmd;
-    int nv;
-
-    if (!eval_buf || eval_size <= 0)
-        return 0;
-    eval_buf[0] = '\0';
-
-    if (s_replay_cache_pc == g_replay_pc &&
-        cmd_idx >= 0 && cmd_idx < g_num_cmds &&
-        s_replay_predef_snap_valid[cmd_idx] &&
-        s_replay_flat_map[cmd_idx] == flat_idx)
-        memcpy(predef_vals, s_replay_predef_snap[cmd_idx],
-               sizeof(float) * (size_t)g_num_predef_vars);
-    else if (!replay_copy_predef_values_before_flat_cmd(flat_idx,
-                                                        predef_vals,
-                                                        MAX_PREDEF_VARS))
-        return 0;
-
-    nv = build_visible_vars_from_predef_values(flat_idx, predef_vals,
-                                               visible_vars,
-                                               (int)(sizeof(visible_vars) / sizeof(visible_vars[0])));
-    memset(&eval_cmd, 0, sizeof(eval_cmd));
-    if (!repl_parse_command_with_vars(g_cmds[cmd_idx].source,
-                                      &eval_cmd, visible_vars, nv))
-        return 0;
-
-    return format_evaluated_cmd(&eval_cmd, g_cmds[cmd_idx].source,
-                                eval_buf, eval_size);
-}
-
-/* Get format string for a command type's evaluated display */
-static const char *eval_fmt_for_type(CmdType type, int *nargs_out) {
-    switch (type) {
-    case CMD_VERTEX3F:         *nargs_out = 3; return "glVertex3f(%g, %g, %g);";
-    case CMD_VERTEX2F:         *nargs_out = 2; return "glVertex2f(%g, %g);";
-    case CMD_NORMAL3F:         *nargs_out = 3; return "glNormal3f(%g, %g, %g);";
-    case CMD_COLOR3F:          *nargs_out = 3; return "glColor3f(%g, %g, %g);";
-    case CMD_COLOR4F:          *nargs_out = 4; return "glColor4f(%g, %g, %g, %g);";
-    case CMD_CLEAR_COLOR:      *nargs_out = 4; return "glClearColor(%g, %g, %g, %g);";
-    case CMD_TRANSLATE3F:      *nargs_out = 3; return "glTranslatef(%g, %g, %g);";
-    case CMD_SCALEF:           *nargs_out = 3; return "glScalef(%g, %g, %g);";
-    case CMD_ROTATEF:          *nargs_out = 4; return "glRotatef(%g, %g, %g, %g);";
-    case CMD_GLU_SPHERE:       *nargs_out = 3; return "gluSphere(q, %g, %g, %g);";
-    case CMD_GLU_CYLINDER:     *nargs_out = 5; return "gluCylinder(q, %g, %g, %g, %g, %g);";
-    case CMD_GLU_DISK:         *nargs_out = 4; return "gluDisk(q, %g, %g, %g, %g);";
-    case CMD_GLU_PARTIAL_DISK: *nargs_out = 6; return "gluPartialDisk(q, %g, %g, %g, %g, %g, %g);";
-    case CMD_GLUT_TORUS:       *nargs_out = 4; return "glutSolidTorus(%g, %g, %g, %g);";
-    case CMD_TESS_NORMAL:      *nargs_out = 3; return "gluNormal(%g, %g, %g);";
-    case CMD_TESS_VERTEX:      *nargs_out = 3; return "gluVertex(%g, %g, %g);";
-    default:                   *nargs_out = 0; return NULL;
-    }
-}
-
-/* Format a command with evaluated numeric args.
- * Preserves leading whitespace from the original source. */
-static int format_evaluated_cmd(const GLCmd *cmd, const char *orig_source,
-                                 char *out, int out_size) {
-    int indent = 0;
-    while (orig_source[indent] &&
-           isspace((unsigned char)orig_source[indent]))
-        indent++;
-
-    int oi = 0;
-    if (indent > 0) {
-        if (indent > out_size - 1) indent = out_size - 1;
-        memcpy(out, orig_source, indent);
-        oi = indent;
-    }
-
-    /* VAR_ASSIGN: show "var = value;" */
-    if (cmd->type == CMD_VAR_ASSIGN) {
-        const char *p = orig_source;
-        while (*p && isspace((unsigned char)*p)) p++;
-        char vname[16];
-        int ni = 0;
-        while (*p && (isalnum((unsigned char)*p) || *p == '_') && ni < 15)
-            vname[ni++] = *p++;
-        vname[ni] = '\0';
-        snprintf(out + oi, out_size - oi, "%s = %g;", vname, cmd->args[0]);
-        return 1;
-    }
-
-    int nargs;
-    const char *fmt = eval_fmt_for_type(cmd->type, &nargs);
-    if (!fmt || nargs < 1) return 0;
-
-    switch (nargs) {
-    case 2:
-        snprintf(out + oi, out_size - oi, fmt,
-                 cmd->args[0], cmd->args[1]);
-        break;
-    case 3:
-        snprintf(out + oi, out_size - oi, fmt,
-                 cmd->args[0], cmd->args[1], cmd->args[2]);
-        break;
-    case 4:
-        snprintf(out + oi, out_size - oi, fmt,
-                 cmd->args[0], cmd->args[1], cmd->args[2], cmd->args[3]);
-        break;
-    case 5:
-        snprintf(out + oi, out_size - oi, fmt,
-                 cmd->args[0], cmd->args[1], cmd->args[2], cmd->args[3],
-                 cmd->args[4]);
-        break;
-    case 6:
-        snprintf(out + oi, out_size - oi, fmt,
-                 cmd->args[0], cmd->args[1], cmd->args[2], cmd->args[3],
-                 cmd->args[4], cmd->args[5]);
-        break;
-    default:
-        return 0;
-    }
-    return 1;
-}
+/* Replay annotations live in repl_replay_annotations.c. */
 
 /* ========================================================================= */
 /* Code panel                                                                 */
 /* ========================================================================= */
-
-static CodePanelTextLayout code_panel_layout_for_text(int panel_w, int first_x) {
-    return repl_code_panel_layout_make(panel_w, first_x, FONT_W,
-                                       g_wrap_at_comma);
-}
-
-static void code_wrap_iter_init(CodePanelWrapIter *it, const char *text,
-                                int first_x, int panel_w) {
-    CodePanelTextLayout layout = code_panel_layout_for_text(panel_w, first_x);
-    repl_code_panel_wrap_iter_init(it, text, &layout);
-}
-
-static int code_wrap_iter_next(CodePanelWrapIter *it, int *out_start,
-                               int *out_len, int *out_x) {
-    return repl_code_panel_wrap_iter_next(it, out_start, out_len, out_x);
-}
-
-static int code_panel_row_count_for_text(const char *text, int first_x,
-                                         int panel_w) {
-    CodePanelTextLayout layout = code_panel_layout_for_text(panel_w, first_x);
-    return repl_code_panel_row_count_for_text(text, &layout);
-}
-
-static int code_panel_segment_for_row(const char *text, int first_x, int panel_w,
-                                      int want_row, int *out_start,
-                                      int *out_len, int *out_x) {
-    CodePanelTextLayout layout = code_panel_layout_for_text(panel_w, first_x);
-    return repl_code_panel_segment_for_row(text, &layout, want_row,
-                                           out_start, out_len, out_x);
-}
-
-static int code_panel_cursor_row_for_text(const char *text, int first_x,
-                                          int panel_w, int cursor_pos,
-                                          int *out_seg_start,
-                                          int *out_seg_len,
-                                          int *out_seg_x) {
-    CodePanelTextLayout layout = code_panel_layout_for_text(panel_w, first_x);
-    return repl_code_panel_cursor_row_for_text(text, &layout, cursor_pos,
-                                               out_seg_start, out_seg_len,
-                                               out_seg_x);
-}
 
 static void code_panel_draw_segment(int x, int y, const char *text,
                                     int start, int len, void *font) {
@@ -1004,54 +177,11 @@ static void code_panel_draw_segment(int x, int y, const char *text,
     draw_string((float)x, (float)y, buf, font);
 }
 
-static int code_panel_header_row_count(int panel_w, int text_x) {
-    int rows = 0;
+/* Menu bar lives in repl_menu_bar.c. */
 
-    for (int i = 0; i < g_workspace_header_line_count; i++)
-        rows += code_panel_row_count_for_text(g_workspace_header_lines[i], text_x, panel_w);
-    for (int i = 0; g_header_pre[i]; i++)
-        rows += code_panel_row_count_for_text(g_header_pre[i], text_x, panel_w);
-    for (int i = 0; i < RENDER_STATE_LINE_COUNT; i++)
-        rows += code_panel_row_count_for_text(g_render_state_lines[i], text_x, panel_w);
-    for (int i = 0; i < CAM_LINE_COUNT; i++)
-        rows += code_panel_row_count_for_text(g_cam_lines[i], text_x, panel_w);
-    for (int i = 0; g_header_post[i]; i++)
-        rows += code_panel_row_count_for_text(g_header_post[i], text_x, panel_w);
-
-    return rows;
-}
-
-/* Menu bar — styled after Header Wireframes v2.
- * Left: top-level menus (File, Scene, Config).
- * Right: pinned buttons (Search, Replay) — retained in flat form until the
- * right-side redesign lands. */
-
-enum {
-    MENU_FILE = REPL_MENU_FILE,
-    MENU_SCENE = REPL_MENU_SCENE,
-    MENU_CONFIG = REPL_MENU_CONFIG,
-    NUM_MENUS = REPL_MENU_COUNT
-};
-
-static const char *g_menu_labels[NUM_MENUS] = {
-    "File", "Scene", "Config"
-};
-
-/* Right-to-left the pins render from highest index first, so PIN_REPLAY sits
- * at the far right matching the design. PIN_SEARCH fills the gap between the
- * last menu on the left and PIN_REPLAY. */
-enum { PIN_SEARCH = 0, PIN_REPLAY, NUM_PIN_BTNS };
-static const char *g_pin_btn_labels[NUM_PIN_BTNS] = {
-    "search...", "Replay"
-};
-
-#define PIN_SEARCH_MIN_W 140
-
-static int g_open_menu = -1;      /* index into g_menu_labels; -1 = none */
-
-/* Inline scene rename state.  Keep near g_open_menu so rendering and key
- * handlers can reach it without extra plumbing. Menu actions enter rename
- * through ui_panels_begin_rename(). */
+/* Inline scene rename state. Menu actions enter rename through
+ * ui_panels_begin_rename(); the menu/dropdown state itself lives in
+ * repl_menu_bar.c. */
 static int  g_rename_slot = -1;
 static char g_rename_buf[USER_SCENE_NAME_MAX];
 static int  g_rename_len  = 0;
@@ -1062,584 +192,6 @@ static void rename_refresh_status(void) {
              "Rename scene (Enter to save, Esc to cancel): %s", g_rename_buf);
     set_status(msg);
 }
-static int g_menu_item_hover = -1;
-static float g_menu_open_time = -1.0f;   /* g_anim_time when current menu opened */
-static float g_search_open_time = -1.0f; /* g_anim_time when search opened */
-#define UI_FADE_DURATION 0.18f
-
-int menu_dropdown_is_open(void) {
-    return g_open_menu >= 0 &&
-           code_panel_layout_mode() != CODE_PANEL_LAYOUT_HIDDEN;
-}
-int example_dropdown_is_open(void) { return menu_dropdown_is_open(); }
-
-
-enum {
-    FILE_ITEM_EXPORT = REPL_FILE_ITEM_EXPORT,
-    FILE_ITEM_IMPORT = REPL_FILE_ITEM_IMPORT,
-    FILE_ITEM_SAVE_WORKSPACE = REPL_FILE_ITEM_SAVE_WORKSPACE,
-    FILE_ITEM_LOAD_WORKSPACE = REPL_FILE_ITEM_LOAD_WORKSPACE,
-    FILE_ITEM_COUNT = REPL_FILE_ITEM_COUNT
-};
-
-/* SCENE menu layout:
- *   [0]                      "### EXAMPLES"
- *   [1..e]                   example names  (e = repl_example_count())
- *   [e + SCENE_OFF_DIVIDER]  "---"
- *   [e + SCENE_OFF_HDR]      "### SCENE"
- *   [e + SCENE_OFF_NEW]      "New empty scene"
- *   [e + SCENE_OFF_SAVE]     "Save to output.c"
- *   [e + SCENE_OFF_RENAME]   "Rename active scene"
- *   [e + SCENE_OFF_SCENES ..
- *      e + SCENE_OFF_SCENES + n - 1]  user scene names
- *                                     (n = repl_user_scene_count())
- */
-enum {
-    SCENE_OFF_DIVIDER = REPL_SCENE_OFF_DIVIDER,
-    SCENE_OFF_HDR     = REPL_SCENE_OFF_HDR,
-    SCENE_OFF_NEW     = REPL_SCENE_OFF_NEW,
-    SCENE_OFF_SAVE    = REPL_SCENE_OFF_SAVE,
-    SCENE_OFF_RENAME  = REPL_SCENE_OFF_RENAME,
-    SCENE_OFF_SCENES  = REPL_SCENE_OFF_SCENES,
-    SCENE_FIXED_COUNT = REPL_SCENE_FIXED_COUNT
-};
-
-static int menu_item_count(int menu_id) {
-    switch (menu_id) {
-    case MENU_FILE:   return FILE_ITEM_COUNT;
-    case MENU_SCENE:  return 1 + repl_example_count() + SCENE_FIXED_COUNT
-                             + repl_user_scene_count();
-    case MENU_CONFIG: return CFG_ITEM_COUNT;
-    }
-    return 0;
-}
-
-static const char *menu_item_label(int menu_id, int i) {
-    if (menu_id == MENU_FILE) {
-        if (i == FILE_ITEM_EXPORT) return "Export";
-        if (i == FILE_ITEM_IMPORT) return "Import";
-        if (i == FILE_ITEM_SAVE_WORKSPACE) return "Save Workspace";
-        if (i == FILE_ITEM_LOAD_WORKSPACE) return "Load Workspace";
-        return NULL;
-    }
-    if (menu_id == MENU_SCENE) {
-        int e = repl_example_count();
-        if (i == 0)                                            return "### EXAMPLES";
-        if (i >= 1 && i <= e)                                 return repl_example_name(i - 1);
-        if (i == e + SCENE_OFF_DIVIDER)                       return "---";
-        if (i == e + SCENE_OFF_HDR)                           return "### SCENE";
-        if (i == e + SCENE_OFF_NEW)                           return "New empty scene";
-        if (i == e + SCENE_OFF_SAVE)                          return "Save to output.c";
-        if (i == e + SCENE_OFF_RENAME)                        return "Rename active scene";
-        int scene_n = i - (e + SCENE_OFF_SCENES);
-        if (scene_n >= 0 && scene_n < repl_user_scene_count()) {
-            int slot = repl_scene_menu_slot_for_dense_index(scene_n);
-            return (slot >= 0) ? repl_user_scene_name(slot) : NULL;
-        }
-        return NULL;
-    }
-    if (menu_id == MENU_CONFIG) {
-        if (i >= 0 && i < CFG_ITEM_COUNT) return g_cfg_items[i].label;
-        return NULL;
-    }
-    return NULL;
-}
-
-static const char *menu_item_shortcut(int menu_id, int i) {
-    if (menu_id == MENU_FILE && i == FILE_ITEM_EXPORT) return "Ctrl+S";
-    if (menu_id == MENU_SCENE) {
-        int e = repl_example_count();
-        if (i == e + SCENE_OFF_SAVE) return "Ctrl+S";
-        return NULL;
-    }
-    if (menu_id == MENU_CONFIG && i >= 0 && i < CFG_ITEM_COUNT && g_cfg_items[i].value != NULL) {
-        static char buf[16];
-        if (g_cfg_items[i].key_code == 0) return NULL;
-        if (g_cfg_items[i].is_special) {
-            snprintf(buf, sizeof(buf), "F%d", g_cfg_items[i].key_code - GLUT_KEY_F1 + 1);
-            return buf;
-        } else {
-            if (g_cfg_items[i].key_code > 0 && g_cfg_items[i].key_code <= 26) {
-                snprintf(buf, sizeof(buf), "Ctrl+%c", g_cfg_items[i].key_code - 1 + 'a');
-                return buf;
-            } else if (g_cfg_items[i].key_code == KEY_CTRL_BACKSLASH) {
-                return "Ctrl+\\";
-            } else {
-                snprintf(buf, sizeof(buf), "%c", g_cfg_items[i].key_code);
-                return buf;
-            }
-        }
-    }
-    (void)i;
-    return NULL;
-}
-
-static int menu_max_shortcut_px(int menu_id) {
-    int n = menu_item_count(menu_id);
-    int max_sc = 0;
-    for (int i = 0; i < n; i++) {
-        const char *sc = menu_item_shortcut(menu_id, i);
-        if (sc) {
-            int w = (int)strlen(sc) * FONT_SMALL_W;
-            if (w > max_sc) max_sc = w;
-        }
-    }
-    return max_sc;
-}
-
-#define CFG_STATE_MAX_CHARS 20
-
-/* Fills `out` with the current state label, truncated to CFG_STATE_MAX_CHARS
- * (with a trailing ellipsis). Returns `out`. */
-static const char *cfg_state_str(int i, char *out, int out_size) {
-    const char *s = "";
-    if (i >= 0 && i < CFG_ITEM_COUNT && g_cfg_items[i].value != NULL) {
-        if (g_cfg_items[i].state_names)
-            s = g_cfg_items[i].state_names[*g_cfg_items[i].value];
-        else
-            s = *g_cfg_items[i].value ? "ON" : "OFF";
-    }
-    int n = (int)strlen(s);
-    int cap = out_size - 1;
-    if (cap > CFG_STATE_MAX_CHARS) cap = CFG_STATE_MAX_CHARS;
-    if (n <= cap) {
-        memcpy(out, s, (size_t)n);
-        out[n] = '\0';
-    } else {
-        int keep = cap - 3;
-        if (keep < 0) keep = 0;
-        memcpy(out, s, (size_t)keep);
-        int dots = cap - keep;
-        for (int k = 0; k < dots; k++) out[keep + k] = '.';
-        out[cap] = '\0';
-    }
-    return out;
-}
-
-/* Widest possible state label across all items & all their possible values,
- * clamped to CFG_STATE_MAX_CHARS. Used to keep the menu width stable as
- * values cycle. */
-static int cfg_max_state_chars(void) {
-    int max_chars = 3;  /* "OFF" */
-    for (int i = 0; i < CFG_ITEM_COUNT; i++) {
-        if (g_cfg_items[i].value == NULL) continue;
-        const char *const *names = g_cfg_items[i].state_names;
-        if (!names) continue;
-        for (int k = 0; k < g_cfg_items[i].n_states; k++) {
-            int n = (int)strlen(names[k]);
-            if (n > max_chars) max_chars = n;
-        }
-    }
-    if (max_chars > CFG_STATE_MAX_CHARS) max_chars = CFG_STATE_MAX_CHARS;
-    return max_chars;
-}
-
-static int menu_item_activate(int menu_id, int i) {
-    return repl_action_menu_item_activate(menu_id, i);
-}
-
-static void menubar_rects(int menu_x[NUM_MENUS], int menu_w[NUM_MENUS],
-                          int pin_x[NUM_PIN_BTNS], int pin_w[NUM_PIN_BTNS],
-                          int *row_y, int *row_h) {
-    int cp_x, cp_y, cp_w, cp_h;
-    code_panel_rect(&cp_x, &cp_y, &cp_w, &cp_h);
-    int panel_top = cp_y + cp_h;
-    int by = panel_top - CODE_MARGIN_Y - LINE_H;
-    int bh = LINE_H;
-    if (row_y) *row_y = by;
-    if (row_h) *row_h = bh;
-
-    int x = cp_x + CODE_MARGIN_X;
-    for (int i = 0; i < NUM_MENUS; i++) {
-        int label_w = (int)strlen(g_menu_labels[i]) * FONT_SMALL_W;
-        menu_w[i] = label_w + 18;  /* ~9px padding each side */
-        menu_x[i] = x;
-        x += menu_w[i];
-    }
-
-    int right_edge = cp_x + cp_w - CODE_MARGIN_X;
-
-    /* PIN_REPLAY — width reserves room for the widest state label plus a
-     * 12px state icon (triangle / pause-bars) and padding. */
-    int replay_label_w = (int)strlen("Replaying") * FONT_SMALL_W;
-    pin_w[PIN_REPLAY] = replay_label_w + 12 /* icon */ + 22 /* pads */;
-    pin_x[PIN_REPLAY] = right_edge - pin_w[PIN_REPLAY];
-
-    /* PIN_SEARCH — fills the gap between the last menu and PIN_REPLAY. */
-    int menus_right = menu_x[NUM_MENUS - 1] + menu_w[NUM_MENUS - 1];
-    int search_w = pin_x[PIN_REPLAY] - menus_right;
-    if (search_w < PIN_SEARCH_MIN_W) search_w = PIN_SEARCH_MIN_W;
-    pin_w[PIN_SEARCH] = search_w;
-    pin_x[PIN_SEARCH] = pin_x[PIN_REPLAY] - search_w;
-}
-
-static int menubar_menu_hit(int gx, int gy) {
-    int menu_x[NUM_MENUS], menu_w[NUM_MENUS];
-    int pin_x[NUM_PIN_BTNS], pin_w[NUM_PIN_BTNS];
-    int by, bh;
-    int ry = g_win_h - gy;
-    menubar_rects(menu_x, menu_w, pin_x, pin_w, &by, &bh);
-    if (ry < by || ry >= by + bh) return -1;
-    for (int i = 0; i < NUM_MENUS; i++)
-        if (gx >= menu_x[i] && gx < menu_x[i] + menu_w[i]) return i;
-    return -1;
-}
-
-static int menubar_pin_hit(int gx, int gy) {
-    int menu_x[NUM_MENUS], menu_w[NUM_MENUS];
-    int pin_x[NUM_PIN_BTNS], pin_w[NUM_PIN_BTNS];
-    int by, bh;
-    int ry = g_win_h - gy;
-    menubar_rects(menu_x, menu_w, pin_x, pin_w, &by, &bh);
-    if (ry < by || ry >= by + bh) return -1;
-    for (int i = 0; i < NUM_PIN_BTNS; i++)
-        if (gx >= pin_x[i] && gx < pin_x[i] + pin_w[i]) return i;
-    return -1;
-}
-
-static int menu_dropdown_rect(int *dx, int *dy, int *dw, int *dh) {
-    if (g_open_menu < 0) return 0;
-    if (code_panel_layout_mode() == CODE_PANEL_LAYOUT_HIDDEN) return 0;
-    int menu_x[NUM_MENUS], menu_w[NUM_MENUS];
-    int pin_x[NUM_PIN_BTNS], pin_w[NUM_PIN_BTNS];
-    int by, bh;
-    menubar_rects(menu_x, menu_w, pin_x, pin_w, &by, &bh);
-    int n = menu_item_count(g_open_menu);
-
-    int max_lbl = 0, max_state = 0, max_sc = 0;
-    for (int i = 0; i < n; i++) {
-        const char *lbl = menu_item_label(g_open_menu, i);
-        const char *sc  = menu_item_shortcut(g_open_menu, i);
-        int lw = (int)(lbl ? strlen(lbl) : 0) * FONT_SMALL_W;
-        if (lw > max_lbl) max_lbl = lw;
-        if (sc) {
-            int cw = (int)strlen(sc) * FONT_SMALL_W;
-            if (cw > max_sc) max_sc = cw;
-        }
-    }
-    if (g_open_menu == MENU_CONFIG)
-        max_state = cfg_max_state_chars() * FONT_SMALL_W;
-    int max_w = max_lbl;
-    if (max_state > 0) max_w += max_state + 20;
-    if (max_sc > 0)    max_w += max_sc + 16;
-    if (max_w < 80) max_w = 80;
-    int width  = max_w + 28;
-    int rows   = (n > 0) ? n : 1;  /* reserve one row for "(empty)" */
-    int height = rows * LINE_H + 8;
-
-    if (dx) *dx = menu_x[g_open_menu];
-    if (dy) *dy = by - height;
-    if (dw) *dw = width;
-    if (dh) *dh = height;
-    return 1;
-}
-
-static int menu_dropdown_item_hit(int gx, int gy) {
-    if (g_open_menu < 0) return -1;
-    int n = menu_item_count(g_open_menu);
-    if (n == 0) return -1;
-    int dx, dy, dw, dh;
-    if (!menu_dropdown_rect(&dx, &dy, &dw, &dh)) return -1;
-    int ry = g_win_h - gy;
-    if (gx < dx || gx >= dx + dw || ry < dy || ry >= dy + dh) return -1;
-    int row = (dy + dh - 4 - ry) / LINE_H;
-    if (row < 0 || row >= n) return -1;
-    const char *lbl = menu_item_label(g_open_menu, row);
-    if (!lbl || strncmp(lbl, "###", 3) == 0 || strcmp(lbl, "---") == 0) return -1;
-    return row;
-}
-
-static int code_panel_footer_row_count(int panel_w, int text_x) {
-    int rows = 0;
-    char line[MAX_LINE_LEN];
-
-    for (int i = 0; g_footer_pre_init[i]; i++)
-        rows += code_panel_row_count_for_text(g_footer_pre_init[i], text_x, panel_w);
-    for (int i = 0; i < init_section_line_count(); i++) {
-        init_section_line(i, line, sizeof(line));
-        rows += code_panel_row_count_for_text(line, text_x, panel_w);
-    }
-    for (int i = 0; g_footer_post_init[i]; i++)
-        rows += code_panel_row_count_for_text(g_footer_post_init[i], text_x, panel_w);
-
-    return rows;
-}
-
-static int code_panel_replay_extra_rows_for_line(int cmd_idx) {
-    if (!g_replay_active)
-        return 0;
-    if (!g_replay_expand_args)
-        return 0;
-    if (cmd_idx < 0 || cmd_idx >= g_num_cmds)
-        return 0;
-    if (cmd_idx != g_replay_src_line)
-        return 0;
-    if (!g_cmds[cmd_idx].has_vars)
-        return 0;
-    if (g_cmds[cmd_idx].type == CMD_VAR_ASSIGN)
-        return 0;
-    return 2;
-}
-
-static int code_panel_leading_ws_chars(const char *text) {
-    int n = 0;
-
-    while (text && text[n] && isspace((unsigned char)text[n]))
-        n++;
-    return n;
-}
-
-static int code_panel_active_indent_chars(void) {
-    if (g_inserting)
-        return cmd_indent_chars(g_edit_line);
-    if (g_edit_line >= 0 && g_edit_line < g_num_cmds)
-        return code_panel_leading_ws_chars(g_cmds[g_edit_line].source);
-    return cmd_indent_chars(g_num_cmds);
-}
-
-static int code_panel_command_main_rows(int cmd_idx, int panel_w, int text_x) {
-    if (!g_inserting && cmd_idx == g_edit_line) {
-        int indent_chars = code_panel_active_indent_chars();
-        return code_panel_row_count_for_text(g_input,
-                                             text_x + indent_chars * FONT_W,
-                                             panel_w);
-    }
-
-    {
-        char display_text[MAX_INPUT_LEN];
-        if (!code_panel_get_command_display_text(cmd_idx, display_text,
-                                                 sizeof(display_text)))
-            return 1;
-        return code_panel_row_count_for_text(display_text, text_x, panel_w);
-    }
-}
-
-static void code_panel_precompute_layout_rows(int panel_w, int text_x,
-                                              int *main_rows,
-                                              int *replay_extra_rows) {
-    for (int i = 0; i < g_num_cmds; i++) {
-        if (main_rows)
-            main_rows[i] = code_panel_command_main_rows(i, panel_w, text_x);
-        if (replay_extra_rows)
-            replay_extra_rows[i] = code_panel_replay_extra_rows_for_line(i);
-    }
-}
-
-static int code_panel_insert_rows(int panel_w, int text_x);
-static int code_panel_newline_rows(int panel_w, int text_x);
-
-static int code_panel_cursor_doc_line_from_layout(int header_rows,
-                                                  const int *cmd_main_rows,
-                                                  const int *replay_extra_rows,
-                                                  int panel_w, int text_x) {
-    int cursor_doc_line = header_rows;
-
-    if (g_inserting) {
-        for (int i = 0; i < g_edit_line && i < g_num_cmds; i++) {
-            cursor_doc_line += cmd_main_rows[i];
-            cursor_doc_line += replay_extra_rows[i];
-        }
-        cursor_doc_line += code_panel_cursor_row_for_text(
-            g_input, text_x + code_panel_active_indent_chars() * FONT_W,
-            panel_w, g_cursor_pos, NULL, NULL, NULL);
-    } else if (g_edit_line < g_num_cmds) {
-        for (int i = 0; i < g_edit_line; i++) {
-            cursor_doc_line += cmd_main_rows[i];
-            cursor_doc_line += replay_extra_rows[i];
-        }
-        cursor_doc_line += code_panel_cursor_row_for_text(
-            g_input, text_x + code_panel_active_indent_chars() * FONT_W,
-            panel_w, g_cursor_pos, NULL, NULL, NULL);
-    } else {
-        for (int i = 0; i < g_num_cmds; i++) {
-            cursor_doc_line += cmd_main_rows[i];
-            cursor_doc_line += replay_extra_rows[i];
-        }
-        cursor_doc_line += code_panel_cursor_row_for_text(
-            g_input, text_x + code_panel_active_indent_chars() * FONT_W,
-            panel_w, g_cursor_pos, NULL, NULL, NULL);
-    }
-
-    return cursor_doc_line;
-}
-
-static int code_panel_follow_doc_line_from_layout(int cursor_doc_line,
-                                                  int header_rows,
-                                                  const int *cmd_main_rows,
-                                                  const int *replay_extra_rows) {
-    int follow_doc_line = cursor_doc_line;
-
-    if (g_replay_active &&
-        g_replay_src_line >= 0 && g_replay_src_line < g_num_cmds) {
-        follow_doc_line = header_rows;
-        for (int i = 0; i < g_replay_src_line; i++) {
-            follow_doc_line += cmd_main_rows[i];
-            follow_doc_line += replay_extra_rows[i];
-        }
-        if (replay_extra_rows[g_replay_src_line] > 0) {
-            follow_doc_line += cmd_main_rows[g_replay_src_line];
-            follow_doc_line += replay_extra_rows[g_replay_src_line] - 1;
-        } else if (cmd_main_rows[g_replay_src_line] > 0) {
-            follow_doc_line += cmd_main_rows[g_replay_src_line] - 1;
-        }
-    }
-
-    return follow_doc_line;
-}
-
-static int code_panel_visible_lines_for_height(int cp_h) {
-    int available = cp_h - CODE_MARGIN_Y - 2 * LINE_H - 3 - STATUSBAR_H;
-    if (available < 0)
-        return 1;
-    return available / LINE_H + 1;
-}
-
-static void code_panel_apply_follow_scroll(int total_lines, int visible_lines,
-                                           int follow_doc_line) {
-    int max_scroll = total_lines - visible_lines;
-    if (max_scroll < 0) max_scroll = 0;
-    if (g_scroll > max_scroll) g_scroll = max_scroll;
-    if (g_scroll < 0) g_scroll = 0;
-
-    if (g_scroll_follow_cursor) {
-        if (follow_doc_line < g_scroll)
-            g_scroll = follow_doc_line;
-        if (follow_doc_line >= g_scroll + visible_lines)
-            g_scroll = follow_doc_line - visible_lines + 1;
-        if (g_scroll > max_scroll) g_scroll = max_scroll;
-        if (g_scroll < 0) g_scroll = 0;
-        g_scroll_follow_cursor = 0;
-    }
-}
-
-int code_panel_apply_scroll_follow_for_test(int *out_follow_doc_line,
-                                            int *out_visible_lines) {
-    int cmd_main_rows[MAX_COMMANDS];
-    int replay_extra_rows[MAX_COMMANDS];
-    int cp_x, cp_y, cp_w, cp_h;
-    int linenum_w = 4 * FONT_W;
-    int idx_col_w = g_show_indices ? (6 * FONT_W) : 0;
-    int idx_x = CODE_MARGIN_X + linenum_w + FONT_W;
-    int text_x = idx_x + idx_col_w;
-    int visible_lines;
-    int header_rows;
-    int footer_rows;
-    int total_lines;
-    int cursor_doc_line;
-    int follow_doc_line;
-
-    refresh_workspace_header_lines();
-    code_panel_rect(&cp_x, &cp_y, &cp_w, &cp_h);
-    (void)cp_x;
-    (void)cp_y;
-
-    visible_lines = code_panel_visible_lines_for_height(cp_h);
-
-    if (g_replay_active &&
-        s_replay_cache_pc != g_replay_pc)
-        rebuild_replay_annotation_cache();
-    else if (!g_replay_active)
-        invalidate_replay_annotation_cache();
-
-    header_rows = code_panel_header_row_count(cp_w, text_x);
-    footer_rows = code_panel_footer_row_count(cp_w, text_x);
-    code_panel_precompute_layout_rows(cp_w, text_x,
-                                      cmd_main_rows, replay_extra_rows);
-
-    total_lines = header_rows + footer_rows + code_panel_newline_rows(cp_w, text_x);
-    for (int i = 0; i < g_num_cmds; i++) {
-        if (g_inserting && i == g_edit_line)
-            total_lines += code_panel_insert_rows(cp_w, text_x);
-        total_lines += cmd_main_rows[i];
-        total_lines += replay_extra_rows[i];
-    }
-
-    cursor_doc_line = code_panel_cursor_doc_line_from_layout(
-        header_rows, cmd_main_rows, replay_extra_rows, cp_w, text_x);
-    follow_doc_line = code_panel_follow_doc_line_from_layout(
-        cursor_doc_line, header_rows, cmd_main_rows, replay_extra_rows);
-
-    code_panel_apply_follow_scroll(total_lines, visible_lines, follow_doc_line);
-
-    if (out_follow_doc_line) *out_follow_doc_line = follow_doc_line;
-    if (out_visible_lines) *out_visible_lines = visible_lines;
-    return follow_doc_line >= g_scroll &&
-           follow_doc_line < g_scroll + visible_lines;
-}
-
-static int code_panel_insert_rows(int panel_w, int text_x) {
-    int indent_chars = code_panel_active_indent_chars();
-    return code_panel_row_count_for_text(g_input,
-                                         text_x + indent_chars * FONT_W,
-                                         panel_w);
-}
-
-static int code_panel_newline_rows(int panel_w, int text_x) {
-    if (g_edit_line == g_num_cmds) {
-        int indent_chars = code_panel_active_indent_chars();
-        return code_panel_row_count_for_text(g_input,
-                                             text_x + indent_chars * FONT_W,
-                                             panel_w);
-    }
-    return 1;
-}
-
-static int code_panel_target_for_doc_line(int doc_line, int panel_w, int text_x,
-                                          int *out_target,
-                                          int *out_on_insert_line,
-                                          int *out_row_offset) {
-    int row = doc_line - code_panel_header_row_count(panel_w, text_x);
-
-    if (row < 0)
-        return 0;
-
-    for (int i = 0; i <= g_num_cmds; i++) {
-        if (g_inserting && i == g_edit_line) {
-            int insert_rows = code_panel_insert_rows(panel_w, text_x);
-            if (row < insert_rows) {
-                if (out_target) *out_target = -1;
-                if (out_on_insert_line) *out_on_insert_line = 1;
-                if (out_row_offset) *out_row_offset = row;
-                return 1;
-            }
-            row -= insert_rows;
-        }
-
-        if (i < g_num_cmds) {
-            int main_rows = code_panel_command_main_rows(i, panel_w, text_x);
-            if (row < main_rows) {
-                if (out_target) *out_target = i;
-                if (out_on_insert_line) *out_on_insert_line = 0;
-                if (out_row_offset) *out_row_offset = row;
-                return 1;
-            }
-            row -= main_rows;
-
-            {
-                int replay_rows = code_panel_replay_extra_rows_for_line(i);
-                if (row < replay_rows) {
-                    if (out_target) *out_target = i;
-                    if (out_on_insert_line) *out_on_insert_line = 0;
-                    if (out_row_offset) *out_row_offset = 0;
-                    return 1;
-                }
-                row -= replay_rows;
-            }
-        } else {
-            int newline_rows = code_panel_newline_rows(panel_w, text_x);
-            if (row < newline_rows) {
-                if (out_target) *out_target = g_num_cmds;
-                if (out_on_insert_line) *out_on_insert_line = 0;
-                if (out_row_offset) *out_row_offset = row;
-                return 1;
-            }
-            return 0;
-        }
-    }
-
-    return 0;
-}
-
 static void code_panel_draw_search_highlights(const char *text, int search_row_idx,
                                               int seg_start, int seg_len,
                                               int seg_x, int y) {
@@ -1681,170 +233,6 @@ static void code_panel_draw_search_highlights(const char *text, int search_row_i
         glDisable(GL_BLEND);
 }
 
-static void code_panel_format_search_query(char *out, int out_sz,
-                                           int max_chars,
-                                           int *out_cursor_col) {
-    int start = 0;
-    int take = 0;
-
-    if (out_sz <= 0)
-        return;
-
-    out[0] = '\0';
-    if (out_cursor_col)
-        *out_cursor_col = 0;
-
-    if (max_chars <= 0 || g_search_query_len <= 0)
-        return;
-
-    if (g_search_query_len > max_chars) {
-        start = g_search_cursor_pos - max_chars + 1;
-        if (start < 0)
-            start = 0;
-        if (start > g_search_query_len - max_chars)
-            start = g_search_query_len - max_chars;
-    }
-
-    take = g_search_query_len - start;
-    if (take > max_chars)
-        take = max_chars;
-    if (take >= out_sz)
-        take = out_sz - 1;
-    if (take < 0)
-        take = 0;
-
-    if (take > 0)
-        memcpy(out, g_search_query + start, (size_t)take);
-    out[take] = '\0';
-
-    if (out_cursor_col) {
-        int col = g_search_cursor_pos - start;
-        if (col < 0)
-            col = 0;
-        if (col > take)
-            col = take;
-        *out_cursor_col = col;
-    }
-}
-
-static float ui_fade_alpha(float open_time) {
-    if (open_time < 0.0f) return 1.0f;
-    float dt = g_anim_time - open_time;
-    if (dt >= UI_FADE_DURATION) return 1.0f;
-    if (dt <= 0.0f) return 0.0f;
-    return dt / UI_FADE_DURATION;
-}
-
-/* Draws a simple magnifying-glass icon (circle + handle) at (cx, cy) with
- * given radius, using the current GL color. */
-static void draw_search_icon(float cx, float cy, float r) {
-    glBegin(GL_LINE_LOOP);
-    for (int i = 0; i < 20; i++) {
-        float a = (float)i * (6.2831853f / 20.0f);
-        glVertex2f(cx + cosf(a) * r, cy + sinf(a) * r);
-    }
-    glEnd();
-    float hx0 = cx + cosf(-0.7853982f) * r;
-    float hy0 = cy + sinf(-0.7853982f) * r;
-    glBegin(GL_LINES);
-    glVertex2f(hx0, hy0);
-    glVertex2f(hx0 + r * 0.9f, hy0 - r * 0.9f);
-    glEnd();
-}
-
-static void render_code_panel_search_overlay(int cp_x, int panel_w, int panel_top) {
-    char count_buf[32];
-    char query_buf[128];
-    int cursor_col = 0;
-    (void)cp_x; (void)panel_w; (void)panel_top;
-
-    static int prev_active = 0;
-    if (g_search_active && !prev_active) g_search_open_time = g_anim_time;
-    prev_active = g_search_active;
-
-    if (!g_search_active)
-        return;
-
-    /* Anchor on the PIN_SEARCH slot so the search bar sits where the
-     * placeholder was — matches the design's inline search affordance. */
-    int menu_x[NUM_MENUS], menu_w[NUM_MENUS];
-    int pin_x[NUM_PIN_BTNS], pin_w[NUM_PIN_BTNS];
-    int by, bh;
-    menubar_rects(menu_x, menu_w, pin_x, pin_w, &by, &bh);
-
-    int box_x = pin_x[PIN_SEARCH];
-    int box_y = by;
-    int box_w = pin_w[PIN_SEARCH];
-    int box_h = bh;
-
-    if (g_search_query_len <= 0)
-        snprintf(count_buf, sizeof(count_buf), "type to search");
-    else if (g_search_match_count <= 0)
-        snprintf(count_buf, sizeof(count_buf), "0");
-    else
-        snprintf(count_buf, sizeof(count_buf), "%d/%d",
-                 g_search_hit_ordinal, g_search_match_count);
-
-    int pad_x = 8;
-    int icon_r = 5;
-    int icon_cx = box_x + pad_x + icon_r;
-    int icon_cy = box_y + box_h / 2;
-    int text_y  = box_y + (box_h - FONT_SMALL_H) / 2 + 1;
-    int count_w = (int)strlen(count_buf) * FONT_SMALL_W;
-    int count_x = box_x + box_w - pad_x - count_w;
-    int query_x = icon_cx + icon_r + 8;
-    int max_query_chars = (count_x - query_x - pad_x) / FONT_SMALL_W;
-    if (max_query_chars < 1) max_query_chars = 1;
-    code_panel_format_search_query(query_buf, sizeof(query_buf),
-                                   max_query_chars, &cursor_col);
-
-    float alpha = ui_fade_alpha(g_search_open_time);
-
-    glEnable(GL_BLEND);
-    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-
-    /* Background: a shade lighter than the menu bar (#262626) so the active
-     * search input reads as "focused". */
-    glColor4f(0.149f, 0.149f, 0.149f, alpha);
-    draw_quad((float)box_x, (float)box_y, (float)box_w, (float)box_h);
-
-    /* Inner border */
-    glColor4f(0.298f, 0.329f, 0.392f, alpha); /* #4c5464 */
-    glBegin(GL_LINE_LOOP);
-    glVertex2f((float)box_x + 0.5f,              (float)box_y + 0.5f);
-    glVertex2f((float)(box_x + box_w) - 0.5f,    (float)box_y + 0.5f);
-    glVertex2f((float)(box_x + box_w) - 0.5f,    (float)(box_y + box_h) - 0.5f);
-    glVertex2f((float)box_x + 0.5f,              (float)(box_y + box_h) - 0.5f);
-    glEnd();
-
-    /* Magnifying-glass icon */
-    glColor4f(0.667f, 0.706f, 0.784f, alpha); /* #aab3c8 */
-    draw_search_icon((float)icon_cx, (float)icon_cy, (float)icon_r);
-
-    /* Query text (or placeholder style when empty) */
-    if (g_search_query_len <= 0)
-        glColor4f(0.478f, 0.478f, 0.478f, alpha); /* #7a7a7a placeholder */
-    else
-        glColor4f(0.941f, 0.941f, 0.902f, alpha);
-    draw_string((float)query_x, (float)text_y, query_buf, FONT_SMALL);
-
-    /* Count/status on the right */
-    if (g_search_query_len > 0 && g_search_match_count <= 0)
-        glColor4f(0.851f, 0.424f, 0.310f, alpha); /* accent for "0" */
-    else
-        glColor4f(0.533f, 0.533f, 0.533f, alpha);
-    draw_string((float)count_x, (float)text_y, count_buf, FONT_SMALL);
-
-    if (g_cursor_on && g_search_query_len > 0) {
-        int cursor_x = query_x + cursor_col * FONT_SMALL_W;
-        glColor4f(0.95f, 0.80f, 0.24f, 0.85f * alpha);
-        draw_quad((float)cursor_x, (float)(text_y - 2), 2.0f,
-                  (float)(FONT_SMALL_H + 2));
-    }
-
-    glDisable(GL_BLEND);
-}
-
 static void render_active_input_rows(int panel_w, int text_x, int idx_x,
                                      int visible_lines, int file_line,
                                      int indent_chars, const char *idx_text,
@@ -1857,15 +245,15 @@ static void render_active_input_rows(int panel_w, int text_x, int idx_x,
     int cursor_seg_start = 0;
     int cursor_seg_len = 0;
     int cursor_seg_x = input_x;
-    int cursor_row = code_panel_cursor_row_for_text(g_input, input_x, panel_w,
+    int cursor_row = repl_code_panel_document_cursor_row_for_text(g_input, input_x, panel_w,
                                                     g_cursor_pos,
                                                     &cursor_seg_start,
                                                     &cursor_seg_len,
                                                     &cursor_seg_x);
     int cursor_col = g_cursor_pos - cursor_seg_start;
 
-    code_wrap_iter_init(&wrap_it, g_input, input_x, panel_w);
-    while (code_wrap_iter_next(&wrap_it, &wrap_start, &wrap_len, &wrap_x)) {
+    repl_code_panel_document_wrap_iter_init(&wrap_it, g_input, input_x, panel_w);
+    while (repl_code_panel_document_wrap_iter_next(&wrap_it, &wrap_start, &wrap_len, &wrap_x)) {
         if (*io_cur >= g_scroll && *io_cur < g_scroll + visible_lines) {
             glColor3f(0.55f, 0.55f, 0.30f);
             if (wrap_row == 0) {
@@ -1942,368 +330,39 @@ static void render_active_input_rows(int panel_w, int text_x, int idx_x,
     }
 }
 
-/* ========================================================================= */
-/* Color picker                                                               */
-/* ========================================================================= */
+int code_panel_apply_scroll_follow_for_test(int *out_follow_doc_line,
+                                            int *out_visible_lines) {
+    CodePanelDocumentLayout layout;
+    int cp_x, cp_y, cp_w, cp_h;
+    int linenum_w = 4 * FONT_W;
+    int idx_col_w = g_show_indices ? (6 * FONT_W) : 0;
+    int idx_x = CODE_MARGIN_X + linenum_w + FONT_W;
+    int text_x = idx_x + idx_col_w;
 
-#define CP_SV_SZ    150   /* SV square side */
-#define CP_HUE_W     18   /* hue bar width  */
-#define CP_ALPHA_W   18   /* alpha bar width (COLOR4F only) */
-#define CP_GAP        6   /* gap between elements */
-#define CP_PREV_H    16   /* preview strip height */
-#define SWATCH_W     12   /* inline swatch width in code panel */
-/* CP_CLEAR_MAX_V is defined in sample.h */
+    refresh_workspace_header_lines();
+    code_panel_rect(&cp_x, &cp_y, &cp_w, &cp_h);
+    (void)cp_x;
+    (void)cp_y;
 
-/* g_cp_line >= 0: picker is open for that cmd index */
-static int   g_cp_line     = -1;
-static float g_cp_hue      = 0.0f, g_cp_sat = 1.0f, g_cp_val = 1.0f;
-static float g_cp_alpha    = 1.0f;
-static int   g_cp_px       = 0, g_cp_py = 0;  /* top-left (OpenGL y-up) */
-static int   g_cp_drag     = 0;    /* 0=none 1=SV 2=hue 3=alpha */
-static int   g_cp_has_alpha= 0;    /* 1 when editing an RGBA color command */
+    repl_code_panel_document_build(&layout, cp_w, text_x, cp_h);
+    repl_code_panel_document_apply_follow_scroll(&layout);
 
-/* Hit-rects in y-up OpenGL coords, updated each frame in render_color_picker */
-static int g_cp_sv_x, g_cp_sv_y, g_cp_sv_sz;
-static int g_cp_hue_x, g_cp_hue_y, g_cp_hue_h;
-static int g_cp_alp_x, g_cp_alp_y, g_cp_alp_h;
-
-static void cp_hsv_to_rgb(float h, float s, float v,
-                           float *r, float *g, float *b) {
-    int i = (int)(h*6.0f);
-    float f=h*6.0f-i, p=v*(1-s), q=v*(1-f*s), t=v*(1-(1-f)*s);
-    switch (i%6) {
-    case 0:*r=v;*g=t;*b=p;break; case 1:*r=q;*g=v;*b=p;break;
-    case 2:*r=p;*g=v;*b=t;break; case 3:*r=p;*g=q;*b=v;break;
-    case 4:*r=t;*g=p;*b=v;break; default:*r=v;*g=p;*b=q;break;
-    }
-}
-static void cp_rgb_to_hsv(float r, float g, float b,
-                           float *h, float *s, float *v) {
-    float mx=r>g?(r>b?r:b):(g>b?g:b), mn=r<g?(r<b?r:b):(g<b?g:b), d=mx-mn;
-    *v=mx; *s=(mx!=0.0f)?d/mx:0.0f;
-    if (d==0.0f){*h=0.0f;return;}
-    if      (mx==r)*h=fmodf((g-b)/d,6.0f)/6.0f;
-    else if (mx==g)*h=((b-r)/d+2.0f)/6.0f;
-    else           *h=((r-g)/d+4.0f)/6.0f;
-    if(*h<0.0f)*h+=1.0f;
-}
-static void cp_ring(float cx, float cy, float r, int n) {
-    glBegin(GL_LINE_LOOP);
-    for (int i=0;i<n;i++){float a=(float)i/(float)n*6.28318f;
-        glVertex2f(cx+cosf(a)*r, cy+sinf(a)*r);}
-    glEnd();
+    if (out_follow_doc_line)
+        *out_follow_doc_line = layout.follow_doc_line;
+    if (out_visible_lines)
+        *out_visible_lines = layout.visible_lines;
+    return layout.follow_doc_line >= g_scroll &&
+           layout.follow_doc_line < g_scroll + layout.visible_lines;
 }
 
-static void color_picker_write_cmd(void) {
-    if (g_cp_line<0 || g_cp_line>=g_num_cmds) return;
-    float r,g,b;
-    CmdType cmd_type = g_cmds[g_cp_line].type;
-    const char *old_src = g_cmds[g_cp_line].source;
-    int indent_len = 0;
-    char indent_prefix[sizeof(g_cmds[g_cp_line].source)];
-    char new_source[sizeof(g_cmds[g_cp_line].source)];
-    int formatted = 0;
-    cp_hsv_to_rgb(g_cp_hue, g_cp_sat, g_cp_val, &r, &g, &b);
-    while (old_src[indent_len] == ' ' || old_src[indent_len] == '\t')
-        indent_len++;
-    if ((size_t)indent_len >= sizeof(indent_prefix))
-        indent_len = (int)sizeof(indent_prefix) - 1;
-    for (int i = 0; i < indent_len; i++)
-        indent_prefix[i] = old_src[i];
-    indent_prefix[indent_len] = '\0';
-    if (g_cp_has_alpha) {
-        if (cmd_type == CMD_TESS_COLOR) {
-            formatted = repl_format_fits(new_source, sizeof(new_source),
-                                         "%sgluColor(%g, %g, %g, %g);",
-                                         indent_prefix, r, g, b, g_cp_alpha);
-        } else if (cmd_type == CMD_CLEAR_COLOR) {
-            float cr=r<CP_CLEAR_MAX_V?r:CP_CLEAR_MAX_V;
-            float cg=g<CP_CLEAR_MAX_V?g:CP_CLEAR_MAX_V;
-            float cb=b<CP_CLEAR_MAX_V?b:CP_CLEAR_MAX_V;
-            formatted = repl_format_fits(new_source, sizeof(new_source),
-                                         "%sglClearColor(%g, %g, %g, %g);",
-                                         indent_prefix, cr, cg, cb, g_cp_alpha);
-            if (!formatted) {
-                set_status("Command too long");
-                return;
-            }
-            g_cmds[g_cp_line].args[0]=cr;
-            g_cmds[g_cp_line].args[1]=cg;
-            g_cmds[g_cp_line].args[2]=cb;
-            g_cmds[g_cp_line].args[3]=g_cp_alpha;
-            g_cmds[g_cp_line].num_args = 4;
-            memcpy(g_cmds[g_cp_line].source, new_source,
-                   strlen(new_source) + 1);
-            g_flat_dirty = 1;
-            return;
-        } else {
-            formatted = repl_format_fits(new_source, sizeof(new_source),
-                                         "%sglColor4f(%g, %g, %g, %g);",
-                                         indent_prefix, r, g, b, g_cp_alpha);
-        }
-    } else {
-        if (cmd_type == CMD_TESS_COLOR) {
-            formatted = repl_format_fits(new_source, sizeof(new_source),
-                                         "%sgluColor(%g, %g, %g);",
-                                         indent_prefix, r, g, b);
-        } else {
-            formatted = repl_format_fits(new_source, sizeof(new_source),
-                                         "%sglColor3f(%g, %g, %g);",
-                                         indent_prefix, r, g, b);
-        }
-    }
-    if (!formatted) {
-        set_status("Command too long");
-        return;
-    }
-    g_cmds[g_cp_line].args[0]=r;
-    g_cmds[g_cp_line].args[1]=g;
-    g_cmds[g_cp_line].args[2]=b;
-    g_cmds[g_cp_line].num_args = g_cp_has_alpha ? 4 : 3;
-    if (g_cp_has_alpha)
-        g_cmds[g_cp_line].args[3]=g_cp_alpha;
-    memcpy(g_cmds[g_cp_line].source, new_source, strlen(new_source) + 1);
-    g_flat_dirty = 1;
-}
-
-/* Open (or switch) the picker for cmd_idx.  my is GLUT screen y coord. */
-static void color_picker_open(int cmd_idx, int my) {
-    int cp_x, cp_w;
-    code_panel_rect(&cp_x, NULL, &cp_w, NULL);
-    g_cp_line      = cmd_idx;
-    g_cp_has_alpha = (g_cmds[cmd_idx].type == CMD_COLOR4F ||
-                      g_cmds[cmd_idx].type == CMD_TESS_COLOR ||
-                      g_cmds[cmd_idx].type == CMD_CLEAR_COLOR);
-    g_cp_alpha     = g_cp_has_alpha ? g_cmds[cmd_idx].args[3] : 1.0f;
-    cp_rgb_to_hsv(g_cmds[cmd_idx].args[0],
-                  g_cmds[cmd_idx].args[1],
-                  g_cmds[cmd_idx].args[2],
-                  &g_cp_hue, &g_cp_sat, &g_cp_val);
-    if (g_cmds[cmd_idx].type == CMD_CLEAR_COLOR &&
-        g_cp_val > CP_CLEAR_MAX_V) g_cp_val = CP_CLEAR_MAX_V;
-    /* Position to the right of the panel, near the click y */
-    int pw = CP_SV_SZ + CP_GAP + CP_HUE_W
-           + (g_cp_has_alpha ? CP_GAP + CP_ALPHA_W : 0) + CP_GAP;
-    int ph = CP_SV_SZ + CP_GAP + CP_PREV_H + CP_GAP;
-    int ppx = cp_x + cp_w + 8;
-    if (ppx + pw > g_win_w - 4) ppx = cp_x - pw - 4;
-    if (ppx < 4) ppx = 4;
-    if (ppx + pw > g_win_w - 4) ppx = g_win_w - pw - 4;
-    if (ppx < 4) ppx = 4;
-    int ppy = (g_win_h - my) + ph / 2;
-    if (ppy > g_win_h - 4) ppy = g_win_h - 4;
-    if (ppy - ph < 4)       ppy = ph + 4;
-    g_cp_px = ppx;  g_cp_py = ppy;
-}
-
-static void render_color_picker(void) {
-    if (g_cp_line < 0) return;
-    int px = g_cp_px, py = g_cp_py, sz = CP_SV_SZ;
-    int pw = sz + CP_GAP + CP_HUE_W
-           + (g_cp_has_alpha ? CP_GAP + CP_ALPHA_W : 0) + CP_GAP;
-    int ph = sz + CP_GAP + CP_PREV_H + CP_GAP;
-
-    /* Background */
-    glEnable(GL_BLEND);
-    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-    glColor4f(0.08f, 0.08f, 0.12f, 0.94f);
-    draw_quad((float)(px-CP_GAP), (float)(py-ph), (float)(pw+CP_GAP), (float)(ph+CP_GAP));
-    glColor4f(0.30f, 0.30f, 0.50f, 0.80f);
-    glBegin(GL_LINE_LOOP);
-    glVertex2f(px-CP_GAP,        py-ph);
-    glVertex2f(px-CP_GAP+pw+CP_GAP, py-ph);
-    glVertex2f(px-CP_GAP+pw+CP_GAP, py+CP_GAP);
-    glVertex2f(px-CP_GAP,        py+CP_GAP);
-    glEnd();
-    glDisable(GL_BLEND);
-
-    /* SV square: white→hue left-right, hue→black top-bottom */
-    g_cp_sv_x=px; g_cp_sv_y=py-sz; g_cp_sv_sz=sz;
-    float hr,hg,hb; cp_hsv_to_rgb(g_cp_hue,1,1,&hr,&hg,&hb);
-    glBegin(GL_QUADS);
-    glColor3f(1,1,1);    glVertex2f(px,    py);
-    glColor3f(hr,hg,hb); glVertex2f(px+sz, py);
-    glColor3f(hr,hg,hb); glVertex2f(px+sz, py-sz);
-    glColor3f(1,1,1);    glVertex2f(px,    py-sz);
-    glEnd();
-    glEnable(GL_BLEND); glBlendFunc(GL_SRC_ALPHA,GL_ONE_MINUS_SRC_ALPHA);
-    glBegin(GL_QUADS);
-    glColor4f(0,0,0,0); glVertex2f(px,    py);
-    glColor4f(0,0,0,0); glVertex2f(px+sz, py);
-    glColor4f(0,0,0,1); glVertex2f(px+sz, py-sz);
-    glColor4f(0,0,0,1); glVertex2f(px,    py-sz);
-    glEnd();
-    glDisable(GL_BLEND);
-    /* glClearColor: shade the V > CP_CLEAR_MAX_V zone to show it's off-limits */
-    if (g_cp_line >= 0 && g_cp_line < g_num_cmds &&
-        g_cmds[g_cp_line].type == CMD_CLEAR_COLOR) {
-        float lim_y = py - (1.0f - CP_CLEAR_MAX_V) * (float)sz;
-        glEnable(GL_BLEND); glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-        glColor4f(0.0f, 0.0f, 0.0f, 0.72f);
-        draw_quad((float)px, lim_y, (float)sz, py - lim_y);
-        glDisable(GL_BLEND);
-        glColor3f(0.85f, 0.85f, 0.50f); glLineWidth(1.5f);
-        glBegin(GL_LINES);
-        glVertex2f((float)px, lim_y); glVertex2f((float)(px+sz), lim_y);
-        glEnd();
-        glLineWidth(1.0f);
-    }
-    /* SV cursor */
-    float cx=px+g_cp_sat*sz, cy=py-(1.0f-g_cp_val)*sz;
-    glColor3f(1,1,1); glLineWidth(1.5f); cp_ring(cx,cy,5.0f,16);
-    glColor3f(0,0,0); glLineWidth(1.0f); cp_ring(cx,cy,6.5f,16);
-
-    /* Hue bar: hue=0 at top, hue=1 at bottom */
-    int hx=px+sz+CP_GAP;
-    g_cp_hue_x=hx; g_cp_hue_y=py-sz; g_cp_hue_h=sz;
-    for (int i=0;i<40;i++) {
-        float h1=(float)i/40.0f, h2=(float)(i+1)/40.0f;
-        float r1,g1,b1,r2,g2,b2;
-        cp_hsv_to_rgb(h1,1,1,&r1,&g1,&b1); cp_hsv_to_rgb(h2,1,1,&r2,&g2,&b2);
-        glBegin(GL_QUADS);
-        glColor3f(r1,g1,b1); glVertex2f(hx,          py-h1*sz);
-        glColor3f(r1,g1,b1); glVertex2f(hx+CP_HUE_W, py-h1*sz);
-        glColor3f(r2,g2,b2); glVertex2f(hx+CP_HUE_W, py-h2*sz);
-        glColor3f(r2,g2,b2); glVertex2f(hx,          py-h2*sz);
-        glEnd();
-    }
-    glColor3f(1,1,1); glLineWidth(2.0f);
-    float hy=py-g_cp_hue*sz;
-    glBegin(GL_LINES); glVertex2f(hx-2,hy); glVertex2f(hx+CP_HUE_W+2,hy); glEnd();
-    glLineWidth(1.0f);
-
-    /* Alpha bar (COLOR4F only): alpha=1 at top */
-    if (g_cp_has_alpha) {
-        int ax=hx+CP_HUE_W+CP_GAP;
-        g_cp_alp_x=ax; g_cp_alp_y=py-sz; g_cp_alp_h=sz;
-        float cr,cg,cb; cp_hsv_to_rgb(g_cp_hue,g_cp_sat,g_cp_val,&cr,&cg,&cb);
-        int ck=5;
-        for (int iy=0;iy<sz;iy+=ck) for (int ix=0;ix<CP_ALPHA_W;ix+=ck) {
-            float gv=((ix/ck+iy/ck)%2)?0.35f:0.55f; glColor3f(gv,gv,gv);
-            int tw=(ix+ck<CP_ALPHA_W)?ck:CP_ALPHA_W-ix, th=(iy+ck<sz)?ck:sz-iy;
-            draw_quad((float)(ax+ix),(float)(py-iy-th),(float)tw,(float)th);
-        }
-        glEnable(GL_BLEND); glBlendFunc(GL_SRC_ALPHA,GL_ONE_MINUS_SRC_ALPHA);
-        for (int i=0;i<40;i++) {
-            float a1=1.0f-(float)i/40.0f, a2=1.0f-(float)(i+1)/40.0f;
-            float y1=py-(float)i/40.0f*sz,  y2=py-(float)(i+1)/40.0f*sz;
-            glBegin(GL_QUADS);
-            glColor4f(cr,cg,cb,a1); glVertex2f(ax,            y1);
-            glColor4f(cr,cg,cb,a1); glVertex2f(ax+CP_ALPHA_W, y1);
-            glColor4f(cr,cg,cb,a2); glVertex2f(ax+CP_ALPHA_W, y2);
-            glColor4f(cr,cg,cb,a2); glVertex2f(ax,            y2);
-            glEnd();
-        }
-        glDisable(GL_BLEND);
-        float ay=py-(1.0f-g_cp_alpha)*sz;
-        glColor3f(1,1,1); glLineWidth(2.0f);
-        glBegin(GL_LINES); glVertex2f(ax-2,ay); glVertex2f(ax+CP_ALPHA_W+2,ay); glEnd();
-        glLineWidth(1.0f);
-    }
-
-    /* Preview swatch */
-    float pr,pg,pb; cp_hsv_to_rgb(g_cp_hue,g_cp_sat,g_cp_val,&pr,&pg,&pb);
-    int total_w=sz+CP_GAP+CP_HUE_W+(g_cp_has_alpha?CP_GAP+CP_ALPHA_W:0);
-    int swy=py-sz-CP_GAP;
-    if (g_cp_has_alpha) {
-        int ck=4;
-        for (int iy=0;iy<CP_PREV_H;iy+=ck) for (int ix=0;ix<total_w;ix+=ck) {
-            float gv=((ix/ck+iy/ck)%2)?0.35f:0.55f; glColor3f(gv,gv,gv);
-            int tw=(ix+ck<total_w)?ck:total_w-ix, th=(iy+ck<CP_PREV_H)?ck:CP_PREV_H-iy;
-            draw_quad((float)(px+ix),(float)(swy-CP_PREV_H+iy),(float)tw,(float)th);
-        }
-        glEnable(GL_BLEND); glBlendFunc(GL_SRC_ALPHA,GL_ONE_MINUS_SRC_ALPHA);
-        glColor4f(pr,pg,pb,g_cp_alpha);
-    } else {
-        glColor3f(pr,pg,pb);
-    }
-    draw_quad((float)px,(float)(swy-CP_PREV_H),(float)total_w,(float)CP_PREV_H);
-    if (g_cp_has_alpha) glDisable(GL_BLEND);
-    glColor3f(0.4f,0.4f,0.5f);
-    glBegin(GL_LINE_LOOP);
-    glVertex2f(px,         swy-CP_PREV_H); glVertex2f(px+total_w, swy-CP_PREV_H);
-    glVertex2f(px+total_w, swy);           glVertex2f(px,         swy);
-    glEnd();
-}
-
-static int color_picker_press(int mx, int my) {
-    if (g_cp_line < 0) return 0;
-    int gl_y = g_win_h - my;
-
-    /* SV square */
-    if (mx >= g_cp_sv_x && mx < g_cp_sv_x+g_cp_sv_sz &&
-        gl_y >= g_cp_sv_y && gl_y < g_cp_sv_y+g_cp_sv_sz) {
-        g_cp_drag = 1;
-        g_cp_sat = (float)(mx-g_cp_sv_x)/(float)g_cp_sv_sz;
-        g_cp_val = (float)(gl_y-g_cp_sv_y)/(float)g_cp_sv_sz;
-        if (g_cp_sat<0)g_cp_sat=0; if (g_cp_sat>1)g_cp_sat=1;
-        if (g_cp_val<0)g_cp_val=0; if (g_cp_val>1)g_cp_val=1;
-        if (g_cp_line>=0 && g_cp_line<g_num_cmds &&
-            g_cmds[g_cp_line].type==CMD_CLEAR_COLOR &&
-            g_cp_val>CP_CLEAR_MAX_V) g_cp_val=CP_CLEAR_MAX_V;
-        color_picker_write_cmd(); return 1;
-    }
-    /* Hue bar */
-    if (mx >= g_cp_hue_x && mx < g_cp_hue_x+CP_HUE_W &&
-        gl_y >= g_cp_hue_y && gl_y < g_cp_hue_y+g_cp_hue_h) {
-        g_cp_drag = 2;
-        g_cp_hue = 1.0f-(float)(gl_y-g_cp_hue_y)/(float)g_cp_hue_h;
-        if (g_cp_hue<0)g_cp_hue=0; if (g_cp_hue>=1)g_cp_hue=0.999f;
-        color_picker_write_cmd(); return 1;
-    }
-    /* Alpha bar */
-    if (g_cp_has_alpha &&
-        mx >= g_cp_alp_x && mx < g_cp_alp_x+CP_ALPHA_W &&
-        gl_y >= g_cp_alp_y && gl_y < g_cp_alp_y+g_cp_alp_h) {
-        g_cp_drag = 3;
-        g_cp_alpha = (float)(gl_y-g_cp_alp_y)/(float)g_cp_alp_h;
-        if (g_cp_alpha<0)g_cp_alpha=0; if (g_cp_alpha>1)g_cp_alpha=1;
-        color_picker_write_cmd(); return 1;
-    }
-
-    /* Click outside picker: close and let the event fall through */
-    g_cp_line = -1;  g_cp_drag = 0;
-    return 0;
-}
-
-static int color_picker_motion(int mx, int my) {
-    if (g_cp_drag == 0) return 0;
-    int gl_y = g_win_h - my;
-    if (g_cp_drag == 1) {
-        g_cp_sat = (float)(mx-g_cp_sv_x)/(float)g_cp_sv_sz;
-        g_cp_val = (float)(gl_y-g_cp_sv_y)/(float)g_cp_sv_sz;
-        if (g_cp_sat<0)g_cp_sat=0; if (g_cp_sat>1)g_cp_sat=1;
-        if (g_cp_val<0)g_cp_val=0; if (g_cp_val>1)g_cp_val=1;
-        if (g_cp_line>=0 && g_cp_line<g_num_cmds &&
-            g_cmds[g_cp_line].type==CMD_CLEAR_COLOR &&
-            g_cp_val>CP_CLEAR_MAX_V) g_cp_val=CP_CLEAR_MAX_V;
-    } else if (g_cp_drag == 2) {
-        g_cp_hue = 1.0f-(float)(gl_y-g_cp_hue_y)/(float)g_cp_hue_h;
-        if (g_cp_hue<0)g_cp_hue=0; if (g_cp_hue>=1)g_cp_hue=0.999f;
-    } else if (g_cp_drag == 3) {
-        g_cp_alpha = (float)(gl_y-g_cp_alp_y)/(float)g_cp_alp_h;
-        if (g_cp_alpha<0)g_cp_alpha=0; if (g_cp_alpha>1)g_cp_alpha=1;
-    }
-    color_picker_write_cmd();
-    return 1;
-}
-
-static void color_picker_release(void) { g_cp_drag = 0; }
-
-/* Close the picker.  Returns 1 if it was open (caller should redisplay). */
-static int color_picker_close(void) {
-    if (g_cp_line < 0) return 0;
-    g_cp_line = -1;  g_cp_drag = 0;
-    return 1;
-}
+/* Color picker lives in repl_color_picker.c. */
 
 void render_code_panel(void) {
     prof_begin(PROF_CODE_PANEL_LAYOUT);
     prof_begin(PROF_CODE_PANEL_LAYOUT_GEOM);
     prof_begin(PROF_CODE_PANEL_LAYOUT_GEOM_SETUP);
 
-    int cmd_main_rows[MAX_COMMANDS];
-    int replay_extra_rows[MAX_COMMANDS];
+    CodePanelDocumentLayout doc_layout;
     int cp_x, cp_y, cp_w, cp_h;
     code_panel_rect(&cp_x, &cp_y, &cp_w, &cp_h);
     if (cp_w <= 0 || cp_h <= 0) {
@@ -2319,7 +378,8 @@ void render_code_panel(void) {
     int idx_col_w = g_show_indices ? (6 * FONT_W) : 0;
     int idx_x = CODE_MARGIN_X + linenum_w + FONT_W;
     int text_x = idx_x + idx_col_w;
-    int visible_lines = code_panel_visible_lines_for_height(cp_h);
+    int visible_lines;
+    int total_lines;
 
     /* When cursor is on a vertex, find which normal/color lines feed it so
      * we can draw a gutter accent bar on them below. */
@@ -2333,45 +393,26 @@ void render_code_panel(void) {
     prof_end(PROF_CODE_PANEL_LAYOUT_GEOM_SETUP);
     prof_begin(PROF_CODE_PANEL_LAYOUT_GEOM_PRECOMPUTE);
 
-    /* Build per-frame replay annotation cache before any annotation work */
-    if (g_replay_active &&
-        s_replay_cache_pc != g_replay_pc)
-        rebuild_replay_annotation_cache();
-    else if (!g_replay_active)
-        invalidate_replay_annotation_cache();
-
-    int header_rows = code_panel_header_row_count(panel_w, text_x);
-    int footer_rows = code_panel_footer_row_count(panel_w, text_x);
-    code_panel_precompute_layout_rows(panel_w, text_x,
-                                      cmd_main_rows, replay_extra_rows);
+    repl_code_panel_document_build(&doc_layout, panel_w, text_x, cp_h);
+    visible_lines = doc_layout.visible_lines;
     prof_end(PROF_CODE_PANEL_LAYOUT_GEOM_PRECOMPUTE);
     prof_begin(PROF_CODE_PANEL_LAYOUT_GEOM_TOTALS);
 
-    int total_lines = header_rows + footer_rows + code_panel_newline_rows(panel_w, text_x);
-    for (int i = 0; i < g_num_cmds; i++) {
-        if (g_inserting && i == g_edit_line)
-            total_lines += code_panel_insert_rows(panel_w, text_x);
-        total_lines += cmd_main_rows[i];
-        total_lines += replay_extra_rows[i];
-    }
+    total_lines = doc_layout.total_lines;
 
     prof_end(PROF_CODE_PANEL_LAYOUT_GEOM_TOTALS);
 
     prof_end(PROF_CODE_PANEL_LAYOUT_GEOM);
     prof_begin(PROF_CODE_PANEL_LAYOUT_CURSOR);
 
-    int cursor_doc_line = code_panel_cursor_doc_line_from_layout(
-        header_rows, cmd_main_rows, replay_extra_rows, panel_w, text_x);
+    (void)doc_layout.cursor_doc_line;
 
     prof_end(PROF_CODE_PANEL_LAYOUT_CURSOR);
     prof_begin(PROF_CODE_PANEL_LAYOUT_SCROLL);
 
-    int follow_doc_line = code_panel_follow_doc_line_from_layout(
-        cursor_doc_line, header_rows, cmd_main_rows, replay_extra_rows);
-
     /* Only snap to cursor/replay after an edit or replay step; manual scroll
      * can stay off-target. */
-    code_panel_apply_follow_scroll(total_lines, visible_lines, follow_doc_line);
+    repl_code_panel_document_apply_follow_scroll(&doc_layout);
 
     prof_end(PROF_CODE_PANEL_LAYOUT_SCROLL);
 
@@ -2405,140 +446,8 @@ void render_code_panel(void) {
     glEnd();
     glDisable(GL_BLEND);
 
-    /* Menu bar — design ref: Header Wireframes v2 (now at the very top of
-     * the code panel; the old info bar moved into the bottom status strip). */
-    {
-        int menu_x[NUM_MENUS], menu_w[NUM_MENUS];
-        int pin_x[NUM_PIN_BTNS], pin_w[NUM_PIN_BTNS];
-        int by, bh;
-        menubar_rects(menu_x, menu_w, pin_x, pin_w, &by, &bh);
-
-        glEnable(GL_BLEND);
-        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-
-        /* Full-width strip: #1d1d1d */
-        glColor4f(0.114f, 0.114f, 0.114f, 0.98f);
-        draw_quad((float)cp_x, (float)by, (float)cp_w, (float)bh);
-
-        int hover_menu = menubar_menu_hit(g_mouse_x, g_mouse_y);
-        int hover_pin  = menubar_pin_hit(g_mouse_x, g_mouse_y);
-
-        /* Left-side menu labels */
-        for (int i = 0; i < NUM_MENUS; i++) {
-            int active = (g_open_menu == i);
-            int hover  = (hover_menu == i);
-            if (active) {
-                glColor4f(0.149f, 0.149f, 0.149f, 1.0f); /* #262626 */
-                draw_quad((float)menu_x[i], (float)by, (float)menu_w[i], (float)bh);
-            } else if (hover) {
-                glColor4f(0.165f, 0.165f, 0.165f, 1.0f); /* #2a2a2a */
-                draw_quad((float)menu_x[i], (float)by, (float)menu_w[i], (float)bh);
-            }
-            if (active || hover)
-                glColor3f(1.0f, 1.0f, 1.0f);
-            else
-                glColor3f(0.847f, 0.847f, 0.847f);       /* #d8d8d8 */
-            int tx = menu_x[i] + 9;
-            draw_string((float)tx, (float)(by + 3),
-                        g_menu_labels[i], FONT_SMALL);
-        }
-
-        /* Mask the combined pin area with the menubar bg so a long menu
-         * label in a narrow window can't bleed through transparent pin
-         * slots (pins must stay visible and take hit-test priority). */
-        int pin_block_x = pin_x[PIN_SEARCH];
-        int pin_block_w = cp_x + cp_w - CODE_MARGIN_X - pin_block_x;
-        glColor4f(0.114f, 0.114f, 0.114f, 1.0f); /* #1d1d1d, fully opaque */
-        draw_quad((float)pin_block_x, (float)by, (float)pin_block_w, (float)bh);
-
-        /* Right-side pins: Search | Replay (always rendered on top) */
-        for (int i = 0; i < NUM_PIN_BTNS; i++) {
-            int hover = (hover_pin == i);
-            int active = (i == PIN_REPLAY && g_replay_active);
-            if (hover) {
-                glColor4f(0.165f, 0.165f, 0.165f, 1.0f);
-                draw_quad((float)pin_x[i], (float)by, (float)pin_w[i], (float)bh);
-            } else if (active) {
-                glColor4f(0.149f, 0.149f, 0.149f, 1.0f);
-                draw_quad((float)pin_x[i], (float)by, (float)pin_w[i], (float)bh);
-            }
-            /* Left separator rule (#2a2a2a) */
-            glColor4f(0.165f, 0.165f, 0.165f, 1.0f);
-            glBegin(GL_LINES);
-            glVertex2f((float)pin_x[i], (float)by);
-            glVertex2f((float)pin_x[i], (float)(by + bh));
-            glEnd();
-
-            if (i == PIN_SEARCH) {
-                if (g_search_active) {
-                    /* render_code_panel_search_overlay() fills this slot */
-                    continue;
-                }
-                /* "search..." label in muted gray */
-                glColor3f(0.478f, 0.478f, 0.478f); /* #7a7a7a */
-                int tx = pin_x[i] + 12;
-                draw_string((float)tx, (float)(by + 3),
-                            g_pin_btn_labels[i], FONT_SMALL);
-            } else if (i == PIN_REPLAY) {
-                /* Green accent (#6fb36f), state icon + dynamic label */
-                const char *label = "Replay";
-                if (g_replay_state == REPLAY_PLAYING) label = "Replaying";
-                else if (g_replay_state == REPLAY_PAUSED) label = "Paused";
-                else if (g_replay_state == REPLAY_DONE)   label = "Done";
-
-                int icon_x = pin_x[i] + 10;
-                int icon_cy = by + bh / 2;
-                int icon_sz = 8;
-
-                glColor3f(UI_ACCENT_GREEN_R, UI_ACCENT_GREEN_G, UI_ACCENT_GREEN_B);
-
-                if (g_replay_state == REPLAY_PLAYING) {
-                    /* Two vertical bars (pause glyph) */
-                    float bw = 2.5f, gap = 2.0f;
-                    float by0 = (float)icon_cy - (float)icon_sz * 0.5f;
-                    float bh0 = (float)icon_sz;
-                    draw_quad((float)icon_x,                    by0, bw, bh0);
-                    draw_quad((float)icon_x + bw + gap,         by0, bw, bh0);
-                } else if (g_replay_state == REPLAY_DONE) {
-                    /* Square — run complete */
-                    float sx = (float)icon_x;
-                    float sy = (float)icon_cy - (float)icon_sz * 0.5f;
-                    draw_quad(sx, sy, (float)icon_sz, (float)icon_sz);
-                } else {
-                    /* Play triangle — stopped (OFF) or paused, click to start */
-                    float x0 = (float)icon_x;
-                    float cy = (float)icon_cy;
-                    glBegin(GL_TRIANGLES);
-                    glVertex2f(x0,             cy - (float)icon_sz * 0.5f);
-                    glVertex2f(x0,             cy + (float)icon_sz * 0.5f);
-                    glVertex2f(x0 + icon_sz,   cy);
-                    glEnd();
-                }
-
-                int tx = icon_x + 12 + 6;
-                draw_string((float)tx, (float)(by + 3), label, FONT_SMALL);
-            } else {
-                if (hover || active)
-                    glColor3f(1.0f, 1.0f, 1.0f);
-                else
-                    glColor3f(0.847f, 0.847f, 0.847f);
-                int tx = pin_x[i] + 9;
-                draw_string((float)tx, (float)(by + 3),
-                            g_pin_btn_labels[i], FONT_SMALL);
-            }
-        }
-
-        /* Bottom divider (#000) */
-        glColor4f(0.0f, 0.0f, 0.0f, 1.0f);
-        glBegin(GL_LINES);
-        glVertex2f((float)cp_x,          (float)by);
-        glVertex2f((float)(cp_x + cp_w), (float)by);
-        glEnd();
-
-        glDisable(GL_BLEND);
-    }
-
-    render_code_panel_search_overlay(cp_x, panel_w, panel_top);
+    repl_menu_bar_render();
+    repl_menu_bar_render_search_overlay(cp_x, panel_w, panel_top);
 
     prof_end(PROF_CODE_PANEL_CHROME);
     prof_begin(PROF_CODE_PANEL_LINES);
@@ -2554,8 +463,8 @@ void render_code_panel(void) {
         CodePanelWrapIter wrap_it;                                              \
         int wrap_row = 0;                                                       \
         int wrap_start, wrap_len, wrap_x;                                       \
-        code_wrap_iter_init(&wrap_it, text, text_x, panel_w);                   \
-        while (code_wrap_iter_next(&wrap_it, &wrap_start, &wrap_len, &wrap_x)) {\
+        repl_code_panel_document_wrap_iter_init(&wrap_it, text, text_x, panel_w);                   \
+        while (repl_code_panel_document_wrap_iter_next(&wrap_it, &wrap_start, &wrap_len, &wrap_x)) {\
             if (cur >= g_scroll && cur < g_scroll + visible_lines) {            \
                 if (wrap_row == 0) {                                             \
                     glColor3f(0.30f, 0.30f, 0.38f);                            \
@@ -2610,7 +519,7 @@ void render_code_panel(void) {
         if (g_inserting && i == g_edit_line) {
                         render_active_input_rows(panel_w, text_x, idx_x,
                                                                          visible_lines, file_line,
-                                                                         code_panel_active_indent_chars(), NULL,
+                                                                         repl_code_panel_document_active_indent_chars(), NULL,
                                                                          g_edit_line,
                                                                          &cur, &line_y);
             file_line++;
@@ -2644,7 +553,7 @@ void render_code_panel(void) {
                 }
                 render_active_input_rows(panel_w, text_x, idx_x,
                                          visible_lines, file_line,
-                                         code_panel_active_indent_chars(), idx_text,
+                                         repl_code_panel_document_active_indent_chars(), idx_text,
                                          g_edit_line,
                                          &cur, &line_y);
                 file_line++;
@@ -2657,8 +566,8 @@ void render_code_panel(void) {
                 int search_row_idx = repl_search_row_for_cmd_index(i);
                 code_panel_get_command_display_text(i, display_text,
                                                     sizeof(display_text));
-                code_wrap_iter_init(&wrap_it, display_text, text_x, panel_w);
-                while (code_wrap_iter_next(&wrap_it, &wrap_start, &wrap_len, &wrap_x)) {
+                repl_code_panel_document_wrap_iter_init(&wrap_it, display_text, text_x, panel_w);
+                while (repl_code_panel_document_wrap_iter_next(&wrap_it, &wrap_start, &wrap_len, &wrap_x)) {
                     if (cur >= g_scroll && cur < g_scroll + visible_lines) {
                         if (g_replay_active &&
                             g_replay_src_line >= 0 && i == g_replay_src_line) {
@@ -2701,41 +610,12 @@ void render_code_panel(void) {
                                 draw_string((float)idx_x, (float)line_y,
                                             idx_s, FONT_MONO);
                             }
-                               /* Color swatch for glColor / glClearColor */
-                               if ((g_cmds[i].type == CMD_COLOR3F ||
-                                   g_cmds[i].type == CMD_COLOR4F ||
-                                   g_cmds[i].type == CMD_TESS_COLOR ||
-                                   g_cmds[i].type == CMD_CLEAR_COLOR) &&
-                                g_cmds[i].valid && !g_cmds[i].has_vars) {
-                                int sw = SWATCH_W;
+                            /* Color swatch for glColor / glClearColor */
+                            if (repl_color_picker_can_edit_cmd(i)) {
+                                int sw = REPL_COLOR_SWATCH_W;
                                 int sx = cp_x + cp_w - CODE_MARGIN_X - sw - 2;
                                 int sy = line_y + (LINE_H - sw) / 2 - 1;
-                                glEnable(GL_BLEND);
-                                glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-                                  float sa = (g_cmds[i].type == CMD_COLOR4F ||
-                                            g_cmds[i].type == CMD_TESS_COLOR ||
-                                            g_cmds[i].type == CMD_CLEAR_COLOR)
-                                           ? g_cmds[i].args[3] : 1.0f;
-                                glColor4f(g_cmds[i].args[0], g_cmds[i].args[1],
-                                          g_cmds[i].args[2], sa);
-                                draw_quad((float)sx, (float)sy, (float)sw, (float)sw);
-                                /* Border */
-                                glColor4f(0.55f, 0.55f, 0.65f, 0.9f);
-                                glBegin(GL_LINE_LOOP);
-                                glVertex2f(sx,    sy);    glVertex2f(sx+sw, sy);
-                                glVertex2f(sx+sw, sy+sw); glVertex2f(sx,    sy+sw);
-                                glEnd();
-                                /* Highlight when picker is open for this line */
-                                if (g_cp_line == i) {
-                                    glColor4f(1.0f, 1.0f, 1.0f, 0.9f);
-                                    glBegin(GL_LINE_LOOP);
-                                    glVertex2f(sx-1,    sy-1);
-                                    glVertex2f(sx+sw+1, sy-1);
-                                    glVertex2f(sx+sw+1, sy+sw+1);
-                                    glVertex2f(sx-1,    sy+sw+1);
-                                    glEnd();
-                                }
-                                glDisable(GL_BLEND);
+                                repl_color_picker_render_swatch(i, sx, sy);
                             }
                         }
                         color_for_type(g_cmds[i].type);
@@ -2757,10 +637,10 @@ void render_code_panel(void) {
                     g_replay_src_line >= 0 && i == g_replay_src_line &&
                     g_cmds[i].has_vars &&
                     g_cmds[i].type != CMD_VAR_ASSIGN) {
-                    int flat_idx = find_replay_flat_cmd(i);
+                    int flat_idx = repl_replay_annotation_flat_cmd_for_source(i);
                     if (flat_idx >= 0) {
                         char subst[MAX_LINE_LEN], var_comment[128];
-                        if (build_replay_subst_annotation(i, flat_idx,
+                        if (repl_replay_build_subst_annotation(i, flat_idx,
                                                           subst, sizeof(subst),
                                                           var_comment, sizeof(var_comment)) > 0) {
                             if (cur >= g_scroll &&
@@ -2789,7 +669,7 @@ void render_code_panel(void) {
 
                         {
                             char eval_buf[MAX_LINE_LEN];
-                            if (build_replay_eval_annotation(i, flat_idx,
+                            if (repl_replay_build_eval_annotation(i, flat_idx,
                                                              eval_buf, sizeof(eval_buf))) {
                                 if (cur >= g_scroll &&
                                     cur < g_scroll + visible_lines) {
@@ -2845,7 +725,7 @@ void render_code_panel(void) {
         if (is_edit_nl) {
             render_active_input_rows(panel_w, text_x, idx_x,
                                      visible_lines, file_line,
-                                     code_panel_active_indent_chars(), NULL,
+                                     repl_code_panel_document_active_indent_chars(), NULL,
                                      g_edit_line,
                                      &cur, &line_y);
         } else {
@@ -3005,7 +885,7 @@ void render_code_panel(void) {
         glDisable(GL_BLEND);
     }
 
-    render_color_picker();
+    repl_color_picker_render();
 
     prof_end(PROF_CODE_PANEL_OVERLAYS);
 
@@ -3078,120 +958,6 @@ void render_autocomplete(void) {
     draw_string((float)(popup_x + 4),
                 (float)(popup_y - popup_h - FONT_H - 2),
                 "Tab to accept", FONT_SMALL);
-
-    glDisable(GL_BLEND);
-    end_2d();
-}
-
-void render_example_dropdown(void) {
-    if (g_open_menu < 0) return;
-    int menu_id = g_open_menu;
-    int n  = menu_item_count(menu_id);
-    int ne = (menu_id == MENU_SCENE) ? repl_example_count() : -1;
-
-    int dx, dy, dw, dh;
-    if (!menu_dropdown_rect(&dx, &dy, &dw, &dh)) return;
-
-    g_menu_item_hover = menu_dropdown_item_hit(g_mouse_x, g_mouse_y);
-
-    float alpha = ui_fade_alpha(g_menu_open_time);
-
-    begin_2d();
-    glEnable(GL_BLEND);
-    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-
-    /* Dropdown bg (#222) + border (#3a3a3a) — design ref */
-    glColor4f(0.133f, 0.133f, 0.133f, 0.98f * alpha);
-    draw_quad((float)dx, (float)dy, (float)dw, (float)dh);
-    glColor4f(0.227f, 0.227f, 0.227f, alpha);
-    glBegin(GL_LINE_LOOP);
-    glVertex2f((float)dx,        (float)dy);
-    glVertex2f((float)(dx + dw), (float)dy);
-    glVertex2f((float)(dx + dw), (float)(dy + dh));
-    glVertex2f((float)dx,        (float)(dy + dh));
-    glEnd();
-
-    if (n == 0) {
-        int ey = dy + dh - LINE_H + 1;
-        glColor4f(0.478f, 0.518f, 0.580f, alpha);  /* #7a8494 (header style) */
-        draw_string((float)(dx + 14), (float)ey, "(empty)", FONT_SMALL);
-        glDisable(GL_BLEND);
-        end_2d();
-        return;
-    }
-
-    int max_sc_px = menu_max_shortcut_px(menu_id);
-    int state_right = dx + dw - 14;
-    if (max_sc_px > 0) state_right -= max_sc_px + 16;
-
-    int ey = dy + dh - LINE_H + 1;
-    for (int i = 0; i < n; i++) {
-        const char *lbl = menu_item_label(menu_id, i);
-        if (!lbl) continue;
-
-        if (strncmp(lbl, "### ", 4) == 0) {
-            glColor4f(0.478f, 0.518f, 0.580f, alpha);  /* #7a8494 (header style) */
-            draw_string((float)(dx + 14), (float)ey, lbl + 4, FONT_SMALL);
-            ey -= LINE_H;
-            continue;
-        }
-
-        if (strcmp(lbl, "---") == 0) {
-            glColor4f(0.20f, 0.20f, 0.20f, alpha);  /* #333 */
-            glBegin(GL_LINES);
-            glVertex2f((float)(dx + 6),       (float)(ey + LINE_H / 2 - 2));
-            glVertex2f((float)(dx + dw - 6),  (float)(ey + LINE_H / 2 - 2));
-            glEnd();
-            ey -= LINE_H;
-            continue;
-        }
-
-        int scene_hit = -1;
-        if (menu_id == MENU_SCENE && ne >= 0) {
-            int scene_n = i - (ne + SCENE_OFF_SCENES);
-            if (scene_n >= 0 && scene_n < repl_user_scene_count())
-                scene_hit = repl_scene_menu_slot_for_dense_index(scene_n);
-        }
-        int is_active_example = (menu_id == MENU_SCENE && ne >= 0 &&
-                                 i >= 1 && i <= ne &&
-                                 (i - 1) == g_example_idx);
-        int is_active_scene   = (scene_hit >= 0 &&
-                                 scene_hit == repl_active_user_scene());
-
-        if (i == g_menu_item_hover) {
-            glColor4f(0.180f, 0.290f, 0.431f, alpha);  /* #2e4a6e */
-            draw_quad((float)(dx + 1), (float)(ey - 2),
-                      (float)(dw - 2), (float)LINE_H);
-            glColor4f(1.0f, 1.0f, 1.0f, alpha);
-        } else if (is_active_example || is_active_scene) {
-            glColor4f(UI_ACCENT_GREEN_R, UI_ACCENT_GREEN_G, UI_ACCENT_GREEN_B, alpha);
-        } else {
-            glColor4f(0.847f, 0.847f, 0.847f, alpha);  /* #d8d8d8 */
-        }
-
-        draw_string((float)(dx + 14), (float)ey, lbl, FONT_SMALL);
-
-        const char *sc = menu_item_shortcut(menu_id, i);
-        if (sc) {
-            int sc_px = (int)strlen(sc) * FONT_SMALL_W;
-            glColor4f(0.533f, 0.533f, 0.533f, alpha);  /* #888 */
-            draw_string((float)(dx + dw - 14 - sc_px), (float)ey, sc, FONT_SMALL);
-        }
-
-        if (menu_id == MENU_CONFIG && g_cfg_items[i].value != NULL) {
-            char st_buf[CFG_STATE_MAX_CHARS + 1];
-            const char *st = cfg_state_str(i, st_buf, sizeof(st_buf));
-            int st_px = (int)strlen(st) * FONT_SMALL_W;
-            int val = *g_cfg_items[i].value;
-            if (val)
-                glColor4f(UI_ACCENT_GREEN_R, UI_ACCENT_GREEN_G, UI_ACCENT_GREEN_B, alpha);
-            else
-                glColor4f(0.533f, 0.533f, 0.533f, alpha);
-            draw_string((float)(state_right - st_px), (float)ey, st, FONT_SMALL);
-        }
-
-        ey -= LINE_H;
-    }
 
     glDisable(GL_BLEND);
     end_2d();
@@ -3922,17 +1688,12 @@ void render_var_panel(void) {
 /* ========================================================================= */
 
 int ui_panels_handle_right_press(int mx, int my) {
-    if (g_open_menu != MENU_CONFIG) return 0;
-    int item = menu_dropdown_item_hit(mx, my);
-    if (item < 0) return 0;
-    repl_cfg_cycle_row(item, -1);
-    return 1;
+    return repl_menu_bar_handle_config_right_press(mx, my);
 }
 
 void ui_panels_close_menus(void) {
-    g_open_menu = -1;
-    g_menu_item_hover = -1;
-    color_picker_close();
+    repl_menu_bar_close();
+    repl_color_picker_close();
 }
 
 /* ========================================================================= */
@@ -4012,13 +1773,7 @@ int ui_panels_handle_rename_special(int key) {
 }
 
 void ui_panels_open_config(void) {
-    if (g_open_menu == MENU_CONFIG) {
-        g_open_menu = -1;
-        return;
-    }
-    g_open_menu = MENU_CONFIG;
-    g_menu_open_time = g_anim_time;
-    g_menu_item_hover = -1;
+    repl_menu_bar_open_config();
 }
 
 /* ========================================================================= */
@@ -4047,19 +1802,22 @@ static int code_panel_hit_test(int mx, int my,
     int line_y_start = panel_top - CODE_MARGIN_Y - 2 * LINE_H;
     int vis = (line_y_start + LINE_H - 3 - gl_y) / LINE_H;
     if (vis < 0) return 0;   /* clicked in header */
-    if (vis >= code_panel_visible_lines_for_height(cp_h)) return 0;
+    if (vis >= repl_code_panel_document_visible_lines_for_height(cp_h)) return 0;
 
     int linenum_w = 4 * FONT_W;
     int idx_col_w = g_show_indices ? (6 * FONT_W) : 0;
     int text_x = CODE_MARGIN_X + linenum_w + FONT_W + idx_col_w;
     int doc_line = g_scroll + vis;
+    CodePanelDocumentLayout layout;
     int target;
     int on_insert_line;
     int row_offset;
 
-    if (!code_panel_target_for_doc_line(doc_line, panel_w, text_x,
-                                        &target, &on_insert_line,
-                                        &row_offset))
+    repl_code_panel_document_build(&layout, panel_w, text_x, cp_h);
+    if (!repl_code_panel_document_target_for_doc_line(doc_line, &layout,
+                                                      &target,
+                                                      &on_insert_line,
+                                                      &row_offset))
         return 0;
 
     if (out_target) *out_target = target;
@@ -4079,7 +1837,7 @@ static int code_panel_drag_target(int mx, int my, int *out_target) {
     int line_y_start = panel_top - CODE_MARGIN_Y - 2 * LINE_H;
     int vis = (line_y_start + LINE_H - 3 - gl_y) / LINE_H;
 
-    int visible_lines = code_panel_visible_lines_for_height(cp_h);
+    int visible_lines = repl_code_panel_document_visible_lines_for_height(cp_h);
     if (vis < 0) vis = 0;
     if (vis >= visible_lines) vis = visible_lines - 1;
 
@@ -4087,11 +1845,15 @@ static int code_panel_drag_target(int mx, int my, int *out_target) {
     int idx_col_w = g_show_indices ? (6 * FONT_W) : 0;
     int text_x = CODE_MARGIN_X + linenum_w + FONT_W + idx_col_w;
     int doc_line = g_scroll + vis;
+    CodePanelDocumentLayout layout;
     int target;
     int on_insert_line;
 
-    if (!code_panel_target_for_doc_line(doc_line, panel_w, text_x,
-                                        &target, &on_insert_line, NULL))
+    repl_code_panel_document_build(&layout, panel_w, text_x, cp_h);
+    if (!repl_code_panel_document_target_for_doc_line(doc_line, &layout,
+                                                      &target,
+                                                      &on_insert_line,
+                                                      NULL))
         return 0;
 
     if (on_insert_line) {
@@ -4128,13 +1890,13 @@ void handle_code_panel_click(int mx, int my) {
     int linenum_w = 4 * FONT_W;
     int idx_col_w = g_show_indices ? (6 * FONT_W) : 0;
     int text_x = CODE_MARGIN_X + linenum_w + FONT_W + idx_col_w;
-    int indent_chars = code_panel_active_indent_chars();
+    int indent_chars = repl_code_panel_document_active_indent_chars();
     int seg_start = g_input_len;
     int seg_len = 0;
     int seg_x = text_x + indent_chars * FONT_W;
     int col;
 
-    code_panel_segment_for_row(g_input, seg_x, panel_w, row_offset,
+    repl_code_panel_document_segment_for_row(g_input, seg_x, panel_w, row_offset,
                                &seg_start, &seg_len, &seg_x);
 
     col = (mx - seg_x + FONT_W / 2) / FONT_W;
@@ -4154,17 +1916,17 @@ int handle_code_panel_press(int mx, int my) {
 
     /* Color picker floats and may overlap the code panel (e.g. top/bottom
      * layouts).  Give it first crack so its hit rects take priority. */
-    if (color_picker_press(mx, my))
+    if (repl_color_picker_press(mx, my))
         return UI_PANEL_PRESS_CONSUMED;
 
     /* Pins (Search, Replay) take priority over menu labels and dropdown items
      * so they remain clickable even when a menu label visually overlaps them
      * in a narrow window — matches the render order (pins drawn on top). */
-    int pin = menubar_pin_hit(mx, my);
+    int pin = repl_menu_bar_pin_hit(mx, my);
     if (pin >= 0) {
-        if (g_open_menu >= 0) g_open_menu = -1;
+        repl_menu_bar_close();
         switch (pin) {
-        case PIN_REPLAY:
+        case REPL_MENU_BAR_PIN_REPLAY:
             /* Button mirrors its glyph: pause when playing, resume when
              * paused, (re)start when stopped or done. */
             if (g_replay_state == REPLAY_PLAYING) {
@@ -4175,42 +1937,40 @@ int handle_code_panel_press(int mx, int my) {
                 replay_start();
             }
             break;
-        case PIN_SEARCH:
+        case REPL_MENU_BAR_PIN_SEARCH:
             handle_search_key(KEY_CTRL_F);
-            g_search_open_time = g_anim_time;
+            repl_menu_bar_note_search_opened();
             break;
         }
         return UI_PANEL_PRESS_CONSUMED;
     }
 
     /* Menu dropdown (floats over code) */
-    if (g_open_menu >= 0) {
+    if (menu_dropdown_is_open()) {
         /* Clicking the same top-level menu toggles closed; clicking another
          * switches to it. */
-        int over_menu = menubar_menu_hit(mx, my);
+        int open_menu = repl_menu_bar_open_menu_id();
+        int over_menu = repl_menu_bar_menu_hit(mx, my);
         if (over_menu >= 0) {
-            if (over_menu == g_open_menu) {
-                g_open_menu = -1;
+            if (over_menu == open_menu) {
+                repl_menu_bar_close();
             } else {
-                g_open_menu = over_menu;
-                g_menu_open_time = g_anim_time;
+                repl_menu_bar_set_open_menu(over_menu);
             }
             return UI_PANEL_PRESS_CONSUMED;
         }
-        int item = menu_dropdown_item_hit(mx, my);
+        int item = repl_menu_bar_dropdown_item_hit(mx, my);
         if (item >= 0) {
-            int close = menu_item_activate(g_open_menu, item);
-            if (close) g_open_menu = -1;
+            repl_menu_bar_activate_dropdown_item(item);
             return UI_PANEL_PRESS_CONSUMED;
         }
         /* Click outside dropdown: dismiss, fall through for code nav */
-        g_open_menu = -1;
+        repl_menu_bar_close();
     }
 
-    int menu = menubar_menu_hit(mx, my);
+    int menu = repl_menu_bar_menu_hit(mx, my);
     if (menu >= 0) {
-        g_open_menu = menu;
-        g_menu_open_time = g_anim_time;
+        repl_menu_bar_set_open_menu(menu);
         return UI_PANEL_PRESS_CONSUMED;
     }
 
@@ -4220,19 +1980,16 @@ int handle_code_panel_press(int mx, int my) {
 
     /* Check for swatch click on a color line */
     if (!on_insert_line && row_offset == 0 && target >= 0 && target < g_num_cmds) {
-        CmdType ct = g_cmds[target].type;
-        if ((ct == CMD_COLOR3F || ct == CMD_COLOR4F || ct == CMD_TESS_COLOR ||
-             ct == CMD_CLEAR_COLOR) &&
-            g_cmds[target].valid && !g_cmds[target].has_vars) {
+        if (repl_color_picker_can_edit_cmd(target)) {
             int cp_x2, cp_w2;
             code_panel_rect(&cp_x2, NULL, &cp_w2, NULL);
-            int sx = cp_x2 + cp_w2 - CODE_MARGIN_X - SWATCH_W - 2;
-            if (mx >= sx && mx < sx + SWATCH_W) {
-                if (g_cp_line == target) {
-                    g_cp_line = -1;   /* toggle: close picker */
+            int sx = cp_x2 + cp_w2 - CODE_MARGIN_X - REPL_COLOR_SWATCH_W - 2;
+            if (mx >= sx && mx < sx + REPL_COLOR_SWATCH_W) {
+                if (repl_color_picker_active_line() == target) {
+                    repl_color_picker_close();   /* toggle: close picker */
                 } else {
                     actions |= UI_PANEL_PRESS_OPENED_COLOR_PICKER;
-                    color_picker_open(target, my);
+                    repl_color_picker_open(target, my);
                 }
                 glutPostRedisplay();
                 return actions | UI_PANEL_PRESS_CONSUMED;
@@ -4240,10 +1997,7 @@ int handle_code_panel_press(int mx, int my) {
         }
     }
     /* Any non-swatch code-panel click closes the picker */
-    if (g_cp_line >= 0) {
-        g_cp_line = -1;
-        g_cp_drag = 0;
-    }
+    repl_color_picker_close();
 
     handle_code_panel_click(mx, my);
 
@@ -4280,18 +2034,18 @@ void handle_code_panel_release(void) {
 }
 
 int ui_panels_handle_escape(void) {
-    return color_picker_close();
+    return repl_color_picker_close();
 }
 
 int ui_panels_handle_scene_press(int mx, int my) {
-    return color_picker_press(mx, my);
+    return repl_color_picker_press(mx, my);
 }
 
 int ui_panels_handle_motion(int mx, int my) {
-    return color_picker_motion(mx, my);
+    return repl_color_picker_motion(mx, my);
 }
 
 void ui_panels_handle_mouse_release(void) {
-    color_picker_release();
+    repl_color_picker_release();
     handle_code_panel_release();
 }
