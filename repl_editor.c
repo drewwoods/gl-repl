@@ -1352,7 +1352,7 @@ static int editor_special_restores_hidden_code_panel(int key, int mods) {
 
 static int editor_point_in_code_panel(int x, int y) {
     int cp_x, cp_y, cp_w, cp_h;
-    int gl_y = g_win_h - y;
+    int gl_y = *repl_state_viewport()->window_h - y;
 
     code_panel_rect(&cp_x, &cp_y, &cp_w, &cp_h);
     return x >= cp_x && x < cp_x + cp_w &&
@@ -1361,7 +1361,7 @@ static int editor_point_in_code_panel(int x, int y) {
 
 static int editor_point_on_code_panel_divider(int x, int y) {
     int cp_x, cp_y, cp_w, cp_h;
-    int gl_y = g_win_h - y;
+    int gl_y = *repl_state_viewport()->window_h - y;
     int layout = editor_code_panel_layout();
 
     if (layout == CODE_PANEL_LAYOUT_HIDDEN)
@@ -1386,14 +1386,17 @@ static void editor_update_panel_frac_from_mouse(int x, int y) {
     if (layout == CODE_PANEL_LAYOUT_HIDDEN) {
         return;
     } else if (layout == CODE_PANEL_LAYOUT_TOP) {
-        if (g_win_h > 0)
-            g_panel_frac = (float)y / (float)g_win_h;
+        int win_h = *repl_state_viewport()->window_h;
+        if (win_h > 0)
+            g_panel_frac = (float)y / (float)win_h;
     } else if (layout == CODE_PANEL_LAYOUT_BOTTOM) {
-        if (g_win_h > 0)
-            g_panel_frac = (float)(g_win_h - y) / (float)g_win_h;
+        int win_h = *repl_state_viewport()->window_h;
+        if (win_h > 0)
+            g_panel_frac = (float)(win_h - y) / (float)win_h;
     } else {
-        if (g_win_w > 0)
-            g_panel_frac = (float)x / (float)g_win_w;
+        int win_w = *repl_state_viewport()->window_w;
+        if (win_w > 0)
+            g_panel_frac = (float)x / (float)win_w;
     }
 
     if (g_panel_frac < 0.1f)

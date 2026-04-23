@@ -264,8 +264,10 @@ void render_help(void) {
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
-    int hx = g_win_w / 6, hy = g_win_h / 12;
-    int hw = g_win_w * 2 / 3, hh = g_win_h * 5 / 6;
+    int win_w = *repl_state_viewport()->window_w;
+    int win_h = *repl_state_viewport()->window_h;
+    int hx = win_w / 6, hy = win_h / 12;
+    int hw = win_w * 2 / 3, hh = win_h * 5 / 6;
     int tab_bar_h = LINE_H + 2;
     int title_h   = LINE_H + 4;
     int pad_top   = title_h + tab_bar_h + 6;

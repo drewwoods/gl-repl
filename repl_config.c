@@ -41,7 +41,7 @@ static int *config_value_ptr(ReplConfigKey key) {
     case REPL_CONFIG_LIGHT_INDICATORS:    return &g_show_lights;
     case REPL_CONFIG_POLY_HIGHLIGHT:      return &g_highlight_current_poly;
     case REPL_CONFIG_BACKDROP:            return &g_backdrop_mode;
-    case REPL_CONFIG_CAMERA_ROTATE:       return &g_cam_rotate;
+    case REPL_CONFIG_CAMERA_ROTATE:       return repl_state_camera_mut()->auto_rotate;
     case REPL_CONFIG_AUTO_NORMALS:        return &g_autonormal;
     case REPL_CONFIG_VERTEX_LABELS:       return &g_show_vnums;
     case REPL_CONFIG_NORMAL_VECTORS:      return &g_show_normals;

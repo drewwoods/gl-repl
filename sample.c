@@ -165,7 +165,7 @@ int main(int argc, char **argv) {
     glutInit(&argc, argv);
     glutInitDisplayMode(GLUT_DOUBLE | GLUT_RGBA | GLUT_DEPTH | GLUT_MULTISAMPLE |
                         (g_use_accum ? GLUT_ACCUM : 0));
-    glutInitWindowSize(g_win_w, g_win_h);
+    glutInitWindowSize(*repl_state_viewport()->window_w, *repl_state_viewport()->window_h);
     glutCreateWindow("OpenGL REPL - Display List Dynamic Rendering");
 
     repl_init_gl();

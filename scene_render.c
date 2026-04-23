@@ -87,13 +87,16 @@ static void scene_render_config_init(SceneRenderConfig *config) {
     if (config->scene_w < 1) config->scene_w = 1;
     if (config->scene_h < 1) config->scene_h = 1;
 
-    config->cam_dist = g_cam_dist;
-    config->cam_rx = g_cam_rx;
-    config->cam_ry = g_cam_ry;
-    config->cam_tx = g_cam_tx;
-    config->cam_ty = g_cam_ty;
-    config->cam_tz = g_cam_tz;
-    config->cam_motion_glow = g_cam_motion_glow;
+    {
+        const ReplCameraState *cam = repl_state_camera();
+        config->cam_dist = *cam->dist;
+        config->cam_rx = *cam->rx;
+        config->cam_ry = *cam->ry;
+        config->cam_tx = *cam->tx;
+        config->cam_ty = *cam->ty;
+        config->cam_tz = *cam->tz;
+        config->cam_motion_glow = *cam->motion_glow;
+    }
     config->accum_jitter_x = *render->accum_jitter_x;
     config->accum_jitter_y = *render->accum_jitter_y;
     config->multisample_enabled = *render->multisample_enabled;
@@ -315,7 +318,7 @@ static void draw_replay_hud(const SceneRenderConfig *config) {
     if (progress > 1.0f) progress = 1.0f;
 
     scene_render_push_state();
-    glViewport(0, 0, g_win_w, g_win_h);
+    glViewport(0, 0, *repl_state_viewport()->window_w, *repl_state_viewport()->window_h);
     begin_2d();
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);

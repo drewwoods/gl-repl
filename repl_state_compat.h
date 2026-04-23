@@ -59,13 +59,6 @@ extern char g_newline_buf[MAX_INPUT_LEN];
 extern int  g_newline_len;
 extern int  g_inserting;
 
-extern float g_cam_rx, g_cam_ry;
-extern float g_cam_dist;
-extern float g_cam_tx, g_cam_ty, g_cam_tz;
-extern float g_cam_motion_glow;
-extern int   g_mouse_x, g_mouse_y;
-extern int   g_mouse_btn;
-extern int   g_win_w, g_win_h;
 
 extern float g_panel_frac;
 extern int   g_resizing_panel;
@@ -107,7 +100,6 @@ extern int         g_xform_guide_mode;
 extern int         g_autonormal;
 extern int         g_show_lights;
 extern int         g_backdrop_mode;
-extern int         g_cam_rotate;
 extern int         g_example_idx;
 extern int         g_user_lighting_enabled;
 extern int         g_show_outlines;

@@ -341,54 +341,51 @@ int main() {
 
         repl_state_camera_set(11.0f, -22.0f, 7.5f,
                               1.0f, 2.0f, 3.0f, 0.25f);
-        ASSERT_TRUE("state camera rx", g_cam_rx == 11.0f);
-        ASSERT_TRUE("state camera ry", g_cam_ry == -22.0f);
-        ASSERT_TRUE("state camera dist", g_cam_dist == 7.5f);
-        ASSERT_TRUE("state camera tx", g_cam_tx == 1.0f);
-        ASSERT_TRUE("state camera ty", g_cam_ty == 2.0f);
-        ASSERT_TRUE("state camera tz", g_cam_tz == 3.0f);
-        ASSERT_TRUE("state camera glow", g_cam_motion_glow == 0.25f);
+        ASSERT_TRUE("state camera rx", *repl_state_camera()->rx == 11.0f);
+        ASSERT_TRUE("state camera ry", *repl_state_camera()->ry == -22.0f);
+        ASSERT_TRUE("state camera dist", *repl_state_camera()->dist == 7.5f);
+        ASSERT_TRUE("state camera tx", *repl_state_camera()->tx == 1.0f);
+        ASSERT_TRUE("state camera ty", *repl_state_camera()->ty == 2.0f);
+        ASSERT_TRUE("state camera tz", *repl_state_camera()->tz == 3.0f);
+        ASSERT_TRUE("state camera glow", *repl_state_camera()->motion_glow == 0.25f);
 
         repl_state_camera_set_orbit(33.0f, 44.0f);
-        ASSERT_TRUE("state camera orbit rx", g_cam_rx == 33.0f);
-        ASSERT_TRUE("state camera orbit ry", g_cam_ry == 44.0f);
+        ASSERT_TRUE("state camera orbit rx", *repl_state_camera()->rx == 33.0f);
+        ASSERT_TRUE("state camera orbit ry", *repl_state_camera()->ry == 44.0f);
         repl_state_camera_set_pan(-1.0f, -2.0f, -3.0f);
-        ASSERT_TRUE("state camera pan tx", g_cam_tx == -1.0f);
-        ASSERT_TRUE("state camera pan ty", g_cam_ty == -2.0f);
-        ASSERT_TRUE("state camera pan tz", g_cam_tz == -3.0f);
+        ASSERT_TRUE("state camera pan tx", *repl_state_camera()->tx == -1.0f);
+        ASSERT_TRUE("state camera pan ty", *repl_state_camera()->ty == -2.0f);
+        ASSERT_TRUE("state camera pan tz", *repl_state_camera()->tz == -3.0f);
         repl_state_camera_set_distance(9.0f);
-        ASSERT_TRUE("state camera distance", g_cam_dist == 9.0f);
+        ASSERT_TRUE("state camera distance", *repl_state_camera()->dist == 9.0f);
         repl_state_camera_set_motion_glow(0.5f);
-        ASSERT_TRUE("state camera motion glow", g_cam_motion_glow == 0.5f);
+        ASSERT_TRUE("state camera motion glow", *repl_state_camera()->motion_glow == 0.5f);
 
         camera = repl_state_camera_mut();
-        ASSERT_TRUE("state camera facade rx", camera->rx == &g_cam_rx);
-        ASSERT_TRUE("state camera facade dist", camera->dist == &g_cam_dist);
+        ASSERT_TRUE("state camera facade rx", camera->rx != NULL);
+        ASSERT_TRUE("state camera facade dist", camera->dist != NULL);
 
         repl_state_pointer_set(10, 20, 3);
-        ASSERT_INT("state pointer x", g_mouse_x, 10);
-        ASSERT_INT("state pointer y", g_mouse_y, 20);
-        ASSERT_INT("state pointer button", g_mouse_btn, 3);
+        ASSERT_INT("state pointer x", *repl_state_pointer()->mouse_x, 10);
+        ASSERT_INT("state pointer y", *repl_state_pointer()->mouse_y, 20);
+        ASSERT_INT("state pointer button", *repl_state_pointer()->mouse_button, 3);
         repl_state_pointer_set_pos(30, 40);
-        ASSERT_INT("state pointer pos x", g_mouse_x, 30);
-        ASSERT_INT("state pointer pos y", g_mouse_y, 40);
+        ASSERT_INT("state pointer pos x", *repl_state_pointer()->mouse_x, 30);
+        ASSERT_INT("state pointer pos y", *repl_state_pointer()->mouse_y, 40);
         repl_state_pointer_set_button(-1);
-        ASSERT_INT("state pointer button set", g_mouse_btn, -1);
+        ASSERT_INT("state pointer button set", *repl_state_pointer()->mouse_button, -1);
 
         pointer = repl_state_pointer_mut();
-        ASSERT_TRUE("state pointer facade x", pointer->mouse_x == &g_mouse_x);
-        ASSERT_TRUE("state pointer facade button",
-                    pointer->mouse_button == &g_mouse_btn);
+        ASSERT_TRUE("state pointer facade x", pointer->mouse_x != NULL);
+        ASSERT_TRUE("state pointer facade button", pointer->mouse_button != NULL);
 
         repl_state_viewport_set_size(1024, 768);
-        ASSERT_INT("state viewport width", g_win_w, 1024);
-        ASSERT_INT("state viewport height", g_win_h, 768);
+        ASSERT_INT("state viewport width", *repl_state_viewport()->window_w, 1024);
+        ASSERT_INT("state viewport height", *repl_state_viewport()->window_h, 768);
 
         viewport = repl_state_viewport_mut();
-        ASSERT_TRUE("state viewport facade width",
-                    viewport->window_w == &g_win_w);
-        ASSERT_TRUE("state viewport facade height",
-                    viewport->window_h == &g_win_h);
+        ASSERT_TRUE("state viewport facade width", viewport->window_w != NULL);
+        ASSERT_TRUE("state viewport facade height", viewport->window_h != NULL);
 
         view = repl_view_state_live();
         ASSERT_TRUE("view live bundle camera", view.cam_rx == camera->rx);
@@ -398,10 +395,10 @@ int main() {
                     view.win_w == viewport->window_w);
 
         repl_state_camera_reset_default();
-        ASSERT_TRUE("state camera reset rx", g_cam_rx == 20.0f);
-        ASSERT_TRUE("state camera reset ry", g_cam_ry == 30.0f);
-        ASSERT_TRUE("state camera reset dist", g_cam_dist == 5.0f);
-        ASSERT_TRUE("state camera reset glow", g_cam_motion_glow == 0.0f);
+        ASSERT_TRUE("state camera reset rx", *repl_state_camera()->rx == 20.0f);
+        ASSERT_TRUE("state camera reset ry", *repl_state_camera()->ry == 30.0f);
+        ASSERT_TRUE("state camera reset dist", *repl_state_camera()->dist == 5.0f);
+        ASSERT_TRUE("state camera reset glow", *repl_state_camera()->motion_glow == 0.0f);
     }
 
     /* 13. presentation state facade */
@@ -433,7 +430,7 @@ int main() {
         g_autonormal = 1;
         g_show_lights = 0;
         g_backdrop_mode = 0;
-        g_cam_rotate = 1;
+        *repl_state_camera_mut()->auto_rotate = 1;
         g_highlight_current_poly = 0;
         g_ortho_mode = 1;
         g_wrap_at_comma = 0;
@@ -469,7 +466,7 @@ int main() {
         ASSERT_INT("presentation reset backdrop",
                    g_backdrop_mode, CFG_DEFAULT_BACKDROP_MODE);
         ASSERT_INT("presentation reset camera rotate",
-                   g_cam_rotate, CFG_DEFAULT_CAMERA_ROTATE);
+                   *repl_state_camera()->auto_rotate, CFG_DEFAULT_CAMERA_ROTATE);
         ASSERT_INT("presentation reset highlight", g_highlight_current_poly, 1);
         ASSERT_INT("presentation reset ortho", g_ortho_mode, 0);
         ASSERT_INT("presentation reset wrap",
