@@ -51,13 +51,7 @@ extern int              g_num_flat_cmds;
 extern int              g_flat_dirty;
 extern FlatCmdLocalVars g_flat_cmd_local_vars[MAX_COMMANDS];
 
-extern char g_input[MAX_INPUT_LEN];
-extern int  g_input_len;
-extern int  g_cursor_pos;
 extern int  g_edit_line;
-extern char g_newline_buf[MAX_INPUT_LEN];
-extern int  g_newline_len;
-extern int  g_inserting;
 
 
 extern float g_panel_frac;

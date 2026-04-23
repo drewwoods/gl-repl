@@ -112,7 +112,7 @@ static int code_panel_leading_ws_chars(const char *text) {
 }
 
 int repl_code_panel_document_active_indent_chars(void) {
-    if (g_inserting)
+    if (repl_state_insert_mode())
         return cmd_indent_chars(g_edit_line);
     if (g_edit_line >= 0 && g_edit_line < g_num_cmds)
         return code_panel_leading_ws_chars(g_cmds[g_edit_line].source);
@@ -120,10 +120,10 @@ int repl_code_panel_document_active_indent_chars(void) {
 }
 
 static int code_panel_command_main_rows(int cmd_idx, int panel_w, int text_x) {
-    if (!g_inserting && cmd_idx == g_edit_line) {
+    if (!repl_state_insert_mode() && cmd_idx == g_edit_line) {
         int indent_chars = repl_code_panel_document_active_indent_chars();
         return repl_code_panel_document_row_count_for_text(
-            g_input, text_x + indent_chars * FONT_W, panel_w);
+            repl_state_editor_input()->input, text_x + indent_chars * FONT_W, panel_w);
     }
 
     {
@@ -151,14 +151,14 @@ static void code_panel_precompute_layout_rows(int panel_w, int text_x,
 static int code_panel_insert_rows(int panel_w, int text_x) {
     int indent_chars = repl_code_panel_document_active_indent_chars();
     return repl_code_panel_document_row_count_for_text(
-        g_input, text_x + indent_chars * FONT_W, panel_w);
+        repl_state_editor_input()->input, text_x + indent_chars * FONT_W, panel_w);
 }
 
 static int code_panel_newline_rows(int panel_w, int text_x) {
     if (g_edit_line == g_num_cmds) {
         int indent_chars = repl_code_panel_document_active_indent_chars();
         return repl_code_panel_document_row_count_for_text(
-            g_input, text_x + indent_chars * FONT_W, panel_w);
+            repl_state_editor_input()->input, text_x + indent_chars * FONT_W, panel_w);
     }
     return 1;
 }
@@ -168,30 +168,30 @@ static int code_panel_cursor_doc_line_from_layout(
     int panel_w, int text_x) {
     int cursor_doc_line = header_rows;
 
-    if (g_inserting) {
+    if (repl_state_insert_mode()) {
         for (int i = 0; i < g_edit_line && i < g_num_cmds; i++) {
             cursor_doc_line += cmd_main_rows[i];
             cursor_doc_line += replay_extra_rows[i];
         }
         cursor_doc_line += repl_code_panel_document_cursor_row_for_text(
-            g_input, text_x + repl_code_panel_document_active_indent_chars() * FONT_W,
-            panel_w, g_cursor_pos, NULL, NULL, NULL);
+            repl_state_editor_input()->input, text_x + repl_code_panel_document_active_indent_chars() * FONT_W,
+            panel_w, repl_state_cursor_pos(), NULL, NULL, NULL);
     } else if (g_edit_line < g_num_cmds) {
         for (int i = 0; i < g_edit_line; i++) {
             cursor_doc_line += cmd_main_rows[i];
             cursor_doc_line += replay_extra_rows[i];
         }
         cursor_doc_line += repl_code_panel_document_cursor_row_for_text(
-            g_input, text_x + repl_code_panel_document_active_indent_chars() * FONT_W,
-            panel_w, g_cursor_pos, NULL, NULL, NULL);
+            repl_state_editor_input()->input, text_x + repl_code_panel_document_active_indent_chars() * FONT_W,
+            panel_w, repl_state_cursor_pos(), NULL, NULL, NULL);
     } else {
         for (int i = 0; i < g_num_cmds; i++) {
             cursor_doc_line += cmd_main_rows[i];
             cursor_doc_line += replay_extra_rows[i];
         }
         cursor_doc_line += repl_code_panel_document_cursor_row_for_text(
-            g_input, text_x + repl_code_panel_document_active_indent_chars() * FONT_W,
-            panel_w, g_cursor_pos, NULL, NULL, NULL);
+            repl_state_editor_input()->input, text_x + repl_code_panel_document_active_indent_chars() * FONT_W,
+            panel_w, repl_state_cursor_pos(), NULL, NULL, NULL);
     }
 
     return cursor_doc_line;
@@ -251,7 +251,7 @@ void repl_code_panel_document_build(CodePanelDocumentLayout *layout,
     total_lines = layout->header_rows + layout->footer_rows
                 + code_panel_newline_rows(panel_w, text_x);
     for (int i = 0; i < g_num_cmds; i++) {
-        if (g_inserting && i == g_edit_line)
+        if (repl_state_insert_mode() && i == g_edit_line)
             total_lines += code_panel_insert_rows(panel_w, text_x);
         total_lines += layout->cmd_main_rows[i];
         total_lines += layout->replay_extra_rows[i];
@@ -302,7 +302,7 @@ int repl_code_panel_document_target_for_doc_line(
         return 0;
 
     for (int i = 0; i <= g_num_cmds; i++) {
-        if (g_inserting && i == g_edit_line) {
+        if (repl_state_insert_mode() && i == g_edit_line) {
             int insert_rows = code_panel_insert_rows(layout->panel_w,
                                                      layout->text_x);
             if (row < insert_rows) {

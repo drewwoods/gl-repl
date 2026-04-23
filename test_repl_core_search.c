@@ -35,10 +35,11 @@ static void declare_test_vars(void) {
 }
 
 static void set_live_input(const char *text) {
-    strncpy(g_input, text, MAX_INPUT_LEN - 1);
-    g_input[MAX_INPUT_LEN - 1] = '\0';
-    g_input_len = (int)strlen(g_input);
-    g_cursor_pos = g_input_len;
+    ReplEditorInputState *inp = repl_state_editor_input_mut();
+    strncpy(inp->input, text, MAX_INPUT_LEN - 1);
+    inp->input[MAX_INPUT_LEN - 1] = '\0';
+    *inp->input_len = (int)strlen(inp->input);
+    repl_state_cursor_pos_set(*inp->input_len);
 }
 
 int main(void) {
@@ -199,7 +200,7 @@ int main(void) {
     repl_reset_state(); declare_test_vars();
     repl_feed_line_public("glBegin(GL_POINTS);");
     repl_feed_line_public("glEnd();");
-    g_inserting = 1;
+    repl_state_insert_mode_set(1);
     g_edit_line = 1;
     ASSERT_TRUE("row count inserting includes input row",
                 repl_search_row_count() == g_num_cmds + 1);

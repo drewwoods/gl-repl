@@ -58,7 +58,7 @@ static void apply_func_decl_resume(CmdType end_type) {
 }
 
 int repl_commit_resolve_insert_exit_target(int target) {
-    if (!g_inserting ||
+    if (!repl_state_insert_mode() ||
         g_func_decl_resume_delta <= 0 ||
         g_edit_line < 0 ||
         g_edit_line >= g_num_cmds ||
@@ -81,7 +81,7 @@ void repl_commit_reset_transients(void) {
 }
 
 int try_commit_float_decl(void) {
-    const char *p = g_input;
+    const char *p = repl_state_editor_input()->input;
     while (*p && isspace((unsigned char)*p)) p++;
     if (strncmp(p, "float", 5) != 0) return 0;
     if (isalnum((unsigned char)p[5]) || p[5] == '_') return 0;
@@ -193,9 +193,9 @@ int try_commit_float_decl(void) {
      * so validation can exempt the line's own names from the "already
      * declared" check. Without this, re-committing `float tmp;` after
      * editing — even unchanged — reports "'tmp' already declared". */
-    int insert_idx = g_inserting ? g_edit_line :
+    int insert_idx = repl_state_insert_mode() ? g_edit_line :
                (g_edit_line < g_num_cmds ? g_edit_line : g_num_cmds);
-    int overwriting_decl = (!g_inserting && insert_idx < g_num_cmds &&
+    int overwriting_decl = (!repl_state_insert_mode() && insert_idx < g_num_cmds &&
                             g_cmds[insert_idx].type == CMD_VAR_DECLARE);
     const GLCmd *old_decl = overwriting_decl ? &g_cmds[insert_idx] : NULL;
 
@@ -363,7 +363,7 @@ int try_commit_float_decl(void) {
         } else if (repl_command_store_insert_one(
                        &store, decl_pos, &cmd,
                        REPL_COMMAND_STORE_ADJUST_EDIT_LINE)) {
-            if (!g_inserting && g_edit_line < g_num_cmds)
+            if (!repl_state_insert_mode() && g_edit_line < g_num_cmds)
                 load_line_to_input(g_edit_line);
         } else {
             set_status("Command buffer full!");
@@ -380,9 +380,12 @@ int try_commit_float_decl(void) {
         }
         set_status(msg);
     }
-    g_input[0] = '\0';
-    g_input_len = 0;
-    g_cursor_pos = 0;
+    {
+        ReplEditorInputState *inp = repl_state_editor_input_mut();
+        inp->input[0] = '\0';
+        *inp->input_len = 0;
+    }
+    repl_state_cursor_pos_set(0);
     mark_normals_dirty();
     return 1;
 }
@@ -396,12 +399,12 @@ int try_assign_variable(void) {
     char indent[32];
     int ind;
 
-    if (!repl_extract_assignment_parts(g_input, name, sizeof(name), rhs, sizeof(rhs)))
+    if (!repl_extract_assignment_parts(repl_state_editor_input()->input, name, sizeof(name), rhs, sizeof(rhs)))
         return 0;
 
     comment[0] = '\0';
     {
-        const char *comment_p = strstr(g_input, "//");
+        const char *comment_p = strstr(repl_state_editor_input()->input, "//");
         if (comment_p) {
             while (*comment_p && isspace((unsigned char)*comment_p))
                 comment_p++;
@@ -421,7 +424,7 @@ int try_assign_variable(void) {
     }
 
     {
-        int insert_idx = g_inserting ? g_edit_line :
+        int insert_idx = repl_state_insert_mode() ? g_edit_line :
                    (g_edit_line < g_num_cmds ? g_edit_line : g_num_cmds);
         ExprVar vis[MAX_EXPR_VARS];
         int vis_n = collect_visible_vars(insert_idx, vis, MAX_EXPR_VARS);
@@ -448,7 +451,7 @@ int try_assign_variable(void) {
         cmd.has_vars = has_rhs_vars;
 
         {
-            int insert_idx = g_inserting ? g_edit_line :
+            int insert_idx = repl_state_insert_mode() ? g_edit_line :
                        (g_edit_line < g_num_cmds ? g_edit_line : g_num_cmds);
             ind = (in_begin_block_at(insert_idx) ? 4 : 2) + block_depth_at(insert_idx) * 2;
             if (ind > (int)sizeof(indent) - 1)
@@ -463,7 +466,7 @@ int try_assign_variable(void) {
             }
 
             ReplCommandStore store = repl_command_store_live();
-            if (g_inserting) {
+            if (repl_state_insert_mode()) {
                 if (repl_command_store_insert_one(&store, insert_idx, &cmd, 0))
                     g_edit_line++;
                 else {
@@ -521,22 +524,25 @@ int try_assign_variable(void) {
         snprintf(msg, sizeof(msg), "%s = %g", name, val);
         set_status(msg);
     }
-    g_input[0] = '\0';
-    g_input_len = 0;
-    g_cursor_pos = 0;
+    {
+        ReplEditorInputState *inp = repl_state_editor_input_mut();
+        inp->input[0] = '\0';
+        *inp->input_len = 0;
+    }
+    repl_state_cursor_pos_set(0);
     mark_normals_dirty();
     return 1;
 }
 
 int try_commit_for_loop(void) {
-    const char *p = g_input;
+    const char *p = repl_state_editor_input()->input;
     while (*p && isspace((unsigned char)*p))
         p++;
     if (strncmp(p, "for(", 4) != 0 && strncmp(p, "for (", 5) != 0)
         return 0;
 
     {
-        int pos = g_inserting ? g_edit_line :
+        int pos = repl_state_insert_mode() ? g_edit_line :
                   (g_edit_line < g_num_cmds ? g_edit_line : g_num_cmds);
         ExprVar visible_vars[MAX_EXPR_VARS];
         int visible_nv = collect_visible_vars(pos, visible_vars, MAX_EXPR_VARS);
@@ -659,15 +665,18 @@ int try_commit_for_loop(void) {
             snprintf(fe.source, sizeof(fe.source), "%s}", indent);
 
             if (*body_start == '{' || *body_start == '\0') {
-                if (!g_inserting && g_edit_line < g_num_cmds &&
+                if (!repl_state_insert_mode() && g_edit_line < g_num_cmds &&
                     g_cmds[g_edit_line].type == CMD_FOR_BEGIN) {
                     ReplCommandStore store = repl_command_store_live();
                     repl_command_store_replace_one(&store, g_edit_line, &fb);
                     g_edit_line++;
-                    g_inserting = 1;
-                    g_input[0] = '\0';
-                    g_input_len = 0;
-                    g_cursor_pos = 0;
+                    repl_state_insert_mode_set(1);
+                    {
+                        ReplEditorInputState *inp = repl_state_editor_input_mut();
+                        inp->input[0] = '\0';
+                        *inp->input_len = 0;
+                    }
+                    repl_state_cursor_pos_set(0);
                     clear_autocomplete_state();
                     set_status("for-loop header updated");
                     mark_normals_dirty();
@@ -683,10 +692,13 @@ int try_commit_for_loop(void) {
                 }
 
                 g_edit_line = pos + 1;
-                g_inserting = 1;
-                g_input[0] = '\0';
-                g_input_len = 0;
-                g_cursor_pos = 0;
+                repl_state_insert_mode_set(1);
+                {
+                    ReplEditorInputState *inp = repl_state_editor_input_mut();
+                    inp->input[0] = '\0';
+                    *inp->input_len = 0;
+                }
+                repl_state_cursor_pos_set(0);
                 set_status("for-loop: type body lines, press Esc when done");
                 mark_normals_dirty();
                 return 1;
@@ -743,12 +755,18 @@ int try_commit_for_loop(void) {
                 }
 
                 g_edit_line = pos + 3;
-                g_inserting = 0;
-                g_input[0] = '\0';
-                g_input_len = 0;
-                g_cursor_pos = 0;
-                g_newline_buf[0] = '\0';
-                g_newline_len = 0;
+                repl_state_insert_mode_set(0);
+                {
+                    ReplEditorInputState *inp = repl_state_editor_input_mut();
+                    inp->input[0] = '\0';
+                    *inp->input_len = 0;
+                }
+                repl_state_cursor_pos_set(0);
+                {
+                    ReplEditorInputState *inp = repl_state_editor_input_mut();
+                    inp->pending_newline[0] = '\0';
+                    *inp->pending_newline_len = 0;
+                }
 
                 {
                     char msg[128];
@@ -767,21 +785,21 @@ int try_commit_func_def(void) {
     int fn = -1;
     int param_count = 0;
     char param_names[MAX_EXPR_VARS][16];
-    const char *trimmed = g_input;
+    const char *trimmed = repl_state_editor_input()->input;
 
     while (*trimmed && isspace((unsigned char)*trimmed))
         trimmed++;
     if (strchr(trimmed, '(') && strchr(trimmed, '{') == NULL)
         return 0;
-    if (!parse_repl_func_signature(g_input, &fn,
+    if (!parse_repl_func_signature(repl_state_editor_input()->input, &fn,
                                    param_names, MAX_EXPR_VARS,
                                    &param_count))
         return 0;
 
     {
-        int edit_pos = g_inserting ? g_edit_line :
+        int edit_pos = repl_state_insert_mode() ? g_edit_line :
                        (g_edit_line < g_num_cmds ? g_edit_line : g_num_cmds);
-        int overwriting_func = (!g_inserting && edit_pos < g_num_cmds &&
+        int overwriting_func = (!repl_state_insert_mode() && edit_pos < g_num_cmds &&
                                 g_cmds[edit_pos].type == CMD_FUNC_DEF);
 
         /* Reject duplicate func definitions: each func<N> may only be defined
@@ -822,10 +840,13 @@ int try_commit_func_def(void) {
                                indent, fn, param_names, param_count);
             repl_command_store_replace_one(&store, edit_pos, &updated);
             g_edit_line = edit_pos + 1;
-            g_inserting = 1;
-            g_input[0] = '\0';
-            g_input_len = 0;
-            g_cursor_pos = 0;
+            repl_state_insert_mode_set(1);
+            {
+                ReplEditorInputState *inp = repl_state_editor_input_mut();
+                inp->input[0] = '\0';
+                *inp->input_len = 0;
+            }
+            repl_state_cursor_pos_set(0);
             clear_autocomplete_state();
             set_status("func def header updated");
             mark_normals_dirty();
@@ -880,10 +901,13 @@ int try_commit_func_def(void) {
         free(insert_cmds);
 
         g_edit_line = pos + comment_count + 1;
-        g_inserting = 1;
-        g_input[0] = '\0';
-        g_input_len = 0;
-        g_cursor_pos = 0;
+        repl_state_insert_mode_set(1);
+        {
+            ReplEditorInputState *inp = repl_state_editor_input_mut();
+            inp->input[0] = '\0';
+            *inp->input_len = 0;
+        }
+        repl_state_cursor_pos_set(0);
         set_status("func def: type body lines, press Esc when done");
         mark_normals_dirty();
         return 1;
@@ -891,14 +915,14 @@ int try_commit_func_def(void) {
 }
 
 int try_commit_if_block(void) {
-    const char *p = g_input;
+    const char *p = repl_state_editor_input()->input;
     while (*p && isspace((unsigned char)*p))
         p++;
     if (strncmp(p, "if(", 3) != 0 && strncmp(p, "if (", 4) != 0)
         return 0;
 
     {
-        int pos = g_inserting ? g_edit_line :
+        int pos = repl_state_insert_mode() ? g_edit_line :
                   (g_edit_line < g_num_cmds ? g_edit_line : g_num_cmds);
         ExprVar visible_vars[MAX_EXPR_VARS];
         int visible_nv = collect_visible_vars(pos, visible_vars, MAX_EXPR_VARS);
@@ -992,15 +1016,18 @@ int try_commit_if_block(void) {
             snprintf(ib.source, sizeof(ib.source), "%sif(%s) {", indent, ct);
         }
 
-        if (!g_inserting && g_edit_line < g_num_cmds &&
+        if (!repl_state_insert_mode() && g_edit_line < g_num_cmds &&
             g_cmds[g_edit_line].type == CMD_IF_BEGIN) {
             ReplCommandStore store = repl_command_store_live();
             repl_command_store_replace_one(&store, g_edit_line, &ib);
             g_edit_line++;
-            g_inserting = 1;
-            g_input[0] = '\0';
-            g_input_len = 0;
-            g_cursor_pos = 0;
+            repl_state_insert_mode_set(1);
+            {
+                ReplEditorInputState *inp = repl_state_editor_input_mut();
+                inp->input[0] = '\0';
+                *inp->input_len = 0;
+            }
+            repl_state_cursor_pos_set(0);
             clear_autocomplete_state();
             set_status("if condition updated");
             mark_normals_dirty();
@@ -1020,10 +1047,13 @@ int try_commit_if_block(void) {
         }
 
         g_edit_line = pos + 1;
-        g_inserting = 1;
-        g_input[0] = '\0';
-        g_input_len = 0;
-        g_cursor_pos = 0;
+        repl_state_insert_mode_set(1);
+        {
+            ReplEditorInputState *inp = repl_state_editor_input_mut();
+            inp->input[0] = '\0';
+            *inp->input_len = 0;
+        }
+        repl_state_cursor_pos_set(0);
         set_status("if-block: type body lines, press Esc when done");
         mark_normals_dirty();
         return 1;
@@ -1031,14 +1061,14 @@ int try_commit_if_block(void) {
 }
 
 int try_commit_close_brace(void) {
-    const char *p = g_input;
+    const char *p = repl_state_editor_input()->input;
     while (*p && isspace((unsigned char)*p))
         p++;
     if (*p != '}')
         return 0;
 
     {
-        int pos = g_inserting ? g_edit_line :
+        int pos = repl_state_insert_mode() ? g_edit_line :
                   (g_edit_line < g_num_cmds ? g_edit_line : g_num_cmds);
         CmdType open_type = nearest_open_block_at(pos);
         CmdType end_type;
@@ -1073,10 +1103,13 @@ int try_commit_close_brace(void) {
                                   end_type != CMD_FUNC_END);
             g_edit_line = pos + 1;
             apply_func_decl_resume(end_type);
-            g_inserting = keep_inserting ? 1 : 0;
-            g_input[0] = '\0';
-            g_input_len = 0;
-            g_cursor_pos = 0;
+            repl_state_insert_mode_set(keep_inserting ? 1 : 0);
+            {
+                ReplEditorInputState *inp = repl_state_editor_input_mut();
+                inp->input[0] = '\0';
+                *inp->input_len = 0;
+            }
+            repl_state_cursor_pos_set(0);
             load_line_to_input(g_edit_line);
             {
                 char msg[64];
@@ -1111,12 +1144,18 @@ int try_commit_close_brace(void) {
                               end_type != CMD_FUNC_END);
         g_edit_line = pos + 1;
         apply_func_decl_resume(end_type);
-        g_inserting = keep_inserting ? 1 : 0;
-        g_input[0] = '\0';
-        g_input_len = 0;
-        g_cursor_pos = 0;
-        g_newline_buf[0] = '\0';
-        g_newline_len = 0;
+        repl_state_insert_mode_set(keep_inserting ? 1 : 0);
+        {
+            ReplEditorInputState *inp = repl_state_editor_input_mut();
+            inp->input[0] = '\0';
+            *inp->input_len = 0;
+        }
+        repl_state_cursor_pos_set(0);
+        {
+            ReplEditorInputState *inp = repl_state_editor_input_mut();
+            inp->pending_newline[0] = '\0';
+            *inp->pending_newline_len = 0;
+        }
         {
             char msg[64];
             snprintf(msg, sizeof(msg), "%s block closed", label);
@@ -1160,18 +1199,24 @@ int try_commit_any(void) {
  * "Insert mode" status and marks normals dirty (float decl does not). */
 int try_commit_var_statements_then_insert(void) {
     if (try_commit_float_decl()) {
-        g_inserting = 1;
-        g_input[0] = '\0';
-        g_input_len = 0;
-        g_cursor_pos = 0;
+        repl_state_insert_mode_set(1);
+        {
+            ReplEditorInputState *inp = repl_state_editor_input_mut();
+            inp->input[0] = '\0';
+            *inp->input_len = 0;
+        }
+        repl_state_cursor_pos_set(0);
         clear_autocomplete_state();
         return 1;
     }
     if (try_assign_variable()) {
-        g_inserting = 1;
-        g_input[0] = '\0';
-        g_input_len = 0;
-        g_cursor_pos = 0;
+        repl_state_insert_mode_set(1);
+        {
+            ReplEditorInputState *inp = repl_state_editor_input_mut();
+            inp->input[0] = '\0';
+            *inp->input_len = 0;
+        }
+        repl_state_cursor_pos_set(0);
         clear_autocomplete_state();
         set_status("Insert mode");
         mark_normals_dirty();

@@ -36,9 +36,10 @@ static void declare_test_vars(void) {
 }
 
 static void set_input_text(const char *text) {
-    strcpy(g_input, text);
-    g_input_len = (int)strlen(g_input);
-    g_cursor_pos = g_input_len;
+    ReplEditorInputState *inp = repl_state_editor_input_mut();
+    strcpy(inp->input, text);
+    *inp->input_len = (int)strlen(inp->input);
+    repl_state_cursor_pos_set(*inp->input_len);
 }
 
 static int has_insert_match(const char *text) {
@@ -66,7 +67,7 @@ int main() {
         ASSERT_STR("hint text", g_ac_hint, "x, y, z)");
         
         accept_autocomplete();
-        ASSERT_STR("input after accept", g_input, "glVertex3f(");
+        ASSERT_STR("input after accept", repl_state_editor_input()->input, "glVertex3f(");
     }
 
     /* 2. Enum completion - glBegin */
@@ -80,7 +81,7 @@ int main() {
         ASSERT_STR("ghost text", g_ac_ghost, "ANGLES)");
         
         accept_autocomplete();
-        ASSERT_STR("input after accept", g_input, "glBegin(GL_TRIANGLES)");
+        ASSERT_STR("input after accept", repl_state_editor_input()->input, "glBegin(GL_TRIANGLES)");
     }
 
     /* 3. Multi-argument enum completion - glColorMaterial */
@@ -92,14 +93,14 @@ int main() {
         ASSERT_STR("first match arg1", g_ac_insert_matches[0], "GL_FRONT");
         ASSERT_STR("ghost text arg1", g_ac_ghost, "ONT, ");
         accept_autocomplete();
-        ASSERT_STR("input after arg1", g_input, "glColorMaterial(GL_FRONT, ");
+        ASSERT_STR("input after arg1", repl_state_editor_input()->input, "glColorMaterial(GL_FRONT, ");
         
         set_input_text("glColorMaterial(GL_FRONT, GL_AMB");
         update_autocomplete();
         ASSERT_STR("first match arg2", g_ac_insert_matches[0], "GL_AMBIENT");
         ASSERT_STR("ghost text arg2", g_ac_ghost, "IENT)");
         accept_autocomplete();
-        ASSERT_STR("input after arg2", g_input, "glColorMaterial(GL_FRONT, GL_AMBIENT)");
+        ASSERT_STR("input after arg2", repl_state_editor_input()->input, "glColorMaterial(GL_FRONT, GL_AMBIENT)");
 
         set_input_text("glColorMaterial(GL_FRONT, GL_SH");
         update_autocomplete();
@@ -115,7 +116,7 @@ int main() {
         ASSERT_STR("match", g_ac_insert_matches[0], "GL_POINT_DISTANCE_ATTENUATION");
         ASSERT_STR("ghost", g_ac_ghost, "ANCE_ATTENUATION, ");
         accept_autocomplete();
-        ASSERT_STR("input", g_input, "glPointParameterfv(GL_POINT_DISTANCE_ATTENUATION, ");
+        ASSERT_STR("input", repl_state_editor_input()->input, "glPointParameterfv(GL_POINT_DISTANCE_ATTENUATION, ");
     }
 
     /* 5. User-defined function completion */
@@ -145,7 +146,7 @@ int main() {
         ASSERT_STR("float ghost", g_ac_ghost, "at ");
 
         accept_autocomplete();
-        ASSERT_STR("float input after accept", g_input, "float ");
+        ASSERT_STR("float input after accept", repl_state_editor_input()->input, "float ");
     }
 
     /* 7. Supported funcN completions cover func0..func9 */
