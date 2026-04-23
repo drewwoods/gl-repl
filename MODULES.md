@@ -326,9 +326,10 @@ render files.
   `repl_command_store_load()`.
 - `sample.h` stays the shared compatibility header, while `repl_config.h`
   owns the keyed config descriptor API and `repl_state.h` carries the typed
-  runtime-state facade. The source document and flat-program buffers are the
-  first storage domains moving behind that facade; other domains still use
-  compatibility externs until their slices land.
+  runtime-state facade. The source document, flat-program, editor-input,
+  selection, and clipboard buffers are the first storage domains moving behind
+  that facade; other domains still use compatibility externs until their
+  slices land.
 
 ## Naming Notes
 

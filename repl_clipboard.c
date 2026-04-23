@@ -1,21 +1,15 @@
 /*
  * repl_clipboard.c -- Line selection and command clipboard operations.
  *
- * This module owns the selection anchors and clipboard buffer.  Editor input
- * routing decides when copy/cut/paste happens; this file decides which command
- * range that means, preserves var-declaration guards, and performs the actual
- * clipboard mutation.
+ * Editor input routing decides when copy/cut/paste happens; this file decides
+ * which command range that means, preserves var-declaration guards, and
+ * performs the actual clipboard mutation. Phase 2 keeps selection and
+ * clipboard storage in repl_state.c while this module owns the behavior.
  */
 #include "repl_clipboard.h"
 #include "repl_command_store.h"
 #include "repl_core_internal.h"
 #include "repl_undo.h"
-
-GLCmd g_clipboard[MAX_COMMANDS];
-int   g_clipboard_count = 0;
-
-int g_sel_anchor = -1;
-int g_sel_end = -1;
 
 void clear_selection(void) {
     g_sel_anchor = g_sel_end = -1;
