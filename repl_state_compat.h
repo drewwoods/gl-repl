@@ -162,11 +162,6 @@ extern char        g_ac_hint[MAX_LINE_LEN];
 extern int         g_cursor_px;
 extern int         g_cursor_py;
 
-extern int   g_sel_anchor;
-extern int   g_sel_end;
-extern GLCmd g_clipboard[MAX_COMMANDS];
-extern int   g_clipboard_count;
-
 extern char g_scratch_buf[256];
 
 extern char g_workspace_header_lines[MAX_WORKSPACE_HEADER_LINES][WORKSPACE_HEADER_LINE_LEN];

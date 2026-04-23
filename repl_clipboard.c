@@ -12,32 +12,33 @@
 #include "repl_undo.h"
 
 void clear_selection(void) {
-    g_sel_anchor = g_sel_end = -1;
+    repl_state_selection_clear();
 }
 
 int sel_active(void) {
-    return g_sel_anchor >= 0 && g_sel_end >= 0;
+    return repl_state_selection_anchor() >= 0 && repl_state_selection_end_idx() >= 0;
 }
 
 int sel_lo(void) {
-    return g_sel_anchor < g_sel_end ? g_sel_anchor : g_sel_end;
+    int a = repl_state_selection_anchor(), e = repl_state_selection_end_idx();
+    return a < e ? a : e;
 }
 
 int sel_hi(void) {
-    return g_sel_anchor > g_sel_end ? g_sel_anchor : g_sel_end;
+    int a = repl_state_selection_anchor(), e = repl_state_selection_end_idx();
+    return a > e ? a : e;
 }
 
 void repl_selection_start(int line_idx) {
-    g_sel_anchor = line_idx;
-    g_sel_end = line_idx;
+    repl_state_selection_set(line_idx, line_idx);
 }
 
 int repl_selection_end(void) {
-    return g_sel_end;
+    return repl_state_selection_end_idx();
 }
 
 void repl_selection_set_end(int line_idx) {
-    g_sel_end = line_idx;
+    repl_state_selection_set(repl_state_selection_anchor(), line_idx);
 }
 
 int repl_selection_normalize_cmd_range(int start, int count,
@@ -56,11 +57,12 @@ int repl_selection_cmds_contain_var_decl(const GLCmd *cmds, int count) {
 }
 
 int repl_selection_cmd_range_contains_var_decl(int start, int count) {
-    if (start < 0 || count <= 0 || start >= g_num_cmds)
+    int n = repl_state_document_count();
+    if (start < 0 || count <= 0 || start >= n)
         return 0;
-    if (start + count > g_num_cmds)
-        count = g_num_cmds - start;
-    return repl_selection_cmds_contain_var_decl(&g_cmds[start], count);
+    if (start + count > n)
+        count = n - start;
+    return repl_selection_cmds_contain_var_decl(repl_state_document_cmds() + start, count);
 }
 
 void repl_selection_set_var_decl_action_status(const char *action) {
@@ -69,22 +71,22 @@ void repl_selection_set_var_decl_action_status(const char *action) {
     set_status(msg);
 }
 
-static void clipboard_clear(void) {
-    g_clipboard_count = 0;
-}
-
 static void clipboard_copy_range(int start, int count) {
-    clipboard_clear();
-    for (int i = start; i < start + count && g_clipboard_count < MAX_COMMANDS; i++)
-        g_clipboard[g_clipboard_count++] = g_cmds[i];
+    GLCmd *cb = repl_state_clipboard_cmds_mut();
+    const GLCmd *cmds = repl_state_document_cmds();
+    int n = 0;
+    for (int i = start; i < start + count && n < MAX_COMMANDS; i++)
+        cb[n++] = cmds[i];
+    repl_state_clipboard_count_set(n);
 }
 
 static int selected_cmd_range(int *out_start, int *out_count) {
     int start = sel_lo();
     int hi = sel_hi();
+    int n = repl_state_document_count();
 
-    if (hi >= g_num_cmds)
-        hi = g_num_cmds - 1;
+    if (hi >= n)
+        hi = n - 1;
 
     return repl_selection_normalize_cmd_range(start, hi - start + 1,
                                              out_start, out_count);
@@ -95,15 +97,16 @@ static int current_copy_range(int *out_start, int *out_count,
     int start;
     int count = 1;
     int copying_for;
+    int n = repl_state_document_count();
 
-    if (g_edit_line >= g_num_cmds)
+    if (repl_state_edit_line() >= n)
         return 0;
 
-    start = g_edit_line;
-    copying_for = (g_cmds[start].type == CMD_FOR_BEGIN);
+    start = repl_state_edit_line();
+    copying_for = (repl_state_document_cmds()[start].type == CMD_FOR_BEGIN);
     if (copying_for) {
         int block_end_idx = find_block_end(start);
-        int end_idx = (block_end_idx < g_num_cmds) ? block_end_idx + 1 : g_num_cmds;
+        int end_idx = (block_end_idx < n) ? block_end_idx + 1 : n;
         count = end_idx - start;
     }
 
@@ -117,17 +120,18 @@ static int current_copy_range(int *out_start, int *out_count,
 static int current_cut_range(int *out_start, int *out_count) {
     int start;
     int count;
+    int n = repl_state_document_count();
 
     if (sel_active())
         return selected_cmd_range(out_start, out_count);
 
-    if (g_edit_line >= g_num_cmds)
+    if (repl_state_edit_line() >= n)
         return 0;
 
-    start = g_edit_line;
-    if (g_cmds[start].type == CMD_FOR_BEGIN) {
+    start = repl_state_edit_line();
+    if (repl_state_document_cmds()[start].type == CMD_FOR_BEGIN) {
         int block_end_idx = find_block_end(start);
-        count = ((block_end_idx < g_num_cmds) ? block_end_idx + 1 : g_num_cmds) - start;
+        count = ((block_end_idx < n) ? block_end_idx + 1 : n) - start;
     } else {
         count = 1;
     }
@@ -136,7 +140,7 @@ static int current_cut_range(int *out_start, int *out_count) {
 }
 
 void repl_clipboard_copy_current(void) {
-    if (g_inserting) {
+    if (repl_state_insert_mode()) {
         clear_selection();
         return;
     }
@@ -156,10 +160,11 @@ void repl_clipboard_copy_current(void) {
         {
             char msg[64];
             snprintf(msg, sizeof(msg), "Copied %d line%s",
-                     g_clipboard_count, g_clipboard_count > 1 ? "s" : "");
+                     repl_state_clipboard_count(),
+                     repl_state_clipboard_count() > 1 ? "s" : "");
             set_status(msg);
         }
-    } else if (g_edit_line < g_num_cmds) {
+    } else if (repl_state_edit_line() < repl_state_document_count()) {
         int start;
         int count;
         int copying_for = 0;
@@ -175,13 +180,13 @@ void repl_clipboard_copy_current(void) {
         if (copying_for) {
             char msg[64];
             snprintf(msg, sizeof(msg), "Copied for-loop (%d lines)",
-                     g_clipboard_count);
+                     repl_state_clipboard_count());
             set_status(msg);
         } else {
             set_status("Copied line");
         }
     } else {
-        clipboard_clear();
+        repl_state_clipboard_count_set(0);
     }
 
     clear_selection();
@@ -191,13 +196,13 @@ void repl_clipboard_cut_current(void) {
     int start;
     int count;
 
-    if (g_inserting) {
+    if (repl_state_insert_mode()) {
         clear_selection();
         return;
     }
 
     if (!current_cut_range(&start, &count)) {
-        clipboard_clear();
+        repl_state_clipboard_count_set(0);
         clear_selection();
         return;
     }
@@ -212,15 +217,16 @@ void repl_clipboard_cut_current(void) {
 }
 
 void repl_clipboard_paste_current(void) {
-    if (g_clipboard_count > 0) {
-        if (repl_selection_cmds_contain_var_decl(g_clipboard, g_clipboard_count)) {
+    if (repl_state_clipboard_count() > 0) {
+        if (repl_selection_cmds_contain_var_decl(repl_state_clipboard_cmds_mut(),
+                                                 repl_state_clipboard_count())) {
             repl_selection_set_var_decl_action_status("paste");
             return;
         }
 
         {
             ReplCommandStore store = repl_command_store_live();
-            if (!repl_command_store_can_insert(&store, g_clipboard_count)) {
+            if (!repl_command_store_can_insert(&store, repl_state_clipboard_count())) {
                 set_status("Command buffer full!");
                 return;
             }
@@ -229,23 +235,26 @@ void repl_clipboard_paste_current(void) {
         push_undo_snapshot();
         {
             ReplCommandStore store = repl_command_store_live();
-            int pos = g_inserting ? g_edit_line :
-                      (g_edit_line < g_num_cmds ? g_edit_line : g_num_cmds);
-            if (!repl_command_store_insert_many(&store, pos, g_clipboard,
-                                                g_clipboard_count, 0)) {
+            int edit = repl_state_edit_line();
+            int n = repl_state_document_count();
+            int pos = repl_state_insert_mode() ? edit :
+                      (edit < n ? edit : n);
+            if (!repl_command_store_insert_many(&store, pos, repl_state_clipboard_cmds_mut(),
+                                                repl_state_clipboard_count(), 0)) {
                 set_status("Command buffer full!");
                 return;
             }
-            g_edit_line = pos + g_clipboard_count;
-            g_inserting = 0;
-            load_line_to_input(g_edit_line);
+            repl_state_edit_line_set(pos + repl_state_clipboard_count());
+            repl_state_insert_mode_set(0);
+            load_line_to_input(repl_state_edit_line());
             mark_normals_dirty();
         }
 
         {
             char msg[64];
             snprintf(msg, sizeof(msg), "Pasted %d line%s",
-                     g_clipboard_count, g_clipboard_count > 1 ? "s" : "");
+                     repl_state_clipboard_count(),
+                     repl_state_clipboard_count() > 1 ? "s" : "");
             set_status(msg);
         }
     } else {
