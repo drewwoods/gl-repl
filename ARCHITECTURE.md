@@ -67,9 +67,15 @@ of one monolithic `repl_core.c`.
 - `ui_panels.c`: 2D code-panel row rendering, source search highlights, inline
   ghost/hint text, scene status banner, and top-level panel routing.
 - `scene_render.c`: 3D frame orchestration, `SceneRenderConfig` /
-  `FrameRenderContext` prep, edit guides, orbit target, and replay HUD.
+  `FrameRenderContext` prep, orbit target, and replay HUD.
 - `scene_render_types.h`: shared per-frame render snapshot types consumed by
   the scene helpers.
+- `scene_guides_shared.h`: shared scene-guide snapshot and transform-guide
+  planning types.
+- `scene_geometry_guides.c`: vertex-input and normal-edit guide rendering from
+  snapshot state.
+- `scene_transform_guides.c`: transform-guide planning and rendering
+  (`glTranslatef`/`glRotatef`/`glScalef`) from snapshot state.
 - `scene_grid.c`: grid theme rendering, including focus/ocean/ruler/planes
   variants.
 - `scene_axes.c`: axes theme rendering.
@@ -160,7 +166,8 @@ every path shares the same parse/normalize/flatten guarantees.
    expand loops, functions, conditionals, and variable-driven commands into
    `g_flat_cmds[]`.
 2. `scene_render.c` prepares the frame, delegates grid rendering to
-   `scene_grid.c`, axes rendering to `scene_axes.c`, light setup to
+   `scene_grid.c`, axes rendering to `scene_axes.c`, guide rendering to
+   `scene_geometry_guides.c` / `scene_transform_guides.c`, light setup to
    `scene_lights.c`, and calls `repl_execute_program()` with an explicit
    `FlatProgramView`/flat-command limit for normal, replay, and fade passes.
 3. `repl_executor.c` issues fixed-function OpenGL calls against the requested
@@ -494,7 +501,7 @@ captures the intended behavior change.
 ### Current cleanup baseline
 
 After the Phase 7 code-panel responsibility split, `make test-stubs TEST_JOBS=4`
-builds all test binaries and passes 17 of 17 suites: 2380/2380 tests. The
+builds all test binaries and passes 19 of 19 suites: 2437/2437 tests. The
 latest slices extracted document rows, replay annotations, menu/dropdown
 rendering, the color picker, help overlay, variable panel, autocomplete popup,
 inline rename, and variable slider dragging while preserving behavior. Phase 8
@@ -606,14 +613,16 @@ export-derived behavior.
 ### Transform edit guides
 
 When the cursor sits on a committed `glTranslatef`, `glRotatef`, or
-`glScalef` line, `scene_render.c` renders an overlay showing that
-command's effect. Guides live in the vertex-dots pass because it already
-walks `g_flat_cmds[]` and tracks the matrix stack.
+`glScalef` line, `scene_transform_guides.c` renders an overlay showing that
+command's effect. `scene_render.c` builds one `SceneGuideSnapshot` per frame
+and the guide module runs in the vertex-dots pass so it shares the flat-walk
+matrix tracking.
 
-Gating: `g_show_guides` is on, `!replaying`, `g_cmds[g_edit_line].valid`,
-and the input buffer still matches the normalized committed source
-(mirrors the `unmodified` check in `repl_editor.c` so mid-keystroke
-edits suppress the guide).
+Gating comes from `scene_transform_guides_prepare()`: `show_guides` is on,
+`!replaying`, the edit-line source command is valid transform type, and the
+input buffer still matches the normalized committed source (mirrors the
+`unmodified` check in `repl_editor.c` so mid-keystroke edits suppress the
+guide).
 
 ## Evaluator / translation learnings
 
@@ -628,11 +637,11 @@ edits suppress the guide).
 - **String copy warning hygiene:** use explicit bounded formatting for internal
   translation buffers where practical to avoid `-Wstringop-truncation`
   false-positives from `strncpy`.
-- **GL-stub parity matters for test-stubs.** The transform-guide renderer now
-  uses `glLoadMatrixf` and `glVertex3fv`; missing these no-op declarations in
-  `include/GL/gl.h` breaks `make test-stubs` at link time even though normal GL
-  builds succeed. When adding fixed-function calls in rendering code, mirror
-  them in the local stubs immediately.
+- **GL-stub parity matters for test-stubs.** The transform-guide renderer in
+  `scene_transform_guides.c` uses `glLoadMatrixf` and `glVertex3fv`; missing
+  these no-op declarations in `include/GL/gl.h` breaks `make test-stubs` at
+  link time even though normal GL builds succeed. When adding fixed-function
+  calls in rendering code, mirror them in the local stubs immediately.
 - **Bounded copies still need explicit NUL termination.** In parser paths that
   trim/copy function identifiers into fixed buffers, always terminate manually
   after `strncpy(..., size-1)`; otherwise long unknown commands can leave
@@ -669,17 +678,16 @@ Two render modes, chosen via the `g_xform_guide_mode` config toggle
   scales). `compute_before_cursor_matrix()` walks all flat cmds
   before the cursor in a fresh identity matrix (via
   `apply_tracked_transform_cmd` so push/pop scopes correctly).
-  Rotate guides draw with `camera * pre_cursor`, so their axis and
-  arc inherit prior frame rotations. Translation/scale guides still
-  use `compute_before_cursor_origin()` to keep the existing
-  position-anchor behavior.
+  In Frame mode, the guide matrix is `camera * pre_cursor` and the
+  command's acts-on point is the local origin, so translate/rotate/scale
+  guides all inherit prior frame rotations consistently.
 
 Per-command helpers:
 
 Shared visual style: shafts and arcs use an **axes-pulse-style**
 overlay — a dim solid base line (or arc) at `alpha≈0.30`, with a
 bright `sin(π·phase)` dot sweeping `a→b` and a short trail behind
-it, driven by `g_anim_time`. Helpers live alongside the per-command
+it, driven by snapshot `anim_time`. Helpers live alongside the per-command
 helpers: `xform_axis_color()` maps `(|x|,|y|,|z|)/max` → RGB, and
 `draw_pulse_segment()` renders the dim base + traveling dot + trail
 for a straight segment. The rotate guide inlines an arc-based
@@ -707,10 +715,10 @@ Per-command helpers:
   plus a pulsing arrow per axis in that axis's own color (X=red,
   Y=green, Z=blue) to `(sx,0,0)`, `(0,sy,0)`, `(0,0,sz)`.
 
-Adding a new transform-guide type: extend the cmd-type gate in the
-setup block and the dispatch switch at the draw site in
-`render_3d_scene()`, and add a new `draw_<name>_guide` helper
-alongside the existing three.
+Adding a new transform-guide type: extend the command gate in
+`scene_transform_guides_prepare()`, add a render branch in
+`scene_transform_guides_render_if_due()`, and add a new
+`draw_<name>_guide` helper in `scene_transform_guides.c`.
 
 ### Replay
 

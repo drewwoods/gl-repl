@@ -9,7 +9,7 @@ extractions that can each land as a single reviewable commit *today*,
 without committing to the larger context-object rewrite.
 
 Four files still dominate the codebase: `scene_render.c` (frame prep,
-edit guides, replay HUD), `scene_grid.c` (grid themes), `scene_axes.c`
+replay HUD), `scene_grid.c` (grid themes), `scene_axes.c`
 (axes themes), `repl_export.c` (2541), `repl_core.c` (~1964), and
 `repl_editor.c` (~1653). `ui_panels.c`
 dropped to 1237 LoC (from 4452) after Phase-7
@@ -29,7 +29,7 @@ This list is ordered by impact-per-effort. Pick one and execute it
 in isolation; each item is sized to land as one `refactor:` commit.
 
 > **Baseline note:** `make test-stubs TEST_JOBS=4` currently passes
-> all 17 suites / 2380 tests cleanly. Any new failure introduced by a
+> all 19 suites / 2437 tests cleanly. Any new failure introduced by a
 > punch-list item is a real regression unless the team explicitly
 > rebaselines it.
 
@@ -145,9 +145,7 @@ Implemented in the Phase-8 render cleanup slices. `walk_vertex_overlay()`
 centralizes transform replay, begin/end/tessellation block tracking, current
 normal state, and cursor-selected block filtering. Ownership now lives in
 `scene_overlays.c` alongside polygon outlines, with public entrypoints for
-vertex-number and normal-vector rendering. The partial-input guides still have
-their own parsing/search logic in `scene_render.c` because they are driven by
-live `g_input`, not by the flattened command stream.
+vertex-number and normal-vector rendering.
 
 ### 5b. Guard scene helper GL state ✅ DONE
 
@@ -194,6 +192,19 @@ projection/camera setup, grid renderer in `scene_grid.c`, axes renderer in
 `scene_axes.c`, orbit target, replay outlines, replay fade pass, guide
 drawing, vertex-point overlay, and replay HUD now consume the explicit config
 instead of independently sampling those globals.
+
+### 5g. Extract scene-edit guides into snapshot-driven modules ✅ DONE
+
+Implemented in the Phase-8 residual render cleanup slice. Scene-edit guides no
+longer read globals directly while drawing. `scene_render.c` now builds one
+`SceneGuideSnapshot` per frame/per-input state, then delegates:
+
+- vertex-input and normal-edit guides to `scene_geometry_guides.c`
+- transform guide planning/rendering to `scene_transform_guides.c`
+
+`scene_transform_guides_prepare()` keeps the existing committed+unmodified gate,
+flat source-index matching, and `after_flat_idx` fallback behavior; rendering
+still uses live flattened args and one-shot consumption in the vertex-dots pass.
 
 ### 6. Workspace header read/write symmetry in `repl_export.c` ✅ DONE
 
@@ -303,7 +314,7 @@ future per-command semantic mutation API.
 
 For any item picked:
 
-1. `make test-stubs TEST_JOBS=4` — all 17 suites should pass cleanly.
+1. `make test-stubs TEST_JOBS=4` — all 19 suites should pass cleanly.
 2. `make sample && ./sample` — load an example, exercise the
    touched feature, confirm no visual or interactive regression.
 3. For Tier 2 rendering changes (items 4 & 5), do an explicit A/B
