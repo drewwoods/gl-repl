@@ -302,22 +302,21 @@ int main() {
         ASSERT_INT("state insert mode set", g_inserting, 1);
 
         repl_state_selection_set(4, 2);
-        ASSERT_INT("state selection anchor", g_sel_anchor, 4);
-        ASSERT_INT("state selection end", g_sel_end, 2);
+        ASSERT_INT("state selection anchor", repl_state_selection_anchor(), 4);
+        ASSERT_INT("state selection end", repl_state_selection_end_idx(), 2);
         repl_state_selection_clear();
-        ASSERT_INT("state selection clear anchor", g_sel_anchor, -1);
-        ASSERT_INT("state selection clear end", g_sel_end, -1);
+        ASSERT_INT("state selection clear anchor", repl_state_selection_anchor(), -1);
+        ASSERT_INT("state selection clear end", repl_state_selection_end_idx(), -1);
 
         clipboard = repl_state_clipboard_cmds_mut();
         clipboard[0].type = CMD_COLOR3F;
         clipboard[0].valid = 1;
         repl_state_clipboard_count_set(1);
-        ASSERT_TRUE("state clipboard buffer", clipboard == g_clipboard);
-        ASSERT_INT("state clipboard count", g_clipboard_count, 1);
+        ASSERT_INT("state clipboard count", repl_state_clipboard_count(), 1);
         ASSERT_INT("state clipboard count accessor",
                    repl_state_clipboard_count(), 1);
         repl_state_clipboard_clear();
-        ASSERT_INT("state clipboard clear", g_clipboard_count, 0);
+        ASSERT_INT("state clipboard clear", repl_state_clipboard_count(), 0);
 
         editor = repl_editor_state_live();
         ASSERT_TRUE("editor live bundle uses state input",
