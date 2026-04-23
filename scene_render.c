@@ -39,16 +39,22 @@ static int cmd_is_focus_vertex(const GLCmd *cmd) {
 }
 
 static void scene_focus_store(float x, float y, float z) {
-    g_focus_vtx[0] = x;
-    g_focus_vtx[1] = y;
-    g_focus_vtx[2] = z;
-    g_focus_vtx_valid = 1;
+    ReplRenderDerivedState *derived = repl_state_render_derived_mut();
+    derived->focus_vertex[0] = x;
+    derived->focus_vertex[1] = y;
+    derived->focus_vertex[2] = z;
+    *derived->focus_vertex_valid = 1;
 }
 
 static SceneFocusVertex scene_prepare_focus_vertex(void) {
+    const ReplRenderDerivedState *derived = repl_state_render_derived();
     SceneFocusVertex focus = {
-        .pos = { g_focus_vtx[0], g_focus_vtx[1], g_focus_vtx[2] },
-        .valid = g_focus_vtx_valid,
+        .pos = {
+            derived->focus_vertex[0],
+            derived->focus_vertex[1],
+            derived->focus_vertex[2],
+        },
+        .valid = *derived->focus_vertex_valid,
     };
 
     if (g_edit_line >= 0 && g_edit_line < g_num_cmds &&
@@ -56,7 +62,7 @@ static SceneFocusVertex scene_prepare_focus_vertex(void) {
         scene_focus_store(g_cmds[g_edit_line].args[0],
                           g_cmds[g_edit_line].args[1],
                           g_cmds[g_edit_line].args[2]);
-    } else if (!g_focus_vtx_valid) {
+    } else if (!*derived->focus_vertex_valid) {
         for (int i = g_edit_line - 1; i >= 0; i--) {
             if (cmd_is_focus_vertex(&g_cmds[i])) {
                 scene_focus_store(g_cmds[i].args[0],
@@ -67,14 +73,15 @@ static SceneFocusVertex scene_prepare_focus_vertex(void) {
         }
     }
 
-    focus.pos[0] = g_focus_vtx[0];
-    focus.pos[1] = g_focus_vtx[1];
-    focus.pos[2] = g_focus_vtx[2];
-    focus.valid = g_focus_vtx_valid;
+    focus.pos[0] = derived->focus_vertex[0];
+    focus.pos[1] = derived->focus_vertex[1];
+    focus.pos[2] = derived->focus_vertex[2];
+    focus.valid = *derived->focus_vertex_valid;
     return focus;
 }
 
 static void scene_render_config_init(SceneRenderConfig *config) {
+    const ReplRenderState *render = repl_state_render();
     scene_rect(&config->scene_x, &config->scene_y,
                &config->scene_w, &config->scene_h);
     if (config->scene_w < 1) config->scene_w = 1;
@@ -87,10 +94,10 @@ static void scene_render_config_init(SceneRenderConfig *config) {
     config->cam_ty = g_cam_ty;
     config->cam_tz = g_cam_tz;
     config->cam_motion_glow = g_cam_motion_glow;
-    config->accum_jitter_x = g_accum_jitter_x;
-    config->accum_jitter_y = g_accum_jitter_y;
-    config->multisample_enabled = g_multisample_enabled;
-    config->line_smooth_enabled = g_line_smooth_enabled;
+    config->accum_jitter_x = *render->accum_jitter_x;
+    config->accum_jitter_y = *render->accum_jitter_y;
+    config->multisample_enabled = *render->multisample_enabled;
+    config->line_smooth_enabled = *render->line_smooth_enabled;
     config->wireframe = g_wireframe;
     config->grid_theme = g_grid_theme;
     config->grid_extent_idx = g_grid_extent_idx;
@@ -114,9 +121,9 @@ static void scene_render_config_init(SceneRenderConfig *config) {
     /* Boost translucent overlay alphas when the bg is darker than the
      * design-point luminance (~0.10).  K=0.02 softens the curve near
      * zero; result is clamped to [1, 3] so colours never blow out. */
-    float bg_lum = 0.2126f * g_clear_color[0]
-                 + 0.7152f * g_clear_color[1]
-                 + 0.0722f * g_clear_color[2];
+    float bg_lum = 0.2126f * render->clear_color[0]
+                 + 0.7152f * render->clear_color[1]
+                 + 0.0722f * render->clear_color[2];
     float as_val = (0.10f + 0.02f) / fmaxf(bg_lum + 0.02f, 1e-4f);
     config->alpha_scale = as_val < 1.0f ? 1.0f : (as_val > 3.0f ? 3.0f : as_val);
 }
@@ -164,11 +171,12 @@ static void scene_apply_wireframe_config(const SceneRenderConfig *config) {
 
 static void scene_prepare_frame_context(FrameRenderContext *ctx,
                                         const SceneRenderConfig *config) {
+    const ReplRenderDerivedState *derived = repl_state_render_derived();
     ctx->config = *config;
-    ctx->focus.pos[0] = g_focus_vtx[0];
-    ctx->focus.pos[1] = g_focus_vtx[1];
-    ctx->focus.pos[2] = g_focus_vtx[2];
-    ctx->focus.valid = g_focus_vtx_valid;
+    ctx->focus.pos[0] = derived->focus_vertex[0];
+    ctx->focus.pos[1] = derived->focus_vertex[1];
+    ctx->focus.pos[2] = derived->focus_vertex[2];
+    ctx->focus.valid = *derived->focus_vertex_valid;
 
     /* Modelview setup is T(-dist) * Rx * Ry * T(-target). Solving that for
      * the eye position gives target.y + sin(rx) * dist; ry does not affect Y. */

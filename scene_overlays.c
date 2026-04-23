@@ -211,12 +211,13 @@ void scene_overlays_render_normal_vectors(void) {
 
 void scene_overlays_render_outlines(int show_current_poly,
                                     int replay_tess_preview) {
+    const ReplRenderState *render = repl_state_render();
     glDisable(GL_LIGHTING);
     glEnable(GL_DEPTH_TEST);
     glDepthMask(GL_FALSE);
-    if (g_multisample_enabled) glEnable(GL_MULTISAMPLE);
+    if (*render->multisample_enabled) glEnable(GL_MULTISAMPLE);
     else glDisable(GL_MULTISAMPLE);
-    if (g_line_smooth_enabled) glEnable(GL_LINE_SMOOTH);
+    if (*render->line_smooth_enabled) glEnable(GL_LINE_SMOOTH);
     else glDisable(GL_LINE_SMOOTH);
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);

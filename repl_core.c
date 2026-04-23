@@ -88,16 +88,6 @@ void mark_normals_dirty(void) {
 
 /* (no display list - commands are executed directly each frame) */
 
-/* Accumulation buffer — enabled by default, disabled with --noaccum.
- * Designed to be forward-compatible with FBO-based accumulation later. */
-int    g_use_accum        = 1;  /* GLUT_ACCUM requested at init */
-int    g_accum_aa_enabled = 1;  /* Ctrl+B toggles jitter AA on/off */
-int    g_accum_samples    = 2;  /* current sample count */
-float  g_accum_jitter_x   = 0.0f;
-float  g_accum_jitter_y   = 0.0f;
-int    g_multisample_enabled = CFG_DEFAULT_MULTISAMPLE;
-int    g_line_smooth_enabled = CFG_DEFAULT_LINE_SMOOTH;
-
 /* Sub-pixel jitter offsets (units: fraction of one pixel).
  * Table is ordered so the first N entries form a good N-sample set.
  * Supports 1, 2, 4, 8, or 16 samples. */
@@ -182,43 +172,6 @@ const char *g_axes_names[AXES_THEME_COUNT] = {
     [AXES_THEME_GIZMO]   = "Gizmo",
 };
 char   g_scratch_buf[256];  /* shared scratch space for formatting strings, etc. */
-
-/* GLU quadric (shared for sphere/cylinder/disk drawing) */
-GLUquadric *g_quadric = NULL;
-
-/* GLU tessellator (for concave polygon support) */
-GLUtesselator *g_tess = NULL;
-
-/* Tessellator vertex buffer (position + normal + color per vertex) */
-TessVertex g_tess_verts[TESS_VERT_BUF_SIZE];
-int        g_tess_vert_count = 0;
-
-/* Lights */
-SceneLight g_lights[MAX_LIGHTS] = {
-    { GL_LIGHT0, 1,
-      { 2.0f, 4.0f, 5.0f, 0.0f },           /* key light (directional) */
-      { 0.80f, 0.80f, 0.75f, 1.0f },
-      { 0.10f, 0.10f, 0.12f, 1.0f },
-      { 1.0f, 1.0f, 0.95f, 1.0f } },
-    { GL_LIGHT1, 1,
-      { -3.0f, 2.0f, -2.0f, 1.0f },          /* warm fill (positional) */
-      { 0.45f, 0.30f, 0.15f, 1.0f },
-      { 0.05f, 0.03f, 0.02f, 1.0f },
-      { 0.30f, 0.20f, 0.10f, 1.0f } },
-    { GL_LIGHT2, 1,
-      { 0.0f, -1.0f, 3.0f, 1.0f },           /* cool rim (positional) */
-      { 0.15f, 0.25f, 0.50f, 1.0f },
-      { 0.02f, 0.03f, 0.06f, 1.0f },
-      { 0.10f, 0.15f, 0.35f, 1.0f } },
-    { GL_LIGHT3, 0,
-      { 1.0f, 1.0f, -4.0f, 0.0f },           /* back light (directional, off) */
-      { 0.35f, 0.35f, 0.40f, 1.0f },
-      { 0.05f, 0.05f, 0.06f, 1.0f },
-      { 0.20f, 0.20f, 0.25f, 1.0f } },
-};
-
-/* Clear color (user-settable via glClearColor command) */
-float  g_clear_color[4] = {0.10f, 0.10f, 0.13f, 1.0f};
 
 /* Status bar */
 char   g_status[256] = "";
@@ -905,72 +858,11 @@ static void load_initial_commands(const char *import_file) {
     scroll_to_display_function();
 }
 
-/* GLU tessellator callbacks for explicit gluBegin/gluEnd tessellation */
-static void _tess_vtx_begin_cb(GLenum mode) {
-    glBegin(mode);
-}
-
-static void _tess_vtx_end_cb(void) {
-    glEnd();
-}
-
-static void _tess_vtx_cb(void *vertex_data) {
-    TessVertex *v = (TessVertex *)vertex_data;
-    glNormal3dv(v->normal);
-    glColor4dv(v->color);
-    glVertex3dv(v->pos);
-}
-
-static void _tess_comb_cb(GLdouble coords[3],
-                          void *vertex_data[4],
-                          GLfloat weight[4],
-                          void **out_data) {
-    if (g_tess_vert_count >= TESS_VERT_BUF_SIZE) { *out_data = NULL; return; }
-    TessVertex *v = &g_tess_verts[g_tess_vert_count++];
-    v->pos[0] = coords[0]; v->pos[1] = coords[1]; v->pos[2] = coords[2];
-    for (int c = 0; c < 3; c++) v->normal[c] = 0.0;
-    for (int c = 0; c < 4; c++) v->color[c]  = 0.0;
-    for (int j = 0; j < 4; j++) {
-        if (!vertex_data[j]) continue;
-        TessVertex *src = (TessVertex *)vertex_data[j];
-        for (int c = 0; c < 3; c++) v->normal[c] += weight[j] * src->normal[c];
-        for (int c = 0; c < 4; c++) v->color[c]  += weight[j] * src->color[c];
-    }
-    /* Renormalize interpolated normal */
-    double len = sqrt(v->normal[0]*v->normal[0] + v->normal[1]*v->normal[1]
-                    + v->normal[2]*v->normal[2]);
-    if (len > 1e-9) { v->normal[0]/=len; v->normal[1]/=len; v->normal[2]/=len; }
-    *out_data = v;
-}
-
-static void _tess_err_cb(GLenum err) {
-    (void)err; /* silently ignore tessellation errors */
-}
-
 static void init_gl(void) {
     GLfloat lm_amb[] = { 0.15f, 0.15f, 0.20f, 1.0f };
     glLightModelfv(GL_LIGHT_MODEL_AMBIENT, lm_amb);
 
-    /* Init GLU quadric for gluSphere/gluCylinder/gluDisk */
-    g_quadric = gluNewQuadric();
-    gluQuadricNormals(g_quadric, GLU_SMOOTH);
-    gluQuadricTexture(g_quadric, GL_FALSE);
-
-    /* Init GLU tessellator for concave polygon support */
-    g_tess = gluNewTess();
-    gluTessCallback(g_tess, GLU_TESS_BEGIN,
-                    (void (*)())_tess_vtx_begin_cb);
-    gluTessCallback(g_tess, GLU_TESS_END,
-                    (void (*)())_tess_vtx_end_cb);
-    gluTessCallback(g_tess, GLU_TESS_VERTEX,
-                    (void (*)())_tess_vtx_cb);
-    gluTessCallback(g_tess, GLU_TESS_COMBINE,
-                    (void (*)())_tess_comb_cb);
-    gluTessCallback(g_tess, GLU_TESS_ERROR,
-                    (void (*)())_tess_err_cb);
-    gluTessCallback(g_tess, GLU_TESS_EDGE_FLAG,
-                    (void (*)())glEdgeFlag);
-
+    repl_state_render_init_resources();
     apply_init_bootstrap();
 }
 

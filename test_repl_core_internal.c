@@ -473,6 +473,79 @@ int main() {
                    g_code_panel_layout, CFG_DEFAULT_CODE_PANEL_LAYOUT);
     }
 
+    /* 14. render state facade */
+    {
+        ReplRenderState *render;
+        ReplRenderDerivedState *derived;
+
+        render = repl_state_render_mut();
+        ASSERT_TRUE("render facade use accum",
+                    render->use_accum == &g_use_accum);
+        ASSERT_TRUE("render facade accum aa",
+                    render->accum_aa_enabled == &g_accum_aa_enabled);
+        ASSERT_TRUE("render facade accum samples",
+                    render->accum_samples == &g_accum_samples);
+        ASSERT_TRUE("render facade accum jitter x",
+                    render->accum_jitter_x == &g_accum_jitter_x);
+        ASSERT_TRUE("render facade accum jitter y",
+                    render->accum_jitter_y == &g_accum_jitter_y);
+        ASSERT_TRUE("render facade multisample",
+                    render->multisample_enabled == &g_multisample_enabled);
+        ASSERT_TRUE("render facade line smooth",
+                    render->line_smooth_enabled == &g_line_smooth_enabled);
+        ASSERT_TRUE("render facade point attenuation",
+                    render->point_attenuation_enabled == &g_init_attenuate_points);
+        ASSERT_TRUE("render facade quadric",
+                    render->quadric == &g_quadric);
+        ASSERT_TRUE("render facade tess", render->tess == &g_tess);
+        ASSERT_TRUE("render facade tess verts",
+                    render->tess_verts == g_tess_verts);
+        ASSERT_TRUE("render facade tess vert count",
+                    render->tess_vert_count == &g_tess_vert_count);
+        ASSERT_TRUE("render facade lights", render->lights == g_lights);
+        ASSERT_TRUE("render facade clear color",
+                    render->clear_color == g_clear_color);
+
+        derived = repl_state_render_derived_mut();
+        ASSERT_TRUE("render derived facade vertex",
+                    derived->focus_vertex == g_focus_vtx);
+        ASSERT_TRUE("render derived facade valid",
+                    derived->focus_vertex_valid == &g_focus_vtx_valid);
+
+        g_multisample_enabled = 0;
+        g_line_smooth_enabled = 0;
+        g_init_attenuate_points = 0;
+        g_clear_color[0] = 0.0f;
+        g_clear_color[1] = 0.0f;
+        g_clear_color[2] = 0.0f;
+        g_clear_color[3] = 0.0f;
+        g_quadric = NULL;
+        g_tess = NULL;
+        g_tess_vert_count = 7;
+
+        repl_state_render_reset_defaults();
+        ASSERT_INT("render reset multisample",
+                   g_multisample_enabled, CFG_DEFAULT_MULTISAMPLE);
+        ASSERT_INT("render reset line smooth",
+                   g_line_smooth_enabled, CFG_DEFAULT_LINE_SMOOTH);
+        ASSERT_INT("render reset point attenuation",
+                   g_init_attenuate_points, CFG_DEFAULT_ATTENUATE_POINTS);
+        ASSERT_TRUE("render reset clear color r", g_clear_color[0] == 0.10f);
+        ASSERT_TRUE("render reset clear color g", g_clear_color[1] == 0.10f);
+        ASSERT_TRUE("render reset clear color b", g_clear_color[2] == 0.13f);
+        ASSERT_TRUE("render reset clear color a", g_clear_color[3] == 1.0f);
+
+        repl_state_render_init_resources();
+        ASSERT_TRUE("render init quadric live", *render->quadric != NULL);
+        ASSERT_TRUE("render init tess live", *render->tess != NULL);
+        ASSERT_INT("render init tess vert count", g_tess_vert_count, 0);
+
+        repl_state_render_destroy_resources();
+        ASSERT_TRUE("render destroy quadric null", g_quadric == NULL);
+        ASSERT_TRUE("render destroy tess null", g_tess == NULL);
+        ASSERT_INT("render destroy tess vert count", g_tess_vert_count, 0);
+    }
+
     printf("\n%d / %d tests passed\n", g_pass, g_run);
     return (g_pass == g_run) ? 0 : 1;
 }
