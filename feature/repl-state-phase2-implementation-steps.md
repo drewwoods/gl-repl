@@ -40,13 +40,13 @@ Current status: the storage moves for 3.1-3.4 are underway. `repl_state.c` alrea
 - Remove `ReplEditorState`, `repl_editor_state_live()`, and the editor/selection/clipboard compat externs once no production users remain.
 - Current progress: the typed editor-input, selection, and clipboard accessors already exist in `repl_state.h` and are backed by storage in `repl_state.c`, but `repl_editor.c`, `repl_clipboard.c`, `repl_search.c`, `repl_autocomplete.c`, and the editor tests still reach the compat globals in many places. This slice is started, not finished.
 
-### 3.4 Camera, Pointer, Viewport
-- Add camera helpers for snapshot, set full camera, set orbit angles, set pan, set distance, pulse/decay motion glow, and reset default.
-- Add pointer helpers for mouse position/button and viewport helpers for window size.
-- Convert camera controls, scene render frame prep, import/export camera metadata, sample window init/reshape, and camera tests to the new API.
-- Move camera, pointer, and viewport storage into `repl_state.c`.
-- Remove `ReplViewState`, `repl_view_state_live()`, and camera/pointer/viewport compat externs.
-- Current progress: camera, pointer, and viewport storage already live in `repl_state.c` and the facade exposes snapshot/set helpers, but `repl_camera_controls.c`, `repl_core.c`, `scene_render.c`, `repl_export.c`, and the related tests still use the old globals directly. The bridge is still required here.
+### 3.4 Camera, Pointer, Viewport ✅ DONE
+All camera (rx/ry/dist/tx/ty/tz/motion_glow/auto_rotate), pointer (mouse_x/y/button),
+and viewport (win_w/h) access now routes through `repl_state` typed APIs. Removed 8
+compat externs (`g_cam_rx`, `g_cam_ry`, `g_cam_dist`, `g_cam_tx`, `g_cam_ty`,
+`g_cam_tz`, `g_cam_motion_glow`, `g_mouse_x`, `g_mouse_y`, `g_mouse_btn`, `g_win_w`,
+`g_win_h`, `g_cam_rotate`) from `repl_state_compat.h`. Converted 24 source files
+including all production modules and all 7 affected test files. All 2557 tests pass.
 
 ### 3.5 Presentation + Config
 - Treat `repl_config_get/set/cycle()` as the only mutation API for user-facing presentation config.
