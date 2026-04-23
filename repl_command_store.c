@@ -1,6 +1,6 @@
 #include "repl_command_store.h"
 #include "repl_core_internal.h"
-#include "repl_state.h"
+#include "repl_state_compat.h"
 
 ReplCommandStore repl_command_store_live(void) {
     ReplCommandState commands = repl_command_state_live();
