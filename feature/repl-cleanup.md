@@ -32,9 +32,10 @@ failure should be treated as a regression unless explicitly rebaselined.
    - Group current globals into domain-owned structs: command/document state, editor state, presentation config, render view, replay state, UI state, import/export state.
    - Move declarations out of `sample.h` incrementally into focused headers. Leave compatibility aliases temporarily so call sites can migrate in small steps.
    - Add reset/init helpers for each domain to replace scattered manual global initialization.
-   - Header sketch: `feature/repl-state-phase2-sketch.md` captures the
-     intended 80% endpoint for `sample.h` and `repl_state.h`, including
-     unresolved ownership calls before the full context API is finalized.
+   - Header design: `feature/repl-state-phase2-sketch.md` captures the
+     resolved endpoint for `sample.h` and `repl_state.h`, including final
+     context ownership, focused state APIs, compatibility policy, and reset
+     ordering.
 
 3. **Centralize command mutation**
    - Introduce a command-store API for insert, replace, delete, range delete, load, clear, and reformat updates.
