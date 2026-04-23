@@ -119,7 +119,7 @@ void var_panel_rect(int *px, int *py, int *pw, int *ph) {
 int var_panel_hit(int gx, int gy, int *out_row) {
     int px, py, pw, ph;
     var_panel_rect(&px, &py, &pw, &ph);
-    int ry = g_win_h - gy;
+    int ry = *repl_state_viewport()->window_h - gy;
     if (gx < px || gx >= px + pw || ry < py || ry >= py + ph) return 0;
     int inner_top = py + ph - VAR_PANEL_PAD - VAR_TITLE_H;
     int row = (inner_top - ry) / VAR_ROW_H;

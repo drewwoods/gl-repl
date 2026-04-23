@@ -148,12 +148,14 @@ void ui_color_picker_open(int cmd_idx, int my) {
            + (g_cp_has_alpha ? CP_GAP + CP_ALPHA_W : 0) + CP_GAP;
     int ph = CP_SV_SZ + CP_GAP + CP_PREV_H + CP_GAP;
     int ppx = cp_x + cp_w + 8;
-    if (ppx + pw > g_win_w - 4) ppx = cp_x - pw - 4;
+    int win_w = *repl_state_viewport()->window_w;
+    int win_h = *repl_state_viewport()->window_h;
+    if (ppx + pw > win_w - 4) ppx = cp_x - pw - 4;
     if (ppx < 4) ppx = 4;
-    if (ppx + pw > g_win_w - 4) ppx = g_win_w - pw - 4;
+    if (ppx + pw > win_w - 4) ppx = win_w - pw - 4;
     if (ppx < 4) ppx = 4;
-    int ppy = (g_win_h - my) + ph / 2;
-    if (ppy > g_win_h - 4) ppy = g_win_h - 4;
+    int ppy = (win_h - my) + ph / 2;
+    if (ppy > win_h - 4) ppy = win_h - 4;
     if (ppy - ph < 4)       ppy = ph + 4;
     g_cp_px = ppx;  g_cp_py = ppy;
 }
@@ -290,7 +292,7 @@ void ui_color_picker_render(void) {
 
 int ui_color_picker_press(int mx, int my) {
     if (g_cp_line < 0) return 0;
-    int gl_y = g_win_h - my;
+    int gl_y = *repl_state_viewport()->window_h - my;
 
     /* SV square */
     if (mx >= g_cp_sv_x && mx < g_cp_sv_x+g_cp_sv_sz &&
@@ -330,7 +332,7 @@ int ui_color_picker_press(int mx, int my) {
 
 int ui_color_picker_motion(int mx, int my) {
     if (g_cp_drag == 0) return 0;
-    int gl_y = g_win_h - my;
+    int gl_y = *repl_state_viewport()->window_h - my;
     if (g_cp_drag == 1) {
         g_cp_sat = (float)(mx-g_cp_sv_x)/(float)g_cp_sv_sz;
         g_cp_val = (float)(gl_y-g_cp_sv_y)/(float)g_cp_sv_sz;

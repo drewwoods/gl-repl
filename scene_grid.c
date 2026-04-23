@@ -321,7 +321,7 @@ static void scene_grid_render_ocean_theme(const GridDrawContext *grid_ctx,
         glDisable(GL_DEPTH_TEST);
         glColor4f(0.05f, 0.25f, 0.35f, 0.75f);
         begin_2d();
-        glRectf(0, 0, g_win_w, g_win_h);
+        glRectf(0, 0, (float)*repl_state_viewport()->window_w, (float)*repl_state_viewport()->window_h);
         end_2d();
         glEnable(GL_DEPTH_TEST);
     } else {

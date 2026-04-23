@@ -114,12 +114,9 @@ static int try_apply_example_camera_header(const char *const *lines) {
         !example_cam_parse_translate(lines[4], &tx, &ty, &tz))
         return 0;
 
-    g_cam_dist = -dist_z;
-    g_cam_rx = rx;
-    g_cam_ry = ry;
-    g_cam_tx = -tx;
-    g_cam_ty = -ty;
-    g_cam_tz = -tz;
+    repl_state_camera_set_orbit(rx, ry);
+    repl_state_camera_set_distance(-dist_z);
+    repl_state_camera_set_pan(-tx, -ty, -tz);
     return 1;
 }
 
@@ -138,7 +135,7 @@ static void reset_example_presentation_defaults(void) {
     g_xform_guide_mode = CFG_DEFAULT_XFORM_GUIDE_MODE;
     g_show_lights = CFG_DEFAULT_LIGHT_INDICATORS;
     g_backdrop_mode = CFG_DEFAULT_BACKDROP_MODE;
-    g_cam_rotate = CFG_DEFAULT_CAMERA_ROTATE;
+    *repl_state_camera_mut()->auto_rotate = CFG_DEFAULT_CAMERA_ROTATE;
 }
 
 static int example_cfg_extract_slug(const char *text,

@@ -26,8 +26,7 @@ static int code_panel_text_x(void) {
 
 static void reset_doc_fixture(void) {
     repl_reset_state();
-    g_win_w = 800;
-    g_win_h = 260;
+    repl_state_viewport_set_size(800, 260);
     g_panel_frac = 0.45f;
     g_code_panel_layout = CODE_PANEL_LAYOUT_LEFT;
     g_show_indices = 0;

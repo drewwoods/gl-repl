@@ -122,7 +122,7 @@ static int code_panel_mouse_y_for_cmd(int cmd_idx) {
     int vis = doc_line - g_scroll;
     int line_y_start = cp_y + cp_h - CODE_MARGIN_Y - 2 * LINE_H;
     int gl_y = line_y_start - vis * LINE_H + 1;
-    return g_win_h - gl_y;
+    return *repl_state_viewport()->window_h - gl_y;
 }
 
 static void assert_float_decl_rejected_atomic(const char *label,
@@ -179,8 +179,8 @@ int main() {
     /* 0. Code/scene panel geometry supports left, top, bottom, and hidden layouts */
     {
         int x, y, w, h;
-        g_win_w = 1000;
-        g_win_h = 800;
+        
+        repl_state_viewport_set_size(1000, 800);
         g_panel_frac = 0.25f;
 
         g_code_panel_layout = CODE_PANEL_LAYOUT_LEFT;
@@ -231,8 +231,7 @@ int main() {
         ASSERT_INT("hidden scene w", w, 1000);
         ASSERT_INT("hidden scene h", h, 800);
 
-        g_win_w = 1200;
-        g_win_h = 800;
+        repl_state_viewport_set_size(1200, 800);
         g_panel_frac = CFG_DEFAULT_PANEL_FRAC;
         g_code_panel_layout = CFG_DEFAULT_CODE_PANEL_LAYOUT;
     }
@@ -479,8 +478,7 @@ int main() {
     /* 0d. Cramped variable-panel fallback still preserves scene status strip */
     {
         int x, y, w, h;
-        g_win_w = 320;
-        g_win_h = 80;
+        repl_state_viewport_set_size(320, 80);
         g_panel_frac = 0.25f;
         g_code_panel_layout = CODE_PANEL_LAYOUT_LEFT;
         g_replay_active = 0;
@@ -489,8 +487,7 @@ int main() {
         ASSERT_INT("cramped var panel clears status strip",
                    y, STATUSBAR_H + 4);
 
-        g_win_w = 1200;
-        g_win_h = 800;
+        repl_state_viewport_set_size(1200, 800);
         g_panel_frac = CFG_DEFAULT_PANEL_FRAC;
         g_code_panel_layout = CFG_DEFAULT_CODE_PANEL_LAYOUT;
     }
@@ -498,41 +495,37 @@ int main() {
     /* 0e. Camera control module owns scene drag and momentum behavior. */
     {
         repl_reset_state();
-        g_cam_rx = 0.0f;
-        g_cam_ry = 0.0f;
-        g_cam_dist = 10.0f;
+        repl_state_camera_set_orbit(0.0f, 0.0f);
+        repl_state_camera_set_distance(10.0f);
         repl_camera_mouse_event(GLUT_LEFT_BUTTON, GLUT_DOWN, 10, 10, 0);
         repl_camera_drag_motion(20, 14);
         ASSERT_TRUE("camera left drag yaws",
-                    fabsf(g_cam_ry - 5.0f) < 1e-6f);
+                    fabsf(*repl_state_camera()->ry - 5.0f) < 1e-6f);
         ASSERT_TRUE("camera left drag pitches",
-                    fabsf(g_cam_rx - 2.0f) < 1e-6f);
+                    fabsf(*repl_state_camera()->rx - 2.0f) < 1e-6f);
         repl_camera_mouse_event(GLUT_LEFT_BUTTON, GLUT_UP, 20, 14, 0);
         repl_camera_tick();
         ASSERT_TRUE("camera release keeps yaw momentum",
-                    fabsf(g_cam_ry - 7.5f) < 1e-6f);
+                    fabsf(*repl_state_camera()->ry - 7.5f) < 1e-6f);
 
         repl_camera_controls_reset();
-        g_cam_rx = 0.0f;
-        g_cam_ry = 0.0f;
-        g_cam_tx = 0.0f;
-        g_cam_ty = 0.0f;
-        g_cam_tz = 0.0f;
-        g_cam_dist = 10.0f;
+        repl_state_camera_set_orbit(0.0f, 0.0f);
+        repl_state_camera_set_pan(0.0f, 0.0f, 0.0f);
+        repl_state_camera_set_distance(10.0f);
         repl_camera_mouse_event(GLUT_RIGHT_BUTTON, GLUT_DOWN, 0, 0,
                                 GLUT_ACTIVE_SHIFT);
         repl_camera_drag_motion(0, 20);
         ASSERT_TRUE("camera shift-right drag pans y",
-                    fabsf(g_cam_ty - 1.0f) < 1e-6f);
+                    fabsf(*repl_state_camera()->ty - 1.0f) < 1e-6f);
         ASSERT_TRUE("camera y pan lights motion glow",
-                    fabsf(g_cam_motion_glow - 1.0f) < 1e-6f);
+                    fabsf(*repl_state_camera()->motion_glow - 1.0f) < 1e-6f);
 
         repl_camera_controls_reset();
-        g_cam_dist = 0.6f;
+        repl_state_camera_set_distance(0.6f);
         repl_camera_mouse_event(GLUT_MIDDLE_BUTTON, GLUT_DOWN, 0, 0, 0);
         repl_camera_drag_motion(0, -100);
         ASSERT_TRUE("camera middle drag clamps near zoom",
-                    fabsf(g_cam_dist - 0.5f) < 1e-6f);
+                    fabsf(*repl_state_camera()->dist - 0.5f) < 1e-6f);
     }
 
     /* 1. Undo when nothing to undo — must run before any undo push */
@@ -1810,8 +1803,8 @@ int main() {
         }
         repl_flatten_commands();
 
-        g_win_w = 800;
-        g_win_h = 230;
+        
+        repl_state_viewport_set_size(800, 230);
         g_panel_frac = 0.5f;
         g_code_panel_layout = CODE_PANEL_LAYOUT_LEFT;
         g_show_indices = 0;
@@ -1897,8 +1890,8 @@ int main() {
         repl_feed_line_public("glVertex3f(2, 0, 0);");
         repl_flatten_commands();
 
-        g_win_w = 800;
-        g_win_h = 230;
+        
+        repl_state_viewport_set_size(800, 230);
         g_panel_frac = 0.5f;
         g_code_panel_layout = CODE_PANEL_LAYOUT_LEFT;
         g_show_indices = 0;
@@ -1972,8 +1965,8 @@ int main() {
             repl_feed_line_public(line);
         }
 
-        g_win_w = 800;
-        g_win_h = 230;
+        
+        repl_state_viewport_set_size(800, 230);
         g_panel_frac = 0.5f;
         g_code_panel_layout = CODE_PANEL_LAYOUT_LEFT;
         g_show_indices = 0;
@@ -2042,8 +2035,8 @@ int main() {
             repl_feed_line_public(line);
         }
 
-        g_win_w = 800;
-        g_win_h = 230;
+        
+        repl_state_viewport_set_size(800, 230);
         g_panel_frac = 0.5f;
         g_code_panel_layout = CODE_PANEL_LAYOUT_LEFT;
         g_show_indices = 0;
@@ -2159,8 +2152,8 @@ int main() {
         repl_feed_line_public("glVertex3f(0,0,0)");
         repl_feed_line_public("glVertex3f(1,1,1)");
         repl_feed_line_public("glVertex3f(2,2,2)");
-        g_win_w = 800;
-        g_win_h = 600;
+        
+        repl_state_viewport_set_size(800, 600);
         g_panel_frac = 0.5f;
         g_code_panel_layout = CODE_PANEL_LAYOUT_LEFT;
         g_show_indices = 0;

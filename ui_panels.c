@@ -40,6 +40,8 @@ static int panel_span_px(int total_px) {
 
 void code_panel_rect(int *x, int *y, int *w, int *h) {
     int layout = code_panel_layout_mode();
+    int win_w = *repl_state_viewport()->window_w;
+    int win_h = *repl_state_viewport()->window_h;
 
     if (layout == CODE_PANEL_LAYOUT_HIDDEN) {
         if (x) *x = 0;
@@ -47,52 +49,54 @@ void code_panel_rect(int *x, int *y, int *w, int *h) {
         if (w) *w = 0;
         if (h) *h = 0;
     } else if (layout == CODE_PANEL_LAYOUT_TOP) {
-        int panel_h = panel_span_px(g_win_h);
+        int panel_h = panel_span_px(win_h);
         if (x) *x = 0;
-        if (y) *y = g_win_h - panel_h;
-        if (w) *w = g_win_w;
+        if (y) *y = win_h - panel_h;
+        if (w) *w = win_w;
         if (h) *h = panel_h;
     } else if (layout == CODE_PANEL_LAYOUT_BOTTOM) {
-        int panel_h = panel_span_px(g_win_h);
+        int panel_h = panel_span_px(win_h);
         if (x) *x = 0;
         if (y) *y = 0;
-        if (w) *w = g_win_w;
+        if (w) *w = win_w;
         if (h) *h = panel_h;
     } else {
-        int panel_w = panel_span_px(g_win_w);
+        int panel_w = panel_span_px(win_w);
         if (x) *x = 0;
         if (y) *y = 0;
         if (w) *w = panel_w;
-        if (h) *h = g_win_h;
+        if (h) *h = win_h;
     }
 }
 
 void scene_rect(int *x, int *y, int *w, int *h) {
     int layout = code_panel_layout_mode();
+    int win_w = *repl_state_viewport()->window_w;
+    int win_h = *repl_state_viewport()->window_h;
 
     if (layout == CODE_PANEL_LAYOUT_HIDDEN) {
         if (x) *x = 0;
         if (y) *y = 0;
-        if (w) *w = g_win_w;
-        if (h) *h = g_win_h;
+        if (w) *w = win_w;
+        if (h) *h = win_h;
     } else if (layout == CODE_PANEL_LAYOUT_TOP) {
-        int panel_h = panel_span_px(g_win_h);
+        int panel_h = panel_span_px(win_h);
         if (x) *x = 0;
         if (y) *y = 0;
-        if (w) *w = g_win_w;
-        if (h) *h = g_win_h - panel_h;
+        if (w) *w = win_w;
+        if (h) *h = win_h - panel_h;
     } else if (layout == CODE_PANEL_LAYOUT_BOTTOM) {
-        int panel_h = panel_span_px(g_win_h);
+        int panel_h = panel_span_px(win_h);
         if (x) *x = 0;
         if (y) *y = panel_h;
-        if (w) *w = g_win_w;
-        if (h) *h = g_win_h - panel_h;
+        if (w) *w = win_w;
+        if (h) *h = win_h - panel_h;
     } else {
-        int panel_w = panel_span_px(g_win_w);
+        int panel_w = panel_span_px(win_w);
         if (x) *x = panel_w;
         if (y) *y = 0;
-        if (w) *w = g_win_w - panel_w;
-        if (h) *h = g_win_h;
+        if (w) *w = win_w - panel_w;
+        if (h) *h = win_h;
     }
 }
 
@@ -416,15 +420,15 @@ void render_code_panel(void) {
     if (code_panel_layout_mode() == CODE_PANEL_LAYOUT_TOP) {
         /* Horizontal divider along bottom of code panel. */
         glVertex2f(0.0f, (float)cp_y);
-        glVertex2f((float)g_win_w, (float)cp_y);
+        glVertex2f((float)*repl_state_viewport()->window_w, (float)cp_y);
     } else if (code_panel_layout_mode() == CODE_PANEL_LAYOUT_BOTTOM) {
         /* Horizontal divider along top of code panel. */
         glVertex2f(0.0f, (float)(cp_y + cp_h));
-        glVertex2f((float)g_win_w, (float)(cp_y + cp_h));
+        glVertex2f((float)*repl_state_viewport()->window_w, (float)(cp_y + cp_h));
     } else {
         /* Vertical divider along right edge of code panel */
         glVertex2f((float)(cp_x + cp_w), 0.0f);
-        glVertex2f((float)(cp_x + cp_w), (float)g_win_h);
+        glVertex2f((float)(cp_x + cp_w), (float)*repl_state_viewport()->window_h);
     }
     glEnd();
     glDisable(GL_BLEND);
@@ -980,7 +984,7 @@ static int code_panel_hit_test(int mx, int my,
     int panel_w = cp_w;
     int panel_top = cp_y + cp_h;
     /* Convert GLUT Y (top=0) to OpenGL Y (bottom=0) */
-    int gl_y = g_win_h - my;
+    int gl_y = *repl_state_viewport()->window_h - my;
     if (mx < cp_x || mx >= cp_x + cp_w) return 0;
     if (gl_y < cp_y || gl_y >= cp_y + cp_h) return 0;
 
@@ -1019,7 +1023,7 @@ static int code_panel_drag_target(int mx, int my, int *out_target) {
     if (cp_w <= 0 || cp_h <= 0) return 0;
     int panel_w = cp_w;
     int panel_top = cp_y + cp_h;
-    int gl_y = g_win_h - my;
+    int gl_y = *repl_state_viewport()->window_h - my;
     int line_y_start = panel_top - CODE_MARGIN_Y - 2 * LINE_H;
     int vis = (line_y_start + LINE_H - 3 - gl_y) / LINE_H;
 

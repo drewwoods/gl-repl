@@ -510,7 +510,7 @@ static void emit_export_header_pre(FILE *f) {
     char angle_line[64];
 
     snprintf(angle_line, sizeof(angle_line),
-             "static float g_angle = %.4ff;", g_cam_ry);
+             "static float g_angle = %.4ff;", *repl_state_camera()->ry);
 
     for (int i = 0; g_header_pre[i]; i++) {
         if (strcmp(g_header_pre[i], "void display() {") == 0)
@@ -524,11 +524,12 @@ static void emit_export_header_pre(FILE *f) {
 }
 
 static void emit_export_cam_lines(FILE *f) {
-    fprintf(f, "  glTranslatef(0.0000f, 0.0000f, %.4ff);\n", -g_cam_dist);
-    fprintf(f, "  glRotatef(%.4ff, 1.0f, 0.0f, 0.0f);\n", g_cam_rx);
+    const ReplCameraState *cam = repl_state_camera();
+    fprintf(f, "  glTranslatef(0.0000f, 0.0000f, %.4ff);\n", -*cam->dist);
+    fprintf(f, "  glRotatef(%.4ff, 1.0f, 0.0f, 0.0f);\n", *cam->rx);
     fprintf(f, "  glRotatef(g_angle, 0.0f, 1.0f, 0.0f);\n");
     fprintf(f, "  glTranslatef(%.4ff, %.4ff, %.4ff);\n",
-            -g_cam_tx, -g_cam_ty, -g_cam_tz);
+            -*cam->tx, -*cam->ty, -*cam->tz);
 }
 
 void update_render_state_strings(void) {
@@ -592,7 +593,7 @@ static int import_parse_export_angle_init(const char *text) {
     if (end == eq)
         return 0;
 
-    g_cam_ry = v;
+    repl_state_camera_set_orbit(*repl_state_camera()->rx, v);
     return 1;
 }
 
@@ -611,7 +612,7 @@ int import_parse_cam_line(const char *text) {
         p++;
         float v[3];
         if (!cam_line_read_floats(p, v, 3)) return 0;
-        g_cam_dist = -v[2];
+        repl_state_camera_set_distance(-v[2]);
         g_cam_parse_state = 1;
         return 1;
     }
@@ -623,7 +624,7 @@ int import_parse_cam_line(const char *text) {
         float v[4];
         if (!cam_line_read_floats(p, v, 4)) return 0;
         if (v[1] != 1.0f || v[2] != 0.0f || v[3] != 0.0f) return 0;
-        g_cam_rx = v[0];
+        repl_state_camera_set_orbit(v[0], *repl_state_camera()->ry);
         g_cam_parse_state = 2;
         return 1;
     }
@@ -641,7 +642,7 @@ int import_parse_cam_line(const char *text) {
         float v[4];
         if (!cam_line_read_floats(p, v, 4)) return 0;
         if (v[1] != 0.0f || v[2] != 1.0f || v[3] != 0.0f) return 0;
-        g_cam_ry = v[0];
+        repl_state_camera_set_orbit(*repl_state_camera()->rx, v[0]);
         g_cam_parse_state = 3;
         return 1;
     }
@@ -665,9 +666,7 @@ int import_parse_cam_line(const char *text) {
         p++;
         float v[3];
         if (!cam_line_read_floats(p, v, 3)) return 0;
-        g_cam_tx = -v[0];
-        g_cam_ty = -v[1];
-        g_cam_tz = -v[2];
+        repl_state_camera_set_pan(-v[0], -v[1], -v[2]);
         g_cam_parse_state = 5;
         return 1;
     }
@@ -676,15 +675,16 @@ int import_parse_cam_line(const char *text) {
 }
 
 void update_cam_lines(void) {
+    const ReplCameraState *cam = repl_state_camera();
     snprintf(g_cam_lines[0], sizeof(g_cam_lines[0]),
-             "  glTranslatef(0.0000f, 0.0000f, %.4ff);", -g_cam_dist);
+             "  glTranslatef(0.0000f, 0.0000f, %.4ff);", -*cam->dist);
     snprintf(g_cam_lines[1], sizeof(g_cam_lines[1]),
-             "  glRotatef(%.4ff, 1.0f, 0.0f, 0.0f);", g_cam_rx);
+             "  glRotatef(%.4ff, 1.0f, 0.0f, 0.0f);", *cam->rx);
     snprintf(g_cam_lines[2], sizeof(g_cam_lines[2]),
-             "  glRotatef(%.4ff, 0.0f, 1.0f, 0.0f);", g_cam_ry);
+             "  glRotatef(%.4ff, 0.0f, 1.0f, 0.0f);", *cam->ry);
     snprintf(g_cam_lines[3], sizeof(g_cam_lines[3]),
              "  glTranslatef(%.4ff, %.4ff, %.4ff);",
-             -g_cam_tx, -g_cam_ty, -g_cam_tz);
+             -*cam->tx, -*cam->ty, -*cam->tz);
 }
 
 static void write_light_setup(FILE *f) {

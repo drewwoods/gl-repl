@@ -93,12 +93,9 @@ static void declare_test_vars(void) {
 }
 
 static void pin_code_panel_state(void) {
-    g_cam_rx = 18.0f;
-    g_cam_ry = 32.0f;
-    g_cam_dist = 5.5f;
-    g_cam_tx = 0.0f;
-    g_cam_ty = 0.0f;
-    g_cam_tz = 0.0f;
+    repl_state_camera_set_orbit(18.0f, 32.0f);
+    repl_state_camera_set_distance(5.5f);
+    repl_state_camera_set_pan(0.0f, 0.0f, 0.0f);
     g_axes_theme = CFG_DEFAULT_AXES_THEME;
     g_backdrop_mode = CFG_DEFAULT_BACKDROP_MODE;
     g_show_outlines = CFG_DEFAULT_VERTEX_OUTLINES;
@@ -109,12 +106,9 @@ static void pin_code_panel_state(void) {
 }
 
 static void seed_nondefault_example_presentation_state(void) {
-    g_cam_rx = -41.0f;
-    g_cam_ry = 73.0f;
-    g_cam_dist = 12.0f;
-    g_cam_tx = 1.5f;
-    g_cam_ty = -2.0f;
-    g_cam_tz = 0.75f;
+    repl_state_camera_set_orbit(-41.0f, 73.0f);
+    repl_state_camera_set_distance(12.0f);
+    repl_state_camera_set_pan(1.5f, -2.0f, 0.75f);
     g_wireframe = 1;
     g_grid_theme = 1;
     g_grid_major_idx = GRID_MAJOR_10;
@@ -127,7 +121,7 @@ static void seed_nondefault_example_presentation_state(void) {
     g_show_guides = 0;
     g_show_lights = 0;
     g_backdrop_mode = 1;
-    g_cam_rotate = 1;
+    *repl_state_camera_mut()->auto_rotate = 1;
 }
 
 static char *slurp_stream(FILE *f) {
@@ -611,19 +605,19 @@ int main(int argc, char **argv) {
         ASSERT_TRUE("no cfg reset backdrop default",
                     g_backdrop_mode == CFG_DEFAULT_BACKDROP_MODE);
         ASSERT_TRUE("no cfg reset camera rotate default",
-                    g_cam_rotate == CFG_DEFAULT_CAMERA_ROTATE);
+                    *repl_state_camera()->auto_rotate == CFG_DEFAULT_CAMERA_ROTATE);
         ASSERT_TRUE("no cfg keeps camera rx",
-                    fabsf(g_cam_rx - (-41.0f)) < 1e-4f);
+                    fabsf(*repl_state_camera()->rx - (-41.0f)) < 1e-4f);
         ASSERT_TRUE("no cfg keeps camera ry",
-                    fabsf(g_cam_ry - 73.0f) < 1e-4f);
+                    fabsf(*repl_state_camera()->ry - 73.0f) < 1e-4f);
         ASSERT_TRUE("no cfg keeps camera dist",
-                    fabsf(g_cam_dist - 12.0f) < 1e-4f);
+                    fabsf(*repl_state_camera()->dist - 12.0f) < 1e-4f);
         ASSERT_TRUE("no cfg keeps camera tx",
-                    fabsf(g_cam_tx - 1.5f) < 1e-4f);
+                    fabsf(*repl_state_camera()->tx - 1.5f) < 1e-4f);
         ASSERT_TRUE("no cfg keeps camera ty",
-                    fabsf(g_cam_ty - (-2.0f)) < 1e-4f);
+                    fabsf(*repl_state_camera()->ty - (-2.0f)) < 1e-4f);
         ASSERT_TRUE("no cfg keeps camera tz",
-                    fabsf(g_cam_tz - 0.75f) < 1e-4f);
+                    fabsf(*repl_state_camera()->tz - 0.75f) < 1e-4f);
     }
 
     {
@@ -666,9 +660,9 @@ int main(int argc, char **argv) {
         ASSERT_TRUE("partial cfg lights reset default",
                     g_show_lights == CFG_DEFAULT_LIGHT_INDICATORS);
         ASSERT_TRUE("partial cfg camera rotate reset default",
-                    g_cam_rotate == CFG_DEFAULT_CAMERA_ROTATE);
+                    *repl_state_camera()->auto_rotate == CFG_DEFAULT_CAMERA_ROTATE);
         ASSERT_TRUE("partial cfg keeps camera rx",
-                    fabsf(g_cam_rx - (-41.0f)) < 1e-4f);
+                    fabsf(*repl_state_camera()->rx - (-41.0f)) < 1e-4f);
     }
 
     {
@@ -685,17 +679,17 @@ int main(int argc, char **argv) {
             ASSERT_TRUE("stress example backdrop preset",
                         g_backdrop_mode == 1);
             ASSERT_TRUE("stress example camera rx preset",
-                        fabsf(g_cam_rx - 27.5f) < 1e-4f);
+                        fabsf(*repl_state_camera()->rx - 27.5f) < 1e-4f);
             ASSERT_TRUE("stress example camera ry preset",
-                        fabsf(g_cam_ry - (-24.0f)) < 1e-4f);
+                        fabsf(*repl_state_camera()->ry - (-24.0f)) < 1e-4f);
             ASSERT_TRUE("stress example camera dist preset",
-                        fabsf(g_cam_dist - 12.5f) < 1e-4f);
+                        fabsf(*repl_state_camera()->dist - 12.5f) < 1e-4f);
             ASSERT_TRUE("stress example camera tx preset",
-                        fabsf(g_cam_tx - 0.6f) < 1e-4f);
+                        fabsf(*repl_state_camera()->tx - 0.6f) < 1e-4f);
             ASSERT_TRUE("stress example camera ty preset",
-                        fabsf(g_cam_ty - 0.1f) < 1e-4f);
+                        fabsf(*repl_state_camera()->ty - 0.1f) < 1e-4f);
             ASSERT_TRUE("stress example camera tz preset",
-                        fabsf(g_cam_tz - 0.4f) < 1e-4f);
+                        fabsf(*repl_state_camera()->tz - 0.4f) < 1e-4f);
 
             dump = dump_current_code_panel_text();
             ASSERT_TRUE("stress example camera dump alloc", dump != NULL);
@@ -743,17 +737,17 @@ int main(int argc, char **argv) {
         ASSERT_TRUE("mixed cfg camera disallowed layout ignored",
                     g_code_panel_layout == CODE_PANEL_LAYOUT_LEFT);
         ASSERT_TRUE("mixed cfg camera rx preset",
-                    fabsf(g_cam_rx - 11.0f) < 1e-4f);
+                    fabsf(*repl_state_camera()->rx - 11.0f) < 1e-4f);
         ASSERT_TRUE("mixed cfg camera ry preset",
-                    fabsf(g_cam_ry - (-17.0f)) < 1e-4f);
+                    fabsf(*repl_state_camera()->ry - (-17.0f)) < 1e-4f);
         ASSERT_TRUE("mixed cfg camera dist preset",
-                    fabsf(g_cam_dist - 9.0f) < 1e-4f);
+                    fabsf(*repl_state_camera()->dist - 9.0f) < 1e-4f);
         ASSERT_TRUE("mixed cfg camera tx preset",
-                    fabsf(g_cam_tx - 0.2f) < 1e-4f);
+                    fabsf(*repl_state_camera()->tx - 0.2f) < 1e-4f);
         ASSERT_TRUE("mixed cfg camera ty preset",
-                    fabsf(g_cam_ty - 0.3f) < 1e-4f);
+                    fabsf(*repl_state_camera()->ty - 0.3f) < 1e-4f);
         ASSERT_TRUE("mixed cfg camera tz preset",
-                    fabsf(g_cam_tz - (-0.4f)) < 1e-4f);
+                    fabsf(*repl_state_camera()->tz - (-0.4f)) < 1e-4f);
         ASSERT_TRUE("mixed cfg camera body cmds loaded", g_num_cmds == 3);
 
         dump = dump_current_code_panel_text();
@@ -818,17 +812,17 @@ int main(int argc, char **argv) {
         ASSERT_TRUE("invalid camera header keeps cmds valid",
                     examples_have_no_invalid_cmds());
         ASSERT_TRUE("invalid camera header preserves rx",
-                    fabsf(g_cam_rx - 18.0f) < 1e-4f);
+                    fabsf(*repl_state_camera()->rx - 18.0f) < 1e-4f);
         ASSERT_TRUE("invalid camera header preserves ry",
-                    fabsf(g_cam_ry - 32.0f) < 1e-4f);
+                    fabsf(*repl_state_camera()->ry - 32.0f) < 1e-4f);
         ASSERT_TRUE("invalid camera header preserves dist",
-                    fabsf(g_cam_dist - 5.5f) < 1e-4f);
+                    fabsf(*repl_state_camera()->dist - 5.5f) < 1e-4f);
         ASSERT_TRUE("invalid camera header preserves tx",
-                    fabsf(g_cam_tx - 0.0f) < 1e-4f);
+                    fabsf(*repl_state_camera()->tx - 0.0f) < 1e-4f);
         ASSERT_TRUE("invalid camera header preserves ty",
-                    fabsf(g_cam_ty - 0.0f) < 1e-4f);
+                    fabsf(*repl_state_camera()->ty - 0.0f) < 1e-4f);
         ASSERT_TRUE("invalid camera header preserves tz",
-                    fabsf(g_cam_tz - 0.0f) < 1e-4f);
+                    fabsf(*repl_state_camera()->tz - 0.0f) < 1e-4f);
 
         dump = dump_current_code_panel_text();
         ASSERT_TRUE("invalid camera header dump alloc", dump != NULL);

@@ -38,8 +38,7 @@ static void test_help_overlay(void) {
     ASSERT_TRUE("help hidden -> no GL calls", gl_stub_counts[GL_STUB_glBegin] == 0);
     
     g_show_help = 1;
-    g_win_w = 800;
-    g_win_h = 600;
+    repl_state_viewport_set_size(800, 600);
     g_help_tab = 0;
     g_help_scroll = 0;
     
@@ -98,7 +97,7 @@ static void test_color_picker(void) {
     
     ASSERT_TRUE("can edit color cmd", ui_color_picker_can_edit_cmd(0));
     
-    g_win_w = 800; g_win_h = 600;
+    repl_state_viewport_set_size(800, 600);
     ui_color_picker_open(0, 300);
     ASSERT_TRUE("picker is active", ui_color_picker_active_line() == 0);
     
@@ -112,13 +111,13 @@ static void test_color_picker(void) {
     int py = 300;
     
     /* Press SV square (CP_SV_SZ = 150) */
-    ui_color_picker_press(px + 10, g_win_h - (py - 10));
-    ui_color_picker_motion(px + 20, g_win_h - (py - 20));
+    ui_color_picker_press(px + 10, *repl_state_viewport()->window_h - (py - 10));
+    ui_color_picker_motion(px + 20, *repl_state_viewport()->window_h - (py - 20));
     ui_color_picker_release();
 
     /* Press Hue bar (Offset by CP_SV_SZ + CP_GAP = 150 + 6 = 156) */
-    ui_color_picker_press(px + 156 + 10, g_win_h - (py - 10));
-    ui_color_picker_motion(px + 156 + 10, g_win_h - (py - 20));
+    ui_color_picker_press(px + 156 + 10, *repl_state_viewport()->window_h - (py - 10));
+    ui_color_picker_motion(px + 156 + 10, *repl_state_viewport()->window_h - (py - 20));
     ui_color_picker_release();
 
     /* Test Alpha support */
@@ -132,14 +131,14 @@ static void test_color_picker(void) {
     ASSERT_GL_CALLS("picker render with alpha -> draws quads", GL_STUB_glBegin, 1);
     
     /* Press Alpha bar (alp_x = hue_x + 18 + 6 = px + 156 + 24 = 180) */
-    ui_color_picker_press(px + 185, g_win_h - (py - 10));
-    ui_color_picker_motion(px + 185, g_win_h - (py - 20));
+    ui_color_picker_press(px + 185, *repl_state_viewport()->window_h - (py - 10));
+    ui_color_picker_motion(px + 185, *repl_state_viewport()->window_h - (py - 20));
     ui_color_picker_release();
 
     /* Test glClearColor limits */
     g_cmds[0].type = CMD_CLEAR_COLOR;
     ui_color_picker_open(0, 300);
-    ui_color_picker_press(px + 10, g_win_h - (py - 5)); // High V
+    ui_color_picker_press(px + 10, *repl_state_viewport()->window_h - (py - 5)); // High V
     ui_color_picker_release();
     
     ui_color_picker_close();
@@ -194,10 +193,10 @@ static void test_variable_panel(void) {
     
     /* Test hit testing */
     int row = -1;
-    g_win_w = 800; g_win_h = 600;
+    repl_state_viewport_set_size(800, 600);
     int px, py, pw, ph;
     var_panel_rect(&px, &py, &pw, &ph);
-    ASSERT_TRUE("hit test in panel", var_panel_hit(px + 10, g_win_h - (py + 10), &row));
+    ASSERT_TRUE("hit test in panel", var_panel_hit(px + 10, *repl_state_viewport()->window_h - (py + 10), &row));
     ASSERT_TRUE("hit test outside panel", !var_panel_hit(0, 0, &row));
 }
 
@@ -205,7 +204,7 @@ static void test_menu_bar(void) {
     printf("Testing Menu Bar...\n");
     gl_stub_counts_reset();
     
-    g_win_w = 800; g_win_h = 600;
+    repl_state_viewport_set_size(800, 600);
     g_code_panel_layout = CODE_PANEL_LAYOUT_LEFT;
     g_panel_frac = 0.5f;
     
@@ -215,11 +214,11 @@ static void test_menu_bar(void) {
     ASSERT_GL_CALLS("menu bar render -> draws text", GL_STUB_glRasterPos2f, 2);
     
     /* Test hits */
-    ASSERT_TRUE("menu hit", ui_menu_bar_menu_hit(20, g_win_h - (g_win_h - 10)) >= 0);
+    ASSERT_TRUE("menu hit", ui_menu_bar_menu_hit(20, 10) >= 0);
     /* Pins are on the right side of the code panel. 
      * With CP LEFT and frac 0.5, cp_w = 400. 
      */
-    ASSERT_TRUE("pin hit", ui_menu_bar_pin_hit(380, g_win_h - (g_win_h - 10)) >= 0);
+    ASSERT_TRUE("pin hit", ui_menu_bar_pin_hit(380, 10) >= 0);
 
     /* Test dropdown */
     ui_menu_bar_set_open_menu(0); // File menu

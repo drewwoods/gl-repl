@@ -182,7 +182,7 @@ int main(void) {
         declare_test_vars();
         g_wrap_at_comma = 1;
         g_show_indices = 0;
-        g_win_w = 360;
+        repl_state_viewport_set_size(360, *repl_state_viewport()->window_h);
         g_panel_frac = 0.75f;
 
         memset(&g_cmds[0], 0, sizeof(g_cmds[0]));
@@ -222,7 +222,7 @@ int main(void) {
         declare_test_vars();
         g_wrap_at_comma = 1;
         g_show_indices = 0;
-        g_win_w = 360;
+        repl_state_viewport_set_size(360, *repl_state_viewport()->window_h);
         g_panel_frac = 0.75f;
 
         memset(&g_cmds[0], 0, sizeof(g_cmds[0]));
@@ -265,7 +265,7 @@ int main(void) {
         declare_test_vars();
         g_wrap_at_comma = 1;
         g_show_indices = 0;
-        g_win_w = 360;
+        repl_state_viewport_set_size(360, *repl_state_viewport()->window_h);
         g_panel_frac = 0.75f;
 
         memset(&g_cmds[0], 0, sizeof(g_cmds[0]));
@@ -307,7 +307,7 @@ int main(void) {
         declare_test_vars();
         g_wrap_at_comma = 1;
         g_show_indices = 0;
-        g_win_w = 260;
+        repl_state_viewport_set_size(260, *repl_state_viewport()->window_h);
         g_panel_frac = 0.75f;
 
         memset(&g_cmds[0], 0, sizeof(g_cmds[0]));
@@ -345,8 +345,7 @@ int main(void) {
         declare_test_vars();
         g_wrap_at_comma = 1;
         g_show_indices = 0;
-        g_win_w = 360;
-        g_win_h = 800;
+        repl_state_viewport_set_size(360, 800);
         g_panel_frac = 0.5f;
         g_code_panel_layout = CODE_PANEL_LAYOUT_BOTTOM;
 

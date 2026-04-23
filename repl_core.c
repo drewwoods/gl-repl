@@ -267,9 +267,12 @@ void repl_debug_dump_editor(FILE *out) {
         fprintf(dst, "%s\n", g_cmds[i].source);
     }
     fprintf(dst, "--- camera ---\n");
-    fprintf(dst, "rx=%g ry=%g dist=%g tx=%g ty=%g tz=%g\n",
-            (double)g_cam_rx, (double)g_cam_ry, (double)g_cam_dist,
-            (double)g_cam_tx, (double)g_cam_ty, (double)g_cam_tz);
+    {
+        const ReplCameraState *cam = repl_state_camera();
+        fprintf(dst, "rx=%g ry=%g dist=%g tx=%g ty=%g tz=%g\n",
+                (double)*cam->rx, (double)*cam->ry, (double)*cam->dist,
+                (double)*cam->tx, (double)*cam->ty, (double)*cam->tz);
+    }
     update_cam_lines();
     for (int i = 0; i < CAM_LINE_COUNT; i++)
         fprintf(dst, "%s\n", g_cam_lines[i]);
@@ -628,7 +631,7 @@ void begin_2d(void) {
     glMatrixMode(GL_PROJECTION);
     glPushMatrix();
     glLoadIdentity();
-    gluOrtho2D(0, g_win_w, 0, g_win_h);
+    gluOrtho2D(0, *repl_state_viewport()->window_w, 0, *repl_state_viewport()->window_h);
     glMatrixMode(GL_MODELVIEW);
     glPushMatrix();
     glLoadIdentity();
@@ -683,7 +686,7 @@ static void display_func(void) {
     update_cam_lines();
 
     /* Full-window clear — use last glClearColor cmd if present, else default */
-    glViewport(0, 0, g_win_w, g_win_h);
+    glViewport(0, 0, *repl_state_viewport()->window_w, *repl_state_viewport()->window_h);
     {
         float cr = 0.10f, cg = 0.10f, cb = 0.13f, ca = 1.0f;
         for (int ci = 0; ci < g_num_flat_cmds; ci++) {
@@ -732,7 +735,7 @@ static void display_func(void) {
         prof_accum_commit(s);
 
     /* 2D overlays in full window coords */
-    glViewport(0, 0, g_win_w, g_win_h);
+    glViewport(0, 0, *repl_state_viewport()->window_w, *repl_state_viewport()->window_h);
     prof_begin(PROF_CODE_PANEL);
     render_code_panel();
     prof_end(PROF_CODE_PANEL);
@@ -757,8 +760,7 @@ static void display_func(void) {
 
 static void reshape_func(int w, int h) {
     if (h < 1) h = 1;
-    g_win_w = w;
-    g_win_h = h;
+    repl_state_viewport_set_size(w, h);
 }
 
 /* ========================================================================= */
