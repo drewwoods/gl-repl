@@ -223,12 +223,15 @@ static void load_example_lines(const char *const *lines) {
 
     repl_command_store_load(&store, NULL, 0, 0);
     g_num_flat_cmds = 0;
-    g_inserting = 0;
-    g_input[0] = '\0';
-    g_input_len = 0;
-    g_cursor_pos = 0;
-    g_newline_buf[0] = '\0';
-    g_newline_len = 0;
+    repl_state_insert_mode_set(0);
+    {
+        ReplEditorInputState *inp = repl_state_editor_input_mut();
+        inp->input[0] = '\0';
+        *inp->input_len = 0;
+        repl_state_cursor_pos_set(0);
+        inp->pending_newline[0] = '\0';
+        *inp->pending_newline_len = 0;
+    }
     repl_editor_reset_transients();
     init_predef_vars();
     reset_example_presentation_defaults();
@@ -245,11 +248,14 @@ static void load_example_lines(const char *const *lines) {
     for (; body && *body; body++)
         feed_line(*body);
 
-    g_inserting = 0;
-    g_edit_line = g_num_cmds;
-    g_input[0] = '\0';
-    g_input_len = 0;
-    g_cursor_pos = 0;
+    repl_state_insert_mode_set(0);
+    repl_state_edit_line_set(repl_state_document_count());
+    {
+        ReplEditorInputState *inp = repl_state_editor_input_mut();
+        inp->input[0] = '\0';
+        *inp->input_len = 0;
+        repl_state_cursor_pos_set(0);
+    }
     mark_normals_dirty();
 }
 

@@ -280,26 +280,26 @@ int main() {
 
         input = repl_state_editor_input_mut();
         ASSERT_TRUE("editor input facade uses input buffer",
-                    input->input == g_input);
-        ASSERT_TRUE("editor input facade uses input len",
-                    input->input_len == &g_input_len);
-        ASSERT_TRUE("editor input facade uses cursor",
-                    input->cursor_pos == &g_cursor_pos);
+                    input->input == repl_state_input_buffer_mut());
+        repl_state_input_set_text("xyz");
+        ASSERT_TRUE("editor input len ptr reflects state", *input->input_len == 3);
+        ASSERT_TRUE("editor input cursor ptr reflects state",
+                    *input->cursor_pos == repl_state_cursor_pos());
 
         repl_state_input_set_text("abc");
-        ASSERT_STR("state input set text", g_input, "abc");
-        ASSERT_INT("state input set len", g_input_len, 3);
-        ASSERT_INT("state input cursor at end", g_cursor_pos, 3);
+        ASSERT_STR("state input set text", repl_state_editor_input()->input, "abc");
+        ASSERT_INT("state input set len", repl_state_input_len(), 3);
+        ASSERT_INT("state input cursor at end", repl_state_cursor_pos(), 3);
         repl_state_cursor_pos_set(99);
-        ASSERT_INT("state cursor clamps high", g_cursor_pos, 3);
+        ASSERT_INT("state cursor clamps high", repl_state_cursor_pos(), 3);
         repl_state_cursor_pos_set(-5);
-        ASSERT_INT("state cursor clamps low", g_cursor_pos, 0);
+        ASSERT_INT("state cursor clamps low", repl_state_cursor_pos(), 0);
 
         repl_state_pending_newline_set_text("next line");
-        ASSERT_STR("state newline set text", g_newline_buf, "next line");
-        ASSERT_INT("state newline len", g_newline_len, 9);
+        ASSERT_STR("state newline set text", repl_state_pending_newline_buffer_mut(), "next line");
+        ASSERT_INT("state newline len", repl_state_pending_newline_len(), 9);
         repl_state_insert_mode_set(42);
-        ASSERT_INT("state insert mode set", g_inserting, 1);
+        ASSERT_INT("state insert mode set", repl_state_insert_mode(), 1);
 
         repl_state_selection_set(4, 2);
         ASSERT_INT("state selection anchor", repl_state_selection_anchor(), 4);
@@ -327,9 +327,9 @@ int main() {
                     editor.clipboard == repl_state_clipboard_cmds_mut());
 
         repl_state_editor_input_reset();
-        ASSERT_STR("state input reset text", g_input, "");
-        ASSERT_INT("state input reset inserting", g_inserting, 0);
-        ASSERT_STR("state newline reset text", g_newline_buf, "");
+        ASSERT_STR("state input reset text", repl_state_editor_input()->input, "");
+        ASSERT_INT("state input reset inserting", repl_state_insert_mode(), 0);
+        ASSERT_STR("state newline reset text", repl_state_pending_newline_buffer_mut(), "");
     }
 
     /* 12. camera/pointer/viewport state facade */

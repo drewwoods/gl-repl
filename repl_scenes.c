@@ -120,7 +120,7 @@ static void load_scene_from_slot(int idx) {
         g_predef_vars[i].value = s->predef_vals[i];
         memcpy(g_predef_vars[i].name, s->predef_names[i], 16);
     }
-    g_inserting = 0;
+    repl_state_insert_mode_set(0);
     load_line_to_input(g_edit_line);
     mark_normals_dirty();
     s->last_touch       = next_user_scene_tick();

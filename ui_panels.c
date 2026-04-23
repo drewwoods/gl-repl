@@ -225,6 +225,10 @@ static void render_active_input_rows(int panel_w, int text_x, int idx_x,
                                      int indent_chars, const char *idx_text,
                                      int search_row_idx,
                                      int *io_cur, int *io_line_y) {
+    const ReplEditorInputState *inp = repl_state_editor_input();
+    const char *input = inp->input;
+    int cursor_pos = repl_state_cursor_pos();
+    int input_len = *inp->input_len;
     CodePanelWrapIter wrap_it;
     int wrap_row = 0;
     int wrap_start, wrap_len, wrap_x;
@@ -232,14 +236,14 @@ static void render_active_input_rows(int panel_w, int text_x, int idx_x,
     int cursor_seg_start = 0;
     int cursor_seg_len = 0;
     int cursor_seg_x = input_x;
-    int cursor_row = repl_code_panel_document_cursor_row_for_text(g_input, input_x, panel_w,
-                                                    g_cursor_pos,
+    int cursor_row = repl_code_panel_document_cursor_row_for_text(input, input_x, panel_w,
+                                                    cursor_pos,
                                                     &cursor_seg_start,
                                                     &cursor_seg_len,
                                                     &cursor_seg_x);
-    int cursor_col = g_cursor_pos - cursor_seg_start;
+    int cursor_col = cursor_pos - cursor_seg_start;
 
-    repl_code_panel_document_wrap_iter_init(&wrap_it, g_input, input_x, panel_w);
+    repl_code_panel_document_wrap_iter_init(&wrap_it, input, input_x, panel_w);
     while (repl_code_panel_document_wrap_iter_next(&wrap_it, &wrap_start, &wrap_len, &wrap_x)) {
         if (*io_cur >= g_scroll && *io_cur < g_scroll + visible_lines) {
             glColor3f(0.55f, 0.55f, 0.30f);
@@ -270,17 +274,17 @@ static void render_active_input_rows(int panel_w, int text_x, int idx_x,
             }
 
             glColor3f(0.95f, 0.95f, 0.90f);
-            code_panel_draw_search_highlights(g_input, search_row_idx,
+            code_panel_draw_search_highlights(input, search_row_idx,
                                               wrap_start, wrap_len,
                                               wrap_x, *io_line_y);
-            code_panel_draw_segment(wrap_x, *io_line_y, g_input,
+            code_panel_draw_segment(wrap_x, *io_line_y, input,
                                     wrap_start, wrap_len, FONT_MONO);
 
             if (wrap_row == cursor_row) {
                 int cursor_x = wrap_x + cursor_col * FONT_W;
                 int hint_x = cursor_x;
 
-                if (g_ac_ghost[0] && g_cursor_pos == g_input_len) {
+                if (g_ac_ghost[0] && cursor_pos == input_len) {
                     glEnable(GL_BLEND);
                     glColor4f(0.50f, 0.55f, 0.65f, 0.55f);
                     draw_string((float)cursor_x, (float)(*io_line_y),
@@ -289,7 +293,7 @@ static void render_active_input_rows(int panel_w, int text_x, int idx_x,
                     hint_x += (int)strlen(g_ac_ghost) * FONT_W;
                 }
 
-                if (g_ac_hint[0] && g_cursor_pos == g_input_len) {
+                if (g_ac_hint[0] && cursor_pos == input_len) {
                     glEnable(GL_BLEND);
                     glColor4f(0.56f, 0.62f, 0.72f, 0.38f);
                     draw_string((float)hint_x, (float)(*io_line_y),
@@ -372,7 +376,7 @@ void render_code_panel(void) {
      * we can draw a gutter accent bar on them below. */
     int highlight_normal_idx = -1;
     int highlight_color_idx  = -1;
-    if (!g_inserting && g_edit_line < g_num_cmds && g_cmds[g_edit_line].valid) {
+    if (!repl_state_insert_mode() && g_edit_line < g_num_cmds && g_cmds[g_edit_line].valid) {
         highlight_normal_idx = repl_find_feeding_normal_cmd(g_edit_line);
         highlight_color_idx  = repl_find_feeding_color_cmd(g_edit_line);
     }
@@ -503,7 +507,7 @@ void render_code_panel(void) {
     int primitive_vnums_exact = 1;
     for (int i = 0; i < g_num_cmds; i++) {
         /* If inserting, render the virtual insert line before command[g_edit_line] */
-        if (g_inserting && i == g_edit_line) {
+        if (repl_state_insert_mode() && i == g_edit_line) {
                         render_active_input_rows(panel_w, text_x, idx_x,
                                                                          visible_lines, file_line,
                                                                          repl_code_panel_document_active_indent_chars(), NULL,
@@ -526,7 +530,7 @@ void render_code_panel(void) {
                 }
             }
 
-            int is_edit = (!g_inserting && i == g_edit_line);
+            int is_edit = (!repl_state_insert_mode() && i == g_edit_line);
             int is_vertex = g_cmds[i].valid && (g_cmds[i].type == CMD_VERTEX3F ||
                                                 g_cmds[i].type == CMD_TESS_VERTEX);
             if (is_edit) {
@@ -817,7 +821,7 @@ void render_code_panel(void) {
 
         /* Line / insert-mode / begin-mode */
         char ln_buf[64];
-        if (g_inserting)
+        if (repl_state_insert_mode())
             snprintf(ln_buf, sizeof(ln_buf), "Ln %d [INSERT]", g_edit_line + 1);
         else if (in_begin_block())
             snprintf(ln_buf, sizeof(ln_buf), "Ln %d  %s",
@@ -1081,19 +1085,24 @@ void handle_code_panel_click(int mx, int my) {
     int idx_col_w = g_show_indices ? (6 * FONT_W) : 0;
     int text_x = CODE_MARGIN_X + linenum_w + FONT_W + idx_col_w;
     int indent_chars = repl_code_panel_document_active_indent_chars();
-    int seg_start = g_input_len;
+    int seg_start = *repl_state_editor_input()->input_len;
     int seg_len = 0;
     int seg_x = text_x + indent_chars * FONT_W;
     int col;
 
-    repl_code_panel_document_segment_for_row(g_input, seg_x, panel_w, row_offset,
+    repl_code_panel_document_segment_for_row(repl_state_editor_input()->input,
+                               seg_x, panel_w, row_offset,
                                &seg_start, &seg_len, &seg_x);
 
     col = (mx - seg_x + FONT_W / 2) / FONT_W;
     if (col < 0) col = 0;
     if (col > seg_len) col = seg_len;
-    g_cursor_pos = seg_start + col;
-    if (g_cursor_pos > g_input_len) g_cursor_pos = g_input_len;
+    {
+        int new_cursor = seg_start + col;
+        int cur_input_len = *repl_state_editor_input()->input_len;
+        if (new_cursor > cur_input_len) new_cursor = cur_input_len;
+        repl_state_cursor_pos_set(new_cursor);
+    }
 
     g_cursor_on = 1;
     g_blink_tick = 0;

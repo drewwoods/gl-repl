@@ -3,7 +3,7 @@
 ## Summary
 Migrate one runtime domain at a time from broad `g_*` access to `ReplRuntimeState` ownership. Each domain follows the same pattern: add focused accessors, convert production callers, update tests, move storage into `repl_state.c`, then delete that domain’s compat externs from `repl_state_compat.h`.
 
-Current status: the storage moves for 3.1-3.4 are underway. `repl_state.c` already owns the document, flat-program, editor-input, selection, clipboard, camera, pointer, and viewport storage blocks, but the compat bridge and several direct callers are still in place. The render-resource slice is already landed. The next implementation slice is 3.3, editor input / selection / clipboard, followed by 3.4 camera / pointer / viewport cleanup.
+Current status: slices 3.3, 3.4, and 3.6 are complete. The compat bridge still carries externs for slices 3.1–3.2 (document/command-store and flat-program) and 3.5+ (presentation, replay, scenes, search, autocomplete, status). Next up is 3.5 (presentation/config) or 3.1 (document/command-store).
 
 ## Migration Pattern For Every Slice
 1. Add the smallest missing `repl_state_*` helper API needed by the domain.
@@ -32,13 +32,14 @@ Current status: the storage moves for 3.1-3.4 are underway. `repl_state.c` alrea
 - Remove the remaining flat fields from `ReplCommandState`; if no callers remain, delete `repl_command_state_live()` entirely.
 - Current progress: `repl_state.c` now builds the live flat-program view directly from its owned storage, `repl_flatten.c` writes current-block and dirty state through the facade, and `repl_core.c`, `repl_executor.c`, `repl_replay.c`, `scene_render.c`, `scene_lights.c`, `scene_overlays.c`, and the internal state tests read the flat stream through the new accessor path. The compat externs remain only for the still-unmigrated legacy bridge, so this slice is partially complete but not retired yet.
 
-### 3.3 Editor Input, Selection, Clipboard
-- Add editor-input helpers for clear, set text, load source line, cursor move/set, insert/delete character, pending-newline save/restore, and insert-mode get/set.
-- Convert keyboard/feed-line/autocomplete callers away from raw `g_input`, `g_input_len`, `g_cursor_pos`, `g_newline_buf`, `g_newline_len`, and `g_inserting`.
-- Convert selection and clipboard modules to use `ReplSelectionState` / `ReplClipboardState` helpers, not direct `g_sel_anchor`, `g_sel_end`, `g_clipboard`, or `g_clipboard_count`.
-- Move input storage from editor, clipboard storage from clipboard module, and selection storage into `repl_state.c`.
-- Remove `ReplEditorState`, `repl_editor_state_live()`, and the editor/selection/clipboard compat externs once no production users remain.
-- Current progress: the typed editor-input, selection, and clipboard accessors already exist in `repl_state.h` and are backed by storage in `repl_state.c`, but `repl_editor.c`, `repl_clipboard.c`, `repl_search.c`, `repl_autocomplete.c`, and the editor tests still reach the compat globals in many places. This slice is started, not finished.
+### 3.3 Editor Input, Selection, Clipboard ✅ DONE
+All editor-input globals (`g_input`, `g_input_len`, `g_cursor_pos`, `g_newline_buf`,
+`g_newline_len`, `g_inserting`) now route exclusively through `repl_state` typed APIs
+(`repl_state_editor_input()`, `repl_state_editor_input_mut()`, `repl_state_cursor_pos()`,
+`repl_state_cursor_pos_set()`, `repl_state_insert_mode()`, `repl_state_insert_mode_set()`,
+`repl_state_pending_newline_*`). Converted `repl_editor.c` (133 refs), `repl_commit.c`
+(78 refs), `ui_panels.c` (16 refs), `repl_autocomplete.c` (20 refs), and all 7 affected
+test files. Removed 6 compat externs from `repl_state_compat.h`. All 2557 tests pass.
 
 ### 3.4 Camera, Pointer, Viewport ✅ DONE
 All camera (rx/ry/dist/tx/ty/tz/motion_glow/auto_rotate), pointer (mouse_x/y/button),

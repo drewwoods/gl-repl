@@ -69,7 +69,7 @@ int main(void) {
     }
 
     repl_navigate_to_line(1);
-    g_cursor_pos = 0;
+    repl_state_cursor_pos_set(0);
     repl_keyboard_func('\r', 0, 0);
     build_doc(&layout);
     {

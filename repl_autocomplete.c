@@ -147,8 +147,9 @@ static int find_defined_func_call_params(const char *input, const char **after_o
 }
 
 static void update_input_param_hint(void) {
+    const char *input = repl_state_editor_input()->input;
     const char *after = NULL;
-    const FuncCompletion *builtin = find_builtin_completion_for_input(g_input, &after);
+    const FuncCompletion *builtin = find_builtin_completion_for_input(input, &after);
     if (builtin) {
         build_param_hint_text(builtin->params, builtin->param_count,
                               after, g_ac_hint, (int)sizeof(g_ac_hint));
@@ -160,7 +161,7 @@ static void update_input_param_hint(void) {
         char param_storage[MAX_EXPR_VARS][16];
         int param_count = 0;
 
-        if (find_defined_func_call_params(g_input, &after, params,
+        if (find_defined_func_call_params(input, &after, params,
                                           &param_count, param_storage)) {
             build_param_hint_text(params, param_count, after,
                                   g_ac_hint, (int)sizeof(g_ac_hint));
@@ -169,6 +170,8 @@ static void update_input_param_hint(void) {
 }
 
 void update_selected_autocomplete_preview(void) {
+    const ReplEditorInputState *inp = repl_state_editor_input();
+
     g_ac_ghost[0] = '\0';
     g_ac_hint[0] = '\0';
 
@@ -182,12 +185,12 @@ void update_selected_autocomplete_preview(void) {
         int param_count = 0;
 
         snprintf(g_ac_ghost, sizeof(g_ac_ghost), "%s",
-                 g_ac_insert_matches[g_ac_sel] + g_input_len);
+                 g_ac_insert_matches[g_ac_sel] + *inp->input_len);
         if (g_ac_func_matches[g_ac_sel] && g_ac_func_matches[g_ac_sel]->param_count > 0) {
             build_param_hint_text(g_ac_func_matches[g_ac_sel]->params,
                                   g_ac_func_matches[g_ac_sel]->param_count,
                                   "", g_ac_hint, (int)sizeof(g_ac_hint));
-        } else if (find_defined_func_call_params(g_input, &after, params,
+        } else if (find_defined_func_call_params(inp->input, &after, params,
                                                  &param_count, param_storage)) {
             g_ac_ghost[0] = '\0';
             build_param_hint_text(params, param_count, after,
@@ -205,25 +208,29 @@ void update_selected_autocomplete_preview(void) {
 }
 
 void update_autocomplete(void) {
+    const ReplEditorInputState *inp = repl_state_editor_input();
+    const char *input = inp->input;
+    int input_len = *inp->input_len;
+
     clear_autocomplete_state();
     g_ac_mode = AC_MODE_NONE;
     g_ac_token_len = 0;
     g_ac_suffix[0] = '\0';
 
-    if (g_input_len == 0) return;
+    if (input_len == 0) return;
 
     /* Only offer completions when cursor is at the end of input. */
-    if (g_cursor_pos != g_input_len) return;
+    if (repl_state_cursor_pos() != input_len) return;
 
     /* glPointParameterfv enum completion (custom: 1 enum + 3 floats). */
     {
         static const char prefix[] = "glPointParameterfv(";
         const EnumEntry *point_param_pnames = repl_point_param_pname_entries();
         int plen = (int)sizeof(prefix) - 1;
-        if (strncmp(g_input, prefix, plen) == 0 && g_input_len > plen &&
-            strchr(g_input + plen, ',') == NULL) {
-            const char *after = g_input + plen;
-            int alen = g_input_len - plen;
+        if (strncmp(input, prefix, plen) == 0 && input_len > plen &&
+            strchr(input + plen, ',') == NULL) {
+            const char *after = input + plen;
+            int alen = input_len - plen;
             for (int j = 0; point_param_pnames[j].name && g_ac_count < MAX_AC_MATCHES; j++) {
                 if (strncmp(point_param_pnames[j].name, after, alen) == 0 &&
                     (int)strlen(point_param_pnames[j].name) > alen) {
@@ -250,9 +257,9 @@ void update_autocomplete(void) {
         snprintf(prefix, sizeof(prefix), "%s(", enum_cmds[i].name);
         int plen = (int)strlen(prefix);
 
-        if (strncmp(g_input, prefix, plen) == 0 && g_input_len > plen) {
-            const char *after = g_input + plen;
-            int alen = g_input_len - plen;
+        if (strncmp(input, prefix, plen) == 0 && input_len > plen) {
+            const char *after = input + plen;
+            int alen = input_len - plen;
             char *comma = strchr(after, ',');
 
             if (!comma) {
@@ -281,7 +288,7 @@ void update_autocomplete(void) {
                 if (abs(enum_cmds[i].num_args) == 2 && enum_cmds[i].enums2) {
                     const char *arg2 = comma + 1;
                     while (*arg2 == ' ') arg2++;
-                    int arg2_len = g_input_len - (int)(arg2 - g_input);
+                    int arg2_len = input_len - (int)(arg2 - input);
 
                     for (int j = 0; enum_cmds[i].enums2[j].name && g_ac_count < MAX_AC_MATCHES; j++) {
                         if (strncmp(enum_cmds[i].enums2[j].name, arg2, arg2_len) == 0 &&
@@ -307,8 +314,8 @@ void update_autocomplete(void) {
     /* Complete function names. */
     const FuncCompletion *completions = repl_func_completions();
     for (int i = 0; completions[i].insert_text && g_ac_count < MAX_AC_MATCHES; i++) {
-        if (strncmp(completions[i].insert_text, g_input, (size_t)g_input_len) == 0 &&
-            (int)strlen(completions[i].insert_text) > g_input_len) {
+        if (strncmp(completions[i].insert_text, input, (size_t)input_len) == 0 &&
+            (int)strlen(completions[i].insert_text) > input_len) {
             g_ac_matches[g_ac_count] = completions[i].display_text;
             g_ac_insert_matches[g_ac_count] = completions[i].insert_text;
             g_ac_func_matches[g_ac_count] = &completions[i];
@@ -328,10 +335,13 @@ void accept_autocomplete(void) {
     if (g_ac_count == 0 || g_ac_ghost[0] == '\0') return;
 
     int ghost_len = (int)strlen(g_ac_ghost);
-    if (g_input_len + ghost_len < MAX_INPUT_LEN - 1) {
-        strcat(g_input, g_ac_ghost);
-        g_input_len += ghost_len;
-        g_cursor_pos = g_input_len;
+    {
+        ReplEditorInputState *inp = repl_state_editor_input_mut();
+        if (*inp->input_len + ghost_len < MAX_INPUT_LEN - 1) {
+            strcat(inp->input, g_ac_ghost);
+            *inp->input_len += ghost_len;
+            repl_state_cursor_pos_set(*inp->input_len);
+        }
     }
     clear_autocomplete_state();
     g_ac_mode = AC_MODE_NONE;

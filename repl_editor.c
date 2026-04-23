@@ -153,18 +153,25 @@ void repl_clear_all_cmds(void) {
     ReplCommandStore store = repl_command_store_live();
     repl_command_store_clear(&store);
     g_edit_line = 0;
-    g_inserting = 0;
-    g_input[0] = '\0';
-    g_input_len = 0;
-    g_cursor_pos = 0;
-    g_newline_buf[0] = '\0';
-    g_newline_len = 0;
+    repl_state_insert_mode_set(0);
+    {
+        ReplEditorInputState *inp = repl_state_editor_input_mut();
+        inp->input[0] = '\0';
+        *inp->input_len = 0;
+    }
+    repl_state_cursor_pos_set(0);
+    {
+        ReplEditorInputState *inp = repl_state_editor_input_mut();
+        inp->pending_newline[0] = '\0';
+        *inp->pending_newline_len = 0;
+    }
     init_predef_vars();
     mark_normals_dirty();
     set_status("All commands cleared");
 }
 
 void load_line_to_input(int idx) {
+    ReplEditorInputState *inp = repl_state_editor_input_mut();
     if (idx >= 0 && idx < g_num_cmds) {
         const char *s = g_cmds[idx].source;
         while (*s && isspace((unsigned char)*s))
@@ -177,11 +184,11 @@ void load_line_to_input(int idx) {
                 len--;
             if (len > MAX_INPUT_LEN - 2)
                 len = MAX_INPUT_LEN - 2;
-            g_input[0] = ':';
-            memcpy(g_input + 1, s, (size_t)len);
-            g_input[len + 1] = '\0';
-            g_input_len = len + 1;
-            g_cursor_pos = g_input_len;
+            inp->input[0] = ':';
+            memcpy(inp->input + 1, s, (size_t)len);
+            inp->input[len + 1] = '\0';
+            *inp->input_len = len + 1;
+            repl_state_cursor_pos_set(*inp->input_len);
             return;
         }
 
@@ -191,20 +198,21 @@ void load_line_to_input(int idx) {
             len--;
         if (len >= MAX_INPUT_LEN)
             len = MAX_INPUT_LEN - 1;
-        memcpy(g_input, s, (size_t)len);
-        g_input[len] = '\0';
-        g_input_len = len;
-        g_cursor_pos = len;
+        memcpy(inp->input, s, (size_t)len);
+        inp->input[len] = '\0';
+        *inp->input_len = len;
+        repl_state_cursor_pos_set(len);
     } else {
-        memcpy(g_input, g_newline_buf, (size_t)g_newline_len + 1);
-        g_input_len = g_newline_len;
-        g_cursor_pos = g_newline_len;
+        memcpy(inp->input, inp->pending_newline, (size_t)*inp->pending_newline_len + 1);
+        *inp->input_len = *inp->pending_newline_len;
+        repl_state_cursor_pos_set(*inp->pending_newline_len);
     }
 }
 
 static void save_newline_buf(void) {
-    memcpy(g_newline_buf, g_input, (size_t)g_input_len + 1);
-    g_newline_len = g_input_len;
+    ReplEditorInputState *inp = repl_state_editor_input_mut();
+    memcpy(inp->pending_newline, inp->input, (size_t)*inp->input_len + 1);
+    *inp->pending_newline_len = *inp->input_len;
 }
 
 void repl_editor_reset_transients(void) {
@@ -222,14 +230,14 @@ static int normalize_navigation_target(int target) {
 }
 
 static void navigate_to_line_raw_resolved(int target) {
-    if (target == g_edit_line && !g_inserting)
+    if (target == g_edit_line && !repl_state_insert_mode())
         return;
 
-    if (g_edit_line == g_num_cmds && !g_inserting)
+    if (g_edit_line == g_num_cmds && !repl_state_insert_mode())
         save_newline_buf();
 
     g_edit_line = target;
-    g_inserting = 0;
+    repl_state_insert_mode_set(0);
     load_line_to_input(target);
     clear_autocomplete_state();
 }
@@ -242,7 +250,7 @@ static void navigate_to_line_raw_resolved(int target) {
 static void rewrite_cmd_source_with_indent(GLCmd *cmd, int pos,
                                            int include_block_depth) {
     char stripped[MAX_LINE_LEN];
-    const char *sp = g_input;
+    const char *sp = repl_state_editor_input()->input;
     while (*sp && isspace((unsigned char)*sp)) sp++;
     strncpy(stripped, sp, MAX_LINE_LEN - 1);
     stripped[MAX_LINE_LEN - 1] = '\0';
@@ -279,13 +287,13 @@ static int parse_for_overwrite_enter(GLCmd *cmd, int insert_idx) {
     int parsed;
     if (num_vis_vars > 0) {
         ReplParseContext parse_ctx = { insert_idx, vis_vars, num_vis_vars, 0 };
-        parsed = repl_parse_command_ctx(g_input, cmd, &parse_ctx);
+        parsed = repl_parse_command_ctx(repl_state_editor_input()->input, cmd, &parse_ctx);
         if (parsed)
             rewrite_cmd_source_with_indent(cmd, insert_idx, 1);
     } else {
         ReplParseContext parse_ctx = { insert_idx, NULL, 0, 0 };
-        parsed = repl_parse_command_ctx(g_input, cmd, &parse_ctx);
-        if (parsed && input_has_predef_vars(g_input)) {
+        parsed = repl_parse_command_ctx(repl_state_editor_input()->input, cmd, &parse_ctx);
+        if (parsed && input_has_predef_vars(repl_state_editor_input()->input)) {
             cmd->has_vars = 1;
             rewrite_cmd_source_with_indent(cmd, insert_idx, 0);
         }
@@ -307,21 +315,23 @@ static CommitAttemptState g_commit_attempt_before;
 static CommitAttemptState g_navigation_commit_before;
 
 static void capture_commit_attempt_state(CommitAttemptState *s) {
+    const ReplEditorInputState *inp = repl_state_editor_input();
     repl_undo_snapshot_save(&s->undo);
-    memcpy(s->input, g_input, sizeof(s->input));
-    s->input_len = g_input_len;
-    s->cursor_pos = g_cursor_pos;
-    s->inserting = g_inserting;
-    memcpy(s->newline_buf, g_newline_buf, sizeof(s->newline_buf));
-    s->newline_len = g_newline_len;
+    memcpy(s->input, inp->input, sizeof(s->input));
+    s->input_len = *inp->input_len;
+    s->cursor_pos = repl_state_cursor_pos();
+    s->inserting = repl_state_insert_mode();
+    memcpy(s->newline_buf, inp->pending_newline, sizeof(s->newline_buf));
+    s->newline_len = *inp->pending_newline_len;
 }
 
 /* Navigation rejection reverts commands/predefs and the saved append-line
  * buffer.  The transient typed input stays discarded by the undo snapshot
  * restore; captured input fields are used only to detect commit progress. */
 static void restore_commit_attempt_committed_state(const CommitAttemptState *s) {
-    memcpy(g_newline_buf, s->newline_buf, sizeof(g_newline_buf));
-    g_newline_len = s->newline_len;
+    ReplEditorInputState *inp = repl_state_editor_input_mut();
+    memcpy(inp->pending_newline, s->newline_buf, sizeof(s->newline_buf));
+    *inp->pending_newline_len = s->newline_len;
     repl_undo_snapshot_restore(&s->undo);
 }
 
@@ -338,18 +348,22 @@ static int input_matches_committed_line(int line) {
            (s[slen - 1] == ';' || isspace((unsigned char)s[slen - 1])))
         slen--;
 
-    return slen == g_input_len && strncmp(g_input, s, (size_t)slen) == 0;
+    {
+        const ReplEditorInputState *inp = repl_state_editor_input();
+        return slen == *inp->input_len && strncmp(inp->input, s, (size_t)slen) == 0;
+    }
 }
 
 static int commit_progressed_since(const CommitAttemptState *s) {
+    const ReplEditorInputState *inp = repl_state_editor_input();
     if (g_num_cmds != s->undo.num_cmds ||
         g_edit_line != s->undo.edit_line ||
-        g_inserting != s->inserting ||
-        g_input_len != s->input_len ||
-        g_cursor_pos != s->cursor_pos)
+        repl_state_insert_mode() != s->inserting ||
+        *inp->input_len != s->input_len ||
+        repl_state_cursor_pos() != s->cursor_pos)
         return 1;
 
-    if (memcmp(g_input, s->input, (size_t)g_input_len + 1) != 0)
+    if (memcmp(inp->input, s->input, (size_t)*inp->input_len + 1) != 0)
         return 1;
 
     if (g_num_cmds > 0 &&
@@ -361,9 +375,9 @@ static int commit_progressed_since(const CommitAttemptState *s) {
 }
 
 static int current_input_needs_navigation_commit(void) {
-    if (g_input_len <= 0)
+    if (*repl_state_editor_input()->input_len <= 0)
         return 0;
-    if (!g_inserting && g_edit_line < g_num_cmds &&
+    if (!repl_state_insert_mode() && g_edit_line < g_num_cmds &&
         input_matches_committed_line(g_edit_line))
         return 0;
     return 1;
@@ -376,18 +390,21 @@ static CommitResult commit_current_input(int enter_mode) {
     if (!enter_mode && !current_input_needs_navigation_commit())
         return COMMIT_UNCHANGED;
 
-    if (!g_inserting && g_edit_line < g_num_cmds) {
-        int unmodified = (g_input_len == 0 ||
+    if (!repl_state_insert_mode() && g_edit_line < g_num_cmds) {
+        int unmodified = (*repl_state_editor_input()->input_len == 0 ||
                           input_matches_committed_line(g_edit_line));
         if (unmodified) {
             if (!enter_mode)
                 return COMMIT_UNCHANGED;
-            if (g_cursor_pos > 0)
+            if (repl_state_cursor_pos() > 0)
                 g_edit_line++;
-            g_inserting = 1;
-            g_input[0] = '\0';
-            g_input_len = 0;
-            g_cursor_pos = 0;
+            repl_state_insert_mode_set(1);
+            {
+                ReplEditorInputState *inp = repl_state_editor_input_mut();
+                inp->input[0] = '\0';
+                *inp->input_len = 0;
+            }
+            repl_state_cursor_pos_set(0);
             clear_autocomplete_state();
             set_status("Insert mode");
             mark_normals_dirty();
@@ -395,19 +412,19 @@ static CommitResult commit_current_input(int enter_mode) {
         }
     }
 
-    if (g_input_len > 0)
+    if (*repl_state_editor_input()->input_len > 0)
         push_undo_snapshot();
 
     CommitAttemptState *before = &g_commit_attempt_before;
     capture_commit_attempt_state(before);
 
-    if ((g_inserting || g_edit_line >= g_num_cmds) &&
-        g_input_len > 0 && try_commit_block_structs()) {
+    if ((repl_state_insert_mode() || g_edit_line >= g_num_cmds) &&
+        *repl_state_editor_input()->input_len > 0 && try_commit_block_structs()) {
         return commit_progressed_since(before) ? COMMIT_OK : COMMIT_REJECTED;
     }
 
-    if (g_inserting) {
-        if (g_input_len > 0) {
+    if (repl_state_insert_mode()) {
+        if (*repl_state_editor_input()->input_len > 0) {
             GLCmd cmd;
             int parsed;
             int insert_idx = g_edit_line;
@@ -419,12 +436,12 @@ static CommitResult commit_current_input(int enter_mode) {
                 ReplParseContext parse_ctx = { insert_idx, vis_vars, num_vis_vars, 0 };
                 if (try_commit_var_statements())
                     return commit_progressed_since(before) ? COMMIT_OK : COMMIT_REJECTED;
-                parsed = repl_parse_command_ctx(g_input, &cmd, &parse_ctx);
+                parsed = repl_parse_command_ctx(repl_state_editor_input()->input, &cmd, &parse_ctx);
                 if (parsed)
                     rewrite_cmd_source_with_indent(&cmd, insert_idx, 1);
             } else {
                 ReplParseContext parse_ctx = { insert_idx, NULL, 0, 0 };
-                parsed = repl_parse_command_ctx(g_input, &cmd, &parse_ctx);
+                parsed = repl_parse_command_ctx(repl_state_editor_input()->input, &cmd, &parse_ctx);
             }
 
             if (parsed) {
@@ -434,9 +451,12 @@ static CommitResult commit_current_input(int enter_mode) {
                     return COMMIT_REJECTED;
                 }
                 g_edit_line++;
-                g_input[0] = '\0';
-                g_input_len = 0;
-                g_cursor_pos = 0;
+                {
+                    ReplEditorInputState *inp = repl_state_editor_input_mut();
+                    inp->input[0] = '\0';
+                    *inp->input_len = 0;
+                }
+                repl_state_cursor_pos_set(0);
                 set_status("Inserted");
                 return COMMIT_OK;
             }
@@ -444,7 +464,7 @@ static CommitResult commit_current_input(int enter_mode) {
         }
 
         if (enter_mode) {
-            g_inserting = 0;
+            repl_state_insert_mode_set(0);
             if (g_edit_line <= g_num_cmds)
                 load_line_to_input(g_edit_line);
             return COMMIT_OK;
@@ -455,7 +475,7 @@ static CommitResult commit_current_input(int enter_mode) {
     if (g_edit_line < g_num_cmds) {
         int can_advance = 1;
 
-        if (g_input_len > 0) {
+        if (*repl_state_editor_input()->input_len > 0) {
             if (g_cmds[g_edit_line].type == CMD_FOR_BEGIN) {
                 if (try_commit_for_loop())
                     return commit_progressed_since(before) ? COMMIT_OK : COMMIT_REJECTED;
@@ -486,17 +506,20 @@ static CommitResult commit_current_input(int enter_mode) {
 
         if (can_advance) {
             g_edit_line++;
-            g_inserting = 1;
-            g_input[0] = '\0';
-            g_input_len = 0;
-            g_cursor_pos = 0;
+            repl_state_insert_mode_set(1);
+            {
+                ReplEditorInputState *inp = repl_state_editor_input_mut();
+                inp->input[0] = '\0';
+                *inp->input_len = 0;
+            }
+            repl_state_cursor_pos_set(0);
             set_status("Insert mode");
             return COMMIT_OK;
         }
         return COMMIT_REJECTED;
     }
 
-    if (g_input_len > 0) {
+    if (*repl_state_editor_input()->input_len > 0) {
         GLCmd cmd;
         int parsed = parse_for_overwrite_enter(&cmd, g_num_cmds);
 
@@ -507,11 +530,17 @@ static CommitResult commit_current_input(int enter_mode) {
                 return COMMIT_REJECTED;
             }
             g_edit_line = g_num_cmds;
-            g_input[0] = '\0';
-            g_input_len = 0;
-            g_cursor_pos = 0;
-            g_newline_buf[0] = '\0';
-            g_newline_len = 0;
+            {
+                ReplEditorInputState *inp = repl_state_editor_input_mut();
+                inp->input[0] = '\0';
+                *inp->input_len = 0;
+            }
+            repl_state_cursor_pos_set(0);
+            {
+                ReplEditorInputState *inp = repl_state_editor_input_mut();
+                inp->pending_newline[0] = '\0';
+                *inp->pending_newline_len = 0;
+            }
             set_status("OK");
             return COMMIT_OK;
         }
@@ -549,7 +578,7 @@ static CommitResult commit_before_navigation(void) {
 
 void navigate_to_line(int target) {
     target = normalize_navigation_target(target);
-    if (target == g_edit_line && !g_inserting)
+    if (target == g_edit_line && !repl_state_insert_mode())
         return;
 
     if (target != g_edit_line)
@@ -620,15 +649,18 @@ static int handle_escape_key_route(unsigned char key) {
             g_help_scroll = 0;
         } else if (g_ac_count > 0) {
             clear_autocomplete_state();
-        } else if (g_inserting) {
-            g_inserting = 0;
+        } else if (repl_state_insert_mode()) {
+            repl_state_insert_mode_set(0);
             if (g_edit_line <= g_num_cmds)
                 load_line_to_input(g_edit_line);
             set_status("Insert mode exited");
         } else {
-            g_input[0] = '\0';
-            g_input_len = 0;
-            g_cursor_pos = 0;
+            {
+                ReplEditorInputState *inp = repl_state_editor_input_mut();
+                inp->input[0] = '\0';
+                *inp->input_len = 0;
+            }
+            repl_state_cursor_pos_set(0);
             set_status("Input cleared");
         }
         return 1;
@@ -642,12 +674,12 @@ static int handle_cfg_shortcut_key_route(unsigned char key) {
 
 static int handle_cursor_endpoint_key_route(unsigned char key) {
     if (key == KEY_CTRL_A) {
-        g_cursor_pos = 0;
+        repl_state_cursor_pos_set(0);
         update_autocomplete();
         return 1;
     }
     if (key == KEY_CTRL_E) {
-        g_cursor_pos = g_input_len;
+        repl_state_cursor_pos_set(*repl_state_editor_input()->input_len);
         update_autocomplete();
         return 1;
     }
@@ -676,8 +708,8 @@ static int handle_replay_key_route(unsigned char key) {
 
 static int handle_line_delete_key_route(unsigned char key) {
     if (key == KEY_CTRL_D) {
-        if (g_inserting) {
-            g_inserting = 0;
+        if (repl_state_insert_mode()) {
+            repl_state_insert_mode_set(0);
             if (g_edit_line <= g_num_cmds)
                 load_line_to_input(g_edit_line);
             set_status("Insert mode exited");
@@ -752,7 +784,7 @@ static int handle_paste_key_route(unsigned char key) {
 
 static int handle_comment_toggle_key_route(unsigned char key) {
     if (key == '/' && (editor_get_modifiers() & GLUT_ACTIVE_CTRL)) {
-        if (g_edit_line < g_num_cmds && !g_inserting) {
+        if (g_edit_line < g_num_cmds && !repl_state_insert_mode()) {
             push_undo_snapshot();
             {
                 GLCmd *cur = &g_cmds[g_edit_line];
@@ -914,7 +946,7 @@ static int handle_accum_samples_key_route(unsigned char key) {
 
 static int handle_text_delete_key_route(unsigned char key) {
     if (key == KEY_BACKSPACE || key == KEY_DELETE) {
-        if (sel_active() && !g_inserting) {
+        if (sel_active() && !repl_state_insert_mode()) {
             int start = sel_lo();
             int hi = sel_hi();
             if (hi >= g_num_cmds)
@@ -922,12 +954,16 @@ static int handle_text_delete_key_route(unsigned char key) {
             delete_cmd_range(start, hi - start + 1, "Deleted");
             return 1;
         }
-        if (g_cursor_pos > 0 && g_input_len > 0) {
-            memmove(&g_input[g_cursor_pos - 1], &g_input[g_cursor_pos],
-                    (size_t)(g_input_len - g_cursor_pos + 1));
-            g_input_len--;
-            g_cursor_pos--;
-            update_autocomplete();
+        {
+            int cur = repl_state_cursor_pos();
+            ReplEditorInputState *inp = repl_state_editor_input_mut();
+            if (cur > 0 && *inp->input_len > 0) {
+                memmove(&inp->input[cur - 1], &inp->input[cur],
+                        (size_t)(*inp->input_len - cur + 1));
+                (*inp->input_len)--;
+                repl_state_cursor_pos_set(cur - 1);
+                update_autocomplete();
+            }
         }
         return 1;
     }
@@ -963,7 +999,7 @@ static int handle_enter_key_route(unsigned char key) {
 
 static int handle_semicolon_commit_key_route(unsigned char key) {
     if (key == ';') {
-        if (g_input_len > 0) {
+        if (*repl_state_editor_input()->input_len > 0) {
             push_undo_snapshot();
             if (try_commit_any()) {
                 clear_autocomplete_state();
@@ -971,7 +1007,7 @@ static int handle_semicolon_commit_key_route(unsigned char key) {
             }
             {
                 GLCmd cmd;
-                int insert_idx = g_inserting ? g_edit_line :
+                int insert_idx = repl_state_insert_mode() ? g_edit_line :
                            (g_edit_line < g_num_cmds ? g_edit_line : g_num_cmds);
                 int parsed;
                 ExprVar vis_vars[MAX_EXPR_VARS];
@@ -979,21 +1015,24 @@ static int handle_semicolon_commit_key_route(unsigned char key) {
 
                 memset(&cmd, 0, sizeof(cmd));
                 if (num_vis_vars > 0)
-                    parsed = repl_parse_and_normalize_strict(g_input, insert_idx, vis_vars, num_vis_vars,
-                                                             input_has_any_visible_vars(g_input, vis_vars, num_vis_vars),
+                    parsed = repl_parse_and_normalize_strict(repl_state_editor_input()->input, insert_idx, vis_vars, num_vis_vars,
+                                                             input_has_any_visible_vars(repl_state_editor_input()->input, vis_vars, num_vis_vars),
                                                              &cmd);
                 else
-                    parsed = repl_parse_and_normalize_strict(g_input, insert_idx, NULL, 0,
-                                                             input_has_predef_vars(g_input), &cmd);
+                    parsed = repl_parse_and_normalize_strict(repl_state_editor_input()->input, insert_idx, NULL, 0,
+                                                             input_has_predef_vars(repl_state_editor_input()->input), &cmd);
 
                 if (parsed) {
                     ReplCommandStore store = repl_command_store_live();
-                    if (g_inserting) {
+                    if (repl_state_insert_mode()) {
                         if (repl_command_store_insert_one(&store, g_edit_line, &cmd, 0)) {
                             g_edit_line++;
-                            g_input[0] = '\0';
-                            g_input_len = 0;
-                            g_cursor_pos = 0;
+                            {
+                                ReplEditorInputState *inp = repl_state_editor_input_mut();
+                                inp->input[0] = '\0';
+                                *inp->input_len = 0;
+                            }
+                            repl_state_cursor_pos_set(0);
                             set_status("Inserted");
                         } else {
                             set_status("Command buffer full!");
@@ -1007,11 +1046,17 @@ static int handle_semicolon_commit_key_route(unsigned char key) {
                         if (repl_command_store_insert_one(&store, g_num_cmds, &cmd, 0)) {
                             g_edit_line = g_num_cmds;
                             set_status("OK");
-                            g_input[0] = '\0';
-                            g_input_len = 0;
-                            g_cursor_pos = 0;
-                            g_newline_buf[0] = '\0';
-                            g_newline_len = 0;
+                            {
+                                ReplEditorInputState *inp = repl_state_editor_input_mut();
+                                inp->input[0] = '\0';
+                                *inp->input_len = 0;
+                            }
+                            repl_state_cursor_pos_set(0);
+                            {
+                                ReplEditorInputState *inp = repl_state_editor_input_mut();
+                                inp->pending_newline[0] = '\0';
+                                *inp->pending_newline_len = 0;
+                            }
                         } else {
                             set_status("Command buffer full!");
                         }
@@ -1036,12 +1081,14 @@ static int handle_quit_key_route(unsigned char key) {
 }
 
 static int handle_printable_input_key_route(unsigned char key) {
-    if (key >= 32 && key < 127 && g_input_len < MAX_INPUT_LEN - 2) {
-        memmove(&g_input[g_cursor_pos + 1], &g_input[g_cursor_pos],
-                (size_t)(g_input_len - g_cursor_pos + 1));
-        g_input[g_cursor_pos] = (char)key;
-        g_input_len++;
-        g_cursor_pos++;
+    int cur = repl_state_cursor_pos();
+    ReplEditorInputState *inp = repl_state_editor_input_mut();
+    if (key >= 32 && key < 127 && *inp->input_len < MAX_INPUT_LEN - 2) {
+        memmove(&inp->input[cur + 1], &inp->input[cur],
+                (size_t)(*inp->input_len - cur + 1));
+        inp->input[cur] = (char)key;
+        (*inp->input_len)++;
+        repl_state_cursor_pos_set(cur + 1);
         update_autocomplete();
         return 1;
     }
@@ -1128,8 +1175,8 @@ static int handle_horizontal_special_key_route(int key) {
             }
             return 1;
         }
-        if (g_cursor_pos > 0)
-            g_cursor_pos--;
+        if (repl_state_cursor_pos() > 0)
+            repl_state_cursor_pos_set(repl_state_cursor_pos() - 1);
         update_autocomplete();
         return 1;
     case GLUT_KEY_RIGHT:
@@ -1144,16 +1191,16 @@ static int handle_horizontal_special_key_route(int key) {
             }
             return 1;
         }
-        if (g_cursor_pos < g_input_len)
-            g_cursor_pos++;
+        if (repl_state_cursor_pos() < *repl_state_editor_input()->input_len)
+            repl_state_cursor_pos_set(repl_state_cursor_pos() + 1);
         update_autocomplete();
         return 1;
     case GLUT_KEY_HOME:
-        g_cursor_pos = 0;
+        repl_state_cursor_pos_set(0);
         update_autocomplete();
         return 1;
     case GLUT_KEY_END:
-        g_cursor_pos = g_input_len;
+        repl_state_cursor_pos_set(*repl_state_editor_input()->input_len);
         update_autocomplete();
         return 1;
     default:
@@ -1620,10 +1667,13 @@ static void timer_func(int value) {
 }
 
 int feed_line(const char *line) {
-    strncpy(g_input, line, MAX_INPUT_LEN - 1);
-    g_input[MAX_INPUT_LEN - 1] = '\0';
-    g_input_len = (int)strlen(g_input);
-    g_cursor_pos = g_input_len;
+    {
+        ReplEditorInputState *inp = repl_state_editor_input_mut();
+        strncpy(inp->input, line, MAX_INPUT_LEN - 1);
+        inp->input[MAX_INPUT_LEN - 1] = '\0';
+        *inp->input_len = (int)strlen(inp->input);
+        repl_state_cursor_pos_set(*inp->input_len);
+    }
 
     if (try_commit_any())
         return 1;
@@ -1631,7 +1681,7 @@ int feed_line(const char *line) {
     {
         int handled = 0;
         GLCmd cmd;
-        int insert_idx = g_inserting ? g_edit_line :
+        int insert_idx = repl_state_insert_mode() ? g_edit_line :
                    (g_edit_line < g_num_cmds ? g_edit_line : g_num_cmds);
         int parsed;
         ExprVar vis_vars[MAX_EXPR_VARS];
@@ -1639,16 +1689,16 @@ int feed_line(const char *line) {
 
         memset(&cmd, 0, sizeof(cmd));
         if (num_vis_vars > 0)
-            parsed = repl_parse_and_normalize_strict(g_input, insert_idx, vis_vars, num_vis_vars,
-                                                     input_has_any_visible_vars(g_input, vis_vars, num_vis_vars),
+            parsed = repl_parse_and_normalize_strict(repl_state_editor_input()->input, insert_idx, vis_vars, num_vis_vars,
+                                                     input_has_any_visible_vars(repl_state_editor_input()->input, vis_vars, num_vis_vars),
                                                      &cmd);
         else
-            parsed = repl_parse_and_normalize_strict(g_input, insert_idx, NULL, 0,
-                                                     input_has_predef_vars(g_input), &cmd);
+            parsed = repl_parse_and_normalize_strict(repl_state_editor_input()->input, insert_idx, NULL, 0,
+                                                     input_has_predef_vars(repl_state_editor_input()->input), &cmd);
 
         if (parsed) {
             ReplCommandStore store = repl_command_store_live();
-            if (g_inserting) {
+            if (repl_state_insert_mode()) {
                 if (!repl_command_store_insert_one(&store, g_edit_line, &cmd, 0))
                     goto feed_line_done;
                 g_edit_line++;
@@ -1663,9 +1713,12 @@ int feed_line(const char *line) {
             handled = 1;
         }
 feed_line_done:
-        g_input[0] = '\0';
-        g_input_len = 0;
-        g_cursor_pos = 0;
+        {
+            ReplEditorInputState *inp = repl_state_editor_input_mut();
+            inp->input[0] = '\0';
+            *inp->input_len = 0;
+        }
+        repl_state_cursor_pos_set(0);
         return handled;
     }
 }

@@ -40,11 +40,11 @@ static int search_row_to_nav_line(int row_idx) {
     if (row_idx < 0 || row_idx >= repl_search_row_count())
         return -1;
     if (search_row_is_live_input(row_idx)) {
-        if (g_inserting)
+        if (repl_state_insert_mode())
             return -1;
-        return g_edit_line;
+        return repl_state_edit_line();
     }
-    if (g_inserting && row_idx > g_edit_line)
+    if (repl_state_insert_mode() && row_idx > repl_state_edit_line())
         return row_idx - 1;
     return row_idx;
 }
@@ -187,27 +187,31 @@ void search_clear_all(void) {
 }
 
 int repl_search_row_count(void) {
-    if (g_inserting || g_edit_line == g_num_cmds)
-        return g_num_cmds + 1;
-    return g_num_cmds;
+    int num_cmds = repl_state_document_count();
+    if (repl_state_insert_mode() || repl_state_edit_line() == num_cmds)
+        return num_cmds + 1;
+    return num_cmds;
 }
 
 const char *repl_search_row_text(int row_idx) {
+    int num_cmds = repl_state_document_count();
+    int edit_line = repl_state_edit_line();
     if (row_idx < 0 || row_idx >= repl_search_row_count())
         return "";
     if (search_row_is_live_input(row_idx))
-        return g_input;
-    if (g_inserting && row_idx > g_edit_line)
+        return repl_state_editor_input()->input;
+    if (repl_state_insert_mode() && row_idx > edit_line)
         row_idx--;
-    if (row_idx >= 0 && row_idx < g_num_cmds)
-        return g_cmds[row_idx].source;
+    if (row_idx >= 0 && row_idx < num_cmds)
+        return repl_state_document_cmds()[row_idx].source;
     return "";
 }
 
 int repl_search_row_for_cmd_index(int cmd_idx) {
-    if (cmd_idx < 0 || cmd_idx >= g_num_cmds)
+    int num_cmds = repl_state_document_count();
+    if (cmd_idx < 0 || cmd_idx >= num_cmds)
         return -1;
-    return (g_inserting && cmd_idx >= g_edit_line) ? cmd_idx + 1 : cmd_idx;
+    return (repl_state_insert_mode() && cmd_idx >= repl_state_edit_line()) ? cmd_idx + 1 : cmd_idx;
 }
 
 int repl_search_find_next_in_text(const char *text, const char *query,

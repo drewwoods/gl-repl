@@ -250,7 +250,7 @@ void repl_debug_dump_editor(FILE *out) {
     fprintf(dst, "=== REPL Editor Dump ===\n");
     fprintf(dst,
             "num_cmds=%d edit_line=%d inserting=%d flat_dirty=%d normals_dirty=%d\n",
-            g_num_cmds, g_edit_line, g_inserting,
+            repl_state_document_count(), repl_state_edit_line(), repl_state_insert_mode(),
             repl_state_flat_program_dirty(), g_normals_dirty);
 
     for (int i = 0; i < g_num_cmds; i++) {
@@ -417,12 +417,12 @@ int repl_parse_and_normalize_strict(const char *line, int pos,
 
 void repl_reformat_commands(void) {
     prof_begin(PROF_REFORMAT);
-    int saved_edit_line = g_edit_line;
-    int saved_inserting = g_inserting;
+    int saved_edit_line = repl_state_edit_line();
+    int saved_inserting = repl_state_insert_mode();
     char saved_input[MAX_INPUT_LEN];
-    int saved_input_len = g_input_len;
-    int saved_cursor_pos = g_cursor_pos;
-    memcpy(saved_input, g_input, sizeof(saved_input));
+    int saved_input_len = *repl_state_editor_input()->input_len;
+    int saved_cursor_pos = repl_state_cursor_pos();
+    memcpy(saved_input, repl_state_editor_input()->input, sizeof(saved_input));
     ReplCommandStore store = repl_command_store_live();
 
     for (int i = 0; i < g_num_cmds; i++) {
@@ -594,16 +594,16 @@ void repl_reformat_commands(void) {
     depth_cache_invalidate();
     mark_normals_dirty();
 
-    g_edit_line = saved_edit_line;
-    if (g_edit_line < 0) g_edit_line = 0;
-    if (g_edit_line > g_num_cmds) g_edit_line = g_num_cmds;
-    g_inserting = saved_inserting;
-    if (g_inserting) {
-        memcpy(g_input, saved_input, sizeof(g_input));
-        g_input_len = saved_input_len;
-        g_cursor_pos = saved_cursor_pos;
+    repl_state_edit_line_set(saved_edit_line);
+    repl_state_edit_line_clamp();
+    repl_state_insert_mode_set(saved_inserting);
+    if (saved_inserting) {
+        ReplEditorInputState *inp = repl_state_editor_input_mut();
+        memcpy(inp->input, saved_input, sizeof(saved_input));
+        *inp->input_len = saved_input_len;
+        repl_state_cursor_pos_set(saved_cursor_pos);
     } else {
-        load_line_to_input(g_edit_line);
+        load_line_to_input(repl_state_edit_line());
     }
     prof_end(PROF_REFORMAT);
 }
