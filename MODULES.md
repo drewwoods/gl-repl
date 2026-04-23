@@ -326,8 +326,9 @@ render files.
   `repl_command_store_load()`.
 - `sample.h` stays the shared compatibility header, while `repl_config.h`
   owns the keyed config descriptor API and `repl_state.h` carries the typed
-  runtime-state facade. The current module splits are ownership boundaries,
-  not yet context-object rewrites.
+  runtime-state facade. The source document and flat-program buffers are the
+  first storage domains moving behind that facade; other domains still use
+  compatibility externs until their slices land.
 
 ## Naming Notes
 
@@ -370,5 +371,6 @@ comment for the one-line charter.
   half and a render half, split them into a `repl_*` (model) and
   `ui_*` (render) pair.
 - Adding example content? `repl_examples.c`.
-- Adding persisted state? Add the extern in `repl_state.h` and
-  register the pointer in `repl_state.c`'s catalog.
+- Adding persisted state? Add the focused field/accessor in `repl_state.h`
+  and register the storage in `repl_state.c`. Add a temporary compat extern
+  only when existing callers cannot migrate in the same slice.

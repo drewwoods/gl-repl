@@ -10,17 +10,6 @@
  * but the existing modules still rely on these bundle structs and externs. */
 
 typedef struct {
-    GLCmd            *cmds;
-    int              *num_cmds;
-    int               capacity;
-    int              *normals_dirty;
-    GLCmd            *flat_cmds;
-    int              *num_flat_cmds;
-    int              *flat_dirty;
-    FlatCmdLocalVars *flat_local_vars;
-} ReplCommandState;
-
-typedef struct {
     char *input;
     int   input_capacity;
     int  *input_len;
@@ -51,7 +40,6 @@ typedef struct {
     int   *win_h;
 } ReplViewState;
 
-ReplCommandState       repl_command_state_live(void);
 ReplEditorState        repl_editor_state_live(void);
 ReplViewState          repl_view_state_live(void);
 

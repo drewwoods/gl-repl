@@ -298,11 +298,11 @@ future per-command semantic mutation API.
 
 ## Not recommended for now
 
-- **Global state clustering** (group `repl_state.h`'s 127 externs into
-  context structs): high long-term value but enormous churn surface.
-  This is what stage 2 of `repl-cleanup.md` plans more carefully —
-  defer to that effort rather than attempting it as a punch-list
-  item.
+- **Broad, multi-domain state clustering in one commit:** high long-term value
+  but enormous churn surface. Phase 2 is now active and should continue as
+  narrow storage-migration slices: document, flat program, editor input,
+  camera/view, presentation, render resources, replay, scenes/import-export,
+  search/autocomplete/status, then remaining UI runtime state.
 - **Keyboard dispatch table** (collapse the 22 `handle_*_key_route`
   functions in `repl_editor.c` into a table): the chain *is* the
   ordering policy and reading it sequentially is fairly clear today.

@@ -4,13 +4,10 @@
 #include "sample.h"
 #include "repl_core.h"
 #include "repl_core_internal.h"
+#include "repl_state.h"
 
 #define MAX_FLATTEN_CALL_DEPTH 64
 #define MAX_FLATTEN_VISIT_BUDGET 200000
-
-int g_current_block_begin = -1; /* flat cmd index of cursor's glBegin */
-int g_current_block_end   = -1; /* flat cmd index of cursor's glEnd */
-int g_current_block_line  = -1; /* source line used to compute block highlight */
 
 typedef struct {
     const GLCmd      *source_cmds;
@@ -118,9 +115,8 @@ static int flatten_append_cmd(FlattenContext *ctx, const GLCmd *cmd,
  * repl_flat_cmd_matches_cursor() to highlight the active geometry
  * batch in the 3D view. */
 static void refresh_current_block_highlight(void) {
-    g_current_block_begin = -1;
-    g_current_block_end   = -1;
-    g_current_block_line  = g_edit_line;
+    int current_block_begin = -1;
+    int current_block_end = -1;
 
     /* Scan g_cmds alongside g_flat_cmds to find the innermost
      * BEGIN/END block (in flat-cmd indices) that contains g_edit_line
@@ -142,8 +138,8 @@ static void refresh_current_block_highlight(void) {
                 if (ci <= g_edit_line) { begin_src = ci; begin_flat = fcur; }
             } else if (g_cmds[ci].type == CMD_END) {
                 if (begin_src >= 0 && ci > g_edit_line) {
-                    g_current_block_begin = begin_flat;
-                    g_current_block_end   = fcur;
+                    current_block_begin = begin_flat;
+                    current_block_end = fcur;
                     break;
                 } else if (begin_src >= 0 && ci <= g_edit_line) {
                     begin_src = -1; begin_flat = -1;
@@ -152,6 +148,10 @@ static void refresh_current_block_highlight(void) {
             fcur++;
         }
     }
+
+    repl_state_flat_program_set_current_block(current_block_begin,
+                                              current_block_end,
+                                              g_edit_line);
 }
 
 /* Recursively expand source_commands[start..end_idx) into the destination
@@ -502,20 +502,22 @@ int repl_flatten_program(const ReplFlattenOptions *options,
 }
 
 void flatten_commands(void) {
+    ReplFlatProgramState *flat_program = repl_state_flat_program_mut();
     ReplFlattenOptions options = {
         .source_cmds = g_cmds,
         .source_cmd_count = g_num_cmds,
-        .flat_cmds = g_flat_cmds,
-        .flat_local_vars = g_flat_cmd_local_vars,
-        .flat_capacity = MAX_COMMANDS,
+        .flat_cmds = flat_program->cmds,
+        .flat_local_vars = flat_program->local_vars,
+        .flat_capacity = flat_program->capacity,
         .max_call_depth = MAX_FLATTEN_CALL_DEPTH,
         .visit_budget = MAX_FLATTEN_VISIT_BUDGET
     };
     ReplFlattenResult result;
 
     repl_flatten_program(&options, &result);
-    g_num_flat_cmds = result.flat_cmd_count;
-    g_user_lighting_enabled = result.user_lighting_enabled;
+    repl_state_flat_program_set_count(result.flat_cmd_count);
+    repl_state_flat_program_set_user_lighting_enabled(
+        result.user_lighting_enabled);
     if (result.status[0])
         set_status(result.status);
 

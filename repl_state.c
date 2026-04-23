@@ -12,6 +12,19 @@
 void refresh_workspace_header_lines(void);
 int  parse_workspace_header_line(const char *line);
 
+GLCmd g_cmds[MAX_COMMANDS];
+int   g_num_cmds = 0;
+int   g_edit_line = 0;
+int   g_normals_dirty = 1;
+GLCmd            g_flat_cmds[MAX_COMMANDS];
+FlatCmdLocalVars g_flat_cmd_local_vars[MAX_COMMANDS];
+int              g_num_flat_cmds = 0;
+int              g_flat_dirty = 1;
+int              g_user_lighting_enabled = 0;
+int              g_current_block_begin = -1;
+int              g_current_block_end = -1;
+int              g_current_block_line = -1;
+
 static ReplRuntimeState g_repl_state = {
     .document = {
         .cmds = g_cmds,
@@ -222,6 +235,58 @@ ReplDocumentState *repl_state_document_mut(void) {
     return &g_repl_state.document;
 }
 
+const GLCmd *repl_state_document_cmds(void) {
+    return g_repl_state.document.cmds;
+}
+
+GLCmd *repl_state_document_cmds_mut(void) {
+    return g_repl_state.document.cmds;
+}
+
+const GLCmd *repl_state_document_cmd_at(int cmd_idx) {
+    if (cmd_idx < 0 || cmd_idx >= g_num_cmds)
+        return NULL;
+    return &g_cmds[cmd_idx];
+}
+
+GLCmd *repl_state_document_cmd_at_mut(int cmd_idx) {
+    if (cmd_idx < 0 || cmd_idx >= g_num_cmds)
+        return NULL;
+    return &g_cmds[cmd_idx];
+}
+
+int repl_state_document_count(void) {
+    return g_num_cmds;
+}
+
+int repl_state_document_capacity(void) {
+    return MAX_COMMANDS;
+}
+
+int repl_state_edit_line(void) {
+    return g_edit_line;
+}
+
+void repl_state_edit_line_set(int edit_line_idx) {
+    g_edit_line = edit_line_idx;
+    repl_state_edit_line_clamp();
+}
+
+void repl_state_edit_line_clamp(void) {
+    if (g_edit_line < 0)
+        g_edit_line = 0;
+    if (g_edit_line > g_num_cmds)
+        g_edit_line = g_num_cmds;
+}
+
+int repl_state_normals_dirty(void) {
+    return g_normals_dirty;
+}
+
+void repl_state_normals_dirty_clear(void) {
+    g_normals_dirty = 0;
+}
+
 void repl_state_document_reset(void) {
     ReplCommandStore store = repl_command_store_live();
     repl_command_store_load(&store, NULL, 0, 0);
@@ -235,13 +300,62 @@ ReplFlatProgramState *repl_state_flat_program_mut(void) {
     return &g_repl_state.flat_program;
 }
 
+const GLCmd *repl_state_flat_program_cmds(void) {
+    return g_repl_state.flat_program.cmds;
+}
+
+GLCmd *repl_state_flat_program_cmds_mut(void) {
+    return g_repl_state.flat_program.cmds;
+}
+
+FlatCmdLocalVars *repl_state_flat_program_local_vars_mut(void) {
+    return g_repl_state.flat_program.local_vars;
+}
+
+int repl_state_flat_program_count(void) {
+    return g_num_flat_cmds;
+}
+
+void repl_state_flat_program_set_count(int cmd_count) {
+    if (cmd_count < 0)
+        cmd_count = 0;
+    if (cmd_count > MAX_COMMANDS)
+        cmd_count = MAX_COMMANDS;
+    g_num_flat_cmds = cmd_count;
+}
+
+int repl_state_flat_program_dirty(void) {
+    return g_flat_dirty;
+}
+
+void repl_state_flat_program_clear_dirty(void) {
+    g_flat_dirty = 0;
+}
+
+int repl_state_flat_program_user_lighting_enabled(void) {
+    return g_user_lighting_enabled;
+}
+
+void repl_state_flat_program_set_user_lighting_enabled(int enabled) {
+    g_user_lighting_enabled = enabled ? 1 : 0;
+}
+
+void repl_state_flat_program_set_current_block(int begin_idx, int end_idx,
+                                               int source_line_idx) {
+    g_current_block_begin = begin_idx;
+    g_current_block_end = end_idx;
+    g_current_block_line = source_line_idx;
+}
+
+void repl_state_flat_program_clear_current_block(void) {
+    repl_state_flat_program_set_current_block(-1, -1, -1);
+}
+
 void repl_state_flat_program_reset(void) {
     g_num_flat_cmds = 0;
     g_flat_dirty = 1;
     g_user_lighting_enabled = 0;
-    g_current_block_begin = -1;
-    g_current_block_end = -1;
-    g_current_block_line = -1;
+    repl_state_flat_program_clear_current_block();
 }
 
 void repl_state_mark_flat_dirty(void) {
@@ -660,20 +774,6 @@ void repl_state_reset_all(void) {
     depth_cache_invalidate();
     repl_state_mark_flat_dirty();
     repl_state_mark_normals_dirty();
-}
-
-ReplCommandState repl_command_state_live(void) {
-    ReplCommandState state = {
-        g_cmds,
-        &g_num_cmds,
-        MAX_COMMANDS,
-        &g_normals_dirty,
-        g_flat_cmds,
-        &g_num_flat_cmds,
-        &g_flat_dirty,
-        g_flat_cmd_local_vars
-    };
-    return state;
 }
 
 ReplEditorState repl_editor_state_live(void) {
