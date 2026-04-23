@@ -67,8 +67,12 @@ of one monolithic `repl_core.c`.
 - `ui_panels.c`: 2D code-panel row rendering, source search highlights, inline
   ghost/hint text, scene status banner, and top-level panel routing.
 - `scene_render.c`: 3D frame orchestration, `SceneRenderConfig` /
-  `FrameRenderContext` prep, grid/axes theme specs, edit guides, orbit target,
-  and replay HUD.
+  `FrameRenderContext` prep, edit guides, orbit target, and replay HUD.
+- `scene_render_types.h`: shared per-frame render snapshot types consumed by
+  the scene helpers.
+- `scene_grid.c`: grid theme rendering, including focus/ocean/ruler/planes
+  variants.
+- `scene_axes.c`: axes theme rendering.
 - `scene_backdrop.c`: backdrop mode dispatch and deterministic cityscape
   rendering.
 - `scene_lights.c`: per-pass light property setup and light indicator overlay
@@ -155,7 +159,8 @@ every path shares the same parse/normalize/flatten guarantees.
 1. `flatten_commands()` in `repl_flatten.c` calls `repl_flatten_program()` to
    expand loops, functions, conditionals, and variable-driven commands into
    `g_flat_cmds[]`.
-2. `scene_render.c` prepares the frame, delegates light setup to
+2. `scene_render.c` prepares the frame, delegates grid rendering to
+   `scene_grid.c`, axes rendering to `scene_axes.c`, light setup to
    `scene_lights.c`, and calls `repl_execute_program()` with an explicit
    `FlatProgramView`/flat-command limit for normal, replay, and fade passes.
 3. `repl_executor.c` issues fixed-function OpenGL calls against the requested
@@ -479,10 +484,10 @@ captures the intended behavior change.
   overlay toggles, and replay-derived limits once at frame start.
   `FrameRenderContext` carries that config plus prepared derived state such as
   the Focus-grid vertex and ocean-grid camera waterline classification before
-  helper renderers run. Standard grid themes are described by `GridThemeSpec`
-  entries and standard axes by `AxesThemeSpec` entries. Flattened geometry
-  overlays live in `scene_overlays.c`, where outline, vertex-number, and
-  normal-vector passes share cursor-block matching and transform traversal.
+  helper renderers run. Grid themes live in `scene_grid.c` and axes themes in
+  `scene_axes.c`. Flattened geometry overlays live in `scene_overlays.c`,
+  where outline, vertex-number, and normal-vector passes share cursor-block
+  matching and transform traversal.
 - **Import/export:** owns scaffold sections, workspace metadata, and
   translation between exported C and REPL command text.
 
@@ -493,11 +498,11 @@ builds all test binaries and passes 17 of 17 suites: 2380/2380 tests. The
 latest slices extracted document rows, replay annotations, menu/dropdown
 rendering, the color picker, help overlay, variable panel, autocomplete popup,
 inline rename, and variable slider dragging while preserving behavior. Phase 8
-then added grid/axes theme specs, local helper-pass GL state guards, a shared
-vertex-overlay traversal, explicit scene render config/frame context prep,
-Focus/ocean frame prep, backdrop/light modules, and geometry overlay
-extraction.
-Phase 9 paired workspace-header parsing/emission
+then added grid theme rendering in `scene_grid.c`, axes theme rendering in
+`scene_axes.c`, local helper-pass GL state guards, a shared vertex-overlay
+traversal, explicit scene render config/frame context prep, Focus/ocean frame
+prep, backdrop/light modules, and geometry overlay extraction. Phase 9 paired
+workspace-header parsing/emission
 through a directive table, split `load_from_file()` into ordered import
 handlers, confirmed visual dumps use the shared code-panel wrap iterator, and
 introduced typed top-level scaffold sections plus display/pass helpers for the
