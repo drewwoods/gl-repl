@@ -95,7 +95,10 @@ failure should be treated as a regression unless explicitly rebaselined.
      `scene_lights.c`. Polygon outline/current-block highlight rendering,
      vertex-number overlays, and normal-vector overlays now live in
      `scene_overlays.c`, sharing one flat-command traversal and cursor-block
-     matcher.
+     matcher. Scene-edit guides now live in `scene_geometry_guides.c`
+     (vertex/normal guides) and `scene_transform_guides.c`
+     (translate/rotate/scale planning + rendering) via a per-frame
+     `SceneGuideSnapshot`.
 
 9. **Refactor import/export around a shared scaffold model**
    - Represent the generated C scaffold as typed sections rather than duplicated string/layout logic.

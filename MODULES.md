@@ -89,7 +89,9 @@ The viewport. Shared `SceneRenderConfig` / `FrameRenderContext` in
 
 | Module | Role |
 |--------|------|
-| `scene_render` | Camera, render config/frame prep, edit guides, orbit target |
+| `scene_render` | Camera, render config/frame prep, orbit target, replay HUD |
+| `scene_geometry_guides` | Vertex-input + normal-edit guide rendering |
+| `scene_transform_guides` | Translate/rotate/scale guide planning + rendering |
 | `scene_grid` | Grid theme rendering |
 | `scene_axes` | Axes theme rendering |
 | `scene_backdrop` | Backdrop pass (e.g. cityscape) |
@@ -156,7 +158,9 @@ flowchart LR
     end
 
     subgraph scene_layer["3D scene rendering"]
-        sceneR["scene_render.c<br/>frame prep · edit guides · replay HUD"]
+        sceneR["scene_render.c<br/>frame prep · replay HUD"]
+        geomg["scene_geometry_guides.c<br/>vertex/normal guides"]
+        xformg["scene_transform_guides.c<br/>xform guide planner+render"]
         grid["scene_grid.c<br/>grid themes"]
         axes["scene_axes.c<br/>axes themes"]
         backdrop["scene_backdrop.c<br/>backdrop pass"]
@@ -211,6 +215,8 @@ flowchart LR
 
     sceneR --> exec
     sceneR --> replay
+    sceneR --> geomg
+    sceneR --> xformg
     sceneR --> backdrop
     sceneR --> lights
     sceneR --> overlays
@@ -302,7 +308,10 @@ render files.
   indicators delegate to `scene_lights.c`. Polygon outline/current-block
   highlighting, vertex-number labels, and normal-vector overlays delegate to
   `scene_overlays.c`, where one flat-command visitor keeps transform replay
-  and tessellation block tracking consistent.
+  and tessellation block tracking consistent. Scene-edit guides now delegate to
+  `scene_geometry_guides.c` (vertex/normal input guides) and
+  `scene_transform_guides.c` (transform guide planning and drawing) via a
+  shared `SceneGuideSnapshot`.
 
 ## Open Edges
 

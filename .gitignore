@@ -7,4 +7,6 @@ build/
 test_eval
 test_format
 test_repl_*
+test_ui
+test_scene_*
 bench_repl
