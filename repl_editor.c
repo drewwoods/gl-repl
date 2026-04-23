@@ -11,9 +11,9 @@
  *  - Public repl_*_func() wrappers forwarded from sample.c
  *
  * Shared state (g_input, g_edit_line, g_num_cmds, g_cmds[], etc.) is
- * declared in sample.h. This file OWNS the editor-side globals listed
- * above; commit handlers live in repl_commit.c and parser/executor side
- * lives in repl_core.c / repl_executor.c.
+ * declared through the state compatibility layer while Phase 2 migrates
+ * storage into repl_state.c. Commit handlers live in repl_commit.c and
+ * parser/executor side lives in repl_core.c / repl_executor.c.
  */
 #include "sample.h"
 #include "repl_actions.h"
@@ -55,13 +55,6 @@ typedef enum {
     COMMIT_OK,
     COMMIT_REJECTED
 } CommitResult;
-
-char g_input[MAX_INPUT_LEN];
-int  g_input_len = 0;
-int  g_cursor_pos = 0;
-char g_newline_buf[MAX_INPUT_LEN] = "";
-int  g_newline_len = 0;
-int  g_inserting = 0;
 
 float g_panel_frac = CFG_DEFAULT_PANEL_FRAC;
 int   g_resizing_panel = 0;

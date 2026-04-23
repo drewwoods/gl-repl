@@ -264,6 +264,69 @@ int main() {
         ASSERT_INT("command_store_load empty edit clamp", g_edit_line, 0);
     }
 
+    /* 11. editor input/selection/clipboard state facade */
+    {
+        ReplEditorInputState *input;
+        ReplEditorState editor;
+        GLCmd *clipboard;
+
+        repl_reset_state(); declare_test_vars();
+
+        input = repl_state_editor_input_mut();
+        ASSERT_TRUE("editor input facade uses input buffer",
+                    input->input == g_input);
+        ASSERT_TRUE("editor input facade uses input len",
+                    input->input_len == &g_input_len);
+        ASSERT_TRUE("editor input facade uses cursor",
+                    input->cursor_pos == &g_cursor_pos);
+
+        repl_state_input_set_text("abc");
+        ASSERT_STR("state input set text", g_input, "abc");
+        ASSERT_INT("state input set len", g_input_len, 3);
+        ASSERT_INT("state input cursor at end", g_cursor_pos, 3);
+        repl_state_cursor_pos_set(99);
+        ASSERT_INT("state cursor clamps high", g_cursor_pos, 3);
+        repl_state_cursor_pos_set(-5);
+        ASSERT_INT("state cursor clamps low", g_cursor_pos, 0);
+
+        repl_state_pending_newline_set_text("next line");
+        ASSERT_STR("state newline set text", g_newline_buf, "next line");
+        ASSERT_INT("state newline len", g_newline_len, 9);
+        repl_state_insert_mode_set(42);
+        ASSERT_INT("state insert mode set", g_inserting, 1);
+
+        repl_state_selection_set(4, 2);
+        ASSERT_INT("state selection anchor", g_sel_anchor, 4);
+        ASSERT_INT("state selection end", g_sel_end, 2);
+        repl_state_selection_clear();
+        ASSERT_INT("state selection clear anchor", g_sel_anchor, -1);
+        ASSERT_INT("state selection clear end", g_sel_end, -1);
+
+        clipboard = repl_state_clipboard_cmds_mut();
+        clipboard[0].type = CMD_COLOR3F;
+        clipboard[0].valid = 1;
+        repl_state_clipboard_count_set(1);
+        ASSERT_TRUE("state clipboard buffer", clipboard == g_clipboard);
+        ASSERT_INT("state clipboard count", g_clipboard_count, 1);
+        ASSERT_INT("state clipboard count accessor",
+                   repl_state_clipboard_count(), 1);
+        repl_state_clipboard_clear();
+        ASSERT_INT("state clipboard clear", g_clipboard_count, 0);
+
+        editor = repl_editor_state_live();
+        ASSERT_TRUE("editor live bundle uses state input",
+                    editor.input == repl_state_input_buffer_mut());
+        ASSERT_TRUE("editor live bundle uses state selection",
+                    editor.sel_anchor == repl_state_selection_mut()->anchor_idx);
+        ASSERT_TRUE("editor live bundle uses state clipboard",
+                    editor.clipboard == repl_state_clipboard_cmds_mut());
+
+        repl_state_editor_input_reset();
+        ASSERT_STR("state input reset text", g_input, "");
+        ASSERT_INT("state input reset inserting", g_inserting, 0);
+        ASSERT_STR("state newline reset text", g_newline_buf, "");
+    }
+
     printf("\n%d / %d tests passed\n", g_pass, g_run);
     return (g_pass == g_run) ? 0 : 1;
 }

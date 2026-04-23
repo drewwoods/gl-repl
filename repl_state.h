@@ -308,14 +308,35 @@ void repl_state_time_reset_to_zero(void);
 const ReplEditorInputState *repl_state_editor_input(void);
 ReplEditorInputState       *repl_state_editor_input_mut(void);
 void repl_state_editor_input_reset(void);
+const char *repl_state_input_text(void);
+char       *repl_state_input_buffer_mut(void);
+int         repl_state_input_len(void);
+void        repl_state_input_len_set(int input_len);
+void        repl_state_input_set_text(const char *text);
+void        repl_state_input_clear(void);
+int         repl_state_cursor_pos(void);
+void        repl_state_cursor_pos_set(int cursor_pos);
+int         repl_state_insert_mode(void);
+void        repl_state_insert_mode_set(int insert_mode);
+char       *repl_state_pending_newline_buffer_mut(void);
+int         repl_state_pending_newline_len(void);
+void        repl_state_pending_newline_len_set(int newline_len);
+void        repl_state_pending_newline_set_text(const char *text);
+void        repl_state_pending_newline_clear(void);
 
 const ReplSelectionState *repl_state_selection(void);
 ReplSelectionState       *repl_state_selection_mut(void);
 void repl_state_selection_clear(void);
+int  repl_state_selection_anchor(void);
+int  repl_state_selection_end_idx(void);
+void repl_state_selection_set(int anchor_idx, int end_idx);
 
 const ReplClipboardState *repl_state_clipboard(void);
 ReplClipboardState       *repl_state_clipboard_mut(void);
 void repl_state_clipboard_clear(void);
+GLCmd *repl_state_clipboard_cmds_mut(void);
+int    repl_state_clipboard_count(void);
+void   repl_state_clipboard_count_set(int cmd_count);
 
 const ReplCodePanelRuntimeState *repl_state_code_panel(void);
 ReplCodePanelRuntimeState       *repl_state_code_panel_mut(void);

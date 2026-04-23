@@ -24,6 +24,16 @@ int              g_user_lighting_enabled = 0;
 int              g_current_block_begin = -1;
 int              g_current_block_end = -1;
 int              g_current_block_line = -1;
+char             g_input[MAX_INPUT_LEN];
+int              g_input_len = 0;
+int              g_cursor_pos = 0;
+char             g_newline_buf[MAX_INPUT_LEN] = "";
+int              g_newline_len = 0;
+int              g_inserting = 0;
+GLCmd            g_clipboard[MAX_COMMANDS];
+int              g_clipboard_count = 0;
+int              g_sel_anchor = -1;
+int              g_sel_end = -1;
 
 static ReplRuntimeState g_repl_state = {
     .document = {
@@ -415,12 +425,90 @@ ReplEditorInputState *repl_state_editor_input_mut(void) {
 }
 
 void repl_state_editor_input_reset(void) {
+    repl_state_input_clear();
+    repl_state_pending_newline_clear();
+    g_inserting = 0;
+}
+
+const char *repl_state_input_text(void) {
+    return g_input;
+}
+
+char *repl_state_input_buffer_mut(void) {
+    return g_input;
+}
+
+int repl_state_input_len(void) {
+    return g_input_len;
+}
+
+void repl_state_input_len_set(int input_len) {
+    if (input_len < 0)
+        input_len = 0;
+    if (input_len >= MAX_INPUT_LEN)
+        input_len = MAX_INPUT_LEN - 1;
+    g_input_len = input_len;
+    g_input[g_input_len] = '\0';
+    repl_state_cursor_pos_set(g_cursor_pos);
+}
+
+void repl_state_input_set_text(const char *text) {
+    repl_copy_string_fits(g_input, MAX_INPUT_LEN, text ? text : "");
+    repl_state_input_len_set((int)strlen(g_input));
+    repl_state_cursor_pos_set(g_input_len);
+}
+
+void repl_state_input_clear(void) {
     g_input[0] = '\0';
     g_input_len = 0;
     g_cursor_pos = 0;
+}
+
+int repl_state_cursor_pos(void) {
+    return g_cursor_pos;
+}
+
+void repl_state_cursor_pos_set(int cursor_pos) {
+    if (cursor_pos < 0)
+        cursor_pos = 0;
+    if (cursor_pos > g_input_len)
+        cursor_pos = g_input_len;
+    g_cursor_pos = cursor_pos;
+}
+
+int repl_state_insert_mode(void) {
+    return g_inserting;
+}
+
+void repl_state_insert_mode_set(int insert_mode) {
+    g_inserting = insert_mode ? 1 : 0;
+}
+
+char *repl_state_pending_newline_buffer_mut(void) {
+    return g_newline_buf;
+}
+
+int repl_state_pending_newline_len(void) {
+    return g_newline_len;
+}
+
+void repl_state_pending_newline_len_set(int newline_len) {
+    if (newline_len < 0)
+        newline_len = 0;
+    if (newline_len >= MAX_INPUT_LEN)
+        newline_len = MAX_INPUT_LEN - 1;
+    g_newline_len = newline_len;
+    g_newline_buf[g_newline_len] = '\0';
+}
+
+void repl_state_pending_newline_set_text(const char *text) {
+    repl_copy_string_fits(g_newline_buf, MAX_INPUT_LEN, text ? text : "");
+    repl_state_pending_newline_len_set((int)strlen(g_newline_buf));
+}
+
+void repl_state_pending_newline_clear(void) {
     g_newline_buf[0] = '\0';
     g_newline_len = 0;
-    g_inserting = 0;
 }
 
 const ReplSelectionState *repl_state_selection(void) {
@@ -432,7 +520,21 @@ ReplSelectionState *repl_state_selection_mut(void) {
 }
 
 void repl_state_selection_clear(void) {
-    clear_selection();
+    g_sel_anchor = -1;
+    g_sel_end = -1;
+}
+
+int repl_state_selection_anchor(void) {
+    return g_sel_anchor;
+}
+
+int repl_state_selection_end_idx(void) {
+    return g_sel_end;
+}
+
+void repl_state_selection_set(int anchor_idx, int end_idx) {
+    g_sel_anchor = anchor_idx;
+    g_sel_end = end_idx;
 }
 
 const ReplClipboardState *repl_state_clipboard(void) {
@@ -445,6 +547,22 @@ ReplClipboardState *repl_state_clipboard_mut(void) {
 
 void repl_state_clipboard_clear(void) {
     g_clipboard_count = 0;
+}
+
+GLCmd *repl_state_clipboard_cmds_mut(void) {
+    return g_clipboard;
+}
+
+int repl_state_clipboard_count(void) {
+    return g_clipboard_count;
+}
+
+void repl_state_clipboard_count_set(int cmd_count) {
+    if (cmd_count < 0)
+        cmd_count = 0;
+    if (cmd_count > MAX_COMMANDS)
+        cmd_count = MAX_COMMANDS;
+    g_clipboard_count = cmd_count;
 }
 
 const ReplCodePanelRuntimeState *repl_state_code_panel(void) {
@@ -777,20 +895,23 @@ void repl_state_reset_all(void) {
 }
 
 ReplEditorState repl_editor_state_live(void) {
+    ReplEditorInputState *input = &g_repl_state.editor_input;
+    ReplSelectionState *selection = &g_repl_state.selection;
+    ReplClipboardState *clipboard = &g_repl_state.clipboard;
     ReplEditorState state = {
-        g_input,
-        MAX_INPUT_LEN,
-        &g_input_len,
-        &g_cursor_pos,
-        &g_edit_line,
-        g_newline_buf,
-        MAX_INPUT_LEN,
-        &g_newline_len,
-        &g_inserting,
-        &g_sel_anchor,
-        &g_sel_end,
-        g_clipboard,
-        &g_clipboard_count
+        input->input,
+        input->input_capacity,
+        input->input_len,
+        input->cursor_pos,
+        input->edit_line_idx,
+        input->pending_newline,
+        input->pending_newline_capacity,
+        input->pending_newline_len,
+        input->insert_mode,
+        selection->anchor_idx,
+        selection->end_idx,
+        clipboard->cmds,
+        clipboard->cmd_count
     };
     return state;
 }
