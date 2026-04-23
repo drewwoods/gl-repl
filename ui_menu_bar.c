@@ -85,7 +85,11 @@ static int menu_item_count(int menu_id) {
     case MENU_FILE:   return FILE_ITEM_COUNT;
     case MENU_SCENE:  return 1 + repl_example_count() + SCENE_FIXED_COUNT
                              + repl_user_scene_count();
-    case MENU_CONFIG: return CFG_ITEM_COUNT;
+    case MENU_CONFIG: {
+        int count = 0;
+        repl_config_items(&count);
+        return count;
+    }
     }
     return 0;
 }
@@ -115,7 +119,8 @@ static const char *menu_item_label(int menu_id, int i) {
         return NULL;
     }
     if (menu_id == MENU_CONFIG) {
-        if (i >= 0 && i < CFG_ITEM_COUNT) return g_cfg_items[i].label;
+        const ReplConfigItem *item = repl_config_item_at(i);
+        if (item) return item->label;
         return NULL;
     }
     return NULL;
@@ -128,20 +133,23 @@ static const char *menu_item_shortcut(int menu_id, int i) {
         if (i == e + SCENE_OFF_SAVE) return "Ctrl+S";
         return NULL;
     }
-    if (menu_id == MENU_CONFIG && i >= 0 && i < CFG_ITEM_COUNT && g_cfg_items[i].value != NULL) {
+    if (menu_id == MENU_CONFIG) {
+        const ReplConfigItem *item = repl_config_item_at(i);
+        if (!item || item->section_header || item->key == REPL_CONFIG_NONE)
+            return NULL;
         static char buf[16];
-        if (g_cfg_items[i].key_code == 0) return NULL;
-        if (g_cfg_items[i].is_special) {
-            snprintf(buf, sizeof(buf), "F%d", g_cfg_items[i].key_code - GLUT_KEY_F1 + 1);
+        if (item->key_code == 0) return NULL;
+        if (item->is_special) {
+            snprintf(buf, sizeof(buf), "F%d", item->key_code - GLUT_KEY_F1 + 1);
             return buf;
         } else {
-            if (g_cfg_items[i].key_code > 0 && g_cfg_items[i].key_code <= 26) {
-                snprintf(buf, sizeof(buf), "Ctrl+%c", g_cfg_items[i].key_code - 1 + 'a');
+            if (item->key_code > 0 && item->key_code <= 26) {
+                snprintf(buf, sizeof(buf), "Ctrl+%c", item->key_code - 1 + 'a');
                 return buf;
-            } else if (g_cfg_items[i].key_code == KEY_CTRL_BACKSLASH) {
+            } else if (item->key_code == KEY_CTRL_BACKSLASH) {
                 return "Ctrl+\\";
             } else {
-                snprintf(buf, sizeof(buf), "%c", g_cfg_items[i].key_code);
+                snprintf(buf, sizeof(buf), "%c", item->key_code);
                 return buf;
             }
         }
@@ -169,11 +177,11 @@ static int menu_max_shortcut_px(int menu_id) {
  * (with a trailing ellipsis). Returns `out`. */
 static const char *cfg_state_str(int i, char *out, int out_size) {
     const char *s = "";
-    if (i >= 0 && i < CFG_ITEM_COUNT && g_cfg_items[i].value != NULL) {
-        if (g_cfg_items[i].state_names)
-            s = g_cfg_items[i].state_names[*g_cfg_items[i].value];
-        else
-            s = *g_cfg_items[i].value ? "ON" : "OFF";
+    const ReplConfigItem *item = repl_config_item_at(i);
+    if (item && !item->section_header && item->key != REPL_CONFIG_NONE) {
+        s = repl_config_state_name(item->key, repl_config_get(item->key));
+        if (!s)
+            s = "";
     }
     int n = (int)strlen(s);
     int cap = out_size - 1;
@@ -197,11 +205,15 @@ static const char *cfg_state_str(int i, char *out, int out_size) {
  * values cycle. */
 static int cfg_max_state_chars(void) {
     int max_chars = 3;  /* "OFF" */
-    for (int i = 0; i < CFG_ITEM_COUNT; i++) {
-        if (g_cfg_items[i].value == NULL) continue;
-        const char *const *names = g_cfg_items[i].state_names;
+    int count = 0;
+    const ReplConfigItem *items = repl_config_items(&count);
+    for (int i = 0; i < count; i++) {
+        const ReplConfigItem *item = &items[i];
+        if (item->section_header || item->key == REPL_CONFIG_NONE)
+            continue;
+        const char **names = item->state_names;
         if (!names) continue;
-        for (int k = 0; k < g_cfg_items[i].n_states; k++) {
+        for (int k = 0; k < item->state_count; k++) {
             int n = (int)strlen(names[k]);
             if (n > max_chars) max_chars = n;
         }
@@ -780,11 +792,14 @@ void render_example_dropdown(void) {
             draw_string((float)(dx + dw - 14 - sc_px), (float)ey, sc, FONT_SMALL);
         }
 
-        if (menu_id == MENU_CONFIG && g_cfg_items[i].value != NULL) {
+        if (menu_id == MENU_CONFIG) {
+            const ReplConfigItem *item = repl_config_item_at(i);
+            if (!item || item->section_header || item->key == REPL_CONFIG_NONE)
+                continue;
             char st_buf[CFG_STATE_MAX_CHARS + 1];
             const char *st = cfg_state_str(i, st_buf, sizeof(st_buf));
             int st_px = (int)strlen(st) * FONT_SMALL_W;
-            int val = *g_cfg_items[i].value;
+            int val = repl_config_get(item->key);
             if (val)
                 glColor4f(UI_ACCENT_GREEN_R, UI_ACCENT_GREEN_G, UI_ACCENT_GREEN_B, alpha);
             else

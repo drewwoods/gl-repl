@@ -420,8 +420,9 @@ state, hit rectangles, and rendering live outside `ui_panels.c`.
 
 ## Shared State Rules
 
-- `sample.h` remains the single shared type and compatibility header, but broad
-  runtime state declarations now live in `repl_state.h`.
+- `sample.h` remains the single shared type and compatibility header, while
+  `repl_config.h` now owns the keyed config descriptor API and broad runtime
+  state declarations live behind `repl_state.h`.
 - `repl_state.h` groups the historical `g_*` globals into typed live views
   (`ReplCommandState`, `ReplEditorState`, `ReplPresentationState`,
   `ReplRenderState`, etc.). Storage is unchanged; this is an ownership layer

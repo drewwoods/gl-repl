@@ -63,7 +63,8 @@ They are also not a simulation.  Timing is approximate, randomness is determinis
 The pattern is easy to extend.  A new scene needs:
 1. A `.c` / `.h` file pair with a `draw_*()` entry point.
 2. A `g_show_*` global in `repl_core.c` + extern in `sample.h`.
-3. A `CfgItem` row in `repl_editor.c`.
+3. A `ReplConfigItem` descriptor row in `repl_actions.c` plus the matching
+   `ReplConfigKey` case in `repl_config.h` / `repl_config.c`.
 4. A `draw_*()` call in `render_3d_scene()` after `execute_commands()`.
 5. An entry in `SRCS` / `CORE_TEST_SRCS` in the Makefile.
 

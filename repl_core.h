@@ -50,8 +50,12 @@ void repl_flatten_commands(void);
 void repl_recompute_autonormals(void);
 
 /* --- Example library & user scene -------------------------------------- */
+#ifndef MAX_USER_SCENES
 #define MAX_USER_SCENES      8
+#endif
+#ifndef USER_SCENE_NAME_MAX
 #define USER_SCENE_NAME_MAX 64
+#endif
 
 int  repl_example_count(void);
 const char *repl_example_name(int idx);

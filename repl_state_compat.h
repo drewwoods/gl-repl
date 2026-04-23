@@ -9,9 +9,6 @@
  * New code should eventually move to the typed runtime APIs in repl_state.h,
  * but the existing modules still rely on these bundle structs and externs. */
 
-#define MAX_WORKSPACE_HEADER_LINES 48
-#define WORKSPACE_HEADER_LINE_LEN  96
-
 typedef struct {
     GLCmd            *cmds;
     int              *num_cmds;
@@ -54,134 +51,9 @@ typedef struct {
     int   *win_h;
 } ReplViewState;
 
-typedef struct {
-    int *show_help;
-    int *help_tab;
-    int *help_scroll;
-    int *wireframe;
-    int *grid_theme;
-    int *grid_major_idx;
-    int *grid_extent_idx;
-    int *axes_theme;
-    const float *grid_major_steps;
-    const float *grid_extents;
-    float *focus_vtx;
-    int *focus_vtx_valid;
-    int *show_vnums;
-    int *show_normals;
-    int *show_indices;
-    int *wrap_at_comma;
-    int *code_panel_layout;
-    int *show_guides;
-    int *xform_guide_mode;
-    int *autonormal;
-    int *show_lights;
-    int *backdrop_mode;
-    int *cam_rotate;
-    int *example_idx;
-    int *user_lighting_enabled;
-    int *show_outlines;
-    int *show_vpoints;
-    int *highlight_current_poly;
-    int *current_block_begin;
-    int *current_block_end;
-    int *ortho_mode;
-} ReplPresentationState;
-
-typedef struct {
-    int   *replay_active;
-    int   *replay_state;
-    int   *replay_pc;
-    int   *replay_mode;
-    float *replay_speed;
-    float *replay_accum;
-    float *replay_fade_speed;
-    int   *replay_src_line;
-    int   *replay_total_flat;
-    int   *replay_expand_args;
-} ReplReplayRuntimeState;
-
-typedef struct {
-    float *panel_frac;
-    int   *resizing_panel;
-    int   *scroll;
-    int   *scroll_follow_cursor;
-    int   *cursor_on;
-    int   *blink_tick;
-    float *anim_time;
-    int   *t_playing;
-    int   *t_var_idx;
-    int   *show_var_panel;
-    int   *drag_var;
-    int   *drag_log_mode;
-    float *drag_start_val;
-    int   *drag_start_x;
-    int   *show_profile_panel;
-    char  *status;
-    int    status_capacity;
-    int   *status_ttl;
-    int   *search_active;
-    char  *search_query;
-    int    search_query_capacity;
-    int   *search_query_len;
-    int   *search_cursor_pos;
-    int   *search_hit_line;
-    int   *search_hit_char;
-    int   *search_hit_ordinal;
-    int   *search_match_count;
-    const char **ac_matches;
-    int   *ac_count;
-    int   *ac_sel;
-    char  *ac_ghost;
-    int    ac_ghost_capacity;
-    char  *ac_hint;
-    int    ac_hint_capacity;
-    int   *cursor_px;
-    int   *cursor_py;
-} ReplUiState;
-
-typedef struct {
-    int   *use_accum;
-    int   *accum_aa_enabled;
-    int   *accum_samples;
-    float *accum_jitter_x;
-    float *accum_jitter_y;
-    int   *multisample_enabled;
-    int   *line_smooth_enabled;
-    GLUquadric **quadric;
-    GLUtesselator **tess;
-    TessVertex  *tess_verts;
-    int   *tess_vert_count;
-    SceneLight *lights;
-    float *clear_color;
-} ReplRenderState;
-
-typedef struct {
-    char (*workspace_header_lines)[WORKSPACE_HEADER_LINE_LEN];
-    int   *workspace_header_line_count;
-    char  *scratch_buf;
-    int    scratch_capacity;
-    char (*render_state_lines)[64];
-    char (*cam_lines)[96];
-    const char **header_pre;
-    const char **header_post;
-    const char **footer_pre_init;
-    const char **footer_post_init;
-    const char **grid_names;
-    const char **grid_major_names;
-    const char **grid_extent_names;
-    const char **axes_names;
-    int   *init_attenuate_points;
-} ReplExportState;
-
 ReplCommandState       repl_command_state_live(void);
 ReplEditorState        repl_editor_state_live(void);
 ReplViewState          repl_view_state_live(void);
-ReplPresentationState  repl_presentation_state_live(void);
-ReplReplayRuntimeState repl_replay_runtime_state_live(void);
-ReplUiState            repl_ui_state_live(void);
-ReplRenderState        repl_render_state_live(void);
-ReplExportState        repl_export_state_live(void);
 
 extern GLCmd            g_cmds[MAX_COMMANDS];
 extern int              g_num_cmds;
@@ -255,6 +127,7 @@ extern int         g_show_vpoints;
 extern int         g_highlight_current_poly;
 extern int         g_current_block_begin;
 extern int         g_current_block_end;
+extern int         g_current_block_line;
 extern int         g_ortho_mode;
 
 extern int   g_replay_active;
@@ -324,8 +197,5 @@ extern const char *g_grid_major_names[GRID_MAJOR_COUNT];
 extern const char *g_grid_extent_names[GRID_EXTENT_COUNT];
 extern const char *g_axes_names[];
 extern int         g_init_attenuate_points;
-
-extern CfgItem g_cfg_items[];
-extern const int CFG_ITEM_COUNT;
 
 #endif /* REPL_STATE_COMPAT_H */

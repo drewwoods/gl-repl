@@ -80,7 +80,8 @@ Run all: `make test`
 | File | Responsibility |
 |------|----------------|
 | `sample.c` | GLUT callback wrappers, `main()`, window setup |
-| `sample.h` | Shared types (`GLCmd`, `CmdType`, `SceneLight`, `CfgItem`), extern globals, utility declarations, `CFG_DEFAULT_*` macros |
+| `sample.h` | Shared types (`GLCmd`, `CmdType`, `SceneLight`), defaults, stateless helpers, compatibility includes |
+| `repl_config.h` | `ReplConfigKey` / `ReplConfigItem` descriptor API for keyed config access |
 | `repl_core.c` | Normalization, display callback, GL init |
 | `repl_parser.c` | REPL source-line parser, expression validation, canonical `GLCmd.source[]` generation |
 | `repl_parser.h` | Parser entrypoints (`repl_parse_command*`, `repl_parse_command_ctx`) and `ReplParseContext` |
@@ -89,11 +90,12 @@ Run all: `make test`
 | `repl_commit.c` | Float declarations, variable assignments, structured block commits, close-brace commits |
 | `repl_core.h` | Public API (parse, flatten, display, input callbacks, user scene + workspace) |
 | `repl_core_internal.h` | Test-visible internals (normalize/commit pipeline, `feed_line`, `load_line_to_input`, `repl_promote_example_if_needed`) |
+| `repl_state.h` | Typed runtime-state facade, reset helpers, and focused accessors over the live REPL state |
 | `repl_editor.c` | Keyboard/mouse routing, commit orchestration, feed-line entrypoint |
 | `repl_clipboard.c` | Line selection anchors, command clipboard buffer, copy/cut/paste behavior |
 | `repl_undo.c` | Undo/redo snapshots, history rings, example auto-promote hook before mutation |
 | `repl_camera_controls.c` | Scene camera pointer state, orbit/pan/zoom drags, wheel zoom velocity, momentum tick |
-| `repl_actions.c` | Config item table, config shortcuts, menu actions, startup config defaults |
+| `repl_actions.c` | Config descriptor table, config shortcuts, menu actions, startup config defaults |
 | `repl_code_panel_layout.c` | Pure code-panel wrapping, row counts, segment lookup, cursor-row mapping |
 | `repl_code_panel_layout.h` | `CodePanelTextLayout` / `CodePanelWrapIter` API shared by UI, export dumps, tests |
 | `repl_code_panel_document.c` | Code-panel document row model, scroll-follow calculation, hit-test targets |
@@ -142,8 +144,9 @@ Run all: `make test`
 
 - Global variables prefixed `g_` (e.g., `g_num_cmds`, `g_cam_rx`)
 - Static helpers are file-scoped; public API goes through `repl_core.h`
-- Config toggles use the `CfgItem` pattern: add entries to `g_cfg_items[]` in
-  `repl_actions.c`; `CFG_ITEM_COUNT` auto-computes via `sizeof`
+- Config toggles use the `ReplConfigItem` / `ReplConfigKey` pattern: add a
+  descriptor entry to `g_cfg_items[]` in `repl_actions.c`; `CFG_ITEM_COUNT`
+  auto-computes via `sizeof`
 - New GL commands: add to `CmdType` enum in `sample.h`, then handle in
   `parse_command()` in `repl_parser.c`, `execute_commands()` in
   `repl_executor.c`, and `flatten_range()` in `repl_flatten.c`
@@ -527,8 +530,8 @@ Case-insensitive text search in `repl_search.c`:
 ### Config Menu
 
 Declarative toggle system in `repl_actions.c`:
-- `g_cfg_items[]` array of `CfgItem` structs: `{ label, key_hint,
-  int *value, n_states, state_names[] }`
+- `g_cfg_items[]` array of `ReplConfigItem` descriptors: `{ label, key_code,
+  is_special, key, state_count, state_names[], section_header }`
 - Each item is a toggle (2 states, default OFF/ON) or cycle (>2 states
   with named entries, e.g. grid themes)
 - Rendered by the Config dropdown in `ui_menu_bar.c`; menu clicks and

@@ -10,7 +10,7 @@
 
 int g_current_block_begin = -1; /* flat cmd index of cursor's glBegin */
 int g_current_block_end   = -1; /* flat cmd index of cursor's glEnd */
-static int g_current_block_line = -1; /* g_edit_line used to compute block */
+int g_current_block_line  = -1; /* source line used to compute block highlight */
 
 typedef struct {
     const GLCmd      *source_cmds;
