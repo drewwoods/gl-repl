@@ -4,6 +4,7 @@
 #include "repl_replay.h"
 #include "repl_core_internal.h"
 #include "repl_keys.h"
+#include "repl_state.h"
 #include "ui_profile_panel.h"
 
 int    g_replay_active = 0;
@@ -33,11 +34,17 @@ typedef struct {
 static ReplayFadeBatch g_replay_fade_batches[REPLAY_FADE_BATCH_MAX];
 static int             g_replay_fade_batch_count = 0;
 
+#define REPLAY_FLAT_STATE \
+    FlatProgramView flat_program = repl_state_flat_program_view(); \
+    const GLCmd *g_flat_cmds __attribute__((unused)) = flat_program.cmds; \
+    int g_num_flat_cmds __attribute__((unused)) = flat_program.cmd_count
+
 static int replay_enabled(void) {
     return g_replay_active;
 }
 
 static int replay_has_meaningful_cmds(void) {
+    REPLAY_FLAT_STATE;
     for (int i = 0; i < g_num_flat_cmds; i++) {
         if (!g_flat_cmds[i].valid) continue;
         if (g_flat_cmds[i].type == CMD_COMMENT) continue;
@@ -47,6 +54,7 @@ static int replay_has_meaningful_cmds(void) {
 }
 
 static int replay_find_open_begin_before(int limit) {
+    REPLAY_FLAT_STATE;
     int open_begin = -1;
     int in_begin = 0;
 
@@ -65,6 +73,7 @@ static int replay_find_open_begin_before(int limit) {
 }
 
 static int replay_find_open_tess_polygon_before(int limit, int *out_depth) {
+    REPLAY_FLAT_STATE;
     int poly_start = -1;
     int tess_depth = 0;
 
@@ -97,6 +106,7 @@ static int replay_find_open_tess_polygon_before(int limit, int *out_depth) {
 }
 
 static int replay_find_matching_gl_end(int begin_idx) {
+    REPLAY_FLAT_STATE;
     for (int i = begin_idx + 1; i < g_num_flat_cmds; i++) {
         if (!g_flat_cmds[i].valid) continue;
         if (g_flat_cmds[i].type == CMD_END)
@@ -127,6 +137,7 @@ static int replay_cmd_is_focus_candidate(CmdType type) {
 }
 
 static int replay_last_meaningful_src(int begin, int end_exclusive) {
+    REPLAY_FLAT_STATE;
     for (int i = end_exclusive - 1; i >= begin && i >= 0; i--) {
         if (!g_flat_cmds[i].valid) continue;
         if (!replay_cmd_is_focus_candidate(g_flat_cmds[i].type)) continue;
@@ -211,6 +222,7 @@ int replay_has_active_fades(void) {
 }
 
 int replay_fill_base_limit(void) {
+    REPLAY_FLAT_STATE;
     if (!replay_has_active_fades())
         return g_num_flat_cmds;
     if (g_replay_fade_batches[0].old_pc < 0)
@@ -222,6 +234,7 @@ int replay_fill_base_limit(void) {
 
 static int replay_next_polygon_limit(int start, int *fade_begin, int *fade_end) {
     int saw_meaningful = 0;
+    REPLAY_FLAT_STATE;
 
     *fade_begin = -1;
     *fade_end = -1;
@@ -284,6 +297,7 @@ static int replay_next_polygon_limit(int start, int *fade_begin, int *fade_end) 
 }
 
 static int replay_next_vertex_limit(int start, int *fade_begin, int *fade_end) {
+    REPLAY_FLAT_STATE;
     int open_begin = replay_find_open_begin_before(start);
     int tess_depth = 0;
     int open_tess_poly = replay_find_open_tess_polygon_before(start, &tess_depth);
@@ -377,6 +391,7 @@ static int replay_prev_limit(int current_pc) {
 }
 
 void replay_seek(int new_pc) {
+    REPLAY_FLAT_STATE;
     if (new_pc < 0)
         new_pc = 0;
     if (new_pc > g_num_flat_cmds)
@@ -395,12 +410,13 @@ int replay_seek_to_src_line(int target_line) {
     int pc = 0;
     int landed_pc = -1;
     int landed_src = -1;
+    REPLAY_FLAT_STATE;
 
-    if (g_flat_dirty) {
+    if (repl_state_flat_program_dirty()) {
         float live_predef_vals[MAX_PREDEF_VARS] = { 0 };
         repl_copy_predef_values(live_predef_vals, MAX_PREDEF_VARS);
         flatten_commands();
-        g_flat_dirty = 0;
+        repl_state_flat_program_clear_dirty();
         repl_restore_predef_values(live_predef_vals, MAX_PREDEF_VARS);
     }
 
@@ -441,11 +457,12 @@ void replay_restart_from_beginning(void) {
 
 void replay_start(void) {
     float live_predef_vals[MAX_PREDEF_VARS];
+    REPLAY_FLAT_STATE;
 
     repl_copy_predef_values(live_predef_vals, MAX_PREDEF_VARS);
-    if (g_flat_dirty) {
+    if (repl_state_flat_program_dirty()) {
         flatten_commands();
-        g_flat_dirty = 0;
+        repl_state_flat_program_clear_dirty();
         repl_restore_predef_values(live_predef_vals, MAX_PREDEF_VARS);
     }
 
@@ -530,6 +547,7 @@ void replay_step_back(void) {
 }
 
 int replay_exec_limit(void) {
+    REPLAY_FLAT_STATE;
     if (replay_enabled())
         return g_replay_pc;
     return g_num_flat_cmds;
@@ -545,6 +563,7 @@ void replay_speed_adjust(float factor) {
 }
 
 int replay_prepare_frame(int full_flat_count) {
+    REPLAY_FLAT_STATE;
     if (!g_replay_active)
         return g_num_flat_cmds;
 
@@ -702,6 +721,9 @@ int replay_handle_special_key(int key) {
 
 void execute_replay_fade_batches(void) {
     int skip_limits[REPLAY_FADE_BATCH_MAX];
+    FlatProgramView flat_program = repl_state_flat_program_view();
+    const GLCmd *g_flat_cmds = flat_program.cmds;
+    int g_num_flat_cmds = flat_program.cmd_count;
 
     if (!replay_has_active_fades())
         return;
@@ -788,6 +810,7 @@ void execute_replay_fade_batches(void) {
 int repl_bench_fade_install(const int *old_pcs, const int *new_pcs,
                             int count, float age) {
     int installed = 0;
+    REPLAY_FLAT_STATE;
 
     if (count < 0) count = 0;
     if (count > REPLAY_FADE_BATCH_MAX) count = REPLAY_FADE_BATCH_MAX;

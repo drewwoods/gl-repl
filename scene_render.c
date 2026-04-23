@@ -191,11 +191,12 @@ static void scene_prepare_frame_context(FrameRenderContext *ctx,
 
 static SceneGuideSnapshot scene_build_guide_snapshot(const SceneRenderConfig *config,
                                                      FlatProgramView flat_program) {
+    const ReplFlatProgramState *flat_state = repl_state_flat_program();
     SceneGuideSnapshot snapshot = {
         .show_guides = config->show_guides,
         .replaying = config->replaying,
         .xform_guide_mode = g_xform_guide_mode,
-        .user_lighting_enabled = g_user_lighting_enabled,
+        .user_lighting_enabled = *flat_state->user_lighting_enabled,
         .anim_time = g_anim_time,
         .input = g_input,
         .input_len = g_input_len,
@@ -217,6 +218,9 @@ static SceneGuideSnapshot scene_build_guide_snapshot(const SceneRenderConfig *co
 /* ========================================================================= */
 
 static void draw_replay_tess_preview(const SceneRenderConfig *config) {
+    FlatProgramView flat_program = repl_state_flat_program_view();
+    const GLCmd *g_flat_cmds = flat_program.cmds;
+    int g_num_flat_cmds = flat_program.cmd_count;
     if (!config->replay_tess_preview)
         return;
 
@@ -487,7 +491,7 @@ void render_3d_scene(void) {
     scene_apply_wireframe_config(&config);
     prof_accum_end(PROF_SCENE_3D_SETUP);
 
-    FlatProgramView flat_program = repl_flat_program_view_live();
+    FlatProgramView flat_program = repl_state_flat_program_view();
     {
         ReplExecutionOptions exec_options = {
             .flat_cmd_count = flat_program.cmd_count,
@@ -599,7 +603,7 @@ void render_3d_scene(void) {
     }
     glPopMatrix();
     glDisable(GL_BLEND);
-    if (g_user_lighting_enabled) glEnable(GL_LIGHTING);
+    if (repl_state_flat_program_user_lighting_enabled()) glEnable(GL_LIGHTING);
     prof_accum_end(PROF_SCENE_3D_OVERLAYS);
 
     prof_begin(PROF_SCENE_3D_HUD);
