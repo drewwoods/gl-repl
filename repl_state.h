@@ -266,10 +266,34 @@ typedef struct {
 
 const ReplDocumentState *repl_state_document(void);
 ReplDocumentState       *repl_state_document_mut(void);
+const GLCmd *repl_state_document_cmds(void);
+GLCmd       *repl_state_document_cmds_mut(void);
+const GLCmd *repl_state_document_cmd_at(int cmd_idx);
+GLCmd       *repl_state_document_cmd_at_mut(int cmd_idx);
+int          repl_state_document_count(void);
+int          repl_state_document_capacity(void);
+int          repl_state_edit_line(void);
+void         repl_state_edit_line_set(int edit_line_idx);
+void         repl_state_edit_line_clamp(void);
+int          repl_state_normals_dirty(void);
+void         repl_state_normals_dirty_clear(void);
 void repl_state_document_reset(void);
 
 const ReplFlatProgramState *repl_state_flat_program(void);
 ReplFlatProgramState       *repl_state_flat_program_mut(void);
+const GLCmd      *repl_state_flat_program_cmds(void);
+GLCmd            *repl_state_flat_program_cmds_mut(void);
+FlatCmdLocalVars *repl_state_flat_program_local_vars_mut(void);
+int               repl_state_flat_program_count(void);
+void              repl_state_flat_program_set_count(int cmd_count);
+int               repl_state_flat_program_dirty(void);
+void              repl_state_flat_program_clear_dirty(void);
+int               repl_state_flat_program_user_lighting_enabled(void);
+void              repl_state_flat_program_set_user_lighting_enabled(int enabled);
+void              repl_state_flat_program_set_current_block(int begin_idx,
+                                                            int end_idx,
+                                                            int source_line_idx);
+void              repl_state_flat_program_clear_current_block(void);
 void repl_state_flat_program_reset(void);
 void repl_state_mark_flat_dirty(void);
 void repl_state_mark_normals_dirty(void);

@@ -80,14 +80,6 @@ static const char *outfile = "output.c";
 /* Global state                                                               */
 /* ========================================================================= */
 
-GLCmd  g_cmds[MAX_COMMANDS];
-int    g_num_cmds = 0;
-int    g_normals_dirty = 1;
-GLCmd           g_flat_cmds[MAX_COMMANDS];
-int             g_num_flat_cmds = 0;
-int             g_flat_dirty = 1;
-FlatCmdLocalVars g_flat_cmd_local_vars[MAX_COMMANDS];
-
 void mark_normals_dirty(void) {
     repl_state_mark_normals_dirty();
 }
@@ -219,7 +211,6 @@ int    g_backdrop_mode = CFG_DEFAULT_BACKDROP_MODE; /* 0=off, 1=cityscape */
 int    g_cam_rotate   = CFG_DEFAULT_CAMERA_ROTATE;  /* auto-rotate camera around Y */
 char   g_scratch_buf[256];  /* shared scratch space for formatting strings, etc. */
 
-int    g_user_lighting_enabled = 0; /* tracks if user typed glEnable(GL_LIGHTING) */
 int    g_show_outlines = CFG_DEFAULT_VERTEX_OUTLINES; /* draw black wireframe over filled polygons */
 int    g_show_vpoints  = CFG_DEFAULT_VERTEX_POINTS; /* draw black dots at each vertex position */
 int    g_highlight_current_poly = 1; /* highlight glBegin block under cursor */

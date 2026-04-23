@@ -1,5 +1,6 @@
 #include "repl_core_internal.h"
 #include "repl_command_store.h"
+#include "repl_state.h"
 #include <stdio.h>
 #include <string.h>
 
@@ -225,12 +226,28 @@ int main() {
                  "glColor3f(1, 0, 0);");
 
         store = repl_command_store_live();
+        ASSERT_TRUE("command_store uses document cmds",
+                    store.cmds == repl_state_document_cmds_mut());
+        ASSERT_TRUE("command_store uses document count",
+                    store.count == repl_state_document_mut()->cmd_count);
+        repl_state_normals_dirty_clear();
+        ASSERT_INT("document normals dirty clear",
+                   repl_state_normals_dirty(), 0);
         ASSERT_INT("command_store_load ok",
                    repl_command_store_load(&store, loaded, 2, 99), 1);
         ASSERT_INT("command_store_load count", g_num_cmds, 2);
+        ASSERT_INT("command_store_load state count",
+                   repl_state_document_count(), 2);
         ASSERT_INT("command_store_load edit clamp", g_edit_line, 2);
+        ASSERT_INT("command_store_load state edit clamp",
+                   repl_state_edit_line(), 2);
         ASSERT_STR("command_store_load source", g_cmds[1].source,
                    "glColor3f(1, 0, 0);");
+        ASSERT_STR("command_store_load state source",
+                   repl_state_document_cmd_at(1)->source,
+                   "glColor3f(1, 0, 0);");
+        ASSERT_INT("command_store_load marks normals dirty",
+                   repl_state_normals_dirty(), 1);
         ASSERT_INT("command_store_load invalidates depth",
                    block_depth_at(1), 0);
 

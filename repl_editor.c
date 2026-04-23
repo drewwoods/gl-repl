@@ -59,7 +59,6 @@ typedef enum {
 char g_input[MAX_INPUT_LEN];
 int  g_input_len = 0;
 int  g_cursor_pos = 0;
-int  g_edit_line = 0;
 char g_newline_buf[MAX_INPUT_LEN] = "";
 int  g_newline_len = 0;
 int  g_inserting = 0;

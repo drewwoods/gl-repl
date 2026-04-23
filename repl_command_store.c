@@ -1,15 +1,13 @@
 #include "repl_command_store.h"
-#include "repl_core_internal.h"
-#include "repl_state_compat.h"
+#include "repl_state.h"
 
 ReplCommandStore repl_command_store_live(void) {
-    ReplCommandState commands = repl_command_state_live();
-    ReplEditorState editor = repl_editor_state_live();
+    ReplDocumentState *document = repl_state_document_mut();
     ReplCommandStore store = {
-        commands.cmds,
-        commands.num_cmds,
-        commands.capacity,
-        editor.edit_line
+        document->cmds,
+        document->cmd_count,
+        document->capacity,
+        document->edit_line_idx
     };
     return store;
 }
@@ -70,6 +68,10 @@ static int clamp_edit_line_to_count(int edit_line, int count) {
     return edit_line;
 }
 
+static void command_store_invalidate_after_mutation(void) {
+    repl_state_mark_normals_dirty();
+}
+
 int repl_command_store_insert_many(ReplCommandStore *store, int pos,
                                    const GLCmd *cmds, int count, int flags) {
     if (!store || !store->cmds || !store->count || !cmds || count <= 0)
@@ -88,7 +90,7 @@ int repl_command_store_insert_many(ReplCommandStore *store, int pos,
         *store->edit_line += count;
     }
 
-    depth_cache_invalidate();
+    command_store_invalidate_after_mutation();
     return 1;
 }
 
@@ -105,7 +107,7 @@ int repl_command_store_replace_one(ReplCommandStore *store, int pos,
         return 0;
 
     store->cmds[pos] = *cmd;
-    depth_cache_invalidate();
+    command_store_invalidate_after_mutation();
     return 1;
 }
 
@@ -118,7 +120,7 @@ int repl_command_store_delete_range(ReplCommandStore *store, int start,
     memmove(&store->cmds[start], &store->cmds[start + count],
             (size_t)(*store->count - start - count) * sizeof(store->cmds[0]));
     *store->count -= count;
-    depth_cache_invalidate();
+    command_store_invalidate_after_mutation();
     return 1;
 }
 
@@ -137,7 +139,7 @@ int repl_command_store_load(ReplCommandStore *store, const GLCmd *cmds,
     if (store->edit_line)
         *store->edit_line = clamp_edit_line_to_count(edit_line, count);
 
-    depth_cache_invalidate();
+    command_store_invalidate_after_mutation();
     return 1;
 }
 
@@ -145,5 +147,5 @@ void repl_command_store_clear(ReplCommandStore *store) {
     if (!store || !store->count)
         return;
     *store->count = 0;
-    depth_cache_invalidate();
+    command_store_invalidate_after_mutation();
 }
