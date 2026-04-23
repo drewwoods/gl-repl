@@ -3,7 +3,7 @@
 ## Summary
 Migrate one runtime domain at a time from broad `g_*` access to `ReplRuntimeState` ownership. Each domain follows the same pattern: add focused accessors, convert production callers, update tests, move storage into `repl_state.c`, then delete that domain’s compat externs from `repl_state_compat.h`.
 
-Current status: the flat-program slice has landed on the accessor-backed path. `repl_state.c` owns the live flat-program storage and `repl_state_flat_program_view()` is already feeding replay/render/overlay consumers, but the flat compat bridge still remains until the remaining legacy callers are retired. The render-resource slice is already landed; render resources and derived focus state now sit behind the state facade. The next implementation slice is 3.3, editor input / selection / clipboard.
+Current status: the storage moves for 3.1-3.4 are underway. `repl_state.c` already owns the document, flat-program, editor-input, selection, clipboard, camera, pointer, and viewport storage blocks, but the compat bridge and several direct callers are still in place. The render-resource slice is already landed. The next implementation slice is 3.3, editor input / selection / clipboard, followed by 3.4 camera / pointer / viewport cleanup.
 
 ## Migration Pattern For Every Slice
 1. Add the smallest missing `repl_state_*` helper API needed by the domain.
@@ -22,6 +22,7 @@ Current status: the flat-program slice has landed on the accessor-backed path. `
 - Convert read-only production consumers after mutation paths: UI rows, search rows, scene focus lookup, export, flatten inputs, autocomplete function scan.
 - Move `g_cmds`, `g_num_cmds`, `g_edit_line`, and `g_normals_dirty` storage under the document storage block in `repl_state.c`.
 - Remove document fields from `ReplCommandState` / `ReplEditorState`, then delete document externs from `repl_state_compat.h`.
+- Current progress: the command-store boundary is in place and `repl_state.c` already owns the source-command storage, but many production callers still read `g_cmds`, `g_num_cmds`, and `g_edit_line` directly. This slice remains in progress until those callers move off the bridge and the compat externs can go away.
 
 ### 3.2 Flat Program + Dirty Flags
 - Add flat-program helpers for live `FlatProgramView`, mutable output buffer for flattening, flat count set/clear, dirty get/set/clear, current-block highlight set/clear, and user-lighting flag access.
@@ -29,7 +30,7 @@ Current status: the flat-program slice has landed on the accessor-backed path. `
 - Convert executor/render/replay/overlay readers to accept `FlatProgramView` or call `repl_state_flat_program_view()`.
 - Move `g_flat_cmds`, `g_flat_cmd_local_vars`, `g_num_flat_cmds`, `g_flat_dirty`, `g_user_lighting_enabled`, `g_current_block_begin`, `g_current_block_end`, and `g_current_block_line` storage into `repl_state.c`.
 - Remove the remaining flat fields from `ReplCommandState`; if no callers remain, delete `repl_command_state_live()` entirely.
-- Current progress: `repl_state.c` now builds the live flat-program view directly from its owned storage, `repl_flatten.c` writes current-block and dirty state through the facade, and `repl_core.c`, `repl_executor.c`, `repl_replay.c`, `scene_render.c`, `scene_lights.c`, `scene_overlays.c`, and the internal state tests read the flat stream through the new accessor path. The compat externs remain only for the still-unmigrated legacy bridge.
+- Current progress: `repl_state.c` now builds the live flat-program view directly from its owned storage, `repl_flatten.c` writes current-block and dirty state through the facade, and `repl_core.c`, `repl_executor.c`, `repl_replay.c`, `scene_render.c`, `scene_lights.c`, `scene_overlays.c`, and the internal state tests read the flat stream through the new accessor path. The compat externs remain only for the still-unmigrated legacy bridge, so this slice is partially complete but not retired yet.
 
 ### 3.3 Editor Input, Selection, Clipboard
 - Add editor-input helpers for clear, set text, load source line, cursor move/set, insert/delete character, pending-newline save/restore, and insert-mode get/set.
@@ -37,6 +38,7 @@ Current status: the flat-program slice has landed on the accessor-backed path. `
 - Convert selection and clipboard modules to use `ReplSelectionState` / `ReplClipboardState` helpers, not direct `g_sel_anchor`, `g_sel_end`, `g_clipboard`, or `g_clipboard_count`.
 - Move input storage from editor, clipboard storage from clipboard module, and selection storage into `repl_state.c`.
 - Remove `ReplEditorState`, `repl_editor_state_live()`, and the editor/selection/clipboard compat externs once no production users remain.
+- Current progress: the typed editor-input, selection, and clipboard accessors already exist in `repl_state.h` and are backed by storage in `repl_state.c`, but `repl_editor.c`, `repl_clipboard.c`, `repl_search.c`, `repl_autocomplete.c`, and the editor tests still reach the compat globals in many places. This slice is started, not finished.
 
 ### 3.4 Camera, Pointer, Viewport
 - Add camera helpers for snapshot, set full camera, set orbit angles, set pan, set distance, pulse/decay motion glow, and reset default.
@@ -44,6 +46,7 @@ Current status: the flat-program slice has landed on the accessor-backed path. `
 - Convert camera controls, scene render frame prep, import/export camera metadata, sample window init/reshape, and camera tests to the new API.
 - Move camera, pointer, and viewport storage into `repl_state.c`.
 - Remove `ReplViewState`, `repl_view_state_live()`, and camera/pointer/viewport compat externs.
+- Current progress: camera, pointer, and viewport storage already live in `repl_state.c` and the facade exposes snapshot/set helpers, but `repl_camera_controls.c`, `repl_core.c`, `scene_render.c`, `repl_export.c`, and the related tests still use the old globals directly. The bridge is still required here.
 
 ### 3.5 Presentation + Config
 - Treat `repl_config_get/set/cycle()` as the only mutation API for user-facing presentation config.
@@ -52,13 +55,8 @@ Current status: the flat-program slice has landed on the accessor-backed path. `
 - Move presentation storage into `repl_state.c`: grid/axes modes, overlays, wrapping/layout toggles, backdrop, camera rotate, auto normals, highlight, ortho.
 - Remove presentation compat externs after all production callers use config/state accessors.
 
-### 3.6 Render Resources + Derived Render State
-- Add render-resource helpers for quadric/tess pointers, tess vertex buffer/count, light array access, clear color get/set, AA/jitter settings, and point attenuation.
-- Move GL resource storage into `repl_state.c`, but keep resource creation/destruction called from the existing GL bootstrap path through `repl_state_render_init_resources()` / `repl_state_render_destroy_resources()`.
-- Move derived focus-vertex state behind `repl_state_render_derived_*` helpers or a small `scene_focus_*` API; no direct `g_focus_vtx` writes outside the owner.
-- Convert scene render, lights, backdrop/grid helpers, and config/export users.
-- Remove render-resource and derived-state compat externs.
-- Current progress: the render resource storage, derived focus-vertex state, and GL bootstrap hooks are already behind `repl_state.c` / `repl_state_render_*()` accessors. Scene rendering, light setup, and the scene helper passes consume the new facade; this slice is functionally done even though the broader Phase 2 bridge still exists.
+### 3.6 Render Resources + Derived Render State ✅ DONE
+Landed as the render-resource slice: `repl_state.c` now owns the GL resource storage and the derived focus state, bootstrap/teardown run through `repl_state_render_init_resources()` and `repl_state_render_destroy_resources()`, and the scene helper passes read the facade instead of writing those globals directly.
 
 ### 3.7 Replay
 - Keep replay behavior owned by `repl_replay.c`; expose state through replay APIs and `ReplReplayRuntimeState` only where cross-module access is still needed.
