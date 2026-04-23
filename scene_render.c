@@ -110,6 +110,15 @@ static void scene_render_config_init(SceneRenderConfig *config) {
                                    ? replay_fill_base_limit()
                                    : 0;
     config->show_current_poly = g_highlight_current_poly && !config->replaying;
+
+    /* Boost translucent overlay alphas when the bg is darker than the
+     * design-point luminance (~0.10).  K=0.02 softens the curve near
+     * zero; result is clamped to [1, 3] so colours never blow out. */
+    float bg_lum = 0.2126f * g_clear_color[0]
+                 + 0.7152f * g_clear_color[1]
+                 + 0.0722f * g_clear_color[2];
+    float as_val = (0.10f + 0.02f) / fmaxf(bg_lum + 0.02f, 1e-4f);
+    config->alpha_scale = as_val < 1.0f ? 1.0f : (as_val > 3.0f ? 3.0f : as_val);
 }
 
 static void scene_apply_projection(const SceneRenderConfig *config) {
@@ -190,6 +199,7 @@ static SceneGuideSnapshot scene_build_guide_snapshot(const SceneRenderConfig *co
         .flat_program = flat_program,
         .predef_vars = g_predef_vars,
         .predef_var_count = g_num_predef_vars,
+        .alpha_scale = config->alpha_scale,
     };
     return snapshot;
 }

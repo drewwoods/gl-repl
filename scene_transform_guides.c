@@ -108,9 +108,10 @@ static void xform_axis_color(float x, float y, float z, float out[3]) {
 static void draw_pulse_segment(const SceneGuideSnapshot *snapshot,
                                const float a[3], const float b[3],
                                const float rgb[3]) {
+    float as = snapshot->alpha_scale;
     glLineWidth(2.0f);
     glBegin(GL_LINES);
-    glColor4f(rgb[0], rgb[1], rgb[2], 0.30f);
+    glColor4f(rgb[0], rgb[1], rgb[2], fminf(0.30f * as, 1.0f));
     glVertex3f(a[0], a[1], a[2]);
     glVertex3f(b[0], b[1], b[2]);
     glEnd();
@@ -132,16 +133,16 @@ static void draw_pulse_segment(const SceneGuideSnapshot *snapshot,
 
     glLineWidth(3.5f);
     glBegin(GL_LINES);
-    glColor4f(rgb[0], rgb[1], rgb[2], 0.05f);
+    glColor4f(rgb[0], rgb[1], rgb[2], fminf(0.05f * as, 1.0f));
     glVertex3f(trail[0], trail[1], trail[2]);
-    glColor4f(rgb[0], rgb[1], rgb[2], glow * 0.75f);
+    glColor4f(rgb[0], rgb[1], rgb[2], fminf(glow * 0.75f * as, 1.0f));
     glVertex3f(pos[0], pos[1], pos[2]);
     glEnd();
     glLineWidth(1.0f);
 
     glPointSize(8.0f);
     glBegin(GL_POINTS);
-    glColor4f(rgb[0], rgb[1], rgb[2], glow);
+    glColor4f(rgb[0], rgb[1], rgb[2], fminf(glow * as, 1.0f));
     glVertex3f(pos[0], pos[1], pos[2]);
     glEnd();
     glPointSize(1.0f);
@@ -356,7 +357,7 @@ static void draw_scale_guide(const SceneGuideSnapshot *snapshot,
             const float *pb = axes[perp_b[a]];
 
             glLineWidth(1.5f);
-            glColor4f(0.55f, 0.55f, 0.55f, 0.45f);
+            glColor4f(0.55f, 0.55f, 0.55f, fminf(0.45f * snapshot->alpha_scale, 1.0f));
             glBegin(GL_LINES);
             glVertex3f(0.0f, 0.0f, 0.0f);
             glVertex3f(ax[0], ax[1], ax[2]);
@@ -450,8 +451,9 @@ static void draw_rotate_guide(const SceneGuideSnapshot *snapshot,
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
     float axis_len = (plen > 0.5f ? plen : 0.5f) * 1.1f;
+    float as = snapshot->alpha_scale;
     glLineWidth(2.0f);
-    glColor4f(rgb[0], rgb[1], rgb[2], 0.55f);
+    glColor4f(rgb[0], rgb[1], rgb[2], fminf(0.55f * as, 1.0f));
     glBegin(GL_LINES);
     glVertex3f(-ax*axis_len, -ay*axis_len, -az*axis_len);
     glVertex3f( ax*axis_len,  ay*axis_len,  az*axis_len);
@@ -508,7 +510,7 @@ static void draw_rotate_guide(const SceneGuideSnapshot *snapshot,
     }
 
     glLineWidth(2.0f);
-    glColor4f(rgb[0], rgb[1], rgb[2], 0.30f);
+    glColor4f(rgb[0], rgb[1], rgb[2], fminf(0.30f * as, 1.0f));
     glBegin(GL_LINE_STRIP);
     for (int i = 0; i <= segs; i++) glVertex3fv(arc[i]);
     glEnd();
@@ -538,14 +540,14 @@ static void draw_rotate_guide(const SceneGuideSnapshot *snapshot,
 
     glLineWidth(3.5f);
     glBegin(GL_LINE_STRIP);
-    glColor4f(rgb[0], rgb[1], rgb[2], 0.05f);
+    glColor4f(rgb[0], rgb[1], rgb[2], fminf(0.05f * as, 1.0f));
     glVertex3f(trail[0], trail[1], trail[2]);
     for (int i = i_tp + 1; i <= i_pos; i++) {
         float u = (float)(i - i_tp) / (float)(i_pos - i_tp + 1);
-        glColor4f(rgb[0], rgb[1], rgb[2], 0.05f + (glow * 0.7f) * u);
+        glColor4f(rgb[0], rgb[1], rgb[2], fminf((0.05f + (glow * 0.7f) * u) * as, 1.0f));
         glVertex3fv(arc[i]);
     }
-    glColor4f(rgb[0], rgb[1], rgb[2], glow * 0.75f);
+    glColor4f(rgb[0], rgb[1], rgb[2], fminf(glow * 0.75f * as, 1.0f));
     glVertex3f(pos[0], pos[1], pos[2]);
     glEnd();
     glLineWidth(1.0f);
