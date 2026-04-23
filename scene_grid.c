@@ -17,6 +17,7 @@ typedef struct GridDrawContext {
     float step;
     float major_tol;
     float breath;
+    float alpha_scale; /* boost factor when bg is darker than design point */
 } GridDrawContext;
 
 typedef struct GridLineColors {
@@ -98,11 +99,15 @@ static void draw_grid_standard_theme(const GridDrawContext *ctx,
         int is_major = grid_is_major_line(v, ctx->major, ctx->major_tol);
         GridLineColors colors;
         spec->line_color(v, is_major, ctx, &colors);
+        colors.x_const.a = fminf(colors.x_const.a * ctx->alpha_scale, 1.0f);
+        colors.z_const.a = fminf(colors.z_const.a * ctx->alpha_scale, 1.0f);
         draw_grid_line_pair(v, ctx, colors);
     }
     glEnd();
 
-    draw_grid_origin_axes(ctx, spec->origin_color(ctx), spec->origin_line_width);
+    SceneRgba origin_c = spec->origin_color(ctx);
+    origin_c.a = fminf(origin_c.a * ctx->alpha_scale, 1.0f);
+    draw_grid_origin_axes(ctx, origin_c, spec->origin_line_width);
 
     if (spec->end_pass)
         spec->end_pass(ctx);
@@ -249,6 +254,7 @@ static void scene_grid_render_focus_theme(const FrameRenderContext *frame_ctx,
     const SceneFocusVertex *focus = &frame_ctx->focus;
     float cx = focus->pos[0], cz = focus->pos[2];
     float radius = 3.0f;  /* fade-out radius */
+    float as = grid_ctx->alpha_scale;
 
     glBegin(GL_LINES);
     for (float v = -grid_ctx->extent; v <= grid_ctx->extent + 0.01f;
@@ -264,7 +270,7 @@ static void scene_grid_render_focus_theme(const FrameRenderContext *frame_ctx,
         if (fx < 0.0f) fx = 0.0f;
         fx = fx * fx;  /* sharper falloff */
         if (fx > 0.001f) {
-            glColor4f(0.50f, 0.55f, 0.70f, base * fx);
+            glColor4f(0.50f, 0.55f, 0.70f, fminf(base * fx * as, 1.0f));
             /* Clamp line Z extent around focus */
             float z0 = cz - radius, z1 = cz + radius;
             if (z0 < -grid_ctx->extent) z0 = -grid_ctx->extent;
@@ -278,7 +284,7 @@ static void scene_grid_render_focus_theme(const FrameRenderContext *frame_ctx,
         if (fz < 0.0f) fz = 0.0f;
         fz = fz * fz;
         if (fz > 0.001f) {
-            glColor4f(0.50f, 0.55f, 0.70f, base * fz);
+            glColor4f(0.50f, 0.55f, 0.70f, fminf(base * fz * as, 1.0f));
             float x0 = cx - radius, x1 = cx + radius;
             if (x0 < -grid_ctx->extent) x0 = -grid_ctx->extent;
             if (x1 > grid_ctx->extent) x1 = grid_ctx->extent;
@@ -291,7 +297,7 @@ static void scene_grid_render_focus_theme(const FrameRenderContext *frame_ctx,
     if (focus->valid) {
         glLineWidth(1.5f);
         glBegin(GL_LINES);
-        glColor4f(0.80f, 0.85f, 0.95f, 0.25f);
+        glColor4f(0.80f, 0.85f, 0.95f, fminf(0.25f * as, 1.0f));
         glVertex3f(cx - 0.3f, 0, cz);
         glVertex3f(cx + 0.3f, 0, cz);
         glVertex3f(cx, 0, cz - 0.3f);
@@ -325,6 +331,7 @@ static void scene_grid_render_ocean_theme(const GridDrawContext *grid_ctx,
     }
 
     /* Ocean floor grid with animated caustic highlights */
+    float as = grid_ctx->alpha_scale;
     glBegin(GL_LINES);
     for (float v = -extent; v <= extent + 0.01f; v += step) {
         if (fabsf(v) < 0.01f) continue;
@@ -334,7 +341,7 @@ static void scene_grid_render_ocean_theme(const GridDrawContext *grid_ctx,
         float c1 = sinf(v * 3.0f + g_anim_time * 1.3f);
         float c2 = cosf(v * 2.3f - g_anim_time * 0.9f);
         float caustic = (c1 * c2) * 0.5f + 0.5f;   /* 0..1 */
-        float a = base_a * (0.5f + caustic * 0.5f);
+        float a = fminf(base_a * (0.5f + caustic * 0.5f) * as, 1.0f);
 
         float r = 0.10f + caustic * 0.35f;
         float g = 0.35f + caustic * 0.60f;
@@ -349,7 +356,7 @@ static void scene_grid_render_ocean_theme(const GridDrawContext *grid_ctx,
         float c1_o = sinf(g_anim_time * 1.3f);
         float c2_o = cosf(-g_anim_time * 0.9f);
         float caustic_o = (c1_o * c2_o) * 0.5f + 0.5f;
-        float a_o = 0.95f * (0.5f + caustic_o * 0.5f);
+        float a_o = fminf(0.95f * (0.5f + caustic_o * 0.5f) * as, 1.0f);
         float r_o = 0.10f + caustic_o * 0.35f;
         float g_o = 0.35f + caustic_o * 0.60f;
         float b_o = 0.45f + caustic_o * 0.50f;
@@ -410,6 +417,7 @@ static void scene_grid_render_xzruler_theme(const GridDrawContext *grid_ctx) {
     float major = grid_ctx->major;
     float step = grid_ctx->step;
     float major_tol = grid_ctx->major_tol;
+    float as = grid_ctx->alpha_scale;
 
     /* Non-origin grid lines with directional colour coding */
     glBegin(GL_LINES);
@@ -418,6 +426,8 @@ static void scene_grid_render_xzruler_theme(const GridDrawContext *grid_ctx) {
         int is_major = grid_is_major_line(v, major, major_tol);
         GridLineColors colors;
         grid_ruler_line_color(v, is_major, grid_ctx, &colors);
+        colors.x_const.a = fminf(colors.x_const.a * as, 1.0f);
+        colors.z_const.a = fminf(colors.z_const.a * as, 1.0f);
         draw_grid_line_pair(v, grid_ctx, colors);
     }
     glEnd();
@@ -442,6 +452,7 @@ static void scene_grid_render_xzruler_theme(const GridDrawContext *grid_ctx) {
     for (float v = -extent; v <= extent + 0.01f; v += major) {
         if (fabsf(v) < 0.01f) continue;
         float ta = (fabsf(v) <= major * 2.5f) ? 0.48f : 0.22f;
+        ta = fminf(ta * as, 1.0f);
         /* Ticks crossing the X axis in the Z direction */
         glColor4f(0.88f, 0.28f, 0.12f, ta);
         glVertex3f(v, 0, -tick); glVertex3f(v, 0, tick);
@@ -458,6 +469,7 @@ static void scene_grid_render_planes_theme(const SceneRenderConfig *config,
     float major = grid_ctx->major;
     float major_tol = grid_ctx->major_tol;
     float step = grid_ctx->step;
+    float as = grid_ctx->alpha_scale;
 
     /* Determine which vertical plane is most face-on to the camera.
      * Camera horizontal look direction: (sin(ry), 0, -cos(ry))
@@ -481,7 +493,7 @@ static void scene_grid_render_planes_theme(const SceneRenderConfig *config,
     for (float v = -extent; v <= extent + 0.01f; v += step) {
         if (fabsf(v) < 0.01f) continue;
         int is_major  = grid_is_major_line(v, major, major_tol);
-        float a = is_major ? 0.10f : 0.04f;
+        float a = fminf((is_major ? 0.10f : 0.04f) * as, 1.0f);
         glColor4f(0.50f, 0.52f, 0.65f, a);
         glVertex3f(v,       0, -extent); glVertex3f(v,      0, extent);
         glVertex3f(-extent, 0, v);       glVertex3f(extent, 0, v);
@@ -490,7 +502,7 @@ static void scene_grid_render_planes_theme(const SceneRenderConfig *config,
     /* Floor origin axes — write to depth buffer */
     glDepthMask(GL_TRUE);
     glBegin(GL_LINES);
-    glColor4f(0.50f, 0.52f, 0.65f, 0.30f);
+    glColor4f(0.50f, 0.52f, 0.65f, fminf(0.30f * as, 1.0f));
     glVertex3f(-extent, 0, 0); glVertex3f(extent, 0, 0);
     glVertex3f(0, 0, -extent); glVertex3f(0, 0, extent);
     glEnd();
@@ -503,7 +515,7 @@ static void scene_grid_render_planes_theme(const SceneRenderConfig *config,
             if (fabsf(v) < 0.01f) continue;
             int is_major  = grid_is_major_line(v, major, major_tol);
             float base = is_major ? 0.14f : 0.05f;
-            float a = base * xy_w;
+            float a = fminf(base * xy_w * as, 1.0f);
             glColor4f(0.35f, 0.62f, 0.88f, a);
             glVertex3f(-extent, v, 0); glVertex3f(extent, v, 0);
             glColor4f(0.35f, 0.62f, 0.88f, a * 0.75f);
@@ -513,7 +525,7 @@ static void scene_grid_render_planes_theme(const SceneRenderConfig *config,
         /* XY plane origin axes — write to depth buffer */
         glDepthMask(GL_TRUE);
         glBegin(GL_LINES);
-        glColor4f(0.35f, 0.62f, 0.88f, 0.42f * xy_w);
+        glColor4f(0.35f, 0.62f, 0.88f, fminf(0.42f * xy_w * as, 1.0f));
         glVertex3f(-extent, 0, 0); glVertex3f(extent, 0, 0);  /* X axis */
         glVertex3f(0, -extent, 0); glVertex3f(0, extent, 0);  /* Y axis */
         glEnd();
@@ -527,7 +539,7 @@ static void scene_grid_render_planes_theme(const SceneRenderConfig *config,
             if (fabsf(v) < 0.01f) continue;
             int is_major  = grid_is_major_line(v, major, major_tol);
             float base = is_major ? 0.14f : 0.05f;
-            float a = base * zy_w;
+            float a = fminf(base * zy_w * as, 1.0f);
             glColor4f(0.82f, 0.52f, 0.28f, a);
             glVertex3f(0, v, -extent); glVertex3f(0, v, extent);
             glColor4f(0.82f, 0.52f, 0.28f, a * 0.75f);
@@ -537,7 +549,7 @@ static void scene_grid_render_planes_theme(const SceneRenderConfig *config,
         /* ZY plane origin axes — write to depth buffer */
         glDepthMask(GL_TRUE);
         glBegin(GL_LINES);
-        glColor4f(0.82f, 0.52f, 0.28f, 0.42f * zy_w);
+        glColor4f(0.82f, 0.52f, 0.28f, fminf(0.42f * zy_w * as, 1.0f));
         glVertex3f(0, 0, -extent); glVertex3f(0, 0, extent);  /* Z axis */
         glVertex3f(0, -extent, 0); glVertex3f(0, extent, 0);  /* Y axis */
         glEnd();
@@ -582,6 +594,7 @@ void scene_grid_render(const FrameRenderContext *frame_ctx) {
         .step = step,
         .major_tol = major_tol,
         .breath = breath,
+        .alpha_scale = config->alpha_scale,
     };
 
     if (config->grid_extent_idx == GRID_EXTENT_FAR) {
@@ -598,10 +611,6 @@ void scene_grid_render(const FrameRenderContext *frame_ctx) {
     }
 
     switch (grid_theme) {
-
-    /* TODO: Adjust some of the line colors to better suit black background.
-     * Experiment with using darker lines but with higher alpha to get lines to
-     * work better with both light and dark themes. */
 
     case GRID_THEME_CLASSIC:
     case GRID_THEME_FOG:

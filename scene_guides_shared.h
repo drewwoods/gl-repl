@@ -25,6 +25,7 @@ typedef struct SceneGuideSnapshot {
 
     ExprVar *predef_vars;
     int predef_var_count;
+    float alpha_scale; /* alpha boost to counter dark-bg crush; 1.0 = no change */
 } SceneGuideSnapshot;
 
 typedef struct SceneTransformGuidePlan {

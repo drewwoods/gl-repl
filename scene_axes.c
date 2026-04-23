@@ -174,6 +174,7 @@ void scene_axes_render(const FrameRenderContext *frame_ctx) {
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
     float breath = sinf(g_anim_time * 0.8f) * 0.5f + 0.5f; /* 0..1 */
+    float as = config->alpha_scale;
 
     switch (axes_theme) {
 
@@ -238,9 +239,9 @@ void scene_axes_render(const FrameRenderContext *frame_ctx) {
         float len = 2.5f;
         float glow = 0.6f + breath * 0.4f;
         SceneRgba outer[3] = {
-            rgba(1.0f, 0.1f, 0.1f, 0.12f * glow),
-            rgba(0.1f, 1.0f, 0.1f, 0.12f * glow),
-            rgba(0.1f, 0.1f, 1.0f, 0.12f * glow),
+            rgba(1.0f, 0.1f, 0.1f, fminf(0.12f * glow * as, 1.0f)),
+            rgba(0.1f, 1.0f, 0.1f, fminf(0.12f * glow * as, 1.0f)),
+            rgba(0.1f, 0.1f, 1.0f, fminf(0.12f * glow * as, 1.0f)),
         };
         SceneRgba core[3] = {
             rgba(1.0f, 0.4f, 0.4f, 1.0f * glow),
@@ -342,13 +343,13 @@ void scene_axes_render(const FrameRenderContext *frame_ctx) {
 
         /* XZ floor plane quadrant — always shown */
         glBegin(GL_QUADS);
-        glColor4f(0.58f, 0.60f, 0.72f, 0.07f);
+        glColor4f(0.58f, 0.60f, 0.72f, fminf(0.07f * as, 1.0f));
         glVertex3f(0,    0, 0);    glVertex3f(fill, 0, 0);
         glVertex3f(fill, 0, fill); glVertex3f(0,    0, fill);
         glEnd();
 
         /* XY plane quadrant (z=0) — fades in when looking along Z */
-        float xy_a = 0.11f * xy_w;
+        float xy_a = fminf(0.11f * xy_w * as, 1.0f);
         if (xy_a > 0.004f) {
             glBegin(GL_QUADS);
             glColor4f(0.80f, 0.50f, 0.25f, xy_a);
@@ -363,7 +364,7 @@ void scene_axes_render(const FrameRenderContext *frame_ctx) {
         }
 
         /* ZY plane quadrant (x=0) — fades in when looking along X */
-        float zy_a = 0.11f * zy_w;
+        float zy_a = fminf(0.11f * zy_w * as, 1.0f);
         if (zy_a > 0.004f) {
             glBegin(GL_QUADS);
             glColor4f(0.32f, 0.58f, 0.88f, zy_a);
