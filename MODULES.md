@@ -84,12 +84,14 @@ as one visible region on screen.
 
 ### 5. 3D scene rendering
 
-The viewport. Shared `SceneRenderConfig` / `FrameRenderContext`, guarded
-helper passes, table-driven themes.
+The viewport. Shared `SceneRenderConfig` / `FrameRenderContext` in
+`scene_render_types.h`, guarded helper passes, table-driven themes.
 
 | Module | Role |
 |--------|------|
-| `scene_render` | Camera, render config/frame prep, grid/axes specs, edit guides |
+| `scene_render` | Camera, render config/frame prep, edit guides, orbit target |
+| `scene_grid` | Grid theme rendering |
+| `scene_axes` | Axes theme rendering |
 | `scene_backdrop` | Backdrop pass (e.g. cityscape) |
 | `scene_lights` | Light setup + indicator drawing |
 | `scene_overlays` | Outline, vertex-number, and normal-vector overlays |
@@ -154,7 +156,9 @@ flowchart LR
     end
 
     subgraph scene_layer["3D scene rendering"]
-        sceneR["scene_render.c<br/>frame prep · theme specs · edit guides"]
+        sceneR["scene_render.c<br/>frame prep · edit guides · replay HUD"]
+        grid["scene_grid.c<br/>grid themes"]
+        axes["scene_axes.c<br/>axes themes"]
         backdrop["scene_backdrop.c<br/>backdrop pass"]
         lights["scene_lights.c<br/>light setup + indicators"]
         overlays["scene_overlays.c<br/>geometry overlays"]
@@ -291,13 +295,14 @@ render files.
   overlay toggles, and replay-derived limits. `FrameRenderContext` carries
   that config plus derived state such as the Focus-grid vertex and ocean-grid
   waterline classification. Helper-pass GL state stays local with small
-  `glPushAttrib`/`glPopAttrib` wrappers. Standard grid/axes themes are table
-  entries, while focus/ocean/adaptive-plane grid themes remain custom render
-  paths. Backdrop rendering now delegates to `scene_backdrop.c`; per-pass
-  light setup and light indicators delegate to `scene_lights.c`. Polygon
-  outline/current-block highlighting, vertex-number labels, and normal-vector
-  overlays delegate to `scene_overlays.c`, where one flat-command visitor keeps
-  transform replay and tessellation block tracking consistent.
+  `glPushAttrib`/`glPopAttrib` wrappers. Grid themes now live in
+  `scene_grid.c`, axes themes in `scene_axes.c`; focus/ocean/adaptive-plane
+  grid themes remain custom render paths in `scene_grid.c`. Backdrop rendering
+  now delegates to `scene_backdrop.c`; per-pass light setup and light
+  indicators delegate to `scene_lights.c`. Polygon outline/current-block
+  highlighting, vertex-number labels, and normal-vector overlays delegate to
+  `scene_overlays.c`, where one flat-command visitor keeps transform replay
+  and tessellation block tracking consistent.
 
 ## Open Edges
 

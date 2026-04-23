@@ -117,7 +117,12 @@ Run all: `make test`
 | `repl_examples.c` | Predefined example data (`g_examples[]`, `g_example_names[]`) |
 | `repl_examples.h` | Example query API (`repl_examples_count/name/lines`) |
 | `repl_export.c` | `save_output` / `load_from_file`, workspace header directives, `@scene-name` / `@workspace-dir` markers |
-| `scene_render.c` | 3D scene frame orchestration, `SceneRenderConfig` / `FrameRenderContext` prep, grid/axes theme specs, edit guides, orbit target, replay HUD |
+| `scene_render_types.h` | Shared `SceneRgba` / `SceneRenderConfig` / `FrameRenderContext` types for scene helpers |
+| `scene_render.c` | 3D scene frame orchestration, scene config/frame prep, edit guides, orbit target, replay HUD |
+| `scene_grid.c` | Grid theme rendering and custom focus/ocean/ruler/planes passes |
+| `scene_grid.h` | Grid render entrypoint |
+| `scene_axes.c` | Axes theme rendering |
+| `scene_axes.h` | Axes render entrypoint |
 | `scene_render.h` | Declares `render_3d_scene()` |
 | `scene_backdrop.c` | Backdrop mode dispatch and deterministic cityscape renderer |
 | `scene_backdrop.h` | Backdrop render entrypoint |
@@ -149,15 +154,17 @@ Run all: `make test`
 
 ## Adding Grid/Axes Themes
 
-Grids and axes are themeable through small specs in `scene_render.c`:
+Grids and axes are themeable through small specs in `scene_grid.c` and
+`scene_axes.c`:
 1. Add a new entry to the `GridTheme` (or `AxesTheme`) enum in `sample.h`
    before the trailing `_COUNT` sentinel
 2. Add the name string at that enum's index in `g_grid_names[]`
    (or `g_axes_names[]`) in `repl_core.c` — both arrays use designated
    initializers keyed on the enum, so order is validated at compile time
-3. Add a matching `GridThemeSpec` / `AxesThemeSpec` entry in
-   `scene_render.c` for standard line/color themes. Use a custom render path
-   only for themes that need extra geometry, such as focus, ocean, or planes.
+3. Add a matching `GridThemeSpec` entry in `scene_grid.c` for standard grid
+   line/color themes and an `AxesThemeSpec` entry in `scene_axes.c` for
+   standard axes themes. Keep custom geometry-heavy grid cases in
+   `scene_grid.c`.
 4. The theme cycles via F3 (grid) / F4 (axes) in `repl_editor.c`
 
 ## Adding Menu Bar Items
@@ -327,8 +334,9 @@ example switch. Deferred — see `feature/multi-user-scenes.md`.
    `g_accum_jitter_x/y` → adjusted `glFrustum()` bounds
 3. `render_3d_scene()` in `scene_render.c`: projection setup → camera
    transforms → `execute_commands()` (user geometry fill pass) → replay
-   fade batches → grid/axes/orbit-target (depth-masked, blended) →
-   polygon outline overlays → vertex number/normal/guide overlays
+   fade batches → grid (`scene_grid.c`) / axes (`scene_axes.c`) /
+   orbit-target (depth-masked, blended) → polygon outline overlays →
+   vertex number/normal/guide overlays
 4. 2D overlays: code panel, autocomplete popup, example dropdown,
    variable slider panel, config menu, help overlay, search overlay
 

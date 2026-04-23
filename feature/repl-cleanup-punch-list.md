@@ -8,10 +8,10 @@ counterpart: a prioritized set of concrete, behavior-preserving
 extractions that can each land as a single reviewable commit *today*,
 without committing to the larger context-object rewrite.
 
-Four files still dominate the codebase: `scene_render.c` (~2586, now with
-frame prep/theme specs/state guards/overlay visitor helpers while delegating
-backdrop, light, and outline helpers), `repl_export.c` (2541),
-`repl_core.c` (~1964), and `repl_editor.c` (~1653). `ui_panels.c`
+Four files still dominate the codebase: `scene_render.c` (frame prep,
+edit guides, replay HUD), `scene_grid.c` (grid themes), `scene_axes.c`
+(axes themes), `repl_export.c` (2541), `repl_core.c` (~1964), and
+`repl_editor.c` (~1653). `ui_panels.c`
 dropped to 1237 LoC (from 4452) after Phase-7
 extractions: document rows, replay annotations, menu/dropdowns, color
 picker, help overlay, variable panel, autocomplete popup, inline rename,
@@ -122,14 +122,15 @@ live in `ui_menu_bar.c`. Side effects remain in `repl_actions.c`.
 
 ## Tier 2 — Pattern consolidation (1–2 days, medium impact)
 
-### 4. Data-drive grid + axes themes in `scene_render.c` ✅ DONE
+### 4. Data-drive grid + axes themes into `scene_grid.c` / `scene_axes.c` ✅ DONE
 
 Implemented in the Phase-8 render cleanup slice. Standard grid themes now
-flow through `GridThemeSpec` entries plus a shared line/origin-axis renderer;
-focus, ocean, ruler extras, and adaptive planes remain custom where they
-draw extra geometry. Axes now have `AxesThemeSpec` entries and shared
-triplet helpers for X/Y/Z lines, tips, and labels, so adding a normal theme
-starts with table data instead of a copied switch body.
+flow through `GridThemeSpec` entries in `scene_grid.c` plus a shared
+line/origin-axis renderer; focus, ocean, ruler extras, and adaptive planes
+remain custom where they draw extra geometry. Axes now have `AxesThemeSpec`
+entries and shared triplet helpers in `scene_axes.c` for X/Y/Z lines, tips,
+and labels, so adding a normal theme starts with table data instead of a
+copied switch body.
 
 The Focus grid no longer chooses or writes its focus vertex while drawing.
 `FrameRenderContext` prepares the sticky focus vertex before helper rendering,
@@ -189,9 +190,10 @@ for scene rectangle, camera, accumulation jitter, quality toggles, grid/axes
 choices, guide/vertex overlay toggles, replay mode, replay tess preview, and
 replay fill-base limit. `FrameRenderContext` carries that config plus prepared
 derived state such as Focus-grid vertex and ocean-grid waterline facts. The
-projection/camera setup, grid/axes helpers, orbit target, replay outlines,
-replay fade pass, guide drawing, vertex-point overlay, and replay HUD now
-consume the explicit config instead of independently sampling those globals.
+projection/camera setup, grid renderer in `scene_grid.c`, axes renderer in
+`scene_axes.c`, orbit target, replay outlines, replay fade pass, guide
+drawing, vertex-point overlay, and replay HUD now consume the explicit config
+instead of independently sampling those globals.
 
 ### 6. Workspace header read/write symmetry in `repl_export.c` ✅ DONE
 

@@ -2,7 +2,7 @@
  * sample.h — Shared types, macros, extern globals, and utility declarations
  *
  * Common header for the OpenGL REPL split across sample.c, scene_render.c,
- * and ui_panels.c.
+ * scene_grid.c, scene_axes.c, and ui_panels.c.
  */
 #ifndef SAMPLE_H
 #define SAMPLE_H
@@ -42,7 +42,7 @@
 
 #define MAX_ACCUM_SAMPLES 16
 #define ACCUM_STEP_COUNT  5
-/* Grid themes. g_grid_names[] in repl_core.c and the theme specs/custom
+/* Grid themes. g_grid_names[] in repl_core.c, scene_grid.c, and the custom
  * render paths in scene_render.c must stay in sync with this enum. */
 typedef enum {
     GRID_THEME_OFF = 0,
@@ -58,8 +58,8 @@ typedef enum {
     GRID_THEME_COUNT
 } GridTheme;
 
-/* Axes themes. g_axes_names[] in repl_core.c and the theme specs in
- * scene_render.c must stay in sync with this enum. */
+/* Axes themes. g_axes_names[] in repl_core.c and scene_axes.c must stay in
+ * sync with this enum. */
 typedef enum {
     AXES_THEME_OFF = 0,
     AXES_THEME_CLASSIC,

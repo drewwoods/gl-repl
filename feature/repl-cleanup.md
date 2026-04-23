@@ -88,10 +88,10 @@ failure should be treated as a regression unless explicitly rebaselined.
      rect, camera, jitter, quality toggles, grid/axes settings, overlay toggles,
      and replay-derived limits before the frame renders. `FrameRenderContext`
      carries that config plus prepared derived data such as Focus-grid vertex
-     state and ocean-grid camera waterline classification. Standard grid/axes
-     themes now use local specs and shared draw helpers, helper passes have
-     explicit GL attribute guards. Backdrop/cityscape rendering now lives in
-     `scene_backdrop.c`, and light setup plus light indicators live in
+     state and ocean-grid camera waterline classification. Grid rendering now
+     lives in `scene_grid.c`, axes rendering in `scene_axes.c`, and helper
+     passes have explicit GL attribute guards. Backdrop/cityscape rendering now
+     lives in `scene_backdrop.c`, and light setup plus light indicators live in
      `scene_lights.c`. Polygon outline/current-block highlight rendering,
      vertex-number overlays, and normal-vector overlays now live in
      `scene_overlays.c`, sharing one flat-command traversal and cursor-block
