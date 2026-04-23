@@ -34,6 +34,18 @@ GLCmd            g_clipboard[MAX_COMMANDS];
 int              g_clipboard_count = 0;
 int              g_sel_anchor = -1;
 int              g_sel_end = -1;
+float            g_cam_rx = 20.0f;
+float            g_cam_ry = 30.0f;
+float            g_cam_dist = 5.0f;
+float            g_cam_tx = 0.0f;
+float            g_cam_ty = 0.0f;
+float            g_cam_tz = 0.0f;
+float            g_cam_motion_glow = 0.0f;
+int              g_mouse_x = 0;
+int              g_mouse_y = 0;
+int              g_mouse_btn = -1;
+int              g_win_w = 1200;
+int              g_win_h = 800;
 
 static ReplRuntimeState g_repl_state = {
     .document = {
@@ -686,14 +698,40 @@ ReplCameraState repl_state_camera_snapshot(void) {
     return g_repl_state.camera;
 }
 
+void repl_state_camera_set(float rx, float ry, float dist,
+                           float tx, float ty, float tz,
+                           float motion_glow) {
+    g_cam_rx = rx;
+    g_cam_ry = ry;
+    g_cam_dist = dist;
+    g_cam_tx = tx;
+    g_cam_ty = ty;
+    g_cam_tz = tz;
+    g_cam_motion_glow = motion_glow;
+}
+
+void repl_state_camera_set_orbit(float rx, float ry) {
+    g_cam_rx = rx;
+    g_cam_ry = ry;
+}
+
+void repl_state_camera_set_pan(float tx, float ty, float tz) {
+    g_cam_tx = tx;
+    g_cam_ty = ty;
+    g_cam_tz = tz;
+}
+
+void repl_state_camera_set_distance(float dist) {
+    g_cam_dist = dist;
+}
+
+void repl_state_camera_set_motion_glow(float motion_glow) {
+    g_cam_motion_glow = motion_glow;
+}
+
 void repl_state_camera_reset_default(void) {
-    g_cam_rx = 20.0f;
-    g_cam_ry = 30.0f;
-    g_cam_dist = 5.0f;
-    g_cam_tx = 0.0f;
-    g_cam_ty = 0.0f;
-    g_cam_tz = 0.0f;
-    g_cam_motion_glow = 0.0f;
+    repl_state_camera_set(20.0f, 30.0f, 5.0f,
+                          0.0f, 0.0f, 0.0f, 0.0f);
 }
 
 const ReplPointerState *repl_state_pointer(void) {
@@ -704,12 +742,32 @@ ReplPointerState *repl_state_pointer_mut(void) {
     return &g_repl_state.pointer;
 }
 
+void repl_state_pointer_set(int mouse_x, int mouse_y, int mouse_button) {
+    g_mouse_x = mouse_x;
+    g_mouse_y = mouse_y;
+    g_mouse_btn = mouse_button;
+}
+
+void repl_state_pointer_set_pos(int mouse_x, int mouse_y) {
+    g_mouse_x = mouse_x;
+    g_mouse_y = mouse_y;
+}
+
+void repl_state_pointer_set_button(int mouse_button) {
+    g_mouse_btn = mouse_button;
+}
+
 const ReplViewportState *repl_state_viewport(void) {
     return &g_repl_state.viewport;
 }
 
 ReplViewportState *repl_state_viewport_mut(void) {
     return &g_repl_state.viewport;
+}
+
+void repl_state_viewport_set_size(int window_w, int window_h) {
+    g_win_w = window_w;
+    g_win_h = window_h;
 }
 
 const ReplPresentationState *repl_state_presentation(void) {
@@ -917,19 +975,22 @@ ReplEditorState repl_editor_state_live(void) {
 }
 
 ReplViewState repl_view_state_live(void) {
+    ReplCameraState *camera = &g_repl_state.camera;
+    ReplPointerState *pointer = &g_repl_state.pointer;
+    ReplViewportState *viewport = &g_repl_state.viewport;
     ReplViewState state = {
-        &g_cam_rx,
-        &g_cam_ry,
-        &g_cam_dist,
-        &g_cam_tx,
-        &g_cam_ty,
-        &g_cam_tz,
-        &g_cam_motion_glow,
-        &g_mouse_x,
-        &g_mouse_y,
-        &g_mouse_btn,
-        &g_win_w,
-        &g_win_h
+        camera->rx,
+        camera->ry,
+        camera->dist,
+        camera->tx,
+        camera->ty,
+        camera->tz,
+        camera->motion_glow,
+        pointer->mouse_x,
+        pointer->mouse_y,
+        pointer->mouse_button,
+        viewport->window_w,
+        viewport->window_h
     };
     return state;
 }

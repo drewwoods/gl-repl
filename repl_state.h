@@ -372,13 +372,24 @@ void repl_state_autocomplete_clear(void);
 const ReplCameraState *repl_state_camera(void);
 ReplCameraState       *repl_state_camera_mut(void);
 ReplCameraState        repl_state_camera_snapshot(void);
+void repl_state_camera_set(float rx, float ry, float dist,
+                           float tx, float ty, float tz,
+                           float motion_glow);
+void repl_state_camera_set_orbit(float rx, float ry);
+void repl_state_camera_set_pan(float tx, float ty, float tz);
+void repl_state_camera_set_distance(float dist);
+void repl_state_camera_set_motion_glow(float motion_glow);
 void repl_state_camera_reset_default(void);
 
 const ReplPointerState *repl_state_pointer(void);
 ReplPointerState       *repl_state_pointer_mut(void);
+void repl_state_pointer_set(int mouse_x, int mouse_y, int mouse_button);
+void repl_state_pointer_set_pos(int mouse_x, int mouse_y);
+void repl_state_pointer_set_button(int mouse_button);
 
 const ReplViewportState *repl_state_viewport(void);
 ReplViewportState       *repl_state_viewport_mut(void);
+void repl_state_viewport_set_size(int window_w, int window_h);
 
 const ReplPresentationState *repl_state_presentation(void);
 ReplPresentationState       *repl_state_presentation_mut(void);

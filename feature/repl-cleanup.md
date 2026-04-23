@@ -41,8 +41,9 @@ failure should be treated as a regression unless explicitly rebaselined.
      `ReplDocumentState`, and `repl_flatten.c` writes flat count, lighting, and
      current-block metadata through `ReplFlatProgramState` helpers. The source
      command, flat-program, editor-input, selection, and clipboard buffer
-     definitions have moved to `repl_state.c`; compatibility externs remain
-     until production readers are migrated.
+     definitions, plus camera/pointer/viewport storage, have moved to
+     `repl_state.c`; compatibility externs remain until production readers are
+     migrated.
 
 3. **Centralize command mutation**
    - Introduce a command-store API for insert, replace, delete, range delete, load, clear, and reformat updates.

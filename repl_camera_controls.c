@@ -2,8 +2,8 @@
  * repl_camera_controls.c -- Viewport camera drag and momentum controls.
  *
  * Editor/UI code decides whether a mouse event belongs to panels, menus, or
- * the scene. This module owns the scene-camera state that starts after that
- * routing decision: active drag button/modifiers, pointer position, inertial
+ * the scene. The runtime camera/pointer values live in repl_state.c during
+ * Phase 2 migration; this module owns active drag modifiers, inertial
  * velocities, orbit/pan/zoom math, and per-frame momentum decay.
  */
 #include "sample.h"
@@ -16,9 +16,6 @@
 #define CAM_RX_MAX 89.0f
 #define CAM_DIST_MIN 0.5f
 #define CAM_DIST_MAX 50.0f
-
-int g_mouse_x, g_mouse_y;
-int g_mouse_btn = -1;
 
 static int   g_mouse_mods = 0;
 static float g_vel_ry = 0.0f;
