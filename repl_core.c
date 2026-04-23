@@ -89,9 +89,7 @@ int             g_flat_dirty = 1;
 FlatCmdLocalVars g_flat_cmd_local_vars[MAX_COMMANDS];
 
 void mark_normals_dirty(void) {
-    g_normals_dirty = 1;
-    g_flat_dirty = 1;
-    depth_cache_invalidate();
+    repl_state_mark_normals_dirty();
 }
 
 /* Predefined variables — defined in repl_eval.c */
@@ -279,9 +277,7 @@ static void get_for_var_name(const GLCmd *cmd, char *var, int var_sz);
 /* ========================================================================= */
 
 void set_status(const char *msg) {
-    strncpy(g_status, msg, sizeof(g_status) - 1);
-    g_status[sizeof(g_status) - 1] = '\0';
-    g_status_ttl = 240;
+    repl_status_set(msg);
 }
 
 const char *mode_name(GLenum mode) {
@@ -951,20 +947,6 @@ static void load_initial_commands(const char *import_file) {
     scroll_to_display_function();
 }
 
-static void ensure_t_var_idx_cached(void) {
-    if (g_t_var_idx >= 0 && g_t_var_idx < g_num_predef_vars &&
-        strcmp(g_predef_vars[g_t_var_idx].name, "t") == 0)
-        return;
-
-    g_t_var_idx = -1;
-    for (int i = 0; i < g_num_predef_vars; i++) {
-        if (strcmp(g_predef_vars[i].name, "t") == 0) {
-            g_t_var_idx = i;
-            break;
-        }
-    }
-}
-
 /* GLU tessellator callbacks for explicit gluBegin/gluEnd tessellation */
 static void _tess_vtx_begin_cb(GLenum mode) {
     glBegin(mode);
@@ -1068,57 +1050,13 @@ void repl_init_gl(void) {
 }
 
 void repl_advance_time(float dt) {
-    if (dt <= 0.0f)
-        return;
-
-    g_anim_time += dt;
-    ensure_t_var_idx_cached();
-    if (g_t_playing && g_t_var_idx >= 0) {
-        g_predef_vars[g_t_var_idx].value += dt;
-        g_flat_dirty = 1;
-    }
+    repl_state_time_advance(dt);
 }
 
 void repl_reset_time_to_zero(void) {
-    ensure_t_var_idx_cached();
-    if (g_t_var_idx < 0)
-        return;
-
-    g_predef_vars[g_t_var_idx].value = 0.0f;
-    g_flat_dirty = 1;
+    repl_state_time_reset_to_zero();
 }
 
 void repl_reset_state(void) {
-    ReplCommandStore store = repl_command_store_live();
-    repl_command_store_load(&store, NULL, 0, 0);
-    g_num_flat_cmds = 0;
-    g_inserting = 0;
-    repl_scenes_reset();
-    g_example_idx       = -1;
-    g_input[0] = '\0';
-    g_input_len = 0;
-    g_cursor_pos = 0;
-    g_newline_buf[0] = '\0';
-    g_newline_len = 0;
-    repl_editor_reset_transients();
-    g_scroll = 0;
-    g_scroll_follow_cursor = 0;
-    g_multisample_enabled = CFG_DEFAULT_MULTISAMPLE;
-    g_line_smooth_enabled = CFG_DEFAULT_LINE_SMOOTH;
-    g_init_attenuate_points = CFG_DEFAULT_ATTENUATE_POINTS;
-    g_wrap_at_comma = CFG_DEFAULT_WRAP_AT_COMMA;
-    g_code_panel_layout = CFG_DEFAULT_CODE_PANEL_LAYOUT;
-    g_panel_frac = CFG_DEFAULT_PANEL_FRAC;
-    g_anim_time = 0.0f;
-    g_flat_dirty = 1;
-    g_normals_dirty = 1;
-    g_clear_color[0] = 0.10f; g_clear_color[1] = 0.10f;
-    g_clear_color[2] = 0.13f; g_clear_color[3] = 1.0f;
-    init_predef_vars();
-    ensure_t_var_idx_cached();
-    clear_autocomplete_state();
-    search_clear_all();
-    update_render_state_strings();
-    depth_cache_invalidate();
-    clear_selection();
+    repl_state_reset_all();
 }

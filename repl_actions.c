@@ -34,50 +34,49 @@ static const char *code_panel_layout_names[] = {
 #define AUDIO_CFG_ONCE  1
 #define AUDIO_CFG_SONG  2
 #define AUDIO_CFG_ALL   3
-static int g_audio_cfg_mode = AUDIO_CFG_ALL;
 static const char *audio_cfg_names[] = { "Pause", "Once", "Song", "All" };
 
-CfgItem g_cfg_items[] = {
-    { "### RENDERING",    0, 0,     NULL,                      0,                NULL              },
-    { "MSAA",             KEY_CTRL_U, 0, &g_multisample_enabled,    2,                NULL              },
-    { "Line smooth",      0, 0,     &g_line_smooth_enabled,    2,                NULL              },
-    { "Accum AA",         0, 0,     &g_accum_aa_enabled,       2,                NULL              },
-    { "Wireframe",        GLUT_KEY_F2, 1, &g_wireframe,              2,                NULL              },
-    { "Point attenuation",0, 0,     &g_init_attenuate_points,  2,                NULL              },
-    { "---",              0, 0,     NULL,                      0,                NULL              },
-    { "### TIME & REPLAY",0, 0,     NULL,                      0,                NULL              },
-    { "Auto time",        KEY_CTRL_T, 0, &g_t_playing,              2,                NULL              },
-    { "Replay",           KEY_CTRL_R, 0, &g_replay_active,          2,                NULL              },
-    { "Replay mode",      0, 0,   &g_replay_mode,            2,                replay_mode_names },
-    { "Replay expand",    0, 0,     &g_replay_expand_args,     2,                NULL              },
-    { "---",              0, 0,     NULL,                      0,                NULL              },
-    { "### OVERLAYS & SCENE",0, 0,  NULL,                      0,                NULL              },
-    { "Grid",             GLUT_KEY_F3, 1, &g_grid_theme,             GRID_THEME_COUNT, g_grid_names      },
-    { "Grid major",       KEY_CTRL_O, 0, &g_grid_major_idx,         GRID_MAJOR_COUNT, g_grid_major_names  },
-    { "Grid extent",      0, 0,     &g_grid_extent_idx,        GRID_EXTENT_COUNT, g_grid_extent_names },
-    { "Axes",             GLUT_KEY_F4, 1, &g_axes_theme,             AXES_THEME_COUNT, g_axes_names      },
-    { "Vertex guides",    GLUT_KEY_F8, 1, &g_show_guides,            2,                NULL              },
-    { "Xform guide mode", 0, 0,     &g_xform_guide_mode,       2,                xform_guide_mode_names },
-    { "Light indicators", GLUT_KEY_F10, 1, &g_show_lights,            2,                NULL              },
-    { "Poly highlight",   0, 0,     &g_highlight_current_poly, 2,                NULL              },
-    { "Backdrop",         0, 0,     &g_backdrop_mode,          2,                backdrop_mode_names },
-    { "Camera rotate",    GLUT_KEY_F11, 1, &g_cam_rotate,             2,                NULL              },
-    { "Auto-normals",     GLUT_KEY_F9, 1, &g_autonormal,             2,                NULL              },
-    { "---",              0, 0,     NULL,                      0,                NULL              },
-    { "### GEOMETRY",     0, 0,     NULL,                      0,                NULL              },
-    { "Vertex labels",    GLUT_KEY_F5, 1, &g_show_vnums,             2,                NULL              },
-    { "Normal vectors",   GLUT_KEY_F6, 1, &g_show_normals,           2,                NULL              },
-    { "Vertex outlines",  GLUT_KEY_F7, 1, &g_show_outlines,          2,                NULL              },
-    { "Vertex points",    0, 0,     &g_show_vpoints,           2,                NULL              },
-    { "---",              0, 0,     NULL,                      0,                NULL              },
-    { "### INTERFACE",    0, 0,     NULL,                      0,                NULL              },
-    { "Variable panel",   0, 0,   &g_show_var_panel,         2,                NULL              },
-    { "CPU profile",      KEY_CTRL_W, 0, &g_show_profile_panel,     PROFILE_PANEL_MODE_COUNT, profile_panel_mode_names },
-    { "Code panel",       KEY_CTRL_B, 0, &g_code_panel_layout,      CODE_PANEL_LAYOUT_COUNT, code_panel_layout_names },
-    { "Wrap at commas",   0, 0,     &g_wrap_at_comma,          2,                NULL              },
-    { "---",              0, 0,     NULL,                      0,                NULL              },
-    { "### AUDIO",        0, 0,     NULL,                      0,                NULL              },
-    { "Audio",            0, 0,     &g_audio_cfg_mode,         4,                audio_cfg_names   },
+const ReplConfigItem g_cfg_items[] = {
+    { "### RENDERING",     0, 0,  REPL_CONFIG_NONE,               0, NULL,                 1 },
+    { "MSAA",              KEY_CTRL_U, 0, REPL_CONFIG_MSAA,       2, NULL,                 0 },
+    { "Line smooth",       0, 0,  REPL_CONFIG_LINE_SMOOTH,        2, NULL,                 0 },
+    { "Accum AA",          0, 0,  REPL_CONFIG_ACCUM_AA,           2, NULL,                 0 },
+    { "Wireframe",         GLUT_KEY_F2, 1, REPL_CONFIG_WIREFRAME, 2, NULL,                 0 },
+    { "Point attenuation",  0, 0,  REPL_CONFIG_POINT_ATTENUATION,  2, NULL,                 0 },
+    { "---",               0, 0,  REPL_CONFIG_NONE,               0, NULL,                 1 },
+    { "### TIME & REPLAY",  0, 0,  REPL_CONFIG_NONE,               0, NULL,                 1 },
+    { "Auto time",         KEY_CTRL_T, 0, REPL_CONFIG_AUTO_TIME,   2, NULL,                 0 },
+    { "Replay",            KEY_CTRL_R, 0, REPL_CONFIG_REPLAY,      2, NULL,                 0 },
+    { "Replay mode",       0, 0,  REPL_CONFIG_REPLAY_MODE,         2, replay_mode_names,    0 },
+    { "Replay expand",     0, 0,  REPL_CONFIG_REPLAY_EXPAND,       2, NULL,                 0 },
+    { "---",               0, 0,  REPL_CONFIG_NONE,               0, NULL,                 1 },
+    { "### OVERLAYS & SCENE", 0, 0, REPL_CONFIG_NONE,              0, NULL,                 1 },
+    { "Grid",              GLUT_KEY_F3, 1, REPL_CONFIG_GRID_THEME,  GRID_THEME_COUNT, g_grid_names, 0 },
+    { "Grid major",        KEY_CTRL_O, 0, REPL_CONFIG_GRID_MAJOR,  GRID_MAJOR_COUNT, g_grid_major_names, 0 },
+    { "Grid extent",       0, 0,  REPL_CONFIG_GRID_EXTENT,         GRID_EXTENT_COUNT, g_grid_extent_names, 0 },
+    { "Axes",              GLUT_KEY_F4, 1, REPL_CONFIG_AXES_THEME,  AXES_THEME_COUNT, g_axes_names,    0 },
+    { "Vertex guides",     GLUT_KEY_F8, 1, REPL_CONFIG_VERTEX_GUIDES, 2, NULL,             0 },
+    { "Xform guide mode",  0, 0,  REPL_CONFIG_XFORM_GUIDE_MODE,     2, xform_guide_mode_names, 0 },
+    { "Light indicators",  GLUT_KEY_F10, 1, REPL_CONFIG_LIGHT_INDICATORS, 2, NULL,        0 },
+    { "Poly highlight",    0, 0,  REPL_CONFIG_POLY_HIGHLIGHT,       2, NULL,                 0 },
+    { "Backdrop",          0, 0,  REPL_CONFIG_BACKDROP,             2, backdrop_mode_names, 0 },
+    { "Camera rotate",     GLUT_KEY_F11, 1, REPL_CONFIG_CAMERA_ROTATE, 2, NULL,            0 },
+    { "Auto-normals",      GLUT_KEY_F9, 1, REPL_CONFIG_AUTO_NORMALS, 2, NULL,              0 },
+    { "---",               0, 0,  REPL_CONFIG_NONE,               0, NULL,                 1 },
+    { "### GEOMETRY",      0, 0,  REPL_CONFIG_NONE,               0, NULL,                 1 },
+    { "Vertex labels",     GLUT_KEY_F5, 1, REPL_CONFIG_VERTEX_LABELS, 2, NULL,             0 },
+    { "Normal vectors",    GLUT_KEY_F6, 1, REPL_CONFIG_NORMAL_VECTORS, 2, NULL,            0 },
+    { "Vertex outlines",   GLUT_KEY_F7, 1, REPL_CONFIG_VERTEX_OUTLINES, 2, NULL,           0 },
+    { "Vertex points",     0, 0,  REPL_CONFIG_VERTEX_POINTS,        2, NULL,                 0 },
+    { "---",               0, 0,  REPL_CONFIG_NONE,               0, NULL,                 1 },
+    { "### INTERFACE",     0, 0,  REPL_CONFIG_NONE,               0, NULL,                 1 },
+    { "Variable panel",    0, 0,  REPL_CONFIG_VARIABLE_PANEL,      2, NULL,                 0 },
+    { "CPU profile",       KEY_CTRL_W, 0, REPL_CONFIG_CPU_PROFILE,  PROFILE_PANEL_MODE_COUNT, profile_panel_mode_names, 0 },
+    { "Code panel",        KEY_CTRL_B, 0, REPL_CONFIG_CODE_PANEL_LAYOUT, CODE_PANEL_LAYOUT_COUNT, code_panel_layout_names, 0 },
+    { "Wrap at commas",    0, 0,  REPL_CONFIG_WRAP_AT_COMMA,       2, NULL,                 0 },
+    { "---",               0, 0,  REPL_CONFIG_NONE,               0, NULL,                 1 },
+    { "### AUDIO",         0, 0,  REPL_CONFIG_NONE,               0, NULL,                 1 },
+    { "Audio",             0, 0,  REPL_CONFIG_AUDIO_MODE,          4, audio_cfg_names,      0 },
 };
 
 const int CFG_ITEM_COUNT = (int)(sizeof(g_cfg_items) / sizeof(g_cfg_items[0]));
@@ -116,14 +115,16 @@ int repl_scene_menu_slot_for_dense_index(int scene_idx) {
 }
 
 void repl_cfg_cycle_row(int row, int delta) {
-    if (row < 0 || row >= CFG_ITEM_COUNT)
+    const ReplConfigItem *item = repl_config_item_at(row);
+
+    if (!item || item->section_header)
         return;
 
     /* Replay is special-cased: its cfg toggle kicks off/ends the replay
      * machinery rather than flipping the int directly. Both directions
      * collapse to "toggle". */
-    if (g_cfg_items[row].value == &g_replay_active) {
-        if (g_replay_active) {
+    if (item->key == REPL_CONFIG_REPLAY) {
+        if (repl_config_get(REPL_CONFIG_REPLAY)) {
             replay_stop();
             set_status("Replay: off");
         } else {
@@ -132,7 +133,7 @@ void repl_cfg_cycle_row(int row, int delta) {
         return;
     }
 
-    if (g_cfg_items[row].value == &g_t_playing) {
+    if (item->key == REPL_CONFIG_AUTO_TIME) {
         if (glutGetModifiers() & GLUT_ACTIVE_SHIFT) {
             repl_reset_time_to_zero();
             set_status(g_t_playing ? "Time: reset to 0"
@@ -144,19 +145,9 @@ void repl_cfg_cycle_row(int row, int delta) {
     if (g_replay_active)
         replay_stop();
 
-    if (g_cfg_items[row].value == NULL)
-        return;
+    int v = repl_config_cycle(item->key, delta);
 
-    int n = g_cfg_items[row].n_states;
-    if (n < 2)
-        return;
-
-    int v = (*g_cfg_items[row].value + delta) % n;
-    if (v < 0)
-        v += n;
-    *g_cfg_items[row].value = v;
-
-    if (g_cfg_items[row].value == &g_code_panel_layout) {
+    if (item->key == REPL_CONFIG_CODE_PANEL_LAYOUT) {
         g_panel_frac = 0.3f;
         if (g_code_panel_layout == CODE_PANEL_LAYOUT_TOP) {
             set_status("Layout: top code panel");
@@ -169,44 +160,46 @@ void repl_cfg_cycle_row(int row, int delta) {
         } else {
             set_status("Layout: left code panel");
         }
-    } else if (g_cfg_items[row].value == &g_autonormal) {
+    } else if (item->key == REPL_CONFIG_AUTO_NORMALS) {
         if (g_autonormal) {
             mark_normals_dirty();
             set_status("Auto-normals: ON");
         } else {
             set_status("Auto-normals: OFF (existing normals kept)");
         }
-    } else if (g_cfg_items[row].value == &g_init_attenuate_points) {
+    } else if (item->key == REPL_CONFIG_POINT_ATTENUATION) {
         apply_init_bootstrap();
         set_status(g_init_attenuate_points ? "Point attenuation: ON"
                                            : "Point attenuation: OFF");
-    } else if (g_cfg_items[row].value == &g_audio_cfg_mode) {
-        apply_audio_cfg_mode(g_audio_cfg_mode);
-        repl_audio_set_cfg_mode(g_audio_cfg_mode);
+    } else if (item->key == REPL_CONFIG_AUDIO_MODE) {
+        int mode = repl_config_get(REPL_CONFIG_AUDIO_MODE);
+        apply_audio_cfg_mode(mode);
         static const char *labels[] = {
             "Audio: paused",
             "Audio: play once",
             "Audio: loop song",
             "Audio: loop all",
         };
-        set_status(labels[g_audio_cfg_mode]);
-    } else if (g_cfg_items[row].state_names) {
+        set_status(labels[mode]);
+    } else if (item->state_names) {
         snprintf(g_scratch_buf, sizeof(g_scratch_buf), "%s: %s",
-                 g_cfg_items[row].label, g_cfg_items[row].state_names[v]);
+                 item->label, repl_config_state_name(item->key, v));
         set_status(g_scratch_buf);
-    } else if (n == 2) {
+    } else if (item->state_count == 2) {
         snprintf(g_scratch_buf, sizeof(g_scratch_buf), "%s: %s",
-                 g_cfg_items[row].label, v ? "ON" : "OFF");
+                 item->label, v ? "ON" : "OFF");
         set_status(g_scratch_buf);
     }
 }
 
 int repl_cfg_handle_ascii_shortcut(unsigned char key) {
     for (int i = 0; i < CFG_ITEM_COUNT; i++) {
-        if (!g_cfg_items[i].is_special &&
-            g_cfg_items[i].key_code > 0 &&
-            g_cfg_items[i].key_code < 32 &&
-            g_cfg_items[i].key_code == key) {
+        const ReplConfigItem *item = repl_config_item_at(i);
+        if (item && !item->section_header &&
+            !item->is_special &&
+            item->key_code > 0 &&
+            item->key_code < 32 &&
+            item->key_code == key) {
             repl_cfg_cycle_row(i, 1);
             return 1;
         }
@@ -216,7 +209,9 @@ int repl_cfg_handle_ascii_shortcut(unsigned char key) {
 
 int repl_cfg_handle_special_shortcut(int key) {
     for (int i = 0; i < CFG_ITEM_COUNT; i++) {
-        if (g_cfg_items[i].is_special && g_cfg_items[i].key_code == key) {
+        const ReplConfigItem *item = repl_config_item_at(i);
+        if (item && !item->section_header &&
+            item->is_special && item->key_code == key) {
             repl_cfg_cycle_row(i, 1);
             return 1;
         }
@@ -284,8 +279,8 @@ int repl_action_menu_item_activate(int menu_id, int item_idx) {
         }
         return 1;
     } else if (menu_id == REPL_MENU_CONFIG) {
-        if (item_idx >= 0 && item_idx < CFG_ITEM_COUNT &&
-            g_cfg_items[item_idx].value != NULL) {
+        if (repl_config_item_at(item_idx) &&
+            !repl_config_item_at(item_idx)->section_header) {
             repl_cfg_cycle_row(item_idx, 1);
         }
         return 0;
@@ -297,11 +292,11 @@ int repl_action_menu_item_activate(int menu_id, int item_idx) {
 void repl_actions_apply_defaults(void) {
     /* Restore the audio mode persisted from the previous session.
      * repl_audio_play_playlist() calls load_state() which stores the cfg_mode
-     * in the audio module; pull it here so both g_audio_cfg_mode (the UI) and
-     * the actual audio engine agree before the first frame. */
+     * in the audio module; pull it here so the UI config and the actual audio
+     * engine agree before the first frame. */
     int saved_mode = repl_audio_get_cfg_mode();
-    if (saved_mode >= AUDIO_CFG_PAUSE && saved_mode <= AUDIO_CFG_ALL)
-        g_audio_cfg_mode = saved_mode;
-    apply_audio_cfg_mode(g_audio_cfg_mode);
-    repl_audio_set_cfg_mode(g_audio_cfg_mode);
+    if (saved_mode < AUDIO_CFG_PAUSE || saved_mode > AUDIO_CFG_ALL)
+        saved_mode = AUDIO_CFG_ALL;
+    apply_audio_cfg_mode(saved_mode);
+    repl_audio_set_cfg_mode(saved_mode);
 }

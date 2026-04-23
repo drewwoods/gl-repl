@@ -189,20 +189,20 @@ static int parse_cfg(const char *args) {
     while (*p && isspace((unsigned char)*p)) p++;
     int val = (int)strtol(p, NULL, 10);
     if (strcmp(slug, "top_code_panel") == 0) {
-        g_code_panel_layout = val ? CODE_PANEL_LAYOUT_TOP
-                                  : CODE_PANEL_LAYOUT_LEFT;
+        repl_config_set(REPL_CONFIG_CODE_PANEL_LAYOUT,
+                        val ? CODE_PANEL_LAYOUT_TOP : CODE_PANEL_LAYOUT_LEFT);
         return 1;
     }
-    for (int i = 0; i < CFG_ITEM_COUNT; i++) {
-        if (g_cfg_items[i].value == NULL) continue;
+    int cfg_count = 0;
+    const ReplConfigItem *items = repl_config_items(&cfg_count);
+    for (int i = 0; i < cfg_count; i++) {
+        const ReplConfigItem *item = &items[i];
+        if (item->section_header || item->key == REPL_CONFIG_NONE)
+            continue;
         char item_slug[32];
-        workspace_slug_from_name(g_cfg_items[i].label, item_slug, sizeof(item_slug));
+        workspace_slug_from_name(item->label, item_slug, sizeof(item_slug));
         if (strcmp(item_slug, slug) == 0) {
-            int max_v = g_cfg_items[i].n_states > 0
-                        ? g_cfg_items[i].n_states - 1 : 1;
-            if (val < 0) val = 0;
-            if (val > max_v) val = max_v;
-            *g_cfg_items[i].value = val;
+            repl_config_set(item->key, val);
             return 1;
         }
     }
@@ -211,12 +211,16 @@ static int parse_cfg(const char *args) {
 }
 
 static void emit_cfgs(int *n) {
-    for (int i = 0; i < CFG_ITEM_COUNT && *n < MAX_WORKSPACE_HEADER_LINES; i++) {
-        if (g_cfg_items[i].value == NULL) continue;
+    int cfg_count = 0;
+    const ReplConfigItem *items = repl_config_items(&cfg_count);
+    for (int i = 0; i < cfg_count && *n < MAX_WORKSPACE_HEADER_LINES; i++) {
+        const ReplConfigItem *item = &items[i];
+        if (item->section_header || item->key == REPL_CONFIG_NONE)
+            continue;
         char slug[32];
-        workspace_slug_from_name(g_cfg_items[i].label, slug, sizeof(slug));
+        workspace_slug_from_name(item->label, slug, sizeof(slug));
         snprintf(g_workspace_header_lines[(*n)++], WORKSPACE_HEADER_LINE_LEN,
-                 "// @cfg %s = %d", slug, *g_cfg_items[i].value);
+                 "// @cfg %s = %d", slug, repl_config_get(item->key));
     }
 }
 

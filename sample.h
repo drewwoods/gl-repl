@@ -29,6 +29,8 @@
 #define MAX_LINE_LEN    256
 #define MAX_INPUT_LEN   1024
 #define MAX_AC_MATCHES  10
+#define MAX_WORKSPACE_HEADER_LINES 48
+#define WORKSPACE_HEADER_LINE_LEN   96
 
 #define FONT_MONO       GLUT_BITMAP_9_BY_15
 #define FONT_SMALL      GLUT_BITMAP_8_BY_13
@@ -339,11 +341,10 @@ static inline void unwind_tracked_transform_stack(int *matrix_depth) {
 int  init_section_line_count(void);
 void init_section_line(int i, char *buf, size_t n);
 
+void repl_state_autocomplete_clear(void);
+
 static inline void clear_autocomplete_state(void) {
-    g_ac_count = 0;
-    g_ac_sel = 0;
-    g_ac_ghost[0] = '\0';
-    g_ac_hint[0] = '\0';
+    repl_state_autocomplete_clear();
 }
 
 /* ========================================================================= */

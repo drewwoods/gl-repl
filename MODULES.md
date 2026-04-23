@@ -324,9 +324,10 @@ render files.
   directly (`ui_color_picker.c`, `repl_var_drag.c`, and declaration slot
   repair in commit paths). Bulk source-array restores now go through
   `repl_command_store_load()`.
-- `sample.h` and `repl_state.h` still expose broad globals for compatibility.
-  The current module splits are ownership boundaries, not yet context-object
-  rewrites.
+- `sample.h` stays the shared compatibility header, while `repl_config.h`
+  owns the keyed config descriptor API and `repl_state.h` carries the typed
+  runtime-state facade. The current module splits are ownership boundaries,
+  not yet context-object rewrites.
 
 ## Naming Notes
 

@@ -218,13 +218,19 @@ void render_help(void) {
         snprintf(fkey_strbuf[0], sizeof(fkey_strbuf[0]), "  F1   \tHelp overlay");
         tab_keys[nk++] = fkey_strbuf[0];
 
-        /* F2–F11 — pulled from g_cfg_items by matching key_code (GLUT_KEY_Fn == n) */
+        /* F2–F11 — pulled from the config descriptor table by matching
+         * key_code (GLUT_KEY_Fn == n). */
         int di = 1;
         for (int fn = 2; fn <= 11 && di < HELP_FKEY_MAX - 1; fn++) {
-            for (int ci = 0; ci < CFG_ITEM_COUNT; ci++) {
-                if (g_cfg_items[ci].is_special && g_cfg_items[ci].key_code == fn) {
+            int cfg_count = 0;
+            const ReplConfigItem *items = repl_config_items(&cfg_count);
+            for (int ci = 0; ci < cfg_count; ci++) {
+                const ReplConfigItem *item = &items[ci];
+                if (item->section_header || item->key == REPL_CONFIG_NONE)
+                    continue;
+                if (item->is_special && item->key_code == fn) {
                     snprintf(fkey_strbuf[di], sizeof(fkey_strbuf[di]),
-                             "  F%-2d  \t%s", fn, g_cfg_items[ci].label);
+                             "  F%-2d  \t%s", fn, item->label);
                     tab_keys[nk++] = fkey_strbuf[di++];
                     break;
                 }
