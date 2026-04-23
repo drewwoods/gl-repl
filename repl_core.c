@@ -88,16 +88,6 @@ void mark_normals_dirty(void) {
 
 /* (no display list - commands are executed directly each frame) */
 
-/* Camera */
-float  g_cam_rx = 20.0f;
-float  g_cam_ry = 30.0f;
-float  g_cam_dist = 5.0f;
-float  g_cam_tx = 0.0f, g_cam_ty = 0.0f, g_cam_tz = 0.0f;
-float  g_cam_motion_glow = 0.0f;  /* 0..1, pulses to 1 on camera input, decays each tick */
-
-/* Window */
-int    g_win_w = 1200, g_win_h = 800;
-
 /* Accumulation buffer — enabled by default, disabled with --noaccum.
  * Designed to be forward-compatible with FBO-based accumulation later. */
 int    g_use_accum        = 1;  /* GLUT_ACCUM requested at init */
