@@ -168,6 +168,10 @@ typedef enum {
 #define UI_ACCENT_GREEN_G 0.702f
 #define UI_ACCENT_GREEN_B 0.435f
 
+/* Max brightness (V in HSV) allowed for glClearColor channels.
+ * Since max(r,g,b) == V, capping V caps all channels. */
+#define CP_CLEAR_MAX_V 0.1f
+
 typedef struct {
     GLdouble pos[3];
     GLdouble normal[3]; /* per-vertex normal, default (0,0,1) */
@@ -276,15 +280,6 @@ typedef struct {
     float    specular[4];
 } SceneLight;
 
-typedef struct {
-    const char  *label;
-    int          key_code;    /* Which key triggers this? e.g. '`', KEY_CTRL_R, GLUT_KEY_F2. 0 = none */
-    int          is_special;  /* 1 if this is a GLUT_KEY_* special key instead of an ascii/ctrl key */
-    int         *value;
-    int          n_states;    /* 2 = ON/OFF toggle; >2 = cycle */
-    const char **state_names; /* NULL -> display "OFF"/"ON" */
-} CfgItem;
-
 /* ========================================================================= */
 /* Transform command helpers (used by sample.c and scene_render.c)           */
 /* ========================================================================= */
@@ -335,8 +330,10 @@ static inline void unwind_tracked_transform_stack(int *matrix_depth) {
     }
 }
 
-/* Runtime state globals and ownership facades live in repl_state.h. */
-#include "repl_state.h"
+#include "repl_config.h"
+#include "repl_flatten.h"
+#include "repl_executor.h"
+#include "repl_state_compat.h"
 #include "repl_source_scope.h"
 
 int  init_section_line_count(void);
@@ -373,12 +370,6 @@ int  repl_search_find_prev_in_text(const char *text, const char *query,
                                    int start_pos);
 
 void navigate_to_line(int target);
-typedef struct {
-    int flat_cmd_count;
-    FlatProgramView program;
-} ReplExecutionOptions;
-FlatProgramView repl_flat_program_view_live(void);
-void repl_execute_program(const ReplExecutionOptions *options);
 void execute_commands(void);
 void execute_replay_fade_batches(void);
 void flatten_commands(void);
