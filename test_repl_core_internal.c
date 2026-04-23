@@ -150,6 +150,7 @@ int main() {
         ReplFlattenResult result;
         int live_count;
         GLCmd live_first;
+        FlatProgramView live_view;
 
         repl_reset_state(); declare_test_vars();
         repl_feed_line_public("glEnable(GL_LIGHTING);");
@@ -158,8 +159,8 @@ int main() {
         repl_feed_line_public("}");
         repl_feed_line_public("func0(2);");
         repl_flatten_commands();
-        live_count = g_num_flat_cmds;
-        live_first = g_flat_cmds[0];
+        live_count = repl_state_flat_program_count();
+        live_first = repl_state_flat_program_cmds()[0];
 
         memset(temp_flat, 0, sizeof(temp_flat));
         memset(temp_locals, 0, sizeof(temp_locals));
@@ -183,9 +184,14 @@ int main() {
         ASSERT_INT("flatten_program provenance source type",
                    g_cmds[temp_flat[1].src_cmd_idx].type, CMD_VERTEX3F);
         ASSERT_INT("flatten_program live count unchanged",
-                   g_num_flat_cmds, live_count);
+                   repl_state_flat_program_count(), live_count);
         ASSERT_INT("flatten_program live first unchanged",
-                   g_flat_cmds[0].type, live_first.type);
+                   repl_state_flat_program_cmds()[0].type, live_first.type);
+        live_view = repl_state_flat_program_view();
+        ASSERT_TRUE("flatten_program live view uses flat cmds",
+                    live_view.cmds == repl_state_flat_program_cmds());
+        ASSERT_INT("flatten_program live view count",
+                   live_view.cmd_count, live_count);
 
         opts.flat_capacity = 1;
         ASSERT_INT("flatten_program capacity fail",
@@ -194,7 +200,7 @@ int main() {
         ASSERT_TRUE("flatten_program capacity status",
                     strstr(result.status, "limit") != NULL);
         ASSERT_INT("flatten_program fail leaves live count",
-                   g_num_flat_cmds, live_count);
+                   repl_state_flat_program_count(), live_count);
     }
 
     /* 9. input_has_expr_vars */

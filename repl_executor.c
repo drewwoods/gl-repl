@@ -3,6 +3,7 @@
  */
 #include "sample.h"
 #include "repl_core_internal.h"
+#include "repl_state.h"
 
 /* Execution context adjusted by repl_replay.c for fade-batch rendering. */
 static float g_execute_alpha_scale = 1.0f;
@@ -100,12 +101,7 @@ int apply_state_cmd(const GLCmd *cmd, float alpha_scale) {
 }
 
 FlatProgramView repl_flat_program_view_live(void) {
-    FlatProgramView view = {
-        g_flat_cmds,
-        g_flat_cmd_local_vars,
-        g_num_flat_cmds
-    };
-    return view;
+    return repl_state_flat_program_view();
 }
 
 static FlatProgramView execution_program_from_options(const ReplExecutionOptions *options) {

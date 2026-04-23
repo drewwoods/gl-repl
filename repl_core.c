@@ -205,6 +205,10 @@ GLenum current_begin_mode(void) {
 
 int count_vertices(void) {
     int n = 0;
+    FlatProgramView flat_program = repl_state_flat_program_view();
+    const GLCmd *g_flat_cmds = flat_program.cmds;
+    int g_num_flat_cmds = flat_program.cmd_count;
+
     for (int i = 0; i < g_num_flat_cmds; i++)
         if (g_flat_cmds[i].valid && g_flat_cmds[i].type == CMD_VERTEX3F) n++;
     return n;
@@ -246,7 +250,8 @@ void repl_debug_dump_editor(FILE *out) {
     fprintf(dst, "=== REPL Editor Dump ===\n");
     fprintf(dst,
             "num_cmds=%d edit_line=%d inserting=%d flat_dirty=%d normals_dirty=%d\n",
-            g_num_cmds, g_edit_line, g_inserting, g_flat_dirty, g_normals_dirty);
+            g_num_cmds, g_edit_line, g_inserting,
+            repl_state_flat_program_dirty(), g_normals_dirty);
 
     for (int i = 0; i < g_num_cmds; i++) {
         const GLCmd *cmd = &g_cmds[i];
@@ -280,9 +285,16 @@ void repl_debug_dump_editor(FILE *out) {
 
 void repl_debug_dump_flat_commands(FILE *out) {
     FILE *dst = out ? out : stdout;
+    FlatProgramView flat_program = repl_state_flat_program_view();
+    const GLCmd *g_flat_cmds = flat_program.cmds;
+    int g_num_flat_cmds = flat_program.cmd_count;
 
-    if (g_flat_dirty)
+    if (repl_state_flat_program_dirty()) {
         flatten_commands();
+        flat_program = repl_state_flat_program_view();
+        g_flat_cmds = flat_program.cmds;
+        g_num_flat_cmds = flat_program.cmd_count;
+    }
 
     fprintf(dst, "=== REPL Flattened Commands Dump ===\n");
     fprintf(dst, "num_flat_cmds=%d\n", g_num_flat_cmds);
@@ -626,7 +638,7 @@ void begin_2d(void) {
 
 void end_2d(void) {
     glEnable(GL_DEPTH_TEST);
-    if (g_user_lighting_enabled) glEnable(GL_LIGHTING);
+    if (repl_state_flat_program_user_lighting_enabled()) glEnable(GL_LIGHTING);
     else glDisable(GL_LIGHTING);
     glMatrixMode(GL_PROJECTION);
     glPopMatrix();
@@ -641,6 +653,9 @@ void end_2d(void) {
 static void display_func(void) {
     int saved_flat_count;
     float live_predef_vals[MAX_PREDEF_VARS] = { 0 };
+    FlatProgramView flat_program = repl_state_flat_program_view();
+    const GLCmd *g_flat_cmds = flat_program.cmds;
+    int g_num_flat_cmds = flat_program.cmd_count;
 
     prof_frame_tick();
     prof_begin(PROF_FRAME_TOTAL);
@@ -649,17 +664,20 @@ static void display_func(void) {
         recompute_autonormals();
         g_normals_dirty = 0;
     }
-    if (g_flat_dirty) {
+    if (repl_state_flat_program_dirty()) {
         prof_begin(PROF_FLATTEN);
         flatten_commands();
-        g_flat_dirty = 0;
+        repl_state_flat_program_clear_dirty();
         prof_end(PROF_FLATTEN);
+        flat_program = repl_state_flat_program_view();
+        g_flat_cmds = flat_program.cmds;
+        g_num_flat_cmds = flat_program.cmd_count;
     }
 
     saved_flat_count = g_num_flat_cmds;
     repl_copy_predef_values(live_predef_vals, MAX_PREDEF_VARS);
     if (g_replay_active)
-        g_num_flat_cmds = replay_prepare_frame(saved_flat_count);
+        repl_state_flat_program_set_count(replay_prepare_frame(saved_flat_count));
 
     update_render_state_strings();
     update_cam_lines();
@@ -729,7 +747,7 @@ static void display_func(void) {
 
     render_profile_panel();
 
-    g_num_flat_cmds = saved_flat_count;
+    repl_state_flat_program_set_count(saved_flat_count);
     repl_restore_predef_values(live_predef_vals, MAX_PREDEF_VARS);
 
     prof_end(PROF_FRAME_TOTAL);

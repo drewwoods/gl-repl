@@ -18,6 +18,9 @@ static int begin_mode_has_outline_overlay(GLenum mode) {
 }
 
 int scene_overlay_flat_block_matches_cursor(int begin_idx, int is_tess) {
+    FlatProgramView flat_program = repl_state_flat_program_view();
+    const GLCmd *g_flat_cmds = flat_program.cmds;
+    int g_num_flat_cmds = flat_program.cmd_count;
     int depth = is_tess ? 1 : 0;
 
     for (int i = begin_idx; i < g_num_flat_cmds; i++) {
@@ -66,6 +69,9 @@ static void scene_overlay_pop_state(void) {
 static void walk_vertex_overlay(int selected_block_only,
                                 VertexOverlayVisitFn on_vertex,
                                 void *user) {
+    FlatProgramView flat_program = repl_state_flat_program_view();
+    const GLCmd *g_flat_cmds = flat_program.cmds;
+    int g_num_flat_cmds = flat_program.cmd_count;
     VertexOverlayState state = {
         .flat_cmd_idx = -1,
         .vertex_idx = 0,
@@ -80,7 +86,7 @@ static void walk_vertex_overlay(int selected_block_only,
     for (int i = 0; i < g_num_flat_cmds; i++) {
         if (!g_flat_cmds[i].valid) continue;
 
-        GLCmd *cmd = &g_flat_cmds[i];
+        const GLCmd *cmd = &g_flat_cmds[i];
         if (!state.in_block && is_transform_cmd(cmd->type)) {
             apply_tracked_transform_cmd(cmd, &matrix_depth);
             continue;
@@ -183,6 +189,7 @@ static void draw_normal_vector_at_vertex(const GLCmd *cmd,
 }
 
 void scene_overlays_render_vertex_numbers(void) {
+    int g_user_lighting_enabled = repl_state_flat_program_user_lighting_enabled();
     scene_overlay_push_state();
     glDisable(GL_LIGHTING);
     glDisable(GL_DEPTH_TEST);
@@ -196,6 +203,7 @@ void scene_overlays_render_vertex_numbers(void) {
 }
 
 void scene_overlays_render_normal_vectors(void) {
+    int g_user_lighting_enabled = repl_state_flat_program_user_lighting_enabled();
     scene_overlay_push_state();
     glDisable(GL_LIGHTING);
     glDisable(GL_DEPTH_TEST);
@@ -211,6 +219,9 @@ void scene_overlays_render_normal_vectors(void) {
 
 void scene_overlays_render_outlines(int show_current_poly,
                                     int replay_tess_preview) {
+    FlatProgramView flat_program = repl_state_flat_program_view();
+    const GLCmd *g_flat_cmds = flat_program.cmds;
+    int g_num_flat_cmds = flat_program.cmd_count;
     const ReplRenderState *render = repl_state_render();
     glDisable(GL_LIGHTING);
     glEnable(GL_DEPTH_TEST);

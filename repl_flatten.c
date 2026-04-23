@@ -115,6 +115,9 @@ static int flatten_append_cmd(FlattenContext *ctx, const GLCmd *cmd,
  * repl_flat_cmd_matches_cursor() to highlight the active geometry
  * batch in the 3D view. */
 static void refresh_current_block_highlight(void) {
+    const ReplFlatProgramState *flat = repl_state_flat_program();
+    const GLCmd *flat_cmds = flat->cmds;
+    int flat_cmd_count = *flat->cmd_count;
     int current_block_begin = -1;
     int current_block_end = -1;
 
@@ -125,15 +128,15 @@ static void refresh_current_block_highlight(void) {
     {
         int begin_src = -1, begin_flat = -1;
         int fcur = 0;
-        for (int ci = 0; ci < g_num_cmds && fcur < g_num_flat_cmds; ci++) {
+        for (int ci = 0; ci < g_num_cmds && fcur < flat_cmd_count; ci++) {
             if (!g_cmds[ci].valid) continue;
             if (g_cmds[ci].type == CMD_FUNC_DEF || g_cmds[ci].type == CMD_FUNC_END ||
                 g_cmds[ci].type == CMD_FOR_BEGIN || g_cmds[ci].type == CMD_FOR_END ||
                 g_cmds[ci].type == CMD_IF_BEGIN  || g_cmds[ci].type == CMD_IF_END  ||
                 g_cmds[ci].type == CMD_CALL)
                 continue;
-            while (fcur < g_num_flat_cmds && !g_flat_cmds[fcur].valid) fcur++;
-            if (fcur >= g_num_flat_cmds) break;
+            while (fcur < flat_cmd_count && !flat_cmds[fcur].valid) fcur++;
+            if (fcur >= flat_cmd_count) break;
             if (g_cmds[ci].type == CMD_BEGIN) {
                 if (ci <= g_edit_line) { begin_src = ci; begin_flat = fcur; }
             } else if (g_cmds[ci].type == CMD_END) {
@@ -558,14 +561,21 @@ static unsigned int line_func_scope_mask(int line) {
 }
 
 int repl_flat_cmd_matches_cursor(int flat_idx) {
-    if (flat_idx < 0 || flat_idx >= g_num_flat_cmds) return 0;
+    const ReplFlatProgramState *flat = repl_state_flat_program();
+    const GLCmd *flat_cmds = flat->cmds;
+    int flat_cmd_count = *flat->cmd_count;
+    int current_block_begin = *flat->current_block_begin_idx;
+    int current_block_end = *flat->current_block_end_idx;
+    int current_block_line = *flat->current_block_source_line_idx;
+
+    if (flat_idx < 0 || flat_idx >= flat_cmd_count) return 0;
     if (g_edit_line < 0 || g_edit_line >= g_num_cmds) return 0;
-    if (!g_flat_cmds[flat_idx].valid) return 0;
-    if (g_current_block_line != g_edit_line)
+    if (!flat_cmds[flat_idx].valid) return 0;
+    if (current_block_line != g_edit_line)
         refresh_current_block_highlight();
 
-    GLCmd *cmd = &g_flat_cmds[flat_idx];
-    GLCmd *cursor_cmd = &g_cmds[g_edit_line];
+    const GLCmd *cmd = &flat_cmds[flat_idx];
+    const GLCmd *cursor_cmd = &g_cmds[g_edit_line];
 
     if (cursor_cmd->valid && cursor_cmd->type == CMD_CALL) {
         return cmd->call_src_cmd_idx == g_edit_line ||
@@ -578,8 +588,8 @@ int repl_flat_cmd_matches_cursor(int flat_idx) {
             return (cmd->func_scope_mask & cursor_func_mask) != 0;
     }
 
-    if (g_current_block_begin >= 0 && g_current_block_end >= g_current_block_begin)
-        return flat_idx >= g_current_block_begin && flat_idx <= g_current_block_end;
+    if (current_block_begin >= 0 && current_block_end >= current_block_begin)
+        return flat_idx >= current_block_begin && flat_idx <= current_block_end;
 
     /* Top-level color/normal commands outside glBegin/glEnd still affect later
      * vertices. Match those vertices to the most recent applicable state line
@@ -590,10 +600,10 @@ int repl_flat_cmd_matches_cursor(int flat_idx) {
         if (cmd->type == CMD_VERTEX3F) {
             int last_color_src = -1;
             for (int i = 0; i <= flat_idx; i++) {
-                if (!g_flat_cmds[i].valid) continue;
-                if (g_flat_cmds[i].type == CMD_COLOR3F ||
-                    g_flat_cmds[i].type == CMD_COLOR4F)
-                    last_color_src = g_flat_cmds[i].src_cmd_idx;
+                if (!flat_cmds[i].valid) continue;
+                if (flat_cmds[i].type == CMD_COLOR3F ||
+                    flat_cmds[i].type == CMD_COLOR4F)
+                    last_color_src = flat_cmds[i].src_cmd_idx;
             }
             if (last_color_src == g_edit_line)
                 return 1;
@@ -604,9 +614,9 @@ int repl_flat_cmd_matches_cursor(int flat_idx) {
         if (cmd->type == CMD_VERTEX3F) {
             int last_normal_src = -1;
             for (int i = 0; i <= flat_idx; i++) {
-                if (!g_flat_cmds[i].valid) continue;
-                if (g_flat_cmds[i].type == CMD_NORMAL3F)
-                    last_normal_src = g_flat_cmds[i].src_cmd_idx;
+                if (!flat_cmds[i].valid) continue;
+                if (flat_cmds[i].type == CMD_NORMAL3F)
+                    last_normal_src = flat_cmds[i].src_cmd_idx;
             }
             if (last_normal_src == g_edit_line)
                 return 1;
@@ -617,9 +627,9 @@ int repl_flat_cmd_matches_cursor(int flat_idx) {
         if (cmd->type == CMD_TESS_VERTEX) {
             int last_tess_color_src = -1;
             for (int i = 0; i <= flat_idx; i++) {
-                if (!g_flat_cmds[i].valid) continue;
-                if (g_flat_cmds[i].type == CMD_TESS_COLOR)
-                    last_tess_color_src = g_flat_cmds[i].src_cmd_idx;
+                if (!flat_cmds[i].valid) continue;
+                if (flat_cmds[i].type == CMD_TESS_COLOR)
+                    last_tess_color_src = flat_cmds[i].src_cmd_idx;
             }
             if (last_tess_color_src == g_edit_line)
                 return 1;
@@ -630,9 +640,9 @@ int repl_flat_cmd_matches_cursor(int flat_idx) {
         if (cmd->type == CMD_TESS_VERTEX) {
             int last_tess_normal_src = -1;
             for (int i = 0; i <= flat_idx; i++) {
-                if (!g_flat_cmds[i].valid) continue;
-                if (g_flat_cmds[i].type == CMD_TESS_NORMAL)
-                    last_tess_normal_src = g_flat_cmds[i].src_cmd_idx;
+                if (!flat_cmds[i].valid) continue;
+                if (flat_cmds[i].type == CMD_TESS_NORMAL)
+                    last_tess_normal_src = flat_cmds[i].src_cmd_idx;
             }
             if (last_tess_normal_src == g_edit_line)
                 return 1;

@@ -503,7 +503,12 @@ void repl_state_mark_normals_dirty(void) {
 }
 
 FlatProgramView repl_state_flat_program_view(void) {
-    return repl_flat_program_view_live();
+    FlatProgramView view = {
+        .cmds = g_repl_state.flat_program.cmds,
+        .local_vars = g_repl_state.flat_program.local_vars,
+        .cmd_count = *g_repl_state.flat_program.cmd_count,
+    };
+    return view;
 }
 
 const ReplVariableState *repl_state_variables(void) {
