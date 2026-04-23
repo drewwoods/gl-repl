@@ -301,8 +301,6 @@ typedef struct {
     const int  *toggle;
 } InitBootstrapEntry;
 
-int g_init_attenuate_points = CFG_DEFAULT_ATTENUATE_POINTS;
-
 static const InitBootstrapEntry g_init_bootstrap_repl[] = {
     { "glEnable(GL_COLOR_MATERIAL);", NULL },
     { "glLightModeli(GL_LIGHT_MODEL_TWO_SIDE, GL_TRUE);", NULL },

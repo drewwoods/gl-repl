@@ -169,6 +169,7 @@ int main(int argc, char **argv) {
     glutCreateWindow("OpenGL REPL - Display List Dynamic Rendering");
 
     repl_init_gl();
+    atexit(repl_state_render_destroy_resources);
     init_predef_vars();
     for (int i = 0; i < g_num_predef_vars; i++)
         if (strcmp(g_predef_vars[i].name, "t") == 0) { g_t_var_idx = i; break; }

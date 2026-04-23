@@ -15,18 +15,20 @@ static void scene_lights_pop_state(void) {
 /* Set light properties only. User REPL commands still decide whether each
  * light is enabled during command execution. */
 void scene_lights_setup(void) {
+    ReplRenderState *render = repl_state_render_mut();
     for (int i = 0; i < MAX_LIGHTS; i++) {
-        glDisable(g_lights[i].id);
-        g_lights[i].enabled = 0;
-        glLightfv(g_lights[i].id, GL_POSITION, g_lights[i].pos);
-        glLightfv(g_lights[i].id, GL_DIFFUSE,  g_lights[i].diffuse);
-        glLightfv(g_lights[i].id, GL_AMBIENT,  g_lights[i].ambient);
-        glLightfv(g_lights[i].id, GL_SPECULAR, g_lights[i].specular);
+        glDisable(render->lights[i].id);
+        render->lights[i].enabled = 0;
+        glLightfv(render->lights[i].id, GL_POSITION, render->lights[i].pos);
+        glLightfv(render->lights[i].id, GL_DIFFUSE,  render->lights[i].diffuse);
+        glLightfv(render->lights[i].id, GL_AMBIENT,  render->lights[i].ambient);
+        glLightfv(render->lights[i].id, GL_SPECULAR, render->lights[i].specular);
     }
 }
 
 void scene_lights_render(void) {
     if (!g_show_lights) return;
+    const ReplRenderState *render = repl_state_render();
 
     scene_lights_push_state();
     glDisable(GL_LIGHTING);
@@ -37,10 +39,10 @@ void scene_lights_render(void) {
     float breath = sinf(g_anim_time * 1.2f) * 0.5f + 0.5f;
 
     for (int i = 0; i < MAX_LIGHTS; i++) {
-        float *d = g_lights[i].diffuse;
-        float *p = g_lights[i].pos;
+        float *d = render->lights[i].diffuse;
+        float *p = render->lights[i].pos;
         int is_dir = (p[3] == 0.0f);
-        int on = g_lights[i].enabled;
+        int on = render->lights[i].enabled;
 
         float lx, ly, lz;
         if (is_dir) {
