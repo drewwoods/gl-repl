@@ -428,8 +428,9 @@ state, hit rectangles, and rendering live outside `ui_panels.c`.
   `ReplPresentationState`, `ReplRenderState`, etc.). Phase 2 is moving
   storage behind that facade domain by domain; the source command buffer,
   flat-program buffers, editor input, selection, clipboard storage, camera,
-  pointer, and viewport state now live in `repl_state.c` while compatibility
-  externs remain for unmigrated callers.
+  pointer, viewport, and mutable presentation config state now live in
+  `repl_state.c` while compatibility externs remain for unmigrated callers.
+  Immutable descriptor/name tables remain outside runtime state.
 - `repl_command_store.h` is the first ownership boundary around source-command
   array mechanics. Code that shifts, inserts, replaces, deletes, clears, or
   bulk-restores `g_cmds[]` should prefer `repl_command_store_*` helpers so
