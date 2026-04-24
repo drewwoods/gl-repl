@@ -22,6 +22,7 @@ static const char *profile_panel_mode_names[] = { "Off", "On", "Details" };
 static const char *code_panel_layout_names[] = {
     "Left", "Top", "Bottom", "Hidden"
 };
+static char cfg_status_buf[256];
 
 /* Unified audio cfg: collapses mute + loop mode into one cycling menu entry.
  * Indices:
@@ -182,13 +183,13 @@ void repl_cfg_cycle_row(int row, int delta) {
         };
         set_status(labels[mode]);
     } else if (item->state_names) {
-        snprintf(g_scratch_buf, sizeof(g_scratch_buf), "%s: %s",
+        snprintf(cfg_status_buf, sizeof(cfg_status_buf), "%s: %s",
                  item->label, repl_config_state_name(item->key, v));
-        set_status(g_scratch_buf);
+        set_status(cfg_status_buf);
     } else if (item->state_count == 2) {
-        snprintf(g_scratch_buf, sizeof(g_scratch_buf), "%s: %s",
+        snprintf(cfg_status_buf, sizeof(cfg_status_buf), "%s: %s",
                  item->label, v ? "ON" : "OFF");
-        set_status(g_scratch_buf);
+        set_status(cfg_status_buf);
     }
 }
 

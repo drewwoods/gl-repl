@@ -150,7 +150,6 @@ const char *g_axes_names[AXES_THEME_COUNT] = {
     [AXES_THEME_COMPASS] = "Compass",
     [AXES_THEME_GIZMO]   = "Gizmo",
 };
-char   g_scratch_buf[256];  /* shared scratch space for formatting strings, etc. */
 
 /* Forward declarations (eval_expr, parse_for_header, etc. are in repl_eval.h) */
 static void get_for_var_name(const GLCmd *cmd, char *var, int var_sz);
