@@ -180,8 +180,8 @@ int main(void) {
 
         repl_reset_state();
         declare_test_vars();
-        g_wrap_at_comma = 1;
-        g_show_indices = 0;
+        *repl_state_presentation_mut()->wrap_at_comma = 1;
+        *repl_state_presentation_mut()->show_vertex_indices = 0;
         repl_state_viewport_set_size(360, *repl_state_viewport()->window_h);
         g_panel_frac = 0.75f;
 
@@ -220,8 +220,8 @@ int main(void) {
 
         repl_reset_state();
         declare_test_vars();
-        g_wrap_at_comma = 1;
-        g_show_indices = 0;
+        *repl_state_presentation_mut()->wrap_at_comma = 1;
+        *repl_state_presentation_mut()->show_vertex_indices = 0;
         repl_state_viewport_set_size(360, *repl_state_viewport()->window_h);
         g_panel_frac = 0.75f;
 
@@ -263,8 +263,8 @@ int main(void) {
 
         repl_reset_state();
         declare_test_vars();
-        g_wrap_at_comma = 1;
-        g_show_indices = 0;
+        *repl_state_presentation_mut()->wrap_at_comma = 1;
+        *repl_state_presentation_mut()->show_vertex_indices = 0;
         repl_state_viewport_set_size(360, *repl_state_viewport()->window_h);
         g_panel_frac = 0.75f;
 
@@ -305,8 +305,8 @@ int main(void) {
 
         repl_reset_state();
         declare_test_vars();
-        g_wrap_at_comma = 1;
-        g_show_indices = 0;
+        *repl_state_presentation_mut()->wrap_at_comma = 1;
+        *repl_state_presentation_mut()->show_vertex_indices = 0;
         repl_state_viewport_set_size(260, *repl_state_viewport()->window_h);
         g_panel_frac = 0.75f;
 
@@ -343,11 +343,11 @@ int main(void) {
 
         repl_reset_state();
         declare_test_vars();
-        g_wrap_at_comma = 1;
-        g_show_indices = 0;
+        *repl_state_presentation_mut()->wrap_at_comma = 1;
+        *repl_state_presentation_mut()->show_vertex_indices = 0;
         repl_state_viewport_set_size(360, 800);
         g_panel_frac = 0.5f;
-        g_code_panel_layout = CODE_PANEL_LAYOUT_BOTTOM;
+        *repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_BOTTOM;
 
         memset(&repl_state_document_cmds_mut()[0], 0, sizeof(repl_state_document_cmds_mut()[0]));
         repl_state_document_cmds_mut()[0].type = CMD_VERTEX3F;
@@ -373,7 +373,7 @@ int main(void) {
             ASSERT_TRUE("bottom visual dump does not use side-panel width",
                         strstr(visual_buf, "--- source ---\n  glVertex3f(1,\n") == NULL);
         }
-        g_code_panel_layout = CFG_DEFAULT_CODE_PANEL_LAYOUT;
+        *repl_state_presentation_mut()->code_panel_layout = CFG_DEFAULT_CODE_PANEL_LAYOUT;
         g_panel_frac = CFG_DEFAULT_PANEL_FRAC;
     }
 

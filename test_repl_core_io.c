@@ -132,8 +132,8 @@ int main(void) {
 
     g_multisample_enabled = 0;
     g_line_smooth_enabled = 1;
-    g_show_outlines = 0;
-    g_show_vpoints = 0;
+    *repl_state_presentation_mut()->show_vertex_outlines = 0;
+    *repl_state_presentation_mut()->show_vertex_points = 0;
     repl_save_output(path);
     {
         char buf[16384];
@@ -273,8 +273,8 @@ int main(void) {
     before_n = repl_state_document_count();
     for (int i = 0; i < before_n; i++) before_types[i] = repl_state_document_cmds_mut()[i].type;
 
-    g_show_outlines = 1;
-    g_show_vpoints = 1;
+    *repl_state_presentation_mut()->show_vertex_outlines = 1;
+    *repl_state_presentation_mut()->show_vertex_points = 1;
     repl_save_output(func_path);
     {
         char buf[32768];
@@ -397,8 +397,8 @@ int main(void) {
     repl_feed_line_public("gluCylinder(0.15, 0.05, 1.5, 8, 1);");
     repl_feed_line_public("gluDisk(0, 0.35, 12, 1);");
     repl_feed_line_public("gluPartialDisk(0.1, 0.5, 12, 4, 30, 180);");
-    g_show_outlines = 0;
-    g_show_vpoints = 0;
+    *repl_state_presentation_mut()->show_vertex_outlines = 0;
+    *repl_state_presentation_mut()->show_vertex_points = 0;
     repl_save_output(quadric_path);
     {
         char buf[16384];
@@ -449,8 +449,8 @@ int main(void) {
     repl_feed_line_public("gluEnd();");
     repl_feed_line_public("}");
     repl_feed_line_public("func0(2.0);");
-    g_show_outlines = 1;
-    g_show_vpoints = 1;
+    *repl_state_presentation_mut()->show_vertex_outlines = 1;
+    *repl_state_presentation_mut()->show_vertex_points = 1;
     repl_save_output(tess_path);
     {
         char buf[65536];

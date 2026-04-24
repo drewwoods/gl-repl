@@ -68,6 +68,17 @@ int              g_show_outlines = CFG_DEFAULT_VERTEX_OUTLINES;
 int              g_show_vpoints = CFG_DEFAULT_VERTEX_POINTS;
 int              g_highlight_current_poly = 1;
 int              g_ortho_mode = 0;
+const float g_grid_major_steps[GRID_MAJOR_COUNT] = {
+    [GRID_MAJOR_1]  = 1.0f,
+    [GRID_MAJOR_2]  = 2.0f,
+    [GRID_MAJOR_5]  = 5.0f,
+    [GRID_MAJOR_10] = 10.0f,
+};
+const float g_grid_extents[GRID_EXTENT_COUNT] = {
+    [GRID_EXTENT_CLOSE] = 5.0f,
+    [GRID_EXTENT_MID]   = 25.0f,
+    [GRID_EXTENT_FAR]   = 100.0f,
+};
 int              g_use_accum = 1;
 int              g_accum_aa_enabled = 1;
 int              g_accum_samples = 2;

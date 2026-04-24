@@ -133,15 +133,8 @@ const char *g_grid_names[GRID_THEME_COUNT] = {
     [GRID_THEME_PLANES]  = "Adaptive Planes",
 };
 
-/* Grid major tick spacing in world units. Includes 1 and 5 per request;
- * 2 and 10 fill in the common orders of magnitude. The minor step is
- * derived as major * 0.2 so every major cell holds five subdivisions. */
-const float g_grid_major_steps[GRID_MAJOR_COUNT] = {
-    [GRID_MAJOR_1]  = 1.0f,
-    [GRID_MAJOR_2]  = 2.0f,
-    [GRID_MAJOR_5]  = 5.0f,
-    [GRID_MAJOR_10] = 10.0f,
-};
+/* Grid major tick spacing in world units — defined in repl_state.c,
+ * accessed via repl_state_presentation()->grid_major_steps. */
 const char *g_grid_major_names[GRID_MAJOR_COUNT] = {
     [GRID_MAJOR_1]  = "1",
     [GRID_MAJOR_2]  = "2",
@@ -149,14 +142,8 @@ const char *g_grid_major_names[GRID_MAJOR_COUNT] = {
     [GRID_MAJOR_10] = "10",
 };
 
-/* Grid half-extent. Close keeps the grid tight around origin (good for
- * small scenes and the Classic theme); Far lets themes like Fog and
- * Tron stretch to the horizon. */
-const float g_grid_extents[GRID_EXTENT_COUNT] = {
-    [GRID_EXTENT_CLOSE] = 5.0f,
-    [GRID_EXTENT_MID]   = 25.0f,
-    [GRID_EXTENT_FAR]   = 100.0f,
-};
+/* Grid half-extents — defined in repl_state.c,
+ * accessed via repl_state_presentation()->grid_extents. */
 const char *g_grid_extent_names[GRID_EXTENT_COUNT] = {
     [GRID_EXTENT_CLOSE] = "Close",
     [GRID_EXTENT_MID]   = "Mid",

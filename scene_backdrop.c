@@ -226,7 +226,7 @@ static void draw_cityscape(void) {
 }
 
 void scene_backdrop_render(void) {
-    switch (g_backdrop_mode) {
+    switch (*repl_state_presentation()->backdrop_mode) {
     case 1:
         draw_cityscape();
         break;

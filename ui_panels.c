@@ -26,9 +26,9 @@
 /* ========================================================================= */
 
 static int code_panel_layout_mode(void) {
-    if (g_code_panel_layout < 0 || g_code_panel_layout >= CODE_PANEL_LAYOUT_COUNT)
+    if (*repl_state_presentation()->code_panel_layout < 0 || *repl_state_presentation()->code_panel_layout >= CODE_PANEL_LAYOUT_COUNT)
         return CODE_PANEL_LAYOUT_LEFT;
-    return g_code_panel_layout;
+    return *repl_state_presentation()->code_panel_layout;
 }
 
 static int panel_span_px(int total_px) {
@@ -326,7 +326,7 @@ int code_panel_apply_scroll_follow_for_test(int *out_follow_doc_line,
     CodePanelDocumentLayout layout;
     int cp_x, cp_y, cp_w, cp_h;
     int linenum_w = 4 * FONT_W;
-    int idx_col_w = g_show_indices ? (6 * FONT_W) : 0;
+    int idx_col_w = *repl_state_presentation()->show_vertex_indices ? (6 * FONT_W) : 0;
     int idx_x = CODE_MARGIN_X + linenum_w + FONT_W;
     int text_x = idx_x + idx_col_w;
 
@@ -366,7 +366,7 @@ void render_code_panel(void) {
     int panel_w = cp_w;
     int panel_top = cp_y + cp_h;  /* y of the panel's top edge (OpenGL coords) */
     int linenum_w = 4 * FONT_W;
-    int idx_col_w = g_show_indices ? (6 * FONT_W) : 0;
+    int idx_col_w = *repl_state_presentation()->show_vertex_indices ? (6 * FONT_W) : 0;
     int idx_x = CODE_MARGIN_X + linenum_w + FONT_W;
     int text_x = idx_x + idx_col_w;
     int visible_lines;
@@ -537,7 +537,7 @@ void render_code_panel(void) {
                 /* Active editing line */
                 char idx_s[16];
                 const char *idx_text = NULL;
-                if (g_show_indices && is_vertex) {
+                if (*repl_state_presentation()->show_vertex_indices && is_vertex) {
                     snprintf(idx_s, sizeof(idx_s),
                              primitive_vnums_exact ? "v%d" : "vn", vnum);
                     idx_text = idx_s;
@@ -593,7 +593,7 @@ void render_code_panel(void) {
                             { char ln[16]; snprintf(ln, sizeof(ln), "%3d", file_line);
                               draw_string((float)CODE_MARGIN_X, (float)line_y,
                                           ln, FONT_MONO); }
-                            if (g_show_indices && is_vertex) {
+                            if (*repl_state_presentation()->show_vertex_indices && is_vertex) {
                                 char idx_s[16];
                                 snprintf(idx_s, sizeof(idx_s),
                                          primitive_vnums_exact ? "v%d" : "vn", vnum);
@@ -999,7 +999,7 @@ static int code_panel_hit_test(int mx, int my,
     if (vis >= repl_code_panel_document_visible_lines_for_height(cp_h)) return 0;
 
     int linenum_w = 4 * FONT_W;
-    int idx_col_w = g_show_indices ? (6 * FONT_W) : 0;
+    int idx_col_w = *repl_state_presentation()->show_vertex_indices ? (6 * FONT_W) : 0;
     int text_x = CODE_MARGIN_X + linenum_w + FONT_W + idx_col_w;
     int doc_line = g_scroll + vis;
     CodePanelDocumentLayout layout;
@@ -1036,7 +1036,7 @@ static int code_panel_drag_target(int mx, int my, int *out_target) {
     if (vis >= visible_lines) vis = visible_lines - 1;
 
     int linenum_w = 4 * FONT_W;
-    int idx_col_w = g_show_indices ? (6 * FONT_W) : 0;
+    int idx_col_w = *repl_state_presentation()->show_vertex_indices ? (6 * FONT_W) : 0;
     int text_x = CODE_MARGIN_X + linenum_w + FONT_W + idx_col_w;
     int doc_line = g_scroll + vis;
     CodePanelDocumentLayout layout;
@@ -1082,7 +1082,7 @@ void handle_code_panel_click(int mx, int my) {
     code_panel_rect(NULL, NULL, &cp_w, NULL);
     int panel_w = cp_w;
     int linenum_w = 4 * FONT_W;
-    int idx_col_w = g_show_indices ? (6 * FONT_W) : 0;
+    int idx_col_w = *repl_state_presentation()->show_vertex_indices ? (6 * FONT_W) : 0;
     int text_x = CODE_MARGIN_X + linenum_w + FONT_W + idx_col_w;
     int indent_chars = repl_code_panel_document_active_indent_chars();
     int seg_start = *repl_state_editor_input()->input_len;

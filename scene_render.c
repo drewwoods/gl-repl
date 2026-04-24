@@ -101,15 +101,15 @@ static void scene_render_config_init(SceneRenderConfig *config) {
     config->accum_jitter_y = *render->accum_jitter_y;
     config->multisample_enabled = *render->multisample_enabled;
     config->line_smooth_enabled = *render->line_smooth_enabled;
-    config->wireframe = g_wireframe;
-    config->grid_theme = g_grid_theme;
-    config->grid_extent_idx = g_grid_extent_idx;
-    config->grid_major_idx = g_grid_major_idx;
-    config->axes_theme = g_axes_theme;
-    config->show_guides = g_show_guides;
-    config->show_vpoints = g_show_vpoints;
-    config->show_vnums = g_show_vnums;
-    config->show_normals = g_show_normals;
+    config->wireframe = *repl_state_presentation()->wireframe;
+    config->grid_theme = *repl_state_presentation()->grid_theme;
+    config->grid_extent_idx = *repl_state_presentation()->grid_extent_idx;
+    config->grid_major_idx = *repl_state_presentation()->grid_major_idx;
+    config->axes_theme = *repl_state_presentation()->axes_theme;
+    config->show_guides = *repl_state_presentation()->show_vertex_guides;
+    config->show_vpoints = *repl_state_presentation()->show_vertex_points;
+    config->show_vnums = *repl_state_presentation()->show_vertex_labels;
+    config->show_normals = *repl_state_presentation()->show_normal_vectors;
     config->replaying = g_replay_active;
     config->replay_mode = g_replay_mode;
     config->replay_tess_preview = config->replaying &&
@@ -119,7 +119,7 @@ static void scene_render_config_init(SceneRenderConfig *config) {
     config->replay_fill_base_limit = config->replay_has_fades
                                    ? replay_fill_base_limit()
                                    : 0;
-    config->show_current_poly = g_highlight_current_poly && !config->replaying;
+    config->show_current_poly = *repl_state_presentation()->highlight_current_poly && !config->replaying;
 
     /* Boost translucent overlay alphas when the bg is darker than the
      * design-point luminance (~0.10).  K=0.02 softens the curve near
@@ -198,7 +198,7 @@ static SceneGuideSnapshot scene_build_guide_snapshot(const SceneRenderConfig *co
     SceneGuideSnapshot snapshot = {
         .show_guides = config->show_guides,
         .replaying = config->replaying,
-        .xform_guide_mode = g_xform_guide_mode,
+        .xform_guide_mode = *repl_state_presentation()->xform_guide_mode,
         .user_lighting_enabled = *flat_state->user_lighting_enabled,
         .anim_time = g_anim_time,
         .input = repl_state_editor_input()->input,
@@ -305,7 +305,7 @@ static void draw_replay_hud(const SceneRenderConfig *config) {
         if (hud_y < min_y) hud_y = min_y;
         if (hud_y > max_y) hud_y = max_y;
     } else {
-        hud_y = g_code_panel_layout == CODE_PANEL_LAYOUT_TOP
+        hud_y = *repl_state_presentation()->code_panel_layout == CODE_PANEL_LAYOUT_TOP
               ? scene_y + scene_h - REPLAY_HUD_HEIGHT - 4
               : min_y;
     }

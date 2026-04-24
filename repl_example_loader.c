@@ -121,21 +121,7 @@ static int try_apply_example_camera_header(const char *const *lines) {
 }
 
 static void reset_example_presentation_defaults(void) {
-    g_wireframe = CFG_DEFAULT_WIREFRAME;
-    g_grid_theme = CFG_DEFAULT_GRID_THEME;
-    g_grid_major_idx = CFG_DEFAULT_GRID_MAJOR_IDX;
-    g_grid_extent_idx = CFG_DEFAULT_GRID_EXTENT_IDX;
-    g_axes_theme = CFG_DEFAULT_AXES_THEME;
-    g_show_vnums = CFG_DEFAULT_VERTEX_LABELS;
-    g_show_indices = CFG_DEFAULT_VERTEX_INDICES;
-    g_show_normals = CFG_DEFAULT_NORMAL_VECTORS;
-    g_show_outlines = CFG_DEFAULT_VERTEX_OUTLINES;
-    g_show_vpoints = CFG_DEFAULT_VERTEX_POINTS;
-    g_show_guides = CFG_DEFAULT_VERTEX_GUIDES;
-    g_xform_guide_mode = CFG_DEFAULT_XFORM_GUIDE_MODE;
-    g_show_lights = CFG_DEFAULT_LIGHT_INDICATORS;
-    g_backdrop_mode = CFG_DEFAULT_BACKDROP_MODE;
-    *repl_state_camera_mut()->auto_rotate = CFG_DEFAULT_CAMERA_ROTATE;
+    repl_state_presentation_reset_example_defaults();
 }
 
 static int example_cfg_extract_slug(const char *text,

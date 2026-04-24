@@ -17,9 +17,9 @@
 /* Local copy of the layout-mode clamp.  Duplicated by repl_editor.c and
  * ui_panels.c; promoting to a shared header is a separate cleanup. */
 static int rvp_code_panel_layout_mode(void) {
-    if (g_code_panel_layout < 0 || g_code_panel_layout >= CODE_PANEL_LAYOUT_COUNT)
+    if (*repl_state_presentation()->code_panel_layout < 0 || *repl_state_presentation()->code_panel_layout >= CODE_PANEL_LAYOUT_COUNT)
         return CODE_PANEL_LAYOUT_LEFT;
-    return g_code_panel_layout;
+    return *repl_state_presentation()->code_panel_layout;
 }
 
 /* Compute a shared logarithmic display scale from all variable absolute values.

@@ -406,73 +406,73 @@ int main() {
         ReplPresentationState *presentation;
 
         presentation = repl_state_presentation_mut();
-        ASSERT_TRUE("presentation facade wireframe",
-                    presentation->wireframe == &g_wireframe);
-        ASSERT_TRUE("presentation facade grid",
-                    presentation->grid_theme == &g_grid_theme);
-        ASSERT_TRUE("presentation facade focus vertex",
-                    presentation->focus_vertex == g_focus_vtx);
-        ASSERT_TRUE("presentation facade focus valid",
-                    presentation->focus_vertex_valid == &g_focus_vtx_valid);
+        ASSERT_TRUE("presentation facade wireframe ptr",
+                    presentation->wireframe != NULL);
+        ASSERT_TRUE("presentation facade grid ptr",
+                    presentation->grid_theme != NULL);
+        ASSERT_TRUE("presentation facade focus vertex ptr",
+                    presentation->focus_vertex != NULL);
+        ASSERT_TRUE("presentation facade focus valid ptr",
+                    presentation->focus_vertex_valid != NULL);
 
-        g_wireframe = 1;
-        g_grid_theme = GRID_THEME_TRON;
-        g_grid_major_idx = GRID_MAJOR_10;
-        g_grid_extent_idx = GRID_EXTENT_CLOSE;
-        g_axes_theme = AXES_THEME_NEON;
-        g_show_vnums = 1;
-        g_show_normals = 1;
-        g_show_indices = 1;
-        g_show_outlines = 1;
-        g_show_vpoints = 1;
-        g_show_guides = 1;
-        g_xform_guide_mode = 1;
-        g_autonormal = 1;
-        g_show_lights = 0;
-        g_backdrop_mode = 0;
+        *repl_state_presentation_mut()->wireframe = 1;
+        *repl_state_presentation_mut()->grid_theme = GRID_THEME_TRON;
+        *repl_state_presentation_mut()->grid_major_idx = GRID_MAJOR_10;
+        *repl_state_presentation_mut()->grid_extent_idx = GRID_EXTENT_CLOSE;
+        *repl_state_presentation_mut()->axes_theme = AXES_THEME_NEON;
+        *repl_state_presentation_mut()->show_vertex_labels = 1;
+        *repl_state_presentation_mut()->show_normal_vectors = 1;
+        *repl_state_presentation_mut()->show_vertex_indices = 1;
+        *repl_state_presentation_mut()->show_vertex_outlines = 1;
+        *repl_state_presentation_mut()->show_vertex_points = 1;
+        *repl_state_presentation_mut()->show_vertex_guides = 1;
+        *repl_state_presentation_mut()->xform_guide_mode = 1;
+        *repl_state_presentation_mut()->autonormal = 1;
+        *repl_state_presentation_mut()->show_light_indicators = 0;
+        *repl_state_presentation_mut()->backdrop_mode = 0;
         *repl_state_camera_mut()->auto_rotate = 1;
-        g_highlight_current_poly = 0;
-        g_ortho_mode = 1;
-        g_wrap_at_comma = 0;
-        g_code_panel_layout = CODE_PANEL_LAYOUT_BOTTOM;
+        *repl_state_presentation_mut()->highlight_current_poly = 0;
+        *repl_state_presentation_mut()->ortho_mode = 1;
+        *repl_state_presentation_mut()->wrap_at_comma = 0;
+        *repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_BOTTOM;
 
         repl_state_presentation_reset_defaults();
         ASSERT_INT("presentation reset wireframe",
-                   g_wireframe, CFG_DEFAULT_WIREFRAME);
+                   *repl_state_presentation()->wireframe, CFG_DEFAULT_WIREFRAME);
         ASSERT_INT("presentation reset grid",
-                   g_grid_theme, CFG_DEFAULT_GRID_THEME);
+                   *repl_state_presentation()->grid_theme, CFG_DEFAULT_GRID_THEME);
         ASSERT_INT("presentation reset grid major",
-                   g_grid_major_idx, CFG_DEFAULT_GRID_MAJOR_IDX);
+                   *repl_state_presentation()->grid_major_idx, CFG_DEFAULT_GRID_MAJOR_IDX);
         ASSERT_INT("presentation reset grid extent",
-                   g_grid_extent_idx, CFG_DEFAULT_GRID_EXTENT_IDX);
+                   *repl_state_presentation()->grid_extent_idx, CFG_DEFAULT_GRID_EXTENT_IDX);
         ASSERT_INT("presentation reset axes",
-                   g_axes_theme, CFG_DEFAULT_AXES_THEME);
+                   *repl_state_presentation()->axes_theme, CFG_DEFAULT_AXES_THEME);
         ASSERT_INT("presentation reset labels",
-                   g_show_vnums, CFG_DEFAULT_VERTEX_LABELS);
+                   *repl_state_presentation()->show_vertex_labels, CFG_DEFAULT_VERTEX_LABELS);
         ASSERT_INT("presentation reset normals",
-                   g_show_normals, CFG_DEFAULT_NORMAL_VECTORS);
+                   *repl_state_presentation()->show_normal_vectors, CFG_DEFAULT_NORMAL_VECTORS);
         ASSERT_INT("presentation reset indices",
-                   g_show_indices, CFG_DEFAULT_VERTEX_INDICES);
+                   *repl_state_presentation()->show_vertex_indices, CFG_DEFAULT_VERTEX_INDICES);
         ASSERT_INT("presentation reset outlines",
-                   g_show_outlines, CFG_DEFAULT_VERTEX_OUTLINES);
+                   *repl_state_presentation()->show_vertex_outlines, CFG_DEFAULT_VERTEX_OUTLINES);
         ASSERT_INT("presentation reset points",
-                   g_show_vpoints, CFG_DEFAULT_VERTEX_POINTS);
+                   *repl_state_presentation()->show_vertex_points, CFG_DEFAULT_VERTEX_POINTS);
         ASSERT_INT("presentation reset guides",
-                   g_show_guides, CFG_DEFAULT_VERTEX_GUIDES);
+                   *repl_state_presentation()->show_vertex_guides, CFG_DEFAULT_VERTEX_GUIDES);
         ASSERT_INT("presentation reset xform guide",
-                   g_xform_guide_mode, CFG_DEFAULT_XFORM_GUIDE_MODE);
+                   *repl_state_presentation()->xform_guide_mode, CFG_DEFAULT_XFORM_GUIDE_MODE);
         ASSERT_INT("presentation reset lights",
-                   g_show_lights, CFG_DEFAULT_LIGHT_INDICATORS);
+                   *repl_state_presentation()->show_light_indicators, CFG_DEFAULT_LIGHT_INDICATORS);
         ASSERT_INT("presentation reset backdrop",
-                   g_backdrop_mode, CFG_DEFAULT_BACKDROP_MODE);
+                   *repl_state_presentation()->backdrop_mode, CFG_DEFAULT_BACKDROP_MODE);
         ASSERT_INT("presentation reset camera rotate",
                    *repl_state_camera()->auto_rotate, CFG_DEFAULT_CAMERA_ROTATE);
-        ASSERT_INT("presentation reset highlight", g_highlight_current_poly, 1);
-        ASSERT_INT("presentation reset ortho", g_ortho_mode, 0);
+        ASSERT_INT("presentation reset highlight", *repl_state_presentation()->highlight_current_poly, 1);
+        ASSERT_INT("presentation reset ortho", *repl_state_presentation()->ortho_mode, 0);
         ASSERT_INT("presentation reset wrap",
-                   g_wrap_at_comma, CFG_DEFAULT_WRAP_AT_COMMA);
+                   *repl_state_presentation()->wrap_at_comma, CFG_DEFAULT_WRAP_AT_COMMA);
         ASSERT_INT("presentation reset layout",
-                   g_code_panel_layout, CFG_DEFAULT_CODE_PANEL_LAYOUT);
+                   *repl_state_presentation()->code_panel_layout, CFG_DEFAULT_CODE_PANEL_LAYOUT);
     }
 
     /* 14. render state facade */
@@ -509,10 +509,10 @@ int main() {
                     render->clear_color == g_clear_color);
 
         derived = repl_state_render_derived_mut();
-        ASSERT_TRUE("render derived facade vertex",
-                    derived->focus_vertex == g_focus_vtx);
-        ASSERT_TRUE("render derived facade valid",
-                    derived->focus_vertex_valid == &g_focus_vtx_valid);
+        ASSERT_TRUE("render derived facade vertex ptr",
+                    derived->focus_vertex != NULL);
+        ASSERT_TRUE("render derived facade valid ptr",
+                    derived->focus_vertex_valid != NULL);
 
         g_multisample_enabled = 0;
         g_line_smooth_enabled = 0;

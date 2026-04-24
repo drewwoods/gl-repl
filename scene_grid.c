@@ -584,8 +584,8 @@ void scene_grid_render(const FrameRenderContext *frame_ctx) {
     if (ex_i < 0 || ex_i >= GRID_EXTENT_COUNT) ex_i = GRID_EXTENT_MID;
     int mj_i = config->grid_major_idx;
     if (mj_i < 0 || mj_i >= GRID_MAJOR_COUNT) mj_i = GRID_MAJOR_1;
-    float extent = g_grid_extents[ex_i];
-    float major  = g_grid_major_steps[mj_i];
+    float extent = repl_state_presentation()->grid_extents[ex_i];
+    float major  = repl_state_presentation()->grid_major_steps[mj_i];
     float step   = major * 0.2f;
     float major_tol = step * 0.25f;
     GridDrawContext grid_ctx = {
