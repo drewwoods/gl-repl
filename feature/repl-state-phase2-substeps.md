@@ -3,6 +3,9 @@
 ## Summary
 This phase is a header-boundary refactor only. The goal is to make `sample.h` shared vocabulary, make `repl_state.h` the typed runtime-state facade, and move broad `extern g_*` access behind focused accessors without changing REPL behavior, file format, or UI semantics.
 
+Bridge retirement is now tracked separately in
+[feature/repl-state-phase2-bridge-retirement.md](feature/repl-state-phase2-bridge-retirement.md).
+
 ## Key Steps
 1. **Lock the header boundary**
    - Remove `repl_state.h` from `sample.h` and keep `sample.h` to enums, fixed capacities, shared structs, defaults, and small stateless helpers.
@@ -41,4 +44,3 @@ This phase is a header-boundary refactor only. The goal is to make `sample.h` sh
 - Command language, file format, GLUT entrypoint, and sample-local structure stay unchanged.
 - The migration is compatibility-first: keep a bridge while callers move, then delete it after the last production user is off the old globals.
 - Phase 2 stops at the state-header boundary; it does not broaden into rendering, import/export format changes, or command-language changes beyond the header/API reshaping needed for ownership clarity.
-
