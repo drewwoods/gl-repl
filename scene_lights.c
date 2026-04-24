@@ -27,7 +27,7 @@ void scene_lights_setup(void) {
 }
 
 void scene_lights_render(void) {
-    if (!g_show_lights) return;
+    if (!*repl_state_presentation()->show_light_indicators) return;
     int g_user_lighting_enabled = repl_state_flat_program_user_lighting_enabled();
     const ReplRenderState *render = repl_state_render();
 

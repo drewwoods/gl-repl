@@ -19,7 +19,7 @@ static int g_failed = 0;
 
 static int code_panel_text_x(void) {
     int linenum_w = 4 * FONT_W;
-    int idx_col_w = g_show_indices ? (6 * FONT_W) : 0;
+    int idx_col_w = *repl_state_presentation()->show_vertex_indices ? (6 * FONT_W) : 0;
     int idx_x = CODE_MARGIN_X + linenum_w + FONT_W;
     return idx_x + idx_col_w;
 }
@@ -28,8 +28,8 @@ static void reset_doc_fixture(void) {
     repl_reset_state();
     repl_state_viewport_set_size(800, 260);
     g_panel_frac = 0.45f;
-    g_code_panel_layout = CODE_PANEL_LAYOUT_LEFT;
-    g_show_indices = 0;
+    *repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT;
+    *repl_state_presentation_mut()->show_vertex_indices = 0;
     g_scroll = 0;
     g_scroll_follow_cursor = 0;
     refresh_workspace_header_lines();

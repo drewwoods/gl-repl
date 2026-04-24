@@ -3,7 +3,7 @@
 ## Summary
 Migrate one runtime domain at a time from broad `g_*` access to `ReplRuntimeState` ownership. Each domain follows the same pattern: add focused accessors, convert production callers, update tests, move storage into `repl_state.c`, then delete that domain’s compat externs from `repl_state_compat.h`.
 
-Current status: slices 3.1, 3.2, 3.3, 3.4, and 3.6 are complete. The compat bridge still carries externs for 3.5+ (presentation, replay, scenes, search, autocomplete, status). Next up is 3.5 (presentation/config).
+Current status: slices 3.1, 3.2, 3.3, 3.4, 3.5, and 3.6 are complete. The compat bridge still carries externs for 3.7+ (replay, scenes, search, autocomplete, status). Next up is 3.7 (replay) or 3.9 (search/autocomplete/status).
 
 ## Migration Pattern For Every Slice
 1. Add the smallest missing `repl_state_*` helper API needed by the domain.
@@ -53,12 +53,18 @@ compat externs (`g_cam_rx`, `g_cam_ry`, `g_cam_dist`, `g_cam_tx`, `g_cam_ty`,
 `g_win_h`, `g_cam_rotate`) from `repl_state_compat.h`. Converted 24 source files
 including all production modules and all 7 affected test files. All 2557 tests pass.
 
-### 3.5 Presentation + Config
-- Treat `repl_config_get/set/cycle()` as the only mutation API for user-facing presentation config.
-- Convert remaining direct config reads in UI/render/export to either `repl_config_get()` or a `repl_state_presentation_snapshot()` captured at frame/layout boundaries.
-- Keep immutable descriptor/name tables as `static const` or descriptor accessors; do not put them in runtime state.
-- Move presentation storage into `repl_state.c`: grid/axes modes, overlays, wrapping/layout toggles, backdrop, camera rotate, auto normals, highlight, ortho.
-- Remove presentation compat externs after all production callers use config/state accessors.
+### 3.5 Presentation + Config ✅ DONE
+All presentation globals (`g_wireframe`, `g_grid_theme`, `g_grid_major_idx`, `g_grid_extent_idx`,
+`g_axes_theme`, `g_show_vnums`, `g_show_normals`, `g_show_indices`, `g_show_outlines`,
+`g_show_vpoints`, `g_show_guides`, `g_xform_guide_mode`, `g_autonormal`, `g_show_lights`,
+`g_backdrop_mode`, `g_highlight_current_poly`, `g_ortho_mode`, `g_wrap_at_comma`,
+`g_code_panel_layout`, `g_focus_vtx`, `g_focus_vtx_valid`) now route exclusively through
+`repl_state_presentation()` / `repl_state_presentation_mut()` typed accessors.
+`repl_config.c`'s `config_value_ptr()` now returns state-struct field pointers directly.
+`repl_example_loader.c`'s reset block collapsed to `repl_state_presentation_reset_example_defaults()`.
+`g_grid_major_steps` and `g_grid_extents` moved from `repl_core.c` to `repl_state.c`.
+Pointer-equality tests in `test_repl_core_internal.c` updated to non-NULL checks.
+Removed 23 compat externs from `repl_state_compat.h`. All 2557 tests pass.
 
 ### 3.6 Render Resources + Derived Render State ✅ DONE
 Landed as the render-resource slice: `repl_state.c` now owns the GL resource storage and the derived focus state, bootstrap/teardown run through `repl_state_render_init_resources()` and `repl_state_render_destroy_resources()`, and the scene helper passes read the facade instead of writing those globals directly.

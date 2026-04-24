@@ -237,7 +237,7 @@ void scene_overlays_render_outlines(int show_current_poly,
                     REPL_OUTLINE_POLYGON_OFFSET_UNITS);
     glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
 
-    if (g_show_outlines || show_current_poly) {
+    if (*repl_state_presentation()->show_vertex_outlines || show_current_poly) {
         glPushMatrix();
         int in_begin = 0;
         int matrix_depth = 0;
@@ -262,7 +262,7 @@ void scene_overlays_render_outlines(int show_current_poly,
                     glEnd();
                     glLineWidth(1.0f);
                 }
-                if (g_show_outlines || tess_poly_is_current) {
+                if (*repl_state_presentation()->show_vertex_outlines || tess_poly_is_current) {
                     glLineWidth(1.5f);
                     if (tess_poly_is_current)
                         glColor3f(0.0f, 0.9f, 0.9f);
@@ -300,7 +300,7 @@ void scene_overlays_render_outlines(int show_current_poly,
                 if (block_is_current) {
                     glLineWidth(3.0f);
                     glColor3f(0.0f, 0.9f, 0.9f);
-                } else if (g_show_outlines && draw_outline) {
+                } else if (*repl_state_presentation()->show_vertex_outlines && draw_outline) {
                     glLineWidth(1.2f);
                     glColor3f(0.0f, 0.0f, 0.0f);
                 } else {
@@ -322,7 +322,7 @@ void scene_overlays_render_outlines(int show_current_poly,
                 break;
             case CMD_VERTEX3F:
                 if (in_begin) {
-                    if (block_is_current || g_show_outlines)
+                    if (block_is_current || *repl_state_presentation()->show_vertex_outlines)
                         glVertex3f(g_flat_cmds[i].args[0], g_flat_cmds[i].args[1],
                                    g_flat_cmds[i].args[2]);
                 }

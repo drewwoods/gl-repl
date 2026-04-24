@@ -790,7 +790,7 @@ void execute_replay_fade_batches(void) {
         glDisable(GL_LIGHTING);
         glEnable(GL_BLEND);
         glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-        glPolygonMode(GL_FRONT_AND_BACK, g_wireframe ? GL_LINE : GL_FILL);
+        glPolygonMode(GL_FRONT_AND_BACK, *repl_state_presentation()->wireframe ? GL_LINE : GL_FILL);
         glColor4f(0.70f, 0.70f, 0.80f, alpha);
         glPushMatrix();
         prof_accum_end(PROF_SCENE_3D_FADE_BATCH_PREP);

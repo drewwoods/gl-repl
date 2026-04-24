@@ -12,7 +12,7 @@
 CodePanelTextLayout repl_code_panel_document_text_layout(int panel_w,
                                                          int first_x) {
     return repl_code_panel_layout_make(panel_w, first_x, FONT_W,
-                                       g_wrap_at_comma);
+                                       *repl_state_presentation()->wrap_at_comma);
 }
 
 void repl_code_panel_document_wrap_iter_init(CodePanelWrapIter *it,

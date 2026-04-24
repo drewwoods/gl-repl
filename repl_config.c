@@ -26,31 +26,31 @@ static int *config_value_ptr(ReplConfigKey key) {
     case REPL_CONFIG_MSAA:                return &g_multisample_enabled;
     case REPL_CONFIG_LINE_SMOOTH:         return &g_line_smooth_enabled;
     case REPL_CONFIG_ACCUM_AA:            return &g_accum_aa_enabled;
-    case REPL_CONFIG_WIREFRAME:           return &g_wireframe;
+    case REPL_CONFIG_WIREFRAME:           return repl_state_presentation_mut()->wireframe;
     case REPL_CONFIG_POINT_ATTENUATION:   return &g_init_attenuate_points;
     case REPL_CONFIG_AUTO_TIME:           return &g_t_playing;
     case REPL_CONFIG_REPLAY:              return &g_replay_active;
     case REPL_CONFIG_REPLAY_MODE:         return &g_replay_mode;
     case REPL_CONFIG_REPLAY_EXPAND:       return &g_replay_expand_args;
-    case REPL_CONFIG_GRID_THEME:          return &g_grid_theme;
-    case REPL_CONFIG_GRID_MAJOR:          return &g_grid_major_idx;
-    case REPL_CONFIG_GRID_EXTENT:         return &g_grid_extent_idx;
-    case REPL_CONFIG_AXES_THEME:          return &g_axes_theme;
-    case REPL_CONFIG_VERTEX_GUIDES:       return &g_show_guides;
-    case REPL_CONFIG_XFORM_GUIDE_MODE:    return &g_xform_guide_mode;
-    case REPL_CONFIG_LIGHT_INDICATORS:    return &g_show_lights;
-    case REPL_CONFIG_POLY_HIGHLIGHT:      return &g_highlight_current_poly;
-    case REPL_CONFIG_BACKDROP:            return &g_backdrop_mode;
+    case REPL_CONFIG_GRID_THEME:          return repl_state_presentation_mut()->grid_theme;
+    case REPL_CONFIG_GRID_MAJOR:          return repl_state_presentation_mut()->grid_major_idx;
+    case REPL_CONFIG_GRID_EXTENT:         return repl_state_presentation_mut()->grid_extent_idx;
+    case REPL_CONFIG_AXES_THEME:          return repl_state_presentation_mut()->axes_theme;
+    case REPL_CONFIG_VERTEX_GUIDES:       return repl_state_presentation_mut()->show_vertex_guides;
+    case REPL_CONFIG_XFORM_GUIDE_MODE:    return repl_state_presentation_mut()->xform_guide_mode;
+    case REPL_CONFIG_LIGHT_INDICATORS:    return repl_state_presentation_mut()->show_light_indicators;
+    case REPL_CONFIG_POLY_HIGHLIGHT:      return repl_state_presentation_mut()->highlight_current_poly;
+    case REPL_CONFIG_BACKDROP:            return repl_state_presentation_mut()->backdrop_mode;
     case REPL_CONFIG_CAMERA_ROTATE:       return repl_state_camera_mut()->auto_rotate;
-    case REPL_CONFIG_AUTO_NORMALS:        return &g_autonormal;
-    case REPL_CONFIG_VERTEX_LABELS:       return &g_show_vnums;
-    case REPL_CONFIG_NORMAL_VECTORS:      return &g_show_normals;
-    case REPL_CONFIG_VERTEX_OUTLINES:     return &g_show_outlines;
-    case REPL_CONFIG_VERTEX_POINTS:       return &g_show_vpoints;
+    case REPL_CONFIG_AUTO_NORMALS:        return repl_state_presentation_mut()->autonormal;
+    case REPL_CONFIG_VERTEX_LABELS:       return repl_state_presentation_mut()->show_vertex_labels;
+    case REPL_CONFIG_NORMAL_VECTORS:      return repl_state_presentation_mut()->show_normal_vectors;
+    case REPL_CONFIG_VERTEX_OUTLINES:     return repl_state_presentation_mut()->show_vertex_outlines;
+    case REPL_CONFIG_VERTEX_POINTS:       return repl_state_presentation_mut()->show_vertex_points;
     case REPL_CONFIG_VARIABLE_PANEL:      return &g_show_var_panel;
     case REPL_CONFIG_CPU_PROFILE:         return &g_show_profile_panel;
-    case REPL_CONFIG_CODE_PANEL_LAYOUT:   return &g_code_panel_layout;
-    case REPL_CONFIG_WRAP_AT_COMMA:       return &g_wrap_at_comma;
+    case REPL_CONFIG_CODE_PANEL_LAYOUT:   return repl_state_presentation_mut()->code_panel_layout;
+    case REPL_CONFIG_WRAP_AT_COMMA:       return repl_state_presentation_mut()->wrap_at_comma;
     case REPL_CONFIG_AUDIO_MODE:          return NULL; /* audio module owns this one */
     case REPL_CONFIG_NONE:
     case REPL_CONFIG_COUNT:

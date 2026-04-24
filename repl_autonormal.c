@@ -145,7 +145,7 @@ static void compute_block_normals(GLenum mode, GLenum front_face,
 }
 
 void recompute_autonormals(void) {
-    if (!g_autonormal) return;
+    if (!*repl_state_presentation()->autonormal) return;
 
     int i = 0;
     GLenum front_face = GL_CCW;

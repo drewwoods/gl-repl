@@ -1356,9 +1356,9 @@ static void special_func(int key, int x, int y) {
 }
 
 static int editor_code_panel_layout(void) {
-    if (g_code_panel_layout < 0 || g_code_panel_layout >= CODE_PANEL_LAYOUT_COUNT)
+    if (*repl_state_presentation()->code_panel_layout < 0 || *repl_state_presentation()->code_panel_layout >= CODE_PANEL_LAYOUT_COUNT)
         return CODE_PANEL_LAYOUT_LEFT;
-    return g_code_panel_layout;
+    return *repl_state_presentation()->code_panel_layout;
 }
 
 static int editor_code_panel_hidden(void) {
@@ -1368,7 +1368,7 @@ static int editor_code_panel_hidden(void) {
 static int editor_restore_hidden_code_panel(void) {
     if (!editor_code_panel_hidden())
         return 0;
-    g_code_panel_layout = CODE_PANEL_LAYOUT_LEFT;
+    *repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT;
     ui_panels_close_menus();
     return 1;
 }

@@ -119,7 +119,7 @@ static int test_code_panel_row_count_for_text(const char *text, int first_x,
             int width_chars = test_code_panel_available_chars(panel_w, x);
             int remaining = len - pos;
 
-            if (!g_wrap_at_comma || width_chars < 1 || remaining <= width_chars) {
+            if (!*repl_state_presentation()->wrap_at_comma || width_chars < 1 || remaining <= width_chars) {
                 done = 1;
             } else {
                 int break_idx = test_code_panel_find_wrap_break(src, pos,
@@ -140,7 +140,7 @@ static int test_code_panel_row_count_for_text(const char *text, int first_x,
 static int code_panel_header_row_count(void) {
     int panel_w;
     int linenum_w = 4 * FONT_W;
-    int idx_col_w = g_show_indices ? (6 * FONT_W) : 0;
+    int idx_col_w = *repl_state_presentation()->show_vertex_indices ? (6 * FONT_W) : 0;
     int text_x = CODE_MARGIN_X + linenum_w + FONT_W + idx_col_w;
     int rows = 0;
 
@@ -162,7 +162,7 @@ static int code_panel_header_row_count(void) {
 static int code_panel_mouse_y_for_cmd(int cmd_idx) {
     int cp_y, cp_h, panel_w;
     int linenum_w = 4 * FONT_W;
-    int idx_col_w = g_show_indices ? (6 * FONT_W) : 0;
+    int idx_col_w = *repl_state_presentation()->show_vertex_indices ? (6 * FONT_W) : 0;
     int text_x = CODE_MARGIN_X + linenum_w + FONT_W + idx_col_w;
     int doc_line = code_panel_header_row_count();
 
@@ -451,7 +451,7 @@ int main(void) {
     repl_feed_line_public("}");
     {
         int linenum_w = 4 * FONT_W;
-        int idx_col_w = g_show_indices ? (6 * FONT_W) : 0;
+        int idx_col_w = *repl_state_presentation()->show_vertex_indices ? (6 * FONT_W) : 0;
         int text_x = CODE_MARGIN_X + linenum_w + FONT_W + idx_col_w;
         int indent = test_leading_ws_chars(repl_state_document_cmds_mut()[1].source);
         handle_code_panel_click(text_x + indent * FONT_W + 1,
@@ -471,9 +471,9 @@ int main(void) {
     repl_keyboard_func(5, 0, 0);
     ASSERT_TRUE("ctrl-e moves to line end", repl_state_cursor_pos() == repl_state_input_len());
     {
-        int before = g_code_panel_layout;
+        int before = *repl_state_presentation()->code_panel_layout;
         repl_keyboard_func(2, 0, 0);
-        ASSERT_TRUE("ctrl-b toggles code panel layout", g_code_panel_layout != before);
+        ASSERT_TRUE("ctrl-b toggles code panel layout", *repl_state_presentation()->code_panel_layout != before);
     }
 
     repl_reset_state(); declare_test_vars();

@@ -205,7 +205,7 @@ static void test_menu_bar(void) {
     gl_stub_counts_reset();
     
     repl_state_viewport_set_size(800, 600);
-    g_code_panel_layout = CODE_PANEL_LAYOUT_LEFT;
+    *repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT;
     g_panel_frac = 0.5f;
     
     gl_stub_counts_reset();

@@ -149,11 +149,11 @@ void repl_cfg_cycle_row(int row, int delta) {
 
     if (item->key == REPL_CONFIG_CODE_PANEL_LAYOUT) {
         g_panel_frac = 0.3f;
-        if (g_code_panel_layout == CODE_PANEL_LAYOUT_TOP) {
+        if (*repl_state_presentation()->code_panel_layout == CODE_PANEL_LAYOUT_TOP) {
             set_status("Layout: top code panel");
-        } else if (g_code_panel_layout == CODE_PANEL_LAYOUT_BOTTOM) {
+        } else if (*repl_state_presentation()->code_panel_layout == CODE_PANEL_LAYOUT_BOTTOM) {
             set_status("Layout: bottom code panel");
-        } else if (g_code_panel_layout == CODE_PANEL_LAYOUT_HIDDEN) {
+        } else if (*repl_state_presentation()->code_panel_layout == CODE_PANEL_LAYOUT_HIDDEN) {
             ui_panels_close_menus();
             clear_autocomplete_state();
             set_status("Layout: code panel hidden");
@@ -161,7 +161,7 @@ void repl_cfg_cycle_row(int row, int delta) {
             set_status("Layout: left code panel");
         }
     } else if (item->key == REPL_CONFIG_AUTO_NORMALS) {
-        if (g_autonormal) {
+        if (*repl_state_presentation()->autonormal) {
             mark_normals_dirty();
             set_status("Auto-normals: ON");
         } else {

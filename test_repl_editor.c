@@ -79,14 +79,14 @@ static int cfg_row_for_key(ReplConfigKey key) {
 static int test_code_panel_row_count_for_text(const char *text, int first_x,
                                               int panel_w) {
     CodePanelTextLayout layout =
-        repl_code_panel_layout_make(panel_w, first_x, FONT_W, g_wrap_at_comma);
+        repl_code_panel_layout_make(panel_w, first_x, FONT_W, *repl_state_presentation()->wrap_at_comma);
     return repl_code_panel_row_count_for_text(text, &layout);
 }
 
 static int code_panel_header_row_count(void) {
     int panel_w;
     int linenum_w = 4 * FONT_W;
-    int idx_col_w = g_show_indices ? (6 * FONT_W) : 0;
+    int idx_col_w = *repl_state_presentation()->show_vertex_indices ? (6 * FONT_W) : 0;
     int text_x = CODE_MARGIN_X + linenum_w + FONT_W + idx_col_w;
     int rows = 0;
 
@@ -110,7 +110,7 @@ static int code_panel_header_row_count(void) {
 static int code_panel_mouse_y_for_cmd(int cmd_idx) {
     int cp_y, cp_h, panel_w;
     int linenum_w = 4 * FONT_W;
-    int idx_col_w = g_show_indices ? (6 * FONT_W) : 0;
+    int idx_col_w = *repl_state_presentation()->show_vertex_indices ? (6 * FONT_W) : 0;
     int text_x = CODE_MARGIN_X + linenum_w + FONT_W + idx_col_w;
     int doc_line = code_panel_header_row_count();
 
@@ -184,7 +184,7 @@ int main() {
         repl_state_viewport_set_size(1000, 800);
         g_panel_frac = 0.25f;
 
-        g_code_panel_layout = CODE_PANEL_LAYOUT_LEFT;
+        *repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT;
         code_panel_rect(&x, &y, &w, &h);
         ASSERT_INT("left code x", x, 0);
         ASSERT_INT("left code y", y, 0);
@@ -196,7 +196,7 @@ int main() {
         ASSERT_INT("left scene w", w, 750);
         ASSERT_INT("left scene h", h, 800);
 
-        g_code_panel_layout = CODE_PANEL_LAYOUT_TOP;
+        *repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_TOP;
         code_panel_rect(&x, &y, &w, &h);
         ASSERT_INT("top code x", x, 0);
         ASSERT_INT("top code y", y, 600);
@@ -208,7 +208,7 @@ int main() {
         ASSERT_INT("top scene w", w, 1000);
         ASSERT_INT("top scene h", h, 600);
 
-        g_code_panel_layout = CODE_PANEL_LAYOUT_BOTTOM;
+        *repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_BOTTOM;
         code_panel_rect(&x, &y, &w, &h);
         ASSERT_INT("bottom code x", x, 0);
         ASSERT_INT("bottom code y", y, 0);
@@ -220,7 +220,7 @@ int main() {
         ASSERT_INT("bottom scene w", w, 1000);
         ASSERT_INT("bottom scene h", h, 600);
 
-        g_code_panel_layout = CODE_PANEL_LAYOUT_HIDDEN;
+        *repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_HIDDEN;
         code_panel_rect(&x, &y, &w, &h);
         ASSERT_INT("hidden code x", x, 0);
         ASSERT_INT("hidden code y", y, 0);
@@ -234,7 +234,7 @@ int main() {
 
         repl_state_viewport_set_size(1200, 800);
         g_panel_frac = CFG_DEFAULT_PANEL_FRAC;
-        g_code_panel_layout = CFG_DEFAULT_CODE_PANEL_LAYOUT;
+        *repl_state_presentation_mut()->code_panel_layout = CFG_DEFAULT_CODE_PANEL_LAYOUT;
     }
 
     /* 0b. Code panel config cycles Left -> Top -> Bottom -> Hidden and imports legacy top layout */
@@ -242,39 +242,39 @@ int main() {
         int row = cfg_row_for_key(REPL_CONFIG_CODE_PANEL_LAYOUT);
         ASSERT_TRUE("code panel cfg row exists", row >= 0);
         if (row >= 0) {
-            g_code_panel_layout = CODE_PANEL_LAYOUT_LEFT;
+            *repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT;
             repl_cfg_cycle_row(row, +1);
             ASSERT_INT("code panel cfg cycles to top",
-                       g_code_panel_layout, CODE_PANEL_LAYOUT_TOP);
+                       *repl_state_presentation()->code_panel_layout, CODE_PANEL_LAYOUT_TOP);
             repl_cfg_cycle_row(row, +1);
             ASSERT_INT("code panel cfg cycles to bottom",
-                       g_code_panel_layout, CODE_PANEL_LAYOUT_BOTTOM);
+                       *repl_state_presentation()->code_panel_layout, CODE_PANEL_LAYOUT_BOTTOM);
             g_ac_count = 2;
             g_ac_sel = 1;
             strcpy(g_ac_ghost, "glVertex3f");
             strcpy(g_ac_hint, "vertex");
             repl_cfg_cycle_row(row, +1);
             ASSERT_INT("code panel cfg cycles to hidden",
-                       g_code_panel_layout, CODE_PANEL_LAYOUT_HIDDEN);
+                       *repl_state_presentation()->code_panel_layout, CODE_PANEL_LAYOUT_HIDDEN);
             ASSERT_INT("hide clears autocomplete count", g_ac_count, 0);
             ASSERT_INT("hide clears autocomplete selection", g_ac_sel, 0);
             ASSERT_STR("hide clears autocomplete ghost", g_ac_ghost, "");
             ASSERT_STR("hide clears autocomplete hint", g_ac_hint, "");
             repl_cfg_cycle_row(row, +1);
             ASSERT_INT("code panel cfg wraps to left",
-                       g_code_panel_layout, CODE_PANEL_LAYOUT_LEFT);
+                       *repl_state_presentation()->code_panel_layout, CODE_PANEL_LAYOUT_LEFT);
         }
 
-        g_code_panel_layout = CODE_PANEL_LAYOUT_LEFT;
+        *repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT;
         ASSERT_INT("parse code_panel cfg",
                    parse_workspace_header_line("// @cfg code_panel = 2"), 1);
         ASSERT_INT("parse code_panel bottom",
-                   g_code_panel_layout, CODE_PANEL_LAYOUT_BOTTOM);
+                   *repl_state_presentation()->code_panel_layout, CODE_PANEL_LAYOUT_BOTTOM);
 
         ASSERT_INT("parse code_panel hidden cfg",
                    parse_workspace_header_line("// @cfg code_panel = 3"), 1);
         ASSERT_INT("parse code_panel hidden",
-                   g_code_panel_layout, CODE_PANEL_LAYOUT_HIDDEN);
+                   *repl_state_presentation()->code_panel_layout, CODE_PANEL_LAYOUT_HIDDEN);
 
         {
             int found_hidden_export = 0;
@@ -291,60 +291,60 @@ int main() {
         ASSERT_INT("parse legacy top_code_panel cfg",
                    parse_workspace_header_line("// @cfg top_code_panel = 1"), 1);
         ASSERT_INT("legacy top_code_panel maps to top",
-                   g_code_panel_layout, CODE_PANEL_LAYOUT_TOP);
+                   *repl_state_presentation()->code_panel_layout, CODE_PANEL_LAYOUT_TOP);
 
         ASSERT_INT("parse legacy top_code_panel off cfg",
                    parse_workspace_header_line("// @cfg top_code_panel = 0"), 1);
         ASSERT_INT("legacy top_code_panel off maps to left",
-                   g_code_panel_layout, CODE_PANEL_LAYOUT_LEFT);
+                   *repl_state_presentation()->code_panel_layout, CODE_PANEL_LAYOUT_LEFT);
 
         g_panel_frac = CFG_DEFAULT_PANEL_FRAC;
-        g_code_panel_layout = CFG_DEFAULT_CODE_PANEL_LAYOUT;
+        *repl_state_presentation_mut()->code_panel_layout = CFG_DEFAULT_CODE_PANEL_LAYOUT;
     }
 
     /* 0b2. Config/action module owns shortcut and menu row dispatch. */
     {
         repl_reset_state();
 
-        g_wireframe = 0;
+        *repl_state_presentation_mut()->wireframe = 0;
         ASSERT_INT("config special shortcut consumed",
                    repl_cfg_handle_special_shortcut(GLUT_KEY_F2), 1);
         ASSERT_INT("config special shortcut toggles wireframe",
-                   g_wireframe, 1);
+                   *repl_state_presentation()->wireframe, 1);
 
-        g_grid_major_idx = 0;
+        *repl_state_presentation_mut()->grid_major_idx = 0;
         ASSERT_INT("config ascii shortcut consumed",
                    repl_cfg_handle_ascii_shortcut(KEY_CTRL_O), 1);
         ASSERT_INT("config ascii shortcut cycles grid major",
-                   g_grid_major_idx, 1);
+                   *repl_state_presentation()->grid_major_idx, 1);
 
         int row = cfg_row_for_key(REPL_CONFIG_CODE_PANEL_LAYOUT);
         ASSERT_TRUE("config menu action row exists", row >= 0);
         if (row >= 0) {
-            g_code_panel_layout = CODE_PANEL_LAYOUT_LEFT;
+            *repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT;
             int close_menu = repl_action_menu_item_activate(REPL_MENU_CONFIG, row);
             ASSERT_INT("config menu action keeps menu open", close_menu, 0);
             ASSERT_INT("config menu action cycles code panel",
-                       g_code_panel_layout, CODE_PANEL_LAYOUT_TOP);
+                       *repl_state_presentation()->code_panel_layout, CODE_PANEL_LAYOUT_TOP);
         }
     }
 
     /* 0c. Hidden code panel returns to the editor on ordinary input */
     {
         repl_reset_state();
-        g_code_panel_layout = CODE_PANEL_LAYOUT_HIDDEN;
+        *repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_HIDDEN;
         repl_keyboard_func('v', 0, 0);
         ASSERT_INT("typing restores hidden code panel",
-                   g_code_panel_layout, CODE_PANEL_LAYOUT_LEFT);
+                   *repl_state_presentation()->code_panel_layout, CODE_PANEL_LAYOUT_LEFT);
         ASSERT_STR("typing after restore still reaches input", repl_state_editor_input()->input, "v");
 
-        g_code_panel_layout = CODE_PANEL_LAYOUT_HIDDEN;
+        *repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_HIDDEN;
         repl_keyboard_func('`', 0, 0);
         ASSERT_INT("config shortcut restores hidden code panel",
-                   g_code_panel_layout, CODE_PANEL_LAYOUT_LEFT);
+                   *repl_state_presentation()->code_panel_layout, CODE_PANEL_LAYOUT_LEFT);
         repl_keyboard_func('`', 0, 0);
 
-        g_code_panel_layout = CFG_DEFAULT_CODE_PANEL_LAYOUT;
+        *repl_state_presentation_mut()->code_panel_layout = CFG_DEFAULT_CODE_PANEL_LAYOUT;
     }
 
     /* 0c2. Keyboard mode routing keeps rename ahead of config, replay, and search. */
@@ -355,10 +355,10 @@ int main() {
         ASSERT_TRUE("rename route setup slot", slot >= 0);
         ASSERT_INT("rename route begin", repl_inline_rename_begin(slot), 1);
 
-        g_code_panel_layout = CODE_PANEL_LAYOUT_HIDDEN;
+        *repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_HIDDEN;
         repl_keyboard_func('`', 0, 0);
         ASSERT_INT("rename swallows config hidden restore",
-                   g_code_panel_layout, CODE_PANEL_LAYOUT_HIDDEN);
+                   *repl_state_presentation()->code_panel_layout, CODE_PANEL_LAYOUT_HIDDEN);
         ASSERT_INT("rename remains active after config key",
                    repl_inline_rename_active(), 1);
 
@@ -369,7 +369,7 @@ int main() {
         ASSERT_INT("rename swallows search open", g_search_active, 0);
 
         repl_inline_rename_cancel();
-        g_code_panel_layout = CFG_DEFAULT_CODE_PANEL_LAYOUT;
+        *repl_state_presentation_mut()->code_panel_layout = CFG_DEFAULT_CODE_PANEL_LAYOUT;
     }
 
     /* 0c3. Search mode captures printable editing keys before text editing. */
@@ -414,7 +414,7 @@ int main() {
 
         set_editor_input("abc");
         repl_state_cursor_pos_set(2);
-        g_code_panel_layout = CODE_PANEL_LAYOUT_HIDDEN;
+        *repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_HIDDEN;
         g_show_help = 0;
         g_replay_active = 1;
         g_replay_state = REPLAY_PAUSED;
@@ -426,7 +426,7 @@ int main() {
 
         repl_special_func(GLUT_KEY_LEFT, 0, 0);
         ASSERT_INT("rename special swallows hidden restore",
-                   g_code_panel_layout, CODE_PANEL_LAYOUT_HIDDEN);
+                   *repl_state_presentation()->code_panel_layout, CODE_PANEL_LAYOUT_HIDDEN);
         ASSERT_INT("rename special keeps editor cursor", repl_state_cursor_pos(), 2);
         ASSERT_INT("rename special keeps search cursor", g_search_cursor_pos, 2);
         ASSERT_INT("rename special keeps replay pc", g_replay_pc, 0);
@@ -439,7 +439,7 @@ int main() {
         repl_inline_rename_cancel();
         search_clear_all();
         g_replay_active = 0;
-        g_code_panel_layout = CFG_DEFAULT_CODE_PANEL_LAYOUT;
+        *repl_state_presentation_mut()->code_panel_layout = CFG_DEFAULT_CODE_PANEL_LAYOUT;
     }
 
     /* 0c6. Search mode captures special arrows before editor/help navigation. */
@@ -481,7 +481,7 @@ int main() {
         int x, y, w, h;
         repl_state_viewport_set_size(320, 80);
         g_panel_frac = 0.25f;
-        g_code_panel_layout = CODE_PANEL_LAYOUT_LEFT;
+        *repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT;
         g_replay_active = 0;
 
         var_panel_rect(&x, &y, &w, &h);
@@ -490,7 +490,7 @@ int main() {
 
         repl_state_viewport_set_size(1200, 800);
         g_panel_frac = CFG_DEFAULT_PANEL_FRAC;
-        g_code_panel_layout = CFG_DEFAULT_CODE_PANEL_LAYOUT;
+        *repl_state_presentation_mut()->code_panel_layout = CFG_DEFAULT_CODE_PANEL_LAYOUT;
     }
 
     /* 0e. Camera control module owns scene drag and momentum behavior. */
@@ -1868,11 +1868,11 @@ int main() {
         ASSERT_INT("replay left steps back",
                    g_replay_pc, 0);
 
-        g_code_panel_layout = CODE_PANEL_LAYOUT_HIDDEN;
+        *repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_HIDDEN;
         g_replay_state = REPLAY_PLAYING;
         repl_keyboard_func(' ', 0, 0);
         ASSERT_INT("replay space keeps hidden code panel",
-                   g_code_panel_layout, CODE_PANEL_LAYOUT_HIDDEN);
+                   *repl_state_presentation()->code_panel_layout, CODE_PANEL_LAYOUT_HIDDEN);
         ASSERT_INT("replay space still pauses through editor",
                    g_replay_state, REPLAY_PAUSED);
 
@@ -1880,10 +1880,10 @@ int main() {
         g_replay_pc = 0;
         repl_special_func(GLUT_KEY_RIGHT, 0, 0);
         ASSERT_INT("replay right keeps hidden code panel",
-                   g_code_panel_layout, CODE_PANEL_LAYOUT_HIDDEN);
+                   *repl_state_presentation()->code_panel_layout, CODE_PANEL_LAYOUT_HIDDEN);
         ASSERT_INT("replay right still advances through editor",
                    g_replay_pc, 1);
-        g_code_panel_layout = CFG_DEFAULT_CODE_PANEL_LAYOUT;
+        *repl_state_presentation_mut()->code_panel_layout = CFG_DEFAULT_CODE_PANEL_LAYOUT;
 
         ASSERT_INT("replay unknown key unconsumed",
                    replay_handle_key('x'), 0);
@@ -1908,8 +1908,8 @@ int main() {
         
         repl_state_viewport_set_size(800, 230);
         g_panel_frac = 0.5f;
-        g_code_panel_layout = CODE_PANEL_LAYOUT_LEFT;
-        g_show_indices = 0;
+        *repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT;
+        *repl_state_presentation_mut()->show_vertex_indices = 0;
         navigate_to_line(0);
 
         g_replay_active = 1;
@@ -1994,8 +1994,8 @@ int main() {
         
         repl_state_viewport_set_size(800, 230);
         g_panel_frac = 0.5f;
-        g_code_panel_layout = CODE_PANEL_LAYOUT_LEFT;
-        g_show_indices = 0;
+        *repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT;
+        *repl_state_presentation_mut()->show_vertex_indices = 0;
         navigate_to_line(0);
 
         g_replay_active = 1;
@@ -2069,8 +2069,8 @@ int main() {
         
         repl_state_viewport_set_size(800, 230);
         g_panel_frac = 0.5f;
-        g_code_panel_layout = CODE_PANEL_LAYOUT_LEFT;
-        g_show_indices = 0;
+        *repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT;
+        *repl_state_presentation_mut()->show_vertex_indices = 0;
         g_replay_active = 0;
 
         repl_state_edit_line_set(repl_state_document_count());
@@ -2142,8 +2142,8 @@ int main() {
         
         repl_state_viewport_set_size(800, 230);
         g_panel_frac = 0.5f;
-        g_code_panel_layout = CODE_PANEL_LAYOUT_LEFT;
-        g_show_indices = 0;
+        *repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT;
+        *repl_state_presentation_mut()->show_vertex_indices = 0;
         g_replay_active = 0;
 
         navigate_to_line(repl_state_document_count() - 1);
@@ -2255,8 +2255,8 @@ int main() {
         
         repl_state_viewport_set_size(800, 600);
         g_panel_frac = 0.5f;
-        g_code_panel_layout = CODE_PANEL_LAYOUT_LEFT;
-        g_show_indices = 0;
+        *repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT;
+        *repl_state_presentation_mut()->show_vertex_indices = 0;
         g_scroll = code_panel_header_row_count();
         navigate_to_line(0);
         set_editor_input("glVertex3f(8, 0, 0)");
