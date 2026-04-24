@@ -5,6 +5,7 @@
  * autocomplete facade.
  */
 #include "sample.h"
+#include "repl_state.h"
 #include "repl_core_internal.h"
 #include "repl_command_spec.h"
 static const FuncCompletion *g_ac_func_matches[MAX_AC_MATCHES];
@@ -146,10 +147,10 @@ static void update_input_param_hint(void) {
     const char *input = repl_state_editor_input()->input;
     const char *after = NULL;
     const FuncCompletion *builtin = find_builtin_completion_for_input(input, &after);
+    ReplAutocompleteState *ac = repl_state_autocomplete_mut();
     if (builtin) {
         build_param_hint_text(builtin->params, builtin->param_count,
-                              after, g_ac_hint,
-                              repl_state_autocomplete()->hint_capacity);
+                              after, ac->hint, ac->hint_capacity);
         return;
     }
 
@@ -161,19 +162,19 @@ static void update_input_param_hint(void) {
         if (find_defined_func_call_params(input, &after, params,
                                           &param_count, param_storage)) {
             build_param_hint_text(params, param_count, after,
-                                  g_ac_hint,
-                                  repl_state_autocomplete()->hint_capacity);
+                                  ac->hint, ac->hint_capacity);
         }
     }
 }
 
 void update_selected_autocomplete_preview(void) {
     const ReplEditorInputState *inp = repl_state_editor_input();
+    ReplAutocompleteState *ac = repl_state_autocomplete_mut();
 
-    g_ac_ghost[0] = '\0';
-    g_ac_hint[0] = '\0';
+    ac->ghost[0] = '\0';
+    ac->hint[0] = '\0';
 
-    if (g_ac_count <= 0 || !g_ac_insert_matches[g_ac_sel])
+    if (*ac->match_count <= 0 || !ac->insert_matches[*ac->selected_idx])
         return;
 
     if (g_ac_mode == AC_MODE_FUNC_PREFIX) {
@@ -182,19 +183,17 @@ void update_selected_autocomplete_preview(void) {
         char param_storage[MAX_EXPR_VARS][16];
         int param_count = 0;
 
-        snprintf(g_ac_ghost, repl_state_autocomplete()->ghost_capacity, "%s",
-                 g_ac_insert_matches[g_ac_sel] + *inp->input_len);
-        if (g_ac_func_matches[g_ac_sel] && g_ac_func_matches[g_ac_sel]->param_count > 0) {
-            build_param_hint_text(g_ac_func_matches[g_ac_sel]->params,
-                                  g_ac_func_matches[g_ac_sel]->param_count,
-                                  "", g_ac_hint,
-                                  repl_state_autocomplete()->hint_capacity);
+        snprintf(ac->ghost, ac->ghost_capacity, "%s",
+                 ac->insert_matches[*ac->selected_idx] + *inp->input_len);
+        if (g_ac_func_matches[*ac->selected_idx] && g_ac_func_matches[*ac->selected_idx]->param_count > 0) {
+            build_param_hint_text(g_ac_func_matches[*ac->selected_idx]->params,
+                                  g_ac_func_matches[*ac->selected_idx]->param_count,
+                                  "", ac->hint, ac->hint_capacity);
         } else if (find_defined_func_call_params(inp->input, &after, params,
                                                  &param_count, param_storage)) {
-            g_ac_ghost[0] = '\0';
+            ac->ghost[0] = '\0';
             build_param_hint_text(params, param_count, after,
-                                  g_ac_hint,
-                                  repl_state_autocomplete()->hint_capacity);
+                                  ac->hint, ac->hint_capacity);
         }
         return;
     }
@@ -202,13 +201,14 @@ void update_selected_autocomplete_preview(void) {
     if (g_ac_mode == AC_MODE_POINT_PARAM ||
         g_ac_mode == AC_MODE_ENUM_ARG1 ||
         g_ac_mode == AC_MODE_ENUM_ARG2) {
-        snprintf(g_ac_ghost, repl_state_autocomplete()->ghost_capacity, "%s%s",
-                 g_ac_insert_matches[g_ac_sel] + g_ac_token_len, g_ac_suffix);
+        snprintf(ac->ghost, ac->ghost_capacity, "%s%s",
+                 ac->insert_matches[*ac->selected_idx] + g_ac_token_len, g_ac_suffix);
     }
 }
 
 void update_autocomplete(void) {
     const ReplEditorInputState *inp = repl_state_editor_input();
+    ReplAutocompleteState *ac = repl_state_autocomplete_mut();
     const char *input = inp->input;
     int input_len = *inp->input_len;
 
@@ -231,16 +231,16 @@ void update_autocomplete(void) {
             strchr(input + plen, ',') == NULL) {
             const char *after = input + plen;
             int alen = input_len - plen;
-            for (int j = 0; point_param_pnames[j].name && g_ac_count < MAX_AC_MATCHES; j++) {
+            for (int j = 0; point_param_pnames[j].name && *ac->match_count < MAX_AC_MATCHES; j++) {
                 if (strncmp(point_param_pnames[j].name, after, alen) == 0 &&
                     (int)strlen(point_param_pnames[j].name) > alen) {
-                    g_ac_matches[g_ac_count] = point_param_pnames[j].name;
-                    g_ac_insert_matches[g_ac_count] = point_param_pnames[j].name;
-                    g_ac_func_matches[g_ac_count] = NULL;
-                    g_ac_count++;
+                    ac->matches[*ac->match_count] = point_param_pnames[j].name;
+                    ac->insert_matches[*ac->match_count] = point_param_pnames[j].name;
+                    g_ac_func_matches[*ac->match_count] = NULL;
+                    (*ac->match_count)++;
                 }
             }
-            if (g_ac_count > 0) {
+            if (*ac->match_count > 0) {
                 g_ac_mode = AC_MODE_POINT_PARAM;
                 g_ac_token_len = alen;
                 snprintf(g_ac_suffix, sizeof(g_ac_suffix), ", ");
@@ -264,16 +264,16 @@ void update_autocomplete(void) {
 
             if (!comma) {
                 /* Complete enum1. */
-                for (int j = 0; enum_cmds[i].enums1 && enum_cmds[i].enums1[j].name && g_ac_count < MAX_AC_MATCHES; j++) {
+                for (int j = 0; enum_cmds[i].enums1 && enum_cmds[i].enums1[j].name && *ac->match_count < MAX_AC_MATCHES; j++) {
                     if (strncmp(enum_cmds[i].enums1[j].name, after, alen) == 0 &&
                         (int)strlen(enum_cmds[i].enums1[j].name) > alen) {
-                        g_ac_matches[g_ac_count] = enum_cmds[i].enums1[j].name;
-                        g_ac_insert_matches[g_ac_count] = enum_cmds[i].enums1[j].name;
-                        g_ac_func_matches[g_ac_count] = NULL;
-                        g_ac_count++;
+                        ac->matches[*ac->match_count] = enum_cmds[i].enums1[j].name;
+                        ac->insert_matches[*ac->match_count] = enum_cmds[i].enums1[j].name;
+                        g_ac_func_matches[*ac->match_count] = NULL;
+                        (*ac->match_count)++;
                     }
                 }
-                if (g_ac_count > 0) {
+                if (*ac->match_count > 0) {
                     g_ac_mode = AC_MODE_ENUM_ARG1;
                     g_ac_token_len = alen;
                     if (abs(enum_cmds[i].num_args) == 1)
@@ -290,16 +290,16 @@ void update_autocomplete(void) {
                     while (*arg2 == ' ') arg2++;
                     int arg2_len = input_len - (int)(arg2 - input);
 
-                    for (int j = 0; enum_cmds[i].enums2[j].name && g_ac_count < MAX_AC_MATCHES; j++) {
+                    for (int j = 0; enum_cmds[i].enums2[j].name && *ac->match_count < MAX_AC_MATCHES; j++) {
                         if (strncmp(enum_cmds[i].enums2[j].name, arg2, arg2_len) == 0 &&
                             (int)strlen(enum_cmds[i].enums2[j].name) > arg2_len) {
-                            g_ac_matches[g_ac_count] = enum_cmds[i].enums2[j].name;
-                            g_ac_insert_matches[g_ac_count] = enum_cmds[i].enums2[j].name;
-                            g_ac_func_matches[g_ac_count] = NULL;
-                            g_ac_count++;
+                            ac->matches[*ac->match_count] = enum_cmds[i].enums2[j].name;
+                            ac->insert_matches[*ac->match_count] = enum_cmds[i].enums2[j].name;
+                            g_ac_func_matches[*ac->match_count] = NULL;
+                            (*ac->match_count)++;
                         }
                     }
-                    if (g_ac_count > 0) {
+                    if (*ac->match_count > 0) {
                         g_ac_mode = AC_MODE_ENUM_ARG2;
                         g_ac_token_len = arg2_len;
                         snprintf(g_ac_suffix, sizeof(g_ac_suffix), ")");
@@ -313,16 +313,16 @@ void update_autocomplete(void) {
 
     /* Complete function names. */
     const FuncCompletion *completions = repl_func_completions();
-    for (int i = 0; completions[i].insert_text && g_ac_count < MAX_AC_MATCHES; i++) {
+    for (int i = 0; completions[i].insert_text && *ac->match_count < MAX_AC_MATCHES; i++) {
         if (strncmp(completions[i].insert_text, input, (size_t)input_len) == 0 &&
             (int)strlen(completions[i].insert_text) > input_len) {
-            g_ac_matches[g_ac_count] = completions[i].display_text;
-            g_ac_insert_matches[g_ac_count] = completions[i].insert_text;
-            g_ac_func_matches[g_ac_count] = &completions[i];
-            g_ac_count++;
+            ac->matches[*ac->match_count] = completions[i].display_text;
+            ac->insert_matches[*ac->match_count] = completions[i].insert_text;
+            g_ac_func_matches[*ac->match_count] = &completions[i];
+            (*ac->match_count)++;
         }
     }
-    if (g_ac_count > 0) {
+    if (*ac->match_count > 0) {
         g_ac_mode = AC_MODE_FUNC_PREFIX;
         update_selected_autocomplete_preview();
         return;
@@ -332,13 +332,14 @@ void update_autocomplete(void) {
 }
 
 void accept_autocomplete(void) {
-    if (g_ac_count == 0 || g_ac_ghost[0] == '\0') return;
+    const ReplAutocompleteState *ac = repl_state_autocomplete();
+    if (*ac->match_count == 0 || ac->ghost[0] == '\0') return;
 
-    int ghost_len = (int)strlen(g_ac_ghost);
+    int ghost_len = (int)strlen(ac->ghost);
     {
         ReplEditorInputState *inp = repl_state_editor_input_mut();
         if (*inp->input_len + ghost_len < MAX_INPUT_LEN - 1) {
-            strcat(inp->input, g_ac_ghost);
+            strcat(inp->input, ac->ghost);
             *inp->input_len += ghost_len;
             repl_state_cursor_pos_set(*inp->input_len);
         }
