@@ -107,15 +107,28 @@ The viewport. Shared `SceneRenderConfig` / `FrameRenderContext` in
 | `sample` | `main()` + GLUT callback wiring |
 | `gl_stub_counts` | `USE_GL_STUBS` symbol tracking |
 
-## Ownership Diagram
+## Ownership / Coordination Diagram
 
 Editor-adjacent modules split out of the old `repl_editor.c`, plus the
 nearby modules they coordinate with. Cluster boxes match the layers
 above. This is not every file — it's the coordination web that drives
 most refactor decisions.
 
+The old single-arrow version blurred together three different
+relationships. In the updated diagram:
+
+- `-->` means “delegated mutation / write-owning path”
+- `-.->` means “read/query/render dependency”
+- `==>` means “invoke / stage / dataflow path”
+
 ```mermaid
 flowchart LR
+    subgraph legend["Edge meaning"]
+        lmut_a["delegates mutation"] --> lmut_b["write-owning module"]
+        lread_a["reads / renders"] -.-> lread_b["query / model / helper"]
+        lflow_a["invokes / feeds"] ==> lflow_b["callback / stage / pass"]
+    end
+
     sample["sample.c<br/>GLUT callback wiring"]
 
     subgraph pipeline["Command pipeline"]
@@ -170,18 +183,18 @@ flowchart LR
 
     export["repl_export.c<br/>typed scaffold · import/export · visual dump"]
 
-    sample --> editor
+    sample ==> editor
 
-    editor --> actions
-    editor --> camera
-    editor --> undo
-    editor --> clipboard
-    editor --> commit
-    editor --> uicp
-    editor --> replay
-    editor --> varpanel
-    editor --> rename
-    editor --> vardrag
+    editor ==> actions
+    editor ==> camera
+    editor ==> undo
+    editor ==> clipboard
+    editor ==> commit
+    editor -.-> uicp
+    editor ==> replay
+    editor -.-> varpanel
+    editor ==> rename
+    editor ==> vardrag
 
     actions --> audio
     actions --> replay
@@ -193,49 +206,51 @@ flowchart LR
     clipboard --> undo
     clipboard --> store
     commit --> undo
-    commit --> parser
-    commit --> scope
+    commit -.-> parser
+    commit -.-> scope
     commit --> store
     undo --> scenes
-    store --> core
+    store ==> core
 
-    core --> parser
-    core --> scope
-    core --> flatten
-    core --> exec
-    core --> sceneR
-    core --> help
-    core --> varpanel
-    core --> acpanel
+    core -.-> parser
+    core -.-> scope
+    core ==> flatten
+    core ==> exec
+    core ==> sceneR
+    core ==> help
+    core ==> varpanel
+    core ==> acpanel
 
-    acpanel --> acmodel
+    acpanel -.-> acmodel
     rename --> scenes
-    varpanel --> vardrag
-    replay --> exec
+    varpanel -.-> vardrag
+    replay ==> exec
 
-    sceneR --> exec
-    sceneR --> replay
-    sceneR --> geomg
-    sceneR --> xformg
-    sceneR --> backdrop
-    sceneR --> lights
-    sceneR --> overlays
+    sceneR ==> exec
+    sceneR -.-> replay
+    sceneR ==> geomg
+    sceneR ==> xformg
+    sceneR ==> backdrop
+    sceneR ==> lights
+    sceneR ==> overlays
+    sceneR ==> grid
+    sceneR ==> axes
 
-    parser --> scope
-    flatten --> scope
+    parser -.-> scope
+    flatten -.-> scope
 
-    uicp --> actions
-    uicp --> scenes
-    uicp --> docrows
-    uicp --> menu
-    uicp --> color
-    docrows --> layout
-    docrows --> replay_ann
-    replay_ann --> replay
-    menu --> actions
-    menu --> scenes
+    uicp ==> actions
+    uicp -.-> scenes
+    uicp -.-> docrows
+    uicp ==> menu
+    uicp ==> color
+    docrows -.-> layout
+    docrows -.-> replay_ann
+    replay_ann -.-> replay
+    menu ==> actions
+    menu -.-> scenes
     color --> core
-    export --> layout
+    export -.-> layout
 ```
 
 ## Render / Model Split
