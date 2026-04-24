@@ -18,6 +18,12 @@
 #define g_multisample_enabled      (*repl_state_render()->multisample_enabled)
 #define g_line_smooth_enabled      (*repl_state_render()->line_smooth_enabled)
 #define g_init_attenuate_points    (*repl_state_render()->point_attenuation_enabled)
+#define g_quadric                  (*repl_state_render()->quadric)
+#define g_tess                     (*repl_state_render()->tess)
+#define g_tess_verts               (repl_state_render()->tess_verts)
+#define g_tess_vert_count          (*repl_state_render()->tess_vert_count)
+#define g_lights                   (repl_state_render()->lights)
+#define g_clear_color              (repl_state_render()->clear_color)
 
 #define g_anim_time              (*repl_state_variables()->anim_time)
 #define g_t_playing              (*repl_state_variables()->time_playing)
@@ -65,17 +71,9 @@
 #define g_ac_hint                 (repl_state_autocomplete()->hint)
 #endif
 
-extern GLUquadric    *g_quadric;
-extern GLUtesselator *g_tess;
-extern TessVertex     g_tess_verts[TESS_VERT_BUF_SIZE];
-extern int            g_tess_vert_count;
-extern SceneLight     g_lights[MAX_LIGHTS];
-extern float          g_clear_color[4];
-
 void refresh_workspace_header_lines(void);
 int  parse_workspace_header_line(const char *line);
 
-extern char         g_scratch_buf[256];
 extern const char  *g_grid_names[];
 extern const char  *g_grid_major_names[GRID_MAJOR_COUNT];
 extern const char  *g_grid_extent_names[GRID_EXTENT_COUNT];
