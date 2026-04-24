@@ -13,7 +13,8 @@
 #define _HELP_STR(x)  _HELP_STR2(x)
 
 void render_help(void) {
-    if (!g_show_help) return;
+    ReplHelpState *help = repl_state_help_mut();
+    if (!*help->visible) return;
 
     /* --- Tab 0: Commands ---
      * '\t' marks the boundary between left column (command) and
@@ -251,10 +252,13 @@ void render_help(void) {
     static const char **tabs[]      = { tab_commands, tab_keys };
     #define HELP_NUM_TABS 2
 
-    if (g_help_tab < 0) g_help_tab = 0;
-    if (g_help_tab >= HELP_NUM_TABS) g_help_tab = HELP_NUM_TABS - 1;
+    int help_tab = *help->tab_idx;
+    int help_scroll = *help->scroll;
+    if (help_tab < 0) help_tab = 0;
+    if (help_tab >= HELP_NUM_TABS) help_tab = HELP_NUM_TABS - 1;
+    *help->tab_idx = help_tab;
 
-    const char **text = tabs[g_help_tab];
+    const char **text = tabs[help_tab];
 
     /* Count total lines */
     int n_lines = 0;
@@ -279,8 +283,9 @@ void render_help(void) {
     /* Clamp scroll */
     int max_scroll = n_lines - visible_lines;
     if (max_scroll < 0) max_scroll = 0;
-    if (g_help_scroll > max_scroll) g_help_scroll = max_scroll;
-    if (g_help_scroll < 0) g_help_scroll = 0;
+    if (help_scroll > max_scroll) help_scroll = max_scroll;
+    if (help_scroll < 0) help_scroll = 0;
+    *help->scroll = help_scroll;
 
     /* Background — matches config menu #222 */
     glColor4f(0.133f, 0.133f, 0.133f, 0.98f);
@@ -327,7 +332,7 @@ void render_help(void) {
 
         for (int t = 0; t < HELP_NUM_TABS; t++) {
             int tx_tab = hx + t * tab_w;
-            if (t == g_help_tab) {
+            if (t == help_tab) {
                 /* Active tab: bottom accent bar + bright label */
                 glColor4f(UI_ACCENT_GREEN_R, UI_ACCENT_GREEN_G, UI_ACCENT_GREEN_B, 0.85f);
                 draw_quad((float)tx_tab, (float)tab_y, (float)tab_w, 2.0f);
@@ -379,8 +384,8 @@ void render_help(void) {
         }
     }
 
-    for (int i = g_help_scroll; i < n_lines && i < g_help_scroll + visible_lines + 1; i++) {
-        int ty = ty_start - (i - g_help_scroll) * LINE_H;
+    for (int i = help_scroll; i < n_lines && i < help_scroll + visible_lines + 1; i++) {
+        int ty = ty_start - (i - help_scroll) * LINE_H;
         if (ty < hy + pad_bot - LINE_H) break;
         if (text[i][0] == '\0') continue;
 
@@ -423,7 +428,7 @@ void render_help(void) {
         int bar_top = hy + hh - pad_top;
         int bar_h   = content_h;
         float frac  = (float)visible_lines / (float)n_lines;
-        float pos   = (float)g_help_scroll / (float)n_lines;
+        float pos   = (float)help_scroll / (float)n_lines;
         int thumb_h = (int)(bar_h * frac);
         if (thumb_h < 12) thumb_h = 12;
         int thumb_y = bar_top - (int)(bar_h * pos) - thumb_h;
@@ -437,10 +442,10 @@ void render_help(void) {
         draw_quad((float)bar_x, (float)thumb_y, 4.0f, (float)thumb_h);
 
         /* Scroll hint at bottom */
-        if (g_help_scroll < max_scroll) {
+        if (help_scroll < max_scroll) {
             char hint[32];
             snprintf(hint, sizeof(hint), "v %d more v",
-                     n_lines - g_help_scroll - visible_lines);
+                     n_lines - help_scroll - visible_lines);
             int hint_x = hx + (hw - (int)strlen(hint) * FONT_SMALL_W) / 2;
             glColor4f(0.533f, 0.533f, 0.533f, 0.50f);
             draw_string((float)hint_x, (float)(hy + 4), hint, FONT_SMALL);
