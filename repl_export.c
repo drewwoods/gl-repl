@@ -281,17 +281,17 @@ const char *g_header_post[] = {
 
 typedef struct {
     const char *repl_line;
-    const int  *toggle;
+    ReplConfigKey toggle_key;
 } InitBootstrapEntry;
 
 static const InitBootstrapEntry g_init_bootstrap_repl[] = {
-    { "glEnable(GL_COLOR_MATERIAL);", NULL },
-    { "glLightModeli(GL_LIGHT_MODEL_TWO_SIDE, GL_TRUE);", NULL },
-    { "glEnable(GL_BLEND);", NULL },
-    { "glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);", NULL },
+    { "glEnable(GL_COLOR_MATERIAL);", REPL_CONFIG_NONE },
+    { "glLightModeli(GL_LIGHT_MODEL_TWO_SIDE, GL_TRUE);", REPL_CONFIG_NONE },
+    { "glEnable(GL_BLEND);", REPL_CONFIG_NONE },
+    { "glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);", REPL_CONFIG_NONE },
 #ifndef NO_POINT_PARAMETER
     { "glPointParameterfv(GL_POINT_DISTANCE_ATTENUATION, 1.0, 0.0, 0.02);",
-      &g_init_attenuate_points },
+      REPL_CONFIG_POINT_ATTENUATION },
 #endif
 };
 #define NUM_INIT_BOOTSTRAP \
@@ -407,8 +407,8 @@ void apply_init_bootstrap(void) {
     ensure_init_bootstrap_ready();
 
     for (int i = 0; i < NUM_INIT_BOOTSTRAP; i++) {
-        if (g_init_bootstrap_repl[i].toggle &&
-            *g_init_bootstrap_repl[i].toggle == 0) {
+        if (g_init_bootstrap_repl[i].toggle_key != REPL_CONFIG_NONE &&
+            !repl_config_get(g_init_bootstrap_repl[i].toggle_key)) {
             if (g_init_bootstrap_cmds[i].type == CMD_POINT_PARAMETER_FV &&
                 g_init_bootstrap_cmds[i].mode == GL_POINT_DISTANCE_ATTENUATION) {
                 GLCmd disabled = g_init_bootstrap_cmds[i];
@@ -428,8 +428,8 @@ int init_section_line_count(void) {
 
     ensure_init_bootstrap_ready();
     for (int i = 0; i < NUM_INIT_BOOTSTRAP; i++) {
-        if (g_init_bootstrap_repl[i].toggle &&
-            *g_init_bootstrap_repl[i].toggle == 0)
+        if (g_init_bootstrap_repl[i].toggle_key != REPL_CONFIG_NONE &&
+            !repl_config_get(g_init_bootstrap_repl[i].toggle_key))
             continue;
         count++;
     }
@@ -457,8 +457,8 @@ void init_section_line(int i, char *buf, size_t n) {
 
     i -= host_count;
     for (int idx = 0; idx < NUM_INIT_BOOTSTRAP; idx++) {
-        if (g_init_bootstrap_repl[idx].toggle &&
-            *g_init_bootstrap_repl[idx].toggle == 0)
+        if (g_init_bootstrap_repl[idx].toggle_key != REPL_CONFIG_NONE &&
+            !repl_config_get(g_init_bootstrap_repl[idx].toggle_key))
             continue;
         if (enabled_idx == i) {
             format_cmd_source_as_c(buf, n, &g_init_bootstrap_cmds[idx], 0);
@@ -481,8 +481,8 @@ static void emit_export_init_section_to_file(FILE *f, int include_tess) {
 
     ensure_init_bootstrap_ready();
     for (int idx = 0; idx < NUM_INIT_BOOTSTRAP; idx++) {
-        if (g_init_bootstrap_repl[idx].toggle &&
-            *g_init_bootstrap_repl[idx].toggle == 0)
+        if (g_init_bootstrap_repl[idx].toggle_key != REPL_CONFIG_NONE &&
+            !repl_config_get(g_init_bootstrap_repl[idx].toggle_key))
             continue;
         format_cmd_source_as_c(line, sizeof(line), &g_init_bootstrap_cmds[idx], 0);
         fprintf(f, "%s\n", line);
