@@ -41,6 +41,7 @@
 #include "repl_core_internal.h"
 #include "repl_eval.h"
 #include "repl_examples.h"
+#include "repl_state.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -303,7 +304,8 @@ static BenchResult bench_replay_examples(int iters) {
 
             replay_start();
             int safety = repl_state_flat_program_count() + 1;
-            while (g_replay_state == REPLAY_PLAYING && safety-- > 0) {
+            const ReplReplayRuntimeState *replay = repl_state_replay();
+            while (*replay->state == REPLAY_PLAYING && safety-- > 0) {
                 replay_advance();
                 steps++;
             }
@@ -397,7 +399,8 @@ static BenchResult bench_replay_long(int iters) {
 
         replay_start();
         int safety = repl_state_flat_program_count() + 1;
-        while (g_replay_state == REPLAY_PLAYING && safety-- > 0) {
+        const ReplReplayRuntimeState *replay = repl_state_replay();
+        while (*replay->state == REPLAY_PLAYING && safety-- > 0) {
             replay_advance();
             steps++;
         }

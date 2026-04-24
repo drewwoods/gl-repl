@@ -8,6 +8,7 @@
 #include "sample.h"
 #include "repl_code_panel_document.h"
 #include "repl_replay_annotations.h"
+#include "repl_state.h"
 
 CodePanelTextLayout repl_code_panel_document_text_layout(int panel_w,
                                                          int first_x) {
@@ -200,20 +201,22 @@ static int code_panel_cursor_doc_line_from_layout(
 static int code_panel_follow_doc_line_from_layout(
     int cursor_doc_line, int header_rows, const int *cmd_main_rows,
     const int *replay_extra_rows) {
+    const ReplReplayRuntimeState *replay = repl_state_replay();
     int follow_doc_line = cursor_doc_line;
 
-    if (g_replay_active &&
-        g_replay_src_line >= 0 && g_replay_src_line < repl_state_document_count()) {
+    if (*replay->active &&
+        *replay->src_line_idx >= 0 &&
+        *replay->src_line_idx < repl_state_document_count()) {
         follow_doc_line = header_rows;
-        for (int i = 0; i < g_replay_src_line; i++) {
+        for (int i = 0; i < *replay->src_line_idx; i++) {
             follow_doc_line += cmd_main_rows[i];
             follow_doc_line += replay_extra_rows[i];
         }
-        if (replay_extra_rows[g_replay_src_line] > 0) {
-            follow_doc_line += cmd_main_rows[g_replay_src_line];
-            follow_doc_line += replay_extra_rows[g_replay_src_line] - 1;
-        } else if (cmd_main_rows[g_replay_src_line] > 0) {
-            follow_doc_line += cmd_main_rows[g_replay_src_line] - 1;
+        if (replay_extra_rows[*replay->src_line_idx] > 0) {
+            follow_doc_line += cmd_main_rows[*replay->src_line_idx];
+            follow_doc_line += replay_extra_rows[*replay->src_line_idx] - 1;
+        } else if (cmd_main_rows[*replay->src_line_idx] > 0) {
+            follow_doc_line += cmd_main_rows[*replay->src_line_idx] - 1;
         }
     }
 

@@ -1,6 +1,7 @@
 #include "repl_config.h"
 
 #include "repl_audio.h"
+#include "repl_state.h"
 #include "repl_state_compat.h"
 
 static int clamp_int(int v, int lo, int hi) {
@@ -29,9 +30,9 @@ static int *config_value_ptr(ReplConfigKey key) {
     case REPL_CONFIG_WIREFRAME:           return repl_state_presentation_mut()->wireframe;
     case REPL_CONFIG_POINT_ATTENUATION:   return &g_init_attenuate_points;
     case REPL_CONFIG_AUTO_TIME:           return &g_t_playing;
-    case REPL_CONFIG_REPLAY:              return &g_replay_active;
-    case REPL_CONFIG_REPLAY_MODE:         return &g_replay_mode;
-    case REPL_CONFIG_REPLAY_EXPAND:       return &g_replay_expand_args;
+    case REPL_CONFIG_REPLAY:              return repl_state_replay_mut()->active;
+    case REPL_CONFIG_REPLAY_MODE:         return repl_state_replay_mut()->mode;
+    case REPL_CONFIG_REPLAY_EXPAND:       return repl_state_replay_mut()->expand_args;
     case REPL_CONFIG_GRID_THEME:          return repl_state_presentation_mut()->grid_theme;
     case REPL_CONFIG_GRID_MAJOR:          return repl_state_presentation_mut()->grid_major_idx;
     case REPL_CONFIG_GRID_EXTENT:         return repl_state_presentation_mut()->grid_extent_idx;

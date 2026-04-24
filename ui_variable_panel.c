@@ -11,6 +11,7 @@
  */
 #include "sample.h"
 #include "ui_variable_panel.h"
+#include "repl_state.h"
 #include "repl_var_drag.h"
 #include "ui_panels.h"
 
@@ -66,8 +67,9 @@ static float var_panel_replay_target_lift_px(void) {
 }
 
 static float var_panel_replay_lift(void) {
+    const ReplReplayRuntimeState *replay = repl_state_replay();
     float target = 0.0f;
-    if (g_replay_active)
+    if (*replay->active)
         target = var_panel_replay_target_lift_px();
 
     if (g_var_panel_lift_update_time == g_anim_time &&
