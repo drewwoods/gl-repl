@@ -1,5 +1,5 @@
 /*
- * scene_grid.c — grid theme rendering
+ * scene_grid.c - grid theme rendering
  */
 #include "sample.h"
 #include "scene_grid.h"
@@ -316,7 +316,7 @@ static void scene_grid_render_ocean_theme(const GridDrawContext *grid_ctx,
     const float major_tol = grid_ctx->major_tol;
     const float step = grid_ctx->step;
 
-    /* Underwater fog — slightly breathing density */
+    /* Underwater fog - slightly breathing density */
     if (frame_ctx->camera_below_water_surface) {
         glDisable(GL_DEPTH_TEST);
         glColor4f(0.05f, 0.25f, 0.35f, 0.75f);
@@ -351,7 +351,7 @@ static void scene_grid_render_ocean_theme(const GridDrawContext *grid_ctx,
         glVertex3f(-extent, 0, v);  glVertex3f(extent, 0, v);
     }
     glEnd();
-    /* Origin axes — write to depth buffer; colour evaluated at v=0 */
+    /* Origin axes - write to depth buffer; colour evaluated at v=0 */
     {
         float c1_o = sinf((*repl_state_variables()->anim_time) * 1.3f);
         float c2_o = cosf(-(*repl_state_variables()->anim_time) * 0.9f);
@@ -432,7 +432,7 @@ static void scene_grid_render_xzruler_theme(const GridDrawContext *grid_ctx) {
     }
     glEnd();
 
-    /* Origin axes — bright, wider */
+    /* Origin axes - bright, wider */
     glDepthMask(GL_TRUE);
     glLineWidth(2.0f);
     glBegin(GL_LINES);
@@ -499,7 +499,7 @@ static void scene_grid_render_planes_theme(const SceneRenderConfig *config,
         glVertex3f(-extent, 0, v);       glVertex3f(extent, 0, v);
     }
     glEnd();
-    /* Floor origin axes — write to depth buffer */
+    /* Floor origin axes - write to depth buffer */
     glDepthMask(GL_TRUE);
     glBegin(GL_LINES);
     glColor4f(0.50f, 0.52f, 0.65f, fminf(0.30f * as, 1.0f));
@@ -522,7 +522,7 @@ static void scene_grid_render_planes_theme(const SceneRenderConfig *config,
             glVertex3f(v, -extent, 0); glVertex3f(v, extent, 0);
         }
         glEnd();
-        /* XY plane origin axes — write to depth buffer */
+        /* XY plane origin axes - write to depth buffer */
         glDepthMask(GL_TRUE);
         glBegin(GL_LINES);
         glColor4f(0.35f, 0.62f, 0.88f, fminf(0.42f * xy_w * as, 1.0f));
@@ -546,7 +546,7 @@ static void scene_grid_render_planes_theme(const SceneRenderConfig *config,
             glVertex3f(0, -extent, v); glVertex3f(0, extent, v);
         }
         glEnd();
-        /* ZY plane origin axes — write to depth buffer */
+        /* ZY plane origin axes - write to depth buffer */
         glDepthMask(GL_TRUE);
         glBegin(GL_LINES);
         glColor4f(0.82f, 0.52f, 0.28f, fminf(0.42f * zy_w * as, 1.0f));

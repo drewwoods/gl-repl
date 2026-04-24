@@ -1,5 +1,5 @@
 /*
- * gl_stub_counts.c — storage + helpers for the stub GL/GLU/GLUT call
+ * gl_stub_counts.c - storage + helpers for the stub GL/GLU/GLUT call
  * counters declared in include/GL/gl_stub_counts.h.
  *
  * The file compiles to nothing when OPENGL_VIBE_USE_GL_STUBS is not

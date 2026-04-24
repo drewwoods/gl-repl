@@ -1,5 +1,5 @@
 /*
- * repl_eval.h — Expression evaluator, translators, and for-loop parsers
+ * repl_eval.h - Expression evaluator, translators, and for-loop parsers
  *
  * Extracted from the REPL for independent testing.
  * Include this header, then either:

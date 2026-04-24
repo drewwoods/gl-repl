@@ -11,7 +11,7 @@ static void scene_transform_guides_pop_state(void) {
     glPopAttrib();
 }
 
-/* Cmds that emit geometry — hitting one of these means "something just got
+/* Cmds that emit geometry - hitting one of these means "something just got
  * drawn with the current modelview", so further transforms shouldn't factor
  * into the cursor-line's guide. */
 static int is_geometry_emit_cmd(CmdType type) {
@@ -271,7 +271,7 @@ static void draw_arrow_head(const float tip[3], const float dir[3], float head_l
 
 /* Scale guide. Draws the identity reference (origin → axis·1, gray) with a
  * bright tick at the 1.0 position on each axis, then a pulse arrow showing
- * only the distortion — from the 1.0 tick to the scaled tip. Scale of 1 on
+ * only the distortion - from the 1.0 tick to the scaled tip. Scale of 1 on
  * an axis draws no pulse (identity); negative factors produce an arrow that
  * passes through origin. The non-origin branch is the World-mode variant
  * where p_start is the actual anchor point and the 1.0 reference is p_start

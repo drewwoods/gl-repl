@@ -1,5 +1,5 @@
 /*
- * repl_core.h — Public API for the REPL core module.
+ * repl_core.h - Public API for the REPL core module.
  *
  * repl_core.c owns the source-command array (g_cmds), the flattened command
  * array (g_flat_cmds), display callback, and app-level lifecycle wrappers.

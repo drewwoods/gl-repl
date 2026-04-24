@@ -14,7 +14,7 @@ Goal: carve out three sibling translation units (`repl_search.c`,
 `repl_core.h` API untouched. Globals that become cross-unit visible are
 promoted to `extern` in the already-existing `repl_core_internal.h` (which is
 test-visible and exactly the right place for internal API). Every phase
-leaves the tree building and all currently-green tests green — pre-existing
+leaves the tree building and all currently-green tests green - pre-existing
 failures in `test_repl_core_commit` (mouse/backspace, 7 assertions) are
 captured as a baseline in Phase 0 and must not change across any phase.
 
@@ -25,7 +25,7 @@ captured as a baseline in Phase 0 and must not change across any phase.
 - `src/immediate-mode-repl/claude4.6-opus-thinking/Makefile` (add new `.c` files to every `SRCS`/target rule)
 - New: `repl_search.c`, `repl_export.c`, `repl_editor.c`
 
-## Phase 0 — prep (behavior-preserving)
+## Phase 0 - prep (behavior-preserving)
 
 1. Capture the baseline failing assertions in `test_repl_core_commit` (7
    mouse/backspace failures) into a note file so later phases can diff
@@ -33,7 +33,7 @@ captured as a baseline in Phase 0 and must not change across any phase.
 2. Audit `repl_core.c` and list every `g_*` global and every static helper
    each of the upcoming phases will need across a file boundary. Add
    `extern` declarations for those globals to `repl_core_internal.h` now
-   — definitions still live in `repl_core.c`, so this is purely a
+   - definitions still live in `repl_core.c`, so this is purely a
    header change.
 3. Build the sample + every test binary and run the full suite. No
    behavior change expected; this confirms the header prep didn't break
@@ -41,7 +41,7 @@ captured as a baseline in Phase 0 and must not change across any phase.
 
 Commit: "immediate-mode-repl: promote repl_core globals to internal header".
 
-## Phase 1 — extract `repl_search.c`
+## Phase 1 - extract `repl_search.c`
 
 Why first: smallest unit, dedicated test binary (`test_repl_core_search`,
 38 assertions), validates the extract-and-wire pattern before we touch
@@ -50,18 +50,18 @@ Why first: smallest unit, dedicated test binary (`test_repl_core_search`,
 1. Move the search-state globals (Ctrl+F buffer, match cursor), match/next/
    prev helpers, and search-mode keyboard handling into `repl_search.c`.
 2. Add a thin `repl_search.h` *only* if sample.c or ui_panels.c needs to
-   peek at search state for rendering — otherwise keep the entry points
+   peek at search state for rendering - otherwise keep the entry points
    in `repl_core_internal.h`.
 3. Update `Makefile`: every target that compiles `repl_core.c` must also
    compile `repl_search.c` (sample + each test binary).
-4. Grep every moved function name across the tree — any that are only
+4. Grep every moved function name across the tree - any that are only
    called from inside the new file become `static` immediately.
 5. Build. Run `make test_repl_core_search` first, then the full suite.
    Diff `test_repl_core_commit` failures against the Phase 0 baseline.
 
 Commit: "immediate-mode-repl: extract repl_search.c".
 
-## Phase 2 — extract `repl_export.c`
+## Phase 2 - extract `repl_export.c`
 
 Biggest payoff (~2000 lines). Covered by `test_repl_core_io` (75
 assertions) and `test_repl_core_examples` (184 assertions, incl. compile
@@ -89,7 +89,7 @@ Move these out of `repl_core.c`:
 
 Constraints:
 
-- Public API in `repl_core.h` stays identical — only
+- Public API in `repl_core.h` stays identical - only
   `repl_save_output()` and the init-section query functions are
   exposed, and they already are.
 - Anything that's only called inside `repl_export.c` becomes `static`
@@ -99,7 +99,7 @@ Constraints:
   `g_line_smooth_enabled`, `g_show_outlines`, `g_show_vpoints`,
   `g_cam_*`, `g_lights[]`, etc.) were already `extern`'d in Phase 0.
 - `test_repl_core_io.c` calls `init_section_line` / `init_section_line_count`
-  — those must remain accessible via `repl_core_internal.h`.
+  - those must remain accessible via `repl_core_internal.h`.
 
 Update `Makefile`, rebuild, run **`test_repl_core_io`** and
 **`test_repl_core_examples`** first (these are the export-specific
@@ -109,7 +109,7 @@ generated `output.c` as a final smoke check.
 
 Commit: "immediate-mode-repl: extract repl_export.c".
 
-## Phase 3 — extract `repl_editor.c`
+## Phase 3 - extract `repl_editor.c`
 
 Most tangled unit, done last so everything around it has already
 quieted down.
@@ -129,18 +129,18 @@ cmd-spec table `g_cmd_specs[]`), `execute_commands`, `flatten_range`,
 cleanly separate from them yet.
 
 Test gates: `test_repl_core_parse`, `test_repl_core_format`, and
-critically `test_repl_core_commit` — capture its failure set and
+critically `test_repl_core_commit` - capture its failure set and
 confirm it matches the Phase 0 baseline exactly. Zero new failures, zero
 accidental "fixes".
 
 Commit: "immediate-mode-repl: extract repl_editor.c".
 
-## Phase 4 — cleanup
+## Phase 4 - cleanup
 
 1. Grep `repl_core.c` for now-unused statics, dead prototypes, and
    forward declarations that no longer point at anything. Delete.
 2. Scan `repl_core_internal.h` for externs that are only referenced
-   from inside `repl_core.c` after the moves — demote them back to
+   from inside `repl_core.c` after the moves - demote them back to
    file-local.
 3. Run the full suite one more time and diff vs. Phase 0 baseline.
 

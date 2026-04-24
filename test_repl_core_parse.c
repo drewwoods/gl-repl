@@ -222,7 +222,7 @@ int main(void) {
                     strstr(g_status, "Unknown cmd") != NULL);
     }
 
-    /* 4-arg commands (glRotatef, gluDisk, glutSolidTorus) — exercise case 4 in fmt switch */
+    /* 4-arg commands (glRotatef, gluDisk, glutSolidTorus) - exercise case 4 in fmt switch */
     {
         repl_reset_state();
         GLCmd cmd;
@@ -251,7 +251,7 @@ int main(void) {
         ASSERT_TRUE("glutSolidTorus type", cmd.type == CMD_GLUT_TORUS);
     }
 
-    /* 5-arg command: gluCylinder — exercise case 5 */
+    /* 5-arg command: gluCylinder - exercise case 5 */
     {
         repl_reset_state();
         GLCmd cmd;
@@ -262,7 +262,7 @@ int main(void) {
         ASSERT_TRUE("gluCylinder source has height", cmd.args[2] == 1.0f);
     }
 
-    /* 6-arg command: gluPartialDisk — exercise case 6 */
+    /* 6-arg command: gluPartialDisk - exercise case 6 */
     {
         repl_reset_state();
         GLCmd cmd;
@@ -272,7 +272,7 @@ int main(void) {
         ASSERT_TRUE("gluPartialDisk type", cmd.type == CMD_GLU_PARTIAL_DISK);
     }
 
-    /* glColorMaterial — face/mode enums */
+    /* glColorMaterial - face/mode enums */
     {
         repl_reset_state();
         GLCmd cmd;
@@ -295,7 +295,7 @@ int main(void) {
         assert_status_contains("glColorMaterial bad mode status", "GL_AMBIENT_AND_DIFFUSE");
     }
 
-    /* glMaterialf — scalar and vector (4-value) forms */
+    /* glMaterialf - scalar and vector (4-value) forms */
     {
         repl_reset_state();
         GLCmd cmd;
@@ -317,7 +317,7 @@ int main(void) {
         ASSERT_TRUE("glMaterialf vector num_args", cmd.num_args == 5); /* pname + 4 vals */
     }
 
-    /* glMaterialf — bad face name */
+    /* glMaterialf - bad face name */
     {
         repl_reset_state();
         GLCmd cmd;
@@ -423,7 +423,7 @@ int main(void) {
         ASSERT_TRUE("gluBegin CONTOUR type", cmd.type == CMD_TESS_BEGIN_CONTOUR);
     }
 
-    /* glDepthMask — bool-enum state command */
+    /* glDepthMask - bool-enum state command */
     {
         repl_reset_state();
         GLCmd cmd;
@@ -616,7 +616,7 @@ int main(void) {
 
         /* 13 numeric args of 18 chars separated by ',' → 246 chars of args.
          * Full input "func0(<246>)" = 253 chars (fits pre-truncation).
-         * Canonical "  func0(<246>);" = 256 chars — one past the buffer. */
+         * Canonical "  func0(<246>);" = 256 chars - one past the buffer. */
         char line[MAX_LINE_LEN];
         int off = snprintf(line, sizeof(line), "func0(");
         for (int i = 0; i < 13; i++) {

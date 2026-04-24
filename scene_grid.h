@@ -1,5 +1,5 @@
 /*
- * scene_grid.h — grid theme rendering entrypoint
+ * scene_grid.h - grid theme rendering entrypoint
  */
 #ifndef SCENE_GRID_H
 #define SCENE_GRID_H

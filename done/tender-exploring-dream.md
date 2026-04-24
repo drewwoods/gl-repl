@@ -5,9 +5,9 @@
 The OpenGL immediate-mode REPL (`sample.c`, ~5,763 lines) is a live C-based command interpreter for fixed-function OpenGL. Users type GL commands in a left-panel editor and see results rendered in a 3D viewport. The codebase uses a two-array architecture (`g_cmds[]` raw → `g_flat_cmds[]` expanded) with a PC-based executor designed for future flow control. This plan addresses 13 TODO items grouped into 4 phases.
 
 **Critical files:**
-- `sample.c` — main app, all 10 items touch this
-- `repl_eval.c` / `repl_eval.h` — expression evaluator (no changes needed, read-only reference)
-- `include/gl_includes.h` — already includes GLU
+- `sample.c` - main app, all 10 items touch this
+- `repl_eval.c` / `repl_eval.h` - expression evaluator (no changes needed, read-only reference)
+- `include/gl_includes.h` - already includes GLU
 
 ---
 
@@ -23,7 +23,7 @@ The OpenGL immediate-mode REPL (`sample.c`, ~5,763 lines) is a live C-based comm
 - Change all lighting restore paths (`end_2d()`, post-overlay code) to check `g_user_lighting_enabled` before calling `glEnable(GL_LIGHTING)`
 
 ### 2. Fix output.c generation for functions
-**Problem:** `save_output()` has no cases for `CMD_FUNC_DEF`, `CMD_FUNC_END`, `CMD_CALL` — they fall through to `default` which emits invalid C.
+**Problem:** `save_output()` has no cases for `CMD_FUNC_DEF`, `CMD_FUNC_END`, `CMD_CALL` - they fall through to `default` which emits invalid C.
 
 **Fix (two-pass approach):**
 - **Pass 1:** Before the display function body, scan `g_cmds[]` for `CMD_FUNC_DEF` blocks. Emit each as `static void funcN(void) { ... }` with body commands translated to C
@@ -36,13 +36,13 @@ The OpenGL immediate-mode REPL (`sample.c`, ~5,763 lines) is a live C-based comm
 
 **Fix:** In `draw_vertex_guides()` (line ~3119):
 
-**1 arg — draw plane perpendicular to the specified axis:**
+**1 arg - draw plane perpendicular to the specified axis:**
 - Currently only handles `(x',_,_)` → draws YZ plane at x'. This is correct.
 - Add: if cursor is on the 2nd arg position with only y specified `(_,y',_)` → draw XZ plane at y'
 - Add: if cursor is on the 3rd arg position with only z specified `(_,_,z')` → draw XY plane at z'
 - Detection: parse which argument slot the value is in by counting commas before the cursor in the input
 
-**2 args — draw plane + line:**
+**2 args - draw plane + line:**
 - `(x',y',_)`: draw XZ plane at y' + Z-line at (x',y') (current behavior draws only line)
 - `(x',_,z')`: draw XY plane at z' + Y-line at (x',z')
 - `(_,y',z')`: draw YZ plane at y' + X-line at (y',z')
@@ -90,7 +90,7 @@ The OpenGL immediate-mode REPL (`sample.c`, ~5,763 lines) is a live C-based comm
 - `save_output()`: emit as C labels (`name:`) and `goto name;`
 
 ### 6. Concave polygon support (GLU tessellation)
-**Approach:** Automatic detection — no new CmdTypes needed.
+**Approach:** Automatic detection - no new CmdTypes needed.
 
 **Implementation:**
 - Add global `GLUtesselator *g_tess`, init in `init_gl()` with callbacks (`glBegin`, `glEnd`, `glVertex3dv`, custom combine callback)
@@ -116,7 +116,7 @@ The OpenGL immediate-mode REPL (`sample.c`, ~5,763 lines) is a live C-based comm
 **Implementation:**
 - Add `g_multi_viewport` toggle
 - Refactor `render_3d_scene()` to accept viewport config params (rect, ortho flag, fixed rotation angles, label)
-- In `display_func()`, when enabled: call render 4 times — perspective (top-left), front/XY (top-right), side/ZY (bottom-left), top/XZ (bottom-right)
+- In `display_func()`, when enabled: call render 4 times - perspective (top-left), front/XY (top-right), side/ZY (bottom-left), top/XZ (bottom-right)
 - Each ortho view uses `glOrtho` with fixed rotation
 - Mouse interaction: detect which viewport was clicked, apply camera only to perspective view
 - Draw viewport labels in 2D overlay
@@ -181,8 +181,8 @@ The OpenGL immediate-mode REPL (`sample.c`, ~5,763 lines) is a live C-based comm
 ## Verification
 
 For each item, after implementation:
-1. `make clean && make` — must compile without warnings
+1. `make clean && make` - must compile without warnings
 2. Run `./sample` and verify the specific feature works
-3. Ctrl+S to save `output.c`, then `make output` or `glut_compile output.c` — must produce valid standalone C
-4. F12 to cycle predefined examples — all 5 must still render correctly
-5. Ctrl+T to toggle time animation — expressions with `t` must still animate
+3. Ctrl+S to save `output.c`, then `make output` or `glut_compile output.c` - must produce valid standalone C
+4. F12 to cycle predefined examples - all 5 must still render correctly
+5. Ctrl+T to toggle time animation - expressions with `t` must still animate

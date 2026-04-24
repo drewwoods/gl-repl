@@ -83,7 +83,7 @@ Add two entries to `g_cfg_items[]` (line 679, before the closing `}`):
 { "Replay",      "Ctrl+g", &g_replay_active, 2, NULL },
 { "Replay mode", "m",      &g_replay_mode,   2, replay_mode_names },
 ```
-Update `CFG_ITEM_COUNT` — it's auto-computed from sizeof so no change needed.
+Update `CFG_ITEM_COUNT` - it's auto-computed from sizeof so no change needed.
 ### Step 3: Replay control functions in `repl_core.c`
 Place near `execute_commands()` (~line 3545). These are the core replay engine:
 **`replay_start()`**: Set `g_replay_active = 1`, `g_replay_state = REPLAY_PLAYING`, `g_replay_pc = 0`, `g_replay_accum = 0`, `g_replay_fade_alpha = 1.0`, `g_replay_src_line = -1`.
@@ -102,7 +102,7 @@ Place near `execute_commands()` (~line 3545). These are the core replay engine:
 ### Step 4: Clamp `g_num_flat_cmds` during rendering in `display_func()` (repl_core.c:3837)
 After `flatten_commands()` runs and `g_flat_dirty` is cleared (line 3839), add:
 ```c
-/* Clamp flat cmd count for replay — all render loops respect this automatically */
+/* Clamp flat cmd count for replay - all render loops respect this automatically */
 int saved_flat_count = g_num_flat_cmds;
 if (g_replay_active && g_replay_state != REPLAY_OFF) {
     if (g_replay_pc < g_num_flat_cmds)
@@ -141,7 +141,7 @@ if (g_replay_active && g_replay_state == REPLAY_PLAYING) {
 ### Step 7: Keyboard bindings in `keyboard_func()` (repl_core.c:4585)
 Add a replay input block early in keyboard_func, after blink reset (line 4590) but before the selection clear (line 4593):
 ```c
-/* Replay controls — intercept keys when replay is active */
+/* Replay controls - intercept keys when replay is active */
 if (g_replay_active) {
     if (key == 7) { /* Ctrl+G: toggle off */
         replay_stop();
@@ -209,7 +209,7 @@ At the end of `render_3d_scene()` (before `glPopAttrib()` at line 1107), when `g
 - Mode indicator: "Polygon" or "Vertex"
 - State: "PLAYING" / "PAUSED" / "DONE"
 Position at bottom of the 3D viewport (right of code panel). Use `g_panel_frac` to offset past the code panel. Keep it compact (1-2 lines of text + thin progress bar).
-Need to add `extern int g_replay_active;` etc. — already in sample.h so no extra includes needed since scene_render.c includes sample.h.
+Need to add `extern int g_replay_active;` etc. - already in sample.h so no extra includes needed since scene_render.c includes sample.h.
 Note: need to receive the `saved_flat_count` (total commands) for the progress display. Pass it via a new `extern int g_replay_total_flat` global set in display_func before clamping.
 ### Step 9: Source line highlight in `ui_panels.c`
 In `render_code_panel()`, in the "existing command, not being edited" path (line 303-341), before the existing selection highlight check (line 307), add a replay highlight check:
@@ -229,13 +229,13 @@ if (g_replay_active && g_replay_src_line >= 0 && i == g_replay_src_line) {
 ```
 Add auto-scroll: when replay is active, treat `g_replay_src_line` as the "cursor" for scroll purposes. In the scroll-follow logic (line 144-152), when `g_replay_active`, use `n_header + g_replay_src_line` as the target line instead of `cursor_doc_line`. Set `g_scroll_follow_cursor = 1` each time `g_replay_src_line` changes (done in timer_func via replay_advance).
 ### Step 10: Edge cases
-1. **Editing cancels replay**: Step 7 already handles this — any unrecognized key calls `replay_stop()` before falling through.
+1. **Editing cancels replay**: Step 7 already handles this - any unrecognized key calls `replay_stop()` before falling through.
 2. **Re-flatten during replay**: Step 4 clamps `g_replay_pc` to new `g_num_flat_cmds` after flatten.
 3. **Goto loops**: The existing 100k safety guard in execute_commands works; the clamped `g_num_flat_cmds` also bounds execution.
 4. **Empty command buffer**: `replay_start()` should check `g_num_flat_cmds > 0` before starting.
 5. **Config menu toggle**: When replay is active and user opens config via backtick, cancel replay (backtick handling is before replay intercept, so it works naturally since the config toggle returns early).
 ## Verification
-1. `make sample` in the claude4.6-opus-thinking directory — must compile clean
+1. `make sample` in the claude4.6-opus-thinking directory - must compile clean
 2. Run `./sample`, type a few glBegin/glEnd blocks with vertices
 3. Press Ctrl+G: geometry should build up incrementally from empty
 4. Press Space: pause/resume; when DONE, Space restarts

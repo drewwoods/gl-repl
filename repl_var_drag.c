@@ -66,7 +66,7 @@ void repl_var_drag_motion(int x) {
     g_predef_vars[*drag->var_idx].value = new_val;
 
     /* Sync any literal CMD_VAR_ASSIGN for this var so the source line
-     * on screen matches the new value (constant assignments only —
+     * on screen matches the new value (constant assignments only -
      * expressions that reference other vars are left alone). */
     const char *vname = g_predef_vars[*drag->var_idx].name;
     for (int i = 0; i < repl_state_document_count(); i++) {

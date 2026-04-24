@@ -215,11 +215,11 @@ void render_help(void) {
         for (int i = 0; tab_keys_base[i] != NULL && nk < HELP_KEYS_MAX - HELP_FKEY_MAX - 4; i++)
             tab_keys[nk++] = tab_keys_base[i];
 
-        /* F1 — not in g_cfg_items */
+        /* F1 - not in g_cfg_items */
         snprintf(fkey_strbuf[0], sizeof(fkey_strbuf[0]), "  F1   \tHelp overlay");
         tab_keys[nk++] = fkey_strbuf[0];
 
-        /* F2–F11 — pulled from the config descriptor table by matching
+        /* F2–F11 - pulled from the config descriptor table by matching
          * key_code (GLUT_KEY_Fn == n). */
         int di = 1;
         for (int fn = 2; fn <= 11 && di < HELP_FKEY_MAX - 1; fn++) {
@@ -238,7 +238,7 @@ void render_help(void) {
             }
         }
 
-        /* F12 — not in g_cfg_items */
+        /* F12 - not in g_cfg_items */
         snprintf(fkey_strbuf[di], sizeof(fkey_strbuf[di]), "  F12  \tCycle examples");
         tab_keys[nk++] = fkey_strbuf[di];
 
@@ -287,11 +287,11 @@ void render_help(void) {
     if (help_scroll < 0) help_scroll = 0;
     *help->scroll = help_scroll;
 
-    /* Background — matches config menu #222 */
+    /* Background - matches config menu #222 */
     glColor4f(0.133f, 0.133f, 0.133f, 0.98f);
     draw_quad((float)hx, (float)hy, (float)hw, (float)hh);
 
-    /* Border — matches config menu #3a3a3a */
+    /* Border - matches config menu #3a3a3a */
     glColor4f(0.227f, 0.227f, 0.227f, 1.0f);
     glBegin(GL_LINE_LOOP);
     glVertex2f((float)hx,        (float)hy);
@@ -310,7 +310,7 @@ void render_help(void) {
         glVertex2f((float)(hx + hw), (float)title_y);
         glEnd();
 
-        /* Title text — dim, left-aligned like config menu section headers */
+        /* Title text - dim, left-aligned like config menu section headers */
         glColor4f(0.478f, 0.518f, 0.580f, 1.0f);
         draw_string((float)(hx + 14), (float)(title_y + 4), "HELP", FONT_SMALL);
 
@@ -392,7 +392,7 @@ void render_help(void) {
         /* '\t' marks the left/right column boundary */
         const char *tab = strchr(text[i], '\t');
         if (tab) {
-            /* Left column (command / key) — #d8d8d8 */
+            /* Left column (command / key) - #d8d8d8 */
             char left[256];
             int ln = (int)(tab - text[i]);
             if (ln > 255) ln = 255;
@@ -401,20 +401,20 @@ void render_help(void) {
             glColor4f(0.847f, 0.847f, 0.847f, 1.0f);
             draw_string((float)tx, (float)ty, left, FONT_SMALL);
 
-            /* Right column (description) — aligned to shared tab stop */
+            /* Right column (description) - aligned to shared tab stop */
             glColor4f(0.533f, 0.533f, 0.533f, 1.0f);
             draw_string((float)(tx + tab_stop * FONT_SMALL_W), (float)ty,
                         tab + 1, FONT_SMALL);
         } else if (text[i][0] != ' ') {
-            /* Section header — dim gray-blue like config menu */
+            /* Section header - dim gray-blue like config menu */
             glColor4f(0.478f, 0.518f, 0.580f, 1.0f);
             draw_string((float)tx, (float)ty, text[i], FONT_SMALL);
         } else if (text[i][2] == ' ' && text[i][3] == ' ') {
-            /* 4+ space indent — code example, green accent */
+            /* 4+ space indent - code example, green accent */
             glColor4f(UI_ACCENT_GREEN_R, UI_ACCENT_GREEN_G, UI_ACCENT_GREEN_B, 0.90f);
             draw_string((float)tx, (float)ty, text[i], FONT_SMALL);
         } else {
-            /* 2-space indent, no split — light label colour */
+            /* 2-space indent, no split - light label colour */
             glColor4f(0.847f, 0.847f, 0.847f, 1.0f);
             draw_string((float)tx, (float)ty, text[i], FONT_SMALL);
         }
@@ -433,11 +433,11 @@ void render_help(void) {
         if (thumb_h < 12) thumb_h = 12;
         int thumb_y = bar_top - (int)(bar_h * pos) - thumb_h;
 
-        /* Track — #333 */
+        /* Track - #333 */
         glColor4f(0.20f, 0.20f, 0.20f, 0.60f);
         draw_quad((float)bar_x, (float)(bar_top - bar_h), 4.0f, (float)bar_h);
 
-        /* Thumb — #888 */
+        /* Thumb - #888 */
         glColor4f(0.533f, 0.533f, 0.533f, 0.80f);
         draw_quad((float)bar_x, (float)thumb_y, 4.0f, (float)thumb_h);
 

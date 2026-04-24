@@ -160,7 +160,7 @@ void render_var_panel(void) {
                 (float)(py + ph - VAR_PANEL_PAD - 4),
                 "Variables (declared)", FONT_SMALL);
 
-    /* Column offsets within the panel — sized for multi-char var names */
+    /* Column offsets within the panel - sized for multi-char var names */
     int max_name_len = 1;
     for (int i = 0; i < g_num_predef_vars; i++) {
         int len = (int)strlen(g_predef_vars[i].name);
@@ -185,7 +185,7 @@ void render_var_panel(void) {
         int text_y = row_y + 4;
         float val  = g_predef_vars[i].value;
 
-        /* Drag highlight — amber tint for log mode, blue for linear */
+        /* Drag highlight - amber tint for log mode, blue for linear */
         if (repl_var_drag_active_var() == i) {
             if (repl_var_drag_log_mode())
                 glColor4f(0.30f, 0.20f, 0.05f, 0.60f);
@@ -218,7 +218,7 @@ void render_var_panel(void) {
         glVertex2f(cx, (float)(row_y + VAR_ROW_H - 5));
         glEnd();
 
-        /* Handle — position computed via shared log-normalized scale.
+        /* Handle - position computed via shared log-normalized scale.
          * Yellow = linear drag, orange = log drag, blue = idle. */
         float t  = val_to_slider_t(val, log_scale);
         float hx = (float)track_x + t * (float)(track_w - handle_w);

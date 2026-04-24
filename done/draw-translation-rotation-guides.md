@@ -3,7 +3,7 @@
 ## Context
 
 Today the REPL draws live guide overlays (`draw_guide_xy_plane`, etc.) only while
-the user is *typing* a `glVertex3f(` line — `draw_vertex_guides()` inspects
+the user is *typing* a `glVertex3f(` line - `draw_vertex_guides()` inspects
 `g_input` mid-keystroke and renders planes/dots to help the user place a point
 in 3D.
 
@@ -93,7 +93,7 @@ New helper `draw_translate_guide(const GLCmd *cmd, const float p_after[3])`:
 - Dashed line (`glLineStipple(1, 0xAAAA)`, same style as
   `draw_normal_guides`, `scene_render.c:~1203`) from `p_before` to `p_result`.
 - Endpoint dots: small dot at `p_before`, larger at `p_result`
-  (`glPointSize(8.0f)` — reuse normal-guide style).
+  (`glPointSize(8.0f)` - reuse normal-guide style).
 - Color: axis-tinted (e.g. translate = yellow/orange) to distinguish from
   vertex/normal guides.
 
@@ -105,12 +105,12 @@ New helper `draw_rotate_guide(const GLCmd *cmd, const float p_start[3])`:
 - Normalize axis; skip draw if `|axis| < eps` or `angle == 0`.
 - Arc as `GL_LINE_STRIP` of ~48 segments from angle `0` to `angle`:
   at step `i`, build quaternion/axis-angle rotation of `theta_i` about the
-  axis, apply to `p_start`, emit vertex. (Straightforward Rodrigues formula —
+  axis, apply to `p_start`, emit vertex. (Straightforward Rodrigues formula -
   no new math libs needed.)
 - Draw a short axis stub through the local origin along `(ax,ay,az)` so the
   rotation axis is visible.
 - Small dot at `p_start` (pre-rotation), larger dot at the final point.
-  No tangent stub at the end — the larger dot is sufficient.
+  No tangent stub at the end - the larger dot is sufficient.
 - Color derived from the rotation axis via `xform_axis_color(ax,ay,az)`.
   The shaft/arc uses the axes-pulse visual style (dim base + traveling
   pulse dot).
@@ -125,8 +125,8 @@ is a transform:
   `i_after` is found by first locating the first flat cmd with
   `src_cmd_idx == g_edit_line`, then scanning forward in flat
   execution order for the next valid flat cmd whose `src_cmd_idx`
-  differs. `src_cmd_idx` is **not** monotonic — function-call
-  expansions carry the callee's body line — so a numeric `>` compare
+  differs. `src_cmd_idx` is **not** monotonic - function-call
+  expansions carry the callee's body line - so a numeric `>` compare
   would skip past them.
 - Before applying the cursor transform (so modelview = `M_before`), call
   `draw_translate_guide` or `draw_rotate_guide`.
@@ -147,17 +147,17 @@ lines.
 
 ## Verification
 
-1. `make sample && ./sample` — manual smoke test.
+1. `make sample && ./sample` - manual smoke test.
 2. Type the two example programs from the task description; navigate cursor
    onto each transform line; confirm arrow/arc positions match expected
    `(0,0,-1) → (0,1,-1)` and 90° arc from `(0,0,-1)` around Y.
 3. Edge cases to verify interactively:
-   - Cursor on invalid/partial transform line — no guide (respects "complete
+   - Cursor on invalid/partial transform line - no guide (respects "complete
      and correct" rule).
-   - `glRotatef(0, …)` or zero-length axis — no arc drawn.
-   - Transform inside a `glPushMatrix/glPopMatrix` block — guide still renders
+   - `glRotatef(0, …)` or zero-length axis - no arc drawn.
+   - Transform inside a `glPushMatrix/glPopMatrix` block - guide still renders
      in the correct local frame.
-   - Transform inside a for-loop — renders against the first unrolled instance
+   - Transform inside a for-loop - renders against the first unrolled instance
      (best-effort; acceptable per the existing flat-cmd model).
-4. `make test` — ensure no regressions in existing parse/format/commit tests
+4. `make test` - ensure no regressions in existing parse/format/commit tests
    (rendering-only change, expected to pass unchanged).

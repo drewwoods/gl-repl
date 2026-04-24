@@ -19,7 +19,7 @@ not by replaying more commands. Here's the breakdown:
 
 ### Replay doesn't change `g_num_cmds`
 
-`replay_exec_limit()` only clamps `g_num_flat_cmds` — the code panel still
+`replay_exec_limit()` only clamps `g_num_flat_cmds` - the code panel still
 iterates **all source commands** every frame. The scene rendering correctly
 limits work to `g_replay_pc`, but the code panel does not.
 
@@ -31,11 +31,11 @@ each command, it calls `code_panel_command_main_rows` →
 `CMD_VAR_ASSIGN` with `has_vars`, this calls:
 
 1. **`find_replay_assignment_flat_cmd`** → `find_replay_flat_cmd` (ui_panels.c)
-   — scans **backwards from `g_replay_pc` to 0** to find the matching flat cmd.
+   - scans **backwards from `g_replay_pc` to 0** to find the matching flat cmd.
    This is O(replay_pc) per call.
 
 2. **`build_replay_assignment_inline_comment`** →
-   `replay_copy_predef_values_before_flat_cmd` (ui_panels.c) — walks **forward
+   `replay_copy_predef_values_before_flat_cmd` (ui_panels.c) - walks **forward
    from 0 to `flat_idx`**, re-evaluating every assignment. Also O(replay_pc).
 
 So for N variable-assignment commands: **O(N × replay_pc)** per frame. At
@@ -44,10 +44,10 @@ command 2000, that's millions of iterations just for layout.
 ### PROF_CODE_PANEL_LINES_BODY_CMDS
 
 The rendering loop calls `code_panel_get_command_display_text` **again** for
-every non-edit command — duplicating all the same O(replay_pc) scans from
+every non-edit command - duplicating all the same O(replay_pc) scans from
 precompute. Then for `g_replay_src_line`, it additionally calls
 `find_replay_flat_cmd`, `build_replay_subst_annotation`, and
-`build_replay_eval_annotation` — each triggering another O(replay_pc) scan.
+`build_replay_eval_annotation` - each triggering another O(replay_pc) scan.
 
 ### Summary
 
@@ -57,7 +57,7 @@ precompute. Then for `g_replay_src_line`, it additionally calls
 | `replay_copy_predef_values_before_flat_cmd` | O(replay_pc) per call | Forward walk replaying all assignments |
 | Both called N times across precompute + render | O(N × replay_pc) total | Called for every var-assign command |
 
-The scene only going from 2.5ms→4ms makes sense — it's bounded by
+The scene only going from 2.5ms→4ms makes sense - it's bounded by
 `replay_exec_limit()` which is O(replay_pc) once. The code panel is O(N ×
 replay_pc) due to repeated linear scans.
 
@@ -86,7 +86,7 @@ A single O(replay_pc) forward simulation (`replay_build_predef_snapshots()`)
 replicates the full `replay_copy_predef_values_before_flat_cmd` control-flow
 logic (var-assign updates, if-block skipping, goto handling) and snapshots
 predef values at each flat position referenced by `s_replay_flat_map`. Each
-snapshot captures the state **before** that flat command executes — matching
+snapshot captures the state **before** that flat command executes - matching
 the exact semantics of the original per-call function.
 
 `build_replay_assignment_inline_comment`, `build_replay_subst_annotation`, and

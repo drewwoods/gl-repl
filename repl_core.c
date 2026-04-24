@@ -1,5 +1,5 @@
 /*
- * repl_core.c — Core state, normalization, and display infrastructure.
+ * repl_core.c - Core state, normalization, and display infrastructure.
  *
  * Division of labor
  * -----------------
@@ -8,9 +8,9 @@
  *   - Control-flow state that is not pure command metadata
  *   - Global state: command arrays (repl_state_document_cmds_mut() / g_flat_cmds), camera, toggles,
  *     accumulation-buffer settings, etc.
- *   - Normalization — repl_parse_and_normalize(), repl_reformat_commands()
+ *   - Normalization - repl_parse_and_normalize(), repl_reformat_commands()
  *   - GLUT display / reshape callbacks
- *   - 2D helpers   — draw_string(), draw_quad(), begin_2d(), end_2d()
+ *   - 2D helpers   - draw_string(), draw_quad(), begin_2d(), end_2d()
  *   - Public API wrappers forwarded from sample.c
  *
  * repl_editor.c owns the interactive editing layer:
@@ -18,38 +18,38 @@
  *   - Commit handlers that decide *where* a parsed command goes in repl_state_document_cmds_mut()[]
  *   - GLUT keyboard / special / mouse / motion / timer dispatch
  *   - Panel resizing and routing to variable-drag ownership
- *   - feed_line() — the programmatic commit entry point used by file loading
+ *   - feed_line() - the programmatic commit entry point used by file loading
  *     and test harnesses
  *
  * Other translation units:
- *   repl_eval.c    — expression evaluator, for-loop header parsers
- *   repl_export.c  — save / load  (output.c round-tripping)
- *   repl_undo.c    — undo/redo snapshots and history rings
- *   repl_camera_controls.c — viewport camera drag and momentum controls
- *   repl_actions.c — config shortcuts, menu actions, startup config defaults
- *   repl_code_panel_layout.c — pure code-panel wrapping and row lookup
- *   repl_code_panel_document.c — code-panel document rows and hit targets
- *   repl_search.c  — incremental search overlay
- *   cmd_format.c   — source-text formatting helpers
- *   repl_parser.c  — parse_command(): text → GLCmd
- *   repl_source_scope.c — source block/depth queries and indent cache
- *   repl_flatten.c — repl_flatten_program() / flatten_commands()
- *   repl_executor.c— repl_execute_program() / execute_commands()
- *   repl_autocomplete.c — completions and parameter hints
- *   repl_autonormal.c — auto-generated normals and feeding-state lookup
- *   repl_example_loader.c — built-in example loading and metadata
- *   repl_replay.c  — replay state machine and fade-batch rendering
- *   repl_replay_annotations.c — code-panel replay variable annotations
- *   scene_render.c — 3D scene setup, grid / axes / overlay drawing
- *   ui_menu_bar.c — code-panel menus, dropdowns, and search slot
- *   ui_color_picker.c — floating literal-color editor
- *   ui_autocomplete_panel.c — floating autocomplete popup renderer
- *   ui_help_overlay.c — modal F1 help overlay
- *   ui_variable_panel.c — floating variable panel renderer
- *   repl_inline_rename.c — scene-rename input buffer
- *   repl_var_drag.c — variable slider drag state/writeback
- *   ui_panels.c    — code rows, scene status, hit routing
- *   repl_examples.c— predefined example scene data
+ *   repl_eval.c    - expression evaluator, for-loop header parsers
+ *   repl_export.c  - save / load  (output.c round-tripping)
+ *   repl_undo.c    - undo/redo snapshots and history rings
+ *   repl_camera_controls.c - viewport camera drag and momentum controls
+ *   repl_actions.c - config shortcuts, menu actions, startup config defaults
+ *   repl_code_panel_layout.c - pure code-panel wrapping and row lookup
+ *   repl_code_panel_document.c - code-panel document rows and hit targets
+ *   repl_search.c  - incremental search overlay
+ *   cmd_format.c   - source-text formatting helpers
+ *   repl_parser.c  - parse_command(): text → GLCmd
+ *   repl_source_scope.c - source block/depth queries and indent cache
+ *   repl_flatten.c - repl_flatten_program() / flatten_commands()
+ *   repl_executor.c- repl_execute_program() / execute_commands()
+ *   repl_autocomplete.c - completions and parameter hints
+ *   repl_autonormal.c - auto-generated normals and feeding-state lookup
+ *   repl_example_loader.c - built-in example loading and metadata
+ *   repl_replay.c  - replay state machine and fade-batch rendering
+ *   repl_replay_annotations.c - code-panel replay variable annotations
+ *   scene_render.c - 3D scene setup, grid / axes / overlay drawing
+ *   ui_menu_bar.c - code-panel menus, dropdowns, and search slot
+ *   ui_color_picker.c - floating literal-color editor
+ *   ui_autocomplete_panel.c - floating autocomplete popup renderer
+ *   ui_help_overlay.c - modal F1 help overlay
+ *   ui_variable_panel.c - floating variable panel renderer
+ *   repl_inline_rename.c - scene-rename input buffer
+ *   repl_var_drag.c - variable slider drag state/writeback
+ *   ui_panels.c    - code rows, scene status, hit routing
+ *   repl_examples.c- predefined example scene data
  */
 
 #include "sample.h"
@@ -85,7 +85,7 @@ void mark_normals_dirty(void) {
     repl_state_mark_normals_dirty();
 }
 
-/* Predefined variables — defined in repl_eval.c */
+/* Predefined variables - defined in repl_eval.c */
 
 /* (no display list - commands are executed directly each frame) */
 
@@ -620,7 +620,7 @@ static void display_func(void) {
     update_render_state_strings();
     update_cam_lines();
 
-    /* Full-window clear — use last glClearColor cmd if present, else default */
+    /* Full-window clear - use last glClearColor cmd if present, else default */
     glViewport(0, 0, *repl_state_viewport()->window_w, *repl_state_viewport()->window_h);
     {
         float cr = 0.10f, cg = 0.10f, cb = 0.13f, ca = 1.0f;
@@ -636,7 +636,7 @@ static void display_func(void) {
         glClearColor(cr, cg, cb, ca);
     }
 
-    /* 3D scene — with optional accumulation-buffer jitter AA */
+    /* 3D scene - with optional accumulation-buffer jitter AA */
     /* Reset subsection accumulators so timings across all AA samples sum up
      * correctly before the first (or only) render_3d_scene() call. */
     for (ProfSection s = PROF_SCENE_3D_SETUP; s <= PROF_SCENE_3D_HUD; s++)

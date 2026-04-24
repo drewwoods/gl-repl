@@ -1,5 +1,5 @@
 /*
- * scene_render.c — 3D scene rendering (frame prep, edit guides, replay HUD)
+ * scene_render.c - 3D scene rendering (frame prep, edit guides, replay HUD)
  *
  * Extracted from sample.c for maintainability.
  */
@@ -348,12 +348,12 @@ static void draw_replay_hud(const SceneRenderConfig *config) {
         draw_quad((float)icon_cx - bw - gap * 0.5f, by0, bw, (float)icon_sz);
         draw_quad((float)icon_cx + gap * 0.5f,      by0, bw, (float)icon_sz);
     } else if (*replay->state == REPLAY_DONE) {
-        /* Square — run complete */
+        /* Square - run complete */
         float sx = (float)icon_cx - (float)icon_sz * 0.5f;
         float sy = (float)icon_cy - (float)icon_sz * 0.5f;
         draw_quad(sx, sy, (float)icon_sz, (float)icon_sz);
     } else {
-        /* Play triangle — paused / stopped, click to (re)start */
+        /* Play triangle - paused / stopped, click to (re)start */
         float x0 = (float)icon_cx - (float)icon_sz * 0.5f;
         float cy = (float)icon_cy;
         glBegin(GL_TRIANGLES);
@@ -363,7 +363,7 @@ static void draw_replay_hud(const SceneRenderConfig *config) {
         glEnd();
     }
 
-    /* Line 1 — "Replay  4.0 cmd/s | Polygon" in green; command count
+    /* Line 1 - "Replay  4.0 cmd/s | Polygon" in green; command count
      * is right-aligned so 4-digit totals don't push other fields around. */
     snprintf(progress_txt, sizeof(progress_txt),
              "Replay  %11.1f cmd/s  | %7s  | %s",
@@ -402,7 +402,7 @@ static void draw_replay_hud(const SceneRenderConfig *config) {
     glVertex2f((float)groove_x + 0.5f,                     (float)(groove_y + REPLAY_HUD_PROGRESS_H) - 0.5f);
     glEnd();
 
-    /* Line 2 — compact kbd hints along the bottom in muted gray */
+    /* Line 2 - compact kbd hints along the bottom in muted gray */
     snprintf(kbd_txt, sizeof(kbd_txt),
              "Space pause  |  +/- speed  |  m mode  |  e expand |  %c %c step |  Esc stop", 0xAB, 0xBB);
     glColor3f(0.533f, 0.533f, 0.533f);  /* #888 */
@@ -417,7 +417,7 @@ static void draw_replay_hud(const SceneRenderConfig *config) {
 
 /* Ground-plane crosshair gizmo at the orbit target. Visible only while the
  * camera is moving (during drag or while momentum carries it); fades out.
- * REPL-only — never exported. Styled to match the other scene helpers:
+ * REPL-only - never exported. Styled to match the other scene helpers:
  * soft halo line under a bright core, alpha driven by g_cam_motion_glow. */
 static void draw_orbit_target(const FrameRenderContext *frame_ctx) {
     const SceneRenderConfig *config = &frame_ctx->config;
@@ -551,7 +551,7 @@ void render_3d_scene(void) {
                                    config.replay_tess_preview);
     prof_accum_end(PROF_SCENE_3D_OUTLINES);
 
-    /* Vertex dots — replay transforms so dots match the filled geometry */
+    /* Vertex dots - replay transforms so dots match the filled geometry */
     prof_begin(PROF_SCENE_3D_OVERLAYS);
     glPushMatrix();
     /* Snapshot the pure camera-view matrix (before any user transforms are

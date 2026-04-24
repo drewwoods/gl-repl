@@ -1,5 +1,5 @@
 /*
- * repl_eval.c — Expression evaluator, REPL<->C translators, for-loop parsers.
+ * repl_eval.c - Expression evaluator, REPL<->C translators, for-loop parsers.
  *
  * Responsibilities:
  *  - Recursive-descent float evaluator for REPL expressions with support for
@@ -194,7 +194,7 @@ int input_has_predef_vars(const char *s) {
 }
 
 /* ========================================================================= */
-/* Expression evaluator — recursive descent with variables                    */
+/* Expression evaluator - recursive descent with variables                    */
 /* ========================================================================= */
 /*
  * Grammar, loosest to tightest precedence:
@@ -714,7 +714,7 @@ int parse_c_for_header(const char *input, char *var_name, int var_sz,
     while (*p && isspace((unsigned char)*p)) p++;
 
     /* Skip the loop variable in the condition (we don't validate it matches
-     * the declared one — REPL trusts the imported C is well-formed). */
+     * the declared one - REPL trusts the imported C is well-formed). */
     while (*p && (isalnum((unsigned char)*p) || *p == '_')) p++;
     while (*p && isspace((unsigned char)*p)) p++;
 
@@ -767,7 +767,7 @@ int parse_c_for_header(const char *input, char *var_name, int var_sz,
     } else {
         return 0;
     }
-    /* A `>` condition with a positive step would never terminate — flip sign
+    /* A `>` condition with a positive step would never terminate - flip sign
      * so it counts down toward the bound. This helps termination when the
      * loop runs, but does not guarantee any iterations. */
     if (is_greater && *step > 0) *step = -*step;

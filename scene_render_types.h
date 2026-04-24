@@ -1,5 +1,5 @@
 /*
- * scene_render_types.h — shared render context types
+ * scene_render_types.h - shared render context types
  */
 #ifndef SCENE_RENDER_TYPES_H
 #define SCENE_RENDER_TYPES_H

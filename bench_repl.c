@@ -1,5 +1,5 @@
 /*
- * bench_repl.c — Runtime benchmarks for the REPL parse / flatten / replay
+ * bench_repl.c - Runtime benchmarks for the REPL parse / flatten / replay
  * pipeline.
  *
  * The benchmark binary links against the same CORE_TEST_OBJS the unit tests
@@ -10,18 +10,18 @@
  * per-function counter (see include/GL/gl_stub_counts.h), so timings
  * measure pure C-level cost. In the real-GL build we create a real GL
  * context up front (via GLUT) so sub-benchmarks that drive actual draw
- * calls — notably `fade_batches` via `execute_replay_fade_batches()` —
+ * calls - notably `fade_batches` via `execute_replay_fade_batches()` -
  * have somewhere to emit to; without a current context those calls are
  * undefined behaviour rather than measurable work.
  *
  * Sub-benchmarks (names match the `--only` filter strings and the printed
  * labels):
- *   parse_lines       — repl_parse_command on every example line
- *   feed_examples     — full feed_line path on every example
- *   flatten_examples  — load each example then call repl_flatten_commands
- *   replay_examples   — start a replay and step it to completion
- *   replay_long       — feed a synthetic large scene and step replay to end
- *   fade_batches      — drive execute_replay_fade_batches() with a packed
+ *   parse_lines       - repl_parse_command on every example line
+ *   feed_examples     - full feed_line path on every example
+ *   flatten_examples  - load each example then call repl_flatten_commands
+ *   replay_examples   - start a replay and step it to completion
+ *   replay_long       - feed a synthetic large scene and step replay to end
+ *   fade_batches      - drive execute_replay_fade_batches() with a packed
  *                       batch buffer whose old_pcs sit deep in a long flat
  *                       command stream (exercises the per-batch prefix
  *                       walk that dominates late-replay fade-in cost).
@@ -53,7 +53,7 @@
 #else
 /* Real-GL build: pull in GLUT so we can create an actual current
  * context before running sub-benchmarks that emit draw calls. The
- * stub headers deliberately do NOT get included here — the Makefile
+ * stub headers deliberately do NOT get included here - the Makefile
  * picks between stub and system GL headers via -I ordering. */
 #include <gl_includes.h>
 #endif
@@ -111,7 +111,7 @@ static void report(BenchResult r) {
 
 /* ---- Test fixture helpers --------------------------------------------- */
 
-/* Mirror declare_test_vars() from the test suites — examples reference
+/* Mirror declare_test_vars() from the test suites - examples reference
  * these single-letter identifiers freely and parsing them otherwise fails
  * the validate_expression_idents() check. We declare them once at startup
  * and re-declare after each repl_reset_state() call (reset wipes the
@@ -171,7 +171,7 @@ static BenchResult bench_parse_lines(int iters) {
 
     /* Predeclare a common subset of identifiers so the validator does
      * not reject `x` etc. on the lines that use them. This is NOT
-     * exhaustive — examples that reference other locals/params will
+     * exhaustive - examples that reference other locals/params will
      * still fail validation, but the parser work we're measuring
      * (tokenize, expression parse, normalize) runs regardless of that
      * result. */
@@ -251,7 +251,7 @@ static BenchResult bench_flatten_examples(int iters) {
             /* Snapshot post-load predef values. flatten_range() writes
              * g_predef_vars[].value on CMD_VAR_ASSIGN (repl_core.c:2624),
              * so without restoring each iter sees drifted values and
-             * measures a different workload than the first — several
+             * measures a different workload than the first - several
              * examples have self-referential-looking assignments whose
              * RHS depends on other predef vars. */
             int saved_n = g_num_predef_vars;
@@ -269,7 +269,7 @@ static BenchResult bench_flatten_examples(int iters) {
                 /* repl_flatten_commands() -> flatten_commands() rebuilds
                  * unconditionally (resets repl_state_flat_program_count() and walks
                  * repl_state_document_cmds_mut()[]), so we don't need to toggle any dirty flag
-                 * here — doing so would just add unrelated side effects
+                 * here - doing so would just add unrelated side effects
                  * (repl_state_normals_dirty(), depth cache invalidation) into the
                  * timed region. */
                 repl_flatten_commands();
@@ -293,7 +293,7 @@ static BenchResult bench_replay_examples(int iters) {
                       .min_sec = 1e18 };
 
     /* load_example_lines() leaves repl_state_flat_program_dirty()=1, and replay_start() will
-     * flatten once on its own — calling repl_flatten_commands() explicitly
+     * flatten once on its own - calling repl_flatten_commands() explicitly
      * beforehand would flatten twice, because repl_flatten_commands() does
      * NOT clear repl_state_flat_program_dirty() (see repl_core.c:4462-4464 vs. :3265-3269). */
     for (int it = 0; it < iters; it++) {
@@ -359,11 +359,11 @@ static BenchResult bench_replay_long(int iters) {
     BenchResult r = { .name = "replay_long", .unit = "steps",
                       .min_sec = 1e18 };
 
-    /* Load once outside the inner loop — feed_line is not what we are
+    /* Load once outside the inner loop - feed_line is not what we are
      * measuring here. Re-using the same repl_state_document_cmds_mut()[] across iterations is
      * fine because replay only mutates the replay state, not the source
      * commands. We mark repl_state_flat_program_dirty() between iterations so replay_start()
-     * does a fresh flatten each time — that matches "what happens the
+     * does a fresh flatten each time - that matches "what happens the
      * first time you press play". Note: replay_start() handles the
      * flatten itself and clears repl_state_flat_program_dirty(), so calling
      * repl_flatten_commands() explicitly here would flatten twice. */
@@ -371,7 +371,7 @@ static BenchResult bench_replay_long(int iters) {
 
     /* Warm up via replay_start/replay_stop (not a bare
      * repl_flatten_commands) so the flatten's CMD_VAR_ASSIGN writes
-     * to g_predef_vars don't leak into the timed iterations —
+     * to g_predef_vars don't leak into the timed iterations -
      * replay_start does its own predef snapshot/restore around the
      * flatten (repl_core.c:3264-3268). */
     mark_normals_dirty();
@@ -413,7 +413,7 @@ static BenchResult bench_replay_long(int iters) {
         r.iters++;
     }
 
-    /* Diagnostic aside — useful for confirming the scene size, but gated
+    /* Diagnostic aside - useful for confirming the scene size, but gated
      * behind !g_csv so machine-parseable output stays clean on stderr too. */
     if (!g_csv) {
         fprintf(stderr, "  (replay_long scene flattened to %d flat cmds)\n",
@@ -428,7 +428,7 @@ static BenchResult bench_replay_long(int iters) {
  * so we can exercise the fade-batch rendering pass with large old_pc
  * indices. We unroll a for-loop that emits one triangle per iteration;
  * flatten caps us at MAX_COMMANDS flat cmds regardless of the iteration
- * count, which is what we want for this benchmark — we just need a large
+ * count, which is what we want for this benchmark - we just need a large
  * repl_state_flat_program_count(). */
 static const char *const k_fade_bench_scene[] = {
     "glEnable(GL_DEPTH_TEST);",
@@ -470,7 +470,7 @@ static int populate_late_batches(int flat_cmds, int *old_pcs, int *new_pcs,
     int tail_start = flat_cmds * 3 / 4;
     int span = flat_cmds - tail_start;
     if (span < count * 2) {
-        /* Fallback for tiny flat counts — keeps the bench usable even if
+        /* Fallback for tiny flat counts - keeps the bench usable even if
          * MAX_COMMANDS is reduced. */
         count = span / 2;
         if (count < 1) count = 1;
@@ -505,7 +505,7 @@ static BenchResult bench_fade_batches(int iters) {
     replay_stop();
 
     /* Re-flatten after replay_stop so repl_state_flat_program_count() is the full stream
-     * (replay's clamp might still be in effect otherwise — we observed
+     * (replay's clamp might still be in effect otherwise - we observed
      * flat_cmds via the post-start snapshot above). */
     mark_normals_dirty();
     repl_flatten_commands();
@@ -543,7 +543,7 @@ static BenchResult bench_fade_batches(int iters) {
              * the measured workload (replay_tick_fade_batches isn't
              * called here, but keeping the install call in-loop also
              * amortizes a tiny fraction of the setup cost into each
-             * measurement — intentional, since a real replay frame
+             * measurement - intentional, since a real replay frame
              * also re-registers batches as new steps arrive). */
             repl_bench_fade_install(old_pcs, new_pcs, installed_count, age);
             execute_replay_fade_batches();
@@ -605,12 +605,12 @@ static int wants(const char *filter, const char *name) {
 /* Real-GL build: create a minimal GLUT window so there is a current
  * GL context for sub-benchmarks that actually emit draw calls.
  * Without this, glBegin / glVertex / glEnd and friends hit whatever
- * the driver does with no context current — typically a silent no-op,
+ * the driver does with no context current - typically a silent no-op,
  * sometimes a segfault, never a representative timing.
  *
  * The stubs build skips this entirely: every gl* is an inline no-op
  * that ticks a counter and returns, so no context is needed (or
- * even available — the stub build intentionally has no GL libs).
+ * even available - the stub build intentionally has no GL libs).
  *
  * If the process has no display (e.g. headless CI without $DISPLAY),
  * glutInit() will exit non-zero with its own error message; that's

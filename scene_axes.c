@@ -1,5 +1,5 @@
 /*
- * scene_axes.c — axes theme rendering
+ * scene_axes.c - axes theme rendering
  */
 #include "sample.h"
 #include "scene_axes.h"
@@ -341,14 +341,14 @@ void scene_axes_render(const FrameRenderContext *frame_ctx) {
         /* Axis lines (same palette as Classic) */
         draw_axis_line_triplet(len, 2.0f, spec->axis, 1);
 
-        /* XZ floor plane quadrant — always shown */
+        /* XZ floor plane quadrant - always shown */
         glBegin(GL_QUADS);
         glColor4f(0.58f, 0.60f, 0.72f, fminf(0.07f * as, 1.0f));
         glVertex3f(0,    0, 0);    glVertex3f(fill, 0, 0);
         glVertex3f(fill, 0, fill); glVertex3f(0,    0, fill);
         glEnd();
 
-        /* XY plane quadrant (z=0) — fades in when looking along Z */
+        /* XY plane quadrant (z=0) - fades in when looking along Z */
         float xy_a = fminf(0.11f * xy_w * as, 1.0f);
         if (xy_a > 0.004f) {
             glBegin(GL_QUADS);
@@ -363,7 +363,7 @@ void scene_axes_render(const FrameRenderContext *frame_ctx) {
             glEnd();
         }
 
-        /* ZY plane quadrant (x=0) — fades in when looking along X */
+        /* ZY plane quadrant (x=0) - fades in when looking along X */
         float zy_a = fminf(0.11f * zy_w * as, 1.0f);
         if (zy_a > 0.004f) {
             glBegin(GL_QUADS);

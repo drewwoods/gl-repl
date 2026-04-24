@@ -1,4 +1,4 @@
-# Architecture Notes — OpenGL Immediate-Mode REPL
+# Architecture Notes - OpenGL Immediate-Mode REPL
 
 ## Language Choice: C vs Go vs Lua
 
@@ -16,9 +16,9 @@ The project touches C APIs directly (OpenGL, GLUT) and has a hot render loop.
   `g_flat_cmds[4096]` model with no heap allocation is idiomatic C. Zero
   allocation in the hot path.
 
-### Lua is the genuinely interesting alternative — but differently
+### Lua is the genuinely interesting alternative - but differently
 
-Not "rewrite in Lua" — rather "embed Lua as the expression/scripting layer":
+Not "rewrite in Lua" - rather "embed Lua as the expression/scripting layer":
 
 ```
 C host:        OpenGL, GLUT, windowing, camera, UI rendering
@@ -37,8 +37,8 @@ end
 
 This is what LOVE2D / Defold do. Benefits:
 
-- **Functions and goto** become free — Lua has `function`, `goto`, `::labels::`
-- **Conditionals** — `if x > 0.5 then ... end`
+- **Functions and goto** become free - Lua has `function`, `goto`, `::labels::`
+- **Conditionals** - `if x > 0.5 then ... end`
 - **Tables** as data structures for complex geometry
 - Full math library already there
 - `t % 1` works natively (Lua `%` is float modulo)
@@ -46,7 +46,7 @@ This is what LOVE2D / Defold do. Benefits:
 
 The cost: the command list concept would need rethinking. Currently `g_cmds[]`
 is a structured list you can navigate, edit line-by-line, save, and reload. With
-Lua you'd store Lua source text and re-execute it each frame — which is actually
+Lua you'd store Lua source text and re-execute it each frame - which is actually
 fine for a REPL, and what things like Shadertoy do.
 
 ### Comparison
@@ -62,7 +62,7 @@ fine for a REPL, and what things like Shadertoy do.
 | Binary size/deps | tiny | large runtime | +lua (~200KB) |
 
 Go is the worst option for this use case. C stays right for the host. Lua as
-the scripting backend is a real architectural direction — essentially building a
+the scripting backend is a real architectural direction - essentially building a
 tiny LOVE2D.
 
 ---
@@ -77,7 +77,7 @@ GLCmd struct:
   mode      GLenum (for glBegin mode, glEnable cap, etc.)
   args[8]   float arguments (expanded from 4 to support future GLU commands)
   num_args  argument count
-  source    char[256] — original REPL text for display and serialization
+  source    char[256] - original REPL text for display and serialization
   valid     whether this command is active
   is_auto   auto-generated (e.g. auto-normals)
   has_vars  source references predefined variables, needs re-eval on flatten
@@ -90,13 +90,13 @@ g_cmds[4096]       Raw command list (what the user types)
                     Contains for-loop blocks (CMD_FOR_BEGIN..CMD_FOR_END)
                     Contains var assignments, comments, etc.
                          |
-                    flatten_range() — recursive expansion
+                    flatten_range() - recursive expansion
                          |
                          v
 g_flat_cmds[4096]  Flattened commands (loops expanded, vars evaluated)
                     Only executable GL commands remain
                          |
-                    execute_commands() — while loop with program counter
+                    execute_commands() - while loop with program counter
                          |
                          v
                     OpenGL calls (glBegin, glVertex3f, glEnd, ...)
@@ -107,8 +107,8 @@ g_flat_cmds[4096]  Flattened commands (loops expanded, vars evaluated)
 `execute_commands()` uses a `while` loop with an explicit program counter (`pc`)
 rather than a `for` loop. This enables future additions:
 
-- `CMD_GOTO` / `CMD_LABEL` — set `pc` directly and `continue`
-- `CMD_CALL` / `CMD_RETURN` — push/pop return address, jump to function body
+- `CMD_GOTO` / `CMD_LABEL` - set `pc` directly and `continue`
+- `CMD_CALL` / `CMD_RETURN` - push/pop return address, jump to function body
 
 ### Expression Evaluator (repl_eval.c)
 
@@ -127,7 +127,7 @@ Recursive descent parser supporting:
 x, y, z    General-purpose (future: drag GUI)
 i, j, k    Loop iterators / general-purpose
 n          General-purpose counter
-t          Time — auto-increments with elapsed time (Ctrl+T to pause)
+t          Time - auto-increments with elapsed time (Ctrl+T to pause)
 ```
 
 `t` is driven by `g_anim_time` in `timer_func()`. When playing, `g_flat_dirty`
@@ -171,7 +171,7 @@ reverse. For-loops are exported as real C `for` statements. Snippet markers
   established.
 - **GLU quadric drawing** (gluSphere, gluCylinder, gluDisk): new CmdType
   entries, need a static `GLUquadric*`. gluCylinder needs 5 args (base, top,
-  height, slices, stacks) — handled by `args[8]`.
+  height, slices, stacks) - handled by `args[8]`.
 
 ### Moderate Impact
 
@@ -185,7 +185,7 @@ reverse. For-loops are exported as real C `for` statements. Snippet markers
 - **Vertex entry plane preview**: parse partially-typed `g_input` during render,
   draw a faint guide plane at the fixed coordinate value.
 - **GLU tessellator** (concave polygons): vertex accumulator in
-  `execute_commands()` — when `CMD_BEGIN(GL_POLYGON)` is hit with tessellation
+  `execute_commands()` - when `CMD_BEGIN(GL_POLYGON)` is hit with tessellation
   enabled, accumulate vertices until `CMD_END`, then tessellate via
   `gluTessBeginContour` / `gluTessEndContour` callbacks.
 

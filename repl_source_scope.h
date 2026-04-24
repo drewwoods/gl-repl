@@ -1,5 +1,5 @@
 /*
- * repl_source_scope.h — Source-command scope/depth queries.
+ * repl_source_scope.h - Source-command scope/depth queries.
  */
 #ifndef REPL_SOURCE_SCOPE_H
 #define REPL_SOURCE_SCOPE_H

@@ -1,5 +1,5 @@
 /*
- * repl_editor.c — Editor state, line routing, and GLUT input dispatch.
+ * repl_editor.c - Editor state, line routing, and GLUT input dispatch.
  *
  * Subsystems in this file (top to bottom):
  *  - Editor state routed through repl_state.c
@@ -7,7 +7,7 @@
  *  - Line-input load/save and line navigation
  *  - Commit attempt orchestration and Enter/navigation outcomes
  *  - GLUT keyboard / special / mouse / wheel / motion / timer callbacks
- *  - feed_line() — the programmatic commit entry point
+ *  - feed_line() - the programmatic commit entry point
  *  - Public repl_*_func() wrappers forwarded from sample.c
  *
  * Shared state (g_input, repl_state_edit_line(), repl_state_document_count(), repl_state_document_cmds_mut()[], etc.) is
@@ -598,7 +598,7 @@ static void keyboard_begin_key(unsigned char key) {
 
 static int handle_rename_key_route(unsigned char key) {
     /* Rename overlay captures every keystroke while active, ahead of
-     * the backtick/config, replay, and search branches — otherwise
+     * the backtick/config, replay, and search branches - otherwise
      * typing `, or keys bound to replay would leak out of the rename
      * buffer and trigger unrelated UI. */
     return repl_inline_rename_handle_key(key);
@@ -807,7 +807,7 @@ static int handle_comment_toggle_key_route(unsigned char key) {
                             built = 1;
                         } else {
                             /* Parser may have set its own error (e.g. "Unknown
-                             * cmd.") — drop it; the friendly "Cannot uncomment"
+                             * cmd.") - drop it; the friendly "Cannot uncomment"
                              * message below is clearer for this key path. */
                             repl_state_status()->text[0] = '\0';
 
@@ -827,7 +827,7 @@ static int handle_comment_toggle_key_route(unsigned char key) {
                                 if (var_idx < 0) {
                                     char buf[128];
                                     snprintf(buf, sizeof(buf),
-                                             "undeclared variable '%s' — use 'float %s;' first",
+                                             "undeclared variable '%s' - use 'float %s;' first",
                                              name, name);
                                     set_status(buf);
                                     fallback_set_status = 1;

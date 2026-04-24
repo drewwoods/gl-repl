@@ -1,5 +1,5 @@
 /*
- * test_eval.c — Standalone test harness for the REPL expression evaluator
+ * test_eval.c - Standalone test harness for the REPL expression evaluator
  *
  * Build:
  *   gcc -Wall -std=c2x -o test_eval test_eval.c repl_eval.c -lm
@@ -181,7 +181,7 @@ static int predef_idx(const char *name) {
 static void set_predef(const char *name, float val) {
     int idx = predef_idx(name);
     if (idx < 0) {
-        printf("  BUG: set_predef(\"%s\") — var not declared\n", name);
+        printf("  BUG: set_predef(\"%s\") - var not declared\n", name);
         return;
     }
     g_predef_vars[idx].value = val;
@@ -526,7 +526,7 @@ static void run_tests(void) {
     ASSERT_HAS_VARS("z / 4", 1);
     ASSERT_HAS_VARS("alpha + beta", 0);
 
-    /* ---- Expression evaluator — additional coverage ---- */
+    /* ---- Expression evaluator - additional coverage ---- */
     printf("Expression evaluator (additional):\n");
 
     /* Math functions with less obvious inputs */
@@ -559,7 +559,7 @@ static void run_tests(void) {
     ASSERT_FLOAT("0 || 0 || 1", 1.0f);
     ASSERT_FLOAT("1 && 1 && 0", 0.0f);
 
-    /* Functions with wrong arg count — fall through to 0.0 */
+    /* Functions with wrong arg count - fall through to 0.0 */
     ASSERT_FLOAT("pow(2)", 0.0f);                      /* needs 2 args */
     ASSERT_FLOAT("min(3)", 0.0f);
     ASSERT_FLOAT("max(7)", 0.0f);
@@ -628,7 +628,7 @@ static void run_tests(void) {
 
         ASSERT_DECLARE_OK("alpha");   /* re-declare after undeclare */
 
-        /* Undeclare non-existent — no-op, count unchanged */
+        /* Undeclare non-existent - no-op, count unchanged */
         int count_before = g_num_predef_vars;
         undeclare_predef_var("nosuchvar");
         g_tests_run++;
@@ -645,7 +645,7 @@ static void run_tests(void) {
     {
         ExprVar lv[2] = { { "r", 1.0f }, { "h", 2.0f } };
 
-        /* Pure number — no identifiers at all */
+        /* Pure number - no identifiers at all */
         ASSERT_VALIDATE_OK("3.14", NULL, 0);
         ASSERT_VALIDATE_OK("42 + 1", NULL, 0);
 
@@ -663,11 +663,11 @@ static void run_tests(void) {
         /* Loop-local var provided in vars array */
         ASSERT_VALIDATE_OK("r + h", lv, 2);
 
-        /* Undeclared variable — should fail */
+        /* Undeclared variable - should fail */
         ASSERT_VALIDATE_FAIL("undefined_var", NULL, 0);
         ASSERT_VALIDATE_FAIL("r + unknown", lv, 2);
 
-        /* Inline comment — scanner stops before it */
+        /* Inline comment - scanner stops before it */
         ASSERT_VALIDATE_OK("x + 1 // comment with undefined_var", NULL, 0);
 
         /* Identifier too long (>= 16 chars) */
@@ -680,10 +680,10 @@ static void run_tests(void) {
     ASSERT_SOURCE_USES("sin(x) + y", "y", 1);
     ASSERT_SOURCE_USES("sin(x) + y", "z", 0);
     ASSERT_SOURCE_USES("glVertex3f(1,2,3)", "x", 0);
-    /* Substring — "foo" must not match inside "foobar" */
+    /* Substring - "foo" must not match inside "foobar" */
     ASSERT_SOURCE_USES("foobar + 1", "foo", 0);
     ASSERT_SOURCE_USES("foo + foobar", "foo", 1);
-    /* Numeric literal that starts with digits — "3" in "3.14" */
+    /* Numeric literal that starts with digits - "3" in "3.14" */
     ASSERT_SOURCE_USES("3.14 + x", "x", 1);
     ASSERT_SOURCE_USES("3.14", "x", 0);
     /* Empty source */
@@ -724,7 +724,7 @@ static void run_tests(void) {
     ASSERT_FOR("for(i, 0.5, 3.0)", 1, "i", 0.5f, 3.0f, 1.0f);
     /* Negative step */
     ASSERT_FOR("for(i, 10, 0, -1)", 1, "i", 10.0f, 0.0f, -1.0f);
-    /* Missing end (only one value after var) — should fail */
+    /* Missing end (only one value after var) - should fail */
     ASSERT_FOR("for(i, 0)", 0, "", 0, 0, 0);
     /* Empty var name */
     ASSERT_FOR("for(, 0, 10)", 0, "", 0, 0, 0);
@@ -761,7 +761,7 @@ static void run_tests(void) {
     /* ---- input_has_predef_vars after undeclare ---- */
     printf("input_has_predef_vars (after undeclare):\n");
     {
-        /* 'x' is currently declared — should be found */
+        /* 'x' is currently declared - should be found */
         ASSERT_HAS_VARS("x + 1", 1);
 
         /* undeclare 'x', then it should no longer match */
@@ -776,9 +776,9 @@ static void run_tests(void) {
     /* ---- Summary ---- */
     printf("\n%d / %d tests passed", g_tests_passed, g_tests_run);
     if (g_tests_passed == g_tests_run)
-        printf(" — all OK!\n");
+        printf(" - all OK!\n");
     else
-        printf(" — %d FAILED\n", g_tests_run - g_tests_passed);
+        printf(" - %d FAILED\n", g_tests_run - g_tests_passed);
 }
 
 /* ---- Interactive REPL ------------------------------------------------- */
