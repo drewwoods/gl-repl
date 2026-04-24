@@ -3,7 +3,7 @@
 ## Summary
 Migrate one runtime domain at a time from broad `g_*` access to `ReplRuntimeState` ownership. Each domain follows the same pattern: add focused accessors, convert production callers, update tests, move storage into `repl_state.c`, then delete that domain’s compat externs from `repl_state_compat.h`.
 
-Current status: slices 3.1, 3.2, 3.3, 3.4, 3.5, and 3.6 are complete. The compat bridge still carries externs for 3.7+ (replay, scenes, search, autocomplete, status). Next up is 3.7 (replay) or 3.9 (search/autocomplete/status).
+Current status: slices 3.1, 3.2, 3.3, 3.4, 3.5, and 3.6 are complete. Replay storage and the main render/UI/editor consumers have started moving in 3.7, but the compat bridge still carries the remaining replay externs plus later domains (scenes, search, autocomplete, status). Next up is finishing 3.7 (replay) before 3.8/3.9.
 
 ## Migration Pattern For Every Slice
 1. Add the smallest missing `repl_state_*` helper API needed by the domain.
@@ -71,10 +71,10 @@ Landed as the render-resource slice: `repl_state.c` now owns the GL resource sto
 
 ### 3.7 Replay
 - Keep replay behavior owned by `repl_replay.c`; expose state through replay APIs and `ReplReplayRuntimeState` only where cross-module access is still needed.
-- Convert direct replay reads/writes in UI, editor actions, render, annotations, and tests to replay helpers or `repl_state_replay()`.
-- Move replay control storage into `repl_state.c`: active, state, pc, mode, speed, accum, fade speed, source line, total flat count, expand args.
+- Replay control storage now lives in `repl_state.c`: active, state, pc, mode, speed, accum, fade speed, source line, total flat count, and expand args.
+- The main production consumers are now on `repl_state_replay()` for replay reads/writes: `repl_core.c`, `scene_render.c`, `repl_actions.c`, `ui_panels.c`, `repl_editor.c`, and `repl_replay_annotations.c`.
 - Keep fade batch internals private to `repl_replay.c` unless a later render slice needs them in the state facade.
-- Remove replay compat externs.
+- Remaining work for this slice: convert the replay tests off raw globals, then remove replay compat externs.
 
 ### 3.8 Scenes, Workspace, Import/Export Metadata
 - Keep `g_user_scenes[]` and active scene internals private to `repl_scenes.c`; they are already encapsulated domain storage.

@@ -612,7 +612,7 @@ static int handle_rename_key_route(unsigned char key) {
 
 static int handle_config_menu_key_route(unsigned char key) {
     if (!g_search_active && key == '`') {
-        if (g_replay_active)
+        if (*repl_state_replay()->active)
             replay_stop();
         editor_restore_hidden_code_panel();
         ui_panels_open_config();
@@ -622,7 +622,7 @@ static int handle_config_menu_key_route(unsigned char key) {
 }
 
 static int handle_active_replay_key_route(unsigned char key) {
-    return g_replay_active && replay_handle_key(key);
+    return *repl_state_replay()->active && replay_handle_key(key);
 }
 
 static void restore_hidden_code_panel_for_key(unsigned char key) {
@@ -1472,7 +1472,7 @@ static void mouse_func(int button, int state, int x, int y) {
         if (g_show_var_panel) {
             int row;
             if (var_panel_hit(x, y, &row)) {
-                if (g_replay_active)
+                if (*repl_state_replay()->active)
                     replay_stop();
                 repl_var_drag_begin(row, 0, x);
                 glutPostRedisplay();
@@ -1523,7 +1523,7 @@ static void mouse_func(int button, int state, int x, int y) {
     if (button == GLUT_RIGHT_BUTTON && state == GLUT_DOWN && g_show_var_panel) {
         int row;
         if (var_panel_hit(x, y, &row)) {
-            if (g_replay_active)
+            if (*repl_state_replay()->active)
                 replay_stop();
             repl_var_drag_begin(row, 1, x);
             glutPostRedisplay();
@@ -1640,14 +1640,19 @@ static void timer_func(int value) {
 
     repl_advance_time(0.016f);
 
-    if (g_replay_active)
-        replay_tick_fade_batches(0.016f);
+    {
+        const ReplReplayRuntimeState *replay = repl_state_replay();
 
-    if (g_replay_active && g_replay_state == REPLAY_PLAYING) {
-        g_replay_accum += g_replay_speed * 0.016f;
-        while (g_replay_accum >= 1.0f && g_replay_state == REPLAY_PLAYING) {
-            g_replay_accum -= 1.0f;
-            replay_advance();
+        if (*replay->active)
+            replay_tick_fade_batches(0.016f);
+
+        if (*replay->active && *replay->state == REPLAY_PLAYING) {
+            *replay->accum += *replay->speed * 0.016f;
+            while (*replay->accum >= 1.0f &&
+                   *replay->state == REPLAY_PLAYING) {
+                *replay->accum -= 1.0f;
+                replay_advance();
+            }
         }
     }
 
