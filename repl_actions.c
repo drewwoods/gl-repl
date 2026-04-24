@@ -22,6 +22,37 @@ static const char *profile_panel_mode_names[] = { "Off", "On", "Details" };
 static const char *code_panel_layout_names[] = {
     "Left", "Top", "Bottom", "Hidden"
 };
+static const char *grid_theme_names[GRID_THEME_COUNT] = {
+    [GRID_THEME_OFF]     = "OFF",
+    [GRID_THEME_CLASSIC] = "Classic",
+    [GRID_THEME_FOG]     = "Fog",
+    [GRID_THEME_TRON]    = "Tron",
+    [GRID_THEME_EMBER]   = "Ember",
+    [GRID_THEME_FAINT]   = "Faint",
+    [GRID_THEME_FOCUS]   = "Focus",
+    [GRID_THEME_OCEAN]   = "Ocean",
+    [GRID_THEME_XZRULER] = "XZ Ruler",
+    [GRID_THEME_PLANES]  = "Adaptive Planes",
+};
+static const char *grid_major_names[GRID_MAJOR_COUNT] = {
+    [GRID_MAJOR_1]  = "1",
+    [GRID_MAJOR_2]  = "2",
+    [GRID_MAJOR_5]  = "5",
+    [GRID_MAJOR_10] = "10",
+};
+static const char *grid_extent_names[GRID_EXTENT_COUNT] = {
+    [GRID_EXTENT_CLOSE] = "Close",
+    [GRID_EXTENT_MID]   = "Mid",
+    [GRID_EXTENT_FAR]   = "Far",
+};
+static const char *axes_theme_names[AXES_THEME_COUNT] = {
+    [AXES_THEME_OFF]     = "OFF",
+    [AXES_THEME_CLASSIC] = "Classic",
+    [AXES_THEME_PULSE]   = "Pulse",
+    [AXES_THEME_NEON]    = "Neon",
+    [AXES_THEME_COMPASS] = "Compass",
+    [AXES_THEME_GIZMO]   = "Gizmo",
+};
 static char cfg_status_buf[256];
 
 /* Unified audio cfg: collapses mute + loop mode into one cycling menu entry.
@@ -52,10 +83,10 @@ const ReplConfigItem g_cfg_items[] = {
     { "Replay expand",     0, 0,  REPL_CONFIG_REPLAY_EXPAND,       2, NULL,                 0 },
     { "---",               0, 0,  REPL_CONFIG_NONE,               0, NULL,                 1 },
     { "### OVERLAYS & SCENE", 0, 0, REPL_CONFIG_NONE,              0, NULL,                 1 },
-    { "Grid",              GLUT_KEY_F3, 1, REPL_CONFIG_GRID_THEME,  GRID_THEME_COUNT, g_grid_names, 0 },
-    { "Grid major",        KEY_CTRL_O, 0, REPL_CONFIG_GRID_MAJOR,  GRID_MAJOR_COUNT, g_grid_major_names, 0 },
-    { "Grid extent",       0, 0,  REPL_CONFIG_GRID_EXTENT,         GRID_EXTENT_COUNT, g_grid_extent_names, 0 },
-    { "Axes",              GLUT_KEY_F4, 1, REPL_CONFIG_AXES_THEME,  AXES_THEME_COUNT, g_axes_names,    0 },
+    { "Grid",              GLUT_KEY_F3, 1, REPL_CONFIG_GRID_THEME,  GRID_THEME_COUNT, grid_theme_names, 0 },
+    { "Grid major",        KEY_CTRL_O, 0, REPL_CONFIG_GRID_MAJOR,  GRID_MAJOR_COUNT, grid_major_names, 0 },
+    { "Grid extent",       0, 0,  REPL_CONFIG_GRID_EXTENT,         GRID_EXTENT_COUNT, grid_extent_names, 0 },
+    { "Axes",              GLUT_KEY_F4, 1, REPL_CONFIG_AXES_THEME,  AXES_THEME_COUNT, axes_theme_names,    0 },
     { "Vertex guides",     GLUT_KEY_F8, 1, REPL_CONFIG_VERTEX_GUIDES, 2, NULL,             0 },
     { "Xform guide mode",  0, 0,  REPL_CONFIG_XFORM_GUIDE_MODE,     2, xform_guide_mode_names, 0 },
     { "Light indicators",  GLUT_KEY_F10, 1, REPL_CONFIG_LIGHT_INDICATORS, 2, NULL,        0 },
