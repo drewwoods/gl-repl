@@ -14,21 +14,12 @@
  * ordinals across navigation by remembering the per-row occurrence index
  * and remapping it after a navigation shifts the row mapping.
  *
- * The module owns g_search_* state; outside code only reads it for
- * rendering (ui_panels.c) and clears via search_clear_all().
+ * The module owns search behavior; storage lives in repl_state.c and is
+ * accessed through the typed search facade.
  */
 #include "sample.h"
 #include "repl_core_internal.h"
 #include "repl_keys.h"
-
-int  g_search_active = 0;
-char g_search_query[MAX_INPUT_LEN] = "";
-int  g_search_query_len = 0;
-int  g_search_cursor_pos = 0;
-int  g_search_hit_line = -1;
-int  g_search_hit_char = -1;
-int  g_search_hit_ordinal = 0;
-int  g_search_match_count = 0;
 
 static int search_row_is_live_input(int row_idx) {
     if (row_idx < 0 || row_idx >= repl_search_row_count())

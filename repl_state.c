@@ -1,3 +1,4 @@
+#define REPL_STATE_IMPLEMENTATION
 #include "repl_state.h"
 
 #include "repl_clipboard.h"
@@ -7,6 +8,7 @@
 #include "repl_eval.h"
 #include "repl_source_scope.h"
 #include "repl_state_compat.h"
+#undef REPL_STATE_IMPLEMENTATION
 
 /* Import/export helpers stay in repl_export.c for now; state exposes them. */
 void refresh_workspace_header_lines(void);
@@ -116,6 +118,25 @@ SceneLight       g_lights[MAX_LIGHTS] = {
       { 0.20f, 0.20f, 0.25f, 1.0f } },
 };
 float            g_clear_color[4] = { 0.10f, 0.10f, 0.13f, 1.0f };
+
+char g_status[REPL_STATUS_TEXT_MAX] = "";
+int  g_status_ttl = 0;
+
+int  g_search_active = 0;
+char g_search_query[MAX_INPUT_LEN] = "";
+int  g_search_query_len = 0;
+int  g_search_cursor_pos = 0;
+int  g_search_hit_line = -1;
+int  g_search_hit_char = -1;
+int  g_search_hit_ordinal = 0;
+int  g_search_match_count = 0;
+
+const char *g_ac_matches[MAX_AC_MATCHES];
+const char *g_ac_insert_matches[MAX_AC_MATCHES];
+int         g_ac_count = 0;
+int         g_ac_sel = 0;
+char        g_ac_ghost[MAX_LINE_LEN] = "";
+char        g_ac_hint[MAX_LINE_LEN] = "";
 
 int   g_replay_active = 0;
 int   g_replay_state = REPLAY_OFF;
@@ -239,6 +260,7 @@ static ReplRuntimeState g_repl_state = {
     },
     .autocomplete = {
         .matches = g_ac_matches,
+        .insert_matches = g_ac_insert_matches,
         .match_count = &g_ac_count,
         .selected_idx = &g_ac_sel,
         .ghost = g_ac_ghost,
@@ -807,22 +829,29 @@ const ReplStatusState *repl_state_status(void) {
     return &g_repl_state.status;
 }
 
+ReplStatusState *repl_state_status_mut(void) {
+    return &g_repl_state.status;
+}
+
 void repl_status_set(const char *message) {
+    ReplStatusState *status = repl_state_status_mut();
     if (!message)
         message = "";
-    strncpy(g_status, message, sizeof(g_status) - 1);
-    g_status[sizeof(g_status) - 1] = '\0';
-    g_status_ttl = 240;
+    strncpy(status->text, message, (size_t)status->capacity - 1);
+    status->text[status->capacity - 1] = '\0';
+    *status->ttl = 240;
 }
 
 void repl_status_clear(void) {
-    g_status[0] = '\0';
-    g_status_ttl = 0;
+    ReplStatusState *status = repl_state_status_mut();
+    status->text[0] = '\0';
+    *status->ttl = 0;
 }
 
 void repl_status_tick(void) {
-    if (g_status_ttl > 0)
-        g_status_ttl--;
+    ReplStatusState *status = repl_state_status_mut();
+    if (*status->ttl > 0)
+        (*status->ttl)--;
 }
 
 const ReplSearchState *repl_state_search(void) {
@@ -834,7 +863,15 @@ ReplSearchState *repl_state_search_mut(void) {
 }
 
 void repl_state_search_clear(void) {
-    search_clear_all();
+    ReplSearchState *search = repl_state_search_mut();
+    *search->active = 0;
+    search->query[0] = '\0';
+    *search->query_len = 0;
+    *search->cursor_pos = 0;
+    *search->hit_line_idx = -1;
+    *search->hit_char_idx = -1;
+    *search->hit_ordinal = 0;
+    *search->match_count = 0;
 }
 
 const ReplAutocompleteState *repl_state_autocomplete(void) {
@@ -846,10 +883,11 @@ ReplAutocompleteState *repl_state_autocomplete_mut(void) {
 }
 
 void repl_state_autocomplete_clear(void) {
-    g_ac_count = 0;
-    g_ac_sel = 0;
-    g_ac_ghost[0] = '\0';
-    g_ac_hint[0] = '\0';
+    ReplAutocompleteState *ac = repl_state_autocomplete_mut();
+    *ac->match_count = 0;
+    *ac->selected_idx = 0;
+    ac->ghost[0] = '\0';
+    ac->hint[0] = '\0';
 }
 
 const ReplCameraState *repl_state_camera(void) {

@@ -3,7 +3,7 @@
 ## Summary
 Migrate one runtime domain at a time from broad `g_*` access to `ReplRuntimeState` ownership. Each domain follows the same pattern: add focused accessors, convert production callers, update tests, move storage into `repl_state.c`, then delete that domain’s compat externs from `repl_state_compat.h`.
 
-Current status: slices 3.1, 3.2, 3.3, 3.4, 3.5, 3.6, 3.7, and 3.8 are complete. Scene/workspace runtime and the import/export metadata bundle now route through `repl_state` accessors; the remaining open domains are search, autocomplete, and status.
+Current status: slices 3.1, 3.2, 3.3, 3.4, 3.5, 3.6, 3.7, 3.8, and 3.9 are complete. Scene/workspace runtime, the import/export metadata bundle, and the search/autocomplete/status bundle now route through `repl_state` accessors; the remaining open domain is the final UI runtime slice.
 
 ## Migration Pattern For Every Slice
 1. Add the smallest missing `repl_state_*` helper API needed by the domain.
@@ -75,12 +75,8 @@ Replay behavior stays owned by `repl_replay.c`, but replay control storage now l
 ### 3.8 Scenes, Workspace, Import/Export Metadata ✅ DONE
 `g_example_idx` and `g_workspace_dir` now live behind `repl_state_scenes()`, and the workspace/import-export metadata bundle now lives behind `repl_state_import_export()`: workspace header lines, render-state lines, camera metadata lines, pending scene/workspace names, and the export scene-name hint. `repl_scenes.c`, `repl_example_loader.c`, `repl_actions.c`, `repl_editor.c`, `ui_menu_bar.c`, `repl_core.c`, `repl_export.c`, and the affected tests now use the state facade, and the remaining workspace/import-export compat externs have been removed.
 
-### 3.9 Search, Autocomplete, Status
-- Add status read accessor if needed; keep mutation through `repl_status_set/clear/tick`.
-- Convert search UI/editor paths to `ReplSearchState` helpers rather than raw search globals.
-- Convert autocomplete UI/editor paths to `ReplAutocompleteState` helpers. Keep private autocomplete matcher internals in `repl_autocomplete.c`.
-- Move status, search, and public autocomplete display storage into `repl_state.c`.
-- Remove status/search/autocomplete compat externs.
+### 3.9 Search, Autocomplete, Status ✅ DONE
+Status, search, and autocomplete storage now live in `repl_state.c` and are accessed through the typed state facade. `repl_state_compat.h` no longer exports the raw status/search/autocomplete externs; the remaining code paths read and mutate those domains through the accessor-backed compatibility bridge while the final UI runtime slice still has broader global cleanup to do. All 2557 tests pass.
 
 ### 3.10 Variable Panel, Profile Panel, Variable Drag, Code Panel Runtime
 - Move small UI runtime states last because they have low behavior risk but many incidental reads.

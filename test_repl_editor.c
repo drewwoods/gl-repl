@@ -434,7 +434,7 @@ int main() {
         replay_state = REPLAY_PAUSED;
         replay_pc = 0;
         g_search_active = 1;
-        snprintf(g_search_query, sizeof(g_search_query), "abc");
+        snprintf(g_search_query, MAX_INPUT_LEN, "abc");
         g_search_query_len = 3;
         g_search_cursor_pos = 2;
 
@@ -466,7 +466,7 @@ int main() {
         g_show_help = 1;
         g_help_tab = 1;
         g_search_active = 1;
-        snprintf(g_search_query, sizeof(g_search_query), "abc");
+        snprintf(g_search_query, MAX_INPUT_LEN, "abc");
         g_search_query_len = 3;
         g_search_cursor_pos = 2;
 

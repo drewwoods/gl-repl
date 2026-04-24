@@ -553,7 +553,7 @@ static CommitResult commit_current_input(int enter_mode) {
 static CommitResult commit_before_navigation(void) {
     CommitAttemptState *before = &g_navigation_commit_before;
     ReplUndoRingState undo_before;
-    char rejected_status[sizeof(g_status)];
+    char rejected_status[REPL_STATUS_TEXT_MAX];
     int rejected_ttl;
 
     if (!current_input_needs_navigation_commit())
@@ -569,8 +569,8 @@ static CommitResult commit_before_navigation(void) {
     rejected_ttl = g_status_ttl;
     restore_commit_attempt_committed_state(before);
     repl_undo_ring_state_restore(&undo_before);
-    memcpy(g_status, rejected_status, sizeof(g_status));
-    g_status[sizeof(g_status) - 1] = '\0';
+    memcpy(g_status, rejected_status, sizeof(rejected_status));
+    g_status[REPL_STATUS_TEXT_MAX - 1] = '\0';
     g_status_ttl = rejected_ttl;
     clear_autocomplete_state();
     return COMMIT_REJECTED;

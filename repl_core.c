@@ -160,10 +160,6 @@ const char *g_axes_names[AXES_THEME_COUNT] = {
 };
 char   g_scratch_buf[256];  /* shared scratch space for formatting strings, etc. */
 
-/* Status bar */
-char   g_status[256] = "";
-int    g_status_ttl = 0;
-
 int    g_cursor_px = 0;     /* screen pos of cursor, set during render */
 int    g_cursor_py = 0;
 
