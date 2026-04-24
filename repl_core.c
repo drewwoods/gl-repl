@@ -646,6 +646,7 @@ static void display_func(void) {
     FlatProgramView flat_program = repl_state_flat_program_view();
     const GLCmd *g_flat_cmds = flat_program.cmds;
     int g_num_flat_cmds = flat_program.cmd_count;
+    const ReplReplayRuntimeState *replay = repl_state_replay();
 
     prof_frame_tick();
     prof_begin(PROF_FRAME_TOTAL);
@@ -666,7 +667,7 @@ static void display_func(void) {
 
     saved_flat_count = g_num_flat_cmds;
     repl_copy_predef_values(live_predef_vals, MAX_PREDEF_VARS);
-    if (g_replay_active)
+    if (*replay->active)
         repl_state_flat_program_set_count(replay_prepare_frame(saved_flat_count));
 
     update_render_state_strings();
@@ -700,7 +701,7 @@ static void display_func(void) {
         float weight = 1.0f / (float)g_accum_samples;
         for (int j = 0; j < g_accum_samples; j++) {
             glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-            if (g_replay_active)
+            if (*replay->active)
                 replay_restore_baseline_predef_values();
             g_accum_jitter_x = g_jitter_table[j % MAX_ACCUM_SAMPLES][0];
             g_accum_jitter_y = g_jitter_table[j % MAX_ACCUM_SAMPLES][1];
@@ -712,7 +713,7 @@ static void display_func(void) {
         glAccum(GL_RETURN, 1.0f);
     } else {
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-        if (g_replay_active)
+        if (*replay->active)
             replay_restore_baseline_predef_values();
         render_3d_scene();
     }

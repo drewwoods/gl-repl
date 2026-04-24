@@ -82,6 +82,7 @@ static SceneFocusVertex scene_prepare_focus_vertex(void) {
 
 static void scene_render_config_init(SceneRenderConfig *config) {
     const ReplRenderState *render = repl_state_render();
+    const ReplReplayRuntimeState *replay = repl_state_replay();
     scene_rect(&config->scene_x, &config->scene_y,
                &config->scene_w, &config->scene_h);
     if (config->scene_w < 1) config->scene_w = 1;
@@ -110,8 +111,8 @@ static void scene_render_config_init(SceneRenderConfig *config) {
     config->show_vpoints = *repl_state_presentation()->show_vertex_points;
     config->show_vnums = *repl_state_presentation()->show_vertex_labels;
     config->show_normals = *repl_state_presentation()->show_normal_vectors;
-    config->replaying = g_replay_active;
-    config->replay_mode = g_replay_mode;
+    config->replaying = *replay->active;
+    config->replay_mode = *replay->mode;
     config->replay_tess_preview = config->replaying &&
                                   config->replay_mode == REPLAY_MODE_VERTEX;
     config->replay_vertex_points = config->replay_tess_preview;
@@ -281,6 +282,7 @@ static void draw_replay_tess_preview(const SceneRenderConfig *config) {
 }
 
 static void draw_replay_hud(const SceneRenderConfig *config) {
+    const ReplReplayRuntimeState *replay = repl_state_replay();
     char progress_txt[64];
     char kbd_txt[128];
     float progress = 0.0f;
@@ -309,8 +311,8 @@ static void draw_replay_hud(const SceneRenderConfig *config) {
               ? scene_y + scene_h - REPLAY_HUD_HEIGHT - 4
               : min_y;
     }
-    if (g_replay_total_flat > 0)
-        progress = (float)g_replay_pc / (float)g_replay_total_flat;
+    if (*replay->total_flat_cmds > 0)
+        progress = (float)*replay->pc / (float)*replay->total_flat_cmds;
     if (progress < 0.0f) progress = 0.0f;
     if (progress > 1.0f) progress = 1.0f;
 
@@ -340,12 +342,12 @@ static void draw_replay_hud(const SceneRenderConfig *config) {
     int icon_sz    = 10;
 
     glColor4f(UI_ACCENT_GREEN_R, UI_ACCENT_GREEN_G, UI_ACCENT_GREEN_B, 1.0f);
-    if (g_replay_state == REPLAY_PLAYING) {
+    if (*replay->state == REPLAY_PLAYING) {
         float bw = 3.0f, gap = 3.0f;
         float by0 = (float)icon_cy - (float)icon_sz * 0.5f;
         draw_quad((float)icon_cx - bw - gap * 0.5f, by0, bw, (float)icon_sz);
         draw_quad((float)icon_cx + gap * 0.5f,      by0, bw, (float)icon_sz);
-    } else if (g_replay_state == REPLAY_DONE) {
+    } else if (*replay->state == REPLAY_DONE) {
         /* Square — run complete */
         float sx = (float)icon_cx - (float)icon_sz * 0.5f;
         float sy = (float)icon_cy - (float)icon_sz * 0.5f;
@@ -365,9 +367,9 @@ static void draw_replay_hud(const SceneRenderConfig *config) {
      * is right-aligned so 4-digit totals don't push other fields around. */
     snprintf(progress_txt, sizeof(progress_txt),
              "Replay  %11.1f cmd/s  | %7s  | %s",
-             g_replay_speed,
+             *replay->speed,
              config->replay_mode == REPLAY_MODE_VERTEX ? "Vertex" : "Polygon",
-             g_replay_expand_args ? "Code Expanded" : ""
+             *replay->expand_args ? "Code Expanded" : ""
              );
     glColor3f(UI_ACCENT_GREEN_R, UI_ACCENT_GREEN_G, UI_ACCENT_GREEN_B);
     draw_string((float)text_col_x,
@@ -376,7 +378,7 @@ static void draw_replay_hud(const SceneRenderConfig *config) {
 
     char count_txt[32];
     snprintf(count_txt, sizeof(count_txt), "%d / %d",
-             g_replay_pc, g_replay_total_flat);
+             *replay->pc, *replay->total_flat_cmds);
     int count_w = (int)strlen(count_txt) * FONT_SMALL_W;
     draw_string((float)(hud_x + hud_w - REPLAY_HUD_TEXT_PAD_X - count_w),
                 (float)(hud_y + REPLAY_HUD_TEXT_LINE1_Y),

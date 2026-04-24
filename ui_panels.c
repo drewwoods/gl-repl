@@ -349,6 +349,7 @@ int code_panel_apply_scroll_follow_for_test(int *out_follow_doc_line,
 /* Color picker lives in repl_color_picker.c. */
 
 void render_code_panel(void) {
+    const ReplReplayRuntimeState *replay = repl_state_replay();
     prof_begin(PROF_CODE_PANEL_LAYOUT);
     prof_begin(PROF_CODE_PANEL_LAYOUT_GEOM);
     prof_begin(PROF_CODE_PANEL_LAYOUT_GEOM_SETUP);
@@ -560,8 +561,9 @@ void render_code_panel(void) {
                 repl_code_panel_document_wrap_iter_init(&wrap_it, display_text, text_x, panel_w);
                 while (repl_code_panel_document_wrap_iter_next(&wrap_it, &wrap_start, &wrap_len, &wrap_x)) {
                     if (cur >= g_scroll && cur < g_scroll + visible_lines) {
-                        if (g_replay_active &&
-                            g_replay_src_line >= 0 && i == g_replay_src_line) {
+                        if (*replay->active &&
+                            *replay->src_line_idx >= 0 &&
+                            i == *replay->src_line_idx) {
                             glEnable(GL_BLEND);
                             glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
                             glColor4f(0.10f, 0.35f, 0.15f, 0.55f);
@@ -623,9 +625,10 @@ void render_code_panel(void) {
                 }
                 file_line++;
 
-                if (g_replay_active &&
-                    g_replay_expand_args &&
-                    g_replay_src_line >= 0 && i == g_replay_src_line &&
+                if (*replay->active &&
+                    *replay->expand_args &&
+                    *replay->src_line_idx >= 0 &&
+                    i == *replay->src_line_idx &&
                     repl_state_document_cmds_mut()[i].has_vars &&
                     repl_state_document_cmds_mut()[i].type != CMD_VAR_ASSIGN) {
                     int flat_idx = repl_replay_annotation_flat_cmd_for_source(i);
@@ -1112,6 +1115,7 @@ void handle_code_panel_click(int mx, int my) {
 
 int handle_code_panel_press(int mx, int my) {
     int actions = UI_PANEL_PRESS_NONE;
+    ReplReplayRuntimeState *replay = repl_state_replay_mut();
 
     /* Color picker floats and may overlap the code panel (e.g. top/bottom
      * layouts).  Give it first crack so its hit rects take priority. */
@@ -1128,10 +1132,10 @@ int handle_code_panel_press(int mx, int my) {
         case REPL_MENU_BAR_PIN_REPLAY:
             /* Button mirrors its glyph: pause when playing, resume when
              * paused, (re)start when stopped or done. */
-            if (g_replay_state == REPLAY_PLAYING) {
-                g_replay_state = REPLAY_PAUSED;
-            } else if (g_replay_state == REPLAY_PAUSED) {
-                g_replay_state = REPLAY_PLAYING;
+            if (*replay->state == REPLAY_PLAYING) {
+                *replay->state = REPLAY_PAUSED;
+            } else if (*replay->state == REPLAY_PAUSED) {
+                *replay->state = REPLAY_PLAYING;
             } else {
                 replay_start();
             }

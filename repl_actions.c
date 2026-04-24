@@ -142,7 +142,7 @@ void repl_cfg_cycle_row(int row, int delta) {
         }
     }
 
-    if (g_replay_active)
+    if (*repl_state_replay()->active)
         replay_stop();
 
     int v = repl_config_cycle(item->key, delta);
