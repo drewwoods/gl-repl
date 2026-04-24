@@ -273,7 +273,6 @@ int main() {
     /* 11. editor input/selection/clipboard state facade */
     {
         ReplEditorInputState *input;
-        ReplEditorState editor;
         GLCmd *clipboard;
 
         repl_reset_state(); declare_test_vars();
@@ -318,14 +317,6 @@ int main() {
         repl_state_clipboard_clear();
         ASSERT_INT("state clipboard clear", repl_state_clipboard_count(), 0);
 
-        editor = repl_editor_state_live();
-        ASSERT_TRUE("editor live bundle uses state input",
-                    editor.input == repl_state_input_buffer_mut());
-        ASSERT_TRUE("editor live bundle uses state selection",
-                    editor.sel_anchor == repl_state_selection_mut()->anchor_idx);
-        ASSERT_TRUE("editor live bundle uses state clipboard",
-                    editor.clipboard == repl_state_clipboard_cmds_mut());
-
         repl_state_editor_input_reset();
         ASSERT_STR("state input reset text", repl_state_editor_input()->input, "");
         ASSERT_INT("state input reset inserting", repl_state_insert_mode(), 0);
@@ -337,7 +328,6 @@ int main() {
         ReplCameraState *camera;
         ReplPointerState *pointer;
         ReplViewportState *viewport;
-        ReplViewState view;
 
         repl_state_camera_set(11.0f, -22.0f, 7.5f,
                               1.0f, 2.0f, 3.0f, 0.25f);
@@ -386,13 +376,6 @@ int main() {
         viewport = repl_state_viewport_mut();
         ASSERT_TRUE("state viewport facade width", viewport->window_w != NULL);
         ASSERT_TRUE("state viewport facade height", viewport->window_h != NULL);
-
-        view = repl_view_state_live();
-        ASSERT_TRUE("view live bundle camera", view.cam_rx == camera->rx);
-        ASSERT_TRUE("view live bundle pointer",
-                    view.mouse_btn == pointer->mouse_button);
-        ASSERT_TRUE("view live bundle viewport",
-                    view.win_w == viewport->window_w);
 
         repl_state_camera_reset_default();
         ASSERT_TRUE("state camera reset rx", *repl_state_camera()->rx == 20.0f);

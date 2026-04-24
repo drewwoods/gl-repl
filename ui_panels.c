@@ -5,6 +5,7 @@
  * Extracted from sample.c for maintainability.
  */
 #include "sample.h"
+#include "repl_export.h"
 #include "repl_actions.h"
 #include "ui_color_picker.h"
 #include "repl_code_panel_document.h"

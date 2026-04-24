@@ -6,6 +6,7 @@
  * selection, replay annotations, and visual dumps do not drift apart.
  */
 #include "sample.h"
+#include "repl_export.h"
 #include "repl_code_panel_document.h"
 #include "repl_replay_annotations.h"
 #include "repl_state.h"

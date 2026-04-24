@@ -7,7 +7,6 @@
 #include "repl_core_internal.h"
 #include "repl_eval.h"
 #include "repl_source_scope.h"
-#include "repl_state_compat.h"
 #undef REPL_STATE_IMPLEMENTATION
 
 /* Import/export helpers stay in repl_export.c for now; state exposes them. */
@@ -1202,47 +1201,4 @@ void repl_state_reset_all(void) {
     depth_cache_invalidate();
     repl_state_mark_flat_dirty();
     repl_state_mark_normals_dirty();
-}
-
-ReplEditorState repl_editor_state_live(void) {
-    ReplEditorInputState *input = &g_repl_state.editor_input;
-    ReplSelectionState *selection = &g_repl_state.selection;
-    ReplClipboardState *clipboard = &g_repl_state.clipboard;
-    ReplEditorState state = {
-        input->input,
-        input->input_capacity,
-        input->input_len,
-        input->cursor_pos,
-        input->edit_line_idx,
-        input->pending_newline,
-        input->pending_newline_capacity,
-        input->pending_newline_len,
-        input->insert_mode,
-        selection->anchor_idx,
-        selection->end_idx,
-        clipboard->cmds,
-        clipboard->cmd_count
-    };
-    return state;
-}
-
-ReplViewState repl_view_state_live(void) {
-    ReplCameraState *camera = &g_repl_state.camera;
-    ReplPointerState *pointer = &g_repl_state.pointer;
-    ReplViewportState *viewport = &g_repl_state.viewport;
-    ReplViewState state = {
-        camera->rx,
-        camera->ry,
-        camera->dist,
-        camera->tx,
-        camera->ty,
-        camera->tz,
-        camera->motion_glow,
-        pointer->mouse_x,
-        pointer->mouse_y,
-        pointer->mouse_button,
-        viewport->window_w,
-        viewport->window_h
-    };
-    return state;
 }

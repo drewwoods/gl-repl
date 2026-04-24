@@ -2,7 +2,6 @@
 
 #include "repl_audio.h"
 #include "repl_state.h"
-#include "repl_state_compat.h"
 
 static int clamp_int(int v, int lo, int hi) {
     if (v < lo) return lo;
@@ -24,12 +23,12 @@ const ReplConfigItem *repl_config_item_at(int idx) {
 
 static int *config_value_ptr(ReplConfigKey key) {
     switch (key) {
-    case REPL_CONFIG_MSAA:                return &g_multisample_enabled;
-    case REPL_CONFIG_LINE_SMOOTH:         return &g_line_smooth_enabled;
-    case REPL_CONFIG_ACCUM_AA:            return &g_accum_aa_enabled;
+    case REPL_CONFIG_MSAA:                return repl_state_render_mut()->multisample_enabled;
+    case REPL_CONFIG_LINE_SMOOTH:         return repl_state_render_mut()->line_smooth_enabled;
+    case REPL_CONFIG_ACCUM_AA:            return repl_state_render_mut()->accum_aa_enabled;
     case REPL_CONFIG_WIREFRAME:           return repl_state_presentation_mut()->wireframe;
-    case REPL_CONFIG_POINT_ATTENUATION:   return &g_init_attenuate_points;
-    case REPL_CONFIG_AUTO_TIME:           return &g_t_playing;
+    case REPL_CONFIG_POINT_ATTENUATION:   return repl_state_render_mut()->point_attenuation_enabled;
+    case REPL_CONFIG_AUTO_TIME:           return repl_state_variables_mut()->time_playing;
     case REPL_CONFIG_REPLAY:              return repl_state_replay_mut()->active;
     case REPL_CONFIG_REPLAY_MODE:         return repl_state_replay_mut()->mode;
     case REPL_CONFIG_REPLAY_EXPAND:       return repl_state_replay_mut()->expand_args;
@@ -48,8 +47,8 @@ static int *config_value_ptr(ReplConfigKey key) {
     case REPL_CONFIG_NORMAL_VECTORS:      return repl_state_presentation_mut()->show_normal_vectors;
     case REPL_CONFIG_VERTEX_OUTLINES:     return repl_state_presentation_mut()->show_vertex_outlines;
     case REPL_CONFIG_VERTEX_POINTS:       return repl_state_presentation_mut()->show_vertex_points;
-    case REPL_CONFIG_VARIABLE_PANEL:      return &g_show_var_panel;
-    case REPL_CONFIG_CPU_PROFILE:         return &g_show_profile_panel;
+    case REPL_CONFIG_VARIABLE_PANEL:      return repl_state_variable_panel_mut()->visible;
+    case REPL_CONFIG_CPU_PROFILE:         return repl_state_profile_panel_mut()->mode;
     case REPL_CONFIG_CODE_PANEL_LAYOUT:   return repl_state_presentation_mut()->code_panel_layout;
     case REPL_CONFIG_WRAP_AT_COMMA:       return repl_state_presentation_mut()->wrap_at_comma;
     case REPL_CONFIG_AUDIO_MODE:          return NULL; /* audio module owns this one */
