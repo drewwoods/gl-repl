@@ -142,7 +142,9 @@ Run all: `make test`
 
 ## Conventions
 
-- Global variables prefixed `g_` (e.g., `g_num_cmds`, `g_cam_rx`)
+- File-private statics use `g_` prefix (e.g., `g_cfg_items[]`, `g_user_scenes[]`).
+  Runtime state that crosses module boundaries is accessed through the typed
+  facade in `repl_state.h` (e.g., `repl_state_render()`, `repl_state_search()`).
 - Static helpers are file-scoped; public API goes through `repl_core.h`
 - Config toggles use the `ReplConfigItem` / `ReplConfigKey` pattern: add a
   descriptor entry to `g_cfg_items[]` in `repl_actions.c`; `CFG_ITEM_COUNT`
@@ -152,8 +154,8 @@ Run all: `make test`
   `repl_executor.c`, and `flatten_range()` in `repl_flatten.c`
 - Keyboard bindings: `keyboard_func()` for ASCII keys (Ctrl+X = key code X-64),
   `special_func()` for F-keys/arrows in `repl_editor.c`
-- Expression variables: `ExprVar` struct in `repl_eval.h`, predefined set in
-  `g_predef_vars[]`
+- Expression variables: `ExprVar` struct in `repl_eval.h`, predefined set
+  accessible via `repl_state_variables()` and managed by `declare_predef_var()`
 
 ## Adding Grid/Axes Themes
 
@@ -241,9 +243,9 @@ message (user has to save workspace first to unlock eviction).
 - `repl_save_workspace(dir)` mkdirs `dir` (idempotent), flushes the active
   slot, then iterates every occupied slot: `install_scene_into_live` + a
   stash/restore pattern wraps each slot so `save_output()` sees that scene's
-  live state. `g_export_scene_name_hint` is set per-slot so the exported
+  live state. The export scene-name hint is set per-slot so the exported
   header's `// @scene-name` reflects the correct name. The bound dir is
-  remembered in `g_workspace_dir` and stamped into every single-file export
+  remembered in import/export state and stamped into every single-file export
   as `// @workspace-dir <path>`.
 - `repl_load_workspace(dir)` opens `dir`, loads each `*.c` into a fresh slot
   via `load_scene_file_into_slot`, and restores live editor state around the
@@ -328,13 +330,12 @@ example switch. Deferred — see `feature/multi-user-scenes.md`.
 
 `display_func()` in `repl_core.c` drives each frame:
 1. Clear color/depth/accum buffers, save predef var values
-2. If accumulation-buffer AA is enabled (`g_accum_aa_enabled`), loop
-   `g_accum_samples` times with sub-pixel jitter offsets from
-   `g_jitter_table[]`, calling `render_3d_scene()` per pass and
-   accumulating with `glAccum(GL_ACCUM, 1/samples)`; final
-   `glAccum(GL_RETURN, 1.0)` averages into framebuffer. The jitter is
-   applied as a frustum shift in `render_3d_scene()` via
-   `g_accum_jitter_x/y` → adjusted `glFrustum()` bounds
+2. If accumulation-buffer AA is enabled (`repl_state_render()->accum_aa_enabled`),
+   loop `accum_samples` times with sub-pixel jitter offsets from a static jitter
+   table, calling `render_3d_scene()` per pass and accumulating with
+   `glAccum(GL_ACCUM, 1/samples)`; final `glAccum(GL_RETURN, 1.0)` averages into
+   framebuffer. The jitter is applied as a frustum shift in `render_3d_scene()`
+   via `accum_jitter_x/y` → adjusted `glFrustum()` bounds
 3. `render_3d_scene()` in `scene_render.c`: projection setup → camera
    transforms → `execute_commands()` (user geometry fill pass) → replay
    fade batches → grid (`scene_grid.c`) / axes (`scene_axes.c`) /
@@ -347,31 +348,32 @@ example switch. Deferred — see `feature/multi-user-scenes.md`.
 
 The core data flow is **source commands → flat commands → GL calls**:
 
-- **`g_cmds[MAX_COMMANDS]`** — source-level array. Each `GLCmd` holds
-  parsed type/args, normalized `source[]` text, and flags (`has_vars`,
-  `valid`, `is_auto`). Edited directly by the user via the code panel.
-- **`g_flat_cmds[MAX_COMMANDS]`** — expanded array. For-loops are
+- **Source array** (`repl_state_document_cmds()`, count via
+  `repl_state_document_count()`) — each `GLCmd` holds parsed type/args,
+  normalized `source[]` text, and flags (`has_vars`, `valid`, `is_auto`).
+  Edited directly by the user via the code panel.
+- **Flat array** (`repl_state_flat_cmds()`) — expanded copy. For-loops are
   unrolled, function calls are inlined, if-blocks are resolved.
   Each flat cmd records `src_cmd_idx` (owning source line),
   `call_src_cmd_idx` (immediate call site), and `func_scope_mask`
   (active function scopes) for cursor highlighting.
-- **Trigger:** any edit sets `g_flat_dirty = 1` (via
-  `mark_normals_dirty()`); `flatten_commands()` rebuilds
-  `g_flat_cmds[]` on the next frame before rendering.
+- **Trigger:** any edit marks the flat array dirty (via `mark_normals_dirty()`);
+  `flatten_commands()` rebuilds it on the next frame before rendering.
 
 ### Command Lifecycle
 
-1. **Input** — user types into `g_input[]` (max 1024 chars)
+1. **Input** — user types into the input buffer (`repl_state_editor_input()->input`,
+   max 1024 chars)
 2. **Commit** — pressing `;` calls the commit dispatch chain in
    `keyboard_func()` in `repl_editor.c`. There are TWO distinct paths:
    - **Interactive `;` key** (`repl_editor.c`, `key == ';'` block):
-     `g_input` does NOT include the `;` — the keystroke triggers the
+     the input buffer does NOT include the `;` — the keystroke triggers the
      commit but is not appended. Commit handlers must accept input
      without a trailing `;`.
    - **`feed_line()`** (`repl_editor.c`): copies the full line
-     (including `;`) into `g_input`, then runs the same dispatch chain.
+     (including `;`) into the input buffer, then runs the same dispatch chain.
      Used by file loading and example loading.
-   - **Enter key** (insert mode): `g_input` may or may not have `;`
+   - **Enter key** (insert mode): input may or may not have `;`
      depending on what the user typed.
    The dispatch chain calls `try_commit_*()` handlers in order:
    `try_commit_float_decl` → `try_assign_variable` → `try_commit_close_brace`
@@ -388,12 +390,12 @@ The core data flow is **source commands → flat commands → GL calls**:
    `CmdType`, evaluates argument expressions via `eval_expr()`, stores
    result in `GLCmd.args[]` and normalized text in `GLCmd.source[]`.
    Internal call sites pass `ReplParseContext.source_line_idx` instead of
-   temporarily changing `g_edit_line`.
+   temporarily changing the edit-line cursor.
 4. **Flatten** — `flatten_range()` recursively expands the source array:
    for-loops iterate (capped at 100k visits), function calls inline the
    body with actual args, if-blocks evaluate conditions. Recursion
    depth limited to `MAX_FLATTEN_CALL_DEPTH=32`
-5. **Execute** — `execute_commands()` walks `g_flat_cmds[]` emitting GL
+5. **Execute** — `execute_commands()` walks the flat command array emitting GL
    calls. Re-evaluates expressions with `has_vars` flag each frame
    (for animated `t`, etc.)
 
@@ -427,7 +429,7 @@ call sites. Ordering inside each helper is load-bearing:
 
 When the user navigates to an existing line, `load_line_to_input()`
 strips the trailing `;` and whitespace from `cmd.source` before
-loading into `g_input`. This means re-committing the line goes
+loading into the input buffer. This means re-committing the line goes
 through the no-semicolon path. Commit handlers that check for `;`
 must also accept end-of-string as a valid terminator.
 
@@ -447,7 +449,7 @@ Key details:
   therefore only reference already-declared predef vars — no scope
   locals are visible at block depth 0.
 - `CMD_VAR_DECLARE` is a no-op in `execute_commands()` and
-  `flatten_range()` — registration into `g_predef_vars[]` happens at
+  `flatten_range()` — registration into the predefined-variable table happens at
   commit time via `declare_predef_var()`
 - `GLCmd` fields: `var_names[MAX_NAMES_PER_DECL][16]`, `var_decl_count`
 - Editing an existing `CMD_VAR_DECLARE` line works: the overwrite
@@ -475,33 +477,34 @@ Key details:
   camera state as the raw `glTranslatef`/`glRotatef` sequence the REPL
   uses internally, predefined vars as globals, REPL functions as C
   functions, and `display()` body containing the user's geometry commands.
-  The workspace iterator in `repl_core.c` sets `g_export_scene_name_hint`
-  before each slot's save so the hint wins over `g_active_user_scene`.
+  The workspace iterator in `repl_core.c` sets the export scene-name hint
+  in import/export state before each slot's save so the hint wins over the
+  active user scene index.
 - **Import** (`load_from_file()`): line-by-line scan parses camera state
   and workspace directives, detects function definitions (converts C
   syntax back to REPL), and feeds geometry lines through `feed_line()`.
-  Pending directives (`g_pending_scene_name`, `g_pending_workspace_dir`)
-  are read by the caller after `load_from_file` returns so the importer
-  can name the new slot and remember the workspace dir.
+  Pending scene-name and workspace-dir directives are read by the caller
+  after `load_from_file` returns so the importer can name the new slot
+  and remember the workspace dir.
 
 ### Replay System
 
-Step-by-step execution visualization in `repl_core.c`:
-- `g_replay_state` (OFF/PLAYING/PAUSED/DONE), `g_replay_pc` (program
-  counter into `g_flat_cmds[]`), `g_replay_speed` (multiplier)
-- During playback, `g_num_flat_cmds` is clamped to `replay_exec_limit()`
+Step-by-step execution visualization in `repl_replay.c`:
+- `ReplReplayRuntimeState` (via `repl_state_replay()`) tracks state
+  (OFF/PLAYING/PAUSED/DONE), program counter, and speed multiplier
+- During playback, the flat command count is clamped to `replay_exec_limit()`
   so only commands up to the PC render
-- `g_replay_fade_batches[]` — circular buffer of fading geometry
-  snapshots; old geometry fades out as new geometry appears, rendered
-  in a separate blended pass after the main fill pass
+- Fade batch ring buffer — fading geometry snapshots; old geometry fades out
+  as new geometry appears, rendered in a separate blended pass after the
+  main fill pass
 - Toggled via Ctrl+G or the Replay header button
 
 ### Undo/Redo
 
 Circular snapshot buffers in `repl_undo.c`:
-- `ReplUndoSnapshot` captures `cmds[]`, `num_cmds`, `edit_line`,
-  `predef_vals[]` — full editor state
-- `g_undo_buf[32]` and `g_redo_buf[32]` with head/count tracking
+- `ReplUndoSnapshot` captures the full editor state: source commands,
+  command count, cursor position, predefined variable values
+- Undo and redo rings (32 slots each) with head/count tracking
 - `push_undo_snapshot()` called before any mutation (delete, paste,
   reformat, etc.); `pop_undo_snapshot()` on Ctrl+Z; `do_redo()` on
   Ctrl+Y. Also the hook where `repl_promote_example_if_needed()` fires
@@ -511,9 +514,9 @@ Circular snapshot buffers in `repl_undo.c`:
 ### Autocomplete
 
 Symbol matching and function parameter hints in `repl_autocomplete.c`:
-- `g_ac_matches[]` — matched completions from GL command/constant tables
-- `g_ac_ghost[]` — suffix to append to input on Tab accept
-- `g_ac_hint[]` — parameter list hint shown below cursor
+- `repl_state_autocomplete()->matches` — matched completions from GL command/constant tables
+- `repl_state_autocomplete()->ghost` — suffix to append to input on Tab accept
+- `repl_state_autocomplete()->hint` — parameter list hint shown below cursor
 - Modes: `AC_MODE_FUNC_PREFIX` (after `foo(` → param hints),
   `AC_MODE_ENUM_ARG1/2` (GL constant completion),
   `AC_MODE_POINT_PARAM` (3D point coordinates)
@@ -521,10 +524,10 @@ Symbol matching and function parameter hints in `repl_autocomplete.c`:
 ### Search
 
 Case-insensitive text search in `repl_search.c`:
-- Activated by Ctrl+F; query stored in `g_search_query[]`
+- Activated by Ctrl+F; query and state accessed via `repl_state_search()`
 - `repl_search_find_next_in_text()` finds substring matches across
   all visible lines (header, user code, footer)
-- `g_search_hit_line`/`g_search_hit_char` track current match position
+- `hit_line_idx`/`hit_char_idx` in `ReplSearchState` track current match position
 - Integrated with code panel rendering for match highlighting
 
 ### Config Menu
