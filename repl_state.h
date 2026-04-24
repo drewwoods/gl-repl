@@ -25,6 +25,10 @@
 #define REPL_WORKSPACE_DIR_MAX 1024
 #endif
 
+#ifndef REPL_STATUS_TEXT_MAX
+#define REPL_STATUS_TEXT_MAX 256
+#endif
+
 #ifndef USER_SCENE_NAME_MAX
 #define USER_SCENE_NAME_MAX 64
 #endif
@@ -124,6 +128,7 @@ typedef struct {
 
 typedef struct {
     const char **matches;
+    const char **insert_matches;
     int         *match_count;
     int         *selected_idx;
     char        *ghost;
@@ -358,6 +363,7 @@ const ReplProfilePanelState *repl_state_profile_panel(void);
 ReplProfilePanelState       *repl_state_profile_panel_mut(void);
 
 const ReplStatusState *repl_state_status(void);
+ReplStatusState       *repl_state_status_mut(void);
 void repl_status_set(const char *message);
 void repl_status_clear(void);
 void repl_status_tick(void);

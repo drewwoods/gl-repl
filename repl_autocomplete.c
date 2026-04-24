@@ -1,16 +1,12 @@
 /*
  * repl_autocomplete.c -- Input completion and parameter hints.
+ *
+ * Runtime storage lives in repl_state.c and is accessed through the typed
+ * autocomplete facade.
  */
 #include "sample.h"
 #include "repl_core_internal.h"
 #include "repl_command_spec.h"
-
-const char *g_ac_matches[MAX_AC_MATCHES];
-int g_ac_count = 0;
-int g_ac_sel = 0;
-char g_ac_ghost[MAX_LINE_LEN] = "";
-char g_ac_hint[MAX_LINE_LEN] = "";
-const char *g_ac_insert_matches[MAX_AC_MATCHES];
 static const FuncCompletion *g_ac_func_matches[MAX_AC_MATCHES];
 
 typedef enum {
@@ -152,7 +148,8 @@ static void update_input_param_hint(void) {
     const FuncCompletion *builtin = find_builtin_completion_for_input(input, &after);
     if (builtin) {
         build_param_hint_text(builtin->params, builtin->param_count,
-                              after, g_ac_hint, (int)sizeof(g_ac_hint));
+                              after, g_ac_hint,
+                              repl_state_autocomplete()->hint_capacity);
         return;
     }
 
@@ -164,7 +161,8 @@ static void update_input_param_hint(void) {
         if (find_defined_func_call_params(input, &after, params,
                                           &param_count, param_storage)) {
             build_param_hint_text(params, param_count, after,
-                                  g_ac_hint, (int)sizeof(g_ac_hint));
+                                  g_ac_hint,
+                                  repl_state_autocomplete()->hint_capacity);
         }
     }
 }
@@ -184,17 +182,19 @@ void update_selected_autocomplete_preview(void) {
         char param_storage[MAX_EXPR_VARS][16];
         int param_count = 0;
 
-        snprintf(g_ac_ghost, sizeof(g_ac_ghost), "%s",
+        snprintf(g_ac_ghost, repl_state_autocomplete()->ghost_capacity, "%s",
                  g_ac_insert_matches[g_ac_sel] + *inp->input_len);
         if (g_ac_func_matches[g_ac_sel] && g_ac_func_matches[g_ac_sel]->param_count > 0) {
             build_param_hint_text(g_ac_func_matches[g_ac_sel]->params,
                                   g_ac_func_matches[g_ac_sel]->param_count,
-                                  "", g_ac_hint, (int)sizeof(g_ac_hint));
+                                  "", g_ac_hint,
+                                  repl_state_autocomplete()->hint_capacity);
         } else if (find_defined_func_call_params(inp->input, &after, params,
                                                  &param_count, param_storage)) {
             g_ac_ghost[0] = '\0';
             build_param_hint_text(params, param_count, after,
-                                  g_ac_hint, (int)sizeof(g_ac_hint));
+                                  g_ac_hint,
+                                  repl_state_autocomplete()->hint_capacity);
         }
         return;
     }
@@ -202,7 +202,7 @@ void update_selected_autocomplete_preview(void) {
     if (g_ac_mode == AC_MODE_POINT_PARAM ||
         g_ac_mode == AC_MODE_ENUM_ARG1 ||
         g_ac_mode == AC_MODE_ENUM_ARG2) {
-        snprintf(g_ac_ghost, sizeof(g_ac_ghost), "%s%s",
+        snprintf(g_ac_ghost, repl_state_autocomplete()->ghost_capacity, "%s%s",
                  g_ac_insert_matches[g_ac_sel] + g_ac_token_len, g_ac_suffix);
     }
 }

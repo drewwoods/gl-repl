@@ -147,7 +147,6 @@ void repl_dump_code_panel_visual_text(FILE *out);
 
 /* ---- Autocomplete ----------------------------------------------------- */
 
-extern const char *g_ac_insert_matches[MAX_AC_MATCHES];
 void update_selected_autocomplete_preview(void);
 void update_autocomplete(void);
 void accept_autocomplete(void);

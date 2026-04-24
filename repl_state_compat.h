@@ -43,8 +43,6 @@ typedef struct {
 ReplEditorState        repl_editor_state_live(void);
 ReplViewState          repl_view_state_live(void);
 
-
-
 extern float g_panel_frac;
 extern int   g_resizing_panel;
 extern int   g_scroll;
@@ -67,15 +65,33 @@ extern int         g_show_help;
 extern int         g_help_tab;
 extern int         g_help_scroll;
 
-
 extern int   g_show_var_panel;
 extern int   g_drag_var;
 extern int   g_drag_log_mode;
 extern float g_drag_start_val;
 extern int   g_drag_start_x;
 extern int   g_show_profile_panel;
-extern char  g_status[256];
-extern int   g_status_ttl;
+
+#ifndef REPL_STATE_IMPLEMENTATION
+#define g_status                  (repl_state_status()->text)
+#define g_status_ttl              (*repl_state_status()->ttl)
+
+#define g_search_active           (*repl_state_search()->active)
+#define g_search_query            (repl_state_search()->query)
+#define g_search_query_len        (*repl_state_search()->query_len)
+#define g_search_cursor_pos       (*repl_state_search()->cursor_pos)
+#define g_search_hit_line         (*repl_state_search()->hit_line_idx)
+#define g_search_hit_char         (*repl_state_search()->hit_char_idx)
+#define g_search_hit_ordinal      (*repl_state_search()->hit_ordinal)
+#define g_search_match_count      (*repl_state_search()->match_count)
+
+#define g_ac_matches              (repl_state_autocomplete()->matches)
+#define g_ac_insert_matches       (repl_state_autocomplete()->insert_matches)
+#define g_ac_count                (*repl_state_autocomplete()->match_count)
+#define g_ac_sel                  (*repl_state_autocomplete()->selected_idx)
+#define g_ac_ghost                (repl_state_autocomplete()->ghost)
+#define g_ac_hint                 (repl_state_autocomplete()->hint)
+#endif
 
 extern GLUquadric    *g_quadric;
 extern GLUtesselator *g_tess;
@@ -84,36 +100,22 @@ extern int            g_tess_vert_count;
 extern SceneLight     g_lights[MAX_LIGHTS];
 extern float          g_clear_color[4];
 
-extern int  g_search_active;
-extern char g_search_query[MAX_INPUT_LEN];
-extern int  g_search_query_len;
-extern int  g_search_cursor_pos;
-extern int  g_search_hit_line;
-extern int  g_search_hit_char;
-extern int  g_search_hit_ordinal;
-extern int  g_search_match_count;
+extern int            g_cursor_px;
+extern int            g_cursor_py;
 
-extern const char *g_ac_matches[MAX_AC_MATCHES];
-extern int         g_ac_count;
-extern int         g_ac_sel;
-extern char        g_ac_ghost[MAX_LINE_LEN];
-extern char        g_ac_hint[MAX_LINE_LEN];
-extern int         g_cursor_px;
-extern int         g_cursor_py;
-
-extern char g_scratch_buf[256];
+extern int g_init_attenuate_points;
 
 void refresh_workspace_header_lines(void);
 int  parse_workspace_header_line(const char *line);
 
-extern const char *g_header_pre[];
-extern const char *g_header_post[];
-extern const char *g_footer_pre_init[];
-extern const char *g_footer_post_init[];
-extern const char *g_grid_names[];
-extern const char *g_grid_major_names[GRID_MAJOR_COUNT];
-extern const char *g_grid_extent_names[GRID_EXTENT_COUNT];
-extern const char *g_axes_names[];
-extern int         g_init_attenuate_points;
+extern char         g_scratch_buf[256];
+extern const char  *g_header_pre[];
+extern const char  *g_header_post[];
+extern const char  *g_footer_pre_init[];
+extern const char  *g_footer_post_init[];
+extern const char  *g_grid_names[];
+extern const char  *g_grid_major_names[GRID_MAJOR_COUNT];
+extern const char  *g_grid_extent_names[GRID_EXTENT_COUNT];
+extern const char  *g_axes_names[];
 
 #endif /* REPL_STATE_COMPAT_H */
