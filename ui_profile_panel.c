@@ -69,7 +69,7 @@ static void profile_panel_rect_for_height(int panel_h, int *out_x, int *out_y) {
 
     scene_rect(&sc_x, &sc_y, &sc_w, &sc_h);
 
-    if (g_show_var_panel) {
+    if (*repl_state_variable_panel()->visible) {
         px = sc_x + sc_w - PROF_PANEL_W - PROF_PANEL_MARGIN;
         py = sc_y + sc_h - panel_h - PROF_PANEL_MARGIN;
     } else {
@@ -96,8 +96,6 @@ static double g_prof_avg_us[PROF_SECTION_COUNT];   /* EMA in µs             */
 static int    g_prof_stale[PROF_SECTION_COUNT];    /* frames since last sample */
 static double g_prof_accum_pending[PROF_SECTION_COUNT]; /* running total for accum-commit */
 static int    g_prof_initialized = 0;
-
-int g_show_profile_panel = PROFILE_PANEL_OFF;
 
 /* ========================================================================= */
 /* Helpers                                                                    */
@@ -252,7 +250,7 @@ static void fmt_us(char *buf, int buf_sz, double us) {
 }
 
 int prof_code_panel_details_enabled(void) {
-    return g_show_profile_panel == PROFILE_PANEL_DETAILS;
+    return *repl_state_profile_panel()->mode == PROFILE_PANEL_DETAILS;
 }
 
 static int is_detail_section(ProfSection s) {
@@ -300,7 +298,7 @@ static int visible_section_count(void) {
 }
 
 void render_profile_panel(void) {
-    if (g_show_profile_panel == PROFILE_PANEL_OFF) return;
+    if (*repl_state_profile_panel()->mode == PROFILE_PANEL_OFF) return;
     init_if_needed();
 
     int row_count = visible_section_count();

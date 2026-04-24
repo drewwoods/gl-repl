@@ -110,15 +110,6 @@ static const float g_jitter_table[MAX_ACCUM_SAMPLES][2] = {
     {  0.500f,  0.000f },  /* 16 */
 };
 
-/* Animation */
-float  g_anim_time = 0.0f;
-int    g_t_playing = 1;    /* 1: 't' var auto-increments with time; 0: frozen */
-int    g_t_var_idx = -1;   /* index of "t" in g_predef_vars[], cached at init */
-
-/* Toggles */
-int    g_show_help    = 0;
-int    g_help_tab     = 0;   /* 0=Commands, 1=Keys */
-int    g_help_scroll  = 0;
 /* Names must match the GridTheme enum in sample.h. */
 const char *g_grid_names[GRID_THEME_COUNT] = {
     [GRID_THEME_OFF]     = "OFF",
@@ -159,9 +150,6 @@ const char *g_axes_names[AXES_THEME_COUNT] = {
     [AXES_THEME_GIZMO]   = "Gizmo",
 };
 char   g_scratch_buf[256];  /* shared scratch space for formatting strings, etc. */
-
-int    g_cursor_px = 0;     /* screen pos of cursor, set during render */
-int    g_cursor_py = 0;
 
 /* Forward declarations (eval_expr, parse_for_header, etc. are in repl_eval.h) */
 static void get_for_var_name(const GLCmd *cmd, char *var, int var_sz);

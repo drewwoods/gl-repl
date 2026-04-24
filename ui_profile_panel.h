@@ -72,8 +72,8 @@ void prof_accum_commit(ProfSection s);
 /* Mark the start of a new frame so per-frame sections can detect staleness. */
 void prof_frame_tick(void);
 
-/* Render the profile panel overlay.  Draws nothing when
- * g_show_profile_panel == PROFILE_PANEL_OFF. */
+/* Render the profile panel overlay.  Draws nothing when the profile
+ * panel mode is PROFILE_PANEL_OFF. */
 void render_profile_panel(void);
 
 /* Whether detail rows should be rendered/timed for PROF_CODE_PANEL. */

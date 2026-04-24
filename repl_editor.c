@@ -2,7 +2,7 @@
  * repl_editor.c — Editor state, line routing, and GLUT input dispatch.
  *
  * Subsystems in this file (top to bottom):
- *  - Editor state (g_input, cursor, panel resize, variable dragging)
+ *  - Editor state routed through repl_state.c
  *  - Cmd-range deletion with var-decl guards
  *  - Line-input load/save and line navigation
  *  - Commit attempt orchestration and Enter/navigation outcomes
@@ -56,18 +56,8 @@ typedef enum {
     COMMIT_REJECTED
 } CommitResult;
 
-float g_panel_frac = CFG_DEFAULT_PANEL_FRAC;
-int   g_resizing_panel = 0;
-int   g_scroll = 0;
-int   g_scroll_follow_cursor = 0;
-
-int g_cursor_on = 1;
-int g_blink_tick = 0;
-
-int   g_show_var_panel = 1;
-/* Variable drag state (g_drag_var, g_drag_log_mode, g_drag_start_val,
- * g_drag_start_x) lives in repl_var_drag.c.  Externs are declared in
- * repl_state.h so the ReplUiState catalog keeps a pointer to each. */
+/* Variable drag state lives in repl_state.c and is accessed through the
+ * transaction helpers in repl_var_drag.c. */
 
 /* Browser autoplay policy: the Web Audio context stays suspended until
  * a user gesture. We call repl_audio_on_user_gesture() the first time
