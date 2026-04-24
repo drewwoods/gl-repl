@@ -74,9 +74,4 @@
 void refresh_workspace_header_lines(void);
 int  parse_workspace_header_line(const char *line);
 
-extern const char  *g_grid_names[];
-extern const char  *g_grid_major_names[GRID_MAJOR_COUNT];
-extern const char  *g_grid_extent_names[GRID_EXTENT_COUNT];
-extern const char  *g_axes_names[];
-
 #endif /* REPL_STATE_COMPAT_H */

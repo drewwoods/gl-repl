@@ -111,46 +111,6 @@ static const float g_jitter_table[MAX_ACCUM_SAMPLES][2] = {
     {  0.500f,  0.000f },  /* 16 */
 };
 
-/* Names must match the GridTheme enum in sample.h. */
-const char *g_grid_names[GRID_THEME_COUNT] = {
-    [GRID_THEME_OFF]     = "OFF",
-    [GRID_THEME_CLASSIC] = "Classic",
-    [GRID_THEME_FOG]     = "Fog",
-    [GRID_THEME_TRON]    = "Tron",
-    [GRID_THEME_EMBER]   = "Ember",
-    [GRID_THEME_FAINT]   = "Faint",
-    [GRID_THEME_FOCUS]   = "Focus",
-    [GRID_THEME_OCEAN]   = "Ocean",
-    [GRID_THEME_XZRULER] = "XZ Ruler",
-    [GRID_THEME_PLANES]  = "Adaptive Planes",
-};
-
-/* Grid major tick spacing in world units — defined in repl_state.c,
- * accessed via repl_state_presentation()->grid_major_steps. */
-const char *g_grid_major_names[GRID_MAJOR_COUNT] = {
-    [GRID_MAJOR_1]  = "1",
-    [GRID_MAJOR_2]  = "2",
-    [GRID_MAJOR_5]  = "5",
-    [GRID_MAJOR_10] = "10",
-};
-
-/* Grid half-extents — defined in repl_state.c,
- * accessed via repl_state_presentation()->grid_extents. */
-const char *g_grid_extent_names[GRID_EXTENT_COUNT] = {
-    [GRID_EXTENT_CLOSE] = "Close",
-    [GRID_EXTENT_MID]   = "Mid",
-    [GRID_EXTENT_FAR]   = "Far",
-};
-/* Names must match the AxesTheme enum in sample.h. */
-const char *g_axes_names[AXES_THEME_COUNT] = {
-    [AXES_THEME_OFF]     = "OFF",
-    [AXES_THEME_CLASSIC] = "Classic",
-    [AXES_THEME_PULSE]   = "Pulse",
-    [AXES_THEME_NEON]    = "Neon",
-    [AXES_THEME_COMPASS] = "Compass",
-    [AXES_THEME_GIZMO]   = "Gizmo",
-};
-
 /* Forward declarations (eval_expr, parse_for_header, etc. are in repl_eval.h) */
 static void get_for_var_name(const GLCmd *cmd, char *var, int var_sz);
 
