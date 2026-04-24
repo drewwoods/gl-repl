@@ -221,7 +221,7 @@ static void draw_cityscape(void) {
 
     glDepthMask(GL_TRUE);
     glDisable(GL_BLEND);
-    if (g_user_lighting_enabled) glEnable(GL_LIGHTING);
+    if (repl_state_flat_program_user_lighting_enabled()) glEnable(GL_LIGHTING);
     scene_backdrop_pop_state();
 }
 

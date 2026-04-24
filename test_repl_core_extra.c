@@ -48,7 +48,7 @@ int in_begin_block(void);
 int cmd_indent_chars(int pos);
 GLenum current_begin_mode(void);
 int count_vertices(void);
-extern int g_num_flat_cmds;
+extern int repl_state_flat_program_count();
 extern int g_replay_pc;
 extern int g_replay_state;
 extern float g_anim_time;
@@ -125,20 +125,20 @@ void test_replay_advanced() {
     repl_feed_line_public("glVertex3f(2,2,2);");
     repl_flatten_commands();
 
-    int full_flat_count = g_num_flat_cmds;
+    int full_flat_count = repl_state_flat_program_count();
     FlatProgramView live_program = repl_flat_program_view_live();
     ASSERT_INT("flat program view count", live_program.cmd_count, full_flat_count);
-    ASSERT_TRUE("flat program view cmds", live_program.cmds == g_flat_cmds);
-    ASSERT_TRUE("flat program view locals", live_program.local_vars == g_flat_cmd_local_vars);
+    ASSERT_TRUE("flat program view cmds", live_program.cmds == repl_state_flat_program_cmds_mut());
+    ASSERT_TRUE("flat program view locals", live_program.local_vars == repl_state_flat_program_local_vars_mut());
 
     ReplExecutionOptions limited_exec = { .flat_cmd_count = 1 };
     repl_execute_program(&limited_exec);
-    ASSERT_INT("limited execute preserves flat count", g_num_flat_cmds, full_flat_count);
+    ASSERT_INT("limited execute preserves flat count", repl_state_flat_program_count(), full_flat_count);
 
     limited_exec.flat_cmd_count = full_flat_count + 100;
     limited_exec.program = live_program;
     repl_execute_program(&limited_exec);
-    ASSERT_INT("over-limit execute preserves flat count", g_num_flat_cmds, full_flat_count);
+    ASSERT_INT("over-limit execute preserves flat count", repl_state_flat_program_count(), full_flat_count);
 
     replay_start();
     ASSERT_INT("replay_exec_limit start", replay_exec_limit(), 0);
@@ -560,8 +560,8 @@ void test_debug_dump_flat_commands() {
     if (basic) {
         char count_line[64];
         snprintf(count_line, sizeof(count_line),
-                 "num_flat_cmds=%d\n", g_num_flat_cmds);
-        ASSERT_TRUE("basic count matches g_num_flat_cmds",
+                 "num_flat_cmds=%d\n", repl_state_flat_program_count());
+        ASSERT_TRUE("basic count matches repl_state_flat_program_count()",
                     strstr(basic, count_line) != NULL);
 
         /* The fix in abccf5c3 aligned cmd_type_name with the CmdType enum and
@@ -597,7 +597,7 @@ void test_debug_dump_flat_commands() {
         for (const char *p = basic; *p; p++)
             if (*p == '\n') newlines++;
         ASSERT_INT("basic dump line count",
-                   newlines, g_num_flat_cmds + 3);
+                   newlines, repl_state_flat_program_count() + 3);
 
         free(basic);
     }
@@ -611,8 +611,8 @@ void test_debug_dump_flat_commands() {
     repl_flatten_commands();
 
     int vertex_flats = 0;
-    for (int i = 0; i < g_num_flat_cmds; i++)
-        if (g_flat_cmds[i].type == CMD_VERTEX3F)
+    for (int i = 0; i < repl_state_flat_program_count(); i++)
+        if (repl_state_flat_program_cmds_mut()[i].type == CMD_VERTEX3F)
             vertex_flats++;
     ASSERT_INT("for-loop unrolled to 3 vertices", vertex_flats, 3);
 
@@ -620,7 +620,7 @@ void test_debug_dump_flat_commands() {
     ASSERT_TRUE("loop dump captured", loop != NULL);
     if (loop) {
         /* Flattening unrolls the for-loop, so only the body commands survive
-         * in g_flat_cmds[]. The FOR_BEGIN/FOR_END source markers do not
+         * in repl_state_flat_program_cmds_mut()[]. The FOR_BEGIN/FOR_END source markers do not
          * appear in the flat stream. */
         int hits = 0;
         const char *p = loop;
@@ -643,9 +643,9 @@ void test_debug_dump_flat_commands() {
     repl_flatten_commands();
 
     int scoped_hits = 0;
-    for (int i = 0; i < g_num_flat_cmds; i++) {
-        if (g_flat_cmds[i].type == CMD_VERTEX3F &&
-            g_flat_cmds[i].func_scope_mask != 0u)
+    for (int i = 0; i < repl_state_flat_program_count(); i++) {
+        if (repl_state_flat_program_cmds_mut()[i].type == CMD_VERTEX3F &&
+            repl_state_flat_program_cmds_mut()[i].func_scope_mask != 0u)
             scoped_hits++;
     }
     ASSERT_TRUE("inlined call sets func_scope_mask", scoped_hits >= 1);
@@ -668,18 +668,18 @@ void test_debug_dump_flat_commands() {
         free(call_dump);
     }
 
-    /* Implicit flatten: even if the caller leaves g_flat_dirty set and stale
-     * flat state behind, the dump should rebuild g_flat_cmds[] on demand. */
+    /* Implicit flatten: even if the caller leaves repl_state_flat_program_dirty() set and stale
+     * flat state behind, the dump should rebuild repl_state_flat_program_cmds_mut()[] on demand. */
     repl_reset_state(); declare_test_vars();
     repl_feed_line_public("glVertex3f(0,0,0);");
-    g_flat_dirty = 1;
-    g_num_flat_cmds = 0;
+    repl_state_mark_flat_dirty();
+    repl_state_flat_program_set_count(0);
     FILE *dn = fopen("/dev/null", "w");
     if (dn) {
         repl_debug_dump_flat_commands(dn);
         fclose(dn);
     }
-    ASSERT_TRUE("dump re-flattens commands", g_num_flat_cmds >= 1);
+    ASSERT_TRUE("dump re-flattens commands", repl_state_flat_program_count() >= 1);
 }
 
 /* Capture the output of repl_debug_dump_editor() into a malloc'd string. */

@@ -96,7 +96,7 @@ static void color_picker_write_cmd(void) {
             repl_state_document_cmds_mut()[g_cp_line].num_args = 4;
             memcpy(repl_state_document_cmds_mut()[g_cp_line].source, new_source,
                    strlen(new_source) + 1);
-            g_flat_dirty = 1;
+            repl_state_mark_flat_dirty();
             return;
         } else {
             formatted = repl_format_fits(new_source, sizeof(new_source),
@@ -125,7 +125,7 @@ static void color_picker_write_cmd(void) {
     if (g_cp_has_alpha)
         repl_state_document_cmds_mut()[g_cp_line].args[3]=g_cp_alpha;
     memcpy(repl_state_document_cmds_mut()[g_cp_line].source, new_source, strlen(new_source) + 1);
-    g_flat_dirty = 1;
+    repl_state_mark_flat_dirty();
 }
 
 /* Open (or switch) the picker for cmd_idx.  my is GLUT screen y coord. */

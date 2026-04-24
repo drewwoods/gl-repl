@@ -802,7 +802,7 @@ void render_code_panel(void) {
         /* cmd count */
         char cmds_buf[48];
         snprintf(cmds_buf, sizeof(cmds_buf), "%d/%d cmds",
-                 g_num_flat_cmds, MAX_COMMANDS);
+                 repl_state_flat_program_count(), MAX_COMMANDS);
         glColor3f(0.878f, 0.878f, 0.878f); /* #e0e0e0 — stronger for counts */
         draw_string((float)tx, (float)text_y, cmds_buf, FONT_SMALL);
         tx += (int)strlen(cmds_buf) * FONT_SMALL_W;

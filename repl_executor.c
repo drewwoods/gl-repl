@@ -141,7 +141,7 @@ static FlatCmdLocalVars *execution_local_vars_at(FlatProgramView program,
  * evaluation, and variable assignments.
  *
  * Replay and fade passes provide an explicit limit instead of temporarily
- * mutating g_num_flat_cmds. */
+ * mutating repl_state_flat_program_count(). */
 void repl_execute_program(const ReplExecutionOptions *options) {
     FlatProgramView program = execution_program_from_options(options);
     const GLCmd *flat_cmds = program.cmds;

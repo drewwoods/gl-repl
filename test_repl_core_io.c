@@ -222,7 +222,7 @@ int main(void) {
     }
 
     repl_flatten_commands();
-    ASSERT_TRUE("flatten produced cmds", g_num_flat_cmds > 0);
+    ASSERT_TRUE("flatten produced cmds", repl_state_flat_program_count() > 0);
 
     /* Camera state round-trip: non-default eye/center must survive save+load. */
     repl_reset_state(); declare_test_vars();
@@ -324,12 +324,12 @@ int main(void) {
     }
 
     repl_flatten_commands();
-    ASSERT_TRUE("param func flatten count", g_num_flat_cmds >= 2);
-    ASSERT_TRUE("param func flatten vertex type", g_flat_cmds[g_num_flat_cmds - 1].type == CMD_VERTEX3F);
+    ASSERT_TRUE("param func flatten count", repl_state_flat_program_count() >= 2);
+    ASSERT_TRUE("param func flatten vertex type", repl_state_flat_program_cmds_mut()[repl_state_flat_program_count() - 1].type == CMD_VERTEX3F);
     ASSERT_TRUE("param func flatten x",
-                fabsf(g_flat_cmds[g_num_flat_cmds - 1].args[0] - 1.5f) < 1e-6f);
+                fabsf(repl_state_flat_program_cmds_mut()[repl_state_flat_program_count() - 1].args[0] - 1.5f) < 1e-6f);
     ASSERT_TRUE("param func flatten y",
-                fabsf(g_flat_cmds[g_num_flat_cmds - 1].args[1] - 3.0f) < 1e-6f);
+                fabsf(repl_state_flat_program_cmds_mut()[repl_state_flat_program_count() - 1].args[1] - 3.0f) < 1e-6f);
 
     repl_reset_state();
     repl_feed_line_public("func0(radius, sides, phase) {");
@@ -362,8 +362,8 @@ int main(void) {
     repl_flatten_commands();
     {
         int vertex_count = 0;
-        for (int i = 0; i < g_num_flat_cmds; i++)
-            if (g_flat_cmds[i].type == CMD_VERTEX3F)
+        for (int i = 0; i < repl_state_flat_program_count(); i++)
+            if (repl_state_flat_program_cmds_mut()[i].type == CMD_VERTEX3F)
                 vertex_count++;
         ASSERT_TRUE("loaded param loop iterates through sides plus center close",
                     vertex_count == 7);

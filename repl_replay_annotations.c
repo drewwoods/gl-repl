@@ -31,9 +31,9 @@ static void repl_replay_annotations_rebuild_cache(void) {
 
     /* Backward pass: first match per src_cmd_idx = most recent execution */
     for (int j = g_replay_pc - 1; j >= 0; j--) {
-        int src = g_flat_cmds[j].src_cmd_idx;
+        int src = repl_state_flat_program_cmds_mut()[j].src_cmd_idx;
         if (src >= 0 && src < repl_state_document_count() &&
-            s_replay_flat_map[src] == -1 && g_flat_cmds[j].valid)
+            s_replay_flat_map[src] == -1 && repl_state_flat_program_cmds_mut()[j].valid)
             s_replay_flat_map[src] = j;
     }
 
@@ -59,7 +59,7 @@ int repl_replay_annotation_flat_cmd_for_source(int src_line) {
         src_line >= 0 && src_line < repl_state_document_count())
         return s_replay_flat_map[src_line];
     for (int j = g_replay_pc - 1; j >= 0; j--) {
-        if (g_flat_cmds[j].src_cmd_idx == src_line && g_flat_cmds[j].valid)
+        if (repl_state_flat_program_cmds_mut()[j].src_cmd_idx == src_line && repl_state_flat_program_cmds_mut()[j].valid)
             return j;
     }
     return -1;
@@ -170,12 +170,12 @@ static int replay_flat_cmd_context_matches(int flat_idx, int current_flat_idx) {
     if (flat_idx < 0 || current_flat_idx < 0)
         return 1;
 
-    if (g_flat_cmds[flat_idx].func_scope_mask !=
-        g_flat_cmds[current_flat_idx].func_scope_mask)
+    if (repl_state_flat_program_cmds_mut()[flat_idx].func_scope_mask !=
+        repl_state_flat_program_cmds_mut()[current_flat_idx].func_scope_mask)
         return 0;
 
-    flat_vars = &g_flat_cmd_local_vars[flat_idx];
-    cur_vars = &g_flat_cmd_local_vars[current_flat_idx];
+    flat_vars = &repl_state_flat_program_local_vars_mut()[flat_idx];
+    cur_vars = &repl_state_flat_program_local_vars_mut()[current_flat_idx];
 
     for (int i = 0; i < flat_vars->num_vars; i++) {
         int ci = visible_var_index(cur_vars->vars, cur_vars->num_vars,
@@ -207,7 +207,7 @@ static int find_replay_assignment_flat_cmd(int src_line) {
 
     /* Fallback: full scan (only for context mismatch in function bodies) */
     for (int j = g_replay_pc - 1; j >= 0; j--) {
-        if (g_flat_cmds[j].src_cmd_idx != src_line || !g_flat_cmds[j].valid)
+        if (repl_state_flat_program_cmds_mut()[j].src_cmd_idx != src_line || !repl_state_flat_program_cmds_mut()[j].valid)
             continue;
         if (current_flat_idx < 0 ||
             j == current_flat_idx ||
@@ -226,8 +226,8 @@ static int build_visible_vars_from_predef_values(int flat_idx,
     if (!out || max_out <= 0)
         return 0;
 
-    if (flat_idx >= 0 && flat_idx < g_num_flat_cmds) {
-        const FlatCmdLocalVars *lcvars = &g_flat_cmd_local_vars[flat_idx];
+    if (flat_idx >= 0 && flat_idx < repl_state_flat_program_count()) {
+        const FlatCmdLocalVars *lcvars = &repl_state_flat_program_local_vars_mut()[flat_idx];
         for (int i = 0; i < lcvars->num_vars && nv < max_out; i++)
             out[nv++] = lcvars->vars[i];
     }
@@ -373,22 +373,22 @@ static int replay_copy_predef_values_before_flat_cmd(int target_pc,
 
     if (target_pc < 0)
         target_pc = 0;
-    if (target_pc > g_num_flat_cmds)
-        target_pc = g_num_flat_cmds;
+    if (target_pc > repl_state_flat_program_count())
+        target_pc = repl_state_flat_program_count();
 
     while (pc < target_pc) {
-        if (!g_flat_cmds[pc].valid) {
+        if (!repl_state_flat_program_cmds_mut()[pc].valid) {
             pc++;
             continue;
         }
 
-        switch (g_flat_cmds[pc].type) {
+        switch (repl_state_flat_program_cmds_mut()[pc].type) {
         case CMD_VAR_ASSIGN: {
-            int vi = g_flat_cmds[pc].num_args;
-            float value = g_flat_cmds[pc].args[0];
-            if (g_flat_cmds[pc].has_vars) {
+            int vi = repl_state_flat_program_cmds_mut()[pc].num_args;
+            float value = repl_state_flat_program_cmds_mut()[pc].args[0];
+            if (repl_state_flat_program_cmds_mut()[pc].has_vars) {
                 char rhs[MAX_LINE_LEN];
-                if (repl_extract_assignment_parts(g_flat_cmds[pc].source,
+                if (repl_extract_assignment_parts(repl_state_flat_program_cmds_mut()[pc].source,
                                                   NULL, 0,
                                                   rhs, sizeof(rhs)) &&
                     rhs[0]) {
@@ -400,10 +400,10 @@ static int replay_copy_predef_values_before_flat_cmd(int target_pc,
             break;
         }
         case CMD_IF_BEGIN: {
-            float cond = g_flat_cmds[pc].args[0];
-            if (g_flat_cmds[pc].has_vars) {
+            float cond = repl_state_flat_program_cmds_mut()[pc].args[0];
+            if (repl_state_flat_program_cmds_mut()[pc].has_vars) {
                 char cond_text[MAX_LINE_LEN];
-                if (repl_extract_paren_payload(g_flat_cmds[pc].source,
+                if (repl_extract_paren_payload(repl_state_flat_program_cmds_mut()[pc].source,
                                                cond_text, sizeof(cond_text)) &&
                     cond_text[0]) {
                     replay_eval_expr_with_predefs(pc, cond_text, out_vals, &cond);
@@ -412,24 +412,24 @@ static int replay_copy_predef_values_before_flat_cmd(int target_pc,
             if (cond == 0.0f) {
                 int depth = 1;
                 while (depth > 0 && ++pc < target_pc) {
-                    if (g_flat_cmds[pc].type == CMD_IF_BEGIN) depth++;
-                    else if (g_flat_cmds[pc].type == CMD_IF_END) depth--;
+                    if (repl_state_flat_program_cmds_mut()[pc].type == CMD_IF_BEGIN) depth++;
+                    else if (repl_state_flat_program_cmds_mut()[pc].type == CMD_IF_END) depth--;
                 }
             }
             break;
         }
         case CMD_GOTO: {
             char label[64];
-            if (!repl_extract_goto_label(g_flat_cmds[pc].source,
+            if (!repl_extract_goto_label(repl_state_flat_program_cmds_mut()[pc].source,
                                          label, sizeof(label)))
                 break;
             if (goto_count++ > 100000)
                 return 0;
-            for (int li = 0; li < g_num_flat_cmds; li++) {
+            for (int li = 0; li < repl_state_flat_program_count(); li++) {
                 char target_label[64];
-                if (g_flat_cmds[li].valid &&
-                    g_flat_cmds[li].type == CMD_LABEL &&
-                    repl_extract_label_name(g_flat_cmds[li].source,
+                if (repl_state_flat_program_cmds_mut()[li].valid &&
+                    repl_state_flat_program_cmds_mut()[li].type == CMD_LABEL &&
+                    repl_extract_label_name(repl_state_flat_program_cmds_mut()[li].source,
                                             target_label,
                                             sizeof(target_label)) &&
                     strcmp(target_label, label) == 0) {
@@ -470,11 +470,11 @@ static void replay_build_predef_snapshots(void) {
             vals[i] = g_predef_vars[i].value;
 
     if (target_pc < 0) target_pc = 0;
-    if (target_pc > g_num_flat_cmds) target_pc = g_num_flat_cmds;
+    if (target_pc > repl_state_flat_program_count()) target_pc = repl_state_flat_program_count();
 
     /* Macro: snapshot predef vals for a flat position's source command */
     #define SNAP_IF_MAPPED(flat_pc) do {                                    \
-        int _src = g_flat_cmds[flat_pc].src_cmd_idx;                        \
+        int _src = repl_state_flat_program_cmds_mut()[flat_pc].src_cmd_idx;                        \
         if (_src >= 0 && _src < repl_state_document_count() &&                               \
             s_replay_flat_map[_src] == (flat_pc) &&                         \
             !s_replay_predef_snap_valid[_src]) {                            \
@@ -487,15 +487,15 @@ static void replay_build_predef_snapshots(void) {
     while (pc < target_pc) {
         SNAP_IF_MAPPED(pc);
 
-        if (!g_flat_cmds[pc].valid) { pc++; continue; }
+        if (!repl_state_flat_program_cmds_mut()[pc].valid) { pc++; continue; }
 
-        switch (g_flat_cmds[pc].type) {
+        switch (repl_state_flat_program_cmds_mut()[pc].type) {
         case CMD_VAR_ASSIGN: {
-            int vi = g_flat_cmds[pc].num_args;
-            float value = g_flat_cmds[pc].args[0];
-            if (g_flat_cmds[pc].has_vars) {
+            int vi = repl_state_flat_program_cmds_mut()[pc].num_args;
+            float value = repl_state_flat_program_cmds_mut()[pc].args[0];
+            if (repl_state_flat_program_cmds_mut()[pc].has_vars) {
                 char rhs[MAX_LINE_LEN];
-                if (repl_extract_assignment_parts(g_flat_cmds[pc].source,
+                if (repl_extract_assignment_parts(repl_state_flat_program_cmds_mut()[pc].source,
                                                   NULL, 0,
                                                   rhs, sizeof(rhs)) &&
                     rhs[0])
@@ -506,10 +506,10 @@ static void replay_build_predef_snapshots(void) {
             break;
         }
         case CMD_IF_BEGIN: {
-            float cond = g_flat_cmds[pc].args[0];
-            if (g_flat_cmds[pc].has_vars) {
+            float cond = repl_state_flat_program_cmds_mut()[pc].args[0];
+            if (repl_state_flat_program_cmds_mut()[pc].has_vars) {
                 char cond_text[MAX_LINE_LEN];
-                if (repl_extract_paren_payload(g_flat_cmds[pc].source,
+                if (repl_extract_paren_payload(repl_state_flat_program_cmds_mut()[pc].source,
                                                cond_text, sizeof(cond_text)) &&
                     cond_text[0])
                     replay_eval_expr_with_predefs(pc, cond_text, vals, &cond);
@@ -518,24 +518,24 @@ static void replay_build_predef_snapshots(void) {
                 int depth = 1;
                 while (depth > 0 && ++pc < target_pc) {
                     SNAP_IF_MAPPED(pc);
-                    if (g_flat_cmds[pc].type == CMD_IF_BEGIN) depth++;
-                    else if (g_flat_cmds[pc].type == CMD_IF_END) depth--;
+                    if (repl_state_flat_program_cmds_mut()[pc].type == CMD_IF_BEGIN) depth++;
+                    else if (repl_state_flat_program_cmds_mut()[pc].type == CMD_IF_END) depth--;
                 }
             }
             break;
         }
         case CMD_GOTO: {
             char label[64];
-            if (!repl_extract_goto_label(g_flat_cmds[pc].source,
+            if (!repl_extract_goto_label(repl_state_flat_program_cmds_mut()[pc].source,
                                          label, sizeof(label)))
                 break;
             if (goto_count++ > 100000)
                 goto snap_done;
-            for (int li = 0; li < g_num_flat_cmds; li++) {
+            for (int li = 0; li < repl_state_flat_program_count(); li++) {
                 char target_label[64];
-                if (g_flat_cmds[li].valid &&
-                    g_flat_cmds[li].type == CMD_LABEL &&
-                    repl_extract_label_name(g_flat_cmds[li].source,
+                if (repl_state_flat_program_cmds_mut()[li].valid &&
+                    repl_state_flat_program_cmds_mut()[li].type == CMD_LABEL &&
+                    repl_extract_label_name(repl_state_flat_program_cmds_mut()[li].source,
                                             target_label,
                                             sizeof(target_label)) &&
                     strcmp(target_label, label) == 0) {
@@ -594,7 +594,7 @@ static int build_replay_assignment_inline_comment(int cmd_idx, int flat_idx,
         return 0;
 
     {
-        float value = g_flat_cmds[flat_idx].args[0];
+        float value = repl_state_flat_program_cmds_mut()[flat_idx].args[0];
         subst_visible_vars(rhs, rhs_subst, sizeof(rhs_subst),
                            NULL, 0, visible_vars, nv);
         replay_eval_expr_with_predefs(flat_idx, rhs, predef_vals, &value);

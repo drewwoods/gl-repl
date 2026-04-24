@@ -499,6 +499,7 @@ void replay_stop(void) {
 }
 
 void replay_advance(void) {
+    REPLAY_FLAT_STATE;
     int old_pc;
     int next_pc;
     int src_line = -1;

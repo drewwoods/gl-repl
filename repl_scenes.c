@@ -114,7 +114,7 @@ static void load_scene_from_slot(int idx) {
     if (!s->used) return;
     if (!load_commands_into_live(s->cmds, s->num_cmds, s->edit_line))
         return;
-    g_num_flat_cmds   = 0;
+    repl_state_flat_program_set_count(0);
     g_num_predef_vars = s->num_predef_vars;
     for (int i = 0; i < s->num_predef_vars; i++) {
         g_predef_vars[i].value = s->predef_vals[i];

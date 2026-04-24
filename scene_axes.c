@@ -396,6 +396,6 @@ void scene_axes_render(const FrameRenderContext *frame_ctx) {
     glDepthMask(GL_TRUE);
     glDisable(GL_BLEND);
     glEnable(GL_DEPTH_TEST);
-    if (g_user_lighting_enabled) glEnable(GL_LIGHTING);
+    if (repl_state_flat_program_user_lighting_enabled()) glEnable(GL_LIGHTING);
     scene_axes_pop_state();
 }

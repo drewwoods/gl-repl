@@ -3,7 +3,7 @@
 ## Summary
 Migrate one runtime domain at a time from broad `g_*` access to `ReplRuntimeState` ownership. Each domain follows the same pattern: add focused accessors, convert production callers, update tests, move storage into `repl_state.c`, then delete that domain’s compat externs from `repl_state_compat.h`.
 
-Current status: slices 3.1, 3.3, 3.4, and 3.6 are complete. The compat bridge still carries externs for slice 3.2 (flat-program) and 3.5+ (presentation, replay, scenes, search, autocomplete, status). Next up is 3.2 (flat-program) or 3.5 (presentation/config).
+Current status: slices 3.1, 3.2, 3.3, 3.4, and 3.6 are complete. The compat bridge still carries externs for 3.5+ (presentation, replay, scenes, search, autocomplete, status). Next up is 3.5 (presentation/config).
 
 ## Migration Pattern For Every Slice
 1. Add the smallest missing `repl_state_*` helper API needed by the domain.
@@ -23,13 +23,18 @@ exclusively through `repl_state` typed APIs (`repl_state_document_cmds_mut()`,
 `repl_state_mark_normals_dirty()`, `repl_state_normals_dirty_clear()`). Converted 32
 source files. Removed 4 compat externs from `repl_state_compat.h`. All 2557 tests pass.
 
-### 3.2 Flat Program + Dirty Flags
-- Add flat-program helpers for live `FlatProgramView`, mutable output buffer for flattening, flat count set/clear, dirty get/set/clear, current-block highlight set/clear, and user-lighting flag access.
-- Convert `repl_flatten.c` to write through the flat-program state API instead of mutating `g_flat_cmds`, `g_num_flat_cmds`, `g_flat_dirty`, and current-block globals directly.
-- Convert executor/render/replay/overlay readers to accept `FlatProgramView` or call `repl_state_flat_program_view()`.
-- Move `g_flat_cmds`, `g_flat_cmd_local_vars`, `g_num_flat_cmds`, `g_flat_dirty`, `g_user_lighting_enabled`, `g_current_block_begin`, `g_current_block_end`, and `g_current_block_line` storage into `repl_state.c`.
-- Remove the remaining flat fields from `ReplCommandState`; if no callers remain, delete `repl_command_state_live()` entirely.
-- Current progress: `repl_state.c` now builds the live flat-program view directly from its owned storage, `repl_flatten.c` writes current-block and dirty state through the facade, and `repl_core.c`, `repl_executor.c`, `repl_replay.c`, `scene_render.c`, `scene_lights.c`, `scene_overlays.c`, and the internal state tests read the flat stream through the new accessor path. The compat externs remain only for the still-unmigrated legacy bridge, so this slice is partially complete but not retired yet.
+### 3.2 Flat Program + Dirty Flags ✅ DONE
+All flat-program globals (`g_flat_cmds`, `g_num_flat_cmds`, `g_flat_dirty`,
+`g_flat_cmd_local_vars`, `g_user_lighting_enabled`, `g_current_block_begin`,
+`g_current_block_end`, `g_current_block_line`) now route exclusively through `repl_state`
+typed APIs (`repl_state_flat_program_view()`, `repl_state_flat_program_cmds_mut()`,
+`repl_state_flat_program_count()`, `repl_state_flat_program_set_count()`,
+`repl_state_flat_program_dirty()`, `repl_state_mark_flat_dirty()`,
+`repl_state_flat_program_clear_dirty()`, `repl_state_flat_program_user_lighting_enabled()`,
+`repl_state_flat_program_set_user_lighting_enabled()`,
+`repl_state_flat_program_set_current_block()`, `repl_state_flat_program_clear_current_block()`).
+Converted 16 source files. Fixed `repl_replay.c`'s `replay_advance()` which was missing the
+`REPLAY_FLAT_STATE` macro. Removed 8 compat externs from `repl_state_compat.h`. All 2557 tests pass.
 
 ### 3.3 Editor Input, Selection, Clipboard ✅ DONE
 All editor-input globals (`g_input`, `g_input_len`, `g_cursor_pos`, `g_newline_buf`,
