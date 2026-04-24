@@ -99,7 +99,7 @@ int main(void) {
     repl_feed_line_public("}");
     repl_feed_line_public("glEnd();");
 
-    ASSERT_TRUE("pre-save cmds", g_num_cmds > 0);
+    ASSERT_TRUE("pre-save cmds", repl_state_document_count() > 0);
     ASSERT_TRUE("init has host-only ambient line",
                 find_init_line("  glLightModelfv(GL_LIGHT_MODEL_AMBIENT, lm_amb);") >= 0);
     ASSERT_TRUE("init has quadric texture line",
@@ -126,9 +126,9 @@ int main(void) {
     ASSERT_TRUE("init omits tess edge-flag callback",
                 find_init_line_substr("GLU_TESS_EDGE_FLAG") < 0);
 
-    int before_n = g_num_cmds;
+    int before_n = repl_state_document_count();
     CmdType before_types[MAX_COMMANDS];
-    for (int i = 0; i < before_n; i++) before_types[i] = g_cmds[i].type;
+    for (int i = 0; i < before_n; i++) before_types[i] = repl_state_document_cmds_mut()[i].type;
 
     g_multisample_enabled = 0;
     g_line_smooth_enabled = 1;
@@ -213,12 +213,12 @@ int main(void) {
 
     repl_reset_state(); declare_test_vars();
     ASSERT_TRUE("load saved output", repl_load_from_file(path) == 1);
-    ASSERT_TRUE("roundtrip cmd count", g_num_cmds == before_n);
+    ASSERT_TRUE("roundtrip cmd count", repl_state_document_count() == before_n);
 
     for (int i = 0; i < before_n; i++) {
         char label[64];
         snprintf(label, sizeof(label), "roundtrip type %d", i);
-        ASSERT_TRUE(label, g_cmds[i].type == before_types[i]);
+        ASSERT_TRUE(label, repl_state_document_cmds_mut()[i].type == before_types[i]);
     }
 
     repl_flatten_commands();
@@ -270,8 +270,8 @@ int main(void) {
     repl_feed_line_public("}");
     repl_feed_line_public("func0(1.5, x + 2);");
 
-    before_n = g_num_cmds;
-    for (int i = 0; i < before_n; i++) before_types[i] = g_cmds[i].type;
+    before_n = repl_state_document_count();
+    for (int i = 0; i < before_n; i++) before_types[i] = repl_state_document_cmds_mut()[i].type;
 
     g_show_outlines = 1;
     g_show_vpoints = 1;
@@ -306,15 +306,15 @@ int main(void) {
 
     repl_reset_state(); declare_test_vars();
     ASSERT_TRUE("load saved param func output", repl_load_from_file(func_path) == 1);
-    ASSERT_TRUE("param func roundtrip cmd count", g_num_cmds == before_n);
+    ASSERT_TRUE("param func roundtrip cmd count", repl_state_document_count() == before_n);
     {
         int have_var = 0, have_def = 0, have_body = 0, have_end = 0, have_call = 0;
-        for (int i = 0; i < g_num_cmds; i++) {
-            if (g_cmds[i].type == CMD_VAR_ASSIGN) have_var++;
-            if (g_cmds[i].type == CMD_FUNC_DEF) have_def++;
-            if (g_cmds[i].type == CMD_VERTEX3F) have_body++;
-            if (g_cmds[i].type == CMD_FUNC_END) have_end++;
-            if (g_cmds[i].type == CMD_CALL) have_call++;
+        for (int i = 0; i < repl_state_document_count(); i++) {
+            if (repl_state_document_cmds_mut()[i].type == CMD_VAR_ASSIGN) have_var++;
+            if (repl_state_document_cmds_mut()[i].type == CMD_FUNC_DEF) have_def++;
+            if (repl_state_document_cmds_mut()[i].type == CMD_VERTEX3F) have_body++;
+            if (repl_state_document_cmds_mut()[i].type == CMD_FUNC_END) have_end++;
+            if (repl_state_document_cmds_mut()[i].type == CMD_CALL) have_call++;
         }
         ASSERT_TRUE("param func roundtrip has var assign", have_var == 1);
         ASSERT_TRUE("param func roundtrip has func def", have_def == 1);
@@ -350,10 +350,10 @@ int main(void) {
     ASSERT_TRUE("load saved param loop output", repl_load_from_file(param_loop_path) == 1);
     {
         int have_bound = 0;
-        for (int i = 0; i < g_num_cmds; i++) {
-            if (g_cmds[i].type == CMD_FOR_BEGIN &&
-                strstr(g_cmds[i].source, "sides + 1") != NULL &&
-                g_cmds[i].has_vars) {
+        for (int i = 0; i < repl_state_document_count(); i++) {
+            if (repl_state_document_cmds_mut()[i].type == CMD_FOR_BEGIN &&
+                strstr(repl_state_document_cmds_mut()[i].source, "sides + 1") != NULL &&
+                repl_state_document_cmds_mut()[i].has_vars) {
                 have_bound = 1;
             }
         }
@@ -382,14 +382,14 @@ int main(void) {
     repl_reset_state(); declare_test_vars();
     ASSERT_TRUE("load decl plus promoted func output",
                 repl_load_from_file(decl_func_path) == 1);
-    ASSERT_TRUE("decl plus func cmd count", g_num_cmds == 7);
-    ASSERT_TRUE("imported decl remains first", g_cmds[0].type == CMD_VAR_DECLARE);
-    ASSERT_TRUE("imported func follows decl", g_cmds[1].type == CMD_FUNC_DEF);
-    ASSERT_TRUE("imported func body follows header", g_cmds[2].type == CMD_VERTEX3F);
-    ASSERT_TRUE("imported func end follows body", g_cmds[3].type == CMD_FUNC_END);
-    ASSERT_TRUE("imported prior command follows func block", g_cmds[4].type == CMD_CLEAR_COLOR);
-    ASSERT_TRUE("imported var assign follows prior command", g_cmds[5].type == CMD_VAR_ASSIGN);
-    ASSERT_TRUE("imported call follows assign", g_cmds[6].type == CMD_CALL);
+    ASSERT_TRUE("decl plus func cmd count", repl_state_document_count() == 7);
+    ASSERT_TRUE("imported decl remains first", repl_state_document_cmds_mut()[0].type == CMD_VAR_DECLARE);
+    ASSERT_TRUE("imported func follows decl", repl_state_document_cmds_mut()[1].type == CMD_FUNC_DEF);
+    ASSERT_TRUE("imported func body follows header", repl_state_document_cmds_mut()[2].type == CMD_VERTEX3F);
+    ASSERT_TRUE("imported func end follows body", repl_state_document_cmds_mut()[3].type == CMD_FUNC_END);
+    ASSERT_TRUE("imported prior command follows func block", repl_state_document_cmds_mut()[4].type == CMD_CLEAR_COLOR);
+    ASSERT_TRUE("imported var assign follows prior command", repl_state_document_cmds_mut()[5].type == CMD_VAR_ASSIGN);
+    ASSERT_TRUE("imported call follows assign", repl_state_document_cmds_mut()[6].type == CMD_CALL);
 
     repl_reset_state(); declare_test_vars();
     repl_feed_line_public("x = 0.25;");
@@ -418,18 +418,18 @@ int main(void) {
     {
         int sphere_seen = 0;
         int quadric_cmds = 0;
-        for (int i = 0; i < g_num_cmds; i++) {
-            if (!g_cmds[i].valid)
+        for (int i = 0; i < repl_state_document_count(); i++) {
+            if (!repl_state_document_cmds_mut()[i].valid)
                 continue;
-            if (g_cmds[i].type == CMD_GLU_SPHERE ||
-                g_cmds[i].type == CMD_GLU_CYLINDER ||
-                g_cmds[i].type == CMD_GLU_DISK ||
-                g_cmds[i].type == CMD_GLU_PARTIAL_DISK) {
+            if (repl_state_document_cmds_mut()[i].type == CMD_GLU_SPHERE ||
+                repl_state_document_cmds_mut()[i].type == CMD_GLU_CYLINDER ||
+                repl_state_document_cmds_mut()[i].type == CMD_GLU_DISK ||
+                repl_state_document_cmds_mut()[i].type == CMD_GLU_PARTIAL_DISK) {
                 quadric_cmds++;
                 ASSERT_TRUE("loaded quadric source omits g_quadric",
-                            strstr(g_cmds[i].source, "g_quadric") == NULL);
-                if (g_cmds[i].type == CMD_GLU_SPHERE &&
-                    strstr(g_cmds[i].source, "gluSphere(x, 16, 12);") != NULL)
+                            strstr(repl_state_document_cmds_mut()[i].source, "g_quadric") == NULL);
+                if (repl_state_document_cmds_mut()[i].type == CMD_GLU_SPHERE &&
+                    strstr(repl_state_document_cmds_mut()[i].source, "gluSphere(x, 16, 12);") != NULL)
                     sphere_seen = 1;
             }
         }

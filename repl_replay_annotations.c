@@ -27,18 +27,18 @@ static int   s_replay_predef_snap_valid[MAX_COMMANDS];
 static void replay_build_predef_snapshots(void);
 
 static void repl_replay_annotations_rebuild_cache(void) {
-    memset(s_replay_flat_map, 0xff, sizeof(int) * (size_t)g_num_cmds);
+    memset(s_replay_flat_map, 0xff, sizeof(int) * (size_t)repl_state_document_count());
 
     /* Backward pass: first match per src_cmd_idx = most recent execution */
     for (int j = g_replay_pc - 1; j >= 0; j--) {
         int src = g_flat_cmds[j].src_cmd_idx;
-        if (src >= 0 && src < g_num_cmds &&
+        if (src >= 0 && src < repl_state_document_count() &&
             s_replay_flat_map[src] == -1 && g_flat_cmds[j].valid)
             s_replay_flat_map[src] = j;
     }
 
     s_replay_current_flat_idx = (g_replay_src_line >= 0 &&
-                                 g_replay_src_line < g_num_cmds)
+                                 g_replay_src_line < repl_state_document_count())
                                 ? s_replay_flat_map[g_replay_src_line] : -1;
 
     /* Single forward pass builds per-src predef snapshots */
@@ -56,7 +56,7 @@ int repl_replay_annotation_flat_cmd_for_source(int src_line) {
     if (g_replay_pc <= 0) return -1;
     /* Use per-frame cache when available */
     if (s_replay_cache_pc == g_replay_pc &&
-        src_line >= 0 && src_line < g_num_cmds)
+        src_line >= 0 && src_line < repl_state_document_count())
         return s_replay_flat_map[src_line];
     for (int j = g_replay_pc - 1; j >= 0; j--) {
         if (g_flat_cmds[j].src_cmd_idx == src_line && g_flat_cmds[j].valid)
@@ -196,7 +196,7 @@ static int find_replay_assignment_flat_cmd(int src_line) {
 
     /* Try cached map: O(1) lookup + context check */
     if (s_replay_cache_pc == g_replay_pc &&
-        src_line >= 0 && src_line < g_num_cmds) {
+        src_line >= 0 && src_line < repl_state_document_count()) {
         int cached = s_replay_flat_map[src_line];
         if (cached >= 0 &&
             (current_flat_idx < 0 ||
@@ -461,7 +461,7 @@ static void replay_build_predef_snapshots(void) {
     int pc = 0, goto_count = 0;
     int target_pc = g_replay_pc;
 
-    memset(s_replay_predef_snap_valid, 0, sizeof(int) * (size_t)g_num_cmds);
+    memset(s_replay_predef_snap_valid, 0, sizeof(int) * (size_t)repl_state_document_count());
 
     if (g_replay_active)
         repl_copy_replay_baseline_predef_values(vals, MAX_PREDEF_VARS);
@@ -475,7 +475,7 @@ static void replay_build_predef_snapshots(void) {
     /* Macro: snapshot predef vals for a flat position's source command */
     #define SNAP_IF_MAPPED(flat_pc) do {                                    \
         int _src = g_flat_cmds[flat_pc].src_cmd_idx;                        \
-        if (_src >= 0 && _src < g_num_cmds &&                               \
+        if (_src >= 0 && _src < repl_state_document_count() &&                               \
             s_replay_flat_map[_src] == (flat_pc) &&                         \
             !s_replay_predef_snap_valid[_src]) {                            \
             memcpy(s_replay_predef_snap[_src], vals,                        \
@@ -574,7 +574,7 @@ static int build_replay_assignment_inline_comment(int cmd_idx, int flat_idx,
 
     /* Use per-src predef snapshot when cache covers this cmd/flat pair */
     if (s_replay_cache_pc == g_replay_pc &&
-        cmd_idx >= 0 && cmd_idx < g_num_cmds &&
+        cmd_idx >= 0 && cmd_idx < repl_state_document_count() &&
         s_replay_predef_snap_valid[cmd_idx] &&
         s_replay_flat_map[cmd_idx] == flat_idx)
         memcpy(predef_vals, s_replay_predef_snap[cmd_idx],
@@ -587,7 +587,7 @@ static int build_replay_assignment_inline_comment(int cmd_idx, int flat_idx,
     nv = build_visible_vars_from_predef_values(flat_idx, predef_vals,
                                                visible_vars,
                                                (int)(sizeof(visible_vars) / sizeof(visible_vars[0])));
-    if (!repl_extract_assignment_parts(g_cmds[cmd_idx].source,
+    if (!repl_extract_assignment_parts(repl_state_document_cmds_mut()[cmd_idx].source,
                                        name, sizeof(name),
                                        rhs, sizeof(rhs)) ||
         !name[0] || !rhs[0])
@@ -621,17 +621,17 @@ int code_panel_get_command_display_text(int cmd_idx, char *out, int out_size) {
         return 0;
     out[0] = '\0';
 
-    if (cmd_idx < 0 || cmd_idx >= g_num_cmds)
+    if (cmd_idx < 0 || cmd_idx >= repl_state_document_count())
         return 0;
 
-    snprintf(out, out_size, "%s", g_cmds[cmd_idx].source);
+    snprintf(out, out_size, "%s", repl_state_document_cmds_mut()[cmd_idx].source);
 
     if (!g_replay_active ||
         !g_replay_expand_args ||
-        !g_cmds[cmd_idx].has_vars)
+        !repl_state_document_cmds_mut()[cmd_idx].has_vars)
         return 1;
 
-    if (g_cmds[cmd_idx].type != CMD_VAR_ASSIGN)
+    if (repl_state_document_cmds_mut()[cmd_idx].type != CMD_VAR_ASSIGN)
         return 1;
 
     flat_idx = find_replay_assignment_flat_cmd(cmd_idx);
@@ -641,7 +641,7 @@ int code_panel_get_command_display_text(int cmd_idx, char *out, int out_size) {
     if (build_replay_assignment_inline_comment(cmd_idx, flat_idx,
                                                comment, sizeof(comment)) &&
         comment[0]) {
-        snprintf(out, out_size, "%s%s", g_cmds[cmd_idx].source, comment);
+        snprintf(out, out_size, "%s%s", repl_state_document_cmds_mut()[cmd_idx].source, comment);
     }
 
     return 1;
@@ -661,7 +661,7 @@ int repl_replay_build_subst_annotation(int cmd_idx, int flat_idx,
         var_comment[0] = '\0';
 
     if (s_replay_cache_pc == g_replay_pc &&
-        cmd_idx >= 0 && cmd_idx < g_num_cmds &&
+        cmd_idx >= 0 && cmd_idx < repl_state_document_count() &&
         s_replay_predef_snap_valid[cmd_idx] &&
         s_replay_flat_map[cmd_idx] == flat_idx)
         memcpy(predef_vals, s_replay_predef_snap[cmd_idx],
@@ -674,7 +674,7 @@ int repl_replay_build_subst_annotation(int cmd_idx, int flat_idx,
     nv = build_visible_vars_from_predef_values(flat_idx, predef_vals,
                                                visible_vars,
                                                (int)(sizeof(visible_vars) / sizeof(visible_vars[0])));
-    return subst_visible_vars(g_cmds[cmd_idx].source, subst, subst_size,
+    return subst_visible_vars(repl_state_document_cmds_mut()[cmd_idx].source, subst, subst_size,
                               var_comment, comment_size,
                               visible_vars, nv);
 }
@@ -691,7 +691,7 @@ int repl_replay_build_eval_annotation(int cmd_idx, int flat_idx,
     eval_buf[0] = '\0';
 
     if (s_replay_cache_pc == g_replay_pc &&
-        cmd_idx >= 0 && cmd_idx < g_num_cmds &&
+        cmd_idx >= 0 && cmd_idx < repl_state_document_count() &&
         s_replay_predef_snap_valid[cmd_idx] &&
         s_replay_flat_map[cmd_idx] == flat_idx)
         memcpy(predef_vals, s_replay_predef_snap[cmd_idx],
@@ -706,11 +706,11 @@ int repl_replay_build_eval_annotation(int cmd_idx, int flat_idx,
                                                (int)(sizeof(visible_vars) / sizeof(visible_vars[0])));
     memset(&eval_cmd, 0, sizeof(eval_cmd));
     ReplParseContext parse_ctx = { cmd_idx, visible_vars, nv };
-    if (!repl_parse_command_ctx(g_cmds[cmd_idx].source,
+    if (!repl_parse_command_ctx(repl_state_document_cmds_mut()[cmd_idx].source,
                                 &eval_cmd, &parse_ctx))
         return 0;
 
-    return format_evaluated_cmd(&eval_cmd, g_cmds[cmd_idx].source,
+    return format_evaluated_cmd(&eval_cmd, repl_state_document_cmds_mut()[cmd_idx].source,
                                 eval_buf, eval_size);
 }
 
@@ -812,13 +812,13 @@ int repl_replay_annotation_extra_rows_for_line(int cmd_idx) {
         return 0;
     if (!g_replay_expand_args)
         return 0;
-    if (cmd_idx < 0 || cmd_idx >= g_num_cmds)
+    if (cmd_idx < 0 || cmd_idx >= repl_state_document_count())
         return 0;
     if (cmd_idx != g_replay_src_line)
         return 0;
-    if (!g_cmds[cmd_idx].has_vars)
+    if (!repl_state_document_cmds_mut()[cmd_idx].has_vars)
         return 0;
-    if (g_cmds[cmd_idx].type == CMD_VAR_ASSIGN)
+    if (repl_state_document_cmds_mut()[cmd_idx].type == CMD_VAR_ASSIGN)
         return 0;
     return 2;
 }

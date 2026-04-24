@@ -598,7 +598,7 @@ int replay_handle_key(unsigned char key) {
             return 1;
         }
         if (key == KEY_CTRL_K) {
-            int target_line = g_edit_line;
+            int target_line = repl_state_edit_line();
             replay_start();
             if (g_replay_active) {
                 int landed = replay_seek_to_src_line(target_line);
@@ -622,7 +622,7 @@ int replay_handle_key(unsigned char key) {
         return 1;
     }
     if (key == KEY_CTRL_K) {
-        int landed = replay_seek_to_src_line(g_edit_line);
+        int landed = replay_seek_to_src_line(repl_state_edit_line());
         if (landed < 0) {
             set_status("Jump: no geometry at or after cursor");
         } else {

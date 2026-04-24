@@ -73,8 +73,8 @@ static void compute_block_normals(GLenum mode, GLenum front_face,
     switch (mode) {
     case GL_TRIANGLES:
         for (int i = 0; i + 2 < nv; i += 3) {
-            face_normal(g_cmds[vi[i]].args, g_cmds[vi[i+1]].args,
-                        g_cmds[vi[i+2]].args, n);
+            face_normal(repl_state_document_cmds_mut()[vi[i]].args, repl_state_document_cmds_mut()[vi[i+1]].args,
+                        repl_state_document_cmds_mut()[vi[i+2]].args, n);
             apply_front_face_to_normal(front_face, n);
             for (int j = 0; j < 3; j++)
                 memcpy(norms[i+j], n, sizeof(n));
@@ -83,11 +83,11 @@ static void compute_block_normals(GLenum mode, GLenum front_face,
     case GL_TRIANGLE_STRIP:
         for (int i = 0; i + 2 < nv; i++) {
             if (i % 2 == 0)
-                face_normal(g_cmds[vi[i]].args, g_cmds[vi[i+1]].args,
-                            g_cmds[vi[i+2]].args, n);
+                face_normal(repl_state_document_cmds_mut()[vi[i]].args, repl_state_document_cmds_mut()[vi[i+1]].args,
+                            repl_state_document_cmds_mut()[vi[i+2]].args, n);
             else
-                face_normal(g_cmds[vi[i]].args, g_cmds[vi[i+2]].args,
-                            g_cmds[vi[i+1]].args, n);
+                face_normal(repl_state_document_cmds_mut()[vi[i]].args, repl_state_document_cmds_mut()[vi[i+2]].args,
+                            repl_state_document_cmds_mut()[vi[i+1]].args, n);
             apply_front_face_to_normal(front_face, n);
             memcpy(norms[i+2], n, sizeof(n));
             if (i == 0) {
@@ -98,8 +98,8 @@ static void compute_block_normals(GLenum mode, GLenum front_face,
         break;
     case GL_TRIANGLE_FAN:
         for (int i = 1; i + 1 < nv; i++) {
-            face_normal(g_cmds[vi[0]].args, g_cmds[vi[i]].args,
-                        g_cmds[vi[i+1]].args, n);
+            face_normal(repl_state_document_cmds_mut()[vi[0]].args, repl_state_document_cmds_mut()[vi[i]].args,
+                        repl_state_document_cmds_mut()[vi[i+1]].args, n);
             apply_front_face_to_normal(front_face, n);
             memcpy(norms[i+1], n, sizeof(n));
             if (i == 1) {
@@ -110,8 +110,8 @@ static void compute_block_normals(GLenum mode, GLenum front_face,
         break;
     case GL_QUADS:
         for (int i = 0; i + 3 < nv; i += 4) {
-            face_normal(g_cmds[vi[i]].args, g_cmds[vi[i+1]].args,
-                        g_cmds[vi[i+2]].args, n);
+            face_normal(repl_state_document_cmds_mut()[vi[i]].args, repl_state_document_cmds_mut()[vi[i+1]].args,
+                        repl_state_document_cmds_mut()[vi[i+2]].args, n);
             apply_front_face_to_normal(front_face, n);
             for (int j = 0; j < 4; j++)
                 memcpy(norms[i+j], n, sizeof(n));
@@ -119,8 +119,8 @@ static void compute_block_normals(GLenum mode, GLenum front_face,
         break;
     case GL_QUAD_STRIP:
         for (int i = 0; i + 3 < nv; i += 2) {
-            face_normal(g_cmds[vi[i]].args, g_cmds[vi[i+1]].args,
-                        g_cmds[vi[i+2]].args, n);
+            face_normal(repl_state_document_cmds_mut()[vi[i]].args, repl_state_document_cmds_mut()[vi[i+1]].args,
+                        repl_state_document_cmds_mut()[vi[i+2]].args, n);
             apply_front_face_to_normal(front_face, n);
             memcpy(norms[i+2], n, sizeof(n));
             memcpy(norms[i+3], n, sizeof(n));
@@ -132,8 +132,8 @@ static void compute_block_normals(GLenum mode, GLenum front_face,
         break;
     case GL_POLYGON:
         if (nv >= 3) {
-            face_normal(g_cmds[vi[0]].args, g_cmds[vi[1]].args,
-                        g_cmds[vi[2]].args, n);
+            face_normal(repl_state_document_cmds_mut()[vi[0]].args, repl_state_document_cmds_mut()[vi[1]].args,
+                        repl_state_document_cmds_mut()[vi[2]].args, n);
             apply_front_face_to_normal(front_face, n);
             for (int i = 0; i < nv; i++)
                 memcpy(norms[i], n, sizeof(n));
@@ -149,32 +149,32 @@ void recompute_autonormals(void) {
 
     int i = 0;
     GLenum front_face = GL_CCW;
-    while (i < g_num_cmds) {
-        if (g_cmds[i].valid && g_cmds[i].type == CMD_FRONT_FACE) {
-            front_face = g_cmds[i].mode;
+    while (i < repl_state_document_count()) {
+        if (repl_state_document_cmds_mut()[i].valid && repl_state_document_cmds_mut()[i].type == CMD_FRONT_FACE) {
+            front_face = repl_state_document_cmds_mut()[i].mode;
             i++;
             continue;
         }
-        if (g_cmds[i].type == CMD_FOR_BEGIN ||
-            g_cmds[i].type == CMD_FUNC_DEF ||
-            g_cmds[i].type == CMD_IF_BEGIN) {
+        if (repl_state_document_cmds_mut()[i].type == CMD_FOR_BEGIN ||
+            repl_state_document_cmds_mut()[i].type == CMD_FUNC_DEF ||
+            repl_state_document_cmds_mut()[i].type == CMD_IF_BEGIN) {
             i = find_block_end(i);
-            if (i < g_num_cmds) i++;
+            if (i < repl_state_document_count()) i++;
             continue;
         }
-        if (!g_cmds[i].valid || g_cmds[i].type != CMD_BEGIN) { i++; continue; }
+        if (!repl_state_document_cmds_mut()[i].valid || repl_state_document_cmds_mut()[i].type != CMD_BEGIN) { i++; continue; }
 
-        GLenum mode = g_cmds[i].mode;
+        GLenum mode = repl_state_document_cmds_mut()[i].mode;
         i++;
 
         int vi[MAX_COMMANDS];
         int nv = 0;
-        int block_end = g_num_cmds;
-        for (int j = i; j < g_num_cmds; j++) {
-            if (!g_cmds[j].valid) continue;
-            if (g_cmds[j].type == CMD_END) { block_end = j; break; }
-            if (g_cmds[j].type == CMD_BEGIN) { block_end = j; break; }
-            if (g_cmds[j].type == CMD_VERTEX3F)
+        int block_end = repl_state_document_count();
+        for (int j = i; j < repl_state_document_count(); j++) {
+            if (!repl_state_document_cmds_mut()[j].valid) continue;
+            if (repl_state_document_cmds_mut()[j].type == CMD_END) { block_end = j; break; }
+            if (repl_state_document_cmds_mut()[j].type == CMD_BEGIN) { block_end = j; break; }
+            if (repl_state_document_cmds_mut()[j].type == CMD_VERTEX3F)
                 vi[nv++] = j;
         }
 
@@ -186,9 +186,9 @@ void recompute_autonormals(void) {
             int vidx = vi[v] + offset;
             float nx = norms[v][0], ny = norms[v][1], nz = norms[v][2];
 
-            if (vidx > 0 && g_cmds[vidx - 1].valid &&
-                g_cmds[vidx - 1].type == CMD_NORMAL3F) {
-                if (g_cmds[vidx - 1].is_auto) {
+            if (vidx > 0 && repl_state_document_cmds_mut()[vidx - 1].valid &&
+                repl_state_document_cmds_mut()[vidx - 1].type == CMD_NORMAL3F) {
+                if (repl_state_document_cmds_mut()[vidx - 1].is_auto) {
                     ReplCommandStore store = repl_command_store_live();
                     GLCmd auto_normal = make_auto_normal(nx, ny, nz, vidx - 1);
                     repl_command_store_replace_one(&store, vidx - 1, &auto_normal);
@@ -207,17 +207,17 @@ void recompute_autonormals(void) {
 }
 
 static int find_feeding_state_cmd(int line_idx, int want_normal) {
-    if (line_idx < 0 || line_idx >= g_num_cmds) return -1;
-    if (!g_cmds[line_idx].valid) return -1;
+    if (line_idx < 0 || line_idx >= repl_state_document_count()) return -1;
+    if (!repl_state_document_cmds_mut()[line_idx].valid) return -1;
 
-    CmdType target = g_cmds[line_idx].type;
+    CmdType target = repl_state_document_cmds_mut()[line_idx].type;
     int is_gl_vtx = (target == CMD_VERTEX3F || target == CMD_VERTEX2F);
     int is_tess_vtx = (target == CMD_TESS_VERTEX);
     if (!is_gl_vtx && !is_tess_vtx) return -1;
 
     for (int i = line_idx - 1; i >= 0; i--) {
-        if (!g_cmds[i].valid) continue;
-        CmdType t = g_cmds[i].type;
+        if (!repl_state_document_cmds_mut()[i].valid) continue;
+        CmdType t = repl_state_document_cmds_mut()[i].type;
         if (want_normal) {
             if (is_gl_vtx && t == CMD_NORMAL3F) return i;
             if (is_tess_vtx && t == CMD_TESS_NORMAL) return i;

@@ -39,9 +39,9 @@ int main(void) {
     repl_reset_state();
     declare_test_vars();
     repl_feed_line_public(line);
-    ASSERT_TRUE("feed inserted one", g_num_cmds == 1);
+    ASSERT_TRUE("feed inserted one", repl_state_document_count() == 1);
     ASSERT_TRUE("feed matches interactive",
-                strcmp(g_cmds[0].source, interactive_cmd.source) == 0);
+                strcmp(repl_state_document_cmds_mut()[0].source, interactive_cmd.source) == 0);
 
     {
         FILE *f = fopen(tmp_path, "w");
@@ -57,9 +57,9 @@ int main(void) {
     repl_reset_state();
     declare_test_vars();
     ASSERT_TRUE("load from file", repl_load_from_file(tmp_path) == 1);
-    ASSERT_TRUE("load inserted one", g_num_cmds == 1);
+    ASSERT_TRUE("load inserted one", repl_state_document_count() == 1);
     ASSERT_TRUE("load matches interactive",
-                strcmp(g_cmds[0].source, interactive_cmd.source) == 0);
+                strcmp(repl_state_document_cmds_mut()[0].source, interactive_cmd.source) == 0);
 
     {
         char out[256];
@@ -87,24 +87,24 @@ int main(void) {
     repl_reset_state();
     declare_test_vars();
     ASSERT_TRUE("load loop file", repl_load_from_file(tmp_loop_path) == 1);
-    ASSERT_TRUE("loop imported 3 cmds", g_num_cmds == 3);
-    ASSERT_TRUE("loop header type", g_cmds[0].type == CMD_FOR_BEGIN);
-    ASSERT_TRUE("loop body type", g_cmds[1].type == CMD_VERTEX3F);
-    ASSERT_TRUE("loop body has vars", g_cmds[1].has_vars == 1);
-    ASSERT_TRUE("loop body keeps expression", strstr(g_cmds[1].source, "i + x") != NULL);
-    ASSERT_TRUE("loop body indented", strncmp(g_cmds[1].source, "    ", 4) == 0);
+    ASSERT_TRUE("loop imported 3 cmds", repl_state_document_count() == 3);
+    ASSERT_TRUE("loop header type", repl_state_document_cmds_mut()[0].type == CMD_FOR_BEGIN);
+    ASSERT_TRUE("loop body type", repl_state_document_cmds_mut()[1].type == CMD_VERTEX3F);
+    ASSERT_TRUE("loop body has vars", repl_state_document_cmds_mut()[1].has_vars == 1);
+    ASSERT_TRUE("loop body keeps expression", strstr(repl_state_document_cmds_mut()[1].source, "i + x") != NULL);
+    ASSERT_TRUE("loop body indented", strncmp(repl_state_document_cmds_mut()[1].source, "    ", 4) == 0);
 
     {
-        strncpy(g_cmds[1].source, "glVertex3f(i+x,0,0)", sizeof(g_cmds[1].source) - 1);
-        g_cmds[1].source[sizeof(g_cmds[1].source) - 1] = '\0';
-        strncpy(g_cmds[2].source, "}", sizeof(g_cmds[2].source) - 1);
-        g_cmds[2].source[sizeof(g_cmds[2].source) - 1] = '\0';
+        strncpy(repl_state_document_cmds_mut()[1].source, "glVertex3f(i+x,0,0)", sizeof(repl_state_document_cmds_mut()[1].source) - 1);
+        repl_state_document_cmds_mut()[1].source[sizeof(repl_state_document_cmds_mut()[1].source) - 1] = '\0';
+        strncpy(repl_state_document_cmds_mut()[2].source, "}", sizeof(repl_state_document_cmds_mut()[2].source) - 1);
+        repl_state_document_cmds_mut()[2].source[sizeof(repl_state_document_cmds_mut()[2].source) - 1] = '\0';
         repl_reformat_commands();
-        ASSERT_TRUE("reformat body semicolon", g_cmds[1].source[strlen(g_cmds[1].source) - 1] == ';');
-        ASSERT_TRUE("reformat body indent", strncmp(g_cmds[1].source, "    ", 4) == 0);
+        ASSERT_TRUE("reformat body semicolon", repl_state_document_cmds_mut()[1].source[strlen(repl_state_document_cmds_mut()[1].source) - 1] == ';');
+        ASSERT_TRUE("reformat body indent", strncmp(repl_state_document_cmds_mut()[1].source, "    ", 4) == 0);
         ASSERT_TRUE("reformat body comma spacing",
-                    strstr(g_cmds[1].source, ", 0, 0") != NULL);
-        ASSERT_TRUE("reformat close brace indent", strcmp(g_cmds[2].source, "  }") == 0);
+                    strstr(repl_state_document_cmds_mut()[1].source, ", 0, 0") != NULL);
+        ASSERT_TRUE("reformat close brace indent", strcmp(repl_state_document_cmds_mut()[2].source, "  }") == 0);
     }
 
     repl_reset_state();
@@ -112,17 +112,17 @@ int main(void) {
     repl_feed_line_public("for(i, 0, 3) {");
     repl_feed_line_public("x = i + 1;");
     repl_feed_line_public("}");
-    ASSERT_TRUE("assign in loop cmd count", g_num_cmds == 3);
-    ASSERT_TRUE("assign in loop type", g_cmds[1].type == CMD_VAR_ASSIGN);
-    ASSERT_TRUE("assign in loop indent", strncmp(g_cmds[1].source, "    ", 4) == 0);
-    ASSERT_TRUE("assign in loop keeps expression", strstr(g_cmds[1].source, "i + 1") != NULL);
+    ASSERT_TRUE("assign in loop cmd count", repl_state_document_count() == 3);
+    ASSERT_TRUE("assign in loop type", repl_state_document_cmds_mut()[1].type == CMD_VAR_ASSIGN);
+    ASSERT_TRUE("assign in loop indent", strncmp(repl_state_document_cmds_mut()[1].source, "    ", 4) == 0);
+    ASSERT_TRUE("assign in loop keeps expression", strstr(repl_state_document_cmds_mut()[1].source, "i + 1") != NULL);
     {
-        strncpy(g_cmds[1].source, "x=i+1", sizeof(g_cmds[1].source) - 1);
-        g_cmds[1].source[sizeof(g_cmds[1].source) - 1] = '\0';
+        strncpy(repl_state_document_cmds_mut()[1].source, "x=i+1", sizeof(repl_state_document_cmds_mut()[1].source) - 1);
+        repl_state_document_cmds_mut()[1].source[sizeof(repl_state_document_cmds_mut()[1].source) - 1] = '\0';
         repl_reformat_commands();
-        ASSERT_TRUE("reformat assign in loop indent", strncmp(g_cmds[1].source, "    ", 4) == 0);
+        ASSERT_TRUE("reformat assign in loop indent", strncmp(repl_state_document_cmds_mut()[1].source, "    ", 4) == 0);
         ASSERT_TRUE("reformat assign in loop semicolon",
-                    g_cmds[1].source[strlen(g_cmds[1].source) - 1] == ';');
+                    repl_state_document_cmds_mut()[1].source[strlen(repl_state_document_cmds_mut()[1].source) - 1] == ';');
     }
 
     {
@@ -185,12 +185,12 @@ int main(void) {
         repl_state_viewport_set_size(360, *repl_state_viewport()->window_h);
         g_panel_frac = 0.75f;
 
-        memset(&g_cmds[0], 0, sizeof(g_cmds[0]));
-        g_cmds[0].type = CMD_COLOR4F;
-        g_cmds[0].valid = 1;
-        strncpy(g_cmds[0].source, wrapped, sizeof(g_cmds[0].source) - 1);
-        g_cmds[0].source[sizeof(g_cmds[0].source) - 1] = '\0';
-        g_num_cmds = 1;
+        memset(&repl_state_document_cmds_mut()[0], 0, sizeof(repl_state_document_cmds_mut()[0]));
+        repl_state_document_cmds_mut()[0].type = CMD_COLOR4F;
+        repl_state_document_cmds_mut()[0].valid = 1;
+        strncpy(repl_state_document_cmds_mut()[0].source, wrapped, sizeof(repl_state_document_cmds_mut()[0].source) - 1);
+        repl_state_document_cmds_mut()[0].source[sizeof(repl_state_document_cmds_mut()[0].source) - 1] = '\0';
+        repl_state_document_count_set(1);
 
         ASSERT_TRUE("open visual dump file", dump_f != NULL);
         if (dump_f) {
@@ -225,12 +225,12 @@ int main(void) {
         repl_state_viewport_set_size(360, *repl_state_viewport()->window_h);
         g_panel_frac = 0.75f;
 
-        memset(&g_cmds[0], 0, sizeof(g_cmds[0]));
-        g_cmds[0].type = CMD_VERTEX3F;
-        g_cmds[0].valid = 1;
-        strncpy(g_cmds[0].source, wrapped, sizeof(g_cmds[0].source) - 1);
-        g_cmds[0].source[sizeof(g_cmds[0].source) - 1] = '\0';
-        g_num_cmds = 1;
+        memset(&repl_state_document_cmds_mut()[0], 0, sizeof(repl_state_document_cmds_mut()[0]));
+        repl_state_document_cmds_mut()[0].type = CMD_VERTEX3F;
+        repl_state_document_cmds_mut()[0].valid = 1;
+        strncpy(repl_state_document_cmds_mut()[0].source, wrapped, sizeof(repl_state_document_cmds_mut()[0].source) - 1);
+        repl_state_document_cmds_mut()[0].source[sizeof(repl_state_document_cmds_mut()[0].source) - 1] = '\0';
+        repl_state_document_count_set(1);
 
         ASSERT_TRUE("open overflow visual dump file", dump_f != NULL);
         if (dump_f) {
@@ -268,12 +268,12 @@ int main(void) {
         repl_state_viewport_set_size(360, *repl_state_viewport()->window_h);
         g_panel_frac = 0.75f;
 
-        memset(&g_cmds[0], 0, sizeof(g_cmds[0]));
-        g_cmds[0].type = CMD_POINT_PARAMETER_FV;
-        g_cmds[0].valid = 1;
-        strncpy(g_cmds[0].source, wrapped, sizeof(g_cmds[0].source) - 1);
-        g_cmds[0].source[sizeof(g_cmds[0].source) - 1] = '\0';
-        g_num_cmds = 1;
+        memset(&repl_state_document_cmds_mut()[0], 0, sizeof(repl_state_document_cmds_mut()[0]));
+        repl_state_document_cmds_mut()[0].type = CMD_POINT_PARAMETER_FV;
+        repl_state_document_cmds_mut()[0].valid = 1;
+        strncpy(repl_state_document_cmds_mut()[0].source, wrapped, sizeof(repl_state_document_cmds_mut()[0].source) - 1);
+        repl_state_document_cmds_mut()[0].source[sizeof(repl_state_document_cmds_mut()[0].source) - 1] = '\0';
+        repl_state_document_count_set(1);
 
         ASSERT_TRUE("open point-parameter visual dump file", dump_f != NULL);
         if (dump_f) {
@@ -310,12 +310,12 @@ int main(void) {
         repl_state_viewport_set_size(260, *repl_state_viewport()->window_h);
         g_panel_frac = 0.75f;
 
-        memset(&g_cmds[0], 0, sizeof(g_cmds[0]));
-        g_cmds[0].type = CMD_POINT_PARAMETER_FV;
-        g_cmds[0].valid = 1;
-        strncpy(g_cmds[0].source, wrapped, sizeof(g_cmds[0].source) - 1);
-        g_cmds[0].source[sizeof(g_cmds[0].source) - 1] = '\0';
-        g_num_cmds = 1;
+        memset(&repl_state_document_cmds_mut()[0], 0, sizeof(repl_state_document_cmds_mut()[0]));
+        repl_state_document_cmds_mut()[0].type = CMD_POINT_PARAMETER_FV;
+        repl_state_document_cmds_mut()[0].valid = 1;
+        strncpy(repl_state_document_cmds_mut()[0].source, wrapped, sizeof(repl_state_document_cmds_mut()[0].source) - 1);
+        repl_state_document_cmds_mut()[0].source[sizeof(repl_state_document_cmds_mut()[0].source) - 1] = '\0';
+        repl_state_document_count_set(1);
 
         ASSERT_TRUE("open narrow point-parameter visual dump file", dump_f != NULL);
         if (dump_f) {
@@ -349,12 +349,12 @@ int main(void) {
         g_panel_frac = 0.5f;
         g_code_panel_layout = CODE_PANEL_LAYOUT_BOTTOM;
 
-        memset(&g_cmds[0], 0, sizeof(g_cmds[0]));
-        g_cmds[0].type = CMD_VERTEX3F;
-        g_cmds[0].valid = 1;
-        strncpy(g_cmds[0].source, src, sizeof(g_cmds[0].source) - 1);
-        g_cmds[0].source[sizeof(g_cmds[0].source) - 1] = '\0';
-        g_num_cmds = 1;
+        memset(&repl_state_document_cmds_mut()[0], 0, sizeof(repl_state_document_cmds_mut()[0]));
+        repl_state_document_cmds_mut()[0].type = CMD_VERTEX3F;
+        repl_state_document_cmds_mut()[0].valid = 1;
+        strncpy(repl_state_document_cmds_mut()[0].source, src, sizeof(repl_state_document_cmds_mut()[0].source) - 1);
+        repl_state_document_cmds_mut()[0].source[sizeof(repl_state_document_cmds_mut()[0].source) - 1] = '\0';
+        repl_state_document_count_set(1);
 
         ASSERT_TRUE("open bottom-layout visual dump file", dump_f != NULL);
         if (dump_f) {

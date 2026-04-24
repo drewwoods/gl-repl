@@ -2,12 +2,12 @@
  * repl_search.c — Case-insensitive incremental search over code-panel rows.
  *
  * A "row" is one visible line in the code panel. It usually maps 1:1 to a
- * GLCmd in g_cmds[], except while inserting: an extra synthetic row holds
- * the live g_input at g_edit_line, and real g_cmds[] entries at or beyond
+ * GLCmd in repl_state_document_cmds_mut()[], except while inserting: an extra synthetic row holds
+ * the live g_input at repl_state_edit_line(), and real repl_state_document_cmds_mut()[] entries at or beyond
  * that index are shifted down by one row.
  *
- *   row_count = g_num_cmds         (overwrite mode)
- *             = g_num_cmds + 1     (insert mode, or past-end edit line)
+ *   row_count = repl_state_document_count()         (overwrite mode)
+ *             = repl_state_document_count() + 1     (insert mode, or past-end edit line)
  *
  * A "hit" is (row, char_pos); an "ordinal" is the 1-based hit number among
  * all matches (shown to the user as "3 / 12"). Public helpers preserve
@@ -33,7 +33,7 @@ int  g_search_match_count = 0;
 static int search_row_is_live_input(int row_idx) {
     if (row_idx < 0 || row_idx >= repl_search_row_count())
         return 0;
-    return row_idx == g_edit_line;
+    return row_idx == repl_state_edit_line();
 }
 
 static int search_row_to_nav_line(int row_idx) {
@@ -342,7 +342,7 @@ static void search_apply_hit(int row, int char_pos) {
     if (nav_line >= 0) {
         g_scroll_follow_cursor = 1;
         navigate_to_line(nav_line);
-        row = g_edit_line;
+        row = repl_state_edit_line();
         if (row_occurrence >= 0) {
             int remapped_char = search_char_for_row_occurrence(row, row_occurrence);
             if (remapped_char >= 0)
@@ -353,7 +353,7 @@ static void search_apply_hit(int row, int char_pos) {
 }
 
 /* Re-seed the search after the query text changed. Always anchors to
- * g_edit_line rather than the previous hit, so typing another character
+ * repl_state_edit_line() rather than the previous hit, so typing another character
  * jumps to the nearest match from the cursor instead of chaining from
  * wherever the last match landed. */
 static void search_refresh_query(void) {
@@ -371,7 +371,7 @@ static void search_refresh_query(void) {
         return;
     }
 
-    if (!search_find_forward(g_edit_line, 0, &row, &char_pos)) {
+    if (!search_find_forward(repl_state_edit_line(), 0, &row, &char_pos)) {
         search_clear_matches();
         return;
     }
@@ -380,7 +380,7 @@ static void search_refresh_query(void) {
 
 /* Jump to the next (+1) or previous (-1) match, wrapping at document ends.
  * If a hit is already active, we step one char past/before it; otherwise we
- * anchor the scan at g_edit_line. */
+ * anchor the scan at repl_state_edit_line(). */
 static void search_navigate(int direction) {
     int row;
     int char_pos;
@@ -391,11 +391,11 @@ static void search_navigate(int direction) {
         return;
 
     if (direction < 0) {
-        int start_row  = have_hit ? g_search_hit_line      : g_edit_line;
+        int start_row  = have_hit ? g_search_hit_line      : repl_state_edit_line();
         int start_char = have_hit ? g_search_hit_char - 1  : MAX_INPUT_LEN;
         found = search_find_backward(start_row, start_char, &row, &char_pos);
     } else {
-        int start_row  = have_hit ? g_search_hit_line      : g_edit_line;
+        int start_row  = have_hit ? g_search_hit_line      : repl_state_edit_line();
         int start_char = have_hit ? g_search_hit_char + 1  : 0;
         found = search_find_forward(start_row, start_char, &row, &char_pos);
     }

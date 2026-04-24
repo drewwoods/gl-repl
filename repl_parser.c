@@ -91,7 +91,7 @@ static int is_known_incomplete_func_name(const char *func) {
  */
 static int parse_command(const char *line, GLCmd *cmd,
                          const ReplParseContext *ctx) {
-    int source_line_idx = ctx ? ctx->source_line_idx : g_edit_line;
+    int source_line_idx = ctx ? ctx->source_line_idx : repl_state_edit_line();
     ExprVar *vars = ctx ? ctx->vars : NULL;
     int num_vars = ctx ? ctx->num_vars : 0;
     char buf[MAX_LINE_LEN];
@@ -516,10 +516,10 @@ static int parse_command(const char *line, GLCmd *cmd,
          * are still allowed so mutual recursion keeps working. */
         if (ctx && ctx->strict_refs && block_depth_at(source_line_idx) == 0) {
             int def_exists = 0;
-            for (int di = 0; di < g_num_cmds; di++) {
-                if (!g_cmds[di].valid) continue;
-                if (g_cmds[di].type != CMD_FUNC_DEF) continue;
-                if ((int)g_cmds[di].args[0] != fn) continue;
+            for (int di = 0; di < repl_state_document_count(); di++) {
+                if (!repl_state_document_cmds_mut()[di].valid) continue;
+                if (repl_state_document_cmds_mut()[di].type != CMD_FUNC_DEF) continue;
+                if ((int)repl_state_document_cmds_mut()[di].args[0] != fn) continue;
                 def_exists = 1;
                 break;
             }
@@ -690,13 +690,13 @@ unknown_command:
 }
 
 int repl_parse_command(const char *line, GLCmd *cmd) {
-    ReplParseContext ctx = { g_edit_line, NULL, 0, 0 };
+    ReplParseContext ctx = { repl_state_edit_line(), NULL, 0, 0 };
     return parse_command(line, cmd, &ctx);
 }
 
 int repl_parse_command_with_vars(const char *line, GLCmd *cmd,
                                  ExprVar *vars, int num_vars) {
-    ReplParseContext ctx = { g_edit_line, vars, num_vars, 0 };
+    ReplParseContext ctx = { repl_state_edit_line(), vars, num_vars, 0 };
     return parse_command(line, cmd, &ctx);
 }
 

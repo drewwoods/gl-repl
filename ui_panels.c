@@ -376,9 +376,9 @@ void render_code_panel(void) {
      * we can draw a gutter accent bar on them below. */
     int highlight_normal_idx = -1;
     int highlight_color_idx  = -1;
-    if (!repl_state_insert_mode() && g_edit_line < g_num_cmds && g_cmds[g_edit_line].valid) {
-        highlight_normal_idx = repl_find_feeding_normal_cmd(g_edit_line);
-        highlight_color_idx  = repl_find_feeding_color_cmd(g_edit_line);
+    if (!repl_state_insert_mode() && repl_state_edit_line() < repl_state_document_count() && repl_state_document_cmds_mut()[repl_state_edit_line()].valid) {
+        highlight_normal_idx = repl_find_feeding_normal_cmd(repl_state_edit_line());
+        highlight_color_idx  = repl_find_feeding_color_cmd(repl_state_edit_line());
     }
 
     prof_end(PROF_CODE_PANEL_LAYOUT_GEOM_SETUP);
@@ -505,24 +505,24 @@ void render_code_panel(void) {
     int in_tess_poly = 0;
     int tess_depth = 0;
     int primitive_vnums_exact = 1;
-    for (int i = 0; i < g_num_cmds; i++) {
-        /* If inserting, render the virtual insert line before command[g_edit_line] */
-        if (repl_state_insert_mode() && i == g_edit_line) {
+    for (int i = 0; i < repl_state_document_count(); i++) {
+        /* If inserting, render the virtual insert line before command[repl_state_edit_line()] */
+        if (repl_state_insert_mode() && i == repl_state_edit_line()) {
                         render_active_input_rows(panel_w, text_x, idx_x,
                                                                          visible_lines, file_line,
                                                                          repl_code_panel_document_active_indent_chars(), NULL,
-                                                                         g_edit_line,
+                                                                         repl_state_edit_line(),
                                                                          &cur, &line_y);
             file_line++;
         }
 
-        if (i < g_num_cmds) {
+        if (i < repl_state_document_count()) {
             /* Track vertex number for all commands regardless of visibility */
-            if (g_cmds[i].valid) {
-                if (g_cmds[i].type == CMD_BEGIN) {
+            if (repl_state_document_cmds_mut()[i].valid) {
+                if (repl_state_document_cmds_mut()[i].type == CMD_BEGIN) {
                     vnum = 0;
                     primitive_vnums_exact = (loop_depth == 0);
-                } else if (g_cmds[i].type == CMD_TESS_BEGIN_POLYGON) {
+                } else if (repl_state_document_cmds_mut()[i].type == CMD_TESS_BEGIN_POLYGON) {
                     vnum = 0;
                     in_tess_poly = 1;
                     tess_depth = 1;
@@ -530,9 +530,9 @@ void render_code_panel(void) {
                 }
             }
 
-            int is_edit = (!repl_state_insert_mode() && i == g_edit_line);
-            int is_vertex = g_cmds[i].valid && (g_cmds[i].type == CMD_VERTEX3F ||
-                                                g_cmds[i].type == CMD_TESS_VERTEX);
+            int is_edit = (!repl_state_insert_mode() && i == repl_state_edit_line());
+            int is_vertex = repl_state_document_cmds_mut()[i].valid && (repl_state_document_cmds_mut()[i].type == CMD_VERTEX3F ||
+                                                repl_state_document_cmds_mut()[i].type == CMD_TESS_VERTEX);
             if (is_edit) {
                 /* Active editing line */
                 char idx_s[16];
@@ -545,7 +545,7 @@ void render_code_panel(void) {
                 render_active_input_rows(panel_w, text_x, idx_x,
                                          visible_lines, file_line,
                                          repl_code_panel_document_active_indent_chars(), idx_text,
-                                         g_edit_line,
+                                         repl_state_edit_line(),
                                          &cur, &line_y);
                 file_line++;
             } else {
@@ -609,8 +609,8 @@ void render_code_panel(void) {
                                 ui_color_picker_render_swatch(i, sx, sy);
                             }
                         }
-                        color_for_type(g_cmds[i].type);
-                        code_panel_draw_search_highlights(g_cmds[i].source,
+                        color_for_type(repl_state_document_cmds_mut()[i].type);
+                        code_panel_draw_search_highlights(repl_state_document_cmds_mut()[i].source,
                                                           search_row_idx,
                                                           wrap_start, wrap_len,
                                                           wrap_x, line_y);
@@ -626,8 +626,8 @@ void render_code_panel(void) {
                 if (g_replay_active &&
                     g_replay_expand_args &&
                     g_replay_src_line >= 0 && i == g_replay_src_line &&
-                    g_cmds[i].has_vars &&
-                    g_cmds[i].type != CMD_VAR_ASSIGN) {
+                    repl_state_document_cmds_mut()[i].has_vars &&
+                    repl_state_document_cmds_mut()[i].type != CMD_VAR_ASSIGN) {
                     int flat_idx = repl_replay_annotation_flat_cmd_for_source(i);
                     if (flat_idx >= 0) {
                         char subst[MAX_LINE_LEN], var_comment[128];
@@ -686,17 +686,17 @@ void render_code_panel(void) {
             /* Advance vertex counter after rendering this command */
             if (is_vertex) vnum++;
 
-            if (g_cmds[i].valid) {
-                if (g_cmds[i].type == CMD_FOR_BEGIN) {
+            if (repl_state_document_cmds_mut()[i].valid) {
+                if (repl_state_document_cmds_mut()[i].type == CMD_FOR_BEGIN) {
                     loop_depth++;
                     primitive_vnums_exact = 0;
-                } else if (g_cmds[i].type == CMD_FOR_END) {
+                } else if (repl_state_document_cmds_mut()[i].type == CMD_FOR_END) {
                     if (loop_depth > 0) loop_depth--;
-                } else if (g_cmds[i].type == CMD_END) {
+                } else if (repl_state_document_cmds_mut()[i].type == CMD_END) {
                     primitive_vnums_exact = 1;
-                } else if (g_cmds[i].type == CMD_TESS_BEGIN_CONTOUR && in_tess_poly) {
+                } else if (repl_state_document_cmds_mut()[i].type == CMD_TESS_BEGIN_CONTOUR && in_tess_poly) {
                     tess_depth++;
-                } else if (g_cmds[i].type == CMD_TESS_END && in_tess_poly) {
+                } else if (repl_state_document_cmds_mut()[i].type == CMD_TESS_END && in_tess_poly) {
                     if (tess_depth > 0) tess_depth--;
                     if (tess_depth == 0) {
                         in_tess_poly = 0;
@@ -712,12 +712,12 @@ void render_code_panel(void) {
 
     /* New-line slot after the last command */
     {
-        int is_edit_nl = (g_edit_line == g_num_cmds);
+        int is_edit_nl = (repl_state_edit_line() == repl_state_document_count());
         if (is_edit_nl) {
             render_active_input_rows(panel_w, text_x, idx_x,
                                      visible_lines, file_line,
                                      repl_code_panel_document_active_indent_chars(), NULL,
-                                     g_edit_line,
+                                     repl_state_edit_line(),
                                      &cur, &line_y);
         } else {
             if (cur >= g_scroll && cur < g_scroll + visible_lines) {
@@ -725,7 +725,7 @@ void render_code_panel(void) {
                 { char ln[16]; snprintf(ln, sizeof(ln), "%3d", file_line);
                   draw_string(CODE_MARGIN_X, line_y, ln, FONT_MONO); }
                 glColor3f(0.28f, 0.28f, 0.35f);
-                { char ind_s[32]; int nc = cmd_indent_chars(g_num_cmds);
+                { char ind_s[32]; int nc = cmd_indent_chars(repl_state_document_count());
                   if (nc > 31) nc = 31;
                   memset(ind_s, ' ', nc); ind_s[nc] = '\0';
                   draw_string((float)text_x, (float)line_y, ind_s, FONT_MONO); }
@@ -822,12 +822,12 @@ void render_code_panel(void) {
         /* Line / insert-mode / begin-mode */
         char ln_buf[64];
         if (repl_state_insert_mode())
-            snprintf(ln_buf, sizeof(ln_buf), "Ln %d [INSERT]", g_edit_line + 1);
+            snprintf(ln_buf, sizeof(ln_buf), "Ln %d [INSERT]", repl_state_edit_line() + 1);
         else if (in_begin_block())
             snprintf(ln_buf, sizeof(ln_buf), "Ln %d  %s",
-                     g_edit_line + 1, mode_name(current_begin_mode()));
+                     repl_state_edit_line() + 1, mode_name(current_begin_mode()));
         else
-            snprintf(ln_buf, sizeof(ln_buf), "Ln %d", g_edit_line + 1);
+            snprintf(ln_buf, sizeof(ln_buf), "Ln %d", repl_state_edit_line() + 1);
         glColor3f(0.627f, 0.627f, 0.627f); /* #a0a0a0 */
         draw_string((float)tx, (float)text_y, ln_buf, FONT_SMALL);
         tx += (int)strlen(ln_buf) * FONT_SMALL_W;
@@ -1051,20 +1051,20 @@ static int code_panel_drag_target(int mx, int my, int *out_target) {
         return 0;
 
     if (on_insert_line) {
-        if (g_edit_line < g_num_cmds)
-            target = g_edit_line;
-        else if (g_num_cmds > 0)
-            target = g_num_cmds - 1;
+        if (repl_state_edit_line() < repl_state_document_count())
+            target = repl_state_edit_line();
+        else if (repl_state_document_count() > 0)
+            target = repl_state_document_count() - 1;
         else
             return 0;
-    } else if (target >= g_num_cmds) {
-        target = g_num_cmds - 1;
+    } else if (target >= repl_state_document_count()) {
+        target = repl_state_document_count() - 1;
     }
 
     if (target < 0) target = 0;
-    if (target >= g_num_cmds) target = g_num_cmds - 1;
+    if (target >= repl_state_document_count()) target = repl_state_document_count() - 1;
     if (out_target) *out_target = target;
-    return g_num_cmds > 0;
+    return repl_state_document_count() > 0;
 }
 
 /* Handle left-click in the code panel: navigate to line + column */
@@ -1074,7 +1074,7 @@ void handle_code_panel_click(int mx, int my) {
 
     if (!on_insert_line) {
         if (target < 0) target = 0;
-        if (target > g_num_cmds) target = g_num_cmds;
+        if (target > repl_state_document_count()) target = repl_state_document_count();
         navigate_to_line(target);
     }
 
@@ -1178,7 +1178,7 @@ int handle_code_panel_press(int mx, int my) {
         return UI_PANEL_PRESS_NONE;
 
     /* Check for swatch click on a color line */
-    if (!on_insert_line && row_offset == 0 && target >= 0 && target < g_num_cmds) {
+    if (!on_insert_line && row_offset == 0 && target >= 0 && target < repl_state_document_count()) {
         if (ui_color_picker_can_edit_cmd(target)) {
             int cp_x2, cp_w2;
             code_panel_rect(&cp_x2, NULL, &cp_w2, NULL);
@@ -1203,7 +1203,7 @@ int handle_code_panel_press(int mx, int my) {
     g_code_panel_drag_active = 0;
     g_code_panel_drag_anchor = -1;
     g_code_panel_drag_moved = 0;
-    if (!on_insert_line && target >= 0 && target < g_num_cmds) {
+    if (!on_insert_line && target >= 0 && target < repl_state_document_count()) {
         g_code_panel_drag_active = 1;
         g_code_panel_drag_anchor = target;
     }

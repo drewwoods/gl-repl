@@ -50,17 +50,17 @@ int main(void) {
     repl_feed_line_public("glEnd();");
     {
         char before0[MAX_LINE_LEN];
-        int before_num = g_num_cmds;
+        int before_num = repl_state_document_count();
 
-        strncpy(before0, g_cmds[0].source, sizeof(before0) - 1);
+        strncpy(before0, repl_state_document_cmds_mut()[0].source, sizeof(before0) - 1);
         before0[sizeof(before0) - 1] = '\0';
 
         open_search();
         ASSERT_TRUE("ctrl-f activates search", g_search_active == 1);
         ASSERT_TRUE("ctrl-f leaves query empty", g_search_query_len == 0);
-        ASSERT_TRUE("ctrl-f leaves cmd count unchanged", g_num_cmds == before_num);
+        ASSERT_TRUE("ctrl-f leaves cmd count unchanged", repl_state_document_count() == before_num);
         ASSERT_TRUE("ctrl-f leaves source unchanged",
-                    strcmp(g_cmds[0].source, before0) == 0);
+                    strcmp(repl_state_document_cmds_mut()[0].source, before0) == 0);
     }
 
     repl_reset_state(); declare_test_vars();
@@ -76,18 +76,18 @@ int main(void) {
                                                    g_search_query, first + 1);
 
         ASSERT_TRUE("search matches case-insensitively", g_search_match_count == 3);
-        ASSERT_TRUE("search jumps to first hit line", g_edit_line == 0);
+        ASSERT_TRUE("search jumps to first hit line", repl_state_edit_line() == 0);
         ASSERT_TRUE("search first hit line", g_search_hit_line == 0);
         ASSERT_TRUE("search first hit char", g_search_hit_char == first);
         ASSERT_TRUE("search first ordinal", g_search_hit_ordinal == 1);
 
         repl_keyboard_func('\n', 0, 0);
-        ASSERT_TRUE("enter navigates next same-line hit", g_edit_line == 0);
+        ASSERT_TRUE("enter navigates next same-line hit", repl_state_edit_line() == 0);
         ASSERT_TRUE("enter next hit char", g_search_hit_char == second);
         ASSERT_TRUE("enter next ordinal", g_search_hit_ordinal == 2);
 
         repl_special_func(GLUT_KEY_DOWN, 0, 0);
-        ASSERT_TRUE("down navigates next line", g_edit_line == 1);
+        ASSERT_TRUE("down navigates next line", repl_state_edit_line() == 1);
         ASSERT_TRUE("down hit line", g_search_hit_line == 1);
         ASSERT_TRUE("down hit ordinal", g_search_hit_ordinal == 3);
         ASSERT_TRUE("down hit char",
@@ -96,13 +96,13 @@ int main(void) {
                                                   g_search_query, 0));
 
         repl_special_func(GLUT_KEY_DOWN, 0, 0);
-        ASSERT_TRUE("down wraps to first hit", g_edit_line == 0);
+        ASSERT_TRUE("down wraps to first hit", repl_state_edit_line() == 0);
         ASSERT_TRUE("down wrap line", g_search_hit_line == 0);
         ASSERT_TRUE("down wrap char", g_search_hit_char == first);
         ASSERT_TRUE("down wrap ordinal", g_search_hit_ordinal == 1);
 
         repl_special_func(GLUT_KEY_UP, 0, 0);
-        ASSERT_TRUE("up wraps to last hit", g_edit_line == 1);
+        ASSERT_TRUE("up wraps to last hit", repl_state_edit_line() == 1);
         ASSERT_TRUE("up wrap line", g_search_hit_line == 1);
         ASSERT_TRUE("up wrap ordinal", g_search_hit_ordinal == 3);
     }
@@ -115,7 +115,7 @@ int main(void) {
     type_search_text("#include");
     ASSERT_TRUE("header text is not searched", g_search_match_count == 0);
     ASSERT_TRUE("header search has no current hit", g_search_hit_line == -1);
-    ASSERT_TRUE("zero-hit search leaves line unchanged", g_edit_line == 1);
+    ASSERT_TRUE("zero-hit search leaves line unchanged", repl_state_edit_line() == 1);
 
     repl_reset_state(); declare_test_vars();
     repl_feed_line_public("glBegin(GL_POINTS);");
@@ -136,7 +136,7 @@ int main(void) {
     ASSERT_TRUE("newline buffer is searchable", g_search_match_count == 1);
     ASSERT_TRUE("newline hit line", g_search_hit_line == 0);
     ASSERT_TRUE("newline hit char", g_search_hit_char == 0);
-    ASSERT_TRUE("newline search keeps current line", g_edit_line == 0);
+    ASSERT_TRUE("newline search keeps current line", repl_state_edit_line() == 0);
 
     repl_keyboard_func(27, 0, 0);
     ASSERT_TRUE("escape closes search", g_search_active == 0);
@@ -201,9 +201,9 @@ int main(void) {
     repl_feed_line_public("glBegin(GL_POINTS);");
     repl_feed_line_public("glEnd();");
     repl_state_insert_mode_set(1);
-    g_edit_line = 1;
+    repl_state_edit_line_set(1);
     ASSERT_TRUE("row count inserting includes input row",
-                repl_search_row_count() == g_num_cmds + 1);
+                repl_search_row_count() == repl_state_document_count() + 1);
     ASSERT_TRUE("row map inserting shifts at edit line",
                 repl_search_row_for_cmd_index(1) == 2);
     ASSERT_TRUE("row map inserting keeps prior rows",

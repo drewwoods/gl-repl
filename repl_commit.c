@@ -15,20 +15,20 @@ static int g_func_decl_resume_delta = 0;
 static int function_decl_insert_pos(void) {
     int pos = 0;
 
-    while (pos < g_num_cmds && g_cmds[pos].type == CMD_VAR_DECLARE)
+    while (pos < repl_state_document_count() && repl_state_document_cmds_mut()[pos].type == CMD_VAR_DECLARE)
         pos++;
 
-    while (pos < g_num_cmds) {
-        if (g_cmds[pos].type == CMD_COMMENT) {
+    while (pos < repl_state_document_count()) {
+        if (repl_state_document_cmds_mut()[pos].type == CMD_COMMENT) {
             pos++;
             continue;
         }
-        if (g_cmds[pos].type != CMD_FUNC_DEF)
+        if (repl_state_document_cmds_mut()[pos].type != CMD_FUNC_DEF)
             break;
 
         int end = find_block_end(pos);
-        if (end >= g_num_cmds)
-            return g_num_cmds;
+        if (end >= repl_state_document_count())
+            return repl_state_document_count();
         pos = end + 1;
     }
 
@@ -39,8 +39,8 @@ static int function_leading_comment_start(int pos) {
     int start = pos;
 
     while (start > 0 &&
-           g_cmds[start - 1].valid &&
-           g_cmds[start - 1].type == CMD_COMMENT &&
+           repl_state_document_cmds_mut()[start - 1].valid &&
+           repl_state_document_cmds_mut()[start - 1].type == CMD_COMMENT &&
            block_depth_at(start - 1) == 0)
         start--;
 
@@ -51,24 +51,24 @@ static void apply_func_decl_resume(CmdType end_type) {
     if (end_type != CMD_FUNC_END || g_func_decl_resume_delta <= 0)
         return;
 
-    g_edit_line += g_func_decl_resume_delta;
-    if (g_edit_line > g_num_cmds)
-        g_edit_line = g_num_cmds;
+    repl_state_edit_line_set(repl_state_edit_line() + (g_func_decl_resume_delta));
+    if (repl_state_edit_line() > repl_state_document_count())
+        repl_state_edit_line_set(repl_state_document_count());
     g_func_decl_resume_delta = 0;
 }
 
 int repl_commit_resolve_insert_exit_target(int target) {
     if (!repl_state_insert_mode() ||
         g_func_decl_resume_delta <= 0 ||
-        g_edit_line < 0 ||
-        g_edit_line >= g_num_cmds ||
-        g_cmds[g_edit_line].type != CMD_FUNC_END)
+        repl_state_edit_line() < 0 ||
+        repl_state_edit_line() >= repl_state_document_count() ||
+        repl_state_document_cmds_mut()[repl_state_edit_line()].type != CMD_FUNC_END)
         return target;
 
-    if (target == g_edit_line) {
+    if (target == repl_state_edit_line()) {
         target += g_func_decl_resume_delta;
-        if (target > g_num_cmds)
-            target = g_num_cmds;
+        if (target > repl_state_document_count())
+            target = repl_state_document_count();
     }
 
     g_func_decl_resume_delta = 0;
@@ -193,11 +193,11 @@ int try_commit_float_decl(void) {
      * so validation can exempt the line's own names from the "already
      * declared" check. Without this, re-committing `float tmp;` after
      * editing — even unchanged — reports "'tmp' already declared". */
-    int insert_idx = repl_state_insert_mode() ? g_edit_line :
-               (g_edit_line < g_num_cmds ? g_edit_line : g_num_cmds);
-    int overwriting_decl = (!repl_state_insert_mode() && insert_idx < g_num_cmds &&
-                            g_cmds[insert_idx].type == CMD_VAR_DECLARE);
-    const GLCmd *old_decl = overwriting_decl ? &g_cmds[insert_idx] : NULL;
+    int insert_idx = repl_state_insert_mode() ? repl_state_edit_line() :
+               (repl_state_edit_line() < repl_state_document_count() ? repl_state_edit_line() : repl_state_document_count());
+    int overwriting_decl = (!repl_state_insert_mode() && insert_idx < repl_state_document_count() &&
+                            repl_state_document_cmds_mut()[insert_idx].type == CMD_VAR_DECLARE);
+    const GLCmd *old_decl = overwriting_decl ? &repl_state_document_cmds_mut()[insert_idx] : NULL;
 
     /* Validate all names atomically before registering any */
     for (int i = 0; i < var_count; i++) {
@@ -274,8 +274,8 @@ int try_commit_float_decl(void) {
 
     {
         int decl_pos = 0;
-        while (decl_pos < g_num_cmds &&
-               g_cmds[decl_pos].type == CMD_VAR_DECLARE)
+        while (decl_pos < repl_state_document_count() &&
+               repl_state_document_cmds_mut()[decl_pos].type == CMD_VAR_DECLARE)
             decl_pos++;
 
         int ind = 2;  /* decls always at block depth 0 (top-level) */
@@ -297,16 +297,16 @@ int try_commit_float_decl(void) {
          * names being REMOVED (present in old decl, absent from new) need
          * the "in use" check — names being kept stay valid throughout. */
         if (overwriting_decl) {
-            for (int d = 0; d < g_cmds[insert_idx].var_decl_count; d++) {
-                const char *nm = g_cmds[insert_idx].var_names[d];
+            for (int d = 0; d < repl_state_document_cmds_mut()[insert_idx].var_decl_count; d++) {
+                const char *nm = repl_state_document_cmds_mut()[insert_idx].var_names[d];
                 int kept = 0;
                 for (int k = 0; k < var_count; k++) {
                     if (strcmp(names[k], nm) == 0) { kept = 1; break; }
                 }
                 if (kept) continue;
-                for (int j = 0; j < g_num_cmds; j++) {
+                for (int j = 0; j < repl_state_document_count(); j++) {
                     if (j == insert_idx) continue;
-                    if (source_uses_ident(g_cmds[j].source, nm)) {
+                    if (source_uses_ident(repl_state_document_cmds_mut()[j].source, nm)) {
                         char buf[128];
                         snprintf(buf, sizeof(buf),
                                  "variable '%s' is in use, cannot overwrite", nm);
@@ -320,8 +320,8 @@ int try_commit_float_decl(void) {
         /* Undeclare only names being removed (absent from new decl) so kept
          * names retain their slot indices and live values. */
         if (overwriting_decl) {
-            for (int d = 0; d < g_cmds[insert_idx].var_decl_count; d++) {
-                const char *nm = g_cmds[insert_idx].var_names[d];
+            for (int d = 0; d < repl_state_document_cmds_mut()[insert_idx].var_decl_count; d++) {
+                const char *nm = repl_state_document_cmds_mut()[insert_idx].var_names[d];
                 int kept = 0;
                 for (int k = 0; k < var_count; k++) {
                     if (strcmp(names[k], nm) == 0) { kept = 1; break; }
@@ -330,9 +330,9 @@ int try_commit_float_decl(void) {
                 int slot = find_predef_var_idx(nm);
                 if (slot < 0) continue;
                 undeclare_predef_var(nm);
-                for (int j = 0; j < g_num_cmds; j++) {
-                    if (g_cmds[j].type == CMD_VAR_ASSIGN && g_cmds[j].num_args > slot)
-                        g_cmds[j].num_args--;
+                for (int j = 0; j < repl_state_document_count(); j++) {
+                    if (repl_state_document_cmds_mut()[j].type == CMD_VAR_ASSIGN && repl_state_document_cmds_mut()[j].num_args > slot)
+                        repl_state_document_cmds_mut()[j].num_args--;
                 }
             }
         }
@@ -358,13 +358,13 @@ int try_commit_float_decl(void) {
         ReplCommandStore store = repl_command_store_live();
         if (overwriting_decl) {
             repl_command_store_replace_one(&store, insert_idx, &cmd);
-            g_edit_line++;
-            load_line_to_input(g_edit_line);
+            repl_state_edit_line_set(repl_state_edit_line() + 1);
+            load_line_to_input(repl_state_edit_line());
         } else if (repl_command_store_insert_one(
                        &store, decl_pos, &cmd,
                        REPL_COMMAND_STORE_ADJUST_EDIT_LINE)) {
-            if (!repl_state_insert_mode() && g_edit_line < g_num_cmds)
-                load_line_to_input(g_edit_line);
+            if (!repl_state_insert_mode() && repl_state_edit_line() < repl_state_document_count())
+                load_line_to_input(repl_state_edit_line());
         } else {
             set_status("Command buffer full!");
             return 1;
@@ -424,8 +424,8 @@ int try_assign_variable(void) {
     }
 
     {
-        int insert_idx = repl_state_insert_mode() ? g_edit_line :
-                   (g_edit_line < g_num_cmds ? g_edit_line : g_num_cmds);
+        int insert_idx = repl_state_insert_mode() ? repl_state_edit_line() :
+                   (repl_state_edit_line() < repl_state_document_count() ? repl_state_edit_line() : repl_state_document_count());
         ExprVar vis[MAX_EXPR_VARS];
         int vis_n = collect_visible_vars(insert_idx, vis, MAX_EXPR_VARS);
         char verr[128];
@@ -451,8 +451,8 @@ int try_assign_variable(void) {
         cmd.has_vars = has_rhs_vars;
 
         {
-            int insert_idx = repl_state_insert_mode() ? g_edit_line :
-                       (g_edit_line < g_num_cmds ? g_edit_line : g_num_cmds);
+            int insert_idx = repl_state_insert_mode() ? repl_state_edit_line() :
+                       (repl_state_edit_line() < repl_state_document_count() ? repl_state_edit_line() : repl_state_document_count());
             ind = (in_begin_block_at(insert_idx) ? 4 : 2) + block_depth_at(insert_idx) * 2;
             if (ind > (int)sizeof(indent) - 1)
                 ind = (int)sizeof(indent) - 1;
@@ -468,18 +468,18 @@ int try_assign_variable(void) {
             ReplCommandStore store = repl_command_store_live();
             if (repl_state_insert_mode()) {
                 if (repl_command_store_insert_one(&store, insert_idx, &cmd, 0))
-                    g_edit_line++;
+                    repl_state_edit_line_set(repl_state_edit_line() + 1);
                 else {
                     set_status("Command buffer full!");
                     return 1;
                 }
-            } else if (insert_idx < g_num_cmds) {
-                if (g_cmds[insert_idx].type == CMD_VAR_DECLARE) {
-                    for (int d = 0; d < g_cmds[insert_idx].var_decl_count; d++) {
-                        const char *nm = g_cmds[insert_idx].var_names[d];
-                        for (int j = 0; j < g_num_cmds; j++) {
+            } else if (insert_idx < repl_state_document_count()) {
+                if (repl_state_document_cmds_mut()[insert_idx].type == CMD_VAR_DECLARE) {
+                    for (int d = 0; d < repl_state_document_cmds_mut()[insert_idx].var_decl_count; d++) {
+                        const char *nm = repl_state_document_cmds_mut()[insert_idx].var_names[d];
+                        for (int j = 0; j < repl_state_document_count(); j++) {
                             if (j == insert_idx) continue;
-                            if (source_uses_ident(g_cmds[j].source, nm)) {
+                            if (source_uses_ident(repl_state_document_cmds_mut()[j].source, nm)) {
                                 char buf[128];
                                 snprintf(buf, sizeof(buf),
                                          "variable '%s' is in use, cannot overwrite", nm);
@@ -488,20 +488,20 @@ int try_assign_variable(void) {
                             }
                         }
                     }
-                    for (int d = 0; d < g_cmds[insert_idx].var_decl_count; d++) {
-                        const char *nm = g_cmds[insert_idx].var_names[d];
+                    for (int d = 0; d < repl_state_document_cmds_mut()[insert_idx].var_decl_count; d++) {
+                        const char *nm = repl_state_document_cmds_mut()[insert_idx].var_names[d];
                         int slot = find_predef_var_idx(nm);
                         if (slot < 0) continue;
                         undeclare_predef_var(nm);
-                        for (int j = 0; j < g_num_cmds; j++) {
-                            if (g_cmds[j].type == CMD_VAR_ASSIGN && g_cmds[j].num_args > slot)
-                                g_cmds[j].num_args--;
+                        for (int j = 0; j < repl_state_document_count(); j++) {
+                            if (repl_state_document_cmds_mut()[j].type == CMD_VAR_ASSIGN && repl_state_document_cmds_mut()[j].num_args > slot)
+                                repl_state_document_cmds_mut()[j].num_args--;
                         }
                     }
                 }
                 repl_command_store_replace_one(&store, insert_idx, &cmd);
-                g_edit_line++;
-                load_line_to_input(g_edit_line);
+                repl_state_edit_line_set(repl_state_edit_line() + 1);
+                load_line_to_input(repl_state_edit_line());
                 {
                     char msg[128];
                     snprintf(msg, sizeof(msg), "%s = %g", name, val);
@@ -510,11 +510,11 @@ int try_assign_variable(void) {
                 mark_normals_dirty();
                 return 1;
             } else {
-                if (!repl_command_store_insert_one(&store, g_num_cmds, &cmd, 0)) {
+                if (!repl_command_store_insert_one(&store, repl_state_document_count(), &cmd, 0)) {
                     set_status("Command buffer full!");
                     return 1;
                 }
-                g_edit_line = g_num_cmds;
+                repl_state_edit_line_set(repl_state_document_count());
             }
         }
     }
@@ -542,8 +542,8 @@ int try_commit_for_loop(void) {
         return 0;
 
     {
-        int pos = repl_state_insert_mode() ? g_edit_line :
-                  (g_edit_line < g_num_cmds ? g_edit_line : g_num_cmds);
+        int pos = repl_state_insert_mode() ? repl_state_edit_line() :
+                  (repl_state_edit_line() < repl_state_document_count() ? repl_state_edit_line() : repl_state_document_count());
         ExprVar visible_vars[MAX_EXPR_VARS];
         int visible_nv = collect_visible_vars(pos, visible_vars, MAX_EXPR_VARS);
         char var_name[16];
@@ -665,11 +665,11 @@ int try_commit_for_loop(void) {
             snprintf(fe.source, sizeof(fe.source), "%s}", indent);
 
             if (*body_start == '{' || *body_start == '\0') {
-                if (!repl_state_insert_mode() && g_edit_line < g_num_cmds &&
-                    g_cmds[g_edit_line].type == CMD_FOR_BEGIN) {
+                if (!repl_state_insert_mode() && repl_state_edit_line() < repl_state_document_count() &&
+                    repl_state_document_cmds_mut()[repl_state_edit_line()].type == CMD_FOR_BEGIN) {
                     ReplCommandStore store = repl_command_store_live();
-                    repl_command_store_replace_one(&store, g_edit_line, &fb);
-                    g_edit_line++;
+                    repl_command_store_replace_one(&store, repl_state_edit_line(), &fb);
+                    repl_state_edit_line_set(repl_state_edit_line() + 1);
                     repl_state_insert_mode_set(1);
                     {
                         ReplEditorInputState *inp = repl_state_editor_input_mut();
@@ -691,7 +691,7 @@ int try_commit_for_loop(void) {
                     return 1;
                 }
 
-                g_edit_line = pos + 1;
+                repl_state_edit_line_set(pos + 1);
                 repl_state_insert_mode_set(1);
                 {
                     ReplEditorInputState *inp = repl_state_editor_input_mut();
@@ -754,7 +754,7 @@ int try_commit_for_loop(void) {
                     return 1;
                 }
 
-                g_edit_line = pos + 3;
+                repl_state_edit_line_set(pos + 3);
                 repl_state_insert_mode_set(0);
                 {
                     ReplEditorInputState *inp = repl_state_editor_input_mut();
@@ -797,18 +797,18 @@ int try_commit_func_def(void) {
         return 0;
 
     {
-        int edit_pos = repl_state_insert_mode() ? g_edit_line :
-                       (g_edit_line < g_num_cmds ? g_edit_line : g_num_cmds);
-        int overwriting_func = (!repl_state_insert_mode() && edit_pos < g_num_cmds &&
-                                g_cmds[edit_pos].type == CMD_FUNC_DEF);
+        int edit_pos = repl_state_insert_mode() ? repl_state_edit_line() :
+                       (repl_state_edit_line() < repl_state_document_count() ? repl_state_edit_line() : repl_state_document_count());
+        int overwriting_func = (!repl_state_insert_mode() && edit_pos < repl_state_document_count() &&
+                                repl_state_document_cmds_mut()[edit_pos].type == CMD_FUNC_DEF);
 
         /* Reject duplicate func definitions: each func<N> may only be defined
          * once.  Overwriting the existing definition (cursor already on that
          * line) is still allowed. */
-        for (int ei = 0; ei < g_num_cmds; ei++) {
-            if (!g_cmds[ei].valid) continue;
-            if (g_cmds[ei].type != CMD_FUNC_DEF) continue;
-            if ((int)g_cmds[ei].args[0] != fn) continue;
+        for (int ei = 0; ei < repl_state_document_count(); ei++) {
+            if (!repl_state_document_cmds_mut()[ei].valid) continue;
+            if (repl_state_document_cmds_mut()[ei].type != CMD_FUNC_DEF) continue;
+            if ((int)repl_state_document_cmds_mut()[ei].args[0] != fn) continue;
             if (overwriting_func && ei == edit_pos) continue;
             char buf[64];
             snprintf(buf, sizeof(buf),
@@ -832,14 +832,14 @@ int try_commit_func_def(void) {
         indent[ind] = '\0';
 
         if (overwriting_func) {
-            GLCmd updated = g_cmds[edit_pos];
+            GLCmd updated = repl_state_document_cmds_mut()[edit_pos];
             updated.args[0] = (float)fn;
             updated.num_args = param_count;
             format_func_header(updated.source,
                                (int)sizeof(updated.source),
                                indent, fn, param_names, param_count);
             repl_command_store_replace_one(&store, edit_pos, &updated);
-            g_edit_line = edit_pos + 1;
+            repl_state_edit_line_set(edit_pos + 1);
             repl_state_insert_mode_set(1);
             {
                 ReplEditorInputState *inp = repl_state_editor_input_mut();
@@ -882,7 +882,7 @@ int try_commit_func_def(void) {
             return 1;
         }
         if (comment_count > 0) {
-            memcpy(insert_cmds, &g_cmds[comment_start],
+            memcpy(insert_cmds, &repl_state_document_cmds_mut()[comment_start],
                    (size_t)comment_count * sizeof(*insert_cmds));
             repl_command_store_delete_range(&store, comment_start, comment_count);
             resume_pos = edit_pos - comment_count;
@@ -900,7 +900,7 @@ int try_commit_func_def(void) {
         g_func_decl_resume_delta = resume_pos > pos ? resume_pos - pos : 0;
         free(insert_cmds);
 
-        g_edit_line = pos + comment_count + 1;
+        repl_state_edit_line_set(pos + comment_count + 1);
         repl_state_insert_mode_set(1);
         {
             ReplEditorInputState *inp = repl_state_editor_input_mut();
@@ -922,8 +922,8 @@ int try_commit_if_block(void) {
         return 0;
 
     {
-        int pos = repl_state_insert_mode() ? g_edit_line :
-                  (g_edit_line < g_num_cmds ? g_edit_line : g_num_cmds);
+        int pos = repl_state_insert_mode() ? repl_state_edit_line() :
+                  (repl_state_edit_line() < repl_state_document_count() ? repl_state_edit_line() : repl_state_document_count());
         ExprVar visible_vars[MAX_EXPR_VARS];
         int visible_nv = collect_visible_vars(pos, visible_vars, MAX_EXPR_VARS);
         float cond_args[1];
@@ -1016,11 +1016,11 @@ int try_commit_if_block(void) {
             snprintf(ib.source, sizeof(ib.source), "%sif(%s) {", indent, ct);
         }
 
-        if (!repl_state_insert_mode() && g_edit_line < g_num_cmds &&
-            g_cmds[g_edit_line].type == CMD_IF_BEGIN) {
+        if (!repl_state_insert_mode() && repl_state_edit_line() < repl_state_document_count() &&
+            repl_state_document_cmds_mut()[repl_state_edit_line()].type == CMD_IF_BEGIN) {
             ReplCommandStore store = repl_command_store_live();
-            repl_command_store_replace_one(&store, g_edit_line, &ib);
-            g_edit_line++;
+            repl_command_store_replace_one(&store, repl_state_edit_line(), &ib);
+            repl_state_edit_line_set(repl_state_edit_line() + 1);
             repl_state_insert_mode_set(1);
             {
                 ReplEditorInputState *inp = repl_state_editor_input_mut();
@@ -1046,7 +1046,7 @@ int try_commit_if_block(void) {
             return 1;
         }
 
-        g_edit_line = pos + 1;
+        repl_state_edit_line_set(pos + 1);
         repl_state_insert_mode_set(1);
         {
             ReplEditorInputState *inp = repl_state_editor_input_mut();
@@ -1068,8 +1068,8 @@ int try_commit_close_brace(void) {
         return 0;
 
     {
-        int pos = repl_state_insert_mode() ? g_edit_line :
-                  (g_edit_line < g_num_cmds ? g_edit_line : g_num_cmds);
+        int pos = repl_state_insert_mode() ? repl_state_edit_line() :
+                  (repl_state_edit_line() < repl_state_document_count() ? repl_state_edit_line() : repl_state_document_count());
         CmdType open_type = nearest_open_block_at(pos);
         CmdType end_type;
         const char *label;
@@ -1098,10 +1098,10 @@ int try_commit_close_brace(void) {
         /* Reuse an existing synthesized end marker even if we're no longer
          * in insert mode (e.g. after closing an inner block). Otherwise a
          * function/if/for close brace can duplicate the trailing end command. */
-        if (pos < g_num_cmds && g_cmds[pos].type == end_type) {
+        if (pos < repl_state_document_count() && repl_state_document_cmds_mut()[pos].type == end_type) {
             int keep_inserting = (g_func_decl_resume_delta > 0 &&
                                   end_type != CMD_FUNC_END);
-            g_edit_line = pos + 1;
+            repl_state_edit_line_set(pos + 1);
             apply_func_decl_resume(end_type);
             repl_state_insert_mode_set(keep_inserting ? 1 : 0);
             {
@@ -1110,7 +1110,7 @@ int try_commit_close_brace(void) {
                 *inp->input_len = 0;
             }
             repl_state_cursor_pos_set(0);
-            load_line_to_input(g_edit_line);
+            load_line_to_input(repl_state_edit_line());
             {
                 char msg[64];
                 snprintf(msg, sizeof(msg), "%s block closed", label);
@@ -1142,7 +1142,7 @@ int try_commit_close_brace(void) {
         }
         int keep_inserting = (g_func_decl_resume_delta > 0 &&
                               end_type != CMD_FUNC_END);
-        g_edit_line = pos + 1;
+        repl_state_edit_line_set(pos + 1);
         apply_func_decl_resume(end_type);
         repl_state_insert_mode_set(keep_inserting ? 1 : 0);
         {

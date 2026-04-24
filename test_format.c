@@ -392,7 +392,7 @@ static void test_output_c_import_trace(void) {
      */
     char buf[32];
 
-    /* Build a sequence incrementally, mirroring g_cmds as load_from_file fills it. */
+    /* Build a sequence incrementally, mirroring repl_state_document_cmds_mut() as load_from_file fills it. */
     FmtCmd seq[32];
     int n = 0;
     /* Preamble: 9 FMT_OTHER entries (glEnable×7, var, comment) */

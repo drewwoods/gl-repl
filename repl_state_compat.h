@@ -43,15 +43,10 @@ typedef struct {
 ReplEditorState        repl_editor_state_live(void);
 ReplViewState          repl_view_state_live(void);
 
-extern GLCmd            g_cmds[MAX_COMMANDS];
-extern int              g_num_cmds;
-extern int              g_normals_dirty;
 extern GLCmd            g_flat_cmds[MAX_COMMANDS];
 extern int              g_num_flat_cmds;
 extern int              g_flat_dirty;
 extern FlatCmdLocalVars g_flat_cmd_local_vars[MAX_COMMANDS];
-
-extern int  g_edit_line;
 
 
 extern float g_panel_frac;

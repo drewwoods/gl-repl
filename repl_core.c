@@ -6,7 +6,7 @@
  * This file owns everything that transforms text into renderable GL state:
  *
  *   - Control-flow state that is not pure command metadata
- *   - Global state: command arrays (g_cmds / g_flat_cmds), camera, toggles,
+ *   - Global state: command arrays (repl_state_document_cmds_mut() / g_flat_cmds), camera, toggles,
  *     accumulation-buffer settings, etc.
  *   - Normalization — repl_parse_and_normalize(), repl_reformat_commands()
  *   - GLUT display / reshape callbacks
@@ -15,7 +15,7 @@
  *
  * repl_editor.c owns the interactive editing layer:
  *   - Editor state (g_input, cursor)
- *   - Commit handlers that decide *where* a parsed command goes in g_cmds[]
+ *   - Commit handlers that decide *where* a parsed command goes in repl_state_document_cmds_mut()[]
  *   - GLUT keyboard / special / mouse / motion / timer dispatch
  *   - Panel resizing and routing to variable-drag ownership
  *   - feed_line() — the programmatic commit entry point used by file loading
@@ -197,9 +197,9 @@ const char *mode_name(GLenum mode) {
 
 GLenum current_begin_mode(void) {
     GLenum mode = GL_TRIANGLES;
-    for (int i = 0; i < g_num_cmds; i++)
-        if (g_cmds[i].valid && g_cmds[i].type == CMD_BEGIN)
-            mode = g_cmds[i].mode;
+    for (int i = 0; i < repl_state_document_count(); i++)
+        if (repl_state_document_cmds_mut()[i].valid && repl_state_document_cmds_mut()[i].type == CMD_BEGIN)
+            mode = repl_state_document_cmds_mut()[i].mode;
     return mode;
 }
 
@@ -251,10 +251,10 @@ void repl_debug_dump_editor(FILE *out) {
     fprintf(dst,
             "num_cmds=%d edit_line=%d inserting=%d flat_dirty=%d normals_dirty=%d\n",
             repl_state_document_count(), repl_state_edit_line(), repl_state_insert_mode(),
-            repl_state_flat_program_dirty(), g_normals_dirty);
+            repl_state_flat_program_dirty(), repl_state_normals_dirty());
 
-    for (int i = 0; i < g_num_cmds; i++) {
-        const GLCmd *cmd = &g_cmds[i];
+    for (int i = 0; i < repl_state_document_count(); i++) {
+        const GLCmd *cmd = &repl_state_document_cmds_mut()[i];
         fprintf(dst,
                 "%4d | %-22s | valid=%d has_vars=%d is_auto=%d src_idx=%d | %s\n",
                 i, cmd_type_name(cmd->type), cmd->valid, cmd->has_vars,
@@ -262,9 +262,9 @@ void repl_debug_dump_editor(FILE *out) {
     }
 
     fprintf(dst, "--- source ---\n");
-    for (int i = 0; i < g_num_cmds; i++) {
-        if (!g_cmds[i].valid) continue;
-        fprintf(dst, "%s\n", g_cmds[i].source);
+    for (int i = 0; i < repl_state_document_count(); i++) {
+        if (!repl_state_document_cmds_mut()[i].valid) continue;
+        fprintf(dst, "%s\n", repl_state_document_cmds_mut()[i].source);
     }
     fprintf(dst, "--- camera ---\n");
     {
@@ -425,10 +425,10 @@ void repl_reformat_commands(void) {
     memcpy(saved_input, repl_state_editor_input()->input, sizeof(saved_input));
     ReplCommandStore store = repl_command_store_live();
 
-    for (int i = 0; i < g_num_cmds; i++) {
-        if (!g_cmds[i].valid) continue;
+    for (int i = 0; i < repl_state_document_count(); i++) {
+        if (!repl_state_document_cmds_mut()[i].valid) continue;
 
-        GLCmd orig = g_cmds[i];
+        GLCmd orig = repl_state_document_cmds_mut()[i];
         GLCmd fmt = orig;
 
         int bb = in_begin_block_at(i);
@@ -663,9 +663,9 @@ static void display_func(void) {
     prof_frame_tick();
     prof_begin(PROF_FRAME_TOTAL);
 
-    if (g_normals_dirty) {
+    if (repl_state_normals_dirty()) {
         recompute_autonormals();
-        g_normals_dirty = 0;
+        repl_state_normals_dirty_clear();
     }
     if (repl_state_flat_program_dirty()) {
         prof_begin(PROF_FLATTEN);
@@ -792,8 +792,8 @@ int collect_visible_vars(int pos, ExprVar *vars, int max_vars) {
     ScopeFrame frames[64];
     int depth = 0;
 
-    for (int i = 0; i < pos && i < g_num_cmds; i++) {
-        CmdType t = g_cmds[i].type;
+    for (int i = 0; i < pos && i < repl_state_document_count(); i++) {
+        CmdType t = repl_state_document_cmds_mut()[i].type;
         if (t == CMD_FOR_BEGIN || t == CMD_FUNC_DEF || t == CMD_IF_BEGIN) {
             if (depth >= (int)(sizeof(frames) / sizeof(frames[0])))
                 break;
@@ -803,17 +803,17 @@ int collect_visible_vars(int pos, ExprVar *vars, int max_vars) {
 
             if (t == CMD_FOR_BEGIN) {
                 char vn[16];
-                get_for_var_name(&g_cmds[i], vn, sizeof(vn));
+                get_for_var_name(&repl_state_document_cmds_mut()[i], vn, sizeof(vn));
                 repl_copy_string_fits(frames[depth].vars[0].name,
                                       sizeof(frames[depth].vars[0].name),
                                       vn);
-                frames[depth].vars[0].value = g_cmds[i].args[0];
+                frames[depth].vars[0].value = repl_state_document_cmds_mut()[i].args[0];
                 frames[depth].count = 1;
             } else if (t == CMD_FUNC_DEF) {
                 int fn = -1;
                 int param_count = 0;
                 char param_names[MAX_EXPR_VARS][16];
-                if (parse_repl_func_signature(g_cmds[i].source, &fn,
+                if (parse_repl_func_signature(repl_state_document_cmds_mut()[i].source, &fn,
                                               param_names, MAX_EXPR_VARS,
                                               &param_count)) {
                     for (int p = 0; p < param_count; p++) {
@@ -861,12 +861,12 @@ static void load_initial_commands(const char *import_file) {
         struct stat st;
         if (stat(import_file, &st) == 0 && S_ISDIR(st.st_mode)) {
             if (repl_load_workspace(import_file) > 0) {
-                g_edit_line = g_num_cmds;
+                repl_state_edit_line_set(repl_state_document_count());
                 scroll_to_display_function();
                 return;
             }
         } else if (load_from_file(import_file)) {
-            g_edit_line = g_num_cmds;
+            repl_state_edit_line_set(repl_state_document_count());
             scroll_to_display_function();
             return;
         }

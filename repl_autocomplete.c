@@ -123,14 +123,14 @@ static int find_defined_func_call_params(const char *input, const char **after_o
     if (after_out)
         *after_out = p + 1;
 
-    for (int i = 0; i < g_num_cmds; i++) {
+    for (int i = 0; i < repl_state_document_count(); i++) {
         int parsed_fn = -1;
         int param_count = 0;
-        if (!g_cmds[i].valid || g_cmds[i].type != CMD_FUNC_DEF)
+        if (!repl_state_document_cmds_mut()[i].valid || repl_state_document_cmds_mut()[i].type != CMD_FUNC_DEF)
             continue;
-        if ((int)g_cmds[i].args[0] != fn)
+        if ((int)repl_state_document_cmds_mut()[i].args[0] != fn)
             continue;
-        if (!parse_repl_func_signature(g_cmds[i].source, &parsed_fn,
+        if (!parse_repl_func_signature(repl_state_document_cmds_mut()[i].source, &parsed_fn,
                                        param_storage, MAX_EXPR_VARS,
                                        &param_count))
             continue;
