@@ -9,15 +9,16 @@
  * New code should eventually move to the typed runtime APIs in repl_state.h,
  * but some modules still rely on these legacy compatibility names. */
 
-extern int   g_use_accum;
-extern int   g_accum_aa_enabled;
-extern int   g_accum_samples;
-extern float g_accum_jitter_x;
-extern float g_accum_jitter_y;
-extern int   g_multisample_enabled;
-extern int   g_line_smooth_enabled;
-
 #ifndef REPL_STATE_IMPLEMENTATION
+#define g_use_accum                (*repl_state_render()->use_accum)
+#define g_accum_aa_enabled         (*repl_state_render()->accum_aa_enabled)
+#define g_accum_samples            (*repl_state_render()->accum_samples)
+#define g_accum_jitter_x           (*repl_state_render()->accum_jitter_x)
+#define g_accum_jitter_y           (*repl_state_render()->accum_jitter_y)
+#define g_multisample_enabled      (*repl_state_render()->multisample_enabled)
+#define g_line_smooth_enabled      (*repl_state_render()->line_smooth_enabled)
+#define g_init_attenuate_points    (*repl_state_render()->point_attenuation_enabled)
+
 #define g_anim_time              (*repl_state_variables()->anim_time)
 #define g_t_playing              (*repl_state_variables()->time_playing)
 #define g_t_var_idx              (*repl_state_variables()->time_var_idx)
@@ -70,8 +71,6 @@ extern TessVertex     g_tess_verts[TESS_VERT_BUF_SIZE];
 extern int            g_tess_vert_count;
 extern SceneLight     g_lights[MAX_LIGHTS];
 extern float          g_clear_color[4];
-
-extern int g_init_attenuate_points;
 
 void refresh_workspace_header_lines(void);
 int  parse_workspace_header_line(const char *line);

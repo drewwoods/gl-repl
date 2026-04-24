@@ -169,8 +169,8 @@ void repl_cfg_cycle_row(int row, int delta) {
         }
     } else if (item->key == REPL_CONFIG_POINT_ATTENUATION) {
         apply_init_bootstrap();
-        set_status(g_init_attenuate_points ? "Point attenuation: ON"
-                                           : "Point attenuation: OFF");
+        set_status(repl_config_get(REPL_CONFIG_POINT_ATTENUATION) ? "Point attenuation: ON"
+                                                                  : "Point attenuation: OFF");
     } else if (item->key == REPL_CONFIG_AUDIO_MODE) {
         int mode = repl_config_get(REPL_CONFIG_AUDIO_MODE);
         apply_audio_cfg_mode(mode);
