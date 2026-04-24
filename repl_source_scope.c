@@ -1,5 +1,5 @@
 /*
- * repl_source_scope.c — Prefix-depth cache and source block queries.
+ * repl_source_scope.c - Prefix-depth cache and source block queries.
  *
  * These helpers answer questions about the source command array before a
  * command at a given index is parsed, formatted, or structurally edited.
@@ -21,10 +21,10 @@ void depth_cache_invalidate(void) {
  * nesting depth *before* command `pos`.  Each array tracks one kind of
  * scope opener/closer:
  *
- *   g_for_depth_prefix   — for-loop nesting only
- *   g_block_depth_prefix — any block (for/func/if) nesting (used for indent)
- *   g_begin_depth_prefix — glBegin/glEnd nesting
- *   g_tess_depth_prefix  — gluBegin/gluEnd nesting
+ *   g_for_depth_prefix   - for-loop nesting only
+ *   g_block_depth_prefix - any block (for/func/if) nesting (used for indent)
+ *   g_begin_depth_prefix - glBegin/glEnd nesting
+ *   g_tess_depth_prefix  - gluBegin/gluEnd nesting
  *
  * All queries call this first; depth_cache_invalidate() marks it dirty. */
 static void depth_cache_rebuild(void) {

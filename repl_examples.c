@@ -66,7 +66,7 @@ static const char *const g_example_cube[] = {
     NULL
 };
 
-/* Example 1: Animated ring — for-loop + t variable */
+/* Example 1: Animated ring - for-loop + t variable */
 static const char *const g_example_ring[] = {
     "glClearColor(0.1, 0.1, 0.1, 1.0);",
     "glEnable(GL_DEPTH_TEST);",
@@ -87,7 +87,7 @@ static const char *const g_example_ring[] = {
     NULL
 };
 
-/* Example 2: Function demo — define reusable triangle, call with transforms */
+/* Example 2: Function demo - define reusable triangle, call with transforms */
 static const char *const g_example_func[] = {
     "// @cfg vertex_points = 0",
     "glClearColor(0.1, 0.1, 0.1, 1.0);",
@@ -111,7 +111,7 @@ static const char *const g_example_func[] = {
     NULL
 };
 
-/* Example 3: Parametric polygon helper — function args driving local for-loops */
+/* Example 3: Parametric polygon helper - function args driving local for-loops */
 static const char *const g_example_func_loop[] = {
     "glClearColor(0.1, 0.1, 0.1, 1.0);",
     "glEnable(GL_DEPTH_TEST);",
@@ -141,7 +141,7 @@ static const char *const g_example_func_loop[] = {
     NULL
 };
 
-/* Example 4: Branching helper — function args driving local if-blocks */
+/* Example 4: Branching helper - function args driving local if-blocks */
 static const char *const g_example_func_if[] = {
     "glClearColor(0.1, 0.1, 0.1, 1.0);",
     "glEnable(GL_DEPTH_TEST);",
@@ -181,7 +181,7 @@ static const char *const g_example_func_if[] = {
     NULL
 };
 
-/* Example 5: Recursive helper — transformed child calls with depth countdown */
+/* Example 5: Recursive helper - transformed child calls with depth countdown */
 static const char *const g_example_func_recurse[] = {
     "// @cfg vertex_outlines = 0",
     "// @cfg vertex_points = 0",
@@ -229,7 +229,7 @@ static const char *const g_example_func_recurse[] = {
     NULL
 };
 
-/* Example 6: Conditional colors — if-blocks + t variable */
+/* Example 6: Conditional colors - if-blocks + t variable */
 static const char *const g_example_cond[] = {
     "glClearColor(0.1, 0.1, 0.1, 1.0);",
     "glEnable(GL_DEPTH_TEST);",
@@ -262,7 +262,7 @@ static const char *const g_example_cond[] = {
     NULL
 };
 
-/* Example 7: Parametric torus — nested for-loops */
+/* Example 7: Parametric torus - nested for-loops */
 static const char *const g_example_torus[] = {
     "glClearColor(0.1, 0.1, 0.1, 1.0);",
     "glEnable(GL_DEPTH_TEST);",
@@ -283,7 +283,7 @@ static const char *const g_example_torus[] = {
     NULL
 };
 
-/* Example 8: GLU tessellator — concave arrow polygon with per-vertex color */
+/* Example 8: GLU tessellator - concave arrow polygon with per-vertex color */
 static const char *const g_example_tess[] = {
     "glClearColor(0.1, 0.1, 0.1, 1.0);",
     "glEnable(GL_DEPTH_TEST);",
@@ -316,7 +316,7 @@ static const char *const g_example_tess[] = {
     NULL
 };
 
-/* Example 9: GLU tessellator — concave arrow polygon cutout */
+/* Example 9: GLU tessellator - concave arrow polygon cutout */
 static const char *const g_example_tess_cutout[] = {
     "float z;",
     "glClearColor(0.1, 0.1, 0.1, 1.0);",
@@ -440,7 +440,7 @@ static const char *const g_example_tess_cutout[] = {
     NULL
 };
 
-/* Example 10: 2D assignment sketch — runtime assignment without goto.
+/* Example 10: 2D assignment sketch - runtime assignment without goto.
  * No predefined goto examples are shipped because goto support is partial:
  * top-level only, not replay-safe, and not suitable for variable-driven
  * geometry loops. Keep coverage in tests/docs instead of F12 examples. */
@@ -487,7 +487,7 @@ static const char *const g_example_particles_stateless[] = {
     NULL
 };
 
-/* Example 12: Additive glow particles — glPointSize + distance attenuation + blend */
+/* Example 12: Additive glow particles - glPointSize + distance attenuation + blend */
 static const char *const g_example_glow_particles[] = {
     "// @cfg vertex_outlines = 0",
     "// @cfg vertex_points = 0",
@@ -520,7 +520,7 @@ static const char *const g_example_glow_particles[] = {
     NULL
 };
 
-/* Example 13: Procedural terrain — rand(x,z) samples heights at each grid vertex,
+/* Example 13: Procedural terrain - rand(x,z) samples heights at each grid vertex,
  * building GL_QUAD_STRIP rows via nested for-loops. An animated sine ripple
  * (k = 0.25*sin(t/2 * ...)) is added to alternate columns each frame, giving
  * the flat random field a rolling wave motion. Lit with GL_LIGHT0 + GL_LIGHT3,
@@ -566,7 +566,7 @@ static const char *const g_example_random_surface[] = {
 };
 
 
-/* Example 14: Animated wave surface — y = sin(x*2.5+t)*cos(z*2.5+t*0.7)*0.4
+/* Example 14: Animated wave surface - y = sin(x*2.5+t)*cos(z*2.5+t*0.7)*0.4
  * rendered as GL_TRIANGLE_STRIP rows. Normals are the exact analytic partial
  * derivatives of the wave function (no finite-difference approximation), giving
  * correct smooth lighting across all four lights. Per-vertex color varies with
@@ -609,7 +609,7 @@ static const char *const g_example_waves[] = {
     NULL
 };
 
-/* Example 15: Animated spirograph curve — closed parametric line loop
+/* Example 15: Animated spirograph curve - closed parametric line loop
  * driven by t, showing dense iteration and trig-heavy vertex generation. */
 static const char *const g_example_spirograph_curve[] = {
     "// @cfg vertex_outlines = 0",
@@ -634,7 +634,7 @@ static const char *const g_example_spirograph_curve[] = {
     NULL
 };
 
-/* Example 16: Traveling ripple ring — circular line loop with a narrow
+/* Example 16: Traveling ripple ring - circular line loop with a narrow
  * modulo-selected radial wave, exercising fmod math and conditional edits. */
 static const char *const g_example_traveling_ripple_ring[] = {
     "// @cfg vertex_outlines = 0",
@@ -665,7 +665,7 @@ static const char *const g_example_traveling_ripple_ring[] = {
     NULL
 };
 
-/* Example 17: Stress test — exercises parser, code UI, nested structures,
+/* Example 17: Stress test - exercises parser, code UI, nested structures,
  * multiple functions, recursion, conditionals, variables, tessellation,
  * GLU primitives, matrix stack, animation, and long line count. */
 static const char *const g_example_stress[] = {
@@ -882,7 +882,7 @@ static const char *const g_example_stress[] = {
     NULL
 };
 
-/* Transformation stress test — exercises translate/rotate/scale guides in
+/* Transformation stress test - exercises translate/rotate/scale guides in
  * varied contexts: nested push/pop, time-varying args (t), for-loop
  * unrolling, function scopes, and scale-of-origin (3-axis gizmo fallback).
  * Park the cursor on any transform line to see its guide overlay. */

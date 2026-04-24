@@ -1,5 +1,5 @@
 /*
- * repl_parser.h — Public parser entrypoints for REPL source lines.
+ * repl_parser.h - Public parser entrypoints for REPL source lines.
  */
 #ifndef REPL_PARSER_H
 #define REPL_PARSER_H

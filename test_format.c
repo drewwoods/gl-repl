@@ -1,5 +1,5 @@
 /*
- * test_format.c — Tests for the command indentation logic in cmd_format.c
+ * test_format.c - Tests for the command indentation logic in cmd_format.c
  *
  * Build:
  *   gcc -Wall -std=c2x -o test_format test_format.c cmd_format.c -lm
@@ -159,7 +159,7 @@ static void test_glu_end_polygon_indent(void) {
 }
 
 static void test_full_tess_scenario(void) {
-    printf("test_full_tess_scenario — complete gluBegin/glBegin nesting\n");
+    printf("test_full_tess_scenario - complete gluBegin/glBegin nesting\n");
     /*
      * Desired output from user spec:
      *   gluBegin(GLU_POLYGON);        ← 2 spaces  (tess=0)
@@ -226,7 +226,7 @@ static void test_invalid_cmds_skipped(void) {
     /* Invalid commands should not affect depth counting */
     FmtCmd seq[] = {
         V(FMT_TESS_BEGIN_POLYGON),
-        INV(FMT_TESS_BEGIN_CONTOUR),  /* deleted — should be ignored */
+        INV(FMT_TESS_BEGIN_CONTOUR),  /* deleted - should be ignored */
         V(FMT_TESS_BEGIN_CONTOUR),
     };
     int n = 3;
@@ -495,7 +495,7 @@ static void test_tess_leaf_indent(void) {
       char buf[32]; fmt_tess_leaf_indent(seq, 2, buf, sizeof(buf));
       ASSERT_STR("tess_leaf tess=2", buf, "      "); }
 
-    /* KEY: inside tess=2 AND inside glBegin — begin depth must NOT be added */
+    /* KEY: inside tess=2 AND inside glBegin - begin depth must NOT be added */
     { FmtCmd seq[] = {
           V(FMT_TESS_BEGIN_POLYGON), V(FMT_TESS_BEGIN_CONTOUR), V(FMT_GL_BEGIN) };
       char buf[32]; fmt_tess_leaf_indent(seq, 3, buf, sizeof(buf));
@@ -601,12 +601,12 @@ static void test_autonormal_indent(void) {
      * fmt_indent at the insert position.  They must respect tess scope depth
      * the same as any other normal command. */
 
-    /* Plain glBegin, no tess — normal at tess=0, begin=1 → 4 spaces */
+    /* Plain glBegin, no tess - normal at tess=0, begin=1 → 4 spaces */
     {
         FmtCmd seq[] = { V(FMT_GL_BEGIN) };
         ASSERT_STR("autonormal plain begin", indent_str(seq, 1), "    ");
     }
-    /* Inside tess contour + glBegin — tess=2, begin=1 → 8 spaces */
+    /* Inside tess contour + glBegin - tess=2, begin=1 → 8 spaces */
     {
         FmtCmd seq[] = {
             V(FMT_TESS_BEGIN_POLYGON),
@@ -615,7 +615,7 @@ static void test_autonormal_indent(void) {
         };
         ASSERT_STR("autonormal tess=2 begin=1", indent_str(seq, 3), "        ");
     }
-    /* Inside tess polygon only + glBegin — tess=1, begin=1 → 6 spaces */
+    /* Inside tess polygon only + glBegin - tess=1, begin=1 → 6 spaces */
     {
         FmtCmd seq[] = { V(FMT_TESS_BEGIN_POLYGON), V(FMT_GL_BEGIN) };
         ASSERT_STR("autonormal tess=1 begin=1", indent_str(seq, 2), "      ");

@@ -2,7 +2,7 @@
 
 ## Context
 
-Currently `glBegin(GL_POLYGON)` silently hijacks the GLU tessellator in `execute_commands()` — the vertex callback uses only `glVertex3dv`, discarding per-vertex normal/color data, and the combine callback ignores interpolation. The user wants explicit tessellator commands with full per-vertex data (position + normal + color), a weighted combine callback, and removal of the implicit tessellator hijack so `glBegin(GL_POLYGON)` goes back to a plain GL call.
+Currently `glBegin(GL_POLYGON)` silently hijacks the GLU tessellator in `execute_commands()` - the vertex callback uses only `glVertex3dv`, discarding per-vertex normal/color data, and the combine callback ignores interpolation. The user wants explicit tessellator commands with full per-vertex data (position + normal + color), a weighted combine callback, and removal of the implicit tessellator hijack so `glBegin(GL_POLYGON)` goes back to a plain GL call.
 
 ## New REPL Syntax → Execution Mapping
 
@@ -21,11 +21,11 @@ Currently `glBegin(GL_POLYGON)` silently hijacks the GLU tessellator in `execute
 |------|---------|
 | `sample.h` | Add `TessVertex` struct; 6 new `CmdType` values; update `g_tess_verts` extern |
 | `sample.c` | Global def, `tess_vertex_callback`, updated `tess_combine_callback`, `init_gl`, `parse_command_internal`, `execute_commands`, `save_output`, `g_func_completions` |
-| `ui_panels.c` | `color_for_type()` — new cases for 6 new types |
+| `ui_panels.c` | `color_for_type()` - new cases for 6 new types |
 
 ---
 
-## Step 1 — sample.h
+## Step 1 - sample.h
 
 ### 1a. Add `TessVertex` struct (after `TESS_VERT_BUF_SIZE` macro):
 ```c
@@ -54,7 +54,7 @@ extern TessVertex g_tess_verts[TESS_VERT_BUF_SIZE];
 
 ---
 
-## Step 2 — sample.c: globals & callbacks
+## Step 2 - sample.c: globals & callbacks
 
 ### 2a. Change global definition:
 ```c
@@ -72,7 +72,7 @@ static void tess_vertex_callback(void *vertex_data) {
 }
 ```
 
-### 2c. Update `tess_combine_callback` — interpolate normal & color with weights:
+### 2c. Update `tess_combine_callback` - interpolate normal & color with weights:
 ```c
 static void tess_combine_callback(GLdouble coords[3], void *vertex_data[4],
                                    GLfloat weight[4], void **out_data) {
@@ -95,7 +95,7 @@ static void tess_combine_callback(GLdouble coords[3], void *vertex_data[4],
 }
 ```
 
-### 2d. Update `init_gl` — swap vertex callback:
+### 2d. Update `init_gl` - swap vertex callback:
 ```c
 // OLD: gluTessCallback(g_tess, GLU_TESS_VERTEX, (void (*)())glVertex3dv);
 gluTessCallback(g_tess, GLU_TESS_VERTEX, (void (*)())tess_vertex_callback);
@@ -103,15 +103,15 @@ gluTessCallback(g_tess, GLU_TESS_VERTEX, (void (*)())tess_vertex_callback);
 
 ---
 
-## Step 3 — sample.c: parse_command_internal
+## Step 3 - sample.c: parse_command_internal
 
 Add 6 new function-name handlers, placed after the `glutSolidTorus` block and before the `goto` block:
 
 | Input | Parsed as | args[] |
 |-------|-----------|--------|
-| `gluBegin(GLU_POLYGON)` | CMD_TESS_BEGIN_POLYGON | — |
-| `gluBegin(GLU_CONTOUR)` | CMD_TESS_BEGIN_CONTOUR | — |
-| `gluEnd()` | CMD_TESS_END | — |
+| `gluBegin(GLU_POLYGON)` | CMD_TESS_BEGIN_POLYGON | - |
+| `gluBegin(GLU_CONTOUR)` | CMD_TESS_BEGIN_CONTOUR | - |
+| `gluEnd()` | CMD_TESS_END | - |
 | `gluNormal(x,y,z)` | CMD_TESS_NORMAL | [0-2] = xyz |
 | `gluColor(r,g,b[,a])` | CMD_TESS_COLOR | [0-3] = rgba (a defaults to 1) |
 | `gluVertex(x,y,z)` | CMD_TESS_VERTEX | [0-2] = xyz |
@@ -126,13 +126,13 @@ Source strings (use `indent` variable already computed in the parser):
 
 ---
 
-## Step 4 — sample.c: execute_commands
+## Step 4 - sample.c: execute_commands
 
 ### 4a. Remove implicit tessellator:
 - Remove `static GLdouble tess_buf[256][3];` local
 - Remove `int tess_n = 0;` and `int in_polygon = 0;` locals
-- In `CMD_BEGIN`: remove `if (mode == GL_POLYGON && g_tess)` branch — use plain `glBegin` always
-- In `CMD_END`: remove `in_polygon` branch — keep only `glEnd(); in_begin = 0;`
+- In `CMD_BEGIN`: remove `if (mode == GL_POLYGON && g_tess)` branch - use plain `glBegin` always
+- In `CMD_END`: remove `in_polygon` branch - keep only `glEnd(); in_begin = 0;`
 - In `CMD_VERTEX3F`: remove `in_polygon` branch
 - At `execute_done`: remove tess cleanup for in_polygon
 
@@ -188,7 +188,7 @@ if (tess_depth == 1 && g_tess) { gluTessEndPolygon(g_tess); }
 
 ---
 
-## Step 5 — sample.c: save_output
+## Step 5 - sample.c: save_output
 
 ### 5a. Detect tess usage before snippet:
 ```c
@@ -234,7 +234,7 @@ case CMD_TESS_VERTEX:
 
 ---
 
-## Step 6 — sample.c: g_func_completions
+## Step 6 - sample.c: g_func_completions
 
 Add to array:
 ```c
@@ -248,7 +248,7 @@ Add to array:
 
 ---
 
-## Step 7 — ui_panels.c: color_for_type
+## Step 7 - ui_panels.c: color_for_type
 
 Add to switch:
 ```c
@@ -264,7 +264,7 @@ case CMD_TESS_VERTEX:       glColor3f(0.40f, 0.90f, 0.40f); break; /* green (sam
 
 ## Verification
 
-1. `make clean && make` — zero errors/warnings
+1. `make clean && make` - zero errors/warnings
 2. In REPL, enter a concave polygon:
    ```
    gluBegin(GLU_POLYGON);
@@ -282,4 +282,4 @@ case CMD_TESS_VERTEX:       glColor3f(0.40f, 0.90f, 0.40f); break; /* green (sam
 3. Verify syntax colors: tess begin/end show violet, gluVertex green, gluNormal cyan, gluColor yellow
 4. Press Ctrl+S → `output.c` compiles standalone: `glut_compile output.c`
 5. Verify `glBegin(GL_POLYGON)` still works as a plain GL call (no tessellator hijacking)
-6. Test combine callback: non-convex shape forcing tessellation — interpolated vertices should carry weighted normal/color
+6. Test combine callback: non-convex shape forcing tessellation - interpolated vertices should carry weighted normal/color

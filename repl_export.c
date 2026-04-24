@@ -257,7 +257,7 @@ int parse_workspace_header_line(const char *line) {
     if (*p != '@') return 0;
     p++;
 
-    /* Banner line: `// @workspace: REPL state ...` — recognised, no payload. */
+    /* Banner line: `// @workspace: REPL state ...` - recognised, no payload. */
     if (strncmp(p, "workspace:", 10) == 0) return 1;
     if (strncmp(p, "workspace", 9) == 0 &&
         !isalnum((unsigned char)p[9]) && p[9] != '_' && p[9] != '-')
@@ -631,7 +631,7 @@ int import_parse_cam_line(const char *text) {
     }
 
     if (g_cam_parse_state == 3 && strncmp(p, "glRotatef", 9) == 0) {
-        /* Literal `glRotatef(g_angle, 0,1,0)` animation hook — no scalars
+        /* Literal `glRotatef(g_angle, 0,1,0)` animation hook - no scalars
          * to extract, just advance past it. We also tolerate its absence
          * (fall through to state 4) for files saved before it existed. */
         const char *q = strchr(p, '(');

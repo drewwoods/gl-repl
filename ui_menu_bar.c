@@ -9,9 +9,9 @@
 #include "ui_menu_bar.h"
 #include "ui_panels.h"
 
-/* Menu bar — styled after Header Wireframes v2.
+/* Menu bar - styled after Header Wireframes v2.
  * Left: top-level menus (File, Scene, Config).
- * Right: pinned buttons (Search, Replay) — retained in flat form until the
+ * Right: pinned buttons (Search, Replay) - retained in flat form until the
  * right-side redesign lands. */
 
 enum {
@@ -248,13 +248,13 @@ static void menubar_rects(int menu_x[NUM_MENUS], int menu_w[NUM_MENUS],
 
     int right_edge = cp_x + cp_w - CODE_MARGIN_X;
 
-    /* PIN_REPLAY — width reserves room for the widest state label plus a
+    /* PIN_REPLAY - width reserves room for the widest state label plus a
      * 12px state icon (triangle / pause-bars) and padding. */
     int replay_label_w = (int)strlen("Replaying") * FONT_SMALL_W;
     pin_w[PIN_REPLAY] = replay_label_w + 12 /* icon */ + 22 /* pads */;
     pin_x[PIN_REPLAY] = right_edge - pin_w[PIN_REPLAY];
 
-    /* PIN_SEARCH — fills the gap between the last menu and PIN_REPLAY. */
+    /* PIN_SEARCH - fills the gap between the last menu and PIN_REPLAY. */
     int menus_right = menu_x[NUM_MENUS - 1] + menu_w[NUM_MENUS - 1];
     int search_w = pin_x[PIN_REPLAY] - menus_right;
     if (search_w < PIN_SEARCH_MIN_W) search_w = PIN_SEARCH_MIN_W;
@@ -480,7 +480,7 @@ void ui_menu_bar_render_search_overlay(int cp_x, int panel_w, int panel_top) {
         return;
 
     /* Anchor on the PIN_SEARCH slot so the search bar sits where the
-     * placeholder was — matches the design's inline search affordance. */
+     * placeholder was - matches the design's inline search affordance. */
     int menu_x[NUM_MENUS], menu_w[NUM_MENUS];
     int pin_x[NUM_PIN_BTNS], pin_w[NUM_PIN_BTNS];
     int by, bh;
@@ -566,7 +566,7 @@ void ui_menu_bar_render(void) {
     code_panel_rect(&cp_x, &cp_y, &cp_w, &cp_h);
     (void)cp_y;
     if (cp_w <= 0 || cp_h <= 0) return;
-    /* Menu bar — design ref: Header Wireframes v2 (now at the very top of
+    /* Menu bar - design ref: Header Wireframes v2 (now at the very top of
      * the code panel; the old info bar moved into the bottom status strip). */
     {
         int menu_x[NUM_MENUS], menu_w[NUM_MENUS];
@@ -661,12 +661,12 @@ void ui_menu_bar_render(void) {
                     draw_quad((float)icon_x,                    by0, bw, bh0);
                     draw_quad((float)icon_x + bw + gap,         by0, bw, bh0);
                 } else if (*replay->state == REPLAY_DONE) {
-                    /* Square — run complete */
+                    /* Square - run complete */
                     float sx = (float)icon_x;
                     float sy = (float)icon_cy - (float)icon_sz * 0.5f;
                     draw_quad(sx, sy, (float)icon_sz, (float)icon_sz);
                 } else {
-                    /* Play triangle — stopped (OFF) or paused, click to start */
+                    /* Play triangle - stopped (OFF) or paused, click to start */
                     float x0 = (float)icon_x;
                     float cy = (float)icon_cy;
                     glBegin(GL_TRIANGLES);
@@ -718,7 +718,7 @@ void render_example_dropdown(void) {
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
-    /* Dropdown bg (#222) + border (#3a3a3a) — design ref */
+    /* Dropdown bg (#222) + border (#3a3a3a) - design ref */
     glColor4f(0.133f, 0.133f, 0.133f, 0.98f * alpha);
     draw_quad((float)dx, (float)dy, (float)dw, (float)dh);
     glColor4f(0.227f, 0.227f, 0.227f, alpha);

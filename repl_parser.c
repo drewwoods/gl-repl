@@ -1,5 +1,5 @@
 /*
- * repl_parser.c — REPL text command parser.
+ * repl_parser.c - REPL text command parser.
  *
  * Converts one source line into a GLCmd and canonical source text. The parse
  * context carries the source-line index used for scope-sensitive indentation
@@ -75,7 +75,7 @@ static int is_known_incomplete_func_name(const char *func) {
 }
 
 /*
- * parse_command — Convert a single REPL text line into a GLCmd.
+ * parse_command - Convert a single REPL text line into a GLCmd.
  *
  * This is the main entry point for the parser. It tries each command
  * grammar in order:
@@ -239,7 +239,7 @@ static int parse_command(const char *line, GLCmd *cmd,
         }
     }
 
-    /* glEnd() — aligns with its matching glBegin: 2 + 2*tess + 2*block (begin depth not added) */
+    /* glEnd() - aligns with its matching glBegin: 2 + 2*tess + 2*block (begin depth not added) */
     if (strcmp(func, "glEnd") == 0) {
         cmd->type = CMD_END;
         cmd->valid = 1;
@@ -415,7 +415,7 @@ static int parse_command(const char *line, GLCmd *cmd,
         return 1;
     }
 
-    /* glPointParameterfv(pname, const, linear, quadratic) —
+    /* glPointParameterfv(pname, const, linear, quadratic) -
      * only GL_POINT_DISTANCE_ATTENUATION (size *= 1 / sqrt(const + linear*d + quadratic*d*d)) */
     if (strcmp(func, "glPointParameterfv") == 0) {
         char a1[64] = "", rest[MAX_LINE_LEN] = "";
@@ -492,7 +492,7 @@ static int parse_command(const char *line, GLCmd *cmd,
         return 1;
     }
 
-    /* funcN([expr, ...]) — function call */
+    /* funcN([expr, ...]) - function call */
     if (strncmp(func, "func", 4) == 0 && func[4] >= '0' && func[4] <= '9' &&
         func[5] == '\0' && open_p && close_p) {
         int fn = func[4] - '0';
@@ -511,7 +511,7 @@ static int parse_command(const char *line, GLCmd *cmd,
         }
 
         /* In strict mode (commit path), require a matching CMD_FUNC_DEF
-         * for top-level calls — same rule as `x = expr;` needing `float
+         * for top-level calls - same rule as `x = expr;` needing `float
          * x;`.  Inside a function body (block depth > 0) forward refs
          * are still allowed so mutual recursion keeps working. */
         if (ctx && ctx->strict_refs && block_depth_at(source_line_idx) == 0) {
@@ -526,7 +526,7 @@ static int parse_command(const char *line, GLCmd *cmd,
             if (!def_exists) {
                 char buf[96];
                 snprintf(buf, sizeof(buf),
-                         "undefined function 'func%d' — define it first", fn);
+                         "undefined function 'func%d' - define it first", fn);
                 set_status(buf);
                 return 0;
             }
@@ -564,7 +564,7 @@ static int parse_command(const char *line, GLCmd *cmd,
         return 1;
     }
 
-    /* gluBegin(GLU_POLYGON) — start a tessellated polygon */
+    /* gluBegin(GLU_POLYGON) - start a tessellated polygon */
     if (strcmp(func, "gluBegin") == 0) {
         char *a = args; while (*a && isspace((unsigned char)*a)) a++;
         if (strncmp(a, "GLU_POLYGON", 11) == 0) {
@@ -583,7 +583,7 @@ static int parse_command(const char *line, GLCmd *cmd,
         return 0;
     }
 
-    /* gluEnd() — end tessellator contour or polygon.
+    /* gluEnd() - end tessellator contour or polygon.
      * Indent at the *enclosing* level (tess_depth - 1), same logic as glEnd()
      * always being at 2-space rather than the 4-space inside a glBegin block.
      * Formula: 2 + 2*(tess-1) + 2*block  (begin depth excluded). */
@@ -604,7 +604,7 @@ static int parse_command(const char *line, GLCmd *cmd,
         return 1;
     }
 
-    /* gluColor(r, g, b[, a]) — set per-vertex color for tessellator */
+    /* gluColor(r, g, b[, a]) - set per-vertex color for tessellator */
     if (strcmp(func, "gluColor") == 0) {
         {
             char verr[128];
@@ -628,7 +628,7 @@ static int parse_command(const char *line, GLCmd *cmd,
         return 0;
     }
 
-    /* goto label — jump to a named label.
+    /* goto label - jump to a named label.
      *
      * Current limitations:
      * - top-level only; flatten rejects labels/gotos inside functions
@@ -660,7 +660,7 @@ static int parse_command(const char *line, GLCmd *cmd,
         }
     }
 
-    /* :label or label: — define a label */
+    /* :label or label: - define a label */
     if ((p[0] == ':' && p[1] && !isspace((unsigned char)p[1])) ||
         (len > 1 && p[len - 1] == ':' && !isspace((unsigned char)p[0]))) {
         cmd->type = CMD_LABEL;

@@ -1,5 +1,5 @@
 /*
- * scene_axes.h — axes theme rendering entrypoint
+ * scene_axes.h - axes theme rendering entrypoint
  */
 #ifndef SCENE_AXES_H
 #define SCENE_AXES_H

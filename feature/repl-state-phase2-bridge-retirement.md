@@ -16,24 +16,24 @@ includes or depends on it. All 2551 tests pass.
 - Grid and axes label tables local to `repl_actions.c`.
 
 ### Bridge retirement (this branch)
-1. `ui_autocomplete_panel.c` — converted to typed code-panel and autocomplete
+1. `ui_autocomplete_panel.c` - converted to typed code-panel and autocomplete
    accessors.
-2. `repl_search.c` — 68 compat macro uses replaced with typed search accessors.
-3. `repl_autocomplete.c` — compat dependence removed.
-4. `repl_editor.c` — 84 compat macro uses replaced across 19 functions.
+2. `repl_search.c` - 68 compat macro uses replaced with typed search accessors.
+3. `repl_autocomplete.c` - compat dependence removed.
+4. `repl_editor.c` - 84 compat macro uses replaced across 19 functions.
 5. Scene files (`scene_render.c`, `scene_grid.c`, `scene_axes.c`,
-   `scene_lights.c`, `scene_backdrop.c`) — `g_anim_time` replaced.
-6. `repl_replay.c` — `g_scroll_follow_cursor` and `g_t_playing` replaced.
-7. `repl_code_panel_document.c` — scroll block converted.
-8. `repl_executor.c` — local `EXEC_RENDER` macro block covers remaining render
+   `scene_lights.c`, `scene_backdrop.c`) - `g_anim_time` replaced.
+6. `repl_replay.c` - `g_scroll_follow_cursor` and `g_t_playing` replaced.
+7. `repl_code_panel_document.c` - scroll block converted.
+8. `repl_executor.c` - local `EXEC_RENDER` macro block covers remaining render
    state reads (quadric, tess, lights, clear_color).
-9. `repl_export.c` — `g_lights`, `g_multisample_enabled`, `g_line_smooth_enabled`
+9. `repl_export.c` - `g_lights`, `g_multisample_enabled`, `g_line_smooth_enabled`
    replaced with typed accessor calls.
-10. `repl_core.c`, `ui_panels.c`, `repl_example_loader.c` — old function names
+10. `repl_core.c`, `ui_panels.c`, `repl_example_loader.c` - old function names
     `refresh_workspace_header_lines` / `parse_workspace_header_line` updated to
     `repl_state_refresh_workspace_header_lines` / `repl_state_parse_workspace_header_line`.
-11. `repl_replay.c` — `g_t_playing` replaced with `repl_state_variables_mut()->time_playing`.
-12. All test files — local `#define` alias blocks added for the handful of compat
+11. `repl_replay.c` - `g_t_playing` replaced with `repl_state_variables_mut()->time_playing`.
+12. All test files - local `#define` alias blocks added for the handful of compat
     names each test uses, pointing to typed accessor calls.
 13. `repl_state_compat.h` deleted.
 

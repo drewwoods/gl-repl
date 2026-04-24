@@ -1,11 +1,11 @@
 /*
- * ui_profile_panel.c — per-section wall-time profiling overlay panel.
+ * ui_profile_panel.c - per-section wall-time profiling overlay panel.
  *
  * Uses a fast monotonic clock so sampling doesn't itself dominate the
  * sections it measures:
- *   - Linux:  clock_gettime(CLOCK_MONOTONIC) — served from the vDSO, no
+ *   - Linux:  clock_gettime(CLOCK_MONOTONIC) - served from the vDSO, no
  *             syscall on modern kernels.
- *   - macOS:  mach_absolute_time() — direct timer read, no syscall.
+ *   - macOS:  mach_absolute_time() - direct timer read, no syscall.
  * This is wall clock (elapsed time), not CPU time; in a single-threaded
  * render loop the two differ only when the process is preempted, which
  * is exactly what a frame-budget profiler should surface anyway.

@@ -45,7 +45,7 @@ static void test_degenerate_normal(void) {
 
     repl_reset_state(); declare_test_vars();
     *repl_state_presentation_mut()->autonormal = 1;
-    /* All three vertices collinear along x — cross product is zero */
+    /* All three vertices collinear along x - cross product is zero */
     repl_feed_line_public("glBegin(GL_TRIANGLES);");
     repl_feed_line_public("glVertex3f(0, 0, 0);");
     repl_feed_line_public("glVertex3f(1, 0, 0);");

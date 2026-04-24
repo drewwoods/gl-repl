@@ -54,7 +54,7 @@ static int  g_playlist_count = 0;
 static int  g_playlist_pos   = 0;  /* index of the currently-loaded track */
 
 /* Default to REPL_AUDIO_LOOP_ALL so a folder of tracks just plays
- * through and repeats — the friendliest default, and it collapses to
+ * through and repeats - the friendliest default, and it collapses to
  * "repeat forever" when there's only one file. */
 static int g_loop_mode = REPL_AUDIO_LOOP_ALL;
 
@@ -116,7 +116,7 @@ static void save_state(void) {
     /* Write to a temp file first, then rename() over the real path.
      * rename() is a single atomic syscall on POSIX: the destination
      * always contains either the old content or the new content, never
-     * a partial write — safe even if interrupted during shutdown. */
+     * a partial write - safe even if interrupted during shutdown. */
     char tmp[REPL_AUDIO_MAX_PATH];
     if (snprintf(tmp, sizeof(tmp), ".%s.tmp", g_state_file) >= (int)sizeof(tmp))
         return;
@@ -166,7 +166,7 @@ static void save_state(void) {
     fclose(f);
 
     if (rename(tmp, g_state_file) != 0)
-        remove(tmp);  /* rename failed — discard temp, old file untouched */
+        remove(tmp);  /* rename failed - discard temp, old file untouched */
     else
         g_last_save_time = time(NULL);
 }
@@ -214,7 +214,7 @@ static int load_state(float *out_offset) {
             return i;
         }
     }
-    return -1;  /* track not found in current playlist — start fresh */
+    return -1;  /* track not found in current playlist - start fresh */
 }
 
 /* ------------------------------------------------------------------ */
@@ -273,7 +273,7 @@ static int start_track_now(int idx) {
     /* Apply a saved cursor position if one was staged (e.g. by
      * repl_audio_play_playlist() restoring persisted state).
      * miniaudio queues seek operations for ASYNC stream sounds, so
-     * issuing it immediately is safe — it will be processed once the
+     * issuing it immediately is safe - it will be processed once the
      * background init job completes. */
     if (g_pending_seek_secs >= 0.0f) {
         ma_uint32 sr = ma_engine_get_sample_rate(&g_engine);

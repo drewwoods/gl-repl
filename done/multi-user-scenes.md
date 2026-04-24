@@ -17,7 +17,7 @@ import/export, and a fix for the Scene menu highlighting bug.
    (today's behavior); a directory imports every `.c` in it as a separate
    scene.
 6. Fix the **Scene menu bug** where the active user scene disappears from
-   the menu after selection — it should stay visible and render in the
+   the menu after selection - it should stay visible and render in the
    accent color, the same way the selected example does.
 7. **Workspace folder is renamable** (path is part of workspace state, not
    hard-coded).
@@ -32,7 +32,7 @@ distinguish "this scene *desires* grid theme = 3" from "this scene just
 happened to inherit grid theme = 3 from the example that spawned it".
 
 **Plan when revisited:** add a `cfg_snapshot[]` per scene taken at
-promotion time, then on save diff against the snapshot — only diffs are
+promotion time, then on save diff against the snapshot - only diffs are
 emitted to `@cfg`. On load, only emitted `@cfg` lines override current
 runtime values; unset items inherit. This keeps the blast radius small
 (no per-read consultation of the active scene) and matches how examples
@@ -95,7 +95,7 @@ New: when an example is active (`g_active_example >= 0`) and the user
 makes any mutation (anything that would call `push_undo_snapshot`
 during example viewing), promote:
 
-1. Allocate a user scene slot (LRU evict if full — see above).
+1. Allocate a user scene slot (LRU evict if full - see above).
 2. Copy current `g_cmds[]`, `edit_line`, `predef_vals[]` into the slot.
 3. Set `name` to the example's name, de-duplicated with ` (2)`, ` (3)`,
    … if the name is already taken by another user-scene slot.
@@ -114,7 +114,7 @@ promotion is distinct from home capture.
   action in the Scene menu) to enter an inline-edit state
   (`g_renaming_scene = 1`, typed chars go into the slot's `name`
   buffer, Enter commits, Esc cancels). Reuse the same minimal text
-  entry used elsewhere — don't introduce a full text widget.
+  entry used elsewhere - don't introduce a full text widget.
 - Validation on commit: trim, reject empty, de-duplicate with ` (n)`
   suffix against sibling slots.
 
@@ -131,7 +131,7 @@ Likely causes to probe in `ui_panels.c` (example dropdown builder) and
 
 Fix in the multi-scene world: **always list every occupied slot**, and
 render the active slot (whether a user scene or an example) in the
-accent color — same treatment examples already get. No special case
+accent color - same treatment examples already get. No special case
 for "hide active user scene."
 
 ## Save / Load
@@ -158,33 +158,33 @@ for "hide active user scene."
 
 ### CLI
 
-`./sample path/to/file.c` — today's behavior.
-`./sample path/to/workspace/` — new: load entire workspace, set
+`./sample path/to/file.c` - today's behavior.
+`./sample path/to/workspace/` - new: load entire workspace, set
 `g_workspace_dir` to that path, activate slot 0.
 
 ## File layout impact
 
-- `repl_core.c` — replace singleton `UserScene` with array + active
+- `repl_core.c` - replace singleton `UserScene` with array + active
   index; update `save_user_scene`, `restore_user_scene`,
   `repl_user_scene_valid`, `repl_load_user_scene`.
-- `repl_core.h` — extend public API: `repl_user_scene_count`,
+- `repl_core.h` - extend public API: `repl_user_scene_count`,
   `repl_user_scene_name(int)`, `repl_user_scene_rename(int, const char*)`,
   `repl_load_user_scene_idx(int)`, `repl_active_user_scene(void)`.
-- `repl_export.c` — extend `save_output` to accept a scene slot
+- `repl_export.c` - extend `save_output` to accept a scene slot
   argument; add `save_workspace(dir)` and `load_workspace(dir)`. Teach
   the importer about `@scene-name`.
-- `repl_editor.c` — promotion trigger on first mutation-of-example;
+- `repl_editor.c` - promotion trigger on first mutation-of-example;
   inline rename state; Scene menu entries for rename / save workspace /
   load workspace.
-- `ui_panels.c` — multi-scene dropdown rendering; fix active-scene
+- `ui_panels.c` - multi-scene dropdown rendering; fix active-scene
   highlight (accent color, no hiding); inline rename input.
-- `sample.h` — `UserScene` struct, `MAX_USER_SCENES`, new externs.
+- `sample.h` - `UserScene` struct, `MAX_USER_SCENES`, new externs.
 
 ## Open questions
 
 - **Slot 0 "home" lifecycle**: if the user explicitly renames and edits
   slot 0, it stops being "the pre-example state". Do we still pin it
-  from eviction? Suggest: yes — slot 0 is pinned by index, not by
+  from eviction? Suggest: yes - slot 0 is pinned by index, not by
   content. User can always manually clear it.
 - **Workspace path persistence across sessions**: save
   `g_workspace_dir` into the single-file export header, or a separate

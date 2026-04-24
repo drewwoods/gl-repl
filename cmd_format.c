@@ -1,5 +1,5 @@
 /*
- * cmd_format.c — Command indentation / depth computation
+ * cmd_format.c - Command indentation / depth computation
  *
  * See cmd_format.h for the public API and documentation.
  */

@@ -1,4 +1,4 @@
-# Audio Integration Plan — `src/immediate-mode-repl/claude4.6-opus-thinking`
+# Audio Integration Plan - `src/immediate-mode-repl/claude4.6-opus-thinking`
 
 
 
@@ -28,7 +28,7 @@ is the pick.
 
 
 
-No — audio breaks into three independent layers. You can swap any one of them
+No - audio breaks into three independent layers. You can swap any one of them
 
 without touching the others.
 
@@ -46,7 +46,7 @@ without touching the others.
 
 
 
-"PCM" is just an array of 16-bit (or float) samples at a fixed sample rate —
+"PCM" is just an array of 16-bit (or float) samples at a fixed sample rate -
 
 e.g. `int16_t samples[44100 * 2]` is one second of 44.1 kHz stereo. Everything
 
@@ -56,7 +56,7 @@ that array to the speakers.
 
 
 
-### `/dev/dsp` — why it's a dead end
+### `/dev/dsp` - why it's a dead end
 
 
 
@@ -74,9 +74,9 @@ Problems for this project:
 
   Most distros do not ship `/dev/dsp` without installing `osspd`/`padsp`.
 
-- macOS has no equivalent — you'd need a second CoreAudio backend.
+- macOS has no equivalent - you'd need a second CoreAudio backend.
 
-- Emscripten cannot use it — the browser has no filesystem devices. You'd need
+- Emscripten cannot use it - the browser has no filesystem devices. You'd need
 
   a third Web Audio backend.
 
@@ -114,7 +114,7 @@ did, tested against, and ship as a single header. Not worth reinventing.
 
 | PortAudio + dr_mp3 | Linux/macOS/Win | Separate | Spotty | External lib + 1 header | Medium |
 
-| Roll own (`/dev/dsp`, ALSA, …) | Pick one | Bring your own | No | — | Days of yak-shaving |
+| Roll own (`/dev/dsp`, ALSA, …) | Pick one | Bring your own | No | - | Days of yak-shaving |
 
 
 
@@ -130,7 +130,7 @@ did, tested against, and ship as a single header. Not worth reinventing.
 
 2. **Batteries included.** `ma_decoder` handles WAV / MP3 / FLAC out of the
 
-   box — no separate `dr_mp3.h` needed.
+   box - no separate `dr_mp3.h` needed.
 
 3. **Emscripten-native.** It has a direct Web Audio backend; you don't need
 
@@ -142,7 +142,7 @@ did, tested against, and ship as a single header. Not worth reinventing.
 
    three of which the Makefile already links. On macOS it needs
 
-   `-framework CoreAudio -framework CoreFoundation -framework AudioToolbox` —
+   `-framework CoreAudio -framework CoreFoundation -framework AudioToolbox` -
 
    three extra flags, added alongside the existing `-framework` block.
 
@@ -160,15 +160,15 @@ did, tested against, and ship as a single header. Not worth reinventing.
 
 
 
-MIDI is genuinely different — it's not audio, it's a sequence of note events
+MIDI is genuinely different - it's not audio, it's a sequence of note events
 
 that have to be synthesized. Two single-header libraries make this tractable:
 
 
 
-- **`tml.h`** (TinyMidiLoader) — parses a `.mid` file into events
+- **`tml.h`** (TinyMidiLoader) - parses a `.mid` file into events
 
-- **`tsf.h`** (TinySoundFont) — synthesizes those events against a `.sf2`
+- **`tsf.h`** (TinySoundFont) - synthesizes those events against a `.sf2`
 
   soundfont into PCM
 
@@ -182,7 +182,7 @@ same code style.
 
 
 
-**Recommendation: defer MIDI.** It's an additive change — `repl_audio.c`
+**Recommendation: defer MIDI.** It's an additive change - `repl_audio.c`
 
 can grow a `play_midi()` entry point later without disturbing the PCM path.
 
@@ -208,7 +208,7 @@ scenes).
 
 
 
-### Step 1 — Vendor miniaudio
+### Step 1 - Vendor miniaudio
 
 
 
@@ -220,7 +220,7 @@ scenes).
 
 
 
-### Step 2 — Add a thin audio module
+### Step 2 - Add a thin audio module
 
 
 
@@ -228,7 +228,7 @@ New files in `src/immediate-mode-repl/claude4.6-opus-thinking/`:
 
 
 
-- **`repl_audio.h`** — small public API:
+- **`repl_audio.h`** - small public API:
 
   ```c
 
@@ -248,7 +248,7 @@ New files in `src/immediate-mode-repl/claude4.6-opus-thinking/`:
 
   ```
 
-- **`repl_audio.c`** — ~120 lines, file-scoped statics:
+- **`repl_audio.c`** - ~120 lines, file-scoped statics:
 
   - `static ma_engine g_engine;`
 
@@ -266,7 +266,7 @@ New files in `src/immediate-mode-repl/claude4.6-opus-thinking/`:
 
   - `repl_audio_init()` → `ma_engine_init(NULL, &g_engine)`; on native,
 
-    also call `ma_engine_start()`. On Emscripten, skip start — defer until
+    also call `ma_engine_start()`. On Emscripten, skip start - defer until
 
     `repl_audio_on_user_gesture()` fires the first time.
 
@@ -290,7 +290,7 @@ New files in `src/immediate-mode-repl/claude4.6-opus-thinking/`:
 
 
 
-### Step 3 — Wire into the REPL lifecycle
+### Step 3 - Wire into the REPL lifecycle
 
 
 
@@ -300,13 +300,13 @@ New files in `src/immediate-mode-repl/claude4.6-opus-thinking/`:
 
     `repl_audio_play_music("assets/song.mp3");` (or whichever file the user
 
-    drops in — see Step 5).
+    drops in - see Step 5).
 
   - After `main()` finishes argument parsing, register
 
     `atexit(repl_audio_shutdown);` so freeglut tear-down is clean.
 
-- **`repl_editor.c`** — browser-gesture unlock:
+- **`repl_editor.c`** - browser-gesture unlock:
 
   - In `repl_keyboard_func` and `repl_mouse_func`, add a single guarded call:
 
@@ -324,7 +324,7 @@ New files in `src/immediate-mode-repl/claude4.6-opus-thinking/`:
 
     state, which satisfies Chrome/Safari autoplay policy.
 
-- **Config menu mute toggle** — follows the CLAUDE.md recipe in the
+- **Config menu mute toggle** - follows the CLAUDE.md recipe in the
 
   "Config Menu" section of the sample's `CLAUDE.md`:
 
@@ -344,11 +344,11 @@ New files in `src/immediate-mode-repl/claude4.6-opus-thinking/`:
 
     post-hook (or make `CfgItem` carry an optional callback if the file
 
-    already uses that pattern — worth checking during implementation).
+    already uses that pattern - worth checking during implementation).
 
 
 
-### Step 4 — Makefile edits
+### Step 4 - Makefile edits
 
 
 
@@ -356,9 +356,9 @@ New files in `src/immediate-mode-repl/claude4.6-opus-thinking/`:
 
 - Link flags split by platform (the Makefile already conditionally selects
 
-  `GLUT_GL_LDFLAGS` vs `GL_LDFLAGS` — piggy-back on that split):
+  `GLUT_GL_LDFLAGS` vs `GL_LDFLAGS` - piggy-back on that split):
 
-  - **Linux** (freeglut path): append `-ldl` — miniaudio `dlopen`s
+  - **Linux** (freeglut path): append `-ldl` - miniaudio `dlopen`s
 
     `libpulse.so` / `libasound.so` at runtime, no build-time lib needed.
 
@@ -366,13 +366,13 @@ New files in `src/immediate-mode-repl/claude4.6-opus-thinking/`:
 
     `-framework CoreAudio -framework CoreFoundation -framework AudioToolbox`.
 
-- No new `-I` paths needed — `include/miniaudio.h` is reachable via the
+- No new `-I` paths needed - `include/miniaudio.h` is reachable via the
 
   existing `REPO_INCLUDE` flag.
 
 
 
-### Step 5 — Asset placement
+### Step 5 - Asset placement
 
 
 
@@ -388,7 +388,7 @@ New files in `src/immediate-mode-repl/claude4.6-opus-thinking/`:
 
 
 
-### Step 6 — Emscripten / gl4es web build
+### Step 6 - Emscripten / gl4es web build
 
 
 
@@ -400,7 +400,7 @@ New files in `src/immediate-mode-repl/claude4.6-opus-thinking/`:
 
   path the native build uses.
 
-- No miniaudio-specific emcc flags — it autoselects the Web Audio backend
+- No miniaudio-specific emcc flags - it autoselects the Web Audio backend
 
   when `__EMSCRIPTEN__` is defined. Do **not** add `-s USE_SDL=2`; freeglut
 
@@ -410,7 +410,7 @@ New files in `src/immediate-mode-repl/claude4.6-opus-thinking/`:
 
   runs on the page's audio thread; miniaudio doesn't need pthreads there).
 
-- The Step 3 gesture hook handles Chrome/Safari autoplay policy — first key
+- The Step 3 gesture hook handles Chrome/Safari autoplay policy - first key
 
   or mouse event starts the engine.
 
@@ -434,13 +434,13 @@ New files in `src/immediate-mode-repl/claude4.6-opus-thinking/`:
 
    silencing mechanism, not stop/start).
 
-3. **Graceful degradation:** rename `assets/song.mp3`, run `./sample` — the
+3. **Graceful degradation:** rename `assets/song.mp3`, run `./sample` - the
 
    REPL launches normally and prints a single-line warning to stderr; no
 
    crash.
 
-4. **Existing tests unaffected:** `make test` — all eight suites still pass.
+4. **Existing tests unaffected:** `make test` - all eight suites still pass.
 
    `repl_audio.*` is not unit-tested (it drives a real device); it's isolated
 
@@ -470,15 +470,15 @@ New files in `src/immediate-mode-repl/claude4.6-opus-thinking/`:
 
 - **Modify:**
 
-  - `Makefile` — add source, add link flags
+  - `Makefile` - add source, add link flags
 
-  - `sample.c` — init/play/atexit calls after `repl_init_gl()`
+  - `sample.c` - init/play/atexit calls after `repl_init_gl()`
 
-  - `repl_editor.c` — gesture hook in keyboard/mouse callbacks,
+  - `repl_editor.c` - gesture hook in keyboard/mouse callbacks,
 
     `g_cfg_items[]` mute entry
 
-  - `emscripten/build.sh` — `--preload-file` flag in `build_one()`
+  - `emscripten/build.sh` - `--preload-file` flag in `build_one()`
 
 - **Create:**
 
@@ -492,13 +492,13 @@ New files in `src/immediate-mode-repl/claude4.6-opus-thinking/`:
 
 - **Read (for patterns, no edits):**
 
-  - `include/gl_includes.h` — vendoring style
+  - `include/gl_includes.h` - vendoring style
 
-  - `sample.c` (sample.c:88) — init-order reference
+  - `sample.c` (sample.c:88) - init-order reference
 
-  - CLAUDE.md "Config Menu" section — CfgItem recipe
+  - CLAUDE.md "Config Menu" section - CfgItem recipe
 
-  - `emscripten/build.sh` (build.sh:212) — emcc command location
+  - `emscripten/build.sh` (build.sh:212) - emcc command location
 
 
 

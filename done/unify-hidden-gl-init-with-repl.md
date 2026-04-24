@@ -46,11 +46,11 @@ a default but is **gated by a new `CfgItem` toggle** so users can opt out.
 
 ### Included
 
-1. `g_init_bootstrap_repl[]` — an array of `{ repl_line, optional toggle pointer }`
+1. `g_init_bootstrap_repl[]` - an array of `{ repl_line, optional toggle pointer }`
    entries in `repl_core.c`, near `g_footer[]`.
 2. Parse bootstrap lines once at startup into `g_init_bootstrap_cmds[]` (separate
    from `g_cmds[]`; never seeded into the user buffer). Abort loudly if any line
-   fails to parse — these are developer-authored.
+   fails to parse - these are developer-authored.
 3. Refactor `init_gl()` to:
    - Host-only plumbing first (`glLightModelfv` ambient, quadric alloc/config, tess
      alloc/callbacks).
@@ -65,12 +65,12 @@ a default but is **gated by a new `CfgItem` toggle** so users can opt out.
    the old hard-coded init body (`repl_core.c:293-298`). Add a parallel static list
    `g_init_host_only_c[]` with the host-only init lines as literal C strings.
 6. Emit helpers (single source used by export, panel render, dump):
-   - `init_section_line_count(void)` — returns `len(g_init_host_only_c) +
+   - `init_section_line_count(void)` - returns `len(g_init_host_only_c) +
      enabled bootstrap cmd count`.
-   - `init_section_line(int i, char *buf, size_t n)` — fills `buf` with the nth
+   - `init_section_line(int i, char *buf, size_t n)` - fills `buf` with the nth
      generated line (host-only lines first, then bootstrap lines formatted via
      existing `write_cmd_source_as_c()`-style formatting into a buffer).
-   - `emit_init_section_to_file(FILE *f)` — writes the same lines to a `FILE*`.
+   - `emit_init_section_to_file(FILE *f)` - writes the same lines to a `FILE*`.
 7. Wire `save_output()` (`repl_core.c:2961-2962`) and code panel footer rendering
    (`ui_panels.c:564`, `~1349`) to iterate `g_footer_pre_init` → init section lines
    → `g_footer_post_init`.
@@ -79,11 +79,11 @@ a default but is **gated by a new `CfgItem` toggle** so users can opt out.
    - Backing var: `int g_init_attenuate_points = 1;` (default ON)
    - Max value: `2` (off/on)
    - On toggle change, re-run the bootstrap apply pass so live GL state matches
-     (idempotent — applying `glPointParameterfv` with 1,0,0 disables attenuation;
+     (idempotent - applying `glPointParameterfv` with 1,0,0 disables attenuation;
      applying the original values re-enables it). Simplest implementation: wrap the
      bootstrap walk in `apply_init_bootstrap(void)` and call it from both
      `init_gl()` and the config toggle hook.
-9. Tests — see below.
+9. Tests - see below.
 
 ### Explicitly out of scope
 
@@ -93,7 +93,7 @@ a default but is **gated by a new `CfgItem` toggle** so users can opt out.
 - No change to user-facing save/load format. The `init()` section lives in footer
   scaffolding only; the snippet markers and `g_cmds[]` contents are untouched.
 - Tess export preamble (`write_tess_preamble`, `repl_core.c:1794-1831`) stays
-  host-only generated C — callback wiring cannot be expressed in REPL format.
+  host-only generated C - callback wiring cannot be expressed in REPL format.
 - Init body is **visible-only, permanent**: no UI hooks to edit bootstrap entries
   from the running program. Developer-authored only.
 - No changes to `g_header_pre/post`, `g_render_state_lines`, or `g_lookat`.
@@ -106,7 +106,7 @@ a default but is **gated by a new `CfgItem` toggle** so users can opt out.
 | `ui_panels.c` | `code_panel_footer_row_count()` (`~564`) and footer render loop (`~1349`) iterate pre-init lines, generated init section, post-init lines. |
 | `sample.h` | Extern declarations for `g_init_attenuate_points`, `init_section_line_count`, `init_section_line`. |
 | `test_repl_core_io.c` | New assertions on emitted init() body contents with toggle on/off. |
-| `test_repl_core_examples.c` | Unchanged — export/compile coverage continues to validate nothing broke. |
+| `test_repl_core_examples.c` | Unchanged - export/compile coverage continues to validate nothing broke. |
 
 ## Existing Helpers to Reuse
 
@@ -148,7 +148,7 @@ a default but is **gated by a new `CfgItem` toggle** so users can opt out.
    };
    ```
 
-2. **Add `parse_init_bootstrap(void)`** — called from `repl_init_gl()` before
+2. **Add `parse_init_bootstrap(void)`** - called from `repl_init_gl()` before
    anything else. Loops over `g_init_bootstrap_repl[]`, calls `parse_command()` on
    each `repl_line`, stores result in `g_init_bootstrap_cmds[i]`, and `fprintf(stderr,
    ...)` + `abort()` on parse failure (developer error).
@@ -158,7 +158,7 @@ a default but is **gated by a new `CfgItem` toggle** so users can opt out.
    Leave vertex/geometry/transform branches in place. In `execute_commands()`,
    replace those branches with `apply_state_cmd(&g_flat_cmds[pc]); break;`.
 
-4. **Add `apply_init_bootstrap(void)`** — walks `g_init_bootstrap_cmds[]`, skipping
+4. **Add `apply_init_bootstrap(void)`** - walks `g_init_bootstrap_cmds[]`, skipping
    entries whose `toggle` pointer is non-NULL and points to zero, and calls
    `apply_state_cmd(&cmd)` for the rest.
 
@@ -184,17 +184,17 @@ a default but is **gated by a new `CfgItem` toggle** so users can opt out.
    `repl_init_gl()` now calls `parse_init_bootstrap()` before `init_gl()`.
 
 6. **Split `g_footer[]`** (`repl_core.c:268-314`) into:
-   - `g_footer_pre_init[]` — rows 0-291 through the `void init() {` opener.
-   - `g_footer_post_init[]` — the closing `}` of init() through rows to end.
+   - `g_footer_pre_init[]` - rows 0-291 through the `void init() {` opener.
+   - `g_footer_post_init[]` - the closing `}` of init() through rows to end.
    Delete the hard-coded init body lines 294-297.
 
 7. **Add emit helpers.**
-   - `int init_section_line_count(void)` — returns count of `g_init_host_only_c[]`
+   - `int init_section_line_count(void)` - returns count of `g_init_host_only_c[]`
      strings plus enabled bootstrap entries.
-   - `void init_section_line(int i, char *out, size_t n)` — renders the nth line
+   - `void init_section_line(int i, char *out, size_t n)` - renders the nth line
      (host-only first, then enabled bootstrap lines formatted via
      `write_cmd_source_as_c`-style formatting into `out`).
-   - `void emit_init_section_to_file(FILE *f)` — writes the same sequence to `f`.
+   - `void emit_init_section_to_file(FILE *f)` - writes the same sequence to `f`.
      Internally uses the same line-producing logic to guarantee parity.
 
 8. **Wire `save_output()`** (`repl_core.c:2961-2962`). Replace the raw
@@ -208,7 +208,7 @@ a default but is **gated by a new `CfgItem` toggle** so users can opt out.
    ```
 
 9. **Wire code panel** (`ui_panels.c`).
-   - `code_panel_footer_row_count()` — sum row counts over `g_footer_pre_init`,
+   - `code_panel_footer_row_count()` - sum row counts over `g_footer_pre_init`,
      each generated `init_section_line()`, and `g_footer_post_init`.
    - The render loop that currently iterates `g_footer` (`~line 1349`) iterates the
      same three lists, using `RENDER_STATIC_LINE` on each produced string.
@@ -224,27 +224,27 @@ a default but is **gated by a new `CfgItem` toggle** so users can opt out.
     `apply_init_bootstrap()` + set a flag so the footer redraws.
 
 11. **Tests** (`test_repl_core_io.c`).
-    - `each bootstrap line parses into a valid GLCmd` — iterate the array and
+    - `each bootstrap line parses into a valid GLCmd` - iterate the array and
       assert `parse_command()` returns success.
-    - `save_output emits host-only init lines in order` — grep emitted file for
+    - `save_output emits host-only init lines in order` - grep emitted file for
       `gluNewQuadric`, `gluQuadricTexture`, and `glLightModelfv`.
-    - `save_output emits enabled bootstrap lines once` — grep for each bootstrap
+    - `save_output emits enabled bootstrap lines once` - grep for each bootstrap
       source line; confirm exactly one occurrence inside the init() body.
-    - `toggle off removes attenuation line` — set `g_init_attenuate_points = 0`,
+    - `toggle off removes attenuation line` - set `g_init_attenuate_points = 0`,
       `repl_save_output()`, assert the exported file does NOT contain
       `glPointParameterfv`.
 
 ## Verification
 
-1. `make test` — all existing suites green plus the new assertions.
-2. `make sample && ./sample` — visually confirm the code-panel footer's `init()`
+1. `make test` - all existing suites green plus the new assertions.
+2. `make sample && ./sample` - visually confirm the code-panel footer's `init()`
    body now shows host-only lines + the enabled bootstrap lines in order, and that
    the init() body matches exactly what runtime applies.
-3. `./sample`, toggle `Point attenuation` in the config menu — confirm the footer
+3. `./sample`, toggle `Point attenuation` in the config menu - confirm the footer
    re-renders immediately to add/remove the bootstrap line, and that point rendering
    behavior in the 3D scene changes accordingly.
 4. `Ctrl+S` / Save C button → `gcc -Wall ... output.c -framework OpenGL
-   -framework GLUT -o out` → run `./out` — exported program compiles and matches
+   -framework GLUT -o out` → run `./out` - exported program compiles and matches
    live behavior for the bootstrap-state subset.
-5. `./sample --dump-code` — dumped text matches the panel render.
-6. `make test_repl_core_examples` — every example still exports and compiles.
+5. `./sample --dump-code` - dumped text matches the panel render.
+6. `make test_repl_core_examples` - every example still exports and compiles.

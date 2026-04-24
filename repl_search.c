@@ -1,5 +1,5 @@
 /*
- * repl_search.c — Case-insensitive incremental search over code-panel rows.
+ * repl_search.c - Case-insensitive incremental search over code-panel rows.
  *
  * A "row" is one visible line in the code panel. It usually maps 1:1 to a
  * GLCmd in repl_state_document_cmds_mut()[], except while inserting: an extra synthetic row holds

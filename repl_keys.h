@@ -1,5 +1,5 @@
 /*
- * repl_keys.h — ASCII/control key codes used by keyboard_func callbacks.
+ * repl_keys.h - ASCII/control key codes used by keyboard_func callbacks.
  *
  * GLUT delivers Ctrl+<letter> as a single byte (Ctrl+A = 1, ... Ctrl+Z = 26).
  * These names make the keyboard dispatch readable and give a single place to

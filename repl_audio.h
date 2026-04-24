@@ -80,7 +80,7 @@ int  repl_audio_get_loop_mode(void);
 
 /* Pause/resume without losing the playback position.  Pausing calls
  * ma_sound_stop() (cursor preserved); resuming calls ma_sound_start().
- * Safe to call before a track is loaded — the flag is honoured when the
+ * Safe to call before a track is loaded - the flag is honoured when the
  * next track starts. */
 void repl_audio_set_paused(int paused);
 int  repl_audio_is_paused(void);

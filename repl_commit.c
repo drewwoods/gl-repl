@@ -99,7 +99,7 @@ int try_commit_float_decl(void) {
         if (*p == ';' || *p == '\0') break;
         if (var_count > 0) {
             if (*p != ',') {
-                /* Not a comma — might be '=' handled below, or junk.
+                /* Not a comma - might be '=' handled below, or junk.
                  * If we already consumed at least one name and the
                  * previous iteration didn't end with '=', this is
                  * not a valid float declaration. */
@@ -142,7 +142,7 @@ int try_commit_float_decl(void) {
             /* Declarations are placed at the top of non-decl code; visible
              * scope vars at that position are always empty (decls live at
              * block depth 0), so the init expression may only reference
-             * already-declared predef vars — no loop/function locals.
+             * already-declared predef vars - no loop/function locals.
              * Extract the initializer expression up to ',' or ';' or end. */
             char init_expr[MAX_LINE_LEN];
             const char *expr_start = p;
@@ -192,7 +192,7 @@ int try_commit_float_decl(void) {
     /* Detect overwrite-in-place (editing an existing CMD_VAR_DECLARE) early
      * so validation can exempt the line's own names from the "already
      * declared" check. Without this, re-committing `float tmp;` after
-     * editing — even unchanged — reports "'tmp' already declared". */
+     * editing - even unchanged - reports "'tmp' already declared". */
     int insert_idx = repl_state_insert_mode() ? repl_state_edit_line() :
                (repl_state_edit_line() < repl_state_document_count() ? repl_state_edit_line() : repl_state_document_count());
     int overwriting_decl = (!repl_state_insert_mode() && insert_idx < repl_state_document_count() &&
@@ -210,7 +210,7 @@ int try_commit_float_decl(void) {
                 return 1;
             }
         }
-        /* Reject re-declaring an already-declared variable — but exempt
+        /* Reject re-declaring an already-declared variable - but exempt
          * names carried over from the decl we're overwriting, since those
          * will be undeclared before the new registration runs. */
         if (find_predef_var_idx(names[i]) >= 0) {
@@ -295,7 +295,7 @@ int try_commit_float_decl(void) {
 
         /* Check overwrite feasibility BEFORE registering new names. Only
          * names being REMOVED (present in old decl, absent from new) need
-         * the "in use" check — names being kept stay valid throughout. */
+         * the "in use" check - names being kept stay valid throughout. */
         if (overwriting_decl) {
             for (int d = 0; d < repl_state_document_cmds_mut()[insert_idx].var_decl_count; d++) {
                 const char *nm = repl_state_document_cmds_mut()[insert_idx].var_names[d];
@@ -337,7 +337,7 @@ int try_commit_float_decl(void) {
             }
         }
 
-        /* Register new names (safe — overwrite check passed, capacity verified).
+        /* Register new names (safe - overwrite check passed, capacity verified).
          * Skip names already registered (kept from old decl) to preserve values. */
         for (int i = 0; i < var_count; i++) {
             if (overwriting_decl && find_predef_var_idx(names[i]) >= 0) {
@@ -418,7 +418,7 @@ int try_assign_variable(void) {
     if (var_idx < 0) {
         char buf[128];
         snprintf(buf, sizeof(buf),
-                 "undeclared variable '%s' — use 'float %s;' first", name, name);
+                 "undeclared variable '%s' - use 'float %s;' first", name, name);
         set_status(buf);
         return 1;
     }

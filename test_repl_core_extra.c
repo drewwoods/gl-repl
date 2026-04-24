@@ -482,7 +482,7 @@ void test_user_scene_rename_flow() {
     ASSERT_TRUE("name unchanged after cancel",
                 strcmp(repl_user_scene_name(slot), "My SceneBadName") == 0);
 
-    /* Empty commit is rejected — rename stays active so user can retry. */
+    /* Empty commit is rejected - rename stays active so user can retry. */
     ASSERT_INT("begin_rename for empty test", repl_inline_rename_begin(slot), 1);
     for (int i = 0; i < 64; i++) repl_inline_rename_handle_key(8 /*BS*/);
     repl_inline_rename_handle_key('\r');
@@ -502,7 +502,7 @@ void test_user_scene_rename_flow() {
 void test_debug_dump_flat_commands() {
     printf("--- Debug dump flat commands ---\n");
 
-    /* Empty state: header, count=0, end marker — and no crash on NULL out. */
+    /* Empty state: header, count=0, end marker - and no crash on NULL out. */
     repl_reset_state(); declare_test_vars();
     repl_flatten_commands();
     char *empty = capture_flat_dump();
@@ -565,7 +565,7 @@ void test_debug_dump_flat_commands() {
                     strstr(basic, count_line) != NULL);
 
         /* The fix in abccf5c3 aligned cmd_type_name with the CmdType enum and
-         * added CMD_FRONT_FACE — ensure its label surfaces correctly. */
+         * added CMD_FRONT_FACE - ensure its label surfaces correctly. */
         ASSERT_TRUE("basic dump contains CMD_FRONT_FACE",
                     strstr(basic, "CMD_FRONT_FACE") != NULL);
         ASSERT_TRUE("basic dump contains CMD_COLOR3F",

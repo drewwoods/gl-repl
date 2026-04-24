@@ -18,10 +18,10 @@ picker, help overlay, variable panel, autocomplete popup, inline rename,
 and variable dragging. The highest-value remaining refactors fall into
 two camps:
 
-1. **Mechanical extractions** — self-contained features still living in
+1. **Mechanical extractions** - self-contained features still living in
    the wrong file. Low risk, immediate LoC reduction, no behavior
    change.
-2. **Pattern consolidation** — repeated boilerplate (per-theme switch
+2. **Pattern consolidation** - repeated boilerplate (per-theme switch
    cases, per-overlay traversal loops, repeated GL-pass emit blocks)
    that hurts every time someone adds a new theme/overlay.
 
@@ -35,7 +35,7 @@ in isolation; each item is sized to land as one `refactor:` commit.
 
 ---
 
-## Tier 1 — Mechanical extractions (hours each, near-zero risk)
+## Tier 1 - Mechanical extractions (hours each, near-zero risk)
 
 ### 1. Extract help overlay → `ui_help_overlay.c` ✅ DONE
 
@@ -80,7 +80,7 @@ match the newer module-prefix convention (`_active`, `_begin`,
 `_cancel`, `_handle_key`, `_handle_special`). Callers updated in
 `repl_editor.c`, `repl_actions.c`, and two test files
 (`test_repl_editor.c`, `test_repl_core_extra.c`). Rename has no
-dedicated render pass — the buffer is surfaced through
+dedicated render pass - the buffer is surfaced through
 `set_status()` into the existing status strip, so this is an input
 module, not a panel; that matches the model/render split rule
 (no OpenGL calls in the new file).
@@ -120,7 +120,7 @@ live in `ui_menu_bar.c`. Side effects remain in `repl_actions.c`.
 
 ---
 
-## Tier 2 — Pattern consolidation (1–2 days, medium impact)
+## Tier 2 - Pattern consolidation (1–2 days, medium impact)
 
 ### 4. Data-drive grid + axes themes into `scene_grid.c` / `scene_axes.c` ✅ DONE
 
@@ -243,7 +243,7 @@ passes are now explicit enough for future export changes to review locally.
 
 ---
 
-## Tier 3 — Remaining structural extraction
+## Tier 3 - Remaining structural extraction
 
 The editor-adjacent Phase 7 mechanical extractions are now complete.
 `MODULES.md` (Open Edges) still lists smaller residual ownership edges in
@@ -251,7 +251,7 @@ The editor-adjacent Phase 7 mechanical extractions are now complete.
 row-rendering concerns. Phase 9 now has its main scaffold/import slices in
 place. The next large mechanical extraction, parser ownership, is now done.
 
-### 8. Extract `parse_command()` → `repl_parser.c` — done
+### 8. Extract `parse_command()` → `repl_parser.c` - done
 
 - `repl_parser.c` now owns the parser grammar and the public
   `repl_parse_command*()` entrypoints.
@@ -314,11 +314,11 @@ future per-command semantic mutation API.
 
 For any item picked:
 
-1. `make test-stubs TEST_JOBS=4` — all 19 suites should pass cleanly.
-2. `make sample && ./sample` — load an example, exercise the
+1. `make test-stubs TEST_JOBS=4` - all 19 suites should pass cleanly.
+2. `make sample && ./sample` - load an example, exercise the
    touched feature, confirm no visual or interactive regression.
 3. For Tier 2 rendering changes (items 4 & 5), do an explicit A/B
-   against the pre-refactor binary on every theme/overlay — diff
+   against the pre-refactor binary on every theme/overlay - diff
    review alone is not enough for pixel-level equivalence.
 4. Single commit per item, conventional `refactor:` prefix per
    project CLAUDE.md.

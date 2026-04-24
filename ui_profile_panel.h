@@ -1,5 +1,5 @@
 /*
- * profile_panel.h — CPU overhead profiling overlay panel.
+ * profile_panel.h - CPU overhead profiling overlay panel.
  *
  * Measures CPU time spent in the major per-frame sections and renders a
  * compact overlay showing the last measured time and a smoothed average.

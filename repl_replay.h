@@ -1,5 +1,5 @@
 /*
- * repl_replay.h — Replay state machine and replay rendering helpers.
+ * repl_replay.h - Replay state machine and replay rendering helpers.
  */
 #ifndef REPL_REPLAY_H
 #define REPL_REPLAY_H

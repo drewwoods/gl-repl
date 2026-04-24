@@ -1,5 +1,5 @@
 /*
- * ui_panels.c — Code-panel row rendering, autocomplete/help/variable panels,
+ * ui_panels.c - Code-panel row rendering, autocomplete/help/variable panels,
  *               panel input routing, and inline scene rename UI.
  *
  * Extracted from sample.c for maintainability.
@@ -25,7 +25,7 @@
 #define g_render_state_lines (IMPORT_EXPORT_STATE->render_state_lines)
 #define g_cam_lines (IMPORT_EXPORT_STATE->cam_lines)
 
-/* Status footer height — design: 22px strip flush against code panel bottom */
+/* Status footer height - design: 22px strip flush against code panel bottom */
 /* STATUSBAR_H lives in sample.h now so scene_render.c can lift the
  * replay HUD above the amber status strip.  */
 
@@ -503,7 +503,7 @@ void render_code_panel(void) {
     for (int i = 0; i < RENDER_STATE_LINE_COUNT; i++) {
         RENDER_STATIC_LINE(g_render_state_lines[i], glColor3f(0.50f, 0.45f, 0.55f));
     }
-    /* Camera transform lines (dynamic — updated every frame) */
+    /* Camera transform lines (dynamic - updated every frame) */
     for (int i = 0; i < CAM_LINE_COUNT; i++) {
         RENDER_STATIC_LINE(g_cam_lines[i], glColor3f(0.50f, 0.45f, 0.55f));
     }
@@ -797,7 +797,7 @@ void render_code_panel(void) {
         glDisable(GL_BLEND);
     }
 
-    /* Bottom status strip — design ref: Header Wireframes v2 statusbar.
+    /* Bottom status strip - design ref: Header Wireframes v2 statusbar.
      * Always drawn; shows cmd counts, cursor location, AA indicator, and the
      * transient `g_status` message (when set) in amber "err" style. */
     {
@@ -822,7 +822,7 @@ void render_code_panel(void) {
         char cmds_buf[48];
         snprintf(cmds_buf, sizeof(cmds_buf), "%d/%d cmds",
                  repl_state_flat_program_count(), MAX_COMMANDS);
-        glColor3f(0.878f, 0.878f, 0.878f); /* #e0e0e0 — stronger for counts */
+        glColor3f(0.878f, 0.878f, 0.878f); /* #e0e0e0 - stronger for counts */
         draw_string((float)tx, (float)text_y, cmds_buf, FONT_SMALL);
         tx += (int)strlen(cmds_buf) * FONT_SMALL_W;
 
@@ -864,7 +864,7 @@ void render_code_panel(void) {
         }
 
         /* The amber g_status message renders at the bottom of the scene panel
-         * (see render_scene_status()) — the statusbar has limited width. */
+         * (see render_scene_status()) - the statusbar has limited width. */
 
         /* Right-aligned F1 help affordance */
         {
@@ -926,7 +926,7 @@ void render_scene_status(void) {
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
-    /* Design ref: amber error banner — bg #3a2a10, top rule #1a1208, text
+    /* Design ref: amber error banner - bg #3a2a10, top rule #1a1208, text
      * #f0c070, "!" in bordered circle. */
     glColor4f(0.227f, 0.165f, 0.063f, 0.92f * alpha);
     draw_quad((float)sc_x, (float)bar_y, (float)sc_w, (float)bar_h);
@@ -975,7 +975,7 @@ void render_scene_status(void) {
 
 
 /* ========================================================================= */
-/* Configuration menu — now hosted inside the MENU_CONFIG dropdown            */
+/* Configuration menu - now hosted inside the MENU_CONFIG dropdown            */
 /* ========================================================================= */
 
 int ui_panels_handle_right_press(int mx, int my) {
@@ -1141,7 +1141,7 @@ int handle_code_panel_press(int mx, int my) {
 
     /* Pins (Search, Replay) take priority over menu labels and dropdown items
      * so they remain clickable even when a menu label visually overlaps them
-     * in a narrow window — matches the render order (pins drawn on top). */
+     * in a narrow window - matches the render order (pins drawn on top). */
     int pin = ui_menu_bar_pin_hit(mx, my);
     if (pin >= 0) {
         ui_menu_bar_close();

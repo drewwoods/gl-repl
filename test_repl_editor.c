@@ -564,7 +564,7 @@ int main() {
                     fabsf(*repl_state_camera()->dist - 0.5f) < 1e-6f);
     }
 
-    /* 1. Undo when nothing to undo — must run before any undo push */
+    /* 1. Undo when nothing to undo - must run before any undo push */
     {
         /* g_undo_count starts at 0 (global zero-init); repl_reset_state() does
          * NOT clear the undo buffer, so run this before touching undo at all. */
@@ -574,7 +574,7 @@ int main() {
         ASSERT_INT("undo-nothing: num_cmds still 0", repl_state_document_count(), 0);
     }
 
-    /* 2. Redo when nothing to redo — similarly must be before any undo activity */
+    /* 2. Redo when nothing to redo - similarly must be before any undo activity */
     {
         repl_reset_state();
         do_redo();
@@ -600,7 +600,7 @@ int main() {
         ASSERT_STR("cmd 1 source", repl_state_document_cmds_mut()[1].source, "  glVertex3f(2, 2, 2);");
     }
 
-    /* 4. Deleting commands — basic */
+    /* 4. Deleting commands - basic */
     {
         repl_reset_state(); declare_test_vars();
         repl_feed_line_public("glVertex3f(0,0,0)");
@@ -614,7 +614,7 @@ int main() {
         ASSERT_STR("line 1 is now old line 2", repl_state_document_cmds_mut()[1].source, "  glVertex3f(2, 2, 2);");
     }
 
-    /* 5. delete_cmd_range — count=0 (no-op) */
+    /* 5. delete_cmd_range - count=0 (no-op) */
     {
         repl_reset_state();
         repl_feed_line_public("glVertex3f(1,1,1)");
@@ -622,7 +622,7 @@ int main() {
         ASSERT_INT("delete count=0: no change", repl_state_document_count(), 1);
     }
 
-    /* 6. delete_cmd_range — start=repl_state_document_count() (out of bounds, no-op) */
+    /* 6. delete_cmd_range - start=repl_state_document_count() (out of bounds, no-op) */
     {
         repl_reset_state();
         repl_feed_line_public("glVertex3f(1,1,1)");
@@ -630,7 +630,7 @@ int main() {
         ASSERT_INT("delete oob start: no change", repl_state_document_count(), 1);
     }
 
-    /* 7. delete_cmd_range — count clamped when over-count */
+    /* 7. delete_cmd_range - count clamped when over-count */
     {
         repl_reset_state();
         repl_feed_line_public("glVertex3f(0,0,0)");
@@ -641,7 +641,7 @@ int main() {
         ASSERT_STR("delete clamp: cmd 0 remains", repl_state_document_cmds_mut()[0].source, "  glVertex3f(0, 0, 0);");
     }
 
-    /* 8. delete_cmd_range — edit_line clamped when it would exceed repl_state_document_count() */
+    /* 8. delete_cmd_range - edit_line clamped when it would exceed repl_state_document_count() */
     {
         repl_reset_state();
         repl_feed_line_public("glVertex3f(0,0,0)");
@@ -652,7 +652,7 @@ int main() {
         ASSERT_INT("delete edit_line clamp: edit_line<=num_cmds", repl_state_edit_line() <= repl_state_document_count(), 1);
     }
 
-    /* 8a. delete_cmd_range — interior multi-line block */
+    /* 8a. delete_cmd_range - interior multi-line block */
     {
         repl_reset_state();
         repl_feed_line_public("glVertex3f(0,0,0)");
@@ -958,7 +958,7 @@ int main() {
         assert_status_contains("commit unknown command: status", "Unknown cmd");
     }
 
-    /* 9. load_line_to_input — CMD_LABEL path */
+    /* 9. load_line_to_input - CMD_LABEL path */
     {
         repl_reset_state();
         /* Feed a label command to create a CMD_LABEL entry */
@@ -973,7 +973,7 @@ int main() {
         ASSERT_TRUE("label load: contains name", strstr(repl_state_editor_input()->input, "myloop") != NULL);
     }
 
-    /* 10. navigate_to_line — clamp target < 0 */
+    /* 10. navigate_to_line - clamp target < 0 */
     {
         repl_reset_state();
         repl_feed_line_public("glVertex3f(1,1,1)");
@@ -981,7 +981,7 @@ int main() {
         ASSERT_INT("navigate_to_line neg: edit_line=0", repl_state_edit_line(), 0);
     }
 
-    /* 11. navigate_to_line — clamp target > repl_state_document_count() */
+    /* 11. navigate_to_line - clamp target > repl_state_document_count() */
     {
         repl_reset_state();
         repl_feed_line_public("glVertex3f(1,1,1)");
@@ -989,7 +989,7 @@ int main() {
         ASSERT_INT("navigate_to_line over: edit_line=repl_state_document_count()", repl_state_edit_line(), repl_state_document_count());
     }
 
-    /* 12. try_assign_variable — append to end (existing tests cover this) */
+    /* 12. try_assign_variable - append to end (existing tests cover this) */
     {
         repl_reset_state(); declare_test_vars();
         {
@@ -1004,7 +1004,7 @@ int main() {
         ASSERT_STR("assigned cmd source", repl_state_document_cmds_mut()[0].source, "  n = 10.5;");
     }
 
-    /* 13. try_assign_variable — inserting mode (inserts before cursor) */
+    /* 13. try_assign_variable - inserting mode (inserts before cursor) */
     {
         repl_reset_state(); declare_test_vars();
         repl_feed_line_public("glVertex3f(1,1,1)");
@@ -1025,7 +1025,7 @@ int main() {
         ASSERT_INT("insert assign: cmd 1 is VAR_ASSIGN", repl_state_document_cmds_mut()[1].type, CMD_VAR_ASSIGN);
     }
 
-    /* 14. try_assign_variable — overwrite existing cmd */
+    /* 14. try_assign_variable - overwrite existing cmd */
     {
         repl_reset_state(); declare_test_vars();
         repl_feed_line_public("n = 1.0");
@@ -1045,7 +1045,7 @@ int main() {
         ASSERT_INT("overwrite assign: edit_line advanced", repl_state_edit_line(), 1);
     }
 
-    /* 15. Committing for loops — basic open brace form */
+    /* 15. Committing for loops - basic open brace form */
     {
         repl_reset_state(); declare_test_vars();
         {
@@ -1061,7 +1061,7 @@ int main() {
         ASSERT_STR("for end source", repl_state_document_cmds_mut()[1].source, "  }");
     }
 
-    /* 16. try_commit_for_loop — with explicit step */
+    /* 16. try_commit_for_loop - with explicit step */
     {
         repl_reset_state();
         {
@@ -1078,7 +1078,7 @@ int main() {
                     strstr(repl_state_document_cmds_mut()[0].source, "2") != NULL);
     }
 
-    /* 17. try_commit_for_loop — update existing for-begin header */
+    /* 17. try_commit_for_loop - update existing for-begin header */
     {
         repl_reset_state();
         /* Create an existing for-loop */
@@ -1107,7 +1107,7 @@ int main() {
                     strstr(repl_state_document_cmds_mut()[0].source, "10") != NULL);
     }
 
-    /* 18. try_commit_for_loop — inline form (for with body on same line) */
+    /* 18. try_commit_for_loop - inline form (for with body on same line) */
     {
         repl_reset_state();
         {
@@ -1124,7 +1124,7 @@ int main() {
         ASSERT_INT("for inline: cmd 2 is FOR_END", repl_state_document_cmds_mut()[2].type, CMD_FOR_END);
     }
 
-    /* 19. Committing func defs — basic */
+    /* 19. Committing func defs - basic */
     {
         repl_reset_state(); declare_test_vars();
         {
@@ -1140,7 +1140,7 @@ int main() {
         ASSERT_STR("func end source", repl_state_document_cmds_mut()[1].source, "  }");
     }
 
-    /* 20. try_commit_func_def — update existing func-def header */
+    /* 20. try_commit_func_def - update existing func-def header */
     {
         repl_reset_state();
         {
@@ -1167,7 +1167,7 @@ int main() {
                     strstr(repl_state_document_cmds_mut()[0].source, "b") != NULL);
     }
 
-    /* 21. Committing if blocks — basic */
+    /* 21. Committing if blocks - basic */
     {
         repl_reset_state(); declare_test_vars();
         {
@@ -1183,7 +1183,7 @@ int main() {
         ASSERT_STR("if end source", repl_state_document_cmds_mut()[1].source, "  }");
     }
 
-    /* 22. try_commit_if_block — update existing if-begin */
+    /* 22. try_commit_if_block - update existing if-begin */
     {
         repl_reset_state(); declare_test_vars();
         {
@@ -1208,7 +1208,7 @@ int main() {
         ASSERT_STR("update if-begin: source updated", repl_state_document_cmds_mut()[0].source, "  if(x < 0) {");
     }
 
-    /* 23. Committing close brace — for-loop */
+    /* 23. Committing close brace - for-loop */
     {
         repl_reset_state(); declare_test_vars();
         repl_feed_line_public("for(i, 0, 1) {");
@@ -1225,7 +1225,7 @@ int main() {
         ASSERT_STR("close brace source", repl_state_document_cmds_mut()[1].source, "  }");
     }
 
-    /* 26. Committing close brace — while in inserting mode closes existing end */
+    /* 26. Committing close brace - while in inserting mode closes existing end */
     {
         repl_reset_state();
         /* Set up: for-loop with begin+end, enter inserting mode inside */
@@ -1235,7 +1235,7 @@ int main() {
             *inp->input_len = (int)strlen(inp->input);
         }
         try_commit_for_loop();
-        /* repl_state_edit_line()=1, repl_state_insert_mode()=1 — we're inside the loop */
+        /* repl_state_edit_line()=1, repl_state_insert_mode()=1 - we're inside the loop */
         ASSERT_INT("insert-close setup: in inserting", repl_state_insert_mode(), 1);
         ASSERT_INT("insert-close setup: edit_line=1", repl_state_edit_line(), 1);
 
@@ -1250,7 +1250,7 @@ int main() {
         ASSERT_INT("insert-close: no longer inserting", repl_state_insert_mode(), 0);
     }
 
-    /* 27. Committing close brace — func-def */
+    /* 27. Committing close brace - func-def */
     {
         repl_reset_state();
         {
@@ -1271,7 +1271,7 @@ int main() {
         ASSERT_INT("func close: no longer inserting", repl_state_insert_mode(), 0);
     }
 
-    /* 28. Committing close brace — if-block */
+    /* 28. Committing close brace - if-block */
     {
         repl_reset_state(); declare_test_vars();
         {
@@ -1292,7 +1292,7 @@ int main() {
         ASSERT_INT("if close: no longer inserting", repl_state_insert_mode(), 0);
     }
 
-    /* 29. try_commit_for_loop — empty body emits error */
+    /* 29. try_commit_for_loop - empty body emits error */
     {
         repl_reset_state();
         {
@@ -1307,7 +1307,7 @@ int main() {
         ASSERT_INT("for empty body: no cmds added", repl_state_document_count(), 0);
     }
 
-    /* 30. try_commit_func_def — func with no params */
+    /* 30. try_commit_func_def - func with no params */
     {
         repl_reset_state();
         {
@@ -1323,19 +1323,19 @@ int main() {
                     strstr(repl_state_document_cmds_mut()[0].source, "func3") != NULL);
     }
 
-    /* 24. prof_frame_tick — increments staleness counters */
+    /* 24. prof_frame_tick - increments staleness counters */
     {
         /* Call begin/end to prime a section, then tick several frames */
         prof_begin(PROF_SCENE_3D);
         prof_end(PROF_SCENE_3D);
-        /* Frame tick — sections that didn't run this frame become stale */
+        /* Frame tick - sections that didn't run this frame become stale */
         prof_frame_tick();
         prof_frame_tick();
         /* Should not crash; calling multiple times is fine */
         ASSERT_TRUE("prof_frame_tick survives", 1);
     }
 
-    /* 25. prof_code_panel_details_enabled — reflects g_show_profile_panel */
+    /* 25. prof_code_panel_details_enabled - reflects g_show_profile_panel */
     {
         g_show_profile_panel = PROFILE_PANEL_OFF;
         ASSERT_INT("details disabled when OFF", prof_code_panel_details_enabled(), 0);
@@ -1844,7 +1844,7 @@ int main() {
         ASSERT_INT("expand decl: assign c slot correct", repl_state_document_cmds_mut()[3].num_args, ci);
     }
 
-    /* try_assign_variable — overlong formatted source is rejected with
+    /* try_assign_variable - overlong formatted source is rejected with
      * "Command too long" and does not mutate repl_state_document_cmds_mut() / repl_state_document_count(). */
     {
         repl_reset_state(); declare_test_vars();
@@ -2150,7 +2150,7 @@ int main() {
         ASSERT_INT("down key sets scroll_follow_cursor", g_scroll_follow_cursor, 1);
 
         /* Page Up/Down scroll the view manually and must NOT trigger cursor
-         * follow — that would snap the view back to the cursor position,
+         * follow - that would snap the view back to the cursor position,
          * defeating the purpose of the scroll. */
         g_scroll_follow_cursor = 0;
         repl_special_func(GLUT_KEY_PAGE_UP, 0, 0);
@@ -2322,7 +2322,7 @@ int main() {
                     fabsf(repl_state_document_cmds_mut()[0].args[0] - 0.0f) < 1e-6f);
     }
 
-    /* repl_clear_all_cmds — clears scene including float declarations. */
+    /* repl_clear_all_cmds - clears scene including float declarations. */
     {
         int base_num_predef_vars;
         int i;

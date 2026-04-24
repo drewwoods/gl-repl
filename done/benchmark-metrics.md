@@ -32,10 +32,10 @@ diffs keep working.
 
 The metrics naturally split into three tiers by portability and cost:
 
-**Tier 1 — wall time (already shipped).** `clock_gettime(CLOCK_MONOTONIC)`,
+**Tier 1 - wall time (already shipped).** `clock_gettime(CLOCK_MONOTONIC)`,
 no privileges, no kernel features. Always on.
 
-**Tier 2 — hardware perf counters (Linux first, macOS later).** Counts
+**Tier 2 - hardware perf counters (Linux first, macOS later).** Counts
 that capture *what the CPU actually did* and are largely insulated from
 turbo/thermal effects:
 
@@ -49,7 +49,7 @@ time: a parser that goes from 5,000 → 4,000 instructions per line is
 unambiguously faster, even if one machine clocks twice as fast as the
 other.
 
-**Tier 3 — normalized score.** Same binary runs a tiny CPU-only
+**Tier 3 - normalized score.** Same binary runs a tiny CPU-only
 microbenchmark (e.g. SHA-256 of 1 MB or a fixed-iteration xorshift
 loop) at startup and reports REPL benchmark times *as a ratio* to that
 baseline. This collapses CPU-frequency differences out of the wall-time
@@ -101,14 +101,14 @@ About **half a day** of work on Linux x86_64:
   reference),
 - ~30 lines of plumbing in `bench_repl.c` (struct field, before/after
   calls, two new printf columns),
-- ~10 lines of Makefile work (no new dependencies — perf_event_open is
+- ~10 lines of Makefile work (no new dependencies - perf_event_open is
   in libc).
 
 No external libraries. No root. No build-mode change.
 
 #### Caveats specific to Linux x86_64
 
-- `instructions retired` on x86 has a small "skid" — a counter overflow
+- `instructions retired` on x86 has a small "skid" - a counter overflow
   can be attributed a few instructions past the actual one. We don't
   use sampling, just count totals, so skid does not matter for us.
 - Hyper-threading: if the benchmark gets context-switched onto a
@@ -128,12 +128,12 @@ No external libraries. No root. No build-mode change.
 
 Add `bench_baseline.c` exposing `bench_baseline_run()` that returns
 seconds for one well-defined workload (suggestion: 1 million iterations
-of an xorshift32 inner loop — small, deterministic, no allocations,
+of an xorshift32 inner loop - small, deterministic, no allocations,
 exercises ALU+branch like the REPL parser does).
 
 `main()` runs it once at startup, stores the seconds in a global, and
 `report()` prints `vs-baseline = repl_per_op / baseline_per_iter` as
-the last column. The exact baseline is arbitrary — what matters is
+the last column. The exact baseline is arbitrary - what matters is
 that *the same* binary measures it on every machine.
 
 This piece is **machine-portable**: pure C, no kernel calls, ~30 lines.
@@ -146,27 +146,27 @@ possible code surface.
 The macOS story is meaningfully harder than Linux. Options ranked by
 effort:
 
-**Option A — wall time + normalized score only.** Ships on macOS today
+**Option A - wall time + normalized score only.** Ships on macOS today
 with zero extra code (Tier 1 + Tier 3 already are portable C). The
 `vs-baseline` column gives a usable cross-machine comparison even
 without HW counters. **Effort: zero, already covered by the Tier 3
 plan above.**
 
-**Option B — `mach_absolute_time` for a higher-resolution wall clock.**
+**Option B - `mach_absolute_time` for a higher-resolution wall clock.**
 On Apple Silicon, `clock_gettime(CLOCK_MONOTONIC)` is already backed by
 `mach_absolute_time` so there is no precision win; this is only worth
 doing if we ever target old x86 macOS where `clock_gettime` was
 emulated. **Effort: trivial (~10 lines, conditional on `__APPLE__`),
 but probably not worth it.**
 
-**Option C — kperf / kpc HW counters via the private framework.**
+**Option C - kperf / kpc HW counters via the private framework.**
 macOS does expose performance counters (`kperf` / `kpc_*`) but the
 public surface is severely limited:
 - The `kpc_*` symbols live inside `/System/Library/PrivateFrameworks/kperf.framework`
   and are dlopen'd at runtime; they are not in any public SDK header.
 - Reading counters requires either the `com.apple.private.kernel.kperf`
   entitlement (Apple-internal only) or running as root.
-- Apple Silicon counters are organized differently from x86 — the
+- Apple Silicon counters are organized differently from x86 - the
   event ids `INST_RETIRED.ANY` etc. are documented only via Instruments
   XML, and they change between M1 / M2 / M3 generations.
 
@@ -211,9 +211,9 @@ non-Linux output stays uncluttered.
 
 Suggested order, each independently mergeable:
 
-1. **Tier 3 — normalized baseline.** ~30 lines, portable, gives the
+1. **Tier 3 - normalized baseline.** ~30 lines, portable, gives the
    single biggest cross-machine usability win for the smallest cost.
-2. **Tier 2 — Linux perf counters.** ~120 lines behind a build flag,
+2. **Tier 2 - Linux perf counters.** ~120 lines behind a build flag,
    no behavior change on macOS or stubs builds.
 3. **Optional: scheduler pinning + turbo-off documentation.** README
    only, no code; just so contributors can publish reproducible
@@ -229,7 +229,7 @@ Suggested order, each independently mergeable:
   Adding a full distribution is easy later but not in the initial
   metrics extension.
 - **Memory / allocator stats.** The REPL is statically allocated
-  globals — there's no `malloc` traffic worth measuring inside the
+  globals - there's no `malloc` traffic worth measuring inside the
   hot loops. Skip.
 - **Per-sub-benchmark overrides for iteration counts.** A single
   `--iters` flag works fine because the slowest sub-benchmark

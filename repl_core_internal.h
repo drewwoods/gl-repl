@@ -1,9 +1,9 @@
 /*
- * repl_core_internal.h — Cross-TU internals shared among repl_core.c,
+ * repl_core_internal.h - Cross-TU internals shared among repl_core.c,
  * repl_editor.c, repl_executor.c, repl_export.c, repl_parser.c,
  * repl_search.c, and the unit tests.
  *
- * These are intentionally NOT part of the public API in repl_core.h — they
+ * These are intentionally NOT part of the public API in repl_core.h - they
  * are implementation details of the REPL that tests and sibling modules
  * need to reach into directly. When something here stabilizes and outside
  * code depends on it, graduate it to repl_core.h.

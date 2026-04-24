@@ -1,5 +1,5 @@
 /*
- * cmd_format.h — Command indentation / depth computation
+ * cmd_format.h - Command indentation / depth computation
  *
  * Pure functions that compute indentation from an abstract command sequence.
  * No OpenGL headers required; can be built standalone for testing.
@@ -14,11 +14,11 @@
  * All other command types should map to FMT_OTHER. */
 typedef enum {
     FMT_OTHER = 0,
-    FMT_GL_BEGIN,            /* glBegin(MODE)          — opens a vertex block   */
-    FMT_GL_END,              /* glEnd()                — closes a vertex block  */
-    FMT_TESS_BEGIN_POLYGON,  /* gluBegin(GLU_POLYGON)  — opens tess polygon     */
-    FMT_TESS_BEGIN_CONTOUR,  /* gluBegin(GLU_CONTOUR)  — opens tess contour     */
-    FMT_TESS_END,            /* gluEnd()               — closes tess scope      */
+    FMT_GL_BEGIN,            /* glBegin(MODE)          - opens a vertex block   */
+    FMT_GL_END,              /* glEnd()                - closes a vertex block  */
+    FMT_TESS_BEGIN_POLYGON,  /* gluBegin(GLU_POLYGON)  - opens tess polygon     */
+    FMT_TESS_BEGIN_CONTOUR,  /* gluBegin(GLU_CONTOUR)  - opens tess contour     */
+    FMT_TESS_END,            /* gluEnd()               - closes tess scope      */
 } FmtType;
 
 /* Minimal command descriptor: only what the formatter needs. */
@@ -81,7 +81,7 @@ void fmt_tess_end_indent(const FmtCmd *cmds, int n, char *buf, int buf_sz);
  * align with the enclosing gluBegin rather than the enclosing glBegin.
  * Spaces = 2 + 2*tess_depth
  *
- * Example — tess=2, begin=1 (glBegin opened inside the contour):
+ * Example - tess=2, begin=1 (glBegin opened inside the contour):
  *   fmt_indent      → 8 spaces  (gl commands like glVertex3f)
  *   fmt_tess_leaf_indent → 6 spaces  (glu commands like gluNormal)
  */
@@ -96,7 +96,7 @@ void fmt_tess_leaf_indent(const FmtCmd *cmds, int n, char *buf, int buf_sz);
  * fmt_indent(), strips leading whitespace from raw_expr, and writes
  * new_indent + stripped_expr into out.
  *
- * Example — tess=2, begin=1, raw="  glVertex3f(-1.2, -0.45, z);":
+ * Example - tess=2, begin=1, raw="  glVertex3f(-1.2, -0.45, z);":
  *   out → "        glVertex3f(-1.2, -0.45, z);"   (8 spaces)
  */
 void fmt_reindent_expr(const FmtCmd *cmds, int n,
@@ -107,7 +107,7 @@ void fmt_reindent_expr(const FmtCmd *cmds, int n,
  * parsed_source (computed by parse_command) and applying it to raw_expr.
  *
  * Use this instead of fmt_reindent_expr when the correct indent was already
- * computed by parse_command — it preserves whatever indent rule (fmt_indent
+ * computed by parse_command - it preserves whatever indent rule (fmt_indent
  * or fmt_tess_leaf_indent) was used there, without recomputing it.
  *
  * parsed_source: the source string produced by parse_command (leading spaces
