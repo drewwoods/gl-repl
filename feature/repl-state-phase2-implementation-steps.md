@@ -74,7 +74,7 @@ Landed as the render-resource slice: `repl_state.c` now owns the GL resource sto
 - Replay control storage now lives in `repl_state.c`: active, state, pc, mode, speed, accum, fade speed, source line, total flat count, and expand args.
 - The main production consumers are now on `repl_state_replay()` for replay reads/writes: `repl_core.c`, `scene_render.c`, `repl_actions.c`, `ui_panels.c`, `repl_editor.c`, `repl_replay_annotations.c`, `repl_config.c`, `ui_menu_bar.c`, `ui_variable_panel.c`, `repl_code_panel_document.c`, `repl_executor.c`, and `bench_repl.c`.
 - Keep fade batch internals private to `repl_replay.c` unless a later render slice needs them in the state facade.
-- Remaining work for this slice: convert `repl_replay.c` itself and the replay tests off raw globals, then remove replay compat externs.
+- Remaining work for this slice: convert `repl_replay.c` itself off raw globals, then remove replay compat externs.
 
 ### 3.8 Scenes, Workspace, Import/Export Metadata
 - Keep `g_user_scenes[]` and active scene internals private to `repl_scenes.c`; they are already encapsulated domain storage.

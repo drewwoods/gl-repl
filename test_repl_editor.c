@@ -5,6 +5,7 @@
 #include "repl_code_panel_layout.h"
 #include "repl_replay.h"
 #include "repl_keys.h"
+#include "repl_state.h"
 #include "sample.h"
 #include "ui_profile_panel.h"
 #include "ui_panels.h"
@@ -34,6 +35,13 @@ static int g_mock_modifiers = 0;
     if (strcmp(got, exp) == 0) g_pass++; \
     else printf("FAIL [%s] got \"%s\", expected \"%s\" (line %d)\n", label, got, exp, __LINE__); \
 } while (0)
+
+#define replay_active        (*repl_state_replay_mut()->active)
+#define replay_state         (*repl_state_replay_mut()->state)
+#define replay_pc            (*repl_state_replay_mut()->pc)
+#define replay_mode          (*repl_state_replay_mut()->mode)
+#define replay_src_line      (*repl_state_replay_mut()->src_line_idx)
+#define replay_expand_args   (*repl_state_replay_mut()->expand_args)
 
 #define ASSERT_DECL_OK(label, cond, err) do { \
     g_run++; \
@@ -363,7 +371,7 @@ int main() {
                    repl_inline_rename_active(), 1);
 
         repl_keyboard_func(KEY_CTRL_R, 0, 0);
-        ASSERT_INT("rename swallows replay toggle", g_replay_active, 0);
+        ASSERT_INT("rename swallows replay toggle", replay_active, 0);
 
         repl_keyboard_func(KEY_CTRL_F, 0, 0);
         ASSERT_INT("rename swallows search open", g_search_active, 0);
@@ -416,9 +424,9 @@ int main() {
         repl_state_cursor_pos_set(2);
         *repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_HIDDEN;
         g_show_help = 0;
-        g_replay_active = 1;
-        g_replay_state = REPLAY_PAUSED;
-        g_replay_pc = 0;
+        replay_active = 1;
+        replay_state = REPLAY_PAUSED;
+        replay_pc = 0;
         g_search_active = 1;
         snprintf(g_search_query, sizeof(g_search_query), "abc");
         g_search_query_len = 3;
@@ -429,7 +437,7 @@ int main() {
                    *repl_state_presentation()->code_panel_layout, CODE_PANEL_LAYOUT_HIDDEN);
         ASSERT_INT("rename special keeps editor cursor", repl_state_cursor_pos(), 2);
         ASSERT_INT("rename special keeps search cursor", g_search_cursor_pos, 2);
-        ASSERT_INT("rename special keeps replay pc", g_replay_pc, 0);
+        ASSERT_INT("rename special keeps replay pc", replay_pc, 0);
 
         repl_special_func(GLUT_KEY_F1, 0, 0);
         ASSERT_INT("rename special swallows help toggle", g_show_help, 0);
@@ -438,7 +446,7 @@ int main() {
 
         repl_inline_rename_cancel();
         search_clear_all();
-        g_replay_active = 0;
+        replay_active = 0;
         *repl_state_presentation_mut()->code_panel_layout = CFG_DEFAULT_CODE_PANEL_LAYOUT;
     }
 
@@ -482,7 +490,7 @@ int main() {
         repl_state_viewport_set_size(320, 80);
         g_panel_frac = 0.25f;
         *repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT;
-        g_replay_active = 0;
+        replay_active = 0;
 
         var_panel_rect(&x, &y, &w, &h);
         ASSERT_INT("cramped var panel clears status strip",
@@ -1848,47 +1856,47 @@ int main() {
         ASSERT_INT("replay key ctrl-r consumed",
                    replay_handle_key(KEY_CTRL_R), 1);
         ASSERT_INT("replay key ctrl-r starts replay",
-                   g_replay_active, 1);
+                   replay_active, 1);
         ASSERT_INT("replay space consumed",
                    replay_handle_key(' '), 1);
         ASSERT_INT("replay space pauses",
-                   g_replay_state, REPLAY_PAUSED);
+                   replay_state, REPLAY_PAUSED);
         ASSERT_INT("replay space resumes",
                    replay_handle_key(' '), 1);
         ASSERT_INT("replay resumed playing",
-                   g_replay_state, REPLAY_PLAYING);
+                   replay_state, REPLAY_PLAYING);
 
-        g_replay_state = REPLAY_PAUSED;
+        replay_state = REPLAY_PAUSED;
         ASSERT_INT("replay right consumed",
                    replay_handle_special_key(GLUT_KEY_RIGHT), 1);
         ASSERT_INT("replay right advances one step",
-                   g_replay_pc, 1);
+                   replay_pc, 1);
         ASSERT_INT("replay left consumed",
                    replay_handle_special_key(GLUT_KEY_LEFT), 1);
         ASSERT_INT("replay left steps back",
-                   g_replay_pc, 0);
+                   replay_pc, 0);
 
         *repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_HIDDEN;
-        g_replay_state = REPLAY_PLAYING;
+        replay_state = REPLAY_PLAYING;
         repl_keyboard_func(' ', 0, 0);
         ASSERT_INT("replay space keeps hidden code panel",
                    *repl_state_presentation()->code_panel_layout, CODE_PANEL_LAYOUT_HIDDEN);
         ASSERT_INT("replay space still pauses through editor",
-                   g_replay_state, REPLAY_PAUSED);
+                   replay_state, REPLAY_PAUSED);
 
-        g_replay_state = REPLAY_PAUSED;
-        g_replay_pc = 0;
+        replay_state = REPLAY_PAUSED;
+        replay_pc = 0;
         repl_special_func(GLUT_KEY_RIGHT, 0, 0);
         ASSERT_INT("replay right keeps hidden code panel",
                    *repl_state_presentation()->code_panel_layout, CODE_PANEL_LAYOUT_HIDDEN);
         ASSERT_INT("replay right still advances through editor",
-                   g_replay_pc, 1);
+                   replay_pc, 1);
         *repl_state_presentation_mut()->code_panel_layout = CFG_DEFAULT_CODE_PANEL_LAYOUT;
 
         ASSERT_INT("replay unknown key unconsumed",
                    replay_handle_key('x'), 0);
         ASSERT_INT("replay unknown key stops replay",
-                   g_replay_active, 0);
+                   replay_active, 0);
     }
 
     /* Replay scroll-follow should keep the replayed source command visible
@@ -1912,10 +1920,10 @@ int main() {
         *repl_state_presentation_mut()->show_vertex_indices = 0;
         navigate_to_line(0);
 
-        g_replay_active = 1;
-        g_replay_state = REPLAY_PAUSED;
-        g_replay_pc = repl_state_flat_program_count();
-        g_replay_src_line = 25;
+        replay_active = 1;
+        replay_state = REPLAY_PAUSED;
+        replay_pc = repl_state_flat_program_count();
+        replay_src_line = 25;
         g_scroll = 0;
         g_scroll_follow_cursor = 0;
 
@@ -1940,10 +1948,10 @@ int main() {
         ASSERT_INT("replay follow leaves edit line alone", repl_state_edit_line(), 0);
         ASSERT_STR("replay follow leaves input alone", repl_state_editor_input()->input, "glVertex3f(0, 0, 0)");
 
-        g_replay_active = 0;
-        g_replay_state = REPLAY_OFF;
-        g_replay_src_line = -1;
-        g_replay_pc = 0;
+        replay_active = 0;
+        replay_state = REPLAY_OFF;
+        replay_src_line = -1;
+        replay_pc = 0;
     }
 
     /* Replay source focus should follow GLU tessellation vertices, not the
@@ -1959,23 +1967,23 @@ int main() {
         repl_feed_line_public("gluEnd();");
         repl_flatten_commands();
 
-        g_replay_mode = REPLAY_MODE_VERTEX;
+        replay_mode = REPLAY_MODE_VERTEX;
         replay_start();
         replay_advance();
         ASSERT_INT("replay vertex mode focuses first gluVertex",
-                   g_replay_src_line, 2);
+                   replay_src_line, 2);
         replay_advance();
         ASSERT_INT("replay vertex mode focuses next gluVertex",
-                   g_replay_src_line, 3);
+                   replay_src_line, 3);
         replay_stop();
 
-        g_replay_mode = REPLAY_MODE_POLYGON;
+        replay_mode = REPLAY_MODE_POLYGON;
         replay_start();
         replay_advance();
         ASSERT_INT("replay polygon mode focuses tess vertex",
-                   g_replay_src_line, 4);
+                   replay_src_line, 4);
         replay_stop();
-        g_replay_mode = REPLAY_MODE_VERTEX;
+        replay_mode = REPLAY_MODE_VERTEX;
     }
 
     /* Replay follow rows must match whether variable expansion rows are
@@ -1998,37 +2006,37 @@ int main() {
         *repl_state_presentation_mut()->show_vertex_indices = 0;
         navigate_to_line(0);
 
-        g_replay_active = 1;
-        g_replay_state = REPLAY_PAUSED;
-        g_replay_pc = repl_state_flat_program_count();
-        g_replay_src_line = 1;
+        replay_active = 1;
+        replay_state = REPLAY_PAUSED;
+        replay_pc = repl_state_flat_program_count();
+        replay_src_line = 1;
         g_scroll = 0;
         g_scroll_follow_cursor = 0;
 
-        g_replay_expand_args = 0;
+        replay_expand_args = 0;
         (void)code_panel_apply_scroll_follow_for_test(&collapsed_follow,
                                                       &visible_lines);
         ASSERT_TRUE("collapsed replay follow resolves command row",
                     collapsed_follow >= 0);
 
-        g_replay_expand_args = 1;
+        replay_expand_args = 1;
         (void)code_panel_apply_scroll_follow_for_test(&expanded_follow,
                                                       &visible_lines);
         ASSERT_INT("expanded replay follows final annotation row",
                    expanded_follow, collapsed_follow + 2);
 
-        g_replay_expand_args = 0;
+        replay_expand_args = 0;
         expanded_follow = -1;
         (void)code_panel_apply_scroll_follow_for_test(&expanded_follow,
                                                       &visible_lines);
         ASSERT_INT("collapsed replay removes annotation rows from follow",
                    expanded_follow, collapsed_follow);
 
-        g_replay_expand_args = 1;
-        g_replay_active = 0;
-        g_replay_state = REPLAY_OFF;
-        g_replay_src_line = -1;
-        g_replay_pc = 0;
+        replay_expand_args = 1;
+        replay_active = 0;
+        replay_state = REPLAY_OFF;
+        replay_src_line = -1;
+        replay_pc = 0;
     }
 
     /* Regression: pressing Enter on the last existing command must enter
@@ -2071,7 +2079,7 @@ int main() {
         g_panel_frac = 0.5f;
         *repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT;
         *repl_state_presentation_mut()->show_vertex_indices = 0;
-        g_replay_active = 0;
+        replay_active = 0;
 
         repl_state_edit_line_set(repl_state_document_count());
         repl_state_insert_mode_set(1);
@@ -2144,7 +2152,7 @@ int main() {
         g_panel_frac = 0.5f;
         *repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT;
         *repl_state_presentation_mut()->show_vertex_indices = 0;
-        g_replay_active = 0;
+        replay_active = 0;
 
         navigate_to_line(repl_state_document_count() - 1);
         g_scroll = 0;
