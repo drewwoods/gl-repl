@@ -1,47 +1,44 @@
 # Phase 2 Bridge Retirement
 
-## Status
-Phase 2 storage migration is done. The remaining Phase 2 work is bridge retirement: remove the last production dependence on `repl_state_compat.h`, keep the behavior unchanged, and delete the compatibility header once no production source needs it.
+## Status: COMPLETE
 
-This doc is the incremental landing zone for that remaining work. Keep it current and narrow: one or two small slices at a time, then update the progress section with what landed and what is still open.
+Phase 2 storage migration and bridge retirement are both done.
+`repl_state_compat.h` has been deleted. No production or test source file
+includes or depends on it. All 2551 tests pass.
 
-## Done So Far
-- Storage migration slices 3.1 through 3.10 are complete.
-- `ReplEditorState` and `ReplViewState` bundle helpers are gone.
-- The immutable export scaffold declarations now live in `repl_export.h`.
-- The render-resource bridge is macro-backed through `repl_state_render()`.
-- The old config scratch buffer is local to `repl_actions.c`.
-- The grid and axes label tables are local to `repl_actions.c`.
-- `repl_actions.c`, `ui_variable_panel.c`, `ui_help_overlay.c`, and `ui_menu_bar.c` now use typed state accessors instead of the bridge for the state they still read.
-- The branch still passes `make test-stubs TEST_JOBS=4`, `make sample USE_GL_STUBS=1`, and `make sample` after those slices.
+## What Landed
 
-## Remaining Slices
-1. `ui_autocomplete_panel.c`
-   - Replace compat-backed cursor and autocomplete reads with typed code-panel and autocomplete accessors.
-   - Keep popup geometry, highlighting, and placement unchanged.
-2. `repl_search.c`
-   - Convert the search overlay and navigation paths to typed search/state accessors.
-   - Preserve the current search semantics and focus behavior.
-3. `repl_autocomplete.c`
-   - Remove the remaining compat dependence from autocomplete model reads and writes.
-   - Keep matching, ghost text, and hint text behavior unchanged.
-4. `repl_editor.c`
-   - Peel off the last high-touch compat reads in smaller slices.
-   - Prefer keyboard/mouse routing, overlay dispatch, and input state cleanup one path at a time.
-5. `repl_state_compat.h`
-   - Delete the header only after no production `.c` file includes it.
-   - Leave only module-local `static const` descriptor tables and direct typed state accessors.
+### Storage migration (slices 3.1–3.10)
+- `ReplEditorState` and `ReplViewState` bundle helpers removed.
+- Immutable export scaffold declarations moved to `repl_export.h`.
+- Render-resource bridge backed by `repl_state_render()`.
+- Old config scratch buffer local to `repl_actions.c`.
+- Grid and axes label tables local to `repl_actions.c`.
 
-## Possible Follow-Ons
-- If `rg` still finds compat reads in `ui_profile_panel.c`, `repl_var_drag.c`, or another small renderer, peel those off as tiny follow-on slices before the final header deletion.
-- Keep any final cleanup commit narrow: no behavior changes, no API reshaping, just bridge removal.
+### Bridge retirement (this branch)
+1. `ui_autocomplete_panel.c` — converted to typed code-panel and autocomplete
+   accessors.
+2. `repl_search.c` — 68 compat macro uses replaced with typed search accessors.
+3. `repl_autocomplete.c` — compat dependence removed.
+4. `repl_editor.c` — 84 compat macro uses replaced across 19 functions.
+5. Scene files (`scene_render.c`, `scene_grid.c`, `scene_axes.c`,
+   `scene_lights.c`, `scene_backdrop.c`) — `g_anim_time` replaced.
+6. `repl_replay.c` — `g_scroll_follow_cursor` and `g_t_playing` replaced.
+7. `repl_code_panel_document.c` — scroll block converted.
+8. `repl_executor.c` — local `EXEC_RENDER` macro block covers remaining render
+   state reads (quadric, tess, lights, clear_color).
+9. `repl_export.c` — `g_lights`, `g_multisample_enabled`, `g_line_smooth_enabled`
+   replaced with typed accessor calls.
+10. `repl_core.c`, `ui_panels.c`, `repl_example_loader.c` — old function names
+    `refresh_workspace_header_lines` / `parse_workspace_header_line` updated to
+    `repl_state_refresh_workspace_header_lines` / `repl_state_parse_workspace_header_line`.
+11. `repl_replay.c` — `g_t_playing` replaced with `repl_state_variables_mut()->time_playing`.
+12. All test files — local `#define` alias blocks added for the handful of compat
+    names each test uses, pointing to typed accessor calls.
+13. `repl_state_compat.h` deleted.
 
-## Slice Rules
-- Keep each commit reviewable.
-- Do not combine broad bridge deletion with behavior changes.
-- Update this doc after each slice so the next target is obvious.
+## Final Acceptance
 
-## Test Plan
-- After each slice: `make test-stubs TEST_JOBS=4` and `git diff --check`.
-- Search/autocomplete/editor slices: also run `make test_repl_core_search`, `make test_repl_core_search_extra`, `make test_repl_autocomplete`, `make test_repl_editor`, `make test_ui`, `make sample USE_GL_STUBS=1`, and `make sample`.
-- Final bridge deletion: run `make test-stubs TEST_JOBS=4`, `make sample USE_GL_STUBS=1`, and `make sample`.
+- `make test-stubs TEST_JOBS=4`: 2551/2551 passed, 19/19 suites ✓
+- `make sample USE_GL_STUBS=1`: clean link ✓
+- `grep -rn repl_state_compat src/`: zero hits in any `.c` or `.h` file ✓

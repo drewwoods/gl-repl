@@ -194,7 +194,7 @@ static int consume_example_cfg_header(const char *const *lines) {
         if (!example_cfg_extract_slug(lines[count], slug, sizeof(slug)))
             break;
         if (example_cfg_slug_allowed(slug))
-            parse_workspace_header_line(lines[count]);
+            repl_state_parse_workspace_header_line(lines[count]);
         count++;
     }
 

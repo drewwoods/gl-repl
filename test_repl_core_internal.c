@@ -1,6 +1,22 @@
 #include "repl_core_internal.h"
 #include "repl_command_store.h"
 #include "repl_state.h"
+
+#define g_use_accum            (*repl_state_render_mut()->use_accum)
+#define g_accum_aa_enabled     (*repl_state_render_mut()->accum_aa_enabled)
+#define g_accum_samples        (*repl_state_render_mut()->accum_samples)
+#define g_accum_jitter_x       (*repl_state_render_mut()->accum_jitter_x)
+#define g_accum_jitter_y       (*repl_state_render_mut()->accum_jitter_y)
+#define g_multisample_enabled  (*repl_state_render_mut()->multisample_enabled)
+#define g_line_smooth_enabled  (*repl_state_render_mut()->line_smooth_enabled)
+#define g_init_attenuate_points (*repl_state_render_mut()->point_attenuation_enabled)
+#define g_quadric              (*repl_state_render_mut()->quadric)
+#define g_tess                 (*repl_state_render_mut()->tess)
+#define g_tess_verts           (repl_state_render_mut()->tess_verts)
+#define g_tess_vert_count      (*repl_state_render_mut()->tess_vert_count)
+#define g_lights               (repl_state_render_mut()->lights)
+#define g_clear_color          (repl_state_render_mut()->clear_color)
+
 #include <stdio.h>
 #include <string.h>
 

@@ -343,7 +343,7 @@ int code_panel_apply_scroll_follow_for_test(int *out_follow_doc_line,
     int idx_x = CODE_MARGIN_X + linenum_w + FONT_W;
     int text_x = idx_x + idx_col_w;
 
-    refresh_workspace_header_lines();
+    repl_state_refresh_workspace_header_lines();
     code_panel_rect(&cp_x, &cp_y, &cp_w, &cp_h);
     (void)cp_x;
     (void)cp_y;
@@ -379,7 +379,7 @@ void render_code_panel(void) {
         prof_end(PROF_CODE_PANEL_LAYOUT);
         return;
     }
-    refresh_workspace_header_lines();
+    repl_state_refresh_workspace_header_lines();
     int panel_w = cp_w;
     int panel_top = cp_y + cp_h;  /* y of the panel's top edge (OpenGL coords) */
     int linenum_w = 4 * FONT_W;

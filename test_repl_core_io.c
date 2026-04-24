@@ -5,7 +5,10 @@
 #include <string.h>
 
 #define IMPORT_EXPORT_STATE (repl_state_import_export())
-#define g_render_state_lines (IMPORT_EXPORT_STATE->render_state_lines)
+#define g_render_state_lines    (IMPORT_EXPORT_STATE->render_state_lines)
+#define g_multisample_enabled   (*repl_state_render_mut()->multisample_enabled)
+#define g_line_smooth_enabled   (*repl_state_render_mut()->line_smooth_enabled)
+#define g_init_attenuate_points (*repl_state_render_mut()->point_attenuation_enabled)
 
 static int g_run = 0;
 static int g_pass = 0;

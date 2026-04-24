@@ -201,7 +201,7 @@ static SceneGuideSnapshot scene_build_guide_snapshot(const SceneRenderConfig *co
         .replaying = config->replaying,
         .xform_guide_mode = *repl_state_presentation()->xform_guide_mode,
         .user_lighting_enabled = *flat_state->user_lighting_enabled,
-        .anim_time = g_anim_time,
+        .anim_time = (*repl_state_variables()->anim_time),
         .input = repl_state_editor_input()->input,
         .input_len = *repl_state_editor_input()->input_len,
         .cursor_pos = *repl_state_editor_input()->cursor_pos,

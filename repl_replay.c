@@ -153,7 +153,7 @@ static void replay_set_src_line(int src_line) {
     if (src_line != g_replay_last_src_line) {
         g_replay_last_src_line = src_line;
         if (src_line >= 0)
-            g_scroll_follow_cursor = 1;
+            (*repl_state_code_panel()->scroll_follow_cursor) = 1;
     }
 }
 
@@ -473,8 +473,8 @@ void replay_start(void) {
     }
 
     repl_copy_predef_values(g_replay_baseline_predef_vals, MAX_PREDEF_VARS);
-    g_replay_saved_t_playing = g_t_playing;
-    g_t_playing = 0;
+    g_replay_saved_t_playing = *repl_state_variables()->time_playing;
+    *repl_state_variables_mut()->time_playing = 0;
 
     g_replay_active = 1;
     g_replay_state = REPLAY_PLAYING;
@@ -488,7 +488,7 @@ void replay_start(void) {
 }
 
 void replay_stop(void) {
-    g_t_playing = g_replay_saved_t_playing;
+    *repl_state_variables_mut()->time_playing = g_replay_saved_t_playing;
     g_replay_active = 0;
     g_replay_state = REPLAY_OFF;
     g_replay_pc = 0;

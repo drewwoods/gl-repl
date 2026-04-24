@@ -174,7 +174,7 @@ static void grid_ember_line_color(float v, int is_major,
                                   const GridDrawContext *ctx,
                                   GridLineColors *out) {
     float dist = fabsf(v) / ctx->extent;
-    float ripple = sinf(dist * 12.0f - g_anim_time * 2.5f);
+    float ripple = sinf(dist * 12.0f - (*repl_state_variables()->anim_time) * 2.5f);
     ripple = ripple * 0.5f + 0.5f;
     float fade = 1.0f - dist;
     if (fade < 0.0f) fade = 0.0f;
@@ -186,7 +186,7 @@ static void grid_ember_line_color(float v, int is_major,
 
 static SceneRgba grid_ember_origin_color(const GridDrawContext *ctx) {
     (void)ctx;
-    float ripple0 = -sinf(g_anim_time * 2.5f) * 0.5f + 0.5f;
+    float ripple0 = -sinf((*repl_state_variables()->anim_time) * 2.5f) * 0.5f + 0.5f;
     return rgba(0.95f, 0.35f + ripple0 * 0.25f, 0.05f,
                 0.7f * (0.6f + ripple0 * 0.4f));
 }
@@ -338,8 +338,8 @@ static void scene_grid_render_ocean_theme(const GridDrawContext *grid_ctx,
         int is_major  = grid_is_major_line(v, major, major_tol);
         float base_a  = is_major ? 0.55f : 0.28f;
 
-        float c1 = sinf(v * 3.0f + g_anim_time * 1.3f);
-        float c2 = cosf(v * 2.3f - g_anim_time * 0.9f);
+        float c1 = sinf(v * 3.0f + (*repl_state_variables()->anim_time) * 1.3f);
+        float c2 = cosf(v * 2.3f - (*repl_state_variables()->anim_time) * 0.9f);
         float caustic = (c1 * c2) * 0.5f + 0.5f;   /* 0..1 */
         float a = fminf(base_a * (0.5f + caustic * 0.5f) * as, 1.0f);
 
@@ -353,8 +353,8 @@ static void scene_grid_render_ocean_theme(const GridDrawContext *grid_ctx,
     glEnd();
     /* Origin axes — write to depth buffer; colour evaluated at v=0 */
     {
-        float c1_o = sinf(g_anim_time * 1.3f);
-        float c2_o = cosf(-g_anim_time * 0.9f);
+        float c1_o = sinf((*repl_state_variables()->anim_time) * 1.3f);
+        float c2_o = cosf(-(*repl_state_variables()->anim_time) * 0.9f);
         float caustic_o = (c1_o * c2_o) * 0.5f + 0.5f;
         float a_o = fminf(0.95f * (0.5f + caustic_o * 0.5f) * as, 1.0f);
         float r_o = 0.10f + caustic_o * 0.35f;
@@ -388,9 +388,9 @@ static void scene_grid_render_ocean_theme(const GridDrawContext *grid_ctx,
                 float zz = sz + row * surf_step;
 
                 /* Composite wave displacement (3 octaves) */
-                float w = sinf(sx * 1.5f + g_anim_time * 0.7f) * 0.025f
-                        + cosf(zz * 1.8f + g_anim_time * 0.5f) * 0.018f
-                        + sinf((sx + zz) * 0.8f + g_anim_time * 1.0f) * 0.012f;
+                float w = sinf(sx * 1.5f + (*repl_state_variables()->anim_time) * 0.7f) * 0.025f
+                        + cosf(zz * 1.8f + (*repl_state_variables()->anim_time) * 0.5f) * 0.018f
+                        + sinf((sx + zz) * 0.8f + (*repl_state_variables()->anim_time) * 1.0f) * 0.012f;
                 float y = surf_y + w;
 
                 /* Smooth edge fade so the surface has no hard border */
@@ -402,8 +402,8 @@ static void scene_grid_render_ocean_theme(const GridDrawContext *grid_ctx,
                 float alpha = 0.62f * edge;
 
                 /* Subtle colour variation across surface */
-                float cr = sinf(sx * 0.4f + g_anim_time * 0.3f) * 0.04f;
-                float cg = cosf(zz * 0.3f + g_anim_time * 0.25f) * 0.04f;
+                float cr = sinf(sx * 0.4f + (*repl_state_variables()->anim_time) * 0.3f) * 0.04f;
+                float cg = cosf(zz * 0.3f + (*repl_state_variables()->anim_time) * 0.25f) * 0.04f;
                 glColor4f(0.05f + cr, 0.25f + cg, 0.35f + cr, alpha);
                 glVertex3f(sx, y, zz);
             }
@@ -575,7 +575,7 @@ void scene_grid_render(const FrameRenderContext *frame_ctx) {
     glPushMatrix();
     glTranslatef(0, -0.002f, 0);
 
-    float breath = sinf(g_anim_time * 0.8f) * 0.5f + 0.5f; /* 0..1 */
+    float breath = sinf((*repl_state_variables()->anim_time) * 0.8f) * 0.5f + 0.5f; /* 0..1 */
 
     /* Configurable extent / major-tick spacing. Minor step is the
      * major cell divided into 5 subdivisions, which keeps the look

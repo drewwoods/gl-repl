@@ -173,7 +173,7 @@ void scene_axes_render(const FrameRenderContext *frame_ctx) {
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
-    float breath = sinf(g_anim_time * 0.8f) * 0.5f + 0.5f; /* 0..1 */
+    float breath = sinf((*repl_state_variables()->anim_time) * 0.8f) * 0.5f + 0.5f; /* 0..1 */
     float as = config->alpha_scale;
 
     switch (axes_theme) {
@@ -192,7 +192,7 @@ void scene_axes_render(const FrameRenderContext *frame_ctx) {
         draw_axis_line_triplet(len, 1.5f, spec->axis, 1);
 
         /* Pulsing dot position (loops 0..1) */
-        float t = fmodf(g_anim_time * 0.6f, 1.0f);
+        float t = fmodf((*repl_state_variables()->anim_time) * 0.6f, 1.0f);
         float pos = t * len;
         float glow = sinf(t * (float)M_PI); /* bright in middle, dim at ends */
         glow = glow * 0.8f + 0.2f;

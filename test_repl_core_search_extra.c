@@ -1,5 +1,14 @@
 #include "repl_core_internal.h"
 
+#define g_search_active    (*repl_state_search_mut()->active)
+#define g_search_query     (repl_state_search_mut()->query)
+#define g_search_query_len (*repl_state_search_mut()->query_len)
+#define g_search_cursor_pos (*repl_state_search_mut()->cursor_pos)
+#define g_search_match_count (*repl_state_search_mut()->match_count)
+#define g_search_hit_line  (*repl_state_search_mut()->hit_line_idx)
+#define g_search_hit_char  (*repl_state_search_mut()->hit_char_idx)
+#define g_search_hit_ordinal (*repl_state_search_mut()->hit_ordinal)
+
 #include <stdio.h>
 #include <string.h>
 

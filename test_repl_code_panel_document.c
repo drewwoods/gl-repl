@@ -27,12 +27,12 @@ static int code_panel_text_x(void) {
 static void reset_doc_fixture(void) {
     repl_reset_state();
     repl_state_viewport_set_size(800, 260);
-    g_panel_frac = 0.45f;
+    *repl_state_code_panel_mut()->panel_frac = 0.45f;
     *repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT;
     *repl_state_presentation_mut()->show_vertex_indices = 0;
-    g_scroll = 0;
-    g_scroll_follow_cursor = 0;
-    refresh_workspace_header_lines();
+    *repl_state_code_panel_mut()->scroll = 0;
+    *repl_state_code_panel_mut()->scroll_follow_cursor = 0;
+    repl_state_refresh_workspace_header_lines();
 }
 
 static void build_doc(CodePanelDocumentLayout *layout) {
@@ -86,13 +86,13 @@ int main(void) {
     repl_feed_line_public("glColor3f(1, 0, 0);");
     repl_feed_line_public("glEnd();");
     repl_navigate_to_line(2);
-    g_scroll = 0;
-    g_scroll_follow_cursor = 1;
+    *repl_state_code_panel_mut()->scroll = 0;
+    *repl_state_code_panel_mut()->scroll_follow_cursor = 1;
     build_doc(&layout);
     repl_code_panel_document_apply_follow_scroll(&layout);
     ASSERT_TRUE("follow line visible after apply",
-                layout.follow_doc_line >= g_scroll &&
-                layout.follow_doc_line < g_scroll + layout.visible_lines);
+                layout.follow_doc_line >= *repl_state_code_panel()->scroll &&
+                layout.follow_doc_line < *repl_state_code_panel()->scroll + layout.visible_lines);
 
     if (g_failed) {
         printf("repl_code_panel_document: %d/%d passed\n",

@@ -1,5 +1,7 @@
 #include "repl_core_internal.h"
 
+#define g_status (repl_state_status_mut()->text)
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>

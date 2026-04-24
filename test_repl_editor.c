@@ -12,6 +12,25 @@
 #include "ui_panels.h"
 #include "ui_variable_panel.h"
 #include "repl_inline_rename.h"
+
+#define g_status     (repl_state_status_mut()->text)
+#define g_scroll     (*repl_state_code_panel_mut()->scroll)
+#define g_panel_frac (*repl_state_code_panel_mut()->panel_frac)
+#define g_ac_count   (*repl_state_autocomplete_mut()->match_count)
+#define g_ac_sel     (*repl_state_autocomplete_mut()->selected_idx)
+#define g_ac_ghost   (repl_state_autocomplete_mut()->ghost)
+#define g_ac_hint    (repl_state_autocomplete_mut()->hint)
+#define g_search_active    (*repl_state_search_mut()->active)
+#define g_search_query     (repl_state_search_mut()->query)
+#define g_search_query_len (*repl_state_search_mut()->query_len)
+#define g_search_cursor_pos (*repl_state_search_mut()->cursor_pos)
+#define g_show_help          (*repl_state_help_mut()->visible)
+#define g_help_tab           (*repl_state_help_mut()->tab_idx)
+#define g_show_profile_panel (*repl_state_profile_panel_mut()->mode)
+#define g_scroll_follow_cursor (*repl_state_code_panel_mut()->scroll_follow_cursor)
+#define refresh_workspace_header_lines repl_state_refresh_workspace_header_lines
+#define parse_workspace_header_line    repl_state_parse_workspace_header_line
+
 #include <stdio.h>
 #include <string.h>
 
