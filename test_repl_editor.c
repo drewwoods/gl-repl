@@ -36,6 +36,12 @@ static int g_mock_modifiers = 0;
     else printf("FAIL [%s] got \"%s\", expected \"%s\" (line %d)\n", label, got, exp, __LINE__); \
 } while (0)
 
+#define IMPORT_EXPORT_STATE (repl_state_import_export())
+#define g_workspace_header_lines (IMPORT_EXPORT_STATE->workspace_header_lines)
+#define g_workspace_header_line_count (*IMPORT_EXPORT_STATE->workspace_header_line_count)
+#define g_render_state_lines (IMPORT_EXPORT_STATE->render_state_lines)
+#define g_cam_lines (IMPORT_EXPORT_STATE->cam_lines)
+
 #define replay_active        (*repl_state_replay_mut()->active)
 #define replay_state         (*repl_state_replay_mut()->state)
 #define replay_pc            (*repl_state_replay_mut()->pc)

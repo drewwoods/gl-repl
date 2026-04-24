@@ -11,6 +11,8 @@
 /* Import/export helpers stay in repl_export.c for now; state exposes them. */
 void refresh_workspace_header_lines(void);
 int  parse_workspace_header_line(const char *line);
+void update_render_state_strings(void);
+void update_cam_lines(void);
 
 GLCmd g_cmds[MAX_COMMANDS];
 int   g_num_cmds = 0;
@@ -128,6 +130,24 @@ int   g_replay_expand_args = 1;
 
 int  g_example_idx = -1;
 char g_workspace_dir[REPL_WORKSPACE_DIR_MAX] = "";
+char g_workspace_header_lines[MAX_WORKSPACE_HEADER_LINES][WORKSPACE_HEADER_LINE_LEN] = {
+    [0] = "",
+};
+int  g_workspace_header_line_count = 0;
+char g_render_state_lines[RENDER_STATE_LINE_COUNT][64] = {
+    "  glEnable(GL_MULTISAMPLE);",
+    "  glDisable(GL_LINE_SMOOTH);",
+    "  glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE);"
+};
+char g_cam_lines[CAM_LINE_COUNT][96] = {
+    "  glTranslatef(0.0000f, 0.0000f, -5.0000f);",
+    "  glRotatef(20.0000f, 1.0f, 0.0f, 0.0f);",
+    "  glRotatef(30.0000f, 0.0f, 1.0f, 0.0f);",
+    "  glTranslatef(0.0000f, 0.0000f, 0.0000f);"
+};
+const char *g_export_scene_name_hint = NULL;
+char g_pending_scene_name[USER_SCENE_NAME_MAX] = "";
+char g_pending_workspace_dir[REPL_WORKSPACE_DIR_MAX] = "";
 
 static ReplRuntimeState g_repl_state = {
     .document = {
@@ -1120,6 +1140,7 @@ void repl_state_reset_all(void) {
     repl_state_search_clear();
     repl_state_import_export_reset();
     update_render_state_strings();
+    update_cam_lines();
     depth_cache_invalidate();
     repl_state_mark_flat_dirty();
     repl_state_mark_normals_dirty();

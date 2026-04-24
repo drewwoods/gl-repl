@@ -17,6 +17,12 @@
 #include "ui_profile_panel.h"
 #include "ui_panels.h"
 
+#define IMPORT_EXPORT_STATE (repl_state_import_export())
+#define g_workspace_header_lines (IMPORT_EXPORT_STATE->workspace_header_lines)
+#define g_workspace_header_line_count (*IMPORT_EXPORT_STATE->workspace_header_line_count)
+#define g_render_state_lines (IMPORT_EXPORT_STATE->render_state_lines)
+#define g_cam_lines (IMPORT_EXPORT_STATE->cam_lines)
+
 /* Status footer height — design: 22px strip flush against code panel bottom */
 /* STATUSBAR_H lives in sample.h now so scene_render.c can lift the
  * replay HUD above the amber status strip.  */

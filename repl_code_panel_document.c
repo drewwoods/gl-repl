@@ -10,6 +10,12 @@
 #include "repl_replay_annotations.h"
 #include "repl_state.h"
 
+#define IMPORT_EXPORT_STATE (repl_state_import_export())
+#define g_workspace_header_lines (IMPORT_EXPORT_STATE->workspace_header_lines)
+#define g_workspace_header_line_count (*IMPORT_EXPORT_STATE->workspace_header_line_count)
+#define g_render_state_lines (IMPORT_EXPORT_STATE->render_state_lines)
+#define g_cam_lines (IMPORT_EXPORT_STATE->cam_lines)
+
 CodePanelTextLayout repl_code_panel_document_text_layout(int panel_w,
                                                          int first_x) {
     return repl_code_panel_layout_make(panel_w, first_x, FONT_W,

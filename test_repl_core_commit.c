@@ -28,6 +28,12 @@ static int g_pass = 0;
 #define replay_pc            (*repl_state_replay_mut()->pc)
 #define replay_src_line      (*repl_state_replay_mut()->src_line_idx)
 
+#define IMPORT_EXPORT_STATE (repl_state_import_export())
+#define g_workspace_header_lines (IMPORT_EXPORT_STATE->workspace_header_lines)
+#define g_workspace_header_line_count (*IMPORT_EXPORT_STATE->workspace_header_line_count)
+#define g_render_state_lines (IMPORT_EXPORT_STATE->render_state_lines)
+#define g_cam_lines (IMPORT_EXPORT_STATE->cam_lines)
+
 static void declare_test_vars(void) {
     char err[128];
     declare_predef_var("x", err, sizeof(err));

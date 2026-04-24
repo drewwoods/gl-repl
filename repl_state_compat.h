@@ -103,13 +103,9 @@ extern int         g_cursor_py;
 
 extern char g_scratch_buf[256];
 
-extern char g_workspace_header_lines[MAX_WORKSPACE_HEADER_LINES][WORKSPACE_HEADER_LINE_LEN];
-extern int  g_workspace_header_line_count;
 void refresh_workspace_header_lines(void);
 int  parse_workspace_header_line(const char *line);
 
-extern char        g_render_state_lines[RENDER_STATE_LINE_COUNT][64];
-extern char        g_cam_lines[CAM_LINE_COUNT][96];
 extern const char *g_header_pre[];
 extern const char *g_header_post[];
 extern const char *g_footer_pre_init[];

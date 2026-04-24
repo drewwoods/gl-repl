@@ -4,6 +4,15 @@
 #include "repl_command_store.h"
 #include "ui_panels.h"
 
+#define IMPORT_EXPORT_STATE (repl_state_import_export_mut())
+#define g_workspace_header_lines (IMPORT_EXPORT_STATE->workspace_header_lines)
+#define g_workspace_header_line_count (*IMPORT_EXPORT_STATE->workspace_header_line_count)
+#define g_render_state_lines (IMPORT_EXPORT_STATE->render_state_lines)
+#define g_cam_lines (IMPORT_EXPORT_STATE->cam_lines)
+#define g_export_scene_name_hint (*IMPORT_EXPORT_STATE->export_scene_name_hint)
+#define g_pending_scene_name (IMPORT_EXPORT_STATE->pending_scene_name)
+#define g_pending_workspace_dir (IMPORT_EXPORT_STATE->pending_workspace_dir)
+
 const char *g_header_pre[] = {
     "#include <gl_includes.h>",
     "#include <math.h>",
@@ -23,9 +32,6 @@ const char *g_header_pre[] = {
     NULL
 };
 
-char g_workspace_header_lines[MAX_WORKSPACE_HEADER_LINES][WORKSPACE_HEADER_LINE_LEN];
-int  g_workspace_header_line_count = 0;
-
 /* Deferred @var values: set by parse_workspace_header_line alongside the
  * normal auto-declare+set-value path.  load_from_file re-applies them after
  * the snippet is processed so that // @declare markers in the snippet can
@@ -35,18 +41,6 @@ int  g_workspace_header_line_count = 0;
 typedef struct { char name[16]; float value; } DeferredVar;
 static DeferredVar g_deferred_var_values[MAX_DEFERRED_VAR_VALUES];
 static int         g_deferred_var_count = 0;
-
-/* Transient: set by repl_save_workspace during each slot's export so
- * refresh_workspace_header_lines emits the slot's scene name.  Cleared
- * by the exporter once the file is written. */
-const char *g_export_scene_name_hint = NULL;
-
-/* Parsed from the workspace header by parse_workspace_header_line; read
- * by the caller of load_from_file once the file is fully consumed so the
- * slot allocator can name the imported scene.  Reset at the start of
- * each load_from_file call (along with g_deferred_var_count). */
-char g_pending_scene_name[USER_SCENE_NAME_MAX] = "";
-char g_pending_workspace_dir[1024] = "";
 
 static void workspace_slug_from_name(const char *name, char *out, size_t out_sz) {
     size_t j = 0;
@@ -87,7 +81,7 @@ typedef struct {
 
 static int parse_workspace_dir(const char *args) {
     size_t i = 0;
-    while (*args && i < sizeof(g_pending_workspace_dir) - 1)
+    while (*args && i < REPL_WORKSPACE_DIR_MAX - 1)
         g_pending_workspace_dir[i++] = *args++;
     g_pending_workspace_dir[i] = '\0';
     while (i > 0 && isspace((unsigned char)g_pending_workspace_dir[i - 1]))
@@ -108,7 +102,7 @@ static void emit_workspace_dir(int *n) {
 
 static int parse_scene_name(const char *args) {
     size_t i = 0;
-    while (*args && i < sizeof(g_pending_scene_name) - 1)
+    while (*args && i < USER_SCENE_NAME_MAX - 1)
         g_pending_scene_name[i++] = *args++;
     g_pending_scene_name[i] = '\0';
     while (i > 0 && isspace((unsigned char)g_pending_scene_name[i - 1]))
@@ -280,19 +274,6 @@ int parse_workspace_header_line(const char *line) {
     }
     return 0;
 }
-
-char g_render_state_lines[RENDER_STATE_LINE_COUNT][64] = {
-    "  glEnable(GL_MULTISAMPLE);",
-    "  glDisable(GL_LINE_SMOOTH);",
-    "  glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE);"
-};
-
-char g_cam_lines[CAM_LINE_COUNT][96] = {
-    "  glTranslatef(0.0000f, 0.0000f, -5.0000f);",
-    "  glRotatef(20.0000f, 1.0f, 0.0f, 0.0f);",
-    "  glRotatef(30.0000f, 0.0f, 1.0f, 0.0f);",
-    "  glTranslatef(0.0000f, 0.0000f, 0.0000f);"
-};
 
 const char *g_header_post[] = {
     NULL
