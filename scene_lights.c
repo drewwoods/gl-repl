@@ -37,7 +37,7 @@ void scene_lights_render(void) {
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
-    float breath = sinf(g_anim_time * 1.2f) * 0.5f + 0.5f;
+    float breath = sinf((*repl_state_variables()->anim_time) * 1.2f) * 0.5f + 0.5f;
 
     for (int i = 0; i < MAX_LIGHTS; i++) {
         float *d = render->lights[i].diffuse;

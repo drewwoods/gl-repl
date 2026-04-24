@@ -26,7 +26,7 @@ static float city_rng(unsigned int s) {
 
 static float city_night_factor(float angle) {
     float tz = angle / (2.0f * (float)M_PI);
-    float local_t = fmodf(g_anim_time / CITY_CYCLE_SECS + tz, 1.0f);
+    float local_t = fmodf((*repl_state_variables()->anim_time) / CITY_CYCLE_SECS + tz, 1.0f);
     if (local_t < 0.0f) local_t += 1.0f;
     return 0.5f + 0.5f * cosf(local_t * 2.0f * (float)M_PI);
 }
@@ -169,7 +169,7 @@ static void draw_cityscape(void) {
                 if (wrng < 0.10f) continue;
 
                 float win_phase = (city_rng(wid + 7u) - 0.5f) * 0.12f;
-                float lt = fmodf(g_anim_time / CITY_CYCLE_SECS + tz + bldg_phase + win_phase,
+                float lt = fmodf((*repl_state_variables()->anim_time) / CITY_CYCLE_SECS + tz + bldg_phase + win_phase,
                                  1.0f);
                 if (lt < 0.0f) lt += 1.0f;
 

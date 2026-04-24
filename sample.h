@@ -335,7 +335,7 @@ static inline void unwind_tracked_transform_stack(int *matrix_depth) {
 #include "repl_config.h"
 #include "repl_flatten.h"
 #include "repl_executor.h"
-#include "repl_state_compat.h"
+#include "repl_state.h"
 #include "repl_source_scope.h"
 
 int  init_section_line_count(void);

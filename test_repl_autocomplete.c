@@ -1,5 +1,12 @@
 #include "repl_core_internal.h"
 #include "sample.h"
+
+#define g_ac_count          (*repl_state_autocomplete_mut()->match_count)
+#define g_ac_ghost          (repl_state_autocomplete_mut()->ghost)
+#define g_ac_hint           (repl_state_autocomplete_mut()->hint)
+#define g_ac_matches        (repl_state_autocomplete_mut()->matches)
+#define g_ac_insert_matches (repl_state_autocomplete_mut()->insert_matches)
+
 #include <stdio.h>
 #include <string.h>
 

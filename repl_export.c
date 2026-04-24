@@ -518,10 +518,10 @@ static void emit_export_cam_lines(FILE *f) {
 void update_render_state_strings(void) {
     snprintf(g_render_state_lines[0], sizeof(g_render_state_lines[0]),
              "  gl%s(GL_MULTISAMPLE);",
-             g_multisample_enabled ? "Enable" : "Disable");
+             *repl_state_render()->multisample_enabled ? "Enable" : "Disable");
     snprintf(g_render_state_lines[1], sizeof(g_render_state_lines[1]),
              "  gl%s(GL_LINE_SMOOTH);",
-             g_line_smooth_enabled ? "Enable" : "Disable");
+             *repl_state_render()->line_smooth_enabled ? "Enable" : "Disable");
     snprintf(g_render_state_lines[2], sizeof(g_render_state_lines[2]),
              "  glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE);");
 }
@@ -678,7 +678,7 @@ static void write_light_setup(FILE *f) {
     int first_light = 1;
 
     for (int i = 0; i < MAX_LIGHTS; i++) {
-        const SceneLight *l = &g_lights[i];
+        const SceneLight *l = &repl_state_render()->lights[i];
         const char *ln = light_names[i];
 
         if (!l->enabled) continue;

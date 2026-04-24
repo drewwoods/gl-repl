@@ -4,6 +4,13 @@
 #include "repl_state.h"
 #include "ui_panels.h"
 
+#define g_status  (repl_state_status_mut()->text)
+#define g_scroll  (*repl_state_code_panel_mut()->scroll)
+#define g_t_playing (*repl_state_variables_mut()->time_playing)
+#define g_ac_ghost  (repl_state_autocomplete_mut()->ghost)
+#define g_ac_hint   (repl_state_autocomplete_mut()->hint)
+#define g_ac_matches (repl_state_autocomplete_mut()->matches)
+
 #include <ctype.h>
 #include <stdio.h>
 #include <stdlib.h>

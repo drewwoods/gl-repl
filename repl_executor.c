@@ -5,6 +5,14 @@
 #include "repl_core_internal.h"
 #include "repl_state.h"
 
+#define EXEC_RENDER (repl_state_render_mut())
+#define g_lights          (EXEC_RENDER->lights)
+#define g_clear_color     (EXEC_RENDER->clear_color)
+#define g_quadric         (*EXEC_RENDER->quadric)
+#define g_tess            (*EXEC_RENDER->tess)
+#define g_tess_verts      (EXEC_RENDER->tess_verts)
+#define g_tess_vert_count (*EXEC_RENDER->tess_vert_count)
+
 /* Execution context adjusted by repl_replay.c for fade-batch rendering. */
 static float g_execute_alpha_scale = 1.0f;
 
