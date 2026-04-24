@@ -117,16 +117,16 @@ most refactor decisions.
 The old single-arrow version blurred together three different
 relationships. In the updated diagram:
 
-- `-->` means “delegated mutation / write-owning path”
+- `e1@==>` means “delegated mutation / write-owning path”
 - `-.->` means “read/query/render dependency”
-- `==>` means “invoke / stage / dataflow path”
+- `i1@-->` means “invoke / stage / dataflow path”
 
 ```mermaid
 flowchart LR
     subgraph legend["Edge meaning"]
-        lmut_a["delegates mutation"] --> lmut_b["write-owning module"]
+        lmut_a["delegates mutation"] e1@==> lmut_b["write-owning module"]
         lread_a["reads / renders"] -.-> lread_b["query / model / helper"]
-        lflow_a["invokes / feeds"] ==> lflow_b["callback / stage / pass"]
+        lflow_a["invokes / feeds"] i1@--> lflow_b["callback / stage / pass"]
     end
 
     sample["sample.c<br/>GLUT callback wiring"]
@@ -183,74 +183,81 @@ flowchart LR
 
     export["repl_export.c<br/>typed scaffold · import/export · visual dump"]
 
-    sample ==> editor
+    sample i2@--> editor
 
-    editor ==> actions
-    editor ==> camera
-    editor ==> undo
-    editor ==> clipboard
-    editor ==> commit
+    editor i3@--> actions
+    editor i4@--> camera
+    editor i5@--> undo
+    editor i6@--> clipboard
+    editor i7@--> commit
     editor -.-> uicp
-    editor ==> replay
+    editor i8@--> replay
     editor -.-> varpanel
-    editor ==> rename
-    editor ==> vardrag
+    editor i9@--> rename
+    editor i10@--> vardrag
 
-    actions --> audio
-    actions --> replay
-    actions --> scenes
-    actions --> core
-    actions --> rename
-    actions --> uicp
+    actions e2@==> audio
+    actions e3@==> replay
+    actions e4@==> scenes
+    actions e5@==> core
+    actions e6@==> rename
+    actions e7@==> uicp
 
-    clipboard --> undo
-    clipboard --> store
-    commit --> undo
+    clipboard e8@==> undo
+    clipboard e9@==> store
+    commit e10@==> undo
     commit -.-> parser
     commit -.-> scope
-    commit --> store
-    undo --> scenes
-    store ==> core
+    commit e11@==> store
+    undo e12@==> scenes
+    store i11@--> core
 
     core -.-> parser
     core -.-> scope
-    core ==> flatten
-    core ==> exec
-    core ==> sceneR
-    core ==> help
-    core ==> varpanel
-    core ==> acpanel
+    core i12@--> flatten
+    core i13@--> exec
+    core i14@--> sceneR
+    core i15@--> help
+    core i16@--> varpanel
+    core i17@--> acpanel
 
     acpanel -.-> acmodel
-    rename --> scenes
+    rename e13@==> scenes
     varpanel -.-> vardrag
-    replay ==> exec
+    replay i18@--> exec
 
-    sceneR ==> exec
+    sceneR i19@--> exec
     sceneR -.-> replay
-    sceneR ==> geomg
-    sceneR ==> xformg
-    sceneR ==> backdrop
-    sceneR ==> lights
-    sceneR ==> overlays
-    sceneR ==> grid
-    sceneR ==> axes
+    sceneR i20@--> geomg
+    sceneR i21@--> xformg
+    sceneR i22@--> backdrop
+    sceneR i23@--> lights
+    sceneR i24@--> overlays
+    sceneR i25@--> grid
+    sceneR i26@--> axes
 
     parser -.-> scope
     flatten -.-> scope
 
-    uicp ==> actions
+    uicp i27@--> actions
     uicp -.-> scenes
     uicp -.-> docrows
-    uicp ==> menu
-    uicp ==> color
+    uicp i28@--> menu
+    uicp i29@--> color
     docrows -.-> layout
     docrows -.-> replay_ann
     replay_ann -.-> replay
-    menu ==> actions
+    menu i30@--> actions
     menu -.-> scenes
-    color --> core
+    color e14@==> core
     export -.-> layout
+
+    classDef animateE stroke:#f50,stroke-dasharray: 9\,5,stroke-dashoffset: 900,animation: dash 90s linear infinite;
+
+    classDef animateF stroke:#5f0,stroke-dasharray: 9\,5,stroke-dashoffset: 900,animation: dash 90s linear infinite;
+
+    class e1,e2,e3,e4,e5,e6,e7,e8,e9,e10,e11,e12,e13,e14 animateE
+    class i2,i3,i4,i5,i6,i7,i8,i9,i10,i11,i12,i13,i14,i15,i16,i17,i18,i19,i20,i21,i22,i23,i24,i25,i26,i27,i28,i29,i30 animateF
 ```
 
 ## Render / Model Split
