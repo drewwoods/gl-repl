@@ -14,6 +14,10 @@
 #define SCENE_STATE (repl_state_scenes_mut())
 #define g_example_idx (*SCENE_STATE->active_example_idx)
 #define g_workspace_dir (SCENE_STATE->workspace_dir)
+#define IMPORT_EXPORT_STATE (repl_state_import_export_mut())
+#define g_export_scene_name_hint (*IMPORT_EXPORT_STATE->export_scene_name_hint)
+#define g_pending_scene_name (IMPORT_EXPORT_STATE->pending_scene_name)
+#define g_pending_workspace_dir (IMPORT_EXPORT_STATE->pending_workspace_dir)
 
 /* User scene slots for the workspace / example-promotion system.
  *

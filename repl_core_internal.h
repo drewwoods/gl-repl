@@ -107,17 +107,6 @@ void apply_init_bootstrap(void);
 void save_output(const char *filename);
 int  load_from_file(const char *filename);
 
-/* Set by repl_save_workspace before each slot's save_output call so the
- * exported file's header advertises that slot's scene name.  Cleared
- * between exports. */
-extern const char *g_export_scene_name_hint;
-
-/* Populated by parse_workspace_header_line during load_from_file.  The
- * outer workspace-importer reads these after load_from_file returns to
- * name the new scene slot.  Reset on each load_from_file entry. */
-extern char g_pending_scene_name[];
-extern char g_pending_workspace_dir[];
-
 /* ---- Text / expression parsing helpers -------------------------------- */
 
 void trim_in_place(char *s);

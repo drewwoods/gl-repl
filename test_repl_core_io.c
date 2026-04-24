@@ -4,6 +4,9 @@
 #include <stdlib.h>
 #include <string.h>
 
+#define IMPORT_EXPORT_STATE (repl_state_import_export())
+#define g_render_state_lines (IMPORT_EXPORT_STATE->render_state_lines)
+
 static int g_run = 0;
 static int g_pass = 0;
 

@@ -261,8 +261,11 @@ void repl_debug_dump_editor(FILE *out) {
                 (double)*cam->tx, (double)*cam->ty, (double)*cam->tz);
     }
     update_cam_lines();
-    for (int i = 0; i < CAM_LINE_COUNT; i++)
-        fprintf(dst, "%s\n", g_cam_lines[i]);
+    {
+        const ReplImportExportState *meta = repl_state_import_export();
+        for (int i = 0; i < CAM_LINE_COUNT; i++)
+            fprintf(dst, "%s\n", meta->cam_lines[i]);
+    }
     fprintf(dst, "--- init ---\n");
     for (int i = 0; i < init_section_line_count(); i++) {
         char line[MAX_LINE_LEN];
@@ -834,7 +837,8 @@ int collect_visible_vars(int pos, ExprVar *vars, int max_vars) {
 
 static void scroll_to_display_function(void) {
     refresh_workspace_header_lines();
-    int target = g_workspace_header_line_count;
+    const ReplImportExportState *meta = repl_state_import_export();
+    int target = *meta->workspace_header_line_count;
     for (int i = 0; g_header_pre[i]; i++) {
         if (strcmp(g_header_pre[i], "void display() {") == 0)
             break;

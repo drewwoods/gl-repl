@@ -3,7 +3,7 @@
 ## Summary
 Migrate one runtime domain at a time from broad `g_*` access to `ReplRuntimeState` ownership. Each domain follows the same pattern: add focused accessors, convert production callers, update tests, move storage into `repl_state.c`, then delete that domain’s compat externs from `repl_state_compat.h`.
 
-Current status: slices 3.1, 3.2, 3.3, 3.4, 3.5, 3.6, and 3.7 are complete. 3.8 has started: scene/workspace runtime now routes through `repl_state` accessors, while the import/export metadata bundle and later domains (search, autocomplete, status) remain open. Next up is finishing the rest of 3.8 before 3.9.
+Current status: slices 3.1, 3.2, 3.3, 3.4, 3.5, 3.6, 3.7, and 3.8 are complete. Scene/workspace runtime and the import/export metadata bundle now route through `repl_state` accessors; the remaining open domains are search, autocomplete, and status.
 
 ## Migration Pattern For Every Slice
 1. Add the smallest missing `repl_state_*` helper API needed by the domain.
@@ -72,11 +72,8 @@ Landed as the render-resource slice: `repl_state.c` now owns the GL resource sto
 ### 3.7 Replay ✅ DONE
 Replay behavior stays owned by `repl_replay.c`, but replay control storage now lives in `repl_state.c`: active, state, pc, mode, speed, accum, fade speed, source line, total flat count, and expand args. The main production consumers are on `repl_state_replay()` for replay reads/writes: `repl_core.c`, `scene_render.c`, `repl_actions.c`, `ui_panels.c`, `repl_editor.c`, `repl_replay_annotations.c`, `repl_config.c`, `ui_menu_bar.c`, `ui_variable_panel.c`, `repl_code_panel_document.c`, `repl_executor.c`, and `bench_repl.c`. Replay tests now use `repl_state_replay_mut()` accessors, and the replay compat externs have been removed.
 
-### 3.8 Scenes, Workspace, Import/Export Metadata
-- Keep `g_user_scenes[]` and active scene internals private to `repl_scenes.c`; they are already encapsulated domain storage.
-- Scene/workspace runtime now lives in `repl_state.c`: active example index and workspace dir.
-- `repl_scenes.c`, `repl_example_loader.c`, `repl_actions.c`, `repl_editor.c`, `ui_menu_bar.c`, `test_repl_editor.c`, and the export header path now route through `repl_state_scenes()` / `repl_state_workspace_*()` accessors.
-- Remaining work for this slice: move workspace header lines, render-state lines, camera metadata lines, pending scene/workspace names, and export scene-name hint into `repl_state.c`, then remove the remaining workspace/import-export bridge.
+### 3.8 Scenes, Workspace, Import/Export Metadata ✅ DONE
+`g_example_idx` and `g_workspace_dir` now live behind `repl_state_scenes()`, and the workspace/import-export metadata bundle now lives behind `repl_state_import_export()`: workspace header lines, render-state lines, camera metadata lines, pending scene/workspace names, and the export scene-name hint. `repl_scenes.c`, `repl_example_loader.c`, `repl_actions.c`, `repl_editor.c`, `ui_menu_bar.c`, `repl_core.c`, `repl_export.c`, and the affected tests now use the state facade, and the remaining workspace/import-export compat externs have been removed.
 
 ### 3.9 Search, Autocomplete, Status
 - Add status read accessor if needed; keep mutation through `repl_status_set/clear/tick`.
