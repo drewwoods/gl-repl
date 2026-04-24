@@ -38,6 +38,24 @@ GLCmd            g_clipboard[MAX_COMMANDS];
 int              g_clipboard_count = 0;
 int              g_sel_anchor = -1;
 int              g_sel_end = -1;
+float            g_anim_time = 0.0f;
+int              g_t_playing = 1;    /* 1: 't' var auto-increments with time; 0: frozen */
+int              g_t_var_idx = -1;   /* index of "t" in g_predef_vars[], cached at init */
+float            g_panel_frac = CFG_DEFAULT_PANEL_FRAC;
+int              g_resizing_panel = 0;
+int              g_scroll = 0;
+int              g_scroll_follow_cursor = 0;
+int              g_cursor_on = 1;
+int              g_blink_tick = 0;
+int              g_show_help = 0;
+int              g_help_tab = 0;   /* 0=Commands, 1=Keys */
+int              g_help_scroll = 0;
+int              g_show_var_panel = 1;
+int              g_drag_var = -1;
+int              g_drag_log_mode = 0;  /* 0=linear (LMB drag), 1=logarithmic (RMB drag) */
+float            g_drag_start_val = 0.0f;
+int              g_drag_start_x = 0;
+int              g_show_profile_panel = PROFILE_PANEL_OFF;
 float            g_cam_rx = 20.0f;
 float            g_cam_ry = 30.0f;
 float            g_cam_dist = 5.0f;
@@ -72,6 +90,8 @@ int              g_show_outlines = CFG_DEFAULT_VERTEX_OUTLINES;
 int              g_show_vpoints = CFG_DEFAULT_VERTEX_POINTS;
 int              g_highlight_current_poly = 1;
 int              g_ortho_mode = 0;
+int              g_cursor_px = 0;     /* screen pos of cursor, set during render */
+int              g_cursor_py = 0;
 const float g_grid_major_steps[GRID_MAJOR_COUNT] = {
     [GRID_MAJOR_1]  = 1.0f,
     [GRID_MAJOR_2]  = 2.0f,

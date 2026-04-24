@@ -7,7 +7,8 @@
 
 /* Compatibility facade for the pre-phase-2 global state layout.
  * New code should eventually move to the typed runtime APIs in repl_state.h,
- * but the existing modules still rely on these bundle structs and externs. */
+ * but the existing modules still rely on these bundle structs and legacy
+ * compatibility names. */
 
 typedef struct {
     char *input;
@@ -43,16 +44,6 @@ typedef struct {
 ReplEditorState        repl_editor_state_live(void);
 ReplViewState          repl_view_state_live(void);
 
-extern float g_panel_frac;
-extern int   g_resizing_panel;
-extern int   g_scroll;
-extern int   g_scroll_follow_cursor;
-extern int   g_cursor_on;
-extern int   g_blink_tick;
-extern float g_anim_time;
-extern int   g_t_playing;
-extern int   g_t_var_idx;
-
 extern int   g_use_accum;
 extern int   g_accum_aa_enabled;
 extern int   g_accum_samples;
@@ -61,18 +52,33 @@ extern float g_accum_jitter_y;
 extern int   g_multisample_enabled;
 extern int   g_line_smooth_enabled;
 
-extern int         g_show_help;
-extern int         g_help_tab;
-extern int         g_help_scroll;
-
-extern int   g_show_var_panel;
-extern int   g_drag_var;
-extern int   g_drag_log_mode;
-extern float g_drag_start_val;
-extern int   g_drag_start_x;
-extern int   g_show_profile_panel;
-
 #ifndef REPL_STATE_IMPLEMENTATION
+#define g_anim_time              (*repl_state_variables()->anim_time)
+#define g_t_playing              (*repl_state_variables()->time_playing)
+#define g_t_var_idx              (*repl_state_variables()->time_var_idx)
+
+#define g_panel_frac              (*repl_state_code_panel()->panel_frac)
+#define g_resizing_panel          (*repl_state_code_panel()->resizing_panel)
+#define g_scroll                  (*repl_state_code_panel()->scroll)
+#define g_scroll_follow_cursor    (*repl_state_code_panel()->scroll_follow_cursor)
+#define g_cursor_on               (*repl_state_code_panel()->cursor_visible)
+#define g_blink_tick              (*repl_state_code_panel()->blink_tick)
+#define g_cursor_px               (*repl_state_code_panel()->cursor_px)
+#define g_cursor_py               (*repl_state_code_panel()->cursor_py)
+
+#define g_show_help               (*repl_state_help()->visible)
+#define g_help_tab                (*repl_state_help()->tab_idx)
+#define g_help_scroll             (*repl_state_help()->scroll)
+
+#define g_show_var_panel          (*repl_state_variable_panel()->visible)
+
+#define g_drag_var                (*repl_state_variable_drag()->var_idx)
+#define g_drag_log_mode           (*repl_state_variable_drag()->log_mode)
+#define g_drag_start_val          (*repl_state_variable_drag()->start_value)
+#define g_drag_start_x            (*repl_state_variable_drag()->start_x)
+
+#define g_show_profile_panel       (*repl_state_profile_panel()->mode)
+
 #define g_status                  (repl_state_status()->text)
 #define g_status_ttl              (*repl_state_status()->ttl)
 
@@ -99,9 +105,6 @@ extern TessVertex     g_tess_verts[TESS_VERT_BUF_SIZE];
 extern int            g_tess_vert_count;
 extern SceneLight     g_lights[MAX_LIGHTS];
 extern float          g_clear_color[4];
-
-extern int            g_cursor_px;
-extern int            g_cursor_py;
 
 extern int g_init_attenuate_points;
 

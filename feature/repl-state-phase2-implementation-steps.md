@@ -3,7 +3,7 @@
 ## Summary
 Migrate one runtime domain at a time from broad `g_*` access to `ReplRuntimeState` ownership. Each domain follows the same pattern: add focused accessors, convert production callers, update tests, move storage into `repl_state.c`, then delete that domain’s compat externs from `repl_state_compat.h`.
 
-Current status: slices 3.1, 3.2, 3.3, 3.4, 3.5, 3.6, 3.7, 3.8, and 3.9 are complete. Scene/workspace runtime, the import/export metadata bundle, and the search/autocomplete/status bundle now route through `repl_state` accessors; the remaining open domain is the final UI runtime slice.
+Current status: slices 3.1 through 3.10 are complete. Scene/workspace runtime, the import/export metadata bundle, the search/autocomplete/status bundle, and the remaining UI/time runtime scalars now route through `repl_state` accessors. The remaining Phase 2 work is bridge retirement, not more state migration.
 
 ## Migration Pattern For Every Slice
 1. Add the smallest missing `repl_state_*` helper API needed by the domain.
@@ -78,12 +78,8 @@ Replay behavior stays owned by `repl_replay.c`, but replay control storage now l
 ### 3.9 Search, Autocomplete, Status ✅ DONE
 Status, search, and autocomplete storage now live in `repl_state.c` and are accessed through the typed state facade. `repl_state_compat.h` no longer exports the raw status/search/autocomplete externs; the remaining code paths read and mutate those domains through the accessor-backed compatibility bridge while the final UI runtime slice still has broader global cleanup to do. All 2557 tests pass.
 
-### 3.10 Variable Panel, Profile Panel, Variable Drag, Code Panel Runtime
-- Move small UI runtime states last because they have low behavior risk but many incidental reads.
-- Convert variable panel/profile visibility through state/config helpers.
-- Convert variable drag to `ReplVariableDragState` helpers and keep the drag transaction logic in `repl_var_drag.c`.
-- Convert code-panel runtime fields: panel fraction, resizing flag, scroll, follow-cursor, cursor blink, cursor pixel position.
-- Move storage into `repl_state.c` and remove the final UI runtime compat externs.
+### 3.10 Variable Panel, Profile Panel, Variable Drag, Code Panel Runtime, Time Scalars ✅ DONE
+The last state-migration slice landed in `repl_state.c`: panel fraction, resizing flag, scroll, follow-cursor, cursor blink, cursor pixel position, help overlay state, variable-panel visibility, profile-panel mode, variable-drag transaction state, and the `t` animation bookkeeping now all route through the typed runtime facade. `repl_state_compat.h` no longer exports raw externs for those domains. All 2557 tests pass.
 
 ## API And Compatibility Rules
 - Public command language, save/load format, GLUT entrypoint, and existing high-level REPL APIs stay unchanged.
