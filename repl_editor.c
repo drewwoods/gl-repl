@@ -11,11 +11,11 @@
  *  - Public repl_*_func() wrappers forwarded from sample.c
  *
  * Shared state (g_input, repl_state_edit_line(), repl_state_document_count(), repl_state_document_cmds_mut()[], etc.) is
- * declared through the state compatibility layer while Phase 2 migrates
- * storage into repl_state.c. Commit handlers live in repl_commit.c and
- * parser/executor side lives in repl_core.c / repl_executor.c.
+ * accessed through typed repl_state accessors. Commit handlers live in
+ * repl_commit.c and parser/executor side lives in repl_core.c / repl_executor.c.
  */
 #include "sample.h"
+#include "repl_state.h"
 #include "repl_actions.h"
 #include "repl_core_internal.h"
 #include "repl_command_store.h"
@@ -555,13 +555,16 @@ static CommitResult commit_before_navigation(void) {
     if (result != COMMIT_REJECTED)
         return result;
 
-    memcpy(rejected_status, g_status, sizeof(rejected_status));
-    rejected_ttl = g_status_ttl;
-    restore_commit_attempt_committed_state(before);
-    repl_undo_ring_state_restore(&undo_before);
-    memcpy(g_status, rejected_status, sizeof(rejected_status));
-    g_status[REPL_STATUS_TEXT_MAX - 1] = '\0';
-    g_status_ttl = rejected_ttl;
+    {
+        const ReplStatusState *status = repl_state_status();
+        memcpy(rejected_status, status->text, sizeof(rejected_status));
+        rejected_ttl = *status->ttl;
+        restore_commit_attempt_committed_state(before);
+        repl_undo_ring_state_restore(&undo_before);
+        memcpy(status->text, rejected_status, sizeof(rejected_status));
+        status->text[REPL_STATUS_TEXT_MAX - 1] = '\0';
+        *status->ttl = rejected_ttl;
+    }
     clear_autocomplete_state();
     return COMMIT_REJECTED;
 }
@@ -580,8 +583,9 @@ void navigate_to_line(int target) {
 }
 
 static void keyboard_begin_key(unsigned char key) {
-    g_cursor_on = 1;
-    g_blink_tick = 0;
+    ReplCodePanelRuntimeState *cp = repl_state_code_panel_mut();
+    *cp->cursor_visible = 1;
+    *cp->blink_tick = 0;
 
     /* Cut / copy / backspace / delete preserve any active line-range
      * selection; everything else clears it before processing the key. */
@@ -589,7 +593,7 @@ static void keyboard_begin_key(unsigned char key) {
         key != KEY_CTRL_X && key != KEY_DELETE)
         clear_selection();
 
-    g_scroll_follow_cursor = 1;
+    *cp->scroll_follow_cursor = 1;
 }
 
 static int handle_rename_key_route(unsigned char key) {
@@ -601,7 +605,7 @@ static int handle_rename_key_route(unsigned char key) {
 }
 
 static int handle_config_menu_key_route(unsigned char key) {
-    if (!g_search_active && key == '`') {
+    if (!*repl_state_search()->active && key == '`') {
         if (*repl_state_replay()->active)
             replay_stop();
         editor_restore_hidden_code_panel();
@@ -633,11 +637,11 @@ static int handle_escape_key_route(unsigned char key) {
             glutPostRedisplay();
             return 1;
         }
-        if (g_show_help) {
-            g_show_help = 0;
-            g_help_tab = 0;
-            g_help_scroll = 0;
-        } else if (g_ac_count > 0) {
+        if (*repl_state_help()->visible) {
+            *repl_state_help_mut()->visible = 0;
+            *repl_state_help_mut()->tab_idx = 0;
+            *repl_state_help_mut()->scroll = 0;
+        } else if (*repl_state_autocomplete()->match_count > 0) {
             clear_autocomplete_state();
         } else if (repl_state_insert_mode()) {
             repl_state_insert_mode_set(0);
@@ -797,7 +801,7 @@ static int handle_comment_toggle_key_route(unsigned char key) {
                         /* Clear any prior status (e.g. "Commented out" from the
                          * previous key press) so we can tell whether the
                          * fallback produced an actionable error of its own. */
-                        g_status[0] = '\0';
+                        repl_state_status()->text[0] = '\0';
 
                         if (repl_parse_command_ctx(s, &new_cmd, &parse_ctx)) {
                             built = 1;
@@ -805,7 +809,7 @@ static int handle_comment_toggle_key_route(unsigned char key) {
                             /* Parser may have set its own error (e.g. "Unknown
                              * cmd.") — drop it; the friendly "Cannot uncomment"
                              * message below is clearer for this key path. */
-                            g_status[0] = '\0';
+                            repl_state_status()->text[0] = '\0';
 
                             /* Fallback: variable assignments (`x = expr;`) live
                              * in the commit chain, not the GL-command parser.
@@ -894,20 +898,21 @@ static int handle_comment_toggle_key_route(unsigned char key) {
 }
 
 static int handle_accum_samples_key_route(unsigned char key) {
+    ReplRenderState *rs = repl_state_render_mut();
     if (key == '=' || key == '+') {
         int mods = editor_get_modifiers();
         if (!(mods & GLUT_ACTIVE_CTRL))
             return 0;
-        if (g_use_accum) {
+        if (*rs->use_accum) {
             for (int i = 0; i < ACCUM_STEP_COUNT - 1; i++) {
-                if (g_accum_samples <= g_accum_steps[i]) {
-                    g_accum_samples = g_accum_steps[i + 1];
+                if (*rs->accum_samples <= g_accum_steps[i]) {
+                    *rs->accum_samples = g_accum_steps[i + 1];
                     break;
                 }
             }
             {
                 char msg[64];
-                snprintf(msg, sizeof(msg), "Accum samples: %d", g_accum_samples);
+                snprintf(msg, sizeof(msg), "Accum samples: %d", *rs->accum_samples);
                 set_status(msg);
             }
         }
@@ -916,16 +921,16 @@ static int handle_accum_samples_key_route(unsigned char key) {
 
     if (key == KEY_CTRL_DASH ||
         (key == '-' && (editor_get_modifiers() & GLUT_ACTIVE_CTRL))) {
-        if (g_use_accum) {
+        if (*rs->use_accum) {
             for (int i = ACCUM_STEP_COUNT - 1; i > 0; i--) {
-                if (g_accum_samples >= g_accum_steps[i]) {
-                    g_accum_samples = g_accum_steps[i - 1];
+                if (*rs->accum_samples >= g_accum_steps[i]) {
+                    *rs->accum_samples = g_accum_steps[i - 1];
                     break;
                 }
             }
             {
                 char msg[64];
-                snprintf(msg, sizeof(msg), "Accum samples: %d", g_accum_samples);
+                snprintf(msg, sizeof(msg), "Accum samples: %d", *rs->accum_samples);
                 set_status(msg);
             }
         }
@@ -962,7 +967,7 @@ static int handle_text_delete_key_route(unsigned char key) {
 
 static int handle_tab_key_route(unsigned char key) {
     if (key == '\t') {
-        if (g_ac_count > 0) {
+        if (*repl_state_autocomplete()->match_count > 0) {
             accept_autocomplete();
             update_autocomplete();
         }
@@ -973,7 +978,7 @@ static int handle_tab_key_route(unsigned char key) {
 
 static int handle_enter_key_route(unsigned char key) {
     if (key == '\r' || key == '\n') {
-        if (g_ac_count > 0) {
+        if (*repl_state_autocomplete()->match_count > 0) {
             accept_autocomplete();
             update_autocomplete();
             return 1;
@@ -1120,9 +1125,10 @@ void keyboard_func(unsigned char key, int x, int y) {
 
 static void special_begin_key(int key) {
     (void)key;
-    g_cursor_on = 1;
-    g_blink_tick = 0;
-    g_scroll_follow_cursor = 1;
+    ReplCodePanelRuntimeState *cp = repl_state_code_panel_mut();
+    *cp->cursor_visible = 1;
+    *cp->blink_tick = 0;
+    *cp->scroll_follow_cursor = 1;
 }
 
 static int handle_rename_special_route(int key) {
@@ -1152,16 +1158,17 @@ static int handle_cfg_special_shortcut_route(int key) {
 }
 
 static int handle_horizontal_special_key_route(int key) {
+    ReplHelpState *help = repl_state_help_mut();
     switch (key) {
     case GLUT_KEY_LEFT:
         if (editor_get_modifiers() & GLUT_ACTIVE_CTRL) {
             repl_audio_prev_track();
             return 1;
         }
-        if (g_show_help) {
-            if (g_help_tab > 0) {
-                g_help_tab--;
-                g_help_scroll = 0;
+        if (*help->visible) {
+            if (*help->tab_idx > 0) {
+                (*help->tab_idx)--;
+                *help->scroll = 0;
             }
             return 1;
         }
@@ -1174,10 +1181,10 @@ static int handle_horizontal_special_key_route(int key) {
             repl_audio_next_track();
             return 1;
         }
-        if (g_show_help) {
-            if (g_help_tab < 1) {
-                g_help_tab++;
-                g_help_scroll = 0;
+        if (*help->visible) {
+            if (*help->tab_idx < 1) {
+                (*help->tab_idx)++;
+                *help->scroll = 0;
             }
             return 1;
         }
@@ -1199,14 +1206,16 @@ static int handle_horizontal_special_key_route(int key) {
 }
 
 static int handle_vertical_special_key_route(int key) {
+    ReplHelpState *help = repl_state_help_mut();
+    ReplAutocompleteState *ac = repl_state_autocomplete_mut();
     switch (key) {
     case GLUT_KEY_UP:
-        if (g_show_help) {
-            g_help_scroll--;
+        if (*help->visible) {
+            (*help->scroll)--;
             return 1;
         }
-        if (g_ac_count > 1) {
-            g_ac_sel = (g_ac_sel - 1 + g_ac_count) % g_ac_count;
+        if (*ac->match_count > 1) {
+            *ac->selected_idx = (*ac->selected_idx - 1 + *ac->match_count) % *ac->match_count;
             update_selected_autocomplete_preview();
         } else if (editor_get_modifiers() & GLUT_ACTIVE_SHIFT) {
             if (!sel_active()) {
@@ -1223,12 +1232,12 @@ static int handle_vertical_special_key_route(int key) {
         }
         return 1;
     case GLUT_KEY_DOWN:
-        if (g_show_help) {
-            g_help_scroll++;
+        if (*help->visible) {
+            (*help->scroll)++;
             return 1;
         }
-        if (g_ac_count > 1) {
-            g_ac_sel = (g_ac_sel + 1) % g_ac_count;
+        if (*ac->match_count > 1) {
+            *ac->selected_idx = (*ac->selected_idx + 1) % *ac->match_count;
             update_selected_autocomplete_preview();
         } else if (editor_get_modifiers() & GLUT_ACTIVE_SHIFT) {
             if (!sel_active()) {
@@ -1251,9 +1260,10 @@ static int handle_vertical_special_key_route(int key) {
 
 static int handle_help_toggle_special_key_route(int key) {
     if (key == GLUT_KEY_F1) {
-        g_show_help = !g_show_help;
-        g_help_tab = 0;
-        g_help_scroll = 0;
+        ReplHelpState *help = repl_state_help_mut();
+        *help->visible = !*help->visible;
+        *help->tab_idx = 0;
+        *help->scroll = 0;
         return 1;
     }
     return 0;
@@ -1307,18 +1317,18 @@ static int handle_scene_cycle_special_key_route(int key) {
 static int handle_page_scroll_special_key_route(int key) {
     switch (key) {
     case GLUT_KEY_PAGE_UP:
-        if (g_show_help)
-            g_help_scroll -= 5;
+        if (*repl_state_help()->visible)
+            *repl_state_help_mut()->scroll -= 5;
         else
-            g_scroll -= 5;
-        g_scroll_follow_cursor = 0;
+            *repl_state_code_panel_mut()->scroll -= 5;
+        *repl_state_code_panel_mut()->scroll_follow_cursor = 0;
         return 1;
     case GLUT_KEY_PAGE_DOWN:
-        if (g_show_help)
-            g_help_scroll += 5;
+        if (*repl_state_help()->visible)
+            *repl_state_help_mut()->scroll += 5;
         else
-            g_scroll += 5;
-        g_scroll_follow_cursor = 0;
+            *repl_state_code_panel_mut()->scroll += 5;
+        *repl_state_code_panel_mut()->scroll_follow_cursor = 0;
         return 1;
     default:
         return 0;
@@ -1418,6 +1428,7 @@ static int editor_code_panel_resize_cursor(void) {
 }
 
 static void editor_update_panel_frac_from_mouse(int x, int y) {
+    ReplCodePanelRuntimeState *cp = repl_state_code_panel_mut();
     int layout = editor_code_panel_layout();
 
     if (layout == CODE_PANEL_LAYOUT_HIDDEN) {
@@ -1425,21 +1436,21 @@ static void editor_update_panel_frac_from_mouse(int x, int y) {
     } else if (layout == CODE_PANEL_LAYOUT_TOP) {
         int win_h = *repl_state_viewport()->window_h;
         if (win_h > 0)
-            g_panel_frac = (float)y / (float)win_h;
+            *cp->panel_frac = (float)y / (float)win_h;
     } else if (layout == CODE_PANEL_LAYOUT_BOTTOM) {
         int win_h = *repl_state_viewport()->window_h;
         if (win_h > 0)
-            g_panel_frac = (float)(win_h - y) / (float)win_h;
+            *cp->panel_frac = (float)(win_h - y) / (float)win_h;
     } else {
         int win_w = *repl_state_viewport()->window_w;
         if (win_w > 0)
-            g_panel_frac = (float)x / (float)win_w;
+            *cp->panel_frac = (float)x / (float)win_w;
     }
 
-    if (g_panel_frac < 0.1f)
-        g_panel_frac = 0.1f;
-    if (g_panel_frac > 0.9f)
-        g_panel_frac = 0.9f;
+    if (*cp->panel_frac < 0.1f)
+        *cp->panel_frac = 0.1f;
+    if (*cp->panel_frac > 0.9f)
+        *cp->panel_frac = 0.9f;
 }
 
 static void mouse_func(int button, int state, int x, int y) {
@@ -1450,8 +1461,8 @@ static void mouse_func(int button, int state, int x, int y) {
             glutPostRedisplay();
             return;
         }
-        if (g_resizing_panel) {
-            g_resizing_panel = 0;
+        if (*repl_state_code_panel()->resizing_panel) {
+            *repl_state_code_panel_mut()->resizing_panel = 0;
             glutSetCursor(GLUT_CURSOR_INHERIT);
             glutPostRedisplay();
             return;
@@ -1459,7 +1470,7 @@ static void mouse_func(int button, int state, int x, int y) {
     }
 
     if (button == GLUT_LEFT_BUTTON && state == GLUT_DOWN) {
-        if (g_show_var_panel) {
+        if (*repl_state_variable_panel()->visible) {
             int row;
             if (var_panel_hit(x, y, &row)) {
                 if (*repl_state_replay()->active)
@@ -1482,7 +1493,7 @@ static void mouse_func(int button, int state, int x, int y) {
         }
 
         if (editor_point_on_code_panel_divider(x, y)) {
-            g_resizing_panel = 1;
+            *repl_state_code_panel_mut()->resizing_panel = 1;
             glutSetCursor(editor_code_panel_resize_cursor());
             return;
         }
@@ -1510,7 +1521,7 @@ static void mouse_func(int button, int state, int x, int y) {
     }
 
     /* Right-click on var panel: logarithmic drag mode. */
-    if (button == GLUT_RIGHT_BUTTON && state == GLUT_DOWN && g_show_var_panel) {
+    if (button == GLUT_RIGHT_BUTTON && state == GLUT_DOWN && *repl_state_variable_panel()->visible) {
         int row;
         if (var_panel_hit(x, y, &row)) {
             if (*repl_state_replay()->active)
@@ -1525,21 +1536,21 @@ static void mouse_func(int button, int state, int x, int y) {
 
 #ifdef USE_GLUT
     if (button == 3 && state == GLUT_DOWN) {
-        if (g_show_help) {
-            g_help_scroll--;
+        if (*repl_state_help()->visible) {
+            (*repl_state_help_mut()->scroll)--;
         } else {
             if (editor_point_in_code_panel(x, y))
-                g_scroll--;
+                (*repl_state_code_panel_mut()->scroll)--;
             else
                 repl_camera_add_zoom_velocity(-0.3f);
         }
         glutPostRedisplay();
     } else if (button == 4 && state == GLUT_DOWN) {
-        if (g_show_help) {
-            g_help_scroll++;
+        if (*repl_state_help()->visible) {
+            (*repl_state_help_mut()->scroll)++;
         } else {
             if (editor_point_in_code_panel(x, y))
-                g_scroll++;
+                (*repl_state_code_panel_mut()->scroll)++;
             else
                 repl_camera_add_zoom_velocity(0.3f);
         }
@@ -1551,11 +1562,11 @@ static void mouse_func(int button, int state, int x, int y) {
 #ifndef USE_GLUT
 static void mousewheel_func(int wheel, int direction, int x, int y) {
     (void)wheel;
-    if (g_show_help) {
-        g_help_scroll -= direction;
+    if (*repl_state_help()->visible) {
+        *repl_state_help_mut()->scroll -= direction;
     } else {
         if (editor_point_in_code_panel(x, y))
-            g_scroll -= direction;
+            *repl_state_code_panel_mut()->scroll -= direction;
         else
             repl_camera_add_zoom_velocity(-(float)direction * 0.1f);
     }
@@ -1579,7 +1590,7 @@ static void motion_func(int x, int y) {
         return;
     }
 
-    if (g_resizing_panel) {
+    if (*repl_state_code_panel()->resizing_panel) {
         editor_update_panel_frac_from_mouse(x, y);
         glutPostRedisplay();
         return;
@@ -1648,14 +1659,20 @@ static void timer_func(int value) {
 
     repl_camera_tick();
 
-    g_blink_tick++;
-    if (g_blink_tick >= 30) {
-        g_blink_tick = 0;
-        g_cursor_on = !g_cursor_on;
+    {
+        ReplCodePanelRuntimeState *cp = repl_state_code_panel_mut();
+        (*cp->blink_tick)++;
+        if (*cp->blink_tick >= 30) {
+            *cp->blink_tick = 0;
+            *cp->cursor_visible = !*cp->cursor_visible;
+        }
     }
 
-    if (g_status_ttl > 0)
-        g_status_ttl--;
+    {
+        const ReplStatusState *status = repl_state_status();
+        if (*status->ttl > 0)
+            (*status->ttl)--;
+    }
 
     glutPostRedisplay();
     glutTimerFunc(16, timer_func, 0);
