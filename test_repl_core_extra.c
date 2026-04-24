@@ -49,8 +49,6 @@ int cmd_indent_chars(int pos);
 GLenum current_begin_mode(void);
 int count_vertices(void);
 extern int repl_state_flat_program_count();
-extern int g_replay_pc;
-extern int g_replay_state;
 extern float g_anim_time;
 
 /* Capture the output of repl_debug_dump_flat_commands() into a malloc'd string.
