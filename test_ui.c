@@ -1,4 +1,5 @@
 #include "sample.h"
+#include "repl_state.h"
 #include "repl_core.h"
 #include "ui_help_overlay.h"
 #include "ui_profile_panel.h"
@@ -33,14 +34,14 @@ static void test_help_overlay(void) {
     printf("Testing Help Overlay...\n");
     gl_stub_counts_reset();
     
-    g_show_help = 0;
+    *repl_state_help_mut()->visible = 0;
     render_help();
     ASSERT_TRUE("help hidden -> no GL calls", gl_stub_counts[GL_STUB_glBegin] == 0);
-    
-    g_show_help = 1;
+
+    *repl_state_help_mut()->visible = 1;
     repl_state_viewport_set_size(800, 600);
-    g_help_tab = 0;
-    g_help_scroll = 0;
+    *repl_state_help_mut()->tab_idx = 0;
+    *repl_state_help_mut()->scroll = 0;
     
     gl_stub_counts_reset();
     render_help();
@@ -50,7 +51,7 @@ static void test_help_overlay(void) {
     ASSERT_GL_CALLS("help visible -> enables blending", GL_STUB_glEnable, 1);
     
     /* Switch tabs */
-    g_help_tab = 1;
+    *repl_state_help_mut()->tab_idx = 1;
     gl_stub_counts_reset();
     render_help();
     ASSERT_GL_CALLS("help tab 1 -> draws text", GL_STUB_glRasterPos2f, 10);
@@ -60,11 +61,11 @@ static void test_profile_panel(void) {
     printf("Testing Profile Panel...\n");
     gl_stub_counts_reset();
     
-    g_show_profile_panel = PROFILE_PANEL_OFF;
+    *repl_state_profile_panel_mut()->mode = PROFILE_PANEL_OFF;
     render_profile_panel();
     ASSERT_TRUE("profile hidden -> no GL calls", gl_stub_counts[GL_STUB_glBegin] == 0);
-    
-    g_show_profile_panel = PROFILE_PANEL_ON;
+
+    *repl_state_profile_panel_mut()->mode = PROFILE_PANEL_ON;
     prof_frame_tick();
     prof_begin(PROF_FRAME_TOTAL);
     prof_end(PROF_FRAME_TOTAL);
@@ -76,7 +77,7 @@ static void test_profile_panel(void) {
     ASSERT_GL_CALLS("profile visible -> calls glColor4f", GL_STUB_glColor4f, 1);
 
     /* Test details mode */
-    g_show_profile_panel = PROFILE_PANEL_DETAILS;
+    *repl_state_profile_panel_mut()->mode = PROFILE_PANEL_DETAILS;
     gl_stub_counts_reset();
     render_profile_panel();
     ASSERT_GL_CALLS("profile details -> draws more text", GL_STUB_glRasterPos2f, 10);
@@ -154,16 +155,16 @@ static void test_autocomplete_panel(void) {
     printf("Testing Autocomplete Panel...\n");
     gl_stub_counts_reset();
     
-    g_ac_count = 0;
+    *repl_state_autocomplete_mut()->match_count = 0;
     ui_autocomplete_panel_render();
     ASSERT_TRUE("ac hidden -> no GL calls", gl_stub_counts[GL_STUB_glBegin] == 0);
-    
-    g_ac_count = 2;
-    g_ac_matches[0] = "glVertex3f";
-    g_ac_matches[1] = "glVertex2f";
-    g_ac_sel = 0;
-    g_cursor_px = 100;
-    g_cursor_py = 100;
+
+    *repl_state_autocomplete_mut()->match_count = 2;
+    repl_state_autocomplete_mut()->matches[0] = "glVertex3f";
+    repl_state_autocomplete_mut()->matches[1] = "glVertex2f";
+    *repl_state_autocomplete_mut()->selected_idx = 0;
+    *repl_state_code_panel_mut()->cursor_px = 100;
+    *repl_state_code_panel_mut()->cursor_py = 100;
     
     gl_stub_counts_reset();
     ui_autocomplete_panel_render();
@@ -176,11 +177,11 @@ static void test_variable_panel(void) {
     printf("Testing Variable Panel...\n");
     gl_stub_counts_reset();
     
-    g_show_var_panel = 0;
+    *repl_state_variable_panel_mut()->visible = 0;
     render_var_panel();
     ASSERT_TRUE("var panel hidden -> no GL calls", gl_stub_counts[GL_STUB_glBegin] == 0);
-    
-    g_show_var_panel = 1;
+
+    *repl_state_variable_panel_mut()->visible = 1;
     g_num_predef_vars = 1;
     strcpy(g_predef_vars[0].name, "x");
     g_predef_vars[0].value = 1.0f;
@@ -206,7 +207,7 @@ static void test_menu_bar(void) {
     
     repl_state_viewport_set_size(800, 600);
     *repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT;
-    g_panel_frac = 0.5f;
+    *repl_state_code_panel_mut()->panel_frac = 0.5f;
     
     gl_stub_counts_reset();
     ui_menu_bar_render();
@@ -236,7 +237,7 @@ static void test_menu_bar(void) {
     ASSERT_TRUE("config menu open", ui_menu_bar_open_menu_id() == 2); // MENU_CONFIG
 
     /* Test search overlay */
-    g_search_active = 1;
+    *repl_state_search_mut()->active = 1;
     gl_stub_counts_reset();
     ui_menu_bar_render_search_overlay(0, 400, 600);
     ASSERT_GL_CALLS("search overlay -> draws quads", GL_STUB_glBegin, 1);
