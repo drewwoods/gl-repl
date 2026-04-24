@@ -480,7 +480,8 @@ int main() {
         if (repl_example_count() > 1) {
             repl_load_example(0);
             repl_special_func(GLUT_KEY_F12, 0, 0);
-            ASSERT_INT("f12 special route advances example", g_example_idx, 1);
+            ASSERT_INT("f12 special route advances example",
+                       *repl_state_scenes()->active_example_idx, 1);
         }
     }
 

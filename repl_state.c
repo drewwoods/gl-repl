@@ -126,6 +126,9 @@ int   g_replay_src_line = -1;
 int   g_replay_total_flat = 0;
 int   g_replay_expand_args = 1;
 
+int  g_example_idx = -1;
+char g_workspace_dir[REPL_WORKSPACE_DIR_MAX] = "";
+
 static ReplRuntimeState g_repl_state = {
     .document = {
         .cmds = g_cmds,

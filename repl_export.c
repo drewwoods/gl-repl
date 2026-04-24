@@ -96,9 +96,11 @@ static int parse_workspace_dir(const char *args) {
 }
 
 static void emit_workspace_dir(int *n) {
-    if (g_workspace_dir[0] && *n < MAX_WORKSPACE_HEADER_LINES) {
+    const char *workspace_dir = repl_state_workspace_dir();
+
+    if (workspace_dir[0] && *n < MAX_WORKSPACE_HEADER_LINES) {
         snprintf(g_workspace_header_lines[(*n)++], WORKSPACE_HEADER_LINE_LEN,
-                 "// @workspace-dir %s", g_workspace_dir);
+                 "// @workspace-dir %s", workspace_dir);
     }
 }
 

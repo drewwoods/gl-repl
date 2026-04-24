@@ -11,6 +11,10 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 
+#define SCENE_STATE (repl_state_scenes_mut())
+#define g_example_idx (*SCENE_STATE->active_example_idx)
+#define g_workspace_dir (SCENE_STATE->workspace_dir)
+
 /* User scene slots for the workspace / example-promotion system.
  *
  * Slot 0 is the pinned "home" scene: the user's pre-example state, captured
@@ -39,9 +43,7 @@ static UserScene g_user_scenes[MAX_USER_SCENES];
 static int       g_active_user_scene = -1;
 static uint32_t  g_user_scene_tick = 0;
 
-/* Currently-bound workspace directory (empty = none). */
-#define WORKSPACE_DIR_MAX 1024
-char g_workspace_dir[WORKSPACE_DIR_MAX] = "";
+#define WORKSPACE_DIR_MAX REPL_WORKSPACE_DIR_MAX
 
 /* Default home-scene name -- used when slot 0 is captured on first example load. */
 #define USER_SCENE_HOME_NAME "Your Scene"
