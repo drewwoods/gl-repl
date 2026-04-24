@@ -3,7 +3,7 @@
 ## Summary
 Migrate one runtime domain at a time from broad `g_*` access to `ReplRuntimeState` ownership. Each domain follows the same pattern: add focused accessors, convert production callers, update tests, move storage into `repl_state.c`, then delete that domain’s compat externs from `repl_state_compat.h`.
 
-Current status: slices 3.1 through 3.10 are complete. Scene/workspace runtime, the import/export metadata bundle, the search/autocomplete/status bundle, and the remaining UI/time runtime scalars now route through `repl_state` accessors. The remaining Phase 2 work is bridge retirement, not more state migration.
+Current status: slices 3.1 through 3.10 are complete. Scene/workspace runtime, the import/export metadata bundle, the search/autocomplete/status bundle, and the remaining UI/time runtime scalars now route through `repl_state` accessors. Bridge retirement has started: the test-only `ReplEditorState` / `ReplViewState` bundles are gone, and the immutable export scaffold declarations now live in `repl_export.h` instead of the state compat header.
 
 ## Migration Pattern For Every Slice
 1. Add the smallest missing `repl_state_*` helper API needed by the domain.

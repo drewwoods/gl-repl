@@ -7,42 +7,7 @@
 
 /* Compatibility facade for the pre-phase-2 global state layout.
  * New code should eventually move to the typed runtime APIs in repl_state.h,
- * but the existing modules still rely on these bundle structs and legacy
- * compatibility names. */
-
-typedef struct {
-    char *input;
-    int   input_capacity;
-    int  *input_len;
-    int  *cursor_pos;
-    int  *edit_line;
-    char *newline_buf;
-    int   newline_capacity;
-    int  *newline_len;
-    int  *inserting;
-    int  *sel_anchor;
-    int  *sel_end;
-    GLCmd *clipboard;
-    int  *clipboard_count;
-} ReplEditorState;
-
-typedef struct {
-    float *cam_rx;
-    float *cam_ry;
-    float *cam_dist;
-    float *cam_tx;
-    float *cam_ty;
-    float *cam_tz;
-    float *cam_motion_glow;
-    int   *mouse_x;
-    int   *mouse_y;
-    int   *mouse_btn;
-    int   *win_w;
-    int   *win_h;
-} ReplViewState;
-
-ReplEditorState        repl_editor_state_live(void);
-ReplViewState          repl_view_state_live(void);
+ * but some modules still rely on these legacy compatibility names. */
 
 extern int   g_use_accum;
 extern int   g_accum_aa_enabled;
@@ -112,10 +77,6 @@ void refresh_workspace_header_lines(void);
 int  parse_workspace_header_line(const char *line);
 
 extern char         g_scratch_buf[256];
-extern const char  *g_header_pre[];
-extern const char  *g_header_post[];
-extern const char  *g_footer_pre_init[];
-extern const char  *g_footer_post_init[];
 extern const char  *g_grid_names[];
 extern const char  *g_grid_major_names[GRID_MAJOR_COUNT];
 extern const char  *g_grid_extent_names[GRID_EXTENT_COUNT];
