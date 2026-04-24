@@ -1289,7 +1289,7 @@ static void cycle_example_or_user_scene(void) {
     }
 
     if (count > 0) {
-        int next = g_example_idx + 1;
+        int next = *repl_state_scenes()->active_example_idx + 1;
         if (next < count) {
             repl_load_example(next);
             return;

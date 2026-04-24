@@ -6,8 +6,6 @@
 #include "repl_core_internal.h"
 #include "repl_examples.h"
 
-int g_example_idx = -1; /* current predefined example (-1 = none loaded yet) */
-
 static const char *example_cam_skip_ws(const char *text) {
     while (*text && isspace((unsigned char)*text))
         text++;
@@ -260,7 +258,7 @@ static void load_example(int idx) {
     repl_scenes_capture_home_if_needed();
 
     load_example_lines(lines);
-    g_example_idx = idx;
+    *repl_state_scenes_mut()->active_example_idx = idx;
     repl_scenes_mark_example_active();
     char msg[128];
     snprintf(msg, sizeof(msg), "Example %d/%d: %s (F12 for next)",

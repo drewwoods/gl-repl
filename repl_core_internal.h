@@ -107,10 +107,6 @@ void apply_init_bootstrap(void);
 void save_output(const char *filename);
 int  load_from_file(const char *filename);
 
-/* Workspace folder where multi-scene exports live.  Empty string = unset.
- * Owned by repl_scenes.c. */
-extern char g_workspace_dir[1024];
-
 /* Set by repl_save_workspace before each slot's save_output call so the
  * exported file's header advertises that slot's scene name.  Cleared
  * between exports. */

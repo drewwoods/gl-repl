@@ -66,7 +66,6 @@ extern int   g_line_smooth_enabled;
 extern int         g_show_help;
 extern int         g_help_tab;
 extern int         g_help_scroll;
-extern int         g_example_idx;
 
 
 extern int   g_show_var_panel;
