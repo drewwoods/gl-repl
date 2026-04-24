@@ -15,7 +15,12 @@ replay HUD), `scene_grid.c` (grid themes), `scene_axes.c`
 dropped to 1237 LoC (from 4452) after Phase-7
 extractions: document rows, replay annotations, menu/dropdowns, color
 picker, help overlay, variable panel, autocomplete popup, inline rename,
-and variable dragging. The highest-value remaining refactors fall into
+and variable dragging. The live GL call surface is already mostly in the
+scene/UI renderers plus `repl_executor.c`; the remaining out-of-band call
+sites are frame orchestration in `repl_core.c`, tessellation/bootstrap
+wiring in `repl_state.c`, a couple of inline helpers in `sample.h`, and
+text-emitting export/example scaffolds that intentionally print GL source
+rather than execute it. The highest-value remaining refactors fall into
 two camps:
 
 1. **Mechanical extractions** - self-contained features still living in
@@ -293,6 +298,33 @@ Remaining direct `g_cmds[]` writes are not command-array escape hatches:
 existing command, and declaration commit paths repair assignment variable-slot
 indices after predef declarations change. Those should only move if we add a
 future per-command semantic mutation API.
+
+### 11. Segregate live GL calls to scene/UI modules plus `repl_executor.c`
+
+Current state: the actual GL API calls are concentrated in the scene and UI
+renderers, with `repl_executor.c` kept as the one non-scene/UI exception. The
+remaining live-call residue outside that boundary is small but real:
+
+- `repl_core.c` still owns frame-level clear/projection/text-quad orchestration.
+- `repl_state.c` still wires tessellation callbacks and GLU bootstrap/teardown
+  helpers.
+- `sample.h` still has a couple of inline transform / point-size helpers that
+  expand to GL calls.
+
+What stays out of scope: `repl_export.c`, `repl_examples.c`, and the workspace
+artifacts are allowed to emit or store GL command text because that is the REPL
+language, not a live GL call site.
+
+Next work:
+
+1. Peel the remaining frame-orchestration calls out of `repl_core.c` into the
+   render helpers that already own the scene/UI passes.
+2. Push the `repl_state.c` tessellation/bootstrap wiring behind the render
+   owner so that file stays state-only.
+3. Replace the last GL-touching inline helpers in `sample.h` with ordinary
+   helper functions or state-backed wrappers.
+4. Re-run the non-comment GL grep and keep the surviving live-call list limited
+   to the scene/UI render modules plus `repl_executor.c`.
 
 ---
 
