@@ -15,8 +15,9 @@ follow the convention described in *Naming Notes* below:
 
 ### 1. Command pipeline — source → flatten → execute
 
-The central data flow. Edits mutate `g_cmds[]`; everything downstream
-(execution, replay, overlays) reads the flattened array `g_flat_cmds[]`.
+The central data flow. Edits mutate the source command array (via
+`repl_state_document_cmds()`); everything downstream (execution, replay,
+overlays) reads the flattened array (`repl_state_flat_cmds()`).
 
 | Module | Role |
 |--------|------|
@@ -24,7 +25,7 @@ The central data flow. Edits mutate `g_cmds[]`; everything downstream
 | `repl_command_spec` | Declarative descriptors for fixed-arity GL commands |
 | `repl_parser` | Source-line parser and canonical `GLCmd.source[]` generation |
 | `repl_source_scope` | Source prefix-depth cache, indent helpers, block lookup |
-| `repl_command_store` | Insert/delete/replace/load API over `g_cmds[]` |
+| `repl_command_store` | Insert/delete/replace/load API over the source command array |
 | `repl_commit` | Float decls, variable assignments, structured block commits |
 | `repl_flatten` | Explicit source-to-flat program builder (loops, functions, `if`) |
 | `repl_executor` | Flat-program GL dispatch |
@@ -316,8 +317,8 @@ render files.
 - `repl_inline_rename.c` owns the inline scene-rename input buffer and key
   handling (surfaced through `set_status()`, no dedicated render pass).
 - `repl_var_drag.c` owns the variable slider drag transaction: start/motion/
-  reset, the linear-vs-log value mapping, and the writeback into
-  `g_predef_vars` plus matching `CMD_VAR_ASSIGN` sources.
+  reset, the linear-vs-log value mapping, and the writeback into the
+  predefined-variable table plus matching `CMD_VAR_ASSIGN` sources.
 - `scene_render.c` now snapshots frame inputs in `SceneRenderConfig`: scene
   rect, camera, jitter, quality toggles, grid/axes choices, guide/vertex
   overlay toggles, and replay-derived limits. `FrameRenderContext` carries
@@ -348,11 +349,10 @@ render files.
   `repl_command_store_load()`.
 - `sample.h` stays the shared compatibility header, while `repl_config.h`
   owns the keyed config descriptor API and `repl_state.h` carries the typed
-  runtime-state facade. The source document, flat-program, editor-input,
-  selection, clipboard, camera, pointer, viewport, and mutable presentation
-  config buffers are the first storage domains moving behind that facade. Other
-  domains still use compatibility externs until their slices land; descriptor
-  tables stay module-local or behind descriptor accessors.
+  runtime-state facade. All runtime state (source document, flat program,
+  editor input, selection, clipboard, camera, pointer, viewport, presentation
+  config, search, autocomplete, render settings, replay) is now behind that
+  facade; descriptor tables stay module-local.
 
 ## Naming Notes
 
