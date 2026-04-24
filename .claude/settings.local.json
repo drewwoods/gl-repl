@@ -46,13 +46,15 @@
       "Bash(sed -n '885,895p' ui_panels.c)",
       "Bash(git push *)",
       "Bash(git mv *)",
-      "Bash(sed -i '' -e 's|repl_menu_bar\\\\.c|ui_menu_bar.c|g' -e 's|repl_color_picker\\\\.c|ui_color_picker.c|g' -e 's|repl_autocomplete_panel\\\\.c|ui_autocomplete_panel.c|g' -e 's|repl_help_overlay\\\\.c|ui_help_overlay.c|g' -e 's|repl_variable_panel\\\\.c|ui_variable_panel.c|g' -e 's|profile_panel\\\\.c|ui_profile_panel.c|g' repl_core.c ui_color_picker.c repl_inline_rename.c ui_profile_panel.c)",
-      "Bash(sed -i '' -e 's|repl_color_picker\\\\.c|ui_color_picker.c|g' -e 's|repl_color_picker\\\\.h|ui_color_picker.h|g' -e 's|repl_help_overlay\\\\.c|ui_help_overlay.c|g' -e 's|repl_help_overlay\\\\.h|ui_help_overlay.h|g' -e 's|repl_menu_bar\\\\.c|ui_menu_bar.c|g' -e 's|repl_menu_bar\\\\.h|ui_menu_bar.h|g' -e 's|repl_variable_panel\\\\.c|ui_variable_panel.c|g' -e 's|repl_variable_panel\\\\.h|ui_variable_panel.h|g' -e 's|repl_autocomplete_panel\\\\.c|ui_autocomplete_panel.c|g' -e 's|repl_autocomplete_panel\\\\.h|ui_autocomplete_panel.h|g' -e 's|profile_panel\\\\.c|ui_profile_panel.c|g' -e 's|profile_panel\\\\.h|ui_profile_panel.h|g' -e 's|profile_panel\\\\.o|ui_profile_panel.o|g' Makefile)",
-      "Bash(git rm *)",
-      "Bash(git pull *)",
-      "Bash(sed -i '' -e 's/ReplParseContext parse_ctx = { insert_idx, vis_vars, num_vis_vars };/ReplParseContext parse_ctx = { insert_idx, vis_vars, num_vis_vars, 0 };/g' -e 's/ReplParseContext parse_ctx = { insert_idx, NULL, 0 };/ReplParseContext parse_ctx = { insert_idx, NULL, 0, 0 };/g' -e 's/ReplParseContext parse_ctx = { g_edit_line, NULL, 0 };/ReplParseContext parse_ctx = { g_edit_line, NULL, 0, 0 };/g' repl_editor.c)",
-      "Bash(sed -i '' -e 's/ReplParseContext ctx = { g_edit_line, NULL, 0 };/ReplParseContext ctx = { g_edit_line, NULL, 0, 0 };/g' -e 's/ReplParseContext ctx = { g_edit_line, vars, num_vars };/ReplParseContext ctx = { g_edit_line, vars, num_vars, 0 };/g' repl_parser.c)",
-      "Bash(sed -i '' -e 's/ReplParseContext parse_ctx = { i, vars, nv };/ReplParseContext parse_ctx = { i, vars, nv, 0 };/g' -e 's/ReplParseContext parse_ctx = { i, NULL, 0 };/ReplParseContext parse_ctx = { i, NULL, 0, 0 };/g' repl_flatten.c)"
+      "Bash(sed *)",
+      "Bash(grep *)",
+      "Bash(git -C /Users/drew/src/code/opengl/samples/gen-ai/OpenGL-Vibe status)",
+      "Bash(git -C /Users/drew/src/code/opengl/samples/gen-ai/OpenGL-Vibe diff --stat HEAD)",
+      "Bash(git -C /Users/drew/src/code/opengl/samples/gen-ai/OpenGL-Vibe log --oneline -5)",
+      "Bash(git -C /Users/drew/src/code/opengl/samples/gen-ai/OpenGL-Vibe commit -m ' *)",
+      "Bash(git -C /Users/drew/src/code/opengl/samples/gen-ai/OpenGL-Vibe push)",
+      "Bash(git *)",
+      "Bash(sort -t: -k2 -rn)"
     ]
   }
 }
