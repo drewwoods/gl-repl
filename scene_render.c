@@ -221,9 +221,6 @@ static SceneGuideSnapshot scene_build_guide_snapshot(const SceneRenderConfig *co
 /* ========================================================================= */
 
 static void draw_replay_tess_preview(const SceneRenderConfig *config) {
-    FlatProgramView flat_program = repl_state_flat_program_view();
-    const GLCmd *g_flat_cmds = flat_program.cmds;
-    int g_num_flat_cmds = flat_program.cmd_count;
     if (!config->replay_tess_preview)
         return;
 
@@ -239,16 +236,16 @@ static void draw_replay_tess_preview(const SceneRenderConfig *config) {
     {
         int in_contour = 0;
         int matrix_depth = 0;
-        for (int i = 0; i < g_num_flat_cmds; i++) {
-            if (!g_flat_cmds[i].valid) continue;
+        for (int i = 0; i < repl_state_flat_program_count(); i++) {
+            if (!repl_state_flat_program_cmds_mut()[i].valid) continue;
 
-            if (is_transform_cmd(g_flat_cmds[i].type)) {
+            if (is_transform_cmd(repl_state_flat_program_cmds_mut()[i].type)) {
                 if (!in_contour)
-                    apply_tracked_transform_cmd(&g_flat_cmds[i], &matrix_depth);
+                    apply_tracked_transform_cmd(&repl_state_flat_program_cmds_mut()[i], &matrix_depth);
                 continue;
             }
 
-            switch (g_flat_cmds[i].type) {
+            switch (repl_state_flat_program_cmds_mut()[i].type) {
             case CMD_TESS_BEGIN_CONTOUR:
                 if (in_contour)
                     glEnd();
@@ -257,8 +254,8 @@ static void draw_replay_tess_preview(const SceneRenderConfig *config) {
                 break;
             case CMD_TESS_VERTEX:
                 if (in_contour)
-                    glVertex3f(g_flat_cmds[i].args[0], g_flat_cmds[i].args[1],
-                               g_flat_cmds[i].args[2]);
+                    glVertex3f(repl_state_flat_program_cmds_mut()[i].args[0], repl_state_flat_program_cmds_mut()[i].args[1],
+                               repl_state_flat_program_cmds_mut()[i].args[2]);
                 break;
             case CMD_TESS_END:
                 if (in_contour) {
@@ -279,7 +276,7 @@ static void draw_replay_tess_preview(const SceneRenderConfig *config) {
     glLineWidth(1.0f);
     glDisable(GL_BLEND);
     glEnable(GL_DEPTH_TEST);
-    if (g_user_lighting_enabled) glEnable(GL_LIGHTING);
+    if (repl_state_flat_program_user_lighting_enabled()) glEnable(GL_LIGHTING);
     scene_render_pop_state();
 }
 

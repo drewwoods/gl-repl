@@ -1914,7 +1914,7 @@ int main() {
 
         g_replay_active = 1;
         g_replay_state = REPLAY_PAUSED;
-        g_replay_pc = g_num_flat_cmds;
+        g_replay_pc = repl_state_flat_program_count();
         g_replay_src_line = 25;
         g_scroll = 0;
         g_scroll_follow_cursor = 0;
@@ -2000,7 +2000,7 @@ int main() {
 
         g_replay_active = 1;
         g_replay_state = REPLAY_PAUSED;
-        g_replay_pc = g_num_flat_cmds;
+        g_replay_pc = repl_state_flat_program_count();
         g_replay_src_line = 1;
         g_scroll = 0;
         g_scroll_follow_cursor = 0;

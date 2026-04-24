@@ -646,6 +646,6 @@ void scene_grid_render(const FrameRenderContext *frame_ctx) {
     glDepthMask(GL_TRUE);
     glDisable(GL_BLEND);
     glDisable(GL_FOG);
-    if (g_user_lighting_enabled) glEnable(GL_LIGHTING);
+    if (repl_state_flat_program_user_lighting_enabled()) glEnable(GL_LIGHTING);
     scene_grid_pop_state();
 }

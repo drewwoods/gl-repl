@@ -206,7 +206,7 @@ static BenchResult bench_feed_examples(int iters) {
     BenchResult r = { .name = "feed_examples", .unit = "lines",
                       .min_sec = 1e18 };
 
-    /* load_example_lines() already resets repl_state_document_cmds_mut() / g_num_flat_cmds and
+    /* load_example_lines() already resets repl_state_document_cmds_mut() / repl_state_flat_program_count() and
      * calls init_predef_vars(), so an extra fresh_repl() before each
      * load would just bill duplicate reset work to this benchmark.
      * Examples declare their own float vars, so we don't need
@@ -266,7 +266,7 @@ static BenchResult bench_flatten_examples(int iters) {
                 for (int i = 0; i < saved_n; i++)
                     g_predef_vars[i].value = saved_vals[i];
                 /* repl_flatten_commands() -> flatten_commands() rebuilds
-                 * unconditionally (resets g_num_flat_cmds and walks
+                 * unconditionally (resets repl_state_flat_program_count() and walks
                  * repl_state_document_cmds_mut()[]), so we don't need to toggle any dirty flag
                  * here — doing so would just add unrelated side effects
                  * (repl_state_normals_dirty(), depth cache invalidation) into the
@@ -291,10 +291,10 @@ static BenchResult bench_replay_examples(int iters) {
     BenchResult r = { .name = "replay_examples", .unit = "steps",
                       .min_sec = 1e18 };
 
-    /* load_example_lines() leaves g_flat_dirty=1, and replay_start() will
+    /* load_example_lines() leaves repl_state_flat_program_dirty()=1, and replay_start() will
      * flatten once on its own — calling repl_flatten_commands() explicitly
      * beforehand would flatten twice, because repl_flatten_commands() does
-     * NOT clear g_flat_dirty (see repl_core.c:4462-4464 vs. :3265-3269). */
+     * NOT clear repl_state_flat_program_dirty() (see repl_core.c:4462-4464 vs. :3265-3269). */
     for (int it = 0; it < iters; it++) {
         long long steps = 0;
         double t0 = now_seconds();
@@ -302,7 +302,7 @@ static BenchResult bench_replay_examples(int iters) {
             repl_load_example_lines_for_test(repl_examples_lines(e));
 
             replay_start();
-            int safety = g_num_flat_cmds + 1;
+            int safety = repl_state_flat_program_count() + 1;
             while (g_replay_state == REPLAY_PLAYING && safety-- > 0) {
                 replay_advance();
                 steps++;
@@ -320,15 +320,15 @@ static BenchResult bench_replay_examples(int iters) {
 
 /* ---- bench: long-running replay (synthetic large scene) --------------- */
 
-/* Build a single scene that flattens to a very large g_flat_cmds[] so we
+/* Build a single scene that flattens to a very large repl_state_flat_program_cmds_mut()[] so we
  * get a longer-running replay test that is comparable across machines.
  *
  * We use one outer for-loop that emits a triangle per iteration. The
  * iteration count is capped at MAX_FLATTEN_VISITS (100k) inside
- * flatten_range, but g_flat_cmds[] itself is bounded by MAX_COMMANDS
+ * flatten_range, but repl_state_flat_program_cmds_mut()[] itself is bounded by MAX_COMMANDS
  * (typically 4096), so in practice we get around (MAX_COMMANDS / per-iter
  * cmds) iterations expanded. The benchmark adapts: it reads
- * g_num_flat_cmds after flatten and reports the actual flat-cmd count,
+ * repl_state_flat_program_count() after flatten and reports the actual flat-cmd count,
  * stepping replay over all of them. */
 static const char *const k_long_replay_scene[] = {
     "glClearColor(0.05, 0.05, 0.05, 1);",
@@ -360,10 +360,10 @@ static BenchResult bench_replay_long(int iters) {
     /* Load once outside the inner loop — feed_line is not what we are
      * measuring here. Re-using the same repl_state_document_cmds_mut()[] across iterations is
      * fine because replay only mutates the replay state, not the source
-     * commands. We mark g_flat_dirty between iterations so replay_start()
+     * commands. We mark repl_state_flat_program_dirty() between iterations so replay_start()
      * does a fresh flatten each time — that matches "what happens the
      * first time you press play". Note: replay_start() handles the
-     * flatten itself and clears g_flat_dirty, so calling
+     * flatten itself and clears repl_state_flat_program_dirty(), so calling
      * repl_flatten_commands() explicitly here would flatten twice. */
     repl_load_example_lines_for_test(k_long_replay_scene);
 
@@ -374,7 +374,7 @@ static BenchResult bench_replay_long(int iters) {
      * flatten (repl_core.c:3264-3268). */
     mark_normals_dirty();
     replay_start();
-    int flat_cmds = g_num_flat_cmds;
+    int flat_cmds = repl_state_flat_program_count();
     replay_stop();
 
     /* Snapshot post-load predef values. replay_advance() writes
@@ -396,7 +396,7 @@ static BenchResult bench_replay_long(int iters) {
         double t0 = now_seconds();
 
         replay_start();
-        int safety = g_num_flat_cmds + 1;
+        int safety = repl_state_flat_program_count() + 1;
         while (g_replay_state == REPLAY_PLAYING && safety-- > 0) {
             replay_advance();
             steps++;
@@ -426,7 +426,7 @@ static BenchResult bench_replay_long(int iters) {
  * indices. We unroll a for-loop that emits one triangle per iteration;
  * flatten caps us at MAX_COMMANDS flat cmds regardless of the iteration
  * count, which is what we want for this benchmark — we just need a large
- * g_num_flat_cmds. */
+ * repl_state_flat_program_count(). */
 static const char *const k_fade_bench_scene[] = {
     "glEnable(GL_DEPTH_TEST);",
     "glEnable(GL_LIGHTING);",
@@ -493,20 +493,20 @@ static BenchResult bench_fade_batches(int iters) {
 
     /* Build the long scene and flatten once. The flatten pass runs
      * inside replay_start(); we piggy-back on that to also capture
-     * g_num_flat_cmds (replay_start clamps g_num_flat_cmds during
+     * repl_state_flat_program_count() (replay_start clamps repl_state_flat_program_count() during
      * playback, so we snapshot before/after). */
     repl_load_example_lines_for_test(k_fade_bench_scene);
     mark_normals_dirty();
     replay_start();
-    int flat_cmds = g_num_flat_cmds;
+    int flat_cmds = repl_state_flat_program_count();
     replay_stop();
 
-    /* Re-flatten after replay_stop so g_num_flat_cmds is the full stream
+    /* Re-flatten after replay_stop so repl_state_flat_program_count() is the full stream
      * (replay's clamp might still be in effect otherwise — we observed
      * flat_cmds via the post-start snapshot above). */
     mark_normals_dirty();
     repl_flatten_commands();
-    flat_cmds = g_num_flat_cmds;
+    flat_cmds = repl_state_flat_program_count();
 
     /* 32 batches mirrors a typical in-flight count at the default 30fps
      * replay speed (REPLAY_FADE_DURATION is 0.5s). age=0.25s → alpha≈0.5

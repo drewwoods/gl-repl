@@ -72,5 +72,5 @@ void repl_var_drag_motion(int x) {
                      "  %s = %g;", vname, (double)new_val);
         }
     }
-    g_flat_dirty = 1;
+    repl_state_mark_flat_dirty();
 }
