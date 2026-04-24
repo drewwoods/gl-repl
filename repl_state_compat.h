@@ -68,16 +68,6 @@ extern int         g_help_tab;
 extern int         g_help_scroll;
 extern int         g_example_idx;
 
-extern int   g_replay_active;
-extern int   g_replay_state;
-extern int   g_replay_pc;
-extern int   g_replay_mode;
-extern float g_replay_speed;
-extern float g_replay_accum;
-extern float g_replay_fade_speed;
-extern int   g_replay_src_line;
-extern int   g_replay_total_flat;
-extern int   g_replay_expand_args;
 
 extern int   g_show_var_panel;
 extern int   g_drag_var;

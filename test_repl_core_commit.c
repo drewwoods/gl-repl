@@ -1,5 +1,6 @@
 #include "repl_core_internal.h"
 #include "repl_clipboard.h"
+#include "repl_state.h"
 #include "ui_panels.h"
 
 #include <ctype.h>
@@ -21,6 +22,11 @@ static int g_pass = 0;
     if (strcmp((got), (exp)) == 0) g_pass++; \
     else printf("FAIL [%s] got \"%s\", expected \"%s\" (line %d)\n", label, (got), (exp), __LINE__); \
 } while (0)
+
+#define replay_active        (*repl_state_replay_mut()->active)
+#define replay_state         (*repl_state_replay_mut()->state)
+#define replay_pc            (*repl_state_replay_mut()->pc)
+#define replay_src_line      (*repl_state_replay_mut()->src_line_idx)
 
 static void declare_test_vars(void) {
     char err[128];
@@ -714,18 +720,18 @@ int main(void) {
         if (i_idx >= 0) g_predef_vars[i_idx].value = 3.2f;
         if (j_idx >= 0) g_predef_vars[j_idx].value = 1.2f;
         replay_start();
-        g_replay_state = REPLAY_PAUSED;
+        replay_state = REPLAY_PAUSED;
 
-        g_replay_pc = 1;
-        g_replay_src_line = 0;
+        replay_pc = 1;
+        replay_src_line = 0;
         ASSERT_TRUE("replay display assignment text",
                     code_panel_get_command_display_text(0, display, sizeof(display)));
         ASSERT_STR("replay display assignment inline comment",
                    display,
                    "  i = i + j + 3; // i = 3.2 + 1.2 + 3 = 7.4");
 
-        g_replay_pc = 2;
-        g_replay_src_line = 1;
+        replay_pc = 2;
+        replay_src_line = 1;
         ASSERT_TRUE("replay display prior assignment still visible",
                     code_panel_get_command_display_text(0, display, sizeof(display)));
         ASSERT_STR("replay display prior assignment inline comment",
@@ -737,10 +743,10 @@ int main(void) {
                    display,
                    "  glVertex3f(i, j, 0);");
 
-        g_replay_active = 0;
-        g_replay_state = REPLAY_OFF;
-        g_replay_src_line = -1;
-        g_replay_pc = 0;
+        replay_active = 0;
+        replay_state = REPLAY_OFF;
+        replay_src_line = -1;
+        replay_pc = 0;
     }
 
     repl_reset_state(); declare_test_vars();
@@ -758,20 +764,20 @@ int main(void) {
         if (i_idx >= 0) g_predef_vars[i_idx].value = 0.23f;
         if (k_idx >= 0) g_predef_vars[k_idx].value = 0.5f;
         replay_start();
-        g_replay_state = REPLAY_PAUSED;
+        replay_state = REPLAY_PAUSED;
 
-        g_replay_pc = 1;
-        g_replay_src_line = 0;
+        replay_pc = 1;
+        replay_src_line = 0;
         ASSERT_TRUE("replay chain assignment text",
                     code_panel_get_command_display_text(0, display, sizeof(display)));
         ASSERT_STR("replay chain assignment inline comment",
                    display,
                    "  i = i + k; // i = 0.23 + 0.5 = 0.73");
 
-        g_replay_active = 0;
-        g_replay_state = REPLAY_OFF;
-        g_replay_src_line = -1;
-        g_replay_pc = 0;
+        replay_active = 0;
+        replay_state = REPLAY_OFF;
+        replay_src_line = -1;
+        replay_pc = 0;
     }
 
     repl_reset_state(); declare_test_vars();
@@ -790,10 +796,10 @@ int main(void) {
         repl_feed_line_public(":after");
         repl_feed_line_public("glVertex3f(0, 0, 0);");
         replay_start();
-        g_replay_state = REPLAY_PAUSED;
+        replay_state = REPLAY_PAUSED;
 
-        g_replay_pc = repl_state_flat_program_count();
-        g_replay_src_line = 5;
+        replay_pc = repl_state_flat_program_count();
+        replay_src_line = 5;
         ASSERT_TRUE("replay goto skipped assignment text",
                     code_panel_get_command_display_text(3, display, sizeof(display)));
         ASSERT_TRUE("replay goto skipped assignment uses pre-jump value",
@@ -801,10 +807,10 @@ int main(void) {
         ASSERT_TRUE("replay goto skipped assignment ignores skipped overwrite",
                     strstr(display, "100 + 1") == NULL);
 
-        g_replay_active = 0;
-        g_replay_state = REPLAY_OFF;
-        g_replay_src_line = -1;
-        g_replay_pc = 0;
+        replay_active = 0;
+        replay_state = REPLAY_OFF;
+        replay_src_line = -1;
+        replay_pc = 0;
     }
 
     repl_reset_state(); declare_test_vars();
@@ -822,19 +828,19 @@ int main(void) {
         repl_feed_line_public("}");
         if (j_idx >= 0) g_predef_vars[j_idx].value = 1.0f;
         replay_start();
-        g_replay_state = REPLAY_PAUSED;
+        replay_state = REPLAY_PAUSED;
 
-        g_replay_pc = 1;
-        g_replay_src_line = 1;
+        replay_pc = 1;
+        replay_src_line = 1;
         ASSERT_TRUE("replay scientific assignment text",
                     code_panel_get_command_display_text(1, display, sizeof(display)));
         ASSERT_TRUE("replay scientific inline comment keeps expanded rhs",
                     strstr(display, "// i = 1 * 1e-06 = 1e-06") != NULL);
 
-        g_replay_active = 0;
-        g_replay_state = REPLAY_OFF;
-        g_replay_src_line = -1;
-        g_replay_pc = 0;
+        replay_active = 0;
+        replay_state = REPLAY_OFF;
+        replay_src_line = -1;
+        replay_pc = 0;
     }
 
     repl_reset_state(); declare_test_vars();

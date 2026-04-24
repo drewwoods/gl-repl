@@ -7,6 +7,18 @@
 #include "repl_state.h"
 #include "ui_profile_panel.h"
 
+#define REPLAY_STATE (repl_state_replay_mut())
+#define g_replay_active      (*REPLAY_STATE->active)
+#define g_replay_state       (*REPLAY_STATE->state)
+#define g_replay_pc          (*REPLAY_STATE->pc)
+#define g_replay_mode        (*REPLAY_STATE->mode)
+#define g_replay_speed       (*REPLAY_STATE->speed)
+#define g_replay_accum       (*REPLAY_STATE->accum)
+#define g_replay_fade_speed  (*REPLAY_STATE->fade_speed)
+#define g_replay_src_line    (*REPLAY_STATE->src_line_idx)
+#define g_replay_total_flat  (*REPLAY_STATE->total_flat_cmds)
+#define g_replay_expand_args (*REPLAY_STATE->expand_args)
+
 static float g_replay_baseline_predef_vals[MAX_PREDEF_VARS];
 static int   g_replay_saved_t_playing = 1;
 static int   g_replay_last_src_line = -1;
