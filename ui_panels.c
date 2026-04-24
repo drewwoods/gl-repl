@@ -5,6 +5,7 @@
  * Extracted from sample.c for maintainability.
  */
 #include "sample.h"
+#include "repl_state.h"
 #include "repl_export.h"
 #include "repl_actions.h"
 #include "ui_color_picker.h"
@@ -39,7 +40,7 @@ static int code_panel_layout_mode(void) {
 }
 
 static int panel_span_px(int total_px) {
-    int span = (int)((float)total_px * g_panel_frac);
+    int span = (int)((float)total_px * *repl_state_code_panel()->panel_frac);
     if (span < 1) span = 1;
     if (span > total_px) span = total_px;
     return span;
@@ -189,16 +190,17 @@ static void code_panel_draw_segment(int x, int y, const char *text,
 static void code_panel_draw_search_highlights(const char *text, int search_row_idx,
                                               int seg_start, int seg_len,
                                               int seg_x, int y) {
+    const ReplSearchState *srch = repl_state_search();
     int drew = 0;
 
-    if (!g_search_active || g_search_query_len <= 0 || search_row_idx < 0 ||
+    if (!*srch->active || *srch->query_len <= 0 || search_row_idx < 0 ||
         !text || seg_len <= 0)
         return;
 
-    for (int pos = repl_search_find_next_in_text(text, g_search_query, 0);
+    for (int pos = repl_search_find_next_in_text(text, srch->query, 0);
          pos >= 0;
-         pos = repl_search_find_next_in_text(text, g_search_query, pos + 1)) {
-        int match_end = pos + g_search_query_len;
+         pos = repl_search_find_next_in_text(text, srch->query, pos + 1)) {
+        int match_end = pos + *srch->query_len;
         int seg_end = seg_start + seg_len;
         int draw_start = pos > seg_start ? pos : seg_start;
         int draw_end = match_end < seg_end ? match_end : seg_end;
@@ -212,7 +214,7 @@ static void code_panel_draw_search_highlights(const char *text, int search_row_i
             drew = 1;
         }
 
-        if (search_row_idx == g_search_hit_line && pos == g_search_hit_char)
+        if (search_row_idx == *srch->hit_line_idx && pos == *srch->hit_char_idx)
             glColor4f(0.95f, 0.65f, 0.18f, 0.55f);
         else
             glColor4f(0.25f, 0.45f, 0.85f, 0.30f);
@@ -232,7 +234,11 @@ static void render_active_input_rows(int panel_w, int text_x, int idx_x,
                                      int indent_chars, const char *idx_text,
                                      int search_row_idx,
                                      int *io_cur, int *io_line_y) {
-    const ReplEditorInputState *inp = repl_state_editor_input();
+    const ReplEditorInputState      *inp    = repl_state_editor_input();
+    const ReplCodePanelRuntimeState *cp     = repl_state_code_panel();
+    ReplCodePanelRuntimeState       *cp_mut = repl_state_code_panel_mut();
+    const ReplAutocompleteState     *ac     = repl_state_autocomplete();
+    const ReplSearchState           *srch   = repl_state_search();
     const char *input = inp->input;
     int cursor_pos = repl_state_cursor_pos();
     int input_len = *inp->input_len;
@@ -252,7 +258,7 @@ static void render_active_input_rows(int panel_w, int text_x, int idx_x,
 
     repl_code_panel_document_wrap_iter_init(&wrap_it, input, input_x, panel_w);
     while (repl_code_panel_document_wrap_iter_next(&wrap_it, &wrap_start, &wrap_len, &wrap_x)) {
-        if (*io_cur >= g_scroll && *io_cur < g_scroll + visible_lines) {
+        if (*io_cur >= *cp->scroll && *io_cur < *cp->scroll + visible_lines) {
             glColor3f(0.55f, 0.55f, 0.30f);
             if (wrap_row == 0) {
                 char ln[16];
@@ -291,24 +297,24 @@ static void render_active_input_rows(int panel_w, int text_x, int idx_x,
                 int cursor_x = wrap_x + cursor_col * FONT_W;
                 int hint_x = cursor_x;
 
-                if (g_ac_ghost[0] && cursor_pos == input_len) {
+                if (ac->ghost[0] && cursor_pos == input_len) {
                     glEnable(GL_BLEND);
                     glColor4f(0.50f, 0.55f, 0.65f, 0.55f);
                     draw_string((float)cursor_x, (float)(*io_line_y),
-                                g_ac_ghost, FONT_MONO);
+                                ac->ghost, FONT_MONO);
                     glDisable(GL_BLEND);
-                    hint_x += (int)strlen(g_ac_ghost) * FONT_W;
+                    hint_x += (int)strlen(ac->ghost) * FONT_W;
                 }
 
-                if (g_ac_hint[0] && cursor_pos == input_len) {
+                if (ac->hint[0] && cursor_pos == input_len) {
                     glEnable(GL_BLEND);
                     glColor4f(0.56f, 0.62f, 0.72f, 0.38f);
                     draw_string((float)hint_x, (float)(*io_line_y),
-                                g_ac_hint, FONT_MONO);
+                                ac->hint, FONT_MONO);
                     glDisable(GL_BLEND);
                 }
 
-                if (g_cursor_on && !g_search_active) {
+                if (*cp->cursor_visible && !*srch->active) {
                     glEnable(GL_BLEND);
                     glColor4f(0.90f, 0.80f, 0.25f, 0.85f);
                     draw_quad((float)cursor_x, (float)(*io_line_y - 2),
@@ -316,8 +322,8 @@ static void render_active_input_rows(int panel_w, int text_x, int idx_x,
                     glDisable(GL_BLEND);
                 }
 
-                g_cursor_px = cursor_x;
-                g_cursor_py = *io_line_y;
+                *cp_mut->cursor_px = cursor_x;
+                *cp_mut->cursor_py = *io_line_y;
             }
 
             *io_line_y -= LINE_H;
@@ -349,14 +355,17 @@ int code_panel_apply_scroll_follow_for_test(int *out_follow_doc_line,
         *out_follow_doc_line = layout.follow_doc_line;
     if (out_visible_lines)
         *out_visible_lines = layout.visible_lines;
-    return layout.follow_doc_line >= g_scroll &&
-           layout.follow_doc_line < g_scroll + layout.visible_lines;
+    int scroll = *repl_state_code_panel()->scroll;
+    return layout.follow_doc_line >= scroll &&
+           layout.follow_doc_line < scroll + layout.visible_lines;
 }
 
 /* Color picker lives in repl_color_picker.c. */
 
 void render_code_panel(void) {
-    const ReplReplayRuntimeState *replay = repl_state_replay();
+    const ReplReplayRuntimeState    *replay = repl_state_replay();
+    const ReplCodePanelRuntimeState *cp     = repl_state_code_panel();
+    const ReplRenderState           *rs     = repl_state_render();
     prof_begin(PROF_CODE_PANEL_LAYOUT);
     prof_begin(PROF_CODE_PANEL_LAYOUT_GEOM);
     prof_begin(PROF_CODE_PANEL_LAYOUT_GEOM_SETUP);
@@ -464,7 +473,7 @@ void render_code_panel(void) {
         int wrap_start, wrap_len, wrap_x;                                       \
         repl_code_panel_document_wrap_iter_init(&wrap_it, text, text_x, panel_w);                   \
         while (repl_code_panel_document_wrap_iter_next(&wrap_it, &wrap_start, &wrap_len, &wrap_x)) {\
-            if (cur >= g_scroll && cur < g_scroll + visible_lines) {            \
+            if (cur >= *cp->scroll && cur < *cp->scroll + visible_lines) {            \
                 if (wrap_row == 0) {                                             \
                     glColor3f(0.30f, 0.30f, 0.38f);                            \
                     { char ln[16]; snprintf(ln, sizeof(ln), "%3d", file_line);  \
@@ -567,7 +576,7 @@ void render_code_panel(void) {
                                                     sizeof(display_text));
                 repl_code_panel_document_wrap_iter_init(&wrap_it, display_text, text_x, panel_w);
                 while (repl_code_panel_document_wrap_iter_next(&wrap_it, &wrap_start, &wrap_len, &wrap_x)) {
-                    if (cur >= g_scroll && cur < g_scroll + visible_lines) {
+                    if (cur >= *cp->scroll && cur < *cp->scroll + visible_lines) {
                         if (*replay->active &&
                             *replay->src_line_idx >= 0 &&
                             i == *replay->src_line_idx) {
@@ -644,8 +653,8 @@ void render_code_panel(void) {
                         if (repl_replay_build_subst_annotation(i, flat_idx,
                                                           subst, sizeof(subst),
                                                           var_comment, sizeof(var_comment)) > 0) {
-                            if (cur >= g_scroll &&
-                                cur < g_scroll + visible_lines) {
+                            if (cur >= *cp->scroll &&
+                                cur < *cp->scroll + visible_lines) {
                                 glEnable(GL_BLEND);
                                 glBlendFunc(GL_SRC_ALPHA,
                                             GL_ONE_MINUS_SRC_ALPHA);
@@ -672,8 +681,8 @@ void render_code_panel(void) {
                             char eval_buf[MAX_LINE_LEN];
                             if (repl_replay_build_eval_annotation(i, flat_idx,
                                                              eval_buf, sizeof(eval_buf))) {
-                                if (cur >= g_scroll &&
-                                    cur < g_scroll + visible_lines) {
+                                if (cur >= *cp->scroll &&
+                                    cur < *cp->scroll + visible_lines) {
                                     glEnable(GL_BLEND);
                                     glBlendFunc(GL_SRC_ALPHA,
                                                 GL_ONE_MINUS_SRC_ALPHA);
@@ -730,7 +739,7 @@ void render_code_panel(void) {
                                      repl_state_edit_line(),
                                      &cur, &line_y);
         } else {
-            if (cur >= g_scroll && cur < g_scroll + visible_lines) {
+            if (cur >= *cp->scroll && cur < *cp->scroll + visible_lines) {
                 glColor3f(0.30f, 0.30f, 0.38f);
                 { char ln[16]; snprintf(ln, sizeof(ln), "%3d", file_line);
                   draw_string(CODE_MARGIN_X, line_y, ln, FONT_MONO); }
@@ -775,7 +784,7 @@ void render_code_panel(void) {
     if (total_lines > visible_lines) {
         int bar_h = cp_h - CODE_MARGIN_Y - LINE_H - STATUSBAR_H;
         float frac = (float)visible_lines / (float)total_lines;
-        float pos  = (float)g_scroll / (float)total_lines;
+        float pos  = (float)*cp->scroll / (float)total_lines;
         int thumb_h = (int)(bar_h * frac);
         if (thumb_h < 12) thumb_h = 12;
         int thumb_y = panel_top - CODE_MARGIN_Y - LINE_H
@@ -843,11 +852,11 @@ void render_code_panel(void) {
         tx += (int)strlen(ln_buf) * FONT_SMALL_W;
 
         /* AA indicator */
-        if (g_use_accum) {
+        if (*rs->use_accum) {
             STATUSBAR_SEP();
             char aa_buf[24];
-            if (g_accum_aa_enabled && g_accum_samples > 1)
-                snprintf(aa_buf, sizeof(aa_buf), "AA %dx", g_accum_samples);
+            if (*rs->accum_aa_enabled && *rs->accum_samples > 1)
+                snprintf(aa_buf, sizeof(aa_buf), "AA %dx", *rs->accum_samples);
             else
                 snprintf(aa_buf, sizeof(aa_buf), "AA off");
             draw_string((float)tx, (float)text_y, aa_buf, FONT_SMALL);
@@ -901,7 +910,8 @@ void render_code_panel(void) {
  * is much wider than the code-panel statusbar slot, so long diagnostics
  * (~80 chars) fit here without truncation. */
 void render_scene_status(void) {
-    if (g_status_ttl <= 0 || !g_status[0]) return;
+    const ReplStatusState *status = repl_state_status();
+    if (*status->ttl <= 0 || !status->text[0]) return;
 
     int sc_x, sc_y, sc_w, sc_h;
     scene_rect(&sc_x, &sc_y, &sc_w, &sc_h);
@@ -910,7 +920,7 @@ void render_scene_status(void) {
     int bar_h = STATUSBAR_H;
     int bar_y = sc_y;
 
-    float alpha = g_status_ttl > 60 ? 1.0f : (float)g_status_ttl / 60.0f;
+    float alpha = *status->ttl > 60 ? 1.0f : (float)*status->ttl / 60.0f;
 
     begin_2d();
     glEnable(GL_BLEND);
@@ -950,11 +960,11 @@ void render_scene_status(void) {
     if (max_chars > 255) max_chars = 255;
 
     char msg[256];
-    int n = (int)strlen(g_status);
+    int n = (int)strlen(status->text);
     if (n > max_chars) {
-        snprintf(msg, sizeof(msg), "%.*s...", max_chars - 3, g_status);
+        snprintf(msg, sizeof(msg), "%.*s...", max_chars - 3, status->text);
     } else {
-        snprintf(msg, sizeof(msg), "%s", g_status);
+        snprintf(msg, sizeof(msg), "%s", status->text);
     }
     glColor4f(0.941f, 0.753f, 0.439f, alpha); /* #f0c070 */
     draw_string((float)tx, (float)text_y, msg, FONT_SMALL);
@@ -1011,7 +1021,7 @@ static int code_panel_hit_test(int mx, int my,
     int linenum_w = 4 * FONT_W;
     int idx_col_w = *repl_state_presentation()->show_vertex_indices ? (6 * FONT_W) : 0;
     int text_x = CODE_MARGIN_X + linenum_w + FONT_W + idx_col_w;
-    int doc_line = g_scroll + vis;
+    int doc_line = *repl_state_code_panel()->scroll + vis;
     CodePanelDocumentLayout layout;
     int target;
     int on_insert_line;
@@ -1048,7 +1058,7 @@ static int code_panel_drag_target(int mx, int my, int *out_target) {
     int linenum_w = 4 * FONT_W;
     int idx_col_w = *repl_state_presentation()->show_vertex_indices ? (6 * FONT_W) : 0;
     int text_x = CODE_MARGIN_X + linenum_w + FONT_W + idx_col_w;
-    int doc_line = g_scroll + vis;
+    int doc_line = *repl_state_code_panel()->scroll + vis;
     CodePanelDocumentLayout layout;
     int target;
     int on_insert_line;
@@ -1114,8 +1124,8 @@ void handle_code_panel_click(int mx, int my) {
         repl_state_cursor_pos_set(new_cursor);
     }
 
-    g_cursor_on = 1;
-    g_blink_tick = 0;
+    *repl_state_code_panel_mut()->cursor_visible = 1;
+    *repl_state_code_panel_mut()->blink_tick = 0;
     clear_autocomplete_state();
     clear_selection();
 }
@@ -1231,8 +1241,8 @@ int handle_code_panel_drag(int mx, int my) {
         repl_selection_start(g_code_panel_drag_anchor);
         repl_selection_set_end(target);
         navigate_to_line(target);
-        g_cursor_on = 1;
-        g_blink_tick = 0;
+        *repl_state_code_panel_mut()->cursor_visible = 1;
+        *repl_state_code_panel_mut()->blink_tick = 0;
     }
     return 1;
 }
