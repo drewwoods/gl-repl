@@ -398,6 +398,9 @@ static void code_panel_format_search_query(char *out, int out_sz,
                                            int *out_cursor_col) {
     int start = 0;
     int take = 0;
+    const ReplSearchState *search = repl_state_search();
+    int search_query_len = *search->query_len;
+    int search_cursor_pos = *search->cursor_pos;
 
     if (out_sz <= 0)
         return;
@@ -406,18 +409,18 @@ static void code_panel_format_search_query(char *out, int out_sz,
     if (out_cursor_col)
         *out_cursor_col = 0;
 
-    if (max_chars <= 0 || g_search_query_len <= 0)
+    if (max_chars <= 0 || search_query_len <= 0)
         return;
 
-    if (g_search_query_len > max_chars) {
-        start = g_search_cursor_pos - max_chars + 1;
+    if (search_query_len > max_chars) {
+        start = search_cursor_pos - max_chars + 1;
         if (start < 0)
             start = 0;
-        if (start > g_search_query_len - max_chars)
-            start = g_search_query_len - max_chars;
+        if (start > search_query_len - max_chars)
+            start = search_query_len - max_chars;
     }
 
-    take = g_search_query_len - start;
+    take = search_query_len - start;
     if (take > max_chars)
         take = max_chars;
     if (take >= out_sz)
@@ -426,11 +429,11 @@ static void code_panel_format_search_query(char *out, int out_sz,
         take = 0;
 
     if (take > 0)
-        memcpy(out, g_search_query + start, (size_t)take);
+        memcpy(out, search->query + start, (size_t)take);
     out[take] = '\0';
 
     if (out_cursor_col) {
-        int col = g_search_cursor_pos - start;
+        int col = search_cursor_pos - start;
         if (col < 0)
             col = 0;
         if (col > take)
@@ -441,7 +444,7 @@ static void code_panel_format_search_query(char *out, int out_sz,
 
 static float ui_fade_alpha(float open_time) {
     if (open_time < 0.0f) return 1.0f;
-    float dt = g_anim_time - open_time;
+    float dt = *repl_state_variables()->anim_time - open_time;
     if (dt >= UI_FADE_DURATION) return 1.0f;
     if (dt <= 0.0f) return 0.0f;
     return dt / UI_FADE_DURATION;
@@ -469,12 +472,19 @@ void ui_menu_bar_render_search_overlay(int cp_x, int panel_w, int panel_top) {
     char query_buf[128];
     int cursor_col = 0;
     (void)cp_x; (void)panel_w; (void)panel_top;
+    const ReplSearchState *search = repl_state_search();
+    const ReplVariableState *vars = repl_state_variables();
+    int search_active = *search->active;
+    int search_query_len = *search->query_len;
+    int search_match_count = *search->match_count;
+    int search_hit_ordinal = *search->hit_ordinal;
+    int cursor_on = *repl_state_code_panel()->cursor_visible;
 
     static int prev_active = 0;
-    if (g_search_active && !prev_active) g_search_open_time = g_anim_time;
-    prev_active = g_search_active;
+    if (search_active && !prev_active) g_search_open_time = *vars->anim_time;
+    prev_active = search_active;
 
-    if (!g_search_active)
+    if (!search_active)
         return;
 
     /* Anchor on the PIN_SEARCH slot so the search bar sits where the
@@ -489,13 +499,13 @@ void ui_menu_bar_render_search_overlay(int cp_x, int panel_w, int panel_top) {
     int box_w = pin_w[PIN_SEARCH];
     int box_h = bh;
 
-    if (g_search_query_len <= 0)
+    if (search_query_len <= 0)
         snprintf(count_buf, sizeof(count_buf), "type to search");
-    else if (g_search_match_count <= 0)
+    else if (search_match_count <= 0)
         snprintf(count_buf, sizeof(count_buf), "0");
     else
         snprintf(count_buf, sizeof(count_buf), "%d/%d",
-                 g_search_hit_ordinal, g_search_match_count);
+                 search_hit_ordinal, search_match_count);
 
     int pad_x = 8;
     int icon_r = 5;
@@ -534,20 +544,20 @@ void ui_menu_bar_render_search_overlay(int cp_x, int panel_w, int panel_top) {
     draw_search_icon((float)icon_cx, (float)icon_cy, (float)icon_r);
 
     /* Query text (or placeholder style when empty) */
-    if (g_search_query_len <= 0)
+    if (search_query_len <= 0)
         glColor4f(0.478f, 0.478f, 0.478f, alpha); /* #7a7a7a placeholder */
     else
         glColor4f(0.941f, 0.941f, 0.902f, alpha);
     draw_string((float)query_x, (float)text_y, query_buf, FONT_SMALL);
 
     /* Count/status on the right */
-    if (g_search_query_len > 0 && g_search_match_count <= 0)
+    if (search_query_len > 0 && search_match_count <= 0)
         glColor4f(0.851f, 0.424f, 0.310f, alpha); /* accent for "0" */
     else
         glColor4f(0.533f, 0.533f, 0.533f, alpha);
     draw_string((float)count_x, (float)text_y, count_buf, FONT_SMALL);
 
-    if (g_cursor_on && g_search_query_len > 0) {
+    if (cursor_on && search_query_len > 0) {
         int cursor_x = query_x + cursor_col * FONT_SMALL_W;
         glColor4f(0.95f, 0.80f, 0.24f, 0.85f * alpha);
         draw_quad((float)cursor_x, (float)(text_y - 2), 2.0f,
@@ -629,7 +639,7 @@ void ui_menu_bar_render(void) {
             glEnd();
 
             if (i == PIN_SEARCH) {
-                if (g_search_active) {
+                if (*repl_state_search()->active) {
                     /* render_code_panel_search_overlay() fills this slot */
                     continue;
                 }
