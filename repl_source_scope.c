@@ -35,14 +35,14 @@ static void depth_cache_rebuild(void) {
     g_begin_depth_prefix[0] = 0;
     g_tess_depth_prefix[0] = 0;
 
-    for (int i = 0; i < g_num_cmds; i++) {
+    for (int i = 0; i < repl_state_document_count(); i++) {
         int for_depth   = g_for_depth_prefix[i];
         int block_depth = g_block_depth_prefix[i];
         int begin_depth = g_begin_depth_prefix[i];
         int tess_depth  = g_tess_depth_prefix[i];
 
-        if (g_cmds[i].valid) {
-            CmdType t = g_cmds[i].type;
+        if (repl_state_document_cmds_mut()[i].valid) {
+            CmdType t = repl_state_document_cmds_mut()[i].type;
 
             if (t == CMD_FOR_BEGIN) for_depth++;
             else if (t == CMD_FOR_END) for_depth--;
@@ -74,25 +74,25 @@ static void depth_cache_rebuild(void) {
 int in_begin_block_at(int pos) {
     depth_cache_rebuild();
     if (pos < 0) pos = 0;
-    if (pos > g_num_cmds) pos = g_num_cmds;
+    if (pos > repl_state_document_count()) pos = repl_state_document_count();
     return g_begin_depth_prefix[pos] > 0;
 }
 
 int in_begin_block(void) {
-    return in_begin_block_at(g_num_cmds);
+    return in_begin_block_at(repl_state_document_count());
 }
 
 int block_depth_at(int pos) {
     depth_cache_rebuild();
     if (pos < 0) pos = 0;
-    if (pos > g_num_cmds) pos = g_num_cmds;
+    if (pos > repl_state_document_count()) pos = repl_state_document_count();
     return g_block_depth_prefix[pos];
 }
 
 int tess_scope_depth_at(int pos) {
     depth_cache_rebuild();
     if (pos < 0) pos = 0;
-    if (pos > g_num_cmds) pos = g_num_cmds;
+    if (pos > repl_state_document_count()) pos = repl_state_document_count();
     return g_tess_depth_prefix[pos];
 }
 
@@ -100,7 +100,7 @@ int tess_scope_depth_at(int pos) {
 void cmd_indent(int pos, char *buf, int buf_sz) {
     depth_cache_rebuild();
     if (pos < 0) pos = 0;
-    if (pos > g_num_cmds) pos = g_num_cmds;
+    if (pos > repl_state_document_count()) pos = repl_state_document_count();
     int td = g_tess_depth_prefix[pos];
     int bd = g_begin_depth_prefix[pos];
     int kd = g_block_depth_prefix[pos];
@@ -114,7 +114,7 @@ void cmd_indent(int pos, char *buf, int buf_sz) {
 int cmd_indent_chars(int pos) {
     depth_cache_rebuild();
     if (pos < 0) pos = 0;
-    if (pos > g_num_cmds) pos = g_num_cmds;
+    if (pos > repl_state_document_count()) pos = repl_state_document_count();
     return 2 + 2 * g_tess_depth_prefix[pos] + 2 * g_begin_depth_prefix[pos]
              + 2 * g_block_depth_prefix[pos];
 }
@@ -123,7 +123,7 @@ int cmd_indent_chars(int pos) {
 void cmd_tess_indent(int pos, char *buf, int buf_sz) {
     depth_cache_rebuild();
     if (pos < 0) pos = 0;
-    if (pos > g_num_cmds) pos = g_num_cmds;
+    if (pos > repl_state_document_count()) pos = repl_state_document_count();
     int td = g_tess_depth_prefix[pos];
     int kd = g_block_depth_prefix[pos];
     int spaces = 2 + 2 * td + 2 * kd;
@@ -135,22 +135,22 @@ void cmd_tess_indent(int pos, char *buf, int buf_sz) {
 
 int find_block_end(int begin_idx) {
     int depth = 1;
-    for (int j = begin_idx + 1; j < g_num_cmds; j++) {
-        CmdType t = g_cmds[j].type;
+    for (int j = begin_idx + 1; j < repl_state_document_count(); j++) {
+        CmdType t = repl_state_document_cmds_mut()[j].type;
         if (t == CMD_FOR_BEGIN || t == CMD_FUNC_DEF || t == CMD_IF_BEGIN) depth++;
         else if (t == CMD_FOR_END || t == CMD_FUNC_END || t == CMD_IF_END) {
             depth--;
             if (depth == 0) return j;
         }
     }
-    return g_num_cmds;
+    return repl_state_document_count();
 }
 
 CmdType nearest_open_block_at(int pos) {
     CmdType stack[64];
     int depth = 0;
-    for (int i = 0; i < pos && i < g_num_cmds; i++) {
-        CmdType t = g_cmds[i].type;
+    for (int i = 0; i < pos && i < repl_state_document_count(); i++) {
+        CmdType t = repl_state_document_cmds_mut()[i].type;
         if (t == CMD_FOR_BEGIN || t == CMD_FUNC_DEF || t == CMD_IF_BEGIN) {
             if (depth < 64) stack[depth++] = t;
         } else if (t == CMD_FOR_END || t == CMD_FUNC_END || t == CMD_IF_END) {

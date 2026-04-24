@@ -113,14 +113,14 @@ static int code_panel_leading_ws_chars(const char *text) {
 
 int repl_code_panel_document_active_indent_chars(void) {
     if (repl_state_insert_mode())
-        return cmd_indent_chars(g_edit_line);
-    if (g_edit_line >= 0 && g_edit_line < g_num_cmds)
-        return code_panel_leading_ws_chars(g_cmds[g_edit_line].source);
-    return cmd_indent_chars(g_num_cmds);
+        return cmd_indent_chars(repl_state_edit_line());
+    if (repl_state_edit_line() >= 0 && repl_state_edit_line() < repl_state_document_count())
+        return code_panel_leading_ws_chars(repl_state_document_cmds_mut()[repl_state_edit_line()].source);
+    return cmd_indent_chars(repl_state_document_count());
 }
 
 static int code_panel_command_main_rows(int cmd_idx, int panel_w, int text_x) {
-    if (!repl_state_insert_mode() && cmd_idx == g_edit_line) {
+    if (!repl_state_insert_mode() && cmd_idx == repl_state_edit_line()) {
         int indent_chars = repl_code_panel_document_active_indent_chars();
         return repl_code_panel_document_row_count_for_text(
             repl_state_editor_input()->input, text_x + indent_chars * FONT_W, panel_w);
@@ -139,7 +139,7 @@ static int code_panel_command_main_rows(int cmd_idx, int panel_w, int text_x) {
 static void code_panel_precompute_layout_rows(int panel_w, int text_x,
                                               int *main_rows,
                                               int *replay_extra_rows) {
-    for (int i = 0; i < g_num_cmds; i++) {
+    for (int i = 0; i < repl_state_document_count(); i++) {
         if (main_rows)
             main_rows[i] = code_panel_command_main_rows(i, panel_w, text_x);
         if (replay_extra_rows)
@@ -155,7 +155,7 @@ static int code_panel_insert_rows(int panel_w, int text_x) {
 }
 
 static int code_panel_newline_rows(int panel_w, int text_x) {
-    if (g_edit_line == g_num_cmds) {
+    if (repl_state_edit_line() == repl_state_document_count()) {
         int indent_chars = repl_code_panel_document_active_indent_chars();
         return repl_code_panel_document_row_count_for_text(
             repl_state_editor_input()->input, text_x + indent_chars * FONT_W, panel_w);
@@ -169,15 +169,15 @@ static int code_panel_cursor_doc_line_from_layout(
     int cursor_doc_line = header_rows;
 
     if (repl_state_insert_mode()) {
-        for (int i = 0; i < g_edit_line && i < g_num_cmds; i++) {
+        for (int i = 0; i < repl_state_edit_line() && i < repl_state_document_count(); i++) {
             cursor_doc_line += cmd_main_rows[i];
             cursor_doc_line += replay_extra_rows[i];
         }
         cursor_doc_line += repl_code_panel_document_cursor_row_for_text(
             repl_state_editor_input()->input, text_x + repl_code_panel_document_active_indent_chars() * FONT_W,
             panel_w, repl_state_cursor_pos(), NULL, NULL, NULL);
-    } else if (g_edit_line < g_num_cmds) {
-        for (int i = 0; i < g_edit_line; i++) {
+    } else if (repl_state_edit_line() < repl_state_document_count()) {
+        for (int i = 0; i < repl_state_edit_line(); i++) {
             cursor_doc_line += cmd_main_rows[i];
             cursor_doc_line += replay_extra_rows[i];
         }
@@ -185,7 +185,7 @@ static int code_panel_cursor_doc_line_from_layout(
             repl_state_editor_input()->input, text_x + repl_code_panel_document_active_indent_chars() * FONT_W,
             panel_w, repl_state_cursor_pos(), NULL, NULL, NULL);
     } else {
-        for (int i = 0; i < g_num_cmds; i++) {
+        for (int i = 0; i < repl_state_document_count(); i++) {
             cursor_doc_line += cmd_main_rows[i];
             cursor_doc_line += replay_extra_rows[i];
         }
@@ -203,7 +203,7 @@ static int code_panel_follow_doc_line_from_layout(
     int follow_doc_line = cursor_doc_line;
 
     if (g_replay_active &&
-        g_replay_src_line >= 0 && g_replay_src_line < g_num_cmds) {
+        g_replay_src_line >= 0 && g_replay_src_line < repl_state_document_count()) {
         follow_doc_line = header_rows;
         for (int i = 0; i < g_replay_src_line; i++) {
             follow_doc_line += cmd_main_rows[i];
@@ -250,8 +250,8 @@ void repl_code_panel_document_build(CodePanelDocumentLayout *layout,
 
     total_lines = layout->header_rows + layout->footer_rows
                 + code_panel_newline_rows(panel_w, text_x);
-    for (int i = 0; i < g_num_cmds; i++) {
-        if (repl_state_insert_mode() && i == g_edit_line)
+    for (int i = 0; i < repl_state_document_count(); i++) {
+        if (repl_state_insert_mode() && i == repl_state_edit_line())
             total_lines += code_panel_insert_rows(panel_w, text_x);
         total_lines += layout->cmd_main_rows[i];
         total_lines += layout->replay_extra_rows[i];
@@ -301,8 +301,8 @@ int repl_code_panel_document_target_for_doc_line(
     if (row < 0)
         return 0;
 
-    for (int i = 0; i <= g_num_cmds; i++) {
-        if (repl_state_insert_mode() && i == g_edit_line) {
+    for (int i = 0; i <= repl_state_document_count(); i++) {
+        if (repl_state_insert_mode() && i == repl_state_edit_line()) {
             int insert_rows = code_panel_insert_rows(layout->panel_w,
                                                      layout->text_x);
             if (row < insert_rows) {
@@ -314,7 +314,7 @@ int repl_code_panel_document_target_for_doc_line(
             row -= insert_rows;
         }
 
-        if (i < g_num_cmds) {
+        if (i < repl_state_document_count()) {
             int main_rows = layout->cmd_main_rows[i];
             if (row < main_rows) {
                 if (out_target) *out_target = i;
@@ -338,7 +338,7 @@ int repl_code_panel_document_target_for_doc_line(
             int newline_rows = code_panel_newline_rows(layout->panel_w,
                                                        layout->text_x);
             if (row < newline_rows) {
-                if (out_target) *out_target = g_num_cmds;
+                if (out_target) *out_target = repl_state_document_count();
                 if (out_on_insert_line) *out_on_insert_line = 0;
                 if (out_row_offset) *out_row_offset = row;
                 return 1;

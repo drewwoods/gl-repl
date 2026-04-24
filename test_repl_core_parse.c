@@ -140,23 +140,23 @@ int main(void) {
         repl_reset_state();
         declare_test_vars();
         repl_feed_line_public("glBegin(GL_TRIANGLES);");
-        g_edit_line = 0;
+        repl_state_edit_line_set(0);
 
         GLCmd cmd;
-        ReplParseContext ctx = { g_num_cmds, NULL, 0 };
+        ReplParseContext ctx = { repl_state_document_count(), NULL, 0 };
         memset(&cmd, 0, sizeof(cmd));
         int ok = repl_parse_command_ctx("glVertex3f(1, 2, 3)", &cmd, &ctx);
         ASSERT_TRUE("context parse ok", ok == 1);
         ASSERT_TRUE("context parse uses source line indent",
                     leading_spaces(cmd.source) == 4);
-        ASSERT_TRUE("context parse leaves edit line alone", g_edit_line == 0);
+        ASSERT_TRUE("context parse leaves edit line alone", repl_state_edit_line() == 0);
 
         memset(&cmd, 0, sizeof(cmd));
-        ok = repl_parse_and_normalize("glColor3f(1, 0, 0)", g_num_cmds,
+        ok = repl_parse_and_normalize("glColor3f(1, 0, 0)", repl_state_document_count(),
                                       NULL, 0, 0, &cmd);
         ASSERT_TRUE("normalize explicit line ok", ok == 1);
         ASSERT_TRUE("normalize explicit line leaves edit line alone",
-                    g_edit_line == 0);
+                    repl_state_edit_line() == 0);
     }
 
     {
@@ -171,9 +171,9 @@ int main(void) {
         memset(&tess_cmd, 0, sizeof(tess_cmd));
         memset(&gl_cmd, 0, sizeof(gl_cmd));
 
-        int ok1 = repl_parse_and_normalize("gluNormal(0, 0, 1)", g_num_cmds,
+        int ok1 = repl_parse_and_normalize("gluNormal(0, 0, 1)", repl_state_document_count(),
                                            NULL, 0, 0, &tess_cmd);
-        int ok2 = repl_parse_and_normalize("glVertex3f(1, 2, 3)", g_num_cmds,
+        int ok2 = repl_parse_and_normalize("glVertex3f(1, 2, 3)", repl_state_document_count(),
                                            NULL, 0, 0, &gl_cmd);
         ASSERT_TRUE("tess parse ok", ok1 == 1);
         ASSERT_TRUE("gl parse ok", ok2 == 1);
@@ -187,7 +187,7 @@ int main(void) {
     {
         repl_reset_state();
         declare_test_vars();
-        g_edit_line = 0;
+        repl_state_edit_line_set(0);
         GLCmd cmd;
         memset(&cmd, 0, sizeof(cmd));
         int ok = repl_parse_command("glBegin(GL_TRIANGLES)", &cmd);
@@ -198,7 +198,7 @@ int main(void) {
     {
         repl_reset_state();
         declare_test_vars();
-        g_edit_line = 0;
+        repl_state_edit_line_set(0);
         GLCmd cmd;
         memset(&cmd, 0, sizeof(cmd));
         int ok = repl_parse_command("func0(x + 1, 2)", &cmd);

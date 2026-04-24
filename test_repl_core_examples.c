@@ -217,8 +217,8 @@ static void fixture_path_for_idx(int idx, char *out, int out_sz) {
 }
 
 static int examples_have_no_invalid_cmds(void) {
-    for (int i = 0; i < g_num_cmds; i++) {
-        if (!g_cmds[i].valid)
+    for (int i = 0; i < repl_state_document_count(); i++) {
+        if (!repl_state_document_cmds_mut()[i].valid)
             return 0;
     }
     return 1;
@@ -424,8 +424,8 @@ static char *collect_loaded_definition_lines(void) {
     int count = 0;
     char *joined;
 
-    for (int i = 0; i < g_num_cmds; i++) {
-        if (g_cmds[i].type != CMD_VAR_DECLARE && g_cmds[i].type != CMD_VAR_ASSIGN)
+    for (int i = 0; i < repl_state_document_count(); i++) {
+        if (repl_state_document_cmds_mut()[i].type != CMD_VAR_DECLARE && repl_state_document_cmds_mut()[i].type != CMD_VAR_ASSIGN)
             continue;
         count++;
     }
@@ -435,10 +435,10 @@ static char *collect_loaded_definition_lines(void) {
         return NULL;
 
     count = 0;
-    for (int i = 0; i < g_num_cmds; i++) {
-        if (g_cmds[i].type != CMD_VAR_DECLARE && g_cmds[i].type != CMD_VAR_ASSIGN)
+    for (int i = 0; i < repl_state_document_count(); i++) {
+        if (repl_state_document_cmds_mut()[i].type != CMD_VAR_DECLARE && repl_state_document_cmds_mut()[i].type != CMD_VAR_ASSIGN)
             continue;
-        canon_lines[count] = canonicalize_definition_line(g_cmds[i].source);
+        canon_lines[count] = canonicalize_definition_line(repl_state_document_cmds_mut()[i].source);
         if (!canon_lines[count]) {
             for (int j = 0; j < count; j++)
                 free(canon_lines[j]);
@@ -748,7 +748,7 @@ int main(int argc, char **argv) {
                     fabsf(*repl_state_camera()->ty - 0.3f) < 1e-4f);
         ASSERT_TRUE("mixed cfg camera tz preset",
                     fabsf(*repl_state_camera()->tz - (-0.4f)) < 1e-4f);
-        ASSERT_TRUE("mixed cfg camera body cmds loaded", g_num_cmds == 3);
+        ASSERT_TRUE("mixed cfg camera body cmds loaded", repl_state_document_count() == 3);
 
         dump = dump_current_code_panel_text();
         ASSERT_TRUE("mixed cfg camera dump alloc", dump != NULL);
@@ -782,7 +782,7 @@ int main(int argc, char **argv) {
         ASSERT_TRUE("nonleading cfg leaves axes unchanged",
                     g_axes_theme == 0);
         ASSERT_TRUE("nonleading cfg comments preserved",
-                g_num_cmds == 5);
+                repl_state_document_count() == 5);
 
         dump = dump_current_code_panel_text();
         ASSERT_TRUE("nonleading cfg dump alloc", dump != NULL);
@@ -808,7 +808,7 @@ int main(int argc, char **argv) {
         char *dump;
 
         load_custom_example_lines_for_test(invalid_camera_example);
-        ASSERT_TRUE("invalid camera header loads body cmds", g_num_cmds == 3);
+        ASSERT_TRUE("invalid camera header loads body cmds", repl_state_document_count() == 3);
         ASSERT_TRUE("invalid camera header keeps cmds valid",
                     examples_have_no_invalid_cmds());
         ASSERT_TRUE("invalid camera header preserves rx",
@@ -866,8 +866,8 @@ int main(int argc, char **argv) {
         name = repl_example_name(idx);
         log_example_step(idx, name, "verify", "loaded example into REPL state");
         snprintf(label, sizeof(label), "example %02d loads cmds", idx);
-        ASSERT_TRUE(label, g_num_cmds > 0);
-        original_cmd_count = g_num_cmds;
+        ASSERT_TRUE(label, repl_state_document_count() > 0);
+        original_cmd_count = repl_state_document_count();
         snprintf(label, sizeof(label), "example %02d has public name", idx);
         ASSERT_TRUE(label, name != NULL);
         snprintf(label, sizeof(label), "example %02d has no invalid cmds", idx);
@@ -957,7 +957,7 @@ int main(int argc, char **argv) {
         imported_defs_exact = 0;
         if (roundtrip_loaded == 1) {
             snprintf(label, sizeof(label), "example %02d import cmd count", idx);
-            ASSERT_TRUE(label, g_num_cmds == original_cmd_count);
+            ASSERT_TRUE(label, repl_state_document_count() == original_cmd_count);
             snprintf(label, sizeof(label), "example %02d import has no invalid cmds", idx);
             ASSERT_TRUE(label, examples_have_no_invalid_cmds());
 

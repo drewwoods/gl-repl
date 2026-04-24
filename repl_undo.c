@@ -19,9 +19,9 @@ static int g_redo_head = 0;
 static int g_redo_count = 0;
 
 void repl_undo_snapshot_save(ReplUndoSnapshot *snapshot) {
-    memcpy(snapshot->cmds, g_cmds, (size_t)g_num_cmds * sizeof(GLCmd));
-    snapshot->num_cmds = g_num_cmds;
-    snapshot->edit_line = g_edit_line;
+    memcpy(snapshot->cmds, repl_state_document_cmds_mut(), (size_t)repl_state_document_count() * sizeof(GLCmd));
+    snapshot->num_cmds = repl_state_document_count();
+    snapshot->edit_line = repl_state_edit_line();
     snapshot->num_predef_vars = g_num_predef_vars;
     for (int i = 0; i < g_num_predef_vars; i++) {
         snapshot->predef_vals[i] = g_predef_vars[i].value;
@@ -41,7 +41,7 @@ void repl_undo_snapshot_restore(const ReplUndoSnapshot *snapshot) {
         memcpy(g_predef_vars[i].name, snapshot->predef_names[i], 16);
     }
     repl_state_insert_mode_set(0);
-    load_line_to_input(g_edit_line);
+    load_line_to_input(repl_state_edit_line());
     mark_normals_dirty();
 }
 

@@ -220,7 +220,7 @@ void test_examples() {
     ASSERT_TRUE("example_name(0) != NULL", name != NULL);
 
     repl_load_example(0);
-    ASSERT_TRUE("g_num_cmds > 0 after load_example", g_num_cmds > 0);
+    ASSERT_TRUE("repl_state_document_count() > 0 after load_example", repl_state_document_count() > 0);
 }
 
 void test_user_scene() {
@@ -715,8 +715,8 @@ void test_var_declare_cmd() {
 
     /* 1. The source array should have exactly one CMD_VAR_DECLARE entry */
     int found_decl = 0;
-    for (int i = 0; i < g_num_cmds; i++) {
-        if (g_cmds[i].type == CMD_VAR_DECLARE)
+    for (int i = 0; i < repl_state_document_count(); i++) {
+        if (repl_state_document_cmds_mut()[i].type == CMD_VAR_DECLARE)
             found_decl++;
     }
     ASSERT_INT("float decl produces CMD_VAR_DECLARE", found_decl, 1);

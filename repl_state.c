@@ -393,6 +393,10 @@ int repl_state_document_count(void) {
     return g_num_cmds;
 }
 
+void repl_state_document_count_set(int cmd_count) {
+    g_num_cmds = cmd_count;
+}
+
 int repl_state_document_capacity(void) {
     return MAX_COMMANDS;
 }

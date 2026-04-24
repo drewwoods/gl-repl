@@ -54,11 +54,11 @@ static void test_degenerate_normal(void) {
     repl_recompute_autonormals();
 
     /* An auto-normal should be inserted before each vertex */
-    ASSERT_INT("degenerate: cmd count", g_num_cmds, 8);
-    ASSERT_TRUE("degenerate: first inserted is auto normal", g_cmds[1].type == CMD_NORMAL3F && g_cmds[1].is_auto);
-    ASSERT_FLOAT("degenerate: normal x is 0", g_cmds[1].args[0], 0.0f);
-    ASSERT_FLOAT("degenerate: normal y is 0", g_cmds[1].args[1], 0.0f);
-    ASSERT_FLOAT("degenerate: normal z is 0", g_cmds[1].args[2], 0.0f);
+    ASSERT_INT("degenerate: cmd count", repl_state_document_count(), 8);
+    ASSERT_TRUE("degenerate: first inserted is auto normal", repl_state_document_cmds_mut()[1].type == CMD_NORMAL3F && repl_state_document_cmds_mut()[1].is_auto);
+    ASSERT_FLOAT("degenerate: normal x is 0", repl_state_document_cmds_mut()[1].args[0], 0.0f);
+    ASSERT_FLOAT("degenerate: normal y is 0", repl_state_document_cmds_mut()[1].args[1], 0.0f);
+    ASSERT_FLOAT("degenerate: normal z is 0", repl_state_document_cmds_mut()[1].args[2], 0.0f);
 
     g_autonormal = 0;
 }
@@ -81,12 +81,12 @@ static void test_triangle_strip(void) {
     repl_recompute_autonormals();
 
     /* 4 vertices + 4 auto normals + BEGIN + END */
-    ASSERT_INT("strip: cmd count", g_num_cmds, 10);
-    ASSERT_TRUE("strip: v0 has auto normal", g_cmds[1].type == CMD_NORMAL3F && g_cmds[1].is_auto);
-    ASSERT_TRUE("strip: v1 has auto normal", g_cmds[3].type == CMD_NORMAL3F && g_cmds[3].is_auto);
+    ASSERT_INT("strip: cmd count", repl_state_document_count(), 10);
+    ASSERT_TRUE("strip: v0 has auto normal", repl_state_document_cmds_mut()[1].type == CMD_NORMAL3F && repl_state_document_cmds_mut()[1].is_auto);
+    ASSERT_TRUE("strip: v1 has auto normal", repl_state_document_cmds_mut()[3].type == CMD_NORMAL3F && repl_state_document_cmds_mut()[3].is_auto);
     /* All normals for a flat strip in xy-plane should point along +z */
-    ASSERT_FLOAT("strip: n0 z", g_cmds[1].args[2], 1.0f);
-    ASSERT_FLOAT("strip: n1 z", g_cmds[3].args[2], 1.0f);
+    ASSERT_FLOAT("strip: n0 z", repl_state_document_cmds_mut()[1].args[2], 1.0f);
+    ASSERT_FLOAT("strip: n1 z", repl_state_document_cmds_mut()[3].args[2], 1.0f);
 
     g_autonormal = 0;
 }
@@ -109,10 +109,10 @@ static void test_triangle_fan(void) {
     repl_recompute_autonormals();
 
     /* 4 vertices + 4 auto normals + BEGIN + END */
-    ASSERT_INT("fan: cmd count", g_num_cmds, 10);
-    ASSERT_TRUE("fan: v0 has auto normal", g_cmds[1].type == CMD_NORMAL3F && g_cmds[1].is_auto);
+    ASSERT_INT("fan: cmd count", repl_state_document_count(), 10);
+    ASSERT_TRUE("fan: v0 has auto normal", repl_state_document_cmds_mut()[1].type == CMD_NORMAL3F && repl_state_document_cmds_mut()[1].is_auto);
     /* Fan in xy-plane, normal should be +z */
-    ASSERT_FLOAT("fan: n0 z", g_cmds[1].args[2], 1.0f);
+    ASSERT_FLOAT("fan: n0 z", repl_state_document_cmds_mut()[1].args[2], 1.0f);
 
     g_autonormal = 0;
 }
@@ -135,10 +135,10 @@ static void test_quads(void) {
     repl_recompute_autonormals();
 
     /* 4 vertices + 4 auto normals + BEGIN + END */
-    ASSERT_INT("quads: cmd count", g_num_cmds, 10);
-    ASSERT_TRUE("quads: v0 has auto normal", g_cmds[1].type == CMD_NORMAL3F && g_cmds[1].is_auto);
+    ASSERT_INT("quads: cmd count", repl_state_document_count(), 10);
+    ASSERT_TRUE("quads: v0 has auto normal", repl_state_document_cmds_mut()[1].type == CMD_NORMAL3F && repl_state_document_cmds_mut()[1].is_auto);
     /* Quad in xy-plane: cross (1,0,0)x(1,1,0) = (0,0,1) */
-    ASSERT_FLOAT("quads: n0 z", g_cmds[1].args[2], 1.0f);
+    ASSERT_FLOAT("quads: n0 z", repl_state_document_cmds_mut()[1].args[2], 1.0f);
 
     g_autonormal = 0;
 }
@@ -161,10 +161,10 @@ static void test_quad_strip(void) {
     repl_recompute_autonormals();
 
     /* 4 vertices + 4 auto normals + BEGIN + END */
-    ASSERT_INT("quad_strip: cmd count", g_num_cmds, 10);
-    ASSERT_TRUE("quad_strip: v0 has auto normal", g_cmds[1].type == CMD_NORMAL3F && g_cmds[1].is_auto);
+    ASSERT_INT("quad_strip: cmd count", repl_state_document_count(), 10);
+    ASSERT_TRUE("quad_strip: v0 has auto normal", repl_state_document_cmds_mut()[1].type == CMD_NORMAL3F && repl_state_document_cmds_mut()[1].is_auto);
     /* First quad: v0=(0,0,0) v1=(1,0,0) v2=(0,1,0). Normal = (0,0,1) */
-    ASSERT_FLOAT("quad_strip: n0 z", g_cmds[1].args[2], 1.0f);
+    ASSERT_FLOAT("quad_strip: n0 z", repl_state_document_cmds_mut()[1].args[2], 1.0f);
 
     g_autonormal = 0;
 }
@@ -187,9 +187,9 @@ static void test_polygon(void) {
     repl_recompute_autonormals();
 
     /* 4 vertices + 4 auto normals + BEGIN + END */
-    ASSERT_INT("polygon: cmd count", g_num_cmds, 10);
-    ASSERT_TRUE("polygon: v0 has auto normal", g_cmds[1].type == CMD_NORMAL3F && g_cmds[1].is_auto);
-    ASSERT_FLOAT("polygon: n0 z", g_cmds[1].args[2], 1.0f);
+    ASSERT_INT("polygon: cmd count", repl_state_document_count(), 10);
+    ASSERT_TRUE("polygon: v0 has auto normal", repl_state_document_cmds_mut()[1].type == CMD_NORMAL3F && repl_state_document_cmds_mut()[1].is_auto);
+    ASSERT_FLOAT("polygon: n0 z", repl_state_document_cmds_mut()[1].args[2], 1.0f);
 
     g_autonormal = 0;
 }
@@ -212,10 +212,10 @@ static void test_unsupported_mode(void) {
 
     /* compute_block_normals default branch leaves all norms at zero,
      * but recompute_autonormals still inserts (0,0,0) auto-normals */
-    ASSERT_INT("unsupported mode: auto normals still inserted", g_num_cmds, 6);
-    ASSERT_TRUE("unsupported mode: inserted cmd is auto normal", g_cmds[1].type == CMD_NORMAL3F && g_cmds[1].is_auto);
-    ASSERT_FLOAT("unsupported mode: normal is zero x", g_cmds[1].args[0], 0.0f);
-    ASSERT_FLOAT("unsupported mode: normal is zero z", g_cmds[1].args[2], 0.0f);
+    ASSERT_INT("unsupported mode: auto normals still inserted", repl_state_document_count(), 6);
+    ASSERT_TRUE("unsupported mode: inserted cmd is auto normal", repl_state_document_cmds_mut()[1].type == CMD_NORMAL3F && repl_state_document_cmds_mut()[1].is_auto);
+    ASSERT_FLOAT("unsupported mode: normal is zero x", repl_state_document_cmds_mut()[1].args[0], 0.0f);
+    ASSERT_FLOAT("unsupported mode: normal is zero z", repl_state_document_cmds_mut()[1].args[2], 0.0f);
 
     g_autonormal = 0;
 }
@@ -238,11 +238,11 @@ static void test_block_skipping(void) {
     repl_feed_line_public("glVertex3f(1, 0, 0);");
     repl_feed_line_public("glVertex3f(0, 1, 0);");
     repl_feed_line_public("glEnd();");
-    int cmds_before = g_num_cmds;
+    int cmds_before = repl_state_document_count();
     repl_recompute_autonormals();
 
     /* 3 normals inserted into the glBegin block; for-loop was skipped */
-    ASSERT_INT("for-skip: cmds added", g_num_cmds, cmds_before + 3);
+    ASSERT_INT("for-skip: cmds added", repl_state_document_count(), cmds_before + 3);
     g_autonormal = 0;
 
     /* func-def block before glBegin */
@@ -256,10 +256,10 @@ static void test_block_skipping(void) {
     repl_feed_line_public("glVertex3f(1, 0, 0);");
     repl_feed_line_public("glVertex3f(0, 1, 0);");
     repl_feed_line_public("glEnd();");
-    cmds_before = g_num_cmds;
+    cmds_before = repl_state_document_count();
     repl_recompute_autonormals();
 
-    ASSERT_INT("func-skip: cmds added", g_num_cmds, cmds_before + 3);
+    ASSERT_INT("func-skip: cmds added", repl_state_document_count(), cmds_before + 3);
     g_autonormal = 0;
 
     /* if-block before glBegin */
@@ -273,10 +273,10 @@ static void test_block_skipping(void) {
     repl_feed_line_public("glVertex3f(1, 0, 0);");
     repl_feed_line_public("glVertex3f(0, 1, 0);");
     repl_feed_line_public("glEnd();");
-    cmds_before = g_num_cmds;
+    cmds_before = repl_state_document_count();
     repl_recompute_autonormals();
 
-    ASSERT_INT("if-skip: cmds added", g_num_cmds, cmds_before + 3);
+    ASSERT_INT("if-skip: cmds added", repl_state_document_count(), cmds_before + 3);
     g_autonormal = 0;
 }
 
@@ -295,7 +295,7 @@ static void test_autonormal_disabled(void) {
     repl_feed_line_public("glVertex3f(0, 1, 0);");
     repl_feed_line_public("glEnd();");
     repl_recompute_autonormals();
-    ASSERT_INT("disabled: no cmds added", g_num_cmds, 5);
+    ASSERT_INT("disabled: no cmds added", repl_state_document_count(), 5);
 }
 
 /* ------------------------------------------------------------------ */
@@ -313,10 +313,10 @@ static void test_gl_triangles(void) {
     repl_feed_line_public("glVertex3f(0, 1, 0);");
     repl_feed_line_public("glEnd();");
     repl_recompute_autonormals();
-    ASSERT_TRUE("autonormal inserts before each triangle vertex", g_num_cmds == 8);
-    ASSERT_TRUE("autonormal default front-face first cmd type", g_cmds[1].type == CMD_NORMAL3F);
-    ASSERT_TRUE("autonormal default front-face first cmd auto", g_cmds[1].is_auto == 1);
-    ASSERT_TRUE("autonormal default front-face keeps +z", fabsf(g_cmds[1].args[2] - 1.0f) < 1e-6f);
+    ASSERT_TRUE("autonormal inserts before each triangle vertex", repl_state_document_count() == 8);
+    ASSERT_TRUE("autonormal default front-face first cmd type", repl_state_document_cmds_mut()[1].type == CMD_NORMAL3F);
+    ASSERT_TRUE("autonormal default front-face first cmd auto", repl_state_document_cmds_mut()[1].is_auto == 1);
+    ASSERT_TRUE("autonormal default front-face keeps +z", fabsf(repl_state_document_cmds_mut()[1].args[2] - 1.0f) < 1e-6f);
 
     repl_reset_state(); declare_test_vars();
     g_autonormal = 1;
@@ -327,14 +327,14 @@ static void test_gl_triangles(void) {
     repl_feed_line_public("glVertex3f(0, 1, 0);");
     repl_feed_line_public("glEnd();");
     repl_recompute_autonormals();
-    ASSERT_TRUE("autonormal front-face cw inserts before each triangle vertex", g_num_cmds == 9);
-    ASSERT_TRUE("autonormal front-face cw first cmd type", g_cmds[2].type == CMD_NORMAL3F);
-    ASSERT_TRUE("autonormal front-face cw first cmd auto", g_cmds[2].is_auto == 1);
-    ASSERT_TRUE("autonormal front-face cw flips z", fabsf(g_cmds[2].args[2] - (-1.0f)) < 1e-6f);
+    ASSERT_TRUE("autonormal front-face cw inserts before each triangle vertex", repl_state_document_count() == 9);
+    ASSERT_TRUE("autonormal front-face cw first cmd type", repl_state_document_cmds_mut()[2].type == CMD_NORMAL3F);
+    ASSERT_TRUE("autonormal front-face cw first cmd auto", repl_state_document_cmds_mut()[2].is_auto == 1);
+    ASSERT_TRUE("autonormal front-face cw flips z", fabsf(repl_state_document_cmds_mut()[2].args[2] - (-1.0f)) < 1e-6f);
 
-    g_cmds[0].mode = GL_CCW;
+    repl_state_document_cmds_mut()[0].mode = GL_CCW;
     repl_recompute_autonormals();
-    ASSERT_TRUE("autonormal front-face update flips auto normal back", fabsf(g_cmds[2].args[2] - 1.0f) < 1e-6f);
+    ASSERT_TRUE("autonormal front-face update flips auto normal back", fabsf(repl_state_document_cmds_mut()[2].args[2] - 1.0f) < 1e-6f);
 
     g_autonormal = 0;
 }

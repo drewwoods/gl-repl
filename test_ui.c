@@ -86,14 +86,14 @@ static void test_color_picker(void) {
     printf("Testing Color Picker...\n");
     
     /* Setup a command to edit */
-    g_num_cmds = 1;
-    g_cmds[0].type = CMD_COLOR3F;
-    g_cmds[0].args[0] = 1.0f;
-    g_cmds[0].args[1] = 0.0f;
-    g_cmds[0].args[2] = 0.0f;
-    g_cmds[0].valid = 1;
-    g_cmds[0].has_vars = 0;
-    strcpy(g_cmds[0].source, "glColor3f(1, 0, 0);");
+    repl_state_document_count_set(1);
+    repl_state_document_cmds_mut()[0].type = CMD_COLOR3F;
+    repl_state_document_cmds_mut()[0].args[0] = 1.0f;
+    repl_state_document_cmds_mut()[0].args[1] = 0.0f;
+    repl_state_document_cmds_mut()[0].args[2] = 0.0f;
+    repl_state_document_cmds_mut()[0].valid = 1;
+    repl_state_document_cmds_mut()[0].has_vars = 0;
+    strcpy(repl_state_document_cmds_mut()[0].source, "glColor3f(1, 0, 0);");
     
     ASSERT_TRUE("can edit color cmd", ui_color_picker_can_edit_cmd(0));
     
@@ -121,9 +121,9 @@ static void test_color_picker(void) {
     ui_color_picker_release();
 
     /* Test Alpha support */
-    g_cmds[0].type = CMD_COLOR4F;
-    g_cmds[0].args[3] = 0.5f;
-    strcpy(g_cmds[0].source, "glColor4f(1, 0, 0, 0.5);");
+    repl_state_document_cmds_mut()[0].type = CMD_COLOR4F;
+    repl_state_document_cmds_mut()[0].args[3] = 0.5f;
+    strcpy(repl_state_document_cmds_mut()[0].source, "glColor4f(1, 0, 0, 0.5);");
     ui_color_picker_open(0, 300);
     
     gl_stub_counts_reset();
@@ -136,7 +136,7 @@ static void test_color_picker(void) {
     ui_color_picker_release();
 
     /* Test glClearColor limits */
-    g_cmds[0].type = CMD_CLEAR_COLOR;
+    repl_state_document_cmds_mut()[0].type = CMD_CLEAR_COLOR;
     ui_color_picker_open(0, 300);
     ui_color_picker_press(px + 10, *repl_state_viewport()->window_h - (py - 5)); // High V
     ui_color_picker_release();

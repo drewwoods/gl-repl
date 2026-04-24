@@ -63,12 +63,12 @@ void repl_var_drag_motion(int x) {
      * on screen matches the new value (constant assignments only —
      * expressions that reference other vars are left alone). */
     const char *vname = g_predef_vars[g_drag_var].name;
-    for (int i = 0; i < g_num_cmds; i++) {
-        if (g_cmds[i].valid && g_cmds[i].type == CMD_VAR_ASSIGN &&
-            g_cmds[i].num_args == g_drag_var &&
-            !g_cmds[i].has_vars) {
-            g_cmds[i].args[0] = new_val;
-            snprintf(g_cmds[i].source, sizeof(g_cmds[i].source),
+    for (int i = 0; i < repl_state_document_count(); i++) {
+        if (repl_state_document_cmds_mut()[i].valid && repl_state_document_cmds_mut()[i].type == CMD_VAR_ASSIGN &&
+            repl_state_document_cmds_mut()[i].num_args == g_drag_var &&
+            !repl_state_document_cmds_mut()[i].has_vars) {
+            repl_state_document_cmds_mut()[i].args[0] = new_val;
+            snprintf(repl_state_document_cmds_mut()[i].source, sizeof(repl_state_document_cmds_mut()[i].source),
                      "  %s = %g;", vname, (double)new_val);
         }
     }

@@ -827,10 +827,10 @@ static int cmd_type_is_tess(CmdType t) {
 }
 
 static int export_uses_tess_commands(void) {
-    for (int i = 0; i < g_num_cmds; i++) {
-        if (!g_cmds[i].valid)
+    for (int i = 0; i < repl_state_document_count(); i++) {
+        if (!repl_state_document_cmds_mut()[i].valid)
             continue;
-        if (cmd_type_is_tess(g_cmds[i].type))
+        if (cmd_type_is_tess(repl_state_document_cmds_mut()[i].type))
             return 1;
     }
 
@@ -1330,8 +1330,8 @@ static void write_cmd_source_as_c(FILE *f, const GLCmd *cmd, int translate_exprs
 static int find_export_block_end(int begin_idx) {
     int depth = 1;
 
-    for (int i = begin_idx + 1; i < g_num_cmds; i++) {
-        CmdType t = g_cmds[i].type;
+    for (int i = begin_idx + 1; i < repl_state_document_count(); i++) {
+        CmdType t = repl_state_document_cmds_mut()[i].type;
         if (t == CMD_FOR_BEGIN || t == CMD_FUNC_DEF || t == CMD_IF_BEGIN) depth++;
         else if (t == CMD_FOR_END || t == CMD_FUNC_END || t == CMD_IF_END) {
             if (--depth == 0)
@@ -1339,16 +1339,16 @@ static int find_export_block_end(int begin_idx) {
         }
     }
 
-    return g_num_cmds;
+    return repl_state_document_count();
 }
 
 static int comment_run_attached_func_idx(int start, int end_idx) {
     int i = start;
-    while (i < end_idx && i < g_num_cmds &&
-           g_cmds[i].valid && g_cmds[i].type == CMD_COMMENT)
+    while (i < end_idx && i < repl_state_document_count() &&
+           repl_state_document_cmds_mut()[i].valid && repl_state_document_cmds_mut()[i].type == CMD_COMMENT)
         i++;
-    if (i > start && i < end_idx && i < g_num_cmds &&
-        g_cmds[i].valid && g_cmds[i].type == CMD_FUNC_DEF)
+    if (i > start && i < end_idx && i < repl_state_document_count() &&
+        repl_state_document_cmds_mut()[i].valid && repl_state_document_cmds_mut()[i].type == CMD_FUNC_DEF)
         return i;
     return -1;
 }
@@ -1431,23 +1431,23 @@ static void write_render_body_range_as_c(FILE *f, int start, int end_idx,
     int for_depth = 0;
     int tess_depth = 0;
 
-    for (int i = start; i < end_idx && i < g_num_cmds; i++) {
-        if (!g_cmds[i].valid) continue;
-        if (skip_func_defs && g_cmds[i].type == CMD_COMMENT) {
+    for (int i = start; i < end_idx && i < repl_state_document_count(); i++) {
+        if (!repl_state_document_cmds_mut()[i].valid) continue;
+        if (skip_func_defs && repl_state_document_cmds_mut()[i].type == CMD_COMMENT) {
             int attached_func = comment_run_attached_func_idx(i, end_idx);
             if (attached_func >= 0) {
                 i = find_export_block_end(attached_func);
                 continue;
             }
         }
-        switch (g_cmds[i].type) {
+        switch (repl_state_document_cmds_mut()[i].type) {
         case CMD_FOR_BEGIN:
-            write_for_begin_as_c(f, &g_cmds[i]);
+            write_for_begin_as_c(f, &repl_state_document_cmds_mut()[i]);
             for_depth++;
             break;
         case CMD_FOR_END:
             for_depth--;
-            fprintf(f, "%s\n", g_cmds[i].source);
+            fprintf(f, "%s\n", repl_state_document_cmds_mut()[i].source);
             break;
         case CMD_FUNC_DEF:
             if (skip_func_defs)
@@ -1456,7 +1456,7 @@ static void write_render_body_range_as_c(FILE *f, int start, int end_idx,
         case CMD_FUNC_END:
             break;
         default:
-            write_canonical_cmd_as_c(f, &g_cmds[i], for_depth, &tess_depth);
+            write_canonical_cmd_as_c(f, &repl_state_document_cmds_mut()[i], for_depth, &tess_depth);
             break;
         }
     }
@@ -1497,11 +1497,11 @@ static void write_rand_helper(FILE *f) {
 static void write_render_helper_as_c(FILE *f, const char *name) {
     fprintf(f, "\nstatic void %s(void) {\n", name);
     fprintf(f, "  // Snippet start\n");
-    write_render_body_range_as_c(f, 0, g_num_cmds, 1);
+    write_render_body_range_as_c(f, 0, repl_state_document_count(), 1);
     int bb = 0;
-    for (int i = 0; i < g_num_cmds; i++) {
-        if (g_cmds[i].valid && g_cmds[i].type == CMD_BEGIN) bb++;
-        else if (g_cmds[i].valid && g_cmds[i].type == CMD_END) bb--;
+    for (int i = 0; i < repl_state_document_count(); i++) {
+        if (repl_state_document_cmds_mut()[i].valid && repl_state_document_cmds_mut()[i].type == CMD_BEGIN) bb++;
+        else if (repl_state_document_cmds_mut()[i].valid && repl_state_document_cmds_mut()[i].type == CMD_END) bb--;
     }
     if (bb > 0)
         fprintf(f, "  glEnd();\n");
@@ -1510,22 +1510,22 @@ static void write_render_helper_as_c(FILE *f, const char *name) {
 }
 
 static void write_func_defs_as_c(FILE *f) {
-    for (int i = 0; i < g_num_cmds; i++) {
-        if (!g_cmds[i].valid || g_cmds[i].type != CMD_FUNC_DEF) continue;
+    for (int i = 0; i < repl_state_document_count(); i++) {
+        if (!repl_state_document_cmds_mut()[i].valid || repl_state_document_cmds_mut()[i].type != CMD_FUNC_DEF) continue;
         int comment_start = i;
         while (comment_start > 0 &&
-               g_cmds[comment_start - 1].valid &&
-               g_cmds[comment_start - 1].type == CMD_COMMENT)
+               repl_state_document_cmds_mut()[comment_start - 1].valid &&
+               repl_state_document_cmds_mut()[comment_start - 1].type == CMD_COMMENT)
             comment_start--;
         for (int c = comment_start; c < i; c++)
-            fprintf(f, "\n%s\n", g_cmds[c].source);
+            fprintf(f, "\n%s\n", repl_state_document_cmds_mut()[c].source);
 
-        int fn = (int)g_cmds[i].args[0];
+        int fn = (int)repl_state_document_cmds_mut()[i].args[0];
         int parsed_fn = fn;
         int param_count = 0;
         char param_names[MAX_EXPR_VARS][16];
         int fe = find_export_block_end(i);
-        if (parse_repl_func_signature(g_cmds[i].source, &parsed_fn,
+        if (parse_repl_func_signature(repl_state_document_cmds_mut()[i].source, &parsed_fn,
                                       param_names, MAX_EXPR_VARS,
                                       &param_count) && param_count > 0) {
             fprintf(f, "\nstatic void func%d(", parsed_fn);
@@ -2267,7 +2267,7 @@ static int import_make_repl_quadric_line(const char *line, char *out, int out_sz
 
 static void import_feed_one_line(const char *line, int *loaded, int *warnings) {
     char repl_line[MAX_LINE_LEN];
-    int before = g_num_cmds;
+    int before = repl_state_document_count();
     int handled = 0;
 
     /* @declare markers are written by write_canonical_cmd_as_c() for
@@ -2287,7 +2287,7 @@ static void import_feed_one_line(const char *line, int *loaded, int *warnings) {
         handled = feed_line(repl_line);
     }
 
-    if (g_num_cmds > before) *loaded += (g_num_cmds - before);
+    if (repl_state_document_count() > before) *loaded += (repl_state_document_count() - before);
     if (!handled) {
         fprintf(stderr, "Warning: could not parse line: %s\n", line);
         (*warnings)++;
@@ -2317,8 +2317,8 @@ static ExportNeeds export_collect_needs(void) {
         .needs_rand = 0,
     };
 
-    for (int i = 0; i < g_num_cmds; i++) {
-        if (g_cmds[i].valid && strstr(g_cmds[i].source, "rand(") != NULL)
+    for (int i = 0; i < repl_state_document_count(); i++) {
+        if (repl_state_document_cmds_mut()[i].valid && strstr(repl_state_document_cmds_mut()[i].source, "rand(") != NULL)
             needs.needs_rand = 1;
     }
 
@@ -2525,7 +2525,7 @@ void save_output(const char *filename) {
     fclose(f);
 
     char msg[128];
-    snprintf(msg, sizeof(msg), "Saved to output.c (%d commands)", g_num_cmds);
+    snprintf(msg, sizeof(msg), "Saved to output.c (%d commands)", repl_state_document_count());
     set_status(msg);
 }
 
@@ -2586,9 +2586,9 @@ static int import_try_function_header(ImportState *s, const char *p, const char 
     for (int c = 0; c < s->pending_comment_count; c++)
         import_feed_one_line(s->pending_comments[c], &s->loaded, &s->warnings);
     s->pending_comment_count = 0;
-    int before = g_num_cmds;
+    int before = repl_state_document_count();
     int handled = feed_line(repl_func_line);
-    if (g_num_cmds > before) s->loaded += (g_num_cmds - before);
+    if (repl_state_document_count() > before) s->loaded += (repl_state_document_count() - before);
     if (!handled) {
         fprintf(stderr, "Warning: could not parse line: %s\n", raw);
         s->warnings++;
@@ -2605,7 +2605,7 @@ static int import_try_snippet_start(ImportState *s, const char *p) {
      * inside existing commands.  Force snippet lines to start appending from
      * the end of the command list. */
     repl_state_insert_mode_set(0);
-    g_edit_line = g_num_cmds;
+    repl_state_edit_line_set(repl_state_document_count());
     return 1;
 }
 
@@ -2763,9 +2763,9 @@ void repl_dump_code_panel_text(FILE *out) {
         fprintf(dst, "%s\n", g_header_post[i]);
 
     fprintf(dst, "--- source ---\n");
-    for (int i = 0; i < g_num_cmds; i++) {
-        if (!g_cmds[i].valid) continue;
-        fprintf(dst, "%s\n", g_cmds[i].source);
+    for (int i = 0; i < repl_state_document_count(); i++) {
+        if (!repl_state_document_cmds_mut()[i].valid) continue;
+        fprintf(dst, "%s\n", repl_state_document_cmds_mut()[i].source);
     }
 
     fflush(dst);
@@ -2800,9 +2800,9 @@ void repl_dump_code_panel_visual_text(FILE *out) {
         dump_code_panel_wrapped_line(dst, g_header_post[i], text_x, panel_w);
 
     fprintf(dst, "--- source ---\n");
-    for (int i = 0; i < g_num_cmds; i++) {
-        if (!g_cmds[i].valid) continue;
-        dump_code_panel_wrapped_line(dst, g_cmds[i].source, text_x, panel_w);
+    for (int i = 0; i < repl_state_document_count(); i++) {
+        if (!repl_state_document_cmds_mut()[i].valid) continue;
+        dump_code_panel_wrapped_line(dst, repl_state_document_cmds_mut()[i].source, text_x, panel_w);
     }
 
     fflush(dst);

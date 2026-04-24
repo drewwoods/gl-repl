@@ -47,7 +47,7 @@ static void flatten_get_for_var_name(const GLCmd *cmd, char *var, int var_sz) {
 
 /* Tag a flat command with its origin so cursor-highlighting, replay, and
  * debug dumps can trace each expanded command back to:
- *   src_cmd_idx          -- the g_cmds[] line this command came from
+ *   src_cmd_idx          -- the repl_state_document_cmds_mut()[] line this command came from
  *   call_src_cmd_idx     -- the funcN() call site that triggered expansion
  *                          (-1 if top-level)
  *   root_call_src_cmd_idx-- the outermost call site in nested func calls
@@ -110,7 +110,7 @@ static int flatten_append_cmd(FlattenContext *ctx, const GLCmd *cmd,
 }
 
 /* Determine which flat-command range corresponds to the innermost
- * glBegin/glEnd block containing g_edit_line. The result is stored in
+ * glBegin/glEnd block containing repl_state_edit_line(). The result is stored in
  * g_current_block_begin / g_current_block_end and used by
  * repl_flat_cmd_matches_cursor() to highlight the active geometry
  * batch in the 3D view. */
@@ -121,30 +121,30 @@ static void refresh_current_block_highlight(void) {
     int current_block_begin = -1;
     int current_block_end = -1;
 
-    /* Scan g_cmds alongside g_flat_cmds to find the innermost
-     * BEGIN/END block (in flat-cmd indices) that contains g_edit_line
+    /* Scan repl_state_document_cmds_mut() alongside g_flat_cmds to find the innermost
+     * BEGIN/END block (in flat-cmd indices) that contains repl_state_edit_line()
      * in source-cmd space. Skips for/func/if structural commands that
      * don't appear in the flat stream. */
     {
         int begin_src = -1, begin_flat = -1;
         int fcur = 0;
-        for (int ci = 0; ci < g_num_cmds && fcur < flat_cmd_count; ci++) {
-            if (!g_cmds[ci].valid) continue;
-            if (g_cmds[ci].type == CMD_FUNC_DEF || g_cmds[ci].type == CMD_FUNC_END ||
-                g_cmds[ci].type == CMD_FOR_BEGIN || g_cmds[ci].type == CMD_FOR_END ||
-                g_cmds[ci].type == CMD_IF_BEGIN  || g_cmds[ci].type == CMD_IF_END  ||
-                g_cmds[ci].type == CMD_CALL)
+        for (int ci = 0; ci < repl_state_document_count() && fcur < flat_cmd_count; ci++) {
+            if (!repl_state_document_cmds_mut()[ci].valid) continue;
+            if (repl_state_document_cmds_mut()[ci].type == CMD_FUNC_DEF || repl_state_document_cmds_mut()[ci].type == CMD_FUNC_END ||
+                repl_state_document_cmds_mut()[ci].type == CMD_FOR_BEGIN || repl_state_document_cmds_mut()[ci].type == CMD_FOR_END ||
+                repl_state_document_cmds_mut()[ci].type == CMD_IF_BEGIN  || repl_state_document_cmds_mut()[ci].type == CMD_IF_END  ||
+                repl_state_document_cmds_mut()[ci].type == CMD_CALL)
                 continue;
             while (fcur < flat_cmd_count && !flat_cmds[fcur].valid) fcur++;
             if (fcur >= flat_cmd_count) break;
-            if (g_cmds[ci].type == CMD_BEGIN) {
-                if (ci <= g_edit_line) { begin_src = ci; begin_flat = fcur; }
-            } else if (g_cmds[ci].type == CMD_END) {
-                if (begin_src >= 0 && ci > g_edit_line) {
+            if (repl_state_document_cmds_mut()[ci].type == CMD_BEGIN) {
+                if (ci <= repl_state_edit_line()) { begin_src = ci; begin_flat = fcur; }
+            } else if (repl_state_document_cmds_mut()[ci].type == CMD_END) {
+                if (begin_src >= 0 && ci > repl_state_edit_line()) {
                     current_block_begin = begin_flat;
                     current_block_end = fcur;
                     break;
-                } else if (begin_src >= 0 && ci <= g_edit_line) {
+                } else if (begin_src >= 0 && ci <= repl_state_edit_line()) {
                     begin_src = -1; begin_flat = -1;
                 }
             }
@@ -154,7 +154,7 @@ static void refresh_current_block_highlight(void) {
 
     repl_state_flat_program_set_current_block(current_block_begin,
                                               current_block_end,
-                                              g_edit_line);
+                                              repl_state_edit_line());
 }
 
 /* Recursively expand source_commands[start..end_idx) into the destination
@@ -507,8 +507,8 @@ int repl_flatten_program(const ReplFlattenOptions *options,
 void flatten_commands(void) {
     ReplFlatProgramState *flat_program = repl_state_flat_program_mut();
     ReplFlattenOptions options = {
-        .source_cmds = g_cmds,
-        .source_cmd_count = g_num_cmds,
+        .source_cmds = repl_state_document_cmds_mut(),
+        .source_cmd_count = repl_state_document_count(),
         .flat_cmds = flat_program->cmds,
         .flat_local_vars = flat_program->local_vars,
         .flat_capacity = flat_program->capacity,
@@ -533,13 +533,13 @@ static unsigned int line_func_scope_mask(int line) {
     int depth = 0;
 
     if (line < 0) return 0;
-    if (line >= g_num_cmds) line = g_num_cmds - 1;
+    if (line >= repl_state_document_count()) line = repl_state_document_count() - 1;
 
-    for (int i = 0; i <= line && i < g_num_cmds; i++) {
-        if (!g_cmds[i].valid) continue;
+    for (int i = 0; i <= line && i < repl_state_document_count(); i++) {
+        if (!repl_state_document_cmds_mut()[i].valid) continue;
 
-        if (g_cmds[i].type == CMD_FUNC_DEF) {
-            int fn = (int)g_cmds[i].args[0];
+        if (repl_state_document_cmds_mut()[i].type == CMD_FUNC_DEF) {
+            int fn = (int)repl_state_document_cmds_mut()[i].args[0];
             if (fn >= 0 && fn < 32 && depth < (int)(sizeof(stack) / sizeof(stack[0]))) {
                 stack[depth++] = fn;
                 mask |= (1u << fn);
@@ -547,7 +547,7 @@ static unsigned int line_func_scope_mask(int line) {
             continue;
         }
 
-        if (g_cmds[i].type == CMD_FUNC_END) {
+        if (repl_state_document_cmds_mut()[i].type == CMD_FUNC_END) {
             if (i == line)
                 return mask;
             if (depth > 0) {
@@ -569,21 +569,21 @@ int repl_flat_cmd_matches_cursor(int flat_idx) {
     int current_block_line = *flat->current_block_source_line_idx;
 
     if (flat_idx < 0 || flat_idx >= flat_cmd_count) return 0;
-    if (g_edit_line < 0 || g_edit_line >= g_num_cmds) return 0;
+    if (repl_state_edit_line() < 0 || repl_state_edit_line() >= repl_state_document_count()) return 0;
     if (!flat_cmds[flat_idx].valid) return 0;
-    if (current_block_line != g_edit_line)
+    if (current_block_line != repl_state_edit_line())
         refresh_current_block_highlight();
 
     const GLCmd *cmd = &flat_cmds[flat_idx];
-    const GLCmd *cursor_cmd = &g_cmds[g_edit_line];
+    const GLCmd *cursor_cmd = &repl_state_document_cmds_mut()[repl_state_edit_line()];
 
     if (cursor_cmd->valid && cursor_cmd->type == CMD_CALL) {
-        return cmd->call_src_cmd_idx == g_edit_line ||
-               cmd->root_call_src_cmd_idx == g_edit_line;
+        return cmd->call_src_cmd_idx == repl_state_edit_line() ||
+               cmd->root_call_src_cmd_idx == repl_state_edit_line();
     }
 
     {
-        unsigned int cursor_func_mask = line_func_scope_mask(g_edit_line);
+        unsigned int cursor_func_mask = line_func_scope_mask(repl_state_edit_line());
         if (cursor_func_mask != 0)
             return (cmd->func_scope_mask & cursor_func_mask) != 0;
     }
@@ -605,7 +605,7 @@ int repl_flat_cmd_matches_cursor(int flat_idx) {
                     flat_cmds[i].type == CMD_COLOR4F)
                     last_color_src = flat_cmds[i].src_cmd_idx;
             }
-            if (last_color_src == g_edit_line)
+            if (last_color_src == repl_state_edit_line())
                 return 1;
         }
         break;
@@ -618,7 +618,7 @@ int repl_flat_cmd_matches_cursor(int flat_idx) {
                 if (flat_cmds[i].type == CMD_NORMAL3F)
                     last_normal_src = flat_cmds[i].src_cmd_idx;
             }
-            if (last_normal_src == g_edit_line)
+            if (last_normal_src == repl_state_edit_line())
                 return 1;
         }
         break;
@@ -631,7 +631,7 @@ int repl_flat_cmd_matches_cursor(int flat_idx) {
                 if (flat_cmds[i].type == CMD_TESS_COLOR)
                     last_tess_color_src = flat_cmds[i].src_cmd_idx;
             }
-            if (last_tess_color_src == g_edit_line)
+            if (last_tess_color_src == repl_state_edit_line())
                 return 1;
         }
         break;
@@ -644,7 +644,7 @@ int repl_flat_cmd_matches_cursor(int flat_idx) {
                 if (flat_cmds[i].type == CMD_TESS_NORMAL)
                     last_tess_normal_src = flat_cmds[i].src_cmd_idx;
             }
-            if (last_tess_normal_src == g_edit_line)
+            if (last_tess_normal_src == repl_state_edit_line())
                 return 1;
         }
         break;
@@ -653,5 +653,5 @@ int repl_flat_cmd_matches_cursor(int flat_idx) {
         break;
     }
 
-    return cmd->src_cmd_idx == g_edit_line;
+    return cmd->src_cmd_idx == repl_state_edit_line();
 }

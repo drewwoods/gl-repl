@@ -3,7 +3,7 @@
 ## Summary
 Migrate one runtime domain at a time from broad `g_*` access to `ReplRuntimeState` ownership. Each domain follows the same pattern: add focused accessors, convert production callers, update tests, move storage into `repl_state.c`, then delete that domain’s compat externs from `repl_state_compat.h`.
 
-Current status: slices 3.3, 3.4, and 3.6 are complete. The compat bridge still carries externs for slices 3.1–3.2 (document/command-store and flat-program) and 3.5+ (presentation, replay, scenes, search, autocomplete, status). Next up is 3.5 (presentation/config) or 3.1 (document/command-store).
+Current status: slices 3.1, 3.3, 3.4, and 3.6 are complete. The compat bridge still carries externs for slice 3.2 (flat-program) and 3.5+ (presentation, replay, scenes, search, autocomplete, status). Next up is 3.2 (flat-program) or 3.5 (presentation/config).
 
 ## Migration Pattern For Every Slice
 1. Add the smallest missing `repl_state_*` helper API needed by the domain.
@@ -15,14 +15,13 @@ Current status: slices 3.3, 3.4, and 3.6 are complete. The compat bridge still c
 
 ## Slices
 
-### 3.1 Document + Command Store Hooks
-- Add document helpers for source command count, command array/view, edit-line get/set/clamp, normals-dirty get/clear, and command-store dirty invalidation.
-- Convert `repl_command_store.c` off `repl_command_state_live()` and onto `repl_state_document_mut()` plus `repl_state_mark_flat_dirty()` / `repl_state_mark_normals_dirty()`.
-- Convert source-command mutation paths first: commit, undo/redo restore, clipboard paste/cut, examples, scene load/restore, import declaration insertion, reformat/autonormal replacements.
-- Convert read-only production consumers after mutation paths: UI rows, search rows, scene focus lookup, export, flatten inputs, autocomplete function scan.
-- Move `g_cmds`, `g_num_cmds`, `g_edit_line`, and `g_normals_dirty` storage under the document storage block in `repl_state.c`.
-- Remove document fields from `ReplCommandState` / `ReplEditorState`, then delete document externs from `repl_state_compat.h`.
-- Current progress: the command-store boundary is in place and `repl_state.c` already owns the source-command storage, but many production callers still read `g_cmds`, `g_num_cmds`, and `g_edit_line` directly. This slice remains in progress until those callers move off the bridge and the compat externs can go away.
+### 3.1 Document + Command Store Hooks ✅ DONE
+All document globals (`g_cmds`, `g_num_cmds`, `g_edit_line`, `g_normals_dirty`) now route
+exclusively through `repl_state` typed APIs (`repl_state_document_cmds_mut()`,
+`repl_state_document_count()`, `repl_state_document_count_set()`,
+`repl_state_edit_line()`, `repl_state_edit_line_set()`, `repl_state_edit_line_clamp()`,
+`repl_state_mark_normals_dirty()`, `repl_state_normals_dirty_clear()`). Converted 32
+source files. Removed 4 compat externs from `repl_state_compat.h`. All 2557 tests pass.
 
 ### 3.2 Flat Program + Dirty Flags
 - Add flat-program helpers for live `FlatProgramView`, mutable output buffer for flattening, flat count set/clear, dirty get/set/clear, current-block highlight set/clear, and user-lighting flag access.

@@ -271,6 +271,7 @@ GLCmd       *repl_state_document_cmds_mut(void);
 const GLCmd *repl_state_document_cmd_at(int cmd_idx);
 GLCmd       *repl_state_document_cmd_at_mut(int cmd_idx);
 int          repl_state_document_count(void);
+void         repl_state_document_count_set(int cmd_count);
 int          repl_state_document_capacity(void);
 int          repl_state_edit_line(void);
 void         repl_state_edit_line_set(int edit_line_idx);

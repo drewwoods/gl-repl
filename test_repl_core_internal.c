@@ -165,8 +165,8 @@ int main() {
         memset(temp_flat, 0, sizeof(temp_flat));
         memset(temp_locals, 0, sizeof(temp_locals));
         opts = (ReplFlattenOptions){
-            .source_cmds = g_cmds,
-            .source_cmd_count = g_num_cmds,
+            .source_cmds = repl_state_document_cmds_mut(),
+            .source_cmd_count = repl_state_document_count(),
             .flat_cmds = temp_flat,
             .flat_local_vars = temp_locals,
             .flat_capacity = 8
@@ -182,7 +182,7 @@ int main() {
         ASSERT_TRUE("flatten_program arg eval",
                     fabsf(temp_flat[1].args[0] - 2.0f) < 1e-6f);
         ASSERT_INT("flatten_program provenance source type",
-                   g_cmds[temp_flat[1].src_cmd_idx].type, CMD_VERTEX3F);
+                   repl_state_document_cmds_mut()[temp_flat[1].src_cmd_idx].type, CMD_VERTEX3F);
         ASSERT_INT("flatten_program live count unchanged",
                    repl_state_flat_program_count(), live_count);
         ASSERT_INT("flatten_program live first unchanged",
@@ -241,13 +241,13 @@ int main() {
                    repl_state_normals_dirty(), 0);
         ASSERT_INT("command_store_load ok",
                    repl_command_store_load(&store, loaded, 2, 99), 1);
-        ASSERT_INT("command_store_load count", g_num_cmds, 2);
+        ASSERT_INT("command_store_load count", repl_state_document_count(), 2);
         ASSERT_INT("command_store_load state count",
                    repl_state_document_count(), 2);
-        ASSERT_INT("command_store_load edit clamp", g_edit_line, 2);
+        ASSERT_INT("command_store_load edit clamp", repl_state_edit_line(), 2);
         ASSERT_INT("command_store_load state edit clamp",
                    repl_state_edit_line(), 2);
-        ASSERT_STR("command_store_load source", g_cmds[1].source,
+        ASSERT_STR("command_store_load source", repl_state_document_cmds_mut()[1].source,
                    "glColor3f(1, 0, 0);");
         ASSERT_STR("command_store_load state source",
                    repl_state_document_cmd_at(1)->source,
@@ -259,15 +259,15 @@ int main() {
 
         ASSERT_INT("command_store_load rejects missing cmds",
                    repl_command_store_load(&store, NULL, 1, 0), 0);
-        ASSERT_INT("command_store_load reject keeps count", g_num_cmds, 2);
+        ASSERT_INT("command_store_load reject keeps count", repl_state_document_count(), 2);
         ASSERT_INT("command_store_load rejects overflow",
                    repl_command_store_load(&store, loaded,
                                            MAX_COMMANDS + 1, 0), 0);
-        ASSERT_INT("command_store_load overflow keeps count", g_num_cmds, 2);
+        ASSERT_INT("command_store_load overflow keeps count", repl_state_document_count(), 2);
         ASSERT_INT("command_store_load empty ok",
                    repl_command_store_load(&store, NULL, 0, -5), 1);
-        ASSERT_INT("command_store_load empty count", g_num_cmds, 0);
-        ASSERT_INT("command_store_load empty edit clamp", g_edit_line, 0);
+        ASSERT_INT("command_store_load empty count", repl_state_document_count(), 0);
+        ASSERT_INT("command_store_load empty edit clamp", repl_state_edit_line(), 0);
     }
 
     /* 11. editor input/selection/clipboard state facade */

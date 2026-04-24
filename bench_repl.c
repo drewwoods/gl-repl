@@ -206,7 +206,7 @@ static BenchResult bench_feed_examples(int iters) {
     BenchResult r = { .name = "feed_examples", .unit = "lines",
                       .min_sec = 1e18 };
 
-    /* load_example_lines() already resets g_cmds / g_num_flat_cmds and
+    /* load_example_lines() already resets repl_state_document_cmds_mut() / g_num_flat_cmds and
      * calls init_predef_vars(), so an extra fresh_repl() before each
      * load would just bill duplicate reset work to this benchmark.
      * Examples declare their own float vars, so we don't need
@@ -267,9 +267,9 @@ static BenchResult bench_flatten_examples(int iters) {
                     g_predef_vars[i].value = saved_vals[i];
                 /* repl_flatten_commands() -> flatten_commands() rebuilds
                  * unconditionally (resets g_num_flat_cmds and walks
-                 * g_cmds[]), so we don't need to toggle any dirty flag
+                 * repl_state_document_cmds_mut()[]), so we don't need to toggle any dirty flag
                  * here — doing so would just add unrelated side effects
-                 * (g_normals_dirty, depth cache invalidation) into the
+                 * (repl_state_normals_dirty(), depth cache invalidation) into the
                  * timed region. */
                 repl_flatten_commands();
             }
@@ -358,7 +358,7 @@ static BenchResult bench_replay_long(int iters) {
                       .min_sec = 1e18 };
 
     /* Load once outside the inner loop — feed_line is not what we are
-     * measuring here. Re-using the same g_cmds[] across iterations is
+     * measuring here. Re-using the same repl_state_document_cmds_mut()[] across iterations is
      * fine because replay only mutates the replay state, not the source
      * commands. We mark g_flat_dirty between iterations so replay_start()
      * does a fresh flatten each time — that matches "what happens the

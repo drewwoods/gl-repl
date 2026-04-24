@@ -57,17 +57,17 @@ static SceneFocusVertex scene_prepare_focus_vertex(void) {
         .valid = *derived->focus_vertex_valid,
     };
 
-    if (g_edit_line >= 0 && g_edit_line < g_num_cmds &&
-        cmd_is_focus_vertex(&g_cmds[g_edit_line])) {
-        scene_focus_store(g_cmds[g_edit_line].args[0],
-                          g_cmds[g_edit_line].args[1],
-                          g_cmds[g_edit_line].args[2]);
+    if (repl_state_edit_line() >= 0 && repl_state_edit_line() < repl_state_document_count() &&
+        cmd_is_focus_vertex(&repl_state_document_cmds_mut()[repl_state_edit_line()])) {
+        scene_focus_store(repl_state_document_cmds_mut()[repl_state_edit_line()].args[0],
+                          repl_state_document_cmds_mut()[repl_state_edit_line()].args[1],
+                          repl_state_document_cmds_mut()[repl_state_edit_line()].args[2]);
     } else if (!*derived->focus_vertex_valid) {
-        for (int i = g_edit_line - 1; i >= 0; i--) {
-            if (cmd_is_focus_vertex(&g_cmds[i])) {
-                scene_focus_store(g_cmds[i].args[0],
-                                  g_cmds[i].args[1],
-                                  g_cmds[i].args[2]);
+        for (int i = repl_state_edit_line() - 1; i >= 0; i--) {
+            if (cmd_is_focus_vertex(&repl_state_document_cmds_mut()[i])) {
+                scene_focus_store(repl_state_document_cmds_mut()[i].args[0],
+                                  repl_state_document_cmds_mut()[i].args[1],
+                                  repl_state_document_cmds_mut()[i].args[2]);
                 break;
             }
         }
@@ -206,8 +206,8 @@ static SceneGuideSnapshot scene_build_guide_snapshot(const SceneRenderConfig *co
         .cursor_pos = *repl_state_editor_input()->cursor_pos,
         .edit_line_idx = repl_state_edit_line(),
         .inserting = repl_state_insert_mode(),
-        .source_cmds = g_cmds,
-        .source_cmd_count = g_num_cmds,
+        .source_cmds = repl_state_document_cmds_mut(),
+        .source_cmd_count = repl_state_document_count(),
         .flat_program = flat_program,
         .predef_vars = g_predef_vars,
         .predef_var_count = g_num_predef_vars,

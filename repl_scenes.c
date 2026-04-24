@@ -17,7 +17,7 @@
  * once before the first example load and never LRU-evicted. Slots 1..N are
  * promoted examples / user scenes.
  *
- *   g_active_user_scene  >= 0  => that slot is loaded into g_cmds[]
+ *   g_active_user_scene  >= 0  => that slot is loaded into repl_state_document_cmds_mut()[]
  *                        == -1 => an example or fresh workspace is active
  *
  *   last_touch is bumped from the monotonic g_user_scene_tick counter
@@ -86,9 +86,9 @@ static void derive_unique_scene_name(char *out, size_t out_sz,
 static void save_scene_to_slot(int idx, const char *name) {
     if (idx < 0 || idx >= MAX_USER_SCENES) return;
     UserScene *s = &g_user_scenes[idx];
-    memcpy(s->cmds, g_cmds, (size_t)g_num_cmds * sizeof(GLCmd));
-    s->num_cmds        = g_num_cmds;
-    s->edit_line       = g_edit_line;
+    memcpy(s->cmds, repl_state_document_cmds_mut(), (size_t)repl_state_document_count() * sizeof(GLCmd));
+    s->num_cmds        = repl_state_document_count();
+    s->edit_line       = repl_state_edit_line();
     s->num_predef_vars = g_num_predef_vars;
     for (int i = 0; i < g_num_predef_vars; i++) {
         s->predef_vals[i] = g_predef_vars[i].value;
@@ -121,7 +121,7 @@ static void load_scene_from_slot(int idx) {
         memcpy(g_predef_vars[i].name, s->predef_names[i], 16);
     }
     repl_state_insert_mode_set(0);
-    load_line_to_input(g_edit_line);
+    load_line_to_input(repl_state_edit_line());
     mark_normals_dirty();
     s->last_touch       = next_user_scene_tick();
     g_active_user_scene = idx;
@@ -161,9 +161,9 @@ static void install_scene_into_live(int slot) {
 
 static void stash_live_state(UserScene *dst) {
     memset(dst, 0, sizeof(*dst));
-    memcpy(dst->cmds, g_cmds, (size_t)g_num_cmds * sizeof(GLCmd));
-    dst->num_cmds        = g_num_cmds;
-    dst->edit_line       = g_edit_line;
+    memcpy(dst->cmds, repl_state_document_cmds_mut(), (size_t)repl_state_document_count() * sizeof(GLCmd));
+    dst->num_cmds        = repl_state_document_count();
+    dst->edit_line       = repl_state_edit_line();
     dst->num_predef_vars = g_num_predef_vars;
     for (int i = 0; i < g_num_predef_vars; i++) {
         dst->predef_vals[i] = g_predef_vars[i].value;

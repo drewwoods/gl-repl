@@ -57,13 +57,13 @@ static void cp_ring(float cx, float cy, float r, int n) {
     glEnd();
 }
 static void color_picker_write_cmd(void) {
-    if (g_cp_line<0 || g_cp_line>=g_num_cmds) return;
+    if (g_cp_line<0 || g_cp_line>=repl_state_document_count()) return;
     float r,g,b;
-    CmdType cmd_type = g_cmds[g_cp_line].type;
-    const char *old_src = g_cmds[g_cp_line].source;
+    CmdType cmd_type = repl_state_document_cmds_mut()[g_cp_line].type;
+    const char *old_src = repl_state_document_cmds_mut()[g_cp_line].source;
     int indent_len = 0;
-    char indent_prefix[sizeof(g_cmds[g_cp_line].source)];
-    char new_source[sizeof(g_cmds[g_cp_line].source)];
+    char indent_prefix[sizeof(repl_state_document_cmds_mut()[g_cp_line].source)];
+    char new_source[sizeof(repl_state_document_cmds_mut()[g_cp_line].source)];
     int formatted = 0;
     cp_hsv_to_rgb(g_cp_hue, g_cp_sat, g_cp_val, &r, &g, &b);
     while (old_src[indent_len] == ' ' || old_src[indent_len] == '\t')
@@ -89,12 +89,12 @@ static void color_picker_write_cmd(void) {
                 set_status("Command too long");
                 return;
             }
-            g_cmds[g_cp_line].args[0]=cr;
-            g_cmds[g_cp_line].args[1]=cg;
-            g_cmds[g_cp_line].args[2]=cb;
-            g_cmds[g_cp_line].args[3]=g_cp_alpha;
-            g_cmds[g_cp_line].num_args = 4;
-            memcpy(g_cmds[g_cp_line].source, new_source,
+            repl_state_document_cmds_mut()[g_cp_line].args[0]=cr;
+            repl_state_document_cmds_mut()[g_cp_line].args[1]=cg;
+            repl_state_document_cmds_mut()[g_cp_line].args[2]=cb;
+            repl_state_document_cmds_mut()[g_cp_line].args[3]=g_cp_alpha;
+            repl_state_document_cmds_mut()[g_cp_line].num_args = 4;
+            memcpy(repl_state_document_cmds_mut()[g_cp_line].source, new_source,
                    strlen(new_source) + 1);
             g_flat_dirty = 1;
             return;
@@ -118,13 +118,13 @@ static void color_picker_write_cmd(void) {
         set_status("Command too long");
         return;
     }
-    g_cmds[g_cp_line].args[0]=r;
-    g_cmds[g_cp_line].args[1]=g;
-    g_cmds[g_cp_line].args[2]=b;
-    g_cmds[g_cp_line].num_args = g_cp_has_alpha ? 4 : 3;
+    repl_state_document_cmds_mut()[g_cp_line].args[0]=r;
+    repl_state_document_cmds_mut()[g_cp_line].args[1]=g;
+    repl_state_document_cmds_mut()[g_cp_line].args[2]=b;
+    repl_state_document_cmds_mut()[g_cp_line].num_args = g_cp_has_alpha ? 4 : 3;
     if (g_cp_has_alpha)
-        g_cmds[g_cp_line].args[3]=g_cp_alpha;
-    memcpy(g_cmds[g_cp_line].source, new_source, strlen(new_source) + 1);
+        repl_state_document_cmds_mut()[g_cp_line].args[3]=g_cp_alpha;
+    memcpy(repl_state_document_cmds_mut()[g_cp_line].source, new_source, strlen(new_source) + 1);
     g_flat_dirty = 1;
 }
 
@@ -133,15 +133,15 @@ void ui_color_picker_open(int cmd_idx, int my) {
     int cp_x, cp_w;
     code_panel_rect(&cp_x, NULL, &cp_w, NULL);
     g_cp_line      = cmd_idx;
-    g_cp_has_alpha = (g_cmds[cmd_idx].type == CMD_COLOR4F ||
-                      g_cmds[cmd_idx].type == CMD_TESS_COLOR ||
-                      g_cmds[cmd_idx].type == CMD_CLEAR_COLOR);
-    g_cp_alpha     = g_cp_has_alpha ? g_cmds[cmd_idx].args[3] : 1.0f;
-    cp_rgb_to_hsv(g_cmds[cmd_idx].args[0],
-                  g_cmds[cmd_idx].args[1],
-                  g_cmds[cmd_idx].args[2],
+    g_cp_has_alpha = (repl_state_document_cmds_mut()[cmd_idx].type == CMD_COLOR4F ||
+                      repl_state_document_cmds_mut()[cmd_idx].type == CMD_TESS_COLOR ||
+                      repl_state_document_cmds_mut()[cmd_idx].type == CMD_CLEAR_COLOR);
+    g_cp_alpha     = g_cp_has_alpha ? repl_state_document_cmds_mut()[cmd_idx].args[3] : 1.0f;
+    cp_rgb_to_hsv(repl_state_document_cmds_mut()[cmd_idx].args[0],
+                  repl_state_document_cmds_mut()[cmd_idx].args[1],
+                  repl_state_document_cmds_mut()[cmd_idx].args[2],
                   &g_cp_hue, &g_cp_sat, &g_cp_val);
-    if (g_cmds[cmd_idx].type == CMD_CLEAR_COLOR &&
+    if (repl_state_document_cmds_mut()[cmd_idx].type == CMD_CLEAR_COLOR &&
         g_cp_val > CP_CLEAR_MAX_V) g_cp_val = CP_CLEAR_MAX_V;
     /* Position to the right of the panel, near the click y */
     int pw = CP_SV_SZ + CP_GAP + CP_HUE_W
@@ -199,8 +199,8 @@ void ui_color_picker_render(void) {
     glEnd();
     glDisable(GL_BLEND);
     /* glClearColor: shade the V > CP_CLEAR_MAX_V zone to show it's off-limits */
-    if (g_cp_line >= 0 && g_cp_line < g_num_cmds &&
-        g_cmds[g_cp_line].type == CMD_CLEAR_COLOR) {
+    if (g_cp_line >= 0 && g_cp_line < repl_state_document_count() &&
+        repl_state_document_cmds_mut()[g_cp_line].type == CMD_CLEAR_COLOR) {
         float lim_y = py - (1.0f - CP_CLEAR_MAX_V) * (float)sz;
         glEnable(GL_BLEND); glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
         glColor4f(0.0f, 0.0f, 0.0f, 0.72f);
@@ -302,8 +302,8 @@ int ui_color_picker_press(int mx, int my) {
         g_cp_val = (float)(gl_y-g_cp_sv_y)/(float)g_cp_sv_sz;
         if (g_cp_sat<0)g_cp_sat=0; if (g_cp_sat>1)g_cp_sat=1;
         if (g_cp_val<0)g_cp_val=0; if (g_cp_val>1)g_cp_val=1;
-        if (g_cp_line>=0 && g_cp_line<g_num_cmds &&
-            g_cmds[g_cp_line].type==CMD_CLEAR_COLOR &&
+        if (g_cp_line>=0 && g_cp_line<repl_state_document_count() &&
+            repl_state_document_cmds_mut()[g_cp_line].type==CMD_CLEAR_COLOR &&
             g_cp_val>CP_CLEAR_MAX_V) g_cp_val=CP_CLEAR_MAX_V;
         color_picker_write_cmd(); return 1;
     }
@@ -338,8 +338,8 @@ int ui_color_picker_motion(int mx, int my) {
         g_cp_val = (float)(gl_y-g_cp_sv_y)/(float)g_cp_sv_sz;
         if (g_cp_sat<0)g_cp_sat=0; if (g_cp_sat>1)g_cp_sat=1;
         if (g_cp_val<0)g_cp_val=0; if (g_cp_val>1)g_cp_val=1;
-        if (g_cp_line>=0 && g_cp_line<g_num_cmds &&
-            g_cmds[g_cp_line].type==CMD_CLEAR_COLOR &&
+        if (g_cp_line>=0 && g_cp_line<repl_state_document_count() &&
+            repl_state_document_cmds_mut()[g_cp_line].type==CMD_CLEAR_COLOR &&
             g_cp_val>CP_CLEAR_MAX_V) g_cp_val=CP_CLEAR_MAX_V;
     } else if (g_cp_drag == 2) {
         g_cp_hue = 1.0f-(float)(gl_y-g_cp_hue_y)/(float)g_cp_hue_h;
@@ -367,14 +367,14 @@ int ui_color_picker_active_line(void) {
 }
 
 int ui_color_picker_can_edit_cmd(int cmd_idx) {
-    if (cmd_idx < 0 || cmd_idx >= g_num_cmds)
+    if (cmd_idx < 0 || cmd_idx >= repl_state_document_count())
         return 0;
-    if (!g_cmds[cmd_idx].valid || g_cmds[cmd_idx].has_vars)
+    if (!repl_state_document_cmds_mut()[cmd_idx].valid || repl_state_document_cmds_mut()[cmd_idx].has_vars)
         return 0;
-    return g_cmds[cmd_idx].type == CMD_COLOR3F ||
-           g_cmds[cmd_idx].type == CMD_COLOR4F ||
-           g_cmds[cmd_idx].type == CMD_TESS_COLOR ||
-           g_cmds[cmd_idx].type == CMD_CLEAR_COLOR;
+    return repl_state_document_cmds_mut()[cmd_idx].type == CMD_COLOR3F ||
+           repl_state_document_cmds_mut()[cmd_idx].type == CMD_COLOR4F ||
+           repl_state_document_cmds_mut()[cmd_idx].type == CMD_TESS_COLOR ||
+           repl_state_document_cmds_mut()[cmd_idx].type == CMD_CLEAR_COLOR;
 }
 
 void ui_color_picker_render_swatch(int cmd_idx, int sx, int sy) {
@@ -382,15 +382,15 @@ void ui_color_picker_render_swatch(int cmd_idx, int sx, int sy) {
         return;
 
     int sw = UI_COLOR_SWATCH_W;
-    float alpha = (g_cmds[cmd_idx].type == CMD_COLOR4F ||
-                   g_cmds[cmd_idx].type == CMD_TESS_COLOR ||
-                   g_cmds[cmd_idx].type == CMD_CLEAR_COLOR)
-                ? g_cmds[cmd_idx].args[3] : 1.0f;
+    float alpha = (repl_state_document_cmds_mut()[cmd_idx].type == CMD_COLOR4F ||
+                   repl_state_document_cmds_mut()[cmd_idx].type == CMD_TESS_COLOR ||
+                   repl_state_document_cmds_mut()[cmd_idx].type == CMD_CLEAR_COLOR)
+                ? repl_state_document_cmds_mut()[cmd_idx].args[3] : 1.0f;
 
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-    glColor4f(g_cmds[cmd_idx].args[0], g_cmds[cmd_idx].args[1],
-              g_cmds[cmd_idx].args[2], alpha);
+    glColor4f(repl_state_document_cmds_mut()[cmd_idx].args[0], repl_state_document_cmds_mut()[cmd_idx].args[1],
+              repl_state_document_cmds_mut()[cmd_idx].args[2], alpha);
     draw_quad((float)sx, (float)sy, (float)sw, (float)sw);
 
     glColor4f(0.55f, 0.55f, 0.65f, 0.9f);
