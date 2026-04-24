@@ -168,8 +168,8 @@ void repl_cfg_cycle_row(int row, int delta) {
     if (item->key == REPL_CONFIG_AUTO_TIME) {
         if (glutGetModifiers() & GLUT_ACTIVE_SHIFT) {
             repl_reset_time_to_zero();
-            set_status(g_t_playing ? "Time: reset to 0"
-                                   : "Time: reset to 0 (paused)");
+            set_status(*repl_state_variables()->time_playing ? "Time: reset to 0"
+                                                             : "Time: reset to 0 (paused)");
             return;
         }
     }
@@ -180,7 +180,7 @@ void repl_cfg_cycle_row(int row, int delta) {
     int v = repl_config_cycle(item->key, delta);
 
     if (item->key == REPL_CONFIG_CODE_PANEL_LAYOUT) {
-        g_panel_frac = 0.3f;
+        *repl_state_code_panel()->panel_frac = 0.3f;
         if (*repl_state_presentation()->code_panel_layout == CODE_PANEL_LAYOUT_TOP) {
             set_status("Layout: top code panel");
         } else if (*repl_state_presentation()->code_panel_layout == CODE_PANEL_LAYOUT_BOTTOM) {
