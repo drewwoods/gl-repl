@@ -108,6 +108,12 @@ failure should be treated as a regression unless explicitly rebaselined.
      (vertex/normal guides) and `scene_transform_guides.c`
      (translate/rotate/scale planning + rendering) via a per-frame
      `SceneGuideSnapshot`.
+   - GL call segmentation boundary: live OpenGL calls should stay in the
+     scene/UI renderers plus `repl_executor.c`. The remaining non-scene/UI live
+     calls are a small orchestration residue in `repl_core.c`, tessellation and
+     GLU bootstrap wiring in `repl_state.c`, and a couple of inline helpers in
+     `sample.h`. Export/example files may still emit GL command text because
+     that text is part of the REPL language, not the live call surface.
 
 9. **Refactor import/export around a shared scaffold model**
    - Represent the generated C scaffold as typed sections rather than duplicated string/layout logic.
