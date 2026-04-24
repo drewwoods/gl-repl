@@ -72,10 +72,11 @@ static float var_panel_replay_lift(void) {
     if (*replay->active)
         target = var_panel_replay_target_lift_px();
 
-    if (g_var_panel_lift_update_time == g_anim_time &&
+    float anim_time = *repl_state_variables()->anim_time;
+    if (g_var_panel_lift_update_time == anim_time &&
         g_var_panel_lift_update_target == target)
         return g_var_panel_replay_lift_px;
-    g_var_panel_lift_update_time = g_anim_time;
+    g_var_panel_lift_update_time = anim_time;
     g_var_panel_lift_update_target = target;
 
     /* Exponential-decay style easing toward target (and back to 0 when replay ends). */
@@ -131,7 +132,7 @@ int var_panel_hit(int gx, int gy, int *out_row) {
 }
 
 void render_var_panel(void) {
-    if (!g_show_var_panel) return;
+    if (!*repl_state_variable_panel()->visible) return;
 
     int px, py, pw, ph;
     var_panel_rect(&px, &py, &pw, &ph);
