@@ -1,9 +1,9 @@
 /*
  * repl_autocomplete_panel.c -- Floating autocomplete popup.
  *
- * Pure renderer: reads g_ac_count / g_ac_matches / g_ac_sel from the
+ * Pure renderer: reads match_count / matches / selected_idx from the
  * autocomplete model (repl_autocomplete.c) and the cursor pixel
- * position (g_cursor_px/g_cursor_py), and draws.  Selection
+ * position (cursor_px/cursor_py), and draws.  Selection
  * mutation, match building, and hint text all live outside.
  *
  * The ghost-text and parameter-hint overlays drawn inline next to
@@ -11,27 +11,31 @@
  * layout has the surrounding context.
  */
 #include "sample.h"
+#include "repl_state.h"
 #include "ui_autocomplete_panel.h"
 #include "ui_panels.h"
 
 void ui_autocomplete_panel_render(void) {
-    if (g_ac_count < 1) return;
+    const ReplAutocompleteState      *ac  = repl_state_autocomplete();
+    const ReplCodePanelRuntimeState  *cp  = repl_state_code_panel();
+
+    if (*ac->match_count < 1) return;
 
     begin_2d();
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
-    int popup_x = g_cursor_px;
-    int popup_y = g_cursor_py - LINE_H - 4;
+    int popup_x = *cp->cursor_px;
+    int popup_y = *cp->cursor_py - LINE_H - 4;
 
     /* Calculate popup width from longest match */
     int max_w = 0;
-    for (int i = 0; i < g_ac_count; i++) {
-        int w = (int)strlen(g_ac_matches[i]) * FONT_W;
+    for (int i = 0; i < *ac->match_count; i++) {
+        int w = (int)strlen(ac->matches[i]) * FONT_W;
         if (w > max_w) max_w = w;
     }
     int popup_w = max_w + 16;
-    int popup_h = g_ac_count * LINE_H + 6;
+    int popup_h = *ac->match_count * LINE_H + 6;
 
     /* Clamp to code panel width */
     int cp_x, cp_y, cp_w, cp_h;
@@ -56,8 +60,8 @@ void ui_autocomplete_panel_render(void) {
 
     /* Entries */
     int ey = popup_y - LINE_H + 1;
-    for (int i = 0; i < g_ac_count; i++) {
-        if (i == g_ac_sel) {
+    for (int i = 0; i < *ac->match_count; i++) {
+        if (i == *ac->selected_idx) {
             /* Highlight selected */
             glColor4f(0.20f, 0.25f, 0.42f, 0.90f);
             draw_quad((float)(popup_x + 1), (float)(ey - 2),
@@ -67,7 +71,7 @@ void ui_autocomplete_panel_render(void) {
             glColor3f(0.65f, 0.65f, 0.72f);
         }
         draw_string((float)(popup_x + 8), (float)ey,
-                    g_ac_matches[i], FONT_MONO);
+                    ac->matches[i], FONT_MONO);
         ey -= LINE_H;
     }
 

@@ -642,27 +642,31 @@ static void display_func(void) {
     for (ProfSection s = PROF_SCENE_3D_SETUP; s <= PROF_SCENE_3D_HUD; s++)
         prof_accum_reset(s);
     prof_begin(PROF_SCENE_3D);
-    if (g_use_accum && g_accum_aa_enabled && g_accum_samples > 1) {
-        /* Clear the accumulation buffer once per frame */
-        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_ACCUM_BUFFER_BIT);
-        float weight = 1.0f / (float)g_accum_samples;
-        for (int j = 0; j < g_accum_samples; j++) {
+    {
+        const ReplRenderState *rs     = repl_state_render();
+        ReplRenderState       *rs_mut = repl_state_render_mut();
+        if (*rs->use_accum && *rs->accum_aa_enabled && *rs->accum_samples > 1) {
+            /* Clear the accumulation buffer once per frame */
+            glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_ACCUM_BUFFER_BIT);
+            float weight = 1.0f / (float)*rs->accum_samples;
+            for (int j = 0; j < *rs->accum_samples; j++) {
+                glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+                if (*replay->active)
+                    replay_restore_baseline_predef_values();
+                *rs_mut->accum_jitter_x = g_jitter_table[j % MAX_ACCUM_SAMPLES][0];
+                *rs_mut->accum_jitter_y = g_jitter_table[j % MAX_ACCUM_SAMPLES][1];
+                render_3d_scene();
+                glAccum(GL_ACCUM, weight);
+            }
+            *rs_mut->accum_jitter_x = 0.0f;
+            *rs_mut->accum_jitter_y = 0.0f;
+            glAccum(GL_RETURN, 1.0f);
+        } else {
             glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
             if (*replay->active)
                 replay_restore_baseline_predef_values();
-            g_accum_jitter_x = g_jitter_table[j % MAX_ACCUM_SAMPLES][0];
-            g_accum_jitter_y = g_jitter_table[j % MAX_ACCUM_SAMPLES][1];
             render_3d_scene();
-            glAccum(GL_ACCUM, weight);
         }
-        g_accum_jitter_x = 0.0f;
-        g_accum_jitter_y = 0.0f;
-        glAccum(GL_RETURN, 1.0f);
-    } else {
-        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-        if (*replay->active)
-            replay_restore_baseline_predef_values();
-        render_3d_scene();
     }
     prof_end(PROF_SCENE_3D);
     /* Commit the accumulated subsection totals now that all AA samples are done. */
@@ -788,8 +792,8 @@ static void scroll_to_display_function(void) {
             break;
         target++;
     }
-    g_scroll = target;
-    g_scroll_follow_cursor = 0;
+    *repl_state_code_panel_mut()->scroll = target;
+    *repl_state_code_panel_mut()->scroll_follow_cursor = 0;
 }
 
 static void load_initial_commands(const char *import_file) {
