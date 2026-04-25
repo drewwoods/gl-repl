@@ -638,12 +638,21 @@ preserves the GL-isolation rule.
      `repl_display_func()` returns. That keeps the buffer swap at the
      GLUT-callback boundary, which is its natural home.
 
-7. **Move `init_gl`'s `glLightModelfv` into `scene_lights.c`.** Add
-   `scene_lights_init_global_ambient()` (one-shot, called from
-   `repl_init_gl()`); the existing per-frame `scene_lights_setup()` keeps
-   its current responsibility. `repl_init_gl()` then has zero GL calls —
-   it just calls `repl_executor_init_resources()` (from 11b) and
-   `scene_lights_init_global_ambient()`, plus `apply_init_bootstrap()`.
+7. **Move `init_gl`'s `glLightModelfv` into `scene_render.c → scene_lights.c`.**
+   Add a `scene_render_init_gl()` (one-shot) in `scene_render.c`,
+   called from `repl_init_gl()`. `scene_render_init_gl()` delegates
+   the ambient-light setup to a new
+   `scene_lights_init_global_ambient()` in `scene_lights.c`; the
+   existing per-frame `scene_lights_setup()` keeps its current
+   responsibility. After the move:
+   - `repl_init_gl()` in `repl_core.c` has zero GL calls — it calls
+     `repl_executor_init_resources()` (from 11b),
+     `scene_render_init_gl()`, and `apply_init_bootstrap()`.
+   - `scene_render.c` becomes the owner of one-shot scene-side GL
+     setup, mirroring its existing ownership of per-frame scene
+     orchestration. Future one-shot scene init goes there too.
+   - The `{0.15, 0.15, 0.20, 1.0}` constants live next to the rest
+     of light state in `scene_lights.c`, not in `repl_core.c`.
 
 8. **Verification grep.** After 11a lands:
    `grep -nE '\b(gl[A-Z]|glu[A-Z])[A-Za-z0-9]*\s*\(' repl_core.c`
@@ -1042,58 +1051,74 @@ the first commit so each sub-step is mechanical.
    GL-isolation work.
 
 6. **`bench_repl.c` access path for `render_replay_fade_pass()`
-   (11d-step-3).** The plan lists a "preferred" and "fallback".
-   **Decide up front:** the preferred path — expose
-   `render_replay_fade_pass()` from `scene_render.h` unconditionally,
-   not behind `#ifdef BENCH_REPL_HARNESS`. Conditional exports
-   complicate the public header and the bench is part of the source
-   tree, not a separate consumer. The bench is simply a different
-   entrypoint that drives one render pass; that's fine. Flagging
-   this as the canonical answer prevents the implementer from
-   reaching for the upward-shim fallback.
+   (11d-step-3).**
+   **Decision: expose `render_replay_fade_pass()` from
+   `scene_render.h` unconditionally — do not gate it behind
+   `#ifdef BENCH_REPL_HARNESS` or any other compile flag.** The
+   public header should not carry conditional declarations; ifdef'ing
+   the API splits readers between two interpretations of the same
+   header and makes the bench a special-case consumer when it's
+   really just a different entrypoint that drives one render pass.
+   The "fallback" upward-shim option in 11d-step-3 is rejected.
 
-7. **`gl_includes.h` retention in `sample.h` (11c-step-4).** The
-   plan says "trial removal." **Concrete answer:** `sample.h`
+7. **`gl_includes.h` retention in `sample.h`.**
+   **Decision: leave `gl_includes.h` in `sample.h`.** `sample.h`
    declares `GLfloat`, `GLenum`, and the `GLCmd` struct (which
-   contains GL types), so `gl_includes.h` must remain in `sample.h`
-   even after 11c. The point of 11c is to ensure no `static inline`
-   GL *function calls* expand into every TU; type declarations are
-   fine. Don't waste a sub-commit chasing this.
+   contains GL types), so the include is required. The point of 11c
+   is to keep `static inline` GL *function calls* from expanding
+   into every TU; type declarations are fine. Do not spend a
+   sub-commit attempting trial removal — it's load-bearing.
 
-8. **`TessVertex` typedef location (11b-step-5).** Currently in
-   `repl_state.h`; consumed by `repl_executor.c` (the dispatch path
-   at `repl_executor.c:328-334`) and emitted as a string by
-   `repl_export.c:1529-1543`. After 11b, the only live consumer is
-   `repl_executor.c`. **Decide:** move the typedef into
-   `repl_executor.h` (or keep as file-private in `repl_executor.c`
-   with a forward declaration if no header export is needed — check
-   tests first via `grep -n 'TessVertex' test_*.c`).
+8. **`TessVertex` typedef location.**
+   **Decision: leave `TessVertex` in `repl_state.h` for now.** It is
+   referenced by `repl_executor.c` (the dispatch path at
+   `repl_executor.c:328-334`) and emitted as a string by
+   `repl_export.c:1529-1543`. Even after 11b moves the GLU resources
+   into `repl_executor.c`, the typedef stays in `repl_state.h` —
+   moving it is unnecessary churn for this slice. Revisit only if a
+   later phase of the broader state-clustering refactor wants the
+   type local to its consumer.
 
-9. **`repl_state_render_init_resources()` rename strategy
-   (11b-step-2).** No callers currently reference the old name except
-   `repl_init_gl()` and `sample.c`'s teardown path. **Decide:** hard
-   rename, no compat shim. Two callers update in the same commit;
-   leaving an alias is overhead with no payoff.
+9. **`repl_state_render_init_resources()` move + rename
+   (11b-step-2).**
+   **Decision: hard move into `repl_executor.c` with rename, no
+   compat shim.** The function moves out of `repl_state.c` entirely
+   and is renamed to `repl_executor_init_resources()`. The two
+   callers (`repl_init_gl()` in `repl_core.c` and the teardown site
+   in `sample.c`) update in the same commit. Same applies to the
+   destroy counterpart.
 
 10. **`test_ui.c` impact.** `test_ui.c` exercises `render_help()` and
     other `ui_*` renderers via the GL-stub-counter harness. It
     includes `sample.h` plus the `ui_*.h` headers it tests. **Decide:**
     `test_ui.c` is unaffected by 11a-11e because all its calls are
     already through the `ui_*` public renderers. The 2D primitive
-    rename (`ui_2d_begin/end/draw_text`) is purely internal to those
-    renderers. Confirm by re-running `make test_ui` after each
+    rename (`gl2d_*` from `include/gl_2d.h`) is purely internal to
+    those renderers. Confirm by re-running `make test_ui` after each
     sub-step; no test edits expected.
 
-11. **`scene_lights_init_global_ambient()` vs. fold into
-    `scene_lights_setup()` (11a-step-6).** The current
-    `glLightModelfv(GL_LIGHT_MODEL_AMBIENT, ...)` runs once at GL init
-    with constants `{0.15, 0.15, 0.20, 1.0}`. `scene_lights_setup()`
-    runs every frame. **Decide:** add a separate one-shot
-    `scene_lights_init_global_ambient()` (or
-    `scene_lights_init_static_state()` if more such one-shots
-    accumulate later). The global ambient is invariant; folding it
-    into `scene_lights_setup()` would re-set it on every frame for
-    no benefit and would make per-frame light state harder to audit.
+11. **Ambient-light `glLightModelfv` placement.**
+    **Decision: move `glLightModelfv(GL_LIGHT_MODEL_AMBIENT, ...)`
+    into `scene_render.c`'s `init_gl()`, which delegates to
+    `scene_lights.c`.** Concretely:
+    - `scene_render.c` gains its own `init_gl()` (one-shot, called
+      from `repl_init_gl()` in `repl_core.c`). This mirrors the way
+      `scene_render.c` already owns `render_3d_scene()` per-frame
+      orchestration — it's the natural owner of one-shot scene-side
+      GL setup too.
+    - `scene_render.c`'s `init_gl()` delegates the ambient setup to
+      a `scene_lights_init_global_ambient()` (or similarly named)
+      function in `scene_lights.c`. The constants `{0.15, 0.15,
+      0.20, 1.0}` move with it.
+    - `repl_init_gl()` in `repl_core.c` then has zero GL calls —
+      it just calls `repl_executor_init_resources()` (from 11b),
+      `scene_render_init_gl()`, and `apply_init_bootstrap()`. The
+      orchestrator role of `repl_core.c` is preserved at the
+      public API boundary; the actual GL setup is owned by the
+      scene/executor layers.
+    - Why not fold into `scene_lights_setup()`: the global ambient
+      is invariant, so re-setting it every frame is wasted work and
+      would make per-frame light state harder to audit.
 
 12. **Sub-step ordering and dependencies.** Phase 1 (11.0a, 11.0b)
     must land before Phase 2. Within Phase 2:
