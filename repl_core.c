@@ -103,7 +103,7 @@ static void get_for_var_name(const GLCmd *cmd, char *var, int var_sz);
 /* ========================================================================= */
 
 void set_status(const char *msg) {
-    repl_status_set(msg);
+    repl_state_status_set(msg);
 }
 
 const char *mode_name(GLenum mode) {

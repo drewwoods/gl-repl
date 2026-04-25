@@ -76,8 +76,8 @@ int  repl_load_user_scene_idx(int slot);  /* returns 1 on success */
 int  repl_active_user_scene(void);        /* -1 if none active */
 
 /* --- Replay ------------------------------------------------------------ */
-void replay_start(void);
-void replay_stop(void);
+void repl_replay_start(void);
+void repl_replay_stop(void);
 
 /* --- Editor / navigation helpers called from outside repl_core.c ------- */
 void repl_navigate_to_line(int target);

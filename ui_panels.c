@@ -1150,7 +1150,7 @@ int handle_code_panel_press(int mx, int my) {
             } else if (*replay->state == REPLAY_PAUSED) {
                 *replay->state = REPLAY_PLAYING;
             } else {
-                replay_start();
+                repl_replay_start();
             }
             break;
         case REPL_MENU_BAR_PIN_SEARCH:

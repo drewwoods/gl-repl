@@ -620,7 +620,7 @@ static int handle_rename_key_route(unsigned char key) {
 static int handle_config_menu_key_route(unsigned char key) {
     if (!*repl_state_search()->active && key == '`') {
         if (*repl_state_replay()->active)
-            replay_stop();
+            repl_replay_stop();
         editor_restore_hidden_code_panel();
         ui_panels_open_config();
         return 1;
@@ -1487,7 +1487,7 @@ static void mouse_func(int button, int state, int x, int y) {
             int row_idx;
             if (var_panel_hit(x, y, &row_idx)) {
                 if (*repl_state_replay()->active)
-                    replay_stop();
+                    repl_replay_stop();
                 repl_var_drag_begin(row_idx, 0, x);
                 editor_request_redraw();
                 return;
@@ -1538,7 +1538,7 @@ static void mouse_func(int button, int state, int x, int y) {
         int row_idx;
         if (var_panel_hit(x, y, &row_idx)) {
             if (*repl_state_replay()->active)
-                replay_stop();
+                repl_replay_stop();
             repl_var_drag_begin(row_idx, 1, x);
             editor_request_redraw();
             return;

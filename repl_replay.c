@@ -512,7 +512,7 @@ void replay_restart_from_beginning(void) {
     g_replay_last_src_line = -1;
 }
 
-void replay_start(void) {
+void repl_replay_start(void) {
     float live_predef_vals[MAX_PREDEF_VARS];
     REPLAY_FLAT_STATE;
 
@@ -543,7 +543,7 @@ void replay_start(void) {
     set_status("Replay: playing");
 }
 
-void replay_stop(void) {
+void repl_replay_stop(void) {
     *repl_state_variables_mut()->time_playing = g_replay_saved_t_playing;
     g_replay_active = 0;
     g_replay_state = REPLAY_OFF;
@@ -652,12 +652,12 @@ void repl_copy_replay_baseline_predef_values(float *dst, int max_vals) {
 int replay_handle_key(unsigned char key) {
     if (!g_replay_active) {
         if (key == KEY_CTRL_R) {
-            replay_start();
+            repl_replay_start();
             return 1;
         }
         if (key == KEY_CTRL_K) {
             int target_line = repl_state_edit_line();
-            replay_start();
+            repl_replay_start();
             if (g_replay_active) {
                 int landed = replay_seek_to_src_line(target_line);
                 if (landed < 0) {
@@ -675,7 +675,7 @@ int replay_handle_key(unsigned char key) {
     }
 
     if (key == KEY_CTRL_R) {
-        replay_stop();
+        repl_replay_stop();
         set_status("Replay: off");
         return 1;
     }
@@ -730,12 +730,12 @@ int replay_handle_key(unsigned char key) {
         return 1;
     }
     if (key == KEY_ESC) {
-        replay_stop();
+        repl_replay_stop();
         set_status("Replay: off");
         return 1;
     }
 
-    replay_stop();
+    repl_replay_stop();
     return 0;
 }
 
@@ -773,7 +773,7 @@ int replay_handle_special_key(int key) {
     }
 
     if (!replay_modifier_special_key(key))
-        replay_stop();
+        repl_replay_stop();
     return 0;
 }
 
