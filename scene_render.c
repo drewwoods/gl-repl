@@ -146,9 +146,9 @@ static void scene_render_config_init(SceneRenderConfig *config) {
     config->replay_tess_preview = config->replaying &&
                                   config->replay_mode == REPLAY_MODE_VERTEX;
     config->replay_vertex_points = config->replay_tess_preview;
-    config->replay_has_fades = replay_has_active_fades();
-    config->replay_fill_base_limit = config->replay_has_fades
-                                   ? replay_fill_base_limit()
+    config->replay_has_fades = repl_replay_has_active_fades();
+    config->replay_base_limit = config->replay_has_fades
+                                   ? repl_replay_fill_base_limit()
                                    : 0;
     config->show_current_poly = *repl_state_presentation()->highlight_current_poly && !config->replaying;
 
@@ -523,10 +523,10 @@ void render_replay_fade_pass(void) {
         return;
 
     flat_program = repl_state_flat_program_view();
-    fade_batches = replay_fade_batches_view();
+    fade_batches = repl_replay_fade_batches_view();
 
     prof_begin(PROF_SCENE_3D_FADE_PROLOGUE);
-    batch_count = replay_compute_fade_skip_limits(skip_limits, REPLAY_FADE_BATCH_MAX);
+    batch_count = repl_replay_compute_fade_skip_limits(skip_limits, REPLAY_FADE_BATCH_MAX);
     prof_accum_end(PROF_SCENE_3D_FADE_PROLOGUE);
     if (batch_count <= 0)
         return;
@@ -549,7 +549,7 @@ void render_replay_fade_pass(void) {
 
     for (int batch_idx = 0; batch_idx < batch_count; batch_idx++) {
         const ReplayFadeBatch *batch = &fade_batches.batches[batch_idx];
-        float alpha = replay_batch_alpha(batch);
+        float alpha = repl_replay_batch_alpha(batch);
 
         if (alpha <= 0.0f)
             continue;
@@ -559,7 +559,7 @@ void render_replay_fade_pass(void) {
             .flat_cmd_count = batch->new_pc,
             .program = flat_program
         };
-        replay_restore_baseline_predef_values();
+        repl_replay_restore_baseline_predef_values();
         repl_execute_set_fade_context(alpha, skip_limits[batch_idx]);
         glColor4f(0.70f, 0.70f, 0.80f, alpha);
         glPushMatrix();
@@ -611,7 +611,7 @@ static void render_3d_scene_pass(void) {
         };
 
         if (config.replay_has_fades)
-            exec_options.flat_cmd_count = config.replay_fill_base_limit;
+            exec_options.flat_cmd_count = config.replay_base_limit;
 
         prof_begin(PROF_SCENE_3D_FILL);
         glPushMatrix();
@@ -736,7 +736,7 @@ void render_3d_scene(void) {
         for (int sample_idx = 0; sample_idx < *render->accum_samples; sample_idx++) {
             glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
             if (*replay->active)
-                replay_restore_baseline_predef_values();
+                repl_replay_restore_baseline_predef_values();
             *render_mut->accum_jitter_x = g_jitter_table[sample_idx % MAX_ACCUM_SAMPLES][0];
             *render_mut->accum_jitter_y = g_jitter_table[sample_idx % MAX_ACCUM_SAMPLES][1];
             render_3d_scene_pass();
@@ -748,7 +748,7 @@ void render_3d_scene(void) {
     } else {
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
         if (*replay->active)
-            replay_restore_baseline_predef_values();
+            repl_replay_restore_baseline_predef_values();
         render_3d_scene_pass();
     }
 }

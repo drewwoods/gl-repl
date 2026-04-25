@@ -119,7 +119,7 @@ void test_utils() {
     }
 }
 
-void test_replay_advanced() {
+void test_repl_replay_advanced() {
     printf("--- Replay advanced functions ---\n");
     repl_reset_state(); declare_test_vars();
     repl_feed_line_public("glVertex3f(0,0,0);");
@@ -143,22 +143,22 @@ void test_replay_advanced() {
     ASSERT_INT("over-limit execute preserves flat count", repl_state_flat_program_count(), full_flat_count);
 
     repl_replay_start();
-    ASSERT_INT("replay_exec_limit start", replay_exec_limit(), 0);
+    ASSERT_INT("repl_replay_exec_limit start", repl_replay_exec_limit(), 0);
 
-    replay_advance();
-    ASSERT_INT("replay_exec_limit advance 1", replay_exec_limit(), 1);
+    repl_replay_advance();
+    ASSERT_INT("repl_replay_exec_limit advance 1", repl_replay_exec_limit(), 1);
 
-    replay_advance();
-    ASSERT_INT("replay_exec_limit advance 2", replay_exec_limit(), 2);
+    repl_replay_advance();
+    ASSERT_INT("repl_replay_exec_limit advance 2", repl_replay_exec_limit(), 2);
 
-    replay_step_back();
-    ASSERT_INT("replay_exec_limit step back", replay_exec_limit(), 1);
+    repl_replay_step_back();
+    ASSERT_INT("repl_replay_exec_limit step back", repl_replay_exec_limit(), 1);
 
-    replay_seek_to_src_line(2);
-    ASSERT_INT("replay_exec_limit seek_to_src_line(2)", replay_exec_limit(), 3);
+    repl_replay_seek_to_src_line(2);
+    ASSERT_INT("repl_replay_exec_limit seek_to_src_line(2)", repl_replay_exec_limit(), 3);
 
-    replay_restart_from_beginning();
-    ASSERT_INT("replay_exec_limit restart", replay_exec_limit(), 0);
+    repl_replay_restart_from_beginning();
+    ASSERT_INT("repl_replay_exec_limit restart", repl_replay_exec_limit(), 0);
 
     repl_replay_stop();
 }
@@ -771,7 +771,7 @@ int main(int argc, char **argv) {
     init_predef_vars();
 
     test_utils();
-    test_replay_advanced();
+    test_repl_replay_advanced();
     test_io();
     test_execution();
     test_examples();

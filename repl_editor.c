@@ -629,7 +629,7 @@ static int handle_config_menu_key_route(unsigned char key) {
 }
 
 static int handle_active_replay_key_route(unsigned char key) {
-    return *repl_state_replay()->active && replay_handle_key(key);
+    return *repl_state_replay()->active && repl_replay_handle_key(key);
 }
 
 static void restore_hidden_code_panel_for_key(unsigned char key) {
@@ -710,7 +710,7 @@ static int handle_undo_redo_key_route(unsigned char key) {
 }
 
 static int handle_replay_key_route(unsigned char key) {
-    return replay_handle_key(key);
+    return repl_replay_handle_key(key);
 }
 
 static int handle_line_delete_key_route(unsigned char key) {
@@ -1151,7 +1151,7 @@ static int handle_rename_special_route(int key) {
 }
 
 static int handle_replay_special_route(int key) {
-    return replay_handle_special_key(key);
+    return repl_replay_handle_special_key(key);
 }
 
 static void restore_hidden_code_panel_for_special(int key) {
@@ -1658,14 +1658,14 @@ static void timer_func(int value) {
         const ReplReplayRuntimeState *replay = repl_state_replay();
 
         if (*replay->active)
-            replay_tick_fade_batches(0.016f);
+            repl_replay_tick_fade_batches(0.016f);
 
         if (*replay->active && *replay->state == REPLAY_PLAYING) {
             *replay->accum += *replay->speed * 0.016f;
             while (*replay->accum >= 1.0f &&
                    *replay->state == REPLAY_PLAYING) {
                 *replay->accum -= 1.0f;
-                replay_advance();
+                repl_replay_advance();
             }
         }
     }
