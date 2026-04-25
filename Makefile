@@ -93,7 +93,7 @@ else
 COVERAGE_LDFLAGS =
 endif
 
-.PHONY: all clean test test-detailed test_detailed test-stubs lines debug coverage glut help bench bench-csv
+.PHONY: all clean test test-detailed test_detailed test-stubs lines debug coverage glut help bench bench-csv check-gl-boundaries check-layer-coupling
 
 all: sample
 
@@ -192,7 +192,23 @@ sample: $(SAMPLE_OBJS) ## Build the main REPL sample using release flags by defa
 $(TEST_BINS) $(BENCH_BINS): %: $$($$@_OBJS)
 	$(CC) $(OBJ_CFLAGS) -o $@ $^ $($@_LDLIBS) $(COVERAGE_LDFLAGS)
 
-test: $(TEST_BINS) ## Run the full automated test suite.
+# Layering boundary enforcement ------------------------------------------
+check-gl-boundaries: ## Verify GL/GLUT calls are isolated to allowed files.
+	@echo "Checking GL/GLU drawing calls isolation..."
+	@! grep -nE '\b(gl[A-Z]|glu[A-Z])[A-Za-z0-9]*\s*\(' repl_*.c | grep -v '^repl_executor\.c:' | grep -vE '[/*"\x27]' || (echo "ERROR: GL/GLU calls found outside repl_executor.c" && exit 1)
+	@echo "Checking GL/GLU calls in sample.h..."
+	@! grep -nE '\b(gl[A-Z]|glu[A-Z])[A-Za-z0-9]*\s*\(' sample.h | grep -vE '[/*"\x27]' || (echo "ERROR: GL/GLU calls found in sample.h" && exit 1)
+	@echo "Checking GLUT input/feedback calls isolation..."
+	@! grep -nE '\bglut[A-Z][A-Za-z0-9]*\s*\(' repl_*.c | grep -vE '^repl_(editor|executor)\.c:' | grep -vE '[/*"\x27]' || (echo "ERROR: GLUT calls found outside repl_editor.c and repl_executor.c" && exit 1)
+	@echo "GL/GLUT boundaries OK"
+
+check-layer-coupling: ## Verify UI and scene layers don't include each other's headers.
+	@echo "Checking UI/scene layer coupling..."
+	@! grep -nE '#include\s+"scene_' ui_*.c ui_*.h || (echo "ERROR: UI files must not include scene headers" && exit 1)
+	@! grep -nE '#include\s+"ui_' scene_*.c scene_*.h | grep -vE 'scene_render\.c:.*ui_panels\.h' || (echo "ERROR: scene files must not include UI headers (except scene_render.c->ui_panels.h)" && exit 1)
+	@echo "Layer coupling OK"
+
+test: check-gl-boundaries check-layer-coupling $(TEST_BINS) ## Run the full automated test suite.
 	@REPL_EXPORT_CC="$(CC)" \
 	REPL_EXPORT_COMPILE_CFLAGS='$(BUILD_CFLAGS) $(CFLAGS)' \
 	TEST_JOBS="$(TEST_JOBS)" \
