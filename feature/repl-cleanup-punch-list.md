@@ -320,7 +320,6 @@ named wrappers so the rule is mechanically checkable.
 
 | File | Calls | Nature |
 |------|-------|--------|
-| `repl_core.c` | ~34 | `draw_string`/`draw_quad`/`begin_2d`/`end_2d` 2D helpers, `display_func()` viewport+clear+accum-AA loop+`glutSwapBuffers`, `init_gl()` `glLightModelfv` |
 | `repl_state.c` | ~19 | 5 tess callbacks (`glBegin`/`glEnd`/`glNormal3dv`/`glColor4dv`/`glVertex3dv`) + `repl_state_render_init_resources`/`_destroy_resources` (`gluNewQuadric`, `gluQuadric*`, `gluNewTess`, `gluTessCallback`, `gluDelete*`) |
 | `repl_replay.c` | 9 | `execute_replay_fade_batches()` push/pop attrib, lighting/blend setup, `glColor4f`, `glPushMatrix`/`glPopMatrix` around the executor call |
 | `sample.h` | 9 | inline `apply_transform_cmd`, `apply_tracked_transform_cmd`, `unwind_tracked_transform_stack`, `_repl_point_size` (`NO_POINT_PARAMETER` shim) |
@@ -437,16 +436,14 @@ changes. `make test-stubs TEST_JOBS=4` stays green. Commit as
 brackets must still link); `make sample && ./sample`; toggle the
 profile HUD and confirm timings still populate.
 
-#### 11a. Extract generic 2D helpers into a project-agnostic header library; hoist accumulation-AA into `render_3d_scene()`; keep `repl_core.c` as orchestrator
+#### 11a. Extract generic 2D helpers into a project-agnostic header library; hoist accumulation-AA into `render_3d_scene()`; keep `repl_core.c` as orchestrator ✅ DONE
 
-**Problem.** `display_func()` in `repl_core.c` currently owns
-2D-helper definitions (`begin_2d`/`end_2d`/`draw_quad`/`draw_string`),
-the accumulation-AA jitter loop, the per-frame `glViewport` calls,
-`glutSwapBuffers`, and `init_gl()`'s ambient-light setup. None of
-that is orchestration — it's render-internal work leaking into the
-master. Trim `repl_core.c` to a pure orchestrator: dirty-bit
-handling + model bookkeeping + dispatch into `render_3d_scene()`
-and the 2D overlay sequence.
+**Status.** This slice landed as a focused render-orchestration cleanup.
+`include/gl_2d.h` now owns the generic 2D helpers, `scene_render.c`
+owns the 3D viewport/clear/accumulation-AA loop and clear-color setup,
+`ui_panels.c` owns the overlay viewport bracket, and `sample.c` owns the
+GLUT buffer swap. `repl_core.c` is now orchestration only; step 7's
+ambient-light setup has moved into `scene_render.c`/`scene_lights.c`.
 
 **Layering check (verified):**
 
@@ -480,7 +477,7 @@ conventions to touched lines. Pure rename, no logic changes.
 `make test-stubs TEST_JOBS=4` stays green. Commit as
 `refactor: normalize names for §11a prep`.
 
-**Move (the second `refactor:` commit):**
+**Implementation notes:**
 
 1. **Create `include/gl_2d.h`.** Header-only, `static inline`, no
    project state. Public API:

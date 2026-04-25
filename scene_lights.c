@@ -12,6 +12,11 @@ static void scene_lights_pop_state(void) {
     glPopAttrib();
 }
 
+void scene_lights_init_global_ambient(void) {
+    GLfloat lm_amb[] = { 0.15f, 0.15f, 0.20f, 1.0f };
+    glLightModelfv(GL_LIGHT_MODEL_AMBIENT, lm_amb);
+}
+
 /* Set light properties only. User REPL commands still decide whether each
  * light is enabled during command execution. */
 void scene_lights_setup(void) {

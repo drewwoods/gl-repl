@@ -79,10 +79,10 @@ Run all: `make test`
 
 | File | Responsibility |
 |------|----------------|
-| `sample.c` | GLUT callback wrappers, `main()`, window setup |
+| `sample.c` | GLUT callback wrappers, `main()`, window setup, buffer swap |
 | `sample.h` | Shared types (`GLCmd`, `CmdType`, `SceneLight`), defaults, stateless helpers, compatibility includes |
 | `repl_config.h` | `ReplConfigKey` / `ReplConfigItem` descriptor API for keyed config access |
-| `repl_core.c` | Normalization, display callback, GL init |
+| `repl_core.c` | Normalization, display callback, init wrapper |
 | `repl_parser.c` | REPL source-line parser, expression validation, canonical `GLCmd.source[]` generation |
 | `repl_parser.h` | Parser entrypoints (`repl_parse_command*`, `repl_parse_command_ctx`) and `ReplParseContext` |
 | `repl_source_scope.c` | Source prefix-depth cache, indentation helpers, block lookup |
@@ -120,7 +120,7 @@ Run all: `make test`
 | `repl_examples.h` | Example query API (`repl_examples_count/name/lines`) |
 | `repl_export.c` | `save_output` / `load_from_file`, workspace header directives, `@scene-name` / `@workspace-dir` markers |
 | `scene_render_types.h` | Shared `SceneRgba` / `SceneRenderConfig` / `FrameRenderContext` types for scene helpers |
-| `scene_render.c` | 3D scene frame orchestration, scene config/frame prep, edit guides, orbit target, replay HUD |
+| `scene_render.c` | 3D scene frame orchestration, one-shot init, scene config/frame prep, edit guides, orbit target, replay HUD |
 | `scene_grid.c` | Grid theme rendering and custom focus/ocean/ruler/planes passes |
 | `scene_grid.h` | Grid render entrypoint |
 | `scene_axes.c` | Axes theme rendering |
@@ -128,7 +128,7 @@ Run all: `make test`
 | `scene_render.h` | Declares `render_3d_scene()` |
 | `scene_backdrop.c` | Backdrop mode dispatch and deterministic cityscape renderer |
 | `scene_backdrop.h` | Backdrop render entrypoint |
-| `scene_lights.c` | Light setup/reset and visible light indicator overlay |
+| `scene_lights.c` | Ambient init, light setup/reset, and visible light indicator overlay |
 | `scene_lights.h` | Scene light setup/render entrypoints |
 | `scene_overlays.c` | Polygon outline/current-block, vertex-number, and normal-vector overlays |
 | `scene_overlays.h` | Scene overlay render/helper API |

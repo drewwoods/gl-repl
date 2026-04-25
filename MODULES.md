@@ -21,7 +21,7 @@ overlays) reads the flattened array (`repl_state_flat_cmds()`).
 
 | Module | Role |
 |--------|------|
-| `repl_core` | Normalization, display frame, GL init |
+| `repl_core` | Normalization, display frame, init wrapper |
 | `repl_command_spec` | Declarative descriptors for fixed-arity GL commands |
 | `repl_parser` | Source-line parser and canonical `GLCmd.source[]` generation |
 | `repl_source_scope` | Source prefix-depth cache, indent helpers, block lookup |
@@ -72,7 +72,7 @@ as one visible region on screen.
 
 | Module | Role |
 |--------|------|
-| `ui_panels` | Code-panel rows, inline ghost/hint, scene status banner |
+| `ui_panels` | Code-panel rows, overlay viewport bracket, inline ghost/hint, scene status banner |
 | `repl_code_panel_layout` | Pure text wrapping (no GL) — shared with export dumps + tests |
 | `repl_code_panel_document` | Document row model (no GL) |
 | `repl_replay_annotations` | Source-line replay text expansion |
@@ -85,18 +85,20 @@ as one visible region on screen.
 
 ### 5. 3D scene rendering
 
-The viewport. Shared `SceneRenderConfig` / `FrameRenderContext` in
-`scene_render_types.h`, guarded helper passes, table-driven themes.
+The viewport. `scene_render.c` owns the 3D viewport, clear color,
+accumulation-AA loop, and one-shot scene-side GL setup; shared
+`SceneRenderConfig` / `FrameRenderContext` live in `scene_render_types.h`,
+alongside guarded helper passes and table-driven themes.
 
 | Module | Role |
 |--------|------|
-| `scene_render` | Camera, render config/frame prep, orbit target, replay HUD |
+| `scene_render` | Camera, render config/frame prep, 3D viewport/clear/accum-AA, one-shot scene init, orbit target, replay HUD |
 | `scene_geometry_guides` | Vertex-input + normal-edit guide rendering |
 | `scene_transform_guides` | Translate/rotate/scale guide planning + rendering |
 | `scene_grid` | Grid theme rendering |
 | `scene_axes` | Axes theme rendering |
 | `scene_backdrop` | Backdrop pass (e.g. cityscape) |
-| `scene_lights` | Light setup + indicator drawing |
+| `scene_lights` | Ambient init, light setup + indicator drawing |
 | `scene_overlays` | Outline, vertex-number, and normal-vector overlays |
 
 ### 6. Persistence, audio, instrumentation, lifecycle
@@ -106,7 +108,7 @@ The viewport. Shared `SceneRenderConfig` / `FrameRenderContext` in
 | `repl_export` | Save/load, typed export scaffold, workspace headers, code-panel dumps |
 | `repl_audio` | Playlist engine + persisted audio config |
 | `prof` | Project-wide CPU timing instrumentation |
-| `sample` | `main()` + GLUT callback wiring |
+| `sample` | `main()` + GLUT callback wiring + GLUT buffer swap |
 | `gl_stub_counts` | `USE_GL_STUBS` symbol tracking |
 
 ## Ownership / Coordination Diagram
@@ -131,7 +133,7 @@ flowchart LR
         lflow_a["invokes / feeds"] i1@--> lflow_b["callback / stage / pass"]
     end
 
-    sample["sample.c<br/>GLUT callback wiring"]
+    sample["sample.c<br/>GLUT callback wiring · buffer swap"]
 
     subgraph pipeline["Command pipeline"]
         core["repl_core.c<br/>normalize · display frame"]
@@ -165,7 +167,7 @@ flowchart LR
     end
 
     subgraph ui_layer["2D UI rendering"]
-        uicp["ui_panels.c<br/>code panel rows · status banner"]
+        uicp["ui_panels.c<br/>code panel rows · overlay viewport · status banner"]
         layout["repl_code_panel_layout.c<br/>pure wrap iterator"]
         docrows["repl_code_panel_document.c<br/>document row model"]
         replay_ann["repl_replay_annotations.c<br/>code-panel replay text"]
@@ -178,13 +180,13 @@ flowchart LR
     end
 
     subgraph scene_layer["3D scene rendering"]
-        sceneR["scene_render.c<br/>frame prep · replay HUD"]
+        sceneR["scene_render.c<br/>frame prep · 3D viewport/clear · accum-AA · one-shot init · replay HUD"]
         geomg["scene_geometry_guides.c<br/>vertex/normal guides"]
         xformg["scene_transform_guides.c<br/>xform guide planner+render"]
         grid["scene_grid.c<br/>grid themes"]
         axes["scene_axes.c<br/>axes themes"]
         backdrop["scene_backdrop.c<br/>backdrop pass"]
-        lights["scene_lights.c<br/>light setup + indicators"]
+        lights["scene_lights.c<br/>ambient init · light setup + indicators"]
         overlays["scene_overlays.c<br/>geometry overlays"]
     end
 
@@ -369,7 +371,7 @@ render files.
 File prefixes partition the tree by responsibility:
 
 - `repl_*` — pipeline, input, domain models. No OpenGL calls
-  (except `repl_core.c`, which owns GL init and the display
+  (except `repl_core.c`, which owns the init wrapper and the display
   callback, and `repl_executor.c`, which dispatches GL drawing
   for flat commands).
 - `ui_*` — 2D rendering (code panel + floating overlays/popups).

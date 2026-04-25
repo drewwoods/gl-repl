@@ -8,7 +8,7 @@
 The immediate-mode REPL is now split across focused translation units instead
 of one monolithic `repl_core.c`.
 
-- `repl_core.c`: normalization, display callback, and OpenGL initialization.
+- `repl_core.c`: normalization, display callback, and init wrapper.
 - `repl_parser.c`: source-line parser, expression validation against visible
   variables, explicit `ReplParseContext`, and canonical `GLCmd.source[]`
   generation for GL commands.
@@ -66,8 +66,8 @@ of one monolithic `repl_core.c`.
 - `repl_eval.c`: expression parsing and evaluation.
 - `ui_panels.c`: 2D code-panel row rendering, source search highlights, inline
   ghost/hint text, scene status banner, and top-level panel routing.
-- `scene_render.c`: 3D frame orchestration, `SceneRenderConfig` /
-  `FrameRenderContext` prep, orbit target, and replay HUD.
+- `scene_render.c`: 3D frame orchestration, one-shot scene init,
+  `SceneRenderConfig` / `FrameRenderContext` prep, orbit target, and replay HUD.
 - `scene_render_types.h`: shared per-frame render snapshot types consumed by
   the scene helpers.
 - `scene_guides_shared.h`: shared scene-guide snapshot and transform-guide
@@ -81,12 +81,12 @@ of one monolithic `repl_core.c`.
 - `scene_axes.c`: axes theme rendering.
 - `scene_backdrop.c`: backdrop mode dispatch and deterministic cityscape
   rendering.
-- `scene_lights.c`: per-pass light property setup and light indicator overlay
-  rendering.
+- `scene_lights.c`: ambient init, per-pass light property setup, and light
+  indicator overlay rendering.
 - `scene_overlays.c`: polygon outline/current-block, vertex-number, and
   normal-vector overlay rendering plus shared flat-block cursor matching.
 - `prof.c`: project-wide CPU timing instrumentation.
-- `sample.c`: application entrypoint and GLUT callback wiring.
+- `sample.c`: application entrypoint, GLUT callback wiring, and buffer swap.
 
 The public API is still `repl_core.h`. Cross-module runtime/test helpers live in
 `repl_core_internal.h`. Shared globals and UI-visible state still live in
@@ -201,7 +201,7 @@ Owns the semantic model and display infrastructure.
 - `g_flat_cmds[]`, `g_num_flat_cmds`
 - normalization and reformat orchestration
 - display callback
-- GL init
+- init wrapper
 
 ### `repl_parser.c`
 

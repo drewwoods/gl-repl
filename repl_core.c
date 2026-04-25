@@ -9,8 +9,7 @@
  *   - Global state: command arrays (repl_state_document_cmds_mut() / g_flat_cmds), camera, toggles,
  *     accumulation-buffer settings, etc.
  *   - Normalization - repl_parse_and_normalize(), repl_reformat_commands()
- *   - GLUT display / reshape callbacks
- *   - 2D helpers   - draw_string(), draw_quad(), begin_2d(), end_2d()
+ *   - GLUT display / reshape callbacks and frame orchestration
  *   - Public API wrappers forwarded from sample.c
  *
  * repl_editor.c owns the interactive editing layer:
@@ -58,7 +57,6 @@
 #include "repl_core_internal.h"
 #include "repl_command_spec.h"
 #include "repl_command_store.h"
-#include "repl_clipboard.h"
 #include "repl_replay.h"
 #include "cmd_format.h"
 #include "scene_render.h"
@@ -90,27 +88,8 @@ void mark_normals_dirty(void) {
 
 /* (no display list - commands are executed directly each frame) */
 
-/* Sub-pixel jitter offsets (units: fraction of one pixel).
- * Table is ordered so the first N entries form a good N-sample set.
- * Supports 1, 2, 4, 8, or 16 samples. */
-static const float g_jitter_table[MAX_ACCUM_SAMPLES][2] = {
-    {  0.250f,  0.250f },
-    { -0.250f, -0.250f },/* 2  */
-    {  0.250f, -0.250f },
-    { -0.250f,  0.250f },  /* 4  */
-    { -0.125f,  0.375f },
-    {  0.375f,  0.125f },
-    { -0.375f, -0.125f },
-    {  0.125f, -0.375f }, /* 8  */
-    {  0.375f, -0.375f },
-    { -0.375f,  0.375f },
-    {  0.125f,  0.125f },
-    { -0.125f, -0.125f },
-    {  0.375f,  0.375f },
-    { -0.375f, -0.375f },
-    {  0.000f,  0.500f },
-    {  0.500f,  0.000f },  /* 16 */
-};
+/* Forward declarations (eval_expr, parse_for_header, etc. are in repl_eval.h) */
+static void get_for_var_name(const GLCmd *cmd, char *var, int var_sz);
 
 /* Forward declarations (eval_expr, parse_for_header, etc. are in repl_eval.h) */
 static void get_for_var_name(const GLCmd *cmd, char *var, int var_sz);
@@ -551,7 +530,6 @@ static void display_func(void) {
     int saved_flat_count;
     float live_predef_vals[MAX_PREDEF_VARS] = { 0 };
     FlatProgramView flat_program = repl_state_flat_program_view();
-    const GLCmd *g_flat_cmds = flat_program.cmds;
     int g_num_flat_cmds = flat_program.cmd_count;
     const ReplReplayRuntimeState *replay = repl_state_replay();
 
@@ -568,7 +546,6 @@ static void display_func(void) {
         repl_state_flat_program_clear_dirty();
         prof_end(PROF_FLATTEN);
         flat_program = repl_state_flat_program_view();
-        g_flat_cmds = flat_program.cmds;
         g_num_flat_cmds = flat_program.cmd_count;
     }
 
@@ -580,61 +557,18 @@ static void display_func(void) {
     update_render_state_strings();
     update_cam_lines();
 
-    /* Full-window clear - use last glClearColor cmd if present, else default */
-    glViewport(0, 0, *repl_state_viewport()->window_w, *repl_state_viewport()->window_h);
-    {
-        float cr = 0.10f, cg = 0.10f, cb = 0.13f, ca = 1.0f;
-        for (int ci = 0; ci < g_num_flat_cmds; ci++) {
-            if (g_flat_cmds[ci].valid &&
-                g_flat_cmds[ci].type == CMD_CLEAR_COLOR) {
-                cr = g_flat_cmds[ci].args[0];
-                cg = g_flat_cmds[ci].args[1];
-                cb = g_flat_cmds[ci].args[2];
-                ca = g_flat_cmds[ci].args[3];
-            }
-        }
-        glClearColor(cr, cg, cb, ca);
-    }
-
-    /* 3D scene - with optional accumulation-buffer jitter AA */
+    /* 3D scene - render_3d_scene() handles optional accumulation-buffer AA */
     /* Reset subsection accumulators so timings across all AA samples sum up
      * correctly before the first (or only) render_3d_scene() call. */
     for (ProfSection section_idx = PROF_SCENE_3D_SETUP; section_idx <= PROF_SCENE_3D_HUD; section_idx++)
         prof_accum_reset(section_idx);
     prof_begin(PROF_SCENE_3D);
-    {
-        const ReplRenderState *rs     = repl_state_render();
-        ReplRenderState       *rs_mut = repl_state_render_mut();
-        if (*rs->use_accum && *rs->accum_aa_enabled && *rs->accum_samples > 1) {
-            /* Clear the accumulation buffer once per frame */
-            glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_ACCUM_BUFFER_BIT);
-            float weight = 1.0f / (float)*rs->accum_samples;
-            for (int j = 0; j < *rs->accum_samples; j++) {
-                glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-                if (*replay->active)
-                    replay_restore_baseline_predef_values();
-                *rs_mut->accum_jitter_x = g_jitter_table[j % MAX_ACCUM_SAMPLES][0];
-                *rs_mut->accum_jitter_y = g_jitter_table[j % MAX_ACCUM_SAMPLES][1];
-                render_3d_scene();
-                glAccum(GL_ACCUM, weight);
-            }
-            *rs_mut->accum_jitter_x = 0.0f;
-            *rs_mut->accum_jitter_y = 0.0f;
-            glAccum(GL_RETURN, 1.0f);
-        } else {
-            glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-            if (*replay->active)
-                replay_restore_baseline_predef_values();
-            render_3d_scene();
-        }
-    }
+    render_3d_scene();
     prof_end(PROF_SCENE_3D);
     /* Commit the accumulated subsection totals now that all AA samples are done. */
     for (ProfSection section_idx = PROF_SCENE_3D_SETUP; section_idx <= PROF_SCENE_3D_HUD; section_idx++)
         prof_accum_commit(section_idx);
 
-    /* 2D overlays in full window coords */
-    glViewport(0, 0, *repl_state_viewport()->window_w, *repl_state_viewport()->window_h);
     prof_begin(PROF_CODE_PANEL);
     render_code_panel();
     prof_end(PROF_CODE_PANEL);
@@ -653,8 +587,6 @@ static void display_func(void) {
     repl_restore_predef_values(live_predef_vals, MAX_PREDEF_VARS);
 
     prof_end(PROF_FRAME_TOTAL);
-
-    glutSwapBuffers();
 }
 
 static void reshape_func(int w, int h) {
@@ -779,9 +711,7 @@ static void load_initial_commands(const char *import_file) {
 }
 
 static void init_gl(void) {
-    GLfloat lm_amb[] = { 0.15f, 0.15f, 0.20f, 1.0f };
-    glLightModelfv(GL_LIGHT_MODEL_AMBIENT, lm_amb);
-
+    scene_render_init_gl();
     repl_state_render_init_resources();
     apply_init_bootstrap();
 }
