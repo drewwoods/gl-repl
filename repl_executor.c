@@ -544,9 +544,9 @@ void repl_execute_program(const ReplExecutionOptions *options) {
                                                cond_text, sizeof(cond_text)) &&
                     cond_text[0]) {
                     char repl_cond[MAX_LINE_LEN];
-                    c_expr_to_repl(cond_text, repl_cond, sizeof(repl_cond));
+                    repl_eval_c_expr_to_repl(cond_text, repl_cond, sizeof(repl_cond));
                     ExprCtx ctx = { repl_cond, eval_vars, eval_num_vars };
-                    cond = eval_expr(&ctx);
+                    cond = repl_eval_expr(&ctx);
                 }
             }
             if (cond == 0.0f) {
@@ -578,9 +578,9 @@ void repl_execute_program(const ReplExecutionOptions *options) {
                         eval_num_vars = local_vars->num_vars;
                     }
                     char repl_rhs[MAX_LINE_LEN];
-                    c_expr_to_repl(rhs, repl_rhs, sizeof(repl_rhs));
+                    repl_eval_c_expr_to_repl(rhs, repl_rhs, sizeof(repl_rhs));
                     ExprCtx ctx = { repl_rhs, eval_vars, eval_num_vars };
-                    value = eval_expr(&ctx);
+                    value = repl_eval_expr(&ctx);
                 }
             }
             if (var_idx >= 0 && var_idx < g_num_predef_vars)

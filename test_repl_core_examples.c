@@ -86,16 +86,16 @@ static void log_example_result(int idx, const char *name, const char *step,
 
 static void declare_test_vars(void) {
     char err[128];
-    declare_predef_var("x", err, sizeof(err));
-    declare_predef_var("y", err, sizeof(err));
-    declare_predef_var("z", err, sizeof(err));
-    declare_predef_var("i", err, sizeof(err));
-    declare_predef_var("j", err, sizeof(err));
-    declare_predef_var("k", err, sizeof(err));
-    declare_predef_var("a", err, sizeof(err));
-    declare_predef_var("b", err, sizeof(err));
-    declare_predef_var("c", err, sizeof(err));
-    declare_predef_var("n", err, sizeof(err));
+    repl_eval_declare_predef_var("x", err, sizeof(err));
+    repl_eval_declare_predef_var("y", err, sizeof(err));
+    repl_eval_declare_predef_var("z", err, sizeof(err));
+    repl_eval_declare_predef_var("i", err, sizeof(err));
+    repl_eval_declare_predef_var("j", err, sizeof(err));
+    repl_eval_declare_predef_var("k", err, sizeof(err));
+    repl_eval_declare_predef_var("a", err, sizeof(err));
+    repl_eval_declare_predef_var("b", err, sizeof(err));
+    repl_eval_declare_predef_var("c", err, sizeof(err));
+    repl_eval_declare_predef_var("n", err, sizeof(err));
 }
 
 static void pin_code_panel_state(void) {
@@ -343,7 +343,7 @@ static char *canonicalize_definition_line(const char *line) {
     char *comment;
     char *out;
 
-    c_expr_to_repl(line, repl_line, sizeof(repl_line));
+    repl_eval_c_expr_to_repl(line, repl_line, sizeof(repl_line));
     trim_in_place(repl_line);
 
     comment = strstr(repl_line, "//");
@@ -516,7 +516,7 @@ static int dump_single_example_to_stdout(int idx) {
         return 1;
     }
 
-    init_predef_vars();
+    repl_eval_init_predef_vars();
     load_example_for_test(idx);
     dump = dump_current_code_panel_text();
     if (!dump)
@@ -570,7 +570,7 @@ int main(int argc, char **argv) {
         return 1;
     }
 
-    init_predef_vars();
+    repl_eval_init_predef_vars();
 
     {
         static const char *const no_cfg_reset_example[] = {

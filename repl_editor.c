@@ -123,9 +123,9 @@ static void remove_cmd_range_unchecked(int start, int count, const char *what) {
 
     /* Compact g_predef_vars and shift CMD_VAR_ASSIGN indices */
     for (int r = 0; r < n_removed; r++) {
-        int slot = find_predef_var_idx(removed_names[r]);
+        int slot = repl_eval_find_predef_var_idx(removed_names[r]);
         if (slot < 0) continue;
-        undeclare_predef_var(removed_names[r]);
+        repl_eval_undeclare_predef_var(removed_names[r]);
         for (int j = 0; j < repl_state_document_count(); j++) {
             if (repl_state_document_cmds_mut()[j].type == CMD_VAR_ASSIGN && repl_state_document_cmds_mut()[j].num_args > slot)
                 repl_state_document_cmds_mut()[j].num_args--;
@@ -168,7 +168,7 @@ void repl_clear_all_cmds(void) {
         inp->pending_newline[0] = '\0';
         *inp->pending_newline_len = 0;
     }
-    init_predef_vars();
+    repl_eval_init_predef_vars();
     mark_normals_dirty();
     set_status("All commands cleared");
 }
@@ -296,7 +296,7 @@ static int parse_for_overwrite_enter(GLCmd *cmd, int insert_idx) {
     } else {
         ReplParseContext parse_ctx = { insert_idx, NULL, 0, 0 };
         parsed = repl_parse_command_ctx(repl_state_editor_input()->input, cmd, &parse_ctx);
-        if (parsed && input_has_predef_vars(repl_state_editor_input()->input)) {
+        if (parsed && repl_eval_input_has_predef_vars(repl_state_editor_input()->input)) {
             cmd->has_vars = 1;
             rewrite_cmd_source_with_indent(cmd, insert_idx, 0);
         }
@@ -832,7 +832,7 @@ static int handle_comment_toggle_key_route(unsigned char key) {
                             char rhs[MAX_LINE_LEN];
                             if (repl_extract_assignment_parts(s, name, sizeof(name),
                                                               rhs, sizeof(rhs))) {
-                                int var_idx = find_predef_var_idx(name);
+                                int var_idx = repl_eval_find_predef_var_idx(name);
                                 ExprVar vis[MAX_EXPR_VARS];
                                 int vis_n = collect_visible_vars(repl_state_edit_line(),
                                                                  vis, MAX_EXPR_VARS);
@@ -844,14 +844,14 @@ static int handle_comment_toggle_key_route(unsigned char key) {
                                              name, name);
                                     set_status(buf);
                                     fallback_set_status = 1;
-                                } else if (!validate_expression_idents(
+                                } else if (!repl_eval_validate_expression_idents(
                                         rhs, vis_n > 0 ? vis : NULL, vis_n,
                                         verr, sizeof(verr))) {
                                     set_status(verr);
                                     fallback_set_status = 1;
                                 } else {
                                     ExprCtx ectx = { rhs, g_predef_vars, g_num_predef_vars };
-                                    float val = eval_expr(&ectx);
+                                    float val = repl_eval_expr(&ectx);
                                     int indent_len = (in_begin_block_at(repl_state_edit_line()) ? 4 : 2)
                                                      + block_depth_at(repl_state_edit_line()) * 2;
                                     char indent[32];
@@ -864,7 +864,7 @@ static int handle_comment_toggle_key_route(unsigned char key) {
                                     new_cmd.valid    = 1;
                                     new_cmd.args[0]  = val;
                                     new_cmd.num_args = var_idx;
-                                    new_cmd.has_vars = input_has_predef_vars(rhs);
+                                    new_cmd.has_vars = repl_eval_input_has_predef_vars(rhs);
                                     if (repl_format_fits(new_cmd.source,
                                                          sizeof(new_cmd.source),
                                                          "%s%s = %s;",
@@ -1028,7 +1028,7 @@ static int handle_semicolon_commit_key_route(unsigned char key) {
                                                              &cmd);
                 else
                     parsed = repl_parse_and_normalize_strict(repl_state_editor_input()->input, insert_idx, NULL, 0,
-                                                             input_has_predef_vars(repl_state_editor_input()->input), &cmd);
+                                                             repl_eval_input_has_predef_vars(repl_state_editor_input()->input), &cmd);
 
                 if (parsed) {
                     ReplCommandStore store = repl_command_store_live();
@@ -1719,7 +1719,7 @@ int feed_line(const char *line) {
                                                      &cmd);
         else
             parsed = repl_parse_and_normalize_strict(repl_state_editor_input()->input, insert_idx, NULL, 0,
-                                                     input_has_predef_vars(repl_state_editor_input()->input), &cmd);
+                                                     repl_eval_input_has_predef_vars(repl_state_editor_input()->input), &cmd);
 
         if (parsed) {
             ReplCommandStore store = repl_command_store_live();

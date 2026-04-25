@@ -35,13 +35,13 @@ static void type_search_text(const char *text) {
 
 static void declare_test_vars(void) {
     char err[128];
-    declare_predef_var("x", err, sizeof(err));
-    declare_predef_var("y", err, sizeof(err));
-    declare_predef_var("z", err, sizeof(err));
-    declare_predef_var("i", err, sizeof(err));
-    declare_predef_var("j", err, sizeof(err));
-    declare_predef_var("k", err, sizeof(err));
-    declare_predef_var("n", err, sizeof(err));
+    repl_eval_declare_predef_var("x", err, sizeof(err));
+    repl_eval_declare_predef_var("y", err, sizeof(err));
+    repl_eval_declare_predef_var("z", err, sizeof(err));
+    repl_eval_declare_predef_var("i", err, sizeof(err));
+    repl_eval_declare_predef_var("j", err, sizeof(err));
+    repl_eval_declare_predef_var("k", err, sizeof(err));
+    repl_eval_declare_predef_var("n", err, sizeof(err));
 }
 
 static void set_live_input(const char *text) {
@@ -53,7 +53,7 @@ static void set_live_input(const char *text) {
 }
 
 int main(void) {
-    init_predef_vars();
+    repl_eval_init_predef_vars();
 
     repl_reset_state(); declare_test_vars();
     repl_feed_line_public("glColor3f(1, 0, 0);");

@@ -115,7 +115,7 @@ static void report(BenchResult r) {
 
 /* Mirror declare_test_vars() from the test suites - examples reference
  * these single-letter identifiers freely and parsing them otherwise fails
- * the validate_expression_idents() check. We declare them once at startup
+ * the repl_eval_validate_expression_idents() check. We declare them once at startup
  * and re-declare after each repl_reset_state() call (reset wipes the
  * predef table). */
 static const char *const k_test_idents[] = {
@@ -127,7 +127,7 @@ static const int k_num_test_idents =
 static void declare_test_idents(void) {
     char err[128];
     for (int i = 0; i < k_num_test_idents; i++)
-        declare_predef_var(k_test_idents[i], err, sizeof(err));
+        repl_eval_declare_predef_var(k_test_idents[i], err, sizeof(err));
 }
 
 static void fresh_repl(void) {

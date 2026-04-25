@@ -154,7 +154,7 @@ int main(int argc, char **argv) {
     }
 
     if (dump_code || dump_flat) {
-        init_predef_vars();
+        repl_eval_init_predef_vars();
         for (int i = 0; i < g_num_predef_vars; i++)
             if (strcmp(g_predef_vars[i].name, "t") == 0) { *repl_state_variables_mut()->time_var_idx = i; break; }
         repl_load_initial_commands(input_file);
@@ -173,7 +173,7 @@ int main(int argc, char **argv) {
 
     repl_init_gl();
     atexit(repl_executor_destroy_resources);
-    init_predef_vars();
+    repl_eval_init_predef_vars();
     for (int i = 0; i < g_num_predef_vars; i++)
         if (strcmp(g_predef_vars[i].name, "t") == 0) { *repl_state_variables_mut()->time_var_idx = i; break; }
     repl_load_initial_commands(input_file);
