@@ -249,7 +249,7 @@ int repl_save_workspace(const char *dir) {
         snprintf(path, sizeof(path), "%s/%s.c", dir, slug);
 
         g_export_scene_name_hint = g_user_scenes[s].name;
-        repl_save_output(path);
+        repl_export_save_output(path);
         g_export_scene_name_hint = NULL;
         written++;
     }
@@ -267,7 +267,7 @@ static int load_scene_file_into_slot(const char *path) {
     load_commands_into_live(NULL, 0, 0);
     g_num_predef_vars = 0;
 
-    if (!repl_load_from_file(path)) return -1;
+    if (!repl_export_load_from_file(path)) return -1;
 
     int slot = find_free_user_scene_slot();
     if (!g_user_scenes[0].used) slot = 0;
@@ -353,7 +353,7 @@ static int evict_scene_to_workspace(int slot) {
     snprintf(path, sizeof(path), "%s/%s.c", g_workspace_dir, slug);
 
     g_export_scene_name_hint = g_user_scenes[slot].name;
-    repl_save_output(path);
+    repl_export_save_output(path);
     g_export_scene_name_hint = NULL;
 
     g_user_scenes[slot].used = 0;

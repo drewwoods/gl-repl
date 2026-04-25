@@ -1081,7 +1081,7 @@ static int handle_semicolon_commit_key_route(unsigned char key) {
 
 static int handle_quit_key_route(unsigned char key) {
     if (key == KEY_CTRL_Q) {
-        repl_save_output(quit_tempfile);
+        repl_export_save_output(quit_tempfile);
         printf("Saved to %s\n", quit_tempfile);
         exit(0);
     }

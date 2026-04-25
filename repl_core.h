@@ -20,8 +20,8 @@
 
 /* --- Save / load ------------------------------------------------------- */
 void repl_save_default_output(void);   /* writes ./output.c */
-int  repl_load_from_file(const char *filename);
-void repl_save_output(const char *filename);
+int  repl_export_load_from_file(const char *filename);
+void repl_export_save_output(const char *filename);
 
 /* Workspace I/O: save every occupied user-scene slot to `<dir>/<slug>.c`.
  * repl_load_workspace scans `dir` for *.c and imports each into a fresh
