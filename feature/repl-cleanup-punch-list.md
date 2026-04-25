@@ -327,43 +327,82 @@ named wrappers so the rule is mechanically checkable.
 | `repl_actions.c` | 1 | `glutGetModifiers()` SHIFT check on the time-toggle config row |
 | `repl_editor.c` | ~23 | All `glutPostRedisplay`/`glutSetCursor`/`glutGetModifiers` — GLUT input/feedback, not GL drawing |
 
-The work below lands as a sequence of small `refactor:` commits, one
-sub-step per commit. After each commit, `make test-stubs TEST_JOBS=4`
-must still pass and `make sample` must still launch.
+The work below lands as a sequence of small `refactor:` commits.
+Each sub-step is **self-contained**: it states the problem, the
+files it edits, the move, the verification, and a per-slice naming
+pass that lands as a separate `refactor:` commit immediately
+before the move. Read any sub-step in isolation; it tells you
+everything you need to execute it.
+
+After each commit, `make test-stubs TEST_JOBS=4` must still pass
+and `make sample` must still launch.
 
 The sub-steps are organised in two phases:
 
-- **Phase 1 — precursor cleanup** (11.0). Two structural prerequisites
-  that aren't strictly GL-isolation work, but that the GL-isolation
-  slices in Phase 2 will trip over if they aren't addressed first:
-  extracting the prof primitives out of `ui_profile_panel.*` into
-  their own module, and a focused naming pass on the files about to be
-  edited.
+- **Phase 1 — precursor cleanup** (11.0a). One structural
+  prerequisite: extract the prof primitives out of
+  `ui_profile_panel.*` into their own module so the GL-isolation
+  slices in Phase 2 don't trip over it.
 - **Phase 2 — GL isolation** (11a-11f). The mechanical moves that
   segregate live GL calls.
 
+**Per-slice naming pass convention.** The broader naming/comment
+pass described in [`feature/repl-cleanup.md` §10](./repl-cleanup.md)
+is a Phase 10 strategic concern; doing the full pass before Phase 2
+here would inflate the slice. But landing each move on top of
+inconsistent local names produces diffs that are harder than
+necessary to review. So each sub-step below opens with a "Naming
+pass" subsection that lists the files it touches and asks for a
+focused rename pass on those files only, applying §10 conventions
+(`*_idx` for indexes, `*_count` for counts, canonical names like
+`source_line_idx` / `flat_cmd_idx` / `indent_cols` /
+`visible_line_count` / `command_store` / `render_config` /
+`workspace_dir`, plus removing stale comments and vague TODOs in
+the touched files). The naming-pass commit must be a pure rename
+(no logic changes). The move commit that follows must be a pure
+move (no rename creep). The full project-wide sweep stays a
+Phase 10 concern.
+
+**Sub-step ordering.** 11.0a is a hard prerequisite for 11f's
+grep guard. Within Phase 2: 11b is independent of 11a; 11c is
+cleanest after 11b; 11d/11e are independent of 11a-11c; 11f
+requires 11.0a + 11a-11e all landed. Recommended order: 11.0a →
+11a → 11b → 11c → 11d → 11e → 11f. Each move commit is preceded
+by its naming-pass commit.
+
 ---
 
-#### 11.0 Phase 1 — precursor cleanup
+#### 11.0a. Extract prof primitives into a `prof` module
 
-These two slices unblock the GL-isolation work and should land first.
-Each is one `refactor:` commit.
-
-##### 11.0a. Extract prof primitives into a `prof` module
-
-**Problem:** `prof_begin`, `prof_end`, `prof_accum_reset`,
+**Problem.** `prof_begin`, `prof_end`, `prof_accum_reset`,
 `prof_accum_end`, `prof_accum_commit`, `prof_frame_tick`,
 `prof_code_panel_details_enabled`, and the `ProfSection` enum live
 in `ui_profile_panel.h` and `ui_profile_panel.c`. They are called
 from `repl_core.c`, `repl_replay.c`, every `scene_*.c` that times
-sub-passes, and the code-panel renderers — i.e. every layer in the
+sub-passes, and the code-panel renderers — every layer in the
 project transitively `#include`s a UI header to instrument itself.
-That violates the layering rule before the GL-isolation work even
-starts. Profiling primitives are generic instrumentation, not UI.
+Profiling primitives are generic instrumentation, not UI.
 
-**Steps:**
+This is a Phase 1 prerequisite for 11f. Once 11f's
+`make check-layer-coupling` grep guard lands, every
+`scene_*.c → ui_profile_panel.h` include would show up as a
+violation. Extracting prof first means that guard can be
+unconditional rather than carrying a per-file exception list.
 
-1. Create `prof.h` and `prof.c`. Move the following out of
+**Files this slice touches:** `ui_profile_panel.{c,h}`,
+`prof.{c,h}` (new), `repl_core.c`, `repl_replay.c`, every
+`scene_*.c` that uses prof brackets, every `ui_*.c` that uses prof
+brackets, `Makefile`, `MODULES.md`, `ARCHITECTURE.md`.
+
+**Naming pass (separate `refactor:` commit, lands before the
+move).** Run a focused rename pass on the files listed above,
+applying §10 conventions to touched lines. Pure rename, no logic
+changes. `make test-stubs TEST_JOBS=4` stays green. Commit as
+`refactor: normalize names for §11.0a prep`.
+
+**Move (the second `refactor:` commit):**
+
+1. Create `prof.h` and `prof.c`. Move out of
    `ui_profile_panel.{h,c}`:
    - the `ProfSection` enum (`ui_profile_panel.h:13-46`),
    - the `PROF_SECTION_COUNT` sentinel,
@@ -373,18 +412,20 @@ starts. Profiling primitives are generic instrumentation, not UI.
    - `prof_code_panel_details_enabled`,
    - any internal `static` storage (per-section accumulators,
      frame-tick counters) — keep file-static in `prof.c`.
-2. `ui_profile_panel.{h,c}` now own only the *rendering* of the prof
-   HUD: `render_profile_panel()` plus its layout helpers. The HUD
-   reads measured timings via a small read-only API exported from
-   `prof.h` (e.g. `prof_section_avg_ms(ProfSection)` /
-   `prof_section_last_ms(ProfSection)`). Define just enough getters
-   to cover what the HUD currently displays — no speculative API.
-3. Update every caller's include: `repl_core.c`, `repl_replay.c`,
-   each `scene_*.c` using prof brackets, `ui_panels.c`,
-   `ui_*` overlay renderers — replace
-   `#include "ui_profile_panel.h"` with `#include "prof.h"`. The HUD
-   call site (`render_profile_panel()` in `repl_core.c:690`) keeps
-   `#include "ui_profile_panel.h"` because that's the renderer.
+2. `ui_profile_panel.{h,c}` now own only the *rendering* of the
+   prof HUD: `render_profile_panel()` plus its layout helpers. The
+   HUD reads measured timings via a small read-only API exported
+   from `prof.h` (e.g. `prof_section_avg_ms(ProfSection)` /
+   `prof_section_last_ms(ProfSection)`). Define just enough
+   getters to cover what the HUD currently displays — no
+   speculative API.
+3. Update every caller's include: replace
+   `#include "ui_profile_panel.h"` with `#include "prof.h"` in
+   `repl_core.c`, `repl_replay.c`, each `scene_*.c` using prof
+   brackets, `ui_panels.c`, `ui_*` overlay renderers. The HUD
+   call site (`render_profile_panel()` in `repl_core.c:690`)
+   keeps `#include "ui_profile_panel.h"` because that's the
+   renderer.
 4. Add `prof.{h,c}` to the Makefile object lists (sample,
    test-stubs, bench).
 5. Update `MODULES.md`: add `prof` to the layer table — it's a
@@ -392,104 +433,54 @@ starts. Profiling primitives are generic instrumentation, not UI.
    layered groups (similar to `gl_stub_counts`). Update
    `ARCHITECTURE.md` ownership list with a `prof.c` bullet.
 
-**Why this is a Phase 1 prerequisite:** once 11f's
-`make check-layer-coupling` grep guard lands, every
-`scene_*.c → ui_profile_panel.h` include shows up as a violation.
-Extracting prof first means the guard can be unconditional rather
-than carrying a per-file exception list for each prof-bracketed
-helper.
-
 **Verify:** `make test-stubs TEST_JOBS=4` (every TU using prof
 brackets must still link); `make sample && ./sample`; toggle the
 profile HUD and confirm timings still populate.
 
-##### 11.0b. Naming pass on the files about to be edited
-
-**Decision:** the broader naming/comment pass described in
-[`feature/repl-cleanup.md` §10](./repl-cleanup.md) ("Final
-naming/comment pass") is a Phase 10 concern in the strategic plan.
-Doing the *full* pass before Phase 2 here would inflate the slice.
-But each Phase 2 sub-step (11a-11f) edits a small set of files, and
-landing those moves on top of inconsistent local names produces
-diffs that are harder than necessary to review.
-
-**Approach:** before each Phase 2 sub-step, run a focused naming
-pass on **only the files that sub-step touches**, following the
-conventions from `feature/repl-cleanup.md` §10:
-
-- `*_idx` for indexes, `*_count` for counts (e.g. rename `i`,
-  `n`, `cnt` style locals when the rename clarifies intent at
-  function-call sites).
-- `source_line_idx`, `flat_cmd_idx`, `indent_cols`,
-  `visible_line_count`, `command_store`, `render_config`,
-  `workspace_dir` are the canonical names — adopt them where
-  encountered.
-- Remove stale comments and vague TODOs in the touched files.
-  Real defects become tracked items; speculative comments are
-  deleted.
-- Do **not** rename across files outside the sub-step's edit scope.
-  The full project-wide naming sweep stays at Phase 10.
-
-**Why this is a Phase 1 prerequisite:** the GL-isolation moves in
-Phase 2 will rewrite call sites and signatures of helpers like
-`apply_transform_cmd`, `_repl_point_size`, `begin_2d`,
-`execute_replay_fade_batches`. Doing the rename in the same commit
-muddies the diff; doing it after means re-touching the same lines
-twice. A pre-slice rename pass on the touched files is the cheapest
-ordering.
-
-**Steps for each Phase 2 sub-step (executed inline before the move
-itself, but split into a separate `refactor:` commit):**
-
-1. List the files the sub-step will edit (grep for callers of the
-   functions being moved).
-2. Apply the §10 naming conventions to those files only.
-3. Run `make test-stubs TEST_JOBS=4` — must stay green.
-4. Commit as `refactor: normalize names in <file list> for §11<x>
-   prep`.
-5. Land the GL-isolation move in the next commit.
-
-**Verify per slice:** `make test-stubs TEST_JOBS=4` after the
-naming commit and again after the move commit; the rename commit
-should be a pure rename (no logic changes), and the move commit
-should be a pure move (no rename creep).
-
----
-
-#### Phase 2 — GL-isolation moves
-
-11a through 11f below are the GL-isolation sub-steps that depend on
-Phase 1.
-
 #### 11a. Extract generic 2D helpers into a project-agnostic header library; hoist accumulation-AA into `render_3d_scene()`; keep `repl_core.c` as orchestrator
+
+**Problem.** `display_func()` in `repl_core.c` currently owns
+2D-helper definitions (`begin_2d`/`end_2d`/`draw_quad`/`draw_string`),
+the accumulation-AA jitter loop, the per-frame `glViewport` calls,
+`glutSwapBuffers`, and `init_gl()`'s ambient-light setup. None of
+that is orchestration — it's render-internal work leaking into the
+master. Trim `repl_core.c` to a pure orchestrator: dirty-bit
+handling + model bookkeeping + dispatch into `render_3d_scene()`
+and the 2D overlay sequence.
 
 **Layering check (verified):**
 
 - No `ui_*.c` includes any `scene_*.h`.
-- The only `scene_*` → `ui_*` coupling is `scene_render.c` reading
-  `scene_rect()` and `ui_profile_panel.h` for layout coordinates — a
-  read-only query, not render dispatch.
-- `repl_core.c`'s `display_func()` is the single master that calls
-  `render_3d_scene()` then the 2D `render_*` helpers in order; neither
-  layer reaches sideways into the other.
+- After 11.0a, the only `scene_*` → `ui_*` coupling is
+  `scene_render.c` reading `scene_rect()` from `ui_panels.h` (a
+  read-only layout query, not render dispatch).
+- `repl_core.c`'s `display_func()` is the single master; neither
+  rendering layer reaches sideways into the other.
 
-The 2D helpers (`begin_2d`/`end_2d`/`draw_quad`/`draw_string`) are
-*generic fixed-function GL utilities* — they don't carry any REPL
-domain knowledge once `end_2d`'s lighting query is replaced with a
-plain `glPushAttrib`/`glPopAttrib` bracket. The right answer is
-neither "duplicate per layer" nor "move into one layer and force a
-dependency"; it's **extract into a project-agnostic header-only
-library under `include/`** alongside `gl_includes.h`, `stb_image.h`,
-and `utils.h`. The project's CLAUDE.md explicitly endorses extending
-that library set ("Extending these libraries is allowed").
+The 2D helpers are *generic fixed-function GL utilities* once
+`end_2d`'s lighting query is replaced with a plain
+`glPushAttrib`/`glPopAttrib` bracket. The right home is neither
+"duplicate per layer" nor "move into one layer and force a
+dependency"; it's **extract into `include/gl_2d.h`**, a
+project-agnostic header-only library alongside `gl_includes.h`,
+`stb_image.h`, and `utils.h`. CLAUDE.md endorses extending that
+library set. Both `scene_*` and `ui_*` `#include <gl_2d.h>`;
+pure-model `repl_*` files don't include it (they don't draw).
 
-Both `scene_*` and `ui_*` then `#include <gl_2d.h>` from the shared
-include path. There's no cross-layer coupling because the include
-target is a third-party-style utility, not a sibling layer's header.
-Pure-model `repl_*` files don't include it (they don't draw), which
-preserves the GL-isolation rule.
+**Files this slice touches:** `include/gl_2d.h` (new),
+`repl_core.c`, `sample.c`, `sample.h`, `scene_render.c`,
+`scene_grid.c`, `scene_lights.c`, `ui_panels.c`, `ui_menu_bar.c`,
+`ui_color_picker.c`, `ui_help_overlay.c`, `ui_variable_panel.c`,
+`ui_autocomplete_panel.c`, `ui_profile_panel.c`, `MODULES.md`,
+`ARCHITECTURE.md`, `CLAUDE.md`.
 
-**Steps:**
+**Naming pass (separate `refactor:` commit, lands before the
+move).** Focused rename on the files listed above, applying §10
+conventions to touched lines. Pure rename, no logic changes.
+`make test-stubs TEST_JOBS=4` stays green. Commit as
+`refactor: normalize names for §11a prep`.
+
+**Move (the second `refactor:` commit):**
 
 1. **Create `include/gl_2d.h`.** Header-only, `static inline`, no
    project state. Public API:
@@ -594,49 +585,62 @@ preserves the GL-isolation rule.
      (`replay_restore_baseline_predef_values()`) currently sits inside the
      loop at the same nesting — keep it inside the inner per-sample step
      so behavior is unchanged.
-   - The PROF section bracketing (`PROF_SCENE_3D` plus the
-     `prof_accum_reset`/`prof_accum_commit` for `PROF_SCENE_3D_SETUP..HUD`)
-     is render-internal too — move the reset/commit pair inside
-     `render_3d_scene()` along with the loop. Keep `PROF_SCENE_3D`
-     begin/end in `display_func()` if you want one frame-level entry, or
-     move it inside too — pick whichever keeps the existing flame chart
-     readable (decision: keep frame-level entry in `display_func()`,
-     see decision #5 below).
+   - **Profiling layout stays as-is.** Do *not* move any prof
+     brackets. `prof_begin(PROF_SCENE_3D)` /
+     `prof_end(PROF_SCENE_3D)` keep their frame-level position in
+     `display_func()`; the inner `PROF_SCENE_3D_SETUP..HUD`
+     reset/commit pair stays where it currently sits. This slice is
+     about GL isolation, not profiling layout — keeping prof
+     untouched preserves the existing flame chart and limits the
+     diff. (The prof primitives themselves were extracted into
+     `prof.h` in 11.0a; this step only moves GL calls.)
    - After the move, `display_func()` calls `render_3d_scene()` once,
      period. No knowledge of accumulation.
 
-6. **Trim `display_func()` to pure orchestration.** What remains in
+6. **Trim `display_func()` to pure orchestration.** What stays in
    `repl_core.c` after step 5:
 
-   - autonormal/flatten dirty-bit handling (model bookkeeping — stays),
-   - replay PC clamp via `repl_state_flat_program_set_count(...)` (model —
+   - autonormal/flatten dirty-bit handling (model bookkeeping —
      stays),
-   - `update_render_state_strings()` / `update_cam_lines()` (string
-     scaffold — stays),
+   - replay PC clamp via `repl_state_flat_program_set_count(...)`
+     (model — stays),
+   - `update_render_state_strings()` / `update_cam_lines()` calls
+     (string scaffold — **stays where it is**; these live in
+     `repl_export.c`, produce text scaffold not GL, and have other
+     non-display callers. Not a GL-refactor concern; flagged so the
+     implementer doesn't get distracted),
    - per-frame predef-value snapshot/restore (model — stays),
    - one call to `render_3d_scene()`,
    - the 2D overlay sequence (`render_code_panel`,
      `ui_autocomplete_panel_render`, `render_example_dropdown`,
      `render_var_panel`, `render_scene_status`, `render_help`,
-     `render_profile_panel`),
-   - `glutSwapBuffers()` and the bracket `glViewport` calls.
+     `render_profile_panel`).
 
-   Move the two `glViewport(0, 0, window_w, window_h)` calls
-   (`repl_core.c:624,677`) and `glutSwapBuffers()` (`:697`) out:
+   What moves out:
 
-   - The 3D-side `glViewport` at `:624` becomes the first line of
+   - The 3D-side `glViewport(0, 0, window_w, window_h)` at
+     `repl_core.c:624` becomes the first line of
      `render_3d_scene()`.
-   - The 2D-side `glViewport` at `:677` becomes the first line of
-     `render_code_panel()`. This mirrors `render_3d_scene()` setting
-     its own viewport, so each renderer states explicitly what
-     viewport it draws into. Subsequent 2D overlays (autocomplete,
-     dropdown, var panel, help, profile) inherit that viewport,
-     which matches today's behavior. Document the convention in
-     `render_code_panel()`'s top-of-function comment.
-   - `glutSwapBuffers()` is GLUT framework plumbing, not GL drawing.
-     Move to `sample.c`'s `display_func()` GLUT wrapper, right after
-     `repl_display_func()` returns. That keeps the buffer swap at the
-     GLUT-callback boundary, which is its natural home.
+   - The 2D-side `glViewport` at `repl_core.c:677` becomes the
+     first line of `render_code_panel()`. This mirrors
+     `render_3d_scene()` setting its own viewport — each renderer
+     states explicitly what viewport it draws into. Subsequent 2D
+     overlays (autocomplete, dropdown, var panel, help, profile)
+     inherit that viewport, which matches today's behavior. No new
+     `ui_panels_begin_overlays()` helper is introduced. Document
+     the convention in `render_code_panel()`'s top-of-function
+     comment.
+   - `glutSwapBuffers()` at `repl_core.c:697` is GLUT framework
+     plumbing, not GL drawing. Move to `sample.c`'s GLUT
+     `display_func()` wrapper, right after `repl_display_func()`
+     returns. That keeps the buffer swap at the GLUT-callback
+     boundary, which is its natural home.
+
+   **Keep the `repl_display_func()` wrapper.** After this slice,
+   `repl_display_func()` is a one-liner that just dispatches to
+   the orchestrator body. Keep the wrapper anyway — it preserves
+   `repl_core.c`'s public-API role (`sample.c` only knows about
+   `repl_*`, not `scene_render.h`).
 
 7. **Move `init_gl`'s `glLightModelfv` into `scene_render.c → scene_lights.c`.**
    Add a `scene_render_init_gl()` (one-shot) in `scene_render.c`,
@@ -675,276 +679,376 @@ preserves the GL-isolation rule.
 **Verify:** `make test-stubs TEST_JOBS=4`; `make sample && ./sample`,
 load examples 0-15, F12 cycle, replay a fade-heavy example with
 accumulation AA on (default) and off (`--noaccum`) — the AA jitter
-loop is the highest-risk piece. Confirm `glutSwapBuffers` still runs
-exactly once per frame (a quick `printf` instrumented in
+loop is the highest-risk piece. Confirm `glutSwapBuffers` still
+runs exactly once per frame (a quick `printf` instrumented in
 `sample.c`'s wrapper, removed before commit, is the easiest check).
-After the move, A/B against the pre-refactor binary on the replay HUD
-and ruler-grid labels — those are the two `scene_*` callers of
-`begin_2d`/`draw_string` and the ones most likely to drift.
+A/B against the pre-refactor binary on the replay HUD and
+ruler-grid labels — those are the two `scene_*` callers of the old
+`begin_2d`/`draw_string` and the most likely places visual output
+could drift. `make test_ui` should pass unchanged (it exercises
+`render_help()` and other public `ui_*` renderers; the `gl2d_*`
+rename is internal to those renderers).
 
 #### 11b. Move tessellation/GLU resources into `repl_executor.c`
 
-**Layering check:** `gluSphere`, `gluCylinder`, `gluDisk`, `gluPartialDisk`,
-`gluTessBeginPolygon`, `gluTessVertex`, etc. are all called from
-`repl_executor.c` — the executor is the *only* consumer of `g_quadric` /
-`g_tess`. No `scene_*` or `ui_*` module reads these resources. Putting them
-in a `scene_resources.c` would force `repl_executor.c` to include
-`scene_*.h`, which inverts the layering (executor is the pipeline layer
-*below* scene rendering — scene calls executor, not the other way around).
+**Problem.** `repl_state.c` owns the static `g_quadric` / `g_tess`
+storage, the 5 GLU tess callbacks, and the
+`gluNewQuadric`/`gluNewTess` bootstrap pair. `repl_state.c` is the
+typed runtime-state facade — it should own *storage*, not GL
+resource lifetimes.
 
-The right home is `repl_executor.c` itself: it's the sole caller of GLU
-drawing APIs, so it should own the GLU resources too.
+**Layering check.** `gluSphere`, `gluCylinder`, `gluDisk`,
+`gluPartialDisk`, `gluTessBeginPolygon`, `gluTessVertex`, etc. are
+all called from `repl_executor.c` — the executor is the *only*
+consumer of `g_quadric` / `g_tess`. No `scene_*` or `ui_*` module
+reads these resources. The right home is `repl_executor.c`
+itself: putting them in a hypothetical `scene_resources.c` would
+force `repl_executor.c` to include `scene_*.h`, inverting the
+layering (the executor is the pipeline layer below scene
+rendering — scene calls executor, not the other way around).
 
-Steps:
+**Files this slice touches:** `repl_state.{c,h}`,
+`repl_executor.{c,h}`, `repl_core.c` (one caller), `sample.c`
+(one teardown caller), `MODULES.md`, `ARCHITECTURE.md`.
+
+**Naming pass (separate `refactor:` commit, lands before the
+move).** Focused rename on the files listed above, applying §10
+conventions to touched lines. Pure rename, no logic changes.
+`make test-stubs TEST_JOBS=4` stays green. Commit as
+`refactor: normalize names for §11b prep`.
+
+**Move (the second `refactor:` commit):**
 
 1. Move from `repl_state.c` into `repl_executor.c`:
    - the static `g_quadric`, `g_tess`, `g_tess_verts[]`,
-     `g_tess_vert_count` storage (`repl_state.c` definitions and the
-     externs in `repl_state.h`),
+     `g_tess_vert_count` storage (and corresponding externs in
+     `repl_state.h`),
    - the 5 tess callbacks `repl_render_tess_vtx_begin_cb`,
      `repl_render_tess_vtx_end_cb`, `repl_render_tess_vtx_cb`,
      `repl_render_tess_comb_cb`, `repl_render_tess_err_cb`
      (`repl_state.c:389-450ish`),
    - `repl_state_render_init_resources()` and
-     `repl_state_render_destroy_resources()` (`repl_state.c:1066-1106`).
-2. Rename the public entrypoints to match the executor module
-   (`repl_executor_init_resources()` /
-   `repl_executor_destroy_resources()`) in `repl_executor.h`. Update the
-   two callers: `repl_init_gl()` in `repl_core.c` (now calls
-   `repl_executor_init_resources()`) and the destroy site in `sample.c`.
+     `repl_state_render_destroy_resources()`
+     (`repl_state.c:1066-1106`).
+2. **Hard rename, no compat shim.** Rename the public entrypoints
+   to `repl_executor_init_resources()` /
+   `repl_executor_destroy_resources()` in `repl_executor.h`.
+   Update both callers in the same commit: `repl_init_gl()` in
+   `repl_core.c` and the teardown site in `sample.c`. No alias
+   layer — two callers is too few to justify the overhead.
 3. Internal access to `g_quadric` / `g_tess` is now file-static in
-   `repl_executor.c` — no header export needed. If anything outside the
-   executor ever needs them in future, expose typed getters rather than
-   re-introducing externs.
-4. After the move, `repl_state.c` should have **zero** live GL/GLU calls.
-   The string-literal hits at `repl_state.c:178-186` (the
-   `g_render_state_lines` / camera scaffold strings) are not live calls
-   and stay where they are.
-5. `repl_state.h` loses the `g_quadric` / `g_tess` / `g_tess_verts` /
-   `g_tess_vert_count` externs and the `TessVertex` typedef if no other
-   module references it (grep first — `TessVertex` may be referenced in
-   tests).
-6. Stubs in `include/GL/glu.h` are unchanged — the GLU symbols already
-   linked in `repl_state.c`'s build now link in `repl_executor.c`'s
-   instead. The `USE_GL_STUBS=1` build needs no stub additions, just
-   the moved object file.
+   `repl_executor.c`. No header export needed. If anything outside
+   the executor ever needs them in future, expose typed getters
+   rather than re-introducing externs.
+4. **Leave `TessVertex` in `repl_state.h` for now.** The typedef
+   is referenced by `repl_executor.c` (the dispatch path at
+   `repl_executor.c:328-334`) and emitted as a string by
+   `repl_export.c:1529-1543`. Moving it is unnecessary churn for
+   this slice — revisit only if a later state-clustering refactor
+   wants the type local to its consumer.
+5. After the move, `repl_state.c` should have **zero** live GL/GLU
+   calls. The string-literal hits at `repl_state.c:178-186` (the
+   `g_render_state_lines` / camera scaffold strings) are not live
+   calls and stay where they are.
+6. `repl_state.h` loses the `g_quadric` / `g_tess` / `g_tess_verts`
+   / `g_tess_vert_count` externs (but keeps `TessVertex`, per
+   step 4).
+7. Stubs in `include/GL/glu.h` are unchanged — the GLU symbols
+   already linked in `repl_state.c`'s build now link in
+   `repl_executor.c`'s instead. The `USE_GL_STUBS=1` build needs
+   no stub additions, just the moved object file.
 
-**Verify:** `make test-stubs TEST_JOBS=4` (the tess callbacks must still
-link in stub mode); `make sample && ./sample`; load an example that
-exercises tessellation (the polygon-with-holes tess examples) and one
-that exercises quadrics (`gluSphere`/`gluCylinder` calls); confirm exit
-cleanly via window close so `repl_executor_destroy_resources()` fires.
+**Verify:** `make test-stubs TEST_JOBS=4` (the tess callbacks must
+still link in stub mode); `make sample && ./sample`; load an
+example that exercises tessellation (the polygon-with-holes tess
+examples) and one that exercises quadrics
+(`gluSphere`/`gluCylinder` calls); exit cleanly via window close
+so `repl_executor_destroy_resources()` fires.
 
 #### 11c. Replace inline GL helpers in `sample.h` with `repl_executor.h` exports
 
-`sample.h` is supposed to be the shared *types* and compatibility header.
-Inline helpers that expand to GL calls in every translation unit pull GL
-symbols into every `.c` that includes `sample.h`, defeating the layering.
+**Problem.** `sample.h` is the shared *types* and compatibility
+header, but it currently defines `static inline` helpers that
+expand to GL calls in every translation unit:
+`apply_transform_cmd`, `apply_tracked_transform_cmd`,
+`unwind_tracked_transform_stack` (`sample.h:296-333`), and the
+`_repl_point_size` `NO_POINT_PARAMETER` shim (`sample.h:386-395`).
+Every `.c` including `sample.h` then drags GL symbols into its TU,
+defeating the layering rule.
 
-**Layering check:** `apply_transform_cmd` and `apply_tracked_transform_cmd`
-are called by `repl_executor.c` (dispatch) and by two `scene_*` modules
+**Layering check.** `apply_transform_cmd` and
+`apply_tracked_transform_cmd` are called by `repl_executor.c`
+(dispatch) and by two `scene_*` modules
 (`scene_transform_guides.c`'s `compute_before_cursor_matrix`,
 `scene_overlays.c`'s flat-cmd walk). `scene_*` already includes
-`repl_executor.h` (because `scene_render.c` calls `repl_execute_program`),
-so the dependency direction is **scene → executor** — pipeline-below-scene,
-which matches the layering. No new coupling is introduced by exporting
-these from `repl_executor.h`. There is no `ui_*` consumer.
+`repl_executor.h` (because `scene_render.c` calls
+`repl_execute_program`), so the dependency direction is
+**scene → executor** — pipeline-below-scene, which matches the
+layering. No new coupling is introduced by exporting these from
+`repl_executor.h`. There is no `ui_*` consumer.
 
-Steps:
+**Files this slice touches:** `sample.h`, `repl_executor.{c,h}`,
+`scene_transform_guides.c`, `scene_overlays.c`, `MODULES.md`,
+`ARCHITECTURE.md`.
 
-1. Keep `is_transform_cmd` where it is — it's a pure command-classifier
-   with no GL, so it can stay in `sample.h` or move to `repl_executor.h`
-   if you prefer. No behavior risk.
+**Naming pass (separate `refactor:` commit, lands before the
+move).** Focused rename on the files listed above, applying §10
+conventions to touched lines. Pure rename, no logic changes.
+`make test-stubs TEST_JOBS=4` stays green. Commit as
+`refactor: normalize names for §11c prep`.
+
+**Move (the second `refactor:` commit):**
+
+1. Keep `is_transform_cmd` where it is — it's a pure
+   command-classifier with no GL, so it can stay in `sample.h` or
+   move to `repl_executor.h` if you prefer. No behavior risk.
 2. Move `apply_transform_cmd`, `apply_tracked_transform_cmd`, and
    `unwind_tracked_transform_stack` (`sample.h:296-333`) into
-   `repl_executor.c` and export from `repl_executor.h`. Convert from
-   `static inline` to ordinary functions. Call sites:
-   - `repl_executor.c`'s own dispatch — was inline-via-include, becomes a
-     direct call within the same TU.
-   - `scene_transform_guides.c` `compute_before_cursor_matrix` — already
-     includes `repl_executor.h` transitively; no new coupling.
+   `repl_executor.c` and export from `repl_executor.h`. Convert
+   from `static inline` to ordinary functions. Call sites:
+   - `repl_executor.c`'s own dispatch — was inline-via-include,
+     becomes a direct call within the same TU.
+   - `scene_transform_guides.c` `compute_before_cursor_matrix` —
+     already includes `repl_executor.h` transitively; no new
+     coupling.
    - `scene_overlays.c` flat-walk — same.
-3. Replace `_repl_point_size` (`sample.h:386-395`) with a static helper
-   inside `repl_executor.c` and scope the `glPointSize` macro override to
-   that TU only:
-   - Move the `#ifdef NO_POINT_PARAMETER` block out of `sample.h` and
-     into `repl_executor.c`. The override is for the `case CMD_POINT_SIZE:`
-     dispatch path only — that's the only *user-facing* `glPointSize`
-     issued by the REPL language.
+3. Replace `_repl_point_size` (`sample.h:386-395`) with a static
+   helper inside `repl_executor.c` and scope the `glPointSize`
+   macro override to that TU only:
+   - Move the `#ifdef NO_POINT_PARAMETER` block out of `sample.h`
+     and into `repl_executor.c`. The override is for the
+     `case CMD_POINT_SIZE:` dispatch path only — that's the only
+     *user-facing* `glPointSize` issued by the REPL language.
    - All other `glPointSize` call sites in `scene_*` modules
-     (`scene_geometry_guides.c`, `scene_overlays.c`, `scene_axes.c`,
-     `scene_lights.c`) are render-internal helpers that already chose
-     their own size and don't want the attenuation hack — confirmed by
-     the comment at `sample.h:386-395`. Scoping the shim to the executor
-     is a behavior-preserving win.
-4. Drop `#include <gl_includes.h>` from `sample.h` if it survives only to
-   make these inline GL helpers compile. Keep it if `GLfloat`/`GLenum`
-   still appear in struct types (`GLCmd`). Verify by trial removal +
-   `make sample USE_GL_STUBS=1` link.
-5. `sample.h`'s GL-call grep should hit zero after the move.
+     (`scene_geometry_guides.c`, `scene_overlays.c`,
+     `scene_axes.c`, `scene_lights.c`) are render-internal
+     helpers that already chose their own size and don't want
+     the attenuation hack — confirmed by the comment at
+     `sample.h:386-395`. Scoping the shim to the executor is a
+     behavior-preserving win.
+4. **Leave `gl_includes.h` in `sample.h`.** It is required —
+   `sample.h` declares `GLfloat`, `GLenum`, and `GLCmd` (which
+   contains GL types). The point of 11c is to keep
+   `static inline` GL *function calls* from expanding into every
+   TU; type declarations are fine. Do not attempt trial removal —
+   the include is load-bearing.
+5. After the move, `sample.h`'s GL-call grep should hit zero
+   (only type uses remain). `sample.h`'s line count drops by the
+   ~50 lines of inline helpers + macro shim.
 
 **Verify:** `make test-stubs TEST_JOBS=4`; build all three flag
 combinations: `make sample`, `make sample USE_GL_STUBS=1`, and
-`make sample NO_POINT_PARAMETER=1` (the punch-list intersection). Run
-`./bench_repl fade_batches` — it exercises tracked transforms via the
-executor and the scene_* walkers.
+`make sample NO_POINT_PARAMETER=1` (the punch-list intersection).
+Run `./bench_repl fade_batches` — it exercises tracked transforms
+via the executor and the scene_* walkers.
 
 #### 11d. Move replay-fade GL pass into `scene_render.c`
 
-**Layering check:** the fade pass is pure 3D scene rendering — no `ui_*`
-involvement. `scene_render.c` already calls `execute_replay_fade_batches()`
-from inside its frame, and the layering rule (master `repl_*` calls down
-into `scene_*`/`ui_*` renderers) is preserved by having `repl_replay.c`
-expose model data that `scene_render.c` reads. Direction stays:
-**scene → replay model** (read-only, fade-batch ring + alpha math).
+**Problem.** `repl_replay.c` should be the replay *model* (state
+machine, fade-batch ring, alpha math, PC tracking). The actual GL
+pass at `repl_replay.c:773-809` (push/pop attrib, lighting/blend
+setup, `glColor4f`, push/pop matrix wrapping the executor call) is
+render-side work in the wrong file.
 
-Steps:
+**Layering check.** The fade pass is pure 3D scene rendering — no
+`ui_*` involvement. `scene_render.c` already calls
+`execute_replay_fade_batches()` from inside its frame, so moving
+the GL pass there preserves the layering: `scene_render.c` reads
+model data from `repl_replay.c`. Direction stays
+**scene → replay model** (read-only).
+
+**Files this slice touches:** `repl_replay.{c,h}`,
+`scene_render.{c,h}`, `bench_repl.c`, `sample.h`, `MODULES.md`,
+`ARCHITECTURE.md`.
+
+**Naming pass (separate `refactor:` commit, lands before the
+move).** Focused rename on the files listed above, applying §10
+conventions to touched lines. Pure rename, no logic changes.
+`make test-stubs TEST_JOBS=4` stays green. Commit as
+`refactor: normalize names for §11d prep`.
+
+**Move (the second `refactor:` commit):**
 
 1. Split `execute_replay_fade_batches()` into two halves:
    - **Model side** (stays in `repl_replay.c`): the `skip_limits[]`
-     computation loop at lines 735-771 — pure data, no GL. Expose as
-     `replay_compute_fade_skip_limits(int *out_limits, int max_count)`
+     computation loop at lines 735-771 — pure data, no GL. Expose
+     as `replay_compute_fade_skip_limits(int *out_limits, int max_count)`
      returning the actual count. Also keep `replay_batch_alpha()`,
-     `repl_execute_set_fade_context()`, and `replay_has_active_fades()`
-     where they are.
-   - **Render side** (moves to `scene_render.c` as a new static
+     `repl_execute_set_fade_context()`, and
+     `replay_has_active_fades()` where they are.
+   - **Render side** (moves to `scene_render.c` as a new
      `render_replay_fade_pass()` adjacent to the existing fade-pass
-     setup at `scene_render.c:512-530`): the `glPushAttrib` / per-batch
-     `glDisable(GL_LIGHTING)` / `glEnable(GL_BLEND)` / `glBlendFunc` /
-     `glPolygonMode` / `glColor4f` / `glPushMatrix` / `glPopMatrix` /
-     `glPopAttrib` block plus the per-batch
+     setup at `scene_render.c:512-530`): the `glPushAttrib` /
+     per-batch `glDisable(GL_LIGHTING)` / `glEnable(GL_BLEND)` /
+     `glBlendFunc` / `glPolygonMode` / `glColor4f` / `glPushMatrix`
+     / `glPopMatrix` / `glPopAttrib` block plus the per-batch
      `repl_execute_program(&exec_options)` call.
-2. The existing fade-pass setup in `scene_render.c:512-530` already
-   primes lighting, blend, and polygon mode, then immediately calls
-   `execute_replay_fade_batches()`. After the move, both blocks live in
-   one place — collapse the duplicated setup so we only set blend/
-   polygon mode once around the loop, not once per batch. This is the
-   payoff for moving the code.
-3. Delete the now-empty `execute_replay_fade_batches()` wrapper from
-   `sample.h:375` and `repl_replay.h:29`. Callers:
-   - `scene_render.c` calls the new static `render_replay_fade_pass()`
-     directly — no public API needed.
-   - `bench_repl.c:549` calls `execute_replay_fade_batches()` for its
-     GL-call count harness. The bench is a *test harness* that needs to
-     drive the GL pass without `scene_render.c`'s frame setup. Two
-     options:
-     - **Preferred:** move the bench's fade-batch driver to call the new
-       `render_replay_fade_pass()` directly — exposed via
-       `scene_render.h` solely for the bench. Keep the function `static`
-       within `scene_render.c` for normal builds, expose only behind
-       `#ifdef BENCH_REPL_HARNESS` (or via a separate
-       `scene_render_test.h` linked only by the bench). This preserves
-       the master/slave rule for normal builds.
-     - **Fallback:** keep a thin `execute_replay_fade_batches()` in
-       `repl_replay.c` that delegates to the new
-       `render_replay_fade_pass()` — but that re-introduces the upward
-       call (replay → scene render). Avoid unless the bench-only
-       exposure proves intractable.
-   - The bench's stdout strings at `bench_repl.c:531,564` reference
-     `execute_replay_fade_batches` — update them to name the new
-     entrypoint so log readers can find the symbol.
-4. After the move, `repl_replay.c` should have **zero** live GL calls.
-   `repl_replay.h` should drop any `gl_includes.h` include if no
-   remaining declaration needs it.
+2. The existing fade-pass setup in `scene_render.c:512-530`
+   already primes lighting, blend, and polygon mode, then
+   immediately calls `execute_replay_fade_batches()`. After the
+   move, both blocks live in one place — collapse the duplicated
+   setup so we only set blend/polygon mode once around the loop,
+   not once per batch. This is the payoff.
+3. Delete the now-empty `execute_replay_fade_batches()` wrapper
+   from `sample.h:375` and `repl_replay.h:29`. Callers:
+   - `scene_render.c` calls `render_replay_fade_pass()` directly.
+   - `bench_repl.c:549` calls `execute_replay_fade_batches()` for
+     its GL-call count harness — it needs to drive the fade pass
+     without the surrounding frame setup. **Decision: expose
+     `render_replay_fade_pass()` from `scene_render.h`
+     unconditionally.** Do not gate it behind
+     `#ifdef BENCH_REPL_HARNESS` or any other compile flag. The
+     bench is part of the source tree, just a different
+     entrypoint that drives one render pass. Conditional public
+     declarations split readers between two interpretations of
+     the same header. The upward-shim alternative (a thin
+     `execute_replay_fade_batches()` shim in `repl_replay.c`
+     delegating to scene) is rejected because it re-introduces
+     `replay → scene_render` upward coupling.
+   - The bench's stdout strings at `bench_repl.c:531,564`
+     reference `execute_replay_fade_batches` — update them to
+     name the new entrypoint so log readers can find the symbol.
+4. After the move, `repl_replay.c` should have **zero** live GL
+   calls. `repl_replay.h` should drop any `gl_includes.h` include
+   if no remaining declaration needs it.
 
 **Verify:** `make test-stubs TEST_JOBS=4`; the bench harness
-`./bench_repl fade_batches` GL-call count should be **strictly less
-than or equal to** the pre-refactor number (the per-batch redundant
-`glDisable(GL_LIGHTING)`/`glEnable(GL_BLEND)`/`glBlendFunc`/
-`glPolygonMode` calls collapse to one). Capture the before/after counts
-in the commit message. `make sample && ./sample`: load an example with
-heavy geometry, Ctrl+G to start replay, hold Right arrow — the trailing
-ghost should look identical.
+`./bench_repl fade_batches` GL-call count should be **strictly
+less than or equal to** the pre-refactor number (the per-batch
+redundant `glDisable(GL_LIGHTING)`/`glEnable(GL_BLEND)`/
+`glBlendFunc`/`glPolygonMode` calls collapse to one). Capture the
+before/after counts in the commit message.
+`make sample && ./sample`: load an example with heavy geometry,
+Ctrl+G to start replay, hold Right arrow — the trailing ghost
+should look identical.
 
 #### 11e. Funnel `repl_editor.c` and `repl_actions.c` GLUT calls through helpers
 
-**Layering note:** GLUT input/feedback (post-redisplay, cursor, modifiers)
-is editor/input layer, not rendering. No `scene_*`/`ui_*` coupling
-involved. This step is unchanged by the layering rule — included here
-for completeness.
+**Problem.** `repl_editor.c` makes ~22 direct GLUT calls
+(`glutPostRedisplay`, `glutSetCursor`, `glutGetModifiers`), and
+`repl_actions.c:169` makes one (`glutGetModifiers` for a SHIFT
+check). GLUT input/feedback isn't GL drawing, but the call sites
+should still be funnelled through one helper per primitive so the
+GLUT surface is reviewable in one place and `repl_actions.c` stops
+including `<GL/freeglut.h>` directly.
 
-Steps:
+**Layering check.** GLUT input/feedback (post-redisplay, cursor,
+modifiers) is editor/input layer, not rendering. No
+`scene_*`/`ui_*` coupling involved.
+
+**Files this slice touches:** `repl_editor.{c,h}`, `repl_actions.c`,
+`MODULES.md`, `ARCHITECTURE.md`.
+
+**Naming pass (separate `refactor:` commit, lands before the
+move).** Focused rename on the files listed above, applying §10
+conventions to touched lines. Pure rename, no logic changes.
+`make test-stubs TEST_JOBS=4` stays green. Commit as
+`refactor: normalize names for §11e prep`.
+
+**Move (the second `refactor:` commit):**
 
 1. Add two helpers to `repl_editor.c` (private — just `static`):
    - `static void editor_request_redraw(void)` wrapping
      `glutPostRedisplay()`.
    - `static void editor_set_cursor(int cursor)` wrapping
      `glutSetCursor()`.
-   Replace all 21 `glutPostRedisplay()` / `glutSetCursor(...)` call sites
-   inside `repl_editor.c` with the helpers. There is no cross-module API
-   change; this is purely a single-funnel refactor.
-2. The two `glutGetModifiers()` queries — one in `repl_editor.c:75`, one
-   in `repl_actions.c:169` — are GLUT inputs, not drawing. Move them
-   behind a single helper `repl_editor_active_modifiers()` exported from
-   `repl_editor.h`. `repl_actions.c` calls the helper instead of
-   including GLUT headers directly. After this, `repl_actions.c` has
-   zero `gl[uU][A-Z]` matches.
-3. Update the "Naming Notes" exception list in `MODULES.md:359-365` to
-   mention that `repl_editor.c` calls GLUT *input/feedback* APIs
-   through the funnel helpers and that this is the only `repl_*` file
-   allowed to include `<GL/freeglut.h>` for input — distinct from the
-   `repl_executor.c` exception, which is allowed to call GL drawing APIs.
+   Replace all 21 `glutPostRedisplay()` / `glutSetCursor(...)`
+   call sites inside `repl_editor.c` with the helpers. There is
+   no cross-module API change; this is purely a single-funnel
+   refactor.
+2. The two `glutGetModifiers()` queries — one in
+   `repl_editor.c:75`, one in `repl_actions.c:169` — are GLUT
+   inputs, not drawing. Move them behind a single helper
+   `repl_editor_active_modifiers()` exported from `repl_editor.h`.
+   `repl_actions.c` calls the helper instead of including GLUT
+   headers directly. After this, `repl_actions.c` has zero
+   `gl[uU][A-Z]` matches.
+3. Update the "Naming Notes" exception list in `MODULES.md:359-365`
+   to mention that `repl_editor.c` calls GLUT *input/feedback*
+   APIs through the funnel helpers and that this is the only
+   `repl_*` file allowed to include `<GL/freeglut.h>` for input —
+   distinct from the `repl_executor.c` exception, which is
+   allowed to call GL drawing APIs.
 
-**Verify:** `make test-stubs TEST_JOBS=4`; `./sample` cursor changes
-across the code-panel resize divider, undo/redo redraws, scrolling
-redraws, and SHIFT-clicking the time toggle (Ctrl+T with SHIFT) all
-behave as before.
+**Verify:** `make test-stubs TEST_JOBS=4`; `./sample` cursor
+changes across the code-panel resize divider, undo/redo redraws,
+scrolling redraws, and SHIFT-clicking the time toggle (Ctrl+T
+with SHIFT) all behave as before.
 
 #### 11f. Lock both boundaries with grep guards
 
-After 11a-11e land, two rules are enforceable:
+**Problem.** Without an enforcement mechanism, the rules from
+11.0a-11e will erode the next time someone adds a quick GL call
+in the wrong file. Two rules are now enforceable:
 
 - **GL/GLUT layer rule:** only `scene_*.c`, `ui_*.c`, and
-  `repl_executor.c` issue GL/GLU drawing calls; only `sample.c` and
-  `repl_editor.c` issue GLUT input/feedback calls.
-- **Cross-layer coupling rule:** `ui_*` and `scene_*` do not include
-  each other's headers (with one grandfathered exception — see below).
+  `repl_executor.c` issue GL/GLU drawing calls; only `sample.c`
+  and `repl_editor.c` issue GLUT input/feedback calls.
+- **Cross-layer coupling rule:** `ui_*` and `scene_*` do not
+  include each other's headers, with one grandfathered exception
+  (see step 2 below).
 
-Steps:
+**Files this slice touches:** `Makefile`, `MODULES.md`,
+`ARCHITECTURE.md`. No `.c` source code is modified — this is the
+guard slice.
 
-1. Add a `make check-gl-boundaries` target that runs four greps and
-   fails the build if any returns matches:
+**Naming pass:** none. This slice doesn't touch `.c` files, so
+there's no per-slice rename pass. The accompanying doc edits in
+`MODULES.md` and `ARCHITECTURE.md` are themselves the
+documentation update.
+
+**Move (a single `refactor:` commit):**
+
+1. Add a `make check-gl-boundaries` target that runs three greps
+   and fails if any returns matches:
    - **GL/GLU drawing:**
      `grep -nE '\b(gl[A-Z]|glu[A-Z])[A-Za-z0-9]*\s*\(' repl_*.c | grep -v '^repl_executor\.c:' | grep -v ':\s*[/*"]'`
-     (exclude executor and lines that look like comments/strings).
-   - **GL in sample.h:** same grep against `sample.h` should be empty
-     (transform helpers / point-size shim moved out in 11c).
+     (exclude executor and lines that look like
+     comments/strings).
+   - **GL in sample.h:** same grep against `sample.h` should be
+     empty (transform helpers / point-size shim moved out in 11c).
    - **GLUT input/feedback:**
      `grep -nE '\bglut[A-Z][A-Za-z0-9]*\s*\(' repl_*.c | grep -vE '^repl_(editor|executor)\.c:' | grep -v ':\s*[/*"]'`
      (only editor and executor may name GLUT symbols).
-2. Add a `make check-layer-coupling` target enforcing layer
-   independence:
-   - `! grep -nE '#include\s+"scene_' ui_*.c ui_*.h` —
-     **UI must not include any scene header.** Hard rule, no exceptions.
+2. Add a `make check-layer-coupling` target:
+   - `! grep -nE '#include\s+"scene_' ui_*.c ui_*.h` — **UI must
+     not include any scene header.** Hard rule, no exceptions.
    - `! grep -nE '#include\s+"ui_' scene_*.c scene_*.h | grep -vE 'scene_render\.c:.*ui_panels\.h'` —
      scene must not include UI headers, with one grandfathered
      `scene_render.c → ui_panels.h` coupling for `scene_rect()`.
      (The previous `scene_render.c → ui_profile_panel.h` coupling
-     disappears after the Phase 1 prof-module extraction —
-     `prof_begin`/`prof_end` come from the new `prof.h` instead.)
-     Track the remaining `scene_rect()` exception for removal — see
-     follow-up below.
+     went away after 11.0a.) The `scene_rect()` exception is
+     **left in place indefinitely**; see step 4 below.
 3. Wire both targets into `make test` and the `make test-stubs`
    umbrella so a regression is caught on first push.
-4. Document the rules in `MODULES.md` under "Naming Notes". One-line
-   summaries:
-   - *"`repl_*.c` files don't call GL or GLU. Only `repl_executor.c`
-     (drawing) and `repl_editor.c` (GLUT input via local funnel helpers)
-     are exceptions."*
-   - *"`ui_*` and `scene_*` are independent layers. Neither includes
-     the other's headers. The remaining `scene_render.c → ui_panels.h`
-     include for `scene_rect()` is grandfathered until layout
-     coordinates migrate to a shared `repl_*` model module."*
-5. **Optional follow-up (separate punch-list item, not part of 11):**
-   move `scene_rect()` out of `ui_panels.c` into a `repl_*` layout
-   model so the grandfathered `scene_render.c → ui_panels.h` include
-   can be deleted. Same for profile-panel layout. Track as a
-   TODO in `MODULES.md` Open Edges; do not block 11 on it.
+4. **Document the `scene_rect()` exception as a known limitation,
+   not a near-term TODO.** The deeper fix is structural: scene
+   and UI layers should ideally have **no runtime configuration
+   of their own** — they should render based on config provided
+   by `repl_*`. `scene_rect()` is one symptom of UI owning layout
+   that scene also needs to read. Resolving it properly means
+   moving viewport/scene-rect derivation into a `repl_*` config
+   model that both layers consume. That's a *separate* later
+   refactor, not part of step 11 and not blocked on. Add a single
+   line to `MODULES.md` Open Edges noting the long-term direction
+   ("scene/UI should consume layout config from `repl_*`, not own
+   it"), but do not assign a date or block this slice on it.
+5. Document the rules in `MODULES.md` under "Naming Notes".
+   One-line summaries:
+   - *"`repl_*.c` files don't call GL or GLU. Only
+     `repl_executor.c` (drawing) and `repl_editor.c` (GLUT input
+     via local funnel helpers) are exceptions."*
+   - *"`ui_*` and `scene_*` are independent layers. Neither
+     includes the other's headers. The
+     `scene_render.c → ui_panels.h` include for `scene_rect()`
+     is a grandfathered exception; eliminating it is a future
+     refactor that moves layout config into a `repl_*` model."*
 
-**Verify:** both new make targets pass on the cleaned tree and fail
-if any boundary line from 11a-11e is reintroduced — confirm by
-temporarily reverting one move from each sub-step and running the
-targets. `make test-stubs TEST_JOBS=4` must stay green.
+**Verify:** both new make targets pass on the cleaned tree and
+fail if any boundary line from 11.0a-11e is reintroduced —
+confirm by temporarily reverting one move from each sub-step and
+running the targets. `make test-stubs TEST_JOBS=4` must stay
+green.
 
 ---
 
@@ -966,198 +1070,6 @@ re-checked at the end:
 - `make check-gl-boundaries` — empty.
 - `make check-layer-coupling` — empty modulo grandfathered exceptions.
 
----
-
-#### Decisions / open questions explicitly settled before starting 11
-
-These are the architectural calls the punch list would otherwise let the
-implementer make ad-hoc on the fly. Decide and record before opening
-the first commit so each sub-step is mechanical.
-
-1. **2D helpers go into a project-agnostic header library, not
-   per-layer duplication.** Earlier drafts considered duplicating
-   `begin_2d`/`draw_string` per layer (`scene_2d_*` and `ui_2d_*`).
-   That trades cross-layer coupling for code duplication. The
-   better answer is **extract into `include/gl_2d.h`**, a header-only
-   library alongside the existing `gl_includes.h` / `stb_image.h` /
-   `utils.h` set. Both `scene_*` and `ui_*` `#include <gl_2d.h>`;
-   neither depends on a sibling layer's header. Pure-model `repl_*`
-   files don't include it (they don't draw). The criterion for what
-   belongs in the header library is **purely a function of arguments
-   with no project state** — `gl2d_begin(int w, int h)`,
-   `gl2d_draw_string(float x, float y, const char *s, void *font)`.
-   Project-state-dependent helpers (`apply_transform_cmd`,
-   `_repl_point_size`, the replay fade pass) stay project-side
-   because they read `GLCmd`, REPL state, or replay state. See 11a
-   for the proposed `gl_2d.h` API and 11c for the project-side
-   helpers that cannot move. ✅ DONE
-
-2. **`repl_display_func()` thin wrapper retention.** `sample.c:96`
-   currently calls `repl_display_func()` from its GLUT wrapper. After
-   11a, that wrapper becomes a one-liner — just dispatch + swap.
-   **Decision: keep the wrapper.** `sample.c` stays the GLUT-only
-   file (it only knows about `repl_*`, not `scene_render.h`), and
-   `repl_core.c`'s orchestrator role is preserved at the public API
-   boundary. The buffer-swap call (`glutSwapBuffers()`) moves into
-   `sample.c`'s wrapper after `repl_display_func()` returns, since
-   that's GLUT plumbing, not GL drawing.
-
-3. **`update_render_state_strings()` / `update_cam_lines()`
-   ownership.** Both live in `repl_export.c` and are called from
-   `display_func()`, three call sites inside `repl_export.c`, and
-   `repl_state.c`. They produce text scaffold (no GL).
-   **Decision: leave as-is.** This is not a GL-refactor concern;
-   moving them would mix string-formatter ownership churn into a
-   GL-isolation slice. Flagged here only so the implementer doesn't
-   get distracted by their non-GL footprint while editing
-   `repl_core.c`'s `display_func()`.
-
-4. **2D viewport `glViewport` placement (11a-step-6).**
-   **Decision: keep viewport configuration internal to
-   `render_code_panel()`.** This mirrors `render_3d_scene()`, which
-   sets its own viewport at the top of its body — symmetric across
-   the two render layers. `display_func()` does not own viewport
-   policy for either side; each renderer states explicitly what
-   viewport it draws into. No new `ui_panels_begin_overlays()`
-   helper is introduced. The other 2D overlays (autocomplete,
-   dropdown, var panel, help, profile) run after
-   `render_code_panel()` and inherit the viewport it set, which
-   matches today's behavior. Document the convention in
-   `render_code_panel()`'s top-of-function comment so the dependency
-   is explicit.
-
-5. **PROF_SCENE_3D bracketing (11a-step-5).**
-   **Decision: leave the entire profiling structure as-is.** Keep
-   `prof_begin(PROF_SCENE_3D)` / `prof_end(PROF_SCENE_3D)` in
-   `display_func()`, keep the inner `PROF_SCENE_3D_SETUP..HUD`
-   reset/commit pair where it currently sits. The accumulation-AA
-   hoist (11a-step-5) does *not* move any prof brackets — it only
-   moves the `glClear`/`glAccum` jitter loop. That keeps this slice
-   focused on GL-isolation; profiling layout stays untouched.
-
-   **However** — the prof system itself is structurally
-   misplaced. `prof_begin`/`prof_end`/`prof_accum_*`/`prof_frame_tick`
-   and the `ProfSection` enum currently live in `ui_profile_panel.h` /
-   `ui_profile_panel.c`, but they are called from `repl_core.c`,
-   `repl_replay.c`, every `scene_*.c`, and the code-panel renderers.
-   That means every pipeline and scene-rendering file effectively
-   includes a UI header for instrumentation, which violates the
-   layering rule before we even start applying it. The prof
-   primitives are generic instrumentation, not UI.
-
-   **Mitigation:** extract the prof primitives into a separate
-   `prof` module *before* 11a-11f. See the new "11. Phase 1
-   Cleanup" stage below; that stage is a precursor to the
-   GL-isolation work.
-
-6. **`bench_repl.c` access path for `render_replay_fade_pass()`
-   (11d-step-3).**
-   **Decision: expose `render_replay_fade_pass()` from
-   `scene_render.h` unconditionally — do not gate it behind
-   `#ifdef BENCH_REPL_HARNESS` or any other compile flag.** The
-   public header should not carry conditional declarations; ifdef'ing
-   the API splits readers between two interpretations of the same
-   header and makes the bench a special-case consumer when it's
-   really just a different entrypoint that drives one render pass.
-   The "fallback" upward-shim option in 11d-step-3 is rejected.
-
-7. **`gl_includes.h` retention in `sample.h`.**
-   **Decision: leave `gl_includes.h` in `sample.h`.** `sample.h`
-   declares `GLfloat`, `GLenum`, and the `GLCmd` struct (which
-   contains GL types), so the include is required. The point of 11c
-   is to keep `static inline` GL *function calls* from expanding
-   into every TU; type declarations are fine. Do not spend a
-   sub-commit attempting trial removal — it's load-bearing.
-
-8. **`TessVertex` typedef location.**
-   **Decision: leave `TessVertex` in `repl_state.h` for now.** It is
-   referenced by `repl_executor.c` (the dispatch path at
-   `repl_executor.c:328-334`) and emitted as a string by
-   `repl_export.c:1529-1543`. Even after 11b moves the GLU resources
-   into `repl_executor.c`, the typedef stays in `repl_state.h` —
-   moving it is unnecessary churn for this slice. Revisit only if a
-   later phase of the broader state-clustering refactor wants the
-   type local to its consumer.
-
-9. **`repl_state_render_init_resources()` move + rename
-   (11b-step-2).**
-   **Decision: hard move into `repl_executor.c` with rename, no
-   compat shim.** The function moves out of `repl_state.c` entirely
-   and is renamed to `repl_executor_init_resources()`. The two
-   callers (`repl_init_gl()` in `repl_core.c` and the teardown site
-   in `sample.c`) update in the same commit. Same applies to the
-   destroy counterpart.
-
-10. **`test_ui.c` impact.** `test_ui.c` exercises `render_help()` and
-    other `ui_*` renderers via the GL-stub-counter harness. It
-    includes `sample.h` plus the `ui_*.h` headers it tests. **Decide:**
-    `test_ui.c` is unaffected by 11a-11e because all its calls are
-    already through the `ui_*` public renderers. The 2D primitive
-    rename (`gl2d_*` from `include/gl_2d.h`) is purely internal to
-    those renderers. Confirm by re-running `make test_ui` after each
-    sub-step; no test edits expected.
-
-11. **Ambient-light `glLightModelfv` placement.**
-    **Decision: move `glLightModelfv(GL_LIGHT_MODEL_AMBIENT, ...)`
-    into `scene_render.c`'s `init_gl()`, which delegates to
-    `scene_lights.c`.** Concretely:
-    - `scene_render.c` gains its own `init_gl()` (one-shot, called
-      from `repl_init_gl()` in `repl_core.c`). This mirrors the way
-      `scene_render.c` already owns `render_3d_scene()` per-frame
-      orchestration — it's the natural owner of one-shot scene-side
-      GL setup too.
-    - `scene_render.c`'s `init_gl()` delegates the ambient setup to
-      a `scene_lights_init_global_ambient()` (or similarly named)
-      function in `scene_lights.c`. The constants `{0.15, 0.15,
-      0.20, 1.0}` move with it.
-    - `repl_init_gl()` in `repl_core.c` then has zero GL calls —
-      it just calls `repl_executor_init_resources()` (from 11b),
-      `scene_render_init_gl()`, and `apply_init_bootstrap()`. The
-      orchestrator role of `repl_core.c` is preserved at the
-      public API boundary; the actual GL setup is owned by the
-      scene/executor layers.
-    - Why not fold into `scene_lights_setup()`: the global ambient
-      is invariant, so re-setting it every frame is wasted work and
-      would make per-frame light state harder to audit.
-
-12. **Sub-step ordering and dependencies.** Phase 1 (11.0a, 11.0b)
-    must land before Phase 2. Within Phase 2:
-    - 11.0a (prof module extraction) is a hard prerequisite for 11f's
-      `make check-layer-coupling` grep guard — without it, every
-      `scene_*.c → ui_profile_panel.h` include shows up as a
-      violation.
-    - 11.0b (per-slice naming pass) lands as a separate
-      `refactor:` commit immediately before each Phase 2 sub-step,
-      scoped to the files that sub-step touches.
-    - 11b (executor owns tess/quadric) is independent of 11a.
-    - 11c (transform helpers move to `repl_executor.h`) depends on
-      nothing in 11a/11b but is cleanest if 11b lands first so
-      `repl_executor.c` is already the established home for
-      executor-owned resources.
-    - 11d (replay fade pass) is independent of 11a-11c.
-    - 11e (GLUT funnel) is independent of all preceding sub-steps.
-    - 11f (grep guards) requires 11.0a + 11a-11e all landed.
-
-    **Decide:** land in the order 11.0a → 11.0b(11a) → 11a →
-    11.0b(11b) → 11b → … → 11f. The full project-wide naming sweep
-    from `feature/repl-cleanup.md` §10 stays a separate Phase 10
-    item, not a Phase 2 prerequisite. Document the intended landing
-    order in the first commit message of the series.
-
-13. **"Hard rule" on `ui_*` ↔ `scene_*` separation vs. read-only
-    layout queries.** 11f-step-2 grandfathers
-    `scene_render.c → ui_panels.h` for `scene_rect()`. The deeper
-    fix (move `scene_rect()` into a `repl_*` layout model) is listed
-    as an *optional* follow-up. **Decide:** confirm the optional
-    follow-up is genuinely deferrable. `scene_rect()` is a query
-    against `repl_state_viewport()` plus the code-panel layout
-    fraction — pure derivation, no GL. Moving it into a new
-    `repl_layout.c` (sibling to `repl_code_panel_layout.c`) is a
-    half-day refactor with no runtime risk. **Recommendation:** do
-    the optional follow-up *before* item 11f's grep guard so the
-    guard can be unconditional (no grandfathered list to maintain).
-    Alternatively, document a hard date / next-tier-cycle commitment
-    so the exception doesn't ossify.
 
 ---
 
