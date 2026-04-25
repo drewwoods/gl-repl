@@ -187,7 +187,7 @@ static BenchResult bench_parse_lines(int iters) {
         double t0 = now_seconds();
         for (long long i = 0; i < flat_n; i++) {
             memset(&cmd, 0, sizeof(cmd));
-            (void)repl_parse_command(flat[i], &cmd);
+            (void)repl_parser_parse_command(flat[i], &cmd);
         }
         double dt = now_seconds() - t0;
         if (dt < r.min_sec) r.min_sec = dt;

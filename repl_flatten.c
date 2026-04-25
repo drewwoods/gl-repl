@@ -64,7 +64,7 @@ static void flat_cmd_set_provenance(GLCmd *cmd, int src_cmd_idx,
     cmd->func_scope_mask = func_scope_mask;
 }
 
-static int flatten_find_block_end(const FlattenContext *ctx, int begin_idx) {
+static int flatten_repl_source_scope_find_block_end(const FlattenContext *ctx, int begin_idx) {
     int depth = 1;
 
     for (int j = begin_idx + 1; j < ctx->source_count; j++) {
@@ -179,7 +179,7 @@ static void flatten_range(FlattenContext *ctx,
         if (!src_cmd->valid) { i++; continue; }
 
         if (src_cmd->type == CMD_FOR_BEGIN) {
-            int loop_end = flatten_find_block_end(ctx, i);
+            int loop_end = flatten_repl_source_scope_find_block_end(ctx, i);
             char var_name[16];
             float start_val = src_cmd->args[0];
             float end_val   = src_cmd->args[1];
@@ -234,7 +234,7 @@ static void flatten_range(FlattenContext *ctx,
 
         /* Function definitions: skip body (expanded at call sites) */
         if (src_cmd->type == CMD_FUNC_DEF) {
-            int func_end = flatten_find_block_end(ctx, i);
+            int func_end = flatten_repl_source_scope_find_block_end(ctx, i);
             i = (func_end < ctx->source_count) ? func_end + 1 : ctx->source_count;
             continue;
         }
@@ -258,7 +258,7 @@ static void flatten_range(FlattenContext *ctx,
                 const GLCmd *def_cmd = &ctx->source_cmds[k];
                 if (def_cmd->type == CMD_FUNC_DEF && (int)def_cmd->args[0] == func_num) {
                     def_found = 1;
-                    int body_end = flatten_find_block_end(ctx, k);
+                    int body_end = flatten_repl_source_scope_find_block_end(ctx, k);
                     int def_fn = func_num;
                     int param_count = 0;
                     char param_names[MAX_EXPR_VARS][16];
@@ -321,7 +321,7 @@ static void flatten_range(FlattenContext *ctx,
         }
 
         if (src_cmd->type == CMD_IF_BEGIN) {
-            int if_end = flatten_find_block_end(ctx, i);
+            int if_end = flatten_repl_source_scope_find_block_end(ctx, i);
             char cond_text[MAX_LINE_LEN];
             int needs_local_eval = 0;
 
@@ -415,7 +415,7 @@ static void flatten_range(FlattenContext *ctx,
             GLCmd tmp;
             ReplParseContext parse_ctx = { i, vars, nv, 0 };
             memset(&tmp, 0, sizeof(tmp));
-            if (repl_parse_command_ctx(src_cmd->source, &tmp, &parse_ctx)) {
+            if (repl_parser_parse_command_ctx(src_cmd->source, &tmp, &parse_ctx)) {
                 tmp.has_vars = src_cmd->has_vars;
                 strncpy(tmp.source, src_cmd->source, sizeof(tmp.source) - 1);
                 tmp.source[sizeof(tmp.source) - 1] = '\0';
@@ -429,7 +429,7 @@ static void flatten_range(FlattenContext *ctx,
             GLCmd tmp;
             ReplParseContext parse_ctx = { i, NULL, 0, 0 };
             memset(&tmp, 0, sizeof(tmp));
-            if (repl_parse_command_ctx(src_cmd->source, &tmp, &parse_ctx)) {
+            if (repl_parser_parse_command_ctx(src_cmd->source, &tmp, &parse_ctx)) {
                 tmp.has_vars = 1;
                 strncpy(tmp.source, src_cmd->source, sizeof(tmp.source) - 1);
                 tmp.source[sizeof(tmp.source) - 1] = '\0';

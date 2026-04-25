@@ -302,7 +302,7 @@ static int parse_and_normalize_impl(const char *line, int pos,
                                     int preserve_expr, GLCmd *out_cmd,
                                     int strict_refs) {
     ReplParseContext parse_ctx = { pos, vars, num_vars, strict_refs };
-    int parsed = repl_parse_command_ctx(line, out_cmd, &parse_ctx);
+    int parsed = repl_parser_parse_command_ctx(line, out_cmd, &parse_ctx);
 
     if (!parsed) return 0;
     if (preserve_expr) {
@@ -349,8 +349,8 @@ void repl_reformat_commands(void) {
         GLCmd orig = repl_state_document_cmds_mut()[i];
         GLCmd fmt = orig;
 
-        int bb = in_begin_block_at(i);
-        int bdepth = block_depth_at(i);
+        int bb = repl_source_scope_in_begin_block_at(i);
+        int bdepth = repl_source_scope_block_depth_at(i);
         int ind = (bb ? 4 : 2) + bdepth * 2;
         char ind_s[32];
         if (ind > (int)sizeof(ind_s) - 1) ind = (int)sizeof(ind_s) - 1;
@@ -381,9 +381,9 @@ void repl_reformat_commands(void) {
         case CMD_FOR_END:
         case CMD_FUNC_END:
         case CMD_IF_END: {
-            int close_depth = block_depth_at(i) - 1;
+            int close_depth = repl_source_scope_block_depth_at(i) - 1;
             if (close_depth < 0) close_depth = 0;
-            int cb = in_begin_block_at(i);
+            int cb = repl_source_scope_in_begin_block_at(i);
             int close_ind = (cb ? 4 : 2) + close_depth * 2;
             char close_s[32];
             if (close_ind > (int)sizeof(close_s) - 1) close_ind = (int)sizeof(close_s) - 1;
@@ -509,7 +509,7 @@ void repl_reformat_commands(void) {
         }
     }
 
-    depth_cache_invalidate();
+    repl_source_scope_depth_cache_invalidate();
     mark_normals_dirty();
 
     repl_state_edit_line_set(saved_edit_line);

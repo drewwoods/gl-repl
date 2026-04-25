@@ -26,8 +26,8 @@ void repl_undo_ring_state_restore(const ReplUndoRingState *state);
 
 /* Snapshot the current editor state onto the undo stack. Call before any
  * mutation; pushing clears the redo stack. */
-void push_undo_snapshot(void);
-void pop_undo_snapshot(void);
-void do_redo(void);
+void repl_undo_push_snapshot(void);
+void repl_undo_pop_snapshot(void);
+void repl_undo_do_redo(void);
 
 #endif /* REPL_UNDO_H */

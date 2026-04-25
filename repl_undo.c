@@ -60,7 +60,7 @@ void repl_undo_ring_state_restore(const ReplUndoRingState *state) {
     g_redo_count = state->redo_count;
 }
 
-void push_undo_snapshot(void) {
+void repl_undo_push_snapshot(void) {
     /* First mutation on a loaded example auto-promotes to a user scene,
      * inheriting the example's name. The snapshot captures the post-promotion
      * state so Undo rewinds to the unedited example reference still visible in
@@ -75,7 +75,7 @@ void push_undo_snapshot(void) {
     g_redo_head = 0;
 }
 
-void pop_undo_snapshot(void) {
+void repl_undo_pop_snapshot(void) {
     if (g_undo_count == 0) {
         set_status("Nothing to undo");
         return;
@@ -94,7 +94,7 @@ void pop_undo_snapshot(void) {
     }
 }
 
-void do_redo(void) {
+void repl_undo_do_redo(void) {
     if (g_redo_count == 0) {
         set_status("Nothing to redo");
         return;

@@ -14,7 +14,7 @@ static int g_block_depth_prefix[MAX_COMMANDS + 1];
 static int g_begin_depth_prefix[MAX_COMMANDS + 1];
 static int g_tess_depth_prefix[MAX_COMMANDS + 1];
 
-void depth_cache_invalidate(void) {
+void repl_source_scope_depth_cache_invalidate(void) {
     g_depth_cache_dirty = 1;
 }
 
@@ -27,7 +27,7 @@ void depth_cache_invalidate(void) {
  *   g_begin_depth_prefix - glBegin/glEnd nesting
  *   g_tess_depth_prefix  - gluBegin/gluEnd nesting
  *
- * All queries call this first; depth_cache_invalidate() marks it dirty. */
+ * All queries call this first; repl_source_scope_depth_cache_invalidate() marks it dirty. */
 static void depth_cache_rebuild(void) {
     if (!g_depth_cache_dirty) return;
 
@@ -72,25 +72,25 @@ static void depth_cache_rebuild(void) {
     g_depth_cache_dirty = 0;
 }
 
-int in_begin_block_at(int pos) {
+int repl_source_scope_in_begin_block_at(int pos) {
     depth_cache_rebuild();
     if (pos < 0) pos = 0;
     if (pos > repl_state_document_count()) pos = repl_state_document_count();
     return g_begin_depth_prefix[pos] > 0;
 }
 
-int in_begin_block(void) {
-    return in_begin_block_at(repl_state_document_count());
+int repl_source_scope_in_begin_block(void) {
+    return repl_source_scope_in_begin_block_at(repl_state_document_count());
 }
 
-int block_depth_at(int pos) {
+int repl_source_scope_block_depth_at(int pos) {
     depth_cache_rebuild();
     if (pos < 0) pos = 0;
     if (pos > repl_state_document_count()) pos = repl_state_document_count();
     return g_block_depth_prefix[pos];
 }
 
-int tess_scope_depth_at(int pos) {
+int repl_source_scope_tess_scope_depth_at(int pos) {
     depth_cache_rebuild();
     if (pos < 0) pos = 0;
     if (pos > repl_state_document_count()) pos = repl_state_document_count();
@@ -98,7 +98,7 @@ int tess_scope_depth_at(int pos) {
 }
 
 /* Normal command indent: 2 + 2*tess + 2*begin + 2*block */
-void cmd_indent(int pos, char *buf, int buf_sz) {
+void repl_source_scope_cmd_indent(int pos, char *buf, int buf_sz) {
     depth_cache_rebuild();
     if (pos < 0) pos = 0;
     if (pos > repl_state_document_count()) pos = repl_state_document_count();
@@ -112,7 +112,7 @@ void cmd_indent(int pos, char *buf, int buf_sz) {
     buf[spaces] = '\0';
 }
 
-int cmd_indent_chars(int pos) {
+int repl_source_scope_cmd_indent_chars(int pos) {
     depth_cache_rebuild();
     if (pos < 0) pos = 0;
     if (pos > repl_state_document_count()) pos = repl_state_document_count();
@@ -121,7 +121,7 @@ int cmd_indent_chars(int pos) {
 }
 
 /* Tessellator leaf command indent: 2 + 2*tess + 2*block  (begin depth ignored) */
-void cmd_tess_indent(int pos, char *buf, int buf_sz) {
+void repl_source_scope_cmd_tess_indent(int pos, char *buf, int buf_sz) {
     depth_cache_rebuild();
     if (pos < 0) pos = 0;
     if (pos > repl_state_document_count()) pos = repl_state_document_count();
@@ -134,7 +134,7 @@ void cmd_tess_indent(int pos, char *buf, int buf_sz) {
     buf[spaces] = '\0';
 }
 
-int find_block_end(int begin_idx) {
+int repl_source_scope_find_block_end(int begin_idx) {
     int depth = 1;
     for (int j = begin_idx + 1; j < repl_state_document_count(); j++) {
         CmdType t = repl_state_document_cmds_mut()[j].type;
@@ -147,7 +147,7 @@ int find_block_end(int begin_idx) {
     return repl_state_document_count();
 }
 
-CmdType nearest_open_block_at(int pos) {
+CmdType repl_source_scope_nearest_open_block_at(int pos) {
     CmdType stack[64];
     int depth = 0;
     for (int i = 0; i < pos && i < repl_state_document_count(); i++) {

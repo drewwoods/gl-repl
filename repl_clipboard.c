@@ -107,7 +107,7 @@ static int current_copy_range(int *out_start, int *out_count,
     start = repl_state_edit_line();
     copying_for = (repl_state_document_cmds()[start].type == CMD_FOR_BEGIN);
     if (copying_for) {
-        int block_end_idx = find_block_end(start);
+        int block_end_idx = repl_source_scope_find_block_end(start);
         int end_idx = (block_end_idx < n) ? block_end_idx + 1 : n;
         count = end_idx - start;
     }
@@ -132,7 +132,7 @@ static int current_cut_range(int *out_start, int *out_count) {
 
     start = repl_state_edit_line();
     if (repl_state_document_cmds()[start].type == CMD_FOR_BEGIN) {
-        int block_end_idx = find_block_end(start);
+        int block_end_idx = repl_source_scope_find_block_end(start);
         count = ((block_end_idx < n) ? block_end_idx + 1 : n) - start;
     } else {
         count = 1;
@@ -234,7 +234,7 @@ void repl_clipboard_paste_current(void) {
             }
         }
 
-        push_undo_snapshot();
+        repl_undo_push_snapshot();
         {
             ReplCommandStore store = repl_command_store_live();
             int edit = repl_state_edit_line();

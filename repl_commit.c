@@ -29,7 +29,7 @@ static int function_decl_insert_pos(void) {
         if (repl_state_document_cmds_mut()[pos].type != CMD_FUNC_DEF)
             break;
 
-        int end = find_block_end(pos);
+        int end = repl_source_scope_find_block_end(pos);
         if (end >= repl_state_document_count())
             return repl_state_document_count();
         pos = end + 1;
@@ -44,7 +44,7 @@ static int function_leading_comment_start(int pos) {
     while (start > 0 &&
            repl_state_document_cmds_mut()[start - 1].valid &&
            repl_state_document_cmds_mut()[start - 1].type == CMD_COMMENT &&
-           block_depth_at(start - 1) == 0)
+           repl_source_scope_block_depth_at(start - 1) == 0)
         start--;
 
     return start;
@@ -456,7 +456,7 @@ int try_assign_variable(void) {
         {
             int insert_idx = repl_state_insert_mode() ? repl_state_edit_line() :
                        (repl_state_edit_line() < repl_state_document_count() ? repl_state_edit_line() : repl_state_document_count());
-            ind = (in_begin_block_at(insert_idx) ? 4 : 2) + block_depth_at(insert_idx) * 2;
+            ind = (repl_source_scope_in_begin_block_at(insert_idx) ? 4 : 2) + repl_source_scope_block_depth_at(insert_idx) * 2;
             if (ind > (int)sizeof(indent) - 1)
                 ind = (int)sizeof(indent) - 1;
             memset(indent, ' ', (size_t)ind);
@@ -564,8 +564,8 @@ int try_commit_for_loop(void) {
             body_start++;
 
         {
-            int fdepth = block_depth_at(pos);
-            int bb = in_begin_block_at(pos);
+            int fdepth = repl_source_scope_block_depth_at(pos);
+            int bb = repl_source_scope_in_begin_block_at(pos);
             int ind = (bb ? 4 : 2) + fdepth * 2;
             char indent[32];
             GLCmd fb;
@@ -734,7 +734,7 @@ int try_commit_for_loop(void) {
 
                 memset(&body_cmd, 0, sizeof(body_cmd));
                 ReplParseContext parse_ctx = { pos, dv, dvn, 1 };
-                if (!repl_parse_command_ctx(body, &body_cmd, &parse_ctx)) {
+                if (!repl_parser_parse_command_ctx(body, &body_cmd, &parse_ctx)) {
                     set_status("Invalid for-loop body command");
                     return 1;
                 }
@@ -821,8 +821,8 @@ int try_commit_func_def(void) {
         }
 
         int pos = overwriting_func ? edit_pos : function_decl_insert_pos();
-        int bdepth = overwriting_func ? block_depth_at(pos) : 0;
-        int bb = overwriting_func ? in_begin_block_at(pos) : 0;
+        int bdepth = overwriting_func ? repl_source_scope_block_depth_at(pos) : 0;
+        int bb = overwriting_func ? repl_source_scope_in_begin_block_at(pos) : 0;
         int ind = (bb ? 4 : 2) + bdepth * 2;
         char indent[32];
         GLCmd fd;
@@ -993,8 +993,8 @@ int try_commit_if_block(void) {
             return 1;
         }
 
-        bdepth = block_depth_at(pos);
-        bb = in_begin_block_at(pos);
+        bdepth = repl_source_scope_block_depth_at(pos);
+        bb = repl_source_scope_in_begin_block_at(pos);
         ind = (bb ? 4 : 2) + bdepth * 2;
         if (ind > (int)sizeof(indent) - 1)
             ind = (int)sizeof(indent) - 1;
@@ -1073,7 +1073,7 @@ int try_commit_close_brace(void) {
     {
         int pos = repl_state_insert_mode() ? repl_state_edit_line() :
                   (repl_state_edit_line() < repl_state_document_count() ? repl_state_edit_line() : repl_state_document_count());
-        CmdType open_type = nearest_open_block_at(pos);
+        CmdType open_type = repl_source_scope_nearest_open_block_at(pos);
         CmdType end_type;
         const char *label;
         int bdepth;
@@ -1123,10 +1123,10 @@ int try_commit_close_brace(void) {
             return 1;
         }
 
-        bdepth = block_depth_at(pos) - 1;
+        bdepth = repl_source_scope_block_depth_at(pos) - 1;
         if (bdepth < 0)
             bdepth = 0;
-        bb_val = in_begin_block_at(pos);
+        bb_val = repl_source_scope_in_begin_block_at(pos);
         ind_len = (bb_val ? 4 : 2) + bdepth * 2;
         if (ind_len > (int)sizeof(indent) - 1)
             ind_len = (int)sizeof(indent) - 1;

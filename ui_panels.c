@@ -741,7 +741,7 @@ void render_code_panel(void) {
                 { char ln[16]; snprintf(ln, sizeof(ln), "%3d", file_line);
                   gl2d_draw_string(CODE_MARGIN_X, line_y, ln, FONT_MONO); }
                 glColor3f(0.28f, 0.28f, 0.35f);
-                { char ind_s[32]; int nc = cmd_indent_chars(repl_state_document_count());
+                { char ind_s[32]; int nc = repl_source_scope_cmd_indent_chars(repl_state_document_count());
                   if (nc > 31) nc = 31;
                   memset(ind_s, ' ', nc); ind_s[nc] = '\0';
                   gl2d_draw_string((float)text_x, (float)line_y, ind_s, FONT_MONO); }
@@ -838,7 +838,7 @@ void render_code_panel(void) {
         char ln_buf[64];
         if (repl_state_insert_mode())
             snprintf(ln_buf, sizeof(ln_buf), "Ln %d [INSERT]", repl_state_edit_line() + 1);
-        else if (in_begin_block())
+        else if (repl_source_scope_in_begin_block())
             snprintf(ln_buf, sizeof(ln_buf), "Ln %d  %s",
                      repl_state_edit_line() + 1, mode_name(current_begin_mode()));
         else

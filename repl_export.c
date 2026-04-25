@@ -391,7 +391,7 @@ static void parse_init_bootstrap(void) {
         GLCmd cmd;
         ReplParseContext parse_ctx = { 0, NULL, 0, 0 };
         memset(&cmd, 0, sizeof(cmd));
-        if (!repl_parse_command_ctx(g_init_bootstrap_repl[i].repl_line,
+        if (!repl_parser_parse_command_ctx(g_init_bootstrap_repl[i].repl_line,
                                     &cmd, &parse_ctx)) {
             fprintf(stderr, "init bootstrap parse failed: %s\n",
                     g_init_bootstrap_repl[i].repl_line);
@@ -2696,7 +2696,7 @@ int load_from_file(const char *filename) {
     g_deferred_var_count = 0;
 
     if (state.loaded > 0) {
-        depth_cache_invalidate();
+        repl_source_scope_depth_cache_invalidate();
         repl_reformat_commands();
         char msg[256];
         if (state.warnings > 0)

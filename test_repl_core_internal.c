@@ -140,10 +140,10 @@ int main() {
         repl_feed_line_public("  glVertex3f(0,0,0);"); /* 1 */
         repl_feed_line_public("}");                    /* 2 */
         
-        ASSERT_INT("find_block_end(0)", find_block_end(0), 2);
-        ASSERT_INT("block_depth_at(1)", block_depth_at(1), 1);
-        ASSERT_INT("block_depth_at(2)", block_depth_at(2), 1); /* Still 1 at the closing brace */
-        ASSERT_INT("nearest_open_block_at(1)", nearest_open_block_at(1), CMD_FOR_BEGIN);
+        ASSERT_INT("repl_source_scope_find_block_end(0)", repl_source_scope_find_block_end(0), 2);
+        ASSERT_INT("repl_source_scope_block_depth_at(1)", repl_source_scope_block_depth_at(1), 1);
+        ASSERT_INT("repl_source_scope_block_depth_at(2)", repl_source_scope_block_depth_at(2), 1); /* Still 1 at the closing brace */
+        ASSERT_INT("repl_source_scope_nearest_open_block_at(1)", repl_source_scope_nearest_open_block_at(1), CMD_FOR_BEGIN);
     }
 
     /* 7. collect_visible_vars */
@@ -237,7 +237,7 @@ int main() {
         repl_reset_state(); declare_test_vars();
         repl_feed_line_public("for(i, 0, 1) {");
         repl_feed_line_public("}");
-        ASSERT_INT("command_store_load pre-cache depth", block_depth_at(1), 1);
+        ASSERT_INT("command_store_load pre-cache depth", repl_source_scope_block_depth_at(1), 1);
 
         memset(loaded, 0, sizeof(loaded));
         loaded[0].type = CMD_VERTEX3F;
@@ -273,7 +273,7 @@ int main() {
         ASSERT_INT("command_store_load marks normals dirty",
                    repl_state_normals_dirty(), 1);
         ASSERT_INT("command_store_load invalidates depth",
-                   block_depth_at(1), 0);
+                   repl_source_scope_block_depth_at(1), 0);
 
         ASSERT_INT("command_store_load rejects missing cmds",
                    repl_command_store_load(&store, NULL, 1, 0), 0);
