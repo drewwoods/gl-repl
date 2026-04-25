@@ -55,7 +55,10 @@
       "Bash(git -C /Users/drew/src/code/opengl/samples/gen-ai/OpenGL-Vibe push)",
       "Bash(git *)",
       "Bash(sort -t: -k2 -rn)",
-      "Read(//Users/drew/src/code/opengl/samples/gen-ai/OpenGL-Vibe/src/immediate-mode-repl/claude4.6-opus-thinking/**)"
+      "Read(//Users/drew/src/code/opengl/samples/gen-ai/OpenGL-Vibe/src/immediate-mode-repl/claude4.6-opus-thinking/**)",
+      "Read(//tmp/**)",
+      "Bash(sed -i 's/replay_start\\(\\)/repl_replay_start\\(\\)/g' test*.c)",
+      "Bash(sed -i 's/replay_stop\\(\\)/repl_replay_stop\\(\\)/g' test*.c)"
     ]
   }
 }
