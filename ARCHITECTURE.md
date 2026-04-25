@@ -582,6 +582,29 @@ handlers, confirmed visual dumps use the shared code-panel wrap iterator, and
 introduced typed top-level scaffold sections plus display/pass helpers for the
 generated export file.
 
+**Phase 10 (Naming Consistency):**
+Phase 10 addresses function naming consistency using the repl_<module>_<action>()
+convention. **Phase 10 step 1** (completed) fixes function names in public headers:
+- repl_state.h: `repl_status_*` → `repl_state_status_*` (set/clear/tick)
+- repl_core.h: `replay_*` → `repl_replay_*` (start/stop)
+
+These naming inconsistencies did not block functionality but violated the module
+naming contract where public APIs should be namespaced. Variable name consistency
+is deferred to a larger refactoring phase. Test count: 2503/2503 passed.
+
+**Phase 11 (GL/GLUT Layering):**
+Phase 11 segregates live GL calls to preserve clean module boundaries.
+- **Step 11e** (completed): Funnel GLUT input/feedback calls through helpers
+  in repl_editor.c (glutPostRedisplay, glutSetCursor, glutGetModifiers).
+  Added repl_editor.h with `repl_editor_active_modifiers()` to expose
+  one GLUT API call outside repl_editor. Updated repl_actions.c to call
+  through the helper instead of directly.
+- **Step 11f** (completed): Add `make check-gl-boundaries` and
+  `make check-layer-coupling` targets to enforce layering rules mechanically:
+  GL/GLU calls allowed only in scene_*.c, ui_*.c, repl_executor.c;
+  GLUT calls allowed only in sample.c, repl_editor.c.
+  UI/scene layer decoupling verified (grandfathered: scene_render.c → ui_panels.h).
+
 ## Key Pipelines
 
 ### Structured block commits

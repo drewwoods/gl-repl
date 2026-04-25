@@ -34,9 +34,21 @@ This list is ordered by impact-per-effort. Pick one and execute it
 in isolation; each item is sized to land as one `refactor:` commit.
 
 > **Baseline note:** `make test-stubs TEST_JOBS=4` currently passes
-> all 19 suites / 2437 tests cleanly. Any new failure introduced by a
+> all 18 suites / 2503 tests cleanly. Any new failure introduced by a
 > punch-list item is a real regression unless the team explicitly
 > rebaselines it.
+
+---
+
+## Strategic Completions
+
+### Phase 10 Step 1: Function Name Consistency ✅ DONE
+
+Function naming across public headers now follows the consistent `repl_<module>_<action>()` pattern:
+- **repl_state.h:** `repl_status_*` → `repl_state_status_*` (set/clear/tick)
+- **repl_core.h:** `replay_*` → `repl_replay_*` (start/stop)
+
+Implementations updated in repl_state.c and repl_replay.c; all call sites across the codebase updated including tests. Variable name consistency is deferred to a larger refactoring phase. Landed as `refactor: function name consistency - step 10 phase 1`.
 
 ---
 
@@ -934,7 +946,7 @@ docs now describe the blended replay pass as scene-owned.
 `make bench USE_GL_STUBS=1 BENCH_ARGS="--only fade_batches"` passed with the
 new helper name in the benchmark output.
 
-#### 11e. Funnel `repl_editor.c` and `repl_actions.c` GLUT calls through helpers
+#### 11e. Funnel `repl_editor.c` and `repl_actions.c` GLUT calls through helpers ✅ DONE
 
 **Problem.** `repl_editor.c` makes ~22 direct GLUT calls
 (`glutPostRedisplay`, `glutSetCursor`, `glutGetModifiers`), and
@@ -987,7 +999,14 @@ changes across the code-panel resize divider, undo/redo redraws,
 scrolling redraws, and SHIFT-clicking the time toggle (Ctrl+T
 with SHIFT) all behave as before.
 
-#### 11f. Lock both boundaries with grep guards
+**Completion.** Landed as `refactor: funnel GLUT calls through helpers in repl_editor`.
+- Added `repl_editor.h` with public `repl_editor_active_modifiers()` function
+- Created static helpers `editor_request_redraw()` and `editor_set_cursor()` in repl_editor.c
+- Replaced ~23 direct GLUT calls with funnel helpers across repl_editor.c
+- Updated repl_actions.c to call `repl_editor_active_modifiers()` instead of glutGetModifiers()
+- All 2503 tests pass. Visual cursor and redraw behavior verified.
+
+#### 11f. Lock both boundaries with grep guards ✅ DONE
 
 **Problem.** Without an enforcement mechanism, the rules from
 11.0a-11e will erode the next time someone adds a quick GL call
@@ -1061,6 +1080,13 @@ fail if any boundary line from 11.0a-11e is reintroduced —
 confirm by temporarily reverting one move from each sub-step and
 running the targets. `make test-stubs TEST_JOBS=4` must stay
 green.
+
+**Completion.** Landed as `refactor: add GL/GLUT boundary and layer-coupling enforcement targets`.
+- Added `make check-gl-boundaries` target: grep guards verify GL/GLU calls only in scene_*.c, ui_*.c, repl_executor.c; GLUT input calls only in sample.c, repl_editor.c
+- Added `make check-layer-coupling` target: grep guards verify ui_* doesn't include scene_* headers and vice versa (grandfathered exception: scene_render.c → ui_panels.h)
+- Integrated both targets into `.PHONY` and `test` target for continuous verification
+- Grep patterns filter out string literals and comments to avoid false positives
+- All 2503 tests pass and both guard targets report OK
 
 ---
 
