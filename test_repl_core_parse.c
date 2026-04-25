@@ -25,9 +25,9 @@ static int leading_spaces(const char *s) {
 
 static void declare_test_vars(void) {
     char err[128];
-    declare_predef_var("x", err, sizeof(err));
-    declare_predef_var("y", err, sizeof(err));
-    declare_predef_var("z", err, sizeof(err));
+    repl_eval_declare_predef_var("x", err, sizeof(err));
+    repl_eval_declare_predef_var("y", err, sizeof(err));
+    repl_eval_declare_predef_var("z", err, sizeof(err));
 }
 
 static void assert_status_contains(const char *label, const char *needle) {
@@ -35,7 +35,7 @@ static void assert_status_contains(const char *label, const char *needle) {
 }
 
 int main(void) {
-    init_predef_vars();
+    repl_eval_init_predef_vars();
     repl_reset_state();
     declare_test_vars();
 

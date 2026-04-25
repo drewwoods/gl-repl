@@ -44,16 +44,16 @@ static int g_pass = 0;
 
 static void declare_test_vars(void) {
     char err[128];
-    declare_predef_var("x", err, sizeof(err));
-    declare_predef_var("y", err, sizeof(err));
-    declare_predef_var("z", err, sizeof(err));
-    declare_predef_var("i", err, sizeof(err));
-    declare_predef_var("j", err, sizeof(err));
-    declare_predef_var("k", err, sizeof(err));
-    declare_predef_var("a", err, sizeof(err));
-    declare_predef_var("b", err, sizeof(err));
-    declare_predef_var("c", err, sizeof(err));
-    declare_predef_var("n", err, sizeof(err));
+    repl_eval_declare_predef_var("x", err, sizeof(err));
+    repl_eval_declare_predef_var("y", err, sizeof(err));
+    repl_eval_declare_predef_var("z", err, sizeof(err));
+    repl_eval_declare_predef_var("i", err, sizeof(err));
+    repl_eval_declare_predef_var("j", err, sizeof(err));
+    repl_eval_declare_predef_var("k", err, sizeof(err));
+    repl_eval_declare_predef_var("a", err, sizeof(err));
+    repl_eval_declare_predef_var("b", err, sizeof(err));
+    repl_eval_declare_predef_var("c", err, sizeof(err));
+    repl_eval_declare_predef_var("n", err, sizeof(err));
 }
 
 #define TEST_CODE_PANEL_MAX_HANG_INDENT_CHARS 12
@@ -245,7 +245,7 @@ static void run_flat_control_flow_only(void) {
                         eval_num_vars = repl_state_flat_program_local_vars_mut()[pc].num_vars;
                     }
                     ExprCtx ctx = { rhs, eval_vars, eval_num_vars };
-                    value = eval_expr(&ctx);
+                    value = repl_eval_expr(&ctx);
                 }
             }
             if (vi >= 0 && vi < g_num_predef_vars)
@@ -265,7 +265,7 @@ static void run_flat_control_flow_only(void) {
                         eval_num_vars = repl_state_flat_program_local_vars_mut()[pc].num_vars;
                     }
                     ExprCtx ctx = { cond_text, eval_vars, eval_num_vars };
-                    cond = eval_expr(&ctx);
+                    cond = repl_eval_expr(&ctx);
                 }
             }
             if (cond == 0.0f) {
@@ -307,7 +307,7 @@ next_pc:
 }
 
 int main(void) {
-    init_predef_vars();
+    repl_eval_init_predef_vars();
 
     repl_reset_state(); declare_test_vars();
     {

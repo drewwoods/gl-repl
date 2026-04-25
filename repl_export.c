@@ -139,13 +139,13 @@ static int parse_var(const char *args) {
     if (*p != '=') return 0;
     p++;
     ExprCtx ctx = { p, NULL, 0 };
-    float val = eval_expr(&ctx);
-    int idx = find_predef_var_idx(name);
+    float val = repl_eval_expr(&ctx);
+    int idx = repl_eval_find_predef_var_idx(name);
     if (idx < 0) {
         char err[128];
-        if (!declare_predef_var(name, err, sizeof(err)))
+        if (!repl_eval_declare_predef_var(name, err, sizeof(err)))
             return 0;
-        idx = find_predef_var_idx(name);
+        idx = repl_eval_find_predef_var_idx(name);
         if (idx < 0)
             return 0;
     }
@@ -757,10 +757,10 @@ static void write_for_begin_as_c(FILE *f, const GLCmd *cmd) {
         }
 
         char c_start[128], c_end[128], c_step[128];
-        repl_expr_to_c(start_s, c_start, sizeof(c_start));
-        repl_expr_to_c(end_s, c_end, sizeof(c_end));
+        repl_eval_expr_to_c(start_s, c_start, sizeof(c_start));
+        repl_eval_expr_to_c(end_s, c_end, sizeof(c_end));
         if (step_s[0])
-            repl_expr_to_c(step_s, c_step, sizeof(c_step));
+            repl_eval_expr_to_c(step_s, c_step, sizeof(c_step));
         else
             strncpy(c_step, "1.0f", sizeof(c_step));
 
@@ -777,7 +777,7 @@ static void write_for_begin_as_c(FILE *f, const GLCmd *cmd) {
 
     float start_v, end_v, step_v;
     const char *body;
-    if (parse_for_header(p, var_name, sizeof(var_name),
+    if (repl_eval_parse_for_header(p, var_name, sizeof(var_name),
                          &start_v, &end_v, &step_v, &body)) {
         if (step_v == 1.0f) {
             fprintf(f, "%sfor (float %s = %g; %s < %g; %s += 1.0f) {\n",
@@ -971,7 +971,7 @@ int parse_expr_list_exact(const char *src, float *out_vals, int max_vals,
 
     for (;;) {
         ExprCtx ctx = { p, vars, num_vars };
-        float value = eval_expr(&ctx);
+        float value = repl_eval_expr(&ctx);
         if (ctx.p == p) return 0;
         if (count >= max_vals) return 0;
         if (out_vals) out_vals[count] = value;
@@ -1109,7 +1109,7 @@ int input_has_expr_vars(const char *s, ExprVar *vars, int num_vars) {
 }
 
 int input_has_any_visible_vars(const char *s, ExprVar *vars, int num_vars) {
-    return input_has_predef_vars(s) || input_has_expr_vars(s, vars, num_vars);
+    return repl_eval_input_has_predef_vars(s) || input_has_expr_vars(s, vars, num_vars);
 }
 
 int repl_extract_label_name(const char *src, char *name, int name_sz) {
@@ -1249,7 +1249,7 @@ static int write_tess_source_as_c(FILE *f, const GLCmd *cmd) {
         return 0;
 
     for (int i = 0; i < arg_count; i++)
-        repl_expr_to_c(raw_args[i], c_args[i], sizeof(c_args[i]));
+        repl_eval_expr_to_c(raw_args[i], c_args[i], sizeof(c_args[i]));
 
     switch (cmd->type) {
     case CMD_TESS_NORMAL:
@@ -1293,7 +1293,7 @@ static void format_cmd_source_as_c(char *out, size_t out_sz,
         return;
 
     if (translate_exprs)
-        repl_expr_to_c(cmd->source, c_src, sizeof(c_src));
+        repl_eval_expr_to_c(cmd->source, c_src, sizeof(c_src));
     else {
         strncpy(c_src, cmd->source, sizeof(c_src) - 1);
         c_src[sizeof(c_src) - 1] = '\0';
@@ -1361,7 +1361,7 @@ static void write_canonical_cmd_as_c(FILE *f, const GLCmd *cmd, int for_depth,
     }
     case CMD_VAR_ASSIGN: {
         char c_src[MAX_LINE_LEN];
-        repl_expr_to_c(cmd->source, c_src, sizeof(c_src));
+        repl_eval_expr_to_c(cmd->source, c_src, sizeof(c_src));
         fprintf(f, "%s\n", c_src);
         break;
     }
@@ -1585,7 +1585,7 @@ static int import_parse_predef_decl(const char *line) {
         p++;
 
         ExprCtx ctx = { p, NULL, 0 };
-        float val = eval_expr(&ctx);
+        float val = repl_eval_expr(&ctx);
         p = ctx.p;
 
         for (int i = 0; i < g_num_predef_vars; i++) {
@@ -1644,9 +1644,9 @@ static int import_parse_declare_marker(const char *line, int *loaded,
         memcpy(name, start, (size_t)len);
         name[len] = '\0';
         /* Declare the var if not yet registered (noop if already there). */
-        int var_idx = find_predef_var_idx(name);
+        int var_idx = repl_eval_find_predef_var_idx(name);
         if (var_idx < 0) {
-            var_idx = declare_predef_var(name, NULL, 0);
+            var_idx = repl_eval_declare_predef_var(name, NULL, 0);
             if (var_idx < 0) {
                 if (warnings) (*warnings)++;
                 continue;
@@ -1783,7 +1783,7 @@ static int import_extract_c_for_exprs(const char *line,
                                       int *include_end,
                                       int *is_greater) {
     char repl_line[MAX_LINE_LEN];
-    c_expr_to_repl(line, repl_line, sizeof(repl_line));
+    repl_eval_c_expr_to_repl(line, repl_line, sizeof(repl_line));
 
     const char *p = repl_line;
     while (*p && *p != '=') p++;
@@ -1852,7 +1852,7 @@ static int import_extract_c_for_exprs(const char *line,
 static int import_make_repl_for_header(const char *line, char *out, int out_sz) {
     char var[16];
     float start_v, end_v, step_v;
-    if (!parse_c_for_header(line, var, sizeof(var), &start_v, &end_v, &step_v))
+    if (!repl_eval_parse_c_for_header(line, var, sizeof(var), &start_v, &end_v, &step_v))
         return 0;
 
     char start_expr[128];
@@ -2007,7 +2007,7 @@ static int import_extract_assignment_expr(const char *line, const char *key,
     if (!import_copy_expr_until(&p, ';', c_expr, sizeof(c_expr)))
         return 0;
 
-    c_expr_to_repl(c_expr, out, out_sz);
+    repl_eval_c_expr_to_repl(c_expr, out, out_sz);
     trim_in_place(out);
     return out[0] != '\0';
 }
@@ -2054,7 +2054,7 @@ static int import_make_repl_tess_line(const char *line, char *out, int out_sz) {
             if (!eq) break;
             eq++;
             ExprCtx ctx = { eq, NULL, 0 };
-            nv[i] = eval_expr(&ctx);
+            nv[i] = repl_eval_expr(&ctx);
             np = ctx.p;
         }
         snprintf(out, out_sz, "gluNormal(%g, %g, %g);", nv[0], nv[1], nv[2]);
@@ -2090,7 +2090,7 @@ static int import_make_repl_tess_line(const char *line, char *out, int out_sz) {
             if (!eq) break;
             eq++;
             ExprCtx ctx = { eq, NULL, 0 };
-            cv[i] = eval_expr(&ctx);
+            cv[i] = repl_eval_expr(&ctx);
             cp = ctx.p;
         }
         snprintf(out, out_sz, "gluColor(%g, %g, %g, %g);",
@@ -2123,7 +2123,7 @@ static int import_make_repl_tess_line(const char *line, char *out, int out_sz) {
             if (!eq) break;
             eq++;
             ExprCtx ctx = { eq, NULL, 0 };
-            vv[i] = eval_expr(&ctx);
+            vv[i] = repl_eval_expr(&ctx);
             vp = ctx.p;
         }
         snprintf(out, out_sz, "gluVertex(%g, %g, %g);",
@@ -2193,7 +2193,7 @@ static int import_make_repl_point_parameter_line(const char *line, char *out, in
         return 0;
 
     for (int i = 0; i < count; i++)
-        c_expr_to_repl(raw_args[i], repl_args[i], sizeof(repl_args[i]));
+        repl_eval_c_expr_to_repl(raw_args[i], repl_args[i], sizeof(repl_args[i]));
 
     return repl_format_fits(out, (size_t)out_sz,
                             "glPointParameterfv(%s, %s, %s, %s);",
@@ -2245,7 +2245,7 @@ static int import_make_repl_quadric_line(const char *line, char *out, int out_sz
         tmp[prefix_len] = '\0';
         strncat(tmp, args, sizeof(tmp) - 1 - strlen(tmp));
 
-        c_expr_to_repl(tmp, out, out_sz);
+        repl_eval_c_expr_to_repl(tmp, out, out_sz);
         return 1;
     }
 
@@ -2270,7 +2270,7 @@ static void import_feed_one_line(const char *line, int *loaded, int *warnings) {
                import_make_repl_label(line, repl_line, sizeof(repl_line))) {
         handled = feed_line(repl_line);
     } else {
-        c_expr_to_repl(line, repl_line, sizeof(repl_line));
+        repl_eval_c_expr_to_repl(line, repl_line, sizeof(repl_line));
         handled = feed_line(repl_line);
     }
 
@@ -2689,7 +2689,7 @@ int load_from_file(const char *filename) {
      * commands), resetting their values to 0.  Reapply the workspace-header
      * values here so they are restored correctly after the round-trip. */
     for (int di = 0; di < g_deferred_var_count; di++) {
-        int idx = find_predef_var_idx(g_deferred_var_values[di].name);
+        int idx = repl_eval_find_predef_var_idx(g_deferred_var_values[di].name);
         if (idx >= 0)
             g_predef_vars[idx].value = g_deferred_var_values[di].value;
     }

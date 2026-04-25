@@ -33,13 +33,13 @@ static int g_pass = 0;
 
 static void declare_test_vars(void) {
     char err[128];
-    declare_predef_var("x", err, sizeof(err));
-    declare_predef_var("y", err, sizeof(err));
-    declare_predef_var("z", err, sizeof(err));
-    declare_predef_var("i", err, sizeof(err));
-    declare_predef_var("j", err, sizeof(err));
-    declare_predef_var("k", err, sizeof(err));
-    declare_predef_var("n", err, sizeof(err));
+    repl_eval_declare_predef_var("x", err, sizeof(err));
+    repl_eval_declare_predef_var("y", err, sizeof(err));
+    repl_eval_declare_predef_var("z", err, sizeof(err));
+    repl_eval_declare_predef_var("i", err, sizeof(err));
+    repl_eval_declare_predef_var("j", err, sizeof(err));
+    repl_eval_declare_predef_var("k", err, sizeof(err));
+    repl_eval_declare_predef_var("n", err, sizeof(err));
 }
 
 static void set_input_text(const char *text) {
@@ -59,7 +59,7 @@ static int has_insert_match(const char *text) {
 }
 
 int main() {
-    init_predef_vars();
+    repl_eval_init_predef_vars();
     printf("--- repl_autocomplete tests ---\n");
 
     /* 1. Basic function completion */

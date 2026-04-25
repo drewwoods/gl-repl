@@ -353,14 +353,14 @@ static int replay_eval_expr_with_predefs(int flat_idx, const char *expr,
     if (!expr || !out_value)
         return 0;
 
-    c_expr_to_repl(expr, repl_expr, sizeof(repl_expr));
+    repl_eval_c_expr_to_repl(expr, repl_expr, sizeof(repl_expr));
     nv = build_visible_vars_from_predef_values(flat_idx, predef_vals,
                                                vars,
                                                (int)(sizeof(vars) / sizeof(vars[0])));
     ctx.p = repl_expr;
     ctx.vars = vars;
     ctx.num_vars = nv;
-    *out_value = eval_expr(&ctx);
+    *out_value = repl_eval_expr(&ctx);
     return 1;
 }
 

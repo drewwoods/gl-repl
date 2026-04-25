@@ -219,7 +219,7 @@ static void load_example_lines(const char *const *lines) {
         *inp->pending_newline_len = 0;
     }
     repl_editor_reset_transients();
-    init_predef_vars();
+    repl_eval_init_predef_vars();
     reset_example_presentation_defaults();
 
     if (body)

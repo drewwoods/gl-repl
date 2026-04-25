@@ -168,13 +168,13 @@ int try_commit_float_decl(void) {
                 return 1;
             }
             char verr[128];
-            if (!validate_expression_idents(init_expr, NULL, 0,
+            if (!repl_eval_validate_expression_idents(init_expr, NULL, 0,
                                             verr, sizeof(verr))) {
                 set_status(verr);
                 return 1;
             }
             ExprCtx ctx = { init_expr, g_predef_vars, g_num_predef_vars };
-            init_vals[var_count] = eval_expr(&ctx);
+            init_vals[var_count] = repl_eval_expr(&ctx);
             has_init[var_count] = 1;
         }
 
@@ -216,7 +216,7 @@ int try_commit_float_decl(void) {
         /* Reject re-declaring an already-declared variable - but exempt
          * names carried over from the decl we're overwriting, since those
          * will be undeclared before the new registration runs. */
-        if (find_predef_var_idx(names[i]) >= 0) {
+        if (repl_eval_find_predef_var_idx(names[i]) >= 0) {
             int in_old_decl = 0;
             if (old_decl) {
                 for (int d = 0; d < old_decl->var_decl_count; d++) {
@@ -234,7 +234,7 @@ int try_commit_float_decl(void) {
                 return 1;
             }
         }
-        if (is_reserved_ident(names[i])) {
+        if (repl_eval_is_reserved_ident(names[i])) {
             char buf[128];
             if (!repl_format_fits(buf, sizeof(buf), "'%s' is reserved", names[i]))
                 repl_format_fits(buf, sizeof(buf), "identifier is reserved");
@@ -309,7 +309,7 @@ int try_commit_float_decl(void) {
                 if (kept) continue;
                 for (int j = 0; j < repl_state_document_count(); j++) {
                     if (j == insert_idx) continue;
-                    if (source_uses_ident(repl_state_document_cmds_mut()[j].source, nm)) {
+                    if (repl_eval_source_uses_ident(repl_state_document_cmds_mut()[j].source, nm)) {
                         char buf[128];
                         snprintf(buf, sizeof(buf),
                                  "variable '%s' is in use, cannot overwrite", nm);
@@ -330,9 +330,9 @@ int try_commit_float_decl(void) {
                     if (strcmp(names[k], nm) == 0) { kept = 1; break; }
                 }
                 if (kept) continue;
-                int slot = find_predef_var_idx(nm);
+                int slot = repl_eval_find_predef_var_idx(nm);
                 if (slot < 0) continue;
-                undeclare_predef_var(nm);
+                repl_eval_undeclare_predef_var(nm);
                 for (int j = 0; j < repl_state_document_count(); j++) {
                     if (repl_state_document_cmds_mut()[j].type == CMD_VAR_ASSIGN && repl_state_document_cmds_mut()[j].num_args > slot)
                         repl_state_document_cmds_mut()[j].num_args--;
@@ -343,16 +343,16 @@ int try_commit_float_decl(void) {
         /* Register new names (safe - overwrite check passed, capacity verified).
          * Skip names already registered (kept from old decl) to preserve values. */
         for (int i = 0; i < var_count; i++) {
-            if (overwriting_decl && find_predef_var_idx(names[i]) >= 0) {
+            if (overwriting_decl && repl_eval_find_predef_var_idx(names[i]) >= 0) {
                 if (has_init[i]) {
-                    int idx = find_predef_var_idx(names[i]);
+                    int idx = repl_eval_find_predef_var_idx(names[i]);
                     g_predef_vars[idx].value = init_vals[i];
                 }
                 continue;
             }
-            declare_predef_var(names[i], NULL, 0);
+            repl_eval_declare_predef_var(names[i], NULL, 0);
             if (has_init[i]) {
-                int idx = find_predef_var_idx(names[i]);
+                int idx = repl_eval_find_predef_var_idx(names[i]);
                 if (idx >= 0)
                     g_predef_vars[idx].value = init_vals[i];
             }
@@ -417,7 +417,7 @@ int try_assign_variable(void) {
         }
     }
 
-    int var_idx = find_predef_var_idx(name);
+    int var_idx = repl_eval_find_predef_var_idx(name);
     if (var_idx < 0) {
         char buf[128];
         snprintf(buf, sizeof(buf),
@@ -432,17 +432,17 @@ int try_assign_variable(void) {
         ExprVar vis[MAX_EXPR_VARS];
         int vis_n = collect_visible_vars(insert_idx, vis, MAX_EXPR_VARS);
         char verr[128];
-        if (!validate_expression_idents(rhs, vis_n > 0 ? vis : NULL, vis_n, verr, sizeof(verr))) {
+        if (!repl_eval_validate_expression_idents(rhs, vis_n > 0 ? vis : NULL, vis_n, verr, sizeof(verr))) {
             set_status(verr);
             return 1;
         }
     }
     {
         ExprCtx ctx = { rhs, g_predef_vars, g_num_predef_vars };
-        val = eval_expr(&ctx);
+        val = repl_eval_expr(&ctx);
     }
     g_predef_vars[var_idx].value = val;
-    has_rhs_vars = input_has_predef_vars(rhs);
+    has_rhs_vars = repl_eval_input_has_predef_vars(rhs);
 
     {
         GLCmd cmd;
@@ -482,7 +482,7 @@ int try_assign_variable(void) {
                         const char *nm = repl_state_document_cmds_mut()[insert_idx].var_names[d];
                         for (int j = 0; j < repl_state_document_count(); j++) {
                             if (j == insert_idx) continue;
-                            if (source_uses_ident(repl_state_document_cmds_mut()[j].source, nm)) {
+                            if (repl_eval_source_uses_ident(repl_state_document_cmds_mut()[j].source, nm)) {
                                 char buf[128];
                                 snprintf(buf, sizeof(buf),
                                          "variable '%s' is in use, cannot overwrite", nm);
@@ -493,9 +493,9 @@ int try_assign_variable(void) {
                     }
                     for (int d = 0; d < repl_state_document_cmds_mut()[insert_idx].var_decl_count; d++) {
                         const char *nm = repl_state_document_cmds_mut()[insert_idx].var_names[d];
-                        int slot = find_predef_var_idx(nm);
+                        int slot = repl_eval_find_predef_var_idx(nm);
                         if (slot < 0) continue;
-                        undeclare_predef_var(nm);
+                        repl_eval_undeclare_predef_var(nm);
                         for (int j = 0; j < repl_state_document_count(); j++) {
                             if (repl_state_document_cmds_mut()[j].type == CMD_VAR_ASSIGN && repl_state_document_cmds_mut()[j].num_args > slot)
                                 repl_state_document_cmds_mut()[j].num_args--;
@@ -553,7 +553,7 @@ int try_commit_for_loop(void) {
         float start, end, step;
         const char *body_start;
 
-        if (!parse_for_header_with_vars(p, var_name, sizeof(var_name),
+        if (!repl_eval_parse_for_header_with_vars(p, var_name, sizeof(var_name),
                                         &start, &end, &step,
                                         visible_vars, visible_nv, &body_start)) {
             set_status("for syntax: for(var, start, end[, step]) body;");
@@ -629,7 +629,7 @@ int try_commit_for_loop(void) {
 
                         {
                             char verr[128];
-                            if (!validate_expression_idents(ra, visible_vars, visible_nv, verr, sizeof(verr))) {
+                            if (!repl_eval_validate_expression_idents(ra, visible_vars, visible_nv, verr, sizeof(verr))) {
                                 set_status(verr);
                                 return 1;
                             }
@@ -972,7 +972,7 @@ int try_commit_if_block(void) {
 
         {
             char verr[128];
-            if (!validate_expression_idents(cond_text,
+            if (!repl_eval_validate_expression_idents(cond_text,
                                             visible_nv > 0 ? visible_vars : NULL, visible_nv,
                                             verr, sizeof(verr))) {
                 set_status(verr);
@@ -980,7 +980,7 @@ int try_commit_if_block(void) {
             }
         }
         {
-            int neval = parse_exprs(cond_text, cond_args, 1,
+            int neval = repl_eval_parse_exprs(cond_text, cond_args, 1,
                                     visible_nv > 0 ? visible_vars : NULL, visible_nv);
             cond_val = (neval >= 1) ? cond_args[0] : 0.0f;
         }

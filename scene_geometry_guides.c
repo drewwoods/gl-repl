@@ -54,7 +54,7 @@ static void draw_guide_xy_plane(float v, float sz, float as) {
 }
 
 /* Parse up to 3 comma-separated glVertex argument slots, recording which
- * positions are actually present. parse_exprs() skips leading commas so
+ * positions are actually present. repl_eval_parse_exprs() skips leading commas so
  * ",1," and "1," look identical to it; this version tracks slot indices.
  * Empty slots (e.g. x in ",1,") leave filled[i]=0, out[i] unchanged. */
 static int parse_vertex_slots(const SceneGuideSnapshot *snapshot,
@@ -73,7 +73,7 @@ static int parse_vertex_slots(const SceneGuideSnapshot *snapshot,
         if (c < end) {
             ExprCtx ctx = { start, snapshot->predef_vars,
                             snapshot->predef_var_count };
-            float val = eval_expr(&ctx);
+            float val = repl_eval_expr(&ctx);
             if (ctx.p > start) {
                 out[slot] = val;
                 filled[slot] = 1;
@@ -178,7 +178,7 @@ static void draw_normal_guides(const SceneGuideSnapshot *snapshot) {
         return;
 
     float vals[3];
-    int n = parse_exprs(args_str, vals, 3, NULL, 0);
+    int n = repl_eval_parse_exprs(args_str, vals, 3, NULL, 0);
     if (n < 3 || snapshot->cursor_pos < paren_pos)
         return;
 

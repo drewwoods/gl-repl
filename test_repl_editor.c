@@ -78,13 +78,13 @@ static int g_mock_modifiers = 0;
 
 static void declare_test_vars(void) {
     char err[128];
-    ASSERT_DECL_OK("declare_predef_var x", declare_predef_var("x", err, sizeof(err)), err);
-    ASSERT_DECL_OK("declare_predef_var y", declare_predef_var("y", err, sizeof(err)), err);
-    ASSERT_DECL_OK("declare_predef_var z", declare_predef_var("z", err, sizeof(err)), err);
-    ASSERT_DECL_OK("declare_predef_var i", declare_predef_var("i", err, sizeof(err)), err);
-    ASSERT_DECL_OK("declare_predef_var j", declare_predef_var("j", err, sizeof(err)), err);
-    ASSERT_DECL_OK("declare_predef_var k", declare_predef_var("k", err, sizeof(err)), err);
-    ASSERT_DECL_OK("declare_predef_var n", declare_predef_var("n", err, sizeof(err)), err);
+    ASSERT_DECL_OK("declare_predef_var x", repl_eval_declare_predef_var("x", err, sizeof(err)), err);
+    ASSERT_DECL_OK("declare_predef_var y", repl_eval_declare_predef_var("y", err, sizeof(err)), err);
+    ASSERT_DECL_OK("declare_predef_var z", repl_eval_declare_predef_var("z", err, sizeof(err)), err);
+    ASSERT_DECL_OK("declare_predef_var i", repl_eval_declare_predef_var("i", err, sizeof(err)), err);
+    ASSERT_DECL_OK("declare_predef_var j", repl_eval_declare_predef_var("j", err, sizeof(err)), err);
+    ASSERT_DECL_OK("declare_predef_var k", repl_eval_declare_predef_var("k", err, sizeof(err)), err);
+    ASSERT_DECL_OK("declare_predef_var n", repl_eval_declare_predef_var("n", err, sizeof(err)), err);
 }
 
 static void set_editor_input(const char *s) {
@@ -182,15 +182,15 @@ static void assert_float_decl_rejected_atomic(const char *label,
     snprintf(detail, sizeof(detail), "%s: var count unchanged", label);
     ASSERT_INT(detail, g_num_predef_vars, old_num_predef_vars);
     snprintf(detail, sizeof(detail), "%s: rejected name not registered", label);
-    ASSERT_TRUE(detail, find_predef_var_idx(rejected_name) < 0);
+    ASSERT_TRUE(detail, repl_eval_find_predef_var_idx(rejected_name) < 0);
     snprintf(detail, sizeof(detail), "%s: status", label);
     assert_status_contains(detail, status_part);
     ASSERT_TRUE("atomic failure preserves anchor",
-                old_num_predef_vars <= 1 || find_predef_var_idx("anchor") >= 0);
+                old_num_predef_vars <= 1 || repl_eval_find_predef_var_idx("anchor") >= 0);
 }
 
 int main() {
-    init_predef_vars();
+    repl_eval_init_predef_vars();
     repl_set_modifier_provider_for_test(mock_get_modifiers);
     printf("--- repl_editor tests ---\n");
 
@@ -209,7 +209,7 @@ int main() {
         ASSERT_INT("commit chain float decl cmd type",
                    repl_state_document_cmds_mut()[0].type, CMD_VAR_DECLARE);
         ASSERT_TRUE("commit chain float decl registered var",
-                    find_predef_var_idx("chain_order") >= 0);
+                    repl_eval_find_predef_var_idx("chain_order") >= 0);
     }
 
     /* 0. Code/scene panel geometry supports left, top, bottom, and hidden layouts */
@@ -436,7 +436,7 @@ int main() {
         ASSERT_INT("semicolon route used float declaration handler",
                    repl_state_document_cmds_mut()[0].type, CMD_VAR_DECLARE);
         ASSERT_TRUE("semicolon route registered declared variable",
-                    find_predef_var_idx("keyboard_route") >= 0);
+                    repl_eval_find_predef_var_idx("keyboard_route") >= 0);
     }
 
     /* 0c5. Special-key routing keeps rename ahead of replay/search/navigation. */
@@ -1371,7 +1371,7 @@ int main() {
         ASSERT_INT("float_decl no-semi: var_decl_count", repl_state_document_cmds_mut()[0].var_decl_count, 1);
         ASSERT_STR("float_decl no-semi: var name", repl_state_document_cmds_mut()[0].var_names[0], "tmp");
         ASSERT_TRUE("float_decl no-semi: predef registered",
-                     find_predef_var_idx("tmp") >= 0);
+                     repl_eval_find_predef_var_idx("tmp") >= 0);
     }
 
     /* 27. float decl WITH trailing semicolon (feed_line path) */
@@ -1382,7 +1382,7 @@ int main() {
         ASSERT_INT("float_decl with-semi: type", repl_state_document_cmds_mut()[0].type, CMD_VAR_DECLARE);
         ASSERT_STR("float_decl with-semi: var name", repl_state_document_cmds_mut()[0].var_names[0], "abc");
         ASSERT_TRUE("float_decl with-semi: predef registered",
-                     find_predef_var_idx("abc") >= 0);
+                     repl_eval_find_predef_var_idx("abc") >= 0);
     }
 
     /* 28. float decl with initializer, no trailing semicolon */
@@ -1404,7 +1404,7 @@ int main() {
         ASSERT_INT("float_decl init no-semi: cmd added", repl_state_document_count(), 1);
         ASSERT_INT("float_decl init no-semi: type", repl_state_document_cmds_mut()[0].type, CMD_VAR_DECLARE);
         ASSERT_STR("float_decl init no-semi: var name", repl_state_document_cmds_mut()[0].var_names[0], "tmp");
-        int idx = find_predef_var_idx("tmp");
+        int idx = repl_eval_find_predef_var_idx("tmp");
         ASSERT_TRUE("float_decl init no-semi: predef registered", idx >= 0);
         if (idx >= 0)
             ASSERT_TRUE("float_decl init no-semi: value is 0",
@@ -1418,7 +1418,7 @@ int main() {
         ASSERT_INT("float_decl init expr: cmd added", repl_state_document_count(), 1);
         ASSERT_INT("float_decl init expr: type", repl_state_document_cmds_mut()[0].type, CMD_VAR_DECLARE);
         ASSERT_STR("float_decl init expr: var name", repl_state_document_cmds_mut()[0].var_names[0], "radius");
-        int idx = find_predef_var_idx("radius");
+        int idx = repl_eval_find_predef_var_idx("radius");
         ASSERT_TRUE("float_decl init expr: registered", idx >= 0);
         if (idx >= 0)
             ASSERT_TRUE("float_decl init expr: value is 2.5",
@@ -1445,11 +1445,11 @@ int main() {
         ASSERT_INT("float_decl multi no-semi: var_decl_count",
                    repl_state_document_cmds_mut()[0].var_decl_count, 3);
         ASSERT_TRUE("float_decl multi no-semi: a registered",
-                     find_predef_var_idx("a") >= 0);
+                     repl_eval_find_predef_var_idx("a") >= 0);
         ASSERT_TRUE("float_decl multi no-semi: b registered",
-                     find_predef_var_idx("b") >= 0);
+                     repl_eval_find_predef_var_idx("b") >= 0);
         ASSERT_TRUE("float_decl multi no-semi: c registered",
-                     find_predef_var_idx("c") >= 0);
+                     repl_eval_find_predef_var_idx("c") >= 0);
     }
 
     /* 31. multi-name float decl with initializers */
@@ -1459,8 +1459,8 @@ int main() {
         ASSERT_INT("float_decl multi init: cmd added", repl_state_document_count(), 1);
         ASSERT_INT("float_decl multi init: var_decl_count",
                    repl_state_document_cmds_mut()[0].var_decl_count, 2);
-        int xi = find_predef_var_idx("x");
-        int yi = find_predef_var_idx("y");
+        int xi = repl_eval_find_predef_var_idx("x");
+        int yi = repl_eval_find_predef_var_idx("y");
         ASSERT_TRUE("float_decl multi init: x registered", xi >= 0);
         ASSERT_TRUE("float_decl multi init: y registered", yi >= 0);
         if (xi >= 0)
@@ -1537,9 +1537,9 @@ int main() {
         repl_feed_line_public("float a, b;");
         ASSERT_INT("overwrite shared: baseline cmd count", repl_state_document_count(), 1);
         ASSERT_TRUE("overwrite shared: a registered",
-                    find_predef_var_idx("a") >= 0);
+                    repl_eval_find_predef_var_idx("a") >= 0);
         ASSERT_TRUE("overwrite shared: b registered",
-                    find_predef_var_idx("b") >= 0);
+                    repl_eval_find_predef_var_idx("b") >= 0);
 
         {
             ReplEditorInputState *inp = repl_state_editor_input_mut();
@@ -1558,11 +1558,11 @@ int main() {
         ASSERT_STR("overwrite shared: slot 0 is a", repl_state_document_cmds_mut()[0].var_names[0], "a");
         ASSERT_STR("overwrite shared: slot 1 is c", repl_state_document_cmds_mut()[0].var_names[1], "c");
         ASSERT_TRUE("overwrite shared: a still registered",
-                    find_predef_var_idx("a") >= 0);
+                    repl_eval_find_predef_var_idx("a") >= 0);
         ASSERT_TRUE("overwrite shared: c registered",
-                    find_predef_var_idx("c") >= 0);
+                    repl_eval_find_predef_var_idx("c") >= 0);
         ASSERT_TRUE("overwrite shared: b unregistered",
-                    find_predef_var_idx("b") < 0);
+                    repl_eval_find_predef_var_idx("b") < 0);
     }
 
     /* 35. Overwriting `float n, b;` → `float n;` with `n` referenced
@@ -1590,9 +1590,9 @@ int main() {
         ASSERT_INT("drop b: var_decl_count now 1", repl_state_document_cmds_mut()[0].var_decl_count, 1);
         ASSERT_STR("drop b: slot 0 is n", repl_state_document_cmds_mut()[0].var_names[0], "n");
         ASSERT_TRUE("drop b: n still registered",
-                    find_predef_var_idx("n") >= 0);
+                    repl_eval_find_predef_var_idx("n") >= 0);
         ASSERT_TRUE("drop b: b unregistered",
-                    find_predef_var_idx("b") < 0);
+                    repl_eval_find_predef_var_idx("b") < 0);
     }
 
     /* 36. Attempting to drop a name that IS referenced elsewhere must
@@ -1633,7 +1633,7 @@ int main() {
         repl_feed_line_public("float n;");
         repl_feed_line_public("n = 5;");
         ASSERT_TRUE("delete referenced decl setup: n registered",
-                    find_predef_var_idx("n") >= 0);
+                    repl_eval_find_predef_var_idx("n") >= 0);
 
         delete_cmd_range(0, 1, "Deleted");
 
@@ -1641,7 +1641,7 @@ int main() {
         ASSERT_INT("delete referenced decl: first still decl", repl_state_document_cmds_mut()[0].type, CMD_VAR_DECLARE);
         ASSERT_INT("delete referenced decl: second still assign", repl_state_document_cmds_mut()[1].type, CMD_VAR_ASSIGN);
         ASSERT_TRUE("delete referenced decl: n still registered",
-                    find_predef_var_idx("n") >= 0);
+                    repl_eval_find_predef_var_idx("n") >= 0);
         assert_status_contains("delete referenced decl: status", "Cannot remove float declarations");
     }
 
@@ -1660,7 +1660,7 @@ int main() {
         ASSERT_INT("cut referenced decl: first still decl", repl_state_document_cmds_mut()[0].type, CMD_VAR_DECLARE);
         ASSERT_INT("cut referenced decl: second still assign", repl_state_document_cmds_mut()[1].type, CMD_VAR_ASSIGN);
         ASSERT_TRUE("cut referenced decl: n still registered",
-                    find_predef_var_idx("n") >= 0);
+                    repl_eval_find_predef_var_idx("n") >= 0);
         ASSERT_INT("cut referenced decl: clipboard count preserved", repl_state_clipboard_count(), 1);
         ASSERT_STR("cut referenced decl: clipboard source preserved", repl_state_clipboard_cmds_mut()[0].source, "  n = 5;");
         assert_status_contains("cut referenced decl: status", "Cannot remove float declarations");
@@ -1672,7 +1672,7 @@ int main() {
         repl_feed_line_public("float n;");
         repl_feed_line_public("n = 5;");
         ASSERT_TRUE("cut decl block setup: n registered",
-                    find_predef_var_idx("n") >= 0);
+                    repl_eval_find_predef_var_idx("n") >= 0);
         repl_state_clipboard_cmds_mut()[0] = repl_state_document_cmds()[1];
         repl_state_clipboard_count_set(1);
         repl_state_selection_set(0, 1);
@@ -1681,7 +1681,7 @@ int main() {
 
         ASSERT_INT("cut decl block: cmd count unchanged", repl_state_document_count(), 2);
         ASSERT_TRUE("cut decl block: n still registered",
-                    find_predef_var_idx("n") >= 0);
+                    repl_eval_find_predef_var_idx("n") >= 0);
         ASSERT_INT("cut decl block: clipboard count preserved", repl_state_clipboard_count(), 1);
         ASSERT_STR("cut decl block: clipboard source preserved", repl_state_clipboard_cmds_mut()[0].source, "  n = 5;");
         assert_status_contains("cut decl block: status", "Cannot remove float declarations");
@@ -1693,13 +1693,13 @@ int main() {
         repl_feed_line_public("float n;");
         repl_feed_line_public("n = 5;");
         ASSERT_TRUE("delete decl block setup: n registered",
-                    find_predef_var_idx("n") >= 0);
+                    repl_eval_find_predef_var_idx("n") >= 0);
 
         delete_cmd_range(0, 2, "Deleted");
 
         ASSERT_INT("delete decl block: cmd count unchanged", repl_state_document_count(), 2);
         ASSERT_TRUE("delete decl block: n still registered",
-                    find_predef_var_idx("n") >= 0);
+                    repl_eval_find_predef_var_idx("n") >= 0);
         assert_status_contains("delete decl block: status", "Cannot remove float declarations");
     }
 
@@ -1720,7 +1720,7 @@ int main() {
             char label[128];
             snprintf(name, sizeof(name), "v%d", i);
             snprintf(label, sizeof(label), "decl per-line overflow: %s not registered", name);
-            ASSERT_TRUE(label, find_predef_var_idx(name) < 0);
+            ASSERT_TRUE(label, repl_eval_find_predef_var_idx(name) < 0);
         }
         assert_status_contains("decl per-line overflow: status count", "too many names per declaration");
         assert_status_contains("decl per-line overflow: status max", "max 8");
@@ -1743,11 +1743,11 @@ int main() {
         ASSERT_INT("decl table full: cmd count unchanged", repl_state_document_count(), 2);
         ASSERT_INT("decl table full: var count unchanged", g_num_predef_vars, MAX_PREDEF_VARS);
         ASSERT_TRUE("decl table full: overflow not registered",
-                    find_predef_var_idx("overflow") < 0);
+                    repl_eval_find_predef_var_idx("overflow") < 0);
         ASSERT_TRUE("decl table full: first existing var remains",
-                    find_predef_var_idx("v0") >= 0);
+                    repl_eval_find_predef_var_idx("v0") >= 0);
         ASSERT_TRUE("decl table full: last existing var remains",
-                    find_predef_var_idx("v14") >= 0);
+                    repl_eval_find_predef_var_idx("v14") >= 0);
         assert_status_contains("decl table full: status full", "variable table full");
         assert_status_contains("decl table full: status max", "max 16");
     }
@@ -1758,7 +1758,7 @@ int main() {
         repl_feed_line_public("float anchor;");
         ASSERT_INT("decl atomic setup: one decl", repl_state_document_count(), 1);
         ASSERT_TRUE("decl atomic setup: anchor registered",
-                    find_predef_var_idx("anchor") >= 0);
+                    repl_eval_find_predef_var_idx("anchor") >= 0);
 
         assert_float_decl_rejected_atomic("decl duplicate", "float dup, dup",
                                           "dup", "duplicate name 'dup'");
@@ -1772,7 +1772,7 @@ int main() {
         ASSERT_INT("decl atomic: only anchor cmd remains", repl_state_document_count(), 1);
         ASSERT_INT("decl atomic: only t plus anchor registered", g_num_predef_vars, 2);
         ASSERT_TRUE("decl atomic: anchor still registered",
-                    find_predef_var_idx("anchor") >= 0);
+                    repl_eval_find_predef_var_idx("anchor") >= 0);
     }
 
     /* 42. Expanding a multi-name decl (float a,b,c → float a,b,c,d) must
@@ -1787,9 +1787,9 @@ int main() {
         repl_feed_line_public("c = 3;");
         ASSERT_INT("expand decl: baseline cmd count", repl_state_document_count(), 4);
 
-        int ai = find_predef_var_idx("a");
-        int bi = find_predef_var_idx("b");
-        int ci = find_predef_var_idx("c");
+        int ai = repl_eval_find_predef_var_idx("a");
+        int bi = repl_eval_find_predef_var_idx("b");
+        int ci = repl_eval_find_predef_var_idx("c");
         ASSERT_TRUE("expand decl: a registered before", ai >= 0);
         ASSERT_TRUE("expand decl: b registered before", bi >= 0);
         ASSERT_TRUE("expand decl: c registered before", ci >= 0);
@@ -1817,10 +1817,10 @@ int main() {
         ASSERT_INT("expand decl: still 4 cmds", repl_state_document_count(), 4);
         ASSERT_INT("expand decl: var_decl_count is 4", repl_state_document_cmds_mut()[0].var_decl_count, 4);
 
-        ai = find_predef_var_idx("a");
-        bi = find_predef_var_idx("b");
-        ci = find_predef_var_idx("c");
-        int di = find_predef_var_idx("d");
+        ai = repl_eval_find_predef_var_idx("a");
+        bi = repl_eval_find_predef_var_idx("b");
+        ci = repl_eval_find_predef_var_idx("c");
+        int di = repl_eval_find_predef_var_idx("d");
         ASSERT_TRUE("expand decl: a still registered", ai >= 0);
         ASSERT_TRUE("expand decl: b still registered", bi >= 0);
         ASSERT_TRUE("expand decl: c still registered", ci >= 0);
@@ -2400,7 +2400,7 @@ int main() {
                     strstr(g_status, "Cannot uncomment") == NULL);
         assert_status_contains("uncomment assignment: status", "Uncommented");
         ASSERT_TRUE("uncomment assignment: value restored",
-                    repl_state_document_cmds_mut()[1].num_args == find_predef_var_idx("x"));
+                    repl_state_document_cmds_mut()[1].num_args == repl_eval_find_predef_var_idx("x"));
 
         g_mock_modifiers = saved_mods;
     }

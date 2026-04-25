@@ -191,7 +191,7 @@ static void flatten_range(FlattenContext *ctx,
                 const char *unused_body;
                 float re_start, re_end, re_step;
                 char rv[16];
-                if (parse_for_header_with_vars(src_cmd->source, rv, sizeof(rv),
+                if (repl_eval_parse_for_header_with_vars(src_cmd->source, rv, sizeof(rv),
                                                &re_start, &re_end, &re_step,
                                                vars, nv, &unused_body)) {
                     start_val = re_start;
@@ -328,15 +328,15 @@ static void flatten_range(FlattenContext *ctx,
             if (vars && nv > 0 &&
                 repl_extract_paren_payload(src_cmd->source, cond_text, sizeof(cond_text)) &&
                 (input_has_expr_vars(cond_text, vars, nv) ||
-                 input_has_predef_vars(cond_text))) {
+                 repl_eval_input_has_predef_vars(cond_text))) {
                 needs_local_eval = 1;
             }
 
             if (needs_local_eval) {
                 char repl_cond[MAX_LINE_LEN];
-                c_expr_to_repl(cond_text, repl_cond, sizeof(repl_cond));
+                repl_eval_c_expr_to_repl(cond_text, repl_cond, sizeof(repl_cond));
                 ExprCtx expr_ctx = { repl_cond, vars, nv };
-                float cond = eval_expr(&expr_ctx);
+                float cond = repl_eval_expr(&expr_ctx);
                 if (cond != 0.0f)
                     flatten_range(ctx, i + 1, if_end, vars, nv,
                                   call_src_cmd_idx, root_call_src_cmd_idx,
@@ -390,9 +390,9 @@ static void flatten_range(FlattenContext *ctx,
             if (repl_extract_assignment_parts(src_cmd->source, NULL, 0,
                                               rhs, sizeof(rhs)) && rhs[0]) {
                 char repl_rhs[MAX_LINE_LEN];
-                c_expr_to_repl(rhs, repl_rhs, sizeof(repl_rhs));
+                repl_eval_c_expr_to_repl(rhs, repl_rhs, sizeof(repl_rhs));
                 ExprCtx expr_ctx = { repl_rhs, vars, nv };
-                value = eval_expr(&expr_ctx);
+                value = repl_eval_expr(&expr_ctx);
                 if (vars && nv > 0)
                     local_rhs_vars = input_has_expr_vars(rhs, vars, nv);
             }

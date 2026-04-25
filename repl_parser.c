@@ -221,10 +221,10 @@ static int parse_command(const char *line, GLCmd *cmd,
 
                 if (!found2 && def->type == CMD_LIGHT_MODEL_I) {
                     char verr[128];
-                    if (!validate_expression_idents(trimmed2, vars, num_vars, verr, sizeof(verr))) {
+                    if (!repl_eval_validate_expression_idents(trimmed2, vars, num_vars, verr, sizeof(verr))) {
                         set_status(verr); return 0;
                     }
-                    float fv; if (parse_exprs(trimmed2, &fv, 1, vars, num_vars) == 1) { val2_f = fv; found2 = 1; }
+                    float fv; if (repl_eval_parse_exprs(trimmed2, &fv, 1, vars, num_vars) == 1) { val2_f = fv; found2 = 1; }
                 }
 
                 if (!found2) { set_status(def->usage2); return 0; }
@@ -275,7 +275,7 @@ static int parse_command(const char *line, GLCmd *cmd,
         if (strcmp(func, def->name) == 0) {
             {
                 char verr[128];
-                if (!validate_expression_idents(args, vars, num_vars, verr, sizeof(verr))) {
+                if (!repl_eval_validate_expression_idents(args, vars, num_vars, verr, sizeof(verr))) {
                     set_status(verr); return 0;
                 }
             }
@@ -339,7 +339,7 @@ static int parse_command(const char *line, GLCmd *cmd,
                 }
                 return 1;
             }
-            cmd->num_args = parse_exprs(args, cmd->args, def->num_args, vars, num_vars);
+            cmd->num_args = repl_eval_parse_exprs(args, cmd->args, def->num_args, vars, num_vars);
             if (cmd->num_args < def->num_args)
                 set_incomplete_arg_count_status(def->name, def->num_args, cmd->num_args);
             else
@@ -388,12 +388,12 @@ static int parse_command(const char *line, GLCmd *cmd,
 
         {
             char verr[128];
-            if (!validate_expression_idents(a3, vars, num_vars, verr, sizeof(verr))) {
+            if (!repl_eval_validate_expression_idents(a3, vars, num_vars, verr, sizeof(verr))) {
                 set_status(verr); return 0;
             }
         }
         float parsed_args[8];
-        int num_parsed = parse_exprs(a3, parsed_args, 8, vars, num_vars);
+        int num_parsed = repl_eval_parse_exprs(a3, parsed_args, 8, vars, num_vars);
         if (num_parsed != 1 && num_parsed != 4) {
             set_status("Expected 1 or 4 float values");
             return 0;
@@ -451,12 +451,12 @@ static int parse_command(const char *line, GLCmd *cmd,
 
         {
             char verr[128];
-            if (!validate_expression_idents(rest, vars, num_vars, verr, sizeof(verr))) {
+            if (!repl_eval_validate_expression_idents(rest, vars, num_vars, verr, sizeof(verr))) {
                 set_status(verr); return 0;
             }
         }
         float parsed_args[4];
-        int num_parsed = parse_exprs(rest, parsed_args, 4, vars, num_vars);
+        int num_parsed = repl_eval_parse_exprs(rest, parsed_args, 4, vars, num_vars);
         if (num_parsed != 3) {
             set_status("Expected 3 floats: const, linear, quadratic attenuation coefficients");
             return 0;
@@ -502,7 +502,7 @@ static int parse_command(const char *line, GLCmd *cmd,
         int arg_count = 0;
         if (args[0] != '\0') {
             char verr[128];
-            if (!validate_expression_idents(args, vars, num_vars, verr, sizeof(verr))) {
+            if (!repl_eval_validate_expression_idents(args, vars, num_vars, verr, sizeof(verr))) {
                 set_status(verr); return 0;
             }
         }
@@ -610,11 +610,11 @@ static int parse_command(const char *line, GLCmd *cmd,
     if (strcmp(func, "gluColor") == 0) {
         {
             char verr[128];
-            if (!validate_expression_idents(args, vars, num_vars, verr, sizeof(verr))) {
+            if (!repl_eval_validate_expression_idents(args, vars, num_vars, verr, sizeof(verr))) {
                 set_status(verr); return 0;
             }
         }
-        cmd->num_args = parse_exprs(args, cmd->args, 4, vars, num_vars);
+        cmd->num_args = repl_eval_parse_exprs(args, cmd->args, 4, vars, num_vars);
         if (cmd->num_args >= 3) {
             if (cmd->num_args < 4) cmd->args[3] = 1.0f;
             cmd->num_args = 4;

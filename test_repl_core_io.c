@@ -22,10 +22,10 @@ static int g_pass = 0;
 
 static void declare_test_vars(void) {
     char err[128];
-    declare_predef_var("x", err, sizeof(err));
-    declare_predef_var("i", err, sizeof(err));
-    declare_predef_var("j", err, sizeof(err));
-    declare_predef_var("n", err, sizeof(err));
+    repl_eval_declare_predef_var("x", err, sizeof(err));
+    repl_eval_declare_predef_var("i", err, sizeof(err));
+    repl_eval_declare_predef_var("j", err, sizeof(err));
+    repl_eval_declare_predef_var("n", err, sizeof(err));
 }
 
 static size_t read_text_file(const char *path, char *buf, size_t buf_sz) {
@@ -96,7 +96,7 @@ int main(void) {
     const char *quadric_path = "/tmp/repl_core_quadric_output.c";
     const char *tess_path = "/tmp/repl_core_tess_output.c";
 
-    init_predef_vars();
+    repl_eval_init_predef_vars();
     repl_reset_state(); declare_test_vars();
 
     repl_feed_line_public("x = 1.25;");

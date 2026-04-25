@@ -33,14 +33,14 @@ static const char *skip_numeric_literal(const char *s) {
     return end;
 }
 
-void init_predef_vars(void) {
+void repl_eval_init_predef_vars(void) {
     g_num_predef_vars = 1;
     strncpy(g_predef_vars[0].name, "t", sizeof(g_predef_vars[0].name) - 1);
     g_predef_vars[0].name[sizeof(g_predef_vars[0].name) - 1] = '\0';
     g_predef_vars[0].value = 0.0f;
 }
 
-int find_predef_var_idx(const char *name) {
+int repl_eval_find_predef_var_idx(const char *name) {
     for (int i = 0; i < g_num_predef_vars; i++)
         if (strcmp(name, g_predef_vars[i].name) == 0)
             return i;
@@ -55,13 +55,13 @@ static const char *s_reserved_idents[] = {
     NULL
 };
 
-int is_reserved_ident(const char *name) {
+int repl_eval_is_reserved_ident(const char *name) {
     for (const char **r = s_reserved_idents; *r; r++)
         if (strcmp(name, *r) == 0) return 1;
     return 0;
 }
 
-int declare_predef_var(const char *name, char *err, int errsz) {
+int repl_eval_declare_predef_var(const char *name, char *err, int errsz) {
     if (!name || !name[0]) {
         if (err) snprintf(err, errsz, "empty variable name");
         return 0;
@@ -81,11 +81,11 @@ int declare_predef_var(const char *name, char *err, int errsz) {
                           name, (int)sizeof(g_predef_vars[0].name) - 1);
         return 0;
     }
-    if (is_reserved_ident(name)) {
+    if (repl_eval_is_reserved_ident(name)) {
         if (err) snprintf(err, errsz, "'%s' is reserved", name);
         return 0;
     }
-    if (find_predef_var_idx(name) >= 0) {
+    if (repl_eval_find_predef_var_idx(name) >= 0) {
         if (err) snprintf(err, errsz, "'%s' already declared", name);
         return 0;
     }
@@ -101,8 +101,8 @@ int declare_predef_var(const char *name, char *err, int errsz) {
     return 1;
 }
 
-void undeclare_predef_var(const char *name) {
-    int idx = find_predef_var_idx(name);
+void repl_eval_undeclare_predef_var(const char *name) {
+    int idx = repl_eval_find_predef_var_idx(name);
     if (idx < 0) return;
     for (int i = idx; i < g_num_predef_vars - 1; i++)
         g_predef_vars[i] = g_predef_vars[i + 1];
@@ -110,7 +110,7 @@ void undeclare_predef_var(const char *name) {
     memset(&g_predef_vars[g_num_predef_vars], 0, sizeof(ExprVar));
 }
 
-int source_uses_ident(const char *src, const char *name) {
+int repl_eval_source_uses_ident(const char *src, const char *name) {
     int nlen = (int)strlen(name);
     const char *s = src;
     while (*s) {
@@ -129,7 +129,7 @@ int source_uses_ident(const char *src, const char *name) {
     return 0;
 }
 
-int validate_expression_idents(const char *src, const ExprVar *vars,
+int repl_eval_validate_expression_idents(const char *src, const ExprVar *vars,
                                int num_vars, char *err, int errsz) {
     const char *s = src;
     while (*s) {
@@ -170,7 +170,7 @@ int validate_expression_idents(const char *src, const ExprVar *vars,
             if (strcmp(name, vars[i].name) == 0) { found = 1; break; }
         if (found) continue;
 
-        if (find_predef_var_idx(name) >= 0) continue;
+        if (repl_eval_find_predef_var_idx(name) >= 0) continue;
 
         if (err) snprintf(err, errsz, "undeclared variable '%s'", name);
         return 0;
@@ -178,7 +178,7 @@ int validate_expression_idents(const char *src, const ExprVar *vars,
     return 1;
 }
 
-int input_has_predef_vars(const char *s) {
+int repl_eval_input_has_predef_vars(const char *s) {
     while (*s) {
         if (!isalpha((unsigned char)*s) && *s != '_') { s++; continue; }
         const char *start = s;
@@ -231,7 +231,7 @@ static float eval_primary(ExprCtx *ctx) {
     /* Parenthesised expression */
     if (*ctx->p == '(') {
         ctx->p++;
-        float v = eval_expr(ctx);
+        float v = repl_eval_expr(ctx);
         expr_skip_ws(ctx);
         if (*ctx->p == ')') ctx->p++;
         return v;
@@ -276,11 +276,11 @@ static float eval_primary(ExprCtx *ctx) {
         expr_skip_ws(ctx);
         if (*ctx->p == '(') {
             ctx->p++;
-            float a = eval_expr(ctx);
+            float a = repl_eval_expr(ctx);
             float b = 0;
             int has_b = 0;
             expr_skip_ws(ctx);
-            if (*ctx->p == ',') { ctx->p++; b = eval_expr(ctx); has_b = 1; }
+            if (*ctx->p == ',') { ctx->p++; b = repl_eval_expr(ctx); has_b = 1; }
             expr_skip_ws(ctx);
             if (*ctx->p == ')') ctx->p++;
 
@@ -356,7 +356,7 @@ static float eval_comparison(ExprCtx *ctx) {
     return v;
 }
 
-float eval_expr(ExprCtx *ctx) {
+float repl_eval_expr(ExprCtx *ctx) {
     float v = eval_comparison(ctx);
     for (;;) {
         expr_skip_ws(ctx);
@@ -373,7 +373,7 @@ float eval_expr(ExprCtx *ctx) {
     return v;
 }
 
-int parse_exprs(const char *s, float *out, int max,
+int repl_eval_parse_exprs(const char *s, float *out, int max,
                 ExprVar *vars, int num_vars) {
     int n = 0;
     const char *p = s;
@@ -381,7 +381,7 @@ int parse_exprs(const char *s, float *out, int max,
         while (*p && (isspace((unsigned char)*p) || *p == ',')) p++;
         if (!*p || *p == ')') break;
         ExprCtx ctx = { p, vars, num_vars };
-        out[n] = eval_expr(&ctx);
+        out[n] = repl_eval_expr(&ctx);
         if (ctx.p == p) break;   /* no progress */
         n++;
         p = ctx.p;
@@ -393,7 +393,7 @@ int parse_exprs(const char *s, float *out, int max,
 /* Expression translation: REPL <-> C                                         */
 /* ========================================================================= */
 
-void repl_expr_to_c(const char *in, char *out, int out_sz) {
+void repl_eval_expr_to_c(const char *in, char *out, int out_sz) {
     static const struct { const char *from; const char *to; int is_func; } map[] = {
         { "sin",   "sinf",   1 },
         { "cos",   "cosf",   1 },
@@ -530,7 +530,7 @@ void repl_expr_to_c(const char *in, char *out, int out_sz) {
     }
 }
 
-void c_expr_to_repl(const char *in, char *out, int out_sz) {
+void repl_eval_c_expr_to_repl(const char *in, char *out, int out_sz) {
     if (!in || !out || out_sz <= 0)
         return;
 
@@ -611,7 +611,7 @@ void c_expr_to_repl(const char *in, char *out, int out_sz) {
 /* For-loop header parsers                                                    */
 /* ========================================================================= */
 
-int parse_for_header_with_vars(const char *input, char *var_name, int var_sz,
+int repl_eval_parse_for_header_with_vars(const char *input, char *var_name, int var_sz,
                                float *start, float *end, float *step,
                                ExprVar *vars, int num_vars,
                                const char **body_start) {
@@ -639,14 +639,14 @@ int parse_for_header_with_vars(const char *input, char *var_name, int var_sz,
     /* Start and end expressions share the same ExprCtx; we only need to
      * re-seat ctx.p at each argument boundary since eval_expr advances it. */
     ExprCtx ctx = { p, vars, num_vars };
-    *start = eval_expr(&ctx);
+    *start = repl_eval_expr(&ctx);
     p = ctx.p;
     while (*p && isspace((unsigned char)*p)) p++;
     if (*p != ',') return 0;
     p++;
 
     ctx.p = p;
-    *end = eval_expr(&ctx);
+    *end = repl_eval_expr(&ctx);
     p = ctx.p;
     while (*p && isspace((unsigned char)*p)) p++;
 
@@ -655,7 +655,7 @@ int parse_for_header_with_vars(const char *input, char *var_name, int var_sz,
     if (*p == ',') {
         p++;
         ctx.p = p;
-        *step = eval_expr(&ctx);
+        *step = repl_eval_expr(&ctx);
         p = ctx.p;
         while (*p && isspace((unsigned char)*p)) p++;
     }
@@ -667,15 +667,15 @@ int parse_for_header_with_vars(const char *input, char *var_name, int var_sz,
     return 1;
 }
 
-int parse_for_header(const char *input, char *var_name, int var_sz,
+int repl_eval_parse_for_header(const char *input, char *var_name, int var_sz,
                      float *start, float *end, float *step,
                      const char **body_start) {
-    return parse_for_header_with_vars(input, var_name, var_sz,
+    return repl_eval_parse_for_header_with_vars(input, var_name, var_sz,
                                       start, end, step,
                                       NULL, 0, body_start);
 }
 
-int parse_c_for_header(const char *input, char *var_name, int var_sz,
+int repl_eval_parse_c_for_header(const char *input, char *var_name, int var_sz,
                        float *start, float *end, float *step) {
     const char *p = input;
     while (*p && isspace((unsigned char)*p)) p++;
@@ -705,7 +705,7 @@ int parse_c_for_header(const char *input, char *var_name, int var_sz,
 
     /* Start value */
     ExprCtx ctx = { p, NULL, 0 };
-    *start = eval_expr(&ctx);
+    *start = repl_eval_expr(&ctx);
     p = ctx.p;
     if (*p == 'f' || *p == 'F') p++;   /* skip C float suffix */
     while (*p && isspace((unsigned char)*p)) p++;
@@ -731,7 +731,7 @@ int parse_c_for_header(const char *input, char *var_name, int var_sz,
     /* End value. REPL loops are half-open, so convert inclusive C bounds by
      * nudging the limit by one step in the iteration direction. */
     ctx.p = p;
-    *end = eval_expr(&ctx);
+    *end = repl_eval_expr(&ctx);
     if (include_end && !is_greater) *end += 1.0f;
     if (include_end && is_greater)  *end -= 1.0f;
     p = ctx.p;
@@ -755,13 +755,13 @@ int parse_c_for_header(const char *input, char *var_name, int var_sz,
     } else if (*p == '+' && *(p+1) == '=') {
         p += 2;
         ctx.p = p;
-        *step = eval_expr(&ctx);
+        *step = repl_eval_expr(&ctx);
         p = ctx.p;
         if (*p == 'f' || *p == 'F') p++;
     } else if (*p == '-' && *(p+1) == '=') {
         p += 2;
         ctx.p = p;
-        *step = -eval_expr(&ctx);
+        *step = -repl_eval_expr(&ctx);
         p = ctx.p;
         if (*p == 'f' || *p == 'F') p++;
     } else {

@@ -32,7 +32,7 @@ static int g_tests_passed = 0;
 
 #define ASSERT_FLOAT(expr_str, expected) do { \
     ExprCtx _ctx = { (expr_str), NULL, 0 }; \
-    float _got = eval_expr(&_ctx); \
+    float _got = repl_eval_expr(&_ctx); \
     float _exp = (expected); \
     g_tests_run++; \
     if (fabsf(_got - _exp) < 1e-4f) { \
@@ -44,11 +44,11 @@ static int g_tests_passed = 0;
 
 #define ASSERT_EXPRS(expr_str, n_expected, ...) do { \
     float _vals[8]; \
-    int _n = parse_exprs(expr_str, _vals, 8, NULL, 0); \
+    int _n = repl_eval_parse_exprs(expr_str, _vals, 8, NULL, 0); \
     float _exp[] = { __VA_ARGS__ }; \
     g_tests_run++; \
     if (_n != n_expected) { \
-        printf("  FAIL: parse_exprs(\"%s\") returned %d args, expected %d (line %d)\n", \
+        printf("  FAIL: repl_eval_parse_exprs(\"%s\") returned %d args, expected %d (line %d)\n", \
                expr_str, _n, n_expected, __LINE__); \
     } else { \
         int _ok = 1; \
@@ -56,7 +56,7 @@ static int g_tests_passed = 0;
             if (fabsf(_vals[_i] - _exp[_i]) > 1e-4f) _ok = 0; \
         if (_ok) g_tests_passed++; \
         else { \
-            printf("  FAIL: parse_exprs(\"%s\") values (line %d):", expr_str, __LINE__); \
+            printf("  FAIL: repl_eval_parse_exprs(\"%s\") values (line %d):", expr_str, __LINE__); \
             for (int _i = 0; _i < _n; _i++) printf(" %g", _vals[_i]); \
             printf(" (expected"); \
             for (int _i = 0; _i < n_expected; _i++) printf(" %g", _exp[_i]); \
@@ -67,7 +67,7 @@ static int g_tests_passed = 0;
 
 #define ASSERT_TO_C(in, expected) do { \
     char _buf[512]; \
-    repl_expr_to_c(in, _buf, sizeof(_buf)); \
+    repl_eval_expr_to_c(in, _buf, sizeof(_buf)); \
     g_tests_run++; \
     if (strcmp(_buf, expected) == 0) { \
         g_tests_passed++; \
@@ -78,7 +78,7 @@ static int g_tests_passed = 0;
 
 #define ASSERT_TO_REPL(in, expected) do { \
     char _buf[512]; \
-    c_expr_to_repl(in, _buf, sizeof(_buf)); \
+    repl_eval_c_expr_to_repl(in, _buf, sizeof(_buf)); \
     g_tests_run++; \
     if (strcmp(_buf, expected) == 0) { \
         g_tests_passed++; \
@@ -89,7 +89,7 @@ static int g_tests_passed = 0;
 
 #define ASSERT_FOR(input, expect_ok, e_var, e_start, e_end, e_step) do { \
     char _vn[16]; float _s, _e, _st; const char *_b; \
-    int _ok = parse_for_header(input, _vn, sizeof(_vn), &_s, &_e, &_st, &_b); \
+    int _ok = repl_eval_parse_for_header(input, _vn, sizeof(_vn), &_s, &_e, &_st, &_b); \
     g_tests_run++; \
     if (_ok != expect_ok) { \
         printf("  FAIL: for(\"%s\") returned %d, expected %d (line %d)\n", input, _ok, expect_ok, __LINE__); \
@@ -107,7 +107,7 @@ static int g_tests_passed = 0;
 
 #define ASSERT_CFOR(input, expect_ok, e_var, e_start, e_end, e_step) do { \
     char _vn[16]; float _s, _e, _st; \
-    int _ok = parse_c_for_header(input, _vn, sizeof(_vn), &_s, &_e, &_st); \
+    int _ok = repl_eval_parse_c_for_header(input, _vn, sizeof(_vn), &_s, &_e, &_st); \
     g_tests_run++; \
     if (_ok != expect_ok) { \
         printf("  FAIL: cfor(\"%s\") returned %d, expected %d (line %d)\n", input, _ok, expect_ok, __LINE__); \
@@ -124,7 +124,7 @@ static int g_tests_passed = 0;
 } while(0)
 
 #define ASSERT_HAS_VARS(input, expected) do { \
-    int _got = input_has_predef_vars(input); \
+    int _got = repl_eval_input_has_predef_vars(input); \
     g_tests_run++; \
     if (_got == expected) { g_tests_passed++; } \
     else { printf("  FAIL: has_vars(\"%s\") = %d, expected %d (line %d)\n", input, _got, expected, __LINE__); } \
@@ -132,23 +132,23 @@ static int g_tests_passed = 0;
 
 #define ASSERT_DECLARE_OK(name) do { \
     char _err[128] = {0}; \
-    int _ok = declare_predef_var(name, _err, sizeof(_err)); \
+    int _ok = repl_eval_declare_predef_var(name, _err, sizeof(_err)); \
     g_tests_run++; \
     if (_ok) { g_tests_passed++; } \
-    else { printf("  FAIL: declare_predef_var(\"%s\") should succeed, got: %s (line %d)\n", name, _err, __LINE__); } \
+    else { printf("  FAIL: repl_eval_declare_predef_var(\"%s\") should succeed, got: %s (line %d)\n", name, _err, __LINE__); } \
 } while(0)
 
 #define ASSERT_DECLARE_FAIL(name) do { \
     char _err[128] = {0}; \
-    int _ok = declare_predef_var(name, _err, sizeof(_err)); \
+    int _ok = repl_eval_declare_predef_var(name, _err, sizeof(_err)); \
     g_tests_run++; \
     if (!_ok) { g_tests_passed++; } \
-    else { printf("  FAIL: declare_predef_var(\"%s\") should fail (line %d)\n", name, __LINE__); } \
+    else { printf("  FAIL: repl_eval_declare_predef_var(\"%s\") should fail (line %d)\n", name, __LINE__); } \
 } while(0)
 
 #define ASSERT_VALIDATE_OK(src, vars, nv) do { \
     char _err[128] = {0}; \
-    int _ok = validate_expression_idents(src, vars, nv, _err, sizeof(_err)); \
+    int _ok = repl_eval_validate_expression_idents(src, vars, nv, _err, sizeof(_err)); \
     g_tests_run++; \
     if (_ok) { g_tests_passed++; } \
     else { printf("  FAIL: validate_expr(\"%s\") should pass, got: %s (line %d)\n", src, _err, __LINE__); } \
@@ -156,17 +156,17 @@ static int g_tests_passed = 0;
 
 #define ASSERT_VALIDATE_FAIL(src, vars, nv) do { \
     char _err[128] = {0}; \
-    int _ok = validate_expression_idents(src, vars, nv, _err, sizeof(_err)); \
+    int _ok = repl_eval_validate_expression_idents(src, vars, nv, _err, sizeof(_err)); \
     g_tests_run++; \
     if (!_ok) { g_tests_passed++; } \
     else { printf("  FAIL: validate_expr(\"%s\") should fail (line %d)\n", src, __LINE__); } \
 } while(0)
 
 #define ASSERT_SOURCE_USES(src, name, expected) do { \
-    int _got = source_uses_ident(src, name); \
+    int _got = repl_eval_source_uses_ident(src, name); \
     g_tests_run++; \
     if (_got == expected) { g_tests_passed++; } \
-    else { printf("  FAIL: source_uses_ident(\"%s\", \"%s\") = %d, expected %d (line %d)\n", \
+    else { printf("  FAIL: repl_eval_source_uses_ident(\"%s\", \"%s\") = %d, expected %d (line %d)\n", \
                   src, name, _got, expected, __LINE__); } \
 } while(0)
 
@@ -200,8 +200,8 @@ static void strip_ws(const char *in, char *out, int out_sz) {
 
 #define ASSERT_ROUNDTRIP_WS(in) do { \
     char _cbuf[512], _rbuf[512], _n_in[512], _n_out[512]; \
-    repl_expr_to_c((in), _cbuf, sizeof(_cbuf)); \
-    c_expr_to_repl(_cbuf, _rbuf, sizeof(_rbuf)); \
+    repl_eval_expr_to_c((in), _cbuf, sizeof(_cbuf)); \
+    repl_eval_c_expr_to_repl(_cbuf, _rbuf, sizeof(_rbuf)); \
     strip_ws((in), _n_in, sizeof(_n_in)); \
     strip_ws(_rbuf, _n_out, sizeof(_n_out)); \
     g_tests_run++; \
@@ -283,7 +283,7 @@ static void run_tests(void) {
     {
         int t_idx;
         char err[128];
-        init_predef_vars();
+        repl_eval_init_predef_vars();
 
         t_idx = predef_idx("t");
         g_tests_run++;
@@ -302,13 +302,13 @@ static void run_tests(void) {
         if (predef_idx("not_a_predef") == -1) g_tests_passed++;
         else printf("  FAIL: unknown predefined var lookup did not return -1\n");
 
-        declare_predef_var("x", err, sizeof(err));
-        declare_predef_var("y", err, sizeof(err));
-        declare_predef_var("z", err, sizeof(err));
-        declare_predef_var("n", err, sizeof(err));
-        declare_predef_var("i", err, sizeof(err));
-        declare_predef_var("j", err, sizeof(err));
-        declare_predef_var("k", err, sizeof(err));
+        repl_eval_declare_predef_var("x", err, sizeof(err));
+        repl_eval_declare_predef_var("y", err, sizeof(err));
+        repl_eval_declare_predef_var("z", err, sizeof(err));
+        repl_eval_declare_predef_var("n", err, sizeof(err));
+        repl_eval_declare_predef_var("i", err, sizeof(err));
+        repl_eval_declare_predef_var("j", err, sizeof(err));
+        repl_eval_declare_predef_var("k", err, sizeof(err));
 
         g_tests_run++;
         if (predef_idx("x") >= 0) g_tests_passed++;
@@ -344,7 +344,7 @@ static void run_tests(void) {
     {
         ExprVar lv[1] = { { "x", 99.0f } };
         ExprCtx ctx = { "x", lv, 1 };
-        float v = eval_expr(&ctx);
+        float v = repl_eval_expr(&ctx);
         g_tests_run++;
         if (fabsf(v - 99.0f) < 1e-4f) g_tests_passed++;
         else printf("  FAIL: loop var override: got %g, expected 99\n", v);
@@ -365,7 +365,7 @@ static void run_tests(void) {
     {
         ExprVar vars[2] = { { "radius", 3.0f }, { "height", 4.0f } };
         float vals[4];
-        int n = parse_exprs("radius + height, 0", vals, 4, vars, 2);
+        int n = repl_eval_parse_exprs("radius + height, 0", vals, 4, vars, 2);
         g_tests_run++;
         if (n == 2 && fabsf(vals[0] - 7.0f) < 1e-4f && fabsf(vals[1]) < 1e-4f) {
             g_tests_passed++;
@@ -404,13 +404,13 @@ static void run_tests(void) {
     ASSERT_FLOAT("pow(1.0f,2.0f)", 1.0f);
     {
         char tiny[5];
-        c_expr_to_repl("sinf(x)", tiny, sizeof(tiny));
+        repl_eval_c_expr_to_repl("sinf(x)", tiny, sizeof(tiny));
         g_tests_run++;
         if (strcmp(tiny, "sin(") == 0) g_tests_passed++;
         else printf("  FAIL: c_expr_to_repl truncation -> \"%s\"\n", tiny);
 
         strcpy(tiny, "keep");
-        c_expr_to_repl("sinf(x)", tiny, 0);
+        repl_eval_c_expr_to_repl("sinf(x)", tiny, 0);
         g_tests_run++;
         if (strcmp(tiny, "keep") == 0) g_tests_passed++;
         else printf("  FAIL: c_expr_to_repl out_sz=0 changed output -> \"%s\"\n", tiny);
@@ -453,8 +453,8 @@ static void run_tests(void) {
         };
         for (int ci = 0; cases[ci]; ci++) {
             char c_buf[512], repl_buf[512];
-            repl_expr_to_c(cases[ci], c_buf, sizeof(c_buf));
-            c_expr_to_repl(c_buf, repl_buf, sizeof(repl_buf));
+            repl_eval_expr_to_c(cases[ci], c_buf, sizeof(c_buf));
+            repl_eval_c_expr_to_repl(c_buf, repl_buf, sizeof(repl_buf));
             g_tests_run++;
             if (strcmp(cases[ci], repl_buf) == 0) {
                 g_tests_passed++;
@@ -484,7 +484,7 @@ static void run_tests(void) {
         float s, e, st;
         const char *body = NULL;
         const char *bp = NULL;
-        int ok = parse_for_header_with_vars(
+        int ok = repl_eval_parse_for_header_with_vars(
             "for(i, 0, radius, stepv) glVertex3f(i, 0, 0);",
             vn, sizeof(vn), &s, &e, &st, vars, 2, &body);
         bp = body;
@@ -571,47 +571,47 @@ static void run_tests(void) {
         int ok;
 
         /* Empty name */
-        ok = declare_predef_var("", err, sizeof(err));
+        ok = repl_eval_declare_predef_var("", err, sizeof(err));
         g_tests_run++;
         if (!ok) g_tests_passed++;
         else printf("  FAIL: empty name should fail\n");
 
         /* Name starts with a digit */
-        ok = declare_predef_var("3x", err, sizeof(err));
+        ok = repl_eval_declare_predef_var("3x", err, sizeof(err));
         g_tests_run++;
         if (!ok) g_tests_passed++;
         else printf("  FAIL: digit-start name should fail\n");
 
         /* Name contains invalid character */
-        ok = declare_predef_var("x@y", err, sizeof(err));
+        ok = repl_eval_declare_predef_var("x@y", err, sizeof(err));
         g_tests_run++;
         if (!ok) g_tests_passed++;
         else printf("  FAIL: invalid char name should fail\n");
 
         /* Reserved built-in name */
-        ok = declare_predef_var("sin", err, sizeof(err));
+        ok = repl_eval_declare_predef_var("sin", err, sizeof(err));
         g_tests_run++;
         if (!ok) g_tests_passed++;
         else printf("  FAIL: reserved name 'sin' should fail\n");
 
-        ok = declare_predef_var("PI", err, sizeof(err));
+        ok = repl_eval_declare_predef_var("PI", err, sizeof(err));
         g_tests_run++;
         if (!ok) g_tests_passed++;
         else printf("  FAIL: reserved name 'PI' should fail\n");
 
-        ok = declare_predef_var("t", err, sizeof(err));
+        ok = repl_eval_declare_predef_var("t", err, sizeof(err));
         g_tests_run++;
         if (!ok) g_tests_passed++;
         else printf("  FAIL: reserved name 't' should fail (already declared)\n");
 
         /* Already declared */
-        ok = declare_predef_var("x", err, sizeof(err));
+        ok = repl_eval_declare_predef_var("x", err, sizeof(err));
         g_tests_run++;
         if (!ok) g_tests_passed++;
         else printf("  FAIL: re-declaring 'x' should fail\n");
 
         /* Name too long (>= 16 chars) */
-        ok = declare_predef_var("averylongvarname1", err, sizeof(err));
+        ok = repl_eval_declare_predef_var("averylongvarname1", err, sizeof(err));
         g_tests_run++;
         if (!ok) g_tests_passed++;
         else printf("  FAIL: too-long name should fail\n");
@@ -621,23 +621,23 @@ static void run_tests(void) {
         ASSERT_DECLARE_OK("_beta");
 
         /* Undeclare and re-declare */
-        undeclare_predef_var("alpha");
+        repl_eval_undeclare_predef_var("alpha");
         g_tests_run++;
-        if (find_predef_var_idx("alpha") == -1) g_tests_passed++;
+        if (repl_eval_find_predef_var_idx("alpha") == -1) g_tests_passed++;
         else printf("  FAIL: 'alpha' should be gone after undeclare\n");
 
         ASSERT_DECLARE_OK("alpha");   /* re-declare after undeclare */
 
         /* Undeclare non-existent - no-op, count unchanged */
         int count_before = g_num_predef_vars;
-        undeclare_predef_var("nosuchvar");
+        repl_eval_undeclare_predef_var("nosuchvar");
         g_tests_run++;
         if (g_num_predef_vars == count_before) g_tests_passed++;
         else printf("  FAIL: undeclare non-existent changed count\n");
 
         /* Clean up extras so later tests aren't affected */
-        undeclare_predef_var("alpha");
-        undeclare_predef_var("_beta");
+        repl_eval_undeclare_predef_var("alpha");
+        repl_eval_undeclare_predef_var("_beta");
     }
 
     /* ---- validate_expression_idents ---- */
@@ -735,7 +735,7 @@ static void run_tests(void) {
     {
         char vn[16]; float s, e, st;
         const char *body = NULL;
-        int ok = parse_for_header("for(i, 0, 5) glVertex3f(0,0,0);",
+        int ok = repl_eval_parse_for_header("for(i, 0, 5) glVertex3f(0,0,0);",
                                   vn, sizeof(vn), &s, &e, &st, &body);
         g_tests_run++;
         if (ok && body != NULL && strncmp(body, " glVertex3f", 11) == 0)
@@ -765,11 +765,11 @@ static void run_tests(void) {
         ASSERT_HAS_VARS("x + 1", 1);
 
         /* undeclare 'x', then it should no longer match */
-        undeclare_predef_var("x");
+        repl_eval_undeclare_predef_var("x");
         ASSERT_HAS_VARS("x + 1", 0);
 
         /* restore 'x' for any follow-on code */
-        declare_predef_var("x", NULL, 0);
+        repl_eval_declare_predef_var("x", NULL, 0);
         set_predef("x", 0.0f);
     }
 
@@ -836,21 +836,21 @@ static void interactive(void) {
 
         if (strncmp(line, "to_c ", 5) == 0) {
             char buf[512];
-            repl_expr_to_c(line + 5, buf, sizeof(buf));
+            repl_eval_expr_to_c(line + 5, buf, sizeof(buf));
             printf("  %s\n", buf);
             continue;
         }
 
         if (strncmp(line, "to_repl ", 8) == 0) {
             char buf[512];
-            c_expr_to_repl(line + 8, buf, sizeof(buf));
+            repl_eval_c_expr_to_repl(line + 8, buf, sizeof(buf));
             printf("  %s\n", buf);
             continue;
         }
 
         if (strncmp(line, "for ", 4) == 0) {
             char vn[16]; float s, e, st; const char *body;
-            if (parse_for_header(line + 4, vn, sizeof(vn), &s, &e, &st, &body))
+            if (repl_eval_parse_for_header(line + 4, vn, sizeof(vn), &s, &e, &st, &body))
                 printf("  var=%s  start=%g  end=%g  step=%g  body=\"%s\"\n",
                        vn, s, e, st, body);
             else
@@ -860,7 +860,7 @@ static void interactive(void) {
 
         if (strncmp(line, "cfor ", 5) == 0) {
             char vn[16]; float s, e, st;
-            if (parse_c_for_header(line + 5, vn, sizeof(vn), &s, &e, &st))
+            if (repl_eval_parse_c_for_header(line + 5, vn, sizeof(vn), &s, &e, &st))
                 printf("  var=%s  start=%g  end=%g  step=%g\n", vn, s, e, st);
             else
                 printf("  parse failed\n");
@@ -869,7 +869,7 @@ static void interactive(void) {
 
         /* Default: evaluate as expression */
         ExprCtx ctx = { line, NULL, 0 };
-        float val = eval_expr(&ctx);
+        float val = repl_eval_expr(&ctx);
         printf("  = %g", val);
         if (*ctx.p) printf("  (stopped at: \"%s\")", ctx.p);
         printf("\n");
@@ -877,7 +877,7 @@ static void interactive(void) {
 }
 
 int main(int argc, char *argv[]) {
-    init_predef_vars();
+    repl_eval_init_predef_vars();
 
     if (argc > 1 && strcmp(argv[1], "--run-tests") == 0) {
         run_tests();

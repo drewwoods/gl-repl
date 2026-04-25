@@ -38,13 +38,13 @@ static int g_pass = 0;
 
 static void declare_test_vars(void) {
     char err[128];
-    declare_predef_var("x", err, sizeof(err));
-    declare_predef_var("y", err, sizeof(err));
-    declare_predef_var("z", err, sizeof(err));
-    declare_predef_var("i", err, sizeof(err));
-    declare_predef_var("j", err, sizeof(err));
-    declare_predef_var("k", err, sizeof(err));
-    declare_predef_var("n", err, sizeof(err));
+    repl_eval_declare_predef_var("x", err, sizeof(err));
+    repl_eval_declare_predef_var("y", err, sizeof(err));
+    repl_eval_declare_predef_var("z", err, sizeof(err));
+    repl_eval_declare_predef_var("i", err, sizeof(err));
+    repl_eval_declare_predef_var("j", err, sizeof(err));
+    repl_eval_declare_predef_var("k", err, sizeof(err));
+    repl_eval_declare_predef_var("n", err, sizeof(err));
 }
 
 /* Some functions are not in internal header but are non-static */
@@ -724,9 +724,9 @@ void test_var_declare_cmd() {
     ASSERT_INT("float decl produces CMD_VAR_DECLARE", found_decl, 1);
 
     /* 2. The declared variables should exist in g_predef_vars */
-    ASSERT_TRUE("var 'a' declared", find_predef_var_idx("a") >= 0);
-    ASSERT_TRUE("var 'b' declared", find_predef_var_idx("b") >= 0);
-    ASSERT_TRUE("var 'c' declared", find_predef_var_idx("c") >= 0);
+    ASSERT_TRUE("var 'a' declared", repl_eval_find_predef_var_idx("a") >= 0);
+    ASSERT_TRUE("var 'b' declared", repl_eval_find_predef_var_idx("b") >= 0);
+    ASSERT_TRUE("var 'c' declared", repl_eval_find_predef_var_idx("c") >= 0);
 
     /* 3. cmd_type_name returns the right string (catches positional table bugs) */
     ASSERT_STR("cmd_type_name(CMD_VAR_DECLARE)",
@@ -768,7 +768,7 @@ void test_time() {
 }
 
 int main(int argc, char **argv) {
-    init_predef_vars();
+    repl_eval_init_predef_vars();
 
     test_utils();
     test_repl_replay_advanced();

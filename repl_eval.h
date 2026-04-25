@@ -53,42 +53,42 @@ typedef struct {
 extern ExprVar g_predef_vars[MAX_PREDEF_VARS];
 extern int     g_num_predef_vars;
 
-void init_predef_vars(void);
-int  input_has_predef_vars(const char *s);
-int  find_predef_var_idx(const char *name);
-int  declare_predef_var(const char *name, char *err, int errsz);
-void undeclare_predef_var(const char *name);
-int  is_reserved_ident(const char *name);
-int  source_uses_ident(const char *src, const char *name);
-int  validate_expression_idents(const char *src, const ExprVar *vars,
-                                int num_vars, char *err, int errsz);
+void repl_eval_init_predef_vars(void);
+int  repl_eval_input_has_predef_vars(const char *s);
+int  repl_eval_find_predef_var_idx(const char *name);
+int  repl_eval_declare_predef_var(const char *name, char *err, int errsz);
+void repl_eval_undeclare_predef_var(const char *name);
+int  repl_eval_is_reserved_ident(const char *name);
+int  repl_eval_source_uses_ident(const char *src, const char *name);
+int  repl_eval_validate_expression_idents(const char *src, const ExprVar *vars,
+                                          int num_vars, char *err, int errsz);
 
 /* ---- Expression evaluator --------------------------------------------- */
 
-float eval_expr(ExprCtx *ctx);
-int   parse_exprs(const char *s, float *out, int max,
-                  ExprVar *vars, int num_vars);
+float repl_eval_expr(ExprCtx *ctx);
+int   repl_eval_parse_exprs(const char *s, float *out, int max,
+                            ExprVar *vars, int num_vars);
 
 /* ---- Expression translation: REPL <-> C ------------------------------- */
 
-void repl_expr_to_c(const char *in, char *out, int out_sz);
-void c_expr_to_repl(const char *in, char *out, int out_sz);
+void repl_eval_expr_to_c(const char *in, char *out, int out_sz);
+void repl_eval_c_expr_to_repl(const char *in, char *out, int out_sz);
 
 /* ---- For-loop header parsers ------------------------------------------ */
 
 /* REPL form: for(var, start, end[, step]) body
  * Returns 1 on success.  *body_start points past ')'. */
-int parse_for_header(const char *input, char *var_name, int var_sz,
-                     float *start, float *end, float *step,
-                     const char **body_start);
-int parse_for_header_with_vars(const char *input, char *var_name, int var_sz,
-                               float *start, float *end, float *step,
-                               ExprVar *vars, int num_vars,
-                               const char **body_start);
+int repl_eval_parse_for_header(const char *input, char *var_name, int var_sz,
+                                float *start, float *end, float *step,
+                                const char **body_start);
+int repl_eval_parse_for_header_with_vars(const char *input, char *var_name, int var_sz,
+                                          float *start, float *end, float *step,
+                                          ExprVar *vars, int num_vars,
+                                          const char **body_start);
 
 /* C form: for (float var = start; var < end; var += step) {
  * Returns 1 on success. */
-int parse_c_for_header(const char *input, char *var_name, int var_sz,
-                       float *start, float *end, float *step);
+int repl_eval_parse_c_for_header(const char *input, char *var_name, int var_sz,
+                                  float *start, float *end, float *step);
 
 #endif /* REPL_EVAL_H */

@@ -374,12 +374,12 @@ static void ensure_t_var_idx(void) {
     if (g_t_var_idx >= 0 && g_t_var_idx < g_num_predef_vars &&
         strcmp(g_predef_vars[g_t_var_idx].name, "t") == 0)
         return;
-    g_t_var_idx = find_predef_var_idx("t");
+    g_t_var_idx = repl_eval_find_predef_var_idx("t");
 }
 
 static void reset_time_state(void) {
     g_anim_time = 0.0f;
-    init_predef_vars();
+    repl_eval_init_predef_vars();
     ensure_t_var_idx();
 }
 
@@ -546,8 +546,8 @@ ReplVariableState *repl_state_variables_mut(void) {
 }
 
 void repl_state_variables_reset(void) {
-    init_predef_vars();
-    g_t_var_idx = find_predef_var_idx("t");
+    repl_eval_init_predef_vars();
+    g_t_var_idx = repl_eval_find_predef_var_idx("t");
 }
 
 void repl_state_time_advance(float dt) {
