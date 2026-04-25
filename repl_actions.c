@@ -179,7 +179,7 @@ void repl_cfg_cycle_row(int row, int delta) {
     if (*repl_state_replay()->active)
         replay_stop();
 
-    int v = repl_config_cycle(item->key, delta);
+    int new_value = repl_config_cycle(item->key, delta);
 
     if (item->key == REPL_CONFIG_CODE_PANEL_LAYOUT) {
         *repl_state_code_panel()->panel_frac = 0.3f;
@@ -217,11 +217,11 @@ void repl_cfg_cycle_row(int row, int delta) {
         set_status(labels[mode]);
     } else if (item->state_names) {
         snprintf(cfg_status_buf, sizeof(cfg_status_buf), "%s: %s",
-                 item->label, repl_config_state_name(item->key, v));
+                 item->label, repl_config_state_name(item->key, new_value));
         set_status(cfg_status_buf);
     } else if (item->state_count == 2) {
         snprintf(cfg_status_buf, sizeof(cfg_status_buf), "%s: %s",
-                 item->label, v ? "ON" : "OFF");
+                 item->label, new_value ? "ON" : "OFF");
         set_status(cfg_status_buf);
     }
 }

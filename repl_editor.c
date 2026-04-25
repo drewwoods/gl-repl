@@ -250,14 +250,14 @@ static void rewrite_cmd_source_with_indent(GLCmd *cmd, int pos,
            (stripped[slen - 1] == ';' ||
             isspace((unsigned char)stripped[slen - 1])))
         stripped[--slen] = '\0';
-    int ind = in_begin_block_at(pos) ? 4 : 2;
+    int indent_len = in_begin_block_at(pos) ? 4 : 2;
     if (include_block_depth)
-        ind += block_depth_at(pos) * 2;
+        indent_len += block_depth_at(pos) * 2;
     char indent[32];
-    if (ind > (int)sizeof(indent) - 1)
-        ind = (int)sizeof(indent) - 1;
-    memset(indent, ' ', (size_t)ind);
-    indent[ind] = '\0';
+    if (indent_len > (int)sizeof(indent) - 1)
+        indent_len = (int)sizeof(indent) - 1;
+    memset(indent, ' ', (size_t)indent_len);
+    indent[indent_len] = '\0';
     snprintf(cmd->source, sizeof(cmd->source), "%s%s;", indent, stripped);
 }
 
@@ -584,9 +584,9 @@ void navigate_to_line(int target) {
 }
 
 static void keyboard_begin_key(unsigned char key) {
-    ReplCodePanelRuntimeState *cp = repl_state_code_panel_mut();
-    *cp->cursor_visible = 1;
-    *cp->blink_tick = 0;
+    ReplCodePanelRuntimeState *code_panel_state = repl_state_code_panel_mut();
+    *code_panel_state->cursor_visible = 1;
+    *code_panel_state->blink_tick = 0;
 
     /* Cut / copy / backspace / delete preserve any active line-range
      * selection; everything else clears it before processing the key. */
@@ -594,7 +594,7 @@ static void keyboard_begin_key(unsigned char key) {
         key != KEY_CTRL_X && key != KEY_DELETE)
         clear_selection();
 
-    *cp->scroll_follow_cursor = 1;
+    *code_panel_state->scroll_follow_cursor = 1;
 }
 
 static int handle_rename_key_route(unsigned char key) {
@@ -840,13 +840,13 @@ static int handle_comment_toggle_key_route(unsigned char key) {
                                 } else {
                                     ExprCtx ectx = { rhs, g_predef_vars, g_num_predef_vars };
                                     float val = eval_expr(&ectx);
-                                    int ind = (in_begin_block_at(repl_state_edit_line()) ? 4 : 2)
-                                              + block_depth_at(repl_state_edit_line()) * 2;
+                                    int indent_len = (in_begin_block_at(repl_state_edit_line()) ? 4 : 2)
+                                                     + block_depth_at(repl_state_edit_line()) * 2;
                                     char indent[32];
-                                    if (ind > (int)sizeof(indent) - 1)
-                                        ind = (int)sizeof(indent) - 1;
-                                    memset(indent, ' ', (size_t)ind);
-                                    indent[ind] = '\0';
+                                    if (indent_len > (int)sizeof(indent) - 1)
+                                        indent_len = (int)sizeof(indent) - 1;
+                                    memset(indent, ' ', (size_t)indent_len);
+                                    indent[indent_len] = '\0';
                                     memset(&new_cmd, 0, sizeof(new_cmd));
                                     new_cmd.type     = CMD_VAR_ASSIGN;
                                     new_cmd.valid    = 1;
@@ -880,10 +880,10 @@ static int handle_comment_toggle_key_route(unsigned char key) {
                            cur->type != CMD_FOR_END) {
                     char new_src[MAX_LINE_LEN];
                     const char *s = cur->source;
-                    int ind = 0;
-                    while (s[ind] && isspace((unsigned char)s[ind]))
-                        ind++;
-                    snprintf(new_src, sizeof(new_src), "%.*s// %s", ind, s, s + ind);
+                    int leading_ws_len = 0;
+                    while (s[leading_ws_len] && isspace((unsigned char)s[leading_ws_len]))
+                        leading_ws_len++;
+                    snprintf(new_src, sizeof(new_src), "%.*s// %s", leading_ws_len, s, s + leading_ws_len);
                     cur->type = CMD_COMMENT;
                     cur->valid = 1;
                     repl_copy_string_fits(cur->source, sizeof(cur->source), new_src);
@@ -1126,10 +1126,10 @@ void keyboard_func(unsigned char key, int x, int y) {
 
 static void special_begin_key(int key) {
     (void)key;
-    ReplCodePanelRuntimeState *cp = repl_state_code_panel_mut();
-    *cp->cursor_visible = 1;
-    *cp->blink_tick = 0;
-    *cp->scroll_follow_cursor = 1;
+    ReplCodePanelRuntimeState *code_panel_state = repl_state_code_panel_mut();
+    *code_panel_state->cursor_visible = 1;
+    *code_panel_state->blink_tick = 0;
+    *code_panel_state->scroll_follow_cursor = 1;
 }
 
 static int handle_rename_special_route(int key) {
@@ -1278,9 +1278,9 @@ static void cycle_example_or_user_scene(void) {
     int active_scene = repl_active_user_scene();
 
     if (active_scene >= 0) {
-        for (int s = active_scene + 1; s < MAX_USER_SCENES; s++) {
-            if (repl_user_scene_slot_used(s)) {
-                repl_load_user_scene_idx(s);
+        for (int scene_idx = active_scene + 1; scene_idx < MAX_USER_SCENES; scene_idx++) {
+            if (repl_user_scene_slot_used(scene_idx)) {
+                repl_load_user_scene_idx(scene_idx);
                 return;
             }
         }
@@ -1297,9 +1297,9 @@ static void cycle_example_or_user_scene(void) {
         }
     }
 
-    for (int s = 0; s < MAX_USER_SCENES; s++) {
-        if (repl_user_scene_slot_used(s)) {
-            repl_load_user_scene_idx(s);
+    for (int scene_idx = 0; scene_idx < MAX_USER_SCENES; scene_idx++) {
+        if (repl_user_scene_slot_used(scene_idx)) {
+            repl_load_user_scene_idx(scene_idx);
             return;
         }
     }
@@ -1429,7 +1429,7 @@ static int editor_code_panel_resize_cursor(void) {
 }
 
 static void editor_update_panel_frac_from_mouse(int x, int y) {
-    ReplCodePanelRuntimeState *cp = repl_state_code_panel_mut();
+    ReplCodePanelRuntimeState *code_panel_state = repl_state_code_panel_mut();
     int layout = editor_code_panel_layout();
 
     if (layout == CODE_PANEL_LAYOUT_HIDDEN) {
@@ -1437,21 +1437,21 @@ static void editor_update_panel_frac_from_mouse(int x, int y) {
     } else if (layout == CODE_PANEL_LAYOUT_TOP) {
         int win_h = *repl_state_viewport()->window_h;
         if (win_h > 0)
-            *cp->panel_frac = (float)y / (float)win_h;
+            *code_panel_state->panel_frac = (float)y / (float)win_h;
     } else if (layout == CODE_PANEL_LAYOUT_BOTTOM) {
         int win_h = *repl_state_viewport()->window_h;
         if (win_h > 0)
-            *cp->panel_frac = (float)(win_h - y) / (float)win_h;
+            *code_panel_state->panel_frac = (float)(win_h - y) / (float)win_h;
     } else {
         int win_w = *repl_state_viewport()->window_w;
         if (win_w > 0)
-            *cp->panel_frac = (float)x / (float)win_w;
+            *code_panel_state->panel_frac = (float)x / (float)win_w;
     }
 
-    if (*cp->panel_frac < 0.1f)
-        *cp->panel_frac = 0.1f;
-    if (*cp->panel_frac > 0.9f)
-        *cp->panel_frac = 0.9f;
+    if (*code_panel_state->panel_frac < 0.1f)
+        *code_panel_state->panel_frac = 0.1f;
+    if (*code_panel_state->panel_frac > 0.9f)
+        *code_panel_state->panel_frac = 0.9f;
 }
 
 static void mouse_func(int button, int state, int x, int y) {
@@ -1472,11 +1472,11 @@ static void mouse_func(int button, int state, int x, int y) {
 
     if (button == GLUT_LEFT_BUTTON && state == GLUT_DOWN) {
         if (*repl_state_variable_panel()->visible) {
-            int row;
-            if (var_panel_hit(x, y, &row)) {
+            int row_idx;
+            if (var_panel_hit(x, y, &row_idx)) {
                 if (*repl_state_replay()->active)
                     replay_stop();
-                repl_var_drag_begin(row, 0, x);
+                repl_var_drag_begin(row_idx, 0, x);
                 glutPostRedisplay();
                 return;
             }
@@ -1523,11 +1523,11 @@ static void mouse_func(int button, int state, int x, int y) {
 
     /* Right-click on var panel: logarithmic drag mode. */
     if (button == GLUT_RIGHT_BUTTON && state == GLUT_DOWN && *repl_state_variable_panel()->visible) {
-        int row;
-        if (var_panel_hit(x, y, &row)) {
+        int row_idx;
+        if (var_panel_hit(x, y, &row_idx)) {
             if (*repl_state_replay()->active)
                 replay_stop();
-            repl_var_drag_begin(row, 1, x);
+            repl_var_drag_begin(row_idx, 1, x);
             glutPostRedisplay();
             return;
         }
@@ -1661,11 +1661,11 @@ static void timer_func(int value) {
     repl_camera_tick();
 
     {
-        ReplCodePanelRuntimeState *cp = repl_state_code_panel_mut();
-        (*cp->blink_tick)++;
-        if (*cp->blink_tick >= 30) {
-            *cp->blink_tick = 0;
-            *cp->cursor_visible = !*cp->cursor_visible;
+        ReplCodePanelRuntimeState *code_panel_state = repl_state_code_panel_mut();
+        (*code_panel_state->blink_tick)++;
+        if (*code_panel_state->blink_tick >= 30) {
+            *code_panel_state->blink_tick = 0;
+            *code_panel_state->cursor_visible = !*code_panel_state->cursor_visible;
         }
     }
 
