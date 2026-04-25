@@ -157,6 +157,9 @@ flowchart LR
         scenes["repl_scenes.c<br/>user scenes + workspace"]
         acmodel["repl_autocomplete.c<br/>completion model"]
         replay["repl_replay.c<br/>replay state + fade batches"]
+    end
+
+    subgraph services["Services + lifecycle"]
         audio["repl_audio.c<br/>playlist engine"]
         prof["prof.c<br/>instrumentation"]
     end

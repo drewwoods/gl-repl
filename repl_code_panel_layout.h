@@ -29,6 +29,7 @@ CodePanelTextLayout repl_code_panel_layout_make(int panel_w, int first_x,
 int  repl_code_panel_available_chars(const CodePanelTextLayout *layout, int x);
 int  repl_code_panel_cont_indent_chars(const char *text,
                                        int max_hang_indent_chars);
+
 int  repl_code_panel_find_wrap_break(const char *text, int start,
                                      int max_chars, int len);
 

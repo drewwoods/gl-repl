@@ -7,6 +7,7 @@
  */
 #include "sample.h"
 #include "ui_help_overlay.h"
+#include "./include/gl_2d.h"
 
 /* Compile-time stringify for embedding macro values in string literals */
 #define _HELP_STR2(x) #x
@@ -264,7 +265,7 @@ void render_help(void) {
     int n_lines = 0;
     while (text[n_lines]) n_lines++;
 
-    begin_2d();
+    gl2d_begin(*repl_state_viewport()->window_w, *repl_state_viewport()->window_h);
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
@@ -289,7 +290,7 @@ void render_help(void) {
 
     /* Background - matches config menu #222 */
     glColor4f(0.133f, 0.133f, 0.133f, 0.98f);
-    draw_quad((float)hx, (float)hy, (float)hw, (float)hh);
+    glRectf((float)hx, (float)hy, (float)hx + (float)hw, (float)hy + (float)hh);
 
     /* Border - matches config menu #3a3a3a */
     glColor4f(0.227f, 0.227f, 0.227f, 1.0f);
@@ -312,13 +313,13 @@ void render_help(void) {
 
         /* Title text - dim, left-aligned like config menu section headers */
         glColor4f(0.478f, 0.518f, 0.580f, 1.0f);
-        draw_string((float)(hx + 14), (float)(title_y + 4), "HELP", FONT_SMALL);
+        gl2d_draw_string((float)(hx + 14), (float)(title_y + 4), "HELP", FONT_SMALL);
 
         /* Tab switch hint right-aligned */
         const char *nav_hint = "Left/Right: switch tabs";
         int nh_x = hx + hw - (int)strlen(nav_hint) * FONT_SMALL_W - 14;
         glColor4f(0.533f, 0.533f, 0.533f, 0.70f);
-        draw_string((float)nh_x, (float)(title_y + 4), nav_hint, FONT_SMALL);
+        gl2d_draw_string((float)nh_x, (float)(title_y + 4), nav_hint, FONT_SMALL);
     }
 
     /* --- Tab bar --- */
@@ -328,21 +329,21 @@ void render_help(void) {
 
         /* Tab bar background */
         glColor4f(0.10f, 0.10f, 0.10f, 1.0f);
-        draw_quad((float)hx, (float)tab_y, (float)hw, (float)tab_bar_h);
+        glRectf((float)hx, (float)tab_y, (float)hx + (float)hw, (float)tab_y + (float)tab_bar_h);
 
         for (int t = 0; t < HELP_NUM_TABS; t++) {
             int tx_tab = hx + t * tab_w;
             if (t == help_tab) {
                 /* Active tab: bottom accent bar + bright label */
                 glColor4f(UI_ACCENT_GREEN_R, UI_ACCENT_GREEN_G, UI_ACCENT_GREEN_B, 0.85f);
-                draw_quad((float)tx_tab, (float)tab_y, (float)tab_w, 2.0f);
+                glRectf((float)tx_tab, (float)tab_y, (float)tx_tab + (float)tab_w, (float)tab_y + 2.0f);
                 glColor4f(0.847f, 0.847f, 0.847f, 1.0f);
             } else {
                 glColor4f(0.533f, 0.533f, 0.533f, 1.0f);
             }
             int lbl_len = (int)strlen(tab_labels[t]);
             int lbl_x   = tx_tab + (tab_w - lbl_len * FONT_SMALL_W) / 2;
-            draw_string((float)lbl_x, (float)(tab_y + 3), tab_labels[t], FONT_SMALL);
+            gl2d_draw_string((float)lbl_x, (float)(tab_y + 3), tab_labels[t], FONT_SMALL);
         }
 
         /* Separator line below tab bar */
@@ -399,24 +400,24 @@ void render_help(void) {
             memcpy(left, text[i], ln);
             left[ln] = '\0';
             glColor4f(0.847f, 0.847f, 0.847f, 1.0f);
-            draw_string((float)tx, (float)ty, left, FONT_SMALL);
+            gl2d_draw_string((float)tx, (float)ty, left, FONT_SMALL);
 
             /* Right column (description) - aligned to shared tab stop */
             glColor4f(0.533f, 0.533f, 0.533f, 1.0f);
-            draw_string((float)(tx + tab_stop * FONT_SMALL_W), (float)ty,
+            gl2d_draw_string((float)(tx + tab_stop * FONT_SMALL_W), (float)ty,
                         tab + 1, FONT_SMALL);
         } else if (text[i][0] != ' ') {
             /* Section header - dim gray-blue like config menu */
             glColor4f(0.478f, 0.518f, 0.580f, 1.0f);
-            draw_string((float)tx, (float)ty, text[i], FONT_SMALL);
+            gl2d_draw_string((float)tx, (float)ty, text[i], FONT_SMALL);
         } else if (text[i][2] == ' ' && text[i][3] == ' ') {
             /* 4+ space indent - code example, green accent */
             glColor4f(UI_ACCENT_GREEN_R, UI_ACCENT_GREEN_G, UI_ACCENT_GREEN_B, 0.90f);
-            draw_string((float)tx, (float)ty, text[i], FONT_SMALL);
+            gl2d_draw_string((float)tx, (float)ty, text[i], FONT_SMALL);
         } else {
             /* 2-space indent, no split - light label colour */
             glColor4f(0.847f, 0.847f, 0.847f, 1.0f);
-            draw_string((float)tx, (float)ty, text[i], FONT_SMALL);
+            gl2d_draw_string((float)tx, (float)ty, text[i], FONT_SMALL);
         }
     }
 
@@ -435,11 +436,11 @@ void render_help(void) {
 
         /* Track - #333 */
         glColor4f(0.20f, 0.20f, 0.20f, 0.60f);
-        draw_quad((float)bar_x, (float)(bar_top - bar_h), 4.0f, (float)bar_h);
+        glRectf((float)bar_x, (float)(bar_top - bar_h), (float)bar_x + 4.0f, (float)(bar_top - bar_h) + (float)bar_h);
 
         /* Thumb - #888 */
         glColor4f(0.533f, 0.533f, 0.533f, 0.80f);
-        draw_quad((float)bar_x, (float)thumb_y, 4.0f, (float)thumb_h);
+        glRectf((float)bar_x, (float)thumb_y, (float)bar_x + 4.0f, (float)thumb_y + (float)thumb_h);
 
         /* Scroll hint at bottom */
         if (help_scroll < max_scroll) {
@@ -448,12 +449,12 @@ void render_help(void) {
                      n_lines - help_scroll - visible_lines);
             int hint_x = hx + (hw - (int)strlen(hint) * FONT_SMALL_W) / 2;
             glColor4f(0.533f, 0.533f, 0.533f, 0.50f);
-            draw_string((float)hint_x, (float)(hy + 4), hint, FONT_SMALL);
+            gl2d_draw_string((float)hint_x, (float)(hy + 4), hint, FONT_SMALL);
         }
     }
 
     glDisable(GL_BLEND);
-    end_2d();
+    gl2d_end();
 
     #undef HELP_NUM_TABS
 }

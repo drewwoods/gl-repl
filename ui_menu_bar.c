@@ -8,6 +8,7 @@
 #include "repl_state.h"
 #include "ui_menu_bar.h"
 #include "ui_panels.h"
+#include "./include/gl_2d.h"
 
 /* Menu bar - styled after Header Wireframes v2.
  * Left: top-level menus (File, Scene, Config).
@@ -520,7 +521,7 @@ void ui_menu_bar_render_search_overlay(int cp_x, int panel_w, int panel_top) {
     /* Background: a shade lighter than the menu bar (#262626) so the active
      * search input reads as "focused". */
     glColor4f(0.149f, 0.149f, 0.149f, alpha);
-    draw_quad((float)box_x, (float)box_y, (float)box_w, (float)box_h);
+    glRectf((float)box_x, (float)box_y, (float)box_x + (float)box_w, (float)box_y + (float)box_h);
 
     /* Inner border */
     glColor4f(0.298f, 0.329f, 0.392f, alpha); /* #4c5464 */
@@ -540,20 +541,20 @@ void ui_menu_bar_render_search_overlay(int cp_x, int panel_w, int panel_top) {
         glColor4f(0.478f, 0.478f, 0.478f, alpha); /* #7a7a7a placeholder */
     else
         glColor4f(0.941f, 0.941f, 0.902f, alpha);
-    draw_string((float)query_x, (float)text_y, query_buf, FONT_SMALL);
+    gl2d_draw_string((float)query_x, (float)text_y, query_buf, FONT_SMALL);
 
     /* Count/status on the right */
     if (*srch->query_len > 0 && *srch->match_count <= 0)
         glColor4f(0.851f, 0.424f, 0.310f, alpha); /* accent for "0" */
     else
         glColor4f(0.533f, 0.533f, 0.533f, alpha);
-    draw_string((float)count_x, (float)text_y, count_buf, FONT_SMALL);
+    gl2d_draw_string((float)count_x, (float)text_y, count_buf, FONT_SMALL);
 
     if (*repl_state_code_panel()->cursor_visible && *srch->query_len > 0) {
         int cursor_x = query_x + cursor_col * FONT_SMALL_W;
         glColor4f(0.95f, 0.80f, 0.24f, 0.85f * alpha);
-        draw_quad((float)cursor_x, (float)(text_y - 2), 2.0f,
-                  (float)(FONT_SMALL_H + 2));
+        glRectf((float)cursor_x, (float)(text_y - 2), (float)cursor_x + 2.0f,
+                  (float)(text_y - 2) + (float)(FONT_SMALL_H + 2));
     }
 
     glDisable(GL_BLEND);
@@ -579,7 +580,7 @@ void ui_menu_bar_render(void) {
 
         /* Full-width strip: #1d1d1d */
         glColor4f(0.114f, 0.114f, 0.114f, 0.98f);
-        draw_quad((float)cp_x, (float)by, (float)cp_w, (float)bh);
+        glRectf((float)cp_x, (float)by, (float)cp_x + (float)cp_w, (float)by + (float)bh);
 
         int hover_menu = ui_menu_bar_menu_hit(*repl_state_pointer()->mouse_x, *repl_state_pointer()->mouse_y);
         int hover_pin  = ui_menu_bar_pin_hit(*repl_state_pointer()->mouse_x, *repl_state_pointer()->mouse_y);
@@ -590,17 +591,17 @@ void ui_menu_bar_render(void) {
             int hover  = (hover_menu == i);
             if (active) {
                 glColor4f(0.149f, 0.149f, 0.149f, 1.0f); /* #262626 */
-                draw_quad((float)menu_x[i], (float)by, (float)menu_w[i], (float)bh);
+                glRectf((float)menu_x[i], (float)by, (float)menu_x[i] + (float)menu_w[i], (float)by + (float)bh);
             } else if (hover) {
                 glColor4f(0.165f, 0.165f, 0.165f, 1.0f); /* #2a2a2a */
-                draw_quad((float)menu_x[i], (float)by, (float)menu_w[i], (float)bh);
+                glRectf((float)menu_x[i], (float)by, (float)menu_x[i] + (float)menu_w[i], (float)by + (float)bh);
             }
             if (active || hover)
                 glColor3f(1.0f, 1.0f, 1.0f);
             else
                 glColor3f(0.847f, 0.847f, 0.847f);       /* #d8d8d8 */
             int tx = menu_x[i] + 9;
-            draw_string((float)tx, (float)(by + 3),
+            gl2d_draw_string((float)tx, (float)(by + 3),
                         g_menu_labels[i], FONT_SMALL);
         }
 
@@ -610,7 +611,7 @@ void ui_menu_bar_render(void) {
         int pin_block_x = pin_x[PIN_SEARCH];
         int pin_block_w = cp_x + cp_w - CODE_MARGIN_X - pin_block_x;
         glColor4f(0.114f, 0.114f, 0.114f, 1.0f); /* #1d1d1d, fully opaque */
-        draw_quad((float)pin_block_x, (float)by, (float)pin_block_w, (float)bh);
+        glRectf((float)pin_block_x, (float)by, (float)pin_block_x + (float)pin_block_w, (float)by + (float)bh);
 
         /* Right-side pins: Search | Replay (always rendered on top) */
         for (int i = 0; i < NUM_PIN_BTNS; i++) {
@@ -618,10 +619,10 @@ void ui_menu_bar_render(void) {
             int active = (i == PIN_REPLAY && *replay->active);
             if (hover) {
                 glColor4f(0.165f, 0.165f, 0.165f, 1.0f);
-                draw_quad((float)pin_x[i], (float)by, (float)pin_w[i], (float)bh);
+                glRectf((float)pin_x[i], (float)by, (float)pin_x[i] + (float)pin_w[i], (float)by + (float)bh);
             } else if (active) {
                 glColor4f(0.149f, 0.149f, 0.149f, 1.0f);
-                draw_quad((float)pin_x[i], (float)by, (float)pin_w[i], (float)bh);
+                glRectf((float)pin_x[i], (float)by, (float)pin_x[i] + (float)pin_w[i], (float)by + (float)bh);
             }
             /* Left separator rule (#2a2a2a) */
             glColor4f(0.165f, 0.165f, 0.165f, 1.0f);
@@ -638,7 +639,7 @@ void ui_menu_bar_render(void) {
                 /* "search..." label in muted gray */
                 glColor3f(0.478f, 0.478f, 0.478f); /* #7a7a7a */
                 int tx = pin_x[i] + 12;
-                draw_string((float)tx, (float)(by + 3),
+                gl2d_draw_string((float)tx, (float)(by + 3),
                             g_pin_btn_labels[i], FONT_SMALL);
             } else if (i == PIN_REPLAY) {
                 /* Green accent (#6fb36f), state icon + dynamic label */
@@ -658,13 +659,13 @@ void ui_menu_bar_render(void) {
                     float bw = 2.5f, gap = 2.0f;
                     float by0 = (float)icon_cy - (float)icon_sz * 0.5f;
                     float bh0 = (float)icon_sz;
-                    draw_quad((float)icon_x,                    by0, bw, bh0);
-                    draw_quad((float)icon_x + bw + gap,         by0, bw, bh0);
+                    glRectf((float)icon_x,                    by0, (float)icon_x + bw, by0 + bh0);
+                    glRectf((float)icon_x + bw + gap,         by0, (float)icon_x + bw + gap + bw, by0 + bh0);
                 } else if (*replay->state == REPLAY_DONE) {
                     /* Square - run complete */
                     float sx = (float)icon_x;
                     float sy = (float)icon_cy - (float)icon_sz * 0.5f;
-                    draw_quad(sx, sy, (float)icon_sz, (float)icon_sz);
+                    glRectf(sx, sy, sx + (float)icon_sz, sy + (float)icon_sz);
                 } else {
                     /* Play triangle - stopped (OFF) or paused, click to start */
                     float x0 = (float)icon_x;
@@ -677,14 +678,14 @@ void ui_menu_bar_render(void) {
                 }
 
                 int tx = icon_x + 12 + 6;
-                draw_string((float)tx, (float)(by + 3), label, FONT_SMALL);
+                gl2d_draw_string((float)tx, (float)(by + 3), label, FONT_SMALL);
             } else {
                 if (hover || active)
                     glColor3f(1.0f, 1.0f, 1.0f);
                 else
                     glColor3f(0.847f, 0.847f, 0.847f);
                 int tx = pin_x[i] + 9;
-                draw_string((float)tx, (float)(by + 3),
+                gl2d_draw_string((float)tx, (float)(by + 3),
                             g_pin_btn_labels[i], FONT_SMALL);
             }
         }
@@ -714,13 +715,13 @@ void render_example_dropdown(void) {
 
     float alpha = ui_fade_alpha(g_menu_open_time);
 
-    begin_2d();
+    gl2d_begin(*repl_state_viewport()->window_w, *repl_state_viewport()->window_h);
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
     /* Dropdown bg (#222) + border (#3a3a3a) - design ref */
     glColor4f(0.133f, 0.133f, 0.133f, 0.98f * alpha);
-    draw_quad((float)dx, (float)dy, (float)dw, (float)dh);
+    glRectf((float)dx, (float)dy, (float)dx + (float)dw, (float)dy + (float)dh);
     glColor4f(0.227f, 0.227f, 0.227f, alpha);
     glBegin(GL_LINE_LOOP);
     glVertex2f((float)dx,        (float)dy);
@@ -732,9 +733,9 @@ void render_example_dropdown(void) {
     if (n == 0) {
         int ey = dy + dh - LINE_H + 1;
         glColor4f(0.478f, 0.518f, 0.580f, alpha);  /* #7a8494 (header style) */
-        draw_string((float)(dx + 14), (float)ey, "(empty)", FONT_SMALL);
+        gl2d_draw_string((float)(dx + 14), (float)ey, "(empty)", FONT_SMALL);
         glDisable(GL_BLEND);
-        end_2d();
+        gl2d_end();
         return;
     }
 
@@ -749,7 +750,7 @@ void render_example_dropdown(void) {
 
         if (strncmp(lbl, "### ", 4) == 0) {
             glColor4f(0.478f, 0.518f, 0.580f, alpha);  /* #7a8494 (header style) */
-            draw_string((float)(dx + 14), (float)ey, lbl + 4, FONT_SMALL);
+            gl2d_draw_string((float)(dx + 14), (float)ey, lbl + 4, FONT_SMALL);
             ey -= LINE_H;
             continue;
         }
@@ -778,8 +779,8 @@ void render_example_dropdown(void) {
 
         if (i == g_menu_item_hover) {
             glColor4f(0.180f, 0.290f, 0.431f, alpha);  /* #2e4a6e */
-            draw_quad((float)(dx + 1), (float)(ey - 2),
-                      (float)(dw - 2), (float)LINE_H);
+            glRectf((float)(dx + 1), (float)(ey - 2),
+                      (float)(dx + 1) + (float)(dw - 2), (float)(ey - 2) + (float)LINE_H);
             glColor4f(1.0f, 1.0f, 1.0f, alpha);
         } else if (is_active_example || is_active_scene) {
             glColor4f(UI_ACCENT_GREEN_R, UI_ACCENT_GREEN_G, UI_ACCENT_GREEN_B, alpha);
@@ -787,13 +788,13 @@ void render_example_dropdown(void) {
             glColor4f(0.847f, 0.847f, 0.847f, alpha);  /* #d8d8d8 */
         }
 
-        draw_string((float)(dx + 14), (float)ey, lbl, FONT_SMALL);
+        gl2d_draw_string((float)(dx + 14), (float)ey, lbl, FONT_SMALL);
 
         const char *sc = menu_item_shortcut(menu_id, i);
         if (sc) {
             int sc_px = (int)strlen(sc) * FONT_SMALL_W;
             glColor4f(0.533f, 0.533f, 0.533f, alpha);  /* #888 */
-            draw_string((float)(dx + dw - 14 - sc_px), (float)ey, sc, FONT_SMALL);
+            gl2d_draw_string((float)(dx + dw - 14 - sc_px), (float)ey, sc, FONT_SMALL);
         }
 
         if (menu_id == MENU_CONFIG) {
@@ -808,12 +809,12 @@ void render_example_dropdown(void) {
                 glColor4f(UI_ACCENT_GREEN_R, UI_ACCENT_GREEN_G, UI_ACCENT_GREEN_B, alpha);
             else
                 glColor4f(0.533f, 0.533f, 0.533f, alpha);
-            draw_string((float)(state_right - st_px), (float)ey, st, FONT_SMALL);
+            gl2d_draw_string((float)(state_right - st_px), (float)ey, st, FONT_SMALL);
         }
 
         ey -= LINE_H;
     }
 
     glDisable(GL_BLEND);
-    end_2d();
+    gl2d_end();
 }

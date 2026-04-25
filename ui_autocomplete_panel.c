@@ -14,6 +14,7 @@
 #include "repl_state.h"
 #include "ui_autocomplete_panel.h"
 #include "ui_panels.h"
+#include "./include/gl_2d.h"
 
 void ui_autocomplete_panel_render(void) {
     const ReplAutocompleteState      *ac  = repl_state_autocomplete();
@@ -21,7 +22,7 @@ void ui_autocomplete_panel_render(void) {
 
     if (*ac->match_count < 1) return;
 
-    begin_2d();
+    gl2d_begin(*repl_state_viewport()->window_w, *repl_state_viewport()->window_h);
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
@@ -46,8 +47,7 @@ void ui_autocomplete_panel_render(void) {
 
     /* Background */
     glColor4f(0.08f, 0.08f, 0.15f, 0.95f);
-    draw_quad((float)popup_x, (float)(popup_y - popup_h),
-              (float)popup_w, (float)popup_h);
+    glRectf((float)((float)popup_x), (float)((float)(popup_y - popup_h)), (float)((float)popup_x)+(float)((float)popup_w), (float)((float)(popup_y - popup_h))+(float)((float)popup_h));
 
     /* Border */
     glColor4f(0.40f, 0.40f, 0.65f, 0.80f);
@@ -64,23 +64,22 @@ void ui_autocomplete_panel_render(void) {
         if (i == *ac->selected_idx) {
             /* Highlight selected */
             glColor4f(0.20f, 0.25f, 0.42f, 0.90f);
-            draw_quad((float)(popup_x + 1), (float)(ey - 2),
-                      (float)(popup_w - 2), (float)LINE_H);
+            glRectf((float)((float)(popup_x + 1)), (float)((float)(ey - 2)), (float)((float)(popup_x + 1))+(float)((float)(popup_w - 2)), (float)((float)(ey - 2))+(float)((float)LINE_H));
             glColor3f(1.0f, 1.0f, 0.90f);
         } else {
             glColor3f(0.65f, 0.65f, 0.72f);
         }
-        draw_string((float)(popup_x + 8), (float)ey,
+        gl2d_draw_string((float)(popup_x + 8), (float)ey,
                     ac->matches[i], FONT_MONO);
         ey -= LINE_H;
     }
 
     /* Hint text */
     glColor4f(0.45f, 0.45f, 0.55f, 0.70f);
-    draw_string((float)(popup_x + 4),
+    gl2d_draw_string((float)(popup_x + 4),
                 (float)(popup_y - popup_h - FONT_H - 2),
                 "Tab to accept", FONT_SMALL);
 
     glDisable(GL_BLEND);
-    end_2d();
+    gl2d_end();
 }

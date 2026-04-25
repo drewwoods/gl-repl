@@ -49,7 +49,7 @@ static void repl_replay_annotations_rebuild_cache(void) {
     s_replay_cache_pc = *replay->pc;
 }
 
-void repl_replay_annotations_invalidate(void) {
+static void repl_replay_annotations_invalidate(void) {
     s_replay_cache_pc = -2;
 }
 
