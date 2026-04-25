@@ -556,7 +556,7 @@ static void display_func(void) {
     saved_flat_count = g_num_flat_cmds;
     repl_copy_predef_values(live_predef_vals, MAX_PREDEF_VARS);
     if (*replay->active)
-        repl_state_flat_program_set_count(replay_prepare_frame(saved_flat_count));
+        repl_state_flat_program_set_count(repl_replay_prepare_frame(saved_flat_count));
 
     update_render_state_strings();
     update_cam_lines();

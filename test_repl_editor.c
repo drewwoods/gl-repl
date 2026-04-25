@@ -1882,25 +1882,25 @@ int main() {
         repl_flatten_commands();
 
         ASSERT_INT("replay key ctrl-r consumed",
-                   replay_handle_key(KEY_CTRL_R), 1);
+                   repl_replay_handle_key(KEY_CTRL_R), 1);
         ASSERT_INT("replay key ctrl-r starts replay",
                    replay_active, 1);
         ASSERT_INT("replay space consumed",
-                   replay_handle_key(' '), 1);
+                   repl_replay_handle_key(' '), 1);
         ASSERT_INT("replay space pauses",
                    replay_state, REPLAY_PAUSED);
         ASSERT_INT("replay space resumes",
-                   replay_handle_key(' '), 1);
+                   repl_replay_handle_key(' '), 1);
         ASSERT_INT("replay resumed playing",
                    replay_state, REPLAY_PLAYING);
 
         replay_state = REPLAY_PAUSED;
         ASSERT_INT("replay right consumed",
-                   replay_handle_special_key(GLUT_KEY_RIGHT), 1);
+                   repl_replay_handle_special_key(GLUT_KEY_RIGHT), 1);
         ASSERT_INT("replay right advances one step",
                    replay_pc, 1);
         ASSERT_INT("replay left consumed",
-                   replay_handle_special_key(GLUT_KEY_LEFT), 1);
+                   repl_replay_handle_special_key(GLUT_KEY_LEFT), 1);
         ASSERT_INT("replay left steps back",
                    replay_pc, 0);
 
@@ -1922,7 +1922,7 @@ int main() {
         *repl_state_presentation_mut()->code_panel_layout = CFG_DEFAULT_CODE_PANEL_LAYOUT;
 
         ASSERT_INT("replay unknown key unconsumed",
-                   replay_handle_key('x'), 0);
+                   repl_replay_handle_key('x'), 0);
         ASSERT_INT("replay unknown key stops replay",
                    replay_active, 0);
     }
@@ -1997,17 +1997,17 @@ int main() {
 
         replay_mode = REPLAY_MODE_VERTEX;
         repl_replay_start();
-        replay_advance();
+        repl_replay_advance();
         ASSERT_INT("replay vertex mode focuses first gluVertex",
                    replay_src_line, 2);
-        replay_advance();
+        repl_replay_advance();
         ASSERT_INT("replay vertex mode focuses next gluVertex",
                    replay_src_line, 3);
         repl_replay_stop();
 
         replay_mode = REPLAY_MODE_POLYGON;
         repl_replay_start();
-        replay_advance();
+        repl_replay_advance();
         ASSERT_INT("replay polygon mode focuses tess vertex",
                    replay_src_line, 4);
         repl_replay_stop();

@@ -308,7 +308,7 @@ static BenchResult bench_replay_examples(int iters) {
             int safety = repl_state_flat_program_count() + 1;
             const ReplReplayRuntimeState *replay = repl_state_replay();
             while (*replay->state == REPLAY_PLAYING && safety-- > 0) {
-                replay_advance();
+                repl_replay_advance();
                 steps++;
             }
             repl_replay_stop();
@@ -381,7 +381,7 @@ static BenchResult bench_replay_long(int iters) {
     int flat_cmds = repl_state_flat_program_count();
     replay_stop();
 
-    /* Snapshot post-load predef values. replay_advance() writes
+    /* Snapshot post-load predef values. repl_replay_advance() writes
      * g_predef_vars on CMD_VAR_ASSIGN during playback
      * (repl_core.c:3655-3656), so without restoring, each iteration
      * would start repl_replay_start()'s baseline capture from progressively
@@ -403,7 +403,7 @@ static BenchResult bench_replay_long(int iters) {
         int safety = repl_state_flat_program_count() + 1;
         const ReplReplayRuntimeState *replay = repl_state_replay();
         while (*replay->state == REPLAY_PLAYING && safety-- > 0) {
-            replay_advance();
+            repl_replay_advance();
             steps++;
         }
         replay_stop();
@@ -515,7 +515,7 @@ static BenchResult bench_fade_batches(int iters) {
 
     /* 32 batches mirrors a typical in-flight count at the default 30fps
      * replay speed (REPLAY_FADE_DURATION is 0.5s). age=0.25s → alpha≈0.5
-     * so replay_batch_alpha() returns a non-zero value and the per-batch
+     * so repl_replay_batch_alpha() returns a non-zero value and the per-batch
      * body runs. */
     enum { N_BATCHES = 32 };
     int old_pcs[N_BATCHES];
@@ -542,7 +542,7 @@ static BenchResult bench_fade_batches(int iters) {
         for (int k = 0; k < inner; k++) {
             /* Reinstall on every call so a fade batch that ticks its
              * age past REPLAY_FADE_DURATION doesn't silently reduce
-             * the measured workload (replay_tick_fade_batches isn't
+             * the measured workload (repl_replay_tick_fade_batches isn't
              * called here, but keeping the install call in-loop also
              * amortizes a tiny fraction of the setup cost into each
              * measurement - intentional, since a real replay frame

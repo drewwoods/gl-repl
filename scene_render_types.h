@@ -46,7 +46,7 @@ typedef struct SceneRenderConfig {
     int replay_tess_preview;
     int replay_vertex_points;
     int replay_has_fades;
-    int replay_fill_base_limit;
+    int replay_base_limit;
     int show_current_poly;
     float alpha_scale; /* alpha boost to counter dark-bg crush; 1.0 = no change */
 } SceneRenderConfig;

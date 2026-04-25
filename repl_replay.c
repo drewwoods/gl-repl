@@ -149,14 +149,14 @@ static void replay_set_src_line(int src_line) {
     }
 }
 
-float replay_batch_alpha(const ReplayFadeBatch *batch) {
+float repl_replay_batch_alpha(const ReplayFadeBatch *batch) {
     float alpha = batch->age * g_replay_fade_speed;
     if (alpha < 0.0f) alpha = 0.0f;
     if (alpha > 1.0f) alpha = 1.0f;
     return alpha;
 }
 
-ReplayFadeBatchView replay_fade_batches_view(void) {
+ReplayFadeBatchView repl_replay_fade_batches_view(void) {
     ReplayFadeBatchView view = {
         .batches = g_replay_fade_batches,
         .count = g_replay_fade_batch_count,
@@ -164,11 +164,11 @@ ReplayFadeBatchView replay_fade_batches_view(void) {
     return view;
 }
 
-int replay_compute_fade_skip_limits(int *out_limits, int max_count) {
+int repl_replay_compute_fade_skip_limits(int *out_limits, int max_count) {
     FlatProgramView flat_program = repl_state_flat_program_view();
     const GLCmd *g_flat_cmds = flat_program.cmds;
     int g_num_flat_cmds = flat_program.cmd_count;
-    ReplayFadeBatchView fade_batches = replay_fade_batches_view();
+    ReplayFadeBatchView fade_batches = repl_replay_fade_batches_view();
     int batch_limit;
     int batch_idx = 0;
     int open_begin = -1;
@@ -177,7 +177,7 @@ int replay_compute_fade_skip_limits(int *out_limits, int max_count) {
 
     if (!out_limits || max_count <= 0)
         return 0;
-    if (!replay_has_active_fades())
+    if (!repl_replay_has_active_fades())
         return 0;
 
     batch_limit = fade_batches.count;
@@ -261,7 +261,7 @@ static void replay_clamp_fade_batches(int max_pc) {
     g_replay_fade_batch_count = dst;
 }
 
-void replay_tick_fade_batches(float dt) {
+void repl_replay_tick_fade_batches(float dt) {
     int dst = 0;
 
     for (int i = 0; i < g_replay_fade_batch_count; i++) {
@@ -275,13 +275,13 @@ void replay_tick_fade_batches(float dt) {
     g_replay_fade_batch_count = dst;
 }
 
-int replay_has_active_fades(void) {
+int repl_replay_has_active_fades(void) {
     return g_replay_active && g_replay_fade_batch_count > 0;
 }
 
-int replay_fill_base_limit(void) {
+int repl_replay_fill_base_limit(void) {
     REPLAY_FLAT_STATE;
-    if (!replay_has_active_fades())
+    if (!repl_replay_has_active_fades())
         return g_num_flat_cmds;
     if (g_replay_fade_batches[0].old_pc < 0)
         return 0;
@@ -448,7 +448,7 @@ static int replay_prev_limit(int current_pc) {
     return prev_pc;
 }
 
-void replay_seek(int new_pc) {
+void repl_replay_seek(int new_pc) {
     REPLAY_FLAT_STATE;
     if (new_pc < 0)
         new_pc = 0;
@@ -464,7 +464,7 @@ void replay_seek(int new_pc) {
                    : REPLAY_PAUSED;
 }
 
-int replay_seek_to_src_line(int target_line) {
+int repl_replay_seek_to_src_line(int target_line) {
     int pc = 0;
     int landed_pc = -1;
     int landed_src = -1;
@@ -499,11 +499,11 @@ int replay_seek_to_src_line(int target_line) {
     if (landed_pc < 0)
         return -1;
 
-    replay_seek(landed_pc);
+    repl_replay_seek(landed_pc);
     return landed_src;
 }
 
-void replay_restart_from_beginning(void) {
+void repl_replay_restart_from_beginning(void) {
     g_replay_pc = 0;
     g_replay_accum = 0.0f;
     replay_clear_fade_batches();
@@ -555,7 +555,7 @@ void repl_replay_stop(void) {
     g_replay_last_src_line = -1;
 }
 
-void replay_advance(void) {
+void repl_replay_advance(void) {
     REPLAY_FLAT_STATE;
     int old_pc;
     int next_pc;
@@ -591,27 +591,27 @@ void replay_advance(void) {
     }
 }
 
-void replay_step_back(void) {
+void repl_replay_step_back(void) {
     if (!g_replay_active)
         return;
 
     if (g_replay_pc <= 0) {
-        replay_seek(0);
+        repl_replay_seek(0);
         set_status("Replay: at start");
         return;
     }
 
-    replay_seek(replay_prev_limit(g_replay_pc));
+    repl_replay_seek(replay_prev_limit(g_replay_pc));
 }
 
-int replay_exec_limit(void) {
+int repl_replay_exec_limit(void) {
     REPLAY_FLAT_STATE;
     if (replay_enabled())
         return g_replay_pc;
     return g_num_flat_cmds;
 }
 
-void replay_speed_adjust(float factor) {
+void repl_replay_speed_adjust(float factor) {
     char msg[64];
     g_replay_speed *= factor;
     if (g_replay_speed < 0.5f) g_replay_speed = 0.5f;
@@ -620,7 +620,7 @@ void replay_speed_adjust(float factor) {
     set_status(msg);
 }
 
-int replay_prepare_frame(int full_flat_count) {
+int repl_replay_prepare_frame(int full_flat_count) {
     REPLAY_FLAT_STATE;
     if (!g_replay_active)
         return g_num_flat_cmds;
@@ -632,14 +632,14 @@ int replay_prepare_frame(int full_flat_count) {
         g_replay_state == REPLAY_PLAYING)
         g_replay_state = REPLAY_DONE;
     replay_clamp_fade_batches(g_replay_pc);
-    return replay_exec_limit();
+    return repl_replay_exec_limit();
 }
 
-void replay_restore_baseline_predef_values(void) {
+void repl_replay_restore_baseline_predef_values(void) {
     repl_restore_predef_values(g_replay_baseline_predef_vals, MAX_PREDEF_VARS);
 }
 
-void repl_copy_replay_baseline_predef_values(float *dst, int max_vals) {
+void repl_replay_copy_baseline_predef_values(float *dst, int max_vals) {
     int n;
 
     if (!dst || max_vals <= 0)
@@ -649,7 +649,7 @@ void repl_copy_replay_baseline_predef_values(float *dst, int max_vals) {
     memcpy(dst, g_replay_baseline_predef_vals, (size_t)n * sizeof(float));
 }
 
-int replay_handle_key(unsigned char key) {
+int repl_replay_handle_key(unsigned char key) {
     if (!g_replay_active) {
         if (key == KEY_CTRL_R) {
             repl_replay_start();
@@ -659,7 +659,7 @@ int replay_handle_key(unsigned char key) {
             int target_line = repl_state_edit_line();
             repl_replay_start();
             if (g_replay_active) {
-                int landed = replay_seek_to_src_line(target_line);
+                int landed = repl_replay_seek_to_src_line(target_line);
                 if (landed < 0) {
                     set_status("Jump: no geometry at or after cursor");
                 } else {
@@ -680,7 +680,7 @@ int replay_handle_key(unsigned char key) {
         return 1;
     }
     if (key == KEY_CTRL_K) {
-        int landed = replay_seek_to_src_line(repl_state_edit_line());
+        int landed = repl_replay_seek_to_src_line(repl_state_edit_line());
         if (landed < 0) {
             set_status("Jump: no geometry at or after cursor");
         } else {
@@ -699,17 +699,17 @@ int replay_handle_key(unsigned char key) {
             g_replay_state = REPLAY_PLAYING;
             set_status("Replay: playing");
         } else if (g_replay_state == REPLAY_DONE) {
-            replay_restart_from_beginning();
+            repl_replay_restart_from_beginning();
             set_status("Replay: restarted");
         }
         return 1;
     }
     if (key == '+' || key == '=') {
-        replay_speed_adjust(1.5f);
+        repl_replay_speed_adjust(1.5f);
         return 1;
     }
     if (key == '-') {
-        replay_speed_adjust(0.67f);
+        repl_replay_speed_adjust(0.67f);
         return 1;
     }
     if (key == 'm' || key == 'M') {
@@ -717,7 +717,7 @@ int replay_handle_key(unsigned char key) {
         g_replay_mode = (g_replay_mode == REPLAY_MODE_VERTEX)
                       ? REPLAY_MODE_POLYGON
                       : REPLAY_MODE_VERTEX;
-        replay_seek(g_replay_pc);
+        repl_replay_seek(g_replay_pc);
         if (was_playing && g_replay_state != REPLAY_DONE)
             g_replay_state = REPLAY_PLAYING;
         set_status(g_replay_mode == REPLAY_MODE_VERTEX
@@ -751,24 +751,24 @@ static int replay_modifier_special_key(int key) {
 #endif
 }
 
-int replay_handle_special_key(int key) {
+int repl_replay_handle_special_key(int key) {
     if (!g_replay_active)
         return 0;
 
     if (key == GLUT_KEY_LEFT) {
-        replay_step_back();
+        repl_replay_step_back();
         return 1;
     }
     if (key == GLUT_KEY_RIGHT) {
-        replay_advance();
+        repl_replay_advance();
         return 1;
     }
     if (key == GLUT_KEY_UP) {
-        replay_speed_adjust(1.5f);
+        repl_replay_speed_adjust(1.5f);
         return 1;
     }
     if (key == GLUT_KEY_DOWN) {
-        replay_speed_adjust(0.67f);
+        repl_replay_speed_adjust(0.67f);
         return 1;
     }
 

@@ -375,7 +375,7 @@ static int replay_copy_predef_values_before_flat_cmd(int target_pc,
         return 0;
 
     if (*replay->active)
-        repl_copy_replay_baseline_predef_values(out_vals, max_vals);
+        repl_replay_copy_baseline_predef_values(out_vals, max_vals);
     else
         for (int i = 0; i < g_num_predef_vars && i < max_vals; i++)
             out_vals[i] = g_predef_vars[i].value;
@@ -474,7 +474,7 @@ static void replay_build_predef_snapshots(void) {
     memset(s_replay_predef_snap_valid, 0, sizeof(int) * (size_t)repl_state_document_count());
 
     if (*replay->active)
-        repl_copy_replay_baseline_predef_values(vals, MAX_PREDEF_VARS);
+        repl_replay_copy_baseline_predef_values(vals, MAX_PREDEF_VARS);
     else
         for (int i = 0; i < g_num_predef_vars && i < MAX_PREDEF_VARS; i++)
             vals[i] = g_predef_vars[i].value;
