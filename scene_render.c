@@ -16,7 +16,7 @@
 #include "scene_render.h"
 #include "scene_transform_guides.h"
 #include "ui_panels.h"
-#include "ui_profile_panel.h"
+#include "prof.h"
 
 /* ========================================================================= */
 /* 3D scene helpers                                                           */

@@ -16,7 +16,7 @@
 #include "repl_keys.h"
 #include "ui_menu_bar.h"
 #include "repl_replay_annotations.h"
-#include "ui_profile_panel.h"
+#include "prof.h"
 #include "ui_panels.h"
 
 #define IMPORT_EXPORT_STATE (repl_state_import_export())

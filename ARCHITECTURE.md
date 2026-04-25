@@ -85,6 +85,7 @@ of one monolithic `repl_core.c`.
   rendering.
 - `scene_overlays.c`: polygon outline/current-block, vertex-number, and
   normal-vector overlay rendering plus shared flat-block cursor matching.
+- `prof.c`: project-wide CPU timing instrumentation.
 - `sample.c`: application entrypoint and GLUT callback wiring.
 
 The public API is still `repl_core.h`. Cross-module runtime/test helpers live in
@@ -462,9 +463,8 @@ two rendering layers.
 
 ### Grandfathered exceptions
 
-- `scene_render.c` includes `ui_panels.h` for `scene_rect()` and
-  `ui_profile_panel.h` for profile-panel layout queries. Both are
-  read-only layout coordinates, not render dispatch. Tracked for
+- `scene_render.c` includes `ui_panels.h` for `scene_rect()`. This is
+  a read-only layout coordinate, not render dispatch. Tracked for
   removal by migrating `scene_rect()` into a `repl_*` layout model.
 
 ### Enforcement

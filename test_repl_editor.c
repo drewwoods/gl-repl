@@ -8,7 +8,7 @@
 #include "repl_keys.h"
 #include "repl_state.h"
 #include "sample.h"
-#include "ui_profile_panel.h"
+#include "prof.h"
 #include "ui_panels.h"
 #include "ui_variable_panel.h"
 #include "repl_inline_rename.h"

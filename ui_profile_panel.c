@@ -1,42 +1,18 @@
 /*
  * ui_profile_panel.c - per-section wall-time profiling overlay panel.
- *
- * Uses a fast monotonic clock so sampling doesn't itself dominate the
- * sections it measures:
- *   - Linux:  clock_gettime(CLOCK_MONOTONIC) - served from the vDSO, no
- *             syscall on modern kernels.
- *   - macOS:  mach_absolute_time() - direct timer read, no syscall.
- * This is wall clock (elapsed time), not CPU time; in a single-threaded
- * render loop the two differ only when the process is preempted, which
- * is exactly what a frame-budget profiler should surface anyway.
- *
- * Each section is timed with prof_begin/prof_end.  The last measured value
- * and an exponential moving average (EMA, alpha = 0.08) are maintained.
- * Sections that didn't run this frame are shown with their most recent value
- * dimmed; after PROF_STALE_FRAMES frames without a sample they show "--".
  */
-#define _POSIX_C_SOURCE 200809L
 #include "sample.h"
 #include "ui_profile_panel.h"
 #include "ui_panels.h"
 #include "ui_variable_panel.h"
+#include "prof.h"
 
-#include <time.h>
-
-#ifdef __APPLE__
-#include <mach/mach_time.h>
-#endif
+#include <stdio.h>
+#include <string.h>
 
 /* ========================================================================= */
 /* Configuration                                                              */
 /* ========================================================================= */
-
-/* EMA smoothing factor.  Higher = more responsive, lower = smoother. */
-#define PROF_EMA_ALPHA      0.08
-
-/* After this many frames without a new sample, display "--" instead of the
- * stale value.  At 60 fps this is 3 seconds. */
-#define PROF_STALE_FRAMES   180
 
 /* Panel geometry (pixels). */
 #define PROF_PANEL_W        320
@@ -64,143 +40,30 @@ static int clamp_profile_y(int y, int scene_y, int scene_h, int panel_h) {
 }
 
 static void profile_panel_rect_for_height(int panel_h, int *out_x, int *out_y) {
-    int sc_x, sc_y, sc_w, sc_h;
-    int px, py;
+    int scene_x, scene_y, scene_w, scene_h;
+    int panel_x, panel_y;
 
-    scene_rect(&sc_x, &sc_y, &sc_w, &sc_h);
+    scene_rect(&scene_x, &scene_y, &scene_w, &scene_h);
 
     if (*repl_state_variable_panel()->visible) {
-        px = sc_x + sc_w - PROF_PANEL_W - PROF_PANEL_MARGIN;
-        py = sc_y + sc_h - panel_h - PROF_PANEL_MARGIN;
+        panel_x = scene_x + scene_w - PROF_PANEL_W - PROF_PANEL_MARGIN;
+        panel_y = scene_y + scene_h - panel_h - PROF_PANEL_MARGIN;
     } else {
-        int vx, vy, vw, vh;
-        var_panel_rect(&vx, &vy, &vw, &vh);
-        px = vx + vw - PROF_PANEL_W;
-        py = vy;
+        int var_x, var_y, var_w, var_h;
+        var_panel_rect(&var_x, &var_y, &var_w, &var_h);
+        panel_x = var_x + var_w - PROF_PANEL_W;
+        panel_y = var_y;
     }
 
-    px = clamp_int(px, sc_x + 4, sc_x + sc_w - PROF_PANEL_W - 4);
-    py = clamp_profile_y(py, sc_y, sc_h, panel_h);
+    panel_x = clamp_int(panel_x, scene_x + 4, scene_x + scene_w - PROF_PANEL_W - 4);
+    panel_y = clamp_profile_y(panel_y, scene_y, scene_h, panel_h);
 
-    if (out_x) *out_x = px;
-    if (out_y) *out_y = py;
+    if (out_x) *out_x = panel_x;
+    if (out_y) *out_y = panel_y;
 }
-
-/* ========================================================================= */
-/* State                                                                      */
-/* ========================================================================= */
-
-static double g_prof_start[PROF_SECTION_COUNT];
-static double g_prof_last_us[PROF_SECTION_COUNT];  /* last measured wall µs */
-static double g_prof_avg_us[PROF_SECTION_COUNT];   /* EMA in µs             */
-static int    g_prof_stale[PROF_SECTION_COUNT];    /* frames since last sample */
-static double g_prof_accum_pending[PROF_SECTION_COUNT]; /* running total for accum-commit */
-static int    g_prof_initialized = 0;
 
 /* ========================================================================= */
 /* Helpers                                                                    */
-/* ========================================================================= */
-
-#ifdef __APPLE__
-static double prof_now_us(void) {
-    static mach_timebase_info_data_t tb = {0, 0};
-    if (tb.denom == 0) mach_timebase_info(&tb);
-    /* mach_absolute_time returns ticks; convert to nanoseconds via the
-     * timebase, then to microseconds. Division by 1000.0 is in double to
-     * keep sub-microsecond resolution for the EMA. */
-    uint64_t ticks = mach_absolute_time();
-    double nsec = (double)ticks * (double)tb.numer / (double)tb.denom;
-    return nsec / 1000.0;
-}
-#else
-static double prof_now_us(void) {
-    struct timespec ts;
-    /* CLOCK_MONOTONIC is served by the vDSO on Linux, so this is a
-     * single register-load worth of overhead rather than a full syscall. */
-    clock_gettime(CLOCK_MONOTONIC, &ts);
-    return (double)ts.tv_sec * 1e6 + (double)ts.tv_nsec / 1000.0;
-}
-#endif
-
-static void init_if_needed(void) {
-    if (g_prof_initialized) return;
-    for (int i = 0; i < PROF_SECTION_COUNT; i++) {
-        g_prof_start[i]         = 0.0;
-        g_prof_last_us[i]       = 0.0;
-        g_prof_avg_us[i]        = 0.0;
-        g_prof_stale[i]         = PROF_STALE_FRAMES; /* treat as stale until first sample */
-        g_prof_accum_pending[i] = 0.0;
-    }
-    g_prof_initialized = 1;
-}
-
-/* ========================================================================= */
-/* Public API                                                                 */
-/* ========================================================================= */
-
-void prof_begin(ProfSection s) {
-    if (s < 0 || s >= PROF_SECTION_COUNT) return;
-    init_if_needed();
-    g_prof_start[s] = prof_now_us();
-}
-
-void prof_end(ProfSection s) {
-    if (s < 0 || s >= PROF_SECTION_COUNT) return;
-    init_if_needed();
-
-    double elapsed = prof_now_us() - g_prof_start[s];
-    if (elapsed < 0.0) elapsed = 0.0;
-
-    g_prof_last_us[s] = elapsed;
-    g_prof_stale[s]   = 0;
-
-    if (g_prof_avg_us[s] == 0.0)
-        g_prof_avg_us[s] = elapsed;  /* seed with first sample */
-    else
-        g_prof_avg_us[s] = PROF_EMA_ALPHA * elapsed
-                         + (1.0 - PROF_EMA_ALPHA) * g_prof_avg_us[s];
-}
-
-void prof_accum_reset(ProfSection s) {
-    if (s < 0 || s >= PROF_SECTION_COUNT) return;
-    init_if_needed();
-    g_prof_accum_pending[s] = 0.0;
-}
-
-void prof_accum_end(ProfSection s) {
-    if (s < 0 || s >= PROF_SECTION_COUNT) return;
-    init_if_needed();
-    double elapsed = prof_now_us() - g_prof_start[s];
-    if (elapsed < 0.0) elapsed = 0.0;
-    g_prof_accum_pending[s] += elapsed;
-    g_prof_stale[s] = 0;
-}
-
-void prof_accum_commit(ProfSection s) {
-    if (s < 0 || s >= PROF_SECTION_COUNT) return;
-    init_if_needed();
-    double total = g_prof_accum_pending[s];
-    g_prof_last_us[s] = total;
-    if (g_prof_avg_us[s] == 0.0)
-        g_prof_avg_us[s] = total;
-    else
-        g_prof_avg_us[s] = PROF_EMA_ALPHA * total
-                         + (1.0 - PROF_EMA_ALPHA) * g_prof_avg_us[s];
-}
-
-void prof_frame_tick(void) {
-    init_if_needed();
-    /* Increment staleness counters for all sections.  For sections that run
-     * during this frame prof_end() will reset their counter back to 0, so the
-     * transient increment here is invisible by the time the panel renders. */
-    for (int i = 0; i < PROF_SECTION_COUNT; i++) {
-        if (g_prof_stale[i] < PROF_STALE_FRAMES)
-            g_prof_stale[i]++;
-    }
-}
-
-/* ========================================================================= */
-/* Rendering                                                                  */
 /* ========================================================================= */
 
 static const char *section_label(ProfSection s) {
@@ -249,10 +112,6 @@ static void fmt_us(char *buf, int buf_sz, double us) {
         snprintf(buf, (size_t)buf_sz, "%.2f ms", us / 1000.0);
 }
 
-int prof_code_panel_details_enabled(void) {
-    return *repl_state_profile_panel()->mode == PROFILE_PANEL_DETAILS;
-}
-
 static int is_detail_section(ProfSection s) {
     return (s == PROF_SCENE_3D_SETUP ||
             s == PROF_SCENE_3D_FILL ||
@@ -289,31 +148,34 @@ static int section_visible(ProfSection s) {
 }
 
 static int visible_section_count(void) {
-    int count = 0;
-    for (int i = 0; i < PROF_SECTION_COUNT; i++) {
-        if (section_visible((ProfSection)i))
-            count++;
+    int section_count = 0;
+    for (int section_idx = 0; section_idx < PROF_SECTION_COUNT; section_idx++) {
+        if (section_visible((ProfSection)section_idx))
+            section_count++;
     }
-    return count;
+    return section_count;
 }
+
+/* ========================================================================= */
+/* Rendering                                                                  */
+/* ========================================================================= */
 
 void render_profile_panel(void) {
     if (*repl_state_profile_panel()->mode == PROFILE_PANEL_OFF) return;
-    init_if_needed();
 
-    int row_count = visible_section_count();
+    int visible_count = visible_section_count();
 
     /* Panel total height: header + column headings + one row per section +
      * divider before FRAME_TOTAL + bottom padding */
     int panel_h  = PROF_HEADER_H
                  + 18                           /* column heading row */
-                 + row_count * PROF_ROW_H
+                 + visible_count * PROF_ROW_H
                  + 4                            /* divider before FRAME_TOTAL */
                  + PROF_BOTTOM_PAD
                  + PROF_PANEL_MARGIN;
 
-    int px, py;
-    profile_panel_rect_for_height(panel_h, &px, &py);
+    int panel_x, panel_y;
+    profile_panel_rect_for_height(panel_h, &panel_x, &panel_y);
 
     begin_2d();
 
@@ -321,20 +183,20 @@ void render_profile_panel(void) {
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
     glColor4f(0.05f, 0.05f, 0.08f, 0.91f);
-    draw_quad((float)px, (float)py, (float)PROF_PANEL_W, (float)panel_h);
+    draw_quad((float)panel_x, (float)panel_y, (float)PROF_PANEL_W, (float)panel_h);
 
     /* Border */
     glColor4f(0.35f, 0.35f, 0.55f, 0.85f);
     glBegin(GL_LINE_LOOP);
-    glVertex2f((float)px,                   (float)py);
-    glVertex2f((float)(px + PROF_PANEL_W),  (float)py);
-    glVertex2f((float)(px + PROF_PANEL_W),  (float)(py + panel_h));
-    glVertex2f((float)px,                   (float)(py + panel_h));
+    glVertex2f((float)panel_x,                   (float)panel_y);
+    glVertex2f((float)(panel_x + PROF_PANEL_W),  (float)panel_y);
+    glVertex2f((float)(panel_x + PROF_PANEL_W),  (float)(panel_y + panel_h));
+    glVertex2f((float)panel_x,                   (float)(panel_y + panel_h));
     glEnd();
     glDisable(GL_BLEND);
 
-    int tx = px + 8;
-    int ty = py + panel_h - PROF_HEADER_H + 2;
+    int tx = panel_x + 8;
+    int ty = panel_y + panel_h - PROF_HEADER_H + 2;
     const char *HINT = "Ctrl+W:hide";
     const int hint_width = FONT_SMALL_W * (int)strlen(HINT) + 2;
 
@@ -342,7 +204,7 @@ void render_profile_panel(void) {
     glColor3f(0.85f, 0.90f, 1.00f);
     draw_string((float)tx, (float)ty, "CPU Profile", FONT_SMALL);
     glColor3f(0.40f, 0.42f, 0.50f);
-    draw_string((float)(px + PROF_PANEL_W - hint_width), (float)ty, HINT, FONT_SMALL);
+    draw_string((float)(panel_x + PROF_PANEL_W - hint_width), (float)ty, HINT, FONT_SMALL);
 
     ty -= PROF_HEADER_H;
 
@@ -361,16 +223,16 @@ void render_profile_panel(void) {
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
     glBegin(GL_LINES);
-    glVertex2f((float)(px + 4),              (float)ty);
-    glVertex2f((float)(px + PROF_PANEL_W - 4), (float)ty);
+    glVertex2f((float)(panel_x + 4),              (float)ty);
+    glVertex2f((float)(panel_x + PROF_PANEL_W - 4), (float)ty);
     glEnd();
     glDisable(GL_BLEND);
 
     ty -= PROF_ROW_H - 2;
 
     /* One row per section.  Insert a separator line before FRAME_TOTAL. */
-    for (int i = 0; i < PROF_SECTION_COUNT; i++) {
-        ProfSection s = (ProfSection)i;
+    for (int section_idx = 0; section_idx < PROF_SECTION_COUNT; section_idx++) {
+        ProfSection s = (ProfSection)section_idx;
         if (!section_visible(s)) continue;
 
         if (s == PROF_FRAME_TOTAL) {
@@ -379,18 +241,18 @@ void render_profile_panel(void) {
             glEnable(GL_BLEND);
             glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
             glBegin(GL_LINES);
-            glVertex2f((float)(px + 4),               (float)(ty + PROF_ROW_H - 3));
-            glVertex2f((float)(px + PROF_PANEL_W - 4),(float)(ty + PROF_ROW_H - 3));
+            glVertex2f((float)(panel_x + 4),               (float)(ty + PROF_ROW_H - 3));
+            glVertex2f((float)(panel_x + PROF_PANEL_W - 4),(float)(ty + PROF_ROW_H - 3));
             glEnd();
             glDisable(GL_BLEND);
         }
 
-        int stale = g_prof_stale[s];
+        int stale = prof_section_is_stale(s);
 
         /* Label */
         if (s == PROF_FRAME_TOTAL)
             glColor3f(0.80f, 0.85f, 1.00f);
-        else if (stale >= PROF_STALE_FRAMES)
+        else if (stale)
             glColor3f(0.35f, 0.35f, 0.42f);
         else if (is_detail_section(s))
             glColor3f(0.62f, 0.68f, 0.80f);
@@ -400,13 +262,13 @@ void render_profile_panel(void) {
 
         /* Last / avg values */
         char last_buf[24], avg_buf[24];
-        if (stale >= PROF_STALE_FRAMES) {
+        if (stale) {
             snprintf(last_buf, sizeof(last_buf), "--");
             snprintf(avg_buf,  sizeof(avg_buf),  "--");
             glColor3f(0.30f, 0.30f, 0.38f);
         } else {
-            fmt_us(last_buf, (int)sizeof(last_buf), g_prof_last_us[s]);
-            fmt_us(avg_buf,  (int)sizeof(avg_buf),  g_prof_avg_us[s]);
+            fmt_us(last_buf, (int)sizeof(last_buf), prof_section_last_us(s));
+            fmt_us(avg_buf,  (int)sizeof(avg_buf),  prof_section_avg_us(s));
             if (s == PROF_FRAME_TOTAL)
                 glColor3f(0.90f, 0.95f, 0.70f);
             else

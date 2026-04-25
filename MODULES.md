@@ -99,12 +99,13 @@ The viewport. Shared `SceneRenderConfig` / `FrameRenderContext` in
 | `scene_lights` | Light setup + indicator drawing |
 | `scene_overlays` | Outline, vertex-number, and normal-vector overlays |
 
-### 6. Persistence, audio, lifecycle
+### 6. Persistence, audio, instrumentation, lifecycle
 
 | Module | Role |
 |--------|------|
 | `repl_export` | Save/load, typed export scaffold, workspace headers, code-panel dumps |
 | `repl_audio` | Playlist engine + persisted audio config |
+| `prof` | Project-wide CPU timing instrumentation |
 | `sample` | `main()` + GLUT callback wiring |
 | `gl_stub_counts` | `USE_GL_STUBS` symbol tracking |
 
@@ -157,6 +158,7 @@ flowchart LR
         acmodel["repl_autocomplete.c<br/>completion model"]
         replay["repl_replay.c<br/>replay state + fade batches"]
         audio["repl_audio.c<br/>playlist engine"]
+        prof["prof.c<br/>instrumentation"]
     end
 
     subgraph ui_layer["2D UI rendering"]
@@ -169,6 +171,7 @@ flowchart LR
         help["ui_help_overlay.c<br/>modal F1 help"]
         varpanel["ui_variable_panel.c<br/>slider panel (render only)"]
         acpanel["ui_autocomplete_panel.c<br/>completion popup"]
+        uiprof["ui_profile_panel.c<br/>timing HUD"]
     end
 
     subgraph scene_layer["3D scene rendering"]
@@ -221,8 +224,10 @@ flowchart LR
     core i15@--> help
     core i16@--> varpanel
     core i17@--> acpanel
+    core i31@--> uiprof
 
     acpanel -.-> acmodel
+    uiprof -.-> prof
     rename e13@==> scenes
     varpanel -.-> vardrag
     replay i18@--> exec
@@ -236,6 +241,7 @@ flowchart LR
     sceneR i24@--> overlays
     sceneR i25@--> grid
     sceneR i26@--> axes
+    sceneR -.-> prof
 
     parser -.-> scope
     flatten -.-> scope
@@ -245,6 +251,7 @@ flowchart LR
     uicp -.-> docrows
     uicp i28@--> menu
     uicp i29@--> color
+    uicp -.-> prof
     docrows -.-> layout
     docrows -.-> replay_ann
     replay_ann -.-> replay
@@ -258,7 +265,7 @@ flowchart LR
     classDef animateF stroke:#5f0,stroke-dasharray: 9\,5,stroke-dashoffset: 900,animation: dash 90s linear infinite;
 
     class e1,e2,e3,e4,e5,e6,e7,e8,e9,e10,e11,e12,e13,e14 animateE
-    class i2,i3,i4,i5,i6,i7,i8,i9,i10,i11,i12,i13,i14,i15,i16,i17,i18,i19,i20,i21,i22,i23,i24,i25,i26,i27,i28,i29,i30 animateF
+    class i2,i3,i4,i5,i6,i7,i8,i9,i10,i11,i12,i13,i14,i15,i16,i17,i18,i19,i20,i21,i22,i23,i24,i25,i26,i27,i28,i29,i30,i31 animateF
 ```
 
 ## Render / Model Split
@@ -411,9 +418,8 @@ Generic GL utilities live in `include/`, not in either layer.
 
 Grandfathered exceptions:
 
-- `scene_render.c` includes `ui_panels.h` for `scene_rect()` and
-  `ui_profile_panel.h` for profile-panel layout queries. Both are
-  read-only layout coordinates, not render dispatch. Tracked for
+- `scene_render.c` includes `ui_panels.h` for `scene_rect()`. This is
+  a read-only layout coordinate, not render dispatch. Tracked for
   removal via a future move of `scene_rect()` into a `repl_*`
   layout model.
 
