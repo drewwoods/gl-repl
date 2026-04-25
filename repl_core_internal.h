@@ -1,27 +1,60 @@
 /*
- * repl_core_internal.h - Cross-TU internals shared among repl_core.c,
- * repl_editor.c, repl_executor.c, repl_export.c, repl_parser.c,
- * repl_search.c, and the unit tests.
+ * repl_core_internal.h - Implementation internals shared across REPL modules.
  *
- * These are intentionally NOT part of the public API in repl_core.h - they
- * are implementation details of the REPL that tests and sibling modules
- * need to reach into directly. When something here stabilizes and outside
- * code depends on it, graduate it to repl_core.h.
+ * Collects internal APIs used by repl_core.c, repl_editor.c, repl_executor.c,
+ * repl_export.c, repl_parser.c, repl_search.c, and the unit test suites. These
+ * are NOT part of the public API (repl_core.h); they are domain-specific helpers
+ * that tests and sibling modules need. When an internal API stabilizes and
+ * becomes broadly useful, graduate it to repl_core.h.
  *
- * Organized by subsystem:
- *   - Normalization / commit pipeline
- *   - Text / expression parsing helpers
- *   - Code-panel dumps (debug + visual)
- *   - Autocomplete
- *   - Source-scope helpers (via repl_source_scope.h)
- *   - Executor helpers
- *   - Replay state machine
- *   - Scene/workspace state
- *   - Timekeeping
- *   - Search input dispatch
- *   - Line feeding
- *   - Undo / redo
- *   - Commit handler chain
+ * Organization by subsystem (see function declarations below):
+ *
+ * 1. Normalization / commit pipeline: repl_parse_and_normalize() and the strict
+ *    variant validate top-level function calls. Helpers update render and camera
+ *    state strings for export consistency.
+ *
+ * 2. Text / expression parsing: Argument extraction, for-loop parsing, function
+ *    signature parsing, variable reference checking, and normalization helpers.
+ *
+ * 3. Code-panel dumps: Debug output for tests and visual inspection of the code
+ *    panel (wrapped text, highlighting, etc.). Used by test suites to verify
+ *    rendering logic without running the full UI.
+ *
+ * 4. Autocomplete: Update and accept logic for symbol completion and parameter
+ *    hints. Integrates with repl_autocomplete.c model.
+ *
+ * 5. Source-scope: Block depth, indentation, and scope queries (documented in
+ *    repl_source_scope.h). Prefixes cached to avoid re-traversal.
+ *
+ * 6. Executor helpers: Apply state commands (enable/disable), variable snapshot
+ *    save/restore, and fade context setup for replay.
+ *
+ * 7. Line feeding: load_line_to_input() and collect_visible_vars() support
+ *    editing existing lines and variable scope queries.
+ *
+ * 8. Replay/bench: repl_bench_fade_install/clear() for deterministic replay
+ *    fade testing (bench_repl.c workload).
+ *
+ * 9. Feed line (test entry): feed_line() is the programmatic equivalent of typing
+ *    a command and pressing ';'. Used by all test harnesses and file loading.
+ *
+ * 10. Timekeeping: Advance and reset the animated 't' variable.
+ *
+ * 11. Search dispatch: Keyboard routing for the search overlay (repl_search.c).
+ *
+ * 12. Editor input test hooks: Modifier provider for simulating Ctrl/Shift/Alt
+ *     in tests.
+ *
+ * 13. Command mutations: delete_cmd_range() with guards against orphaning
+ *     variable references, repl_clear_all_cmds() for full clear.
+ *
+ * 14. User scene promotion: repl_promote_example_if_needed() creates a user
+ *     scene on first edit of an example. Scene state reset/initialization.
+ *
+ * 15. Commit handler chain: try_commit_*() functions in declaration order
+ *     (float, assign, close-brace, for, func, if, GL command). Each returns 1
+ *     if consumed, 0 if not matched. Utilities repl_commit_reset_transients()
+ *     and repl_commit_resolve_insert_exit_target().
  */
 #ifndef REPL_CORE_INTERNAL_H
 #define REPL_CORE_INTERNAL_H
