@@ -44,11 +44,24 @@ in isolation; each item is sized to land as one `refactor:` commit.
 
 ### Phase 10 Step 1: Function Name Consistency ✅ DONE
 
-Function naming across public headers now follows the consistent `repl_<module>_<action>()` pattern:
-- **repl_state.h:** `repl_status_*` → `repl_state_status_*` (set/clear/tick)
-- **repl_core.h:** `replay_*` → `repl_replay_*` (start/stop)
+Function naming across all public headers now follows the consistent `repl_<module>_<action>()` pattern.
 
-Implementations updated in repl_state.c and repl_replay.c; all call sites across the codebase updated including tests. Variable name consistency is deferred to a larger refactoring phase. Landed as `refactor: function name consistency - step 10 phase 1`.
+**Wave 1 (Session 1):**
+- **repl_replay.h:** 18 functions renamed (replay_start → repl_replay_start, etc.)
+- **repl_eval.h:** 16 functions renamed (init_predef_vars → repl_eval_init_predef_vars, etc.)
+- **repl_parser.h:** 3 functions renamed (repl_parse_command → repl_parser_parse_command, etc.)
+- **repl_source_scope.h:** 10 functions renamed (depth_cache_invalidate → repl_source_scope_depth_cache_invalidate, etc.)
+- **repl_undo.h:** 3 functions renamed (push_undo_snapshot → repl_undo_push_snapshot, etc.)
+
+**Wave 2 (Session 2, THIS COMMIT):**
+- **repl_clipboard.h:** 4 functions renamed (clear_selection → repl_clipboard_clear_selection, etc.)
+- **repl_executor.h:** 3 functions renamed (apply_transform_cmd → repl_executor_apply_transform_cmd, etc.)
+- **repl_export.h:** 2 functions renamed (save_output → repl_save_output, load_from_file → repl_load_from_file)
+- **repl_audio.h:** Already compliant with repl_audio_* naming (no changes required)
+
+**Total scope:** 59 functions renamed across 9 header modules, 25+ implementation files updated, all 2503 tests passing.
+
+Implementations updated across repl_*.c files; all call sites including tests updated. Variable name consistency is deferred to a larger refactoring phase. Landed as multiple commits: `refactor: function name consistency - step 10 phase 1` and subsequent waves.
 
 ---
 
