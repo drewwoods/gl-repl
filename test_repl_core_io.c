@@ -141,7 +141,7 @@ int main(void) {
     g_line_smooth_enabled = 1;
     *repl_state_presentation_mut()->show_vertex_outlines = 0;
     *repl_state_presentation_mut()->show_vertex_points = 0;
-    repl_save_output(path);
+    repl_export_save_output(path);
     {
         char buf[16384];
         read_text_file(path, buf, sizeof(buf));
@@ -208,7 +208,7 @@ int main(void) {
     g_init_attenuate_points = 0;
     ASSERT_TRUE("init hides point attenuation when disabled",
                 find_init_line_substr("glPointParameterfv(GL_POINT_DISTANCE_ATTENUATION") < 0);
-    repl_save_output(path);
+    repl_export_save_output(path);
     {
         char buf[16384];
         read_text_file(path, buf, sizeof(buf));
@@ -219,7 +219,7 @@ int main(void) {
 #endif
 
     repl_reset_state(); declare_test_vars();
-    ASSERT_TRUE("load saved output", repl_load_from_file(path) == 1);
+    ASSERT_TRUE("load saved output", repl_export_load_from_file(path) == 1);
     ASSERT_TRUE("roundtrip cmd count", repl_state_document_count() == before_n);
 
     for (int i = 0; i < before_n; i++) {
@@ -239,7 +239,7 @@ int main(void) {
     repl_state_camera_set_orbit(31.523f, 31.4799f);
     repl_state_camera_set_distance(7.59313f);
     repl_state_camera_set_pan(1.50f, 0.0f, -2.00f);
-    repl_save_output(path);
+    repl_export_save_output(path);
     {
         char buf[16384];
         read_text_file(path, buf, sizeof(buf));
@@ -261,7 +261,7 @@ int main(void) {
         repl_state_camera_set_distance(5.0f);
         repl_state_camera_set_pan(0.0f, 0.0f, 0.0f);
         repl_reset_state(); declare_test_vars();
-        ASSERT_TRUE("load camera output", repl_load_from_file(path) == 1);
+        ASSERT_TRUE("load camera output", repl_export_load_from_file(path) == 1);
         ASSERT_TRUE("camera rx restored",   fabsf(*repl_state_camera()->rx   - saved_rx)   < 1e-2f);
         ASSERT_TRUE("camera ry restored",   fabsf(*repl_state_camera()->ry   - saved_ry)   < 1e-2f);
         ASSERT_TRUE("camera dist restored", fabsf(*repl_state_camera()->dist - saved_dist) < 1e-2f);
@@ -282,7 +282,7 @@ int main(void) {
 
     *repl_state_presentation_mut()->show_vertex_outlines = 1;
     *repl_state_presentation_mut()->show_vertex_points = 1;
-    repl_save_output(func_path);
+    repl_export_save_output(func_path);
     {
         char buf[32768];
         read_text_file(func_path, buf, sizeof(buf));
@@ -312,7 +312,7 @@ int main(void) {
     }
 
     repl_reset_state(); declare_test_vars();
-    ASSERT_TRUE("load saved param func output", repl_load_from_file(func_path) == 1);
+    ASSERT_TRUE("load saved param func output", repl_export_load_from_file(func_path) == 1);
     ASSERT_TRUE("param func roundtrip cmd count", repl_state_document_count() == before_n);
     {
         int have_var = 0, have_def = 0, have_body = 0, have_end = 0, have_call = 0;
@@ -345,7 +345,7 @@ int main(void) {
     repl_feed_line_public("}");
     repl_feed_line_public("}");
     repl_feed_line_public("func0(1, 6, 0);");
-    repl_save_output(param_loop_path);
+    repl_export_save_output(param_loop_path);
     {
         char buf[32768];
         read_text_file(param_loop_path, buf, sizeof(buf));
@@ -354,7 +354,7 @@ int main(void) {
     }
 
     repl_reset_state();
-    ASSERT_TRUE("load saved param loop output", repl_load_from_file(param_loop_path) == 1);
+    ASSERT_TRUE("load saved param loop output", repl_export_load_from_file(param_loop_path) == 1);
     {
         int have_bound = 0;
         for (int i = 0; i < repl_state_document_count(); i++) {
@@ -384,11 +384,11 @@ int main(void) {
     repl_feed_line_public("}");
     repl_feed_line_public("r = 2;");
     repl_feed_line_public("func0();");
-    repl_save_output(decl_func_path);
+    repl_export_save_output(decl_func_path);
 
     repl_reset_state(); declare_test_vars();
     ASSERT_TRUE("load decl plus promoted func output",
-                repl_load_from_file(decl_func_path) == 1);
+                repl_export_load_from_file(decl_func_path) == 1);
     ASSERT_TRUE("decl plus func cmd count", repl_state_document_count() == 7);
     ASSERT_TRUE("imported decl remains first", repl_state_document_cmds_mut()[0].type == CMD_VAR_DECLARE);
     ASSERT_TRUE("imported func follows decl", repl_state_document_cmds_mut()[1].type == CMD_FUNC_DEF);
@@ -406,7 +406,7 @@ int main(void) {
     repl_feed_line_public("gluPartialDisk(0.1, 0.5, 12, 4, 30, 180);");
     *repl_state_presentation_mut()->show_vertex_outlines = 0;
     *repl_state_presentation_mut()->show_vertex_points = 0;
-    repl_save_output(quadric_path);
+    repl_export_save_output(quadric_path);
     {
         char buf[16384];
         read_text_file(quadric_path, buf, sizeof(buf));
@@ -421,7 +421,7 @@ int main(void) {
     }
 
     repl_reset_state(); declare_test_vars();
-    ASSERT_TRUE("load saved quadric output", repl_load_from_file(quadric_path) == 1);
+    ASSERT_TRUE("load saved quadric output", repl_export_load_from_file(quadric_path) == 1);
     {
         int sphere_seen = 0;
         int quadric_cmds = 0;
@@ -458,7 +458,7 @@ int main(void) {
     repl_feed_line_public("func0(2.0);");
     *repl_state_presentation_mut()->show_vertex_outlines = 1;
     *repl_state_presentation_mut()->show_vertex_points = 1;
-    repl_save_output(tess_path);
+    repl_export_save_output(tess_path);
     {
         char buf[65536];
         read_text_file(tess_path, buf, sizeof(buf));

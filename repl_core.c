@@ -701,7 +701,7 @@ static void load_initial_commands(const char *import_file) {
                 scroll_to_display_function();
                 return;
             }
-        } else if (repl_load_from_file(import_file)) {
+        } else if (repl_export_load_from_file(import_file)) {
             repl_state_edit_line_set(repl_state_document_count());
             scroll_to_display_function();
             return;
@@ -721,7 +721,7 @@ static void init_gl(void) {
 }
 
 void repl_save_default_output(void) {
-    repl_save_output(outfile);
+    repl_export_save_output(outfile);
 }
 
 void repl_flatten_commands(void) {

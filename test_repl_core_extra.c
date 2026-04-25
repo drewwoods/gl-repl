@@ -169,12 +169,12 @@ void test_io() {
     repl_feed_line_public("glVertex3f(1,2,3);");
 
     const char *tmpf = "test_extra_io.c";
-    repl_save_output(tmpf);
+    repl_export_save_output(tmpf);
 
     repl_reset_state(); declare_test_vars();
     ASSERT_INT("num_cmds after reset", count_vertices(), 0);
 
-    int r = repl_load_from_file(tmpf);
+    int r = repl_export_load_from_file(tmpf);
     ASSERT_INT("load_from_file return", r, 1);
     repl_flatten_commands();
     ASSERT_INT("count_vertices after load", count_vertices(), 1);
