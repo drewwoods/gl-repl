@@ -176,7 +176,7 @@ int  collect_visible_vars(int pos, ExprVar *vars, int max_vars);
 
 /* ---- Bench helpers (populate replay fade state without stepping) -------
  * These exist solely for bench_repl.c to drive
- * `execute_replay_fade_batches()` on a deterministic workload. They bypass
+ * `render_replay_fade_pass()` on a deterministic workload. They bypass
  * the full replay state machine: the caller is responsible for having
  * populated `g_flat_cmds[]` first (e.g. via repl_flatten_commands()). */
 int  repl_bench_fade_install(const int *old_pcs, const int *new_pcs,

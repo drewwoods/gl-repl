@@ -4,7 +4,10 @@
  * Extracted from sample.c for maintainability.
  */
 #include "sample.h"
+#include "repl_core_internal.h"
+#include "repl_executor.h"
 #include "repl_replay.h"
+#include "repl_state.h"
 #include "scene_axes.h"
 #include "scene_backdrop.h"
 #include "scene_geometry_guides.h"
@@ -508,6 +511,73 @@ static void scene_apply_clear_color(FlatProgramView flat_program) {
     glClearColor(cr, cg, cb, ca);
 }
 
+void render_replay_fade_pass(void) {
+    SceneRenderConfig config;
+    FlatProgramView flat_program;
+    ReplayFadeBatchView fade_batches;
+    int skip_limits[REPLAY_FADE_BATCH_MAX];
+    int batch_count;
+
+    scene_render_config_init(&config);
+    if (!config.replay_has_fades)
+        return;
+
+    flat_program = repl_state_flat_program_view();
+    fade_batches = replay_fade_batches_view();
+
+    prof_begin(PROF_SCENE_3D_FADE_PROLOGUE);
+    batch_count = replay_compute_fade_skip_limits(skip_limits, REPLAY_FADE_BATCH_MAX);
+    prof_accum_end(PROF_SCENE_3D_FADE_PROLOGUE);
+    if (batch_count <= 0)
+        return;
+
+    glPushAttrib(GL_ALL_ATTRIB_BITS);
+
+    scene_lights_setup();
+    glDisable(GL_LIGHTING);
+    glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE);
+    GLfloat mspec[] = { 0.4f, 0.4f, 0.4f, 1.0f };
+    GLfloat mshin[] = { 30.0f };
+    glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, mspec);
+    glMaterialfv(GL_FRONT_AND_BACK, GL_SHININESS, mshin);
+    scene_apply_quality_config(&config);
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    glColor4f(0.70f, 0.70f, 0.80f, 1.0f);
+    if (config.wireframe) glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+    else glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+
+    for (int batch_idx = 0; batch_idx < batch_count; batch_idx++) {
+        const ReplayFadeBatch *batch = &fade_batches.batches[batch_idx];
+        float alpha = replay_batch_alpha(batch);
+
+        if (alpha <= 0.0f)
+            continue;
+
+        prof_begin(PROF_SCENE_3D_FADE_BATCH_PREP);
+        ReplExecutionOptions exec_options = {
+            .flat_cmd_count = batch->new_pc,
+            .program = flat_program
+        };
+        replay_restore_baseline_predef_values();
+        repl_execute_set_fade_context(alpha, skip_limits[batch_idx]);
+        glColor4f(0.70f, 0.70f, 0.80f, alpha);
+        glPushMatrix();
+        prof_accum_end(PROF_SCENE_3D_FADE_BATCH_PREP);
+
+        prof_begin(PROF_SCENE_3D_FADE_BATCH_EXEC);
+        repl_execute_program(&exec_options);
+        prof_accum_end(PROF_SCENE_3D_FADE_BATCH_EXEC);
+
+        glPopMatrix();
+    }
+
+    prof_begin(PROF_SCENE_3D_FADE_BATCH_POST);
+    repl_execute_set_fade_context(1.0f, 0);
+    glPopAttrib();
+    prof_accum_end(PROF_SCENE_3D_FADE_BATCH_POST);
+}
+
 static void render_3d_scene_pass(void) {
     SceneRenderConfig config;
     FrameRenderContext frame_ctx;
@@ -551,21 +621,7 @@ static void render_3d_scene_pass(void) {
 
         if (config.replay_has_fades) {
             prof_begin(PROF_SCENE_3D_FADE);
-            scene_lights_setup();
-            glDisable(GL_LIGHTING);
-            glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE);
-            glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, mspec);
-            glMaterialfv(GL_FRONT_AND_BACK, GL_SHININESS, mshin);
-            scene_apply_quality_config(&config);
-            glEnable(GL_BLEND);
-            glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-            glColor4f(0.70f, 0.70f, 0.80f, 1.0f);
-            if (config.wireframe) glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
-            else glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
-
-            glPushMatrix();
-            execute_replay_fade_batches();
-            glPopMatrix();
+            render_replay_fade_pass();
             prof_accum_end(PROF_SCENE_3D_FADE);
         }
     }
