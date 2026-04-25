@@ -331,48 +331,150 @@ The work below lands as a sequence of small `refactor:` commits, one
 sub-step per commit. After each commit, `make test-stubs TEST_JOBS=4`
 must still pass and `make sample` must still launch.
 
-#### 11a. Move 2D helpers and frame-display orchestration out of `repl_core.c`
+#### 11a. Split the 2D helpers per layer; hoist accumulation-AA into `render_3d_scene()`; keep `repl_core.c` as orchestrator
 
-`repl_core.c` is supposed to own normalization, the display callback, and GL
-init — *not* drawing. The four 2D primitives plus the entire body of
-`display_func()` are pure render code that should live alongside the rest of
-the frame pipeline.
+**Layering check (verified):**
 
-Steps:
+- No `ui_*.c` includes any `scene_*.h`.
+- The only `scene_*` → `ui_*` coupling is `scene_render.c` reading
+  `scene_rect()` and `ui_profile_panel.h` for layout coordinates — a
+  read-only query, not render dispatch.
+- `repl_core.c`'s `display_func()` is the single master that calls
+  `render_3d_scene()` then the 2D `render_*` helpers in order; neither
+  layer reaches sideways into the other.
 
-1. Create `scene_2d.c` / `scene_2d.h` (or extend `scene_render.c` if we'd
-   rather not add another file — pick one and stick with it). Move
-   `draw_string`, `draw_quad`, `begin_2d`, `end_2d` from `repl_core.c:549-584`
-   verbatim. Update the forward declarations in `sample.h:354-357` to live in
-   the new header instead, and add `#include "scene_2d.h"` to every current
-   caller (`ui_panels.c`, `ui_menu_bar.c`, `ui_color_picker.c`,
-   `ui_help_overlay.c`, `ui_variable_panel.c`, `ui_autocomplete_panel.c`,
-   `ui_profile_panel.c`, `scene_grid.c`, `scene_render.c`).
-2. Move the body of `display_func()` (`repl_core.c:590-698`) into a new
-   `scene_render_frame()` in `scene_render.c`. The wrapper
-   `repl_display_func()` (`repl_core.c:849-851`) and the GLUT registration
-   in `sample.c` keep the same signature — they now just call
-   `scene_render_frame()`. The `glutSwapBuffers()` call at the tail moves
-   with it; `sample.c` can keep its own swap if we'd rather isolate GLUT
-   buffer wiring at the entrypoint. Pick one home and document it in
-   `MODULES.md`.
-3. Move the `glLightModelfv(GL_LIGHT_MODEL_AMBIENT, ...)` from `init_gl()`
-   (`repl_core.c:822-823`) into `scene_lights.c` as a new
-   `scene_lights_init_global_ambient()` (or fold it into the existing
-   `scene_lights_setup()` if the global-ambient is invariant per-frame).
-   `repl_init_gl()` then calls it instead of touching GL directly.
-4. After the moves, `repl_core.c` should have **zero** matches for
-   `\b(gl[A-Z]|glu[A-Z])`. Add a verification step to the punch list:
-   `! grep -E '\bgl[A-Z]|\bglu[A-Z]' repl_core.c` should exit non-zero.
-5. Update `ARCHITECTURE.md`'s `repl_core.c` ownership list to drop "display
-   callback" (it now becomes thin GLUT plumbing) and add a `scene_render.c`
-   bullet for "frame orchestration: viewport, clear, accumulation-AA loop,
-   swap." Update `MODULES.md` Layer 1 / Layer 5 tables in lockstep.
+That clean split is worth preserving. The 2D helpers
+(`begin_2d`/`end_2d`/`draw_quad`/`draw_string`) are currently the *only*
+shared GL code between `scene_*` and `ui_*` — and they're trivial. Rather
+than moving them into one layer and forcing the other to depend on it, keep
+them per-layer.
+
+**Steps:**
+
+1. **Duplicate / inline `begin_2d` / `end_2d`.** They have only two
+   `scene_*` callers (`scene_render.c` replay HUD and `scene_grid.c` ruler
+   labels). Copy the bodies verbatim into static helpers
+   `scene_2d_begin()` / `scene_2d_end()` in `scene_render.c` (exposed via
+   `scene_render.h` so `scene_grid.c` can share them within the scene
+   layer). Move the public `begin_2d`/`end_2d` definitions from
+   `repl_core.c:564-584` into `ui_panels.c` (or a new tiny `ui_2d.c` if
+   you'd rather not enlarge `ui_panels.c`) and rename to `ui_2d_begin()` /
+   `ui_2d_end()`. Update every `ui_*.c` caller. The two definitions are
+   identical today; that's fine — the duplication makes it a *layer*
+   convention rather than a shared utility, and either side can evolve
+   independently (e.g. `scene_2d_*` may want to keep depth-test on for
+   text-on-3D in future).
+
+2. **Replace `draw_quad` with `glRectf`.** Every call site is a solid
+   filled rectangle in current color — exactly `glRectf`'s job, no
+   helper needed. Mechanical replace:
+   `draw_quad(x,y,w,h)` → `glRectf((float)(x), (float)(y), (float)(x+w), (float)(y+h))`.
+   ~50 sites across `scene_render.c` (replay HUD), `ui_color_picker.c`,
+   `ui_help_overlay.c`, `ui_profile_panel.c`, `ui_variable_panel.c`,
+   `ui_autocomplete_panel.c`, `ui_panels.c`, `ui_menu_bar.c`. Delete
+   `draw_quad` from `repl_core.c:555-561` and the forward decl in
+   `sample.h:355`. Confirm the local stub (`include/GL/gl.h`) declares
+   `glRectf`; it almost certainly does, since fixed-function GL builds
+   use it all over the project.
+
+3. **Duplicate `draw_string` per layer.** The body is two GL calls
+   (`glRasterPos2f` + `glutBitmapCharacter` loop) — same argument as
+   `begin_2d`. Move to `scene_render.c` as static `scene_2d_draw_text()`
+   (exposed in `scene_render.h` for `scene_grid.c` ruler labels) and to
+   `ui_panels.c` (or `ui_2d.c`) as `ui_2d_draw_text()`. Update the three
+   `scene_*` callers (`scene_render.c:375,383,409`) and every `ui_*`
+   caller. Delete `draw_string` from `repl_core.c:549-552` and its
+   forward decl in `sample.h:354`.
+
+4. **Hoist accumulation-AA into `render_3d_scene()`.** `display_func()`
+   in `repl_core.c:644-670` currently owns the per-sample
+   `glClear`/`glAccum(GL_ACCUM)` jitter loop and calls
+   `render_3d_scene()` once per sample. That's a render-internal concern
+   leaking into the orchestrator. Push it inside:
+
+   - Move the `if (use_accum && accum_aa_enabled && accum_samples > 1)`
+     branch into `render_3d_scene()` (or a dedicated
+     `render_3d_scene_accum()` it dispatches to).
+   - `render_3d_scene()` becomes responsible for: clearing color/depth
+     (and accum if AA is on), running the inner pass(es), writing
+     `accum_jitter_x/y` into `ReplRenderState`, and final
+     `glAccum(GL_RETURN)` if AA was used.
+   - The replay-baseline restore call
+     (`replay_restore_baseline_predef_values()`) currently sits inside the
+     loop at the same nesting — keep it inside the inner per-sample step
+     so behavior is unchanged.
+   - The PROF section bracketing (`PROF_SCENE_3D` plus the
+     `prof_accum_reset`/`prof_accum_commit` for `PROF_SCENE_3D_SETUP..HUD`)
+     is render-internal too — move the reset/commit pair inside
+     `render_3d_scene()` along with the loop. Keep `PROF_SCENE_3D`
+     begin/end in `display_func()` if you want one frame-level entry, or
+     move it inside too — pick whichever keeps the existing flame chart
+     readable.
+   - After the move, `display_func()` calls `render_3d_scene()` once,
+     period. No knowledge of accumulation.
+
+5. **Trim `display_func()` to pure orchestration.** What remains in
+   `repl_core.c` after step 4:
+
+   - autonormal/flatten dirty-bit handling (model bookkeeping — stays),
+   - replay PC clamp via `repl_state_flat_program_set_count(...)` (model —
+     stays),
+   - `update_render_state_strings()` / `update_cam_lines()` (string
+     scaffold — stays),
+   - per-frame predef-value snapshot/restore (model — stays),
+   - one call to `render_3d_scene()`,
+   - the 2D overlay sequence (`render_code_panel`,
+     `ui_autocomplete_panel_render`, `render_example_dropdown`,
+     `render_var_panel`, `render_scene_status`, `render_help`,
+     `render_profile_panel`),
+   - `glutSwapBuffers()` and the bracket `glViewport` calls.
+
+   Move the two `glViewport(0, 0, window_w, window_h)` calls
+   (`repl_core.c:624,677`) and `glutSwapBuffers()` (`:697`) out:
+
+   - The 3D-side `glViewport` at `:624` becomes the first line of
+     `render_3d_scene()`.
+   - The 2D-side `glViewport` at `:677` belongs at the top of the
+     overlay sequence — either as the first line of `render_code_panel()`
+     or as a new `ui_panels_begin_overlays()` helper that
+     `display_func()` calls before the overlay sequence.
+   - `glutSwapBuffers()` is GLUT framework plumbing, not GL drawing.
+     Move to `sample.c`'s `display_func()` GLUT wrapper, right after
+     `repl_display_func()` returns. That keeps the buffer swap at the
+     GLUT-callback boundary, which is its natural home.
+
+6. **Move `init_gl`'s `glLightModelfv` into `scene_lights.c`.** Add
+   `scene_lights_init_global_ambient()` (one-shot, called from
+   `repl_init_gl()`); the existing per-frame `scene_lights_setup()` keeps
+   its current responsibility. `repl_init_gl()` then has zero GL calls —
+   it just calls `scene_resources_init()` (from 11b) and
+   `scene_lights_init_global_ambient()`, plus `apply_init_bootstrap()`.
+
+7. **Verification grep.** After 11a lands:
+   `grep -nE '\b(gl[A-Z]|glu[A-Z])[A-Za-z0-9]*\s*\(' repl_core.c`
+   should be empty. The orchestration role of `repl_core.c`'s
+   `display_func()` is preserved — it still drives the
+   `render_3d_scene()` → 2D-overlay-sequence pipeline — but no GL call
+   originates there.
+
+8. **Update docs.** `ARCHITECTURE.md` `repl_core.c` ownership: drop the
+   "GL init" and "display callback owns frame GL state" implications;
+   add to `scene_render.c`: "owns 3D viewport, clear, accumulation-AA
+   loop, and per-frame `glViewport`"; add to `ui_panels.c`: "owns the
+   2D overlay viewport bracket"; add to `sample.c`: "owns the GLUT
+   buffer swap." `MODULES.md` Layer 1/4/5 tables update in lockstep,
+   and the per-layer 2D primitives convention (`scene_2d_*` /
+   `ui_2d_*`) gets a one-line note in "Naming Notes".
 
 **Verify:** `make test-stubs TEST_JOBS=4`; `make sample && ./sample`,
-load examples 0-15, F12 cycle, replay a fade-heavy example with accumulation
-AA on (`--noaccum` *off*) — the AA jitter loop is the highest-risk piece.
-Confirm `glutSwapBuffers` still runs exactly once per frame.
+load examples 0-15, F12 cycle, replay a fade-heavy example with
+accumulation AA on (default) and off (`--noaccum`) — the AA jitter
+loop is the highest-risk piece. Confirm `glutSwapBuffers` still runs
+exactly once per frame (a quick `printf` instrumented in
+`sample.c`'s wrapper, removed before commit, is the easiest check).
+After the move, A/B against the pre-refactor binary on the replay HUD
+and ruler-grid labels — those are the two `scene_*` callers of
+`begin_2d`/`draw_string` and the ones most likely to drift.
 
 #### 11b. Push tessellation/GLU bootstrap behind a scene-owned module
 
