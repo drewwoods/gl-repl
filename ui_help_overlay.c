@@ -15,7 +15,7 @@
 #define _HELP_STR2(x) #x
 #define _HELP_STR(x)  _HELP_STR2(x)
 
-void render_help(void) {
+void ui_help_overlay_render(void) {
     ReplHelpState *help = repl_state_help_mut();
     if (!*help->visible) return;
 

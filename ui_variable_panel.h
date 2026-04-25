@@ -9,8 +9,8 @@
 #ifndef UI_VARIABLE_PANEL_H
 #define UI_VARIABLE_PANEL_H
 
-void render_var_panel(void);
-void var_panel_rect(int *px, int *py, int *pw, int *ph);
-int  var_panel_hit(int gx, int gy, int *out_row);
+void ui_variable_panel_render(void);
+void ui_variable_panel_rect(int *px, int *py, int *pw, int *ph);
+int  ui_variable_panel_hit(int gx, int gy, int *out_row);
 
 #endif /* UI_VARIABLE_PANEL_H */

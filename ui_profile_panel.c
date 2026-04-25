@@ -45,14 +45,14 @@ static void profile_panel_rect_for_height(int panel_h, int *out_x, int *out_y) {
     int scene_x, scene_y, scene_w, scene_h;
     int panel_x, panel_y;
 
-    scene_rect(&scene_x, &scene_y, &scene_w, &scene_h);
+    ui_panels_scene_rect(&scene_x, &scene_y, &scene_w, &scene_h);
 
     if (*repl_state_variable_panel()->visible) {
         panel_x = scene_x + scene_w - PROF_PANEL_W - PROF_PANEL_MARGIN;
         panel_y = scene_y + scene_h - panel_h - PROF_PANEL_MARGIN;
     } else {
         int var_x, var_y, var_w, var_h;
-        var_panel_rect(&var_x, &var_y, &var_w, &var_h);
+        ui_variable_panel_rect(&var_x, &var_y, &var_w, &var_h);
         panel_x = var_x + var_w - PROF_PANEL_W;
         panel_y = var_y;
     }
@@ -162,7 +162,7 @@ static int visible_section_count(void) {
 /* Rendering                                                                  */
 /* ========================================================================= */
 
-void render_profile_panel(void) {
+void ui_profile_panel_render(void) {
     if (*repl_state_profile_panel()->mode == PROFILE_PANEL_OFF) return;
 
     int visible_count = visible_section_count();

@@ -90,12 +90,12 @@ static float var_panel_replay_lift(void) {
 }
 
 /* Geometry in render coords (y=0 at bottom). */
-void var_panel_rect(int *px, int *py, int *pw, int *ph) {
+void ui_variable_panel_rect(int *px, int *py, int *pw, int *ph) {
     int sc_x, sc_y, sc_w, sc_h;
     int panel_w, panel_h, panel_x, panel_y;
     int min_y, max_y;
 
-    scene_rect(&sc_x, &sc_y, &sc_w, &sc_h);
+    ui_panels_scene_rect(&sc_x, &sc_y, &sc_w, &sc_h);
     panel_w = VAR_PANEL_W;
     panel_h = VAR_TITLE_H + g_num_predef_vars * VAR_ROW_H + 2 * VAR_PANEL_PAD;
     panel_x = sc_x + sc_w - panel_w - 8;
@@ -121,9 +121,9 @@ void var_panel_rect(int *px, int *py, int *pw, int *ph) {
 }
 
 /* Return 1 if GLUT screen coord (gx, gy) is in the panel; sets *out_row. */
-int var_panel_hit(int gx, int gy, int *out_row) {
+int ui_variable_panel_hit(int gx, int gy, int *out_row) {
     int px, py, pw, ph;
-    var_panel_rect(&px, &py, &pw, &ph);
+    ui_variable_panel_rect(&px, &py, &pw, &ph);
     int ry = *repl_state_viewport()->window_h - gy;
     if (gx < px || gx >= px + pw || ry < py || ry >= py + ph) return 0;
     int inner_top = py + ph - VAR_PANEL_PAD - VAR_TITLE_H;
@@ -133,11 +133,11 @@ int var_panel_hit(int gx, int gy, int *out_row) {
     return 1;
 }
 
-void render_var_panel(void) {
+void ui_variable_panel_render(void) {
     if (!*repl_state_variable_panel()->visible) return;
 
     int px, py, pw, ph;
-    var_panel_rect(&px, &py, &pw, &ph);
+    ui_variable_panel_rect(&px, &py, &pw, &ph);
 
     gl2d_begin(*repl_state_viewport()->window_w, *repl_state_viewport()->window_h);
     glEnable(GL_BLEND);

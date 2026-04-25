@@ -574,18 +574,18 @@ static void display_func(void) {
         prof_accum_commit(section_idx);
 
     prof_begin(PROF_CODE_PANEL);
-    render_code_panel();
+    ui_panels_render_code_panel();
     prof_end(PROF_CODE_PANEL);
 
     prof_begin(PROF_UI_PANELS);
     ui_autocomplete_panel_render();
-    render_example_dropdown();
-    render_var_panel();
-    render_scene_status();
-    render_help();
+    ui_menu_bar_render_example_dropdown();
+    ui_variable_panel_render();
+    ui_panels_render_scene_status();
+    ui_help_overlay_render();
     prof_end(PROF_UI_PANELS);
 
-    render_profile_panel();
+    ui_profile_panel_render();
 
     repl_state_flat_program_set_count(saved_flat_count);
     repl_restore_predef_values(live_predef_vals, MAX_PREDEF_VARS);

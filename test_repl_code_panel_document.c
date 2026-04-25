@@ -38,7 +38,7 @@ static void reset_doc_fixture(void) {
 
 static void build_doc(CodePanelDocumentLayout *layout) {
     int cp_w, cp_h;
-    code_panel_rect(NULL, NULL, &cp_w, &cp_h);
+    ui_panels_code_panel_rect(NULL, NULL, &cp_w, &cp_h);
     repl_code_panel_document_build(layout, cp_w, code_panel_text_x(), cp_h);
 }
 

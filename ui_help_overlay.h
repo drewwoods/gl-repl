@@ -4,6 +4,6 @@
 #ifndef UI_HELP_OVERLAY_H
 #define UI_HELP_OVERLAY_H
 
-void render_help(void);
+void ui_help_overlay_render(void);
 
 #endif /* UI_HELP_OVERLAY_H */

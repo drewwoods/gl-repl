@@ -125,7 +125,7 @@ static int code_panel_header_row_count(void) {
     int text_x = CODE_MARGIN_X + linenum_w + FONT_W + idx_col_w;
     int rows = 0;
 
-    code_panel_rect(NULL, NULL, &panel_w, NULL);
+    ui_panels_code_panel_rect(NULL, NULL, &panel_w, NULL);
     refresh_workspace_header_lines();
     for (int i = 0; i < g_workspace_header_line_count; i++)
         rows += test_code_panel_row_count_for_text(g_workspace_header_lines[i],
@@ -149,7 +149,7 @@ static int code_panel_mouse_y_for_cmd(int cmd_idx) {
     int text_x = CODE_MARGIN_X + linenum_w + FONT_W + idx_col_w;
     int doc_line = code_panel_header_row_count();
 
-    code_panel_rect(NULL, &cp_y, &panel_w, &cp_h);
+    ui_panels_code_panel_rect(NULL, &cp_y, &panel_w, &cp_h);
     for (int i = 0; i < cmd_idx && i < repl_state_document_count(); i++) {
         doc_line += test_code_panel_row_count_for_text(repl_state_document_cmds_mut()[i].source,
                                                        text_x, panel_w);
@@ -220,48 +220,48 @@ int main() {
         g_panel_frac = 0.25f;
 
         *repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT;
-        code_panel_rect(&x, &y, &w, &h);
+        ui_panels_code_panel_rect(&x, &y, &w, &h);
         ASSERT_INT("left code x", x, 0);
         ASSERT_INT("left code y", y, 0);
         ASSERT_INT("left code w", w, 250);
         ASSERT_INT("left code h", h, 800);
-        scene_rect(&x, &y, &w, &h);
+        ui_panels_scene_rect(&x, &y, &w, &h);
         ASSERT_INT("left scene x", x, 250);
         ASSERT_INT("left scene y", y, 0);
         ASSERT_INT("left scene w", w, 750);
         ASSERT_INT("left scene h", h, 800);
 
         *repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_TOP;
-        code_panel_rect(&x, &y, &w, &h);
+        ui_panels_code_panel_rect(&x, &y, &w, &h);
         ASSERT_INT("top code x", x, 0);
         ASSERT_INT("top code y", y, 600);
         ASSERT_INT("top code w", w, 1000);
         ASSERT_INT("top code h", h, 200);
-        scene_rect(&x, &y, &w, &h);
+        ui_panels_scene_rect(&x, &y, &w, &h);
         ASSERT_INT("top scene x", x, 0);
         ASSERT_INT("top scene y", y, 0);
         ASSERT_INT("top scene w", w, 1000);
         ASSERT_INT("top scene h", h, 600);
 
         *repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_BOTTOM;
-        code_panel_rect(&x, &y, &w, &h);
+        ui_panels_code_panel_rect(&x, &y, &w, &h);
         ASSERT_INT("bottom code x", x, 0);
         ASSERT_INT("bottom code y", y, 0);
         ASSERT_INT("bottom code w", w, 1000);
         ASSERT_INT("bottom code h", h, 200);
-        scene_rect(&x, &y, &w, &h);
+        ui_panels_scene_rect(&x, &y, &w, &h);
         ASSERT_INT("bottom scene x", x, 0);
         ASSERT_INT("bottom scene y", y, 200);
         ASSERT_INT("bottom scene w", w, 1000);
         ASSERT_INT("bottom scene h", h, 600);
 
         *repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_HIDDEN;
-        code_panel_rect(&x, &y, &w, &h);
+        ui_panels_code_panel_rect(&x, &y, &w, &h);
         ASSERT_INT("hidden code x", x, 0);
         ASSERT_INT("hidden code y", y, 0);
         ASSERT_INT("hidden code w", w, 0);
         ASSERT_INT("hidden code h", h, 0);
-        scene_rect(&x, &y, &w, &h);
+        ui_panels_scene_rect(&x, &y, &w, &h);
         ASSERT_INT("hidden scene x", x, 0);
         ASSERT_INT("hidden scene y", y, 0);
         ASSERT_INT("hidden scene w", w, 1000);
@@ -520,7 +520,7 @@ int main() {
         *repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT;
         replay_active = 0;
 
-        var_panel_rect(&x, &y, &w, &h);
+        ui_variable_panel_rect(&x, &y, &w, &h);
         ASSERT_INT("cramped var panel clears status strip",
                    y, STATUSBAR_H + 4);
 
@@ -1955,7 +1955,7 @@ int main() {
         g_scroll = 0;
         g_scroll_follow_cursor = 0;
 
-        (void)code_panel_apply_scroll_follow_for_test(&follow_doc_line,
+        (void)ui_panels_code_panel_apply_scroll_follow_for_test(&follow_doc_line,
                                                       &visible_lines);
         ASSERT_TRUE("replay follow helper computes target",
                     follow_doc_line >= 0);
@@ -1966,7 +1966,7 @@ int main() {
         g_scroll_follow_cursor = 1;
 
         ASSERT_TRUE("replay follow helper reports visible",
-                    code_panel_apply_scroll_follow_for_test(&follow_doc_line,
+                    ui_panels_code_panel_apply_scroll_follow_for_test(&follow_doc_line,
                                                             &visible_lines));
         ASSERT_INT("replay follow scrolls row above status bar",
                    g_scroll, follow_doc_line - visible_lines + 1);
@@ -2042,20 +2042,20 @@ int main() {
         g_scroll_follow_cursor = 0;
 
         replay_expand_args = 0;
-        (void)code_panel_apply_scroll_follow_for_test(&collapsed_follow,
+        (void)ui_panels_code_panel_apply_scroll_follow_for_test(&collapsed_follow,
                                                       &visible_lines);
         ASSERT_TRUE("collapsed replay follow resolves command row",
                     collapsed_follow >= 0);
 
         replay_expand_args = 1;
-        (void)code_panel_apply_scroll_follow_for_test(&expanded_follow,
+        (void)ui_panels_code_panel_apply_scroll_follow_for_test(&expanded_follow,
                                                       &visible_lines);
         ASSERT_INT("expanded replay follows final annotation row",
                    expanded_follow, collapsed_follow + 2);
 
         replay_expand_args = 0;
         expanded_follow = -1;
-        (void)code_panel_apply_scroll_follow_for_test(&expanded_follow,
+        (void)ui_panels_code_panel_apply_scroll_follow_for_test(&expanded_follow,
                                                       &visible_lines);
         ASSERT_INT("collapsed replay removes annotation rows from follow",
                    expanded_follow, collapsed_follow);
@@ -2119,7 +2119,7 @@ int main() {
         repl_state_cursor_pos_set(0);
         g_scroll = 0;
         g_scroll_follow_cursor = 1;
-        code_panel_apply_scroll_follow_for_test(&follow_insert, &visible_lines);
+        ui_panels_code_panel_apply_scroll_follow_for_test(&follow_insert, &visible_lines);
         ASSERT_TRUE("insert-at-end cursor in visible region",
                     follow_insert >= g_scroll &&
                     follow_insert < g_scroll + visible_lines);
@@ -2128,7 +2128,7 @@ int main() {
         repl_state_insert_mode_set(0);
         g_scroll = 0;
         g_scroll_follow_cursor = 1;
-        code_panel_apply_scroll_follow_for_test(&follow_overwrite, &visible_lines);
+        ui_panels_code_panel_apply_scroll_follow_for_test(&follow_overwrite, &visible_lines);
 
         ASSERT_INT("insert-at-end follow matches overwrite-at-end follow",
                    follow_insert, follow_overwrite);
@@ -2190,7 +2190,7 @@ int main() {
         ASSERT_INT("up nav: scroll_follow_cursor set", g_scroll_follow_cursor, 1);
 
         ASSERT_TRUE("up nav: cursor visible after follow",
-                    code_panel_apply_scroll_follow_for_test(&follow_doc_line,
+                    ui_panels_code_panel_apply_scroll_follow_for_test(&follow_doc_line,
                                                             &visible_lines));
     }
 
@@ -2297,7 +2297,7 @@ int main() {
         navigate_to_line(0);
         set_editor_input("glVertex3f(8, 0, 0)");
 
-        handle_code_panel_click(CODE_MARGIN_X + 1, code_panel_mouse_y_for_cmd(2));
+        ui_panels_handle_code_panel_click(CODE_MARGIN_X + 1, code_panel_mouse_y_for_cmd(2));
 
         ASSERT_INT("mouse auto-commit valid edit: cursor moved", repl_state_edit_line(), 2);
         ASSERT_TRUE("mouse auto-commit valid edit: x arg",
