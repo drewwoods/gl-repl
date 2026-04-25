@@ -757,6 +757,149 @@ re-checked at the end:
   `glPointSize` command.
 - `bench_repl fade_batches` GL-call count: equal or lower than before.
 - `make check-gl-boundaries` — empty.
+- `make check-layer-coupling` — empty modulo grandfathered exceptions.
+
+---
+
+#### Decisions / open questions explicitly settled before starting 11
+
+These are the architectural calls the punch list would otherwise let the
+implementer make ad-hoc on the fly. Decide and record before opening
+the first commit so each sub-step is mechanical.
+
+1. **`scene_2d.*` / `ui_2d.*` file vs. inline.** 11a-step-1 leaves "or
+   `ui_2d.c` if you'd rather not enlarge `ui_panels.c`" open. **Decide
+   up front:** a new `ui_2d.c` / `ui_2d.h` pair (and matching
+   `scene_2d.c` / `scene_2d.h`, separate from `scene_render.c`) is
+   preferred — it keeps the layer convention discoverable and makes
+   the duplication explicit rather than burying it inside larger
+   files. Add both pairs to `MODULES.md` Layer 4 and Layer 5 tables
+   with a one-line charter ("layer-private 2D drawing primitives").
+
+2. **`repl_display_func()` thin wrapper retention.** `sample.c:96`
+   currently calls `repl_display_func()` from its GLUT wrapper. After
+   11a, that wrapper becomes a one-liner (`repl_run_display_frame()`
+   or similar — just dispatch + swap). **Decide:** keep the wrapper
+   layer (so `sample.c` only knows about `repl_*`, not
+   `scene_render.h`) vs. delete it and have `sample.c` call
+   `scene_render_frame()` directly. Recommend keeping the wrapper —
+   `sample.c` stays the GLUT-only file, and `repl_core.c`'s
+   orchestrator role is preserved at the public API.
+
+3. **`update_render_state_strings()` / `update_cam_lines()` ownership.**
+   Both currently live in `repl_export.c` and are called from
+   `display_func()` *and* from `repl_export.c` itself (3 call sites)
+   *and* from `repl_state.c`. They produce text scaffold (no GL).
+   **Decide:** they stay in `repl_export.c` — they're export-side
+   string formatters that the display callback also happens to need
+   for the code-panel preview. No move required for 11; flag this so
+   the implementer doesn't get distracted by their non-GL footprint
+   while editing `repl_core.c`'s `display_func()`.
+
+4. **2D viewport `glViewport` placement (11a-step-5).** Two options:
+   first line of `render_code_panel()` vs. new
+   `ui_panels_begin_overlays()` helper called from `display_func()`.
+   **Decide up front:** a new `ui_panels_begin_overlays()` /
+   `ui_panels_end_overlays()` pair, called once around the entire 2D
+   overlay sequence. Putting it inside `render_code_panel()` would
+   force every other overlay (autocomplete, dropdown, var panel,
+   help, profile) to redundantly assume the 2D viewport is set, or
+   hide the bracket from anyone reading just `display_func()`.
+
+5. **PROF_SCENE_3D bracketing (11a-step-4).** The plan says "pick
+   whichever keeps the existing flame chart readable." **Decide:**
+   keep `prof_begin(PROF_SCENE_3D)` / `prof_end(PROF_SCENE_3D)` in
+   `display_func()` so the frame-level entry stays visible at the
+   orchestrator level; move only the inner per-sample
+   `PROF_SCENE_3D_SETUP..HUD` reset/commit pair into
+   `render_3d_scene()`. This preserves the existing two-level
+   flame-chart structure.
+
+6. **`bench_repl.c` access path for `render_replay_fade_pass()`
+   (11d-step-3).** The plan lists a "preferred" and "fallback".
+   **Decide up front:** the preferred path — expose
+   `render_replay_fade_pass()` from `scene_render.h` unconditionally,
+   not behind `#ifdef BENCH_REPL_HARNESS`. Conditional exports
+   complicate the public header and the bench is part of the source
+   tree, not a separate consumer. The bench is simply a different
+   entrypoint that drives one render pass; that's fine. Flagging
+   this as the canonical answer prevents the implementer from
+   reaching for the upward-shim fallback.
+
+7. **`gl_includes.h` retention in `sample.h` (11c-step-4).** The
+   plan says "trial removal." **Concrete answer:** `sample.h`
+   declares `GLfloat`, `GLenum`, and the `GLCmd` struct (which
+   contains GL types), so `gl_includes.h` must remain in `sample.h`
+   even after 11c. The point of 11c is to ensure no `static inline`
+   GL *function calls* expand into every TU; type declarations are
+   fine. Don't waste a sub-commit chasing this.
+
+8. **`TessVertex` typedef location (11b-step-5).** Currently in
+   `repl_state.h`; consumed by `repl_executor.c` (the dispatch path
+   at `repl_executor.c:328-334`) and emitted as a string by
+   `repl_export.c:1529-1543`. After 11b, the only live consumer is
+   `repl_executor.c`. **Decide:** move the typedef into
+   `repl_executor.h` (or keep as file-private in `repl_executor.c`
+   with a forward declaration if no header export is needed — check
+   tests first via `grep -n 'TessVertex' test_*.c`).
+
+9. **`repl_state_render_init_resources()` rename strategy
+   (11b-step-2).** No callers currently reference the old name except
+   `repl_init_gl()` and `sample.c`'s teardown path. **Decide:** hard
+   rename, no compat shim. Two callers update in the same commit;
+   leaving an alias is overhead with no payoff.
+
+10. **`test_ui.c` impact.** `test_ui.c` exercises `render_help()` and
+    other `ui_*` renderers via the GL-stub-counter harness. It
+    includes `sample.h` plus the `ui_*.h` headers it tests. **Decide:**
+    `test_ui.c` is unaffected by 11a-11e because all its calls are
+    already through the `ui_*` public renderers. The 2D primitive
+    rename (`ui_2d_begin/end/draw_text`) is purely internal to those
+    renderers. Confirm by re-running `make test_ui` after each
+    sub-step; no test edits expected.
+
+11. **`scene_lights_init_global_ambient()` vs. fold into
+    `scene_lights_setup()` (11a-step-6).** The current
+    `glLightModelfv(GL_LIGHT_MODEL_AMBIENT, ...)` runs once at GL init
+    with constants `{0.15, 0.15, 0.20, 1.0}`. `scene_lights_setup()`
+    runs every frame. **Decide:** add a separate one-shot
+    `scene_lights_init_global_ambient()` (or
+    `scene_lights_init_static_state()` if more such one-shots
+    accumulate later). The global ambient is invariant; folding it
+    into `scene_lights_setup()` would re-set it on every frame for
+    no benefit and would make per-frame light state harder to audit.
+
+12. **Sub-step ordering and dependencies.** The list 11a → 11f reads
+    sequential, but the only hard dependencies are:
+    - 11b (executor owns tess/quadric) is independent of 11a.
+    - 11c (transform helpers move to `repl_executor.h`) depends on
+      nothing in 11a/11b but is cleanest if 11b lands first so
+      `repl_executor.c` is already the established home for
+      executor-owned resources.
+    - 11d (replay fade pass) is independent of 11a-11c.
+    - 11e (GLUT funnel) is independent of all preceding sub-steps.
+    - 11f (grep guards) requires 11a-11e all landed.
+
+    **Decide:** land in the order 11a → 11b → 11c → 11d → 11e → 11f
+    as written, but if review bandwidth allows parallel review, 11b
+    + 11d + 11e can land in any order before 11c, and 11a can land
+    last among the moves before 11f. Document the intended landing
+    order in the first commit message of the series.
+
+13. **"Hard rule" on `ui_*` ↔ `scene_*` separation vs. read-only
+    layout queries.** 11f-step-2 grandfathers
+    `scene_render.c → ui_panels.h` for `scene_rect()`. The deeper
+    fix (move `scene_rect()` into a `repl_*` layout model) is listed
+    as an *optional* follow-up. **Decide:** confirm the optional
+    follow-up is genuinely deferrable. `scene_rect()` is a query
+    against `repl_state_viewport()` plus the code-panel layout
+    fraction — pure derivation, no GL. Moving it into a new
+    `repl_layout.c` (sibling to `repl_code_panel_layout.c`) is a
+    half-day refactor with no runtime risk. **Recommendation:** do
+    the optional follow-up *before* item 11f's grep guard so the
+    guard can be unconditional (no grandfathered list to maintain).
+    Alternatively, document a hard date / next-tier-cycle commitment
+    so the exception doesn't ossify.
 
 ---
 
