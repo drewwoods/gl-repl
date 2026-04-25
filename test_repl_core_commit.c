@@ -164,7 +164,7 @@ static int code_panel_header_row_count(void) {
     int text_x = CODE_MARGIN_X + linenum_w + FONT_W + idx_col_w;
     int rows = 0;
 
-    code_panel_rect(NULL, NULL, &panel_w, NULL);
+    ui_panels_code_panel_rect(NULL, NULL, &panel_w, NULL);
     for (int i = 0; i < g_workspace_header_line_count; i++)
         rows += test_code_panel_row_count_for_text(g_workspace_header_lines[i], text_x, panel_w);
     for (int i = 0; g_header_pre[i]; i++)
@@ -186,7 +186,7 @@ static int code_panel_mouse_y_for_cmd(int cmd_idx) {
     int text_x = CODE_MARGIN_X + linenum_w + FONT_W + idx_col_w;
     int doc_line = code_panel_header_row_count();
 
-    code_panel_rect(NULL, &cp_y, &panel_w, &cp_h);
+    ui_panels_code_panel_rect(NULL, &cp_y, &panel_w, &cp_h);
     for (int i = 0; i < cmd_idx && i < repl_state_document_count(); i++) {
         doc_line += test_code_panel_row_count_for_text(repl_state_document_cmds_mut()[i].source,
                                                        text_x, panel_w);
@@ -451,15 +451,15 @@ int main(void) {
     repl_feed_line_public("glBegin(GL_POINTS);");
     repl_feed_line_public("glColor3f(1, 0, 0);");
     repl_feed_line_public("glEnd();");
-    handle_code_panel_press(CODE_MARGIN_X + 1, code_panel_mouse_y_for_cmd(0));
+    ui_panels_handle_code_panel_press(CODE_MARGIN_X + 1, code_panel_mouse_y_for_cmd(0));
     ASSERT_TRUE("mouse press selects current line for edit", repl_state_edit_line() == 0);
     ASSERT_TRUE("mouse press starts with no selection", !repl_clipboard_sel_active());
-    handle_code_panel_drag(CODE_MARGIN_X + 1, code_panel_mouse_y_for_cmd(2));
+    ui_panels_handle_code_panel_drag(CODE_MARGIN_X + 1, code_panel_mouse_y_for_cmd(2));
     ASSERT_TRUE("mouse drag activates selection", repl_clipboard_sel_active());
     ASSERT_TRUE("mouse drag selection low", repl_clipboard_sel_lo() == 0);
     ASSERT_TRUE("mouse drag selection high", repl_clipboard_sel_hi() == 2);
     ASSERT_TRUE("mouse drag navigates to drag end", repl_state_edit_line() == 2);
-    handle_code_panel_release();
+    ui_panels_handle_code_panel_release();
     repl_keyboard_func(8, 0, 0);
     ASSERT_TRUE("backspace deletes selected lines", repl_state_document_count() == 0);
     ASSERT_TRUE("backspace clears selection after delete", !repl_clipboard_sel_active());
@@ -474,7 +474,7 @@ int main(void) {
         int idx_col_w = *repl_state_presentation()->show_vertex_indices ? (6 * FONT_W) : 0;
         int text_x = CODE_MARGIN_X + linenum_w + FONT_W + idx_col_w;
         int indent = test_leading_ws_chars(repl_state_document_cmds_mut()[1].source);
-        handle_code_panel_click(text_x + indent * FONT_W + 1,
+        ui_panels_handle_code_panel_click(text_x + indent * FONT_W + 1,
                                 code_panel_mouse_y_for_cmd(1));
         ASSERT_TRUE("clicking indented active line keeps cursor at first char",
                     repl_state_cursor_pos() == 0);

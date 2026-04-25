@@ -113,7 +113,7 @@ static SceneFocusVertex scene_prepare_focus_vertex(void) {
 static void scene_render_config_init(SceneRenderConfig *config) {
     const ReplRenderState *render = repl_state_render();
     const ReplReplayRuntimeState *replay = repl_state_replay();
-    scene_rect(&config->scene_x, &config->scene_y,
+    ui_panels_scene_rect(&config->scene_x, &config->scene_y,
                &config->scene_w, &config->scene_h);
     if (config->scene_w < 1) config->scene_w = 1;
     if (config->scene_h < 1) config->scene_h = 1;

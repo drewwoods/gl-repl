@@ -132,7 +132,7 @@ static void color_picker_write_cmd(void) {
 /* Open (or switch) the picker for cmd_idx.  my is GLUT screen y coord. */
 void ui_color_picker_open(int cmd_idx, int my) {
     int cp_x, cp_w;
-    code_panel_rect(&cp_x, NULL, &cp_w, NULL);
+    ui_panels_code_panel_rect(&cp_x, NULL, &cp_w, NULL);
     g_cp_line      = cmd_idx;
     g_cp_has_alpha = (repl_state_document_cmds_mut()[cmd_idx].type == CMD_COLOR4F ||
                       repl_state_document_cmds_mut()[cmd_idx].type == CMD_TESS_COLOR ||

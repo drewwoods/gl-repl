@@ -47,7 +47,7 @@ static int panel_span_px(int total_px) {
     return span;
 }
 
-void code_panel_rect(int *x, int *y, int *w, int *h) {
+void ui_panels_code_panel_rect(int *x, int *y, int *w, int *h) {
     int layout = code_panel_layout_mode();
     int win_w = *repl_state_viewport()->window_w;
     int win_h = *repl_state_viewport()->window_h;
@@ -78,7 +78,7 @@ void code_panel_rect(int *x, int *y, int *w, int *h) {
     }
 }
 
-void scene_rect(int *x, int *y, int *w, int *h) {
+void ui_panels_scene_rect(int *x, int *y, int *w, int *h) {
     int layout = code_panel_layout_mode();
     int win_w = *repl_state_viewport()->window_w;
     int win_h = *repl_state_viewport()->window_h;
@@ -331,7 +331,7 @@ static void render_active_input_rows(int panel_w, int text_x, int idx_x,
     }
 }
 
-int code_panel_apply_scroll_follow_for_test(int *out_follow_doc_line,
+int ui_panels_code_panel_apply_scroll_follow_for_test(int *out_follow_doc_line,
                                             int *out_visible_lines) {
     CodePanelDocumentLayout layout;
     int cp_x, cp_y, cp_w, cp_h;
@@ -341,7 +341,7 @@ int code_panel_apply_scroll_follow_for_test(int *out_follow_doc_line,
     int text_x = idx_x + idx_col_w;
 
     repl_state_refresh_workspace_header_lines();
-    code_panel_rect(&cp_x, &cp_y, &cp_w, &cp_h);
+    ui_panels_code_panel_rect(&cp_x, &cp_y, &cp_w, &cp_h);
     (void)cp_x;
     (void)cp_y;
 
@@ -359,7 +359,7 @@ int code_panel_apply_scroll_follow_for_test(int *out_follow_doc_line,
 
 /* Color picker lives in repl_color_picker.c. */
 
-void render_code_panel(void) {
+void ui_panels_render_code_panel(void) {
     const ReplReplayRuntimeState    *replay = repl_state_replay();
     const ReplCodePanelRuntimeState *cp     = repl_state_code_panel();
     const ReplRenderState           *rs     = repl_state_render();
@@ -369,7 +369,7 @@ void render_code_panel(void) {
 
     CodePanelDocumentLayout doc_layout;
     int cp_x, cp_y, cp_w, cp_h;
-    code_panel_rect(&cp_x, &cp_y, &cp_w, &cp_h);
+    ui_panels_code_panel_rect(&cp_x, &cp_y, &cp_w, &cp_h);
     if (cp_w <= 0 || cp_h <= 0) {
         prof_end(PROF_CODE_PANEL_LAYOUT_GEOM_SETUP);
         prof_end(PROF_CODE_PANEL_LAYOUT_GEOM);
@@ -905,12 +905,12 @@ void render_code_panel(void) {
 /* Amber status/error strip along the bottom of the scene panel.  The scene
  * is much wider than the code-panel statusbar slot, so long diagnostics
  * (~80 chars) fit here without truncation. */
-void render_scene_status(void) {
+void ui_panels_render_scene_status(void) {
     const ReplStatusState *status = repl_state_status();
     if (*status->ttl <= 0 || !status->text[0]) return;
 
     int sc_x, sc_y, sc_w, sc_h;
-    scene_rect(&sc_x, &sc_y, &sc_w, &sc_h);
+    ui_panels_scene_rect(&sc_x, &sc_y, &sc_w, &sc_h);
     if (sc_w <= 0 || sc_h <= 0) return;
 
     int bar_h = STATUSBAR_H;
@@ -999,7 +999,7 @@ static int code_panel_hit_test(int mx, int my,
                                int *out_on_insert_line,
                                int *out_row_offset) {
     int cp_x, cp_y, cp_w, cp_h;
-    code_panel_rect(&cp_x, &cp_y, &cp_w, &cp_h);
+    ui_panels_code_panel_rect(&cp_x, &cp_y, &cp_w, &cp_h);
     if (cp_w <= 0 || cp_h <= 0) return 0;
     int panel_w = cp_w;
     int panel_top = cp_y + cp_h;
@@ -1039,7 +1039,7 @@ static int code_panel_hit_test(int mx, int my,
 static int code_panel_drag_target(int mx, int my, int *out_target) {
     (void)mx;
     int cp_x, cp_y, cp_w, cp_h;
-    code_panel_rect(&cp_x, &cp_y, &cp_w, &cp_h);
+    ui_panels_code_panel_rect(&cp_x, &cp_y, &cp_w, &cp_h);
     if (cp_w <= 0 || cp_h <= 0) return 0;
     int panel_w = cp_w;
     int panel_top = cp_y + cp_h;
@@ -1084,7 +1084,7 @@ static int code_panel_drag_target(int mx, int my, int *out_target) {
 }
 
 /* Handle left-click in the code panel: navigate to line + column */
-void handle_code_panel_click(int mx, int my) {
+void ui_panels_handle_code_panel_click(int mx, int my) {
     int target, on_insert_line, row_offset;
     if (!code_panel_hit_test(mx, my, &target, &on_insert_line, &row_offset)) return;
 
@@ -1095,7 +1095,7 @@ void handle_code_panel_click(int mx, int my) {
     }
 
     int cp_w;
-    code_panel_rect(NULL, NULL, &cp_w, NULL);
+    ui_panels_code_panel_rect(NULL, NULL, &cp_w, NULL);
     int panel_w = cp_w;
     int linenum_w = 4 * FONT_W;
     int idx_col_w = *repl_state_presentation()->show_vertex_indices ? (6 * FONT_W) : 0;
@@ -1126,7 +1126,7 @@ void handle_code_panel_click(int mx, int my) {
     repl_clipboard_clear_selection();
 }
 
-int handle_code_panel_press(int mx, int my) {
+int ui_panels_handle_code_panel_press(int mx, int my) {
     int actions = UI_PANEL_PRESS_NONE;
     ReplReplayRuntimeState *replay = repl_state_replay_mut();
 
@@ -1162,7 +1162,7 @@ int handle_code_panel_press(int mx, int my) {
     }
 
     /* Menu dropdown (floats over code) */
-    if (menu_dropdown_is_open()) {
+    if (ui_menu_bar_menu_dropdown_is_open()) {
         /* Clicking the same top-level menu toggles closed; clicking another
          * switches to it. */
         int open_menu = ui_menu_bar_open_menu_id();
@@ -1198,7 +1198,7 @@ int handle_code_panel_press(int mx, int my) {
     if (!on_insert_line && row_offset == 0 && target >= 0 && target < repl_state_document_count()) {
         if (ui_color_picker_can_edit_cmd(target)) {
             int cp_x2, cp_w2;
-            code_panel_rect(&cp_x2, NULL, &cp_w2, NULL);
+            ui_panels_code_panel_rect(&cp_x2, NULL, &cp_w2, NULL);
             int sx = cp_x2 + cp_w2 - CODE_MARGIN_X - UI_COLOR_SWATCH_W - 2;
             if (mx >= sx && mx < sx + UI_COLOR_SWATCH_W) {
                 if (ui_color_picker_active_line() == target) {
@@ -1215,7 +1215,7 @@ int handle_code_panel_press(int mx, int my) {
     /* Any non-swatch code-panel click closes the picker */
     ui_color_picker_close();
 
-    handle_code_panel_click(mx, my);
+    ui_panels_handle_code_panel_click(mx, my);
 
     g_code_panel_drag_active = 0;
     g_code_panel_drag_anchor = -1;
@@ -1227,7 +1227,7 @@ int handle_code_panel_press(int mx, int my) {
     return actions | UI_PANEL_PRESS_CONSUMED;
 }
 
-int handle_code_panel_drag(int mx, int my) {
+int ui_panels_handle_code_panel_drag(int mx, int my) {
     int target;
     if (!g_code_panel_drag_active || g_code_panel_drag_anchor < 0) return 0;
     if (!code_panel_drag_target(mx, my, &target)) return 0;
@@ -1243,7 +1243,7 @@ int handle_code_panel_drag(int mx, int my) {
     return 1;
 }
 
-void handle_code_panel_release(void) {
+void ui_panels_handle_code_panel_release(void) {
     g_code_panel_drag_active = 0;
     g_code_panel_drag_anchor = -1;
     g_code_panel_drag_moved = 0;
@@ -1263,5 +1263,5 @@ int ui_panels_handle_motion(int mx, int my) {
 
 void ui_panels_handle_mouse_release(void) {
     ui_color_picker_release();
-    handle_code_panel_release();
+    ui_panels_handle_code_panel_release();
 }

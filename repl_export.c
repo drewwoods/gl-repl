@@ -2766,7 +2766,7 @@ void repl_dump_code_panel_visual_text(FILE *out) {
     int idx_x = CODE_MARGIN_X + linenum_w + FONT_W;
     int text_x = idx_x + idx_col_w;
 
-    code_panel_rect(NULL, NULL, &panel_w, NULL);
+    ui_panels_code_panel_rect(NULL, NULL, &panel_w, NULL);
     update_render_state_strings();
     update_cam_lines();
 

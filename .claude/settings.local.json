@@ -58,7 +58,8 @@
       "Read(//Users/drew/src/code/opengl/samples/gen-ai/OpenGL-Vibe/src/immediate-mode-repl/claude4.6-opus-thinking/**)",
       "Read(//tmp/**)",
       "Bash(sed -i 's/replay_start\\(\\)/repl_replay_start\\(\\)/g' test*.c)",
-      "Bash(sed -i 's/replay_stop\\(\\)/repl_replay_stop\\(\\)/g' test*.c)"
+      "Bash(sed -i 's/replay_stop\\(\\)/repl_replay_stop\\(\\)/g' test*.c)",
+      "Bash(sed -i '' -f /tmp/fix_ui_panels.sed ui_panels.c)"
     ]
   }
 }

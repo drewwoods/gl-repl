@@ -10,6 +10,6 @@
 
 /* Render the profile panel overlay.  Draws nothing when the profile
  * panel mode is PROFILE_PANEL_OFF. */
-void render_profile_panel(void);
+void ui_profile_panel_render(void);
 
 #endif /* UI_PROFILE_PANEL_H */

@@ -1414,7 +1414,7 @@ static int editor_point_in_code_panel(int x, int y) {
     int cp_x, cp_y, cp_w, cp_h;
     int gl_y = *repl_state_viewport()->window_h - y;
 
-    code_panel_rect(&cp_x, &cp_y, &cp_w, &cp_h);
+    ui_panels_code_panel_rect(&cp_x, &cp_y, &cp_w, &cp_h);
     return x >= cp_x && x < cp_x + cp_w &&
            gl_y >= cp_y && gl_y < cp_y + cp_h;
 }
@@ -1426,7 +1426,7 @@ static int editor_point_on_code_panel_divider(int x, int y) {
 
     if (layout == CODE_PANEL_LAYOUT_HIDDEN)
         return 0;
-    code_panel_rect(&cp_x, &cp_y, &cp_w, &cp_h);
+    ui_panels_code_panel_rect(&cp_x, &cp_y, &cp_w, &cp_h);
     if (layout == CODE_PANEL_LAYOUT_TOP)
         return abs(gl_y - cp_y) < 10;
     if (layout == CODE_PANEL_LAYOUT_BOTTOM)
@@ -1485,7 +1485,7 @@ static void mouse_func(int button, int state, int x, int y) {
     if (button == GLUT_LEFT_BUTTON && state == GLUT_DOWN) {
         if (*repl_state_variable_panel()->visible) {
             int row_idx;
-            if (var_panel_hit(x, y, &row_idx)) {
+            if (ui_variable_panel_hit(x, y, &row_idx)) {
                 if (*repl_state_replay()->active)
                     repl_replay_stop();
                 repl_var_drag_begin(row_idx, 0, x);
@@ -1497,8 +1497,8 @@ static void mouse_func(int button, int state, int x, int y) {
         /* The example dropdown can extend outside the code panel bounds (e.g.
          * below the panel in vertical layout).  Handle it before the
          * panel-area gate so clicks on any part of the dropdown register. */
-        if (example_dropdown_is_open()) {
-            int panel_actions = handle_code_panel_press(x, y);
+        if (ui_menu_bar_example_dropdown_is_open()) {
+            int panel_actions = ui_panels_handle_code_panel_press(x, y);
             if (panel_actions & UI_PANEL_PRESS_OPENED_COLOR_PICKER)
                 repl_undo_push_snapshot();
             editor_request_redraw();
@@ -1511,7 +1511,7 @@ static void mouse_func(int button, int state, int x, int y) {
             return;
         }
         if (editor_point_in_code_panel(x, y)) {
-            int panel_actions = handle_code_panel_press(x, y);
+            int panel_actions = ui_panels_handle_code_panel_press(x, y);
             if (panel_actions & UI_PANEL_PRESS_OPENED_COLOR_PICKER)
                 repl_undo_push_snapshot();
             editor_request_redraw();
@@ -1536,7 +1536,7 @@ static void mouse_func(int button, int state, int x, int y) {
     /* Right-click on var panel: logarithmic drag mode. */
     if (button == GLUT_RIGHT_BUTTON && state == GLUT_DOWN && *repl_state_variable_panel()->visible) {
         int row_idx;
-        if (var_panel_hit(x, y, &row_idx)) {
+        if (ui_variable_panel_hit(x, y, &row_idx)) {
             if (*repl_state_replay()->active)
                 repl_replay_stop();
             repl_var_drag_begin(row_idx, 1, x);
@@ -1616,7 +1616,7 @@ static void motion_func(int x, int y) {
         return;
     }
 
-    if (handle_code_panel_drag(x, y)) {
+    if (ui_panels_handle_code_panel_drag(x, y)) {
         repl_camera_pointer_set(x, y);
         editor_request_redraw();
         return;
