@@ -323,7 +323,6 @@ int  repl_search_find_prev_in_text(const char *text, const char *query,
 
 void navigate_to_line(int target);
 void execute_commands(void);
-void execute_replay_fade_batches(void);
 void flatten_commands(void);
 void replay_start(void);
 void replay_stop(void);

@@ -5,7 +5,6 @@
 #include "repl_core_internal.h"
 #include "repl_keys.h"
 #include "repl_state.h"
-#include "prof.h"
 
 #define REPLAY_STATE (repl_state_replay_mut())
 #define g_replay_active      (*REPLAY_STATE->active)
@@ -24,13 +23,6 @@ static int   g_replay_saved_t_playing = 1;
 static int   g_replay_last_src_line = -1;
 
 #define REPLAY_FADE_DURATION   0.20f
-#define REPLAY_FADE_BATCH_MAX  24
-
-typedef struct {
-    int   old_pc;
-    int   new_pc;
-    float age;
-} ReplayFadeBatch;
 
 static ReplayFadeBatch g_replay_fade_batches[REPLAY_FADE_BATCH_MAX];
 static int             g_replay_fade_batch_count = 0;
@@ -157,11 +149,76 @@ static void replay_set_src_line(int src_line) {
     }
 }
 
-static float replay_batch_alpha(const ReplayFadeBatch *batch) {
+float replay_batch_alpha(const ReplayFadeBatch *batch) {
     float alpha = batch->age * g_replay_fade_speed;
     if (alpha < 0.0f) alpha = 0.0f;
     if (alpha > 1.0f) alpha = 1.0f;
     return alpha;
+}
+
+ReplayFadeBatchView replay_fade_batches_view(void) {
+    ReplayFadeBatchView view = {
+        .batches = g_replay_fade_batches,
+        .count = g_replay_fade_batch_count,
+    };
+    return view;
+}
+
+int replay_compute_fade_skip_limits(int *out_limits, int max_count) {
+    FlatProgramView flat_program = repl_state_flat_program_view();
+    const GLCmd *g_flat_cmds = flat_program.cmds;
+    int g_num_flat_cmds = flat_program.cmd_count;
+    ReplayFadeBatchView fade_batches = replay_fade_batches_view();
+    int batch_limit;
+    int batch_idx = 0;
+    int open_begin = -1;
+    int open_tess = -1;
+    int tess_depth = 0;
+
+    if (!out_limits || max_count <= 0)
+        return 0;
+    if (!replay_has_active_fades())
+        return 0;
+
+    batch_limit = fade_batches.count;
+    if (batch_limit > max_count)
+        batch_limit = max_count;
+    if (batch_limit <= 0)
+        return 0;
+
+    int max_old_pc = fade_batches.batches[batch_limit - 1].old_pc;
+    if (max_old_pc > g_num_flat_cmds) max_old_pc = g_num_flat_cmds;
+
+    for (int pc = 0; pc <= max_old_pc; pc++) {
+        while (batch_idx < batch_limit &&
+               fade_batches.batches[batch_idx].old_pc <= pc) {
+            int sl = fade_batches.batches[batch_idx].old_pc;
+            if (open_begin >= 0 && open_begin < sl) sl = open_begin;
+            if (open_tess  >= 0 && open_tess  < sl) sl = open_tess;
+            out_limits[batch_idx++] = sl;
+        }
+        if (pc >= g_num_flat_cmds || !g_flat_cmds[pc].valid)
+            continue;
+        switch (g_flat_cmds[pc].type) {
+        case CMD_BEGIN: open_begin = pc; break;
+        case CMD_END:   open_begin = -1; break;
+        case CMD_TESS_BEGIN_POLYGON: open_tess = pc; tess_depth = 1; break;
+        case CMD_TESS_BEGIN_CONTOUR: if (tess_depth == 1) tess_depth = 2; break;
+        case CMD_TESS_END:
+            if (tess_depth == 2) tess_depth = 1;
+            else if (tess_depth == 1) { open_tess = -1; tess_depth = 0; }
+            break;
+        default: break;
+        }
+    }
+    while (batch_idx < batch_limit) {
+        int sl = fade_batches.batches[batch_idx].old_pc;
+        if (open_begin >= 0 && open_begin < sl) sl = open_begin;
+        if (open_tess  >= 0 && open_tess  < sl) sl = open_tess;
+        out_limits[batch_idx++] = sl;
+    }
+
+    return batch_limit;
 }
 
 static void replay_clear_fade_batches(void) {
@@ -434,7 +491,6 @@ int replay_seek_to_src_line(int target_line) {
         int step_src = replay_last_meaningful_src(pc, next_pc);
         if (step_src >= target_line) {
             landed_pc = next_pc;
-            landed_src = step_src;
             break;
         }
         pc = next_pc;
@@ -719,94 +775,6 @@ int replay_handle_special_key(int key) {
     if (!replay_modifier_special_key(key))
         replay_stop();
     return 0;
-}
-
-void execute_replay_fade_batches(void) {
-    int skip_limits[REPLAY_FADE_BATCH_MAX];
-    FlatProgramView flat_program = repl_state_flat_program_view();
-    const GLCmd *g_flat_cmds = flat_program.cmds;
-    int g_num_flat_cmds = flat_program.cmd_count;
-
-    if (!replay_has_active_fades())
-        return;
-
-    prof_begin(PROF_SCENE_3D_FADE_PROLOGUE);
-
-    {
-        int batch_idx = 0;
-        int open_begin = -1;
-        int open_tess = -1;
-        int tess_depth = 0;
-        int max_old_pc = g_replay_fade_batches[g_replay_fade_batch_count - 1].old_pc;
-        if (max_old_pc > g_num_flat_cmds) max_old_pc = g_num_flat_cmds;
-
-        for (int pc = 0; pc <= max_old_pc; pc++) {
-            while (batch_idx < g_replay_fade_batch_count &&
-                   g_replay_fade_batches[batch_idx].old_pc <= pc) {
-                int sl = g_replay_fade_batches[batch_idx].old_pc;
-                if (open_begin >= 0 && open_begin < sl) sl = open_begin;
-                if (open_tess  >= 0 && open_tess  < sl) sl = open_tess;
-                skip_limits[batch_idx++] = sl;
-            }
-            if (pc >= g_num_flat_cmds || !g_flat_cmds[pc].valid)
-                continue;
-            switch (g_flat_cmds[pc].type) {
-            case CMD_BEGIN: open_begin = pc; break;
-            case CMD_END:   open_begin = -1; break;
-            case CMD_TESS_BEGIN_POLYGON: open_tess = pc; tess_depth = 1; break;
-            case CMD_TESS_BEGIN_CONTOUR: if (tess_depth == 1) tess_depth = 2; break;
-            case CMD_TESS_END:
-                if (tess_depth == 2) tess_depth = 1;
-                else if (tess_depth == 1) { open_tess = -1; tess_depth = 0; }
-                break;
-            default: break;
-            }
-        }
-        while (batch_idx < g_replay_fade_batch_count) {
-            int sl = g_replay_fade_batches[batch_idx].old_pc;
-            if (open_begin >= 0 && open_begin < sl) sl = open_begin;
-            if (open_tess  >= 0 && open_tess  < sl) sl = open_tess;
-            skip_limits[batch_idx++] = sl;
-        }
-    }
-
-    glPushAttrib(GL_ALL_ATTRIB_BITS);
-    prof_accum_end(PROF_SCENE_3D_FADE_PROLOGUE);
-
-    for (int batch_idx = 0; batch_idx < g_replay_fade_batch_count; batch_idx++) {
-        float alpha = replay_batch_alpha(&g_replay_fade_batches[batch_idx]);
-
-        if (alpha <= 0.0f)
-            continue;
-
-        prof_begin(PROF_SCENE_3D_FADE_BATCH_PREP);
-        FlatProgramView flat_program = repl_flat_program_view_live();
-        ReplExecutionOptions exec_options = {
-            .flat_cmd_count = g_replay_fade_batches[batch_idx].new_pc,
-            .program = flat_program
-        };
-        replay_restore_baseline_predef_values();
-        repl_execute_set_fade_context(alpha, skip_limits[batch_idx]);
-
-        glDisable(GL_LIGHTING);
-        glEnable(GL_BLEND);
-        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-        glPolygonMode(GL_FRONT_AND_BACK, *repl_state_presentation()->wireframe ? GL_LINE : GL_FILL);
-        glColor4f(0.70f, 0.70f, 0.80f, alpha);
-        glPushMatrix();
-        prof_accum_end(PROF_SCENE_3D_FADE_BATCH_PREP);
-
-        prof_begin(PROF_SCENE_3D_FADE_BATCH_EXEC);
-        repl_execute_program(&exec_options);
-        prof_accum_end(PROF_SCENE_3D_FADE_BATCH_EXEC);
-
-        glPopMatrix();
-    }
-
-    prof_begin(PROF_SCENE_3D_FADE_BATCH_POST);
-    repl_execute_set_fade_context(1.0f, 0);
-    glPopAttrib();
-    prof_accum_end(PROF_SCENE_3D_FADE_BATCH_POST);
 }
 
 int repl_bench_fade_install(const int *old_pcs, const int *new_pcs,

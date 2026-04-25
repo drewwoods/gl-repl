@@ -807,9 +807,10 @@ Under the hood, replay works by clamping how much of `g_flat_cmds[]`
   the fill/fade executor does not temporarily rewrite `g_num_flat_cmds`.
 - `g_replay_fade_batches[]` is a circular buffer of recent geometry
   snapshots. Old batches fade out as new geometry appears and are drawn
-  in a separate blended pass (`execute_replay_fade_batches()`) after the
-  main fill. This is what produces the trailing-ghost look without
-  changing how the main executor walks the flat array.
+  in a separate blended pass (`render_replay_fade_pass()` in
+  `scene_render.c`) after the main fill. This is what produces the
+  trailing-ghost look without changing how the main executor walks the
+  flat array.
 
 ## Startup and Examples
 

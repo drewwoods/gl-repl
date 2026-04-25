@@ -315,13 +315,11 @@ named wrappers so the rule is mechanically checkable.
   `repl_command_spec.c`, `repl_parser.c` — these only handle GL command
   strings as REPL source. Grep hits inside string literals don't count.
 
-**Current live-call residue outside the allowed set** (verified by
-`grep -nE '\b(gl[A-Z]|glu[A-Z])[A-Za-z0-9]*\s*\('` minus comment/string lines):
+**Current live-call residue outside the allowed set** now consists of
+GLUT input/feedback only (verified by `grep -nE '\b(gl[A-Z]|glu[A-Z])[A-Za-z0-9]*\s*\('` minus comment/string lines):
 
 | File | Calls | Nature |
 |------|-------|--------|
-| `repl_replay.c` | 9 | `execute_replay_fade_batches()` push/pop attrib, lighting/blend setup, `glColor4f`, `glPushMatrix`/`glPopMatrix` around the executor call |
-| `sample.h` | 9 | inline `apply_transform_cmd`, `apply_tracked_transform_cmd`, `unwind_tracked_transform_stack`, `_repl_point_size` (`NO_POINT_PARAMETER` shim) |
 | `repl_actions.c` | 1 | `glutGetModifiers()` SHIFT check on the time-toggle config row |
 | `repl_editor.c` | ~23 | All `glutPostRedisplay`/`glutSetCursor`/`glutGetModifiers` — GLUT input/feedback, not GL drawing |
 
@@ -765,7 +763,11 @@ examples) and one that exercises quadrics
 (`gluSphere`/`gluCylinder` calls); exit cleanly via window close
 so `repl_executor_destroy_resources()` fires.
 
-#### 11c. Replace inline GL helpers in `sample.h` with `repl_executor.h` exports
+#### 11c. Replace inline GL helpers in `sample.h` with `repl_executor.h` exports ✅ DONE
+
+**Status.** This slice landed in the 11c cleanup commit. `repl_executor.c` now owns the transform helper bodies and `sample.h` is back to types-and-compatibility only, with the point-size shim moved out of the shared header.
+
+**Validation.** `make test-stubs TEST_JOBS=4` passed, along with the requested build matrix (`make sample`, `make sample USE_GL_STUBS=1`, `make sample NO_POINT_PARAMETER=1`) and `./bench_repl fade_batches`.
 
 **Problem.** `sample.h` is the shared *types* and compatibility
 header, but it currently defines `static inline` helpers that
@@ -842,7 +844,7 @@ combinations: `make sample`, `make sample USE_GL_STUBS=1`, and
 Run `./bench_repl fade_batches` — it exercises tracked transforms
 via the executor and the scene_* walkers.
 
-#### 11d. Move replay-fade GL pass into `scene_render.c`
+#### 11d. Move replay-fade GL pass into `scene_render.c` ✅ DONE
 
 **Problem.** `repl_replay.c` should be the replay *model* (state
 machine, fade-batch ring, alpha math, PC tracking). The actual GL
@@ -921,6 +923,16 @@ before/after counts in the commit message.
 `make sample && ./sample`: load an example with heavy geometry,
 Ctrl+G to start replay, hold Right arrow — the trailing ghost
 should look identical.
+
+**Status.** This slice landed in commit `d513dd9` as a replay-model/render
+split. `repl_replay.c` now owns the fade-batch ring, alpha math, and
+skip-limit helpers; `scene_render.c` owns `render_replay_fade_pass()`;
+`bench_repl.c` drives the scene-side helper directly; and the architecture
+docs now describe the blended replay pass as scene-owned.
+
+**Validation.** `make test-stubs TEST_JOBS=4` passed, and
+`make bench USE_GL_STUBS=1 BENCH_ARGS="--only fade_batches"` passed with the
+new helper name in the benchmark output.
 
 #### 11e. Funnel `repl_editor.c` and `repl_actions.c` GLUT calls through helpers
 
