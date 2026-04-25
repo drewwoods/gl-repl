@@ -573,7 +573,7 @@ void render_code_panel(void) {
                 int wrap_row = 0;
                 int wrap_start, wrap_len, wrap_x;
                 int search_row_idx = repl_search_row_for_cmd_index(i);
-                code_panel_get_command_display_text(i, display_text,
+                repl_replay_code_panel_get_command_display_text(i, display_text,
                                                     sizeof(display_text));
                 repl_code_panel_document_wrap_iter_init(&wrap_it, display_text, text_x, panel_w);
                 while (repl_code_panel_document_wrap_iter_next(&wrap_it, &wrap_start, &wrap_len, &wrap_x)) {

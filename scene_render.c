@@ -511,7 +511,7 @@ static void scene_apply_clear_color(FlatProgramView flat_program) {
     glClearColor(cr, cg, cb, ca);
 }
 
-void render_replay_fade_pass(void) {
+void scene_render_replay_fade_pass(void) {
     SceneRenderConfig config;
     FlatProgramView flat_program;
     ReplayFadeBatchView fade_batches;
@@ -621,7 +621,7 @@ static void render_3d_scene_pass(void) {
 
         if (config.replay_has_fades) {
             prof_begin(PROF_SCENE_3D_FADE);
-            render_replay_fade_pass();
+            scene_render_replay_fade_pass();
             prof_accum_end(PROF_SCENE_3D_FADE);
         }
     }
@@ -718,7 +718,7 @@ static void render_3d_scene_pass(void) {
     prof_accum_end(PROF_SCENE_3D_HUD);
 }
 
-void render_3d_scene(void) {
+void scene_render_3d_scene(void) {
     SceneRenderConfig viewport_config;
     const ReplRenderState *render = repl_state_render();
     ReplRenderState *render_mut = repl_state_render_mut();

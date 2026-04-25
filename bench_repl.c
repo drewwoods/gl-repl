@@ -10,7 +10,7 @@
  * per-function counter (see include/GL/gl_stub_counts.h), so timings
  * measure pure C-level cost. In the real-GL build we create a real GL
  * context up front (via GLUT) so sub-benchmarks that drive actual draw
- * calls - notably `fade_batches` via `render_replay_fade_pass()` -
+ * calls - notably `fade_batches` via `scene_render_replay_fade_pass()` -
  * have somewhere to emit to; without a current context those calls are
  * undefined behaviour rather than measurable work.
  *
@@ -21,7 +21,7 @@
  *   flatten_examples  - load each example then call repl_flatten_commands
  *   replay_examples   - start a replay and step it to completion
  *   replay_long       - feed a synthetic large scene and step replay to end
- *   fade_batches      - drive render_replay_fade_pass() with a packed
+ *   fade_batches      - drive scene_render_replay_fade_pass() with a packed
  *                       batch buffer whose old_pcs sit deep in a long flat
  *                       command stream (exercises the per-batch prefix
  *                       walk that dominates late-replay fade-in cost).
@@ -530,7 +530,7 @@ static BenchResult bench_fade_batches(int iters) {
 
 #ifdef OPENGL_VIBE_USE_GL_STUBS
     /* Reset right before the timed region so the counter dump below
-     * reflects only the work driven by render_replay_fade_pass()
+     * reflects only the work driven by scene_render_replay_fade_pass()
      * across the full iters×inner call count. repl_bench_fade_install
      * doesn't invoke any GL stubs, so including it in the counted
      * region is fine. */
@@ -548,7 +548,7 @@ static BenchResult bench_fade_batches(int iters) {
              * measurement - intentional, since a real replay frame
              * also re-registers batches as new steps arrive). */
             repl_bench_fade_install(old_pcs, new_pcs, installed_count, age);
-            render_replay_fade_pass();
+            scene_render_replay_fade_pass();
         }
         double dt = now_seconds() - t0;
         if (dt < r.min_sec) r.min_sec = dt;
@@ -563,7 +563,7 @@ static BenchResult bench_fade_batches(int iters) {
         fprintf(stderr, "  (fade_batches: flat_cmds=%d, batches=%d, age=%.3f)\n",
                 flat_cmds, installed_count, age);
 #ifdef OPENGL_VIBE_USE_GL_STUBS
-        fprintf(stderr, "  (GL stub calls per render_replay_fade_pass():)\n");
+        fprintf(stderr, "  (GL stub calls per scene_render_replay_fade_pass():)\n");
         gl_stub_counts_dump(stderr, "    ", r.ops);
 #endif
     }

@@ -12,6 +12,6 @@ int  repl_replay_build_subst_annotation(int cmd_idx, int flat_idx,
 int  repl_replay_build_eval_annotation(int cmd_idx, int flat_idx,
                                        char *eval_buf, int eval_size);
 
-int  code_panel_get_command_display_text(int cmd_idx, char *out, int out_size);
+int  repl_replay_code_panel_get_command_display_text(int cmd_idx, char *out, int out_size);
 
 #endif /* REPL_REPLAY_ANNOTATIONS_H */

@@ -137,7 +137,7 @@ static int code_panel_command_main_rows(int cmd_idx, int panel_w, int text_x) {
 
     {
         char display_text[MAX_INPUT_LEN];
-        if (!code_panel_get_command_display_text(cmd_idx, display_text,
+        if (!repl_replay_code_panel_get_command_display_text(cmd_idx, display_text,
                                                  sizeof(display_text)))
             return 1;
         return repl_code_panel_document_row_count_for_text(display_text,
