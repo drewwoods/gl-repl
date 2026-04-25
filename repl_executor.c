@@ -154,7 +154,7 @@ void repl_execute_set_fade_context(float alpha_scale, int skip_geom_before_pc) {
     g_execute_skip_geom_before_pc = skip_geom_before_pc;
 }
 
-void apply_transform_cmd(const GLCmd *cmd) {
+void repl_executor_apply_transform_cmd(const GLCmd *cmd) {
     if (!cmd)
         return;
 
@@ -179,7 +179,7 @@ void apply_transform_cmd(const GLCmd *cmd) {
     }
 }
 
-void apply_tracked_transform_cmd(const GLCmd *cmd, int *matrix_depth) {
+void repl_executor_apply_tracked_transform_cmd(const GLCmd *cmd, int *matrix_depth) {
     if (!cmd)
         return;
 
@@ -197,12 +197,12 @@ void apply_tracked_transform_cmd(const GLCmd *cmd, int *matrix_depth) {
         }
         break;
     default:
-        apply_transform_cmd(cmd);
+        repl_executor_apply_transform_cmd(cmd);
         break;
     }
 }
 
-void unwind_tracked_transform_stack(int *matrix_depth) {
+void repl_executor_unwind_tracked_transform_stack(int *matrix_depth) {
     if (!matrix_depth)
         return;
 
@@ -328,7 +328,7 @@ void repl_execute_program(const ReplExecutionOptions *options) {
     while (pc < flat_cmd_count) {
         if (!flat_cmds[pc].valid) { pc++; continue; }
         if (is_transform_cmd(flat_cmds[pc].type)) {
-            apply_tracked_transform_cmd(&flat_cmds[pc], &matrix_depth);
+            repl_executor_apply_tracked_transform_cmd(&flat_cmds[pc], &matrix_depth);
             pc++;
             continue;
         }
@@ -606,7 +606,7 @@ execute_done:
         if (tess_depth == 2 && g_tess) { gluTessEndContour(g_tess); tess_depth = 1; }
         if (tess_depth == 1 && g_tess) { gluTessEndPolygon(g_tess); }
     }
-    unwind_tracked_transform_stack(&matrix_depth);
+    repl_executor_unwind_tracked_transform_stack(&matrix_depth);
 }
 
 void execute_commands(void) {

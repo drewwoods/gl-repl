@@ -50,10 +50,10 @@ static void compute_before_cursor_matrix(const SceneGuideSnapshot *snapshot,
     for (int i = 0; i < cursor_flat_idx; i++) {
         if (!flat_cmds[i].valid) continue;
         if (is_transform_cmd(flat_cmds[i].type))
-            apply_tracked_transform_cmd(&flat_cmds[i], &depth);
+            repl_executor_apply_tracked_transform_cmd(&flat_cmds[i], &depth);
     }
     glGetFloatv(GL_MODELVIEW_MATRIX, out);
-    unwind_tracked_transform_stack(&depth);
+    repl_executor_unwind_tracked_transform_stack(&depth);
     glPopMatrix();
 }
 
@@ -76,14 +76,14 @@ static void compute_after_cursor_origin(const SceneGuideSnapshot *snapshot,
         if (!flat_cmds[i].valid) continue;
         if (is_geometry_emit_cmd(flat_cmds[i].type)) break;
         if (is_transform_cmd(flat_cmds[i].type))
-            apply_tracked_transform_cmd(&flat_cmds[i], &depth);
+            repl_executor_apply_tracked_transform_cmd(&flat_cmds[i], &depth);
     }
     float m[16];
     glGetFloatv(GL_MODELVIEW_MATRIX, m);
     out[0] = m[12];
     out[1] = m[13];
     out[2] = m[14];
-    unwind_tracked_transform_stack(&depth);
+    repl_executor_unwind_tracked_transform_stack(&depth);
     glPopMatrix();
 }
 

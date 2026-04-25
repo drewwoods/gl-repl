@@ -8,9 +8,9 @@ typedef struct {
     FlatProgramView program;
 } ReplExecutionOptions;
 
-void apply_transform_cmd(const GLCmd *cmd);
-void apply_tracked_transform_cmd(const GLCmd *cmd, int *matrix_depth);
-void unwind_tracked_transform_stack(int *matrix_depth);
+void repl_executor_apply_transform_cmd(const GLCmd *cmd);
+void repl_executor_apply_tracked_transform_cmd(const GLCmd *cmd, int *matrix_depth);
+void repl_executor_unwind_tracked_transform_stack(int *matrix_depth);
 
 void repl_executor_init_resources(void);
 void repl_executor_destroy_resources(void);

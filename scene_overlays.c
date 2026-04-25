@@ -90,7 +90,7 @@ static void walk_vertex_overlay(int selected_block_only,
 
         const GLCmd *cmd = &g_flat_cmds[i];
         if (!state.in_block && is_transform_cmd(cmd->type)) {
-            apply_tracked_transform_cmd(cmd, &matrix_depth);
+            repl_executor_apply_tracked_transform_cmd(cmd, &matrix_depth);
             continue;
         }
 
@@ -157,7 +157,7 @@ static void walk_vertex_overlay(int selected_block_only,
             break;
         }
     }
-    unwind_tracked_transform_stack(&matrix_depth);
+    repl_executor_unwind_tracked_transform_stack(&matrix_depth);
     glPopMatrix();
 }
 
@@ -252,7 +252,7 @@ void scene_overlays_render_outlines(int show_current_poly,
 
             if (is_transform_cmd(g_flat_cmds[i].type)) {
                 if (!in_begin && !tess_in_contour)
-                    apply_tracked_transform_cmd(&g_flat_cmds[i], &matrix_depth);
+                    repl_executor_apply_tracked_transform_cmd(&g_flat_cmds[i], &matrix_depth);
                 continue;
             }
 
@@ -346,7 +346,7 @@ void scene_overlays_render_outlines(int show_current_poly,
             glEnd();
             glLineWidth(1.0f);
         }
-        unwind_tracked_transform_stack(&matrix_depth);
+        repl_executor_unwind_tracked_transform_stack(&matrix_depth);
         glPopMatrix();
     }
 
