@@ -404,8 +404,10 @@ APIs (`glutPostRedisplay`, `glutSetCursor`, `glutGetModifiers`,
 `glutSwapBuffers`) only appear in `sample.c` and `repl_editor.c`,
 funnelled through local helpers
 (`editor_request_redraw()`, `editor_set_cursor()`,
-`repl_editor_active_modifiers()`). `repl_*.c` files (other than
-the executor) and `sample.h` do not call GL or GLU. Text emission
+`repl_editor_active_modifiers()`). The public header `repl_editor.h`
+exports `repl_editor_active_modifiers()` for use by repl_actions.c;
+other helpers remain static to repl_editor.c. `repl_*.c` files (other
+than the executor) and `sample.h` do not call GL or GLU. Text emission
 of GL command names — `repl_export.c`, `repl_examples.c`,
 `repl_command_spec.c`, `repl_replay_annotations.c`,
 `repl_parser.c` — is REPL source, not a live call site.
