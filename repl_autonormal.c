@@ -3,8 +3,9 @@
  */
 #include "sample.h"
 #include "repl_core.h"
-#include "repl_core_internal.h"
 #include "repl_command_store.h"
+#include "repl_source_scope.h"
+#include "repl_state.h"
 
 static void normal_indent(int pos, char *buf, int buf_sz) {
     int spaces;

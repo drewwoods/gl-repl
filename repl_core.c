@@ -57,6 +57,9 @@
 #include "repl_core_internal.h"
 #include "repl_command_spec.h"
 #include "repl_command_store.h"
+#include "repl_parser.h"
+#include "repl_source_scope.h"
+#include "repl_executor.h"
 #include "repl_replay.h"
 #include "cmd_format.h"
 #include "scene_render.h"
@@ -66,6 +69,7 @@
 #include "ui_variable_panel.h"
 #include "ui_profile_panel.h"
 #include "prof.h"
+#include "repl_state.h"
 
 #include <sys/stat.h>
 #include <sys/types.h>
@@ -712,7 +716,7 @@ static void load_initial_commands(const char *import_file) {
 
 static void init_gl(void) {
     scene_render_init_gl();
-    repl_state_render_init_resources();
+    repl_executor_init_resources();
     apply_init_bootstrap();
 }
 

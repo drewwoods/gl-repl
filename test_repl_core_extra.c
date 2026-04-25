@@ -1,5 +1,7 @@
 #include "repl_core_internal.h"
 #include "repl_replay.h"
+#include "repl_executor.h"
+#include "repl_state.h"
 #include "ui_panels.h"
 #include "repl_inline_rename.h"
 

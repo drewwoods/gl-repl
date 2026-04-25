@@ -3,6 +3,7 @@
  */
 #include "sample.h"
 #include "scene_lights.h"
+#include "repl_state.h"
 
 static void scene_lights_push_state(void) {
     glPushAttrib(GL_ALL_ATTRIB_BITS);

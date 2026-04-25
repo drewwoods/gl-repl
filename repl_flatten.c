@@ -4,6 +4,7 @@
 #include "sample.h"
 #include "repl_core.h"
 #include "repl_core_internal.h"
+#include "repl_parser.h"
 #include "repl_state.h"
 
 #define MAX_FLATTEN_CALL_DEPTH 64

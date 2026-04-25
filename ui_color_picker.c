@@ -3,9 +3,9 @@
  */
 #include "sample.h"
 #include "repl_core_internal.h"
+#include "repl_state.h"
 #include "ui_color_picker.h"
 #include "ui_panels.h"
-#include "./include/gl_2d.h"
 
 /* ========================================================================= */
 /* Color picker                                                               */

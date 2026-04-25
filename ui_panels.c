@@ -7,6 +7,7 @@
 #include "sample.h"
 #include "repl_state.h"
 #include "repl_export.h"
+#include "repl_source_scope.h"
 #include "ui_color_picker.h"
 #include "repl_code_panel_document.h"
 #include "repl_core.h"

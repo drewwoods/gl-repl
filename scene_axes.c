@@ -3,6 +3,7 @@
  */
 #include "sample.h"
 #include "scene_axes.h"
+#include "repl_state.h"
 
 enum {
     SCENE_AXIS_X = 0,

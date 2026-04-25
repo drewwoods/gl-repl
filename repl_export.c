@@ -2,6 +2,10 @@
 #include "repl_code_panel_layout.h"
 #include "repl_core_internal.h"
 #include "repl_command_store.h"
+#include "repl_config.h"
+#include "repl_parser.h"
+#include "repl_source_scope.h"
+#include "repl_state.h"
 #include "ui_panels.h"
 
 #define IMPORT_EXPORT_STATE (repl_state_import_export_mut())
@@ -385,7 +389,7 @@ static void parse_init_bootstrap(void) {
 
     for (int i = 0; i < NUM_INIT_BOOTSTRAP; i++) {
         GLCmd cmd;
-        ReplParseContext parse_ctx = { 0, NULL, 0 };
+        ReplParseContext parse_ctx = { 0, NULL, 0, 0 };
         memset(&cmd, 0, sizeof(cmd));
         if (!repl_parse_command_ctx(g_init_bootstrap_repl[i].repl_line,
                                     &cmd, &parse_ctx)) {

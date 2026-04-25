@@ -2,9 +2,11 @@
  * repl_example_loader.c -- Built-in example loading and metadata handling.
  */
 #include "sample.h"
+#include "repl_export.h"
 #include "repl_command_store.h"
 #include "repl_core_internal.h"
 #include "repl_examples.h"
+#include "repl_state.h"
 
 static const char *example_cam_skip_ws(const char *text) {
     while (*text && isspace((unsigned char)*text))

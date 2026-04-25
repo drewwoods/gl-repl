@@ -5,6 +5,7 @@
 #include "repl_command_store.h"
 #include "repl_core_internal.h"
 #include "repl_examples.h"
+#include "repl_state.h"
 
 #include <dirent.h>
 #include <errno.h>

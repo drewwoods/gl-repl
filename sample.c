@@ -1,6 +1,7 @@
 #include "sample.h"
 #include "repl_actions.h"
 #include "repl_core.h"
+#include "repl_executor.h"
 #include "repl_audio.h"
 #include "repl_state.h"
 
@@ -171,7 +172,7 @@ int main(int argc, char **argv) {
     glutCreateWindow("OpenGL REPL - Display List Dynamic Rendering");
 
     repl_init_gl();
-    atexit(repl_state_render_destroy_resources);
+    atexit(repl_executor_destroy_resources);
     init_predef_vars();
     for (int i = 0; i < g_num_predef_vars; i++)
         if (strcmp(g_predef_vars[i].name, "t") == 0) { *repl_state_variables_mut()->time_var_idx = i; break; }

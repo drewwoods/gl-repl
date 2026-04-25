@@ -320,7 +320,6 @@ named wrappers so the rule is mechanically checkable.
 
 | File | Calls | Nature |
 |------|-------|--------|
-| `repl_state.c` | ~19 | 5 tess callbacks (`glBegin`/`glEnd`/`glNormal3dv`/`glColor4dv`/`glVertex3dv`) + `repl_state_render_init_resources`/`_destroy_resources` (`gluNewQuadric`, `gluQuadric*`, `gluNewTess`, `gluTessCallback`, `gluDelete*`) |
 | `repl_replay.c` | 9 | `execute_replay_fade_batches()` push/pop attrib, lighting/blend setup, `glColor4f`, `glPushMatrix`/`glPopMatrix` around the executor call |
 | `sample.h` | 9 | inline `apply_transform_cmd`, `apply_tracked_transform_cmd`, `unwind_tracked_transform_stack`, `_repl_point_size` (`NO_POINT_PARAMETER` shim) |
 | `repl_actions.c` | 1 | `glutGetModifiers()` SHIFT check on the time-toggle config row |
@@ -686,7 +685,7 @@ could drift. `make test_ui` should pass unchanged (it exercises
 `render_help()` and other public `ui_*` renderers; the `gl2d_*`
 rename is internal to those renderers).
 
-#### 11b. Move tessellation/GLU resources into `repl_executor.c`
+#### 11b. Move tessellation/GLU resources into `repl_executor.c` ✅ DONE
 
 **Problem.** `repl_state.c` owns the static `g_quadric` / `g_tess`
 storage, the 5 GLU tess callbacks, and the
@@ -703,6 +702,10 @@ itself: putting them in a hypothetical `scene_resources.c` would
 force `repl_executor.c` to include `scene_*.h`, inverting the
 layering (the executor is the pipeline layer below scene
 rendering — scene calls executor, not the other way around).
+
+**Status.** The move landed. `repl_executor.c` now owns the quadric/
+tessellator storage, callback wiring, and public init/destroy API;
+`repl_state.c` is back to facade-only runtime state.
 
 **Files this slice touches:** `repl_state.{c,h}`,
 `repl_executor.{c,h}`, `repl_core.c` (one caller), `sample.c`

@@ -1,4 +1,5 @@
 #include "repl_core_internal.h"
+#include "repl_state.h"
 
 #define g_panel_frac (*repl_state_code_panel_mut()->panel_frac)
 

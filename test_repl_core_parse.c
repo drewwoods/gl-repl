@@ -1,4 +1,6 @@
 #include "repl_core_internal.h"
+#include "repl_parser.h"
+#include "repl_state.h"
 
 #define g_status (repl_state_status_mut()->text)
 
@@ -145,7 +147,7 @@ int main(void) {
         repl_state_edit_line_set(0);
 
         GLCmd cmd;
-        ReplParseContext ctx = { repl_state_document_count(), NULL, 0 };
+        ReplParseContext ctx = { repl_state_document_count(), NULL, 0, 0 };
         memset(&cmd, 0, sizeof(cmd));
         int ok = repl_parse_command_ctx("glVertex3f(1, 2, 3)", &cmd, &ctx);
         ASSERT_TRUE("context parse ok", ok == 1);

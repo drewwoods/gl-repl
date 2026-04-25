@@ -1,7 +1,6 @@
 #define REPL_STATE_IMPLEMENTATION
 #include "repl_state.h"
 
-#include "repl_clipboard.h"
 #include "repl_command_store.h"
 #include "repl_core.h"
 #include "repl_core_internal.h"
@@ -110,10 +109,6 @@ float            g_accum_jitter_y = 0.0f;
 int              g_multisample_enabled = CFG_DEFAULT_MULTISAMPLE;
 int              g_line_smooth_enabled = CFG_DEFAULT_LINE_SMOOTH;
 int              g_init_attenuate_points = CFG_DEFAULT_ATTENUATE_POINTS;
-GLUquadric      *g_quadric = NULL;
-GLUtesselator   *g_tess = NULL;
-TessVertex       g_tess_verts[TESS_VERT_BUF_SIZE];
-int              g_tess_vert_count = 0;
 SceneLight       g_lights[MAX_LIGHTS] = {
     { GL_LIGHT0, 1,
       { 2.0f, 4.0f, 5.0f, 0.0f },
@@ -340,10 +335,6 @@ static ReplRuntimeState g_repl_state = {
         .multisample_enabled = &g_multisample_enabled,
         .line_smooth_enabled = &g_line_smooth_enabled,
         .point_attenuation_enabled = &g_init_attenuate_points,
-        .quadric = &g_quadric,
-        .tess = &g_tess,
-        .tess_verts = g_tess_verts,
-        .tess_vert_count = &g_tess_vert_count,
         .lights = g_lights,
         .clear_color = g_clear_color,
     },
@@ -384,61 +375,6 @@ static void ensure_t_var_idx(void) {
         strcmp(g_predef_vars[g_t_var_idx].name, "t") == 0)
         return;
     g_t_var_idx = find_predef_var_idx("t");
-}
-
-static void repl_render_tess_vtx_begin_cb(GLenum mode) {
-    glBegin(mode);
-}
-
-static void repl_render_tess_vtx_end_cb(void) {
-    glEnd();
-}
-
-static void repl_render_tess_vtx_cb(void *vertex_data) {
-    TessVertex *v = (TessVertex *)vertex_data;
-    glNormal3dv(v->normal);
-    glColor4dv(v->color);
-    glVertex3dv(v->pos);
-}
-
-static void repl_render_tess_comb_cb(GLdouble coords[3],
-                                     void *vertex_data[4],
-                                     GLfloat weight[4],
-                                     void **out_data) {
-    if (g_tess_vert_count >= TESS_VERT_BUF_SIZE) {
-        *out_data = NULL;
-        return;
-    }
-    TessVertex *v = &g_tess_verts[g_tess_vert_count++];
-    v->pos[0] = coords[0];
-    v->pos[1] = coords[1];
-    v->pos[2] = coords[2];
-    for (int c = 0; c < 3; c++)
-        v->normal[c] = 0.0;
-    for (int c = 0; c < 4; c++)
-        v->color[c] = 0.0;
-    for (int j = 0; j < 4; j++) {
-        if (!vertex_data[j])
-            continue;
-        TessVertex *src = (TessVertex *)vertex_data[j];
-        for (int c = 0; c < 3; c++)
-            v->normal[c] += weight[j] * src->normal[c];
-        for (int c = 0; c < 4; c++)
-            v->color[c] += weight[j] * src->color[c];
-    }
-    double len = sqrt(v->normal[0] * v->normal[0] +
-                      v->normal[1] * v->normal[1] +
-                      v->normal[2] * v->normal[2]);
-    if (len > 1e-9) {
-        v->normal[0] /= len;
-        v->normal[1] /= len;
-        v->normal[2] /= len;
-    }
-    *out_data = v;
-}
-
-static void repl_render_tess_err_cb(GLenum err) {
-    (void)err;
 }
 
 static void reset_time_state(void) {
@@ -1061,48 +997,6 @@ void repl_state_render_reset_defaults(void) {
     g_clear_color[1] = 0.10f;
     g_clear_color[2] = 0.13f;
     g_clear_color[3] = 1.0f;
-}
-
-void repl_state_render_init_resources(void) {
-    if (g_quadric) {
-        gluDeleteQuadric(g_quadric);
-        g_quadric = NULL;
-    }
-    if (g_tess) {
-        gluDeleteTess(g_tess);
-        g_tess = NULL;
-    }
-
-    g_tess_vert_count = 0;
-
-    g_quadric = gluNewQuadric();
-    gluQuadricNormals(g_quadric, GLU_SMOOTH);
-    gluQuadricTexture(g_quadric, GL_FALSE);
-
-    g_tess = gluNewTess();
-    gluTessCallback(g_tess, GLU_TESS_BEGIN,
-                    (void (*)())repl_render_tess_vtx_begin_cb);
-    gluTessCallback(g_tess, GLU_TESS_END,
-                    (void (*)())repl_render_tess_vtx_end_cb);
-    gluTessCallback(g_tess, GLU_TESS_VERTEX,
-                    (void (*)())repl_render_tess_vtx_cb);
-    gluTessCallback(g_tess, GLU_TESS_COMBINE,
-                    (void (*)())repl_render_tess_comb_cb);
-    gluTessCallback(g_tess, GLU_TESS_ERROR,
-                    (void (*)())repl_render_tess_err_cb);
-    gluTessCallback(g_tess, GLU_TESS_EDGE_FLAG, (void (*)())glEdgeFlag);
-}
-
-void repl_state_render_destroy_resources(void) {
-    if (g_quadric) {
-        gluDeleteQuadric(g_quadric);
-        g_quadric = NULL;
-    }
-    if (g_tess) {
-        gluDeleteTess(g_tess);
-        g_tess = NULL;
-    }
-    g_tess_vert_count = 0;
 }
 
 const ReplRenderDerivedState *repl_state_render_derived(void) {

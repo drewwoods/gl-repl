@@ -1,17 +1,20 @@
 /*
- * repl_executor.c -- Flat command execution and execution-time state helpers.
+ * repl_executor.c -- Flat command execution, GLU resource lifetimes,
+ * and execution-time state helpers.
  */
 #include "sample.h"
 #include "repl_core_internal.h"
+#include "repl_executor.h"
 #include "repl_state.h"
 
 #define EXEC_RENDER (repl_state_render_mut())
-#define g_lights          (EXEC_RENDER->lights)
-#define g_clear_color     (EXEC_RENDER->clear_color)
-#define g_quadric         (*EXEC_RENDER->quadric)
-#define g_tess            (*EXEC_RENDER->tess)
-#define g_tess_verts      (EXEC_RENDER->tess_verts)
-#define g_tess_vert_count (*EXEC_RENDER->tess_vert_count)
+#define g_lights      (EXEC_RENDER->lights)
+#define g_clear_color (EXEC_RENDER->clear_color)
+
+static GLUquadric    *g_quadric = NULL;
+static GLUtesselator *g_tess = NULL;
+static TessVertex     g_tess_verts[TESS_VERT_BUF_SIZE];
+static int            g_tess_vert_count = 0;
 
 /* Execution context adjusted by repl_replay.c for fade-batch rendering. */
 static float g_execute_alpha_scale = 1.0f;
@@ -24,6 +27,105 @@ static float g_execute_alpha_scale = 1.0f;
  * back to the enclosing CMD_BEGIN / CMD_TESS_BEGIN_POLYGON when vertex-mode
  * batches land mid-primitive, so the full primitive still renders. */
 static int g_execute_skip_geom_before_pc = 0;
+
+#ifdef NO_POINT_PARAMETER
+/* Approximate glPointParameterfv distance attenuation by scaling every
+ * glPointSize call by 2/cam_dist. Defined here so the override only affects
+ * the executor's user-facing CMD_POINT_SIZE dispatch. */
+static void _repl_point_size(GLfloat sz) {
+    float cam_dist = *repl_state_camera()->dist;
+    glPointSize(cam_dist > 0.0f ? sz * (2.0f / (0.5 * cam_dist)) : sz);
+}
+#define glPointSize _repl_point_size
+#endif
+
+static void repl_render_tess_vtx_begin_cb(GLenum mode) {
+    glBegin(mode);
+}
+
+static void repl_render_tess_vtx_end_cb(void) {
+    glEnd();
+}
+
+static void repl_render_tess_vtx_cb(void *vertex_data) {
+    TessVertex *v = (TessVertex *)vertex_data;
+    glNormal3dv(v->normal);
+    glColor4dv(v->color);
+    glVertex3dv(v->pos);
+}
+
+static void repl_render_tess_comb_cb(GLdouble coords[3],
+                                     void *vertex_data[4],
+                                     GLfloat weight[4],
+                                     void **out_data) {
+    if (g_tess_vert_count >= TESS_VERT_BUF_SIZE) {
+        *out_data = NULL;
+        return;
+    }
+    TessVertex *v = &g_tess_verts[g_tess_vert_count++];
+    v->pos[0] = coords[0];
+    v->pos[1] = coords[1];
+    v->pos[2] = coords[2];
+    for (int c = 0; c < 3; c++)
+        v->normal[c] = 0.0;
+    for (int c = 0; c < 4; c++)
+        v->color[c] = 0.0;
+    for (int j = 0; j < 4; j++) {
+        if (!vertex_data[j])
+            continue;
+        TessVertex *src = (TessVertex *)vertex_data[j];
+        for (int c = 0; c < 3; c++)
+            v->normal[c] += weight[j] * src->normal[c];
+        for (int c = 0; c < 4; c++)
+            v->color[c] += weight[j] * src->color[c];
+    }
+    double len = sqrt(v->normal[0] * v->normal[0] +
+                      v->normal[1] * v->normal[1] +
+                      v->normal[2] * v->normal[2]);
+    if (len > 1e-9) {
+        v->normal[0] /= len;
+        v->normal[1] /= len;
+        v->normal[2] /= len;
+    }
+    *out_data = v;
+}
+
+static void repl_render_tess_err_cb(GLenum err) {
+    (void)err;
+}
+
+void repl_executor_destroy_resources(void) {
+    if (g_quadric) {
+        gluDeleteQuadric(g_quadric);
+        g_quadric = NULL;
+    }
+    if (g_tess) {
+        gluDeleteTess(g_tess);
+        g_tess = NULL;
+    }
+    g_tess_vert_count = 0;
+}
+
+void repl_executor_init_resources(void) {
+    repl_executor_destroy_resources();
+
+    g_quadric = gluNewQuadric();
+    gluQuadricNormals(g_quadric, GLU_SMOOTH);
+    gluQuadricTexture(g_quadric, GL_FALSE);
+
+    g_tess = gluNewTess();
+    gluTessCallback(g_tess, GLU_TESS_BEGIN,
+                    (void (*)())repl_render_tess_vtx_begin_cb);
+    gluTessCallback(g_tess, GLU_TESS_END,
+                    (void (*)())repl_render_tess_vtx_end_cb);
+    gluTessCallback(g_tess, GLU_TESS_VERTEX,
+                    (void (*)())repl_render_tess_vtx_cb);
+    gluTessCallback(g_tess, GLU_TESS_COMBINE,
+                    (void (*)())repl_render_tess_comb_cb);
+    gluTessCallback(g_tess, GLU_TESS_ERROR,
+                    (void (*)())repl_render_tess_err_cb);
+    gluTessCallback(g_tess, GLU_TESS_EDGE_FLAG, (void (*)())glEdgeFlag);
+}
 
 void repl_copy_predef_values(float *dst, int max_vals) {
     int n;
@@ -50,6 +152,64 @@ void repl_restore_predef_values(const float *src, int max_vals) {
 void repl_execute_set_fade_context(float alpha_scale, int skip_geom_before_pc) {
     g_execute_alpha_scale = alpha_scale;
     g_execute_skip_geom_before_pc = skip_geom_before_pc;
+}
+
+void apply_transform_cmd(const GLCmd *cmd) {
+    if (!cmd)
+        return;
+
+    switch (cmd->type) {
+    case CMD_TRANSLATE3F:
+        glTranslatef(cmd->args[0], cmd->args[1], cmd->args[2]);
+        break;
+    case CMD_SCALEF:
+        glScalef(cmd->args[0], cmd->args[1], cmd->args[2]);
+        break;
+    case CMD_ROTATEF:
+        glRotatef(cmd->args[0], cmd->args[1], cmd->args[2], cmd->args[3]);
+        break;
+    case CMD_PUSH_MATRIX:
+        glPushMatrix();
+        break;
+    case CMD_POP_MATRIX:
+        glPopMatrix();
+        break;
+    default:
+        break;
+    }
+}
+
+void apply_tracked_transform_cmd(const GLCmd *cmd, int *matrix_depth) {
+    if (!cmd)
+        return;
+
+    switch (cmd->type) {
+    case CMD_PUSH_MATRIX:
+        glPushMatrix();
+        if (matrix_depth)
+            (*matrix_depth)++;
+        break;
+    case CMD_POP_MATRIX:
+        if (!matrix_depth || *matrix_depth > 0) {
+            glPopMatrix();
+            if (matrix_depth)
+                (*matrix_depth)--;
+        }
+        break;
+    default:
+        apply_transform_cmd(cmd);
+        break;
+    }
+}
+
+void unwind_tracked_transform_stack(int *matrix_depth) {
+    if (!matrix_depth)
+        return;
+
+    while (*matrix_depth > 0) {
+        glPopMatrix();
+        (*matrix_depth)--;
+    }
 }
 
 int apply_state_cmd(const GLCmd *cmd, float alpha_scale) {

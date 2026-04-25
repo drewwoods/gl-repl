@@ -3,6 +3,7 @@
 #include "repl_camera_controls.h"
 #include "repl_clipboard.h"
 #include "repl_code_panel_layout.h"
+#include "repl_config.h"
 #include "repl_export.h"
 #include "repl_replay.h"
 #include "repl_keys.h"

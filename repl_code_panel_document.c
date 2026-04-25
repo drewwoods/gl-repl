@@ -9,6 +9,7 @@
 #include "repl_export.h"
 #include "repl_code_panel_document.h"
 #include "repl_replay_annotations.h"
+#include "repl_source_scope.h"
 #include "repl_state.h"
 
 #define IMPORT_EXPORT_STATE (repl_state_import_export())
