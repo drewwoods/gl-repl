@@ -12,6 +12,7 @@
 #include "repl_core.h"
 #include "repl_core_internal.h"
 #include "repl_config.h"
+#include "repl_editor.h"
 #include "repl_keys.h"
 #include "repl_state.h"
 #include "ui_panels.h"
@@ -168,7 +169,7 @@ void repl_cfg_cycle_row(int row, int delta) {
     }
 
     if (item->key == REPL_CONFIG_AUTO_TIME) {
-        if (glutGetModifiers() & GLUT_ACTIVE_SHIFT) {
+        if (repl_editor_active_modifiers() & GLUT_ACTIVE_SHIFT) {
             repl_reset_time_to_zero();
             set_status(*repl_state_variables()->time_playing ? "Time: reset to 0"
                                                              : "Time: reset to 0 (paused)");
