@@ -450,11 +450,15 @@ two rendering layers.
   `display_func()`, which is the sole master that dispatches
   `render_3d_scene()` and the 2D overlay sequence per frame.
 - Both layers may freely include `repl_*` headers (pipeline plus
-  domain models).
-- The 2D primitives (`scene_2d_*` in the scene layer, `ui_2d_*` in the
-  UI layer) are duplicated per layer rather than shared, so each layer
-  can evolve drawing conventions independently. `glRectf` replaces
-  the former `draw_quad` shared helper at every call site.
+  domain models) and project-agnostic header libraries from
+  `include/`.
+- Generic 2D primitives live in `include/gl_2d.h`
+  (`gl2d_begin`/`gl2d_end`/`gl2d_draw_string`) — a header-only
+  library alongside `gl_includes.h`, `stb_image.h`, and `utils.h`.
+  The criterion is **pure function of arguments, no project state**.
+  Both `scene_*` and `ui_*` include this header; pure-model `repl_*`
+  files do not (they don't draw). `glRectf` replaces the former
+  `draw_quad` shared helper at every call site.
 
 ### Grandfathered exceptions
 
