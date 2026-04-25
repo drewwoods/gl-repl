@@ -56,7 +56,7 @@ Function naming across all public headers now follows the consistent `repl_<modu
 **Wave 2 (Session 2, THIS COMMIT):**
 - **repl_clipboard.h:** 4 functions renamed (clear_selection → repl_clipboard_clear_selection, etc.)
 - **repl_executor.h:** 3 functions renamed (apply_transform_cmd → repl_executor_apply_transform_cmd, etc.)
-- **repl_export.h:** 2 functions renamed (save_output → repl_save_output, load_from_file → repl_load_from_file)
+- **repl_export.h:** 2 functions renamed (save_output → repl_export_save_output, load_from_file → repl_export_load_from_file)
 - **repl_audio.h:** Already compliant with repl_audio_* naming (no changes required)
 
 **Total scope:** 59 functions renamed across 9 header modules, 25+ implementation files updated, all 2503 tests passing.
