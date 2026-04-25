@@ -131,6 +131,28 @@ failure should be treated as a regression unless explicitly rebaselined.
    - Remove stale comments and vague TODOs; turn real defects, such as the ocean-grid camera TODO, into specific tracked fixes.
    - Normalize names: `*_idx` for indexes, `*_count` for counts, `source_line_idx`, `flat_cmd_idx`, `indent_cols`, `visible_line_count`, `command_store`, `render_config`, and `workspace_dir`.
 
+11. **Segregate live GL calls to scene/UI modules plus `repl_executor.c`**
+   - Cross-cutting tactical follow-up to stages 7-9: the structural splits
+     are now in place, but live GL calls still leak from a few
+     pipeline-layer files (`repl_core.c`, `repl_state.c`, `repl_replay.c`)
+     and from inline helpers in `sample.h`. Tighten the boundary so the
+     only `.c` files that issue OpenGL/GLU drawing calls are `scene_*.c`,
+     `ui_*.c`, and `repl_executor.c`.
+   - Establish UI/scene independence as a hard rule: `ui_*` and `scene_*`
+     do not include each other's headers; generic 2D primitives move to
+     `include/gl_2d.h`, a project-agnostic header-only library alongside
+     `gl_includes.h`/`stb_image.h`/`utils.h`.
+   - Funnel the remaining GLUT input/feedback calls in `repl_editor.c`
+     and `repl_actions.c` through local helpers so `glutPostRedisplay`,
+     `glutSetCursor`, and `glutGetModifiers` appear in one place per
+     module.
+   - Lock both boundaries with `make check-gl-boundaries` and
+     `make check-layer-coupling` grep guards wired into `make test`.
+   - Tactical breakdown: see [`feature/repl-cleanup-punch-list.md`](./repl-cleanup-punch-list.md)
+     §11. The punch-list lays out the work as a precursor Phase 1 (prof
+     module extraction, per-slice naming) followed by Phase 2 (six
+     `refactor:` commits 11a-11f).
+
 ## Test Plan
 - After baseline stabilization: run `make test-stubs TEST_JOBS=4` after every stage.
 - For parser/command-store work: run `make test_repl_core_parse`, `make test_repl_core_commit`, `make test_repl_core_format`, `make test_repl_core_io`, and `make test_repl_core_examples`.

@@ -404,9 +404,10 @@ communicate only through `repl_*` models above them and through
 the orchestrator in `repl_core.c`'s `display_func()`, which is
 the sole master that dispatches `render_3d_scene()` and the 2D
 overlay sequence per frame. Both layers may freely include
-`repl_*` headers (pipeline + models). The 2D primitives
-(`scene_2d_*` in the scene layer, `ui_2d_*` in the UI layer)
-are duplicated per layer rather than shared.
+`repl_*` headers (pipeline + models) and project-agnostic
+header libraries from `include/` (e.g. `<gl_2d.h>` for the
+generic `gl2d_begin`/`gl2d_end`/`gl2d_draw_string` primitives).
+Generic GL utilities live in `include/`, not in either layer.
 
 Grandfathered exceptions:
 
