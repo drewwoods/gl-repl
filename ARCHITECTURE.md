@@ -89,9 +89,16 @@ of one monolithic `repl_core.c`.
 - `prof.c`: project-wide CPU timing instrumentation.
 - `sample.c`: application entrypoint, GLUT callback wiring, and buffer swap.
 
-The public API is still `repl_core.h`. Cross-module runtime/test helpers live in
-`repl_core_internal.h`. Shared globals and UI-visible state still live in
-`sample.h`.
+**Public API:** Each module header (`repl_*.h`, `ui_*.h`, `scene_*.h`)
+comprehensively documents its public API with module overview, lifecycle
+integration, and detailed function descriptions. The headers are stand-alone
+references — read any module's header to understand its API without consulting
+other headers or implementation files. For a detailed explanation of the
+header documentation standard, see [`MODULES.md` → Header Documentation
+Standard](MODULES.md#header-documentation-standard).
+
+Cross-module runtime/test helpers live in `repl_core_internal.h`. Shared
+globals and UI-visible state still live in `sample.h`.
 
 For the layered overview and the editor-adjacent ownership diagram, see
 [`MODULES.md`](MODULES.md).

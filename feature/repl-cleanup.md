@@ -131,6 +131,15 @@ failure should be treated as a regression unless explicitly rebaselined.
    - Remove stale comments and vague TODOs; turn real defects, such as the ocean-grid camera TODO, into specific tracked fixes.
    - Normalize names: `*_idx` for indexes, `*_count` for counts, `source_line_idx`, `flat_cmd_idx`, `indent_cols`, `visible_line_count`, `command_store`, `render_config`, and `workspace_dir`.
 
+10a. **Comprehensive public API header documentation** ✅ DONE
+   - Every module header (`*.h`) now documents its public API consistently with module overview, lifecycle notes, type definitions, and detailed function descriptions.
+   - Headers are stand-alone references: read any header from top to bottom to understand the module's API without consulting other headers or implementation files.
+   - Documentation covers all 26 `repl_*` headers, 7 `ui_*` headers, and 8 `scene_*` headers.
+   - `MODULES.md` now includes a "Header Documentation Standard" section explaining the consistent structure applied across all modules.
+   - `ARCHITECTURE.md` updated to emphasize that comprehensive header documentation is the authoritative API reference.
+   - All function names follow the module-name convention: `repl_<module>_<action>()`, `ui_<module>_<action>()`, `scene_<module>_<action>()`.
+   - Completed in current session; all 2541 tests passing.
+
 11. **Segregate live GL calls to scene/UI modules plus `repl_executor.c`**
    - Cross-cutting tactical follow-up to stages 7-9: the structural splits
      are now in place, but live GL calls still leak from a few

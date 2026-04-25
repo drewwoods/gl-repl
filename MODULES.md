@@ -6,6 +6,11 @@ layered overview, the ownership diagram, the render/model split, and
 the current boundary/open-edge notes — it should read in under five
 minutes.
 
+**Public API:** Every module header (`*.h`) is comprehensively documented with
+module overview, lifecycle notes, and detailed function descriptions. Start
+with the relevant header for a module's public API — all documentation includes
+usage context, parameter descriptions, and lifecycle integration points.
+
 ## Responsibility Layers
 
 Every source file belongs to one of six layers. File-name prefixes
@@ -374,9 +379,15 @@ File prefixes partition the tree by responsibility:
   (except `repl_core.c`, which owns the init wrapper and the display
   callback, and `repl_executor.c`, which dispatches GL drawing
   for flat commands).
+  **Public API:** `repl_<module>_<action>()` naming. Headers document
+  module overview, lifecycle integration, and all public functions.
 - `ui_*` — 2D rendering (code panel + floating overlays/popups).
   These files call OpenGL and read state from the `repl_*` models.
+  **Public API:** `ui_<module>_<action>()` naming. Headers document
+  UI component purpose, rendering model, and input handling.
 - `scene_*` — 3D viewport rendering.
+  **Public API:** `scene_<module>_<action>()` naming. Headers document
+  rendering phase, guide/overlay purpose, and integration with frame pipeline.
 - Bare (no prefix): `sample`, `cmd_format`, `gl_stub_counts`.
 
 Deliberate exceptions that stay under `repl_*` even though they're
@@ -391,8 +402,10 @@ UI-adjacent:
 - `repl_inline_rename`, `repl_var_drag` — input buffers / drag
   transactions. They mutate state; they don't render.
 
-The prefix tells you the layer; read the file's top-of-file
-comment for the one-line charter.
+The prefix tells you the layer. Read the public header file (`*.h`) for
+comprehensive API documentation including module overview, lifecycle,
+and detailed function descriptions. Read the file's top-of-file
+comment in the implementation (`.c`) for implementation notes.
 
 ### Layering rules
 
@@ -450,3 +463,31 @@ The grep guards `make check-gl-boundaries` and
 - Adding persisted state? Add the focused field/accessor in `repl_state.h`
   and register the storage in `repl_state.c`. Add a temporary compat extern
   only when existing callers cannot migrate in the same slice.
+
+## Header Documentation Standard
+
+Each module's public API header (`*.h`) follows a consistent structure:
+
+1. **Module overview** — One-paragraph description of the module's role,
+   key abstractions, and primary use cases. Example: "Renders optional
+   visual overlays on top of user geometry: polygon outlines (highlighting
+   current editing context), vertex numbers (for reference), normal vectors
+   (showing surface orientation), and vertex position guides."
+
+2. **Lifecycle documentation** — When/where/how the module is initialized,
+   updated per-frame, and what state it maintains. Example: "Toggled via F5
+   key or config menu. Respects depth-masking state so they don't interfere
+   with orbit target highlighting."
+
+3. **Type definitions** — Shared structs and enums (if any) used by the API.
+
+4. **Function documentation** — Detailed per-function headers describing:
+   - Purpose and return value
+   - Parameters with types and meanings
+   - When the function is called (frame phase, input event, etc.)
+   - Integration points with other modules
+   - Usage constraints or preconditions
+
+All headers are stand-alone: you can read a header from top to bottom and
+understand the module's public API without reading the implementation or
+other headers. Cross-module details reference file names for navigation.
