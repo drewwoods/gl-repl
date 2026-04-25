@@ -64,6 +64,7 @@
 #include "cmd_format.h"
 #include "scene_render.h"
 #include "ui_panels.h"
+#include "ui_menu_bar.h"
 #include "ui_autocomplete_panel.h"
 #include "ui_help_overlay.h"
 #include "ui_variable_panel.h"
