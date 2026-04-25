@@ -5,7 +5,7 @@
 #define SCENE_RENDER_H
 
 void scene_render_init_gl(void);
-void render_replay_fade_pass(void);
-void render_3d_scene(void);
+void scene_render_replay_fade_pass(void);
+void scene_render_3d_scene(void);
 
 #endif /* SCENE_RENDER_H */

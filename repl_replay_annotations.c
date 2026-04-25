@@ -624,7 +624,7 @@ static int build_replay_assignment_inline_comment(int cmd_idx, int flat_idx,
     return 0;
 }
 
-int code_panel_get_command_display_text(int cmd_idx, char *out, int out_size) {
+int repl_replay_code_panel_get_command_display_text(int cmd_idx, char *out, int out_size) {
     const ReplReplayRuntimeState *replay = repl_state_replay();
     int flat_idx;
     char comment[MAX_INPUT_LEN];

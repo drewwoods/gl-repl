@@ -561,13 +561,13 @@ static void display_func(void) {
     update_render_state_strings();
     update_cam_lines();
 
-    /* 3D scene - render_3d_scene() handles optional accumulation-buffer AA */
+    /* 3D scene - scene_render_3d_scene() handles optional accumulation-buffer AA */
     /* Reset subsection accumulators so timings across all AA samples sum up
-     * correctly before the first (or only) render_3d_scene() call. */
+     * correctly before the first (or only) scene_render_3d_scene() call. */
     for (ProfSection section_idx = PROF_SCENE_3D_SETUP; section_idx <= PROF_SCENE_3D_HUD; section_idx++)
         prof_accum_reset(section_idx);
     prof_begin(PROF_SCENE_3D);
-    render_3d_scene();
+    scene_render_3d_scene();
     prof_end(PROF_SCENE_3D);
     /* Commit the accumulated subsection totals now that all AA samples are done. */
     for (ProfSection section_idx = PROF_SCENE_3D_SETUP; section_idx <= PROF_SCENE_3D_HUD; section_idx++)
