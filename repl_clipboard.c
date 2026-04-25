@@ -13,20 +13,20 @@
 #include "repl_undo.h"
 #include "repl_state.h"
 
-void clear_selection(void) {
+void repl_clipboard_clear_selection(void) {
     repl_state_selection_clear();
 }
 
-int sel_active(void) {
+int repl_clipboard_sel_active(void) {
     return repl_state_selection_anchor() >= 0 && repl_state_selection_end_idx() >= 0;
 }
 
-int sel_lo(void) {
+int repl_clipboard_sel_lo(void) {
     int a = repl_state_selection_anchor(), e = repl_state_selection_end_idx();
     return a < e ? a : e;
 }
 
-int sel_hi(void) {
+int repl_clipboard_sel_hi(void) {
     int a = repl_state_selection_anchor(), e = repl_state_selection_end_idx();
     return a > e ? a : e;
 }
@@ -83,8 +83,8 @@ static void clipboard_copy_range(int start, int count) {
 }
 
 static int selected_cmd_range(int *out_start, int *out_count) {
-    int start = sel_lo();
-    int hi = sel_hi();
+    int start = repl_clipboard_sel_lo();
+    int hi = repl_clipboard_sel_hi();
     int n = repl_state_document_count();
 
     if (hi >= n)
@@ -124,7 +124,7 @@ static int current_cut_range(int *out_start, int *out_count) {
     int count;
     int n = repl_state_document_count();
 
-    if (sel_active())
+    if (repl_clipboard_sel_active())
         return selected_cmd_range(out_start, out_count);
 
     if (repl_state_edit_line() >= n)
@@ -143,11 +143,11 @@ static int current_cut_range(int *out_start, int *out_count) {
 
 void repl_clipboard_copy_current(void) {
     if (repl_state_insert_mode()) {
-        clear_selection();
+        repl_clipboard_clear_selection();
         return;
     }
 
-    if (sel_active()) {
+    if (repl_clipboard_sel_active()) {
         int start;
         int count;
 
@@ -191,7 +191,7 @@ void repl_clipboard_copy_current(void) {
         repl_state_clipboard_count_set(0);
     }
 
-    clear_selection();
+    repl_clipboard_clear_selection();
 }
 
 void repl_clipboard_cut_current(void) {
@@ -199,13 +199,13 @@ void repl_clipboard_cut_current(void) {
     int count;
 
     if (repl_state_insert_mode()) {
-        clear_selection();
+        repl_clipboard_clear_selection();
         return;
     }
 
     if (!current_cut_range(&start, &count)) {
         repl_state_clipboard_count_set(0);
-        clear_selection();
+        repl_clipboard_clear_selection();
         return;
     }
 

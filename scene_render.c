@@ -272,7 +272,7 @@ static void draw_replay_tess_preview(const SceneRenderConfig *config) {
 
             if (is_transform_cmd(repl_state_flat_program_cmds_mut()[i].type)) {
                 if (!in_contour)
-                    apply_tracked_transform_cmd(&repl_state_flat_program_cmds_mut()[i], &matrix_depth);
+                    repl_executor_apply_tracked_transform_cmd(&repl_state_flat_program_cmds_mut()[i], &matrix_depth);
                 continue;
             }
 
@@ -300,7 +300,7 @@ static void draw_replay_tess_preview(const SceneRenderConfig *config) {
         }
         if (in_contour)
             glEnd();
-        unwind_tracked_transform_stack(&matrix_depth);
+        repl_executor_unwind_tracked_transform_stack(&matrix_depth);
     }
     glPopMatrix();
 
@@ -686,7 +686,7 @@ static void render_3d_scene_pass(void) {
                                              i, tg_cam_view);
 
         if (is_transform_cmd(flat_cmds[i].type)) {
-            apply_tracked_transform_cmd(&flat_cmds[i], &matrix_depth);
+            repl_executor_apply_tracked_transform_cmd(&flat_cmds[i], &matrix_depth);
         } else if ((config.show_vpoints || config.replay_vertex_points) &&
                    (flat_cmds[i].type == CMD_VERTEX3F ||
                     flat_cmds[i].type == CMD_TESS_VERTEX)) {
@@ -697,7 +697,7 @@ static void render_3d_scene_pass(void) {
         }
     }
     glPointSize(1.0f);
-    unwind_tracked_transform_stack(&matrix_depth);
+    repl_executor_unwind_tracked_transform_stack(&matrix_depth);
     }
     glPopMatrix();
     glDisable(GL_BLEND);

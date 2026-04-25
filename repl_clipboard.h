@@ -3,10 +3,10 @@
 
 #include "sample.h"
 
-void clear_selection(void);
-int  sel_active(void);
-int  sel_lo(void);
-int  sel_hi(void);
+void repl_clipboard_clear_selection(void);
+int  repl_clipboard_sel_active(void);
+int  repl_clipboard_sel_lo(void);
+int  repl_clipboard_sel_hi(void);
 void repl_selection_start(int line_idx);
 int  repl_selection_end(void);
 void repl_selection_set_end(int line_idx);

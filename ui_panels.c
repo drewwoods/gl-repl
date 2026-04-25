@@ -589,7 +589,7 @@ void render_code_panel(void) {
                             glRectf((float)(1.0f), (float)((float)(line_y - 3)), (float)(1.0f)+(float)(3.0f), (float)((float)(line_y - 3))+(float)(LINE_H));
                             glDisable(GL_BLEND);
                         }
-                        if (sel_active() && i >= sel_lo() && i <= sel_hi()) {
+                        if (repl_clipboard_sel_active() && i >= repl_clipboard_sel_lo() && i <= repl_clipboard_sel_hi()) {
                             glEnable(GL_BLEND);
                             glColor4f(0.20f, 0.30f, 0.50f, 0.55f);
                             glRectf((float)(0), (float)((float)(line_y - 3)), (float)(0)+(float)((float)panel_w), (float)((float)(line_y - 3))+(float)(LINE_H));
@@ -1123,7 +1123,7 @@ void handle_code_panel_click(int mx, int my) {
     *repl_state_code_panel_mut()->cursor_visible = 1;
     *repl_state_code_panel_mut()->blink_tick = 0;
     clear_autocomplete_state();
-    clear_selection();
+    repl_clipboard_clear_selection();
 }
 
 int handle_code_panel_press(int mx, int my) {

@@ -137,7 +137,7 @@ static void remove_cmd_range_unchecked(int start, int count, const char *what) {
         repl_state_edit_line_set(repl_state_document_count());
     load_line_to_input(repl_state_edit_line());
     mark_normals_dirty();
-    clear_selection();
+    repl_clipboard_clear_selection();
     snprintf(msg, sizeof(msg), "%s %d line%s",
              what, count, count > 1 ? "s" : "");
     set_status(msg);
@@ -604,7 +604,7 @@ static void keyboard_begin_key(unsigned char key) {
      * selection; everything else clears it before processing the key. */
     if (key != KEY_CTRL_C && key != KEY_CTRL_D && key != KEY_BACKSPACE &&
         key != KEY_CTRL_X && key != KEY_DELETE)
-        clear_selection();
+        repl_clipboard_clear_selection();
 
     *code_panel_state->scroll_follow_cursor = 1;
 }
@@ -720,9 +720,9 @@ static int handle_line_delete_key_route(unsigned char key) {
             if (repl_state_edit_line() <= repl_state_document_count())
                 load_line_to_input(repl_state_edit_line());
             set_status("Insert mode exited");
-        } else if (sel_active()) {
-            int start = sel_lo();
-            int hi = sel_hi();
+        } else if (repl_clipboard_sel_active()) {
+            int start = repl_clipboard_sel_lo();
+            int hi = repl_clipboard_sel_hi();
             if (hi >= repl_state_document_count())
                 hi = repl_state_document_count() - 1;
             delete_cmd_range(start, hi - start + 1, "Deleted");
@@ -954,9 +954,9 @@ static int handle_accum_samples_key_route(unsigned char key) {
 
 static int handle_text_delete_key_route(unsigned char key) {
     if (key == KEY_BACKSPACE || key == KEY_DELETE) {
-        if (sel_active() && !repl_state_insert_mode()) {
-            int start = sel_lo();
-            int hi = sel_hi();
+        if (repl_clipboard_sel_active() && !repl_state_insert_mode()) {
+            int start = repl_clipboard_sel_lo();
+            int hi = repl_clipboard_sel_hi();
             if (hi >= repl_state_document_count())
                 hi = repl_state_document_count() - 1;
             delete_cmd_range(start, hi - start + 1, "Deleted");
@@ -1231,7 +1231,7 @@ static int handle_vertical_special_key_route(int key) {
             *ac->selected_idx = (*ac->selected_idx - 1 + *ac->match_count) % *ac->match_count;
             update_selected_autocomplete_preview();
         } else if (editor_get_modifiers() & GLUT_ACTIVE_SHIFT) {
-            if (!sel_active()) {
+            if (!repl_clipboard_sel_active()) {
                 repl_selection_start(repl_state_edit_line());
             }
             int selection_end = repl_selection_end();
@@ -1240,7 +1240,7 @@ static int handle_vertical_special_key_route(int key) {
             repl_selection_set_end(selection_end);
             navigate_to_line(selection_end);
         } else {
-            clear_selection();
+            repl_clipboard_clear_selection();
             navigate_to_line(repl_state_edit_line() - 1);
         }
         return 1;
@@ -1253,7 +1253,7 @@ static int handle_vertical_special_key_route(int key) {
             *ac->selected_idx = (*ac->selected_idx + 1) % *ac->match_count;
             update_selected_autocomplete_preview();
         } else if (editor_get_modifiers() & GLUT_ACTIVE_SHIFT) {
-            if (!sel_active()) {
+            if (!repl_clipboard_sel_active()) {
                 repl_selection_start(repl_state_edit_line());
             }
             int selection_end = repl_selection_end();
@@ -1262,7 +1262,7 @@ static int handle_vertical_special_key_route(int key) {
             repl_selection_set_end(selection_end);
             navigate_to_line(selection_end);
         } else {
-            clear_selection();
+            repl_clipboard_clear_selection();
             navigate_to_line(repl_state_edit_line() + 1);
         }
         return 1;

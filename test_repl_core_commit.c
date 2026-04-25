@@ -453,16 +453,16 @@ int main(void) {
     repl_feed_line_public("glEnd();");
     handle_code_panel_press(CODE_MARGIN_X + 1, code_panel_mouse_y_for_cmd(0));
     ASSERT_TRUE("mouse press selects current line for edit", repl_state_edit_line() == 0);
-    ASSERT_TRUE("mouse press starts with no selection", !sel_active());
+    ASSERT_TRUE("mouse press starts with no selection", !repl_clipboard_sel_active());
     handle_code_panel_drag(CODE_MARGIN_X + 1, code_panel_mouse_y_for_cmd(2));
-    ASSERT_TRUE("mouse drag activates selection", sel_active());
-    ASSERT_TRUE("mouse drag selection low", sel_lo() == 0);
-    ASSERT_TRUE("mouse drag selection high", sel_hi() == 2);
+    ASSERT_TRUE("mouse drag activates selection", repl_clipboard_sel_active());
+    ASSERT_TRUE("mouse drag selection low", repl_clipboard_sel_lo() == 0);
+    ASSERT_TRUE("mouse drag selection high", repl_clipboard_sel_hi() == 2);
     ASSERT_TRUE("mouse drag navigates to drag end", repl_state_edit_line() == 2);
     handle_code_panel_release();
     repl_keyboard_func(8, 0, 0);
     ASSERT_TRUE("backspace deletes selected lines", repl_state_document_count() == 0);
-    ASSERT_TRUE("backspace clears selection after delete", !sel_active());
+    ASSERT_TRUE("backspace clears selection after delete", !repl_clipboard_sel_active());
     ASSERT_TRUE("backspace keeps edit line at start after delete", repl_state_edit_line() == 0);
 
     repl_reset_state(); declare_test_vars();

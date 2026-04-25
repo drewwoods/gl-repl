@@ -670,7 +670,7 @@ int main() {
         ASSERT_STR("delete block: last survives", repl_state_document_cmds_mut()[1].source, "  glVertex3f(4, 4, 4);");
         ASSERT_INT("delete block: edit_line at deletion start", repl_state_edit_line(), 1);
         ASSERT_STR("delete block: input reloaded", repl_state_editor_input()->input, "glVertex3f(4, 4, 4)");
-        ASSERT_TRUE("delete block: selection cleared", !sel_active());
+        ASSERT_TRUE("delete block: selection cleared", !repl_clipboard_sel_active());
         assert_status_contains("delete block: status line count", "Deleted 3 lines");
     }
 
@@ -691,7 +691,7 @@ int main() {
         ASSERT_STR("backspace reversed selection: first survives", repl_state_document_cmds_mut()[0].source, "  glVertex3f(0, 0, 0);");
         ASSERT_STR("backspace reversed selection: second survives", repl_state_document_cmds_mut()[1].source, "  glVertex3f(1, 1, 1);");
         ASSERT_INT("backspace reversed selection: edit_line", repl_state_edit_line(), 2);
-        ASSERT_TRUE("backspace reversed selection: selection cleared", !sel_active());
+        ASSERT_TRUE("backspace reversed selection: selection cleared", !repl_clipboard_sel_active());
     }
 
     /* 8b2. Ctrl+D deletes a selected range through its own key path */
@@ -711,7 +711,7 @@ int main() {
         ASSERT_STR("ctrl-d selection: first survives", repl_state_document_cmds_mut()[0].source, "  glVertex3f(0, 0, 0);");
         ASSERT_STR("ctrl-d selection: last survives", repl_state_document_cmds_mut()[1].source, "  glVertex3f(4, 4, 4);");
         ASSERT_INT("ctrl-d selection: edit_line", repl_state_edit_line(), 1);
-        ASSERT_TRUE("ctrl-d selection: selection cleared", !sel_active());
+        ASSERT_TRUE("ctrl-d selection: selection cleared", !repl_clipboard_sel_active());
         assert_status_contains("ctrl-d selection: status", "Deleted 3 lines");
     }
 
@@ -752,7 +752,7 @@ int main() {
         ASSERT_INT("copy block: clipboard count", repl_state_clipboard_count(), 2);
         ASSERT_STR("copy block: first copied", repl_state_clipboard_cmds_mut()[0].source, "    glVertex3f(0, 0, 0);");
         ASSERT_STR("copy block: second copied", repl_state_clipboard_cmds_mut()[1].source, "    glVertex3f(1, 1, 1);");
-        ASSERT_TRUE("copy block: selection cleared", !sel_active());
+        ASSERT_TRUE("copy block: selection cleared", !repl_clipboard_sel_active());
 
         repl_state_edit_line_set(5);
         repl_state_insert_mode_set(0);
@@ -794,7 +794,7 @@ int main() {
         ASSERT_INT("cut block: leaves 2 cmds", repl_state_document_count(), 2);
         ASSERT_STR("cut block: first survivor", repl_state_document_cmds_mut()[0].source, "  glVertex3f(0, 0, 0);");
         ASSERT_STR("cut block: second survivor", repl_state_document_cmds_mut()[1].source, "  glVertex3f(3, 3, 3);");
-        ASSERT_TRUE("cut block: selection cleared", !sel_active());
+        ASSERT_TRUE("cut block: selection cleared", !repl_clipboard_sel_active());
 
         repl_undo_pop_snapshot();
         ASSERT_INT("cut undo: restores 4 cmds", repl_state_document_count(), 4);
@@ -905,7 +905,7 @@ int main() {
         ASSERT_INT("copy insert mode: cmd count unchanged", repl_state_document_count(), 2);
         ASSERT_INT("copy insert mode: clipboard unchanged", repl_state_clipboard_count(), 1);
         ASSERT_STR("copy insert mode: clipboard source unchanged", repl_state_clipboard_cmds_mut()[0].source, "  glVertex3f(2, 2, 2);");
-        ASSERT_TRUE("copy insert mode: selection cleared", !sel_active());
+        ASSERT_TRUE("copy insert mode: selection cleared", !repl_clipboard_sel_active());
 
         repl_state_selection_set(0, 1);
         repl_state_insert_mode_set(1);
@@ -913,7 +913,7 @@ int main() {
         ASSERT_INT("cut insert mode: cmd count unchanged", repl_state_document_count(), 2);
         ASSERT_INT("cut insert mode: clipboard unchanged", repl_state_clipboard_count(), 1);
         ASSERT_STR("cut insert mode: clipboard source unchanged", repl_state_clipboard_cmds_mut()[0].source, "  glVertex3f(2, 2, 2);");
-        ASSERT_TRUE("cut insert mode: selection cleared", !sel_active());
+        ASSERT_TRUE("cut insert mode: selection cleared", !repl_clipboard_sel_active());
     }
 
     /* 8k. Backspace in insert mode edits input instead of selected source lines */

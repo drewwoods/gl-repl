@@ -2492,7 +2492,7 @@ static void emit_export_scaffold(FILE *f, const ExportScaffoldContext *ctx) {
     }
 }
 
-void save_output(const char *filename) {
+void repl_save_output(const char *filename) {
     FILE *f = fopen(filename, "w");
     if (!f) {
         set_status("Error: cannot write output.c");
@@ -2658,7 +2658,7 @@ static void import_process_line(ImportState *s, const char *p, const char *raw) 
     (void)import_try_snippet_body_line(s, p);
 }
 
-int load_from_file(const char *filename) {
+int repl_load_from_file(const char *filename) {
     FILE *f = fopen(filename, "r");
     if (!f) return 0;
 
