@@ -4,7 +4,7 @@
  * Extracted from sample.c for maintainability.
  */
 #include "sample.h"
-#include "repl_core.h"
+#include "repl_replay.h"
 #include "scene_axes.h"
 #include "scene_backdrop.h"
 #include "scene_geometry_guides.h"
@@ -18,6 +18,32 @@
 #include "ui_panels.h"
 #include "prof.h"
 #include "./include/gl_2d.h"
+
+/* Sub-pixel jitter offsets (units: fraction of one pixel).
+ * Table is ordered so the first N entries form a good N-sample set.
+ * Supports 1, 2, 4, 8, or 16 samples. */
+static const float g_jitter_table[MAX_ACCUM_SAMPLES][2] = {
+    {  0.250f,  0.250f },
+    { -0.250f, -0.250f },/* 2  */
+    {  0.250f, -0.250f },
+    { -0.250f,  0.250f },  /* 4  */
+    { -0.125f,  0.375f },
+    {  0.375f,  0.125f },
+    { -0.375f, -0.125f },
+    {  0.125f, -0.375f }, /* 8  */
+    {  0.375f, -0.375f },
+    { -0.375f,  0.375f },
+    {  0.125f,  0.125f },
+    { -0.125f, -0.125f },
+    {  0.375f,  0.375f },
+    { -0.375f, -0.375f },
+    {  0.000f,  0.500f },
+    {  0.500f,  0.000f },  /* 16 */
+};
+
+void scene_render_init_gl(void) {
+    scene_lights_init_global_ambient();
+}
 
 /* ========================================================================= */
 /* 3D scene helpers                                                           */
@@ -468,7 +494,21 @@ static void draw_orbit_target(const FrameRenderContext *frame_ctx) {
     scene_render_pop_state();
 }
 
-void render_3d_scene(void) {
+static void scene_apply_clear_color(FlatProgramView flat_program) {
+    float cr = 0.10f, cg = 0.10f, cb = 0.13f, ca = 1.0f;
+    for (int ci = 0; ci < flat_program.cmd_count; ci++) {
+        if (flat_program.cmds[ci].valid &&
+            flat_program.cmds[ci].type == CMD_CLEAR_COLOR) {
+            cr = flat_program.cmds[ci].args[0];
+            cg = flat_program.cmds[ci].args[1];
+            cb = flat_program.cmds[ci].args[2];
+            ca = flat_program.cmds[ci].args[3];
+        }
+    }
+    glClearColor(cr, cg, cb, ca);
+}
+
+static void render_3d_scene_pass(void) {
     SceneRenderConfig config;
     FrameRenderContext frame_ctx;
     scene_render_config_init(&config);
@@ -476,7 +516,6 @@ void render_3d_scene(void) {
 
     prof_begin(PROF_SCENE_3D_SETUP);
     glPushAttrib(GL_ALL_ATTRIB_BITS);
-    glViewport(config.scene_x, config.scene_y, config.scene_w, config.scene_h);
 
     scene_apply_projection(&config);
     scene_apply_camera_view(&config);
@@ -621,4 +660,39 @@ void render_3d_scene(void) {
         draw_replay_hud(&config);
     glPopAttrib();
     prof_accum_end(PROF_SCENE_3D_HUD);
+}
+
+void render_3d_scene(void) {
+    SceneRenderConfig viewport_config;
+    const ReplRenderState *render = repl_state_render();
+    ReplRenderState *render_mut = repl_state_render_mut();
+    const ReplReplayRuntimeState *replay = repl_state_replay();
+    FlatProgramView flat_program = repl_state_flat_program_view();
+
+    scene_render_config_init(&viewport_config);
+    glViewport(viewport_config.scene_x, viewport_config.scene_y,
+               viewport_config.scene_w, viewport_config.scene_h);
+    scene_apply_clear_color(flat_program);
+
+    if (*render->use_accum && *render->accum_aa_enabled && *render->accum_samples > 1) {
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_ACCUM_BUFFER_BIT);
+        float weight = 1.0f / (float)*render->accum_samples;
+        for (int sample_idx = 0; sample_idx < *render->accum_samples; sample_idx++) {
+            glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+            if (*replay->active)
+                replay_restore_baseline_predef_values();
+            *render_mut->accum_jitter_x = g_jitter_table[sample_idx % MAX_ACCUM_SAMPLES][0];
+            *render_mut->accum_jitter_y = g_jitter_table[sample_idx % MAX_ACCUM_SAMPLES][1];
+            render_3d_scene_pass();
+            glAccum(GL_ACCUM, weight);
+        }
+        *render_mut->accum_jitter_x = 0.0f;
+        *render_mut->accum_jitter_y = 0.0f;
+        glAccum(GL_RETURN, 1.0f);
+    } else {
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+        if (*replay->active)
+            replay_restore_baseline_predef_values();
+        render_3d_scene_pass();
+    }
 }

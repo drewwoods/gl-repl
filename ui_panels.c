@@ -7,7 +7,6 @@
 #include "sample.h"
 #include "repl_state.h"
 #include "repl_export.h"
-#include "repl_actions.h"
 #include "ui_color_picker.h"
 #include "repl_code_panel_document.h"
 #include "repl_core.h"
@@ -385,6 +384,10 @@ void render_code_panel(void) {
     int text_x = idx_x + idx_col_w;
     int visible_lines;
     int total_lines;
+
+    /* Own the full-window overlay viewport so the code panel and the UI
+     * stack beneath it render in the same 2D projection. */
+    glViewport(0, 0, *repl_state_viewport()->window_w, *repl_state_viewport()->window_h);
 
     /* When cursor is on a vertex, find which normal/color lines feed it so
      * we can draw a gutter accent bar on them below. */
@@ -942,7 +945,7 @@ void render_scene_status(void) {
                    badge_y + badge_d * 0.5f + sinf(a) * (badge_d * 0.5f));
     }
     glEnd();
-    gl2d_draw_string((float)(badge_x + badge_d / 2 - FONT_SMALL_W / 2 + 1),
+    gl2d_draw_string((float)(badge_x + badge_d * 0.5f - FONT_SMALL_W * 0.5f + 1.0f),
                 (float)text_y, "!", FONT_SMALL);
 
     int tx = badge_x + badge_d + 8;

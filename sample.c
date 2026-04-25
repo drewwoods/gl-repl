@@ -94,6 +94,7 @@ static void print_usage(const char *prog) {
 
 static void display_func(void) {
     repl_display_func();
+    glutSwapBuffers();
 }
 
 static void reshape_func(int w, int h) {
