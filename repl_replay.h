@@ -1,15 +1,49 @@
 /*
- * repl_replay.h - Replay state machine and replay rendering helpers.
+ * repl_replay.h - Step-by-step execution visualization and state machine.
+ *
+ * Replay mode allows users to step through an expanded command stream one
+ * command at a time (or with variable speed), seeing geometry appear
+ * progressively. Toggleable via Ctrl+G or the Replay header button.
+ *
+ * Execution model: The replay state machine (OFF/PLAYING/PAUSED/DONE) tracks
+ * a program counter (PC) into the flat command array. During playback, the
+ * executor only renders commands with index < exec_limit() (the PC clamped
+ * by replay speed/pause state). Geometry fades in/out as new geometry appears
+ * via a ring buffer of fading geometry snapshots (ReplayFadeBatch).
+ *
+ * Controls (routed from repl_editor.c):
+ *   Step forward (Space or >) - advance PC by 1 command
+ *   Step back (< or backspace) - retreat PC and re-execute from the new point
+ *   Play/pause (P) - toggle PLAYING/PAUSED state
+ *   Speed up/down (+ / -) - adjust playback speed multiplier
+ *   Seek (numeric keys 0-9, or click on sidebar) - jump to line/command
+ *
+ * State preservation: When stepping back, the executor restores the baseline
+ * predefined variable values (for 't' and slider variables) and re-executes
+ * from the new PC. This allows "time travel" even when expressions are
+ * time-dependent (e.g., objects rotating with sin(t*speed)).
+ *
+ * Fade batches: Old geometry (that was rendered in a previous frame) is
+ * captured in a snapshot at execution time. As the PC advances, the old
+ * snapshot fades out over several frames while new geometry fades in,
+ * giving visual feedback about what's being added. The ring buffer holds up
+ * to REPLAY_FADE_BATCH_MAX snapshots.
  */
 #ifndef REPL_REPLAY_H
 #define REPL_REPLAY_H
 
+/* A snapshot of geometry from [old_pc, new_pc) that fades out as new geometry
+ * appears. age is the fade timestamp (incremented by repl_replay_tick_fade_batches).
+ * Multiple batches can be active simultaneously (ring buffer). */
 typedef struct {
     int   old_pc;
     int   new_pc;
     float age;
 } ReplayFadeBatch;
 
+/* Read-only view over the active fade batches. Valid until the next call to
+ * repl_replay_tick_fade_batches(). Accessed by scene_render.c to render
+ * fading geometry overlays. */
 typedef struct {
     const ReplayFadeBatch *batches;
     int                    count;
@@ -17,28 +51,52 @@ typedef struct {
 
 #define REPLAY_FADE_BATCH_MAX 24
 
-void repl_replay_start(void);
-void repl_replay_stop(void);
-void repl_replay_advance(void);
-void repl_replay_tick_fade_batches(float dt);
-void repl_replay_seek(int new_pc);
-int  repl_replay_seek_to_src_line(int target_line);
-void repl_replay_step_back(void);
-void repl_replay_restart_from_beginning(void);
-void repl_replay_speed_adjust(float factor);
+/* --- State machine control -------------------------------------------- */
 
-int  repl_replay_exec_limit(void);
-int  repl_replay_has_active_fades(void);
-int  repl_replay_fill_base_limit(void);
+void repl_replay_start(void);                /* Enter PLAYING state */
+void repl_replay_stop(void);                 /* Enter OFF state, clear history */
+void repl_replay_advance(void);              /* Increment PC by 1 */
+void repl_replay_tick_fade_batches(float dt);/* Age and decay active fades */
+
+/* --- Seek operations --------------------------------------------------- */
+
+void repl_replay_seek(int new_pc);           /* Jump to PC; restores baseline vars */
+int  repl_replay_seek_to_src_line(int target_line);
+void repl_replay_step_back(void);            /* Retreat PC; re-execute from new point */
+void repl_replay_restart_from_beginning(void);
+
+/* --- Speed / playback control ----------------------------------------- */
+
+void repl_replay_speed_adjust(float factor); /* Multiply speed by factor (1.5 = faster) */
+
+/* --- Query / renderer helpers ----------------------------------------- */
+
+int  repl_replay_exec_limit(void);           /* Current PC (what executor renders to) */
+int  repl_replay_has_active_fades(void);     /* Any fades currently visible? */
+int  repl_replay_fill_base_limit(void);      /* Highest PC reached so far */
+
+/* Compute skip limits for performance: scene_render.c can skip rendering
+ * commands in ranges where no fade is active (optimization). */
 int  repl_replay_compute_fade_skip_limits(int *out_limits, int max_count);
+
 ReplayFadeBatchView repl_replay_fade_batches_view(void);
 float repl_replay_batch_alpha(const ReplayFadeBatch *batch);
+
+/* Per-frame: updates exec_limit based on speed multiplier and pause state,
+ * captures geometry snapshots for new fades. Called each frame. */
 int  repl_replay_prepare_frame(int full_flat_count);
+
+/* --- Variable state for step-back --------------------------------------- */
+
 void repl_replay_restore_baseline_predef_values(void);
 void repl_replay_copy_baseline_predef_values(float *dst, int max_vals);
 
+/* --- Input routing (called from repl_editor.c) ----------------------- */
+
 int  repl_replay_handle_key(unsigned char key);
 int  repl_replay_handle_special_key(int key);
+
+/* --- Benchmark / test helpers ----------------------------------------- */
 
 int  repl_bench_fade_install(const int *old_pcs, const int *new_pcs,
                              int count, float age);
