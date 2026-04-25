@@ -18,6 +18,7 @@
 #include "repl_replay_annotations.h"
 #include "prof.h"
 #include "ui_panels.h"
+#include "./include/gl_2d.h"
 
 #define IMPORT_EXPORT_STATE (repl_state_import_export())
 #define g_workspace_header_lines (IMPORT_EXPORT_STATE->workspace_header_lines)
@@ -182,7 +183,7 @@ static void code_panel_draw_segment(int x, int y, const char *text,
 
     memcpy(buf, text + start, (size_t)len);
     buf[len] = '\0';
-    draw_string((float)x, (float)y, buf, font);
+    gl2d_draw_string((float)x, (float)y, buf, font);
 }
 
 /* Menu bar lives in repl_menu_bar.c. */
@@ -219,10 +220,7 @@ static void code_panel_draw_search_highlights(const char *text, int search_row_i
         else
             glColor4f(0.25f, 0.45f, 0.85f, 0.30f);
 
-        draw_quad((float)(seg_x + (draw_start - seg_start) * FONT_W),
-                  (float)(y - 2),
-                  (float)((draw_end - draw_start) * FONT_W),
-                  (float)(FONT_H + 4));
+        glRectf((float)((float)(seg_x + (draw_start - seg_start) * FONT_W)), (float)((float)(y - 2)), (float)((float)(seg_x + (draw_start - seg_start) * FONT_W))+(float)((float)((draw_end - draw_start) * FONT_W)), (float)((float)(y - 2))+(float)(FONT_H + 4));
     }
 
     if (drew)
@@ -263,16 +261,16 @@ static void render_active_input_rows(int panel_w, int text_x, int idx_x,
             if (wrap_row == 0) {
                 char ln[16];
                 snprintf(ln, sizeof(ln), "%3d", file_line);
-                draw_string((float)CODE_MARGIN_X, (float)(*io_line_y), ln, FONT_MONO);
+                gl2d_draw_string((float)CODE_MARGIN_X, (float)(*io_line_y), ln, FONT_MONO);
                 if (idx_text) {
                     glColor3f(0.45f, 0.50f, 0.65f);
-                    draw_string((float)idx_x, (float)(*io_line_y), idx_text, FONT_MONO);
+                    gl2d_draw_string((float)idx_x, (float)(*io_line_y), idx_text, FONT_MONO);
                 }
             }
 
             glEnable(GL_BLEND);
             glColor4f(0.15f, 0.18f, 0.28f, 0.70f);
-            draw_quad(0, (float)(*io_line_y - 3), (float)panel_w, (float)LINE_H);
+            glRectf((float)(0), (float)((float)(*io_line_y - 3)), (float)(0)+(float)((float)panel_w), (float)((float)(*io_line_y - 3))+(float)(LINE_H));
             glDisable(GL_BLEND);
 
             if (wrap_row == 0 && indent_chars > 0) {
@@ -283,7 +281,7 @@ static void render_active_input_rows(int panel_w, int text_x, int idx_x,
                 memset(spaces, ' ', (size_t)draw_indent);
                 spaces[draw_indent] = '\0';
                 glColor3f(0.30f, 0.30f, 0.38f);
-                draw_string((float)text_x, (float)(*io_line_y), spaces, FONT_MONO);
+                gl2d_draw_string((float)text_x, (float)(*io_line_y), spaces, FONT_MONO);
             }
 
             glColor3f(0.95f, 0.95f, 0.90f);
@@ -300,7 +298,7 @@ static void render_active_input_rows(int panel_w, int text_x, int idx_x,
                 if (ac->ghost[0] && cursor_pos == input_len) {
                     glEnable(GL_BLEND);
                     glColor4f(0.50f, 0.55f, 0.65f, 0.55f);
-                    draw_string((float)cursor_x, (float)(*io_line_y),
+                    gl2d_draw_string((float)cursor_x, (float)(*io_line_y),
                                 ac->ghost, FONT_MONO);
                     glDisable(GL_BLEND);
                     hint_x += (int)strlen(ac->ghost) * FONT_W;
@@ -309,7 +307,7 @@ static void render_active_input_rows(int panel_w, int text_x, int idx_x,
                 if (ac->hint[0] && cursor_pos == input_len) {
                     glEnable(GL_BLEND);
                     glColor4f(0.56f, 0.62f, 0.72f, 0.38f);
-                    draw_string((float)hint_x, (float)(*io_line_y),
+                    gl2d_draw_string((float)hint_x, (float)(*io_line_y),
                                 ac->hint, FONT_MONO);
                     glDisable(GL_BLEND);
                 }
@@ -317,8 +315,7 @@ static void render_active_input_rows(int panel_w, int text_x, int idx_x,
                 if (*cp->cursor_visible && !*srch->active) {
                     glEnable(GL_BLEND);
                     glColor4f(0.90f, 0.80f, 0.25f, 0.85f);
-                    draw_quad((float)cursor_x, (float)(*io_line_y - 2),
-                              2.0f, (float)(FONT_H + 2));
+                    glRectf((float)((float)cursor_x), (float)((float)(*io_line_y - 2)), (float)((float)cursor_x)+(float)(2.0f), (float)((float)(*io_line_y - 2))+(float)(FONT_H + 2));
                     glDisable(GL_BLEND);
                 }
 
@@ -427,13 +424,13 @@ void render_code_panel(void) {
     prof_end(PROF_CODE_PANEL_LAYOUT);
     prof_begin(PROF_CODE_PANEL_CHROME);
 
-    begin_2d();
+    gl2d_begin(*repl_state_viewport()->window_w, *repl_state_viewport()->window_h);
 
     /* Background */
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
     glColor4f(0.06f, 0.06f, 0.10f, 0.92f);
-    draw_quad((float)cp_x, (float)cp_y, (float)cp_w, (float)cp_h);
+    glRectf((float)((float)cp_x), (float)((float)cp_y), (float)((float)cp_x)+(float)((float)cp_w), (float)((float)cp_y)+(float)(cp_h));
 
     /* Border: divider between code panel and scene */
     glColor4f(0.30f, 0.30f, 0.50f, 0.80f);
@@ -477,7 +474,7 @@ void render_code_panel(void) {
                 if (wrap_row == 0) {                                             \
                     glColor3f(0.30f, 0.30f, 0.38f);                            \
                     { char ln[16]; snprintf(ln, sizeof(ln), "%3d", file_line);  \
-                      draw_string((float)CODE_MARGIN_X, (float)line_y,          \
+                      gl2d_draw_string((float)CODE_MARGIN_X, (float)line_y,          \
                                   ln, FONT_MONO); }                             \
                 }                                                               \
                 set_color;                                                       \
@@ -583,17 +580,15 @@ void render_code_panel(void) {
                             glEnable(GL_BLEND);
                             glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
                             glColor4f(0.10f, 0.35f, 0.15f, 0.55f);
-                            draw_quad(0, (float)(line_y - 3),
-                                      (float)panel_w, (float)LINE_H);
+                            glRectf((float)(0), (float)((float)(line_y - 3)), (float)(0)+(float)((float)panel_w), (float)((float)(line_y - 3))+(float)(LINE_H));
                             glColor4f(0.20f, 0.90f, 0.30f, 0.85f);
-                            draw_quad(1.0f, (float)(line_y - 3), 3.0f, (float)LINE_H);
+                            glRectf((float)(1.0f), (float)((float)(line_y - 3)), (float)(1.0f)+(float)(3.0f), (float)((float)(line_y - 3))+(float)(LINE_H));
                             glDisable(GL_BLEND);
                         }
                         if (sel_active() && i >= sel_lo() && i <= sel_hi()) {
                             glEnable(GL_BLEND);
                             glColor4f(0.20f, 0.30f, 0.50f, 0.55f);
-                            draw_quad(0, (float)(line_y - 3),
-                                      (float)panel_w, (float)LINE_H);
+                            glRectf((float)(0), (float)((float)(line_y - 3)), (float)(0)+(float)((float)panel_w), (float)((float)(line_y - 3))+(float)(LINE_H));
                             glDisable(GL_BLEND);
                         }
                         if (i == highlight_normal_idx || i == highlight_color_idx) {
@@ -603,20 +598,20 @@ void render_code_panel(void) {
                                 glColor4f(0.40f, 0.80f, 0.95f, 0.85f);
                             else
                                 glColor4f(0.95f, 0.85f, 0.30f, 0.85f);
-                            draw_quad(1.0f, (float)(line_y - 3), 3.0f, (float)LINE_H);
+                            glRectf((float)(1.0f), (float)((float)(line_y - 3)), (float)(1.0f)+(float)(3.0f), (float)((float)(line_y - 3))+(float)(LINE_H));
                             glDisable(GL_BLEND);
                         }
                         if (wrap_row == 0) {
                             glColor3f(0.30f, 0.30f, 0.38f);
                             { char ln[16]; snprintf(ln, sizeof(ln), "%3d", file_line);
-                              draw_string((float)CODE_MARGIN_X, (float)line_y,
+                              gl2d_draw_string((float)CODE_MARGIN_X, (float)line_y,
                                           ln, FONT_MONO); }
                             if (*repl_state_presentation()->show_vertex_indices && is_vertex) {
                                 char idx_s[16];
                                 snprintf(idx_s, sizeof(idx_s),
                                          primitive_vnums_exact ? "v%d" : "vn", vnum);
                                 glColor3f(0.45f, 0.50f, 0.65f);
-                                draw_string((float)idx_x, (float)line_y,
+                                gl2d_draw_string((float)idx_x, (float)line_y,
                                             idx_s, FONT_MONO);
                             }
                             /* Color swatch for glColor / glClearColor */
@@ -659,16 +654,15 @@ void render_code_panel(void) {
                                 glBlendFunc(GL_SRC_ALPHA,
                                             GL_ONE_MINUS_SRC_ALPHA);
                                 glColor4f(0.10f, 0.25f, 0.15f, 0.35f);
-                                draw_quad(0, (float)(line_y - 3),
-                                          (float)panel_w, (float)LINE_H);
+                                glRectf((float)(0), (float)((float)(line_y - 3)), (float)(0)+(float)((float)panel_w), (float)((float)(line_y - 3))+(float)(LINE_H));
                                 glDisable(GL_BLEND);
                                 glColor3f(0.50f, 0.75f, 0.50f);
-                                draw_string((float)text_x, (float)line_y,
+                                gl2d_draw_string((float)text_x, (float)line_y,
                                             subst, FONT_MONO);
                                 if (var_comment[0]) {
                                     int sw = (int)strlen(subst) * FONT_W;
                                     glColor3f(0.40f, 0.55f, 0.40f);
-                                    draw_string((float)(text_x + sw),
+                                    gl2d_draw_string((float)(text_x + sw),
                                                 (float)line_y,
                                                 var_comment, FONT_MONO);
                                 }
@@ -687,11 +681,10 @@ void render_code_panel(void) {
                                     glBlendFunc(GL_SRC_ALPHA,
                                                 GL_ONE_MINUS_SRC_ALPHA);
                                     glColor4f(0.15f, 0.15f, 0.25f, 0.35f);
-                                    draw_quad(0, (float)(line_y - 3),
-                                              (float)panel_w, (float)LINE_H);
+                                    glRectf((float)(0), (float)((float)(line_y - 3)), (float)(0)+(float)((float)panel_w), (float)((float)(line_y - 3))+(float)(LINE_H));
                                     glDisable(GL_BLEND);
                                     glColor3f(0.50f, 0.60f, 0.80f);
-                                    draw_string((float)text_x, (float)line_y,
+                                    gl2d_draw_string((float)text_x, (float)line_y,
                                                 eval_buf, FONT_MONO);
                                     line_y -= LINE_H;
                                 }
@@ -742,12 +735,12 @@ void render_code_panel(void) {
             if (cur >= *cp->scroll && cur < *cp->scroll + visible_lines) {
                 glColor3f(0.30f, 0.30f, 0.38f);
                 { char ln[16]; snprintf(ln, sizeof(ln), "%3d", file_line);
-                  draw_string(CODE_MARGIN_X, line_y, ln, FONT_MONO); }
+                  gl2d_draw_string(CODE_MARGIN_X, line_y, ln, FONT_MONO); }
                 glColor3f(0.28f, 0.28f, 0.35f);
                 { char ind_s[32]; int nc = cmd_indent_chars(repl_state_document_count());
                   if (nc > 31) nc = 31;
                   memset(ind_s, ' ', nc); ind_s[nc] = '\0';
-                  draw_string((float)text_x, (float)line_y, ind_s, FONT_MONO); }
+                  gl2d_draw_string((float)text_x, (float)line_y, ind_s, FONT_MONO); }
                 line_y -= LINE_H;
             }
         }
@@ -792,8 +785,7 @@ void render_code_panel(void) {
 
         glEnable(GL_BLEND);
         glColor4f(0.50f, 0.50f, 0.65f, 0.35f);
-        draw_quad((float)(cp_x + cp_w - 6), (float)thumb_y,
-                  5.0f, (float)thumb_h);
+        glRectf((float)((float)(cp_x + cp_w - 6)), (float)((float)thumb_y), (float)((float)(cp_x + cp_w - 6))+(float)(5.0f), (float)((float)thumb_y)+(float)(thumb_h));
         glDisable(GL_BLEND);
     }
 
@@ -808,7 +800,7 @@ void render_code_panel(void) {
 
         /* Strip bg (#181818) + top divider (#000) */
         glColor4f(0.094f, 0.094f, 0.094f, 0.98f);
-        draw_quad((float)cp_x, (float)sy, (float)cp_w, (float)sh);
+        glRectf((float)((float)cp_x), (float)((float)sy), (float)((float)cp_x)+(float)((float)cp_w), (float)((float)sy)+(float)(sh));
         glColor4f(0.0f, 0.0f, 0.0f, 1.0f);
         glBegin(GL_LINES);
         glVertex2f((float)cp_x,          (float)(sy + sh));
@@ -823,7 +815,7 @@ void render_code_panel(void) {
         snprintf(cmds_buf, sizeof(cmds_buf), "%d/%d cmds",
                  repl_state_flat_program_count(), MAX_COMMANDS);
         glColor3f(0.878f, 0.878f, 0.878f); /* #e0e0e0 - stronger for counts */
-        draw_string((float)tx, (float)text_y, cmds_buf, FONT_SMALL);
+        gl2d_draw_string((float)tx, (float)text_y, cmds_buf, FONT_SMALL);
         tx += (int)strlen(cmds_buf) * FONT_SMALL_W;
 
         #define STATUSBAR_SEP() do {                                    \
@@ -848,7 +840,7 @@ void render_code_panel(void) {
         else
             snprintf(ln_buf, sizeof(ln_buf), "Ln %d", repl_state_edit_line() + 1);
         glColor3f(0.627f, 0.627f, 0.627f); /* #a0a0a0 */
-        draw_string((float)tx, (float)text_y, ln_buf, FONT_SMALL);
+        gl2d_draw_string((float)tx, (float)text_y, ln_buf, FONT_SMALL);
         tx += (int)strlen(ln_buf) * FONT_SMALL_W;
 
         /* AA indicator */
@@ -859,7 +851,7 @@ void render_code_panel(void) {
                 snprintf(aa_buf, sizeof(aa_buf), "AA %dx", *rs->accum_samples);
             else
                 snprintf(aa_buf, sizeof(aa_buf), "AA off");
-            draw_string((float)tx, (float)text_y, aa_buf, FONT_SMALL);
+            gl2d_draw_string((float)tx, (float)text_y, aa_buf, FONT_SMALL);
             tx += (int)strlen(aa_buf) * FONT_SMALL_W;
         }
 
@@ -874,12 +866,12 @@ void render_code_panel(void) {
             int lbl_w = (int)strlen(help_lbl) * FONT_SMALL_W;
             int rx = cp_x + cp_w - CODE_MARGIN_X - lbl_w;
             glColor3f(0.627f, 0.627f, 0.627f);
-            draw_string((float)rx, (float)text_y, help_lbl, FONT_SMALL);
+            gl2d_draw_string((float)rx, (float)text_y, help_lbl, FONT_SMALL);
             int kx = rx - kbd_w - 6;
             int ky = sy + 3;
             int kh = sh - 6;
             glColor4f(0.078f, 0.078f, 0.078f, 1.0f); /* #141414 */
-            draw_quad((float)kx, (float)ky, (float)kbd_w, (float)kh);
+            glRectf((float)((float)kx), (float)((float)ky), (float)((float)kx)+(float)((float)kbd_w), (float)((float)ky)+(float)(kh));
             glColor4f(0.20f, 0.20f, 0.20f, 1.0f); /* #333 */
             glBegin(GL_LINE_LOOP);
             glVertex2f((float)kx,           (float)ky);
@@ -888,7 +880,7 @@ void render_code_panel(void) {
             glVertex2f((float)kx,           (float)(ky + kh));
             glEnd();
             glColor3f(0.733f, 0.733f, 0.733f); /* #bbb */
-            draw_string((float)(kx + 5), (float)(ky + 2), help_kbd, FONT_SMALL);
+            gl2d_draw_string((float)(kx + 5), (float)(ky + 2), help_kbd, FONT_SMALL);
         }
 
         #undef STATUSBAR_SEP
@@ -899,7 +891,7 @@ void render_code_panel(void) {
 
     prof_end(PROF_CODE_PANEL_OVERLAYS);
 
-    end_2d();
+    gl2d_end();
 }
 
 /* ========================================================================= */
@@ -922,14 +914,14 @@ void render_scene_status(void) {
 
     float alpha = *status->ttl > 60 ? 1.0f : (float)*status->ttl / 60.0f;
 
-    begin_2d();
+    gl2d_begin(*repl_state_viewport()->window_w, *repl_state_viewport()->window_h);
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
     /* Design ref: amber error banner - bg #3a2a10, top rule #1a1208, text
      * #f0c070, "!" in bordered circle. */
     glColor4f(0.227f, 0.165f, 0.063f, 0.92f * alpha);
-    draw_quad((float)sc_x, (float)bar_y, (float)sc_w, (float)bar_h);
+    glRectf((float)((float)sc_x), (float)((float)bar_y), (float)((float)sc_x)+(float)((float)sc_w), (float)((float)bar_y)+(float)(bar_h));
     glColor4f(0.102f, 0.071f, 0.031f, alpha);
     glBegin(GL_LINES);
     glVertex2f((float)sc_x,          (float)(bar_y + bar_h));
@@ -950,7 +942,7 @@ void render_scene_status(void) {
                    badge_y + badge_d * 0.5f + sinf(a) * (badge_d * 0.5f));
     }
     glEnd();
-    draw_string((float)(badge_x + badge_d / 2 - FONT_SMALL_W / 2 + 1),
+    gl2d_draw_string((float)(badge_x + badge_d / 2 - FONT_SMALL_W / 2 + 1),
                 (float)text_y, "!", FONT_SMALL);
 
     int tx = badge_x + badge_d + 8;
@@ -967,10 +959,10 @@ void render_scene_status(void) {
         snprintf(msg, sizeof(msg), "%s", status->text);
     }
     glColor4f(0.941f, 0.753f, 0.439f, alpha); /* #f0c070 */
-    draw_string((float)tx, (float)text_y, msg, FONT_SMALL);
+    gl2d_draw_string((float)tx, (float)text_y, msg, FONT_SMALL);
 
     glDisable(GL_BLEND);
-    end_2d();
+    gl2d_end();
 }
 
 

@@ -3,6 +3,7 @@
  */
 #include "sample.h"
 #include "ui_profile_panel.h"
+#include "./include/gl_2d.h"
 #include "ui_panels.h"
 #include "ui_variable_panel.h"
 #include "prof.h"
@@ -177,13 +178,13 @@ void render_profile_panel(void) {
     int panel_x, panel_y;
     profile_panel_rect_for_height(panel_h, &panel_x, &panel_y);
 
-    begin_2d();
+    gl2d_begin(*repl_state_viewport()->window_w, *repl_state_viewport()->window_h);
 
     /* Background */
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
     glColor4f(0.05f, 0.05f, 0.08f, 0.91f);
-    draw_quad((float)panel_x, (float)panel_y, (float)PROF_PANEL_W, (float)panel_h);
+    glRectf((float)((float)panel_x), (float)((float)panel_y), (float)((float)panel_x)+(float)((float)PROF_PANEL_W), (float)((float)panel_y)+(float)panel_h);
 
     /* Border */
     glColor4f(0.35f, 0.35f, 0.55f, 0.85f);
@@ -202,9 +203,9 @@ void render_profile_panel(void) {
 
     /* Title */
     glColor3f(0.85f, 0.90f, 1.00f);
-    draw_string((float)tx, (float)ty, "CPU Profile", FONT_SMALL);
+    gl2d_draw_string((float)tx, (float)ty, "CPU Profile", FONT_SMALL);
     glColor3f(0.40f, 0.42f, 0.50f);
-    draw_string((float)(panel_x + PROF_PANEL_W - hint_width), (float)ty, HINT, FONT_SMALL);
+    gl2d_draw_string((float)(panel_x + PROF_PANEL_W - hint_width), (float)ty, HINT, FONT_SMALL);
 
     ty -= PROF_HEADER_H;
 
@@ -213,9 +214,9 @@ void render_profile_panel(void) {
     int col_avg  = col_last + PROF_COL_LAST_W;
 
     glColor3f(0.45f, 0.50f, 0.62f);
-    draw_string((float)tx,        (float)ty, "Section",  FONT_SMALL);
-    draw_string((float)col_last,  (float)ty, "Last",     FONT_SMALL);
-    draw_string((float)col_avg,   (float)ty, "Avg",      FONT_SMALL);
+    gl2d_draw_string((float)tx,        (float)ty, "Section",  FONT_SMALL);
+    gl2d_draw_string((float)col_last,  (float)ty, "Last",     FONT_SMALL);
+    gl2d_draw_string((float)col_avg,   (float)ty, "Avg",      FONT_SMALL);
     ty -= 2;
 
     /* Thin rule under headings */
@@ -258,7 +259,7 @@ void render_profile_panel(void) {
             glColor3f(0.62f, 0.68f, 0.80f);
         else
             glColor3f(0.72f, 0.78f, 0.90f);
-        draw_string((float)tx, (float)ty, section_label(s), FONT_SMALL);
+        gl2d_draw_string((float)tx, (float)ty, section_label(s), FONT_SMALL);
 
         /* Last / avg values */
         char last_buf[24], avg_buf[24];
@@ -274,11 +275,11 @@ void render_profile_panel(void) {
             else
                 glColor3f(0.60f, 0.88f, 0.60f);
         }
-        draw_string((float)col_last, (float)ty, last_buf, FONT_SMALL);
-        draw_string((float)col_avg,  (float)ty, avg_buf,  FONT_SMALL);
+        gl2d_draw_string((float)col_last, (float)ty, last_buf, FONT_SMALL);
+        gl2d_draw_string((float)col_avg,  (float)ty, avg_buf,  FONT_SMALL);
 
         ty -= PROF_ROW_H;
     }
 
-    end_2d();
+    gl2d_end();
 }

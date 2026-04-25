@@ -3,6 +3,7 @@
  *
  * Pure renderer: reads g_predef_vars, scene rect, and the drag-state
  * accessors from repl_var_drag.c, and draws.  The actual value
+
  * mutation lives in repl_var_drag.c; the editor's mouse handler
  * begins/ends the drag transaction.
  *
@@ -14,6 +15,7 @@
 #include "repl_state.h"
 #include "repl_var_drag.h"
 #include "ui_panels.h"
+#include "./include/gl_2d.h"
 
 /* Local copy of the layout-mode clamp.  Duplicated by repl_editor.c and
  * ui_panels.c; promoting to a shared header is a separate cleanup. */
@@ -137,13 +139,13 @@ void render_var_panel(void) {
     int px, py, pw, ph;
     var_panel_rect(&px, &py, &pw, &ph);
 
-    begin_2d();
+    gl2d_begin(*repl_state_viewport()->window_w, *repl_state_viewport()->window_h);
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
     /* Background */
     glColor4f(0.05f, 0.05f, 0.10f, 0.88f);
-    draw_quad((float)px, (float)py, (float)pw, (float)ph);
+    glRectf((float)((float)px), (float)((float)py), (float)((float)px)+(float)((float)pw), (float)((float)py)+(float)ph);
 
     /* Border */
     glColor4f(0.40f, 0.40f, 0.70f, 0.75f);
@@ -156,7 +158,7 @@ void render_var_panel(void) {
 
     /* Title */
     glColor3f(0.75f, 0.75f, 1.00f);
-    draw_string((float)(px + 6),
+    gl2d_draw_string((float)(px + 6),
                 (float)(py + ph - VAR_PANEL_PAD - 4),
                 "Variables (declared)", FONT_SMALL);
 
@@ -191,24 +193,22 @@ void render_var_panel(void) {
                 glColor4f(0.30f, 0.20f, 0.05f, 0.60f);
             else
                 glColor4f(0.20f, 0.20f, 0.40f, 0.60f);
-            draw_quad((float)(px + 1), (float)row_y,
-                      (float)(pw - 2), (float)VAR_ROW_H);
+            glRectf((float)(px + 1), (float)row_y, (float)(px + 1) + (float)(pw - 2), (float)row_y + (float)VAR_ROW_H);
         }
 
         /* Label */
         glColor3f(0.70f, 0.85f, 0.70f);
-        draw_string((float)label_x, (float)text_y,
+        gl2d_draw_string((float)label_x, (float)text_y,
                     g_predef_vars[i].name, FONT_SMALL);
 
         /* Value */
         char valstr[16]; snprintf(valstr, sizeof(valstr), "%7.3f", (double)val);
         glColor3f(0.90f, 0.90f, 0.60f);
-        draw_string((float)val_x, (float)text_y, valstr, FONT_SMALL);
+        gl2d_draw_string((float)val_x, (float)text_y, valstr, FONT_SMALL);
 
         /* Slider track */
         glColor4f(0.18f, 0.18f, 0.28f, 0.90f);
-        draw_quad((float)track_x, (float)(row_y + 6),
-                  (float)track_w, (float)(VAR_ROW_H - 12));
+        glRectf((float)track_x, (float)(row_y + 6), (float)track_x + (float)track_w, (float)(row_y + 6) + (float)(VAR_ROW_H - 12));
 
         /* Centre tick (marks zero on the log scale) */
         float cx = (float)track_x + (float)track_w * 0.5f;
@@ -230,10 +230,9 @@ void render_var_panel(void) {
         } else {
             glColor4f(0.55f, 0.70f, 1.00f, 0.90f);      /* blue: idle */
         }
-        draw_quad(hx, (float)(row_y + 4),
-                  (float)handle_w, (float)(VAR_ROW_H - 8));
+        glRectf(hx, (float)(row_y + 4), hx + (float)handle_w, (float)(row_y + 4) + (float)(VAR_ROW_H - 8));
     }
 
     glDisable(GL_BLEND);
-    end_2d();
+    gl2d_end();
 }

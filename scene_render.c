@@ -17,6 +17,7 @@
 #include "scene_transform_guides.h"
 #include "ui_panels.h"
 #include "prof.h"
+#include "./include/gl_2d.h"
 
 /* ========================================================================= */
 /* 3D scene helpers                                                           */
@@ -318,14 +319,14 @@ static void draw_replay_hud(const SceneRenderConfig *config) {
 
     scene_render_push_state();
     glViewport(0, 0, *repl_state_viewport()->window_w, *repl_state_viewport()->window_h);
-    begin_2d();
+    gl2d_begin(*repl_state_viewport()->window_w, *repl_state_viewport()->window_h);
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
     /* Panel bg matches the menubar palette: #1d1d1d with subtle green tint
      * on the border so the HUD reads as paired with the green Replay button. */
     glColor4f(0.114f, 0.118f, 0.114f, 0.94f); /* #1d1e1d */
-    draw_quad((float)hud_x, (float)hud_y, (float)hud_w, (float)REPLAY_HUD_HEIGHT);
+    glRectf((float)(hud_x), (float)(hud_y), (float)(hud_x)+(float)(hud_w), (float)(hud_y)+(float)(REPLAY_HUD_HEIGHT));
     glColor4f(0.188f, 0.298f, 0.220f, 0.95f); /* #304c38 */
     glBegin(GL_LINE_LOOP);
     glVertex2f((float)hud_x + 0.5f,                      (float)hud_y + 0.5f);
@@ -345,13 +346,13 @@ static void draw_replay_hud(const SceneRenderConfig *config) {
     if (*replay->state == REPLAY_PLAYING) {
         float bw = 3.0f, gap = 3.0f;
         float by0 = (float)icon_cy - (float)icon_sz * 0.5f;
-        draw_quad((float)icon_cx - bw - gap * 0.5f, by0, bw, (float)icon_sz);
-        draw_quad((float)icon_cx + gap * 0.5f,      by0, bw, (float)icon_sz);
+        glRectf((float)(icon_cx - bw - gap * 0.5f), (float)(by0), (float)(icon_cx - bw - gap * 0.5f) + (float)(bw), (float)(by0) + (float)(icon_sz));
+        glRectf((float)(icon_cx + gap * 0.5f),      (float)(by0), (float)(icon_cx + gap * 0.5f) + (float)(bw), (float)(by0) + (float)(icon_sz));
     } else if (*replay->state == REPLAY_DONE) {
         /* Square - run complete */
         float sx = (float)icon_cx - (float)icon_sz * 0.5f;
         float sy = (float)icon_cy - (float)icon_sz * 0.5f;
-        draw_quad(sx, sy, (float)icon_sz, (float)icon_sz);
+        glRectf((float)(sx), (float)(sy), (float)(sx) + (float)(icon_sz), (float)(sy) + (float)(icon_sz));
     } else {
         /* Play triangle - paused / stopped, click to (re)start */
         float x0 = (float)icon_cx - (float)icon_sz * 0.5f;
@@ -372,7 +373,7 @@ static void draw_replay_hud(const SceneRenderConfig *config) {
              *replay->expand_args ? "Code Expanded" : ""
              );
     glColor3f(UI_ACCENT_GREEN_R, UI_ACCENT_GREEN_G, UI_ACCENT_GREEN_B);
-    draw_string((float)text_col_x,
+    gl2d_draw_string((float)text_col_x,
                 (float)(hud_y + REPLAY_HUD_TEXT_LINE1_Y),
                 progress_txt, FONT_SMALL);
 
@@ -380,7 +381,7 @@ static void draw_replay_hud(const SceneRenderConfig *config) {
     snprintf(count_txt, sizeof(count_txt), "%d / %d",
              *replay->pc, *replay->total_flat_cmds);
     int count_w = (int)strlen(count_txt) * FONT_SMALL_W;
-    draw_string((float)(hud_x + hud_w - REPLAY_HUD_TEXT_PAD_X - count_w),
+    gl2d_draw_string((float)(hud_x + hud_w - REPLAY_HUD_TEXT_PAD_X - count_w),
                 (float)(hud_y + REPLAY_HUD_TEXT_LINE1_Y),
                 count_txt, FONT_SMALL);
 
@@ -389,11 +390,11 @@ static void draw_replay_hud(const SceneRenderConfig *config) {
     int groove_w = hud_w - 2 * REPLAY_HUD_TEXT_PAD_X;
     int groove_y = hud_y + REPLAY_HUD_PROGRESS_Y;
     glColor4f(0.094f, 0.118f, 0.102f, 1.0f);  /* #181e1a */
-    draw_quad((float)groove_x, (float)groove_y,
-              (float)groove_w, (float)REPLAY_HUD_PROGRESS_H);
+    glRectf((float)(groove_x), (float)(groove_y),
+              (float)(groove_x) + (float)(groove_w), (float)(groove_y) + (float)(REPLAY_HUD_PROGRESS_H));
     glColor4f(UI_ACCENT_GREEN_R, UI_ACCENT_GREEN_G, UI_ACCENT_GREEN_B, 1.0f);
-    draw_quad((float)groove_x, (float)groove_y,
-              (float)groove_w * progress, (float)REPLAY_HUD_PROGRESS_H);
+    glRectf((float)(groove_x), (float)(groove_y),
+              (float)(groove_x) + (float)(groove_w * progress), (float)(groove_y) + (float)(REPLAY_HUD_PROGRESS_H));
     glColor4f(0.227f, 0.298f, 0.243f, 1.0f);  /* #3a4c3e border */
     glBegin(GL_LINE_LOOP);
     glVertex2f((float)groove_x + 0.5f,                     (float)groove_y + 0.5f);
@@ -406,12 +407,12 @@ static void draw_replay_hud(const SceneRenderConfig *config) {
     snprintf(kbd_txt, sizeof(kbd_txt),
              "Space pause  |  +/- speed  |  m mode  |  e expand |  %c %c step |  Esc stop", 0xAB, 0xBB);
     glColor3f(0.533f, 0.533f, 0.533f);  /* #888 */
-    draw_string((float)text_col_x,
+    gl2d_draw_string((float)text_col_x,
                 (float)(hud_y + REPLAY_HUD_TEXT_LINE2_Y),
                 kbd_txt, FONT_SMALL);
 
     glDisable(GL_BLEND);
-    end_2d();
+    gl2d_end();
     scene_render_pop_state();
 }
 

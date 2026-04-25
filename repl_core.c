@@ -544,47 +544,6 @@ void repl_reformat_commands(void) {
 }
 
 /* ========================================================================= */
-/* 2D rendering helpers                                                       */
-/* ========================================================================= */
-
-void draw_string(float x, float y, const char *s, void *font) {
-    glRasterPos2f(x, y);
-    for (; *s; s++)
-        glutBitmapCharacter(font, (unsigned char)*s);
-}
-
-void draw_quad(float x, float y, float w, float h) {
-    glBegin(GL_QUADS);
-    glVertex2f(x, y);
-    glVertex2f(x + w, y);
-    glVertex2f(x + w, y + h);
-    glVertex2f(x, y + h);
-    glEnd();
-}
-
-void begin_2d(void) {
-    glMatrixMode(GL_PROJECTION);
-    glPushMatrix();
-    glLoadIdentity();
-    gluOrtho2D(0, *repl_state_viewport()->window_w, 0, *repl_state_viewport()->window_h);
-    glMatrixMode(GL_MODELVIEW);
-    glPushMatrix();
-    glLoadIdentity();
-    glDisable(GL_DEPTH_TEST);
-    glDisable(GL_LIGHTING);
-}
-
-void end_2d(void) {
-    glEnable(GL_DEPTH_TEST);
-    if (repl_state_flat_program_user_lighting_enabled()) glEnable(GL_LIGHTING);
-    else glDisable(GL_LIGHTING);
-    glMatrixMode(GL_PROJECTION);
-    glPopMatrix();
-    glMatrixMode(GL_MODELVIEW);
-    glPopMatrix();
-}
-
-/* ========================================================================= */
 /* GLUT callbacks                                                             */
 /* ========================================================================= */
 

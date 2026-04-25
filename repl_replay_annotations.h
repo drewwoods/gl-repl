@@ -2,7 +2,6 @@
 #define REPL_REPLAY_ANNOTATIONS_H
 
 void repl_replay_annotations_prepare(void);
-void repl_replay_annotations_invalidate(void);
 
 int  repl_replay_annotation_flat_cmd_for_source(int src_line);
 int  repl_replay_annotation_extra_rows_for_line(int cmd_idx);

@@ -5,6 +5,7 @@
 #include "repl_core_internal.h"
 #include "ui_color_picker.h"
 #include "ui_panels.h"
+#include "./include/gl_2d.h"
 
 /* ========================================================================= */
 /* Color picker                                                               */
@@ -171,7 +172,7 @@ void ui_color_picker_render(void) {
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
     glColor4f(0.08f, 0.08f, 0.12f, 0.94f);
-    draw_quad((float)(px-CP_GAP), (float)(py-ph), (float)(pw+CP_GAP), (float)(ph+CP_GAP));
+    glRectf((float)(px-CP_GAP), (float)(py-ph), (float)(px-CP_GAP)+(float)(pw+CP_GAP), (float)(py-ph)+(float)(ph+CP_GAP));
     glColor4f(0.30f, 0.30f, 0.50f, 0.80f);
     glBegin(GL_LINE_LOOP);
     glVertex2f(px-CP_GAP,        py-ph);
@@ -204,7 +205,7 @@ void ui_color_picker_render(void) {
         float lim_y = py - (1.0f - CP_CLEAR_MAX_V) * (float)sz;
         glEnable(GL_BLEND); glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
         glColor4f(0.0f, 0.0f, 0.0f, 0.72f);
-        draw_quad((float)px, lim_y, (float)sz, py - lim_y);
+        glRectf((float)px, lim_y, (float)px + (float)sz, lim_y + (py - lim_y));
         glDisable(GL_BLEND);
         glColor3f(0.85f, 0.85f, 0.50f); glLineWidth(1.5f);
         glBegin(GL_LINES);
@@ -245,7 +246,7 @@ void ui_color_picker_render(void) {
         for (int iy=0;iy<sz;iy+=ck) for (int ix=0;ix<CP_ALPHA_W;ix+=ck) {
             float gv=((ix/ck+iy/ck)%2)?0.35f:0.55f; glColor3f(gv,gv,gv);
             int tw=(ix+ck<CP_ALPHA_W)?ck:CP_ALPHA_W-ix, th=(iy+ck<sz)?ck:sz-iy;
-            draw_quad((float)(ax+ix),(float)(py-iy-th),(float)tw,(float)th);
+            glRectf((float)(ax+ix), (float)(py-iy-th), (float)(ax+ix)+(float)tw, (float)(py-iy-th)+(float)th);
         }
         glEnable(GL_BLEND); glBlendFunc(GL_SRC_ALPHA,GL_ONE_MINUS_SRC_ALPHA);
         for (int i=0;i<40;i++) {
@@ -274,14 +275,14 @@ void ui_color_picker_render(void) {
         for (int iy=0;iy<CP_PREV_H;iy+=ck) for (int ix=0;ix<total_w;ix+=ck) {
             float gv=((ix/ck+iy/ck)%2)?0.35f:0.55f; glColor3f(gv,gv,gv);
             int tw=(ix+ck<total_w)?ck:total_w-ix, th=(iy+ck<CP_PREV_H)?ck:CP_PREV_H-iy;
-            draw_quad((float)(px+ix),(float)(swy-CP_PREV_H+iy),(float)tw,(float)th);
+            glRectf((float)(px+ix), (float)(swy-CP_PREV_H+iy), (float)(px+ix)+(float)tw, (float)(swy-CP_PREV_H+iy)+(float)th);
         }
         glEnable(GL_BLEND); glBlendFunc(GL_SRC_ALPHA,GL_ONE_MINUS_SRC_ALPHA);
         glColor4f(pr,pg,pb,g_cp_alpha);
     } else {
         glColor3f(pr,pg,pb);
     }
-    draw_quad((float)px,(float)(swy-CP_PREV_H),(float)total_w,(float)CP_PREV_H);
+    glRectf((float)px, (float)(swy-CP_PREV_H), (float)px+(float)total_w, (float)(swy-CP_PREV_H)+(float)CP_PREV_H);
     if (g_cp_has_alpha) glDisable(GL_BLEND);
     glColor3f(0.4f,0.4f,0.5f);
     glBegin(GL_LINE_LOOP);
@@ -391,7 +392,7 @@ void ui_color_picker_render_swatch(int cmd_idx, int sx, int sy) {
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
     glColor4f(repl_state_document_cmds_mut()[cmd_idx].args[0], repl_state_document_cmds_mut()[cmd_idx].args[1],
               repl_state_document_cmds_mut()[cmd_idx].args[2], alpha);
-    draw_quad((float)sx, (float)sy, (float)sw, (float)sw);
+    glRectf((float)sx, (float)sy, (float)sx + (float)sw, (float)sy + (float)sw);
 
     glColor4f(0.55f, 0.55f, 0.65f, 0.9f);
     glBegin(GL_LINE_LOOP);

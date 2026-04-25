@@ -351,11 +351,6 @@ static inline void clear_autocomplete_state(void) {
 /* Shared utility functions                                                   */
 /* ========================================================================= */
 
-void draw_string(float x, float y, const char *s, void *font);
-void draw_quad(float x, float y, float w, float h);
-void begin_2d(void);
-void end_2d(void);
-
 void set_status(const char *msg);
 const char *mode_name(GLenum mode);
 GLenum current_begin_mode(void);
