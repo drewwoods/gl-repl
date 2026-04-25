@@ -4,9 +4,32 @@
 /*
  * repl_state.h -- Phase 2 runtime-state facade.
  *
- * This is the bridge API that will eventually own the REPL runtime contexts.
- * For now it exposes typed sub-state views over the legacy globals so the
- * module boundaries can start moving without changing behavior.
+ * Typed accessor layer over the REPL's global runtime state. This facade
+ * allows module boundaries to evolve without breaking callers: internal state
+ * lives in global variables (g_cmds, g_flat_cmds, g_predef_vars, etc.), but
+ * are accessed only through typed views returned by repl_state_* accessors.
+ *
+ * Each accessor returns a struct of pointers into the live state: these are
+ * valid only for the current scope and must not be cached across function calls
+ * or frame boundaries (state relocations invalidate pointers). Callers should
+ * re-fetch accessors as needed.
+ *
+ * Sub-state categories:
+ *   Document      - source command array, edit cursor, dirty flags
+ *   Flat program  - flattened (expanded) command array, local vars
+ *   Variables     - predefined variables (t, x, y, z, etc.), animation state
+ *   Editor input  - command-line input buffer, cursor, line number
+ *   Selection     - clipboard selection anchor/end
+ *   Camera        - orbit camera position, angles, zoom
+ *   Render config - grid/axes themes, overlay toggles, lighting, etc.
+ *   Search        - active search query, match position
+ *   Replay        - step-by-step playback state and execution limit
+ *   Autocomplete  - symbol matching and completion hints
+ *   Drag state    - active variable slider drag transaction
+ *   Status        - one-line status message and lifetime
+ *
+ * Mutation is safe: callers can modify values pointed-to by the accessor
+ * (e.g., *repl_state_edit_line() = 5), and changes take effect immediately.
  */
 
 #include "sample.h"
