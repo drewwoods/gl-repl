@@ -42,26 +42,42 @@ in isolation; each item is sized to land as one `refactor:` commit.
 
 ## Strategic Completions
 
-### Phase 10 Step 1: Function Name Consistency ✅ DONE
+### Phase 10 Step 1: Function Name Consistency + Comprehensive Header Documentation ✅ DONE
 
-Function naming across all public headers now follows the consistent `repl_<module>_<action>()` pattern.
+Function naming across all public headers now follows the consistent `repl_<module>_<action>()` pattern, and all module headers have comprehensive public API documentation.
 
-**Wave 1 (Session 1):**
+**Function Naming (Waves 1-2):**
 - **repl_replay.h:** 18 functions renamed (replay_start → repl_replay_start, etc.)
 - **repl_eval.h:** 16 functions renamed (init_predef_vars → repl_eval_init_predef_vars, etc.)
 - **repl_parser.h:** 3 functions renamed (repl_parse_command → repl_parser_parse_command, etc.)
 - **repl_source_scope.h:** 10 functions renamed (depth_cache_invalidate → repl_source_scope_depth_cache_invalidate, etc.)
 - **repl_undo.h:** 3 functions renamed (push_undo_snapshot → repl_undo_push_snapshot, etc.)
-
-**Wave 2 (Session 2, THIS COMMIT):**
 - **repl_clipboard.h:** 4 functions renamed (clear_selection → repl_clipboard_clear_selection, etc.)
 - **repl_executor.h:** 3 functions renamed (apply_transform_cmd → repl_executor_apply_transform_cmd, etc.)
 - **repl_export.h:** 2 functions renamed (save_output → repl_export_save_output, load_from_file → repl_export_load_from_file)
 - **repl_audio.h:** Already compliant with repl_audio_* naming (no changes required)
 
-**Total scope:** 59 functions renamed across 9 header modules, 25+ implementation files updated, all 2503 tests passing.
+**Total naming scope:** 59 functions renamed across 9 header modules, 25+ implementation files updated, all 2503 tests passing.
 
-Implementations updated across repl_*.c files; all call sites including tests updated. Variable name consistency is deferred to a larger refactoring phase. Landed as multiple commits: `refactor: function name consistency - step 10 phase 1` and subsequent waves.
+**Header Documentation (Comprehensive Phase):**
+All 26 repl_* headers, 7 ui_* headers, and 8 scene_* headers now include:
+1. **Module overview** — Role, key abstractions, primary use cases
+2. **Lifecycle documentation** — When/where/how initialized, per-frame updates, state maintenance
+3. **Type definitions** — Shared structs and enums (if any)
+4. **Function documentation** — Purpose, return value, parameters, frame phase, integration points
+
+Headers are stand-alone references: read any header from top to bottom without consulting other headers or implementation files.
+
+**Documentation coverage:**
+- **repl_* (26 headers):** repl_audio, repl_autocomplete, repl_autonormal, repl_camera_controls, repl_clipboard, repl_code_panel_document, repl_code_panel_layout, repl_command_spec, repl_command_store, repl_config, repl_core_internal, repl_editor, repl_eval, repl_example_loader, repl_examples, repl_export, repl_flatten, repl_inline_rename, repl_keys, repl_parser, repl_replay_annotations, repl_replay, repl_scenes, repl_search, repl_source_scope, repl_var_drag
+- **ui_* (7 headers):** ui_autocomplete_panel, ui_color_picker, ui_help_overlay, ui_menu_bar, ui_panels, ui_profile_panel, ui_variable_panel
+- **scene_* (8 headers):** scene_axes, scene_backdrop, scene_geometry_guides, scene_grid, scene_lights, scene_overlays, scene_render, scene_transform_guides
+
+**Test fixes:** test_ui.c updated to use new ui_* function names. All 2541 tests passing (includes new test_ui fixes).
+
+**Documentation updates:** MODULES.md and ARCHITECTURE.md updated to reference new "Header Documentation Standard" explaining the consistent documentation structure and conventions. New section in MODULES.md: "Header Documentation Standard" with full details on module overview, lifecycle, types, and function documentation.
+
+Implementations updated across repl_*.c files; all call sites including tests updated. Landed as multiple commits with focused naming waves, header documentation batches, test fixes, and doc updates.
 
 ---
 
