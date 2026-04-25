@@ -13,7 +13,7 @@ static void normal_indent(int pos, char *buf, int buf_sz) {
     if (!buf || buf_sz <= 0)
         return;
 
-    spaces = cmd_indent_chars(pos);
+    spaces = repl_source_scope_cmd_indent_chars(pos);
     if (spaces > buf_sz - 1) spaces = buf_sz - 1;
     if (spaces < 0) spaces = 0;
     memset(buf, ' ', (size_t)spaces);
@@ -159,7 +159,7 @@ void recompute_autonormals(void) {
         if (repl_state_document_cmds_mut()[i].type == CMD_FOR_BEGIN ||
             repl_state_document_cmds_mut()[i].type == CMD_FUNC_DEF ||
             repl_state_document_cmds_mut()[i].type == CMD_IF_BEGIN) {
-            i = find_block_end(i);
+            i = repl_source_scope_find_block_end(i);
             if (i < repl_state_document_count()) i++;
             continue;
         }

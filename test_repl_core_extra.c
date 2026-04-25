@@ -49,8 +49,8 @@ static void declare_test_vars(void) {
 
 /* Some functions are not in internal header but are non-static */
 const char *mode_name(GLenum mode);
-int in_begin_block(void);
-int cmd_indent_chars(int pos);
+int repl_source_scope_in_begin_block(void);
+int repl_source_scope_cmd_indent_chars(int pos);
 GLenum current_begin_mode(void);
 int count_vertices(void);
 extern int repl_state_flat_program_count();
@@ -90,7 +90,7 @@ void test_utils() {
     repl_reset_state(); declare_test_vars();
     ASSERT_INT("count_vertices initial", count_vertices(), 0);
     ASSERT_INT("current_begin_mode initial", current_begin_mode(), GL_TRIANGLES);
-    ASSERT_INT("in_begin_block initial", in_begin_block(), 0);
+    ASSERT_INT("in_begin_block initial", repl_source_scope_in_begin_block(), 0);
 
     repl_feed_line_public("glBegin(GL_TRIANGLES);");
     repl_feed_line_public("glVertex3f(0,0,0);");
@@ -99,17 +99,17 @@ void test_utils() {
 
     ASSERT_INT("count_vertices after 2 vtx", count_vertices(), 2);
     ASSERT_INT("current_begin_mode in block", current_begin_mode(), GL_TRIANGLES);
-    ASSERT_INT("in_begin_block in block", in_begin_block(), 1);
+    ASSERT_INT("in_begin_block in block", repl_source_scope_in_begin_block(), 1);
 
     repl_feed_line_public("glEnd();");
     repl_flatten_commands();
     ASSERT_INT("current_begin_mode after end", current_begin_mode(), GL_TRIANGLES);
-    ASSERT_INT("in_begin_block after end", in_begin_block(), 0);
+    ASSERT_INT("in_begin_block after end", repl_source_scope_in_begin_block(), 0);
 
     /* cmd_indent_chars */
-    ASSERT_INT("cmd_indent_chars at 0", cmd_indent_chars(0), 2);
-    ASSERT_INT("cmd_indent_chars at 1", cmd_indent_chars(1), 4);
-    ASSERT_INT("cmd_indent_chars at 4", cmd_indent_chars(4), 2);
+    ASSERT_INT("cmd_indent_chars at 0", repl_source_scope_cmd_indent_chars(0), 2);
+    ASSERT_INT("cmd_indent_chars at 1", repl_source_scope_cmd_indent_chars(1), 4);
+    ASSERT_INT("cmd_indent_chars at 4", repl_source_scope_cmd_indent_chars(4), 2);
 
     /* debug dump */
     FILE *devnull = fopen("/dev/null", "w");

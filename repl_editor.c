@@ -117,7 +117,7 @@ static void remove_cmd_range_unchecked(int start, int count, const char *what) {
         }
     }
 
-    push_undo_snapshot();
+    repl_undo_push_snapshot();
     ReplCommandStore store = repl_command_store_live();
     repl_command_store_delete_range(&store, start, count);
 
@@ -152,7 +152,7 @@ void delete_cmd_range(int start, int count, const char *what) {
 }
 
 void repl_clear_all_cmds(void) {
-    push_undo_snapshot();
+    repl_undo_push_snapshot();
     ReplCommandStore store = repl_command_store_live();
     repl_command_store_clear(&store);
     repl_state_edit_line_set(0);
@@ -262,9 +262,9 @@ static void rewrite_cmd_source_with_indent(GLCmd *cmd, int pos,
            (stripped[slen - 1] == ';' ||
             isspace((unsigned char)stripped[slen - 1])))
         stripped[--slen] = '\0';
-    int indent_len = in_begin_block_at(pos) ? 4 : 2;
+    int indent_len = repl_source_scope_in_begin_block_at(pos) ? 4 : 2;
     if (include_block_depth)
-        indent_len += block_depth_at(pos) * 2;
+        indent_len += repl_source_scope_block_depth_at(pos) * 2;
     char indent[32];
     if (indent_len > (int)sizeof(indent) - 1)
         indent_len = (int)sizeof(indent) - 1;
@@ -290,12 +290,12 @@ static int parse_for_overwrite_enter(GLCmd *cmd, int insert_idx) {
     int parsed;
     if (num_vis_vars > 0) {
         ReplParseContext parse_ctx = { insert_idx, vis_vars, num_vis_vars, 0 };
-        parsed = repl_parse_command_ctx(repl_state_editor_input()->input, cmd, &parse_ctx);
+        parsed = repl_parser_parse_command_ctx(repl_state_editor_input()->input, cmd, &parse_ctx);
         if (parsed)
             rewrite_cmd_source_with_indent(cmd, insert_idx, 1);
     } else {
         ReplParseContext parse_ctx = { insert_idx, NULL, 0, 0 };
-        parsed = repl_parse_command_ctx(repl_state_editor_input()->input, cmd, &parse_ctx);
+        parsed = repl_parser_parse_command_ctx(repl_state_editor_input()->input, cmd, &parse_ctx);
         if (parsed && repl_eval_input_has_predef_vars(repl_state_editor_input()->input)) {
             cmd->has_vars = 1;
             rewrite_cmd_source_with_indent(cmd, insert_idx, 0);
@@ -416,7 +416,7 @@ static CommitResult commit_current_input(int enter_mode) {
     }
 
     if (*repl_state_editor_input()->input_len > 0)
-        push_undo_snapshot();
+        repl_undo_push_snapshot();
 
     CommitAttemptState *before = &g_commit_attempt_before;
     capture_commit_attempt_state(before);
@@ -439,12 +439,12 @@ static CommitResult commit_current_input(int enter_mode) {
                 ReplParseContext parse_ctx = { insert_idx, vis_vars, num_vis_vars, 0 };
                 if (try_commit_var_statements())
                     return commit_progressed_since(before) ? COMMIT_OK : COMMIT_REJECTED;
-                parsed = repl_parse_command_ctx(repl_state_editor_input()->input, &cmd, &parse_ctx);
+                parsed = repl_parser_parse_command_ctx(repl_state_editor_input()->input, &cmd, &parse_ctx);
                 if (parsed)
                     rewrite_cmd_source_with_indent(&cmd, insert_idx, 1);
             } else {
                 ReplParseContext parse_ctx = { insert_idx, NULL, 0, 0 };
-                parsed = repl_parse_command_ctx(repl_state_editor_input()->input, &cmd, &parse_ctx);
+                parsed = repl_parser_parse_command_ctx(repl_state_editor_input()->input, &cmd, &parse_ctx);
             }
 
             if (parsed) {
@@ -696,14 +696,14 @@ static int handle_cursor_endpoint_key_route(unsigned char key) {
 static int handle_undo_redo_key_route(unsigned char key) {
     if (key == KEY_CTRL_Z) {
         if (editor_get_modifiers() & GLUT_ACTIVE_SHIFT)
-            do_redo();
+            repl_undo_do_redo();
         else
-            pop_undo_snapshot();
+            repl_undo_pop_snapshot();
         return 1;
     }
 
     if (key == KEY_CTRL_Y) {
-        do_redo();
+        repl_undo_do_redo();
         return 1;
     }
     return 0;
@@ -742,7 +742,7 @@ static int handle_buffer_command_key_route(unsigned char key) {
 
     if (key == KEY_CTRL_BACKSLASH) {
         if (repl_state_document_count() > 0) {
-            push_undo_snapshot();
+            repl_undo_push_snapshot();
             repl_reformat_commands();
             set_status("Reformatted command buffer");
         } else {
@@ -792,7 +792,7 @@ static int handle_paste_key_route(unsigned char key) {
 static int handle_comment_toggle_key_route(unsigned char key) {
     if (key == '/' && (editor_get_modifiers() & GLUT_ACTIVE_CTRL)) {
         if (repl_state_edit_line() < repl_state_document_count() && !repl_state_insert_mode()) {
-            push_undo_snapshot();
+            repl_undo_push_snapshot();
             {
                 GLCmd *cur = &repl_state_document_cmds_mut()[repl_state_edit_line()];
                 if (cur->type == CMD_COMMENT) {
@@ -816,7 +816,7 @@ static int handle_comment_toggle_key_route(unsigned char key) {
                          * fallback produced an actionable error of its own. */
                         repl_state_status()->text[0] = '\0';
 
-                        if (repl_parse_command_ctx(s, &new_cmd, &parse_ctx)) {
+                        if (repl_parser_parse_command_ctx(s, &new_cmd, &parse_ctx)) {
                             built = 1;
                         } else {
                             /* Parser may have set its own error (e.g. "Unknown
@@ -852,8 +852,8 @@ static int handle_comment_toggle_key_route(unsigned char key) {
                                 } else {
                                     ExprCtx ectx = { rhs, g_predef_vars, g_num_predef_vars };
                                     float val = repl_eval_expr(&ectx);
-                                    int indent_len = (in_begin_block_at(repl_state_edit_line()) ? 4 : 2)
-                                                     + block_depth_at(repl_state_edit_line()) * 2;
+                                    int indent_len = (repl_source_scope_in_begin_block_at(repl_state_edit_line()) ? 4 : 2)
+                                                     + repl_source_scope_block_depth_at(repl_state_edit_line()) * 2;
                                     char indent[32];
                                     if (indent_len > (int)sizeof(indent) - 1)
                                         indent_len = (int)sizeof(indent) - 1;
@@ -1008,7 +1008,7 @@ static int handle_enter_key_route(unsigned char key) {
 static int handle_semicolon_commit_key_route(unsigned char key) {
     if (key == ';') {
         if (*repl_state_editor_input()->input_len > 0) {
-            push_undo_snapshot();
+            repl_undo_push_snapshot();
             if (try_commit_any()) {
                 clear_autocomplete_state();
                 return 1;
@@ -1500,7 +1500,7 @@ static void mouse_func(int button, int state, int x, int y) {
         if (example_dropdown_is_open()) {
             int panel_actions = handle_code_panel_press(x, y);
             if (panel_actions & UI_PANEL_PRESS_OPENED_COLOR_PICKER)
-                push_undo_snapshot();
+                repl_undo_push_snapshot();
             editor_request_redraw();
             return;
         }
@@ -1513,7 +1513,7 @@ static void mouse_func(int button, int state, int x, int y) {
         if (editor_point_in_code_panel(x, y)) {
             int panel_actions = handle_code_panel_press(x, y);
             if (panel_actions & UI_PANEL_PRESS_OPENED_COLOR_PICKER)
-                push_undo_snapshot();
+                repl_undo_push_snapshot();
             editor_request_redraw();
             return;
         }

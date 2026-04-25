@@ -570,7 +570,7 @@ int main() {
         /* g_undo_count starts at 0 (global zero-init); repl_reset_state() does
          * NOT clear the undo buffer, so run this before touching undo at all. */
         repl_reset_state();
-        pop_undo_snapshot();
+        repl_undo_pop_snapshot();
         /* Should survive without crashing; state unchanged */
         ASSERT_INT("undo-nothing: num_cmds still 0", repl_state_document_count(), 0);
     }
@@ -578,7 +578,7 @@ int main() {
     /* 2. Redo when nothing to redo - similarly must be before any undo activity */
     {
         repl_reset_state();
-        do_redo();
+        repl_undo_do_redo();
         ASSERT_INT("redo-nothing: num_cmds still 0", repl_state_document_count(), 0);
     }
 
@@ -588,15 +588,15 @@ int main() {
         repl_feed_line_public("glVertex3f(1,1,1)");
         ASSERT_INT("num_cmds 1", repl_state_document_count(), 1);
 
-        push_undo_snapshot();
+        repl_undo_push_snapshot();
         repl_feed_line_public("glVertex3f(2,2,2)");
         ASSERT_INT("num_cmds 2", repl_state_document_count(), 2);
 
-        pop_undo_snapshot();
+        repl_undo_pop_snapshot();
         ASSERT_INT("num_cmds after undo", repl_state_document_count(), 1);
         ASSERT_STR("cmd 0 source", repl_state_document_cmds_mut()[0].source, "  glVertex3f(1, 1, 1);");
 
-        do_redo();
+        repl_undo_do_redo();
         ASSERT_INT("num_cmds after redo", repl_state_document_count(), 2);
         ASSERT_STR("cmd 1 source", repl_state_document_cmds_mut()[1].source, "  glVertex3f(2, 2, 2);");
     }
@@ -727,11 +727,11 @@ int main() {
         delete_cmd_range(1, 3, "Deleted");
         ASSERT_INT("delete undo setup: leaves 2 cmds", repl_state_document_count(), 2);
 
-        pop_undo_snapshot();
+        repl_undo_pop_snapshot();
         ASSERT_INT("delete undo: restores 5 cmds", repl_state_document_count(), 5);
         ASSERT_STR("delete undo: middle restored", repl_state_document_cmds_mut()[2].source, "  glVertex3f(2, 2, 2);");
 
-        do_redo();
+        repl_undo_do_redo();
         ASSERT_INT("delete redo: leaves 2 cmds", repl_state_document_count(), 2);
         ASSERT_STR("delete redo: last survives", repl_state_document_cmds_mut()[1].source, "  glVertex3f(4, 4, 4);");
     }
@@ -767,12 +767,12 @@ int main() {
         ASSERT_STR("paste block: input reloaded after paste", repl_state_editor_input()->input, "glColor3f(1, 0, 0)");
         assert_status_contains("paste block: status", "Pasted 2 lines");
 
-        pop_undo_snapshot();
+        repl_undo_pop_snapshot();
         ASSERT_INT("paste undo: restores original count", repl_state_document_count(), 7);
         ASSERT_STR("paste undo: original body restored", repl_state_document_cmds_mut()[5].source, "    glColor3f(1, 0, 0);");
         ASSERT_STR("paste undo: close brace restored", repl_state_document_cmds_mut()[6].source, "  }");
 
-        do_redo();
+        repl_undo_do_redo();
         ASSERT_INT("paste redo: restores pasted count", repl_state_document_count(), 9);
         ASSERT_STR("paste redo: first pasted line", repl_state_document_cmds_mut()[5].source, "    glVertex3f(0, 0, 0);");
         ASSERT_STR("paste redo: original body shifted again", repl_state_document_cmds_mut()[7].source, "    glColor3f(1, 0, 0);");
@@ -796,11 +796,11 @@ int main() {
         ASSERT_STR("cut block: second survivor", repl_state_document_cmds_mut()[1].source, "  glVertex3f(3, 3, 3);");
         ASSERT_TRUE("cut block: selection cleared", !sel_active());
 
-        pop_undo_snapshot();
+        repl_undo_pop_snapshot();
         ASSERT_INT("cut undo: restores 4 cmds", repl_state_document_count(), 4);
         ASSERT_STR("cut undo: first cut line restored", repl_state_document_cmds_mut()[1].source, "  glVertex3f(1, 1, 1);");
 
-        do_redo();
+        repl_undo_do_redo();
         ASSERT_INT("cut redo: leaves 2 cmds", repl_state_document_count(), 2);
         ASSERT_STR("cut redo: second survivor", repl_state_document_cmds_mut()[1].source, "  glVertex3f(3, 3, 3);");
     }

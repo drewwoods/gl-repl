@@ -525,7 +525,7 @@ void repl_state_mark_flat_dirty(void) {
 void repl_state_mark_normals_dirty(void) {
     g_normals_dirty = 1;
     g_flat_dirty = 1;
-    depth_cache_invalidate();
+    repl_source_scope_depth_cache_invalidate();
 }
 
 FlatProgramView repl_state_flat_program_view(void) {
@@ -1092,7 +1092,7 @@ void repl_state_reset_all(void) {
     repl_state_import_export_reset();
     update_render_state_strings();
     update_cam_lines();
-    depth_cache_invalidate();
+    repl_source_scope_depth_cache_invalidate();
     repl_state_mark_flat_dirty();
     repl_state_mark_normals_dirty();
 }
