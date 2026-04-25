@@ -14,8 +14,9 @@
 #ifndef REPL_CORE_H
 #define REPL_CORE_H
 
-#include "sample.h"
-#include "repl_parser.h"
+#include <stdio.h>
+
+#include "repl_flatten.h"
 
 /* --- Save / load ------------------------------------------------------- */
 void repl_save_default_output(void);   /* writes ./output.c */

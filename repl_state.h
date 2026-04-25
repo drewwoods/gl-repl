@@ -11,7 +11,6 @@
 
 #include "sample.h"
 #include "repl_flatten.h"
-#include "repl_executor.h"
 
 #ifndef MAX_WORKSPACE_HEADER_LINES
 #define MAX_WORKSPACE_HEADER_LINES 48
@@ -194,10 +193,6 @@ typedef struct {
     int            *multisample_enabled;
     int            *line_smooth_enabled;
     int            *point_attenuation_enabled;
-    GLUquadric    **quadric;
-    GLUtesselator **tess;
-    TessVertex     *tess_verts;
-    int            *tess_vert_count;
     SceneLight     *lights;
     float          *clear_color;
 } ReplRenderState;
@@ -407,8 +402,6 @@ void repl_state_presentation_reset_example_defaults(void);
 const ReplRenderState *repl_state_render(void);
 ReplRenderState       *repl_state_render_mut(void);
 void repl_state_render_reset_defaults(void);
-void repl_state_render_init_resources(void);
-void repl_state_render_destroy_resources(void);
 
 const ReplRenderDerivedState *repl_state_render_derived(void);
 ReplRenderDerivedState       *repl_state_render_derived_mut(void);

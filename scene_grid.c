@@ -3,6 +3,7 @@
  */
 #include "sample.h"
 #include "scene_grid.h"
+#include "repl_state.h"
 #include "./include/gl_2d.h"
 
 /* Returns non-zero when v is close enough to a multiple of `major`

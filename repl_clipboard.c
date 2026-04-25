@@ -9,7 +9,9 @@
 #include "repl_clipboard.h"
 #include "repl_command_store.h"
 #include "repl_core_internal.h"
+#include "repl_source_scope.h"
 #include "repl_undo.h"
+#include "repl_state.h"
 
 void clear_selection(void) {
     repl_state_selection_clear();

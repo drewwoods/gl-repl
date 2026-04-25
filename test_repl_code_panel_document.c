@@ -4,6 +4,7 @@
 #include "sample.h"
 #include "repl_code_panel_document.h"
 #include "repl_core.h"
+#include "repl_state.h"
 #include "ui_panels.h"
 
 static int g_tests = 0;

@@ -16,8 +16,9 @@ of one monolithic `repl_core.c`.
   helpers, `find_block_end()`, and nearest-open-block queries.
 - `repl_flatten.c`: source-to-flat command expansion and flat-command cursor
   matching.
-- `repl_executor.c`: flat-command execution, state-command dispatch, replay
-  fade execution context, and predefined-variable snapshots.
+- `repl_executor.c`: flat-command execution, GLU resource lifetimes,
+  state-command dispatch, replay fade execution context, and
+  predefined-variable snapshots.
 - `repl_autocomplete.c`: input completions and parameter hints derived from
   parser command metadata plus user-defined function signatures.
 - `repl_autonormal.c`: auto-generated `glNormal3f` command maintenance and
@@ -240,6 +241,7 @@ Owns flat-program execution and execution-time state.
 
 - `repl_execute_program()`, `execute_commands()`
 - `FlatProgramView` resolution and execution-limit clamping
+- GLU quadric / tessellator resource lifetimes and tess callbacks
 - `apply_state_cmd()`
 - replay fade execution context
 - predefined-variable snapshot/restore helpers

@@ -4,6 +4,7 @@
 #include "sample.h"
 #include "repl_actions.h"
 #include "repl_core.h"
+#include "repl_config.h"
 #include "repl_keys.h"
 #include "repl_state.h"
 #include "ui_menu_bar.h"

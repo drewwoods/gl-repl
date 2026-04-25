@@ -4,7 +4,7 @@
 #define _POSIX_C_SOURCE 200809L
 #include "prof.h"
 #include "sample.h"
-#include "repl_config.h"
+#include "repl_state.h"
 
 #include <time.h>
 #include <stdio.h>

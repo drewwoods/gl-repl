@@ -11,7 +11,9 @@
 #include "repl_audio.h"
 #include "repl_core.h"
 #include "repl_core_internal.h"
+#include "repl_config.h"
 #include "repl_keys.h"
+#include "repl_state.h"
 #include "ui_panels.h"
 #include "repl_inline_rename.h"
 

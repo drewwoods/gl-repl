@@ -293,50 +293,6 @@ static inline int is_transform_cmd(CmdType t) {
 }
 
 /* Execute the GL call for a transform command (must not be inside glBegin/glEnd) */
-static inline void apply_transform_cmd(const GLCmd *cmd) {
-    switch (cmd->type) {
-    case CMD_TRANSLATE3F: glTranslatef(cmd->args[0], cmd->args[1], cmd->args[2]); break;
-    case CMD_SCALEF:      glScalef    (cmd->args[0], cmd->args[1], cmd->args[2]); break;
-    case CMD_ROTATEF:     glRotatef   (cmd->args[0], cmd->args[1],
-                                       cmd->args[2], cmd->args[3]); break;
-    case CMD_PUSH_MATRIX: glPushMatrix(); break;
-    case CMD_POP_MATRIX:  glPopMatrix();  break;
-    default: break;
-    }
-}
-
-static inline void apply_tracked_transform_cmd(const GLCmd *cmd, int *matrix_depth) {
-    switch (cmd->type) {
-    case CMD_PUSH_MATRIX:
-        glPushMatrix();
-        if (matrix_depth) (*matrix_depth)++;
-        break;
-    case CMD_POP_MATRIX:
-        if (!matrix_depth || *matrix_depth > 0) {
-            glPopMatrix();
-            if (matrix_depth) (*matrix_depth)--;
-        }
-        break;
-    default:
-        apply_transform_cmd(cmd);
-        break;
-    }
-}
-
-static inline void unwind_tracked_transform_stack(int *matrix_depth) {
-    if (!matrix_depth)
-        return;
-    while (*matrix_depth > 0) {
-        glPopMatrix();
-        (*matrix_depth)--;
-    }
-}
-
-#include "repl_config.h"
-#include "repl_flatten.h"
-#include "repl_executor.h"
-#include "repl_state.h"
-#include "repl_source_scope.h"
 
 int  init_section_line_count(void);
 void init_section_line(int i, char *buf, size_t n);

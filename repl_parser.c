@@ -9,6 +9,8 @@
 
 #include "repl_command_spec.h"
 #include "repl_core_internal.h"
+#include "repl_source_scope.h"
+#include "repl_state.h"
 
 static void set_incomplete_missing_paren_status(const char *func) {
     char msg[128];

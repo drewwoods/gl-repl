@@ -4,6 +4,7 @@
 #include "sample.h"
 #include "repl_core.h"
 #include "repl_core_internal.h"
+#include "repl_parser.h"
 #include "repl_replay.h"
 #include "repl_state.h"
 #include "repl_replay_annotations.h"
@@ -718,7 +719,7 @@ int repl_replay_build_eval_annotation(int cmd_idx, int flat_idx,
                                                visible_vars,
                                                (int)(sizeof(visible_vars) / sizeof(visible_vars[0])));
     memset(&eval_cmd, 0, sizeof(eval_cmd));
-    ReplParseContext parse_ctx = { cmd_idx, visible_vars, nv };
+    ReplParseContext parse_ctx = { cmd_idx, visible_vars, nv, 0 };
     if (!repl_parse_command_ctx(repl_state_document_cmds_mut()[cmd_idx].source,
                                 &eval_cmd, &parse_ctx))
         return 0;

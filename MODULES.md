@@ -28,7 +28,7 @@ overlays) reads the flattened array (`repl_state_flat_cmds()`).
 | `repl_command_store` | Insert/delete/replace/load API over the source command array |
 | `repl_commit` | Float decls, variable assignments, structured block commits |
 | `repl_flatten` | Explicit source-to-flat program builder (loops, functions, `if`) |
-| `repl_executor` | Flat-program GL dispatch |
+| `repl_executor` | Flat-program GL dispatch + GLU resource lifetimes |
 | `repl_eval` | Expression evaluator (recursive descent) |
 | `cmd_format` | Pure indentation/depth computation (no GL) |
 
@@ -140,7 +140,7 @@ flowchart LR
         parser["repl_parser.c<br/>source parser"]
         scope["repl_source_scope.c<br/>depth · indent"]
         flatten["repl_flatten.c<br/>explicit source-to-flat builder"]
-        exec["repl_executor.c<br/>flat program execution"]
+        exec["repl_executor.c<br/>flat program execution · GLU resources"]
         commit["repl_commit.c<br/>decls · assigns · blocks"]
         store["repl_command_store.c<br/>source command mutation · restore"]
     end

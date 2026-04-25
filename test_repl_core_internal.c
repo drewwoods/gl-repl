@@ -1,6 +1,12 @@
 #include "repl_core_internal.h"
 #include "repl_command_store.h"
+#include "repl_executor.h"
+#include "repl_source_scope.h"
 #include "repl_state.h"
+
+#ifdef OPENGL_VIBE_USE_GL_STUBS
+#include <GL/gl_stub_counts.h>
+#endif
 
 #define g_use_accum            (*repl_state_render_mut()->use_accum)
 #define g_accum_aa_enabled     (*repl_state_render_mut()->accum_aa_enabled)
@@ -10,10 +16,6 @@
 #define g_multisample_enabled  (*repl_state_render_mut()->multisample_enabled)
 #define g_line_smooth_enabled  (*repl_state_render_mut()->line_smooth_enabled)
 #define g_init_attenuate_points (*repl_state_render_mut()->point_attenuation_enabled)
-#define g_quadric              (*repl_state_render_mut()->quadric)
-#define g_tess                 (*repl_state_render_mut()->tess)
-#define g_tess_verts           (repl_state_render_mut()->tess_verts)
-#define g_tess_vert_count      (*repl_state_render_mut()->tess_vert_count)
 #define g_lights               (repl_state_render_mut()->lights)
 #define g_clear_color          (repl_state_render_mut()->clear_color)
 
@@ -496,13 +498,6 @@ int main() {
                     render->line_smooth_enabled == &g_line_smooth_enabled);
         ASSERT_TRUE("render facade point attenuation",
                     render->point_attenuation_enabled == &g_init_attenuate_points);
-        ASSERT_TRUE("render facade quadric",
-                    render->quadric == &g_quadric);
-        ASSERT_TRUE("render facade tess", render->tess == &g_tess);
-        ASSERT_TRUE("render facade tess verts",
-                    render->tess_verts == g_tess_verts);
-        ASSERT_TRUE("render facade tess vert count",
-                    render->tess_vert_count == &g_tess_vert_count);
         ASSERT_TRUE("render facade lights", render->lights == g_lights);
         ASSERT_TRUE("render facade clear color",
                     render->clear_color == g_clear_color);
@@ -520,9 +515,6 @@ int main() {
         g_clear_color[1] = 0.0f;
         g_clear_color[2] = 0.0f;
         g_clear_color[3] = 0.0f;
-        g_quadric = NULL;
-        g_tess = NULL;
-        g_tess_vert_count = 7;
 
         repl_state_render_reset_defaults();
         ASSERT_INT("render reset multisample",
@@ -536,15 +528,26 @@ int main() {
         ASSERT_TRUE("render reset clear color b", g_clear_color[2] == 0.13f);
         ASSERT_TRUE("render reset clear color a", g_clear_color[3] == 1.0f);
 
-        repl_state_render_init_resources();
-        ASSERT_TRUE("render init quadric live", *render->quadric != NULL);
-        ASSERT_TRUE("render init tess live", *render->tess != NULL);
-        ASSERT_INT("render init tess vert count", g_tess_vert_count, 0);
+    #ifdef OPENGL_VIBE_USE_GL_STUBS
+        gl_stub_counts_reset();
+    #endif
+        repl_executor_init_resources();
+    #ifdef OPENGL_VIBE_USE_GL_STUBS
+        ASSERT_INT("executor init quadric", (int)gl_stub_counts[GL_STUB_gluNewQuadric], 1);
+        ASSERT_INT("executor init quadric normals", (int)gl_stub_counts[GL_STUB_gluQuadricNormals], 1);
+        ASSERT_INT("executor init quadric texture", (int)gl_stub_counts[GL_STUB_gluQuadricTexture], 1);
+        ASSERT_INT("executor init tess", (int)gl_stub_counts[GL_STUB_gluNewTess], 1);
+        ASSERT_INT("executor init tess callbacks", (int)gl_stub_counts[GL_STUB_gluTessCallback], 6);
+    #endif
 
-        repl_state_render_destroy_resources();
-        ASSERT_TRUE("render destroy quadric null", g_quadric == NULL);
-        ASSERT_TRUE("render destroy tess null", g_tess == NULL);
-        ASSERT_INT("render destroy tess vert count", g_tess_vert_count, 0);
+    #ifdef OPENGL_VIBE_USE_GL_STUBS
+        gl_stub_counts_reset();
+    #endif
+        repl_executor_destroy_resources();
+    #ifdef OPENGL_VIBE_USE_GL_STUBS
+        ASSERT_INT("executor destroy quadric", (int)gl_stub_counts[GL_STUB_gluDeleteQuadric], 1);
+        ASSERT_INT("executor destroy tess", (int)gl_stub_counts[GL_STUB_gluDeleteTess], 1);
+    #endif
     }
 
     printf("\n%d / %d tests passed\n", g_pass, g_run);

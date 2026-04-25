@@ -2,6 +2,8 @@
  * scene_transform_guides.c - transform edit-guide planning/rendering.
  */
 #include "scene_transform_guides.h"
+#include "repl_executor.h"
+#include "repl_state.h"
 
 static void scene_transform_guides_push_state(void) {
     glPushAttrib(GL_ALL_ATTRIB_BITS);

@@ -6,6 +6,8 @@
  * so the displayed bindings always match the actual config table.
  */
 #include "sample.h"
+#include "repl_config.h"
+#include "repl_state.h"
 #include "ui_help_overlay.h"
 #include "./include/gl_2d.h"
 

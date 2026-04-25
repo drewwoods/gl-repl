@@ -1,4 +1,5 @@
 #include "repl_core_internal.h"
+#include "repl_state.h"
 
 #define g_search_active    (*repl_state_search_mut()->active)
 #define g_search_query     (repl_state_search_mut()->query)
