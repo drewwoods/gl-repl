@@ -76,6 +76,18 @@ static int editor_get_modifiers(void) {
     return glutGetModifiers();
 }
 
+static void editor_request_redraw(void) {
+    glutPostRedisplay();
+}
+
+static void editor_set_cursor(int cursor) {
+    glutSetCursor(cursor);
+}
+
+int repl_editor_active_modifiers(void) {
+    return editor_get_modifiers();
+}
+
 static const int g_accum_steps[] = { 1, 2, 4, 8, 16 };
 static const char *quit_tempfile = "/tmp/temp-output.c";
 
@@ -635,7 +647,7 @@ static int handle_search_key_route(unsigned char key) {
 static int handle_escape_key_route(unsigned char key) {
     if (key == KEY_ESC) {
         if (ui_panels_handle_escape()) {
-            glutPostRedisplay();
+            editor_request_redraw();
             return 1;
         }
         if (*repl_state_help()->visible) {
@@ -1459,13 +1471,13 @@ static void mouse_func(int button, int state, int x, int y) {
         ui_panels_handle_mouse_release();
         if (repl_var_drag_active()) {
             repl_var_drag_reset();
-            glutPostRedisplay();
+            editor_request_redraw();
             return;
         }
         if (*repl_state_code_panel()->resizing_panel) {
             *repl_state_code_panel_mut()->resizing_panel = 0;
-            glutSetCursor(GLUT_CURSOR_INHERIT);
-            glutPostRedisplay();
+            editor_set_cursor(GLUT_CURSOR_INHERIT);
+            editor_request_redraw();
             return;
         }
     }
@@ -1477,7 +1489,7 @@ static void mouse_func(int button, int state, int x, int y) {
                 if (*repl_state_replay()->active)
                     replay_stop();
                 repl_var_drag_begin(row_idx, 0, x);
-                glutPostRedisplay();
+                editor_request_redraw();
                 return;
             }
         }
@@ -1489,25 +1501,25 @@ static void mouse_func(int button, int state, int x, int y) {
             int panel_actions = handle_code_panel_press(x, y);
             if (panel_actions & UI_PANEL_PRESS_OPENED_COLOR_PICKER)
                 push_undo_snapshot();
-            glutPostRedisplay();
+            editor_request_redraw();
             return;
         }
 
         if (editor_point_on_code_panel_divider(x, y)) {
             *repl_state_code_panel_mut()->resizing_panel = 1;
-            glutSetCursor(editor_code_panel_resize_cursor());
+            editor_set_cursor(editor_code_panel_resize_cursor());
             return;
         }
         if (editor_point_in_code_panel(x, y)) {
             int panel_actions = handle_code_panel_press(x, y);
             if (panel_actions & UI_PANEL_PRESS_OPENED_COLOR_PICKER)
                 push_undo_snapshot();
-            glutPostRedisplay();
+            editor_request_redraw();
             return;
         }
         /* Scene-area click: let the color picker intercept before camera. */
         if (ui_panels_handle_scene_press(x, y)) {
-            glutPostRedisplay();
+            editor_request_redraw();
             return;
         }
     }
@@ -1516,7 +1528,7 @@ static void mouse_func(int button, int state, int x, int y) {
      * missed clicks leave the menu open so the user can keep seeking. */
     if (button == GLUT_RIGHT_BUTTON && state == GLUT_DOWN) {
         if (ui_panels_handle_right_press(x, y)) {
-            glutPostRedisplay();
+            editor_request_redraw();
             return;
         }
     }
@@ -1528,7 +1540,7 @@ static void mouse_func(int button, int state, int x, int y) {
             if (*repl_state_replay()->active)
                 replay_stop();
             repl_var_drag_begin(row_idx, 1, x);
-            glutPostRedisplay();
+            editor_request_redraw();
             return;
         }
     }
@@ -1545,7 +1557,7 @@ static void mouse_func(int button, int state, int x, int y) {
             else
                 repl_camera_add_zoom_velocity(-0.3f);
         }
-        glutPostRedisplay();
+        editor_request_redraw();
     } else if (button == 4 && state == GLUT_DOWN) {
         if (*repl_state_help()->visible) {
             (*repl_state_help_mut()->scroll)++;
@@ -1555,7 +1567,7 @@ static void mouse_func(int button, int state, int x, int y) {
             else
                 repl_camera_add_zoom_velocity(0.3f);
         }
-        glutPostRedisplay();
+        editor_request_redraw();
     }
 #endif
 }
@@ -1571,7 +1583,7 @@ static void mousewheel_func(int wheel, int direction, int x, int y) {
         else
             repl_camera_add_zoom_velocity(-(float)direction * 0.1f);
     }
-    glutPostRedisplay();
+    editor_request_redraw();
 }
 #endif
 
@@ -1579,34 +1591,34 @@ static void passive_motion_func(int x, int y) {
     repl_camera_pointer_set(x, y);
 
     if (editor_point_on_code_panel_divider(x, y))
-        glutSetCursor(editor_code_panel_resize_cursor());
+        editor_set_cursor(editor_code_panel_resize_cursor());
     else
-        glutSetCursor(GLUT_CURSOR_INHERIT);
+        editor_set_cursor(GLUT_CURSOR_INHERIT);
 }
 
 static void motion_func(int x, int y) {
     if (ui_panels_handle_motion(x, y)) {
         repl_camera_pointer_set(x, y);
-        glutPostRedisplay();
+        editor_request_redraw();
         return;
     }
 
     if (*repl_state_code_panel()->resizing_panel) {
         editor_update_panel_frac_from_mouse(x, y);
-        glutPostRedisplay();
+        editor_request_redraw();
         return;
     }
 
     if (repl_var_drag_active()) {
         repl_var_drag_motion(x);
         repl_camera_pointer_set(x, y);
-        glutPostRedisplay();
+        editor_request_redraw();
         return;
     }
 
     if (handle_code_panel_drag(x, y)) {
         repl_camera_pointer_set(x, y);
-        glutPostRedisplay();
+        editor_request_redraw();
         return;
     }
 
@@ -1675,7 +1687,7 @@ static void timer_func(int value) {
             (*status->ttl)--;
     }
 
-    glutPostRedisplay();
+    editor_request_redraw();
     glutTimerFunc(16, timer_func, 0);
 }
 
