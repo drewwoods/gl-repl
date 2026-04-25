@@ -788,7 +788,7 @@ ReplStatusState *repl_state_status_mut(void) {
     return &g_repl_state.status;
 }
 
-void repl_status_set(const char *message) {
+void repl_state_status_set(const char *message) {
     ReplStatusState *status = repl_state_status_mut();
     if (!message)
         message = "";
@@ -797,13 +797,13 @@ void repl_status_set(const char *message) {
     *status->ttl = 240;
 }
 
-void repl_status_clear(void) {
+void repl_state_status_clear(void) {
     ReplStatusState *status = repl_state_status_mut();
     status->text[0] = '\0';
     *status->ttl = 0;
 }
 
-void repl_status_tick(void) {
+void repl_state_status_tick(void) {
     ReplStatusState *status = repl_state_status_mut();
     if (*status->ttl > 0)
         (*status->ttl)--;

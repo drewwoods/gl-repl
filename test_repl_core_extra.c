@@ -142,7 +142,7 @@ void test_replay_advanced() {
     repl_execute_program(&limited_exec);
     ASSERT_INT("over-limit execute preserves flat count", repl_state_flat_program_count(), full_flat_count);
 
-    replay_start();
+    repl_replay_start();
     ASSERT_INT("replay_exec_limit start", replay_exec_limit(), 0);
 
     replay_advance();
@@ -160,7 +160,7 @@ void test_replay_advanced() {
     replay_restart_from_beginning();
     ASSERT_INT("replay_exec_limit restart", replay_exec_limit(), 0);
 
-    replay_stop();
+    repl_replay_stop();
 }
 
 void test_io() {

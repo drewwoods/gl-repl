@@ -294,7 +294,7 @@ static BenchResult bench_replay_examples(int iters) {
     BenchResult r = { .name = "replay_examples", .unit = "steps",
                       .min_sec = 1e18 };
 
-    /* load_example_lines() leaves repl_state_flat_program_dirty()=1, and replay_start() will
+    /* load_example_lines() leaves repl_state_flat_program_dirty()=1, and repl_replay_start() will
      * flatten once on its own - calling repl_flatten_commands() explicitly
      * beforehand would flatten twice, because repl_flatten_commands() does
      * NOT clear repl_state_flat_program_dirty() (see repl_core.c:4462-4464 vs. :3265-3269). */
@@ -304,14 +304,14 @@ static BenchResult bench_replay_examples(int iters) {
         for (int e = 0; e < n_examples; e++) {
             repl_load_example_lines_for_test(repl_examples_lines(e));
 
-            replay_start();
+            repl_replay_start();
             int safety = repl_state_flat_program_count() + 1;
             const ReplReplayRuntimeState *replay = repl_state_replay();
             while (*replay->state == REPLAY_PLAYING && safety-- > 0) {
                 replay_advance();
                 steps++;
             }
-            replay_stop();
+            repl_replay_stop();
         }
         double dt = now_seconds() - t0;
         if (dt < r.min_sec) r.min_sec = dt;
@@ -364,17 +364,17 @@ static BenchResult bench_replay_long(int iters) {
     /* Load once outside the inner loop - feed_line is not what we are
      * measuring here. Re-using the same repl_state_document_cmds_mut()[] across iterations is
      * fine because replay only mutates the replay state, not the source
-     * commands. We mark repl_state_flat_program_dirty() between iterations so replay_start()
+     * commands. We mark repl_state_flat_program_dirty() between iterations so repl_replay_start()
      * does a fresh flatten each time - that matches "what happens the
-     * first time you press play". Note: replay_start() handles the
+     * first time you press play". Note: repl_replay_start() handles the
      * flatten itself and clears repl_state_flat_program_dirty(), so calling
      * repl_flatten_commands() explicitly here would flatten twice. */
     repl_load_example_lines_for_test(k_long_replay_scene);
 
-    /* Warm up via replay_start/replay_stop (not a bare
+    /* Warm up via repl_replay_start/repl_replay_stop (not a bare
      * repl_flatten_commands) so the flatten's CMD_VAR_ASSIGN writes
      * to g_predef_vars don't leak into the timed iterations -
-     * replay_start does its own predef snapshot/restore around the
+     * repl_replay_start does its own predef snapshot/restore around the
      * flatten (repl_core.c:3264-3268). */
     mark_normals_dirty();
     replay_start();
@@ -384,7 +384,7 @@ static BenchResult bench_replay_long(int iters) {
     /* Snapshot post-load predef values. replay_advance() writes
      * g_predef_vars on CMD_VAR_ASSIGN during playback
      * (repl_core.c:3655-3656), so without restoring, each iteration
-     * would start replay_start()'s baseline capture from progressively
+     * would start repl_replay_start()'s baseline capture from progressively
      * drifted values. */
     float saved_vals[MAX_PREDEF_VARS];
     int saved_n = g_num_predef_vars;
@@ -497,8 +497,8 @@ static BenchResult bench_fade_batches(int iters) {
                       .min_sec = 1e18 };
 
     /* Build the long scene and flatten once. The flatten pass runs
-     * inside replay_start(); we piggy-back on that to also capture
-     * repl_state_flat_program_count() (replay_start clamps repl_state_flat_program_count() during
+     * inside repl_replay_start(); we piggy-back on that to also capture
+     * repl_state_flat_program_count() (repl_replay_start clamps repl_state_flat_program_count() during
      * playback, so we snapshot before/after). */
     repl_load_example_lines_for_test(k_fade_bench_scene);
     mark_normals_dirty();
@@ -506,7 +506,7 @@ static BenchResult bench_fade_batches(int iters) {
     int flat_cmds = repl_state_flat_program_count();
     replay_stop();
 
-    /* Re-flatten after replay_stop so repl_state_flat_program_count() is the full stream
+    /* Re-flatten after repl_replay_stop so repl_state_flat_program_count() is the full stream
      * (replay's clamp might still be in effect otherwise - we observed
      * flat_cmds via the post-start snapshot above). */
     mark_normals_dirty();

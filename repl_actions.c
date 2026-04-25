@@ -160,10 +160,10 @@ void repl_cfg_cycle_row(int row, int delta) {
      * collapse to "toggle". */
     if (item->key == REPL_CONFIG_REPLAY) {
         if (repl_config_get(REPL_CONFIG_REPLAY)) {
-            replay_stop();
+            repl_replay_stop();
             set_status("Replay: off");
         } else {
-            replay_start();
+            repl_replay_start();
         }
         return;
     }
@@ -178,7 +178,7 @@ void repl_cfg_cycle_row(int row, int delta) {
     }
 
     if (*repl_state_replay()->active)
-        replay_stop();
+        repl_replay_stop();
 
     int new_value = repl_config_cycle(item->key, delta);
 

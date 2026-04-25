@@ -359,9 +359,9 @@ ReplProfilePanelState       *repl_state_profile_panel_mut(void);
 
 const ReplStatusState *repl_state_status(void);
 ReplStatusState       *repl_state_status_mut(void);
-void repl_status_set(const char *message);
-void repl_status_clear(void);
-void repl_status_tick(void);
+void repl_state_status_set(const char *message);
+void repl_state_status_clear(void);
+void repl_state_status_tick(void);
 
 const ReplSearchState *repl_state_search(void);
 ReplSearchState       *repl_state_search_mut(void);

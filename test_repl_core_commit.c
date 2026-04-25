@@ -733,7 +733,7 @@ int main(void) {
         repl_feed_line_public("glVertex3f(i, j, 0);");
         if (i_idx >= 0) g_predef_vars[i_idx].value = 3.2f;
         if (j_idx >= 0) g_predef_vars[j_idx].value = 1.2f;
-        replay_start();
+        repl_replay_start();
         replay_state = REPLAY_PAUSED;
 
         replay_pc = 1;
@@ -777,7 +777,7 @@ int main(void) {
         repl_feed_line_public("i = i + k;");
         if (i_idx >= 0) g_predef_vars[i_idx].value = 0.23f;
         if (k_idx >= 0) g_predef_vars[k_idx].value = 0.5f;
-        replay_start();
+        repl_replay_start();
         replay_state = REPLAY_PAUSED;
 
         replay_pc = 1;
@@ -809,7 +809,7 @@ int main(void) {
         repl_feed_line_public("x = i + 1;");
         repl_feed_line_public(":after");
         repl_feed_line_public("glVertex3f(0, 0, 0);");
-        replay_start();
+        repl_replay_start();
         replay_state = REPLAY_PAUSED;
 
         replay_pc = repl_state_flat_program_count();
@@ -841,7 +841,7 @@ int main(void) {
         repl_feed_line_public("i = j * 1e-06;");
         repl_feed_line_public("}");
         if (j_idx >= 0) g_predef_vars[j_idx].value = 1.0f;
-        replay_start();
+        repl_replay_start();
         replay_state = REPLAY_PAUSED;
 
         replay_pc = 1;

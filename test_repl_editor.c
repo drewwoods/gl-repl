@@ -1996,21 +1996,21 @@ int main() {
         repl_flatten_commands();
 
         replay_mode = REPLAY_MODE_VERTEX;
-        replay_start();
+        repl_replay_start();
         replay_advance();
         ASSERT_INT("replay vertex mode focuses first gluVertex",
                    replay_src_line, 2);
         replay_advance();
         ASSERT_INT("replay vertex mode focuses next gluVertex",
                    replay_src_line, 3);
-        replay_stop();
+        repl_replay_stop();
 
         replay_mode = REPLAY_MODE_POLYGON;
-        replay_start();
+        repl_replay_start();
         replay_advance();
         ASSERT_INT("replay polygon mode focuses tess vertex",
                    replay_src_line, 4);
-        replay_stop();
+        repl_replay_stop();
         replay_mode = REPLAY_MODE_VERTEX;
     }
 
