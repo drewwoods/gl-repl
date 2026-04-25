@@ -2,6 +2,7 @@
 #include "repl_state.h"
 #include "repl_core.h"
 #include "ui_help_overlay.h"
+#include "prof.h"
 #include "ui_profile_panel.h"
 #include "ui_color_picker.h"
 #include "ui_autocomplete_panel.h"

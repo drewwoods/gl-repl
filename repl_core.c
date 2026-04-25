@@ -67,6 +67,7 @@
 #include "ui_help_overlay.h"
 #include "ui_variable_panel.h"
 #include "ui_profile_panel.h"
+#include "prof.h"
 
 #include <sys/stat.h>
 #include <sys/types.h>
@@ -639,8 +640,8 @@ static void display_func(void) {
     /* 3D scene - with optional accumulation-buffer jitter AA */
     /* Reset subsection accumulators so timings across all AA samples sum up
      * correctly before the first (or only) render_3d_scene() call. */
-    for (ProfSection s = PROF_SCENE_3D_SETUP; s <= PROF_SCENE_3D_HUD; s++)
-        prof_accum_reset(s);
+    for (ProfSection section_idx = PROF_SCENE_3D_SETUP; section_idx <= PROF_SCENE_3D_HUD; section_idx++)
+        prof_accum_reset(section_idx);
     prof_begin(PROF_SCENE_3D);
     {
         const ReplRenderState *rs     = repl_state_render();
@@ -670,8 +671,8 @@ static void display_func(void) {
     }
     prof_end(PROF_SCENE_3D);
     /* Commit the accumulated subsection totals now that all AA samples are done. */
-    for (ProfSection s = PROF_SCENE_3D_SETUP; s <= PROF_SCENE_3D_HUD; s++)
-        prof_accum_commit(s);
+    for (ProfSection section_idx = PROF_SCENE_3D_SETUP; section_idx <= PROF_SCENE_3D_HUD; section_idx++)
+        prof_accum_commit(section_idx);
 
     /* 2D overlays in full window coords */
     glViewport(0, 0, *repl_state_viewport()->window_w, *repl_state_viewport()->window_h);

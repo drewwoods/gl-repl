@@ -5,7 +5,7 @@
 #include "repl_core_internal.h"
 #include "repl_keys.h"
 #include "repl_state.h"
-#include "ui_profile_panel.h"
+#include "prof.h"
 
 #define REPLAY_STATE (repl_state_replay_mut())
 #define g_replay_active      (*REPLAY_STATE->active)
@@ -773,8 +773,8 @@ void execute_replay_fade_batches(void) {
     glPushAttrib(GL_ALL_ATTRIB_BITS);
     prof_accum_end(PROF_SCENE_3D_FADE_PROLOGUE);
 
-    for (int i = 0; i < g_replay_fade_batch_count; i++) {
-        float alpha = replay_batch_alpha(&g_replay_fade_batches[i]);
+    for (int batch_idx = 0; batch_idx < g_replay_fade_batch_count; batch_idx++) {
+        float alpha = replay_batch_alpha(&g_replay_fade_batches[batch_idx]);
 
         if (alpha <= 0.0f)
             continue;
@@ -782,11 +782,11 @@ void execute_replay_fade_batches(void) {
         prof_begin(PROF_SCENE_3D_FADE_BATCH_PREP);
         FlatProgramView flat_program = repl_flat_program_view_live();
         ReplExecutionOptions exec_options = {
-            .flat_cmd_count = g_replay_fade_batches[i].new_pc,
+            .flat_cmd_count = g_replay_fade_batches[batch_idx].new_pc,
             .program = flat_program
         };
         replay_restore_baseline_predef_values();
-        repl_execute_set_fade_context(alpha, skip_limits[i]);
+        repl_execute_set_fade_context(alpha, skip_limits[batch_idx]);
 
         glDisable(GL_LIGHTING);
         glEnable(GL_BLEND);
