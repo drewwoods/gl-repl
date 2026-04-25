@@ -360,7 +360,8 @@ File prefixes partition the tree by responsibility:
 
 - `repl_*` — pipeline, input, domain models. No OpenGL calls
   (except `repl_core.c`, which owns GL init and the display
-  callback).
+  callback, and `repl_executor.c`, which dispatches GL drawing
+  for flat commands).
 - `ui_*` — 2D rendering (code panel + floating overlays/popups).
   These files call OpenGL and read state from the `repl_*` models.
 - `scene_*` — 3D viewport rendering.
@@ -380,6 +381,43 @@ UI-adjacent:
 
 The prefix tells you the layer; read the file's top-of-file
 comment for the one-line charter.
+
+### Layering rules
+
+Two hard rules govern the prefix groups:
+
+**1. GL/GLUT isolation.** Live OpenGL/GLU drawing calls only appear in
+`scene_*.c`, `ui_*.c`, and `repl_executor.c`. GLUT input/feedback
+APIs (`glutPostRedisplay`, `glutSetCursor`, `glutGetModifiers`,
+`glutSwapBuffers`) only appear in `sample.c` and `repl_editor.c`,
+funnelled through local helpers
+(`editor_request_redraw()`, `editor_set_cursor()`,
+`repl_editor_active_modifiers()`). `repl_*.c` files (other than
+the executor) and `sample.h` do not call GL or GLU. Text emission
+of GL command names — `repl_export.c`, `repl_examples.c`,
+`repl_command_spec.c`, `repl_replay_annotations.c`,
+`repl_parser.c` — is REPL source, not a live call site.
+
+**2. UI/scene independence.** `ui_*` and `scene_*` are sibling
+rendering layers; neither includes the other's headers. They
+communicate only through `repl_*` models above them and through
+the orchestrator in `repl_core.c`'s `display_func()`, which is
+the sole master that dispatches `render_3d_scene()` and the 2D
+overlay sequence per frame. Both layers may freely include
+`repl_*` headers (pipeline + models). The 2D primitives
+(`scene_2d_*` in the scene layer, `ui_2d_*` in the UI layer)
+are duplicated per layer rather than shared.
+
+Grandfathered exceptions:
+
+- `scene_render.c` includes `ui_panels.h` for `scene_rect()` and
+  `ui_profile_panel.h` for profile-panel layout queries. Both are
+  read-only layout coordinates, not render dispatch. Tracked for
+  removal via a future move of `scene_rect()` into a `repl_*`
+  layout model.
+
+The grep guards `make check-gl-boundaries` and
+`make check-layer-coupling` enforce both rules.
 
 ## Where to put new code
 

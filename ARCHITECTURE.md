@@ -418,6 +418,62 @@ state, hit rectangles, and rendering live outside `ui_panels.c`.
 - swatch rendering for literal color commands
 - picker drag handling and command rewrite
 
+## Layering Rules
+
+Two hard rules govern where OpenGL calls and inter-module includes are
+allowed. They keep the rendering surface mechanically auditable and
+preserve the master/slave relationship between the orchestrator and the
+two rendering layers.
+
+### GL/GLUT isolation
+
+- Live OpenGL/GLU drawing calls only appear in `scene_*.c`, `ui_*.c`,
+  and `repl_executor.c`. The executor is the sole `repl_*` exception
+  because it dispatches GL for flat commands.
+- GLUT input/feedback APIs (`glutPostRedisplay`, `glutSetCursor`,
+  `glutGetModifiers`, `glutSwapBuffers`) only appear in `sample.c` and
+  `repl_editor.c`, and inside `repl_editor.c` they go through local
+  funnel helpers (`editor_request_redraw()`, `editor_set_cursor()`,
+  `repl_editor_active_modifiers()`) so the GLUT surface is reviewable
+  in one place.
+- All other `repl_*.c` files and `sample.h` do not call GL or GLU.
+  Text emission of GL command *names* — `repl_export.c`,
+  `repl_examples.c`, `repl_command_spec.c`,
+  `repl_replay_annotations.c`, `repl_parser.c` — is REPL source, not
+  a live call site.
+
+### UI/scene independence
+
+- `ui_*` and `scene_*` are sibling rendering layers. Neither includes
+  the other's headers. They communicate only through `repl_*` models
+  above them and through the orchestrator in `repl_core.c`'s
+  `display_func()`, which is the sole master that dispatches
+  `render_3d_scene()` and the 2D overlay sequence per frame.
+- Both layers may freely include `repl_*` headers (pipeline plus
+  domain models).
+- The 2D primitives (`scene_2d_*` in the scene layer, `ui_2d_*` in the
+  UI layer) are duplicated per layer rather than shared, so each layer
+  can evolve drawing conventions independently. `glRectf` replaces
+  the former `draw_quad` shared helper at every call site.
+
+### Grandfathered exceptions
+
+- `scene_render.c` includes `ui_panels.h` for `scene_rect()` and
+  `ui_profile_panel.h` for profile-panel layout queries. Both are
+  read-only layout coordinates, not render dispatch. Tracked for
+  removal by migrating `scene_rect()` into a `repl_*` layout model.
+
+### Enforcement
+
+`make check-gl-boundaries` greps `repl_*.c` (excluding the executor)
+for GL/GLU drawing calls and `repl_*.c` (excluding the executor and
+editor) for GLUT calls; both sets must be empty.
+`make check-layer-coupling` greps `ui_*` for `#include "scene_*"` and
+`scene_*` for `#include "ui_*"`, allowing only the two grandfathered
+includes above. Both targets run inside the `make test` /
+`make test-stubs` umbrella so a regression fails the build on first
+push.
+
 ## Shared State Rules
 
 - `sample.h` remains the single shared type and compatibility header, while
