@@ -476,106 +476,121 @@ After the move, A/B against the pre-refactor binary on the replay HUD
 and ruler-grid labels — those are the two `scene_*` callers of
 `begin_2d`/`draw_string` and the ones most likely to drift.
 
-#### 11b. Push tessellation/GLU bootstrap behind a scene-owned module
+#### 11b. Move tessellation/GLU resources into `repl_executor.c`
 
-`repl_state.c` is the typed runtime-state facade — it should own *storage*,
-not GL resource lifetimes. The 5 tess callbacks and the `gluNewQuadric`/
-`gluNewTess` bootstrap pair are render-side concerns.
+**Layering check:** `gluSphere`, `gluCylinder`, `gluDisk`, `gluPartialDisk`,
+`gluTessBeginPolygon`, `gluTessVertex`, etc. are all called from
+`repl_executor.c` — the executor is the *only* consumer of `g_quadric` /
+`g_tess`. No `scene_*` or `ui_*` module reads these resources. Putting them
+in a `scene_resources.c` would force `repl_executor.c` to include
+`scene_*.h`, which inverts the layering (executor is the pipeline layer
+*below* scene rendering — scene calls executor, not the other way around).
+
+The right home is `repl_executor.c` itself: it's the sole caller of GLU
+drawing APIs, so it should own the GLU resources too.
 
 Steps:
 
-1. Create `scene_resources.c` / `scene_resources.h` (or fold into
-   `scene_render.c`) that owns:
-   - the static `g_quadric`, `g_tess`, `g_tess_verts[]`, `g_tess_vert_count`
-     storage (move from `repl_state.c`),
+1. Move from `repl_state.c` into `repl_executor.c`:
+   - the static `g_quadric`, `g_tess`, `g_tess_verts[]`,
+     `g_tess_vert_count` storage (`repl_state.c` definitions and the
+     externs in `repl_state.h`),
    - the 5 tess callbacks `repl_render_tess_vtx_begin_cb`,
      `repl_render_tess_vtx_end_cb`, `repl_render_tess_vtx_cb`,
      `repl_render_tess_comb_cb`, `repl_render_tess_err_cb`
      (`repl_state.c:389-450ish`),
    - `repl_state_render_init_resources()` and
      `repl_state_render_destroy_resources()` (`repl_state.c:1066-1106`).
-2. Rename the public entrypoints to match the scene module
-   (`scene_resources_init()` / `scene_resources_destroy()`) and update the
-   two callers (`repl_init_gl` in `repl_core.c` and the destroy site in
-   `sample.c`). Keep one-line `repl_state_render_*_resources` shims if any
-   test references them; otherwise delete the old names.
-3. Confirm `repl_executor.c` accessors that read `g_quadric` / `g_tess`
-   continue to compile — likely move those externs into
-   `scene_resources.h`, or expose typed getters
-   (`scene_resources_quadric()`, `scene_resources_tess()`) and migrate
-   `repl_executor.c` to use them. Getter form is preferred since it keeps
-   the pointer non-mutable from the caller side.
+2. Rename the public entrypoints to match the executor module
+   (`repl_executor_init_resources()` /
+   `repl_executor_destroy_resources()`) in `repl_executor.h`. Update the
+   two callers: `repl_init_gl()` in `repl_core.c` (now calls
+   `repl_executor_init_resources()`) and the destroy site in `sample.c`.
+3. Internal access to `g_quadric` / `g_tess` is now file-static in
+   `repl_executor.c` — no header export needed. If anything outside the
+   executor ever needs them in future, expose typed getters rather than
+   re-introducing externs.
 4. After the move, `repl_state.c` should have **zero** live GL/GLU calls.
    The string-literal hits at `repl_state.c:178-186` (the
-   `g_render_state_lines` / camera scaffold strings) are not live calls and
-   stay where they are.
-5. Update the local `include/GL/glu.h` stub if needed — `gluNewQuadric`,
-   `gluNewTess`, `gluTessCallback`, `gluTessProperty`, `gluTessBeginPolygon`,
-   `gluTessBeginContour`, `gluTessVertex`, `gluTessEndContour`,
-   `gluTessEndPolygon`, `gluDeleteQuadric`, `gluDeleteTess`,
-   `gluQuadricNormals`, `gluQuadricTexture`, `gluSphere`, `gluCylinder`,
-   `gluDisk`, `gluPartialDisk`, `gluOrtho2D` should all already be present
-   for `USE_GL_STUBS=1`. Adding `#include "scene_resources.h"` to whatever
-   stub-build object list previously included these symbols may be
-   required.
+   `g_render_state_lines` / camera scaffold strings) are not live calls
+   and stay where they are.
+5. `repl_state.h` loses the `g_quadric` / `g_tess` / `g_tess_verts` /
+   `g_tess_vert_count` externs and the `TessVertex` typedef if no other
+   module references it (grep first — `TessVertex` may be referenced in
+   tests).
+6. Stubs in `include/GL/glu.h` are unchanged — the GLU symbols already
+   linked in `repl_state.c`'s build now link in `repl_executor.c`'s
+   instead. The `USE_GL_STUBS=1` build needs no stub additions, just
+   the moved object file.
 
 **Verify:** `make test-stubs TEST_JOBS=4` (the tess callbacks must still
 link in stub mode); `make sample && ./sample`; load an example that
-exercises tessellation (the polygon-with-holes tess examples); confirm
-the quadric is recreated on a window-context rebuild path if any. Also
-explicitly run the leak/teardown path — exit cleanly via `q`/window
-close — to make sure `scene_resources_destroy()` fires.
+exercises tessellation (the polygon-with-holes tess examples) and one
+that exercises quadrics (`gluSphere`/`gluCylinder` calls); confirm exit
+cleanly via window close so `repl_executor_destroy_resources()` fires.
 
-#### 11c. Replace inline GL helpers in `sample.h`
+#### 11c. Replace inline GL helpers in `sample.h` with `repl_executor.h` exports
 
 `sample.h` is supposed to be the shared *types* and compatibility header.
 Inline helpers that expand to GL calls in every translation unit pull GL
 symbols into every `.c` that includes `sample.h`, defeating the layering.
 
+**Layering check:** `apply_transform_cmd` and `apply_tracked_transform_cmd`
+are called by `repl_executor.c` (dispatch) and by two `scene_*` modules
+(`scene_transform_guides.c`'s `compute_before_cursor_matrix`,
+`scene_overlays.c`'s flat-cmd walk). `scene_*` already includes
+`repl_executor.h` (because `scene_render.c` calls `repl_execute_program`),
+so the dependency direction is **scene → executor** — pipeline-below-scene,
+which matches the layering. No new coupling is introduced by exporting
+these from `repl_executor.h`. There is no `ui_*` consumer.
+
 Steps:
 
-1. Move `is_transform_cmd` (still pure, no GL) — keep where it is or move
-   to `repl_executor.h` since it classifies commands. No behavior risk.
+1. Keep `is_transform_cmd` where it is — it's a pure command-classifier
+   with no GL, so it can stay in `sample.h` or move to `repl_executor.h`
+   if you prefer. No behavior risk.
 2. Move `apply_transform_cmd`, `apply_tracked_transform_cmd`, and
    `unwind_tracked_transform_stack` (`sample.h:296-333`) into
-   `repl_executor.c` (or a new `repl_transform_apply.c` if both
-   `repl_executor.c` and `scene_transform_guides.c` need them — check
-   `grep -nE 'apply_(tracked_)?transform_cmd|unwind_tracked_transform_stack'`).
-   Convert from `static inline` to ordinary `extern` functions exported
-   from the new home's header. The current call sites are:
-   - `repl_executor.c` (the `case CMD_TRANSLATE3F:` etc. dispatch) — already
-     in the same TU, becomes a static helper local to `repl_executor.c`.
-   - `scene_transform_guides.c` `compute_before_cursor_matrix` — calls
-     `apply_tracked_transform_cmd`. Use the exported version from
-     `repl_executor.h` (or `repl_transform_apply.h`).
-   - `scene_overlays.c` walk — same call pattern.
-3. Replace `_repl_point_size` (`sample.h:386-395`) with a real function
-   in `repl_executor.c` (e.g. `repl_apply_point_size(GLfloat)`). Update
-   the `glPointSize` macro re-definition: instead of overriding the GL
-   symbol globally via `sample.h`, do the override only inside
-   `repl_executor.c` for the `case CMD_POINT_SIZE:` path. All other
-   `glPointSize` call sites (`scene_geometry_guides.c`, `scene_overlays.c`,
-   `scene_axes.c`, `scene_lights.c`) call the real GL function and don't
-   need the attenuation hack — confirm by re-reading the original intent
-   in the `sample.h:386-395` comment block. If a *user-facing* point-size
-   command is the only place that needs distance attenuation, scoping the
-   shim to the executor is a behavior-preserving win.
-4. Drop the `#include <gl_includes.h>` from `sample.h` if it survives only
-   to make these inline GL helpers compile — keep it if struct types
-   (`GLfloat`, `GLenum`, `GLCmd`) still require it.
+   `repl_executor.c` and export from `repl_executor.h`. Convert from
+   `static inline` to ordinary functions. Call sites:
+   - `repl_executor.c`'s own dispatch — was inline-via-include, becomes a
+     direct call within the same TU.
+   - `scene_transform_guides.c` `compute_before_cursor_matrix` — already
+     includes `repl_executor.h` transitively; no new coupling.
+   - `scene_overlays.c` flat-walk — same.
+3. Replace `_repl_point_size` (`sample.h:386-395`) with a static helper
+   inside `repl_executor.c` and scope the `glPointSize` macro override to
+   that TU only:
+   - Move the `#ifdef NO_POINT_PARAMETER` block out of `sample.h` and
+     into `repl_executor.c`. The override is for the `case CMD_POINT_SIZE:`
+     dispatch path only — that's the only *user-facing* `glPointSize`
+     issued by the REPL language.
+   - All other `glPointSize` call sites in `scene_*` modules
+     (`scene_geometry_guides.c`, `scene_overlays.c`, `scene_axes.c`,
+     `scene_lights.c`) are render-internal helpers that already chose
+     their own size and don't want the attenuation hack — confirmed by
+     the comment at `sample.h:386-395`. Scoping the shim to the executor
+     is a behavior-preserving win.
+4. Drop `#include <gl_includes.h>` from `sample.h` if it survives only to
+   make these inline GL helpers compile. Keep it if `GLfloat`/`GLenum`
+   still appear in struct types (`GLCmd`). Verify by trial removal +
+   `make sample USE_GL_STUBS=1` link.
 5. `sample.h`'s GL-call grep should hit zero after the move.
 
-**Verify:** `make test-stubs TEST_JOBS=4`; build both `make sample` and
-`make sample USE_GL_STUBS=1` and `make sample NO_POINT_PARAMETER=1`
-(the punch list lives at the intersection of these three flags). Run
-the bench harness `./bench_repl fade_batches` if available — it
-exercises tracked transforms via the executor.
+**Verify:** `make test-stubs TEST_JOBS=4`; build all three flag
+combinations: `make sample`, `make sample USE_GL_STUBS=1`, and
+`make sample NO_POINT_PARAMETER=1` (the punch-list intersection). Run
+`./bench_repl fade_batches` — it exercises tracked transforms via the
+executor and the scene_* walkers.
 
 #### 11d. Move replay-fade GL pass into `scene_render.c`
 
-`repl_replay.c` should be the replay *model* (state machine, fade-batch
-ring, alpha math, PC tracking). The actual GL pass at
-`repl_replay.c:773-809` is a render owner.
+**Layering check:** the fade pass is pure 3D scene rendering — no `ui_*`
+involvement. `scene_render.c` already calls `execute_replay_fade_batches()`
+from inside its frame, and the layering rule (master `repl_*` calls down
+into `scene_*`/`ui_*` renderers) is preserved by having `repl_replay.c`
+expose model data that `scene_render.c` reads. Direction stays:
+**scene → replay model** (read-only, fade-batch ring + alpha math).
 
 Steps:
 
@@ -586,33 +601,49 @@ Steps:
      returning the actual count. Also keep `replay_batch_alpha()`,
      `repl_execute_set_fade_context()`, and `replay_has_active_fades()`
      where they are.
-   - **Render side** (moves to `scene_render.c` as a new
-     `scene_render_replay_fades()` next to the existing fade-pass setup
-     at `scene_render.c:512-530`): the `glPushAttrib` / per-batch
+   - **Render side** (moves to `scene_render.c` as a new static
+     `render_replay_fade_pass()` adjacent to the existing fade-pass
+     setup at `scene_render.c:512-530`): the `glPushAttrib` / per-batch
      `glDisable(GL_LIGHTING)` / `glEnable(GL_BLEND)` / `glBlendFunc` /
      `glPolygonMode` / `glColor4f` / `glPushMatrix` / `glPopMatrix` /
      `glPopAttrib` block plus the per-batch
      `repl_execute_program(&exec_options)` call.
 2. The existing fade-pass setup in `scene_render.c:512-530` already
    primes lighting, blend, and polygon mode, then immediately calls
-   `execute_replay_fade_batches()`. After the move, both blocks live
-   in one place — collapse the duplicated setup so we only set blend/
+   `execute_replay_fade_batches()`. After the move, both blocks live in
+   one place — collapse the duplicated setup so we only set blend/
    polygon mode once around the loop, not once per batch. This is the
    payoff for moving the code.
-3. Rename or delete the now-thin `execute_replay_fade_batches()`
-   wrapper in `sample.h:375` and `repl_replay.h:29` — callers in
-   `bench_repl.c` need to migrate to the new entrypoint
-   (`scene_render_replay_fades()`); the bench harness explicitly
-   counts GL calls from this function (`bench_repl.c:531`,
-   `bench_repl.c:564`), so its name appears in test output strings —
-   update those too.
+3. Delete the now-empty `execute_replay_fade_batches()` wrapper from
+   `sample.h:375` and `repl_replay.h:29`. Callers:
+   - `scene_render.c` calls the new static `render_replay_fade_pass()`
+     directly — no public API needed.
+   - `bench_repl.c:549` calls `execute_replay_fade_batches()` for its
+     GL-call count harness. The bench is a *test harness* that needs to
+     drive the GL pass without `scene_render.c`'s frame setup. Two
+     options:
+     - **Preferred:** move the bench's fade-batch driver to call the new
+       `render_replay_fade_pass()` directly — exposed via
+       `scene_render.h` solely for the bench. Keep the function `static`
+       within `scene_render.c` for normal builds, expose only behind
+       `#ifdef BENCH_REPL_HARNESS` (or via a separate
+       `scene_render_test.h` linked only by the bench). This preserves
+       the master/slave rule for normal builds.
+     - **Fallback:** keep a thin `execute_replay_fade_batches()` in
+       `repl_replay.c` that delegates to the new
+       `render_replay_fade_pass()` — but that re-introduces the upward
+       call (replay → scene render). Avoid unless the bench-only
+       exposure proves intractable.
+   - The bench's stdout strings at `bench_repl.c:531,564` reference
+     `execute_replay_fade_batches` — update them to name the new
+     entrypoint so log readers can find the symbol.
 4. After the move, `repl_replay.c` should have **zero** live GL calls.
    `repl_replay.h` should drop any `gl_includes.h` include if no
    remaining declaration needs it.
 
 **Verify:** `make test-stubs TEST_JOBS=4`; the bench harness
-`./bench_repl fade_batches` GL-call count should be **strictly less than
-or equal to** the pre-refactor number (the per-batch redundant
+`./bench_repl fade_batches` GL-call count should be **strictly less
+than or equal to** the pre-refactor number (the per-batch redundant
 `glDisable(GL_LIGHTING)`/`glEnable(GL_BLEND)`/`glBlendFunc`/
 `glPolygonMode` calls collapse to one). Capture the before/after counts
 in the commit message. `make sample && ./sample`: load an example with
@@ -621,9 +652,10 @@ ghost should look identical.
 
 #### 11e. Funnel `repl_editor.c` and `repl_actions.c` GLUT calls through helpers
 
-This is the smallest sub-step but it's what makes the rule mechanically
-enforceable: after this lands, the grep `grep -nE '\bgl[uU]?[A-Z]' repl_*.c`
-(excluding `repl_executor.c`) should return nothing.
+**Layering note:** GLUT input/feedback (post-redisplay, cursor, modifiers)
+is editor/input layer, not rendering. No `scene_*`/`ui_*` coupling
+involved. This step is unchanged by the layering rule — included here
+for completeness.
 
 Steps:
 
@@ -638,13 +670,13 @@ Steps:
 2. The two `glutGetModifiers()` queries — one in `repl_editor.c:75`, one
    in `repl_actions.c:169` — are GLUT inputs, not drawing. Move them
    behind a single helper `repl_editor_active_modifiers()` exported from
-   `repl_editor.h`. `repl_actions.c` calls the helper instead of including
-   GLUT headers directly. After this, `repl_actions.c` has zero
-   `gl[uU][A-Z]` matches.
+   `repl_editor.h`. `repl_actions.c` calls the helper instead of
+   including GLUT headers directly. After this, `repl_actions.c` has
+   zero `gl[uU][A-Z]` matches.
 3. Update the "Naming Notes" exception list in `MODULES.md:359-365` to
-   mention that `repl_editor.c` calls GLUT *input/feedback* APIs through
-   the funnel helpers and that this is the only `repl_*` file allowed to
-   include `<GL/freeglut.h>` for input — distinct from the
+   mention that `repl_editor.c` calls GLUT *input/feedback* APIs
+   through the funnel helpers and that this is the only `repl_*` file
+   allowed to include `<GL/freeglut.h>` for input — distinct from the
    `repl_executor.c` exception, which is allowed to call GL drawing APIs.
 
 **Verify:** `make test-stubs TEST_JOBS=4`; `./sample` cursor changes
@@ -652,35 +684,60 @@ across the code-panel resize divider, undo/redo redraws, scrolling
 redraws, and SHIFT-clicking the time toggle (Ctrl+T with SHIFT) all
 behave as before.
 
-#### 11f. Lock the boundary with a grep guard
+#### 11f. Lock both boundaries with grep guards
 
-After 11a-11e land, the live-call surface should match the rule: only
-`scene_*.c`, `ui_*.c`, and `repl_executor.c` issue GL/GLU calls; only
-`sample.c` and `repl_editor.c` issue GLUT input/feedback calls.
+After 11a-11e land, two rules are enforceable:
+
+- **GL/GLUT layer rule:** only `scene_*.c`, `ui_*.c`, and
+  `repl_executor.c` issue GL/GLU drawing calls; only `sample.c` and
+  `repl_editor.c` issue GLUT input/feedback calls.
+- **Cross-layer coupling rule:** `ui_*` and `scene_*` do not include
+  each other's headers (with one grandfathered exception — see below).
 
 Steps:
 
-1. Add a `make check-gl-boundaries` target that runs three greps and
+1. Add a `make check-gl-boundaries` target that runs four greps and
    fails the build if any returns matches:
-   - `grep -nE '\b(gl[A-Z]|glu[A-Z])[A-Za-z0-9]*\s*\(' repl_*.c | grep -v '^repl_executor\.c:' | grep -v ':\s*[/*"]'`
-     (exclude executor and exclude lines that look like comments/strings)
-   - same grep against `sample.h` / `sample.c` minus `sample.c` GLUT
-     callback wiring.
-   - `grep -nE '\bglut[A-Z][A-Za-z0-9]*\s*\(' repl_*.c | grep -vE '^repl_(editor|executor)\.c:' | grep -v ':\s*[/*"]'`
+   - **GL/GLU drawing:**
+     `grep -nE '\b(gl[A-Z]|glu[A-Z])[A-Za-z0-9]*\s*\(' repl_*.c | grep -v '^repl_executor\.c:' | grep -v ':\s*[/*"]'`
+     (exclude executor and lines that look like comments/strings).
+   - **GL in sample.h:** same grep against `sample.h` should be empty
+     (transform helpers / point-size shim moved out in 11c).
+   - **GLUT input/feedback:**
+     `grep -nE '\bglut[A-Z][A-Za-z0-9]*\s*\(' repl_*.c | grep -vE '^repl_(editor|executor)\.c:' | grep -v ':\s*[/*"]'`
      (only editor and executor may name GLUT symbols).
-2. Wire `check-gl-boundaries` into the same recipe `make test` already
-   uses, or call it from CI / the `make test-stubs` umbrella.
-3. Document the rule in `MODULES.md` under "Naming Notes" so the next
-   contributor sees the boundary plus the grep that enforces it. The
-   single-line summary: *"`repl_*.c` files don't call GL or GLU. Only
-   `repl_executor.c` (drawing) and `repl_editor.c` (GLUT input via local
-   funnel helpers) are exceptions."*
+2. Add a `make check-layer-coupling` target enforcing layer
+   independence:
+   - `! grep -nE '#include\s+"scene_' ui_*.c ui_*.h` —
+     **UI must not include any scene header.** Hard rule, no exceptions.
+   - `! grep -nE '#include\s+"ui_' scene_*.c scene_*.h | grep -vE 'scene_render\.c:.*ui_(panels|profile_panel)\.h'` —
+     scene must not include UI headers, with the existing
+     `scene_render.c → ui_panels.h` and `scene_render.c →
+     ui_profile_panel.h` couplings grandfathered for `scene_rect()` and
+     profile-panel layout. Document those two as the only allowed
+     exceptions and TODO their removal (see follow-up below).
+3. Wire both targets into `make test` and the `make test-stubs`
+   umbrella so a regression is caught on first push.
+4. Document the rules in `MODULES.md` under "Naming Notes". One-line
+   summaries:
+   - *"`repl_*.c` files don't call GL or GLU. Only `repl_executor.c`
+     (drawing) and `repl_editor.c` (GLUT input via local funnel helpers)
+     are exceptions."*
+   - *"`ui_*` and `scene_*` are independent layers. Neither includes the
+     other's headers. The two exceptions in `scene_render.c` — pulling
+     `scene_rect()` from `ui_panels.h` and profile-panel layout from
+     `ui_profile_panel.h` — are grandfathered until layout coordinates
+     migrate to a shared `repl_*` model module."*
+5. **Optional follow-up (separate punch-list item, not part of 11):**
+   move `scene_rect()` out of `ui_panels.c` into a `repl_*` layout
+   model so the grandfathered `scene_render.c → ui_panels.h` include
+   can be deleted. Same for profile-panel layout. Track as a
+   TODO in `MODULES.md` Open Edges; do not block 11 on it.
 
-**Verify:** the new `make check-gl-boundaries` passes on the cleaned
-tree and fails if any of the prior `grep -E '\b(gl|glu)[A-Z]'` lines
-are reintroduced — confirm by temporarily reverting one of the moves
-in 11a and running the target. `make test-stubs TEST_JOBS=4` must stay
-green.
+**Verify:** both new make targets pass on the cleaned tree and fail
+if any boundary line from 11a-11e is reintroduced — confirm by
+temporarily reverting one move from each sub-step and running the
+targets. `make test-stubs TEST_JOBS=4` must stay green.
 
 ---
 
