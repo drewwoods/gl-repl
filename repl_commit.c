@@ -203,12 +203,12 @@ int try_commit_float_decl(void) {
     const GLCmd *old_decl = overwriting_decl ? &repl_state_document_cmds_mut()[insert_idx] : NULL;
 
     /* Validate all names atomically before registering any */
-    for (int i = 0; i < var_count; i++) {
+    for (int var_idx = 0; var_idx < var_count; var_idx++) {
         /* Reject duplicates within the same declaration (e.g. float a, a;) */
-        for (int j = 0; j < i; j++) {
-            if (strcmp(names[i], names[j]) == 0) {
+        for (int prev_var_idx = 0; prev_var_idx < var_idx; prev_var_idx++) {
+            if (strcmp(names[var_idx], names[prev_var_idx]) == 0) {
                 char buf[128];
-                snprintf(buf, sizeof(buf), "duplicate name '%s' in declaration", names[i]);
+                snprintf(buf, sizeof(buf), "duplicate name '%s' in declaration", names[var_idx]);
                 set_status(buf);
                 return 1;
             }
@@ -216,11 +216,12 @@ int try_commit_float_decl(void) {
         /* Reject re-declaring an already-declared variable - but exempt
          * names carried over from the decl we're overwriting, since those
          * will be undeclared before the new registration runs. */
-        if (repl_eval_find_predef_var_idx(names[i]) >= 0) {
+        if (repl_eval_find_predef_var_idx(names[var_idx]) >= 0) {
             int in_old_decl = 0;
             if (old_decl) {
-                for (int d = 0; d < old_decl->var_decl_count; d++) {
-                    if (strcmp(old_decl->var_names[d], names[i]) == 0) {
+                /* Check if this name appears in the old declaration. */
+                for (int decl_idx = 0; decl_idx < old_decl->var_decl_count; decl_idx++) {
+                    if (strcmp(old_decl->var_names[decl_idx], names[var_idx]) == 0) {
                         in_old_decl = 1;
                         break;
                     }
@@ -228,22 +229,22 @@ int try_commit_float_decl(void) {
             }
             if (!in_old_decl) {
                 char buf[128];
-                if (!repl_format_fits(buf, sizeof(buf), "'%s' is already declared", names[i]))
+                if (!repl_format_fits(buf, sizeof(buf), "'%s' is already declared", names[var_idx]))
                     repl_format_fits(buf, sizeof(buf), "identifier is already declared");
                 set_status(buf);
                 return 1;
             }
         }
-        if (repl_eval_is_reserved_ident(names[i])) {
+        if (repl_eval_is_reserved_ident(names[var_idx])) {
             char buf[128];
-            if (!repl_format_fits(buf, sizeof(buf), "'%s' is reserved", names[i]))
+            if (!repl_format_fits(buf, sizeof(buf), "'%s' is reserved", names[var_idx]))
                 repl_format_fits(buf, sizeof(buf), "identifier is reserved");
             set_status(buf);
             return 1;
         }
-        if (!(isalpha((unsigned char)names[i][0]) || names[i][0] == '_')) {
+        if (!(isalpha((unsigned char)names[var_idx][0]) || names[var_idx][0] == '_')) {
             char buf[128];
-            if (!repl_format_fits(buf, sizeof(buf), "invalid identifier '%s'", names[i]))
+            if (!repl_format_fits(buf, sizeof(buf), "invalid identifier '%s'", names[var_idx]))
                 repl_format_fits(buf, sizeof(buf), "invalid identifier");
             set_status(buf);
             return 1;
@@ -267,9 +268,10 @@ int try_commit_float_decl(void) {
     cmd.type = CMD_VAR_DECLARE;
     cmd.valid = 1;
     cmd.var_decl_count = var_count;
-    for (int i = 0; i < var_count; i++) {
-        if (!repl_copy_string_fits(cmd.var_names[i], sizeof(cmd.var_names[i]),
-                                   names[i])) {
+    /* Copy all variable names into the command structure. */
+    for (int var_idx = 0; var_idx < var_count; var_idx++) {
+        if (!repl_copy_string_fits(cmd.var_names[var_idx], sizeof(cmd.var_names[var_idx]),
+                                   names[var_idx])) {
             set_status("invalid identifier (max 15 chars)");
             return 1;
         }
@@ -287,12 +289,13 @@ int try_commit_float_decl(void) {
         indent[ind] = '\0';
 
         int off = snprintf(cmd.source, sizeof(cmd.source), "%sfloat ", indent);
-        for (int i = 0; i < var_count && off < (int)sizeof(cmd.source) - 4; i++) {
-            if (i > 0) off += snprintf(cmd.source + off, sizeof(cmd.source) - off, ", ");
-            off += snprintf(cmd.source + off, sizeof(cmd.source) - off, "%s", names[i]);
-            if (has_init[i])
+        /* Format each variable name and optional initializer in the source. */
+        for (int var_idx = 0; var_idx < var_count && off < (int)sizeof(cmd.source) - 4; var_idx++) {
+            if (var_idx > 0) off += snprintf(cmd.source + off, sizeof(cmd.source) - off, ", ");
+            off += snprintf(cmd.source + off, sizeof(cmd.source) - off, "%s", names[var_idx]);
+            if (has_init[var_idx])
                 off += snprintf(cmd.source + off, sizeof(cmd.source) - off,
-                                " = %g", init_vals[i]);
+                                " = %g", init_vals[var_idx]);
         }
         snprintf(cmd.source + off, sizeof(cmd.source) - off, ";");
 
@@ -300,16 +303,18 @@ int try_commit_float_decl(void) {
          * names being REMOVED (present in old decl, absent from new) need
          * the "in use" check - names being kept stay valid throughout. */
         if (overwriting_decl) {
-            for (int d = 0; d < repl_state_document_cmds_mut()[insert_idx].var_decl_count; d++) {
-                const char *nm = repl_state_document_cmds_mut()[insert_idx].var_names[d];
+            /* Check each old declaration name. */
+            for (int decl_idx = 0; decl_idx < repl_state_document_cmds_mut()[insert_idx].var_decl_count; decl_idx++) {
+                const char *nm = repl_state_document_cmds_mut()[insert_idx].var_names[decl_idx];
                 int kept = 0;
-                for (int k = 0; k < var_count; k++) {
-                    if (strcmp(names[k], nm) == 0) { kept = 1; break; }
+                for (int var_idx = 0; var_idx < var_count; var_idx++) {
+                    if (strcmp(names[var_idx], nm) == 0) { kept = 1; break; }
                 }
                 if (kept) continue;
-                for (int j = 0; j < repl_state_document_count(); j++) {
-                    if (j == insert_idx) continue;
-                    if (repl_eval_source_uses_ident(repl_state_document_cmds_mut()[j].source, nm)) {
+                /* Check if this removed name is still used anywhere. */
+                for (int cmd_idx = 0; cmd_idx < repl_state_document_count(); cmd_idx++) {
+                    if (cmd_idx == insert_idx) continue;
+                    if (repl_eval_source_uses_ident(repl_state_document_cmds_mut()[cmd_idx].source, nm)) {
                         char buf[128];
                         snprintf(buf, sizeof(buf),
                                  "variable '%s' is in use, cannot overwrite", nm);
@@ -323,38 +328,40 @@ int try_commit_float_decl(void) {
         /* Undeclare only names being removed (absent from new decl) so kept
          * names retain their slot indices and live values. */
         if (overwriting_decl) {
-            for (int d = 0; d < repl_state_document_cmds_mut()[insert_idx].var_decl_count; d++) {
-                const char *nm = repl_state_document_cmds_mut()[insert_idx].var_names[d];
+            /* Undeclare each old name that is not being kept. */
+            for (int decl_idx = 0; decl_idx < repl_state_document_cmds_mut()[insert_idx].var_decl_count; decl_idx++) {
+                const char *nm = repl_state_document_cmds_mut()[insert_idx].var_names[decl_idx];
                 int kept = 0;
-                for (int k = 0; k < var_count; k++) {
-                    if (strcmp(names[k], nm) == 0) { kept = 1; break; }
+                for (int var_idx = 0; var_idx < var_count; var_idx++) {
+                    if (strcmp(names[var_idx], nm) == 0) { kept = 1; break; }
                 }
                 if (kept) continue;
                 int slot = repl_eval_find_predef_var_idx(nm);
                 if (slot < 0) continue;
                 repl_eval_undeclare_predef_var(nm);
-                for (int j = 0; j < repl_state_document_count(); j++) {
-                    if (repl_state_document_cmds_mut()[j].type == CMD_VAR_ASSIGN && repl_state_document_cmds_mut()[j].num_args > slot)
-                        repl_state_document_cmds_mut()[j].num_args--;
+                /* Adjust num_args in variable assignments that reference this slot. */
+                for (int cmd_idx = 0; cmd_idx < repl_state_document_count(); cmd_idx++) {
+                    if (repl_state_document_cmds_mut()[cmd_idx].type == CMD_VAR_ASSIGN && repl_state_document_cmds_mut()[cmd_idx].num_args > slot)
+                        repl_state_document_cmds_mut()[cmd_idx].num_args--;
                 }
             }
         }
 
         /* Register new names (safe - overwrite check passed, capacity verified).
          * Skip names already registered (kept from old decl) to preserve values. */
-        for (int i = 0; i < var_count; i++) {
-            if (overwriting_decl && repl_eval_find_predef_var_idx(names[i]) >= 0) {
-                if (has_init[i]) {
-                    int idx = repl_eval_find_predef_var_idx(names[i]);
-                    g_predef_vars[idx].value = init_vals[i];
+        for (int var_idx = 0; var_idx < var_count; var_idx++) {
+            if (overwriting_decl && repl_eval_find_predef_var_idx(names[var_idx]) >= 0) {
+                if (has_init[var_idx]) {
+                    int idx = repl_eval_find_predef_var_idx(names[var_idx]);
+                    g_predef_vars[idx].value = init_vals[var_idx];
                 }
                 continue;
             }
-            repl_eval_declare_predef_var(names[i], NULL, 0);
-            if (has_init[i]) {
-                int idx = repl_eval_find_predef_var_idx(names[i]);
+            repl_eval_declare_predef_var(names[var_idx], NULL, 0);
+            if (has_init[var_idx]) {
+                int idx = repl_eval_find_predef_var_idx(names[var_idx]);
                 if (idx >= 0)
-                    g_predef_vars[idx].value = init_vals[i];
+                    g_predef_vars[idx].value = init_vals[var_idx];
             }
         }
 
@@ -377,9 +384,10 @@ int try_commit_float_decl(void) {
     {
         char msg[128];
         int off = snprintf(msg, sizeof(msg), "declared ");
-        for (int i = 0; i < var_count && off < (int)sizeof(msg) - 4; i++) {
-            if (i > 0) off += snprintf(msg + off, sizeof(msg) - off, ", ");
-            off += snprintf(msg + off, sizeof(msg) - off, "%s", names[i]);
+        /* Append comma-separated variable names to status message. */
+        for (int var_idx = 0; var_idx < var_count && off < (int)sizeof(msg) - 4; var_idx++) {
+            if (var_idx > 0) off += snprintf(msg + off, sizeof(msg) - off, ", ");
+            off += snprintf(msg + off, sizeof(msg) - off, "%s", names[var_idx]);
         }
         set_status(msg);
     }
@@ -478,11 +486,12 @@ int try_assign_variable(void) {
                 }
             } else if (insert_idx < repl_state_document_count()) {
                 if (repl_state_document_cmds_mut()[insert_idx].type == CMD_VAR_DECLARE) {
-                    for (int d = 0; d < repl_state_document_cmds_mut()[insert_idx].var_decl_count; d++) {
-                        const char *nm = repl_state_document_cmds_mut()[insert_idx].var_names[d];
-                        for (int j = 0; j < repl_state_document_count(); j++) {
-                            if (j == insert_idx) continue;
-                            if (repl_eval_source_uses_ident(repl_state_document_cmds_mut()[j].source, nm)) {
+                    /* Check if any variables are still in use. */
+                    for (int decl_idx = 0; decl_idx < repl_state_document_cmds_mut()[insert_idx].var_decl_count; decl_idx++) {
+                        const char *nm = repl_state_document_cmds_mut()[insert_idx].var_names[decl_idx];
+                        for (int cmd_idx = 0; cmd_idx < repl_state_document_count(); cmd_idx++) {
+                            if (cmd_idx == insert_idx) continue;
+                            if (repl_eval_source_uses_ident(repl_state_document_cmds_mut()[cmd_idx].source, nm)) {
                                 char buf[128];
                                 snprintf(buf, sizeof(buf),
                                          "variable '%s' is in use, cannot overwrite", nm);
@@ -491,14 +500,16 @@ int try_assign_variable(void) {
                             }
                         }
                     }
-                    for (int d = 0; d < repl_state_document_cmds_mut()[insert_idx].var_decl_count; d++) {
-                        const char *nm = repl_state_document_cmds_mut()[insert_idx].var_names[d];
+                    /* Undeclare removed variables and adjust assignments. */
+                    for (int decl_idx = 0; decl_idx < repl_state_document_cmds_mut()[insert_idx].var_decl_count; decl_idx++) {
+                        const char *nm = repl_state_document_cmds_mut()[insert_idx].var_names[decl_idx];
                         int slot = repl_eval_find_predef_var_idx(nm);
                         if (slot < 0) continue;
                         repl_eval_undeclare_predef_var(nm);
-                        for (int j = 0; j < repl_state_document_count(); j++) {
-                            if (repl_state_document_cmds_mut()[j].type == CMD_VAR_ASSIGN && repl_state_document_cmds_mut()[j].num_args > slot)
-                                repl_state_document_cmds_mut()[j].num_args--;
+                        /* Adjust num_args in variable assignments that reference this slot. */
+                        for (int cmd_idx = 0; cmd_idx < repl_state_document_count(); cmd_idx++) {
+                            if (repl_state_document_cmds_mut()[cmd_idx].type == CMD_VAR_ASSIGN && repl_state_document_cmds_mut()[cmd_idx].num_args > slot)
+                                repl_state_document_cmds_mut()[cmd_idx].num_args--;
                         }
                     }
                 }
@@ -729,8 +740,9 @@ int try_commit_for_loop(void) {
                                       var_name);
                 dv[dvn].value = start;
                 dvn++;
-                for (int i = 0; i < visible_nv && dvn < MAX_EXPR_VARS; i++)
-                    dv[dvn++] = visible_vars[i];
+                /* Append visible variables to the loop context. */
+                for (int var_idx = 0; var_idx < visible_nv && dvn < MAX_EXPR_VARS; var_idx++)
+                    dv[dvn++] = visible_vars[var_idx];
 
                 memset(&body_cmd, 0, sizeof(body_cmd));
                 ReplParseContext parse_ctx = { pos, dv, dvn, 1 };

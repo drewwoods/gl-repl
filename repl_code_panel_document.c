@@ -74,21 +74,26 @@ int repl_code_panel_document_cursor_row_for_text(const char *text,
 static int code_panel_header_row_count(int panel_w, int text_x) {
     int rows = 0;
 
-    for (int i = 0; i < g_workspace_header_line_count; i++)
+    /* Count rows for workspace header lines. */
+    for (int header_line_idx = 0; header_line_idx < g_workspace_header_line_count; header_line_idx++)
         rows += repl_code_panel_document_row_count_for_text(
-            g_workspace_header_lines[i], text_x, panel_w);
-    for (int i = 0; g_header_pre[i]; i++)
+            g_workspace_header_lines[header_line_idx], text_x, panel_w);
+    /* Count rows for pre-header setup lines. */
+    for (int line_idx = 0; g_header_pre[line_idx]; line_idx++)
         rows += repl_code_panel_document_row_count_for_text(
-            g_header_pre[i], text_x, panel_w);
-    for (int i = 0; i < RENDER_STATE_LINE_COUNT; i++)
+            g_header_pre[line_idx], text_x, panel_w);
+    /* Count rows for render state setup lines. */
+    for (int state_line_idx = 0; state_line_idx < RENDER_STATE_LINE_COUNT; state_line_idx++)
         rows += repl_code_panel_document_row_count_for_text(
-            g_render_state_lines[i], text_x, panel_w);
-    for (int i = 0; i < CAM_LINE_COUNT; i++)
+            g_render_state_lines[state_line_idx], text_x, panel_w);
+    /* Count rows for camera transformation lines. */
+    for (int cam_line_idx = 0; cam_line_idx < CAM_LINE_COUNT; cam_line_idx++)
         rows += repl_code_panel_document_row_count_for_text(
-            g_cam_lines[i], text_x, panel_w);
-    for (int i = 0; g_header_post[i]; i++)
+            g_cam_lines[cam_line_idx], text_x, panel_w);
+    /* Count rows for post-header setup lines. */
+    for (int line_idx = 0; g_header_post[line_idx]; line_idx++)
         rows += repl_code_panel_document_row_count_for_text(
-            g_header_post[i], text_x, panel_w);
+            g_header_post[line_idx], text_x, panel_w);
 
     return rows;
 }
@@ -97,17 +102,20 @@ static int code_panel_footer_row_count(int panel_w, int text_x) {
     int rows = 0;
     char line[MAX_LINE_LEN];
 
-    for (int i = 0; g_footer_pre_init[i]; i++)
+    /* Count rows for pre-init footer lines. */
+    for (int line_idx = 0; g_footer_pre_init[line_idx]; line_idx++)
         rows += repl_code_panel_document_row_count_for_text(
-            g_footer_pre_init[i], text_x, panel_w);
-    for (int i = 0; i < init_section_line_count(); i++) {
-        init_section_line(i, line, sizeof(line));
+            g_footer_pre_init[line_idx], text_x, panel_w);
+    /* Count rows for init section lines. */
+    for (int init_line_idx = 0; init_line_idx < init_section_line_count(); init_line_idx++) {
+        init_section_line(init_line_idx, line, sizeof(line));
         rows += repl_code_panel_document_row_count_for_text(
             line, text_x, panel_w);
     }
-    for (int i = 0; g_footer_post_init[i]; i++)
+    /* Count rows for post-init footer lines. */
+    for (int line_idx = 0; g_footer_post_init[line_idx]; line_idx++)
         rows += repl_code_panel_document_row_count_for_text(
-            g_footer_post_init[i], text_x, panel_w);
+            g_footer_post_init[line_idx], text_x, panel_w);
 
     return rows;
 }
@@ -148,12 +156,13 @@ static int code_panel_command_main_rows(int cmd_idx, int panel_w, int text_x) {
 static void code_panel_precompute_layout_rows(int panel_w, int text_x,
                                               int *main_rows,
                                               int *replay_extra_rows) {
-    for (int i = 0; i < repl_state_document_count(); i++) {
+    /* Precompute row counts for each command in the document. */
+    for (int cmd_idx = 0; cmd_idx < repl_state_document_count(); cmd_idx++) {
         if (main_rows)
-            main_rows[i] = code_panel_command_main_rows(i, panel_w, text_x);
+            main_rows[cmd_idx] = code_panel_command_main_rows(cmd_idx, panel_w, text_x);
         if (replay_extra_rows)
-            replay_extra_rows[i] =
-                repl_replay_annotation_extra_rows_for_line(i);
+            replay_extra_rows[cmd_idx] =
+                repl_replay_annotation_extra_rows_for_line(cmd_idx);
     }
 }
 
@@ -178,25 +187,28 @@ static int code_panel_cursor_doc_line_from_layout(
     int cursor_doc_line = header_rows;
 
     if (repl_state_insert_mode()) {
-        for (int i = 0; i < repl_state_edit_line() && i < repl_state_document_count(); i++) {
-            cursor_doc_line += cmd_main_rows[i];
-            cursor_doc_line += replay_extra_rows[i];
+        /* Accumulate rows up to the edit line in insert mode. */
+        for (int cmd_idx = 0; cmd_idx < repl_state_edit_line() && cmd_idx < repl_state_document_count(); cmd_idx++) {
+            cursor_doc_line += cmd_main_rows[cmd_idx];
+            cursor_doc_line += replay_extra_rows[cmd_idx];
         }
         cursor_doc_line += repl_code_panel_document_cursor_row_for_text(
             repl_state_editor_input()->input, text_x + repl_code_panel_document_active_indent_chars() * FONT_W,
             panel_w, repl_state_cursor_pos(), NULL, NULL, NULL);
     } else if (repl_state_edit_line() < repl_state_document_count()) {
-        for (int i = 0; i < repl_state_edit_line(); i++) {
-            cursor_doc_line += cmd_main_rows[i];
-            cursor_doc_line += replay_extra_rows[i];
+        /* Accumulate rows up to the edit line in overwrite mode. */
+        for (int cmd_idx = 0; cmd_idx < repl_state_edit_line(); cmd_idx++) {
+            cursor_doc_line += cmd_main_rows[cmd_idx];
+            cursor_doc_line += replay_extra_rows[cmd_idx];
         }
         cursor_doc_line += repl_code_panel_document_cursor_row_for_text(
             repl_state_editor_input()->input, text_x + repl_code_panel_document_active_indent_chars() * FONT_W,
             panel_w, repl_state_cursor_pos(), NULL, NULL, NULL);
     } else {
-        for (int i = 0; i < repl_state_document_count(); i++) {
-            cursor_doc_line += cmd_main_rows[i];
-            cursor_doc_line += replay_extra_rows[i];
+        /* Accumulate all rows when edit line is past the end. */
+        for (int cmd_idx = 0; cmd_idx < repl_state_document_count(); cmd_idx++) {
+            cursor_doc_line += cmd_main_rows[cmd_idx];
+            cursor_doc_line += replay_extra_rows[cmd_idx];
         }
         cursor_doc_line += repl_code_panel_document_cursor_row_for_text(
             repl_state_editor_input()->input, text_x + repl_code_panel_document_active_indent_chars() * FONT_W,
@@ -216,9 +228,10 @@ static int code_panel_follow_doc_line_from_layout(
         *replay->src_line_idx >= 0 &&
         *replay->src_line_idx < repl_state_document_count()) {
         follow_doc_line = header_rows;
-        for (int i = 0; i < *replay->src_line_idx; i++) {
-            follow_doc_line += cmd_main_rows[i];
-            follow_doc_line += replay_extra_rows[i];
+        /* Accumulate rows up to the replay source line. */
+        for (int cmd_idx = 0; cmd_idx < *replay->src_line_idx; cmd_idx++) {
+            follow_doc_line += cmd_main_rows[cmd_idx];
+            follow_doc_line += replay_extra_rows[cmd_idx];
         }
         if (replay_extra_rows[*replay->src_line_idx] > 0) {
             follow_doc_line += cmd_main_rows[*replay->src_line_idx];
@@ -261,11 +274,12 @@ void repl_code_panel_document_build(CodePanelDocumentLayout *layout,
 
     total_lines = layout->header_rows + layout->footer_rows
                 + code_panel_newline_rows(panel_w, text_x);
-    for (int i = 0; i < repl_state_document_count(); i++) {
-        if (repl_state_insert_mode() && i == repl_state_edit_line())
+    /* Add rows for each command in the document. */
+    for (int cmd_idx = 0; cmd_idx < repl_state_document_count(); cmd_idx++) {
+        if (repl_state_insert_mode() && cmd_idx == repl_state_edit_line())
             total_lines += code_panel_insert_rows(panel_w, text_x);
-        total_lines += layout->cmd_main_rows[i];
-        total_lines += layout->replay_extra_rows[i];
+        total_lines += layout->cmd_main_rows[cmd_idx];
+        total_lines += layout->replay_extra_rows[cmd_idx];
     }
     layout->total_lines = total_lines;
 
@@ -313,8 +327,9 @@ int repl_code_panel_document_target_for_doc_line(
     if (row < 0)
         return 0;
 
-    for (int i = 0; i <= repl_state_document_count(); i++) {
-        if (repl_state_insert_mode() && i == repl_state_edit_line()) {
+    /* Iterate through document commands to find the target. */
+    for (int cmd_idx = 0; cmd_idx <= repl_state_document_count(); cmd_idx++) {
+        if (repl_state_insert_mode() && cmd_idx == repl_state_edit_line()) {
             int insert_rows = code_panel_insert_rows(layout->panel_w,
                                                      layout->text_x);
             if (row < insert_rows) {
@@ -326,10 +341,10 @@ int repl_code_panel_document_target_for_doc_line(
             row -= insert_rows;
         }
 
-        if (i < repl_state_document_count()) {
-            int main_rows = layout->cmd_main_rows[i];
+        if (cmd_idx < repl_state_document_count()) {
+            int main_rows = layout->cmd_main_rows[cmd_idx];
             if (row < main_rows) {
-                if (out_target) *out_target = i;
+                if (out_target) *out_target = cmd_idx;
                 if (out_on_insert_line) *out_on_insert_line = 0;
                 if (out_row_offset) *out_row_offset = row;
                 return 1;
@@ -337,9 +352,9 @@ int repl_code_panel_document_target_for_doc_line(
             row -= main_rows;
 
             {
-                int replay_rows = layout->replay_extra_rows[i];
+                int replay_rows = layout->replay_extra_rows[cmd_idx];
                 if (row < replay_rows) {
-                    if (out_target) *out_target = i;
+                    if (out_target) *out_target = cmd_idx;
                     if (out_on_insert_line) *out_on_insert_line = 0;
                     if (out_row_offset) *out_row_offset = 0;
                     return 1;
