@@ -124,6 +124,7 @@ TEST_BINS = \
 	test_repl_core_internal \
 	test_repl_autocomplete \
 	test_scene_guides \
+	test_scene_render \
 	test_repl_editor \
 	test_repl_core_extra \
 	test_repl_autonormal
