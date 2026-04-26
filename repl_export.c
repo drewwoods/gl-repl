@@ -1498,32 +1498,35 @@ static void write_render_helper_as_c(FILE *f, const char *name) {
 }
 
 static void write_func_defs_as_c(FILE *f) {
-    for (int i = 0; i < repl_state_document_count(); i++) {
-        if (!repl_state_document_cmds_mut()[i].valid || repl_state_document_cmds_mut()[i].type != CMD_FUNC_DEF) continue;
-        int comment_start = i;
+    /* Iterate through all document commands looking for function definitions. */
+    for (int cmd_idx = 0; cmd_idx < repl_state_document_count(); cmd_idx++) {
+        if (!repl_state_document_cmds_mut()[cmd_idx].valid || repl_state_document_cmds_mut()[cmd_idx].type != CMD_FUNC_DEF) continue;
+        int comment_start = cmd_idx;
         while (comment_start > 0 &&
                repl_state_document_cmds_mut()[comment_start - 1].valid &&
                repl_state_document_cmds_mut()[comment_start - 1].type == CMD_COMMENT)
             comment_start--;
-        for (int c = comment_start; c < i; c++)
-            fprintf(f, "\n%s\n", repl_state_document_cmds_mut()[c].source);
+        /* Emit any preceding comment lines. */
+        for (int comment_idx = comment_start; comment_idx < cmd_idx; comment_idx++)
+            fprintf(f, "\n%s\n", repl_state_document_cmds_mut()[comment_idx].source);
 
-        int fn = (int)repl_state_document_cmds_mut()[i].args[0];
+        int fn = (int)repl_state_document_cmds_mut()[cmd_idx].args[0];
         int parsed_fn = fn;
         int param_count = 0;
         char param_names[MAX_EXPR_VARS][16];
-        int fe = find_export_block_end(i);
-        if (parse_repl_func_signature(repl_state_document_cmds_mut()[i].source, &parsed_fn,
+        int fe = find_export_block_end(cmd_idx);
+        if (parse_repl_func_signature(repl_state_document_cmds_mut()[cmd_idx].source, &parsed_fn,
                                       param_names, MAX_EXPR_VARS,
                                       &param_count) && param_count > 0) {
             fprintf(f, "\nstatic void func%d(", parsed_fn);
-            for (int p = 0; p < param_count; p++)
-                fprintf(f, "%sfloat %s", p == 0 ? "" : ", ", param_names[p]);
+            /* Emit function parameters. */
+            for (int param_idx = 0; param_idx < param_count; param_idx++)
+                fprintf(f, "%sfloat %s", param_idx == 0 ? "" : ", ", param_names[param_idx]);
             fprintf(f, ") {\n");
         } else {
             fprintf(f, "\nstatic void func%d(void) {\n", fn);
         }
-        write_render_body_range_as_c(f, i + 1, fe, 0);
+        write_render_body_range_as_c(f, cmd_idx + 1, fe, 0);
         fprintf(f, "}\n");
     }
 }
@@ -1589,9 +1592,10 @@ static int import_parse_predef_decl(const char *line) {
         float val = repl_eval_expr(&ctx);
         p = ctx.p;
 
-        for (int i = 0; i < g_num_predef_vars; i++) {
-            if (strcmp(g_predef_vars[i].name, name) == 0) {
-                g_predef_vars[i].value = val;
+        /* Look up and update the predefined variable value. */
+        for (int var_idx = 0; var_idx < g_num_predef_vars; var_idx++) {
+            if (strcmp(g_predef_vars[var_idx].name, name) == 0) {
+                g_predef_vars[var_idx].value = val;
                 updated = 1;
                 break;
             }
@@ -1970,9 +1974,10 @@ static int import_make_repl_func_header(const char *line, char *out, int out_sz)
     }
 
     int written = snprintf(out, out_sz, "func%d(", fn);
-    for (int i = 0; i < count && written < out_sz; i++)
+    /* Append comma-separated parameter names. */
+    for (int param_idx = 0; param_idx < count && written < out_sz; param_idx++)
         written += snprintf(out + written, out_sz - written, "%s%s",
-                            i == 0 ? "" : ", ", names[i]);
+                            param_idx == 0 ? "" : ", ", names[param_idx]);
     if (written < out_sz)
         snprintf(out + written, out_sz - written, ") {");
     return 1;
@@ -2034,10 +2039,11 @@ static int import_make_repl_tess_line(const char *line, char *out, int out_sz) {
     if (strncmp(p, "{ _tn[", 6) == 0) {
         char exprs[3][MAX_LINE_LEN];
         int have_exprs = 1;
-        for (int i = 0; i < 3; i++) {
+        /* Iterate through 3D normal vector components (x, y, z). */
+        for (int component_idx = 0; component_idx < 3; component_idx++) {
             char key[16];
-            snprintf(key, sizeof(key), "_tn[%d]", i);
-            if (!import_extract_assignment_expr(p, key, exprs[i], sizeof(exprs[i]))) {
+            snprintf(key, sizeof(key), "_tn[%d]", component_idx);
+            if (!import_extract_assignment_expr(p, key, exprs[component_idx], sizeof(exprs[component_idx]))) {
                 have_exprs = 0;
                 break;
             }
@@ -2050,12 +2056,13 @@ static int import_make_repl_tess_line(const char *line, char *out, int out_sz) {
 
         float nv[3] = {0, 0, 1};
         const char *np = p;
-        for (int i = 0; i < 3; i++) {
+        /* Parse 3 floating-point normal components. */
+        for (int component_idx = 0; component_idx < 3; component_idx++) {
             const char *eq = strchr(np, '=');
             if (!eq) break;
             eq++;
             ExprCtx ctx = { eq, NULL, 0 };
-            nv[i] = repl_eval_expr(&ctx);
+            nv[component_idx] = repl_eval_expr(&ctx);
             np = ctx.p;
         }
         snprintf(out, out_sz, "gluNormal(%g, %g, %g);", nv[0], nv[1], nv[2]);
@@ -2065,10 +2072,11 @@ static int import_make_repl_tess_line(const char *line, char *out, int out_sz) {
     if (strncmp(p, "{ _tc[", 6) == 0) {
         char exprs[4][MAX_LINE_LEN];
         int have_exprs = 1;
-        for (int i = 0; i < 4; i++) {
+        /* Iterate through 4D color vector components (r, g, b, a). */
+        for (int component_idx = 0; component_idx < 4; component_idx++) {
             char key[16];
-            snprintf(key, sizeof(key), "_tc[%d]", i);
-            if (!import_extract_assignment_expr(p, key, exprs[i], sizeof(exprs[i]))) {
+            snprintf(key, sizeof(key), "_tc[%d]", component_idx);
+            if (!import_extract_assignment_expr(p, key, exprs[component_idx], sizeof(exprs[component_idx]))) {
                 have_exprs = 0;
                 break;
             }
@@ -2086,12 +2094,13 @@ static int import_make_repl_tess_line(const char *line, char *out, int out_sz) {
 
         float cv[4] = {1, 1, 1, 1};
         const char *cp = p;
-        for (int i = 0; i < 4; i++) {
+        /* Parse 4 floating-point color components. */
+        for (int component_idx = 0; component_idx < 4; component_idx++) {
             const char *eq = strchr(cp, '=');
             if (!eq) break;
             eq++;
             ExprCtx ctx = { eq, NULL, 0 };
-            cv[i] = repl_eval_expr(&ctx);
+            cv[component_idx] = repl_eval_expr(&ctx);
             cp = ctx.p;
         }
         snprintf(out, out_sz, "gluColor(%g, %g, %g, %g);",
@@ -2581,8 +2590,9 @@ static int import_try_function_header(ImportState *s, const char *p, const char 
     char repl_func_line[MAX_LINE_LEN];
     if (!import_make_repl_func_header(p, repl_func_line, sizeof(repl_func_line)))
         return 0;
-    for (int c = 0; c < s->pending_comment_count; c++)
-        import_feed_one_line(s->pending_comments[c], &s->loaded, &s->warnings);
+    /* Feed accumulated pending comments before the function header. */
+    for (int comment_idx = 0; comment_idx < s->pending_comment_count; comment_idx++)
+        import_feed_one_line(s->pending_comments[comment_idx], &s->loaded, &s->warnings);
     s->pending_comment_count = 0;
     int before = repl_state_document_count();
     int handled = feed_line(repl_func_line);
