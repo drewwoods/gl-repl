@@ -2102,10 +2102,11 @@ static int import_make_repl_tess_line(const char *line, char *out, int out_sz) {
     if (strstr(p, "TessVertex") != NULL && strstr(p, "gluTessVertex") != NULL) {
         char exprs[3][MAX_LINE_LEN];
         int have_exprs = 1;
-        for (int i = 0; i < 3; i++) {
+        /* Iterate through 3D vector components (x, y, z). */
+        for (int component_idx = 0; component_idx < 3; component_idx++) {
             char key[24];
-            snprintf(key, sizeof(key), "_v->pos[%d]", i);
-            if (!import_extract_assignment_expr(p, key, exprs[i], sizeof(exprs[i]))) {
+            snprintf(key, sizeof(key), "_v->pos[%d]", component_idx);
+            if (!import_extract_assignment_expr(p, key, exprs[component_idx], sizeof(exprs[component_idx]))) {
                 have_exprs = 0;
                 break;
             }
@@ -2119,12 +2120,13 @@ static int import_make_repl_tess_line(const char *line, char *out, int out_sz) {
         float vv[3] = {0, 0, 0};
         const char *vp = strstr(p, "_v->pos[0]");
         if (!vp) return 0;
-        for (int i = 0; i < 3; i++) {
+        /* Parse 3 floating-point components from the expression. */
+        for (int component_idx = 0; component_idx < 3; component_idx++) {
             const char *eq = strchr(vp, '=');
             if (!eq) break;
             eq++;
             ExprCtx ctx = { eq, NULL, 0 };
-            vv[i] = repl_eval_expr(&ctx);
+            vv[component_idx] = repl_eval_expr(&ctx);
             vp = ctx.p;
         }
         snprintf(out, out_sz, "gluVertex(%g, %g, %g);",
@@ -2193,8 +2195,9 @@ static int import_make_repl_point_parameter_line(const char *line, char *out, in
     if (count != 3)
         return 0;
 
-    for (int i = 0; i < count; i++)
-        repl_eval_c_expr_to_repl(raw_args[i], repl_args[i], sizeof(repl_args[i]));
+    /* Convert parsed C expressions back to REPL syntax. */
+    for (int arg_idx = 0; arg_idx < count; arg_idx++)
+        repl_eval_c_expr_to_repl(raw_args[arg_idx], repl_args[arg_idx], sizeof(repl_args[arg_idx]));
 
     return repl_format_fits(out, (size_t)out_sz,
                             "glPointParameterfv(%s, %s, %s, %s);",
@@ -2216,8 +2219,9 @@ static int import_make_repl_quadric_line(const char *line, char *out, int out_sz
         indent++;
     p += indent;
 
-    for (int i = 0; names[i]; i++) {
-        const char *name = names[i];
+    /* Iterate through supported quadric function names. */
+    for (int name_idx = 0; names[name_idx]; name_idx++) {
+        const char *name = names[name_idx];
         int name_len = (int)strlen(name);
         const char *args;
         char tmp[MAX_LINE_LEN];
@@ -2305,8 +2309,9 @@ static ExportNeeds export_collect_needs(void) {
         .needs_rand = 0,
     };
 
-    for (int i = 0; i < repl_state_document_count(); i++) {
-        if (repl_state_document_cmds_mut()[i].valid && strstr(repl_state_document_cmds_mut()[i].source, "rand(") != NULL)
+    /* Check each command for rand() function calls. */
+    for (int cmd_idx = 0; cmd_idx < repl_state_document_count(); cmd_idx++) {
+        if (repl_state_document_cmds_mut()[cmd_idx].valid && strstr(repl_state_document_cmds_mut()[cmd_idx].source, "rand(") != NULL)
             needs.needs_rand = 1;
     }
 
@@ -2357,11 +2362,13 @@ static void emit_export_display_begin(FILE *f) {
     fprintf(f, "  glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);\n");
     fprintf(f, "  glLoadIdentity();\n");
     fprintf(f, "  glPushAttrib(GL_LIGHTING_BIT);\n");
-    for (int i = 0; i < RENDER_STATE_LINE_COUNT; i++)
-        fprintf(f, "%s\n", g_render_state_lines[i]);
+    /* Emit render state configuration lines (lighting, depth, etc). */
+    for (int state_line_idx = 0; state_line_idx < RENDER_STATE_LINE_COUNT; state_line_idx++)
+        fprintf(f, "%s\n", g_render_state_lines[state_line_idx]);
     emit_export_cam_lines(f);
-    for (int i = 0; g_header_post[i]; i++)
-        fprintf(f, "%s\n", g_header_post[i]);
+    /* Emit post-render-state header lines (typically additional setup). */
+    for (int line_idx = 0; g_header_post[line_idx]; line_idx++)
+        fprintf(f, "%s\n", g_header_post[line_idx]);
     write_light_setup(f);
 }
 
@@ -2379,11 +2386,13 @@ static void emit_export_display_geometry(FILE *f) {
 static void emit_export_display_tail(FILE *f, const ExportNeeds *needs) {
     int include_tess = needs ? needs->needs_tess : 0;
 
-    for (int i = 0; g_footer_pre_init[i]; i++)
-        fprintf(f, "%s\n", g_footer_pre_init[i]);
+    /* Emit footer lines before init section. */
+    for (int line_idx = 0; g_footer_pre_init[line_idx]; line_idx++)
+        fprintf(f, "%s\n", g_footer_pre_init[line_idx]);
     emit_export_init_section_to_file(f, include_tess);
-    for (int i = 0; g_footer_post_init[i]; i++)
-        fprintf(f, "%s\n", g_footer_post_init[i]);
+    /* Emit footer lines after init section. */
+    for (int line_idx = 0; g_footer_post_init[line_idx]; line_idx++)
+        fprintf(f, "%s\n", g_footer_post_init[line_idx]);
 }
 
 static void emit_export_display(FILE *f, const ExportNeeds *needs) {
@@ -2418,8 +2427,9 @@ static int export_section_needs_tess(const ExportScaffoldContext *ctx) {
 static void emit_export_workspace_metadata_section(FILE *f,
                                                    const ExportScaffoldContext *ctx) {
     (void)ctx;
-    for (int i = 0; i < g_workspace_header_line_count; i++)
-        fprintf(f, "%s\n", g_workspace_header_lines[i]);
+    /* Emit workspace directives (@scene-name, @workspace-dir, etc). */
+    for (int header_line_idx = 0; header_line_idx < g_workspace_header_line_count; header_line_idx++)
+        fprintf(f, "%s\n", g_workspace_header_lines[header_line_idx]);
     if (g_workspace_header_line_count > 0)
         fprintf(f, "\n");
 }
@@ -2735,25 +2745,30 @@ void repl_dump_code_panel_text(FILE *out) {
     update_cam_lines();
 
     fprintf(dst, "--- header_pre ---\n");
-    for (int i = 0; g_header_pre[i]; i++)
-        fprintf(dst, "%s\n", g_header_pre[i]);
+    /* Dump pre-header lines (includes, setup). */
+    for (int line_idx = 0; g_header_pre[line_idx]; line_idx++)
+        fprintf(dst, "%s\n", g_header_pre[line_idx]);
 
     fprintf(dst, "--- render_state ---\n");
-    for (int i = 0; i < RENDER_STATE_LINE_COUNT; i++)
-        fprintf(dst, "%s\n", g_render_state_lines[i]);
+    /* Dump render state configuration. */
+    for (int state_line_idx = 0; state_line_idx < RENDER_STATE_LINE_COUNT; state_line_idx++)
+        fprintf(dst, "%s\n", g_render_state_lines[state_line_idx]);
 
     fprintf(dst, "--- camera ---\n");
-    for (int i = 0; i < CAM_LINE_COUNT; i++)
-        fprintf(dst, "%s\n", g_cam_lines[i]);
+    /* Dump camera transformation lines. */
+    for (int cam_line_idx = 0; cam_line_idx < CAM_LINE_COUNT; cam_line_idx++)
+        fprintf(dst, "%s\n", g_cam_lines[cam_line_idx]);
 
     fprintf(dst, "--- header_post ---\n");
-    for (int i = 0; g_header_post[i]; i++)
-        fprintf(dst, "%s\n", g_header_post[i]);
+    /* Dump post-header lines (light setup, etc). */
+    for (int line_idx = 0; g_header_post[line_idx]; line_idx++)
+        fprintf(dst, "%s\n", g_header_post[line_idx]);
 
     fprintf(dst, "--- source ---\n");
-    for (int i = 0; i < repl_state_document_count(); i++) {
-        if (!repl_state_document_cmds_mut()[i].valid) continue;
-        fprintf(dst, "%s\n", repl_state_document_cmds_mut()[i].source);
+    /* Dump all valid user commands. */
+    for (int cmd_idx = 0; cmd_idx < repl_state_document_count(); cmd_idx++) {
+        if (!repl_state_document_cmds_mut()[cmd_idx].valid) continue;
+        fprintf(dst, "%s\n", repl_state_document_cmds_mut()[cmd_idx].source);
     }
 
     fflush(dst);
@@ -2772,25 +2787,30 @@ void repl_dump_code_panel_visual_text(FILE *out) {
     update_cam_lines();
 
     fprintf(dst, "--- header_pre ---\n");
-    for (int i = 0; g_header_pre[i]; i++)
-        dump_code_panel_wrapped_line(dst, g_header_pre[i], text_x, panel_w);
+    /* Dump pre-header lines with code panel wrapping. */
+    for (int line_idx = 0; g_header_pre[line_idx]; line_idx++)
+        dump_code_panel_wrapped_line(dst, g_header_pre[line_idx], text_x, panel_w);
 
     fprintf(dst, "--- render_state ---\n");
-    for (int i = 0; i < RENDER_STATE_LINE_COUNT; i++)
-        dump_code_panel_wrapped_line(dst, g_render_state_lines[i], text_x, panel_w);
+    /* Dump render state with code panel wrapping. */
+    for (int state_line_idx = 0; state_line_idx < RENDER_STATE_LINE_COUNT; state_line_idx++)
+        dump_code_panel_wrapped_line(dst, g_render_state_lines[state_line_idx], text_x, panel_w);
 
     fprintf(dst, "--- camera ---\n");
-    for (int i = 0; i < CAM_LINE_COUNT; i++)
-        dump_code_panel_wrapped_line(dst, g_cam_lines[i], text_x, panel_w);
+    /* Dump camera lines with code panel wrapping. */
+    for (int cam_line_idx = 0; cam_line_idx < CAM_LINE_COUNT; cam_line_idx++)
+        dump_code_panel_wrapped_line(dst, g_cam_lines[cam_line_idx], text_x, panel_w);
 
     fprintf(dst, "--- header_post ---\n");
-    for (int i = 0; g_header_post[i]; i++)
-        dump_code_panel_wrapped_line(dst, g_header_post[i], text_x, panel_w);
+    /* Dump post-header lines with code panel wrapping. */
+    for (int line_idx = 0; g_header_post[line_idx]; line_idx++)
+        dump_code_panel_wrapped_line(dst, g_header_post[line_idx], text_x, panel_w);
 
     fprintf(dst, "--- source ---\n");
-    for (int i = 0; i < repl_state_document_count(); i++) {
-        if (!repl_state_document_cmds_mut()[i].valid) continue;
-        dump_code_panel_wrapped_line(dst, repl_state_document_cmds_mut()[i].source, text_x, panel_w);
+    /* Dump all valid user commands with code panel wrapping. */
+    for (int cmd_idx = 0; cmd_idx < repl_state_document_count(); cmd_idx++) {
+        if (!repl_state_document_cmds_mut()[cmd_idx].valid) continue;
+        dump_code_panel_wrapped_line(dst, repl_state_document_cmds_mut()[cmd_idx].source, text_x, panel_w);
     }
 
     fflush(dst);
