@@ -446,7 +446,7 @@ static void render_3d_scene_pass(void) {
     scene_apply_projection(&config);
     scene_apply_camera_view(&config);
 
-    scene_lights_setup();
+    scene_lights_setup(&frame_ctx);
     glDisable(GL_LIGHTING); /* baseline: disabled; execute_commands() enables if user typed it */
 
     glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE);
@@ -486,7 +486,7 @@ static void render_3d_scene_pass(void) {
 
                 if (batch_count > 0) {
                     glPushAttrib(GL_ALL_ATTRIB_BITS);
-                    scene_lights_setup();
+                    scene_lights_setup(&frame_ctx);
                     glDisable(GL_LIGHTING);
                     glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE);
                     GLfloat mspec[] = { 0.4f, 0.4f, 0.4f, 1.0f };
@@ -538,7 +538,7 @@ static void render_3d_scene_pass(void) {
      * edges blend against the final background color rather than the clear
      * color from earlier in the frame. */
     prof_begin(PROF_SCENE_3D_HELPERS);
-    scene_backdrop_render();
+    scene_backdrop_render(&frame_ctx);
     scene_grid_render(&frame_ctx);
     scene_axes_render(&frame_ctx);
     draw_orbit_target(&frame_ctx);
@@ -607,14 +607,14 @@ static void render_3d_scene_pass(void) {
     }
     glPopMatrix();
     glDisable(GL_BLEND);
-    if (repl_state_flat_program_user_lighting_enabled()) glEnable(GL_LIGHTING);
+    if (config.user_lighting_enabled) glEnable(GL_LIGHTING);
     prof_accum_end(PROF_SCENE_3D_OVERLAYS);
 
     prof_begin(PROF_SCENE_3D_HUD);
     if (config.replay_tess_preview)
         draw_replay_tess_preview(&config);
 
-    scene_lights_render();
+    scene_lights_render(&frame_ctx);
 
     if (config.show_vnums)   scene_overlays_render_vertex_numbers();
     if (config.show_normals) scene_overlays_render_normal_vectors();

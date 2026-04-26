@@ -29,6 +29,8 @@
 #ifndef SCENE_LIGHTS_H
 #define SCENE_LIGHTS_H
 
+#include "scene_render_types.h"
+
 /* Initialize global ambient light color. Sets the default ambient light that
  * illuminates all surfaces (even those not directly lit). Called once at
  * startup before rendering begins. */
@@ -37,12 +39,12 @@ void scene_lights_init_global_ambient(void);
 /* Set up light state for the frame. Applies light positions, enables/disables
  * lights according to current state, and configures light parameters.
  * Called once per frame before executing user geometry commands. */
-void scene_lights_setup(void);
+void scene_lights_setup(const FrameRenderContext *frame_ctx);
 
 /* Render light indicator overlays (small spheres at light positions). Visualizes
  * where lights are located in the scene for debugging and understanding
  * geometry lighting. Called during overlay rendering phase if light indicators
  * are enabled (REPL_CONFIG_LIGHT_INDICATORS toggle). */
-void scene_lights_render(void);
+void scene_lights_render(const FrameRenderContext *frame_ctx);
 
 #endif /* SCENE_LIGHTS_H */

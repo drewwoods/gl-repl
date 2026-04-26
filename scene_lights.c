@@ -3,7 +3,6 @@
  */
 #include "sample.h"
 #include "scene_lights.h"
-#include "repl_state.h"
 
 static void scene_lights_push_state(void) {
     glPushAttrib(GL_ALL_ATTRIB_BITS);
@@ -20,22 +19,20 @@ void scene_lights_init_global_ambient(void) {
 
 /* Set light properties only. User REPL commands still decide whether each
  * light is enabled during command execution. */
-void scene_lights_setup(void) {
-    ReplRenderState *render = repl_state_render_mut();
+void scene_lights_setup(const FrameRenderContext *frame_ctx) {
     for (int i = 0; i < MAX_LIGHTS; i++) {
-        glDisable(render->lights[i].id);
-        render->lights[i].enabled = 0;
-        glLightfv(render->lights[i].id, GL_POSITION, render->lights[i].pos);
-        glLightfv(render->lights[i].id, GL_DIFFUSE,  render->lights[i].diffuse);
-        glLightfv(render->lights[i].id, GL_AMBIENT,  render->lights[i].ambient);
-        glLightfv(render->lights[i].id, GL_SPECULAR, render->lights[i].specular);
+        const SceneLight *light = &frame_ctx->config.lights[i];
+        glDisable(light->id);
+        glLightfv(light->id, GL_POSITION, light->pos);
+        glLightfv(light->id, GL_DIFFUSE,  light->diffuse);
+        glLightfv(light->id, GL_AMBIENT,  light->ambient);
+        glLightfv(light->id, GL_SPECULAR, light->specular);
     }
 }
 
-void scene_lights_render(void) {
-    if (!*repl_state_presentation()->show_light_indicators) return;
-    int g_user_lighting_enabled = repl_state_flat_program_user_lighting_enabled();
-    const ReplRenderState *render = repl_state_render();
+void scene_lights_render(const FrameRenderContext *frame_ctx) {
+    if (!frame_ctx->config.show_light_indicators) return;
+    int g_user_lighting_enabled = frame_ctx->config.user_lighting_enabled;
 
     scene_lights_push_state();
     glDisable(GL_LIGHTING);
@@ -43,13 +40,14 @@ void scene_lights_render(void) {
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
-    float breath = sinf((*repl_state_variables()->anim_time) * 1.2f) * 0.5f + 0.5f;
+    float breath = sinf(frame_ctx->config.anim_time * 1.2f) * 0.5f + 0.5f;
 
     for (int i = 0; i < MAX_LIGHTS; i++) {
-        float *d = render->lights[i].diffuse;
-        float *p = render->lights[i].pos;
+        const SceneLight *light = &frame_ctx->config.lights[i];
+        float *d = (float *)light->diffuse;
+        float *p = (float *)light->pos;
         int is_dir = (p[3] == 0.0f);
-        int on = render->lights[i].enabled;
+        int on = light->enabled;
 
         float lx, ly, lz;
         if (is_dir) {

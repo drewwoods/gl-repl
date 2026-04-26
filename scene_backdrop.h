@@ -29,11 +29,13 @@
 #ifndef SCENE_BACKDROP_H
 #define SCENE_BACKDROP_H
 
+#include "scene_render_types.h"
+
 /* Render the backdrop environment once per frame. Draws either a procedural
  * cityscape or solid color in the background (behind grid, geometry, overlays).
  * Uses orthogonal projection so backdrop doesn't move with camera pan/zoom.
  * Backdrop mode is controlled by config (REPL_CONFIG_BACKDROP toggle). Called
  * early in frame rendering (deepest background layer). */
-void scene_backdrop_render(void);
+void scene_backdrop_render(const FrameRenderContext *frame_ctx);
 
 #endif /* SCENE_BACKDROP_H */

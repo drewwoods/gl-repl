@@ -2,7 +2,6 @@
  * scene_backdrop.c - optional 3D backdrop renderers for the REPL scene.
  */
 #include "scene_backdrop.h"
-#include "repl_state.h"
 
 #define CITY_BLDG_COUNT   150
 #define CITY_RADIUS       42.0f
@@ -24,14 +23,14 @@ static float city_rng(unsigned int s) {
     return (float)(s & 0xFFFFu) * (1.0f / 65536.0f);
 }
 
-static float city_night_factor(float angle) {
+static float city_night_factor(float angle, float anim_time) {
     float tz = angle / (2.0f * (float)M_PI);
-    float local_t = fmodf((*repl_state_variables()->anim_time) / CITY_CYCLE_SECS + tz, 1.0f);
+    float local_t = fmodf(anim_time / CITY_CYCLE_SECS + tz, 1.0f);
     if (local_t < 0.0f) local_t += 1.0f;
     return 0.5f + 0.5f * cosf(local_t * 2.0f * (float)M_PI);
 }
 
-static void draw_cityscape(void) {
+static void draw_cityscape(float anim_time) {
     scene_backdrop_push_state();
     glDisable(GL_LIGHTING);
     glEnable(GL_DEPTH_TEST);
@@ -83,7 +82,7 @@ static void draw_cityscape(void) {
 
         float y0 = -0.05f;
         float y1 = bh;
-        float night = city_night_factor(angle);
+        float night = city_night_factor(angle, anim_time);
 
         float bd_base = 0.07f + night * 0.035f;
         float bd_r = bd_base;
@@ -169,7 +168,7 @@ static void draw_cityscape(void) {
                 if (wrng < 0.10f) continue;
 
                 float win_phase = (city_rng(wid + 7u) - 0.5f) * 0.12f;
-                float lt = fmodf((*repl_state_variables()->anim_time) / CITY_CYCLE_SECS + tz + bldg_phase + win_phase,
+                float lt = fmodf(anim_time / CITY_CYCLE_SECS + tz + bldg_phase + win_phase,
                                  1.0f);
                 if (lt < 0.0f) lt += 1.0f;
 
@@ -221,14 +220,13 @@ static void draw_cityscape(void) {
 
     glDepthMask(GL_TRUE);
     glDisable(GL_BLEND);
-    if (repl_state_flat_program_user_lighting_enabled()) glEnable(GL_LIGHTING);
     scene_backdrop_pop_state();
 }
 
-void scene_backdrop_render(void) {
-    switch (*repl_state_presentation()->backdrop_mode) {
+void scene_backdrop_render(const FrameRenderContext *frame_ctx) {
+    switch (frame_ctx->config.backdrop_mode) {
     case 1:
-        draw_cityscape();
+        draw_cityscape(frame_ctx->config.anim_time);
         break;
     default:
         break;
