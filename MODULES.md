@@ -98,6 +98,8 @@ alongside guarded helper passes and table-driven themes.
 | Module | Role |
 |--------|------|
 | `scene_render` | Camera, render config/frame prep, 3D viewport/clear/accum-AA, one-shot scene init, orbit target, replay HUD |
+| `scene_render_types` | Shared per-frame config/context types for push-model snapshot |
+| `scene_transform_utils` | Inline GL matrix helpers (no GL layer violation) |
 | `scene_geometry_guides` | Vertex-input + normal-edit guide rendering |
 | `scene_transform_guides` | Translate/rotate/scale guide planning + rendering |
 | `scene_grid` | Grid theme rendering |
@@ -336,19 +338,25 @@ render files.
 - `repl_var_drag.c` owns the variable slider drag transaction: start/motion/
   reset, the linear-vs-log value mapping, and the writeback into the
   predefined-variable table plus matching `CMD_VAR_ASSIGN` sources.
-- `scene_render.c` now snapshots frame inputs in `SceneRenderConfig`: scene
-  rect, camera, jitter, quality toggles, grid/axes choices, guide/vertex
-  overlay toggles, and replay-derived limits. `FrameRenderContext` carries
-  that config plus derived state such as the Focus-grid vertex and ocean-grid
-  waterline classification. Helper-pass GL state stays local with small
-  `glPushAttrib`/`glPopAttrib` wrappers. Grid themes now live in
-  `scene_grid.c`, axes themes in `scene_axes.c`; focus/ocean/adaptive-plane
-  grid themes remain custom render paths in `scene_grid.c`. Backdrop rendering
-  now delegates to `scene_backdrop.c`; per-pass light setup and light
-  indicators delegate to `scene_lights.c`. Polygon outline/current-block
+- `scene_render.c` implements the push-model architecture: once per frame,
+  `scene_render_config_build()` snapshots all rendering state from `repl_state`
+  into `SceneRenderConfig` (scene rect, camera, jitter, quality toggles,
+  grid/axes choices, lighting setup, guide/vertex overlay toggles, and
+  replay-derived limits). This snapshot is the single source of truth for all
+  scene renderers — no scene module reads `repl_state` directly. `FrameRenderContext`
+  carries that config plus derived state such as the Focus-grid vertex and
+  ocean-grid waterline classification. Helper-pass GL state stays local with
+  small `glPushAttrib`/`glPopAttrib` wrappers. All scene renderers accept
+  `FrameRenderContext` and read everything from `config` fields, not globals.
+  `scene_transform_utils.h` provides inline GL matrix helpers (apply/unwind)
+  without requiring `repl_executor.h`. Grid themes live in `scene_grid.c`,
+  axes themes in `scene_axes.c`; focus/ocean/adaptive-plane grid themes remain
+  custom render paths in `scene_grid.c`. Backdrop rendering (`scene_backdrop.c`)
+  and light setup/indicators (`scene_lights.c`) read config fields for animation
+  time, lighting state, and backdrop mode. Polygon outline/current-block
   highlighting, vertex-number labels, and normal-vector overlays delegate to
-  `scene_overlays.c`, where one flat-command visitor keeps transform replay
-  and tessellation block tracking consistent. Scene-edit guides now delegate to
+  `scene_overlays.c`, which reimplements cursor-matching logic using only config
+  fields (no `repl_state` or `repl_core.h` calls). Scene-edit guides delegate to
   `scene_geometry_guides.c` (vertex/normal input guides) and
   `scene_transform_guides.c` (transform guide planning and drawing) via a
   shared `SceneGuideSnapshot`.

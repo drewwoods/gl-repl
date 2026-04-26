@@ -77,15 +77,18 @@ of one monolithic `repl_core.c`.
   snapshot state.
 - `scene_transform_guides.c`: transform-guide planning and rendering
   (`glTranslatef`/`glRotatef`/`glScalef`) from snapshot state.
+- `scene_transform_utils.h`: inline GL matrix helpers (`scene_apply_tracked_transform`,
+  `scene_unwind_transform_stack`) used by scene renderers and guides.
 - `scene_grid.c`: grid theme rendering, including focus/ocean/ruler/planes
-  variants.
-- `scene_axes.c`: axes theme rendering.
+  variants, accepting `FrameRenderContext` for config access.
+- `scene_axes.c`: axes theme rendering, accepting `FrameRenderContext`.
 - `scene_backdrop.c`: backdrop mode dispatch and deterministic cityscape
-  rendering.
+  rendering, accepting `FrameRenderContext`.
 - `scene_lights.c`: ambient init, per-pass light property setup, and light
-  indicator overlay rendering.
+  indicator overlay rendering, accepting `FrameRenderContext`.
 - `scene_overlays.c`: polygon outline/current-block, vertex-number, and
-  normal-vector overlay rendering plus shared flat-block cursor matching.
+  normal-vector overlay rendering plus local cursor-match logic using only
+  config fields, accepting `FrameRenderContext`.
 - `prof.c`: project-wide CPU timing instrumentation.
 - `sample.c`: application entrypoint, GLUT callback wiring, and buffer swap.
 
@@ -559,16 +562,20 @@ captures the intended behavior change.
   scene-rename buffer and key handling. `ui_panels.c` now focuses on
   code-panel row rendering, the scene-status banner, and top-level
   hit routing.
-- **Scene renderer:** owns camera/view setup, grid/axes/overlay drawing, and GL
-  state discipline for a single frame. `SceneRenderConfig` snapshots the scene
-  rectangle, camera, accumulation jitter, quality toggles, grid/axes choices,
-  overlay toggles, and replay-derived limits once at frame start.
+- **Scene renderer (push-model):** owns camera/view setup, config/frame prep, and
+  GL state discipline for a single frame. `scene_render.c` calls
+  `scene_render_config_build()` once at frame start to snapshot all rendering state
+  into `SceneRenderConfig` (scene rectangle, camera, lighting, animation time, grid
+  tables, lights array, cursor block ranges, overlay toggles, and replay-derived limits).
+  No scene module reads `repl_state` directly — all state flows through the config.
   `FrameRenderContext` carries that config plus prepared derived state such as
-  the Focus-grid vertex and ocean-grid camera waterline classification before
-  helper renderers run. Grid themes live in `scene_grid.c` and axes themes in
-  `scene_axes.c`. Flattened geometry overlays live in `scene_overlays.c`,
-  where outline, vertex-number, and normal-vector passes share cursor-block
-  matching and transform traversal.
+  the Focus-grid vertex and ocean-grid camera waterline classification. All scene
+  renderers accept `FrameRenderContext` and consume only config fields.
+  `scene_transform_utils.h` provides inline GL matrix helpers for guides/overlays.
+  Grid themes live in `scene_grid.c`, axes themes in `scene_axes.c`, backdrop in
+  `scene_backdrop.c`, lights in `scene_lights.c`. Flattened geometry overlays live
+  in `scene_overlays.c`, where outline, vertex-number, and normal-vector passes
+  use local cursor-match logic based on config fields (no global state reads).
 - **Import/export:** owns scaffold sections, workspace metadata, and
   translation between exported C and REPL command text.
 
@@ -610,7 +617,39 @@ Phase 11 segregates live GL calls to preserve clean module boundaries.
   `make check-layer-coupling` targets to enforce layering rules mechanically:
   GL/GLU calls allowed only in scene_*.c, ui_*.c, repl_executor.c;
   GLUT calls allowed only in sample.c, repl_editor.c.
-  UI/scene layer decoupling verified (grandfathered: scene_render.c → ui_panels.h).
+  UI/scene layer decoupling verified (scene_render.c no longer includes ui_panels.h).
+
+**Phase 12 (Push-Model Architecture):**
+Phase 12 completes the push-model architecture refactor for scene rendering.
+All scene renderers now receive `FrameRenderContext` and read state exclusively
+from `SceneRenderConfig`, eliminating direct `repl_state` dependencies:
+
+- **Step 12.1** (completed): Extended `SceneRenderConfig` with all push-model fields
+  (execute callbacks, flat program, animation, viewport, lighting, backdrop, overlays).
+  Implemented `scene_render_config_build()` to snapshot all frame state once at startup.
+
+- **Step 12.2** (completed): Migrated `scene_grid.c` and `scene_axes.c` to accept
+  `FrameRenderContext` and consume config fields instead of `repl_state` calls.
+
+- **Step 12.3** (completed): Decoupled `scene_backdrop.c` and `scene_lights.c` to
+  accept `FrameRenderContext` and read lighting/animation/backdrop state from config.
+
+- **Step 12.4** (completed): Created `scene_transform_utils.h` with inline GL matrix
+  helpers, eliminating `repl_executor.h` dependency from scene guides.
+
+- **Step 12.5** (completed): Rewrote `scene_overlays.c` cursor-match logic to use only
+  config fields, removing `repl_state.h` and `repl_core.h` includes. All three public
+  functions now accept `FrameRenderContext`.
+
+- **Step 12.6** (completed): Removed `repl_executor.h` from `scene_render.c`,
+  replaced repl_executor calls with inline `scene_transform_utils` functions.
+
+- **Step 12.7** (completed): Tightened Makefile boundary checks by removing
+  `scene_render.c → ui_panels.h` grandfathering (no longer needed).
+
+Result: Complete push-model decoupling. All scene modules are stateless renderers
+that accept frame config and produce GL output. No global state reads from scene layer.
+Test count: 2503/2503 passed. All boundary checks enforce clean layering.
 
 ## Key Pipelines
 
