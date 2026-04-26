@@ -8,20 +8,27 @@ means nothing in the scene layer can run without the full REPL + UI stack.
 
 The goal is a clean **push model**:
 
-- All state is built once per frame by the REPL caller and pushed into
-  `SceneRenderConfig` before calling any `scene_*` entry point.
-- The `repl_execute_program()` call in scene_render.c becomes an **optional
-  function callback pointer** inside `SceneRenderConfig`. When `NULL`, the
-  scene renders without user geometry — grid, backdrop, axes, lights, and
-  overlays all work; only user GL commands are suppressed.
+- A REPL-owned adapter builds all per-frame state once and pushes it into
+  `SceneRenderConfig`.
+- The scene layer exposes a config-driven entry point:
+  `scene_render_3d_scene_with_config(const SceneRenderConfig *config)`.
+- The existing `scene_render_3d_scene()` public API remains available as the
+  REPL compatibility wrapper. Existing callers keep working, but the standalone
+  scene renderer no longer depends on that wrapper.
+- The `repl_execute_program()` call becomes an **optional function callback**
+  inside `SceneRenderConfig`. When `NULL`, the scene renders without user
+  geometry — grid, backdrop, axes, lights, and non-user overlays still work;
+  only user GL commands are suppressed.
 - `scene_*.c` files depend only on **common code**: `sample.h`,
-  `gl_includes.h`, `gl_2d.h`, `repl_flatten.h` (for `FlatProgramView` /
-  `GLCmd`). No direct includes of `repl_state.h`, `repl_executor.h`,
+  `gl_includes.h`, `gl_2d.h`, and `repl_flatten.h` for `FlatProgramView` /
+  `GLCmd`. No direct includes of `repl_state.h`, `repl_executor.h`,
   `repl_core.h`, `repl_replay.h`, or `ui_panels.h`.
 
-The existing `scene_render_3d_scene()` public signature is **unchanged**. All
-callers are unaffected. The internal wiring changes; the external interface
-stays the same.
+`sample.h` is accepted as a transitional common header because it still owns
+`GLCmd`, `CmdType`, `SceneLight`, grid enums, replay enums, and shared UI
+constants today. Long term, those common pieces should be split out of
+`sample.h` so the scene layer is structurally clean rather than merely
+include-clean by convention.
 
 ---
 
@@ -39,91 +46,117 @@ stays the same.
 
 ---
 
+## Entry Point Design
+
+The scene layer gets a true push-model entry point:
+
+```c
+/* Pure scene entry point.  Does not read repl_state, does not call ui_panels,
+ * and does not include repl_executor/repl_replay/repl_core. */
+void scene_render_3d_scene_with_config(const SceneRenderConfig *config);
+```
+
+The old API becomes a REPL-owned compatibility wrapper:
+
+```c
+void scene_render_3d_scene(void) {
+    SceneRenderConfig config;
+    scene_render_config_build(&config);
+    scene_render_3d_scene_with_config(&config);
+}
+```
+
+That wrapper may live in `repl_core.c` or a small `repl_scene_adapter.c` rather
+than in pure `scene_render.c`. The important rule is that standalone scene code
+only needs `scene_render_3d_scene_with_config()`.
+
+---
+
 ## Execute Callback Design
 
 The callback typedef lives in `scene_render_types.h`. It uses only
 `FlatProgramView` from `repl_flatten.h` — no `repl_executor.h` types:
 
 ```c
-/* Called by scene_render.c to emit user geometry. May be NULL (geometry
- * is silently skipped; scene background/grid/axes/lights still render).
- *
- * alpha_scale:          1.0 for normal pass; 0.0–1.0 for replay fade batches
- * skip_geom_before_pc:  first flat cmd index to emit geometry for (0 = all;
- *                       used by fade passes to suppress already-faded prefix)
- * flat_cmd_count:       number of commands to execute from program.cmds[]
- * program:              the flat command buffer + local vars
- * user_data:            opaque pointer supplied at config build time
- */
-typedef void (*SceneExecuteProgramFn)(float alpha_scale,
-                                     int skip_geom_before_pc,
-                                     int flat_cmd_count,
-                                     FlatProgramView program,
-                                     void *user_data);
+typedef struct SceneExecuteRequest {
+    float alpha_scale;          /* 1.0 normal pass; 0.0-1.0 fade batches */
+    int   skip_geom_before_pc;  /* prefix state walk; skip geometry before pc */
+    int   flat_cmd_count;       /* number of commands to execute */
+    FlatProgramView program;    /* flat command buffer + local vars */
+} SceneExecuteRequest;
+
+/* Called by scene_render.c to emit user geometry. May be NULL, in which case
+ * user geometry is silently skipped while scene helpers still render. */
+typedef void (*SceneExecuteProgramFn)(const SceneExecuteRequest *request,
+                                      void *user_data);
 ```
 
-`SceneRenderConfig` gains three fields:
+`SceneRenderConfig` gains two execution fields:
 
 ```c
-SceneExecuteProgramFn execute_fn;          /* NULL = skip user geometry */
+SceneExecuteProgramFn execute_fn;        /* NULL = skip user geometry */
 void                 *execute_user_data;
-void (*execute_reset_fn)(void *user_data); /* called after last fade batch;
-                                              resets executor fade state */
 ```
 
-`repl_core.c` provides the adapters (static, not exported):
+There is intentionally **no reset callback**. The execution request carries the
+fade alpha and prefix-skip state explicitly. The REPL adapter should leave no
+persistent executor state behind.
+
+Preferred REPL adapter shape:
 
 ```c
-static void scene_execute_adapter(float alpha, int skip, int count,
-                                  FlatProgramView prog, void *ud) {
+static void scene_execute_adapter(const SceneExecuteRequest *req, void *ud) {
     (void)ud;
-    repl_execute_set_fade_context(alpha, skip);
-    repl_execute_program(&(ReplExecutionOptions){ .flat_cmd_count = count,
-                                                  .program = prog });
-}
-static void scene_execute_reset_adapter(void *ud) {
-    (void)ud;
-    repl_execute_set_fade_context(1.0f, 0);
+    ReplExecutionOptions opts = {
+        .flat_cmd_count = req->flat_cmd_count,
+        .program = req->program,
+        .alpha_scale = req->alpha_scale,
+        .skip_geom_before_pc = req->skip_geom_before_pc,
+    };
+    repl_execute_program(&opts);
 }
 ```
 
-These are set in `scene_render_config_build()` (see below) so that the live
-rendering path is wired transparently.
+This implies a small executor API cleanup: move `alpha_scale` and
+`skip_geom_before_pc` into `ReplExecutionOptions` and retire the temporal
+`repl_execute_set_fade_context()` reset pattern. If that cleanup cannot happen
+in the first pass, the adapter may temporarily keep the old set/reset behavior,
+but the architecture target is stateless request-driven execution.
 
 ---
 
 ## New Fields Added to SceneRenderConfig
 
-Grouped by domain. All filled by `scene_render_config_build()` in `repl_core.c`.
+Grouped by domain. All filled by `scene_render_config_build()` in REPL-owned
+code.
 
 ```c
-/* ── Execute callback ─────────────────────────────────────────────────── */
-SceneExecuteProgramFn execute_fn;          /* NULL = no geometry */
+/* -- Execute callback --------------------------------------------------- */
+SceneExecuteProgramFn execute_fn;          /* NULL = no user geometry */
 void                 *execute_user_data;
-void (*execute_reset_fn)(void *user_data);
 
-/* ── Flat program (snapshot for overlays / outline pass) ─────────────── */
+/* -- Flat program snapshot --------------------------------------------- */
 FlatProgramView flat_program;              /* repl_state_flat_program_view() */
 
-/* ── Animation ────────────────────────────────────────────────────────── */
+/* -- Animation ---------------------------------------------------------- */
 float anim_time;                           /* *repl_state_variables()->anim_time */
 
-/* ── Viewport (for 2D overlays and ocean fill rect) ──────────────────── */
+/* -- Viewport ----------------------------------------------------------- */
 int viewport_w;
 int viewport_h;
 
-/* ── Lighting ─────────────────────────────────────────────────────────── */
+/* -- Lighting ----------------------------------------------------------- */
 int        user_lighting_enabled;          /* repl_state_flat_program_user_lighting_enabled() */
-SceneLight lights[MAX_LIGHTS];             /* deep copy of render->lights[] */
+SceneLight lights[MAX_LIGHTS];             /* per-frame copy */
 int        show_light_indicators;
 
-/* ── Backdrop ─────────────────────────────────────────────────────────── */
+/* -- Backdrop ----------------------------------------------------------- */
 int backdrop_mode;
 
-/* ── Outline overlay ──────────────────────────────────────────────────── */
+/* -- Outline overlay ---------------------------------------------------- */
 int show_vertex_outlines;
 
-/* ── Replay HUD / layout ──────────────────────────────────────────────── */
+/* -- Replay HUD / layout ----------------------------------------------- */
 int   code_panel_layout;
 int   replay_pc;
 int   replay_total_cmds;
@@ -131,11 +164,22 @@ int   replay_state_val;     /* REPLAY_PLAYING / REPLAY_PAUSED / REPLAY_DONE */
 float replay_speed;
 int   replay_expand_args;
 
-/* ── Grid tables (GRID_MAJOR_COUNT and GRID_EXTENT_COUNT are small enums) */
-float grid_major_steps[GRID_MAJOR_COUNT]; /* memcpy from presentation->grid_major_steps */
-float grid_extents[GRID_EXTENT_COUNT];    /* memcpy from presentation->grid_extents */
+/* -- Replay fade batches ----------------------------------------------- */
+typedef struct SceneReplayFadeBatch {
+    float alpha_scale;
+    int   skip_geom_before_pc;
+    int   flat_cmd_count;
+} SceneReplayFadeBatch;
 
-/* ── Cursor block bounds (replaces repl_flat_cmd_matches_cursor()) ─────── */
+SceneReplayFadeBatch replay_fade_batches[REPLAY_FADE_BATCH_MAX];
+int                  replay_fade_batch_count;
+int                  replay_base_limit;
+
+/* -- Grid tables -------------------------------------------------------- */
+float grid_major_steps[GRID_MAJOR_COUNT];
+float grid_extents[GRID_EXTENT_COUNT];
+
+/* -- Cursor block snapshot --------------------------------------------- */
 int          cursor_block_begin_idx;  /* -1 = no active block */
 int          cursor_block_end_idx;
 int          cursor_block_source_line;
@@ -147,33 +191,40 @@ int          cursor_call_src_cmd_idx; /* -1 = cursor not on a CMD_CALL */
 `FrameRenderContext` is **unchanged** — the new fields live in the embedded
 `SceneRenderConfig` and are reached via `frame_ctx->config.*`.
 
+Note: `REPLAY_FADE_BATCH_MAX` is also transitional. If replay constants move out
+of `sample.h`, either define a scene-side maximum or store an array view plus a
+count in the config.
+
 ---
 
 ## Config Build: scene_render_config_build()
 
-A new function declared in `scene_render.h`, implemented in `repl_core.c`:
+A REPL-owned function declared in a REPL-facing header and implemented in
+`repl_core.c` or `repl_scene_adapter.c`:
 
 ```c
 /* Populate *config from the current REPL runtime state for one frame.
- * Call once at frame start before any scene_* entry point. */
+ * Call once at frame start before scene_render_3d_scene_with_config(). */
 void scene_render_config_build(SceneRenderConfig *config);
 ```
 
-`scene_render.c` calls this at the top of `scene_render_3d_scene()` instead of
-the current static `scene_render_config_init()`.
+Key responsibilities:
 
-Key responsibilities of this function:
 - Reads `repl_state_camera()`, `repl_state_presentation()`,
   `repl_state_render()`, `repl_state_replay()`, `repl_state_viewport()`,
-  `repl_state_variables()` — **these calls stay in `repl_core.c`** where they
-  already belong.
-- Calls `ui_panels_scene_rect()` to fill `scene_x/y/w/h` — this call moves
-  from `scene_render.c` to `repl_core.c`.
-- Calls `refresh_current_block_highlight()` (or a wrapper) before reading
+  `repl_state_variables()`.
+- Calls `ui_panels_scene_rect()` to fill `scene_x/y/w/h`. This call moves out
+  of `scene_render.c`.
+- Calls `refresh_current_block_highlight()` or a wrapper before reading
   `current_block_begin/end_idx` so the cursor block is current.
+- Computes replay fade batch alpha values and skip limits, then copies them
+  into `config->replay_fade_batches[]`. `scene_render.c` should not call
+  `repl_replay_*` helpers directly.
 - Deep-copies `lights[MAX_LIGHTS]` and the two grid tables by value.
-- Sets `execute_fn = scene_execute_adapter`, `execute_reset_fn =
-  scene_execute_reset_adapter`, `execute_user_data = NULL`.
+- Sets `execute_fn = scene_execute_adapter` and `execute_user_data = NULL`.
+
+The pure scene entry point receives the already-built config and does no REPL
+state sampling.
 
 ---
 
@@ -198,7 +249,7 @@ and `scene_overlays.c`. No `.c` companion — the bodies are small enough to inl
 /* Apply a single transform command to the GL matrix stack.
  * Increments *depth on glPushMatrix, decrements on glPopMatrix. */
 static inline void scene_apply_tracked_transform(const GLCmd *cmd,
-                                                  int *depth) { ... }
+                                                 int *depth) { ... }
 
 /* Pop the GL matrix stack until *depth reaches zero. */
 static inline void scene_unwind_transform_stack(int *depth) { ... }
@@ -210,63 +261,76 @@ static inline void scene_unwind_transform_stack(int *depth) { ... }
 
 ## Eliminating repl_flat_cmd_matches_cursor() From scene_overlays.c
 
-`repl_flat_cmd_matches_cursor()` in `repl_core.c` currently encapsulates the
-cursor-block highlight logic. After this refactor, `scene_overlays.c` reimplements
-it locally using only fields available from `SceneRenderConfig` plus the flat
-command's own metadata fields (`src_cmd_idx`, `call_src_cmd_idx`,
-`root_call_src_cmd_idx`, `func_scope_mask` — all already in `GLCmd`):
+Do not duplicate the old `repl_flat_cmd_matches_cursor()` semantics inline in
+`scene_overlays.c`. Move the logic to a pure helper that accepts a pushed
+snapshot and a flat command:
 
 ```c
-/* Returns non-zero if the flat command at flat_idx should be highlighted
- * as part of the cursor's current block. Uses only pushed config state — no
- * repl_core.h call needed. */
-static int overlay_flat_cmd_matches_cursor(int flat_idx,
-                                           const SceneRenderConfig *cfg) {
-    const GLCmd *cmd = &cfg->flat_program.cmds[flat_idx];
+typedef struct SceneCursorMatchSnapshot {
+    int          edit_line_idx;
+    int          cursor_block_begin_idx;
+    int          cursor_block_end_idx;
+    unsigned int cursor_func_scope_mask;
+    int          cursor_call_src_cmd_idx;
+} SceneCursorMatchSnapshot;
 
-    /* CMD_CALL: highlight commands inlined from the called function */
-    if (cmd->call_src_cmd_idx == cfg->edit_line_idx ||
-        cmd->root_call_src_cmd_idx == cfg->edit_line_idx)
-        return 1;
-
-    /* Function scope: highlight commands sharing the cursor's func scope */
-    if (cfg->cursor_func_scope_mask &&
-        (cmd->func_scope_mask & cfg->cursor_func_scope_mask))
-        return 1;
-
-    /* Block range: highlight commands inside the cursor's begin..end block */
-    if (cfg->cursor_block_begin_idx >= 0 &&
-        flat_idx >= cfg->cursor_block_begin_idx &&
-        flat_idx <= cfg->cursor_block_end_idx)
-        return 1;
-
-    /* Direct: flat cmd originates from the cursor source line */
-    return cmd->src_cmd_idx == cfg->edit_line_idx;
-}
+int scene_flat_cmd_matches_cursor(const SceneCursorMatchSnapshot *cursor,
+                                  const GLCmd *cmd,
+                                  int flat_idx);
 ```
 
-The side-effect of refreshing the current block is moved to
-`scene_render_config_build()` in `repl_core.c`.
+`scene_overlays.c` then calls the pure helper using fields already present in
+`SceneRenderConfig`. The side effect of refreshing the current block stays in
+`scene_render_config_build()`.
+
+This avoids creating two independent implementations of the same highlight
+rules.
 
 ---
 
-## Replay Fade Pass: Moving to repl_core.c
+## Replay Fade Pass
 
-`scene_render_replay_fade_pass()` calls `repl_replay_*` orchestration
-functions and the executor — it belongs in REPL territory. Move it from
-`scene_render.c` to a static function in `repl_core.c`. The public declaration
-is removed from `scene_render.h`. The call site inside `render_3d_scene_pass()`
-is replaced with `config.execute_fn` calls per batch:
+Replay orchestration belongs to REPL-owned config build code; replay fade
+rendering belongs to the scene layer.
+
+- `scene_render_config_build()` computes the fade batch list, alpha values,
+  prefix skip limits, and `replay_base_limit`.
+- `scene_render_3d_scene_with_config()` performs the normal fill pass up to
+  `config->replay_base_limit` when fades are active.
+- It then loops over `config->replay_fade_batches[]` and calls `execute_fn` for
+  each batch.
+
+Sketch:
 
 ```c
-if (config.replay_has_fades && config.execute_fn) {
-    /* For each fade batch: */
-    config.execute_fn(batch_alpha, skip_limit, batch_pc,
-                      config.flat_program, config.execute_user_data);
+if (config->execute_fn) {
+    SceneExecuteRequest fill = {
+        .alpha_scale = 1.0f,
+        .skip_geom_before_pc = 0,
+        .flat_cmd_count = config->replay_fade_batch_count > 0
+                        ? config->replay_base_limit
+                        : config->flat_program.cmd_count,
+        .program = config->flat_program,
+    };
+    config->execute_fn(&fill, config->execute_user_data);
 }
-if (config.execute_reset_fn)
-    config.execute_reset_fn(config.execute_user_data);
+
+for (int i = 0; config->execute_fn && i < config->replay_fade_batch_count; i++) {
+    const SceneReplayFadeBatch *batch = &config->replay_fade_batches[i];
+    SceneExecuteRequest fade = {
+        .alpha_scale = batch->alpha_scale,
+        .skip_geom_before_pc = batch->skip_geom_before_pc,
+        .flat_cmd_count = batch->flat_cmd_count,
+        .program = config->flat_program,
+    };
+    config->execute_fn(&fade, config->execute_user_data);
+}
 ```
+
+The scene layer still owns per-pass GL isolation such as `glPushAttrib()` and
+per-batch `glPushMatrix()` / `glPopMatrix()`. Matrix isolation is correctness,
+not merely cleanup: executor transforms are incremental and must not leak from
+one fade batch into the next.
 
 ---
 
@@ -282,9 +346,10 @@ if (config.execute_reset_fn)
 | `scene_overlays.c` | `repl_executor.h`, `repl_core.h`, `repl_state.h` | `scene_transform_utils.h`, `scene_render_types.h` |
 | `scene_transform_guides.c` | `repl_executor.h`, `repl_state.h` | `scene_transform_utils.h` |
 | `scene_render_types.h` | — | `repl_flatten.h` |
-| `repl_core.c` | — | `scene_render_types.h` (for SceneRenderConfig) |
+| `repl_core.c` / `repl_scene_adapter.c` | — | `scene_render_types.h` |
 
-New files: `scene_transform_utils.h` (inline-only, no `.c` companion).
+New files: `scene_transform_utils.h` and optionally `scene_cursor_match.h` /
+`.c` for the pure cursor-match helper.
 
 ---
 
@@ -300,15 +365,17 @@ grep -nE '#include\s+"ui_' scene_*.c scene_*.h | grep -vE 'scene_render\.c:.*ui_
 grep -nE '#include\s+"ui_' scene_*.c scene_*.h
 ```
 
-**Add two new guards (wired into `make test`):**
+**Add two new guards wired into `make test`:**
 
 ```makefile
-check-scene-boundaries: ## scene_*.c must not include repl_state.h, repl_executor.h, or repl_core.h
-    @! grep -nE '#include\s+"repl_state\.h"' scene_*.c \
-        || (echo "ERROR: scene_*.c must not include repl_state.h" && exit 1)
-    @! grep -nE '#include\s+"repl_(executor|core)\.h"' scene_*.c \
-        || (echo "ERROR: scene_*.c must not include repl_executor.h / repl_core.h" && exit 1)
-    @echo "scene/repl boundaries OK"
+check-scene-boundaries: ## scene_*.c must not include REPL/UI owner headers
+	@! grep -nE '#include\s+"repl_state\.h"' scene_*.c scene_*.h \
+		|| (echo "ERROR: scene_*.c/h must not include repl_state.h" && exit 1)
+	@! grep -nE '#include\s+"repl_(executor|core|replay)\.h"' scene_*.c scene_*.h \
+		|| (echo "ERROR: scene_*.c/h must not include repl_executor/core/replay.h" && exit 1)
+	@! grep -nE '#include\s+"ui_' scene_*.c scene_*.h \
+		|| (echo "ERROR: scene_*.c/h must not include ui_*.h" && exit 1)
+	@echo "scene/repl boundaries OK"
 ```
 
 ---
@@ -319,45 +386,62 @@ Each commit must compile and pass `make test-stubs TEST_JOBS=4`.
 
 | # | Commit | Files Touched |
 |---|--------|---------------|
-| 1 | `feat: add SceneExecuteProgramFn callback typedef and new fields to SceneRenderConfig` | `scene_render_types.h` |
-| 2 | `refactor: add scene_render_config_build() in repl_core.c, remove repl_state.h from scene_render.c, move fade pass` | `repl_core.c`, `scene_render.c`, `scene_render.h` |
-| 3 | `refactor: remove repl_state.h from scene_grid.c and scene_axes.c` | `scene_grid.c`, `scene_axes.c` |
-| 4 | `refactor: remove repl_state.h from scene_backdrop.c and scene_lights.c` | `scene_backdrop.c`, `scene_lights.c`, `scene_lights.h`, `scene_backdrop.h` |
-| 5 | `refactor: add scene_transform_utils.h, remove repl_executor.h from scene_transform_guides.c` | `scene_transform_utils.h` (new), `scene_transform_guides.c` |
-| 6 | `refactor: remove repl_executor.h, repl_core.h, repl_state.h from scene_overlays.c` | `scene_overlays.c`, `scene_overlays.h` |
-| 7 | `refactor: remove remaining repl/ui includes from scene_render.c` | `scene_render.c` |
-| 8 | `refactor: tighten Makefile boundary checks for scene_* layer` | `Makefile` |
+| 1 | `refactor: add config-driven scene render entry point` | `scene_render.c`, `scene_render.h` |
+| 2 | `feat: add SceneExecuteRequest callback model to SceneRenderConfig` | `scene_render_types.h` |
+| 3 | `refactor: make executor options carry fade context` | `repl_executor.h`, `repl_executor.c`, callers |
+| 4 | `refactor: add scene_render_config_build() in REPL adapter` | `repl_core.c` or `repl_scene_adapter.c`, headers |
+| 5 | `refactor: remove repl_state.h from scene_render.c` | `scene_render.c`, adapter file |
+| 6 | `refactor: remove repl_state.h from scene_grid.c and scene_axes.c` | `scene_grid.c`, `scene_axes.c` |
+| 7 | `refactor: remove repl_state.h from scene_backdrop.c and scene_lights.c` | `scene_backdrop.c`, `scene_lights.c`, headers |
+| 8 | `refactor: add scene_transform_utils.h for scene transform walking` | `scene_transform_utils.h`, `scene_transform_guides.c` |
+| 9 | `refactor: move cursor highlight matching to pure scene helper` | `scene_overlays.c`, `scene_cursor_match.*` |
+| 10 | `refactor: remove remaining repl/ui includes from scene_render.c` | `scene_render.c` |
+| 11 | `refactor: tighten Makefile boundary checks for scene_* layer` | `Makefile` |
 
-Commit 2 is the largest and highest-risk. Commits 3–5 are small and mechanical.
-Commit 6 carries the cursor-match logic rewrite. Commit 7 is purely cleanup
-once 2–6 have done the work.
+Commits 1 and 2 establish the API shape before the risky ownership moves.
+Commit 3 removes the need for an executor reset callback. Commit 4 contains the
+REPL pull-to-push adapter. Commit 9 carries the cursor-match semantic risk and
+should include focused tests.
 
 ---
 
 ## Verification
 
-- `make test-stubs TEST_JOBS=4` after every commit
-- `make test` after Commit 8 (validates new Makefile guards)
-- Manual smoke test of live rendering after Commit 7: grid, axes, backdrop,
-  lights, overlays, replay, fade pass all exercise the changed code paths
-- Optionally: write a `test_scene_config.c` that calls `scene_render_3d_scene()`
-  with `config.execute_fn = NULL` in GL-stubs mode and verifies no crash and
-  `GL_STUB_glBegin` count is non-zero (grid/backdrop drew) but no user-geometry
-  calls are issued
+- `make test-stubs TEST_JOBS=4` after every commit.
+- `make test` after the Makefile boundary checks land.
+- Manual smoke test after Commit 10: grid, axes, backdrop, lights, overlays,
+  replay, and fade pass all exercise changed code paths.
+- Required GL-stubs tests:
+  - `scene_render_3d_scene_with_config()` with `execute_fn = NULL` does not
+    crash.
+  - `execute_fn = NULL` suppresses user flat-program execution.
+  - Grid/axes/backdrop still issue GL-stub drawing calls with no executor.
+  - Replay fade batches do not accumulate transforms across batches.
+  - Vertex replay inside `glBegin`/`glEnd` still emits the incremental vertex.
+  - Tess replay inside a GLU tess contour still emits the incremental tess
+    vertex.
+  - Cursor overlay matching returns the same results before and after the pure
+    helper extraction.
 
 ---
 
-## Open Questions / Notes
+## Required Design Constraints / Notes
 
 - **`scene_lights_setup()` mutation**: currently writes `lights[i].enabled = 0`
-  as a per-frame reset. After this refactor the lights array is a const copy in
-  `SceneRenderConfig`. The reset must move to `repl_core.c` (before building
-  config). A helper `repl_lights_reset_all_enabled()` encapsulates this.
+  as a per-frame reset. After this refactor, scene code must not mutate
+  persistent REPL light state. Either mutate only the per-frame copied
+  `SceneLight lights[MAX_LIGHTS]` inside `SceneRenderConfig`, or reset the live
+  REPL light state before building config via a helper such as
+  `repl_lights_reset_all_enabled()`.
 - **`repl_state_render_derived()` write-back**: `scene_prepare_focus_vertex()`
-  currently writes the focus vertex back to global derived state. After Commit 2,
-  this write-back is no longer needed — the result stays local to
-  `FrameRenderContext.focus`. The global `ReplRenderDerivedState` write is
-  eliminated.
-- **GL-stubs test feasibility**: `render_3d_scene_pass()` is currently a static
-  function. A thin `#ifdef OPENGL_VIBE_USE_GL_STUBS` wrapper in `scene_render.c`
-  could expose it for testing.
+  currently writes the focus vertex back to global derived state. After the
+  config-driven entry point lands, this write-back is no longer needed — the
+  result stays local to `FrameRenderContext.focus`. The global
+  `ReplRenderDerivedState` write is eliminated.
+- **Matrix isolation around fade batches**: keep per-batch matrix isolation even
+  if attribute push/pop is reduced. `repl_execute_program()` applies
+  `glTranslatef` / `glRotatef` / `glScalef` incrementally, so later fade batches
+  must not inherit the previous batch's final modelview matrix.
+- **`sample.h` dependency**: accepted for this phase, but do not expand it. New
+  common scene-facing types should go into focused headers rather than adding
+  more REPL declarations to `sample.h`.
