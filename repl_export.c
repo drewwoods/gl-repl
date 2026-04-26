@@ -47,14 +47,14 @@ static DeferredVar g_deferred_var_values[MAX_DEFERRED_VAR_VALUES];
 static int         g_deferred_var_count = 0;
 
 static void workspace_slug_from_name(const char *name, char *out, size_t out_sz) {
-    size_t j = 0;
-    for (size_t i = 0; name[i] && j + 1 < out_sz; i++) {
-        unsigned char c = (unsigned char)name[i];
-        if (isspace(c) || c == '-' || c == '/') out[j++] = '_';
-        else if (isalnum(c))                    out[j++] = (char)tolower(c);
-        else if (c == '_')                      out[j++] = '_';
+    size_t out_idx = 0;
+    for (size_t name_idx = 0; name[name_idx] && out_idx + 1 < out_sz; name_idx++) {
+        unsigned char c = (unsigned char)name[name_idx];
+        if (isspace(c) || c == '-' || c == '/') out[out_idx++] = '_';
+        else if (isalnum(c))                    out[out_idx++] = (char)tolower(c);
+        else if (c == '_')                      out[out_idx++] = '_';
     }
-    out[j] = '\0';
+    out[out_idx] = '\0';
 }
 
 static void workspace_format_float(char *buf, size_t n, float v) {
@@ -84,12 +84,12 @@ typedef struct {
 /* --- workspace-dir --------------------------------------------------------- */
 
 static int parse_workspace_dir(const char *args) {
-    size_t i = 0;
-    while (*args && i < REPL_WORKSPACE_DIR_MAX - 1)
-        g_pending_workspace_dir[i++] = *args++;
-    g_pending_workspace_dir[i] = '\0';
-    while (i > 0 && isspace((unsigned char)g_pending_workspace_dir[i - 1]))
-        g_pending_workspace_dir[--i] = '\0';
+    size_t char_idx = 0;
+    while (*args && char_idx < REPL_WORKSPACE_DIR_MAX - 1)
+        g_pending_workspace_dir[char_idx++] = *args++;
+    g_pending_workspace_dir[char_idx] = '\0';
+    while (char_idx > 0 && isspace((unsigned char)g_pending_workspace_dir[char_idx - 1]))
+        g_pending_workspace_dir[--char_idx] = '\0';
     return 1;
 }
 
@@ -105,12 +105,12 @@ static void emit_workspace_dir(int *n) {
 /* --- scene-name ------------------------------------------------------------ */
 
 static int parse_scene_name(const char *args) {
-    size_t i = 0;
-    while (*args && i < USER_SCENE_NAME_MAX - 1)
-        g_pending_scene_name[i++] = *args++;
-    g_pending_scene_name[i] = '\0';
-    while (i > 0 && isspace((unsigned char)g_pending_scene_name[i - 1]))
-        g_pending_scene_name[--i] = '\0';
+    size_t char_idx = 0;
+    while (*args && char_idx < USER_SCENE_NAME_MAX - 1)
+        g_pending_scene_name[char_idx++] = *args++;
+    g_pending_scene_name[char_idx] = '\0';
+    while (char_idx > 0 && isspace((unsigned char)g_pending_scene_name[char_idx - 1]))
+        g_pending_scene_name[--char_idx] = '\0';
     return 1;
 }
 
@@ -130,11 +130,11 @@ static void emit_scene_name(int *n) {
 static int parse_var(const char *args) {
     const char *p = args;
     char name[16];
-    int ni = 0;
+    int name_char_idx = 0;
     while (*p && (isalnum((unsigned char)*p) || *p == '_') &&
-           ni < (int)sizeof(name) - 1)
-        name[ni++] = *p++;
-    name[ni] = '\0';
+           name_char_idx < (int)sizeof(name) - 1)
+        name[name_char_idx++] = *p++;
+    name[name_char_idx] = '\0';
     while (*p && isspace((unsigned char)*p)) p++;
     if (*p != '=') return 0;
     p++;
@@ -164,11 +164,11 @@ static int parse_var(const char *args) {
 }
 
 static void emit_vars(int *n) {
-    for (int i = 0; i < g_num_predef_vars && *n < MAX_WORKSPACE_HEADER_LINES; i++) {
+    for (int var_idx = 0; var_idx < g_num_predef_vars && *n < MAX_WORKSPACE_HEADER_LINES; var_idx++) {
         char vbuf[32];
-        workspace_format_float(vbuf, sizeof(vbuf), g_predef_vars[i].value);
+        workspace_format_float(vbuf, sizeof(vbuf), g_predef_vars[var_idx].value);
         if (repl_format_fits(g_workspace_header_lines[*n], WORKSPACE_HEADER_LINE_LEN,
-                             "// @var %s = %s", g_predef_vars[i].name, vbuf))
+                             "// @var %s = %s", g_predef_vars[var_idx].name, vbuf))
             (*n)++;
     }
 }
@@ -178,11 +178,11 @@ static void emit_vars(int *n) {
 static int parse_cfg(const char *args) {
     const char *p = args;
     char slug[32];
-    int si = 0;
+    int slug_char_idx = 0;
     while (*p && (isalnum((unsigned char)*p) || *p == '_') &&
-           si < (int)sizeof(slug) - 1)
-        slug[si++] = *p++;
-    slug[si] = '\0';
+           slug_char_idx < (int)sizeof(slug) - 1)
+        slug[slug_char_idx++] = *p++;
+    slug[slug_char_idx] = '\0';
     while (*p && isspace((unsigned char)*p)) p++;
     if (*p != '=') return 0;
     p++;
@@ -195,8 +195,8 @@ static int parse_cfg(const char *args) {
     }
     int cfg_count = 0;
     const ReplConfigItem *items = repl_config_items(&cfg_count);
-    for (int i = 0; i < cfg_count; i++) {
-        const ReplConfigItem *item = &items[i];
+    for (int item_idx = 0; item_idx < cfg_count; item_idx++) {
+        const ReplConfigItem *item = &items[item_idx];
         if (item->section_header || item->key == REPL_CONFIG_NONE)
             continue;
         char item_slug[32];
@@ -213,8 +213,8 @@ static int parse_cfg(const char *args) {
 static void emit_cfgs(int *n) {
     int cfg_count = 0;
     const ReplConfigItem *items = repl_config_items(&cfg_count);
-    for (int i = 0; i < cfg_count && *n < MAX_WORKSPACE_HEADER_LINES; i++) {
-        const ReplConfigItem *item = &items[i];
+    for (int item_idx = 0; item_idx < cfg_count && *n < MAX_WORKSPACE_HEADER_LINES; item_idx++) {
+        const ReplConfigItem *item = &items[item_idx];
         if (item->section_header || item->key == REPL_CONFIG_NONE)
             continue;
         char slug[32];
@@ -242,14 +242,14 @@ static const WorkspaceDirective WORKSPACE_DIRECTIVES[] = {
 #undef WS_DIR
 
 void refresh_workspace_header_lines(void) {
-    int n = 0;
-    if (n < MAX_WORKSPACE_HEADER_LINES) {
-        snprintf(g_workspace_header_lines[n++], WORKSPACE_HEADER_LINE_LEN,
+    int line_count = 0;
+    if (line_count < MAX_WORKSPACE_HEADER_LINES) {
+        snprintf(g_workspace_header_lines[line_count++], WORKSPACE_HEADER_LINE_LEN,
                  "// @workspace: REPL state (auto-saved)");
     }
-    for (int i = 0; i < WORKSPACE_DIRECTIVE_COUNT; i++)
-        WORKSPACE_DIRECTIVES[i].emit(&n);
-    g_workspace_header_line_count = n;
+    for (int dir_idx = 0; dir_idx < WORKSPACE_DIRECTIVE_COUNT; dir_idx++)
+        WORKSPACE_DIRECTIVES[dir_idx].emit(&line_count);
+    g_workspace_header_line_count = line_count;
 }
 
 int parse_workspace_header_line(const char *line) {
@@ -267,8 +267,8 @@ int parse_workspace_header_line(const char *line) {
         !isalnum((unsigned char)p[9]) && p[9] != '_' && p[9] != '-')
         return 1;
 
-    for (int i = 0; i < WORKSPACE_DIRECTIVE_COUNT; i++) {
-        const WorkspaceDirective *d = &WORKSPACE_DIRECTIVES[i];
+    for (int dir_idx = 0; dir_idx < WORKSPACE_DIRECTIVE_COUNT; dir_idx++) {
+        const WorkspaceDirective *d = &WORKSPACE_DIRECTIVES[dir_idx];
         if (strncmp(p, d->name, d->name_len) != 0) continue;
         unsigned char follow = (unsigned char)p[d->name_len];
         if (follow != '\0' && !isspace(follow)) continue;
@@ -387,17 +387,17 @@ static void parse_init_bootstrap(void) {
     if (g_init_bootstrap_ready)
         return;
 
-    for (int i = 0; i < NUM_INIT_BOOTSTRAP; i++) {
+    for (int bootstrap_idx = 0; bootstrap_idx < NUM_INIT_BOOTSTRAP; bootstrap_idx++) {
         GLCmd cmd;
         ReplParseContext parse_ctx = { 0, NULL, 0, 0 };
         memset(&cmd, 0, sizeof(cmd));
-        if (!repl_parser_parse_command_ctx(g_init_bootstrap_repl[i].repl_line,
+        if (!repl_parser_parse_command_ctx(g_init_bootstrap_repl[bootstrap_idx].repl_line,
                                     &cmd, &parse_ctx)) {
             fprintf(stderr, "init bootstrap parse failed: %s\n",
-                    g_init_bootstrap_repl[i].repl_line);
+                    g_init_bootstrap_repl[bootstrap_idx].repl_line);
             abort();
         }
-        g_init_bootstrap_cmds[i] = cmd;
+        g_init_bootstrap_cmds[bootstrap_idx] = cmd;
     }
     g_init_bootstrap_ready = 1;
 }
@@ -410,12 +410,12 @@ void ensure_init_bootstrap_ready(void) {
 void apply_init_bootstrap(void) {
     ensure_init_bootstrap_ready();
 
-    for (int i = 0; i < NUM_INIT_BOOTSTRAP; i++) {
-        if (g_init_bootstrap_repl[i].toggle_key != REPL_CONFIG_NONE &&
-            !repl_config_get(g_init_bootstrap_repl[i].toggle_key)) {
-            if (g_init_bootstrap_cmds[i].type == CMD_POINT_PARAMETER_FV &&
-                g_init_bootstrap_cmds[i].mode == GL_POINT_DISTANCE_ATTENUATION) {
-                GLCmd disabled = g_init_bootstrap_cmds[i];
+    for (int bootstrap_idx = 0; bootstrap_idx < NUM_INIT_BOOTSTRAP; bootstrap_idx++) {
+        if (g_init_bootstrap_repl[bootstrap_idx].toggle_key != REPL_CONFIG_NONE &&
+            !repl_config_get(g_init_bootstrap_repl[bootstrap_idx].toggle_key)) {
+            if (g_init_bootstrap_cmds[bootstrap_idx].type == CMD_POINT_PARAMETER_FV &&
+                g_init_bootstrap_cmds[bootstrap_idx].mode == GL_POINT_DISTANCE_ATTENUATION) {
+                GLCmd disabled = g_init_bootstrap_cmds[bootstrap_idx];
                 disabled.args[0] = 1.0f;
                 disabled.args[1] = 0.0f;
                 disabled.args[2] = 0.0f;
@@ -423,7 +423,7 @@ void apply_init_bootstrap(void) {
             }
             continue;
         }
-        apply_state_cmd(&g_init_bootstrap_cmds[i], 1.0f);
+        apply_state_cmd(&g_init_bootstrap_cmds[bootstrap_idx], 1.0f);
     }
 }
 
@@ -431,9 +431,9 @@ int init_section_line_count(void) {
     int count = init_host_only_line_count();
 
     ensure_init_bootstrap_ready();
-    for (int i = 0; i < NUM_INIT_BOOTSTRAP; i++) {
-        if (g_init_bootstrap_repl[i].toggle_key != REPL_CONFIG_NONE &&
-            !repl_config_get(g_init_bootstrap_repl[i].toggle_key))
+    for (int bootstrap_idx = 0; bootstrap_idx < NUM_INIT_BOOTSTRAP; bootstrap_idx++) {
+        if (g_init_bootstrap_repl[bootstrap_idx].toggle_key != REPL_CONFIG_NONE &&
+            !repl_config_get(g_init_bootstrap_repl[bootstrap_idx].toggle_key))
             continue;
         count++;
     }
@@ -460,12 +460,12 @@ void init_section_line(int i, char *buf, size_t n) {
     }
 
     i -= host_count;
-    for (int idx = 0; idx < NUM_INIT_BOOTSTRAP; idx++) {
-        if (g_init_bootstrap_repl[idx].toggle_key != REPL_CONFIG_NONE &&
-            !repl_config_get(g_init_bootstrap_repl[idx].toggle_key))
+    for (int bootstrap_idx = 0; bootstrap_idx < NUM_INIT_BOOTSTRAP; bootstrap_idx++) {
+        if (g_init_bootstrap_repl[bootstrap_idx].toggle_key != REPL_CONFIG_NONE &&
+            !repl_config_get(g_init_bootstrap_repl[bootstrap_idx].toggle_key))
             continue;
         if (enabled_idx == i) {
-            format_cmd_source_as_c(buf, n, &g_init_bootstrap_cmds[idx], 0);
+            format_cmd_source_as_c(buf, n, &g_init_bootstrap_cmds[bootstrap_idx], 0);
             return;
         }
         enabled_idx++;
@@ -477,18 +477,18 @@ void init_section_line(int i, char *buf, size_t n) {
 static void emit_export_init_section_to_file(FILE *f, int include_tess) {
     char line[MAX_LINE_LEN];
 
-    for (int i = 0; g_init_host_only_visible_c[i]; i++)
-        fprintf(f, "%s\n", g_init_host_only_visible_c[i]);
+    for (int line_idx = 0; g_init_host_only_visible_c[line_idx]; line_idx++)
+        fprintf(f, "%s\n", g_init_host_only_visible_c[line_idx]);
     if (include_tess)
-        for (int i = 0; g_init_host_only_tess_c[i]; i++)
-            fprintf(f, "%s\n", g_init_host_only_tess_c[i]);
+        for (int line_idx = 0; g_init_host_only_tess_c[line_idx]; line_idx++)
+            fprintf(f, "%s\n", g_init_host_only_tess_c[line_idx]);
 
     ensure_init_bootstrap_ready();
-    for (int idx = 0; idx < NUM_INIT_BOOTSTRAP; idx++) {
-        if (g_init_bootstrap_repl[idx].toggle_key != REPL_CONFIG_NONE &&
-            !repl_config_get(g_init_bootstrap_repl[idx].toggle_key))
+    for (int bootstrap_idx = 0; bootstrap_idx < NUM_INIT_BOOTSTRAP; bootstrap_idx++) {
+        if (g_init_bootstrap_repl[bootstrap_idx].toggle_key != REPL_CONFIG_NONE &&
+            !repl_config_get(g_init_bootstrap_repl[bootstrap_idx].toggle_key))
             continue;
-        format_cmd_source_as_c(line, sizeof(line), &g_init_bootstrap_cmds[idx], 0);
+        format_cmd_source_as_c(line, sizeof(line), &g_init_bootstrap_cmds[bootstrap_idx], 0);
         fprintf(f, "%s\n", line);
     }
 }
@@ -499,14 +499,14 @@ static void emit_export_header_pre(FILE *f) {
     snprintf(angle_line, sizeof(angle_line),
              "static float g_angle = %.4ff;", *repl_state_camera()->ry);
 
-    for (int i = 0; g_header_pre[i]; i++) {
-        if (strcmp(g_header_pre[i], "void display() {") == 0)
+    for (int line_idx = 0; g_header_pre[line_idx]; line_idx++) {
+        if (strcmp(g_header_pre[line_idx], "void display() {") == 0)
             break;
-        if (strcmp(g_header_pre[i], "static float g_angle = 0.0f;") == 0) {
+        if (strcmp(g_header_pre[line_idx], "static float g_angle = 0.0f;") == 0) {
             fprintf(f, "%s\n", angle_line);
             continue;
         }
-        fprintf(f, "%s\n", g_header_pre[i]);
+        fprintf(f, "%s\n", g_header_pre[line_idx]);
     }
 }
 
@@ -539,10 +539,10 @@ static const char *cam_line_skip_sep(const char *p) {
 }
 
 static int cam_line_read_floats(const char *p, float *out, int n) {
-    for (int i = 0; i < n; i++) {
+    for (int float_idx = 0; float_idx < n; float_idx++) {
         p = cam_line_skip_sep(p);
         char *end = NULL;
-        out[i] = strtof(p, &end);
+        out[float_idx] = strtof(p, &end);
         if (end == p) return 0;
         p = end;
     }
@@ -681,9 +681,10 @@ static void write_light_setup(FILE *f) {
 
     int first_light = 1;
 
-    for (int i = 0; i < MAX_LIGHTS; i++) {
-        const SceneLight *l = &repl_state_render()->lights[i];
-        const char *ln = light_names[i];
+    /* Iterate through configured lights and export their setup to C code. */
+    for (int light_idx = 0; light_idx < MAX_LIGHTS; light_idx++) {
+        const SceneLight *l = &repl_state_render()->lights[light_idx];
+        const char *ln = light_names[light_idx];
 
         if (!l->enabled) continue;
 
@@ -726,11 +727,11 @@ static void write_for_begin_as_c(FILE *f, const GLCmd *cmd) {
         while (*hp && *hp != '(') hp++;
         if (*hp) hp++;
         while (*hp && isspace((unsigned char)*hp)) hp++;
-        int ni = 0;
+        int var_name_idx = 0;
         while (*hp && (isalnum((unsigned char)*hp) || *hp == '_') &&
-               ni < (int)sizeof(var_name) - 1)
-            var_name[ni++] = *hp++;
-        var_name[ni] = '\0';
+               var_name_idx < (int)sizeof(var_name) - 1)
+            var_name[var_name_idx++] = *hp++;
+        var_name[var_name_idx] = '\0';
         while (*hp && isspace((unsigned char)*hp)) hp++;
         if (*hp == ',') hp++;
 
@@ -814,10 +815,10 @@ static int cmd_type_is_tess(CmdType t) {
 }
 
 static int export_uses_tess_commands(void) {
-    for (int i = 0; i < repl_state_document_count(); i++) {
-        if (!repl_state_document_cmds_mut()[i].valid)
+    for (int cmd_idx = 0; cmd_idx < repl_state_document_count(); cmd_idx++) {
+        if (!repl_state_document_cmds_mut()[cmd_idx].valid)
             continue;
-        if (cmd_type_is_tess(repl_state_document_cmds_mut()[i].type))
+        if (cmd_type_is_tess(repl_state_document_cmds_mut()[cmd_idx].type))
             return 1;
     }
 
@@ -1082,9 +1083,9 @@ void format_func_header(char *out, int out_sz, const char *indent,
     }
     if (param_count > 0) {
         written += snprintf(out + written, out_sz - written, "(");
-        for (int i = 0; i < param_count && written < out_sz; i++) {
+        for (int param_idx = 0; param_idx < param_count && written < out_sz; param_idx++) {
             written += snprintf(out + written, out_sz - written, "%s%s",
-                                i == 0 ? "" : ", ", param_names[i]);
+                                param_idx == 0 ? "" : ", ", param_names[param_idx]);
         }
         if (written < out_sz)
             written += snprintf(out + written, out_sz - written, ")");
@@ -1099,9 +1100,9 @@ int input_has_expr_vars(const char *s, ExprVar *vars, int num_vars) {
         const char *start = s;
         while (*s && (isalnum((unsigned char)*s) || *s == '_')) s++;
         int len = (int)(s - start);
-        for (int i = 0; i < num_vars; i++) {
-            int nlen = (int)strlen(vars[i].name);
-            if (nlen == len && strncmp(start, vars[i].name, len) == 0)
+        for (int var_idx = 0; var_idx < num_vars; var_idx++) {
+            int nlen = (int)strlen(vars[var_idx].name);
+            if (nlen == len && strncmp(start, vars[var_idx].name, len) == 0)
                 return 1;
         }
     }
