@@ -445,3 +445,169 @@ should include focused tests.
 - **`sample.h` dependency**: accepted for this phase, but do not expand it. New
   common scene-facing types should go into focused headers rather than adding
   more REPL declarations to `sample.h`.
+
+---
+
+## Implementation Notes: Deviations From Plan
+
+The plan above was written before implementation. This section documents
+pragmatic adjustments made during execution.
+
+### Execute Callback Signature
+
+**Plan:** Proposed a `SceneExecuteRequest` struct wrapper:
+```c
+typedef struct SceneExecuteRequest {
+    float alpha_scale;
+    int   skip_geom_before_pc;
+    int   flat_cmd_count;
+    FlatProgramView program;
+} SceneExecuteRequest;
+
+typedef void (*SceneExecuteProgramFn)(const SceneExecuteRequest *request,
+                                      void *user_data);
+```
+
+**Implementation:** Flattened to direct function parameters:
+```c
+typedef void (*SceneExecuteProgramFn)(float alpha_scale,
+                                     int skip_geom_before_pc,
+                                     int flat_cmd_count,
+                                     FlatProgramView program,
+                                     void *user_data);
+```
+
+**Rationale:** Simpler to use at call sites (no struct allocation), fewer
+indirections, and the overhead of a struct wrapper added no clarity given the
+small parameter set. Direct parameters map clearly to the semantic meaning at
+the call site.
+
+### Reset Callback Addition
+
+**Plan:** Explicitly stated "intentionally no reset callback." Execution context
+was intended to be stateless, with all state carried in the request parameters.
+
+**Implementation:** Added `execute_reset_fn` callback:
+```c
+void (*execute_reset_fn)(void *user_data);
+```
+
+**Rationale:** In practice, the executor maintains some per-frame state (matrix
+depth tracking, attribute state) that must be cleaned up between replay fade
+batches. Without a reset hook, the first batch's transforms would leak into the
+second batch's GL state. The reset callback provides a clean separation point
+between fade passes. Called after all geometry in a batch is emitted, before the
+next batch begins.
+
+### Replay Fade Batch Representation
+
+**Plan:** Pre-computed fade batch snapshots stored in config:
+```c
+typedef struct SceneReplayFadeBatch {
+    float alpha_scale;
+    int   skip_geom_before_pc;
+    int   flat_cmd_count;
+} SceneReplayFadeBatch;
+
+SceneReplayFadeBatch replay_fade_batches[REPLAY_FADE_BATCH_MAX];
+int                  replay_fade_batch_count;
+```
+
+**Implementation:** Config carries replay state variables instead; fade batches
+computed dynamically during execution:
+```c
+int   replay_pc;
+int   replay_total_cmds;
+int   replay_state_val;     /* REPLAY_PLAYING / REPLAY_PAUSED / REPLAY_DONE */
+float replay_speed;
+int   replay_expand_args;
+```
+
+**Rationale:** Fade batch computation is tied to replay's internal state machine
+(speed, pause state, total command count). Pre-snaphotting the batches would
+require duplicating that logic in `scene_render_config_build()`. Instead, the
+config carries just the replay state variables, and the executor callback logic
+queries `repl_replay_*` helpers to determine which batches are active and their
+alpha values. This keeps the replay state machine in one place (`repl_replay.c`)
+and avoids storing stale batch snapshots that might diverge from the replay
+state during frame-to-frame changes.
+
+### Cursor Match Helper
+
+**Plan:** Proposed extracting cursor matching to a pure helper function in a new
+file:
+```c
+typedef struct SceneCursorMatchSnapshot {
+    int          edit_line_idx;
+    int          cursor_block_begin_idx;
+    int          cursor_block_end_idx;
+    unsigned int cursor_func_scope_mask;
+    int          cursor_call_src_cmd_idx;
+} SceneCursorMatchSnapshot;
+
+int scene_flat_cmd_matches_cursor(const SceneCursorMatchSnapshot *cursor,
+                                  const GLCmd *cmd,
+                                  int flat_idx);
+```
+
+**Implementation:** Inlined as a static helper directly in `scene_overlays.c`:
+```c
+static int overlay_flat_cmd_matches_cursor(int begin_idx, int is_tess,
+                                           const SceneRenderConfig *cfg);
+```
+
+**Rationale:** The cursor matching logic is only used in `scene_overlays.c` for
+polygon outline highlighting. Creating a separate module (`scene_cursor_match.c`)
+added no benefit since the function is tightly coupled to the overlay rendering
+context. The static inline version in `scene_overlays.c` is clearer and avoids
+unnecessary file proliferation. The logic still operates on a pushed snapshot
+(via `SceneRenderConfig` fields), preserving the decoupling intent.
+
+### Entry Point Strategy
+
+**Plan:** Proposed a new pure entry point `scene_render_3d_scene_with_config()`
+with the existing `scene_render_3d_scene()` as a REPL-owned wrapper.
+
+**Implementation:** Kept `scene_render_3d_scene()` as the sole public entry point;
+config building happens in `repl_core.c` via `scene_render_config_build()` called
+from `display_func()`.
+
+**Rationale:** The plan's dual-entry-point design was correct architecturally
+but added naming complexity. In practice, `scene_render.c` doesn't need to expose
+a separate config-driven entry point because the REPL always controls the
+rendering context via `display_func()`. The decoupling is achieved by pushing
+state into `SceneRenderConfig` and passing `FrameRenderContext` through all
+scene helper functions. Users of the scene layer inside the REPL can already see
+the push-model design through the `FrameRenderContext` parameter; adding a
+second entry point would just be redundant ceremony.
+
+### Commit Strategy Consolidation
+
+**Plan:** 11 staged commits, including a separate executor refactor step
+(Step 3: "make executor options carry fade context").
+
+**Implementation:** 9 commits (Steps 1–9) plus a final verification, skipping the
+separate executor refactor. The config-building and scene-module decoupling
+stages were consolidated rather than split into separate steps.
+
+**Rationale:** The executor refactor (moving `alpha_scale` and
+`skip_geom_before_pc` into `ReplExecutionOptions`) was intended to remove the
+need for a reset callback. In practice, we added the reset callback anyway
+(see above), so the executor refactor became unnecessary. The direct callback
+parameters work well. Consolidating the commits reduced the number of
+intermediate states and made the refactor easier to review as a cohesive whole.
+
+### Test Coverage
+
+**Plan:** Mentioned required GL-stubs verification tests but did not propose a
+dedicated test module for scene_* functions.
+
+**Implementation:** Added `test_scene_render.c`, a comprehensive standalone test
+suite that validates all scene modules operate independently of `repl_state.h`.
+45 tests cover config initialization, renderer entry points, data propagation,
+viewport handling, and render mode toggles.
+
+**Rationale:** The refactor's core value is scene module independence. Having
+explicit tests for the push-model decoupling ensures the contract is maintained
+as the code evolves. The tests use GL stubs and require no REPL initialization,
+proving the modules truly are independent components.
