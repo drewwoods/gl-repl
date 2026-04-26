@@ -4,7 +4,6 @@
  * Extracted from sample.c for maintainability.
  */
 #include "sample.h"
-#include "repl_core_internal.h"
 #include "repl_executor.h"
 #include "repl_replay.h"
 #include "repl_state.h"
@@ -18,7 +17,6 @@
 #include "scene_render_types.h"
 #include "scene_render.h"
 #include "scene_transform_guides.h"
-#include "ui_panels.h"
 #include "prof.h"
 #include "./include/gl_2d.h"
 
@@ -68,45 +66,27 @@ static int cmd_is_focus_vertex(const GLCmd *cmd) {
            (cmd->type == CMD_VERTEX3F || cmd->type == CMD_TESS_VERTEX);
 }
 
-static void scene_focus_store(float x, float y, float z) {
-    ReplRenderDerivedState *derived = repl_state_render_derived_mut();
-    derived->focus_vertex[0] = x;
-    derived->focus_vertex[1] = y;
-    derived->focus_vertex[2] = z;
-    *derived->focus_vertex_valid = 1;
-}
-
 static SceneFocusVertex scene_prepare_focus_vertex(void) {
-    const ReplRenderDerivedState *derived = repl_state_render_derived();
-    SceneFocusVertex focus = {
-        .pos = {
-            derived->focus_vertex[0],
-            derived->focus_vertex[1],
-            derived->focus_vertex[2],
-        },
-        .valid = *derived->focus_vertex_valid,
-    };
+    SceneFocusVertex focus = { .valid = 0 };
 
     if (repl_state_edit_line() >= 0 && repl_state_edit_line() < repl_state_document_count() &&
         cmd_is_focus_vertex(&repl_state_document_cmds_mut()[repl_state_edit_line()])) {
-        scene_focus_store(repl_state_document_cmds_mut()[repl_state_edit_line()].args[0],
-                          repl_state_document_cmds_mut()[repl_state_edit_line()].args[1],
-                          repl_state_document_cmds_mut()[repl_state_edit_line()].args[2]);
-    } else if (!*derived->focus_vertex_valid) {
+        focus.pos[0] = repl_state_document_cmds_mut()[repl_state_edit_line()].args[0];
+        focus.pos[1] = repl_state_document_cmds_mut()[repl_state_edit_line()].args[1];
+        focus.pos[2] = repl_state_document_cmds_mut()[repl_state_edit_line()].args[2];
+        focus.valid = 1;
+    } else {
         for (int i = repl_state_edit_line() - 1; i >= 0; i--) {
             if (cmd_is_focus_vertex(&repl_state_document_cmds_mut()[i])) {
-                scene_focus_store(repl_state_document_cmds_mut()[i].args[0],
-                                  repl_state_document_cmds_mut()[i].args[1],
-                                  repl_state_document_cmds_mut()[i].args[2]);
+                focus.pos[0] = repl_state_document_cmds_mut()[i].args[0];
+                focus.pos[1] = repl_state_document_cmds_mut()[i].args[1];
+                focus.pos[2] = repl_state_document_cmds_mut()[i].args[2];
+                focus.valid = 1;
                 break;
             }
         }
     }
 
-    focus.pos[0] = derived->focus_vertex[0];
-    focus.pos[1] = derived->focus_vertex[1];
-    focus.pos[2] = derived->focus_vertex[2];
-    focus.valid = *derived->focus_vertex_valid;
     return focus;
 }
 
@@ -153,12 +133,10 @@ static void scene_apply_wireframe_config(const SceneRenderConfig *config) {
 
 static void scene_prepare_frame_context(FrameRenderContext *ctx,
                                         const SceneRenderConfig *config) {
-    const ReplRenderDerivedState *derived = repl_state_render_derived();
     ctx->config = *config;
-    ctx->focus.pos[0] = derived->focus_vertex[0];
-    ctx->focus.pos[1] = derived->focus_vertex[1];
-    ctx->focus.pos[2] = derived->focus_vertex[2];
-    ctx->focus.valid = *derived->focus_vertex_valid;
+
+    /* Prepare focus vertex for cursor or preceding vertex */
+    ctx->focus = scene_prepare_focus_vertex();
 
     /* Modelview setup is T(-dist) * Rx * Ry * T(-target). Solving that for
      * the eye position gives target.y + sin(rx) * dist; ry does not affect Y. */
@@ -166,9 +144,6 @@ static void scene_prepare_frame_context(FrameRenderContext *ctx,
     ctx->camera_world_y = config->cam_ty +
                           sinf(camera_rx_rad) * config->cam_dist;
     ctx->camera_below_water_surface = (ctx->camera_world_y < 0.0f);
-
-    if (config->grid_theme == GRID_THEME_FOCUS)
-        ctx->focus = scene_prepare_focus_vertex();
 }
 
 static SceneGuideSnapshot scene_build_guide_snapshot(const SceneRenderConfig *config,
@@ -459,73 +434,6 @@ static void scene_apply_clear_color(FlatProgramView flat_program) {
     glClearColor(cr, cg, cb, ca);
 }
 
-void scene_render_replay_fade_pass(void) {
-    SceneRenderConfig config;
-    FlatProgramView flat_program;
-    ReplayFadeBatchView fade_batches;
-    int skip_limits[REPLAY_FADE_BATCH_MAX];
-    int batch_count;
-
-    scene_render_config_build(&config);
-    if (!config.replay_has_fades)
-        return;
-
-    flat_program = repl_state_flat_program_view();
-    fade_batches = repl_replay_fade_batches_view();
-
-    prof_begin(PROF_SCENE_3D_FADE_PROLOGUE);
-    batch_count = repl_replay_compute_fade_skip_limits(skip_limits, REPLAY_FADE_BATCH_MAX);
-    prof_accum_end(PROF_SCENE_3D_FADE_PROLOGUE);
-    if (batch_count <= 0)
-        return;
-
-    glPushAttrib(GL_ALL_ATTRIB_BITS);
-
-    scene_lights_setup();
-    glDisable(GL_LIGHTING);
-    glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE);
-    GLfloat mspec[] = { 0.4f, 0.4f, 0.4f, 1.0f };
-    GLfloat mshin[] = { 30.0f };
-    glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, mspec);
-    glMaterialfv(GL_FRONT_AND_BACK, GL_SHININESS, mshin);
-    scene_apply_quality_config(&config);
-    glEnable(GL_BLEND);
-    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-    glColor4f(0.70f, 0.70f, 0.80f, 1.0f);
-    if (config.wireframe) glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
-    else glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
-
-    for (int batch_idx = 0; batch_idx < batch_count; batch_idx++) {
-        const ReplayFadeBatch *batch = &fade_batches.batches[batch_idx];
-        float alpha = repl_replay_batch_alpha(batch);
-
-        if (alpha <= 0.0f)
-            continue;
-
-        prof_begin(PROF_SCENE_3D_FADE_BATCH_PREP);
-        ReplExecutionOptions exec_options = {
-            .flat_cmd_count = batch->new_pc,
-            .program = flat_program
-        };
-        repl_replay_restore_baseline_predef_values();
-        repl_execute_set_fade_context(alpha, skip_limits[batch_idx]);
-        glColor4f(0.70f, 0.70f, 0.80f, alpha);
-        glPushMatrix();
-        prof_accum_end(PROF_SCENE_3D_FADE_BATCH_PREP);
-
-        prof_begin(PROF_SCENE_3D_FADE_BATCH_EXEC);
-        repl_execute_program(&exec_options);
-        prof_accum_end(PROF_SCENE_3D_FADE_BATCH_EXEC);
-
-        glPopMatrix();
-    }
-
-    prof_begin(PROF_SCENE_3D_FADE_BATCH_POST);
-    repl_execute_set_fade_context(1.0f, 0);
-    glPopAttrib();
-    prof_accum_end(PROF_SCENE_3D_FADE_BATCH_POST);
-}
-
 static void render_3d_scene_pass(void) {
     SceneRenderConfig config;
     FrameRenderContext frame_ctx;
@@ -564,9 +472,62 @@ static void render_3d_scene_pass(void) {
         glPopMatrix();
         prof_accum_end(PROF_SCENE_3D_FILL);
 
-        if (config.replay_has_fades) {
+        if (config.replay_has_fades && config.execute_fn) {
             prof_begin(PROF_SCENE_3D_FADE);
-            scene_render_replay_fade_pass();
+            {
+                ReplayFadeBatchView fade_batches;
+                int skip_limits[REPLAY_FADE_BATCH_MAX];
+                int batch_count;
+
+                fade_batches = repl_replay_fade_batches_view();
+                prof_begin(PROF_SCENE_3D_FADE_PROLOGUE);
+                batch_count = repl_replay_compute_fade_skip_limits(skip_limits, REPLAY_FADE_BATCH_MAX);
+                prof_accum_end(PROF_SCENE_3D_FADE_PROLOGUE);
+
+                if (batch_count > 0) {
+                    glPushAttrib(GL_ALL_ATTRIB_BITS);
+                    scene_lights_setup();
+                    glDisable(GL_LIGHTING);
+                    glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE);
+                    GLfloat mspec[] = { 0.4f, 0.4f, 0.4f, 1.0f };
+                    GLfloat mshin[] = { 30.0f };
+                    glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, mspec);
+                    glMaterialfv(GL_FRONT_AND_BACK, GL_SHININESS, mshin);
+                    scene_apply_quality_config(&config);
+                    glEnable(GL_BLEND);
+                    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+                    glColor4f(0.70f, 0.70f, 0.80f, 1.0f);
+                    if (config.wireframe) glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+                    else glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+
+                    for (int batch_idx = 0; batch_idx < batch_count; batch_idx++) {
+                        const ReplayFadeBatch *batch = &fade_batches.batches[batch_idx];
+                        float alpha = repl_replay_batch_alpha(batch);
+
+                        if (alpha <= 0.0f)
+                            continue;
+
+                        prof_begin(PROF_SCENE_3D_FADE_BATCH_PREP);
+                        repl_replay_restore_baseline_predef_values();
+                        glColor4f(0.70f, 0.70f, 0.80f, alpha);
+                        glPushMatrix();
+                        prof_accum_end(PROF_SCENE_3D_FADE_BATCH_PREP);
+
+                        prof_begin(PROF_SCENE_3D_FADE_BATCH_EXEC);
+                        config.execute_fn(alpha, skip_limits[batch_idx], batch->new_pc,
+                                        config.flat_program, config.execute_user_data);
+                        prof_accum_end(PROF_SCENE_3D_FADE_BATCH_EXEC);
+
+                        glPopMatrix();
+                    }
+
+                    prof_begin(PROF_SCENE_3D_FADE_BATCH_POST);
+                    if (config.execute_reset_fn)
+                        config.execute_reset_fn(config.execute_user_data);
+                    glPopAttrib();
+                    prof_accum_end(PROF_SCENE_3D_FADE_BATCH_POST);
+                }
+            }
             prof_accum_end(PROF_SCENE_3D_FADE);
         }
     }
