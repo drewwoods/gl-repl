@@ -113,9 +113,9 @@ const char *mode_name(GLenum mode) {
 
 GLenum current_begin_mode(void) {
     GLenum mode = GL_TRIANGLES;
-    for (int i = 0; i < repl_state_document_count(); i++)
-        if (repl_state_document_cmds_mut()[i].valid && repl_state_document_cmds_mut()[i].type == CMD_BEGIN)
-            mode = repl_state_document_cmds_mut()[i].mode;
+    for (int cmd_idx = 0; cmd_idx < repl_state_document_count(); cmd_idx++)
+        if (repl_state_document_cmds_mut()[cmd_idx].valid && repl_state_document_cmds_mut()[cmd_idx].type == CMD_BEGIN)
+            mode = repl_state_document_cmds_mut()[cmd_idx].mode;
     return mode;
 }
 
@@ -125,8 +125,8 @@ int count_vertices(void) {
     const GLCmd *g_flat_cmds = flat_program.cmds;
     int g_num_flat_cmds = flat_program.cmd_count;
 
-    for (int i = 0; i < g_num_flat_cmds; i++)
-        if (g_flat_cmds[i].valid && g_flat_cmds[i].type == CMD_VERTEX3F) n++;
+    for (int flat_idx = 0; flat_idx < g_num_flat_cmds; flat_idx++)
+        if (g_flat_cmds[flat_idx].valid && g_flat_cmds[flat_idx].type == CMD_VERTEX3F) n++;
     return n;
 }
 
@@ -169,18 +169,18 @@ void repl_debug_dump_editor(FILE *out) {
             repl_state_document_count(), repl_state_edit_line(), repl_state_insert_mode(),
             repl_state_flat_program_dirty(), repl_state_normals_dirty());
 
-    for (int i = 0; i < repl_state_document_count(); i++) {
-        const GLCmd *cmd = &repl_state_document_cmds_mut()[i];
+    for (int cmd_idx = 0; cmd_idx < repl_state_document_count(); cmd_idx++) {
+        const GLCmd *cmd = &repl_state_document_cmds_mut()[cmd_idx];
         fprintf(dst,
                 "%4d | %-22s | valid=%d has_vars=%d is_auto=%d src_idx=%d | %s\n",
-                i, cmd_type_name(cmd->type), cmd->valid, cmd->has_vars,
+                cmd_idx, cmd_type_name(cmd->type), cmd->valid, cmd->has_vars,
                 cmd->is_auto, cmd->src_cmd_idx, cmd->source);
     }
 
     fprintf(dst, "--- source ---\n");
-    for (int i = 0; i < repl_state_document_count(); i++) {
-        if (!repl_state_document_cmds_mut()[i].valid) continue;
-        fprintf(dst, "%s\n", repl_state_document_cmds_mut()[i].source);
+    for (int cmd_idx = 0; cmd_idx < repl_state_document_count(); cmd_idx++) {
+        if (!repl_state_document_cmds_mut()[cmd_idx].valid) continue;
+        fprintf(dst, "%s\n", repl_state_document_cmds_mut()[cmd_idx].source);
     }
     fprintf(dst, "--- camera ---\n");
     {
@@ -192,13 +192,13 @@ void repl_debug_dump_editor(FILE *out) {
     update_cam_lines();
     {
         const ReplImportExportState *meta = repl_state_import_export();
-        for (int i = 0; i < CAM_LINE_COUNT; i++)
-            fprintf(dst, "%s\n", meta->cam_lines[i]);
+        for (int cam_line_idx = 0; cam_line_idx < CAM_LINE_COUNT; cam_line_idx++)
+            fprintf(dst, "%s\n", meta->cam_lines[cam_line_idx]);
     }
     fprintf(dst, "--- init ---\n");
-    for (int i = 0; i < init_section_line_count(); i++) {
+    for (int init_line_idx = 0; init_line_idx < init_section_line_count(); init_line_idx++) {
         char line[MAX_LINE_LEN];
-        init_section_line(i, line, sizeof(line));
+        init_section_line(init_line_idx, line, sizeof(line));
         fprintf(dst, "%s\n", line);
     }
     fprintf(dst, "=== End REPL Editor Dump ===\n");
@@ -221,11 +221,11 @@ void repl_debug_dump_flat_commands(FILE *out) {
     fprintf(dst, "=== REPL Flattened Commands Dump ===\n");
     fprintf(dst, "num_flat_cmds=%d\n", g_num_flat_cmds);
 
-    for (int i = 0; i < g_num_flat_cmds; i++) {
-        const GLCmd *cmd = &g_flat_cmds[i];
+    for (int flat_idx = 0; flat_idx < g_num_flat_cmds; flat_idx++) {
+        const GLCmd *cmd = &g_flat_cmds[flat_idx];
         fprintf(dst,
                 "%4d | %-22s | valid=%d has_vars=%d src_idx=%d call_src_idx=%d root_call_src_idx=%d func_scope=0x%08x | %s\n",
-                i, cmd_type_name(cmd->type), cmd->valid, cmd->has_vars,
+                flat_idx, cmd_type_name(cmd->type), cmd->valid, cmd->has_vars,
                 cmd->src_cmd_idx, cmd->call_src_cmd_idx,
                 cmd->root_call_src_cmd_idx, cmd->func_scope_mask,
                 cmd->source);
@@ -269,16 +269,16 @@ static void normalize_with_indent(const char *raw_expr, int indent_spaces,
     {
         char spaced[MAX_LINE_LEN];
         int si = 0;
-        for (int i = 0; body[i] && si < (int)sizeof(spaced) - 1; i++) {
-            char c = body[i];
+        for (int char_idx = 0; body[char_idx] && si < (int)sizeof(spaced) - 1; char_idx++) {
+            char c = body[char_idx];
             if (c == ',') {
                 while (si > 0 && isspace((unsigned char)spaced[si - 1]))
                     si--;
                 spaced[si++] = ',';
                 if (si < (int)sizeof(spaced) - 1)
                     spaced[si++] = ' ';
-                while (body[i + 1] && isspace((unsigned char)body[i + 1]))
-                    i++;
+                while (body[char_idx + 1] && isspace((unsigned char)body[char_idx + 1]))
+                    char_idx++;
                 continue;
             }
             spaced[si++] = c;
@@ -344,14 +344,14 @@ void repl_reformat_commands(void) {
     memcpy(saved_input, repl_state_editor_input()->input, sizeof(saved_input));
     ReplCommandStore store = repl_command_store_live();
 
-    for (int i = 0; i < repl_state_document_count(); i++) {
-        if (!repl_state_document_cmds_mut()[i].valid) continue;
+    for (int cmd_idx = 0; cmd_idx < repl_state_document_count(); cmd_idx++) {
+        if (!repl_state_document_cmds_mut()[cmd_idx].valid) continue;
 
-        GLCmd orig = repl_state_document_cmds_mut()[i];
+        GLCmd orig = repl_state_document_cmds_mut()[cmd_idx];
         GLCmd fmt = orig;
 
-        int bb = repl_source_scope_in_begin_block_at(i);
-        int bdepth = repl_source_scope_block_depth_at(i);
+        int bb = repl_source_scope_in_begin_block_at(cmd_idx);
+        int bdepth = repl_source_scope_block_depth_at(cmd_idx);
         int ind = (bb ? 4 : 2) + bdepth * 2;
         char ind_s[32];
         if (ind > (int)sizeof(ind_s) - 1) ind = (int)sizeof(ind_s) - 1;
@@ -376,22 +376,22 @@ void repl_reformat_commands(void) {
                 snprintf(fmt.source, sizeof(fmt.source), "%sfor(%s, %g, %g) {",
                          ind_s, var, orig.args[0], orig.args[1]);
             }
-            repl_command_store_replace_one(&store, i, &fmt);
+            repl_command_store_replace_one(&store, cmd_idx, &fmt);
             break;
         }
         case CMD_FOR_END:
         case CMD_FUNC_END:
         case CMD_IF_END: {
-            int close_depth = repl_source_scope_block_depth_at(i) - 1;
+            int close_depth = repl_source_scope_block_depth_at(cmd_idx) - 1;
             if (close_depth < 0) close_depth = 0;
-            int cb = repl_source_scope_in_begin_block_at(i);
+            int cb = repl_source_scope_in_begin_block_at(cmd_idx);
             int close_ind = (cb ? 4 : 2) + close_depth * 2;
             char close_s[32];
             if (close_ind > (int)sizeof(close_s) - 1) close_ind = (int)sizeof(close_s) - 1;
             memset(close_s, ' ', (size_t)close_ind);
             close_s[close_ind] = '\0';
             snprintf(fmt.source, sizeof(fmt.source), "%s}", close_s);
-            repl_command_store_replace_one(&store, i, &fmt);
+            repl_command_store_replace_one(&store, cmd_idx, &fmt);
             break;
         }
         case CMD_FUNC_DEF: {
@@ -406,7 +406,7 @@ void repl_reformat_commands(void) {
                                    parsed_fn, param_names, param_count);
             else
                 snprintf(fmt.source, sizeof(fmt.source), "%sfunc%d {", ind_s, fn);
-            repl_command_store_replace_one(&store, i, &fmt);
+            repl_command_store_replace_one(&store, cmd_idx, &fmt);
             break;
         }
         case CMD_IF_BEGIN: {
@@ -414,7 +414,7 @@ void repl_reformat_commands(void) {
             if (!repl_extract_paren_payload(orig.source, cond, sizeof(cond)))
                 snprintf(cond, sizeof(cond), "%g", orig.args[0]);
             snprintf(fmt.source, sizeof(fmt.source), "%sif(%s) {", ind_s, cond);
-            repl_command_store_replace_one(&store, i, &fmt);
+            repl_command_store_replace_one(&store, cmd_idx, &fmt);
             break;
         }
         case CMD_VAR_ASSIGN: {
@@ -443,7 +443,7 @@ void repl_reformat_commands(void) {
                 else if (name)
                     snprintf(fmt.source, sizeof(fmt.source), "%s%s = %g;%s", ind_s, name, orig.args[0], comment);
             }
-            repl_command_store_replace_one(&store, i, &fmt);
+            repl_command_store_replace_one(&store, cmd_idx, &fmt);
             break;
         }
         case CMD_COMMENT: {
@@ -462,40 +462,40 @@ void repl_reformat_commands(void) {
             } else {
                 snprintf(fmt.source, sizeof(fmt.source), "%s//", ind_s);
             }
-            repl_command_store_replace_one(&store, i, &fmt);
+            repl_command_store_replace_one(&store, cmd_idx, &fmt);
             break;
         }
         case CMD_VAR_DECLARE: {
             int off = snprintf(fmt.source, sizeof(fmt.source), "%sfloat ", ind_s);
-            for (int n = 0; n < orig.var_decl_count && off < (int)sizeof(fmt.source) - 4; n++) {
-                if (n > 0) off += snprintf(fmt.source + off, sizeof(fmt.source) - off, ", ");
-                off += snprintf(fmt.source + off, sizeof(fmt.source) - off, "%s", orig.var_names[n]);
+            for (int decl_idx = 0; decl_idx < orig.var_decl_count && off < (int)sizeof(fmt.source) - 4; decl_idx++) {
+                if (decl_idx > 0) off += snprintf(fmt.source + off, sizeof(fmt.source) - off, ", ");
+                off += snprintf(fmt.source + off, sizeof(fmt.source) - off, "%s", orig.var_names[decl_idx]);
             }
             snprintf(fmt.source + off, sizeof(fmt.source) - off, ";");
-            repl_command_store_replace_one(&store, i, &fmt);
+            repl_command_store_replace_one(&store, cmd_idx, &fmt);
             break;
         }
         case CMD_LABEL: {
             char label[64] = "";
             if (repl_extract_label_name(orig.source, label, sizeof(label)))
                 snprintf(fmt.source, sizeof(fmt.source), "%s:", label);
-            repl_command_store_replace_one(&store, i, &fmt);
+            repl_command_store_replace_one(&store, cmd_idx, &fmt);
             break;
         }
         case CMD_GOTO: {
             char label[64] = "";
             if (repl_extract_goto_label(orig.source, label, sizeof(label)))
                 snprintf(fmt.source, sizeof(fmt.source), "%sgoto %s;", ind_s, label);
-            repl_command_store_replace_one(&store, i, &fmt);
+            repl_command_store_replace_one(&store, cmd_idx, &fmt);
             break;
         }
         default: {
             ExprVar vis_vars[MAX_EXPR_VARS];
-            int num_vis_vars = collect_visible_vars(i, vis_vars, MAX_EXPR_VARS);
+            int num_vis_vars = collect_visible_vars(cmd_idx, vis_vars, MAX_EXPR_VARS);
             int preserve_expr = (num_vis_vars > 0) || orig.has_vars;
             GLCmd parsed;
             memset(&parsed, 0, sizeof(parsed));
-            if (repl_parse_and_normalize(orig.source, i,
+            if (repl_parse_and_normalize(orig.source, cmd_idx,
                                          num_vis_vars > 0 ? vis_vars : NULL,
                                          num_vis_vars > 0 ? num_vis_vars : 0,
                                          preserve_expr, &parsed) &&
@@ -503,7 +503,7 @@ void repl_reformat_commands(void) {
                 parsed.is_auto = orig.is_auto;
                 parsed.src_cmd_idx = orig.src_cmd_idx;
                 if (!preserve_expr) parsed.has_vars = orig.has_vars;
-                repl_command_store_replace_one(&store, i, &parsed);
+                repl_command_store_replace_one(&store, cmd_idx, &parsed);
             }
             break;
         }
@@ -628,8 +628,8 @@ int collect_visible_vars(int pos, ExprVar *vars, int max_vars) {
     ScopeFrame frames[64];
     int depth = 0;
 
-    for (int i = 0; i < pos && i < repl_state_document_count(); i++) {
-        CmdType t = repl_state_document_cmds_mut()[i].type;
+    for (int cmd_idx = 0; cmd_idx < pos && cmd_idx < repl_state_document_count(); cmd_idx++) {
+        CmdType t = repl_state_document_cmds_mut()[cmd_idx].type;
         if (t == CMD_FOR_BEGIN || t == CMD_FUNC_DEF || t == CMD_IF_BEGIN) {
             if (depth >= (int)(sizeof(frames) / sizeof(frames[0])))
                 break;
@@ -639,24 +639,24 @@ int collect_visible_vars(int pos, ExprVar *vars, int max_vars) {
 
             if (t == CMD_FOR_BEGIN) {
                 char vn[16];
-                get_for_var_name(&repl_state_document_cmds_mut()[i], vn, sizeof(vn));
+                get_for_var_name(&repl_state_document_cmds_mut()[cmd_idx], vn, sizeof(vn));
                 repl_copy_string_fits(frames[depth].vars[0].name,
                                       sizeof(frames[depth].vars[0].name),
                                       vn);
-                frames[depth].vars[0].value = repl_state_document_cmds_mut()[i].args[0];
+                frames[depth].vars[0].value = repl_state_document_cmds_mut()[cmd_idx].args[0];
                 frames[depth].count = 1;
             } else if (t == CMD_FUNC_DEF) {
                 int fn = -1;
                 int param_count = 0;
                 char param_names[MAX_EXPR_VARS][16];
-                if (parse_repl_func_signature(repl_state_document_cmds_mut()[i].source, &fn,
+                if (parse_repl_func_signature(repl_state_document_cmds_mut()[cmd_idx].source, &fn,
                                               param_names, MAX_EXPR_VARS,
                                               &param_count)) {
-                    for (int p = 0; p < param_count; p++) {
-                        repl_copy_string_fits(frames[depth].vars[p].name,
-                                              sizeof(frames[depth].vars[p].name),
-                                              param_names[p]);
-                        frames[depth].vars[p].value = 0.0f;
+                    for (int param_idx = 0; param_idx < param_count; param_idx++) {
+                        repl_copy_string_fits(frames[depth].vars[param_idx].name,
+                                              sizeof(frames[depth].vars[param_idx].name),
+                                              param_names[param_idx]);
+                        frames[depth].vars[param_idx].value = 0.0f;
                     }
                     frames[depth].count = param_count;
                 }
@@ -668,9 +668,9 @@ int collect_visible_vars(int pos, ExprVar *vars, int max_vars) {
     }
 
     int count = 0;
-    for (int i = depth - 1; i >= 0 && count < max_vars; i--) {
-        for (int v = 0; v < frames[i].count && count < max_vars; v++)
-            vars[count++] = frames[i].vars[v];
+    for (int depth_idx = depth - 1; depth_idx >= 0 && count < max_vars; depth_idx--) {
+        for (int var_idx = 0; var_idx < frames[depth_idx].count && count < max_vars; var_idx++)
+            vars[count++] = frames[depth_idx].vars[var_idx];
     }
 
     return count;
@@ -684,8 +684,8 @@ static void scroll_to_display_function(void) {
     repl_state_refresh_workspace_header_lines();
     const ReplImportExportState *meta = repl_state_import_export();
     int target = *meta->workspace_header_line_count;
-    for (int i = 0; g_header_pre[i]; i++) {
-        if (strcmp(g_header_pre[i], "void display() {") == 0)
+    for (int line_idx = 0; g_header_pre[line_idx]; line_idx++) {
+        if (strcmp(g_header_pre[line_idx], "void display() {") == 0)
             break;
         target++;
     }

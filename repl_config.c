@@ -69,9 +69,9 @@ int repl_config_get(ReplConfigKey key) {
 
 int repl_config_state_count(ReplConfigKey key) {
     const ReplConfigItem *item = NULL;
-    for (int i = 0; i < CFG_ITEM_COUNT; i++) {
-        if (g_cfg_items[i].key == key) {
-            item = &g_cfg_items[i];
+    for (int item_idx = 0; item_idx < CFG_ITEM_COUNT; item_idx++) {
+        if (g_cfg_items[item_idx].key == key) {
+            item = &g_cfg_items[item_idx];
             break;
         }
     }
@@ -82,9 +82,9 @@ int repl_config_state_count(ReplConfigKey key) {
 
 const char *repl_config_state_name(ReplConfigKey key, int value) {
     const ReplConfigItem *item = NULL;
-    for (int i = 0; i < CFG_ITEM_COUNT; i++) {
-        if (g_cfg_items[i].key == key) {
-            item = &g_cfg_items[i];
+    for (int item_idx = 0; item_idx < CFG_ITEM_COUNT; item_idx++) {
+        if (g_cfg_items[item_idx].key == key) {
+            item = &g_cfg_items[item_idx];
             break;
         }
     }

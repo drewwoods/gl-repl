@@ -38,9 +38,9 @@ static int replay_enabled(void) {
 
 static int replay_has_meaningful_cmds(void) {
     REPLAY_FLAT_STATE;
-    for (int i = 0; i < g_num_flat_cmds; i++) {
-        if (!g_flat_cmds[i].valid) continue;
-        if (g_flat_cmds[i].type == CMD_COMMENT) continue;
+    for (int flat_idx = 0; flat_idx < g_num_flat_cmds; flat_idx++) {
+        if (!g_flat_cmds[flat_idx].valid) continue;
+        if (g_flat_cmds[flat_idx].type == CMD_COMMENT) continue;
         return 1;
     }
     return 0;
@@ -51,12 +51,12 @@ static int replay_find_open_begin_before(int limit) {
     int open_begin = -1;
     int in_begin = 0;
 
-    for (int i = 0; i < limit && i < g_num_flat_cmds; i++) {
-        if (!g_flat_cmds[i].valid) continue;
-        if (g_flat_cmds[i].type == CMD_BEGIN) {
-            open_begin = i;
+    for (int flat_idx = 0; flat_idx < limit && flat_idx < g_num_flat_cmds; flat_idx++) {
+        if (!g_flat_cmds[flat_idx].valid) continue;
+        if (g_flat_cmds[flat_idx].type == CMD_BEGIN) {
+            open_begin = flat_idx;
             in_begin = 1;
-        } else if (g_flat_cmds[i].type == CMD_END && in_begin) {
+        } else if (g_flat_cmds[flat_idx].type == CMD_END && in_begin) {
             open_begin = -1;
             in_begin = 0;
         }
@@ -70,11 +70,11 @@ static int replay_find_open_tess_polygon_before(int limit, int *out_depth) {
     int poly_start = -1;
     int tess_depth = 0;
 
-    for (int i = 0; i < limit && i < g_num_flat_cmds; i++) {
-        if (!g_flat_cmds[i].valid) continue;
-        switch (g_flat_cmds[i].type) {
+    for (int flat_idx = 0; flat_idx < limit && flat_idx < g_num_flat_cmds; flat_idx++) {
+        if (!g_flat_cmds[flat_idx].valid) continue;
+        switch (g_flat_cmds[flat_idx].type) {
         case CMD_TESS_BEGIN_POLYGON:
-            poly_start = i;
+            poly_start = flat_idx;
             tess_depth = 1;
             break;
         case CMD_TESS_BEGIN_CONTOUR:
@@ -100,10 +100,10 @@ static int replay_find_open_tess_polygon_before(int limit, int *out_depth) {
 
 static int replay_find_matching_gl_end(int begin_idx) {
     REPLAY_FLAT_STATE;
-    for (int i = begin_idx + 1; i < g_num_flat_cmds; i++) {
-        if (!g_flat_cmds[i].valid) continue;
-        if (g_flat_cmds[i].type == CMD_END)
-            return i;
+    for (int flat_idx = begin_idx + 1; flat_idx < g_num_flat_cmds; flat_idx++) {
+        if (!g_flat_cmds[flat_idx].valid) continue;
+        if (g_flat_cmds[flat_idx].type == CMD_END)
+            return flat_idx;
     }
     return g_num_flat_cmds > 0 ? g_num_flat_cmds - 1 : begin_idx;
 }
@@ -131,11 +131,11 @@ static int replay_cmd_is_focus_candidate(CmdType type) {
 
 static int replay_last_meaningful_src(int begin, int end_exclusive) {
     REPLAY_FLAT_STATE;
-    for (int i = end_exclusive - 1; i >= begin && i >= 0; i--) {
-        if (!g_flat_cmds[i].valid) continue;
-        if (!replay_cmd_is_focus_candidate(g_flat_cmds[i].type)) continue;
-        if (g_flat_cmds[i].src_cmd_idx >= 0)
-            return g_flat_cmds[i].src_cmd_idx;
+    for (int flat_idx = end_exclusive - 1; flat_idx >= begin && flat_idx >= 0; flat_idx--) {
+        if (!g_flat_cmds[flat_idx].valid) continue;
+        if (!replay_cmd_is_focus_candidate(g_flat_cmds[flat_idx].type)) continue;
+        if (g_flat_cmds[flat_idx].src_cmd_idx >= 0)
+            return g_flat_cmds[flat_idx].src_cmd_idx;
     }
     return -1;
 }
@@ -246,8 +246,8 @@ static void replay_push_fade_batch(int old_pc, int new_pc) {
 static void replay_clamp_fade_batches(int max_pc) {
     int dst = 0;
 
-    for (int i = 0; i < g_replay_fade_batch_count; i++) {
-        ReplayFadeBatch batch = g_replay_fade_batches[i];
+    for (int idx = 0; idx < g_replay_fade_batch_count; idx++) {
+        ReplayFadeBatch batch = g_replay_fade_batches[idx];
 
         if (batch.old_pc > max_pc)
             continue;
@@ -264,8 +264,8 @@ static void replay_clamp_fade_batches(int max_pc) {
 void repl_replay_tick_fade_batches(float dt) {
     int dst = 0;
 
-    for (int i = 0; i < g_replay_fade_batch_count; i++) {
-        ReplayFadeBatch batch = g_replay_fade_batches[i];
+    for (int idx = 0; idx < g_replay_fade_batch_count; idx++) {
+        ReplayFadeBatch batch = g_replay_fade_batches[idx];
         batch.age += dt;
         if (batch.age >= REPLAY_FADE_DURATION)
             continue;
@@ -297,18 +297,18 @@ static int replay_next_polygon_limit(int start, int *fade_begin, int *fade_end) 
     *fade_begin = -1;
     *fade_end = -1;
 
-    for (int i = start; i < g_num_flat_cmds; i++) {
+    for (int flat_idx = start; flat_idx < g_num_flat_cmds; flat_idx++) {
         CmdType t;
 
-        if (!g_flat_cmds[i].valid || g_flat_cmds[i].type == CMD_COMMENT)
+        if (!g_flat_cmds[flat_idx].valid || g_flat_cmds[flat_idx].type == CMD_COMMENT)
             continue;
 
-        t = g_flat_cmds[i].type;
+        t = g_flat_cmds[flat_idx].type;
         saw_meaningful = 1;
 
         switch (t) {
         case CMD_BEGIN: {
-            int end = replay_find_matching_gl_end(i);
+            int end = replay_find_matching_gl_end(flat_idx);
             *fade_begin = start;
             *fade_end = end;
             return end + 1;
@@ -319,29 +319,29 @@ static int replay_next_polygon_limit(int start, int *fade_begin, int *fade_end) 
         case CMD_GLU_PARTIAL_DISK:
         case CMD_GLUT_TORUS:
             *fade_begin = start;
-            *fade_end = i;
-            return i + 1;
+            *fade_end = flat_idx;
+            return flat_idx + 1;
         case CMD_TESS_BEGIN_POLYGON: {
             int tess_depth = 1;
-            for (int j = i + 1; j < g_num_flat_cmds; j++) {
-                if (!g_flat_cmds[j].valid) continue;
-                if (g_flat_cmds[j].type == CMD_TESS_BEGIN_POLYGON) {
+            for (int tess_idx = flat_idx + 1; tess_idx < g_num_flat_cmds; tess_idx++) {
+                if (!g_flat_cmds[tess_idx].valid) continue;
+                if (g_flat_cmds[tess_idx].type == CMD_TESS_BEGIN_POLYGON) {
                     tess_depth = 1;
-                } else if (g_flat_cmds[j].type == CMD_TESS_BEGIN_CONTOUR) {
+                } else if (g_flat_cmds[tess_idx].type == CMD_TESS_BEGIN_CONTOUR) {
                     if (tess_depth == 1)
                         tess_depth = 2;
-                } else if (g_flat_cmds[j].type == CMD_TESS_END) {
+                } else if (g_flat_cmds[tess_idx].type == CMD_TESS_END) {
                     if (tess_depth == 2) {
                         tess_depth = 1;
                     } else if (tess_depth == 1) {
                         *fade_begin = start;
-                        *fade_end = j;
-                        return j + 1;
+                        *fade_end = tess_idx;
+                        return tess_idx + 1;
                     }
                 }
             }
             *fade_begin = start;
-            *fade_end = g_num_flat_cmds > 0 ? g_num_flat_cmds - 1 : i;
+            *fade_end = g_num_flat_cmds > 0 ? g_num_flat_cmds - 1 : flat_idx;
             return g_num_flat_cmds;
         }
         default:
@@ -364,24 +364,24 @@ static int replay_next_vertex_limit(int start, int *fade_begin, int *fade_end) {
     *fade_begin = -1;
     *fade_end = -1;
 
-    for (int i = start; i < g_num_flat_cmds; i++) {
+    for (int flat_idx = start; flat_idx < g_num_flat_cmds; flat_idx++) {
         CmdType t;
 
-        if (!g_flat_cmds[i].valid || g_flat_cmds[i].type == CMD_COMMENT)
+        if (!g_flat_cmds[flat_idx].valid || g_flat_cmds[flat_idx].type == CMD_COMMENT)
             continue;
 
-        t = g_flat_cmds[i].type;
+        t = g_flat_cmds[flat_idx].type;
         saw_meaningful = 1;
 
         switch (t) {
         case CMD_BEGIN:
-            open_begin = i;
+            open_begin = flat_idx;
             break;
         case CMD_END:
             open_begin = -1;
             break;
         case CMD_TESS_BEGIN_POLYGON:
-            open_tess_poly = i;
+            open_tess_poly = flat_idx;
             tess_depth = 1;
             break;
         case CMD_TESS_BEGIN_CONTOUR:
@@ -393,27 +393,27 @@ static int replay_next_vertex_limit(int start, int *fade_begin, int *fade_end) {
                 tess_depth = 1;
             } else if (tess_depth == 1) {
                 *fade_begin = (open_tess_poly >= 0) ? open_tess_poly : start;
-                *fade_end = i;
-                return i + 1;
+                *fade_end = flat_idx;
+                return flat_idx + 1;
             }
             break;
         case CMD_VERTEX3F:
         case CMD_VERTEX2F:
             *fade_begin = (open_begin >= 0) ? open_begin : start;
-            *fade_end = i;
-            return i + 1;
+            *fade_end = flat_idx;
+            return flat_idx + 1;
         case CMD_TESS_VERTEX:
             *fade_begin = (open_tess_poly >= 0) ? open_tess_poly : start;
-            *fade_end = i;
-            return i + 1;
+            *fade_end = flat_idx;
+            return flat_idx + 1;
         case CMD_GLU_SPHERE:
         case CMD_GLU_CYLINDER:
         case CMD_GLU_DISK:
         case CMD_GLU_PARTIAL_DISK:
         case CMD_GLUT_TORUS:
             *fade_begin = start;
-            *fade_end = i;
-            return i + 1;
+            *fade_end = flat_idx;
+            return flat_idx + 1;
         default:
             break;
         }
@@ -788,9 +788,9 @@ int repl_bench_fade_install(const int *old_pcs, const int *new_pcs,
     if (count > 0 && (old_pcs == NULL || new_pcs == NULL))
         count = 0;
 
-    for (int i = 0; i < count; i++) {
-        int old_pc = old_pcs[i];
-        int new_pc = new_pcs[i];
+    for (int idx = 0; idx < count; idx++) {
+        int old_pc = old_pcs[idx];
+        int new_pc = new_pcs[idx];
 
         if (old_pc < 0) old_pc = 0;
         if (old_pc > g_num_flat_cmds) old_pc = g_num_flat_cmds;

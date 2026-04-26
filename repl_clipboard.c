@@ -51,8 +51,8 @@ int repl_selection_normalize_cmd_range(int start, int count,
 }
 
 int repl_selection_cmds_contain_var_decl(const GLCmd *cmds, int count) {
-    for (int i = 0; i < count; i++) {
-        if (cmds[i].type == CMD_VAR_DECLARE)
+    for (int idx = 0; idx < count; idx++) {
+        if (cmds[idx].type == CMD_VAR_DECLARE)
             return 1;
     }
     return 0;

@@ -67,65 +67,65 @@ static void apply_front_face_to_normal(GLenum front_face, float *n) {
 
 static void compute_block_normals(GLenum mode, GLenum front_face,
                                   int *vi, int nv, float norms[][3]) {
-    for (int i = 0; i < nv; i++)
-        norms[i][0] = norms[i][1] = norms[i][2] = 0;
+    for (int idx = 0; idx < nv; idx++)
+        norms[idx][0] = norms[idx][1] = norms[idx][2] = 0;
 
     float n[3];
     switch (mode) {
     case GL_TRIANGLES:
-        for (int i = 0; i + 2 < nv; i += 3) {
-            face_normal(repl_state_document_cmds_mut()[vi[i]].args, repl_state_document_cmds_mut()[vi[i+1]].args,
-                        repl_state_document_cmds_mut()[vi[i+2]].args, n);
+        for (int idx = 0; idx + 2 < nv; idx += 3) {
+            face_normal(repl_state_document_cmds_mut()[vi[idx]].args, repl_state_document_cmds_mut()[vi[idx+1]].args,
+                        repl_state_document_cmds_mut()[vi[idx+2]].args, n);
             apply_front_face_to_normal(front_face, n);
-            for (int j = 0; j < 3; j++)
-                memcpy(norms[i+j], n, sizeof(n));
+            for (int component_idx = 0; component_idx < 3; component_idx++)
+                memcpy(norms[idx+component_idx], n, sizeof(n));
         }
         break;
     case GL_TRIANGLE_STRIP:
-        for (int i = 0; i + 2 < nv; i++) {
-            if (i % 2 == 0)
-                face_normal(repl_state_document_cmds_mut()[vi[i]].args, repl_state_document_cmds_mut()[vi[i+1]].args,
-                            repl_state_document_cmds_mut()[vi[i+2]].args, n);
+        for (int idx = 0; idx + 2 < nv; idx++) {
+            if (idx % 2 == 0)
+                face_normal(repl_state_document_cmds_mut()[vi[idx]].args, repl_state_document_cmds_mut()[vi[idx+1]].args,
+                            repl_state_document_cmds_mut()[vi[idx+2]].args, n);
             else
-                face_normal(repl_state_document_cmds_mut()[vi[i]].args, repl_state_document_cmds_mut()[vi[i+2]].args,
-                            repl_state_document_cmds_mut()[vi[i+1]].args, n);
+                face_normal(repl_state_document_cmds_mut()[vi[idx]].args, repl_state_document_cmds_mut()[vi[idx+2]].args,
+                            repl_state_document_cmds_mut()[vi[idx+1]].args, n);
             apply_front_face_to_normal(front_face, n);
-            memcpy(norms[i+2], n, sizeof(n));
-            if (i == 0) {
+            memcpy(norms[idx+2], n, sizeof(n));
+            if (idx == 0) {
                 memcpy(norms[0], n, sizeof(n));
                 memcpy(norms[1], n, sizeof(n));
             }
         }
         break;
     case GL_TRIANGLE_FAN:
-        for (int i = 1; i + 1 < nv; i++) {
-            face_normal(repl_state_document_cmds_mut()[vi[0]].args, repl_state_document_cmds_mut()[vi[i]].args,
-                        repl_state_document_cmds_mut()[vi[i+1]].args, n);
+        for (int idx = 1; idx + 1 < nv; idx++) {
+            face_normal(repl_state_document_cmds_mut()[vi[0]].args, repl_state_document_cmds_mut()[vi[idx]].args,
+                        repl_state_document_cmds_mut()[vi[idx+1]].args, n);
             apply_front_face_to_normal(front_face, n);
-            memcpy(norms[i+1], n, sizeof(n));
-            if (i == 1) {
+            memcpy(norms[idx+1], n, sizeof(n));
+            if (idx == 1) {
                 memcpy(norms[0], n, sizeof(n));
                 memcpy(norms[1], n, sizeof(n));
             }
         }
         break;
     case GL_QUADS:
-        for (int i = 0; i + 3 < nv; i += 4) {
-            face_normal(repl_state_document_cmds_mut()[vi[i]].args, repl_state_document_cmds_mut()[vi[i+1]].args,
-                        repl_state_document_cmds_mut()[vi[i+2]].args, n);
+        for (int idx = 0; idx + 3 < nv; idx += 4) {
+            face_normal(repl_state_document_cmds_mut()[vi[idx]].args, repl_state_document_cmds_mut()[vi[idx+1]].args,
+                        repl_state_document_cmds_mut()[vi[idx+2]].args, n);
             apply_front_face_to_normal(front_face, n);
-            for (int j = 0; j < 4; j++)
-                memcpy(norms[i+j], n, sizeof(n));
+            for (int component_idx = 0; component_idx < 4; component_idx++)
+                memcpy(norms[idx+component_idx], n, sizeof(n));
         }
         break;
     case GL_QUAD_STRIP:
-        for (int i = 0; i + 3 < nv; i += 2) {
-            face_normal(repl_state_document_cmds_mut()[vi[i]].args, repl_state_document_cmds_mut()[vi[i+1]].args,
-                        repl_state_document_cmds_mut()[vi[i+2]].args, n);
+        for (int idx = 0; idx + 3 < nv; idx += 2) {
+            face_normal(repl_state_document_cmds_mut()[vi[idx]].args, repl_state_document_cmds_mut()[vi[idx+1]].args,
+                        repl_state_document_cmds_mut()[vi[idx+2]].args, n);
             apply_front_face_to_normal(front_face, n);
-            memcpy(norms[i+2], n, sizeof(n));
-            memcpy(norms[i+3], n, sizeof(n));
-            if (i == 0) {
+            memcpy(norms[idx+2], n, sizeof(n));
+            memcpy(norms[idx+3], n, sizeof(n));
+            if (idx == 0) {
                 memcpy(norms[0], n, sizeof(n));
                 memcpy(norms[1], n, sizeof(n));
             }
@@ -136,8 +136,8 @@ static void compute_block_normals(GLenum mode, GLenum front_face,
             face_normal(repl_state_document_cmds_mut()[vi[0]].args, repl_state_document_cmds_mut()[vi[1]].args,
                         repl_state_document_cmds_mut()[vi[2]].args, n);
             apply_front_face_to_normal(front_face, n);
-            for (int i = 0; i < nv; i++)
-                memcpy(norms[i], n, sizeof(n));
+            for (int idx = 0; idx < nv; idx++)
+                memcpy(norms[idx], n, sizeof(n));
         }
         break;
     default:
