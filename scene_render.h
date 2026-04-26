@@ -32,14 +32,17 @@
 #ifndef SCENE_RENDER_H
 #define SCENE_RENDER_H
 
+#include "scene_render_types.h"
+
 /* One-time GL initialization: create display lists, compile shaders, allocate
  * tessellator, set up default light state. Called once on startup. */
 void scene_render_init_gl(void);
 
-/* Render the replay fade pass: blend old geometry snapshots (fading out) with
- * new geometry (fading in). Called during replay mode to visualize what
- * commands are being added/removed. Reads fade state from repl_replay.c. */
-void scene_render_replay_fade_pass(void);
+/* Populate *config from the current REPL runtime state for one frame.
+ * Call once at frame start before any scene_* entry point.
+ * This is the push-model builder: all state is snapshotted into config
+ * so downstream renderers don't sample globals directly. */
+void scene_render_config_build(SceneRenderConfig *config);
 
 /* Render the full 3D scene for one frame. Orchestrates projection setup, camera
  * transforms, user geometry execution, grid/axes, overlays, and edit guides.

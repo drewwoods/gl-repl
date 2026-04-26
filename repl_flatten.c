@@ -115,7 +115,7 @@ static int flatten_append_cmd(FlattenContext *ctx, const GLCmd *cmd,
  * g_current_block_begin / g_current_block_end and used by
  * repl_flat_cmd_matches_cursor() to highlight the active geometry
  * batch in the 3D view. */
-static void refresh_current_block_highlight(void) {
+void repl_flatten_refresh_current_block_highlight(void) {
     const ReplFlatProgramState *flat = repl_state_flat_program();
     const GLCmd *flat_cmds = flat->cmds;
     int flat_cmd_count = *flat->cmd_count;
@@ -525,7 +525,7 @@ void flatten_commands(void) {
     if (result.status[0])
         set_status(result.status);
 
-    refresh_current_block_highlight();
+    repl_flatten_refresh_current_block_highlight();
 }
 
 static unsigned int line_func_scope_mask(int line) {
@@ -573,7 +573,7 @@ int repl_flat_cmd_matches_cursor(int flat_idx) {
     if (repl_state_edit_line() < 0 || repl_state_edit_line() >= repl_state_document_count()) return 0;
     if (!flat_cmds[flat_idx].valid) return 0;
     if (current_block_line != repl_state_edit_line())
-        refresh_current_block_highlight();
+        repl_flatten_refresh_current_block_highlight();
 
     const GLCmd *cmd = &flat_cmds[flat_idx];
     const GLCmd *cursor_cmd = &repl_state_document_cmds_mut()[repl_state_edit_line()];

@@ -84,4 +84,9 @@ FlatProgramView repl_flat_program_view_live(void);
 int  repl_flatten_program(const ReplFlattenOptions *options,
                           ReplFlattenResult *result);
 
+/* Refresh the current-block highlight by scanning the flat program to find
+ * the innermost BEGIN/END block containing the current edit line. Called
+ * before building scene config to ensure cursor block bounds are current. */
+void repl_flatten_refresh_current_block_highlight(void);
+
 #endif /* REPL_FLATTEN_H */
