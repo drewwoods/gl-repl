@@ -59,7 +59,26 @@
       "Read(//tmp/**)",
       "Bash(sed -i 's/replay_start\\(\\)/repl_replay_start\\(\\)/g' test*.c)",
       "Bash(sed -i 's/replay_stop\\(\\)/repl_replay_stop\\(\\)/g' test*.c)",
-      "Bash(sed -i '' -f /tmp/fix_ui_panels.sed ui_panels.c)"
+      "Bash(sed -i '' -f /tmp/fix_ui_panels.sed ui_panels.c)",
+      "Bash(chmod +x /tmp/check_naming.sh)",
+      "Bash(/tmp/check_naming.sh)",
+      "Bash(chmod +x /tmp/normalize.sh)",
+      "Bash(/tmp/normalize.sh)",
+      "Bash(perl -i -pe 's/for \\\\\\(int i = 0; i < repl_state_document_count\\\\\\(\\\\\\); i\\\\+\\\\+\\\\\\)/for \\(int cmd_idx = 0; cmd_idx < repl_state_document_count\\(\\); cmd_idx++\\)/g' repl_core.c)",
+      "Bash(perl -i -pe 's/for \\\\\\(int i = 0; i < g_num_flat_cmds; i\\\\+\\\\+\\\\\\)/for \\(int flat_idx = 0; flat_idx < g_num_flat_cmds; flat_idx++\\)/g' repl_core.c)",
+      "Bash(perl -i -pe 's/for \\\\\\(int i = 0; i < CAM_LINE_COUNT; i\\\\+\\\\+\\\\\\)/for \\(int cam_line_idx = 0; cam_line_idx < CAM_LINE_COUNT; cam_line_idx++\\)/g' repl_core.c)",
+      "Bash(perl -i -pe 's/for \\\\\\(int i = 0; i < init_section_line_count\\\\\\(\\\\\\); i\\\\+\\\\+\\\\\\)/for \\(int init_line_idx = 0; init_line_idx < init_section_line_count\\(\\); init_line_idx++\\)/g' repl_core.c)",
+      "Bash(perl -i -pe 's/for \\\\\\(int n = 0; n < orig\\\\.var_decl_count/for \\(int decl_idx = 0; decl_idx < orig.var_decl_count/g' repl_core.c)",
+      "Bash(perl -i -pe 's/for \\\\\\(int i = 0; i < repl_state_document_count\\\\\\(\\\\\\); i\\\\+\\\\+\\\\\\)/for \\(int cmd_idx = 0; cmd_idx < repl_state_document_count\\(\\); cmd_idx++\\)/g' repl_replay.c)",
+      "Bash(perl -i -pe 's/for \\\\\\(int i = 0; i < g_num_flat_cmds; i\\\\+\\\\+\\\\\\)/for \\(int flat_idx = 0; flat_idx < g_num_flat_cmds; flat_idx++\\)/g' repl_replay.c)",
+      "Bash(perl -i -pe 's/for \\\\\\(int n = 0; n < cmd\\\\.var_decl_count/for \\(int decl_idx = 0; decl_idx < cmd.var_decl_count/g' repl_replay.c)",
+      "Bash(perl -i -pe 's/repl_state_document_cmds_mut\\\\\\(\\\\\\)\\\\[i\\\\]/repl_state_document_cmds_mut\\(\\)[cmd_idx]/g' repl_replay.c)",
+      "Bash(perl -i -pe 's/g_flat_cmds\\\\[i\\\\]/g_flat_cmds[flat_idx]/g' repl_replay.c)",
+      "Bash(perl -i -pe 's/for \\\\\\(int i = 0; i < count; i\\\\+\\\\+\\\\\\)/for \\(int idx = 0; idx < count; idx++\\)/g' repl_parser.c)",
+      "Bash(perl -i -pe 's/for \\\\\\(int j = 0; j < arg_count; j\\\\+\\\\+\\\\\\)/for \\(int arg_idx = 0; arg_idx < arg_count; arg_idx++\\)/g' repl_parser.c)",
+      "Bash(perl -i -pe 's/for \\\\\\(int i = 0; i < cmd_count; i\\\\+\\\\+\\\\\\)/for \\(int cmd_idx = 0; cmd_idx < cmd_count; cmd_idx++\\)/g' repl_executor.c)",
+      "Bash(perl -i -pe 's/for \\\\\\(int j = 0; j < 3; j\\\\+\\\\+\\\\\\)/for \\(int component_idx = 0; component_idx < 3; component_idx++\\)/g' repl_executor.c)",
+      "Bash(perl -i -pe 's/for \\\\\\(int i = 0; i < count; i\\\\+\\\\+\\\\\\)/for \\(int idx = 0; idx < count; idx++\\)/g' repl_eval.c)"
     ]
   }
 }

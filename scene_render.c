@@ -110,58 +110,6 @@ static SceneFocusVertex scene_prepare_focus_vertex(void) {
     return focus;
 }
 
-static void scene_render_config_init(SceneRenderConfig *config) {
-    const ReplRenderState *render = repl_state_render();
-    const ReplReplayRuntimeState *replay = repl_state_replay();
-    ui_panels_scene_rect(&config->scene_x, &config->scene_y,
-               &config->scene_w, &config->scene_h);
-    if (config->scene_w < 1) config->scene_w = 1;
-    if (config->scene_h < 1) config->scene_h = 1;
-
-    {
-        const ReplCameraState *cam = repl_state_camera();
-        config->cam_dist = *cam->dist;
-        config->cam_rx = *cam->rx;
-        config->cam_ry = *cam->ry;
-        config->cam_tx = *cam->tx;
-        config->cam_ty = *cam->ty;
-        config->cam_tz = *cam->tz;
-        config->cam_motion_glow = *cam->motion_glow;
-    }
-    config->accum_jitter_x = *render->accum_jitter_x;
-    config->accum_jitter_y = *render->accum_jitter_y;
-    config->multisample_enabled = *render->multisample_enabled;
-    config->line_smooth_enabled = *render->line_smooth_enabled;
-    config->wireframe = *repl_state_presentation()->wireframe;
-    config->grid_theme = *repl_state_presentation()->grid_theme;
-    config->grid_extent_idx = *repl_state_presentation()->grid_extent_idx;
-    config->grid_major_idx = *repl_state_presentation()->grid_major_idx;
-    config->axes_theme = *repl_state_presentation()->axes_theme;
-    config->show_guides = *repl_state_presentation()->show_vertex_guides;
-    config->show_vpoints = *repl_state_presentation()->show_vertex_points;
-    config->show_vnums = *repl_state_presentation()->show_vertex_labels;
-    config->show_normals = *repl_state_presentation()->show_normal_vectors;
-    config->replaying = *replay->active;
-    config->replay_mode = *replay->mode;
-    config->replay_tess_preview = config->replaying &&
-                                  config->replay_mode == REPLAY_MODE_VERTEX;
-    config->replay_vertex_points = config->replay_tess_preview;
-    config->replay_has_fades = repl_replay_has_active_fades();
-    config->replay_base_limit = config->replay_has_fades
-                                   ? repl_replay_fill_base_limit()
-                                   : 0;
-    config->show_current_poly = *repl_state_presentation()->highlight_current_poly && !config->replaying;
-
-    /* Boost translucent overlay alphas when the bg is darker than the
-     * design-point luminance (~0.10).  K=0.02 softens the curve near
-     * zero; result is clamped to [1, 3] so colours never blow out. */
-    float bg_lum = 0.2126f * render->clear_color[0]
-                 + 0.7152f * render->clear_color[1]
-                 + 0.0722f * render->clear_color[2];
-    float as_val = (0.10f + 0.02f) / fmaxf(bg_lum + 0.02f, 1e-4f);
-    config->alpha_scale = as_val < 1.0f ? 1.0f : (as_val > 3.0f ? 3.0f : as_val);
-}
-
 static void scene_apply_projection(const SceneRenderConfig *config) {
     glMatrixMode(GL_PROJECTION);
     glLoadIdentity();
@@ -518,7 +466,7 @@ void scene_render_replay_fade_pass(void) {
     int skip_limits[REPLAY_FADE_BATCH_MAX];
     int batch_count;
 
-    scene_render_config_init(&config);
+    scene_render_config_build(&config);
     if (!config.replay_has_fades)
         return;
 
@@ -581,7 +529,7 @@ void scene_render_replay_fade_pass(void) {
 static void render_3d_scene_pass(void) {
     SceneRenderConfig config;
     FrameRenderContext frame_ctx;
-    scene_render_config_init(&config);
+    scene_render_config_build(&config);
     scene_prepare_frame_context(&frame_ctx, &config);
 
     prof_begin(PROF_SCENE_3D_SETUP);
@@ -603,19 +551,16 @@ static void render_3d_scene_pass(void) {
     scene_apply_wireframe_config(&config);
     prof_accum_end(PROF_SCENE_3D_SETUP);
 
-    FlatProgramView flat_program = repl_state_flat_program_view();
     {
-        ReplExecutionOptions exec_options = {
-            .flat_cmd_count = flat_program.cmd_count,
-            .program = flat_program
-        };
-
+        int flat_cmd_count = config.flat_program.cmd_count;
         if (config.replay_has_fades)
-            exec_options.flat_cmd_count = config.replay_base_limit;
+            flat_cmd_count = config.replay_base_limit;
 
         prof_begin(PROF_SCENE_3D_FILL);
         glPushMatrix();
-        repl_execute_program(&exec_options);
+        if (config.execute_fn)
+            config.execute_fn(1.0f, 0, flat_cmd_count, config.flat_program,
+                            config.execute_user_data);
         glPopMatrix();
         prof_accum_end(PROF_SCENE_3D_FILL);
 
@@ -656,12 +601,12 @@ static void render_3d_scene_pass(void) {
     float tg_cam_view[16];
     glGetFloatv(GL_MODELVIEW_MATRIX, tg_cam_view);
     SceneGuideSnapshot guide_snapshot =
-        scene_build_guide_snapshot(&config, flat_program);
+        scene_build_guide_snapshot(&config, config.flat_program);
     SceneTransformGuidePlan xform_guide_plan;
     scene_transform_guides_prepare(&guide_snapshot, &xform_guide_plan);
     {
-    const GLCmd *flat_cmds = flat_program.cmds;
-    int flat_cmd_count = flat_program.cmd_count;
+    const GLCmd *flat_cmds = config.flat_program.cmds;
+    int flat_cmd_count = config.flat_program.cmd_count;
     int matrix_depth = 0;
     glPointSize(8.0f);
     if (config.replay_vertex_points)
@@ -723,12 +668,11 @@ void scene_render_3d_scene(void) {
     const ReplRenderState *render = repl_state_render();
     ReplRenderState *render_mut = repl_state_render_mut();
     const ReplReplayRuntimeState *replay = repl_state_replay();
-    FlatProgramView flat_program = repl_state_flat_program_view();
 
-    scene_render_config_init(&viewport_config);
+    scene_render_config_build(&viewport_config);
     glViewport(viewport_config.scene_x, viewport_config.scene_y,
                viewport_config.scene_w, viewport_config.scene_h);
-    scene_apply_clear_color(flat_program);
+    scene_apply_clear_color(viewport_config.flat_program);
 
     if (*render->use_accum && *render->accum_aa_enabled && *render->accum_samples > 1) {
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_ACCUM_BUFFER_BIT);
