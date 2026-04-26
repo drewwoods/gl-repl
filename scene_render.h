@@ -51,11 +51,4 @@ void scene_render_config_build(SceneRenderConfig *config);
  * (replay PC, variable values, etc.). */
 void scene_render_3d_scene(void);
 
-/* Render the full 3D scene for one frame. Orchestrates projection setup, camera
- * transforms, user geometry execution, grid/axes, overlays, and edit guides.
- * Called once per frame (or multiple times per frame for accumulation-buffer AA).
- * Reads scene config (grid theme, axes, overlays, etc.) and execution state
- * (replay PC, variable values, etc.). */
-void scene_render_3d_scene(void);
-
 #endif /* SCENE_RENDER_H */
