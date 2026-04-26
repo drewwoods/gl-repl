@@ -3,7 +3,6 @@
  */
 #include "sample.h"
 #include "scene_grid.h"
-#include "repl_state.h"
 #include "./include/gl_2d.h"
 
 /* Returns non-zero when v is close enough to a multiple of `major`
@@ -18,6 +17,7 @@ typedef struct GridDrawContext {
     float major;
     float step;
     float major_tol;
+    float anim_time;
     float breath;
     float alpha_scale; /* boost factor when bg is darker than design point */
 } GridDrawContext;
@@ -176,7 +176,7 @@ static void grid_ember_line_color(float v, int is_major,
                                   const GridDrawContext *ctx,
                                   GridLineColors *out) {
     float dist = fabsf(v) / ctx->extent;
-    float ripple = sinf(dist * 12.0f - (*repl_state_variables()->anim_time) * 2.5f);
+    float ripple = sinf(dist * 12.0f - ctx->anim_time * 2.5f);
     ripple = ripple * 0.5f + 0.5f;
     float fade = 1.0f - dist;
     if (fade < 0.0f) fade = 0.0f;
@@ -188,7 +188,7 @@ static void grid_ember_line_color(float v, int is_major,
 
 static SceneRgba grid_ember_origin_color(const GridDrawContext *ctx) {
     (void)ctx;
-    float ripple0 = -sinf((*repl_state_variables()->anim_time) * 2.5f) * 0.5f + 0.5f;
+    float ripple0 = -sinf(ctx->anim_time * 2.5f) * 0.5f + 0.5f;
     return rgba(0.95f, 0.35f + ripple0 * 0.25f, 0.05f,
                 0.7f * (0.6f + ripple0 * 0.4f));
 }
@@ -322,8 +322,8 @@ static void scene_grid_render_ocean_theme(const GridDrawContext *grid_ctx,
     if (frame_ctx->camera_below_water_surface) {
         glDisable(GL_DEPTH_TEST);
         glColor4f(0.05f, 0.25f, 0.35f, 0.75f);
-        gl2d_begin(*repl_state_viewport()->window_w, *repl_state_viewport()->window_h);
-        glRectf(0, 0, (float)*repl_state_viewport()->window_w, (float)*repl_state_viewport()->window_h);
+        gl2d_begin(frame_ctx->config.viewport_w, frame_ctx->config.viewport_h);
+        glRectf(0, 0, (float)frame_ctx->config.viewport_w, (float)frame_ctx->config.viewport_h);
         gl2d_end();
         glEnable(GL_DEPTH_TEST);
     } else {
@@ -340,8 +340,8 @@ static void scene_grid_render_ocean_theme(const GridDrawContext *grid_ctx,
         int is_major  = grid_is_major_line(v, major, major_tol);
         float base_a  = is_major ? 0.55f : 0.28f;
 
-        float c1 = sinf(v * 3.0f + (*repl_state_variables()->anim_time) * 1.3f);
-        float c2 = cosf(v * 2.3f - (*repl_state_variables()->anim_time) * 0.9f);
+        float c1 = sinf(v * 3.0f + grid_ctx->anim_time * 1.3f);
+        float c2 = cosf(v * 2.3f - grid_ctx->anim_time * 0.9f);
         float caustic = (c1 * c2) * 0.5f + 0.5f;   /* 0..1 */
         float a = fminf(base_a * (0.5f + caustic * 0.5f) * as, 1.0f);
 
@@ -355,8 +355,8 @@ static void scene_grid_render_ocean_theme(const GridDrawContext *grid_ctx,
     glEnd();
     /* Origin axes - write to depth buffer; colour evaluated at v=0 */
     {
-        float c1_o = sinf((*repl_state_variables()->anim_time) * 1.3f);
-        float c2_o = cosf(-(*repl_state_variables()->anim_time) * 0.9f);
+        float c1_o = sinf(grid_ctx->anim_time * 1.3f);
+        float c2_o = cosf(-grid_ctx->anim_time * 0.9f);
         float caustic_o = (c1_o * c2_o) * 0.5f + 0.5f;
         float a_o = fminf(0.95f * (0.5f + caustic_o * 0.5f) * as, 1.0f);
         float r_o = 0.10f + caustic_o * 0.35f;
@@ -390,9 +390,9 @@ static void scene_grid_render_ocean_theme(const GridDrawContext *grid_ctx,
                 float zz = sz + row * surf_step;
 
                 /* Composite wave displacement (3 octaves) */
-                float w = sinf(sx * 1.5f + (*repl_state_variables()->anim_time) * 0.7f) * 0.025f
-                        + cosf(zz * 1.8f + (*repl_state_variables()->anim_time) * 0.5f) * 0.018f
-                        + sinf((sx + zz) * 0.8f + (*repl_state_variables()->anim_time) * 1.0f) * 0.012f;
+                float w = sinf(sx * 1.5f + grid_ctx->anim_time * 0.7f) * 0.025f
+                        + cosf(zz * 1.8f + grid_ctx->anim_time * 0.5f) * 0.018f
+                        + sinf((sx + zz) * 0.8f + grid_ctx->anim_time * 1.0f) * 0.012f;
                 float y = surf_y + w;
 
                 /* Smooth edge fade so the surface has no hard border */
@@ -404,8 +404,8 @@ static void scene_grid_render_ocean_theme(const GridDrawContext *grid_ctx,
                 float alpha = 0.62f * edge;
 
                 /* Subtle colour variation across surface */
-                float cr = sinf(sx * 0.4f + (*repl_state_variables()->anim_time) * 0.3f) * 0.04f;
-                float cg = cosf(zz * 0.3f + (*repl_state_variables()->anim_time) * 0.25f) * 0.04f;
+                float cr = sinf(sx * 0.4f + grid_ctx->anim_time * 0.3f) * 0.04f;
+                float cg = cosf(zz * 0.3f + grid_ctx->anim_time * 0.25f) * 0.04f;
                 glColor4f(0.05f + cr, 0.25f + cg, 0.35f + cr, alpha);
                 glVertex3f(sx, y, zz);
             }
@@ -577,7 +577,7 @@ void scene_grid_render(const FrameRenderContext *frame_ctx) {
     glPushMatrix();
     glTranslatef(0, -0.002f, 0);
 
-    float breath = sinf((*repl_state_variables()->anim_time) * 0.8f) * 0.5f + 0.5f; /* 0..1 */
+    float breath = sinf(frame_ctx->config.anim_time * 0.8f) * 0.5f + 0.5f; /* 0..1 */
 
     /* Configurable extent / major-tick spacing. Minor step is the
      * major cell divided into 5 subdivisions, which keeps the look
@@ -586,8 +586,8 @@ void scene_grid_render(const FrameRenderContext *frame_ctx) {
     if (ex_i < 0 || ex_i >= GRID_EXTENT_COUNT) ex_i = GRID_EXTENT_MID;
     int mj_i = config->grid_major_idx;
     if (mj_i < 0 || mj_i >= GRID_MAJOR_COUNT) mj_i = GRID_MAJOR_1;
-    float extent = repl_state_presentation()->grid_extents[ex_i];
-    float major  = repl_state_presentation()->grid_major_steps[mj_i];
+    float extent = frame_ctx->config.grid_extents[ex_i];
+    float major  = frame_ctx->config.grid_major_steps[mj_i];
     float step   = major * 0.2f;
     float major_tol = step * 0.25f;
     GridDrawContext grid_ctx = {
@@ -595,6 +595,7 @@ void scene_grid_render(const FrameRenderContext *frame_ctx) {
         .major = major,
         .step = step,
         .major_tol = major_tol,
+        .anim_time = frame_ctx->config.anim_time,
         .breath = breath,
         .alpha_scale = config->alpha_scale,
     };
@@ -648,6 +649,6 @@ void scene_grid_render(const FrameRenderContext *frame_ctx) {
     glDepthMask(GL_TRUE);
     glDisable(GL_BLEND);
     glDisable(GL_FOG);
-    if (repl_state_flat_program_user_lighting_enabled()) glEnable(GL_LIGHTING);
+    if (frame_ctx->config.user_lighting_enabled) glEnable(GL_LIGHTING);
     scene_grid_pop_state();
 }
