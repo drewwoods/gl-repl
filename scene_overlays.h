@@ -35,31 +35,35 @@
 #ifndef SCENE_OVERLAYS_H
 #define SCENE_OVERLAYS_H
 
+#include "scene_render_types.h"
+
 /* Check whether a flat command block (starting at begin_idx) matches the cursor
  * context (for highlighting in polygon outlines). Returns 1 if the block's
  * source code includes the cursor line, 0 otherwise. is_tess indicates whether
  * the block is tessellation-related (gluTessCallback). Used to determine whether
  * to highlight or dim polygon outlines while editing. */
-int  scene_overlay_flat_block_matches_cursor(int begin_idx, int is_tess);
+int  scene_overlay_flat_block_matches_cursor(int begin_idx, int is_tess,
+                                             const SceneRenderConfig *cfg);
 
 /* Render polygon outlines (wireframe edges of filled triangles/quads), color-coded
  * by matrix stack depth. show_current_poly controls whether to brighten outlines
  * for geometry matching the cursor block (1) or dim them (0). replay_tess_preview
  * enables special highlighting for tessellation callback geometry during replay.
  * Called during the overlay rendering phase of the frame. */
-void scene_overlays_render_outlines(int show_current_poly,
+void scene_overlays_render_outlines(const FrameRenderContext *frame_ctx,
+                                    int show_current_poly,
                                     int replay_tess_preview);
 
 /* Render vertex numbers (small text labels at each vertex showing index).
  * Useful for debugging index order, primitive winding, and vertex positioning.
  * Called during the overlay rendering phase if vertex number overlay is enabled
  * (F6). */
-void scene_overlays_render_vertex_numbers(void);
+void scene_overlays_render_vertex_numbers(const FrameRenderContext *frame_ctx);
 
 /* Render normal vectors (colored lines extending from each vertex showing
  * surface normal direction). Color-coded by matrix depth for visual clarity.
  * Called during the overlay rendering phase if normal vector overlay is enabled
  * (F7). Helps users understand surface orientation and normals computation. */
-void scene_overlays_render_normal_vectors(void);
+void scene_overlays_render_normal_vectors(const FrameRenderContext *frame_ctx);
 
 #endif /* SCENE_OVERLAYS_H */

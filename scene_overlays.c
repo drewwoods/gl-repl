@@ -2,10 +2,9 @@
  * scene_overlays.c - scene geometry overlay passes shared by render frame code.
  */
 #include "sample.h"
-#include "repl_executor.h"
-#include "repl_core.h"
-#include "repl_state.h"
 #include "scene_overlays.h"
+#include "scene_render_types.h"
+#include "scene_transform_utils.h"
 
 static int begin_mode_has_outline_overlay(GLenum mode) {
     switch (mode) {
@@ -19,21 +18,55 @@ static int begin_mode_has_outline_overlay(GLenum mode) {
     }
 }
 
-int scene_overlay_flat_block_matches_cursor(int begin_idx, int is_tess) {
-    FlatProgramView flat_program = repl_state_flat_program_view();
-    const GLCmd *g_flat_cmds = flat_program.cmds;
-    int g_num_flat_cmds = flat_program.cmd_count;
+/* Returns non-zero if the flat command at flat_idx should be highlighted
+ * as part of the cursor's current block. Uses only pushed config state. */
+static int overlay_flat_cmd_matches_cursor(int flat_idx,
+                                           const SceneRenderConfig *cfg) {
+    const GLCmd *cmd = &cfg->flat_program.cmds[flat_idx];
+
+    if (flat_idx < 0 || flat_idx >= cfg->flat_program.cmd_count)
+        return 0;
+    if (!cmd->valid)
+        return 0;
+
+    if (cfg->edit_line_idx < 0)
+        return 0;
+
+    /* CMD_CALL: highlight commands inlined from the called function */
+    if (cmd->call_src_cmd_idx == cfg->edit_line_idx ||
+        cmd->root_call_src_cmd_idx == cfg->edit_line_idx)
+        return 1;
+
+    /* Function scope: highlight commands sharing the cursor's func scope */
+    if (cfg->cursor_func_scope_mask != 0 &&
+        (cmd->func_scope_mask & cfg->cursor_func_scope_mask) != 0)
+        return 1;
+
+    /* Block range: highlight commands inside the cursor's begin..end block */
+    if (cfg->cursor_block_begin_idx >= 0 &&
+        flat_idx >= cfg->cursor_block_begin_idx &&
+        flat_idx <= cfg->cursor_block_end_idx)
+        return 1;
+
+    /* Direct: flat cmd originates from the cursor source line */
+    return cmd->src_cmd_idx == cfg->edit_line_idx;
+}
+
+int scene_overlay_flat_block_matches_cursor(int begin_idx, int is_tess,
+                                            const SceneRenderConfig *cfg) {
+    const GLCmd *cmds = cfg->flat_program.cmds;
+    int cmd_count = cfg->flat_program.cmd_count;
     int depth = is_tess ? 1 : 0;
 
-    for (int i = begin_idx; i < g_num_flat_cmds; i++) {
-        if (!g_flat_cmds[i].valid) continue;
-        if (repl_flat_cmd_matches_cursor(i))
+    for (int i = begin_idx; i < cmd_count; i++) {
+        if (!cmds[i].valid) continue;
+        if (overlay_flat_cmd_matches_cursor(i, cfg))
             return 1;
-        if (!is_tess && i > begin_idx && g_flat_cmds[i].type == CMD_END)
+        if (!is_tess && i > begin_idx && cmds[i].type == CMD_END)
             break;
         if (is_tess && i > begin_idx) {
-            if (g_flat_cmds[i].type == CMD_TESS_BEGIN_POLYGON) depth++;
-            else if (g_flat_cmds[i].type == CMD_TESS_END) {
+            if (cmds[i].type == CMD_TESS_BEGIN_POLYGON) depth++;
+            else if (cmds[i].type == CMD_TESS_END) {
                 depth--;
                 if (depth == 0) break;
             }
@@ -70,10 +103,10 @@ static void scene_overlay_pop_state(void) {
  * drift from each other as flatten/execution rules evolve. */
 static void walk_vertex_overlay(int selected_block_only,
                                 VertexOverlayVisitFn on_vertex,
-                                void *user) {
-    FlatProgramView flat_program = repl_state_flat_program_view();
-    const GLCmd *g_flat_cmds = flat_program.cmds;
-    int g_num_flat_cmds = flat_program.cmd_count;
+                                void *user,
+                                const SceneRenderConfig *cfg) {
+    const GLCmd *cmds = cfg->flat_program.cmds;
+    int cmd_count = cfg->flat_program.cmd_count;
     VertexOverlayState state = {
         .flat_cmd_idx = -1,
         .vertex_idx = 0,
@@ -85,12 +118,12 @@ static void walk_vertex_overlay(int selected_block_only,
     int matrix_depth = 0;
 
     glPushMatrix();
-    for (int i = 0; i < g_num_flat_cmds; i++) {
-        if (!g_flat_cmds[i].valid) continue;
+    for (int i = 0; i < cmd_count; i++) {
+        if (!cmds[i].valid) continue;
 
-        const GLCmd *cmd = &g_flat_cmds[i];
+        const GLCmd *cmd = &cmds[i];
         if (!state.in_block && is_transform_cmd(cmd->type)) {
-            repl_executor_apply_tracked_transform_cmd(cmd, &matrix_depth);
+            scene_apply_tracked_transform(cmd, &matrix_depth);
             continue;
         }
 
@@ -98,7 +131,7 @@ static void walk_vertex_overlay(int selected_block_only,
         case CMD_BEGIN:
             state.in_block = 1;
             state.block_selected = selected_block_only
-                                 ? scene_overlay_flat_block_matches_cursor(i, 0)
+                                 ? scene_overlay_flat_block_matches_cursor(i, 0, cfg)
                                  : 1;
             state.vertex_idx = 0;
             state.tess_depth = 0;
@@ -114,7 +147,7 @@ static void walk_vertex_overlay(int selected_block_only,
         case CMD_TESS_BEGIN_POLYGON:
             state.in_block = 1;
             state.block_selected = selected_block_only
-                                 ? scene_overlay_flat_block_matches_cursor(i, 1)
+                                 ? scene_overlay_flat_block_matches_cursor(i, 1, cfg)
                                  : 1;
             state.vertex_idx = 0;
             state.tess_depth = 1;
@@ -157,7 +190,7 @@ static void walk_vertex_overlay(int selected_block_only,
             break;
         }
     }
-    repl_executor_unwind_tracked_transform_stack(&matrix_depth);
+    scene_unwind_transform_stack(&matrix_depth);
     glPopMatrix();
 }
 
@@ -190,47 +223,46 @@ static void draw_normal_vector_at_vertex(const GLCmd *cmd,
     glPointSize(1.0f);
 }
 
-void scene_overlays_render_vertex_numbers(void) {
-    int g_user_lighting_enabled = repl_state_flat_program_user_lighting_enabled();
+void scene_overlays_render_vertex_numbers(const FrameRenderContext *frame_ctx) {
     scene_overlay_push_state();
     glDisable(GL_LIGHTING);
     glDisable(GL_DEPTH_TEST);
     glColor3f(1.0f, 1.0f, 0.30f);
 
-    walk_vertex_overlay(1, draw_vertex_number_label, NULL);
+    walk_vertex_overlay(1, draw_vertex_number_label, NULL, &frame_ctx->config);
 
     glEnable(GL_DEPTH_TEST);
-    if (g_user_lighting_enabled) glEnable(GL_LIGHTING);
+    if (frame_ctx->config.user_lighting_enabled) glEnable(GL_LIGHTING);
     scene_overlay_pop_state();
 }
 
-void scene_overlays_render_normal_vectors(void) {
-    int g_user_lighting_enabled = repl_state_flat_program_user_lighting_enabled();
+void scene_overlays_render_normal_vectors(const FrameRenderContext *frame_ctx) {
     scene_overlay_push_state();
     glDisable(GL_LIGHTING);
     glDisable(GL_DEPTH_TEST);
     glColor3f(0.80f, 0.80f, 0.30f);
     float scale = 0.35f;
 
-    walk_vertex_overlay(0, draw_normal_vector_at_vertex, &scale);
+    walk_vertex_overlay(0, draw_normal_vector_at_vertex, &scale, &frame_ctx->config);
 
     glEnable(GL_DEPTH_TEST);
-    if (g_user_lighting_enabled) glEnable(GL_LIGHTING);
+    if (frame_ctx->config.user_lighting_enabled) glEnable(GL_LIGHTING);
     scene_overlay_pop_state();
 }
 
-void scene_overlays_render_outlines(int show_current_poly,
+void scene_overlays_render_outlines(const FrameRenderContext *frame_ctx,
+                                    int show_current_poly,
                                     int replay_tess_preview) {
-    FlatProgramView flat_program = repl_state_flat_program_view();
-    const GLCmd *g_flat_cmds = flat_program.cmds;
-    int g_num_flat_cmds = flat_program.cmd_count;
-    const ReplRenderState *render = repl_state_render();
+    const SceneRenderConfig *cfg = &frame_ctx->config;
+    const GLCmd *cmds = cfg->flat_program.cmds;
+    int cmd_count = cfg->flat_program.cmd_count;
+
     glDisable(GL_LIGHTING);
     glEnable(GL_DEPTH_TEST);
     glDepthMask(GL_FALSE);
-    if (*render->multisample_enabled) glEnable(GL_MULTISAMPLE);
+    if (cfg->multisample_enabled) glEnable(GL_MULTISAMPLE);
     else glDisable(GL_MULTISAMPLE);
-    if (*render->line_smooth_enabled) glEnable(GL_LINE_SMOOTH);
+    if (cfg->line_smooth_enabled) glEnable(GL_LINE_SMOOTH);
     else glDisable(GL_LINE_SMOOTH);
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
@@ -239,7 +271,7 @@ void scene_overlays_render_outlines(int show_current_poly,
                     REPL_OUTLINE_POLYGON_OFFSET_UNITS);
     glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
 
-    if (*repl_state_presentation()->show_vertex_outlines || show_current_poly) {
+    if (cfg->show_vertex_outlines || show_current_poly) {
         glPushMatrix();
         int in_begin = 0;
         int matrix_depth = 0;
@@ -247,16 +279,16 @@ void scene_overlays_render_outlines(int show_current_poly,
         int tess_in_contour = 0;
         int tess_poly_is_current = 0;
 
-        for (int i = 0; i < g_num_flat_cmds; i++) {
-            if (!g_flat_cmds[i].valid) continue;
+        for (int i = 0; i < cmd_count; i++) {
+            if (!cmds[i].valid) continue;
 
-            if (is_transform_cmd(g_flat_cmds[i].type)) {
+            if (is_transform_cmd(cmds[i].type)) {
                 if (!in_begin && !tess_in_contour)
-                    repl_executor_apply_tracked_transform_cmd(&g_flat_cmds[i], &matrix_depth);
+                    scene_apply_tracked_transform(&cmds[i], &matrix_depth);
                 continue;
             }
 
-            switch (g_flat_cmds[i].type) {
+            switch (cmds[i].type) {
             case CMD_TESS_BEGIN_CONTOUR:
                 if (replay_tess_preview)
                     break;
@@ -264,7 +296,7 @@ void scene_overlays_render_outlines(int show_current_poly,
                     glEnd();
                     glLineWidth(1.0f);
                 }
-                if (*repl_state_presentation()->show_vertex_outlines || tess_poly_is_current) {
+                if (cfg->show_vertex_outlines || tess_poly_is_current) {
                     glLineWidth(1.5f);
                     if (tess_poly_is_current)
                         glColor3f(0.0f, 0.9f, 0.9f);
@@ -278,8 +310,8 @@ void scene_overlays_render_outlines(int show_current_poly,
                 if (replay_tess_preview)
                     break;
                 if (tess_in_contour)
-                    glVertex3f(g_flat_cmds[i].args[0], g_flat_cmds[i].args[1],
-                               g_flat_cmds[i].args[2]);
+                    glVertex3f(cmds[i].args[0], cmds[i].args[1],
+                               cmds[i].args[2]);
                 break;
             case CMD_TESS_END:
                 if (replay_tess_preview) {
@@ -295,21 +327,21 @@ void scene_overlays_render_outlines(int show_current_poly,
                     tess_poly_is_current = 0;
                 break;
             case CMD_BEGIN: {
-                int draw_outline = begin_mode_has_outline_overlay(g_flat_cmds[i].mode);
+                int draw_outline = begin_mode_has_outline_overlay(cmds[i].mode);
                 if (in_begin) glEnd();
                 block_is_current = show_current_poly &&
-                                   scene_overlay_flat_block_matches_cursor(i, 0);
+                                   scene_overlay_flat_block_matches_cursor(i, 0, cfg);
                 if (block_is_current) {
                     glLineWidth(3.0f);
                     glColor3f(0.0f, 0.9f, 0.9f);
-                } else if (*repl_state_presentation()->show_vertex_outlines && draw_outline) {
+                } else if (cfg->show_vertex_outlines && draw_outline) {
                     glLineWidth(1.2f);
                     glColor3f(0.0f, 0.0f, 0.0f);
                 } else {
                     in_begin = 0;
                     break;
                 }
-                glBegin(g_flat_cmds[i].mode);
+                glBegin(cmds[i].mode);
                 in_begin = 1;
                 break;
             }
@@ -324,14 +356,14 @@ void scene_overlays_render_outlines(int show_current_poly,
                 break;
             case CMD_VERTEX3F:
                 if (in_begin) {
-                    if (block_is_current || *repl_state_presentation()->show_vertex_outlines)
-                        glVertex3f(g_flat_cmds[i].args[0], g_flat_cmds[i].args[1],
-                                   g_flat_cmds[i].args[2]);
+                    if (block_is_current || cfg->show_vertex_outlines)
+                        glVertex3f(cmds[i].args[0], cmds[i].args[1],
+                                   cmds[i].args[2]);
                 }
                 break;
             case CMD_TESS_BEGIN_POLYGON:
                 tess_poly_is_current = show_current_poly &&
-                                       scene_overlay_flat_block_matches_cursor(i, 1);
+                                       scene_overlay_flat_block_matches_cursor(i, 1, cfg);
                 break;
             default:
                 break;
@@ -346,7 +378,7 @@ void scene_overlays_render_outlines(int show_current_poly,
             glEnd();
             glLineWidth(1.0f);
         }
-        repl_executor_unwind_tracked_transform_stack(&matrix_depth);
+        scene_unwind_transform_stack(&matrix_depth);
         glPopMatrix();
     }
 

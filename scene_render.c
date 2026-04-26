@@ -549,7 +549,7 @@ static void render_3d_scene_pass(void) {
      * between passes.  CMD_TRANSLATE3F is replayed within each pass so
      * outlines are positioned correctly even when transforms separate blocks. */
     prof_begin(PROF_SCENE_3D_OUTLINES);
-    scene_overlays_render_outlines(config.show_current_poly,
+    scene_overlays_render_outlines(&frame_ctx, config.show_current_poly,
                                    config.replay_tess_preview);
     prof_accum_end(PROF_SCENE_3D_OUTLINES);
 
@@ -616,8 +616,8 @@ static void render_3d_scene_pass(void) {
 
     scene_lights_render(&frame_ctx);
 
-    if (config.show_vnums)   scene_overlays_render_vertex_numbers();
-    if (config.show_normals) scene_overlays_render_normal_vectors();
+    if (config.show_vnums)   scene_overlays_render_vertex_numbers(&frame_ctx);
+    if (config.show_normals) scene_overlays_render_normal_vectors(&frame_ctx);
     if (config.replaying)
         draw_replay_hud(&config);
     glPopAttrib();
