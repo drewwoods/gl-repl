@@ -434,17 +434,15 @@ static void scene_apply_clear_color(FlatProgramView flat_program) {
     glClearColor(cr, cg, cb, ca);
 }
 
-static void render_3d_scene_pass(void) {
-    SceneRenderConfig config;
+static void render_3d_scene_pass(const SceneRenderConfig *config) {
     FrameRenderContext frame_ctx;
-    scene_render_config_build(&config);
-    scene_prepare_frame_context(&frame_ctx, &config);
+    scene_prepare_frame_context(&frame_ctx, config);
 
     prof_begin(PROF_SCENE_3D_SETUP);
     glPushAttrib(GL_ALL_ATTRIB_BITS);
 
-    scene_apply_projection(&config);
-    scene_apply_camera_view(&config);
+    scene_apply_projection(config);
+    scene_apply_camera_view(config);
 
     scene_lights_setup(&frame_ctx);
     glDisable(GL_LIGHTING); /* baseline: disabled; execute_commands() enables if user typed it */
@@ -455,24 +453,24 @@ static void render_3d_scene_pass(void) {
     glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, mspec);
     glMaterialfv(GL_FRONT_AND_BACK, GL_SHININESS, mshin);
 
-    scene_apply_quality_config(&config);
-    scene_apply_wireframe_config(&config);
+    scene_apply_quality_config(config);
+    scene_apply_wireframe_config(config);
     prof_accum_end(PROF_SCENE_3D_SETUP);
 
     {
-        int flat_cmd_count = config.flat_program.cmd_count;
-        if (config.replay_has_fades)
-            flat_cmd_count = config.replay_base_limit;
+        int flat_cmd_count = config->flat_program.cmd_count;
+        if (config->replay_has_fades)
+            flat_cmd_count = config->replay_base_limit;
 
         prof_begin(PROF_SCENE_3D_FILL);
         glPushMatrix();
-        if (config.execute_fn)
-            config.execute_fn(1.0f, 0, flat_cmd_count, config.flat_program,
-                            config.execute_user_data);
+        if (config->execute_fn)
+            config->execute_fn(1.0f, 0, flat_cmd_count, config->flat_program,
+                            config->execute_user_data);
         glPopMatrix();
         prof_accum_end(PROF_SCENE_3D_FILL);
 
-        if (config.replay_has_fades && config.execute_fn) {
+        if (config->replay_has_fades && config->execute_fn) {
             prof_begin(PROF_SCENE_3D_FADE);
             {
                 ReplayFadeBatchView fade_batches;
@@ -493,11 +491,11 @@ static void render_3d_scene_pass(void) {
                     GLfloat mshin[] = { 30.0f };
                     glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, mspec);
                     glMaterialfv(GL_FRONT_AND_BACK, GL_SHININESS, mshin);
-                    scene_apply_quality_config(&config);
+                    scene_apply_quality_config(config);
                     glEnable(GL_BLEND);
                     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
                     glColor4f(0.70f, 0.70f, 0.80f, 1.0f);
-                    if (config.wireframe) glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+                    if (config->wireframe) glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
                     else glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
 
                     for (int batch_idx = 0; batch_idx < batch_count; batch_idx++) {
@@ -514,16 +512,16 @@ static void render_3d_scene_pass(void) {
                         prof_accum_end(PROF_SCENE_3D_FADE_BATCH_PREP);
 
                         prof_begin(PROF_SCENE_3D_FADE_BATCH_EXEC);
-                        config.execute_fn(alpha, skip_limits[batch_idx], batch->new_pc,
-                                        config.flat_program, config.execute_user_data);
+                        config->execute_fn(alpha, skip_limits[batch_idx], batch->new_pc,
+                                        config->flat_program, config->execute_user_data);
                         prof_accum_end(PROF_SCENE_3D_FADE_BATCH_EXEC);
 
                         glPopMatrix();
                     }
 
                     prof_begin(PROF_SCENE_3D_FADE_BATCH_POST);
-                    if (config.execute_reset_fn)
-                        config.execute_reset_fn(config.execute_user_data);
+                    if (config->execute_reset_fn)
+                        config->execute_reset_fn(config->execute_user_data);
                     glPopAttrib();
                     prof_accum_end(PROF_SCENE_3D_FADE_BATCH_POST);
                 }
@@ -532,7 +530,7 @@ static void render_3d_scene_pass(void) {
         }
     }
 
-    if (config.wireframe) glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+    if (config->wireframe) glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
 
     /* Draw translucent scene helpers after the main geometry so antialiased
      * edges blend against the final background color rather than the clear
@@ -549,8 +547,8 @@ static void render_3d_scene_pass(void) {
      * between passes.  CMD_TRANSLATE3F is replayed within each pass so
      * outlines are positioned correctly even when transforms separate blocks. */
     prof_begin(PROF_SCENE_3D_OUTLINES);
-    scene_overlays_render_outlines(&frame_ctx, config.show_current_poly,
-                                   config.replay_tess_preview);
+    scene_overlays_render_outlines(&frame_ctx, config->show_current_poly,
+                                   config->replay_tess_preview);
     prof_accum_end(PROF_SCENE_3D_OUTLINES);
 
     /* Vertex dots - replay transforms so dots match the filled geometry */
@@ -562,15 +560,15 @@ static void render_3d_scene_pass(void) {
     float tg_cam_view[16];
     glGetFloatv(GL_MODELVIEW_MATRIX, tg_cam_view);
     SceneGuideSnapshot guide_snapshot =
-        scene_build_guide_snapshot(&config, config.flat_program);
+        scene_build_guide_snapshot(config, config->flat_program);
     SceneTransformGuidePlan xform_guide_plan;
     scene_transform_guides_prepare(&guide_snapshot, &xform_guide_plan);
     {
-    const GLCmd *flat_cmds = config.flat_program.cmds;
-    int flat_cmd_count = config.flat_program.cmd_count;
+    const GLCmd *flat_cmds = config->flat_program.cmds;
+    int flat_cmd_count = config->flat_program.cmd_count;
     int matrix_depth = 0;
     glPointSize(8.0f);
-    if (config.replay_vertex_points)
+    if (config->replay_vertex_points)
         glColor3f(1.0f, 0.88f, 0.20f);
     else
         glColor3f(0.0f, 0.0f, 0.0f);
@@ -583,7 +581,7 @@ static void render_3d_scene_pass(void) {
         // position. Do this inline so that the current model matrix is applied
         // to the guides, ensuring they are positioned correctly even when
         // transforms separate blocks.
-        if (is_cursor && !config.replaying) {
+        if (is_cursor && !config->replaying) {
             scene_geometry_guides_render_for_cursor(&guide_snapshot);
         }
 
@@ -593,7 +591,7 @@ static void render_3d_scene_pass(void) {
 
         if (is_transform_cmd(flat_cmds[i].type)) {
             scene_apply_tracked_transform(&flat_cmds[i], &matrix_depth);
-        } else if ((config.show_vpoints || config.replay_vertex_points) &&
+        } else if ((config->show_vpoints || config->replay_vertex_points) &&
                    (flat_cmds[i].type == CMD_VERTEX3F ||
                     flat_cmds[i].type == CMD_TESS_VERTEX)) {
             glBegin(GL_POINTS);
@@ -607,53 +605,48 @@ static void render_3d_scene_pass(void) {
     }
     glPopMatrix();
     glDisable(GL_BLEND);
-    if (config.user_lighting_enabled) glEnable(GL_LIGHTING);
+    if (config->user_lighting_enabled) glEnable(GL_LIGHTING);
     prof_accum_end(PROF_SCENE_3D_OVERLAYS);
 
     prof_begin(PROF_SCENE_3D_HUD);
-    if (config.replay_tess_preview)
-        draw_replay_tess_preview(&config);
+    if (config->replay_tess_preview)
+        draw_replay_tess_preview(config);
 
     scene_lights_render(&frame_ctx);
 
-    if (config.show_vnums)   scene_overlays_render_vertex_numbers(&frame_ctx);
-    if (config.show_normals) scene_overlays_render_normal_vectors(&frame_ctx);
-    if (config.replaying)
-        draw_replay_hud(&config);
+    if (config->show_vnums)   scene_overlays_render_vertex_numbers(&frame_ctx);
+    if (config->show_normals) scene_overlays_render_normal_vectors(&frame_ctx);
+    if (config->replaying)
+        draw_replay_hud(config);
     glPopAttrib();
     prof_accum_end(PROF_SCENE_3D_HUD);
 }
 
-void scene_render_3d_scene(void) {
-    SceneRenderConfig viewport_config;
+void scene_render_3d_scene(const SceneRenderConfig *config) {
     const ReplRenderState *render = repl_state_render();
-    ReplRenderState *render_mut = repl_state_render_mut();
-    const ReplReplayRuntimeState *replay = repl_state_replay();
+    SceneRenderConfig frame_config = *config;
 
-    scene_render_config_build(&viewport_config);
-    glViewport(viewport_config.scene_x, viewport_config.scene_y,
-               viewport_config.scene_w, viewport_config.scene_h);
-    scene_apply_clear_color(viewport_config.flat_program);
+    glViewport(frame_config.scene_x, frame_config.scene_y,
+               frame_config.scene_w, frame_config.scene_h);
+    scene_apply_clear_color(frame_config.flat_program);
 
     if (*render->use_accum && *render->accum_aa_enabled && *render->accum_samples > 1) {
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_ACCUM_BUFFER_BIT);
         float weight = 1.0f / (float)*render->accum_samples;
         for (int sample_idx = 0; sample_idx < *render->accum_samples; sample_idx++) {
             glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-            if (*replay->active)
+            if (frame_config.replaying)
                 repl_replay_restore_baseline_predef_values();
-            *render_mut->accum_jitter_x = g_jitter_table[sample_idx % MAX_ACCUM_SAMPLES][0];
-            *render_mut->accum_jitter_y = g_jitter_table[sample_idx % MAX_ACCUM_SAMPLES][1];
-            render_3d_scene_pass();
+            frame_config.accum_jitter_x = g_jitter_table[sample_idx % MAX_ACCUM_SAMPLES][0];
+            frame_config.accum_jitter_y = g_jitter_table[sample_idx % MAX_ACCUM_SAMPLES][1];
+            render_3d_scene_pass(&frame_config);
             glAccum(GL_ACCUM, weight);
         }
-        *render_mut->accum_jitter_x = 0.0f;
-        *render_mut->accum_jitter_y = 0.0f;
         glAccum(GL_RETURN, 1.0f);
     } else {
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-        if (*replay->active)
+        if (frame_config.replaying)
             repl_replay_restore_baseline_predef_values();
-        render_3d_scene_pass();
+        render_3d_scene_pass(&frame_config);
     }
 }

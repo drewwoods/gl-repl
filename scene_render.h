@@ -38,17 +38,11 @@
  * tessellator, set up default light state. Called once on startup. */
 void scene_render_init_gl(void);
 
-/* Populate *config from the current REPL runtime state for one frame.
- * Call once at frame start before any scene_* entry point.
- * This is the push-model builder: all state is snapshotted into config
- * so downstream renderers don't sample globals directly. */
-void scene_render_config_build(SceneRenderConfig *config);
-
-/* Render the full 3D scene for one frame. Orchestrates projection setup, camera
- * transforms, user geometry execution, grid/axes, overlays, and edit guides.
- * Called once per frame (or multiple times per frame for accumulation-buffer AA).
- * Reads scene config (grid theme, axes, overlays, etc.) and execution state
- * (replay PC, variable values, etc.). */
-void scene_render_3d_scene(void);
+/* Render the full 3D scene for one frame using an explicit config snapshot.
+ * Orchestrates projection setup, camera transforms, user geometry execution,
+ * grid/axes, overlays, and edit guides.
+ * Called once per frame (or multiple times per frame for accumulation-buffer
+ * AA). The controller builds the config once and passes it in. */
+void scene_render_3d_scene(const SceneRenderConfig *config);
 
 #endif /* SCENE_RENDER_H */
