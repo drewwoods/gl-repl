@@ -52,10 +52,11 @@ to avoid burying architecture changes under include churn. Rename them to
 
 ## Intended Frame Shape
 
-At the top level, the controller builds view inputs from REPL state:
+At the top level, `sample.c` registers the GLUT display callback and forwards
+directly to the controller (no shim layer):
 
 ```text
-imrepl_ctrl_display_frame
+sample.c glutDisplayFunc -> imrepl_ctrl_display_frame
   -> rebuild autonormals / flat program if dirty
   -> prepare replay frame clamp if needed
   -> build SceneRenderConfig from REPL state
@@ -158,12 +159,13 @@ on the per-frame config or guide snapshots.
 | `scene_geometry_guides` | REPL-aware vertex/primitive guide rendering from snapshots |
 | `scene_transform_guides` | REPL-aware transform guide rendering from snapshots |
 | `scene_overlays` | REPL-aware outlines, labels, normals |
+| `ui_replay_hud` | *(planned — R1c)* 2D replay HUD moved out of `scene_render.c` |
 
 Neutral scene files should stay free of REPL state access. `scene_render.c`
-still has transitional direct REPL reads for replay HUD and a few replay/
-presentation fields; focus/guide assembly and accumulation jitter now come
-from the controller or local pass state, and the remaining gaps are tracked as
-replay follow-ups.
+still has transitional direct REPL reads for replay HUD, fade batches, and
+accumulation AA. R1 in `feature/push-architecture-refinement.md` removes all
+of these: the controller builds a `ReplayFadePlan` snapshot; the HUD moves to
+`ui_replay_hud.c`; and accumulation-AA settings move to `SceneRenderConfig`.
 
 ### 5. 2D UI rendering
 
@@ -235,16 +237,38 @@ is not a live GL call.
 
 ### Scene/UI includes from `repl_*`
 
-Phase 1 target:
+Current rule:
 
 ```text
 imrepl_ctrl.c may include scene/UI render headers.
 repl_core.c should not include scene/UI headers after the controller move.
 ```
 
-Existing input/layout exceptions are `repl_editor.c`, `repl_actions.c`, and
-`repl_export.c`, which include selected `ui_*` headers today. Do not silently
-expand those exceptions.
+Existing exceptions: `repl_editor.c`, `repl_actions.c`, and `repl_export.c`
+include selected `ui_*` headers. The `repl_editor.c` exception is eliminated
+in Phase 2 by moving cross-layer input routing to `imrepl_ctrl.c`. Do not
+silently expand these exceptions.
+
+### Typed-state facade boundary (Phase 2 target)
+
+`repl_state.h` will split into two headers (R6 in the refinement plan):
+
+```text
+repl_state_views.h   — read-only accessors; safe to include from scene_* and ui_*
+repl_state_owners.h  — mutating accessors; owner modules and controller only
+```
+
+Until R6 lands, the rule is enforced by `check-scene-no-repl-state-mut` and
+`check-ui-no-repl-state-mut` in the Makefile. After R6: `scene_*.c` and
+`ui_*.c` include `repl_state_views.h` only; `check-views-no-owners` catches
+regressions.
+
+### Layout geometry (Phase 2 target)
+
+`ui_panels_scene_rect` and `ui_panels_code_panel_rect` will move to a new
+`repl_layout.c` / `repl_layout.h` (R3). Until then, non-UI callers
+(`imrepl_ctrl.c`, `repl_editor.c`, `repl_export.c`, tests) include
+`ui_panels.h` for these two functions — a known wrong-direction dependency.
 
 ### UI / scene independence
 
@@ -268,12 +292,22 @@ render-neutral helpers belong in explicit shared headers.
 
 ## Open Refactor Edges
 
-Completed in code: controller extraction, explicit `SceneRenderConfig` handoff,
-focus/guide snapshot construction, and scene-local accumulation jitter.
+Completed: controller extraction, explicit `SceneRenderConfig` handoff,
+focus/guide snapshot construction, scene-local accumulation jitter, and
+app-shell shim removal.
 
-Remaining follow-ups:
+Phase 2 follow-ups are specified in `feature/push-architecture-refinement.md`.
+Suggested order:
 
-* Simplify replay fade rendering, then slim `SceneRenderConfig`.
-* Move the 2D replay HUD out of `scene_render.c`.
-* Rename `sample.c` / `sample.h` to `imrepl.c` / `imrepl.h` in a dedicated
-  mechanical cleanup.
+```
+R10-phase1  delete stale GLUT decls from repl_core.h (zero risk, do first)
+R1          replay/HUD migration — highest leverage
+R2          UI → REPL mutation holes (parallel with R1)
+R3          extract repl_layout.c
+R5          slim SceneRenderConfig (requires R1)
+R6          split repl_state facade (requires R1 + R2)
+R7          add view-side grep guards
+R4          controller off repl_core_internal.h
+R10-ph2-5   dissolve repl_core.c into natural owners
+R8          sample → imrepl rename (last, mechanical)
+```
