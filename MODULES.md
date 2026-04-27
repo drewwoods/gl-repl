@@ -1,112 +1,148 @@
 # REPL Module Guide
 
-One-page lay of the land for the REPL source tree. For per-module
-detail read [`ARCHITECTURE.md`](ARCHITECTURE.md). This doc covers the
-layered overview, the ownership diagram, the render/model split, and
-the current boundary/open-edge notes — it should read in under five
-minutes.
+This document is the quick map for the immediate-mode REPL source tree. For the deeper ownership reference, see [`ARCHITECTURE.md`](ARCHITECTURE.md). For the staged cleanup plan, see [`feature/push-architecture-refinement.md`](feature/push-architecture-refinement.md).
 
-**Public API:** Every module header (`*.h`) is comprehensively documented with
-module overview, lifecycle notes, and detailed function descriptions. Start
-with the relevant header for a module's public API — all documentation includes
-usage context, parameter descriptions, and lifecycle integration points.
+The important split is not just by filename prefix. The important split is by ownership:
+
+```text
+repl_*   = REPL language, source model, flat geometry model, replay model, controller
+scene_*  = independent 3D view: camera, frame setup, world decorators, callback hooks
+ui_*     = independent 2D view: code panel, menus, overlays, popups, HUDs
+```
+
+`scene_*` and `ui_*` are views. They render from per-frame config snapshots. They should not own REPL semantics.
+
+`repl_*` is mostly model/controller code. It parses source, owns the flat program, owns replay state, and builds the configs/plans consumed by the scene and UI views.
+
+## Core Tenets
+
+1. **The REPL owns the user program.** The REPL parses the C-like language, stores source commands, flattens loops/functions/conditionals, owns replay state, and describes the user geometry and REPL-aware geometry annotations.
+2. **The executor is the narrow live-GL escape hatch for user geometry.** General `repl_*` modules should not casually call OpenGL. The executor turns a `FlatProgramView` into live GL.
+3. **The scene owns the 3D stage, not the actor.** The scene establishes viewport, clear color, projection, camera, accumulation-buffer samples, lights, grid, axes, backdrop, orbit target, and other neutral 3D decorators.
+4. **The scene calls generic user callbacks.** `scene_render_3d_scene()` should not know whether the user geometry came from the REPL, an exporter, a test, or a future alternate geometry source.
+5. **The UI owns 2D presentation only.** UI renderers draw from per-frame config/model snapshots and route mutations through `repl_*` actions or command-store APIs.
+6. **Replay is REPL policy.** Replay PC, replay mode, fade/highlight state, and replay variable snapshots belong behind the REPL geometry callback, not in generic scene config.
+
+## Intended Frame Shape
+
+At the top level, the REPL builds the models/configs and wires the scene callback:
+
+```text
+repl display/frame entry
+  -> rebuild flat program if dirty
+  -> build ReplGeometryRenderPlan
+  -> build SceneRender3DConfig
+  -> resolve REPL clear color into scene config
+  -> install generic user draw callback backed by the REPL plan
+  -> scene_render_3d_scene(&scene_cfg)
+  -> build UiRenderConfig
+  -> ui_render(&ui_cfg)
+```
+
+Inside the scene:
+
+```text
+scene_render_3d_scene
+  -> set viewport / clear / projection / camera / quality state
+  -> draw scene-owned decorators
+  -> call generic user geometry callback
+  -> call generic user annotation callback, if configured
+  -> draw scene-owned foreground decorators
+  -> finish accumulation-buffer sample/frame
+```
+
+The scene decides where the generic hooks are. The REPL decides what those hooks draw.
 
 ## Responsibility Layers
 
-Every source file belongs to one of six layers. File-name prefixes
-follow the convention described in *Naming Notes* below:
-`repl_*` for pipeline/input/models, `ui_*` for 2D rendering, and
-`scene_*` for 3D rendering.
+### 1. REPL command pipeline: source -> flatten -> execute
 
-### 1. Command pipeline — source → flatten → execute
-
-The central data flow. Edits mutate the source command array (via
-`repl_state_document_cmds()`); everything downstream (execution, replay,
-overlays) reads the flattened array (`repl_state_flat_cmds()`).
+The central data flow. Edits mutate the source command array. Execution, replay, export, and geometry annotations consume the flattened program or plans derived from it.
 
 | Module | Role |
 |--------|------|
-| `repl_core` | Normalization, display frame, init wrapper |
-| `repl_command_spec` | Declarative descriptors for fixed-arity GL commands |
+| `repl_core` | Top-level REPL orchestration, display/frame entry point, normalization wrapper |
+| `repl_command_spec` | Declarative descriptors for fixed-arity GL-like commands |
 | `repl_parser` | Source-line parser and canonical `GLCmd.source[]` generation |
 | `repl_source_scope` | Source prefix-depth cache, indent helpers, block lookup |
 | `repl_command_store` | Insert/delete/replace/load API over the source command array |
-| `repl_commit` | Float decls, variable assignments, structured block commits |
-| `repl_flatten` | Explicit source-to-flat program builder (loops, functions, `if`) |
-| `repl_executor` | Flat-program GL dispatch + GLU resource lifetimes |
-| `repl_eval` | Expression evaluator (recursive descent) |
-| `cmd_format` | Pure indentation/depth computation (no GL) |
+| `repl_commit` | Float declarations, variable assignments, structured block commits |
+| `repl_flatten` | Explicit source-to-flat program builder for loops, functions, and `if` blocks |
+| `repl_executor` | Narrow live-GL dispatch boundary for flat user geometry |
+| `repl_eval` | Expression evaluator |
+| `cmd_format` | Pure indentation/depth computation |
 
-### 2. Editor + input
+### 2. Editor and input controller
 
-Accepts keystrokes/clicks, routes each event to the right subsystem,
-and performs mutations through the command store.
+These modules route input and mutate REPL-owned state through focused ownership APIs.
 
 | Module | Role |
 |--------|------|
 | `repl_editor` | Keyboard/mouse dispatcher, commit orchestration, `feed_line` |
-| `repl_actions` | Config/menu side effects (single mutation lane for UI) |
-| `repl_commit` | *(see pipeline)* — invoked from the editor's commit path |
+| `repl_actions` | Config/menu side effects and action dispatch |
 | `repl_keys` | Keybinding constants |
-| `repl_camera_controls` | Scene camera drag + momentum |
+| `repl_camera_controls` | Scene camera drag + momentum state |
 | `repl_clipboard` | Line selection and copy/cut/paste |
-| `repl_undo` | Snapshot rings; example-promotion hook |
+| `repl_undo` | Snapshot rings and restore paths |
 | `repl_search` | Search state and navigation |
 | `repl_var_drag` | Variable slider drag transaction + writeback |
-| `repl_inline_rename` | Scene-rename input buffer (surfaces via status strip) |
+| `repl_inline_rename` | Scene rename input buffer |
 
-### 3. Domain models
+Input/controller modules may mutate models. Render modules should not.
 
-Non-pipeline state that UI and input both read. None of these call
-OpenGL.
+### 3. REPL domain models
+
+These modules own REPL state that is not itself a renderer.
 
 | Module | Role |
 |--------|------|
+| `repl_state` | Typed runtime-state facade over historical globals |
 | `repl_scenes` | User-scene slots, workspace directory, LRU eviction |
-| `repl_example_loader` | Built-in example loading + active tracking |
+| `repl_example_loader` | Built-in example loading and active tracking |
 | `repl_examples` | Built-in example data |
-| `repl_autocomplete` | Completion model: matches, selection, ghost, hints |
+| `repl_autocomplete` | Completion model: matches, selection, ghost text, hints |
 | `repl_autonormal` | Auto-generated `glNormal3f` maintenance |
-| `repl_replay` | Replay state machine + fade batches |
-| `repl_state` | Cross-cutting state catalog (`ReplUiState`, etc.) |
+| `repl_replay` | Replay state machine, replay PC/mode, fade/highlight inputs |
+| `repl_replay_annotations` | Source-line replay text expansion for the code panel |
 
-### 4. 2D UI rendering (code panel + overlays)
+`repl_replay` owns replay semantics. The scene should not know what a REPL replay is.
 
-Pure renderers that read from the models above. Each module ends up
-as one visible region on screen.
+### 4. 3D scene rendering
 
-| Module | Role |
-|--------|------|
-| `ui_panels` | Code-panel rows, overlay viewport bracket, inline ghost/hint, scene status banner |
-| `repl_code_panel_layout` | Pure text wrapping (no GL) — shared with export dumps + tests |
-| `repl_code_panel_document` | Document row model (no GL) |
-| `repl_replay_annotations` | Source-line replay text expansion |
-| `ui_menu_bar` | Top-level menus, dropdowns, pinned buttons, search slot |
-| `ui_color_picker` | Floating HSV/alpha picker + literal colour swatches |
-| `ui_help_overlay` | Modal F1 help (Commands / Keys tabs) |
-| `ui_variable_panel` | Floating variable slider panel (render-only) |
-| `ui_autocomplete_panel` | Completion popup renderer |
-| `ui_profile_panel` | CPU timing HUD |
-
-### 5. 3D scene rendering
-
-The viewport. `scene_render.c` owns the 3D viewport, clear color,
-accumulation-AA loop, and one-shot scene-side GL setup; shared
-`SceneRenderConfig` / `FrameRenderContext` live in `scene_render_types.h`,
-alongside guarded helper passes and table-driven themes.
+`scene_*` owns the 3D frame and neutral world decorators. It may call generic user callbacks, but should not inspect REPL source, flat-command provenance, replay state, or editor state.
 
 | Module | Role |
 |--------|------|
-| `scene_render` | Camera, render config/frame prep, 3D viewport/clear/accum-AA, one-shot scene init, orbit target, replay HUD |
-| `scene_render_types` | Shared per-frame config/context types for push-model snapshot |
-| `scene_transform_utils` | Inline GL matrix helpers (no GL layer violation) |
-| `scene_geometry_guides` | Vertex-input + normal-edit guide rendering |
-| `scene_transform_guides` | Translate/rotate/scale guide planning + rendering |
+| `scene_render` | 3D frame setup, viewport, clear, projection, camera, accumulation loop, generic callback hook order |
+| `scene_render_types` | Scene config/context types and generic user callback types |
 | `scene_grid` | Grid theme rendering |
 | `scene_axes` | Axes theme rendering |
-| `scene_backdrop` | Backdrop pass (e.g. cityscape) |
-| `scene_lights` | Ambient init, light setup + indicator drawing |
-| `scene_overlays` | Outline, vertex-number, and normal-vector overlays |
+| `scene_backdrop` | Backdrop/environment rendering |
+| `scene_lights` | Scene lighting baseline and light indicators |
+| `scene_transform_utils` | Small GL matrix helpers used by renderers |
+| `scene_geometry_guides` | Current transitional module: REPL-aware 3D guide rendering |
+| `scene_transform_guides` | Current transitional module: REPL-aware transform guide rendering |
+| `scene_overlays` | Current transitional module: REPL-aware outlines/labels/normals |
+
+The last three modules draw inside the scene, but their inputs are REPL-specific. They should either move toward `repl_geometry_*` ownership or be fed by a generic enough plan that the `scene_` prefix remains honest.
+
+### 5. 2D UI rendering
+
+`ui_*` owns screen-space drawing from per-frame UI config/model state.
+
+| Module | Role |
+|--------|------|
+| `ui_panels` | Code-panel rows, overlay viewport bracket, scene status banner |
+| `ui_menu_bar` | Menus, dropdowns, pinned buttons, search slot |
+| `ui_color_picker` | Floating HSV/alpha picker and literal color swatches |
+| `ui_help_overlay` | Modal F1 help |
+| `ui_variable_panel` | Floating variable slider panel |
+| `ui_autocomplete_panel` | Completion popup |
+| `ui_profile_panel` | CPU timing HUD |
+| `repl_code_panel_layout` | Pure text wrapping model, no GL |
+| `repl_code_panel_document` | Code-panel row/document model, no GL |
+
+UI renderers read models and draw. Mutations go through `repl_actions`, `repl_command_store`, `repl_var_drag`, or another REPL-owned mutation API.
 
 ### 6. Persistence, audio, instrumentation, lifecycle
 
@@ -115,387 +151,219 @@ alongside guarded helper passes and table-driven themes.
 | `repl_export` | Save/load, typed export scaffold, workspace headers, code-panel dumps |
 | `repl_audio` | Playlist engine + persisted audio config |
 | `prof` | Project-wide CPU timing instrumentation |
-| `sample` | `main()` + GLUT callback wiring + GLUT buffer swap |
+| `sample` | `main()`, GLUT callback wiring, GLUT buffer swap |
 | `gl_stub_counts` | `USE_GL_STUBS` symbol tracking |
 
-## Ownership / Coordination Diagram
+## Scene Render Config Direction
 
-Editor-adjacent modules split out of the old `repl_editor.c`, plus the
-nearby modules they coordinate with. Cluster boxes match the layers
-above. This is not every file — it's the coordination web that drives
-most refactor decisions.
+The scene config should describe the 3D frame and generic draw hooks. It should not be the dumping ground for flat-program, replay, and editor state.
 
-The old single-arrow version blurred together three different
-relationships. In the updated diagram:
+Preferred shape:
 
-- `e1@==>` means “delegated mutation / write-owning path”
-- `-.->` means “read/query/render dependency”
-- `i1@-->` means “invoke / stage / dataflow path”
+```c
+typedef enum SceneUserDrawPass {
+    SCENE_USER_DRAW_MAIN,
+    SCENE_USER_DRAW_ANNOTATIONS_3D,
+} SceneUserDrawPass;
 
-```mermaid
-flowchart LR
-    subgraph legend["Edge meaning"]
-        lmut_a["delegates mutation"] e1@==> lmut_b["write-owning module"]
-        lread_a["reads / renders"] -.-> lread_b["query / model / helper"]
-        lflow_a["invokes / feeds"] i1@--> lflow_b["callback / stage / pass"]
-    end
+typedef struct SceneUserDrawRequest {
+    SceneUserDrawPass pass;
+    const struct SceneFrameContext *scene;
+    int accum_sample_idx;
+    int accum_sample_count;
+    float alpha_scale;
+} SceneUserDrawRequest;
 
-    sample["sample.c<br/>GLUT callback wiring · buffer swap"]
+typedef void (*SceneUserDrawFn)(const SceneUserDrawRequest *request,
+                                void *user_data);
 
-    subgraph pipeline["Command pipeline"]
-        core["repl_core.c<br/>normalize · display frame"]
-        parser["repl_parser.c<br/>source parser"]
-        scope["repl_source_scope.c<br/>depth · indent"]
-        flatten["repl_flatten.c<br/>explicit source-to-flat builder"]
-        exec["repl_executor.c<br/>flat program execution · GLU resources"]
-        commit["repl_commit.c<br/>decls · assigns · blocks"]
-        store["repl_command_store.c<br/>source command mutation · restore"]
-    end
+typedef struct SceneUserDrawCallbacks {
+    SceneUserDrawFn draw;
+    void (*reset)(void *user_data);
+    void *user_data;
+} SceneUserDrawCallbacks;
 
-    subgraph input["Editor + input"]
-        editor["repl_editor.c<br/>input router · feed_line"]
-        actions["repl_actions.c<br/>config + menu side effects"]
-        camera["repl_camera_controls.c<br/>orbit/pan/zoom + momentum"]
-        undo["repl_undo.c<br/>undo/redo rings"]
-        clipboard["repl_clipboard.c<br/>selection + copy/cut/paste"]
-        vardrag["repl_var_drag.c<br/>variable drag transaction"]
-        rename["repl_inline_rename.c<br/>scene-rename buffer"]
-    end
+typedef struct SceneRender3DConfig {
+    int scene_x, scene_y, scene_w, scene_h;
+    int viewport_w, viewport_h;
 
-    subgraph models["Domain models"]
-        scenes["repl_scenes.c<br/>user scenes + workspace"]
-        acmodel["repl_autocomplete.c<br/>completion model"]
-        replay["repl_replay.c<br/>replay state + fade batches"]
-    end
+    float clear_rgba[4];
 
-    subgraph services["Services + lifecycle"]
-        audio["repl_audio.c<br/>playlist engine"]
-        prof["prof.c<br/>instrumentation"]
-    end
+    float cam_dist;
+    float cam_rx, cam_ry;
+    float cam_tx, cam_ty, cam_tz;
+    float cam_motion_glow;
 
-    subgraph ui_layer["2D UI rendering"]
-        uicp["ui_panels.c<br/>code panel rows · overlay viewport · status banner"]
-        layout["repl_code_panel_layout.c<br/>pure wrap iterator"]
-        docrows["repl_code_panel_document.c<br/>document row model"]
-        replay_ann["repl_replay_annotations.c<br/>code-panel replay text"]
-        menu["ui_menu_bar.c<br/>menubar + dropdowns"]
-        color["ui_color_picker.c<br/>floating color picker"]
-        help["ui_help_overlay.c<br/>modal F1 help"]
-        varpanel["ui_variable_panel.c<br/>slider panel (render only)"]
-        acpanel["ui_autocomplete_panel.c<br/>completion popup"]
-        uiprof["ui_profile_panel.c<br/>timing HUD"]
-    end
+    int multisample_enabled;
+    int line_smooth_enabled;
+    int wireframe;
 
-    subgraph scene_layer["3D scene rendering"]
-        sceneR["scene_render.c<br/>frame prep · 3D viewport/clear · accum-AA · one-shot init · replay HUD"]
-        geomg["scene_geometry_guides.c<br/>vertex/normal guides"]
-        xformg["scene_transform_guides.c<br/>xform guide planner+render"]
-        grid["scene_grid.c<br/>grid themes"]
-        axes["scene_axes.c<br/>axes themes"]
-        backdrop["scene_backdrop.c<br/>backdrop pass"]
-        lights["scene_lights.c<br/>ambient init · light setup + indicators"]
-        overlays["scene_overlays.c<br/>geometry overlays"]
-    end
+    int use_accum;
+    int accum_aa_enabled;
+    int accum_samples;
 
-    export["repl_export.c<br/>typed scaffold · import/export · visual dump"]
+    int grid_theme;
+    int grid_extent_idx;
+    int grid_major_idx;
+    float grid_major_steps[GRID_MAJOR_COUNT];
+    float grid_extents[GRID_EXTENT_COUNT];
 
-    sample i2@--> editor
+    int axes_theme;
+    int backdrop_mode;
 
-    editor i3@--> actions
-    editor i4@--> camera
-    editor i5@--> undo
-    editor i6@--> clipboard
-    editor i7@--> commit
-    editor -.-> uicp
-    editor i8@--> replay
-    editor -.-> varpanel
-    editor i9@--> rename
-    editor i10@--> vardrag
+    int user_lighting_enabled;
+    SceneLight lights[MAX_LIGHTS];
+    int show_light_indicators;
 
-    actions e2@==> audio
-    actions e3@==> replay
-    actions e4@==> scenes
-    actions e5@==> core
-    actions e6@==> rename
-    actions e7@==> uicp
-
-    clipboard e8@==> undo
-    clipboard e9@==> store
-    commit e10@==> undo
-    commit -.-> parser
-    commit -.-> scope
-    commit e11@==> store
-    undo e12@==> scenes
-    store i11@--> core
-
-    core -.-> parser
-    core -.-> scope
-    core i12@--> flatten
-    core i13@--> exec
-    core i14@--> sceneR
-    core i15@--> help
-    core i16@--> varpanel
-    core i17@--> acpanel
-    core i31@--> uiprof
-
-    acpanel -.-> acmodel
-    uiprof -.-> prof
-    rename e13@==> scenes
-    varpanel -.-> vardrag
-    replay i18@--> exec
-
-    sceneR i19@--> exec
-    sceneR -.-> replay
-    sceneR i20@--> geomg
-    sceneR i21@--> xformg
-    sceneR i22@--> backdrop
-    sceneR i23@--> lights
-    sceneR i24@--> overlays
-    sceneR i25@--> grid
-    sceneR i26@--> axes
-    sceneR -.-> prof
-
-    parser -.-> scope
-    flatten -.-> scope
-
-    uicp i27@--> actions
-    uicp -.-> scenes
-    uicp -.-> docrows
-    uicp i28@--> menu
-    uicp i29@--> color
-    uicp -.-> prof
-    docrows -.-> layout
-    docrows -.-> replay_ann
-    replay_ann -.-> replay
-    menu i30@--> actions
-    menu -.-> scenes
-    color e14@==> core
-    export -.-> layout
-
-    classDef animateE stroke:#f50,stroke-dasharray: 9\,5,stroke-dashoffset: 900,animation: dash 90s linear infinite;
-
-    classDef animateF stroke:#5f0,stroke-dasharray: 9\,5,stroke-dashoffset: 900,animation: dash 90s linear infinite;
-
-    class e1,e2,e3,e4,e5,e6,e7,e8,e9,e10,e11,e12,e13,e14 animateE
-    class i2,i3,i4,i5,i6,i7,i8,i9,i10,i11,i12,i13,i14,i15,i16,i17,i18,i19,i20,i21,i22,i23,i24,i25,i26,i27,i28,i29,i30,i31 animateF
+    SceneUserDrawCallbacks user_draw;
+} SceneRender3DConfig;
 ```
 
-## Render / Model Split
+REPL-specific data belongs in the callback `user_data`, for example a `ReplGeometryRenderPlan`.
 
-For UI and scene layers the convention is paired modules:
+## How `repl_*` Calls the Scene
 
-- **Model** owns state + computation, makes no GL calls.
-- **Panel / render** owns drawing, reads model state, performs no
-  mutations.
+The REPL frame path should build separate snapshots:
 
-Concrete pairs today:
+```text
+SceneRender3DConfig       scene_cfg
+ReplGeometryRenderPlan    geometry_plan
+UiRenderConfig            ui_cfg
+```
 
-| Model | Renderer |
-|-------|----------|
-| `repl_autocomplete` | `ui_autocomplete_panel` |
-| `repl_code_panel_layout` + `repl_code_panel_document` | `ui_panels` |
-| `repl_var_drag` (writeback) | `ui_variable_panel` |
+Then wire the REPL plan into the generic scene callback:
 
-The split is the boundary most likely to be violated by new code —
-keep GL calls out of the model files and keep mutations out of the
-render files.
+```c
+void repl_display_frame(void)
+{
+    SceneRender3DConfig scene_cfg;
+    ReplGeometryRenderPlan geom_plan;
+    UiRenderConfig ui_cfg;
 
-## Current Boundaries
+    repl_geometry_render_plan_build(&geom_plan);
+    scene_render_3d_config_build(&scene_cfg);
 
-- `repl_editor.c` should keep shrinking toward ordered input routing and small
-  editor-local state. It should delegate mutations once it knows which route
-  owns an input event.
-- `repl_actions.c` owns side effects that begin from config rows, F-key/Ctrl-key
-  config shortcuts, and top-level menu items. UI code should ask it to execute
-  actions instead of mutating scenes/files/config directly.
-- `repl_camera_controls.c` owns only viewport camera state after UI routing has
-  decided a mouse event belongs to the scene.
-- `repl_undo.c` owns snapshots and the example-promotion hook that must run
-  before mutating editor state.
-- `repl_clipboard.c` owns selection and clipboard buffers. It mutates commands
-  through `ReplCommandStore` and takes snapshots through `repl_undo.c`.
-- `repl_code_panel_layout.c` owns pure text wrapping for code-panel rows:
-  continuation indent, wrap break choice, row counts, segment lookup, and cursor
-  row mapping. `ui_panels.c`, export visual dumps, and tests should consume this
-  instead of carrying local copies.
-- `repl_code_panel_document.c` owns the higher-level code-panel row model:
-  header/body/footer row counts, replay-extra rows, cursor-follow scrolling,
-  and document-line to command-line hit targets.
-- `repl_replay_annotations.c` owns code-panel replay text expansion: source to
-  flat-command mapping, variable substitution comments, and evaluated command
-  display text.
-- `ui_menu_bar.c` owns top-level menu/dropdown state, menu hit-testing,
-  right-click config cycling, and the inline search slot in the menu bar.
-- `ui_color_picker.c` owns the floating HSV/alpha picker state and literal
-  color swatch rendering/mutation for color commands.
-- `ui_help_overlay.c` owns the modal F1 help overlay.
-- `ui_variable_panel.c` owns the floating variable slider panel rendering,
-  geometry, and hit-test; value mutation happens in `repl_var_drag.c`.
-- `ui_autocomplete_panel.c` owns the floating completion popup renderer;
-  match/selection/hint state lives in `repl_autocomplete.c`.
-- `repl_inline_rename.c` owns the inline scene-rename input buffer and key
-  handling (surfaced through `set_status()`, no dedicated render pass).
-- `repl_var_drag.c` owns the variable slider drag transaction: start/motion/
-  reset, the linear-vs-log value mapping, and the writeback into the
-  predefined-variable table plus matching `CMD_VAR_ASSIGN` sources.
-- `scene_render.c` implements the push-model architecture: once per frame,
-  `scene_render_config_build()` snapshots all rendering state from `repl_state`
-  into `SceneRenderConfig` (scene rect, camera, jitter, quality toggles,
-  grid/axes choices, lighting setup, guide/vertex overlay toggles, and
-  replay-derived limits). This snapshot is the single source of truth for all
-  scene renderers — no scene module reads `repl_state` directly. `FrameRenderContext`
-  carries that config plus derived state such as the Focus-grid vertex and
-  ocean-grid waterline classification. Helper-pass GL state stays local with
-  small `glPushAttrib`/`glPopAttrib` wrappers. All scene renderers accept
-  `FrameRenderContext` and read everything from `config` fields, not globals.
-  `scene_transform_utils.h` provides inline GL matrix helpers (apply/unwind)
-  without requiring `repl_executor.h`. Grid themes live in `scene_grid.c`,
-  axes themes in `scene_axes.c`; focus/ocean/adaptive-plane grid themes remain
-  custom render paths in `scene_grid.c`. Backdrop rendering (`scene_backdrop.c`)
-  and light setup/indicators (`scene_lights.c`) read config fields for animation
-  time, lighting state, and backdrop mode. Polygon outline/current-block
-  highlighting, vertex-number labels, and normal-vector overlays delegate to
-  `scene_overlays.c`, which reimplements cursor-matching logic using only config
-  fields (no `repl_state` or `repl_core.h` calls). Scene-edit guides delegate to
-  `scene_geometry_guides.c` (vertex/normal input guides) and
-  `scene_transform_guides.c` (transform guide planning and drawing) via a
-  shared `SceneGuideSnapshot`.
+    repl_geometry_resolve_clear_color(&geom_plan, scene_cfg.clear_rgba);
 
-## Open Edges
+    scene_cfg.user_draw.draw = repl_geometry_scene_draw_callback;
+    scene_cfg.user_draw.reset = repl_geometry_scene_reset_callback;
+    scene_cfg.user_draw.user_data = &geom_plan;
 
-- `ui_panels.c` still owns render-time iteration over code-panel rows, search
-  match highlights inside source lines, and inline ghost/hint text rendering
-  next to the input line.
-- `repl_editor.c` still owns hidden-code-panel restore rules and the main
-  keyboard/special/mouse route ordering.
-- A few semantic value editors still rewrite fields inside existing commands
-  directly (`ui_color_picker.c`, `repl_var_drag.c`, and declaration slot
-  repair in commit paths). Bulk source-array restores now go through
-  `repl_command_store_load()`.
-- `sample.h` stays the shared compatibility header, while `repl_config.h`
-  owns the keyed config descriptor API and `repl_state.h` carries the typed
-  runtime-state facade. All runtime state (source document, flat program,
-  editor input, selection, clipboard, camera, pointer, viewport, presentation
-  config, search, autocomplete, render settings, replay) is now behind that
-  facade; descriptor tables stay module-local.
+    scene_render_3d_scene(&scene_cfg);
 
-## Naming Notes
+    ui_render_config_build(&ui_cfg);
+    ui_render(&ui_cfg);
+}
+```
 
-File prefixes partition the tree by responsibility:
+`scene_render_3d_scene()` does not know that `user_data` points at a REPL geometry plan.
 
-- `repl_*` — pipeline, input, domain models. No OpenGL calls
-  (except `repl_core.c`, which owns the init wrapper and the display
-  callback, and `repl_executor.c`, which dispatches GL drawing
-  for flat commands).
-  **Public API:** `repl_<module>_<action>()` naming. Headers document
-  module overview, lifecycle integration, and all public functions.
-- `ui_*` — 2D rendering (code panel + floating overlays/popups).
-  These files call OpenGL and read state from the `repl_*` models.
-  **Public API:** `ui_<module>_<action>()` naming. Headers document
-  UI component purpose, rendering model, and input handling.
-- `scene_*` — 3D viewport rendering.
-  **Public API:** `scene_<module>_<action>()` naming. Headers document
-  rendering phase, guide/overlay purpose, and integration with frame pipeline.
-- Bare (no prefix): `sample`, `cmd_format`, `gl_stub_counts`.
+## Replay Handling
 
-Deliberate exceptions that stay under `repl_*` even though they're
-UI-adjacent:
+Replay should be handled inside the REPL geometry callback, not by adding a scene-level replay callback.
 
-- `repl_code_panel_layout` and `repl_code_panel_document` — pure
-  text-wrap and row-count models. No GL. Shared by `ui_panels.c`,
-  export dumps, and tests, so they belong with the models rather
-  than with the renderers.
-- `repl_replay_annotations` — source-to-flat-command text
-  expansion. Also pure (no GL); same argument.
-- `repl_inline_rename`, `repl_var_drag` — input buffers / drag
-  transactions. They mutate state; they don't render.
+```text
+scene_render_3d_scene
+  -> generic user draw callback
+       -> repl_geometry_render_main
+            -> normal draw
+            -> replay-limited draw
+            -> replay fade/highlight draw
+```
 
-The prefix tells you the layer. Read the public header file (`*.h`) for
-comprehensive API documentation including module overview, lifecycle,
-and detailed function descriptions. Read the file's top-of-file
-comment in the implementation (`.c`) for implementation notes.
+If full fade batches become too costly or invasive, simplify the replay visual model:
 
-### Layering rules
+```text
+fade only the most recently completed vertex or polygon
+```
 
-Two hard rules govern the prefix groups:
+Candidate model:
 
-**1. GL/GLUT isolation.** Live OpenGL/GLU drawing calls only appear in
-`scene_*.c`, `ui_*.c`, and `repl_executor.c`. GLUT input/feedback
-APIs (`glutPostRedisplay`, `glutSetCursor`, `glutGetModifiers`,
-`glutSwapBuffers`) only appear in `sample.c` and `repl_editor.c`,
-funnelled through local helpers
-(`editor_request_redraw()`, `editor_set_cursor()`,
-`repl_editor_active_modifiers()`). The public header `repl_editor.h`
-exports `repl_editor_active_modifiers()` for use by repl_actions.c;
-other helpers remain static to repl_editor.c. `repl_*.c` files (other
-than the executor) and `sample.h` do not call GL or GLU. Text emission
-of GL command names — `repl_export.c`, `repl_examples.c`,
-`repl_command_spec.c`, `repl_replay_annotations.c`,
-`repl_parser.c` — is REPL source, not a live call site.
+```c
+typedef enum ReplReplayHighlightKind {
+    REPL_REPLAY_HIGHLIGHT_NONE,
+    REPL_REPLAY_HIGHLIGHT_VERTEX,
+    REPL_REPLAY_HIGHLIGHT_POLYGON,
+} ReplReplayHighlightKind;
 
-**2. UI/scene independence.** `ui_*` and `scene_*` are sibling
-rendering layers; neither includes the other's headers. They
-communicate only through `repl_*` models above them and through
-the orchestrator in `repl_core.c`'s `display_func()`, which is
-the sole master that dispatches `render_3d_scene()` and the 2D
-overlay sequence per frame. Both layers may freely include
-`repl_*` headers (pipeline + models) and project-agnostic
-header libraries from `include/` (e.g. `<gl_2d.h>` for the
-generic `gl2d_begin`/`gl2d_end`/`gl2d_draw_string` primitives).
-Generic GL utilities live in `include/`, not in either layer.
+typedef struct ReplReplayHighlight {
+    ReplReplayHighlightKind kind;
+    int flat_begin_idx;
+    int flat_end_idx;
+    float alpha;
+} ReplReplayHighlight;
+```
 
-Grandfathered exceptions:
+That keeps replay policy in `repl_*` and keeps the scene generic.
 
-- `scene_render.c` includes `ui_panels.h` for `scene_rect()`. This is
-  a read-only layout coordinate, not render dispatch. Tracked for
-  removal via a future move of `scene_rect()` into a `repl_*`
-  layout model.
+## Boundary Rules
 
-The grep guards `make check-gl-boundaries` and
-`make check-layer-coupling` enforce both rules.
+### Live OpenGL / GLU calls
 
-## Where to put new code
+Allowed:
 
-- Adding a GL command? Pipeline layer — start in `repl_parser.c`
-  (`parse_command`), then `repl_executor.c` (`execute_commands`),
-  and `repl_flatten.c` if it needs expansion.
-- Adding a keyboard shortcut? Editor layer — `repl_editor.c` if
-  it's a new route, `repl_actions.c` if it piggybacks an existing
-  config toggle.
-- Adding a visual overlay? 2D UI layer (new `ui_*.c`) or scene
-  layer (extend `scene_render.c` overlays) depending on whether it
-  lives in the code panel or the viewport. If it has both a model
-  half and a render half, split them into a `repl_*` (model) and
-  `ui_*` (render) pair.
-- Adding example content? `repl_examples.c`.
-- Adding persisted state? Add the focused field/accessor in `repl_state.h`
-  and register the storage in `repl_state.c`. Add a temporary compat extern
-  only when existing callers cannot migrate in the same slice.
+```text
+scene_*.c
+ui_*.c
+repl_executor.c
+sample.c        only for GLUT/window lifecycle and buffer swap
+```
+
+Avoid live GL calls in general `repl_*` files. Text emission of GL command names in parser/export/example code is not a live GL call.
+
+### GLUT calls
+
+Allowed:
+
+```text
+sample.c
+repl_editor.c   only through local editor helpers where possible
+```
+
+### Scene purity
+
+Pure scene modules should consume only scene config/context and neutral helpers. They should not read:
+
+```text
+repl_state_* APIs
+g_cmds / g_flat_cmds
+g_predef_vars
+repl_replay_* state
+source command indexes
+edit-line state
+FlatProgramView
+```
+
+The REPL frame compositor may build scene config from REPL state. The scene renderer should consume the resulting config.
+
+### UI / scene independence
+
+`ui_*` and `scene_*` are sibling view layers. They should not include each other's headers. Shared render-neutral helpers belong under `include/`.
+
+## Where to Put New Code
+
+- New REPL syntax: `repl_parser.c`, `repl_command_spec.c`, `repl_commit.c`, `repl_flatten.c`, and `repl_executor.c` as needed.
+- New user-geometry execution behavior: prefer `repl_executor.c` or a deliberately named executor-adjacent file.
+- New geometry model/plan data: `repl_geometry_*`.
+- New replay policy: `repl_replay.c` / `repl_replay_plan.c`.
+- New 3D world decorator: `scene_*`.
+- New 3D REPL annotation: REPL-owned plan plus executor/callback rendering.
+- New 2D UI: `ui_*` renderer plus `repl_*` model/action code if mutation is required.
+- New command mutation: use `repl_command_store_*`.
+
+## Open Refactor Edges
+
+- `SceneRenderConfig` currently carries too much REPL execution/replay data. Split it into a scene-only config plus REPL-owned geometry/overlay plans.
+- `scene_render_3d_scene()` should accept an explicit config argument rather than rebuilding all state internally.
+- `scene_overlays.c`, `scene_geometry_guides.c`, and `scene_transform_guides.c` currently sound scene-owned but contain REPL-aware concepts. Either migrate them toward REPL geometry annotation modules or make their input generic enough that scene ownership is honest.
+- Replay fade rendering should move out of `scene_render.c`. The scene should call a generic callback; the REPL callback should decide how replay is drawn.
 
 ## Header Documentation Standard
 
-Each module's public API header (`*.h`) follows a consistent structure:
+Each public API header should document:
 
-1. **Module overview** — One-paragraph description of the module's role,
-   key abstractions, and primary use cases. Example: "Renders optional
-   visual overlays on top of user geometry: polygon outlines (highlighting
-   current editing context), vertex numbers (for reference), normal vectors
-   (showing surface orientation), and vertex position guides."
-
-2. **Lifecycle documentation** — When/where/how the module is initialized,
-   updated per-frame, and what state it maintains. Example: "Toggled via F5
-   key or config menu. Respects depth-masking state so they don't interfere
-   with orbit target highlighting."
-
-3. **Type definitions** — Shared structs and enums (if any) used by the API.
-
-4. **Function documentation** — Detailed per-function headers describing:
-   - Purpose and return value
-   - Parameters with types and meanings
-   - When the function is called (frame phase, input event, etc.)
-   - Integration points with other modules
-   - Usage constraints or preconditions
-
-All headers are stand-alone: you can read a header from top to bottom and
-understand the module's public API without reading the implementation or
-other headers. Cross-module details reference file names for navigation.
+1. Module responsibility and ownership boundary.
+2. Lifecycle: initialization, per-frame calls, mutation rules.
+3. Public types and what layer owns them.
+4. Public functions, parameters, return values, and preconditions.
+5. Important cross-module invariants, especially GL/state ownership and callback ordering.
