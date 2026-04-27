@@ -1,6 +1,6 @@
 /*
  * test_scene_render.c - Unit tests for scene_* modules (grid, axes, backdrop, lights, overlays).
- * Tests operate independently of repl_state using stub GL headers.
+ * Tests operate independently of repl_state with a minimal GL context.
  */
 #include "scene_grid.h"
 #include "scene_axes.h"
@@ -12,6 +12,8 @@
 
 #include <stdio.h>
 #include <string.h>
+#include <GL/gl.h>
+#include <GLUT/glut.h>
 
 static int g_run = 0;
 static int g_pass = 0;
@@ -405,9 +407,15 @@ static void test_render_mode_toggles(void) {
     ASSERT_TRUE("all toggles tested", 1);
 }
 
-int main(void) {
+int main(int argc, char **argv) {
+    /* Initialize GLUT and create a minimal window for GL context */
+    glutInit(&argc, argv);
+    glutInitDisplayMode(GLUT_DOUBLE | GLUT_RGBA | GLUT_DEPTH);
+    glutInitWindowSize(800, 600);
+    glutCreateWindow("test_scene_render");
+
     printf("==> test_scene_render\n");
-    printf("Scene render modules independent of repl_state\n\n");
+    printf("Scene render modules with minimal GL context\n\n");
 
     test_config_defaults();
     test_frame_ctx_defaults();
