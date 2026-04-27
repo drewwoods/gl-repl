@@ -79,16 +79,18 @@ Run all: `make test`
 
 | File | Responsibility |
 |------|----------------|
-| `sample.c` | GLUT callback wrappers, `main()`, window setup, buffer swap |
+| `sample.c` | GLUT callback registration, `main()`, window setup, buffer swap; forwards directly to `imrepl_ctrl_*` |
 | `sample.h` | Shared types (`GLCmd`, `CmdType`, `SceneLight`), defaults, stateless helpers, compatibility includes |
+| `imrepl_ctrl.c` | App-frame controller: `imrepl_ctrl_display_frame`, `imrepl_ctrl_reshape`, `imrepl_ctrl_init_gl`; builds `SceneRenderConfig`, calls scene/UI renderers |
+| `imrepl_ctrl.h` | Controller public surface: display, reshape, init-GL entrypoints |
 | `repl_config.h` | `ReplConfigKey` / `ReplConfigItem` descriptor API for keyed config access |
-| `repl_core.c` | Normalization, display callback, init wrapper |
+| `repl_core.c` | Normalization pipeline (`repl_parse_and_normalize*`), reformatter, startup helpers; being dissolved into natural owners (R10) |
 | `repl_parser.c` | REPL source-line parser, expression validation, canonical `GLCmd.source[]` generation |
 | `repl_parser.h` | Parser entrypoints (`repl_parse_command*`, `repl_parse_command_ctx`) and `ReplParseContext` |
 | `repl_source_scope.c` | Source prefix-depth cache, indentation helpers, block lookup |
 | `repl_source_scope.h` | Source-scope query API (`block_depth_at`, `find_block_end`, indent helpers) |
 | `repl_commit.c` | Float declarations, variable assignments, structured block commits, close-brace commits |
-| `repl_core.h` | Public API (parse, flatten, display, input callbacks, user scene + workspace) |
+| `repl_core.h` | Public API (parse, flatten, user scene + workspace); stale GLUT callback declarations removed in R10-phase1 |
 | `repl_core_internal.h` | Test-visible internals (normalize/commit pipeline, `feed_line`, `load_line_to_input`, `repl_promote_example_if_needed`) |
 | `repl_state.h` | Typed runtime-state facade, reset helpers, and focused accessors over the live REPL state |
 | `repl_editor.c` | Keyboard/mouse routing, commit orchestration, feed-line entrypoint |
@@ -125,7 +127,7 @@ Run all: `make test`
 | `scene_grid.h` | Grid render entrypoint |
 | `scene_axes.c` | Axes theme rendering |
 | `scene_axes.h` | Axes render entrypoint |
-| `scene_render.h` | Declares `render_3d_scene()` |
+| `scene_render.h` | Declares `scene_render_3d_scene(const SceneRenderConfig *)` |
 | `scene_backdrop.c` | Backdrop mode dispatch and deterministic cityscape renderer |
 | `scene_backdrop.h` | Backdrop render entrypoint |
 | `scene_lights.c` | Ambient init, light setup/reset, and visible light indicator overlay |
@@ -152,8 +154,10 @@ Run all: `make test`
 - New GL commands: add to `CmdType` enum in `sample.h`, then handle in
   `parse_command()` in `repl_parser.c`, `execute_commands()` in
   `repl_executor.c`, and `flatten_range()` in `repl_flatten.c`
-- Keyboard bindings: `keyboard_func()` for ASCII keys (Ctrl+X = key code X-64),
-  `special_func()` for F-keys/arrows in `repl_editor.c`
+- Keyboard bindings: `repl_editor_handle_key()` for ASCII keys (Ctrl+X = key
+  code X-64), `repl_editor_handle_special()` for F-keys/arrows. Currently
+  `repl_editor.c` also owns the cross-layer routing; Phase 2 moves that to
+  `imrepl_ctrl.c` (see R in `feature/push-architecture-refinement.md`)
 - Expression variables: `ExprVar` struct in `repl_eval.h`, predefined set
   accessible via `repl_state_variables()` and managed by `declare_predef_var()`
 
@@ -328,19 +332,22 @@ example switch. Deferred — see `feature/multi-user-scenes.md`.
 
 ### Rendering Pipeline
 
-`display_func()` in `repl_core.c` drives each frame:
-1. Clear color/depth/accum buffers, save predef var values
-2. If accumulation-buffer AA is enabled (`repl_state_render()->accum_aa_enabled`),
-   loop `accum_samples` times with sub-pixel jitter offsets from a static jitter
-   table, calling `render_3d_scene()` per pass and accumulating with
-   `glAccum(GL_ACCUM, 1/samples)`; final `glAccum(GL_RETURN, 1.0)` averages into
-   framebuffer. The jitter is applied as a frustum shift in `render_3d_scene()`
-   via `accum_jitter_x/y` → adjusted `glFrustum()` bounds
-3. `render_3d_scene()` in `scene_render.c`: projection setup → camera
-   transforms → `execute_commands()` (user geometry fill pass) → replay
-   fade batches → grid (`scene_grid.c`) / axes (`scene_axes.c`) /
-   orbit-target (depth-masked, blended) → polygon outline overlays →
-   vertex number/normal/guide overlays
+`imrepl_ctrl_display_frame()` in `imrepl_ctrl.c` drives each frame.
+`sample.c` registers the GLUT display callback and forwards directly — there
+is no shim layer.
+1. Rebuild autonormals and flat program if dirty; save predef var values;
+   prepare replay frame if active; update export/camera strings
+2. Build `SceneRenderConfig` from REPL state; if accumulation-buffer AA is
+   enabled (currently read from `repl_state_render()`; R1a moves this to
+   config fields), call `scene_render_3d_scene(&cfg)` once per jitter sample.
+   Jitter is applied as a scene-local frustum shift inside the scene function —
+   it is no longer a config field
+3. `scene_render_3d_scene(&cfg)` in `scene_render.c`: viewport/clear setup →
+   projection → camera → execute user geometry via `SceneExecuteProgramFn`
+   callback → replay fade batches (transitional; R1b replaces with
+   `ReplayFadePlan` snapshot iteration) → grid/axes/backdrop/orbit-target →
+   polygon-outline, vertex, normal, and guide overlays → 2D replay HUD
+   (transitional; R1c moves to `ui_replay_hud.c`)
 4. 2D overlays: code panel, autocomplete popup, example dropdown,
    variable slider panel, config menu, help overlay, search overlay
 

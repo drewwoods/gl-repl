@@ -55,7 +55,6 @@
 #include "repl_export.h"
 #include "repl_core.h"
 #include "repl_core_internal.h"
-#include "imrepl_ctrl.h"
 #include "repl_command_spec.h"
 #include "repl_command_store.h"
 #include "repl_parser.h"
