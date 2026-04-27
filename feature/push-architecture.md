@@ -1,5 +1,11 @@
 # scene_* Push-Model Architecture
 
+> Superseded by
+> [`feature/push-architecture-refinement.md`](push-architecture-refinement.md).
+> The current direction is Option B controller extraction through
+> `imrepl_ctrl.c`, not the generic scene-callback/scene-plugin boundary
+> described below.
+
 ## Context
 
 Today all `scene_*.c` files pull state at render time from `repl_state.h` and
