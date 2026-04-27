@@ -27,6 +27,11 @@ alone in this phase; renaming them to `imrepl.c` / `imrepl.h` is a later
 mechanical cleanup. Replay fade simplification, 2D replay HUD relocation, and
 broader input/UI coupling cleanup remain follow-ups.
 
+Implementation status: steps 1-7 have already landed in the repository and are
+validated. This document now records the completed Phase 1 slice plus the
+remaining follow-ups, with the documentation pass as the only Phase 1 step
+still being actively aligned.
+
 ## Review Corrections
 
 This document incorporates the gaps found while comparing it with
@@ -102,17 +107,17 @@ Out of scope:
 
 | File | Role in this plan |
 |------|-------------------|
-| `repl_core.c` | Source for current display/reshape/init wrappers, scene config build, execute adapter, and per-frame orchestration. These move or forward to `imrepl_ctrl.c`. |
+| `repl_core.c` | Source for legacy display/reshape/init wrappers and thin forwarding hooks. Per-frame orchestration now lives in `imrepl_ctrl.c`. |
 | `repl_core.h` | Keep legacy `repl_display_func`, `repl_reshape_func`, and `repl_init_gl` declarations as wrappers for `sample.c`; update comments after the move. |
-| `imrepl_ctrl.c` | New controller translation unit. Owns frame display, reshape, GL-init wiring, scene config construction, focus/guide snapshot construction, and UI render ordering. |
+| `imrepl_ctrl.c` | Controller translation unit. Owns frame display, reshape, GL-init wiring, scene config construction, focus/guide snapshot construction, and UI render ordering. |
 | `imrepl_ctrl.h` | New controller public surface: `imrepl_ctrl_init_gl`, `imrepl_ctrl_display_frame`, `imrepl_ctrl_reshape`, and any test-visible scene-config builder if needed. |
 | `scene_render.c` | Consumes explicit `SceneRenderConfig *`; no config rebuild; no scene-side jitter writes; focus/guide snapshot reads come from config. Replay fade/HUD code remains transitional. |
 | `scene_render.h` | Update `scene_render_3d_scene` signature; remove `scene_render_config_build` declaration. |
-| `scene_render_types.h` | Add config fields for focus/guide snapshots; remove `accum_jitter_x/y` from config once projection receives jitter via frame context/local pass state. |
+| `scene_render_types.h` | Carries focus/guide snapshots; scene-local jitter no longer lives in config. |
 | `scene_guides_shared.h` | May remain the shared guide snapshot type used by controller and scene guide renderers. |
 | `sample.c` | Prefer no churn: keep calling legacy `repl_*` wrappers. Switch to `imrepl_ctrl_*` only if the wrapper path becomes awkward. |
 | `sample.h` | Legacy shared type/constant header. Do not rename in Phase 1; that would touch most files and should be a separate mechanical commit. |
-| `Makefile` | Extend existing boundary checks instead of adding brittle duplicate checks. |
+| `Makefile` | Existing boundary checks are already in place; extend them instead of adding brittle duplicate checks. |
 
 `scene_overlays.c`, `scene_geometry_guides.c`, `scene_transform_guides.c`,
 `scene_grid.c`, `scene_axes.c`, `scene_backdrop.c`, and `scene_lights.c` are not

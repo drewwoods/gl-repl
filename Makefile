@@ -93,7 +93,7 @@ else
 COVERAGE_LDFLAGS =
 endif
 
-.PHONY: all clean test test-detailed test_detailed test-stubs lines debug coverage glut help bench bench-csv check-gl-boundaries check-layer-coupling
+.PHONY: all clean test test-detailed test_detailed test-stubs lines debug coverage glut help bench bench-csv check-gl-boundaries check-layer-coupling check-controller-boundaries check-scene-no-repl-state-mut
 
 all: sample
 
@@ -209,7 +209,33 @@ check-layer-coupling: ## Verify UI and scene layers don't include each other's h
 	@! grep -nE '#include\s+"ui_' scene_*.c scene_*.h || (echo "ERROR: scene files must not include UI headers" && exit 1)
 	@echo "Layer coupling OK"
 
-test: check-gl-boundaries check-layer-coupling $(TEST_BINS) ## Run the full automated test suite.
+
+check-controller-boundaries: ## Verify controller owns the scene/UI wiring boundary.
+	@echo "Checking controller boundaries..."
+	@bad=$$(grep -lE '#[[:space:]]*include[[:space:]]+"scene_' repl_*.c imrepl_ctrl.c \
+		| grep -v '^imrepl_ctrl\.c$$' || true); \
+	if [ -n "$$bad" ]; then \
+		echo "ERROR: scene headers included outside imrepl_ctrl.c:"; \
+		echo "$$bad"; exit 1; \
+	fi
+	@bad=$$(grep -lE '#[[:space:]]*include[[:space:]]+"ui_' repl_*.c imrepl_ctrl.c \
+		| grep -vE '^(imrepl_ctrl|repl_(actions|editor|export))\.c$$' || true); \
+	if [ -n "$$bad" ]; then \
+		echo "ERROR: new ui headers included outside approved exceptions:"; \
+		echo "$$bad"; exit 1; \
+	fi
+	@echo "Controller boundaries OK"
+
+check-scene-no-repl-state-mut: ## Verify scene code does not mutate REPL state directly.
+	@echo "Checking scene renderers do not mutate REPL state..."
+	@bad=$$(grep -nE 'repl_state_[A-Za-z0-9_]*_mut[[:space:]]*\(' scene_*.c || true); \
+	if [ -n "$$bad" ]; then \
+		echo "ERROR: scene files mutate REPL state:"; \
+		echo "$$bad"; exit 1; \
+	fi
+	@echo "Scene mutation boundary OK"
+
+test: check-gl-boundaries check-layer-coupling check-controller-boundaries check-scene-no-repl-state-mut $(TEST_BINS) ## Run the full automated test suite.
 	@REPL_EXPORT_CC="$(CC)" \
 	REPL_EXPORT_COMPILE_CFLAGS='$(BUILD_CFLAGS) $(CFLAGS)' \
 	TEST_JOBS="$(TEST_JOBS)" \

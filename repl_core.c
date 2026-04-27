@@ -62,7 +62,6 @@
 #include "repl_source_scope.h"
 #include "repl_flatten.h"
 #include "cmd_format.h"
-#include "ui_panels.h"
 #include "prof.h"
 #include "repl_state.h"
 

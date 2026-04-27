@@ -103,8 +103,6 @@ static SceneRenderConfig make_test_config(void) {
     cfg.cam_ty = 0.0f;
     cfg.cam_tz = 0.0f;
     cfg.cam_motion_glow = 0.0f;
-    cfg.accum_jitter_x = 0.0f;
-    cfg.accum_jitter_y = 0.0f;
     cfg.multisample_enabled = 0;
     cfg.line_smooth_enabled = 0;
     cfg.wireframe = 0;

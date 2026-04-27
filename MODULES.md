@@ -24,9 +24,8 @@ imrepl.c/h    = future app shell/shared header name, replacing sample.c/h
 snapshots. They should not own REPL mutation paths.
 
 `repl_*` owns the user program, editor/controller behavior, replay policy, and
-the data snapshots passed to the views. After controller extraction,
-`imrepl_ctrl.c` is the only file that should own frame-level scene/UI render wiring.
-It is deliberately outside the `repl_*` namespace.
+the data snapshots passed to the views. `imrepl_ctrl.c` owns frame-level
+scene/UI render wiring. It is deliberately outside the `repl_*` namespace.
 
 `sample.c` and `sample.h` keep their current names during controller extraction
 to avoid burying architecture changes under include churn. Rename them to
@@ -89,8 +88,8 @@ annotations consume the flattened program or snapshots derived from it.
 
 | Module | Role |
 |--------|------|
-| `repl_core` | Core REPL orchestration, normalization wrapper, public lifecycle wrappers until controller extraction is complete |
-| `imrepl_ctrl` | Planned frame controller: display/reshape, scene config build, scene/UI render ordering |
+| `repl_core` | Core REPL model/pipeline, normalization wrapper, and legacy lifecycle wrappers that forward to the controller |
+| `imrepl_ctrl` | App-frame controller: display/reshape, scene config build, scene/UI render ordering |
 | `repl_command_spec` | Declarative descriptors for fixed-arity GL-like commands |
 | `repl_parser` | Source-line parser and canonical `GLCmd.source[]` generation |
 | `repl_source_scope` | Source prefix-depth cache, indent helpers, block lookup |
@@ -148,8 +147,8 @@ on the per-frame config or guide snapshots.
 
 | Module | Role |
 |--------|------|
-| `scene_render` | 3D frame setup, viewport, clear, projection, camera, accumulation loop, user-geometry execution point, transitional replay/HUD code |
-| `scene_render_types` | Scene config/context types, including the current narrow execution hook |
+| `scene_render` | 3D frame setup from explicit config, viewport, clear, projection, camera, accumulation loop, user-geometry execution point, transitional replay/HUD code |
+| `scene_render_types` | Scene config/context types, including focus/guide snapshots and the narrow execution hook |
 | `scene_grid` | Grid theme rendering |
 | `scene_axes` | Axes theme rendering |
 | `scene_backdrop` | Backdrop/environment rendering |
@@ -161,8 +160,10 @@ on the per-frame config or guide snapshots.
 | `scene_overlays` | REPL-aware outlines, labels, normals |
 
 Neutral scene files should stay free of REPL state access. `scene_render.c`
-still has transitional direct REPL reads for focus/guide assembly, replay HUD,
-fade batches, and jitter mutation; the refinement plan tracks those gaps.
+still has transitional direct REPL reads for replay HUD and a few replay/
+presentation fields; focus/guide assembly and accumulation jitter now come
+from the controller or local pass state, and the remaining gaps are tracked as
+replay follow-ups.
 
 ### 5. 2D UI rendering
 
@@ -199,7 +200,7 @@ UI renderers read models and draw. Mutations go through `repl_actions`,
 is allowed to carry REPL-aware data because there is one frontend and no plugin
 host requirement.
 
-It should include:
+The controller builds it once per frame. It should include:
 
 * scene rectangle and window dimensions
 * camera pose and camera-motion glow
@@ -209,6 +210,9 @@ It should include:
 * guide/focus/replay snapshots needed by 3D overlay passes
 * the existing narrow execution hook, until direct executor call cleanup is
   worth doing
+
+Scene-local jitter no longer belongs in the config. `FrameRenderContext` holds
+the per-pass state the scene helpers share.
 
 It should not require `scene_render.c` to call `scene_render_config_build()` or
 pull from `repl_state_*` during the frame.
@@ -264,12 +268,12 @@ render-neutral helpers belong in explicit shared headers.
 
 ## Open Refactor Edges
 
-* Extract `imrepl_ctrl.c` and move display/config orchestration out of
-  `repl_core.c`.
-* Make `scene_render_3d_scene()` take an explicit config argument.
-* Remove scene-side writes to `repl_state_render_mut()->accum_jitter_*`.
-* Move focus vertex and guide snapshot assembly out of `scene_render.c`.
-* Move 2D replay HUD out of `scene_render.c`.
+Completed in code: controller extraction, explicit `SceneRenderConfig` handoff,
+focus/guide snapshot construction, and scene-local accumulation jitter.
+
+Remaining follow-ups:
+
 * Simplify replay fade rendering, then slim `SceneRenderConfig`.
+* Move the 2D replay HUD out of `scene_render.c`.
 * Rename `sample.c` / `sample.h` to `imrepl.c` / `imrepl.h` in a dedicated
   mechanical cleanup.
