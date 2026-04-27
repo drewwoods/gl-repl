@@ -321,7 +321,8 @@ clean: ## Remove built binaries and object files.
 		$(TEST_BINS) $(addsuffix .dSYM,$(TEST_BINS)) \
 		$(BENCH_BINS) $(addsuffix .dSYM,$(BENCH_BINS)) \
 		build/coverage/lcov.info build/coverage/html \
-		build
+		build \
+		callgraph*.mmd callgrind.out*
 
 glut: ## Rebuild using the Apple GLUT framework instead of freeglut.
 	$(MAKE) clean
@@ -329,6 +330,51 @@ glut: ## Rebuild using the Apple GLUT framework instead of freeglut.
 		BUILD="$(BUILD)" \
 		CFLAGS="$(CFLAGS) -DUSE_GLUT" \
 		GL_LDFLAGS="$(GLUT_GL_LDFLAGS)"
+
+# Call graph generation targets -----------------------------------------------
+
+callgraph-static: ## Generate static call graph using cflow -> Mermaid diagram.
+	@if ! command -v cflow &> /dev/null; then \
+		echo "ERROR: cflow not found. Install with: brew install cflow"; exit 1; \
+	fi
+	@echo "Generating static call graph from $(SRCS)..."
+	@cflow $(SRCS) 2>/dev/null | python3 scripts/cflow_to_mermaid.py > callgraph-static.mmd
+	@echo "Call graph saved to callgraph-static.mmd"
+	@echo "Visualize at: https://mermaid.live or with: npx @mermaid-js/mermaid-cli"
+
+callgraph-static-entry: ## Generate call graph from specific entry point (ENTRY=function_name).
+	@if ! command -v cflow &> /dev/null; then \
+		echo "ERROR: cflow not found. Install with: brew install cflow"; exit 1; \
+	fi
+	@if [ -z "$(ENTRY)" ]; then \
+		echo "ERROR: specify entry point with ENTRY=function_name"; \
+		echo "  Example: make callgraph-static-entry ENTRY=imrepl_ctrl_display_frame"; exit 1; \
+	fi
+	@echo "Generating static call graph from $(ENTRY)..."
+	@cflow -m $(ENTRY) $(SRCS) 2>/dev/null | python3 scripts/cflow_to_mermaid.py > callgraph-$(ENTRY).mmd
+	@echo "Call graph saved to callgraph-$(ENTRY).mmd"
+
+callgraph-profile: sample ## Generate profile-based call graph using Valgrind callgrind.
+	@if ! command -v valgrind &> /dev/null; then \
+		echo "ERROR: valgrind not found. Install with: brew install valgrind"; exit 1; \
+	fi
+	@if ! command -v callgrind_annotate &> /dev/null; then \
+		echo "ERROR: callgrind_annotate not found (part of valgrind)"; exit 1; \
+	fi
+	@if [ -z "$(PROG)" ]; then \
+		echo "Running sample with no args for default 5 seconds..."; \
+		PROG="./sample"; \
+		timeout 5 valgrind --tool=callgrind --callgrind-out-file=callgrind.out $$PROG 2>/dev/null || true; \
+	else \
+		echo "Running: $$PROG"; \
+		valgrind --tool=callgrind --callgrind-out-file=callgrind.out $$PROG 2>/dev/null; \
+	fi
+	@if [ -f callgrind.out ]; then \
+		callgrind_annotate callgrind.out 2>/dev/null | python3 scripts/callgrind_to_mermaid.py > callgraph-profile.mmd; \
+		echo "Profile-based call graph saved to callgraph-profile.mmd"; \
+	else \
+		echo "ERROR: callgrind.out not generated"; exit 1; \
+	fi
 
 help: ## Show available targets and build-mode notes.
 	@printf "Immediate-mode REPL Make targets\n\n"
