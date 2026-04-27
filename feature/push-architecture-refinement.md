@@ -2,549 +2,514 @@
 
 ## Context
 
-The current push-model work decouples render modules from live `repl_state` reads by
-building per-frame snapshots. That is the right local direction, but the broader
-architecture can be cleaned up further by separating three concepts that are currently
-interleaved inside the 3D scene path:
+The current push-model work moved scene helpers toward per-frame config/context snapshots. That is good, but the boundary is still muddy.
 
-1. **Scene frame / environment** — viewport, projection, camera, clear color, quality
-   state, grid, axes, backdrop, lights, orbit target.
-2. **REPL geometry** — the user-authored OpenGL program emitted by the REPL executor
-   from `FlatProgramView`.
-3. **REPL-aware geometry annotations** — current polygon outline, vertex labels,
-   normal vectors, edit guides, transform guides, replay tess preview, replay fades,
-   and replay HUD.
-
-The important conceptual shift is this:
+The desired architecture has three components:
 
 ```text
-The scene is the stage.
-The REPL executor draws the actor.
-The REPL overlays annotate the actor.
-The UI draws the editor around it.
+repl_*   = language/controller/model, including geometry/replay/annotation plans
+scene_*  = independent 3D frame/decorator view
+ui_*     = independent 2D UI view
 ```
 
-Today `scene_render.c` still acts as the master of the REPL geometry pass: it prepares
-the scene, calls the executor callback, handles replay fade execution, and then draws
-both decorative scene helpers and REPL-specific overlays. The callback abstraction is
-useful, but ownership is only half-inverted: the executor is injected, while
-`scene_render.c` still decides when and how user geometry is emitted.
+The scene should be an independent module that can decorate a 3D world while calling a generic user callback to draw user geometry.
 
-This refinement proposes moving that ownership out of `scene_render.c`. The top-level
-frame compositor (`repl_core.c`, or a future `frame_render.c`) should orchestrate scene,
-REPL geometry, REPL overlays, and 2D UI as separate layers.
+The REPL should provide that callback.
 
----
+The scene should not know that the callback is backed by a REPL flat program.
 
 ## Goal
 
-Make `scene_*` able to render a complete camera/environment frame without knowing how
-REPL geometry is executed.
+Make `scene_*` own the 3D frame and 3D decorators, while `repl_*` owns the user geometry/replay/annotation model.
 
-The scene layer should not own the user program. It should own the 3D world the user
-program is viewed inside.
+The target relationship is:
 
----
+```text
+repl builds SceneRender3DConfig
+repl builds ReplGeometryRenderPlan
+repl installs generic callbacks into SceneRender3DConfig
+scene_render_3d_scene(&scene_cfg) renders the 3D frame
+scene calls the generic callbacks at defined hook points
+REPL callback draws geometry/replay/annotations through the executor boundary
+```
 
 ## Non-Goals
 
-- Do not change visual behavior in this phase.
-- Do not remove the REPL executor callback immediately if it is still useful as a
-  seam for tests or alternate geometry sources.
-- Do not make user geometry a 2D overlay. It must still render inside the same 3D
-  projection, camera, lighting, depth, and quality state.
-- Do not move editor/input mutation paths as part of this refinement.
+- Do not change the REPL language.
+- Do not change exported file compatibility.
+- Do not change visual behavior unless a simplification is explicitly chosen.
+- Do not make user geometry a 2D overlay.
+- Do not let generic `repl_*` files freely call OpenGL.
+- Do not make scene modules depend on REPL source/replay state.
 
----
+## Current Problem
 
-## Current Shape
+The current `SceneRenderConfig` is doing too much.
 
-The current design already has a useful seam:
+It contains scene data, but it also carries execution callback data, flat program data, replay fields, source/edit-line fields, and overlay fields.
 
-```c
-typedef void (*SceneExecuteProgramFn)(float alpha_scale,
-                                      int skip_geom_before_pc,
-                                      int flat_cmd_count,
-                                      FlatProgramView program,
-                                      void *user_data);
-```
+That makes scene rendering look independent locally, while still encoding REPL semantics in the scene config.
 
-`SceneRenderConfig` carries `execute_fn`, `execute_reset_fn`, and `flat_program`, so
-`scene_render.c` does not need to call `repl_execute_program()` directly. That is good.
-
-However, the scene layer still owns the pass order:
+The deeper issue:
 
 ```text
-repl_core/display_func
-  -> scene_render_3d_scene
-       -> scene frame setup
-       -> execute_fn(...) for user geometry
-       -> replay fade batches via execute_fn(...)
-       -> scene helpers
-       -> REPL overlays/guides/HUD
-  -> 2D UI render
+scene_render.c still decides too much about REPL geometry and replay.
 ```
 
-That makes `scene_render.c` responsible for both the stage and the actor.
-
----
+The scene should decide frame order and callback hook points. The REPL should decide what its callback draws.
 
 ## Proposed Shape
 
-Move pass ordering to a top-level frame compositor:
+### Top-level frame path
 
 ```text
-repl_core/display_func or frame_render_render
-  -> build SceneFrameConfig
-  -> build ReplGeometryRenderConfig
-  -> build ReplOverlayRenderConfig
-  -> scene_frame_begin
-  -> scene_render_environment passes
-  -> repl_geometry_render
-  -> repl_geometry_overlay passes
-  -> scene_render_foreground indicators
-  -> scene_frame_end
-  -> 2D UI render
+repl_core_display_frame
+  -> rebuild flat program if dirty
+  -> build ReplGeometryRenderPlan
+  -> build SceneRender3DConfig
+  -> resolve clear color from REPL geometry plan into scene config
+  -> attach generic user draw callbacks
+  -> scene_render_3d_scene(&scene_cfg)
+  -> build UiRenderConfig
+  -> ui_render(&ui_cfg)
 ```
 
-In code form:
-
-```c
-void repl_render_frame(void) {
-    SceneFrameConfig scene_cfg;
-    ReplGeometryRenderConfig geom_cfg;
-    ReplOverlayRenderConfig overlay_cfg;
-    UiRenderConfig ui_cfg;
-    UiRenderOutputs ui_out = { 0 };
-
-    scene_frame_config_build(&scene_cfg);
-    repl_geometry_render_config_build(&geom_cfg);
-    repl_overlay_render_config_build(&overlay_cfg);
-    ui_render_config_build(&ui_cfg);
-
-    scene_frame_begin(&scene_cfg);
-
-    scene_backdrop_render(&scene_cfg);
-    scene_grid_render(&scene_cfg);
-    scene_axes_render(&scene_cfg);
-
-    repl_geometry_render(&geom_cfg);
-    repl_geometry_overlays_render(&overlay_cfg);
-
-    scene_lights_render_indicators(&scene_cfg);
-    scene_orbit_target_render(&scene_cfg);
-
-    scene_frame_end(&scene_cfg);
-
-    ui_render(&ui_cfg, &ui_out);
-    ui_render_outputs_apply(&ui_out);
-}
-```
-
-The exact function names can change, but the architectural boundary should be clear:
-scene sets up and decorates the 3D frame; REPL geometry renders the user program;
-REPL overlays render editor/program annotations.
-
----
-
-## Ownership Split
-
-### `scene_*`: camera/environment/decorative world
-
-These modules remain scene-owned because they describe the world around the geometry:
-
-| Module / concern | Ownership rationale |
-|------------------|---------------------|
-| `scene_render` frame begin/end | Owns viewport, projection, camera, clear, frame-level GL state discipline |
-| `scene_grid` | Decorative/world reference plane |
-| `scene_axes` | Decorative/world orientation aid |
-| `scene_backdrop` | Decorative background/environment pass |
-| `scene_lights` setup | Scene lighting baseline and light positions |
-| light indicators | Scene/world visualization of lights |
-| orbit target | Camera manipulation visualization |
-
-These modules should be able to render without a REPL program. If no geometry pass is
-provided, the user should still see grid, axes, backdrop, lights, and camera guides.
-
-### `repl_geometry_*`: user program execution
-
-The REPL geometry layer owns execution of the flattened user program:
-
-| Module / concern | Ownership rationale |
-|------------------|---------------------|
-| user geometry fill pass | The flat command stream is the REPL program, not scene decoration |
-| replay base-limit execution | Replay limits are derived from REPL playback state |
-| replay fade batches | Fade logic depends on replay PCs, baseline variable snapshots, and executor semantics |
-| executor callback | Callback remains useful, but belongs to the geometry layer rather than the scene layer |
-| clear-color extraction | The user program can define frame clear color; extract it before scene clear |
-
-Candidate modules:
+### Scene frame path
 
 ```text
-repl_geometry_render.c
-repl_geometry_render.h
-repl_replay_render.c        optional, if replay pass logic is large enough
+scene_render_3d_scene
+  -> set viewport
+  -> clear buffers
+  -> apply projection/camera/jitter
+  -> apply quality and baseline lighting
+  -> render scene decorators
+  -> callback: user main geometry
+  -> callback: user 3D annotations
+  -> render scene foreground decorators
+  -> finish accumulation sample/frame
 ```
 
-### `repl_geometry_overlays_*`: REPL-aware 3D annotations
-
-These are 3D overlays, but they are not neutral scene decoration. They know about
-source lines, edit cursor state, flat-command provenance, replay mode, and command
-semantics.
-
-| Current concern | Proposed ownership |
-|-----------------|-------------------|
-| polygon/current-block outlines | `repl_geometry_overlays.c` |
-| vertex labels / vertex numbers | `repl_geometry_overlays.c` |
-| normal-vector overlays | `repl_geometry_overlays.c` |
-| vertex/normal edit guides | `repl_geometry_guides.c` |
-| transform guides | `repl_transform_guides.c` or `repl_geometry_guides.c` |
-| replay tess preview | `repl_replay_render.c` or `repl_geometry_overlays.c` |
-| replay HUD | either `repl_replay_render.c` or 2D UI, but not generic scene decoration |
-
-These may still render in 3D and use the scene camera/projection, but they should be
-fed by REPL overlay snapshots rather than by generic scene config.
-
----
+The callback names are generic. They do not mention REPL.
 
 ## Proposed Config Types
 
-### Scene frame config
-
-The scene frame config should contain only the data needed to prepare and decorate the
-3D world:
+### Generic scene callback API
 
 ```c
-typedef struct SceneFrameConfig {
+typedef enum SceneUserDrawPass {
+    SCENE_USER_DRAW_MAIN,
+    SCENE_USER_DRAW_ANNOTATIONS_3D,
+} SceneUserDrawPass;
+
+typedef struct SceneUserDrawRequest {
+    SceneUserDrawPass pass;
+    const struct SceneFrameContext *scene;
+
+    int accum_sample_idx;
+    int accum_sample_count;
+
+    float alpha_scale;
+} SceneUserDrawRequest;
+
+typedef void (*SceneUserDrawFn)(const SceneUserDrawRequest *request,
+                                void *user_data);
+
+typedef struct SceneUserDrawCallbacks {
+    SceneUserDrawFn draw;
+    void (*reset)(void *user_data);
+    void *user_data;
+} SceneUserDrawCallbacks;
+```
+
+This is the only thing the scene needs in order to draw user geometry.
+
+### Scene render config
+
+```c
+typedef struct SceneRender3DConfig {
     int scene_x, scene_y, scene_w, scene_h;
     int viewport_w, viewport_h;
 
-    float cam_dist, cam_rx, cam_ry;
+    float clear_rgba[4];
+
+    float cam_dist;
+    float cam_rx, cam_ry;
     float cam_tx, cam_ty, cam_tz;
     float cam_motion_glow;
-
-    float clear_rgba[4];
 
     int multisample_enabled;
     int line_smooth_enabled;
     int wireframe;
 
+    int use_accum;
+    int accum_aa_enabled;
+    int accum_samples;
+
     int grid_theme;
     int grid_extent_idx;
     int grid_major_idx;
-    int axes_theme;
-    int backdrop_mode;
-
     float grid_major_steps[GRID_MAJOR_COUNT];
     float grid_extents[GRID_EXTENT_COUNT];
+
+    int axes_theme;
+    int backdrop_mode;
 
     int user_lighting_enabled;
     SceneLight lights[MAX_LIGHTS];
     int show_light_indicators;
 
-    float accum_jitter_x;
-    float accum_jitter_y;
-} SceneFrameConfig;
+    SceneUserDrawCallbacks user_draw;
+} SceneRender3DConfig;
 ```
 
-### Scene frame derived context
+This config is scene-owned.
+
+It should not contain:
+
+- `FlatProgramView`
+- replay PC
+- replay mode
+- replay fade batches
+- edit-line index
+- source command indexes
+- predef variables
+- current REPL input text
+- parser state
+
+### Scene frame context
 
 ```c
 typedef struct SceneFrameContext {
-    SceneFrameConfig config;
+    SceneRender3DConfig config;
+
     float camera_world_y;
     int camera_below_water_surface;
+
+    int focus_point_valid;
+    float focus_point[3];
 } SceneFrameContext;
 ```
 
-This replaces the current `FrameRenderContext` for truly scene-owned modules.
+Derived scene data belongs here.
 
-### REPL geometry render config
+If focus-point data depends on the REPL edit line, the REPL should compute it and pass it as generic focus-point config. The scene should not inspect the document to find it.
+
+### REPL geometry render plan
 
 ```c
-typedef struct ReplGeometryExecutor {
-    void (*execute)(float alpha_scale,
-                    int skip_geom_before_pc,
-                    int flat_cmd_count,
-                    FlatProgramView program,
-                    void *user_data);
-    void (*reset)(void *user_data);
-    void *user_data;
-} ReplGeometryExecutor;
-
-typedef struct ReplGeometryRenderConfig {
+typedef struct ReplGeometryRenderPlan {
     FlatProgramView flat_program;
-    ReplGeometryExecutor executor;
 
     int wireframe;
     int user_lighting_enabled;
-    int line_smooth_enabled;
 
     int replay_active;
     int replay_mode;
-    int replay_has_fades;
     int replay_base_limit;
-    int replay_expand_args;
-
-    float alpha_scale;
-} ReplGeometryRenderConfig;
-```
-
-The executor callback remains available, but it is no longer a field in the scene
-frame config. Geometry execution is a REPL geometry concern.
-
-### REPL overlay render config
-
-```c
-typedef struct ReplOverlayRenderConfig {
-    FlatProgramView flat_program;
-
-    int edit_line_idx;
-    int insert_mode;
-    const char *input;
-    int input_len;
-    int cursor_pos;
-
-    const ExprVar *predef_vars;
-    int predef_var_count;
 
     int show_current_poly;
-    int show_vertex_outlines;
     int show_vertex_points;
     int show_vertex_labels;
     int show_normal_vectors;
     int show_vertex_guides;
-    int xform_guide_mode;
+    int show_transform_guides;
 
-    int replaying;
-    int replay_mode;
-    int replay_tess_preview;
-    int replay_vertex_points;
-    int replay_pc;
-    int replay_total_cmds;
-    int replay_state;
-    float replay_speed;
-    int replay_expand_args;
-
+    int edit_line_idx;
     int cursor_block_begin_idx;
     int cursor_block_end_idx;
     int cursor_block_source_line;
 
-    float alpha_scale;
-} ReplOverlayRenderConfig;
+    ReplReplayHighlight replay_highlight;
+} ReplGeometryRenderPlan;
 ```
 
-The overlay config can also carry the scene camera/view matrix if transform guides need
-it. That dependency should be explicit: overlays render in the scene frame, but they
-are not owned by the scene layer.
+This plan is REPL-owned.
 
----
+It can contain REPL-specific concepts because it is never inspected by the scene.
 
-## Rendering Order
+## Callback Wiring
 
-The exact order matters. The split should preserve current behavior while making the
-ownership clear.
-
-Recommended order:
-
-```text
-1. scene_frame_begin
-   - viewport
-   - clear color
-   - projection
-   - camera
-   - quality flags
-   - baseline lighting/material state
-
-2. scene background/environment
-   - backdrop
-   - grid
-   - axes
-
-3. REPL geometry
-   - normal fill pass
-   - replay fade passes
-   - executor reset
-
-4. REPL geometry overlays/guides
-   - current polygon/current block
-   - vertex points
-   - vertex labels
-   - normal vectors
-   - edit guides
-   - transform guides
-   - replay tess preview
-
-5. scene foreground indicators
-   - light indicators
-   - orbit target
-
-6. 2D overlays
-   - replay HUD if kept as 2D overlay
-   - code panel
-   - menu/dropdowns/search
-   - autocomplete
-   - variable panel
-   - help/profile
-```
-
-The order can be adjusted for specific visual effects, but the ownership should not
-collapse back into `scene_render.c`.
-
----
-
-## Clear Color Caution
-
-`glClearColor(...)` is currently part of the user command stream. The scene frame must
-clear before the REPL geometry executor runs, so clear color has to be resolved before
-`scene_frame_begin()`.
-
-That means the frame builder needs a small pre-pass:
+The REPL installs the generic callback:
 
 ```c
-void repl_geometry_resolve_clear_color(FlatProgramView program,
+void repl_core_display_frame(void)
+{
+    SceneRender3DConfig scene_cfg;
+    ReplGeometryRenderPlan geom_plan;
+    UiRenderConfig ui_cfg;
+
+    repl_flatten_if_dirty();
+
+    repl_geometry_render_plan_build(&geom_plan);
+    scene_render_3d_config_build_from_repl_state(&scene_cfg);
+
+    repl_geometry_resolve_clear_color(&geom_plan, scene_cfg.clear_rgba);
+
+    scene_cfg.user_draw.draw = repl_geometry_scene_draw_callback;
+    scene_cfg.user_draw.reset = repl_geometry_scene_reset_callback;
+    scene_cfg.user_draw.user_data = &geom_plan;
+
+    scene_render_3d_scene(&scene_cfg);
+
+    ui_render_config_build(&ui_cfg);
+    ui_render(&ui_cfg);
+}
+```
+
+The scene calls it like this:
+
+```c
+static void scene_call_user_draw(const SceneFrameContext *frame_ctx,
+                                 SceneUserDrawPass pass,
+                                 int sample_idx,
+                                 int sample_count)
+{
+    const SceneUserDrawCallbacks *cb = &frame_ctx->config.user_draw;
+
+    if (!cb->draw)
+        return;
+
+    SceneUserDrawRequest request = {
+        .pass = pass,
+        .scene = frame_ctx,
+        .accum_sample_idx = sample_idx,
+        .accum_sample_count = sample_count,
+        .alpha_scale = 1.0f,
+    };
+
+    cb->draw(&request, cb->user_data);
+}
+```
+
+## Replay Decision
+
+Do **not** add a replay-specific scene callback.
+
+Replay should not look like a scene concern.
+
+Bad direction:
+
+```c
+scene_cfg.draw_replay = repl_replay_draw;
+```
+
+Better direction:
+
+```c
+scene_cfg.user_draw.draw = repl_geometry_scene_draw_callback;
+```
+
+Then inside the REPL callback:
+
+```c
+void repl_geometry_scene_draw_callback(const SceneUserDrawRequest *request,
+                                       void *user_data)
+{
+    ReplGeometryRenderPlan *plan = user_data;
+
+    switch (request->pass) {
+    case SCENE_USER_DRAW_MAIN:
+        if (plan->replay_active)
+            repl_geometry_render_replay(plan, request);
+        else
+            repl_geometry_render_normal(plan, request);
+        break;
+
+    case SCENE_USER_DRAW_ANNOTATIONS_3D:
+        repl_geometry_render_annotations(plan, request);
+        break;
+    }
+}
+```
+
+This keeps replay inside REPL geometry ownership.
+
+## Replay Fade Simplification
+
+The existing fade-batch model is visually nice but architecturally expensive. It mixes:
+
+- replay PC state
+- variable baseline restore
+- executor limits
+- blend/material state
+- skip ranges
+- old/new command ranges
+
+If preserving it makes the split difficult, simplify it.
+
+Minimum acceptable replay visual:
+
+```text
+draw the program up to the current replay limit
+fade/highlight only the most recently drawn vertex or polygon
+```
+
+Candidate type:
+
+```c
+typedef enum ReplReplayHighlightKind {
+    REPL_REPLAY_HIGHLIGHT_NONE,
+    REPL_REPLAY_HIGHLIGHT_VERTEX,
+    REPL_REPLAY_HIGHLIGHT_POLYGON,
+} ReplReplayHighlightKind;
+
+typedef struct ReplReplayHighlight {
+    ReplReplayHighlightKind kind;
+    int flat_begin_idx;
+    int flat_end_idx;
+    float alpha;
+} ReplReplayHighlight;
+```
+
+The replay plan builder decides which range is the latest vertex/polygon.
+
+The executor/callback draws it.
+
+The scene still knows nothing about replay.
+
+## Clear Color Handling
+
+`glClearColor(...)` is part of the REPL command stream, but the frame must clear before the user callback executes.
+
+Therefore clear color needs a REPL-owned pre-pass:
+
+```c
+void repl_geometry_resolve_clear_color(const ReplGeometryRenderPlan *plan,
                                        float out_rgba[4]);
 ```
 
-Then:
+Frame flow:
 
 ```c
-repl_geometry_resolve_clear_color(geom_cfg.flat_program, scene_cfg.clear_rgba);
-scene_frame_begin(&scene_cfg);
+repl_geometry_render_plan_build(&geom_plan);
+scene_render_3d_config_build_from_repl_state(&scene_cfg);
+repl_geometry_resolve_clear_color(&geom_plan, scene_cfg.clear_rgba);
+scene_render_3d_scene(&scene_cfg);
 ```
 
-This does not make scene rendering dependent on REPL execution. It only lets the REPL
-program contribute frame clear state.
+This does not make scene rendering dependent on the REPL. The REPL contributes a resolved clear color before the scene starts.
 
----
+## Ownership of 3D Overlays
 
-## Replay Caution
+Current names such as `scene_overlays.c`, `scene_geometry_guides.c`, and `scene_transform_guides.c` are ambiguous because some of their work is REPL-aware.
 
-Replay fade execution currently mixes scene setup, baseline variable restore, fade
-batch calculation, executor calls, and GL blend/material state. That logic should move
-with the REPL geometry renderer, not remain in `scene_render.c`.
+Classify each pass.
 
-Reason: replay fade rendering is not environment decoration. It is a visualization of
-how the REPL command stream executes over time.
+### Keep in `scene_*`
 
-Suggested split:
+Scene/world decorators:
 
-```text
-repl_geometry_render.c
-  - normal fill pass
-  - executor callback adapter
+- grid
+- axes
+- backdrop
+- scene light indicators
+- orbit target
+- generic camera/world focus point
 
-repl_replay_render.c
-  - replay base-limit pass
-  - fade-batch loop
-  - baseline variable restore
-  - executor reset
-  - replay tess preview / HUD, if kept with replay
-```
+### Move or reframe as REPL geometry annotation
 
-If that feels too large for the first refinement, keep replay rendering in
-`repl_geometry_render.c` initially and split it later.
+REPL-aware 3D annotations:
 
----
+- current polygon outline
+- current block outline
+- vertex points tied to flat commands
+- vertex numbers
+- normal vectors derived from user geometry
+- vertex/normal edit guides tied to current input
+- transform guides tied to current source cursor
+- replay tessellation preview
+- replay latest-primitive highlight
+
+These can still draw inside the scene frame, but their ownership is REPL geometry/annotation, not scene decoration.
 
 ## Staged Refactor
 
-Each step should preserve behavior and pass `make test-stubs TEST_JOBS=4`.
+Each step should preserve behavior unless a simplification is explicitly chosen.
 
 | Step | Change | Risk | Rationale |
 |------|--------|------|-----------|
-| 1 | Introduce `SceneFrameConfig` / `SceneFrameContext` aliases or new types while keeping old wrappers. | Low | Establish vocabulary without behavior change. |
-| 2 | Split `scene_frame_begin()` / `scene_frame_end()` out of `scene_render_3d_scene()`. | Medium | Makes scene setup reusable by an external compositor. |
-| 3 | Move clear-color resolution into a small REPL geometry helper used before `scene_frame_begin()`. | Low-Medium | Keeps user `glClearColor` behavior while removing clear ownership confusion. |
-| 4 | Add `repl_geometry_render.c` and move normal executor pass from `scene_render.c`. | Medium | Removes the main user-geometry pass from scene ownership. |
-| 5 | Move replay fade execution into `repl_geometry_render.c` or `repl_replay_render.c`. | High | Most delicate GL-state and replay-state interaction. |
-| 6 | Move REPL-aware overlays/guides from `scene_*` naming toward `repl_geometry_*` modules. | Medium-High | Clarifies ownership; may be mostly renames plus config reshaping. |
-| 7 | Keep decorative passes in `scene_*` and make them consume only `SceneFrameContext`. | Medium | Completes scene independence from REPL program details. |
-| 8 | Introduce `frame_render.c` if `repl_core.c` display orchestration becomes too large. | Low-Medium | Gives the compositor a clear home without bloating core. |
-| 9 | Update `ARCHITECTURE.md`, `MODULES.md`, and Makefile guards for the new ownership boundary. | Low | Prevents future drift. |
-
----
+| 1 | Introduce `SceneUserDrawRequest`, `SceneUserDrawCallbacks`, and explicit `scene_render_3d_scene(const SceneRender3DConfig *)`. | Medium | Establishes the generic callback boundary. |
+| 2 | Keep old `scene_render_3d_scene(void)` as a compatibility wrapper temporarily. | Low | Allows migration in small slices. |
+| 3 | Split current `SceneRenderConfig` into scene-only `SceneRender3DConfig` and REPL-owned `ReplGeometryRenderPlan`. | Medium | Removes REPL concepts from scene config. |
+| 4 | Move clear-color scan into `repl_geometry_resolve_clear_color()`. | Low-Medium | Preserves `glClearColor` behavior without scene knowing flat commands. |
+| 5 | Make `repl_core` or a small frame-compositor helper build both configs and wire callbacks. | Medium | Establishes the intended dependency direction. |
+| 6 | Move normal user geometry execution behind `repl_geometry_scene_draw_callback`. | Medium | Scene calls generic callback; REPL owns execution. |
+| 7 | Move replay rendering out of `scene_render.c` and into REPL geometry/replay code. | High | Most delicate part; simplify to latest vertex/polygon fade if needed. |
+| 8 | Reclassify REPL-aware overlays/guides as REPL geometry annotations. | Medium-High | Clarifies ownership; may require rename or split. |
+| 9 | Tighten boundary checks so pure scene modules cannot read REPL state. | Medium | Prevents regression after the split. |
+| 10 | Update docs and header comments to match the new ownership model. | Low | Locks the vocabulary in place. |
 
 ## Mechanical Boundary Checks
 
-Once the split is complete, enforce the boundary mechanically.
+Add or update grep guards.
 
-Potential guard rules:
+### Live GL boundary
 
-```makefile
-check-scene-frame-boundary:
-	@echo "Checking scene frame independence..."
-	@! grep -nE '\b(repl_state_|repl_execute_|repl_replay_|g_predef_vars|g_num_predef_vars)' \
-		scene_grid.c scene_axes.c scene_backdrop.c scene_lights.c \
-		|| (echo "ERROR: pure scene modules must not read REPL runtime state" && exit 1)
-	@echo "Scene frame boundary OK"
-```
-
-A stricter future version should also ensure pure scene modules do not include
-REPL-specific headers other than shared render-neutral types.
-
-Allow REPL-specific state in:
+Allowed live GL files:
 
 ```text
-repl_geometry_render.c
-repl_geometry_overlays.c
-repl_geometry_guides.c
-repl_replay_render.c
+scene_*.c
+ui_*.c
+repl_executor.c
+sample.c
 ```
 
-Do not allow REPL-specific state in decorative scene modules.
+If a new executor-adjacent file is introduced, add it explicitly. Do not allow generic `repl_*` GL drift.
 
----
+### Pure scene boundary
 
-## Naming Guidance
+Pure scene modules should not read REPL runtime state:
 
-Use names to make ownership obvious:
+```makefile
+check-scene-purity:
+	@echo "Checking pure scene modules..."
+	@! grep -nE '\b(repl_state_|repl_replay_|repl_execute_|g_cmds|g_flat_cmds|g_predef_vars|FlatProgramView)' \
+		scene_grid.c scene_axes.c scene_backdrop.c scene_lights.c \
+		|| (echo "ERROR: pure scene modules must not depend on REPL runtime state" && exit 1)
+	@echo "Scene purity OK"
+```
 
-| Current / possible file | Preferred ownership name |
-|-------------------------|--------------------------|
-| `scene_render.c` | frame begin/end, viewport/camera/environment compositor helpers only |
-| `scene_overlays.c` | `repl_geometry_overlays.c` if it depends on flat/source command provenance |
-| `scene_geometry_guides.c` | `repl_geometry_guides.c` if it depends on edit cursor/input state |
-| `scene_transform_guides.c` | `repl_transform_guides.c` or `repl_geometry_guides.c` |
-| replay HUD/tess preview | `repl_replay_render.c` or 2D UI layer, not generic scene |
+Do not apply that rule to REPL-owned geometry annotation files. Those files are allowed to know about the REPL, but their naming should make that obvious.
 
-The prefix should describe ownership, not merely where pixels appear. A 3D overlay
-can still be REPL-owned if it visualizes REPL/editor state.
+### UI/scene coupling
 
----
+Keep:
+
+```text
+ui_* must not include scene_*
+scene_* must not include ui_*
+```
+
+Shared helpers go under `include/`.
 
 ## Acceptance Criteria
 
-This refinement is successful when:
+This refinement is done when:
 
-1. `scene_*` can render the environment frame without an executor callback.
-2. User geometry execution is owned by `repl_geometry_render.c` or equivalent.
-3. Replay fade execution is owned by REPL geometry/replay rendering, not by
-   `scene_render.c`.
-4. REPL-aware overlays/guides are named and documented as REPL geometry overlays,
-   even if they render in the 3D scene projection.
-5. `scene_grid`, `scene_axes`, `scene_backdrop`, and scene-owned light/orbit helpers
-   consume only scene frame config/context.
-6. The top-level frame compositor owns pass ordering.
-7. `glClearColor` behavior from the user program is preserved by a pre-frame clear
-   color resolver.
-8. Existing tests pass, and a manual smoke test shows no visual ordering regression.
-
----
+1. `scene_render_3d_scene()` takes an explicit config.
+2. `scene_render_3d_scene()` can render an empty 3D scene without a REPL program.
+3. Scene config contains scene/environment state and generic callbacks only.
+4. `FlatProgramView` is not part of pure scene config.
+5. Replay fields are not part of pure scene config.
+6. REPL builds a geometry/replay/annotation render plan.
+7. The scene calls a generic callback for user geometry.
+8. Replay rendering lives behind the REPL geometry callback.
+9. If fade batches are too complex, replay falls back to latest vertex/polygon fade/highlight.
+10. REPL-aware 3D overlays/guides are documented or renamed as REPL geometry annotations.
+11. Existing tests pass.
+12. Manual smoke test shows no obvious visual ordering regression.
 
 ## Bottom Line
 
-Yes: the scene render path can and should become independent of REPL geometry execution.
-
-The clean split is not "scene draws first, then REPL draws a 2D overlay." The clean split
-is:
+The clean split is:
 
 ```text
-scene frame establishes the 3D world;
-REPL geometry renders inside that world;
-REPL overlays annotate that geometry;
-the 2D UI renders around/above everything.
+scene_* creates and decorates the 3D stage;
+repl_* describes the actor and its annotations;
+scene_* calls a generic callback to let the actor draw;
+ui_* draws the editor around it.
 ```
 
-That gives the codebase a stronger architecture than making `scene_render.c` responsible
-for both the decorative world and the user-authored program.
+Replay should not become a scene concept.
+
+Keep replay inside the REPL geometry callback. If full fade batches are too much work, fade only the most recently drawn vertex or polygon.
