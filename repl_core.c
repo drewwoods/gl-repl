@@ -9,7 +9,7 @@
  *   - Global state: command arrays (repl_state_document_cmds_mut() / g_flat_cmds), camera, toggles,
  *     accumulation-buffer settings, etc.
  *   - Normalization - repl_parse_and_normalize(), repl_reformat_commands()
- *   - GLUT callback wrappers and scene config construction
+ *   - GLUT callback wrappers
  *   - Public API wrappers forwarded from sample.c
  *
  * repl_editor.c owns the interactive editing layer:
@@ -61,10 +61,7 @@
 #include "repl_parser.h"
 #include "repl_source_scope.h"
 #include "repl_flatten.h"
-#include "repl_executor.h"
-#include "repl_replay.h"
 #include "cmd_format.h"
-#include "scene_render.h"
 #include "ui_panels.h"
 #include "prof.h"
 #include "repl_state.h"
@@ -522,122 +519,6 @@ void repl_reformat_commands(void) {
         load_line_to_input(repl_state_edit_line());
     }
     prof_end(PROF_REFORMAT);
-}
-
-/* ========================================================================= */
-/* Scene config builder (push model)                                          */
-/* ========================================================================= */
-
-/* Execute callback adapter: forwards to repl_execute_program() */
-static void scene_execute_adapter(float alpha_scale,
-                                  int skip_geom_before_pc,
-                                  int flat_cmd_count,
-                                  FlatProgramView program,
-                                  void *user_data) {
-    (void)user_data;
-    repl_execute_set_fade_context(alpha_scale, skip_geom_before_pc);
-    repl_execute_program(&(ReplExecutionOptions){
-        .flat_cmd_count = flat_cmd_count,
-        .program = program
-    });
-}
-
-/* Execute reset callback: clears fade context after last fade batch */
-static void scene_execute_reset_adapter(void *user_data) {
-    (void)user_data;
-    repl_execute_set_fade_context(1.0f, 0);
-}
-
-void scene_render_config_build(SceneRenderConfig *config) {
-    const ReplRenderState *render = repl_state_render();
-    const ReplReplayRuntimeState *replay = repl_state_replay();
-    const ReplPresentationState *presentation = repl_state_presentation();
-    const ReplCameraState *cam = repl_state_camera();
-    const ReplFlatProgramState *flat = repl_state_flat_program();
-
-    /* Refresh cursor block highlight before reading cursor state */
-    repl_flatten_refresh_current_block_highlight();
-
-    /* Existing fields (legacy, preserved) */
-    ui_panels_scene_rect(&config->scene_x, &config->scene_y,
-                         &config->scene_w, &config->scene_h);
-    if (config->scene_w < 1) config->scene_w = 1;
-    if (config->scene_h < 1) config->scene_h = 1;
-
-    config->cam_dist = *cam->dist;
-    config->cam_rx = *cam->rx;
-    config->cam_ry = *cam->ry;
-    config->cam_tx = *cam->tx;
-    config->cam_ty = *cam->ty;
-    config->cam_tz = *cam->tz;
-    config->cam_motion_glow = *cam->motion_glow;
-    config->accum_jitter_x = *render->accum_jitter_x;
-    config->accum_jitter_y = *render->accum_jitter_y;
-    config->multisample_enabled = *render->multisample_enabled;
-    config->line_smooth_enabled = *render->line_smooth_enabled;
-    config->wireframe = *presentation->wireframe;
-    config->grid_theme = *presentation->grid_theme;
-    config->grid_extent_idx = *presentation->grid_extent_idx;
-    config->grid_major_idx = *presentation->grid_major_idx;
-    config->axes_theme = *presentation->axes_theme;
-    config->show_guides = *presentation->show_vertex_guides;
-    config->show_vpoints = *presentation->show_vertex_points;
-    config->show_vnums = *presentation->show_vertex_labels;
-    config->show_normals = *presentation->show_normal_vectors;
-    config->replaying = *replay->active;
-    config->replay_mode = *replay->mode;
-    config->replay_tess_preview = config->replaying &&
-                                  config->replay_mode == REPLAY_MODE_VERTEX;
-    config->replay_vertex_points = config->replay_tess_preview;
-    config->replay_has_fades = repl_replay_has_active_fades();
-    config->replay_base_limit = config->replay_has_fades
-                                   ? repl_replay_fill_base_limit()
-                                   : 0;
-    config->show_current_poly = *presentation->highlight_current_poly && !config->replaying;
-
-    /* Alpha scale boost for dark backgrounds */
-    float bg_lum = 0.2126f * render->clear_color[0]
-                 + 0.7152f * render->clear_color[1]
-                 + 0.0722f * render->clear_color[2];
-    float as_val = (0.10f + 0.02f) / fmaxf(bg_lum + 0.02f, 1e-4f);
-    config->alpha_scale = as_val < 1.0f ? 1.0f : (as_val > 3.0f ? 3.0f : as_val);
-
-    /* New fields (push model) */
-    config->execute_fn = scene_execute_adapter;
-    config->execute_reset_fn = scene_execute_reset_adapter;
-    config->execute_user_data = NULL;
-
-    config->flat_program = repl_state_flat_program_view();
-    config->anim_time = *repl_state_variables()->anim_time;
-
-    config->viewport_w = *repl_state_viewport()->window_w;
-    config->viewport_h = *repl_state_viewport()->window_h;
-
-    config->user_lighting_enabled = *flat->user_lighting_enabled;
-    memcpy(config->lights, repl_state_render()->lights, sizeof(config->lights));
-    config->show_light_indicators = *presentation->show_light_indicators;
-
-    config->backdrop_mode = *presentation->backdrop_mode;
-    config->show_vertex_outlines = *presentation->show_vertex_outlines;
-
-    config->code_panel_layout = *presentation->code_panel_layout;
-    config->replay_pc = *replay->pc;
-    config->replay_total_cmds = *replay->total_flat_cmds;
-    config->replay_state_val = *replay->state;
-    config->replay_speed = *replay->speed;
-    config->replay_expand_args = *replay->expand_args;
-
-    memcpy(config->grid_major_steps, presentation->grid_major_steps,
-           sizeof(config->grid_major_steps));
-    memcpy(config->grid_extents, presentation->grid_extents,
-           sizeof(config->grid_extents));
-
-    config->cursor_block_begin_idx = *flat->current_block_begin_idx;
-    config->cursor_block_end_idx = *flat->current_block_end_idx;
-    config->cursor_block_source_line = *flat->current_block_source_line_idx;
-    config->edit_line_idx = repl_state_edit_line();
-    config->cursor_func_scope_mask = 0;  /* Placeholder; computed per-command in overlays */
-    config->cursor_call_src_cmd_idx = -1;  /* Placeholder; computed per-command in overlays */
 }
 
 /* ========================================================================= */
