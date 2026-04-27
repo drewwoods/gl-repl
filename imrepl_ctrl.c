@@ -1,5 +1,6 @@
 #include "imrepl_ctrl.h"
 
+#include "repl_core.h"
 #include "repl_core_internal.h"
 #include "repl_executor.h"
 #include "repl_replay.h"
@@ -260,4 +261,32 @@ void imrepl_ctrl_init_gl(void) {
     scene_render_init_gl();
     repl_executor_init_resources();
     apply_init_bootstrap();
+}
+
+void imrepl_ctrl_keyboard(unsigned char key, int x, int y) {
+    repl_keyboard_func(key, x, y);
+}
+
+void imrepl_ctrl_special(int key, int x, int y) {
+    repl_special_func(key, x, y);
+}
+
+void imrepl_ctrl_mouse(int button, int state, int x, int y) {
+    repl_mouse_func(button, state, x, y);
+}
+
+void imrepl_ctrl_motion(int x, int y) {
+    repl_motion_func(x, y);
+}
+
+void imrepl_ctrl_passive_motion(int x, int y) {
+    repl_passive_motion_func(x, y);
+}
+
+void imrepl_ctrl_mousewheel(int wheel, int direction, int x, int y) {
+    repl_mousewheel_func(wheel, direction, x, y);
+}
+
+void imrepl_ctrl_timer(int value) {
+    repl_timer_func(value);
 }

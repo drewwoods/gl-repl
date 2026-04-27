@@ -104,33 +104,33 @@ static void reshape_func(int w, int h) {
 }
 
 static void keyboard_func(unsigned char key, int x, int y) {
-    repl_keyboard_func(key, x, y);
+    imrepl_ctrl_keyboard(key, x, y);
 }
 
 static void special_func(int key, int x, int y) {
-    repl_special_func(key, x, y);
+    imrepl_ctrl_special(key, x, y);
 }
 
 static void mouse_func(int button, int state, int x, int y) {
-    repl_mouse_func(button, state, x, y);
+    imrepl_ctrl_mouse(button, state, x, y);
 }
 
 static void motion_func(int x, int y) {
-    repl_motion_func(x, y);
+    imrepl_ctrl_motion(x, y);
 }
 
 static void passive_motion_func(int x, int y) {
-    repl_passive_motion_func(x, y);
+    imrepl_ctrl_passive_motion(x, y);
 }
 
 #ifndef USE_GLUT
 static void mousewheel_func(int wheel, int direction, int x, int y) {
-    repl_mousewheel_func(wheel, direction, x, y);
+    imrepl_ctrl_mousewheel(wheel, direction, x, y);
 }
 #endif
 
 static void timer_func(int value) {
-    repl_timer_func(value);
+    imrepl_ctrl_timer(value);
 }
 
 int main(int argc, char **argv) {
