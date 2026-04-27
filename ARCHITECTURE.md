@@ -14,10 +14,10 @@ superseded. This is a one-frontend REPL sample, so the useful boundary is
 between the REPL model/controller and the rendering views. The goal is not to
 turn `scene_*` into a plugin host.
 
-Current code is transitional: `repl_core.c` still owns display orchestration and
-scene config construction, and `scene_render.c` still has several direct REPL
-state reads. The refinement plan moves frame wiring into `imrepl_ctrl.c` and
-turns those reads into per-frame snapshots or documented follow-up work.
+Current code already routes frame wiring through `imrepl_ctrl.c`. `repl_core.c`
+now keeps the REPL model/pipeline wrappers, while `scene_render.c` consumes
+explicit per-frame config and only keeps the remaining transitional replay-HUD
+reads and fade-batch helpers.
 
 ## Ownership Model
 
@@ -164,8 +164,8 @@ paths instead of directly mutating command arrays.
 
 ## Controller Layer
 
-The controller layer is the intended home for app-frame wiring that currently
-lives in `repl_core.c`.
+The controller layer is the home for app-frame wiring that used to live in
+`repl_core.c`.
 
 Responsibilities:
 
@@ -188,60 +188,21 @@ included broadly.
 
 ## Scene Render Config
 
-`SceneRenderConfig` is the per-frame input for the 3D stage. In Option B it is
-not a pure scene-only struct: it intentionally carries the flat program and
-REPL-aware overlay snapshots needed by this one frontend.
+`SceneRenderConfig` is the scene's explicit per-frame input. In Option B it is
+allowed to carry REPL-aware data because this sample has one frontend and no
+plugin host requirement.
 
-The direction is:
+The controller builds the config once per frame, and `scene_render_3d_scene()`
+consumes it directly without calling back into REPL globals or rebuilding the
+frame inputs itself. The config currently carries the execute callback,
+`FlatProgramView`, viewport, camera, animation, quality flags, lighting,
+backdrop, overlay toggles, replay/HUD layout, grid tables, cursor-block
+metadata, and the `SceneFocusVertex` / `SceneGuideSnapshot` snapshots needed by
+3D overlays.
 
-```c
-typedef struct SceneRenderConfig {
-    /* Narrow user-geometry execution boundary. Phase 1 keeps the existing
-       execution hook to avoid churn; a later cleanup may replace it with a
-       direct executor call if that is simpler. */
-    SceneExecuteProgramFn execute_fn;
-    void *execute_user_data;
-    void (*execute_reset_fn)(void *user_data);
-
-    FlatProgramView flat_program;
-
-    int scene_x, scene_y, scene_w, scene_h;
-    int viewport_w, viewport_h;
-
-    float cam_dist;
-    float cam_rx, cam_ry;
-    float cam_tx, cam_ty, cam_tz;
-    float cam_motion_glow;
-
-    int multisample_enabled;
-    int line_smooth_enabled;
-    int wireframe;
-    int use_accum;
-    int accum_aa_enabled;
-    int accum_samples;
-
-    int grid_theme;
-    int grid_extent_idx;
-    int grid_major_idx;
-    float grid_major_steps[GRID_MAJOR_COUNT];
-    float grid_extents[GRID_EXTENT_COUNT];
-
-    int axes_theme;
-    int backdrop_mode;
-
-    int user_lighting_enabled;
-    SceneLight lights[MAX_LIGHTS];
-    int show_light_indicators;
-
-    /* REPL-aware overlay and replay snapshots, until follow-up slimming. */
-} SceneRenderConfig;
-```
-
-The controller builds this once per frame. `scene_render_3d_scene()` receives it
-explicitly and must not rebuild it from REPL globals.
-
-Derived per-pass data belongs in `FrameRenderContext`, for example camera world
-height, focus vertex, and other values that helper renderers should share.
+Scene-local accumulation jitter no longer lives in the config. Derived
+per-pass data belongs in `FrameRenderContext`, for example camera world height,
+focus vertex, and other values that helper renderers should share.
 
 ## Scene Layer
 
@@ -251,7 +212,7 @@ Responsibilities:
 
 * viewport and projection setup
 * camera transform
-* accumulation-buffer sampling and jitter
+* accumulation-buffer sampling with scene-local jitter
 * baseline scene lighting and material state
 * grid, axes, backdrop, light indicators, orbit target
 * REPL-aware 3D overlays while they remain under `scene_*`
@@ -292,14 +253,14 @@ Current transitional responsibilities in `scene_render.c`:
 * fade-batch rendering
 * replay tessellation preview
 * 2D replay HUD
-* baseline predef restoration during accumulation/fade passes
 
 Target follow-ups:
 
 * simplify fade batches into a smaller replay highlight model
 * move 2D replay HUD to `ui_replay_hud.c`
 * pass remaining replay draw inputs through `SceneRenderConfig`
-* remove direct `repl_replay_*` state reads from scene rendering where possible
+* trim the direct replay/presentation state reads from scene rendering where
+   possible
 
 ## Boundary Rules
 
@@ -343,9 +304,10 @@ separate input/UI-boundary cleanup.
 Target rule: `scene_*` files consume `SceneRenderConfig`, `FrameRenderContext`,
 or explicit snapshot structs. They should not call `repl_state_*` directly.
 
-Known transitional exceptions live in `scene_render.c` for replay, focus/guide
-snapshot assembly, and accumulation jitter. The refinement plan tracks these
-as Phase 1 fixes or follow-ups.
+Known transitional exceptions live in `scene_render.c` for replay HUD/fade
+handling and a few direct replay/presentation reads. Focus/guide snapshot
+assembly and accumulation jitter now come from the controller or local pass
+state.
 
 ### UI / scene independence
 
@@ -370,18 +332,16 @@ or project-wide `include/` only when broadly reusable.
 
 ## Open Refactor Edges
 
-1. Extract `imrepl_ctrl.c` and move display/config orchestration out of
-   `repl_core.c`.
-2. Change `scene_render_3d_scene()` to accept an explicit
-   `const SceneRenderConfig *`.
-3. Make accumulation jitter scene-local instead of writing through
-   `repl_state_render_mut()`.
-4. Move focus vertex and guide snapshot assembly out of `scene_render.c`.
-5. Simplify replay fade rendering and move surviving replay restore policy out
+Completed in code: controller extraction, explicit `SceneRenderConfig` handoff,
+focus/guide snapshot construction, and scene-local accumulation jitter.
+
+Remaining follow-ups:
+
+1. Simplify replay fade rendering and move surviving replay restore policy out
    of scene rendering where practical.
-6. Move the 2D replay HUD out of `scene_render.c`.
-7. Slim `SceneRenderConfig` after the controller and replay follow-ups land.
-8. Rename `sample.c` / `sample.h` to `imrepl.c` / `imrepl.h` as a dedicated
+2. Move the 2D replay HUD out of `scene_render.c`.
+3. Slim `SceneRenderConfig` after the controller and replay follow-ups land.
+4. Rename `sample.c` / `sample.h` to `imrepl.c` / `imrepl.h` as a dedicated
    mechanical cleanup, updating includes and build rules separately from the
    controller extraction.
 
