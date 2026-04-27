@@ -652,18 +652,6 @@ void repl_load_initial_commands(const char *import_file) {
     load_initial_commands(import_file);
 }
 
-void repl_display_func(void) {
-    imrepl_ctrl_display_frame();
-}
-
-void repl_reshape_func(int w, int h) {
-    imrepl_ctrl_reshape(w, h);
-}
-
-void repl_init_gl(void) {
-    imrepl_ctrl_init_gl();
-}
-
 void repl_advance_time(float dt) {
     repl_state_time_advance(dt);
 }

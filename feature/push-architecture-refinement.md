@@ -27,10 +27,9 @@ alone in this phase; renaming them to `imrepl.c` / `imrepl.h` is a later
 mechanical cleanup. Replay fade simplification, 2D replay HUD relocation, and
 broader input/UI coupling cleanup remain follow-ups.
 
-Implementation status: steps 1-7 have already landed in the repository and are
-validated. This document now records the completed Phase 1 slice plus the
-remaining follow-ups, with the documentation pass as the only Phase 1 step
-still being actively aligned.
+Implementation status: Phase 1 steps 1-8 are complete and merged. Post-Phase 1
+cleanup (app-shell shim removal) has also been completed. This document records
+the final Phase 1 state and documents remaining follow-ups.
 
 ## Review Corrections
 
@@ -308,6 +307,15 @@ Files: `ARCHITECTURE.md`, `MODULES.md`, this file.
 
 Exit criterion: docs match the implemented Phase 1 state and no longer promote
 the old callback/`ReplGeometryRenderPlan` direction.
+
+## Completed Post-Phase 1
+
+1. **App-shell shim removal.** Removed trivial forwarding functions from
+   `repl_core.c` (`repl_display_func`, `repl_reshape_func`, `repl_init_gl`).
+   `sample.c` now directly calls `imrepl_ctrl_*` functions, eliminating an
+   unnecessary indirection layer. This was a deliberate cleanup: Phase 1 kept
+   the shims to avoid sample.c churn, but they added no value once controller
+   was extracted.
 
 ## Future Refactors
 
