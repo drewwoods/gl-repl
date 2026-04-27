@@ -13,6 +13,62 @@
 #include "ui_variable_panel.h"
 #include "prof.h"
 
+static int imrepl_ctrl_cmd_is_focus_vertex(const GLCmd *cmd) {
+    return cmd->valid &&
+           (cmd->type == CMD_VERTEX3F || cmd->type == CMD_TESS_VERTEX);
+}
+
+static SceneFocusVertex imrepl_ctrl_build_focus_vertex(void) {
+    SceneFocusVertex focus = { .valid = 0 };
+    int edit_line = repl_state_edit_line();
+
+    if (edit_line >= 0 && edit_line < repl_state_document_count() &&
+        imrepl_ctrl_cmd_is_focus_vertex(&repl_state_document_cmds_mut()[edit_line])) {
+        focus.pos[0] = repl_state_document_cmds_mut()[edit_line].args[0];
+        focus.pos[1] = repl_state_document_cmds_mut()[edit_line].args[1];
+        focus.pos[2] = repl_state_document_cmds_mut()[edit_line].args[2];
+        focus.valid = 1;
+    } else {
+        for (int i = edit_line - 1; i >= 0; i--) {
+            if (imrepl_ctrl_cmd_is_focus_vertex(&repl_state_document_cmds_mut()[i])) {
+                focus.pos[0] = repl_state_document_cmds_mut()[i].args[0];
+                focus.pos[1] = repl_state_document_cmds_mut()[i].args[1];
+                focus.pos[2] = repl_state_document_cmds_mut()[i].args[2];
+                focus.valid = 1;
+                break;
+            }
+        }
+    }
+
+    return focus;
+}
+
+static SceneGuideSnapshot imrepl_ctrl_build_guide_snapshot(const SceneRenderConfig *config) {
+    const ReplPresentationState *presentation = repl_state_presentation();
+    const ReplVariableState *vars = repl_state_variables();
+    const ReplEditorInputState *input = repl_state_editor_input();
+
+    SceneGuideSnapshot snapshot = {
+        .show_guides = config->show_guides,
+        .replaying = config->replaying,
+        .xform_guide_mode = *presentation->xform_guide_mode,
+        .user_lighting_enabled = config->user_lighting_enabled,
+        .anim_time = *vars->anim_time,
+        .input = input->input,
+        .input_len = *input->input_len,
+        .cursor_pos = *input->cursor_pos,
+        .edit_line_idx = config->edit_line_idx,
+        .inserting = repl_state_insert_mode(),
+        .source_cmds = repl_state_document_cmds_mut(),
+        .source_cmd_count = repl_state_document_count(),
+        .flat_program = config->flat_program,
+        .predef_vars = g_predef_vars,
+        .predef_var_count = g_num_predef_vars,
+        .alpha_scale = config->alpha_scale,
+    };
+    return snapshot;
+}
+
 /* ========================================================================= */
 /* Scene config builder (push model)                                          */
 /* ========================================================================= */
@@ -127,6 +183,8 @@ static void imrepl_ctrl_build_scene_config(SceneRenderConfig *config) {
     config->edit_line_idx = repl_state_edit_line();
         config->cursor_func_scope_mask = 0;
         config->cursor_call_src_cmd_idx = -1;
+        config->focus = imrepl_ctrl_build_focus_vertex();
+        config->guide_snapshot = imrepl_ctrl_build_guide_snapshot(config);
 }
 
 void imrepl_ctrl_display_frame(void) {
