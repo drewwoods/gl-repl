@@ -337,6 +337,240 @@ the old callback/`ReplGeometryRenderPlan` direction.
    build rules, and the live-GL allowlist at the same time. Keep this separate
    from controller extraction because `sample.h` is broadly included.
 
+## Expansion: "facade as global allowed surface"
+
+`repl_state.h` exposes ~50 typed accessors (`repl_state_render()`,
+`repl_state_replay()`, `repl_state_document_cmds_mut()`, etc.). It was introduced
+to replace raw extern globals — but the win was only at the type level, not
+at the layering level. Any .c file that includes repl_state.h can read or
+mutate any subsystem's state from anywhere. The compiler enforces "you used
+the right type"; nothing enforces "you were allowed to reach into that
+subsystem from here."
+
+Concretely, three things follow:
+
+1. `scene_render.c` **reads** repl_state_replay/presentation/viewport/render
+   **directly** instead of receiving a snapshot. Architecturally this is
+   identical to the pre-facade state of the world where it touched globals —
+   it's just typed now. The controller exists precisely to broker that data,
+   and when scene bypasses it the controller's job is half-done.
+2. `ui_color_picker.c` **calls** `repl_state_document_cmds_mut()[line].args[0] = r;`
+   — a UI renderer reaching across the layering rule and mutating REPL-owned
+   source commands in place, with no undo hook, no validation, no observer.
+   The facade made this look like a typed call (mut() returning a typed
+   pointer) instead of what it really is: a UI module editing the REPL's
+   source-of-truth datastructure. Pre-facade it would have been
+   `g_cmds[line].args[0] = r` and just as wrong; the typed wrapper makes it
+   feel sanctioned.
+3. **The boundary checks in `Makefile` only catch include-graph violations and
+   one specific mutation pattern**. They don't see "scene module read REPL
+   replay state" because the include is repl_state.h, which is allowed
+   everywhere. The architecture rule lives only in prose (ARCHITECTURE.md
+   "scene * files consume `SceneRenderConfig`...they should not call
+   repl_state_* directly").
+
+The facade is still the right primitive — but it should be treated like unsafe
+in Rust: necessary, not the default. The path forward is (a) audit each
+`repl_state_*` call site outside `repl_*.c` and `imrepl_ctrl.c` and replace with
+snapshot reads or narrow store/action APIs, (b) add a make
+check-views-no-repl-state that greps `scene_*.c` and `ui_*.c` for `repl_state_`
+and fails on hits not in an explicit allowlist, and (c) split the facade header
+so that `repl_state_views.h` (read-only, snapshot-friendly) and
+`repl_state_owners.h` (mutating, owner-only) make the wrong call hard to import
+accidentally.
+
+That is what makes (1) and (2) load-bearing rather than cosmetic — they
+convert a layering rule from "documented" to "compiler-enforced".
+
+## Phase 2 Recommendations (Post-Phase 1 Audit)
+
+
+Phase 1 extracted the controller and routed the per-frame data path through
+`SceneRenderConfig`. An audit of the actual call graph (`callgraph-static.mmd`)
+and direct grep of `scene_*.c` / `ui_*.c` shows the layering rule is honored at
+the include-graph level but bypassed at the call-graph level. The typed-state
+facade in `repl_state.h` is treated as a globally-allowed surface: anything
+that includes it can read or mutate any subsystem's state, so the boundary
+checks pass while the cross-talk continues. The recommendations below convert
+the documented rule into a compiler-enforced one.
+
+### Why the typed-state facade became a layering hole
+
+`repl_state.h` exposes ~50 typed accessors (`repl_state_render()`,
+`repl_state_replay()`, `repl_state_document_cmds_mut()`, etc.). The conversion
+from raw `extern` globals improved type safety but did not narrow access. Any
+translation unit that includes `repl_state.h` can pull any subsystem's state.
+
+Concrete consequences observed in the current tree:
+
+- `scene_render.c` reads `repl_state_replay/presentation/viewport/render`
+  directly inside `draw_replay_hud` and `scene_render_3d_scene`
+  (lines 187, 212, 222, 576). Architecturally identical to the pre-facade
+  globals — just typed.
+- `ui_color_picker.c` mutates `repl_state_document_cmds_mut()[line].args[0..3]`
+  and `.source` in ~30 places (lines 63–145, 307–393). A UI renderer is editing
+  REPL-owned source commands in place, with no undo hook, no validation, no
+  observer. The `_mut()` wrapper makes this look sanctioned when it is not.
+- `Makefile` boundary checks see only the include graph plus one specific
+  mutation pattern (`check-scene-no-repl-state-mut`). They do not flag a scene
+  module reading replay state, because the include is `repl_state.h`, which is
+  allowed everywhere.
+
+The fix is to treat the facade like `unsafe` in Rust: necessary, not the
+default. The recommendations below split the surface and add grep guards so
+the wrong call becomes hard to make accidentally.
+
+### Recommendations, ordered by leverage
+
+#### R1. Finish the replay/HUD migration (largest single cleanup)
+
+Already listed under "Future Refactors" 1 and 2, but the impact is bigger than
+the current framing reads. Three concrete moves, in this order:
+
+1. Move `draw_replay_hud()` from `scene_render.c` to a new `ui_replay_hud.c`.
+   Drop the HUD-only fields from `SceneRenderConfig` (`replay_pc`,
+   `replay_total_cmds`, `replay_state_val`, `replay_speed`,
+   `replay_expand_args`, plus the `code_panel_layout` value used only by the
+   HUD layout fallback).
+2. Have the controller build a `ReplayFadePlan` snapshot once per frame and
+   put it on the config: `{ batches, batch_count, skip_limits[], baseline_predef[] }`.
+   The scene iterates the plan; no `repl_replay_fade_batches_view`,
+   `repl_replay_compute_fade_skip_limits`, or
+   `repl_replay_restore_baseline_predef_values` calls in scene code.
+3. Move the accumulation-AA settings (`use_accum`, `accum_aa_enabled`,
+   `accum_samples`) onto the config. The controller already reads them
+   indirectly; the scene then stops calling `repl_state_render()` entirely.
+
+After R1, `scene_render.c` has **zero** `repl_state_*` and `repl_replay_*`
+reads. That is the real architectural payoff — it lets the boundary check flip
+from "no `_mut`" to a flat-out ban on `repl_*_state_*` and `repl_replay_*`
+symbols in `scene_*.c`.
+
+#### R2. Close the UI → REPL mutation hole
+
+`ARCHITECTURE.md` already states that UI mutations route through `repl_actions`
+/ `repl_command_store` / `repl_var_drag`. The code does not match the doc:
+
+| File | `_mut()` call sites | Notable |
+|------|---------------------|---------|
+| `ui_color_picker.c` | ~30 | Direct writes to `args[0..3]` and `source` of source cmds |
+| `ui_panels.c` | ~25 | Cursor blink reset, replay state mutation |
+| `ui_help_overlay.c` | 1 | `repl_state_help_mut()` for tab toggle |
+
+Add narrow store/action APIs and convert call sites:
+
+- `repl_command_store_set_color(line_idx, r, g, b, a)` and
+  `repl_command_store_set_clear_color(line_idx, r, g, b, a)`. These can also
+  push undo snapshots, which the picker currently bypasses.
+- `repl_action_blink_cursor_reset()` (replaces `*repl_state_code_panel_mut()->cursor_visible = 1`
+  and `->blink_tick = 0` patterns in `ui_panels.c`).
+- `repl_replay_set_state(...)` / `repl_replay_set_pc(...)` for the replay
+  fields touched by `ui_panels.c`.
+
+Once converted, `ui_*.c` should have zero `repl_state_*_mut()` calls.
+
+#### R3. Extract layout out of `ui_panels.c`
+
+`ui_panels_scene_rect` and `ui_panels_code_panel_rect` (`ui_panels.c:50–110`)
+are pure functions of window size + layout mode + `panel_frac`. They contain
+no GL. Move both to a new `repl_layout.c` (or `imrepl_layout.c`). The
+controller currently includes `ui_panels.h` only to call them when building
+`SceneRenderConfig`; after the move, the controller's UI-header dependency
+disappears for non-rendering reasons. `ui_variable_panel.c`,
+`ui_profile_panel.c`, and `ui_panels.c` itself update their includes; no
+behavior change.
+
+#### R4. Stop reaching into `repl_core_internal.h` from the controller
+
+`imrepl_ctrl.c:3` includes `repl_core_internal.h` and pulls
+`recompute_autonormals`, `flatten_commands`, `update_render_state_strings`,
+`update_cam_lines`, `apply_init_bootstrap`, `ensure_init_bootstrap_ready`,
+`repl_copy_predef_values`, `repl_restore_predef_values`. By name, these are
+pipeline operations, not test internals. Promote them to a small
+`repl_pipeline.h` (or fold into `repl_core.h`). Keep `_internal.h` strictly for
+test-only surfaces. Same hygiene fix for the controller reading `g_predef_vars`
+and `g_num_predef_vars` globals at `imrepl_ctrl.c:65–66` — wrap behind a
+`repl_eval_predef_view()` accessor that returns `{ vars*, count }`.
+
+#### R5. Slim and group `SceneRenderConfig`
+
+After R1 lands, the struct loses ~6 fields. The remainder (122-line flat
+struct in `scene_render_types.h`) is naturally three groups:
+
+- `SceneCameraView`  — `cam_dist/rx/ry/tx/ty/tz`, `cam_motion_glow`,
+  multisample, line smooth.
+- `SceneOverlayFlags` — `wireframe`, grid/axes themes, show_guides/vpoints/
+  vnums/normals/light_indicators/vertex_outlines, backdrop_mode.
+- `SceneGuideInputs` — `flat_program`, `focus`, `guide_snapshot`,
+  `cursor_block_*`, `edit_line_idx`, `cursor_func_scope_mask`,
+  `cursor_call_src_cmd_idx`, `alpha_scale`.
+
+This is mechanical and makes `test_scene_render` setups much clearer; future
+config additions land in the right "drawer" instead of being appended to the
+end.
+
+#### R6. Split the typed-state facade by ownership
+
+Convert `repl_state.h` from "one big pile of accessors" into two headers:
+
+- `repl_state_views.h` — read-only accessors (`repl_state_render()`,
+  `repl_state_replay()`, etc.). Safe to include from views.
+- `repl_state_owners.h` — mutating accessors (`*_mut()`, `*_reset()`,
+  `*_set_*()`). Includable only from owner modules and the controller.
+
+Then add a Makefile rule that bans `#include "repl_state_owners.h"` from
+`scene_*.c` and `ui_*.c`. This is the structural fix that prevents R2-style
+regressions from creeping back. (It does require touching every current
+include of `repl_state.h`; do it after R1/R2 so the move and the cleanup land
+together.)
+
+#### R7. Add view-side state read guards
+
+After R1 + R6, add two greps to `make test`:
+
+```makefile
+check-pure-scene-no-repl-state:
+	@bad=$$(grep -nE 'repl_(state|replay)_' \
+		scene_grid.c scene_axes.c scene_backdrop.c scene_lights.c \
+		scene_geometry_guides.c scene_transform_guides.c \
+		scene_overlays.c scene_render.c || true); \
+	if [ -n "$$bad" ]; then \
+		echo "ERROR: scene files reach into REPL state:"; \
+		echo "$$bad"; exit 1; \
+	fi
+
+check-ui-no-repl-state-mut:
+	@bad=$$(grep -nE 'repl_state_[A-Za-z0-9_]*_mut[[:space:]]*\(' ui_*.c || true); \
+	if [ -n "$$bad" ]; then \
+		echo "ERROR: ui files mutate REPL state directly:"; \
+		echo "$$bad"; exit 1; \
+	fi
+```
+
+The pure-scene rule starts as a small allowlist (e.g.
+`scene_render.c` exempt during R1 transition) and shrinks as cleanup lands.
+
+#### R8. Defer `sample → imrepl` rename until after R1, R2, R5
+
+The rename is mechanical but touches `sample.h`, which is broadly included.
+R1, R2, and R5 each touch `scene_render.h` / `scene_render_types.h` and
+several view modules; doing the rename first multiplies rebase pain. Land it
+as the final commit before `imrepl.c` becomes the new live-GL allowlist
+anchor.
+
+#### R9. Optional: split `repl_export.c` (2827 lines)
+
+Not architectural, just module hygiene. Natural split:
+`repl_export_save.c` / `repl_export_load.c` / `repl_export_workspace.c`.
+Skip if the file is not actively painful to navigate.
+
+### Suggested ordering
+
+R1 → R2 → R3 → R5 (config slimming) → R6 (header split) → R7 (guards) →
+R4 (controller internal cleanup) → R8 (rename) → R9 (export split,
+optional). R1 is highest leverage and unblocks R5 + R6. R2 is independently
+valuable and can be parallelized with R1.
+
 ## Verification
 
 Run after each step and again at the end:

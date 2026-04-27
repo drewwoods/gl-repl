@@ -87,7 +87,9 @@
       "Bash(brew install *)",
       "Bash(chmod +x scripts/cflow_to_graphviz.py scripts/cflow_to_cytoscape_html.py)",
       "Bash(command -v dot)",
-      "Bash(dot -Tsvg callgraph-imrepl_ctrl_display_frame.dot -o callgraph-imrepl_ctrl_display_frame.svg)"
+      "Bash(dot -Tsvg callgraph-imrepl_ctrl_display_frame.dot -o callgraph-imrepl_ctrl_display_frame.svg)",
+      "Bash(awk '{print $1, $3}')",
+      "Read(//private/tmp/**)"
     ]
   }
 }
