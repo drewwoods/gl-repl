@@ -78,7 +78,16 @@
       "Bash(perl -i -pe 's/for \\\\\\(int j = 0; j < arg_count; j\\\\+\\\\+\\\\\\)/for \\(int arg_idx = 0; arg_idx < arg_count; arg_idx++\\)/g' repl_parser.c)",
       "Bash(perl -i -pe 's/for \\\\\\(int i = 0; i < cmd_count; i\\\\+\\\\+\\\\\\)/for \\(int cmd_idx = 0; cmd_idx < cmd_count; cmd_idx++\\)/g' repl_executor.c)",
       "Bash(perl -i -pe 's/for \\\\\\(int j = 0; j < 3; j\\\\+\\\\+\\\\\\)/for \\(int component_idx = 0; component_idx < 3; component_idx++\\)/g' repl_executor.c)",
-      "Bash(perl -i -pe 's/for \\\\\\(int i = 0; i < count; i\\\\+\\\\+\\\\\\)/for \\(int idx = 0; idx < count; idx++\\)/g' repl_eval.c)"
+      "Bash(perl -i -pe 's/for \\\\\\(int i = 0; i < count; i\\\\+\\\\+\\\\\\)/for \\(int idx = 0; idx < count; idx++\\)/g' repl_eval.c)",
+      "Bash(./test_scene_render)",
+      "Bash(lldb ./test_scene_render)",
+      "Bash(nm ./test_scene_render)",
+      "Bash(lldb -batch -o \"run\" -o \"bt\" ./test_scene_render)",
+      "Bash(chmod +x scripts/cflow_to_mermaid.py scripts/callgrind_to_mermaid.py)",
+      "Bash(brew install *)",
+      "Bash(chmod +x scripts/cflow_to_graphviz.py scripts/cflow_to_cytoscape_html.py)",
+      "Bash(command -v dot)",
+      "Bash(dot -Tsvg callgraph-imrepl_ctrl_display_frame.dot -o callgraph-imrepl_ctrl_display_frame.svg)"
     ]
   }
 }

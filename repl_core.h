@@ -7,20 +7,19 @@
  * is edited directly; the flat array is rebuilt on demand before rendering.
  *
  * Lifecycle:
- *   repl_init_gl()                  once, at app startup, after GL context ready (forwards to imrepl_ctrl.c)
+ *   imrepl_ctrl_init_gl()           once, at app startup, after GL context ready (from imrepl_ctrl.h)
  *   repl_load_example(idx)          or repl_load_user_scene_idx() / repl_load_initial_commands()
  *   repl_keyboard_func()            per keystroke (from GLUT)
  *   repl_special_func()             per F-key/arrow (from GLUT)
- *   repl_display_func()             per frame (from GLUT, forwards to imrepl_ctrl.c)
- *   repl_reshape_func()             on window resize (from GLUT, forwards to imrepl_ctrl.c)
+ *   imrepl_ctrl_display_frame()     per frame (from GLUT, owned by imrepl_ctrl.h)
+ *   imrepl_ctrl_reshape()           on window resize (from GLUT, owned by imrepl_ctrl.h)
  *   repl_timer_func()               polling timer (from GLUT)
  *   repl_save_default_output()      or repl_export_save_output() to persist
  *
  * repl_core.c owns:
  *   - Live source-command array (g_cmds[], up to MAX_COMMANDS)
  *   - Live flat-command array (g_flat_cmds[], rebuilt lazily)
- *   - Scene config construction and the legacy GLUT wrappers
- *   - App-level lifecycle wrappers
+ *   - App-level lifecycle and input routing wrappers
  *
  * Specialized responsibilities delegated to focused modules:
  *   repl_parser.c      - Parse source lines to GLCmd (expression validation, normalization)
@@ -148,13 +147,6 @@ void repl_copy_replay_baseline_predef_values(float *dst, int max_vals);
 
 /* --- GLUT callback entry points (wired in sample.c) -------------------- */
 
-/* Per-frame rendering callback. Orchestrates accumulation-buffer AA (if enabled),
- * scene rendering, 2D overlays, and buffer swap. */
-void repl_display_func(void);
-
-/* Window reshape callback. Updates viewport and projection matrices. */
-void repl_reshape_func(int w, int h);
-
 /* ASCII key and Ctrl-key input. Routes to repl_editor.c for editing, or to
  * repl_actions.c for config shortcuts (Ctrl+S, Ctrl+Z, Ctrl+R, etc.). */
 void repl_keyboard_func(unsigned char key, int x, int y);
@@ -181,10 +173,6 @@ void repl_mousewheel_func(int wheel, int direction, int x, int y);
 /* Polling timer callback (every ~16ms @ 60 FPS). Ticks animation frame counter,
  * advances replays, updates camera momentum, and posts next timer event. */
 void repl_timer_func(int value);
-
-/* App startup: initialize GL, load default example, reset all state.
- * Called once from main() before glutMainLoop(). */
-void repl_init_gl(void);
 
 /* --- Test helpers ------------------------------------------------------ */
 

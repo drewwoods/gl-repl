@@ -1,4 +1,5 @@
 #include "sample.h"
+#include "imrepl_ctrl.h"
 #include "repl_actions.h"
 #include "repl_core.h"
 #include "repl_executor.h"
@@ -94,12 +95,12 @@ static void print_usage(const char *prog) {
 }
 
 static void display_func(void) {
-    repl_display_func();
+    imrepl_ctrl_display_frame();
     glutSwapBuffers();
 }
 
 static void reshape_func(int w, int h) {
-    repl_reshape_func(w, h);
+    imrepl_ctrl_reshape(w, h);
 }
 
 static void keyboard_func(unsigned char key, int x, int y) {
@@ -171,7 +172,7 @@ int main(int argc, char **argv) {
     glutInitWindowSize(*repl_state_viewport()->window_w, *repl_state_viewport()->window_h);
     glutCreateWindow("OpenGL REPL - Display List Dynamic Rendering");
 
-    repl_init_gl();
+    imrepl_ctrl_init_gl();
     atexit(repl_executor_destroy_resources);
     repl_eval_init_predef_vars();
     for (int i = 0; i < g_num_predef_vars; i++)
