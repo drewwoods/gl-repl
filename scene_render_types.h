@@ -99,8 +99,6 @@ typedef struct SceneRenderConfig {
     float cam_ty;
     float cam_tz;
     float cam_motion_glow;
-    float accum_jitter_x;
-    float accum_jitter_y;
     int multisample_enabled;
     int line_smooth_enabled;
     int wireframe;
