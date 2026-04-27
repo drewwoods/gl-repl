@@ -7,20 +7,19 @@
  * is edited directly; the flat array is rebuilt on demand before rendering.
  *
  * Lifecycle:
- *   repl_init_gl()                  once, at app startup, after GL context ready
+ *   repl_init_gl()                  once, at app startup, after GL context ready (forwards to imrepl_ctrl.c)
  *   repl_load_example(idx)          or repl_load_user_scene_idx() / repl_load_initial_commands()
  *   repl_keyboard_func()            per keystroke (from GLUT)
  *   repl_special_func()             per F-key/arrow (from GLUT)
- *   repl_display_func()             per frame (from GLUT)
- *   repl_reshape_func()             on window resize (from GLUT)
+ *   repl_display_func()             per frame (from GLUT, forwards to imrepl_ctrl.c)
+ *   repl_reshape_func()             on window resize (from GLUT, forwards to imrepl_ctrl.c)
  *   repl_timer_func()               polling timer (from GLUT)
  *   repl_save_default_output()      or repl_export_save_output() to persist
  *
  * repl_core.c owns:
  *   - Live source-command array (g_cmds[], up to MAX_COMMANDS)
  *   - Live flat-command array (g_flat_cmds[], rebuilt lazily)
- *   - Display callback and frame orchestration
- *   - GLUT callback wiring
+ *   - Scene config construction and the legacy GLUT wrappers
  *   - App-level lifecycle wrappers
  *
  * Specialized responsibilities delegated to focused modules:

@@ -9,7 +9,7 @@
  *   - Global state: command arrays (repl_state_document_cmds_mut() / g_flat_cmds), camera, toggles,
  *     accumulation-buffer settings, etc.
  *   - Normalization - repl_parse_and_normalize(), repl_reformat_commands()
- *   - GLUT display / reshape callbacks and frame orchestration
+ *   - GLUT callback wrappers and scene config construction
  *   - Public API wrappers forwarded from sample.c
  *
  * repl_editor.c owns the interactive editing layer:
@@ -55,6 +55,7 @@
 #include "repl_export.h"
 #include "repl_core.h"
 #include "repl_core_internal.h"
+#include "imrepl_ctrl.h"
 #include "repl_command_spec.h"
 #include "repl_command_store.h"
 #include "repl_parser.h"
@@ -65,11 +66,6 @@
 #include "cmd_format.h"
 #include "scene_render.h"
 #include "ui_panels.h"
-#include "ui_menu_bar.h"
-#include "ui_autocomplete_panel.h"
-#include "ui_help_overlay.h"
-#include "ui_variable_panel.h"
-#include "ui_profile_panel.h"
 #include "prof.h"
 #include "repl_state.h"
 
@@ -648,74 +644,6 @@ void scene_render_config_build(SceneRenderConfig *config) {
 /* GLUT callbacks                                                             */
 /* ========================================================================= */
 
-static void display_func(void) {
-    int saved_flat_count;
-    float live_predef_vals[MAX_PREDEF_VARS] = { 0 };
-    FlatProgramView flat_program = repl_state_flat_program_view();
-    int g_num_flat_cmds = flat_program.cmd_count;
-    const ReplReplayRuntimeState *replay = repl_state_replay();
-
-    prof_frame_tick();
-    prof_begin(PROF_FRAME_TOTAL);
-
-    if (repl_state_normals_dirty()) {
-        recompute_autonormals();
-        repl_state_normals_dirty_clear();
-    }
-    if (repl_state_flat_program_dirty()) {
-        prof_begin(PROF_FLATTEN);
-        flatten_commands();
-        repl_state_flat_program_clear_dirty();
-        prof_end(PROF_FLATTEN);
-        flat_program = repl_state_flat_program_view();
-        g_num_flat_cmds = flat_program.cmd_count;
-    }
-
-    saved_flat_count = g_num_flat_cmds;
-    repl_copy_predef_values(live_predef_vals, MAX_PREDEF_VARS);
-    if (*replay->active)
-        repl_state_flat_program_set_count(repl_replay_prepare_frame(saved_flat_count));
-
-    update_render_state_strings();
-    update_cam_lines();
-
-    /* 3D scene - scene_render_3d_scene() handles optional accumulation-buffer AA */
-    /* Reset subsection accumulators so timings across all AA samples sum up
-     * correctly before the first (or only) scene_render_3d_scene() call. */
-    for (ProfSection section_idx = PROF_SCENE_3D_SETUP; section_idx <= PROF_SCENE_3D_HUD; section_idx++)
-        prof_accum_reset(section_idx);
-    prof_begin(PROF_SCENE_3D);
-    scene_render_3d_scene();
-    prof_end(PROF_SCENE_3D);
-    /* Commit the accumulated subsection totals now that all AA samples are done. */
-    for (ProfSection section_idx = PROF_SCENE_3D_SETUP; section_idx <= PROF_SCENE_3D_HUD; section_idx++)
-        prof_accum_commit(section_idx);
-
-    prof_begin(PROF_CODE_PANEL);
-    ui_panels_render_code_panel();
-    prof_end(PROF_CODE_PANEL);
-
-    prof_begin(PROF_UI_PANELS);
-    ui_autocomplete_panel_render();
-    ui_menu_bar_render_example_dropdown();
-    ui_variable_panel_render();
-    ui_panels_render_scene_status();
-    ui_help_overlay_render();
-    prof_end(PROF_UI_PANELS);
-
-    ui_profile_panel_render();
-
-    repl_state_flat_program_set_count(saved_flat_count);
-    repl_restore_predef_values(live_predef_vals, MAX_PREDEF_VARS);
-
-    prof_end(PROF_FRAME_TOTAL);
-}
-
-static void reshape_func(int w, int h) {
-    if (h < 1) h = 1;
-    repl_state_viewport_set_size(w, h);
-}
-
 /* ========================================================================= */
 /* For-loop parsing and expansion                                             */
 /* ========================================================================= */
@@ -832,12 +760,6 @@ static void load_initial_commands(const char *import_file) {
     scroll_to_display_function();
 }
 
-static void init_gl(void) {
-    scene_render_init_gl();
-    repl_executor_init_resources();
-    apply_init_bootstrap();
-}
-
 void repl_save_default_output(void) {
     repl_export_save_output(outfile);
 }
@@ -851,16 +773,15 @@ void repl_load_initial_commands(const char *import_file) {
 }
 
 void repl_display_func(void) {
-    display_func();
+    imrepl_ctrl_display_frame();
 }
 
 void repl_reshape_func(int w, int h) {
-    reshape_func(w, h);
+    imrepl_ctrl_reshape(w, h);
 }
 
 void repl_init_gl(void) {
-    ensure_init_bootstrap_ready();
-    init_gl();
+    imrepl_ctrl_init_gl();
 }
 
 void repl_advance_time(float dt) {
