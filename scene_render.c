@@ -61,7 +61,9 @@ static void scene_render_pop_state(void) {
     glPopAttrib();
 }
 
-static void scene_apply_projection(const SceneRenderConfig *config) {
+static void scene_apply_projection(const SceneRenderConfig *config,
+                                   float accum_jitter_x,
+                                   float accum_jitter_y) {
     glMatrixMode(GL_PROJECTION);
     glLoadIdentity();
 
@@ -71,9 +73,9 @@ static void scene_apply_projection(const SceneRenderConfig *config) {
     double aspect  = (double)config->scene_w / (double)config->scene_h;
     double top_v   = near_z * tan(45.0 * M_PI / 360.0);
     double right_v = top_v * aspect;
-    double dx = (double)config->accum_jitter_x * 2.0 * right_v /
+    double dx = (double)accum_jitter_x * 2.0 * right_v /
                 (double)config->scene_w;
-    double dy = (double)config->accum_jitter_y * 2.0 * top_v /
+    double dy = (double)accum_jitter_y * 2.0 * top_v /
                 (double)config->scene_h;
 
     glFrustum(-right_v + dx, right_v + dx,
@@ -381,14 +383,16 @@ static void scene_apply_clear_color(FlatProgramView flat_program) {
     glClearColor(cr, cg, cb, ca);
 }
 
-static void render_3d_scene_pass(const SceneRenderConfig *config) {
+static void render_3d_scene_pass(const SceneRenderConfig *config,
+                                 float accum_jitter_x,
+                                 float accum_jitter_y) {
     FrameRenderContext frame_ctx;
     scene_prepare_frame_context(&frame_ctx, config);
 
     prof_begin(PROF_SCENE_3D_SETUP);
     glPushAttrib(GL_ALL_ATTRIB_BITS);
 
-    scene_apply_projection(config);
+    scene_apply_projection(config, accum_jitter_x, accum_jitter_y);
     scene_apply_camera_view(config);
 
     scene_lights_setup(&frame_ctx);
@@ -570,29 +574,27 @@ static void render_3d_scene_pass(const SceneRenderConfig *config) {
 
 void scene_render_3d_scene(const SceneRenderConfig *config) {
     const ReplRenderState *render = repl_state_render();
-    SceneRenderConfig frame_config = *config;
-
-    glViewport(frame_config.scene_x, frame_config.scene_y,
-               frame_config.scene_w, frame_config.scene_h);
-    scene_apply_clear_color(frame_config.flat_program);
+    glViewport(config->scene_x, config->scene_y,
+               config->scene_w, config->scene_h);
+    scene_apply_clear_color(config->flat_program);
 
     if (*render->use_accum && *render->accum_aa_enabled && *render->accum_samples > 1) {
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_ACCUM_BUFFER_BIT);
         float weight = 1.0f / (float)*render->accum_samples;
         for (int sample_idx = 0; sample_idx < *render->accum_samples; sample_idx++) {
             glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-            if (frame_config.replaying)
+            if (config->replaying)
                 repl_replay_restore_baseline_predef_values();
-            frame_config.accum_jitter_x = g_jitter_table[sample_idx % MAX_ACCUM_SAMPLES][0];
-            frame_config.accum_jitter_y = g_jitter_table[sample_idx % MAX_ACCUM_SAMPLES][1];
-            render_3d_scene_pass(&frame_config);
+            render_3d_scene_pass(config,
+                                 g_jitter_table[sample_idx % MAX_ACCUM_SAMPLES][0],
+                                 g_jitter_table[sample_idx % MAX_ACCUM_SAMPLES][1]);
             glAccum(GL_ACCUM, weight);
         }
         glAccum(GL_RETURN, 1.0f);
     } else {
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-        if (frame_config.replaying)
+        if (config->replaying)
             repl_replay_restore_baseline_predef_values();
-        render_3d_scene_pass(&frame_config);
+        render_3d_scene_pass(config, 0.0f, 0.0f);
     }
 }

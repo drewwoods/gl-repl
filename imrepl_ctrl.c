@@ -116,8 +116,6 @@ static void imrepl_ctrl_build_scene_config(SceneRenderConfig *config) {
     config->cam_ty = *cam->ty;
     config->cam_tz = *cam->tz;
     config->cam_motion_glow = *cam->motion_glow;
-    config->accum_jitter_x = *render->accum_jitter_x;
-    config->accum_jitter_y = *render->accum_jitter_y;
     config->multisample_enabled = *render->multisample_enabled;
     config->line_smooth_enabled = *render->line_smooth_enabled;
     config->wireframe = *presentation->wireframe;
