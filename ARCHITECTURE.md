@@ -1,1097 +1,711 @@
 # REPL Architecture
 
-> For a one-page layered overview of all modules, see
-> [`MODULES.md`](MODULES.md). This document is the per-module reference.
+> For the quick module map, see [`MODULES.md`](MODULES.md). This document is the ownership reference for the immediate-mode REPL.
 
 ## Overview
 
-The immediate-mode REPL is now split across focused translation units instead
-of one monolithic `repl_core.c`.
+The immediate-mode REPL is organized around three major components:
 
-- `repl_core.c`: normalization, display callback, and init wrapper.
-- `repl_parser.c`: source-line parser, expression validation against visible
-  variables, explicit `ReplParseContext`, and canonical `GLCmd.source[]`
-  generation for GL commands.
-- `repl_source_scope.c`: source-command prefix-depth cache, indentation
-  helpers, `find_block_end()`, and nearest-open-block queries.
-- `repl_flatten.c`: source-to-flat command expansion and flat-command cursor
-  matching.
-- `repl_executor.c`: flat-command execution, GLU resource lifetimes,
-  state-command dispatch, replay fade execution context, and
-  predefined-variable snapshots.
-- `repl_autocomplete.c`: input completions and parameter hints derived from
-  parser command metadata plus user-defined function signatures.
-- `repl_autonormal.c`: auto-generated `glNormal3f` command maintenance and
-  feeding color/normal lookup for code-panel highlighting.
-- `repl_scenes.c`: user-scene slots, example promotion, workspace save/load,
-  LRU eviction, and scene rename state.
-- `repl_example_loader.c`: built-in example loading, example metadata, camera
-  presets, and active example tracking.
-- `repl_search.c`: search state, match navigation, and search-mode keyboard
-  handling.
-- `repl_export.c`: typed export scaffold sections, init bootstrap tables,
-  import/export translation, save/load, and code-panel dump helpers.
-- `repl_commit.c`: float declarations, variable assignments, structured block
-  commits, close-brace commits, and commit-order helpers.
-- `repl_editor.c`: editor state, commit orchestration, feed-line entrypoint,
-  and GLUT input handlers.
-- `repl_clipboard.c`: line selection anchors, command clipboard buffer, and
-  copy/cut/paste range behavior.
-- `repl_undo.c`: undo/redo snapshots, history rings, and the mutation-time
-  example promotion hook.
-- `repl_camera_controls.c`: scene camera pointer state, orbit/pan/zoom drags,
-  wheel zoom velocity, and per-frame momentum decay.
-- `repl_actions.c`: config item table, config shortcut dispatch, menu item
-  actions, startup config defaults, and side effects for toggles/cycles.
-- `repl_code_panel_layout.c`: pure code-panel wrapping, row counts, row
-  segment lookup, and cursor-row mapping shared by UI rendering, hit-testing,
-  tests, and visual dumps.
-- `repl_code_panel_document.c`: code-panel document row model: wrapped
-  header/body/footer counts, replay annotation rows, cursor-follow scrolling,
-  and document-line to command-line hit targets.
-- `repl_replay_annotations.c`: code-panel replay annotations, including
-  source-line to flat-command mapping, substituted variable comments, and
-  evaluated command display text.
-- `ui_menu_bar.c`: code-panel menu bar, dropdown rendering/hit-testing,
-  config-menu right-click cycling, and inline search-slot rendering.
-- `ui_color_picker.c`: floating color picker state, literal color swatches,
-  and HSV/alpha mutation of color commands.
-- `ui_help_overlay.c`: modal F1 help overlay rendering.
-- `ui_variable_panel.c`: floating variable slider panel rendering, geometry,
-  and hit-testing.
-- `repl_var_drag.c`: variable slider drag transactions and writeback into
-  predefined variables plus matching assignment source.
-- `ui_autocomplete_panel.c`: floating autocomplete popup rendering; match
-  building and selection state stay in `repl_autocomplete.c`.
-- `repl_inline_rename.c`: inline scene-rename input buffer and key handling.
-- `repl_eval.c`: expression parsing and evaluation.
-- `ui_panels.c`: 2D code-panel row rendering, source search highlights, inline
-  ghost/hint text, scene status banner, and top-level panel routing.
-- `scene_render.c`: 3D frame orchestration, one-shot scene init,
-  `SceneRenderConfig` / `FrameRenderContext` prep, orbit target, and replay HUD.
-- `scene_render_types.h`: shared per-frame render snapshot types consumed by
-  the scene helpers.
-- `scene_guides_shared.h`: shared scene-guide snapshot and transform-guide
-  planning types.
-- `scene_geometry_guides.c`: vertex-input and normal-edit guide rendering from
-  snapshot state.
-- `scene_transform_guides.c`: transform-guide planning and rendering
-  (`glTranslatef`/`glRotatef`/`glScalef`) from snapshot state.
-- `scene_transform_utils.h`: inline GL matrix helpers (`scene_apply_tracked_transform`,
-  `scene_unwind_transform_stack`) used by scene renderers and guides.
-- `scene_grid.c`: grid theme rendering, including focus/ocean/ruler/planes
-  variants, accepting `FrameRenderContext` for config access.
-- `scene_axes.c`: axes theme rendering, accepting `FrameRenderContext`.
-- `scene_backdrop.c`: backdrop mode dispatch and deterministic cityscape
-  rendering, accepting `FrameRenderContext`.
-- `scene_lights.c`: ambient init, per-pass light property setup, and light
-  indicator overlay rendering, accepting `FrameRenderContext`.
-- `scene_overlays.c`: polygon outline/current-block, vertex-number, and
-  normal-vector overlay rendering plus local cursor-match logic using only
-  config fields, accepting `FrameRenderContext`.
-- `prof.c`: project-wide CPU timing instrumentation.
-- `sample.c`: application entrypoint, GLUT callback wiring, and buffer swap.
+```text
+repl_*   = language, source model, flattened geometry model, replay model, controller
+scene_*  = independent 3D view/decorator layer
+ui_*     = independent 2D view layer
+````
 
-**Public API:** Each module header (`repl_*.h`, `ui_*.h`, `scene_*.h`)
-comprehensively documents its public API with module overview, lifecycle
-integration, and detailed function descriptions. The headers are stand-alone
-references — read any module's header to understand its API without consulting
-other headers or implementation files. For a detailed explanation of the
-header documentation standard, see [`MODULES.md` → Header Documentation
-Standard](MODULES.md#header-documentation-standard).
+The main design rule is simple:
 
-Cross-module runtime/test helpers live in `repl_core_internal.h`. Shared
-globals and UI-visible state still live in `sample.h`.
+```text
+The REPL owns the user program.
+The scene owns the 3D stage.
+The UI owns the 2D editor/view.
+```
 
-For the layered overview and the editor-adjacent ownership diagram, see
-[`MODULES.md`](MODULES.md).
+The scene may call a generic callback to draw user geometry inside the 3D frame, but the scene should not know that the callback is backed by a REPL flat program. That keeps scene rendering reusable and prevents REPL semantics from leaking into camera/grid/axis/backdrop/light code.
+
+## Three Core Components
+
+### 1. REPL model/controller
+
+The REPL owns the C-like input language and the user-authored geometry program.
+
+Responsibilities:
+
+* parse source lines into source commands
+* maintain the source command array
+* flatten loops/functions/conditionals into an executable flat program
+* own predefined variables and expression evaluation
+* own replay state and replay policy
+* describe geometry, outlines, and annotations as REPL-owned plans
+* provide the callback that draws user geometry inside a scene frame
+
+The REPL should be able to describe geometry in a non-rendering way, much like `repl_export.c` describes emitted C. Live GL execution should remain isolated to the narrow executor boundary.
+
+### 2. Scene view
+
+The scene layer owns the 3D frame and neutral 3D decorators.
+
+Responsibilities:
+
+* viewport rectangle
+* clear color
+* projection
+* camera
+* accumulation-buffer and jitter loop
+* quality flags such as multisample, line smoothing, and wireframe
+* baseline scene lighting
+* grid
+* axes
+* backdrop
+* light indicators
+* orbit target / camera manipulation visualization
+* generic callback hook points for user geometry and 3D annotations
+
+The scene should be able to render an empty environment without a REPL program. If no user callback is installed, the scene should still be capable of drawing the camera/world decorators.
+
+### 3. UI view
+
+The UI layer owns 2D editor rendering.
+
+Responsibilities:
+
+* code panel
+* menus and dropdowns
+* search slot
+* autocomplete popup
+* variable panel
+* color picker
+* help overlay
+* profile HUD
+* status banners and other screen-space overlays
+
+The UI renders from per-frame config/model snapshots. It should route mutations through `repl_*` actions, command-store APIs, or other REPL-owned mutation paths.
+
+## Target Frame Pipeline
+
+The top-level frame path should build all view inputs before rendering:
+
+```text
+repl display/frame entry
+  -> rebuild flat program if dirty
+  -> build ReplGeometryRenderPlan
+  -> build SceneRender3DConfig
+  -> resolve REPL-owned clear color into scene config
+  -> install generic user-draw callbacks into scene config
+  -> scene_render_3d_scene(&scene_cfg)
+  -> build UiRenderConfig
+  -> ui_render(&ui_cfg)
+```
+
+The scene frame should then run independently:
+
+```text
+scene_render_3d_scene
+  -> for each accumulation sample:
+       -> set viewport
+       -> clear color/depth buffers
+       -> apply projection + jitter
+       -> apply camera
+       -> apply quality flags
+       -> setup baseline scene lighting/material state
+       -> draw scene decorators
+       -> call user draw callback: SCENE_USER_DRAW_MAIN
+       -> call user draw callback: SCENE_USER_DRAW_ANNOTATIONS_3D
+       -> draw scene foreground decorators
+       -> accumulate sample if accumulation AA is active
+  -> return final accumulated frame
+```
+
+The exact order can preserve current visuals. For example, if a translucent grid blends better after user geometry, keep that order. The ownership rule still holds: scene decides where generic hooks happen, while REPL decides what its callback draws.
 
 ## Two-Level Command Model
 
-The REPL keeps **source commands** and **flattened commands** as separate
-arrays. Everything else (execution, replay, normal recomputation, overlays)
-reads from the flattened array.
+The REPL keeps source commands and flattened commands separate.
 
-- `g_cmds[MAX_COMMANDS]` — source-level. One entry per line visible in the
-  code panel. Holds parsed type/args, the normalized `source[]` text, and
-  flags (`has_vars`, `valid`, `is_auto`). Editor mutations touch only this
-  array.
-- `g_flat_cmds[MAX_COMMANDS]` — expanded. For-loops unrolled, function calls
-  inlined, if-conditions resolved. Each flat cmd carries `src_cmd_idx`
-  (owning source line), `call_src_cmd_idx` (immediate call site), and
-  `func_scope_mask` (active function scopes) so the editor can highlight
-  the right source line when the cursor lands on a flattened command.
-- **Rebuild trigger:** every mutation sets `g_flat_dirty = 1` (via
-  `mark_normals_dirty()`); `flatten_commands()` rebuilds the flat array on
-  the next frame before rendering.
-- `repl_flatten_program()` is the explicit builder underneath the live rebuild:
-  callers provide source commands, destination flat buffers, local-variable
-  snapshot storage, capacity, recursion limits, visit budget, and receive
-  flat count/status output.
+```text
+source commands
+  one visible/editor line per command
 
-Keeping the two levels separate means edits are cheap, execution reads a
-flat stream, and replay can step by flat-command without worrying about
-loop/function structure.
+flattened commands
+  loops expanded
+  functions inlined
+  conditionals resolved
+  provenance retained
+```
+
+Source commands are the editing model.
+
+Flattened commands are the execution/replay model.
+
+Everything that draws user geometry should consume a `FlatProgramView` or a REPL-owned plan derived from one. Code outside the REPL should not poke raw command arrays.
 
 ## Command Lifecycle
 
-A single REPL line progresses through five stages, owned by different
-modules:
-
-1. **Input** — `repl_editor.c` accumulates characters into `g_input`.
-2. **Commit** — `;` (or Enter in overwrite mode, or programmatic
-   `feed_line()`) runs the commit handler chain (see
-   [Structured block commits](#structured-block-commits) below).
-3. **Parse** — `repl_parse_command()` in `repl_parser.c` matches the line to
-   a `CmdType`, evaluates argument expressions via `repl_eval.c`, and
-   stores results into `GLCmd.args[]` / `GLCmd.source[]`.
-4. **Flatten** — `repl_flatten_program()` recursively expands source commands
-   through `flatten_range()`, capped at 100k visits and recursion depth 64 by
-   the live wrapper.
-5. **Execute** — `execute_commands()` / `repl_execute_program()` in
-   `repl_executor.c` walk `g_flat_cmds[]` and emit GL calls. Commands flagged
-   `has_vars` are re-evaluated each frame so animated expressions (e.g. `t`)
-   stay live.
-
-Stage 1 and commit orchestration live in `repl_editor.c`; commit handlers
-live in `repl_commit.c`; parsing lives in `repl_parser.c`; flattening lives in
-`repl_flatten.c`; execution lives in `repl_executor.c`. This is the
-load-bearing boundary — outside code that needs to inject commands should
-do so through `feed_line()` rather than poking `g_cmds[]` directly, so
-every path shares the same parse/normalize/flatten guarantees.
-
-## Data Flow
-
-### Edit and commit path
-
-1. GLUT keyboard/mouse callbacks enter through `repl_editor.c`.
-2. Commit handlers in `repl_commit.c` convert input text into commands by calling
-   `repl_parse_command*()` in `repl_parser.c` or
-   `repl_parse_and_normalize()` in `repl_core.c`.
-3. Parsed commands are stored in `g_cmds[]`.
-4. `mark_normals_dirty()` and `g_flat_dirty` invalidate downstream derived
-   state.
-
-### Execution path
-
-1. `flatten_commands()` in `repl_flatten.c` calls `repl_flatten_program()` to
-   expand loops, functions, conditionals, and variable-driven commands into
-   `g_flat_cmds[]`.
-2. `scene_render.c` prepares the frame, delegates grid rendering to
-   `scene_grid.c`, axes rendering to `scene_axes.c`, guide rendering to
-   `scene_geometry_guides.c` / `scene_transform_guides.c`, light setup to
-   `scene_lights.c`, and calls `repl_execute_program()` with an explicit
-   `FlatProgramView`/flat-command limit for normal, replay, and fade passes.
-3. `repl_executor.c` issues fixed-function OpenGL calls against the requested
-   flat program view. `execute_commands()` remains a full-range compatibility
-   wrapper around `repl_execute_program(NULL)`.
+A user line follows this path:
 
-### Search path
+```text
+input text
+  -> commit handler
+  -> parser
+  -> source command store
+  -> flatten
+  -> geometry render plan
+  -> executor callback
+```
 
-1. `repl_search.c` scans `g_cmds[].source`.
-2. Search hit movement calls `navigate_to_line()` from `repl_editor.c`.
-3. `ui_panels.c` renders search highlights from the shared search globals.
+Owned stages:
 
-### Import/export path
+| Stage                    | Owner                  |
+| ------------------------ | ---------------------- |
+| Input buffer and routing | `repl_editor.c`        |
+| Structured commits       | `repl_commit.c`        |
+| Parsing                  | `repl_parser.c`        |
+| Source command mutation  | `repl_command_store.c` |
+| Source scope/depth       | `repl_source_scope.c`  |
+| Flattening               | `repl_flatten.c`       |
+| Execution                | `repl_executor.c`      |
+| Export/import            | `repl_export.c`        |
 
-1. `repl_export.c` owns the scaffold shown in the code panel and emitted to
-   exported C.
-2. `save_output()` writes typed scaffold sections plus translated command
-   bodies.
-3. `load_from_file()` converts exported C back into REPL lines and replays them
-   through `feed_line()` from `repl_editor.c`, so import uses the same commit
-   rules as interactive editing.
+This is a load-bearing boundary. Outside code that needs to inject commands should use the existing public command/input paths instead of directly mutating command arrays.
 
-## Ownership
+## REPL Geometry Rendering
 
-### `repl_core.c`
+REPL geometry rendering has two conceptual parts:
 
-Owns the semantic model and display infrastructure.
+1. a mostly pure render plan
+2. a narrow live-GL executor/callback adapter
 
-- `g_cmds[]`, `g_num_cmds`
-- `g_flat_cmds[]`, `g_num_flat_cmds`
-- normalization and reformat orchestration
-- display callback
-- init wrapper
+### Geometry render plan
 
-### `repl_parser.c`
+The plan is REPL-owned. It may contain REPL-specific concepts because the scene never inspects it.
 
-Owns the general GL command parser.
+Candidate shape:
 
-- `ReplParseContext` (`source_line_idx`, visible locals)
-- `repl_parse_command()`
-- `repl_parse_command_with_vars()`
-- `repl_parse_command_ctx()`
-- table-driven fixed-arity/enum command matching
-- custom parser branches for material, point-parameter, tessellator,
-  function-call, label, and goto syntax
+```c
+typedef struct ReplGeometryRenderPlan {
+    FlatProgramView flat_program;
 
-### `repl_source_scope.c`
+    int wireframe;
+    int user_lighting_enabled;
 
-Owns source-command scope/depth lookups.
+    int replay_active;
+    int replay_mode;
+    int replay_base_limit;
 
-- prefix-depth cache invalidated through `depth_cache_invalidate()`
-- `block_depth_at()`, `in_begin_block_at()`, `tess_scope_depth_at()`
-- `cmd_indent()`, `cmd_tess_indent()`, `cmd_indent_chars()`
-- `find_block_end()`, `nearest_open_block_at()`
+    int show_current_poly;
+    int show_vertex_points;
+    int show_vertex_labels;
+    int show_normal_vectors;
+    int show_vertex_guides;
+    int show_transform_guides;
 
-### `repl_flatten.c`
+    int edit_line_idx;
+    int cursor_block_begin_idx;
+    int cursor_block_end_idx;
+    int cursor_block_source_line;
 
-Owns flattening and flat-command cursor matching.
+    ReplReplayHighlight replay_highlight;
+} ReplGeometryRenderPlan;
+```
 
-- `flatten_commands()`
-- `repl_flatten_program()` explicit source/destination builder
-- recursive loop/function/if expansion
-- flat-command provenance fields
-- `g_current_block_begin`, `g_current_block_end`
+This structure should not be part of the pure scene config. It belongs in the callback `user_data` passed from the REPL frame compositor to the scene.
 
-### `repl_executor.c`
+### Live executor callback
 
-Owns flat-program execution and execution-time state.
+The callback is the seam where REPL geometry enters the 3D frame.
 
-- `repl_execute_program()`, `execute_commands()`
-- `FlatProgramView` resolution and execution-limit clamping
-- GLU quadric / tessellator resource lifetimes and tess callbacks
-- `apply_state_cmd()`
-- replay fade execution context
-- predefined-variable snapshot/restore helpers
+```c
+void repl_geometry_scene_draw_callback(const SceneUserDrawRequest *request,
+                                       void *user_data)
+{
+    ReplGeometryRenderPlan *plan = user_data;
 
-### `repl_autocomplete.c`
+    switch (request->pass) {
+    case SCENE_USER_DRAW_MAIN:
+        repl_geometry_render_main(plan, request);
+        break;
 
-Owns editor-input completions and parameter hints.
+    case SCENE_USER_DRAW_ANNOTATIONS_3D:
+        repl_geometry_render_annotations(plan, request);
+        break;
+    }
+}
+```
 
-- `g_ac_*` completion/ghost/hint state
-- builtin command and enum completions
-- user-defined `funcN(...)` parameter hints
+The adapter can delegate to `repl_executor.c` for actual flat-program execution. The important rule is that the scene does not inspect `ReplGeometryRenderPlan`.
 
-### `repl_autonormal.c`
+## Scene Render Config
 
-Owns auto-generated normals and feeding-state lookup.
+The scene render config should be a complete per-frame snapshot of the 3D environment and generic draw hooks.
 
-- `recompute_autonormals()`
-- `repl_find_feeding_normal_cmd()`
-- `repl_find_feeding_color_cmd()`
-- auto-normal command insertion/update through `ReplCommandStore`
+It should not include REPL source/flat/replay internals.
 
-### `repl_scenes.c`
+Preferred shape:
 
-Owns the multi-scene workspace model.
+```c
+typedef enum SceneUserDrawPass {
+    SCENE_USER_DRAW_MAIN,
+    SCENE_USER_DRAW_ANNOTATIONS_3D,
+} SceneUserDrawPass;
 
-- `g_user_scenes[]` and active-scene tracking
-- example-to-user-scene promotion
-- workspace save/load and LRU scene eviction
-- scene naming, slugging, and rename validation
+typedef struct SceneUserDrawRequest {
+    SceneUserDrawPass pass;
+    const struct SceneFrameContext *scene;
 
-### `repl_example_loader.c`
+    int accum_sample_idx;
+    int accum_sample_count;
 
-Owns built-in example loading and loader-only metadata.
+    float alpha_scale;
+} SceneUserDrawRequest;
 
-- `g_example_idx`
-- example `@cfg` metadata filtering and application
-- example camera preset parsing
-- example presentation-default reset before metadata application
-- example source replay through `feed_line()`
+typedef void (*SceneUserDrawFn)(const SceneUserDrawRequest *request,
+                                void *user_data);
 
-### `repl_editor.c`
+typedef struct SceneUserDrawCallbacks {
+    SceneUserDrawFn draw;
+    void (*reset)(void *user_data);
+    void *user_data;
+} SceneUserDrawCallbacks;
 
-Owns transient editor and interaction state.
+typedef struct SceneRender3DConfig {
+    int scene_x;
+    int scene_y;
+    int scene_w;
+    int scene_h;
 
-- `g_input`, `g_input_len`, `g_cursor_pos`
-- `g_edit_line`, `g_inserting`, newline buffer
-- code-panel scroll and resize state
-- variable-drag/config-menu interaction state
-- feed-line entrypoint and commit-attempt outcomes
-- keyboard, special-key, mouse, motion, and timer callbacks
+    int viewport_w;
+    int viewport_h;
 
-### `repl_actions.c`
+    float clear_rgba[4];
 
-Owns side-effecting actions that start from editor shortcuts or menu rows.
+    float cam_dist;
+    float cam_rx;
+    float cam_ry;
+    float cam_tx;
+    float cam_ty;
+    float cam_tz;
+    float cam_motion_glow;
 
-- `g_cfg_items[]`, `CFG_ITEM_COUNT`, and config state-label tables
-- F-key and Ctrl-key config shortcut lookup
-- `repl_cfg_cycle_row()` and per-item side effects
-- menu item activation for File, Scene, and Config menus
-- startup application of persisted audio config
+    int multisample_enabled;
+    int line_smooth_enabled;
+    int wireframe;
 
-### `repl_undo.c`
+    int use_accum;
+    int accum_aa_enabled;
+    int accum_samples;
 
-Owns editor history snapshots and the undo/redo rings.
+    int grid_theme;
+    int grid_extent_idx;
+    int grid_major_idx;
+    float grid_major_steps[GRID_MAJOR_COUNT];
+    float grid_extents[GRID_EXTENT_COUNT];
 
-- source-command, edit-line, and predefined-variable snapshots
-- undo/redo ring heads and counts
-- snapshot save/restore helpers used by commit-attempt rollback
-- example-to-user-scene promotion before the first mutating snapshot
+    int axes_theme;
+    int backdrop_mode;
 
-### `repl_camera_controls.c`
+    int user_lighting_enabled;
+    SceneLight lights[MAX_LIGHTS];
+    int show_light_indicators;
 
-Owns scene-camera pointer and momentum behavior after editor/UI routing has
-decided an event belongs to the viewport.
+    SceneUserDrawCallbacks user_draw;
+} SceneRender3DConfig;
+```
 
-- `g_mouse_x`, `g_mouse_y`, `g_mouse_btn`
-- active mouse-drag modifiers for scene panning
-- orbit, ground-plane pan, vertical pan, and middle-button zoom math
-- wheel zoom velocity and per-frame velocity decay
-- camera auto-rotate and pan-target glow fade during the timer tick
+Derived per-frame data belongs in a context:
 
-### `repl_clipboard.c`
+```c
+typedef struct SceneFrameContext {
+    SceneRender3DConfig config;
 
-Owns line selection and command clipboard behavior.
+    float camera_world_y;
+    int camera_below_water_surface;
 
-- `g_sel_anchor`, `g_sel_end`
-- `g_clipboard[]`, `g_clipboard_count`
-- selected/current command-range resolution for copy and cut
-- var-declaration copy/cut/paste guards
-- paste insertion through `ReplCommandStore`
+    int focus_point_valid;
+    float focus_point[3];
+} SceneFrameContext;
+```
 
-### `repl_commit.c`
+If focus-point data depends on the REPL edit line, the REPL should compute it and pass it as generic optional scene focus data. The scene should not inspect the document to find it.
 
-Owns source-command mutations that happen before the general GL parser path.
+## `scene_render_3d_scene()` Main Loop
 
-- `float` declarations and predefined-variable registration
-- predefined-variable assignments
-- `for`, `func`, and `if` structural block commits
-- explicit close-brace handling
-- canonical commit-handler ordering helpers
-- function-declaration resume state used when declarations move upward
+Target signature:
 
-### `repl_search.c`
+```c
+void scene_render_3d_scene(const SceneRender3DConfig *config);
+```
 
-Owns source-text search state.
+Target flow:
 
-- `g_search_*`
-- row/text lookup helpers
-- next/previous match navigation
-- search-mode key handling
+```c
+void scene_render_3d_scene(const SceneRender3DConfig *config)
+{
+    int sample_count = scene_resolve_sample_count(config);
 
-### `repl_export.c`
+    glViewport(config->scene_x, config->scene_y,
+               config->scene_w, config->scene_h);
 
-Owns generated scaffold and import/export plumbing.
+    glClearColor(config->clear_rgba[0],
+                 config->clear_rgba[1],
+                 config->clear_rgba[2],
+                 config->clear_rgba[3]);
 
-- `g_header_pre`, `g_render_state_lines`, `g_lookat`, `g_header_post`
-- init bootstrap tables and helpers
-- `ExportScaffoldContext`, top-level scaffold sections, `ExportNeeds`, and
-  display-pass specs for generated export sections
-- `save_output()`, `load_from_file()`
-- import translation helpers
-- code-panel visual dump plumbing, using `repl_code_panel_layout.c` for wrap
-  parity with the on-screen panel
+    if (scene_using_accumulation(config))
+        glClear(GL_ACCUM_BUFFER_BIT);
 
-### `repl_code_panel_layout.c`
+    for (int sample_idx = 0; sample_idx < sample_count; sample_idx++) {
+        SceneFrameContext frame_ctx;
 
-Owns pure code-panel text wrapping and row lookup. It has no OpenGL, editor, or
-export side effects.
+        scene_frame_context_prepare(&frame_ctx, config,
+                                    sample_idx, sample_count);
 
-- `CodePanelTextLayout`
-- continuation-indent and wrap-break decisions
-- `CodePanelWrapIter`
-- row count, row segment, and cursor-row lookup helpers
-- shared behavior for `ui_panels.c`, `repl_export.c`, and focused layout tests
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-### `repl_code_panel_document.c`
+        scene_apply_projection(&frame_ctx);
+        scene_apply_camera_view(&frame_ctx);
+        scene_apply_quality_config(&frame_ctx);
+        scene_lights_setup(&frame_ctx);
 
-Owns the code-panel document row model that sits above pure text wrapping. It
-has no drawing code; it turns current REPL/editor state into row counts and
-targets consumed by rendering, scrolling tests, and mouse hit-testing.
+        scene_backdrop_render(&frame_ctx);
+        scene_grid_render(&frame_ctx);
+        scene_axes_render(&frame_ctx);
 
-- wrapped header/body/footer row totals
-- per-command main rows plus replay annotation rows
-- cursor and replay follow-line calculation
-- scroll-follow clamping
-- document-line to command-line target mapping
+        scene_call_user_draw(&frame_ctx,
+                             SCENE_USER_DRAW_MAIN,
+                             sample_idx,
+                             sample_count);
 
-### `repl_replay_annotations.c`
+        scene_call_user_draw(&frame_ctx,
+                             SCENE_USER_DRAW_ANNOTATIONS_3D,
+                             sample_idx,
+                             sample_count);
 
-Owns the code-panel replay text shown beside source commands during replay.
-It reads replay/flat-command state, but keeps annotation caches and evaluated
-display formatting out of `ui_panels.c`.
+        scene_lights_render_indicators(&frame_ctx);
+        scene_orbit_target_render(&frame_ctx);
 
-- source-command to latest flat-command mapping for the current replay PC
-- predef-variable snapshots before annotated flat commands
-- substituted variable comments and evaluated command strings
-- assignment inline comments used by code-panel display text
+        if (scene_using_accumulation(config))
+            glAccum(GL_ACCUM, 1.0f / (float)sample_count);
+    }
 
-### `ui_menu_bar.c`
+    if (scene_using_accumulation(config))
+        glAccum(GL_RETURN, 1.0f);
+}
+```
 
-Owns the menu bar and dropdown UI state. It renders the File/Scene/Config
-menus, the Search/Replay pinned slots, and the menu-hosted search field.
-Action execution still flows through `repl_actions.c`.
+The callback helper should be tiny and generic:
 
-- menu/dropdown open state and hover state
-- menu and pin hit-testing
-- config dropdown right-click cycling
-- `render_example_dropdown()` for the floating dropdown layer
+```c
+static void scene_call_user_draw(const SceneFrameContext *frame_ctx,
+                                 SceneUserDrawPass pass,
+                                 int sample_idx,
+                                 int sample_count)
+{
+    const SceneUserDrawCallbacks *cb = &frame_ctx->config.user_draw;
 
-### `ui_color_picker.c`
+    if (!cb->draw)
+        return;
 
-Owns the floating color editor opened from literal color-command swatches.
-It mutates the selected command source/args directly today, but all picker
-state, hit rectangles, and rendering live outside `ui_panels.c`.
+    SceneUserDrawRequest request = {
+        .pass = pass,
+        .scene = frame_ctx,
+        .accum_sample_idx = sample_idx,
+        .accum_sample_count = sample_count,
+        .alpha_scale = 1.0f,
+    };
 
-- HSV/alpha picker state
-- swatch rendering for literal color commands
-- picker drag handling and command rewrite
+    cb->draw(&request, cb->user_data);
+}
+```
 
-## Layering Rules
+No REPL header is required for this helper.
 
-Two hard rules govern where OpenGL calls and inter-module includes are
-allowed. They keep the rendering surface mechanically auditable and
-preserve the master/slave relationship between the orchestrator and the
-two rendering layers.
+## How REPL Calls the Scene
 
-### GL/GLUT isolation
+The REPL display path should prepare both the scene config and the REPL geometry plan.
 
-- Live OpenGL/GLU drawing calls only appear in `scene_*.c`, `ui_*.c`,
-  and `repl_executor.c`. The executor is the sole `repl_*` exception
-  because it dispatches GL for flat commands.
-- GLUT input/feedback APIs (`glutPostRedisplay`, `glutSetCursor`,
-  `glutGetModifiers`, `glutSwapBuffers`) only appear in `sample.c` and
-  `repl_editor.c`, and inside `repl_editor.c` they go through local
-  funnel helpers (`editor_request_redraw()`, `editor_set_cursor()`,
-  `repl_editor_active_modifiers()`) so the GLUT surface is reviewable
-  in one place.
-- All other `repl_*.c` files and `sample.h` do not call GL or GLU.
-  Text emission of GL command *names* — `repl_export.c`,
-  `repl_examples.c`, `repl_command_spec.c`,
-  `repl_replay_annotations.c`, `repl_parser.c` — is REPL source, not
-  a live call site.
+```c
+void repl_core_display_frame(void)
+{
+    SceneRender3DConfig scene_cfg;
+    ReplGeometryRenderPlan geom_plan;
+    UiRenderConfig ui_cfg;
+
+    repl_flatten_if_dirty();
+
+    repl_geometry_render_plan_build(&geom_plan);
+    scene_render_3d_config_build_from_repl_state(&scene_cfg);
+
+    /*
+     * glClearColor is part of the user command stream, but clearing happens
+     * before the scene calls the user geometry callback. Resolve it up front.
+     */
+    repl_geometry_resolve_clear_color(&geom_plan, scene_cfg.clear_rgba);
+
+    scene_cfg.user_draw.draw = repl_geometry_scene_draw_callback;
+    scene_cfg.user_draw.reset = repl_geometry_scene_reset_callback;
+    scene_cfg.user_draw.user_data = &geom_plan;
+
+    scene_render_3d_scene(&scene_cfg);
+
+    ui_render_config_build(&ui_cfg);
+    ui_render(&ui_cfg);
+}
+```
+
+The dependency direction is the point:
+
+```text
+repl builds scene config
+repl installs generic callbacks
+scene invokes callbacks
+scene does not inspect repl data
+```
+
+## Replay Architecture
+
+Replay is REPL-owned.
+
+The scene layer should not know about replay PC, replay mode, fade batches, variable snapshots, source annotations, or command expansion.
+
+Recommended design:
+
+```text
+repl_replay
+  owns replay state machine
+
+repl_replay_plan
+  converts replay state into draw limits/highlight/fade data
+
+repl_geometry_render_plan
+  embeds the replay draw plan
+
+repl_geometry_scene_draw_callback
+  draws replay through repl_executor
+```
+
+Do not add a scene-level replay callback.
+
+Avoid this:
+
+```c
+scene_cfg.draw_replay = repl_replay_draw_callback;
+```
+
+Prefer this:
+
+```c
+scene_cfg.user_draw.draw = repl_geometry_scene_draw_callback;
+```
+
+Inside that callback:
+
+```c
+if (plan->replay_active) {
+    repl_geometry_render_replay(plan, request);
+} else {
+    repl_geometry_render_normal(plan, request);
+}
+```
+
+### Fade batch simplification
+
+If the current fade-batch logic becomes too complex, simplify replay visuals instead of letting the scene absorb replay policy.
+
+Minimum acceptable replay visual:
+
+```text
+draw the program up to the current replay limit
+fade/highlight only the most recently drawn vertex or polygon
+```
+
+Candidate model:
+
+```c
+typedef enum ReplReplayHighlightKind {
+    REPL_REPLAY_HIGHLIGHT_NONE,
+    REPL_REPLAY_HIGHLIGHT_VERTEX,
+    REPL_REPLAY_HIGHLIGHT_POLYGON,
+} ReplReplayHighlightKind;
+
+typedef struct ReplReplayHighlight {
+    ReplReplayHighlightKind kind;
+    int flat_begin_idx;
+    int flat_end_idx;
+    float alpha;
+} ReplReplayHighlight;
+```
+
+Then replay rendering becomes:
+
+```text
+draw flat commands up to replay_base_limit
+draw latest vertex/polygon highlight with alpha
+draw optional annotations
+```
+
+## 3D Annotations and Outlines
+
+There are two kinds of 3D visuals.
+
+### Scene-owned decorators
+
+These are independent of the REPL program:
+
+* grid
+* axes
+* backdrop
+* scene light indicators
+* orbit target
+* camera/world guides
+
+These belong in `scene_*`.
+
+### REPL-owned geometry annotations
+
+These depend on the REPL program:
+
+* current polygon outline
+* current block outline
+* vertex labels
+* vertex points
+* normal vectors derived from user geometry
+* pending vertex guides
+* transform guides tied to source cursor
+* replay tessellation preview
+* replay latest vertex/polygon highlight
+
+These should be driven by REPL-owned plans.
+
+They may still draw inside the 3D scene, but they are not scene-owned decorators.
+
+Naming options:
+
+```text
+repl_geometry_overlay_plan.c     pure plan/model
+repl_geometry_guides_plan.c      pure guide plan
+repl_replay_plan.c               pure replay draw plan
+repl_executor.c                  live GL execution
+```
+
+If live GL helper code is needed for annotations, either keep it inside `repl_executor.c` or introduce an explicitly allowed executor-adjacent file and update the boundary checks.
+
+## UI Architecture
+
+The UI layer should follow the same push-model idea as scene rendering.
+
+```text
+repl builds UiRenderConfig
+ui_render(&config) draws from config
+ui renderers do not mutate command state
+```
+
+UI modules may own transient view-local state such as hover state or open menu state, but command/source mutations should route through `repl_actions`, `repl_command_store`, `repl_var_drag`, or other REPL-owned mutation APIs.
+
+## Boundary Rules
+
+### Live OpenGL calls
+
+Allowed:
+
+```text
+scene_*.c
+ui_*.c
+repl_executor.c
+sample.c        for GLUT/window lifecycle and buffer swap
+```
+
+Avoid live GL in all other `repl_*` files. If a new exception is needed, document it and update the grep guard. Do not let exceptions accumulate accidentally.
+
+### GLUT calls
+
+Allowed:
+
+```text
+sample.c
+repl_editor.c
+```
+
+Inside `repl_editor.c`, funnel GLUT usage through local helpers where possible.
+
+### Scene purity
+
+Pure scene modules should not include REPL runtime headers or inspect REPL state.
+
+Allowed scene inputs:
+
+```text
+SceneRender3DConfig
+SceneFrameContext
+generic callback request/context
+neutral math/render helper headers
+```
+
+Disallowed in pure scene modules:
+
+```text
+repl_state_* reads
+g_cmds / g_flat_cmds
+g_predef_vars
+repl_replay_* state queries
+source command indexes
+edit-line state
+FlatProgramView
+```
+
+The top-level REPL compositor may build scene config from REPL state. That is expected. The scene renderer itself should consume the resulting config.
 
 ### UI/scene independence
 
-- `ui_*` and `scene_*` are sibling rendering layers. Neither includes
-  the other's headers. They communicate only through `repl_*` models
-  above them and through the orchestrator in `repl_core.c`'s
-  `display_func()`, which is the sole master that dispatches
-  `render_3d_scene()` and the 2D overlay sequence per frame.
-- Both layers may freely include `repl_*` headers (pipeline plus
-  domain models) and project-agnostic header libraries from
-  `include/`.
-- Generic 2D primitives live in `include/gl_2d.h`
-  (`gl2d_begin`/`gl2d_end`/`gl2d_draw_string`) — a header-only
-  library alongside `gl_includes.h`, `stb_image.h`, and `utils.h`.
-  The criterion is **pure function of arguments, no project state**.
-  Both `scene_*` and `ui_*` include this header; pure-model `repl_*`
-  files do not (they don't draw). `glRectf` replaces the former
-  `draw_quad` shared helper at every call site.
+`ui_*` and `scene_*` should not include each other's headers.
 
-### Grandfathered exceptions
-
-- `scene_render.c` includes `ui_panels.h` for `scene_rect()`. This is
-  a read-only layout coordinate, not render dispatch. Tracked for
-  removal by migrating `scene_rect()` into a `repl_*` layout model.
-
-### Enforcement
-
-`make check-gl-boundaries` greps `repl_*.c` (excluding the executor)
-for GL/GLU drawing calls and `repl_*.c` (excluding the executor and
-editor) for GLUT calls; both sets must be empty.
-`make check-layer-coupling` greps `ui_*` for `#include "scene_*"` and
-`scene_*` for `#include "ui_*"`, allowing only the two grandfathered
-includes above. Both targets run inside the `make test` /
-`make test-stubs` umbrella so a regression fails the build on first
-push.
-
-## Shared State Rules
-
-- `sample.h` remains the single shared type and compatibility header, while
-  `repl_config.h` now owns the keyed config descriptor API and broad runtime
-  state declarations live behind `repl_state.h`.
-- `repl_state.h` groups the historical `g_*` globals into typed live views
-  (`ReplDocumentState`, `ReplFlatProgramState`, `ReplEditorState`,
-  `ReplPresentationState`, `ReplRenderState`, etc.). Phase 2 is moving
-  storage behind that facade domain by domain; the source command buffer,
-  flat-program buffers, editor input, selection, clipboard storage, camera,
-  pointer, viewport, and mutable presentation config state now live in
-  `repl_state.c` while compatibility externs remain for unmigrated callers.
-  Immutable descriptor/name tables remain outside runtime state.
-- `repl_command_store.h` is the first ownership boundary around source-command
-  array mechanics. Code that shifts, inserts, replaces, deletes, clears, or
-  bulk-restores `g_cmds[]` should prefer `repl_command_store_*` helpers so
-  capacity checks, edit-line adjustment, and depth-cache invalidation stay
-  consistent. Undo, scene switching, example load, workspace import, and global
-  reset all restore source-command arrays through `repl_command_store_load()`.
-  Remaining direct writes are localized semantic edits to fields inside an
-  existing command, such as color-picker/variable-drag rewrites and declaration
-  assignment-slot repair.
-- `repl_core_internal.h` is the internal bridge for non-public helpers needed by
-  tests or sibling `.c` files.
-- The `CFG_DEFAULT_*` macro block in `sample.h` is also the shared source of
-  truth for example-owned scene-presentation defaults. Reuse those macros from
-  `repl_core.c` initializers, example reset helpers, and focused tests instead
-  of duplicating literals.
-- New per-module headers are introduced only when they establish a real
-  ownership boundary. Avoid adding headers for cosmetic splits.
-- Parser internals live in `repl_parser.c`; editor/search/export/core pass an
-  explicit `ReplParseContext` when the source-line index matters and otherwise
-  call the compatibility wrappers.
+Shared render-neutral helpers belong under `include/`.
 
 ## Refactoring Ownership Map
 
-This is the target responsibility split for cleanup work. Refactors should move
-one boundary at a time and keep behavior unchanged unless a test explicitly
-captures the intended behavior change.
-
-- **Command store:** owns source-command array mechanics, bulk snapshot loads,
-  capacity checks, edit-line adjustment for raw insertions/restores, and
-  depth-cache invalidation.
-- **Parser:** owns line-to-`GLCmd` translation, command metadata, expression
-  preservation, and normalized source text.
-- **Commit pipeline:** owns user intent: where a parsed command lands, when
-  undo snapshots are taken, and how variable declarations register names.
-- **Flattener:** owns expansion of loops, functions, and conditionals into a
-  flat program with source-line provenance. Recursive flattening state and
-  destination buffers live in `FlattenContext` / `ReplFlattenOptions` rather
-  than file-scope control globals.
-- **Executor:** owns OpenGL calls for a flat command stream. Replay fill/fade
-  passes use `ReplExecutionOptions` to supply explicit execution ranges.
-- **Editor/input router:** owns modal dispatch, cursor/input buffers, and
-  keyboard/mouse routing.
-- **Clipboard/selection:** owns line-range selection state, clipboard storage,
-  and copy/cut/paste command mutations.
-- **UI layout:** owns pure code-panel wrapping, document rows, hit-testing, and
-  visual dump coordinates. `repl_code_panel_layout.c` owns wrapping/segment
-  lookup; `repl_code_panel_document.c` owns row totals, follow-scroll state, and
-  document-line targets; `ui_panels.c` consumes those models while rendering.
-- **UI overlays:** owns visible but non-core controls. `ui_menu_bar.c` owns
-  menus/dropdowns/search slot, `ui_color_picker.c` owns the floating color
-  editor, `ui_help_overlay.c` owns the modal F1 help overlay,
-  `ui_variable_panel.c` owns the floating variable slider panel
-  (rendering only — drag mutation lives in `repl_var_drag.c`),
-  `ui_autocomplete_panel.c` owns the floating completion popup
-  (rendering only — match/selection state lives in
-  `repl_autocomplete.c`), and `repl_inline_rename.c` owns the inline
-  scene-rename buffer and key handling. `ui_panels.c` now focuses on
-  code-panel row rendering, the scene-status banner, and top-level
-  hit routing.
-- **Scene renderer (push-model):** owns camera/view setup, config/frame prep, and
-  GL state discipline for a single frame. `scene_render.c` calls
-  `scene_render_config_build()` once at frame start to snapshot all rendering state
-  into `SceneRenderConfig` (scene rectangle, camera, lighting, animation time, grid
-  tables, lights array, cursor block ranges, overlay toggles, and replay-derived limits).
-  No scene module reads `repl_state` directly — all state flows through the config.
-  `FrameRenderContext` carries that config plus prepared derived state such as
-  the Focus-grid vertex and ocean-grid camera waterline classification. All scene
-  renderers accept `FrameRenderContext` and consume only config fields.
-  `scene_transform_utils.h` provides inline GL matrix helpers for guides/overlays.
-  Grid themes live in `scene_grid.c`, axes themes in `scene_axes.c`, backdrop in
-  `scene_backdrop.c`, lights in `scene_lights.c`. Flattened geometry overlays live
-  in `scene_overlays.c`, where outline, vertex-number, and normal-vector passes
-  use local cursor-match logic based on config fields (no global state reads).
-- **Import/export:** owns scaffold sections, workspace metadata, and
-  translation between exported C and REPL command text.
-
-### Current cleanup baseline
-
-After the Phase 7 code-panel responsibility split, `make test-stubs TEST_JOBS=4`
-builds all test binaries and passes 19 of 19 suites: 2437/2437 tests. The
-latest slices extracted document rows, replay annotations, menu/dropdown
-rendering, the color picker, help overlay, variable panel, autocomplete popup,
-inline rename, and variable slider dragging while preserving behavior. Phase 8
-then added grid theme rendering in `scene_grid.c`, axes theme rendering in
-`scene_axes.c`, local helper-pass GL state guards, a shared vertex-overlay
-traversal, explicit scene render config/frame context prep, Focus/ocean frame
-prep, backdrop/light modules, and geometry overlay extraction. Phase 9 paired
-workspace-header parsing/emission
-through a directive table, split `load_from_file()` into ordered import
-handlers, confirmed visual dumps use the shared code-panel wrap iterator, and
-introduced typed top-level scaffold sections plus display/pass helpers for the
-generated export file.
-
-**Phase 10 (Naming Consistency):**
-Phase 10 addresses function naming consistency using the repl_<module>_<action>()
-convention. **Phase 10 step 1** (completed) fixes function names in public headers:
-- repl_state.h: `repl_status_*` → `repl_state_status_*` (set/clear/tick)
-- repl_core.h: `replay_*` → `repl_replay_*` (start/stop)
-
-These naming inconsistencies did not block functionality but violated the module
-naming contract where public APIs should be namespaced. Variable name consistency
-is deferred to a larger refactoring phase. Test count: 2503/2503 passed.
-
-**Phase 11 (GL/GLUT Layering):**
-Phase 11 segregates live GL calls to preserve clean module boundaries.
-- **Step 11e** (completed): Funnel GLUT input/feedback calls through helpers
-  in repl_editor.c (glutPostRedisplay, glutSetCursor, glutGetModifiers).
-  Added repl_editor.h with `repl_editor_active_modifiers()` to expose
-  one GLUT API call outside repl_editor. Updated repl_actions.c to call
-  through the helper instead of directly.
-- **Step 11f** (completed): Add `make check-gl-boundaries` and
-  `make check-layer-coupling` targets to enforce layering rules mechanically:
-  GL/GLU calls allowed only in scene_*.c, ui_*.c, repl_executor.c;
-  GLUT calls allowed only in sample.c, repl_editor.c.
-  UI/scene layer decoupling verified (scene_render.c no longer includes ui_panels.h).
-
-**Phase 12 (Push-Model Architecture):**
-Phase 12 completes the push-model architecture refactor for scene rendering.
-All scene renderers now receive `FrameRenderContext` and read state exclusively
-from `SceneRenderConfig`, eliminating direct `repl_state` dependencies:
-
-- **Step 12.1** (completed): Extended `SceneRenderConfig` with all push-model fields
-  (execute callbacks, flat program, animation, viewport, lighting, backdrop, overlays).
-  Implemented `scene_render_config_build()` to snapshot all frame state once at startup.
-
-- **Step 12.2** (completed): Migrated `scene_grid.c` and `scene_axes.c` to accept
-  `FrameRenderContext` and consume config fields instead of `repl_state` calls.
-
-- **Step 12.3** (completed): Decoupled `scene_backdrop.c` and `scene_lights.c` to
-  accept `FrameRenderContext` and read lighting/animation/backdrop state from config.
-
-- **Step 12.4** (completed): Created `scene_transform_utils.h` with inline GL matrix
-  helpers, eliminating `repl_executor.h` dependency from scene guides.
-
-- **Step 12.5** (completed): Rewrote `scene_overlays.c` cursor-match logic to use only
-  config fields, removing `repl_state.h` and `repl_core.h` includes. All three public
-  functions now accept `FrameRenderContext`.
-
-- **Step 12.6** (completed): Removed `repl_executor.h` from `scene_render.c`,
-  replaced repl_executor calls with inline `scene_transform_utils` functions.
-
-- **Step 12.7** (completed): Tightened Makefile boundary checks by removing
-  `scene_render.c → ui_panels.h` grandfathering (no longer needed).
-
-Result: Complete push-model decoupling. All scene modules are stateless renderers
-that accept frame config and produce GL output. No global state reads from scene layer.
-Test count: 2503/2503 passed. All boundary checks enforce clean layering.
-
-## Key Pipelines
-
-### Structured block commits
-
-`repl_commit.c` handles user-facing block syntax:
-
-- `for(...) { ... }`
-- `funcN(...) { ... }`
-- `if(...) { ... }`
-- closing `}`
-- `float name[, ...];` declarations
-- `name = expr;` assignments to predefined variables
-
-Historically each dispatch site (`;` key, Enter in insert mode, Enter in
-overwrite mode, `feed_line()`) open-coded the handler chain. That is now
-consolidated into four helpers in `repl_commit.c`:
-
-- `try_commit_var_statements()` — float decl, then assign
-- `try_commit_block_structs()` — close-brace, for, func, if
-- `try_commit_any()` — both groups in canonical order
-- `try_commit_var_statements_then_insert()` — var variant that flips to
-  insert mode on success, used by the overwrite-mode Enter key
-
-Adding a new statement handler means extending the right helper, not
-chasing the call sites. Ordering within a helper is load-bearing:
-`try_commit_float_decl` must precede `try_assign_variable` so that
-`float x;` is not misread as an assignment to an identifier named
-`"float"`.
-
-These helpers route source-array insert/replace/delete work through
-`ReplCommandStore`, but they still rely on parser helpers from
-`repl_parser.c` and scope helpers from `repl_source_scope.c` for validation and
-normalization. Declaration bookkeeping may still repair assignment variable-slot
-indices in place after the predef table changes; that is a semantic command
-field update rather than command-array ownership.
-
-### Float variable declarations
-
-`float name[, ...];` lines commit to a dedicated `CMD_VAR_DECLARE` entry
-rather than running through the general parser. Two structural choices
-live here:
-
-- **Placement rule:** new declarations are inserted at the top of
-  non-decl code (index of the first non-`CMD_VAR_DECLARE` cmd), regardless
-  of cursor position. That guarantees every reference in source order
-  follows its declaration, so init expressions only see predef vars
-  declared above them. Editing an existing decl still overwrites in
-  place.
-- **No-op at execution time:** `execute_commands()` and `flatten_range()`
-  skip `CMD_VAR_DECLARE`. Registration into `g_predef_vars[]` happens at
-  commit time via `declare_predef_var()` in `repl_eval.c`, so the
-  evaluator sees the variable before the flat stream references it.
-
-`delete_cmd_range()` in `repl_editor.c` refuses to remove a declaration
-whose name is still referenced elsewhere (via `source_uses_ident()` in
-`repl_eval.c`).
-
-### Editing existing lines
-
-Navigating onto an existing line loads `g_cmds[i].source` into `g_input`
-with the trailing `;` and whitespace stripped, so re-committing goes
-through the no-semicolon code path. Every commit handler that looks for
-`;` must also accept end-of-string as a valid terminator. This invariant
-is shared by all dispatch sites.
-
-### Undo / redo
-
-`repl_undo.c` owns fixed-size circular buffers of editor snapshots.
-
-- `ReplUndoSnapshot` captures `g_cmds[]`, `g_num_cmds`, `g_edit_line`, and
-  `g_predef_vars[]` values — enough to restore the full editor state.
-- Any mutation (delete, paste, reformat, etc.) calls
-  `push_undo_snapshot()` before changing state. Pushing clears the redo
-  stack, which is the usual "diverged history" rule.
-- Ctrl+Z pops the undo stack and moves the current state to the redo
-  stack; Ctrl+Y does the reverse.
-- Snapshot restore loads `g_cmds[]`, `g_num_cmds`, and `g_edit_line` through
-  `repl_command_store_load()` so depth-cache invalidation and edit-line clamping
-  match scene/example/reset restores.
-- Rejected navigation commits use `ReplUndoRingState` to restore the history
-  counters after rolling back the attempted command/predef mutation.
-
-### Flattening
-
-`repl_flatten_program()` / `flatten_range()` in `repl_flatten.c` are still the
-only places that expand:
-
-- `CMD_FOR_BEGIN .. CMD_FOR_END`
-- `CMD_FUNC_DEF .. CMD_FUNC_END`
-- `CMD_IF_BEGIN .. CMD_IF_END`
-- variable-dependent commands
-
-That preserves a single semantic source of truth for execution, replay, and
-export-derived behavior.
-
-### Transform edit guides
-
-When the cursor sits on a committed `glTranslatef`, `glRotatef`, or
-`glScalef` line, `scene_transform_guides.c` renders an overlay showing that
-command's effect. `scene_render.c` builds one `SceneGuideSnapshot` per frame
-and the guide module runs in the vertex-dots pass so it shares the flat-walk
-matrix tracking.
-
-Gating comes from `scene_transform_guides_prepare()`: `show_guides` is on,
-`!replaying`, the edit-line source command is valid transform type, and the
-input buffer still matches the normalized committed source (mirrors the
-`unmodified` check in `repl_editor.c` so mid-keystroke edits suppress the
-guide).
-
-## Evaluator / translation learnings
-
-- **C float-literal suffixes must remain evaluator-safe.** The importer can
-  produce expressions containing literals like `1.0f`. The evaluator and
-  identifier validator now treat `f`/`F` as a numeric suffix when it appears
-  immediately after a parsed number literal, rather than as an identifier.
-  This keeps imported expressions executable without requiring manual cleanup.
-- **Harness gap that caught this:** translating `powf(1.0f,2.0f)` to REPL
-  produced `pow(1.0f,2.0f)`, which previously failed evaluation because parsing
-  stopped at the first `f`. Keep this pattern covered in `test_eval.c`.
-- **String copy warning hygiene:** use explicit bounded formatting for internal
-  translation buffers where practical to avoid `-Wstringop-truncation`
-  false-positives from `strncpy`.
-- **GL-stub parity matters for test-stubs.** The transform-guide renderer in
-  `scene_transform_guides.c` uses `glLoadMatrixf` and `glVertex3fv`; missing
-  these no-op declarations in `include/GL/gl.h` breaks `make test-stubs` at
-  link time even though normal GL builds succeed. When adding fixed-function
-  calls in rendering code, mirror them in the local stubs immediately.
-- **Bounded copies still need explicit NUL termination.** In parser paths that
-  trim/copy function identifiers into fixed buffers, always terminate manually
-  after `strncpy(..., size-1)`; otherwise long unknown commands can leave
-  unterminated stack strings and make command-dispatch comparisons undefined.
-
-Flat-cmd scan: the matching flat cmd is found by flat execution order
-— **not** by comparing `src_cmd_idx > g_edit_line`. Function-call
-expansions carry the callee's `src_cmd_idx`, so a numeric comparison
-would skip past them. Instead, locate the first flat cmd with
-`src_cmd_idx == g_edit_line`, then take the next valid flat cmd whose
-`src_cmd_idx` differs as the start of the post-cursor walk.
-
-The guide's starting point is `p_after = M_after · origin`, where
-`M_after` is the product of transforms that come after the cursor in
-execution order, up to (but not including) the first geometry-emitting
-command (`is_geometry_emit_cmd`: `CMD_BEGIN`, `CMD_GLU_*`,
-`CMD_GLUT_TORUS`, `CMD_TESS_BEGIN_POLYGON`). Stopping at the first
-emit prevents transforms following an intervening draw from bleeding
-into the guide.
-
-Two render modes, chosen via the `g_xform_guide_mode` config toggle
-("Xform guide mode"):
-
-- **World (0, default)** — render in world axes at world origin.
-  Matches strict OpenGL reverse-order semantics: for cursor command
-  `C_k`, vertices are computed as `M_1 · M_2 · ... · M_n · v`, so
-  `C_k` acts on the point `M_after · origin`. Pre-cursor transforms
-  wrap this sub-expression later and don't move the guide. The
-  camera-view matrix is snapshotted before any user transforms and
-  reloaded via `glLoadMatrixf(tg_cam_view)` when drawing the guide.
-
-- **Frame (1)** — render at a scene-world frame derived from the
-  **full pre-cursor modelview** (translations, rotations, and
-  scales). `compute_before_cursor_matrix()` walks all flat cmds
-  before the cursor in a fresh identity matrix (via
-  `apply_tracked_transform_cmd` so push/pop scopes correctly).
-  In Frame mode, the guide matrix is `camera * pre_cursor` and the
-  command's acts-on point is the local origin, so translate/rotate/scale
-  guides all inherit prior frame rotations consistently.
-
-Per-command helpers:
-
-Shared visual style: shafts and arcs use an **axes-pulse-style**
-overlay — a dim solid base line (or arc) at `alpha≈0.30`, with a
-bright `sin(π·phase)` dot sweeping `a→b` and a short trail behind
-it, driven by snapshot `anim_time`. Helpers live alongside the per-command
-helpers: `xform_axis_color()` maps `(|x|,|y|,|z|)/max` → RGB, and
-`draw_pulse_segment()` renders the dim base + traveling dot + trail
-for a straight segment. The rotate guide inlines an arc-based
-variant that walks the pre-sampled Rodrigues arc points.
-
-Per-command helpers:
-
-- `draw_translate_guide` — pulse shaft from `p_after` to
-  `p_after + (tx,ty,tz)` with a 4-fin arrowhead at the tip. Shaft
-  color comes from the translation vector via `xform_axis_color`;
-  arrowhead uses a brighter tint of the same color.
-- `draw_rotate_guide` — axis stub through the local origin plus a
-  48-segment arc swept by Rodrigues rotation. Arc, axis stub, and
-  endpoint dots are tinted from the rotation axis
-  (`xform_axis_color(ax,ay,az)`). The pulse dot sweeps along the
-  arc; the trail is a short strip of arc samples between the
-  trail-phase and dot-phase points so curvature is preserved. The
-  on-axis degenerate case (where `p_after` lies on the rotation
-  axis) is not specially handled — the arc simply collapses.
-- `draw_scale_guide` — pulse shaft from `p_after` to
-  `(sx·x, sy·y, sz·z)` with arrowhead. Shaft color comes from
-  `xform_axis_color(sx-1, sy-1, sz-1)` so the color highlights the
-  axes that deviate from identity. Degenerate case (`p_after` at
-  origin) falls back to a 3-axis gizmo: gray unit reference segment
-  plus a pulsing arrow per axis in that axis's own color (X=red,
-  Y=green, Z=blue) to `(sx,0,0)`, `(0,sy,0)`, `(0,0,sz)`.
-
-Adding a new transform-guide type: extend the command gate in
-`scene_transform_guides_prepare()`, add a render branch in
-`scene_transform_guides_render_if_due()`, and add a new
-`draw_<name>_guide` helper in `scene_transform_guides.c`.
-
-### Replay
-
-Replay state and stepping live in `repl_replay.c`, while editor callbacks in
-`repl_editor.c` drive it.
-
-- editor input toggles replay modes and stepping
-- replay helpers rebuild source-line highlighting state
-- `scene_render.c` consumes replay state to draw the HUD and replay overlays
-
-Under the hood, replay works by clamping how much of `g_flat_cmds[]`
-`execute_commands()` will emit on each frame:
-
-- `g_replay_state` is OFF / PLAYING / PAUSED / DONE; `g_replay_pc` is a
-  program counter into `g_flat_cmds[]`; `g_replay_speed` is a playback
-  multiplier.
-- During playback, `replay_prepare_frame()` still computes the active replay
-  PC, while scene rendering passes explicit `ReplExecutionOptions` limits so
-  the fill/fade executor does not temporarily rewrite `g_num_flat_cmds`.
-- `g_replay_fade_batches[]` is a circular buffer of recent geometry
-  snapshots. Old batches fade out as new geometry appears and are drawn
-  in a separate blended pass (`render_replay_fade_pass()` in
-  `scene_render.c`) after the main fill. This is what produces the
-  trailing-ghost look without changing how the main executor walks the
-  flat array.
-
-## Startup and Examples
-
-`load_initial_commands()` remains in `repl_core.c`, while example metadata
-and built-in example loading live in `repl_example_loader.c`.
-
-- If an import file is provided and `load_from_file()` succeeds, startup uses
-  the imported session.
-- Otherwise core asks the example loader to load a built-in example.
-- `load_example_lines()` performs a metadata pre-pass before feeding the
-   remaining source through `feed_line()`.
-- Built-in examples can begin with contiguous leading `// @cfg slug = value`
-   lines, followed optionally by a 5-line `// camera` preset block.
-- Leading example `@cfg` lines are parsed through
-   `parse_workspace_header_line()` from `repl_export.c`, but only for
-   scene-presentation slugs allowed by the example loader.
-- That leading metadata is consumed as loader-only state and does not appear in
-   the code panel.
-- On each example load, the loader resets the allowed non-camera scene-presentation
-   settings to the `CFG_DEFAULT_*` values from `sample.h` before applying any
-   leading example `@cfg` metadata. This keeps unspecified settings from leaking
-   between examples.
-- Camera is intentionally excluded from that reset; examples keep the current
-   `g_cam_*` state unless the explicit `// camera` block is present.
-- `restore_user_scene()` still restores commands and predefined variables only,
-   so leaving an example does not restore prior camera or presentation state.
-- Example geometry lines are still committed through `feed_line()`, so
-   examples, imported files, and interactive editing share the same commit
-   pipeline once loader metadata has been consumed.
-
-## Test Orchestration
-
-The Makefile builds each standalone `test_*` binary normally, then delegates
-suite execution to `scripts/run-tests.sh`.
-
-- `TEST_BINS` is the canonical ordered list for the full suite.
-- `CORE_TEST_BINS` is derived from `TEST_BINS` by filtering out the lightweight
-  standalone tests (`test_eval`, `test_format`, and `test_repl_audio`).
-- Per-test `*_OBJS`, `*_LDLIBS`, and `*_RUN` variables feed a single
-  `.SECONDEXPANSION` link recipe for all test binaries.
-- `TEST_RUNNER_CASES` is generated from `TEST_BINS` and each test's `*_RUN`
-  command, so build output, replayed logs, and final summaries stay in one
-  predictable order.
-- `make test` and `make test-detailed` export shared environment needed by the
-  example export/compile tests, then call the runner.
-- `TEST_JOBS=N` limits concurrent test binaries. Leaving it empty runs all
-  test binaries concurrently.
-
-The runner prevents interleaved output by redirecting each test binary's
-stdout/stderr into `build/test-logs/run-*/<name>.log`, recording its exit status
-beside that log, and replaying logs in Makefile order after all launched jobs
-finish. This keeps parallel execution fast while preserving the readable
-per-suite transcript expected from the old serial runner.
-
-Global stats are collected from the final `passed/total` line emitted by each
-test binary. The runner reports both binary-level status and assertion-level
-totals, for example:
-
-- `test binaries: 14 total, 14 passed, 0 failed`
-- `tests: 1501 total, 1501 passed, 0 failed`
-
-If a binary exits nonzero, the runner still prints its buffered log and includes
-the binary in the global failure count. If a binary lacks a parseable
-`passed/total` summary, it is counted at the binary level and called out as an
-unknown assertion-count source.
-
-Coverage builds intentionally run tests serially via `make test BUILD=coverage
-TEST_JOBS=1`. Do not parallelize coverage unless the coverage output paths are
-made safe for concurrent `.gcda` writes.
-
-## Extension Guide
-
-### Add a new command
-
-1. Add the `CmdType` in `sample.h`.
-2. Add the matching `ReplCommandTypeSpec` entry in `repl_command_spec.c`.
-   This table owns command debug names plus reformatter traits such as
-   semicolon and block-indent behavior.
-3. Extend parser handling.
-   - Table-driven entries live in `repl_command_spec.c`; the generic loop in
-     `parse_command()` (`repl_parser.c`) walks those tables so most commands
-     need no changes to parser code itself.
-   - Pure numeric calls usually belong in `k_std_command_specs`.
-   - Enum-driven calls usually belong in `k_enum_command_specs`; add a dedicated
-     `EnumEntry` table when the legal enum set differs from a similar command
-     (for example `glColorMaterial` modes are not the same as all
-     `glMaterialf` pnames). Reuse `k_bool_vals` for `GL_TRUE` / `GL_FALSE`
-     arguments (see `glDepthMask`).
-   - Special arity, vector/scalar alternatives, block commands, or commands
-     with custom validation need an explicit parser branch in `repl_parser.c`
-     (alongside `glMaterialf`, `glPointParameterfv`, `gluBegin`, `funcN`, etc.).
-4. Extend execution handling in `repl_executor.c`.
-   - State-only commands normally go through `apply_state_cmd()`, then are
-     dispatched from `execute_commands()`.
-   - Geometry-emitting commands must respect open `glBegin` / tessellation
-     state and any replay/fade semantics.
-5. Extend flattening if the command affects control flow, local scope,
-   declarations, labels/gotos, or per-frame expression evaluation.
-6. Extend export/import in `repl_export.c` if the command must round-trip.
-   - Normal user commands should be emitted by `write_canonical_cmd_as_c()` /
-     `format_cmd_source_as_c()`.
-   - Commands that appear in generated scaffold, but are not user source,
-     must be skipped or parsed as scaffold during `load_from_file()`.
-   - If the command changes generated display setup, keep the code-panel
-     preview and exporter sharing the same source of truth. Display-scaffold
-     state belongs in `g_render_state_lines` plus `RENDER_STATE_LINE_COUNT`;
-     one-time init scaffold belongs in `g_init_bootstrap_repl` or host-only
-     init arrays.
-7. Extend autocomplete and parameter hints.
-   - Add the callable signature to `k_func_completions` in
-     `repl_command_spec.c`. `repl_autocomplete.c` only consumes these tables;
-     it rarely needs edits unless the command uses a bespoke completion mode
-     (e.g. `AC_MODE_POINT_PARAM`).
-   - Enum-argument completion is automatic once the command appears in
-     `k_enum_command_specs` with non-NULL `enums1` / `enums2`.
-   - Add focused coverage in `test_repl_autocomplete.c` for ambiguous enum
-     sets and multi-argument completions.
-8. Extend editor/UI affordances and docs if the command is user-facing.
-   Common touch points are the `tab_commands[]` help overlay in
-   `ui_help_overlay.c`, `color_for_type()` in `ui_panels.c`,
-   `README.md`, `CLAUDE.md`, `AGENTS.md`,
-   command formatting, search/highlight behavior, and any editor-specific
-   validation in `repl_editor.c`.
-9. Update local stub headers when a new GL/GLU/GLUT symbol, enum, or callback
-   enters compiled code. Mirror symbols in `include/GL/`, `include/GLUT/`,
-   `include/OpenGL/`, and `include/GL/gl_stub_counts.h` as needed so
-   `USE_GL_STUBS=1` builds remain useful.
-10. Add tests at the narrowest useful level, then run the relevant suite.
-    Typical coverage:
-    - `test_repl_core_parse.c` for parser acceptance/rejection.
-    - `test_repl_autocomplete.c` for completion and hints.
-    - `test_repl_core_io.c` for export/import and scaffold placement.
-    - `test_repl_core_examples.c` and `testdata/repl_examples_ui/*.golden.txt`
-      when code-panel scaffold output changes.
-    - `make test-stubs` before considering the change complete.
-
-#### Impact of missing new command in `repl_command_spec.c`
-
-Missing command metadata does not affect execution dispatch directly, but it
-does degrade debug dumps and can change reformatting defaults. Keep
-`test_repl_core_extra` covering every `CmdType` so omitted metadata is caught
-before debug output or source normalization starts returning `CMD_UNKNOWN`.
-
-### Add a new editor interaction
-
-1. Add state and handlers in `repl_editor.c`.
-2. Add rendering or hit-testing in the owner for the visible feature:
-   `ui_menu_bar.c` for menu/dropdown/search-slot UI,
-   `ui_color_picker.c` for literal color editing, or `ui_panels.c` for the
-   remaining code/help/autocomplete/variable-panel surfaces.
-3. Only promote new helpers into `repl_core_internal.h` when another module
-   truly needs them.
-
-### Add a new exported scaffold feature
-
-1. Add or update the scaffold strings and typed section entry in
-   `repl_export.c`.
-2. Keep the code-panel preview and file exporter using the same source of
-   truth.
-3. Preserve round-tripping through `load_from_file()` whenever possible.
-
-### Add a new predefined variable
-
-There are two variable classes in the REPL:
-
-- predefined globals stored in `g_predef_vars[]`
-- scoped locals introduced by `for(...)` loop indices and `funcN(...)`
-  parameters
-
-Top-level assignments like `foo = 1;` only target predefined globals. Loop
-indices and function parameters are collected as local `ExprVar` scopes during
-flattening; they are not added to the global variable table.
-
-To add a new predefined global:
-
-1. Increase `MAX_PREDEF_VARS` in `repl_eval.h` if you need more slots.
-2. Add the new variable name to the `names[]` array in `init_predef_vars()` in
-   `repl_eval.c`.
-3. Keep names within the `ExprVar.name[16]` storage limit.
-4. If you add many globals, also check `MAX_WORKSPACE_HEADER_LINES` in
-   `sample.h`, because workspace save/load persists globals through `// @var`
-   header lines.
-
-Existing export/import and persistence paths already iterate
-`g_predef_vars[]`, so new predefined globals automatically:
-
-- participate in expression evaluation
-- round-trip through workspace headers in `repl_export.c`
-- emit as file-scope globals in exported C
-- reset in exported `reset_repl_vars()`
-
-Special case: `t` is wired into animation/time helpers in `repl_core.c`. New
-variables are plain globals unless you add similar runtime plumbing.
-
-## Current Split Intent
-
-The split is structural, not behavioral.
-
-- `repl_core.h` stays stable.
-- Editor, search, export, and execution each have a clear home.
-- Import/export and example loading still go through the same command-commit
-  path used by live editing.
-- Tests remain the behavioral contract for the refactor.
-
-## test_eval Harness Learnings (2026-04-18)
-
-- `make test_eval USE_GL_STUBS=1` is the fastest no-GL regression loop for
-  evaluator/parser/translation behavior.
-- Translation helpers should be treated like public utility functions: guard
-  null pointers and `out_sz <= 0` explicitly before touching output buffers.
-- Prefer bounded formatting (`snprintf`) over `strncpy` for internal staging
-  buffers to avoid truncation warnings and make NUL-termination guarantees
-  obvious during maintenance.
-- Keep at least one tiny-buffer test in `test_eval.c` for translation helpers
-  to ensure truncation behavior is deterministic and safe.
+| Concern                        | Owner                               |
+| ------------------------------ | ----------------------------------- |
+| Source command array mechanics | `repl_command_store`                |
+| Parsing and normalized source  | `repl_parser` / `repl_command_spec` |
+| Structured user intent         | `repl_commit`                       |
+| Source-to-flat expansion       | `repl_flatten`                      |
+| User geometry GL execution     | `repl_executor`                     |
+| Replay state machine           | `repl_replay`                       |
+| Replay draw plan               | `repl_replay_plan` or equivalent    |
+| Geometry render plan           | `repl_geometry_*`                   |
+| 3D frame setup/decorators      | `scene_*`                           |
+| 2D UI rendering                | `ui_*`                              |
+| Code-panel text layout model   | `repl_code_panel_layout`            |
+| Code-panel document model      | `repl_code_panel_document`          |
+| Import/export                  | `repl_export`                       |
+| Input routing                  | `repl_editor`                       |
+| Config/menu actions            | `repl_actions`                      |
+
+## Current Refactor Gaps
+
+The current push-model work moved in the right direction by making scene helpers consume per-frame config/context snapshots. The remaining issue is that the scene config and scene renderer still carry too much REPL-specific execution and replay knowledge.
+
+Primary gaps:
+
+1. `scene_render_3d_scene()` should take an explicit config argument.
+2. `SceneRenderConfig` should become a scene-only config.
+3. `FlatProgramView` should move out of scene config and into REPL geometry render plans.
+4. Replay PC/mode/fade fields should move out of scene config.
+5. REPL-aware overlays/guides should be renamed or split so ownership is clear.
+6. `scene_render.c` should call generic callbacks, not REPL-specific execution paths.
+7. Clear color should be resolved before scene clear by a REPL-owned helper.
+8. Boundary checks should distinguish pure scene decorators from REPL geometry annotation/executor code.
+
+## Acceptance Criteria
+
+The architecture is clean when:
+
+1. `scene_render_3d_scene()` can render a 3D environment with no REPL program.
+2. The scene layer receives a generic callback, not a REPL executor-specific API.
+3. Scene config contains scene/environment fields, not REPL source/replay fields.
+4. REPL builds geometry/replay/annotation plans from the flat program.
+5. Replay rendering is owned by REPL geometry code, not scene code.
+6. REPL-aware outlines/guides/labels are modeled as REPL geometry annotations.
+7. UI rendering is driven by a UI config/model snapshot.
+8. Live GL calls remain mechanically auditable.
+9. Tests and manual visual behavior remain stable across the split.
+
+```
