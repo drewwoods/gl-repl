@@ -28,3 +28,5 @@ bench_repl
 .cache/
 compile_commands.json
 coverage.lcov
+callgraph*.mmd
+callgrind.out*
