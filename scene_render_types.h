@@ -6,6 +6,7 @@
 
 #include "repl_flatten.h"
 #include "sample.h"
+#include "scene_guides_shared.h"
 
 typedef struct SceneRgba {
     float r, g, b, a;
@@ -81,6 +82,10 @@ typedef struct SceneRenderConfig {
     int          edit_line_idx;
     unsigned int cursor_func_scope_mask;
     int          cursor_call_src_cmd_idx; /* -1 = cursor not on a CMD_CALL */
+
+    /* ── Focus / guide snapshots ────────────────────────────────────── */
+    SceneFocusVertex focus;
+    SceneGuideSnapshot guide_snapshot;
 
     /* ── Existing fields (legacy, preserved) ────────────────────────── */
     int scene_x;

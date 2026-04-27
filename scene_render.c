@@ -61,35 +61,6 @@ static void scene_render_pop_state(void) {
     glPopAttrib();
 }
 
-static int cmd_is_focus_vertex(const GLCmd *cmd) {
-    return cmd->valid &&
-           (cmd->type == CMD_VERTEX3F || cmd->type == CMD_TESS_VERTEX);
-}
-
-static SceneFocusVertex scene_prepare_focus_vertex(void) {
-    SceneFocusVertex focus = { .valid = 0 };
-
-    if (repl_state_edit_line() >= 0 && repl_state_edit_line() < repl_state_document_count() &&
-        cmd_is_focus_vertex(&repl_state_document_cmds_mut()[repl_state_edit_line()])) {
-        focus.pos[0] = repl_state_document_cmds_mut()[repl_state_edit_line()].args[0];
-        focus.pos[1] = repl_state_document_cmds_mut()[repl_state_edit_line()].args[1];
-        focus.pos[2] = repl_state_document_cmds_mut()[repl_state_edit_line()].args[2];
-        focus.valid = 1;
-    } else {
-        for (int i = repl_state_edit_line() - 1; i >= 0; i--) {
-            if (cmd_is_focus_vertex(&repl_state_document_cmds_mut()[i])) {
-                focus.pos[0] = repl_state_document_cmds_mut()[i].args[0];
-                focus.pos[1] = repl_state_document_cmds_mut()[i].args[1];
-                focus.pos[2] = repl_state_document_cmds_mut()[i].args[2];
-                focus.valid = 1;
-                break;
-            }
-        }
-    }
-
-    return focus;
-}
-
 static void scene_apply_projection(const SceneRenderConfig *config) {
     glMatrixMode(GL_PROJECTION);
     glLoadIdentity();
@@ -134,9 +105,7 @@ static void scene_apply_wireframe_config(const SceneRenderConfig *config) {
 static void scene_prepare_frame_context(FrameRenderContext *ctx,
                                         const SceneRenderConfig *config) {
     ctx->config = *config;
-
-    /* Prepare focus vertex for cursor or preceding vertex */
-    ctx->focus = scene_prepare_focus_vertex();
+    ctx->focus = config->focus;
 
     /* Modelview setup is T(-dist) * Rx * Ry * T(-target). Solving that for
      * the eye position gives target.y + sin(rx) * dist; ry does not affect Y. */
@@ -144,30 +113,6 @@ static void scene_prepare_frame_context(FrameRenderContext *ctx,
     ctx->camera_world_y = config->cam_ty +
                           sinf(camera_rx_rad) * config->cam_dist;
     ctx->camera_below_water_surface = (ctx->camera_world_y < 0.0f);
-}
-
-static SceneGuideSnapshot scene_build_guide_snapshot(const SceneRenderConfig *config,
-                                                     FlatProgramView flat_program) {
-    const ReplFlatProgramState *flat_state = repl_state_flat_program();
-    SceneGuideSnapshot snapshot = {
-        .show_guides = config->show_guides,
-        .replaying = config->replaying,
-        .xform_guide_mode = *repl_state_presentation()->xform_guide_mode,
-        .user_lighting_enabled = *flat_state->user_lighting_enabled,
-        .anim_time = (*repl_state_variables()->anim_time),
-        .input = repl_state_editor_input()->input,
-        .input_len = *repl_state_editor_input()->input_len,
-        .cursor_pos = *repl_state_editor_input()->cursor_pos,
-        .edit_line_idx = repl_state_edit_line(),
-        .inserting = repl_state_insert_mode(),
-        .source_cmds = repl_state_document_cmds_mut(),
-        .source_cmd_count = repl_state_document_count(),
-        .flat_program = flat_program,
-        .predef_vars = g_predef_vars,
-        .predef_var_count = g_num_predef_vars,
-        .alpha_scale = config->alpha_scale,
-    };
-    return snapshot;
 }
 
 /* ========================================================================= */
@@ -188,18 +133,20 @@ static void draw_replay_tess_preview(const SceneRenderConfig *config) {
 
     glPushMatrix();
     {
+        const GLCmd *flat_cmds = config->flat_program.cmds;
+        int flat_cmd_count = config->flat_program.cmd_count;
         int in_contour = 0;
         int matrix_depth = 0;
-        for (int i = 0; i < repl_state_flat_program_count(); i++) {
-            if (!repl_state_flat_program_cmds_mut()[i].valid) continue;
+        for (int i = 0; i < flat_cmd_count; i++) {
+            if (!flat_cmds[i].valid) continue;
 
-            if (is_transform_cmd(repl_state_flat_program_cmds_mut()[i].type)) {
+            if (is_transform_cmd(flat_cmds[i].type)) {
                 if (!in_contour)
-                    scene_apply_tracked_transform(&repl_state_flat_program_cmds_mut()[i], &matrix_depth);
+                    scene_apply_tracked_transform(&flat_cmds[i], &matrix_depth);
                 continue;
             }
 
-            switch (repl_state_flat_program_cmds_mut()[i].type) {
+            switch (flat_cmds[i].type) {
             case CMD_TESS_BEGIN_CONTOUR:
                 if (in_contour)
                     glEnd();
@@ -208,8 +155,8 @@ static void draw_replay_tess_preview(const SceneRenderConfig *config) {
                 break;
             case CMD_TESS_VERTEX:
                 if (in_contour)
-                    glVertex3f(repl_state_flat_program_cmds_mut()[i].args[0], repl_state_flat_program_cmds_mut()[i].args[1],
-                               repl_state_flat_program_cmds_mut()[i].args[2]);
+                    glVertex3f(flat_cmds[i].args[0], flat_cmds[i].args[1],
+                               flat_cmds[i].args[2]);
                 break;
             case CMD_TESS_END:
                 if (in_contour) {
@@ -230,7 +177,7 @@ static void draw_replay_tess_preview(const SceneRenderConfig *config) {
     glLineWidth(1.0f);
     glDisable(GL_BLEND);
     glEnable(GL_DEPTH_TEST);
-    if (repl_state_flat_program_user_lighting_enabled()) glEnable(GL_LIGHTING);
+    if (config->user_lighting_enabled) glEnable(GL_LIGHTING);
     scene_render_pop_state();
 }
 
@@ -559,49 +506,48 @@ static void render_3d_scene_pass(const SceneRenderConfig *config) {
      * anchor point, independent of pre-cursor rotations. */
     float tg_cam_view[16];
     glGetFloatv(GL_MODELVIEW_MATRIX, tg_cam_view);
-    SceneGuideSnapshot guide_snapshot =
-        scene_build_guide_snapshot(config, config->flat_program);
+    const SceneGuideSnapshot *guide_snapshot = &config->guide_snapshot;
     SceneTransformGuidePlan xform_guide_plan;
-    scene_transform_guides_prepare(&guide_snapshot, &xform_guide_plan);
+    scene_transform_guides_prepare(guide_snapshot, &xform_guide_plan);
     {
-    const GLCmd *flat_cmds = config->flat_program.cmds;
-    int flat_cmd_count = config->flat_program.cmd_count;
-    int matrix_depth = 0;
-    glPointSize(8.0f);
-    if (config->replay_vertex_points)
-        glColor3f(1.0f, 0.88f, 0.20f);
-    else
-        glColor3f(0.0f, 0.0f, 0.0f);
+        const GLCmd *flat_cmds = config->flat_program.cmds;
+        int flat_cmd_count = config->flat_program.cmd_count;
+        int matrix_depth = 0;
+        glPointSize(8.0f);
+        if (config->replay_vertex_points)
+            glColor3f(1.0f, 0.88f, 0.20f);
+        else
+            glColor3f(0.0f, 0.0f, 0.0f);
 
-    for (int i = 0; i < flat_cmd_count; i++) {
-        if (!flat_cmds[i].valid) continue;
-        int is_cursor = (flat_cmds[i].src_cmd_idx == guide_snapshot.edit_line_idx);
+        for (int i = 0; i < flat_cmd_count; i++) {
+            if (!flat_cmds[i].valid) continue;
+            int is_cursor = (flat_cmds[i].src_cmd_idx == guide_snapshot->edit_line_idx);
 
-        // Draw vertex guides and normals if this vertex is at the cursor
-        // position. Do this inline so that the current model matrix is applied
-        // to the guides, ensuring they are positioned correctly even when
-        // transforms separate blocks.
-        if (is_cursor && !config->replaying) {
-            scene_geometry_guides_render_for_cursor(&guide_snapshot);
+            // Draw vertex guides and normals if this vertex is at the cursor
+            // position. Do this inline so that the current model matrix is applied
+            // to the guides, ensuring they are positioned correctly even when
+            // transforms separate blocks.
+            if (is_cursor && !config->replaying) {
+                scene_geometry_guides_render_for_cursor(guide_snapshot);
+            }
+
+            scene_transform_guides_render_if_due(guide_snapshot,
+                                                 &xform_guide_plan,
+                                                 i, tg_cam_view);
+
+            if (is_transform_cmd(flat_cmds[i].type)) {
+                scene_apply_tracked_transform(&flat_cmds[i], &matrix_depth);
+            } else if ((config->show_vpoints || config->replay_vertex_points) &&
+                       (flat_cmds[i].type == CMD_VERTEX3F ||
+                        flat_cmds[i].type == CMD_TESS_VERTEX)) {
+                glBegin(GL_POINTS);
+                glVertex3f(flat_cmds[i].args[0], flat_cmds[i].args[1],
+                           flat_cmds[i].args[2]);
+                glEnd();
+            }
         }
-
-        scene_transform_guides_render_if_due(&guide_snapshot,
-                                             &xform_guide_plan,
-                                             i, tg_cam_view);
-
-        if (is_transform_cmd(flat_cmds[i].type)) {
-            scene_apply_tracked_transform(&flat_cmds[i], &matrix_depth);
-        } else if ((config->show_vpoints || config->replay_vertex_points) &&
-                   (flat_cmds[i].type == CMD_VERTEX3F ||
-                    flat_cmds[i].type == CMD_TESS_VERTEX)) {
-            glBegin(GL_POINTS);
-            glVertex3f(flat_cmds[i].args[0], flat_cmds[i].args[1],
-                       flat_cmds[i].args[2]);
-            glEnd();
-        }
-    }
-    glPointSize(1.0f);
-    scene_unwind_transform_stack(&matrix_depth);
+        glPointSize(1.0f);
+        scene_unwind_transform_stack(&matrix_depth);
     }
     glPopMatrix();
     glDisable(GL_BLEND);
