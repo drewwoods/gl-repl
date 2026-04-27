@@ -322,7 +322,7 @@ clean: ## Remove built binaries and object files.
 		$(BENCH_BINS) $(addsuffix .dSYM,$(BENCH_BINS)) \
 		build/coverage/lcov.info build/coverage/html \
 		build \
-		callgraph*.mmd callgrind.out*
+		callgraph*.mmd callgraph*.dot callgraph*.html callgrind.out*
 
 glut: ## Rebuild using the Apple GLUT framework instead of freeglut.
 	$(MAKE) clean
@@ -375,6 +375,38 @@ callgraph-profile: sample ## Generate profile-based call graph using Valgrind ca
 	else \
 		echo "ERROR: callgrind.out not generated"; exit 1; \
 	fi
+
+callgraph-graphviz: ## Generate Graphviz DOT format (better for large graphs). Use: make callgraph-graphviz [ENTRY=function_name]
+	@if ! command -v cflow &> /dev/null; then \
+		echo "ERROR: cflow not found. Install with: brew install cflow"; exit 1; \
+	fi
+	@if [ -n "$(ENTRY)" ]; then \
+		echo "Generating Graphviz call graph from $(ENTRY)..."; \
+		cflow -m $(ENTRY) $(SRCS) 2>/dev/null | python3 scripts/cflow_to_graphviz.py --no-stdlib > callgraph-$(ENTRY).dot; \
+		echo "Graphviz DOT saved to callgraph-$(ENTRY).dot"; \
+	else \
+		echo "Generating Graphviz call graph from all functions..."; \
+		cflow $(SRCS) 2>/dev/null | python3 scripts/cflow_to_graphviz.py --no-stdlib > callgraph-full.dot; \
+		echo "Graphviz DOT saved to callgraph-full.dot"; \
+	fi
+	@echo "Render with: dot -Tsvg callgraph-*.dot -o callgraph.svg"
+	@echo "Or for better layout: neato -Tsvg callgraph-*.dot -o callgraph.svg"
+	@echo "Or: sfdp -Tsvg callgraph-*.dot -o callgraph.svg (scalable force-directed)"
+
+callgraph-html: ## Generate interactive Cytoscape.js HTML (no size limits, searchable, filterable).
+	@if ! command -v cflow &> /dev/null; then \
+		echo "ERROR: cflow not found. Install with: brew install cflow"; exit 1; \
+	fi
+	@if [ -n "$(ENTRY)" ]; then \
+		echo "Generating interactive HTML from $(ENTRY)..."; \
+		cflow -m $(ENTRY) $(SRCS) 2>/dev/null | python3 scripts/cflow_to_cytoscape_html.py --no-stdlib --no-gl > callgraph-$(ENTRY).html; \
+		echo "Interactive graph saved to callgraph-$(ENTRY).html"; \
+	else \
+		echo "Generating interactive HTML from all functions..."; \
+		cflow $(SRCS) 2>/dev/null | python3 scripts/cflow_to_cytoscape_html.py --no-stdlib --no-gl > callgraph-full.html; \
+		echo "Interactive graph saved to callgraph-full.html"; \
+	fi
+	@echo "Open in browser: open callgraph-*.html"
 
 help: ## Show available targets and build-mode notes.
 	@printf "Immediate-mode REPL Make targets\n\n"

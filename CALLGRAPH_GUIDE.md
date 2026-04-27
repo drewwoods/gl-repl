@@ -1,61 +1,129 @@
 # Call Graph Generation Guide
 
-This project includes tools to automatically generate visual call graphs of the program using two different methods: static analysis and runtime profiling.
+This project includes tools to automatically generate visual call graphs of the program using multiple formats and methods.
 
-## Quick Start
+## Quick Start - Choose Your Format
 
-### Static Analysis (Recommended for quick exploration)
+### 📊 **Interactive HTML** (Recommended for large graphs - NO size limits!)
 
 ```bash
-# Generate call graph from specific entry point
-make callgraph-static-entry ENTRY=imrepl_ctrl_display_frame
-
-# Generate call graph of entire program
-make callgraph-static
+# Interactive, searchable, zoomable - handles unlimited edges
+make callgraph-html ENTRY=imrepl_ctrl_display_frame
+open callgraph-imrepl_ctrl_display_frame.html
 ```
 
-This uses **cflow** to parse the source code and extract function call relationships without running the program.
+**Why choose this:**
+- ✅ No size limits (Mermaid's 500-edge limit doesn't apply)
+- ✅ Searchable functions, clickable connections
+- ✅ Pan/zoom, hide isolated nodes
+- ✅ Works with thousands of edges
+- ✅ Self-contained HTML file (no server needed)
 
-### Runtime Profiling (Shows actual execution)
+### 📈 **Graphviz DOT** (Best for rendering to high-quality images)
 
 ```bash
-# Generate profile-based call graph from default execution
-make callgraph-profile
+# Generate DOT format, render to SVG/PNG with Graphviz
+make callgraph-graphviz ENTRY=imrepl_ctrl_display_frame
 
-# Generate profile with custom program/arguments
+# Render to SVG (better for complex graphs than Mermaid)
+dot -Tsvg callgraph-imrepl_ctrl_display_frame.dot -o callgraph.svg
+
+# Or use better layouts for large graphs:
+neato -Tsvg callgraph-imrepl_ctrl_display_frame.dot -o callgraph.svg   # spring layout
+sfdp -Tsvg callgraph-imrepl_ctrl_display_frame.dot -o callgraph.svg    # scalable force-directed
+```
+
+**Why choose this:**
+- ✅ Handles large graphs better than Mermaid
+- ✅ Better layout algorithms (neato, sfdp)
+- ✅ Renders to any format (SVG, PNG, PDF)
+- ✅ No browser text size limits
+
+### 📋 **Mermaid** (Best for small, focused graphs)
+
+```bash
+# Generate Mermaid diagram for specific entry point
+make callgraph-static-entry ENTRY=scene_render_3d_scene
+```
+
+**Why choose this:**
+- ✅ Beautiful, clean diagrams
+- ✅ Works great for small graphs (< 200 edges)
+- ✅ Can paste to https://mermaid.live
+- ⚠️ Has 500-edge limit
+
+### 📊 **Runtime Profiling** (Shows actual execution)
+
+```bash
+# Profile execution and generate call graph
 make callgraph-profile PROG="./sample output.c"
 ```
 
-This uses **Valgrind's callgrind** to profile actual execution and shows which functions were *actually* called with real timing data.
+**Why choose this:**
+- ✅ Shows what *actually* executes (not all possible calls)
+- ✅ Includes performance data
+- ✅ Useful for understanding real execution flow
+
+## Solving the "Maximum text size" Problem
+
+If you hit `Maximum text size in diagram exceeded`:
+
+```bash
+# Option 1: Use interactive HTML (NO limits)
+make callgraph-html ENTRY=repl_eval_expr
+open callgraph-repl_eval_expr.html
+
+# Option 2: Use Graphviz (better scaling)
+make callgraph-graphviz
+sfdp -Tsvg callgraph-full.dot -o callgraph.svg
+
+# Option 3: Focus on smaller entry points
+make callgraph-static-entry ENTRY=flatten_range
+```
+
+## Output Formats Comparison
+
+| Format | Max Edges | Rendering | Interaction | Best For |
+|--------|-----------|-----------|-------------|----------|
+| **Interactive HTML** | Unlimited | Browser | Search, click, zoom | Large graphs, exploration |
+| **Graphviz (DOT)** | Unlimited | dot/neato/sfdp | None (static) | Publication, precise layout |
+| **Mermaid** | ~500 | Browser/CLI | None (static) | Documentation, small graphs |
+| **Profile** | Varies | Mermaid/Graphviz | None (static) | Performance analysis |
 
 ## Visualizing the Output
 
-The targets generate Mermaid diagram files (`.mmd` format) that can be visualized in several ways:
-
-### Online Visualization
-1. Go to [https://mermaid.live](https://mermaid.live)
-2. Paste the contents of the generated `.mmd` file
-3. The diagram renders instantly
-
-### Command-line Visualization
-Convert Mermaid to SVG or PNG:
-
+### Interactive HTML (Recommended)
 ```bash
-# Install mermaid CLI (requires Node.js)
-npm install -g @mermaid-js/mermaid-cli
+make callgraph-html ENTRY=imrepl_ctrl_display_frame
+open callgraph-imrepl_ctrl_display_frame.html
+```
+- Click nodes to highlight connections
+- Search for functions in the input box
+- Toggle "Hide isolated nodes" checkbox
+- Pan with mouse drag, zoom with scroll
+- No rendering needed (pure browser)
 
-# Convert to SVG
-mmdc -i callgraph-static.mmd -o callgraph-static.svg
+### Graphviz to SVG/PNG
+```bash
+# Generate DOT
+make callgraph-graphviz ENTRY=imrepl_ctrl_display_frame
 
-# Convert to PNG
-mmdc -i callgraph-static.mmd -o callgraph-static.png
+# Render to SVG (recommended for large graphs)
+sfdp -Tsvg callgraph-imrepl_ctrl_display_frame.dot -o graph.svg
+
+# Render to PNG
+sfdp -Tpng callgraph-imrepl_ctrl_display_frame.dot -o graph.png
+
+# Alternative layouts
+dot -Tsvg callgraph-imrepl_ctrl_display_frame.dot -o graph.svg    # left-right layout
+neato -Tsvg callgraph-imrepl_ctrl_display_frame.dot -o graph.svg   # spring layout
 ```
 
-### Open in GUI (macOS)
-```bash
-open callgraph-static.mmd  # Opens in default text editor
-# Copy content to https://mermaid.live in browser
-```
+### Mermaid Online
+1. Generate: `make callgraph-static-entry ENTRY=scene_render_3d_scene`
+2. Go to [https://mermaid.live](https://mermaid.live)
+3. Paste contents of `.mmd` file
+4. (Only works for graphs with < 500 edges)
 
 ## Understanding the Output
 
@@ -71,93 +139,194 @@ open callgraph-static.mmd  # Opens in default text editor
 - **Smaller graphs**: Easier to understand what *actually* executes vs what *could* execute
 - **Useful for**: Performance analysis, understanding real execution flow, finding bottlenecks
 
-## Examples
+## Practical Examples
 
-### Generate call graph from main display loop
+### Example 1: Explore Large Program Interactively
 ```bash
-make callgraph-static-entry ENTRY=imrepl_ctrl_display_frame
-# Output: callgraph-imrepl_ctrl_display_frame.mmd
+# Generate interactive HTML for the entire program (all 400+ functions)
+make callgraph-html
+
+# Open in browser - click nodes to highlight, search for functions
+open callgraph-full.html
 ```
 
-Result shows:
-```
-imrepl_ctrl_display_frame
-├── imrepl_ctrl_build_scene_config
-├── scene_render_3d_scene
-│   └── render_3d_scene_pass
-│       └── execute_fn (scene_execute_adapter)
-│           └── repl_execute_program
-├── ui_panels_render_code_panel
-├── ui_autocomplete_panel_render
-├── ui_menu_bar_render
-└── ...
-```
-
-### Profile actual execution with loaded file
+### Example 2: Understand a Large Entry Point
 ```bash
-# Load a saved session and profile for 5 seconds
-make callgraph-profile PROG="./sample output.c"
+# Main display loop - huge graph with 200+ edges
+make callgraph-graphviz ENTRY=imrepl_ctrl_display_frame
 
-# View the actual call graph of what executed
+# Render with good layout algorithm for large graphs
+sfdp -Tsvg callgraph-imrepl_ctrl_display_frame.dot -o display-frame.svg
+```
+
+### Example 3: Focus on Core Rendering
+```bash
+# Scene rendering pipeline
+make callgraph-static-entry ENTRY=scene_render_3d_scene
+
+# This has ~50 edges, works fine in Mermaid
+cat callgraph-scene_render_3d_scene.mmd
+# Copy to https://mermaid.live
+```
+
+### Example 4: Parser Deep-Dive
+```bash
+# Expression evaluator (focused, manageable size)
+make callgraph-html ENTRY=repl_eval_expr
+open callgraph-repl_eval_expr.html
+
+# Or render to publication-quality SVG
+make callgraph-graphviz ENTRY=repl_eval_expr
+neato -Tsvg callgraph-repl_eval_expr.dot -o expr-eval.svg
+```
+
+### Example 5: Performance Analysis
+```bash
+# Profile actual execution with a specific test
+make callgraph-profile PROG="./test_scene_render"
+
+# Shows only what actually ran (smaller than static analysis)
+```
+
+### Example 6: Remove Noise for Documentation
+```bash
+# Full graph, no stdlib/GL functions
+make callgraph-graphviz
+
+# Generate SVG with filtering applied
+cflow $(SRCS) | python3 scripts/cflow_to_graphviz.py --no-stdlib --no-gl > clean.dot
+sfdp -Tsvg clean.dot -o callgraph-clean.svg
 ```
 
 ## Dependencies
 
-### For Static Analysis
+### Required
 - **cflow** - Parses C source code for function calls
   - Install: `brew install cflow` (macOS) or `apt-get install cflow` (Linux)
+  - Needed for: `callgraph-static*`, `callgraph-graphviz`, `callgraph-html`
+
+### Optional but Recommended
+- **Graphviz** - Graph rendering engine
+  - Install: `brew install graphviz` (macOS) or `apt-get install graphviz` (Linux)
+  - Needed for: rendering `.dot` files to SVG/PNG
+  - Tools: `dot`, `neato`, `sfdp` (each uses different layout algorithm)
 
 ### For Runtime Profiling  
-- **Valgrind** with callgrind tool - Runtime profiling
+- **Valgrind** with callgrind tool
   - Install: `brew install valgrind` (macOS) or `apt-get install valgrind` (Linux)
-- **callgrind_annotate** - Comes with valgrind, parses profiling output
+  - Needed for: `callgraph-profile`
 
 ### For Visualization
-- **Mermaid Live** (online, no installation needed)
-- **mermaid-cli** (optional, requires Node.js): `npm install -g @mermaid-js/mermaid-cli`
+- **Browser** (for interactive HTML) - no install needed
+- **Mermaid Live** - online at https://mermaid.live (for `.mmd` files)
+- **mermaid-cli** (optional) - requires Node.js: `npm install -g @mermaid-js/mermaid-cli`
+
+## Advanced: Filtering Options
+
+All call graph generators support filtering to reduce noise:
+
+```bash
+# Remove standard library functions (strlen, printf, etc.)
+# Automatically done in most targets, but can be explicit:
+cflow *.c | python3 scripts/cflow_to_graphviz.py --no-stdlib
+
+# Remove OpenGL/GLUT functions for REPL-focused graphs
+cflow *.c | python3 scripts/cflow_to_graphviz.py --no-gl
+
+# Combine both filters
+cflow *.c | python3 scripts/cflow_to_graphviz.py --no-stdlib --no-gl
+
+# Reduce transitive edges (A->B->C removes A->C if both exist)
+cflow *.c | python3 scripts/cflow_to_graphviz.py --reduce-edges
+```
 
 ## Scripts
 
-Two Python scripts in `scripts/` handle the conversion:
+Four Python scripts in `scripts/` handle the conversion:
 
 ### `cflow_to_mermaid.py`
 Converts cflow's hierarchical output to Mermaid graph format.
-
 ```bash
-cflow *.c | scripts/cflow_to_mermaid.py > output.mmd
-cflow -m function_name *.c | scripts/cflow_to_mermaid.py > output.mmd
+cflow -m imrepl_ctrl_display_frame *.c | python3 scripts/cflow_to_mermaid.py > output.mmd
+```
+
+### `cflow_to_graphviz.py`
+Converts to Graphviz DOT format (better for large graphs).
+```bash
+cflow *.c | python3 scripts/cflow_to_graphviz.py --no-stdlib > output.dot
+cflow *.c | python3 scripts/cflow_to_graphviz.py --reduce-edges > output.dot
+```
+
+### `cflow_to_cytoscape_html.py`
+Generates self-contained interactive HTML with Cytoscape.js (no size limits).
+```bash
+cflow *.c | python3 scripts/cflow_to_cytoscape_html.py --no-stdlib --no-gl > output.html
 ```
 
 ### `callgrind_to_mermaid.py`
-Converts Valgrind callgrind profiling data to Mermaid graph format.
-
+Converts Valgrind callgrind profiling data to Mermaid.
 ```bash
-callgrind_annotate callgrind.out.12345 | scripts/callgrind_to_mermaid.py > output.mmd
-scripts/callgrind_to_mermaid.py callgrind.out.12345 > output.mmd  # Direct file parsing
+callgrind_annotate callgrind.out.12345 | python3 scripts/callgrind_to_mermaid.py > output.mmd
 ```
 
 ## Troubleshooting
 
 ### "cflow not found"
 ```bash
-brew install cflow
+brew install cflow        # macOS
+apt-get install cflow     # Linux
 ```
 
-### "valgrind not found"
+### "graphviz not found" (for rendering DOT to SVG/PNG)
 ```bash
-brew install valgrind
+brew install graphviz        # macOS
+apt-get install graphviz     # Linux
 ```
 
-### Graph is too large/complex
-For large programs, focus on specific entry points:
+### "valgrind not found" (for `make callgraph-profile`)
 ```bash
-# Instead of all functions, trace just the scene rendering
-make callgraph-static-entry ENTRY=scene_render_3d_scene
+brew install valgrind        # macOS
+apt-get install valgrind     # Linux
 ```
 
-### Mermaid diagram won't render
-- Check file is valid Mermaid syntax (open in browser at https://mermaid.live)
-- Very large graphs may hit browser limitations; split into smaller graphs by entry point
+### "Maximum text size in diagram exceeded" with Mermaid
+**Solution:** Use interactive HTML instead - it has no size limits:
+```bash
+make callgraph-html ENTRY=your_function
+open callgraph-*.html
+```
+
+Or use Graphviz for high-quality rendering:
+```bash
+make callgraph-graphviz ENTRY=your_function
+sfdp -Tsvg callgraph-*.dot -o graph.svg
+```
+
+### Mermaid diagram shows all GL/stdlib functions (too noisy)
+The scripts filter these out by default in most targets. If you're using the raw commands:
+```bash
+cflow *.c | python3 scripts/cflow_to_mermaid.py --no-stdlib --no-gl > output.mmd
+```
+
+### SVG/PNG is too large or has bad layout
+Try different layout algorithms:
+```bash
+dot -Tsvg ...    # left-right, hierarchical
+neato -Tsvg ...  # spring layout, good for general graphs
+sfdp -Tsvg ...   # scalable force-directed, best for large graphs
+```
+
+### HTML file is slow to load/interact
+The HTML file has all ~400+ nodes cached. If it's slow:
+- Use a specific entry point instead of the full graph: `make callgraph-html ENTRY=func_name`
+- Or use a filtered DOT: `cflow *.c | python3 scripts/cflow_to_graphviz.py --no-stdlib > small.dot`
+
+### Graph visualization changes layout every time
+Graphviz uses physics simulation for layout. Use specific seeds for reproducibility:
+```bash
+# Neato with seed for consistent layout
+neato -Tsvg -Gseed=42 callgraph.dot -o graph.svg
+```
 
 ## Use Cases
 

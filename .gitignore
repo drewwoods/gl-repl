@@ -29,4 +29,6 @@ bench_repl
 compile_commands.json
 coverage.lcov
 callgraph*.mmd
+callgraph*.dot
+callgraph*.html
 callgrind.out*
