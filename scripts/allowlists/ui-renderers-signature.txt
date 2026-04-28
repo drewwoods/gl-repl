@@ -1,0 +1,2 @@
+# Renderers audited for snapshot-signature shape.
+ui_replay_hud_render

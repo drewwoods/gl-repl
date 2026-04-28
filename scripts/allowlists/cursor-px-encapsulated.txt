@@ -1,0 +1,3 @@
+# Files still allowed to touch cursor_px/cursor_py during migration.
+ui_autocomplete_panel.c
+ui_panels.c

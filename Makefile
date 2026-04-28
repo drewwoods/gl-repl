@@ -93,7 +93,7 @@ else
 COVERAGE_LDFLAGS =
 endif
 
-.PHONY: all clean test check test-detailed test_detailed test-stubs lines debug coverage glut help bench bench-csv check-gl-boundaries check-layer-coupling check-controller-boundaries check-scene-no-repl-state-mut check-state-boundaries check-views-no-owners check-pure-scene-no-repl-state check-ui-no-repl-state-mut check-public-api-usage callgraph-static callgraph-static-entry callgraph-profile callgraph-graphviz callgraph-html callgraph-files
+.PHONY: all clean test check test-detailed test_detailed test-stubs lines debug coverage glut help bench bench-csv check-gl-boundaries check-layer-coupling check-controller-boundaries check-scene-no-repl-state-mut check-state-boundaries check-views-no-owners check-pure-scene-no-repl-state check-ui-no-repl-state-mut check-public-api-usage check-state-ownership check-no-write-through-view check-views-flat-types check-views-by-value-snapshot check-ui-renderer-takes-view check-renderer-no-direct-mutators check-output-actualization check-mut-accessor-count check-state-c-shrinking check-no-facade-include-in-views check-domain-owner-encapsulation check-cursor-px-encapsulated callgraph-static callgraph-static-entry callgraph-profile callgraph-graphviz callgraph-html callgraph-files
 
 all: sample
 
@@ -296,18 +296,69 @@ check-ui-no-repl-state-mut: ## Verify UI files do not mutate REPL state directly
 	fi
 	@echo "UI mutation boundary OK"
 
+check-no-write-through-view: ## Verify no writes happen through pointer fields on view structs.
+	@bash scripts/check-no-write-through-view.sh scripts/allowlists/write-through-view.txt $(UI_SRCS) $(SCENE_SRCS)
+
+check-views-flat-types: ## Verify view/state snapshot structs avoid mutable pointer fields.
+	@bash scripts/check-views-flat.sh scripts/baselines/views-flat-violations.txt
+
+check-views-by-value-snapshot: ## Ratchet pointer-return snapshot accessors down over time.
+	@bash scripts/check-views-by-value-snapshot.sh scripts/baselines/by-value-snapshot-pointer-returns.txt
+
+check-ui-renderer-takes-view: ## Verify audited UI renderers use canonical snapshot signatures.
+	@bash scripts/check-ui-renderer-signatures.sh scripts/allowlists/ui-renderers-signature.txt
+
+check-renderer-no-direct-mutators: ## Verify audited renderers do not mutate state directly.
+	@bash scripts/check-renderer-purity.sh scripts/allowlists/renderer-purity.txt
+
+check-output-actualization: ## Verify Ui*Output fields are consumed by controller actualization.
+	@bash scripts/check-output-actualization.sh
+
+check-mut-accessor-count: ## Ratchet repl_state_*_mut usage down over time.
+	@bash scripts/check-mut-accessor-count.sh scripts/baselines/mut-count.txt $(SRCS)
+
+check-state-c-shrinking: ## Ratchet repl_state.c line count down over time.
+	@bash scripts/check-state-c-shrinking.sh scripts/baselines/state-c-lines.txt repl_state.c
+
+check-no-facade-include-in-views: ## Verify view/render files avoid repl_state facade headers.
+	@bash scripts/check-no-facade-include-in-views.sh scripts/allowlists/facade-includes-in-views.txt
+
+check-domain-owner-encapsulation: ## Enforce per-domain mutator encapsulation rules as domains migrate.
+	@bash scripts/check-domain-encapsulation.sh scripts/allowlists/domain-owner-encapsulation.txt
+
+check-cursor-px-encapsulated: ## Verify cursor pixel wiring is limited to allowlisted migration files.
+	@bash scripts/check-cursor-px-encapsulated.sh scripts/allowlists/cursor-px-encapsulated.txt
+
+check-state-ownership: ## Run state-ownership contract checks (new + tightened existing checks).
+	@set -e; \
+	for target in \
+		check-controller-boundaries \
+		check-scene-no-repl-state-mut \
+		check-pure-scene-no-repl-state \
+		check-state-boundaries \
+		check-views-no-owners \
+		check-ui-no-repl-state-mut \
+		check-no-write-through-view \
+		check-views-flat-types \
+		check-views-by-value-snapshot \
+		check-ui-renderer-takes-view \
+		check-renderer-no-direct-mutators \
+		check-output-actualization \
+		check-mut-accessor-count \
+		check-state-c-shrinking \
+		check-no-facade-include-in-views \
+		check-domain-owner-encapsulation \
+		check-cursor-px-encapsulated; do \
+		$(MAKE) --no-print-directory $$target || exit $$?; \
+	done
+
 check-public-api-usage: ## Scan public API declarations for unused functions (informational).
 	@bash scripts/check-unused-apis.sh
 
 CHECK_TARGETS = \
 	check-gl-boundaries \
 	check-layer-coupling \
-	check-controller-boundaries \
-	check-scene-no-repl-state-mut \
-	check-pure-scene-no-repl-state \
-	check-state-boundaries \
-	check-views-no-owners \
-	check-ui-no-repl-state-mut \
+	check-state-ownership \
 	check-public-api-usage
 
 check: ## Run all checks.
@@ -318,7 +369,7 @@ check: ## Run all checks.
 		$(MAKE) --no-print-directory $$target || exit $$?; \
 	done
 
-test: check-gl-boundaries check-layer-coupling check-controller-boundaries check-scene-no-repl-state-mut check-pure-scene-no-repl-state check-state-boundaries check-views-no-owners check-ui-no-repl-state-mut $(TEST_BINS) ## Run the full automated test suite.
+test: check-gl-boundaries check-layer-coupling check-state-ownership $(TEST_BINS) ## Run the full automated test suite.
 	@REPL_EXPORT_CC="$(CC)" \
 	REPL_EXPORT_COMPILE_CFLAGS='$(BUILD_CFLAGS) $(CFLAGS)' \
 	TEST_JOBS="$(TEST_JOBS)" \
