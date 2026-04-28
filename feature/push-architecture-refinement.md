@@ -24,8 +24,8 @@ Phase 1 focuses on peeling frame orchestration and scene config construction out
 of `repl_core.c` into a new controller translation unit named
 `imrepl_ctrl.c`. The current `sample.c` / `sample.h` app-shell names are left
 alone in this phase; renaming them to `imrepl.c` / `imrepl.h` is a later
-mechanical cleanup. Replay fade simplification, 2D replay HUD relocation, and
-broader input/UI coupling cleanup remain follow-ups.
+mechanical cleanup. Replay fade simplification and broader input/UI coupling
+cleanup remain follow-ups; the 2D replay HUD relocation is complete.
 
 Implementation status: Phase 1 steps 1-8 are complete and merged. Post-Phase 1
 cleanup (app-shell shim removal) has also been completed. This document records
@@ -46,8 +46,8 @@ This document incorporates the gaps found while comparing it with
   through config, and scene-local jitter removes config jitter fields.
 - Boundary checks account for existing UI include exceptions in
   `repl_editor.c`, `repl_actions.c`, and `repl_export.c`.
-- Replay fade batches and the 2D replay HUD are explicit follow-ups, so Phase 1
-  does not pretend every direct `repl_replay_*` use disappears immediately.
+- Replay fade batches remain an explicit follow-up, so Phase 1 does not pretend
+  every direct `repl_replay_*` use disappears immediately.
 
 ## Revised Tenets
 
@@ -58,7 +58,7 @@ This document incorporates the gaps found while comparing it with
    projection, camera, clear, accumulation, baseline lighting, grid, axes,
    backdrop, light indicators, orbit target, and 3D overlay passes from config.
 3. **UI owns 2D editor chrome.** Code panel, menus, popups, color picker, help,
-   profile HUD, status banner, and future 2D replay HUD live in `ui_*`.
+   profile HUD, status banner, and replay HUD live in `ui_*`.
 4. **The controller wires the frame.** `imrepl_ctrl.c` builds scene/UI inputs from
    REPL state, calls `scene_render_3d_scene(&cfg)`, then drives UI rendering.
 5. **No generic scene plugin callback.** Phase 1 keeps the current narrow
@@ -95,7 +95,6 @@ In scope:
 Out of scope:
 
 - Replay fade-ring simplification and baseline-restore redesign.
-- 2D replay HUD relocation to `ui_replay_hud.c`.
 - Full `SceneRenderConfig` slimming after replay/HUD cleanup.
 - Removing existing UI-layout include exceptions from input/action/export code.
 - Renaming `sample.c` / `sample.h` to `imrepl.c` / `imrepl.h`.
@@ -323,10 +322,9 @@ the old callback/`ReplGeometryRenderPlan` direction.
    `ReplayFadeBatch[24]` and skip-limit aging into a smaller
    `ReplReplayHighlight` model if the visual result remains acceptable. Move
    surviving baseline restore policy out of scene rendering where practical.
-2. **2D replay HUD relocation.** Move `draw_replay_hud()` out of
-   `scene_render.c` into `ui_replay_hud.c`; drop HUD-only fields from
-   `SceneRenderConfig`.
-3. **Scene config slimming.** After replay/HUD cleanup, audit the remaining
+2. **Completed: 2D replay HUD relocation.** `draw_replay_hud()` now lives in
+  `ui_replay_hud.c`.
+3. **Scene config slimming.** After replay cleanup, audit the remaining
    config fields and remove anything no longer used.
 4. **Pure-scene grep guard.** Lock `scene_grid.c`, `scene_axes.c`,
    `scene_backdrop.c`, and `scene_lights.c` against direct REPL state access.
@@ -352,7 +350,7 @@ emission.
 | Main geometry pass clamped to `replay_base_limit` | Already executor-driven — just `execute_fn(1.0f, 0, pc, ...)`. No problem. |
 | Fade batch loop (`render_3d_scene_pass` lines 424–480) | Multiple *additional* calls to `execute_fn`, each with different alpha/skip-limit, plus full GL state setup (push attrib, re-setup lighting, materials, blend) between each one. |
 | `repl_replay_restore_baseline_predef_values()` | Resets user-declared vars to their replay-start values before each fade pass and each AA sample — so animated geometry looks consistent across passes. |
-| `draw_replay_hud()` | Pure 2D UI. Wrong file, no debate. |
+| `ui_replay_hud_render()` | Pure 2D UI, now in `ui_replay_hud.c`. |
 | `draw_replay_tess_preview()` | 3D wireframe overlay — same family as `scene_overlays.c`. |
 
 ### Why execute_fn can't absorb the fade passes
@@ -423,7 +421,7 @@ this, `repl_replay_*` and `repl_state_*` are never called from `scene_render.c`.
 
 ### Where the remaining replay code belongs after R1
 
-- `draw_replay_hud()` → `ui_replay_hud.c` (2D UI overlay)
+- `ui_replay_hud_render()` → `ui_replay_hud.c` (2D UI overlay)
 - `draw_replay_tess_preview()` → `scene_overlays.c` or stays in `scene_render.c`,
   driven by a config flag already on `SceneRenderConfig` (`replay_tess_preview`)
 - Fade batch orchestration → stays in `scene_render.c`, but driven by the
@@ -875,47 +873,19 @@ restore calls (lines 460, 587, 597) are all gone.
 
 ---
 
-**R1c — Move `draw_replay_hud()` to `ui_replay_hud.c`**
+**R1c — Completed: move `draw_replay_hud()` to `ui_replay_hud.c`**
 
-`draw_replay_hud()` (scene_render.c:186–318) is 130 lines of 2D UI rendering.
-It currently reads `repl_state_replay()` directly (line 187) and
-`repl_state_presentation()->code_panel_layout` (line 212) for the HUD
-y-position fallback, and calls `repl_state_viewport()` (lines 222–223) for
-the full-window `gl2d_begin`. All of these become config reads once the HUD
-receives the config pointer it already gets today.
+`ui_replay_hud_render()` now owns the replay HUD, lives in `ui_replay_hud.c`,
+and is called from `imrepl_ctrl_display_frame()` after `scene_render_3d_scene()`.
+It consumes the existing replay HUD fields on `SceneRenderConfig` for now;
+slimming those fields is deferred to the later scene-config cleanup.
 
-Create `ui_replay_hud.c` / `ui_replay_hud.h`:
+The old `draw_replay_hud()` implementation and the
+`if (config->replaying) draw_replay_hud(config)` call are gone from
+`scene_render.c`. `scene_render.c` no longer needs the 2D HUD glue include.
 
-```c
-/* ui_replay_hud.h */
-#include "scene_render_types.h"
-void ui_replay_hud_render(const SceneRenderConfig *config);
-```
-
-Move `draw_replay_hud()` body into `ui_replay_hud_render()`. Replace the three
-`repl_state_*` reads with config fields already present:
-- `repl_state_replay()` → `config->replay_pc`, `config->replay_total_cmds`,
-  `config->replay_state_val`, `config->replay_speed`, `config->replay_expand_args`
-- `repl_state_presentation()->code_panel_layout` → `config->code_panel_layout`
-- `repl_state_viewport()` → `config->viewport_w`, `config->viewport_h`
-
-In `imrepl_ctrl.c::imrepl_ctrl_display_frame()`, call
-`ui_replay_hud_render(&scene_config)` after `scene_render_3d_scene()` (in the
-2D UI block alongside `ui_panels_render_code_panel()`).
-
-Remove `draw_replay_hud()` and its `if (config->replaying) draw_replay_hud(config)`
-call from `scene_render.c`. Drop the HUD-only fields from `SceneRenderConfig`
-once the move is verified:
-`replay_pc`, `replay_total_cmds`, `replay_state_val`, `replay_speed`,
-`replay_expand_args`, `code_panel_layout`.
-
-After R1c, `scene_render.c` no longer includes `repl_state.h` or `repl_replay.h`.
-Remove both includes. The `check-pure-scene-no-repl-state` grep guard (R7)
-can now include `scene_render.c` without an allowlist exemption.
-
-Exit criterion: `make check-pure-scene-no-repl-state` passes with
-`scene_render.c` in the checked set. `make test` passes. `./sample` replay
-mode, accumulation AA, HUD, and fade batches all behave as before.
+Exit criterion: `make test_scene_render USE_GL_STUBS=1` passes and the replay
+HUD renders from `ui_replay_hud.c`.
 
 #### R2. Close the UI → REPL mutation hole
 
@@ -1334,9 +1304,9 @@ Do this in two steps.
 
 ---
 
-**R5a — Confirm R1c's field removal is complete**
+**R5a — Remove HUD-only fields when R5 begins**
 
-Before reorganizing, verify these six declarations are gone from
+When you slim `SceneRenderConfig`, remove these six declarations from
 `SceneRenderConfig` and from every `imrepl_ctrl.c` assignment in the
 config-build function:
 
@@ -1346,7 +1316,7 @@ replay_speed  replay_expand_args  code_panel_layout
 ```
 
 `grep -n "replay_pc\|replay_total_cmds\|replay_state_val\|replay_speed\|replay_expand_args\|code_panel_layout" scene_render_types.h imrepl_ctrl.c`
-should return empty. If R1c is still pending, do R5 after it merges.
+should return empty once the slimming step is applied.
 
 ---
 
