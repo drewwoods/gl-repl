@@ -17,7 +17,7 @@
 
 void ui_help_overlay_render(void) {
     const ReplHelpState *help = repl_state_help();
-    if (!*help->visible) return;
+    if (!help->visible) return;
 
     /* --- Tab 0: Commands ---
      * '\t' marks the boundary between left column (command) and
@@ -255,8 +255,8 @@ void ui_help_overlay_render(void) {
     static const char **tabs[]      = { tab_commands, tab_keys };
     #define HELP_NUM_TABS 2
 
-    int help_tab = *help->tab_idx;
-    int help_scroll = *help->scroll;
+    int help_tab = help->tab_idx;
+    int help_scroll = help->scroll;
     if (help_tab < 0) help_tab = 0;
     if (help_tab >= HELP_NUM_TABS) help_tab = HELP_NUM_TABS - 1;
 

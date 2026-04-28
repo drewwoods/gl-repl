@@ -36,7 +36,7 @@ static void test_capture_restore_round_trip(void) {
     repl_state_cursor_pos_set(6);
     repl_state_document_count_set(2);
     repl_state_edit_line_set(1);
-    *repl_state_help_mut()->visible = 1;
+    repl_state_help_mut()->visible = 1;
     *repl_state_code_panel_mut()->scroll = 9;
     *repl_state_search_mut()->active = 1;
     snprintf(repl_state_search_mut()->query,
@@ -58,7 +58,7 @@ static void test_capture_restore_round_trip(void) {
     repl_state_input_clear();
     repl_state_document_count_set(0);
     repl_state_edit_line_set(0);
-    *repl_state_help_mut()->visible = 0;
+    repl_state_help_mut()->visible = 0;
     *repl_state_code_panel_mut()->scroll = 0;
     repl_state_search_clear();
     *repl_state_variables_mut()->time_playing = 1;
@@ -75,7 +75,7 @@ static void test_capture_restore_round_trip(void) {
     ASSERT_INT("cursor restored", repl_state_cursor_pos(), 6);
     ASSERT_INT("document count restored", repl_state_document_count(), 2);
     ASSERT_INT("edit line restored", repl_state_edit_line(), 1);
-    ASSERT_INT("help restored", *repl_state_help()->visible, 1);
+    ASSERT_INT("help restored", repl_state_help()->visible, 1);
     ASSERT_INT("code panel scroll restored", *repl_state_code_panel()->scroll, 9);
     ASSERT_INT("search active restored", *repl_state_search()->active, 1);
     ASSERT_STR("search query restored", repl_state_search()->query, "vertex");

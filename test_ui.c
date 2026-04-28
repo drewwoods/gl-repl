@@ -35,14 +35,14 @@ static void test_help_overlay(void) {
     printf("Testing Help Overlay...\n");
     gl_stub_counts_reset();
     
-    *repl_state_help_mut()->visible = 0;
+    repl_state_help_mut()->visible = 0;
     ui_help_overlay_render();
     ASSERT_TRUE("help hidden -> no GL calls", gl_stub_counts[GL_STUB_glBegin] == 0);
 
-    *repl_state_help_mut()->visible = 1;
+    repl_state_help_mut()->visible = 1;
     repl_state_viewport_set_size(800, 600);
-    *repl_state_help_mut()->tab_idx = 0;
-    *repl_state_help_mut()->scroll = 0;
+    repl_state_help_mut()->tab_idx = 0;
+    repl_state_help_mut()->scroll = 0;
 
     gl_stub_counts_reset();
     ui_help_overlay_render();
@@ -52,7 +52,7 @@ static void test_help_overlay(void) {
     ASSERT_GL_CALLS("help visible -> enables blending", GL_STUB_glEnable, 1);
 
     /* Switch tabs */
-    *repl_state_help_mut()->tab_idx = 1;
+    repl_state_help_mut()->tab_idx = 1;
     gl_stub_counts_reset();
     ui_help_overlay_render();
     ASSERT_GL_CALLS("help tab 1 -> draws text", GL_STUB_glRasterPos2f, 10);

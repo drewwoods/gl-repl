@@ -238,18 +238,18 @@ void repl_action_cursor_blink_reset(void) {
 void repl_action_help_tab_next(void) {
     ReplHelpState *help = repl_state_help_mut();
 
-    if (*help->tab_idx < 1) {
-        (*help->tab_idx)++;
-        *help->scroll = 0;
+    if (help->tab_idx < 1) {
+        help->tab_idx++;
+        help->scroll = 0;
     }
 }
 
 void repl_action_help_tab_prev(void) {
     ReplHelpState *help = repl_state_help_mut();
 
-    if (*help->tab_idx > 0) {
-        (*help->tab_idx)--;
-        *help->scroll = 0;
+    if (help->tab_idx > 0) {
+        help->tab_idx--;
+        help->scroll = 0;
     }
 }
 

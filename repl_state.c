@@ -399,9 +399,9 @@ static ReplRuntimeFacade g_repl_facade = {
         .cursor_py = &g_cursor_py,
     },
     .help = {
-        .visible = &g_show_help,
-        .tab_idx = &g_help_tab,
-        .scroll = &g_help_scroll,
+        .visible = 0,
+        .tab_idx = 0,
+        .scroll = 0,
     },
     .variable_panel = {
         .visible = &g_show_var_panel,
@@ -937,11 +937,11 @@ void repl_state_code_panel_reset(void) {
 }
 
 const ReplHelpState *repl_state_help(void) {
-    return &g_repl_facade.help;
+    return &g_repl_state.help;
 }
 
 ReplHelpState *repl_state_help_mut(void) {
-    return &g_repl_facade.help;
+    return &g_repl_state.help;
 }
 
 void repl_state_help_reset(void) {
