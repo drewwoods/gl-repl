@@ -61,11 +61,7 @@ typedef struct {
     int   cursor_py;
 } ReplCodePanelRuntimeStorage;
 
-typedef struct {
-    int visible;
-    int tab_idx;
-    int scroll;
-} ReplHelpRuntimeState;
+typedef ReplHelpState ReplHelpRuntimeState;
 
 typedef struct {
     int visible;

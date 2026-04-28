@@ -89,9 +89,9 @@ typedef struct {
 } ReplCodePanelRuntimeState;
 
 typedef struct {
-    int *visible;
-    int *tab_idx;
-    int *scroll;
+    int visible;
+    int tab_idx;
+    int scroll;
 } ReplHelpState;
 
 typedef struct {

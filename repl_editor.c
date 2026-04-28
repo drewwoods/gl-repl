@@ -670,10 +670,10 @@ static int handle_escape_key_route(unsigned char key) {
             editor_request_redraw();
             return 1;
         }
-        if (*repl_state_help()->visible) {
-            *repl_state_help_mut()->visible = 0;
-            *repl_state_help_mut()->tab_idx = 0;
-            *repl_state_help_mut()->scroll = 0;
+        if (repl_state_help()->visible) {
+            repl_state_help_mut()->visible = 0;
+            repl_state_help_mut()->tab_idx = 0;
+            repl_state_help_mut()->scroll = 0;
         } else if (*repl_state_autocomplete()->match_count > 0) {
             clear_autocomplete_state();
         } else if (repl_state_insert_mode()) {
@@ -1197,7 +1197,7 @@ static int handle_horizontal_special_key_route(int key) {
             repl_audio_prev_track();
             return 1;
         }
-        if (*repl_state_help()->visible) {
+        if (repl_state_help()->visible) {
             repl_action_help_tab_prev();
             return 1;
         }
@@ -1210,7 +1210,7 @@ static int handle_horizontal_special_key_route(int key) {
             repl_audio_next_track();
             return 1;
         }
-        if (*repl_state_help()->visible) {
+        if (repl_state_help()->visible) {
             repl_action_help_tab_next();
             return 1;
         }
@@ -1236,8 +1236,8 @@ static int handle_vertical_special_key_route(int key) {
     ReplAutocompleteState *ac = repl_state_autocomplete_mut();
     switch (key) {
     case GLUT_KEY_UP:
-        if (*help->visible) {
-            (*help->scroll)--;
+        if (help->visible) {
+            help->scroll--;
             return 1;
         }
         if (*ac->match_count > 1) {
@@ -1258,8 +1258,8 @@ static int handle_vertical_special_key_route(int key) {
         }
         return 1;
     case GLUT_KEY_DOWN:
-        if (*help->visible) {
-            (*help->scroll)++;
+        if (help->visible) {
+            help->scroll++;
             return 1;
         }
         if (*ac->match_count > 1) {
@@ -1287,9 +1287,9 @@ static int handle_vertical_special_key_route(int key) {
 static int handle_help_toggle_special_key_route(int key) {
     if (key == GLUT_KEY_F1) {
         ReplHelpState *help = repl_state_help_mut();
-        *help->visible = !*help->visible;
-        *help->tab_idx = 0;
-        *help->scroll = 0;
+        help->visible = !help->visible;
+        help->tab_idx = 0;
+        help->scroll = 0;
         return 1;
     }
     return 0;
@@ -1343,15 +1343,15 @@ static int handle_scene_cycle_special_key_route(int key) {
 static int handle_page_scroll_special_key_route(int key) {
     switch (key) {
     case GLUT_KEY_PAGE_UP:
-        if (*repl_state_help()->visible)
-            *repl_state_help_mut()->scroll -= 5;
+        if (repl_state_help()->visible)
+            repl_state_help_mut()->scroll -= 5;
         else
             *repl_state_code_panel_mut()->scroll -= 5;
         *repl_state_code_panel_mut()->scroll_follow_cursor = 0;
         return 1;
     case GLUT_KEY_PAGE_DOWN:
-        if (*repl_state_help()->visible)
-            *repl_state_help_mut()->scroll += 5;
+        if (repl_state_help()->visible)
+            repl_state_help_mut()->scroll += 5;
         else
             *repl_state_code_panel_mut()->scroll += 5;
         *repl_state_code_panel_mut()->scroll_follow_cursor = 0;
@@ -1568,8 +1568,8 @@ static void mouse_func(int button, int state, int x, int y) {
 
 #ifdef USE_GLUT
     if (button == 3 && state == GLUT_DOWN) {
-        if (*repl_state_help()->visible) {
-            (*repl_state_help_mut()->scroll)--;
+        if (repl_state_help()->visible) {
+            repl_state_help_mut()->scroll--;
         } else {
             if (editor_point_in_code_panel(x, y))
                 (*repl_state_code_panel_mut()->scroll)--;
@@ -1578,8 +1578,8 @@ static void mouse_func(int button, int state, int x, int y) {
         }
         editor_request_redraw();
     } else if (button == 4 && state == GLUT_DOWN) {
-        if (*repl_state_help()->visible) {
-            (*repl_state_help_mut()->scroll)++;
+        if (repl_state_help()->visible) {
+            repl_state_help_mut()->scroll++;
         } else {
             if (editor_point_in_code_panel(x, y))
                 (*repl_state_code_panel_mut()->scroll)++;
@@ -1594,8 +1594,8 @@ static void mouse_func(int button, int state, int x, int y) {
 #ifndef USE_GLUT
 static void mousewheel_func(int wheel, int direction, int x, int y) {
     (void)wheel;
-    if (*repl_state_help()->visible) {
-        *repl_state_help_mut()->scroll -= direction;
+    if (repl_state_help()->visible) {
+        repl_state_help_mut()->scroll -= direction;
     } else {
         if (editor_point_in_code_panel(x, y))
             *repl_state_code_panel_mut()->scroll -= direction;

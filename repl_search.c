@@ -419,9 +419,9 @@ static void search_open(void) {
 
     *srch->active = 1;
     *srch->cursor_pos = *srch->query_len;
-    *repl_state_help_mut()->visible = 0;
-    *repl_state_help_mut()->tab_idx = 0;
-    *repl_state_help_mut()->scroll = 0;
+    repl_state_help_mut()->visible = 0;
+    repl_state_help_mut()->tab_idx = 0;
+    repl_state_help_mut()->scroll = 0;
     clear_autocomplete_state();
 }
 
