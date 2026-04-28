@@ -279,7 +279,7 @@ int         repl_state_cursor_pos(void);
 int         repl_state_insert_mode(void);
 int         repl_state_pending_newline_len(void);
 
-const ReplSelectionState *repl_state_selection(void);
+ReplSelectionState        repl_state_selection(void);
 int  repl_state_selection_anchor(void);
 int  repl_state_selection_end_idx(void);
 
@@ -294,7 +294,7 @@ const ReplVariablePanelState *repl_state_variable_panel(void);
 
 const ReplVariableDragState *repl_state_variable_drag(void);
 
-const ReplProfilePanelState *repl_state_profile_panel(void);
+ReplProfilePanelState     repl_state_profile_panel(void);
 
 const ReplStatusState *repl_state_status(void);
 

@@ -506,7 +506,7 @@ void        repl_state_pending_newline_len_set(int newline_len);
 void        repl_state_pending_newline_set_text(const char *text);
 void        repl_state_pending_newline_clear(void);
 
-const ReplSelectionState *repl_state_selection(void);
+ReplSelectionState       repl_state_selection(void);
 ReplSelectionState       *repl_state_selection_mut(void);
 void repl_state_selection_clear(void);
 int  repl_state_selection_anchor(void);
@@ -535,7 +535,7 @@ const ReplVariableDragState *repl_state_variable_drag(void);
 ReplVariableDragState       *repl_state_variable_drag_mut(void);
 void repl_state_variable_drag_reset(void);
 
-const ReplProfilePanelState *repl_state_profile_panel(void);
+ReplProfilePanelState    repl_state_profile_panel(void);
 ReplProfilePanelState       *repl_state_profile_panel_mut(void);
 
 const ReplStatusState *repl_state_status(void);
