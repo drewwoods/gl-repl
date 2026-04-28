@@ -18,8 +18,8 @@
 #define g_status     (repl_state_status_mut()->text)
 #define g_scroll     (*repl_state_code_panel_mut()->scroll)
 #define g_panel_frac (*repl_state_code_panel_mut()->panel_frac)
-#define g_ac_count   (*repl_state_autocomplete_mut()->match_count)
-#define g_ac_sel     (*repl_state_autocomplete_mut()->selected_idx)
+#define g_ac_count   (repl_state_autocomplete_mut()->match_count)
+#define g_ac_sel     (repl_state_autocomplete_mut()->selected_idx)
 #define g_ac_ghost   (repl_state_autocomplete_mut()->ghost)
 #define g_ac_hint    (repl_state_autocomplete_mut()->hint)
 #define g_search_active    (repl_state_search_mut()->active)
@@ -164,7 +164,7 @@ static int code_panel_mouse_y_for_cmd(int cmd_idx) {
     int vis = doc_line - g_scroll;
     int line_y_start = cp_y + cp_h - CODE_MARGIN_Y - 2 * LINE_H;
     int gl_y = line_y_start - vis * LINE_H + 1;
-    return *repl_state_viewport()->window_h - gl_y;
+    return repl_state_viewport()->window_h - gl_y;
 }
 
 static void assert_float_decl_rejected_atomic(const char *label,
@@ -543,13 +543,13 @@ int main() {
         repl_camera_mouse_event(GLUT_LEFT_BUTTON, GLUT_DOWN, 10, 10, 0);
         repl_camera_drag_motion(20, 14);
         ASSERT_TRUE("camera left drag yaws",
-                    fabsf(*repl_state_camera()->ry - 5.0f) < 1e-6f);
+                    fabsf(repl_state_camera()->ry - 5.0f) < 1e-6f);
         ASSERT_TRUE("camera left drag pitches",
-                    fabsf(*repl_state_camera()->rx - 2.0f) < 1e-6f);
+                    fabsf(repl_state_camera()->rx - 2.0f) < 1e-6f);
         repl_camera_mouse_event(GLUT_LEFT_BUTTON, GLUT_UP, 20, 14, 0);
         repl_camera_tick();
         ASSERT_TRUE("camera release keeps yaw momentum",
-                    fabsf(*repl_state_camera()->ry - 7.5f) < 1e-6f);
+                    fabsf(repl_state_camera()->ry - 7.5f) < 1e-6f);
 
         repl_camera_controls_reset();
         repl_state_camera_set_orbit(0.0f, 0.0f);
@@ -559,16 +559,16 @@ int main() {
                                 GLUT_ACTIVE_SHIFT);
         repl_camera_drag_motion(0, 20);
         ASSERT_TRUE("camera shift-right drag pans y",
-                    fabsf(*repl_state_camera()->ty - 1.0f) < 1e-6f);
+                    fabsf(repl_state_camera()->ty - 1.0f) < 1e-6f);
         ASSERT_TRUE("camera y pan lights motion glow",
-                    fabsf(*repl_state_camera()->motion_glow - 1.0f) < 1e-6f);
+                    fabsf(repl_state_camera()->motion_glow - 1.0f) < 1e-6f);
 
         repl_camera_controls_reset();
         repl_state_camera_set_distance(0.6f);
         repl_camera_mouse_event(GLUT_MIDDLE_BUTTON, GLUT_DOWN, 0, 0, 0);
         repl_camera_drag_motion(0, -100);
         ASSERT_TRUE("camera middle drag clamps near zoom",
-                    fabsf(*repl_state_camera()->dist - 0.5f) < 1e-6f);
+                    fabsf(repl_state_camera()->dist - 0.5f) < 1e-6f);
     }
 
     /* 1. Undo when nothing to undo - must run before any undo push */
@@ -2588,9 +2588,9 @@ int main() {
         ASSERT_TRUE("Esc: help closed", !repl_state_help()->visible);
 
         /* 2. Autocomplete active */
-        *repl_state_autocomplete_mut()->match_count = 1;
+        repl_state_autocomplete_mut()->match_count = 1;
         repl_keyboard_func(27, 0, 0);
-        ASSERT_INT("Esc: autocomplete cleared", *repl_state_autocomplete()->match_count, 0);
+        ASSERT_INT("Esc: autocomplete cleared", repl_state_autocomplete()->match_count, 0);
 
         /* 3. Insert mode */
         repl_state_insert_mode_set(1);

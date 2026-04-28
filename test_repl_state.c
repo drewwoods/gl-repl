@@ -80,8 +80,8 @@ static void test_capture_restore_round_trip(void) {
     ASSERT_INT("search active restored", repl_state_search()->active, 1);
     ASSERT_STR("search query restored", repl_state_search()->query, "vertex");
     ASSERT_INT("time playing restored", *repl_state_variables()->time_playing, 0);
-    ASSERT_TRUE("camera rx restored", *repl_state_camera()->rx == 11.0f);
-    ASSERT_TRUE("camera ry restored", *repl_state_camera()->ry == 22.0f);
+    ASSERT_TRUE("camera rx restored", repl_state_camera()->rx == 11.0f);
+    ASSERT_TRUE("camera ry restored", repl_state_camera()->ry == 22.0f);
     ASSERT_STR("workspace restored",
                repl_state_workspace_dir(),
                "/tmp/repl-state-stage1");

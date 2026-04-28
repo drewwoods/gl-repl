@@ -407,10 +407,10 @@ static ReplRuntimeFacade g_repl_facade = {
         .visible = 1,
     },
     .variable_drag = {
-        .var_idx = &g_drag_var,
-        .log_mode = &g_drag_log_mode,
-        .start_value = &g_drag_start_val,
-        .start_x = &g_drag_start_x,
+        .var_idx = -1,
+        .log_mode = 0,
+        .start_value = 0.0f,
+        .start_x = 0,
     },
     .profile_panel = {
         .mode = PROFILE_PANEL_OFF,
@@ -430,33 +430,31 @@ static ReplRuntimeFacade g_repl_facade = {
         .match_count = 0,
     },
     .autocomplete = {
-        .matches = g_ac_matches,
-        .insert_matches = g_ac_insert_matches,
-        .match_count = &g_ac_count,
-        .selected_idx = &g_ac_sel,
-        .ghost = g_ac_ghost,
-        .ghost_capacity = MAX_LINE_LEN,
-        .hint = g_ac_hint,
-        .hint_capacity = MAX_LINE_LEN,
+        .matches = { 0 },
+        .insert_matches = { 0 },
+        .match_count = 0,
+        .selected_idx = 0,
+        .ghost = "",
+        .hint = "",
     },
     .camera = {
-        .rx = &g_cam_rx,
-        .ry = &g_cam_ry,
-        .dist = &g_cam_dist,
-        .tx = &g_cam_tx,
-        .ty = &g_cam_ty,
-        .tz = &g_cam_tz,
-        .motion_glow = &g_cam_motion_glow,
-        .auto_rotate = &g_cam_rotate,
+        .rx = 20.0f,
+        .ry = 30.0f,
+        .dist = 5.0f,
+        .tx = 0.0f,
+        .ty = 0.0f,
+        .tz = 0.0f,
+        .motion_glow = 0.0f,
+        .auto_rotate = CFG_DEFAULT_CAMERA_ROTATE,
     },
     .pointer = {
-        .mouse_x = &g_mouse_x,
-        .mouse_y = &g_mouse_y,
-        .mouse_button = &g_mouse_btn,
+        .mouse_x = 0,
+        .mouse_y = 0,
+        .mouse_button = -1,
     },
     .viewport = {
-        .window_w = &g_win_w,
-        .window_h = &g_win_h,
+        .window_w = 1200,
+        .window_h = 800,
     },
     .presentation = {
         .wireframe = &g_wireframe,
@@ -957,11 +955,11 @@ ReplVariablePanelState *repl_state_variable_panel_mut(void) {
 }
 
 const ReplVariableDragState *repl_state_variable_drag(void) {
-    return &g_repl_facade.variable_drag;
+    return &g_repl_state.variable_drag;
 }
 
 ReplVariableDragState *repl_state_variable_drag_mut(void) {
-    return &g_repl_facade.variable_drag;
+    return &g_repl_state.variable_drag;
 }
 
 void repl_state_variable_drag_reset(void) {
@@ -1029,31 +1027,31 @@ void repl_state_search_clear(void) {
 }
 
 const ReplAutocompleteState *repl_state_autocomplete(void) {
-    return &g_repl_facade.autocomplete;
+    return &g_repl_state.autocomplete;
 }
 
 ReplAutocompleteState *repl_state_autocomplete_mut(void) {
-    return &g_repl_facade.autocomplete;
+    return &g_repl_state.autocomplete;
 }
 
 void repl_state_autocomplete_clear(void) {
     ReplAutocompleteState *ac = repl_state_autocomplete_mut();
-    *ac->match_count = 0;
-    *ac->selected_idx = 0;
+    ac->match_count = 0;
+    ac->selected_idx = 0;
     ac->ghost[0] = '\0';
     ac->hint[0] = '\0';
 }
 
 const ReplCameraState *repl_state_camera(void) {
-    return &g_repl_facade.camera;
+    return &g_repl_state.camera;
 }
 
 ReplCameraState *repl_state_camera_mut(void) {
-    return &g_repl_facade.camera;
+    return &g_repl_state.camera;
 }
 
 ReplCameraState repl_state_camera_snapshot(void) {
-    return g_repl_facade.camera;
+    return g_repl_state.camera;
 }
 
 void repl_state_camera_set(float rx, float ry, float dist,
@@ -1093,11 +1091,11 @@ void repl_state_camera_reset_default(void) {
 }
 
 const ReplPointerState *repl_state_pointer(void) {
-    return &g_repl_facade.pointer;
+    return &g_repl_state.pointer;
 }
 
 ReplPointerState *repl_state_pointer_mut(void) {
-    return &g_repl_facade.pointer;
+    return &g_repl_state.pointer;
 }
 
 void repl_state_pointer_set(int mouse_x, int mouse_y, int mouse_button) {
@@ -1116,11 +1114,11 @@ void repl_state_pointer_set_button(int mouse_button) {
 }
 
 const ReplViewportState *repl_state_viewport(void) {
-    return &g_repl_facade.viewport;
+    return &g_repl_state.viewport;
 }
 
 ReplViewportState *repl_state_viewport_mut(void) {
-    return &g_repl_facade.viewport;
+    return &g_repl_state.viewport;
 }
 
 void repl_state_viewport_set_size(int window_w, int window_h) {

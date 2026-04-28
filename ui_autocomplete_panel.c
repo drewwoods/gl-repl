@@ -20,9 +20,9 @@ void ui_autocomplete_panel_render(void) {
     const ReplAutocompleteState      *ac  = repl_state_autocomplete();
     const ReplCodePanelRuntimeState  *cp  = repl_state_code_panel();
 
-    if (*ac->match_count < 1) return;
+    if (ac->match_count < 1) return;
 
-    gl2d_begin(*repl_state_viewport()->window_w, *repl_state_viewport()->window_h);
+    gl2d_begin(repl_state_viewport()->window_w, repl_state_viewport()->window_h);
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
@@ -31,12 +31,12 @@ void ui_autocomplete_panel_render(void) {
 
     /* Calculate popup width from longest match */
     int max_w = 0;
-    for (int i = 0; i < *ac->match_count; i++) {
+    for (int i = 0; i < ac->match_count; i++) {
         int w = (int)strlen(ac->matches[i]) * FONT_W;
         if (w > max_w) max_w = w;
     }
     int popup_w = max_w + 16;
-    int popup_h = *ac->match_count * LINE_H + 6;
+    int popup_h = ac->match_count * LINE_H + 6;
 
     /* Clamp to code panel width */
     int cp_x, cp_y, cp_w, cp_h;
@@ -60,8 +60,8 @@ void ui_autocomplete_panel_render(void) {
 
     /* Entries */
     int ey = popup_y - LINE_H + 1;
-    for (int i = 0; i < *ac->match_count; i++) {
-        if (i == *ac->selected_idx) {
+    for (int i = 0; i < ac->match_count; i++) {
+        if (i == ac->selected_idx) {
             /* Highlight selected */
             glColor4f(0.20f, 0.25f, 0.42f, 0.90f);
             glRectf((float)((float)(popup_x + 1)), (float)((float)(ey - 2)), (float)((float)(popup_x + 1))+(float)((float)(popup_w - 2)), (float)((float)(ey - 2))+(float)((float)LINE_H));

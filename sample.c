@@ -143,7 +143,7 @@ int main(int argc, char **argv) {
             print_usage(argv[0]);
             return 0;
         } else if (strcmp(argv[i], "--noaccum") == 0)
-            *repl_state_render_mut()->use_accum = 0;
+            *repl_state_render()->use_accum = 0;
         else if (strcmp(argv[i], "--no-audio") == 0)
             no_audio = 1;
         else if (strcmp(argv[i], "--dump-code") == 0)
@@ -157,7 +157,7 @@ int main(int argc, char **argv) {
     if (dump_code || dump_flat) {
         repl_eval_init_predef_vars();
         for (int i = 0; i < g_num_predef_vars; i++)
-            if (strcmp(g_predef_vars[i].name, "t") == 0) { *repl_state_variables_mut()->time_var_idx = i; break; }
+            if (strcmp(g_predef_vars[i].name, "t") == 0) { *repl_state_variables()->time_var_idx = i; break; }
         repl_load_initial_commands(input_file);
         if (dump_code)
             repl_debug_dump_editor(stdout);
@@ -169,14 +169,14 @@ int main(int argc, char **argv) {
     glutInit(&argc, argv);
     glutInitDisplayMode(GLUT_DOUBLE | GLUT_RGBA | GLUT_DEPTH | GLUT_MULTISAMPLE |
                         (*repl_state_render()->use_accum ? GLUT_ACCUM : 0));
-    glutInitWindowSize(*repl_state_viewport()->window_w, *repl_state_viewport()->window_h);
+    glutInitWindowSize(repl_state_viewport()->window_w, repl_state_viewport()->window_h);
     glutCreateWindow("OpenGL REPL - Display List Dynamic Rendering");
 
     imrepl_ctrl_init_gl();
     atexit(repl_executor_destroy_resources);
     repl_eval_init_predef_vars();
     for (int i = 0; i < g_num_predef_vars; i++)
-        if (strcmp(g_predef_vars[i].name, "t") == 0) { *repl_state_variables_mut()->time_var_idx = i; break; }
+        if (strcmp(g_predef_vars[i].name, "t") == 0) { *repl_state_variables()->time_var_idx = i; break; }
     repl_load_initial_commands(input_file);
 
     /* Audio: init once, scan assets/ *.mp3 for a playlist, play the

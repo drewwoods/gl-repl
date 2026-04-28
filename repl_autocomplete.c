@@ -150,7 +150,7 @@ static void update_input_param_hint(void) {
     ReplAutocompleteState *ac = repl_state_autocomplete_mut();
     if (builtin) {
         build_param_hint_text(builtin->params, builtin->param_count,
-                              after, ac->hint, ac->hint_capacity);
+                              after, ac->hint, (int)sizeof(ac->hint));
         return;
     }
 
@@ -162,7 +162,7 @@ static void update_input_param_hint(void) {
         if (find_defined_func_call_params(input, &after, params,
                                           &param_count, param_storage)) {
             build_param_hint_text(params, param_count, after,
-                                  ac->hint, ac->hint_capacity);
+                                  ac->hint, (int)sizeof(ac->hint));
         }
     }
 }
@@ -174,7 +174,7 @@ void update_selected_autocomplete_preview(void) {
     ac->ghost[0] = '\0';
     ac->hint[0] = '\0';
 
-    if (*ac->match_count <= 0 || !ac->insert_matches[*ac->selected_idx])
+    if (ac->match_count <= 0 || !ac->insert_matches[ac->selected_idx])
         return;
 
     if (g_ac_mode == AC_MODE_FUNC_PREFIX) {
@@ -183,17 +183,17 @@ void update_selected_autocomplete_preview(void) {
         char param_storage[MAX_EXPR_VARS][16];
         int param_count = 0;
 
-        snprintf(ac->ghost, ac->ghost_capacity, "%s",
-                 ac->insert_matches[*ac->selected_idx] + *inp->input_len);
-        if (g_ac_func_matches[*ac->selected_idx] && g_ac_func_matches[*ac->selected_idx]->param_count > 0) {
-            build_param_hint_text(g_ac_func_matches[*ac->selected_idx]->params,
-                                  g_ac_func_matches[*ac->selected_idx]->param_count,
-                                  "", ac->hint, ac->hint_capacity);
+        snprintf(ac->ghost, sizeof(ac->ghost), "%s",
+                 ac->insert_matches[ac->selected_idx] + *inp->input_len);
+        if (g_ac_func_matches[ac->selected_idx] && g_ac_func_matches[ac->selected_idx]->param_count > 0) {
+            build_param_hint_text(g_ac_func_matches[ac->selected_idx]->params,
+                                  g_ac_func_matches[ac->selected_idx]->param_count,
+                                  "", ac->hint, (int)sizeof(ac->hint));
         } else if (find_defined_func_call_params(inp->input, &after, params,
                                                  &param_count, param_storage)) {
             ac->ghost[0] = '\0';
             build_param_hint_text(params, param_count, after,
-                                  ac->hint, ac->hint_capacity);
+                                  ac->hint, (int)sizeof(ac->hint));
         }
         return;
     }
@@ -201,8 +201,8 @@ void update_selected_autocomplete_preview(void) {
     if (g_ac_mode == AC_MODE_POINT_PARAM ||
         g_ac_mode == AC_MODE_ENUM_ARG1 ||
         g_ac_mode == AC_MODE_ENUM_ARG2) {
-        snprintf(ac->ghost, ac->ghost_capacity, "%s%s",
-                 ac->insert_matches[*ac->selected_idx] + g_ac_token_len, g_ac_suffix);
+        snprintf(ac->ghost, sizeof(ac->ghost), "%s%s",
+                 ac->insert_matches[ac->selected_idx] + g_ac_token_len, g_ac_suffix);
     }
 }
 
@@ -231,16 +231,16 @@ void update_autocomplete(void) {
             strchr(input + plen, ',') == NULL) {
             const char *after = input + plen;
             int alen = input_len - plen;
-            for (int j = 0; point_param_pnames[j].name && *ac->match_count < MAX_AC_MATCHES; j++) {
+            for (int j = 0; point_param_pnames[j].name && ac->match_count < MAX_AC_MATCHES; j++) {
                 if (strncmp(point_param_pnames[j].name, after, alen) == 0 &&
                     (int)strlen(point_param_pnames[j].name) > alen) {
-                    ac->matches[*ac->match_count] = point_param_pnames[j].name;
-                    ac->insert_matches[*ac->match_count] = point_param_pnames[j].name;
-                    g_ac_func_matches[*ac->match_count] = NULL;
-                    (*ac->match_count)++;
+                    ac->matches[ac->match_count] = point_param_pnames[j].name;
+                    ac->insert_matches[ac->match_count] = point_param_pnames[j].name;
+                    g_ac_func_matches[ac->match_count] = NULL;
+                    ac->match_count++;
                 }
             }
-            if (*ac->match_count > 0) {
+            if (ac->match_count > 0) {
                 g_ac_mode = AC_MODE_POINT_PARAM;
                 g_ac_token_len = alen;
                 snprintf(g_ac_suffix, sizeof(g_ac_suffix), ", ");
@@ -264,16 +264,16 @@ void update_autocomplete(void) {
 
             if (!comma) {
                 /* Complete enum1. */
-                for (int j = 0; enum_cmds[i].enums1 && enum_cmds[i].enums1[j].name && *ac->match_count < MAX_AC_MATCHES; j++) {
+                for (int j = 0; enum_cmds[i].enums1 && enum_cmds[i].enums1[j].name && ac->match_count < MAX_AC_MATCHES; j++) {
                     if (strncmp(enum_cmds[i].enums1[j].name, after, alen) == 0 &&
                         (int)strlen(enum_cmds[i].enums1[j].name) > alen) {
-                        ac->matches[*ac->match_count] = enum_cmds[i].enums1[j].name;
-                        ac->insert_matches[*ac->match_count] = enum_cmds[i].enums1[j].name;
-                        g_ac_func_matches[*ac->match_count] = NULL;
-                        (*ac->match_count)++;
+                        ac->matches[ac->match_count] = enum_cmds[i].enums1[j].name;
+                        ac->insert_matches[ac->match_count] = enum_cmds[i].enums1[j].name;
+                        g_ac_func_matches[ac->match_count] = NULL;
+                        ac->match_count++;
                     }
                 }
-                if (*ac->match_count > 0) {
+                if (ac->match_count > 0) {
                     g_ac_mode = AC_MODE_ENUM_ARG1;
                     g_ac_token_len = alen;
                     if (abs(enum_cmds[i].num_args) == 1)
@@ -290,16 +290,16 @@ void update_autocomplete(void) {
                     while (*arg2 == ' ') arg2++;
                     int arg2_len = input_len - (int)(arg2 - input);
 
-                    for (int j = 0; enum_cmds[i].enums2[j].name && *ac->match_count < MAX_AC_MATCHES; j++) {
+                    for (int j = 0; enum_cmds[i].enums2[j].name && ac->match_count < MAX_AC_MATCHES; j++) {
                         if (strncmp(enum_cmds[i].enums2[j].name, arg2, arg2_len) == 0 &&
                             (int)strlen(enum_cmds[i].enums2[j].name) > arg2_len) {
-                            ac->matches[*ac->match_count] = enum_cmds[i].enums2[j].name;
-                            ac->insert_matches[*ac->match_count] = enum_cmds[i].enums2[j].name;
-                            g_ac_func_matches[*ac->match_count] = NULL;
-                            (*ac->match_count)++;
+                            ac->matches[ac->match_count] = enum_cmds[i].enums2[j].name;
+                            ac->insert_matches[ac->match_count] = enum_cmds[i].enums2[j].name;
+                            g_ac_func_matches[ac->match_count] = NULL;
+                            ac->match_count++;
                         }
                     }
-                    if (*ac->match_count > 0) {
+                    if (ac->match_count > 0) {
                         g_ac_mode = AC_MODE_ENUM_ARG2;
                         g_ac_token_len = arg2_len;
                         snprintf(g_ac_suffix, sizeof(g_ac_suffix), ")");
@@ -313,16 +313,16 @@ void update_autocomplete(void) {
 
     /* Complete function names. */
     const FuncCompletion *completions = repl_func_completions();
-    for (int i = 0; completions[i].insert_text && *ac->match_count < MAX_AC_MATCHES; i++) {
+    for (int i = 0; completions[i].insert_text && ac->match_count < MAX_AC_MATCHES; i++) {
         if (strncmp(completions[i].insert_text, input, (size_t)input_len) == 0 &&
             (int)strlen(completions[i].insert_text) > input_len) {
-            ac->matches[*ac->match_count] = completions[i].display_text;
-            ac->insert_matches[*ac->match_count] = completions[i].insert_text;
-            g_ac_func_matches[*ac->match_count] = &completions[i];
-            (*ac->match_count)++;
+            ac->matches[ac->match_count] = completions[i].display_text;
+            ac->insert_matches[ac->match_count] = completions[i].insert_text;
+            g_ac_func_matches[ac->match_count] = &completions[i];
+            ac->match_count++;
         }
     }
-    if (*ac->match_count > 0) {
+    if (ac->match_count > 0) {
         g_ac_mode = AC_MODE_FUNC_PREFIX;
         update_selected_autocomplete_preview();
         return;
@@ -333,7 +333,7 @@ void update_autocomplete(void) {
 
 void accept_autocomplete(void) {
     const ReplAutocompleteState *ac = repl_state_autocomplete();
-    if (*ac->match_count == 0 || ac->ghost[0] == '\0') return;
+    if (ac->match_count == 0 || ac->ghost[0] == '\0') return;
 
     int ghost_len = (int)strlen(ac->ghost);
     {

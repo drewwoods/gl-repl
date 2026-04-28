@@ -180,7 +180,7 @@ void ui_profile_panel_render(void) {
     int panel_x, panel_y;
     profile_panel_rect_for_height(panel_h, &panel_x, &panel_y);
 
-    gl2d_begin(*repl_state_viewport()->window_w, *repl_state_viewport()->window_h);
+    gl2d_begin(repl_state_viewport()->window_w, repl_state_viewport()->window_h);
 
     /* Background */
     glEnable(GL_BLEND);

@@ -179,8 +179,8 @@ void repl_debug_dump_editor(FILE *out) {
     {
         const ReplCameraState *cam = repl_state_camera();
         fprintf(dst, "rx=%g ry=%g dist=%g tx=%g ty=%g tz=%g\n",
-                (double)*cam->rx, (double)*cam->ry, (double)*cam->dist,
-                (double)*cam->tx, (double)*cam->ty, (double)*cam->tz);
+                (double)cam->rx, (double)cam->ry, (double)cam->dist,
+                (double)cam->tx, (double)cam->ty, (double)cam->tz);
     }
     update_cam_lines();
     {

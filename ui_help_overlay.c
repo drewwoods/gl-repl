@@ -266,12 +266,12 @@ void ui_help_overlay_render(void) {
     int n_lines = 0;
     while (text[n_lines]) n_lines++;
 
-    gl2d_begin(*repl_state_viewport()->window_w, *repl_state_viewport()->window_h);
+    gl2d_begin(repl_state_viewport()->window_w, repl_state_viewport()->window_h);
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
-    int win_w = *repl_state_viewport()->window_w;
-    int win_h = *repl_state_viewport()->window_h;
+    int win_w = repl_state_viewport()->window_w;
+    int win_h = repl_state_viewport()->window_h;
     int hx = win_w / 6, hy = win_h / 12;
     int hw = win_w * 2 / 3, hh = win_h * 5 / 6;
     int tab_bar_h = LINE_H + 2;

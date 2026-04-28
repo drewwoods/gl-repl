@@ -268,7 +268,7 @@ int ui_menu_bar_menu_hit(int gx, int gy) {
     int menu_x[NUM_MENUS], menu_w[NUM_MENUS];
     int pin_x[NUM_PIN_BTNS], pin_w[NUM_PIN_BTNS];
     int by, bh;
-    int ry = *repl_state_viewport()->window_h - gy;
+    int ry = repl_state_viewport()->window_h - gy;
     menubar_rects(menu_x, menu_w, pin_x, pin_w, &by, &bh);
     if (ry < by || ry >= by + bh) return -1;
     for (int i = 0; i < NUM_MENUS; i++)
@@ -280,7 +280,7 @@ int ui_menu_bar_pin_hit(int gx, int gy) {
     int menu_x[NUM_MENUS], menu_w[NUM_MENUS];
     int pin_x[NUM_PIN_BTNS], pin_w[NUM_PIN_BTNS];
     int by, bh;
-    int ry = *repl_state_viewport()->window_h - gy;
+    int ry = repl_state_viewport()->window_h - gy;
     menubar_rects(menu_x, menu_w, pin_x, pin_w, &by, &bh);
     if (ry < by || ry >= by + bh) return -1;
     for (int i = 0; i < NUM_PIN_BTNS; i++)
@@ -331,7 +331,7 @@ int ui_menu_bar_dropdown_item_hit(int gx, int gy) {
     if (n == 0) return -1;
     int dx, dy, dw, dh;
     if (!menu_dropdown_rect(&dx, &dy, &dw, &dh)) return -1;
-    int ry = *repl_state_viewport()->window_h - gy;
+    int ry = repl_state_viewport()->window_h - gy;
     if (gx < dx || gx >= dx + dw || ry < dy || ry >= dy + dh) return -1;
     int row = (dy + dh - 4 - ry) / LINE_H;
     if (row < 0 || row >= n) return -1;
@@ -583,8 +583,8 @@ void ui_menu_bar_render(void) {
         glColor4f(0.114f, 0.114f, 0.114f, 0.98f);
         glRectf((float)cp_x, (float)by, (float)cp_x + (float)cp_w, (float)by + (float)bh);
 
-        int hover_menu = ui_menu_bar_menu_hit(*repl_state_pointer()->mouse_x, *repl_state_pointer()->mouse_y);
-        int hover_pin  = ui_menu_bar_pin_hit(*repl_state_pointer()->mouse_x, *repl_state_pointer()->mouse_y);
+        int hover_menu = ui_menu_bar_menu_hit(repl_state_pointer()->mouse_x, repl_state_pointer()->mouse_y);
+        int hover_pin  = ui_menu_bar_pin_hit(repl_state_pointer()->mouse_x, repl_state_pointer()->mouse_y);
 
         /* Left-side menu labels */
         for (int i = 0; i < NUM_MENUS; i++) {
@@ -712,11 +712,11 @@ void ui_menu_bar_render_example_dropdown(void) {
     int dx, dy, dw, dh;
     if (!menu_dropdown_rect(&dx, &dy, &dw, &dh)) return;
 
-    g_menu_item_hover = ui_menu_bar_dropdown_item_hit(*repl_state_pointer()->mouse_x, *repl_state_pointer()->mouse_y);
+    g_menu_item_hover = ui_menu_bar_dropdown_item_hit(repl_state_pointer()->mouse_x, repl_state_pointer()->mouse_y);
 
     float alpha = ui_fade_alpha(g_menu_open_time);
 
-    gl2d_begin(*repl_state_viewport()->window_w, *repl_state_viewport()->window_h);
+    gl2d_begin(repl_state_viewport()->window_w, repl_state_viewport()->window_h);
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 

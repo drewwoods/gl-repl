@@ -21,8 +21,8 @@ static int repl_layout_panel_span_px(int total_px) {
 
 void repl_layout_code_panel_rect(int *x, int *y, int *w, int *h) {
     int layout = repl_layout_code_panel_layout_mode();
-    int win_w = *repl_state_viewport()->window_w;
-    int win_h = *repl_state_viewport()->window_h;
+    int win_w = repl_state_viewport()->window_w;
+    int win_h = repl_state_viewport()->window_h;
 
     if (layout == CODE_PANEL_LAYOUT_HIDDEN) {
         if (x) *x = 0;
@@ -52,8 +52,8 @@ void repl_layout_code_panel_rect(int *x, int *y, int *w, int *h) {
 
 void repl_layout_scene_rect(int *x, int *y, int *w, int *h) {
     int layout = repl_layout_code_panel_layout_mode();
-    int win_w = *repl_state_viewport()->window_w;
-    int win_h = *repl_state_viewport()->window_h;
+    int win_w = repl_state_viewport()->window_w;
+    int win_h = repl_state_viewport()->window_h;
 
     if (layout == CODE_PANEL_LAYOUT_HIDDEN) {
         if (x) *x = 0;
