@@ -178,11 +178,11 @@ static void test_variable_panel(void) {
     printf("Testing Variable Panel...\n");
     gl_stub_counts_reset();
     
-    *repl_state_variable_panel_mut()->visible = 0;
+    repl_state_variable_panel_mut()->visible = 0;
     ui_variable_panel_render();
     ASSERT_TRUE("var panel hidden -> no GL calls", gl_stub_counts[GL_STUB_glBegin] == 0);
 
-    *repl_state_variable_panel_mut()->visible = 1;
+    repl_state_variable_panel_mut()->visible = 1;
     g_num_predef_vars = 1;
     strcpy(g_predef_vars[0].name, "x");
     g_predef_vars[0].value = 1.0f;

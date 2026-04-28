@@ -2611,9 +2611,9 @@ int main() {
         repl_flatten_commands();
 
         /* 1. Status TTL decrement */
-        *repl_state_status_mut()->ttl = 10;
+        repl_state_status_mut()->ttl = 10;
         repl_timer_func(0);
-        ASSERT_INT("timer: status ttl decremented", *repl_state_status()->ttl, 9);
+        ASSERT_INT("timer: status ttl decremented", repl_state_status()->ttl, 9);
 
         /* 2. Cursor blink */
         *repl_state_code_panel_mut()->blink_tick = 29;
@@ -2638,7 +2638,7 @@ int main() {
     {
         repl_reset_state();
         repl_state_viewport_set_size(1000, 1000);
-        *repl_state_variable_panel_mut()->visible = 1;
+        repl_state_variable_panel_mut()->visible = 1;
         repl_feed_line_public("float testvar = 5.0;");
 
         /* Variable panel is usually at bottom-right of scene.
@@ -2801,7 +2801,7 @@ int main() {
     {
         repl_reset_state();
         repl_state_viewport_set_size(1000, 1000);
-        *repl_state_variable_panel_mut()->visible = 1;
+        repl_state_variable_panel_mut()->visible = 1;
         repl_feed_line_public("float testvar = 5.0;");
 
         int px, py, pw, ph;

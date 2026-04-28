@@ -63,9 +63,7 @@ typedef struct {
 
 typedef ReplHelpState ReplHelpRuntimeState;
 
-typedef struct {
-    int visible;
-} ReplVariablePanelRuntimeState;
+typedef ReplVariablePanelState ReplVariablePanelRuntimeState;
 
 typedef struct {
     int   var_idx;
@@ -78,10 +76,7 @@ typedef struct {
     int mode;
 } ReplProfilePanelRuntimeState;
 
-typedef struct {
-    char text[REPL_STATUS_TEXT_MAX];
-    int  ttl;
-} ReplStatusRuntimeState;
+typedef ReplStatusState ReplStatusRuntimeState;
 
 typedef struct {
     int  active;

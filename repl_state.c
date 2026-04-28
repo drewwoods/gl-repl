@@ -404,7 +404,7 @@ static ReplRuntimeFacade g_repl_facade = {
         .scroll = 0,
     },
     .variable_panel = {
-        .visible = &g_show_var_panel,
+        .visible = 1,
     },
     .variable_drag = {
         .var_idx = &g_drag_var,
@@ -416,9 +416,8 @@ static ReplRuntimeFacade g_repl_facade = {
         .mode = &g_show_profile_panel,
     },
     .status = {
-        .text = g_status,
-        .capacity = (int)sizeof(g_status),
-        .ttl = &g_status_ttl,
+        .text = "",
+        .ttl = 0,
     },
     .search = {
         .active = &g_search_active,
@@ -951,11 +950,11 @@ void repl_state_help_reset(void) {
 }
 
 const ReplVariablePanelState *repl_state_variable_panel(void) {
-    return &g_repl_facade.variable_panel;
+    return &g_repl_state.variable_panel;
 }
 
 ReplVariablePanelState *repl_state_variable_panel_mut(void) {
-    return &g_repl_facade.variable_panel;
+    return &g_repl_state.variable_panel;
 }
 
 const ReplVariableDragState *repl_state_variable_drag(void) {
@@ -982,32 +981,32 @@ ReplProfilePanelState *repl_state_profile_panel_mut(void) {
 }
 
 const ReplStatusState *repl_state_status(void) {
-    return &g_repl_facade.status;
+    return &g_repl_state.status;
 }
 
 ReplStatusState *repl_state_status_mut(void) {
-    return &g_repl_facade.status;
+    return &g_repl_state.status;
 }
 
 void repl_state_status_set(const char *message) {
     ReplStatusState *status = repl_state_status_mut();
     if (!message)
         message = "";
-    strncpy(status->text, message, (size_t)status->capacity - 1);
-    status->text[status->capacity - 1] = '\0';
-    *status->ttl = 240;
+    strncpy(status->text, message, sizeof(status->text) - 1);
+    status->text[sizeof(status->text) - 1] = '\0';
+    status->ttl = 240;
 }
 
 void repl_state_status_clear(void) {
     ReplStatusState *status = repl_state_status_mut();
     status->text[0] = '\0';
-    *status->ttl = 0;
+    status->ttl = 0;
 }
 
 void repl_state_status_tick(void) {
     ReplStatusState *status = repl_state_status_mut();
-    if (*status->ttl > 0)
-        (*status->ttl)--;
+    if (status->ttl > 0)
+        status->ttl--;
 }
 
 const ReplSearchState *repl_state_search(void) {

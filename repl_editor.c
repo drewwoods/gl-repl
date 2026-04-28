@@ -589,14 +589,14 @@ static CommitResult commit_before_navigation(void) {
         return result;
 
     {
-        const ReplStatusState *status = repl_state_status();
+        ReplStatusState *status = repl_state_status_mut();
         memcpy(rejected_status, status->text, sizeof(rejected_status));
-        rejected_ttl = *status->ttl;
+        rejected_ttl = status->ttl;
         restore_commit_attempt_committed_state(before);
         repl_undo_ring_state_restore(&undo_before);
         memcpy(status->text, rejected_status, sizeof(rejected_status));
         status->text[REPL_STATUS_TEXT_MAX - 1] = '\0';
-        *status->ttl = rejected_ttl;
+        status->ttl = rejected_ttl;
     }
     clear_autocomplete_state();
     return COMMIT_REJECTED;
@@ -834,7 +834,7 @@ static int handle_comment_toggle_key_route(unsigned char key) {
                         /* Clear any prior status (e.g. "Commented out" from the
                          * previous key press) so we can tell whether the
                          * fallback produced an actionable error of its own. */
-                        repl_state_status()->text[0] = '\0';
+                        repl_state_status_mut()->text[0] = '\0';
 
                         if (repl_parser_parse_command_ctx(s, &new_cmd, &parse_ctx)) {
                             built = 1;
@@ -842,7 +842,7 @@ static int handle_comment_toggle_key_route(unsigned char key) {
                             /* Parser may have set its own error (e.g. "Unknown
                              * cmd.") - drop it; the friendly "Cannot uncomment"
                              * message below is clearer for this key path. */
-                            repl_state_status()->text[0] = '\0';
+                            repl_state_status_mut()->text[0] = '\0';
 
                             /* Fallback: variable assignments (`x = expr;`) live
                              * in the commit chain, not the GL-command parser.
@@ -1496,7 +1496,7 @@ static void mouse_func(int button, int state, int x, int y) {
     }
 
     if (button == GLUT_LEFT_BUTTON && state == GLUT_DOWN) {
-        if (*repl_state_variable_panel()->visible) {
+        if (repl_state_variable_panel()->visible) {
             int row_idx;
             if (ui_variable_panel_hit(x, y, &row_idx)) {
                 if (*repl_state_replay()->active)
@@ -1553,7 +1553,7 @@ static void mouse_func(int button, int state, int x, int y) {
     }
 
     /* Right-click on var panel: logarithmic drag mode. */
-    if (button == GLUT_RIGHT_BUTTON && state == GLUT_DOWN && *repl_state_variable_panel()->visible) {
+    if (button == GLUT_RIGHT_BUTTON && state == GLUT_DOWN && repl_state_variable_panel()->visible) {
         int row_idx;
         if (ui_variable_panel_hit(x, y, &row_idx)) {
             if (*repl_state_replay()->active)
@@ -1701,9 +1701,9 @@ static void timer_func(int value) {
     }
 
     {
-        const ReplStatusState *status = repl_state_status();
-        if (*status->ttl > 0)
-            (*status->ttl)--;
+        ReplStatusState *status = repl_state_status_mut();
+        if (status->ttl > 0)
+            status->ttl--;
     }
 
     editor_request_redraw();
