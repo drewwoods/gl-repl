@@ -453,7 +453,12 @@ int main(void) {
     repl_feed_line_public("glBegin(GL_POINTS);");
     repl_feed_line_public("glColor3f(1, 0, 0);");
     repl_feed_line_public("glEnd();");
-    ui_panels_handle_code_panel_press(CODE_MARGIN_X + 1, code_panel_mouse_y_for_cmd(0));
+    {
+        int cursor_pos = -1;
+        ui_panels_handle_code_panel_press(CODE_MARGIN_X + 1, code_panel_mouse_y_for_cmd(0), &cursor_pos);
+        if (cursor_pos >= 0)
+            repl_state_cursor_pos_set(cursor_pos);
+    }
     ASSERT_TRUE("mouse press selects current line for edit", repl_state_edit_line() == 0);
     ASSERT_TRUE("mouse press starts with no selection", !repl_clipboard_sel_active());
     ui_panels_handle_code_panel_drag(CODE_MARGIN_X + 1, code_panel_mouse_y_for_cmd(2));
@@ -476,8 +481,10 @@ int main(void) {
         int idx_col_w = *repl_state_presentation()->show_vertex_indices ? (6 * FONT_W) : 0;
         int text_x = CODE_MARGIN_X + linenum_w + FONT_W + idx_col_w;
         int indent = test_leading_ws_chars(repl_state_document_cmds_mut()[1].source);
-        ui_panels_handle_code_panel_click(text_x + indent * FONT_W + 1,
-                                code_panel_mouse_y_for_cmd(1));
+        int cursor_pos = ui_panels_handle_code_panel_click(text_x + indent * FONT_W + 1,
+                                                           code_panel_mouse_y_for_cmd(1));
+        if (cursor_pos >= 0)
+            repl_state_cursor_pos_set(cursor_pos);
         ASSERT_TRUE("clicking indented active line keeps cursor at first char",
                     repl_state_cursor_pos() == 0);
         ASSERT_TRUE("clicking indented active line selects correct line",

@@ -37,7 +37,7 @@ progress as of 2026-04-28:
 - ⚠️ R4 (Controller off repl_core_internal.h): In progress
   - R4a/R4b complete; R4c is complete for production code with `bench_repl.c` intentionally out of scope; R4d is in progress
 - ⚠️ R5: focused scene-render slice complete; repo-wide validation pending
-- ⚠️ R6: split state headers created; include migration pending
+- ⚠️ R6: split header migration complete for view files; guard/documentation pending
 - ❌ R7–R12: Not started
 
 Some pieces have landed, but the strict end-state checks described below should
@@ -1615,6 +1615,10 @@ ui_panels.c         ui_menu_bar.c     ui_color_picker.c
 ui_help_overlay.c   ui_variable_panel.c
 ui_autocomplete_panel.c              ui_profile_panel.c
 ```
+
+This slice is complete for the expected set above: the scene/UI view files now
+include `repl_state_views.h`, and owner/controller modules continue to use the
+compatibility shim or `repl_state_owners.h` as appropriate.
 
 Owner modules (`repl_*.c`, `imrepl_ctrl.c`) continue to include
 `repl_state.h` (the shim) or explicitly `repl_state_owners.h` — either works.

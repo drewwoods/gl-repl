@@ -2,7 +2,7 @@
  * ui_profile_panel.c - per-section wall-time profiling overlay panel.
  */
 #include "sample.h"
-#include "repl_state.h"
+#include "repl_state_views.h"
 #include "ui_profile_panel.h"
 #include "./include/gl_2d.h"
 #include "repl_layout.h"

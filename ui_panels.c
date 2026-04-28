@@ -6,7 +6,7 @@
  */
 #include "sample.h"
 #include "repl_actions.h"
-#include "repl_state.h"
+#include "repl_state_views.h"
 #include "repl_export.h"
 #include "repl_layout.h"
 #include "repl_source_scope.h"
@@ -28,7 +28,7 @@
 #define g_render_state_lines (IMPORT_EXPORT_STATE->render_state_lines)
 #define g_cam_lines (IMPORT_EXPORT_STATE->cam_lines)
 
-static int code_panel_layout_mode(void) {
+static int editor_code_panel_layout(void) {
     if (*repl_state_presentation()->code_panel_layout < 0 || *repl_state_presentation()->code_panel_layout >= CODE_PANEL_LAYOUT_COUNT)
         return CODE_PANEL_LAYOUT_LEFT;
     return *repl_state_presentation()->code_panel_layout;
@@ -368,11 +368,11 @@ void ui_panels_render_code_panel(void) {
     /* Border: divider between code panel and scene */
     glColor4f(0.30f, 0.30f, 0.50f, 0.80f);
     glBegin(GL_LINES);
-    if (code_panel_layout_mode() == CODE_PANEL_LAYOUT_TOP) {
+    if (editor_code_panel_layout() == CODE_PANEL_LAYOUT_TOP) {
         /* Horizontal divider along bottom of code panel. */
         glVertex2f(0.0f, (float)cp_y);
         glVertex2f((float)*repl_state_viewport()->window_w, (float)cp_y);
-    } else if (code_panel_layout_mode() == CODE_PANEL_LAYOUT_BOTTOM) {
+    } else if (editor_code_panel_layout() == CODE_PANEL_LAYOUT_BOTTOM) {
         /* Horizontal divider along top of code panel. */
         glVertex2f(0.0f, (float)(cp_y + cp_h));
         glVertex2f((float)*repl_state_viewport()->window_w, (float)(cp_y + cp_h));
@@ -929,7 +929,7 @@ static int code_panel_hit_test(int mx, int my,
                                int *out_row_offset) {
     int cp_x, cp_y, cp_w, cp_h;
     repl_layout_code_panel_rect(&cp_x, &cp_y, &cp_w, &cp_h);
-    if (cp_w <= 0 || cp_h <= 0) return 0;
+        if (cp_w <= 0 || cp_h <= 0) return 0;
     int panel_w = cp_w;
     int panel_top = cp_y + cp_h;
     /* Convert GLUT Y (top=0) to OpenGL Y (bottom=0) */
@@ -1013,9 +1013,9 @@ static int code_panel_drag_target(int mx, int my, int *out_target) {
 }
 
 /* Handle left-click in the code panel: navigate to line + column */
-void ui_panels_handle_code_panel_click(int mx, int my) {
+int ui_panels_handle_code_panel_click(int mx, int my) {
     int target, on_insert_line, row_offset;
-    if (!code_panel_hit_test(mx, my, &target, &on_insert_line, &row_offset)) return;
+    if (!code_panel_hit_test(mx, my, &target, &on_insert_line, &row_offset)) return -1;
 
     if (!on_insert_line) {
         if (target < 0) target = 0;
@@ -1042,20 +1042,23 @@ void ui_panels_handle_code_panel_click(int mx, int my) {
     col = (mx - seg_x + FONT_W / 2) / FONT_W;
     if (col < 0) col = 0;
     if (col > seg_len) col = seg_len;
+    int new_cursor = seg_start + col;
     {
-        int new_cursor = seg_start + col;
         int cur_input_len = *repl_state_editor_input()->input_len;
         if (new_cursor > cur_input_len) new_cursor = cur_input_len;
-        repl_state_cursor_pos_set(new_cursor);
     }
 
     repl_action_cursor_blink_reset();
     clear_autocomplete_state();
     repl_clipboard_clear_selection();
+    return new_cursor;
 }
 
-int ui_panels_handle_code_panel_press(int mx, int my) {
+int ui_panels_handle_code_panel_press(int mx, int my, int *cursor_pos_out) {
     int actions = UI_PANEL_PRESS_NONE;
+
+    if (cursor_pos_out)
+        *cursor_pos_out = -1;
 
     /* Color picker floats and may overlap the code panel (e.g. top/bottom
      * layouts).  Give it first crack so its hit rects take priority. */
@@ -1134,7 +1137,10 @@ int ui_panels_handle_code_panel_press(int mx, int my) {
     /* Any non-swatch code-panel click closes the picker */
     ui_color_picker_close();
 
-    ui_panels_handle_code_panel_click(mx, my);
+    if (cursor_pos_out)
+        *cursor_pos_out = ui_panels_handle_code_panel_click(mx, my);
+    else
+        (void)ui_panels_handle_code_panel_click(mx, my);
 
     g_code_panel_drag_active = 0;
     g_code_panel_drag_anchor = -1;

@@ -53,17 +53,19 @@ void ui_panels_close_menus(void);
 /* --- Code-panel mouse input --- */
 
 /* Handle left-click in code panel: move cursor, extend selection, or begin drag.
+ * Returns the cursor position to apply, or -1 if the click did not move it.
  * mx, my are window coordinates. Called by repl_editor.c on GLUT mouse down. */
-void ui_panels_handle_code_panel_click(int mx, int my);
+int ui_panels_handle_code_panel_click(int mx, int my);
 
 /* Handle right-click in code panel: show context menu or color picker for inline
  * color editing. Returns a bitmask (UI_PANEL_PRESS_*): CONSUMED if click was
- * handled, OPENED_COLOR_PICKER if color picker was opened. Called by repl_editor.c
- * on right-mouse down. */
+ * handled, OPENED_COLOR_PICKER if color picker was opened. If the press path
+ * changes the cursor, stores the new cursor position in cursor_pos_out; -1 means
+ * no cursor update. Called by repl_editor.c on right-mouse down. */
 #define UI_PANEL_PRESS_NONE                0
 #define UI_PANEL_PRESS_CONSUMED            (1 << 0)
 #define UI_PANEL_PRESS_OPENED_COLOR_PICKER (1 << 1)
-int  ui_panels_handle_code_panel_press(int mx, int my);
+int  ui_panels_handle_code_panel_press(int mx, int my, int *cursor_pos_out);
 
 /* Handle mouse drag in code panel: extend selection, drag scroll, or adjust color
  * picker (if active). mx, my are window coordinates. Called by repl_editor.c on

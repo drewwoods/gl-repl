@@ -11,7 +11,7 @@
  * layout has the surrounding context.
  */
 #include "sample.h"
-#include "repl_state.h"
+#include "repl_state_views.h"
 #include "ui_autocomplete_panel.h"
 #include "repl_layout.h"
 #include "./include/gl_2d.h"
