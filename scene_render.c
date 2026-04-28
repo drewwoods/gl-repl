@@ -105,13 +105,6 @@ static void scene_prepare_frame_context(FrameRenderContext *ctx,
                                         const SceneRenderConfig *config) {
     ctx->config = *config;
     ctx->focus = config->focus;
-
-    /* Modelview setup is T(-dist) * Rx * Ry * T(-target). Solving that for
-     * the eye position gives target.y + sin(rx) * dist; ry does not affect Y. */
-    float camera_rx_rad = config->cam_rx * (float)M_PI / 180.0f;
-    ctx->camera_world_y = config->cam_ty +
-                          sinf(camera_rx_rad) * config->cam_dist;
-    ctx->camera_below_water_surface = (ctx->camera_world_y < 0.0f);
 }
 
 /* ========================================================================= */
