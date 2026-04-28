@@ -85,7 +85,7 @@ const ReplCodePanelRuntimeState *repl_state_code_panel(void);
 ReplCodePanelRuntimeState       *repl_state_code_panel_mut(void);
 void                             repl_state_code_panel_reset(void);
 
-const ReplHelpState *repl_state_help(void);
+ReplHelpState        repl_state_help(void);
 ReplHelpState       *repl_state_help_mut(void);
 void                 repl_state_help_reset(void);
 

@@ -2585,7 +2585,7 @@ int main() {
         /* 1. Help visible */
         repl_state_help_mut()->visible = 1;
         repl_keyboard_func(27, 0, 0);
-        ASSERT_TRUE("Esc: help closed", !repl_state_help()->visible);
+        ASSERT_TRUE("Esc: help closed", !repl_state_help().visible);
 
         /* 2. Autocomplete active */
         repl_state_autocomplete_mut()->match_count = 1;

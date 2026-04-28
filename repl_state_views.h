@@ -288,7 +288,7 @@ int    repl_state_clipboard_count(void);
 
 const ReplCodePanelRuntimeState *repl_state_code_panel(void);
 
-const ReplHelpState *repl_state_help(void);
+ReplHelpState        repl_state_help(void);
 
 const ReplVariablePanelState *repl_state_variable_panel(void);
 

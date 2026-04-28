@@ -232,9 +232,9 @@ static void test_capture_restore_round_trip(void) {
     ASSERT_INT("selection end restored", repl_state_selection()->end_idx, 7);
     ASSERT_INT("clipboard count restored", repl_state_clipboard()->cmd_count, 1);
     ASSERT_INT("clipboard cmd restored", repl_state_clipboard()->cmds[0].type, CMD_COLOR3F);
-    ASSERT_INT("help restored", repl_state_help()->visible, 1);
-    ASSERT_INT("help tab restored", repl_state_help()->tab_idx, 1);
-    ASSERT_INT("help scroll restored", repl_state_help()->scroll, 3);
+    ASSERT_INT("help restored", repl_state_help().visible, 1);
+    ASSERT_INT("help tab restored", repl_state_help().tab_idx, 1);
+    ASSERT_INT("help scroll restored", repl_state_help().scroll, 3);
     ASSERT_TRUE("code panel frac restored", *repl_state_code_panel()->panel_frac == 0.61f);
     ASSERT_INT("code panel resizing restored", *repl_state_code_panel()->resizing_panel, 1);
     ASSERT_INT("code panel scroll restored", *repl_state_code_panel()->scroll, 9);
@@ -354,7 +354,7 @@ static void test_reset_all_restores_default_runtime(void) {
 
     ASSERT_TRUE("reset_all restores default snapshot",
                 memcmp(&defaults, &reset_state, sizeof(defaults)) == 0);
-    ASSERT_INT("reset_all help hidden", repl_state_help()->visible, 0);
+    ASSERT_INT("reset_all help hidden", repl_state_help().visible, 0);
     ASSERT_INT("reset_all panel scroll", *repl_state_code_panel()->scroll, 0);
     ASSERT_INT("reset_all replay mode", *repl_state_replay()->mode, REPLAY_MODE_VERTEX);
     ASSERT_INT("reset_all replay expand", *repl_state_replay()->expand_args, 1);
