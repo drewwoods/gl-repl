@@ -227,6 +227,13 @@ void repl_cfg_cycle_row(int row, int delta) {
     }
 }
 
+void repl_action_cursor_blink_reset(void) {
+    ReplCodePanelRuntimeState *cp = repl_state_code_panel_mut();
+
+    *cp->cursor_visible = 1;
+    *cp->blink_tick = 0;
+}
+
 int repl_cfg_handle_ascii_shortcut(unsigned char key) {
     for (int i = 0; i < CFG_ITEM_COUNT; i++) {
         const ReplConfigItem *item = repl_config_item_at(i);

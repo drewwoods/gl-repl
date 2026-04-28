@@ -69,6 +69,10 @@ void repl_replay_restart_from_beginning(void);
 
 void repl_replay_speed_adjust(float factor); /* Multiply speed by factor (1.5 = faster) */
 
+/* Toggle the Replay pin button state. Playing pauses, paused resumes, and
+ * stopped/done states restart playback from the beginning. */
+void repl_replay_toggle_play_pause(void);
+
 /* --- Query / renderer helpers ----------------------------------------- */
 
 int  repl_replay_exec_limit(void);           /* Current PC (what executor renders to) */

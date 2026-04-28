@@ -620,6 +620,23 @@ void repl_replay_speed_adjust(float factor) {
     set_status(msg);
 }
 
+void repl_replay_toggle_play_pause(void) {
+    if (!g_replay_active || g_replay_state == REPLAY_DONE) {
+        repl_replay_start();
+        return;
+    }
+
+    if (g_replay_state == REPLAY_PLAYING) {
+        g_replay_state = REPLAY_PAUSED;
+        set_status("Replay: paused");
+    } else if (g_replay_state == REPLAY_PAUSED) {
+        g_replay_state = REPLAY_PLAYING;
+        set_status("Replay: playing");
+    } else {
+        repl_replay_start();
+    }
+}
+
 int repl_replay_prepare_frame(int full_flat_count) {
     REPLAY_FLAT_STATE;
     if (!g_replay_active)

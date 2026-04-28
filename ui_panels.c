@@ -5,6 +5,7 @@
  * Extracted from sample.c for maintainability.
  */
 #include "sample.h"
+#include "repl_actions.h"
 #include "repl_state.h"
 #include "repl_export.h"
 #include "repl_source_scope.h"
@@ -14,6 +15,7 @@
 #include "repl_core_internal.h"
 #include "repl_clipboard.h"
 #include "repl_keys.h"
+#include "repl_replay.h"
 #include "ui_menu_bar.h"
 #include "repl_replay_annotations.h"
 #include "prof.h"
@@ -234,7 +236,6 @@ static void render_active_input_rows(int panel_w, int text_x, int idx_x,
                                      int *io_cur, int *io_line_y) {
     const ReplEditorInputState      *inp    = repl_state_editor_input();
     const ReplCodePanelRuntimeState *cp     = repl_state_code_panel();
-    ReplCodePanelRuntimeState       *cp_mut = repl_state_code_panel_mut();
     const ReplAutocompleteState     *ac     = repl_state_autocomplete();
     const ReplSearchState           *srch   = repl_state_search();
     const char *input = inp->input;
@@ -319,8 +320,8 @@ static void render_active_input_rows(int panel_w, int text_x, int idx_x,
                     glDisable(GL_BLEND);
                 }
 
-                *cp_mut->cursor_px = cursor_x;
-                *cp_mut->cursor_py = *io_line_y;
+                *cp->cursor_px = cursor_x;
+                *cp->cursor_py = *io_line_y;
             }
 
             *io_line_y -= LINE_H;
@@ -385,6 +386,7 @@ void ui_panels_render_code_panel(void) {
     int text_x = idx_x + idx_col_w;
     int visible_lines;
     int total_lines;
+    const GLCmd *document_cmds = repl_state_document_cmds();
 
     /* Own the full-window overlay viewport so the code panel and the UI
      * stack beneath it render in the same 2D projection. */
@@ -394,7 +396,7 @@ void ui_panels_render_code_panel(void) {
      * we can draw a gutter accent bar on them below. */
     int highlight_normal_idx = -1;
     int highlight_color_idx  = -1;
-    if (!repl_state_insert_mode() && repl_state_edit_line() < repl_state_document_count() && repl_state_document_cmds_mut()[repl_state_edit_line()].valid) {
+    if (!repl_state_insert_mode() && repl_state_edit_line() < repl_state_document_count() && document_cmds[repl_state_edit_line()].valid) {
         highlight_normal_idx = repl_find_feeding_normal_cmd(repl_state_edit_line());
         highlight_color_idx  = repl_find_feeding_color_cmd(repl_state_edit_line());
     }
@@ -536,11 +538,11 @@ void ui_panels_render_code_panel(void) {
 
         if (i < repl_state_document_count()) {
             /* Track vertex number for all commands regardless of visibility */
-            if (repl_state_document_cmds_mut()[i].valid) {
-                if (repl_state_document_cmds_mut()[i].type == CMD_BEGIN) {
+            if (document_cmds[i].valid) {
+                if (document_cmds[i].type == CMD_BEGIN) {
                     vnum = 0;
                     primitive_vnums_exact = (loop_depth == 0);
-                } else if (repl_state_document_cmds_mut()[i].type == CMD_TESS_BEGIN_POLYGON) {
+                } else if (document_cmds[i].type == CMD_TESS_BEGIN_POLYGON) {
                     vnum = 0;
                     in_tess_poly = 1;
                     tess_depth = 1;
@@ -549,8 +551,8 @@ void ui_panels_render_code_panel(void) {
             }
 
             int is_edit = (!repl_state_insert_mode() && i == repl_state_edit_line());
-            int is_vertex = repl_state_document_cmds_mut()[i].valid && (repl_state_document_cmds_mut()[i].type == CMD_VERTEX3F ||
-                                                repl_state_document_cmds_mut()[i].type == CMD_TESS_VERTEX);
+            int is_vertex = document_cmds[i].valid && (document_cmds[i].type == CMD_VERTEX3F ||
+                                                document_cmds[i].type == CMD_TESS_VERTEX);
             if (is_edit) {
                 /* Active editing line */
                 char idx_s[16];
@@ -626,8 +628,8 @@ void ui_panels_render_code_panel(void) {
                                 ui_color_picker_render_swatch(i, sx, sy);
                             }
                         }
-                        color_for_type(repl_state_document_cmds_mut()[i].type);
-                        code_panel_draw_search_highlights(repl_state_document_cmds_mut()[i].source,
+                        color_for_type(document_cmds[i].type);
+                        code_panel_draw_search_highlights(document_cmds[i].source,
                                                           search_row_idx,
                                                           wrap_start, wrap_len,
                                                           wrap_x, line_y);
@@ -644,8 +646,8 @@ void ui_panels_render_code_panel(void) {
                     *replay->expand_args &&
                     *replay->src_line_idx >= 0 &&
                     i == *replay->src_line_idx &&
-                    repl_state_document_cmds_mut()[i].has_vars &&
-                    repl_state_document_cmds_mut()[i].type != CMD_VAR_ASSIGN) {
+                    document_cmds[i].has_vars &&
+                    document_cmds[i].type != CMD_VAR_ASSIGN) {
                     int flat_idx = repl_replay_annotation_flat_cmd_for_source(i);
                     if (flat_idx >= 0) {
                         char subst[MAX_LINE_LEN], var_comment[128];
@@ -702,17 +704,17 @@ void ui_panels_render_code_panel(void) {
             /* Advance vertex counter after rendering this command */
             if (is_vertex) vnum++;
 
-            if (repl_state_document_cmds_mut()[i].valid) {
-                if (repl_state_document_cmds_mut()[i].type == CMD_FOR_BEGIN) {
+            if (document_cmds[i].valid) {
+                if (document_cmds[i].type == CMD_FOR_BEGIN) {
                     loop_depth++;
                     primitive_vnums_exact = 0;
-                } else if (repl_state_document_cmds_mut()[i].type == CMD_FOR_END) {
+                } else if (document_cmds[i].type == CMD_FOR_END) {
                     if (loop_depth > 0) loop_depth--;
-                } else if (repl_state_document_cmds_mut()[i].type == CMD_END) {
+                } else if (document_cmds[i].type == CMD_END) {
                     primitive_vnums_exact = 1;
-                } else if (repl_state_document_cmds_mut()[i].type == CMD_TESS_BEGIN_CONTOUR && in_tess_poly) {
+                } else if (document_cmds[i].type == CMD_TESS_BEGIN_CONTOUR && in_tess_poly) {
                     tess_depth++;
-                } else if (repl_state_document_cmds_mut()[i].type == CMD_TESS_END && in_tess_poly) {
+                } else if (document_cmds[i].type == CMD_TESS_END && in_tess_poly) {
                     if (tess_depth > 0) tess_depth--;
                     if (tess_depth == 0) {
                         in_tess_poly = 0;
@@ -1120,15 +1122,13 @@ void ui_panels_handle_code_panel_click(int mx, int my) {
         repl_state_cursor_pos_set(new_cursor);
     }
 
-    *repl_state_code_panel_mut()->cursor_visible = 1;
-    *repl_state_code_panel_mut()->blink_tick = 0;
+    repl_action_cursor_blink_reset();
     clear_autocomplete_state();
     repl_clipboard_clear_selection();
 }
 
 int ui_panels_handle_code_panel_press(int mx, int my) {
     int actions = UI_PANEL_PRESS_NONE;
-    ReplReplayRuntimeState *replay = repl_state_replay_mut();
 
     /* Color picker floats and may overlap the code panel (e.g. top/bottom
      * layouts).  Give it first crack so its hit rects take priority. */
@@ -1143,15 +1143,7 @@ int ui_panels_handle_code_panel_press(int mx, int my) {
         ui_menu_bar_close();
         switch (pin) {
         case REPL_MENU_BAR_PIN_REPLAY:
-            /* Button mirrors its glyph: pause when playing, resume when
-             * paused, (re)start when stopped or done. */
-            if (*replay->state == REPLAY_PLAYING) {
-                *replay->state = REPLAY_PAUSED;
-            } else if (*replay->state == REPLAY_PAUSED) {
-                *replay->state = REPLAY_PLAYING;
-            } else {
-                repl_replay_start();
-            }
+            repl_replay_toggle_play_pause();
             break;
         case REPL_MENU_BAR_PIN_SEARCH:
             handle_search_key(KEY_CTRL_F);
@@ -1237,8 +1229,7 @@ int ui_panels_handle_code_panel_drag(int mx, int my) {
         repl_selection_start(g_code_panel_drag_anchor);
         repl_selection_set_end(target);
         navigate_to_line(target);
-        *repl_state_code_panel_mut()->cursor_visible = 1;
-        *repl_state_code_panel_mut()->blink_tick = 0;
+        repl_action_cursor_blink_reset();
     }
     return 1;
 }
