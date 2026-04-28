@@ -37,7 +37,8 @@ progress as of 2026-04-28:
 - ⚠️ R4 (Controller off repl_core_internal.h): In progress
   - R4a/R4b complete; R4c is complete for production code with `bench_repl.c` intentionally out of scope; R4d is in progress
 - ⚠️ R5: focused scene-render slice complete; repo-wide validation pending
-- ❌ R6–R12: Not started
+- ⚠️ R6: split state headers created; include migration pending
+- ❌ R7–R12: Not started
 
 Some pieces have landed, but the strict end-state checks described below should
 not be assumed to pass until their prerequisite Phase 2 slices are complete.
