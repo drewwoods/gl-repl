@@ -676,8 +676,8 @@ void repl_state_pending_newline_clear(void) {
     g_newline_len = 0;
 }
 
-const ReplSelectionState *repl_state_selection(void) {
-    return &g_repl_state.selection;
+ReplSelectionState repl_state_selection(void) {
+    return g_repl_state.selection;
 }
 
 ReplSelectionState *repl_state_selection_mut(void) {
@@ -774,8 +774,8 @@ void repl_state_variable_drag_reset(void) {
     g_repl_state.variable_drag = g_repl_state_defaults.variable_drag;
 }
 
-const ReplProfilePanelState *repl_state_profile_panel(void) {
-    return &g_repl_state.profile_panel;
+ReplProfilePanelState repl_state_profile_panel(void) {
+    return g_repl_state.profile_panel;
 }
 
 ReplProfilePanelState *repl_state_profile_panel_mut(void) {

@@ -228,8 +228,8 @@ static void test_capture_restore_round_trip(void) {
                repl_state_flat_program_local_vars_mut()[0].num_vars, 1);
     ASSERT_INT("flat lighting restored",
                repl_state_flat_program_user_lighting_enabled(), 1);
-    ASSERT_INT("selection anchor restored", repl_state_selection()->anchor_idx, 4);
-    ASSERT_INT("selection end restored", repl_state_selection()->end_idx, 7);
+    ASSERT_INT("selection anchor restored", repl_state_selection().anchor_idx, 4);
+    ASSERT_INT("selection end restored", repl_state_selection().end_idx, 7);
     ASSERT_INT("clipboard count restored", repl_state_clipboard()->cmd_count, 1);
     ASSERT_INT("clipboard cmd restored", repl_state_clipboard()->cmds[0].type, CMD_COLOR3F);
     ASSERT_INT("help restored", repl_state_help().visible, 1);
@@ -252,7 +252,7 @@ static void test_capture_restore_round_trip(void) {
                 repl_state_variable_drag()->start_value == 2.5f);
     ASSERT_INT("variable drag x restored", repl_state_variable_drag()->start_x, 17);
     ASSERT_INT("profile panel restored",
-               repl_state_profile_panel()->mode, PROFILE_PANEL_DETAILS);
+               repl_state_profile_panel().mode, PROFILE_PANEL_DETAILS);
     ASSERT_STR("status text restored", repl_state_status()->text, "state snapshot");
     ASSERT_INT("status ttl restored", repl_state_status()->ttl, 17);
     ASSERT_INT("search active restored", repl_state_search()->active, 1);

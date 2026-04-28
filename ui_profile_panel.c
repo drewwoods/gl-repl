@@ -144,7 +144,7 @@ static int is_detail_section(ProfSection s) {
 }
 
 static int section_visible(ProfSection s) {
-    if (repl_state_profile_panel()->mode != PROFILE_PANEL_DETAILS &&
+    if (repl_state_profile_panel().mode != PROFILE_PANEL_DETAILS &&
         is_detail_section(s))
         return 0;
     return 1;
@@ -164,7 +164,7 @@ static int visible_section_count(void) {
 /* ========================================================================= */
 
 void ui_profile_panel_render(void) {
-    if (repl_state_profile_panel()->mode == PROFILE_PANEL_OFF) return;
+    if (repl_state_profile_panel().mode == PROFILE_PANEL_OFF) return;
 
     int visible_count = visible_section_count();
 
