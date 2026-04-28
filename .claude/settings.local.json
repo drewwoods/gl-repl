@@ -89,7 +89,8 @@
       "Bash(command -v dot)",
       "Bash(dot -Tsvg callgraph-imrepl_ctrl_display_frame.dot -o callgraph-imrepl_ctrl_display_frame.svg)",
       "Bash(awk '{print $1, $3}')",
-      "Read(//private/tmp/**)"
+      "Read(//private/tmp/**)",
+      "Bash(bash /tmp/test_includes.sh)"
     ]
   }
 }

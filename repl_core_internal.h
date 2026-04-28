@@ -62,7 +62,6 @@
 #include <stdarg.h>
 
 #include "repl_core.h"
-#include "repl_pipeline.h"
 #include "repl_replay.h"
 #include "repl_undo.h"
 

@@ -251,7 +251,7 @@ check-state-boundaries: ## Verify REPL state facade usage stays in owned modules
 	fi
 	@bad=$$(grep -lE '#[[:space:]]*include[[:space:]]+"repl_core_internal\.h"' \
 		imrepl_ctrl.c $(SCENE_SRCS) $(UI_SRCS) $(STATE_NEUTRAL_SRCS) 2>/dev/null \
-		| grep -vE '^(imrepl_ctrl|ui_(color_picker|panels))\.c$$' || true); \
+		| grep -vE '^ui_(color_picker|panels)\.c$$' || true); \
 	if [ -n "$$bad" ]; then \
 		echo "ERROR: unapproved view/utility files include repl_core_internal.h:"; \
 		echo "$$bad"; exit 1; \

@@ -28,10 +28,18 @@ mechanical cleanup. Replay fade simplification and broader input/UI coupling
 cleanup remain follow-ups; the 2D replay HUD relocation is complete.
 
 Implementation status: Phase 1 steps 1-8 are complete and merged. Post-Phase 1
-cleanup (app-shell shim removal) has also been completed. Phase 2 remains in
-progress. Some pieces have landed, but the strict end-state checks described
-below should not be assumed to pass until their prerequisite Phase 2 slices are
-complete.
+cleanup (app-shell shim removal) has also been completed. Phase 2 is in active
+progress as of 2026-04-28:
+
+- ✅ R1 (Replay/HUD migration): Complete
+- ✅ R2 (UI → REPL mutation hole): Complete
+- ✅ R3 (Extract layout geometry): Complete
+- ⚠️ R4 (Controller off repl_core_internal.h): Partially complete
+  - R4a/R4b complete; R4c in progress (imrepl_ctrl isolated, 20 non-test files remain)
+- ❌ R5–R11: Not started
+
+Some pieces have landed, but the strict end-state checks described below should
+not be assumed to pass until their prerequisite Phase 2 slices are complete.
 
 ## Review Corrections
 
@@ -1290,9 +1298,28 @@ had to include that header at all.
 
 ---
 
-Exit criterion: `grep "repl_core_internal" imrepl_ctrl.c` returns empty.
-`grep -rn '#include.*repl_core_internal' *.c` lists only `test_*.c` files.
-`make test`, `make sample`, and `make sample USE_GL_STUBS=1` all pass.
+**Status (2026-04-28):** R4a and R4b are complete. R4c is **in progress**.
+
+- ✅ `imrepl_ctrl.c` no longer includes `repl_core_internal.h`
+- ✅ `repl_pipeline.h` created and integrated; controller uses it exclusively
+- ✅ `repl_eval_predef_view()` accessor added; globals are hidden
+- ⚠️ 20 non-test production files still include `repl_core_internal.h`:
+  ```
+  bench_repl.c, repl_actions.c, repl_autocomplete.c, repl_clipboard.c,
+  repl_command_store.c, repl_commit.c, repl_core.c, repl_editor.c,
+  repl_example_loader.c, repl_executor.c, repl_export.c, repl_flatten.c,
+  repl_parser.c, repl_replay_annotations.c, repl_replay.c, repl_scenes.c,
+  repl_search.c, repl_state.c, repl_undo.c, ui_panels.c
+  ```
+  These must either stop including `repl_core_internal.h` or be documented
+  as transitional exceptions in R11. Most of these depend on parse/normalize/
+  export/load symbols that should move to proper public headers (R10 work).
+
+---
+
+Exit criterion: `grep "repl_core_internal" imrepl_ctrl.c` returns empty. ✅
+`grep -rn '#include.*repl_core_internal' *.c` lists only `test_*.c` files. ❌
+`make test`, `make sample`, and `make sample USE_GL_STUBS=1` all pass. ✅
 
 #### R5. Slim and reorganize `SceneRenderConfig`
 
@@ -1762,6 +1789,30 @@ misleads every reader. R4 and R10-phase2 are natural companions: R4 creates
 `repl_pipeline.h` as a proper public surface for the symbols the controller
 needs; R10-phase2 reorganises what remains in `repl_core.c` after those symbols
 are promoted.
+
+### Phase 2 Recommendations Status (2026-04-28)
+
+Implementation is actively in progress. Current completion:
+
+| Recommendation | Status | Notes |
+|---|---|---|
+| **R1** — Replay/HUD migration | ✅ Complete | R1a, R1b, R1c all done; scene has zero `repl_replay_*` calls |
+| **R2** — UI → REPL mutation hole | ✅ Complete | R2a–R2d all done; UI files route mutations through actions/stores |
+| **R3** — Extract layout geometry | ✅ Complete | `repl_layout.h/c` created; ~34 call sites updated |
+| **R4** — Controller off `repl_core_internal.h` | ⚠️ Partial | R4a/R4b done; R4c in progress (imrepl_ctrl ✅, 20 files remain) |
+| **R5** — Slim `SceneRenderConfig` | ❌ Not started | Requires R1 ✅ |
+| **R6** — Split typed-state facade | ❌ Not started | Requires R1 ✅ + R2 ✅ |
+| **R7** — View-side grep guards | ❌ Not started | Requires R6 |
+| **R11** — Harden file-level guards | ❌ Not started | Can start now; shrink allowlists as R2/R4/R6 land |
+| **R10-phase1** — Delete stale GLUT decls | ❌ Not started | Zero-risk, should be done first of R10 phases |
+| **R10-phase2+** — Dissolve `repl_core.c` | ❌ Not started | Phased; depends on R4c completion |
+| **R8** — `sample → imrepl` rename | ❌ Not started | Mechanical; defer until after R5 |
+| **R9** — Optional: split `repl_export.c` | ❌ Not started | Module hygiene only; skip if not painful |
+
+**Next recommended steps:**
+1. Complete R4c by migrating the 20 remaining files away from `repl_core_internal.h` (or documenting as transitional) — blocker for strict exit criterion
+2. Start R5 (slim `SceneRenderConfig`) — unblocked by R1 ✅
+3. Start R6 (split state facade) — unblocked by R1 ✅ + R2 ✅
 
 ## Verification
 
