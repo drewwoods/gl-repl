@@ -311,9 +311,9 @@ int repl_action_menu_item_activate(int menu_id, int item_idx) {
             return 1;
         }
         if (item_idx == example_count + REPL_SCENE_OFF_NEW) {
-            int *active_example_idx = repl_state_scenes_mut()->active_example_idx;
-            if (*active_example_idx >= 0)
-                *active_example_idx = -1;
+            ReplSceneRuntimeState *scenes = repl_state_scenes_mut();
+            if (scenes->active_example_idx >= 0)
+                scenes->active_example_idx = -1;
             repl_clear_all_cmds();
             return 1;
         }

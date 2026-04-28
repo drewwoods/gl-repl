@@ -60,7 +60,7 @@ static int g_mock_modifiers = 0;
 
 #define IMPORT_EXPORT_STATE (repl_state_import_export())
 #define g_workspace_header_lines (IMPORT_EXPORT_STATE->workspace_header_lines)
-#define g_workspace_header_line_count (*IMPORT_EXPORT_STATE->workspace_header_line_count)
+#define g_workspace_header_line_count (IMPORT_EXPORT_STATE->workspace_header_line_count)
 #define g_render_state_lines (IMPORT_EXPORT_STATE->render_state_lines)
 #define g_cam_lines (IMPORT_EXPORT_STATE->cam_lines)
 
@@ -514,7 +514,7 @@ int main() {
             repl_load_example(0);
             repl_special_func(GLUT_KEY_F12, 0, 0);
             ASSERT_INT("f12 special route advances example",
-                       *repl_state_scenes()->active_example_idx, 1);
+                       repl_state_scenes()->active_example_idx, 1);
         }
     }
 
@@ -2493,7 +2493,7 @@ int main() {
 
             /* Cycle from user scene 0 -> should go to example 0 */
             repl_special_func(GLUT_KEY_F12, 0, 0);
-            ASSERT_INT("F12: user scene 0 -> example 0", *repl_state_scenes()->active_example_idx, 0);
+            ASSERT_INT("F12: user scene 0 -> example 0", repl_state_scenes()->active_example_idx, 0);
             ASSERT_INT("F12: active user scene now -1", repl_active_user_scene(), -1);
 
             /* Cycle through all examples to reach user scenes again */

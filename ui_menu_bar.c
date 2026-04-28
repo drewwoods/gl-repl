@@ -773,8 +773,8 @@ void ui_menu_bar_render_example_dropdown(void) {
                 scene_hit = repl_scene_menu_slot_for_dense_index(scene_n);
         }
         int is_active_example = (menu_id == MENU_SCENE && ne >= 0 &&
-                                 i >= 1 && i <= ne &&
-                                 (i - 1) == *repl_state_scenes()->active_example_idx);
+                     i >= 1 && i <= ne &&
+                     (i - 1) == repl_state_scenes()->active_example_idx);
         int is_active_scene   = (scene_hit >= 0 &&
                                  scene_hit == repl_active_user_scene());
 

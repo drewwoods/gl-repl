@@ -9,12 +9,12 @@
 #include "repl_state.h"
 #include "repl_layout.h"
 
-#define IMPORT_EXPORT_STATE (repl_state_import_export())
+#define IMPORT_EXPORT_STATE (repl_state_import_export_mut())
 #define g_workspace_header_lines (IMPORT_EXPORT_STATE->workspace_header_lines)
-#define g_workspace_header_line_count (*IMPORT_EXPORT_STATE->workspace_header_line_count)
+#define g_workspace_header_line_count (IMPORT_EXPORT_STATE->workspace_header_line_count)
 #define g_render_state_lines (IMPORT_EXPORT_STATE->render_state_lines)
 #define g_cam_lines (IMPORT_EXPORT_STATE->cam_lines)
-#define g_export_scene_name_hint (*IMPORT_EXPORT_STATE->export_scene_name_hint)
+#define g_export_scene_name_hint (IMPORT_EXPORT_STATE->export_scene_name_hint)
 #define g_pending_scene_name (IMPORT_EXPORT_STATE->pending_scene_name)
 #define g_pending_workspace_dir (IMPORT_EXPORT_STATE->pending_workspace_dir)
 

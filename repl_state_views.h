@@ -68,13 +68,13 @@ typedef struct {
 } ReplEditorInputState;
 
 typedef struct {
-    int *anchor_idx;
-    int *end_idx;
+    int anchor_idx;
+    int end_idx;
 } ReplSelectionState;
 
 typedef struct {
-    GLCmd *cmds;
-    int   *cmd_count;
+    GLCmd cmds[MAX_COMMANDS];
+    int   cmd_count;
 } ReplClipboardState;
 
 typedef struct {
@@ -207,9 +207,8 @@ typedef struct {
 } ReplReplayRuntimeState;
 
 typedef struct {
-    int   *active_example_idx;
-    char *workspace_dir;
-    int   workspace_dir_capacity;
+    int  active_example_idx;
+    char workspace_dir[REPL_WORKSPACE_DIR_MAX];
 } ReplSceneRuntimeState;
 
 typedef struct {
@@ -220,13 +219,13 @@ typedef struct {
 } ReplVariableDragState;
 
 typedef struct {
-    char (*workspace_header_lines)[WORKSPACE_HEADER_LINE_LEN];
-    int   *workspace_header_line_count;
-    char (*render_state_lines)[64];
-    char (*cam_lines)[96];
-    const char **export_scene_name_hint;
-    char  *pending_scene_name;
-    char  *pending_workspace_dir;
+    char        workspace_header_lines[MAX_WORKSPACE_HEADER_LINES][WORKSPACE_HEADER_LINE_LEN];
+    int         workspace_header_line_count;
+    char        render_state_lines[RENDER_STATE_LINE_COUNT][64];
+    char        cam_lines[CAM_LINE_COUNT][96];
+    const char *export_scene_name_hint;
+    char        pending_scene_name[USER_SCENE_NAME_MAX];
+    char        pending_workspace_dir[REPL_WORKSPACE_DIR_MAX];
 } ReplImportExportState;
 
 typedef struct {

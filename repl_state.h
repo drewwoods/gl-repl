@@ -40,15 +40,9 @@ typedef struct {
     int  insert_mode;
 } ReplEditorInputRuntimeState;
 
-typedef struct {
-    int anchor_idx;
-    int end_idx;
-} ReplSelectionRuntimeState;
+typedef ReplSelectionState ReplSelectionRuntimeState;
 
-typedef struct {
-    GLCmd cmds[MAX_COMMANDS];
-    int   cmd_count;
-} ReplClipboardRuntimeState;
+typedef ReplClipboardState ReplClipboardRuntimeState;
 
 typedef struct {
     float panel_frac;
@@ -131,20 +125,9 @@ typedef struct {
     int   expand_args;
 } ReplReplayRuntimeStateStore;
 
-typedef struct {
-    int  active_example_idx;
-    char workspace_dir[REPL_WORKSPACE_DIR_MAX];
-} ReplSceneRuntimeStateStore;
+typedef ReplSceneRuntimeState ReplSceneRuntimeStateStore;
 
-typedef struct {
-    char        workspace_header_lines[MAX_WORKSPACE_HEADER_LINES][WORKSPACE_HEADER_LINE_LEN];
-    int         workspace_header_line_count;
-    char        render_state_lines[RENDER_STATE_LINE_COUNT][64];
-    char        cam_lines[CAM_LINE_COUNT][96];
-    const char *export_scene_name_hint;
-    char        pending_scene_name[USER_SCENE_NAME_MAX];
-    char        pending_workspace_dir[REPL_WORKSPACE_DIR_MAX];
-} ReplImportExportRuntimeState;
+typedef ReplImportExportState ReplImportExportRuntimeState;
 
 typedef struct {
     ReplDocumentRuntimeState         document;

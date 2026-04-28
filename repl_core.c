@@ -608,7 +608,7 @@ int collect_visible_vars(int pos, ExprVar *vars, int max_vars) {
 static void scroll_to_display_function(void) {
     repl_state_refresh_workspace_header_lines();
     const ReplImportExportState *meta = repl_state_import_export();
-    int target = *meta->workspace_header_line_count;
+    int target = meta->workspace_header_line_count;
     for (int line_idx = 0; g_header_pre[line_idx]; line_idx++) {
         if (strcmp(g_header_pre[line_idx], "void display() {") == 0)
             break;
