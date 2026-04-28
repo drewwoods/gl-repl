@@ -1,0 +1,100 @@
+{
+  "groups": [
+    {
+      "id": "repl_command_pipeline",
+      "label": "1. REPL command pipeline",
+      "files": [
+        "repl_core.c",
+        "imrepl_ctrl.c",
+        "repl_command_spec.c",
+        "repl_parser.c",
+        "repl_source_scope.c",
+        "repl_command_store.c",
+        "repl_commit.c",
+        "repl_flatten.c",
+        "repl_executor.c",
+        "repl_eval.c",
+        "cmd_format.c"
+      ]
+    },
+    {
+      "id": "editor_input_controllers",
+      "label": "2. Editor and input controllers",
+      "files": [
+        "repl_editor.c",
+        "repl_actions.c",
+        "repl_camera_controls.c",
+        "repl_clipboard.c",
+        "repl_undo.c",
+        "repl_search.c",
+        "repl_var_drag.c",
+        "repl_inline_rename.c"
+      ]
+    },
+    {
+      "id": "repl_domain_models",
+      "label": "3. REPL domain models",
+      "files": [
+        "repl_config.c",
+        "repl_state.c",
+        "repl_scenes.c",
+        "repl_example_loader.c",
+        "repl_examples.c",
+        "repl_autocomplete.c",
+        "repl_autonormal.c",
+        "repl_replay.c",
+        "repl_replay_annotations.c"
+      ]
+    },
+    {
+      "id": "scene_rendering",
+      "label": "4. 3D scene rendering",
+      "files": [
+        "scene_render.c",
+        "scene_geometry_guides.c",
+        "scene_transform_guides.c",
+        "scene_grid.c",
+        "scene_axes.c",
+        "scene_backdrop.c",
+        "scene_lights.c",
+        "scene_overlays.c",
+        "ui_replay_hud.c"
+      ]
+    },
+    {
+      "id": "ui_rendering",
+      "label": "5. 2D UI rendering",
+      "files": [
+        "ui_panels.c",
+        "repl_layout.c",
+        "ui_menu_bar.c",
+        "ui_color_picker.c",
+        "ui_help_overlay.c",
+        "ui_variable_panel.c",
+        "ui_autocomplete_panel.c",
+        "ui_profile_panel.c",
+        "repl_code_panel_layout.c",
+        "repl_code_panel_document.c"
+      ]
+    },
+    {
+      "id": "persistence_lifecycle",
+      "label": "6. Persistence, audio, instrumentation, lifecycle",
+      "files": [
+        "repl_export.c",
+        "repl_audio.c",
+        "prof.c",
+        "sample.c",
+        "gl_stub_counts.c"
+      ]
+    }
+  ],
+  "fallback_group": {
+    "id": "other",
+    "label": "Other"
+  },
+  "edge_styles": {
+    "local_group": "stroke:#94a3b8,stroke-width:1.5px,color:#64748b",
+    "cross_group": "stroke:#d97706,stroke-width:3px,color:#d97706"
+  }
+}
