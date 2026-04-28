@@ -52,6 +52,22 @@ make callgraph-static-entry ENTRY=scene_render_3d_scene
 - ✅ Can paste to https://mermaid.live
 - ⚠️ Has 500-edge limit
 
+### 🧱 **File-Level Mermaid** (Best for module boundaries)
+
+```bash
+# Collapse function calls to file -> file edges
+make callgraph-files
+
+# Or focus on one entry path
+make callgraph-files ENTRY=imrepl_ctrl_display_frame
+```
+
+**Why choose this:**
+- ✅ Much smaller than the raw function graph
+- ✅ Better match for `MODULES.md`-style architecture views
+- ✅ Groups files by ownership prefix (`repl_*`, `scene_*`, `ui_*`, etc.)
+- ✅ Edge labels show how many function-level calls collapsed into each file edge
+
 ### 📊 **Runtime Profiling** (Shows actual execution)
 
 ```bash
@@ -88,6 +104,7 @@ make callgraph-static-entry ENTRY=flatten_range
 | **Interactive HTML** | Unlimited | Browser | Search, click, zoom | Large graphs, exploration |
 | **Graphviz (DOT)** | Unlimited | dot/neato/sfdp | None (static) | Publication, precise layout |
 | **Mermaid** | ~500 | Browser/CLI | None (static) | Documentation, small graphs |
+| **File-Level Mermaid** | Usually small | Browser/CLI | None (static) | Module/file interactions |
 | **Profile** | Varies | Mermaid/Graphviz | None (static) | Performance analysis |
 
 ## Visualizing the Output
@@ -167,6 +184,15 @@ make callgraph-static-entry ENTRY=scene_render_3d_scene
 # This has ~50 edges, works fine in Mermaid
 cat callgraph-scene_render_3d_scene.mmd
 # Copy to https://mermaid.live
+```
+
+### Example 3b: Match the Module Guide More Closely
+```bash
+# File-level architecture from the main frame controller
+make callgraph-files ENTRY=imrepl_ctrl_display_frame
+
+# Or the broader reachable file graph
+make callgraph-files
 ```
 
 ### Example 4: Parser Deep-Dive
@@ -359,8 +385,9 @@ make callgraph-profile PROG="./test_scene_render"
 
 ## Integration with MODULES.md
 
-The `MODULES.md` file in the root contains hand-crafted architecture diagrams. These auto-generated call graphs complement those by showing:
+The `MODULES.md` file in the root contains hand-crafted architecture diagrams. These auto-generated graphs complement those by showing:
 - **MODULES.md**: Ownership boundaries, module relationships, responsibilities
 - **Callgraph**: Actual function-level call chains, execution order
+- **File-level Mermaid**: Collapsed `file.c -> file.c` interactions grouped by ownership prefix
 
 Together they provide both high-level structure and detailed execution flow.
