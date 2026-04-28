@@ -317,7 +317,7 @@ void ui_panels_render_code_panel(void) {
 
     /* Own the full-window overlay viewport so the code panel and the UI
      * stack beneath it render in the same 2D projection. */
-    glViewport(0, 0, *repl_state_viewport()->window_w, *repl_state_viewport()->window_h);
+    glViewport(0, 0, repl_state_viewport()->window_w, repl_state_viewport()->window_h);
 
     /* When cursor is on a vertex, find which normal/color lines feed it so
      * we can draw a gutter accent bar on them below. */
@@ -357,7 +357,7 @@ void ui_panels_render_code_panel(void) {
     prof_end(PROF_CODE_PANEL_LAYOUT);
     prof_begin(PROF_CODE_PANEL_CHROME);
 
-    gl2d_begin(*repl_state_viewport()->window_w, *repl_state_viewport()->window_h);
+    gl2d_begin(repl_state_viewport()->window_w, repl_state_viewport()->window_h);
 
     /* Background */
     glEnable(GL_BLEND);
@@ -371,15 +371,15 @@ void ui_panels_render_code_panel(void) {
     if (editor_code_panel_layout() == CODE_PANEL_LAYOUT_TOP) {
         /* Horizontal divider along bottom of code panel. */
         glVertex2f(0.0f, (float)cp_y);
-        glVertex2f((float)*repl_state_viewport()->window_w, (float)cp_y);
+        glVertex2f((float)repl_state_viewport()->window_w, (float)cp_y);
     } else if (editor_code_panel_layout() == CODE_PANEL_LAYOUT_BOTTOM) {
         /* Horizontal divider along top of code panel. */
         glVertex2f(0.0f, (float)(cp_y + cp_h));
-        glVertex2f((float)*repl_state_viewport()->window_w, (float)(cp_y + cp_h));
+        glVertex2f((float)repl_state_viewport()->window_w, (float)(cp_y + cp_h));
     } else {
         /* Vertical divider along right edge of code panel */
         glVertex2f((float)(cp_x + cp_w), 0.0f);
-        glVertex2f((float)(cp_x + cp_w), (float)*repl_state_viewport()->window_h);
+        glVertex2f((float)(cp_x + cp_w), (float)repl_state_viewport()->window_h);
     }
     glEnd();
     glDisable(GL_BLEND);
@@ -847,7 +847,7 @@ void ui_panels_render_scene_status(void) {
 
     float alpha = status->ttl > 60 ? 1.0f : (float)status->ttl / 60.0f;
 
-    gl2d_begin(*repl_state_viewport()->window_w, *repl_state_viewport()->window_h);
+    gl2d_begin(repl_state_viewport()->window_w, repl_state_viewport()->window_h);
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
@@ -933,7 +933,7 @@ static int code_panel_hit_test(int mx, int my,
     int panel_w = cp_w;
     int panel_top = cp_y + cp_h;
     /* Convert GLUT Y (top=0) to OpenGL Y (bottom=0) */
-    int gl_y = *repl_state_viewport()->window_h - my;
+    int gl_y = repl_state_viewport()->window_h - my;
     if (mx < cp_x || mx >= cp_x + cp_w) return 0;
     if (gl_y < cp_y || gl_y >= cp_y + cp_h) return 0;
 
@@ -972,7 +972,7 @@ static int code_panel_drag_target(int mx, int my, int *out_target) {
     if (cp_w <= 0 || cp_h <= 0) return 0;
     int panel_w = cp_w;
     int panel_top = cp_y + cp_h;
-    int gl_y = *repl_state_viewport()->window_h - my;
+    int gl_y = repl_state_viewport()->window_h - my;
     int line_y_start = panel_top - CODE_MARGIN_Y - 2 * LINE_H;
     int vis = (line_y_start + LINE_H - 3 - gl_y) / LINE_H;
 

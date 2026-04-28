@@ -674,7 +674,7 @@ static int handle_escape_key_route(unsigned char key) {
             repl_state_help_mut()->visible = 0;
             repl_state_help_mut()->tab_idx = 0;
             repl_state_help_mut()->scroll = 0;
-        } else if (*repl_state_autocomplete()->match_count > 0) {
+        } else if (repl_state_autocomplete()->match_count > 0) {
             clear_autocomplete_state();
         } else if (repl_state_insert_mode()) {
             repl_state_insert_mode_set(0);
@@ -1000,7 +1000,7 @@ static int handle_text_delete_key_route(unsigned char key) {
 
 static int handle_tab_key_route(unsigned char key) {
     if (key == '\t') {
-        if (*repl_state_autocomplete()->match_count > 0) {
+        if (repl_state_autocomplete()->match_count > 0) {
             accept_autocomplete();
             update_autocomplete();
         }
@@ -1011,7 +1011,7 @@ static int handle_tab_key_route(unsigned char key) {
 
 static int handle_enter_key_route(unsigned char key) {
     if (key == '\r' || key == '\n') {
-        if (*repl_state_autocomplete()->match_count > 0) {
+        if (repl_state_autocomplete()->match_count > 0) {
             accept_autocomplete();
             update_autocomplete();
             return 1;
@@ -1240,8 +1240,8 @@ static int handle_vertical_special_key_route(int key) {
             help->scroll--;
             return 1;
         }
-        if (*ac->match_count > 1) {
-            *ac->selected_idx = (*ac->selected_idx - 1 + *ac->match_count) % *ac->match_count;
+        if (ac->match_count > 1) {
+            ac->selected_idx = (ac->selected_idx - 1 + ac->match_count) % ac->match_count;
             update_selected_autocomplete_preview();
         } else if (editor_get_modifiers() & GLUT_ACTIVE_SHIFT) {
             if (!repl_clipboard_sel_active()) {
@@ -1262,8 +1262,8 @@ static int handle_vertical_special_key_route(int key) {
             help->scroll++;
             return 1;
         }
-        if (*ac->match_count > 1) {
-            *ac->selected_idx = (*ac->selected_idx + 1) % *ac->match_count;
+        if (ac->match_count > 1) {
+            ac->selected_idx = (ac->selected_idx + 1) % ac->match_count;
             update_selected_autocomplete_preview();
         } else if (editor_get_modifiers() & GLUT_ACTIVE_SHIFT) {
             if (!repl_clipboard_sel_active()) {
@@ -1425,7 +1425,7 @@ static int editor_special_restores_hidden_code_panel(int key, int mods) {
 
 static int editor_point_in_code_panel(int x, int y) {
     int cp_x, cp_y, cp_w, cp_h;
-    int gl_y = *repl_state_viewport()->window_h - y;
+    int gl_y = repl_state_viewport()->window_h - y;
 
     repl_layout_code_panel_rect(&cp_x, &cp_y, &cp_w, &cp_h);
     return x >= cp_x && x < cp_x + cp_w &&
@@ -1434,7 +1434,7 @@ static int editor_point_in_code_panel(int x, int y) {
 
 static int editor_point_on_code_panel_divider(int x, int y) {
     int cp_x, cp_y, cp_w, cp_h;
-    int gl_y = *repl_state_viewport()->window_h - y;
+    int gl_y = repl_state_viewport()->window_h - y;
     int layout = editor_code_panel_layout();
 
     if (layout == CODE_PANEL_LAYOUT_HIDDEN)
@@ -1460,15 +1460,15 @@ static void editor_update_panel_frac_from_mouse(int x, int y) {
     if (layout == CODE_PANEL_LAYOUT_HIDDEN) {
         return;
     } else if (layout == CODE_PANEL_LAYOUT_TOP) {
-        int win_h = *repl_state_viewport()->window_h;
+        int win_h = repl_state_viewport()->window_h;
         if (win_h > 0)
             *code_panel_state->panel_frac = (float)y / (float)win_h;
     } else if (layout == CODE_PANEL_LAYOUT_BOTTOM) {
-        int win_h = *repl_state_viewport()->window_h;
+        int win_h = repl_state_viewport()->window_h;
         if (win_h > 0)
             *code_panel_state->panel_frac = (float)(win_h - y) / (float)win_h;
     } else {
-        int win_w = *repl_state_viewport()->window_w;
+        int win_w = repl_state_viewport()->window_w;
         if (win_w > 0)
             *code_panel_state->panel_frac = (float)x / (float)win_w;
     }

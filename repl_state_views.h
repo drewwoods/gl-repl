@@ -119,36 +119,34 @@ typedef struct {
 } ReplSearchState;
 
 typedef struct {
-    const char **matches;
-    const char **insert_matches;
-    int         *match_count;
-    int         *selected_idx;
-    char        *ghost;
-    int          ghost_capacity;
-    char        *hint;
-    int          hint_capacity;
+    const char *matches[MAX_AC_MATCHES];
+    const char *insert_matches[MAX_AC_MATCHES];
+    int         match_count;
+    int         selected_idx;
+    char        ghost[MAX_LINE_LEN];
+    char        hint[MAX_LINE_LEN];
 } ReplAutocompleteState;
 
 typedef struct {
-    float *rx;
-    float *ry;
-    float *dist;
-    float *tx;
-    float *ty;
-    float *tz;
-    float *motion_glow;
-    int   *auto_rotate;
+    float rx;
+    float ry;
+    float dist;
+    float tx;
+    float ty;
+    float tz;
+    float motion_glow;
+    int   auto_rotate;
 } ReplCameraState;
 
 typedef struct {
-    int *mouse_x;
-    int *mouse_y;
-    int *mouse_button;
+    int mouse_x;
+    int mouse_y;
+    int mouse_button;
 } ReplPointerState;
 
 typedef struct {
-    int *window_w;
-    int *window_h;
+    int window_w;
+    int window_h;
 } ReplViewportState;
 
 typedef struct {
@@ -215,10 +213,10 @@ typedef struct {
 } ReplSceneRuntimeState;
 
 typedef struct {
-    int   *var_idx;
-    int   *log_mode;
-    float *start_value;
-    int   *start_x;
+    int   var_idx;
+    int   log_mode;
+    float start_value;
+    int   start_x;
 } ReplVariableDragState;
 
 typedef struct {

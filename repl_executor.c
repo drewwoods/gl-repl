@@ -33,7 +33,7 @@ static int g_execute_skip_geom_before_pc = 0;
  * glPointSize call by 2/cam_dist. Defined here so the override only affects
  * the executor's user-facing CMD_POINT_SIZE dispatch. */
 static void _repl_point_size(GLfloat sz) {
-    float cam_dist = *repl_state_camera()->dist;
+    float cam_dist = repl_state_camera()->dist;
     glPointSize(cam_dist > 0.0f ? sz * (2.0f / (0.5 * cam_dist)) : sz);
 }
 #define glPointSize _repl_point_size

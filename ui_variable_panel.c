@@ -124,7 +124,7 @@ void ui_variable_panel_rect(int *px, int *py, int *pw, int *ph) {
 int ui_variable_panel_hit(int gx, int gy, int *out_row) {
     int px, py, pw, ph;
     ui_variable_panel_rect(&px, &py, &pw, &ph);
-    int ry = *repl_state_viewport()->window_h - gy;
+    int ry = repl_state_viewport()->window_h - gy;
     if (gx < px || gx >= px + pw || ry < py || ry >= py + ph) return 0;
     int inner_top = py + ph - VAR_PANEL_PAD - VAR_TITLE_H;
     int row = (inner_top - ry) / VAR_ROW_H;
@@ -139,7 +139,7 @@ void ui_variable_panel_render(void) {
     int px, py, pw, ph;
     ui_variable_panel_rect(&px, &py, &pw, &ph);
 
-    gl2d_begin(*repl_state_viewport()->window_w, *repl_state_viewport()->window_h);
+    gl2d_begin(repl_state_viewport()->window_w, repl_state_viewport()->window_h);
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
