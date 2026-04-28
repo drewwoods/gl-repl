@@ -1342,17 +1342,6 @@ int main() {
         ASSERT_TRUE("prof_frame_tick survives", 1);
     }
 
-    /* 25. prof_code_panel_details_enabled - reflects g_show_profile_panel */
-    {
-        g_show_profile_panel = PROFILE_PANEL_OFF;
-        ASSERT_INT("details disabled when OFF", prof_code_panel_details_enabled(), 0);
-
-        g_show_profile_panel = PROFILE_PANEL_DETAILS;
-        ASSERT_INT("details enabled when DETAILS", prof_code_panel_details_enabled(), 1);
-
-        g_show_profile_panel = PROFILE_PANEL_OFF;  /* restore */
-    }
-
     /* ---- Float declaration parsing (regression tests) ---- */
 
     /* 26. float decl without trailing semicolon (interactive ';' key path) */

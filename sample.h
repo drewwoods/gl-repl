@@ -333,15 +333,4 @@ int  replay_fill_base_limit(void);
 void recompute_autonormals(void);
 void update_cam_lines(void);
 
-#ifdef NO_POINT_PARAMETER
-/* Approximate glPointParameterfv distance attenuation by scaling every
- * glPointSize call by 5/cam_dist.  Defined before the macro so this body
- * still resolves to the real GL function rather than looping back. */
-static inline void _repl_point_size(GLfloat sz) {
-    float cam_dist = *repl_state_camera()->dist;
-    glPointSize(cam_dist > 0.0f ? sz * (2.0f / (0.5 * cam_dist)) : sz);
-}
-#define glPointSize _repl_point_size
-#endif
-
 #endif /* SAMPLE_H */
