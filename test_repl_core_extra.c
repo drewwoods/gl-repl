@@ -349,6 +349,23 @@ void test_workspace_round_trip() {
     ASSERT_INT("slot count matches after load",
                repl_user_scene_count(), slots_before);
 
+    int ring_slot = -1;
+    for (int slot = 0; slot < MAX_USER_SCENES; slot++) {
+        if (!repl_user_scene_slot_used(slot))
+            continue;
+        const char *name = repl_user_scene_name(slot);
+        if (name && strcmp(name, "Animated ring (for + t)") == 0) {
+            ring_slot = slot;
+            break;
+        }
+    }
+    ASSERT_TRUE("animated ring scene reloaded", ring_slot >= 0);
+    if (ring_slot >= 0) {
+        ASSERT_INT("load animated ring scene", repl_load_user_scene_idx(ring_slot), 1);
+        ASSERT_INT("animated ring command count after workspace load",
+                   repl_state_document_count(), 16);
+    }
+
     /* Clean up scratch dir. */
     DIR *d = opendir(dir);
     if (d) {
