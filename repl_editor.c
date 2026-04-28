@@ -241,6 +241,8 @@ static void save_newline_buf(void) {
 void repl_editor_reset_transients(void) {
     repl_commit_reset_transients();
     repl_camera_controls_reset();
+    ui_panels_close_menus();
+    ui_panels_handle_code_panel_release();
 }
 
 static int normalize_navigation_target(int target) {

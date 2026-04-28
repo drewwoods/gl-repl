@@ -3,6 +3,7 @@
 #include "repl_clipboard.h"
 #include "repl_state.h"
 #include "repl_replay_annotations.h"
+#include "repl_code_panel_document.h"
 #include "ui_panels.h"
 #include "repl_layout.h"
 
@@ -58,140 +59,31 @@ static void declare_test_vars(void) {
     repl_eval_declare_predef_var("n", err, sizeof(err));
 }
 
-#define TEST_CODE_PANEL_MAX_HANG_INDENT_CHARS 12
-
-static int test_code_panel_available_chars(int panel_w, int x) {
-    int avail_px = panel_w - x - 4;
-    if (avail_px < FONT_W)
-        return 0;
-    return avail_px / FONT_W;
-}
-
-static int test_code_panel_cont_indent_chars(const char *text) {
-    const char *src = text ? text : "";
-    int leading = 0;
-
-    while (src[leading] && isspace((unsigned char)src[leading]))
-        leading++;
-
-    {
-        const char *paren = strchr(src, '(');
-        if (paren && paren[1] != '\0') {
-            int align = (int)(paren - src) + 1;
-            int max_align = leading + TEST_CODE_PANEL_MAX_HANG_INDENT_CHARS;
-            if (align > max_align)
-                align = max_align;
-            return align;
-        }
-    }
-
-    return leading + 4;
-}
-
-static int test_code_panel_is_secondary_break(char c) {
-    return c == ')' || c == ' ' || c == '+' || c == '*' || c == '-' || c == '/';
-}
-
-static int test_code_panel_find_wrap_break(const char *text, int start,
-                                           int max_chars, int len) {
-    int end = start + max_chars - 1;
-    int search_start = start;
-
-    if (end >= len)
-        end = len - 1;
-
-    while (search_start < len &&
-           isspace((unsigned char)text[search_start]))
-        search_start++;
-
-    for (int i = end; i > search_start; i--) {
-        if (text[i] == ',')
-            return i;
-    }
-
-    for (int i = end; i > search_start; i--) {
-        if (test_code_panel_is_secondary_break(text[i]))
-            return i;
-    }
-
-    for (int i = end + 1; i < len; i++) {
-        if (text[i] == ',' ||
-            (i > search_start && test_code_panel_is_secondary_break(text[i])))
-            return i;
-    }
-
-    return -1;
-}
-
-static int test_code_panel_row_count_for_text(const char *text, int first_x,
-                                              int panel_w) {
-    const char *src = text ? text : "";
-    int len = (int)strlen(src);
-    int pos = 0;
-    int x = first_x;
-    int cont_x = first_x + test_code_panel_cont_indent_chars(src) * FONT_W;
-    int rows = 0;
-    int done = 0;
-
-    while (!done) {
-        rows++;
-        if (len == 0) {
-            done = 1;
-        } else {
-            int width_chars = test_code_panel_available_chars(panel_w, x);
-            int remaining = len - pos;
-
-            if (!*repl_state_presentation()->wrap_at_comma || width_chars < 1 || remaining <= width_chars) {
-                done = 1;
-            } else {
-                int break_idx = test_code_panel_find_wrap_break(src, pos,
-                                                                width_chars, len);
-                if (break_idx < 0) {
-                    done = 1;
-                } else {
-                    pos = break_idx + 1;
-                    x = cont_x;
-                }
-            }
-        }
-    }
-
-    return rows;
-}
-
-static int code_panel_header_row_count(void) {
-    int panel_w;
-    int linenum_w = 4 * FONT_W;
-    int idx_col_w = *repl_state_presentation()->show_vertex_indices ? (6 * FONT_W) : 0;
-    int text_x = CODE_MARGIN_X + linenum_w + FONT_W + idx_col_w;
-    int rows = 0;
-
-    repl_layout_code_panel_rect(NULL, NULL, &panel_w, NULL);
-    for (int i = 0; i < g_workspace_header_line_count; i++)
-        rows += test_code_panel_row_count_for_text(g_workspace_header_lines[i], text_x, panel_w);
-    for (int i = 0; g_header_pre[i]; i++)
-        rows += test_code_panel_row_count_for_text(g_header_pre[i], text_x, panel_w);
-    for (int i = 0; i < RENDER_STATE_LINE_COUNT; i++)
-        rows += test_code_panel_row_count_for_text(g_render_state_lines[i], text_x, panel_w);
-    for (int i = 0; i < CAM_LINE_COUNT; i++)
-        rows += test_code_panel_row_count_for_text(g_cam_lines[i], text_x, panel_w);
-    for (int i = 0; g_header_post[i]; i++)
-        rows += test_code_panel_row_count_for_text(g_header_post[i], text_x, panel_w);
-
-    return rows;
-}
-
 static int code_panel_mouse_y_for_cmd(int cmd_idx) {
+    CodePanelDocumentLayout layout;
     int cp_y, cp_h, panel_w;
     int linenum_w = 4 * FONT_W;
     int idx_col_w = *repl_state_presentation()->show_vertex_indices ? (6 * FONT_W) : 0;
     int text_x = CODE_MARGIN_X + linenum_w + FONT_W + idx_col_w;
-    int doc_line = code_panel_header_row_count();
+    int doc_line;
+
+    /* Mirror the frame path: scroll-follow is applied before the code panel is
+     * rendered or hit-tested, so synthetic mouse targets need the same step. */
+    (void)ui_panels_code_panel_apply_scroll_follow_for_test(NULL, NULL);
 
     repl_layout_code_panel_rect(NULL, &cp_y, &panel_w, &cp_h);
-    for (int i = 0; i < cmd_idx && i < repl_state_document_count(); i++) {
-        doc_line += test_code_panel_row_count_for_text(repl_state_document_cmds_mut()[i].source,
-                                                       text_x, panel_w);
+    repl_code_panel_document_build(&layout, panel_w, text_x, cp_h);
+
+    doc_line = layout.header_rows;
+    for (int i = 0; i < cmd_idx && i < repl_state_document_count(); i++)
+        doc_line += layout.cmd_main_rows[i] + layout.replay_extra_rows[i];
+
+    {
+        int visible_lines = layout.visible_lines;
+        if (doc_line < g_scroll)
+            g_scroll = doc_line;
+        else if (doc_line >= g_scroll + visible_lines)
+            g_scroll = doc_line - visible_lines + 1;
     }
 
     int vis = doc_line - g_scroll;
