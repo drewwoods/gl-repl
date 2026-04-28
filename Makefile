@@ -93,7 +93,7 @@ else
 COVERAGE_LDFLAGS =
 endif
 
-.PHONY: all clean test test-detailed test_detailed test-stubs lines debug coverage glut help bench bench-csv check-gl-boundaries check-layer-coupling check-controller-boundaries check-scene-no-repl-state-mut check-state-boundaries callgraph-static callgraph-static-entry callgraph-profile callgraph-graphviz callgraph-html callgraph-files
+.PHONY: all clean test test-detailed test_detailed test-stubs lines debug coverage glut help bench bench-csv check-gl-boundaries check-layer-coupling check-controller-boundaries check-scene-no-repl-state-mut check-state-boundaries check-public-api-usage callgraph-static callgraph-static-entry callgraph-profile callgraph-graphviz callgraph-html callgraph-files
 
 all: sample
 
@@ -268,6 +268,9 @@ check-state-boundaries: ## Verify REPL state facade usage stays in owned modules
 		echo "$$bad"; exit 1; \
 	fi
 	@echo "State facade boundaries OK"
+
+check-public-api-usage: ## Scan public API declarations for unused functions (informational).
+	@bash scripts/check-unused-apis.sh
 
 test: check-gl-boundaries check-layer-coupling check-controller-boundaries check-scene-no-repl-state-mut check-state-boundaries $(TEST_BINS) ## Run the full automated test suite.
 	@REPL_EXPORT_CC="$(CC)" \
