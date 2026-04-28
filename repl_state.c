@@ -381,12 +381,12 @@ static ReplRuntimeFacade g_repl_facade = {
         .insert_mode = &g_inserting,
     },
     .selection = {
-        .anchor_idx = &g_sel_anchor,
-        .end_idx = &g_sel_end,
+        .anchor_idx = -1,
+        .end_idx = -1,
     },
     .clipboard = {
-        .cmds = g_clipboard,
-        .cmd_count = &g_clipboard_count,
+        .cmds = { 0 },
+        .cmd_count = 0,
     },
     .code_panel = {
         .panel_frac = &g_panel_frac,
@@ -510,18 +510,17 @@ static ReplRuntimeFacade g_repl_facade = {
         .expand_args = &g_replay_expand_args,
     },
     .scenes = {
-        .active_example_idx = &g_example_idx,
-        .workspace_dir = g_workspace_dir,
-        .workspace_dir_capacity = (int)sizeof(g_workspace_dir),
+        .active_example_idx = -1,
+        .workspace_dir = "",
     },
     .import_export = {
-        .workspace_header_lines = g_workspace_header_lines,
-        .workspace_header_line_count = &g_workspace_header_line_count,
-        .render_state_lines = g_render_state_lines,
-        .cam_lines = g_cam_lines,
-        .export_scene_name_hint = &g_export_scene_name_hint,
-        .pending_scene_name = g_pending_scene_name,
-        .pending_workspace_dir = g_pending_workspace_dir,
+        .workspace_header_lines = { 0 },
+        .workspace_header_line_count = 0,
+        .render_state_lines = { 0 },
+        .cam_lines = { 0 },
+        .export_scene_name_hint = NULL,
+        .pending_scene_name = "",
+        .pending_workspace_dir = "",
     },
 };
 
@@ -864,11 +863,11 @@ void repl_state_pending_newline_clear(void) {
 }
 
 const ReplSelectionState *repl_state_selection(void) {
-    return &g_repl_facade.selection;
+    return &g_repl_state.selection;
 }
 
 ReplSelectionState *repl_state_selection_mut(void) {
-    return &g_repl_facade.selection;
+    return &g_repl_state.selection;
 }
 
 void repl_state_selection_clear(void) {
@@ -890,11 +889,11 @@ void repl_state_selection_set(int anchor_idx, int end_idx) {
 }
 
 const ReplClipboardState *repl_state_clipboard(void) {
-    return &g_repl_facade.clipboard;
+    return &g_repl_state.clipboard;
 }
 
 ReplClipboardState *repl_state_clipboard_mut(void) {
-    return &g_repl_facade.clipboard;
+    return &g_repl_state.clipboard;
 }
 
 void repl_state_clipboard_clear(void) {
@@ -1226,11 +1225,11 @@ void repl_state_replay_reset(void) {
 }
 
 const ReplSceneRuntimeState *repl_state_scenes(void) {
-    return &g_repl_facade.scenes;
+    return &g_repl_state.scenes;
 }
 
 ReplSceneRuntimeState *repl_state_scenes_mut(void) {
-    return &g_repl_facade.scenes;
+    return &g_repl_state.scenes;
 }
 
 void repl_state_workspace_set_dir(const char *dir) {
@@ -1242,11 +1241,11 @@ const char *repl_state_workspace_dir(void) {
 }
 
 const ReplImportExportState *repl_state_import_export(void) {
-    return &g_repl_facade.import_export;
+    return &g_repl_state.import_export;
 }
 
 ReplImportExportState *repl_state_import_export_mut(void) {
-    return &g_repl_facade.import_export;
+    return &g_repl_state.import_export;
 }
 
 void repl_state_capture(ReplRuntimeState *snapshot) {

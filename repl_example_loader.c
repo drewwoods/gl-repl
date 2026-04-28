@@ -260,7 +260,7 @@ static void load_example(int idx) {
     repl_scenes_capture_home_if_needed();
 
     load_example_lines(lines);
-    *repl_state_scenes_mut()->active_example_idx = idx;
+    repl_state_scenes_mut()->active_example_idx = idx;
     repl_scenes_mark_example_active();
     char msg[128];
     snprintf(msg, sizeof(msg), "Example %d/%d: %s (F12 for next)",
