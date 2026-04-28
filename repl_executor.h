@@ -39,10 +39,10 @@ typedef struct {
     FlatProgramView program;
 } ReplExecutionOptions;
 
-/* Apply a transform command (glTranslatef, glRotatef, glScalef, glPushMatrix,
- * glPopMatrix). Used independently by step-back code when re-executing from
- * a new PC. */
-void repl_executor_apply_transform_cmd(const GLCmd *cmd);
+/* Get a view over the live flat program (g_flat_cmds, g_flat_local_vars).
+ * The pointers are valid until the next call to repl_flatten_program()
+ * on the live buffers. */
+FlatProgramView repl_flat_program_view_live(void);
 
 /* Apply a transform command while tracking matrix stack depth. Used during
  * normal execution and replay to maintain an accurate depth counter for

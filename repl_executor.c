@@ -154,7 +154,7 @@ void repl_execute_set_fade_context(float alpha_scale, int skip_geom_before_pc) {
     g_execute_skip_geom_before_pc = skip_geom_before_pc;
 }
 
-void repl_executor_apply_transform_cmd(const GLCmd *cmd) {
+static void repl_executor_apply_transform_cmd(const GLCmd *cmd) {
     if (!cmd)
         return;
 
