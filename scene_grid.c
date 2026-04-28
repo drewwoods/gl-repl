@@ -317,13 +317,16 @@ static void scene_grid_render_ocean_theme(const GridDrawContext *grid_ctx,
     const float major = grid_ctx->major;
     const float major_tol = grid_ctx->major_tol;
     const float step = grid_ctx->step;
+    const SceneRenderConfig *config = &frame_ctx->config;
+    float camera_rx_rad = config->cam_rx * (float)M_PI / 180.0f;
+    float camera_world_y = config->cam_ty + sinf(camera_rx_rad) * config->cam_dist;
 
     /* Underwater fog - slightly breathing density */
-    if (frame_ctx->camera_below_water_surface) {
+    if (camera_world_y < 0.0f) {
         glDisable(GL_DEPTH_TEST);
         glColor4f(0.05f, 0.25f, 0.35f, 0.75f);
-        gl2d_begin(frame_ctx->config.viewport_w, frame_ctx->config.viewport_h);
-        glRectf(0, 0, (float)frame_ctx->config.viewport_w, (float)frame_ctx->config.viewport_h);
+        gl2d_begin(config->viewport_w, config->viewport_h);
+        glRectf(0, 0, (float)config->viewport_w, (float)config->viewport_h);
         gl2d_end();
         glEnable(GL_DEPTH_TEST);
     } else {

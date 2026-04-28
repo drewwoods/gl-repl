@@ -36,7 +36,8 @@ progress as of 2026-04-28:
 - ✅ R3 (Extract layout geometry): Complete
 - ⚠️ R4 (Controller off repl_core_internal.h): In progress
   - R4a/R4b complete; R4c is complete for production code with `bench_repl.c` intentionally out of scope; R4d is in progress
-- ❌ R5–R12: Not started
+- ⚠️ R5: focused scene-render slice complete; repo-wide validation pending
+- ❌ R6–R12: Not started
 
 Some pieces have landed, but the strict end-state checks described below should
 not be assumed to pass until their prerequisite Phase 2 slices are complete.
@@ -1370,13 +1371,10 @@ Exit criterion: `grep "repl_core_internal" imrepl_ctrl.c` returns empty. ✅
 
 R1 removes six HUD-only fields (`replay_pc`, `replay_total_cmds`,
 `replay_state_val`, `replay_speed`, `replay_expand_args`, `code_panel_layout`)
-and adds three accum-AA fields and `ReplayFadePlan`. After that lands, the
-struct in `scene_render_types.h` still has a 30-field "Existing fields
-(legacy, preserved)" section that mixes camera, quality, display flags, grid
-settings, and replay state without logical grouping. R5 is the cleanup pass:
-reorganize the struct and retire the "legacy" label. No implementation files
-change — callers use named-field assignment, so reordering fields in the struct
-is safe.
+and adds three accum-AA fields and `ReplayFadePlan`. R5 finishes the follow-on
+cleanup: reorganize the struct, retire the "legacy" label, and move the replay
+HUD-only ownership out of `SceneRenderConfig` so the controller fills the HUD
+snapshot directly.
 
 Do this in two steps.
 
@@ -1394,7 +1392,9 @@ replay_speed  replay_expand_args  code_panel_layout
 ```
 
 `grep -n "replay_pc\|replay_total_cmds\|replay_state_val\|replay_speed\|replay_expand_args\|code_panel_layout" scene_render_types.h imrepl_ctrl.c`
-should return empty once the slimming step is applied.
+should return empty once the slimming step is applied. The same pass also drops
+the scene-internal `FrameRenderContext` camera cache; the grid renderer derives
+its underwater check locally from the camera config.
 
 ---
 
@@ -1501,8 +1501,10 @@ with `grep -n "camera_world_y\|camera_below_water_surface"`.
 ---
 
 Exit criterion: `scene_render_types.h` no longer contains the string
-"legacy, preserved". The six HUD fields are gone. `make test` and `make
-sample` both pass. `grep "replay_pc\b" scene_render_types.h` returns empty.
+"legacy, preserved". The six HUD fields are gone. The focused validation
+target `make test_scene_render` and the runtime check `./test_scene_render`
+pass. `grep "replay_pc\b" scene_render_types.h` returns empty. Full
+`make test` / `make sample` remain the repo-wide follow-up.
 
 #### R6. Split the typed-state facade by ownership
 

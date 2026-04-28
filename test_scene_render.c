@@ -76,13 +76,6 @@ static SceneRenderConfig make_test_config(void) {
     cfg.backdrop_mode = 0;
     cfg.show_vertex_outlines = 0;
 
-    cfg.code_panel_layout = 0;
-    cfg.replay_pc = 0;
-    cfg.replay_total_cmds = 0;
-    cfg.replay_state_val = 0;
-    cfg.replay_speed = 1.0f;
-    cfg.replay_expand_args = 0;
-
     /* Grid defaults. */
     for (int i = 0; i < GRID_MAJOR_COUNT; i++)
         cfg.grid_major_steps[i] = 1.0f;
@@ -136,8 +129,6 @@ static FrameRenderContext make_test_frame_ctx(void) {
     FrameRenderContext ctx = {0};
     ctx.config = make_test_config();
     ctx.focus.valid = 0;
-    ctx.camera_world_y = 0.0f;
-    ctx.camera_below_water_surface = 0;
     return ctx;
 }
 
@@ -169,8 +160,6 @@ static void test_frame_ctx_defaults(void) {
 
     ASSERT_INT("config has execute_fn", ctx.config.execute_fn != NULL, 1);
     ASSERT_INT("focus not valid by default", ctx.focus.valid, 0);
-    ASSERT_FLOAT("camera_world_y default", ctx.camera_world_y, 0.0f);
-    ASSERT_INT("camera_below_water default", ctx.camera_below_water_surface, 0);
 }
 
 /* --- Tests for scene_grid_render (minimal) ----------------------- */
@@ -398,10 +387,8 @@ static void test_render_mode_toggles(void) {
 
     /* Replaying. */
     ctx.config.replaying = 1;
-    ctx.config.replay_pc = 5;
     scene_grid_render(&ctx);
     ASSERT_INT("replaying set", ctx.config.replaying, 1);
-    ASSERT_INT("replay_pc set", ctx.config.replay_pc, 5);
     ctx.config.replaying = 0;
 
     /* Show guides. */

@@ -137,16 +137,32 @@ static void imrepl_ctrl_build_scene_config(SceneRenderConfig *config) {
     const ReplPresentationState *presentation = repl_state_presentation();
     const ReplCameraState *cam = repl_state_camera();
     const ReplFlatProgramState *flat = repl_state_flat_program();
+    float bg_lum;
+    float as_val;
 
     /* Refresh cursor block highlight before reading cursor state */
     repl_flatten_refresh_current_block_highlight();
 
-    /* Existing fields (legacy, preserved) */
+    /* --- Execute hook --- */
+    config->execute_fn = scene_execute_adapter;
+    config->execute_user_data = NULL;
+    config->execute_reset_fn = scene_execute_reset_adapter;
+
+    /* --- Flat program --- */
+    config->flat_program = repl_state_flat_program_view();
+
+    /* --- Animation --- */
+    config->anim_time = *repl_state_variables()->anim_time;
+
+    /* --- Viewport and scene rectangle --- */
+    config->viewport_w = *repl_state_viewport()->window_w;
+    config->viewport_h = *repl_state_viewport()->window_h;
     repl_layout_scene_rect(&config->scene_x, &config->scene_y,
                            &config->scene_w, &config->scene_h);
     if (config->scene_w < 1) config->scene_w = 1;
     if (config->scene_h < 1) config->scene_h = 1;
 
+    /* --- Camera --- */
     config->cam_dist = *cam->dist;
     config->cam_rx = *cam->rx;
     config->cam_ry = *cam->ry;
@@ -154,73 +170,68 @@ static void imrepl_ctrl_build_scene_config(SceneRenderConfig *config) {
     config->cam_ty = *cam->ty;
     config->cam_tz = *cam->tz;
     config->cam_motion_glow = *cam->motion_glow;
+
+    /* --- Rendering quality --- */
     config->multisample_enabled = *render->multisample_enabled;
     config->line_smooth_enabled = *render->line_smooth_enabled;
+    config->use_accum = *render->use_accum;
+    config->accum_aa_enabled = *render->accum_aa_enabled;
+    config->accum_samples = *render->accum_samples;
+
+    /* --- Lighting --- */
+    config->user_lighting_enabled = *flat->user_lighting_enabled;
+    memcpy(config->lights, render->lights, sizeof(config->lights));
+    config->show_light_indicators = *presentation->show_light_indicators;
+
+    /* --- Environment --- */
+    config->backdrop_mode = *presentation->backdrop_mode;
     config->wireframe = *presentation->wireframe;
+
+    /* --- Grid and axes --- */
     config->grid_theme = *presentation->grid_theme;
     config->grid_extent_idx = *presentation->grid_extent_idx;
     config->grid_major_idx = *presentation->grid_major_idx;
     config->axes_theme = *presentation->axes_theme;
+    memcpy(config->grid_major_steps, presentation->grid_major_steps,
+           sizeof(config->grid_major_steps));
+    memcpy(config->grid_extents, presentation->grid_extents,
+           sizeof(config->grid_extents));
+
+    /* --- 3D overlay flags --- */
     config->show_guides = *presentation->show_vertex_guides;
     config->show_vpoints = *presentation->show_vertex_points;
     config->show_vnums = *presentation->show_vertex_labels;
     config->show_normals = *presentation->show_normal_vectors;
+    config->show_vertex_outlines = *presentation->show_vertex_outlines;
     config->replaying = *replay->active;
     config->replay_mode = *replay->mode;
     config->replay_tess_preview = config->replaying &&
                                   config->replay_mode == REPLAY_MODE_VERTEX;
     config->replay_vertex_points = config->replay_tess_preview;
     config->show_current_poly = *presentation->highlight_current_poly && !config->replaying;
-    imrepl_ctrl_build_replay_fade_plan(config);
+
+    /* --- Cursor / editor block overlay --- */
+    config->cursor_block_begin_idx = *flat->current_block_begin_idx;
+    config->cursor_block_end_idx = *flat->current_block_end_idx;
+    config->cursor_block_source_line = *flat->current_block_source_line_idx;
+    config->edit_line_idx = repl_state_edit_line();
+    config->cursor_func_scope_mask = 0;
+    config->cursor_call_src_cmd_idx = -1;
+
+    /* --- Focus and guide snapshots --- */
+    config->focus = imrepl_ctrl_build_focus_vertex();
 
     /* Alpha scale boost for dark backgrounds */
-    float bg_lum = 0.2126f * render->clear_color[0]
-                 + 0.7152f * render->clear_color[1]
-                 + 0.0722f * render->clear_color[2];
-    float as_val = (0.10f + 0.02f) / fmaxf(bg_lum + 0.02f, 1e-4f);
+    bg_lum = 0.2126f * render->clear_color[0]
+           + 0.7152f * render->clear_color[1]
+           + 0.0722f * render->clear_color[2];
+    as_val = (0.10f + 0.02f) / fmaxf(bg_lum + 0.02f, 1e-4f);
     config->alpha_scale = as_val < 1.0f ? 1.0f : (as_val > 3.0f ? 3.0f : as_val);
 
-    /* New fields (push model) */
-    config->execute_fn = scene_execute_adapter;
-    config->execute_reset_fn = scene_execute_reset_adapter;
-    config->execute_user_data = NULL;
+    config->guide_snapshot = imrepl_ctrl_build_guide_snapshot(config);
 
-    config->flat_program = repl_state_flat_program_view();
-    config->anim_time = *repl_state_variables()->anim_time;
-
-    config->viewport_w = *repl_state_viewport()->window_w;
-    config->viewport_h = *repl_state_viewport()->window_h;
-
-    config->use_accum = *render->use_accum;
-    config->accum_aa_enabled = *render->accum_aa_enabled;
-    config->accum_samples = *render->accum_samples;
-    config->user_lighting_enabled = *flat->user_lighting_enabled;
-    memcpy(config->lights, repl_state_render()->lights, sizeof(config->lights));
-    config->show_light_indicators = *presentation->show_light_indicators;
-
-    config->backdrop_mode = *presentation->backdrop_mode;
-    config->show_vertex_outlines = *presentation->show_vertex_outlines;
-
-        config->code_panel_layout = *presentation->code_panel_layout;
-        config->replay_pc = *replay->pc;
-        config->replay_total_cmds = *replay->total_flat_cmds;
-    config->replay_state_val = *replay->state;
-    config->replay_speed = *replay->speed;
-    config->replay_expand_args = *replay->expand_args;
-
-        memcpy(config->grid_major_steps, presentation->grid_major_steps,
-            sizeof(config->grid_major_steps));
-        memcpy(config->grid_extents, presentation->grid_extents,
-            sizeof(config->grid_extents));
-
-        config->cursor_block_begin_idx = *flat->current_block_begin_idx;
-        config->cursor_block_end_idx = *flat->current_block_end_idx;
-        config->cursor_block_source_line = *flat->current_block_source_line_idx;
-    config->edit_line_idx = repl_state_edit_line();
-        config->cursor_func_scope_mask = 0;
-        config->cursor_call_src_cmd_idx = -1;
-        config->focus = imrepl_ctrl_build_focus_vertex();
-        config->guide_snapshot = imrepl_ctrl_build_guide_snapshot(config);
+    /* --- Replay --- */
+    imrepl_ctrl_build_replay_fade_plan(config);
 }
 
 void imrepl_ctrl_display_frame(void) {
@@ -266,6 +277,7 @@ void imrepl_ctrl_display_frame(void) {
     prof_end(PROF_SCENE_3D);
 
     if (scene_config.replaying) {
+        const ReplPresentationState *presentation = repl_state_presentation();
         UiReplayHudState replay_hud_state = {
             .scene_x = scene_config.scene_x,
             .scene_y = scene_config.scene_y,
@@ -273,13 +285,13 @@ void imrepl_ctrl_display_frame(void) {
             .scene_h = scene_config.scene_h,
             .viewport_w = scene_config.viewport_w,
             .viewport_h = scene_config.viewport_h,
-            .code_panel_layout = scene_config.code_panel_layout,
+            .code_panel_layout = *presentation->code_panel_layout,
             .replay_mode = scene_config.replay_mode,
-            .replay_pc = scene_config.replay_pc,
-            .replay_total_cmds = scene_config.replay_total_cmds,
-            .replay_state_val = scene_config.replay_state_val,
-            .replay_speed = scene_config.replay_speed,
-            .replay_expand_args = scene_config.replay_expand_args,
+            .replay_pc = *replay->pc,
+            .replay_total_cmds = *replay->total_flat_cmds,
+            .replay_state_val = *replay->state,
+            .replay_speed = *replay->speed,
+            .replay_expand_args = *replay->expand_args,
             .replaying = scene_config.replaying,
         };
         ui_replay_hud_render(&replay_hud_state);
