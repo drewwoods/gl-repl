@@ -3,8 +3,6 @@
  */
 #define _POSIX_C_SOURCE 200809L
 #include "prof.h"
-#include "sample.h"
-#include "repl_state.h"
 
 #include <time.h>
 #include <stdio.h>
@@ -135,10 +133,6 @@ void prof_frame_tick(void) {
         if (g_prof_stale[section_idx] < PROF_STALE_FRAMES)
             g_prof_stale[section_idx]++;
     }
-}
-
-int prof_code_panel_details_enabled(void) {
-    return *repl_state_profile_panel()->mode == PROFILE_PANEL_DETAILS;
 }
 
 double prof_section_last_us(ProfSection s) {

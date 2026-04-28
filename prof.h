@@ -69,9 +69,6 @@ void prof_accum_commit(ProfSection s);
 /* Mark the start of a new frame so per-frame sections can detect staleness. */
 void prof_frame_tick(void);
 
-/* Whether detail rows should be rendered/timed for PROF_CODE_PANEL. */
-int prof_code_panel_details_enabled(void);
-
 /* Read-only API for HUD rendering. */
 double prof_section_last_us(ProfSection s);
 double prof_section_avg_us(ProfSection s);
