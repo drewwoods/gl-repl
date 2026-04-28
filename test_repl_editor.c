@@ -87,9 +87,14 @@ static void declare_test_vars(void) {
     ASSERT_DECL_OK("declare_predef_var n", repl_eval_declare_predef_var("n", err, sizeof(err)), err);
 }
 
-static void set_editor_input(const char *s) {
+#include "repl_var_drag.h"
+
+#define VAR_PANEL_PAD_INTERNAL   6
+#define VAR_TITLE_H_INTERNAL    20
+
+static void set_editor_input(const char *text) {
     ReplEditorInputState *inp = repl_state_editor_input_mut();
-    strncpy(inp->input, s, MAX_INPUT_LEN - 1);
+    strncpy(inp->input, text, MAX_INPUT_LEN - 1);
     inp->input[MAX_INPUT_LEN - 1] = '\0';
     *inp->input_len = (int)strlen(inp->input);
     repl_state_cursor_pos_set(*inp->input_len);
@@ -215,7 +220,7 @@ int main() {
     /* 0. Code/scene panel geometry supports left, top, bottom, and hidden layouts */
     {
         int x, y, w, h;
-        
+
         repl_state_viewport_set_size(1000, 800);
         g_panel_frac = 0.25f;
 
@@ -1941,7 +1946,7 @@ int main() {
         }
         repl_flatten_commands();
 
-        
+
         repl_state_viewport_set_size(800, 230);
         g_panel_frac = 0.5f;
         *repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT;
@@ -2027,7 +2032,7 @@ int main() {
         repl_feed_line_public("glVertex3f(2, 0, 0);");
         repl_flatten_commands();
 
-        
+
         repl_state_viewport_set_size(800, 230);
         g_panel_frac = 0.5f;
         *repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT;
@@ -2102,7 +2107,7 @@ int main() {
             repl_feed_line_public(line);
         }
 
-        
+
         repl_state_viewport_set_size(800, 230);
         g_panel_frac = 0.5f;
         *repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT;
@@ -2175,7 +2180,7 @@ int main() {
             repl_feed_line_public(line);
         }
 
-        
+
         repl_state_viewport_set_size(800, 230);
         g_panel_frac = 0.5f;
         *repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT;
@@ -2288,7 +2293,7 @@ int main() {
         repl_feed_line_public("glVertex3f(0,0,0)");
         repl_feed_line_public("glVertex3f(1,1,1)");
         repl_feed_line_public("glVertex3f(2,2,2)");
-        
+
         repl_state_viewport_set_size(800, 600);
         g_panel_frac = 0.5f;
         *repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT;
@@ -2432,6 +2437,389 @@ int main() {
                                "Cannot uncomment");
 
         g_mock_modifiers = saved_mods;
+    }
+
+    /* Extra coverage: accumulation samples toggle (Ctrl++ / Ctrl+-) */
+    {
+        int saved_mods = g_mock_modifiers;
+        ReplRenderState *rs = repl_state_render_mut();
+
+        repl_reset_state();
+        *rs->use_accum = 1;
+        *rs->accum_samples = 2;
+
+        g_mock_modifiers = GLUT_ACTIVE_CTRL;
+
+        /* Increment */
+        repl_keyboard_func('+', 0, 0);
+        ASSERT_INT("accum toggle +: samples increased to 4", *rs->accum_samples, 4);
+
+        repl_keyboard_func('=', 0, 0); /* some keyboards use = for + without shift */
+        ASSERT_INT("accum toggle =: samples increased to 8", *rs->accum_samples, 8);
+
+        /* Decrement */
+        repl_keyboard_func('-', 0, 0);
+        ASSERT_INT("accum toggle -: samples decreased to 4", *rs->accum_samples, 4);
+
+        /* Test limits */
+        *rs->accum_samples = 16;
+        repl_keyboard_func('+', 0, 0);
+        ASSERT_INT("accum toggle +: samples capped at 16", *rs->accum_samples, 16);
+
+        *rs->accum_samples = 1;
+        repl_keyboard_func('-', 0, 0);
+        ASSERT_INT("accum toggle -: samples floored at 1", *rs->accum_samples, 1);
+
+        g_mock_modifiers = saved_mods;
+    }
+
+    /* Extra coverage: Ctrl+L (Clear All) */
+    {
+        int saved_mods = g_mock_modifiers;
+        repl_reset_state();
+        repl_feed_line_public("glVertex3f(1,1,1)");
+        ASSERT_INT("Ctrl+L setup: 1 cmd", repl_state_document_count(), 1);
+
+        g_mock_modifiers = GLUT_ACTIVE_CTRL;
+        repl_keyboard_func(12, 0, 0); /* Ctrl+L is 12 */
+        ASSERT_INT("Ctrl+L: cleared all", repl_state_document_count(), 0);
+
+        g_mock_modifiers = saved_mods;
+    }
+
+    /* Extra coverage: F12 cycling with user scenes */
+    {
+        repl_reset_state();
+        int example_count = repl_example_count();
+        if (example_count > 0) {
+            /* Load example 0 */
+            repl_load_example(0);
+
+            /* Promote to user scene */
+            int slot = repl_promote_example_if_needed();
+            ASSERT_TRUE("F12 test: promoted example to slot", slot >= 0);
+
+            /* Cycle from user scene 0 -> should go to example 0 */
+            repl_special_func(GLUT_KEY_F12, 0, 0);
+            ASSERT_INT("F12: user scene 0 -> example 0", *repl_state_scenes()->active_example_idx, 0);
+            ASSERT_INT("F12: active user scene now -1", repl_active_user_scene(), -1);
+
+            /* Cycle through all examples to reach user scenes again */
+            for (int i = 0; i < example_count; i++) {
+                 repl_special_func(GLUT_KEY_F12, 0, 0);
+            }
+            /* After all examples, it should hit the first used user scene slot */
+            ASSERT_INT("F12: cycled back to user scene 0", repl_active_user_scene(), 0);
+        }
+    }
+
+    /* Extra coverage: panel resizing via mouse motion */
+    {
+        repl_reset_state();
+        repl_state_viewport_set_size(1000, 1000);
+        *repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT;
+        *repl_state_code_panel_mut()->resizing_panel = 1;
+
+        repl_motion_func(300, 500);
+        ASSERT_TRUE("panel resize left: frac updated", fabsf(*repl_state_code_panel()->panel_frac - 0.3f) < 1e-6f);
+
+        *repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_TOP;
+        repl_motion_func(500, 400);
+        ASSERT_TRUE("panel resize top: frac updated", fabsf(*repl_state_code_panel()->panel_frac - 0.4f) < 1e-6f);
+
+        *repl_state_code_panel_mut()->resizing_panel = 0;
+    }
+
+    /* Extra coverage: editor_point_on_code_panel_divider */
+    {
+        repl_reset_state();
+        repl_state_viewport_set_size(1000, 1000);
+        *repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT;
+        *repl_state_code_panel_mut()->panel_frac = 0.3f;
+
+        /* Divider should be at x = 300. Test hit at 305. */
+        repl_passive_motion_func(305, 500);
+        /* We can't easily assert the cursor change without more mocking,
+         * but we are hitting the branch. */
+
+        *repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_TOP;
+        /* Divider should be at gl_y = 300. window_h = 1000, so y = 700. Test hit at 705. */
+        repl_passive_motion_func(500, 705);
+    }
+
+    /* Extra coverage: Audio track navigation (Ctrl+Left/Right) */
+    {
+        int saved_mods = g_mock_modifiers;
+        g_mock_modifiers = GLUT_ACTIVE_CTRL;
+
+        /* Just trigger the routes to ensure they are covered.
+         * Actual track change depends on audio assets. */
+        repl_special_func(GLUT_KEY_LEFT, 0, 0);
+        repl_special_func(GLUT_KEY_RIGHT, 0, 0);
+
+        g_mock_modifiers = saved_mods;
+    }
+
+    /* Extra coverage: Help overlay scrolling */
+    {
+        ReplHelpState *help = repl_state_help_mut();
+        *help->visible = 1;
+        *help->scroll = 0;
+        *help->tab_idx = 0;
+
+        repl_special_func(GLUT_KEY_DOWN, 0, 0);
+        ASSERT_INT("help scroll down", *help->scroll, 1);
+
+        repl_special_func(GLUT_KEY_UP, 0, 0);
+        ASSERT_INT("help scroll up", *help->scroll, 0);
+
+        repl_special_func(GLUT_KEY_RIGHT, 0, 0);
+        ASSERT_INT("help tab right", *help->tab_idx, 1);
+
+        repl_special_func(GLUT_KEY_LEFT, 0, 0);
+        ASSERT_INT("help tab left", *help->tab_idx, 0);
+
+        repl_special_func(GLUT_KEY_PAGE_DOWN, 0, 0);
+        ASSERT_INT("help page down", *help->scroll, 5);
+
+        repl_special_func(GLUT_KEY_PAGE_UP, 0, 0);
+        ASSERT_INT("help page up", *help->scroll, 0);
+
+        *help->visible = 0;
+    }
+
+    /* Extra coverage: Escape key routes */
+    {
+        /* 1. Help visible */
+        *repl_state_help_mut()->visible = 1;
+        repl_keyboard_func(27, 0, 0);
+        ASSERT_TRUE("Esc: help closed", !*repl_state_help()->visible);
+
+        /* 2. Autocomplete active */
+        *repl_state_autocomplete_mut()->match_count = 1;
+        repl_keyboard_func(27, 0, 0);
+        ASSERT_INT("Esc: autocomplete cleared", *repl_state_autocomplete()->match_count, 0);
+
+        /* 3. Insert mode */
+        repl_state_insert_mode_set(1);
+        repl_keyboard_func(27, 0, 0);
+        ASSERT_TRUE("Esc: insert mode exited", !repl_state_insert_mode());
+
+        /* 4. Input clear */
+        set_editor_input("some text");
+        repl_keyboard_func(27, 0, 0);
+        ASSERT_INT("Esc: input cleared", *repl_state_editor_input()->input_len, 0);
+    }
+
+    /* Extra coverage: timer_func logic */
+    {
+        repl_reset_state();
+        repl_feed_line_public("glVertex3f(0,0,0);");
+        repl_feed_line_public("glVertex3f(1,1,1);");
+        repl_flatten_commands();
+
+        /* 1. Status TTL decrement */
+        *repl_state_status_mut()->ttl = 10;
+        repl_timer_func(0);
+        ASSERT_INT("timer: status ttl decremented", *repl_state_status()->ttl, 9);
+
+        /* 2. Cursor blink */
+        *repl_state_code_panel_mut()->blink_tick = 29;
+        *repl_state_code_panel_mut()->cursor_visible = 1;
+        repl_timer_func(0);
+        ASSERT_INT("timer: blink tick reset", *repl_state_code_panel()->blink_tick, 0);
+        ASSERT_TRUE("timer: cursor visibility toggled", !*repl_state_code_panel()->cursor_visible);
+
+        /* 3. Replay advance */
+        *repl_state_replay_mut()->active = 1;
+        *repl_state_replay_mut()->state = REPLAY_PLAYING;
+        *repl_state_replay_mut()->speed = 1.0f;
+        *repl_state_replay_mut()->accum = 0.99f;
+        /* This should trigger at least one repl_replay_advance */
+        repl_timer_func(0);
+        ASSERT_TRUE("timer: replay accum advanced", *repl_state_replay()->accum < 0.5f);
+
+        *repl_state_replay_mut()->active = 0;
+    }
+
+    /* Extra coverage: variable dragging via mouse */
+    {
+        repl_reset_state();
+        repl_state_viewport_set_size(1000, 1000);
+        *repl_state_variable_panel_mut()->visible = 1;
+        repl_feed_line_public("float testvar = 5.0;");
+
+        /* Variable panel is usually at bottom-right of scene.
+         * Scene is to the right of code panel (0.3 frac).
+         * Code panel = 0..300. Scene = 300..1000.
+         * Variable panel rect is roughly [800..1000, 8..60] in GL coords.
+         * GL y=8 is window y=992.
+         */
+
+        /* Attempt to hit the variable row. */
+        /* ui_variable_panel_rect will place it at the right edge of the scene. */
+        int px, py, pw, ph;
+        ui_variable_panel_rect(&px, &py, &pw, &ph);
+
+        /* Click in the middle of the first row. */
+        int click_x = px + pw / 2;
+        int click_y = 1000 - (py + ph - VAR_PANEL_PAD_INTERNAL - VAR_TITLE_H_INTERNAL / 2);
+
+        repl_mouse_func(GLUT_LEFT_BUTTON, GLUT_DOWN, click_x, click_y);
+        ASSERT_TRUE("mouse: variable drag active", repl_var_drag_active());
+
+        repl_motion_func(click_x + 100, click_y);
+        /* drag motion should have changed the variable value. */
+
+        repl_mouse_func(GLUT_LEFT_BUTTON, GLUT_UP, click_x + 100, click_y);
+        ASSERT_TRUE("mouse: variable drag inactive after release", !repl_var_drag_active());
+    }
+
+    /* Extra coverage: Undo/Redo keys */
+    {
+        int saved_mods = g_mock_modifiers;
+        repl_reset_state();
+        repl_undo_push_snapshot();
+        repl_feed_line_public("glVertex3f(1,1,1)");
+        ASSERT_INT("undo setup: 1 cmd", repl_state_document_count(), 1);
+
+        /* Undo */
+        g_mock_modifiers = GLUT_ACTIVE_CTRL;
+        repl_keyboard_func(26, 0, 0); /* Ctrl+Z */
+        ASSERT_INT("Ctrl+Z: undo works", repl_state_document_count(), 0);
+
+        /* Redo via Ctrl+Shift+Z */
+        g_mock_modifiers = GLUT_ACTIVE_CTRL | GLUT_ACTIVE_SHIFT;
+        repl_keyboard_func(26, 0, 0);
+        ASSERT_INT("Ctrl+Shift+Z: redo works", repl_state_document_count(), 1);
+
+        /* Undo again */
+        g_mock_modifiers = GLUT_ACTIVE_CTRL;
+        repl_keyboard_func(26, 0, 0);
+        ASSERT_INT("undo again", repl_state_document_count(), 0);
+
+        /* Redo via Ctrl+Y */
+        g_mock_modifiers = GLUT_ACTIVE_CTRL;
+        repl_keyboard_func(25, 0, 0); /* Ctrl+Y */
+        ASSERT_INT("Ctrl+Y: redo works", repl_state_document_count(), 1);
+
+        g_mock_modifiers = saved_mods;
+    }
+
+    /* Extra coverage: Mouse wheel */
+#ifndef USE_GLUT
+    {
+        repl_reset_state();
+        repl_state_viewport_set_size(1000, 1000);
+        *repl_state_code_panel_mut()->scroll = 0;
+
+        /* Scroll in code panel (x < 300) */
+        repl_mousewheel_func(0, 1, 100, 500);
+        ASSERT_INT("mousewheel: code panel scrolled down", *repl_state_code_panel()->scroll, -1);
+
+        repl_mousewheel_func(0, -1, 100, 500);
+        ASSERT_INT("mousewheel: code panel scrolled up", *repl_state_code_panel()->scroll, 0);
+
+        /* Scroll in scene panel (x > 300) */
+        /* This should affect camera zoom. */
+        repl_mousewheel_func(0, 1, 500, 500);
+        /* Camera zoom velocity is updated, hard to assert directly without more mocks,
+         * but we covered the branch. */
+    }
+#endif
+
+    /* Extra coverage: handle_buffer_command_key_route remaining keys */
+    {
+        int saved_mods = g_mock_modifiers;
+        repl_reset_state();
+        repl_feed_line_public("glVertex3f(1,1,1)");
+
+        g_mock_modifiers = GLUT_ACTIVE_CTRL;
+
+        /* Ctrl+\ (Reformat) */
+        repl_keyboard_func(28, 0, 0);
+        assert_status_contains("Ctrl+\\ reformat", "Reformatted");
+
+        /* Ctrl+P (Dump) */
+        /* We can't easily check stdout, but we trigger the branch. */
+        repl_keyboard_func(16, 0, 0);
+        assert_status_contains("Ctrl+P dump", "Dumped");
+
+        /* Ctrl+S (Save) */
+        repl_keyboard_func(19, 0, 0);
+        assert_status_contains("Ctrl+S save", "Saved");
+
+        g_mock_modifiers = saved_mods;
+    }
+
+    /* Extra coverage: editor_restore_hidden_code_panel from keys */
+    {
+        repl_reset_state();
+        *repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_HIDDEN;
+
+        /* Pressing a printable key should restore it. */
+        repl_keyboard_func('a', 0, 0);
+        ASSERT_INT("key restores hidden panel", *repl_state_presentation()->code_panel_layout, CODE_PANEL_LAYOUT_LEFT);
+
+        *repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_HIDDEN;
+        /* Pressing a special key should restore it. */
+        repl_special_func(GLUT_KEY_UP, 0, 0);
+        ASSERT_INT("special key restores hidden panel", *repl_state_presentation()->code_panel_layout, CODE_PANEL_LAYOUT_LEFT);
+    }
+
+    /* Extra coverage: Commenting Func/If blocks */
+    {
+        repl_reset_state();
+        repl_feed_line_public("if(1) {");
+        repl_feed_line_public("  glVertex3f(0,0,0);");
+        repl_feed_line_public("}");
+
+        int saved_mods = g_mock_modifiers;
+        g_mock_modifiers = GLUT_ACTIVE_CTRL;
+
+        repl_state_edit_line_set(0);
+        repl_state_insert_mode_set(0);
+        repl_keyboard_func('/', 0, 0);
+        ASSERT_INT("comment if-begin", repl_state_document_cmds_mut()[0].type, CMD_COMMENT);
+
+        repl_state_edit_line_set(2);
+        repl_keyboard_func('/', 0, 0);
+        ASSERT_INT("comment if-end", repl_state_document_cmds_mut()[2].type, CMD_COMMENT);
+
+        g_mock_modifiers = saved_mods;
+    }
+
+    /* Extra coverage: BOTTOM layout resizing */
+    {
+        repl_reset_state();
+        repl_state_viewport_set_size(1000, 1000);
+        *repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_BOTTOM;
+        *repl_state_code_panel_mut()->panel_frac = 0.3f;
+
+        /* Divider should be at gl_y = 300 (y = 700). */
+        repl_passive_motion_func(500, 695);
+
+        *repl_state_code_panel_mut()->resizing_panel = 1;
+        repl_motion_func(500, 600);
+        ASSERT_TRUE("panel resize bottom: frac updated", fabsf(*repl_state_code_panel()->panel_frac - 0.4f) < 1e-6f);
+        *repl_state_code_panel_mut()->resizing_panel = 0;
+    }
+
+    /* Extra coverage: Right-click variable drag */
+    {
+        repl_reset_state();
+        repl_state_viewport_set_size(1000, 1000);
+        *repl_state_variable_panel_mut()->visible = 1;
+        repl_feed_line_public("float testvar = 5.0;");
+
+        int px, py, pw, ph;
+        ui_variable_panel_rect(&px, &py, &pw, &ph);
+        int click_x = px + pw / 2;
+        int click_y = 1000 - (py + ph - VAR_PANEL_PAD_INTERNAL - VAR_TITLE_H_INTERNAL / 2);
+
+        repl_mouse_func(GLUT_RIGHT_BUTTON, GLUT_DOWN, click_x, click_y);
+        ASSERT_TRUE("mouse: right-click variable drag active", repl_var_drag_active());
+        repl_mouse_func(GLUT_RIGHT_BUTTON, GLUT_UP, click_x, click_y);
     }
 
     printf("\n%d / %d tests passed\n", g_pass, g_run);
