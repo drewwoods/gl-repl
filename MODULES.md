@@ -20,6 +20,13 @@ sample.c/h    = current GLUT app shell and legacy shared header
 imrepl.c/h    = future app shell/shared header name, replacing sample.c/h
 ```
 
+Treat prefixes as ownership boundaries, not as a catch-all naming scheme.
+`repl_*` is for REPL language/editor/source/replay model behavior. App-shell
+and app-service code belongs under `imrepl_*` once the deferred rename lands;
+generic instrumentation keeps neutral names such as `prof`. `repl_audio` is a
+legacy-named app service and should be revisited in the namespace audit rather
+than copied as a pattern.
+
 `scene_*` and `ui_*` are views. They render from per-frame config or model
 snapshots. They should not own REPL mutation paths.
 
@@ -192,7 +199,7 @@ UI renderers read models and draw. Mutations go through `repl_actions`,
 | Module | Role |
 |--------|------|
 | `repl_export` | Save/load, typed export scaffold, workspace headers, code-panel dumps |
-| `repl_audio` | Playlist engine and persisted audio config |
+| `repl_audio` | Legacy-named app-level playlist engine and persisted audio config; namespace audit candidate |
 | `prof` | Project-wide CPU timing instrumentation |
 | `sample` | Current `main()`, GLUT callback wiring, buffer swap, and legacy shared header; future rename target is `imrepl` |
 | `gl_stub_counts` | `USE_GL_STUBS` symbol tracking |
@@ -259,10 +266,11 @@ repl_state_views.h   — read-only accessors; safe to include from scene_* and u
 repl_state_owners.h  — mutating accessors; owner modules and controller only
 ```
 
-Until R6 lands, the rule is enforced by `check-scene-no-repl-state-mut` and
-`check-ui-no-repl-state-mut` in the Makefile. After R6: `scene_*.c` and
-`ui_*.c` include `repl_state_views.h` only; `check-views-no-owners` catches
-regressions.
+Until R6 lands, the rule is enforced by transitional Makefile checks such as
+`check-scene-no-repl-state-mut` and `check-state-boundaries`. These checks may
+carry documented allowlists while Phase 2 is in progress. After R6:
+`scene_*.c` and `ui_*.c` include `repl_state_views.h` only;
+`check-views-no-owners` catches regressions.
 
 ### Layout geometry (Phase 2 target)
 
@@ -308,6 +316,7 @@ R3          extract repl_layout.c
 R5          slim SceneRenderConfig (requires R1)
 R6          split repl_state facade (requires R1 + R2)
 R7          add view-side grep guards
+R11         harden file-level grep guards; shrink allowlists as Phase 2 lands
 R4          controller off repl_core_internal.h
 R10-ph2-5   dissolve repl_core.c into natural owners
 R8          sample → imrepl rename (last, mechanical)

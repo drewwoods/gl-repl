@@ -5,6 +5,12 @@ The main cleanup target is not one bad file; it is the lack of clear ownership b
 
 Refactor in small behavior-preserving stages. The first goal is to make responsibilities explicit and contain side effects; only then split large files, rename internals, and add comments around real invariants.
 
+The controller-first architecture and Phase 2 dependency ordering are tracked in
+[`feature/push-architecture-refinement.md`](./push-architecture-refinement.md).
+Use that plan for R1-R11 boundaries, Makefile guard timing, and the deferred
+`sample` → `imrepl` namespace work. This cleanup plan stays strategic and
+should not diverge from the refinement plan's current ordering.
+
 Baseline note: the historical pre-refactor failures in `test_repl_core_format`,
 `test_repl_core_commit`, and `test_repl_core_examples` have been fixed on this
 branch. `make test-stubs TEST_JOBS=4` is now expected to pass cleanly; any new
@@ -130,6 +136,16 @@ failure should be treated as a regression unless explicitly rebaselined.
    - Add comments only where they explain invariants, ordering, ownership, or non-obvious side effects: commit handler order, declaration placement, dirty flags, replay limits, import/export markers, and GL state assumptions.
    - Remove stale comments and vague TODOs; turn real defects, such as the ocean-grid camera TODO, into specific tracked fixes.
    - Normalize names: `*_idx` for indexes, `*_count` for counts, `source_line_idx`, `flat_cmd_idx`, `indent_cols`, `visible_line_count`, `command_store`, `render_config`, and `workspace_dir`.
+   - Normalize module prefixes by ownership, not habit. `repl_*` is for REPL
+     language/editor/source/replay model modules; `imrepl_*` is the app shell,
+     controller, and app-level services after the deferred rename; `scene_*`
+     and `ui_*` stay view-layer names; generic utilities keep neutral names
+     such as `prof`.
+   - Audit legacy names that no longer match ownership. `repl_audio` is the
+     obvious candidate: it is an app-level playlist/persistence service, not
+     REPL command-model code. Schedule any rename with
+     `feature/push-architecture-refinement.md` R8/R11 so source files,
+     function prefixes, tests, docs, and Makefile guards change together.
 
 10a. **Comprehensive public API header documentation** ✅ DONE
    - Every module header (`*.h`) now documents its public API consistently with module overview, lifecycle notes, type definitions, and detailed function descriptions.
@@ -157,6 +173,11 @@ failure should be treated as a regression unless explicitly rebaselined.
      module.
    - Lock both boundaries with `make check-gl-boundaries` and
      `make check-layer-coupling` grep guards wired into `make test`.
+   - Continue the guard work through
+     [`feature/push-architecture-refinement.md`](./push-architecture-refinement.md)
+     R11. The active Phase 2 tree may need transitional allowlists; strict
+     no-exception state checks should only be required once their prerequisite
+     R2/R4/R6 cleanup slices have landed.
    - Tactical breakdown: see [`feature/repl-cleanup-punch-list.md`](./repl-cleanup-punch-list.md)
      §11. The punch-list lays out the work as a precursor Phase 1 (prof
      module extraction, per-slice naming) followed by Phase 2 (six
@@ -169,6 +190,12 @@ failure should be treated as a regression unless explicitly rebaselined.
 - For UI layout extraction: add or update tests that compare wrapping, hit-testing, visual dumps, search positions, and continuation indentation.
 - For import/export work: add round-trip tests for declarations, functions, config metadata, camera metadata, workspace scene names, and single-file reload.
 - For render/replay work: run `make sample USE_GL_STUBS=1`, `make sample`, and a manual smoke test for replay, grid/axes themes, overlays, accumulation AA toggle, and example cycling.
+- For architecture-boundary work: run `make check-gl-boundaries`,
+  `make check-layer-coupling`, `make check-controller-boundaries`,
+  `make check-scene-no-repl-state-mut`, and `make check-state-boundaries`.
+  During Phase 2, `check-state-boundaries` may rely on documented transitional
+  allowlists; shrink those allowlists as the corresponding refinement-plan
+  steps land.
 
 ## Assumptions
 - Preserve the current C/OpenGL/GLUT stack and sample-local structure.

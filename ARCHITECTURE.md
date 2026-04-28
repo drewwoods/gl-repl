@@ -16,8 +16,9 @@ turn `scene_*` into a plugin host.
 
 Current code already routes frame wiring through `imrepl_ctrl.c`. `repl_core.c`
 now keeps the REPL model/pipeline wrappers, while `scene_render.c` consumes
-explicit per-frame config and only keeps the remaining transitional replay-HUD
-reads and fade-batch helpers.
+explicit per-frame config. Phase 2 is still in progress; remaining work is
+mostly about shrinking transitional state/config surfaces and removing
+allowlisted view-layer state mutations.
 
 ## Ownership Model
 
@@ -29,6 +30,13 @@ ui_*          = 2D editor chrome: code panel, menus, overlays, popups, HUDs
 sample.c/h    = current GLUT app shell and legacy shared header
 imrepl.c/h    = future app shell/shared header name, replacing sample.c/h
 ```
+
+The prefix is an ownership signal, not a generic sample prefix. New `repl_*`
+modules should own REPL language, editor, source, workspace, replay, or command
+model behavior. App-shell services belong under `imrepl_*` after the deferred
+rename, and generic infrastructure should keep neutral names such as `prof`.
+`repl_audio` is a legacy name to revisit during the namespace audit rather
+than a precedent for unrelated app services.
 
 The main design rule:
 
@@ -60,7 +68,7 @@ globals or call `repl_state_*` APIs directly during rendering.
    and route mutations through REPL-owned actions or stores.
 5. **The controller is the mixed layer.** The frame controller builds scene and
    UI inputs from REPL state, calls the scene renderer, then calls UI renderers.
-   After the refinement lands, this role belongs in `imrepl_ctrl.c`.
+   This role belongs in `imrepl_ctrl.c`.
 6. **Replay is REPL policy.** Replay state machine, PC, mode, baseline values,
    and fade/highlight decisions belong in `repl_replay.c` or follow-up replay
    planning code. Any scene use of replay data should be via snapshots or
@@ -245,23 +253,16 @@ mutation path.
 Replay is REPL-owned. The scene may render the current visual effect, but it
 should not own replay policy.
 
-Current transitional responsibilities in `scene_render.c`:
-
-* fade-batch rendering — calls `repl_replay_*` and `repl_state_*` directly
-* replay tessellation preview
-* 2D replay HUD (`ui_replay_hud_render`) — pure 2D UI in `ui_replay_hud.c`
-
-Phase 2 plan (R1 in `feature/push-architecture-refinement.md`):
+R1 target in `feature/push-architecture-refinement.md`:
 
 * controller builds a `ReplayFadePlan` snapshot once per frame (batches,
-  alpha, skip limits, baseline predef values); scene iterates the snapshot
-  without calling `repl_replay_*` or `repl_state_*` (R1b)
-* accumulation-AA settings move from `repl_state_render()` read to
-  `SceneRenderConfig` fields set by the controller (R1a)
+  alpha, skip limits, baseline predef values)
+* scene iterates the snapshot and owns the GL pass orchestration without
+  calling `repl_replay_*` or `repl_state_*`
+* accumulation-AA settings are `SceneRenderConfig` fields set by the controller
 * 2D replay HUD lives in `ui_replay_hud.c`, driven by config fields
-* after R1, `scene_render.c` includes neither `repl_replay.h` nor
-  `repl_state.h`; the `check-pure-scene-no-repl-state` Makefile rule covers
-  all `scene_*.c` without an allowlist
+* `scene_*.c` files contain no `repl_state_*` or `repl_replay_*` calls; once
+  the relevant Phase 2 slice is complete, Makefile checks keep that true
 
 ## Boundary Rules
 
@@ -308,12 +309,9 @@ require separate, independent cleanup.
 Target rule: `scene_*` files consume `SceneRenderConfig`, `FrameRenderContext`,
 or explicit snapshot structs. They should not call `repl_state_*` directly.
 
-Known transitional exceptions in `scene_render.c`: reads `repl_state_replay()`,
-`repl_state_presentation()`, `repl_state_viewport()`, and `repl_state_render()`
-for fade batches and accumulation AA. R1 in the refinement plan removes all of
-these by building a `ReplayFadePlan` snapshot in the controller and moving the
-HUD to `ui_replay_hud.c`. Focus/guide snapshot assembly and accumulation
-jitter already come from the controller or local pass state.
+R11 in the refinement plan adds `check-state-boundaries` with transitional
+allowlists. The strict no-exception version belongs to the end of the relevant
+Phase 2 cleanup, not to the beginning.
 
 ### UI mutation boundary
 
@@ -355,11 +353,10 @@ focus/guide snapshot construction, scene-local accumulation jitter, and
 app-shell shim removal (`sample.c` calls `imrepl_ctrl_*` directly).
 
 Phase 2 follow-ups are detailed in `feature/push-architecture-refinement.md`
-(recommendations R1–R10). Summary:
+(recommendations R1–R11). Summary:
 
-1. **R1** — replay/HUD migration: controller builds `ReplayFadePlan` snapshot;
-  scene iterates it; 2D HUD lives in `ui_replay_hud.c`. Highest leverage:
-   eliminates all `repl_state_*` and `repl_replay_*` reads from `scene_*.c`.
+1. **R1** — replay/HUD migration: controller builds `ReplayFadePlan`; scene
+   iterates it; 2D HUD lives in `ui_replay_hud.c`.
 2. **R2** — UI → REPL mutation holes: `ui_color_picker`, `ui_panels`,
    `ui_help_overlay` route mutations through store/action APIs.
 3. **R3** — `repl_layout.c` / `repl_layout.h` now own
@@ -373,8 +370,10 @@ Phase 2 follow-ups are detailed in `feature/push-architecture-refinement.md`
    views header.
 7. **R7** — add `check-pure-scene-no-repl-state` and `check-views-no-owners`
    grep guards to `make test`.
-8. **R10** — dissolve `repl_core.c` into natural owners in five phases.
-9. **R8** — rename `sample.c` / `sample.h` to `imrepl.c` / `imrepl.h`
+8. **R11** — harden file-level grep guards with transitional allowlists; shrink
+   them as R2/R4/R6 land.
+9. **R10** — dissolve `repl_core.c` into natural owners in five phases.
+10. **R8** — rename `sample.c` / `sample.h` to `imrepl.c` / `imrepl.h`
    (mechanical, last).
 
 ## Header Documentation Standard

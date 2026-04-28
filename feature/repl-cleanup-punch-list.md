@@ -8,6 +8,12 @@ counterpart: a prioritized set of concrete, behavior-preserving
 extractions that can each land as a single reviewable commit *today*,
 without committing to the larger context-object rewrite.
 
+The active architecture direction and ordering constraints live in
+[`feature/push-architecture-refinement.md`](./push-architecture-refinement.md).
+Use that file as the controller-first source of truth for Phase 2 boundaries;
+this punch list should cross-link to it whenever a cleanup item depends on
+R1-R11 rather than repeating a divergent local plan.
+
 Four files still dominate the codebase: `scene_render.c` (frame prep,
 replay HUD), `scene_grid.c` (grid themes), `scene_axes.c`
 (axes themes), `repl_export.c` (2541), `repl_core.c` (~1964), and
@@ -44,7 +50,11 @@ in isolation; each item is sized to land as one `refactor:` commit.
 
 ### Phase 10 Step 1: Function Name Consistency + Comprehensive Header Documentation ✅ DONE
 
-Function naming across all public headers now follows the consistent `repl_<module>_<action>()` pattern, and all module headers have comprehensive public API documentation.
+Function naming across public headers now follows a module-prefix pattern, and
+all module headers have comprehensive public API documentation. For
+REPL-owned modules the public prefix is `repl_<module>_<action>()`; the
+architecture refinement plan now calls out that `repl_` is not a catch-all
+sample prefix.
 
 **Function Naming (Waves 1-2):**
 - **repl_replay.h:** 18 functions renamed (replay_start → repl_replay_start, etc.)
@@ -55,7 +65,10 @@ Function naming across all public headers now follows the consistent `repl_<modu
 - **repl_clipboard.h:** 4 functions renamed (clear_selection → repl_clipboard_clear_selection, etc.)
 - **repl_executor.h:** 3 functions renamed (apply_transform_cmd → repl_executor_apply_transform_cmd, etc.)
 - **repl_export.h:** 2 functions renamed (save_output → repl_export_save_output, load_from_file → repl_export_load_from_file)
-- **repl_audio.h:** Already compliant with repl_audio_* naming (no changes required)
+- **repl_audio.h:** Syntactically compliant with `repl_audio_*`, but
+  semantically a namespace-audit candidate because it is an app-level service,
+  not REPL language/editor state. See R11 / the namespace notes in
+  `feature/push-architecture-refinement.md`.
 
 **Total naming scope:** 59 functions renamed across 9 header modules, 25+ implementation files updated, all 2503 tests passing.
 
@@ -339,6 +352,29 @@ Remaining direct `g_cmds[]` writes are not command-array escape hatches:
 existing command, and declaration commit paths repair assignment variable-slot
 indices after predef declarations change. Those should only move if we add a
 future per-command semantic mutation API.
+
+### 10b. Namespace audit after `imrepl_ctrl` ✅ TODO
+
+`repl_` has become too broad as a historical prefix. With `imrepl_ctrl` now
+owning app-frame wiring, the naming pass in
+[`feature/repl-cleanup.md`](./repl-cleanup.md) §10 should distinguish module
+ownership before more renames land:
+
+- `repl_*` — REPL language, source/editor model, command pipeline, replay model,
+  workspace/user-scene state, and focused REPL actions.
+- `imrepl_*` — app shell, controller, app-level services, and lifecycle glue
+  after the deferred `sample.c` / `sample.h` rename.
+- `scene_*` — 3D stage/render helpers.
+- `ui_*` — 2D editor/view renderers and UI hit surfaces.
+- neutral names such as `prof`, `cmd_format`, and `gl_stub_counts` — generic
+  utilities that should not import REPL state.
+
+`repl_audio` is the concrete case to revisit. It is a playlist/persistence
+service used by the sample app and config layer, not the REPL command model.
+Do not rename it as drive-by churn in an unrelated cleanup; schedule it with
+the app-shell namespace work in
+[`feature/push-architecture-refinement.md`](./push-architecture-refinement.md)
+R8/R11 so file moves, public function prefixes, tests, and docs change together.
 
 ### 11. Segregate live GL calls to scene/UI modules plus `repl_executor.c`
 
@@ -1117,6 +1153,13 @@ green.
 - Grep patterns filter out string literals and comments to avoid false positives
 - All 2503 tests pass and both guard targets report OK
 
+**Follow-up.** R11 in
+[`feature/push-architecture-refinement.md`](./push-architecture-refinement.md)
+continues this work. It hardens the Makefile grep targets, adds
+state-boundary checks, and explicitly allows transitional leaks only while the
+dependent Phase 2 slices remain open. Do not treat those allowlists as
+completion criteria; shrink them in the same commits that finish R2/R4/R6.
+
 ---
 
 **Cumulative verification umbrella for item 11.** Each commit lands
@@ -1136,6 +1179,8 @@ re-checked at the end:
 - `bench_repl fade_batches` GL-call count: equal or lower than before.
 - `make check-gl-boundaries` — empty.
 - `make check-layer-coupling` — empty modulo grandfathered exceptions.
+- `make check-state-boundaries` — passes with only documented transitional
+  allowlists while Phase 2 is in progress.
 
 
 ---

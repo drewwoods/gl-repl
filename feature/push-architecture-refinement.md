@@ -28,8 +28,10 @@ mechanical cleanup. Replay fade simplification and broader input/UI coupling
 cleanup remain follow-ups; the 2D replay HUD relocation is complete.
 
 Implementation status: Phase 1 steps 1-8 are complete and merged. Post-Phase 1
-cleanup (app-shell shim removal) has also been completed. This document records
-the final Phase 1 state and documents remaining follow-ups.
+cleanup (app-shell shim removal) has also been completed. Phase 2 remains in
+progress. Some pieces have landed, but the strict end-state checks described
+below should not be assumed to pass until their prerequisite Phase 2 slices are
+complete.
 
 ## Review Corrections
 
@@ -727,12 +729,14 @@ the wrong call becomes hard to make accidentally.
 
 ### Recommendations, ordered by leverage
 
-#### R1. Finish the replay/HUD migration (largest single cleanup)
+#### R1. Replay/HUD migration
 
-Already listed under "Future Refactors" 1 and 2, but the impact is bigger than
-the current framing reads. After R1 is complete, `scene_render.c` has zero
-`repl_state_*` and `repl_replay_*` reads — which lets the boundary check flip
-from "no `_mut`" to a flat-out ban on those symbols in all `scene_*.c` files.
+Already listed under "Future Refactors" 1 and 2, but the impact was bigger than
+the original framing reads. When R1 is complete, `scene_*.c` files have zero
+`repl_state_*` and `repl_replay_*` calls, replay fade policy is snapped by the
+controller, and HUD rendering lives in `ui_replay_hud.c`. Some of this may
+already be true in the current tree; keep the sub-step notes below as rationale
+and as a useful audit trail until the whole Phase 2 checklist is closed.
 
 The work is three self-contained steps; do them in order since each removes
 one class of REPL read from scene code.
@@ -1678,6 +1682,46 @@ R10 is independent of R1–R7 and can be done in parallel with them. Phase 1 of
 R10 (deleting dead declarations) should be the very first commit in any session
 touching `repl_core.c`, since it eliminates noise that misleads readers.
 
+#### R11. Harden file-level boundary checks
+
+The first-generation Makefile guards caught several broad layer violations, but
+their file-level greps were too dependent on shell globs and too weak around
+comment filtering. R11 keeps the checks cheap and grep-based, but makes them
+more explicit about ownership and known transitional exceptions.
+
+Current guard direction:
+
+- Use `$(SRCS)` / `$(HDRS)`-derived file groups (`REPL_SRCS`, `SCENE_SRCS`,
+  `UI_SRCS`) instead of raw `repl_*.c` / `scene_*.c` / `ui_*.c` shell globs.
+  This prevents untracked scratch files from changing check behavior.
+- Tighten GL/GLU/GLUT grep filters so comments and strings are ignored without
+  dropping real code lines that contain `*` or `/`.
+- Add `check-state-boundaries` to keep state-neutral modules
+  (`cmd_format.c`, `prof.c`, `gl_stub_counts.c`) free of `repl_state.h` and
+  `_internal` headers.
+- Make scene state isolation enforceable now: `scene_*.c` must contain no
+  `repl_state_*` or `repl_replay_*` calls.
+- Keep a shrinking UI transition allowlist for known R2/R4 holes:
+  `ui_color_picker.c`, `ui_help_overlay.c`, and `ui_panels.c` may still contain
+  direct `_mut()` calls until R2 lands; `ui_color_picker.c` and `ui_panels.c`
+  may still include `repl_core_internal.h` until R4/R2 remove those needs.
+
+R11 is not a substitute for R2/R4/R6/R7, and it does not mean Phase 2 is
+complete. It is the guardrail that prevents new leaks while those steps shrink
+the allowlists. The current Makefile may carry transitional allowlists; strict
+no-exception variants should only be wired into `make test` once the relevant
+Phase 2 prerequisite has landed. Each time a cleanup removes a known exception,
+update `check-state-boundaries` in the same commit so the exception cannot come
+back silently.
+
+Exit criterion for the transitional R11 slice: `make check-gl-boundaries`,
+`make check-layer-coupling`, `make check-controller-boundaries`,
+`make check-scene-no-repl-state-mut`, and `make check-state-boundaries` all pass
+with only explicitly documented allowlists, and the `test` target runs the
+transitional checks. Exit criterion for the final Phase 2 guard state: the
+allowlists are empty or reduced to permanent, documented architectural
+exceptions.
+
 #### R8. Defer `sample → imrepl` rename until after R1, R2, R5
 
 The rename is mechanical but touches `sample.h`, which is broadly included.
@@ -1702,6 +1746,7 @@ R3          (extract layout from ui_panels)
 R5          (slim SceneRenderConfig — requires R1)
 R6          (split typed-state facade — requires R1 + R2)
 R7          (add view-side grep guards — requires R6)
+R11         (harden file-level guards; start now, shrink allowlists after R2/R4/R6)
 R4          (controller off repl_core_internal.h)
 R10-phase2  (parse+normalize → repl_parser, collect_visible_vars → repl_source_scope)
 R10-phase3  (extract repl_reformat.c)
@@ -1735,6 +1780,7 @@ Run after each step and again at the end:
    - `make check-layer-coupling`
    - `make check-controller-boundaries`
    - `make check-scene-no-repl-state-mut`
+   - `make check-state-boundaries`
 4. Manual smoke test of `./sample`:
    - startup with no args
    - load built-in examples via F12
