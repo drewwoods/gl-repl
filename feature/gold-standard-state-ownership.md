@@ -12,17 +12,19 @@ This document keeps the fix aligned with the architecture we actually want:
 - `repl_state` remains the canonical home of runtime state.
 - `ReplRuntimeState` becomes the real aggregate that owns the mutable bytes.
 - Public state structs hold values, not writable aliases into globals.
-- State getters return pure values or by-value snapshots trivially.
+- Read paths return pure values (or read-only view structs). Pointer-returning *read* getters are gone.
+- Write paths go through one slice-level `_mut()` accessor, not a fan of per-field named setters. Named setters are kept only where a non-trivial invariant must be enforced (clamping, ttl, cache invalidation).
 - Renderers consume frozen per-frame views.
 - Full runtime capture becomes straightforward for continuation, undo assembly, and tutorial-style replay.
 
-The goal is not to explode storage across dozens of owner modules. The goal is to make `repl_state` a real state container rather than a typed bag of pointers.
+The goal is not to explode storage across dozens of owner modules, and not to explode the API surface with a named setter per leaf field. The goal is to make `repl_state` a real state container with a small, predictable read/write surface.
 
 The intended outcome:
 
-- Writing through a view fails to compile because views no longer expose writable scalar pointers.
+- Writing through a *read* result fails to compile because reads return values or `const`-fielded view structs, not writable aliases.
 - `ReplRuntimeState` is the single source of truth for live runtime state.
 - Small state slices such as `selected`, `visible`, `scroll`, `tab_idx`, and similar leaf values live as ordinary fields inside nested state structs, not as re-exported pointer fields.
+- Each slice has one read entrypoint (by-value getter) and one write entrypoint (`_mut()` returning a pointer into `g_repl_state`). Domain helpers (`repl_state_status_set`, `repl_state_camera_reset_default`, ...) survive when they encapsulate non-trivial behavior, but trivial leaf setters do not get added.
 - UI renderers are pure functions of snapshots plus optional output structs.
 - Runtime capture and restore are first-class operations instead of a future refactor.
 
@@ -81,12 +83,12 @@ These are the rules the end state must satisfy.
 
 1. **`repl_state` remains the owner.** The live runtime state stays centralized in `repl_state.c` as one `static ReplRuntimeState g_repl_state;`. We are not deleting `repl_state`; we are making it the actual owner.
 2. **Runtime fields are values, not aliases.** `ReplRuntimeState` and its nested public state structs store ints, floats, enums, arrays, and owned buffers directly. No `int *cursor_px`, no `float *panel_frac`, no `char *status`. Embedded arrays are fine; writable pointer fields are not.
-3. **Read APIs return values.** Getters return scalars by value or snapshot structs by value. If a snapshot needs to expose a large collection, it does so via read-only span-style fields such as `(const T *, int count)` or a by-value view struct containing those read-only fields. No getter returns a mutable pointer to state.
-4. **Writes go through named mutators.** Mutation happens through explicit functions such as `repl_state_help_set_visible`, `repl_state_code_panel_set_scroll`, `repl_state_search_set_query`, or higher-level `repl_action_*` helpers. `_mut()` accessors are transitional only and are removed by the end.
-5. **Renderers consume snapshots; render is pure.** `imrepl_ctrl.c` builds `Ui*View` and `Scene*View` inputs from `ReplRuntimeState` once per frame and passes them to renderers. Render functions do not read live runtime state directly and do not call mutators.
+3. **Read APIs return values.** Getters return scalars by value or snapshot structs by value. If a snapshot needs to expose a large collection, it does so via read-only span-style fields such as `(const T *, int count)` or a by-value view struct containing those read-only fields. **No `read` getter returns a pointer to state, mutable or otherwise.** That is the structural invariant — readers cannot incidentally write back.
+4. **Writes go through `_mut()` accessors.** Each slice exposes one writable accessor: `ReplHelpState *repl_state_help_mut(void)`. Callers mutate fields through that pointer. **Named per-field setters (`..._set_visible`, `..._set_scroll`) are not added.** They explode the API surface for no architectural benefit; the structural rule is enforced by the read/write split, not by counting setters. Domain helpers such as `repl_state_status_set`, `repl_state_camera_reset_default`, or `repl_state_camera_set_orbit` survive when they encode an invariant the caller should not have to know (ttl, scale clamping, derived-state invalidation), but routine leaf writes go through `_mut()`.
+5. **Renderers consume snapshots; render is pure.** `imrepl_ctrl.c` builds `Ui*View` and `Scene*View` inputs from `ReplRuntimeState` once per frame and passes them to renderers. Render functions do not read live runtime state directly and do not call `_mut()`.
 6. **Render-time discoveries flow through outputs.** If rendering computes state another consumer needs, it goes into a `Ui*Output` struct and is actualized by the controller back into `repl_state` after the render call. Renderers never write directly into runtime state.
 7. **Runtime capture is first-class.** `ReplRuntimeState` can be copied, restored, or serialized intentionally. That supports continuation, deterministic tutorial replay, undo assembly, and future tooling without re-deriving state from scattered globals.
-8. **Headers reflect the rule.** The public state API centers on `repl_state.h` with value-returning getters, snapshot structs, and named mutators. If `repl_state_views.h` / `repl_state_owners.h` survive during migration, they are temporary adapters, not the final design.
+8. **Headers reflect the rule.** The public state API centers on `repl_state.h` with by-value getters, by-value snapshot structs, and `_mut()` accessors. If `repl_state_views.h` / `repl_state_owners.h` survive during migration, they are temporary adapters, not the final design.
 9. **Lifecycle is explicit.** `repl_state_init()`, `repl_state_reset()`, `repl_state_capture()`, and `repl_state_restore()` are explicit entrypoints. No lazy first-read initialization.
 
 ## Target Shape
@@ -126,15 +128,40 @@ typedef struct ReplRuntimeState {
 Public access then looks like this:
 
 ```c
-ReplHelpState repl_state_help(void);
+/* read paths: by-value */
+ReplHelpState      repl_state_help(void);
 ReplCodePanelState repl_state_code_panel(void);
-int repl_state_help_visible(void);
-void repl_state_help_set_visible(int visible);
-void repl_state_code_panel_set_cursor_pixel(int x, int y);
 
-ReplRuntimeState repl_state_capture(void);
+/* write paths: one _mut() per slice */
+ReplHelpState      *repl_state_help_mut(void);
+ReplCodePanelState *repl_state_code_panel_mut(void);
+
+/* invariant-bearing helpers stay; trivial leaf setters do not exist */
+void repl_state_status_set(const char *message);
+void repl_state_camera_reset_default(void);
+
+/* full-state lifecycle */
+void repl_state_capture(ReplRuntimeState *snapshot);
 void repl_state_restore(const ReplRuntimeState *snapshot);
 ```
+
+A leaf write looks like:
+
+```c
+repl_state_help_mut()->visible = 0;
+repl_state_help_mut()->scroll  = 0;
+```
+
+Not:
+
+```c
+repl_state_help_set_visible(0);
+repl_state_help_set_scroll(0);
+```
+
+Both keep state inside `g_repl_state`, but the second form multiplies the
+public API surface by the number of leaf fields, for no extra architectural
+guarantee.
 
 For large collections, the runtime still owns the storage inline, but readers consume a read-only view:
 
@@ -209,11 +236,15 @@ UiPanelsOutput panels_out = {0};
 imrepl_ctrl_build_panels_view(&panels_view);
 ui_panels_render(&panels_view, &panels_out);
 
-if (panels_out.cursor_pixel_valid)
-    repl_state_code_panel_set_cursor_pixel(
-        panels_out.cursor_px,
-        panels_out.cursor_py);
+if (panels_out.cursor_pixel_valid) {
+    ReplCodePanelState *cp = repl_state_code_panel_mut();
+    cp->cursor_px = panels_out.cursor_px;
+    cp->cursor_py = panels_out.cursor_py;
+}
 ```
+
+The controller is the only place that calls `_mut()` to actualize render
+output back into runtime state. Renderers never call `_mut()` directly.
 
 `ui_autocomplete_panel.c` then reads cursor position from its own view, built from the now-actualized state snapshot.
 
@@ -296,27 +327,34 @@ Forbidden:
 
 This replaces the old assumption that state safety only comes from scattering ownership across modules.
 
-### check-state-getters-return-values (NEW)
+### check-state-read-getters-return-values (NEW)
 
-State getters should return scalars or snapshot structs by value. Mutable-pointer returns are forbidden.
+The base `repl_state_<slice>(void)` *read* getter must return by value (or a
+by-value view struct), not a pointer. Pointer-returning *read* getters are the
+structural bug we are removing — they let any caller incidentally write back.
 
-Examples of good signatures:
+Examples of good read signatures:
 
 ```c
-int repl_state_help_visible(void);
-ReplHelpState repl_state_help(void);
-ReplDocumentView repl_state_document(void);
+ReplHelpState     repl_state_help(void);
+ReplDocumentView  repl_state_document(void);
 ```
 
-Bad signatures:
+Bad read signatures (the check fails on these):
 
 ```c
-ReplHelpState *repl_state_help_mut(void);
+const ReplHelpState *repl_state_help(void);
 const ReplHelpState *repl_state_help_ptr(void);
-int *repl_state_help_visible_ptr(void);
+int                 *repl_state_help_visible_ptr(void);
 ```
 
-The check starts as a ratchet against `_mut()` and pointer-returning accessors and goes to zero by the end.
+`repl_state_<slice>_mut(void)` is **not** a read getter and is **not**
+flagged. The naming convention is the contract: anything ending in `_mut`
+returns a pointer-into-runtime-state and is the legitimate write path.
+
+This check is a ratchet: count the surviving pointer-returning read getters
+in `repl_state.h` / `repl_state_views.h` / `repl_state_owners.h` and fail if
+the count goes up. The ratchet retires once the count hits zero.
 
 ### check-ui-renderer-takes-view (NEW)
 
@@ -333,21 +371,28 @@ Anything else means the renderer is still reaching around the snapshot boundary.
 
 Migrated renderers may not call:
 
-- `repl_state_*_set_*`
-- `repl_action_*`
-- legacy `repl_state_*_mut()` accessors
+- `repl_state_*_mut()` (writes back into runtime state)
+- `repl_action_*` (input-side action helpers)
+- per-domain mutating helpers such as `repl_state_status_set` /
+  `repl_state_camera_set_*` / `repl_state_workspace_set_dir`
 
-They may only read `in` and write to their `out` parameter.
+They may only read `in` and write to their `out` parameter. `_mut()` is
+fine in the controller and in input-handling modules; it is not fine in
+`ui_*` renderer code paths.
 
 ### check-output-actualization (NEW)
 
 If a renderer fills a `Ui*Output` field, `imrepl_ctrl.c` must actualize it back into runtime state or consume it immediately. This prevents render-discovered state from being silently dropped.
 
-### check-mut-accessor-count (NEW, ratchet)
+### check-mut-accessor-count — REMOVED
 
-Count legacy `_mut()` accessor usage and fail if the count increases. Ratchet it down to zero.
+Earlier drafts of this plan ratcheted `_mut()` usage to zero on the
+assumption that named per-field setters would replace it. That assumption
+is gone. `_mut()` is the canonical write path; there is nothing to ratchet.
 
-This keeps migration pressure on the real problem without requiring a large-bang rewrite.
+What is still ratcheted is **pointer-returning *read* getters** (see
+`check-state-read-getters-return-values`). That is the actual structural
+defect: a writable result that pretends to be a read.
 
 ### check-runtime-capture-roundtrip (NEW)
 
@@ -383,11 +428,10 @@ The umbrella target becomes:
 check-state-ownership: check-no-write-through-view \
 	check-runtime-state-value-fields \
 	check-public-state-no-writable-pointers \
-	check-state-getters-return-values \
+	check-state-read-getters-return-values \
 	check-ui-renderer-takes-view \
 	check-renderer-no-direct-mutators \
 	check-output-actualization \
-	check-mut-accessor-count \
 	check-runtime-capture-roundtrip
 
 test: ... check-state-ownership
@@ -523,25 +567,106 @@ Exit criteria:
 
 ### Stage 2 — Pilot value getters on small slices
 
-Convert a few low-risk slices end to end:
+Convert one low-risk slice end to end as the load-bearing pattern. Follow-up
+slices (viewport, status, selection, profile_panel, variable_panel) replicate
+that pattern with no new design work.
 
-- help
-- viewport
-- status
-- selection
+The shape after this stage:
 
-For each slice:
+- the slice's runtime storage stays inside `g_repl_state` (Stage-1 invariant)
+- `repl_state_<slice>(void)` returns the slice **by value**
+- `repl_state_<slice>_mut(void)` keeps returning `Repl<Slice>State *` for writes
+- **no per-field setters are added** — leaf writes go through `_mut()->field`
+- existing domain helpers that encode invariants (e.g. `repl_state_status_set`)
+  stay; they are not what this stage is removing
+- the public `Repl<Slice>State` struct contains only value fields (no `int *`,
+  `char *`, etc.), so a by-value getter is meaningful
 
-- add a nested value struct to `ReplRuntimeState`
-- add by-value getters such as `repl_state_help()`
-- add named setters
-- stop exposing pointer fields for that slice
+#### Pilot procedure
 
-Exit criteria:
+1. Pick a slice whose `Repl<Slice>State` is already a pure value struct in
+   `repl_state_views.h` (no pointer fields). Stage 1 has already done that
+   work for `help`, `viewport`, `status`, `selection`, `variable_panel`,
+   `variable_drag`, `profile_panel`, `pointer`, `camera`, `search`,
+   `autocomplete`, `clipboard`, `scenes`. These are the candidate set.
+2. In all three of `repl_state.h`, `repl_state_views.h`, and
+   `repl_state_owners.h`, change the read getter declaration:
 
-- no `_mut()` or pointer-returning read path for the pilot slices
-- tests for those slices stop poking global state
-- commits are labeled as Stage 2 work rather than generic Stage-1 follow-ups
+   ```c
+   /* before */
+   const Repl<Slice>State *repl_state_<slice>(void);
+   /* after */
+   Repl<Slice>State        repl_state_<slice>(void);
+   ```
+
+   `repl_state_<slice>_mut(void)` stays exactly as it is.
+3. In `repl_state.c`, change the implementation to return the value:
+
+   ```c
+   Repl<Slice>State repl_state_<slice>(void) {
+       return g_repl_state.<slice>;
+   }
+   ```
+4. Sweep call sites. Two mechanical edits cover everything:
+   - `const Repl<Slice>State *foo = repl_state_<slice>();` and uses of
+     `foo->field` become `Repl<Slice>State foo = repl_state_<slice>();`
+     and `foo.field`.
+   - `repl_state_<slice>()->field` becomes `repl_state_<slice>().field`.
+   `_mut()` callers do not change.
+5. Build (`make sample`, `make sample USE_GL_STUBS=1`).
+6. Run the focused tests for the slice plus `make test`.
+7. Commit with a `state:` or `feat:` prefix and a Stage-2 label in the
+   message body so future agents can find this commit by `git log
+   --grep="Stage 2"` and reuse it as a template.
+
+#### Stage 2 reference commit
+
+The first slice converted under this procedure is the **help** slice.
+
+- Commit: `1ea317e7bf36b7b747621b36b7803fc2e9d27845`
+- Title: `gold-standard: stage 2 pilot — help slice by-value getter`
+- Slice: `help` (`ReplHelpState { int visible; int tab_idx; int scroll; }`)
+- Files touched (eight): `repl_state.h`, `repl_state_views.h`,
+  `repl_state_owners.h`, `repl_state.c`, `repl_editor.c`,
+  `ui_help_overlay.c`, `test_repl_state.c`, `test_repl_editor.c`
+- Call-site changes: 13 read-side rewrites (mostly `->` → `.`); zero
+  changes to `_mut()` callers; zero new named setters.
+
+Treat this commit as the canonical "what does Stage-2 work look like in
+this repo" example for every later slice. The slice was deliberately
+chosen as the smallest possible: pure-value struct, three int fields,
+twelve read sites, two write sites — small enough to sweep mechanically,
+big enough to exercise `repl_state.h` / `repl_state_views.h` /
+`repl_state_owners.h` together with both production and test code.
+
+Notes for next slice converters:
+
+- `repl_state_views.h` and `repl_state_owners.h` both declare the
+  read getter (the legacy facade + owners split is still in place).
+  Change *both* declarations and the one in `repl_state.h`. Forgetting
+  one produces a redeclaration conflict the compiler catches loudly.
+- The `_mut()` impl in `repl_state.c` already returns
+  `&g_repl_state.<slice>`. The matching read getter just needs to drop
+  the `&`. No facade plumbing was needed for this slice; that may or
+  may not be true for slices whose public struct still has pointer
+  fields (those are not yet Stage-2-eligible — they belong to Stage 3
+  or later).
+- The Stage-1 capture/restore round-trip in `test_repl_state.c` already
+  covered the slice; the read-style change required only swapping `->`
+  for `.` on the assertions. No new test was needed.
+- `test_ui` has a pre-existing Makefile-include bug and was not run as
+  part of this pilot. Don't get distracted by it; it is unrelated to
+  this work.
+
+Exit criteria for the pilot (all met by `1ea317e`):
+
+- the pilot slice's `repl_state_<slice>(void)` returns by value ✓
+- `_mut()` survives unchanged ✓
+- no new named per-field setters were added ✓
+- `repl_state_capture()` / `repl_state_restore()` round-trip still passes ✓
+- both `make sample` and `make sample USE_GL_STUBS=1` are green ✓
+- `test_repl_state` (101/101) and `test_repl_editor` (708/708) pass ✓
+- the commit message is explicitly Stage-2-labelled ✓
 
 ### Stage 3 — Convert UI-facing leaf state
 
@@ -566,7 +691,7 @@ Changes:
 
 - `ui_panels_render` becomes `void ui_panels_render(const UiPanelsView *in, UiPanelsOutput *out)`
 - the renderer fills `out->cursor_px`, `out->cursor_py`, and `out->cursor_pixel_valid`
-- `imrepl_ctrl.c` actualizes the result via `repl_state_code_panel_set_cursor_pixel(...)`
+- `imrepl_ctrl.c` actualizes the result by writing through `repl_state_code_panel_mut()` once per frame
 - `ui_autocomplete_panel` consumes cursor position from its own input view instead of live writable state
 
 Exit criteria:
@@ -624,10 +749,14 @@ Target shape:
 
 ### Stage 9 — Final cleanup and documentation
 
-- remove remaining `_mut()` accessors
+- ensure every slice's read path is by-value and every write path goes
+  through `_mut()` (or an invariant-bearing domain helper)
+- audit the surviving domain helpers and remove any that were leaf-setter
+  duplicates of `_mut()->field` writes
 - update `ARCHITECTURE.md`, `MODULES.md`, and `CLAUDE.md`
 - document snapshot/capture semantics explicitly
-- keep any future refactor that moves behavior into new modules separate from this state-shape work
+- keep any future refactor that moves behavior into new modules separate
+  from this state-shape work
 
 ## Critical Files
 
@@ -681,11 +810,14 @@ Final verification:
 
 - `repl_state.c` still exists and owns a single `ReplRuntimeState`
 - `ReplRuntimeState` contains no writable pointer fields
-- public state getters return values or read-only views, not mutable pointers
-- `grep -r 'repl_state_.*_mut' .` returns no production matches
+- every public `repl_state_<slice>(void)` *read* getter returns by value
+  (or a read-only view struct); none returns a pointer
+- `_mut()` accessors are the canonical write path and are NOT being
+  ratcheted to zero
 - `make check-state-ownership` is green
 - the cursor-pixel case is routed through `UiPanelsOutput` and controller actualization
 - every UI renderer matches one of the two canonical signatures
+- `ui_*` files contain no `repl_state_*_mut()` or `repl_state_*_set_*` calls
 - `repl_state_capture()` / `repl_state_restore()` round-trip is covered by tests
 
 ## Risks and Notes
@@ -695,6 +827,6 @@ Final verification:
 - **Centralized ownership does not excuse render-time writes.** Keeping state in `repl_state` is compatible with pure rendering only if outputs remain the sole render-to-state path.
 - **Capture semantics must be explicit.** Some state is durable and belongs in a snapshot. Some state may be frame-local or derived. The design is better precisely because this boundary becomes visible and testable.
 - **Do not let stage labels drift.** If a commit converts public slice APIs or bypasses the facade for a slice, say which later stage that spends. "Stage 1" should not become a bucket for every incremental state cleanup.
-- **Avoid API explosion.** Not every leaf value needs its own getter if a slice getter is clearer. Prefer `ReplHelpState repl_state_help(void)` over five tiny getters when that keeps call sites simpler.
+- **Avoid API explosion.** Not every leaf value needs its own getter or setter. Prefer one slice-level by-value getter and one slice-level `_mut()` over five tiny getters and five tiny setters. Named setters survive only when they encode an invariant (clamping, ttl, dependent-state invalidation), not when they exist just to wrap `_mut()->field = value`.
 - **Do not bundle unrelated behavior refactors into this work.** This plan is about making state ownership and state reads defensible, not about moving every helper to a new file.
 - **Tutorial replay and continuation are real design constraints.** The document should keep calling this out so the end state does not optimize only for immediate compile-time cleanup while making future state capture harder.
