@@ -368,6 +368,7 @@ int main() {
         ASSERT_TRUE("state camera distance", repl_state_camera()->dist == 9.0f);
         repl_state_camera_set_motion_glow(0.5f);
         ASSERT_TRUE("state camera motion glow", repl_state_camera()->motion_glow == 0.5f);
+        repl_state_camera_mut()->auto_rotate = 1;
 
         camera = repl_state_camera_mut();
         ASSERT_TRUE("state camera facade rx", camera->rx == 33.0f);
@@ -399,7 +400,12 @@ int main() {
         ASSERT_TRUE("state camera reset rx", repl_state_camera()->rx == 20.0f);
         ASSERT_TRUE("state camera reset ry", repl_state_camera()->ry == 30.0f);
         ASSERT_TRUE("state camera reset dist", repl_state_camera()->dist == 5.0f);
+        ASSERT_TRUE("state camera reset tx", repl_state_camera()->tx == 0.0f);
+        ASSERT_TRUE("state camera reset ty", repl_state_camera()->ty == 0.0f);
+        ASSERT_TRUE("state camera reset tz", repl_state_camera()->tz == 0.0f);
         ASSERT_TRUE("state camera reset glow", repl_state_camera()->motion_glow == 0.0f);
+        ASSERT_INT("state camera reset auto rotate",
+                   repl_state_camera()->auto_rotate, CFG_DEFAULT_CAMERA_ROTATE);
     }
 
     /* 13. presentation state facade */
@@ -436,6 +442,10 @@ int main() {
         *repl_state_presentation_mut()->ortho_mode = 1;
         *repl_state_presentation_mut()->wrap_at_comma = 0;
         *repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_BOTTOM;
+        presentation->focus_vertex[0] = 2.0f;
+        presentation->focus_vertex[1] = -1.0f;
+        presentation->focus_vertex[2] = 0.5f;
+        *presentation->focus_vertex_valid = 1;
 
         repl_state_presentation_reset_defaults();
         ASSERT_INT("presentation reset wireframe",
@@ -474,6 +484,14 @@ int main() {
                    *repl_state_presentation()->wrap_at_comma, CFG_DEFAULT_WRAP_AT_COMMA);
         ASSERT_INT("presentation reset layout",
                    *repl_state_presentation()->code_panel_layout, CFG_DEFAULT_CODE_PANEL_LAYOUT);
+        ASSERT_TRUE("presentation reset focus x",
+                    repl_state_presentation()->focus_vertex[0] == 0.0f);
+        ASSERT_TRUE("presentation reset focus y",
+                    repl_state_presentation()->focus_vertex[1] == 0.0f);
+        ASSERT_TRUE("presentation reset focus z",
+                    repl_state_presentation()->focus_vertex[2] == 0.0f);
+        ASSERT_INT("presentation reset focus valid",
+                   *repl_state_presentation()->focus_vertex_valid, 0);
     }
 
     /* 14. render state facade */
@@ -508,21 +526,33 @@ int main() {
         ASSERT_TRUE("render derived facade valid ptr",
                     derived->focus_vertex_valid != NULL);
 
+        g_use_accum = 0;
+        g_accum_aa_enabled = 0;
+        g_accum_samples = 8;
+        g_accum_jitter_x = 0.5f;
+        g_accum_jitter_y = -0.25f;
         g_multisample_enabled = 0;
         g_line_smooth_enabled = 0;
         g_init_attenuate_points = 0;
+        g_lights[0].enabled = 0;
         g_clear_color[0] = 0.0f;
         g_clear_color[1] = 0.0f;
         g_clear_color[2] = 0.0f;
         g_clear_color[3] = 0.0f;
 
         repl_state_render_reset_defaults();
+        ASSERT_INT("render reset use accum", g_use_accum, 1);
+        ASSERT_INT("render reset accum aa", g_accum_aa_enabled, 1);
+        ASSERT_INT("render reset accum samples", g_accum_samples, 2);
+        ASSERT_TRUE("render reset jitter x", g_accum_jitter_x == 0.0f);
+        ASSERT_TRUE("render reset jitter y", g_accum_jitter_y == 0.0f);
         ASSERT_INT("render reset multisample",
                    g_multisample_enabled, CFG_DEFAULT_MULTISAMPLE);
         ASSERT_INT("render reset line smooth",
                    g_line_smooth_enabled, CFG_DEFAULT_LINE_SMOOTH);
         ASSERT_INT("render reset point attenuation",
                    g_init_attenuate_points, CFG_DEFAULT_ATTENUATE_POINTS);
+        ASSERT_INT("render reset light enabled", g_lights[0].enabled, 1);
         ASSERT_TRUE("render reset clear color r", g_clear_color[0] == 0.10f);
         ASSERT_TRUE("render reset clear color g", g_clear_color[1] == 0.10f);
         ASSERT_TRUE("render reset clear color b", g_clear_color[2] == 0.13f);
