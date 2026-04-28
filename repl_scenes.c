@@ -265,7 +265,12 @@ int repl_save_workspace(const char *dir) {
 
 static int load_scene_file_into_slot(const char *path) {
     load_commands_into_live(NULL, 0, 0);
-    g_num_predef_vars = 0;
+    /* Start each imported scene from the built-in predef baseline (`t`).
+     * Workspace headers then re-declare any user vars on top. Clearing the
+     * table entirely breaks round-tripping for scenes whose expressions
+     * reference `t`, because `@var t = ...` cannot re-declare a reserved
+     * built-in name. */
+    repl_eval_init_predef_vars();
 
     if (!repl_export_load_from_file(path)) return -1;
 
