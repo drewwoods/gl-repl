@@ -19,7 +19,7 @@ The intended outcome:
 
 ## Tenets
 
-These are the eight rules the end state must satisfy. Every step in the plan below moves at least one of them from "documented" to "compiler-enforced."
+These are the nine rules the end state must satisfy. Every step in the plan below moves at least one of them from "documented" to "compiler-enforced."
 
 1. **Domains own their data; there is no facade.** Each domain's state lives `static` inside its owning `.c` file. No `ReplRuntimeState` aggregate. No struct-of-pointers re-export. The facade headers (`repl_state.h`, `repl_state_views.h`, `repl_state_owners.h`) and `repl_state.c` are deleted at the end.
 2. **Two kinds of public function, period.** Each owner header exposes only (a) read accessors that return scalars by value, arrays as `(const T *, int n)` pairs, or aggregates as by-value snapshot structs whose fields are values; and (b) named mutator functions. No `_mut()` accessors. No exposed struct-of-pointers. No field assignment from outside the owner.
@@ -210,7 +210,7 @@ void ui_<panel>_render(const Ui<Panel>View *in);
 void ui_<panel>_render(const Ui<Panel>View *in, Ui<Panel>Output *out);
 ```
 
-The allowlist starts as `{ ui_replay_hud_render }` and grows as panels migrate (stage 8). Renderers may not take additional positional arguments — anything else is upgraded to a field on the view.
+The allowlist starts as `{ ui_replay_hud_render }` and grows as panels migrate (stage 9). Renderers may not take additional positional arguments — anything else is upgraded to a field on the view.
 
 ### check-renderer-no-direct-mutators (NEW)
 
@@ -221,11 +221,11 @@ check-renderer-no-direct-mutators:
 	@bash scripts/check-renderer-purity.sh
 ```
 
-`scripts/check-renderer-purity.sh` — for each function in the migrated-renderers allowlist (starts with `ui_replay_hud_render`, grows per stage 8), greps inside the function body for forbidden patterns:
+`scripts/check-renderer-purity.sh` — for each function in the migrated-renderers allowlist (starts with `ui_replay_hud_render`, grows per stage 9), greps inside the function body for forbidden patterns:
 
 - Calls to any `repl_*_set_*` function.
 - Calls to any `repl_action_*` function.
-- Calls to `repl_state_*_mut()` (which by stage 7 doesn't exist anyway).
+- Calls to `repl_state_*_mut()` (which by stage 8 doesn't exist anyway).
 - Direct assignment through a non-output pointer (`*foo->bar = ...` where `foo` isn't the output param).
 
 Permitted inside renderers: GL/GLU calls, calls to other `ui_*` helpers that themselves take `(in, out)`, calls to `gl2d_*` helpers, calls to formatting/layout helpers in `repl_code_panel_layout.c` and `cmd_format.c` that are pure.
@@ -274,7 +274,7 @@ check-state-c-shrinking:
 	fi
 ```
 
-Initial baseline: current `repl_state.c` line count. Goes to 0 by end of stage 7.
+Initial baseline: current `repl_state.c` line count. Goes to 0 by end of stage 8.
 
 ### check-no-facade-include-in-views (TIGHTENED)
 
@@ -373,7 +373,7 @@ This is the contract before any migration. After this commit, every subsequent c
 
 ### Stage 1 — Pilot the pattern on `repl_help`
 
-`ui_help_overlay` is the smallest end-to-end domain (3 fields: `visible`, `tab_idx`, `scroll`). Use it to lock in the migration template that stages 2-7 follow. Help has no render-side-effect state, so this stage demonstrates the **single-arg** renderer signature; stage 4 adds the `out` arg for the cursor case.
+`ui_help_overlay` is the smallest end-to-end domain (3 fields: `visible`, `tab_idx`, `scroll`). Use it to lock in the migration template that stages 2-5 and 7-9 follow. Help has no render-side-effect state, so this stage demonstrates the **single-arg** renderer signature; stage 4 adds the `out` arg for the cursor case.
 
 Files added:
 - `repl_help.h` — public header with by-value `ReplHelpView` (fields by value), `repl_help_view()` accessor, `repl_help_set_visible(int)`, `repl_help_set_tab(int)`, `repl_help_set_scroll(int)`, `repl_help_init()`, `repl_help_reset()`. **No struct-of-pointers, no `_mut()`.**
@@ -400,9 +400,9 @@ Stage 1 exit criteria:
 
 ### Stage 2 — Document the pilot pattern
 
-Update `MODULES.md` and `ARCHITECTURE.md` with the migration template extracted from stage 1. One short section: "Adding or migrating an owner module."
+Update `MODULES.md`, `ARCHITECTURE.md`, and `CLAUDE.md` with the migration template extracted from stage 1. One short section: "Adding or migrating an owner module."
 
-This is documentation only, but it's load-bearing for stages 3-5 because they apply the template repeatedly.
+This is documentation only, but it's load-bearing for stages 3-5, 7, and 9 because they apply the template repeatedly.
 
 ### Stage 3 — Migrate small single-field/few-field domains
 
@@ -491,7 +491,7 @@ Files:
 - `ui_panels.c` — render function takes `(const UiPanelsView *in, UiPanelsOutput *out)`. Lines 250-251 fill `out->cursor_px`, `out->cursor_py`, `out->cursor_pixel_valid`. All `repl_state_*` reads become `in->...` reads. No mutator calls inside the render path.
 - `ui_autocomplete_panel.h` — adds `UiAutocompletePanelView` containing `cursor_px`, `cursor_py`, `cursor_visible`, plus its existing autocomplete fields.
 - `ui_autocomplete_panel.c` — render takes `const UiAutocompletePanelView *in`; reads `in->cursor_px` instead of `*cp->cursor_px`.
-- `imrepl_ctrl.c` — assembles `UiPanelsView` and `UiPanelsOutput`, calls `ui_panels_render`, actualizes the output by calling `repl_code_panel_set_cursor_pixel`, *then* assembles `UiAutocompletePanelView` from the now-updated `repl_code_panel_view()` and calls `ui_autocomplete_panel_render`. Frame ordering documented in the controller.
+- `imrepl_ctrl.c` — assembles `UiPanelsView` and `UiPanelsOutput`, calls `ui_panels_render`, actualizes the output by calling `repl_code_panel_set_cursor_pixel`, *then* assembles `UiAutocompletePanelView` from the now-updated `repl_code_panel_view()` and calls `ui_autocomplete_panel_render`. Frame ordering documented in the controller. Any render-time lifecycle work discovered in this slice (for example workspace-header refresh style bookkeeping) moves to explicit controller pre-render setup, not renderer bodies.
 - `Makefile` — `check-cursor-px-encapsulated` allowlist goes empty. `check-no-write-through-view` allowlist goes empty. `check-renderer-no-direct-mutators` allowlist gains `ui_panels_render` and `ui_autocomplete_panel_render`.
 
 Stage 4 exit: the cursor_px through-write is a compile-time impossibility. The render-side-effect pathway is documented and runs through one canonical pattern — every subsequent panel that has a cursor_px-shaped problem follows the same template.
@@ -515,7 +515,25 @@ Stage 5 exit:
 - `repl_state.c` ~70% smaller.
 - `mut-count.txt` baseline near zero for non-large domains.
 
-### Stage 6 — Migrate large domains: replay, document, flat_program
+### Stage 6 — Move cross-layer input routing into the controller
+
+State ownership migration does not by itself guarantee that `imrepl_ctrl.c` is the only mixed-layer module. This stage moves the UI-aware input routing chain out of `repl_editor.c` and into the controller.
+
+Scope:
+
+- `imrepl_ctrl.c` owns key and mouse precedence across help, search, menu bar, color picker, variable panel, code panel, and camera controls.
+- `repl_editor.c` stays focused on REPL editing verbs and domain/store calls, with no `ui_*` include knowledge.
+- Routing dispatch calls focused action/store APIs and owner setters; no facade reach-through is introduced.
+
+Tests:
+
+- Add focused controller input-routing tests that assert precedence and dispatch outcomes for key and mouse events across the major overlays and interaction modes.
+
+Stage 6 exit:
+- `repl_editor.c` no longer composes across UI modules.
+- Controller boundary is explicit in both code and tests.
+
+### Stage 7 — Migrate large domains: replay, document, flat_program
 
 Three biggest, most cross-cutting domains.
 
@@ -525,26 +543,26 @@ Three biggest, most cross-cutting domains.
 
 The cursor block highlighting fields (`g_current_block_begin/end/line`) live in `repl_flat_program` but their *update* is driven from `repl_flatten`. Owner-internal seam, no cross-domain changes needed.
 
-Stage 6 exit:
+Stage 7 exit:
 - All globals migrated except `repl_export.c` strings.
 - `repl_state.c` only contains `repl_state_init_defaults()` and `repl_state_reset_all()` forwarders.
 
-### Stage 7 — Migrate `repl_export` strings; delete the facade
+### Stage 8 — Migrate `repl_export` strings; delete the facade
 
 - `repl_export.c` — already exists and now owns its render-state-strings, cam-lines, workspace-header-lines, scene-name-hint, and pending-* buffers (~7 fields).
 - `imrepl_ctrl.c` — calls each domain's `_init()` and `_reset()` in order; the old `repl_state_init_defaults` and `repl_state_reset_all` are dissolved into per-domain functions called from a small `imrepl_ctrl_state_init()`.
 - **Delete** `repl_state.c`, `repl_state.h`, `repl_state_views.h`, `repl_state_owners.h`. Replace with nothing — every consumer already includes per-domain headers.
 - `repl_undo.c` — captures snapshots by calling each domain's view/serialize accessor, not by reaching into globals.
 
-Stage 7 exit:
+Stage 8 exit:
 - `repl_state.c` line count is 0 (file deleted).
 - All allowlists in `check-state-ownership` empty.
 - `repl_state.h` no longer exists; any straggler include is a compile error.
-- All eight tenets above are compiler-enforced.
+- All tenets except full UI snapshot purity (completed in stage 9) are compiler-enforced.
 
-### Stage 8 — UI snapshot completion (intent/output pattern across the board)
+### Stage 9 — UI snapshot completion (intent/output pattern across the board)
 
-Stages 1-7 fix the *write* problem. Stage 8 fixes the *read liveness* problem: panels still read live state during render, just through new domain headers instead of the old facade. After this stage, every UI renderer is pure: `(const Ui*View *in)` or `(const Ui*View *in, Ui*Output *out)` is the only signature shape.
+Stages 1-8 fix the *write* problem. Stage 9 fixes the *read liveness* problem: panels still read live state during render, just through new domain headers instead of the old facade. After this stage, every UI renderer is pure: `(const Ui*View *in)` or `(const Ui*View *in, Ui*Output *out)` is the only signature shape.
 
 Migrate each `ui_*.c` renderer using `ui_replay_hud.c` (single-arg) and `ui_panels.c` (dual-arg, established in stage 4) as templates. For each panel, decide up front:
 
@@ -565,24 +583,25 @@ For each panel:
 - Add `Ui<Panel>View` (and `Ui<Panel>Output` if needed) to the panel's `.h`.
 - Convert the render function to the new signature.
 - Replace every `repl_state_*` or per-domain `repl_<domain>_view()` call inside the render body with `in->...`.
-- If the panel had a forbidden mutator call inside render (none should exist after stage 7, but verify), move it to an `out` field and actualize in the controller.
+- If the panel had a forbidden mutator call inside render (none should exist after stage 8, but verify), move it to an `out` field and actualize in the controller.
 - Add the controller-side assembly: `imrepl_ctrl_build_<panel>_view(&view)`; `Ui<Panel>Output out = {0};`; `ui_<panel>_render(&view, &out);` and the actualization block.
 - Add the panel to the `check-renderer-no-direct-mutators` allowlist.
 - Add a focused test that constructs a fixture view, runs the renderer, and asserts on `out` plus GL-stub state.
 - Tighten allowlists in `check-no-facade-include-in-views`, `check-ui-renderer-takes-view`, `check-output-actualization`.
 
-Stage 8 exit:
+Stage 9 exit:
 - Every UI renderer is a pure function of its inputs (modulo GL emission and the optional `out` parameter).
 - `check-renderer-no-direct-mutators` allowlist contains every UI render entry point — proof that the rule is enforced everywhere, not just on a sample.
 - No `ui_*.c` includes any per-domain `repl_*` state header for *reading* — only the controller does. Action headers (`repl_actions.h`, `repl_command_store.h`) are still included for input-handler dispatch; that's expected and outside the render path.
 - `check-output-actualization` is promoted from warning to error.
 
-### Stage 9 — Final cleanup and documentation
+### Stage 10 — Final cleanup and documentation
 
 - Remove the now-empty allowlists from every check.
-- Update `ARCHITECTURE.md` and `MODULES.md` to describe the gold standard, not the staged transition.
+- Update `ARCHITECTURE.md`, `MODULES.md`, and `CLAUDE.md` to describe the gold standard, not the staged transition.
 - Mark `feature/push-architecture-refinement.md` Phase 2 complete with reference to this plan as the structural follow-through.
 - Open a follow-up for cursor_px Option B (kill the cache, recompute in the autocomplete panel) if Option A was taken in stage 4.
+- Keep the `sample` to `imrepl` rename as a separate mechanical follow-up after ownership stabilization; do not bundle it into this migration.
 
 ---
 
@@ -593,13 +612,14 @@ Per-domain new files (stages 1, 3, 4, 5, 6):
 - (Existing files extended into full owners: `repl_camera_controls.{h,c}`, `repl_clipboard.{h,c}`, `repl_search.{h,c}`, `repl_autocomplete.{h,c}`, `repl_var_drag.{h,c}`, `repl_replay.{h,c}`, `repl_export.{h,c}`)
 
 Files heavily modified across stages:
-- `repl_state.{h,c}`, `repl_state_views.h`, `repl_state_owners.h` — shrink to nothing, deleted in stage 7
+- `repl_state.{h,c}`, `repl_state_views.h`, `repl_state_owners.h` — shrink to nothing, deleted in stage 8
 - `imrepl_ctrl.c` — config build expands to per-domain snapshot calls
+- `repl_editor.c` — input routing/composition surface shrinks in stage 6
 - `repl_undo.c` — capture switches to per-domain snapshots
 - `Makefile` — checks added in stage 0, allowlists shrink across stages
-- `MODULES.md`, `ARCHITECTURE.md` — updated stages 2 and 9
+- `MODULES.md`, `ARCHITECTURE.md`, `CLAUDE.md` — updated stages 2 and 10
 
-Files where `*.h` becomes a `Ui*View` consumer (stage 8):
+Files where `*.h` becomes a `Ui*View` consumer (stage 9):
 - `ui_panels.{c,h}`, `ui_menu_bar.{c,h}`, `ui_color_picker.{c,h}`, `ui_variable_panel.{c,h}`, `ui_autocomplete_panel.{c,h}`, `ui_profile_panel.{c,h}`, `ui_help_overlay.{c,h}` (stage 1)
 
 Existing utilities reused:
@@ -628,13 +648,14 @@ Per stage:
    - Replay start/pause via Ctrl+G.
    - Camera orbit/pan/zoom.
    - Help overlay (F1) — sanity check after stage 1.
-   - Color picker open/edit (after `repl_command_store_set_color` covers in stage 6).
+   - Color picker open/edit (after `repl_command_store_set_color` covers in stage 7).
    - Search (Ctrl+F) — sanity check after stage 3.
 6. Per-stage focused tests:
    - Stage 1: new `test_ui_help_overlay` runs with fixture, no globals.
-   - Stages 3-7: existing tests (`test_repl_core_*`, `test_repl_editor`, `test_scene_render`, etc.) pass without modification — if a test was poking globals, it migrates to fixture-based.
+   - Stage 6: add controller input-routing precedence tests for key and mouse dispatch across overlays.
+   - Stages 3-8: existing tests (`test_repl_core_*`, `test_repl_editor`, `test_scene_render`, etc.) pass without modification — if a test was poking globals, it migrates to fixture-based.
 
-Final verification (after stage 9):
+Final verification (after stage 10):
 
 - `repl_state.c` no longer exists (`ls repl_state.c` fails).
 - `grep -r 'repl_state_' .` returns matches only inside `scripts/`, `MODULES.md`, `ARCHITECTURE.md`, and historical commit messages.
@@ -643,14 +664,16 @@ Final verification (after stage 9):
 - No `*x->y = z` write-through-view pattern compiles anywhere in the tree.
 - Every UI render entry point matches one of the two canonical signatures: `(const Ui*View *in)` or `(const Ui*View *in, Ui*Output *out)`. No third shape exists.
 - Every `Ui*Output` field has at least one actualization site in `imrepl_ctrl.c`.
+- Controller input-routing tests prove key/mouse precedence across help/search/menu/color-picker/variable-panel/code-panel/camera paths.
 
 ---
 
 ## Risks and notes
 
-- **Stage 6 (replay/document/flat_program) is the largest commit.** Consider splitting the document migration into a separate sub-stage if review burden is high.
+- **Stage 7 (replay/document/flat_program) is the largest commit.** Consider splitting the document migration into a separate sub-stage if review burden is high.
 - **Tests that currently call `repl_state_*_mut()` directly** (e.g., `test_ui.c:167-168`) will break in their stage. They migrate to per-domain setters or owner-internal headers — *not* by exposing the mut accessor through a back door.
-- **The `ReplUndoSnapshot` struct** captures full editor state. After stage 7, it gathers per-domain snapshots instead of poking globals. The serialization format does not change; only the assembly pathway does.
+- **Stage 6 input routing is cross-cutting.** Keep it scoped to routing ownership and precedence tests; do not hide unrelated editor or UI behavior refactors in the same commits.
+- **The `ReplUndoSnapshot` struct** captures full editor state. After stage 8, it gathers per-domain snapshots instead of poking globals. The serialization format does not change; only the assembly pathway does.
 - **`repl_eval.c` predefined variables** (`g_predef_vars`, `g_num_predef_vars`) are already domain-encapsulated via `repl_eval_predef_view()` (R4b). No facade migration needed; just confirm `repl_animator` reads through that view, not via extern.
 - **R10 (dissolve `repl_core.c`)** runs in parallel with this plan but they don't conflict. R10 moves *behavior* (parse pipeline, reformat, scope queries) to natural owners; this plan moves *state* into per-domain owners.
 - **Cursor_px Option B** (kill the cache instead of routing it) is deferred to a follow-up after stage 4. With the intent/output pattern in place, the change is mechanical: drop the `cursor_px` fields from `UiPanelsOutput`, drop the controller's actualization, recompute in `ui_autocomplete_panel.c` from layout. Decided as a separate pass.
