@@ -27,6 +27,7 @@
 #include "repl_replay.h"
 #include "repl_keys.h"
 #include "ui_panels.h"
+#include "repl_layout.h"
 #include "ui_menu_bar.h"
 #include "ui_variable_panel.h"
 #include "repl_var_drag.h"
@@ -1408,7 +1409,7 @@ static int editor_point_in_code_panel(int x, int y) {
     int cp_x, cp_y, cp_w, cp_h;
     int gl_y = *repl_state_viewport()->window_h - y;
 
-    ui_panels_code_panel_rect(&cp_x, &cp_y, &cp_w, &cp_h);
+    repl_layout_code_panel_rect(&cp_x, &cp_y, &cp_w, &cp_h);
     return x >= cp_x && x < cp_x + cp_w &&
            gl_y >= cp_y && gl_y < cp_y + cp_h;
 }
@@ -1420,7 +1421,7 @@ static int editor_point_on_code_panel_divider(int x, int y) {
 
     if (layout == CODE_PANEL_LAYOUT_HIDDEN)
         return 0;
-    ui_panels_code_panel_rect(&cp_x, &cp_y, &cp_w, &cp_h);
+    repl_layout_code_panel_rect(&cp_x, &cp_y, &cp_w, &cp_h);
     if (layout == CODE_PANEL_LAYOUT_TOP)
         return abs(gl_y - cp_y) < 10;
     if (layout == CODE_PANEL_LAYOUT_BOTTOM)

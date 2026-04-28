@@ -14,7 +14,7 @@
 #include "ui_variable_panel.h"
 #include "repl_state.h"
 #include "repl_var_drag.h"
-#include "ui_panels.h"
+#include "repl_layout.h"
 #include "./include/gl_2d.h"
 
 /* Local copy of the layout-mode clamp.  Duplicated by repl_editor.c and
@@ -95,7 +95,7 @@ void ui_variable_panel_rect(int *px, int *py, int *pw, int *ph) {
     int panel_w, panel_h, panel_x, panel_y;
     int min_y, max_y;
 
-    ui_panels_scene_rect(&sc_x, &sc_y, &sc_w, &sc_h);
+    repl_layout_scene_rect(&sc_x, &sc_y, &sc_w, &sc_h);
     panel_w = VAR_PANEL_W;
     panel_h = VAR_TITLE_H + g_num_predef_vars * VAR_ROW_H + 2 * VAR_PANEL_PAD;
     panel_x = sc_x + sc_w - panel_w - 8;

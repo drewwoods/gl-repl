@@ -362,8 +362,9 @@ Phase 2 follow-ups are detailed in `feature/push-architecture-refinement.md`
    eliminates all `repl_state_*` and `repl_replay_*` reads from `scene_*.c`.
 2. **R2** — UI → REPL mutation holes: `ui_color_picker`, `ui_panels`,
    `ui_help_overlay` route mutations through store/action APIs.
-3. **R3** — extract `ui_panels_scene_rect` / `ui_panels_code_panel_rect` into
-   `repl_layout.c`; removes UI header dependency from non-UI callers.
+3. **R3** — `repl_layout.c` / `repl_layout.h` now own
+  `repl_layout_scene_rect` / `repl_layout_code_panel_rect`; non-UI callers
+  include `repl_layout.h`.
 4. **R4** — stop `imrepl_ctrl.c` from including `repl_core_internal.h`; create
    `repl_pipeline.h`; add `repl_eval_predef_view()` to hide globals.
 5. **R5** — reorganize `SceneRenderConfig` after R1 removes HUD fields.

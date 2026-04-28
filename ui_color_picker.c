@@ -6,7 +6,7 @@
 #include "repl_state.h"
 #include "repl_undo.h"
 #include "ui_color_picker.h"
-#include "ui_panels.h"
+#include "repl_layout.h"
 
 /* ========================================================================= */
 /* Color picker                                                               */
@@ -91,7 +91,7 @@ void ui_color_picker_open(int cmd_idx, int my) {
     if (g_cp_line != cmd_idx)
         repl_undo_push_snapshot();
 
-    ui_panels_code_panel_rect(&cp_x, NULL, &cp_w, NULL);
+    repl_layout_code_panel_rect(&cp_x, NULL, &cp_w, NULL);
     g_cp_line = cmd_idx;
     cmd = cp_cmd_at(cmd_idx);
     if (!cmd)

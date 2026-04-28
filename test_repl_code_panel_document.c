@@ -5,7 +5,7 @@
 #include "repl_code_panel_document.h"
 #include "repl_core.h"
 #include "repl_state.h"
-#include "ui_panels.h"
+#include "repl_layout.h"
 
 static int g_tests = 0;
 static int g_failed = 0;
@@ -38,7 +38,7 @@ static void reset_doc_fixture(void) {
 
 static void build_doc(CodePanelDocumentLayout *layout) {
     int cp_w, cp_h;
-    ui_panels_code_panel_rect(NULL, NULL, &cp_w, &cp_h);
+    repl_layout_code_panel_rect(NULL, NULL, &cp_w, &cp_h);
     repl_code_panel_document_build(layout, cp_w, code_panel_text_x(), cp_h);
 }
 

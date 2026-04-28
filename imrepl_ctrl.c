@@ -11,6 +11,7 @@
 #include "ui_help_overlay.h"
 #include "ui_menu_bar.h"
 #include "ui_panels.h"
+#include "repl_layout.h"
 #include "ui_profile_panel.h"
 #include "ui_variable_panel.h"
 #include "prof.h"
@@ -139,8 +140,8 @@ static void imrepl_ctrl_build_scene_config(SceneRenderConfig *config) {
     repl_flatten_refresh_current_block_highlight();
 
     /* Existing fields (legacy, preserved) */
-    ui_panels_scene_rect(&config->scene_x, &config->scene_y,
-                         &config->scene_w, &config->scene_h);
+    repl_layout_scene_rect(&config->scene_x, &config->scene_y,
+                           &config->scene_w, &config->scene_h);
     if (config->scene_w < 1) config->scene_w = 1;
     if (config->scene_h < 1) config->scene_h = 1;
 

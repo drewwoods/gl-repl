@@ -1057,6 +1057,8 @@ direction: layout geometry belongs in a module that `scene_*`, `repl_*`, and
 
 There are three steps; do them in a single commit so the rename is atomic.
 
+Status: completed on the current branch; `repl_layout.c` / `repl_layout.h` now own the rectangle helpers and the caller list below reflects the migrated state.
+
 ---
 
 **R3a — Create `repl_layout.h` / `repl_layout.c`**

@@ -6,7 +6,7 @@
 #include "repl_parser.h"
 #include "repl_source_scope.h"
 #include "repl_state.h"
-#include "ui_panels.h"
+#include "repl_layout.h"
 
 #define IMPORT_EXPORT_STATE (repl_state_import_export_mut())
 #define g_workspace_header_lines (IMPORT_EXPORT_STATE->workspace_header_lines)
@@ -2792,7 +2792,7 @@ void repl_dump_code_panel_visual_text(FILE *out) {
     int idx_x = CODE_MARGIN_X + linenum_w + FONT_W;
     int text_x = idx_x + idx_col_w;
 
-    ui_panels_code_panel_rect(NULL, NULL, &panel_w, NULL);
+    repl_layout_code_panel_rect(NULL, NULL, &panel_w, NULL);
     update_render_state_strings();
     update_cam_lines();
 
