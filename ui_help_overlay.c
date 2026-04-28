@@ -16,7 +16,7 @@
 #define _HELP_STR(x)  _HELP_STR2(x)
 
 void ui_help_overlay_render(void) {
-    ReplHelpState *help = repl_state_help_mut();
+    const ReplHelpState *help = repl_state_help();
     if (!*help->visible) return;
 
     /* --- Tab 0: Commands ---
@@ -259,7 +259,6 @@ void ui_help_overlay_render(void) {
     int help_scroll = *help->scroll;
     if (help_tab < 0) help_tab = 0;
     if (help_tab >= HELP_NUM_TABS) help_tab = HELP_NUM_TABS - 1;
-    *help->tab_idx = help_tab;
 
     const char **text = tabs[help_tab];
 
@@ -288,7 +287,6 @@ void ui_help_overlay_render(void) {
     if (max_scroll < 0) max_scroll = 0;
     if (help_scroll > max_scroll) help_scroll = max_scroll;
     if (help_scroll < 0) help_scroll = 0;
-    *help->scroll = help_scroll;
 
     /* Background - matches config menu #222 */
     glColor4f(0.133f, 0.133f, 0.133f, 0.98f);
