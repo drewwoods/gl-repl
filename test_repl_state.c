@@ -38,11 +38,11 @@ static void test_capture_restore_round_trip(void) {
     repl_state_edit_line_set(1);
     repl_state_help_mut()->visible = 1;
     *repl_state_code_panel_mut()->scroll = 9;
-    *repl_state_search_mut()->active = 1;
+    repl_state_search_mut()->active = 1;
     snprintf(repl_state_search_mut()->query,
-             (size_t)repl_state_search_mut()->query_capacity,
+             sizeof(repl_state_search_mut()->query),
              "%s", "vertex");
-    *repl_state_search_mut()->query_len = 6;
+    repl_state_search_mut()->query_len = 6;
     *repl_state_variables_mut()->time_playing = 0;
     repl_state_camera_set_orbit(11.0f, 22.0f);
     repl_state_workspace_set_dir("/tmp/repl-state-stage1");
@@ -77,7 +77,7 @@ static void test_capture_restore_round_trip(void) {
     ASSERT_INT("edit line restored", repl_state_edit_line(), 1);
     ASSERT_INT("help restored", repl_state_help()->visible, 1);
     ASSERT_INT("code panel scroll restored", *repl_state_code_panel()->scroll, 9);
-    ASSERT_INT("search active restored", *repl_state_search()->active, 1);
+    ASSERT_INT("search active restored", repl_state_search()->active, 1);
     ASSERT_STR("search query restored", repl_state_search()->query, "vertex");
     ASSERT_INT("time playing restored", *repl_state_variables()->time_playing, 0);
     ASSERT_TRUE("camera rx restored", *repl_state_camera()->rx == 11.0f);

@@ -72,22 +72,11 @@ typedef struct {
     int   start_x;
 } ReplVariableDragRuntimeState;
 
-typedef struct {
-    int mode;
-} ReplProfilePanelRuntimeState;
+typedef ReplProfilePanelState ReplProfilePanelRuntimeState;
 
 typedef ReplStatusState ReplStatusRuntimeState;
 
-typedef struct {
-    int  active;
-    char query[MAX_INPUT_LEN];
-    int  query_len;
-    int  cursor_pos;
-    int  hit_line_idx;
-    int  hit_char_idx;
-    int  hit_ordinal;
-    int  match_count;
-} ReplSearchRuntimeState;
+typedef ReplSearchState ReplSearchRuntimeState;
 
 typedef struct {
     const char *matches[MAX_AC_MATCHES];

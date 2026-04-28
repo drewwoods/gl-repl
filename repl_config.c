@@ -48,7 +48,7 @@ static int *config_value_ptr(ReplConfigKey key) {
     case REPL_CONFIG_VERTEX_OUTLINES:     return repl_state_presentation_mut()->show_vertex_outlines;
     case REPL_CONFIG_VERTEX_POINTS:       return repl_state_presentation_mut()->show_vertex_points;
     case REPL_CONFIG_VARIABLE_PANEL:      return &repl_state_variable_panel_mut()->visible;
-    case REPL_CONFIG_CPU_PROFILE:         return repl_state_profile_panel_mut()->mode;
+    case REPL_CONFIG_CPU_PROFILE:         return &repl_state_profile_panel_mut()->mode;
     case REPL_CONFIG_CODE_PANEL_LAYOUT:   return repl_state_presentation_mut()->code_panel_layout;
     case REPL_CONFIG_WRAP_AT_COMMA:       return repl_state_presentation_mut()->wrap_at_comma;
     case REPL_CONFIG_AUDIO_MODE:          return NULL; /* audio module owns this one */

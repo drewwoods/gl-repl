@@ -62,11 +62,11 @@ static void test_profile_panel(void) {
     printf("Testing Profile Panel...\n");
     gl_stub_counts_reset();
     
-    *repl_state_profile_panel_mut()->mode = PROFILE_PANEL_OFF;
+    repl_state_profile_panel_mut()->mode = PROFILE_PANEL_OFF;
     ui_profile_panel_render();
     ASSERT_TRUE("profile hidden -> no GL calls", gl_stub_counts[GL_STUB_glBegin] == 0);
 
-    *repl_state_profile_panel_mut()->mode = PROFILE_PANEL_ON;
+    repl_state_profile_panel_mut()->mode = PROFILE_PANEL_ON;
     prof_frame_tick();
     prof_begin(PROF_FRAME_TOTAL);
     prof_end(PROF_FRAME_TOTAL);
@@ -78,7 +78,7 @@ static void test_profile_panel(void) {
     ASSERT_GL_CALLS("profile visible -> calls glColor4f", GL_STUB_glColor4f, 1);
 
     /* Test details mode */
-    *repl_state_profile_panel_mut()->mode = PROFILE_PANEL_DETAILS;
+    repl_state_profile_panel_mut()->mode = PROFILE_PANEL_DETAILS;
     gl_stub_counts_reset();
     ui_profile_panel_render();
     ASSERT_GL_CALLS("profile details -> draws more text", GL_STUB_glRasterPos2f, 10);
@@ -238,7 +238,7 @@ static void test_menu_bar(void) {
     ASSERT_TRUE("config menu open", ui_menu_bar_open_menu_id() == 2); // MENU_CONFIG
 
     /* Test search overlay */
-    *repl_state_search_mut()->active = 1;
+    repl_state_search_mut()->active = 1;
     gl_stub_counts_reset();
     ui_menu_bar_render_search_overlay(0, 400, 600);
     ASSERT_GL_CALLS("search overlay -> draws quads", GL_STUB_glBegin, 1);

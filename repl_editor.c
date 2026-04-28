@@ -638,7 +638,7 @@ static int handle_rename_key_route(unsigned char key) {
 }
 
 static int handle_config_menu_key_route(unsigned char key) {
-    if (!*repl_state_search()->active && key == '`') {
+    if (!repl_state_search()->active && key == '`') {
         if (*repl_state_replay()->active)
             repl_replay_stop();
         editor_restore_hidden_code_panel();

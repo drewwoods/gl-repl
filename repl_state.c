@@ -413,22 +413,21 @@ static ReplRuntimeFacade g_repl_facade = {
         .start_x = &g_drag_start_x,
     },
     .profile_panel = {
-        .mode = &g_show_profile_panel,
+        .mode = PROFILE_PANEL_OFF,
     },
     .status = {
         .text = "",
         .ttl = 0,
     },
     .search = {
-        .active = &g_search_active,
-        .query = g_search_query,
-        .query_capacity = MAX_INPUT_LEN,
-        .query_len = &g_search_query_len,
-        .cursor_pos = &g_search_cursor_pos,
-        .hit_line_idx = &g_search_hit_line,
-        .hit_char_idx = &g_search_hit_char,
-        .hit_ordinal = &g_search_hit_ordinal,
-        .match_count = &g_search_match_count,
+        .active = 0,
+        .query = "",
+        .query_len = 0,
+        .cursor_pos = 0,
+        .hit_line_idx = -1,
+        .hit_char_idx = -1,
+        .hit_ordinal = 0,
+        .match_count = 0,
     },
     .autocomplete = {
         .matches = g_ac_matches,
@@ -973,11 +972,11 @@ void repl_state_variable_drag_reset(void) {
 }
 
 const ReplProfilePanelState *repl_state_profile_panel(void) {
-    return &g_repl_facade.profile_panel;
+    return &g_repl_state.profile_panel;
 }
 
 ReplProfilePanelState *repl_state_profile_panel_mut(void) {
-    return &g_repl_facade.profile_panel;
+    return &g_repl_state.profile_panel;
 }
 
 const ReplStatusState *repl_state_status(void) {
@@ -1010,23 +1009,23 @@ void repl_state_status_tick(void) {
 }
 
 const ReplSearchState *repl_state_search(void) {
-    return &g_repl_facade.search;
+    return &g_repl_state.search;
 }
 
 ReplSearchState *repl_state_search_mut(void) {
-    return &g_repl_facade.search;
+    return &g_repl_state.search;
 }
 
 void repl_state_search_clear(void) {
     ReplSearchState *search = repl_state_search_mut();
-    *search->active = 0;
+    search->active = 0;
     search->query[0] = '\0';
-    *search->query_len = 0;
-    *search->cursor_pos = 0;
-    *search->hit_line_idx = -1;
-    *search->hit_char_idx = -1;
-    *search->hit_ordinal = 0;
-    *search->match_count = 0;
+    search->query_len = 0;
+    search->cursor_pos = 0;
+    search->hit_line_idx = -1;
+    search->hit_char_idx = -1;
+    search->hit_ordinal = 0;
+    search->match_count = 0;
 }
 
 const ReplAutocompleteState *repl_state_autocomplete(void) {
