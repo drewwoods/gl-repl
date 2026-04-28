@@ -34,8 +34,8 @@ progress as of 2026-04-28:
 - ✅ R1 (Replay/HUD migration): Complete
 - ✅ R2 (UI → REPL mutation hole): Complete
 - ✅ R3 (Extract layout geometry): Complete
-- ⚠️ R4 (Controller off repl_core_internal.h): Partially complete
-  - R4a/R4b complete; R4c narrowed to tests + `repl_` implementation code; R4d pending
+- ⚠️ R4 (Controller off repl_core_internal.h): In progress
+  - R4a/R4b complete; R4c is complete for production code with `bench_repl.c` intentionally out of scope; R4d is in progress
 - ❌ R5–R12: Not started
 
 Some pieces have landed, but the strict end-state checks described below should
@@ -1347,19 +1347,17 @@ R4d is **not started**.
 - ✅ `imrepl_ctrl.c` no longer includes `repl_core_internal.h`
 - ✅ `repl_pipeline.h` created and integrated; controller uses it exclusively
 - ✅ `repl_eval_predef_view()` accessor added; globals are hidden
-- ⚠️ 20 non-test production files still include `repl_core_internal.h`:
+- ⚠️ 19 non-test production files still include `repl_core_internal.h`:
   ```
   bench_repl.c, repl_actions.c, repl_autocomplete.c, repl_clipboard.c,
   repl_command_store.c, repl_commit.c, repl_core.c, repl_editor.c,
   repl_example_loader.c, repl_executor.c, repl_export.c, repl_flatten.c,
   repl_parser.c, repl_replay_annotations.c, repl_replay.c, repl_scenes.c,
-  repl_search.c, repl_state.c, repl_undo.c, ui_panels.c
+  repl_search.c, repl_state.c, repl_undo.c
   ```
   Under the R4c rule, the 18 `repl_*.c` users are allowed if they are genuine
-  REPL implementation collaborators. The out-of-policy users are
-  `bench_repl.c` and `ui_panels.c`; those must stop including
-  `repl_core_internal.h` or be documented as temporary R11 exceptions until R4c
-  is finished.
+  REPL implementation collaborators. `bench_repl.c` is an intentionally
+  ignored benchmark harness in this pass.
 
 ---
 

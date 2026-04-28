@@ -20,6 +20,7 @@
 #endif
 
 #include "repl_eval.h"
+#include "repl_search.h"
 
 /* ========================================================================= */
 /* Configuration                                                              */
@@ -312,14 +313,6 @@ const char *mode_name(GLenum mode);
 GLenum current_begin_mode(void);
 int  count_vertices(void);
 void mark_normals_dirty(void);
-
-int  repl_search_row_count(void);
-const char *repl_search_row_text(int row_idx);
-int  repl_search_row_for_cmd_index(int cmd_idx);
-int  repl_search_find_next_in_text(const char *text, const char *query,
-                                   int start_pos);
-int  repl_search_find_prev_in_text(const char *text, const char *query,
-                                   int start_pos);
 
 void navigate_to_line(int target);
 void execute_commands(void);

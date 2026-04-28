@@ -63,6 +63,7 @@
 
 #include "repl_core.h"
 #include "repl_replay.h"
+#include "repl_search.h"
 #include "repl_undo.h"
 
 #if defined(__GNUC__) || defined(__clang__)
@@ -222,12 +223,6 @@ void repl_load_example_lines_for_test(const char *const *lines);
 const char *cmd_type_name(CmdType t);
 void repl_advance_time(float dt);
 void repl_reset_time_to_zero(void);
-
-/* ---- Search input dispatch (implemented in repl_search.c) ------------- */
-
-void search_clear_all(void);
-int  handle_search_key(unsigned char key);
-int  handle_search_special(int key);
 
 /* ---- Editor input dispatch test hooks --------------------------------- */
 

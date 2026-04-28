@@ -143,7 +143,6 @@ void repl_debug_dump_flat_commands(FILE *out);
 int  repl_flat_cmd_matches_cursor(int flat_idx);
 int  repl_find_feeding_normal_cmd(int line_idx);
 int  repl_find_feeding_color_cmd(int line_idx);
-void repl_copy_replay_baseline_predef_values(float *dst, int max_vals);
 
 /* --- GLUT callback entry points (wired in sample.c) -------------------- */
 
