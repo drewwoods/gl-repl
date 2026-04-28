@@ -93,7 +93,7 @@ else
 COVERAGE_LDFLAGS =
 endif
 
-.PHONY: all clean test check test-detailed test_detailed test-stubs lines debug coverage glut help bench bench-csv check-gl-boundaries check-layer-coupling check-controller-boundaries check-scene-no-repl-state-mut check-state-boundaries check-views-no-owners check-public-api-usage callgraph-static callgraph-static-entry callgraph-profile callgraph-graphviz callgraph-html callgraph-files
+.PHONY: all clean test check test-detailed test_detailed test-stubs lines debug coverage glut help bench bench-csv check-gl-boundaries check-layer-coupling check-controller-boundaries check-scene-no-repl-state-mut check-state-boundaries check-views-no-owners check-pure-scene-no-repl-state check-ui-no-repl-state-mut check-public-api-usage callgraph-static callgraph-static-entry callgraph-profile callgraph-graphviz callgraph-html callgraph-files
 
 all: sample
 
@@ -242,6 +242,15 @@ check-scene-no-repl-state-mut: ## Verify scene code does not mutate REPL state d
 	fi
 	@echo "Scene mutation boundary OK"
 
+check-pure-scene-no-repl-state: ## Verify scene files do not reach into REPL state/replay APIs.
+	@echo "Checking scene files do not reach into REPL state/replay APIs..."
+	@bad=$$(grep -nE 'repl_(state|replay)_' $(SCENE_SRCS) || true); \
+	if [ -n "$$bad" ]; then \
+		echo "ERROR: scene files reach into REPL state/replay APIs:"; \
+		echo "$$bad"; exit 1; \
+	fi
+	@echo "Pure-scene boundary OK"
+
 check-state-boundaries: ## Verify REPL state facade usage stays in owned modules.
 	@echo "Checking state facade boundaries..."
 	@bad=$$(grep -lE '#[[:space:]]*include[[:space:]]+"repl_state\.h"' $(SCENE_SRCS) $(STATE_NEUTRAL_SRCS) 2>/dev/null || true); \
@@ -278,6 +287,15 @@ check-views-no-owners: ## Verify scene/UI files do not include repl_state_owners
 	fi
 	@echo "View-file ownership boundary OK"
 
+check-ui-no-repl-state-mut: ## Verify UI files do not mutate REPL state directly.
+	@echo "Checking UI files do not mutate REPL state directly..."
+	@bad=$$(grep -nE 'repl_state_[A-Za-z0-9_]*_mut[[:space:]]*\(' $(UI_SRCS) || true); \
+	if [ -n "$$bad" ]; then \
+		echo "ERROR: UI files mutate REPL state:"; \
+		echo "$$bad"; exit 1; \
+	fi
+	@echo "UI mutation boundary OK"
+
 check-public-api-usage: ## Scan public API declarations for unused functions (informational).
 	@bash scripts/check-unused-apis.sh
 
@@ -286,8 +304,10 @@ CHECK_TARGETS = \
 	check-layer-coupling \
 	check-controller-boundaries \
 	check-scene-no-repl-state-mut \
+	check-pure-scene-no-repl-state \
 	check-state-boundaries \
 	check-views-no-owners \
+	check-ui-no-repl-state-mut \
 	check-public-api-usage
 
 check: ## Run all checks.
@@ -298,7 +318,7 @@ check: ## Run all checks.
 		$(MAKE) --no-print-directory $$target || exit $$?; \
 	done
 
-test: check-gl-boundaries check-layer-coupling check-controller-boundaries check-scene-no-repl-state-mut check-state-boundaries check-views-no-owners $(TEST_BINS) ## Run the full automated test suite.
+test: check-gl-boundaries check-layer-coupling check-controller-boundaries check-scene-no-repl-state-mut check-pure-scene-no-repl-state check-state-boundaries check-views-no-owners check-ui-no-repl-state-mut $(TEST_BINS) ## Run the full automated test suite.
 	@REPL_EXPORT_CC="$(CC)" \
 	REPL_EXPORT_COMPILE_CFLAGS='$(BUILD_CFLAGS) $(CFLAGS)' \
 	TEST_JOBS="$(TEST_JOBS)" \

@@ -38,7 +38,8 @@ progress as of 2026-04-28:
   - R4a/R4b complete; R4c is complete for production code with `bench_repl.c` intentionally out of scope; R4d is in progress
 - ⚠️ R5: focused scene-render slice complete; repo-wide validation pending
 - ✅ R6 (Split state headers by ownership): Complete
-- ❌ R7–R12: Not started
+- ✅ R7 (View-side read guards): Complete
+- ❌ R8–R12: Not started
 
 Some pieces have landed, but the strict end-state checks described below should
 not be assumed to pass until their prerequisite Phase 2 slices are complete.
@@ -1893,7 +1894,7 @@ Implementation is actively in progress. Current completion:
 | **R4** — Controller off `repl_core_internal.h` | ⚠️ Partial | R4a/R4b done; R4c in progress (controller ✅, 2 out-of-policy includes remain); R4d pending |
 | **R5** — Slim `SceneRenderConfig` | ❌ Not started | Requires R1 ✅ |
 | **R6** — Split typed-state facade | ❌ Not started | Requires R1 ✅ + R2 ✅ |
-| **R7** — View-side grep guards | ❌ Not started | Requires R6 |
+| **R7** — View-side grep guards | ✅ Complete | Requires R6 |
 | **R11** — Harden file-level guards | ❌ Not started | Can start now; shrink allowlists as R2/R4/R6 land |
 | **R10-phase1** — Delete stale GLUT decls | ❌ Not started | Zero-risk, should be done first of R10 phases |
 | **R10-phase2+** — Dissolve `repl_core.c` | ❌ Not started | Phased; depends on R4c completion |
