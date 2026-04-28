@@ -26,6 +26,55 @@ The intended outcome:
 - UI renderers are pure functions of snapshots plus optional output structs.
 - Runtime capture and restore are first-class operations instead of a future refactor.
 
+## Stage-1 Reference Commit
+
+Commit `b2f649128b9dcaccb86118c6a827f9b812cfc33d` is the reference pattern for
+Stage 1. It established the three moves that later work must stay aligned
+with:
+
+- live storage moved into one real `static ReplRuntimeState g_repl_state;`
+- the old accessor surface kept working through a transitional
+  `ReplRuntimeFacade` in `repl_state_views.h`
+- `repl_state_capture()` / `repl_state_restore()` landed immediately, with a
+  focused round-trip regression in `test_repl_state.c`
+
+The first and third items are the non-negotiable Stage-1 invariants. The
+second item is only a migration aid.
+
+- Keeping a slice behind `ReplRuntimeFacade` is acceptable during Stage 1.
+- Bypassing the facade for a slice and returning `g_repl_state.<slice>`
+  directly is also acceptable.
+- What is not acceptable is touching runtime-storage shape without also
+  keeping `repl_state_capture()` / `repl_state_restore()` current and tested.
+
+The exact `repl_state_capture()` signature is not the point during migration.
+Whether it is `ReplRuntimeState repl_state_capture(void)` or
+`void repl_state_capture(ReplRuntimeState *snapshot)`, the contract is the
+same: every slice that has become real owned runtime state must round-trip
+through capture and restore.
+
+## Observed Drift After The Pilot
+
+The recent Stage-1-labelled commits show why this needs to be explicit:
+
+- `4adeca0` converted `ReplHelpState` to direct-value fields and returned
+  `g_repl_state.help` directly. That is valid work, but it is already
+  consuming the later slice-conversion plan, not just Stage-1 storage setup.
+- `fb2ac9b` continued the same pattern for additional `state_views` and
+  variable-panel-facing slices.
+- `6c35edf` moved search and related UI-facing leaf state along the same path.
+- `b58f624` retargeted more camera/autocomplete/view callers to the new shape.
+- `a955b86` did the same for selection, clipboard, scenes, and import/export.
+
+None of those commits are inherently wrong. The problem is that the commit
+labels and instructions no longer made it obvious whether the work was:
+
+- pure Stage-1 ownership consolidation
+- deliberate later-stage slice graduation
+- or a mixed commit doing both
+
+Future work must say which of those it is.
+
 ## Tenets
 
 These are the rules the end state must satisfy.
@@ -348,6 +397,22 @@ test: ... check-state-ownership
 
 Each stage is reviewable on its own. The plan is intentionally incremental and does not require moving all storage out of `repl_state`.
 
+### Stage Bookkeeping
+
+When a migration commit touches a slice, state which mode that slice is in
+after the commit:
+
+- `facade-backed`: storage is in `g_repl_state`, but public readers still go
+  through `ReplRuntimeFacade`
+- `direct-runtime`: storage is in `g_repl_state`, and `repl_state_*` returns
+  `&g_repl_state.<slice>` directly
+- `value-getter`: readers use by-value getters or read-only view structs plus
+  named mutators
+
+The facade is optional transitional scaffolding, not a goal. If a commit moves
+a slice from `facade-backed` to `direct-runtime` or `value-getter`, call that
+out explicitly instead of hiding it under a generic "stage 1" label.
+
 ### Stage 0 — Land the checks
 
 Add the new checks and baselines while preserving behavior.
@@ -373,6 +438,10 @@ Exit criteria:
 
 Turn `ReplRuntimeState` into the actual runtime container in `repl_state.c`.
 
+Reference pilot:
+
+- `b2f649128b9dcaccb86118c6a827f9b812cfc33d`
+
 Scope:
 
 - fold the scattered globals into `static ReplRuntimeState g_repl_state;`
@@ -381,6 +450,28 @@ Scope:
 - add `repl_state_capture()` and `repl_state_restore()` entrypoints, even if some call sites still use legacy accessors for a short time
 
 This is the decisive shift: state stays centralized, but it becomes real structured data rather than aliases.
+
+Required invariants for every Stage-1 follow-up commit:
+
+- every touched mutable field still lives in `g_repl_state`
+- `repl_state_capture()` / `repl_state_restore()` keep round-tripping every
+  touched slice
+- `test_repl_state.c` grows whenever a new slice starts relying on real owned
+  runtime storage in a way that capture/restore must preserve
+- if `ReplRuntimeFacade` still exists for a slice, it is an adapter only and
+  never an alternate owner
+- if a commit also converts a slice's public shape, readers, or mutator style,
+  the commit message and review notes say that it is intentionally consuming
+  later-stage work as well
+
+Exit criteria:
+
+- `g_repl_state` is the only owner for the Stage-1-covered slices
+- `repl_state_capture()` / `repl_state_restore()` are kept current for those
+  slices
+- the capture/restore test exercises representative fields from each newly
+  covered slice
+- any surviving facade fields are compatibility adapters only
 
 ### Stage 2 — Pilot value getters on small slices
 
@@ -402,6 +493,7 @@ Exit criteria:
 
 - no `_mut()` or pointer-returning read path for the pilot slices
 - tests for those slices stop poking global state
+- commits are labeled as Stage 2 work rather than generic Stage-1 follow-ups
 
 ### Stage 3 — Convert UI-facing leaf state
 
@@ -414,6 +506,9 @@ Apply the same pattern to the state that drives UI behavior directly:
 - code panel flags that are read frequently but are still small values
 
 The goal here is to kill the easy pointer-through-view cases without a large structural rewrite.
+
+If a commit in this stage bypasses the facade directly, that is fine, but it
+should say so explicitly and should not be described as pure Stage-1 plumbing.
 
 ### Stage 4 — Fix the cursor-pixel write with outputs
 
@@ -529,6 +624,8 @@ Per stage:
 Focused verification to add during the migration:
 
 - runtime capture/restore round-trip test
+- whenever a commit moves a new slice into direct owned runtime storage, extend
+  the round-trip test in the same commit
 - renderer fixture tests using `Ui*View` inputs and `Ui*Output` assertions
 - controller ordering tests for cases where one panel's render output feeds another panel's input in the same frame
 
@@ -549,6 +646,7 @@ Final verification:
 - **Do not reintroduce aliases through convenience helpers.** The temptation will be to add `*_ptr()` or `*_mut()` back once migration pressure appears. That defeats the point.
 - **Centralized ownership does not excuse render-time writes.** Keeping state in `repl_state` is compatible with pure rendering only if outputs remain the sole render-to-state path.
 - **Capture semantics must be explicit.** Some state is durable and belongs in a snapshot. Some state may be frame-local or derived. The design is better precisely because this boundary becomes visible and testable.
+- **Do not let stage labels drift.** If a commit converts public slice APIs or bypasses the facade for a slice, say which later stage that spends. "Stage 1" should not become a bucket for every incremental state cleanup.
 - **Avoid API explosion.** Not every leaf value needs its own getter if a slice getter is clearer. Prefer `ReplHelpState repl_state_help(void)` over five tiny getters when that keeps call sites simpler.
 - **Do not bundle unrelated behavior refactors into this work.** This plan is about making state ownership and state reads defensible, not about moving every helper to a new file.
 - **Tutorial replay and continuation are real design constraints.** The document should keep calling this out so the end state does not optimize only for immediate compile-time cleanup while making future state capture harder.
