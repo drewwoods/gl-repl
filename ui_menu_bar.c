@@ -6,7 +6,7 @@
 #include "repl_core.h"
 #include "repl_config.h"
 #include "repl_keys.h"
-#include "repl_state.h"
+#include "repl_state_views.h"
 #include "ui_menu_bar.h"
 #include "repl_layout.h"
 #include "./include/gl_2d.h"

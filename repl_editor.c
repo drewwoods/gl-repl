@@ -1493,7 +1493,10 @@ static void mouse_func(int button, int state, int x, int y) {
          * below the panel in vertical layout).  Handle it before the
          * panel-area gate so clicks on any part of the dropdown register. */
         if (ui_menu_bar_example_dropdown_is_open()) {
-            int panel_actions = ui_panels_handle_code_panel_press(x, y);
+            int cursor_pos = -1;
+            int panel_actions = ui_panels_handle_code_panel_press(x, y, &cursor_pos);
+            if (cursor_pos >= 0)
+                repl_state_cursor_pos_set(cursor_pos);
             if (panel_actions & UI_PANEL_PRESS_OPENED_COLOR_PICKER)
                 repl_undo_push_snapshot();
             editor_request_redraw();
@@ -1506,7 +1509,10 @@ static void mouse_func(int button, int state, int x, int y) {
             return;
         }
         if (editor_point_in_code_panel(x, y)) {
-            int panel_actions = ui_panels_handle_code_panel_press(x, y);
+            int cursor_pos = -1;
+            int panel_actions = ui_panels_handle_code_panel_press(x, y, &cursor_pos);
+            if (cursor_pos >= 0)
+                repl_state_cursor_pos_set(cursor_pos);
             if (panel_actions & UI_PANEL_PRESS_OPENED_COLOR_PICKER)
                 repl_undo_push_snapshot();
             editor_request_redraw();

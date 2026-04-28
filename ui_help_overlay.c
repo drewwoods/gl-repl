@@ -7,7 +7,7 @@
  */
 #include "sample.h"
 #include "repl_config.h"
-#include "repl_state.h"
+#include "repl_state_views.h"
 #include "ui_help_overlay.h"
 #include "./include/gl_2d.h"
 

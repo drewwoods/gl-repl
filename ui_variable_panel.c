@@ -12,7 +12,7 @@
  */
 #include "sample.h"
 #include "ui_variable_panel.h"
-#include "repl_state.h"
+#include "repl_state_views.h"
 #include "repl_var_drag.h"
 #include "repl_layout.h"
 #include "./include/gl_2d.h"

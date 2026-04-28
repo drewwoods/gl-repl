@@ -3,7 +3,7 @@
  */
 #include "sample.h"
 #include "repl_command_store.h"
-#include "repl_state.h"
+#include "repl_state_views.h"
 #include "repl_undo.h"
 #include "ui_color_picker.h"
 #include "repl_layout.h"
