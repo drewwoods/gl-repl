@@ -249,7 +249,7 @@ Current transitional responsibilities in `scene_render.c`:
 
 * fade-batch rendering — calls `repl_replay_*` and `repl_state_*` directly
 * replay tessellation preview
-* 2D replay HUD (`draw_replay_hud`) — pure 2D UI in the wrong file
+* 2D replay HUD (`ui_replay_hud_render`) — pure 2D UI in `ui_replay_hud.c`
 
 Phase 2 plan (R1 in `feature/push-architecture-refinement.md`):
 
@@ -258,7 +258,7 @@ Phase 2 plan (R1 in `feature/push-architecture-refinement.md`):
   without calling `repl_replay_*` or `repl_state_*` (R1b)
 * accumulation-AA settings move from `repl_state_render()` read to
   `SceneRenderConfig` fields set by the controller (R1a)
-* 2D replay HUD moves to `ui_replay_hud.c`, driven by config fields (R1c)
+* 2D replay HUD lives in `ui_replay_hud.c`, driven by config fields
 * after R1, `scene_render.c` includes neither `repl_replay.h` nor
   `repl_state.h`; the `check-pure-scene-no-repl-state` Makefile rule covers
   all `scene_*.c` without an allowlist
@@ -310,9 +310,9 @@ or explicit snapshot structs. They should not call `repl_state_*` directly.
 
 Known transitional exceptions in `scene_render.c`: reads `repl_state_replay()`,
 `repl_state_presentation()`, `repl_state_viewport()`, and `repl_state_render()`
-for replay HUD, fade batches, and accumulation AA. R1 in the refinement plan
-removes all of these by building a `ReplayFadePlan` snapshot in the controller
-and moving the HUD to `ui_*.c`. Focus/guide snapshot assembly and accumulation
+for fade batches and accumulation AA. R1 in the refinement plan removes all of
+these by building a `ReplayFadePlan` snapshot in the controller and moving the
+HUD to `ui_replay_hud.c`. Focus/guide snapshot assembly and accumulation
 jitter already come from the controller or local pass state.
 
 ### UI mutation boundary
@@ -358,7 +358,7 @@ Phase 2 follow-ups are detailed in `feature/push-architecture-refinement.md`
 (recommendations R1–R10). Summary:
 
 1. **R1** — replay/HUD migration: controller builds `ReplayFadePlan` snapshot;
-   scene iterates it; 2D HUD moves to `ui_replay_hud.c`. Highest leverage:
+  scene iterates it; 2D HUD lives in `ui_replay_hud.c`. Highest leverage:
    eliminates all `repl_state_*` and `repl_replay_*` reads from `scene_*.c`.
 2. **R2** — UI → REPL mutation holes: `ui_color_picker`, `ui_panels`,
    `ui_help_overlay` route mutations through store/action APIs.

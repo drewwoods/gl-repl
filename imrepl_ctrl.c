@@ -70,6 +70,39 @@ static SceneGuideSnapshot imrepl_ctrl_build_guide_snapshot(const SceneRenderConf
     return snapshot;
 }
 
+static void imrepl_ctrl_build_replay_fade_plan(SceneRenderConfig *config) {
+    ReplayFadeBatchView fade_batches;
+    int batch_count;
+
+    memset(&config->replay_fade_plan, 0, sizeof(config->replay_fade_plan));
+    config->replay_has_fades = 0;
+    config->replay_base_limit = 0;
+
+    if (!config->replaying)
+        return;
+
+    repl_replay_copy_baseline_predef_values(config->replay_fade_plan.baseline_predef_vals,
+                                            MAX_PREDEF_VARS);
+
+    config->replay_has_fades = repl_replay_has_active_fades();
+    if (!config->replay_has_fades)
+        return;
+
+    config->replay_base_limit = repl_replay_fill_base_limit();
+    fade_batches = repl_replay_fade_batches_view();
+    batch_count = repl_replay_compute_fade_skip_limits(config->replay_fade_plan.skip_limits,
+                                                       REPLAY_FADE_BATCH_MAX);
+    if (batch_count > REPLAY_FADE_BATCH_MAX)
+        batch_count = REPLAY_FADE_BATCH_MAX;
+
+    config->replay_fade_plan.batch_count = batch_count;
+    for (int batch_idx = 0; batch_idx < batch_count; batch_idx++) {
+        const ReplayFadeBatch *batch = &fade_batches.batches[batch_idx];
+        config->replay_fade_plan.batches[batch_idx] = *batch;
+        config->replay_fade_plan.batch_alpha[batch_idx] = repl_replay_batch_alpha(batch);
+    }
+}
+
 /* ========================================================================= */
 /* Scene config builder (push model)                                          */
 /* ========================================================================= */
@@ -133,11 +166,8 @@ static void imrepl_ctrl_build_scene_config(SceneRenderConfig *config) {
     config->replay_tess_preview = config->replaying &&
                                   config->replay_mode == REPLAY_MODE_VERTEX;
     config->replay_vertex_points = config->replay_tess_preview;
-    config->replay_has_fades = repl_replay_has_active_fades();
-    config->replay_base_limit = config->replay_has_fades
-                                   ? repl_replay_fill_base_limit()
-                                   : 0;
     config->show_current_poly = *presentation->highlight_current_poly && !config->replaying;
+    imrepl_ctrl_build_replay_fade_plan(config);
 
     /* Alpha scale boost for dark backgrounds */
     float bg_lum = 0.2126f * render->clear_color[0]
@@ -157,6 +187,9 @@ static void imrepl_ctrl_build_scene_config(SceneRenderConfig *config) {
     config->viewport_w = *repl_state_viewport()->window_w;
     config->viewport_h = *repl_state_viewport()->window_h;
 
+    config->use_accum = *render->use_accum;
+    config->accum_aa_enabled = *render->accum_aa_enabled;
+    config->accum_samples = *render->accum_samples;
     config->user_lighting_enabled = *flat->user_lighting_enabled;
     memcpy(config->lights, repl_state_render()->lights, sizeof(config->lights));
     config->show_light_indicators = *presentation->show_light_indicators;
