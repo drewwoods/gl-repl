@@ -320,5 +320,6 @@ R7          add view-side grep guards
 R11         harden file-level grep guards; shrink allowlists as Phase 2 lands
 R4          controller off repl_core_internal.h
 R10-ph2-5   dissolve repl_core.c into natural owners
+R12         consolidate public REPL APIs into one concise repl.h
 R8          sample → imrepl rename (last, mechanical)
 ```

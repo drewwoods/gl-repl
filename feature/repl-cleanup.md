@@ -7,7 +7,7 @@ Refactor in small behavior-preserving stages. The first goal is to make responsi
 
 The controller-first architecture and Phase 2 dependency ordering are tracked in
 [`feature/push-architecture-refinement.md`](./push-architecture-refinement.md).
-Use that plan for R1-R11 boundaries, Makefile guard timing, and the deferred
+Use that plan for R1-R12 boundaries, Makefile guard timing, and the deferred
 `sample` → `imrepl` namespace work. This cleanup plan stays strategic and
 should not diverge from the refinement plan's current ordering.
 
@@ -152,8 +152,11 @@ failure should be treated as a regression unless explicitly rebaselined.
    - Headers are stand-alone references: read any header from top to bottom to understand the module's API without consulting other headers or implementation files.
    - Documentation covers all 26 `repl_*` headers, 7 `ui_*` headers, and 8 `scene_*` headers.
    - `MODULES.md` now includes a "Header Documentation Standard" section explaining the consistent structure applied across all modules.
-   - `ARCHITECTURE.md` updated to emphasize that comprehensive header documentation is the authoritative API reference.
+   - `ARCHITECTURE.md` updated to emphasize that comprehensive header documentation is the current API reference until R12 consolidation.
    - All function names follow the module-name convention: `repl_<module>_<action>()`, `ui_<module>_<action>()`, `scene_<module>_<action>()`.
+   - Follow-up R12 changes the long-term shape: truly public REPL APIs should
+     consolidate into one concise public header, while verbose per-module prose
+     moves into implementation sections or module docs.
    - Completed in current session; all 2541 tests passing.
 
 11. **Segregate live GL calls to scene/UI modules plus `repl_executor.c`**
