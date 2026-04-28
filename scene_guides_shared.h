@@ -24,7 +24,7 @@ typedef struct SceneGuideSnapshot {
     int source_cmd_count;
     FlatProgramView flat_program;
 
-    ExprVar *predef_vars;
+    const ExprVar *predef_vars;
     int predef_var_count;
     float alpha_scale; /* alpha boost to counter dark-bg crush; 1.0 = no change */
 } SceneGuideSnapshot;

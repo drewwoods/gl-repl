@@ -67,7 +67,7 @@ static SceneGuideSnapshot imrepl_ctrl_build_guide_snapshot(const SceneRenderConf
         .source_cmds = repl_state_document_cmds_mut(),
         .source_cmd_count = repl_state_document_count(),
         .flat_program = config->flat_program,
-        .predef_vars = (ExprVar *)predef.vars,
+        .predef_vars = predef.vars,
         .predef_var_count = predef.count,
         .alpha_scale = config->alpha_scale,
     };

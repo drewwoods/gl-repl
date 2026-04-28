@@ -67,7 +67,7 @@ typedef struct {
  * variables. Used internally by repl_eval_expr() during recursive descent. */
 typedef struct {
     const char *p;          /* current position in string */
-    ExprVar    *vars;
+    const ExprVar *vars;
     int         num_vars;
 } ExprCtx;
 

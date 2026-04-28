@@ -15,6 +15,5 @@ void ensure_init_bootstrap_ready(void);
 void apply_init_bootstrap(void);
 void repl_copy_predef_values(float *dst, int max_vals);
 void repl_restore_predef_values(const float *src, int max_vals);
-void repl_execute_set_fade_context(float alpha_scale, int skip_geom_before_pc);
 
 #endif /* REPL_PIPELINE_H */
