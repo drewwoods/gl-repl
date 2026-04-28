@@ -1253,6 +1253,7 @@ void repl_state_capture(ReplRuntimeState *snapshot) {
         return;
 
     repl_state_sync_variables_from_eval();
+    refresh_workspace_header_lines();
     update_render_state_strings();
     update_cam_lines();
     *snapshot = g_repl_state;

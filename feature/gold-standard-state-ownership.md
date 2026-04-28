@@ -451,6 +451,54 @@ Scope:
 
 This is the decisive shift: state stays centralized, but it becomes real structured data rather than aliases.
 
+Stage-1 struct inventory:
+
+The Stage-1 storage conversion target is every field inside `ReplRuntimeState`
+in `repl_state.h`. Be explicit about these by exact field and type:
+
+- `document`: `ReplDocumentRuntimeState`
+- `flat_program`: `ReplFlatProgramRuntimeState`
+- `variables`: `ReplVariableRuntimeState`
+- `editor_input`: `ReplEditorInputRuntimeState`
+- `selection`: `ReplSelectionRuntimeState`
+- `clipboard`: `ReplClipboardRuntimeState`
+- `code_panel`: `ReplCodePanelRuntimeStorage`
+- `help`: `ReplHelpRuntimeState`
+- `variable_panel`: `ReplVariablePanelRuntimeState`
+- `variable_drag`: `ReplVariableDragRuntimeState`
+- `profile_panel`: `ReplProfilePanelRuntimeState`
+- `status`: `ReplStatusRuntimeState`
+- `search`: `ReplSearchRuntimeState`
+- `autocomplete`: `ReplAutocompleteRuntimeState`
+- `camera`: `ReplCameraRuntimeState`
+- `pointer`: `ReplPointerRuntimeState`
+- `viewport`: `ReplViewportRuntimeState`
+- `presentation`: `ReplPresentationRuntimeState`
+- `render`: `ReplRenderRuntimeState`
+- `replay`: `ReplReplayRuntimeStateStore`
+- `scenes`: `ReplSceneRuntimeStateStore`
+- `import_export`: `ReplImportExportRuntimeState`
+
+Important clarification:
+
+- Some of those runtime types are currently separate struct definitions.
+- Some are temporary aliases to `Repl*State` types from `repl_state_views.h`.
+- They are still Stage-1-covered runtime storage either way. The alias does not
+  exempt the slice from Stage 1; it only means the runtime/public shape is
+  currently identical for that slice.
+
+Not Stage 1 by default:
+
+- `ReplRenderDerivedState` in the facade layer, because it is not a field in
+  `ReplRuntimeState`
+- `UserScene` / `g_user_scenes[]` / `g_active_user_scene` in `repl_scenes.c`
+- undo/redo ring state in `repl_undo.c`
+- controller/editor/menu/audio/camera-control sidecar globals that are not
+  stored in `ReplRuntimeState`
+
+If a commit touches one of those non-`ReplRuntimeState` sidecars, call that out
+separately. Do not describe it as pure Stage-1 runtime-storage conversion.
+
 Required invariants for every Stage-1 follow-up commit:
 
 - every touched mutable field still lives in `g_repl_state`
