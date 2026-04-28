@@ -144,34 +144,45 @@ int  repl_flat_cmd_matches_cursor(int flat_idx);
 int  repl_find_feeding_normal_cmd(int line_idx);
 int  repl_find_feeding_color_cmd(int line_idx);
 
-/* --- GLUT callback entry points (wired in sample.c) -------------------- */
+/* --- Controller-owned input callback effects --------------------------- */
+
+typedef struct ReplInputDispatchEffects {
+    int request_redraw;
+    int set_cursor;
+    int cursor;
+    int schedule_timer;
+    unsigned int timer_millis;
+    int timer_value;
+} ReplInputDispatchEffects;
+
+/* --- Input callback entry points (wired through the controller) -------- */
 
 /* ASCII key and Ctrl-key input. Routes to repl_editor.c for editing, or to
  * repl_actions.c for config shortcuts (Ctrl+S, Ctrl+Z, Ctrl+R, etc.). */
-void repl_keyboard_func(unsigned char key, int x, int y);
+ReplInputDispatchEffects repl_keyboard_func(unsigned char key, int x, int y);
 
 /* Function key (F1-F12) and arrow input. Routes to repl_editor.c and
  * repl_actions.c for visual toggles, help overlay, theme cycling. */
-void repl_special_func(int key, int x, int y);
+ReplInputDispatchEffects repl_special_func(int key, int x, int y);
 
 /* Mouse button press/release. Routes to ui_panels.c for code-panel hits,
  * color-picker drag, variable-slider transactions. */
-void repl_mouse_func(int button, int state, int x, int y);
+ReplInputDispatchEffects repl_mouse_func(int button, int state, int x, int y);
 
 /* Mouse motion during drag. Routes to ui_panels.c for in-progress drags. */
-void repl_motion_func(int x, int y);
+ReplInputDispatchEffects repl_motion_func(int x, int y);
 
 /* Mouse motion without button held. Updates hover state for tooltips. */
-void repl_passive_motion_func(int x, int y);
+ReplInputDispatchEffects repl_passive_motion_func(int x, int y);
 
 #ifndef USE_GLUT
 /* Mousewheel (freeglut only). Routes to repl_camera_controls.c for zoom velocity. */
-void repl_mousewheel_func(int wheel, int direction, int x, int y);
+ReplInputDispatchEffects repl_mousewheel_func(int wheel, int direction, int x, int y);
 #endif
 
 /* Polling timer callback (every ~16ms @ 60 FPS). Ticks animation frame counter,
  * advances replays, updates camera momentum, and posts next timer event. */
-void repl_timer_func(int value);
+ReplInputDispatchEffects repl_timer_func(int value);
 
 /* --- Test helpers ------------------------------------------------------ */
 

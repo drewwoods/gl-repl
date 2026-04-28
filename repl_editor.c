@@ -67,9 +67,20 @@ typedef enum {
  * a key or mouse event arrives; native builds make this a no-op. */
 static int g_audio_gesture_sent = 0;
 static ReplModifierProvider g_modifier_provider_for_test = NULL;
+static ReplInputDispatchEffects g_pending_input_effects = {0};
 
 void repl_set_modifier_provider_for_test(ReplModifierProvider provider) {
     g_modifier_provider_for_test = provider;
+}
+
+static void editor_reset_input_effects(void) {
+    g_pending_input_effects = (ReplInputDispatchEffects){0};
+}
+
+static ReplInputDispatchEffects editor_take_input_effects(void) {
+    ReplInputDispatchEffects out = g_pending_input_effects;
+    editor_reset_input_effects();
+    return out;
 }
 
 static int editor_get_modifiers(void) {
@@ -79,11 +90,18 @@ static int editor_get_modifiers(void) {
 }
 
 static void editor_request_redraw(void) {
-    glutPostRedisplay();
+    g_pending_input_effects.request_redraw = 1;
 }
 
 static void editor_set_cursor(int cursor) {
-    glutSetCursor(cursor);
+    g_pending_input_effects.set_cursor = 1;
+    g_pending_input_effects.cursor = cursor;
+}
+
+static void editor_schedule_timer(unsigned int millis, int value) {
+    g_pending_input_effects.schedule_timer = 1;
+    g_pending_input_effects.timer_millis = millis;
+    g_pending_input_effects.timer_value = value;
 }
 
 int repl_editor_active_modifiers(void) {
@@ -1689,7 +1707,7 @@ static void timer_func(int value) {
     }
 
     editor_request_redraw();
-    glutTimerFunc(16, timer_func, 0);
+    editor_schedule_timer(16, 0);
 }
 
 int feed_line(const char *line) {
@@ -1759,37 +1777,51 @@ static void notify_audio_gesture_once(void) {
     repl_audio_on_user_gesture();
 }
 
-void repl_keyboard_func(unsigned char key, int x, int y) {
+ReplInputDispatchEffects repl_keyboard_func(unsigned char key, int x, int y) {
+    editor_reset_input_effects();
     notify_audio_gesture_once();
     keyboard_func(key, x, y);
+    return editor_take_input_effects();
 }
 
-void repl_special_func(int key, int x, int y) {
+ReplInputDispatchEffects repl_special_func(int key, int x, int y) {
+    editor_reset_input_effects();
     notify_audio_gesture_once();
     special_func(key, x, y);
+    return editor_take_input_effects();
 }
 
-void repl_mouse_func(int button, int state, int x, int y) {
+ReplInputDispatchEffects repl_mouse_func(int button, int state, int x, int y) {
+    editor_reset_input_effects();
     notify_audio_gesture_once();
     mouse_func(button, state, x, y);
+    return editor_take_input_effects();
 }
 
-void repl_motion_func(int x, int y) {
+ReplInputDispatchEffects repl_motion_func(int x, int y) {
+    editor_reset_input_effects();
     motion_func(x, y);
+    return editor_take_input_effects();
 }
 
-void repl_passive_motion_func(int x, int y) {
+ReplInputDispatchEffects repl_passive_motion_func(int x, int y) {
+    editor_reset_input_effects();
     passive_motion_func(x, y);
+    return editor_take_input_effects();
 }
 
 #ifndef USE_GLUT
-void repl_mousewheel_func(int wheel, int direction, int x, int y) {
+ReplInputDispatchEffects repl_mousewheel_func(int wheel, int direction, int x, int y) {
+    editor_reset_input_effects();
     mousewheel_func(wheel, direction, x, y);
+    return editor_take_input_effects();
 }
 #endif
 
-void repl_timer_func(int value) {
+ReplInputDispatchEffects repl_timer_func(int value) {
+    editor_reset_input_effects();
     timer_func(value);
+    return editor_take_input_effects();
 }
 
 void repl_feed_line_public(const char *line) {
