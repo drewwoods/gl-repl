@@ -670,7 +670,7 @@ static int handle_escape_key_route(unsigned char key) {
             editor_request_redraw();
             return 1;
         }
-        if (repl_state_help()->visible) {
+        if (repl_state_help().visible) {
             repl_state_help_mut()->visible = 0;
             repl_state_help_mut()->tab_idx = 0;
             repl_state_help_mut()->scroll = 0;
@@ -1197,7 +1197,7 @@ static int handle_horizontal_special_key_route(int key) {
             repl_audio_prev_track();
             return 1;
         }
-        if (repl_state_help()->visible) {
+        if (repl_state_help().visible) {
             repl_action_help_tab_prev();
             return 1;
         }
@@ -1210,7 +1210,7 @@ static int handle_horizontal_special_key_route(int key) {
             repl_audio_next_track();
             return 1;
         }
-        if (repl_state_help()->visible) {
+        if (repl_state_help().visible) {
             repl_action_help_tab_next();
             return 1;
         }
@@ -1343,14 +1343,14 @@ static int handle_scene_cycle_special_key_route(int key) {
 static int handle_page_scroll_special_key_route(int key) {
     switch (key) {
     case GLUT_KEY_PAGE_UP:
-        if (repl_state_help()->visible)
+        if (repl_state_help().visible)
             repl_state_help_mut()->scroll -= 5;
         else
             *repl_state_code_panel_mut()->scroll -= 5;
         *repl_state_code_panel_mut()->scroll_follow_cursor = 0;
         return 1;
     case GLUT_KEY_PAGE_DOWN:
-        if (repl_state_help()->visible)
+        if (repl_state_help().visible)
             repl_state_help_mut()->scroll += 5;
         else
             *repl_state_code_panel_mut()->scroll += 5;
@@ -1568,7 +1568,7 @@ static void mouse_func(int button, int state, int x, int y) {
 
 #ifdef USE_GLUT
     if (button == 3 && state == GLUT_DOWN) {
-        if (repl_state_help()->visible) {
+        if (repl_state_help().visible) {
             repl_state_help_mut()->scroll--;
         } else {
             if (editor_point_in_code_panel(x, y))
@@ -1578,7 +1578,7 @@ static void mouse_func(int button, int state, int x, int y) {
         }
         editor_request_redraw();
     } else if (button == 4 && state == GLUT_DOWN) {
-        if (repl_state_help()->visible) {
+        if (repl_state_help().visible) {
             repl_state_help_mut()->scroll++;
         } else {
             if (editor_point_in_code_panel(x, y))
@@ -1594,7 +1594,7 @@ static void mouse_func(int button, int state, int x, int y) {
 #ifndef USE_GLUT
 static void mousewheel_func(int wheel, int direction, int x, int y) {
     (void)wheel;
-    if (repl_state_help()->visible) {
+    if (repl_state_help().visible) {
         repl_state_help_mut()->scroll -= direction;
     } else {
         if (editor_point_in_code_panel(x, y))

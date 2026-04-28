@@ -742,8 +742,8 @@ void repl_state_code_panel_reset(void) {
     g_repl_state.code_panel = g_repl_state_defaults.code_panel;
 }
 
-const ReplHelpState *repl_state_help(void) {
-    return &g_repl_state.help;
+ReplHelpState repl_state_help(void) {
+    return g_repl_state.help;
 }
 
 ReplHelpState *repl_state_help_mut(void) {
