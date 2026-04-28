@@ -1129,7 +1129,6 @@ int ui_panels_handle_code_panel_press(int mx, int my, int *cursor_pos_out) {
                     actions |= UI_PANEL_PRESS_OPENED_COLOR_PICKER;
                     ui_color_picker_open(target, my);
                 }
-                glutPostRedisplay();
                 return actions | UI_PANEL_PRESS_CONSUMED;
             }
         }

@@ -1,5 +1,7 @@
 #include "imrepl_ctrl.h"
 
+#include <gl_includes.h>
+
 #include "repl_core.h"
 #include "repl_executor.h"
 #include "repl_eval.h"
@@ -105,6 +107,15 @@ static void imrepl_ctrl_build_replay_fade_plan(SceneRenderConfig *config) {
         config->replay_fade_plan.batches[batch_idx] = *batch;
         config->replay_fade_plan.batch_alpha[batch_idx] = repl_replay_batch_alpha(batch);
     }
+}
+
+static void imrepl_ctrl_apply_input_effects(ReplInputDispatchEffects effects) {
+    if (effects.set_cursor)
+        glutSetCursor(effects.cursor);
+    if (effects.request_redraw)
+        glutPostRedisplay();
+    if (effects.schedule_timer)
+        glutTimerFunc(effects.timer_millis, imrepl_ctrl_timer, effects.timer_value);
 }
 
 /* ========================================================================= */
@@ -334,29 +345,29 @@ void imrepl_ctrl_init_gl(void) {
 }
 
 void imrepl_ctrl_keyboard(unsigned char key, int x, int y) {
-    repl_keyboard_func(key, x, y);
+    imrepl_ctrl_apply_input_effects(repl_keyboard_func(key, x, y));
 }
 
 void imrepl_ctrl_special(int key, int x, int y) {
-    repl_special_func(key, x, y);
+    imrepl_ctrl_apply_input_effects(repl_special_func(key, x, y));
 }
 
 void imrepl_ctrl_mouse(int button, int state, int x, int y) {
-    repl_mouse_func(button, state, x, y);
+    imrepl_ctrl_apply_input_effects(repl_mouse_func(button, state, x, y));
 }
 
 void imrepl_ctrl_motion(int x, int y) {
-    repl_motion_func(x, y);
+    imrepl_ctrl_apply_input_effects(repl_motion_func(x, y));
 }
 
 void imrepl_ctrl_passive_motion(int x, int y) {
-    repl_passive_motion_func(x, y);
+    imrepl_ctrl_apply_input_effects(repl_passive_motion_func(x, y));
 }
 
 void imrepl_ctrl_mousewheel(int wheel, int direction, int x, int y) {
-    repl_mousewheel_func(wheel, direction, x, y);
+    imrepl_ctrl_apply_input_effects(repl_mousewheel_func(wheel, direction, x, y));
 }
 
 void imrepl_ctrl_timer(int value) {
-    repl_timer_func(value);
+    imrepl_ctrl_apply_input_effects(repl_timer_func(value));
 }

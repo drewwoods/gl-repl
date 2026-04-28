@@ -24,6 +24,7 @@ test_repl_editor
 test_repl_core_extra
 test_repl_autonormal
 test_ui
+test_ui_help_overlay
 bench_repl
 .cache/
 compile_commands.json
