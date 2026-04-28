@@ -2,8 +2,9 @@
  * ui_color_picker.c -- Floating color picker for literal color commands.
  */
 #include "sample.h"
-#include "repl_core_internal.h"
+#include "repl_command_store.h"
 #include "repl_state.h"
+#include "repl_undo.h"
 #include "ui_color_picker.h"
 #include "ui_panels.h"
 
@@ -57,93 +58,52 @@ static void cp_ring(float cx, float cy, float r, int n) {
         glVertex2f(cx+cosf(a)*r, cy+sinf(a)*r);}
     glEnd();
 }
+
+static const GLCmd *cp_cmd_at(int cmd_idx) {
+    if (cmd_idx < 0 || cmd_idx >= repl_state_document_count())
+        return NULL;
+    return repl_state_document_cmd_at(cmd_idx);
+}
+
 static void color_picker_write_cmd(void) {
-    if (g_cp_line<0 || g_cp_line>=repl_state_document_count()) return;
-    float r,g,b;
-    CmdType cmd_type = repl_state_document_cmds_mut()[g_cp_line].type;
-    const char *old_src = repl_state_document_cmds_mut()[g_cp_line].source;
-    int indent_len = 0;
-    char indent_prefix[sizeof(repl_state_document_cmds_mut()[g_cp_line].source)];
-    char new_source[sizeof(repl_state_document_cmds_mut()[g_cp_line].source)];
-    int formatted = 0;
+    const GLCmd *cmd = cp_cmd_at(g_cp_line);
+    float r, g, b;
+
+    if (!cmd)
+        return;
+
     cp_hsv_to_rgb(g_cp_hue, g_cp_sat, g_cp_val, &r, &g, &b);
-    while (old_src[indent_len] == ' ' || old_src[indent_len] == '\t')
-        indent_len++;
-    if ((size_t)indent_len >= sizeof(indent_prefix))
-        indent_len = (int)sizeof(indent_prefix) - 1;
-    for (int i = 0; i < indent_len; i++)
-        indent_prefix[i] = old_src[i];
-    indent_prefix[indent_len] = '\0';
-    if (g_cp_has_alpha) {
-        if (cmd_type == CMD_TESS_COLOR) {
-            formatted = repl_format_fits(new_source, sizeof(new_source),
-                                         "%sgluColor(%g, %g, %g, %g);",
-                                         indent_prefix, r, g, b, g_cp_alpha);
-        } else if (cmd_type == CMD_CLEAR_COLOR) {
-            float cr=r<CP_CLEAR_MAX_V?r:CP_CLEAR_MAX_V;
-            float cg=g<CP_CLEAR_MAX_V?g:CP_CLEAR_MAX_V;
-            float cb=b<CP_CLEAR_MAX_V?b:CP_CLEAR_MAX_V;
-            formatted = repl_format_fits(new_source, sizeof(new_source),
-                                         "%sglClearColor(%g, %g, %g, %g);",
-                                         indent_prefix, cr, cg, cb, g_cp_alpha);
-            if (!formatted) {
-                set_status("Command too long");
-                return;
-            }
-            repl_state_document_cmds_mut()[g_cp_line].args[0]=cr;
-            repl_state_document_cmds_mut()[g_cp_line].args[1]=cg;
-            repl_state_document_cmds_mut()[g_cp_line].args[2]=cb;
-            repl_state_document_cmds_mut()[g_cp_line].args[3]=g_cp_alpha;
-            repl_state_document_cmds_mut()[g_cp_line].num_args = 4;
-            memcpy(repl_state_document_cmds_mut()[g_cp_line].source, new_source,
-                   strlen(new_source) + 1);
-            repl_state_mark_flat_dirty();
-            return;
-        } else {
-            formatted = repl_format_fits(new_source, sizeof(new_source),
-                                         "%sglColor4f(%g, %g, %g, %g);",
-                                         indent_prefix, r, g, b, g_cp_alpha);
-        }
-    } else {
-        if (cmd_type == CMD_TESS_COLOR) {
-            formatted = repl_format_fits(new_source, sizeof(new_source),
-                                         "%sgluColor(%g, %g, %g);",
-                                         indent_prefix, r, g, b);
-        } else {
-            formatted = repl_format_fits(new_source, sizeof(new_source),
-                                         "%sglColor3f(%g, %g, %g);",
-                                         indent_prefix, r, g, b);
-        }
-    }
-    if (!formatted) {
-        set_status("Command too long");
+    if (cmd->type == CMD_CLEAR_COLOR) {
+        repl_command_store_set_clear_color(g_cp_line, r, g, b, g_cp_alpha);
         return;
     }
-    repl_state_document_cmds_mut()[g_cp_line].args[0]=r;
-    repl_state_document_cmds_mut()[g_cp_line].args[1]=g;
-    repl_state_document_cmds_mut()[g_cp_line].args[2]=b;
-    repl_state_document_cmds_mut()[g_cp_line].num_args = g_cp_has_alpha ? 4 : 3;
-    if (g_cp_has_alpha)
-        repl_state_document_cmds_mut()[g_cp_line].args[3]=g_cp_alpha;
-    memcpy(repl_state_document_cmds_mut()[g_cp_line].source, new_source, strlen(new_source) + 1);
-    repl_state_mark_flat_dirty();
+    repl_command_store_set_color(g_cp_line, r, g, b, g_cp_alpha, g_cp_has_alpha);
 }
 
 /* Open (or switch) the picker for cmd_idx.  my is GLUT screen y coord. */
 void ui_color_picker_open(int cmd_idx, int my) {
     int cp_x, cp_w;
+    const GLCmd *cmd;
+
+    if (!ui_color_picker_can_edit_cmd(cmd_idx))
+        return;
+
+    if (g_cp_line != cmd_idx)
+        repl_undo_push_snapshot();
+
     ui_panels_code_panel_rect(&cp_x, NULL, &cp_w, NULL);
-    g_cp_line      = cmd_idx;
-    g_cp_has_alpha = (repl_state_document_cmds_mut()[cmd_idx].type == CMD_COLOR4F ||
-                      repl_state_document_cmds_mut()[cmd_idx].type == CMD_TESS_COLOR ||
-                      repl_state_document_cmds_mut()[cmd_idx].type == CMD_CLEAR_COLOR);
-    g_cp_alpha     = g_cp_has_alpha ? repl_state_document_cmds_mut()[cmd_idx].args[3] : 1.0f;
-    cp_rgb_to_hsv(repl_state_document_cmds_mut()[cmd_idx].args[0],
-                  repl_state_document_cmds_mut()[cmd_idx].args[1],
-                  repl_state_document_cmds_mut()[cmd_idx].args[2],
+    g_cp_line = cmd_idx;
+    cmd = cp_cmd_at(cmd_idx);
+    if (!cmd)
+        return;
+    g_cp_has_alpha = (cmd->type == CMD_COLOR4F ||
+                      cmd->type == CMD_TESS_COLOR ||
+                      cmd->type == CMD_CLEAR_COLOR);
+    g_cp_alpha     = g_cp_has_alpha ? cmd->args[3] : 1.0f;
+    cp_rgb_to_hsv(cmd->args[0], cmd->args[1], cmd->args[2],
                   &g_cp_hue, &g_cp_sat, &g_cp_val);
-    if (repl_state_document_cmds_mut()[cmd_idx].type == CMD_CLEAR_COLOR &&
-        g_cp_val > CP_CLEAR_MAX_V) g_cp_val = CP_CLEAR_MAX_V;
+    if (cmd->type == CMD_CLEAR_COLOR && g_cp_val > CP_CLEAR_MAX_V)
+        g_cp_val = CP_CLEAR_MAX_V;
     /* Position to the right of the panel, near the click y */
     int pw = CP_SV_SZ + CP_GAP + CP_HUE_W
            + (g_cp_has_alpha ? CP_GAP + CP_ALPHA_W : 0) + CP_GAP;
@@ -162,7 +122,12 @@ void ui_color_picker_open(int cmd_idx, int my) {
 }
 
 void ui_color_picker_render(void) {
+    const GLCmd *cmd;
+
     if (g_cp_line < 0) return;
+    cmd = cp_cmd_at(g_cp_line);
+    if (!cmd)
+        return;
     int px = g_cp_px, py = g_cp_py, sz = CP_SV_SZ;
     int pw = sz + CP_GAP + CP_HUE_W
            + (g_cp_has_alpha ? CP_GAP + CP_ALPHA_W : 0) + CP_GAP;
@@ -200,8 +165,7 @@ void ui_color_picker_render(void) {
     glEnd();
     glDisable(GL_BLEND);
     /* glClearColor: shade the V > CP_CLEAR_MAX_V zone to show it's off-limits */
-    if (g_cp_line >= 0 && g_cp_line < repl_state_document_count() &&
-        repl_state_document_cmds_mut()[g_cp_line].type == CMD_CLEAR_COLOR) {
+    if (cmd->type == CMD_CLEAR_COLOR) {
         float lim_y = py - (1.0f - CP_CLEAR_MAX_V) * (float)sz;
         glEnable(GL_BLEND); glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
         glColor4f(0.0f, 0.0f, 0.0f, 0.72f);
@@ -292,7 +256,12 @@ void ui_color_picker_render(void) {
 }
 
 int ui_color_picker_press(int mx, int my) {
+    const GLCmd *cmd;
+
     if (g_cp_line < 0) return 0;
+    cmd = cp_cmd_at(g_cp_line);
+    if (!cmd)
+        return 0;
     int gl_y = *repl_state_viewport()->window_h - my;
 
     /* SV square */
@@ -303,9 +272,8 @@ int ui_color_picker_press(int mx, int my) {
         g_cp_val = (float)(gl_y-g_cp_sv_y)/(float)g_cp_sv_sz;
         if (g_cp_sat<0)g_cp_sat=0; if (g_cp_sat>1)g_cp_sat=1;
         if (g_cp_val<0)g_cp_val=0; if (g_cp_val>1)g_cp_val=1;
-        if (g_cp_line>=0 && g_cp_line<repl_state_document_count() &&
-            repl_state_document_cmds_mut()[g_cp_line].type==CMD_CLEAR_COLOR &&
-            g_cp_val>CP_CLEAR_MAX_V) g_cp_val=CP_CLEAR_MAX_V;
+        if (cmd->type == CMD_CLEAR_COLOR && g_cp_val>CP_CLEAR_MAX_V)
+            g_cp_val=CP_CLEAR_MAX_V;
         color_picker_write_cmd(); return 1;
     }
     /* Hue bar */
@@ -332,16 +300,20 @@ int ui_color_picker_press(int mx, int my) {
 }
 
 int ui_color_picker_motion(int mx, int my) {
+    const GLCmd *cmd;
+
     if (g_cp_drag == 0) return 0;
+    cmd = cp_cmd_at(g_cp_line);
+    if (!cmd)
+        return 0;
     int gl_y = *repl_state_viewport()->window_h - my;
     if (g_cp_drag == 1) {
         g_cp_sat = (float)(mx-g_cp_sv_x)/(float)g_cp_sv_sz;
         g_cp_val = (float)(gl_y-g_cp_sv_y)/(float)g_cp_sv_sz;
         if (g_cp_sat<0)g_cp_sat=0; if (g_cp_sat>1)g_cp_sat=1;
         if (g_cp_val<0)g_cp_val=0; if (g_cp_val>1)g_cp_val=1;
-        if (g_cp_line>=0 && g_cp_line<repl_state_document_count() &&
-            repl_state_document_cmds_mut()[g_cp_line].type==CMD_CLEAR_COLOR &&
-            g_cp_val>CP_CLEAR_MAX_V) g_cp_val=CP_CLEAR_MAX_V;
+        if (cmd->type == CMD_CLEAR_COLOR && g_cp_val>CP_CLEAR_MAX_V)
+            g_cp_val=CP_CLEAR_MAX_V;
     } else if (g_cp_drag == 2) {
         g_cp_hue = 1.0f-(float)(gl_y-g_cp_hue_y)/(float)g_cp_hue_h;
         if (g_cp_hue<0)g_cp_hue=0; if (g_cp_hue>=1)g_cp_hue=0.999f;
@@ -368,30 +340,31 @@ int ui_color_picker_active_line(void) {
 }
 
 int ui_color_picker_can_edit_cmd(int cmd_idx) {
-    if (cmd_idx < 0 || cmd_idx >= repl_state_document_count())
+    const GLCmd *cmd = cp_cmd_at(cmd_idx);
+
+    if (!cmd || !cmd->valid || cmd->has_vars)
         return 0;
-    if (!repl_state_document_cmds_mut()[cmd_idx].valid || repl_state_document_cmds_mut()[cmd_idx].has_vars)
-        return 0;
-    return repl_state_document_cmds_mut()[cmd_idx].type == CMD_COLOR3F ||
-           repl_state_document_cmds_mut()[cmd_idx].type == CMD_COLOR4F ||
-           repl_state_document_cmds_mut()[cmd_idx].type == CMD_TESS_COLOR ||
-           repl_state_document_cmds_mut()[cmd_idx].type == CMD_CLEAR_COLOR;
+    return cmd->type == CMD_COLOR3F ||
+           cmd->type == CMD_COLOR4F ||
+           cmd->type == CMD_TESS_COLOR ||
+           cmd->type == CMD_CLEAR_COLOR;
 }
 
 void ui_color_picker_render_swatch(int cmd_idx, int sx, int sy) {
+    const GLCmd *cmd = cp_cmd_at(cmd_idx);
+
     if (!ui_color_picker_can_edit_cmd(cmd_idx))
         return;
 
     int sw = UI_COLOR_SWATCH_W;
-    float alpha = (repl_state_document_cmds_mut()[cmd_idx].type == CMD_COLOR4F ||
-                   repl_state_document_cmds_mut()[cmd_idx].type == CMD_TESS_COLOR ||
-                   repl_state_document_cmds_mut()[cmd_idx].type == CMD_CLEAR_COLOR)
-                ? repl_state_document_cmds_mut()[cmd_idx].args[3] : 1.0f;
+    float alpha = (cmd->type == CMD_COLOR4F ||
+                   cmd->type == CMD_TESS_COLOR ||
+                   cmd->type == CMD_CLEAR_COLOR)
+                ? cmd->args[3] : 1.0f;
 
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-    glColor4f(repl_state_document_cmds_mut()[cmd_idx].args[0], repl_state_document_cmds_mut()[cmd_idx].args[1],
-              repl_state_document_cmds_mut()[cmd_idx].args[2], alpha);
+    glColor4f(cmd->args[0], cmd->args[1], cmd->args[2], alpha);
     glRectf((float)sx, (float)sy, (float)sx + (float)sw, (float)sy + (float)sw);
 
     glColor4f(0.55f, 0.55f, 0.65f, 0.9f);
