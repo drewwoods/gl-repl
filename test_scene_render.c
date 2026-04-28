@@ -63,6 +63,11 @@ static SceneRenderConfig make_test_config(void) {
     cfg.execute_user_data = NULL;
 
     cfg.anim_time = 0.0f;
+
+    cfg.use_accum = 1;
+    cfg.accum_aa_enabled = 1;
+    cfg.accum_samples = 2;
+
     cfg.viewport_w = 800;
     cfg.viewport_h = 600;
 
@@ -147,6 +152,9 @@ static void test_config_defaults(void) {
     ASSERT_INT("execute_reset_fn set", cfg.execute_reset_fn != NULL, 1);
     ASSERT_FLOAT("viewport_w matches", cfg.viewport_w, 800);
     ASSERT_FLOAT("viewport_h matches", cfg.viewport_h, 600);
+    ASSERT_INT("use_accum default", cfg.use_accum, 1);
+    ASSERT_INT("accum aa default", cfg.accum_aa_enabled, 1);
+    ASSERT_INT("accum samples default", cfg.accum_samples, 2);
     ASSERT_INT("user_lighting_enabled default", cfg.user_lighting_enabled, 0);
     ASSERT_FLOAT("anim_time default", cfg.anim_time, 0.0f);
     ASSERT_INT("cursor block invalid by default", cfg.cursor_block_begin_idx, -1);

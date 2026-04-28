@@ -6,6 +6,7 @@
 
 #include "repl_flatten.h"
 #include "sample.h"
+#include "repl_replay.h"
 #include "scene_guides_shared.h"
 
 typedef struct SceneRgba {
@@ -33,6 +34,15 @@ typedef struct SceneFocusVertex {
     int valid;
 } SceneFocusVertex;
 
+/* Snapshot of replay fade orchestration for the current frame. */
+typedef struct ReplayFadePlan {
+    int batch_count;
+    ReplayFadeBatch batches[REPLAY_FADE_BATCH_MAX];
+    int skip_limits[REPLAY_FADE_BATCH_MAX];
+    float batch_alpha[REPLAY_FADE_BATCH_MAX];
+    float baseline_predef_vals[MAX_PREDEF_VARS];
+} ReplayFadePlan;
+
 /* Snapshot of all per-frame inputs that helper renderers need to read
  * without sampling globals again.  scene_render.c fills this once at frame
  * start, then passes it to grid/axes/overlay helpers. */
@@ -47,6 +57,11 @@ typedef struct SceneRenderConfig {
 
     /* ── Animation ───────────────────────────────────────────────────── */
     float anim_time;
+
+    /* ── Accumulation AA ─────────────────────────────────────────────── */
+    int use_accum;
+    int accum_aa_enabled;
+    int accum_samples;
 
     /* ── Viewport ───────────────────────────────────────────────────── */
     int viewport_w;
@@ -70,6 +85,9 @@ typedef struct SceneRenderConfig {
     int   replay_state_val;     /* REPLAY_PLAYING / REPLAY_PAUSED / REPLAY_DONE */
     float replay_speed;
     int   replay_expand_args;
+
+    /* ── Replay fade snapshot ───────────────────────────────────────── */
+    ReplayFadePlan replay_fade_plan;
 
     /* ── Grid tables ─────────────────────────────────────────────────── */
     float grid_major_steps[GRID_MAJOR_COUNT];

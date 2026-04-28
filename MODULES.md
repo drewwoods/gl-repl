@@ -159,12 +159,12 @@ on the per-frame config or guide snapshots.
 | `scene_geometry_guides` | REPL-aware vertex/primitive guide rendering from snapshots |
 | `scene_transform_guides` | REPL-aware transform guide rendering from snapshots |
 | `scene_overlays` | REPL-aware outlines, labels, normals |
-| `ui_replay_hud` | *(planned — R1c)* 2D replay HUD moved out of `scene_render.c` |
+| `ui_replay_hud` | 2D replay HUD rendered from `SceneRenderConfig` in the UI layer |
 
 Neutral scene files should stay free of REPL state access. `scene_render.c`
-still has transitional direct REPL reads for replay HUD, fade batches, and
-accumulation AA. R1 in `feature/push-architecture-refinement.md` removes all
-of these: the controller builds a `ReplayFadePlan` snapshot; the HUD moves to
+still has transitional direct REPL reads for fade batches and accumulation AA.
+R1 in `feature/push-architecture-refinement.md` removes all of these: the
+controller builds a `ReplayFadePlan` snapshot; the replay HUD now lives in
 `ui_replay_hud.c`; and accumulation-AA settings move to `SceneRenderConfig`.
 
 ### 5. 2D UI rendering
