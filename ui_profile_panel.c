@@ -47,7 +47,7 @@ static void profile_panel_rect_for_height(int panel_h, int *out_x, int *out_y) {
 
     repl_layout_scene_rect(&scene_x, &scene_y, &scene_w, &scene_h);
 
-    if (*repl_state_variable_panel()->visible) {
+    if (repl_state_variable_panel()->visible) {
         panel_x = scene_x + scene_w - PROF_PANEL_W - PROF_PANEL_MARGIN;
         panel_y = scene_y + scene_h - panel_h - PROF_PANEL_MARGIN;
     } else {

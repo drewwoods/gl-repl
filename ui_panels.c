@@ -836,7 +836,7 @@ void ui_panels_render_code_panel(void) {
  * (~80 chars) fit here without truncation. */
 void ui_panels_render_scene_status(void) {
     const ReplStatusState *status = repl_state_status();
-    if (*status->ttl <= 0 || !status->text[0]) return;
+    if (status->ttl <= 0 || !status->text[0]) return;
 
     int sc_x, sc_y, sc_w, sc_h;
     repl_layout_scene_rect(&sc_x, &sc_y, &sc_w, &sc_h);
@@ -845,7 +845,7 @@ void ui_panels_render_scene_status(void) {
     int bar_h = STATUSBAR_H;
     int bar_y = sc_y;
 
-    float alpha = *status->ttl > 60 ? 1.0f : (float)*status->ttl / 60.0f;
+    float alpha = status->ttl > 60 ? 1.0f : (float)status->ttl / 60.0f;
 
     gl2d_begin(*repl_state_viewport()->window_w, *repl_state_viewport()->window_h);
     glEnable(GL_BLEND);

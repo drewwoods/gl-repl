@@ -134,7 +134,7 @@ int ui_variable_panel_hit(int gx, int gy, int *out_row) {
 }
 
 void ui_variable_panel_render(void) {
-    if (!*repl_state_variable_panel()->visible) return;
+    if (!repl_state_variable_panel()->visible) return;
 
     int px, py, pw, ph;
     ui_variable_panel_rect(&px, &py, &pw, &ph);

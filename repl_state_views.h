@@ -95,7 +95,7 @@ typedef struct {
 } ReplHelpState;
 
 typedef struct {
-    int *visible;
+    int visible;
 } ReplVariablePanelState;
 
 typedef struct {
@@ -103,9 +103,8 @@ typedef struct {
 } ReplProfilePanelState;
 
 typedef struct {
-    char *text;
-    int   capacity;
-    int  *ttl;
+    char text[REPL_STATUS_TEXT_MAX];
+    int  ttl;
 } ReplStatusState;
 
 typedef struct {
