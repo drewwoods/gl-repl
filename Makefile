@@ -442,6 +442,21 @@ callgraph-html: ## Generate interactive Cytoscape.js HTML (no size limits, searc
 	fi
 	@echo "Open in browser: open callgraph-*.html"
 
+callgraph-files: ## Generate file-level Mermaid dependency graph (optional ENTRY=function_name).
+	@if ! command -v cflow &> /dev/null; then \
+		echo "ERROR: cflow not found. Install with: brew install cflow"; exit 1; \
+	fi
+	@if [ -n "$(ENTRY)" ]; then \
+		echo "Generating file-level Mermaid graph from $(ENTRY)..."; \
+		cflow -m $(ENTRY) $(SRCS) 2>/dev/null | python3 scripts/cflow_to_file_mermaid.py --no-stdlib --no-gl > callgraph-files-$(ENTRY).mmd; \
+		echo "File-level graph saved to callgraph-files-$(ENTRY).mmd"; \
+	else \
+		echo "Generating file-level Mermaid graph from all reachable functions..."; \
+		cflow $(SRCS) 2>/dev/null | python3 scripts/cflow_to_file_mermaid.py --no-stdlib --no-gl > callgraph-files.mmd; \
+		echo "File-level graph saved to callgraph-files.mmd"; \
+	fi
+	@echo "Visualize at: https://mermaid.live or with: npx @mermaid-js/mermaid-cli"
+
 help: ## Show available targets and build-mode notes.
 	@printf "Immediate-mode REPL Make targets\n\n"
 	@printf "Build modes:\n"
