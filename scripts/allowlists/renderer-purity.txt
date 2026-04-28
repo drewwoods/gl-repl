@@ -1,0 +1,2 @@
+# Renderers audited for no direct mutators in render path.
+ui_replay_hud_render

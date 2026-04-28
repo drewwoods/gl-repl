@@ -1,0 +1,8 @@
+# View files still allowed to include repl_state*.h during migration.
+ui_autocomplete_panel.c
+ui_color_picker.c
+ui_help_overlay.c
+ui_menu_bar.c
+ui_panels.c
+ui_profile_panel.c
+ui_variable_panel.c

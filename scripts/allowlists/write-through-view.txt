@@ -1,0 +1,3 @@
+# Allowed write-through-view sites (file:line). Stage-0 baseline.
+ui_panels.c:250
+ui_panels.c:251
