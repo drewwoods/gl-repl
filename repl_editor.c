@@ -1172,18 +1172,14 @@ static int handle_cfg_special_shortcut_route(int key) {
 }
 
 static int handle_horizontal_special_key_route(int key) {
-    ReplHelpState *help = repl_state_help_mut();
     switch (key) {
     case GLUT_KEY_LEFT:
         if (editor_get_modifiers() & GLUT_ACTIVE_CTRL) {
             repl_audio_prev_track();
             return 1;
         }
-        if (*help->visible) {
-            if (*help->tab_idx > 0) {
-                (*help->tab_idx)--;
-                *help->scroll = 0;
-            }
+        if (*repl_state_help()->visible) {
+            repl_action_help_tab_prev();
             return 1;
         }
         if (repl_state_cursor_pos() > 0)
@@ -1195,11 +1191,8 @@ static int handle_horizontal_special_key_route(int key) {
             repl_audio_next_track();
             return 1;
         }
-        if (*help->visible) {
-            if (*help->tab_idx < 1) {
-                (*help->tab_idx)++;
-                *help->scroll = 0;
-            }
+        if (*repl_state_help()->visible) {
+            repl_action_help_tab_next();
             return 1;
         }
         if (repl_state_cursor_pos() < *repl_state_editor_input()->input_len)
