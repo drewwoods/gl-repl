@@ -80,6 +80,9 @@ void repl_actions_apply_defaults(void);
  * Called by keyboard shortcut handlers. */
 void repl_cfg_cycle_row(int row, int delta);
 
+/* Reset the code-panel cursor blink state after navigation moves the cursor. */
+void repl_action_cursor_blink_reset(void);
+
 /* Handle an ASCII key shortcut for config cycling. Maps key codes (Ctrl+<key>)
  * to config item indices and applies the cycle. Returns 1 if the key matched
  * a config shortcut, 0 otherwise. Called by the editor's key dispatcher
