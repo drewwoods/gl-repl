@@ -93,7 +93,7 @@ else
 COVERAGE_LDFLAGS =
 endif
 
-.PHONY: all clean test check test-detailed test_detailed test-stubs lines debug coverage glut help bench bench-csv check-gl-boundaries check-layer-coupling check-controller-boundaries check-scene-no-repl-state-mut check-state-boundaries check-public-api-usage callgraph-static callgraph-static-entry callgraph-profile callgraph-graphviz callgraph-html callgraph-files
+.PHONY: all clean test check test-detailed test_detailed test-stubs lines debug coverage glut help bench bench-csv check-gl-boundaries check-layer-coupling check-controller-boundaries check-scene-no-repl-state-mut check-state-boundaries check-views-no-owners check-public-api-usage callgraph-static callgraph-static-entry callgraph-profile callgraph-graphviz callgraph-html callgraph-files
 
 all: sample
 
@@ -269,6 +269,15 @@ check-state-boundaries: ## Verify REPL state facade usage stays in owned modules
 	fi
 	@echo "State facade boundaries OK"
 
+check-views-no-owners: ## Verify scene/UI files do not include repl_state_owners.h.
+	@echo "Checking scene/UI view files do not include repl_state_owners.h..."
+	@bad=$$(grep -lE '#[[:space:]]*include[[:space:]]+"repl_state_owners\.h"' $(SCENE_SRCS) $(UI_SRCS) 2>/dev/null || true); \
+	if [ -n "$$bad" ]; then \
+		echo "ERROR: scene/UI view files include repl_state_owners.h:"; \
+		echo "$$bad"; exit 1; \
+	fi
+	@echo "View-file ownership boundary OK"
+
 check-public-api-usage: ## Scan public API declarations for unused functions (informational).
 	@bash scripts/check-unused-apis.sh
 
@@ -278,6 +287,7 @@ CHECK_TARGETS = \
 	check-controller-boundaries \
 	check-scene-no-repl-state-mut \
 	check-state-boundaries \
+	check-views-no-owners \
 	check-public-api-usage
 
 check: ## Run all checks.
@@ -288,7 +298,7 @@ check: ## Run all checks.
 		$(MAKE) --no-print-directory $$target || exit $$?; \
 	done
 
-test: check-gl-boundaries check-layer-coupling check-controller-boundaries check-scene-no-repl-state-mut check-state-boundaries $(TEST_BINS) ## Run the full automated test suite.
+test: check-gl-boundaries check-layer-coupling check-controller-boundaries check-scene-no-repl-state-mut check-state-boundaries check-views-no-owners $(TEST_BINS) ## Run the full automated test suite.
 	@REPL_EXPORT_CC="$(CC)" \
 	REPL_EXPORT_COMPILE_CFLAGS='$(BUILD_CFLAGS) $(CFLAGS)' \
 	TEST_JOBS="$(TEST_JOBS)" \
