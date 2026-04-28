@@ -153,6 +153,11 @@ int  extract_func_call_args_text(const char *src, int *fn,
 void format_func_header(char *out, int out_sz, const char *indent,
                         int fn, char param_names[][16], int param_count);
 
+/* Test-only: parse a command with a local variable scope.
+ * Accepts provided vars array instead of predef-only. */
+int repl_parser_parse_command_with_vars(const char *line, GLCmd *cmd,
+                                        ExprVar *vars, int num_vars);
+
 /* Does `s` reference any variable in the given loop/function-scope array? */
 int  input_has_expr_vars(const char *s, ExprVar *vars, int num_vars);
 /* Same, but counting predef vars too (i.e. is any var visible at all?). */

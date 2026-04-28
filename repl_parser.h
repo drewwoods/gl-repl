@@ -57,7 +57,5 @@ int repl_parser_parse_command_ctx(const char *line, GLCmd *cmd,
  * visible to the expression evaluator (required for flattening contexts where
  * expressions may reference the loop counter or function parameters). */
 int repl_parser_parse_command(const char *line, GLCmd *cmd);
-int repl_parser_parse_command_with_vars(const char *line, GLCmd *cmd,
-                                        ExprVar *vars, int num_vars);
 
 #endif

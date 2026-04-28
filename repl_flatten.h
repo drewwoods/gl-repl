@@ -72,10 +72,6 @@ typedef struct {
     char status[128];                    /* error or informational message */
 } ReplFlattenResult;
 
-/* Get a view over the live flat program (g_flat_cmds, g_flat_local_vars).
- * The pointers are valid until the next call to repl_flatten_program()
- * on the live buffers. */
-FlatProgramView repl_flat_program_view_live(void);
 
 /* Expand a source program into a flat command stream. Options specify the
  * source array, target buffers, and resource limits. Result contains the
