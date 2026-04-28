@@ -93,13 +93,20 @@ else
 COVERAGE_LDFLAGS =
 endif
 
-.PHONY: all clean test test-detailed test_detailed test-stubs lines debug coverage glut help bench bench-csv check-gl-boundaries check-layer-coupling check-controller-boundaries check-scene-no-repl-state-mut
+.PHONY: all clean test test-detailed test_detailed test-stubs lines debug coverage glut help bench bench-csv check-gl-boundaries check-layer-coupling check-controller-boundaries check-scene-no-repl-state-mut check-state-boundaries callgraph-static callgraph-static-entry callgraph-profile callgraph-graphviz callgraph-html callgraph-files
 
 all: sample
 
 SRCS = sample.c imrepl_ctrl.c repl_core.c repl_state.c repl_config.c repl_command_spec.c repl_parser.c repl_source_scope.c repl_command_store.c repl_commit.c repl_clipboard.c repl_undo.c repl_camera_controls.c repl_actions.c repl_layout.c repl_code_panel_layout.c repl_code_panel_document.c repl_flatten.c repl_executor.c repl_autocomplete.c ui_autocomplete_panel.c repl_autonormal.c repl_scenes.c repl_example_loader.c repl_replay.c repl_replay_annotations.c repl_search.c repl_export.c repl_editor.c repl_examples.c scene_render.c scene_geometry_guides.c scene_transform_guides.c scene_grid.c scene_axes.c scene_backdrop.c scene_lights.c scene_overlays.c ui_panels.c ui_menu_bar.c ui_color_picker.c ui_help_overlay.c ui_variable_panel.c ui_replay_hud.c repl_var_drag.c repl_inline_rename.c repl_eval.c cmd_format.c repl_audio.c ui_profile_panel.c prof.c gl_stub_counts.c
 HDRS = sample.h imrepl_ctrl.h repl_state.h repl_config.h repl_core.h repl_core_internal.h repl_command_spec.h repl_parser.h repl_source_scope.h repl_command_store.h repl_layout.h repl_pipeline.h repl_clipboard.h repl_undo.h repl_camera_controls.h repl_actions.h repl_code_panel_layout.h repl_code_panel_document.h repl_replay.h repl_replay_annotations.h repl_examples.h scene_render_types.h scene_guides_shared.h scene_geometry_guides.h scene_transform_guides.h scene_transform_utils.h scene_grid.h scene_axes.h scene_render.h scene_backdrop.h scene_lights.h scene_overlays.h ui_panels.h ui_menu_bar.h ui_color_picker.h ui_help_overlay.h ui_variable_panel.h ui_replay_hud.h repl_var_drag.h ui_autocomplete_panel.h repl_inline_rename.h repl_eval.h cmd_format.h repl_audio.h ui_profile_panel.h prof.h
 CORE_TEST_SRCS = repl_core.c imrepl_ctrl.c repl_state.c repl_config.c repl_command_spec.c repl_parser.c repl_source_scope.c repl_command_store.c repl_commit.c repl_clipboard.c repl_undo.c repl_camera_controls.c repl_actions.c repl_layout.c repl_code_panel_layout.c repl_code_panel_document.c repl_flatten.c repl_executor.c repl_autocomplete.c ui_autocomplete_panel.c repl_autonormal.c repl_scenes.c repl_example_loader.c repl_replay.c repl_replay_annotations.c repl_search.c repl_export.c repl_editor.c repl_examples.c scene_render.c scene_geometry_guides.c scene_transform_guides.c scene_grid.c scene_axes.c scene_backdrop.c scene_lights.c scene_overlays.c ui_panels.c ui_menu_bar.c ui_color_picker.c ui_help_overlay.c ui_variable_panel.c ui_replay_hud.c repl_var_drag.c repl_inline_rename.c repl_eval.c cmd_format.c repl_audio.c ui_profile_panel.c prof.c gl_stub_counts.c
+
+REPL_SRCS = $(filter repl_%.c,$(SRCS))
+SCENE_SRCS = $(filter scene_%.c,$(SRCS))
+UI_SRCS = $(filter ui_%.c,$(SRCS))
+SCENE_HDRS = $(filter scene_%.h,$(HDRS))
+UI_HDRS = $(filter ui_%.h,$(HDRS))
+STATE_NEUTRAL_SRCS = cmd_format.c prof.c gl_stub_counts.c
 
 OBJDIR = build/$(BUILD)$(if $(filter 1,$(USE_GL_STUBS)),-gl-stubs,)
 OBJ_CFLAGS = $(BUILD_CFLAGS) $(CFLAGS)
@@ -196,29 +203,29 @@ $(TEST_BINS) $(BENCH_BINS): %: $$($$@_OBJS)
 # Layering boundary enforcement ------------------------------------------
 check-gl-boundaries: ## Verify GL/GLUT calls are isolated to allowed files.
 	@echo "Checking GL/GLU drawing calls isolation..."
-	@! grep -nE '\b(gl[A-Z]|glu[A-Z])[A-Za-z0-9]*\s*\(' repl_*.c | grep -v '^repl_executor\.c:' | grep -vE '[/*"\x27]' || (echo "ERROR: GL/GLU calls found outside repl_executor.c" && exit 1)
+	@! grep -nE '\b(gl[A-Z]|glu[A-Z])[A-Za-z0-9]*[[:space:]]*\(' $(REPL_SRCS) | grep -v '^repl_executor\.c:' | grep -vE '^([^:]+:)?[0-9]+:[[:space:]]*(/\*|\*|//)' | grep -vE '"' || (echo "ERROR: GL/GLU calls found outside repl_executor.c" && exit 1)
 	@echo "Checking GL/GLU calls in sample.h..."
-	@! grep -nE '\b(gl[A-Z]|glu[A-Z])[A-Za-z0-9]*\s*\(' sample.h | grep -vE '[/*"\x27]' || (echo "ERROR: GL/GLU calls found in sample.h" && exit 1)
+	@! grep -nE '\b(gl[A-Z]|glu[A-Z])[A-Za-z0-9]*[[:space:]]*\(' sample.h | grep -vE '^([^:]+:)?[0-9]+:[[:space:]]*(/\*|\*|//)' | grep -vE '"' || (echo "ERROR: GL/GLU calls found in sample.h" && exit 1)
 	@echo "Checking GLUT input/feedback calls isolation..."
-	@! grep -nE '\bglut[A-Z][A-Za-z0-9]*\s*\(' repl_*.c | grep -vE '^repl_(editor|executor)\.c:' | grep -vE '[/*"\x27]' || (echo "ERROR: GLUT calls found outside repl_editor.c and repl_executor.c" && exit 1)
+	@! grep -nE '\bglut[A-Z][A-Za-z0-9]*[[:space:]]*\(' $(REPL_SRCS) | grep -vE '^repl_(editor|executor)\.c:' | grep -vE '^([^:]+:)?[0-9]+:[[:space:]]*(/\*|\*|//)' | grep -vE '"' || (echo "ERROR: GLUT calls found outside repl_editor.c and repl_executor.c" && exit 1)
 	@echo "GL/GLUT boundaries OK"
 
 check-layer-coupling: ## Verify UI and scene layers don't include each other's headers.
 	@echo "Checking UI/scene layer coupling..."
-	@! grep -nE '#include\s+"scene_' ui_*.c ui_*.h || (echo "ERROR: UI files must not include scene headers" && exit 1)
-	@! grep -nE '#include\s+"ui_' scene_*.c scene_*.h || (echo "ERROR: scene files must not include UI headers" && exit 1)
+	@! grep -nE '#include\s+"scene_' $(UI_SRCS) $(UI_HDRS) || (echo "ERROR: UI files must not include scene headers" && exit 1)
+	@! grep -nE '#include\s+"ui_' $(SCENE_SRCS) $(SCENE_HDRS) || (echo "ERROR: scene files must not include UI headers" && exit 1)
 	@echo "Layer coupling OK"
 
 
 check-controller-boundaries: ## Verify controller owns the scene/UI wiring boundary.
 	@echo "Checking controller boundaries..."
-	@bad=$$(grep -lE '#[[:space:]]*include[[:space:]]+"scene_' repl_*.c imrepl_ctrl.c \
+	@bad=$$(grep -lE '#[[:space:]]*include[[:space:]]+"scene_' $(REPL_SRCS) imrepl_ctrl.c \
 		| grep -v '^imrepl_ctrl\.c$$' || true); \
 	if [ -n "$$bad" ]; then \
 		echo "ERROR: scene headers included outside imrepl_ctrl.c:"; \
 		echo "$$bad"; exit 1; \
 	fi
-	@bad=$$(grep -lE '#[[:space:]]*include[[:space:]]+"ui_' repl_*.c imrepl_ctrl.c \
+	@bad=$$(grep -lE '#[[:space:]]*include[[:space:]]+"ui_' $(REPL_SRCS) imrepl_ctrl.c \
 		| grep -vE '^(imrepl_ctrl|repl_(actions|editor|export))\.c$$' || true); \
 	if [ -n "$$bad" ]; then \
 		echo "ERROR: new ui headers included outside approved exceptions:"; \
@@ -228,14 +235,41 @@ check-controller-boundaries: ## Verify controller owns the scene/UI wiring bound
 
 check-scene-no-repl-state-mut: ## Verify scene code does not mutate REPL state directly.
 	@echo "Checking scene renderers do not mutate REPL state..."
-	@bad=$$(grep -nE 'repl_state_[A-Za-z0-9_]*_mut[[:space:]]*\(' scene_*.c || true); \
+	@bad=$$(grep -nE 'repl_state_[A-Za-z0-9_]*_mut[[:space:]]*\(' $(SCENE_SRCS) || true); \
 	if [ -n "$$bad" ]; then \
 		echo "ERROR: scene files mutate REPL state:"; \
 		echo "$$bad"; exit 1; \
 	fi
 	@echo "Scene mutation boundary OK"
 
-test: check-gl-boundaries check-layer-coupling check-controller-boundaries check-scene-no-repl-state-mut $(TEST_BINS) ## Run the full automated test suite.
+check-state-boundaries: ## Verify REPL state facade usage stays in owned modules.
+	@echo "Checking state facade boundaries..."
+	@bad=$$(grep -lE '#[[:space:]]*include[[:space:]]+"repl_state\.h"' $(SCENE_SRCS) $(STATE_NEUTRAL_SRCS) 2>/dev/null || true); \
+	if [ -n "$$bad" ]; then \
+		echo "ERROR: scene or state-neutral files include repl_state.h:"; \
+		echo "$$bad"; exit 1; \
+	fi
+	@bad=$$(grep -lE '#[[:space:]]*include[[:space:]]+"repl_core_internal\.h"' \
+		imrepl_ctrl.c $(SCENE_SRCS) $(UI_SRCS) $(STATE_NEUTRAL_SRCS) 2>/dev/null \
+		| grep -vE '^(imrepl_ctrl|ui_(color_picker|panels))\.c$$' || true); \
+	if [ -n "$$bad" ]; then \
+		echo "ERROR: unapproved view/utility files include repl_core_internal.h:"; \
+		echo "$$bad"; exit 1; \
+	fi
+	@bad=$$(grep -lE 'repl_state_[A-Za-z0-9_]*_mut[[:space:]]*\(' $(UI_SRCS) 2>/dev/null \
+		| grep -vE '^(ui_(color_picker|help_overlay|panels))\.c$$' || true); \
+	if [ -n "$$bad" ]; then \
+		echo "ERROR: unapproved UI files mutate REPL state directly:"; \
+		echo "$$bad"; exit 1; \
+	fi
+	@bad=$$(grep -nE 'repl_(state|replay)_' $(SCENE_SRCS) 2>/dev/null || true); \
+	if [ -n "$$bad" ]; then \
+		echo "ERROR: scene files reach into REPL state/replay APIs:"; \
+		echo "$$bad"; exit 1; \
+	fi
+	@echo "State facade boundaries OK"
+
+test: check-gl-boundaries check-layer-coupling check-controller-boundaries check-scene-no-repl-state-mut check-state-boundaries $(TEST_BINS) ## Run the full automated test suite.
 	@REPL_EXPORT_CC="$(CC)" \
 	REPL_EXPORT_COMPILE_CFLAGS='$(BUILD_CFLAGS) $(CFLAGS)' \
 	TEST_JOBS="$(TEST_JOBS)" \

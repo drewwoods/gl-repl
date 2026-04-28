@@ -122,7 +122,7 @@ Run all: `make test`
 | `repl_examples.h` | Example query API (`repl_examples_count/name/lines`) |
 | `repl_export.c` | `save_output` / `load_from_file`, workspace header directives, `@scene-name` / `@workspace-dir` markers |
 | `scene_render_types.h` | Shared `SceneRgba` / `SceneRenderConfig` / `FrameRenderContext` types for scene helpers |
-| `scene_render.c` | 3D scene frame orchestration, one-shot init, scene config/frame prep, edit guides, orbit target, replay HUD |
+| `scene_render.c` | 3D scene frame orchestration, one-shot init, scene config/frame prep, edit guides, orbit target, replay fade pass orchestration |
 | `scene_grid.c` | Grid theme rendering and custom focus/ocean/ruler/planes passes |
 | `scene_grid.h` | Grid render entrypoint |
 | `scene_axes.c` | Axes theme rendering |
@@ -148,6 +148,12 @@ Run all: `make test`
   Runtime state that crosses module boundaries is accessed through the typed
   facade in `repl_state.h` (e.g., `repl_state_render()`, `repl_state_search()`).
 - Static helpers are file-scoped; public API goes through `repl_core.h`
+- Prefixes express ownership. Use `repl_*` for REPL language/editor/source/
+  replay model modules, `imrepl_*` for app shell/controller/app-service code,
+  `scene_*` for 3D rendering, `ui_*` for 2D editor/view rendering, and neutral
+  names such as `prof` for generic utilities. `repl_audio` is legacy-named and
+  should be revisited with the deferred app-shell namespace work rather than
+  copied as a pattern.
 - Config toggles use the `ReplConfigItem` / `ReplConfigKey` pattern: add a
   descriptor entry to `g_cfg_items[]` in `repl_actions.c`; `CFG_ITEM_COUNT`
   auto-computes via `sizeof`
