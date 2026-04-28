@@ -8,14 +8,14 @@
 #include <stdio.h>
 #include <string.h>
 
-void ui_replay_hud_render(const SceneRenderConfig *config) {
+void ui_replay_hud_render(const UiReplayHudState *state) {
     char progress_txt[64];
     char kbd_txt[128];
     float progress = 0.0f;
-    int scene_x = config->scene_x;
-    int scene_y = config->scene_y;
-    int scene_w = config->scene_w;
-    int scene_h = config->scene_h;
+    int scene_x = state->scene_x;
+    int scene_y = state->scene_y;
+    int scene_w = state->scene_w;
+    int scene_h = state->scene_h;
     int hud_x = scene_x + REPLAY_HUD_MARGIN_X;
     /* Lifted by STATUSBAR_H so the HUD clears the amber status strip along
      * the bottom of the scene. */
@@ -24,7 +24,7 @@ void ui_replay_hud_render(const SceneRenderConfig *config) {
     int min_y = scene_y + STATUSBAR_H + 4;
     int max_y = scene_y + scene_h - REPLAY_HUD_HEIGHT - 4;
 
-    if (!config->replaying)
+    if (!state->replaying)
         return;
 
     if (hud_w < REPLAY_HUD_MIN_WIDTH)
@@ -33,17 +33,17 @@ void ui_replay_hud_render(const SceneRenderConfig *config) {
         if (hud_y < min_y) hud_y = min_y;
         if (hud_y > max_y) hud_y = max_y;
     } else {
-        hud_y = config->code_panel_layout == CODE_PANEL_LAYOUT_TOP
+        hud_y = state->code_panel_layout == CODE_PANEL_LAYOUT_TOP
               ? scene_y + scene_h - REPLAY_HUD_HEIGHT - 4
               : min_y;
     }
-    if (config->replay_total_cmds > 0)
-        progress = (float)config->replay_pc / (float)config->replay_total_cmds;
+    if (state->replay_total_cmds > 0)
+        progress = (float)state->replay_pc / (float)state->replay_total_cmds;
     if (progress < 0.0f) progress = 0.0f;
     if (progress > 1.0f) progress = 1.0f;
 
-    glViewport(0, 0, config->viewport_w, config->viewport_h);
-    gl2d_begin(config->viewport_w, config->viewport_h);
+    glViewport(0, 0, state->viewport_w, state->viewport_h);
+    gl2d_begin(state->viewport_w, state->viewport_h);
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
@@ -67,12 +67,12 @@ void ui_replay_hud_render(const SceneRenderConfig *config) {
     int icon_sz    = 10;
 
     glColor4f(UI_ACCENT_GREEN_R, UI_ACCENT_GREEN_G, UI_ACCENT_GREEN_B, 1.0f);
-    if (config->replay_state_val == REPLAY_PLAYING) {
+    if (state->replay_state_val == REPLAY_PLAYING) {
         float bw = 3.0f, gap = 3.0f;
         float by0 = (float)icon_cy - (float)icon_sz * 0.5f;
         glRectf((float)(icon_cx - bw - gap * 0.5f), (float)(by0), (float)(icon_cx - bw - gap * 0.5f) + (float)(bw), (float)(by0) + (float)(icon_sz));
         glRectf((float)(icon_cx + gap * 0.5f),      (float)(by0), (float)(icon_cx + gap * 0.5f) + (float)(bw), (float)(by0) + (float)(icon_sz));
-    } else if (config->replay_state_val == REPLAY_DONE) {
+    } else if (state->replay_state_val == REPLAY_DONE) {
         /* Square - run complete */
         float sx = (float)icon_cx - (float)icon_sz * 0.5f;
         float sy = (float)icon_cy - (float)icon_sz * 0.5f;
@@ -92,9 +92,9 @@ void ui_replay_hud_render(const SceneRenderConfig *config) {
      * is right-aligned so 4-digit totals don't push other fields around. */
     snprintf(progress_txt, sizeof(progress_txt),
              "Replay  %11.1f cmd/s  | %7s  | %s",
-             config->replay_speed,
-             config->replay_mode == REPLAY_MODE_VERTEX ? "Vertex" : "Polygon",
-             config->replay_expand_args ? "Code Expanded" : ""
+             state->replay_speed,
+             state->replay_mode == REPLAY_MODE_VERTEX ? "Vertex" : "Polygon",
+             state->replay_expand_args ? "Code Expanded" : ""
              );
     glColor3f(UI_ACCENT_GREEN_R, UI_ACCENT_GREEN_G, UI_ACCENT_GREEN_B);
     gl2d_draw_string((float)text_col_x,
@@ -103,7 +103,7 @@ void ui_replay_hud_render(const SceneRenderConfig *config) {
 
     char count_txt[32];
     snprintf(count_txt, sizeof(count_txt), "%d / %d",
-             config->replay_pc, config->replay_total_cmds);
+             state->replay_pc, state->replay_total_cmds);
     int count_w = (int)strlen(count_txt) * FONT_SMALL_W;
     gl2d_draw_string((float)(hud_x + hud_w - REPLAY_HUD_TEXT_PAD_X - count_w),
                 (float)(hud_y + REPLAY_HUD_TEXT_LINE1_Y),
