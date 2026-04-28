@@ -80,6 +80,16 @@ typedef struct {
 extern ExprVar g_predef_vars[MAX_PREDEF_VARS];
 extern int     g_num_predef_vars;
 
+typedef struct {
+    const ExprVar *vars;
+    int            count;
+} ReplPredefView;
+
+/* Read-only snapshot of the current predefined-variable table. The pointer is
+ * stable until the next declare/undeclare/restore call; do not cache it across
+ * frames. */
+ReplPredefView repl_eval_predef_view(void);
+
 void repl_eval_init_predef_vars(void);
 /* Query: does input contain references to predefined variables (not just literals)? */
 int  repl_eval_input_has_predef_vars(const char *s);

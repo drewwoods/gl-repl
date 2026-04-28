@@ -62,6 +62,7 @@
 #include <stdarg.h>
 
 #include "repl_core.h"
+#include "repl_pipeline.h"
 #include "repl_replay.h"
 #include "repl_undo.h"
 
@@ -131,10 +132,6 @@ int  repl_parse_and_normalize_strict(const char *line, int pos,
                                      ExprVar *vars, int num_vars,
                                      int preserve_expr, GLCmd *out_cmd);
 
-void update_render_state_strings(void);
-void ensure_init_bootstrap_ready(void);
-void apply_init_bootstrap(void);
-
 /* Underlying save/load (no logging / toast side-effects); public wrappers
  * in repl_core.h call these. */
 void save_output(const char *filename);
@@ -192,9 +189,6 @@ void accept_autocomplete(void);
 /* ---- Executor helpers ------------------------------------------------- */
 
 int  apply_state_cmd(const GLCmd *cmd, float alpha_scale);
-void repl_copy_predef_values(float *dst, int max_vals);
-void repl_restore_predef_values(const float *src, int max_vals);
-void repl_execute_set_fade_context(float alpha_scale, int skip_geom_before_pc);
 
 /* ---- Line feeding / source structure ---------------------------------- */
 

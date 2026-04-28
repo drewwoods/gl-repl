@@ -23,6 +23,10 @@
 ExprVar g_predef_vars[MAX_PREDEF_VARS];
 int     g_num_predef_vars = 0;
 
+ReplPredefView repl_eval_predef_view(void) {
+    return (ReplPredefView){ .vars = g_predef_vars, .count = g_num_predef_vars };
+}
+
 static const char *skip_numeric_literal(const char *s) {
     char *end = NULL;
     (void)strtof(s, &end);
