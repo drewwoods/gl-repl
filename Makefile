@@ -93,7 +93,7 @@ else
 COVERAGE_LDFLAGS =
 endif
 
-.PHONY: all clean test test-detailed test_detailed test-stubs lines debug coverage glut help bench bench-csv check-gl-boundaries check-layer-coupling check-controller-boundaries check-scene-no-repl-state-mut check-state-boundaries check-public-api-usage callgraph-static callgraph-static-entry callgraph-profile callgraph-graphviz callgraph-html callgraph-files
+.PHONY: all clean test check test-detailed test_detailed test-stubs lines debug coverage glut help bench bench-csv check-gl-boundaries check-layer-coupling check-controller-boundaries check-scene-no-repl-state-mut check-state-boundaries check-public-api-usage callgraph-static callgraph-static-entry callgraph-profile callgraph-graphviz callgraph-html callgraph-files
 
 all: sample
 
@@ -271,6 +271,22 @@ check-state-boundaries: ## Verify REPL state facade usage stays in owned modules
 
 check-public-api-usage: ## Scan public API declarations for unused functions (informational).
 	@bash scripts/check-unused-apis.sh
+
+CHECK_TARGETS = \
+	check-gl-boundaries \
+	check-layer-coupling \
+	check-controller-boundaries \
+	check-scene-no-repl-state-mut \
+	check-state-boundaries \
+	check-public-api-usage
+
+check: ## Run all checks.
+	@set -e; \
+	for target in $(CHECK_TARGETS); do \
+		desc=$$(awk -v target="$$target" 'BEGIN {FS = ":.*## "} $$1 == target { print $$2; exit }' $(firstword $(MAKEFILE_LIST))); \
+		printf "\n==> %s\n" "$$desc"; \
+		$(MAKE) --no-print-directory $$target || exit $$?; \
+	done
 
 test: check-gl-boundaries check-layer-coupling check-controller-boundaries check-scene-no-repl-state-mut check-state-boundaries $(TEST_BINS) ## Run the full automated test suite.
 	@REPL_EXPORT_CC="$(CC)" \
@@ -473,6 +489,6 @@ help: ## Show available targets and build-mode notes.
 	@printf "User CFLAGS are appended to the selected build mode.\n\n"
 	@printf "Tests:           make test runs test binaries in parallel; set TEST_JOBS=N to limit jobs.\n\n"
 	@printf "Individual tests can still be built directly, e.g. make test_eval or make test_repl_core_io.\n\n"
-	@awk 'BEGIN {FS = ":.*## "}; /^[a-zA-Z0-9_.-]+:.*## / {printf "  %-24s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
+	@awk 'BEGIN {FS = ":.*## "}; /^[a-zA-Z0-9_.-]+:.*## / && $$1 !~ /^check-/ {printf "  %-24s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
 
 -include $(DEPS)
