@@ -268,11 +268,10 @@ repl_state_views.h   — read-only accessors; safe to include from scene_* and u
 repl_state_owners.h  — mutating accessors; owner modules and controller only
 ```
 
-Until R6 lands, the rule is enforced by transitional Makefile checks such as
-`check-scene-no-repl-state-mut` and `check-state-boundaries`. These checks may
-carry documented allowlists while Phase 2 is in progress. After R6:
-`scene_*.c` and `ui_*.c` include `repl_state_views.h` only;
-`check-views-no-owners` catches regressions.
+The rule is enforced by Makefile checks such as `check-scene-no-repl-state-mut`,
+`check-state-boundaries`, and `check-views-no-owners`. `scene_*.c` and
+`ui_*.c` include `repl_state_views.h` only; any accidental include of
+`repl_state_owners.h` in those files is now caught automatically.
 
 ### Layout geometry (Phase 2 target)
 
