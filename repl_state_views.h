@@ -257,7 +257,7 @@ typedef struct {
     ReplReplayRuntimeState    replay;
     ReplSceneRuntimeState     scenes;
     ReplImportExportState     import_export;
-} ReplRuntimeState;
+} ReplRuntimeFacade;
 
 const ReplDocumentState *repl_state_document(void);
 const GLCmd *repl_state_document_cmds(void);

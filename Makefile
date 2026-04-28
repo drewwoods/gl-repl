@@ -118,6 +118,7 @@ CORE_TEST_OBJS = $(addprefix $(OBJDIR)/,$(CORE_TEST_SRCS:.c=.o))
 TEST_BINS = \
 	test_eval \
 	test_format \
+	test_repl_state \
 	test_repl_code_panel_layout \
 	test_repl_code_panel_document \
 	test_repl_core_parse \
