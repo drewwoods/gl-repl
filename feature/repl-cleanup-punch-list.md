@@ -12,7 +12,7 @@ The active architecture direction and ordering constraints live in
 [`feature/push-architecture-refinement.md`](./push-architecture-refinement.md).
 Use that file as the controller-first source of truth for Phase 2 boundaries;
 this punch list should cross-link to it whenever a cleanup item depends on
-R1-R11 rather than repeating a divergent local plan.
+R1-R12 rather than repeating a divergent local plan.
 
 Four files still dominate the codebase: `scene_render.c` (frame prep,
 replay HUD), `scene_grid.c` (grid themes), `scene_axes.c`

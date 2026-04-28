@@ -353,7 +353,7 @@ focus/guide snapshot construction, scene-local accumulation jitter, and
 app-shell shim removal (`sample.c` calls `imrepl_ctrl_*` directly).
 
 Phase 2 follow-ups are detailed in `feature/push-architecture-refinement.md`
-(recommendations R1–R11). Summary:
+(recommendations R1–R12). Summary:
 
 1. **R1** — replay/HUD migration: controller builds `ReplayFadePlan`; scene
    iterates it; 2D HUD lives in `ui_replay_hud.c`.
@@ -373,12 +373,15 @@ Phase 2 follow-ups are detailed in `feature/push-architecture-refinement.md`
 8. **R11** — harden file-level grep guards with transitional allowlists; shrink
    them as R2/R4/R6 land.
 9. **R10** — dissolve `repl_core.c` into natural owners in five phases.
-10. **R8** — rename `sample.c` / `sample.h` to `imrepl.c` / `imrepl.h`
+10. **R12** — consolidate truly public REPL APIs into one concise public
+    header, grouped by implementation owner; keep internals out.
+11. **R8** — rename `sample.c` / `sample.h` to `imrepl.c` / `imrepl.h`
    (mechanical, last).
 
 ## Header Documentation Standard
 
-Each public API header should document:
+Until R12 consolidates the REPL public surface, each public API header should
+document:
 
 1. Module responsibility and ownership boundary.
 2. Lifecycle: initialization, per-frame calls, mutation rules.
@@ -386,3 +389,7 @@ Each public API header should document:
 4. Public functions, parameters, return values, and preconditions.
 5. Important cross-module invariants, especially GL/state ownership and render
    ordering.
+
+Long-form implementation notes belong in the implementation section or module
+docs. The Phase 2 end state is one concise public REPL API header; verbose
+per-module header prose should not become the permanent public surface.

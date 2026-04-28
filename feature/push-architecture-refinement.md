@@ -35,8 +35,8 @@ progress as of 2026-04-28:
 - ✅ R2 (UI → REPL mutation hole): Complete
 - ✅ R3 (Extract layout geometry): Complete
 - ⚠️ R4 (Controller off repl_core_internal.h): Partially complete
-  - R4a/R4b complete; R4c in progress (imrepl_ctrl isolated, 20 non-test files remain)
-- ❌ R5–R11: Not started
+  - R4a/R4b complete; R4c narrowed to tests + `repl_` implementation code; R4d pending
+- ❌ R5–R12: Not started
 
 Some pieces have landed, but the strict end-state checks described below should
 not be assumed to pass until their prerequisite Phase 2 slices are complete.
@@ -1171,10 +1171,12 @@ symbols from it:
 | `repl_copy_predef_values` | Snapshot the current predefined variable table |
 | `repl_restore_predef_values` | Restore a predefined variable table from a snapshot |
 
-Every one of these is a legitimate pipeline or lifecycle operation. Putting them
-in `_internal.h` was a temporary shortcut; the fix is to give them a proper
-public home so `repl_core_internal.h` is genuinely test-only. There are three
-steps.
+Every one of these is a legitimate pipeline or lifecycle operation. Putting
+them in `_internal.h` was a temporary shortcut; the fix is to keep the
+controller, scene/UI views, app shell, and neutral utilities out of
+`repl_core_internal.h` without turning every REPL implementation helper into
+public API. `repl_core_internal.h` may remain a REPL-internal collaboration
+header used by tests and `repl_*.c` implementation files. There are four steps.
 
 ---
 
@@ -1281,7 +1283,7 @@ and does not see the globals.
 
 ---
 
-**R4c — Verify `repl_core_internal.h` is test-only after R4a + R4b**
+**R4c — Verify `repl_core_internal.h` is limited to tests and `repl_` code after R4a + R4b**
 
 After both steps:
 
@@ -1289,8 +1291,22 @@ After both steps:
 grep -rn '#include.*repl_core_internal' *.c
 ```
 
-Should return only `test_*.c` files. If any non-test production `.c` still
-includes it, that is a new cross-layer dependency to fix before merging.
+Allowed matches are:
+
+- `test_*.c` files.
+- Production implementation files whose basename starts with `repl_`.
+
+Disallowed matches are `imrepl_ctrl.c`, `sample.c`, `scene_*.c`, `ui_*.c`,
+neutral utilities such as `prof.c`, `cmd_format.c`, `gl_stub_counts.c`, and
+app/benchmark files such as `bench_repl.c`. If one of those files needs a
+symbol that only exists in `_internal.h`, either route the operation through an
+existing public API or add a narrow public API only when that symbol is truly
+part of the production REPL surface.
+
+This step intentionally does **not** require migrating all `repl_*.c` users off
+`repl_core_internal.h`. Doing that by promoting internal helpers into public
+headers would bloat the API and make private REPL implementation details look
+stable.
 
 Remove the `extern g_predef_vars` / `extern g_num_predef_vars` declarations
 from `repl_core_internal.h` — they were the only reason the controller
@@ -1298,7 +1314,35 @@ had to include that header at all.
 
 ---
 
+**R4d — Verify only truly public APIs live in `repl_*.h` headers**
+
+R4c allows `repl_*.c` implementation files to keep using
+`repl_core_internal.h`; R4d makes the other half of that rule explicit. Do not
+solve internal include pressure by dumping implementation-only declarations into
+ordinary `repl_*.h` headers.
+
+Audit each `repl_*.h` declaration:
+
+- Keep declarations that are used by a legitimate production consumer outside
+  the owning implementation file, or that form an intentional cross-module REPL
+  contract.
+- Move implementation-only helpers back to file-local `static` functions,
+  `repl_core_internal.h`, or a clearly private owner header if one is
+  unavoidable.
+- Do not treat tests as a reason to make an API public. Tests that need
+  implementation seams may include `repl_core_internal.h`.
+- Do not expose file-scope globals, mutable state tables, or convenience hooks
+  whose only purpose is to avoid passing through the real owner API.
+
+Exit criterion: the non-internal `repl_*.h` headers contain only production
+surface area that another owner is allowed to call, with concise comments about
+ownership and lifecycle. Internal seams remain internal, even when multiple
+`repl_*.c` files share them.
+
+---
+
 **Status (2026-04-28):** R4a and R4b are complete. R4c is **in progress**.
+R4d is **not started**.
 
 - ✅ `imrepl_ctrl.c` no longer includes `repl_core_internal.h`
 - ✅ `repl_pipeline.h` created and integrated; controller uses it exclusively
@@ -1311,14 +1355,17 @@ had to include that header at all.
   repl_parser.c, repl_replay_annotations.c, repl_replay.c, repl_scenes.c,
   repl_search.c, repl_state.c, repl_undo.c, ui_panels.c
   ```
-  These must either stop including `repl_core_internal.h` or be documented
-  as transitional exceptions in R11. Most of these depend on parse/normalize/
-  export/load symbols that should move to proper public headers (R10 work).
+  Under the R4c rule, the 18 `repl_*.c` users are allowed if they are genuine
+  REPL implementation collaborators. The out-of-policy users are
+  `bench_repl.c` and `ui_panels.c`; those must stop including
+  `repl_core_internal.h` or be documented as temporary R11 exceptions until R4c
+  is finished.
 
 ---
 
 Exit criterion: `grep "repl_core_internal" imrepl_ctrl.c` returns empty. ✅
-`grep -rn '#include.*repl_core_internal' *.c` lists only `test_*.c` files. ❌
+`grep -rn '#include.*repl_core_internal' *.c` lists only `test_*.c` and
+`repl_*.c` files. ❌
 `make test`, `make sample`, and `make sample USE_GL_STUBS=1` all pass. ✅
 
 #### R5. Slim and reorganize `SceneRenderConfig`
@@ -1698,12 +1745,10 @@ include-churn from `repl_core.h` is amortized.
 
 **Phase 5 of R10 — dissolve repl_core.h:**
 
-Once `repl_core.c` is empty, decide whether `repl_core.h` becomes a temporary
-umbrella (`#include "repl_parser.h"`, `#include "repl_source_scope.h"`, etc.)
-to let callers migrate gradually, or is removed immediately with a mechanical
-include-update pass. The umbrella approach is lower risk; the removal pass is
-cleaner. Either way, `repl_core.h` stops being the de facto "include
-everything" header and each caller explicitly includes what it actually needs.
+Once `repl_core.c` is empty, stop treating `repl_core.h` as the accidental
+"include everything" header. R12 below defines the intentional replacement:
+one concise public REPL API header grouped by implementation file, with
+implementation detail kept out of the public surface.
 
 R10 is independent of R1–R7 and can be done in parallel with them. Phase 1 of
 R10 (deleting dead declarations) should be the very first commit in any session
@@ -1728,10 +1773,10 @@ Current guard direction:
   `_internal` headers.
 - Make scene state isolation enforceable now: `scene_*.c` must contain no
   `repl_state_*` or `repl_replay_*` calls.
-- Keep a shrinking UI transition allowlist for known R2/R4 holes:
-  `ui_color_picker.c`, `ui_help_overlay.c`, and `ui_panels.c` may still contain
-  direct `_mut()` calls until R2 lands; `ui_color_picker.c` and `ui_panels.c`
-  may still include `repl_core_internal.h` until R4/R2 remove those needs.
+- Keep shrinking transition allowlists for known R2/R4 holes. R4c permits
+  `repl_core_internal.h` in tests and `repl_*.c` files only; any remaining
+  `ui_*`, `scene_*`, app-shell, benchmark, or neutral-utility include is a
+  temporary exception that must disappear or be explicitly justified.
 
 R11 is not a substitute for R2/R4/R6/R7, and it does not mean Phase 2 is
 complete. It is the guardrail that prevents new leaks while those steps shrink
@@ -1748,6 +1793,43 @@ with only explicitly documented allowlists, and the `test` target runs the
 transitional checks. Exit criterion for the final Phase 2 guard state: the
 allowlists are empty or reduced to permanent, documented architectural
 exceptions.
+
+#### R12. Consolidate public REPL APIs into one public header
+
+The final public REPL surface should be one header, tentatively `repl.h`, not a
+wide set of public `repl_*.h` files. This is separate from R4c/R4d: R4 keeps
+internals out of view/controller/app code and prevents API bloat; R12 gives the
+remaining public API a deliberate home.
+
+Target shape:
+
+- `repl.h` is the only header non-`repl_` production code includes for REPL
+  public APIs.
+- The header is organized into concise sections by implementation file or owner
+  area, for example `repl_parser.c`, `repl_eval.c`, `repl_export.c`,
+  `repl_replay.c`, and `repl_scenes.c`.
+- Each section has a short purpose note and the declarations that are truly
+  public. The current verbose per-header descriptions move to the matching
+  implementation-section comments, private headers, or architecture docs.
+- The combined header does not include `repl_core_internal.h`, expose mutable
+  globals, or absorb implementation-only helper declarations.
+- Existing per-module `repl_*.h` files either become private owner headers used
+  only by `repl_*.c` and tests, or disappear after callers migrate to `repl.h`.
+
+Suggested sequence:
+
+1. Finish R4d so the public/private line is known before consolidation.
+2. Let R10 finish moving `repl_core.c` responsibilities to natural owners.
+3. Create `repl.h` with concise owner sections and migrate non-`repl_`
+   production callers to it.
+4. Move verbose module-header prose into the corresponding implementation
+   sections, leaving only concise public comments in `repl.h`.
+5. Remove or privatize obsolete per-module public headers.
+
+Exit criterion: non-`repl_` production files include one REPL public header
+(`repl.h`) for production REPL APIs. `repl_core_internal.h` remains excluded
+from that header and stays limited to tests plus `repl_*.c` implementation
+files.
 
 #### R8. Defer `sample → imrepl` rename until after R1, R2, R5
 
@@ -1774,12 +1856,13 @@ R5          (slim SceneRenderConfig — requires R1)
 R6          (split typed-state facade — requires R1 + R2)
 R7          (add view-side grep guards — requires R6)
 R11         (harden file-level guards; start now, shrink allowlists after R2/R4/R6)
-R4          (controller off repl_core_internal.h)
+R4          (controller off repl_core_internal.h; public-header audit)
 R10-phase2  (parse+normalize → repl_parser, collect_visible_vars → repl_source_scope)
 R10-phase3  (extract repl_reformat.c)
 R10-phase4  (startup + query helpers to natural owners)
+R10-phase5  (dissolve repl_core.h — feeds into R12)
+R12         (single public repl.h — after R4d + R10)
 R8          (sample → imrepl rename — mechanical, last)
-R10-phase5  (dissolve repl_core.h — can fold into R8 commit)
 R9          (optional: split repl_export.c)
 ```
 
@@ -1790,6 +1873,9 @@ misleads every reader. R4 and R10-phase2 are natural companions: R4 creates
 needs; R10-phase2 reorganises what remains in `repl_core.c` after those symbols
 are promoted.
 
+R12 should wait until R4d and most of R10 have settled; otherwise the combined
+header will just preserve the current confusion in a bigger file.
+
 ### Phase 2 Recommendations Status (2026-04-28)
 
 Implementation is actively in progress. Current completion:
@@ -1799,20 +1885,25 @@ Implementation is actively in progress. Current completion:
 | **R1** — Replay/HUD migration | ✅ Complete | R1a, R1b, R1c all done; scene has zero `repl_replay_*` calls |
 | **R2** — UI → REPL mutation hole | ✅ Complete | R2a–R2d all done; UI files route mutations through actions/stores |
 | **R3** — Extract layout geometry | ✅ Complete | `repl_layout.h/c` created; ~34 call sites updated |
-| **R4** — Controller off `repl_core_internal.h` | ⚠️ Partial | R4a/R4b done; R4c in progress (imrepl_ctrl ✅, 20 files remain) |
+| **R4** — Controller off `repl_core_internal.h` | ⚠️ Partial | R4a/R4b done; R4c in progress (controller ✅, 2 out-of-policy includes remain); R4d pending |
 | **R5** — Slim `SceneRenderConfig` | ❌ Not started | Requires R1 ✅ |
 | **R6** — Split typed-state facade | ❌ Not started | Requires R1 ✅ + R2 ✅ |
 | **R7** — View-side grep guards | ❌ Not started | Requires R6 |
 | **R11** — Harden file-level guards | ❌ Not started | Can start now; shrink allowlists as R2/R4/R6 land |
 | **R10-phase1** — Delete stale GLUT decls | ❌ Not started | Zero-risk, should be done first of R10 phases |
 | **R10-phase2+** — Dissolve `repl_core.c` | ❌ Not started | Phased; depends on R4c completion |
+| **R12** — Single public REPL header | ❌ Not started | Requires R4d public/private audit + R10 responsibility moves |
 | **R8** — `sample → imrepl` rename | ❌ Not started | Mechanical; defer until after R5 |
 | **R9** — Optional: split `repl_export.c` | ❌ Not started | Module hygiene only; skip if not painful |
 
 **Next recommended steps:**
-1. Complete R4c by migrating the 20 remaining files away from `repl_core_internal.h` (or documenting as transitional) — blocker for strict exit criterion
-2. Start R5 (slim `SceneRenderConfig`) — unblocked by R1 ✅
-3. Start R6 (split state facade) — unblocked by R1 ✅ + R2 ✅
+1. Complete R4c by removing the out-of-policy `repl_core_internal.h` includes
+   from `bench_repl.c` and `ui_panels.c` or documenting them as temporary R11
+   exceptions.
+2. Start R4d and audit `repl_*.h` declarations so public headers do not absorb
+   implementation-only seams.
+3. Start R5 (slim `SceneRenderConfig`) — unblocked by R1 ✅
+4. Start R6 (split state facade) — unblocked by R1 ✅ + R2 ✅
 
 ## Verification
 
