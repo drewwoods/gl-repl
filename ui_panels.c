@@ -13,7 +13,6 @@
 #include "ui_color_picker.h"
 #include "repl_code_panel_document.h"
 #include "repl_core.h"
-#include "repl_core_internal.h"
 #include "repl_clipboard.h"
 #include "repl_keys.h"
 #include "repl_replay.h"

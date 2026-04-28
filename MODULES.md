@@ -123,6 +123,7 @@ APIs.
 | `repl_clipboard` | Line selection and copy/cut/paste |
 | `repl_undo` | Snapshot rings and restore paths |
 | `repl_search` | Search state and navigation |
+| `repl_search.h` | Search query helpers and input routing API |
 | `repl_var_drag` | Variable slider drag transaction and writeback |
 | `repl_inline_rename` | Scene rename input buffer |
 
