@@ -5,7 +5,7 @@
 #include "repl_state.h"
 #include "ui_profile_panel.h"
 #include "./include/gl_2d.h"
-#include "ui_panels.h"
+#include "repl_layout.h"
 #include "ui_variable_panel.h"
 #include "prof.h"
 
@@ -45,7 +45,7 @@ static void profile_panel_rect_for_height(int panel_h, int *out_x, int *out_y) {
     int scene_x, scene_y, scene_w, scene_h;
     int panel_x, panel_y;
 
-    ui_panels_scene_rect(&scene_x, &scene_y, &scene_w, &scene_h);
+    repl_layout_scene_rect(&scene_x, &scene_y, &scene_w, &scene_h);
 
     if (*repl_state_variable_panel()->visible) {
         panel_x = scene_x + scene_w - PROF_PANEL_W - PROF_PANEL_MARGIN;

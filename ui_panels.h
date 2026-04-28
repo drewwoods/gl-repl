@@ -7,9 +7,6 @@
  * and panel-specific internals (scroll state, selection, etc.).
  *
  * Rendering:
- *   - ui_panels_code_panel_rect(): Query code-panel geometry (x, y, width, height
- *     in OpenGL coords with y=0 at bottom).
- *   - ui_panels_scene_rect(): Query 3D scene geometry.
  *   - ui_panels_render_code_panel(): Render the code panel with wrapped lines,
  *     syntax highlighting, overlays (cursor, selection, replay annotations).
  *   - ui_panels_render_scene_status(): Render the status banner below the scene
@@ -34,16 +31,6 @@
  */
 #ifndef UI_PANELS_H
 #define UI_PANELS_H
-
-/* --- Geometry queries (OpenGL coordinates: y=0 at bottom) --- */
-
-/* Query code-panel rectangle (x, y, width, height). Outputs OpenGL-coordinate
- * values for layout and hit-testing. */
-void ui_panels_code_panel_rect(int *x, int *y, int *w, int *h);
-
-/* Query 3D scene rectangle (x, y, width, height). Outputs OpenGL-coordinate
- * values for layout and hit-testing. */
-void ui_panels_scene_rect(int *x, int *y, int *w, int *h);
 
 /* --- Rendering --- */
 

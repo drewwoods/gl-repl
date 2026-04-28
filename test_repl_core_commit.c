@@ -4,6 +4,7 @@
 #include "repl_state.h"
 #include "repl_replay_annotations.h"
 #include "ui_panels.h"
+#include "repl_layout.h"
 
 #define g_status  (repl_state_status_mut()->text)
 #define g_scroll  (*repl_state_code_panel_mut()->scroll)
@@ -165,7 +166,7 @@ static int code_panel_header_row_count(void) {
     int text_x = CODE_MARGIN_X + linenum_w + FONT_W + idx_col_w;
     int rows = 0;
 
-    ui_panels_code_panel_rect(NULL, NULL, &panel_w, NULL);
+    repl_layout_code_panel_rect(NULL, NULL, &panel_w, NULL);
     for (int i = 0; i < g_workspace_header_line_count; i++)
         rows += test_code_panel_row_count_for_text(g_workspace_header_lines[i], text_x, panel_w);
     for (int i = 0; g_header_pre[i]; i++)
@@ -187,7 +188,7 @@ static int code_panel_mouse_y_for_cmd(int cmd_idx) {
     int text_x = CODE_MARGIN_X + linenum_w + FONT_W + idx_col_w;
     int doc_line = code_panel_header_row_count();
 
-    ui_panels_code_panel_rect(NULL, &cp_y, &panel_w, &cp_h);
+    repl_layout_code_panel_rect(NULL, &cp_y, &panel_w, &cp_h);
     for (int i = 0; i < cmd_idx && i < repl_state_document_count(); i++) {
         doc_line += test_code_panel_row_count_for_text(repl_state_document_cmds_mut()[i].source,
                                                        text_x, panel_w);

@@ -119,7 +119,7 @@ APIs.
 | `repl_inline_rename` | Scene rename input buffer |
 
 Input/controller modules may mutate models. Render modules should not. Some
-input modules still include UI layout headers for hit-testing; that is a known
+input modules still include `repl_layout.h` for hit-testing; that is a known
 boundary exception outside the Phase 1 scene-controller extraction.
 
 ### 3. REPL domain models
@@ -174,6 +174,7 @@ controller builds a `ReplayFadePlan` snapshot; the replay HUD now lives in
 | Module | Role |
 |--------|------|
 | `ui_panels` | Code-panel rows, overlay viewport bracket, scene status banner |
+| `repl_layout` | Pure scene/code-panel rectangle geometry, no GL |
 | `ui_menu_bar` | Menus, dropdowns, pinned buttons, search slot |
 | `ui_color_picker` | Floating HSV/alpha picker and literal color swatches |
 | `ui_help_overlay` | Modal F1 help |
@@ -265,10 +266,10 @@ regressions.
 
 ### Layout geometry (Phase 2 target)
 
-`ui_panels_scene_rect` and `ui_panels_code_panel_rect` will move to a new
-`repl_layout.c` / `repl_layout.h` (R3). Until then, non-UI callers
+`repl_layout.c` / `repl_layout.h` own `repl_layout_scene_rect` and
+`repl_layout_code_panel_rect` (R3). Non-UI callers
 (`imrepl_ctrl.c`, `repl_editor.c`, `repl_export.c`, tests) include
-`ui_panels.h` for these two functions — a known wrong-direction dependency.
+`repl_layout.h`; `ui_panels.h` stays on the UI/render side.
 
 ### UI / scene independence
 

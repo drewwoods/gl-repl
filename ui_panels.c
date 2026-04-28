@@ -8,6 +8,7 @@
 #include "repl_actions.h"
 #include "repl_state.h"
 #include "repl_export.h"
+#include "repl_layout.h"
 #include "repl_source_scope.h"
 #include "ui_color_picker.h"
 #include "repl_code_panel_document.h"
@@ -28,88 +29,15 @@
 #define g_render_state_lines (IMPORT_EXPORT_STATE->render_state_lines)
 #define g_cam_lines (IMPORT_EXPORT_STATE->cam_lines)
 
-/* Status footer height - design: 22px strip flush against code panel bottom */
-/* STATUSBAR_H lives in sample.h now so scene_render.c can lift the
- * replay HUD above the amber status strip.  */
-
-/* ========================================================================= */
-/* Layout geometry helpers                                                    */
-/* ========================================================================= */
-
 static int code_panel_layout_mode(void) {
     if (*repl_state_presentation()->code_panel_layout < 0 || *repl_state_presentation()->code_panel_layout >= CODE_PANEL_LAYOUT_COUNT)
         return CODE_PANEL_LAYOUT_LEFT;
     return *repl_state_presentation()->code_panel_layout;
 }
 
-static int panel_span_px(int total_px) {
-    int span = (int)((float)total_px * *repl_state_code_panel()->panel_frac);
-    if (span < 1) span = 1;
-    if (span > total_px) span = total_px;
-    return span;
-}
-
-void ui_panels_code_panel_rect(int *x, int *y, int *w, int *h) {
-    int layout = code_panel_layout_mode();
-    int win_w = *repl_state_viewport()->window_w;
-    int win_h = *repl_state_viewport()->window_h;
-
-    if (layout == CODE_PANEL_LAYOUT_HIDDEN) {
-        if (x) *x = 0;
-        if (y) *y = 0;
-        if (w) *w = 0;
-        if (h) *h = 0;
-    } else if (layout == CODE_PANEL_LAYOUT_TOP) {
-        int panel_h = panel_span_px(win_h);
-        if (x) *x = 0;
-        if (y) *y = win_h - panel_h;
-        if (w) *w = win_w;
-        if (h) *h = panel_h;
-    } else if (layout == CODE_PANEL_LAYOUT_BOTTOM) {
-        int panel_h = panel_span_px(win_h);
-        if (x) *x = 0;
-        if (y) *y = 0;
-        if (w) *w = win_w;
-        if (h) *h = panel_h;
-    } else {
-        int panel_w = panel_span_px(win_w);
-        if (x) *x = 0;
-        if (y) *y = 0;
-        if (w) *w = panel_w;
-        if (h) *h = win_h;
-    }
-}
-
-void ui_panels_scene_rect(int *x, int *y, int *w, int *h) {
-    int layout = code_panel_layout_mode();
-    int win_w = *repl_state_viewport()->window_w;
-    int win_h = *repl_state_viewport()->window_h;
-
-    if (layout == CODE_PANEL_LAYOUT_HIDDEN) {
-        if (x) *x = 0;
-        if (y) *y = 0;
-        if (w) *w = win_w;
-        if (h) *h = win_h;
-    } else if (layout == CODE_PANEL_LAYOUT_TOP) {
-        int panel_h = panel_span_px(win_h);
-        if (x) *x = 0;
-        if (y) *y = 0;
-        if (w) *w = win_w;
-        if (h) *h = win_h - panel_h;
-    } else if (layout == CODE_PANEL_LAYOUT_BOTTOM) {
-        int panel_h = panel_span_px(win_h);
-        if (x) *x = 0;
-        if (y) *y = panel_h;
-        if (w) *w = win_w;
-        if (h) *h = win_h - panel_h;
-    } else {
-        int panel_w = panel_span_px(win_w);
-        if (x) *x = panel_w;
-        if (y) *y = 0;
-        if (w) *w = win_w - panel_w;
-        if (h) *h = win_h;
-    }
-}
+/* Status footer height - design: 22px strip flush against code panel bottom */
+/* STATUSBAR_H lives in sample.h now so scene_render.c can lift the
+ * replay HUD above the amber status strip.  */
 
 /* ========================================================================= */
 /* Syntax color helpers                                                       */
@@ -342,7 +270,7 @@ int ui_panels_code_panel_apply_scroll_follow_for_test(int *out_follow_doc_line,
     int text_x = idx_x + idx_col_w;
 
     repl_state_refresh_workspace_header_lines();
-    ui_panels_code_panel_rect(&cp_x, &cp_y, &cp_w, &cp_h);
+    repl_layout_code_panel_rect(&cp_x, &cp_y, &cp_w, &cp_h);
     (void)cp_x;
     (void)cp_y;
 
@@ -370,7 +298,7 @@ void ui_panels_render_code_panel(void) {
 
     CodePanelDocumentLayout doc_layout;
     int cp_x, cp_y, cp_w, cp_h;
-    ui_panels_code_panel_rect(&cp_x, &cp_y, &cp_w, &cp_h);
+    repl_layout_code_panel_rect(&cp_x, &cp_y, &cp_w, &cp_h);
     if (cp_w <= 0 || cp_h <= 0) {
         prof_end(PROF_CODE_PANEL_LAYOUT_GEOM_SETUP);
         prof_end(PROF_CODE_PANEL_LAYOUT_GEOM);
@@ -912,7 +840,7 @@ void ui_panels_render_scene_status(void) {
     if (*status->ttl <= 0 || !status->text[0]) return;
 
     int sc_x, sc_y, sc_w, sc_h;
-    ui_panels_scene_rect(&sc_x, &sc_y, &sc_w, &sc_h);
+    repl_layout_scene_rect(&sc_x, &sc_y, &sc_w, &sc_h);
     if (sc_w <= 0 || sc_h <= 0) return;
 
     int bar_h = STATUSBAR_H;
@@ -1001,7 +929,7 @@ static int code_panel_hit_test(int mx, int my,
                                int *out_on_insert_line,
                                int *out_row_offset) {
     int cp_x, cp_y, cp_w, cp_h;
-    ui_panels_code_panel_rect(&cp_x, &cp_y, &cp_w, &cp_h);
+    repl_layout_code_panel_rect(&cp_x, &cp_y, &cp_w, &cp_h);
     if (cp_w <= 0 || cp_h <= 0) return 0;
     int panel_w = cp_w;
     int panel_top = cp_y + cp_h;
@@ -1041,7 +969,7 @@ static int code_panel_hit_test(int mx, int my,
 static int code_panel_drag_target(int mx, int my, int *out_target) {
     (void)mx;
     int cp_x, cp_y, cp_w, cp_h;
-    ui_panels_code_panel_rect(&cp_x, &cp_y, &cp_w, &cp_h);
+    repl_layout_code_panel_rect(&cp_x, &cp_y, &cp_w, &cp_h);
     if (cp_w <= 0 || cp_h <= 0) return 0;
     int panel_w = cp_w;
     int panel_top = cp_y + cp_h;
@@ -1097,7 +1025,7 @@ void ui_panels_handle_code_panel_click(int mx, int my) {
     }
 
     int cp_w;
-    ui_panels_code_panel_rect(NULL, NULL, &cp_w, NULL);
+    repl_layout_code_panel_rect(NULL, NULL, &cp_w, NULL);
     int panel_w = cp_w;
     int linenum_w = 4 * FONT_W;
     int idx_col_w = *repl_state_presentation()->show_vertex_indices ? (6 * FONT_W) : 0;
@@ -1190,7 +1118,7 @@ int ui_panels_handle_code_panel_press(int mx, int my) {
     if (!on_insert_line && row_offset == 0 && target >= 0 && target < repl_state_document_count()) {
         if (ui_color_picker_can_edit_cmd(target)) {
             int cp_x2, cp_w2;
-            ui_panels_code_panel_rect(&cp_x2, NULL, &cp_w2, NULL);
+            repl_layout_code_panel_rect(&cp_x2, NULL, &cp_w2, NULL);
             int sx = cp_x2 + cp_w2 - CODE_MARGIN_X - UI_COLOR_SWATCH_W - 2;
             if (mx >= sx && mx < sx + UI_COLOR_SWATCH_W) {
                 if (ui_color_picker_active_line() == target) {

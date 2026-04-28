@@ -8,7 +8,7 @@
 #include "repl_keys.h"
 #include "repl_state.h"
 #include "ui_menu_bar.h"
-#include "ui_panels.h"
+#include "repl_layout.h"
 #include "./include/gl_2d.h"
 
 /* Menu bar - styled after Header Wireframes v2.
@@ -233,7 +233,7 @@ static void menubar_rects(int menu_x[NUM_MENUS], int menu_w[NUM_MENUS],
                           int pin_x[NUM_PIN_BTNS], int pin_w[NUM_PIN_BTNS],
                           int *row_y, int *row_h) {
     int cp_x, cp_y, cp_w, cp_h;
-    ui_panels_code_panel_rect(&cp_x, &cp_y, &cp_w, &cp_h);
+    repl_layout_code_panel_rect(&cp_x, &cp_y, &cp_w, &cp_h);
     int panel_top = cp_y + cp_h;
     int by = panel_top - CODE_MARGIN_Y - LINE_H;
     int bh = LINE_H;
@@ -343,7 +343,7 @@ int ui_menu_bar_dropdown_item_hit(int gx, int gy) {
 
 static int ui_menu_bar_panel_visible(void) {
     int cp_w, cp_h;
-    ui_panels_code_panel_rect(NULL, NULL, &cp_w, &cp_h);
+    repl_layout_code_panel_rect(NULL, NULL, &cp_w, &cp_h);
     return cp_w > 0 && cp_h > 0;
 }
 
@@ -565,7 +565,7 @@ void ui_menu_bar_render_search_overlay(int cp_x, int panel_w, int panel_top) {
 void ui_menu_bar_render(void) {
     const ReplReplayRuntimeState *replay = repl_state_replay();
     int cp_x, cp_y, cp_w, cp_h;
-    ui_panels_code_panel_rect(&cp_x, &cp_y, &cp_w, &cp_h);
+    repl_layout_code_panel_rect(&cp_x, &cp_y, &cp_w, &cp_h);
     (void)cp_y;
     if (cp_w <= 0 || cp_h <= 0) return;
     /* Menu bar - design ref: Header Wireframes v2 (now at the very top of
