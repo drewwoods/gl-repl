@@ -167,6 +167,24 @@ Run all: `make test`
 - Expression variables: `ExprVar` struct in `repl_eval.h`, predefined set
   accessible via `repl_state_variables()` and managed by `declare_predef_var()`
 
+## Adding Or Migrating An Owner Module
+
+When a module starts owning mutable REPL state, follow the Stage-1 template:
+
+1. Put the live bytes in `ReplRuntimeState` unless the state is intentionally a
+   sidecar such as undo rings or user-scene slots. If it is a sidecar, call
+   that out explicitly instead of describing it as runtime-state migration.
+2. Add a named runtime slice in `repl_state.h`, wire it into
+   `static ReplRuntimeState g_repl_state;`, and say whether the read path is
+   currently `facade-backed`, `direct-runtime`, or `value-getter`.
+3. Keep mutations on the owner side. Scene/UI renderers read snapshots only;
+   render-time discoveries return through output structs that the controller
+   actualizes back into state.
+4. Extend the ownership tests in the same change: keep
+   `repl_state_capture()`, `repl_state_restore()`, and `repl_state_reset_all()`
+   current for runtime slices, and add focused behavior coverage in the
+   module's own tests.
+
 ## Adding Grid/Axes Themes
 
 Grids and axes are themeable through small specs in `scene_grid.c` and
