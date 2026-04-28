@@ -15,177 +15,335 @@ int  parse_workspace_header_line(const char *line);
 void update_render_state_strings(void);
 void update_cam_lines(void);
 
-GLCmd g_cmds[MAX_COMMANDS];
-int   g_num_cmds = 0;
-int   g_edit_line = 0;
-int   g_normals_dirty = 1;
-GLCmd            g_flat_cmds[MAX_COMMANDS];
-FlatCmdLocalVars g_flat_cmd_local_vars[MAX_COMMANDS];
-int              g_num_flat_cmds = 0;
-int              g_flat_dirty = 1;
-int              g_user_lighting_enabled = 0;
-int              g_current_block_begin = -1;
-int              g_current_block_end = -1;
-int              g_current_block_line = -1;
-char             g_input[MAX_INPUT_LEN];
-int              g_input_len = 0;
-int              g_cursor_pos = 0;
-char             g_newline_buf[MAX_INPUT_LEN] = "";
-int              g_newline_len = 0;
-int              g_inserting = 0;
-GLCmd            g_clipboard[MAX_COMMANDS];
-int              g_clipboard_count = 0;
-int              g_sel_anchor = -1;
-int              g_sel_end = -1;
-float            g_anim_time = 0.0f;
-int              g_t_playing = 1;    /* 1: 't' var auto-increments with time; 0: frozen */
-int              g_t_var_idx = -1;   /* index of "t" in g_predef_vars[], cached at init */
-float            g_panel_frac = CFG_DEFAULT_PANEL_FRAC;
-int              g_resizing_panel = 0;
-int              g_scroll = 0;
-int              g_scroll_follow_cursor = 0;
-int              g_cursor_on = 1;
-int              g_blink_tick = 0;
-int              g_show_help = 0;
-int              g_help_tab = 0;   /* 0=Commands, 1=Keys */
-int              g_help_scroll = 0;
-int              g_show_var_panel = 1;
-int              g_drag_var = -1;
-int              g_drag_log_mode = 0;  /* 0=linear (LMB drag), 1=logarithmic (RMB drag) */
-float            g_drag_start_val = 0.0f;
-int              g_drag_start_x = 0;
-int              g_show_profile_panel = PROFILE_PANEL_OFF;
-float            g_cam_rx = 20.0f;
-float            g_cam_ry = 30.0f;
-float            g_cam_dist = 5.0f;
-float            g_cam_tx = 0.0f;
-float            g_cam_ty = 0.0f;
-float            g_cam_tz = 0.0f;
-float            g_cam_motion_glow = 0.0f;
-int              g_mouse_x = 0;
-int              g_mouse_y = 0;
-int              g_mouse_btn = -1;
-int              g_win_w = 1200;
-int              g_win_h = 800;
-int              g_wireframe = CFG_DEFAULT_WIREFRAME;
-int              g_grid_theme = CFG_DEFAULT_GRID_THEME;
-int              g_grid_major_idx = CFG_DEFAULT_GRID_MAJOR_IDX;
-int              g_grid_extent_idx = CFG_DEFAULT_GRID_EXTENT_IDX;
-float            g_focus_vtx[3] = { 0.0f, 0.0f, 0.0f };
-int              g_focus_vtx_valid = 0;
-int              g_axes_theme = CFG_DEFAULT_AXES_THEME;
-int              g_show_vnums = CFG_DEFAULT_VERTEX_LABELS;
-int              g_show_normals = CFG_DEFAULT_NORMAL_VECTORS;
-int              g_show_indices = CFG_DEFAULT_VERTEX_INDICES;
-int              g_wrap_at_comma = CFG_DEFAULT_WRAP_AT_COMMA;
-int              g_code_panel_layout = CFG_DEFAULT_CODE_PANEL_LAYOUT;
-int              g_show_guides = CFG_DEFAULT_VERTEX_GUIDES;
-int              g_xform_guide_mode = CFG_DEFAULT_XFORM_GUIDE_MODE;
-int              g_autonormal = 0;
-int              g_show_lights = CFG_DEFAULT_LIGHT_INDICATORS;
-int              g_backdrop_mode = CFG_DEFAULT_BACKDROP_MODE;
-int              g_cam_rotate = CFG_DEFAULT_CAMERA_ROTATE;
-int              g_show_outlines = CFG_DEFAULT_VERTEX_OUTLINES;
-int              g_show_vpoints = CFG_DEFAULT_VERTEX_POINTS;
-int              g_highlight_current_poly = 1;
-int              g_ortho_mode = 0;
-int              g_cursor_px = 0;     /* screen pos of cursor, set during render */
-int              g_cursor_py = 0;
-const float g_grid_major_steps[GRID_MAJOR_COUNT] = {
+static const float g_grid_major_steps[GRID_MAJOR_COUNT] = {
     [GRID_MAJOR_1]  = 1.0f,
     [GRID_MAJOR_2]  = 2.0f,
     [GRID_MAJOR_5]  = 5.0f,
     [GRID_MAJOR_10] = 10.0f,
 };
-const float g_grid_extents[GRID_EXTENT_COUNT] = {
+static const float g_grid_extents[GRID_EXTENT_COUNT] = {
     [GRID_EXTENT_CLOSE] = 5.0f,
     [GRID_EXTENT_MID]   = 25.0f,
     [GRID_EXTENT_FAR]   = 100.0f,
 };
-int              g_use_accum = 1;
-int              g_accum_aa_enabled = 1;
-int              g_accum_samples = 2;
-float            g_accum_jitter_x = 0.0f;
-float            g_accum_jitter_y = 0.0f;
-int              g_multisample_enabled = CFG_DEFAULT_MULTISAMPLE;
-int              g_line_smooth_enabled = CFG_DEFAULT_LINE_SMOOTH;
-int              g_init_attenuate_points = CFG_DEFAULT_ATTENUATE_POINTS;
-SceneLight       g_lights[MAX_LIGHTS] = {
-    { GL_LIGHT0, 1,
-      { 2.0f, 4.0f, 5.0f, 0.0f },
-      { 0.80f, 0.80f, 0.75f, 1.0f },
-      { 0.10f, 0.10f, 0.12f, 1.0f },
-      { 1.0f, 1.0f, 0.95f, 1.0f } },
-    { GL_LIGHT1, 1,
-      { -3.0f, 2.0f, -2.0f, 1.0f },
-      { 0.45f, 0.30f, 0.15f, 1.0f },
-      { 0.05f, 0.03f, 0.02f, 1.0f },
-      { 0.30f, 0.20f, 0.10f, 1.0f } },
-    { GL_LIGHT2, 1,
-      { 0.0f, -1.0f, 3.0f, 1.0f },
-      { 0.15f, 0.25f, 0.50f, 1.0f },
-      { 0.02f, 0.03f, 0.06f, 1.0f },
-      { 0.10f, 0.15f, 0.35f, 1.0f } },
-    { GL_LIGHT3, 0,
-      { 1.0f, 1.0f, -4.0f, 0.0f },
-      { 0.35f, 0.35f, 0.40f, 1.0f },
-      { 0.05f, 0.05f, 0.06f, 1.0f },
-      { 0.20f, 0.20f, 0.25f, 1.0f } },
-};
-float            g_clear_color[4] = { 0.10f, 0.10f, 0.13f, 1.0f };
-
-char g_status[REPL_STATUS_TEXT_MAX] = "";
-int  g_status_ttl = 0;
-
-int  g_search_active = 0;
-char g_search_query[MAX_INPUT_LEN] = "";
-int  g_search_query_len = 0;
-int  g_search_cursor_pos = 0;
-int  g_search_hit_line = -1;
-int  g_search_hit_char = -1;
-int  g_search_hit_ordinal = 0;
-int  g_search_match_count = 0;
-
-const char *g_ac_matches[MAX_AC_MATCHES];
-const char *g_ac_insert_matches[MAX_AC_MATCHES];
-int         g_ac_count = 0;
-int         g_ac_sel = 0;
-char        g_ac_ghost[MAX_LINE_LEN] = "";
-char        g_ac_hint[MAX_LINE_LEN] = "";
-
-int   g_replay_active = 0;
-int   g_replay_state = REPLAY_OFF;
-int   g_replay_pc = 0;
-int   g_replay_mode = REPLAY_MODE_VERTEX;
-float g_replay_speed = 4.0f;
-float g_replay_accum = 0.0f;
-float g_replay_fade_speed = 2.0f;
-int   g_replay_src_line = -1;
-int   g_replay_total_flat = 0;
-int   g_replay_expand_args = 1;
-
-int  g_example_idx = -1;
-char g_workspace_dir[REPL_WORKSPACE_DIR_MAX] = "";
-char g_workspace_header_lines[MAX_WORKSPACE_HEADER_LINES][WORKSPACE_HEADER_LINE_LEN] = {
-    [0] = "",
-};
-int  g_workspace_header_line_count = 0;
-char g_render_state_lines[RENDER_STATE_LINE_COUNT][64] = {
-    "  glEnable(GL_MULTISAMPLE);",
-    "  glDisable(GL_LINE_SMOOTH);",
-    "  glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE);"
-};
-char g_cam_lines[CAM_LINE_COUNT][96] = {
-    "  glTranslatef(0.0000f, 0.0000f, -5.0000f);",
-    "  glRotatef(20.0000f, 1.0f, 0.0f, 0.0f);",
-    "  glRotatef(30.0000f, 0.0f, 1.0f, 0.0f);",
-    "  glTranslatef(0.0000f, 0.0000f, 0.0000f);"
-};
-const char *g_export_scene_name_hint = NULL;
-char g_pending_scene_name[USER_SCENE_NAME_MAX] = "";
-char g_pending_workspace_dir[REPL_WORKSPACE_DIR_MAX] = "";
-
 static ReplRuntimeState g_repl_state = {
+    .document = {
+        .cmd_count = 0,
+        .edit_line_idx = 0,
+        .normals_dirty = 1,
+    },
+    .flat_program = {
+        .cmd_count = 0,
+        .dirty = 1,
+        .user_lighting_enabled = 0,
+        .current_block_begin_idx = -1,
+        .current_block_end_idx = -1,
+        .current_block_source_line_idx = -1,
+    },
+    .variables = {
+        .predef_var_count = 0,
+        .time_var_idx = -1,
+        .time_playing = 1,
+        .anim_time = 0.0f,
+    },
+    .editor_input = {
+        .input = "",
+        .input_len = 0,
+        .cursor_pos = 0,
+        .pending_newline = "",
+        .pending_newline_len = 0,
+        .insert_mode = 0,
+    },
+    .selection = {
+        .anchor_idx = -1,
+        .end_idx = -1,
+    },
+    .clipboard = {
+        .cmd_count = 0,
+    },
+    .code_panel = {
+        .panel_frac = CFG_DEFAULT_PANEL_FRAC,
+        .resizing_panel = 0,
+        .scroll = 0,
+        .scroll_follow_cursor = 0,
+        .cursor_visible = 1,
+        .blink_tick = 0,
+        .cursor_px = 0,
+        .cursor_py = 0,
+    },
+    .help = {
+        .visible = 0,
+        .tab_idx = 0,
+        .scroll = 0,
+    },
+    .variable_panel = {
+        .visible = 1,
+    },
+    .variable_drag = {
+        .var_idx = -1,
+        .log_mode = 0,
+        .start_value = 0.0f,
+        .start_x = 0,
+    },
+    .profile_panel = {
+        .mode = PROFILE_PANEL_OFF,
+    },
+    .status = {
+        .text = "",
+        .ttl = 0,
+    },
+    .search = {
+        .active = 0,
+        .query = "",
+        .query_len = 0,
+        .cursor_pos = 0,
+        .hit_line_idx = -1,
+        .hit_char_idx = -1,
+        .hit_ordinal = 0,
+        .match_count = 0,
+    },
+    .autocomplete = {
+        .match_count = 0,
+        .selected_idx = 0,
+        .ghost = "",
+        .hint = "",
+    },
+    .camera = {
+        .rx = 20.0f,
+        .ry = 30.0f,
+        .dist = 5.0f,
+        .tx = 0.0f,
+        .ty = 0.0f,
+        .tz = 0.0f,
+        .motion_glow = 0.0f,
+        .auto_rotate = CFG_DEFAULT_CAMERA_ROTATE,
+    },
+    .pointer = {
+        .mouse_x = 0,
+        .mouse_y = 0,
+        .mouse_button = -1,
+    },
+    .viewport = {
+        .window_w = 1200,
+        .window_h = 800,
+    },
+    .presentation = {
+        .wireframe = CFG_DEFAULT_WIREFRAME,
+        .grid_theme = CFG_DEFAULT_GRID_THEME,
+        .grid_major_idx = CFG_DEFAULT_GRID_MAJOR_IDX,
+        .grid_extent_idx = CFG_DEFAULT_GRID_EXTENT_IDX,
+        .axes_theme = CFG_DEFAULT_AXES_THEME,
+        .show_vertex_labels = CFG_DEFAULT_VERTEX_LABELS,
+        .show_normal_vectors = CFG_DEFAULT_NORMAL_VECTORS,
+        .show_vertex_indices = CFG_DEFAULT_VERTEX_INDICES,
+        .show_vertex_outlines = CFG_DEFAULT_VERTEX_OUTLINES,
+        .show_vertex_points = CFG_DEFAULT_VERTEX_POINTS,
+        .show_vertex_guides = CFG_DEFAULT_VERTEX_GUIDES,
+        .xform_guide_mode = CFG_DEFAULT_XFORM_GUIDE_MODE,
+        .autonormal = 0,
+        .show_light_indicators = CFG_DEFAULT_LIGHT_INDICATORS,
+        .backdrop_mode = CFG_DEFAULT_BACKDROP_MODE,
+        .highlight_current_poly = 1,
+        .ortho_mode = 0,
+        .wrap_at_comma = CFG_DEFAULT_WRAP_AT_COMMA,
+        .code_panel_layout = CFG_DEFAULT_CODE_PANEL_LAYOUT,
+        .focus_vertex = { 0.0f, 0.0f, 0.0f },
+        .focus_vertex_valid = 0,
+    },
+    .render = {
+        .use_accum = 1,
+        .accum_aa_enabled = 1,
+        .accum_samples = 2,
+        .accum_jitter_x = 0.0f,
+        .accum_jitter_y = 0.0f,
+        .multisample_enabled = CFG_DEFAULT_MULTISAMPLE,
+        .line_smooth_enabled = CFG_DEFAULT_LINE_SMOOTH,
+        .point_attenuation_enabled = CFG_DEFAULT_ATTENUATE_POINTS,
+        .lights = {
+            { GL_LIGHT0, 1,
+              { 2.0f, 4.0f, 5.0f, 0.0f },
+              { 0.80f, 0.80f, 0.75f, 1.0f },
+              { 0.10f, 0.10f, 0.12f, 1.0f },
+              { 1.0f, 1.0f, 0.95f, 1.0f } },
+            { GL_LIGHT1, 1,
+              { -3.0f, 2.0f, -2.0f, 1.0f },
+              { 0.45f, 0.30f, 0.15f, 1.0f },
+              { 0.05f, 0.03f, 0.02f, 1.0f },
+              { 0.30f, 0.20f, 0.10f, 1.0f } },
+            { GL_LIGHT2, 1,
+              { 0.0f, -1.0f, 3.0f, 1.0f },
+              { 0.15f, 0.25f, 0.50f, 1.0f },
+              { 0.02f, 0.03f, 0.06f, 1.0f },
+              { 0.10f, 0.15f, 0.35f, 1.0f } },
+            { GL_LIGHT3, 0,
+              { 1.0f, 1.0f, -4.0f, 0.0f },
+              { 0.35f, 0.35f, 0.40f, 1.0f },
+              { 0.05f, 0.05f, 0.06f, 1.0f },
+              { 0.20f, 0.20f, 0.25f, 1.0f } },
+        },
+        .clear_color = { 0.10f, 0.10f, 0.13f, 1.0f },
+    },
+    .replay = {
+        .active = 0,
+        .state = REPLAY_OFF,
+        .pc = 0,
+        .mode = REPLAY_MODE_VERTEX,
+        .speed = 4.0f,
+        .accum = 0.0f,
+        .fade_speed = 2.0f,
+        .src_line_idx = -1,
+        .total_flat_cmds = 0,
+        .expand_args = 1,
+    },
+    .scenes = {
+        .active_example_idx = -1,
+        .workspace_dir = "",
+    },
+    .import_export = {
+        .workspace_header_lines = {
+            [0] = "",
+        },
+        .workspace_header_line_count = 0,
+        .render_state_lines = {
+            "  glEnable(GL_MULTISAMPLE);",
+            "  glDisable(GL_LINE_SMOOTH);",
+            "  glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE);"
+        },
+        .cam_lines = {
+            "  glTranslatef(0.0000f, 0.0000f, -5.0000f);",
+            "  glRotatef(20.0000f, 1.0f, 0.0f, 0.0f);",
+            "  glRotatef(30.0000f, 0.0f, 1.0f, 0.0f);",
+            "  glTranslatef(0.0000f, 0.0000f, 0.0000f);"
+        },
+        .export_scene_name_hint = NULL,
+        .pending_scene_name = "",
+        .pending_workspace_dir = "",
+    },
+};
+
+#define g_cmds                      (g_repl_state.document.cmds)
+#define g_num_cmds                  (g_repl_state.document.cmd_count)
+#define g_edit_line                 (g_repl_state.document.edit_line_idx)
+#define g_normals_dirty             (g_repl_state.document.normals_dirty)
+#define g_flat_cmds                 (g_repl_state.flat_program.cmds)
+#define g_flat_cmd_local_vars       (g_repl_state.flat_program.local_vars)
+#define g_num_flat_cmds             (g_repl_state.flat_program.cmd_count)
+#define g_flat_dirty                (g_repl_state.flat_program.dirty)
+#define g_user_lighting_enabled     (g_repl_state.flat_program.user_lighting_enabled)
+#define g_current_block_begin       (g_repl_state.flat_program.current_block_begin_idx)
+#define g_current_block_end         (g_repl_state.flat_program.current_block_end_idx)
+#define g_current_block_line        (g_repl_state.flat_program.current_block_source_line_idx)
+#define g_input                     (g_repl_state.editor_input.input)
+#define g_input_len                 (g_repl_state.editor_input.input_len)
+#define g_cursor_pos                (g_repl_state.editor_input.cursor_pos)
+#define g_newline_buf               (g_repl_state.editor_input.pending_newline)
+#define g_newline_len               (g_repl_state.editor_input.pending_newline_len)
+#define g_inserting                 (g_repl_state.editor_input.insert_mode)
+#define g_clipboard                 (g_repl_state.clipboard.cmds)
+#define g_clipboard_count           (g_repl_state.clipboard.cmd_count)
+#define g_sel_anchor                (g_repl_state.selection.anchor_idx)
+#define g_sel_end                   (g_repl_state.selection.end_idx)
+#define g_anim_time                 (g_repl_state.variables.anim_time)
+#define g_t_playing                 (g_repl_state.variables.time_playing)
+#define g_t_var_idx                 (g_repl_state.variables.time_var_idx)
+#define g_panel_frac                (g_repl_state.code_panel.panel_frac)
+#define g_resizing_panel            (g_repl_state.code_panel.resizing_panel)
+#define g_scroll                    (g_repl_state.code_panel.scroll)
+#define g_scroll_follow_cursor      (g_repl_state.code_panel.scroll_follow_cursor)
+#define g_cursor_on                 (g_repl_state.code_panel.cursor_visible)
+#define g_blink_tick                (g_repl_state.code_panel.blink_tick)
+#define g_show_help                 (g_repl_state.help.visible)
+#define g_help_tab                  (g_repl_state.help.tab_idx)
+#define g_help_scroll               (g_repl_state.help.scroll)
+#define g_show_var_panel            (g_repl_state.variable_panel.visible)
+#define g_drag_var                  (g_repl_state.variable_drag.var_idx)
+#define g_drag_log_mode             (g_repl_state.variable_drag.log_mode)
+#define g_drag_start_val            (g_repl_state.variable_drag.start_value)
+#define g_drag_start_x              (g_repl_state.variable_drag.start_x)
+#define g_show_profile_panel        (g_repl_state.profile_panel.mode)
+#define g_cam_rx                    (g_repl_state.camera.rx)
+#define g_cam_ry                    (g_repl_state.camera.ry)
+#define g_cam_dist                  (g_repl_state.camera.dist)
+#define g_cam_tx                    (g_repl_state.camera.tx)
+#define g_cam_ty                    (g_repl_state.camera.ty)
+#define g_cam_tz                    (g_repl_state.camera.tz)
+#define g_cam_motion_glow           (g_repl_state.camera.motion_glow)
+#define g_mouse_x                   (g_repl_state.pointer.mouse_x)
+#define g_mouse_y                   (g_repl_state.pointer.mouse_y)
+#define g_mouse_btn                 (g_repl_state.pointer.mouse_button)
+#define g_win_w                     (g_repl_state.viewport.window_w)
+#define g_win_h                     (g_repl_state.viewport.window_h)
+#define g_wireframe                 (g_repl_state.presentation.wireframe)
+#define g_grid_theme                (g_repl_state.presentation.grid_theme)
+#define g_grid_major_idx            (g_repl_state.presentation.grid_major_idx)
+#define g_grid_extent_idx           (g_repl_state.presentation.grid_extent_idx)
+#define g_focus_vtx                 (g_repl_state.presentation.focus_vertex)
+#define g_focus_vtx_valid           (g_repl_state.presentation.focus_vertex_valid)
+#define g_axes_theme                (g_repl_state.presentation.axes_theme)
+#define g_show_vnums                (g_repl_state.presentation.show_vertex_labels)
+#define g_show_normals              (g_repl_state.presentation.show_normal_vectors)
+#define g_show_indices              (g_repl_state.presentation.show_vertex_indices)
+#define g_wrap_at_comma             (g_repl_state.presentation.wrap_at_comma)
+#define g_code_panel_layout         (g_repl_state.presentation.code_panel_layout)
+#define g_show_guides               (g_repl_state.presentation.show_vertex_guides)
+#define g_xform_guide_mode          (g_repl_state.presentation.xform_guide_mode)
+#define g_autonormal                (g_repl_state.presentation.autonormal)
+#define g_show_lights               (g_repl_state.presentation.show_light_indicators)
+#define g_backdrop_mode             (g_repl_state.presentation.backdrop_mode)
+#define g_cam_rotate                (g_repl_state.camera.auto_rotate)
+#define g_show_outlines             (g_repl_state.presentation.show_vertex_outlines)
+#define g_show_vpoints              (g_repl_state.presentation.show_vertex_points)
+#define g_highlight_current_poly    (g_repl_state.presentation.highlight_current_poly)
+#define g_ortho_mode                (g_repl_state.presentation.ortho_mode)
+#define g_cursor_px                 (g_repl_state.code_panel.cursor_px)
+#define g_cursor_py                 (g_repl_state.code_panel.cursor_py)
+#define g_use_accum                 (g_repl_state.render.use_accum)
+#define g_accum_aa_enabled          (g_repl_state.render.accum_aa_enabled)
+#define g_accum_samples             (g_repl_state.render.accum_samples)
+#define g_accum_jitter_x            (g_repl_state.render.accum_jitter_x)
+#define g_accum_jitter_y            (g_repl_state.render.accum_jitter_y)
+#define g_multisample_enabled       (g_repl_state.render.multisample_enabled)
+#define g_line_smooth_enabled       (g_repl_state.render.line_smooth_enabled)
+#define g_init_attenuate_points     (g_repl_state.render.point_attenuation_enabled)
+#define g_lights                    (g_repl_state.render.lights)
+#define g_clear_color               (g_repl_state.render.clear_color)
+#define g_status                    (g_repl_state.status.text)
+#define g_status_ttl                (g_repl_state.status.ttl)
+#define g_search_active             (g_repl_state.search.active)
+#define g_search_query              (g_repl_state.search.query)
+#define g_search_query_len          (g_repl_state.search.query_len)
+#define g_search_cursor_pos         (g_repl_state.search.cursor_pos)
+#define g_search_hit_line           (g_repl_state.search.hit_line_idx)
+#define g_search_hit_char           (g_repl_state.search.hit_char_idx)
+#define g_search_hit_ordinal        (g_repl_state.search.hit_ordinal)
+#define g_search_match_count        (g_repl_state.search.match_count)
+#define g_ac_matches                (g_repl_state.autocomplete.matches)
+#define g_ac_insert_matches         (g_repl_state.autocomplete.insert_matches)
+#define g_ac_count                  (g_repl_state.autocomplete.match_count)
+#define g_ac_sel                    (g_repl_state.autocomplete.selected_idx)
+#define g_ac_ghost                  (g_repl_state.autocomplete.ghost)
+#define g_ac_hint                   (g_repl_state.autocomplete.hint)
+#define g_replay_active             (g_repl_state.replay.active)
+#define g_replay_state              (g_repl_state.replay.state)
+#define g_replay_pc                 (g_repl_state.replay.pc)
+#define g_replay_mode               (g_repl_state.replay.mode)
+#define g_replay_speed              (g_repl_state.replay.speed)
+#define g_replay_accum              (g_repl_state.replay.accum)
+#define g_replay_fade_speed         (g_repl_state.replay.fade_speed)
+#define g_replay_src_line           (g_repl_state.replay.src_line_idx)
+#define g_replay_total_flat         (g_repl_state.replay.total_flat_cmds)
+#define g_replay_expand_args        (g_repl_state.replay.expand_args)
+#define g_example_idx               (g_repl_state.scenes.active_example_idx)
+#define g_workspace_dir             (g_repl_state.scenes.workspace_dir)
+#define g_workspace_header_lines    (g_repl_state.import_export.workspace_header_lines)
+#define g_workspace_header_line_count (g_repl_state.import_export.workspace_header_line_count)
+#define g_render_state_lines        (g_repl_state.import_export.render_state_lines)
+#define g_cam_lines                 (g_repl_state.import_export.cam_lines)
+#define g_export_scene_name_hint    (g_repl_state.import_export.export_scene_name_hint)
+#define g_pending_scene_name        (g_repl_state.import_export.pending_scene_name)
+#define g_pending_workspace_dir     (g_repl_state.import_export.pending_workspace_dir)
+
+static ReplRuntimeFacade g_repl_facade = {
     .document = {
         .cmds = g_cmds,
         .cmd_count = &g_num_cmds,
@@ -371,6 +529,46 @@ static ReplRuntimeState g_repl_state = {
     },
 };
 
+static void repl_state_sync_variables_from_eval_state(ReplRuntimeState *state) {
+    int var_count = g_num_predef_vars;
+
+    if (var_count < 0)
+        var_count = 0;
+    if (var_count > MAX_PREDEF_VARS)
+        var_count = MAX_PREDEF_VARS;
+
+    memset(state->variables.predef_vars, 0, sizeof(state->variables.predef_vars));
+    if (var_count > 0) {
+        memcpy(state->variables.predef_vars, g_predef_vars,
+               (size_t)var_count * sizeof(ExprVar));
+    }
+    state->variables.predef_var_count = var_count;
+}
+
+static void repl_state_sync_variables_from_eval(void) {
+    repl_state_sync_variables_from_eval_state(&g_repl_state);
+}
+
+static void repl_state_sync_variables_to_eval_state(const ReplRuntimeState *state) {
+    int var_count = state->variables.predef_var_count;
+
+    if (var_count < 0)
+        var_count = 0;
+    if (var_count > MAX_PREDEF_VARS)
+        var_count = MAX_PREDEF_VARS;
+
+    memset(g_predef_vars, 0, sizeof(g_predef_vars));
+    if (var_count > 0) {
+        memcpy(g_predef_vars, state->variables.predef_vars,
+               (size_t)var_count * sizeof(ExprVar));
+    }
+    g_num_predef_vars = var_count;
+}
+
+static void repl_state_sync_variables_to_eval(void) {
+    repl_state_sync_variables_to_eval_state(&g_repl_state);
+}
+
 static void ensure_t_var_idx(void) {
     if (g_t_var_idx >= 0 && g_t_var_idx < g_num_predef_vars &&
         strcmp(g_predef_vars[g_t_var_idx].name, "t") == 0)
@@ -382,14 +580,15 @@ static void reset_time_state(void) {
     g_anim_time = 0.0f;
     repl_eval_init_predef_vars();
     ensure_t_var_idx();
+    repl_state_sync_variables_from_eval();
 }
 
 const ReplDocumentState *repl_state_document(void) {
-    return &g_repl_state.document;
+    return &g_repl_facade.document;
 }
 
 ReplDocumentState *repl_state_document_mut(void) {
-    return &g_repl_state.document;
+    return &g_repl_facade.document;
 }
 
 const GLCmd *repl_state_document_cmds(void) {
@@ -454,11 +653,11 @@ void repl_state_document_reset(void) {
 }
 
 const ReplFlatProgramState *repl_state_flat_program(void) {
-    return &g_repl_state.flat_program;
+    return &g_repl_facade.flat_program;
 }
 
 ReplFlatProgramState *repl_state_flat_program_mut(void) {
-    return &g_repl_state.flat_program;
+    return &g_repl_facade.flat_program;
 }
 
 const GLCmd *repl_state_flat_program_cmds(void) {
@@ -533,22 +732,23 @@ FlatProgramView repl_state_flat_program_view(void) {
     FlatProgramView view = {
         .cmds = g_repl_state.flat_program.cmds,
         .local_vars = g_repl_state.flat_program.local_vars,
-        .cmd_count = *g_repl_state.flat_program.cmd_count,
+        .cmd_count = g_repl_state.flat_program.cmd_count,
     };
     return view;
 }
 
 const ReplVariableState *repl_state_variables(void) {
-    return &g_repl_state.variables;
+    return &g_repl_facade.variables;
 }
 
 ReplVariableState *repl_state_variables_mut(void) {
-    return &g_repl_state.variables;
+    return &g_repl_facade.variables;
 }
 
 void repl_state_variables_reset(void) {
     repl_eval_init_predef_vars();
     g_t_var_idx = repl_eval_find_predef_var_idx("t");
+    repl_state_sync_variables_from_eval();
 }
 
 void repl_state_time_advance(float dt) {
@@ -573,11 +773,11 @@ void repl_state_time_reset_to_zero(void) {
 }
 
 const ReplEditorInputState *repl_state_editor_input(void) {
-    return &g_repl_state.editor_input;
+    return &g_repl_facade.editor_input;
 }
 
 ReplEditorInputState *repl_state_editor_input_mut(void) {
-    return &g_repl_state.editor_input;
+    return &g_repl_facade.editor_input;
 }
 
 void repl_state_editor_input_reset(void) {
@@ -668,11 +868,11 @@ void repl_state_pending_newline_clear(void) {
 }
 
 const ReplSelectionState *repl_state_selection(void) {
-    return &g_repl_state.selection;
+    return &g_repl_facade.selection;
 }
 
 ReplSelectionState *repl_state_selection_mut(void) {
-    return &g_repl_state.selection;
+    return &g_repl_facade.selection;
 }
 
 void repl_state_selection_clear(void) {
@@ -694,11 +894,11 @@ void repl_state_selection_set(int anchor_idx, int end_idx) {
 }
 
 const ReplClipboardState *repl_state_clipboard(void) {
-    return &g_repl_state.clipboard;
+    return &g_repl_facade.clipboard;
 }
 
 ReplClipboardState *repl_state_clipboard_mut(void) {
-    return &g_repl_state.clipboard;
+    return &g_repl_facade.clipboard;
 }
 
 void repl_state_clipboard_clear(void) {
@@ -722,11 +922,11 @@ void repl_state_clipboard_count_set(int cmd_count) {
 }
 
 const ReplCodePanelRuntimeState *repl_state_code_panel(void) {
-    return &g_repl_state.code_panel;
+    return &g_repl_facade.code_panel;
 }
 
 ReplCodePanelRuntimeState *repl_state_code_panel_mut(void) {
-    return &g_repl_state.code_panel;
+    return &g_repl_facade.code_panel;
 }
 
 void repl_state_code_panel_reset(void) {
@@ -737,11 +937,11 @@ void repl_state_code_panel_reset(void) {
 }
 
 const ReplHelpState *repl_state_help(void) {
-    return &g_repl_state.help;
+    return &g_repl_facade.help;
 }
 
 ReplHelpState *repl_state_help_mut(void) {
-    return &g_repl_state.help;
+    return &g_repl_facade.help;
 }
 
 void repl_state_help_reset(void) {
@@ -751,19 +951,19 @@ void repl_state_help_reset(void) {
 }
 
 const ReplVariablePanelState *repl_state_variable_panel(void) {
-    return &g_repl_state.variable_panel;
+    return &g_repl_facade.variable_panel;
 }
 
 ReplVariablePanelState *repl_state_variable_panel_mut(void) {
-    return &g_repl_state.variable_panel;
+    return &g_repl_facade.variable_panel;
 }
 
 const ReplVariableDragState *repl_state_variable_drag(void) {
-    return &g_repl_state.variable_drag;
+    return &g_repl_facade.variable_drag;
 }
 
 ReplVariableDragState *repl_state_variable_drag_mut(void) {
-    return &g_repl_state.variable_drag;
+    return &g_repl_facade.variable_drag;
 }
 
 void repl_state_variable_drag_reset(void) {
@@ -774,19 +974,19 @@ void repl_state_variable_drag_reset(void) {
 }
 
 const ReplProfilePanelState *repl_state_profile_panel(void) {
-    return &g_repl_state.profile_panel;
+    return &g_repl_facade.profile_panel;
 }
 
 ReplProfilePanelState *repl_state_profile_panel_mut(void) {
-    return &g_repl_state.profile_panel;
+    return &g_repl_facade.profile_panel;
 }
 
 const ReplStatusState *repl_state_status(void) {
-    return &g_repl_state.status;
+    return &g_repl_facade.status;
 }
 
 ReplStatusState *repl_state_status_mut(void) {
-    return &g_repl_state.status;
+    return &g_repl_facade.status;
 }
 
 void repl_state_status_set(const char *message) {
@@ -811,11 +1011,11 @@ void repl_state_status_tick(void) {
 }
 
 const ReplSearchState *repl_state_search(void) {
-    return &g_repl_state.search;
+    return &g_repl_facade.search;
 }
 
 ReplSearchState *repl_state_search_mut(void) {
-    return &g_repl_state.search;
+    return &g_repl_facade.search;
 }
 
 void repl_state_search_clear(void) {
@@ -831,11 +1031,11 @@ void repl_state_search_clear(void) {
 }
 
 const ReplAutocompleteState *repl_state_autocomplete(void) {
-    return &g_repl_state.autocomplete;
+    return &g_repl_facade.autocomplete;
 }
 
 ReplAutocompleteState *repl_state_autocomplete_mut(void) {
-    return &g_repl_state.autocomplete;
+    return &g_repl_facade.autocomplete;
 }
 
 void repl_state_autocomplete_clear(void) {
@@ -847,15 +1047,15 @@ void repl_state_autocomplete_clear(void) {
 }
 
 const ReplCameraState *repl_state_camera(void) {
-    return &g_repl_state.camera;
+    return &g_repl_facade.camera;
 }
 
 ReplCameraState *repl_state_camera_mut(void) {
-    return &g_repl_state.camera;
+    return &g_repl_facade.camera;
 }
 
 ReplCameraState repl_state_camera_snapshot(void) {
-    return g_repl_state.camera;
+    return g_repl_facade.camera;
 }
 
 void repl_state_camera_set(float rx, float ry, float dist,
@@ -895,11 +1095,11 @@ void repl_state_camera_reset_default(void) {
 }
 
 const ReplPointerState *repl_state_pointer(void) {
-    return &g_repl_state.pointer;
+    return &g_repl_facade.pointer;
 }
 
 ReplPointerState *repl_state_pointer_mut(void) {
-    return &g_repl_state.pointer;
+    return &g_repl_facade.pointer;
 }
 
 void repl_state_pointer_set(int mouse_x, int mouse_y, int mouse_button) {
@@ -918,11 +1118,11 @@ void repl_state_pointer_set_button(int mouse_button) {
 }
 
 const ReplViewportState *repl_state_viewport(void) {
-    return &g_repl_state.viewport;
+    return &g_repl_facade.viewport;
 }
 
 ReplViewportState *repl_state_viewport_mut(void) {
-    return &g_repl_state.viewport;
+    return &g_repl_facade.viewport;
 }
 
 void repl_state_viewport_set_size(int window_w, int window_h) {
@@ -931,15 +1131,15 @@ void repl_state_viewport_set_size(int window_w, int window_h) {
 }
 
 const ReplPresentationState *repl_state_presentation(void) {
-    return &g_repl_state.presentation;
+    return &g_repl_facade.presentation;
 }
 
 ReplPresentationState *repl_state_presentation_mut(void) {
-    return &g_repl_state.presentation;
+    return &g_repl_facade.presentation;
 }
 
 ReplPresentationState repl_state_presentation_snapshot(void) {
-    return g_repl_state.presentation;
+    return g_repl_facade.presentation;
 }
 
 void repl_state_presentation_reset_defaults(void) {
@@ -983,11 +1183,11 @@ void repl_state_presentation_reset_example_defaults(void) {
 }
 
 const ReplRenderState *repl_state_render(void) {
-    return &g_repl_state.render;
+    return &g_repl_facade.render;
 }
 
 ReplRenderState *repl_state_render_mut(void) {
-    return &g_repl_state.render;
+    return &g_repl_facade.render;
 }
 
 void repl_state_render_reset_defaults(void) {
@@ -1001,19 +1201,19 @@ void repl_state_render_reset_defaults(void) {
 }
 
 const ReplRenderDerivedState *repl_state_render_derived(void) {
-    return &g_repl_state.render_derived;
+    return &g_repl_facade.render_derived;
 }
 
 ReplRenderDerivedState *repl_state_render_derived_mut(void) {
-    return &g_repl_state.render_derived;
+    return &g_repl_facade.render_derived;
 }
 
 const ReplReplayRuntimeState *repl_state_replay(void) {
-    return &g_repl_state.replay;
+    return &g_repl_facade.replay;
 }
 
 ReplReplayRuntimeState *repl_state_replay_mut(void) {
-    return &g_repl_state.replay;
+    return &g_repl_facade.replay;
 }
 
 void repl_state_replay_reset(void) {
@@ -1030,11 +1230,11 @@ void repl_state_replay_reset(void) {
 }
 
 const ReplSceneRuntimeState *repl_state_scenes(void) {
-    return &g_repl_state.scenes;
+    return &g_repl_facade.scenes;
 }
 
 ReplSceneRuntimeState *repl_state_scenes_mut(void) {
-    return &g_repl_state.scenes;
+    return &g_repl_facade.scenes;
 }
 
 void repl_state_workspace_set_dir(const char *dir) {
@@ -1046,11 +1246,31 @@ const char *repl_state_workspace_dir(void) {
 }
 
 const ReplImportExportState *repl_state_import_export(void) {
-    return &g_repl_state.import_export;
+    return &g_repl_facade.import_export;
 }
 
 ReplImportExportState *repl_state_import_export_mut(void) {
-    return &g_repl_state.import_export;
+    return &g_repl_facade.import_export;
+}
+
+void repl_state_capture(ReplRuntimeState *snapshot) {
+    if (!snapshot)
+        return;
+
+    repl_state_sync_variables_from_eval();
+    update_render_state_strings();
+    update_cam_lines();
+    *snapshot = g_repl_state;
+}
+
+void repl_state_restore(const ReplRuntimeState *snapshot) {
+    if (!snapshot)
+        return;
+
+    g_repl_state = *snapshot;
+    repl_state_sync_variables_to_eval();
+    ensure_t_var_idx();
+    repl_source_scope_depth_cache_invalidate();
 }
 
 void repl_state_import_export_reset(void) {

@@ -1,8 +1,226 @@
 #ifndef REPL_STATE_H
 #define REPL_STATE_H
 
+#include "repl_eval.h"
 #include "repl_state_views.h"
 #include "repl_state_owners.h"
+
+typedef struct {
+    GLCmd cmds[MAX_COMMANDS];
+    int   cmd_count;
+    int   edit_line_idx;
+    int   normals_dirty;
+} ReplDocumentRuntimeState;
+
+typedef struct {
+    GLCmd            cmds[MAX_COMMANDS];
+    FlatCmdLocalVars local_vars[MAX_COMMANDS];
+    int              cmd_count;
+    int              dirty;
+    int              user_lighting_enabled;
+    int              current_block_begin_idx;
+    int              current_block_end_idx;
+    int              current_block_source_line_idx;
+} ReplFlatProgramRuntimeState;
+
+typedef struct {
+    ExprVar predef_vars[MAX_PREDEF_VARS];
+    int     predef_var_count;
+    int     time_var_idx;
+    int     time_playing;
+    float   anim_time;
+} ReplVariableRuntimeState;
+
+typedef struct {
+    char input[MAX_INPUT_LEN];
+    int  input_len;
+    int  cursor_pos;
+    char pending_newline[MAX_INPUT_LEN];
+    int  pending_newline_len;
+    int  insert_mode;
+} ReplEditorInputRuntimeState;
+
+typedef struct {
+    int anchor_idx;
+    int end_idx;
+} ReplSelectionRuntimeState;
+
+typedef struct {
+    GLCmd cmds[MAX_COMMANDS];
+    int   cmd_count;
+} ReplClipboardRuntimeState;
+
+typedef struct {
+    float panel_frac;
+    int   resizing_panel;
+    int   scroll;
+    int   scroll_follow_cursor;
+    int   cursor_visible;
+    int   blink_tick;
+    int   cursor_px;
+    int   cursor_py;
+} ReplCodePanelRuntimeStorage;
+
+typedef struct {
+    int visible;
+    int tab_idx;
+    int scroll;
+} ReplHelpRuntimeState;
+
+typedef struct {
+    int visible;
+} ReplVariablePanelRuntimeState;
+
+typedef struct {
+    int   var_idx;
+    int   log_mode;
+    float start_value;
+    int   start_x;
+} ReplVariableDragRuntimeState;
+
+typedef struct {
+    int mode;
+} ReplProfilePanelRuntimeState;
+
+typedef struct {
+    char text[REPL_STATUS_TEXT_MAX];
+    int  ttl;
+} ReplStatusRuntimeState;
+
+typedef struct {
+    int  active;
+    char query[MAX_INPUT_LEN];
+    int  query_len;
+    int  cursor_pos;
+    int  hit_line_idx;
+    int  hit_char_idx;
+    int  hit_ordinal;
+    int  match_count;
+} ReplSearchRuntimeState;
+
+typedef struct {
+    const char *matches[MAX_AC_MATCHES];
+    const char *insert_matches[MAX_AC_MATCHES];
+    int         match_count;
+    int         selected_idx;
+    char        ghost[MAX_LINE_LEN];
+    char        hint[MAX_LINE_LEN];
+} ReplAutocompleteRuntimeState;
+
+typedef struct {
+    float rx;
+    float ry;
+    float dist;
+    float tx;
+    float ty;
+    float tz;
+    float motion_glow;
+    int   auto_rotate;
+} ReplCameraRuntimeState;
+
+typedef struct {
+    int mouse_x;
+    int mouse_y;
+    int mouse_button;
+} ReplPointerRuntimeState;
+
+typedef struct {
+    int window_w;
+    int window_h;
+} ReplViewportRuntimeState;
+
+typedef struct {
+    int   wireframe;
+    int   grid_theme;
+    int   grid_major_idx;
+    int   grid_extent_idx;
+    int   axes_theme;
+    int   show_vertex_labels;
+    int   show_normal_vectors;
+    int   show_vertex_indices;
+    int   show_vertex_outlines;
+    int   show_vertex_points;
+    int   show_vertex_guides;
+    int   xform_guide_mode;
+    int   autonormal;
+    int   show_light_indicators;
+    int   backdrop_mode;
+    int   highlight_current_poly;
+    int   ortho_mode;
+    int   wrap_at_comma;
+    int   code_panel_layout;
+    float focus_vertex[3];
+    int   focus_vertex_valid;
+} ReplPresentationRuntimeState;
+
+typedef struct {
+    int        use_accum;
+    int        accum_aa_enabled;
+    int        accum_samples;
+    float      accum_jitter_x;
+    float      accum_jitter_y;
+    int        multisample_enabled;
+    int        line_smooth_enabled;
+    int        point_attenuation_enabled;
+    SceneLight lights[MAX_LIGHTS];
+    float      clear_color[4];
+} ReplRenderRuntimeState;
+
+typedef struct {
+    int   active;
+    int   state;
+    int   pc;
+    int   mode;
+    float speed;
+    float accum;
+    float fade_speed;
+    int   src_line_idx;
+    int   total_flat_cmds;
+    int   expand_args;
+} ReplReplayRuntimeStateStore;
+
+typedef struct {
+    int  active_example_idx;
+    char workspace_dir[REPL_WORKSPACE_DIR_MAX];
+} ReplSceneRuntimeStateStore;
+
+typedef struct {
+    char        workspace_header_lines[MAX_WORKSPACE_HEADER_LINES][WORKSPACE_HEADER_LINE_LEN];
+    int         workspace_header_line_count;
+    char        render_state_lines[RENDER_STATE_LINE_COUNT][64];
+    char        cam_lines[CAM_LINE_COUNT][96];
+    const char *export_scene_name_hint;
+    char        pending_scene_name[USER_SCENE_NAME_MAX];
+    char        pending_workspace_dir[REPL_WORKSPACE_DIR_MAX];
+} ReplImportExportRuntimeState;
+
+typedef struct {
+    ReplDocumentRuntimeState         document;
+    ReplFlatProgramRuntimeState      flat_program;
+    ReplVariableRuntimeState         variables;
+    ReplEditorInputRuntimeState      editor_input;
+    ReplSelectionRuntimeState        selection;
+    ReplClipboardRuntimeState        clipboard;
+    ReplCodePanelRuntimeStorage      code_panel;
+    ReplHelpRuntimeState             help;
+    ReplVariablePanelRuntimeState    variable_panel;
+    ReplVariableDragRuntimeState     variable_drag;
+    ReplProfilePanelRuntimeState     profile_panel;
+    ReplStatusRuntimeState           status;
+    ReplSearchRuntimeState           search;
+    ReplAutocompleteRuntimeState     autocomplete;
+    ReplCameraRuntimeState           camera;
+    ReplPointerRuntimeState          pointer;
+    ReplViewportRuntimeState         viewport;
+    ReplPresentationRuntimeState     presentation;
+    ReplRenderRuntimeState           render;
+    ReplReplayRuntimeStateStore      replay;
+    ReplSceneRuntimeStateStore       scenes;
+    ReplImportExportRuntimeState     import_export;
+} ReplRuntimeState;
+
+void repl_state_capture(ReplRuntimeState *snapshot);
+void repl_state_restore(const ReplRuntimeState *snapshot);
 
 #if 0
 
