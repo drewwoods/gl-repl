@@ -6,6 +6,7 @@
 #include "repl_replay.h"
 #include "repl_state.h"
 #include "scene_render.h"
+#include "ui_replay_hud.h"
 #include "ui_autocomplete_panel.h"
 #include "ui_help_overlay.h"
 #include "ui_menu_bar.h"
@@ -260,6 +261,27 @@ void imrepl_ctrl_display_frame(void) {
     prof_begin(PROF_SCENE_3D);
     scene_render_3d_scene(&scene_config);
     prof_end(PROF_SCENE_3D);
+
+    if (scene_config.replaying) {
+        UiReplayHudState replay_hud_state = {
+            .scene_x = scene_config.scene_x,
+            .scene_y = scene_config.scene_y,
+            .scene_w = scene_config.scene_w,
+            .scene_h = scene_config.scene_h,
+            .viewport_w = scene_config.viewport_w,
+            .viewport_h = scene_config.viewport_h,
+            .code_panel_layout = scene_config.code_panel_layout,
+            .replay_mode = scene_config.replay_mode,
+            .replay_pc = scene_config.replay_pc,
+            .replay_total_cmds = scene_config.replay_total_cmds,
+            .replay_state_val = scene_config.replay_state_val,
+            .replay_speed = scene_config.replay_speed,
+            .replay_expand_args = scene_config.replay_expand_args,
+            .replaying = scene_config.replaying,
+        };
+        ui_replay_hud_render(&replay_hud_state);
+    }
+
     /* Commit the accumulated subsection totals now that all AA samples are done. */
     for (ProfSection section_idx = PROF_SCENE_3D_SETUP; section_idx <= PROF_SCENE_3D_HUD; section_idx++)
         prof_accum_commit(section_idx);

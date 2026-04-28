@@ -15,7 +15,6 @@
 #include "scene_render.h"
 #include "scene_transform_guides.h"
 #include "scene_transform_utils.h"
-#include "ui_replay_hud.h"
 #include "prof.h"
 
 /* Sub-pixel jitter offsets (units: fraction of one pixel).
@@ -438,7 +437,6 @@ static void render_3d_scene_pass(const SceneRenderConfig *config,
 
     if (config->show_vnums)   scene_overlays_render_vertex_numbers(&frame_ctx);
     if (config->show_normals) scene_overlays_render_normal_vectors(&frame_ctx);
-    ui_replay_hud_render(config);
     glPopAttrib();
     prof_accum_end(PROF_SCENE_3D_HUD);
 }
