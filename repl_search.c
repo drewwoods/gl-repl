@@ -66,7 +66,7 @@ static int search_total_matches(void) {
     const ReplSearchState *srch = repl_state_search();
     int total = 0;
 
-    if (*srch->query_len <= 0)
+    if (srch->query_len <= 0)
         return 0;
 
     for (int row = 0; row < repl_search_row_count(); row++) {
@@ -85,7 +85,7 @@ static int search_hit_exists(int row_idx, int char_pos) {
     const ReplSearchState *srch = repl_state_search();
     const char *text;
 
-    if (*srch->query_len <= 0)
+    if (srch->query_len <= 0)
         return 0;
     if (row_idx < 0 || row_idx >= repl_search_row_count() || char_pos < 0)
         return 0;
@@ -119,7 +119,7 @@ static int search_char_for_row_occurrence(int row_idx, int occurrence_idx) {
     const char *text;
     int occurrence = 0;
 
-    if (*srch->query_len <= 0 || row_idx < 0 || row_idx >= repl_search_row_count() ||
+    if (srch->query_len <= 0 || row_idx < 0 || row_idx >= repl_search_row_count() ||
         occurrence_idx < 0)
         return -1;
 
@@ -158,10 +158,10 @@ static int search_ordinal_for_hit(int row_idx, int char_pos) {
 
 static void search_clear_matches(void) {
     ReplSearchState *srch = repl_state_search_mut();
-    *srch->hit_line_idx = -1;
-    *srch->hit_char_idx = -1;
-    *srch->hit_ordinal = 0;
-    *srch->match_count = 0;
+    srch->hit_line_idx = -1;
+    srch->hit_char_idx = -1;
+    srch->hit_ordinal = 0;
+    srch->match_count = 0;
 }
 
 static void search_store_hit(int row_idx, int char_pos) {
@@ -171,18 +171,18 @@ static void search_store_hit(int row_idx, int char_pos) {
         return;
     }
 
-    *srch->match_count = search_total_matches();
-    *srch->hit_line_idx = row_idx;
-    *srch->hit_char_idx = char_pos;
-    *srch->hit_ordinal = search_ordinal_for_hit(row_idx, char_pos);
+    srch->match_count = search_total_matches();
+    srch->hit_line_idx = row_idx;
+    srch->hit_char_idx = char_pos;
+    srch->hit_ordinal = search_ordinal_for_hit(row_idx, char_pos);
 }
 
 void search_clear_all(void) {
     ReplSearchState *srch = repl_state_search_mut();
-    *srch->active = 0;
+    srch->active = 0;
     srch->query[0] = '\0';
-    *srch->query_len = 0;
-    *srch->cursor_pos = 0;
+    srch->query_len = 0;
+    srch->cursor_pos = 0;
     search_clear_matches();
 }
 
@@ -266,7 +266,7 @@ static int search_find_forward(int start_row, int start_char,
     const ReplSearchState *srch = repl_state_search();
     int row_count = repl_search_row_count();
 
-    if (*srch->query_len <= 0 || row_count <= 0)
+    if (srch->query_len <= 0 || row_count <= 0)
         return 0;
 
     if (start_row < 0)
@@ -299,7 +299,7 @@ static int search_find_backward(int start_row, int start_char,
     const ReplSearchState *srch = repl_state_search();
     int row_count = repl_search_row_count();
 
-    if (*srch->query_len <= 0 || row_count <= 0)
+    if (srch->query_len <= 0 || row_count <= 0)
         return 0;
 
     if (start_row < 0)
@@ -310,7 +310,7 @@ static int search_find_backward(int start_row, int start_char,
     for (int pass = 0; pass < 2; pass++) {
         for (int row = start_row; row >= 0; row--) {
             const char *text = repl_search_row_text(row);
-            int max_start = (int)strlen(text) - *srch->query_len;
+            int max_start = (int)strlen(text) - srch->query_len;
             int pos;
 
             if (max_start < 0)
@@ -363,13 +363,13 @@ static void search_refresh_query(void) {
     int row;
     int char_pos;
 
-    if (!*srch->active)
+    if (!srch->active)
         return;
 
-    *srch->query_len = (int)strlen(srch->query);
-    if (*srch->cursor_pos > *srch->query_len)
-        *srch->cursor_pos = *srch->query_len;
-    if (*srch->query_len <= 0) {
+    srch->query_len = (int)strlen(srch->query);
+    if (srch->cursor_pos > srch->query_len)
+        srch->cursor_pos = srch->query_len;
+    if (srch->query_len <= 0) {
         search_clear_matches();
         return;
     }
@@ -389,18 +389,18 @@ static void search_navigate(int direction) {
     int row;
     int char_pos;
     int found;
-    int have_hit = (*srch->hit_line_idx >= 0 && *srch->hit_char_idx >= 0);
+    int have_hit = (srch->hit_line_idx >= 0 && srch->hit_char_idx >= 0);
 
-    if (!*srch->active || *srch->query_len <= 0)
+    if (!srch->active || srch->query_len <= 0)
         return;
 
     if (direction < 0) {
-        int start_row  = have_hit ? *srch->hit_line_idx      : repl_state_edit_line();
-        int start_char = have_hit ? *srch->hit_char_idx - 1  : MAX_INPUT_LEN;
+        int start_row  = have_hit ? srch->hit_line_idx      : repl_state_edit_line();
+        int start_char = have_hit ? srch->hit_char_idx - 1  : MAX_INPUT_LEN;
         found = search_find_backward(start_row, start_char, &row, &char_pos);
     } else {
-        int start_row  = have_hit ? *srch->hit_line_idx      : repl_state_edit_line();
-        int start_char = have_hit ? *srch->hit_char_idx + 1  : 0;
+        int start_row  = have_hit ? srch->hit_line_idx      : repl_state_edit_line();
+        int start_char = have_hit ? srch->hit_char_idx + 1  : 0;
         found = search_find_forward(start_row, start_char, &row, &char_pos);
     }
 
@@ -414,11 +414,11 @@ static void search_navigate(int direction) {
 
 static void search_open(void) {
     ReplSearchState *srch = repl_state_search_mut();
-    if (*srch->active)
+    if (srch->active)
         return;
 
-    *srch->active = 1;
-    *srch->cursor_pos = *srch->query_len;
+    srch->active = 1;
+    srch->cursor_pos = srch->query_len;
     repl_state_help_mut()->visible = 0;
     repl_state_help_mut()->tab_idx = 0;
     repl_state_help_mut()->scroll = 0;
@@ -431,7 +431,7 @@ int handle_search_key(unsigned char key) {
         search_open();
         return 1;
     }
-    if (!*srch->active)
+    if (!srch->active)
         return 0;
 
     if (key == KEY_ESC) {
@@ -445,24 +445,24 @@ int handle_search_key(unsigned char key) {
     }
 
     if (key == KEY_BACKSPACE || key == KEY_DELETE) {
-        if (*srch->cursor_pos > 0 && *srch->query_len > 0) {
-            memmove(&srch->query[*srch->cursor_pos - 1],
-                    &srch->query[*srch->cursor_pos],
-                    (size_t)(*srch->query_len - *srch->cursor_pos + 1));
-            (*srch->query_len)--;
-            (*srch->cursor_pos)--;
+        if (srch->cursor_pos > 0 && srch->query_len > 0) {
+            memmove(&srch->query[srch->cursor_pos - 1],
+                &srch->query[srch->cursor_pos],
+                (size_t)(srch->query_len - srch->cursor_pos + 1));
+            srch->query_len--;
+            srch->cursor_pos--;
             search_refresh_query();
         }
         return 1;
     }
 
-    if (key >= 32 && key < 127 && *srch->query_len < MAX_INPUT_LEN - 2) {
-        memmove(&srch->query[*srch->cursor_pos + 1],
-                &srch->query[*srch->cursor_pos],
-                (size_t)(*srch->query_len - *srch->cursor_pos + 1));
-        srch->query[*srch->cursor_pos] = (char)key;
-        (*srch->query_len)++;
-        (*srch->cursor_pos)++;
+        if (key >= 32 && key < 127 && srch->query_len < MAX_INPUT_LEN - 2) {
+        memmove(&srch->query[srch->cursor_pos + 1],
+            &srch->query[srch->cursor_pos],
+            (size_t)(srch->query_len - srch->cursor_pos + 1));
+        srch->query[srch->cursor_pos] = (char)key;
+        srch->query_len++;
+        srch->cursor_pos++;
         search_refresh_query();
         return 1;
     }
@@ -472,23 +472,23 @@ int handle_search_key(unsigned char key) {
 
 int handle_search_special(int key) {
     ReplSearchState *srch = repl_state_search_mut();
-    if (!*srch->active)
+    if (!srch->active)
         return 0;
 
     switch (key) {
     case GLUT_KEY_LEFT:
-        if (*srch->cursor_pos > 0)
-            (*srch->cursor_pos)--;
+        if (srch->cursor_pos > 0)
+            srch->cursor_pos--;
         break;
     case GLUT_KEY_RIGHT:
-        if (*srch->cursor_pos < *srch->query_len)
-            (*srch->cursor_pos)++;
+        if (srch->cursor_pos < srch->query_len)
+            srch->cursor_pos++;
         break;
     case GLUT_KEY_HOME:
-        *srch->cursor_pos = 0;
+        srch->cursor_pos = 0;
         break;
     case GLUT_KEY_END:
-        *srch->cursor_pos = *srch->query_len;
+        srch->cursor_pos = srch->query_len;
         break;
     case GLUT_KEY_UP:
         search_navigate(-1);

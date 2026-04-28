@@ -99,7 +99,7 @@ typedef struct {
 } ReplVariablePanelState;
 
 typedef struct {
-    int *mode;
+    int mode;
 } ReplProfilePanelState;
 
 typedef struct {
@@ -108,15 +108,14 @@ typedef struct {
 } ReplStatusState;
 
 typedef struct {
-    int  *active;
-    char *query;
-    int   query_capacity;
-    int  *query_len;
-    int  *cursor_pos;
-    int  *hit_line_idx;
-    int  *hit_char_idx;
-    int  *hit_ordinal;
-    int  *match_count;
+    int  active;
+    char query[MAX_INPUT_LEN];
+    int  query_len;
+    int  cursor_pos;
+    int  hit_line_idx;
+    int  hit_char_idx;
+    int  hit_ordinal;
+    int  match_count;
 } ReplSearchState;
 
 typedef struct {

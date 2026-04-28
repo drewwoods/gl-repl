@@ -123,14 +123,14 @@ static void code_panel_draw_search_highlights(const char *text, int search_row_i
     const ReplSearchState *srch = repl_state_search();
     int drew = 0;
 
-    if (!*srch->active || *srch->query_len <= 0 || search_row_idx < 0 ||
+    if (!srch->active || srch->query_len <= 0 || search_row_idx < 0 ||
         !text || seg_len <= 0)
         return;
 
     for (int pos = repl_search_find_next_in_text(text, srch->query, 0);
          pos >= 0;
          pos = repl_search_find_next_in_text(text, srch->query, pos + 1)) {
-        int match_end = pos + *srch->query_len;
+        int match_end = pos + srch->query_len;
         int seg_end = seg_start + seg_len;
         int draw_start = pos > seg_start ? pos : seg_start;
         int draw_end = match_end < seg_end ? match_end : seg_end;
@@ -144,7 +144,7 @@ static void code_panel_draw_search_highlights(const char *text, int search_row_i
             drew = 1;
         }
 
-        if (search_row_idx == *srch->hit_line_idx && pos == *srch->hit_char_idx)
+        if (search_row_idx == srch->hit_line_idx && pos == srch->hit_char_idx)
             glColor4f(0.95f, 0.65f, 0.18f, 0.55f);
         else
             glColor4f(0.25f, 0.45f, 0.85f, 0.30f);
@@ -240,7 +240,7 @@ static void render_active_input_rows(int panel_w, int text_x, int idx_x,
                     glDisable(GL_BLEND);
                 }
 
-                if (*cp->cursor_visible && !*srch->active) {
+                if (*cp->cursor_visible && !srch->active) {
                     glEnable(GL_BLEND);
                     glColor4f(0.90f, 0.80f, 0.25f, 0.85f);
                     glRectf((float)((float)cursor_x), (float)((float)(*io_line_y - 2)), (float)((float)cursor_x)+(float)(2.0f), (float)((float)(*io_line_y - 2))+(float)(FONT_H + 2));

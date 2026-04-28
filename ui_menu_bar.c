@@ -409,18 +409,18 @@ static void code_panel_format_search_query(char *out, int out_sz,
     if (out_cursor_col)
         *out_cursor_col = 0;
 
-    if (max_chars <= 0 || *srch->query_len <= 0)
+    if (max_chars <= 0 || srch->query_len <= 0)
         return;
 
-    if (*srch->query_len > max_chars) {
-        start = *srch->cursor_pos - max_chars + 1;
+    if (srch->query_len > max_chars) {
+        start = srch->cursor_pos - max_chars + 1;
         if (start < 0)
             start = 0;
-        if (start > *srch->query_len - max_chars)
-            start = *srch->query_len - max_chars;
+        if (start > srch->query_len - max_chars)
+            start = srch->query_len - max_chars;
     }
 
-    take = *srch->query_len - start;
+    take = srch->query_len - start;
     if (take > max_chars)
         take = max_chars;
     if (take >= out_sz)
@@ -433,7 +433,7 @@ static void code_panel_format_search_query(char *out, int out_sz,
     out[take] = '\0';
 
     if (out_cursor_col) {
-        int col = *srch->cursor_pos - start;
+        int col = srch->cursor_pos - start;
         if (col < 0)
             col = 0;
         if (col > take)
@@ -475,10 +475,10 @@ void ui_menu_bar_render_search_overlay(int cp_x, int panel_w, int panel_top) {
     (void)cp_x; (void)panel_w; (void)panel_top;
 
     static int prev_active = 0;
-    if (*srch->active && !prev_active) g_search_open_time = *repl_state_variables()->anim_time;
-    prev_active = *srch->active;
+    if (srch->active && !prev_active) g_search_open_time = *repl_state_variables()->anim_time;
+    prev_active = srch->active;
 
-    if (!*srch->active)
+    if (!srch->active)
         return;
 
     /* Anchor on the PIN_SEARCH slot so the search bar sits where the
@@ -493,13 +493,13 @@ void ui_menu_bar_render_search_overlay(int cp_x, int panel_w, int panel_top) {
     int box_w = pin_w[PIN_SEARCH];
     int box_h = bh;
 
-    if (*srch->query_len <= 0)
+    if (srch->query_len <= 0)
         snprintf(count_buf, sizeof(count_buf), "type to search");
-    else if (*srch->match_count <= 0)
+    else if (srch->match_count <= 0)
         snprintf(count_buf, sizeof(count_buf), "0");
     else
         snprintf(count_buf, sizeof(count_buf), "%d/%d",
-                 *srch->hit_ordinal, *srch->match_count);
+                 srch->hit_ordinal, srch->match_count);
 
     int pad_x = 8;
     int icon_r = 5;
@@ -538,20 +538,20 @@ void ui_menu_bar_render_search_overlay(int cp_x, int panel_w, int panel_top) {
     draw_search_icon((float)icon_cx, (float)icon_cy, (float)icon_r);
 
     /* Query text (or placeholder style when empty) */
-    if (*srch->query_len <= 0)
+    if (srch->query_len <= 0)
         glColor4f(0.478f, 0.478f, 0.478f, alpha); /* #7a7a7a placeholder */
     else
         glColor4f(0.941f, 0.941f, 0.902f, alpha);
     gl2d_draw_string((float)query_x, (float)text_y, query_buf, FONT_SMALL);
 
     /* Count/status on the right */
-    if (*srch->query_len > 0 && *srch->match_count <= 0)
+    if (srch->query_len > 0 && srch->match_count <= 0)
         glColor4f(0.851f, 0.424f, 0.310f, alpha); /* accent for "0" */
     else
         glColor4f(0.533f, 0.533f, 0.533f, alpha);
     gl2d_draw_string((float)count_x, (float)text_y, count_buf, FONT_SMALL);
 
-    if (*repl_state_code_panel()->cursor_visible && *srch->query_len > 0) {
+    if (*repl_state_code_panel()->cursor_visible && srch->query_len > 0) {
         int cursor_x = query_x + cursor_col * FONT_SMALL_W;
         glColor4f(0.95f, 0.80f, 0.24f, 0.85f * alpha);
         glRectf((float)cursor_x, (float)(text_y - 2), (float)cursor_x + 2.0f,
@@ -633,7 +633,7 @@ void ui_menu_bar_render(void) {
             glEnd();
 
             if (i == PIN_SEARCH) {
-                if (*repl_state_search()->active) {
+                if (repl_state_search()->active) {
                     /* render_code_panel_search_overlay() fills this slot */
                     continue;
                 }
