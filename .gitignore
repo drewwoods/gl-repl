@@ -23,6 +23,7 @@ test_scene_render
 test_repl_editor
 test_repl_core_extra
 test_repl_autonormal
+test_repl_state
 test_ui
 test_ui_help_overlay
 bench_repl
