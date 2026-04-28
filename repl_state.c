@@ -4,6 +4,7 @@
 #include "repl_command_store.h"
 #include "repl_core.h"
 #include "repl_core_internal.h"
+#include "repl_pipeline.h"
 #include "repl_eval.h"
 #include "repl_source_scope.h"
 #undef REPL_STATE_IMPLEMENTATION

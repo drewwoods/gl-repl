@@ -14,6 +14,7 @@
 #include "repl_config.h"
 #include "repl_editor.h"
 #include "repl_keys.h"
+#include "repl_pipeline.h"
 #include "repl_state.h"
 #include "ui_panels.h"
 #include "repl_inline_rename.h"

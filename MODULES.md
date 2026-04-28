@@ -101,6 +101,7 @@ annotations consume the flattened program or snapshots derived from it.
 | `repl_command_spec` | Declarative descriptors for fixed-arity GL-like commands |
 | `repl_parser` | Source-line parser and canonical `GLCmd.source[]` generation |
 | `repl_source_scope` | Source prefix-depth cache, indent helpers, block lookup |
+| `repl_pipeline` | Public pipeline and lifecycle surface for frame orchestration (`flatten`, autonormal, replay/bootstrap snapshots) |
 | `repl_command_store` | Insert/delete/replace/load API over the source command array |
 | `repl_commit` | Float declarations, variable assignments, structured block commits |
 | `repl_flatten` | Source-to-flat program builder for loops, functions, and `if` blocks |
