@@ -1,8 +1,9 @@
 #include "imrepl_ctrl.h"
 
 #include "repl_core.h"
-#include "repl_core_internal.h"
 #include "repl_executor.h"
+#include "repl_eval.h"
+#include "repl_pipeline.h"
 #include "repl_replay.h"
 #include "repl_state.h"
 #include "scene_render.h"
@@ -50,6 +51,7 @@ static SceneGuideSnapshot imrepl_ctrl_build_guide_snapshot(const SceneRenderConf
     const ReplPresentationState *presentation = repl_state_presentation();
     const ReplVariableState *vars = repl_state_variables();
     const ReplEditorInputState *input = repl_state_editor_input();
+    ReplPredefView predef = repl_eval_predef_view();
 
     SceneGuideSnapshot snapshot = {
         .show_guides = config->show_guides,
@@ -65,8 +67,8 @@ static SceneGuideSnapshot imrepl_ctrl_build_guide_snapshot(const SceneRenderConf
         .source_cmds = repl_state_document_cmds_mut(),
         .source_cmd_count = repl_state_document_count(),
         .flat_program = config->flat_program,
-        .predef_vars = g_predef_vars,
-        .predef_var_count = g_num_predef_vars,
+        .predef_vars = (ExprVar *)predef.vars,
+        .predef_var_count = predef.count,
         .alpha_scale = config->alpha_scale,
     };
     return snapshot;
