@@ -65,8 +65,9 @@ make callgraph-files ENTRY=imrepl_ctrl_display_frame
 **Why choose this:**
 - ✅ Much smaller than the raw function graph
 - ✅ Better match for `MODULES.md`-style architecture views
-- ✅ Groups files by ownership prefix (`repl_*`, `scene_*`, `ui_*`, etc.)
+- ✅ Groups files using a JSON subgraph config, with a default layout that mirrors `MODULES.md`
 - ✅ Edge labels show how many function-level calls collapsed into each file edge
+- ✅ Cross-subgraph edges are highlighted automatically
 
 ### 📊 **Runtime Profiling** (Shows actual execution)
 
@@ -194,6 +195,15 @@ make callgraph-files ENTRY=imrepl_ctrl_display_frame
 # Or the broader reachable file graph
 make callgraph-files
 ```
+
+### Example 3c: Try a Different Subgraph Layout
+```bash
+# Override the default MODULES.md-oriented grouping
+make callgraph-files \
+  CALLGRAPH_FILES_GROUP_CONFIG=path/to/your-groups.json
+```
+
+The default subgraph config lives at `scripts/callgraph_file_groups.json`.
 
 ### Example 4: Parser Deep-Dive
 ```bash
@@ -388,6 +398,6 @@ make callgraph-profile PROG="./test_scene_render"
 The `MODULES.md` file in the root contains hand-crafted architecture diagrams. These auto-generated graphs complement those by showing:
 - **MODULES.md**: Ownership boundaries, module relationships, responsibilities
 - **Callgraph**: Actual function-level call chains, execution order
-- **File-level Mermaid**: Collapsed `file.c -> file.c` interactions grouped by ownership prefix
+- **File-level Mermaid**: Collapsed `file.c -> file.c` interactions grouped by configurable subgraphs, with cross-boundary edges highlighted
 
 Together they provide both high-level structure and detailed execution flow.
