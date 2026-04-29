@@ -673,6 +673,7 @@ static const char *const g_example_stress[] = {
     "// @cfg vertex_outlines = 0",
     "// @cfg vertex_points = 0",
     "// @cfg backdrop = 1",
+    "// @cfg grid = 7",
     "// camera",
     "glTranslatef(0.0f, 0.0f, -12.5f);",
     "glRotatef(27.5f, 1.0f, 0.0f, 0.0f);",
