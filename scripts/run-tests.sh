@@ -60,13 +60,14 @@ for spec do
 
     log="$log_dir/$name.log"
     status="$log_dir/$name.status"
+    time_file="$log_dir/$name.time"
 
     (
         if [ -n "$child_force_color" ]; then
             FORCE_COLOR=$child_force_color
             export FORCE_COLOR
         fi
-        sh -c "$cmd" >"$log" 2>&1
+        { time sh -c "$cmd" >"$log" 2>&1; } 2>"$time_file"
         rc=$?
         printf '%d\n' "$rc" >"$status"
         exit 0
@@ -101,6 +102,24 @@ parse_counts() {
     ' "$1"
 }
 
+parse_time_output() {
+    # Extract "real" time from time command output (format: real 0m1.234s)
+    awk '/^real/ { print $2 }' "$1"
+}
+
+time_to_seconds() {
+    # Convert time format (0m1.234s or 1m2.345s) to seconds as float
+    local time_str=$1
+    if [ -z "$time_str" ]; then
+        printf '0'
+        return
+    fi
+    # Handle format: XmY.Zs where X is minutes, Y.Z is seconds
+    local mins=$(printf '%s' "$time_str" | cut -d'm' -f1)
+    local secs=$(printf '%s' "$time_str" | cut -d'm' -f2 | cut -d's' -f1)
+    printf '%s\n' "$mins $secs" | awk '{printf "%.3f\n", $1 * 60 + $2}'
+}
+
 passed_bins=0
 failed_bins=0
 passed_tests=0
@@ -108,13 +127,16 @@ total_tests=0
 unknown_stats=0
 summary_file="$log_dir/summary.txt"
 failed_tests_file="$log_dir/failed_tests.txt"
+timings_file="$log_dir/timings.txt"
 : >"$summary_file"
 : >"$failed_tests_file"
+: >"$timings_file"
 
 for spec do
     name=${spec%%:::*}
     log="$log_dir/$name.log"
     status="$log_dir/$name.status"
+    time_file="$log_dir/$name.time"
 
     if [ -f "$status" ]; then
         rc=$(cat "$status")
@@ -122,20 +144,30 @@ for spec do
         rc=127
     fi
 
+    # Extract elapsed time from time output
+    if [ -f "$time_file" ]; then
+        elapsed_str=$(parse_time_output "$time_file")
+        if [ -z "$elapsed_str" ]; then
+            elapsed_str="unknown"
+        else
+            # Record timing for top 3 analysis (in seconds for sorting)
+            elapsed_secs=$(time_to_seconds "$elapsed_str")
+            printf '%s %s\n' "$elapsed_secs" "$name" >>"$timings_file"
+        fi
+    else
+        elapsed_str="unknown"
+    fi
+
     counts=$(parse_counts "$log")
     test_passed=${counts%% *}
     test_total=${counts#* }
-
-    printf '\n%b==> %s%b\n' "$cyan" "$name" "$reset"
-    if [ -s "$log" ]; then
-        cat "$log"
-    fi
 
     if [ "$rc" -eq 0 ]; then
         passed_bins=$((passed_bins + 1))
         printf '%bPASS%b %s' "$green" "$reset" "$name"
     else
         failed_bins=$((failed_bins + 1))
+        printf '%b════════════════════════════════════════════════════════════%b\n' "$red" "$reset"
         printf '%bFAIL%b %s (exit %d)' "$red" "$reset" "$name" "$rc"
         printf '%s\n' "$name" >>"$failed_tests_file"
     fi
@@ -143,12 +175,19 @@ for spec do
     if [ "$test_total" -ge 0 ]; then
         passed_tests=$((passed_tests + test_passed))
         total_tests=$((total_tests + test_total))
-        printf ' [%d/%d tests]\n' "$test_passed" "$test_total"
+        printf ' [%d/%d tests] (%s)\n' "$test_passed" "$test_total" "$elapsed_str"
         printf '%s %s %d %d %d\n' "$name" "$rc" "$test_passed" "$test_total" "$((test_total - test_passed))" >>"$summary_file"
     else
         unknown_stats=$((unknown_stats + 1))
-        printf ' [test count unknown]\n'
+        printf ' [test count unknown] (%s)\n' "$elapsed_str"
         printf '%s %s unknown unknown unknown\n' "$name" "$rc" >>"$summary_file"
+    fi
+
+    # Show test output only for failed tests
+    if [ "$rc" -ne 0 ] && [ -s "$log" ]; then
+        printf '%b==> %s output:%b\n' "$cyan" "$name" "$reset"
+        cat "$log"
+        printf '%b════════════════════════════════════════════════════════════%b\n' "$red" "$reset"
     fi
 done
 
@@ -161,6 +200,22 @@ if [ "$unknown_stats" -gt 0 ]; then
     printf ' (%d binaries had unknown test counts)' "$unknown_stats"
 fi
 printf '\n'
+
+# Show top 3 longest tests
+if [ -f "$timings_file" ] && [ -s "$timings_file" ]; then
+    printf '\n%b⏱️  longest tests:%b\n' "$cyan" "$reset"
+    sort -rn "$timings_file" | head -3 | awk '{
+        secs = $1
+        name = $2
+        mins = int(secs / 60)
+        remaining = secs - (mins * 60)
+        if (mins > 0) {
+            printf "  %s: %dm%.1fs\n", name, mins, remaining
+        } else {
+            printf "  %s: %.3fs\n", name, secs
+        }
+    }'
+fi
 
 if [ "$failed_bins" -gt 0 ]; then
     printf '\n%b❌ FAILED TEST BINARIES:%b\n' "$red" "$reset"
