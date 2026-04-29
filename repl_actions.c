@@ -20,7 +20,7 @@
 #include "repl_inline_rename.h"
 
 static const char *replay_mode_names[] = { "Polygon", "Vertex" };
-static const char *backdrop_mode_names[] = { "Off", "Cityscape" };
+static const char *backdrop_mode_names[] = { "Off", "Cityscape", "Stars", "City+Stars" };
 static const char *xform_guide_mode_names[] = { "World", "Frame" };
 static const char *profile_panel_mode_names[] = { "Off", "On", "Details" };
 static const char *code_panel_layout_names[] = {
@@ -95,7 +95,7 @@ const ReplConfigItem g_cfg_items[] = {
     { "Xform guide mode",  0, 0,  REPL_CONFIG_XFORM_GUIDE_MODE,     2, xform_guide_mode_names, 0 },
     { "Light indicators",  GLUT_KEY_F10, 1, REPL_CONFIG_LIGHT_INDICATORS, 2, NULL,        0 },
     { "Poly highlight",    0, 0,  REPL_CONFIG_POLY_HIGHLIGHT,       2, NULL,                 0 },
-    { "Backdrop",          0, 0,  REPL_CONFIG_BACKDROP,             2, backdrop_mode_names, 0 },
+    { "Backdrop",          0, 0,  REPL_CONFIG_BACKDROP,             4, backdrop_mode_names, 0 },
     { "Camera rotate",     GLUT_KEY_F11, 1, REPL_CONFIG_CAMERA_ROTATE, 2, NULL,            0 },
     { "Auto-normals",      GLUT_KEY_F9, 1, REPL_CONFIG_AUTO_NORMALS, 2, NULL,              0 },
     { "---",               0, 0,  REPL_CONFIG_NONE,               0, NULL,                 1 },
