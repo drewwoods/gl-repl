@@ -702,8 +702,8 @@ void repl_state_selection_set(int anchor_idx, int end_idx) {
     g_sel_end = end_idx;
 }
 
-const ReplClipboardState *repl_state_clipboard(void) {
-    return &g_repl_state.clipboard;
+ReplClipboardState repl_state_clipboard(void) {
+    return g_repl_state.clipboard;
 }
 
 ReplClipboardState *repl_state_clipboard_mut(void) {
@@ -754,16 +754,16 @@ void repl_state_help_reset(void) {
     g_repl_state.help = g_repl_state_defaults.help;
 }
 
-const ReplVariablePanelState *repl_state_variable_panel(void) {
-    return &g_repl_state.variable_panel;
+ReplVariablePanelState repl_state_variable_panel(void) {
+    return g_repl_state.variable_panel;
 }
 
 ReplVariablePanelState *repl_state_variable_panel_mut(void) {
     return &g_repl_state.variable_panel;
 }
 
-const ReplVariableDragState *repl_state_variable_drag(void) {
-    return &g_repl_state.variable_drag;
+ReplVariableDragState repl_state_variable_drag(void) {
+    return g_repl_state.variable_drag;
 }
 
 ReplVariableDragState *repl_state_variable_drag_mut(void) {
@@ -782,8 +782,8 @@ ReplProfilePanelState *repl_state_profile_panel_mut(void) {
     return &g_repl_state.profile_panel;
 }
 
-const ReplStatusState *repl_state_status(void) {
-    return &g_repl_state.status;
+ReplStatusState repl_state_status(void) {
+    return g_repl_state.status;
 }
 
 ReplStatusState *repl_state_status_mut(void) {
@@ -811,8 +811,8 @@ void repl_state_status_tick(void) {
         status->ttl--;
 }
 
-const ReplSearchState *repl_state_search(void) {
-    return &g_repl_state.search;
+ReplSearchState repl_state_search(void) {
+    return g_repl_state.search;
 }
 
 ReplSearchState *repl_state_search_mut(void) {
@@ -823,8 +823,8 @@ void repl_state_search_clear(void) {
     g_repl_state.search = g_repl_state_defaults.search;
 }
 
-const ReplAutocompleteState *repl_state_autocomplete(void) {
-    return &g_repl_state.autocomplete;
+ReplAutocompleteState repl_state_autocomplete(void) {
+    return g_repl_state.autocomplete;
 }
 
 ReplAutocompleteState *repl_state_autocomplete_mut(void) {
@@ -835,8 +835,8 @@ void repl_state_autocomplete_clear(void) {
     g_repl_state.autocomplete = g_repl_state_defaults.autocomplete;
 }
 
-const ReplCameraState *repl_state_camera(void) {
-    return &g_repl_state.camera;
+ReplCameraState repl_state_camera(void) {
+    return g_repl_state.camera;
 }
 
 ReplCameraState *repl_state_camera_mut(void) {
@@ -882,8 +882,8 @@ void repl_state_camera_reset_default(void) {
     g_repl_state.camera = g_repl_state_defaults.camera;
 }
 
-const ReplPointerState *repl_state_pointer(void) {
-    return &g_repl_state.pointer;
+ReplPointerState repl_state_pointer(void) {
+    return g_repl_state.pointer;
 }
 
 ReplPointerState *repl_state_pointer_mut(void) {
@@ -905,8 +905,8 @@ void repl_state_pointer_set_button(int mouse_button) {
     g_mouse_btn = mouse_button;
 }
 
-const ReplViewportState *repl_state_viewport(void) {
-    return &g_repl_state.viewport;
+ReplViewportState repl_state_viewport(void) {
+    return g_repl_state.viewport;
 }
 
 ReplViewportState *repl_state_viewport_mut(void) {
@@ -985,8 +985,8 @@ void repl_state_replay_reset(void) {
     g_repl_state.replay = g_repl_state_defaults.replay;
 }
 
-const ReplSceneRuntimeState *repl_state_scenes(void) {
-    return &g_repl_state.scenes;
+ReplSceneRuntimeState repl_state_scenes(void) {
+    return g_repl_state.scenes;
 }
 
 ReplSceneRuntimeState *repl_state_scenes_mut(void) {

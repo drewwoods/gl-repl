@@ -251,23 +251,23 @@ int main(void) {
                     count_substr(buf, "glRotatef(g_angle, 0.0f, 1.0f, 0.0f);") == 1);
     }
     {
-        float saved_rx   = repl_state_camera()->rx;
-        float saved_ry   = repl_state_camera()->ry;
-        float saved_dist = repl_state_camera()->dist;
-        float saved_tx   = repl_state_camera()->tx;
-        float saved_ty   = repl_state_camera()->ty;
-        float saved_tz   = repl_state_camera()->tz;
+        float saved_rx   = repl_state_camera().rx;
+        float saved_ry   = repl_state_camera().ry;
+        float saved_dist = repl_state_camera().dist;
+        float saved_tx   = repl_state_camera().tx;
+        float saved_ty   = repl_state_camera().ty;
+        float saved_tz   = repl_state_camera().tz;
         repl_state_camera_set_orbit(20.0f, 30.0f);
         repl_state_camera_set_distance(5.0f);
         repl_state_camera_set_pan(0.0f, 0.0f, 0.0f);
         repl_reset_state(); declare_test_vars();
         ASSERT_TRUE("load camera output", repl_export_load_from_file(path) == 1);
-        ASSERT_TRUE("camera rx restored",   fabsf(repl_state_camera()->rx   - saved_rx)   < 1e-2f);
-        ASSERT_TRUE("camera ry restored",   fabsf(repl_state_camera()->ry   - saved_ry)   < 1e-2f);
-        ASSERT_TRUE("camera dist restored", fabsf(repl_state_camera()->dist - saved_dist) < 1e-2f);
-        ASSERT_TRUE("camera tx restored",   fabsf(repl_state_camera()->tx   - saved_tx)   < 1e-2f);
-        ASSERT_TRUE("camera ty restored",   fabsf(repl_state_camera()->ty   - saved_ty)   < 1e-2f);
-        ASSERT_TRUE("camera tz restored",   fabsf(repl_state_camera()->tz   - saved_tz)   < 1e-2f);
+        ASSERT_TRUE("camera rx restored",   fabsf(repl_state_camera().rx   - saved_rx)   < 1e-2f);
+        ASSERT_TRUE("camera ry restored",   fabsf(repl_state_camera().ry   - saved_ry)   < 1e-2f);
+        ASSERT_TRUE("camera dist restored", fabsf(repl_state_camera().dist - saved_dist) < 1e-2f);
+        ASSERT_TRUE("camera tx restored",   fabsf(repl_state_camera().tx   - saved_tx)   < 1e-2f);
+        ASSERT_TRUE("camera ty restored",   fabsf(repl_state_camera().ty   - saved_ty)   < 1e-2f);
+        ASSERT_TRUE("camera tz restored",   fabsf(repl_state_camera().tz   - saved_tz)   < 1e-2f);
     }
 
     repl_reset_state(); declare_test_vars();

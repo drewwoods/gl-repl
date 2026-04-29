@@ -47,7 +47,7 @@ static void profile_panel_rect_for_height(int panel_h, int *out_x, int *out_y) {
 
     repl_layout_scene_rect(&scene_x, &scene_y, &scene_w, &scene_h);
 
-    if (repl_state_variable_panel()->visible) {
+    if (repl_state_variable_panel().visible) {
         panel_x = scene_x + scene_w - PROF_PANEL_W - PROF_PANEL_MARGIN;
         panel_y = scene_y + scene_h - panel_h - PROF_PANEL_MARGIN;
     } else {
@@ -180,7 +180,7 @@ void ui_profile_panel_render(void) {
     int panel_x, panel_y;
     profile_panel_rect_for_height(panel_h, &panel_x, &panel_y);
 
-    gl2d_begin(repl_state_viewport()->window_w, repl_state_viewport()->window_h);
+    gl2d_begin(repl_state_viewport().window_w, repl_state_viewport().window_h);
 
     /* Background */
     glEnable(GL_BLEND);

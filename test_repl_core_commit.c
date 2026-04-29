@@ -89,7 +89,7 @@ static int code_panel_mouse_y_for_cmd(int cmd_idx) {
     int vis = doc_line - g_scroll;
     int line_y_start = cp_y + cp_h - CODE_MARGIN_Y - 2 * LINE_H;
     int gl_y = line_y_start - vis * LINE_H + 1;
-    return repl_state_viewport()->window_h - gl_y;
+    return repl_state_viewport().window_h - gl_y;
 }
 
 static int predef_idx(const char *name) {

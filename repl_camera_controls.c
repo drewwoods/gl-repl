@@ -102,9 +102,10 @@ void repl_camera_add_zoom_velocity(float delta) {
 
 void repl_camera_drag_motion(int x, int y) {
     ReplCameraState *c = repl_state_camera_mut();
-    int px = repl_state_pointer()->mouse_x;
-    int py = repl_state_pointer()->mouse_y;
-    int btn = repl_state_pointer()->mouse_button;
+    ReplPointerState pointer = repl_state_pointer();
+    int px = pointer.mouse_x;
+    int py = pointer.mouse_y;
+    int btn = pointer.mouse_button;
     int dx = x - px;
     int dy = y - py;
 
@@ -162,7 +163,7 @@ void repl_camera_drag_motion(int x, int y) {
 
 void repl_camera_tick(void) {
     ReplCameraState *c = repl_state_camera_mut();
-    int btn = repl_state_pointer()->mouse_button;
+    int btn = repl_state_pointer().mouse_button;
 
     if (btn == -1) {
         c->ry += g_vel_ry;

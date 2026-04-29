@@ -120,17 +120,17 @@ static void code_panel_draw_segment(int x, int y, const char *text,
 static void code_panel_draw_search_highlights(const char *text, int search_row_idx,
                                               int seg_start, int seg_len,
                                               int seg_x, int y) {
-    const ReplSearchState *srch = repl_state_search();
+    ReplSearchState srch = repl_state_search();
     int drew = 0;
 
-    if (!srch->active || srch->query_len <= 0 || search_row_idx < 0 ||
+    if (!srch.active || srch.query_len <= 0 || search_row_idx < 0 ||
         !text || seg_len <= 0)
         return;
 
-    for (int pos = repl_search_find_next_in_text(text, srch->query, 0);
+    for (int pos = repl_search_find_next_in_text(text, srch.query, 0);
          pos >= 0;
-         pos = repl_search_find_next_in_text(text, srch->query, pos + 1)) {
-        int match_end = pos + srch->query_len;
+         pos = repl_search_find_next_in_text(text, srch.query, pos + 1)) {
+        int match_end = pos + srch.query_len;
         int seg_end = seg_start + seg_len;
         int draw_start = pos > seg_start ? pos : seg_start;
         int draw_end = match_end < seg_end ? match_end : seg_end;
@@ -144,7 +144,7 @@ static void code_panel_draw_search_highlights(const char *text, int search_row_i
             drew = 1;
         }
 
-        if (search_row_idx == srch->hit_line_idx && pos == srch->hit_char_idx)
+        if (search_row_idx == srch.hit_line_idx && pos == srch.hit_char_idx)
             glColor4f(0.95f, 0.65f, 0.18f, 0.55f);
         else
             glColor4f(0.25f, 0.45f, 0.85f, 0.30f);
@@ -163,8 +163,8 @@ static void render_active_input_rows(int panel_w, int text_x, int idx_x,
                                      int *io_cur, int *io_line_y) {
     const ReplEditorInputState      *inp    = repl_state_editor_input();
     const ReplCodePanelRuntimeState *cp     = repl_state_code_panel();
-    const ReplAutocompleteState     *ac     = repl_state_autocomplete();
-    const ReplSearchState           *srch   = repl_state_search();
+    ReplAutocompleteState           ac     = repl_state_autocomplete();
+    ReplSearchState                 srch   = repl_state_search();
     const char *input = inp->input;
     int cursor_pos = repl_state_cursor_pos();
     int input_len = *inp->input_len;
@@ -223,24 +223,24 @@ static void render_active_input_rows(int panel_w, int text_x, int idx_x,
                 int cursor_x = wrap_x + cursor_col * FONT_W;
                 int hint_x = cursor_x;
 
-                if (ac->ghost[0] && cursor_pos == input_len) {
+                if (ac.ghost[0] && cursor_pos == input_len) {
                     glEnable(GL_BLEND);
                     glColor4f(0.50f, 0.55f, 0.65f, 0.55f);
                     gl2d_draw_string((float)cursor_x, (float)(*io_line_y),
-                                ac->ghost, FONT_MONO);
+                                ac.ghost, FONT_MONO);
                     glDisable(GL_BLEND);
-                    hint_x += (int)strlen(ac->ghost) * FONT_W;
+                    hint_x += (int)strlen(ac.ghost) * FONT_W;
                 }
 
-                if (ac->hint[0] && cursor_pos == input_len) {
+                if (ac.hint[0] && cursor_pos == input_len) {
                     glEnable(GL_BLEND);
                     glColor4f(0.56f, 0.62f, 0.72f, 0.38f);
                     gl2d_draw_string((float)hint_x, (float)(*io_line_y),
-                                ac->hint, FONT_MONO);
+                                ac.hint, FONT_MONO);
                     glDisable(GL_BLEND);
                 }
 
-                if (*cp->cursor_visible && !srch->active) {
+                if (*cp->cursor_visible && !srch.active) {
                     glEnable(GL_BLEND);
                     glColor4f(0.90f, 0.80f, 0.25f, 0.85f);
                     glRectf((float)((float)cursor_x), (float)((float)(*io_line_y - 2)), (float)((float)cursor_x)+(float)(2.0f), (float)((float)(*io_line_y - 2))+(float)(FONT_H + 2));
@@ -317,7 +317,7 @@ void ui_panels_render_code_panel(void) {
 
     /* Own the full-window overlay viewport so the code panel and the UI
      * stack beneath it render in the same 2D projection. */
-    glViewport(0, 0, repl_state_viewport()->window_w, repl_state_viewport()->window_h);
+    glViewport(0, 0, repl_state_viewport().window_w, repl_state_viewport().window_h);
 
     /* When cursor is on a vertex, find which normal/color lines feed it so
      * we can draw a gutter accent bar on them below. */
@@ -357,7 +357,7 @@ void ui_panels_render_code_panel(void) {
     prof_end(PROF_CODE_PANEL_LAYOUT);
     prof_begin(PROF_CODE_PANEL_CHROME);
 
-    gl2d_begin(repl_state_viewport()->window_w, repl_state_viewport()->window_h);
+    gl2d_begin(repl_state_viewport().window_w, repl_state_viewport().window_h);
 
     /* Background */
     glEnable(GL_BLEND);
@@ -371,15 +371,15 @@ void ui_panels_render_code_panel(void) {
     if (editor_code_panel_layout() == CODE_PANEL_LAYOUT_TOP) {
         /* Horizontal divider along bottom of code panel. */
         glVertex2f(0.0f, (float)cp_y);
-        glVertex2f((float)repl_state_viewport()->window_w, (float)cp_y);
+        glVertex2f((float)repl_state_viewport().window_w, (float)cp_y);
     } else if (editor_code_panel_layout() == CODE_PANEL_LAYOUT_BOTTOM) {
         /* Horizontal divider along top of code panel. */
         glVertex2f(0.0f, (float)(cp_y + cp_h));
-        glVertex2f((float)repl_state_viewport()->window_w, (float)(cp_y + cp_h));
+        glVertex2f((float)repl_state_viewport().window_w, (float)(cp_y + cp_h));
     } else {
         /* Vertical divider along right edge of code panel */
         glVertex2f((float)(cp_x + cp_w), 0.0f);
-        glVertex2f((float)(cp_x + cp_w), (float)repl_state_viewport()->window_h);
+        glVertex2f((float)(cp_x + cp_w), (float)repl_state_viewport().window_h);
     }
     glEnd();
     glDisable(GL_BLEND);
@@ -835,8 +835,8 @@ void ui_panels_render_code_panel(void) {
  * is much wider than the code-panel statusbar slot, so long diagnostics
  * (~80 chars) fit here without truncation. */
 void ui_panels_render_scene_status(void) {
-    const ReplStatusState *status = repl_state_status();
-    if (status->ttl <= 0 || !status->text[0]) return;
+    ReplStatusState status = repl_state_status();
+    if (status.ttl <= 0 || !status.text[0]) return;
 
     int sc_x, sc_y, sc_w, sc_h;
     repl_layout_scene_rect(&sc_x, &sc_y, &sc_w, &sc_h);
@@ -845,9 +845,9 @@ void ui_panels_render_scene_status(void) {
     int bar_h = STATUSBAR_H;
     int bar_y = sc_y;
 
-    float alpha = status->ttl > 60 ? 1.0f : (float)status->ttl / 60.0f;
+    float alpha = status.ttl > 60 ? 1.0f : (float)status.ttl / 60.0f;
 
-    gl2d_begin(repl_state_viewport()->window_w, repl_state_viewport()->window_h);
+    gl2d_begin(repl_state_viewport().window_w, repl_state_viewport().window_h);
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
@@ -885,11 +885,11 @@ void ui_panels_render_scene_status(void) {
     if (max_chars > 255) max_chars = 255;
 
     char msg[256];
-    int n = (int)strlen(status->text);
+    int n = (int)strlen(status.text);
     if (n > max_chars) {
-        snprintf(msg, sizeof(msg), "%.*s...", max_chars - 3, status->text);
+        snprintf(msg, sizeof(msg), "%.*s...", max_chars - 3, status.text);
     } else {
-        snprintf(msg, sizeof(msg), "%s", status->text);
+        snprintf(msg, sizeof(msg), "%s", status.text);
     }
     glColor4f(0.941f, 0.753f, 0.439f, alpha); /* #f0c070 */
     gl2d_draw_string((float)tx, (float)text_y, msg, FONT_SMALL);
@@ -933,7 +933,7 @@ static int code_panel_hit_test(int mx, int my,
     int panel_w = cp_w;
     int panel_top = cp_y + cp_h;
     /* Convert GLUT Y (top=0) to OpenGL Y (bottom=0) */
-    int gl_y = repl_state_viewport()->window_h - my;
+    int gl_y = repl_state_viewport().window_h - my;
     if (mx < cp_x || mx >= cp_x + cp_w) return 0;
     if (gl_y < cp_y || gl_y >= cp_y + cp_h) return 0;
 
@@ -972,7 +972,7 @@ static int code_panel_drag_target(int mx, int my, int *out_target) {
     if (cp_w <= 0 || cp_h <= 0) return 0;
     int panel_w = cp_w;
     int panel_top = cp_y + cp_h;
-    int gl_y = repl_state_viewport()->window_h - my;
+    int gl_y = repl_state_viewport().window_h - my;
     int line_y_start = panel_top - CODE_MARGIN_Y - 2 * LINE_H;
     int vis = (line_y_start + LINE_H - 3 - gl_y) / LINE_H;
 

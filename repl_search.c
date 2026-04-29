@@ -18,6 +18,7 @@
  * accessed through the typed search facade.
  */
 #include "sample.h"
+#include "repl_search.h"
 #include "repl_state.h"
 #include "repl_core_internal.h"
 #include "repl_keys.h"
@@ -62,19 +63,104 @@ static int search_text_matches_at(const char *text, const char *query, int pos) 
     return 1;
 }
 
+int repl_search_find_next_in_text(const char *text, const char *query,
+                                  int start_pos) {
+    int text_len;
+    int query_len;
+
+    if (!text || !query)
+        return -1;
+
+    text_len = (int)strlen(text);
+    query_len = (int)strlen(query);
+    if (query_len <= 0 || text_len <= 0)
+        return -1;
+    if (query_len > text_len)
+        return -1;
+    if (start_pos < 0)
+        start_pos = 0;
+    if (start_pos > text_len - query_len)
+        return -1;
+
+    for (int pos = start_pos; pos <= text_len - query_len; pos++) {
+        if (search_text_matches_at(text, query, pos))
+            return pos;
+    }
+
+    return -1;
+}
+
+int repl_search_find_prev_in_text(const char *text, const char *query,
+                                  int start_pos) {
+    int text_len;
+    int query_len;
+    int max_start;
+
+    if (!text || !query)
+        return -1;
+
+    text_len = (int)strlen(text);
+    query_len = (int)strlen(query);
+    if (query_len <= 0 || text_len <= 0)
+        return -1;
+    if (query_len > text_len)
+        return -1;
+
+    max_start = text_len - query_len;
+    if (start_pos > max_start)
+        start_pos = max_start;
+    if (start_pos < 0)
+        return -1;
+
+    for (int pos = start_pos; pos >= 0; pos--) {
+        if (search_text_matches_at(text, query, pos))
+            return pos;
+    }
+
+    return -1;
+}
+
+int repl_search_row_for_cmd_index(int cmd_idx) {
+    int edit_line = repl_state_edit_line();
+
+    if (cmd_idx < 0 || cmd_idx >= repl_state_document_count())
+        return -1;
+    if (repl_state_insert_mode() && cmd_idx >= edit_line)
+        return cmd_idx + 1;
+    return cmd_idx;
+}
+
+static int search_row_match_count(int row_idx) {
+    ReplSearchState srch = repl_state_search();
+    const char *text;
+    int count = 0;
+
+    if (srch.query_len <= 0)
+        return 0;
+
+    text = repl_search_row_text(row_idx);
+    for (int pos = repl_search_find_next_in_text(text, srch.query, 0);
+         pos >= 0;
+         pos = repl_search_find_next_in_text(text, srch.query, pos + 1)) {
+        count++;
+    }
+
+    return count;
+}
+
 static int search_total_matches(void) {
-    const ReplSearchState *srch = repl_state_search();
+    ReplSearchState srch = repl_state_search();
     int total = 0;
 
-    if (srch->query_len <= 0)
+    if (srch.query_len <= 0)
         return 0;
 
     for (int row = 0; row < repl_search_row_count(); row++) {
         const char *text = repl_search_row_text(row);
-        int pos = repl_search_find_next_in_text(text, srch->query, 0);
+        int pos = repl_search_find_next_in_text(text, srch.query, 0);
         while (pos >= 0) {
             total++;
-            pos = repl_search_find_next_in_text(text, srch->query, pos + 1);
+            pos = repl_search_find_next_in_text(text, srch.query, pos + 1);
         }
     }
 
@@ -82,20 +168,20 @@ static int search_total_matches(void) {
 }
 
 static int search_hit_exists(int row_idx, int char_pos) {
-    const ReplSearchState *srch = repl_state_search();
+    ReplSearchState srch = repl_state_search();
     const char *text;
 
-    if (srch->query_len <= 0)
+    if (srch.query_len <= 0)
         return 0;
     if (row_idx < 0 || row_idx >= repl_search_row_count() || char_pos < 0)
         return 0;
 
     text = repl_search_row_text(row_idx);
-    return search_text_matches_at(text, srch->query, char_pos);
+    return search_text_matches_at(text, srch.query, char_pos);
 }
 
 static int search_row_occurrence_index(int row_idx, int char_pos) {
-    const ReplSearchState *srch = repl_state_search();
+    ReplSearchState srch = repl_state_search();
     const char *text;
     int occurrence = 0;
 
@@ -103,9 +189,9 @@ static int search_row_occurrence_index(int row_idx, int char_pos) {
         return -1;
 
     text = repl_search_row_text(row_idx);
-    for (int pos = repl_search_find_next_in_text(text, srch->query, 0);
+    for (int pos = repl_search_find_next_in_text(text, srch.query, 0);
          pos >= 0;
-         pos = repl_search_find_next_in_text(text, srch->query, pos + 1)) {
+         pos = repl_search_find_next_in_text(text, srch.query, pos + 1)) {
         if (pos == char_pos)
             return occurrence;
         occurrence++;
@@ -115,18 +201,18 @@ static int search_row_occurrence_index(int row_idx, int char_pos) {
 }
 
 static int search_char_for_row_occurrence(int row_idx, int occurrence_idx) {
-    const ReplSearchState *srch = repl_state_search();
+    ReplSearchState srch = repl_state_search();
     const char *text;
     int occurrence = 0;
 
-    if (srch->query_len <= 0 || row_idx < 0 || row_idx >= repl_search_row_count() ||
+    if (srch.query_len <= 0 || row_idx < 0 || row_idx >= repl_search_row_count() ||
         occurrence_idx < 0)
         return -1;
 
     text = repl_search_row_text(row_idx);
-    for (int pos = repl_search_find_next_in_text(text, srch->query, 0);
+    for (int pos = repl_search_find_next_in_text(text, srch.query, 0);
          pos >= 0;
-         pos = repl_search_find_next_in_text(text, srch->query, pos + 1)) {
+         pos = repl_search_find_next_in_text(text, srch.query, pos + 1)) {
         if (occurrence == occurrence_idx)
             return pos;
         occurrence++;
@@ -136,24 +222,27 @@ static int search_char_for_row_occurrence(int row_idx, int occurrence_idx) {
 }
 
 static int search_ordinal_for_hit(int row_idx, int char_pos) {
-    const ReplSearchState *srch = repl_state_search();
-    int ordinal = 0;
+    ReplSearchState srch = repl_state_search();
+    int ordinal = 1;
 
     if (!search_hit_exists(row_idx, char_pos))
         return 0;
 
     for (int row = 0; row < repl_search_row_count(); row++) {
-        const char *text = repl_search_row_text(row);
-        int pos = repl_search_find_next_in_text(text, srch->query, 0);
-        while (pos >= 0) {
-            ordinal++;
-            if (row == row_idx && pos == char_pos)
-                return ordinal;
-            pos = repl_search_find_next_in_text(text, srch->query, pos + 1);
-        }
+        if (row == row_idx)
+            break;
+        ordinal += search_row_match_count(row);
     }
 
-    return 0;
+    for (int pos = 0; pos < char_pos; ) {
+        pos = repl_search_find_next_in_text(repl_search_row_text(row_idx), srch.query, pos);
+        if (pos < 0 || pos >= char_pos)
+            break;
+        ordinal++;
+        pos++;
+    }
+
+    return ordinal;
 }
 
 static void search_clear_matches(void) {
@@ -194,79 +283,23 @@ int repl_search_row_count(void) {
 }
 
 const char *repl_search_row_text(int row_idx) {
-    int num_cmds = repl_state_document_count();
     int edit_line = repl_state_edit_line();
+
     if (row_idx < 0 || row_idx >= repl_search_row_count())
         return "";
     if (search_row_is_live_input(row_idx))
         return repl_state_editor_input()->input;
     if (repl_state_insert_mode() && row_idx > edit_line)
         row_idx--;
-    if (row_idx >= 0 && row_idx < num_cmds)
-        return repl_state_document_cmds()[row_idx].source;
-    return "";
-}
-
-int repl_search_row_for_cmd_index(int cmd_idx) {
-    int num_cmds = repl_state_document_count();
-    if (cmd_idx < 0 || cmd_idx >= num_cmds)
-        return -1;
-    return (repl_state_insert_mode() && cmd_idx >= repl_state_edit_line()) ? cmd_idx + 1 : cmd_idx;
-}
-
-int repl_search_find_next_in_text(const char *text, const char *query,
-                                  int start_pos) {
-    int text_len;
-    int query_len;
-
-    if (!text || !query)
-        return -1;
-
-    text_len = (int)strlen(text);
-    query_len = (int)strlen(query);
-    if (query_len <= 0 || text_len < query_len)
-        return -1;
-    if (start_pos < 0)
-        start_pos = 0;
-
-    for (int pos = start_pos; pos + query_len <= text_len; pos++) {
-        if (search_text_matches_at(text, query, pos))
-            return pos;
-    }
-    return -1;
-}
-
-int repl_search_find_prev_in_text(const char *text, const char *query,
-                                  int start_pos) {
-    int text_len;
-    int query_len;
-    int max_start;
-
-    if (!text || !query)
-        return -1;
-
-    text_len = (int)strlen(text);
-    query_len = (int)strlen(query);
-    if (query_len <= 0 || text_len < query_len)
-        return -1;
-
-    max_start = text_len - query_len;
-    if (start_pos > max_start)
-        start_pos = max_start;
-
-    for (int pos = start_pos; pos >= 0; pos--) {
-        if (search_text_matches_at(text, query, pos))
-            return pos;
-    }
-    return -1;
+    return repl_state_document_cmds()[row_idx].source;
 }
 
 static int search_find_forward(int start_row, int start_char,
                                int *out_row, int *out_char) {
-    const ReplSearchState *srch = repl_state_search();
+    ReplSearchState srch = repl_state_search();
     int row_count = repl_search_row_count();
 
-    if (srch->query_len <= 0 || row_count <= 0)
+    if (srch.query_len <= 0 || row_count <= 0)
         return 0;
 
     if (start_row < 0)
@@ -279,7 +312,7 @@ static int search_find_forward(int start_row, int start_char,
     for (int pass = 0; pass < 2; pass++) {
         for (int row = start_row; row < row_count; row++) {
             int pos = repl_search_find_next_in_text(
-                repl_search_row_text(row), srch->query,
+                repl_search_row_text(row), srch.query,
                 row == start_row ? start_char : 0);
             if (pos >= 0) {
                 if (out_row) *out_row = row;
@@ -296,10 +329,10 @@ static int search_find_forward(int start_row, int start_char,
 
 static int search_find_backward(int start_row, int start_char,
                                 int *out_row, int *out_char) {
-    const ReplSearchState *srch = repl_state_search();
+    ReplSearchState srch = repl_state_search();
     int row_count = repl_search_row_count();
 
-    if (srch->query_len <= 0 || row_count <= 0)
+    if (srch.query_len <= 0 || row_count <= 0)
         return 0;
 
     if (start_row < 0)
@@ -310,7 +343,7 @@ static int search_find_backward(int start_row, int start_char,
     for (int pass = 0; pass < 2; pass++) {
         for (int row = start_row; row >= 0; row--) {
             const char *text = repl_search_row_text(row);
-            int max_start = (int)strlen(text) - srch->query_len;
+            int max_start = (int)strlen(text) - srch.query_len;
             int pos;
 
             if (max_start < 0)
@@ -320,7 +353,7 @@ static int search_find_backward(int start_row, int start_char,
             if (pos > max_start)
                 pos = max_start;
 
-            pos = repl_search_find_prev_in_text(text, srch->query, pos);
+            pos = repl_search_find_prev_in_text(text, srch.query, pos);
             if (pos >= 0) {
                 if (out_row) *out_row = row;
                 if (out_char) *out_char = pos;
@@ -385,22 +418,22 @@ static void search_refresh_query(void) {
  * If a hit is already active, we step one char past/before it; otherwise we
  * anchor the scan at repl_state_edit_line(). */
 static void search_navigate(int direction) {
-    const ReplSearchState *srch = repl_state_search();
+    ReplSearchState srch = repl_state_search();
     int row;
     int char_pos;
     int found;
-    int have_hit = (srch->hit_line_idx >= 0 && srch->hit_char_idx >= 0);
+    int have_hit = (srch.hit_line_idx >= 0 && srch.hit_char_idx >= 0);
 
-    if (!srch->active || srch->query_len <= 0)
+    if (!srch.active || srch.query_len <= 0)
         return;
 
     if (direction < 0) {
-        int start_row  = have_hit ? srch->hit_line_idx      : repl_state_edit_line();
-        int start_char = have_hit ? srch->hit_char_idx - 1  : MAX_INPUT_LEN;
+        int start_row  = have_hit ? srch.hit_line_idx      : repl_state_edit_line();
+        int start_char = have_hit ? srch.hit_char_idx - 1  : MAX_INPUT_LEN;
         found = search_find_backward(start_row, start_char, &row, &char_pos);
     } else {
-        int start_row  = have_hit ? srch->hit_line_idx      : repl_state_edit_line();
-        int start_char = have_hit ? srch->hit_char_idx + 1  : 0;
+        int start_row  = have_hit ? srch.hit_line_idx      : repl_state_edit_line();
+        int start_char = have_hit ? srch.hit_char_idx + 1  : 0;
         found = search_find_forward(start_row, start_char, &row, &char_pos);
     }
 

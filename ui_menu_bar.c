@@ -268,7 +268,7 @@ int ui_menu_bar_menu_hit(int gx, int gy) {
     int menu_x[NUM_MENUS], menu_w[NUM_MENUS];
     int pin_x[NUM_PIN_BTNS], pin_w[NUM_PIN_BTNS];
     int by, bh;
-    int ry = repl_state_viewport()->window_h - gy;
+    int ry = repl_state_viewport().window_h - gy;
     menubar_rects(menu_x, menu_w, pin_x, pin_w, &by, &bh);
     if (ry < by || ry >= by + bh) return -1;
     for (int i = 0; i < NUM_MENUS; i++)
@@ -280,7 +280,7 @@ int ui_menu_bar_pin_hit(int gx, int gy) {
     int menu_x[NUM_MENUS], menu_w[NUM_MENUS];
     int pin_x[NUM_PIN_BTNS], pin_w[NUM_PIN_BTNS];
     int by, bh;
-    int ry = repl_state_viewport()->window_h - gy;
+    int ry = repl_state_viewport().window_h - gy;
     menubar_rects(menu_x, menu_w, pin_x, pin_w, &by, &bh);
     if (ry < by || ry >= by + bh) return -1;
     for (int i = 0; i < NUM_PIN_BTNS; i++)
@@ -331,7 +331,7 @@ int ui_menu_bar_dropdown_item_hit(int gx, int gy) {
     if (n == 0) return -1;
     int dx, dy, dw, dh;
     if (!menu_dropdown_rect(&dx, &dy, &dw, &dh)) return -1;
-    int ry = repl_state_viewport()->window_h - gy;
+    int ry = repl_state_viewport().window_h - gy;
     if (gx < dx || gx >= dx + dw || ry < dy || ry >= dy + dh) return -1;
     int row = (dy + dh - 4 - ry) / LINE_H;
     if (row < 0 || row >= n) return -1;
@@ -398,7 +398,7 @@ void ui_menu_bar_note_search_opened(void) {
 static void code_panel_format_search_query(char *out, int out_sz,
                                            int max_chars,
                                            int *out_cursor_col) {
-    const ReplSearchState *srch = repl_state_search();
+    ReplSearchState srch = repl_state_search();
     int start = 0;
     int take = 0;
 
@@ -409,18 +409,18 @@ static void code_panel_format_search_query(char *out, int out_sz,
     if (out_cursor_col)
         *out_cursor_col = 0;
 
-    if (max_chars <= 0 || srch->query_len <= 0)
+    if (max_chars <= 0 || srch.query_len <= 0)
         return;
 
-    if (srch->query_len > max_chars) {
-        start = srch->cursor_pos - max_chars + 1;
+    if (srch.query_len > max_chars) {
+        start = srch.cursor_pos - max_chars + 1;
         if (start < 0)
             start = 0;
-        if (start > srch->query_len - max_chars)
-            start = srch->query_len - max_chars;
+        if (start > srch.query_len - max_chars)
+            start = srch.query_len - max_chars;
     }
 
-    take = srch->query_len - start;
+    take = srch.query_len - start;
     if (take > max_chars)
         take = max_chars;
     if (take >= out_sz)
@@ -429,11 +429,11 @@ static void code_panel_format_search_query(char *out, int out_sz,
         take = 0;
 
     if (take > 0)
-        memcpy(out, srch->query + start, (size_t)take);
+        memcpy(out, srch.query + start, (size_t)take);
     out[take] = '\0';
 
     if (out_cursor_col) {
-        int col = srch->cursor_pos - start;
+        int col = srch.cursor_pos - start;
         if (col < 0)
             col = 0;
         if (col > take)
@@ -468,17 +468,17 @@ static void draw_search_icon(float cx, float cy, float r) {
 }
 
 void ui_menu_bar_render_search_overlay(int cp_x, int panel_w, int panel_top) {
-    const ReplSearchState *srch = repl_state_search();
+    ReplSearchState srch = repl_state_search();
     char count_buf[32];
     char query_buf[128];
     int cursor_col = 0;
     (void)cp_x; (void)panel_w; (void)panel_top;
 
     static int prev_active = 0;
-    if (srch->active && !prev_active) g_search_open_time = *repl_state_variables()->anim_time;
-    prev_active = srch->active;
+    if (srch.active && !prev_active) g_search_open_time = *repl_state_variables()->anim_time;
+    prev_active = srch.active;
 
-    if (!srch->active)
+    if (!srch.active)
         return;
 
     /* Anchor on the PIN_SEARCH slot so the search bar sits where the
@@ -493,13 +493,13 @@ void ui_menu_bar_render_search_overlay(int cp_x, int panel_w, int panel_top) {
     int box_w = pin_w[PIN_SEARCH];
     int box_h = bh;
 
-    if (srch->query_len <= 0)
+    if (srch.query_len <= 0)
         snprintf(count_buf, sizeof(count_buf), "type to search");
-    else if (srch->match_count <= 0)
+    else if (srch.match_count <= 0)
         snprintf(count_buf, sizeof(count_buf), "0");
     else
         snprintf(count_buf, sizeof(count_buf), "%d/%d",
-                 srch->hit_ordinal, srch->match_count);
+                 srch.hit_ordinal, srch.match_count);
 
     int pad_x = 8;
     int icon_r = 5;
@@ -538,20 +538,20 @@ void ui_menu_bar_render_search_overlay(int cp_x, int panel_w, int panel_top) {
     draw_search_icon((float)icon_cx, (float)icon_cy, (float)icon_r);
 
     /* Query text (or placeholder style when empty) */
-    if (srch->query_len <= 0)
+    if (srch.query_len <= 0)
         glColor4f(0.478f, 0.478f, 0.478f, alpha); /* #7a7a7a placeholder */
     else
         glColor4f(0.941f, 0.941f, 0.902f, alpha);
     gl2d_draw_string((float)query_x, (float)text_y, query_buf, FONT_SMALL);
 
     /* Count/status on the right */
-    if (srch->query_len > 0 && srch->match_count <= 0)
+    if (srch.query_len > 0 && srch.match_count <= 0)
         glColor4f(0.851f, 0.424f, 0.310f, alpha); /* accent for "0" */
     else
         glColor4f(0.533f, 0.533f, 0.533f, alpha);
     gl2d_draw_string((float)count_x, (float)text_y, count_buf, FONT_SMALL);
 
-    if (*repl_state_code_panel()->cursor_visible && srch->query_len > 0) {
+    if (*repl_state_code_panel()->cursor_visible && srch.query_len > 0) {
         int cursor_x = query_x + cursor_col * FONT_SMALL_W;
         glColor4f(0.95f, 0.80f, 0.24f, 0.85f * alpha);
         glRectf((float)cursor_x, (float)(text_y - 2), (float)cursor_x + 2.0f,
@@ -583,8 +583,8 @@ void ui_menu_bar_render(void) {
         glColor4f(0.114f, 0.114f, 0.114f, 0.98f);
         glRectf((float)cp_x, (float)by, (float)cp_x + (float)cp_w, (float)by + (float)bh);
 
-        int hover_menu = ui_menu_bar_menu_hit(repl_state_pointer()->mouse_x, repl_state_pointer()->mouse_y);
-        int hover_pin  = ui_menu_bar_pin_hit(repl_state_pointer()->mouse_x, repl_state_pointer()->mouse_y);
+        int hover_menu = ui_menu_bar_menu_hit(repl_state_pointer().mouse_x, repl_state_pointer().mouse_y);
+        int hover_pin  = ui_menu_bar_pin_hit(repl_state_pointer().mouse_x, repl_state_pointer().mouse_y);
 
         /* Left-side menu labels */
         for (int i = 0; i < NUM_MENUS; i++) {
@@ -633,7 +633,7 @@ void ui_menu_bar_render(void) {
             glEnd();
 
             if (i == PIN_SEARCH) {
-                if (repl_state_search()->active) {
+                if (repl_state_search().active) {
                     /* render_code_panel_search_overlay() fills this slot */
                     continue;
                 }
@@ -712,11 +712,11 @@ void ui_menu_bar_render_example_dropdown(void) {
     int dx, dy, dw, dh;
     if (!menu_dropdown_rect(&dx, &dy, &dw, &dh)) return;
 
-    g_menu_item_hover = ui_menu_bar_dropdown_item_hit(repl_state_pointer()->mouse_x, repl_state_pointer()->mouse_y);
+    g_menu_item_hover = ui_menu_bar_dropdown_item_hit(repl_state_pointer().mouse_x, repl_state_pointer().mouse_y);
 
     float alpha = ui_fade_alpha(g_menu_open_time);
 
-    gl2d_begin(repl_state_viewport()->window_w, repl_state_viewport()->window_h);
+    gl2d_begin(repl_state_viewport().window_w, repl_state_viewport().window_h);
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
@@ -774,7 +774,7 @@ void ui_menu_bar_render_example_dropdown(void) {
         }
         int is_active_example = (menu_id == MENU_SCENE && ne >= 0 &&
                      i >= 1 && i <= ne &&
-                     (i - 1) == repl_state_scenes()->active_example_idx);
+                     (i - 1) == repl_state_scenes().active_example_idx);
         int is_active_scene   = (scene_hit >= 0 &&
                                  scene_hit == repl_active_user_scene());
 

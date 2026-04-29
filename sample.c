@@ -169,7 +169,7 @@ int main(int argc, char **argv) {
     glutInit(&argc, argv);
     glutInitDisplayMode(GLUT_DOUBLE | GLUT_RGBA | GLUT_DEPTH | GLUT_MULTISAMPLE |
                         (*repl_state_render()->use_accum ? GLUT_ACCUM : 0));
-    glutInitWindowSize(repl_state_viewport()->window_w, repl_state_viewport()->window_h);
+    glutInitWindowSize(repl_state_viewport().window_w, repl_state_viewport().window_h);
     glutCreateWindow("OpenGL REPL - Display List Dynamic Rendering");
 
     imrepl_ctrl_init_gl();

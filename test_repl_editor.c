@@ -164,7 +164,7 @@ static int code_panel_mouse_y_for_cmd(int cmd_idx) {
     int vis = doc_line - g_scroll;
     int line_y_start = cp_y + cp_h - CODE_MARGIN_Y - 2 * LINE_H;
     int gl_y = line_y_start - vis * LINE_H + 1;
-    return repl_state_viewport()->window_h - gl_y;
+    return repl_state_viewport().window_h - gl_y;
 }
 
 static void assert_float_decl_rejected_atomic(const char *label,
@@ -514,7 +514,7 @@ int main() {
             repl_load_example(0);
             repl_special_func(GLUT_KEY_F12, 0, 0);
             ASSERT_INT("f12 special route advances example",
-                       repl_state_scenes()->active_example_idx, 1);
+                    repl_state_scenes().active_example_idx, 1);
         }
     }
 
@@ -543,13 +543,13 @@ int main() {
         repl_camera_mouse_event(GLUT_LEFT_BUTTON, GLUT_DOWN, 10, 10, 0);
         repl_camera_drag_motion(20, 14);
         ASSERT_TRUE("camera left drag yaws",
-                    fabsf(repl_state_camera()->ry - 5.0f) < 1e-6f);
+                    fabsf(repl_state_camera().ry - 5.0f) < 1e-6f);
         ASSERT_TRUE("camera left drag pitches",
-                    fabsf(repl_state_camera()->rx - 2.0f) < 1e-6f);
+                    fabsf(repl_state_camera().rx - 2.0f) < 1e-6f);
         repl_camera_mouse_event(GLUT_LEFT_BUTTON, GLUT_UP, 20, 14, 0);
         repl_camera_tick();
         ASSERT_TRUE("camera release keeps yaw momentum",
-                    fabsf(repl_state_camera()->ry - 7.5f) < 1e-6f);
+                    fabsf(repl_state_camera().ry - 7.5f) < 1e-6f);
 
         repl_camera_controls_reset();
         repl_state_camera_set_orbit(0.0f, 0.0f);
@@ -559,16 +559,16 @@ int main() {
                                 GLUT_ACTIVE_SHIFT);
         repl_camera_drag_motion(0, 20);
         ASSERT_TRUE("camera shift-right drag pans y",
-                    fabsf(repl_state_camera()->ty - 1.0f) < 1e-6f);
+                    fabsf(repl_state_camera().ty - 1.0f) < 1e-6f);
         ASSERT_TRUE("camera y pan lights motion glow",
-                    fabsf(repl_state_camera()->motion_glow - 1.0f) < 1e-6f);
+                    fabsf(repl_state_camera().motion_glow - 1.0f) < 1e-6f);
 
         repl_camera_controls_reset();
         repl_state_camera_set_distance(0.6f);
         repl_camera_mouse_event(GLUT_MIDDLE_BUTTON, GLUT_DOWN, 0, 0, 0);
         repl_camera_drag_motion(0, -100);
         ASSERT_TRUE("camera middle drag clamps near zoom",
-                    fabsf(repl_state_camera()->dist - 0.5f) < 1e-6f);
+                    fabsf(repl_state_camera().dist - 0.5f) < 1e-6f);
     }
 
     /* 1. Undo when nothing to undo - must run before any undo push */
@@ -2493,7 +2493,7 @@ int main() {
 
             /* Cycle from user scene 0 -> should go to example 0 */
             repl_special_func(GLUT_KEY_F12, 0, 0);
-            ASSERT_INT("F12: user scene 0 -> example 0", repl_state_scenes()->active_example_idx, 0);
+            ASSERT_INT("F12: user scene 0 -> example 0", repl_state_scenes().active_example_idx, 0);
             ASSERT_INT("F12: active user scene now -1", repl_active_user_scene(), -1);
 
             /* Cycle through all examples to reach user scenes again */
@@ -2590,7 +2590,7 @@ int main() {
         /* 2. Autocomplete active */
         repl_state_autocomplete_mut()->match_count = 1;
         repl_keyboard_func(27, 0, 0);
-        ASSERT_INT("Esc: autocomplete cleared", repl_state_autocomplete()->match_count, 0);
+        ASSERT_INT("Esc: autocomplete cleared", repl_state_autocomplete().match_count, 0);
 
         /* 3. Insert mode */
         repl_state_insert_mode_set(1);
@@ -2613,7 +2613,7 @@ int main() {
         /* 1. Status TTL decrement */
         repl_state_status_mut()->ttl = 10;
         repl_timer_func(0);
-        ASSERT_INT("timer: status ttl decremented", repl_state_status()->ttl, 9);
+        ASSERT_INT("timer: status ttl decremented", repl_state_status().ttl, 9);
 
         /* 2. Cursor blink */
         *repl_state_code_panel_mut()->blink_tick = 29;
