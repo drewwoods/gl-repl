@@ -351,7 +351,9 @@ static void render_3d_scene_pass(const SceneRenderConfig *config,
      * edges blend against the final background color rather than the clear
      * color from earlier in the frame. */
     prof_begin(PROF_SCENE_3D_HELPERS);
+    prof_begin(PROF_SCENE_3D_BACKDROP);
     scene_backdrop_render(&frame_ctx);
+    prof_accum_end(PROF_SCENE_3D_BACKDROP);
     scene_grid_render(&frame_ctx);
     scene_axes_render(&frame_ctx);
     draw_orbit_target(&frame_ctx);

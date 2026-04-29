@@ -79,6 +79,7 @@ static const char *section_label(ProfSection s) {
     case PROF_SCENE_3D_FADE_BATCH_EXEC: return "    batch exec";
     case PROF_SCENE_3D_FADE_BATCH_POST: return "    batch post";
     case PROF_SCENE_3D_HELPERS:  return "  helpers";
+    case PROF_SCENE_3D_BACKDROP: return "    backdrop";
     case PROF_SCENE_3D_OUTLINES: return "  outlines";
     case PROF_SCENE_3D_OVERLAYS: return "  overlays";
     case PROF_SCENE_3D_HUD:      return "  hud";
@@ -123,6 +124,7 @@ static int is_detail_section(ProfSection s) {
             s == PROF_SCENE_3D_FADE_BATCH_EXEC ||
             s == PROF_SCENE_3D_FADE_BATCH_POST ||
             s == PROF_SCENE_3D_HELPERS ||
+            s == PROF_SCENE_3D_BACKDROP ||
             s == PROF_SCENE_3D_OUTLINES ||
             s == PROF_SCENE_3D_OVERLAYS ||
             s == PROF_SCENE_3D_HUD ||
@@ -141,6 +143,27 @@ static int is_detail_section(ProfSection s) {
             s == PROF_CODE_PANEL_LINES_BODY_NEWLINE ||
             s == PROF_CODE_PANEL_LINES_FOOTER ||
             s == PROF_CODE_PANEL_OVERLAYS);
+}
+
+/* Apply a green/yellow/red color based on section timing thresholds.
+ * FRAME_TOTAL uses 1/120s (8.3ms) and 1/60s (16.7ms) breakpoints.
+ * All other sections use half those thresholds (4.15ms / 8.3ms). */
+static void set_time_color(ProfSection s, double us) {
+    if (s == PROF_FRAME_TOTAL) {
+        if (us < 8333.0)
+            glColor3f(0.50f, 0.88f, 0.45f);   /* green  – fits in 120 fps */
+        else if (us < 16667.0)
+            glColor3f(0.95f, 0.82f, 0.25f);   /* yellow – fits in 60 fps */
+        else
+            glColor3f(0.95f, 0.38f, 0.32f);   /* red    – below 60 fps */
+    } else {
+        if (us < 4167.0)
+            glColor3f(0.50f, 0.88f, 0.45f);   /* green  – half-budget OK */
+        else if (us < 8333.0)
+            glColor3f(0.95f, 0.82f, 0.25f);   /* yellow – half-budget tight */
+        else
+            glColor3f(0.95f, 0.38f, 0.32f);   /* red    – over half-budget */
+    }
 }
 
 static int section_visible(ProfSection s) {
@@ -269,16 +292,16 @@ void ui_profile_panel_render(void) {
             snprintf(last_buf, sizeof(last_buf), "--");
             snprintf(avg_buf,  sizeof(avg_buf),  "--");
             glColor3f(0.30f, 0.30f, 0.38f);
+            gl2d_draw_string((float)col_last, (float)ty, last_buf, FONT_SMALL);
+            gl2d_draw_string((float)col_avg,  (float)ty, avg_buf,  FONT_SMALL);
         } else {
             fmt_us(last_buf, (int)sizeof(last_buf), prof_section_last_us(s));
             fmt_us(avg_buf,  (int)sizeof(avg_buf),  prof_section_avg_us(s));
-            if (s == PROF_FRAME_TOTAL)
-                glColor3f(0.90f, 0.95f, 0.70f);
-            else
-                glColor3f(0.60f, 0.88f, 0.60f);
+            set_time_color(s, prof_section_last_us(s));
+            gl2d_draw_string((float)col_last, (float)ty, last_buf, FONT_SMALL);
+            set_time_color(s, prof_section_avg_us(s));
+            gl2d_draw_string((float)col_avg,  (float)ty, avg_buf,  FONT_SMALL);
         }
-        gl2d_draw_string((float)col_last, (float)ty, last_buf, FONT_SMALL);
-        gl2d_draw_string((float)col_avg,  (float)ty, avg_buf,  FONT_SMALL);
 
         ty -= PROF_ROW_H;
     }
