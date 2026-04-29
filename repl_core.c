@@ -632,10 +632,12 @@ static void load_initial_commands(const char *import_file) {
         }
     }
 
-    /* Start in "Your Scene" mode with an empty canvas so the user's edits
-     * accumulate in slot 0 and persist across example switches. */
-    repl_scenes_init_empty_home();
-    set_status("Your Scene - type GL commands, press ; to execute. F1 for help. F12 for examples.");
+    /* Show example 0 as a starting demo, then anchor slot 0 ("Your Scene")
+     * to the current live state so user edits accumulate there and persist
+     * across example switches. */
+    repl_load_example(0);
+    repl_scenes_activate_home_slot();
+    set_status("Ready - type GL commands, press ; to execute. F1 for help. F12 for examples.");
     scroll_to_display_function();
 }
 

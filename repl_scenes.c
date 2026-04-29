@@ -503,9 +503,10 @@ void repl_scenes_mark_example_active(void) {
     g_active_user_scene = -1;
 }
 
-void repl_scenes_init_empty_home(void) {
+void repl_scenes_activate_home_slot(void) {
     save_scene_to_slot(0, USER_SCENE_HOME_NAME);
     g_active_user_scene = 0;
+    g_example_idx       = -1;
 }
 
 void repl_scenes_reset(void) {
