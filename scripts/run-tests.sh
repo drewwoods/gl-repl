@@ -107,7 +107,9 @@ passed_tests=0
 total_tests=0
 unknown_stats=0
 summary_file="$log_dir/summary.txt"
+failed_tests_file="$log_dir/failed_tests.txt"
 : >"$summary_file"
+: >"$failed_tests_file"
 
 for spec do
     name=${spec%%:::*}
@@ -135,6 +137,7 @@ for spec do
     else
         failed_bins=$((failed_bins + 1))
         printf '%bFAIL%b %s (exit %d)' "$red" "$reset" "$name" "$rc"
+        printf '%s\n' "$name" >>"$failed_tests_file"
     fi
 
     if [ "$test_total" -ge 0 ]; then
@@ -160,7 +163,26 @@ fi
 printf '\n'
 
 if [ "$failed_bins" -gt 0 ]; then
-    printf '%bfailure logs kept in %s%b\n' "$yellow" "$log_dir" "$reset"
+    printf '\n%b❌ FAILED TEST BINARIES:%b\n' "$red" "$reset"
+    while IFS= read -r failed_name; do
+        failed_log="$log_dir/$failed_name.log"
+        failed_status="$log_dir/$failed_name.status"
+        if [ -f "$failed_status" ]; then
+            exit_code=$(cat "$failed_status")
+        else
+            exit_code=127
+        fi
+        counts=$(parse_counts "$failed_log")
+        test_passed=${counts%% *}
+        test_total=${counts#* }
+
+        printf '  %b%s%b (exit code: %d)\n' "$red" "$failed_name" "$reset" "$exit_code"
+        if [ "$test_total" -ge 0 ] && [ "$test_total" -gt 0 ]; then
+            printf '    %d/%d tests passed\n' "$test_passed" "$test_total"
+        fi
+        printf '    log: %s\n' "$failed_log"
+    done <"$failed_tests_file"
+    printf '\n%bfailure logs kept in %s%b\n' "$yellow" "$log_dir" "$reset"
     exit 1
 fi
 
