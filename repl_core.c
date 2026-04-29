@@ -632,9 +632,10 @@ static void load_initial_commands(const char *import_file) {
         }
     }
 
-    /* Fall back to default example (cube) */
-    repl_load_example(0);
-    set_status("Ready - type GL commands, press ; to execute. F1 for help. F12 for examples.");
+    /* Start in "Your Scene" mode with an empty canvas so the user's edits
+     * accumulate in slot 0 and persist across example switches. */
+    repl_scenes_init_empty_home();
+    set_status("Your Scene - type GL commands, press ; to execute. F1 for help. F12 for examples.");
     scroll_to_display_function();
 }
 
