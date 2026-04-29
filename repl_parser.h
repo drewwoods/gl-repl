@@ -1,18 +1,11 @@
 /*
  * repl_parser.h - Public parser entrypoints for REPL source lines.
  *
- * Responsible for translating user input (free-form text) into structured
- * GLCmd records. The parser is a cascade of specialized handlers:
- *
- *   1. Float declarations:     float x, y, z;
- *   2. Variable assignments:   x = sin(t);
- *   3. Control flow:           if (...) { } for (...) { } func0() { }
- *   4. Close braces:           }
- *   5. GL commands:            glVertex3f(1, 2, 3), glBegin(GL_TRIANGLES), etc.
- *
- * Each handler tries to match its pattern; if successful, it populates a GLCmd
- * record with parsed type, normalized source text, and evaluated arguments.
- * If all handlers fail, the parser reports "Unknown cmd." in the status.
+ * Translates user input into structured GLCmd records for the parser-owned
+ * command forms: comments, table-driven GL commands, and the other syntax that
+ * feeds the general command model. Float declarations, variable assignments,
+ * and block control-flow statements are handled by the commit pipeline before
+ * the parser sees the line.
  *
  * Parse context allows internal callers (repl_flatten.c during expansion,
  * repl_replay.c during step-back) to parse lines outside the active edit position.
@@ -53,9 +46,8 @@ int repl_parser_parse_command_ctx(const char *line, GLCmd *cmd,
                                   const ReplParseContext *ctx);
 
 /* Parse a single REPL line into cmd. Returns 1 on success, 0 on parse error
- * (status message set). The _with_vars variant makes loop/function locals
- * visible to the expression evaluator (required for flattening contexts where
- * expressions may reference the loop counter or function parameters). */
+ * (status message set). Use repl_parser_parse_command_ctx() when parsing
+ * outside the active editor line or with explicit local-variable scope. */
 int repl_parser_parse_command(const char *line, GLCmd *cmd);
 
 #endif

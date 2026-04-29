@@ -1,22 +1,20 @@
 /*
  * repl_replay.h - Step-by-step execution visualization and state machine.
  *
- * Replay mode allows users to step through an expanded command stream one
- * command at a time (or with variable speed), seeing geometry appear
- * progressively. Toggleable via Ctrl+G or the Replay header button.
+ * Replay mode lets users step through an expanded command stream one command
+ * at a time (or with variable speed), seeing geometry appear progressively.
+ * Toggle it with Ctrl+R or the Replay pin button.
  *
  * Execution model: The replay state machine (OFF/PLAYING/PAUSED/DONE) tracks
  * a program counter (PC) into the flat command array. During playback, the
- * executor only renders commands with index < exec_limit() (the PC clamped
- * by replay speed/pause state). Geometry fades in/out as new geometry appears
- * via a ring buffer of fading geometry snapshots (ReplayFadeBatch).
+ * executor only renders commands with index < repl_replay_exec_limit() (the PC
+ * clamped by replay speed/pause state). Geometry fades in/out as new geometry
+ * appears via a ring buffer of fading geometry snapshots (ReplayFadeBatch).
  *
- * Controls (routed from repl_editor.c):
- *   Step forward (Space or >) - advance PC by 1 command
- *   Step back (< or backspace) - retreat PC and re-execute from the new point
- *   Play/pause (P) - toggle PLAYING/PAUSED state
- *   Speed up/down (+ / -) - adjust playback speed multiplier
- *   Seek (numeric keys 0-9, or click on sidebar) - jump to line/command
+ * Controls (routed from repl_editor.c): Ctrl+R starts/stops replay; Ctrl+K
+ * jumps to the cursor line; Space toggles play/pause (or restarts when done);
+ * Left/Right step by one command; Up/Down or +/- adjust playback speed; M
+ * switches vertex/polygon replay mode; E toggles argument expansion; Esc stops.
  *
  * State preservation: When stepping back, the executor restores the baseline
  * predefined variable values (for 't' and slider variables) and re-executes

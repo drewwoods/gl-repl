@@ -26,20 +26,17 @@
  * segments (includes, setup, display() signature, cleanup). Inserted around the
  * exported code to create a valid C program.
  *
- * Workspace integration: repl_state_refresh_workspace_header_lines() pre-builds the
- * export header text from current state (vars, settings, etc.). repl_state_parse_workspace_header_line()
- * parses a single header directive. repl_state_update_render_state_strings() and
- * repl_state_update_cam_lines() synchronize internal state with export buffers for
- * incremental updates (e.g., after a variable is declared or camera moves).
+ * Workspace integration: repl_state_refresh_workspace_header_lines() rebuilds the
+ * export header text from current state. repl_state_parse_workspace_header_line()
+ * consumes a single header directive during import and stores pending scene/workspace
+ * metadata for the caller to apply after load_from_file() returns.
  *
- * Multi-scene export: repl_core.c's workspace saver iterates user scene slots,
- * using install_scene_into_live() to make each scene active, then calling save_output()
- * with the scene-name hint set. Each file gets the correct @scene-name header.
+ * Multi-scene export lives in repl_scenes.c: workspace saves iterate user-scene
+ * slots, set the export scene-name hint, and call repl_export_save_output() for
+ * each scene.
  */
 #ifndef REPL_EXPORT_H
 #define REPL_EXPORT_H
-
-#include "sample.h"
 
 /* Boilerplate C file segments for export. g_header_pre is the initial includes
  * and setup; g_header_post follows the metadata comments; g_footer_pre_init is
@@ -60,9 +57,8 @@ void repl_export_save_output(const char *filename);
 /* Import a C source file saved by save_output(). Parses workspace header directives,
  * camera state, function definitions, and geometry commands. Feeds geometry lines
  * through feed_line() for normal parsing. Returns 1 on success, 0 on error (parse
- * failure, open failure). Caller must call repl_state_*_export_hint() functions
- * after load_from_file() returns to retrieve pending scene-name and workspace-dir
- * directives. */
+ * failure, open failure). Pending scene-name and workspace-dir directives remain
+ * in import/export state for the caller to consume after return. */
 int  repl_export_load_from_file(const char *filename);
 
 /* Refresh the export header text from current state. Pre-builds the header metadata
@@ -77,14 +73,5 @@ void repl_state_refresh_workspace_header_lines(void);
  * 0 if it's not a directive (caller should process as regular code). Used during
  * load_from_file() to extract metadata. */
 int  repl_state_parse_workspace_header_line(const char *line);
-
-/* Update the export buffer's render state string from current settings. Called after
- * render config mutations (grid theme, axes theme, overlay toggles, etc.) to keep
- * the export buffer in sync. */
-void repl_state_update_render_state_strings(void);
-
-/* Update the export buffer's camera state lines from current camera position/rotation.
- * Called after camera mutations (rotate, pan, zoom) to keep the export buffer in sync. */
-void repl_state_update_cam_lines(void);
 
 #endif

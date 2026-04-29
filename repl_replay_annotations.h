@@ -42,9 +42,9 @@ void repl_replay_annotations_prepare(void);
 
 /* Find the flat command index corresponding to a source line during replay. If the
  * source line expands into multiple flat commands (e.g., a for-loop), returns the
- * first flat command in the expansion. Returns -1 if no flat command is executing
- * for this source line at the current replay PC. Used by annotation builders to
- * look up runtime variable state. */
+ * most recent matching flat command at or before the current replay PC. Returns -1
+ * if no flat command is executing for this source line. Used by annotation builders
+ * to look up runtime variable state. */
 int  repl_replay_annotation_flat_cmd_for_source(int src_line);
 
 /* Count extra annotation rows needed below a source line (used by the code-panel

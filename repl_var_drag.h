@@ -10,17 +10,15 @@
  * with a specified mode (linear or log) and starting mouse x-coordinate. The
  * starting value is captured from the current predefined variable value.
  * repl_var_drag_motion() updates the variable as the mouse moves, computing
- * new values via linear mapping (motion_dx → delta_value) or log mapping
+ * new values via linear mapping (motion_dx -> delta_value) or log mapping
  * (exponential scaling for large value ranges). repl_var_drag_reset() clears
  * the drag state and releases the variable.
  *
- * State writeback: As motion() computes new values, they are written back to
- * g_predef_vars[] (the live predefined variable table) immediately, so the
- * geometry updates in real time. Additionally, if the variable has a matching
- * CMD_VAR_ASSIGN command in the source array, the source text is updated
- * (via repl_state_document_set_cmd_source) to reflect the new value. This
- * ensures that dragging 'x = 5' to 'x = 7' updates both the live value and
- * the source code.
+ * State writeback: As motion computes new values, they are written back to
+ * the live predefined-variable table immediately, so the geometry updates in
+ * real time. If the source contains a literal CMD_VAR_ASSIGN line for the
+ * dragged variable, that command text is rewritten in place to match the new
+ * value. Expression-based assignments are left unchanged.
  *
  * Visual feedback: The variable panel renderer queries repl_var_drag_active_var()
  * and repl_var_drag_log_mode() to highlight the active drag row and adjust
@@ -50,9 +48,10 @@ void repl_var_drag_begin(int row, int log_mode, int x);
 
 /* Update the drag with new mouse x-coordinate. Computes the motion delta from
  * the start x-coordinate, maps it to a new variable value (linear or log),
- * and writes the result back to g_predef_vars[row]. Also updates any matching
- * CMD_VAR_ASSIGN command source to keep the displayed code in sync with the
- * dragged value. Called repeatedly as the mouse moves during a drag. */
+ * and writes the result back to the live predefined-variable table. Also
+ * rewrites any matching literal CMD_VAR_ASSIGN source line to keep the
+ * displayed code in sync with the dragged value. Called repeatedly as the
+ * mouse moves during a drag. */
 void repl_var_drag_motion(int x);
 
 /* End a drag transaction and clear the drag state. Called by the editor's

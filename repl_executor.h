@@ -57,10 +57,11 @@ void repl_executor_unwind_tracked_transform_stack(int *matrix_depth);
 
 /* --- Lifecycle --------------------------------------------------------- */
 
-/* One-time init: create display lists, compile shaders, allocate tessellator. */
+/* One-time init: create the shared GLU quadric and tessellator used by quadric
+ * primitives. */
 void repl_executor_init_resources(void);
 
-/* One-time cleanup: destroy tessellator, release display lists. */
+/* One-time cleanup: destroy the shared quadric and tessellator. */
 void repl_executor_destroy_resources(void);
 
 /* Update the executor's fade overlay context before a frame render. */

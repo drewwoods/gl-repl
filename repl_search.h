@@ -1,8 +1,8 @@
 /*
  * repl_search.h - Search overlay query helpers and input routing.
  *
- * Search state is owned by repl_search.c and surfaced through repl_state.h.
- * Query helpers are read-only; the input handlers mutate the owned search
+ * Search helpers operate on the shared search overlay state exposed through
+ * repl_state.h. Query helpers are read-only; the input handlers mutate the
  * overlay state.
  */
 #ifndef REPL_SEARCH_H

@@ -19,8 +19,8 @@
  *   REPL:  for(i, 0, 10, 0.5)  { ... }    [var, start, end, step]
  *   C:     for (float i = 0; i < 10; i += 0.5) { ... }
  *
- * Both forms are parsed and expanded to unrolled commands up to MAX_FLATTEN_VISITS.
- * Nested loops (loop inside loop/function) work; recursion depth capped at 32.
+ * This header parses expressions and loop headers, and translates REPL <-> C
+ * math syntax. Loop expansion and unrolling happen in repl_flatten.c.
  *
  * This module is extracted for independent testing. Include this header, then:
  *   - #include "repl_eval.c" for single-TU builds, or
