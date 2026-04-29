@@ -27,10 +27,27 @@ static int   g_cp_px       = 0, g_cp_py = 0;  /* top-left (OpenGL y-up) */
 static int   g_cp_drag     = 0;    /* 0=none 1=SV 2=hue 3=alpha */
 static int   g_cp_has_alpha= 0;    /* 1 when editing an RGBA color command */
 
-/* Hit-rects in y-up OpenGL coords, updated each frame in render_color_picker */
-static int g_cp_sv_x, g_cp_sv_y, g_cp_sv_sz;
-static int g_cp_hue_x, g_cp_hue_y, g_cp_hue_h;
-static int g_cp_alp_x, g_cp_alp_y, g_cp_alp_h;
+/* Hit-rect bundle in y-up OpenGL coords. Derived from anchor + flags via
+ * cp_compute_rects() at both render and input time so render no longer
+ * caches geometry that input depends on. */
+typedef struct {
+    int sv_x, sv_y, sv_sz;
+    int hue_x, hue_y, hue_h;
+    int alp_x, alp_y, alp_h;
+} CpRects;
+
+static void cp_compute_rects(CpRects *r) {
+    int px = g_cp_px;
+    int py = g_cp_py;
+    int sz = CP_SV_SZ;
+    int hx = px + sz + CP_GAP;
+
+    r->sv_x  = px;          r->sv_y  = py - sz; r->sv_sz = sz;
+    r->hue_x = hx;          r->hue_y = py - sz; r->hue_h = sz;
+    r->alp_x = hx + CP_HUE_W + CP_GAP;
+    r->alp_y = py - sz;
+    r->alp_h = sz;
+}
 
 static void cp_hsv_to_rgb(float h, float s, float v,
                            float *r, float *g, float *b) {
@@ -148,7 +165,6 @@ void ui_color_picker_render(void) {
     glDisable(GL_BLEND);
 
     /* SV square: white→hue left-right, hue→black top-bottom */
-    g_cp_sv_x=px; g_cp_sv_y=py-sz; g_cp_sv_sz=sz;
     float hr,hg,hb; cp_hsv_to_rgb(g_cp_hue,1,1,&hr,&hg,&hb);
     glBegin(GL_QUADS);
     glColor3f(1,1,1);    glVertex2f(px,    py);
@@ -184,7 +200,6 @@ void ui_color_picker_render(void) {
 
     /* Hue bar: hue=0 at top, hue=1 at bottom */
     int hx=px+sz+CP_GAP;
-    g_cp_hue_x=hx; g_cp_hue_y=py-sz; g_cp_hue_h=sz;
     for (int i=0;i<40;i++) {
         float h1=(float)i/40.0f, h2=(float)(i+1)/40.0f;
         float r1,g1,b1,r2,g2,b2;
@@ -204,7 +219,6 @@ void ui_color_picker_render(void) {
     /* Alpha bar (COLOR4F only): alpha=1 at top */
     if (g_cp_has_alpha) {
         int ax=hx+CP_HUE_W+CP_GAP;
-        g_cp_alp_x=ax; g_cp_alp_y=py-sz; g_cp_alp_h=sz;
         float cr,cg,cb; cp_hsv_to_rgb(g_cp_hue,g_cp_sat,g_cp_val,&cr,&cg,&cb);
         int ck=5;
         for (int iy=0;iy<sz;iy+=ck) for (int ix=0;ix<CP_ALPHA_W;ix+=ck) {
@@ -257,19 +271,21 @@ void ui_color_picker_render(void) {
 
 int ui_color_picker_press(int mx, int my) {
     const GLCmd *cmd;
+    CpRects r;
 
     if (g_cp_line < 0) return 0;
     cmd = cp_cmd_at(g_cp_line);
     if (!cmd)
         return 0;
     int gl_y = repl_state_viewport().window_h - my;
+    cp_compute_rects(&r);
 
     /* SV square */
-    if (mx >= g_cp_sv_x && mx < g_cp_sv_x+g_cp_sv_sz &&
-        gl_y >= g_cp_sv_y && gl_y < g_cp_sv_y+g_cp_sv_sz) {
+    if (mx >= r.sv_x && mx < r.sv_x+r.sv_sz &&
+        gl_y >= r.sv_y && gl_y < r.sv_y+r.sv_sz) {
         g_cp_drag = 1;
-        g_cp_sat = (float)(mx-g_cp_sv_x)/(float)g_cp_sv_sz;
-        g_cp_val = (float)(gl_y-g_cp_sv_y)/(float)g_cp_sv_sz;
+        g_cp_sat = (float)(mx-r.sv_x)/(float)r.sv_sz;
+        g_cp_val = (float)(gl_y-r.sv_y)/(float)r.sv_sz;
         if (g_cp_sat<0)g_cp_sat=0; if (g_cp_sat>1)g_cp_sat=1;
         if (g_cp_val<0)g_cp_val=0; if (g_cp_val>1)g_cp_val=1;
         if (cmd->type == CMD_CLEAR_COLOR && g_cp_val>CP_CLEAR_MAX_V)
@@ -277,19 +293,19 @@ int ui_color_picker_press(int mx, int my) {
         color_picker_write_cmd(); return 1;
     }
     /* Hue bar */
-    if (mx >= g_cp_hue_x && mx < g_cp_hue_x+CP_HUE_W &&
-        gl_y >= g_cp_hue_y && gl_y < g_cp_hue_y+g_cp_hue_h) {
+    if (mx >= r.hue_x && mx < r.hue_x+CP_HUE_W &&
+        gl_y >= r.hue_y && gl_y < r.hue_y+r.hue_h) {
         g_cp_drag = 2;
-        g_cp_hue = 1.0f-(float)(gl_y-g_cp_hue_y)/(float)g_cp_hue_h;
+        g_cp_hue = 1.0f-(float)(gl_y-r.hue_y)/(float)r.hue_h;
         if (g_cp_hue<0)g_cp_hue=0; if (g_cp_hue>=1)g_cp_hue=0.999f;
         color_picker_write_cmd(); return 1;
     }
     /* Alpha bar */
     if (g_cp_has_alpha &&
-        mx >= g_cp_alp_x && mx < g_cp_alp_x+CP_ALPHA_W &&
-        gl_y >= g_cp_alp_y && gl_y < g_cp_alp_y+g_cp_alp_h) {
+        mx >= r.alp_x && mx < r.alp_x+CP_ALPHA_W &&
+        gl_y >= r.alp_y && gl_y < r.alp_y+r.alp_h) {
         g_cp_drag = 3;
-        g_cp_alpha = (float)(gl_y-g_cp_alp_y)/(float)g_cp_alp_h;
+        g_cp_alpha = (float)(gl_y-r.alp_y)/(float)r.alp_h;
         if (g_cp_alpha<0)g_cp_alpha=0; if (g_cp_alpha>1)g_cp_alpha=1;
         color_picker_write_cmd(); return 1;
     }
@@ -301,24 +317,26 @@ int ui_color_picker_press(int mx, int my) {
 
 int ui_color_picker_motion(int mx, int my) {
     const GLCmd *cmd;
+    CpRects r;
 
     if (g_cp_drag == 0) return 0;
     cmd = cp_cmd_at(g_cp_line);
     if (!cmd)
         return 0;
     int gl_y = repl_state_viewport().window_h - my;
+    cp_compute_rects(&r);
     if (g_cp_drag == 1) {
-        g_cp_sat = (float)(mx-g_cp_sv_x)/(float)g_cp_sv_sz;
-        g_cp_val = (float)(gl_y-g_cp_sv_y)/(float)g_cp_sv_sz;
+        g_cp_sat = (float)(mx-r.sv_x)/(float)r.sv_sz;
+        g_cp_val = (float)(gl_y-r.sv_y)/(float)r.sv_sz;
         if (g_cp_sat<0)g_cp_sat=0; if (g_cp_sat>1)g_cp_sat=1;
         if (g_cp_val<0)g_cp_val=0; if (g_cp_val>1)g_cp_val=1;
         if (cmd->type == CMD_CLEAR_COLOR && g_cp_val>CP_CLEAR_MAX_V)
             g_cp_val=CP_CLEAR_MAX_V;
     } else if (g_cp_drag == 2) {
-        g_cp_hue = 1.0f-(float)(gl_y-g_cp_hue_y)/(float)g_cp_hue_h;
+        g_cp_hue = 1.0f-(float)(gl_y-r.hue_y)/(float)r.hue_h;
         if (g_cp_hue<0)g_cp_hue=0; if (g_cp_hue>=1)g_cp_hue=0.999f;
     } else if (g_cp_drag == 3) {
-        g_cp_alpha = (float)(gl_y-g_cp_alp_y)/(float)g_cp_alp_h;
+        g_cp_alpha = (float)(gl_y-r.alp_y)/(float)r.alp_h;
         if (g_cp_alpha<0)g_cp_alpha=0; if (g_cp_alpha>1)g_cp_alpha=1;
     }
     color_picker_write_cmd();
