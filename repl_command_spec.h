@@ -88,10 +88,14 @@ int repl_cmd_type_needs_semicolon(CmdType type);
  * blocks). Used by the formatter to determine indentation rules. */
 int repl_cmd_type_needs_block_indent(CmdType type);
 
-/* Query the full array of standard GL command specs (vertex, normal, color,
- * transform, etc.). Terminated by an entry with a null name. Used by the parser
- * and autocomplete to look up command metadata by type or name. */
+/* Query the full array of enum-backed GL command specs (glBegin, glEnable,
+ * glShadeModel, etc.). Terminated by an entry with a null name. Used by the
+ * parser and autocomplete to look up command metadata by type or name. */
 const ReplEnumCommandSpec *repl_enum_command_specs(void);
+
+/* Query the full array of standard float-arg GL command specs (vertex, normal,
+ * color, transform, etc.). Terminated by an entry with a null name. Used by the
+ * parser and autocomplete to look up command metadata by type or name. */
 const ReplStdCommandSpec *repl_std_command_specs(void);
 
 /* Query completion suggestions for built-in math functions. Used by the

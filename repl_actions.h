@@ -1,22 +1,14 @@
 /*
  * repl_actions.h - Menu bar dispatch and configuration shortcut handling.
  *
- * Implements the menu bar action dispatch for File, Scene, and Config menus,
- * plus keyboard shortcut handlers for config toggles and cycling. Bridges
- * menu UI (ui_menu_bar.h) with state mutations (config changes, save/load,
- * scene operations, workspace I/O).
+ * Bridges the menu UI with state mutations for the File, Scene, and Config
+ * menus. The Scene dropdown starts with built-in examples, then the fixed
+ * scene actions, then the dense user-scene list.
  *
  * Menu structure: Three top-level menus (REPL_MENU_FILE, REPL_MENU_SCENE,
- * REPL_MENU_CONFIG) with item indices defining the available actions. File
- * menu has export/import/workspace operations. Scene menu has new scene,
- * save output, rename, and user scene list. Config menu has toggles/cycles
- * for visual overlays, rendering settings, etc.
- *
- * Scene menu layout: Fixed header rows (divider, "Scenes" label, "New empty
- * scene", "Save to output.c", "Rename active scene") at offsets 0-5, followed
- * by the user scene list at offset REPL_SCENE_OFF_SCENES. User scenes are
- * rendered as a dense menu (unused slots skipped) via repl_scene_menu_slot_for_dense_index(),
- * which maps a display index to the actual user scene slot number.
+ * REPL_MENU_CONFIG). The Scene menu layout is split into an Examples section,
+ * then the fixed scene rows, then user scenes; offsets in REPL_SCENE_OFF_*
+ * are relative to the start of the Scene section after the examples block.
  *
  * Config shortcut dispatch: Keyboard shortcuts (Ctrl+<key> and F-keys) trigger
  * config toggles/cycles via repl_cfg_handle_ascii_shortcut() and
@@ -51,11 +43,11 @@ enum {
     REPL_FILE_ITEM_COUNT
 };
 
-/* Scene menu item offsets and fixed rows. Fixed header (divider, label, new
- * scene, save output, rename) occupy offsets 0-5. User scenes list starts at
- * REPL_SCENE_OFF_SCENES (offset 6). Item count is implicit; lookup uses
- * repl_scene_menu_slot_for_dense_index() to map dense display index to actual
- * user scene slot. */
+/* Scene menu item offsets and fixed rows. Offsets are relative to the start of
+ * the Scene section after the built-in examples block. Fixed rows are the
+ * divider, label, new scene, save output, rename, then the user-scene list.
+ * Item count is implicit; lookup uses repl_scene_menu_slot_for_dense_index()
+ * to map dense display index to the actual user scene slot. */
 enum {
     REPL_SCENE_OFF_DIVIDER = 1,
     REPL_SCENE_OFF_HDR     = 2,

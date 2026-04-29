@@ -2,22 +2,13 @@
  * repl_flatten.h - Expansion of source commands to flat (flattened) commands.
  *
  * Implements the second half of the two-level command model: source commands
- * (as edited by the user) are expanded into a flat program where:
+ * are expanded into a flat program where for-loops are unrolled, function
+ * calls are inlined, and if-block conditions are evaluated. Expansion is
+ * recursive and bounded by MAX_FLATTEN_CALL_DEPTH and MAX_FLATTEN_VISIT_BUDGET.
  *
- *   - For-loops are unrolled (capped at 100k total command visits to prevent
- *     runaway expansion of deeply nested or high-iteration loops)
- *   - Function calls are inlined with actual arguments substituted for params
- *   - If-block conditions are evaluated; bodies included/skipped accordingly
- *   - Each flat command records its origin (source_cmd_idx) and active scopes
- *     (func_scope_mask, call_src_cmd_idx) for cursor highlighting & debugging
- *
- * Expansion is recursive: functions can call functions (depth limit 32),
- * loops can nest, if-blocks can contain anything. The flattening process is
- * lazy and triggered by mark_normals_dirty() after any source mutation.
- *
- * The live flat program (g_flat_cmds, g_flat_local_vars) is rebuilt once per
- * frame if the dirty flag is set. Tests and replay tools can flatten into
- * temporary buffers without mutating the live arrays (see FlatProgramView).
+ * The live flat program is rebuilt once per frame if the dirty flag is set.
+ * Tests and replay tools can flatten into temporary buffers without mutating
+ * the live arrays (see FlatProgramView).
  *
  * Local variables (loop counters, function params) are snapshotted into
  * FlatCmdLocalVars for each flat command so that expressions with variable
@@ -58,8 +49,8 @@ typedef struct {
     GLCmd            *flat_cmds;
     FlatCmdLocalVars *flat_local_vars;
     int               flat_capacity;
-    int               max_call_depth;   /* recursion limit (default 32) */
-    int               visit_budget;     /* total command visits allowed (default 100k) */
+    int               max_call_depth;   /* recursion limit (default MAX_FLATTEN_CALL_DEPTH) */
+    int               visit_budget;     /* total command visits allowed (default MAX_FLATTEN_VISIT_BUDGET) */
 } ReplFlattenOptions;
 
 /* Result: whether flattening succeeded, how many commands were generated,

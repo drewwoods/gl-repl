@@ -12,7 +12,7 @@
  *   REPL_AUDIO_LOOP_ALL   play the playlist; wrap to first at the end
  *
  * Lifecycle:
- *   repl_audio_init()                once, after repl_init_gl()
+ *   repl_audio_init()                once, after the app/controller/GL bootstrap
  *   repl_audio_set_playlist(...)     register the tracks (filename order)
  *   repl_audio_play_playlist()       start the first track
  *   repl_audio_tick()                call each frame; advances on song end

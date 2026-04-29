@@ -1,39 +1,10 @@
 /*
- * repl_core.h - Public API for the REPL core module.
+ * repl_core.h - Public REPL facade.
  *
- * The REPL lives on two-level command model: **source commands** (parsed user
- * input, displayed in the code panel) and **flat commands** (expanded copy with
- * for-loops unrolled, functions inlined, if-blocks resolved). The source array
- * is edited directly; the flat array is rebuilt on demand before rendering.
- *
- * Lifecycle:
- *   imrepl_ctrl_init_gl()           once, at app startup, after GL context ready (from imrepl_ctrl.h)
- *   repl_load_example(idx)          or repl_load_user_scene_idx() / repl_load_initial_commands()
- *   repl_keyboard_func()            per keystroke (from GLUT)
- *   repl_special_func()             per F-key/arrow (from GLUT)
- *   imrepl_ctrl_display_frame()     per frame (from GLUT, owned by imrepl_ctrl.h)
- *   imrepl_ctrl_reshape()           on window resize (from GLUT, owned by imrepl_ctrl.h)
- *   repl_timer_func()               polling timer (from GLUT)
- *   repl_save_default_output()      or repl_export_save_output() to persist
- *
- * repl_core.c owns:
- *   - Live source-command array (g_cmds[], up to MAX_COMMANDS)
- *   - Live flat-command array (g_flat_cmds[], rebuilt lazily)
- *   - App-level lifecycle and input routing wrappers
- *
- * Specialized responsibilities delegated to focused modules:
- *   repl_parser.c      - Parse source lines to GLCmd (expression validation, normalization)
- *   repl_flatten.c     - Expand source → flat (for-loops, functions, if-blocks)
- *   repl_executor.c    - Emit GL calls from flat commands
- *   repl_replay.c      - Step-by-step playback state and visualization
- *   repl_editor.c      - Keyboard routing, line editing, undo/redo
- *   repl_export.c      - Save/load source files with metadata
- *
- * Implementation helpers (repl_state.c, repl_search.c, etc.) share state via
- * repl_core_internal.h; keep them out of this header to preserve the module boundary.
- *
- * Everything listed here is safe to call from sample.c, scene_render.c,
- * ui_panels.c, and test binaries.
+ * Exposes the source/flat command model, persistence helpers, replay hooks,
+ * example and user-scene management, and the input callback wrappers that the
+ * controller forwards to. Runtime storage lives in repl_state.c and is accessed
+ * through repl_state.h; scene/workspace persistence lives in repl_scenes.c.
  */
 #ifndef REPL_CORE_H
 #define REPL_CORE_H
@@ -48,9 +19,9 @@
 void repl_save_default_output(void);
 
 /* Load a single .c file containing source commands and camera state.
- * Parses @var/@cfg/@camera metadata headers, feeds lines through the commit
- * pipeline. Sets status message on success or failure.
- * Returns 1 on success, -1 on error. */
+ * Parses leading workspace metadata, feeds lines through the commit pipeline,
+ * and leaves any pending scene/workspace directives in import/export state for
+ * the caller to apply. Returns 1 on success, 0 on error. */
 int  repl_export_load_from_file(const char *filename);
 
 /* Save active scene or example to a standalone .c file with metadata headers
@@ -62,7 +33,9 @@ void repl_export_save_output(const char *filename);
  * Each slot is flushed with its own @scene-name header. Both functions
  * remember `dir` so single-file exports carry a `@workspace-dir` hint.
  * Sets status message on success or failure.
- * Returns -1 on error, or the number of files saved/loaded. */
+ * `repl_save_workspace()` returns the number of files written, or -1 on error.
+ * `repl_load_workspace()` returns the number of files loaded, 0 for an empty
+ * directory argument, or -1 on I/O error. */
 int  repl_save_workspace(const char *dir);
 int  repl_load_workspace(const char *dir);
 
@@ -75,18 +48,19 @@ void repl_set_workspace_dir(const char *dir);
 /* --- Command pipeline -------------------------------------------------- */
 
 /* Expand a source program into caller-provided flat buffers. This is the
- * core two-level model: for-loops are unrolled (capped at 100k visits per
- * flatten), function calls are inlined with actual arguments substituted,
- * if-blocks are evaluated with condition predicates. Tests use this to
- * flatten into temporary storage without mutating the live g_flat_cmds[];
- * the display loop uses the wrapped repl_flatten_commands() below.
- * Returns the number of flat commands generated, -1 on error. */
+ * core two-level model: for-loops are unrolled, function calls are inlined,
+ * and if-blocks are evaluated against their conditions, subject to the
+ * MAX_FLATTEN_CALL_DEPTH and MAX_FLATTEN_VISIT_BUDGET limits. Tests use this
+ * to flatten into temporary storage without mutating the live flat program;
+ * the display loop uses the wrapped repl_flatten_commands() below. Result->
+ * flat_cmd_count carries the generated count. Returns 1 on success, 0 on
+ * error. */
 int  repl_flatten_program(const ReplFlattenOptions *options,
                           ReplFlattenResult *result);
 
-/* Rebuild g_flat_cmds from g_cmds (idempotent). Expansion honors the
- * laziness flag set by mark_normals_dirty(); call this once per frame
- * before execution if the source array changed. */
+/* Rebuild the live flat program from the current source commands (idempotent).
+ * Expansion honors the laziness flag set by mark_normals_dirty(); call this
+ * once per frame before execution if the source array changed. */
 void repl_flatten_commands(void);
 
 /* Recompute auto-normals for every glBegin/glEnd batch in the source array.

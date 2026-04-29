@@ -42,7 +42,7 @@
 /* Code panel and formatting */
 #define KEY_CTRL_L    12   /* clear all commands (Ctrl+L) */
 #define KEY_CTRL_BACKSLASH 28 /* reformat all commands (Ctrl+\, 0x1c) */
-#define KEY_CTRL_B    2    /* toggle code panel layout (single-line vs. wrapped) */
+#define KEY_CTRL_B    2    /* cycle code panel layout modes */
 
 /* File operations */
 #define KEY_CTRL_S    19   /* save to default output (output.c) */

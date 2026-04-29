@@ -16,7 +16,8 @@
  *
  * Input filtering: Path-unsafe characters (/, \, :) and non-printables are filtered
  * at input time since scene names become filesystem slugs on workspace export. The
- * rename mode status-bar prompt ("New name: ") is rendered by the UI.
+ * rename mode status-bar prompt ("Rename scene (Enter to save, Esc to cancel): ")
+ * is rendered by the UI.
  *
  * State queries: repl_inline_rename_active() returns 1 if rename mode is active.
  * Used by the key dispatcher priority queue (repl_editor.c) to route input and by

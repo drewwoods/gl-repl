@@ -1,34 +1,38 @@
 /*
  * repl_command_store.h - Source-command array mutations (insert/delete/replace).
  *
- * Minimal facade for shifting and replacing entries in the live g_cmds[] array.
- * Centralizes the mechanics of array mutation (inserting/deleting ranges, shifting
- * entries) without owning parsing, undo, variable registration, or editor cursor
- * policy. Callers handle those domain-specific concerns; mutations go through this
- * one place for consistency and testability.
+ * Minimal facade for shifting and replacing entries in the live source-command
+ * array. Centralizes array mechanics (inserting/deleting ranges, shifting
+ * entries, range normalization) without owning parsing, undo, variable
+ * registration, or editor cursor policy. Callers handle those domain-specific
+ * concerns; mutations go through this one place for consistency and testability.
  *
- * Command store facade: ReplCommandStore wraps a pointer to the live command array
- * and its count, capacity, and edit-line index. Obtained via repl_command_store_live(),
- * which reads the current REPL state. All mutations take a store reference and
- * update the underlying g_cmds[] and related state atomically.
+ * Command store facade: ReplCommandStore wraps a pointer to the live command
+ * array and its count, capacity, and edit-line index. Obtained via
+ * repl_command_store_live(), which reads the current REPL state. All mutations
+ * take a store reference and update the underlying array and related state
+ * atomically.
  *
- * Insert/delete/replace operations: All support an optional ADJUST_EDIT_LINE flag
- * that automatically adjusts the cursor position if mutations occur before/at the
- * cursor line. Without the flag, callers must handle cursor adjustment themselves.
+ * Only the insert helpers support REPL_COMMAND_STORE_ADJUST_EDIT_LINE, which
+ * automatically adjusts the cursor position if mutations occur before/at the
+ * cursor line. Delete and replace operations leave cursor adjustment to the
+ * caller.
  *
- * Design: This module owns array mechanics (shifting, bounds checking, capacity).
- * Callers own parsing, undo snapshots, variable registration, cursor policy, and
- * error recovery. Mutations are atomic within the store layer; compound operations
- * (insert + declare variable + mark dirty) are coordinated by callers.
+ * Design: This module owns array mechanics (shifting, bounds checking,
+ * capacity). Callers own parsing, undo snapshots, variable registration, cursor
+ * policy, and error recovery. Mutations are atomic within the store layer;
+ * compound operations (insert + declare variable + mark dirty) are coordinated
+ * by callers.
  */
 #ifndef REPL_COMMAND_STORE_H
 #define REPL_COMMAND_STORE_H
 
 #include "sample.h"
 
-/* Facade over the live source-command array. Points to g_cmds[], its count,
- * capacity, and edit-line index. Obtained via repl_command_store_live().
- * All mutations take a store reference and update these atomically. */
+/* Facade over the live source-command array. Points to the current command
+ * buffer, its count, capacity, and edit-line index. Obtained via
+ * repl_command_store_live(). All mutations take a store reference and update
+ * these atomically. */
 typedef struct {
     GLCmd *cmds;
     int   *count;
@@ -36,9 +40,9 @@ typedef struct {
     int   *edit_line;
 } ReplCommandStore;
 
-/* Flags for insert/delete/replace operations. ADJUST_EDIT_LINE automatically
- * adjusts edit_line if the mutation occurs before/at the cursor. Without this
- * flag, callers must handle cursor adjustment. */
+/* Flags for insert operations. REPL_COMMAND_STORE_ADJUST_EDIT_LINE
+ * automatically adjusts edit_line if the mutation occurs before/at the cursor.
+ * Delete and replace operations do not accept flags. */
 enum {
     REPL_COMMAND_STORE_ADJUST_EDIT_LINE = 1 << 0
 };
@@ -105,8 +109,8 @@ int  repl_command_store_set_clear_color(int cmd_idx,
                                         float r, float g, float b, float a);
 
 /* Delete a range of commands. Shifts cmds[start+count..] left to fill the
- * deleted space. flags control cursor adjustment. Returns 1 on success, 0 on
- * error. Called by delete, cut, and clear-all operations. */
+ * deleted space. Returns 1 on success, 0 on error. Called by delete, cut, and
+ * clear-all operations. */
 int  repl_command_store_delete_range(ReplCommandStore *store, int start,
                                      int count);
 

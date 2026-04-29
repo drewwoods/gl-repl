@@ -1,31 +1,16 @@
 /*
  * repl_camera_controls.h - Interactive camera orbit, pan, and zoom.
  *
- * Manages the scene camera as a stateful object with position, rotation, and
- * zoom level. Supports three interaction modes: orbit (rotate around scene
- * center by dragging), pan (translate camera by dragging), and zoom (scroll
- * wheel or keyboard). Zoom velocity implements momentum so that rapid scroll
- * events create smooth animation.
+ * Mutates the scalar camera and pointer state in repl_state.c. Left-drag orbits
+ * the target, right-drag pans across the ground plane, Shift+right-drag pans
+ * world Y, middle-drag and scroll-wheel input adjust distance, and per-frame
+ * momentum keeps motion smooth between frames.
  *
- * Camera state: Internally stored as transform matrices (translate + rotate)
- * that are applied to the GL matrix stack during rendering. The camera
- * position/rotation are read back for export (camera state is preserved across
- * save/load). Time-stepping (repl_camera_tick) applies zoom momentum decay and
- * accumulates zoom velocity into the transform.
+ * Pointer tracking: repl_camera_pointer_set() updates the stored pointer
+ * position for motion deltas during drags. Called by the GLUT mouse callback.
  *
- * Interaction model:
- *   - Mouse drag: repl_camera_mouse_event() detects press; repl_camera_drag_motion()
- *     updates camera transform during drag. Modifier keys (Ctrl = pan, Shift = orbit
- *     alt-style) choose interaction mode.
- *   - Mouse wheel: repl_camera_add_zoom_velocity() accumulates zoom; momentum decay
- *     happens in repl_camera_tick().
- *   - Reset: repl_camera_controls_reset() returns to default view.
- *
- * Pointer tracking: repl_camera_pointer_set() updates the stored pointer position
- * for motion deltas during drags. Called by the GLUT mouse callback.
- *
- * Integration: scene_render.c calls repl_camera_tick() once per frame to apply
- * momentum, then reads camera state for matrix stack setup.
+ * Integration: scene_render.c reads the resulting camera state once per frame;
+ * this module only updates it.
  */
 #ifndef REPL_CAMERA_CONTROLS_H
 #define REPL_CAMERA_CONTROLS_H
