@@ -66,7 +66,7 @@ static void scene_apply_projection(const SceneRenderConfig *config,
 
     /* Build a jitter-aware perspective frustum.  With zero jitter this is
      * identical to gluPerspective(45, aspect, 0.1, 100). */
-    double near_z = 0.1, far_z = 100.0;
+    double near_z = 0.1, far_z = 200.0;
     double aspect  = (double)config->scene_w / (double)config->scene_h;
     double top_v   = near_z * tan(45.0 * M_PI / 360.0);
     double right_v = top_v * aspect;
@@ -354,9 +354,15 @@ static void render_3d_scene_pass(const SceneRenderConfig *config,
     prof_begin(PROF_SCENE_3D_BACKDROP);
     scene_backdrop_render(&frame_ctx);
     prof_accum_end(PROF_SCENE_3D_BACKDROP);
+    prof_begin(PROF_SCENE_3D_GRID);
     scene_grid_render(&frame_ctx);
+    prof_accum_end(PROF_SCENE_3D_GRID);
+    prof_begin(PROF_SCENE_3D_AXES);
     scene_axes_render(&frame_ctx);
+    prof_accum_end(PROF_SCENE_3D_AXES);
+    prof_begin(PROF_SCENE_3D_ORBIT_TARGET);
     draw_orbit_target(&frame_ctx);
+    prof_accum_end(PROF_SCENE_3D_ORBIT_TARGET);
     prof_accum_end(PROF_SCENE_3D_HELPERS);
 
     /* Polygon outline overlay (optional) + current-block highlight.
