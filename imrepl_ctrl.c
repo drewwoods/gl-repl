@@ -254,7 +254,6 @@ void imrepl_ctrl_display_frame(void) {
     int g_num_flat_cmds = flat_program.cmd_count;
     ReplReplayRuntimeState replay = repl_state_replay();
     SceneRenderConfig scene_config;
-    UiCodePanelOutput code_panel_out;
 
     prof_frame_tick();
     prof_begin(PROF_FRAME_TOTAL);
@@ -316,12 +315,7 @@ void imrepl_ctrl_display_frame(void) {
         prof_accum_commit(section_idx);
 
     prof_begin(PROF_CODE_PANEL);
-    ui_panels_render_code_panel(&code_panel_out);
-    if (code_panel_out.cursor_pixel_valid) {
-        ReplCodePanelRuntimeState *code_panel = repl_state_code_panel_mut();
-        code_panel->cursor_px = code_panel_out.cursor_px;
-        code_panel->cursor_py = code_panel_out.cursor_py;
-    }
+    ui_panels_render_code_panel();
     prof_end(PROF_CODE_PANEL);
 
     prof_begin(PROF_UI_PANELS);

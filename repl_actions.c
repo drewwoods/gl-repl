@@ -235,6 +235,13 @@ void repl_action_cursor_blink_reset(void) {
     cp->blink_tick = 0;
 }
 
+void repl_action_set_cursor_pixel(int px, int py) {
+    ReplCodePanelRuntimeState *cp = repl_state_code_panel_mut();
+
+    cp->cursor_px = px;
+    cp->cursor_py = py;
+}
+
 void repl_action_help_tab_next(void) {
     ReplHelpState *help = repl_state_help_mut();
 

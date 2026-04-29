@@ -159,8 +159,7 @@ static void render_active_input_rows(int panel_w, int text_x, int idx_x,
                                      int visible_lines, int file_line,
                                      int indent_chars, const char *idx_text,
                                      int search_row_idx,
-                                     int *io_cur, int *io_line_y,
-                                     UiCodePanelOutput *out) {
+                                     int *io_cur, int *io_line_y) {
     ReplEditorInputView            inp    = repl_state_editor_input();
     ReplCodePanelRuntimeState cp     = repl_state_code_panel();
     ReplAutocompleteState           ac     = repl_state_autocomplete();
@@ -247,11 +246,7 @@ static void render_active_input_rows(int panel_w, int text_x, int idx_x,
                     glDisable(GL_BLEND);
                 }
 
-                if (out) {
-                    out->cursor_px = cursor_x;
-                    out->cursor_py = *io_line_y;
-                    out->cursor_pixel_valid = 1;
-                }
+                repl_action_set_cursor_pixel(cursor_x, *io_line_y);
             }
 
             *io_line_y -= LINE_H;
@@ -290,7 +285,7 @@ int ui_panels_code_panel_apply_scroll_follow_for_test(int *out_follow_doc_line,
 
 /* Color picker lives in repl_color_picker.c. */
 
-void ui_panels_render_code_panel(UiCodePanelOutput *out) {
+void ui_panels_render_code_panel(void) {
     ReplReplayRuntimeState          replay = repl_state_replay();
     ReplCodePanelRuntimeState cp     = repl_state_code_panel();
     ReplRenderState                 rs     = repl_state_render();
@@ -300,8 +295,6 @@ void ui_panels_render_code_panel(UiCodePanelOutput *out) {
 
     CodePanelDocumentLayout doc_layout;
     int cp_x, cp_y, cp_w, cp_h;
-    if (out)
-        memset(out, 0, sizeof(*out));
 
     repl_layout_code_panel_rect(&cp_x, &cp_y, &cp_w, &cp_h);
     if (cp_w <= 0 || cp_h <= 0) {
@@ -465,8 +458,7 @@ void ui_panels_render_code_panel(UiCodePanelOutput *out) {
                                                                          visible_lines, file_line,
                                                                          repl_code_panel_document_active_indent_chars(), NULL,
                                                                          repl_state_edit_line(),
-                                                                         &cur, &line_y,
-                                                                         out);
+                                                                         &cur, &line_y);
             file_line++;
         }
 
@@ -500,8 +492,7 @@ void ui_panels_render_code_panel(UiCodePanelOutput *out) {
                                          visible_lines, file_line,
                                          repl_code_panel_document_active_indent_chars(), idx_text,
                                          repl_state_edit_line(),
-                                         &cur, &line_y,
-                                         out);
+                                         &cur, &line_y);
                 file_line++;
             } else {
                 /* Existing command, not being edited */
@@ -671,8 +662,7 @@ void ui_panels_render_code_panel(UiCodePanelOutput *out) {
                                      visible_lines, file_line,
                                      repl_code_panel_document_active_indent_chars(), NULL,
                                      repl_state_edit_line(),
-                                     &cur, &line_y,
-                                     out);
+                                     &cur, &line_y);
         } else {
             if (cur >= cp.scroll && cur < cp.scroll + visible_lines) {
                 glColor3f(0.30f, 0.30f, 0.38f);
