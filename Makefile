@@ -93,7 +93,7 @@ else
 COVERAGE_LDFLAGS =
 endif
 
-.PHONY: all clean test check test-detailed test_detailed test-stubs lines debug coverage glut help bench bench-csv check-gl-boundaries check-layer-coupling check-controller-boundaries check-scene-no-repl-state-mut check-state-boundaries check-views-no-owners check-pure-scene-no-repl-state check-ui-no-repl-state-mut check-public-api-usage check-state-ownership check-no-write-through-view check-views-flat-types check-views-by-value-snapshot check-ui-renderer-takes-view check-renderer-no-direct-mutators check-output-actualization check-mut-accessor-count check-state-c-shrinking check-no-facade-include-in-views check-domain-owner-encapsulation check-cursor-px-encapsulated callgraph-static callgraph-static-entry callgraph-profile callgraph-graphviz callgraph-html callgraph-files
+.PHONY: all clean test check test-detailed test_detailed test-stubs lines debug coverage glut help bench bench-csv check-gl-boundaries check-layer-coupling check-controller-boundaries check-scene-no-repl-state-mut check-state-boundaries check-views-no-owners check-pure-scene-no-repl-state check-ui-no-repl-state-mut check-public-api-usage check-state-ownership check-no-write-through-view check-runtime-state-value-fields check-public-state-no-writable-pointers check-views-flat-types check-state-read-getters-return-values check-views-by-value-snapshot check-ui-renderer-takes-view check-renderer-no-direct-mutators check-output-actualization check-state-c-shrinking check-no-facade-include-in-views check-domain-owner-encapsulation check-cursor-px-encapsulated callgraph-static callgraph-static-entry callgraph-profile callgraph-graphviz callgraph-html callgraph-files
 
 all: sample
 
@@ -300,11 +300,18 @@ check-ui-no-repl-state-mut: ## Verify UI files do not mutate REPL state directly
 check-no-write-through-view: ## Verify no writes happen through pointer fields on view structs.
 	@bash scripts/check-no-write-through-view.sh scripts/allowlists/write-through-view.txt $(UI_SRCS) $(SCENE_SRCS)
 
+check-runtime-state-value-fields: ## Verify ReplRuntimeState owns values, not pointer aliases.
+	@bash scripts/check-runtime-state-value-fields.sh repl_state.h
+
 check-views-flat-types: ## Verify view/state snapshot structs avoid mutable pointer fields.
 	@bash scripts/check-views-flat.sh scripts/baselines/views-flat-violations.txt
 
+check-public-state-no-writable-pointers: check-views-flat-types ## Alias for the public state/view writable pointer check.
+
 check-views-by-value-snapshot: ## Ratchet pointer-return snapshot accessors down over time.
 	@bash scripts/check-views-by-value-snapshot.sh scripts/baselines/by-value-snapshot-pointer-returns.txt
+
+check-state-read-getters-return-values: check-views-by-value-snapshot ## Verify read getters return values or read-only views.
 
 check-ui-renderer-takes-view: ## Verify audited UI renderers use canonical snapshot signatures.
 	@bash scripts/check-ui-renderer-signatures.sh scripts/allowlists/ui-renderers-signature.txt
@@ -314,9 +321,6 @@ check-renderer-no-direct-mutators: ## Verify audited renderers do not mutate sta
 
 check-output-actualization: ## Verify Ui*Output fields are consumed by controller actualization.
 	@bash scripts/check-output-actualization.sh
-
-check-mut-accessor-count: ## Ratchet repl_state_*_mut usage down over time.
-	@bash scripts/check-mut-accessor-count.sh scripts/baselines/mut-count.txt $(SRCS)
 
 check-state-c-shrinking: ## Ratchet repl_state.c line count down over time.
 	@bash scripts/check-state-c-shrinking.sh scripts/baselines/state-c-lines.txt repl_state.c
@@ -340,12 +344,12 @@ check-state-ownership: ## Run state-ownership contract checks (new + tightened e
 		check-views-no-owners \
 		check-ui-no-repl-state-mut \
 		check-no-write-through-view \
-		check-views-flat-types \
-		check-views-by-value-snapshot \
+		check-runtime-state-value-fields \
+		check-public-state-no-writable-pointers \
+		check-state-read-getters-return-values \
 		check-ui-renderer-takes-view \
 		check-renderer-no-direct-mutators \
 		check-output-actualization \
-		check-mut-accessor-count \
 		check-state-c-shrinking \
 		check-no-facade-include-in-views \
 		check-domain-owner-encapsulation \

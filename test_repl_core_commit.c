@@ -8,8 +8,8 @@
 #include "repl_layout.h"
 
 #define g_status  (repl_state_status_mut()->text)
-#define g_scroll  (*repl_state_code_panel_mut()->scroll)
-#define g_t_playing (*repl_state_variables_mut()->time_playing)
+#define g_scroll  (repl_state_code_panel_mut()->scroll)
+#define g_t_playing (repl_state_variables_mut()->time_playing)
 #define g_ac_ghost  (repl_state_autocomplete_mut()->ghost)
 #define g_ac_hint   (repl_state_autocomplete_mut()->hint)
 #define g_ac_matches (repl_state_autocomplete_mut()->matches)
@@ -34,16 +34,15 @@ static int g_pass = 0;
     else printf("FAIL [%s] got \"%s\", expected \"%s\" (line %d)\n", label, (got), (exp), __LINE__); \
 } while (0)
 
-#define replay_active        (*repl_state_replay_mut()->active)
-#define replay_state         (*repl_state_replay_mut()->state)
-#define replay_pc            (*repl_state_replay_mut()->pc)
-#define replay_src_line      (*repl_state_replay_mut()->src_line_idx)
+#define replay_active        (repl_state_replay_mut()->active)
+#define replay_state         (repl_state_replay_mut()->state)
+#define replay_pc            (repl_state_replay_mut()->pc)
+#define replay_src_line      (repl_state_replay_mut()->src_line_idx)
 
-#define IMPORT_EXPORT_STATE (repl_state_import_export())
-#define g_workspace_header_lines (IMPORT_EXPORT_STATE->workspace_header_lines)
-#define g_workspace_header_line_count (IMPORT_EXPORT_STATE->workspace_header_line_count)
-#define g_render_state_lines (IMPORT_EXPORT_STATE->render_state_lines)
-#define g_cam_lines (IMPORT_EXPORT_STATE->cam_lines)
+#define g_workspace_header_lines (repl_state_import_export().workspace_header_lines)
+#define g_workspace_header_line_count (repl_state_import_export().workspace_header_line_count)
+#define g_render_state_lines (repl_state_import_export().render_state_lines)
+#define g_cam_lines (repl_state_import_export().cam_lines)
 
 static void declare_test_vars(void) {
     char err[128];
@@ -63,7 +62,7 @@ static int code_panel_mouse_y_for_cmd(int cmd_idx) {
     CodePanelDocumentLayout layout;
     int cp_y, cp_h, panel_w;
     int linenum_w = 4 * FONT_W;
-    int idx_col_w = *repl_state_presentation()->show_vertex_indices ? (6 * FONT_W) : 0;
+    int idx_col_w = repl_state_presentation().show_vertex_indices ? (6 * FONT_W) : 0;
     int text_x = CODE_MARGIN_X + linenum_w + FONT_W + idx_col_w;
     int doc_line;
 
@@ -299,7 +298,7 @@ int main(void) {
     ASSERT_TRUE("label stored as C label", strcmp(repl_state_document_cmds_mut()[0].source, "walk:") == 0);
     repl_navigate_to_line(0);
     ASSERT_TRUE("label loads back into editor as repl syntax",
-                strcmp(repl_state_editor_input()->input, ":walk") == 0);
+                strcmp(repl_state_editor_input().input, ":walk") == 0);
     repl_keyboard_func(';', 0, 0);
     ASSERT_TRUE("recommitting loaded label keeps label type", repl_state_document_cmds_mut()[0].type == CMD_LABEL);
     ASSERT_TRUE("recommitting loaded label keeps source", strcmp(repl_state_document_cmds_mut()[0].source, "walk:") == 0);
@@ -325,8 +324,8 @@ int main(void) {
     {
         ReplEditorInputState *inp = repl_state_editor_input_mut();
         strcpy(inp->input, "glColor3f(1, 0, 0)");
-        *inp->input_len = (int)strlen(inp->input);
-        repl_state_cursor_pos_set(*inp->input_len);
+        inp->input_len = (int)strlen(inp->input);
+        repl_state_cursor_pos_set(inp->input_len);
     }
     repl_keyboard_func('\r', 0, 0);
     ASSERT_TRUE("inserted line before current cmd count", repl_state_document_count() == 3);
@@ -370,7 +369,7 @@ int main(void) {
     repl_feed_line_public("}");
     {
         int linenum_w = 4 * FONT_W;
-        int idx_col_w = *repl_state_presentation()->show_vertex_indices ? (6 * FONT_W) : 0;
+        int idx_col_w = repl_state_presentation().show_vertex_indices ? (6 * FONT_W) : 0;
         int text_x = CODE_MARGIN_X + linenum_w + FONT_W + idx_col_w;
         int indent = test_leading_ws_chars(repl_state_document_cmds_mut()[1].source);
         int cursor_pos = ui_panels_handle_code_panel_click(text_x + indent * FONT_W + 1,
@@ -392,9 +391,9 @@ int main(void) {
     repl_keyboard_func(5, 0, 0);
     ASSERT_TRUE("ctrl-e moves to line end", repl_state_cursor_pos() == repl_state_input_len());
     {
-        int before = *repl_state_presentation()->code_panel_layout;
+        int before = repl_state_presentation().code_panel_layout;
         repl_keyboard_func(2, 0, 0);
-        ASSERT_TRUE("ctrl-b toggles code panel layout", *repl_state_presentation()->code_panel_layout != before);
+        ASSERT_TRUE("ctrl-b toggles code panel layout", repl_state_presentation().code_panel_layout != before);
     }
 
     repl_reset_state(); declare_test_vars();
@@ -411,7 +410,7 @@ int main(void) {
                 strcmp(g_ac_hint, "x, y, z)") == 0);
     repl_keyboard_func('\t', 0, 0);
     ASSERT_TRUE("tab inserts function call prefix only",
-                strcmp(repl_state_editor_input()->input, "glVertex3f(") == 0);
+                strcmp(repl_state_editor_input().input, "glVertex3f(") == 0);
     ASSERT_TRUE("function call hint starts at first parameter",
                 strcmp(g_ac_hint, "x, y, z)") == 0);
     repl_keyboard_func('1', 0, 0);

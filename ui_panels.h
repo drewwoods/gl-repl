@@ -34,9 +34,15 @@
 
 /* --- Rendering --- */
 
+typedef struct UiCodePanelOutput {
+    int cursor_px;
+    int cursor_py;
+    int cursor_pixel_valid;
+} UiCodePanelOutput;
+
 /* Render the code panel: wrapped source lines, syntax highlighting, overlays
  * (cursor, selection, replay annotations). Called once per frame by scene_render.c. */
-void ui_panels_render_code_panel(void);
+void ui_panels_render_code_panel(UiCodePanelOutput *out);
 
 /* Render the scene status banner (below the 3D scene, showing example name,
  * status messages, etc.). Called once per frame by scene_render.c. */

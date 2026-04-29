@@ -50,20 +50,20 @@ static SceneFocusVertex imrepl_ctrl_build_focus_vertex(void) {
 }
 
 static SceneGuideSnapshot imrepl_ctrl_build_guide_snapshot(const SceneRenderConfig *config) {
-    const ReplPresentationState *presentation = repl_state_presentation();
-    const ReplVariableState *vars = repl_state_variables();
-    const ReplEditorInputState *input = repl_state_editor_input();
+    ReplPresentationState presentation = repl_state_presentation();
+    ReplVariableView vars = repl_state_variables();
+    ReplEditorInputView input = repl_state_editor_input();
     ReplPredefView predef = repl_eval_predef_view();
 
     SceneGuideSnapshot snapshot = {
         .show_guides = config->show_guides,
         .replaying = config->replaying,
-        .xform_guide_mode = *presentation->xform_guide_mode,
+        .xform_guide_mode = presentation.xform_guide_mode,
         .user_lighting_enabled = config->user_lighting_enabled,
-        .anim_time = *vars->anim_time,
-        .input = input->input,
-        .input_len = *input->input_len,
-        .cursor_pos = *input->cursor_pos,
+        .anim_time = vars.anim_time,
+        .input = input.input,
+        .input_len = input.input_len,
+        .cursor_pos = input.cursor_pos,
         .edit_line_idx = config->edit_line_idx,
         .inserting = repl_state_insert_mode(),
         .source_cmds = repl_state_document_cmds_mut(),
@@ -145,9 +145,10 @@ static void scene_execute_reset_adapter(void *user_data) {
 static void imrepl_ctrl_build_scene_config(SceneRenderConfig *config) {
     ReplRenderState render = repl_state_render();
     ReplReplayRuntimeState replay = repl_state_replay();
-    const ReplPresentationState *presentation = repl_state_presentation();
+    ReplPresentationState presentation = repl_state_presentation();
     ReplCameraState cam = repl_state_camera();
-    const ReplFlatProgramState *flat = repl_state_flat_program();
+    const float *grid_major_steps = repl_state_grid_major_steps();
+    const float *grid_extents = repl_state_grid_extents();
     float bg_lum;
     float as_val;
 
@@ -163,7 +164,7 @@ static void imrepl_ctrl_build_scene_config(SceneRenderConfig *config) {
     config->flat_program = repl_state_flat_program_view();
 
     /* --- Animation --- */
-    config->anim_time = *repl_state_variables()->anim_time;
+    config->anim_time = repl_state_variables().anim_time;
 
     /* --- Viewport and scene rectangle --- */
     config->viewport_w = repl_state_viewport().window_w;
@@ -183,48 +184,49 @@ static void imrepl_ctrl_build_scene_config(SceneRenderConfig *config) {
     config->cam_motion_glow = cam.motion_glow;
 
     /* --- Rendering quality --- */
-    config->multisample_enabled = *render.multisample_enabled;
-    config->line_smooth_enabled = *render.line_smooth_enabled;
-    config->use_accum = *render.use_accum;
-    config->accum_aa_enabled = *render.accum_aa_enabled;
-    config->accum_samples = *render.accum_samples;
+    config->multisample_enabled = render.multisample_enabled;
+    config->line_smooth_enabled = render.line_smooth_enabled;
+    config->use_accum = render.use_accum;
+    config->accum_aa_enabled = render.accum_aa_enabled;
+    config->accum_samples = render.accum_samples;
 
     /* --- Lighting --- */
-    config->user_lighting_enabled = *flat->user_lighting_enabled;
+    config->user_lighting_enabled = repl_state_flat_program_user_lighting_enabled();
     memcpy(config->lights, render.lights, sizeof(config->lights));
-    config->show_light_indicators = *presentation->show_light_indicators;
+    config->show_light_indicators = presentation.show_light_indicators;
 
     /* --- Environment --- */
-    config->backdrop_mode = *presentation->backdrop_mode;
-    config->wireframe = *presentation->wireframe;
+    config->backdrop_mode = presentation.backdrop_mode;
+    config->wireframe = presentation.wireframe;
 
     /* --- Grid and axes --- */
-    config->grid_theme = *presentation->grid_theme;
-    config->grid_extent_idx = *presentation->grid_extent_idx;
-    config->grid_major_idx = *presentation->grid_major_idx;
-    config->axes_theme = *presentation->axes_theme;
-    memcpy(config->grid_major_steps, presentation->grid_major_steps,
+    config->grid_theme = presentation.grid_theme;
+    config->grid_extent_idx = presentation.grid_extent_idx;
+    config->grid_major_idx = presentation.grid_major_idx;
+    config->axes_theme = presentation.axes_theme;
+    memcpy(config->grid_major_steps, grid_major_steps,
            sizeof(config->grid_major_steps));
-    memcpy(config->grid_extents, presentation->grid_extents,
+    memcpy(config->grid_extents, grid_extents,
            sizeof(config->grid_extents));
 
     /* --- 3D overlay flags --- */
-    config->show_guides = *presentation->show_vertex_guides;
-    config->show_vpoints = *presentation->show_vertex_points;
-    config->show_vnums = *presentation->show_vertex_labels;
-    config->show_normals = *presentation->show_normal_vectors;
-    config->show_vertex_outlines = *presentation->show_vertex_outlines;
-    config->replaying = *replay.active;
-    config->replay_mode = *replay.mode;
+    config->show_guides = presentation.show_vertex_guides;
+    config->show_vpoints = presentation.show_vertex_points;
+    config->show_vnums = presentation.show_vertex_labels;
+    config->show_normals = presentation.show_normal_vectors;
+    config->show_vertex_outlines = presentation.show_vertex_outlines;
+    config->replaying = replay.active;
+    config->replay_mode = replay.mode;
     config->replay_tess_preview = config->replaying &&
                                   config->replay_mode == REPLAY_MODE_VERTEX;
     config->replay_vertex_points = config->replay_tess_preview;
-    config->show_current_poly = *presentation->highlight_current_poly && !config->replaying;
+    config->show_current_poly = presentation.highlight_current_poly && !config->replaying;
 
     /* --- Cursor / editor block overlay --- */
-    config->cursor_block_begin_idx = *flat->current_block_begin_idx;
-    config->cursor_block_end_idx = *flat->current_block_end_idx;
-    config->cursor_block_source_line = *flat->current_block_source_line_idx;
+    config->cursor_block_begin_idx = repl_state_flat_program_current_block_begin();
+    config->cursor_block_end_idx = repl_state_flat_program_current_block_end();
+    config->cursor_block_source_line =
+        repl_state_flat_program_current_block_source_line();
     config->edit_line_idx = repl_state_edit_line();
     config->cursor_func_scope_mask = 0;
     config->cursor_call_src_cmd_idx = -1;
@@ -252,6 +254,7 @@ void imrepl_ctrl_display_frame(void) {
     int g_num_flat_cmds = flat_program.cmd_count;
     ReplReplayRuntimeState replay = repl_state_replay();
     SceneRenderConfig scene_config;
+    UiCodePanelOutput code_panel_out;
 
     prof_frame_tick();
     prof_begin(PROF_FRAME_TOTAL);
@@ -271,7 +274,7 @@ void imrepl_ctrl_display_frame(void) {
 
     saved_flat_count = g_num_flat_cmds;
     repl_copy_predef_values(live_predef_vals, MAX_PREDEF_VARS);
-    if (*replay.active)
+    if (replay.active)
         repl_state_flat_program_set_count(repl_replay_prepare_frame(saved_flat_count));
 
     update_render_state_strings();
@@ -288,7 +291,7 @@ void imrepl_ctrl_display_frame(void) {
     prof_end(PROF_SCENE_3D);
 
     if (scene_config.replaying) {
-        const ReplPresentationState *presentation = repl_state_presentation();
+        ReplPresentationState presentation = repl_state_presentation();
         UiReplayHudState replay_hud_state = {
             .scene_x = scene_config.scene_x,
             .scene_y = scene_config.scene_y,
@@ -296,13 +299,13 @@ void imrepl_ctrl_display_frame(void) {
             .scene_h = scene_config.scene_h,
             .viewport_w = scene_config.viewport_w,
             .viewport_h = scene_config.viewport_h,
-            .code_panel_layout = *presentation->code_panel_layout,
+            .code_panel_layout = presentation.code_panel_layout,
             .replay_mode = scene_config.replay_mode,
-            .replay_pc = *replay.pc,
-            .replay_total_cmds = *replay.total_flat_cmds,
-            .replay_state_val = *replay.state,
-            .replay_speed = *replay.speed,
-            .replay_expand_args = *replay.expand_args,
+            .replay_pc = replay.pc,
+            .replay_total_cmds = replay.total_flat_cmds,
+            .replay_state_val = replay.state,
+            .replay_speed = replay.speed,
+            .replay_expand_args = replay.expand_args,
             .replaying = scene_config.replaying,
         };
         ui_replay_hud_render(&replay_hud_state);
@@ -313,7 +316,12 @@ void imrepl_ctrl_display_frame(void) {
         prof_accum_commit(section_idx);
 
     prof_begin(PROF_CODE_PANEL);
-    ui_panels_render_code_panel();
+    ui_panels_render_code_panel(&code_panel_out);
+    if (code_panel_out.cursor_pixel_valid) {
+        ReplCodePanelRuntimeState *code_panel = repl_state_code_panel_mut();
+        code_panel->cursor_px = code_panel_out.cursor_px;
+        code_panel->cursor_py = code_panel_out.cursor_py;
+    }
     prof_end(PROF_CODE_PANEL);
 
     prof_begin(PROF_UI_PANELS);

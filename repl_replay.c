@@ -8,16 +8,16 @@
 #include "repl_state.h"
 
 #define REPLAY_STATE (repl_state_replay_mut())
-#define g_replay_active      (*REPLAY_STATE->active)
-#define g_replay_state       (*REPLAY_STATE->state)
-#define g_replay_pc          (*REPLAY_STATE->pc)
-#define g_replay_mode        (*REPLAY_STATE->mode)
-#define g_replay_speed       (*REPLAY_STATE->speed)
-#define g_replay_accum       (*REPLAY_STATE->accum)
-#define g_replay_fade_speed  (*REPLAY_STATE->fade_speed)
-#define g_replay_src_line    (*REPLAY_STATE->src_line_idx)
-#define g_replay_total_flat  (*REPLAY_STATE->total_flat_cmds)
-#define g_replay_expand_args (*REPLAY_STATE->expand_args)
+#define g_replay_active      (REPLAY_STATE->active)
+#define g_replay_state       (REPLAY_STATE->state)
+#define g_replay_pc          (REPLAY_STATE->pc)
+#define g_replay_mode        (REPLAY_STATE->mode)
+#define g_replay_speed       (REPLAY_STATE->speed)
+#define g_replay_accum       (REPLAY_STATE->accum)
+#define g_replay_fade_speed  (REPLAY_STATE->fade_speed)
+#define g_replay_src_line    (REPLAY_STATE->src_line_idx)
+#define g_replay_total_flat  (REPLAY_STATE->total_flat_cmds)
+#define g_replay_expand_args (REPLAY_STATE->expand_args)
 
 static float g_replay_baseline_predef_vals[MAX_PREDEF_VARS];
 static int   g_replay_saved_t_playing = 1;
@@ -146,7 +146,7 @@ static void replay_set_src_line(int src_line) {
     if (src_line != g_replay_last_src_line) {
         g_replay_last_src_line = src_line;
         if (src_line >= 0)
-            (*repl_state_code_panel()->scroll_follow_cursor) = 1;
+            repl_state_code_panel_mut()->scroll_follow_cursor = 1;
     }
 }
 
@@ -530,8 +530,8 @@ void repl_replay_start(void) {
     }
 
     repl_copy_predef_values(g_replay_baseline_predef_vals, MAX_PREDEF_VARS);
-    g_replay_saved_t_playing = *repl_state_variables()->time_playing;
-    *repl_state_variables_mut()->time_playing = 0;
+    g_replay_saved_t_playing = repl_state_variables().time_playing;
+    repl_state_variables_mut()->time_playing = 0;
 
     g_replay_active = 1;
     g_replay_state = REPLAY_PLAYING;
@@ -545,7 +545,7 @@ void repl_replay_start(void) {
 }
 
 void repl_replay_stop(void) {
-    *repl_state_variables_mut()->time_playing = g_replay_saved_t_playing;
+    repl_state_variables_mut()->time_playing = g_replay_saved_t_playing;
     g_replay_active = 0;
     g_replay_state = REPLAY_OFF;
     g_replay_pc = 0;

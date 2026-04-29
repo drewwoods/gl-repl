@@ -164,8 +164,8 @@ static void test_autocomplete_panel(void) {
     repl_state_autocomplete_mut()->matches[0] = "glVertex3f";
     repl_state_autocomplete_mut()->matches[1] = "glVertex2f";
     repl_state_autocomplete_mut()->selected_idx = 0;
-    *repl_state_code_panel_mut()->cursor_px = 100;
-    *repl_state_code_panel_mut()->cursor_py = 100;
+    repl_state_code_panel_mut()->cursor_px = 100;
+    repl_state_code_panel_mut()->cursor_py = 100;
     
     gl_stub_counts_reset();
     ui_autocomplete_panel_render();
@@ -207,8 +207,8 @@ static void test_menu_bar(void) {
     gl_stub_counts_reset();
     
     repl_state_viewport_set_size(800, 600);
-    *repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT;
-    *repl_state_code_panel_mut()->panel_frac = 0.5f;
+    repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT;
+    repl_state_code_panel_mut()->panel_frac = 0.5f;
     
     gl_stub_counts_reset();
     ui_menu_bar_render();

@@ -523,10 +523,10 @@ static void emit_export_cam_lines(FILE *f) {
 void update_render_state_strings(void) {
     snprintf(g_render_state_lines[0], sizeof(g_render_state_lines[0]),
              "  gl%s(GL_MULTISAMPLE);",
-             *repl_state_render().multisample_enabled ? "Enable" : "Disable");
+             repl_state_render().multisample_enabled ? "Enable" : "Disable");
     snprintf(g_render_state_lines[1], sizeof(g_render_state_lines[1]),
              "  gl%s(GL_LINE_SMOOTH);",
-             *repl_state_render().line_smooth_enabled ? "Enable" : "Disable");
+             repl_state_render().line_smooth_enabled ? "Enable" : "Disable");
     snprintf(g_render_state_lines[2], sizeof(g_render_state_lines[2]),
              "  glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE);");
 }
@@ -679,12 +679,13 @@ static void write_light_setup(FILE *f) {
     static const char *light_names[] = {
         "GL_LIGHT0", "GL_LIGHT1", "GL_LIGHT2", "GL_LIGHT3"
     };
+    ReplRenderState render = repl_state_render();
 
     int first_light = 1;
 
     /* Iterate through configured lights and export their setup to C code. */
     for (int light_idx = 0; light_idx < MAX_LIGHTS; light_idx++) {
-        const SceneLight *l = &repl_state_render().lights[light_idx];
+        const SceneLight *l = &render.lights[light_idx];
         const char *ln = light_names[light_idx];
 
         if (!l->enabled) continue;
@@ -2385,8 +2386,8 @@ static void emit_export_display_begin(FILE *f) {
 static void emit_export_display_geometry(FILE *f) {
     const ExportDisplayPassSpec passes[] = {
         { "Vertex Fill Pass",    1,               NULL },
-        { "Vertex Outline Pass", *repl_state_presentation()->show_vertex_outlines, emit_export_outline_pass_setup },
-        { "Vertex Point Pass",   *repl_state_presentation()->show_vertex_points,  emit_export_point_pass_setup },
+        { "Vertex Outline Pass", repl_state_presentation().show_vertex_outlines, emit_export_outline_pass_setup },
+        { "Vertex Point Pass",   repl_state_presentation().show_vertex_points,  emit_export_point_pass_setup },
     };
 
     for (size_t i = 0; i < sizeof(passes) / sizeof(passes[0]); i++)
@@ -2738,7 +2739,7 @@ static void dump_code_panel_wrapped_line(FILE *dst, const char *text,
                                          int first_x, int panel_w) {
     const char *src = text ? text : "";
     CodePanelTextLayout layout =
-        repl_code_panel_layout_make(panel_w, first_x, FONT_W, *repl_state_presentation()->wrap_at_comma);
+        repl_code_panel_layout_make(panel_w, first_x, FONT_W, repl_state_presentation().wrap_at_comma);
     CodePanelWrapIter it;
     int start, len, x;
 
@@ -2789,7 +2790,7 @@ void repl_dump_code_panel_visual_text(FILE *out) {
     FILE *dst = out ? out : stdout;
     int panel_w;
     int linenum_w = 4 * FONT_W;
-    int idx_col_w = *repl_state_presentation()->show_vertex_indices ? (6 * FONT_W) : 0;
+    int idx_col_w = repl_state_presentation().show_vertex_indices ? (6 * FONT_W) : 0;
     int idx_x = CODE_MARGIN_X + linenum_w + FONT_W;
     int text_x = idx_x + idx_col_w;
 

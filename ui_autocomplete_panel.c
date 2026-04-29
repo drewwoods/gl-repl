@@ -18,7 +18,7 @@
 
 void ui_autocomplete_panel_render(void) {
     ReplAutocompleteState           ac  = repl_state_autocomplete();
-    const ReplCodePanelRuntimeState  *cp  = repl_state_code_panel();
+    ReplCodePanelRuntimeState       cp  = repl_state_code_panel();
 
     if (ac.match_count < 1) return;
 
@@ -26,8 +26,8 @@ void ui_autocomplete_panel_render(void) {
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
-    int popup_x = *cp->cursor_px;
-    int popup_y = *cp->cursor_py - LINE_H - 4;
+    int popup_x = cp.cursor_px;
+    int popup_y = cp.cursor_py - LINE_H - 4;
 
     /* Calculate popup width from longest match */
     int max_w = 0;

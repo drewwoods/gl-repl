@@ -48,8 +48,8 @@ static void set_live_input(const char *text) {
     ReplEditorInputState *inp = repl_state_editor_input_mut();
     strncpy(inp->input, text, MAX_INPUT_LEN - 1);
     inp->input[MAX_INPUT_LEN - 1] = '\0';
-    *inp->input_len = (int)strlen(inp->input);
-    repl_state_cursor_pos_set(*inp->input_len);
+    inp->input_len = (int)strlen(inp->input);
+    repl_state_cursor_pos_set(inp->input_len);
 }
 
 int main(void) {

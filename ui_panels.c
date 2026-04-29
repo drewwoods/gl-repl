@@ -22,16 +22,15 @@
 #include "ui_panels.h"
 #include "./include/gl_2d.h"
 
-#define IMPORT_EXPORT_STATE (repl_state_import_export())
-#define g_workspace_header_lines (IMPORT_EXPORT_STATE->workspace_header_lines)
-#define g_workspace_header_line_count (IMPORT_EXPORT_STATE->workspace_header_line_count)
-#define g_render_state_lines (IMPORT_EXPORT_STATE->render_state_lines)
-#define g_cam_lines (IMPORT_EXPORT_STATE->cam_lines)
+#define g_workspace_header_lines (repl_state_import_export().workspace_header_lines)
+#define g_workspace_header_line_count (repl_state_import_export().workspace_header_line_count)
+#define g_render_state_lines (repl_state_import_export().render_state_lines)
+#define g_cam_lines (repl_state_import_export().cam_lines)
 
 static int editor_code_panel_layout(void) {
-    if (*repl_state_presentation()->code_panel_layout < 0 || *repl_state_presentation()->code_panel_layout >= CODE_PANEL_LAYOUT_COUNT)
+    if (repl_state_presentation().code_panel_layout < 0 || repl_state_presentation().code_panel_layout >= CODE_PANEL_LAYOUT_COUNT)
         return CODE_PANEL_LAYOUT_LEFT;
-    return *repl_state_presentation()->code_panel_layout;
+    return repl_state_presentation().code_panel_layout;
 }
 
 /* Status footer height - design: 22px strip flush against code panel bottom */
@@ -160,14 +159,15 @@ static void render_active_input_rows(int panel_w, int text_x, int idx_x,
                                      int visible_lines, int file_line,
                                      int indent_chars, const char *idx_text,
                                      int search_row_idx,
-                                     int *io_cur, int *io_line_y) {
-    const ReplEditorInputState      *inp    = repl_state_editor_input();
-    const ReplCodePanelRuntimeState *cp     = repl_state_code_panel();
+                                     int *io_cur, int *io_line_y,
+                                     UiCodePanelOutput *out) {
+    ReplEditorInputView            inp    = repl_state_editor_input();
+    ReplCodePanelRuntimeState cp     = repl_state_code_panel();
     ReplAutocompleteState           ac     = repl_state_autocomplete();
     ReplSearchState                 srch   = repl_state_search();
-    const char *input = inp->input;
+    const char *input = inp.input;
     int cursor_pos = repl_state_cursor_pos();
-    int input_len = *inp->input_len;
+    int input_len = inp.input_len;
     CodePanelWrapIter wrap_it;
     int wrap_row = 0;
     int wrap_start, wrap_len, wrap_x;
@@ -184,7 +184,7 @@ static void render_active_input_rows(int panel_w, int text_x, int idx_x,
 
     repl_code_panel_document_wrap_iter_init(&wrap_it, input, input_x, panel_w);
     while (repl_code_panel_document_wrap_iter_next(&wrap_it, &wrap_start, &wrap_len, &wrap_x)) {
-        if (*io_cur >= *cp->scroll && *io_cur < *cp->scroll + visible_lines) {
+        if (*io_cur >= cp.scroll && *io_cur < cp.scroll + visible_lines) {
             glColor3f(0.55f, 0.55f, 0.30f);
             if (wrap_row == 0) {
                 char ln[16];
@@ -240,14 +240,18 @@ static void render_active_input_rows(int panel_w, int text_x, int idx_x,
                     glDisable(GL_BLEND);
                 }
 
-                if (*cp->cursor_visible && !srch.active) {
+                if (cp.cursor_visible && !srch.active) {
                     glEnable(GL_BLEND);
                     glColor4f(0.90f, 0.80f, 0.25f, 0.85f);
                     glRectf((float)((float)cursor_x), (float)((float)(*io_line_y - 2)), (float)((float)cursor_x)+(float)(2.0f), (float)((float)(*io_line_y - 2))+(float)(FONT_H + 2));
                     glDisable(GL_BLEND);
                 }
 
-                repl_action_set_cursor_pixel(cursor_x, *io_line_y);
+                if (out) {
+                    out->cursor_px = cursor_x;
+                    out->cursor_py = *io_line_y;
+                    out->cursor_pixel_valid = 1;
+                }
             }
 
             *io_line_y -= LINE_H;
@@ -263,7 +267,7 @@ int ui_panels_code_panel_apply_scroll_follow_for_test(int *out_follow_doc_line,
     CodePanelDocumentLayout layout;
     int cp_x, cp_y, cp_w, cp_h;
     int linenum_w = 4 * FONT_W;
-    int idx_col_w = *repl_state_presentation()->show_vertex_indices ? (6 * FONT_W) : 0;
+    int idx_col_w = repl_state_presentation().show_vertex_indices ? (6 * FONT_W) : 0;
     int idx_x = CODE_MARGIN_X + linenum_w + FONT_W;
     int text_x = idx_x + idx_col_w;
 
@@ -279,16 +283,16 @@ int ui_panels_code_panel_apply_scroll_follow_for_test(int *out_follow_doc_line,
         *out_follow_doc_line = layout.follow_doc_line;
     if (out_visible_lines)
         *out_visible_lines = layout.visible_lines;
-    int scroll = *repl_state_code_panel()->scroll;
+    int scroll = repl_state_code_panel().scroll;
     return layout.follow_doc_line >= scroll &&
            layout.follow_doc_line < scroll + layout.visible_lines;
 }
 
 /* Color picker lives in repl_color_picker.c. */
 
-void ui_panels_render_code_panel(void) {
+void ui_panels_render_code_panel(UiCodePanelOutput *out) {
     ReplReplayRuntimeState          replay = repl_state_replay();
-    const ReplCodePanelRuntimeState *cp     = repl_state_code_panel();
+    ReplCodePanelRuntimeState cp     = repl_state_code_panel();
     ReplRenderState                 rs     = repl_state_render();
     prof_begin(PROF_CODE_PANEL_LAYOUT);
     prof_begin(PROF_CODE_PANEL_LAYOUT_GEOM);
@@ -296,6 +300,9 @@ void ui_panels_render_code_panel(void) {
 
     CodePanelDocumentLayout doc_layout;
     int cp_x, cp_y, cp_w, cp_h;
+    if (out)
+        memset(out, 0, sizeof(*out));
+
     repl_layout_code_panel_rect(&cp_x, &cp_y, &cp_w, &cp_h);
     if (cp_w <= 0 || cp_h <= 0) {
         prof_end(PROF_CODE_PANEL_LAYOUT_GEOM_SETUP);
@@ -307,7 +314,7 @@ void ui_panels_render_code_panel(void) {
     int panel_w = cp_w;
     int panel_top = cp_y + cp_h;  /* y of the panel's top edge (OpenGL coords) */
     int linenum_w = 4 * FONT_W;
-    int idx_col_w = *repl_state_presentation()->show_vertex_indices ? (6 * FONT_W) : 0;
+    int idx_col_w = repl_state_presentation().show_vertex_indices ? (6 * FONT_W) : 0;
     int idx_x = CODE_MARGIN_X + linenum_w + FONT_W;
     int text_x = idx_x + idx_col_w;
     int visible_lines;
@@ -402,7 +409,7 @@ void ui_panels_render_code_panel(void) {
         int wrap_start, wrap_len, wrap_x;                                       \
         repl_code_panel_document_wrap_iter_init(&wrap_it, text, text_x, panel_w);                   \
         while (repl_code_panel_document_wrap_iter_next(&wrap_it, &wrap_start, &wrap_len, &wrap_x)) {\
-            if (cur >= *cp->scroll && cur < *cp->scroll + visible_lines) {            \
+            if (cur >= cp.scroll && cur < cp.scroll + visible_lines) {            \
                 if (wrap_row == 0) {                                             \
                     glColor3f(0.30f, 0.30f, 0.38f);                            \
                     { char ln[16]; snprintf(ln, sizeof(ln), "%3d", file_line);  \
@@ -458,7 +465,8 @@ void ui_panels_render_code_panel(void) {
                                                                          visible_lines, file_line,
                                                                          repl_code_panel_document_active_indent_chars(), NULL,
                                                                          repl_state_edit_line(),
-                                                                         &cur, &line_y);
+                                                                         &cur, &line_y,
+                                                                         out);
             file_line++;
         }
 
@@ -483,7 +491,7 @@ void ui_panels_render_code_panel(void) {
                 /* Active editing line */
                 char idx_s[16];
                 const char *idx_text = NULL;
-                if (*repl_state_presentation()->show_vertex_indices && is_vertex) {
+                if (repl_state_presentation().show_vertex_indices && is_vertex) {
                     snprintf(idx_s, sizeof(idx_s),
                              primitive_vnums_exact ? "v%d" : "vn", vnum);
                     idx_text = idx_s;
@@ -492,7 +500,8 @@ void ui_panels_render_code_panel(void) {
                                          visible_lines, file_line,
                                          repl_code_panel_document_active_indent_chars(), idx_text,
                                          repl_state_edit_line(),
-                                         &cur, &line_y);
+                                         &cur, &line_y,
+                                         out);
                 file_line++;
             } else {
                 /* Existing command, not being edited */
@@ -505,10 +514,10 @@ void ui_panels_render_code_panel(void) {
                                                     sizeof(display_text));
                 repl_code_panel_document_wrap_iter_init(&wrap_it, display_text, text_x, panel_w);
                 while (repl_code_panel_document_wrap_iter_next(&wrap_it, &wrap_start, &wrap_len, &wrap_x)) {
-                    if (cur >= *cp->scroll && cur < *cp->scroll + visible_lines) {
-                        if (*replay.active &&
-                            *replay.src_line_idx >= 0 &&
-                            i == *replay.src_line_idx) {
+                    if (cur >= cp.scroll && cur < cp.scroll + visible_lines) {
+                        if (replay.active &&
+                            replay.src_line_idx >= 0 &&
+                            i == replay.src_line_idx) {
                             glEnable(GL_BLEND);
                             glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
                             glColor4f(0.10f, 0.35f, 0.15f, 0.55f);
@@ -538,7 +547,7 @@ void ui_panels_render_code_panel(void) {
                             { char ln[16]; snprintf(ln, sizeof(ln), "%3d", file_line);
                               gl2d_draw_string((float)CODE_MARGIN_X, (float)line_y,
                                           ln, FONT_MONO); }
-                            if (*repl_state_presentation()->show_vertex_indices && is_vertex) {
+                            if (repl_state_presentation().show_vertex_indices && is_vertex) {
                                 char idx_s[16];
                                 snprintf(idx_s, sizeof(idx_s),
                                          primitive_vnums_exact ? "v%d" : "vn", vnum);
@@ -568,10 +577,10 @@ void ui_panels_render_code_panel(void) {
                 }
                 file_line++;
 
-                if (*replay.active &&
-                    *replay.expand_args &&
-                    *replay.src_line_idx >= 0 &&
-                    i == *replay.src_line_idx &&
+                if (replay.active &&
+                    replay.expand_args &&
+                    replay.src_line_idx >= 0 &&
+                    i == replay.src_line_idx &&
                     document_cmds[i].has_vars &&
                     document_cmds[i].type != CMD_VAR_ASSIGN) {
                     int flat_idx = repl_replay_annotation_flat_cmd_for_source(i);
@@ -580,8 +589,8 @@ void ui_panels_render_code_panel(void) {
                         if (repl_replay_build_subst_annotation(i, flat_idx,
                                                           subst, sizeof(subst),
                                                           var_comment, sizeof(var_comment)) > 0) {
-                            if (cur >= *cp->scroll &&
-                                cur < *cp->scroll + visible_lines) {
+                            if (cur >= cp.scroll &&
+                                cur < cp.scroll + visible_lines) {
                                 glEnable(GL_BLEND);
                                 glBlendFunc(GL_SRC_ALPHA,
                                             GL_ONE_MINUS_SRC_ALPHA);
@@ -607,8 +616,8 @@ void ui_panels_render_code_panel(void) {
                             char eval_buf[MAX_LINE_LEN];
                             if (repl_replay_build_eval_annotation(i, flat_idx,
                                                              eval_buf, sizeof(eval_buf))) {
-                                if (cur >= *cp->scroll &&
-                                    cur < *cp->scroll + visible_lines) {
+                                if (cur >= cp.scroll &&
+                                    cur < cp.scroll + visible_lines) {
                                     glEnable(GL_BLEND);
                                     glBlendFunc(GL_SRC_ALPHA,
                                                 GL_ONE_MINUS_SRC_ALPHA);
@@ -662,9 +671,10 @@ void ui_panels_render_code_panel(void) {
                                      visible_lines, file_line,
                                      repl_code_panel_document_active_indent_chars(), NULL,
                                      repl_state_edit_line(),
-                                     &cur, &line_y);
+                                     &cur, &line_y,
+                                     out);
         } else {
-            if (cur >= *cp->scroll && cur < *cp->scroll + visible_lines) {
+            if (cur >= cp.scroll && cur < cp.scroll + visible_lines) {
                 glColor3f(0.30f, 0.30f, 0.38f);
                 { char ln[16]; snprintf(ln, sizeof(ln), "%3d", file_line);
                   gl2d_draw_string(CODE_MARGIN_X, line_y, ln, FONT_MONO); }
@@ -709,7 +719,7 @@ void ui_panels_render_code_panel(void) {
     if (total_lines > visible_lines) {
         int bar_h = cp_h - CODE_MARGIN_Y - LINE_H - STATUSBAR_H;
         float frac = (float)visible_lines / (float)total_lines;
-        float pos  = (float)*cp->scroll / (float)total_lines;
+        float pos  = (float)cp.scroll / (float)total_lines;
         int thumb_h = (int)(bar_h * frac);
         if (thumb_h < 12) thumb_h = 12;
         int thumb_y = panel_top - CODE_MARGIN_Y - LINE_H
@@ -776,11 +786,11 @@ void ui_panels_render_code_panel(void) {
         tx += (int)strlen(ln_buf) * FONT_SMALL_W;
 
         /* AA indicator */
-        if (*rs.use_accum) {
+        if (rs.use_accum) {
             STATUSBAR_SEP();
             char aa_buf[24];
-            if (*rs.accum_aa_enabled && *rs.accum_samples > 1)
-                snprintf(aa_buf, sizeof(aa_buf), "AA %dx", *rs.accum_samples);
+            if (rs.accum_aa_enabled && rs.accum_samples > 1)
+                snprintf(aa_buf, sizeof(aa_buf), "AA %dx", rs.accum_samples);
             else
                 snprintf(aa_buf, sizeof(aa_buf), "AA off");
             gl2d_draw_string((float)tx, (float)text_y, aa_buf, FONT_SMALL);
@@ -943,9 +953,9 @@ static int code_panel_hit_test(int mx, int my,
     if (vis >= repl_code_panel_document_visible_lines_for_height(cp_h)) return 0;
 
     int linenum_w = 4 * FONT_W;
-    int idx_col_w = *repl_state_presentation()->show_vertex_indices ? (6 * FONT_W) : 0;
+    int idx_col_w = repl_state_presentation().show_vertex_indices ? (6 * FONT_W) : 0;
     int text_x = CODE_MARGIN_X + linenum_w + FONT_W + idx_col_w;
-    int doc_line = *repl_state_code_panel()->scroll + vis;
+    int doc_line = repl_state_code_panel().scroll + vis;
     CodePanelDocumentLayout layout;
     int target;
     int on_insert_line;
@@ -980,9 +990,9 @@ static int code_panel_drag_target(int mx, int my, int *out_target) {
     if (vis >= visible_lines) vis = visible_lines - 1;
 
     int linenum_w = 4 * FONT_W;
-    int idx_col_w = *repl_state_presentation()->show_vertex_indices ? (6 * FONT_W) : 0;
+    int idx_col_w = repl_state_presentation().show_vertex_indices ? (6 * FONT_W) : 0;
     int text_x = CODE_MARGIN_X + linenum_w + FONT_W + idx_col_w;
-    int doc_line = *repl_state_code_panel()->scroll + vis;
+    int doc_line = repl_state_code_panel().scroll + vis;
     CodePanelDocumentLayout layout;
     int target;
     int on_insert_line;
@@ -1026,15 +1036,15 @@ int ui_panels_handle_code_panel_click(int mx, int my) {
     repl_layout_code_panel_rect(NULL, NULL, &cp_w, NULL);
     int panel_w = cp_w;
     int linenum_w = 4 * FONT_W;
-    int idx_col_w = *repl_state_presentation()->show_vertex_indices ? (6 * FONT_W) : 0;
+    int idx_col_w = repl_state_presentation().show_vertex_indices ? (6 * FONT_W) : 0;
     int text_x = CODE_MARGIN_X + linenum_w + FONT_W + idx_col_w;
     int indent_chars = repl_code_panel_document_active_indent_chars();
-    int seg_start = *repl_state_editor_input()->input_len;
+    int seg_start = repl_state_editor_input().input_len;
     int seg_len = 0;
     int seg_x = text_x + indent_chars * FONT_W;
     int col;
 
-    repl_code_panel_document_segment_for_row(repl_state_editor_input()->input,
+    repl_code_panel_document_segment_for_row(repl_state_editor_input().input,
                                seg_x, panel_w, row_offset,
                                &seg_start, &seg_len, &seg_x);
 
@@ -1043,7 +1053,7 @@ int ui_panels_handle_code_panel_click(int mx, int my) {
     if (col > seg_len) col = seg_len;
     int new_cursor = seg_start + col;
     {
-        int cur_input_len = *repl_state_editor_input()->input_len;
+        int cur_input_len = repl_state_editor_input().input_len;
         if (new_cursor > cur_input_len) new_cursor = cur_input_len;
     }
 

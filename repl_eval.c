@@ -20,8 +20,28 @@
 /* Predefined variables                                                       */
 /* ========================================================================= */
 
-ExprVar g_predef_vars[MAX_PREDEF_VARS];
-int     g_num_predef_vars = 0;
+static ExprVar g_fallback_predef_vars[MAX_PREDEF_VARS];
+static int     g_fallback_num_predef_vars = 0;
+static ExprVar *g_active_predef_vars = g_fallback_predef_vars;
+static int     *g_active_num_predef_vars = &g_fallback_num_predef_vars;
+
+void repl_eval_bind_predef_storage(ExprVar *vars, int *count_ptr) {
+    if (vars && count_ptr) {
+        g_active_predef_vars = vars;
+        g_active_num_predef_vars = count_ptr;
+    } else {
+        g_active_predef_vars = g_fallback_predef_vars;
+        g_active_num_predef_vars = &g_fallback_num_predef_vars;
+    }
+}
+
+ExprVar *repl_eval_predef_vars_mut(void) {
+    return g_active_predef_vars;
+}
+
+int *repl_eval_predef_count_mut(void) {
+    return g_active_num_predef_vars;
+}
 
 ReplPredefView repl_eval_predef_view(void) {
     return (ReplPredefView){ .vars = g_predef_vars, .count = g_num_predef_vars };

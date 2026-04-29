@@ -1,5 +1,5 @@
 /*
- * repl_state_views.h -- read-only REPL runtime-state facade.
+ * repl_state_views.h -- REPL runtime-state value/view types and read API.
  */
 #ifndef REPL_STATE_VIEWS_H
 #define REPL_STATE_VIEWS_H
@@ -28,44 +28,64 @@
 #endif
 
 typedef struct {
-    GLCmd *cmds;
-    int   *cmd_count;
-    int    capacity;
-    int   *edit_line_idx;
-    int   *normals_dirty;
+    GLCmd cmds[MAX_COMMANDS];
+    int   cmd_count;
+    int   capacity;
+    int   edit_line_idx;
+    int   normals_dirty;
 } ReplDocumentState;
 
 typedef struct {
-    GLCmd            *cmds;
-    FlatCmdLocalVars *local_vars;
-    int              *cmd_count;
-    int               capacity;
-    int              *dirty;
-    int              *user_lighting_enabled;
-    int              *current_block_begin_idx;
-    int              *current_block_end_idx;
-    int              *current_block_source_line_idx;
+    GLCmd            cmds[MAX_COMMANDS];
+    FlatCmdLocalVars local_vars[MAX_COMMANDS];
+    int              cmd_count;
+    int              capacity;
+    int              dirty;
+    int              user_lighting_enabled;
+    int              current_block_begin_idx;
+    int              current_block_end_idx;
+    int              current_block_source_line_idx;
 } ReplFlatProgramState;
 
 typedef struct {
-    ExprVar *vars;
-    int     *var_count;
-    int     *time_var_idx;
-    int     *time_playing;
-    float   *anim_time;
+    ExprVar predef_vars[MAX_PREDEF_VARS];
+    int     predef_var_count;
+    int     time_var_idx;
+    int     time_playing;
+    float   anim_time;
 } ReplVariableState;
 
 typedef struct {
-    char *input;
-    int   input_capacity;
-    int  *input_len;
-    int  *cursor_pos;
-    int  *edit_line_idx;
-    char *pending_newline;
-    int   pending_newline_capacity;
-    int  *pending_newline_len;
-    int  *insert_mode;
+    const ExprVar *vars;
+    int            var_count;
+    int            time_var_idx;
+    int            time_playing;
+    float          anim_time;
+} ReplVariableView;
+
+typedef struct {
+    char input[MAX_INPUT_LEN];
+    int  input_capacity;
+    int  input_len;
+    int  cursor_pos;
+    int  edit_line_idx;
+    char pending_newline[MAX_INPUT_LEN];
+    int  pending_newline_capacity;
+    int  pending_newline_len;
+    int  insert_mode;
 } ReplEditorInputState;
+
+typedef struct {
+    const char *input;
+    int         input_capacity;
+    int         input_len;
+    int         cursor_pos;
+    int         edit_line_idx;
+    const char *pending_newline;
+    int         pending_newline_capacity;
+    int         pending_newline_len;
+    int         insert_mode;
+} ReplEditorInputView;
 
 typedef struct {
     int anchor_idx;
@@ -78,14 +98,14 @@ typedef struct {
 } ReplClipboardState;
 
 typedef struct {
-    float *panel_frac;
-    int   *resizing_panel;
-    int   *scroll;
-    int   *scroll_follow_cursor;
-    int   *cursor_visible;
-    int   *blink_tick;
-    int   *cursor_px;
-    int   *cursor_py;
+    float panel_frac;
+    int   resizing_panel;
+    int   scroll;
+    int   scroll_follow_cursor;
+    int   cursor_visible;
+    int   blink_tick;
+    int   cursor_px;
+    int   cursor_py;
 } ReplCodePanelRuntimeState;
 
 typedef struct {
@@ -150,60 +170,53 @@ typedef struct {
 } ReplViewportState;
 
 typedef struct {
-    int        *wireframe;
-    int        *grid_theme;
-    int        *grid_major_idx;
-    int        *grid_extent_idx;
-    int        *axes_theme;
-    int        *show_vertex_labels;
-    int        *show_normal_vectors;
-    int        *show_vertex_indices;
-    int        *show_vertex_outlines;
-    int        *show_vertex_points;
-    int        *show_vertex_guides;
-    int        *xform_guide_mode;
-    int        *autonormal;
-    int        *show_light_indicators;
-    int        *backdrop_mode;
-    int        *highlight_current_poly;
-    int        *ortho_mode;
-    int        *wrap_at_comma;
-    int        *code_panel_layout;
-    const float *grid_major_steps;
-    const float *grid_extents;
-    float      *focus_vertex;
-    int        *focus_vertex_valid;
+    int   wireframe;
+    int   grid_theme;
+    int   grid_major_idx;
+    int   grid_extent_idx;
+    int   axes_theme;
+    int   show_vertex_labels;
+    int   show_normal_vectors;
+    int   show_vertex_indices;
+    int   show_vertex_outlines;
+    int   show_vertex_points;
+    int   show_vertex_guides;
+    int   xform_guide_mode;
+    int   autonormal;
+    int   show_light_indicators;
+    int   backdrop_mode;
+    int   highlight_current_poly;
+    int   ortho_mode;
+    int   wrap_at_comma;
+    int   code_panel_layout;
+    float focus_vertex[3];
+    int   focus_vertex_valid;
 } ReplPresentationState;
 
 typedef struct {
-    int            *use_accum;
-    int            *accum_aa_enabled;
-    int            *accum_samples;
-    float          *accum_jitter_x;
-    float          *accum_jitter_y;
-    int            *multisample_enabled;
-    int            *line_smooth_enabled;
-    int            *point_attenuation_enabled;
-    SceneLight     *lights;
-    float          *clear_color;
+    int        use_accum;
+    int        accum_aa_enabled;
+    int        accum_samples;
+    float      accum_jitter_x;
+    float      accum_jitter_y;
+    int        multisample_enabled;
+    int        line_smooth_enabled;
+    int        point_attenuation_enabled;
+    SceneLight lights[MAX_LIGHTS];
+    float      clear_color[4];
 } ReplRenderState;
 
 typedef struct {
-    float *focus_vertex;
-    int   *focus_vertex_valid;
-} ReplRenderDerivedState;
-
-typedef struct {
-    int   *active;
-    int   *state;
-    int   *pc;
-    int   *mode;
-    float *speed;
-    float *accum;
-    float *fade_speed;
-    int   *src_line_idx;
-    int   *total_flat_cmds;
-    int   *expand_args;
+    int   active;
+    int   state;
+    int   pc;
+    int   mode;
+    float speed;
+    float accum;
+    float fade_speed;
+    int   src_line_idx;
+    int   total_flat_cmds;
+    int   expand_args;
 } ReplReplayRuntimeState;
 
 typedef struct {
@@ -229,32 +242,15 @@ typedef struct {
 } ReplImportExportState;
 
 typedef struct {
-    ReplDocumentState         document;
-    ReplFlatProgramState      flat_program;
-    ReplVariableState         variables;
-    ReplEditorInputState      editor_input;
-    ReplSelectionState        selection;
-    ReplClipboardState        clipboard;
-    ReplCodePanelRuntimeState code_panel;
-    ReplHelpState             help;
-    ReplVariablePanelState    variable_panel;
-    ReplVariableDragState     variable_drag;
-    ReplProfilePanelState     profile_panel;
-    ReplStatusState           status;
-    ReplSearchState           search;
-    ReplAutocompleteState     autocomplete;
-    ReplCameraState           camera;
-    ReplPointerState          pointer;
-    ReplViewportState         viewport;
-    ReplPresentationState     presentation;
-    ReplRenderState           render;
-    ReplRenderDerivedState    render_derived;
-    ReplReplayRuntimeState    replay;
-    ReplSceneRuntimeState     scenes;
-    ReplImportExportState     import_export;
-} ReplRuntimeFacade;
+    const char (*workspace_header_lines)[WORKSPACE_HEADER_LINE_LEN];
+    int         workspace_header_line_count;
+    const char (*render_state_lines)[64];
+    const char (*cam_lines)[96];
+    const char *export_scene_name_hint;
+    const char *pending_scene_name;
+    const char *pending_workspace_dir;
+} ReplImportExportView;
 
-const ReplDocumentState *repl_state_document(void);
 const GLCmd *repl_state_document_cmds(void);
 const GLCmd *repl_state_document_cmd_at(int cmd_idx);
 int          repl_state_document_count(void);
@@ -263,16 +259,18 @@ int          repl_state_edit_line(void);
 int          repl_state_normals_dirty(void);
 void         repl_state_document_reset(void);
 
-const ReplFlatProgramState *repl_state_flat_program(void);
 const GLCmd      *repl_state_flat_program_cmds(void);
 int               repl_state_flat_program_count(void);
 int               repl_state_flat_program_dirty(void);
 int               repl_state_flat_program_user_lighting_enabled(void);
+int               repl_state_flat_program_current_block_begin(void);
+int               repl_state_flat_program_current_block_end(void);
+int               repl_state_flat_program_current_block_source_line(void);
 FlatProgramView   repl_state_flat_program_view(void);
 
-const ReplVariableState *repl_state_variables(void);
+ReplVariableView repl_state_variables(void);
 
-const ReplEditorInputState *repl_state_editor_input(void);
+ReplEditorInputView repl_state_editor_input(void);
 const char *repl_state_input_text(void);
 int         repl_state_input_len(void);
 int         repl_state_cursor_pos(void);
@@ -286,7 +284,7 @@ int  repl_state_selection_end_idx(void);
 ReplClipboardState        repl_state_clipboard(void);
 int    repl_state_clipboard_count(void);
 
-const ReplCodePanelRuntimeState *repl_state_code_panel(void);
+ReplCodePanelRuntimeState repl_state_code_panel(void);
 
 ReplHelpState        repl_state_help(void);
 
@@ -309,17 +307,17 @@ ReplPointerState         repl_state_pointer(void);
 
 ReplViewportState       repl_state_viewport(void);
 
-const ReplPresentationState *repl_state_presentation(void);
+ReplPresentationState repl_state_presentation(void);
+const float *repl_state_grid_major_steps(void);
+const float *repl_state_grid_extents(void);
 
 ReplRenderState          repl_state_render(void);
-
-ReplRenderDerivedState   repl_state_render_derived(void);
 
 ReplReplayRuntimeState    repl_state_replay(void);
 
 ReplSceneRuntimeState     repl_state_scenes(void);
 const char *repl_state_workspace_dir(void);
 
-const ReplImportExportState *repl_state_import_export(void);
+ReplImportExportView repl_state_import_export(void);
 
 #endif /* REPL_STATE_VIEWS_H */

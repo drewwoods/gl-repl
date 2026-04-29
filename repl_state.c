@@ -156,226 +156,25 @@ static ReplRuntimeState g_repl_state = {
 #define g_pending_scene_name        (g_repl_state.import_export.pending_scene_name)
 #define g_pending_workspace_dir     (g_repl_state.import_export.pending_workspace_dir)
 
-static ReplRuntimeFacade g_repl_facade = {
-    .document = {
-        .cmds = g_cmds,
-        .cmd_count = &g_num_cmds,
-        .capacity = MAX_COMMANDS,
-        .edit_line_idx = &g_edit_line,
-        .normals_dirty = &g_normals_dirty,
-    },
-    .flat_program = {
-        .cmds = g_flat_cmds,
-        .local_vars = g_flat_cmd_local_vars,
-        .cmd_count = &g_num_flat_cmds,
-        .capacity = MAX_COMMANDS,
-        .dirty = &g_flat_dirty,
-        .user_lighting_enabled = &g_user_lighting_enabled,
-        .current_block_begin_idx = &g_current_block_begin,
-        .current_block_end_idx = &g_current_block_end,
-        .current_block_source_line_idx = &g_current_block_line,
-    },
-    .variables = {
-        .vars = g_predef_vars,
-        .var_count = &g_num_predef_vars,
-        .time_var_idx = &g_t_var_idx,
-        .time_playing = &g_t_playing,
-        .anim_time = &g_anim_time,
-    },
-    .editor_input = {
-        .input = g_input,
-        .input_capacity = MAX_INPUT_LEN,
-        .input_len = &g_input_len,
-        .cursor_pos = &g_cursor_pos,
-        .edit_line_idx = &g_edit_line,
-        .pending_newline = g_newline_buf,
-        .pending_newline_capacity = MAX_INPUT_LEN,
-        .pending_newline_len = &g_newline_len,
-        .insert_mode = &g_inserting,
-    },
-    .selection = {
-        .anchor_idx = -1,
-        .end_idx = -1,
-    },
-    .clipboard = {
-        .cmds = { 0 },
-        .cmd_count = 0,
-    },
-    .code_panel = {
-        .panel_frac = &g_panel_frac,
-        .resizing_panel = &g_resizing_panel,
-        .scroll = &g_scroll,
-        .scroll_follow_cursor = &g_scroll_follow_cursor,
-        .cursor_visible = &g_cursor_on,
-        .blink_tick = &g_blink_tick,
-        .cursor_px = &g_cursor_px,
-        .cursor_py = &g_cursor_py,
-    },
-    .help = {
-        .visible = 0,
-        .tab_idx = 0,
-        .scroll = 0,
-    },
-    .variable_panel = {
-        .visible = 1,
-    },
-    .variable_drag = {
-        .var_idx = -1,
-        .log_mode = 0,
-        .start_value = 0.0f,
-        .start_x = 0,
-    },
-    .profile_panel = {
-        .mode = PROFILE_PANEL_OFF,
-    },
-    .status = {
-        .text = "",
-        .ttl = 0,
-    },
-    .search = {
-        .active = 0,
-        .query = "",
-        .query_len = 0,
-        .cursor_pos = 0,
-        .hit_line_idx = -1,
-        .hit_char_idx = -1,
-        .hit_ordinal = 0,
-        .match_count = 0,
-    },
-    .autocomplete = {
-        .matches = { 0 },
-        .insert_matches = { 0 },
-        .match_count = 0,
-        .selected_idx = 0,
-        .ghost = "",
-        .hint = "",
-    },
-    .camera = {
-        .rx = 20.0f,
-        .ry = 30.0f,
-        .dist = 5.0f,
-        .tx = 0.0f,
-        .ty = 0.0f,
-        .tz = 0.0f,
-        .motion_glow = 0.0f,
-        .auto_rotate = CFG_DEFAULT_CAMERA_ROTATE,
-    },
-    .pointer = {
-        .mouse_x = 0,
-        .mouse_y = 0,
-        .mouse_button = -1,
-    },
-    .viewport = {
-        .window_w = 1200,
-        .window_h = 800,
-    },
-    .presentation = {
-        .wireframe = &g_wireframe,
-        .grid_theme = &g_grid_theme,
-        .grid_major_idx = &g_grid_major_idx,
-        .grid_extent_idx = &g_grid_extent_idx,
-        .axes_theme = &g_axes_theme,
-        .show_vertex_labels = &g_show_vnums,
-        .show_normal_vectors = &g_show_normals,
-        .show_vertex_indices = &g_show_indices,
-        .show_vertex_outlines = &g_show_outlines,
-        .show_vertex_points = &g_show_vpoints,
-        .show_vertex_guides = &g_show_guides,
-        .xform_guide_mode = &g_xform_guide_mode,
-        .autonormal = &g_autonormal,
-        .show_light_indicators = &g_show_lights,
-        .backdrop_mode = &g_backdrop_mode,
-        .highlight_current_poly = &g_highlight_current_poly,
-        .ortho_mode = &g_ortho_mode,
-        .wrap_at_comma = &g_wrap_at_comma,
-        .code_panel_layout = &g_code_panel_layout,
-        .grid_major_steps = g_grid_major_steps,
-        .grid_extents = g_grid_extents,
-        .focus_vertex = g_focus_vtx,
-        .focus_vertex_valid = &g_focus_vtx_valid,
-    },
-    .render = {
-        .use_accum = &g_use_accum,
-        .accum_aa_enabled = &g_accum_aa_enabled,
-        .accum_samples = &g_accum_samples,
-        .accum_jitter_x = &g_accum_jitter_x,
-        .accum_jitter_y = &g_accum_jitter_y,
-        .multisample_enabled = &g_multisample_enabled,
-        .line_smooth_enabled = &g_line_smooth_enabled,
-        .point_attenuation_enabled = &g_init_attenuate_points,
-        .lights = g_lights,
-        .clear_color = g_clear_color,
-    },
-    .render_derived = {
-        .focus_vertex = g_focus_vtx,
-        .focus_vertex_valid = &g_focus_vtx_valid,
-    },
-    .replay = {
-        .active = &g_replay_active,
-        .state = &g_replay_state,
-        .pc = &g_replay_pc,
-        .mode = &g_replay_mode,
-        .speed = &g_replay_speed,
-        .accum = &g_replay_accum,
-        .fade_speed = &g_replay_fade_speed,
-        .src_line_idx = &g_replay_src_line,
-        .total_flat_cmds = &g_replay_total_flat,
-        .expand_args = &g_replay_expand_args,
-    },
-    .scenes = {
-        .active_example_idx = -1,
-        .workspace_dir = "",
-    },
-    .import_export = {
-        .workspace_header_lines = { 0 },
-        .workspace_header_line_count = 0,
-        .render_state_lines = { 0 },
-        .cam_lines = { 0 },
-        .export_scene_name_hint = NULL,
-        .pending_scene_name = "",
-        .pending_workspace_dir = "",
-    },
-};
-
-static void repl_state_sync_variables_from_eval_state(ReplRuntimeState *state) {
-    int var_count = g_num_predef_vars;
-
-    if (var_count < 0)
-        var_count = 0;
-    if (var_count > MAX_PREDEF_VARS)
-        var_count = MAX_PREDEF_VARS;
-
-    memset(state->variables.predef_vars, 0, sizeof(state->variables.predef_vars));
-    if (var_count > 0) {
-        memcpy(state->variables.predef_vars, g_predef_vars,
-               (size_t)var_count * sizeof(ExprVar));
-    }
-    state->variables.predef_var_count = var_count;
+ExprVar *repl_state_predef_vars_storage(int *capacity, int **count_ptr) {
+    if (capacity)
+        *capacity = MAX_PREDEF_VARS;
+    if (count_ptr)
+        *count_ptr = &g_repl_state.variables.predef_var_count;
+    return g_repl_state.variables.predef_vars;
 }
 
-static void repl_state_sync_variables_from_eval(void) {
-    repl_state_sync_variables_from_eval_state(&g_repl_state);
+static void repl_state_bind_eval_predef_storage(void) {
+    repl_eval_bind_predef_storage(g_repl_state.variables.predef_vars,
+                                  &g_repl_state.variables.predef_var_count);
 }
 
-static void repl_state_sync_variables_to_eval_state(const ReplRuntimeState *state) {
-    int var_count = state->variables.predef_var_count;
-
-    if (var_count < 0)
-        var_count = 0;
-    if (var_count > MAX_PREDEF_VARS)
-        var_count = MAX_PREDEF_VARS;
-
-    memset(g_predef_vars, 0, sizeof(g_predef_vars));
-    if (var_count > 0) {
-        memcpy(g_predef_vars, state->variables.predef_vars,
-               (size_t)var_count * sizeof(ExprVar));
-    }
-    g_num_predef_vars = var_count;
+#if defined(__GNUC__) || defined(__clang__)
+__attribute__((constructor))
+static void repl_state_bind_eval_predef_storage_at_load(void) {
+    repl_state_bind_eval_predef_storage();
 }
-
-static void repl_state_sync_variables_to_eval(void) {
-    repl_state_sync_variables_to_eval_state(&g_repl_state);
-}
+#endif
 
 static void ensure_t_var_idx(void) {
     if (g_t_var_idx >= 0 && g_t_var_idx < g_num_predef_vars &&
@@ -388,15 +187,10 @@ static void reset_time_state(void) {
     g_anim_time = 0.0f;
     repl_eval_init_predef_vars();
     ensure_t_var_idx();
-    repl_state_sync_variables_from_eval();
-}
-
-const ReplDocumentState *repl_state_document(void) {
-    return &g_repl_facade.document;
 }
 
 ReplDocumentState *repl_state_document_mut(void) {
-    return &g_repl_facade.document;
+    return &g_repl_state.document;
 }
 
 const GLCmd *repl_state_document_cmds(void) {
@@ -460,12 +254,8 @@ void repl_state_document_reset(void) {
     repl_command_store_load(&store, NULL, 0, 0);
 }
 
-const ReplFlatProgramState *repl_state_flat_program(void) {
-    return &g_repl_facade.flat_program;
-}
-
 ReplFlatProgramState *repl_state_flat_program_mut(void) {
-    return &g_repl_facade.flat_program;
+    return &g_repl_state.flat_program;
 }
 
 const GLCmd *repl_state_flat_program_cmds(void) {
@@ -502,6 +292,18 @@ void repl_state_flat_program_clear_dirty(void) {
 
 int repl_state_flat_program_user_lighting_enabled(void) {
     return g_user_lighting_enabled;
+}
+
+int repl_state_flat_program_current_block_begin(void) {
+    return g_current_block_begin;
+}
+
+int repl_state_flat_program_current_block_end(void) {
+    return g_current_block_end;
+}
+
+int repl_state_flat_program_current_block_source_line(void) {
+    return g_current_block_line;
 }
 
 void repl_state_flat_program_set_user_lighting_enabled(int enabled) {
@@ -545,19 +347,25 @@ FlatProgramView repl_state_flat_program_view(void) {
     return view;
 }
 
-const ReplVariableState *repl_state_variables(void) {
-    return &g_repl_facade.variables;
+ReplVariableView repl_state_variables(void) {
+    return (ReplVariableView){
+        .vars = g_predef_vars,
+        .var_count = g_num_predef_vars,
+        .time_var_idx = g_t_var_idx,
+        .time_playing = g_t_playing,
+        .anim_time = g_anim_time,
+    };
 }
 
 ReplVariableState *repl_state_variables_mut(void) {
-    return &g_repl_facade.variables;
+    return &g_repl_state.variables;
 }
 
 void repl_state_variables_reset(void) {
+    repl_state_bind_eval_predef_storage();
     g_repl_state.variables = g_repl_state_defaults.variables;
     repl_eval_init_predef_vars();
     g_t_var_idx = repl_eval_find_predef_var_idx("t");
-    repl_state_sync_variables_from_eval();
 }
 
 void repl_state_time_advance(float dt) {
@@ -581,12 +389,22 @@ void repl_state_time_reset_to_zero(void) {
     g_flat_dirty = 1;
 }
 
-const ReplEditorInputState *repl_state_editor_input(void) {
-    return &g_repl_facade.editor_input;
+ReplEditorInputView repl_state_editor_input(void) {
+    return (ReplEditorInputView){
+        .input = g_input,
+        .input_capacity = MAX_INPUT_LEN,
+        .input_len = g_input_len,
+        .cursor_pos = g_cursor_pos,
+        .edit_line_idx = g_edit_line,
+        .pending_newline = g_newline_buf,
+        .pending_newline_capacity = MAX_INPUT_LEN,
+        .pending_newline_len = g_newline_len,
+        .insert_mode = g_inserting,
+    };
 }
 
 ReplEditorInputState *repl_state_editor_input_mut(void) {
-    return &g_repl_facade.editor_input;
+    return &g_repl_state.editor_input;
 }
 
 void repl_state_editor_input_reset(void) {
@@ -730,12 +548,12 @@ void repl_state_clipboard_count_set(int cmd_count) {
     g_clipboard_count = cmd_count;
 }
 
-const ReplCodePanelRuntimeState *repl_state_code_panel(void) {
-    return &g_repl_facade.code_panel;
+ReplCodePanelRuntimeState repl_state_code_panel(void) {
+    return g_repl_state.code_panel;
 }
 
 ReplCodePanelRuntimeState *repl_state_code_panel_mut(void) {
-    return &g_repl_facade.code_panel;
+    return &g_repl_state.code_panel;
 }
 
 void repl_state_code_panel_reset(void) {
@@ -918,12 +736,20 @@ void repl_state_viewport_set_size(int window_w, int window_h) {
     g_win_h = window_h;
 }
 
-const ReplPresentationState *repl_state_presentation(void) {
-    return &g_repl_facade.presentation;
+ReplPresentationState repl_state_presentation(void) {
+    return g_repl_state.presentation;
 }
 
 ReplPresentationState *repl_state_presentation_mut(void) {
-    return &g_repl_facade.presentation;
+    return &g_repl_state.presentation;
+}
+
+const float *repl_state_grid_major_steps(void) {
+    return g_grid_major_steps;
+}
+
+const float *repl_state_grid_extents(void) {
+    return g_grid_extents;
 }
 
 
@@ -951,31 +777,23 @@ void repl_state_presentation_reset_example_defaults(void) {
 }
 
 ReplRenderState repl_state_render(void) {
-    return g_repl_facade.render;
+    return g_repl_state.render;
 }
 
 ReplRenderState *repl_state_render_mut(void) {
-    return &g_repl_facade.render;
+    return &g_repl_state.render;
 }
 
 void repl_state_render_reset_defaults(void) {
     g_repl_state.render = g_repl_state_defaults.render;
 }
 
-ReplRenderDerivedState repl_state_render_derived(void) {
-    return g_repl_facade.render_derived;
-}
-
-ReplRenderDerivedState *repl_state_render_derived_mut(void) {
-    return &g_repl_facade.render_derived;
-}
-
 ReplReplayRuntimeState repl_state_replay(void) {
-    return g_repl_facade.replay;
+    return g_repl_state.replay;
 }
 
 ReplReplayRuntimeState *repl_state_replay_mut(void) {
-    return &g_repl_facade.replay;
+    return &g_repl_state.replay;
 }
 
 void repl_state_replay_reset(void) {
@@ -998,8 +816,16 @@ const char *repl_state_workspace_dir(void) {
     return repl_workspace_dir();
 }
 
-const ReplImportExportState *repl_state_import_export(void) {
-    return &g_repl_state.import_export;
+ReplImportExportView repl_state_import_export(void) {
+    return (ReplImportExportView){
+        .workspace_header_lines = g_repl_state.import_export.workspace_header_lines,
+        .workspace_header_line_count = g_repl_state.import_export.workspace_header_line_count,
+        .render_state_lines = g_repl_state.import_export.render_state_lines,
+        .cam_lines = g_repl_state.import_export.cam_lines,
+        .export_scene_name_hint = g_repl_state.import_export.export_scene_name_hint,
+        .pending_scene_name = g_repl_state.import_export.pending_scene_name,
+        .pending_workspace_dir = g_repl_state.import_export.pending_workspace_dir,
+    };
 }
 
 ReplImportExportState *repl_state_import_export_mut(void) {
@@ -1010,7 +836,7 @@ void repl_state_capture(ReplRuntimeState *snapshot) {
     if (!snapshot)
         return;
 
-    repl_state_sync_variables_from_eval();
+    repl_state_bind_eval_predef_storage();
     refresh_workspace_header_lines();
     update_render_state_strings();
     update_cam_lines();
@@ -1022,7 +848,7 @@ void repl_state_restore(const ReplRuntimeState *snapshot) {
         return;
 
     g_repl_state = *snapshot;
-    repl_state_sync_variables_to_eval();
+    repl_state_bind_eval_predef_storage();
     ensure_t_var_idx();
     repl_source_scope_depth_cache_invalidate();
 }
@@ -1045,6 +871,7 @@ void repl_state_init_defaults(void) {
 
 void repl_state_reset_all(void) {
     g_repl_state = g_repl_state_defaults;
+    repl_state_bind_eval_predef_storage();
     repl_scenes_reset();
     reset_time_state();
     repl_editor_reset_transients();

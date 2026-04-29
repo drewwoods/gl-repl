@@ -1,25 +1,2 @@
 # key count
-repl_state_views.h:ReplAutocompleteState 4
-repl_state_views.h:ReplCameraState 8
-repl_state_views.h:ReplClipboardState 2
-repl_state_views.h:ReplCodePanelRuntimeState 8
-repl_state_views.h:ReplDocumentState 4
-repl_state_views.h:ReplEditorInputState 7
-repl_state_views.h:ReplFlatProgramState 8
-repl_state_views.h:ReplHelpState 3
-repl_state_views.h:ReplImportExportState 3
-repl_state_views.h:ReplPointerState 3
-repl_state_views.h:ReplPresentationState 21
-repl_state_views.h:ReplProfilePanelState 1
-repl_state_views.h:ReplRenderDerivedState 2
-repl_state_views.h:ReplRenderState 10
-repl_state_views.h:ReplReplayRuntimeState 10
-repl_state_views.h:ReplSceneRuntimeState 2
-repl_state_views.h:ReplSearchState 8
-repl_state_views.h:ReplSelectionState 2
-repl_state_views.h:ReplStatusState 2
-repl_state_views.h:ReplVariableDragState 4
-repl_state_views.h:ReplVariablePanelState 1
-repl_state_views.h:ReplVariableState 5
-repl_state_views.h:ReplViewportState 2
 scene_render_types.h:SceneRenderConfig 1
