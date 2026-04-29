@@ -78,8 +78,11 @@ static const char *section_label(ProfSection s) {
     case PROF_SCENE_3D_FADE_BATCH_PREP: return "    batch prep";
     case PROF_SCENE_3D_FADE_BATCH_EXEC: return "    batch exec";
     case PROF_SCENE_3D_FADE_BATCH_POST: return "    batch post";
-    case PROF_SCENE_3D_HELPERS:  return "  helpers";
-    case PROF_SCENE_3D_BACKDROP: return "    backdrop";
+    case PROF_SCENE_3D_HELPERS:      return "  helpers";
+    case PROF_SCENE_3D_BACKDROP:     return "    backdrop";
+    case PROF_SCENE_3D_GRID:         return "    grid";
+    case PROF_SCENE_3D_AXES:         return "    axes";
+    case PROF_SCENE_3D_ORBIT_TARGET: return "    orbit target";
     case PROF_SCENE_3D_OUTLINES: return "  outlines";
     case PROF_SCENE_3D_OVERLAYS: return "  overlays";
     case PROF_SCENE_3D_HUD:      return "  hud";
@@ -125,6 +128,9 @@ static int is_detail_section(ProfSection s) {
             s == PROF_SCENE_3D_FADE_BATCH_POST ||
             s == PROF_SCENE_3D_HELPERS ||
             s == PROF_SCENE_3D_BACKDROP ||
+            s == PROF_SCENE_3D_GRID ||
+            s == PROF_SCENE_3D_AXES ||
+            s == PROF_SCENE_3D_ORBIT_TARGET ||
             s == PROF_SCENE_3D_OUTLINES ||
             s == PROF_SCENE_3D_OVERLAYS ||
             s == PROF_SCENE_3D_HUD ||
@@ -149,6 +155,10 @@ static int is_detail_section(ProfSection s) {
  * FRAME_TOTAL uses 1/120s (8.3ms) and 1/60s (16.7ms) breakpoints.
  * All other sections use half those thresholds (4.15ms / 8.3ms). */
 static void set_time_color(ProfSection s, double us) {
+    if (us < 2.0) {
+        glColor3f(0.30f, 0.30f, 0.38f);       /* near-zero – same as stale */
+        return;
+    }
     if (s == PROF_FRAME_TOTAL) {
         if (us < 8333.0)
             glColor3f(0.50f, 0.88f, 0.45f);   /* green  – fits in 120 fps */

@@ -16,7 +16,7 @@
 /* ========================================================================= */
 
 /* EMA smoothing factor.  Higher = more responsive, lower = smoother. */
-#define PROF_EMA_ALPHA      0.08
+#define PROF_EMA_ALPHA      0.04
 
 /* After this many frames without a new sample, display "--" instead of the
  * stale value.  At 60 fps this is 3 seconds. */

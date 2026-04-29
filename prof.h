@@ -17,8 +17,11 @@ typedef enum {
     PROF_SCENE_3D_FADE_BATCH_PREP,  /* per-batch find-open + color */
     PROF_SCENE_3D_FADE_BATCH_EXEC,  /* per-batch execute_commands */
     PROF_SCENE_3D_FADE_BATCH_POST,  /* per-batch post-execute cleanup */
-    PROF_SCENE_3D_HELPERS,   /* grid/axes/orbit-target + backdrop sub-pass */
-    PROF_SCENE_3D_BACKDROP,  /* scene_backdrop_render() */
+    PROF_SCENE_3D_HELPERS,      /* backdrop/grid/axes/orbit-target aggregate */
+    PROF_SCENE_3D_BACKDROP,     /* scene_backdrop_render() – stale when off */
+    PROF_SCENE_3D_GRID,         /* scene_grid_render() */
+    PROF_SCENE_3D_AXES,         /* scene_axes_render() */
+    PROF_SCENE_3D_ORBIT_TARGET, /* draw_orbit_target() */
     PROF_SCENE_3D_OUTLINES,  /* polygon outline + current-block highlight */
     PROF_SCENE_3D_OVERLAYS,  /* vertex dots, vertex/normal/transform guides */
     PROF_SCENE_3D_HUD,       /* lights, vertex nums, normals, replay HUD */
