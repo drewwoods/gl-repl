@@ -92,7 +92,9 @@
       "Read(//private/tmp/**)",
       "Bash(bash /tmp/test_includes.sh)",
       "Bash(bash *)",
-      "Bash(./test_repl_state)"
+      "Bash(./test_repl_state)",
+      "Read(//usr/local/include/**)",
+      "Read(//opt/homebrew/include/**)"
     ]
   }
 }
