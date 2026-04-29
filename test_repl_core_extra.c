@@ -248,6 +248,28 @@ void test_user_scene() {
                repl_active_user_scene(), 0);
 }
 
+void test_user_scene_persists_across_example_switch() {
+    printf("--- User scene persists across example switch ---\n");
+    repl_reset_state(); declare_test_vars();
+    if (repl_example_count() < 1) return;
+
+    repl_feed_line_public("glVertex3f(1,1,1);");
+    repl_load_example(0);
+    ASSERT_INT("home slot used after example load", repl_user_scene_slot_used(0), 1);
+
+    repl_load_user_scene();
+    ASSERT_INT("active user scene after restore", repl_active_user_scene(), 0);
+
+    repl_feed_line_public("glVertex3f(2,2,2);");
+    repl_flatten_commands();
+    ASSERT_INT("edited home scene vertex count", count_vertices(), 2);
+
+    repl_load_example(0);
+    repl_load_user_scene();
+    repl_flatten_commands();
+    ASSERT_INT("persisted home scene vertex count", count_vertices(), 2);
+}
+
 void test_user_scene_promote_on_edit() {
     printf("--- User scene promotion on example edit ---\n");
     repl_reset_state(); declare_test_vars();
@@ -794,6 +816,7 @@ int main(int argc, char **argv) {
     test_execution();
     test_examples();
     test_user_scene();
+    test_user_scene_persists_across_example_switch();
     test_user_scene_promote_on_edit();
     test_user_scene_promote_name_dedup();
     test_user_scene_promote_all_slots_full();

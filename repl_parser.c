@@ -119,13 +119,8 @@ static int parse_command(const char *line, GLCmd *cmd,
         cmd->valid = 1;
         cmd->is_auto = 0;
         cmd->num_args = 0;
-        int fdepth = repl_source_scope_block_depth_at(source_line_idx);
-        int bb = repl_source_scope_in_begin_block_at(source_line_idx);
-        int ind = (bb ? 4 : 2) + fdepth * 2;
         char indent[32];
-        if (ind > (int)sizeof(indent) - 1) ind = (int)sizeof(indent) - 1;
-        memset(indent, ' ', ind);
-        indent[ind] = '\0';
+        repl_source_scope_cmd_indent(source_line_idx, indent, sizeof(indent));
         snprintf(cmd->source, sizeof(cmd->source), "%s%s", indent, p);
         return 1;
     }

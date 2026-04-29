@@ -60,6 +60,23 @@ static void apply_func_decl_resume(CmdType end_type) {
     g_func_decl_resume_delta = 0;
 }
 
+static void fill_scope_indent(int pos, char *buf, int buf_sz) {
+    repl_source_scope_cmd_indent(pos, buf, buf_sz);
+}
+
+static void fill_scope_close_indent(int pos, char *buf, int buf_sz) {
+    repl_source_scope_cmd_indent(pos, buf, buf_sz);
+    int len = (int)strlen(buf);
+    if (len >= 2)
+        len -= 2;
+    else
+        len = 0;
+    if (len > buf_sz - 1)
+        len = buf_sz - 1;
+    memset(buf, ' ', (size_t)len);
+    buf[len] = '\0';
+}
+
 int repl_commit_resolve_insert_exit_target(int target) {
     if (!repl_state_insert_mode() ||
         g_func_decl_resume_delta <= 0 ||
@@ -408,7 +425,6 @@ int try_assign_variable(void) {
     int has_rhs_vars;
     float val;
     char indent[32];
-    int ind;
 
     if (!repl_extract_assignment_parts(repl_state_editor_input()->input, name, sizeof(name), rhs, sizeof(rhs)))
         return 0;
@@ -464,11 +480,7 @@ int try_assign_variable(void) {
         {
             int insert_idx = repl_state_insert_mode() ? repl_state_edit_line() :
                        (repl_state_edit_line() < repl_state_document_count() ? repl_state_edit_line() : repl_state_document_count());
-            ind = (repl_source_scope_in_begin_block_at(insert_idx) ? 4 : 2) + repl_source_scope_block_depth_at(insert_idx) * 2;
-            if (ind > (int)sizeof(indent) - 1)
-                ind = (int)sizeof(indent) - 1;
-            memset(indent, ' ', (size_t)ind);
-            indent[ind] = '\0';
+            fill_scope_indent(insert_idx, indent, sizeof(indent));
             if (!repl_format_fits(cmd.source, sizeof(cmd.source),
                                   "%s%s = %s;%s",
                                   indent, name, rhs, comment)) {
@@ -575,17 +587,13 @@ int try_commit_for_loop(void) {
             body_start++;
 
         {
-            int fdepth = repl_source_scope_block_depth_at(pos);
-            int bb = repl_source_scope_in_begin_block_at(pos);
-            int ind = (bb ? 4 : 2) + fdepth * 2;
+            int ind;
             char indent[32];
             GLCmd fb;
             GLCmd fe;
 
-            if (ind > (int)sizeof(indent) - 1)
-                ind = (int)sizeof(indent) - 1;
-            memset(indent, ' ', (size_t)ind);
-            indent[ind] = '\0';
+            fill_scope_indent(pos, indent, sizeof(indent));
+            ind = (int)strlen(indent);
 
             memset(&fb, 0, sizeof(fb));
             fb.type = CMD_FOR_BEGIN;
@@ -833,18 +841,12 @@ int try_commit_func_def(void) {
         }
 
         int pos = overwriting_func ? edit_pos : function_decl_insert_pos();
-        int bdepth = overwriting_func ? repl_source_scope_block_depth_at(pos) : 0;
-        int bb = overwriting_func ? repl_source_scope_in_begin_block_at(pos) : 0;
-        int ind = (bb ? 4 : 2) + bdepth * 2;
         char indent[32];
         GLCmd fd;
         GLCmd fe;
         ReplCommandStore store = repl_command_store_live();
 
-        if (ind > (int)sizeof(indent) - 1)
-            ind = (int)sizeof(indent) - 1;
-        memset(indent, ' ', (size_t)ind);
-        indent[ind] = '\0';
+        fill_scope_indent(pos, indent, sizeof(indent));
 
         if (overwriting_func) {
             GLCmd updated = repl_state_document_cmds_mut()[edit_pos];
@@ -945,9 +947,6 @@ int try_commit_if_block(void) {
         float cond_val;
         char cond_text[MAX_LINE_LEN];
         int clen;
-        int bdepth;
-        int bb;
-        int ind;
         char indent[32];
         GLCmd ib;
         GLCmd ie;
@@ -1005,13 +1004,7 @@ int try_commit_if_block(void) {
             return 1;
         }
 
-        bdepth = repl_source_scope_block_depth_at(pos);
-        bb = repl_source_scope_in_begin_block_at(pos);
-        ind = (bb ? 4 : 2) + bdepth * 2;
-        if (ind > (int)sizeof(indent) - 1)
-            ind = (int)sizeof(indent) - 1;
-        memset(indent, ' ', (size_t)ind);
-        indent[ind] = '\0';
+        fill_scope_indent(pos, indent, sizeof(indent));
 
         memset(&ib, 0, sizeof(ib));
         ib.type = CMD_IF_BEGIN;
@@ -1088,9 +1081,6 @@ int try_commit_close_brace(void) {
         CmdType open_type = repl_source_scope_nearest_open_block_at(pos);
         CmdType end_type;
         const char *label;
-        int bdepth;
-        int bb_val;
-        int ind_len;
         char indent[32];
         GLCmd fe;
 
@@ -1135,15 +1125,7 @@ int try_commit_close_brace(void) {
             return 1;
         }
 
-        bdepth = repl_source_scope_block_depth_at(pos) - 1;
-        if (bdepth < 0)
-            bdepth = 0;
-        bb_val = repl_source_scope_in_begin_block_at(pos);
-        ind_len = (bb_val ? 4 : 2) + bdepth * 2;
-        if (ind_len > (int)sizeof(indent) - 1)
-            ind_len = (int)sizeof(indent) - 1;
-        memset(indent, ' ', (size_t)ind_len);
-        indent[ind_len] = '\0';
+        fill_scope_close_indent(pos, indent, sizeof(indent));
 
         memset(&fe, 0, sizeof(fe));
         fe.type = end_type;
