@@ -332,14 +332,13 @@ void update_autocomplete(void) {
 }
 
 void accept_autocomplete(void) {
-    const ReplAutocompleteState *ac = repl_state_autocomplete();
-    if (ac->match_count == 0 || ac->ghost[0] == '\0') return;
+    ReplAutocompleteState ac = repl_state_autocomplete();
 
-    int ghost_len = (int)strlen(ac->ghost);
+    int ghost_len = (int)strlen(ac.ghost);
     {
         ReplEditorInputState *inp = repl_state_editor_input_mut();
         if (*inp->input_len + ghost_len < MAX_INPUT_LEN - 1) {
-            strcat(inp->input, ac->ghost);
+            strcat(inp->input, ac.ghost);
             *inp->input_len += ghost_len;
             repl_state_cursor_pos_set(*inp->input_len);
         }

@@ -13,15 +13,15 @@
 #include "repl_state.h"
 #include "repl_var_drag.h"
 int repl_var_drag_active(void) {
-    return repl_state_variable_drag()->var_idx >= 0;
+    return repl_state_variable_drag().var_idx >= 0;
 }
 
 int repl_var_drag_active_var(void) {
-    return repl_state_variable_drag()->var_idx;
+    return repl_state_variable_drag().var_idx;
 }
 
 int repl_var_drag_log_mode(void) {
-    return repl_state_variable_drag()->log_mode;
+    return repl_state_variable_drag().log_mode;
 }
 
 void repl_var_drag_begin(int row, int log_mode, int x) {

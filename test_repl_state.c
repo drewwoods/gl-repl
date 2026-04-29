@@ -230,8 +230,8 @@ static void test_capture_restore_round_trip(void) {
                repl_state_flat_program_user_lighting_enabled(), 1);
     ASSERT_INT("selection anchor restored", repl_state_selection().anchor_idx, 4);
     ASSERT_INT("selection end restored", repl_state_selection().end_idx, 7);
-    ASSERT_INT("clipboard count restored", repl_state_clipboard()->cmd_count, 1);
-    ASSERT_INT("clipboard cmd restored", repl_state_clipboard()->cmds[0].type, CMD_COLOR3F);
+    ASSERT_INT("clipboard count restored", repl_state_clipboard().cmd_count, 1);
+    ASSERT_INT("clipboard cmd restored", repl_state_clipboard().cmds[0].type, CMD_COLOR3F);
     ASSERT_INT("help restored", repl_state_help().visible, 1);
     ASSERT_INT("help tab restored", repl_state_help().tab_idx, 1);
     ASSERT_INT("help scroll restored", repl_state_help().scroll, 3);
@@ -245,47 +245,47 @@ static void test_capture_restore_round_trip(void) {
     ASSERT_INT("code panel blink restored", *repl_state_code_panel()->blink_tick, 12);
     ASSERT_INT("code panel cursor x restored", *repl_state_code_panel()->cursor_px, 123);
     ASSERT_INT("code panel cursor y restored", *repl_state_code_panel()->cursor_py, 456);
-    ASSERT_INT("variable panel restored", repl_state_variable_panel()->visible, 0);
-    ASSERT_INT("variable drag idx restored", repl_state_variable_drag()->var_idx, 3);
-    ASSERT_INT("variable drag log restored", repl_state_variable_drag()->log_mode, 1);
+    ASSERT_INT("variable panel restored", repl_state_variable_panel().visible, 0);
+    ASSERT_INT("variable drag idx restored", repl_state_variable_drag().var_idx, 3);
+    ASSERT_INT("variable drag log restored", repl_state_variable_drag().log_mode, 1);
     ASSERT_TRUE("variable drag value restored",
-                repl_state_variable_drag()->start_value == 2.5f);
-    ASSERT_INT("variable drag x restored", repl_state_variable_drag()->start_x, 17);
+                repl_state_variable_drag().start_value == 2.5f);
+    ASSERT_INT("variable drag x restored", repl_state_variable_drag().start_x, 17);
     ASSERT_INT("profile panel restored",
                repl_state_profile_panel().mode, PROFILE_PANEL_DETAILS);
-    ASSERT_STR("status text restored", repl_state_status()->text, "state snapshot");
-    ASSERT_INT("status ttl restored", repl_state_status()->ttl, 17);
-    ASSERT_INT("search active restored", repl_state_search()->active, 1);
-    ASSERT_STR("search query restored", repl_state_search()->query, "vertex");
-    ASSERT_INT("search cursor restored", repl_state_search()->cursor_pos, 2);
-    ASSERT_INT("search hit line restored", repl_state_search()->hit_line_idx, 5);
-    ASSERT_INT("search hit char restored", repl_state_search()->hit_char_idx, 8);
-    ASSERT_INT("search ordinal restored", repl_state_search()->hit_ordinal, 2);
-    ASSERT_INT("search count restored", repl_state_search()->match_count, 4);
-    ASSERT_INT("autocomplete count restored", repl_state_autocomplete()->match_count, 2);
+    ASSERT_STR("status text restored", repl_state_status().text, "state snapshot");
+    ASSERT_INT("status ttl restored", repl_state_status().ttl, 17);
+    ASSERT_INT("search active restored", repl_state_search().active, 1);
+    ASSERT_STR("search query restored", repl_state_search().query, "vertex");
+    ASSERT_INT("search cursor restored", repl_state_search().cursor_pos, 2);
+    ASSERT_INT("search hit line restored", repl_state_search().hit_line_idx, 5);
+    ASSERT_INT("search hit char restored", repl_state_search().hit_char_idx, 8);
+    ASSERT_INT("search ordinal restored", repl_state_search().hit_ordinal, 2);
+    ASSERT_INT("search count restored", repl_state_search().match_count, 4);
+    ASSERT_INT("autocomplete count restored", repl_state_autocomplete().match_count, 2);
     ASSERT_INT("autocomplete selection restored",
-               repl_state_autocomplete()->selected_idx, 1);
-    ASSERT_STR("autocomplete ghost restored", repl_state_autocomplete()->ghost, "ghost text");
-    ASSERT_STR("autocomplete hint restored", repl_state_autocomplete()->hint, "hint text");
+               repl_state_autocomplete().selected_idx, 1);
+    ASSERT_STR("autocomplete ghost restored", repl_state_autocomplete().ghost, "ghost text");
+    ASSERT_STR("autocomplete hint restored", repl_state_autocomplete().hint, "hint text");
     ASSERT_STR("autocomplete match restored",
-               repl_state_autocomplete()->matches[0], "glVertex3f");
+               repl_state_autocomplete().matches[0], "glVertex3f");
     ASSERT_STR("autocomplete insert restored",
-               repl_state_autocomplete()->insert_matches[1], "glVertex2f(");
+               repl_state_autocomplete().insert_matches[1], "glVertex2f(");
     ASSERT_INT("time playing restored", *repl_state_variables()->time_playing, 0);
     ASSERT_TRUE("anim time restored", *repl_state_variables()->anim_time == 1.25f);
-    ASSERT_TRUE("camera rx restored", repl_state_camera()->rx == 11.0f);
-    ASSERT_TRUE("camera ry restored", repl_state_camera()->ry == 22.0f);
-    ASSERT_TRUE("camera dist restored", repl_state_camera()->dist == 7.5f);
-    ASSERT_TRUE("camera tx restored", repl_state_camera()->tx == 0.5f);
-    ASSERT_TRUE("camera ty restored", repl_state_camera()->ty == -0.25f);
-    ASSERT_TRUE("camera tz restored", repl_state_camera()->tz == 1.75f);
-    ASSERT_TRUE("camera glow restored", repl_state_camera()->motion_glow == 0.9f);
-    ASSERT_INT("camera rotate restored", repl_state_camera()->auto_rotate, 1);
-    ASSERT_INT("pointer x restored", repl_state_pointer()->mouse_x, 321);
-    ASSERT_INT("pointer y restored", repl_state_pointer()->mouse_y, 654);
-    ASSERT_INT("pointer button restored", repl_state_pointer()->mouse_button, 2);
-    ASSERT_INT("viewport width restored", repl_state_viewport()->window_w, 1440);
-    ASSERT_INT("viewport height restored", repl_state_viewport()->window_h, 900);
+    ASSERT_TRUE("camera rx restored", repl_state_camera().rx == 11.0f);
+    ASSERT_TRUE("camera ry restored", repl_state_camera().ry == 22.0f);
+    ASSERT_TRUE("camera dist restored", repl_state_camera().dist == 7.5f);
+    ASSERT_TRUE("camera tx restored", repl_state_camera().tx == 0.5f);
+    ASSERT_TRUE("camera ty restored", repl_state_camera().ty == -0.25f);
+    ASSERT_TRUE("camera tz restored", repl_state_camera().tz == 1.75f);
+    ASSERT_TRUE("camera glow restored", repl_state_camera().motion_glow == 0.9f);
+    ASSERT_INT("camera rotate restored", repl_state_camera().auto_rotate, 1);
+    ASSERT_INT("pointer x restored", repl_state_pointer().mouse_x, 321);
+    ASSERT_INT("pointer y restored", repl_state_pointer().mouse_y, 654);
+    ASSERT_INT("pointer button restored", repl_state_pointer().mouse_button, 2);
+    ASSERT_INT("viewport width restored", repl_state_viewport().window_w, 1440);
+    ASSERT_INT("viewport height restored", repl_state_viewport().window_h, 900);
     ASSERT_INT("presentation wireframe restored", *repl_state_presentation()->wireframe, 1);
     ASSERT_INT("presentation grid restored", *repl_state_presentation()->grid_theme, GRID_THEME_TRON);
     ASSERT_INT("presentation layout restored",
@@ -308,7 +308,7 @@ static void test_capture_restore_round_trip(void) {
     ASSERT_TRUE("replay speed restored", *repl_state_replay()->speed == 12.5f);
     ASSERT_INT("replay src line restored", *repl_state_replay()->src_line_idx, 7);
     ASSERT_INT("replay expand restored", *repl_state_replay()->expand_args, 0);
-    ASSERT_INT("active example restored", repl_state_scenes()->active_example_idx, 3);
+    ASSERT_INT("active example restored", repl_state_scenes().active_example_idx, 3);
     ASSERT_STR("workspace restored",
                repl_state_workspace_dir(),
                "/tmp/repl-state-stage1");

@@ -513,7 +513,7 @@ int  repl_state_selection_anchor(void);
 int  repl_state_selection_end_idx(void);
 void repl_state_selection_set(int anchor_idx, int end_idx);
 
-const ReplClipboardState *repl_state_clipboard(void);
+ReplClipboardState       repl_state_clipboard(void);
 ReplClipboardState       *repl_state_clipboard_mut(void);
 void repl_state_clipboard_clear(void);
 GLCmd *repl_state_clipboard_cmds_mut(void);
@@ -528,27 +528,27 @@ ReplHelpState        repl_state_help(void);
 ReplHelpState       *repl_state_help_mut(void);
 void repl_state_help_reset(void);
 
-const ReplVariablePanelState *repl_state_variable_panel(void);
+ReplVariablePanelState   repl_state_variable_panel(void);
 ReplVariablePanelState       *repl_state_variable_panel_mut(void);
 
-const ReplVariableDragState *repl_state_variable_drag(void);
+ReplVariableDragState    repl_state_variable_drag(void);
 ReplVariableDragState       *repl_state_variable_drag_mut(void);
 void repl_state_variable_drag_reset(void);
 
 ReplProfilePanelState    repl_state_profile_panel(void);
 ReplProfilePanelState       *repl_state_profile_panel_mut(void);
 
-const ReplStatusState *repl_state_status(void);
+ReplStatusState          repl_state_status(void);
 ReplStatusState       *repl_state_status_mut(void);
 void repl_state_status_set(const char *message);
 void repl_state_status_clear(void);
 void repl_state_status_tick(void);
 
-const ReplSearchState *repl_state_search(void);
+ReplSearchState          repl_state_search(void);
 ReplSearchState       *repl_state_search_mut(void);
 void repl_state_search_clear(void);
 
-const ReplAutocompleteState *repl_state_autocomplete(void);
+ReplAutocompleteState    repl_state_autocomplete(void);
 ReplAutocompleteState       *repl_state_autocomplete_mut(void);
 void repl_state_autocomplete_clear(void);
 
@@ -564,7 +564,7 @@ void repl_state_camera_set_distance(float dist);
 void repl_state_camera_set_motion_glow(float motion_glow);
 void repl_state_camera_reset_default(void);
 
-const ReplPointerState *repl_state_pointer(void);
+ReplPointerState         repl_state_pointer(void);
 ReplPointerState       *repl_state_pointer_mut(void);
 void repl_state_pointer_set(int mouse_x, int mouse_y, int mouse_button);
 void repl_state_pointer_set_pos(int mouse_x, int mouse_y);

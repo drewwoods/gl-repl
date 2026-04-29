@@ -283,31 +283,31 @@ ReplSelectionState        repl_state_selection(void);
 int  repl_state_selection_anchor(void);
 int  repl_state_selection_end_idx(void);
 
-const ReplClipboardState *repl_state_clipboard(void);
+ReplClipboardState        repl_state_clipboard(void);
 int    repl_state_clipboard_count(void);
 
 const ReplCodePanelRuntimeState *repl_state_code_panel(void);
 
 ReplHelpState        repl_state_help(void);
 
-const ReplVariablePanelState *repl_state_variable_panel(void);
+ReplVariablePanelState    repl_state_variable_panel(void);
 
-const ReplVariableDragState *repl_state_variable_drag(void);
+ReplVariableDragState     repl_state_variable_drag(void);
 
 ReplProfilePanelState     repl_state_profile_panel(void);
 
-const ReplStatusState *repl_state_status(void);
+ReplStatusState          repl_state_status(void);
 
-const ReplSearchState *repl_state_search(void);
+ReplSearchState          repl_state_search(void);
 
-const ReplAutocompleteState *repl_state_autocomplete(void);
+ReplAutocompleteState    repl_state_autocomplete(void);
 
-const ReplCameraState *repl_state_camera(void);
+ReplCameraState        repl_state_camera(void);
 ReplCameraState        repl_state_camera_snapshot(void);
 
-const ReplPointerState *repl_state_pointer(void);
+ReplPointerState         repl_state_pointer(void);
 
-const ReplViewportState *repl_state_viewport(void);
+ReplViewportState       repl_state_viewport(void);
 
 const ReplPresentationState *repl_state_presentation(void);
 ReplPresentationState        repl_state_presentation_snapshot(void);
@@ -318,7 +318,7 @@ const ReplRenderDerivedState *repl_state_render_derived(void);
 
 const ReplReplayRuntimeState *repl_state_replay(void);
 
-const ReplSceneRuntimeState *repl_state_scenes(void);
+ReplSceneRuntimeState     repl_state_scenes(void);
 const char *repl_state_workspace_dir(void);
 
 const ReplImportExportState *repl_state_import_export(void);

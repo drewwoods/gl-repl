@@ -146,7 +146,7 @@ static void imrepl_ctrl_build_scene_config(SceneRenderConfig *config) {
     const ReplRenderState *render = repl_state_render();
     const ReplReplayRuntimeState *replay = repl_state_replay();
     const ReplPresentationState *presentation = repl_state_presentation();
-    const ReplCameraState *cam = repl_state_camera();
+    ReplCameraState cam = repl_state_camera();
     const ReplFlatProgramState *flat = repl_state_flat_program();
     float bg_lum;
     float as_val;
@@ -166,21 +166,21 @@ static void imrepl_ctrl_build_scene_config(SceneRenderConfig *config) {
     config->anim_time = *repl_state_variables()->anim_time;
 
     /* --- Viewport and scene rectangle --- */
-    config->viewport_w = repl_state_viewport()->window_w;
-    config->viewport_h = repl_state_viewport()->window_h;
+    config->viewport_w = repl_state_viewport().window_w;
+    config->viewport_h = repl_state_viewport().window_h;
     repl_layout_scene_rect(&config->scene_x, &config->scene_y,
                            &config->scene_w, &config->scene_h);
     if (config->scene_w < 1) config->scene_w = 1;
     if (config->scene_h < 1) config->scene_h = 1;
 
     /* --- Camera --- */
-    config->cam_dist = cam->dist;
-    config->cam_rx = cam->rx;
-    config->cam_ry = cam->ry;
-    config->cam_tx = cam->tx;
-    config->cam_ty = cam->ty;
-    config->cam_tz = cam->tz;
-    config->cam_motion_glow = cam->motion_glow;
+    config->cam_dist = cam.dist;
+    config->cam_rx = cam.rx;
+    config->cam_ry = cam.ry;
+    config->cam_tx = cam.tx;
+    config->cam_ty = cam.ty;
+    config->cam_tz = cam.tz;
+    config->cam_motion_glow = cam.motion_glow;
 
     /* --- Rendering quality --- */
     config->multisample_enabled = *render->multisample_enabled;

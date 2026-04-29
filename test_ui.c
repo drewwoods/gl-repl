@@ -113,13 +113,13 @@ static void test_color_picker(void) {
     int py = 300;
     
     /* Press SV square (CP_SV_SZ = 150) */
-    ui_color_picker_press(px + 10, repl_state_viewport()->window_h - (py - 10));
-    ui_color_picker_motion(px + 20, repl_state_viewport()->window_h - (py - 20));
+    ui_color_picker_press(px + 10, repl_state_viewport().window_h - (py - 10));
+    ui_color_picker_motion(px + 20, repl_state_viewport().window_h - (py - 20));
     ui_color_picker_release();
 
     /* Press Hue bar (Offset by CP_SV_SZ + CP_GAP = 150 + 6 = 156) */
-    ui_color_picker_press(px + 156 + 10, repl_state_viewport()->window_h - (py - 10));
-    ui_color_picker_motion(px + 156 + 10, repl_state_viewport()->window_h - (py - 20));
+    ui_color_picker_press(px + 156 + 10, repl_state_viewport().window_h - (py - 10));
+    ui_color_picker_motion(px + 156 + 10, repl_state_viewport().window_h - (py - 20));
     ui_color_picker_release();
 
     /* Test Alpha support */
@@ -133,14 +133,14 @@ static void test_color_picker(void) {
     ASSERT_GL_CALLS("picker render with alpha -> draws quads", GL_STUB_glBegin, 1);
     
     /* Press Alpha bar (alp_x = hue_x + 18 + 6 = px + 156 + 24 = 180) */
-    ui_color_picker_press(px + 185, repl_state_viewport()->window_h - (py - 10));
-    ui_color_picker_motion(px + 185, repl_state_viewport()->window_h - (py - 20));
+    ui_color_picker_press(px + 185, repl_state_viewport().window_h - (py - 10));
+    ui_color_picker_motion(px + 185, repl_state_viewport().window_h - (py - 20));
     ui_color_picker_release();
 
     /* Test glClearColor limits */
     repl_state_document_cmds_mut()[0].type = CMD_CLEAR_COLOR;
     ui_color_picker_open(0, 300);
-    ui_color_picker_press(px + 10, repl_state_viewport()->window_h - (py - 5)); // High V
+    ui_color_picker_press(px + 10, repl_state_viewport().window_h - (py - 5)); // High V
     ui_color_picker_release();
     
     ui_color_picker_close();
@@ -198,7 +198,7 @@ static void test_variable_panel(void) {
     repl_state_viewport_set_size(800, 600);
     int px, py, pw, ph;
     ui_variable_panel_rect(&px, &py, &pw, &ph);
-    ASSERT_TRUE("hit test in panel", ui_variable_panel_hit(px + 10, repl_state_viewport()->window_h - (py + 10), &row));
+    ASSERT_TRUE("hit test in panel", ui_variable_panel_hit(px + 10, repl_state_viewport().window_h - (py + 10), &row));
     ASSERT_TRUE("hit test outside panel", !ui_variable_panel_hit(0, 0, &row));
 }
 

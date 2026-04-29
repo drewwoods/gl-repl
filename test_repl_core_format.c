@@ -185,7 +185,7 @@ int main(void) {
         declare_test_vars();
         *repl_state_presentation_mut()->wrap_at_comma = 1;
         *repl_state_presentation_mut()->show_vertex_indices = 0;
-        repl_state_viewport_set_size(360, repl_state_viewport()->window_h);
+        repl_state_viewport_set_size(360, repl_state_viewport().window_h);
         g_panel_frac = 0.75f;
 
         memset(&repl_state_document_cmds_mut()[0], 0, sizeof(repl_state_document_cmds_mut()[0]));
@@ -225,7 +225,7 @@ int main(void) {
         declare_test_vars();
         *repl_state_presentation_mut()->wrap_at_comma = 1;
         *repl_state_presentation_mut()->show_vertex_indices = 0;
-        repl_state_viewport_set_size(360, repl_state_viewport()->window_h);
+        repl_state_viewport_set_size(360, repl_state_viewport().window_h);
         g_panel_frac = 0.75f;
 
         memset(&repl_state_document_cmds_mut()[0], 0, sizeof(repl_state_document_cmds_mut()[0]));
@@ -268,7 +268,7 @@ int main(void) {
         declare_test_vars();
         *repl_state_presentation_mut()->wrap_at_comma = 1;
         *repl_state_presentation_mut()->show_vertex_indices = 0;
-        repl_state_viewport_set_size(360, repl_state_viewport()->window_h);
+        repl_state_viewport_set_size(360, repl_state_viewport().window_h);
         g_panel_frac = 0.75f;
 
         memset(&repl_state_document_cmds_mut()[0], 0, sizeof(repl_state_document_cmds_mut()[0]));
@@ -310,7 +310,7 @@ int main(void) {
         declare_test_vars();
         *repl_state_presentation_mut()->wrap_at_comma = 1;
         *repl_state_presentation_mut()->show_vertex_indices = 0;
-        repl_state_viewport_set_size(260, repl_state_viewport()->window_h);
+        repl_state_viewport_set_size(260, repl_state_viewport().window_h);
         g_panel_frac = 0.75f;
 
         memset(&repl_state_document_cmds_mut()[0], 0, sizeof(repl_state_document_cmds_mut()[0]));
