@@ -2700,22 +2700,64 @@ int main() {
     /* Extra coverage: Mouse wheel */
 #ifndef USE_GLUT
     {
+        const int layouts[] = {
+            CODE_PANEL_LAYOUT_LEFT,
+            CODE_PANEL_LAYOUT_TOP,
+            CODE_PANEL_LAYOUT_BOTTOM
+        };
+        const char *const layout_names[] = {
+            "left",
+            "top",
+            "bottom"
+        };
+
+        for (int layout_idx = 0; layout_idx < 3; layout_idx++) {
+            int cp_x, cp_y, cp_w, cp_h;
+            int scene_x, scene_y, scene_w, scene_h;
+            int code_x, code_y;
+            int layout = layouts[layout_idx];
+            char label[128];
+
+            repl_reset_state();
+            repl_state_viewport_set_size(1000, 1000);
+            repl_state_code_panel_mut()->scroll = 0;
+            repl_state_presentation_mut()->code_panel_layout = layout;
+
+            repl_layout_code_panel_rect(&cp_x, &cp_y, &cp_w, &cp_h);
+            repl_layout_scene_rect(&scene_x, &scene_y, &scene_w, &scene_h);
+
+            code_x = cp_x + cp_w / 2;
+            code_y = repl_state_viewport().window_h - (cp_y + cp_h / 2);
+            scene_x += scene_w / 2;
+            scene_y = repl_state_viewport().window_h - (scene_y + scene_h / 2);
+
+            repl_mousewheel_func(0, 1, code_x, code_y);
+            snprintf(label, sizeof(label),
+                     "mousewheel: %s code panel scrolled down",
+                     layout_names[layout_idx]);
+            ASSERT_INT(label, repl_state_code_panel().scroll, -1);
+
+            repl_mousewheel_func(0, -1, code_x, code_y);
+            snprintf(label, sizeof(label),
+                     "mousewheel: %s code panel scrolled up",
+                     layout_names[layout_idx]);
+            ASSERT_INT(label, repl_state_code_panel().scroll, 0);
+
+            repl_mousewheel_func(0, 1, scene_x, scene_y);
+            snprintf(label, sizeof(label),
+                     "mousewheel: %s scene wheel leaves code scroll unchanged",
+                     layout_names[layout_idx]);
+            ASSERT_INT(label, repl_state_code_panel().scroll, 0);
+        }
+
         repl_reset_state();
         repl_state_viewport_set_size(1000, 1000);
         repl_state_code_panel_mut()->scroll = 0;
+        repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_HIDDEN;
 
-        /* Scroll in code panel (x < 300) */
-        repl_mousewheel_func(0, 1, 100, 500);
-        ASSERT_INT("mousewheel: code panel scrolled down", repl_state_code_panel().scroll, -1);
-
-        repl_mousewheel_func(0, -1, 100, 500);
-        ASSERT_INT("mousewheel: code panel scrolled up", repl_state_code_panel().scroll, 0);
-
-        /* Scroll in scene panel (x > 300) */
-        /* This should affect camera zoom. */
         repl_mousewheel_func(0, 1, 500, 500);
-        /* Camera zoom velocity is updated, hard to assert directly without more mocks,
-         * but we covered the branch. */
+        ASSERT_INT("mousewheel: hidden layout leaves code scroll unchanged",
+                   repl_state_code_panel().scroll, 0);
     }
 #endif
 
@@ -2750,12 +2792,16 @@ int main() {
 
         /* Pressing a printable key should restore it. */
         repl_keyboard_func('a', 0, 0);
-        ASSERT_INT("key restores hidden panel", repl_state_presentation().code_panel_layout, CODE_PANEL_LAYOUT_LEFT);
+        ASSERT_INT("key restores hidden panel",
+                   repl_state_presentation().code_panel_layout,
+                   CODE_PANEL_LAYOUT_LEFT);
 
         repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_HIDDEN;
         /* Pressing a special key should restore it. */
         repl_special_func(GLUT_KEY_UP, 0, 0);
-        ASSERT_INT("special key restores hidden panel", repl_state_presentation().code_panel_layout, CODE_PANEL_LAYOUT_LEFT);
+        ASSERT_INT("special key restores hidden panel",
+                   repl_state_presentation().code_panel_layout,
+                   CODE_PANEL_LAYOUT_LEFT);
     }
 
     /* Extra coverage: Commenting Func/If blocks */

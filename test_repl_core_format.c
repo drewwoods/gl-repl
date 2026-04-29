@@ -185,6 +185,7 @@ int main(void) {
         declare_test_vars();
         repl_state_presentation_mut()->wrap_at_comma = 1;
         repl_state_presentation_mut()->show_vertex_indices = 0;
+        repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT;
         repl_state_viewport_set_size(360, repl_state_viewport().window_h);
         g_panel_frac = 0.75f;
 
@@ -225,6 +226,7 @@ int main(void) {
         declare_test_vars();
         repl_state_presentation_mut()->wrap_at_comma = 1;
         repl_state_presentation_mut()->show_vertex_indices = 0;
+        repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT;
         repl_state_viewport_set_size(360, repl_state_viewport().window_h);
         g_panel_frac = 0.75f;
 
@@ -268,6 +270,7 @@ int main(void) {
         declare_test_vars();
         repl_state_presentation_mut()->wrap_at_comma = 1;
         repl_state_presentation_mut()->show_vertex_indices = 0;
+        repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT;
         repl_state_viewport_set_size(360, repl_state_viewport().window_h);
         g_panel_frac = 0.75f;
 
@@ -340,41 +343,63 @@ int main(void) {
     }
 
     {
+        const int layouts[] = {
+            CODE_PANEL_LAYOUT_TOP,
+            CODE_PANEL_LAYOUT_BOTTOM,
+            CODE_PANEL_LAYOUT_HIDDEN
+        };
+        const char *const layout_names[] = {
+            "top",
+            "bottom",
+            "hidden"
+        };
         const char *src = "  glVertex3f(1, 2, 3);";
         char visual_buf[8192];
-        FILE *dump_f = fopen(tmp_dump_path, "w");
 
-        repl_reset_state();
-        declare_test_vars();
-        repl_state_presentation_mut()->wrap_at_comma = 1;
-        repl_state_presentation_mut()->show_vertex_indices = 0;
-        repl_state_viewport_set_size(360, 800);
-        g_panel_frac = 0.5f;
-        repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_BOTTOM;
+        for (int layout_idx = 0; layout_idx < 3; layout_idx++) {
+            FILE *dump_f = fopen(tmp_dump_path, "w");
 
-        memset(&repl_state_document_cmds_mut()[0], 0, sizeof(repl_state_document_cmds_mut()[0]));
-        repl_state_document_cmds_mut()[0].type = CMD_VERTEX3F;
-        repl_state_document_cmds_mut()[0].valid = 1;
-        strncpy(repl_state_document_cmds_mut()[0].source, src, sizeof(repl_state_document_cmds_mut()[0].source) - 1);
-        repl_state_document_cmds_mut()[0].source[sizeof(repl_state_document_cmds_mut()[0].source) - 1] = '\0';
-        repl_state_document_count_set(1);
+            repl_reset_state();
+            declare_test_vars();
+            repl_state_presentation_mut()->wrap_at_comma = 1;
+            repl_state_presentation_mut()->show_vertex_indices = 0;
+            repl_state_viewport_set_size(360, 800);
+            g_panel_frac = 0.5f;
+            repl_state_presentation_mut()->code_panel_layout = layouts[layout_idx];
 
-        ASSERT_TRUE("open bottom-layout visual dump file", dump_f != NULL);
-        if (dump_f) {
-            repl_dump_code_panel_visual_text(dump_f);
-            fclose(dump_f);
-        }
+            memset(&repl_state_document_cmds_mut()[0], 0, sizeof(repl_state_document_cmds_mut()[0]));
+            repl_state_document_cmds_mut()[0].type = CMD_VERTEX3F;
+            repl_state_document_cmds_mut()[0].valid = 1;
+            strncpy(repl_state_document_cmds_mut()[0].source, src, sizeof(repl_state_document_cmds_mut()[0].source) - 1);
+            repl_state_document_cmds_mut()[0].source[sizeof(repl_state_document_cmds_mut()[0].source) - 1] = '\0';
+            repl_state_document_count_set(1);
 
-        dump_f = fopen(tmp_dump_path, "r");
-        ASSERT_TRUE("read bottom-layout visual dump file", dump_f != NULL);
-        if (dump_f) {
-            size_t n = fread(visual_buf, 1, sizeof(visual_buf) - 1, dump_f);
-            visual_buf[n] = '\0';
-            fclose(dump_f);
-            ASSERT_TRUE("bottom visual dump uses full panel width",
-                        strstr(visual_buf, "--- source ---\n  glVertex3f(1, 2, 3);\n") != NULL);
-            ASSERT_TRUE("bottom visual dump does not use side-panel width",
-                        strstr(visual_buf, "--- source ---\n  glVertex3f(1,\n") == NULL);
+            ASSERT_TRUE("open layout visual dump file", dump_f != NULL);
+            if (dump_f) {
+                repl_dump_code_panel_visual_text(dump_f);
+                fclose(dump_f);
+            }
+
+            dump_f = fopen(tmp_dump_path, "r");
+            ASSERT_TRUE("read layout visual dump file", dump_f != NULL);
+            if (dump_f) {
+                size_t n = fread(visual_buf, 1, sizeof(visual_buf) - 1, dump_f);
+                visual_buf[n] = '\0';
+                fclose(dump_f);
+                {
+                    char label[128];
+                    snprintf(label, sizeof(label),
+                             "%s visual dump keeps source on one row",
+                             layout_names[layout_idx]);
+                    ASSERT_TRUE(label,
+                                strstr(visual_buf, "--- source ---\n  glVertex3f(1, 2, 3);\n") != NULL);
+                    snprintf(label, sizeof(label),
+                             "%s visual dump does not use side-panel width",
+                             layout_names[layout_idx]);
+                    ASSERT_TRUE(label,
+                                strstr(visual_buf, "--- source ---\n  glVertex3f(1,\n") == NULL);
+                }
+            }
         }
         repl_state_presentation_mut()->code_panel_layout = CFG_DEFAULT_CODE_PANEL_LAYOUT;
         g_panel_frac = CFG_DEFAULT_PANEL_FRAC;

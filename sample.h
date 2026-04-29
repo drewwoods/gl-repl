@@ -89,7 +89,7 @@ typedef enum {
 #define CFG_DEFAULT_LINE_SMOOTH       0
 #define CFG_DEFAULT_ATTENUATE_POINTS  1
 #define CFG_DEFAULT_WRAP_AT_COMMA     1
-#define CFG_DEFAULT_CODE_PANEL_LAYOUT CODE_PANEL_LAYOUT_LEFT
+#define CFG_DEFAULT_CODE_PANEL_LAYOUT CODE_PANEL_LAYOUT_TOP
 #define CFG_DEFAULT_PANEL_FRAC        0.45f
 
 /* Grid major tick spacing. Values live in g_grid_major_steps[] and
