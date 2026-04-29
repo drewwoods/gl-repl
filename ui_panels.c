@@ -247,8 +247,7 @@ static void render_active_input_rows(int panel_w, int text_x, int idx_x,
                     glDisable(GL_BLEND);
                 }
 
-                *cp->cursor_px = cursor_x;
-                *cp->cursor_py = *io_line_y;
+                repl_action_set_cursor_pixel(cursor_x, *io_line_y);
             }
 
             *io_line_y -= LINE_H;
