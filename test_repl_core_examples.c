@@ -741,7 +741,7 @@ int main(int argc, char **argv) {
         ASSERT_TRUE("mixed cfg camera disallowed accum aa ignored",
                     g_accum_aa_enabled == 1);
         ASSERT_TRUE("mixed cfg camera disallowed layout ignored",
-                    repl_state_presentation().code_panel_layout == CODE_PANEL_LAYOUT_LEFT);
+                    repl_state_presentation().code_panel_layout == CFG_DEFAULT_CODE_PANEL_LAYOUT);
         ASSERT_TRUE("mixed cfg camera rx preset",
                     fabsf(repl_state_camera().rx - 11.0f) < 1e-4f);
         ASSERT_TRUE("mixed cfg camera ry preset",
