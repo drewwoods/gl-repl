@@ -627,6 +627,7 @@ static void load_initial_commands(const char *import_file) {
             }
         } else if (repl_export_load_from_file(import_file)) {
             repl_state_edit_line_set(repl_state_document_count());
+            repl_scenes_activate_home_slot();
             scroll_to_display_function();
             return;
         }

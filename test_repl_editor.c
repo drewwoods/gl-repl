@@ -34,7 +34,9 @@
 #define parse_workspace_header_line    repl_state_parse_workspace_header_line
 
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 
 static int g_run = 0;
 static int g_pass = 0;
@@ -2779,8 +2781,31 @@ int main() {
         assert_status_contains("Ctrl+P dump", "Dumped");
 
         /* Ctrl+S (Save) */
-        repl_keyboard_func(19, 0, 0);
-        assert_status_contains("Ctrl+S save", "Saved");
+        {
+            /* Keep the default output path inside a throwaway directory so
+             * the test never touches repo-root output.c. */
+            char cwd[1024];
+            char temp_dir[] = "/tmp/test_repl_editor_output.XXXXXX";
+            char *made_dir = mkdtemp(temp_dir);
+            int have_cwd = getcwd(cwd, sizeof(cwd)) != NULL;
+
+            ASSERT_TRUE("mkdtemp default output dir", made_dir != NULL);
+            ASSERT_TRUE("getcwd before Ctrl+S save", have_cwd);
+            if (made_dir && have_cwd) {
+                int cd_ok = chdir(made_dir);
+                ASSERT_INT("chdir default output dir", cd_ok, 0);
+                if (cd_ok == 0) {
+                    repl_keyboard_func(19, 0, 0);
+                    assert_status_contains("Ctrl+S save", "Saved");
+                    ASSERT_INT("default output saved in temp dir",
+                               access("output.c", F_OK), 0);
+                    unlink("output.c");
+                    ASSERT_INT("restore cwd after Ctrl+S save",
+                               chdir(cwd), 0);
+                }
+                rmdir(made_dir);
+            }
+        }
 
         g_mock_modifiers = saved_mods;
     }

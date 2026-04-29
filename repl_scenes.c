@@ -504,7 +504,11 @@ void repl_scenes_mark_example_active(void) {
 }
 
 void repl_scenes_activate_home_slot(void) {
-    save_scene_to_slot(0, USER_SCENE_HOME_NAME);
+    const char *name = g_pending_scene_name[0] ? g_pending_scene_name
+                                               : USER_SCENE_HOME_NAME;
+    char unique[USER_SCENE_NAME_MAX];
+    derive_unique_scene_name(unique, sizeof(unique), name, 0);
+    save_scene_to_slot(0, unique);
     g_active_user_scene = 0;
     g_example_idx       = -1;
 }
