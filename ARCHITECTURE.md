@@ -366,35 +366,61 @@ or project-wide `include/` only when broadly reusable.
 
 ## Open Refactor Edges
 
-Completed: controller extraction, explicit `SceneRenderConfig` handoff,
-focus/guide snapshot construction, scene-local accumulation jitter, and
-app-shell shim removal (`sample.c` calls `imrepl_ctrl_*` directly).
+Completed (Phase 1 + most of Phase 2):
 
-Phase 2 follow-ups are detailed in `feature/push-architecture-refinement.md`
-(recommendations R1–R12). Summary:
+- ✅ Controller extraction, explicit `SceneRenderConfig` handoff,
+  focus/guide snapshot construction, scene-local accumulation jitter, and
+  app-shell shim removal (`sample.c` calls `imrepl_ctrl_*` directly).
+- ✅ **R1** — Replay/HUD migration: controller builds `ReplayFadePlan`; scene
+  iterates it; 2D HUD lives in `ui_replay_hud.c`. Scene files contain zero
+  `repl_replay_*` and `repl_state_*` calls.
+- ✅ **R2** — UI → REPL mutation holes closed: `ui_color_picker`, `ui_panels`,
+  `ui_help_overlay` route mutations through store/action APIs. UI files have
+  zero `_mut()` calls.
+- ✅ **R3** — `repl_layout.c` / `repl_layout.h` own `repl_layout_scene_rect` /
+  `repl_layout_code_panel_rect`; non-UI callers include `repl_layout.h`.
+- ✅ **R4** — `imrepl_ctrl.c` no longer includes `repl_core_internal.h`;
+  `repl_pipeline.h` exists; `repl_eval_predef_view()` hides
+  `g_predef_vars`. R4d (public-API audit) landed; only `bench_repl.c`
+  retains a `repl_core_internal.h` include outside the test/REPL set.
+- ✅ **R5** — `SceneRenderConfig` slimmed and reorganized into labeled
+  sections; HUD fields moved to `UiReplayHudState`; `ReplayFadePlan` and
+  accum-AA fields landed.
+- ✅ **R6** — `repl_state.h` split into `repl_state_views.h` (read-only) and
+  `repl_state_owners.h` (mutating); scene/UI files include only the views
+  header; `repl_state.h` is a compatibility shim.
+- ✅ **R7** — `check-pure-scene-no-repl-state`, `check-views-no-owners`,
+  `check-ui-no-repl-state-mut`, and the `check-state-ownership` umbrella
+  are wired into `make test`.
 
-1. **R1** — replay/HUD migration: controller builds `ReplayFadePlan`; scene
-   iterates it; 2D HUD lives in `ui_replay_hud.c`.
-2. **R2** — UI → REPL mutation holes: `ui_color_picker`, `ui_panels`,
-   `ui_help_overlay` route mutations through store/action APIs.
-3. **R3** — `repl_layout.c` / `repl_layout.h` now own
-  `repl_layout_scene_rect` / `repl_layout_code_panel_rect`; non-UI callers
-  include `repl_layout.h`.
-4. **R4** — stop `imrepl_ctrl.c` from including `repl_core_internal.h`; create
-   `repl_pipeline.h`; add `repl_eval_predef_view()` to hide globals.
-5. **R5** — reorganize `SceneRenderConfig` after R1 removes HUD fields.
-6. **R6** — split `repl_state.h` into `repl_state_views.h` (read-only) and
-   `repl_state_owners.h` (mutating); `scene_*.c` and `ui_*.c` migrate to the
-   views header.
-7. **R7** — add `check-pure-scene-no-repl-state` and `check-views-no-owners`
-   grep guards to `make test`.
-8. **R11** — harden file-level grep guards with transitional allowlists; shrink
-   them as R2/R4/R6 land.
-9. **R10** — dissolve `repl_core.c` into natural owners in five phases.
-10. **R12** — consolidate truly public REPL APIs into one concise public
-    header, grouped by implementation owner; keep internals out.
-11. **R8** — rename `sample.c` / `sample.h` to `imrepl.c` / `imrepl.h`
-   (mechanical, last).
+Still open:
+
+- ⚠️ **R10-phase1** — Reassess: the GLUT decls in `repl_core.h`
+  (`repl_keyboard_func`, `repl_special_func`, …) are not stale — they are
+  implemented in `repl_editor.c` and called from `imrepl_ctrl.c` for
+  cross-layer input dispatch. Decide between leaving them in `repl_core.h`
+  until R10-phase5 dissolves it or moving them to `repl_editor.h`.
+- ❌ **R10-phase2..phase5** — Dissolve `repl_core.c` (~663 lines): move
+  `repl_parse_and_normalize*` / `normalize_with_indent` /
+  `parse_and_normalize_impl` to `repl_parser.c`; move `collect_visible_vars`
+  to `repl_source_scope.c`; extract `repl_reformat.c`; move
+  `load_initial_commands` / `scroll_to_display_function` to `repl_scenes.c`;
+  move `current_begin_mode` / `count_vertices` to `repl_executor.c`; move
+  debug dumps to `repl_state.c` or `repl_debug.c`.
+- ❌ **R11 (tail)** — Shrink the surviving allowlists, mainly the
+  `bench_repl.c` exception for `repl_core_internal.h`.
+- ❌ **R12** — Consolidate truly public REPL APIs into one concise public
+  header, grouped by implementation owner; keep internals out.
+- ❌ **R8** — Rename `sample.c` / `sample.h` to `imrepl.c` / `imrepl.h`
+  (mechanical; last).
+- ❌ **R9** — Optional: split `repl_export.c`.
+
+A parallel state-ownership track lives in
+`feature/gold-standard-state-ownership.md`. Stage 0/1 are complete; Stage 2
+(by-value getters) is broadly applied with a few view-struct slices
+remaining; Stages 4 (cursor-pixel `Ui*Output` actualization), 6
+(`repl_undo.c` consumes `repl_state_capture()`), and 7 (UI snapshot purity)
+are still open.
 
 ## Header Documentation Standard
 

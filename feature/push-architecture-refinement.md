@@ -28,21 +28,59 @@ mechanical cleanup. Replay fade simplification and broader input/UI coupling
 cleanup remain follow-ups; the 2D replay HUD relocation is complete.
 
 Implementation status: Phase 1 steps 1-8 are complete and merged. Post-Phase 1
-cleanup (app-shell shim removal) has also been completed. Phase 2 is in active
-progress as of 2026-04-28:
+cleanup (app-shell shim removal) has also been completed. Phase 2 status as of
+2026-04-29:
 
-- ✅ R1 (Replay/HUD migration): Complete
-- ✅ R2 (UI → REPL mutation hole): Complete
-- ✅ R3 (Extract layout geometry): Complete
-- ⚠️ R4 (Controller off repl_core_internal.h): In progress
-  - R4a/R4b complete; R4c is complete for production code with `bench_repl.c` intentionally out of scope; R4d is in progress
-- ⚠️ R5: focused scene-render slice complete; repo-wide validation pending
-- ✅ R6 (Split state headers by ownership): Complete
-- ✅ R7 (View-side read guards): Complete
-- ❌ R8–R12: Not started
+- ✅ R1 (Replay/HUD migration): Complete — `scene_*.c` files contain zero
+  `repl_state_*` and `repl_replay_*` calls; `ui_replay_hud.c` owns the HUD;
+  `ReplayFadePlan` lives on `SceneRenderConfig`; accumulation-AA fields are
+  on the config; `repl_restore_predef_values()` is exported via
+  `repl_pipeline.h`.
+- ✅ R2 (UI → REPL mutation hole): Complete — color picker, panels, and
+  help overlay route mutations through `repl_command_store`/`repl_actions`/
+  `repl_replay_toggle_play_pause()`; `check-ui-no-repl-state-mut` passes.
+- ✅ R3 (Extract layout geometry): Complete — `repl_layout.h/c` own
+  `repl_layout_scene_rect` / `repl_layout_code_panel_rect`.
+- ⚠️ R4 (Controller off repl_core_internal.h): Mostly complete
+  - ✅ R4a (`repl_pipeline.h` created, controller migrated)
+  - ✅ R4b (`repl_eval_predef_view()` accessor added)
+  - ⚠️ R4c — controller is clean; `bench_repl.c` is the only remaining
+    non-`repl_*` non-test file with a `repl_core_internal.h` include and is
+    intentionally out of scope for now.
+  - ✅ R4d — public API audit landed (`check-public-api-usage` Makefile target,
+    misplaced declarations relocated).
+- ✅ R5 (Slim and reorganize `SceneRenderConfig`): Complete — the six HUD-only
+  fields are gone (now on `UiReplayHudState`), `ReplayFadePlan` and accum-AA
+  fields are present, and the struct is grouped into labeled sections.
+- ✅ R6 (Split state headers by ownership): Complete — `repl_state_views.h`
+  and `repl_state_owners.h` exist, `repl_state.h` is a compatibility shim,
+  and scene/UI files include `repl_state_views.h` only.
+- ✅ R7 (View-side read guards): Complete — `check-pure-scene-no-repl-state`
+  and `check-ui-no-repl-state-mut` are wired into `make test`.
+- ⚠️ R10-phase1 (delete stale GLUT decls): Out of date — the decls
+  (`repl_keyboard_func` / `repl_special_func` / `repl_mouse_func` /
+  `repl_motion_func` / `repl_passive_motion_func` / `repl_mousewheel_func` /
+  `repl_timer_func`) in `repl_core.h` are *not* stale: they are implemented
+  in `repl_editor.c` and called from `imrepl_ctrl.c` for the cross-layer
+  input routing chain. The empty `/* GLUT callbacks */` section in
+  `repl_core.c` is, in practice, gone. Re-evaluate R10-phase1 — the original
+  framing assumed those decls were dead post shim-removal; they are alive.
+- ❌ R8 (sample → imrepl rename): Not started.
+- ❌ R9 (split repl_export.c): Not started — optional.
+- ❌ R10-phase2+ (dissolve repl_core.c): Not started — `repl_core.c` (663
+  lines) still contains `repl_parse_and_normalize*`, `normalize_with_indent`,
+  `repl_reformat_commands`, `collect_visible_vars`, `load_initial_commands`,
+  `scroll_to_display_function`, `repl_debug_dump_*`, `current_begin_mode`,
+  `count_vertices`, and several thin wrappers.
+- ❌ R11 (harden file-level boundary checks): Partially landed — the
+  `check-state-boundaries` / `check-controller-boundaries` /
+  `check-views-no-owners` Makefile targets are wired into `test`. The full
+  allowlist-shrinking pass described below is not done.
+- ❌ R12 (consolidate public REPL APIs into one header): Not started.
 
-Some pieces have landed, but the strict end-state checks described below should
-not be assumed to pass until their prerequisite Phase 2 slices are complete.
+Most strict end-state checks now pass; remaining work is R8/R9/R10/R12 and
+the shrinking-allowlist tail of R11. State-ownership work has continued in a
+parallel track tracked by `feature/gold-standard-state-ownership.md`.
 
 ## Review Corrections
 
@@ -1882,34 +1920,38 @@ are promoted.
 R12 should wait until R4d and most of R10 have settled; otherwise the combined
 header will just preserve the current confusion in a bigger file.
 
-### Phase 2 Recommendations Status (2026-04-28)
+### Phase 2 Recommendations Status (2026-04-29)
 
-Implementation is actively in progress. Current completion:
+Most of Phase 2 has now landed. Current completion:
 
 | Recommendation | Status | Notes |
 |---|---|---|
-| **R1** — Replay/HUD migration | ✅ Complete | R1a, R1b, R1c all done; scene has zero `repl_replay_*` calls |
-| **R2** — UI → REPL mutation hole | ✅ Complete | R2a–R2d all done; UI files route mutations through actions/stores |
+| **R1** — Replay/HUD migration | ✅ Complete | R1a, R1b, R1c all done; scene has zero `repl_replay_*` and `repl_state_*` calls |
+| **R2** — UI → REPL mutation hole | ✅ Complete | R2a–R2d all done; `check-ui-no-repl-state-mut` passes |
 | **R3** — Extract layout geometry | ✅ Complete | `repl_layout.h/c` created; ~34 call sites updated |
-| **R4** — Controller off `repl_core_internal.h` | ⚠️ Partial | R4a/R4b done; R4c in progress (controller ✅, 2 out-of-policy includes remain); R4d pending |
-| **R5** — Slim `SceneRenderConfig` | ❌ Not started | Requires R1 ✅ |
-| **R6** — Split typed-state facade | ❌ Not started | Requires R1 ✅ + R2 ✅ |
-| **R7** — View-side grep guards | ✅ Complete | Requires R6 |
-| **R11** — Harden file-level guards | ❌ Not started | Can start now; shrink allowlists as R2/R4/R6 land |
-| **R10-phase1** — Delete stale GLUT decls | ❌ Not started | Zero-risk, should be done first of R10 phases |
-| **R10-phase2+** — Dissolve `repl_core.c` | ❌ Not started | Phased; depends on R4c completion |
-| **R12** — Single public REPL header | ❌ Not started | Requires R4d public/private audit + R10 responsibility moves |
-| **R8** — `sample → imrepl` rename | ❌ Not started | Mechanical; defer until after R5 |
+| **R4** — Controller off `repl_core_internal.h` | ⚠️ Mostly complete | R4a/R4b/R4d done; R4c clean for controller; only `bench_repl.c` remains (intentional, R4c-out-of-scope) |
+| **R5** — Slim `SceneRenderConfig` | ✅ Complete | Six HUD fields removed (now on `UiReplayHudState`); `ReplayFadePlan` + accum-AA fields landed; struct reorganized into labeled sections |
+| **R6** — Split typed-state facade | ✅ Complete | `repl_state_views.h` / `repl_state_owners.h` split; `repl_state.h` is a shim |
+| **R7** — View-side grep guards | ✅ Complete | `check-pure-scene-no-repl-state` and `check-ui-no-repl-state-mut` wired into `make test` |
+| **R11** — Harden file-level guards | ⚠️ Partial | Core guards live in Makefile and `make test`; shrinking allowlists for the remaining `bench_repl.c` exception still pending |
+| **R10-phase1** — Delete stale GLUT decls | ⚠️ Reassess | Original premise is wrong: the "stale" decls in `repl_core.h` (`repl_keyboard_func` etc.) are actually live — `imrepl_ctrl.c` calls them as the cross-layer input dispatch. They should move to `repl_editor.h` (or stay in `repl_core.h` until R10-phase5), not be deleted. |
+| **R10-phase2+** — Dissolve `repl_core.c` | ❌ Not started | `repl_core.c` is 663 lines: parse+normalize, reformat, scope queries, startup, debug dumps remain |
+| **R12** — Single public REPL header | ❌ Not started | Wait for R10 to finish |
+| **R8** — `sample → imrepl` rename | ❌ Not started | Mechanical; do last |
 | **R9** — Optional: split `repl_export.c` | ❌ Not started | Module hygiene only; skip if not painful |
 
 **Next recommended steps:**
-1. Complete R4c by removing the out-of-policy `repl_core_internal.h` includes
-   from `bench_repl.c` and `ui_panels.c` or documenting them as temporary R11
-   exceptions.
-2. Start R4d and audit `repl_*.h` declarations so public headers do not absorb
-   implementation-only seams.
-3. Start R5 (slim `SceneRenderConfig`) — unblocked by R1 ✅
-4. Start R6 (split state facade) — unblocked by R1 ✅ + R2 ✅
+1. Re-evaluate R10-phase1: the GLUT `repl_*_func` decls are not stale. Either
+   (a) leave them in `repl_core.h` until R10-phase5 dissolves it, or
+   (b) move them to `repl_editor.h` since `repl_editor.c` implements them and
+   `imrepl_ctrl.c` is the only caller. Pick one and update the plan.
+2. Start R10-phase2: move `repl_parse_and_normalize*`, `normalize_with_indent`,
+   `repl_normalize_from_parsed`, and `parse_and_normalize_impl` into
+   `repl_parser.c`; move `collect_visible_vars` into `repl_source_scope.c`.
+3. Start R10-phase3 (extract `repl_reformat.c`).
+4. Continue gold-standard state-ownership Stage 2 conversions in parallel
+   (see `feature/gold-standard-state-ownership.md`); much of the by-value
+   getter work is already done.
 
 ## Verification
 

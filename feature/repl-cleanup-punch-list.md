@@ -1,5 +1,35 @@
 # REPL Refactor Punch List
 
+## Status (2026-04-29)
+
+Everything in Tiers 1, 2, and 3 of this punch list is complete:
+
+- ✅ Tier 1 — Mechanical extractions (help overlay, variable panel,
+  autocomplete popup, inline rename, variable dragging, color picker,
+  menu/dropdown).
+- ✅ Tier 2 — Pattern consolidation (data-driven grid/axes themes,
+  vertex overlay visitor, scene helper GL state guards, backdrop /
+  light setup / polygon outline / scene-edit guides extraction,
+  widened render config / frame context, workspace header table,
+  ordered importer handlers, typed export scaffold).
+- ✅ Tier 3 — Structural extractions (parse_command → repl_parser,
+  repl_flatten_program API, command-store escape hatches, prof
+  module split, GL/GLUT segregation 11a–11f, layer-coupling guards).
+- ✅ Strategic completions — function naming consistency, comprehensive
+  per-header documentation.
+
+The active follow-up tracks are now:
+
+- `feature/push-architecture-refinement.md` — R10 phases 2–5 (dissolve
+  `repl_core.c`), R11 allowlist shrink, R12 (single public REPL header),
+  R8 (sample → imrepl rename).
+- `feature/gold-standard-state-ownership.md` — Stage 4 cursor-pixel
+  output actualization, Stage 6 undo on `repl_state_capture()`, Stage 7
+  UI snapshot purity.
+
+This punch list is preserved as historical context; new tactical work
+should land against the active feature docs above.
+
 ## Context
 
 The companion doc `feature/repl-cleanup.md` is the strategic 10-stage

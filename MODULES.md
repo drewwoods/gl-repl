@@ -320,24 +320,37 @@ render-neutral helpers belong in explicit shared headers.
 
 ## Open Refactor Edges
 
-Completed: controller extraction, explicit `SceneRenderConfig` handoff,
-focus/guide snapshot construction, scene-local accumulation jitter, and
-app-shell shim removal.
+Phase 1 is complete. Most of Phase 2 has now landed (R1, R2, R3, R4
+controller-side, R5, R6, R7). See
+`feature/push-architecture-refinement.md` for the per-recommendation
+status table.
 
-Phase 2 follow-ups are specified in `feature/push-architecture-refinement.md`.
-Suggested order:
+Remaining work, in suggested order:
 
 ```
-R10-phase1  delete stale GLUT decls from repl_core.h (zero risk, do first)
-R1          replay/HUD migration — highest leverage
-R2          UI → REPL mutation holes (parallel with R1)
-R3          extract repl_layout.c
-R5          slim SceneRenderConfig (requires R1)
-R6          split repl_state facade (requires R1 + R2)
-R7          add view-side grep guards
-R11         harden file-level grep guards; shrink allowlists as Phase 2 lands
-R4          controller off repl_core_internal.h
+R10-phase1  reassess: the "stale" GLUT decls in repl_core.h are actually
+            live (called from imrepl_ctrl.c). Decide whether to move them
+            to repl_editor.h or leave them until R10-phase5.
 R10-ph2-5   dissolve repl_core.c into natural owners
+            (parse+normalize → repl_parser.c, collect_visible_vars →
+             repl_source_scope.c, repl_reformat.c, startup → repl_scenes.c,
+             debug dumps → repl_state.c)
+R11 (tail)  shrink remaining allowlists (bench_repl.c repl_core_internal.h)
 R12         consolidate public REPL APIs into one concise repl.h
 R8          sample → imrepl rename (last, mechanical)
+R9          optional: split repl_export.c
 ```
+
+A parallel state-ownership track is tracked in
+`feature/gold-standard-state-ownership.md`:
+
+- Stage 0/1 (Makefile checks, `ReplRuntimeState` real, capture/restore) — ✅ done.
+- Stage 2 (by-value read getters) — ✅ pilot done; broadly applied.
+- Stage 3 (UI-facing leaf state) — ⚠️ mostly done.
+- Stage 4 (cursor-pixel `Ui*Output` actualization) — ⚠️ partial: action
+  helper exists, but the controller-actualized `UiPanelsOutput` pattern
+  is not in place.
+- Stage 5 (medium slices) — ⚠️ partial.
+- Stage 6 (`repl_undo` on top of `repl_state_capture()`) — ❌ not started.
+- Stage 7 (UI snapshot purity) — ❌ not started.
+- Stage 8 (collapse views/owners headers) — ❌ not started.
