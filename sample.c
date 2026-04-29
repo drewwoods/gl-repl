@@ -143,7 +143,7 @@ int main(int argc, char **argv) {
             print_usage(argv[0]);
             return 0;
         } else if (strcmp(argv[i], "--noaccum") == 0)
-            *repl_state_render()->use_accum = 0;
+            *repl_state_render().use_accum = 0;
         else if (strcmp(argv[i], "--no-audio") == 0)
             no_audio = 1;
         else if (strcmp(argv[i], "--dump-code") == 0)
@@ -168,7 +168,7 @@ int main(int argc, char **argv) {
 
     glutInit(&argc, argv);
     glutInitDisplayMode(GLUT_DOUBLE | GLUT_RGBA | GLUT_DEPTH | GLUT_MULTISAMPLE |
-                        (*repl_state_render()->use_accum ? GLUT_ACCUM : 0));
+                        (*repl_state_render().use_accum ? GLUT_ACCUM : 0));
     glutInitWindowSize(repl_state_viewport().window_w, repl_state_viewport().window_h);
     glutCreateWindow("OpenGL REPL - Display List Dynamic Rendering");
 

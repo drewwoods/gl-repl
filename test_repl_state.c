@@ -294,20 +294,20 @@ static void test_capture_restore_round_trip(void) {
                *repl_state_presentation()->focus_vertex_valid, 1);
     ASSERT_TRUE("presentation focus x restored",
                 repl_state_presentation()->focus_vertex[0] == 1.5f);
-    ASSERT_INT("render use accum restored", *repl_state_render()->use_accum, 0);
-    ASSERT_INT("render accum aa restored", *repl_state_render()->accum_aa_enabled, 0);
-    ASSERT_INT("render samples restored", *repl_state_render()->accum_samples, 8);
-    ASSERT_TRUE("render jitter restored", *repl_state_render()->accum_jitter_x == 0.25f);
-    ASSERT_INT("render light enabled restored", repl_state_render()->lights[1].enabled, 0);
+    ASSERT_INT("render use accum restored", *repl_state_render().use_accum, 0);
+    ASSERT_INT("render accum aa restored", *repl_state_render().accum_aa_enabled, 0);
+    ASSERT_INT("render samples restored", *repl_state_render().accum_samples, 8);
+    ASSERT_TRUE("render jitter restored", *repl_state_render().accum_jitter_x == 0.25f);
+    ASSERT_INT("render light enabled restored", repl_state_render().lights[1].enabled, 0);
     ASSERT_TRUE("render clear color restored",
-                repl_state_render()->clear_color[2] == 0.30f);
-    ASSERT_INT("replay active restored", *repl_state_replay()->active, 1);
-    ASSERT_INT("replay state restored", *repl_state_replay()->state, REPLAY_PAUSED);
-    ASSERT_INT("replay mode restored", *repl_state_replay()->mode, REPLAY_MODE_POLYGON);
-    ASSERT_INT("replay pc restored", *repl_state_replay()->pc, 9);
-    ASSERT_TRUE("replay speed restored", *repl_state_replay()->speed == 12.5f);
-    ASSERT_INT("replay src line restored", *repl_state_replay()->src_line_idx, 7);
-    ASSERT_INT("replay expand restored", *repl_state_replay()->expand_args, 0);
+                repl_state_render().clear_color[2] == 0.30f);
+    ASSERT_INT("replay active restored", *repl_state_replay().active, 1);
+    ASSERT_INT("replay state restored", *repl_state_replay().state, REPLAY_PAUSED);
+    ASSERT_INT("replay mode restored", *repl_state_replay().mode, REPLAY_MODE_POLYGON);
+    ASSERT_INT("replay pc restored", *repl_state_replay().pc, 9);
+    ASSERT_TRUE("replay speed restored", *repl_state_replay().speed == 12.5f);
+    ASSERT_INT("replay src line restored", *repl_state_replay().src_line_idx, 7);
+    ASSERT_INT("replay expand restored", *repl_state_replay().expand_args, 0);
     ASSERT_INT("active example restored", repl_state_scenes().active_example_idx, 3);
     ASSERT_STR("workspace restored",
                repl_state_workspace_dir(),
@@ -356,8 +356,8 @@ static void test_reset_all_restores_default_runtime(void) {
                 memcmp(&defaults, &reset_state, sizeof(defaults)) == 0);
     ASSERT_INT("reset_all help hidden", repl_state_help().visible, 0);
     ASSERT_INT("reset_all panel scroll", *repl_state_code_panel()->scroll, 0);
-    ASSERT_INT("reset_all replay mode", *repl_state_replay()->mode, REPLAY_MODE_VERTEX);
-    ASSERT_INT("reset_all replay expand", *repl_state_replay()->expand_args, 1);
+    ASSERT_INT("reset_all replay mode", *repl_state_replay().mode, REPLAY_MODE_VERTEX);
+    ASSERT_INT("reset_all replay expand", *repl_state_replay().expand_args, 1);
     ASSERT_STR("reset_all workspace dir", repl_state_workspace_dir(), "");
     ASSERT_INT("reset_all workspace header count",
                repl_state_import_export()->workspace_header_line_count,

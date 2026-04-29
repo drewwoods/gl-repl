@@ -288,9 +288,9 @@ int ui_panels_code_panel_apply_scroll_follow_for_test(int *out_follow_doc_line,
 /* Color picker lives in repl_color_picker.c. */
 
 void ui_panels_render_code_panel(void) {
-    const ReplReplayRuntimeState    *replay = repl_state_replay();
+    ReplReplayRuntimeState          replay = repl_state_replay();
     const ReplCodePanelRuntimeState *cp     = repl_state_code_panel();
-    const ReplRenderState           *rs     = repl_state_render();
+    ReplRenderState                 rs     = repl_state_render();
     prof_begin(PROF_CODE_PANEL_LAYOUT);
     prof_begin(PROF_CODE_PANEL_LAYOUT_GEOM);
     prof_begin(PROF_CODE_PANEL_LAYOUT_GEOM_SETUP);
@@ -507,9 +507,9 @@ void ui_panels_render_code_panel(void) {
                 repl_code_panel_document_wrap_iter_init(&wrap_it, display_text, text_x, panel_w);
                 while (repl_code_panel_document_wrap_iter_next(&wrap_it, &wrap_start, &wrap_len, &wrap_x)) {
                     if (cur >= *cp->scroll && cur < *cp->scroll + visible_lines) {
-                        if (*replay->active &&
-                            *replay->src_line_idx >= 0 &&
-                            i == *replay->src_line_idx) {
+                        if (*replay.active &&
+                            *replay.src_line_idx >= 0 &&
+                            i == *replay.src_line_idx) {
                             glEnable(GL_BLEND);
                             glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
                             glColor4f(0.10f, 0.35f, 0.15f, 0.55f);
@@ -569,10 +569,10 @@ void ui_panels_render_code_panel(void) {
                 }
                 file_line++;
 
-                if (*replay->active &&
-                    *replay->expand_args &&
-                    *replay->src_line_idx >= 0 &&
-                    i == *replay->src_line_idx &&
+                if (*replay.active &&
+                    *replay.expand_args &&
+                    *replay.src_line_idx >= 0 &&
+                    i == *replay.src_line_idx &&
                     document_cmds[i].has_vars &&
                     document_cmds[i].type != CMD_VAR_ASSIGN) {
                     int flat_idx = repl_replay_annotation_flat_cmd_for_source(i);
@@ -777,11 +777,11 @@ void ui_panels_render_code_panel(void) {
         tx += (int)strlen(ln_buf) * FONT_SMALL_W;
 
         /* AA indicator */
-        if (*rs->use_accum) {
+        if (*rs.use_accum) {
             STATUSBAR_SEP();
             char aa_buf[24];
-            if (*rs->accum_aa_enabled && *rs->accum_samples > 1)
-                snprintf(aa_buf, sizeof(aa_buf), "AA %dx", *rs->accum_samples);
+            if (*rs.accum_aa_enabled && *rs.accum_samples > 1)
+                snprintf(aa_buf, sizeof(aa_buf), "AA %dx", *rs.accum_samples);
             else
                 snprintf(aa_buf, sizeof(aa_buf), "AA off");
             gl2d_draw_string((float)tx, (float)text_y, aa_buf, FONT_SMALL);

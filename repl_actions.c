@@ -178,7 +178,7 @@ void repl_cfg_cycle_row(int row, int delta) {
         }
     }
 
-    if (*repl_state_replay()->active)
+    if (*repl_state_replay().active)
         repl_replay_stop();
 
     int new_value = repl_config_cycle(item->key, delta);

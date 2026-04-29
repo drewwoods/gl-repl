@@ -641,7 +641,7 @@ static int handle_rename_key_route(unsigned char key) {
 
 static int handle_config_menu_key_route(unsigned char key) {
     if (!repl_state_search().active && key == '`') {
-        if (*repl_state_replay()->active)
+        if (*repl_state_replay().active)
             repl_replay_stop();
         editor_restore_hidden_code_panel();
         ui_panels_open_config();
@@ -651,7 +651,7 @@ static int handle_config_menu_key_route(unsigned char key) {
 }
 
 static int handle_active_replay_key_route(unsigned char key) {
-    return *repl_state_replay()->active && repl_replay_handle_key(key);
+    return *repl_state_replay().active && repl_replay_handle_key(key);
 }
 
 static void restore_hidden_code_panel_for_key(unsigned char key) {
@@ -1501,7 +1501,7 @@ static void mouse_func(int button, int state, int x, int y) {
         if (repl_state_variable_panel().visible) {
             int row_idx;
             if (ui_variable_panel_hit(x, y, &row_idx)) {
-                if (*repl_state_replay()->active)
+                if (*repl_state_replay().active)
                     repl_replay_stop();
                 repl_var_drag_begin(row_idx, 0, x);
                 editor_request_redraw();
@@ -1558,7 +1558,7 @@ static void mouse_func(int button, int state, int x, int y) {
     if (button == GLUT_RIGHT_BUTTON && state == GLUT_DOWN && repl_state_variable_panel().visible) {
         int row_idx;
         if (ui_variable_panel_hit(x, y, &row_idx)) {
-            if (*repl_state_replay()->active)
+            if (*repl_state_replay().active)
                 repl_replay_stop();
             repl_var_drag_begin(row_idx, 1, x);
             editor_request_redraw();
@@ -1676,16 +1676,16 @@ static void timer_func(int value) {
     repl_advance_time(0.016f);
 
     {
-        const ReplReplayRuntimeState *replay = repl_state_replay();
+        ReplReplayRuntimeState replay = repl_state_replay();
 
-        if (*replay->active)
+        if (*replay.active)
             repl_replay_tick_fade_batches(0.016f);
 
-        if (*replay->active && *replay->state == REPLAY_PLAYING) {
-            *replay->accum += *replay->speed * 0.016f;
-            while (*replay->accum >= 1.0f &&
-                   *replay->state == REPLAY_PLAYING) {
-                *replay->accum -= 1.0f;
+        if (*replay.active && *replay.state == REPLAY_PLAYING) {
+            *replay.accum += *replay.speed * 0.016f;
+            while (*replay.accum >= 1.0f &&
+                   *replay.state == REPLAY_PLAYING) {
+                *replay.accum -= 1.0f;
                 repl_replay_advance();
             }
         }

@@ -137,18 +137,17 @@ void                    repl_state_viewport_set_size(int window_w, int window_h)
 
 const ReplPresentationState *repl_state_presentation(void);
 ReplPresentationState       *repl_state_presentation_mut(void);
-ReplPresentationState        repl_state_presentation_snapshot(void);
 void                         repl_state_presentation_reset_defaults(void);
 void                         repl_state_presentation_reset_example_defaults(void);
 
-const ReplRenderState *repl_state_render(void);
+ReplRenderState        repl_state_render(void);
 ReplRenderState       *repl_state_render_mut(void);
 void                   repl_state_render_reset_defaults(void);
 
-const ReplRenderDerivedState *repl_state_render_derived(void);
+ReplRenderDerivedState repl_state_render_derived(void);
 ReplRenderDerivedState       *repl_state_render_derived_mut(void);
 
-const ReplReplayRuntimeState *repl_state_replay(void);
+ReplReplayRuntimeState repl_state_replay(void);
 ReplReplayRuntimeState       *repl_state_replay_mut(void);
 void                          repl_state_replay_reset(void);
 

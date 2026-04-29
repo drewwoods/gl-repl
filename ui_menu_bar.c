@@ -563,7 +563,7 @@ void ui_menu_bar_render_search_overlay(int cp_x, int panel_w, int panel_top) {
 
 
 void ui_menu_bar_render(void) {
-    const ReplReplayRuntimeState *replay = repl_state_replay();
+    ReplReplayRuntimeState replay = repl_state_replay();
     int cp_x, cp_y, cp_w, cp_h;
     repl_layout_code_panel_rect(&cp_x, &cp_y, &cp_w, &cp_h);
     (void)cp_y;
@@ -617,7 +617,7 @@ void ui_menu_bar_render(void) {
         /* Right-side pins: Search | Replay (always rendered on top) */
         for (int i = 0; i < NUM_PIN_BTNS; i++) {
             int hover = (hover_pin == i);
-            int active = (i == PIN_REPLAY && *replay->active);
+            int active = (i == PIN_REPLAY && *replay.active);
             if (hover) {
                 glColor4f(0.165f, 0.165f, 0.165f, 1.0f);
                 glRectf((float)pin_x[i], (float)by, (float)pin_x[i] + (float)pin_w[i], (float)by + (float)bh);
@@ -645,9 +645,9 @@ void ui_menu_bar_render(void) {
             } else if (i == PIN_REPLAY) {
                 /* Green accent (#6fb36f), state icon + dynamic label */
                 const char *label = "Replay";
-                if (*replay->state == REPLAY_PLAYING) label = "Replaying";
-                else if (*replay->state == REPLAY_PAUSED) label = "Paused";
-                else if (*replay->state == REPLAY_DONE)   label = "Done";
+                if (*replay.state == REPLAY_PLAYING) label = "Replaying";
+                else if (*replay.state == REPLAY_PAUSED) label = "Paused";
+                else if (*replay.state == REPLAY_DONE)   label = "Done";
 
                 int icon_x = pin_x[i] + 10;
                 int icon_cy = by + bh / 2;
@@ -655,14 +655,14 @@ void ui_menu_bar_render(void) {
 
                 glColor3f(UI_ACCENT_GREEN_R, UI_ACCENT_GREEN_G, UI_ACCENT_GREEN_B);
 
-                if (*replay->state == REPLAY_PLAYING) {
+                if (*replay.state == REPLAY_PLAYING) {
                     /* Two vertical bars (pause glyph) */
                     float bw = 2.5f, gap = 2.0f;
                     float by0 = (float)icon_cy - (float)icon_sz * 0.5f;
                     float bh0 = (float)icon_sz;
                     glRectf((float)icon_x,                    by0, (float)icon_x + bw, by0 + bh0);
                     glRectf((float)icon_x + bw + gap,         by0, (float)icon_x + bw + gap + bw, by0 + bh0);
-                } else if (*replay->state == REPLAY_DONE) {
+                } else if (*replay.state == REPLAY_DONE) {
                     /* Square - run complete */
                     float sx = (float)icon_x;
                     float sy = (float)icon_cy - (float)icon_sz * 0.5f;

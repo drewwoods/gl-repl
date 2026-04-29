@@ -143,8 +143,8 @@ static void scene_execute_reset_adapter(void *user_data) {
 }
 
 static void imrepl_ctrl_build_scene_config(SceneRenderConfig *config) {
-    const ReplRenderState *render = repl_state_render();
-    const ReplReplayRuntimeState *replay = repl_state_replay();
+    ReplRenderState render = repl_state_render();
+    ReplReplayRuntimeState replay = repl_state_replay();
     const ReplPresentationState *presentation = repl_state_presentation();
     ReplCameraState cam = repl_state_camera();
     const ReplFlatProgramState *flat = repl_state_flat_program();
@@ -183,15 +183,15 @@ static void imrepl_ctrl_build_scene_config(SceneRenderConfig *config) {
     config->cam_motion_glow = cam.motion_glow;
 
     /* --- Rendering quality --- */
-    config->multisample_enabled = *render->multisample_enabled;
-    config->line_smooth_enabled = *render->line_smooth_enabled;
-    config->use_accum = *render->use_accum;
-    config->accum_aa_enabled = *render->accum_aa_enabled;
-    config->accum_samples = *render->accum_samples;
+    config->multisample_enabled = *render.multisample_enabled;
+    config->line_smooth_enabled = *render.line_smooth_enabled;
+    config->use_accum = *render.use_accum;
+    config->accum_aa_enabled = *render.accum_aa_enabled;
+    config->accum_samples = *render.accum_samples;
 
     /* --- Lighting --- */
     config->user_lighting_enabled = *flat->user_lighting_enabled;
-    memcpy(config->lights, render->lights, sizeof(config->lights));
+    memcpy(config->lights, render.lights, sizeof(config->lights));
     config->show_light_indicators = *presentation->show_light_indicators;
 
     /* --- Environment --- */
@@ -214,8 +214,8 @@ static void imrepl_ctrl_build_scene_config(SceneRenderConfig *config) {
     config->show_vnums = *presentation->show_vertex_labels;
     config->show_normals = *presentation->show_normal_vectors;
     config->show_vertex_outlines = *presentation->show_vertex_outlines;
-    config->replaying = *replay->active;
-    config->replay_mode = *replay->mode;
+    config->replaying = *replay.active;
+    config->replay_mode = *replay.mode;
     config->replay_tess_preview = config->replaying &&
                                   config->replay_mode == REPLAY_MODE_VERTEX;
     config->replay_vertex_points = config->replay_tess_preview;
@@ -233,9 +233,9 @@ static void imrepl_ctrl_build_scene_config(SceneRenderConfig *config) {
     config->focus = imrepl_ctrl_build_focus_vertex();
 
     /* Alpha scale boost for dark backgrounds */
-    bg_lum = 0.2126f * render->clear_color[0]
-           + 0.7152f * render->clear_color[1]
-           + 0.0722f * render->clear_color[2];
+        bg_lum = 0.2126f * render.clear_color[0]
+            + 0.7152f * render.clear_color[1]
+            + 0.0722f * render.clear_color[2];
     as_val = (0.10f + 0.02f) / fmaxf(bg_lum + 0.02f, 1e-4f);
     config->alpha_scale = as_val < 1.0f ? 1.0f : (as_val > 3.0f ? 3.0f : as_val);
 
@@ -250,7 +250,7 @@ void imrepl_ctrl_display_frame(void) {
     float live_predef_vals[MAX_PREDEF_VARS] = { 0 };
     FlatProgramView flat_program = repl_state_flat_program_view();
     int g_num_flat_cmds = flat_program.cmd_count;
-    const ReplReplayRuntimeState *replay = repl_state_replay();
+    ReplReplayRuntimeState replay = repl_state_replay();
     SceneRenderConfig scene_config;
 
     prof_frame_tick();
@@ -271,7 +271,7 @@ void imrepl_ctrl_display_frame(void) {
 
     saved_flat_count = g_num_flat_cmds;
     repl_copy_predef_values(live_predef_vals, MAX_PREDEF_VARS);
-    if (*replay->active)
+    if (*replay.active)
         repl_state_flat_program_set_count(repl_replay_prepare_frame(saved_flat_count));
 
     update_render_state_strings();
@@ -298,11 +298,11 @@ void imrepl_ctrl_display_frame(void) {
             .viewport_h = scene_config.viewport_h,
             .code_panel_layout = *presentation->code_panel_layout,
             .replay_mode = scene_config.replay_mode,
-            .replay_pc = *replay->pc,
-            .replay_total_cmds = *replay->total_flat_cmds,
-            .replay_state_val = *replay->state,
-            .replay_speed = *replay->speed,
-            .replay_expand_args = *replay->expand_args,
+            .replay_pc = *replay.pc,
+            .replay_total_cmds = *replay.total_flat_cmds,
+            .replay_state_val = *replay.state,
+            .replay_speed = *replay.speed,
+            .replay_expand_args = *replay.expand_args,
             .replaying = scene_config.replaying,
         };
         ui_replay_hud_render(&replay_hud_state);
