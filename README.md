@@ -81,8 +81,8 @@ vertex: `M_1 · M_2 · ... · M_n · v`. That means the cursor's command
 already placed. The guide starts at that point.
 
 Accumulation of the post-cursor transforms stops at the first draw
-call (`glBegin`, `gluSphere`, `gluCylinder`, `gluDisk`,
-`gluPartialDisk`, `glutSolidTorus`, tess polygon). Transforms that
+call (`glBegin`, `glutSolidCube`, `glutSolidSphere`, `glutSolidCone`,
+`glutSolidTeapot`, `glutSolidTorus`, tess polygon). Transforms that
 come after an intervening draw don't factor into the guide.
 
 ### Guide mode

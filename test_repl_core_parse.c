@@ -224,7 +224,7 @@ int main(void) {
                     strstr(g_status, "Unknown cmd") != NULL);
     }
 
-    /* 4-arg commands (glRotatef, gluDisk, glutSolidTorus) - exercise case 4 in fmt switch */
+    /* 4-arg commands (glRotatef, glutSolidTorus, glutSolidCone) - exercise case 4 in fmt switch */
     {
         repl_reset_state();
         GLCmd cmd;
@@ -239,39 +239,51 @@ int main(void) {
         repl_reset_state();
         GLCmd cmd;
         memset(&cmd, 0, sizeof(cmd));
-        int ok = repl_parser_parse_command("gluDisk(0.2, 0.5, 16, 2)", &cmd);
-        ASSERT_TRUE("gluDisk parse ok", ok == 1);
-        ASSERT_TRUE("gluDisk type", cmd.type == CMD_GLU_DISK);
-    }
-
-    {
-        repl_reset_state();
-        GLCmd cmd;
-        memset(&cmd, 0, sizeof(cmd));
         int ok = repl_parser_parse_command("glutSolidTorus(0.1, 0.4, 8, 16)", &cmd);
         ASSERT_TRUE("glutSolidTorus parse ok", ok == 1);
         ASSERT_TRUE("glutSolidTorus type", cmd.type == CMD_GLUT_TORUS);
     }
 
-    /* 5-arg command: gluCylinder - exercise case 5 */
     {
         repl_reset_state();
         GLCmd cmd;
         memset(&cmd, 0, sizeof(cmd));
-        int ok = repl_parser_parse_command("gluCylinder(0.3, 0.3, 1.0, 12, 4)", &cmd);
-        ASSERT_TRUE("gluCylinder parse ok", ok == 1);
-        ASSERT_TRUE("gluCylinder type", cmd.type == CMD_GLU_CYLINDER);
-        ASSERT_TRUE("gluCylinder source has height", cmd.args[2] == 1.0f);
+        int ok = repl_parser_parse_command("glutSolidCone(0.25, 1.0, 12, 4)", &cmd);
+        ASSERT_TRUE("glutSolidCone parse ok", ok == 1);
+        ASSERT_TRUE("glutSolidCone type", cmd.type == CMD_GLUT_CONE);
     }
 
-    /* 6-arg command: gluPartialDisk - exercise case 6 */
     {
         repl_reset_state();
         GLCmd cmd;
         memset(&cmd, 0, sizeof(cmd));
-        int ok = repl_parser_parse_command("gluPartialDisk(0.1, 0.5, 16, 2, 0, 180)", &cmd);
-        ASSERT_TRUE("gluPartialDisk parse ok", ok == 1);
-        ASSERT_TRUE("gluPartialDisk type", cmd.type == CMD_GLU_PARTIAL_DISK);
+        int ok = repl_parser_parse_command("glutSolidSphere(0.25, 16, 12)", &cmd);
+        ASSERT_TRUE("glutSolidSphere parse ok", ok == 1);
+        ASSERT_TRUE("glutSolidSphere type", cmd.type == CMD_GLUT_SPHERE);
+    }
+
+    {
+        repl_reset_state();
+        GLCmd cmd;
+        memset(&cmd, 0, sizeof(cmd));
+        int ok = repl_parser_parse_command("glutSolidTeapot(0.25)", &cmd);
+        ASSERT_TRUE("glutSolidTeapot parse ok", ok == 1);
+        ASSERT_TRUE("glutSolidTeapot type", cmd.type == CMD_GLUT_TEAPOT);
+    }
+
+    /* Removed GLU quadric shapes should no longer parse. */
+    {
+        repl_reset_state();
+        GLCmd cmd;
+        memset(&cmd, 0, sizeof(cmd));
+        ASSERT_TRUE("gluSphere parse fails",
+                    repl_parser_parse_command("gluSphere(0.25, 16, 12)", &cmd) == 0);
+        ASSERT_TRUE("gluCylinder parse fails",
+                    repl_parser_parse_command("gluCylinder(0.3, 0.3, 1.0, 12, 4)", &cmd) == 0);
+        ASSERT_TRUE("gluDisk parse fails",
+                    repl_parser_parse_command("gluDisk(0.2, 0.5, 16, 2)", &cmd) == 0);
+        ASSERT_TRUE("gluPartialDisk parse fails",
+                    repl_parser_parse_command("gluPartialDisk(0.1, 0.5, 16, 2, 0, 180)", &cmd) == 0);
     }
 
     /* glColorMaterial - face/mode enums */

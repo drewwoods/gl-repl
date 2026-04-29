@@ -610,11 +610,12 @@ glColorMaterial(face, mode), glMaterialf(face, pname, value)
   glColorMaterial mode: GL_AMBIENT, GL_DIFFUSE, GL_SPECULAR, GL_EMISSION, GL_AMBIENT_AND_DIFFUSE
 glLightModeli(pname, param), glFrontFace(mode)
 glDepthMask(GL_TRUE|GL_FALSE)
-gluSphere(r, slices, stacks)
-gluCylinder(base, top, height, slices, stacks)
-gluDisk(inner, outer, slices, loops)
-gluPartialDisk(inner, outer, slices, loops, start, sweep)
-glutSolidTorus(inner, outer, nsides, rings)
+GLUT Solid Shapes:
+  glutSolidTorus(inner, outer, nsides, rings)
+  glutSolidCube(size)
+  glutSolidSphere(radius, slices, stacks)
+  glutSolidTeapot(size)
+  glutSolidCone(base, height, slices, stacks)
 for(var, start, end[, step]) { body }
 func0..func9[(params)] { body }
 if(expr) { body }

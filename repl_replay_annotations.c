@@ -740,10 +740,6 @@ static const char *eval_fmt_for_type(CmdType type, int *nargs_out) {
     case CMD_TRANSLATE3F:      *nargs_out = 3; return "glTranslatef(%g, %g, %g);";
     case CMD_SCALEF:           *nargs_out = 3; return "glScalef(%g, %g, %g);";
     case CMD_ROTATEF:          *nargs_out = 4; return "glRotatef(%g, %g, %g, %g);";
-    case CMD_GLU_SPHERE:       *nargs_out = 3; return "gluSphere(q, %g, %g, %g);";
-    case CMD_GLU_CYLINDER:     *nargs_out = 5; return "gluCylinder(q, %g, %g, %g, %g, %g);";
-    case CMD_GLU_DISK:         *nargs_out = 4; return "gluDisk(q, %g, %g, %g, %g);";
-    case CMD_GLU_PARTIAL_DISK: *nargs_out = 6; return "gluPartialDisk(q, %g, %g, %g, %g, %g, %g);";
     case CMD_GLUT_TORUS:       *nargs_out = 4; return "glutSolidTorus(%g, %g, %g, %g);";
     case CMD_GLUT_CUBE:        *nargs_out = 1; return "glutSolidCube(%g);";
     case CMD_GLUT_SPHERE:      *nargs_out = 3; return "glutSolidSphere(%g, %g, %g);";

@@ -465,10 +465,8 @@ make sample          # must be clean (no new warnings)
 make test-stubs      # all tests must pass
 ```
 
-For commands that affect save/load round-trips (e.g. new GLU quadric-style
-commands that need the `g_quadric` handle injected in C export), also update
-`cmd_type_is_quadric()` and `import_make_repl_quadric_line()` in
-`repl_export.c`.
+For commands that affect save/load round-trips, update the matching export
+and import helpers in `repl_export.c`.
 
 ## Open Refactor Edges
 
