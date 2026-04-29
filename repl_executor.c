@@ -459,6 +459,27 @@ void repl_execute_program(const ReplExecutionOptions *options) {
                            (int)flat_cmds[pc].args[2],
                            (int)flat_cmds[pc].args[3]);
             break;
+        case CMD_GLUT_CUBE:
+            if (in_begin) { glEnd(); in_begin = 0; }
+            glutSolidCube((double)flat_cmds[pc].args[0]);
+            break;
+        case CMD_GLUT_SPHERE:
+            if (in_begin) { glEnd(); in_begin = 0; }
+            glutSolidSphere((double)flat_cmds[pc].args[0],
+                            (int)flat_cmds[pc].args[1],
+                            (int)flat_cmds[pc].args[2]);
+            break;
+        case CMD_GLUT_TEAPOT:
+            if (in_begin) { glEnd(); in_begin = 0; }
+            glutSolidTeapot((double)flat_cmds[pc].args[0]);
+            break;
+        case CMD_GLUT_CONE:
+            if (in_begin) { glEnd(); in_begin = 0; }
+            glutSolidCone((double)flat_cmds[pc].args[0],
+                          (double)flat_cmds[pc].args[1],
+                          (int)flat_cmds[pc].args[2],
+                          (int)flat_cmds[pc].args[3]);
+            break;
         case CMD_TESS_BEGIN_POLYGON:
             if (in_begin) { glEnd(); in_begin = 0; }
             if (g_tess) { g_tess_vert_count = 0; gluTessBeginPolygon(g_tess, NULL); tess_depth = 1; }

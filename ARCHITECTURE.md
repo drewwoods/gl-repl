@@ -364,6 +364,112 @@ or project-wide `include/` only when broadly reusable.
   deferred rename.
 * New command mutation: `repl_command_store_*`.
 
+## Adding A New Command
+
+This is the canonical checklist for adding a new GL/GLU/GLUT command to the
+REPL. Every bullet is required unless the note says otherwise. The GLUT solid
+shapes (`glutSolidCube`, `glutSolidSphere`, `glutSolidTeapot`, `glutSolidCone`)
+are a recent worked example.
+
+### 1. `sample.h` — declare the type
+
+Add a new `CmdType` enum entry in the `CMD_*` block, adjacent to related
+commands. The enum drives switch dispatch everywhere.
+
+```c
+CMD_GLUT_CUBE, CMD_GLUT_SPHERE, CMD_GLUT_TEAPOT, CMD_GLUT_CONE,
+```
+
+### 2. `repl_command_spec.c` — three additions
+
+**a. `k_func_completions[]`** — autocomplete prefix/hint entry. The prefix
+string (including the opening `(`) must match exactly what the user types.
+The hint string is displayed inline; param names drive Tab-cycle hints.
+
+```c
+{ "glutSolidCube(",  "glutSolidCube(size)",  1, { "size" } },
+```
+
+**b. `g_std_command_specs[]`** — parse spec used by `repl_parser.c` and the
+autocomplete lookup. `num_args` must match the `%g` count in `fmt`.
+
+```c
+{ "glutSolidCube", CMD_GLUT_CUBE, 1, "glutSolidCube(%g);", "Usage: glutSolidCube(size)", 0 },
+```
+
+For commands with `glEnable`/`glBlendFunc`-style enum arguments, add to
+`g_enum_command_specs[]` instead and wire `enums1`/`enums2` to the
+appropriate `EnumEntry` tables.
+
+**c. `g_command_type_specs[]`** — formatting/indentation metadata for the
+new `CmdType`. Nearly all geometry commands use `(1, 1)` (needs semicolon,
+needs block indent).
+
+```c
+CMD_TYPE_SPEC(CMD_GLUT_CUBE, 1, 1),
+```
+
+### 3. `repl_executor.c` — execute the command
+
+Add a `case` block after the nearest related command. Call the GL/GLU/GLUT
+function, casting `flat_cmds[pc].args[N]` to the correct C type (`(double)`,
+`(int)`, etc.). Always close an open `glBegin` block first for shape commands.
+
+```c
+case CMD_GLUT_CUBE:
+    if (in_begin) { glEnd(); in_begin = 0; }
+    glutSolidCube((double)flat_cmds[pc].args[0]);
+    break;
+```
+
+### 4. `repl_replay_annotations.c` — replay display format
+
+Add a `case` that sets `*nargs_out` and returns a `printf`-style format string
+for the replay annotation overlay.
+
+```c
+case CMD_GLUT_CUBE: *nargs_out = 1; return "glutSolidCube(%g);";
+```
+
+### 5. `ui_help_overlay.c` — help text
+
+Add a line to the appropriate section of `g_commands_lines[]` (F1 overlay,
+Commands tab). Group with related commands under the same section header.
+
+### 6. Stubs (only if adding a symbol not yet in the stub headers)
+
+If the GL/GLU/GLUT function is new to the stub build:
+
+**`include/GL/gl_stub_counts.h`** — append to `GL_STUB_COUNTER_LIST`:
+
+```c
+X(glutSolidTeapot)  \
+X(glutSolidCone)
+```
+
+**`include/GL/freeglut.h`** (or `glu.h`) — add a no-op inline stub:
+
+```c
+static inline void glutSolidTeapot(double size) {
+    gl_stub_tick(GL_STUB_glutSolidTeapot); (void)size;
+}
+```
+
+Keep stubs minimal: model the signature, call `gl_stub_tick`, suppress
+unused-parameter warnings with `(void)`, no real rendering.
+
+### Verify
+
+```bash
+make sample          # must be clean (no new warnings)
+make test-stubs      # all tests must pass
+```
+
+For commands that affect save/load round-trips (e.g. new GLU quadric-style
+commands that need the `g_quadric` handle injected in C export), also update
+`cmd_type_is_quadric()` and `import_make_repl_quadric_line()` in
+`repl_export.c`.
+
 ## Open Refactor Edges
 
 Completed (Phase 1 + most of Phase 2):

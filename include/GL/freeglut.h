@@ -131,6 +131,8 @@ static inline void glutSolidTorus(double inner_radius, double outer_radius, int 
 static inline void glutWireTorus(double inner_radius, double outer_radius, int sides, int rings) { gl_stub_tick(GL_STUB_glutWireTorus); (void)inner_radius; (void)outer_radius; (void)sides; (void)rings; }
 static inline void glutSolidCube(double size) { gl_stub_tick(GL_STUB_glutSolidCube); (void)size; }
 static inline void glutWireCube(double size) { gl_stub_tick(GL_STUB_glutWireCube); (void)size; }
+static inline void glutSolidTeapot(double size) { gl_stub_tick(GL_STUB_glutSolidTeapot); (void)size; }
+static inline void glutSolidCone(double base, double height, int slices, int stacks) { gl_stub_tick(GL_STUB_glutSolidCone); (void)base; (void)height; (void)slices; (void)stacks; }
 
 #ifdef __cplusplus
 }

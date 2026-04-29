@@ -745,6 +745,10 @@ static const char *eval_fmt_for_type(CmdType type, int *nargs_out) {
     case CMD_GLU_DISK:         *nargs_out = 4; return "gluDisk(q, %g, %g, %g, %g);";
     case CMD_GLU_PARTIAL_DISK: *nargs_out = 6; return "gluPartialDisk(q, %g, %g, %g, %g, %g, %g);";
     case CMD_GLUT_TORUS:       *nargs_out = 4; return "glutSolidTorus(%g, %g, %g, %g);";
+    case CMD_GLUT_CUBE:        *nargs_out = 1; return "glutSolidCube(%g);";
+    case CMD_GLUT_SPHERE:      *nargs_out = 3; return "glutSolidSphere(%g, %g, %g);";
+    case CMD_GLUT_TEAPOT:      *nargs_out = 1; return "glutSolidTeapot(%g);";
+    case CMD_GLUT_CONE:        *nargs_out = 4; return "glutSolidCone(%g, %g, %g, %g);";
     case CMD_TESS_NORMAL:      *nargs_out = 3; return "gluNormal(%g, %g, %g);";
     case CMD_TESS_VERTEX:      *nargs_out = 3; return "gluVertex(%g, %g, %g);";
     default:                   *nargs_out = 0; return NULL;
