@@ -213,10 +213,10 @@ static void load_example_lines(const char *const *lines) {
     {
         ReplEditorInputState *inp = repl_state_editor_input_mut();
         inp->input[0] = '\0';
-        *inp->input_len = 0;
+        inp->input_len = 0;
         repl_state_cursor_pos_set(0);
         inp->pending_newline[0] = '\0';
-        *inp->pending_newline_len = 0;
+        inp->pending_newline_len = 0;
     }
     repl_editor_reset_transients();
     repl_eval_init_predef_vars();
@@ -239,7 +239,7 @@ static void load_example_lines(const char *const *lines) {
     {
         ReplEditorInputState *inp = repl_state_editor_input_mut();
         inp->input[0] = '\0';
-        *inp->input_len = 0;
+        inp->input_len = 0;
         repl_state_cursor_pos_set(0);
     }
     mark_normals_dirty();

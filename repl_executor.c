@@ -602,7 +602,7 @@ void repl_execute_program(const ReplExecutionOptions *options) {
     }
 execute_done:
     if (in_begin) glEnd();
-    if (!(*replay.active && *replay.mode == REPLAY_MODE_VERTEX)) {
+    if (!(replay.active && replay.mode == REPLAY_MODE_VERTEX)) {
         if (tess_depth == 2 && g_tess) { gluTessEndContour(g_tess); tess_depth = 1; }
         if (tess_depth == 1 && g_tess) { gluTessEndPolygon(g_tess); }
     }

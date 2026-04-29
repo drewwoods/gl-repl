@@ -6,9 +6,9 @@ ReplCommandStore repl_command_store_live(void) {
     ReplDocumentState *document = repl_state_document_mut();
     ReplCommandStore store = {
         document->cmds,
-        document->cmd_count,
+        &document->cmd_count,
         document->capacity,
-        document->edit_line_idx
+        &document->edit_line_idx
     };
     return store;
 }

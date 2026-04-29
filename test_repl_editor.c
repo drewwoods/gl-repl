@@ -16,8 +16,8 @@
 #include "repl_inline_rename.h"
 
 #define g_status     (repl_state_status_mut()->text)
-#define g_scroll     (*repl_state_code_panel_mut()->scroll)
-#define g_panel_frac (*repl_state_code_panel_mut()->panel_frac)
+#define g_scroll     (repl_state_code_panel_mut()->scroll)
+#define g_panel_frac (repl_state_code_panel_mut()->panel_frac)
 #define g_ac_count   (repl_state_autocomplete_mut()->match_count)
 #define g_ac_sel     (repl_state_autocomplete_mut()->selected_idx)
 #define g_ac_ghost   (repl_state_autocomplete_mut()->ghost)
@@ -29,7 +29,7 @@
 #define g_show_help          (repl_state_help_mut()->visible)
 #define g_help_tab           (repl_state_help_mut()->tab_idx)
 #define g_show_profile_panel (repl_state_profile_panel_mut()->mode)
-#define g_scroll_follow_cursor (*repl_state_code_panel_mut()->scroll_follow_cursor)
+#define g_scroll_follow_cursor (repl_state_code_panel_mut()->scroll_follow_cursor)
 #define refresh_workspace_header_lines repl_state_refresh_workspace_header_lines
 #define parse_workspace_header_line    repl_state_parse_workspace_header_line
 
@@ -58,18 +58,17 @@ static int g_mock_modifiers = 0;
     else printf("FAIL [%s] got \"%s\", expected \"%s\" (line %d)\n", label, got, exp, __LINE__); \
 } while (0)
 
-#define IMPORT_EXPORT_STATE (repl_state_import_export())
-#define g_workspace_header_lines (IMPORT_EXPORT_STATE->workspace_header_lines)
-#define g_workspace_header_line_count (IMPORT_EXPORT_STATE->workspace_header_line_count)
-#define g_render_state_lines (IMPORT_EXPORT_STATE->render_state_lines)
-#define g_cam_lines (IMPORT_EXPORT_STATE->cam_lines)
+#define g_workspace_header_lines (repl_state_import_export().workspace_header_lines)
+#define g_workspace_header_line_count (repl_state_import_export().workspace_header_line_count)
+#define g_render_state_lines (repl_state_import_export().render_state_lines)
+#define g_cam_lines (repl_state_import_export().cam_lines)
 
-#define replay_active        (*repl_state_replay_mut()->active)
-#define replay_state         (*repl_state_replay_mut()->state)
-#define replay_pc            (*repl_state_replay_mut()->pc)
-#define replay_mode          (*repl_state_replay_mut()->mode)
-#define replay_src_line      (*repl_state_replay_mut()->src_line_idx)
-#define replay_expand_args   (*repl_state_replay_mut()->expand_args)
+#define replay_active        (repl_state_replay_mut()->active)
+#define replay_state         (repl_state_replay_mut()->state)
+#define replay_pc            (repl_state_replay_mut()->pc)
+#define replay_mode          (repl_state_replay_mut()->mode)
+#define replay_src_line      (repl_state_replay_mut()->src_line_idx)
+#define replay_expand_args   (repl_state_replay_mut()->expand_args)
 
 #define ASSERT_DECL_OK(label, cond, err) do { \
     g_run++; \
@@ -97,8 +96,8 @@ static void set_editor_input(const char *text) {
     ReplEditorInputState *inp = repl_state_editor_input_mut();
     strncpy(inp->input, text, MAX_INPUT_LEN - 1);
     inp->input[MAX_INPUT_LEN - 1] = '\0';
-    *inp->input_len = (int)strlen(inp->input);
-    repl_state_cursor_pos_set(*inp->input_len);
+    inp->input_len = (int)strlen(inp->input);
+    repl_state_cursor_pos_set(inp->input_len);
 }
 
 static int mock_get_modifiers(void) {
@@ -120,14 +119,14 @@ static int cfg_row_for_key(ReplConfigKey key) {
 static int test_code_panel_row_count_for_text(const char *text, int first_x,
                                               int panel_w) {
     CodePanelTextLayout layout =
-        repl_code_panel_layout_make(panel_w, first_x, FONT_W, *repl_state_presentation()->wrap_at_comma);
+        repl_code_panel_layout_make(panel_w, first_x, FONT_W, repl_state_presentation().wrap_at_comma);
     return repl_code_panel_row_count_for_text(text, &layout);
 }
 
 static int code_panel_header_row_count(void) {
     int panel_w;
     int linenum_w = 4 * FONT_W;
-    int idx_col_w = *repl_state_presentation()->show_vertex_indices ? (6 * FONT_W) : 0;
+    int idx_col_w = repl_state_presentation().show_vertex_indices ? (6 * FONT_W) : 0;
     int text_x = CODE_MARGIN_X + linenum_w + FONT_W + idx_col_w;
     int rows = 0;
 
@@ -151,7 +150,7 @@ static int code_panel_header_row_count(void) {
 static int code_panel_mouse_y_for_cmd(int cmd_idx) {
     int cp_y, cp_h, panel_w;
     int linenum_w = 4 * FONT_W;
-    int idx_col_w = *repl_state_presentation()->show_vertex_indices ? (6 * FONT_W) : 0;
+    int idx_col_w = repl_state_presentation().show_vertex_indices ? (6 * FONT_W) : 0;
     int text_x = CODE_MARGIN_X + linenum_w + FONT_W + idx_col_w;
     int doc_line = code_panel_header_row_count();
 
@@ -225,7 +224,7 @@ int main() {
         repl_state_viewport_set_size(1000, 800);
         g_panel_frac = 0.25f;
 
-        *repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT;
+        repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT;
         repl_layout_code_panel_rect(&x, &y, &w, &h);
         ASSERT_INT("left code x", x, 0);
         ASSERT_INT("left code y", y, 0);
@@ -237,7 +236,7 @@ int main() {
         ASSERT_INT("left scene w", w, 750);
         ASSERT_INT("left scene h", h, 800);
 
-        *repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_TOP;
+        repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_TOP;
         repl_layout_code_panel_rect(&x, &y, &w, &h);
         ASSERT_INT("top code x", x, 0);
         ASSERT_INT("top code y", y, 600);
@@ -249,7 +248,7 @@ int main() {
         ASSERT_INT("top scene w", w, 1000);
         ASSERT_INT("top scene h", h, 600);
 
-        *repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_BOTTOM;
+        repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_BOTTOM;
         repl_layout_code_panel_rect(&x, &y, &w, &h);
         ASSERT_INT("bottom code x", x, 0);
         ASSERT_INT("bottom code y", y, 0);
@@ -261,7 +260,7 @@ int main() {
         ASSERT_INT("bottom scene w", w, 1000);
         ASSERT_INT("bottom scene h", h, 600);
 
-        *repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_HIDDEN;
+        repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_HIDDEN;
         repl_layout_code_panel_rect(&x, &y, &w, &h);
         ASSERT_INT("hidden code x", x, 0);
         ASSERT_INT("hidden code y", y, 0);
@@ -275,7 +274,7 @@ int main() {
 
         repl_state_viewport_set_size(1200, 800);
         g_panel_frac = CFG_DEFAULT_PANEL_FRAC;
-        *repl_state_presentation_mut()->code_panel_layout = CFG_DEFAULT_CODE_PANEL_LAYOUT;
+        repl_state_presentation_mut()->code_panel_layout = CFG_DEFAULT_CODE_PANEL_LAYOUT;
     }
 
     /* 0b. Code panel config cycles Left -> Top -> Bottom -> Hidden and imports legacy top layout */
@@ -283,39 +282,39 @@ int main() {
         int row = cfg_row_for_key(REPL_CONFIG_CODE_PANEL_LAYOUT);
         ASSERT_TRUE("code panel cfg row exists", row >= 0);
         if (row >= 0) {
-            *repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT;
+            repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT;
             repl_cfg_cycle_row(row, +1);
             ASSERT_INT("code panel cfg cycles to top",
-                       *repl_state_presentation()->code_panel_layout, CODE_PANEL_LAYOUT_TOP);
+                       repl_state_presentation().code_panel_layout, CODE_PANEL_LAYOUT_TOP);
             repl_cfg_cycle_row(row, +1);
             ASSERT_INT("code panel cfg cycles to bottom",
-                       *repl_state_presentation()->code_panel_layout, CODE_PANEL_LAYOUT_BOTTOM);
+                       repl_state_presentation().code_panel_layout, CODE_PANEL_LAYOUT_BOTTOM);
             g_ac_count = 2;
             g_ac_sel = 1;
             strcpy(g_ac_ghost, "glVertex3f");
             strcpy(g_ac_hint, "vertex");
             repl_cfg_cycle_row(row, +1);
             ASSERT_INT("code panel cfg cycles to hidden",
-                       *repl_state_presentation()->code_panel_layout, CODE_PANEL_LAYOUT_HIDDEN);
+                       repl_state_presentation().code_panel_layout, CODE_PANEL_LAYOUT_HIDDEN);
             ASSERT_INT("hide clears autocomplete count", g_ac_count, 0);
             ASSERT_INT("hide clears autocomplete selection", g_ac_sel, 0);
             ASSERT_STR("hide clears autocomplete ghost", g_ac_ghost, "");
             ASSERT_STR("hide clears autocomplete hint", g_ac_hint, "");
             repl_cfg_cycle_row(row, +1);
             ASSERT_INT("code panel cfg wraps to left",
-                       *repl_state_presentation()->code_panel_layout, CODE_PANEL_LAYOUT_LEFT);
+                       repl_state_presentation().code_panel_layout, CODE_PANEL_LAYOUT_LEFT);
         }
 
-        *repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT;
+        repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT;
         ASSERT_INT("parse code_panel cfg",
                    parse_workspace_header_line("// @cfg code_panel = 2"), 1);
         ASSERT_INT("parse code_panel bottom",
-                   *repl_state_presentation()->code_panel_layout, CODE_PANEL_LAYOUT_BOTTOM);
+                   repl_state_presentation().code_panel_layout, CODE_PANEL_LAYOUT_BOTTOM);
 
         ASSERT_INT("parse code_panel hidden cfg",
                    parse_workspace_header_line("// @cfg code_panel = 3"), 1);
         ASSERT_INT("parse code_panel hidden",
-                   *repl_state_presentation()->code_panel_layout, CODE_PANEL_LAYOUT_HIDDEN);
+                   repl_state_presentation().code_panel_layout, CODE_PANEL_LAYOUT_HIDDEN);
 
         {
             int found_hidden_export = 0;
@@ -332,60 +331,60 @@ int main() {
         ASSERT_INT("parse legacy top_code_panel cfg",
                    parse_workspace_header_line("// @cfg top_code_panel = 1"), 1);
         ASSERT_INT("legacy top_code_panel maps to top",
-                   *repl_state_presentation()->code_panel_layout, CODE_PANEL_LAYOUT_TOP);
+                   repl_state_presentation().code_panel_layout, CODE_PANEL_LAYOUT_TOP);
 
         ASSERT_INT("parse legacy top_code_panel off cfg",
                    parse_workspace_header_line("// @cfg top_code_panel = 0"), 1);
         ASSERT_INT("legacy top_code_panel off maps to left",
-                   *repl_state_presentation()->code_panel_layout, CODE_PANEL_LAYOUT_LEFT);
+                   repl_state_presentation().code_panel_layout, CODE_PANEL_LAYOUT_LEFT);
 
         g_panel_frac = CFG_DEFAULT_PANEL_FRAC;
-        *repl_state_presentation_mut()->code_panel_layout = CFG_DEFAULT_CODE_PANEL_LAYOUT;
+        repl_state_presentation_mut()->code_panel_layout = CFG_DEFAULT_CODE_PANEL_LAYOUT;
     }
 
     /* 0b2. Config/action module owns shortcut and menu row dispatch. */
     {
         repl_reset_state();
 
-        *repl_state_presentation_mut()->wireframe = 0;
+        repl_state_presentation_mut()->wireframe = 0;
         ASSERT_INT("config special shortcut consumed",
                    repl_cfg_handle_special_shortcut(GLUT_KEY_F2), 1);
         ASSERT_INT("config special shortcut toggles wireframe",
-                   *repl_state_presentation()->wireframe, 1);
+                   repl_state_presentation().wireframe, 1);
 
-        *repl_state_presentation_mut()->grid_major_idx = 0;
+        repl_state_presentation_mut()->grid_major_idx = 0;
         ASSERT_INT("config ascii shortcut consumed",
                    repl_cfg_handle_ascii_shortcut(KEY_CTRL_O), 1);
         ASSERT_INT("config ascii shortcut cycles grid major",
-                   *repl_state_presentation()->grid_major_idx, 1);
+                   repl_state_presentation().grid_major_idx, 1);
 
         int row = cfg_row_for_key(REPL_CONFIG_CODE_PANEL_LAYOUT);
         ASSERT_TRUE("config menu action row exists", row >= 0);
         if (row >= 0) {
-            *repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT;
+            repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT;
             int close_menu = repl_action_menu_item_activate(REPL_MENU_CONFIG, row);
             ASSERT_INT("config menu action keeps menu open", close_menu, 0);
             ASSERT_INT("config menu action cycles code panel",
-                       *repl_state_presentation()->code_panel_layout, CODE_PANEL_LAYOUT_TOP);
+                       repl_state_presentation().code_panel_layout, CODE_PANEL_LAYOUT_TOP);
         }
     }
 
     /* 0c. Hidden code panel returns to the editor on ordinary input */
     {
         repl_reset_state();
-        *repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_HIDDEN;
+        repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_HIDDEN;
         repl_keyboard_func('v', 0, 0);
         ASSERT_INT("typing restores hidden code panel",
-                   *repl_state_presentation()->code_panel_layout, CODE_PANEL_LAYOUT_LEFT);
-        ASSERT_STR("typing after restore still reaches input", repl_state_editor_input()->input, "v");
+                   repl_state_presentation().code_panel_layout, CODE_PANEL_LAYOUT_LEFT);
+        ASSERT_STR("typing after restore still reaches input", repl_state_editor_input().input, "v");
 
-        *repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_HIDDEN;
+        repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_HIDDEN;
         repl_keyboard_func('`', 0, 0);
         ASSERT_INT("config shortcut restores hidden code panel",
-                   *repl_state_presentation()->code_panel_layout, CODE_PANEL_LAYOUT_LEFT);
+                   repl_state_presentation().code_panel_layout, CODE_PANEL_LAYOUT_LEFT);
         repl_keyboard_func('`', 0, 0);
 
-        *repl_state_presentation_mut()->code_panel_layout = CFG_DEFAULT_CODE_PANEL_LAYOUT;
+        repl_state_presentation_mut()->code_panel_layout = CFG_DEFAULT_CODE_PANEL_LAYOUT;
     }
 
     /* 0c2. Keyboard mode routing keeps rename ahead of config, replay, and search. */
@@ -396,10 +395,10 @@ int main() {
         ASSERT_TRUE("rename route setup slot", slot >= 0);
         ASSERT_INT("rename route begin", repl_inline_rename_begin(slot), 1);
 
-        *repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_HIDDEN;
+        repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_HIDDEN;
         repl_keyboard_func('`', 0, 0);
         ASSERT_INT("rename swallows config hidden restore",
-                   *repl_state_presentation()->code_panel_layout, CODE_PANEL_LAYOUT_HIDDEN);
+                   repl_state_presentation().code_panel_layout, CODE_PANEL_LAYOUT_HIDDEN);
         ASSERT_INT("rename remains active after config key",
                    repl_inline_rename_active(), 1);
 
@@ -410,7 +409,7 @@ int main() {
         ASSERT_INT("rename swallows search open", g_search_active, 0);
 
         repl_inline_rename_cancel();
-        *repl_state_presentation_mut()->code_panel_layout = CFG_DEFAULT_CODE_PANEL_LAYOUT;
+        repl_state_presentation_mut()->code_panel_layout = CFG_DEFAULT_CODE_PANEL_LAYOUT;
     }
 
     /* 0c3. Search mode captures printable editing keys before text editing. */
@@ -425,7 +424,7 @@ int main() {
         repl_keyboard_func('v', 0, 0);
         ASSERT_STR("search route receives printable key", g_search_query, "v");
         ASSERT_TRUE("search route does not type into editor input",
-                    strcmp(repl_state_editor_input()->input, "v") != 0);
+                    strcmp(repl_state_editor_input().input, "v") != 0);
         ASSERT_INT("search route does not commit", repl_state_document_count(), 1);
 
         search_clear_all();
@@ -455,7 +454,7 @@ int main() {
 
         set_editor_input("abc");
         repl_state_cursor_pos_set(2);
-        *repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_HIDDEN;
+        repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_HIDDEN;
         g_show_help = 0;
         replay_active = 1;
         replay_state = REPLAY_PAUSED;
@@ -467,7 +466,7 @@ int main() {
 
         repl_special_func(GLUT_KEY_LEFT, 0, 0);
         ASSERT_INT("rename special swallows hidden restore",
-                   *repl_state_presentation()->code_panel_layout, CODE_PANEL_LAYOUT_HIDDEN);
+                   repl_state_presentation().code_panel_layout, CODE_PANEL_LAYOUT_HIDDEN);
         ASSERT_INT("rename special keeps editor cursor", repl_state_cursor_pos(), 2);
         ASSERT_INT("rename special keeps search cursor", g_search_cursor_pos, 2);
         ASSERT_INT("rename special keeps replay pc", replay_pc, 0);
@@ -480,7 +479,7 @@ int main() {
         repl_inline_rename_cancel();
         search_clear_all();
         replay_active = 0;
-        *repl_state_presentation_mut()->code_panel_layout = CFG_DEFAULT_CODE_PANEL_LAYOUT;
+        repl_state_presentation_mut()->code_panel_layout = CFG_DEFAULT_CODE_PANEL_LAYOUT;
     }
 
     /* 0c6. Search mode captures special arrows before editor/help navigation. */
@@ -523,7 +522,7 @@ int main() {
         int x, y, w, h;
         repl_state_viewport_set_size(320, 80);
         g_panel_frac = 0.25f;
-        *repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT;
+        repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT;
         replay_active = 0;
 
         ui_variable_panel_rect(&x, &y, &w, &h);
@@ -532,7 +531,7 @@ int main() {
 
         repl_state_viewport_set_size(1200, 800);
         g_panel_frac = CFG_DEFAULT_PANEL_FRAC;
-        *repl_state_presentation_mut()->code_panel_layout = CFG_DEFAULT_CODE_PANEL_LAYOUT;
+        repl_state_presentation_mut()->code_panel_layout = CFG_DEFAULT_CODE_PANEL_LAYOUT;
     }
 
     /* 0e. Camera control module owns scene drag and momentum behavior. */
@@ -675,7 +674,7 @@ int main() {
         ASSERT_STR("delete block: first survives", repl_state_document_cmds_mut()[0].source, "  glVertex3f(0, 0, 0);");
         ASSERT_STR("delete block: last survives", repl_state_document_cmds_mut()[1].source, "  glVertex3f(4, 4, 4);");
         ASSERT_INT("delete block: edit_line at deletion start", repl_state_edit_line(), 1);
-        ASSERT_STR("delete block: input reloaded", repl_state_editor_input()->input, "glVertex3f(4, 4, 4)");
+        ASSERT_STR("delete block: input reloaded", repl_state_editor_input().input, "glVertex3f(4, 4, 4)");
         ASSERT_TRUE("delete block: selection cleared", !repl_clipboard_sel_active());
         assert_status_contains("delete block: status line count", "Deleted 3 lines");
     }
@@ -770,7 +769,7 @@ int main() {
         ASSERT_STR("paste block: original body shifted", repl_state_document_cmds_mut()[7].source, "    glColor3f(1, 0, 0);");
         ASSERT_STR("paste block: close brace preserved", repl_state_document_cmds_mut()[8].source, "  }");
         ASSERT_INT("paste block: edit_line after pasted block", repl_state_edit_line(), 7);
-        ASSERT_STR("paste block: input reloaded after paste", repl_state_editor_input()->input, "glColor3f(1, 0, 0)");
+        ASSERT_STR("paste block: input reloaded after paste", repl_state_editor_input().input, "glColor3f(1, 0, 0)");
         assert_status_contains("paste block: status", "Pasted 2 lines");
 
         repl_undo_pop_snapshot();
@@ -936,7 +935,7 @@ int main() {
         repl_keyboard_func(8, 0, 0);
 
         ASSERT_INT("backspace insert mode: cmd count unchanged", repl_state_document_count(), 2);
-        ASSERT_STR("backspace insert mode: input edited", repl_state_editor_input()->input, "abd");
+        ASSERT_STR("backspace insert mode: input edited", repl_state_editor_input().input, "abd");
         ASSERT_INT("backspace insert mode: cursor moved", repl_state_cursor_pos(), 2);
         ASSERT_INT("backspace insert mode: still inserting", repl_state_insert_mode(), 1);
     }
@@ -976,8 +975,8 @@ int main() {
         /* Now load it back into input */
         load_line_to_input(0);
         /* Input should start with ':' and contain the label name */
-        ASSERT_TRUE("label load: starts with colon", repl_state_editor_input()->input[0] == ':');
-        ASSERT_TRUE("label load: contains name", strstr(repl_state_editor_input()->input, "myloop") != NULL);
+        ASSERT_TRUE("label load: starts with colon", repl_state_editor_input().input[0] == ':');
+        ASSERT_TRUE("label load: contains name", strstr(repl_state_editor_input().input, "myloop") != NULL);
     }
 
     /* 10. navigate_to_line - clamp target < 0 */
@@ -1002,7 +1001,7 @@ int main() {
         {
             ReplEditorInputState *inp = repl_state_editor_input_mut();
             strcpy(inp->input, "n = 10.5");
-            *inp->input_len = (int)strlen(inp->input);
+            inp->input_len = (int)strlen(inp->input);
         }
 
         int r = try_assign_variable();
@@ -1022,7 +1021,7 @@ int main() {
         {
             ReplEditorInputState *inp = repl_state_editor_input_mut();
             strcpy(inp->input, "x = 3.0");
-            *inp->input_len = (int)strlen(inp->input);
+            inp->input_len = (int)strlen(inp->input);
         }
 
         int r = try_assign_variable();
@@ -1043,7 +1042,7 @@ int main() {
         {
             ReplEditorInputState *inp = repl_state_editor_input_mut();
             strcpy(inp->input, "n = 7.0");
-            *inp->input_len = (int)strlen(inp->input);
+            inp->input_len = (int)strlen(inp->input);
         }
 
         int r = try_assign_variable();
@@ -1058,7 +1057,7 @@ int main() {
         {
             ReplEditorInputState *inp = repl_state_editor_input_mut();
             strcpy(inp->input, "for(i, 0, 5) {");
-            *inp->input_len = (int)strlen(inp->input);
+            inp->input_len = (int)strlen(inp->input);
         }
 
         int r = try_commit_for_loop();
@@ -1074,7 +1073,7 @@ int main() {
         {
             ReplEditorInputState *inp = repl_state_editor_input_mut();
             strcpy(inp->input, "for(i, 0, 10, 2) {");
-            *inp->input_len = (int)strlen(inp->input);
+            inp->input_len = (int)strlen(inp->input);
         }
 
         int r = try_commit_for_loop();
@@ -1092,7 +1091,7 @@ int main() {
         {
             ReplEditorInputState *inp = repl_state_editor_input_mut();
             strcpy(inp->input, "for(i, 0, 5) {");
-            *inp->input_len = (int)strlen(inp->input);
+            inp->input_len = (int)strlen(inp->input);
         }
         try_commit_for_loop();
         ASSERT_INT("setup: 2 cmds", repl_state_document_count(), 2);
@@ -1103,7 +1102,7 @@ int main() {
         {
             ReplEditorInputState *inp = repl_state_editor_input_mut();
             strcpy(inp->input, "for(i, 0, 10) {");
-            *inp->input_len = (int)strlen(inp->input);
+            inp->input_len = (int)strlen(inp->input);
         }
 
         int r = try_commit_for_loop();
@@ -1120,7 +1119,7 @@ int main() {
         {
             ReplEditorInputState *inp = repl_state_editor_input_mut();
             strcpy(inp->input, "for(i, 0, 3) glVertex3f(i,0,0);");
-            *inp->input_len = (int)strlen(inp->input);
+            inp->input_len = (int)strlen(inp->input);
         }
 
         int r = try_commit_for_loop();
@@ -1137,7 +1136,7 @@ int main() {
         {
             ReplEditorInputState *inp = repl_state_editor_input_mut();
             strcpy(inp->input, "func0(x, y) {");
-            *inp->input_len = (int)strlen(inp->input);
+            inp->input_len = (int)strlen(inp->input);
         }
 
         int r = try_commit_func_def();
@@ -1153,7 +1152,7 @@ int main() {
         {
             ReplEditorInputState *inp = repl_state_editor_input_mut();
             strcpy(inp->input, "func1(a) {");
-            *inp->input_len = (int)strlen(inp->input);
+            inp->input_len = (int)strlen(inp->input);
         }
         try_commit_func_def();
         ASSERT_INT("func update setup: 2 cmds", repl_state_document_count(), 2);
@@ -1164,7 +1163,7 @@ int main() {
         {
             ReplEditorInputState *inp = repl_state_editor_input_mut();
             strcpy(inp->input, "func1(a, b) {");
-            *inp->input_len = (int)strlen(inp->input);
+            inp->input_len = (int)strlen(inp->input);
         }
 
         int r = try_commit_func_def();
@@ -1180,7 +1179,7 @@ int main() {
         {
             ReplEditorInputState *inp = repl_state_editor_input_mut();
             strcpy(inp->input, "if(x > 0) {");
-            *inp->input_len = (int)strlen(inp->input);
+            inp->input_len = (int)strlen(inp->input);
         }
 
         int r = try_commit_if_block();
@@ -1196,7 +1195,7 @@ int main() {
         {
             ReplEditorInputState *inp = repl_state_editor_input_mut();
             strcpy(inp->input, "if(x > 0) {");
-            *inp->input_len = (int)strlen(inp->input);
+            inp->input_len = (int)strlen(inp->input);
         }
         try_commit_if_block();
 
@@ -1206,7 +1205,7 @@ int main() {
         {
             ReplEditorInputState *inp = repl_state_editor_input_mut();
             strcpy(inp->input, "if(x < 0) {");
-            *inp->input_len = (int)strlen(inp->input);
+            inp->input_len = (int)strlen(inp->input);
         }
 
         int r = try_commit_if_block();
@@ -1222,7 +1221,7 @@ int main() {
         {
             ReplEditorInputState *inp = repl_state_editor_input_mut();
             strcpy(inp->input, "}");
-            *inp->input_len = (int)strlen(inp->input);
+            inp->input_len = (int)strlen(inp->input);
         }
         repl_state_edit_line_set(1);
 
@@ -1239,7 +1238,7 @@ int main() {
         {
             ReplEditorInputState *inp = repl_state_editor_input_mut();
             strcpy(inp->input, "for(i, 0, 3) {");
-            *inp->input_len = (int)strlen(inp->input);
+            inp->input_len = (int)strlen(inp->input);
         }
         try_commit_for_loop();
         /* repl_state_edit_line()=1, repl_state_insert_mode()=1 - we're inside the loop */
@@ -1249,7 +1248,7 @@ int main() {
         {
             ReplEditorInputState *inp = repl_state_editor_input_mut();
             strcpy(inp->input, "}");
-            *inp->input_len = (int)strlen(inp->input);
+            inp->input_len = (int)strlen(inp->input);
         }
 
         int r = try_commit_close_brace();
@@ -1263,14 +1262,14 @@ int main() {
         {
             ReplEditorInputState *inp = repl_state_editor_input_mut();
             strcpy(inp->input, "func2() {");
-            *inp->input_len = (int)strlen(inp->input);
+            inp->input_len = (int)strlen(inp->input);
         }
         try_commit_func_def();
         /* Now close the func with '}' */
         {
             ReplEditorInputState *inp = repl_state_editor_input_mut();
             strcpy(inp->input, "}");
-            *inp->input_len = (int)strlen(inp->input);
+            inp->input_len = (int)strlen(inp->input);
         }
 
         int r = try_commit_close_brace();
@@ -1284,14 +1283,14 @@ int main() {
         {
             ReplEditorInputState *inp = repl_state_editor_input_mut();
             strcpy(inp->input, "if(x > 0) {");
-            *inp->input_len = (int)strlen(inp->input);
+            inp->input_len = (int)strlen(inp->input);
         }
         try_commit_if_block();
         /* Inserting inside if-block, close it */
         {
             ReplEditorInputState *inp = repl_state_editor_input_mut();
             strcpy(inp->input, "}");
-            *inp->input_len = (int)strlen(inp->input);
+            inp->input_len = (int)strlen(inp->input);
         }
 
         int r = try_commit_close_brace();
@@ -1305,7 +1304,7 @@ int main() {
         {
             ReplEditorInputState *inp = repl_state_editor_input_mut();
             strcpy(inp->input, "for(i, 0, 3) ;");
-            *inp->input_len = (int)strlen(inp->input);
+            inp->input_len = (int)strlen(inp->input);
         }
 
         int r = try_commit_for_loop();
@@ -1320,7 +1319,7 @@ int main() {
         {
             ReplEditorInputState *inp = repl_state_editor_input_mut();
             strcpy(inp->input, "func3() {");
-            *inp->input_len = (int)strlen(inp->input);
+            inp->input_len = (int)strlen(inp->input);
         }
 
         int r = try_commit_func_def();
@@ -1348,13 +1347,13 @@ int main() {
     {
         repl_reset_state();
 
-        /* Simulate the interactive ';' key handler: repl_state_editor_input()->input has no ';' */
+        /* Simulate the interactive ';' key handler: repl_state_editor_input().input has no ';' */
         {
             ReplEditorInputState *inp = repl_state_editor_input_mut();
             strncpy(inp->input, "float tmp", MAX_INPUT_LEN - 1);
             inp->input[MAX_INPUT_LEN - 1] = '\0';
-            *inp->input_len = (int)strlen(inp->input);
-            repl_state_cursor_pos_set(*inp->input_len);
+            inp->input_len = (int)strlen(inp->input);
+            repl_state_cursor_pos_set(inp->input_len);
         }
         repl_state_edit_line_set(repl_state_document_count());
         repl_state_insert_mode_set(0);
@@ -1388,8 +1387,8 @@ int main() {
             ReplEditorInputState *inp = repl_state_editor_input_mut();
             strncpy(inp->input, "float tmp = 0", MAX_INPUT_LEN - 1);
             inp->input[MAX_INPUT_LEN - 1] = '\0';
-            *inp->input_len = (int)strlen(inp->input);
-            repl_state_cursor_pos_set(*inp->input_len);
+            inp->input_len = (int)strlen(inp->input);
+            repl_state_cursor_pos_set(inp->input_len);
         }
         repl_state_edit_line_set(repl_state_document_count());
         repl_state_insert_mode_set(0);
@@ -1428,8 +1427,8 @@ int main() {
             ReplEditorInputState *inp = repl_state_editor_input_mut();
             strncpy(inp->input, "float a, b, c", MAX_INPUT_LEN - 1);
             inp->input[MAX_INPUT_LEN - 1] = '\0';
-            *inp->input_len = (int)strlen(inp->input);
-            repl_state_cursor_pos_set(*inp->input_len);
+            inp->input_len = (int)strlen(inp->input);
+            repl_state_cursor_pos_set(inp->input_len);
         }
         repl_state_edit_line_set(repl_state_document_count());
         repl_state_insert_mode_set(0);
@@ -1504,8 +1503,8 @@ int main() {
             ReplEditorInputState *inp = repl_state_editor_input_mut();
             strncpy(inp->input, "float radius = 3", MAX_INPUT_LEN - 1);
             inp->input[MAX_INPUT_LEN - 1] = '\0';
-            *inp->input_len = (int)strlen(inp->input);
-            repl_state_cursor_pos_set(*inp->input_len);
+            inp->input_len = (int)strlen(inp->input);
+            repl_state_cursor_pos_set(inp->input_len);
         }
         repl_state_edit_line_set(1);
         repl_state_insert_mode_set(0);
@@ -1540,8 +1539,8 @@ int main() {
             ReplEditorInputState *inp = repl_state_editor_input_mut();
             strncpy(inp->input, "float a, c", MAX_INPUT_LEN - 1);
             inp->input[MAX_INPUT_LEN - 1] = '\0';
-            *inp->input_len = (int)strlen(inp->input);
-            repl_state_cursor_pos_set(*inp->input_len);
+            inp->input_len = (int)strlen(inp->input);
+            repl_state_cursor_pos_set(inp->input_len);
         }
         repl_state_edit_line_set(0);
         repl_state_insert_mode_set(0);
@@ -1574,8 +1573,8 @@ int main() {
             ReplEditorInputState *inp = repl_state_editor_input_mut();
             strncpy(inp->input, "float n", MAX_INPUT_LEN - 1);
             inp->input[MAX_INPUT_LEN - 1] = '\0';
-            *inp->input_len = (int)strlen(inp->input);
-            repl_state_cursor_pos_set(*inp->input_len);
+            inp->input_len = (int)strlen(inp->input);
+            repl_state_cursor_pos_set(inp->input_len);
         }
         repl_state_edit_line_set(0);
         repl_state_insert_mode_set(0);
@@ -1603,8 +1602,8 @@ int main() {
             ReplEditorInputState *inp = repl_state_editor_input_mut();
             strncpy(inp->input, "float n", MAX_INPUT_LEN - 1);
             inp->input[MAX_INPUT_LEN - 1] = '\0';
-            *inp->input_len = (int)strlen(inp->input);
-            repl_state_cursor_pos_set(*inp->input_len);
+            inp->input_len = (int)strlen(inp->input);
+            repl_state_cursor_pos_set(inp->input_len);
         }
         repl_state_edit_line_set(0);
         repl_state_insert_mode_set(0);
@@ -1801,8 +1800,8 @@ int main() {
             ReplEditorInputState *inp = repl_state_editor_input_mut();
             strncpy(inp->input, "float a, b, c, d", MAX_INPUT_LEN - 1);
             inp->input[MAX_INPUT_LEN - 1] = '\0';
-            *inp->input_len = (int)strlen(inp->input);
-            repl_state_cursor_pos_set(*inp->input_len);
+            inp->input_len = (int)strlen(inp->input);
+            repl_state_cursor_pos_set(inp->input_len);
         }
         repl_state_edit_line_set(0);
         repl_state_insert_mode_set(0);
@@ -1899,11 +1898,11 @@ int main() {
         ASSERT_INT("replay left steps back",
                    replay_pc, 0);
 
-        *repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_HIDDEN;
+        repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_HIDDEN;
         replay_state = REPLAY_PLAYING;
         repl_keyboard_func(' ', 0, 0);
         ASSERT_INT("replay space keeps hidden code panel",
-                   *repl_state_presentation()->code_panel_layout, CODE_PANEL_LAYOUT_HIDDEN);
+                   repl_state_presentation().code_panel_layout, CODE_PANEL_LAYOUT_HIDDEN);
         ASSERT_INT("replay space still pauses through editor",
                    replay_state, REPLAY_PAUSED);
 
@@ -1911,10 +1910,10 @@ int main() {
         replay_pc = 0;
         repl_special_func(GLUT_KEY_RIGHT, 0, 0);
         ASSERT_INT("replay right keeps hidden code panel",
-                   *repl_state_presentation()->code_panel_layout, CODE_PANEL_LAYOUT_HIDDEN);
+                   repl_state_presentation().code_panel_layout, CODE_PANEL_LAYOUT_HIDDEN);
         ASSERT_INT("replay right still advances through editor",
                    replay_pc, 1);
-        *repl_state_presentation_mut()->code_panel_layout = CFG_DEFAULT_CODE_PANEL_LAYOUT;
+        repl_state_presentation_mut()->code_panel_layout = CFG_DEFAULT_CODE_PANEL_LAYOUT;
 
         ASSERT_INT("replay unknown key unconsumed",
                    repl_replay_handle_key('x'), 0);
@@ -1939,8 +1938,8 @@ int main() {
 
         repl_state_viewport_set_size(800, 230);
         g_panel_frac = 0.5f;
-        *repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT;
-        *repl_state_presentation_mut()->show_vertex_indices = 0;
+        repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT;
+        repl_state_presentation_mut()->show_vertex_indices = 0;
         navigate_to_line(0);
 
         replay_active = 1;
@@ -1969,7 +1968,7 @@ int main() {
                     follow_doc_line >= g_scroll &&
                     follow_doc_line < g_scroll + visible_lines);
         ASSERT_INT("replay follow leaves edit line alone", repl_state_edit_line(), 0);
-        ASSERT_STR("replay follow leaves input alone", repl_state_editor_input()->input, "glVertex3f(0, 0, 0)");
+        ASSERT_STR("replay follow leaves input alone", repl_state_editor_input().input, "glVertex3f(0, 0, 0)");
 
         replay_active = 0;
         replay_state = REPLAY_OFF;
@@ -2025,8 +2024,8 @@ int main() {
 
         repl_state_viewport_set_size(800, 230);
         g_panel_frac = 0.5f;
-        *repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT;
-        *repl_state_presentation_mut()->show_vertex_indices = 0;
+        repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT;
+        repl_state_presentation_mut()->show_vertex_indices = 0;
         navigate_to_line(0);
 
         replay_active = 1;
@@ -2100,8 +2099,8 @@ int main() {
 
         repl_state_viewport_set_size(800, 230);
         g_panel_frac = 0.5f;
-        *repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT;
-        *repl_state_presentation_mut()->show_vertex_indices = 0;
+        repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT;
+        repl_state_presentation_mut()->show_vertex_indices = 0;
         replay_active = 0;
 
         repl_state_edit_line_set(repl_state_document_count());
@@ -2109,7 +2108,7 @@ int main() {
         {
             ReplEditorInputState *inp = repl_state_editor_input_mut();
             inp->input[0] = '\0';
-            *inp->input_len = 0;
+            inp->input_len = 0;
         }
         repl_state_cursor_pos_set(0);
         g_scroll = 0;
@@ -2173,8 +2172,8 @@ int main() {
 
         repl_state_viewport_set_size(800, 230);
         g_panel_frac = 0.5f;
-        *repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT;
-        *repl_state_presentation_mut()->show_vertex_indices = 0;
+        repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT;
+        repl_state_presentation_mut()->show_vertex_indices = 0;
         replay_active = 0;
 
         navigate_to_line(repl_state_document_count() - 1);
@@ -2204,7 +2203,7 @@ int main() {
                    repl_state_document_cmds_mut()[0].type, CMD_VERTEX3F);
         ASSERT_TRUE("nav auto-commit valid edit: x arg",
                     fabsf(repl_state_document_cmds_mut()[0].args[0] - 9.0f) < 1e-6f);
-        ASSERT_STR("nav auto-commit valid edit: input loaded next", repl_state_editor_input()->input, "glVertex3f(1, 1, 1)");
+        ASSERT_STR("nav auto-commit valid edit: input loaded next", repl_state_editor_input().input, "glVertex3f(1, 1, 1)");
     }
 
     /* Invalid auto-commit reverts the edited line and still navigates. */
@@ -2227,7 +2226,7 @@ int main() {
         ASSERT_STR("nav auto-commit invalid edit: source reverted",
                    repl_state_document_cmds_mut()[0].source, old_source);
         ASSERT_INT("nav auto-commit invalid edit: cursor moved", repl_state_edit_line(), 1);
-        ASSERT_STR("nav auto-commit invalid edit: input loaded next", repl_state_editor_input()->input, "glVertex3f(1, 1, 1)");
+        ASSERT_STR("nav auto-commit invalid edit: input loaded next", repl_state_editor_input().input, "glVertex3f(1, 1, 1)");
         assert_status_contains("nav auto-commit invalid edit: status",
                                "Incomplete command");
     }
@@ -2267,14 +2266,14 @@ int main() {
                    repl_state_document_count(), old_num_cmds);
         ASSERT_INT("nav auto-commit invalid append: cursor moved up",
                    repl_state_edit_line(), 1);
-        ASSERT_STR("nav auto-commit invalid append: input loaded target", repl_state_editor_input()->input, "glVertex3f(1, 1, 1)");
+        ASSERT_STR("nav auto-commit invalid append: input loaded target", repl_state_editor_input().input, "glVertex3f(1, 1, 1)");
         assert_status_contains("nav auto-commit invalid append: status",
                                "Incomplete command");
         ASSERT_STR("nav auto-commit invalid append: newline buffer discarded",
                    repl_state_pending_newline_buffer_mut(), "");
 
         navigate_to_line(repl_state_document_count());
-        ASSERT_STR("nav auto-commit invalid append: return to end is empty", repl_state_editor_input()->input, "");
+        ASSERT_STR("nav auto-commit invalid append: return to end is empty", repl_state_editor_input().input, "");
     }
 
     /* Code-panel clicks use the same auto-commit path. */
@@ -2286,8 +2285,8 @@ int main() {
 
         repl_state_viewport_set_size(800, 600);
         g_panel_frac = 0.5f;
-        *repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT;
-        *repl_state_presentation_mut()->show_vertex_indices = 0;
+        repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT;
+        repl_state_presentation_mut()->show_vertex_indices = 0;
         g_scroll = code_panel_header_row_count();
         navigate_to_line(0);
         set_editor_input("glVertex3f(8, 0, 0)");
@@ -2299,7 +2298,7 @@ int main() {
         ASSERT_INT("mouse auto-commit valid edit: cursor moved", repl_state_edit_line(), 2);
         ASSERT_TRUE("mouse auto-commit valid edit: x arg",
                     fabsf(repl_state_document_cmds_mut()[0].args[0] - 8.0f) < 1e-6f);
-        ASSERT_STR("mouse auto-commit valid edit: input loaded clicked", repl_state_editor_input()->input, "glVertex3f(2, 2, 2)");
+        ASSERT_STR("mouse auto-commit valid edit: input loaded clicked", repl_state_editor_input().input, "glVertex3f(2, 2, 2)");
     }
 
     /* Autocomplete Up/Down keeps selection behavior and does not navigate. */
@@ -2347,7 +2346,7 @@ int main() {
         ASSERT_INT("clear_all: num_cmds is 0", repl_state_document_count(), 0);
         ASSERT_INT("clear_all: edit_line is 0", repl_state_edit_line(), 0);
         ASSERT_INT("clear_all: inserting is 0", repl_state_insert_mode(), 0);
-        ASSERT_INT("clear_all: input is empty", repl_state_editor_input()->input[0], 0);
+        ASSERT_INT("clear_all: input is empty", repl_state_editor_input().input[0], 0);
         ASSERT_INT("clear_all: predef var count restored",
                    g_num_predef_vars, base_num_predef_vars);
         for (i = 0; i < g_num_predef_vars; i++) {
@@ -2437,30 +2436,30 @@ int main() {
         ReplRenderState *rs = repl_state_render_mut();
 
         repl_reset_state();
-        *rs->use_accum = 1;
-        *rs->accum_samples = 2;
+        rs->use_accum = 1;
+        rs->accum_samples = 2;
 
         g_mock_modifiers = GLUT_ACTIVE_CTRL;
 
         /* Increment */
         repl_keyboard_func('+', 0, 0);
-        ASSERT_INT("accum toggle +: samples increased to 4", *rs->accum_samples, 4);
+        ASSERT_INT("accum toggle +: samples increased to 4", rs->accum_samples, 4);
 
         repl_keyboard_func('=', 0, 0); /* some keyboards use = for + without shift */
-        ASSERT_INT("accum toggle =: samples increased to 8", *rs->accum_samples, 8);
+        ASSERT_INT("accum toggle =: samples increased to 8", rs->accum_samples, 8);
 
         /* Decrement */
         repl_keyboard_func('-', 0, 0);
-        ASSERT_INT("accum toggle -: samples decreased to 4", *rs->accum_samples, 4);
+        ASSERT_INT("accum toggle -: samples decreased to 4", rs->accum_samples, 4);
 
         /* Test limits */
-        *rs->accum_samples = 16;
+        rs->accum_samples = 16;
         repl_keyboard_func('+', 0, 0);
-        ASSERT_INT("accum toggle +: samples capped at 16", *rs->accum_samples, 16);
+        ASSERT_INT("accum toggle +: samples capped at 16", rs->accum_samples, 16);
 
-        *rs->accum_samples = 1;
+        rs->accum_samples = 1;
         repl_keyboard_func('-', 0, 0);
-        ASSERT_INT("accum toggle -: samples floored at 1", *rs->accum_samples, 1);
+        ASSERT_INT("accum toggle -: samples floored at 1", rs->accum_samples, 1);
 
         g_mock_modifiers = saved_mods;
     }
@@ -2509,32 +2508,32 @@ int main() {
     {
         repl_reset_state();
         repl_state_viewport_set_size(1000, 1000);
-        *repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT;
-        *repl_state_code_panel_mut()->resizing_panel = 1;
+        repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT;
+        repl_state_code_panel_mut()->resizing_panel = 1;
 
         repl_motion_func(300, 500);
-        ASSERT_TRUE("panel resize left: frac updated", fabsf(*repl_state_code_panel()->panel_frac - 0.3f) < 1e-6f);
+        ASSERT_TRUE("panel resize left: frac updated", fabsf(repl_state_code_panel().panel_frac - 0.3f) < 1e-6f);
 
-        *repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_TOP;
+        repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_TOP;
         repl_motion_func(500, 400);
-        ASSERT_TRUE("panel resize top: frac updated", fabsf(*repl_state_code_panel()->panel_frac - 0.4f) < 1e-6f);
+        ASSERT_TRUE("panel resize top: frac updated", fabsf(repl_state_code_panel().panel_frac - 0.4f) < 1e-6f);
 
-        *repl_state_code_panel_mut()->resizing_panel = 0;
+        repl_state_code_panel_mut()->resizing_panel = 0;
     }
 
     /* Extra coverage: editor_point_on_code_panel_divider */
     {
         repl_reset_state();
         repl_state_viewport_set_size(1000, 1000);
-        *repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT;
-        *repl_state_code_panel_mut()->panel_frac = 0.3f;
+        repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT;
+        repl_state_code_panel_mut()->panel_frac = 0.3f;
 
         /* Divider should be at x = 300. Test hit at 305. */
         repl_passive_motion_func(305, 500);
         /* We can't easily assert the cursor change without more mocking,
          * but we are hitting the branch. */
 
-        *repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_TOP;
+        repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_TOP;
         /* Divider should be at gl_y = 300. window_h = 1000, so y = 700. Test hit at 705. */
         repl_passive_motion_func(500, 705);
     }
@@ -2600,7 +2599,7 @@ int main() {
         /* 4. Input clear */
         set_editor_input("some text");
         repl_keyboard_func(27, 0, 0);
-        ASSERT_INT("Esc: input cleared", *repl_state_editor_input()->input_len, 0);
+        ASSERT_INT("Esc: input cleared", repl_state_editor_input().input_len, 0);
     }
 
     /* Extra coverage: timer_func logic */
@@ -2616,22 +2615,22 @@ int main() {
         ASSERT_INT("timer: status ttl decremented", repl_state_status().ttl, 9);
 
         /* 2. Cursor blink */
-        *repl_state_code_panel_mut()->blink_tick = 29;
-        *repl_state_code_panel_mut()->cursor_visible = 1;
+        repl_state_code_panel_mut()->blink_tick = 29;
+        repl_state_code_panel_mut()->cursor_visible = 1;
         repl_timer_func(0);
-        ASSERT_INT("timer: blink tick reset", *repl_state_code_panel()->blink_tick, 0);
-        ASSERT_TRUE("timer: cursor visibility toggled", !*repl_state_code_panel()->cursor_visible);
+        ASSERT_INT("timer: blink tick reset", repl_state_code_panel().blink_tick, 0);
+        ASSERT_TRUE("timer: cursor visibility toggled", !repl_state_code_panel().cursor_visible);
 
         /* 3. Replay advance */
-        *repl_state_replay_mut()->active = 1;
-        *repl_state_replay_mut()->state = REPLAY_PLAYING;
-        *repl_state_replay_mut()->speed = 1.0f;
-        *repl_state_replay_mut()->accum = 0.99f;
+        repl_state_replay_mut()->active = 1;
+        repl_state_replay_mut()->state = REPLAY_PLAYING;
+        repl_state_replay_mut()->speed = 1.0f;
+        repl_state_replay_mut()->accum = 0.99f;
         /* This should trigger at least one repl_replay_advance */
         repl_timer_func(0);
-        ASSERT_TRUE("timer: replay accum advanced", *repl_state_replay().accum < 0.5f);
+        ASSERT_TRUE("timer: replay accum advanced", repl_state_replay().accum < 0.5f);
 
-        *repl_state_replay_mut()->active = 0;
+        repl_state_replay_mut()->active = 0;
     }
 
     /* Extra coverage: variable dragging via mouse */
@@ -2703,14 +2702,14 @@ int main() {
     {
         repl_reset_state();
         repl_state_viewport_set_size(1000, 1000);
-        *repl_state_code_panel_mut()->scroll = 0;
+        repl_state_code_panel_mut()->scroll = 0;
 
         /* Scroll in code panel (x < 300) */
         repl_mousewheel_func(0, 1, 100, 500);
-        ASSERT_INT("mousewheel: code panel scrolled down", *repl_state_code_panel()->scroll, -1);
+        ASSERT_INT("mousewheel: code panel scrolled down", repl_state_code_panel().scroll, -1);
 
         repl_mousewheel_func(0, -1, 100, 500);
-        ASSERT_INT("mousewheel: code panel scrolled up", *repl_state_code_panel()->scroll, 0);
+        ASSERT_INT("mousewheel: code panel scrolled up", repl_state_code_panel().scroll, 0);
 
         /* Scroll in scene panel (x > 300) */
         /* This should affect camera zoom. */
@@ -2747,16 +2746,16 @@ int main() {
     /* Extra coverage: editor_restore_hidden_code_panel from keys */
     {
         repl_reset_state();
-        *repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_HIDDEN;
+        repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_HIDDEN;
 
         /* Pressing a printable key should restore it. */
         repl_keyboard_func('a', 0, 0);
-        ASSERT_INT("key restores hidden panel", *repl_state_presentation()->code_panel_layout, CODE_PANEL_LAYOUT_LEFT);
+        ASSERT_INT("key restores hidden panel", repl_state_presentation().code_panel_layout, CODE_PANEL_LAYOUT_LEFT);
 
-        *repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_HIDDEN;
+        repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_HIDDEN;
         /* Pressing a special key should restore it. */
         repl_special_func(GLUT_KEY_UP, 0, 0);
-        ASSERT_INT("special key restores hidden panel", *repl_state_presentation()->code_panel_layout, CODE_PANEL_LAYOUT_LEFT);
+        ASSERT_INT("special key restores hidden panel", repl_state_presentation().code_panel_layout, CODE_PANEL_LAYOUT_LEFT);
     }
 
     /* Extra coverage: Commenting Func/If blocks */
@@ -2785,16 +2784,16 @@ int main() {
     {
         repl_reset_state();
         repl_state_viewport_set_size(1000, 1000);
-        *repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_BOTTOM;
-        *repl_state_code_panel_mut()->panel_frac = 0.3f;
+        repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_BOTTOM;
+        repl_state_code_panel_mut()->panel_frac = 0.3f;
 
         /* Divider should be at gl_y = 300 (y = 700). */
         repl_passive_motion_func(500, 695);
 
-        *repl_state_code_panel_mut()->resizing_panel = 1;
+        repl_state_code_panel_mut()->resizing_panel = 1;
         repl_motion_func(500, 600);
-        ASSERT_TRUE("panel resize bottom: frac updated", fabsf(*repl_state_code_panel()->panel_frac - 0.4f) < 1e-6f);
-        *repl_state_code_panel_mut()->resizing_panel = 0;
+        ASSERT_TRUE("panel resize bottom: frac updated", fabsf(repl_state_code_panel().panel_frac - 0.4f) < 1e-6f);
+        repl_state_code_panel_mut()->resizing_panel = 0;
     }
 
     /* Extra coverage: Right-click variable drag */

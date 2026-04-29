@@ -5,11 +5,10 @@
 #include <stdlib.h>
 #include <string.h>
 
-#define IMPORT_EXPORT_STATE (repl_state_import_export())
-#define g_render_state_lines    (IMPORT_EXPORT_STATE->render_state_lines)
-#define g_multisample_enabled   (*repl_state_render_mut()->multisample_enabled)
-#define g_line_smooth_enabled   (*repl_state_render_mut()->line_smooth_enabled)
-#define g_init_attenuate_points (*repl_state_render_mut()->point_attenuation_enabled)
+#define g_render_state_lines    (repl_state_import_export().render_state_lines)
+#define g_multisample_enabled   (repl_state_render_mut()->multisample_enabled)
+#define g_line_smooth_enabled   (repl_state_render_mut()->line_smooth_enabled)
+#define g_init_attenuate_points (repl_state_render_mut()->point_attenuation_enabled)
 
 static int g_run = 0;
 static int g_pass = 0;
@@ -139,8 +138,8 @@ int main(void) {
 
     g_multisample_enabled = 0;
     g_line_smooth_enabled = 1;
-    *repl_state_presentation_mut()->show_vertex_outlines = 0;
-    *repl_state_presentation_mut()->show_vertex_points = 0;
+    repl_state_presentation_mut()->show_vertex_outlines = 0;
+    repl_state_presentation_mut()->show_vertex_points = 0;
     repl_export_save_output(path);
     {
         char buf[16384];
@@ -280,8 +279,8 @@ int main(void) {
     before_n = repl_state_document_count();
     for (int i = 0; i < before_n; i++) before_types[i] = repl_state_document_cmds_mut()[i].type;
 
-    *repl_state_presentation_mut()->show_vertex_outlines = 1;
-    *repl_state_presentation_mut()->show_vertex_points = 1;
+    repl_state_presentation_mut()->show_vertex_outlines = 1;
+    repl_state_presentation_mut()->show_vertex_points = 1;
     repl_export_save_output(func_path);
     {
         char buf[32768];
@@ -404,8 +403,8 @@ int main(void) {
     repl_feed_line_public("gluCylinder(0.15, 0.05, 1.5, 8, 1);");
     repl_feed_line_public("gluDisk(0, 0.35, 12, 1);");
     repl_feed_line_public("gluPartialDisk(0.1, 0.5, 12, 4, 30, 180);");
-    *repl_state_presentation_mut()->show_vertex_outlines = 0;
-    *repl_state_presentation_mut()->show_vertex_points = 0;
+    repl_state_presentation_mut()->show_vertex_outlines = 0;
+    repl_state_presentation_mut()->show_vertex_points = 0;
     repl_export_save_output(quadric_path);
     {
         char buf[16384];
@@ -456,8 +455,8 @@ int main(void) {
     repl_feed_line_public("gluEnd();");
     repl_feed_line_public("}");
     repl_feed_line_public("func0(2.0);");
-    *repl_state_presentation_mut()->show_vertex_outlines = 1;
-    *repl_state_presentation_mut()->show_vertex_points = 1;
+    repl_state_presentation_mut()->show_vertex_outlines = 1;
+    repl_state_presentation_mut()->show_vertex_points = 1;
     repl_export_save_output(tess_path);
     {
         char buf[65536];

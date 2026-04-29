@@ -307,7 +307,7 @@ static BenchResult bench_replay_examples(int iters) {
             repl_replay_start();
             int safety = repl_state_flat_program_count() + 1;
             ReplReplayRuntimeState replay = repl_state_replay();
-            while (*replay.state == REPLAY_PLAYING && safety-- > 0) {
+            while (replay.state == REPLAY_PLAYING && safety-- > 0) {
                 repl_replay_advance();
                 steps++;
             }
@@ -402,7 +402,7 @@ static BenchResult bench_replay_long(int iters) {
         replay_start();
         int safety = repl_state_flat_program_count() + 1;
         ReplReplayRuntimeState replay = repl_state_replay();
-        while (*replay.state == REPLAY_PLAYING && safety-- > 0) {
+        while (replay.state == REPLAY_PLAYING && safety-- > 0) {
             repl_replay_advance();
             steps++;
         }

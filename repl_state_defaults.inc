@@ -1,10 +1,12 @@
     .document = {
         .cmd_count = 0,
+        .capacity = MAX_COMMANDS,
         .edit_line_idx = 0,
         .normals_dirty = 1,
     },
     .flat_program = {
         .cmd_count = 0,
+        .capacity = MAX_COMMANDS,
         .dirty = 1,
         .user_lighting_enabled = 0,
         .current_block_begin_idx = -1,
@@ -19,9 +21,11 @@
     },
     .editor_input = {
         .input = "",
+        .input_capacity = MAX_INPUT_LEN,
         .input_len = 0,
         .cursor_pos = 0,
         .pending_newline = "",
+        .pending_newline_capacity = MAX_INPUT_LEN,
         .pending_newline_len = 0,
         .insert_mode = 0,
     },

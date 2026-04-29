@@ -12,16 +12,15 @@
 #include "repl_source_scope.h"
 #include "repl_state.h"
 
-#define IMPORT_EXPORT_STATE (repl_state_import_export())
-#define g_workspace_header_lines (IMPORT_EXPORT_STATE->workspace_header_lines)
-#define g_workspace_header_line_count (IMPORT_EXPORT_STATE->workspace_header_line_count)
-#define g_render_state_lines (IMPORT_EXPORT_STATE->render_state_lines)
-#define g_cam_lines (IMPORT_EXPORT_STATE->cam_lines)
+#define g_workspace_header_lines (repl_state_import_export().workspace_header_lines)
+#define g_workspace_header_line_count (repl_state_import_export().workspace_header_line_count)
+#define g_render_state_lines (repl_state_import_export().render_state_lines)
+#define g_cam_lines (repl_state_import_export().cam_lines)
 
 CodePanelTextLayout repl_code_panel_document_text_layout(int panel_w,
                                                          int first_x) {
     return repl_code_panel_layout_make(panel_w, first_x, FONT_W,
-                                       *repl_state_presentation()->wrap_at_comma);
+                                       repl_state_presentation().wrap_at_comma);
 }
 
 void repl_code_panel_document_wrap_iter_init(CodePanelWrapIter *it,
@@ -140,7 +139,7 @@ static int code_panel_command_main_rows(int cmd_idx, int panel_w, int text_x) {
     if (!repl_state_insert_mode() && cmd_idx == repl_state_edit_line()) {
         int indent_chars = repl_code_panel_document_active_indent_chars();
         return repl_code_panel_document_row_count_for_text(
-            repl_state_editor_input()->input, text_x + indent_chars * FONT_W, panel_w);
+            repl_state_editor_input().input, text_x + indent_chars * FONT_W, panel_w);
     }
 
     {
@@ -169,14 +168,14 @@ static void code_panel_precompute_layout_rows(int panel_w, int text_x,
 static int code_panel_insert_rows(int panel_w, int text_x) {
     int indent_chars = repl_code_panel_document_active_indent_chars();
     return repl_code_panel_document_row_count_for_text(
-        repl_state_editor_input()->input, text_x + indent_chars * FONT_W, panel_w);
+        repl_state_editor_input().input, text_x + indent_chars * FONT_W, panel_w);
 }
 
 static int code_panel_newline_rows(int panel_w, int text_x) {
     if (repl_state_edit_line() == repl_state_document_count()) {
         int indent_chars = repl_code_panel_document_active_indent_chars();
         return repl_code_panel_document_row_count_for_text(
-            repl_state_editor_input()->input, text_x + indent_chars * FONT_W, panel_w);
+            repl_state_editor_input().input, text_x + indent_chars * FONT_W, panel_w);
     }
     return 1;
 }
@@ -193,7 +192,7 @@ static int code_panel_cursor_doc_line_from_layout(
             cursor_doc_line += replay_extra_rows[cmd_idx];
         }
         cursor_doc_line += repl_code_panel_document_cursor_row_for_text(
-            repl_state_editor_input()->input, text_x + repl_code_panel_document_active_indent_chars() * FONT_W,
+            repl_state_editor_input().input, text_x + repl_code_panel_document_active_indent_chars() * FONT_W,
             panel_w, repl_state_cursor_pos(), NULL, NULL, NULL);
     } else if (repl_state_edit_line() < repl_state_document_count()) {
         /* Accumulate rows up to the edit line in overwrite mode. */
@@ -202,7 +201,7 @@ static int code_panel_cursor_doc_line_from_layout(
             cursor_doc_line += replay_extra_rows[cmd_idx];
         }
         cursor_doc_line += repl_code_panel_document_cursor_row_for_text(
-            repl_state_editor_input()->input, text_x + repl_code_panel_document_active_indent_chars() * FONT_W,
+            repl_state_editor_input().input, text_x + repl_code_panel_document_active_indent_chars() * FONT_W,
             panel_w, repl_state_cursor_pos(), NULL, NULL, NULL);
     } else {
         /* Accumulate all rows when edit line is past the end. */
@@ -211,7 +210,7 @@ static int code_panel_cursor_doc_line_from_layout(
             cursor_doc_line += replay_extra_rows[cmd_idx];
         }
         cursor_doc_line += repl_code_panel_document_cursor_row_for_text(
-            repl_state_editor_input()->input, text_x + repl_code_panel_document_active_indent_chars() * FONT_W,
+            repl_state_editor_input().input, text_x + repl_code_panel_document_active_indent_chars() * FONT_W,
             panel_w, repl_state_cursor_pos(), NULL, NULL, NULL);
     }
 
@@ -224,20 +223,20 @@ static int code_panel_follow_doc_line_from_layout(
     ReplReplayRuntimeState replay = repl_state_replay();
     int follow_doc_line = cursor_doc_line;
 
-    if (*replay.active &&
-        *replay.src_line_idx >= 0 &&
-        *replay.src_line_idx < repl_state_document_count()) {
+    if (replay.active &&
+        replay.src_line_idx >= 0 &&
+        replay.src_line_idx < repl_state_document_count()) {
         follow_doc_line = header_rows;
         /* Accumulate rows up to the replay source line. */
-        for (int cmd_idx = 0; cmd_idx < *replay.src_line_idx; cmd_idx++) {
+        for (int cmd_idx = 0; cmd_idx < replay.src_line_idx; cmd_idx++) {
             follow_doc_line += cmd_main_rows[cmd_idx];
             follow_doc_line += replay_extra_rows[cmd_idx];
         }
-        if (replay_extra_rows[*replay.src_line_idx] > 0) {
-            follow_doc_line += cmd_main_rows[*replay.src_line_idx];
-            follow_doc_line += replay_extra_rows[*replay.src_line_idx] - 1;
-        } else if (cmd_main_rows[*replay.src_line_idx] > 0) {
-            follow_doc_line += cmd_main_rows[*replay.src_line_idx] - 1;
+        if (replay_extra_rows[replay.src_line_idx] > 0) {
+            follow_doc_line += cmd_main_rows[replay.src_line_idx];
+            follow_doc_line += replay_extra_rows[replay.src_line_idx] - 1;
+        } else if (cmd_main_rows[replay.src_line_idx] > 0) {
+            follow_doc_line += cmd_main_rows[replay.src_line_idx] - 1;
         }
     }
 
@@ -301,17 +300,17 @@ void repl_code_panel_document_apply_follow_scroll(
     max_scroll = layout->total_lines - layout->visible_lines;
     if (max_scroll < 0) max_scroll = 0;
     ReplCodePanelRuntimeState *cp = repl_state_code_panel_mut();
-    if (*cp->scroll > max_scroll) *cp->scroll = max_scroll;
-    if (*cp->scroll < 0) *cp->scroll = 0;
+    if (cp->scroll > max_scroll) cp->scroll = max_scroll;
+    if (cp->scroll < 0) cp->scroll = 0;
 
-    if (*cp->scroll_follow_cursor) {
-        if (layout->follow_doc_line < *cp->scroll)
-            *cp->scroll = layout->follow_doc_line;
-        if (layout->follow_doc_line >= *cp->scroll + layout->visible_lines)
-            *cp->scroll = layout->follow_doc_line - layout->visible_lines + 1;
-        if (*cp->scroll > max_scroll) *cp->scroll = max_scroll;
-        if (*cp->scroll < 0) *cp->scroll = 0;
-        *cp->scroll_follow_cursor = 0;
+    if (cp->scroll_follow_cursor) {
+        if (layout->follow_doc_line < cp->scroll)
+            cp->scroll = layout->follow_doc_line;
+        if (layout->follow_doc_line >= cp->scroll + layout->visible_lines)
+            cp->scroll = layout->follow_doc_line - layout->visible_lines + 1;
+        if (cp->scroll > max_scroll) cp->scroll = max_scroll;
+        if (cp->scroll < 0) cp->scroll = 0;
+        cp->scroll_follow_cursor = 0;
     }
 }
 

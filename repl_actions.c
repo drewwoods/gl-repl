@@ -172,24 +172,24 @@ void repl_cfg_cycle_row(int row, int delta) {
     if (item->key == REPL_CONFIG_AUTO_TIME) {
         if (repl_editor_active_modifiers() & GLUT_ACTIVE_SHIFT) {
             repl_reset_time_to_zero();
-            set_status(*repl_state_variables()->time_playing ? "Time: reset to 0"
-                                                             : "Time: reset to 0 (paused)");
+            set_status(repl_state_variables().time_playing ? "Time: reset to 0"
+                                                           : "Time: reset to 0 (paused)");
             return;
         }
     }
 
-    if (*repl_state_replay().active)
+    if (repl_state_replay().active)
         repl_replay_stop();
 
     int new_value = repl_config_cycle(item->key, delta);
 
     if (item->key == REPL_CONFIG_CODE_PANEL_LAYOUT) {
-        *repl_state_code_panel()->panel_frac = 0.3f;
-        if (*repl_state_presentation()->code_panel_layout == CODE_PANEL_LAYOUT_TOP) {
+        repl_state_code_panel_mut()->panel_frac = 0.3f;
+        if (repl_state_presentation().code_panel_layout == CODE_PANEL_LAYOUT_TOP) {
             set_status("Layout: top code panel");
-        } else if (*repl_state_presentation()->code_panel_layout == CODE_PANEL_LAYOUT_BOTTOM) {
+        } else if (repl_state_presentation().code_panel_layout == CODE_PANEL_LAYOUT_BOTTOM) {
             set_status("Layout: bottom code panel");
-        } else if (*repl_state_presentation()->code_panel_layout == CODE_PANEL_LAYOUT_HIDDEN) {
+        } else if (repl_state_presentation().code_panel_layout == CODE_PANEL_LAYOUT_HIDDEN) {
             ui_panels_close_menus();
             clear_autocomplete_state();
             set_status("Layout: code panel hidden");
@@ -197,7 +197,7 @@ void repl_cfg_cycle_row(int row, int delta) {
             set_status("Layout: left code panel");
         }
     } else if (item->key == REPL_CONFIG_AUTO_NORMALS) {
-        if (*repl_state_presentation()->autonormal) {
+        if (repl_state_presentation().autonormal) {
             mark_normals_dirty();
             set_status("Auto-normals: ON");
         } else {
@@ -231,15 +231,8 @@ void repl_cfg_cycle_row(int row, int delta) {
 void repl_action_cursor_blink_reset(void) {
     ReplCodePanelRuntimeState *cp = repl_state_code_panel_mut();
 
-    *cp->cursor_visible = 1;
-    *cp->blink_tick = 0;
-}
-
-void repl_action_set_cursor_pixel(int px, int py) {
-    ReplCodePanelRuntimeState *cp = repl_state_code_panel_mut();
-
-    *cp->cursor_px = px;
-    *cp->cursor_py = py;
+    cp->cursor_visible = 1;
+    cp->blink_tick = 0;
 }
 
 void repl_action_help_tab_next(void) {

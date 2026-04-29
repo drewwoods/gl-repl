@@ -20,9 +20,9 @@
 /* Local copy of the layout-mode clamp.  Duplicated by repl_editor.c and
  * ui_panels.c; promoting to a shared header is a separate cleanup. */
 static int rvp_code_panel_layout_mode(void) {
-    if (*repl_state_presentation()->code_panel_layout < 0 || *repl_state_presentation()->code_panel_layout >= CODE_PANEL_LAYOUT_COUNT)
+    if (repl_state_presentation().code_panel_layout < 0 || repl_state_presentation().code_panel_layout >= CODE_PANEL_LAYOUT_COUNT)
         return CODE_PANEL_LAYOUT_LEFT;
-    return *repl_state_presentation()->code_panel_layout;
+    return repl_state_presentation().code_panel_layout;
 }
 
 /* Compute a shared logarithmic display scale from all variable absolute values.
@@ -71,10 +71,10 @@ static float var_panel_replay_target_lift_px(void) {
 static float var_panel_replay_lift(void) {
     ReplReplayRuntimeState replay = repl_state_replay();
     float target = 0.0f;
-    if (*replay.active)
+    if (replay.active)
         target = var_panel_replay_target_lift_px();
 
-    float anim_time = *repl_state_variables()->anim_time;
+    float anim_time = repl_state_variables().anim_time;
     if (g_var_panel_lift_update_time == anim_time &&
         g_var_panel_lift_update_target == target)
         return g_var_panel_replay_lift_px;

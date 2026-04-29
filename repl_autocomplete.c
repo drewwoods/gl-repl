@@ -144,7 +144,7 @@ static int find_defined_func_call_params(const char *input, const char **after_o
 }
 
 static void update_input_param_hint(void) {
-    const char *input = repl_state_editor_input()->input;
+    const char *input = repl_state_editor_input().input;
     const char *after = NULL;
     const FuncCompletion *builtin = find_builtin_completion_for_input(input, &after);
     ReplAutocompleteState *ac = repl_state_autocomplete_mut();
@@ -168,7 +168,7 @@ static void update_input_param_hint(void) {
 }
 
 void update_selected_autocomplete_preview(void) {
-    const ReplEditorInputState *inp = repl_state_editor_input();
+    ReplEditorInputView inp = repl_state_editor_input();
     ReplAutocompleteState *ac = repl_state_autocomplete_mut();
 
     ac->ghost[0] = '\0';
@@ -184,12 +184,12 @@ void update_selected_autocomplete_preview(void) {
         int param_count = 0;
 
         snprintf(ac->ghost, sizeof(ac->ghost), "%s",
-                 ac->insert_matches[ac->selected_idx] + *inp->input_len);
+                 ac->insert_matches[ac->selected_idx] + inp.input_len);
         if (g_ac_func_matches[ac->selected_idx] && g_ac_func_matches[ac->selected_idx]->param_count > 0) {
             build_param_hint_text(g_ac_func_matches[ac->selected_idx]->params,
                                   g_ac_func_matches[ac->selected_idx]->param_count,
                                   "", ac->hint, (int)sizeof(ac->hint));
-        } else if (find_defined_func_call_params(inp->input, &after, params,
+        } else if (find_defined_func_call_params(inp.input, &after, params,
                                                  &param_count, param_storage)) {
             ac->ghost[0] = '\0';
             build_param_hint_text(params, param_count, after,
@@ -207,10 +207,10 @@ void update_selected_autocomplete_preview(void) {
 }
 
 void update_autocomplete(void) {
-    const ReplEditorInputState *inp = repl_state_editor_input();
+    ReplEditorInputView inp = repl_state_editor_input();
     ReplAutocompleteState *ac = repl_state_autocomplete_mut();
-    const char *input = inp->input;
-    int input_len = *inp->input_len;
+    const char *input = inp.input;
+    int input_len = inp.input_len;
 
     clear_autocomplete_state();
     g_ac_mode = AC_MODE_NONE;
@@ -337,10 +337,10 @@ void accept_autocomplete(void) {
     int ghost_len = (int)strlen(ac.ghost);
     {
         ReplEditorInputState *inp = repl_state_editor_input_mut();
-        if (*inp->input_len + ghost_len < MAX_INPUT_LEN - 1) {
+        if (inp->input_len + ghost_len < MAX_INPUT_LEN - 1) {
             strcat(inp->input, ac.ghost);
-            *inp->input_len += ghost_len;
-            repl_state_cursor_pos_set(*inp->input_len);
+            inp->input_len += ghost_len;
+            repl_state_cursor_pos_set(inp->input_len);
         }
     }
     clear_autocomplete_state();

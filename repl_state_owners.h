@@ -1,12 +1,11 @@
 /*
- * repl_state_owners.h -- mutating REPL runtime-state facade.
+ * repl_state_owners.h -- REPL runtime-state owner/mutation API.
  */
 #ifndef REPL_STATE_OWNERS_H
 #define REPL_STATE_OWNERS_H
 
 #include "repl_state_views.h"
 
-const ReplDocumentState *repl_state_document(void);
 ReplDocumentState       *repl_state_document_mut(void);
 const GLCmd *repl_state_document_cmds(void);
 GLCmd       *repl_state_document_cmds_mut(void);
@@ -22,7 +21,6 @@ int          repl_state_normals_dirty(void);
 void         repl_state_normals_dirty_clear(void);
 void         repl_state_document_reset(void);
 
-const ReplFlatProgramState *repl_state_flat_program(void);
 ReplFlatProgramState       *repl_state_flat_program_mut(void);
 const GLCmd      *repl_state_flat_program_cmds(void);
 GLCmd            *repl_state_flat_program_cmds_mut(void);
@@ -32,6 +30,9 @@ void              repl_state_flat_program_set_count(int cmd_count);
 int               repl_state_flat_program_dirty(void);
 void              repl_state_flat_program_clear_dirty(void);
 int               repl_state_flat_program_user_lighting_enabled(void);
+int               repl_state_flat_program_current_block_begin(void);
+int               repl_state_flat_program_current_block_end(void);
+int               repl_state_flat_program_current_block_source_line(void);
 void              repl_state_flat_program_set_user_lighting_enabled(int enabled);
 void              repl_state_flat_program_set_current_block(int begin_idx,
                                                             int end_idx,
@@ -42,13 +43,13 @@ void              repl_state_mark_flat_dirty(void);
 void              repl_state_mark_normals_dirty(void);
 FlatProgramView   repl_state_flat_program_view(void);
 
-const ReplVariableState *repl_state_variables(void);
+ReplVariableView         repl_state_variables(void);
 ReplVariableState       *repl_state_variables_mut(void);
 void                     repl_state_variables_reset(void);
 void                     repl_state_time_advance(float dt);
 void                     repl_state_time_reset_to_zero(void);
 
-const ReplEditorInputState *repl_state_editor_input(void);
+ReplEditorInputView          repl_state_editor_input(void);
 ReplEditorInputState       *repl_state_editor_input_mut(void);
 void                        repl_state_editor_input_reset(void);
 const char *repl_state_input_text(void);
@@ -81,7 +82,7 @@ GLCmd                    *repl_state_clipboard_cmds_mut(void);
 int                       repl_state_clipboard_count(void);
 void                      repl_state_clipboard_count_set(int cmd_count);
 
-const ReplCodePanelRuntimeState *repl_state_code_panel(void);
+ReplCodePanelRuntimeState       repl_state_code_panel(void);
 ReplCodePanelRuntimeState       *repl_state_code_panel_mut(void);
 void                             repl_state_code_panel_reset(void);
 
@@ -135,17 +136,16 @@ ReplViewportState      repl_state_viewport(void);
 ReplViewportState       *repl_state_viewport_mut(void);
 void                    repl_state_viewport_set_size(int window_w, int window_h);
 
-const ReplPresentationState *repl_state_presentation(void);
+ReplPresentationState           repl_state_presentation(void);
 ReplPresentationState       *repl_state_presentation_mut(void);
+const float                  *repl_state_grid_major_steps(void);
+const float                  *repl_state_grid_extents(void);
 void                         repl_state_presentation_reset_defaults(void);
 void                         repl_state_presentation_reset_example_defaults(void);
 
 ReplRenderState        repl_state_render(void);
 ReplRenderState       *repl_state_render_mut(void);
 void                   repl_state_render_reset_defaults(void);
-
-ReplRenderDerivedState repl_state_render_derived(void);
-ReplRenderDerivedState       *repl_state_render_derived_mut(void);
 
 ReplReplayRuntimeState repl_state_replay(void);
 ReplReplayRuntimeState       *repl_state_replay_mut(void);
@@ -156,7 +156,7 @@ ReplSceneRuntimeState       *repl_state_scenes_mut(void);
 void                         repl_state_workspace_set_dir(const char *dir);
 const char                  *repl_state_workspace_dir(void);
 
-const ReplImportExportState *repl_state_import_export(void);
+ReplImportExportView        repl_state_import_export(void);
 ReplImportExportState       *repl_state_import_export_mut(void);
 void                         repl_state_import_export_reset(void);
 void                         repl_state_refresh_workspace_header_lines(void);

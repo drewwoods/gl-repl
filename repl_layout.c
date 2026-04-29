@@ -6,14 +6,14 @@
 #include "repl_state.h"
 
 static int repl_layout_code_panel_layout_mode(void) {
-    if (*repl_state_presentation()->code_panel_layout < 0 ||
-        *repl_state_presentation()->code_panel_layout >= CODE_PANEL_LAYOUT_COUNT)
+    if (repl_state_presentation().code_panel_layout < 0 ||
+        repl_state_presentation().code_panel_layout >= CODE_PANEL_LAYOUT_COUNT)
         return CODE_PANEL_LAYOUT_LEFT;
-    return *repl_state_presentation()->code_panel_layout;
+    return repl_state_presentation().code_panel_layout;
 }
 
 static int repl_layout_panel_span_px(int total_px) {
-    int span = (int)((float)total_px * *repl_state_code_panel()->panel_frac);
+    int span = (int)((float)total_px * repl_state_code_panel().panel_frac);
     if (span < 1) span = 1;
     if (span > total_px) span = total_px;
     return span;

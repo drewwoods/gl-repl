@@ -73,12 +73,15 @@ typedef struct {
 
 /* ---- Predefined variables (global scope) ------------------------------- */
 
-/* Global table of user-declared variables (float x, y, z, t, etc.).
- * The first slot (index 0) is reserved for time 't'; users can declare up to
- * MAX_PREDEF_VARS-1 additional variables. The 't' variable increments each
- * frame when animation is enabled (Ctrl+T in the REPL). */
-extern ExprVar g_predef_vars[MAX_PREDEF_VARS];
-extern int     g_num_predef_vars;
+/* Compatibility access to the predefined-variable table. In the REPL binary
+ * these names resolve to ReplRuntimeState.variables; standalone evaluator
+ * tests use repl_eval.c's fallback storage. */
+ExprVar *repl_eval_predef_vars_mut(void);
+int     *repl_eval_predef_count_mut(void);
+void     repl_eval_bind_predef_storage(ExprVar *vars, int *count_ptr);
+
+#define g_predef_vars     (repl_eval_predef_vars_mut())
+#define g_num_predef_vars (*repl_eval_predef_count_mut())
 
 typedef struct {
     const ExprVar *vars;

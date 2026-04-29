@@ -362,7 +362,7 @@ void ui_menu_bar_set_open_menu(int menu_id) {
         return;
     }
     g_open_menu = menu_id;
-    g_menu_open_time = *repl_state_variables()->anim_time;
+    g_menu_open_time = repl_state_variables().anim_time;
     g_menu_item_hover = -1;
 }
 
@@ -392,7 +392,7 @@ int ui_menu_bar_activate_dropdown_item(int item_idx) {
 }
 
 void ui_menu_bar_note_search_opened(void) {
-    g_search_open_time = *repl_state_variables()->anim_time;
+    g_search_open_time = repl_state_variables().anim_time;
 }
 
 static void code_panel_format_search_query(char *out, int out_sz,
@@ -444,7 +444,7 @@ static void code_panel_format_search_query(char *out, int out_sz,
 
 static float ui_fade_alpha(float open_time) {
     if (open_time < 0.0f) return 1.0f;
-    float dt = *repl_state_variables()->anim_time - open_time;
+    float dt = repl_state_variables().anim_time - open_time;
     if (dt >= UI_FADE_DURATION) return 1.0f;
     if (dt <= 0.0f) return 0.0f;
     return dt / UI_FADE_DURATION;
@@ -475,7 +475,7 @@ void ui_menu_bar_render_search_overlay(int cp_x, int panel_w, int panel_top) {
     (void)cp_x; (void)panel_w; (void)panel_top;
 
     static int prev_active = 0;
-    if (srch.active && !prev_active) g_search_open_time = *repl_state_variables()->anim_time;
+    if (srch.active && !prev_active) g_search_open_time = repl_state_variables().anim_time;
     prev_active = srch.active;
 
     if (!srch.active)
@@ -551,7 +551,7 @@ void ui_menu_bar_render_search_overlay(int cp_x, int panel_w, int panel_top) {
         glColor4f(0.533f, 0.533f, 0.533f, alpha);
     gl2d_draw_string((float)count_x, (float)text_y, count_buf, FONT_SMALL);
 
-    if (*repl_state_code_panel()->cursor_visible && srch.query_len > 0) {
+    if (repl_state_code_panel().cursor_visible && srch.query_len > 0) {
         int cursor_x = query_x + cursor_col * FONT_SMALL_W;
         glColor4f(0.95f, 0.80f, 0.24f, 0.85f * alpha);
         glRectf((float)cursor_x, (float)(text_y - 2), (float)cursor_x + 2.0f,
@@ -617,7 +617,7 @@ void ui_menu_bar_render(void) {
         /* Right-side pins: Search | Replay (always rendered on top) */
         for (int i = 0; i < NUM_PIN_BTNS; i++) {
             int hover = (hover_pin == i);
-            int active = (i == PIN_REPLAY && *replay.active);
+            int active = (i == PIN_REPLAY && replay.active);
             if (hover) {
                 glColor4f(0.165f, 0.165f, 0.165f, 1.0f);
                 glRectf((float)pin_x[i], (float)by, (float)pin_x[i] + (float)pin_w[i], (float)by + (float)bh);
@@ -645,9 +645,9 @@ void ui_menu_bar_render(void) {
             } else if (i == PIN_REPLAY) {
                 /* Green accent (#6fb36f), state icon + dynamic label */
                 const char *label = "Replay";
-                if (*replay.state == REPLAY_PLAYING) label = "Replaying";
-                else if (*replay.state == REPLAY_PAUSED) label = "Paused";
-                else if (*replay.state == REPLAY_DONE)   label = "Done";
+                if (replay.state == REPLAY_PLAYING) label = "Replaying";
+                else if (replay.state == REPLAY_PAUSED) label = "Paused";
+                else if (replay.state == REPLAY_DONE)   label = "Done";
 
                 int icon_x = pin_x[i] + 10;
                 int icon_cy = by + bh / 2;
@@ -655,14 +655,14 @@ void ui_menu_bar_render(void) {
 
                 glColor3f(UI_ACCENT_GREEN_R, UI_ACCENT_GREEN_G, UI_ACCENT_GREEN_B);
 
-                if (*replay.state == REPLAY_PLAYING) {
+                if (replay.state == REPLAY_PLAYING) {
                     /* Two vertical bars (pause glyph) */
                     float bw = 2.5f, gap = 2.0f;
                     float by0 = (float)icon_cy - (float)icon_sz * 0.5f;
                     float bh0 = (float)icon_sz;
                     glRectf((float)icon_x,                    by0, (float)icon_x + bw, by0 + bh0);
                     glRectf((float)icon_x + bw + gap,         by0, (float)icon_x + bw + gap + bw, by0 + bh0);
-                } else if (*replay.state == REPLAY_DONE) {
+                } else if (replay.state == REPLAY_DONE) {
                     /* Square - run complete */
                     float sx = (float)icon_x;
                     float sy = (float)icon_cy - (float)icon_sz * 0.5f;

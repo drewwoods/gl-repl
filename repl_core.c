@@ -184,9 +184,9 @@ void repl_debug_dump_editor(FILE *out) {
     }
     update_cam_lines();
     {
-        const ReplImportExportState *meta = repl_state_import_export();
+        ReplImportExportView meta = repl_state_import_export();
         for (int cam_line_idx = 0; cam_line_idx < CAM_LINE_COUNT; cam_line_idx++)
-            fprintf(dst, "%s\n", meta->cam_lines[cam_line_idx]);
+            fprintf(dst, "%s\n", meta.cam_lines[cam_line_idx]);
     }
     fprintf(dst, "--- init ---\n");
     for (int init_line_idx = 0; init_line_idx < init_section_line_count(); init_line_idx++) {
@@ -332,9 +332,9 @@ void repl_reformat_commands(void) {
     int saved_edit_line = repl_state_edit_line();
     int saved_inserting = repl_state_insert_mode();
     char saved_input[MAX_INPUT_LEN];
-    int saved_input_len = *repl_state_editor_input()->input_len;
+    int saved_input_len = repl_state_editor_input().input_len;
     int saved_cursor_pos = repl_state_cursor_pos();
-    memcpy(saved_input, repl_state_editor_input()->input, sizeof(saved_input));
+    memcpy(saved_input, repl_state_editor_input().input, sizeof(saved_input));
     ReplCommandStore store = repl_command_store_live();
 
     for (int cmd_idx = 0; cmd_idx < repl_state_document_count(); cmd_idx++) {
@@ -510,7 +510,7 @@ void repl_reformat_commands(void) {
     if (saved_inserting) {
         ReplEditorInputState *inp = repl_state_editor_input_mut();
         memcpy(inp->input, saved_input, sizeof(saved_input));
-        *inp->input_len = saved_input_len;
+        inp->input_len = saved_input_len;
         repl_state_cursor_pos_set(saved_cursor_pos);
     } else {
         load_line_to_input(repl_state_edit_line());
@@ -605,15 +605,15 @@ int collect_visible_vars(int pos, ExprVar *vars, int max_vars) {
 
 static void scroll_to_display_function(void) {
     repl_state_refresh_workspace_header_lines();
-    const ReplImportExportState *meta = repl_state_import_export();
-    int target = meta->workspace_header_line_count;
+    ReplImportExportView meta = repl_state_import_export();
+    int target = meta.workspace_header_line_count;
     for (int line_idx = 0; g_header_pre[line_idx]; line_idx++) {
         if (strcmp(g_header_pre[line_idx], "void display() {") == 0)
             break;
         target++;
     }
-    *repl_state_code_panel_mut()->scroll = target;
-    *repl_state_code_panel_mut()->scroll_follow_cursor = 0;
+    repl_state_code_panel_mut()->scroll = target;
+    repl_state_code_panel_mut()->scroll_follow_cursor = 0;
 }
 
 static void load_initial_commands(const char *import_file) {

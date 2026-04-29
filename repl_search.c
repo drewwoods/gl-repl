@@ -288,7 +288,7 @@ const char *repl_search_row_text(int row_idx) {
     if (row_idx < 0 || row_idx >= repl_search_row_count())
         return "";
     if (search_row_is_live_input(row_idx))
-        return repl_state_editor_input()->input;
+        return repl_state_editor_input().input;
     if (repl_state_insert_mode() && row_idx > edit_line)
         row_idx--;
     return repl_state_document_cmds()[row_idx].source;
@@ -375,7 +375,7 @@ static void search_apply_hit(int row, int char_pos) {
     int row_occurrence = search_row_occurrence_index(row, char_pos);
     int nav_line = search_row_to_nav_line(row);
     if (nav_line >= 0) {
-        *repl_state_code_panel_mut()->scroll_follow_cursor = 1;
+        repl_state_code_panel_mut()->scroll_follow_cursor = 1;
         navigate_to_line(nav_line);
         row = repl_state_edit_line();
         if (row_occurrence >= 0) {
