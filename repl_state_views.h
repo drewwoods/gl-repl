@@ -310,13 +310,12 @@ ReplPointerState         repl_state_pointer(void);
 ReplViewportState       repl_state_viewport(void);
 
 const ReplPresentationState *repl_state_presentation(void);
-ReplPresentationState        repl_state_presentation_snapshot(void);
 
-const ReplRenderState *repl_state_render(void);
+ReplRenderState          repl_state_render(void);
 
-const ReplRenderDerivedState *repl_state_render_derived(void);
+ReplRenderDerivedState   repl_state_render_derived(void);
 
-const ReplReplayRuntimeState *repl_state_replay(void);
+ReplReplayRuntimeState    repl_state_replay(void);
 
 ReplSceneRuntimeState     repl_state_scenes(void);
 const char *repl_state_workspace_dir(void);

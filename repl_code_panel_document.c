@@ -221,23 +221,23 @@ static int code_panel_cursor_doc_line_from_layout(
 static int code_panel_follow_doc_line_from_layout(
     int cursor_doc_line, int header_rows, const int *cmd_main_rows,
     const int *replay_extra_rows) {
-    const ReplReplayRuntimeState *replay = repl_state_replay();
+    ReplReplayRuntimeState replay = repl_state_replay();
     int follow_doc_line = cursor_doc_line;
 
-    if (*replay->active &&
-        *replay->src_line_idx >= 0 &&
-        *replay->src_line_idx < repl_state_document_count()) {
+    if (*replay.active &&
+        *replay.src_line_idx >= 0 &&
+        *replay.src_line_idx < repl_state_document_count()) {
         follow_doc_line = header_rows;
         /* Accumulate rows up to the replay source line. */
-        for (int cmd_idx = 0; cmd_idx < *replay->src_line_idx; cmd_idx++) {
+        for (int cmd_idx = 0; cmd_idx < *replay.src_line_idx; cmd_idx++) {
             follow_doc_line += cmd_main_rows[cmd_idx];
             follow_doc_line += replay_extra_rows[cmd_idx];
         }
-        if (replay_extra_rows[*replay->src_line_idx] > 0) {
-            follow_doc_line += cmd_main_rows[*replay->src_line_idx];
-            follow_doc_line += replay_extra_rows[*replay->src_line_idx] - 1;
-        } else if (cmd_main_rows[*replay->src_line_idx] > 0) {
-            follow_doc_line += cmd_main_rows[*replay->src_line_idx] - 1;
+        if (replay_extra_rows[*replay.src_line_idx] > 0) {
+            follow_doc_line += cmd_main_rows[*replay.src_line_idx];
+            follow_doc_line += replay_extra_rows[*replay.src_line_idx] - 1;
+        } else if (cmd_main_rows[*replay.src_line_idx] > 0) {
+            follow_doc_line += cmd_main_rows[*replay.src_line_idx] - 1;
         }
     }
 

@@ -2629,7 +2629,7 @@ int main() {
         *repl_state_replay_mut()->accum = 0.99f;
         /* This should trigger at least one repl_replay_advance */
         repl_timer_func(0);
-        ASSERT_TRUE("timer: replay accum advanced", *repl_state_replay()->accum < 0.5f);
+        ASSERT_TRUE("timer: replay accum advanced", *repl_state_replay().accum < 0.5f);
 
         *repl_state_replay_mut()->active = 0;
     }

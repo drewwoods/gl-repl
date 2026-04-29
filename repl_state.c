@@ -926,9 +926,6 @@ ReplPresentationState *repl_state_presentation_mut(void) {
     return &g_repl_facade.presentation;
 }
 
-ReplPresentationState repl_state_presentation_snapshot(void) {
-    return g_repl_facade.presentation;
-}
 
 void repl_state_presentation_reset_defaults(void) {
     g_repl_state.presentation = g_repl_state_defaults.presentation;
@@ -953,8 +950,8 @@ void repl_state_presentation_reset_example_defaults(void) {
     g_cam_rotate = CFG_DEFAULT_CAMERA_ROTATE;
 }
 
-const ReplRenderState *repl_state_render(void) {
-    return &g_repl_facade.render;
+ReplRenderState repl_state_render(void) {
+    return g_repl_facade.render;
 }
 
 ReplRenderState *repl_state_render_mut(void) {
@@ -965,16 +962,16 @@ void repl_state_render_reset_defaults(void) {
     g_repl_state.render = g_repl_state_defaults.render;
 }
 
-const ReplRenderDerivedState *repl_state_render_derived(void) {
-    return &g_repl_facade.render_derived;
+ReplRenderDerivedState repl_state_render_derived(void) {
+    return g_repl_facade.render_derived;
 }
 
 ReplRenderDerivedState *repl_state_render_derived_mut(void) {
     return &g_repl_facade.render_derived;
 }
 
-const ReplReplayRuntimeState *repl_state_replay(void) {
-    return &g_repl_facade.replay;
+ReplReplayRuntimeState repl_state_replay(void) {
+    return g_repl_facade.replay;
 }
 
 ReplReplayRuntimeState *repl_state_replay_mut(void) {
