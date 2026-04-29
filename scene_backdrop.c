@@ -8,6 +8,9 @@
 #define CITY_RING_SPREAD   7.0f
 #define CITY_CYCLE_SECS  600.0f
 
+#define STAR_COUNT        2080
+#define STAR_SKY_RADIUS   30.0f
+
 static void scene_backdrop_push_state(void) {
     glPushAttrib(GL_ALL_ATTRIB_BITS);
 }
@@ -223,9 +226,109 @@ static void draw_cityscape(float anim_time) {
     scene_backdrop_pop_state();
 }
 
+static void draw_starry_sky(float anim_time) {
+    scene_backdrop_push_state();
+    glDisable(GL_LIGHTING);
+    glEnable(GL_DEPTH_TEST);
+    glDepthMask(GL_FALSE);
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    glEnable(GL_POINT_SMOOTH);
+    glHint(GL_POINT_SMOOTH_HINT, GL_NICEST);
+    glDisable(GL_FOG);
+    glPointParameterfv(GL_POINT_DISTANCE_ATTENUATION, (GLfloat[]){1, 0, 0.00});
+
+    /* Strip camera translation so stars follow rotation only (no zoom pop). */
+    glMatrixMode(GL_MODELVIEW);
+    glPushMatrix();
+    {
+        GLfloat mv[16];
+        glGetFloatv(GL_MODELVIEW_MATRIX, mv);
+        mv[12] = 0.0f; mv[13] = 0.0f; mv[14] = 0.0f;
+        glLoadMatrixf(mv);
+    }
+
+    /* Four point-size bands derived from STAR_COUNT: small(57%) med(23%) large(14%) bright(6%) */
+    static const float band_sizes[4] = { 1.5f, 2.0f, 3.0f, 4.5f };
+    const int band_cuts[5] = {
+        0,
+        (int)(STAR_COUNT * 0.57f),
+        (int)(STAR_COUNT * 0.80f),
+        (int)(STAR_COUNT * 0.94f),
+        STAR_COUNT,
+    };
+
+    for (int bi = 0; bi < 4; bi++) {
+        glPointSize(band_sizes[bi]);
+        glBegin(GL_POINTS);
+
+        for (int i = band_cuts[bi]; i < band_cuts[bi + 1]; i++) {
+            unsigned int base = (unsigned int)(i * 7u + 0x5A7Eu);
+
+            /* Spherical coords: theta all-around, phi mostly above horizon */
+            float theta = city_rng(base + 1u) * 2.0f * (float)M_PI;
+            float phi   = city_rng(base + 2u) * 0.80f * (float)M_PI;
+            float sp = sinf(phi), cp = cosf(phi);
+
+            float sx = sp * cosf(theta) * STAR_SKY_RADIUS;
+            float sy = cp * STAR_SKY_RADIUS;
+            float sz = sp * sinf(theta) * STAR_SKY_RADIUS;
+
+            /* Retro-80s palette: off-white, neon blue, purple/violet */
+            float color_roll = city_rng(base + 3u);
+            float sr, sg, sb;
+            if (color_roll < 0.45f) {
+                float w = city_rng(base + 10u);
+                sr = 0.88f + w * 0.10f;
+                sg = 0.88f + w * 0.06f;
+                sb = 0.94f + w * 0.04f;
+            } else if (color_roll < 0.75f) {
+                float b = city_rng(base + 11u);
+                sr = 0.22f + b * 0.18f;
+                sg = 0.52f + b * 0.22f;
+                sb = 1.0f;
+            } else {
+                float p = city_rng(base + 12u);
+                sr = 0.52f + p * 0.22f;
+                sg = 0.12f + p * 0.14f;
+                sb = 0.88f + p * 0.10f;
+            }
+
+            /* ~35% blink slowly; the rest have a faint atmospheric shimmer */
+            float alpha;
+            float blink_roll = city_rng(base + 4u);
+            if (blink_roll > 0.65f) {
+                float phase = city_rng(base + 5u) * 2.0f * (float)M_PI;
+                float speed = 0.05f + city_rng(base + 6u) * 0.28f;
+                float blink = 0.5f + 0.5f * sinf(anim_time * speed * 2.0f * (float)M_PI + phase);
+                alpha = 0.38f + 0.62f * blink;
+            } else {
+                float phase = city_rng(base + 5u) * 2.0f * (float)M_PI;
+                alpha = 0.82f + 0.10f * sinf(anim_time * 2.7f + phase);
+            }
+
+            glColor4f(sr, sg, sb, alpha);
+            glVertex3f(sx, sy, sz);
+        }
+
+        glEnd();
+    }
+
+    glPopMatrix();
+    scene_backdrop_pop_state();
+}
+
 void scene_backdrop_render(const FrameRenderContext *frame_ctx) {
     switch (frame_ctx->config.backdrop_mode) {
     case 1:
+        draw_cityscape(frame_ctx->config.anim_time);
+        break;
+    case 2:
+        draw_starry_sky(frame_ctx->config.anim_time);
+        break;
+    case 3:
+        /* Stars first so city geometry writes depth over them. */
+        draw_starry_sky(frame_ctx->config.anim_time);
         draw_cityscape(frame_ctx->config.anim_time);
         break;
     default:

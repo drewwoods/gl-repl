@@ -144,6 +144,12 @@ typedef double GLclampd;
 
 #define GL_POINT_DISTANCE_ATTENUATION 0x8129
 
+#define GL_FASTEST 0x1101
+#define GL_NICEST 0x1102
+#define GL_DONT_CARE 0x1100
+
+#define GL_POINT_SMOOTH_HINT 0x0C51
+
 #define GL_TEXTURE_ENV 0x2300
 #define GL_TEXTURE_ENV_MODE 0x2200
 #define GL_COMBINE 0x8570
@@ -203,6 +209,7 @@ static inline void glGetIntegerv(GLenum pname, GLint *params) {
         params[0] = 0;
     }
 }
+static inline void glHint(GLenum target, GLenum mode) { gl_stub_tick(GL_STUB_glHint); (void)target; (void)mode; }
 static inline GLboolean glIsEnabled(GLenum cap) { gl_stub_tick(GL_STUB_glIsEnabled); (void)cap; return GL_FALSE; }
 static inline void glLightfv(GLenum light, GLenum pname, const GLfloat *params) { gl_stub_tick(GL_STUB_glLightfv); (void)light; (void)pname; (void)params; }
 static inline void glLightModelfv(GLenum pname, const GLfloat *params) { gl_stub_tick(GL_STUB_glLightModelfv); (void)pname; (void)params; }
