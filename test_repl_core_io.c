@@ -92,7 +92,7 @@ int main(void) {
     const char *func_path = "/tmp/repl_core_func_output.c";
     const char *param_loop_path = "/tmp/repl_core_param_loop_output.c";
     const char *decl_func_path = "/tmp/repl_core_decl_func_output.c";
-    const char *quadric_path = "/tmp/repl_core_quadric_output.c";
+    const char *shape_path = "/tmp/repl_core_shapes_output.c";
     const char *tess_path = "/tmp/repl_core_tess_output.c";
 
     repl_eval_init_predef_vars();
@@ -108,8 +108,8 @@ int main(void) {
     ASSERT_TRUE("pre-save cmds", repl_state_document_count() > 0);
     ASSERT_TRUE("init has host-only ambient line",
                 find_init_line("  glLightModelfv(GL_LIGHT_MODEL_AMBIENT, lm_amb);") >= 0);
-    ASSERT_TRUE("init has quadric texture line",
-                find_init_line("  gluQuadricTexture(g_quadric, GL_FALSE);") >= 0);
+    ASSERT_TRUE("init omits quadric header line",
+                find_init_line("static GLUquadric *g_quadric = NULL;") < 0);
     ASSERT_TRUE("init omits tess init line",
                 find_init_line("  g_tess = gluNewTess();") < 0);
     ASSERT_TRUE("init has color material enable bootstrap",
@@ -134,7 +134,8 @@ int main(void) {
 
     int before_n = repl_state_document_count();
     CmdType before_types[MAX_COMMANDS];
-    for (int i = 0; i < before_n; i++) before_types[i] = repl_state_document_cmds_mut()[i].type;
+    for (int i = 0; i < before_n; i++)
+        before_types[i] = repl_state_document_cmds_mut()[i].type;
 
     g_multisample_enabled = 0;
     g_line_smooth_enabled = 1;
@@ -179,8 +180,8 @@ int main(void) {
                     strstr(buf, "render_repl_vertex_points_overlay") == NULL);
         ASSERT_TRUE("saved init ambient model line",
                     strstr(buf, "glLightModelfv(GL_LIGHT_MODEL_AMBIENT, lm_amb);") != NULL);
-        ASSERT_TRUE("saved init quadric texture line",
-                    strstr(buf, "gluQuadricTexture(g_quadric, GL_FALSE);") != NULL);
+        ASSERT_TRUE("saved init omits quadric scaffolding",
+                strstr(buf, "g_quadric") == NULL);
         ASSERT_TRUE("saved non-tess export omits tess global",
                     strstr(buf, "static GLUtesselator *g_tess = NULL;") == NULL);
         ASSERT_TRUE("saved non-tess export omits tess setup line",
@@ -220,7 +221,6 @@ int main(void) {
     repl_reset_state(); declare_test_vars();
     ASSERT_TRUE("load saved output", repl_export_load_from_file(path) == 1);
     ASSERT_TRUE("roundtrip cmd count", repl_state_document_count() == before_n);
-
     for (int i = 0; i < before_n; i++) {
         char label[64];
         snprintf(label, sizeof(label), "roundtrip type %d", i);
@@ -276,8 +276,8 @@ int main(void) {
     repl_feed_line_public("}");
     repl_feed_line_public("func0(1.5, x + 2);");
 
-    before_n = repl_state_document_count();
-    for (int i = 0; i < before_n; i++) before_types[i] = repl_state_document_cmds_mut()[i].type;
+    int func_n = repl_state_document_count();
+    for (int i = 0; i < func_n; i++) before_types[i] = repl_state_document_cmds_mut()[i].type;
 
     repl_state_presentation_mut()->show_vertex_outlines = 1;
     repl_state_presentation_mut()->show_vertex_points = 1;
@@ -312,7 +312,7 @@ int main(void) {
 
     repl_reset_state(); declare_test_vars();
     ASSERT_TRUE("load saved param func output", repl_export_load_from_file(func_path) == 1);
-    ASSERT_TRUE("param func roundtrip cmd count", repl_state_document_count() == before_n);
+    ASSERT_TRUE("param func roundtrip cmd count", repl_state_document_count() == func_n);
     {
         int have_var = 0, have_def = 0, have_body = 0, have_end = 0, have_call = 0;
         for (int i = 0; i < repl_state_document_count(); i++) {
@@ -399,49 +399,55 @@ int main(void) {
 
     repl_reset_state(); declare_test_vars();
     repl_feed_line_public("x = 0.25;");
-    repl_feed_line_public("gluSphere(x, 16, 12);");
-    repl_feed_line_public("gluCylinder(0.15, 0.05, 1.5, 8, 1);");
-    repl_feed_line_public("gluDisk(0, 0.35, 12, 1);");
-    repl_feed_line_public("gluPartialDisk(0.1, 0.5, 12, 4, 30, 180);");
+    repl_feed_line_public("glutSolidSphere(x, 16, 12);");
+    repl_feed_line_public("glutSolidCone(0.15, 1.5, 8, 1);");
+    repl_feed_line_public("glutSolidTorus(0.1, 0.35, 12, 4);");
+    repl_feed_line_public("glutSolidTeapot(0.25);");
+    repl_feed_line_public("glutSolidCube(0.5);");
     repl_state_presentation_mut()->show_vertex_outlines = 0;
     repl_state_presentation_mut()->show_vertex_points = 0;
-    repl_export_save_output(quadric_path);
+    repl_export_save_output(shape_path);
     {
         char buf[16384];
-        read_text_file(quadric_path, buf, sizeof(buf));
-        ASSERT_TRUE("saved quadric sphere includes g_quadric",
-                    strstr(buf, "gluSphere(g_quadric, x, 16, 12);") != NULL);
-        ASSERT_TRUE("saved quadric cylinder includes g_quadric",
-                    strstr(buf, "gluCylinder(g_quadric, 0.15, 0.05, 1.5, 8, 1);") != NULL);
-        ASSERT_TRUE("saved quadric disk includes g_quadric",
-                    strstr(buf, "gluDisk(g_quadric, 0, 0.35, 12, 1);") != NULL);
-        ASSERT_TRUE("saved quadric partial disk includes g_quadric",
-                    strstr(buf, "gluPartialDisk(g_quadric, 0.1, 0.5, 12, 4, 30, 180);") != NULL);
+        read_text_file(shape_path, buf, sizeof(buf));
+        ASSERT_TRUE("saved shape sphere preserves variable expr",
+                    strstr(buf, "glutSolidSphere(x, 16, 12);") != NULL);
+        ASSERT_TRUE("saved shape cone stays plain",
+                    strstr(buf, "glutSolidCone(0.15, 1.5, 8, 1);") != NULL);
+        ASSERT_TRUE("saved shape torus stays plain",
+                    strstr(buf, "glutSolidTorus(0.1, 0.35, 12, 4);") != NULL);
+        ASSERT_TRUE("saved shape teapot stays plain",
+                    strstr(buf, "glutSolidTeapot(0.25);") != NULL);
+        ASSERT_TRUE("saved shape cube stays plain",
+                    strstr(buf, "glutSolidCube(0.5);") != NULL);
+        ASSERT_TRUE("saved shape output omits quadric scaffolding",
+                    strstr(buf, "g_quadric") == NULL);
     }
 
     repl_reset_state(); declare_test_vars();
-    ASSERT_TRUE("load saved quadric output", repl_export_load_from_file(quadric_path) == 1);
-    {
-        int sphere_seen = 0;
-        int quadric_cmds = 0;
-        for (int i = 0; i < repl_state_document_count(); i++) {
-            if (!repl_state_document_cmds_mut()[i].valid)
-                continue;
-            if (repl_state_document_cmds_mut()[i].type == CMD_GLU_SPHERE ||
-                repl_state_document_cmds_mut()[i].type == CMD_GLU_CYLINDER ||
-                repl_state_document_cmds_mut()[i].type == CMD_GLU_DISK ||
-                repl_state_document_cmds_mut()[i].type == CMD_GLU_PARTIAL_DISK) {
-                quadric_cmds++;
-                ASSERT_TRUE("loaded quadric source omits g_quadric",
-                            strstr(repl_state_document_cmds_mut()[i].source, "g_quadric") == NULL);
-                if (repl_state_document_cmds_mut()[i].type == CMD_GLU_SPHERE &&
-                    strstr(repl_state_document_cmds_mut()[i].source, "gluSphere(x, 16, 12);") != NULL)
-                    sphere_seen = 1;
-            }
-        }
-        ASSERT_TRUE("loaded quadric cmd count", quadric_cmds == 4);
-        ASSERT_TRUE("loaded quadric sphere keeps expr source", sphere_seen == 1);
-    }
+    ASSERT_TRUE("load saved shape output", repl_export_load_from_file(shape_path) == 1);
+    ASSERT_TRUE("shape roundtrip cmd count", repl_state_document_count() == 6);
+    ASSERT_TRUE("loaded shape assign first",  repl_state_document_cmds_mut()[0].type == CMD_VAR_ASSIGN);
+    ASSERT_TRUE("loaded shape sphere second", repl_state_document_cmds_mut()[1].type == CMD_GLUT_SPHERE);
+    ASSERT_TRUE("loaded shape cone third",    repl_state_document_cmds_mut()[2].type == CMD_GLUT_CONE);
+    ASSERT_TRUE("loaded shape torus fourth",  repl_state_document_cmds_mut()[3].type == CMD_GLUT_TORUS);
+    ASSERT_TRUE("loaded shape teapot fifth",  repl_state_document_cmds_mut()[4].type == CMD_GLUT_TEAPOT);
+    ASSERT_TRUE("loaded shape cube sixth",    repl_state_document_cmds_mut()[5].type == CMD_GLUT_CUBE);
+    ASSERT_TRUE("loaded shape sphere keeps expr source",
+                strstr(repl_state_document_cmds_mut()[1].source, "glutSolidSphere(x, 16, 12);") != NULL);
+    ASSERT_TRUE("loaded shape sphere has_vars set",
+                repl_state_document_cmds_mut()[1].has_vars == 1);
+    ASSERT_TRUE("loaded shape cone source intact",
+                strstr(repl_state_document_cmds_mut()[2].source, "glutSolidCone(0.15, 1.5, 8, 1);") != NULL);
+    ASSERT_TRUE("loaded shape torus source intact",
+                strstr(repl_state_document_cmds_mut()[3].source, "glutSolidTorus(0.1, 0.35, 12, 4);") != NULL);
+    ASSERT_TRUE("loaded shape teapot source intact",
+                strstr(repl_state_document_cmds_mut()[4].source, "glutSolidTeapot(0.25);") != NULL);
+    ASSERT_TRUE("loaded shape cube source intact",
+                strstr(repl_state_document_cmds_mut()[5].source, "glutSolidCube(0.5);") != NULL);
+    for (int i = 1; i < repl_state_document_count(); i++)
+        ASSERT_TRUE("loaded shape source omits g_quadric",
+                    strstr(repl_state_document_cmds_mut()[i].source, "g_quadric") == NULL);
 
     repl_reset_state(); declare_test_vars();
     repl_feed_line_public("func0(radius) {");

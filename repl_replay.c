@@ -314,11 +314,11 @@ static int replay_next_polygon_limit(int start, int *fade_begin, int *fade_end) 
             *fade_end = end;
             return end + 1;
         }
-        case CMD_GLU_SPHERE:
-        case CMD_GLU_CYLINDER:
-        case CMD_GLU_DISK:
-        case CMD_GLU_PARTIAL_DISK:
         case CMD_GLUT_TORUS:
+        case CMD_GLUT_CUBE:
+        case CMD_GLUT_SPHERE:
+        case CMD_GLUT_TEAPOT:
+        case CMD_GLUT_CONE:
             *fade_begin = start;
             *fade_end = flat_idx;
             return flat_idx + 1;
@@ -407,11 +407,11 @@ static int replay_next_vertex_limit(int start, int *fade_begin, int *fade_end) {
             *fade_begin = (open_tess_poly >= 0) ? open_tess_poly : start;
             *fade_end = flat_idx;
             return flat_idx + 1;
-        case CMD_GLU_SPHERE:
-        case CMD_GLU_CYLINDER:
-        case CMD_GLU_DISK:
-        case CMD_GLU_PARTIAL_DISK:
         case CMD_GLUT_TORUS:
+        case CMD_GLUT_CUBE:
+        case CMD_GLUT_SPHERE:
+        case CMD_GLUT_TEAPOT:
+        case CMD_GLUT_CONE:
             *fade_begin = start;
             *fade_end = flat_idx;
             return flat_idx + 1;

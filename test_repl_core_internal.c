@@ -533,9 +533,9 @@ int main() {
     #endif
         repl_executor_init_resources();
     #ifdef OPENGL_VIBE_USE_GL_STUBS
-        ASSERT_INT("executor init quadric", (int)gl_stub_counts[GL_STUB_gluNewQuadric], 1);
-        ASSERT_INT("executor init quadric normals", (int)gl_stub_counts[GL_STUB_gluQuadricNormals], 1);
-        ASSERT_INT("executor init quadric texture", (int)gl_stub_counts[GL_STUB_gluQuadricTexture], 1);
+        ASSERT_INT("executor init quadric removed", (int)gl_stub_counts[GL_STUB_gluNewQuadric], 0);
+        ASSERT_INT("executor init quadric normals removed", (int)gl_stub_counts[GL_STUB_gluQuadricNormals], 0);
+        ASSERT_INT("executor init quadric texture removed", (int)gl_stub_counts[GL_STUB_gluQuadricTexture], 0);
         ASSERT_INT("executor init tess", (int)gl_stub_counts[GL_STUB_gluNewTess], 1);
         ASSERT_INT("executor init tess callbacks", (int)gl_stub_counts[GL_STUB_gluTessCallback], 6);
     #endif
@@ -545,7 +545,7 @@ int main() {
     #endif
         repl_executor_destroy_resources();
     #ifdef OPENGL_VIBE_USE_GL_STUBS
-        ASSERT_INT("executor destroy quadric", (int)gl_stub_counts[GL_STUB_gluDeleteQuadric], 1);
+        ASSERT_INT("executor destroy quadric removed", (int)gl_stub_counts[GL_STUB_gluDeleteQuadric], 0);
         ASSERT_INT("executor destroy tess", (int)gl_stub_counts[GL_STUB_gluDeleteTess], 1);
     #endif
     }

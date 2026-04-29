@@ -132,11 +132,11 @@ int main(void) {
         GLCmd cmd;
         memset(&cmd, 0, sizeof(cmd));
         ASSERT_TRUE("glu sphere constant parse",
-                    repl_parse_and_normalize("gluSphere(0.25, 16, 12);", 0, NULL, 0, 0, &cmd) == 1);
-        ASSERT_TRUE("glu sphere constant no quadric",
+                    repl_parse_and_normalize("glutSolidSphere(0.25, 16, 12);", 0, NULL, 0, 0, &cmd) == 1);
+        ASSERT_TRUE("glut sphere constant no quadric",
                     strstr(cmd.source, "g_quadric") == NULL);
-        ASSERT_TRUE("glu sphere constant syntax",
-                    strstr(cmd.source, "gluSphere(0.25, 16, 12);") != NULL);
+        ASSERT_TRUE("glut sphere constant syntax",
+                    strstr(cmd.source, "glutSolidSphere(0.25, 16, 12);") != NULL);
     }
 
     {
@@ -146,12 +146,12 @@ int main(void) {
             { "stacks", 12.0f }
         };
         memset(&cmd, 0, sizeof(cmd));
-        ASSERT_TRUE("glu sphere var parse",
-                    repl_parse_and_normalize("gluSphere(radius, 16, stacks);",
+        ASSERT_TRUE("glut sphere var parse",
+                    repl_parse_and_normalize("glutSolidSphere(radius, 16, stacks);",
                                              0, vars, 2, 1, &cmd) == 1);
-        ASSERT_TRUE("glu sphere var keeps radius", strstr(cmd.source, "radius") != NULL);
-        ASSERT_TRUE("glu sphere var keeps stacks", strstr(cmd.source, "stacks") != NULL);
-        ASSERT_TRUE("glu sphere var no quadric", strstr(cmd.source, "g_quadric") == NULL);
+        ASSERT_TRUE("glut sphere var keeps radius", strstr(cmd.source, "radius") != NULL);
+        ASSERT_TRUE("glut sphere var keeps stacks", strstr(cmd.source, "stacks") != NULL);
+        ASSERT_TRUE("glut sphere var no quadric", strstr(cmd.source, "g_quadric") == NULL);
     }
 
     {

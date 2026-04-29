@@ -17,9 +17,9 @@ static void scene_transform_guides_pop_state(void) {
  * into the cursor-line's guide. */
 static int is_geometry_emit_cmd(CmdType type) {
     return (type == CMD_BEGIN ||
-            type == CMD_GLU_SPHERE || type == CMD_GLU_CYLINDER ||
-            type == CMD_GLU_DISK   || type == CMD_GLU_PARTIAL_DISK ||
-            type == CMD_GLUT_TORUS ||
+            type == CMD_GLUT_TORUS || type == CMD_GLUT_CUBE ||
+            type == CMD_GLUT_SPHERE || type == CMD_GLUT_TEAPOT ||
+            type == CMD_GLUT_CONE ||
             type == CMD_TESS_BEGIN_POLYGON);
 }
 

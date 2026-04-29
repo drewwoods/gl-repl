@@ -28,7 +28,6 @@ const char *g_header_pre[] = {
     "",
     "static float g_angle = 0.0f;",
     "static int   g_rotating = 0;",
-    "static GLUquadric *g_quadric = NULL;",
     "",
     "void display() {",
     "  glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);",
@@ -308,9 +307,6 @@ static int   g_init_bootstrap_ready = 0;
 static const char *g_init_host_only_visible_c[] = {
     "  GLfloat lm_amb[] = { 0.15f, 0.15f, 0.20f, 1.0f };",
     "  glLightModelfv(GL_LIGHT_MODEL_AMBIENT, lm_amb);",
-    "  g_quadric = gluNewQuadric();",
-    "  gluQuadricNormals(g_quadric, GLU_SMOOTH);",
-    "  gluQuadricTexture(g_quadric, GL_FALSE);",
     NULL
 };
 
@@ -800,13 +796,6 @@ static void write_for_begin_as_c(FILE *f, const GLCmd *cmd) {
     }
 }
 
-static int cmd_type_is_quadric(CmdType t) {
-    return t == CMD_GLU_SPHERE ||
-           t == CMD_GLU_CYLINDER ||
-           t == CMD_GLU_DISK ||
-           t == CMD_GLU_PARTIAL_DISK;
-}
-
 static int cmd_type_is_tess(CmdType t) {
     return t == CMD_TESS_BEGIN_POLYGON ||
            t == CMD_TESS_BEGIN_CONTOUR ||
@@ -825,44 +814,6 @@ static int export_uses_tess_commands(void) {
     }
 
     return 0;
-}
-
-static void quadric_source_to_c(const char *src, char *out, int out_sz) {
-    const char *p = src;
-    const char *open;
-    int indent = 0;
-    int prefix_len;
-    int written;
-
-    if (out_sz <= 0) return;
-    out[0] = '\0';
-
-    while (p[indent] == ' ' || p[indent] == '\t')
-        indent++;
-    p += indent;
-
-    open = strchr(p, '(');
-    if (!open) {
-        size_t copy_len = strlen(src);
-        if (copy_len >= (size_t)out_sz)
-            copy_len = (size_t)out_sz - 1;
-        memcpy(out, src, copy_len);
-        out[copy_len] = '\0';
-        return;
-    }
-
-    prefix_len = indent + (int)(open - p);
-    if (prefix_len > out_sz - 1)
-        prefix_len = out_sz - 1;
-    memcpy(out, src, (size_t)prefix_len);
-    out[prefix_len] = '\0';
-
-    written = snprintf(out + prefix_len, (size_t)(out_sz - prefix_len),
-                       "(g_quadric%s%s",
-                       open[1] == ')' ? "" : ", ",
-                       open + 1);
-    if (written < 0 || prefix_len + written >= out_sz)
-        out[out_sz - 1] = '\0';
 }
 
 void trim_in_place(char *s) {
@@ -1290,7 +1241,6 @@ static int write_tess_source_as_c(FILE *f, const GLCmd *cmd) {
 static void format_cmd_source_as_c(char *out, size_t out_sz,
                                    const GLCmd *cmd, int translate_exprs) {
     char c_src[MAX_LINE_LEN];
-    char quadric_src[MAX_LINE_LEN];
 
     if (!out || out_sz == 0)
         return;
@@ -1302,12 +1252,7 @@ static void format_cmd_source_as_c(char *out, size_t out_sz,
         c_src[sizeof(c_src) - 1] = '\0';
     }
 
-    if (cmd_type_is_quadric(cmd->type)) {
-        quadric_source_to_c(c_src, quadric_src, sizeof(quadric_src));
-        snprintf(out, out_sz, "%s", quadric_src);
-    } else {
-        snprintf(out, out_sz, "%s", c_src);
-    }
+    snprintf(out, out_sz, "%s", c_src);
 }
 
 static void write_cmd_source_as_c(FILE *f, const GLCmd *cmd, int translate_exprs) {
@@ -2215,59 +2160,6 @@ static int import_make_repl_point_parameter_line(const char *line, char *out, in
                             pname, repl_args[0], repl_args[1], repl_args[2]);
 }
 
-static int import_make_repl_quadric_line(const char *line, char *out, int out_sz) {
-    static const char *const names[] = {
-        "gluSphere",
-        "gluCylinder",
-        "gluDisk",
-        "gluPartialDisk",
-        NULL
-    };
-    const char *p = line;
-    int indent = 0;
-
-    while (p[indent] == ' ' || p[indent] == '\t')
-        indent++;
-    p += indent;
-
-    /* Iterate through supported quadric function names. */
-    for (int name_idx = 0; names[name_idx]; name_idx++) {
-        const char *name = names[name_idx];
-        int name_len = (int)strlen(name);
-        const char *args;
-        char tmp[MAX_LINE_LEN];
-        int prefix_len;
-
-        if (strncmp(p, name, (size_t)name_len) != 0 || p[name_len] != '(')
-            continue;
-
-        args = p + name_len + 1;
-        while (*args == ' ' || *args == '\t')
-            args++;
-        if (strncmp(args, "g_quadric", 9) != 0)
-            return 0;
-        args += 9;
-        while (*args == ' ' || *args == '\t')
-            args++;
-        if (*args == ',')
-            args++;
-        while (*args == ' ' || *args == '\t')
-            args++;
-
-        prefix_len = indent + name_len + 1;
-        if (prefix_len >= (int)sizeof(tmp))
-            prefix_len = (int)sizeof(tmp) - 1;
-        memcpy(tmp, line, (size_t)prefix_len);
-        tmp[prefix_len] = '\0';
-        strncat(tmp, args, sizeof(tmp) - 1 - strlen(tmp));
-
-        repl_eval_c_expr_to_repl(tmp, out, out_sz);
-        return 1;
-    }
-
-    return 0;
-}
-
 static void import_feed_one_line(const char *line, int *loaded, int *warnings) {
     char repl_line[MAX_LINE_LEN];
     int before = repl_state_document_count();
@@ -2282,7 +2174,6 @@ static void import_feed_one_line(const char *line, int *loaded, int *warnings) {
         handled = feed_line(repl_line);
     } else if (import_make_repl_tess_line(line, repl_line, sizeof(repl_line)) ||
                import_make_repl_point_parameter_line(line, repl_line, sizeof(repl_line)) ||
-               import_make_repl_quadric_line(line, repl_line, sizeof(repl_line)) ||
                import_make_repl_label(line, repl_line, sizeof(repl_line))) {
         handled = feed_line(repl_line);
     } else {

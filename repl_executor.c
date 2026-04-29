@@ -1,5 +1,5 @@
 /*
- * repl_executor.c -- Flat command execution, GLU resource lifetimes,
+ * repl_executor.c -- Flat command execution, GLUtesselator resource lifetimes,
  * and execution-time state helpers.
  */
 #include "sample.h"
@@ -11,7 +11,6 @@
 #define g_lights      (EXEC_RENDER->lights)
 #define g_clear_color (EXEC_RENDER->clear_color)
 
-static GLUquadric    *g_quadric = NULL;
 static GLUtesselator *g_tess = NULL;
 static TessVertex     g_tess_verts[TESS_VERT_BUF_SIZE];
 static int            g_tess_vert_count = 0;
@@ -95,10 +94,6 @@ static void repl_render_tess_err_cb(GLenum err) {
 }
 
 void repl_executor_destroy_resources(void) {
-    if (g_quadric) {
-        gluDeleteQuadric(g_quadric);
-        g_quadric = NULL;
-    }
     if (g_tess) {
         gluDeleteTess(g_tess);
         g_tess = NULL;
@@ -108,10 +103,6 @@ void repl_executor_destroy_resources(void) {
 
 void repl_executor_init_resources(void) {
     repl_executor_destroy_resources();
-
-    g_quadric = gluNewQuadric();
-    gluQuadricNormals(g_quadric, GLU_SMOOTH);
-    gluQuadricTexture(g_quadric, GL_FALSE);
 
     g_tess = gluNewTess();
     gluTessCallback(g_tess, GLU_TESS_BEGIN,
@@ -343,11 +334,11 @@ void repl_execute_program(const ReplExecutionOptions *options) {
             switch (flat_cmds[pc].type) {
             case CMD_VERTEX3F:
             case CMD_VERTEX2F:
-            case CMD_GLU_SPHERE:
-            case CMD_GLU_CYLINDER:
-            case CMD_GLU_DISK:
-            case CMD_GLU_PARTIAL_DISK:
             case CMD_GLUT_TORUS:
+            case CMD_GLUT_CUBE:
+            case CMD_GLUT_SPHERE:
+            case CMD_GLUT_TEAPOT:
+            case CMD_GLUT_CONE:
             case CMD_TESS_VERTEX:
                 pc++;
                 continue;
@@ -413,44 +404,6 @@ void repl_execute_program(const ReplExecutionOptions *options) {
             g_clear_color[1] = flat_cmds[pc].args[1];
             g_clear_color[2] = flat_cmds[pc].args[2];
             g_clear_color[3] = flat_cmds[pc].args[3];
-            break;
-        case CMD_GLU_SPHERE:
-            if (in_begin) { glEnd(); in_begin = 0; }
-            if (g_quadric)
-                gluSphere(g_quadric,
-                          (double)flat_cmds[pc].args[0],
-                          (int)flat_cmds[pc].args[1],
-                          (int)flat_cmds[pc].args[2]);
-            break;
-        case CMD_GLU_CYLINDER:
-            if (in_begin) { glEnd(); in_begin = 0; }
-            if (g_quadric)
-                gluCylinder(g_quadric,
-                            (double)flat_cmds[pc].args[0],
-                            (double)flat_cmds[pc].args[1],
-                            (double)flat_cmds[pc].args[2],
-                            (int)flat_cmds[pc].args[3],
-                            (int)flat_cmds[pc].args[4]);
-            break;
-        case CMD_GLU_DISK:
-            if (in_begin) { glEnd(); in_begin = 0; }
-            if (g_quadric)
-                gluDisk(g_quadric,
-                        (double)flat_cmds[pc].args[0],
-                        (double)flat_cmds[pc].args[1],
-                        (int)flat_cmds[pc].args[2],
-                        (int)flat_cmds[pc].args[3]);
-            break;
-        case CMD_GLU_PARTIAL_DISK:
-            if (in_begin) { glEnd(); in_begin = 0; }
-            if (g_quadric)
-                gluPartialDisk(g_quadric,
-                               (double)flat_cmds[pc].args[0],
-                               (double)flat_cmds[pc].args[1],
-                               (int)flat_cmds[pc].args[2],
-                               (int)flat_cmds[pc].args[3],
-                               (double)flat_cmds[pc].args[4],
-                               (double)flat_cmds[pc].args[5]);
             break;
         case CMD_GLUT_TORUS:
             if (in_begin) { glEnd(); in_begin = 0; }

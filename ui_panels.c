@@ -79,11 +79,11 @@ static void color_for_type(CmdType t) {
     case CMD_VAR_DECLARE: glColor3f(0.55f, 0.80f, 0.95f); break;
     case CMD_LABEL:
     case CMD_GOTO:       glColor3f(0.85f, 0.55f, 0.85f); break;
-    case CMD_GLU_SPHERE:
-    case CMD_GLU_CYLINDER:
-    case CMD_GLU_DISK:
-    case CMD_GLU_PARTIAL_DISK:
     case CMD_GLUT_TORUS:  glColor3f(0.50f, 0.90f, 0.70f); break;
+    case CMD_GLUT_CUBE:
+    case CMD_GLUT_SPHERE:
+    case CMD_GLUT_TEAPOT:
+    case CMD_GLUT_CONE:   glColor3f(0.50f, 0.90f, 0.70f); break;
     case CMD_TESS_BEGIN_POLYGON:
     case CMD_TESS_BEGIN_CONTOUR:
     case CMD_TESS_END:    glColor3f(0.70f, 0.55f, 0.90f); break; /* violet */
