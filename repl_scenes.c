@@ -503,6 +503,11 @@ void repl_scenes_mark_example_active(void) {
     g_active_user_scene = -1;
 }
 
+void repl_scenes_init_empty_home(void) {
+    save_scene_to_slot(0, USER_SCENE_HOME_NAME);
+    g_active_user_scene = 0;
+}
+
 void repl_scenes_reset(void) {
     memset(g_user_scenes, 0, sizeof(g_user_scenes));
     g_active_user_scene = -1;
