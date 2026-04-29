@@ -343,13 +343,8 @@ void repl_reformat_commands(void) {
         GLCmd orig = repl_state_document_cmds_mut()[cmd_idx];
         GLCmd fmt = orig;
 
-        int bb = repl_source_scope_in_begin_block_at(cmd_idx);
-        int bdepth = repl_source_scope_block_depth_at(cmd_idx);
-        int ind = (bb ? 4 : 2) + bdepth * 2;
         char ind_s[32];
-        if (ind > (int)sizeof(ind_s) - 1) ind = (int)sizeof(ind_s) - 1;
-        memset(ind_s, ' ', (size_t)ind);
-        ind_s[ind] = '\0';
+        repl_source_scope_cmd_indent(cmd_idx, ind_s, sizeof(ind_s));
 
         switch (orig.type) {
         case CMD_FOR_BEGIN: {
@@ -375,11 +370,14 @@ void repl_reformat_commands(void) {
         case CMD_FOR_END:
         case CMD_FUNC_END:
         case CMD_IF_END: {
-            int close_depth = repl_source_scope_block_depth_at(cmd_idx) - 1;
-            if (close_depth < 0) close_depth = 0;
-            int cb = repl_source_scope_in_begin_block_at(cmd_idx);
-            int close_ind = (cb ? 4 : 2) + close_depth * 2;
+            int close_ind;
             char close_s[32];
+            repl_source_scope_cmd_indent(cmd_idx, close_s, sizeof(close_s));
+            close_ind = (int)strlen(close_s);
+            if (close_ind >= 2)
+                close_ind -= 2;
+            else
+                close_ind = 0;
             if (close_ind > (int)sizeof(close_s) - 1) close_ind = (int)sizeof(close_s) - 1;
             memset(close_s, ' ', (size_t)close_ind);
             close_s[close_ind] = '\0';

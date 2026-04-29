@@ -115,10 +115,13 @@ static int load_commands_into_live(const GLCmd *cmds, int num_cmds,
     return repl_command_store_load(&store, cmds, num_cmds, edit_line);
 }
 
+void repl_scenes_save_active_scene_if_any(void);
+
 static void load_scene_from_slot(int idx) {
     if (idx < 0 || idx >= MAX_USER_SCENES) return;
     UserScene *s = &g_user_scenes[idx];
     if (!s->used) return;
+    repl_scenes_save_active_scene_if_any();
     if (!load_commands_into_live(s->cmds, s->num_cmds, s->edit_line))
         return;
     repl_state_flat_program_set_count(0);
@@ -140,6 +143,13 @@ static void load_scene_from_slot(int idx) {
 
 static void save_user_scene(void) {
     save_scene_to_slot(0, USER_SCENE_HOME_NAME);
+}
+
+void repl_scenes_save_active_scene_if_any(void) {
+    if (g_active_user_scene >= 0 && g_active_user_scene < MAX_USER_SCENES) {
+        save_scene_to_slot(g_active_user_scene,
+                           g_user_scenes[g_active_user_scene].name);
+    }
 }
 
 static void restore_user_scene(void) {

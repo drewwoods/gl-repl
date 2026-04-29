@@ -257,6 +257,7 @@ static void load_example(int idx) {
 
     /* Preserve the user's work (once, into slot 0) before overwriting with
      * an example. Subsequent example loads leave the home slot untouched. */
+    repl_scenes_save_active_scene_if_any();
     repl_scenes_capture_home_if_needed();
 
     load_example_lines(lines);

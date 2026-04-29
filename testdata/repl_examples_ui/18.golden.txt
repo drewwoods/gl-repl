@@ -94,24 +94,24 @@ void display() {
   func2(radius, hole) {
     glFrontFace(GL_CW);
     gluBegin(GLU_POLYGON);
-    // Outer contour: 10-pointed star
+      // Outer contour: 10-pointed star
       gluBegin(GLU_CONTOUR);
         gluNormal(0, 1, 0);
-    for(i, 0, 20) {
-      k = radius;
-      if(fmod(i, 2) > 0) {
-        k = radius*0.5;
-      }
+        for(i, 0, 20) {
+          k = radius;
+          if(fmod(i, 2) > 0) {
+            k = radius*0.5;
+          }
           gluColor(0.25 + 0.15*sin(i*0.6), 0.3 + 0.15*cos(i*0.8), 0.55 + 0.1*sin(i));
           gluVertex(k*cos(i*TAU/20), 0, k*sin(i*TAU/20));
-    }
+        }
       gluEnd();
-    // Inner contour: circular cutout (tessellator infers hole from overlap)
+      // Inner contour: circular cutout (tessellator infers hole from overlap)
       gluBegin(GLU_CONTOUR);
-    for(i, 0, 24) {
+        for(i, 0, 24) {
           gluColor(0.1, 0.1, 0.15, 1);
           gluVertex(hole*cos(-i*TAU/24), 0, hole*sin(-i*TAU/24));
-    }
+        }
       gluEnd();
     gluEnd();
     glFrontFace(GL_CCW);

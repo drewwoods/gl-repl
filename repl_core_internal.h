@@ -247,6 +247,7 @@ void repl_clear_all_cmds(void);
  * and inherit the example's name (de-duplicated). Returns the promoted slot
  * index, or -1 if promotion was a no-op or rejected. */
 int repl_promote_example_if_needed(void);
+void repl_scenes_save_active_scene_if_any(void);
 void repl_scenes_capture_home_if_needed(void);
 void repl_scenes_mark_example_active(void);
 void repl_scenes_reset(void);
