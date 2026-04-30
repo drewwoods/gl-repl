@@ -30,9 +30,7 @@ static const ReplRuntimeState g_repl_state_defaults = {
 #include "repl_state_defaults.inc"
 };
 
-static ReplRuntimeState g_repl_state = {
-#include "repl_state_defaults.inc"
-};
+static ReplRuntimeState g_repl_state;
 
 #define g_cmds                      (g_repl_state.document.cmds)
 #define g_num_cmds                  (g_repl_state.document.cmd_count)
