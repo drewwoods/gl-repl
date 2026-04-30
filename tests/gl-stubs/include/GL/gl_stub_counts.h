@@ -4,7 +4,7 @@
 /*
  * Per-function call counters for the stub GL/GLU/GLUT headers.
  *
- * The stub headers (include/GL/gl.h etc.) reference gl_stub_tick() and
+ * The stub headers (tests/gl-stubs/include/GL/gl.h etc.) reference gl_stub_tick() and
  * the GL_STUB_* enum unconditionally, so the enum and tick function
  * must always be visible — otherwise any build that falls back to the
  * local stubs without defining OPENGL_VIBE_USE_GL_STUBS fails to

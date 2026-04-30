@@ -12,7 +12,7 @@
  *    C-style `for (float i = 0; i < N; i++)` loops.
  *
  * Intentionally isolated from GL and from the command/editor layers so the
- * evaluator has its own unit tests (see test_eval.c).
+ * evaluator has its own unit tests (see tests/test_eval.c).
  */
 #include "repl_eval.h"
 

@@ -1,10 +1,14 @@
 CC = gcc
+PROJECT_ROOT := $(abspath .)
 LOCAL_INCLUDE := $(abspath include)
+GL_STUB_INCLUDE := $(abspath tests/gl-stubs/include)
+TEST_DIR := tests
 
 UNAME_S := $(shell uname -s)
 
 ifeq ($(USE_GL_STUBS),1)
 GL_HEADER_CFLAGS = \
+	-I$(GL_STUB_INCLUDE) \
 	-DOPENGL_VIBE_USE_GL_STUBS
 else
 GL_HEADER_CFLAGS = \
@@ -18,6 +22,7 @@ COMMON_CFLAGS = \
 	-Wno-deprecated-declarations -Wfloat-conversion \
 	-std=c2x -DGL_SILENCE_DEPRECATION \
 	$(GL_HEADER_CFLAGS) \
+	-I$(PROJECT_ROOT) \
 	-I$(LOCAL_INCLUDE)
 
 RELEASE_CFLAGS = \
@@ -90,20 +95,22 @@ else
 COVERAGE_LDFLAGS =
 endif
 
-.PHONY: all clean test check test-detailed test_detailed test-stubs lines debug coverage glut help bench bench-csv check-gl-boundaries check-layer-coupling check-controller-boundaries check-scene-no-repl-state-mut check-state-boundaries check-views-no-owners check-pure-scene-no-repl-state check-ui-no-repl-state-mut check-public-api-usage check-state-ownership check-no-write-through-view check-runtime-state-value-fields check-public-state-no-writable-pointers check-views-flat-types check-state-read-getters-return-values check-views-by-value-snapshot check-ui-renderer-takes-view check-renderer-no-direct-mutators check-output-actualization check-state-c-shrinking check-no-facade-include-in-views check-domain-owner-encapsulation check-cursor-px-encapsulated callgraph-static callgraph-static-entry callgraph-profile callgraph-graphviz callgraph-html callgraph-files
+.PHONY: all clean test check test-detailed test_detailed test-stubs lines debug coverage glut help bench bench-csv check-gl-boundaries check-layer-coupling check-controller-boundaries check-scene-no-repl-state-mut check-state-boundaries check-views-no-owners check-pure-scene-no-repl-state check-ui-no-repl-state-mut check-public-api-usage check-state-ownership check-no-write-through-view check-runtime-state-value-fields check-public-state-no-writable-pointers check-views-flat-types check-state-read-getters-return-values check-views-by-value-snapshot check-ui-renderer-takes-view check-renderer-no-direct-mutators check-output-actualization check-state-c-shrinking check-no-facade-include-in-views check-domain-owner-encapsulation check-cursor-px-encapsulated callgraph-static callgraph-static-entry callgraph-profile callgraph-graphviz callgraph-html callgraph-files FORCE
 
 all: sample
 
-SRCS = sample.c imrepl_ctrl.c repl_core.c repl_state.c repl_config.c repl_command_spec.c repl_parser.c repl_source_scope.c repl_command_store.c repl_commit.c repl_clipboard.c repl_undo.c repl_camera_controls.c repl_actions.c repl_layout.c repl_code_panel_layout.c repl_code_panel_document.c repl_flatten.c repl_executor.c repl_autocomplete.c ui_autocomplete_panel.c repl_autonormal.c repl_scenes.c repl_example_loader.c repl_replay.c repl_replay_annotations.c repl_search.c repl_export.c repl_editor.c repl_examples.c scene_render.c scene_geometry_guides.c scene_transform_guides.c scene_grid.c scene_axes.c scene_backdrop.c scene_lights.c scene_overlays.c ui_panels.c ui_menu_bar.c ui_color_picker.c ui_help_overlay.c ui_variable_panel.c ui_replay_hud.c repl_var_drag.c repl_inline_rename.c repl_eval.c cmd_format.c repl_audio.c ui_profile_panel.c prof.c gl_stub_counts.c
+FORCE:
+
+SRCS = sample.c imrepl_ctrl.c repl_core.c repl_state.c repl_config.c repl_command_spec.c repl_parser.c repl_source_scope.c repl_command_store.c repl_commit.c repl_clipboard.c repl_undo.c repl_camera_controls.c repl_actions.c repl_layout.c repl_code_panel_layout.c repl_code_panel_document.c repl_flatten.c repl_executor.c repl_autocomplete.c ui_autocomplete_panel.c repl_autonormal.c repl_scenes.c repl_example_loader.c repl_replay.c repl_replay_annotations.c repl_search.c repl_export.c repl_editor.c repl_examples.c scene_render.c scene_geometry_guides.c scene_transform_guides.c scene_grid.c scene_axes.c scene_backdrop.c scene_lights.c scene_overlays.c ui_panels.c ui_menu_bar.c ui_color_picker.c ui_help_overlay.c ui_variable_panel.c ui_replay_hud.c repl_var_drag.c repl_inline_rename.c repl_eval.c cmd_format.c repl_audio.c ui_profile_panel.c prof.c tests/gl-stubs/gl_stub_counts.c
 HDRS = sample.h repl_search.h imrepl_ctrl.h repl_state.h repl_config.h repl_core.h repl_core_internal.h repl_command_spec.h repl_parser.h repl_source_scope.h repl_command_store.h repl_layout.h repl_pipeline.h repl_clipboard.h repl_undo.h repl_camera_controls.h repl_actions.h repl_code_panel_layout.h repl_code_panel_document.h repl_replay.h repl_replay_annotations.h repl_examples.h scene_render_types.h scene_guides_shared.h scene_geometry_guides.h scene_transform_guides.h scene_transform_utils.h scene_grid.h scene_axes.h scene_render.h scene_backdrop.h scene_lights.h scene_overlays.h ui_panels.h ui_menu_bar.h ui_color_picker.h ui_help_overlay.h ui_variable_panel.h ui_replay_hud.h repl_var_drag.h ui_autocomplete_panel.h repl_inline_rename.h repl_eval.h cmd_format.h repl_audio.h ui_profile_panel.h prof.h
-CORE_TEST_SRCS = repl_core.c imrepl_ctrl.c repl_state.c repl_config.c repl_command_spec.c repl_parser.c repl_source_scope.c repl_command_store.c repl_commit.c repl_clipboard.c repl_undo.c repl_camera_controls.c repl_actions.c repl_layout.c repl_code_panel_layout.c repl_code_panel_document.c repl_flatten.c repl_executor.c repl_autocomplete.c ui_autocomplete_panel.c repl_autonormal.c repl_scenes.c repl_example_loader.c repl_replay.c repl_replay_annotations.c repl_search.c repl_export.c repl_editor.c repl_examples.c scene_render.c scene_geometry_guides.c scene_transform_guides.c scene_grid.c scene_axes.c scene_backdrop.c scene_lights.c scene_overlays.c ui_panels.c ui_menu_bar.c ui_color_picker.c ui_help_overlay.c ui_variable_panel.c ui_replay_hud.c repl_var_drag.c repl_inline_rename.c repl_eval.c cmd_format.c repl_audio.c ui_profile_panel.c prof.c gl_stub_counts.c
+CORE_TEST_SRCS = repl_core.c imrepl_ctrl.c repl_state.c repl_config.c repl_command_spec.c repl_parser.c repl_source_scope.c repl_command_store.c repl_commit.c repl_clipboard.c repl_undo.c repl_camera_controls.c repl_actions.c repl_layout.c repl_code_panel_layout.c repl_code_panel_document.c repl_flatten.c repl_executor.c repl_autocomplete.c ui_autocomplete_panel.c repl_autonormal.c repl_scenes.c repl_example_loader.c repl_replay.c repl_replay_annotations.c repl_search.c repl_export.c repl_editor.c repl_examples.c scene_render.c scene_geometry_guides.c scene_transform_guides.c scene_grid.c scene_axes.c scene_backdrop.c scene_lights.c scene_overlays.c ui_panels.c ui_menu_bar.c ui_color_picker.c ui_help_overlay.c ui_variable_panel.c ui_replay_hud.c repl_var_drag.c repl_inline_rename.c repl_eval.c cmd_format.c repl_audio.c ui_profile_panel.c prof.c tests/gl-stubs/gl_stub_counts.c
 
 REPL_SRCS = $(filter repl_%.c,$(SRCS))
 SCENE_SRCS = $(filter scene_%.c,$(SRCS))
 UI_SRCS = $(filter ui_%.c,$(SRCS))
 SCENE_HDRS = $(filter scene_%.h,$(HDRS))
 UI_HDRS = $(filter ui_%.h,$(HDRS))
-STATE_NEUTRAL_SRCS = cmd_format.c prof.c gl_stub_counts.c
+STATE_NEUTRAL_SRCS = cmd_format.c prof.c tests/gl-stubs/gl_stub_counts.c
 
 OBJDIR = build/$(BUILD)$(if $(filter 1,$(USE_GL_STUBS)),-gl-stubs,)
 OBJ_CFLAGS = $(BUILD_CFLAGS) $(CFLAGS)
@@ -153,38 +160,44 @@ CORE_TEST_BINS = $(filter-out test_eval test_format test_repl_code_panel_layout 
 BENCH_BINS = bench_repl
 
 define core_test_binary
+$(1)_OBJS = $$(OBJDIR)/$$(TEST_DIR)/$(1).o $$(CORE_TEST_OBJS)
+$(1)_LDLIBS = $$(GL_LDFLAGS)
+$(1)_RUN ?= ./$(1)
+endef
+
+define bench_binary
 $(1)_OBJS = $$(OBJDIR)/$(1).o $$(CORE_TEST_OBJS)
 $(1)_LDLIBS = $$(GL_LDFLAGS)
 $(1)_RUN ?= ./$(1)
 endef
 
 $(foreach test,$(CORE_TEST_BINS),$(eval $(call core_test_binary,$(test))))
-$(foreach bin,$(BENCH_BINS),$(eval $(call core_test_binary,$(bin))))
+$(foreach bin,$(BENCH_BINS),$(eval $(call bench_binary,$(bin))))
 
-test_eval_OBJS = $(OBJDIR)/test_eval.o $(OBJDIR)/repl_eval.o
+test_eval_OBJS = $(OBJDIR)/$(TEST_DIR)/test_eval.o $(OBJDIR)/repl_eval.o
 test_eval_LDLIBS = -lm -lpthread
 test_eval_RUN = ./test_eval --run-tests
 
-test_format_OBJS = $(OBJDIR)/test_format.o $(OBJDIR)/cmd_format.o
+test_format_OBJS = $(OBJDIR)/$(TEST_DIR)/test_format.o $(OBJDIR)/cmd_format.o
 test_format_LDLIBS = -lm
 test_format_RUN ?= ./test_format
 
-test_repl_code_panel_layout_OBJS = $(OBJDIR)/test_repl_code_panel_layout.o $(OBJDIR)/repl_code_panel_layout.o
+test_repl_code_panel_layout_OBJS = $(OBJDIR)/$(TEST_DIR)/test_repl_code_panel_layout.o $(OBJDIR)/repl_code_panel_layout.o
 test_repl_code_panel_layout_LDLIBS =
 test_repl_code_panel_layout_RUN ?= ./test_repl_code_panel_layout
 
-test_repl_audio_OBJS = $(OBJDIR)/test_repl_audio.o $(OBJDIR)/repl_audio.o
+test_repl_audio_OBJS = $(OBJDIR)/$(TEST_DIR)/test_repl_audio.o $(OBJDIR)/repl_audio.o
 test_repl_audio_LDLIBS = $(GL_LDFLAGS)
 test_repl_audio_RUN ?= ./test_repl_audio
 
 # For tests using the "include-as-unit" pattern (e.g., `#include "file.c"` to test
 # internal static functions), we must filter out the original object file from
 # the CORE_TEST_OBJS link list to prevent duplicate symbol errors.
-test_imrepl_ctrl_OBJS = $(OBJDIR)/test_imrepl_ctrl.o $(filter-out $(OBJDIR)/imrepl_ctrl.o,$(CORE_TEST_OBJS))
+test_imrepl_ctrl_OBJS = $(OBJDIR)/$(TEST_DIR)/test_imrepl_ctrl.o $(filter-out $(OBJDIR)/imrepl_ctrl.o,$(CORE_TEST_OBJS))
 
-test_repl_executor_OBJS = $(OBJDIR)/test_repl_executor.o $(filter-out $(OBJDIR)/repl_executor.o,$(CORE_TEST_OBJS))
+test_repl_executor_OBJS = $(OBJDIR)/$(TEST_DIR)/test_repl_executor.o $(filter-out $(OBJDIR)/repl_executor.o,$(CORE_TEST_OBJS))
 
-test_repl_replay_OBJS = $(OBJDIR)/test_repl_replay.o $(filter-out $(OBJDIR)/repl_replay.o,$(CORE_TEST_OBJS))
+test_repl_replay_OBJS = $(OBJDIR)/$(TEST_DIR)/test_repl_replay.o $(filter-out $(OBJDIR)/repl_replay.o,$(CORE_TEST_OBJS))
 
 TEST_OBJS = $(foreach test,$(TEST_BINS),$($(test)_OBJS))
 TEST_RUNNER_CASES = $(foreach test,$(TEST_BINS),'$(test):::$($(test)_RUN)')
@@ -200,7 +213,7 @@ $(OBJDIR)/%.o: %.c
 	@mkdir -p $(dir $@)
 	$(CC) $(OBJ_CFLAGS) $(DEPFLAGS) -c -o $@ $<
 
-sample: $(SAMPLE_OBJS) ## Build the main REPL sample using release flags by default.
+sample: FORCE $(SAMPLE_OBJS) ## Build the main REPL sample using release flags by default.
 	$(CC) $(OBJ_CFLAGS) -o $@ $(SAMPLE_OBJS) $(GL_LDFLAGS)
 
 .SECONDEXPANSION:
@@ -210,8 +223,8 @@ sample: $(SAMPLE_OBJS) ## Build the main REPL sample using release flags by defa
 # turn `test_eval` into `$(test_eval_OBJS)`, `test_repl_core_io` into
 # `$(test_repl_core_io_OBJS)`, etc. The doubled dollars delay that lookup until
 # the second pass.
-$(TEST_BINS) $(BENCH_BINS): %: $$($$@_OBJS)
-	$(CC) $(OBJ_CFLAGS) -o $@ $^ $($@_LDLIBS) $(COVERAGE_LDFLAGS)
+$(TEST_BINS) $(BENCH_BINS): %: FORCE $$($$@_OBJS)
+	$(CC) $(OBJ_CFLAGS) -o $@ $(filter-out FORCE,$^) $($@_LDLIBS) $(COVERAGE_LDFLAGS)
 
 # Layering boundary enforcement ------------------------------------------
 check-gl-boundaries: ## Verify GL/GLUT calls are isolated to allowed files.

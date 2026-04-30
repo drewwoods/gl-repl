@@ -2,7 +2,7 @@
  * test_eval.c - Standalone test harness for the REPL expression evaluator
  *
  * Build:
- *   gcc -Wall -std=c2x -o test_eval test_eval.c repl_eval.c -lm
+ *   gcc -Wall -std=c2x -I. -o test_eval tests/test_eval.c repl_eval.c -lm
  *
  * Usage:
  *   ./test_eval                    # interactive REPL

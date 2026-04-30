@@ -21,21 +21,23 @@ by default in debug builds.
 
 `include/gl_includes.h` is vendored alongside the source — the Makefile adds
 `-Iinclude` to `COMMON_CFLAGS` so every translation unit can resolve it via
-`#include <gl_includes.h>`.
+`#include <gl_includes.h>`. Source-backed modules keep paired `.c/.h` files at
+the repo root; `include/` is for header-only helpers and vendored single-header
+dependencies.
 
 ### Local GL Stub Headers
 
-This sample ships no-op OpenGL, GLU, and GLUT headers under `include/` so
-machines without system GL development packages can still compile and run
-non-rendering tests.
+This sample ships no-op OpenGL, GLU, and GLUT headers under
+`tests/gl-stubs/include/` so machines without system GL development packages
+can still compile and run non-rendering tests.
 
 ```bash
 make test-stubs
 make sample USE_GL_STUBS=1
 ```
 
-`USE_GL_STUBS=1` prefers this sample's local `include/` directory and drops
-`-lGL`, `-lGLU`, `-lglut` from the link flags. Stub-mode objects go to
+`USE_GL_STUBS=1` prepends `tests/gl-stubs/include/` and drops `-lGL`, `-lGLU`,
+`-lglut` from the link flags. Stub-mode objects go to
 `build/*-gl-stubs` so they don't mix with rendering builds.
 
 Constraints:
@@ -43,16 +45,18 @@ Constraints:
 - Stubs are for compilation and non-rendering tests only. No window, no pixels,
   no real GL context. Do not make stubs the default rendering path.
 - If the sample starts calling a new GL/GLU/GLUT symbol, extend the matching
-  stub in `include/GL/`, `include/GLUT/`, or `include/OpenGL/`.
+  stub in `tests/gl-stubs/include/GL/`, `tests/gl-stubs/include/GLUT/`, or
+  `tests/gl-stubs/include/OpenGL/`.
 - Keep stubs minimal and no-op — model types, constants, and callable
   signatures well enough for builds, not a fake renderer.
 - After touching stubs, verify both paths: `make test-stubs`, `make sample
   USE_GL_STUBS=1`, `make sample`.
 
-Header layout: `include/GL/gl.h` (fixed-function GL), `include/GL/glu.h`
-(quadrics/projection/tessellator), `include/GL/freeglut.h` (GLUT/freeglut
-callbacks + shapes); `glext.h`, `glut.h`, `GLUT/glut.h`, `OpenGL/gl.h`,
-`OpenGL/glu.h` are compatibility wrappers.
+Header layout: `tests/gl-stubs/include/GL/gl.h` (fixed-function GL),
+`tests/gl-stubs/include/GL/glu.h` (quadrics/projection/tessellator),
+`tests/gl-stubs/include/GL/freeglut.h` (GLUT/freeglut callbacks + shapes);
+`glext.h`, `glut.h`, `GLUT/glut.h`, `OpenGL/gl.h`, `OpenGL/glu.h` are
+compatibility wrappers.
 
 ## Run
 
@@ -76,6 +80,10 @@ make test_repl_core_io     # Save/load round-trip tests
 ```
 
 Run all: `make test`
+
+Test sources live under `tests/` and shared test-only helpers live under
+`tests/support/`. The Makefile still builds root-level test executables
+(`./test_eval`, `./test_format`, etc.) so existing commands stay stable.
 
 ## File Layout
 
@@ -142,6 +150,9 @@ Run all: `make test`
 | `repl_eval.h` | Evaluator types (`ExprVar`, `ExprCtx`), function declarations |
 | `cmd_format.c` | Pure indentation/depth computation (no GL dependency) |
 | `cmd_format.h` | Formatting types (`FmtCmd`, `FmtType`), indent functions |
+| `include/gl_2d.h` | Header-only 2D OpenGL helper functions |
+| `tests/support/` | Shared test harness/setup helpers |
+| `tests/gl-stubs/` | No-op GL/GLU/GLUT headers used by `USE_GL_STUBS=1` builds |
 | `MODULES.md` | One-page layered overview, ownership diagram, current boundaries, open edges |
 
 ## Conventions

@@ -7,7 +7,7 @@
  * build (`make bench USE_GL_STUBS=1`).
  *
  * In the stubs build every gl* call is an inline no-op that only ticks a
- * per-function counter (see include/GL/gl_stub_counts.h), so timings
+ * per-function counter (see tests/gl-stubs/include/GL/gl_stub_counts.h), so timings
  * measure pure C-level cost. In the real-GL build we create a real GL
  * context up front (via GLUT) so sub-benchmarks that drive actual draw
  * calls - notably `fade_batches` via `scene_render_replay_fade_pass()` -

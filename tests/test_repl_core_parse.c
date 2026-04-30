@@ -1,6 +1,8 @@
 #include "repl_core_internal.h"
 #include "repl_parser.h"
 #include "repl_state.h"
+#include "support/repl_test_support.h"
+#include "support/test_harness.h"
 
 #define g_status (repl_state_status_mut()->text)
 
@@ -8,13 +10,10 @@
 #include <stdlib.h>
 #include <string.h>
 
-static int g_run = 0;
-static int g_pass = 0;
+static TestHarness g_harness = TEST_HARNESS_INIT;
 
 #define ASSERT_TRUE(label, cond) do { \
-    g_run++; \
-    if (cond) g_pass++; \
-    else printf("FAIL [%s] (line %d)\n", label, __LINE__); \
+    TEST_ASSERT_TRUE(&g_harness, label, cond); \
 } while (0)
 
 static int leading_spaces(const char *s) {
@@ -25,9 +24,10 @@ static int leading_spaces(const char *s) {
 
 static void declare_test_vars(void) {
     char err[128];
-    repl_eval_declare_predef_var("x", err, sizeof(err));
-    repl_eval_declare_predef_var("y", err, sizeof(err));
-    repl_eval_declare_predef_var("z", err, sizeof(err));
+    static const char *const names[] = { "x", "y", "z" };
+
+    ASSERT_TRUE("declare parser vars",
+                repl_test_declare_predef_vars(names, 3, err, sizeof(err)));
 }
 
 static void assert_status_contains(const char *label, const char *needle) {
@@ -647,6 +647,5 @@ int main(void) {
         assert_status_contains("overlong funcN: status", "Command too long");
     }
 
-    printf("repl_core_parse: %d/%d passed\n", g_pass, g_run);
-    return (g_run == g_pass) ? 0 : 1;
+    return test_harness_report(&g_harness, "repl_core_parse");
 }

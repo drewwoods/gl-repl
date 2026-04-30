@@ -2,41 +2,26 @@
  * test_format.c - Tests for the command indentation logic in cmd_format.c
  *
  * Build:
- *   gcc -Wall -std=c2x -o test_format test_format.c cmd_format.c -lm
+ *   gcc -Wall -std=c2x -I. -o test_format tests/test_format.c cmd_format.c -lm
  *
  * Run:
  *   ./test_format
  */
 #include "cmd_format.h"
+#include "support/test_harness.h"
 
 #include <stdio.h>
-#include <string.h>
 
 /* ---- Test harness ------------------------------------------------------ */
 
-static int g_tests_run    = 0;
-static int g_tests_passed = 0;
-static int g_tests_failed = 0;
+static TestHarness g_harness = TEST_HARNESS_INIT;
 
 #define ASSERT_INT(label, got, expected) do { \
-    g_tests_run++; \
-    if ((got) == (expected)) { \
-        g_tests_passed++; \
-    } else { \
-        g_tests_failed++; \
-        printf("  FAIL [%s]: got %d, expected %d (line %d)\n", (label), (got), (expected), __LINE__); \
-    } \
+    TEST_ASSERT_INT(&g_harness, label, got, expected); \
 } while (0)
 
 #define ASSERT_STR(label, got, expected) do { \
-    g_tests_run++; \
-    if (strcmp((got), (expected)) == 0) { \
-        g_tests_passed++; \
-    } else { \
-        g_tests_failed++; \
-        printf("  FAIL [%s]: got \"%s\" (%d spaces), expected \"%s\" (%d spaces) (line %d)\n", \
-               (label), (got), (int)strlen(got), (expected), (int)strlen(expected), __LINE__); \
-    } \
+    TEST_ASSERT_STR(&g_harness, label, got, expected); \
 } while (0)
 
 /* Helper: run fmt_indent and return a static buffer with the result */
@@ -677,10 +662,6 @@ int main(void) {
     printf("\n--- autonormal ---\n\n");
     test_autonormal_indent();
 
-    printf("\n=== Results: %d/%d passed", g_tests_passed, g_tests_run);
-    if (g_tests_failed > 0)
-        printf(", %d FAILED", g_tests_failed);
-    printf(" ===\n");
-
-    return g_tests_failed > 0 ? 1 : 0;
+    printf("\n=== Results: ");
+    return test_harness_report(&g_harness, "cmd_format");
 }

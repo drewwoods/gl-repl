@@ -44,7 +44,7 @@ DEFAULT_GROUP_CONFIG = {
         {
             "id": "support",
             "label": "Support",
-            "files": ["cmd_format.c", "prof.c", "gl_stub_counts.c"],
+            "files": ["cmd_format.c", "prof.c", "tests/gl-stubs/gl_stub_counts.c"],
         },
     ],
     "fallback_group": {"id": "other", "label": "Other"},

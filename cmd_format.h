@@ -5,7 +5,7 @@
  * No OpenGL headers required; can be built standalone for testing.
  *
  * Build (standalone test):
- *   gcc -Wall -std=c2x -o test_format test_format.c cmd_format.c -lm
+ *   gcc -Wall -std=c2x -I. -o test_format tests/test_format.c cmd_format.c -lm
  */
 #ifndef CMD_FORMAT_H
 #define CMD_FORMAT_H
