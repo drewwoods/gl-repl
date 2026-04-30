@@ -131,6 +131,7 @@ TEST_BINS = \
 	test_repl_audio \
 	test_repl_core_internal \
 	test_repl_autocomplete \
+	test_repl_command_store \
 	test_scene_guides \
 	test_scene_render \
 	test_repl_editor \
