@@ -41,3 +41,4 @@ callgraph*.mmd
 callgraph*.dot
 callgraph*.html
 callgrind.out*
+.compat-scratch/
