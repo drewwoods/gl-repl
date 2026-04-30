@@ -41,8 +41,11 @@
 #include "repl_core_internal.h"
 #include "repl_eval.h"
 #include "repl_examples.h"
+#include "repl_executor.h"
 #include "repl_parser.h"
+#include "repl_replay.h"
 #include "scene_render.h"
+#include "scene_render_types.h"
 #include "repl_state.h"
 
 #include <stdio.h>
@@ -377,9 +380,9 @@ static BenchResult bench_replay_long(int iters) {
      * repl_replay_start does its own predef snapshot/restore around the
      * flatten (repl_core.c:3264-3268). */
     mark_normals_dirty();
-    replay_start();
+    repl_replay_start();
     int flat_cmds = repl_state_flat_program_count();
-    replay_stop();
+    repl_replay_stop();
 
     /* Snapshot post-load predef values. repl_replay_advance() writes
      * g_predef_vars on CMD_VAR_ASSIGN during playback
@@ -399,14 +402,14 @@ static BenchResult bench_replay_long(int iters) {
         mark_normals_dirty();
         double t0 = now_seconds();
 
-        replay_start();
+        repl_replay_start();
         int safety = repl_state_flat_program_count() + 1;
         ReplReplayRuntimeState replay = repl_state_replay();
         while (replay.state == REPLAY_PLAYING && safety-- > 0) {
             repl_replay_advance();
             steps++;
         }
-        replay_stop();
+        repl_replay_stop();
 
         double dt = now_seconds() - t0;
         if (dt < r.min_sec) r.min_sec = dt;
@@ -492,6 +495,58 @@ static int populate_late_batches(int flat_cmds, int *old_pcs, int *new_pcs,
     return count;
 }
 
+/* Execute callbacks used by the bench's synthetic SceneRenderConfig — mirror
+ * the production scene_execute_adapter in imrepl_ctrl.c. We can't reuse those
+ * directly because they're static; this duplicate is small and keeps
+ * bench_repl.c independent of controller-frame plumbing. */
+static void bench_execute_fn(float alpha_scale,
+                             int skip_geom_before_pc,
+                             int flat_cmd_count,
+                             FlatProgramView program,
+                             void *user_data) {
+    (void)user_data;
+    repl_execute_set_fade_context(alpha_scale, skip_geom_before_pc);
+    repl_execute_program(&(ReplExecutionOptions){
+        .flat_cmd_count = flat_cmd_count,
+        .program = program
+    });
+}
+
+static void bench_execute_reset_fn(void *user_data) {
+    (void)user_data;
+    repl_execute_set_fade_context(1.0f, 0);
+}
+
+/* Refresh the fade plan inside `cfg` from the live replay state. The bench
+ * reinstalls fade batches each iteration, so the plan must be rebuilt to
+ * match — this mirrors imrepl_ctrl.c's scene-config builder for the fade
+ * fields only. */
+static void bench_refresh_fade_plan(SceneRenderConfig *cfg) {
+    memset(&cfg->replay_fade_plan, 0, sizeof(cfg->replay_fade_plan));
+
+    repl_replay_copy_baseline_predef_values(cfg->replay_fade_plan.baseline_predef_vals,
+                                            MAX_PREDEF_VARS);
+
+    cfg->replay_has_fades = repl_replay_has_active_fades();
+    if (!cfg->replay_has_fades)
+        return;
+
+    cfg->replay_base_limit = repl_replay_fill_base_limit();
+
+    ReplayFadeBatchView fade_batches = repl_replay_fade_batches_view();
+    int batch_count = repl_replay_compute_fade_skip_limits(cfg->replay_fade_plan.skip_limits,
+                                                           REPLAY_FADE_BATCH_MAX);
+    if (batch_count > REPLAY_FADE_BATCH_MAX)
+        batch_count = REPLAY_FADE_BATCH_MAX;
+
+    cfg->replay_fade_plan.batch_count = batch_count;
+    for (int i = 0; i < batch_count; i++) {
+        const ReplayFadeBatch *batch = &fade_batches.batches[i];
+        cfg->replay_fade_plan.batches[i] = *batch;
+        cfg->replay_fade_plan.batch_alpha[i] = repl_replay_batch_alpha(batch);
+    }
+}
+
 static BenchResult bench_fade_batches(int iters) {
     BenchResult r = { .name = "fade_batches", .unit = "calls",
                       .min_sec = 1e18 };
@@ -502,9 +557,9 @@ static BenchResult bench_fade_batches(int iters) {
      * playback, so we snapshot before/after). */
     repl_load_example_lines_for_test(k_fade_bench_scene);
     mark_normals_dirty();
-    replay_start();
+    repl_replay_start();
     int flat_cmds = repl_state_flat_program_count();
-    replay_stop();
+    repl_replay_stop();
 
     /* Re-flatten after repl_replay_stop so repl_state_flat_program_count() is the full stream
      * (replay's clamp might still be in effect otherwise - we observed
@@ -528,6 +583,19 @@ static BenchResult bench_fade_batches(int iters) {
      * timer resolution even in stubbed / very fast builds. */
     int inner = 200;
 
+    /* Build a synthetic SceneRenderConfig + FrameRenderContext just for the
+     * fade pass. Most fields can stay zeroed; the fade-pass only touches
+     * execute callbacks, flat_program, replay_fade_plan, replay_has_fades,
+     * and a few cosmetic quality/wireframe flags. */
+    SceneRenderConfig cfg = {0};
+    cfg.execute_fn = bench_execute_fn;
+    cfg.execute_reset_fn = bench_execute_reset_fn;
+    cfg.execute_user_data = NULL;
+    cfg.flat_program = repl_state_flat_program_view();
+
+    FrameRenderContext frame_ctx = {0};
+    frame_ctx.config = cfg;
+
 #ifdef OPENGL_VIBE_USE_GL_STUBS
     /* Reset right before the timed region so the counter dump below
      * reflects only the work driven by scene_render_replay_fade_pass()
@@ -548,7 +616,8 @@ static BenchResult bench_fade_batches(int iters) {
              * measurement - intentional, since a real replay frame
              * also re-registers batches as new steps arrive). */
             repl_bench_fade_install(old_pcs, new_pcs, installed_count, age);
-            scene_render_replay_fade_pass();
+            bench_refresh_fade_plan(&frame_ctx.config);
+            scene_render_replay_fade_pass(&frame_ctx);
         }
         double dt = now_seconds() - t0;
         if (dt < r.min_sec) r.min_sec = dt;
@@ -656,7 +725,7 @@ int main(int argc, char **argv) {
         }
     }
 
-    init_predef_vars();
+    repl_eval_init_predef_vars();
     fresh_repl();
 
     if (g_csv) {
