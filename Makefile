@@ -1,14 +1,11 @@
 CC = gcc
-PROJECT_ROOT := $(abspath ../../..)
-REPO_INCLUDE := $(PROJECT_ROOT)/include
 LOCAL_INCLUDE := $(abspath include)
 
 UNAME_S := $(shell uname -s)
 
 ifeq ($(USE_GL_STUBS),1)
 GL_HEADER_CFLAGS = \
-	-DOPENGL_VIBE_USE_GL_STUBS \
-	-I$(LOCAL_INCLUDE)
+	-DOPENGL_VIBE_USE_GL_STUBS
 else
 GL_HEADER_CFLAGS = \
 	-I/usr/include \
@@ -21,7 +18,7 @@ COMMON_CFLAGS = \
 	-Wno-deprecated-declarations -Wfloat-conversion \
 	-std=c2x -DGL_SILENCE_DEPRECATION \
 	$(GL_HEADER_CFLAGS) \
-	-I$(REPO_INCLUDE)
+	-I$(LOCAL_INCLUDE)
 
 RELEASE_CFLAGS = \
 	$(COMMON_CFLAGS) \

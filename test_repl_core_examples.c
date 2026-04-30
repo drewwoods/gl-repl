@@ -187,7 +187,7 @@ static int compile_exported_source(int idx, const char *name,
     if (!cc || !cc[0])
         cc = "cc";
     if (!cflags || !cflags[0])
-        cflags = "-std=c2x -DGL_SILENCE_DEPRECATION -I../../../include";
+        cflags = "-std=c2x -DGL_SILENCE_DEPRECATION -Iinclude";
 
     snprintf(obj_path, sizeof(obj_path), "%s.o", src_path);
     snprintf(log_path, sizeof(log_path), "%s.log", src_path);
