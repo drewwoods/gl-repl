@@ -9,6 +9,23 @@ show_help() {
     cat <<'EOF'
 build-historical.sh — make `make` work at any old SHA in this repo.
 
+THE 30-SECOND VERSION
+
+  From a modern checkout (where this script and compat/ exist), tell
+  the script which historical SHA you want to build:
+
+      ./scripts/build-historical.sh --at <old-sha> sample
+
+  The script does the checkout for you, builds via a private worktree
+  under .compat-scratch/worktrees/<sha>/, then leaves your HEAD where
+  it was. The build's `sample` / test binaries land inside that
+  worktree (path is printed at the end so you can run them).
+
+  Without `--at`, the script builds the *currently* checked-out SHA
+  in place. That's the right mode if you're already on the old SHA
+  (perhaps streamed from main: `git show main:scripts/build-
+  historical.sh | sh -s -- sample`).
+
 WHY THIS EXISTS
 
   This repo was hoisted out of OpenGL-Vibe in April 2026. Before the hoist,
@@ -66,21 +83,35 @@ TWO REFS — DON'T CONFUSE THEM
 
 USAGE
 
-  From inside the repo, on any SHA (modern or historical):
+  Two modes, picked by whether `--at` is given:
 
-    git checkout <old-sha>                                    # ref (a)
-    git show main:scripts/build-historical.sh | sh -s -- <make-args>
+    A. Worktree mode (recommended, run from main or any modern SHA):
+         ./scripts/build-historical.sh --at <sha> [make-args...]
+       Adds a private git worktree under
+         .compat-scratch/worktrees/<sha>/
+       checks out <sha> in it, splices the compat headers in, and runs
+       `make` there. Your main checkout is untouched. To re-clean a
+       worktree, pass `--clean` along with `--at`.
 
-    # Or, if the script is checked out (modern SHAs only):
-    ./scripts/build-historical.sh <make-args>
+    B. In-place mode (run from inside the SHA you want to build):
+         ./scripts/build-historical.sh [make-args...]
+       Useful if you've already `git checkout`'d the old SHA, or are
+       streaming the script from main:
+         git checkout <old-sha>
+         git show main:scripts/build-historical.sh | sh -s -- sample
 
 EXAMPLES
 
-  # Build sample at old SHA 041ff95:
-  git checkout 041ff95
-  git show main:scripts/build-historical.sh | sh -s -- sample
+  # Worktree mode — build sample at old SHA 041ff95 from main:
+  ./scripts/build-historical.sh --at 041ff95 sample
 
-  # Modern SHA — script is in tree:
+  # Worktree mode — run a single test at an old SHA:
+  ./scripts/build-historical.sh --at 041ff95 test_eval USE_GL_STUBS=1
+
+  # Wipe a worktree before reusing it:
+  ./scripts/build-historical.sh --at 041ff95 --clean sample
+
+  # In-place mode — script is in tree, current checkout is what builds:
   ./scripts/build-historical.sh sample
   ./scripts/build-historical.sh test
   ./scripts/build-historical.sh test USE_GL_STUBS=1
@@ -88,13 +119,13 @@ EXAMPLES
 
   # Reading compat from a branch/tag other than `main`
   # (only useful if you've maintained the compat layer there):
-  COMPAT_REF=compat-branch ./scripts/build-historical.sh sample
+  COMPAT_REF=compat-branch ./scripts/build-historical.sh --at 041ff95 sample
 
   # WRONG — passing an old SHA as COMPAT_REF tries to read compat
   # headers from a SHA that doesn't have them:
   COMPAT_REF=041ff95 ./scripts/build-historical.sh sample
   # error: 041ff95:compat/legacy-include/gl_includes.h not found
-  # Fix: drop COMPAT_REF and `git checkout 041ff95` instead.
+  # Fix: use `--at 041ff95` and let COMPAT_REF default to main.
 
 ENVIRONMENT
 
@@ -127,14 +158,45 @@ CLEANUP
 EOF
 }
 
-# Argument parsing: only --help / -h are recognized as script flags;
-# everything else is forwarded to make.
-case "${1:-}" in
-    -h|--help)
-        show_help
-        exit 0
-        ;;
-esac
+# --- Argument parsing -------------------------------------------------------
+# Recognised script flags: --help / -h, --at <ref> / --at=<ref>, --clean.
+# Everything else is forwarded to make verbatim.
+
+target_ref=""
+clean_worktree=0
+
+while [ $# -gt 0 ]; do
+    case "$1" in
+        -h|--help)
+            show_help
+            exit 0
+            ;;
+        --at)
+            shift
+            if [ $# -eq 0 ]; then
+                echo "error: --at requires a git ref argument" >&2
+                exit 2
+            fi
+            target_ref="$1"
+            shift
+            ;;
+        --at=*)
+            target_ref="${1#--at=}"
+            shift
+            ;;
+        --clean)
+            clean_worktree=1
+            shift
+            ;;
+        --)
+            shift
+            break
+            ;;
+        *)
+            break
+            ;;
+    esac
+done
 
 # Sanity: must be inside a git work tree.
 if ! REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null)"; then
@@ -144,6 +206,39 @@ if ! REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null)"; then
 fi
 
 COMPAT_REF="${COMPAT_REF:-main}"
+
+# --- Worktree mode (--at <ref>) --------------------------------------------
+# When --at is given, build inside a private worktree at
+# .compat-scratch/worktrees/<sha>/ instead of mutating the user's HEAD.
+if [ -n "$target_ref" ]; then
+    if ! resolved_sha="$(git rev-parse --verify "$target_ref^{commit}" 2>/dev/null)"; then
+        echo "error: '$target_ref' is not a valid git ref or commit" >&2
+        exit 1
+    fi
+    short_sha="$(git rev-parse --short=12 "$resolved_sha")"
+    worktree_dir="$REPO_ROOT/.compat-scratch/worktrees/$short_sha"
+
+    if [ "$clean_worktree" -eq 1 ] && [ -d "$worktree_dir" ]; then
+        echo "build-historical: removing stale worktree at $worktree_dir"
+        git worktree remove --force "$worktree_dir" 2>/dev/null || rm -rf "$worktree_dir"
+    fi
+
+    if [ ! -d "$worktree_dir" ]; then
+        echo "build-historical: adding worktree at $worktree_dir for $short_sha"
+        mkdir -p "$REPO_ROOT/.compat-scratch/worktrees"
+        git worktree add --detach "$worktree_dir" "$resolved_sha"
+    else
+        echo "build-historical: reusing worktree at $worktree_dir"
+    fi
+
+    # Populate compat headers into the worktree's local .compat-scratch dir,
+    # then run make from inside it. Save the host repo root so the post-build
+    # cleanup hint can reference the right path for `git worktree remove`.
+    HOST_REPO_ROOT="$REPO_ROOT"
+    cd "$worktree_dir"
+    REPO_ROOT="$worktree_dir"
+fi
+
 SCRATCH="$REPO_ROOT/.compat-scratch"
 INCLUDE_DIR="$SCRATCH/include"
 
@@ -185,9 +280,24 @@ fi
 
 echo "build-historical: using headers from $COMPAT_REF -> $INCLUDE_DIR"
 echo "build-historical: invoking make with REPO_INCLUDE=$INCLUDE_DIR"
+if [ -n "${target_ref:-}" ]; then
+    echo "build-historical: build artifacts will land in $REPO_ROOT"
+fi
 
 cd "$REPO_ROOT"
-exec make \
+make \
     REPO_INCLUDE="$INCLUDE_DIR" \
     PROJECT_ROOT="$SCRATCH" \
     "$@"
+make_status=$?
+
+if [ -n "${target_ref:-}" ] && [ $make_status -eq 0 ]; then
+    echo ""
+    echo "build-historical: ok. Worktree preserved at:"
+    echo "    $REPO_ROOT"
+    echo "  cd there to run the binary, e.g. ./sample"
+    echo "  remove the worktree with:"
+    echo "    git -C $HOST_REPO_ROOT worktree remove --force $REPO_ROOT"
+fi
+
+exit $make_status

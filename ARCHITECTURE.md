@@ -536,15 +536,28 @@ and reroutes the Makefile through `-Iinclude`, but historical SHAs
 still encode the old layout, so `git checkout <old-sha> && make`
 fails out of the box.
 
-Use the compat shim:
+Use the compat shim. Two modes:
 
 ```sh
+# Worktree mode — recommended. Run from a modern checkout (where the
+# script and compat/ exist), pass the old SHA via --at, and the
+# script handles the checkout for you in a private git worktree under
+# .compat-scratch/worktrees/<sha>/. Your main checkout is untouched.
+./scripts/build-historical.sh --at <old-sha> sample
+./scripts/build-historical.sh --at <old-sha> test USE_GL_STUBS=1
+./scripts/build-historical.sh --at <old-sha> --clean sample   # wipe worktree first
+
+# In-place mode — only useful if you've already checked out the old SHA
+# yourself, or are streaming the script from main (since the script is
+# not tracked at older SHAs):
 git checkout <old-sha>
 git show main:scripts/build-historical.sh | sh -s -- sample
-# or, on modern checkouts:
-./scripts/build-historical.sh sample
-./scripts/build-historical.sh test USE_GL_STUBS=1
 ```
+
+The script reads compat headers internally with
+`git show main:compat/legacy-include/...`, so `compat/` doesn't need to
+exist on disk in the old checkout — only in `main`'s tree. Run
+`./scripts/build-historical.sh --help` for the full inline reference.
 
 How it works:
 
