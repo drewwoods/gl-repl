@@ -137,6 +137,7 @@ TEST_BINS = \
 	test_scene_render \
 	test_imrepl_ctrl \
 	test_repl_editor \
+	test_repl_executor \
 	test_repl_core_extra \
 	test_repl_autonormal
 
@@ -177,7 +178,12 @@ test_repl_audio_OBJS = $(OBJDIR)/test_repl_audio.o $(OBJDIR)/repl_audio.o
 test_repl_audio_LDLIBS = $(GL_LDFLAGS)
 test_repl_audio_RUN ?= ./test_repl_audio
 
+# For tests using the "include-as-unit" pattern (e.g., `#include "file.c"` to test
+# internal static functions), we must filter out the original object file from
+# the CORE_TEST_OBJS link list to prevent duplicate symbol errors.
 test_imrepl_ctrl_OBJS = $(OBJDIR)/test_imrepl_ctrl.o $(filter-out $(OBJDIR)/imrepl_ctrl.o,$(CORE_TEST_OBJS))
+
+test_repl_executor_OBJS = $(OBJDIR)/test_repl_executor.o $(filter-out $(OBJDIR)/repl_executor.o,$(CORE_TEST_OBJS))
 
 TEST_OBJS = $(foreach test,$(TEST_BINS),$($(test)_OBJS))
 TEST_RUNNER_CASES = $(foreach test,$(TEST_BINS),'$(test):::$($(test)_RUN)')
