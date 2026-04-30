@@ -45,4 +45,10 @@ void scene_render_init_gl(void);
  * AA). The controller builds the config once and passes it in. */
 void scene_render_3d_scene(const SceneRenderConfig *config);
 
+/* Render the replay fade-batch pass: walk config->replay_fade_plan and replay
+ * each active batch through config->execute_fn with its per-batch alpha.
+ * Normally invoked internally by scene_render_3d_scene; exposed publicly so
+ * benchmarks can isolate the fade-pass workload. */
+void scene_render_replay_fade_pass(const FrameRenderContext *frame_ctx);
+
 #endif /* SCENE_RENDER_H */
