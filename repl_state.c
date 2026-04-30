@@ -9,8 +9,6 @@
 #include "repl_source_scope.h"
 #undef REPL_STATE_IMPLEMENTATION
 
-#include <stddef.h>
-
 /* Import/export helpers stay in repl_export.c for now; state exposes them. */
 void refresh_workspace_header_lines(void);
 int  parse_workspace_header_line(const char *line);
@@ -189,105 +187,6 @@ static void reset_time_state(void) {
     g_anim_time = 0.0f;
     repl_eval_init_predef_vars();
     ensure_t_var_idx();
-}
-
-void repl_state_dump_layout() {
-#define REPL_RUNTIME_STATE_FIELDS(X)                                                               \
-    X(ReplDocumentState, document)                                                                 \
-    X(ReplFlatProgramState, flat_program)                                                          \
-    X(ReplVariableState, variables)                                                                \
-    X(ReplEditorInputState, editor_input)                                                          \
-    X(ReplSelectionState, selection)                                                               \
-    X(ReplClipboardState, clipboard)                                                               \
-    X(ReplCodePanelRuntimeState, code_panel)                                                       \
-    X(ReplHelpState, help)                                                                         \
-    X(ReplVariableDragState, variable_drag)                                                        \
-    X(ReplProfilePanelState, profile_panel)                                                        \
-    X(ReplStatusState, status)                                                                     \
-    X(ReplSearchState, search)                                                                     \
-    X(ReplAutocompleteState, autocomplete)                                                         \
-    X(ReplCameraState, camera)                                                                     \
-    X(ReplPointerState, pointer)                                                                   \
-    X(ReplViewportState, viewport)                                                                 \
-    X(ReplPresentationState, presentation)                                                         \
-    X(ReplRenderState, render)                                                                     \
-    X(ReplReplayRuntimeState, replay)                                                              \
-    X(ReplSceneRuntimeState, scenes)                                                               \
-    X(ReplImportExportState, import_export)
-
-#if defined(__STDC_VERSION__) && __STDC_VERSION__ >= 201112L
-#define REPL_HAS_ALIGNOF
-#define REPL_ALIGNOF(type) _Alignof(type)
-#elif defined(__GNUC__) || defined(__clang__)
-#define REPL_HAS_ALIGNOF
-#define REPL_ALIGNOF(type) __alignof__(type)
-#else
-#warning "Need _Alignof or compiler __alignof__ support for ReplRuntimeState layout check"
-#endif
-
-#define REPL_ALIGN_UP(value, alignment)                                                           \
-    (((value) + ((alignment) - 1)) & ~((alignment) - 1))
-
-#define REPL_FIELD_END(type, name)                                                                \
-    (offsetof(ReplRuntimeState, name) + sizeof(((ReplRuntimeState *)0)->name))
-
-#define REPL_RUNTIME_STATE_LAST_FIELD_END                                                         \
-    REPL_FIELD_END(ReplImportExportState, import_export)
-
-#define REPL_RUNTIME_STATE_EXPECTED_SIZE                                                          \
-    REPL_ALIGN_UP(REPL_RUNTIME_STATE_LAST_FIELD_END, REPL_ALIGNOF(ReplRuntimeState))
-
-#if defined(REPL_HAS_ALIGNOF)
-_Static_assert(
-    REPL_RUNTIME_STATE_EXPECTED_SIZE == sizeof(ReplRuntimeState),
-    "ReplRuntimeState layout list does not end at the actual struct size"
-);
-#endif
-
-    #define REPL_PRINT_FIELD(type, name)                                                              \
-        do {                                                                                          \
-            size_t offset = offsetof(ReplRuntimeState, name);                                         \
-            size_t size = sizeof(((ReplRuntimeState *)0)->name);                                      \
-            size_t end = offset + size;                                                               \
-            size_t gap = 0;                                                                           \
-            if (offset > previous_end)                                                                \
-                gap = offset - previous_end;                                                          \
-            printf("%-24s offset=%5zu size=%5zu end=%5zu gap_before=%5zu\n",                         \
-                   #name, offset, size, end, gap);                                                    \
-            previous_end = end;                                                                       \
-        } while (0);
-
-    size_t previous_end = 0;
-    size_t struct_size = sizeof(ReplRuntimeState);
-    size_t tail_padding = 0;
-
-    printf("ReplRuntimeState layout:\n");
-    printf("----------------------------------------------------------------------------\n");
-
-    REPL_RUNTIME_STATE_FIELDS(REPL_PRINT_FIELD)
-
-    if (struct_size > previous_end)
-        tail_padding = struct_size - previous_end;
-
-    printf("----------------------------------------------------------------------------\n");
-    printf("%-24s size=%5zu\n", "last field end", previous_end);
-    printf("%-24s size=%5zu\n", "struct total", struct_size);
-    printf("%-24s size=%5zu\n", "tail padding", tail_padding);
-
-#if defined(REPL_HAS_ALIGNOF)
-    printf("%-24s size=%5zu\n", "struct alignment", (size_t)REPL_ALIGNOF(ReplRuntimeState));
-    printf("%-24s size=%5zu\n", "expected total", (size_t)REPL_RUNTIME_STATE_EXPECTED_SIZE);
-#endif
-
-#undef REPL_PRINT_FIELD
-
-#undef REPL_RUNTIME_STATE_EXPECTED_SIZE
-#undef REPL_RUNTIME_STATE_LAST_FIELD_END
-#undef REPL_FIELD_END
-#undef REPL_ALIGN_UP
-#undef REPL_HAS_ALIGNOF
-#undef REPL_ALIGNOF
-#undef REPL_RUNTIME_STATE_FIELDS
 }
 
 ReplDocumentState *repl_state_document_mut(void) {
