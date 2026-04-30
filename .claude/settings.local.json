@@ -94,7 +94,10 @@
       "Bash(bash *)",
       "Bash(./test_repl_state)",
       "Read(//usr/local/include/**)",
-      "Read(//opt/homebrew/include/**)"
+      "Read(//opt/homebrew/include/**)",
+      "Bash(./test_repl_command_store *)",
+      "Bash(./test_repl_actions *)",
+      "Bash(./test_imrepl_ctrl)"
     ]
   }
 }
