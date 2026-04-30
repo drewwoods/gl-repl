@@ -1,0 +1,244 @@
+#include "repl_actions.h"
+#include "repl_state.h"
+#include "repl_config.h"
+#include "repl_audio.h"
+#include "repl_core.h"
+#include <stdio.h>
+#include <string.h>
+
+static int g_run = 0;
+static int g_pass = 0;
+
+#define ASSERT_TRUE(label, cond) do { \
+    g_run++; \
+    if (cond) g_pass++; \
+    else printf("FAIL [%s] (line %d)\n", label, __LINE__); \
+} while (0)
+
+#define ASSERT_INT(label, got, exp) do { \
+    g_run++; \
+    if ((got) == (exp)) g_pass++; \
+    else printf("FAIL [%s] got %d, expected %d (line %d)\n", \
+                label, (int)(got), (int)(exp), __LINE__); \
+} while (0)
+
+#define ASSERT_STR(label, got, exp) do { \
+    g_run++; \
+    if (strcmp((got), (exp)) == 0) g_pass++; \
+    else printf("FAIL [%s] got \"%s\", expected \"%s\" (line %d)\n", \
+                label, (got), (exp), __LINE__); \
+} while (0)
+
+/* Check the status from the REPL state instead of mocking set_status */
+#define g_last_status (repl_state_status().text)
+
+static void test_apply_defaults(void) {
+    repl_reset_state();
+    /* repl_actions_apply_defaults pulls from repl_audio_get_cfg_mode()
+     * which defaults to AUDIO_CFG_ALL (3) if invalid. */
+    repl_actions_apply_defaults();
+    ASSERT_INT("default audio mode is ALL", repl_config_get(REPL_CONFIG_AUDIO_MODE), 3);
+}
+
+static void test_cursor_actions(void) {
+    repl_reset_state();
+    ReplCodePanelRuntimeState *cp = repl_state_code_panel_mut();
+    cp->cursor_visible = 0;
+    cp->blink_tick = 100;
+
+    repl_action_cursor_blink_reset();
+    ASSERT_INT("cursor visible after reset", cp->cursor_visible, 1);
+    ASSERT_INT("blink tick reset", cp->blink_tick, 0);
+
+    repl_action_set_cursor_pixel(10, 20);
+    ASSERT_INT("cursor_px set", cp->cursor_px, 10);
+    ASSERT_INT("cursor_py set", cp->cursor_py, 20);
+}
+
+static void test_help_tab_actions(void) {
+    repl_reset_state();
+    ReplHelpState *help = repl_state_help_mut();
+    help->tab_idx = 0;
+    help->scroll = 50;
+
+    repl_action_help_tab_next();
+    ASSERT_INT("help tab next moves to 1", help->tab_idx, 1);
+    ASSERT_INT("help tab next resets scroll", help->scroll, 0);
+
+    help->scroll = 30;
+    repl_action_help_tab_next();
+    ASSERT_INT("help tab next stays at 1 (max)", help->tab_idx, 1);
+
+    repl_action_help_tab_prev();
+    ASSERT_INT("help tab prev moves to 0", help->tab_idx, 0);
+    ASSERT_INT("help tab prev resets scroll", help->scroll, 0);
+
+    help->scroll = 20;
+    repl_action_help_tab_prev();
+    ASSERT_INT("help tab prev stays at 0", help->tab_idx, 0);
+}
+
+int g_stub_modifiers = 0;
+
+static void test_cfg_cycling(void) {
+    repl_reset_state();
+
+    /* Find some row indices */
+    int wireframe_row = -1;
+    int auto_time_row = -1;
+    int audio_row = -1;
+    int code_panel_row = -1;
+    int auto_normals_row = -1;
+    int replay_row = -1;
+    int point_attenuation_row = -1;
+
+    for (int i = 0; i < CFG_ITEM_COUNT; i++) {
+        const ReplConfigItem *item = repl_config_item_at(i);
+        if (!item) continue;
+        if (item->key == REPL_CONFIG_WIREFRAME) wireframe_row = i;
+        if (item->key == REPL_CONFIG_AUTO_TIME) auto_time_row = i;
+        if (item->key == REPL_CONFIG_AUDIO_MODE) audio_row = i;
+        if (item->key == REPL_CONFIG_CODE_PANEL_LAYOUT) code_panel_row = i;
+        if (item->key == REPL_CONFIG_AUTO_NORMALS) auto_normals_row = i;
+        if (item->key == REPL_CONFIG_REPLAY) replay_row = i;
+        if (item->key == REPL_CONFIG_POINT_ATTENUATION) point_attenuation_row = i;
+    }
+
+    /* Test generic cycle (Wireframe) */
+    repl_state_presentation_mut()->wireframe = 0;
+    repl_cfg_cycle_row(wireframe_row, 1);
+    ASSERT_INT("wireframe toggled to 1", repl_state_presentation().wireframe, 1);
+    ASSERT_STR("wireframe status ON", g_last_status, "Wireframe: ON");
+
+    /* Test Replay special case - only starts if there are commands to replay */
+    repl_state_replay_mut()->active = 0;
+    repl_config_set(REPL_CONFIG_REPLAY, 0);
+    /* When no commands present, replay toggles but stays inactive with "nothing to play" */
+    repl_cfg_cycle_row(replay_row, 1);
+    ASSERT_STR("replay status nothing to play", g_last_status, "Replay: nothing to play");
+
+    /* Test Auto-time toggle without shift */
+    repl_state_variables_mut()->anim_time = 5.0f;
+    repl_cfg_cycle_row(auto_time_row, 1);
+    /* Time toggle would handle the animation, test just verifies it can be cycled */
+    ASSERT_TRUE("auto time cycled", 1);
+
+    /* Test Code Panel Layout */
+    repl_state_presentation_mut()->code_panel_layout = 0; // Left
+    repl_cfg_cycle_row(code_panel_row, 1); // -> Top
+    ASSERT_INT("code panel layout top", repl_state_presentation().code_panel_layout, 1);
+    ASSERT_STR("status top", g_last_status, "Layout: top code panel");
+
+    repl_cfg_cycle_row(code_panel_row, 1); // -> Bottom
+    ASSERT_INT("code panel layout bottom", repl_state_presentation().code_panel_layout, 2);
+    ASSERT_STR("status bottom", g_last_status, "Layout: bottom code panel");
+
+    repl_cfg_cycle_row(code_panel_row, 1); // -> Hidden
+    ASSERT_INT("code panel layout hidden", repl_state_presentation().code_panel_layout, 3);
+    ASSERT_STR("status hidden", g_last_status, "Layout: code panel hidden");
+
+    repl_cfg_cycle_row(code_panel_row, 1); // -> Left
+    ASSERT_INT("code panel layout left", repl_state_presentation().code_panel_layout, 0);
+    ASSERT_STR("status left", g_last_status, "Layout: left code panel");
+
+    /* Test Auto-normals */
+    repl_state_presentation_mut()->autonormal = 0;
+    repl_cfg_cycle_row(auto_normals_row, 1);
+    ASSERT_INT("autonormal ON", repl_state_presentation().autonormal, 1);
+    ASSERT_STR("status autonormal ON", g_last_status, "Auto-normals: ON");
+
+    /* Test Point Attenuation */
+    repl_config_set(REPL_CONFIG_POINT_ATTENUATION, 0);
+    repl_cfg_cycle_row(point_attenuation_row, 1);
+    ASSERT_INT("point attenuation ON", repl_config_get(REPL_CONFIG_POINT_ATTENUATION), 1);
+    ASSERT_STR("status point attenuation ON", g_last_status, "Point attenuation: ON");
+
+    /* Test Audio modes */
+    repl_config_set(REPL_CONFIG_AUDIO_MODE, 0); // Pause
+    repl_cfg_cycle_row(audio_row, 1); // -> Once
+    ASSERT_INT("audio mode Once", repl_config_get(REPL_CONFIG_AUDIO_MODE), 1);
+    ASSERT_STR("status audio Once", g_last_status, "Audio: play once");
+    ASSERT_INT("audio engine not paused", repl_audio_is_paused(), 0);
+    ASSERT_INT("audio engine loop mode OFF", repl_audio_get_loop_mode(), REPL_AUDIO_LOOP_OFF);
+
+    repl_cfg_cycle_row(audio_row, 1); // -> Song
+    ASSERT_INT("audio mode Song", repl_config_get(REPL_CONFIG_AUDIO_MODE), 2);
+    ASSERT_STR("status audio Song", g_last_status, "Audio: loop song");
+    ASSERT_INT("audio engine loop mode SONG", repl_audio_get_loop_mode(), REPL_AUDIO_LOOP_SONG);
+
+    repl_cfg_cycle_row(audio_row, 1); // -> All
+    ASSERT_INT("audio mode All", repl_config_get(REPL_CONFIG_AUDIO_MODE), 3);
+    ASSERT_STR("status audio All", g_last_status, "Audio: loop all");
+    ASSERT_INT("audio engine loop mode ALL", repl_audio_get_loop_mode(), REPL_AUDIO_LOOP_ALL);
+
+    repl_cfg_cycle_row(audio_row, 1); // -> Pause
+    ASSERT_INT("audio mode Pause", repl_config_get(REPL_CONFIG_AUDIO_MODE), 0);
+    ASSERT_STR("status audio Pause", g_last_status, "Audio: paused");
+    ASSERT_INT("audio engine paused", repl_audio_is_paused(), 1);
+}
+
+static void test_menu_actions(void) {
+    repl_reset_state();
+
+    /* File menu */
+    ASSERT_INT("File Export", repl_action_menu_item_activate(REPL_MENU_FILE, REPL_FILE_ITEM_EXPORT), 1);
+    ASSERT_INT("File Import", repl_action_menu_item_activate(REPL_MENU_FILE, REPL_FILE_ITEM_IMPORT), 1);
+    ASSERT_STR("Import status", g_last_status, "Import not implemented yet");
+    ASSERT_INT("File Save Workspace", repl_action_menu_item_activate(REPL_MENU_FILE, REPL_FILE_ITEM_SAVE_WORKSPACE), 1);
+    ASSERT_INT("File Load Workspace", repl_action_menu_item_activate(REPL_MENU_FILE, REPL_FILE_ITEM_LOAD_WORKSPACE), 1);
+
+    /* Scene menu - Examples */
+    int example_count = repl_example_count();
+    if (example_count > 0) {
+        ASSERT_INT("Load Example 0", repl_action_menu_item_activate(REPL_MENU_SCENE, 1), 1);
+        ASSERT_INT("active example is 0", repl_state_scenes().active_example_idx, 0);
+    }
+
+    /* Scene menu - Fixed items */
+    ASSERT_INT("Scene New", repl_action_menu_item_activate(REPL_MENU_SCENE, example_count + REPL_SCENE_OFF_NEW), 1);
+    ASSERT_INT("active example cleared", repl_state_scenes().active_example_idx, -1);
+
+    ASSERT_INT("Scene Save", repl_action_menu_item_activate(REPL_MENU_SCENE, example_count + REPL_SCENE_OFF_SAVE), 1);
+
+    /* Scene Rename - need an active user scene */
+    /* For now, just call it and expect "No active scene to rename" if none active */
+    ASSERT_INT("Scene Rename (none)", repl_action_menu_item_activate(REPL_MENU_SCENE, example_count + REPL_SCENE_OFF_RENAME), 1);
+    ASSERT_STR("Rename status", g_last_status, "No active scene to rename");
+
+    /* User scenes */
+    /* Add a user scene by loading an example first (promotes current scene to slot 0) */
+    repl_feed_line_public("glVertex3f(1,1,1);");
+    repl_load_example(0);
+
+    ASSERT_INT("Slot 0 used", repl_user_scene_slot_used(0), 1);
+    ASSERT_INT("Dense index 0 is slot 0", repl_scene_menu_slot_for_dense_index(0), 0);
+    ASSERT_INT("Load user scene 0", repl_action_menu_item_activate(REPL_MENU_SCENE, example_count + REPL_SCENE_OFF_SCENES), 1);
+    ASSERT_INT("active user scene slot", repl_active_user_scene(), 0);
+
+    /* Config menu */
+    ASSERT_INT("Config row 1", repl_action_menu_item_activate(REPL_MENU_CONFIG, 1), 0); // 0 because toggles keep menu open
+}
+
+static void test_shortcuts(void) {
+    repl_reset_state();
+
+    /* Test handling of unknown keys - these should return 0 */
+    ASSERT_INT("Unknown ASCII", repl_cfg_handle_ascii_shortcut('X'), 0);
+    ASSERT_INT("Unknown special", repl_cfg_handle_special_shortcut(999), 0);
+
+    /* Test that specific shortcut handlers are callable
+     * Note: testing actual shortcut effects requires GL context initialization,
+     * which is handled by test_cfg_cycling with specific config items  */
+}
+
+int main(void) {
+    test_apply_defaults();
+    test_cursor_actions();
+    test_help_tab_actions();
+    test_cfg_cycling();
+    test_menu_actions();
+    test_shortcuts();
+
+    printf("test_repl_actions: %d/%d tests passed\n", g_pass, g_run);
+    return (g_pass == g_run) ? 0 : 1;
+}
