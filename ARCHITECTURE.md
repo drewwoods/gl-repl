@@ -526,6 +526,54 @@ remaining; Stages 4 (cursor-pixel `Ui*Output` actualization), 6
 (`repl_undo.c` consumes `repl_state_capture()`), and 7 (UI snapshot purity)
 are still open.
 
+## Building Historical Checkouts
+
+This repo was hoisted out of OpenGL-Vibe in April 2026. Pre-hoist
+Makefiles resolved `REPO_INCLUDE := $(abspath ../../..)/include` and
+expected to find OpenGL-Vibe's project-wide `gl_includes.h` and
+`miniaudio.h` there. Modern HEAD vendors slim copies under `include/`
+and reroutes the Makefile through `-Iinclude`, but historical SHAs
+still encode the old layout, so `git checkout <old-sha> && make`
+fails out of the box.
+
+Use the compat shim:
+
+```sh
+git checkout <old-sha>
+git show main:scripts/build-historical.sh | sh -s -- sample
+# or, on modern checkouts:
+./scripts/build-historical.sh sample
+./scripts/build-historical.sh test USE_GL_STUBS=1
+```
+
+How it works:
+
+1. Reads two compat headers from a configurable ref (`COMPAT_REF`,
+   default `main`):
+   - `compat/legacy-include/gl_includes.h` — the **fat** compat header.
+     Older export templates relied on `gl_includes.h` transitively
+     pulling in `<stdlib.h>`, `<stdio.h>`, `<string.h>`, `<math.h>` via
+     OpenGL-Vibe's bundled utilities, so this one re-includes them
+     directly.
+   - `compat/legacy-include/miniaudio.h` (if present), else
+     `include/miniaudio.h`.
+2. Materialises both into `./.compat-scratch/include/` (untracked;
+   already in HEAD's `.gitignore`).
+3. Invokes `make` with `PROJECT_ROOT` and `REPO_INCLUDE` overridden to
+   point at the scratch dir. Extra args after the script are forwarded
+   verbatim to `make`.
+
+Run `./scripts/build-historical.sh --help` for the full inline reference
+including environment variables, examples, and known limitations (most
+notably: the very first commit — the
+`displaylist-dynamic-rendering → immediate-mode-repl` rename — uses
+quoted `#include "gl_includes.h"` and won't be repaired by the shim).
+
+The shim only fixes header layout. Other pre-existing breakage at
+specific older SHAs (renamed symbols, broken examples) is intentionally
+left alone — old SHAs are reference material, not a maintained build
+target.
+
 ## Header Documentation Standard
 
 Until R12 consolidates the REPL public surface, each public API header should
