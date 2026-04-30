@@ -31,7 +31,6 @@ typedef struct {
 
 void repl_state_capture(ReplRuntimeState *snapshot);
 void repl_state_restore(const ReplRuntimeState *snapshot);
-void repl_state_dump_layout(void);
 
 
 #endif /* REPL_STATE_H */

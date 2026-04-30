@@ -109,10 +109,6 @@ void repl_navigate_to_line(int target);
 void repl_load_initial_commands(const char *import_file);
 void repl_reformat_commands(void);
 
-/* --- Debug dumps (used by tests / CLI flags) --------------------------- */
-void repl_debug_dump_editor(FILE *out);
-void repl_debug_dump_flat_commands(FILE *out);
-
 /* --- Cursor / feed queries --------------------------------------------- */
 int  repl_flat_cmd_matches_cursor(int flat_idx);
 int  repl_find_feeding_normal_cmd(int line_idx);

@@ -2,6 +2,7 @@
 #include "imrepl_ctrl.h"
 #include "repl_actions.h"
 #include "repl_core.h"
+#include "repl_debug.h"
 #include "repl_executor.h"
 #include "repl_audio.h"
 #include "repl_state.h"
@@ -87,6 +88,7 @@ static void print_usage(const char *prog) {
             "  --no-audio   Start without audio (disables music entirely)\n"
             "  --dump-code  Load the session and print the editor buffer\n"
             "  --dump-flat  Load the session and print flattened commands\n"
+            "  --dump-state-layout  Print ReplRuntimeState field layout\n"
             "\n"
             "Arguments:\n"
             "  input.c      Optional saved session to load at startup\n"
@@ -137,6 +139,7 @@ int main(int argc, char **argv) {
     const char *input_file = NULL;
     int dump_code = 0;
     int dump_flat = 0;
+    int dump_state_layout = 0;
     int no_audio  = 0;
     for (int i = 1; i < argc; i++) {
         if (strcmp(argv[i], "-h") == 0 || strcmp(argv[i], "--help") == 0) {
@@ -150,19 +153,25 @@ int main(int argc, char **argv) {
             dump_code = 1;
         else if (strcmp(argv[i], "--dump-flat") == 0)
             dump_flat = 1;
+        else if (strcmp(argv[i], "--dump-state-layout") == 0)
+            dump_state_layout = 1;
         else if (!input_file)
             input_file = argv[i];
     }
 
-    if (dump_code || dump_flat) {
-        repl_eval_init_predef_vars();
-        for (int i = 0; i < g_num_predef_vars; i++)
-            if (strcmp(g_predef_vars[i].name, "t") == 0) { repl_state_variables_mut()->time_var_idx = i; break; }
-        repl_load_initial_commands(input_file);
+    if (dump_code || dump_flat || dump_state_layout) {
+        if (dump_code || dump_flat) {
+            repl_eval_init_predef_vars();
+            for (int i = 0; i < g_num_predef_vars; i++)
+                if (strcmp(g_predef_vars[i].name, "t") == 0) { repl_state_variables_mut()->time_var_idx = i; break; }
+            repl_load_initial_commands(input_file);
+        }
         if (dump_code)
             repl_debug_dump_editor(stdout);
         if (dump_flat)
             repl_debug_dump_flat_commands(stdout);
+        if (dump_state_layout)
+            repl_debug_dump_runtime_state_layout(stdout);
         return 0;
     }
 
