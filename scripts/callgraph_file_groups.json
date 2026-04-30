@@ -85,7 +85,7 @@
         "repl_audio.c",
         "prof.c",
         "sample.c",
-        "gl_stub_counts.c"
+        "tests/gl-stubs/gl_stub_counts.c"
       ]
     }
   ],

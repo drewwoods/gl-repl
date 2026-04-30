@@ -440,14 +440,14 @@ Commands tab). Group with related commands under the same section header.
 
 If the GL/GLU/GLUT function is new to the stub build:
 
-**`include/GL/gl_stub_counts.h`** — append to `GL_STUB_COUNTER_LIST`:
+**`tests/gl-stubs/include/GL/gl_stub_counts.h`** — append to `GL_STUB_COUNTER_LIST`:
 
 ```c
 X(glutSolidTeapot)  \
 X(glutSolidCone)
 ```
 
-**`include/GL/freeglut.h`** (or `glu.h`) — add a no-op inline stub:
+**`tests/gl-stubs/include/GL/freeglut.h`** (or `glu.h`) — add a no-op inline stub:
 
 ```c
 static inline void glutSolidTeapot(double size) {

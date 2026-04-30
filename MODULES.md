@@ -38,6 +38,18 @@ scene/UI render wiring. It is deliberately outside the `repl_*` namespace.
 to avoid burying architecture changes under include churn. Rename them to
 `imrepl.c` / `imrepl.h` in a later mechanical pass.
 
+## Repository Layout Rules
+
+Source-backed modules keep paired `.c/.h` files together at the repo root.
+Header-only project helpers and vendored single-header dependencies live under
+`include/`; `gl_2d.h` belongs there because it is header-only. Tests live under
+`tests/`, shared test helpers under `tests/support/`, and no-op GL headers under
+`tests/gl-stubs/include/`.
+
+`cmd_format` and `prof` are utility-like, but both have compiled `.c` modules,
+so they stay as root-level source-backed modules rather than moving to
+`include/` or a generic utility bucket.
+
 ## Adding Or Migrating An Owner Module
 
 When a module starts owning mutable REPL state, follow the Stage-1 template:
@@ -222,7 +234,7 @@ UI renderers read models and draw. Mutations go through `repl_actions`,
 | `repl_audio` | Legacy-named app-level playlist engine and persisted audio config; namespace audit candidate |
 | `prof` | Project-wide CPU timing instrumentation |
 | `sample` | Current `main()`, GLUT callback wiring, buffer swap, and legacy shared header; future rename target is `imrepl` |
-| `gl_stub_counts` | `USE_GL_STUBS` symbol tracking |
+| `gl_stub_counts` | `USE_GL_STUBS` symbol tracking for `tests/gl-stubs` headers |
 
 ## Scene Render Config Direction
 
@@ -317,6 +329,9 @@ render-neutral helpers belong in explicit shared headers.
 * New app lifecycle/window wiring: `sample.c` for now, `imrepl.c` after the
   deferred rename.
 * New command mutation: `repl_command_store_*`.
+* New header-only rendering/helper code: `include/`.
+* New tests: `tests/`; shared test-only helpers: `tests/support/`.
+* New no-op GL stub declarations: `tests/gl-stubs/include/`.
 
 ## Open Refactor Edges
 
