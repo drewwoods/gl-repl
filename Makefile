@@ -134,6 +134,7 @@ TEST_BINS = \
 	test_repl_command_store \
 	test_scene_guides \
 	test_scene_render \
+	test_imrepl_ctrl \
 	test_repl_editor \
 	test_repl_core_extra \
 	test_repl_autonormal
@@ -174,6 +175,8 @@ test_repl_code_panel_layout_RUN ?= ./test_repl_code_panel_layout
 test_repl_audio_OBJS = $(OBJDIR)/test_repl_audio.o $(OBJDIR)/repl_audio.o
 test_repl_audio_LDLIBS = $(GL_LDFLAGS)
 test_repl_audio_RUN ?= ./test_repl_audio
+
+test_imrepl_ctrl_OBJS = $(OBJDIR)/test_imrepl_ctrl.o $(filter-out $(OBJDIR)/imrepl_ctrl.o,$(CORE_TEST_OBJS))
 
 TEST_OBJS = $(foreach test,$(TEST_BINS),$($(test)_OBJS))
 TEST_RUNNER_CASES = $(foreach test,$(TEST_BINS),'$(test):::$($(test)_RUN)')
