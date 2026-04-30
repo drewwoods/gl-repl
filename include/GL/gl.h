@@ -149,6 +149,7 @@ typedef double GLclampd;
 #define GL_DONT_CARE 0x1100
 
 #define GL_POINT_SMOOTH_HINT 0x0C51
+#define GL_FOG_HINT 0x0C54
 
 #define GL_TEXTURE_ENV 0x2300
 #define GL_TEXTURE_ENV_MODE 0x2200
