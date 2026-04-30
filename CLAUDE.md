@@ -19,7 +19,9 @@ make clean           # Remove binaries
 Requires: gcc with C2x support, OpenGL, GLUT/freeglut, AddressSanitizer enabled
 by default in debug builds.
 
-Include path must reach `../../include` (the project-wide `gl_includes.h`).
+`include/gl_includes.h` is vendored alongside the source — the Makefile adds
+`-Iinclude` to `COMMON_CFLAGS` so every translation unit can resolve it via
+`#include <gl_includes.h>`.
 
 ### Local GL Stub Headers
 
