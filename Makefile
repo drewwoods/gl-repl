@@ -99,6 +99,7 @@ endif
 
 all: sample
 
+# Used to force rebuild if you list as a prerequisite, e.g. `test_eval: FORCE $(test_eval_OBJS)`.
 FORCE:
 
 SRCS = sample.c imrepl_ctrl.c repl_core.c repl_debug.c repl_state.c repl_config.c repl_command_spec.c repl_parser.c repl_source_scope.c repl_command_store.c repl_commit.c repl_clipboard.c repl_undo.c repl_camera_controls.c repl_actions.c repl_layout.c repl_code_panel_layout.c repl_code_panel_document.c repl_flatten.c repl_executor.c repl_autocomplete.c ui_autocomplete_panel.c repl_autonormal.c repl_scenes.c repl_example_loader.c repl_replay.c repl_replay_annotations.c repl_search.c repl_export.c repl_editor.c repl_examples.c scene_render.c scene_geometry_guides.c scene_transform_guides.c scene_grid.c scene_axes.c scene_backdrop.c scene_lights.c scene_overlays.c ui_panels.c ui_menu_bar.c ui_color_picker.c ui_help_overlay.c ui_variable_panel.c ui_replay_hud.c repl_var_drag.c repl_inline_rename.c repl_eval.c cmd_format.c repl_audio.c ui_profile_panel.c prof.c tests/gl-stubs/gl_stub_counts.c
@@ -213,7 +214,7 @@ $(OBJDIR)/%.o: %.c
 	@mkdir -p $(dir $@)
 	$(CC) $(OBJ_CFLAGS) $(DEPFLAGS) -c -o $@ $<
 
-sample: FORCE $(SAMPLE_OBJS) ## Build the main REPL sample using release flags by default.
+sample: $(SAMPLE_OBJS) ## Build the main REPL sample using release flags by default.
 	$(CC) $(OBJ_CFLAGS) -o $@ $(SAMPLE_OBJS) $(GL_LDFLAGS)
 
 .SECONDEXPANSION:
@@ -223,8 +224,8 @@ sample: FORCE $(SAMPLE_OBJS) ## Build the main REPL sample using release flags b
 # turn `test_eval` into `$(test_eval_OBJS)`, `test_repl_core_io` into
 # `$(test_repl_core_io_OBJS)`, etc. The doubled dollars delay that lookup until
 # the second pass.
-$(TEST_BINS) $(BENCH_BINS): %: FORCE $$($$@_OBJS)
-	$(CC) $(OBJ_CFLAGS) -o $@ $(filter-out FORCE,$^) $($@_LDLIBS) $(COVERAGE_LDFLAGS)
+$(TEST_BINS) $(BENCH_BINS): %: $$($$@_OBJS)
+	$(CC) $(OBJ_CFLAGS) -o $@ $^ $($@_LDLIBS) $(COVERAGE_LDFLAGS)
 
 # Layering boundary enforcement ------------------------------------------
 check-gl-boundaries: ## Verify GL/GLUT calls are isolated to allowed files.
