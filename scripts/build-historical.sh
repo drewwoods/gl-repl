@@ -45,12 +45,30 @@ WHAT IT DOES
      dir instead of the long-gone OpenGL-Vibe layout. Any extra arguments
      after the script name are forwarded to make verbatim.
 
+TWO REFS — DON'T CONFUSE THEM
+
+  This script juggles two distinct refs:
+
+    a. The *checked-out* ref: the version of the code you want to build.
+       Set this with `git checkout <sha-or-branch>` before running.
+
+    b. COMPAT_REF (env var, default "main"): where the script reads the
+       compat headers from. Must be a ref that tracks
+       compat/legacy-include/  — i.e. `main` or the bootstrap commit and
+       later. **Old SHAs do NOT have compat/ tracked**, so passing an
+       old SHA as COMPAT_REF will fail with "compat/legacy-include/
+       gl_includes.h not found".
+
+  In normal use you only set (a). Leave COMPAT_REF unset (or =main) and
+  the script will splice main's compat headers into whatever old SHA
+  you're sitting on. Setting COMPAT_REF only makes sense if you've
+  forked the compat layer onto a branch or tag.
+
 USAGE
 
   From inside the repo, on any SHA (modern or historical):
 
-    # Recommended: stream the script straight from `main` so old checkouts
-    # don't need a tracked copy of scripts/build-historical.sh:
+    git checkout <old-sha>                                    # ref (a)
     git show main:scripts/build-historical.sh | sh -s -- <make-args>
 
     # Or, if the script is checked out (modern SHAs only):
@@ -58,18 +76,33 @@ USAGE
 
 EXAMPLES
 
+  # Build sample at old SHA 041ff95:
+  git checkout 041ff95
+  git show main:scripts/build-historical.sh | sh -s -- sample
+
+  # Modern SHA — script is in tree:
   ./scripts/build-historical.sh sample
   ./scripts/build-historical.sh test
   ./scripts/build-historical.sh test USE_GL_STUBS=1
   ./scripts/build-historical.sh sample USE_GLUT=1 BUILD=debug
 
-  COMPAT_REF=v1.0  ./scripts/build-historical.sh sample
-  COMPAT_REF=abcd1234  ./scripts/build-historical.sh test_eval
+  # Reading compat from a branch/tag other than `main`
+  # (only useful if you've maintained the compat layer there):
+  COMPAT_REF=compat-branch ./scripts/build-historical.sh sample
+
+  # WRONG — passing an old SHA as COMPAT_REF tries to read compat
+  # headers from a SHA that doesn't have them:
+  COMPAT_REF=041ff95 ./scripts/build-historical.sh sample
+  # error: 041ff95:compat/legacy-include/gl_includes.h not found
+  # Fix: drop COMPAT_REF and `git checkout 041ff95` instead.
 
 ENVIRONMENT
 
   COMPAT_REF   git ref to read compat/legacy-include/gl_includes.h and
-               miniaudio.h from. Defaults to "main".
+               miniaudio.h from. Defaults to "main". This is NOT the
+               version you want to build — see "TWO REFS" above. Only
+               override this if you've published the compat layer on
+               another branch or tag.
 
 LIMITATIONS
 
@@ -121,9 +154,18 @@ mkdir -p "$INCLUDE_DIR"
 # at HEAD — historical export templates rely on transitive stdlib.
 if ! git show "$COMPAT_REF:compat/legacy-include/gl_includes.h" \
         > "$INCLUDE_DIR/gl_includes.h" 2>/dev/null; then
+    rm -f "$INCLUDE_DIR/gl_includes.h"
     echo "error: $COMPAT_REF:compat/legacy-include/gl_includes.h not found" >&2
-    echo "       Set COMPAT_REF to the branch/tag/SHA that has compat/ tracked." >&2
-    echo "       Run with --help for details." >&2
+    echo "" >&2
+    echo "  COMPAT_REF tells this script where to *read the compat headers from*," >&2
+    echo "  not which version of the code to build. The default 'main' is almost" >&2
+    echo "  always what you want." >&2
+    echo "" >&2
+    echo "  If you're trying to build at an old SHA, do this instead:" >&2
+    echo "      git checkout <old-sha>" >&2
+    echo "      ./scripts/build-historical.sh <make-args>      # leaves COMPAT_REF=main" >&2
+    echo "" >&2
+    echo "  Run with --help for the full distinction." >&2
     exit 1
 fi
 
