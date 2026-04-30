@@ -3,6 +3,7 @@
  */
 #include "sample.h"
 #include "repl_command_store.h"
+#include "repl_config.h"
 #include "repl_core_internal.h"
 #include "repl_examples.h"
 #include "repl_state.h"
@@ -19,6 +20,22 @@
 #define g_export_scene_name_hint (IMPORT_EXPORT_STATE->export_scene_name_hint)
 #define g_pending_scene_name (IMPORT_EXPORT_STATE->pending_scene_name)
 #define g_pending_workspace_dir (IMPORT_EXPORT_STATE->pending_workspace_dir)
+
+/* Keys whose values are saved per-scene and restored on scene switch.
+ * Mirrors the set that repl_state_presentation_reset_example_defaults() resets
+ * so that switching between scenes and examples never bleeds cfg across. */
+#define N_SCENE_CFG_KEYS 14
+static const ReplConfigKey k_scene_cfg_keys[N_SCENE_CFG_KEYS] = {
+    REPL_CONFIG_WIREFRAME,
+    REPL_CONFIG_GRID_THEME,    REPL_CONFIG_GRID_MAJOR,  REPL_CONFIG_GRID_EXTENT,
+    REPL_CONFIG_AXES_THEME,
+    REPL_CONFIG_VERTEX_LABELS, REPL_CONFIG_NORMAL_VECTORS,
+    REPL_CONFIG_VERTEX_OUTLINES, REPL_CONFIG_VERTEX_POINTS, REPL_CONFIG_VERTEX_GUIDES,
+    REPL_CONFIG_XFORM_GUIDE_MODE,
+    REPL_CONFIG_LIGHT_INDICATORS,
+    REPL_CONFIG_BACKDROP,
+    REPL_CONFIG_CAMERA_ROTATE,
+};
 
 /* User scene slots for the workspace / example-promotion system.
  *
@@ -42,6 +59,7 @@ typedef struct {
     float    predef_vals[MAX_PREDEF_VARS];
     char     predef_names[MAX_PREDEF_VARS][16];
     int      num_predef_vars;
+    int      scene_cfg[N_SCENE_CFG_KEYS];
 } UserScene;
 
 static UserScene g_user_scenes[MAX_USER_SCENES];
@@ -101,6 +119,8 @@ static void save_scene_to_slot(int idx, const char *name) {
         s->predef_vals[i] = g_predef_vars[i].value;
         memcpy(s->predef_names[i], g_predef_vars[i].name, 16);
     }
+    for (int i = 0; i < N_SCENE_CFG_KEYS; i++)
+        s->scene_cfg[i] = repl_config_get(k_scene_cfg_keys[i]);
     if (name && *name)
         snprintf(s->name, sizeof(s->name), "%s", name);
     else if (s->name[0] == '\0')
@@ -130,6 +150,8 @@ static void load_scene_from_slot(int idx) {
         g_predef_vars[i].value = s->predef_vals[i];
         memcpy(g_predef_vars[i].name, s->predef_names[i], 16);
     }
+    for (int i = 0; i < N_SCENE_CFG_KEYS; i++)
+        repl_config_set(k_scene_cfg_keys[i], s->scene_cfg[i]);
     repl_state_insert_mode_set(0);
     load_line_to_input(repl_state_edit_line());
     mark_normals_dirty();

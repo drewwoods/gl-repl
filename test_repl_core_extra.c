@@ -1,4 +1,5 @@
 #define _DEFAULT_SOURCE
+#include "repl_config.h"
 #include "repl_core_internal.h"
 #include "repl_replay.h"
 #include "repl_executor.h"
@@ -541,6 +542,115 @@ void test_user_scene_rename_flow() {
                repl_inline_rename_begin(MAX_USER_SCENES - 1), 0);
 }
 
+void test_activate_home_slot_no_duplicate_name() {
+    printf("--- activate_home_slot produces no duplicate name ---\n");
+    repl_reset_state(); declare_test_vars();
+    if (repl_example_count() < 1) return;
+
+    /* Simulate the startup path: load example 0 (which captures the empty
+     * state as "Your Scene" in slot 0 via repl_scenes_capture_home_if_needed),
+     * then activate_home_slot seeds slot 0 with the example content.  The two
+     * writes target the same slot, so the name must stay plain "Your Scene"
+     * with no "(2)" suffix. */
+    repl_load_example(0);
+    repl_scenes_activate_home_slot();
+
+    ASSERT_INT("slot 0 active after activate_home_slot",
+               repl_active_user_scene(), 0);
+    const char *name = repl_user_scene_name(0);
+    ASSERT_TRUE("slot 0 name non-null", name != NULL);
+    if (name)
+        ASSERT_STR("slot 0 name is Your Scene (no (2) suffix)",
+                   name, "Your Scene");
+
+    /* No spurious slot 1 should exist. */
+    ASSERT_INT("slot 1 unused", repl_user_scene_slot_used(1), 0);
+}
+
+void test_your_scene_persists_edits_from_startup() {
+    printf("--- Your Scene persists edits across example switch ---\n");
+    repl_reset_state(); declare_test_vars();
+    if (repl_example_count() < 1) return;
+
+    /* Activate an empty slot 0 as "Your Scene" (mirrors the startup path when
+     * the live state is empty, e.g. before any example content is shown). */
+    repl_scenes_activate_home_slot();
+    ASSERT_INT("slot 0 active (Your Scene mode)", repl_active_user_scene(), 0);
+
+    /* User adds a vertex in "Your Scene". */
+    repl_feed_line_public("glVertex3f(9,9,9);");
+    repl_flatten_commands();
+    ASSERT_INT("vertex present in Your Scene", count_vertices(), 1);
+
+    /* Switch to example 0 -- this auto-saves slot 0 before overwriting. */
+    repl_load_example(0);
+    ASSERT_INT("active scene cleared after example load",
+               repl_active_user_scene(), -1);
+
+    /* Return to Your Scene -- should have exactly the user's vertex. */
+    repl_load_user_scene_idx(0);
+    repl_flatten_commands();
+    ASSERT_INT("vertex restored after returning to Your Scene",
+               count_vertices(), 1);
+    ASSERT_INT("slot 0 active again", repl_active_user_scene(), 0);
+}
+
+void test_scene_cfg_persists_across_example_switch() {
+    printf("--- Scene cfg persists across example switch ---\n");
+    repl_reset_state(); declare_test_vars();
+    if (repl_example_count() < 1) return;
+
+    /* Start in Your Scene mode. */
+    repl_load_example(0);
+    repl_scenes_activate_home_slot();
+
+    /* Record the default backdrop value, then set a different one. */
+    int default_backdrop = repl_config_get(REPL_CONFIG_BACKDROP);
+    int custom_backdrop  = (default_backdrop + 1) % repl_config_state_count(REPL_CONFIG_BACKDROP);
+    repl_config_set(REPL_CONFIG_BACKDROP, custom_backdrop);
+
+    int default_grid = repl_config_get(REPL_CONFIG_GRID_THEME);
+    int custom_grid  = (default_grid + 1) % repl_config_state_count(REPL_CONFIG_GRID_THEME);
+    repl_config_set(REPL_CONFIG_GRID_THEME, custom_grid);
+
+    /* Switch to an example -- example load resets cfg to defaults, then
+     * applies its own @cfg.  The user scene should be saved first. */
+    repl_load_example(0);
+    ASSERT_INT("example load resets backdrop to default",
+               repl_config_get(REPL_CONFIG_BACKDROP), default_backdrop);
+
+    /* Return to Your Scene -- our custom cfg must be restored. */
+    repl_load_user_scene_idx(0);
+    ASSERT_INT("backdrop restored from Your Scene",
+               repl_config_get(REPL_CONFIG_BACKDROP), custom_backdrop);
+    ASSERT_INT("grid theme restored from Your Scene",
+               repl_config_get(REPL_CONFIG_GRID_THEME), custom_grid);
+}
+
+void test_scene_cfg_not_inherited_from_example() {
+    printf("--- Scene cfg not inherited from subsequent example ---\n");
+    repl_reset_state(); declare_test_vars();
+    if (repl_example_count() < 1) return;
+
+    /* Build a user scene with default cfg (no custom overrides). */
+    repl_load_example(0);
+    repl_scenes_activate_home_slot();
+    int scene_backdrop = repl_config_get(REPL_CONFIG_BACKDROP);
+
+    /* View an example that has a different backdrop. */
+    repl_load_example(0);
+    int example_backdrop = (scene_backdrop + 1) %
+                           repl_config_state_count(REPL_CONFIG_BACKDROP);
+    repl_config_set(REPL_CONFIG_BACKDROP, example_backdrop);
+    ASSERT_INT("example backdrop different from scene backdrop",
+               repl_config_get(REPL_CONFIG_BACKDROP), example_backdrop);
+
+    /* Return to Your Scene -- must NOT inherit the example's backdrop. */
+    repl_load_user_scene_idx(0);
+    ASSERT_INT("Your Scene backdrop not overwritten by example",
+               repl_config_get(REPL_CONFIG_BACKDROP), scene_backdrop);
+}
+
 void test_debug_dump_flat_commands() {
     printf("--- Debug dump flat commands ---\n");
 
@@ -823,6 +933,10 @@ int main(int argc, char **argv) {
     test_user_scene_promote_lru_evict();
     test_user_scene_rename_flow();
     test_workspace_round_trip();
+    test_activate_home_slot_no_duplicate_name();
+    test_your_scene_persists_edits_from_startup();
+    test_scene_cfg_persists_across_example_switch();
+    test_scene_cfg_not_inherited_from_example();
     test_debug_dump_flat_commands();
     test_var_declare_cmd();
     test_time();
