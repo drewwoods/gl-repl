@@ -347,6 +347,21 @@ void imrepl_ctrl_init_gl(void) {
     apply_init_bootstrap();
 }
 
+void imrepl_ctrl_bootstrap_repl(const char *input_file) {
+    repl_eval_init_predef_vars();
+    for (int i = 0; i < g_num_predef_vars; i++) {
+        if (strcmp(g_predef_vars[i].name, "t") == 0) {
+            repl_state_variables_mut()->time_var_idx = i;
+            break;
+        }
+    }
+    repl_load_initial_commands(input_file);
+}
+
+void imrepl_ctrl_set_accum(int enabled) {
+    repl_state_render_mut()->use_accum = enabled ? 1 : 0;
+}
+
 void imrepl_ctrl_keyboard(unsigned char key, int x, int y) {
     imrepl_ctrl_apply_input_effects(repl_keyboard_func(key, x, y));
 }
