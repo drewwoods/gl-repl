@@ -132,7 +132,7 @@ TEST_BINS = \
 	test_repl_core_internal \
 	test_repl_autocomplete \
 	test_repl_command_store \
-	test_repl_actions \
+	test_repl_var_drag \
 	test_scene_guides \
 	test_scene_render \
 	test_imrepl_ctrl \
@@ -186,6 +186,8 @@ test_repl_audio_RUN ?= ./test_repl_audio
 test_imrepl_ctrl_OBJS = $(OBJDIR)/test_imrepl_ctrl.o $(filter-out $(OBJDIR)/imrepl_ctrl.o,$(CORE_TEST_OBJS))
 
 test_repl_executor_OBJS = $(OBJDIR)/test_repl_executor.o $(filter-out $(OBJDIR)/repl_executor.o,$(CORE_TEST_OBJS))
+
+test_repl_replay_OBJS = $(OBJDIR)/test_repl_replay.o $(filter-out $(OBJDIR)/repl_replay.o,$(CORE_TEST_OBJS))
 
 TEST_OBJS = $(foreach test,$(TEST_BINS),$($(test)_OBJS))
 TEST_RUNNER_CASES = $(foreach test,$(TEST_BINS),'$(test):::$($(test)_RUN)')
