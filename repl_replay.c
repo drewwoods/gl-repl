@@ -492,6 +492,7 @@ int repl_replay_seek_to_src_line(int target_line) {
         int step_src = replay_last_meaningful_src(pc, next_pc);
         if (step_src >= target_line) {
             landed_pc = next_pc;
+            landed_src = step_src;
             break;
         }
         pc = next_pc;

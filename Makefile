@@ -137,12 +137,14 @@ TEST_BINS = \
 	test_scene_render \
 	test_imrepl_ctrl \
 	test_repl_editor \
-	test_repl_executor \
 	test_repl_core_extra \
-	test_repl_autonormal
+	test_repl_autonormal \
+	test_repl_replay
 
 ifeq ($(USE_GL_STUBS),1)
 TEST_BINS += test_ui
+TEST_BINS += test_repl_actions
+TEST_BINS += test_repl_executor
 endif
 
 CORE_TEST_BINS = $(filter-out test_eval test_format test_repl_code_panel_layout test_repl_audio,$(TEST_BINS))
