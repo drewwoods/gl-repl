@@ -585,7 +585,7 @@ static const char *const g_example_waves[] = {
     "glEnable(GL_LIGHT1);",
     "glEnable(GL_LIGHT0);",
     "glShadeModel(GL_SMOOTH);",
-    "n = 24;",
+    "n = 16;",
     "b = 3.0; // breath",
     "for(i, 0, n) {",
         "glBegin(GL_TRIANGLE_STRIP);",
