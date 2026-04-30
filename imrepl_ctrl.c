@@ -340,6 +340,7 @@ void imrepl_ctrl_reshape(int w, int h) {
 }
 
 void imrepl_ctrl_init_gl(void) {
+    repl_state_init_defaults();
     ensure_init_bootstrap_ready();
     scene_render_init_gl();
     repl_executor_init_resources();
