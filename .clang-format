@@ -1,0 +1,45 @@
+---
+# We'll use defaults from the LLVM style, but with 4 columns indentation.
+BasedOnStyle: LLVM
+IndentWidth: 4
+ColumnLimit: 100
+ObjCBlockIndentWidth: 4
+ObjCBreakBeforeNestedBlockParam: true
+InsertNewlineAtEOF: true
+SortIncludes: Never
+#InsertTrailingCommas: Wrapped
+
+#
+# Options to break lines before or after binary operators.
+#
+BinPackArguments: true
+BinPackParameters: true
+AlignConsecutiveDeclarations: Consecutive
+AlignConsecutiveBitFields: Consecutive
+AlignConsecutiveMacros: Consecutive
+Cpp11BracedListStyle: true
+
+#
+# Options to add spaces around operators and after commas.
+#
+#SpaceAfterCStyleCast: false
+#SpaceBeforeAssignmentOperators: true
+#SpaceBeforeParens: ControlStatements
+#SpaceBeforeParensOptions:
+#  AfterFunctionDeclarationName: true
+#  AfterFunctionDefinitionName: true
+#  AfterControlStatements: true
+#SpaceInEmptyParentheses: true
+#SpacesBeforeTrailingComments: 1
+#SpacesInAngles: false
+#SpacesInCStyleCastParentheses: false
+#SpacesInContainerLiterals: true
+##SpacesInParentheses: true
+#SpacesInParens: Custom
+#SpacesInParensOptions:
+#  ExceptDoubleParentheses: true
+#  InConditionalStatements: true
+#  Other: true
+#SpacesInSquareBrackets: false
+
+
