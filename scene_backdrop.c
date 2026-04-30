@@ -3,10 +3,10 @@
  */
 #include "scene_backdrop.h"
 
-#define CITY_BLDG_COUNT   150
-#define CITY_RADIUS       42.0f
+#define CITY_BLDG_COUNT   300
+#define CITY_RADIUS       72.0f
 #define CITY_RING_SPREAD   7.0f
-#define CITY_CYCLE_SECS  600.0f
+#define CITY_CYCLE_SECS  500.0f
 
 #define STAR_COUNT        2080
 #define STAR_SKY_RADIUS   30.0f
@@ -40,6 +40,16 @@ static void draw_cityscape(float anim_time) {
     glDepthMask(GL_TRUE);
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    float clear_col[4];
+    glGetFloatv(GL_COLOR_CLEAR_VALUE, clear_col);
+    glFogfv(GL_FOG_COLOR, clear_col);
+    glEnable(GL_FOG);
+    // glFogi(GL_FOG_MODE, GL_EYE_PLANE_ABSOLUTE_NV);
+    // glFogf(GL_FOG_DENSITY, 0.02);
+    glHint(GL_FOG_HINT, GL_NICEST);
+    glFogi(GL_FOG_MODE, GL_LINEAR);
+    glFogf(GL_FOG_START, CITY_RADIUS * 0.60f);
+    glFogf(GL_FOG_END, CITY_RADIUS * 1.45f);
 
     for (int bi = 0; bi < CITY_BLDG_COUNT; bi++) {
         unsigned int base = (unsigned int)bi * 13u;
@@ -199,15 +209,27 @@ static void draw_cityscape(float anim_time) {
                 float wz = cz + tang_z * (u - 0.5f) * bw + face_oz;
                 float wy = y0 + v * bh;
 
-                float wr_c = warmth > 0.5f ?
-                             (0.90f + warmth * 0.10f) :
-                             (0.85f + warmth * 0.10f);
-                float wg_c = warmth > 0.5f ?
-                             (0.62f + warmth * 0.20f) :
-                             (0.80f + warmth * 0.10f);
-                float wb_c = warmth > 0.5f ?
-                             (0.10f + (1.0f - warmth) * 0.20f) :
-                             (0.70f + (1.0f - warmth) * 0.20f);
+                /* Retro-80s palette matching the star colors */
+                float wr_c, wg_c, wb_c;
+                if (warmth < 0.45f) {
+                    /* Off-white, slight cool tint */
+                    float w = city_rng(wid + 20u);
+                    wr_c = 0.88f + w * 0.10f;
+                    wg_c = 0.88f + w * 0.06f;
+                    wb_c = 0.94f + w * 0.04f;
+                } else if (warmth < 0.75f) {
+                    /* Neon blue */
+                    float b = city_rng(wid + 21u);
+                    wr_c = 0.22f + b * 0.18f;
+                    wg_c = 0.52f + b * 0.22f;
+                    wb_c = 1.0f;
+                } else {
+                    /* Purple / violet */
+                    float p = city_rng(wid + 22u);
+                    wr_c = 0.52f + p * 0.22f;
+                    wg_c = 0.12f + p * 0.14f;
+                    wb_c = 0.88f + p * 0.10f;
+                }
 
                 glColor4f(wr_c * lit, wg_c * lit, wb_c * lit, 0.85f * lit + 0.05f);
 
