@@ -26,10 +26,11 @@
 #ifndef UI_PROFILE_PANEL_H
 #define UI_PROFILE_PANEL_H
 
-/* Render the CPU profile panel overlay once per frame. Reads measurements from
- * prof.c and displays per-section CPU times (last frame + smoothed average) as
- * a compact overlay. Renders nothing if the profile panel is disabled
- * (REPL_CONFIG_CPU_PROFILE = off). Called by repl_core.c during display callback. */
-void ui_profile_panel_render(void);
+#include "ui_snapshot.h"
+
+/* Render the CPU profile panel overlay once per frame from the supplied
+ * snapshot. Reads measurements from prof.c and displays per-section CPU
+ * times. Renders nothing if the profile panel is disabled. */
+void ui_profile_panel_render(const UiRenderSnapshot *snap);
 
 #endif /* UI_PROFILE_PANEL_H */

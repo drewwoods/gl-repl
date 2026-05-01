@@ -30,12 +30,11 @@
 #ifndef UI_HELP_OVERLAY_H
 #define UI_HELP_OVERLAY_H
 
-/* Render the help overlay modal once per frame. Displays a full-screen
- * semi-transparent overlay with keyboard bindings, GL command reference,
- * math functions, and feature descriptions. Renders nothing if help is not
- * active. Input dispatch (keyboard/mouse) should check help state before
- * routing input. Called by repl_core.c during display callback if help
- * overlay is active. */
-void ui_help_overlay_render(void);
+#include "ui_snapshot.h"
+
+/* Render the help overlay modal once per frame. Reads only from the supplied
+ * `UiRenderSnapshot`; performs no live REPL state reads. Renders nothing if
+ * help is not active. */
+void ui_help_overlay_render(const UiRenderSnapshot *snap);
 
 #endif /* UI_HELP_OVERLAY_H */

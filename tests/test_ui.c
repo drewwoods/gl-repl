@@ -8,6 +8,7 @@
 #include "ui_autocomplete_panel.h"
 #include "ui_variable_panel.h"
 #include "ui_menu_bar.h"
+#include "ui_snapshot.h"
 #include "repl_var_drag.h"
 #include <GL/gl_stub_counts.h>
 
@@ -31,12 +32,49 @@ static int g_pass = 0;
                 label, gl_stub_count_name(counter), gl_stub_counts[counter], (min_calls), __LINE__); \
 } while (0)
 
+/* Build a UiRenderSnapshot from the current REPL state for renderer tests.
+ * Mirrors imrepl_ctrl_build_ui_snapshot(); the test harness can't link the
+ * controller TU, so we duplicate the relevant slice population here. */
+static void make_test_ui_snapshot(UiRenderSnapshot *snap) {
+    memset(snap, 0, sizeof(*snap));
+    snap->viewport       = repl_state_viewport();
+    snap->presentation   = repl_state_presentation();
+    snap->code_panel     = repl_state_code_panel();
+    snap->help           = repl_state_help();
+    snap->variable_panel = repl_state_variable_panel();
+    snap->profile_panel  = repl_state_profile_panel();
+    snap->status         = repl_state_status();
+    snap->search         = repl_state_search();
+    snap->autocomplete   = repl_state_autocomplete();
+    snap->camera         = repl_state_camera();
+    snap->pointer        = repl_state_pointer();
+    snap->render         = repl_state_render();
+    snap->replay         = repl_state_replay();
+    snap->scenes         = repl_state_scenes();
+    snap->variable_drag  = repl_state_variable_drag();
+    snap->clipboard      = repl_state_clipboard();
+    snap->selection      = repl_state_selection();
+    snap->variables      = repl_state_variables();
+    snap->editor_input   = repl_state_editor_input();
+    snap->import_export  = repl_state_import_export();
+    snap->flat_program   = repl_state_flat_program_view();
+    snap->predef         = repl_eval_predef_view();
+    snap->document_cmds  = repl_state_document_cmds();
+    snap->document_count = repl_state_document_count();
+    snap->edit_line      = repl_state_edit_line();
+    snap->insert_mode    = snap->editor_input.insert_mode;
+    snap->cursor_pos     = snap->editor_input.cursor_pos;
+    snap->input_len      = snap->editor_input.input_len;
+    snap->flat_program_count = snap->flat_program.cmd_count;
+    snap->user_scene_active_idx = -1;
+}
+
 static void test_help_overlay(void) {
     printf("Testing Help Overlay...\n");
     gl_stub_counts_reset();
     
     repl_state_help_mut()->visible = 0;
-    ui_help_overlay_render();
+    { UiRenderSnapshot s; make_test_ui_snapshot(&s); ui_help_overlay_render(&s); }
     ASSERT_TRUE("help hidden -> no GL calls", gl_stub_counts[GL_STUB_glBegin] == 0);
 
     repl_state_help_mut()->visible = 1;
@@ -45,7 +83,7 @@ static void test_help_overlay(void) {
     repl_state_help_mut()->scroll = 0;
 
     gl_stub_counts_reset();
-    ui_help_overlay_render();
+    { UiRenderSnapshot s; make_test_ui_snapshot(&s); ui_help_overlay_render(&s); }
     ASSERT_GL_CALLS("help visible -> draws quads", GL_STUB_glBegin, 1);
     ASSERT_GL_CALLS("help visible -> calls glVertex2f", GL_STUB_glVertex2f, 4);
     ASSERT_GL_CALLS("help visible -> draws text", GL_STUB_glRasterPos2f, 10);
@@ -54,7 +92,7 @@ static void test_help_overlay(void) {
     /* Switch tabs */
     repl_state_help_mut()->tab_idx = 1;
     gl_stub_counts_reset();
-    ui_help_overlay_render();
+    { UiRenderSnapshot s; make_test_ui_snapshot(&s); ui_help_overlay_render(&s); }
     ASSERT_GL_CALLS("help tab 1 -> draws text", GL_STUB_glRasterPos2f, 10);
 }
 
@@ -63,7 +101,7 @@ static void test_profile_panel(void) {
     gl_stub_counts_reset();
     
     repl_state_profile_panel_mut()->mode = PROFILE_PANEL_OFF;
-    ui_profile_panel_render();
+    { UiRenderSnapshot s; make_test_ui_snapshot(&s); ui_profile_panel_render(&s); }
     ASSERT_TRUE("profile hidden -> no GL calls", gl_stub_counts[GL_STUB_glBegin] == 0);
 
     repl_state_profile_panel_mut()->mode = PROFILE_PANEL_ON;
@@ -72,7 +110,7 @@ static void test_profile_panel(void) {
     prof_end(PROF_FRAME_TOTAL);
 
     gl_stub_counts_reset();
-    ui_profile_panel_render();
+    { UiRenderSnapshot s; make_test_ui_snapshot(&s); ui_profile_panel_render(&s); }
     ASSERT_GL_CALLS("profile visible -> draws quads", GL_STUB_glBegin, 1);
     ASSERT_GL_CALLS("profile visible -> draws text", GL_STUB_glRasterPos2f, 5);
     ASSERT_GL_CALLS("profile visible -> calls glColor4f", GL_STUB_glColor4f, 1);
@@ -80,7 +118,7 @@ static void test_profile_panel(void) {
     /* Test details mode */
     repl_state_profile_panel_mut()->mode = PROFILE_PANEL_DETAILS;
     gl_stub_counts_reset();
-    ui_profile_panel_render();
+    { UiRenderSnapshot s; make_test_ui_snapshot(&s); ui_profile_panel_render(&s); }
     ASSERT_GL_CALLS("profile details -> draws more text", GL_STUB_glRasterPos2f, 10);
 }
 
@@ -104,7 +142,7 @@ static void test_color_picker(void) {
     ASSERT_TRUE("picker is active", ui_color_picker_active_line() == 0);
     
     gl_stub_counts_reset();
-    ui_color_picker_render();
+    { UiRenderSnapshot s; make_test_ui_snapshot(&s); ui_color_picker_render(&s); }
     ASSERT_GL_CALLS("picker render -> draws quads", GL_STUB_glBegin, 1);
     ASSERT_GL_CALLS("picker render -> calls glVertex2f", GL_STUB_glVertex2f, 4);
     
@@ -129,7 +167,7 @@ static void test_color_picker(void) {
     ui_color_picker_open(0, 300);
     
     gl_stub_counts_reset();
-    ui_color_picker_render();
+    { UiRenderSnapshot s; make_test_ui_snapshot(&s); ui_color_picker_render(&s); }
     ASSERT_GL_CALLS("picker render with alpha -> draws quads", GL_STUB_glBegin, 1);
     
     /* Press Alpha bar (alp_x = hue_x + 18 + 6 = px + 156 + 24 = 180) */
@@ -157,7 +195,7 @@ static void test_autocomplete_panel(void) {
     gl_stub_counts_reset();
     
     repl_state_autocomplete_mut()->match_count = 0;
-    ui_autocomplete_panel_render();
+    { UiRenderSnapshot s; make_test_ui_snapshot(&s); ui_autocomplete_panel_render(&s); }
     ASSERT_TRUE("ac hidden -> no GL calls", gl_stub_counts[GL_STUB_glBegin] == 0);
 
     repl_state_autocomplete_mut()->match_count = 2;
@@ -168,7 +206,7 @@ static void test_autocomplete_panel(void) {
     repl_state_code_panel_mut()->cursor_py = 100;
     
     gl_stub_counts_reset();
-    ui_autocomplete_panel_render();
+    { UiRenderSnapshot s; make_test_ui_snapshot(&s); ui_autocomplete_panel_render(&s); }
     ASSERT_GL_CALLS("ac visible -> draws quads", GL_STUB_glBegin, 1);
     ASSERT_GL_CALLS("ac visible -> draws text", GL_STUB_glRasterPos2f, 2);
     ASSERT_GL_CALLS("ac visible -> calls glVertex2f", GL_STUB_glVertex2f, 4);
@@ -179,7 +217,7 @@ static void test_variable_panel(void) {
     gl_stub_counts_reset();
     
     repl_state_variable_panel_mut()->visible = 0;
-    ui_variable_panel_render();
+    { UiRenderSnapshot s; make_test_ui_snapshot(&s); ui_variable_panel_render(&s); }
     ASSERT_TRUE("var panel hidden -> no GL calls", gl_stub_counts[GL_STUB_glBegin] == 0);
 
     repl_state_variable_panel_mut()->visible = 1;
@@ -188,7 +226,7 @@ static void test_variable_panel(void) {
     g_predef_vars[0].value = 1.0f;
 
     gl_stub_counts_reset();
-    ui_variable_panel_render();
+    { UiRenderSnapshot s; make_test_ui_snapshot(&s); ui_variable_panel_render(&s); }
     ASSERT_GL_CALLS("var panel visible -> draws quads", GL_STUB_glBegin, 1);
     ASSERT_GL_CALLS("var panel visible -> draws text", GL_STUB_glRasterPos2f, 2);
     ASSERT_GL_CALLS("var panel visible -> calls glColor4f", GL_STUB_glColor4f, 1);
@@ -211,7 +249,7 @@ static void test_menu_bar(void) {
     repl_state_code_panel_mut()->panel_frac = 0.5f;
     
     gl_stub_counts_reset();
-    ui_menu_bar_render();
+    { UiRenderSnapshot s; make_test_ui_snapshot(&s); ui_menu_bar_render(&s); }
     ASSERT_GL_CALLS("menu bar render -> draws quads", GL_STUB_glBegin, 1);
     ASSERT_GL_CALLS("menu bar render -> draws text", GL_STUB_glRasterPos2f, 2);
     
@@ -227,7 +265,7 @@ static void test_menu_bar(void) {
     ASSERT_TRUE("dropdown open", ui_menu_bar_menu_dropdown_is_open());
     
     gl_stub_counts_reset();
-    ui_menu_bar_render_example_dropdown();
+    { UiRenderSnapshot s; make_test_ui_snapshot(&s); ui_menu_bar_render_example_dropdown(&s); }
     ASSERT_GL_CALLS("dropdown render -> draws quads", GL_STUB_glBegin, 1);
     
     /* Dropdown item hit */
@@ -240,7 +278,7 @@ static void test_menu_bar(void) {
     /* Test search overlay */
     repl_state_search_mut()->active = 1;
     gl_stub_counts_reset();
-    ui_menu_bar_render_search_overlay(0, 400, 600);
+    { UiRenderSnapshot s; make_test_ui_snapshot(&s); ui_menu_bar_render_search_overlay(&s, 0, 400, 600); }
     ASSERT_GL_CALLS("search overlay -> draws quads", GL_STUB_glBegin, 1);
     
     ui_menu_bar_close();

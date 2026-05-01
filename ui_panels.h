@@ -32,15 +32,15 @@
 #ifndef UI_PANELS_H
 #define UI_PANELS_H
 
+#include "ui_snapshot.h"
+
 /* --- Rendering --- */
 
-/* Render the code panel: wrapped source lines, syntax highlighting, overlays
- * (cursor, selection, replay annotations). Called once per frame by scene_render.c. */
-void ui_panels_render_code_panel(void);
+/* Render the code panel from the supplied snapshot. */
+void ui_panels_render_code_panel(const UiRenderSnapshot *snap);
 
-/* Render the scene status banner (below the 3D scene, showing example name,
- * status messages, etc.). Called once per frame by scene_render.c. */
-void ui_panels_render_scene_status(void);
+/* Render the scene status banner from the supplied snapshot. */
+void ui_panels_render_scene_status(const UiRenderSnapshot *snap);
 
 /* --- Menu/config dispatch (called by repl_editor.c) --- */
 

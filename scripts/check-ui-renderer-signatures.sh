@@ -24,10 +24,11 @@ while IFS= read -r fn; do
   # Strip file:line prefix.
   sig="${sig_line#*:*:}"
 
-  one_arg='^\s*void\s+'"$fn"'\s*\(\s*const\s+Ui[A-Za-z0-9_]+(View|State)\s*\*\s*([A-Za-z_][A-Za-z0-9_]*)?\s*\)\s*[;{]\s*$'
-  two_arg='^\s*void\s+'"$fn"'\s*\(\s*const\s+Ui[A-Za-z0-9_]+(View|State)\s*\*\s*([A-Za-z_][A-Za-z0-9_]*)?\s*,\s*Ui[A-Za-z0-9_]+Output\s*\*\s*([A-Za-z_][A-Za-z0-9_]*)?\s*\)\s*[;{]\s*$'
+  one_arg='^\s*void\s+'"$fn"'\s*\(\s*const\s+Ui[A-Za-z0-9_]+(View|State|Snapshot)\s*\*\s*([A-Za-z_][A-Za-z0-9_]*)?\s*\)\s*[;{]\s*$'
+  two_arg='^\s*void\s+'"$fn"'\s*\(\s*const\s+Ui[A-Za-z0-9_]+(View|State|Snapshot)\s*\*\s*([A-Za-z_][A-Za-z0-9_]*)?\s*,\s*Ui[A-Za-z0-9_]+Output\s*\*\s*([A-Za-z_][A-Za-z0-9_]*)?\s*\)\s*[;{]\s*$'
+  trailing_arg='^\s*void\s+'"$fn"'\s*\(\s*const\s+Ui[A-Za-z0-9_]+(View|State|Snapshot)\s*\*\s*([A-Za-z_][A-Za-z0-9_]*)?\s*,'
 
-  if ! printf '%s\n' "$sig" | grep -Eq "$one_arg|$two_arg"; then
+  if ! printf '%s\n' "$sig" | grep -Eq "$one_arg|$two_arg|$trailing_arg"; then
     echo "ERROR: renderer signature shape invalid for $fn" >&2
     echo "  found: $sig" >&2
     bad=1

@@ -97,7 +97,8 @@
       "Read(//opt/homebrew/include/**)",
       "Bash(./test_repl_command_store *)",
       "Bash(./test_repl_actions *)",
-      "Bash(./test_imrepl_ctrl)"
+      "Bash(./test_imrepl_ctrl)",
+      "Bash(uuidgen)"
     ]
   }
 }

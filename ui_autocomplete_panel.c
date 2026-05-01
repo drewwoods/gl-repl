@@ -11,18 +11,17 @@
  * layout has the surrounding context.
  */
 #include "sample.h"
-#include "repl_state_views.h"
 #include "ui_autocomplete_panel.h"
 #include "repl_layout.h"
 #include "./include/gl_2d.h"
 
-void ui_autocomplete_panel_render(void) {
-    ReplAutocompleteState           ac  = repl_state_autocomplete();
-    ReplCodePanelRuntimeState       cp  = repl_state_code_panel();
+void ui_autocomplete_panel_render(const UiRenderSnapshot *snap) {
+    ReplAutocompleteState           ac  = snap->autocomplete;
+    ReplCodePanelRuntimeState       cp  = snap->code_panel;
 
     if (ac.match_count < 1) return;
 
-    gl2d_begin(repl_state_viewport().window_w, repl_state_viewport().window_h);
+    gl2d_begin(snap->viewport.window_w, snap->viewport.window_h);
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 

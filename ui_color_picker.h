@@ -30,6 +30,8 @@
 #ifndef UI_COLOR_PICKER_H
 #define UI_COLOR_PICKER_H
 
+#include "ui_snapshot.h"
+
 /* Width of inline color swatch boxes (shown in code panel). */
 #define UI_COLOR_SWATCH_W 12
 
@@ -52,8 +54,9 @@ void ui_color_picker_open(int cmd_idx, int my);
 
 /* Render the color picker overlay (RGB/RGBA sliders) once per frame. Called
  * by ui_panels.c if active_line() != -1. Slider values are synced to the
- * current command's arguments. */
-void ui_color_picker_render(void);
+ * current command's arguments. Reads the supplied snapshot for layout
+ * data; performs no live REPL state reads inside the render path. */
+void ui_color_picker_render(const UiRenderSnapshot *snap);
 
 /* Render an inline color swatch (small colored box) for a command in the code
  * panel. cmd_idx is the source command index; sx, sy are pixel coordinates in

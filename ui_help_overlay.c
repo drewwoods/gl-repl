@@ -7,7 +7,6 @@
  */
 #include "sample.h"
 #include "repl_config.h"
-#include "repl_state_views.h"
 #include "ui_help_overlay.h"
 #include "./include/gl_2d.h"
 
@@ -15,8 +14,8 @@
 #define _HELP_STR2(x) #x
 #define _HELP_STR(x)  _HELP_STR2(x)
 
-void ui_help_overlay_render(void) {
-    ReplHelpState help = repl_state_help();
+void ui_help_overlay_render(const UiRenderSnapshot *snap) {
+    ReplHelpState help = snap->help;
     if (!help.visible) return;
 
     /* --- Tab 0: Commands ---
@@ -266,12 +265,12 @@ void ui_help_overlay_render(void) {
     int n_lines = 0;
     while (text[n_lines]) n_lines++;
 
-    gl2d_begin(repl_state_viewport().window_w, repl_state_viewport().window_h);
+    gl2d_begin(snap->viewport.window_w, snap->viewport.window_h);
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
-    int win_w = repl_state_viewport().window_w;
-    int win_h = repl_state_viewport().window_h;
+    int win_w = snap->viewport.window_w;
+    int win_h = snap->viewport.window_h;
     int hx = win_w / 6, hy = win_h / 12;
     int hw = win_w * 2 / 3, hh = win_h * 5 / 6;
     int tab_bar_h = LINE_H + 2;

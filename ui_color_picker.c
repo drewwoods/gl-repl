@@ -138,9 +138,10 @@ void ui_color_picker_open(int cmd_idx, int my) {
     g_cp_px = ppx;  g_cp_py = ppy;
 }
 
-void ui_color_picker_render(void) {
+void ui_color_picker_render(const UiRenderSnapshot *snap) {
     const GLCmd *cmd;
 
+    (void)snap;
     if (g_cp_line < 0) return;
     cmd = cp_cmd_at(g_cp_line);
     if (!cmd)

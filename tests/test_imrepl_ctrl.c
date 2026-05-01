@@ -99,13 +99,13 @@ void test_ui_replay_hud_render(const UiReplayHudState *state) {
     g_flat_count_seen_in_hud = repl_state_flat_program_count();
 }
 
-void test_ui_panels_render_code_panel(void) {}
-void test_ui_autocomplete_panel_render(void) {}
-void test_ui_menu_bar_render_example_dropdown(void) {}
-void test_ui_variable_panel_render(void) {}
-void test_ui_panels_render_scene_status(void) {}
-void test_ui_help_overlay_render(void) {}
-void test_ui_profile_panel_render(void) {}
+void test_ui_panels_render_code_panel(const UiRenderSnapshot *snap) { (void)snap; }
+void test_ui_autocomplete_panel_render(const UiRenderSnapshot *snap) { (void)snap; }
+void test_ui_menu_bar_render_example_dropdown(const UiRenderSnapshot *snap) { (void)snap; }
+void test_ui_variable_panel_render(const UiRenderSnapshot *snap) { (void)snap; }
+void test_ui_panels_render_scene_status(const UiRenderSnapshot *snap) { (void)snap; }
+void test_ui_help_overlay_render(const UiRenderSnapshot *snap) { (void)snap; }
+void test_ui_profile_panel_render(const UiRenderSnapshot *snap) { (void)snap; }
 
 static void prepare_display_fixture(void) {
     GLCmd *doc_cmds;

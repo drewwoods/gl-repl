@@ -133,13 +133,13 @@ int ui_variable_panel_hit(int gx, int gy, int *out_row) {
     return 1;
 }
 
-void ui_variable_panel_render(void) {
-    if (!repl_state_variable_panel().visible) return;
+void ui_variable_panel_render(const UiRenderSnapshot *snap) {
+    if (!snap->variable_panel.visible) return;
 
     int px, py, pw, ph;
     ui_variable_panel_rect(&px, &py, &pw, &ph);
 
-    gl2d_begin(repl_state_viewport().window_w, repl_state_viewport().window_h);
+    gl2d_begin(snap->viewport.window_w, snap->viewport.window_h);
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 

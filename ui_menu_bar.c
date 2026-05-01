@@ -395,10 +395,10 @@ void ui_menu_bar_note_search_opened(void) {
     g_search_open_time = repl_state_variables().anim_time;
 }
 
-static void code_panel_format_search_query(char *out, int out_sz,
+static void code_panel_format_search_query(ReplSearchState srch,
+                                           char *out, int out_sz,
                                            int max_chars,
                                            int *out_cursor_col) {
-    ReplSearchState srch = repl_state_search();
     int start = 0;
     int take = 0;
 
@@ -442,9 +442,9 @@ static void code_panel_format_search_query(char *out, int out_sz,
     }
 }
 
-static float ui_fade_alpha(float open_time) {
+static float ui_fade_alpha(float anim_time, float open_time) {
     if (open_time < 0.0f) return 1.0f;
-    float dt = repl_state_variables().anim_time - open_time;
+    float dt = anim_time - open_time;
     if (dt >= UI_FADE_DURATION) return 1.0f;
     if (dt <= 0.0f) return 0.0f;
     return dt / UI_FADE_DURATION;
@@ -467,15 +467,16 @@ static void draw_search_icon(float cx, float cy, float r) {
     glEnd();
 }
 
-void ui_menu_bar_render_search_overlay(int cp_x, int panel_w, int panel_top) {
-    ReplSearchState srch = repl_state_search();
+void ui_menu_bar_render_search_overlay(const UiRenderSnapshot *snap,
+                                       int cp_x, int panel_w, int panel_top) {
+    ReplSearchState srch = snap->search;
     char count_buf[32];
     char query_buf[128];
     int cursor_col = 0;
     (void)cp_x; (void)panel_w; (void)panel_top;
 
     static int prev_active = 0;
-    if (srch.active && !prev_active) g_search_open_time = repl_state_variables().anim_time;
+    if (srch.active && !prev_active) g_search_open_time = snap->variables.anim_time;
     prev_active = srch.active;
 
     if (!srch.active)
@@ -511,10 +512,10 @@ void ui_menu_bar_render_search_overlay(int cp_x, int panel_w, int panel_top) {
     int query_x = icon_cx + icon_r + 8;
     int max_query_chars = (count_x - query_x - pad_x) / FONT_SMALL_W;
     if (max_query_chars < 1) max_query_chars = 1;
-    code_panel_format_search_query(query_buf, sizeof(query_buf),
+    code_panel_format_search_query(srch, query_buf, sizeof(query_buf),
                                    max_query_chars, &cursor_col);
 
-    float alpha = ui_fade_alpha(g_search_open_time);
+    float alpha = ui_fade_alpha(snap->variables.anim_time, g_search_open_time);
 
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
@@ -551,7 +552,7 @@ void ui_menu_bar_render_search_overlay(int cp_x, int panel_w, int panel_top) {
         glColor4f(0.533f, 0.533f, 0.533f, alpha);
     gl2d_draw_string((float)count_x, (float)text_y, count_buf, FONT_SMALL);
 
-    if (repl_state_code_panel().cursor_visible && srch.query_len > 0) {
+    if (snap->code_panel.cursor_visible && srch.query_len > 0) {
         int cursor_x = query_x + cursor_col * FONT_SMALL_W;
         glColor4f(0.95f, 0.80f, 0.24f, 0.85f * alpha);
         glRectf((float)cursor_x, (float)(text_y - 2), (float)cursor_x + 2.0f,
@@ -562,8 +563,8 @@ void ui_menu_bar_render_search_overlay(int cp_x, int panel_w, int panel_top) {
 }
 
 
-void ui_menu_bar_render(void) {
-    ReplReplayRuntimeState replay = repl_state_replay();
+void ui_menu_bar_render(const UiRenderSnapshot *snap) {
+    ReplReplayRuntimeState replay = snap->replay;
     int cp_x, cp_y, cp_w, cp_h;
     repl_layout_code_panel_rect(&cp_x, &cp_y, &cp_w, &cp_h);
     (void)cp_y;
@@ -583,8 +584,8 @@ void ui_menu_bar_render(void) {
         glColor4f(0.114f, 0.114f, 0.114f, 0.98f);
         glRectf((float)cp_x, (float)by, (float)cp_x + (float)cp_w, (float)by + (float)bh);
 
-        int hover_menu = ui_menu_bar_menu_hit(repl_state_pointer().mouse_x, repl_state_pointer().mouse_y);
-        int hover_pin  = ui_menu_bar_pin_hit(repl_state_pointer().mouse_x, repl_state_pointer().mouse_y);
+        int hover_menu = ui_menu_bar_menu_hit(snap->pointer.mouse_x, snap->pointer.mouse_y);
+        int hover_pin  = ui_menu_bar_pin_hit(snap->pointer.mouse_x, snap->pointer.mouse_y);
 
         /* Left-side menu labels */
         for (int i = 0; i < NUM_MENUS; i++) {
@@ -633,7 +634,7 @@ void ui_menu_bar_render(void) {
             glEnd();
 
             if (i == PIN_SEARCH) {
-                if (repl_state_search().active) {
+                if (snap->search.active) {
                     /* render_code_panel_search_overlay() fills this slot */
                     continue;
                 }
@@ -703,7 +704,7 @@ void ui_menu_bar_render(void) {
 
 }
 
-void ui_menu_bar_render_example_dropdown(void) {
+void ui_menu_bar_render_example_dropdown(const UiRenderSnapshot *snap) {
     if (g_open_menu < 0) return;
     int menu_id = g_open_menu;
     int n  = menu_item_count(menu_id);
@@ -712,11 +713,11 @@ void ui_menu_bar_render_example_dropdown(void) {
     int dx, dy, dw, dh;
     if (!menu_dropdown_rect(&dx, &dy, &dw, &dh)) return;
 
-    g_menu_item_hover = ui_menu_bar_dropdown_item_hit(repl_state_pointer().mouse_x, repl_state_pointer().mouse_y);
+    g_menu_item_hover = ui_menu_bar_dropdown_item_hit(snap->pointer.mouse_x, snap->pointer.mouse_y);
 
-    float alpha = ui_fade_alpha(g_menu_open_time);
+    float alpha = ui_fade_alpha(snap->variables.anim_time, g_menu_open_time);
 
-    gl2d_begin(repl_state_viewport().window_w, repl_state_viewport().window_h);
+    gl2d_begin(snap->viewport.window_w, snap->viewport.window_h);
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
@@ -774,9 +775,9 @@ void ui_menu_bar_render_example_dropdown(void) {
         }
         int is_active_example = (menu_id == MENU_SCENE && ne >= 0 &&
                      i >= 1 && i <= ne &&
-                     (i - 1) == repl_state_scenes().active_example_idx);
+                     (i - 1) == snap->scenes.active_example_idx);
         int is_active_scene   = (scene_hit >= 0 &&
-                                 scene_hit == repl_active_user_scene());
+                                 scene_hit == snap->user_scene_active_idx);
 
         if (i == g_menu_item_hover) {
             glColor4f(0.180f, 0.290f, 0.431f, alpha);  /* #2e4a6e */

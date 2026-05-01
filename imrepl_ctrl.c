@@ -14,6 +14,8 @@
 #include "ui_help_overlay.h"
 #include "ui_menu_bar.h"
 #include "ui_panels.h"
+#include "ui_snapshot.h"
+#include "repl_export.h"
 #include "repl_layout.h"
 #include "ui_profile_panel.h"
 #include "ui_variable_panel.h"
@@ -247,6 +249,65 @@ static void imrepl_ctrl_build_scene_config(SceneRenderConfig *config) {
     imrepl_ctrl_build_replay_fade_plan(config);
 }
 
+/* ========================================================================= */
+/* UI snapshot builder (push model)                                           */
+/* ========================================================================= */
+
+static void imrepl_ctrl_build_ui_snapshot(UiRenderSnapshot *snap) {
+    memset(snap, 0, sizeof(*snap));
+
+    /* Refresh derived workspace header lines so the import/export view
+     * reflects the current frame before rendering reads it. */
+    repl_state_refresh_workspace_header_lines();
+
+    snap->viewport       = repl_state_viewport();
+    snap->presentation   = repl_state_presentation();
+    snap->code_panel     = repl_state_code_panel();
+    snap->help           = repl_state_help();
+    snap->variable_panel = repl_state_variable_panel();
+    snap->profile_panel  = repl_state_profile_panel();
+    snap->status         = repl_state_status();
+    snap->search         = repl_state_search();
+    snap->autocomplete   = repl_state_autocomplete();
+    snap->camera         = repl_state_camera();
+    snap->pointer        = repl_state_pointer();
+    snap->render         = repl_state_render();
+    snap->replay         = repl_state_replay();
+    snap->scenes         = repl_state_scenes();
+    snap->variable_drag  = repl_state_variable_drag();
+    snap->clipboard      = repl_state_clipboard();
+    snap->selection      = repl_state_selection();
+
+    snap->variables      = repl_state_variables();
+    snap->editor_input   = repl_state_editor_input();
+    snap->import_export  = repl_state_import_export();
+    snap->flat_program   = repl_state_flat_program_view();
+    snap->predef         = repl_eval_predef_view();
+
+    snap->document_cmds       = repl_state_document_cmds();
+    snap->document_count      = repl_state_document_count();
+    snap->edit_line           = repl_state_edit_line();
+    snap->normals_dirty       = repl_state_normals_dirty();
+
+    snap->insert_mode         = snap->editor_input.insert_mode;
+    snap->cursor_pos          = snap->editor_input.cursor_pos;
+    snap->input_len           = snap->editor_input.input_len;
+    snap->pending_newline_len = snap->editor_input.pending_newline_len;
+    snap->flat_program_count  = snap->flat_program.cmd_count;
+
+    snap->grid_major_steps    = repl_state_grid_major_steps();
+    snap->grid_extents        = repl_state_grid_extents();
+
+    snap->user_scene_count        = repl_user_scene_count();
+    snap->user_scene_active_idx   = repl_active_user_scene();
+    for (int i = 0; i < MAX_USER_SCENES; i++) {
+        snap->user_scene_slot_used[i] = repl_user_scene_slot_used(i);
+        snap->user_scene_names[i]     = repl_user_scene_name(i);
+    }
+
+    snap->workspace_dir = repl_state_workspace_dir();
+}
+
 void imrepl_ctrl_display_frame(void) {
     int saved_flat_count;
     float live_predef_vals[MAX_PREDEF_VARS] = { 0 };
@@ -254,6 +315,7 @@ void imrepl_ctrl_display_frame(void) {
     int g_num_flat_cmds = flat_program.cmd_count;
     ReplReplayRuntimeState replay = repl_state_replay();
     SceneRenderConfig scene_config;
+    UiRenderSnapshot ui_snap;
 
     prof_frame_tick();
     prof_begin(PROF_FRAME_TOTAL);
@@ -279,6 +341,7 @@ void imrepl_ctrl_display_frame(void) {
     update_render_state_strings();
     update_cam_lines();
     imrepl_ctrl_build_scene_config(&scene_config);
+    imrepl_ctrl_build_ui_snapshot(&ui_snap);
 
     /* 3D scene - scene_render_3d_scene() handles optional accumulation-buffer AA */
     /* Reset subsection accumulators so timings across all AA samples sum up
@@ -315,18 +378,18 @@ void imrepl_ctrl_display_frame(void) {
         prof_accum_commit(section_idx);
 
     prof_begin(PROF_CODE_PANEL);
-    ui_panels_render_code_panel();
+    ui_panels_render_code_panel(&ui_snap);
     prof_end(PROF_CODE_PANEL);
 
     prof_begin(PROF_UI_PANELS);
-    ui_autocomplete_panel_render();
-    ui_menu_bar_render_example_dropdown();
-    ui_variable_panel_render();
-    ui_panels_render_scene_status();
-    ui_help_overlay_render();
+    ui_autocomplete_panel_render(&ui_snap);
+    ui_menu_bar_render_example_dropdown(&ui_snap);
+    ui_variable_panel_render(&ui_snap);
+    ui_panels_render_scene_status(&ui_snap);
+    ui_help_overlay_render(&ui_snap);
     prof_end(PROF_UI_PANELS);
 
-    ui_profile_panel_render();
+    ui_profile_panel_render(&ui_snap);
 
     repl_state_flat_program_set_count(saved_flat_count);
     repl_restore_predef_values(live_predef_vals, MAX_PREDEF_VARS);
