@@ -289,6 +289,74 @@ static BenchResult bench_flatten_examples(int iters) {
     return r;
 }
 
+/* ---- bench: spike — flatten the largest example, repeatedly ----------- */
+
+/* Editor-owns-text spike pass/fail bar. The spike modifies flatten_range()
+ * to re-parse every command from the editor buffer on each call (today the
+ * no-vars path passes through). This bench picks the example with the
+ * highest flat-program count after load and times flatten on it alone.
+ *
+ * Pass criterion (per the spike plan): mean flatten time under 4 ms (half
+ * of one 120 fps frame). The bench reports total / mean / min / max so a
+ * regression shows up directly even without the threshold.
+ */
+static BenchResult bench_spike_flatten_largest(int iters) {
+    int n_examples = repl_examples_count();
+    int worst_idx = 0;
+    int worst_flat = 0;
+    float saved_vals[MAX_PREDEF_VARS];
+
+    /* Pick the example with the largest flat-program count after load.
+     * "Lines" alone underestimates: a short for-loop unrolls into many
+     * flat commands, and that's what flatten actually walks. */
+    for (int e = 0; e < n_examples; e++) {
+        repl_load_example_lines_for_test(repl_examples_lines(e));
+        repl_flatten_commands();
+        int n = repl_state_flat_program_count();
+        if (n > worst_flat) {
+            worst_flat = n;
+            worst_idx = e;
+        }
+    }
+
+    /* Reload the chosen example as the timed fixture. */
+    repl_load_example_lines_for_test(repl_examples_lines(worst_idx));
+
+    int saved_n = g_num_predef_vars;
+    for (int i = 0; i < saved_n; i++)
+        saved_vals[i] = g_predef_vars[i].value;
+
+    /* Inner loop runs flatten N times per timer sample so the per-call
+     * granularity is well above the clock's resolution. The pass bar
+     * compares mean per-call cost. */
+    int inner = 1000;
+    BenchResult r = { .name = "spike_flatten_largest", .unit = "flattens",
+                      .min_sec = 1e18 };
+
+    for (int it = 0; it < iters; it++) {
+        for (int i = 0; i < saved_n; i++)
+            g_predef_vars[i].value = saved_vals[i];
+
+        double t0 = now_seconds();
+        for (int k = 0; k < inner; k++) {
+            for (int i = 0; i < saved_n; i++)
+                g_predef_vars[i].value = saved_vals[i];
+            repl_flatten_commands();
+        }
+        double dt = now_seconds() - t0;
+        if (dt < r.min_sec) r.min_sec = dt;
+        r.total_sec += dt;
+        r.ops += inner;
+        r.iters++;
+    }
+
+    if (!g_csv) {
+        printf("  (largest example: idx=%d, flat_cmds=%d)\n",
+               worst_idx, worst_flat);
+    }
+    return r;
+}
+
 /* ---- bench: replay every example end-to-end --------------------------- */
 
 static BenchResult bench_replay_examples(int iters) {
@@ -741,6 +809,8 @@ int main(int argc, char **argv) {
         report(bench_feed_examples(iters));
     if (wants(only, "flatten_examples"))
         report(bench_flatten_examples(iters));
+    if (wants(only, "spike_flatten_largest"))
+        report(bench_spike_flatten_largest(iters));
     if (wants(only, "replay_examples"))
         report(bench_replay_examples(iters));
     if (wants(only, "replay_long"))

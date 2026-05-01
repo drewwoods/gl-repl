@@ -52,6 +52,14 @@ void                     repl_state_time_reset_to_zero(void);
 ReplEditorInputView          repl_state_editor_input(void);
 ReplEditorInputState       *repl_state_editor_input_mut(void);
 void                        repl_state_editor_input_reset(void);
+
+/* Editor-owns-text spike: per-line raw text storage (no trailing ';'). */
+const ReplEditorBuffer       *repl_state_editor_buffer(void);
+ReplEditorBuffer             *repl_state_editor_buffer_mut(void);
+const char                   *repl_state_editor_buffer_line(int idx);
+void                          repl_state_editor_buffer_set_line(int idx, const char *text);
+void                          repl_state_editor_buffer_set_count(int count);
+int                           repl_state_editor_buffer_count(void);
 const char *repl_state_input_text(void);
 char       *repl_state_input_buffer_mut(void);
 int         repl_state_input_len(void);
