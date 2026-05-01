@@ -148,11 +148,11 @@ int main(void) {
 
         GLCmd cmd;
         ReplParseContext ctx = { repl_state_document_count(), NULL, 0, 0 };
-        memset(&cmd, 0, sizeof(cmd));
-        int ok = repl_parser_parse_command_ctx("glVertex3f(1, 2, 3)", &cmd, &ctx);
+        ReplParsedLine pl;
+        int ok = repl_parser_parse_command_ctx("glVertex3f(1, 2, 3)", &pl, &ctx);
         ASSERT_TRUE("context parse ok", ok == 1);
         ASSERT_TRUE("context parse uses source line indent",
-                    leading_spaces(cmd.source) == 4);
+                    leading_spaces(pl.cmd.source) == 4);
         ASSERT_TRUE("context parse leaves edit line alone", repl_state_edit_line() == 0);
 
         memset(&cmd, 0, sizeof(cmd));

@@ -36,13 +36,23 @@ typedef struct {
     int strict_refs;
 } ReplParseContext;
 
+/* Parser output struct. On success, cmd holds the parsed command and text
+ * holds the editor-buffer form (no leading indent, no trailing semicolon).
+ * cmd.source still holds the indented canonical form (removed in Step 3b). */
+typedef struct {
+    GLCmd cmd;
+    char  text[MAX_LINE_LEN];
+} ReplParsedLine;
+
 /* Context-aware parser entrypoint. Pass a ReplParseContext from internal
  * callers when the parse position is not the active editor line (e.g.,
  * repl_flatten.c parsing a source command at a different index, or
  * repl_replay.c doing a step-back parse). Pass NULL to fall back to the
  * legacy g_edit_line behavior used by command-entry wrappers.
- * Returns 1 on success, 0 on parse error (status message set). */
-int repl_parser_parse_command_ctx(const char *line, GLCmd *cmd,
+ * Returns 1 on success, 0 on parse error (status message set).
+ * On success, out->cmd holds the parsed command and out->text holds the
+ * editor-buffer form of the normalized source. */
+int repl_parser_parse_command_ctx(const char *line, ReplParsedLine *out,
                                   const ReplParseContext *ctx);
 
 /* Parse a single REPL line into cmd. Returns 1 on success, 0 on parse error

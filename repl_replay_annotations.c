@@ -728,7 +728,6 @@ int repl_replay_build_eval_annotation(int cmd_idx, int flat_idx,
     ReplReplayRuntimeState replay = repl_state_replay();
     float predef_vals[MAX_PREDEF_VARS];
     ExprVar visible_vars[MAX_PREDEF_VARS + MAX_EXPR_VARS];
-    GLCmd eval_cmd;
     int nv;
 
     if (!eval_buf || eval_size <= 0)
@@ -749,11 +748,12 @@ int repl_replay_build_eval_annotation(int cmd_idx, int flat_idx,
     nv = build_visible_vars_from_predef_values(flat_idx, predef_vals,
                                                visible_vars,
                                                (int)(sizeof(visible_vars) / sizeof(visible_vars[0])));
-    memset(&eval_cmd, 0, sizeof(eval_cmd));
     ReplParseContext parse_ctx = { cmd_idx, visible_vars, nv, 0 };
+    ReplParsedLine eval_pl;
     if (!repl_parser_parse_command_ctx(replay_document_text(cmd_idx),
-                                &eval_cmd, &parse_ctx))
+                                &eval_pl, &parse_ctx))
         return 0;
+    GLCmd eval_cmd = eval_pl.cmd;
 
     return format_evaluated_cmd(&eval_cmd, replay_document_text(cmd_idx),
                                 eval_buf, eval_size);

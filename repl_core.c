@@ -222,9 +222,11 @@ static int parse_and_normalize_impl(const char *line, int pos,
                                     int preserve_expr, GLCmd *out_cmd,
                                     int strict_refs) {
     ReplParseContext parse_ctx = { pos, vars, num_vars, strict_refs };
-    int parsed = repl_parser_parse_command_ctx(line, out_cmd, &parse_ctx);
+    ReplParsedLine pl;
+    int parsed = repl_parser_parse_command_ctx(line, &pl, &parse_ctx);
 
     if (!parsed) return 0;
+    *out_cmd = pl.cmd;
     if (preserve_expr) {
         int parsed_indent = 0;
         while (out_cmd->source[parsed_indent] == ' ' ||

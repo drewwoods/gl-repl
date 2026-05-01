@@ -8,6 +8,7 @@
 #include "repl_parser.h"
 
 #include "repl_command_spec.h"
+#include "repl_command_store.h"
 #include "repl_core_internal.h"
 #include "repl_source_scope.h"
 #include "repl_state.h"
@@ -697,7 +698,13 @@ int repl_parser_parse_command_with_vars(const char *line, GLCmd *cmd,
     return parse_command(line, cmd, &ctx);
 }
 
-int repl_parser_parse_command_ctx(const char *line, GLCmd *cmd,
+int repl_parser_parse_command_ctx(const char *line, ReplParsedLine *out,
                            const ReplParseContext *ctx) {
-    return parse_command(line, cmd, ctx);
+    if (!out) return 0;
+    memset(out, 0, sizeof(*out));
+    int r = parse_command(line, &out->cmd, ctx);
+    if (r)
+        repl_command_store_source_to_line(out->text, sizeof(out->text),
+                                         out->cmd.source);
+    return r;
 }
