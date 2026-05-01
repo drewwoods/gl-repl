@@ -4,7 +4,6 @@
 #include "repl_debug.h"
 #include "repl_executor.h"
 #include "repl_audio.h"
-#include "repl_state.h"
 
 #include <dirent.h>
 #include <stdlib.h>
@@ -140,12 +139,15 @@ int main(int argc, char **argv) {
     int dump_flat = 0;
     int dump_state_layout = 0;
     int no_audio  = 0;
+    int use_accum = 1;
+    int window_w  = 1200;
+    int window_h  = 800;
     for (int i = 1; i < argc; i++) {
         if (strcmp(argv[i], "-h") == 0 || strcmp(argv[i], "--help") == 0) {
             print_usage(argv[0]);
             return 0;
         } else if (strcmp(argv[i], "--noaccum") == 0)
-            imrepl_ctrl_set_accum(0);
+            use_accum = 0;
         else if (strcmp(argv[i], "--no-audio") == 0)
             no_audio = 1;
         else if (strcmp(argv[i], "--dump-code") == 0)
@@ -172,13 +174,14 @@ int main(int argc, char **argv) {
 
     glutInit(&argc, argv);
     glutInitDisplayMode(GLUT_DOUBLE | GLUT_RGBA | GLUT_DEPTH | GLUT_MULTISAMPLE |
-                        (repl_state_render().use_accum ? GLUT_ACCUM : 0));
-    glutInitWindowSize(repl_state_viewport().window_w, repl_state_viewport().window_h);
+                        (use_accum ? GLUT_ACCUM : 0));
+    glutInitWindowSize(window_w, window_h);
     glutCreateWindow("OpenGL REPL - Display List Dynamic Rendering");
 
     imrepl_ctrl_init_gl();
     atexit(repl_executor_destroy_resources);
     imrepl_ctrl_bootstrap_repl(input_file);
+    imrepl_ctrl_set_accum(use_accum);
 
     /* Audio: init once, scan assets/ *.mp3 for a playlist, play the
      * first track, shutdown on exit. Failures here are non-fatal: the
