@@ -3,6 +3,7 @@ PROJECT_ROOT := $(abspath .)
 LOCAL_INCLUDE := $(abspath include)
 GL_STUB_INCLUDE := $(abspath tests/gl-stubs/include)
 TEST_DIR := tests
+BENCH_DIR := bench
 
 UNAME_S := $(shell uname -s)
 
@@ -167,7 +168,7 @@ $(1)_RUN ?= ./$(1)
 endef
 
 define bench_binary
-$(1)_OBJS = $$(OBJDIR)/$(1).o $$(CORE_TEST_OBJS)
+$(1)_OBJS = $$(OBJDIR)/$$(BENCH_DIR)/$(1).o $$(CORE_TEST_OBJS)
 $(1)_LDLIBS = $$(GL_LDFLAGS)
 $(1)_RUN ?= ./$(1)
 endef
