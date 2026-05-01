@@ -107,6 +107,7 @@ typedef struct {
 
 typedef struct {
     GLCmd cmds[MAX_COMMANDS];
+    char  lines[MAX_COMMANDS][MAX_LINE_LEN];
     int   cmd_count;
 } ReplClipboardState;
 

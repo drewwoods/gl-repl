@@ -74,11 +74,15 @@ void repl_selection_set_var_decl_action_status(const char *action) {
 }
 
 static void clipboard_copy_range(int start, int count) {
+    ReplClipboardState *clipboard = repl_state_clipboard_mut();
     GLCmd *cb = repl_state_clipboard_cmds_mut();
     const GLCmd *cmds = repl_state_document_cmds();
     int n = 0;
-    for (int i = start; i < start + count && n < MAX_COMMANDS; i++)
+    for (int i = start; i < start + count && n < MAX_COMMANDS; i++) {
         cb[n++] = cmds[i];
+        repl_copy_string_fits(clipboard->lines[n - 1], MAX_LINE_LEN,
+                              repl_state_editor_buffer_line(i));
+    }
     repl_state_clipboard_count_set(n);
 }
 
@@ -241,8 +245,13 @@ void repl_clipboard_paste_current(void) {
             int n = repl_state_document_count();
             int pos = repl_state_insert_mode() ? edit :
                       (edit < n ? edit : n);
+            const char *lines[MAX_COMMANDS];
+
+            for (int i = 0; i < repl_state_clipboard_count(); i++)
+                lines[i] = repl_state_clipboard_mut()->lines[i];
             if (!repl_command_store_insert_many(&store, pos, repl_state_clipboard_cmds_mut(),
-                                                repl_state_clipboard_count(), 0)) {
+                                                repl_state_clipboard_count(), 0,
+                                                lines)) {
                 set_status("Command buffer full!");
                 return;
             }

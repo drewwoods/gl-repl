@@ -64,7 +64,16 @@ static void workspace_format_float(char *buf, size_t n, float v) {
 
 static const char *export_document_text(int cmd_idx) {
     const char *text;
-    return ((text = repl_state_editor_buffer_line(cmd_idx)) && text[0]) ? text : repl_state_document_cmds_mut()[cmd_idx].source;
+
+    if (cmd_idx < 0 || cmd_idx >= repl_state_document_count())
+        return "";
+
+    text = repl_state_document_cmds_mut()[cmd_idx].source;
+    if (text && text[0])
+        return text;
+
+    text = repl_state_editor_buffer_line(cmd_idx);
+    return (text && text[0]) ? text : "";
 }
 
 /* ========================================================================= */
@@ -1643,9 +1652,14 @@ static int import_parse_declare_marker(const char *line, int *loaded,
     {
         ReplCommandStore store = repl_command_store_live();
         int decl_pos = repl_command_store_first_non_decl(&store);
+        char decl_line[MAX_LINE_LEN];
+
+        repl_command_store_source_to_line(decl_line, sizeof(decl_line),
+                                          cmd.source);
         if (!repl_command_store_insert_one(
                 &store, decl_pos, &cmd,
-                REPL_COMMAND_STORE_ADJUST_EDIT_LINE)) {
+                REPL_COMMAND_STORE_ADJUST_EDIT_LINE,
+                decl_line)) {
             if (warnings) (*warnings)++;
             return 1;
         }

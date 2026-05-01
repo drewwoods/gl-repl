@@ -166,6 +166,21 @@ static void test_repl_command_store_insert_one(void) {
                repl_command_store_insert_one(&store, 0, NULL, 0), 0);
 }
 
+static void test_repl_command_store_insert_one_with_line(void) {
+    repl_reset_state();
+
+    ReplCommandStore store = repl_command_store_live();
+    GLCmd cmd = make_cmd(CMD_VERTEX3F, "  glVertex3f(1, 0, 0);");
+    const char *line = "glVertex3f(1, 0, 0)";
+
+    ASSERT_INT("insert one with explicit line",
+               repl_command_store_insert_one(&store, 0, &cmd, 0, line), 1);
+    ASSERT_STR("document source still stored",
+               repl_state_document_cmd_at(0)->source, "  glVertex3f(1, 0, 0);");
+    ASSERT_STR("editor buffer uses explicit line",
+               repl_state_editor_buffer_line(0), "glVertex3f(1, 0, 0)");
+}
+
 static void test_repl_command_store_insert_many(void) {
     repl_reset_state();
 
@@ -247,6 +262,24 @@ static void test_repl_command_store_replace_one(void) {
                repl_command_store_replace_one(&store, 1, &cmd1), 0);
 }
 
+static void test_repl_command_store_replace_one_with_line(void) {
+    repl_reset_state();
+
+    ReplCommandStore store = repl_command_store_live();
+    GLCmd cmd1 = make_cmd(CMD_VERTEX3F, "glVertex3f(1, 0, 0);");
+    GLCmd cmd2 = make_cmd(CMD_VERTEX3F, "  glVertex3f(0, 1, 0);");
+
+    repl_command_store_insert_one(&store, 0, &cmd1, 0);
+
+    ASSERT_INT("replace with explicit line",
+               repl_command_store_replace_one(&store, 0, &cmd2,
+                                              "glVertex3f(0, 1, 0)"), 1);
+    ASSERT_STR("replaced source preserved",
+               repl_state_document_cmd_at(0)->source, "  glVertex3f(0, 1, 0);");
+    ASSERT_STR("replace updates editor buffer line",
+               repl_state_editor_buffer_line(0), "glVertex3f(0, 1, 0)");
+}
+
 static void test_repl_command_store_delete_range(void) {
     repl_reset_state();
 
@@ -306,6 +339,27 @@ static void test_repl_command_store_load(void) {
 
     ASSERT_INT("load rejects NULL store",
                repl_command_store_load(NULL, cmds, 1, 0), 0);
+}
+
+static void test_repl_command_store_load_with_lines(void) {
+    repl_reset_state();
+
+    ReplCommandStore store = repl_command_store_live();
+    GLCmd cmds[2] = {
+        make_cmd(CMD_VERTEX3F, "  glVertex3f(1, 0, 0);"),
+        make_cmd(CMD_COLOR3F, "  glColor3f(1, 0, 0);")
+    };
+    const char *lines[2] = {
+        "glVertex3f(1, 0, 0)",
+        "glColor3f(1, 0, 0)"
+    };
+
+    ASSERT_INT("load with explicit lines",
+               repl_command_store_load(&store, cmds, 2, lines, 0), 1);
+    ASSERT_STR("load line 0 preserved",
+               repl_state_editor_buffer_line(0), "glVertex3f(1, 0, 0)");
+    ASSERT_STR("load line 1 preserved",
+               repl_state_editor_buffer_line(1), "glColor3f(1, 0, 0)");
 }
 
 static void test_repl_command_store_clear(void) {
@@ -456,11 +510,14 @@ int main(void) {
     test_repl_command_store_first_non_decl();
     test_repl_command_store_normalize_range();
     test_repl_command_store_insert_one();
+    test_repl_command_store_insert_one_with_line();
     test_repl_command_store_insert_many();
     test_repl_command_store_insert_with_edit_line_adjustment();
     test_repl_command_store_replace_one();
+    test_repl_command_store_replace_one_with_line();
     test_repl_command_store_delete_range();
     test_repl_command_store_load();
+    test_repl_command_store_load_with_lines();
     test_repl_command_store_clear();
     test_repl_command_store_set_color();
     test_repl_command_store_set_clear_color();

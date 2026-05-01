@@ -40,6 +40,7 @@
  * and by import/export to preserve full state across save/load boundaries. */
 typedef struct {
     GLCmd cmds[MAX_COMMANDS];
+    char  editor_lines[MAX_COMMANDS][MAX_LINE_LEN];
     int   num_cmds;
     int   edit_line;
     float predef_vals[MAX_PREDEF_VARS];
