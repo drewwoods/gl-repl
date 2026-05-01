@@ -10,26 +10,21 @@
 #include "ui_menu_bar.h"
 #include "ui_snapshot.h"
 #include "repl_var_drag.h"
+#include "support/test_harness.h"
 #include <GL/gl_stub_counts.h>
 
 #include <stdio.h>
 #include <string.h>
 #include <assert.h>
 
-static int g_run = 0;
-static int g_pass = 0;
+static TestHarness g_harness = TEST_HARNESS_INIT;
 
 #define ASSERT_TRUE(label, cond) do { \
-    g_run++; \
-    if (cond) g_pass++; \
-    else printf("FAIL [%s] (line %d)\n", label, __LINE__); \
+    TEST_ASSERT_TRUE(&g_harness, label, cond); \
 } while (0)
 
 #define ASSERT_GL_CALLS(label, counter, min_calls) do { \
-    g_run++; \
-    if (gl_stub_counts[counter] >= (min_calls)) g_pass++; \
-    else printf("FAIL [%s] GL call %s: got %llu, expected >= %d (line %d)\n", \
-                label, gl_stub_count_name(counter), gl_stub_counts[counter], (min_calls), __LINE__); \
+    TEST_ASSERT_TRUE(&g_harness, label, gl_stub_counts[counter] >= (min_calls)); \
 } while (0)
 
 /* Build a UiRenderSnapshot from the current REPL state for renderer tests.
@@ -300,6 +295,6 @@ int main(void) {
     test_variable_panel();
     test_menu_bar();
     
-    printf("\nUI Tests: %d/%d passed\n", g_pass, g_run);
-    return (g_pass == g_run) ? 0 : 1;
+    printf("\nUI Tests: %d/%d passed\n", g_harness.passed, g_harness.run);
+    return (g_harness.passed == g_harness.run) ? 0 : 1;
 }

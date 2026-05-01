@@ -1,6 +1,7 @@
 #include "repl_core.h"
 #include "repl_state.h"
 
+#include "support/test_harness.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -10,13 +11,10 @@
 #define g_line_smooth_enabled   (repl_state_render_mut()->line_smooth_enabled)
 #define g_init_attenuate_points (repl_state_render_mut()->point_attenuation_enabled)
 
-static int g_run = 0;
-static int g_pass = 0;
+static TestHarness g_harness = TEST_HARNESS_INIT;
 
 #define ASSERT_TRUE(label, cond) do { \
-    g_run++; \
-    if (cond) g_pass++; \
-    else printf("FAIL [%s] (line %d)\n", label, __LINE__); \
+    TEST_ASSERT_TRUE(&g_harness, label, cond); \
 } while (0)
 
 static void declare_test_vars(void) {
@@ -492,6 +490,6 @@ int main(void) {
                     strstr(buf, "render_repl_vpoints_") == NULL);
     }
 
-    printf("repl_core_io: %d/%d passed\n", g_pass, g_run);
-    return (g_run == g_pass) ? 0 : 1;
+    printf("repl_core_io: %d/%d passed\n", g_harness.passed, g_harness.run);
+    return (g_harness.run == g_harness.passed) ? 0 : 1;
 }

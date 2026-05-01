@@ -2,6 +2,7 @@
 #include "repl_state.h"
 #include "repl_replay.c"
 #include "repl_keys.h"
+#include "support/test_harness.h"
 #include <stdio.h>
 #include <string.h>
 
@@ -23,16 +24,10 @@
 #define GLUT_KEY_SUPER_R 119
 #endif
 
-static int g_run = 0;
-static int g_pass = 0;
+static TestHarness g_harness = TEST_HARNESS_INIT;
 
 #define ASSERT_TRUE(label, cond) do { \
-    g_run++; \
-    if (cond) { \
-        g_pass++; \
-    } else { \
-        printf("FAIL [%s] (line %d)\n", label, __LINE__); \
-    } \
+    TEST_ASSERT_TRUE(&g_harness, label, cond); \
 } while (0)
 
 static void add_mock_cmd(int idx, CmdType type) {
@@ -199,8 +194,8 @@ static void test_replay_modifiers(void) {
 #else
     // If USE_GLUT is defined, modifier returns 0, so it WILL stop replay.
     // Let's just simulate it.
-    g_pass++; g_run++; // skip
-    g_pass++; g_run++;
+    g_harness.passed++; g_harness.run++; // skip
+    g_harness.passed++; g_harness.run++;
 #endif
 }
 
@@ -251,6 +246,6 @@ int main(void) {
     test_bench_helpers();
     test_misc_helpers();
     
-    printf("test_repl_replay: %d/%d passed\n", g_pass, g_run);
-    return (g_run == g_pass) ? 0 : 1;
+    printf("test_repl_replay: %d/%d passed\n", g_harness.passed, g_harness.run);
+    return (g_harness.run == g_harness.passed) ? 0 : 1;
 }

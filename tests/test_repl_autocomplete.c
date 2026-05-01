@@ -1,5 +1,6 @@
 #include "repl_core_internal.h"
 #include "repl_state.h"
+#include "support/test_harness.h"
 
 #define g_ac_count          (repl_state_autocomplete_mut()->match_count)
 #define g_ac_ghost          (repl_state_autocomplete_mut()->ghost)
@@ -10,26 +11,16 @@
 #include <stdio.h>
 #include <string.h>
 
-static int g_run = 0;
-static int g_pass = 0;
+static TestHarness g_harness = TEST_HARNESS_INIT;
 
-#define ASSERT_TRUE(label, cond) do { \
-    g_run++; \
-    if (cond) g_pass++; \
-    else printf("FAIL [%s] (line %d)\n", label, __LINE__); \
-} while (0)
+#define ASSERT_TRUE(label, cond) \
+    TEST_ASSERT_TRUE(&g_harness, label, cond)
 
-#define ASSERT_INT(label, got, exp) do { \
-    g_run++; \
-    if ((got) == (exp)) g_pass++; \
-    else printf("FAIL [%s] got %d, expected %d (line %d)\n", label, (int)(got), (int)(exp), __LINE__); \
-} while (0)
+#define ASSERT_INT(label, got, exp) \
+    TEST_ASSERT_INT(&g_harness, label, got, exp)
 
-#define ASSERT_STR(label, got, exp) do { \
-    g_run++; \
-    if (strcmp(got, exp) == 0) g_pass++; \
-    else printf("FAIL [%s] got \"%s\", expected \"%s\" (line %d)\n", label, got, exp, __LINE__); \
-} while (0)
+#define ASSERT_STR(label, got, exp) \
+    TEST_ASSERT_STR(&g_harness, label, got, exp)
 
 static void declare_test_vars(void) {
     char err[128];
@@ -179,6 +170,6 @@ int main() {
         }
     }
 
-    printf("\n%d / %d tests passed\n", g_pass, g_run);
-    return (g_pass == g_run) ? 0 : 1;
+    printf("\n");
+    return test_harness_report(&g_harness, "test_repl_autocomplete");
 }

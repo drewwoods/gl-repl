@@ -2,28 +2,25 @@
 #include "repl_core.h"
 #include "repl_state.h"
 #include "repl_eval.h"
+#include "support/test_harness.h"
 
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
-static int g_run = 0;
-static int g_pass = 0;
+static TestHarness g_harness = TEST_HARNESS_INIT;
 
-#define ASSERT_TRUE(label, cond) do { \
-    g_run++; \
-    if (cond) g_pass++; \
-    else printf("FAIL [%s] (line %d)\n", label, __LINE__); \
-} while (0)
+#define ASSERT_TRUE(label, cond) \
+    TEST_ASSERT_TRUE(&g_harness, label, cond)
 
 #define ASSERT_INT(label, actual, expected) \
-    ASSERT_TRUE(label, (actual) == (expected))
+    TEST_ASSERT_INT(&g_harness, label, actual, expected)
 
 #define ASSERT_STR(label, actual, expected) \
-    ASSERT_TRUE(label, strcmp((actual), (expected)) == 0)
+    TEST_ASSERT_STR(&g_harness, label, actual, expected)
 
 #define ASSERT_FALSE(label, cond) \
-    ASSERT_TRUE(label, !(cond))
+    TEST_ASSERT_TRUE(&g_harness, label, !(cond))
 
 static GLCmd make_cmd(CmdType type, const char *source) {
     GLCmd cmd;
@@ -473,6 +470,6 @@ int main(void) {
     test_repl_command_store_insert_at_end();
     test_repl_command_store_load_with_negative_edit_line();
 
-    printf("\n%d/%d passed\n", g_pass, g_run);
-    return g_pass == g_run ? 0 : 1;
+    printf("\n");
+    return test_harness_report(&g_harness, "test_repl_command_store");
 }

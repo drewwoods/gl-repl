@@ -5,19 +5,14 @@
 // We must NOT link repl_executor.o into test_repl_executor!
 #include "repl_executor.c"
 
+#include "support/test_harness.h"
 #include <stdio.h>
 #include <string.h>
 
-static int g_run = 0;
-static int g_pass = 0;
+static TestHarness g_harness = TEST_HARNESS_INIT;
 
 #define ASSERT_TRUE(label, cond) do { \
-    g_run++; \
-    if (cond) { \
-        g_pass++; \
-    } else { \
-        printf("FAIL [%s] (line %d)\n", label, __LINE__); \
-    } \
+    TEST_ASSERT_TRUE(&g_harness, label, cond); \
 } while (0)
 
 static void test_tess_callbacks(void) {
@@ -217,6 +212,6 @@ int main(void) {
     test_apply_state_cmd_edge_cases();
     test_execute_edge_cases();
     test_execute_all_commands();
-    printf("repl_executor: %d/%d passed\n", g_pass, g_run);
-    return (g_pass == g_run) ? 0 : 1;
+    printf("repl_executor: %d/%d passed\n", g_harness.passed, g_harness.run);
+    return (g_harness.passed == g_harness.run) ? 0 : 1;
 }

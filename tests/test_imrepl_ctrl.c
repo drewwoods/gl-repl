@@ -1,31 +1,17 @@
-#include <math.h>
 #include <stdio.h>
 #include <string.h>
+#include "support/test_harness.h"
 
-static int g_run = 0;
-static int g_pass = 0;
+static TestHarness g_harness = TEST_HARNESS_INIT;
 
-#define ASSERT_TRUE(label, cond) do { \
-    g_run++; \
-    if (cond) g_pass++; \
-    else printf("FAIL [%s] (line %d)\n", label, __LINE__); \
-} while (0)
+#define ASSERT_TRUE(label, cond) \
+    TEST_ASSERT_TRUE(&g_harness, label, cond)
 
-#define ASSERT_INT(label, got, exp) do { \
-    g_run++; \
-    if ((got) == (exp)) g_pass++; \
-    else printf("FAIL [%s] got %d, expected %d (line %d)\n", \
-                label, (int)(got), (int)(exp), __LINE__); \
-} while (0)
+#define ASSERT_INT(label, got, exp) \
+    TEST_ASSERT_INT(&g_harness, label, got, exp)
 
-#define ASSERT_FLOAT(label, got, exp) do { \
-    g_run++; \
-    float delta = (float)(got) - (float)(exp); \
-    if (delta < 0.0f) delta = -delta; \
-    if (delta < 1e-5f) g_pass++; \
-    else printf("FAIL [%s] got %.6f, expected %.6f (line %d)\n", \
-                label, (float)(got), (float)(exp), __LINE__); \
-} while (0)
+#define ASSERT_FLOAT(label, got, exp) \
+    TEST_ASSERT_FLOAT(&g_harness, label, got, exp, 1e-5f)
 
 /* Rename the controller's downstream render delegates so this test can stub
  * them and inspect the per-frame config without a real GL context. */
@@ -297,6 +283,6 @@ int main(void) {
     test_display_frame_builds_config_and_restores_live_state();
     test_reshape_clamps_height();
 
-    printf("\n%d / %d tests passed\n", g_pass, g_run);
-    return (g_pass == g_run) ? 0 : 1;
+    printf("\n");
+    return test_harness_report(&g_harness, "test_imrepl_ctrl");
 }

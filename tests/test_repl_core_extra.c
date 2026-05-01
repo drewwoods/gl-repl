@@ -10,6 +10,7 @@
 
 #define g_anim_time (repl_state_variables_mut()->anim_time)
 
+#include "support/test_harness.h"
 #include <dirent.h>
 #include <fcntl.h>
 #include <stdio.h>
@@ -18,25 +19,18 @@
 #include <GL/freeglut.h>
 #include <unistd.h>
 
-static int g_run = 0;
-static int g_pass = 0;
+static TestHarness g_harness = TEST_HARNESS_INIT;
 
 #define ASSERT_TRUE(label, cond) do { \
-    g_run++; \
-    if (cond) g_pass++; \
-    else printf("FAIL [%s] (line %d)\n", label, __LINE__); \
+    TEST_ASSERT_TRUE(&g_harness, label, cond); \
 } while (0)
 
 #define ASSERT_INT(label, got, exp) do { \
-    g_run++; \
-    if ((got) == (exp)) g_pass++; \
-    else printf("FAIL [%s] got %d, expected %d (line %d)\n", label, (int)(got), (int)(exp), __LINE__); \
+    TEST_ASSERT_INT(&g_harness, label, got, exp); \
 } while (0)
 
 #define ASSERT_STR(label, got, exp) do { \
-    g_run++; \
-    if (strcmp(got, exp) == 0) g_pass++; \
-    else printf("FAIL [%s] got \"%s\", expected \"%s\" (line %d)\n", label, got, exp, __LINE__); \
+    TEST_ASSERT_STR(&g_harness, label, got, exp); \
 } while (0)
 
 static void declare_test_vars(void) {
@@ -897,14 +891,10 @@ void test_var_declare_cmd() {
 
     /* 5. Every CmdType value has a non-UNKNOWN name (exhaustive table check) */
     for (int t = 0; t < CMD_TYPE_COUNT; t++) {
+        char label[96];
         const char *name = cmd_type_name((CmdType)t);
-        if (strcmp(name, "CMD_UNKNOWN") == 0) {
-            printf("FAIL [cmd_type_name completeness] CmdType %d -> CMD_UNKNOWN\n", t);
-            g_run++;
-        } else {
-            g_run++;
-            g_pass++;
-        }
+        snprintf(label, sizeof(label), "cmd_type_name completeness #%d", t);
+        ASSERT_TRUE(label, strcmp(name, "CMD_UNKNOWN") != 0);
     }
 }
 
@@ -942,6 +932,6 @@ int main(int argc, char **argv) {
     test_var_declare_cmd();
     test_time();
 
-    printf("\n%d / %d tests passed\n", g_pass, g_run);
-    return (g_pass == g_run) ? 0 : 1;
+    printf("\n%d / %d tests passed\n", g_harness.passed, g_harness.run);
+    return (g_harness.passed == g_harness.run) ? 0 : 1;
 }

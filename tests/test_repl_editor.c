@@ -33,31 +33,25 @@
 #define refresh_workspace_header_lines repl_state_refresh_workspace_header_lines
 #define parse_workspace_header_line    repl_state_parse_workspace_header_line
 
+#include "support/test_harness.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
 
-static int g_run = 0;
-static int g_pass = 0;
+static TestHarness g_harness = TEST_HARNESS_INIT;
 static int g_mock_modifiers = 0;
 
 #define ASSERT_TRUE(label, cond) do { \
-    g_run++; \
-    if (cond) g_pass++; \
-    else printf("FAIL [%s] (line %d)\n", label, __LINE__); \
+    TEST_ASSERT_TRUE(&g_harness, label, cond); \
 } while (0)
 
 #define ASSERT_INT(label, got, exp) do { \
-    g_run++; \
-    if ((got) == (exp)) g_pass++; \
-    else printf("FAIL [%s] got %d, expected %d (line %d)\n", label, (int)(got), (int)(exp), __LINE__); \
+    TEST_ASSERT_INT(&g_harness, label, got, exp); \
 } while (0)
 
 #define ASSERT_STR(label, got, exp) do { \
-    g_run++; \
-    if (strcmp(got, exp) == 0) g_pass++; \
-    else printf("FAIL [%s] got \"%s\", expected \"%s\" (line %d)\n", label, got, exp, __LINE__); \
+    TEST_ASSERT_STR(&g_harness, label, got, exp); \
 } while (0)
 
 #define g_workspace_header_lines (repl_state_import_export().workspace_header_lines)
@@ -73,9 +67,8 @@ static int g_mock_modifiers = 0;
 #define replay_expand_args   (repl_state_replay_mut()->expand_args)
 
 #define ASSERT_DECL_OK(label, cond, err) do { \
-    g_run++; \
-    if (cond) g_pass++; \
-    else printf("FAIL [%s] %s (line %d)\n", label, err, __LINE__); \
+    (void)(err); \
+    TEST_ASSERT_TRUE(&g_harness, label, cond); \
 } while (0)
 
 static void declare_test_vars(void) {
@@ -2884,6 +2877,6 @@ int main() {
         repl_mouse_func(GLUT_RIGHT_BUTTON, GLUT_UP, click_x, click_y);
     }
 
-    printf("\n%d / %d tests passed\n", g_pass, g_run);
-    return (g_pass == g_run) ? 0 : 1;
+    printf("\n%d / %d tests passed\n", g_harness.passed, g_harness.run);
+    return (g_harness.passed == g_harness.run) ? 0 : 1;
 }

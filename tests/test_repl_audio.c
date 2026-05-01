@@ -1,15 +1,12 @@
 #include "repl_audio.h"
+#include "support/test_harness.h"
 #include <stdio.h>
 #include <string.h>
 
-static int g_run = 0;
-static int g_pass = 0;
+static TestHarness g_harness = TEST_HARNESS_INIT;
 
-#define ASSERT_TRUE(label, cond) do { \
-    g_run++; \
-    if (cond) g_pass++; \
-    else printf("FAIL [%s] (line %d)\n", label, __LINE__); \
-} while (0)
+#define ASSERT_TRUE(label, cond) \
+    TEST_ASSERT_TRUE(&g_harness, label, cond)
 
 int main() {
     printf("--- repl_audio tests ---\n");
@@ -150,6 +147,6 @@ int main() {
         printf("Skipping engine-active tests as init failed.\n");
     }
 
-    printf("\n%d / %d tests passed\n", g_pass, g_run);
-    return (g_pass == g_run) ? 0 : 1;
+    printf("\n");
+    return test_harness_report(&g_harness, "test_repl_audio");
 }
