@@ -62,6 +62,11 @@ static void workspace_format_float(char *buf, size_t n, float v) {
     snprintf(buf, n, "%g", (double)v);
 }
 
+static const char *export_document_text(int cmd_idx) {
+    const char *text;
+    return ((text = repl_state_editor_buffer_line(cmd_idx)) && text[0]) ? text : repl_state_document_cmds_mut()[cmd_idx].source;
+}
+
 /* ========================================================================= */
 /* Workspace header directive table                                           */
 /*                                                                            */
@@ -323,7 +328,8 @@ static const char *g_init_host_only_tess_c[] = {
 };
 
 static void format_cmd_source_as_c(char *out, size_t out_sz,
-                                   const GLCmd *cmd, int translate_exprs);
+                                   const char *source_text,
+                                   int translate_exprs);
 
 const char *g_footer_pre_init[] = {
     "",
@@ -463,7 +469,9 @@ void init_section_line(int i, char *buf, size_t n) {
             !repl_config_get(g_init_bootstrap_repl[bootstrap_idx].toggle_key))
             continue;
         if (enabled_idx == i) {
-            format_cmd_source_as_c(buf, n, &g_init_bootstrap_cmds[bootstrap_idx], 0);
+            format_cmd_source_as_c(buf, n,
+                                   g_init_bootstrap_cmds[bootstrap_idx].source,
+                                   0);
             return;
         }
         enabled_idx++;
@@ -486,7 +494,9 @@ static void emit_export_init_section_to_file(FILE *f, int include_tess) {
         if (g_init_bootstrap_repl[bootstrap_idx].toggle_key != REPL_CONFIG_NONE &&
             !repl_config_get(g_init_bootstrap_repl[bootstrap_idx].toggle_key))
             continue;
-        format_cmd_source_as_c(line, sizeof(line), &g_init_bootstrap_cmds[bootstrap_idx], 0);
+        format_cmd_source_as_c(line, sizeof(line),
+                               g_init_bootstrap_cmds[bootstrap_idx].source,
+                               0);
         fprintf(f, "%s\n", line);
     }
 }
@@ -710,9 +720,10 @@ static void write_light_setup(FILE *f) {
     }
 }
 
-static void write_for_begin_as_c(FILE *f, const GLCmd *cmd) {
+static void write_for_begin_as_c(FILE *f, const GLCmd *cmd,
+                                 const char *source_text) {
     char var_name[16];
-    const char *p = cmd->source;
+    const char *p = source_text;
     int indent = 0;
     while (p[indent] && isspace((unsigned char)p[indent])) indent++;
 
@@ -793,7 +804,7 @@ static void write_for_begin_as_c(FILE *f, const GLCmd *cmd) {
                     ind, var_name, start_v, var_name, end_v, var_name, step_v);
         }
     } else {
-        fprintf(f, "%s\n", cmd->source);
+        fprintf(f, "%s\n", source_text);
     }
 }
 
@@ -1190,13 +1201,14 @@ static int split_top_level_args(const char *src, char args[][MAX_LINE_LEN], int 
     return count;
 }
 
-static int write_tess_source_as_c(FILE *f, const GLCmd *cmd) {
+static int write_tess_source_as_c(FILE *f, const GLCmd *cmd,
+                                  const char *source_text) {
     char payload[MAX_LINE_LEN];
     char raw_args[4][MAX_LINE_LEN];
     char c_args[4][MAX_LINE_LEN];
     int arg_count;
 
-    if (!repl_extract_paren_payload(cmd->source, payload, sizeof(payload)))
+    if (!repl_extract_paren_payload(source_text, payload, sizeof(payload)))
         return 0;
 
     arg_count = split_top_level_args(payload, raw_args, 4);
@@ -1240,26 +1252,28 @@ static int write_tess_source_as_c(FILE *f, const GLCmd *cmd) {
 }
 
 static void format_cmd_source_as_c(char *out, size_t out_sz,
-                                   const GLCmd *cmd, int translate_exprs) {
+                                   const char *source_text,
+                                   int translate_exprs) {
     char c_src[MAX_LINE_LEN];
 
     if (!out || out_sz == 0)
         return;
 
     if (translate_exprs)
-        repl_eval_expr_to_c(cmd->source, c_src, sizeof(c_src));
+        repl_eval_expr_to_c(source_text, c_src, sizeof(c_src));
     else {
-        strncpy(c_src, cmd->source, sizeof(c_src) - 1);
+        strncpy(c_src, source_text, sizeof(c_src) - 1);
         c_src[sizeof(c_src) - 1] = '\0';
     }
 
     snprintf(out, out_sz, "%s", c_src);
 }
 
-static void write_cmd_source_as_c(FILE *f, const GLCmd *cmd, int translate_exprs) {
+static void write_cmd_source_as_c(FILE *f, const char *source_text,
+                                  int translate_exprs) {
     char out[MAX_LINE_LEN];
 
-    format_cmd_source_as_c(out, sizeof(out), cmd, translate_exprs);
+    format_cmd_source_as_c(out, sizeof(out), source_text, translate_exprs);
     fprintf(f, "%s\n", out);
 }
 
@@ -1289,11 +1303,13 @@ static int comment_run_attached_func_idx(int start, int end_idx) {
     return -1;
 }
 
-static void write_canonical_cmd_as_c(FILE *f, const GLCmd *cmd, int for_depth,
-                                     int *tess_depth) {
+static void write_canonical_cmd_as_c(FILE *f, const GLCmd *cmd, int cmd_idx,
+                                     int for_depth, int *tess_depth) {
+    const char *source_text = export_document_text(cmd_idx);
+
     switch (cmd->type) {
     case CMD_COMMENT:
-        fprintf(f, "%s\n", cmd->source);
+        fprintf(f, "%s\n", source_text);
         break;
     case CMD_VAR_DECLARE: {
         /* Variables are emitted as file-scope statics by write_predef_var_globals().
@@ -1310,12 +1326,12 @@ static void write_canonical_cmd_as_c(FILE *f, const GLCmd *cmd, int for_depth,
     }
     case CMD_VAR_ASSIGN: {
         char c_src[MAX_LINE_LEN];
-        repl_eval_expr_to_c(cmd->source, c_src, sizeof(c_src));
+        repl_eval_expr_to_c(source_text, c_src, sizeof(c_src));
         fprintf(f, "%s\n", c_src);
         break;
     }
     case CMD_CALL:
-        write_cmd_source_as_c(f, cmd, 1);
+        write_cmd_source_as_c(f, source_text, 1);
         break;
     case CMD_TESS_BEGIN_POLYGON:
         fprintf(f, "  { _tv_n=0; gluTessBeginPolygon(g_tess,NULL); }\n");
@@ -1335,19 +1351,19 @@ static void write_canonical_cmd_as_c(FILE *f, const GLCmd *cmd, int for_depth,
         }
         break;
     case CMD_TESS_NORMAL:
-        if (!write_tess_source_as_c(f, cmd)) {
+        if (!write_tess_source_as_c(f, cmd, source_text)) {
             fprintf(f, "      { _tn[0]=%g; _tn[1]=%g; _tn[2]=%g; }\n",
                     cmd->args[0], cmd->args[1], cmd->args[2]);
         }
         break;
     case CMD_TESS_COLOR:
-        if (!write_tess_source_as_c(f, cmd)) {
+        if (!write_tess_source_as_c(f, cmd, source_text)) {
             fprintf(f, "      { _tc[0]=%g; _tc[1]=%g; _tc[2]=%g; _tc[3]=%g; }\n",
                     cmd->args[0], cmd->args[1], cmd->args[2], cmd->args[3]);
         }
         break;
     case CMD_TESS_VERTEX:
-        if (!write_tess_source_as_c(f, cmd)) {
+        if (!write_tess_source_as_c(f, cmd, source_text)) {
             fprintf(f,
                     "      { TessVertex *_v=&_tv[_tv_n++];"
                     " _v->pos[0]=%g;_v->pos[1]=%g;_v->pos[2]=%g;"
@@ -1357,7 +1373,7 @@ static void write_canonical_cmd_as_c(FILE *f, const GLCmd *cmd, int for_depth,
         }
         break;
     default:
-        write_cmd_source_as_c(f, cmd, for_depth > 0 || cmd->has_vars);
+        write_cmd_source_as_c(f, source_text, for_depth > 0 || cmd->has_vars);
         break;
     }
 }
@@ -1378,12 +1394,13 @@ static void write_render_body_range_as_c(FILE *f, int start, int end_idx,
         }
         switch (repl_state_document_cmds_mut()[cmd_idx].type) {
         case CMD_FOR_BEGIN:
-            write_for_begin_as_c(f, &repl_state_document_cmds_mut()[cmd_idx]);
+            write_for_begin_as_c(f, &repl_state_document_cmds_mut()[cmd_idx],
+                                 export_document_text(cmd_idx));
             for_depth++;
             break;
         case CMD_FOR_END:
             for_depth--;
-            fprintf(f, "%s\n", repl_state_document_cmds_mut()[cmd_idx].source);
+            fprintf(f, "%s\n", export_document_text(cmd_idx));
             break;
         case CMD_FUNC_DEF:
             if (skip_func_defs)
@@ -1392,7 +1409,8 @@ static void write_render_body_range_as_c(FILE *f, int start, int end_idx,
         case CMD_FUNC_END:
             break;
         default:
-            write_canonical_cmd_as_c(f, &repl_state_document_cmds_mut()[cmd_idx], for_depth, &tess_depth);
+            write_canonical_cmd_as_c(f, &repl_state_document_cmds_mut()[cmd_idx],
+                                     cmd_idx, for_depth, &tess_depth);
             break;
         }
     }
@@ -1456,14 +1474,14 @@ static void write_func_defs_as_c(FILE *f) {
             comment_start--;
         /* Emit any preceding comment lines. */
         for (int comment_idx = comment_start; comment_idx < cmd_idx; comment_idx++)
-            fprintf(f, "\n%s\n", repl_state_document_cmds_mut()[comment_idx].source);
+            fprintf(f, "\n%s\n", export_document_text(comment_idx));
 
         int fn = (int)repl_state_document_cmds_mut()[cmd_idx].args[0];
         int parsed_fn = fn;
         int param_count = 0;
         char param_names[MAX_EXPR_VARS][16];
         int fe = find_export_block_end(cmd_idx);
-        if (parse_repl_func_signature(repl_state_document_cmds_mut()[cmd_idx].source, &parsed_fn,
+        if (parse_repl_func_signature(export_document_text(cmd_idx), &parsed_fn,
                                       param_names, MAX_EXPR_VARS,
                                       &param_count) && param_count > 0) {
             fprintf(f, "\nstatic void func%d(", parsed_fn);
@@ -2214,7 +2232,8 @@ static ExportNeeds export_collect_needs(void) {
 
     /* Check each command for rand() function calls. */
     for (int cmd_idx = 0; cmd_idx < repl_state_document_count(); cmd_idx++) {
-        if (repl_state_document_cmds_mut()[cmd_idx].valid && strstr(repl_state_document_cmds_mut()[cmd_idx].source, "rand(") != NULL)
+        if (repl_state_document_cmds_mut()[cmd_idx].valid &&
+            strstr(export_document_text(cmd_idx), "rand(") != NULL)
             needs.needs_rand = 1;
     }
 
@@ -2672,7 +2691,7 @@ void repl_dump_code_panel_text(FILE *out) {
     /* Dump all valid user commands. */
     for (int cmd_idx = 0; cmd_idx < repl_state_document_count(); cmd_idx++) {
         if (!repl_state_document_cmds_mut()[cmd_idx].valid) continue;
-        fprintf(dst, "%s\n", repl_state_document_cmds_mut()[cmd_idx].source);
+        fprintf(dst, "%s\n", export_document_text(cmd_idx));
     }
 
     fflush(dst);
@@ -2714,7 +2733,7 @@ void repl_dump_code_panel_visual_text(FILE *out) {
     /* Dump all valid user commands with code panel wrapping. */
     for (int cmd_idx = 0; cmd_idx < repl_state_document_count(); cmd_idx++) {
         if (!repl_state_document_cmds_mut()[cmd_idx].valid) continue;
-        dump_code_panel_wrapped_line(dst, repl_state_document_cmds_mut()[cmd_idx].source, text_x, panel_w);
+        dump_code_panel_wrapped_line(dst, export_document_text(cmd_idx), text_x, panel_w);
     }
 
     fflush(dst);

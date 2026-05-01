@@ -47,8 +47,9 @@ static void flatten_fail(FlattenContext *ctx, const char *msg) {
     ctx->abort = 1;
 }
 
-static void flatten_get_for_var_name(const GLCmd *cmd, char *var, int var_sz) {
-    const char *p = cmd->source;
+static void flatten_get_for_var_name(const GLCmd *cmd, int cmd_idx,
+                                     char *var, int var_sz) {
+    const char *p = spike_text_for(cmd, cmd_idx);
     while (*p && *p != '(') p++;
     if (*p) p++;
     while (*p && isspace((unsigned char)*p)) p++;
@@ -195,14 +196,15 @@ static void flatten_range(FlattenContext *ctx,
             float start_val = src_cmd->args[0];
             float end_val   = src_cmd->args[1];
             float step_val  = src_cmd->args[2];
-            flatten_get_for_var_name(src_cmd, var_name, sizeof(var_name));
+            const char *src_text = spike_text_for(src_cmd, i);
+            flatten_get_for_var_name(src_cmd, i, var_name, sizeof(var_name));
 
             /* Re-evaluate for-loop bounds from source if they contain variables */
             if (src_cmd->has_vars) {
                 const char *unused_body;
                 float re_start, re_end, re_step;
                 char rv[16];
-                if (repl_eval_parse_for_header_with_vars(src_cmd->source, rv, sizeof(rv),
+                if (repl_eval_parse_for_header_with_vars(src_text, rv, sizeof(rv),
                                                &re_start, &re_end, &re_step,
                                                vars, nv, &unused_body)) {
                     start_val = re_start;
@@ -276,12 +278,14 @@ static void flatten_range(FlattenContext *ctx,
                     char arg_text[MAX_LINE_LEN];
                     float arg_vals[MAX_EXPR_VARS];
                     int arg_count = 0;
+                    const char *def_text = spike_text_for(def_cmd, k);
+                    const char *call_text = spike_text_for(src_cmd, i);
 
-                    if (!parse_repl_func_signature(def_cmd->source, &def_fn,
+                    if (!parse_repl_func_signature(def_text, &def_fn,
                                                    param_names, MAX_EXPR_VARS,
                                                    &param_count))
                         break;
-                    if (!extract_func_call_args_text(src_cmd->source, NULL,
+                    if (!extract_func_call_args_text(call_text, NULL,
                                                      arg_text, sizeof(arg_text)))
                         break;
                     if (!parse_expr_list_exact(arg_text, arg_vals, MAX_EXPR_VARS,
@@ -335,9 +339,10 @@ static void flatten_range(FlattenContext *ctx,
             int if_end = flatten_repl_source_scope_find_block_end(ctx, i);
             char cond_text[MAX_LINE_LEN];
             int needs_local_eval = 0;
+            const char *src_text = spike_text_for(src_cmd, i);
 
             if (vars && nv > 0 &&
-                repl_extract_paren_payload(src_cmd->source, cond_text, sizeof(cond_text)) &&
+                repl_extract_paren_payload(src_text, cond_text, sizeof(cond_text)) &&
                 (input_has_expr_vars(cond_text, vars, nv) ||
                  repl_eval_input_has_predef_vars(cond_text))) {
                 needs_local_eval = 1;
@@ -397,8 +402,9 @@ static void flatten_range(FlattenContext *ctx,
             float value = src_cmd->args[0];
             char rhs[MAX_LINE_LEN] = "";
             int local_rhs_vars = 0;
+            const char *src_text = spike_text_for(src_cmd, i);
 
-            if (repl_extract_assignment_parts(src_cmd->source, NULL, 0,
+            if (repl_extract_assignment_parts(src_text, NULL, 0,
                                               rhs, sizeof(rhs)) && rhs[0]) {
                 char repl_rhs[MAX_LINE_LEN];
                 repl_eval_c_expr_to_repl(rhs, repl_rhs, sizeof(repl_rhs));

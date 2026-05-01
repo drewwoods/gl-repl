@@ -559,12 +559,9 @@ void ui_panels_render_code_panel(const UiRenderSnapshot *snap) {
                         }
                         color_for_type(document_cmds[i].type);
                         {
-                            /* Spike: highlight against the editor-buffer
-                             * text so the text we display and the text
-                             * we search match exactly. */
-                            const char *hl_text = repl_state_editor_buffer_line(i);
-                            if (!hl_text || !hl_text[0])
-                                hl_text = document_cmds[i].source;
+                            /* Highlight against the exact row text being drawn
+                             * so search overlays stay aligned with visible text. */
+                            const char *hl_text = display_text;
                             code_panel_draw_search_highlights(snap,
                                                               hl_text,
                                                               search_row_idx,
