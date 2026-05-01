@@ -96,7 +96,7 @@ Test sources live under `tests/` and shared test-only helpers live under
 | `repl_config.h` | `ReplConfigKey` / `ReplConfigItem` descriptor API for keyed config access |
 | `repl_core.c` | Normalization pipeline (`repl_parse_and_normalize*`), reformatter, startup helpers; being dissolved into natural owners (R10) |
 | `repl_parser.c` | REPL source-line parser, expression validation, canonical `GLCmd.source[]` generation |
-| `repl_parser.h` | Parser entrypoints (`repl_parse_command*`, `repl_parse_command_ctx`) and `ReplParseContext` |
+| `repl_parser.h` | Parser entrypoints (`repl_parser_parse_command*`, `repl_parser_parse_command_ctx`) and `ReplParseContext` |
 | `repl_source_scope.c` | Source prefix-depth cache, indentation helpers, block lookup |
 | `repl_source_scope.h` | Source-scope query API (`block_depth_at`, `find_block_end`, indent helpers) |
 | `repl_commit.c` | Float declarations, variable assignments, structured block commits, close-brace commits |
@@ -130,7 +130,7 @@ Test sources live under `tests/` and shared test-only helpers live under
 | `repl_var_drag.h` | Drag state accessors + begin/motion/reset API |
 | `repl_examples.c` | Predefined example data (`g_examples[]`, `g_example_names[]`) |
 | `repl_examples.h` | Example query API (`repl_examples_count/name/lines`) |
-| `repl_export.c` | `save_output` / `load_from_file`, workspace header directives, `@scene-name` / `@workspace-dir` markers |
+| `repl_export.c` | `repl_export_save_output` / `repl_export_load_from_file`, workspace header directives, `@scene-name` / `@workspace-dir` markers |
 | `scene_render_types.h` | Shared `SceneRgba` / `SceneRenderConfig` / `FrameRenderContext` types for scene helpers |
 | `scene_render.c` | 3D scene frame orchestration, one-shot init, scene config/frame prep, edit guides, orbit target, replay fade pass orchestration |
 | `scene_grid.c` | Grid theme rendering and custom focus/ocean/ruler/planes passes |
@@ -151,6 +151,44 @@ Test sources live under `tests/` and shared test-only helpers live under
 | `cmd_format.c` | Pure indentation/depth computation (no GL dependency) |
 | `cmd_format.h` | Formatting types (`FmtCmd`, `FmtType`), indent functions |
 | `include/gl_2d.h` | Header-only 2D OpenGL helper functions |
+| `repl_executor.c` | Narrow live-GL dispatch gate: executes flat user geometry GL calls, owns GLU resources (quadric, tessellator) |
+| `repl_executor.h` | Executor public API (`repl_executor_init_resources`, `repl_execute_program`, transform helpers) |
+| `repl_flatten.c` | Source-to-flat program builder: unrolls for-loops, inlines functions, resolves if-blocks |
+| `repl_flatten.h` | `repl_flatten_program()`, `repl_flatten_commands()`, `FlatProgramView` |
+| `repl_replay.c` | Replay state machine: PC tracking, fade-batch ring, alpha math, skip-limit helpers |
+| `repl_replay.h` | Replay state/control API (`repl_replay_start`, `repl_replay_toggle_play_pause`, etc.) |
+| `repl_scenes.c` | User-scene slots (`g_user_scenes[]`), workspace directory, LRU eviction, example promotion |
+| `repl_layout.c` | Scene/code-panel rectangle geometry |
+| `repl_layout.h` | Layout geometry API (`repl_layout_scene_rect`, `repl_layout_code_panel_rect`) consumed by controller, editor, export, and tests |
+| `repl_command_spec.c` | Declarative descriptors for fixed-arity GL-like commands |
+| `repl_command_spec.h` | Command spec query API |
+| `repl_command_store.c` | Insert/delete/replace/load API over the source command array |
+| `repl_command_store.h` | Command mutation API; canonical path for source-array edits |
+| `repl_debug.c` | Diagnostic dumps: editor state, flat commands, runtime state layout |
+| `repl_debug.h` | Debug dump entrypoints |
+| `repl_state.c` | Owns `static ReplRuntimeState g_repl_state`; implements getters, mutators, `repl_state_capture`/`repl_state_restore` |
+| `repl_state_views.h` | Read-only state accessors (safe to include from `scene_*` and `ui_*`) |
+| `repl_state_owners.h` | Mutating `_mut()` accessors (owner modules and controller only) |
+| `repl_config.c` | Config key lookup implementation |
+| `repl_keys.h` | Keybinding constants |
+| `repl_pipeline.h` | Public pipeline and lifecycle surface: `flatten`, autonormal, replay/bootstrap snapshots |
+| `repl_example_loader.c` | Built-in example loading and active example tracking |
+| `repl_autonormal.c` | Auto-generated `glNormal3f` computation for source commands |
+| `repl_audio.c` | App-level playlist engine and persisted audio config (legacy-named app service, namespace-audit candidate) |
+| `repl_audio.h` | Audio API |
+| `prof.c` | Project-wide CPU timing instrumentation |
+| `prof.h` | Profiling API (`prof_begin`, `prof_end`, `prof_frame_tick`, etc.) |
+| `bench_repl.c` | Benchmarking harness for replay fade batches and perf-sensitive paths |
+| `ui_profile_panel.c` | Profile HUD rendering from measured timings |
+| `ui_profile_panel.h` | Profile panel render entrypoint |
+| `ui_replay_hud.c` | 2D replay HUD rendered from `UiReplayHudState` snapshot |
+| `ui_replay_hud.h` | Replay HUD render entrypoint and `UiReplayHudState` type |
+| `scene_geometry_guides.c` | REPL-aware vertex/primitive guide rendering from `SceneGuideSnapshot` |
+| `scene_geometry_guides.h` | Geometry guide render/prepare entrypoints |
+| `scene_transform_guides.c` | REPL-aware transform guide rendering from `SceneGuideSnapshot` |
+| `scene_transform_guides.h` | Transform guide render/prepare entrypoints |
+| `scene_transform_utils.h` | Header-only GL matrix helpers for scene guide modules |
+| `scene_guides_shared.h` | Shared snapshot/planning types (`SceneGuideSnapshot`) for REPL-aware 3D guides |
 | `tests/support/` | Shared test harness/setup helpers |
 | `tests/gl-stubs/` | No-op GL/GLU/GLUT headers used by `USE_GL_STUBS=1` builds |
 | `MODULES.md` | One-page layered overview, ownership diagram, current boundaries, open edges |
@@ -173,10 +211,10 @@ Test sources live under `tests/` and shared test-only helpers live under
 - New GL commands: add to `CmdType` enum in `sample.h`, then handle in
   `parse_command()` in `repl_parser.c`, `execute_commands()` in
   `repl_executor.c`, and `flatten_range()` in `repl_flatten.c`
-- Keyboard bindings: `repl_editor_handle_key()` for ASCII keys (Ctrl+X = key
-  code X-64), `repl_editor_handle_special()` for F-keys/arrows. Currently
-  `repl_editor.c` also owns the cross-layer routing; Phase 2 moves that to
-  `imrepl_ctrl.c` (see R in `feature/push-architecture-refinement.md`)
+- Keyboard bindings: `repl_keyboard_func()` for ASCII keys (Ctrl+X = key
+  code X-64), `repl_special_func()` for F-keys/arrows (both declared in
+  `repl_core.h`). Currently `repl_editor.c` also owns the cross-layer routing;
+  Phase 2 moves that to `imrepl_ctrl.c` (see R in `feature/push-architecture-refinement.md`)
 - Expression variables: `ExprVar` struct in `repl_eval.h`, predefined set
   accessible via `repl_state_variables()` and managed by `declare_predef_var()`
 
@@ -204,8 +242,8 @@ Grids and axes are themeable through small specs in `scene_grid.c` and
 `scene_axes.c`:
 1. Add a new entry to the `GridTheme` (or `AxesTheme`) enum in `sample.h`
    before the trailing `_COUNT` sentinel
-2. Add the name string at that enum's index in `g_grid_names[]`
-   (or `g_axes_names[]`) in `repl_core.c` — both arrays use designated
+2. Add the name string at that enum's index in `grid_theme_names[]`
+   (or `axes_theme_names[]`) in `repl_actions.c` — both arrays use designated
    initializers keyed on the enum, so order is validated at compile time
 3. Add a matching `GridThemeSpec` entry in `scene_grid.c` for standard grid
    line/color themes and an `AxesThemeSpec` entry in `scene_axes.c` for
@@ -241,7 +279,7 @@ to `g_pin_btn_labels[]` in `ui_menu_bar.c`, and add a `case` in
 ## User Scene System
 
 The REPL keeps up to `MAX_USER_SCENES` (= 8) independent scenes in
-`g_user_scenes[]` (in `repl_core.c`). Slot 0 is the pinned "home" scene — the
+`g_user_scenes[]` (in `repl_scenes.c`). Slot 0 is the pinned "home" scene — the
 pre-example editor state captured on first example load, never auto-evicted.
 Each `UserScene` stores `GLCmd` array + `num_cmds` + `edit_line` + predefined
 variable values + a scene `name` + `last_touch` tick for LRU.
@@ -250,7 +288,7 @@ variable values + a scene `name` + `last_touch` tick for LRU.
 
 - `g_active_user_scene` (`-1` means an example or a fresh empty workspace is
   loaded instead of a user scene).
-- `push_undo_snapshot()` in `repl_editor.c` calls
+- `repl_undo_push_snapshot()` in `repl_undo.c` calls
   `repl_promote_example_if_needed()` before every mutation. If the user is
   editing an example, that call allocates a fresh slot, copies the current
   state into it, inherits the example's name (de-duplicated via
@@ -283,7 +321,7 @@ message (user has to save workspace first to unlock eviction).
 
 - `repl_save_workspace(dir)` mkdirs `dir` (idempotent), flushes the active
   slot, then iterates every occupied slot: `install_scene_into_live` + a
-  stash/restore pattern wraps each slot so `save_output()` sees that scene's
+  stash/restore pattern wraps each slot so `repl_export_save_output()` sees that scene's
   live state. The export scene-name hint is set per-slot so the exported
   header's `// @scene-name` reflects the correct name. The bound dir is
   remembered in import/export state and stamped into every single-file export
@@ -363,7 +401,7 @@ focused regression suite for this area; `make test` for broader REPL state.
 `@cfg` settings currently can't distinguish "desired" (always apply) from
 "inherited" (only if unset). A desired/inherited split would let user scenes
 save their own presentation config without being overwritten on the next
-example switch. Deferred — see `feature/multi-user-scenes.md`.
+example switch. Deferred (design doc not yet created).
 
 ## Architecture
 
@@ -515,20 +553,20 @@ Key details:
 ### Save/Load (output.c)
 
 `repl_export.c` handles bidirectional text format:
-- **Export** (`save_output()`): writes a standalone C file with header
+- **Export** (`repl_export_save_output()`): writes a standalone C file with header
   comments embedding workspace state (`@var name=value`,
   `@cfg setting=value`, `@scene-name <name>`, `@workspace-dir <path>`),
   camera state as the raw `glTranslatef`/`glRotatef` sequence the REPL
   uses internally, predefined vars as globals, REPL functions as C
   functions, and `display()` body containing the user's geometry commands.
-  The workspace iterator in `repl_core.c` sets the export scene-name hint
+  The workspace iterator in `repl_scenes.c` sets the export scene-name hint
   in import/export state before each slot's save so the hint wins over the
   active user scene index.
-- **Import** (`load_from_file()`): line-by-line scan parses camera state
+- **Import** (`repl_export_load_from_file()`): line-by-line scan parses camera state
   and workspace directives, detects function definitions (converts C
   syntax back to REPL), and feeds geometry lines through `feed_line()`.
   Pending scene-name and workspace-dir directives are read by the caller
-  after `load_from_file` returns so the importer can name the new slot
+  after `repl_export_load_from_file` returns so the importer can name the new slot
   and remember the workspace dir.
 
 ### Replay System
@@ -549,8 +587,8 @@ Circular snapshot buffers in `repl_undo.c`:
 - `ReplUndoSnapshot` captures the full editor state: source commands,
   command count, cursor position, predefined variable values
 - Undo and redo rings (32 slots each) with head/count tracking
-- `push_undo_snapshot()` called before any mutation (delete, paste,
-  reformat, etc.); `pop_undo_snapshot()` on Ctrl+Z; `do_redo()` on
+- `repl_undo_push_snapshot()` called before any mutation (delete, paste,
+  reformat, etc.); `repl_undo_pop_snapshot()` on Ctrl+Z; `repl_undo_do_redo()` on
   Ctrl+Y. Also the hook where `repl_promote_example_if_needed()` fires
   so editing an example auto-creates a user scene.
 - Pushing clears the redo stack; undo moves current state to redo

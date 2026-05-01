@@ -45,7 +45,7 @@ Window lights are driven by a **600-second cosine wave** that sweeps a "night zo
 
 Window colours: 65% warm incandescent yellow, 23% cool white, 12% cold office blue.  A faint haze quad at the base of lit buildings adds ground glow.
 
-#### Pirate Sea Battle (`scene_pirates.c` - `draw_pirates`)
+#### Pirate Sea Battle (planned; `scene_pirates.c` not yet in repo)
 Six ships - three pirate, three navy - patrol slow circular orbits (radius 17–24) at sea level.  Each is a dark silhouette: elongated hex hull, raised sides, mast with yard and backstay, triangular sail.
 
 A state machine drives engagement: every 45–90 s a pirate and a navy ship break from patrol, close on each other, exchange cannon fire for 12–24 s, and one sinks.  Cannon shots are additive `GL_POINTS` on a ballistic arc with a brief muzzle flash at the bow.  The losing ship sinks over 20 s with alpha fade, then respawns off-screen after 18–40 s.
