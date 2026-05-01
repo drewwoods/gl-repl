@@ -2,7 +2,6 @@
  * ui_profile_panel.c - per-section wall-time profiling overlay panel.
  */
 #include "sample.h"
-#include "repl_state_views.h"
 #include "ui_profile_panel.h"
 #include "./include/gl_2d.h"
 #include "repl_layout.h"
@@ -41,13 +40,13 @@ static int clamp_profile_y(int y, int scene_y, int scene_h, int panel_h) {
     return min_y;
 }
 
-static void profile_panel_rect_for_height(int panel_h, int *out_x, int *out_y) {
+static void profile_panel_rect_for_height(const UiRenderSnapshot *snap, int panel_h, int *out_x, int *out_y) {
     int scene_x, scene_y, scene_w, scene_h;
     int panel_x, panel_y;
 
     repl_layout_scene_rect(&scene_x, &scene_y, &scene_w, &scene_h);
 
-    if (repl_state_variable_panel().visible) {
+    if (snap->variable_panel.visible) {
         panel_x = scene_x + scene_w - PROF_PANEL_W - PROF_PANEL_MARGIN;
         panel_y = scene_y + scene_h - panel_h - PROF_PANEL_MARGIN;
     } else {
@@ -176,17 +175,17 @@ static void set_time_color(ProfSection s, double us) {
     }
 }
 
-static int section_visible(ProfSection s) {
-    if (repl_state_profile_panel().mode != PROFILE_PANEL_DETAILS &&
+static int section_visible(int profile_mode, ProfSection s) {
+    if (profile_mode != PROFILE_PANEL_DETAILS &&
         is_detail_section(s))
         return 0;
     return 1;
 }
 
-static int visible_section_count(void) {
+static int visible_section_count(int profile_mode) {
     int section_count = 0;
     for (int section_idx = 0; section_idx < PROF_SECTION_COUNT; section_idx++) {
-        if (section_visible((ProfSection)section_idx))
+        if (section_visible(profile_mode, (ProfSection)section_idx))
             section_count++;
     }
     return section_count;
@@ -196,10 +195,11 @@ static int visible_section_count(void) {
 /* Rendering                                                                  */
 /* ========================================================================= */
 
-void ui_profile_panel_render(void) {
-    if (repl_state_profile_panel().mode == PROFILE_PANEL_OFF) return;
+void ui_profile_panel_render(const UiRenderSnapshot *snap) {
+    int profile_mode = snap->profile_panel.mode;
+    if (profile_mode == PROFILE_PANEL_OFF) return;
 
-    int visible_count = visible_section_count();
+    int visible_count = visible_section_count(profile_mode);
 
     /* Panel total height: header + column headings + one row per section +
      * divider before FRAME_TOTAL + bottom padding */
@@ -211,9 +211,9 @@ void ui_profile_panel_render(void) {
                  + PROF_PANEL_MARGIN;
 
     int panel_x, panel_y;
-    profile_panel_rect_for_height(panel_h, &panel_x, &panel_y);
+    profile_panel_rect_for_height(snap, panel_h, &panel_x, &panel_y);
 
-    gl2d_begin(repl_state_viewport().window_w, repl_state_viewport().window_h);
+    gl2d_begin(snap->viewport.window_w, snap->viewport.window_h);
 
     /* Background */
     glEnable(GL_BLEND);
@@ -269,7 +269,7 @@ void ui_profile_panel_render(void) {
     /* One row per section.  Insert a separator line before FRAME_TOTAL. */
     for (int section_idx = 0; section_idx < PROF_SECTION_COUNT; section_idx++) {
         ProfSection s = (ProfSection)section_idx;
-        if (!section_visible(s)) continue;
+        if (!section_visible(profile_mode, s)) continue;
 
         if (s == PROF_FRAME_TOTAL) {
             /* Divider above totals row */

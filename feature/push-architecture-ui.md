@@ -73,7 +73,50 @@ Exit criterion: every `ui_*` render function takes only `const`
 inputs and (where needed) an `out` struct. No `_mut()` accessors used
 inside any `*_render()` function.
 
-### Phase B — Build `UiRenderSnapshot`, route every UI render through it (medium, ~5–8 commits)
+### Phase B — Build `UiRenderSnapshot`, route every UI render through it ✅ Done
+
+Status (2026-05-01): Phase B has landed. Every UI render entry point now
+takes `const UiRenderSnapshot *snap`; the controller builds the snapshot
+once per frame in `imrepl_ctrl_build_ui_snapshot()` and passes it to each
+renderer. The `check-ui-no-repl-state-read` guard runs as part of
+`make test` / `make check-state-ownership`.
+
+What landed:
+
+- **`ui_snapshot.h`** — `UiRenderSnapshot` bundles the by-value
+  `Repl*State` slices, the pointer-shaped read-only views
+  (`ReplVariableView`, `ReplEditorInputView`, `ReplImportExportView`,
+  `FlatProgramView`, `ReplPredefView`), document/flat-program metadata,
+  user-scene names, and grid arrays.
+- **`imrepl_ctrl_build_ui_snapshot()`** — single per-frame builder; the
+  only place that reads `repl_state_*` for UI rendering. Refreshes
+  workspace header lines before populating the import/export view so
+  renderers stop calling `repl_state_refresh_workspace_header_lines()`
+  mid-frame.
+- **Renderer signatures** — every entry point now matches one of the
+  canonical shapes:
+  - `void ui_X_render(const UiRenderSnapshot *snap)`
+  - `void ui_X_render(const UiRenderSnapshot *snap, ...extra layout args)`
+- **Allowlists** — `scripts/allowlists/ui-renderers-signature.txt`
+  enumerates the audited render functions; `ui_snapshot.h` is allowed
+  to include `repl_state_views.h` because it *is* the UI read boundary.
+- **Tests** — `tests/test_imrepl_ctrl.c` stubs were updated to the new
+  signatures; full suite stays green (2974/2974).
+
+Residual scope (intentional, Phase C territory):
+
+- `ui_*` files keep `#include "repl_state_views.h"` for *non-render*
+  paths: input bridges (`ui_color_picker_press/motion`,
+  `ui_menu_bar_*_hit`, `ui_variable_panel_rect/hit`,
+  `ui_panels_handle_*`) still query live state because they run from
+  GLUT input handlers without a snapshot in scope.
+- `repl_state_status_set()` and similar invariant-bearing setters are
+  still called from input handlers; the Phase B render-side rule does
+  not touch them.
+
+The historical plan follows below; Phase A and Phase C remain as written.
+
+#### Original plan (medium, ~5–8 commits)
 
 Mirror what `SceneRenderConfig` did for `scene_*`. The controller builds
 one per frame from REPL state; UI render functions consume it; UI files

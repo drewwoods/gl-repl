@@ -208,10 +208,11 @@ controller builds a `ReplayFadePlan` snapshot; the replay HUD now lives in
 
 ### 5. 2D UI rendering
 
-`ui_*` owns screen-space drawing from per-frame UI/config/model state.
+`ui_*` owns screen-space drawing from a per-frame `UiRenderSnapshot`.
 
 | Module | Role |
 |--------|------|
+| `ui_snapshot` | `UiRenderSnapshot` definition; the read-only bundle the controller hands to every `ui_*_render*()` entry point |
 | `ui_panels` | Code-panel rows, overlay viewport bracket, scene status banner |
 | `repl_layout` | Pure scene/code-panel rectangle geometry, no GL |
 | `ui_menu_bar` | Menus, dropdowns, pinned buttons, search slot |
@@ -223,8 +224,15 @@ controller builds a `ReplayFadePlan` snapshot; the replay HUD now lives in
 | `repl_code_panel_layout` | Pure text wrapping model, no GL |
 | `repl_code_panel_document` | Code-panel row/document model, no GL |
 
-UI renderers read models and draw. Mutations go through `repl_actions`,
-`repl_command_store`, `repl_var_drag`, or another REPL-owned mutation API.
+`UiRenderSnapshot` is built once per frame by
+`imrepl_ctrl_build_ui_snapshot()` and consumed by every `ui_*_render*()`
+function. The `check-ui-no-repl-state-read` and
+`check-ui-renderer-takes-view` Makefile guards enforce the
+snapshot-shaped signature. Mutations go through `repl_actions`,
+`repl_command_store`, `repl_var_drag`, or another REPL-owned mutation
+API; input-bridge helpers in `ui_*.c` (`*_hit`, `*_rect`, press/motion
+handlers) still query live state pending the Phase C output-list work
+in `feature/push-architecture-ui.md`.
 
 ### 6. Persistence, audio, instrumentation, lifecycle
 
@@ -367,5 +375,6 @@ A parallel state-ownership track is tracked in
   is not in place.
 - Stage 5 (medium slices) — ⚠️ partial.
 - Stage 6 (`repl_undo` on top of `repl_state_capture()`) — ❌ not started.
-- Stage 7 (UI snapshot purity) — ❌ not started.
+- Stage 7 (UI snapshot purity) — ✅ render boundary done; input-bridge
+  cleanup deferred to Phase C of `feature/push-architecture-ui.md`.
 - Stage 8 (collapse views/owners headers) — ❌ not started.

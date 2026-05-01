@@ -27,11 +27,6 @@
 #define g_render_state_lines (repl_state_import_export().render_state_lines)
 #define g_cam_lines (repl_state_import_export().cam_lines)
 
-static int editor_code_panel_layout(void) {
-    if (repl_state_presentation().code_panel_layout < 0 || repl_state_presentation().code_panel_layout >= CODE_PANEL_LAYOUT_COUNT)
-        return CODE_PANEL_LAYOUT_LEFT;
-    return repl_state_presentation().code_panel_layout;
-}
 
 /* Status footer height - design: 22px strip flush against code panel bottom */
 /* STATUSBAR_H lives in sample.h now so scene_render.c can lift the
@@ -116,10 +111,11 @@ static void code_panel_draw_segment(int x, int y, const char *text,
 
 /* Menu bar lives in repl_menu_bar.c. */
 
-static void code_panel_draw_search_highlights(const char *text, int search_row_idx,
+static void code_panel_draw_search_highlights(const UiRenderSnapshot *snap,
+                                              const char *text, int search_row_idx,
                                               int seg_start, int seg_len,
                                               int seg_x, int y) {
-    ReplSearchState srch = repl_state_search();
+    ReplSearchState srch = snap->search;
     int drew = 0;
 
     if (!srch.active || srch.query_len <= 0 || search_row_idx < 0 ||
@@ -155,17 +151,18 @@ static void code_panel_draw_search_highlights(const char *text, int search_row_i
         glDisable(GL_BLEND);
 }
 
-static void render_active_input_rows(int panel_w, int text_x, int idx_x,
+static void render_active_input_rows(const UiRenderSnapshot *snap,
+                                     int panel_w, int text_x, int idx_x,
                                      int visible_lines, int file_line,
                                      int indent_chars, const char *idx_text,
                                      int search_row_idx,
                                      int *io_cur, int *io_line_y) {
-    ReplEditorInputView            inp    = repl_state_editor_input();
-    ReplCodePanelRuntimeState cp     = repl_state_code_panel();
-    ReplAutocompleteState           ac     = repl_state_autocomplete();
-    ReplSearchState                 srch   = repl_state_search();
+    ReplEditorInputView            inp    = snap->editor_input;
+    ReplCodePanelRuntimeState cp     = snap->code_panel;
+    ReplAutocompleteState           ac     = snap->autocomplete;
+    ReplSearchState                 srch   = snap->search;
     const char *input = inp.input;
-    int cursor_pos = repl_state_cursor_pos();
+    int cursor_pos = snap->cursor_pos;
     int input_len = inp.input_len;
     CodePanelWrapIter wrap_it;
     int wrap_row = 0;
@@ -212,7 +209,7 @@ static void render_active_input_rows(int panel_w, int text_x, int idx_x,
             }
 
             glColor3f(0.95f, 0.95f, 0.90f);
-            code_panel_draw_search_highlights(input, search_row_idx,
+            code_panel_draw_search_highlights(snap, input, search_row_idx,
                                               wrap_start, wrap_len,
                                               wrap_x, *io_line_y);
             code_panel_draw_segment(wrap_x, *io_line_y, input,
@@ -285,10 +282,10 @@ int ui_panels_code_panel_apply_scroll_follow_for_test(int *out_follow_doc_line,
 
 /* Color picker lives in repl_color_picker.c. */
 
-void ui_panels_render_code_panel(void) {
-    ReplReplayRuntimeState          replay = repl_state_replay();
-    ReplCodePanelRuntimeState cp     = repl_state_code_panel();
-    ReplRenderState                 rs     = repl_state_render();
+void ui_panels_render_code_panel(const UiRenderSnapshot *snap) {
+    ReplReplayRuntimeState          replay = snap->replay;
+    ReplCodePanelRuntimeState cp     = snap->code_panel;
+    ReplRenderState                 rs     = snap->render;
     prof_begin(PROF_CODE_PANEL_LAYOUT);
     prof_begin(PROF_CODE_PANEL_LAYOUT_GEOM);
     prof_begin(PROF_CODE_PANEL_LAYOUT_GEOM_SETUP);
@@ -303,28 +300,32 @@ void ui_panels_render_code_panel(void) {
         prof_end(PROF_CODE_PANEL_LAYOUT);
         return;
     }
-    repl_state_refresh_workspace_header_lines();
+    /* Workspace header lines were refreshed by the controller before the
+     * snapshot was built. */
     int panel_w = cp_w;
     int panel_top = cp_y + cp_h;  /* y of the panel's top edge (OpenGL coords) */
     int linenum_w = 4 * FONT_W;
-    int idx_col_w = repl_state_presentation().show_vertex_indices ? (6 * FONT_W) : 0;
+    int idx_col_w = snap->presentation.show_vertex_indices ? (6 * FONT_W) : 0;
     int idx_x = CODE_MARGIN_X + linenum_w + FONT_W;
     int text_x = idx_x + idx_col_w;
     int visible_lines;
     int total_lines;
-    const GLCmd *document_cmds = repl_state_document_cmds();
+    const GLCmd *document_cmds = snap->document_cmds;
+    int document_count = snap->document_count;
+    int edit_line = snap->edit_line;
+    int insert_mode = snap->insert_mode;
 
     /* Own the full-window overlay viewport so the code panel and the UI
      * stack beneath it render in the same 2D projection. */
-    glViewport(0, 0, repl_state_viewport().window_w, repl_state_viewport().window_h);
+    glViewport(0, 0, snap->viewport.window_w, snap->viewport.window_h);
 
     /* When cursor is on a vertex, find which normal/color lines feed it so
      * we can draw a gutter accent bar on them below. */
     int highlight_normal_idx = -1;
     int highlight_color_idx  = -1;
-    if (!repl_state_insert_mode() && repl_state_edit_line() < repl_state_document_count() && document_cmds[repl_state_edit_line()].valid) {
-        highlight_normal_idx = repl_find_feeding_normal_cmd(repl_state_edit_line());
-        highlight_color_idx  = repl_find_feeding_color_cmd(repl_state_edit_line());
+    if (!insert_mode && edit_line < document_count && document_cmds[edit_line].valid) {
+        highlight_normal_idx = repl_find_feeding_normal_cmd(edit_line);
+        highlight_color_idx  = repl_find_feeding_color_cmd(edit_line);
     }
 
     prof_end(PROF_CODE_PANEL_LAYOUT_GEOM_SETUP);
@@ -356,7 +357,7 @@ void ui_panels_render_code_panel(void) {
     prof_end(PROF_CODE_PANEL_LAYOUT);
     prof_begin(PROF_CODE_PANEL_CHROME);
 
-    gl2d_begin(repl_state_viewport().window_w, repl_state_viewport().window_h);
+    gl2d_begin(snap->viewport.window_w, snap->viewport.window_h);
 
     /* Background */
     glEnable(GL_BLEND);
@@ -367,24 +368,26 @@ void ui_panels_render_code_panel(void) {
     /* Border: divider between code panel and scene */
     glColor4f(0.30f, 0.30f, 0.50f, 0.80f);
     glBegin(GL_LINES);
-    if (editor_code_panel_layout() == CODE_PANEL_LAYOUT_TOP) {
-        /* Horizontal divider along bottom of code panel. */
-        glVertex2f(0.0f, (float)cp_y);
-        glVertex2f((float)repl_state_viewport().window_w, (float)cp_y);
-    } else if (editor_code_panel_layout() == CODE_PANEL_LAYOUT_BOTTOM) {
-        /* Horizontal divider along top of code panel. */
-        glVertex2f(0.0f, (float)(cp_y + cp_h));
-        glVertex2f((float)repl_state_viewport().window_w, (float)(cp_y + cp_h));
-    } else {
-        /* Vertical divider along right edge of code panel */
-        glVertex2f((float)(cp_x + cp_w), 0.0f);
-        glVertex2f((float)(cp_x + cp_w), (float)repl_state_viewport().window_h);
+    {
+        int layout = snap->presentation.code_panel_layout;
+        if (layout < 0 || layout >= CODE_PANEL_LAYOUT_COUNT)
+            layout = CODE_PANEL_LAYOUT_LEFT;
+        if (layout == CODE_PANEL_LAYOUT_TOP) {
+            glVertex2f(0.0f, (float)cp_y);
+            glVertex2f((float)snap->viewport.window_w, (float)cp_y);
+        } else if (layout == CODE_PANEL_LAYOUT_BOTTOM) {
+            glVertex2f(0.0f, (float)(cp_y + cp_h));
+            glVertex2f((float)snap->viewport.window_w, (float)(cp_y + cp_h));
+        } else {
+            glVertex2f((float)(cp_x + cp_w), 0.0f);
+            glVertex2f((float)(cp_x + cp_w), (float)snap->viewport.window_h);
+        }
     }
     glEnd();
     glDisable(GL_BLEND);
 
-    ui_menu_bar_render();
-    ui_menu_bar_render_search_overlay(cp_x, panel_w, panel_top);
+    ui_menu_bar_render(snap);
+    ui_menu_bar_render_search_overlay(snap, cp_x, panel_w, panel_top);
 
     prof_end(PROF_CODE_PANEL_CHROME);
     prof_begin(PROF_CODE_PANEL_LINES);
@@ -451,18 +454,18 @@ void ui_panels_render_code_panel(void) {
     int in_tess_poly = 0;
     int tess_depth = 0;
     int primitive_vnums_exact = 1;
-    for (int i = 0; i < repl_state_document_count(); i++) {
-        /* If inserting, render the virtual insert line before command[repl_state_edit_line()] */
-        if (repl_state_insert_mode() && i == repl_state_edit_line()) {
-                        render_active_input_rows(panel_w, text_x, idx_x,
+    for (int i = 0; i < document_count; i++) {
+        /* If inserting, render the virtual insert line before command[edit_line] */
+        if (insert_mode && i == edit_line) {
+                        render_active_input_rows(snap, panel_w, text_x, idx_x,
                                                                          visible_lines, file_line,
                                                                          repl_code_panel_document_active_indent_chars(), NULL,
-                                                                         repl_state_edit_line(),
+                                                                         edit_line,
                                                                          &cur, &line_y);
             file_line++;
         }
 
-        if (i < repl_state_document_count()) {
+        if (i < document_count) {
             /* Track vertex number for all commands regardless of visibility */
             if (document_cmds[i].valid) {
                 if (document_cmds[i].type == CMD_BEGIN) {
@@ -476,22 +479,22 @@ void ui_panels_render_code_panel(void) {
                 }
             }
 
-            int is_edit = (!repl_state_insert_mode() && i == repl_state_edit_line());
+            int is_edit = (!insert_mode && i == edit_line);
             int is_vertex = document_cmds[i].valid && (document_cmds[i].type == CMD_VERTEX3F ||
                                                 document_cmds[i].type == CMD_TESS_VERTEX);
             if (is_edit) {
                 /* Active editing line */
                 char idx_s[16];
                 const char *idx_text = NULL;
-                if (repl_state_presentation().show_vertex_indices && is_vertex) {
+                if (snap->presentation.show_vertex_indices && is_vertex) {
                     snprintf(idx_s, sizeof(idx_s),
                              primitive_vnums_exact ? "v%d" : "vn", vnum);
                     idx_text = idx_s;
                 }
-                render_active_input_rows(panel_w, text_x, idx_x,
+                render_active_input_rows(snap, panel_w, text_x, idx_x,
                                          visible_lines, file_line,
                                          repl_code_panel_document_active_indent_chars(), idx_text,
-                                         repl_state_edit_line(),
+                                         edit_line,
                                          &cur, &line_y);
                 file_line++;
             } else {
@@ -538,7 +541,7 @@ void ui_panels_render_code_panel(void) {
                             { char ln[16]; snprintf(ln, sizeof(ln), "%3d", file_line);
                               gl2d_draw_string((float)CODE_MARGIN_X, (float)line_y,
                                           ln, FONT_MONO); }
-                            if (repl_state_presentation().show_vertex_indices && is_vertex) {
+                            if (snap->presentation.show_vertex_indices && is_vertex) {
                                 char idx_s[16];
                                 snprintf(idx_s, sizeof(idx_s),
                                          primitive_vnums_exact ? "v%d" : "vn", vnum);
@@ -555,7 +558,8 @@ void ui_panels_render_code_panel(void) {
                             }
                         }
                         color_for_type(document_cmds[i].type);
-                        code_panel_draw_search_highlights(document_cmds[i].source,
+                        code_panel_draw_search_highlights(snap,
+                                                          document_cmds[i].source,
                                                           search_row_idx,
                                                           wrap_start, wrap_len,
                                                           wrap_x, line_y);
@@ -656,12 +660,12 @@ void ui_panels_render_code_panel(void) {
 
     /* New-line slot after the last command */
     {
-        int is_edit_nl = (repl_state_edit_line() == repl_state_document_count());
+        int is_edit_nl = (edit_line == document_count);
         if (is_edit_nl) {
-            render_active_input_rows(panel_w, text_x, idx_x,
+            render_active_input_rows(snap, panel_w, text_x, idx_x,
                                      visible_lines, file_line,
                                      repl_code_panel_document_active_indent_chars(), NULL,
-                                     repl_state_edit_line(),
+                                     edit_line,
                                      &cur, &line_y);
         } else {
             if (cur >= cp.scroll && cur < cp.scroll + visible_lines) {
@@ -669,7 +673,7 @@ void ui_panels_render_code_panel(void) {
                 { char ln[16]; snprintf(ln, sizeof(ln), "%3d", file_line);
                   gl2d_draw_string(CODE_MARGIN_X, line_y, ln, FONT_MONO); }
                 glColor3f(0.28f, 0.28f, 0.35f);
-                { char ind_s[32]; int nc = repl_source_scope_cmd_indent_chars(repl_state_document_count());
+                { char ind_s[32]; int nc = repl_source_scope_cmd_indent_chars(document_count);
                   if (nc > 31) nc = 31;
                   memset(ind_s, ' ', nc); ind_s[nc] = '\0';
                   gl2d_draw_string((float)text_x, (float)line_y, ind_s, FONT_MONO); }
@@ -745,7 +749,7 @@ void ui_panels_render_code_panel(void) {
         /* cmd count */
         char cmds_buf[48];
         snprintf(cmds_buf, sizeof(cmds_buf), "%d/%d cmds",
-                 repl_state_flat_program_count(), MAX_COMMANDS);
+                 snap->flat_program_count, MAX_COMMANDS);
         glColor3f(0.878f, 0.878f, 0.878f); /* #e0e0e0 - stronger for counts */
         gl2d_draw_string((float)tx, (float)text_y, cmds_buf, FONT_SMALL);
         tx += (int)strlen(cmds_buf) * FONT_SMALL_W;
@@ -764,13 +768,13 @@ void ui_panels_render_code_panel(void) {
 
         /* Line / insert-mode / begin-mode */
         char ln_buf[64];
-        if (repl_state_insert_mode())
-            snprintf(ln_buf, sizeof(ln_buf), "Ln %d [INSERT]", repl_state_edit_line() + 1);
+        if (insert_mode)
+            snprintf(ln_buf, sizeof(ln_buf), "Ln %d [INSERT]", edit_line + 1);
         else if (repl_source_scope_in_begin_block())
             snprintf(ln_buf, sizeof(ln_buf), "Ln %d  %s",
-                     repl_state_edit_line() + 1, mode_name(current_begin_mode()));
+                     edit_line + 1, mode_name(current_begin_mode()));
         else
-            snprintf(ln_buf, sizeof(ln_buf), "Ln %d", repl_state_edit_line() + 1);
+            snprintf(ln_buf, sizeof(ln_buf), "Ln %d", edit_line + 1);
         glColor3f(0.627f, 0.627f, 0.627f); /* #a0a0a0 */
         gl2d_draw_string((float)tx, (float)text_y, ln_buf, FONT_SMALL);
         tx += (int)strlen(ln_buf) * FONT_SMALL_W;
@@ -819,7 +823,7 @@ void ui_panels_render_code_panel(void) {
         glDisable(GL_BLEND);
     }
 
-    ui_color_picker_render();
+    ui_color_picker_render(snap);
 
     prof_end(PROF_CODE_PANEL_OVERLAYS);
 
@@ -833,8 +837,8 @@ void ui_panels_render_code_panel(void) {
 /* Amber status/error strip along the bottom of the scene panel.  The scene
  * is much wider than the code-panel statusbar slot, so long diagnostics
  * (~80 chars) fit here without truncation. */
-void ui_panels_render_scene_status(void) {
-    ReplStatusState status = repl_state_status();
+void ui_panels_render_scene_status(const UiRenderSnapshot *snap) {
+    ReplStatusState status = snap->status;
     if (status.ttl <= 0 || !status.text[0]) return;
 
     int sc_x, sc_y, sc_w, sc_h;
@@ -846,7 +850,7 @@ void ui_panels_render_scene_status(void) {
 
     float alpha = status.ttl > 60 ? 1.0f : (float)status.ttl / 60.0f;
 
-    gl2d_begin(repl_state_viewport().window_w, repl_state_viewport().window_h);
+    gl2d_begin(snap->viewport.window_w, snap->viewport.window_h);
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 

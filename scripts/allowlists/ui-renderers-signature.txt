@@ -1,2 +1,12 @@
 # Renderers audited for snapshot-signature shape.
 ui_replay_hud_render
+ui_help_overlay_render
+ui_profile_panel_render
+ui_autocomplete_panel_render
+ui_variable_panel_render
+ui_color_picker_render
+ui_menu_bar_render
+ui_menu_bar_render_search_overlay
+ui_menu_bar_render_example_dropdown
+ui_panels_render_code_panel
+ui_panels_render_scene_status

@@ -262,9 +262,18 @@ Responsibilities:
 * profile HUD
 * status banners and other screen-space overlays
 
-UI renderers draw from model/config snapshots. Mutations route through
-`repl_actions`, `repl_command_store`, `repl_var_drag`, or another REPL-owned
-mutation path.
+UI renderers draw from a single per-frame `UiRenderSnapshot` (defined in
+`ui_snapshot.h`) that the controller builds once via
+`imrepl_ctrl_build_ui_snapshot()` and passes to every `ui_*_render*()`
+entry point. Render code does not call `repl_state_*()` directly. The
+`check-ui-no-repl-state-read` Makefile guard enforces the snapshot-shaped
+signature for audited renderers.
+
+Mutations route through `repl_actions`, `repl_command_store`,
+`repl_var_drag`, or another REPL-owned mutation path. UI input bridges
+(`*_hit`, `*_rect`, press/motion handlers) still query live state during
+GLUT input dispatch; pulling those onto a deferred output channel is the
+Phase C work in `feature/push-architecture-ui.md`.
 
 ## Replay Architecture
 
@@ -522,9 +531,13 @@ Still open:
 A parallel state-ownership track lives in
 `feature/gold-standard-state-ownership.md`. Stage 0/1 are complete; Stage 2
 (by-value getters) is broadly applied with a few view-struct slices
-remaining; Stages 4 (cursor-pixel `Ui*Output` actualization), 6
-(`repl_undo.c` consumes `repl_state_capture()`), and 7 (UI snapshot purity)
-are still open.
+remaining; Stage 7 (UI snapshot purity) is done at the render boundary —
+every `ui_*_render*()` entry point consumes `const UiRenderSnapshot *snap`
+built once per frame by `imrepl_ctrl_build_ui_snapshot()` (Phase B in
+`feature/push-architecture-ui.md`); input-bridge helpers in `ui_*.c`
+remain on live state pending Phase C. Stages 4 (cursor-pixel `Ui*Output`
+actualization) and 6 (`repl_undo.c` consumes `repl_state_capture()`) are
+still open.
 
 ## Building Historical Checkouts
 

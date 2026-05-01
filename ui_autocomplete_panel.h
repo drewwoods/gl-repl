@@ -36,11 +36,11 @@
 #ifndef UI_AUTOCOMPLETE_PANEL_H
 #define UI_AUTOCOMPLETE_PANEL_H
 
-/* Render the autocomplete popup once per frame. Displays a floating list of
- * matching completions and parameter hints below the cursor. Reads state from
- * the autocomplete model (repl_state_autocomplete()) without modifying it.
- * Renders nothing if autocomplete is not active (no matches). Called by
- * repl_core.c during display callback. */
-void ui_autocomplete_panel_render(void);
+#include "ui_snapshot.h"
+
+/* Render the autocomplete popup once per frame from the supplied snapshot.
+ * Performs no live REPL state reads. Renders nothing if autocomplete is not
+ * active (no matches). */
+void ui_autocomplete_panel_render(const UiRenderSnapshot *snap);
 
 #endif /* UI_AUTOCOMPLETE_PANEL_H */

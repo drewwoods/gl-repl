@@ -32,6 +32,8 @@
 #ifndef UI_MENU_BAR_H
 #define UI_MENU_BAR_H
 
+#include "ui_snapshot.h"
+
 /* Pinned button identifiers (right side of menu bar). Search and Replay
  * buttons that toggle their respective overlays. */
 enum {
@@ -43,17 +45,19 @@ enum {
 /* --- Rendering --- */
 
 /* Render the top menu bar: File/Scene/Config menus on left, Search/Replay
- * buttons on right, and any open dropdown. Called once per frame. */
-void ui_menu_bar_render(void);
+ * buttons on right, and any open dropdown. Reads only from the supplied
+ * UI snapshot. Called once per frame. */
+void ui_menu_bar_render(const UiRenderSnapshot *snap);
 
 /* Render the search overlay text input and matches (below menu bar, full width).
  * cp_x is code-panel x-coordinate; panel_w is width; panel_top is y-coordinate
- * of menu bar bottom. Called by ui_menu_bar_render() if search is active. */
-void ui_menu_bar_render_search_overlay(int cp_x, int panel_w, int panel_top);
+ * of menu bar bottom. Reads from the supplied snapshot. */
+void ui_menu_bar_render_search_overlay(const UiRenderSnapshot *snap,
+                                       int cp_x, int panel_w, int panel_top);
 
 /* Render the example dropdown (F12 cycle menu showing built-in examples + user
- * scenes). Called by ui_menu_bar_render() if example dropdown is open. */
-void ui_menu_bar_render_example_dropdown(void);
+ * scenes). Reads from the supplied snapshot. */
+void ui_menu_bar_render_example_dropdown(const UiRenderSnapshot *snap);
 
 /* --- Menu state --- */
 

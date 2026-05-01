@@ -34,11 +34,12 @@
 #ifndef UI_VARIABLE_PANEL_H
 #define UI_VARIABLE_PANEL_H
 
+#include "ui_snapshot.h"
+
 /* Render the variable panel with all declared variables and current values.
- * Rows are compacted (unused slots skipped). Active drag rows (determined by
- * repl_var_drag_active_var/log_mode queries) are visually highlighted. Called
- * once per frame if the variable panel is enabled. */
-void ui_variable_panel_render(void);
+ * Reads only from the supplied snapshot. Rows are compacted (unused slots
+ * skipped). Called once per frame if the variable panel is enabled. */
+void ui_variable_panel_render(const UiRenderSnapshot *snap);
 
 /* Query the variable panel's bounding rectangle (in window/screen coordinates).
  * Outputs panel position (px, py) and size (pw, ph). Used by ui_panels.c for
