@@ -429,11 +429,11 @@ static void flatten_range(FlattenContext *ctx,
         }
 
         if (vars && nv > 0) {
-            GLCmd tmp;
             ReplParseContext parse_ctx = { i, vars, nv, 0 };
             const char *text = spike_text_for(src_cmd, i);
-            memset(&tmp, 0, sizeof(tmp));
-            if (repl_parser_parse_command_ctx(text, &tmp, &parse_ctx)) {
+            ReplParsedLine tmp_pl;
+            if (repl_parser_parse_command_ctx(text, &tmp_pl, &parse_ctx)) {
+                GLCmd tmp = tmp_pl.cmd;
                 tmp.has_vars = src_cmd->has_vars;
                 strncpy(tmp.source, text, sizeof(tmp.source) - 1);
                 tmp.source[sizeof(tmp.source) - 1] = '\0';
@@ -444,11 +444,11 @@ static void flatten_range(FlattenContext *ctx,
             }
         } else if (src_cmd->has_vars) {
             /* Outside loop but has predefined var references: re-evaluate */
-            GLCmd tmp;
             ReplParseContext parse_ctx = { i, NULL, 0, 0 };
             const char *text = spike_text_for(src_cmd, i);
-            memset(&tmp, 0, sizeof(tmp));
-            if (repl_parser_parse_command_ctx(text, &tmp, &parse_ctx)) {
+            ReplParsedLine tmp_pl;
+            if (repl_parser_parse_command_ctx(text, &tmp_pl, &parse_ctx)) {
+                GLCmd tmp = tmp_pl.cmd;
                 tmp.has_vars = 1;
                 strncpy(tmp.source, text, sizeof(tmp.source) - 1);
                 tmp.source[sizeof(tmp.source) - 1] = '\0';
@@ -460,11 +460,11 @@ static void flatten_range(FlattenContext *ctx,
         } else {
             /* Spike: re-parse the no-vars path too so we measure the
              * worst-case cost of an editor-owned text model. */
-            GLCmd tmp;
             ReplParseContext parse_ctx = { i, NULL, 0, 0 };
             const char *text = spike_text_for(src_cmd, i);
-            memset(&tmp, 0, sizeof(tmp));
-            if (repl_parser_parse_command_ctx(text, &tmp, &parse_ctx)) {
+            ReplParsedLine tmp_pl;
+            if (repl_parser_parse_command_ctx(text, &tmp_pl, &parse_ctx)) {
+                GLCmd tmp = tmp_pl.cmd;
                 tmp.has_vars = 0;
                 tmp.is_auto = src_cmd->is_auto;
                 strncpy(tmp.source, text, sizeof(tmp.source) - 1);

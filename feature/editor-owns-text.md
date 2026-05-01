@@ -19,7 +19,7 @@ The plan follows the established snapshot pattern from `ARCHITECTURE.md`:
 **Critical improvements from code review**:
 1. **Parser stays pure** — no side effects to editor buffer. Only commit path writes. Keeps flatten/replay re-parses safe.
 2. **Step 2.5 introduces text-aware store APIs** — explicit `insert_many()`, `replace_one()`, `load()` handle text movement in parallel with command arrays. Makes Step 3 mechanical and reversible.
-3. **Canonical buffer shape** — normalized committed text only (with indent/semicolon). All reads now go through editor buffer, not cmd->source.
+3. **Editor-line text and visible source text are now split intentionally** — store APIs move editor-buffer line text in parallel with commands, while replay/export helpers can still prefer canonical `cmd->source` where indentation/terminators remain user-visible. This keeps Step 2.5 regression-free while Step 3 removes the field cleanly.
 4. **Color picker uses explicit reparse** — `replace_one()` updates document_cmds before UI reads them, avoiding stale arg visibility.
 5. **Virtual lines are layout-affecting** — not just paint. Scroll, hit-test, search, visible-row-count all include them in the layout model.
 6. **Flat-command text helper** — flat commands need text from source commands. Add `repl_flat_cmd_text(flat_idx)` backed by src_cmd_idx→editor_buffer.
@@ -32,24 +32,32 @@ The plan follows the established snapshot pattern from `ARCHITECTURE.md`:
 
 ## Editor Buffer Invariant
 
-**Buffer shape**: Contains **normalized committed text only** (with indent and semicolon). This is what the parser writes, what display/export consume, and what undo snapshots preserve. This is distinct from raw user input (which lives in `ReplEditorInputState`).
+**Buffer shape**: Contains committed editor-line text: no leading indentation, no trailing semicolon/whitespace, plus a few explicit raw forms such as `:label` when that is the editable document shape. This is the text moved by store/undo/clipboard/scene APIs and used by editor/reparse flows. Consumers that need visible canonical source text (notably replay/export/code-panel display helpers) may still prefer `cmd->source` until Step 3 replaces those paths.
 
-## Current Spike State (on main)
+## Current Progress (after Step 3a)
 
 | Item | Status |
 |---|---|
 | `ReplEditorBuffer` in `ReplRuntimeState` | ✅ |
 | `repl_state_editor_buffer_line(idx)` / `_set_line()` API | ✅ |
 | `spike_text_for()` in repl_flatten.c (buffer+fallback) | ✅ |
-| Commit path mirrors writes to editor buffer | ✅ |
-| 6+ fallback reads in ui_panels.c, repl_replay_annotations.c, repl_export.c | ✅ (partial, Step 2 completes) |
-| cmd->source still in GLCmd | Still there (removed in Step 3) |
+| Targeted Step 2 document-text read migration | ✅ |
+| Text-aware store APIs with compatibility wrappers | ✅ |
+| Clipboard / scene / undo text sidecars | ✅ |
+| `ReplParsedLine` struct + `repl_parser_parse_command_ctx` returns text | ✅ |
+| All `_ctx` call sites migrated to `ReplParsedLine *out` | ✅ |
+| Full regression validation (`make test`, `make test-stubs`) | ✅ (27/27 binaries, 3094/3094 tests) |
+| `cmd->source` still present for canonical visible-text helpers | Yes for now (removed in Step 3b) |
+
+Progress through Step 3a is landed and regression-clean. Parser now returns both `cmd` and `text` via `ReplParsedLine` output param. All `repl_parser_parse_command_ctx` call sites updated. `cmd->source` still present for remaining consumers; removed in Step 3b.
 
 ---
 
-## Step 2: Migrate All cmd->source Reads to Editor Buffer API (~4 days)
+## Step 2: Migrate All cmd->source Reads to Editor Buffer API (~4 days, completed 2026-05-01)
 
-**Goal**: Make editor buffer the sole text source for display, export, annotations, search. cmd->source is written by commit path only; read by nothing else.
+**Status**: Completed. The targeted Step 2 read sites now go through explicit helper paths: editor/reparse consumers use editor-buffer text, while replay/export visible-text helpers opt into canonical `cmd->source` only where editor-line text is not display-equivalent.
+
+**Goal**: Make editor buffer the sole text source for editor/reparse/search-style document flows and remove implicit `cmd->source` reads from the targeted Step 2 surfaces.
 
 **Key constraint**: Parser remains pure (no side effects to editor buffer). Only `repl_command_store.c` commit path writes buffer. This keeps flatten/replay re-parses from mutating committed text.
 
@@ -103,6 +111,8 @@ Both read `document_cmds[idx].source` — switch to `repl_state_editor_buffer_li
 
 ### Verification for Step 2
 
+Completed validation on 2026-05-01: `make test_repl_core_examples`, `make test_repl_editor`, `make test_repl_core_commit`, `make test_repl_core_extra`, `make test`, and `make test-stubs` all passed.
+
 ```bash
 make test && make test-stubs
 
@@ -133,7 +143,9 @@ grep -n "source_cmds\[.*\]\.source" tests/*.c | wc -l
 
 ---
 
-## Step 2.5: Text-Aware Command Store APIs (~3 days)
+## Step 2.5: Text-Aware Command Store APIs (~3 days, completed 2026-05-01)
+
+**Status**: Completed. `repl_command_store.*` now accepts optional explicit line arrays through `_with_line(s)` entrypoints plus compatibility macros, and the live callers, clipboard, user scenes, and undo snapshots all carry text sidecars in parallel with command arrays. The final Step 2.5 regression was a function-definition header line being derived before formatting; once fixed, the flatten/provenance suites and the full test matrix went green.
 
 **Goal**: Before removing `cmd->source[]`, introduce explicit text-movement APIs so the store can shift lines in parallel with command arrays. This makes Step 3 mostly mechanical.
 
@@ -145,7 +157,7 @@ Keep existing function names and semantics (store pointer, insert flags, int edi
 
 ```c
 /* Existing signatures preserved; add optional text parameter */
-int repl_command_store_insert_many(ReplCommandStore *store, int at_idx, 
+int repl_command_store_insert_many(ReplCommandStore *store, int at_idx,
                                     const GLCmd *cmds, int count, int insert_flags,
                                     const char *const *lines);  /* NEW: text parallel array */
 
@@ -164,7 +176,7 @@ int repl_command_store_load(ReplCommandStore *store, const GLCmd *cmds, int coun
 
 ### Implement in repl_command_store.c
 
-- **insert_many(store, at_idx, cmds, count, flags, lines)**: 
+- **insert_many(store, at_idx, cmds, count, flags, lines)**:
   - Call existing array shift logic (handles edit_line, undo, cursor)
   - If lines provided, also shift `editor_buffer.lines[]` in parallel
   - Call `repl_state_editor_buffer_set_count()` to update line count
@@ -203,6 +215,8 @@ int repl_command_store_load(ReplCommandStore *store, const GLCmd *cmds, int coun
 
 ### Verification for Step 2.5
 
+Completed validation on 2026-05-01: `make test_repl_command_store`, `make test_repl_core_examples`, `make test_repl_editor`, `make test_repl_core_commit`, `make test_repl_core_extra`, `make test`, and `make test-stubs` all passed. Final full-suite result: 27/27 test binaries passed, 3127/3127 tests passed.
+
 ```bash
 make test && make test-stubs
 # Parallel text/command arrays remain synchronized:
@@ -210,7 +224,7 @@ make test && make test-stubs
 # - Undo/redo snapshots preserve text alongside commands
 ```
 
-**After Step 2.5**: Parser still writes `cmd->source` (no change), but command store is text-aware. We can now remove `source[]` from GLCmd safely because all text movement is explicit.
+**After Step 2.5**: Storage and mutation are text-aware end-to-end. Step 3 no longer needs to solve command movement or sidecar persistence; it can focus on parser outputs, flat-command text helpers, and finally removing `GLCmd.source`.
 
 ---
 
@@ -305,25 +319,25 @@ After 3a.7: scene/clipboard operations work with both cmds and lines. Source[] r
 
 2. Compiler surfaces all remaining cmd->source accesses as errors — fix each:
 
-   **repl_parser.c** (~26 snprintf sites): 
+   **repl_parser.c** (~26 snprintf sites):
    - Snprintf to local `char normalized[MAX_LINE_LEN]` for temporary parsing use
    - Return normalized text in ReplParsedLine (from 3a)
    - No more writes to editor buffer (parser stays pure)
-   
+
    **repl_commit.c** (commit flow):
    - Already uses parser result ReplParsedLine (from 3a)
    - No changes needed; text already flows via store APIs
-   
+
    **repl_command_store.c** (color picker, existing inserts):
    - All insert/delete/load already use text-aware APIs (from Step 2.5)
    - Color picker write (line ~155) → already passes text param
-   
+
    **repl_executor.c** / **repl_replay_annotations.c** (flat command text):
    - Lines reading flat_cmd->source → use `repl_flat_cmd_text(flat_cmd)` (from 3a.5)
-   
+
    **repl_core.c:230–236** (reads indent from source):
    - Pass indent as separate `int` return value from parse helper instead
-   
+
    **repl_debug.c** (debug prints):
    - Update to use `repl_state_editor_buffer_line(i)` or `repl_flat_cmd_text()` as appropriate
 
@@ -438,7 +452,7 @@ Replace the calls to `repl_command_store_set_color()` and `repl_command_store_se
 - `CMD_TESS_COLOR`
 - `CMD_CLEAR_COLOR`
 
-**Implementation**: 
+**Implementation**:
 1. Get original source text: `const char *orig = repl_state_editor_buffer_line(cmd_idx);`
 2. Parse and extract indentation + original command kind
 3. Format by command type (preserve alpha, tessellation context, clear-color clamping):
@@ -517,10 +531,10 @@ static void push_highlights(void) {
     int col  = repl_find_feeding_color_cmd(edit);
     if (norm >= 0) repl_state_editor_highlights_append(norm, -1, -1, HIGHLIGHT_FEEDING_NORMAL);
     if (col  >= 0) repl_state_editor_highlights_append(col,  -1, -1, HIGHLIGHT_FEEDING_COLOR);
-    
+
     if (repl_state_replay_playing())
         repl_state_editor_highlights_append(replay_pc_source_line(), -1, -1, HIGHLIGHT_REPLAY_PC);
-    
+
     push_search_highlights();  /* iterate search matches in visible range */
 }
 ```

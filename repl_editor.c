@@ -335,15 +335,22 @@ static int parse_for_overwrite_enter(GLCmd *cmd, int insert_idx) {
     int parsed;
     if (num_vis_vars > 0) {
         ReplParseContext parse_ctx = { insert_idx, vis_vars, num_vis_vars, 0 };
-        parsed = repl_parser_parse_command_ctx(repl_state_editor_input().input, cmd, &parse_ctx);
-        if (parsed)
+        ReplParsedLine pl;
+        parsed = repl_parser_parse_command_ctx(repl_state_editor_input().input, &pl, &parse_ctx);
+        if (parsed) {
+            *cmd = pl.cmd;
             rewrite_cmd_source_with_indent(cmd, insert_idx, 1);
+        }
     } else {
         ReplParseContext parse_ctx = { insert_idx, NULL, 0, 0 };
-        parsed = repl_parser_parse_command_ctx(repl_state_editor_input().input, cmd, &parse_ctx);
-        if (parsed && repl_eval_input_has_predef_vars(repl_state_editor_input().input)) {
-            cmd->has_vars = 1;
-            rewrite_cmd_source_with_indent(cmd, insert_idx, 0);
+        ReplParsedLine pl;
+        parsed = repl_parser_parse_command_ctx(repl_state_editor_input().input, &pl, &parse_ctx);
+        if (parsed) {
+            *cmd = pl.cmd;
+            if (repl_eval_input_has_predef_vars(repl_state_editor_input().input)) {
+                cmd->has_vars = 1;
+                rewrite_cmd_source_with_indent(cmd, insert_idx, 0);
+            }
         }
     }
     return parsed;
@@ -484,12 +491,18 @@ static CommitResult commit_current_input(int enter_mode) {
                 ReplParseContext parse_ctx = { insert_idx, vis_vars, num_vis_vars, 0 };
                 if (try_commit_var_statements())
                     return commit_progressed_since(before) ? COMMIT_OK : COMMIT_REJECTED;
-                parsed = repl_parser_parse_command_ctx(repl_state_editor_input().input, &cmd, &parse_ctx);
-                if (parsed)
+                ReplParsedLine pl;
+                parsed = repl_parser_parse_command_ctx(repl_state_editor_input().input, &pl, &parse_ctx);
+                if (parsed) {
+                    cmd = pl.cmd;
                     rewrite_cmd_source_with_indent(&cmd, insert_idx, 1);
+                }
             } else {
                 ReplParseContext parse_ctx = { insert_idx, NULL, 0, 0 };
-                parsed = repl_parser_parse_command_ctx(repl_state_editor_input().input, &cmd, &parse_ctx);
+                ReplParsedLine pl;
+                parsed = repl_parser_parse_command_ctx(repl_state_editor_input().input, &pl, &parse_ctx);
+                if (parsed)
+                    cmd = pl.cmd;
             }
 
             if (parsed) {
@@ -871,9 +884,14 @@ static int handle_comment_toggle_key_route(unsigned char key) {
                          * fallback produced an actionable error of its own. */
                         repl_state_status_mut()->text[0] = '\0';
 
-                        if (repl_parser_parse_command_ctx(s, &new_cmd, &parse_ctx)) {
-                            built = 1;
-                        } else {
+                        {
+                            ReplParsedLine pl;
+                            if (repl_parser_parse_command_ctx(s, &pl, &parse_ctx)) {
+                                new_cmd = pl.cmd;
+                                built = 1;
+                            }
+                        }
+                        if (!built) {
                             /* Parser may have set its own error (e.g. "Unknown
                              * cmd.") - drop it; the friendly "Cannot uncomment"
                              * message below is clearer for this key path. */

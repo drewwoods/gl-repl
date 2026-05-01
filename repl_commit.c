@@ -773,11 +773,14 @@ int try_commit_for_loop(void) {
                 for (int var_idx = 0; var_idx < visible_nv && dvn < MAX_EXPR_VARS; var_idx++)
                     dv[dvn++] = visible_vars[var_idx];
 
-                memset(&body_cmd, 0, sizeof(body_cmd));
                 ReplParseContext parse_ctx = { pos, dv, dvn, 1 };
-                if (!repl_parser_parse_command_ctx(body, &body_cmd, &parse_ctx)) {
-                    set_status("Invalid for-loop body command");
-                    return 1;
+                {
+                    ReplParsedLine body_pl;
+                    if (!repl_parser_parse_command_ctx(body, &body_pl, &parse_ctx)) {
+                        set_status("Invalid for-loop body command");
+                        return 1;
+                    }
+                    body_cmd = body_pl.cmd;
                 }
 
                 {
