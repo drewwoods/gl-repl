@@ -2,85 +2,92 @@
 
 ## Context
 
-Step 1 (spike) is **complete on `editor-text-spike` branch** and validated: ~4.2 ms worst-case
-flatten on the largest example (3,580 flat commands), invisible at edit time since flatten only
-runs when dirty. Results in `feature/editor-owns-text-spike-results.md`.
+Step 1 (spike, commit a8a6569) validated the editor-buffer approach: flatten on 3,580 largest example ≤ 4.2 ms (invisible at edit time). The spike added `ReplEditorBuffer` to `ReplRuntimeState` and mirrors every parser write of `cmd->source` text into `editor_buffer.lines[]`.
 
-The spike added `ReplEditorBuffer { char lines[MAX_COMMANDS][MAX_LINE_LEN]; int line_count; }` to
-`ReplRuntimeState` and made `repl_command_store.c` mirror every write to `cmd->source` into
-`editor_buffer.lines[]`. The goal of Steps 2–6 is to **make `GLCmd` a pure parse-result struct**
-(type, args[], flags, no text) so that all committed line text lives only in the editor buffer.
+**Goal of Steps 2–6**: Make `GLCmd` a pure parse-result struct (type, args[], flags only) — delete `source[256]` field and move all text ownership to the editor buffer. This completes the spike and unblocks future phases (UI-driven transformers, virtual annotations, replay snapshots).
 
-## Current state of the spike (on `editor-text-spike`)
+---
+
+## Architecture Alignment & Key Improvements
+
+The plan follows the established snapshot pattern from `ARCHITECTURE.md`:
+- Controller pushes immutable data structures (`EditorTransformer[]`, `EditorHighlight[]`, `EditorVirtualLine[]`) to UI each frame
+- UI renderers read snapshots, never call `repl_state_*()` directly
+- Mutations stay on the owner side (editor → buffer, replay → fade plan, etc.)
+- Pattern matches `SceneRenderConfig` and `UiRenderSnapshot` precedent
+
+**Critical improvements from code review**:
+1. **Parser stays pure** — no side effects to editor buffer. Only commit path writes. Keeps flatten/replay re-parses safe.
+2. **Step 2.5 introduces text-aware store APIs** — explicit `insert_many()`, `replace_one()`, `load()` handle text movement in parallel with command arrays. Makes Step 3 mechanical and reversible.
+3. **Canonical buffer shape** — normalized committed text only (with indent/semicolon). All reads now go through editor buffer, not cmd->source.
+4. **Color picker uses explicit reparse** — `replace_one()` updates document_cmds before UI reads them, avoiding stale arg visibility.
+5. **Virtual lines are layout-affecting** — not just paint. Scroll, hit-test, search, visible-row-count all include them in the layout model.
+6. **Flat-command text helper** — flat commands need text from source commands. Add `repl_flat_cmd_text(flat_idx)` backed by src_cmd_idx→editor_buffer.
+7. **Parser returns normalized text, preserves error semantics** — keep int return for success/failure and status messages; add `ReplParsedLine *out` output parameter for parsed cmd + text.
+8. **Store API semantics preserved** — extend existing signatures with text params instead of replacing them; keep store/flags/edit_line behavior for cursor/undo/load. Keep int edit_line return (not *out_).
+9. **Scene and clipboard text sidecars** — repl_scenes.c and ReplClipboardState must store lines[][] in parallel with GLCmd cmds[]. Text moves with commands through import/promotion/workspace save/copy/paste.
+10. **Color picker predicate tight** — use ui_color_picker_can_edit_cmd() predicate (COLOR3F, COLOR4F, TESS_COLOR, CLEAR_COLOR, excluding has_vars).
+
+---
+
+## Editor Buffer Invariant
+
+**Buffer shape**: Contains **normalized committed text only** (with indent and semicolon). This is what the parser writes, what display/export consume, and what undo snapshots preserve. This is distinct from raw user input (which lives in `ReplEditorInputState`).
+
+## Current Spike State (on main)
 
 | Item | Status |
 |---|---|
 | `ReplEditorBuffer` in `ReplRuntimeState` | ✅ |
 | `repl_state_editor_buffer_line(idx)` / `_set_line()` API | ✅ |
-| `repl_command_store.c` mirrors all store mutations → buffer | ✅ |
-| `repl_flatten.c` `spike_text_for()` redirects most flatten reads | ✅ (partial — `flatten_get_for_var_name` line 51 missed) |
-| `repl_search.c` reads buffer with fallback | ✅ |
-| `repl_replay_annotations.c` reads buffer with fallback | ✅ (partial fallbacks remain at lines 645, 698, 731, 735) |
-| `bench/bench_repl.c` `bench_spike_flatten_largest` sub-benchmark | ✅ |
-
-## What `cmd->source` looks like today (to frame migration scope)
-
-`GLCmd.source[256]` (`sample.h:264`) is the normalized form written by the parser (~25 `snprintf`
-calls in `repl_parser.c`) and read by:
-
-- `repl_flatten.c:51` — `flatten_get_for_var_name` (direct, not via spike shim)
-- `ui_panels.c:567` — `hl_text = document_cmds[i].source` (syntax-highlight display)
-- `repl_replay_annotations.c:645,698,731,735` — fallback reads for annotations
-- `repl_export.c:1386,1459,1466,2217,2675,2717` — all save_output emit paths
-- `repl_editor.c:200,368` — two read sites
-- `repl_debug.c:28,35,83` — debug prints (low priority)
-- `tests/test_repl_editor.c` — ~40 `ASSERT_STR` assertion sites reading `.source`
-- `tests/test_scene_guides.c` — ~10 `snprintf(source_cmds[N].source, ...)` fixture writes
-
-The spike mirrors mean `editor_buffer.lines[idx]` already holds the same normalized text as
-`cmd->source` for all committed commands (same bytes, same indentation — the spike copies the
-full normalized form, not the stripped raw form).
+| `spike_text_for()` in repl_flatten.c (buffer+fallback) | ✅ |
+| Commit path mirrors writes to editor buffer | ✅ |
+| 6+ fallback reads in ui_panels.c, repl_replay_annotations.c, repl_export.c | ✅ (partial, Step 2 completes) |
+| cmd->source still in GLCmd | Still there (removed in Step 3) |
 
 ---
 
-## Step 2: Migrate all `cmd->source` reads to editor buffer API (~3 days)
+## Step 2: Migrate All cmd->source Reads to Editor Buffer API (~4 days)
 
-**Goal**: After this step, `cmd->source` is still written by the parser but read by nothing outside
-the parser/commit pipeline. The editor buffer is the sole text source for display, export,
-annotations, and search.
+**Goal**: Make editor buffer the sole text source for display, export, annotations, search. cmd->source is written by commit path only; read by nothing else.
 
-**Prerequisite**: Merge `editor-text-spike` branch to main first.
+**Key constraint**: Parser remains pure (no side effects to editor buffer). Only `repl_command_store.c` commit path writes buffer. This keeps flatten/replay re-parses from mutating committed text.
 
-### 2a — Fix `flatten_get_for_var_name` (`repl_flatten.c:51`)
+**Prerequisite**: Spike already merged; all files buildable.
 
-Currently reads `const char *p = cmd->source` directly, bypassing `spike_text_for`. The function
-is called from within `flatten_range` where the command index (`src_cmd_idx`) is in scope — add
-an `int cmd_idx` parameter and change the read to:
+### 2a — Fix repl_flatten.c reads (lines 51, 205, 280, 284, 340, 401)
 
+Multiple sites read `cmd->source` directly or via embedded calls:
+
+- **Line 51** (`flatten_get_for_var_name`): Add `int cmd_idx` parameter, replace `const char *p = cmd->source` with `const char *p = spike_text_for(src_cmd, cmd_idx)`. Update 1 call site (line 198).
+
+- **Lines 205, 280, 284, 340, 401** (various re-parse checks): Replace `src_cmd->source` with `spike_text_for(src_cmd, src_cmd_idx)`. These are fallback-safe (spike_text_for already exists).
+
+### 2b — Fix repl_export.c reads (lines 715, 1296, 1313, 1386, 1459, 1466, 2217, 2675, 2717)
+
+Direct and helper-level reads:
+
+- **Lines 1386, 1459, 1466, 2217, 2675, 2717** (`repl_state_document_cmds_mut()[cmd_idx].source`): Switch to `repl_state_editor_buffer_line(cmd_idx)`.
+
+- **Lines 715, 1296, 1313** (helper function args, e.g. `export_command_text()`): Trace callers to get cmd_idx context, add parameter if needed, switch reads.
+
+- **Line 1250–1252** (`format_cmd_source_as_c`): arg to `repl_eval_expr_to_c(cmd->source, ...)` — update to pass buffer text instead.
+
+- **Lines 1587–1618** (@declare reconstruction): keep as-is; builds temporary normalized text for new insertion, not reading the store.
+
+### 2c — Fix ui_panels.c:567
+
+Already has fallback (from spike); stabilize it:
 ```c
-const char *p = spike_text_for(cmd, cmd_idx);
-```
-
-Update the two call sites in `flatten_range` to pass the index.
-
-### 2b — Fix `ui_panels.c:567`
-
-```c
-// before
-hl_text = document_cmds[i].source;
-// after — fallback keeps correctness during transition
-hl_text = repl_state_editor_buffer_line(i);
+const char *hl_text = repl_state_editor_buffer_line(i);
 if (!hl_text || !hl_text[0]) hl_text = document_cmds[i].source;
 ```
 
-(The Phase B `UiRenderSnapshot` supplies `document_cmds`; `repl_state_editor_buffer_line` reads
-global state — acceptable since the buffer is stable during render.)
+No behavior change.
 
-### 2c — Fix `repl_replay_annotations.c` remaining fallbacks
+### 2d — Fix repl_replay_annotations.c fallbacks (lines 645, 698, 731, 735)
 
-Lines 645, 698, 731, 735 still fall back to `document_cmds[cmd_idx].source`. Make editor buffer
-primary:
-
+Replace fallback reads:
 ```c
 // before
 base = document_cmds[cmd_idx].source;
@@ -88,18 +95,9 @@ base = document_cmds[cmd_idx].source;
 base = repl_state_editor_buffer_line(cmd_idx);
 ```
 
-Remove the fallback once confident (or keep as assert for a release or two).
+Keep fallback or add assert for a release or two.
 
-### 2d — Fix `repl_export.c` reads (6 sites)
-
-Lines 1386, 1459, 1466, 2217, 2675, 2717 all read `document_cmds[cmd_idx].source`. Switch to
-`repl_state_editor_buffer_line(cmd_idx)`. The C-export path at 1250–1252
-(`format_cmd_source_as_c`) does `repl_eval_expr_to_c(cmd->source, ...)` — switch that arg too.
-
-The `@declare` reconstruction block (lines 1587–1618) builds a local `cmd.source` via `snprintf`
-for a new command being inserted — keep as-is; it's building a temporary, not reading the store.
-
-### 2e — Fix `repl_editor.c:200,368`
+### 2e — Fix repl_editor.c (lines 200, 368)
 
 Both read `document_cmds[idx].source` — switch to `repl_state_editor_buffer_line(idx)`.
 
@@ -107,49 +105,235 @@ Both read `document_cmds[idx].source` — switch to `repl_state_editor_buffer_li
 
 ```bash
 make test && make test-stubs
-# Confirm no non-parser reads remain:
-grep -n "\.source" repl_flatten.c repl_replay_annotations.c repl_export.c ui_panels.c repl_editor.c \
-  | grep -v "source_cmds\|source_count\|source_line\|source_idx"
+
+# Audit .source reads by category (commit-path writes in repl_parser.c/repl_commit.c are OK):
+
+# 1. Document text reads (should all use repl_state_editor_buffer_line):
+echo "=== Document reads (should use editor buffer) ==="
+grep -n "document_cmds\[.*\]\.source\|document_cmds->source" \
+  repl_flatten.c repl_export.c repl_editor.c repl_replay_annotations.c ui_panels.c \
+  | grep -v "repl_state_editor_buffer"
+# Should return 0 hits
+
+# 2. Flat-program reads (should use spike_text_for; later repl_flat_cmd_text):
+echo "=== Flat command reads (should use spike_text_for) ==="
+grep -n "flat_cmd.*\.source\|flat_cmds\[.*\]\.source" \
+  repl_executor.c repl_flatten.c repl_replay_annotations.c repl_debug.c \
+  | grep -v "spike_text_for"
+# Should return 0 hits
+
+# 3. Parser/commit writes (expected; these feed the buffer):
+echo "=== Parser/commit writes (expected in repl_parser.c, repl_commit.c) ==="
+grep -n "cmd->source\|cmd\.source" repl_parser.c repl_commit.c | head -20
+
+# 4. Test fixtures (should migrate to pass text arrays to store APIs):
+echo "=== Test fixtures (update to pass lines to store load) ==="
+grep -n "source_cmds\[.*\]\.source" tests/*.c | wc -l
 ```
 
 ---
 
-## Step 3: Drop `cmd.source[]` from `GLCmd` (~2 weeks)
+## Step 2.5: Text-Aware Command Store APIs (~3 days)
 
-This is the "big diff". Best done in sub-steps to keep each commit buildable.
+**Goal**: Before removing `cmd->source[]`, introduce explicit text-movement APIs so the store can shift lines in parallel with command arrays. This makes Step 3 mostly mechanical.
 
-### 3a — Make parser write to editor buffer alongside `cmd->source` (~1 day)
+**Rationale**: Current insert/delete/load rely on re-reading `cmd->source` after array movement (e.g., repl_command_store.c:187). Once source is removed, we need to move text arrays in lockstep with command arrays.
 
-In `repl_parser.c`, every `snprintf(cmd->source, sizeof(cmd->source), ...)` write (~25 sites)
-should be immediately followed by:
+### Extend existing store APIs with text parameters (repl_command_store.h)
+
+Keep existing function names and semantics (store pointer, insert flags, int edit_line). Add optional text parameters to move lines in parallel with commands:
 
 ```c
-if (ctx && ctx->source_line_idx >= 0)
-    repl_state_editor_buffer_set_line(ctx->source_line_idx, cmd->source);
+/* Existing signatures preserved; add optional text parameter */
+int repl_command_store_insert_many(ReplCommandStore *store, int at_idx, 
+                                    const GLCmd *cmds, int count, int insert_flags,
+                                    const char *const *lines);  /* NEW: text parallel array */
+
+int repl_command_store_insert_one(ReplCommandStore *store, int at_idx,
+                                  const GLCmd *cmd, int insert_flags,
+                                  const char *line);  /* NEW: single text line */
+
+int repl_command_store_replace_one(ReplCommandStore *store, int idx,
+                                   const GLCmd *cmd,
+                                   const char *line);  /* NEW: single text line */
+
+int repl_command_store_load(ReplCommandStore *store, const GLCmd *cmds, int count,
+                            const char *const *lines,  /* NEW: text parallel array */
+                            int edit_line);  /* existing edit_line semantics (int, not *out_) */
 ```
 
-The `ReplParseContext.source_line_idx` field already exists for this purpose. Add the same pattern
-to the var-declare snprintfs in `repl_commit.c:308–317`.
+### Implement in repl_command_store.c
 
-After 3a: both `cmd->source` and `editor_buffer.lines[]` are always in sync — no behavior change.
+- **insert_many(store, at_idx, cmds, count, flags, lines)**: 
+  - Call existing array shift logic (handles edit_line, undo, cursor)
+  - If lines provided, also shift `editor_buffer.lines[]` in parallel
+  - Call `repl_state_editor_buffer_set_count()` to update line count
 
-### 3b — Remove `source[]` from `GLCmd` (~3 days)
+- **insert_one(store, at_idx, cmd, flags, line)**:
+  - Call existing single-insert logic
+  - If line provided, shift `editor_buffer.lines[]` at at_idx
+
+- **replace_one(store, idx, cmd, line)**:
+  - Replace `cmds[idx]` with new cmd
+  - If line provided, call `repl_state_editor_buffer_set_line(idx, line)`
+
+- **load(store, cmds, lines, count, edit_line)**:
+  - Call existing load logic (undo snapshot ownership, cursor adjustment)
+  - If lines provided, also load `editor_buffer.lines[]` in parallel
+  - Return int edit_line (pass-through); caller handles cursor placement
+
+### Migrate call sites to pass text alongside cmds
+
+**repl_commit.c** (commit flow):
+- After parser returns both cmd and text, pass both to `insert_one()` or `replace_one()`
+
+**repl_undo.c** (snapshot restore):
+- `repl_undo_snapshot_restore()` calls `load()` with both cmds and lines
+
+**repl_scenes.c** (scene import/promotion):
+- Scene now stores lines[][] in parallel with cmds[]
+- Promotion/import calls `load()` with both cmds and lines
+
+**clipboard** (ReplClipboardState):
+- Clipboard now stores lines[][] in parallel with cmds[]
+- Copy/paste/cut calls `load()` or `insert_many()` with both cmds and lines
+
+**Other store callers** (examples/restart):
+- Pass lines parameter; store handles cursor/undo as before
+
+### Verification for Step 2.5
+
+```bash
+make test && make test-stubs
+# Parallel text/command arrays remain synchronized:
+# - Insert/delete/load leave editor_buffer consistent with cmds[]
+# - Undo/redo snapshots preserve text alongside commands
+```
+
+**After Step 2.5**: Parser still writes `cmd->source` (no change), but command store is text-aware. We can now remove `source[]` from GLCmd safely because all text movement is explicit.
+
+---
+
+## Step 3: Delete cmd->source[] from GLCmd (~2 weeks)
+
+This is the big diff. Done in sub-steps to keep each commit buildable. Shrinks GLCmd from ~340 → ~84 bytes per instance.
+
+### 3a — Parser returns normalized text + cmd via output param (~1 day)
+
+**Parser remains pure** — no side effects to editor buffer. But it must return the normalized text it builds, because commit code cannot reconstruct it reliably once source[] is gone.
+
+Add `ReplParsedLine` result struct and update parser signature to preserve error semantics:
+```c
+typedef struct {
+    GLCmd cmd;
+    char text[MAX_LINE_LEN];  /* normalized source: parser output */
+} ReplParsedLine;
+
+int repl_parser_parse_command_ctx(const char *input, ReplParsedLine *out,
+                                   const ReplParseContext *ctx, ...);
+/* Returns: 1 on success, 0 on parse error (preserving current convention).
+   On success (return 1), *out contains cmd + normalized text. */
+```
+
+Update all parser call sites:
+- Check return value (preserves status message setting in commit flow)
+- Use output param `*out` to get both cmd and text only when return is 1 (success)
+
+**Commit path** (repl_commit.c, repl_command_store.c):
+
+- In `repl_commit.c` (lines ~308–317), after parsing with `if (repl_parser_parse_command_ctx(..., &parsed_line) == 1)`, pass both cmd and text to `repl_command_store_insert_one()` or `replace_one()`.
+
+- In `repl_command_store.c`, extend APIs write to `editor_buffer.lines[]` in parallel with array movement.
+
+After 3a: cmd->source is still in GLCmd (unchanged), but text is explicitly moved with commands. No behavior change; foundation for 3b.
+
+### 3a.5 — Add flat-command text helper (~1 day)
+
+Flat commands don't have source[] (they're generated); they reference source commands via `src_cmd_idx`. Runtime paths (repl_executor.c, replay annotations) read flat command text for goto labels, if conditions, assignment RHS.
+
+Add helper to get source text for a flat command:
+```c
+const char *repl_flat_cmd_text(const GLCmd *flat_cmd) {
+    if (!flat_cmd || flat_cmd->src_cmd_idx < 0)
+        return "";
+    return repl_state_editor_buffer_line(flat_cmd->src_cmd_idx);
+}
+```
+
+Update call sites in repl_executor.c and repl_replay_annotations.c:
+- Lines that read `flat_cmd->source` (if any after Step 3a) → `repl_flat_cmd_text(flat_cmd)`
+- This indirection survives GLCmd.source removal
+
+### 3a.7 — Add text sidecars to scenes and clipboard (~2 days)
+
+**Scene and clipboard also store commands** — they hold GLCmd arrays for import, example promotion, workspace save/restore, copy, cut, paste. Once source[] is removed, these sidecars must carry parallel `lines[][]` arrays.
+
+**repl_scenes.c** (user scenes):
+```c
+typedef struct {
+    GLCmd cmds[MAX_COMMANDS];
+    char lines[MAX_COMMANDS][MAX_LINE_LEN];  /* NEW: text sidecar */
+    int count;
+} ReplScene;
+```
+
+- On scene save (line ~280): capture both cmds and lines from document
+- On scene load (line ~320): pass both to `repl_command_store_load(store, cmds, count, (const char *const *)lines, edit_line)`
+- Update serialize/deserialize to include lines
+
+**ReplClipboardState** (clipboard):
+```c
+typedef struct {
+    GLCmd cmds[MAX_COMMANDS];
+    char lines[MAX_COMMANDS][MAX_LINE_LEN];  /* NEW: text sidecar */
+    int count;
+} ReplClipboardState;
+```
+
+- On copy/cut (line ~450): capture both cmds and lines
+- On paste (line ~480): pass both to `repl_command_store_insert_many(store, at_idx, cmds, count, flags, (const char *const *)lines)`
+- Update serialize/deserialize
+
+**Example promotion** (promote to scene):
+- Capture lines alongside cmds before saving
+
+After 3a.7: scene/clipboard operations work with both cmds and lines. Source[] removal is now fully safe across all persistent command stores.
+
+### 3b — Remove source[] field from GLCmd (~3 days)
 
 1. Delete `char source[MAX_LINE_LEN];` from `sample.h:264`.
-2. The compiler will surface every remaining `cmd->source` access as an error — fix each:
-   - `repl_parser.c` (~25 sites): write to a local `char normalized[MAX_LINE_LEN]` buffer, then
-     call `repl_state_editor_buffer_set_line(ctx->source_line_idx, normalized)`.
-   - `repl_command_store.c` color picker write (line 155): replace `memcpy(cmd->source, ...)` with
-     `repl_state_editor_buffer_set_line(idx, new_text)` directly; remove the redundant mirror call.
-   - `repl_core.c:230–236` reads indent from `out_cmd->source[parsed_indent]` — pass indent as a
-     separate `int` return value from the parse helper instead.
-   - `repl_debug.c` — update prints to use `repl_state_editor_buffer_line(i)`.
 
-### 3c — Update undo snapshot (~1 day)
+2. Compiler surfaces all remaining cmd->source accesses as errors — fix each:
 
-`ReplUndoSnapshot` (`repl_undo.h`) holds `GLCmd cmds[MAX_COMMANDS]` — after removing `source[]`
-the text is gone from undo. Add a parallel text snapshot:
+   **repl_parser.c** (~26 snprintf sites): 
+   - Snprintf to local `char normalized[MAX_LINE_LEN]` for temporary parsing use
+   - Return normalized text in ReplParsedLine (from 3a)
+   - No more writes to editor buffer (parser stays pure)
+   
+   **repl_commit.c** (commit flow):
+   - Already uses parser result ReplParsedLine (from 3a)
+   - No changes needed; text already flows via store APIs
+   
+   **repl_command_store.c** (color picker, existing inserts):
+   - All insert/delete/load already use text-aware APIs (from Step 2.5)
+   - Color picker write (line ~155) → already passes text param
+   
+   **repl_executor.c** / **repl_replay_annotations.c** (flat command text):
+   - Lines reading flat_cmd->source → use `repl_flat_cmd_text(flat_cmd)` (from 3a.5)
+   
+   **repl_core.c:230–236** (reads indent from source):
+   - Pass indent as separate `int` return value from parse helper instead
+   
+   **repl_debug.c** (debug prints):
+   - Update to use `repl_state_editor_buffer_line(i)` or `repl_flat_cmd_text()` as appropriate
 
+3. **Update test fixtures**: Some tests construct `cmd` structs directly. They no longer have source, so update snprintf sites that built text for test setup — pass text alongside cmd arrays to `repl_command_store_load()`.
+
+### 3c — Update ReplUndoSnapshot (~1 day)
+
+Add text snapshot alongside command snapshot:
+
+**repl_undo.h** — extend ReplUndoSnapshot:
 ```c
 typedef struct {
     GLCmd cmds[MAX_COMMANDS];
@@ -163,53 +347,53 @@ typedef struct {
 } ReplUndoSnapshot;
 ```
 
-Memory note: current per-snapshot cost = `MAX_COMMANDS * sizeof(GLCmd)` ≈ 4096 × 340 = 1.36 MB.
-After: `MAX_COMMANDS * 84 + MAX_COMMANDS * 256` = 4096 × 340 = 1.36 MB — **identical total**.
-The source bytes just moved from inside `GLCmd` to `editor_lines`.
+Memory: current ~1.36 MB (4096 × 340 bytes cmd). After: 4096 × 84 + 4096 × 256 = same 4096 × 340 bytes. No increase.
 
-`repl_undo_snapshot_save()` — also copy `editor_buffer.lines[]` into `snapshot->editor_lines`.
-`repl_undo_snapshot_restore()` — restore `editor_lines` into `editor_buffer` before calling
-`repl_command_store_load()` (so the flatten pass sees text immediately).
+**repl_undo.c**:
+- `repl_undo_snapshot_save()`: also copy `editor_buffer.lines[]` into `snapshot->editor_lines[]`
+- `repl_undo_snapshot_restore()`: restore `editor_lines` into `editor_buffer` before calling `repl_command_store_load(store, cmds, num_cmds, (const char *const *)lines, edit_line)` (so flatten sees text immediately)
 
-### 3d — Update 13+ test files (~3 days)
+### 3d — Update tests (~3 days)
 
-Key files and changes:
+**tests/test_repl_editor.c** (~40 `ASSERT_STR` sites):
+- All reads of `repl_state_document_cmds_mut()[N].source` → `repl_state_editor_buffer_line(N)`
+- Parser ensures buffer populated; no other change needed
 
-**`tests/test_repl_editor.c`** (~40 assertion sites): All `ASSERT_STR` calls reading
-`repl_state_document_cmds_mut()[N].source` switch to `repl_state_editor_buffer_line(N)`.
-Verify populated because Step 3a ensures parser always writes to buffer.
+**tests/test_scene_guides.c** (~10 fixture writes):
+- Test fixtures now pass lines alongside cmds to `repl_command_store_load(store, source_cmds, count, (const char *const *)source_lines, edit_line)`
 
-**`tests/test_scene_guides.c`** (~10 fixture writes): Replace
-`snprintf(source_cmds[N].source, sizeof(...), "%s", text)` with
-`repl_state_editor_buffer_set_line(N, text)`.
-
-**Other test files** (`test_repl_core_commit.c`, `test_repl_core_parse.c`, etc.): compile errors
-guide remaining fixes.
+**Other test files** (`test_repl_core_commit.c`, `test_repl_parser.c`, etc.):
+- Compile errors and test failures guide remaining fixes
+- Any fixture or test setup that builds cmd arrays should also build parallel text arrays and pass through store APIs
 
 ### Verification for Step 3
 
 ```bash
 make test && make test-stubs
-# GLCmd no longer has source field — any missed callers are compile errors
-make bench BENCH_ARGS="--only spike_flatten_largest"  # regression check: still ≤ 4.5 ms
+# Confirm no cmd->source references remain:
+grep -rn "\.source" . --include="*.c" --include="*.h" \
+  | grep -v "source_cmds\|source_count\|source_line\|source_idx\|repl_source"
+# Should return 0 hits
+make bench BENCH_ARGS="--only spike_flatten_largest"
+# Verify: ≤ 4.5 ms
 ```
 
 ---
 
 ## Step 4: Transformer API — Color Picker (~1 week)
 
-**Goal**: Color picker becomes a controller-pushed transformer. The editor renders a swatch inline;
-drag rewrites the span in editor buffer; controller re-parses the affected line. Eliminates
-`repl_command_store_write_color_source` entirely.
+**Goal**: Color picker becomes a controller-pushed transformer. Editor renders swatch; drag rewrites text in buffer; controller re-parses next frame. Removes `repl_command_store_write_color_source` entirely.
 
-### Define `EditorTransformer` (new `editor_transformer.h`)
+**File**: New `editor_transformer.h` in root
+
+### Define EditorTransformer
 
 ```c
 typedef enum { TRANSFORMER_COLOR_PICKER, TRANSFORMER_NUMERIC_SLIDER } TransformerKind;
 
 typedef struct {
-    int line_idx;
-    int char_start, char_end;   /* byte offsets into the editor buffer line */
+    int  line_idx;
+    int  char_start, char_end;   /* byte offsets into editor buffer line */
     TransformerKind kind;
     union {
         struct { float r, g, b, a; int has_alpha; int is_clear; } color;
@@ -224,38 +408,62 @@ typedef struct {
 } EditorTransformerList;
 ```
 
-Add `EditorTransformerList editor_transformers;` to `ReplRuntimeState`.
+Add `EditorTransformerList editor_transformers;` to `ReplRuntimeState` (via `repl_state_owners.h` accessors).
 
-### Push from controller each frame (`imrepl_ctrl.c`)
+### Push from controller each frame (imrepl_ctrl.c)
 
-After flatten (fresh parsed args available), scan document commands for color commands and push:
-
+After flatten, scan document for color commands and push:
 ```c
 static void push_color_transformers(void) {
     repl_state_editor_transformers_clear();
     for (int i = 0; i < repl_state_document_count(); i++) {
         const GLCmd *cmd = repl_state_document_cmd_at(i);
-        if (cmd->type == CMD_COLOR || cmd->type == CMD_CLEAR_COLOR) {
+        if (ui_color_picker_can_edit_cmd(cmd)) {  /* Covers COLOR3F, COLOR4F, TESS_COLOR, CLEAR_COLOR; excludes has_vars */
             EditorTransformer t = { .line_idx = i, .kind = TRANSFORMER_COLOR_PICKER, ... };
-            // char_start/char_end: locate the color args in the editor buffer line text
+            // Locate color args in editor buffer line text
             repl_state_editor_transformers_append(&t);
         }
     }
 }
 ```
 
-### On drag/pick (`ui_color_picker.c`)
+Call `push_color_transformers()` from `imrepl_ctrl_display_frame()` after `flatten_commands()`.
 
-Instead of calling `repl_command_store_set_color(cmd_idx, r, g, b)`:
+### On drag/pick (ui_color_picker.c)
 
-1. Format new text: `snprintf(new_line, sizeof(new_line), "  glColor3f(%g, %g, %g);", r, g, b)`
-2. Call `repl_state_editor_buffer_set_line(cmd_idx, new_line)`
-3. Call `repl_state_mark_flat_dirty()` — triggers re-parse next frame
+Replace the calls to `repl_command_store_set_color()` and `repl_command_store_set_clear_color()`:
 
-### Remove `repl_command_store_write_color_source` and wrappers
+**Coverage**: Only editable color commands per `ui_color_picker_can_edit_cmd()` predicate:
+- `CMD_COLOR3F`, `CMD_COLOR4F` (excluding has_vars variants)
+- `CMD_TESS_COLOR`
+- `CMD_CLEAR_COLOR`
 
-`repl_command_store_set_color()` and `repl_command_store_set_clear_color()` are removed.
-`repl_command_store_write_color_source()` (lines 97–164 in `repl_command_store.c`) is deleted.
+**Implementation**: 
+1. Get original source text: `const char *orig = repl_state_editor_buffer_line(cmd_idx);`
+2. Parse and extract indentation + original command kind
+3. Format by command type (preserve alpha, tessellation context, clear-color clamping):
+   ```c
+   char new_line[MAX_LINE_LEN];
+   if (cmd->type == CMD_COLOR3F)
+       snprintf(new_line, sizeof(new_line), "%sglColor3f(%g, %g, %g);", indent, r, g, b);
+   else if (cmd->type == CMD_COLOR4F)
+       snprintf(new_line, sizeof(new_line), "%sglColor4f(%g, %g, %g, %g);", indent, r, g, b, a);
+   else if (cmd->type == CMD_TESS_COLOR)
+       snprintf(new_line, sizeof(new_line), "%s...tess format...", indent, ...);
+   else if (cmd->type == CMD_CLEAR_COLOR)
+       snprintf(new_line, sizeof(new_line), "%sglClearColor(%g, %g, %g, %g);", indent, r, g, b, a);
+   ```
+4. Re-parse and commit via `repl_command_store_replace_one(store, cmd_idx, ..., new_line)`
+5. Mark flat dirty for re-flatten next frame
+
+**Why store.replace_one()**: Ensures document_cmds[cmd_idx] is re-parsed and updated before color picker reads args again (lines 116, 386). Otherwise, stale cmd args could be displayed.
+
+Update both drag/pick call sites in `ui_color_picker.c` to check `ui_color_picker_can_edit_cmd()` predicate.
+
+### Cleanup
+
+Delete `repl_command_store_write_color_source()` (repl_command_store.c:97–164).
+Delete `repl_command_store_set_color()` and `repl_command_store_set_clear_color()` declarations and definitions.
 
 ### Verification for Step 4
 
@@ -269,10 +477,11 @@ make test && make test-stubs
 
 ## Step 5: Cross-line Highlight API (~1 week)
 
-**Goal**: Controller pushes `EditorHighlight[]` each frame. UI renders from pushed data, not by
-calling `repl_find_feeding_*` / search functions inline during draw.
+**Goal**: Controller pushes `EditorHighlight[]` each frame. UI renders from snapshot, not by calling `repl_find_feeding_*()` inline during draw.
 
-### Define `EditorHighlight` (new `editor_highlight.h`)
+**File**: New `editor_highlight.h` in root
+
+### Define EditorHighlight
 
 ```c
 typedef enum {
@@ -284,8 +493,8 @@ typedef enum {
 } HighlightKind;
 
 typedef struct {
-    int line_idx;
-    int char_start, char_end;  /* -1, -1 = whole line */
+    int  line_idx;
+    int  char_start, char_end;  /* -1, -1 = whole line */
     HighlightKind kind;
 } EditorHighlight;
 
@@ -296,9 +505,9 @@ typedef struct {
 } EditorHighlightList;
 ```
 
-Add `EditorHighlightList editor_highlights;` to `ReplRuntimeState`. Include in `UiRenderSnapshot`.
+Add `EditorHighlightList editor_highlights;` to `ReplRuntimeState`, include in `UiRenderSnapshot`.
 
-### Push from controller each frame (`imrepl_ctrl.c`)
+### Push from controller each frame (imrepl_ctrl.c)
 
 ```c
 static void push_highlights(void) {
@@ -308,44 +517,42 @@ static void push_highlights(void) {
     int col  = repl_find_feeding_color_cmd(edit);
     if (norm >= 0) repl_state_editor_highlights_append(norm, -1, -1, HIGHLIGHT_FEEDING_NORMAL);
     if (col  >= 0) repl_state_editor_highlights_append(col,  -1, -1, HIGHLIGHT_FEEDING_COLOR);
+    
     if (repl_state_replay_playing())
         repl_state_editor_highlights_append(replay_pc_source_line(), -1, -1, HIGHLIGHT_REPLAY_PC);
-    push_search_highlights();   /* search matches in visible range */
+    
+    push_search_highlights();  /* iterate search matches in visible range */
 }
 ```
 
-### Render from pushed data (`ui_panels.c`)
+Call `push_highlights()` from `imrepl_ctrl_display_frame()`.
 
-Code panel row loop reads `repl_state_flat_program_view().highlights` from snapshot and draws
-gutter accents. Remove the inline calls to `repl_find_feeding_normal_cmd` /
-`repl_find_feeding_color_cmd` from the render path (currently in `ui_panels.c`).
+### Render from snapshot (ui_panels.c)
+
+Code panel row loop reads `snap->editor_highlights` instead of calling `repl_find_feeding_normal_cmd()` inline. Remove inline function calls from render path.
 
 ### Verification for Step 5
 
 ```bash
 make test && make test-stubs
 # Manual: cursor on glVertex3f — feeding normal/color lines get gutter accent
-# Manual: replay mode active — PC line is highlighted correctly
+# Manual: replay active — PC line highlighted correctly
 # Manual: search active — matches highlighted across all visible rows
 ```
 
 ---
 
-## Step 6: Config extraction + virtual lines for replay annotations (~3 days)
+## Step 6: Config Extraction + Virtual Lines (~3 days)
 
-**Goal**: Color scheme and syntax rules become data structs pushed to the editor. Replay
-annotations become virtual lines, not inline rendered rows.
+**Goal**: Color scheme and syntax rules become snapshots. Replay annotations become virtual lines (not inline row injection mid-render).
 
-### Color scheme / syntax rules as data
+### Color scheme as snapshot data
 
-Move hardcoded color constants from `ui_panels.c` into a `EditorColorScheme` struct in
-`repl_actions.c` (alongside `g_cfg_items[]`). Include in `UiRenderSnapshot`. `ui_panels.c` reads
-colors from snapshot, not from compile-time constants.
+Move hardcoded colors from `ui_panels.c` into `EditorColorScheme` struct in `repl_actions.c` (alongside `g_cfg_items[]`). Include in `UiRenderSnapshot`. Renderers read colors from snapshot, not compile-time constants.
 
-Syntax keywords (for code-panel token coloring) move to a `SyntaxKeyword` table in the same
-location.
+Syntax keywords (code-panel token coloring) → `SyntaxKeyword[]` table in same location.
 
-### Virtual lines for replay annotations
+### Virtual lines for replay annotations (editor_virtual_lines.h)
 
 ```c
 typedef struct {
@@ -363,12 +570,34 @@ typedef struct {
 
 Add to `ReplRuntimeState` and `UiRenderSnapshot`.
 
-Controller (`imrepl_ctrl.c`): call `push_replay_virtual_lines()` each frame when replay +
-`expand_args` are active. This replaces the current approach where `repl_replay_annotations.c`
-drives extra row injection mid-render in `ui_panels.c`.
+### Push virtual lines from controller (imrepl_ctrl.c)
 
-`ui_panels.c` code panel row loop: after rendering real line N, check if any virtual lines have
-`after_line_idx == N` and render them in the annotation style.
+When replay is active + expand_args ON:
+```c
+static void push_replay_virtual_lines(void) {
+    repl_state_editor_virtual_lines_clear();
+    if (!repl_state_replay_playing() || !expand_args_enabled())
+        return;
+    // repl_replay_annotations.c builds annotation text for each visible command
+    // Push as virtual lines keyed to source line indices
+}
+```
+
+Call from `imrepl_ctrl_display_frame()`.
+
+### Layout and render virtual lines (ui_panels.c)
+
+Virtual lines are **layout-affecting**, not paint-only:
+
+- **Layout**: Code panel must compute visible row count including virtual lines before scroll/cursor calculations
+- **Hit testing**: Click in annotation area maps to virtual line index, not real line
+- **Search**: Search result row numbers must account for virtual lines
+- **Scroll**: Cursor position and scroll-to-line must skip over virtual lines
+
+Implement as part of `ReplCodePanelRuntimeState` layout computation:
+- `repl_state_code_panel_view()` (or new snapshot accessor) includes `CodePanelLayout { real_line_idx, virtual_lines_after }` for each visible row
+- UI render loop iterates the layout, not raw document; draws real then virtual lines sequentially
+- Replaces current approach where repl_replay_annotations.c injects rows mid-render
 
 ### Verification for Step 6
 
@@ -380,34 +609,86 @@ make test && make test-stubs
 
 ---
 
-## Full verification (all steps complete)
+## Full End-to-End Verification (All Steps Complete)
 
 ```bash
 make test && make test-stubs
 make bench BENCH_ARGS="--only spike_flatten_largest"  # must stay ≤ 4.5 ms
-grep -rn "\.source" . --include="*.c" --include="*.h" | grep -v "source_cmds\|source_count\|source_line\|source_idx\|repl_source"
-# ^ should return 0 hits (all source[] reads gone)
-# Manual end-to-end: load largest example, edit, undo, color pick, replay, search, save/load
+
+# No cmd->source reads remain:
+grep -rn "\.source" . --include="*.c" --include="*.h" \
+  | grep -v "source_cmds\|source_count\|source_line\|source_idx\|repl_source"
+# Should return 0 hits
+
+# Manual end-to-end:
+# - Load largest example
+# - Edit, undo, color pick, replay, search
+# - Save/load single file and workspace
+# - All text operations correct
 ```
 
-## Critical files summary
+---
+
+## Critical Files Summary
 
 | File | Steps | Key change |
 |---|---|---|
-| `repl_flatten.c` | 2 | Fix `flatten_get_for_var_name` to use editor buffer |
-| `ui_panels.c` | 2, 5, 6 | Editor buffer for display; render highlights + virtual lines from snapshot |
-| `repl_replay_annotations.c` | 2, 6 | Remove fallbacks; push virtual lines |
-| `repl_export.c` | 2 | 6 read sites → editor buffer |
-| `repl_editor.c` | 2 | 2 read sites → editor buffer |
-| `repl_parser.c` | 3a, 3b | Write normalized text to editor buffer; remove source[] field writes |
-| `repl_commit.c` | 3a, 3b | Same for var-declare paths |
-| `sample.h:264` | 3b | Delete `char source[MAX_LINE_LEN]` from `GLCmd` |
-| `repl_undo.h / repl_undo.c` | 3c | Add `editor_lines[][]` to snapshot; save/restore it |
-| `tests/test_repl_editor.c` | 3d | ~40 assertion sites → `repl_state_editor_buffer_line(N)` |
-| `tests/test_scene_guides.c` | 3d | ~10 fixture writes → `repl_state_editor_buffer_set_line()` |
-| `repl_command_store.c` | 3b, 4 | Remove `write_color_source`; color pick → buffer set + mark dirty |
-| `editor_transformer.h` (new) | 4 | `EditorTransformer` / `EditorTransformerList` types |
-| `editor_highlight.h` (new) | 5 | `EditorHighlight` / `EditorHighlightList` types |
-| `imrepl_ctrl.c` | 4, 5, 6 | Push transformers, highlights, virtual lines each frame |
-| `repl_state.h` | 4, 5, 6 | Add transformer/highlight/virtual-line slices to `ReplRuntimeState` |
-| `ui_snapshot.h` | 5, 6 | Include highlight/virtual-line lists in `UiRenderSnapshot` |
+| **repl_flatten.c** | 2 | Fix reads (lines 51, 205, 280, 284, 340, 401) to use spike_text_for() |
+| **repl_export.c** | 2 | Fix reads (lines 715, 1296, 1313, 1386, 1459, 1466, 2217, 2675, 2717) to use editor buffer |
+| **ui_panels.c** | 2, 5, 6 | Stabilize buffer fallback; render highlights + layout-aware virtual lines |
+| **repl_replay_annotations.c** | 2, 3a.5, 6 | Remove fallbacks; use repl_flat_cmd_text(); push virtual lines |
+| **repl_editor.c** | 2 | 2 read sites (200, 368) → editor buffer |
+| **repl_parser.h** | 3a | New `ReplParsedLine { GLCmd cmd; char text[MAX_LINE_LEN]; }` + int return for error semantics |
+| **repl_parser.c** | 3a, 3b | Return int; output ReplParsedLine via param; snprintf to local buffer |
+| **repl_command_store.h** | 2.5 | Extend existing APIs with optional text parameters (insert_many, insert_one, replace_one, load) |
+| **repl_command_store.c** | 2.5, 3b, 4 | Implement text-aware insert/replace/load; color pick uses replace_one with text |
+| **repl_commit.c** | 3a, 3b | Use parser's int return + ReplParsedLine output param; pass text to store APIs |
+| **repl_core.c** | 3a.5, 3b | Add repl_flat_cmd_text() helper; read indent logic: accept int return instead of parsing source |
+| **repl_executor.c** | 3a.5, 3b | Update flat-cmd reads to use repl_flat_cmd_text() |
+| **sample.h:264** | 3b | Delete `char source[MAX_LINE_LEN]` from GLCmd |
+| **repl_scenes.c** | 3a.7 | Add `char lines[MAX_COMMANDS][MAX_LINE_LEN]` to ReplScene; save/load with store APIs |
+| **clipboard / ReplClipboardState** | 3a.7 | Add `char lines[MAX_COMMANDS][MAX_LINE_LEN]` sidecar; copy/paste with store APIs |
+| **repl_undo.h** | 3c | Add `char lines[MAX_COMMANDS][MAX_LINE_LEN]` to ReplUndoSnapshot |
+| **repl_undo.c** | 3c | Save/restore editor_lines via store.load() |
+| **tests/test_repl_editor.c** | 3d | ~40 assertion sites → `repl_state_editor_buffer_line()` |
+| **tests/test_scene_guides.c** | 3d | Test fixtures → pass lines to store load APIs |
+| **tests/** | 3d | Update constructor-based cmd fixtures to pass text alongside |
+| **ui_color_picker.c** | 4 | All editable color types (COLOR3F, COLOR4F, TESS_COLOR, CLEAR_COLOR); use store.replace_one() |
+| **editor_transformer.h** (new) | 4 | EditorTransformer / list types |
+| **editor_highlight.h** (new) | 5 | EditorHighlight / list types |
+| **editor_virtual_lines.h** (new) | 6 | EditorVirtualLine / list types |
+| **imrepl_ctrl.c** | 4, 5, 6 | Push transformers, highlights, virtual lines each frame |
+| **repl_state.h / repl_state_owners.h** | 4, 5, 6 | Add transformer/highlight/virtual-line slices and accessors |
+| **ui_snapshot.h** | 5, 6 | Include highlights, layout model, color scheme in snapshot |
+| **repl_code_panel.c** (or new) | 6 | Layout model computation: map real/virtual lines for scroll, hit-test, search |
+| **repl_actions.c** | 6 | Move color scheme + syntax rules to snapshot structs |
+
+---
+
+## Dependency Order
+
+```
+Step 2 (document text read migration)
+  ↓
+Step 2.5 (extend store APIs with text parameters: insert_many, insert_one, replace_one, load)
+  ↓
+Step 3a (parser returns int + ReplParsedLine output param; preserves error semantics)
+  ↓
+Step 3a.5 (add repl_flat_cmd_text() helper for flat command reads)
+  ↓
+Step 3a.7 (scene save/load + clipboard copy/paste sidecars with text)
+  ↓
+Step 3b (delete source[] field from GLCmd; fix remaining compile errors)
+  ↓
+Step 3c (undo snapshot text sidecars)
+  ↓
+Step 3d (test updates) ← can run in parallel with 3c
+  ↓
+Step 4 (color transformer — all editable types, uses store.replace_one)
+  ↓
+Step 5 (highlights snapshot) ← can run in parallel with Step 4
+  ↓
+Step 6 (config extraction + virtual lines as layout model)
+```
+
+Steps 2–2.5–3a–3a.5–3a.7–3b are sequential (structural change affecting parser, store, and all persistent command stores). Steps 3c–3d can overlap. Steps 4–6 can be re-ordered or combined.
