@@ -11,33 +11,23 @@
 #include "scene_render_types.h"
 #include "repl_flatten.h"
 
+#include "support/test_harness.h"
 #include <stdio.h>
 #include <string.h>
 #include <gl_includes.h>
 
-static int g_run = 0;
-static int g_pass = 0;
+static TestHarness g_harness = TEST_HARNESS_INIT;
 
 #define ASSERT_TRUE(label, cond) do { \
-    g_run++; \
-    if (cond) g_pass++; \
-    else printf("FAIL [%s] (line %d)\n", label, __LINE__); \
+    TEST_ASSERT_TRUE(&g_harness, label, cond); \
 } while (0)
 
 #define ASSERT_INT(label, got, exp) do { \
-    g_run++; \
-    if ((got) == (exp)) g_pass++; \
-    else printf("FAIL [%s] got %d, expected %d (line %d)\n", \
-                label, (int)(got), (int)(exp), __LINE__); \
+    TEST_ASSERT_INT(&g_harness, label, got, exp); \
 } while (0)
 
 #define ASSERT_FLOAT(label, got, exp) do { \
-    g_run++; \
-    float delta = (got) - (exp); \
-    if (delta < 0) delta = -delta; \
-    if (delta < 1e-5) g_pass++; \
-    else printf("FAIL [%s] got %.6f, expected %.6f (line %d)\n", \
-                label, (float)(got), (float)(exp), __LINE__); \
+    TEST_ASSERT_FLOAT_DEFAULT(&g_harness, label, got, exp); \
 } while (0)
 
 /* Minimal execute callback for testing. */
@@ -423,8 +413,8 @@ int main(int argc, char **argv) {
     printf("--- GL-emitting scene smoke checks skipped in real-GL test build ---\n");
     printf("Run `make test_scene_render USE_GL_STUBS=1` for no-op GL path coverage.\n");
 
-    printf("\ntest_scene_render: %d/%d passed\n", g_pass, g_run);
-    return (g_pass == g_run) ? 0 : 1;
+    printf("\ntest_scene_render: %d/%d passed\n", g_harness.passed, g_harness.run);
+    return (g_harness.passed == g_harness.run) ? 0 : 1;
 #endif
 
     test_scene_grid_render();
@@ -439,6 +429,6 @@ int main(int argc, char **argv) {
     test_viewport_dimensions();
     test_render_mode_toggles();
 
-    printf("\ntest_scene_render: %d/%d passed\n", g_pass, g_run);
-    return (g_pass == g_run) ? 0 : 1;
+    printf("\ntest_scene_render: %d/%d passed\n", g_harness.passed, g_harness.run);
+    return (g_harness.passed == g_harness.run) ? 0 : 1;
 }

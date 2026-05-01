@@ -3,6 +3,7 @@
 
 #include <stdio.h>
 #include <string.h>
+#include <math.h>
 
 typedef struct {
     int run;
@@ -50,6 +51,25 @@ typedef struct {
                (label), _got, _expected, __LINE__); \
     } \
 } while (0)
+
+#define TEST_ASSERT_FLOAT(harness_ptr, label, got, expected, epsilon) do { \
+    TestHarness *_h = (harness_ptr); \
+    float _got = (float)(got); \
+    float _expected = (float)(expected); \
+    _h->run++; \
+    if (fabsf(_got - _expected) <= (epsilon)) { \
+        _h->passed++; \
+    } else { \
+        _h->failed++; \
+        printf("FAIL [%s] got %g, expected %g (line %d)\n", \
+               (label), _got, _expected, __LINE__); \
+    } \
+} while (0)
+
+#define TEST_FLOAT_EPSILON 1e-5f
+
+#define TEST_ASSERT_FLOAT_DEFAULT(harness_ptr, label, got, expected) \
+    TEST_ASSERT_FLOAT((harness_ptr), (label), (got), (expected), TEST_FLOAT_EPSILON)
 
 static inline int test_harness_report(const TestHarness *harness,
                                       const char *suite_name) {

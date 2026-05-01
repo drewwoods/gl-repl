@@ -98,7 +98,9 @@
       "Bash(./test_repl_command_store *)",
       "Bash(./test_repl_actions *)",
       "Bash(./test_imrepl_ctrl)",
-      "Bash(uuidgen)"
+      "Bash(uuidgen)",
+      "Bash(chmod +x /tmp/update_tests.sh)",
+      "Bash(/tmp/update_tests.sh)"
     ]
   }
 }

@@ -1,30 +1,20 @@
 #include "repl_core.h"
 #include "repl_state.h"
-#include <math.h>
+#include "support/test_harness.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
-static int g_run = 0;
-static int g_pass = 0;
+static TestHarness g_harness = TEST_HARNESS_INIT;
 
-#define ASSERT_TRUE(label, cond) do { \
-    g_run++; \
-    if (cond) g_pass++; \
-    else printf("FAIL [%s] (line %d)\n", label, __LINE__); \
-} while (0)
+#define ASSERT_TRUE(label, cond) \
+    TEST_ASSERT_TRUE(&g_harness, label, cond)
 
-#define ASSERT_INT(label, got, exp) do { \
-    g_run++; \
-    if ((got) == (exp)) g_pass++; \
-    else printf("FAIL [%s] got %d, expected %d (line %d)\n", label, (int)(got), (int)(exp), __LINE__); \
-} while (0)
+#define ASSERT_INT(label, got, exp) \
+    TEST_ASSERT_INT(&g_harness, label, got, exp)
 
-#define ASSERT_FLOAT(label, got, exp) do { \
-    g_run++; \
-    if (fabsf((got) - (exp)) < 1e-5f) g_pass++; \
-    else printf("FAIL [%s] got %f, expected %f (line %d)\n", label, (float)(got), (float)(exp), __LINE__); \
-} while (0)
+#define ASSERT_FLOAT(label, got, exp) \
+    TEST_ASSERT_FLOAT(&g_harness, label, got, exp, 1e-5f)
 
 
 static void declare_test_vars(void) {
@@ -355,6 +345,5 @@ int main(void) {
     test_autonormal_disabled();
     test_gl_triangles();
 
-    printf("test_repl_autonormal: %d/%d passed\n", g_pass, g_run);
-    return (g_run == g_pass) ? 0 : 1;
+    return test_harness_report(&g_harness, "test_repl_autonormal");
 }

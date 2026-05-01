@@ -9,13 +9,13 @@
 #define g_multisample_enabled (repl_state_render_mut()->multisample_enabled)
 #define g_line_smooth_enabled (repl_state_render_mut()->line_smooth_enabled)
 
+#include "support/test_harness.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
 
-static int g_run = 0;
-static int g_pass = 0;
+static TestHarness g_harness = TEST_HARNESS_INIT;
 static int g_verbose = 0;
 static int g_use_color = 0;
 static int g_show_mismatch = 0;
@@ -47,9 +47,9 @@ static int env_truthy(const char *name) {
 }
 
 static void assert_true_impl(const char *label, int cond, int line) {
-    g_run++;
+    g_harness.run++;
     if (cond) {
-        g_pass++;
+        g_harness.passed++;
         return;
     }
     printf("%sFAIL%s [%s] (line %d)\n", ansi_red(), ansi_reset(), label, line);
@@ -1053,7 +1053,7 @@ int main(int argc, char **argv) {
     rmdir(temp_dir);
 
     printf("%srepl_core_examples: %d/%d passed%s\n",
-           (g_run == g_pass) ? ansi_green() : ansi_red(),
-           g_pass, g_run, ansi_reset());
-    return (g_run == g_pass) ? 0 : 1;
+           (g_harness.run == g_harness.passed) ? ansi_green() : ansi_red(),
+           g_harness.passed, g_harness.run, ansi_reset());
+    return (g_harness.run == g_harness.passed) ? 0 : 1;
 }

@@ -1,32 +1,23 @@
 #include "repl_var_drag.h"
 #include "repl_state.h"
 #include "repl_core.h"
+#include "support/test_harness.h"
 #include <stdio.h>
 #include <string.h>
 #include <math.h>
 
-static int g_run = 0;
-static int g_pass = 0;
+static TestHarness g_harness = TEST_HARNESS_INIT;
 
 #define ASSERT_TRUE(label, cond) do { \
-    g_run++; \
-    if (cond) g_pass++; \
-    else printf("FAIL [%s] (line %d)\n", label, __LINE__); \
+    TEST_ASSERT_TRUE(&g_harness, label, cond); \
 } while (0)
 
 #define ASSERT_INT(label, got, exp) do { \
-    g_run++; \
-    if ((got) == (exp)) g_pass++; \
-    else printf("FAIL [%s] got %d, expected %d (line %d)\n", \
-                label, (int)(got), (int)(exp), __LINE__); \
+    TEST_ASSERT_INT(&g_harness, label, got, exp); \
 } while (0)
 
 #define ASSERT_FLOAT(label, got, exp, tol) do { \
-    g_run++; \
-    float _diff = fabsf((got) - (exp)); \
-    if (_diff <= (tol)) g_pass++; \
-    else printf("FAIL [%s] got %g, expected %g (line %d)\n", \
-                label, (double)(got), (double)(exp), __LINE__); \
+    TEST_ASSERT_FLOAT(&g_harness, label, got, exp, tol); \
 } while (0)
 
 
@@ -444,6 +435,6 @@ int main(void) {
     test_log_small_motion();
     test_zero_motion();
 
-    printf("test_repl_var_drag: %d/%d tests passed\n", g_pass, g_run);
-    return (g_pass == g_run) ? 0 : 1;
+    printf("test_repl_var_drag: %d/%d tests passed\n", g_harness.passed, g_harness.run);
+    return (g_harness.passed == g_harness.run) ? 0 : 1;
 }

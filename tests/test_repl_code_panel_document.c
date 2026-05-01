@@ -6,17 +6,12 @@
 #include "repl_core.h"
 #include "repl_state.h"
 #include "repl_layout.h"
+#include "support/test_harness.h"
 
-static int g_tests = 0;
-static int g_failed = 0;
+static TestHarness g_harness = TEST_HARNESS_INIT;
 
-#define ASSERT_TRUE(name, cond) do {                                      \
-    g_tests++;                                                            \
-    if (!(cond)) {                                                        \
-        g_failed++;                                                       \
-        printf("FAIL [%s] line %d\n", (name), __LINE__);                  \
-    }                                                                     \
-} while (0)
+#define ASSERT_TRUE(name, cond) \
+    TEST_ASSERT_TRUE(&g_harness, name, cond)
 
 static int code_panel_text_x(void) {
     int linenum_w = 4 * FONT_W;
@@ -95,11 +90,5 @@ int main(void) {
                 layout.follow_doc_line >= repl_state_code_panel().scroll &&
                 layout.follow_doc_line < repl_state_code_panel().scroll + layout.visible_lines);
 
-    if (g_failed) {
-        printf("repl_code_panel_document: %d/%d passed\n",
-               g_tests - g_failed, g_tests);
-        return 1;
-    }
-    printf("repl_code_panel_document: %d/%d passed\n", g_tests, g_tests);
-    return 0;
+    return test_harness_report(&g_harness, "repl_code_panel_document");
 }

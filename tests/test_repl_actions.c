@@ -3,34 +3,27 @@
 #include "repl_config.h"
 #include "repl_audio.h"
 #include "repl_core.h"
+#include "support/test_harness.h"
 #include <stdio.h>
 #include <string.h>
 
-static int g_run = 0;
-static int g_pass = 0;
+static TestHarness g_harness = TEST_HARNESS_INIT;
 
-#define ASSERT_TRUE(label, cond) do { \
-    g_run++; \
-    if (cond) g_pass++; \
-    else printf("FAIL [%s] (line %d)\n", label, __LINE__); \
-} while (0)
+#define ASSERT_TRUE(label, cond) \
+    TEST_ASSERT_TRUE(&g_harness, label, cond)
 
-#define ASSERT_INT(label, got, exp) do { \
-    g_run++; \
-    if ((got) == (exp)) g_pass++; \
-    else printf("FAIL [%s] got %d, expected %d (line %d)\n", \
-                label, (int)(got), (int)(exp), __LINE__); \
-} while (0)
+#define ASSERT_INT(label, got, exp) \
+    TEST_ASSERT_INT(&g_harness, label, got, exp)
 
-#define ASSERT_STR(label, got, exp) do { \
-    g_run++; \
-    if (strcmp((got), (exp)) == 0) g_pass++; \
-    else printf("FAIL [%s] got \"%s\", expected \"%s\" (line %d)\n", \
-                label, (got), (exp), __LINE__); \
-} while (0)
+#define ASSERT_STR(label, got, exp) \
+    TEST_ASSERT_STR(&g_harness, label, got, exp)
 
-/* Check the status from the REPL state instead of mocking set_status */
-#define g_last_status (repl_state_status().text)
+/* Read status via the mutable accessor to avoid taking .text from a temporary. */
+static const char *last_status_text(void) {
+    return repl_state_status_mut()->text;
+}
+
+#define g_last_status (last_status_text())
 
 static void test_apply_defaults(void) {
     repl_reset_state();
@@ -239,6 +232,5 @@ int main(void) {
     test_menu_actions();
     test_shortcuts();
 
-    printf("test_repl_actions: %d/%d tests passed\n", g_pass, g_run);
-    return (g_pass == g_run) ? 0 : 1;
+    return test_harness_report(&g_harness, "test_repl_actions");
 }

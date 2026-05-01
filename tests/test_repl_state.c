@@ -1,29 +1,21 @@
 #include "repl_state.h"
 
+#include "support/test_harness.h"
 #include <stdio.h>
 #include <string.h>
 
-static int g_run = 0;
-static int g_pass = 0;
+static TestHarness g_harness = TEST_HARNESS_INIT;
 
 #define ASSERT_TRUE(label, cond) do { \
-    g_run++; \
-    if (cond) g_pass++; \
-    else printf("FAIL [%s] (line %d)\n", label, __LINE__); \
+    TEST_ASSERT_TRUE(&g_harness, label, cond); \
 } while (0)
 
 #define ASSERT_INT(label, got, exp) do { \
-    g_run++; \
-    if ((got) == (exp)) g_pass++; \
-    else printf("FAIL [%s] got %d, expected %d (line %d)\n", \
-                label, (int)(got), (int)(exp), __LINE__); \
+    TEST_ASSERT_INT(&g_harness, label, got, exp); \
 } while (0)
 
 #define ASSERT_STR(label, got, exp) do { \
-    g_run++; \
-    if (strcmp((got), (exp)) == 0) g_pass++; \
-    else printf("FAIL [%s] got \"%s\", expected \"%s\" (line %d)\n", \
-                label, (got), (exp), __LINE__); \
+    TEST_ASSERT_STR(&g_harness, label, got, exp); \
 } while (0)
 
 static void populate_runtime_snapshot_fixture(const char *scene_hint) {
@@ -253,24 +245,30 @@ static void test_capture_restore_round_trip(void) {
     ASSERT_INT("variable drag x restored", repl_state_variable_drag().start_x, 17);
     ASSERT_INT("profile panel restored",
                repl_state_profile_panel().mode, PROFILE_PANEL_DETAILS);
-    ASSERT_STR("status text restored", repl_state_status().text, "state snapshot");
-    ASSERT_INT("status ttl restored", repl_state_status().ttl, 17);
-    ASSERT_INT("search active restored", repl_state_search().active, 1);
-    ASSERT_STR("search query restored", repl_state_search().query, "vertex");
-    ASSERT_INT("search cursor restored", repl_state_search().cursor_pos, 2);
-    ASSERT_INT("search hit line restored", repl_state_search().hit_line_idx, 5);
-    ASSERT_INT("search hit char restored", repl_state_search().hit_char_idx, 8);
-    ASSERT_INT("search ordinal restored", repl_state_search().hit_ordinal, 2);
-    ASSERT_INT("search count restored", repl_state_search().match_count, 4);
-    ASSERT_INT("autocomplete count restored", repl_state_autocomplete().match_count, 2);
-    ASSERT_INT("autocomplete selection restored",
-               repl_state_autocomplete().selected_idx, 1);
-    ASSERT_STR("autocomplete ghost restored", repl_state_autocomplete().ghost, "ghost text");
-    ASSERT_STR("autocomplete hint restored", repl_state_autocomplete().hint, "hint text");
-    ASSERT_STR("autocomplete match restored",
-               repl_state_autocomplete().matches[0], "glVertex3f");
-    ASSERT_STR("autocomplete insert restored",
-               repl_state_autocomplete().insert_matches[1], "glVertex2f(");
+    {
+        ReplStatusState status = repl_state_status();
+        ReplSearchState search = repl_state_search();
+        ReplAutocompleteState autocomplete = repl_state_autocomplete();
+
+        ASSERT_STR("status text restored", status.text, "state snapshot");
+        ASSERT_INT("status ttl restored", status.ttl, 17);
+        ASSERT_INT("search active restored", search.active, 1);
+        ASSERT_STR("search query restored", search.query, "vertex");
+        ASSERT_INT("search cursor restored", search.cursor_pos, 2);
+        ASSERT_INT("search hit line restored", search.hit_line_idx, 5);
+        ASSERT_INT("search hit char restored", search.hit_char_idx, 8);
+        ASSERT_INT("search ordinal restored", search.hit_ordinal, 2);
+        ASSERT_INT("search count restored", search.match_count, 4);
+        ASSERT_INT("autocomplete count restored", autocomplete.match_count, 2);
+        ASSERT_INT("autocomplete selection restored",
+                   autocomplete.selected_idx, 1);
+        ASSERT_STR("autocomplete ghost restored", autocomplete.ghost, "ghost text");
+        ASSERT_STR("autocomplete hint restored", autocomplete.hint, "hint text");
+        ASSERT_STR("autocomplete match restored",
+                   autocomplete.matches[0], "glVertex3f");
+        ASSERT_STR("autocomplete insert restored",
+                   autocomplete.insert_matches[1], "glVertex2f(");
+    }
     ASSERT_INT("time playing restored", repl_state_variables().time_playing, 0);
     ASSERT_TRUE("anim time restored", repl_state_variables().anim_time == 1.25f);
     ASSERT_TRUE("camera rx restored", repl_state_camera().rx == 11.0f);
@@ -371,6 +369,6 @@ int main(void) {
     printf("--- repl_state tests ---\n");
     test_capture_restore_round_trip();
     test_reset_all_restores_default_runtime();
-    printf("%d / %d tests passed\n", g_pass, g_run);
-    return g_pass == g_run ? 0 : 1;
+    printf("%d / %d tests passed\n", g_harness.passed, g_harness.run);
+    return g_harness.passed == g_harness.run ? 0 : 1;
 }
