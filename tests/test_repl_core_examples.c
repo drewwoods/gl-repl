@@ -121,6 +121,7 @@ static void seed_nondefault_example_presentation_state(void) {
     repl_state_presentation_mut()->grid_extent_idx = GRID_EXTENT_CLOSE;
     repl_state_presentation_mut()->axes_theme = 5;
     repl_state_presentation_mut()->show_vertex_labels = 0;
+    repl_state_presentation_mut()->show_vertex_indices = 0;
     repl_state_presentation_mut()->show_normal_vectors = 1;
     repl_state_presentation_mut()->show_vertex_outlines = 0;
     repl_state_presentation_mut()->show_vertex_points = 0;
@@ -786,7 +787,7 @@ int main(int argc, char **argv) {
 
         load_custom_example_lines_for_test(nonleading_cfg_example);
         ASSERT_TRUE("nonleading cfg leaves axes unchanged",
-                    repl_state_presentation().axes_theme == 0);
+                    repl_state_presentation().axes_theme == CFG_DEFAULT_AXES_THEME);
         ASSERT_TRUE("nonleading cfg comments preserved",
                 repl_state_document_count() == 5);
 

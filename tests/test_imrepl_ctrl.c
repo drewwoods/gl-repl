@@ -140,6 +140,7 @@ static void prepare_display_fixture(void) {
 
     presentation = repl_state_presentation_mut();
     presentation->show_vertex_guides = 1;
+    presentation->show_vertex_points = 1;
     presentation->show_light_indicators = 1;
     presentation->highlight_current_poly = 1;
     presentation->xform_guide_mode = 2;
