@@ -10,6 +10,18 @@
 #define MAX_FLATTEN_CALL_DEPTH 64
 #define MAX_FLATTEN_VISIT_BUDGET 200000
 
+/* Editor-owns-text spike: read the source text for command index `i`
+ * from the editor buffer rather than the GLCmd struct. Falls back to
+ * the GLCmd's source when the buffer line is empty (e.g. mid-test
+ * fixture setup before sync). The spike is validating that the parser
+ * can be driven exclusively from editor-owned text. */
+static const char *spike_text_for(const GLCmd *src_cmd, int i) {
+    const char *text = repl_state_editor_buffer_line(i);
+    if (text && text[0])
+        return text;
+    return src_cmd->source;
+}
+
 typedef struct {
     const GLCmd      *source_cmds;
     int               source_count;
@@ -413,10 +425,11 @@ static void flatten_range(FlattenContext *ctx,
         if (vars && nv > 0) {
             GLCmd tmp;
             ReplParseContext parse_ctx = { i, vars, nv, 0 };
+            const char *text = spike_text_for(src_cmd, i);
             memset(&tmp, 0, sizeof(tmp));
-            if (repl_parser_parse_command_ctx(src_cmd->source, &tmp, &parse_ctx)) {
+            if (repl_parser_parse_command_ctx(text, &tmp, &parse_ctx)) {
                 tmp.has_vars = src_cmd->has_vars;
-                strncpy(tmp.source, src_cmd->source, sizeof(tmp.source) - 1);
+                strncpy(tmp.source, text, sizeof(tmp.source) - 1);
                 tmp.source[sizeof(tmp.source) - 1] = '\0';
                 if (!flatten_append_cmd(ctx, &tmp, i, call_src_cmd_idx,
                                         root_call_src_cmd_idx, func_scope_mask,
@@ -427,10 +440,11 @@ static void flatten_range(FlattenContext *ctx,
             /* Outside loop but has predefined var references: re-evaluate */
             GLCmd tmp;
             ReplParseContext parse_ctx = { i, NULL, 0, 0 };
+            const char *text = spike_text_for(src_cmd, i);
             memset(&tmp, 0, sizeof(tmp));
-            if (repl_parser_parse_command_ctx(src_cmd->source, &tmp, &parse_ctx)) {
+            if (repl_parser_parse_command_ctx(text, &tmp, &parse_ctx)) {
                 tmp.has_vars = 1;
-                strncpy(tmp.source, src_cmd->source, sizeof(tmp.source) - 1);
+                strncpy(tmp.source, text, sizeof(tmp.source) - 1);
                 tmp.source[sizeof(tmp.source) - 1] = '\0';
                 if (!flatten_append_cmd(ctx, &tmp, i, call_src_cmd_idx,
                                         root_call_src_cmd_idx, func_scope_mask,
@@ -438,9 +452,24 @@ static void flatten_range(FlattenContext *ctx,
                     return;
             }
         } else {
-            if (!flatten_append_cmd(ctx, src_cmd, i, call_src_cmd_idx,
-                                    root_call_src_cmd_idx, func_scope_mask,
-                                    NULL, 0))
+            /* Spike: re-parse the no-vars path too so we measure the
+             * worst-case cost of an editor-owned text model. */
+            GLCmd tmp;
+            ReplParseContext parse_ctx = { i, NULL, 0, 0 };
+            const char *text = spike_text_for(src_cmd, i);
+            memset(&tmp, 0, sizeof(tmp));
+            if (repl_parser_parse_command_ctx(text, &tmp, &parse_ctx)) {
+                tmp.has_vars = 0;
+                tmp.is_auto = src_cmd->is_auto;
+                strncpy(tmp.source, text, sizeof(tmp.source) - 1);
+                tmp.source[sizeof(tmp.source) - 1] = '\0';
+                if (!flatten_append_cmd(ctx, &tmp, i, call_src_cmd_idx,
+                                        root_call_src_cmd_idx, func_scope_mask,
+                                        NULL, 0))
+                    return;
+            } else if (!flatten_append_cmd(ctx, src_cmd, i, call_src_cmd_idx,
+                                           root_call_src_cmd_idx, func_scope_mask,
+                                           NULL, 0))
                 return;
         }
         i++;

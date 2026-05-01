@@ -87,6 +87,19 @@ typedef struct {
     int         insert_mode;
 } ReplEditorInputView;
 
+/* Editor-owned text buffer (Phase: editor-owns-text spike).
+ *
+ * One canonical text line per source command. Indexed by source command
+ * index. The text is the raw user-typed form (no trailing ';', no
+ * leading whitespace) — the same shape `load_line_to_input()` produces
+ * after stripping. During the spike `cmds[idx].source` keeps the
+ * normalized form for backwards compatibility; this slice is the
+ * load-bearing buffer the redesign will eventually consume. */
+typedef struct {
+    char lines[MAX_COMMANDS][MAX_LINE_LEN];
+    int  line_count;
+} ReplEditorBuffer;
+
 typedef struct {
     int anchor_idx;
     int end_idx;
@@ -271,6 +284,10 @@ FlatProgramView   repl_state_flat_program_view(void);
 ReplVariableView repl_state_variables(void);
 
 ReplEditorInputView repl_state_editor_input(void);
+/* Editor-owns-text spike: read-only access to the per-line text buffer. */
+const ReplEditorBuffer *repl_state_editor_buffer(void);
+const char             *repl_state_editor_buffer_line(int idx);
+int                     repl_state_editor_buffer_count(void);
 const char *repl_state_input_text(void);
 int         repl_state_input_len(void);
 int         repl_state_cursor_pos(void);

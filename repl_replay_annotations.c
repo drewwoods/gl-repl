@@ -636,7 +636,15 @@ int repl_replay_code_panel_get_command_display_text(int cmd_idx, char *out, int 
     if (cmd_idx < 0 || cmd_idx >= repl_state_document_count())
         return 0;
 
-    snprintf(out, out_size, "%s", repl_state_document_cmds_mut()[cmd_idx].source);
+    /* Spike: read display text from the editor buffer rather than
+     * cmds[cmd_idx].source. Falls back to cmd.source when the buffer
+     * has no entry for this index (e.g. immediately after a fixture
+     * setup that bypassed the store helpers). */
+    const char *base = repl_state_editor_buffer_line(cmd_idx);
+    if (!base || !base[0])
+        base = repl_state_document_cmds_mut()[cmd_idx].source;
+
+    snprintf(out, out_size, "%s", base);
 
     if (!replay.active ||
         !replay.expand_args ||
@@ -653,7 +661,7 @@ int repl_replay_code_panel_get_command_display_text(int cmd_idx, char *out, int 
     if (build_replay_assignment_inline_comment(cmd_idx, flat_idx,
                                                comment, sizeof(comment)) &&
         comment[0]) {
-        snprintf(out, out_size, "%s%s", repl_state_document_cmds_mut()[cmd_idx].source, comment);
+        snprintf(out, out_size, "%s%s", base, comment);
     }
 
     return 1;

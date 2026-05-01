@@ -9,6 +9,7 @@ typedef struct {
     ReplFlatProgramState      flat_program;
     ReplVariableState         variables;
     ReplEditorInputState      editor_input;
+    ReplEditorBuffer          editor_buffer;
     ReplSelectionState        selection;
     ReplClipboardState        clipboard;
     ReplCodePanelRuntimeState code_panel;

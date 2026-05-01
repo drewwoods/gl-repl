@@ -73,6 +73,27 @@ static void command_store_invalidate_after_mutation(void) {
     repl_state_mark_normals_dirty();
 }
 
+/* Editor-owns-text spike: keep editor_buffer.lines[] in sync with the
+ * canonical command store. During the spike the buffer is a verbatim
+ * mirror of cmd->source (same indent, same trailing ';'); later phases
+ * of the redesign migrate this to the raw user-typed form, at which
+ * point the parser becomes the only consumer of the indent/semicolon
+ * normalization. */
+static void editor_buffer_sync_after_store_mutation(int count) {
+    ReplEditorBuffer *buf = repl_state_editor_buffer_mut();
+    if (!buf) return;
+    GLCmd *cmds = repl_state_document_cmds_mut();
+    if (count > MAX_COMMANDS) count = MAX_COMMANDS;
+    for (int i = 0; i < count; i++) {
+        const char *src = cmds[i].source;
+        int n = (int)strlen(src);
+        if (n >= MAX_LINE_LEN) n = MAX_LINE_LEN - 1;
+        memcpy(buf->lines[i], src, (size_t)n);
+        buf->lines[i][n] = '\0';
+    }
+    buf->line_count = count;
+}
+
 static int repl_command_store_write_color_source(GLCmd *cmd,
                                                  float r, float g, float b,
                                                  float a, int has_alpha,
@@ -132,6 +153,13 @@ static int repl_command_store_write_color_source(GLCmd *cmd,
     if (has_alpha)
         cmd->args[3] = a;
     memcpy(cmd->source, new_source, strlen(new_source) + 1);
+    /* Editor-owns-text spike: mirror the new source into the editor buffer. */
+    {
+        GLCmd *cmds = repl_state_document_cmds_mut();
+        int idx = (int)(cmd - cmds);
+        if (idx >= 0 && idx < MAX_COMMANDS)
+            repl_state_editor_buffer_set_line(idx, cmd->source);
+    }
     command_store_invalidate_after_mutation();
     return 1;
 }
@@ -174,6 +202,7 @@ int repl_command_store_insert_many(ReplCommandStore *store, int pos,
         *store->edit_line += count;
     }
 
+    editor_buffer_sync_after_store_mutation(*store->count);
     command_store_invalidate_after_mutation();
     return 1;
 }
@@ -191,6 +220,7 @@ int repl_command_store_replace_one(ReplCommandStore *store, int pos,
         return 0;
 
     store->cmds[pos] = *cmd;
+    repl_state_editor_buffer_set_line(pos, cmd->source);
     command_store_invalidate_after_mutation();
     return 1;
 }
@@ -204,6 +234,7 @@ int repl_command_store_delete_range(ReplCommandStore *store, int start,
     memmove(&store->cmds[start], &store->cmds[start + count],
             (size_t)(*store->count - start - count) * sizeof(store->cmds[0]));
     *store->count -= count;
+    editor_buffer_sync_after_store_mutation(*store->count);
     command_store_invalidate_after_mutation();
     return 1;
 }
@@ -223,6 +254,7 @@ int repl_command_store_load(ReplCommandStore *store, const GLCmd *cmds,
     if (store->edit_line)
         *store->edit_line = clamp_edit_line_to_count(edit_line, count);
 
+    editor_buffer_sync_after_store_mutation(*store->count);
     command_store_invalidate_after_mutation();
     return 1;
 }
@@ -231,5 +263,6 @@ void repl_command_store_clear(ReplCommandStore *store) {
     if (!store || !store->count)
         return;
     *store->count = 0;
+    repl_state_editor_buffer_set_count(0);
     command_store_invalidate_after_mutation();
 }
