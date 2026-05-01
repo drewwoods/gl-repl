@@ -294,6 +294,22 @@ static FlatCmdLocalVars *execution_local_vars_at(FlatProgramView program,
     return &program.local_vars[flat_cmd_idx];
 }
 
+static const char *execution_flat_text(const GLCmd *flat_cmd) {
+    int src_cmd_idx;
+
+    if (!flat_cmd)
+        return "";
+
+    src_cmd_idx = flat_cmd->src_cmd_idx;
+    if (src_cmd_idx < 0 || src_cmd_idx >= repl_state_document_count())
+        return "";
+
+    {
+        const char *text = repl_state_editor_buffer_line(src_cmd_idx);
+        return (text && text[0]) ? text : "";
+    }
+}
+
 /* Walk flat_cmds[0..flat_cmd_count) and issue the corresponding GL
  * calls. Handles vertex submission, state changes, GLU quadrics and
  * tessellator commands, transforms, goto/label control flow, if-block
@@ -478,7 +494,7 @@ void repl_execute_program(const ReplExecutionOptions *options) {
              * commands still use the args baked into flat_cmds[]. Replay also
              * cannot follow the dynamic jump trace. */
             char label_name[64];
-            if (!repl_extract_goto_label(flat_cmds[pc].source,
+            if (!repl_extract_goto_label(execution_flat_text(&flat_cmds[pc]),
                                          label_name, sizeof(label_name)))
                 break;
             if (goto_count++ > 100000) {
@@ -489,7 +505,7 @@ void repl_execute_program(const ReplExecutionOptions *options) {
                 if (flat_cmds[label_idx].valid &&
                     flat_cmds[label_idx].type == CMD_LABEL) {
                     char target_label[64];
-                    if (repl_extract_label_name(flat_cmds[label_idx].source,
+                    if (repl_extract_label_name(execution_flat_text(&flat_cmds[label_idx]),
                                                 target_label,
                                                 sizeof(target_label)) &&
                         strcmp(target_label, label_name) == 0) {
@@ -514,7 +530,7 @@ void repl_execute_program(const ReplExecutionOptions *options) {
                     eval_vars = local_vars->vars;
                     eval_num_vars = local_vars->num_vars;
                 }
-                if (repl_extract_paren_payload(flat_cmds[pc].source,
+                if (repl_extract_paren_payload(execution_flat_text(&flat_cmds[pc]),
                                                cond_text, sizeof(cond_text)) &&
                     cond_text[0]) {
                     char repl_cond[MAX_LINE_LEN];
@@ -541,7 +557,7 @@ void repl_execute_program(const ReplExecutionOptions *options) {
             float value = flat_cmds[pc].args[0];
             if (flat_cmds[pc].has_vars) {
                 char rhs[MAX_LINE_LEN] = "";
-                if (repl_extract_assignment_parts(flat_cmds[pc].source, NULL, 0,
+                if (repl_extract_assignment_parts(execution_flat_text(&flat_cmds[pc]), NULL, 0,
                                                   rhs, sizeof(rhs)) && rhs[0]) {
                     FlatCmdLocalVars *local_vars =
                         execution_local_vars_at(program, pc);

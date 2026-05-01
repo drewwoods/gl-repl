@@ -194,10 +194,15 @@ void repl_clear_all_cmds(void) {
     set_status("All commands cleared");
 }
 
+static const char *editor_committed_line_text(int idx) {
+    const char *text;
+    return ((text = repl_state_editor_buffer_line(idx)) && text[0]) ? text : repl_state_document_cmds_mut()[idx].source;
+}
+
 void load_line_to_input(int idx) {
     ReplEditorInputState *inp = repl_state_editor_input_mut();
     if (idx >= 0 && idx < repl_state_document_count()) {
-        const char *s = repl_state_document_cmds_mut()[idx].source;
+        const char *s = editor_committed_line_text(idx);
         while (*s && isspace((unsigned char)*s))
             s++;
 
@@ -365,7 +370,7 @@ static int input_matches_committed_line(int line) {
     if (line < 0 || line >= repl_state_document_count())
         return 0;
 
-    const char *s = repl_state_document_cmds_mut()[line].source;
+    const char *s = editor_committed_line_text(line);
     while (*s && isspace((unsigned char)*s))
         s++;
 
