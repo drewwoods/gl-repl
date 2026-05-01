@@ -179,19 +179,26 @@ static void test_execute_all_commands(void) {
     cmds[count].type = CMD_IF_END; cmds[count].valid = 1; count++;
 
     // Add IF_BEGIN and VAR_ASSIGN with has_vars
+    // Set up editor buffer entries so execution_flat_text() can resolve text.
+    repl_state_editor_buffer_set_line(0, "if (1.0) {");
+    repl_state_editor_buffer_set_line(1, "x = 5.0;");
+    repl_state_editor_buffer_set_line(2, "goto skip;");
+    repl_state_editor_buffer_set_line(3, "label skip;");
+    repl_state_document_count_set(4);
+
     cmds[count].type = CMD_IF_BEGIN; cmds[count].valid = 1; cmds[count].has_vars = 1;
-    strcpy(cmds[count].source, "if (1.0) {"); count++;
+    cmds[count].src_cmd_idx = 0; count++;
     cmds[count].type = CMD_IF_END; cmds[count].valid = 1; count++;
 
     cmds[count].type = CMD_VAR_ASSIGN; cmds[count].valid = 1; cmds[count].has_vars = 1; cmds[count].num_args = 0;
-    strcpy(cmds[count].source, "x = 5.0;"); count++;
+    cmds[count].src_cmd_idx = 1; count++;
 
     // Add GOTO to jump over a command
     cmds[count].type = CMD_GOTO; cmds[count].valid = 1;
-    strcpy(cmds[count].source, "goto skip;"); count++;
+    cmds[count].src_cmd_idx = 2; count++;
     cmds[count].type = CMD_VERTEX3F; cmds[count].valid = 1; count++; // skipped
     cmds[count].type = CMD_LABEL; cmds[count].valid = 1;
-    strcpy(cmds[count].source, "label skip;"); count++;
+    cmds[count].src_cmd_idx = 3; count++;
 
     ReplExecutionOptions opts = {0};
     opts.flat_cmd_count = count;

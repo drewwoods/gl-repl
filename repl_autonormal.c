@@ -44,18 +44,25 @@ static GLCmd make_auto_normal(float nx, float ny, float nz,
     c.valid = 1;
     c.is_auto = 1;
 
-    char ind[32];
-    normal_indent(insert_pos, ind, sizeof(ind));
-    snprintf(c.source, sizeof(c.source),
-             "%sglNormal3f(%g, %g, %g);", ind, nx, ny, nz);
+    (void)insert_pos;  /* indent computed in make_auto_normal_text */
     return c;
 }
 
-static void insert_cmd_at(int pos, const GLCmd *cmd) {
+/* Canonical text for an auto-normal at insert_pos */
+static void make_auto_normal_text(int insert_pos, float nx, float ny, float nz,
+                                  char *text_out, int text_sz) {
+    char ind[32];
+    normal_indent(insert_pos, ind, sizeof(ind));
+    snprintf(text_out, (size_t)text_sz,
+             "%sglNormal3f(%g, %g, %g);", ind, nx, ny, nz);
+}
+
+static void insert_cmd_at(int pos, const GLCmd *cmd,
+                           float nx, float ny, float nz) {
     ReplCommandStore store = repl_command_store_live();
     char line[MAX_LINE_LEN];
 
-    repl_command_store_source_to_line(line, sizeof(line), cmd->source);
+    make_auto_normal_text(pos, nx, ny, nz, line, sizeof(line));
     repl_command_store_insert_one(&store, pos, cmd,
                                   REPL_COMMAND_STORE_ADJUST_EDIT_LINE,
                                   line);
@@ -198,8 +205,7 @@ void recompute_autonormals(void) {
                     GLCmd auto_normal = make_auto_normal(nx, ny, nz, vidx - 1);
                     char line[MAX_LINE_LEN];
 
-                    repl_command_store_source_to_line(line, sizeof(line),
-                                                      auto_normal.source);
+                    make_auto_normal_text(vidx - 1, nx, ny, nz, line, sizeof(line));
                     repl_command_store_replace_one(&store, vidx - 1,
                                                    &auto_normal, line);
                 }
@@ -207,7 +213,7 @@ void recompute_autonormals(void) {
             }
 
             GLCmd nc = make_auto_normal(nx, ny, nz, vidx);
-            insert_cmd_at(vidx, &nc);
+            insert_cmd_at(vidx, &nc, nx, ny, nz);
             offset++;
             block_end++;
         }

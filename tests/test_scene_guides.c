@@ -46,8 +46,6 @@ int main(void) {
 
         source_cmds[0].type = CMD_TRANSLATE3F;
         source_cmds[0].valid = 1;
-        snprintf(source_cmds[0].source, sizeof(source_cmds[0].source),
-                 "glTranslatef(1,2,3);");
         flat_cmds[0].type = CMD_TRANSLATE3F;
         flat_cmds[0].valid = 1;
         flat_cmds[0].src_cmd_idx = 0;
@@ -55,6 +53,7 @@ int main(void) {
         SceneGuideSnapshot snapshot =
             base_snapshot(source_cmds, 2, flat_cmds, 1, 0,
                           "glTranslatef(1,2,3)");
+        snapshot.edit_line_committed_text = "glTranslatef(1,2,3);";
         snapshot.replaying = 1;
         ASSERT_INT("prepare disabled while replaying",
                    scene_transform_guides_prepare(&snapshot, &plan), 0);
@@ -80,8 +79,6 @@ int main(void) {
 
         source_cmds[0].type = CMD_TRANSLATE3F;
         source_cmds[0].valid = 0;
-        snprintf(source_cmds[0].source, sizeof(source_cmds[0].source),
-                 "glTranslatef(1,2,3);");
         flat_cmds[0].type = CMD_TRANSLATE3F;
         flat_cmds[0].valid = 1;
         flat_cmds[0].src_cmd_idx = 0;
@@ -89,51 +86,47 @@ int main(void) {
         SceneGuideSnapshot snapshot =
             base_snapshot(source_cmds, 3, flat_cmds, 1, 0,
                           "glTranslatef(1,2,3)");
+        snapshot.edit_line_committed_text = "glTranslatef(1,2,3);";
         ASSERT_INT("prepare rejects invalid source cmd",
                    scene_transform_guides_prepare(&snapshot, &plan), 0);
 
         source_cmds[0].valid = 1;
         source_cmds[0].type = CMD_VERTEX3F;
-        snprintf(source_cmds[0].source, sizeof(source_cmds[0].source),
-                 "glVertex3f(1,2,3);");
         snapshot.input = "glVertex3f(1,2,3)";
         snapshot.input_len = (int)strlen(snapshot.input);
+        snapshot.edit_line_committed_text = "glVertex3f(1,2,3);";
         ASSERT_INT("prepare rejects non-transform source cmd",
                    scene_transform_guides_prepare(&snapshot, &plan), 0);
 
         source_cmds[0].type = CMD_SCALEF;
-        snprintf(source_cmds[0].source, sizeof(source_cmds[0].source),
-                 "glScalef(2,2,2);");
         snapshot.input = "glScalef(2,2,3)";
         snapshot.input_len = (int)strlen(snapshot.input);
+        snapshot.edit_line_committed_text = "glScalef(2,2,2);";
         ASSERT_INT("prepare rejects modified source text",
                    scene_transform_guides_prepare(&snapshot, &plan), 0);
 
         source_cmds[0].type = CMD_TRANSLATE3F;
         flat_cmds[0].type = CMD_TRANSLATE3F;
-        snprintf(source_cmds[0].source, sizeof(source_cmds[0].source),
-                 "glTranslatef(1,2,3);");
         snapshot.input = "glTranslatef(1,2,3)";
         snapshot.input_len = (int)strlen(snapshot.input);
+        snapshot.edit_line_committed_text = "glTranslatef(1,2,3);";
         ASSERT_INT("prepare accepts translate",
                    scene_transform_guides_prepare(&snapshot, &plan), 1);
         ASSERT_INT("plan active for translate", plan.active, 1);
 
         source_cmds[0].type = CMD_SCALEF;
         flat_cmds[0].type = CMD_SCALEF;
-        snprintf(source_cmds[0].source, sizeof(source_cmds[0].source),
-                 "glScalef(2,2,2);");
         snapshot.input = "glScalef(2,2,2)";
         snapshot.input_len = (int)strlen(snapshot.input);
+        snapshot.edit_line_committed_text = "glScalef(2,2,2);";
         ASSERT_INT("prepare accepts scale",
                    scene_transform_guides_prepare(&snapshot, &plan), 1);
 
         source_cmds[0].type = CMD_ROTATEF;
         flat_cmds[0].type = CMD_ROTATEF;
-        snprintf(source_cmds[0].source, sizeof(source_cmds[0].source),
-                 "glRotatef(45,0,1,0);");
         snapshot.input = "glRotatef(45,0,1,0)";
         snapshot.input_len = (int)strlen(snapshot.input);
+        snapshot.edit_line_committed_text = "glRotatef(45,0,1,0);";
         ASSERT_INT("prepare accepts rotate",
                    scene_transform_guides_prepare(&snapshot, &plan), 1);
     }
@@ -145,8 +138,6 @@ int main(void) {
 
         source_cmds[1].type = CMD_TRANSLATE3F;
         source_cmds[1].valid = 1;
-        snprintf(source_cmds[1].source, sizeof(source_cmds[1].source),
-                 "glTranslatef(1,2,3);");
 
         flat_cmds[0].valid = 1;
         flat_cmds[0].src_cmd_idx = 0;
@@ -164,6 +155,7 @@ int main(void) {
         SceneGuideSnapshot snapshot =
             base_snapshot(source_cmds, 3, flat_cmds, 4, 1,
                           "glTranslatef(1,2,3)");
+        snapshot.edit_line_committed_text = "glTranslatef(1,2,3);";
         ASSERT_INT("prepare activates for indexed flat stream",
                    scene_transform_guides_prepare(&snapshot, &plan), 1);
         ASSERT_INT("cursor flat idx picks first matching src cmd",
@@ -180,8 +172,6 @@ int main(void) {
 
         source_cmds[0].type = CMD_SCALEF;
         source_cmds[0].valid = 1;
-        snprintf(source_cmds[0].source, sizeof(source_cmds[0].source),
-                 "glScalef(2,2,2);");
 
         flat_cmds[0].valid = 1;
         flat_cmds[0].src_cmd_idx = 0;
@@ -193,6 +183,7 @@ int main(void) {
         SceneGuideSnapshot snapshot =
             base_snapshot(source_cmds, 2, flat_cmds, 2, 0,
                           "glScalef(2,2,2)");
+        snapshot.edit_line_committed_text = "glScalef(2,2,2);";
         ASSERT_INT("prepare activates when only cursor-source cmds remain",
                    scene_transform_guides_prepare(&snapshot, &plan), 1);
         ASSERT_INT("after index falls back to flat count",

@@ -37,8 +37,8 @@ typedef struct {
 } ReplParseContext;
 
 /* Parser output struct. On success, cmd holds the parsed command and text
- * holds the editor-buffer form (no leading indent, no trailing semicolon).
- * cmd.source still holds the indented canonical form (removed in Step 3b). */
+ * holds the canonical source form (indented, trailing semicolon), which is
+ * also the form the editor buffer stores for display/re-edit. */
 typedef struct {
     GLCmd cmd;
     char  text[MAX_LINE_LEN];

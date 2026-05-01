@@ -25,10 +25,6 @@ by default in debug builds.
 the repo root; `include/` is for header-only helpers and vendored single-header
 dependencies.
 
-## Code Reading
-- Never read entire files; use offset/limit to target specific sections
-- Pipe bash output through head/grep; never cat large files unfiltered
-
 ### Local GL Stub Headers
 
 This sample ships no-op OpenGL, GLU, and GLUT headers under

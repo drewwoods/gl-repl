@@ -127,10 +127,13 @@ static int find_defined_func_call_params(const char *input, const char **after_o
             continue;
         if ((int)repl_state_document_cmds_mut()[i].args[0] != fn)
             continue;
-        if (!parse_repl_func_signature(repl_state_document_cmds_mut()[i].source, &parsed_fn,
-                                       param_storage, MAX_EXPR_VARS,
-                                       &param_count))
-            continue;
+        {
+            const char *func_text = repl_state_editor_buffer_line(i);
+            if (!parse_repl_func_signature(func_text ? func_text : "", &parsed_fn,
+                                           param_storage, MAX_EXPR_VARS,
+                                           &param_count))
+                continue;
+        }
         if (parsed_fn != fn || param_count <= 0)
             continue;
         for (int j = 0; j < param_count; j++)

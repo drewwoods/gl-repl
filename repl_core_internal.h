@@ -116,12 +116,14 @@ static inline int repl_copy_string_fits(char *dst, size_t dst_sz,
 
 /* ---- Normalize / commit pipeline -------------------------------------- */
 
-/* Parse `line` into `out_cmd` and also write the canonical (normalized)
- * source text back into out_cmd->source. `preserve_expr` keeps the raw
- * argument expressions instead of re-emitting them from evaluated values. */
+/* Parse `line` into `out_cmd` and optionally write the canonical (normalized)
+ * source text into text_out (capacity text_sz; pass NULL/0 to ignore).
+ * `preserve_expr` keeps the raw argument expressions instead of re-emitting
+ * them from evaluated values. */
 int  repl_parse_and_normalize(const char *line, int pos,
                               ExprVar *vars, int num_vars,
-                              int preserve_expr, GLCmd *out_cmd);
+                              int preserve_expr, GLCmd *out_cmd,
+                              char *text_out, int text_sz);
 
 /* Same as repl_parse_and_normalize() but rejects top-level CMD_CALL
  * whose target funcN has no matching CMD_FUNC_DEF.  Used by the commit
@@ -130,7 +132,8 @@ int  repl_parse_and_normalize(const char *line, int pos,
  * variant above. */
 int  repl_parse_and_normalize_strict(const char *line, int pos,
                                      ExprVar *vars, int num_vars,
-                                     int preserve_expr, GLCmd *out_cmd);
+                                     int preserve_expr, GLCmd *out_cmd,
+                                     char *text_out, int text_sz);
 
 /* Underlying save/load (no logging / toast side-effects); public wrappers
  * in repl_core.h call these. */

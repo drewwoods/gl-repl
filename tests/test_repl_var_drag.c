@@ -247,7 +247,9 @@ static void test_source_sync_literal_assign(void) {
             /* Source should contain the new value */
             ASSERT_FLOAT("assignment value updated", cmd->args[0], 4.14f, 0.01f);
             /* Source text should reflect new value */
-            ASSERT_TRUE("source text updated", strstr(cmd->source, "4.14") != NULL);
+            ASSERT_TRUE("source text updated",
+                        strstr(repl_state_editor_buffer_line(i) ? repl_state_editor_buffer_line(i) : "",
+                               "4.14") != NULL);
         }
     }
     ASSERT_INT("assignment command found", found, 1);
@@ -271,25 +273,27 @@ static void test_source_sync_skip_expressions(void) {
     repl_feed_line_public("x = y * 2;");
 
     /* Store original source text */
-    GLCmd *expr_cmd = NULL;
+    int expr_cmd_idx = -1;
     for (int i = 0; i < repl_state_document_count(); i++) {
         GLCmd *cmd = &repl_state_document_cmds_mut()[i];
         if (cmd->type == CMD_VAR_ASSIGN && cmd->num_args == x_idx && cmd->has_vars) {
-            expr_cmd = cmd;
+            expr_cmd_idx = i;
             break;
         }
     }
-    ASSERT_TRUE("expression assignment found", expr_cmd != NULL);
+    ASSERT_TRUE("expression assignment found", expr_cmd_idx >= 0);
 
     char original_source[256];
-    strcpy(original_source, expr_cmd->source);
+    const char *orig_text = repl_state_editor_buffer_line(expr_cmd_idx);
+    snprintf(original_source, sizeof(original_source), "%s", orig_text ? orig_text : "");
 
     /* Drag x */
     repl_var_drag_begin(x_idx, 0, 100);
     repl_var_drag_motion(120);
 
     /* Expression-based assignment should NOT be updated */
-    ASSERT_TRUE("source unchanged", strcmp(expr_cmd->source, original_source) == 0);
+    const char *cur_text = repl_state_editor_buffer_line(expr_cmd_idx);
+    ASSERT_TRUE("source unchanged", strcmp(cur_text ? cur_text : "", original_source) == 0);
 }
 
 /* Test: sequential drags (begin -> motion -> reset -> begin) */

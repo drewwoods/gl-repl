@@ -73,9 +73,10 @@ void repl_var_drag_motion(int x) {
         if (repl_state_document_cmds_mut()[i].valid && repl_state_document_cmds_mut()[i].type == CMD_VAR_ASSIGN &&
             repl_state_document_cmds_mut()[i].num_args == drag->var_idx &&
             !repl_state_document_cmds_mut()[i].has_vars) {
+            char new_line[MAX_LINE_LEN];
             repl_state_document_cmds_mut()[i].args[0] = new_val;
-            snprintf(repl_state_document_cmds_mut()[i].source, sizeof(repl_state_document_cmds_mut()[i].source),
-                     "  %s = %g;", vname, (double)new_val);
+            snprintf(new_line, sizeof(new_line), "  %s = %g;", vname, (double)new_val);
+            repl_state_editor_buffer_set_line(i, new_line);
         }
     }
     repl_state_mark_flat_dirty();

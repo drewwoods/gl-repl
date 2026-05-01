@@ -579,7 +579,9 @@ static void draw_rotate_guide(const SceneGuideSnapshot *snapshot,
 
 static int transform_source_unmodified(const SceneGuideSnapshot *snapshot,
                                        const GLCmd *source_cmd) {
-    const char *source = source_cmd->source;
+    (void)source_cmd;
+    const char *source = snapshot->edit_line_committed_text
+                         ? snapshot->edit_line_committed_text : "";
     while (*source && isspace((unsigned char)*source)) source++;
 
     int source_len = (int)strlen(source);

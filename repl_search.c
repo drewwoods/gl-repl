@@ -291,14 +291,11 @@ const char *repl_search_row_text(int row_idx) {
         return repl_state_editor_input().input;
     if (repl_state_insert_mode() && row_idx > edit_line)
         row_idx--;
-    /* Spike: search the editor buffer rather than cmds[].source so the
-     * search hit positions stay aligned with what the renderer shows.
-     * Falls back to cmd.source for indices not yet mirrored into the
-     * buffer (e.g. test fixtures that bypass the store). */
+    /* Source text lives in the editor buffer. */
     const char *text = repl_state_editor_buffer_line(row_idx);
-    if (text && text[0])
+    if (text)
         return text;
-    return repl_state_document_cmds()[row_idx].source;
+    return "";
 }
 
 static int search_find_forward(int start_row, int start_char,

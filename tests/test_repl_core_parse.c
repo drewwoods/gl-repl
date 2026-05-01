@@ -18,8 +18,23 @@ static TestHarness g_harness = TEST_HARNESS_INIT;
 
 static int leading_spaces(const char *s) {
     int n = 0;
+    if (!s) return 0;
     while (s[n] == ' ') n++;
     return n;
+}
+
+/* Helper: parse line with default context, output cmd + canonical text. */
+static int parse_cmd_with_text(const char *line, GLCmd *cmd,
+                                char *text_out, int text_sz) {
+    ReplParseContext ctx = { 0, NULL, 0, 0 };
+    ReplParsedLine pl;
+    int ok = repl_parser_parse_command_ctx(line, &pl, &ctx);
+    if (cmd) *cmd = pl.cmd;
+    if (text_out && text_sz > 0) {
+        strncpy(text_out, pl.text, (size_t)(text_sz - 1));
+        text_out[text_sz - 1] = '\0';
+    }
+    return ok;
 }
 
 static void declare_test_vars(void) {
@@ -130,14 +145,15 @@ int main(void) {
 
     {
         GLCmd cmd;
+        char cmd_text[MAX_LINE_LEN] = "";
         memset(&cmd, 0, sizeof(cmd));
         int ok = repl_parse_and_normalize("glVertex3f(x+1, y, z)", 0,
-                                          NULL, 0, 1, &cmd);
+                                          NULL, 0, 1, &cmd, cmd_text, sizeof(cmd_text));
         ASSERT_TRUE("parse normalize vars ok", ok == 1);
         ASSERT_TRUE("cmd has vars", cmd.has_vars == 1);
-        ASSERT_TRUE("source keeps x+1", strstr(cmd.source, "x+1") != NULL);
-        ASSERT_TRUE("source keeps y", strstr(cmd.source, "y") != NULL);
-        ASSERT_TRUE("source keeps z", strstr(cmd.source, "z") != NULL);
+        ASSERT_TRUE("source keeps x+1", strstr(cmd_text, "x+1") != NULL);
+        ASSERT_TRUE("source keeps y", strstr(cmd_text, "y") != NULL);
+        ASSERT_TRUE("source keeps z", strstr(cmd_text, "z") != NULL);
     }
 
     {
@@ -152,12 +168,12 @@ int main(void) {
         int ok = repl_parser_parse_command_ctx("glVertex3f(1, 2, 3)", &pl, &ctx);
         ASSERT_TRUE("context parse ok", ok == 1);
         ASSERT_TRUE("context parse uses source line indent",
-                    leading_spaces(pl.cmd.source) == 4);
+                    leading_spaces(pl.text) == 4);
         ASSERT_TRUE("context parse leaves edit line alone", repl_state_edit_line() == 0);
 
         memset(&cmd, 0, sizeof(cmd));
         ok = repl_parse_and_normalize("glColor3f(1, 0, 0)", repl_state_document_count(),
-                                      NULL, 0, 0, &cmd);
+                                      NULL, 0, 0, &cmd, NULL, 0);
         ASSERT_TRUE("normalize explicit line ok", ok == 1);
         ASSERT_TRUE("normalize explicit line leaves edit line alone",
                     repl_state_edit_line() == 0);
@@ -172,18 +188,20 @@ int main(void) {
 
         GLCmd tess_cmd;
         GLCmd gl_cmd;
+        char tess_text[MAX_LINE_LEN] = "";
+        char gl_text[MAX_LINE_LEN] = "";
         memset(&tess_cmd, 0, sizeof(tess_cmd));
         memset(&gl_cmd, 0, sizeof(gl_cmd));
 
         int ok1 = repl_parse_and_normalize("gluNormal(0, 0, 1)", repl_state_document_count(),
-                                           NULL, 0, 0, &tess_cmd);
+                                           NULL, 0, 0, &tess_cmd, tess_text, sizeof(tess_text));
         int ok2 = repl_parse_and_normalize("glVertex3f(1, 2, 3)", repl_state_document_count(),
-                                           NULL, 0, 0, &gl_cmd);
+                                           NULL, 0, 0, &gl_cmd, gl_text, sizeof(gl_text));
         ASSERT_TRUE("tess parse ok", ok1 == 1);
         ASSERT_TRUE("gl parse ok", ok2 == 1);
 
-        int tess_indent = leading_spaces(tess_cmd.source);
-        int gl_indent = leading_spaces(gl_cmd.source);
+        int tess_indent = leading_spaces(tess_text);
+        int gl_indent = leading_spaces(gl_text);
         ASSERT_TRUE("gl indent > tess indent", gl_indent > tess_indent);
         ASSERT_TRUE("indent delta is 2", gl_indent - tess_indent == 2);
     }
@@ -204,11 +222,12 @@ int main(void) {
         declare_test_vars();
         repl_state_edit_line_set(0);
         GLCmd cmd;
+        char cmd_text[MAX_LINE_LEN] = "";
         memset(&cmd, 0, sizeof(cmd));
-        int ok = repl_parser_parse_command("func0(x + 1, 2)", &cmd);
+        int ok = parse_cmd_with_text("func0(x + 1, 2)", &cmd, cmd_text, sizeof(cmd_text));
         ASSERT_TRUE("public parse_command func call", ok == 1);
         ASSERT_TRUE("public parse_command func type", cmd.type == CMD_CALL);
-        ASSERT_TRUE("func call keeps raw expr", strstr(cmd.source, "x + 1") != NULL);
+        ASSERT_TRUE("func call keeps raw expr", strstr(cmd_text, "x + 1") != NULL);
     }
 
     {
@@ -228,11 +247,12 @@ int main(void) {
     {
         repl_reset_state();
         GLCmd cmd;
+        char cmd_text[MAX_LINE_LEN] = "";
         memset(&cmd, 0, sizeof(cmd));
-        int ok = repl_parser_parse_command("glRotatef(45, 0, 1, 0)", &cmd);
+        int ok = parse_cmd_with_text("glRotatef(45, 0, 1, 0)", &cmd, cmd_text, sizeof(cmd_text));
         ASSERT_TRUE("glRotatef parse ok", ok == 1);
         ASSERT_TRUE("glRotatef type", cmd.type == CMD_ROTATEF);
-        ASSERT_TRUE("glRotatef source has 45", strstr(cmd.source, "45") != NULL);
+        ASSERT_TRUE("glRotatef source has 45", strstr(cmd_text, "45") != NULL);
     }
 
     {
@@ -290,14 +310,16 @@ int main(void) {
     {
         repl_reset_state();
         GLCmd cmd;
+        char cmd_text[MAX_LINE_LEN] = "";
         memset(&cmd, 0, sizeof(cmd));
-        int ok = repl_parser_parse_command("glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE)", &cmd);
+        int ok = parse_cmd_with_text("glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE)",
+                                      &cmd, cmd_text, sizeof(cmd_text));
         ASSERT_TRUE("glColorMaterial parse ok", ok == 1);
         ASSERT_TRUE("glColorMaterial type", cmd.type == CMD_COLOR_MATERIAL);
         ASSERT_TRUE("glColorMaterial face", cmd.mode == GL_FRONT_AND_BACK);
         ASSERT_TRUE("glColorMaterial mode", (GLenum)cmd.args[0] == GL_AMBIENT_AND_DIFFUSE);
         ASSERT_TRUE("glColorMaterial source",
-                    strstr(cmd.source, "glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE);") != NULL);
+                    strstr(cmd_text, "glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE);") != NULL);
     }
 
     {
@@ -313,12 +335,14 @@ int main(void) {
     {
         repl_reset_state();
         GLCmd cmd;
+        char cmd_text[MAX_LINE_LEN] = "";
         memset(&cmd, 0, sizeof(cmd));
-        int ok = repl_parser_parse_command("glMaterialf(GL_FRONT, GL_SHININESS, 64)", &cmd);
+        int ok = parse_cmd_with_text("glMaterialf(GL_FRONT, GL_SHININESS, 64)",
+                                      &cmd, cmd_text, sizeof(cmd_text));
         ASSERT_TRUE("glMaterialf scalar parse ok", ok == 1);
         ASSERT_TRUE("glMaterialf scalar type", cmd.type == CMD_MATERIALF);
         ASSERT_TRUE("glMaterialf scalar source has SHININESS",
-                    strstr(cmd.source, "GL_SHININESS") != NULL);
+                    strstr(cmd_text, "GL_SHININESS") != NULL);
     }
 
     {
@@ -441,13 +465,14 @@ int main(void) {
     {
         repl_reset_state();
         GLCmd cmd;
+        char cmd_text[MAX_LINE_LEN] = "";
         memset(&cmd, 0, sizeof(cmd));
-        int ok = repl_parser_parse_command("glDepthMask(GL_FALSE)", &cmd);
+        int ok = parse_cmd_with_text("glDepthMask(GL_FALSE)", &cmd, cmd_text, sizeof(cmd_text));
         ASSERT_TRUE("glDepthMask(GL_FALSE) parse ok", ok == 1);
         ASSERT_TRUE("glDepthMask type", cmd.type == CMD_DEPTH_MASK);
         ASSERT_TRUE("glDepthMask mode GL_FALSE", cmd.mode == GL_FALSE);
         ASSERT_TRUE("glDepthMask source canonicalized",
-                    strstr(cmd.source, "glDepthMask(GL_FALSE);") != NULL);
+                    strstr(cmd_text, "glDepthMask(GL_FALSE);") != NULL);
     }
     {
         repl_reset_state();
@@ -471,23 +496,27 @@ int main(void) {
     {
         repl_reset_state();
         GLCmd cmd;
+        char cmd_text[MAX_LINE_LEN] = "";
         memset(&cmd, 0, sizeof(cmd));
-        int ok = repl_parser_parse_command("   glColor3f( 1 , 2 , 3 )   ;   ", &cmd);
+        int ok = parse_cmd_with_text("   glColor3f( 1 , 2 , 3 )   ;   ",
+                                      &cmd, cmd_text, sizeof(cmd_text));
         ASSERT_TRUE("trimmed glColor3f parse ok", ok == 1);
         ASSERT_TRUE("trimmed glColor3f type", cmd.type == CMD_COLOR3F);
         ASSERT_TRUE("trimmed glColor3f source normalized",
-                    strstr(cmd.source, "glColor3f(1, 2, 3);") != NULL);
+                    strstr(cmd_text, "glColor3f(1, 2, 3);") != NULL);
     }
 
     {
         repl_reset_state();
         GLCmd cmd;
+        char cmd_text[MAX_LINE_LEN] = "";
         memset(&cmd, 0, sizeof(cmd));
-        int ok = repl_parser_parse_command("glColor3f(1 + 2, sin(0.5), -3)", &cmd);
+        int ok = parse_cmd_with_text("glColor3f(1 + 2, sin(0.5), -3)",
+                                      &cmd, cmd_text, sizeof(cmd_text));
         ASSERT_TRUE("expr glColor3f parse ok", ok == 1);
         ASSERT_TRUE("expr glColor3f type", cmd.type == CMD_COLOR3F);
         ASSERT_TRUE("expr glColor3f source canonicalized",
-                    strstr(cmd.source, "glColor3f(") != NULL);
+                    strstr(cmd_text, "glColor3f(") != NULL);
         ASSERT_TRUE("expr glColor3f computes first arg", cmd.args[0] == 3.0f);
     }
 
@@ -557,12 +586,14 @@ int main(void) {
     {
         repl_reset_state();
         GLCmd cmd;
+        char cmd_text[MAX_LINE_LEN] = "";
         memset(&cmd, 0, sizeof(cmd));
-        int ok = repl_parser_parse_command("func2(1 + sin(2), max(3, 4))", &cmd);
+        int ok = parse_cmd_with_text("func2(1 + sin(2), max(3, 4))",
+                                      &cmd, cmd_text, sizeof(cmd_text));
         ASSERT_TRUE("func2 nested args parse ok", ok == 1);
         ASSERT_TRUE("func2 nested args type", cmd.type == CMD_CALL);
         ASSERT_TRUE("func2 nested args preserves nested expr",
-                    strstr(cmd.source, "max(3, 4)") != NULL);
+                    strstr(cmd_text, "max(3, 4)") != NULL);
     }
 
     {

@@ -19,6 +19,7 @@ typedef struct SceneGuideSnapshot {
     int cursor_pos;
     int edit_line_idx;
     int inserting;
+    const char *edit_line_committed_text; /* editor buffer text for edit_line_idx */
 
     const GLCmd *source_cmds;
     int source_cmd_count;

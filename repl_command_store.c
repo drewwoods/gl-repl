@@ -73,34 +73,26 @@ static void command_store_invalidate_after_mutation(void) {
     repl_state_mark_normals_dirty();
 }
 
-/* Editor-owns-text spike: keep editor_buffer.lines[] in sync with the
- * canonical command store. During the spike the buffer is a verbatim
- * mirror of cmd->source (same indent, same trailing ';'); later phases
- * of the redesign migrate this to the raw user-typed form, at which
- * point the parser becomes the only consumer of the indent/semicolon
- * normalization. */
+/* editor_buffer_sync_after_store_mutation: previously mirrored cmd->source
+ * into the buffer, but GLCmd.source has been removed (Step 3b).  All
+ * mutations now supply an explicit text line through the _with_line APIs,
+ * so this fallback is only reached for reset/clear calls (count == 0).
+ * Clear the buffer slots so stale text is not shown. */
 static void editor_buffer_sync_after_store_mutation(int count) {
     ReplEditorBuffer *buf = repl_state_editor_buffer_mut();
     if (!buf) return;
-    GLCmd *cmds = repl_state_document_cmds_mut();
     if (count > MAX_COMMANDS) count = MAX_COMMANDS;
-    for (int i = 0; i < count; i++) {
-        const char *src = cmds[i].source;
-        int n = (int)strlen(src);
-        if (n >= MAX_LINE_LEN) n = MAX_LINE_LEN - 1;
-        memcpy(buf->lines[i], src, (size_t)n);
-        buf->lines[i][n] = '\0';
-    }
+    for (int i = 0; i < count; i++)
+        buf->lines[i][0] = '\0';
     buf->line_count = count;
 }
 
 static const char *editor_buffer_line_input(const GLCmd *cmds,
                                             const char *const *lines,
                                             int idx) {
+    (void)cmds;  /* GLCmd.source removed; explicit line is required */
     if (lines && lines[idx])
         return lines[idx];
-    if (cmds)
-        return cmds[idx].source;
     return "";
 }
 
@@ -148,11 +140,11 @@ static void editor_buffer_replace_one(int pos, const GLCmd *cmd,
                                       const char *line, int count) {
     ReplEditorBuffer *buf = repl_state_editor_buffer_mut();
 
+    (void)cmd;  /* GLCmd.source removed; explicit line is required */
     if (!buf || pos < 0 || pos >= MAX_COMMANDS)
         return;
 
-    editor_buffer_set_line_slot(buf->lines[pos],
-                                line ? line : (cmd ? cmd->source : ""));
+    editor_buffer_set_line_slot(buf->lines[pos], line ? line : "");
     if (buf->line_count < count)
         buf->line_count = count;
 }
@@ -202,20 +194,28 @@ static int repl_command_store_write_color_source(GLCmd *cmd,
                                                  float r, float g, float b,
                                                  float a, int has_alpha,
                                                  int is_clear_color) {
-    int indent_len = 0;
-    char indent_prefix[sizeof(cmd->source)];
-    char new_source[sizeof(cmd->source)];
+    char indent_prefix[MAX_LINE_LEN];
+    char new_source[MAX_LINE_LEN];
     float out_r = r;
     float out_g = g;
     float out_b = b;
     int formatted;
+    int indent_len = 0;
 
-    while (cmd->source[indent_len] == ' ' || cmd->source[indent_len] == '\t')
-        indent_len++;
-    if ((size_t)indent_len >= sizeof(indent_prefix))
-        indent_len = (int)sizeof(indent_prefix) - 1;
+    /* Get the existing text from the editor buffer to extract the indent. */
+    {
+        GLCmd *cmds = repl_state_document_cmds_mut();
+        int idx = (int)(cmd - cmds);
+        const char *existing = (idx >= 0 && idx < MAX_COMMANDS)
+                               ? repl_state_editor_buffer_line(idx) : NULL;
+        if (existing) {
+            while (existing[indent_len] == ' ' || existing[indent_len] == '\t')
+                indent_len++;
+        }
+    }
+    if (indent_len >= MAX_LINE_LEN) indent_len = MAX_LINE_LEN - 1;
     for (int i = 0; i < indent_len; i++)
-        indent_prefix[i] = cmd->source[i];
+        indent_prefix[i] = ' ';
     indent_prefix[indent_len] = '\0';
 
     if (is_clear_color) {
@@ -256,13 +256,11 @@ static int repl_command_store_write_color_source(GLCmd *cmd,
     cmd->num_args = has_alpha ? 4 : 3;
     if (has_alpha)
         cmd->args[3] = a;
-    memcpy(cmd->source, new_source, strlen(new_source) + 1);
-    /* Editor-owns-text spike: mirror the new source into the editor buffer. */
     {
         GLCmd *cmds = repl_state_document_cmds_mut();
         int idx = (int)(cmd - cmds);
         if (idx >= 0 && idx < MAX_COMMANDS)
-            repl_state_editor_buffer_set_line(idx, cmd->source);
+            repl_state_editor_buffer_set_line(idx, new_source);
     }
     command_store_invalidate_after_mutation();
     return 1;

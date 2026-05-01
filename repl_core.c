@@ -87,10 +87,7 @@ void mark_normals_dirty(void) {
 /* (no display list - commands are executed directly each frame) */
 
 /* Forward declarations (eval_expr, parse_for_header, etc. are in repl_eval.h) */
-static void get_for_var_name(const GLCmd *cmd, char *var, int var_sz);
-
-/* Forward declarations (eval_expr, parse_for_header, etc. are in repl_eval.h) */
-static void get_for_var_name(const GLCmd *cmd, char *var, int var_sz);
+static void get_for_var_name_from_text(const char *text, char *var, int var_sz);
 
 /* ========================================================================= */
 /* Utility                                                                    */
@@ -220,6 +217,7 @@ static void normalize_with_indent(const char *raw_expr, int indent_spaces,
 static int parse_and_normalize_impl(const char *line, int pos,
                                     ExprVar *vars, int num_vars,
                                     int preserve_expr, GLCmd *out_cmd,
+                                    char *text_out, int text_sz,
                                     int strict_refs) {
     ReplParseContext parse_ctx = { pos, vars, num_vars, strict_refs };
     ReplParsedLine pl;
@@ -228,40 +226,50 @@ static int parse_and_normalize_impl(const char *line, int pos,
     if (!parsed) return 0;
     *out_cmd = pl.cmd;
     if (preserve_expr) {
+        /* pl.text holds the canonical (indented) form; measure its indent */
         int parsed_indent = 0;
-        while (out_cmd->source[parsed_indent] == ' ' ||
-               out_cmd->source[parsed_indent] == '\t')
+        while (pl.text[parsed_indent] == ' ' || pl.text[parsed_indent] == '\t')
             parsed_indent++;
 
-        normalize_with_indent(line, parsed_indent,
-                              repl_cmd_type_needs_semicolon(out_cmd->type),
-                              out_cmd->source, (int)sizeof(out_cmd->source));
+        if (text_out && text_sz > 0)
+            normalize_with_indent(line, parsed_indent,
+                                  repl_cmd_type_needs_semicolon(out_cmd->type),
+                                  text_out, text_sz);
         out_cmd->has_vars = 1;
+    } else {
+        if (text_out && text_sz > 0) {
+            int n = (int)strlen(pl.text);
+            if (n >= text_sz) n = text_sz - 1;
+            memcpy(text_out, pl.text, (size_t)n);
+            text_out[n] = '\0';
+        }
     }
     return 1;
 }
 
 int repl_parse_and_normalize(const char *line, int pos,
                              ExprVar *vars, int num_vars,
-                             int preserve_expr, GLCmd *out_cmd) {
+                             int preserve_expr, GLCmd *out_cmd,
+                             char *text_out, int text_sz) {
     return parse_and_normalize_impl(line, pos, vars, num_vars,
-                                    preserve_expr, out_cmd, 0);
+                                    preserve_expr, out_cmd,
+                                    text_out, text_sz, 0);
 }
 
 int repl_parse_and_normalize_strict(const char *line, int pos,
                                     ExprVar *vars, int num_vars,
-                                    int preserve_expr, GLCmd *out_cmd) {
+                                    int preserve_expr, GLCmd *out_cmd,
+                                    char *text_out, int text_sz) {
     return parse_and_normalize_impl(line, pos, vars, num_vars,
-                                    preserve_expr, out_cmd, 1);
+                                    preserve_expr, out_cmd,
+                                    text_out, text_sz, 1);
 }
 
 static void repl_core_replace_formatted_cmd(ReplCommandStore *store,
                                             int cmd_idx,
-                                            const GLCmd *cmd) {
-    char line[MAX_LINE_LEN];
-
-    repl_command_store_source_to_line(line, sizeof(line), cmd->source);
-    repl_command_store_replace_one(store, cmd_idx, cmd, line);
+                                            const GLCmd *cmd,
+                                            const char *text) {
+    repl_command_store_replace_one(store, cmd_idx, cmd, text);
 }
 
 void repl_reformat_commands(void) {
@@ -279,6 +287,11 @@ void repl_reformat_commands(void) {
 
         GLCmd orig = repl_state_document_cmds_mut()[cmd_idx];
         GLCmd fmt = orig;
+        char fmt_text[MAX_LINE_LEN] = "";
+
+        /* Canonical text for this command lives in the editor buffer. */
+        const char *orig_text = repl_state_editor_buffer_line(cmd_idx);
+        if (!orig_text) orig_text = "";
 
         char ind_s[32];
         repl_source_scope_cmd_indent(cmd_idx, ind_s, sizeof(ind_s));
@@ -287,21 +300,21 @@ void repl_reformat_commands(void) {
         case CMD_FOR_BEGIN: {
             char var[16] = "";
             char args[128] = "";
-            if (!extract_for_args_text(orig.source, var, sizeof(var), args, sizeof(args)))
-                get_for_var_name(&orig, var, sizeof(var));
+            if (!extract_for_args_text(orig_text, var, sizeof(var), args, sizeof(args)))
+                get_for_var_name_from_text(orig_text, var, sizeof(var));
             if (!var[0]) strncpy(var, "i", sizeof(var) - 1);
 
             if (orig.has_vars && args[0]) {
-                snprintf(fmt.source, sizeof(fmt.source), "%sfor(%s, %s) {", ind_s, var, args);
+                snprintf(fmt_text, sizeof(fmt_text), "%sfor(%s, %s) {", ind_s, var, args);
                 fmt.has_vars = 1;
             } else if (orig.args[2] != 1.0f) {
-                snprintf(fmt.source, sizeof(fmt.source), "%sfor(%s, %g, %g, %g) {",
+                snprintf(fmt_text, sizeof(fmt_text), "%sfor(%s, %g, %g, %g) {",
                          ind_s, var, orig.args[0], orig.args[1], orig.args[2]);
             } else {
-                snprintf(fmt.source, sizeof(fmt.source), "%sfor(%s, %g, %g) {",
+                snprintf(fmt_text, sizeof(fmt_text), "%sfor(%s, %g, %g) {",
                          ind_s, var, orig.args[0], orig.args[1]);
             }
-            repl_core_replace_formatted_cmd(&store, cmd_idx, &fmt);
+            repl_core_replace_formatted_cmd(&store, cmd_idx, &fmt, fmt_text);
             break;
         }
         case CMD_FOR_END:
@@ -318,8 +331,8 @@ void repl_reformat_commands(void) {
             if (close_ind > (int)sizeof(close_s) - 1) close_ind = (int)sizeof(close_s) - 1;
             memset(close_s, ' ', (size_t)close_ind);
             close_s[close_ind] = '\0';
-            snprintf(fmt.source, sizeof(fmt.source), "%s}", close_s);
-            repl_core_replace_formatted_cmd(&store, cmd_idx, &fmt);
+            snprintf(fmt_text, sizeof(fmt_text), "%s}", close_s);
+            repl_core_replace_formatted_cmd(&store, cmd_idx, &fmt, fmt_text);
             break;
         }
         case CMD_FUNC_DEF: {
@@ -327,22 +340,22 @@ void repl_reformat_commands(void) {
             int parsed_fn = fn;
             int param_count = 0;
             char param_names[MAX_EXPR_VARS][16];
-            if (parse_repl_func_signature(orig.source, &parsed_fn,
+            if (parse_repl_func_signature(orig_text, &parsed_fn,
                                           param_names, MAX_EXPR_VARS,
                                           &param_count))
-                format_func_header(fmt.source, sizeof(fmt.source), ind_s,
+                format_func_header(fmt_text, sizeof(fmt_text), ind_s,
                                    parsed_fn, param_names, param_count);
             else
-                snprintf(fmt.source, sizeof(fmt.source), "%sfunc%d {", ind_s, fn);
-            repl_core_replace_formatted_cmd(&store, cmd_idx, &fmt);
+                snprintf(fmt_text, sizeof(fmt_text), "%sfunc%d {", ind_s, fn);
+            repl_core_replace_formatted_cmd(&store, cmd_idx, &fmt, fmt_text);
             break;
         }
         case CMD_IF_BEGIN: {
             char cond[MAX_LINE_LEN] = "";
-            if (!repl_extract_paren_payload(orig.source, cond, sizeof(cond)))
+            if (!repl_extract_paren_payload(orig_text, cond, sizeof(cond)))
                 snprintf(cond, sizeof(cond), "%g", orig.args[0]);
-            snprintf(fmt.source, sizeof(fmt.source), "%sif(%s) {", ind_s, cond);
-            repl_core_replace_formatted_cmd(&store, cmd_idx, &fmt);
+            snprintf(fmt_text, sizeof(fmt_text), "%sif(%s) {", ind_s, cond);
+            repl_core_replace_formatted_cmd(&store, cmd_idx, &fmt, fmt_text);
             break;
         }
         case CMD_VAR_ASSIGN: {
@@ -352,7 +365,7 @@ void repl_reformat_commands(void) {
                 name = g_predef_vars[orig.num_args].name;
             char fallback[16] = "";
             if (!name) {
-                const char *p = orig.source;
+                const char *p = orig_text;
                 while (*p && isspace((unsigned char)*p)) p++;
                 int n = 0;
                 while (*p && (isalnum((unsigned char)*p) || *p == '_') &&
@@ -361,21 +374,21 @@ void repl_reformat_commands(void) {
                 fallback[n] = '\0';
                 if (fallback[0]) name = fallback;
             }
-            repl_extract_assignment_parts(orig.source, NULL, 0, rhs, sizeof(rhs));
+            repl_extract_assignment_parts(orig_text, NULL, 0, rhs, sizeof(rhs));
             {
                 char comment[MAX_LINE_LEN] = "";
-                const char *cp = strstr(orig.source, "//");
+                const char *cp = strstr(orig_text, "//");
                 if (cp) snprintf(comment, sizeof(comment), " %s", cp);
                 if (name && rhs[0])
-                    snprintf(fmt.source, sizeof(fmt.source), "%s%s = %s;%s", ind_s, name, rhs, comment);
+                    snprintf(fmt_text, sizeof(fmt_text), "%s%s = %s;%s", ind_s, name, rhs, comment);
                 else if (name)
-                    snprintf(fmt.source, sizeof(fmt.source), "%s%s = %g;%s", ind_s, name, orig.args[0], comment);
+                    snprintf(fmt_text, sizeof(fmt_text), "%s%s = %g;%s", ind_s, name, orig.args[0], comment);
             }
-            repl_core_replace_formatted_cmd(&store, cmd_idx, &fmt);
+            repl_core_replace_formatted_cmd(&store, cmd_idx, &fmt, fmt_text);
             break;
         }
         case CMD_COMMENT: {
-            const char *p = orig.source;
+            const char *p = orig_text;
             while (*p && isspace((unsigned char)*p)) p++;
             if (p[0] == '/' && p[1] == '/') {
                 char suffix[MAX_LINE_LEN];
@@ -386,35 +399,35 @@ void repl_reformat_commands(void) {
                 while (suffix_len > 0 &&
                        isspace((unsigned char)suffix[suffix_len - 1]))
                     suffix[--suffix_len] = '\0';
-                snprintf(fmt.source, sizeof(fmt.source), "%s//%s", ind_s, suffix);
+                snprintf(fmt_text, sizeof(fmt_text), "%s//%s", ind_s, suffix);
             } else {
-                snprintf(fmt.source, sizeof(fmt.source), "%s//", ind_s);
+                snprintf(fmt_text, sizeof(fmt_text), "%s//", ind_s);
             }
-            repl_core_replace_formatted_cmd(&store, cmd_idx, &fmt);
+            repl_core_replace_formatted_cmd(&store, cmd_idx, &fmt, fmt_text);
             break;
         }
         case CMD_VAR_DECLARE: {
-            int off = snprintf(fmt.source, sizeof(fmt.source), "%sfloat ", ind_s);
-            for (int decl_idx = 0; decl_idx < orig.var_decl_count && off < (int)sizeof(fmt.source) - 4; decl_idx++) {
-                if (decl_idx > 0) off += snprintf(fmt.source + off, sizeof(fmt.source) - off, ", ");
-                off += snprintf(fmt.source + off, sizeof(fmt.source) - off, "%s", orig.var_names[decl_idx]);
+            int off = snprintf(fmt_text, sizeof(fmt_text), "%sfloat ", ind_s);
+            for (int decl_idx = 0; decl_idx < orig.var_decl_count && off < (int)sizeof(fmt_text) - 4; decl_idx++) {
+                if (decl_idx > 0) off += snprintf(fmt_text + off, sizeof(fmt_text) - off, ", ");
+                off += snprintf(fmt_text + off, sizeof(fmt_text) - off, "%s", orig.var_names[decl_idx]);
             }
-            snprintf(fmt.source + off, sizeof(fmt.source) - off, ";");
-            repl_core_replace_formatted_cmd(&store, cmd_idx, &fmt);
+            snprintf(fmt_text + off, sizeof(fmt_text) - off, ";");
+            repl_core_replace_formatted_cmd(&store, cmd_idx, &fmt, fmt_text);
             break;
         }
         case CMD_LABEL: {
             char label[64] = "";
-            if (repl_extract_label_name(orig.source, label, sizeof(label)))
-                snprintf(fmt.source, sizeof(fmt.source), "%s:", label);
-            repl_core_replace_formatted_cmd(&store, cmd_idx, &fmt);
+            if (repl_extract_label_name(orig_text, label, sizeof(label)))
+                snprintf(fmt_text, sizeof(fmt_text), "%s:", label);
+            repl_core_replace_formatted_cmd(&store, cmd_idx, &fmt, fmt_text);
             break;
         }
         case CMD_GOTO: {
             char label[64] = "";
-            if (repl_extract_goto_label(orig.source, label, sizeof(label)))
-                snprintf(fmt.source, sizeof(fmt.source), "%sgoto %s;", ind_s, label);
-            repl_core_replace_formatted_cmd(&store, cmd_idx, &fmt);
+            if (repl_extract_goto_label(orig_text, label, sizeof(label)))
+                snprintf(fmt_text, sizeof(fmt_text), "%sgoto %s;", ind_s, label);
+            repl_core_replace_formatted_cmd(&store, cmd_idx, &fmt, fmt_text);
             break;
         }
         default: {
@@ -422,16 +435,18 @@ void repl_reformat_commands(void) {
             int num_vis_vars = collect_visible_vars(cmd_idx, vis_vars, MAX_EXPR_VARS);
             int preserve_expr = (num_vis_vars > 0) || orig.has_vars;
             GLCmd parsed;
+            char parsed_text[MAX_LINE_LEN] = "";
             memset(&parsed, 0, sizeof(parsed));
-            if (repl_parse_and_normalize(orig.source, cmd_idx,
+            if (repl_parse_and_normalize(orig_text, cmd_idx,
                                          num_vis_vars > 0 ? vis_vars : NULL,
                                          num_vis_vars > 0 ? num_vis_vars : 0,
-                                         preserve_expr, &parsed) &&
+                                         preserve_expr, &parsed,
+                                         parsed_text, sizeof(parsed_text)) &&
                 parsed.type == orig.type) {
                 parsed.is_auto = orig.is_auto;
                 parsed.src_cmd_idx = orig.src_cmd_idx;
                 if (!preserve_expr) parsed.has_vars = orig.has_vars;
-                repl_core_replace_formatted_cmd(&store, cmd_idx, &parsed);
+                repl_core_replace_formatted_cmd(&store, cmd_idx, &parsed, parsed_text);
             }
             break;
         }
@@ -466,9 +481,9 @@ void repl_reformat_commands(void) {
 /* parse_for_header, parse_c_for_header: see repl_eval.c */
 
 
-/* Parse variable name from a FOR_BEGIN source string */
-static void get_for_var_name(const GLCmd *cmd, char *var, int var_sz) {
-    const char *p = cmd->source;
+/* Parse variable name from a FOR_BEGIN text string */
+static void get_for_var_name_from_text(const char *text, char *var, int var_sz) {
+    const char *p = text ? text : "";
     while (*p && *p != '(') p++;
     if (*p) p++;
     while (*p && isspace((unsigned char)*p)) p++;
@@ -499,7 +514,8 @@ int collect_visible_vars(int pos, ExprVar *vars, int max_vars) {
 
             if (t == CMD_FOR_BEGIN) {
                 char vn[16];
-                get_for_var_name(&repl_state_document_cmds_mut()[cmd_idx], vn, sizeof(vn));
+                const char *for_text = repl_state_editor_buffer_line(cmd_idx);
+                get_for_var_name_from_text(for_text ? for_text : "", vn, sizeof(vn));
                 repl_copy_string_fits(frames[depth].vars[0].name,
                                       sizeof(frames[depth].vars[0].name),
                                       vn);
@@ -509,7 +525,8 @@ int collect_visible_vars(int pos, ExprVar *vars, int max_vars) {
                 int fn = -1;
                 int param_count = 0;
                 char param_names[MAX_EXPR_VARS][16];
-                if (parse_repl_func_signature(repl_state_document_cmds_mut()[cmd_idx].source, &fn,
+                const char *func_text = repl_state_editor_buffer_line(cmd_idx);
+                if (parse_repl_func_signature(func_text ? func_text : "", &fn,
                                               param_names, MAX_EXPR_VARS,
                                               &param_count)) {
                     for (int param_idx = 0; param_idx < param_count; param_idx++) {

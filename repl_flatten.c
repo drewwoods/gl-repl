@@ -12,14 +12,11 @@
 
 /* Editor-owns-text spike: read the source text for command index `i`
  * from the editor buffer rather than the GLCmd struct. Falls back to
- * the GLCmd's source when the buffer line is empty (e.g. mid-test
- * fixture setup before sync). The spike is validating that the parser
- * can be driven exclusively from editor-owned text. */
+ * the editor buffer line at index i, falling back to "" if unset. */
 static const char *spike_text_for(const GLCmd *src_cmd, int i) {
+    (void)src_cmd;
     const char *text = repl_state_editor_buffer_line(i);
-    if (text && text[0])
-        return text;
-    return src_cmd->source;
+    return (text && text[0]) ? text : "";
 }
 
 typedef struct {
@@ -435,8 +432,6 @@ static void flatten_range(FlattenContext *ctx,
             if (repl_parser_parse_command_ctx(text, &tmp_pl, &parse_ctx)) {
                 GLCmd tmp = tmp_pl.cmd;
                 tmp.has_vars = src_cmd->has_vars;
-                strncpy(tmp.source, text, sizeof(tmp.source) - 1);
-                tmp.source[sizeof(tmp.source) - 1] = '\0';
                 if (!flatten_append_cmd(ctx, &tmp, i, call_src_cmd_idx,
                                         root_call_src_cmd_idx, func_scope_mask,
                                         vars, nv))
@@ -450,8 +445,6 @@ static void flatten_range(FlattenContext *ctx,
             if (repl_parser_parse_command_ctx(text, &tmp_pl, &parse_ctx)) {
                 GLCmd tmp = tmp_pl.cmd;
                 tmp.has_vars = 1;
-                strncpy(tmp.source, text, sizeof(tmp.source) - 1);
-                tmp.source[sizeof(tmp.source) - 1] = '\0';
                 if (!flatten_append_cmd(ctx, &tmp, i, call_src_cmd_idx,
                                         root_call_src_cmd_idx, func_scope_mask,
                                         NULL, 0))
@@ -467,8 +460,6 @@ static void flatten_range(FlattenContext *ctx,
                 GLCmd tmp = tmp_pl.cmd;
                 tmp.has_vars = 0;
                 tmp.is_auto = src_cmd->is_auto;
-                strncpy(tmp.source, text, sizeof(tmp.source) - 1);
-                tmp.source[sizeof(tmp.source) - 1] = '\0';
                 if (!flatten_append_cmd(ctx, &tmp, i, call_src_cmd_idx,
                                         root_call_src_cmd_idx, func_scope_mask,
                                         NULL, 0))

@@ -32,16 +32,18 @@ int main(void) {
     declare_test_vars();
 
     GLCmd interactive_cmd;
+    char interactive_text[MAX_LINE_LEN] = "";
     memset(&interactive_cmd, 0, sizeof(interactive_cmd));
     ASSERT_TRUE("interactive parse normalize",
-                repl_parse_and_normalize(line, 0, NULL, 0, 1, &interactive_cmd) == 1);
+                repl_parse_and_normalize(line, 0, NULL, 0, 1, &interactive_cmd,
+                                         interactive_text, sizeof(interactive_text)) == 1);
 
     repl_reset_state();
     declare_test_vars();
     repl_feed_line_public(line);
     ASSERT_TRUE("feed inserted one", repl_state_document_count() == 1);
     ASSERT_TRUE("feed matches interactive",
-                strcmp(repl_state_document_cmds_mut()[0].source, interactive_cmd.source) == 0);
+                strcmp(repl_state_editor_buffer_line(0), interactive_text) == 0);
 
     {
         FILE *f = fopen(tmp_path, "w");
@@ -59,7 +61,7 @@ int main(void) {
     ASSERT_TRUE("load from file", repl_export_load_from_file(tmp_path) == 1);
     ASSERT_TRUE("load inserted one", repl_state_document_count() == 1);
     ASSERT_TRUE("load matches interactive",
-                strcmp(repl_state_document_cmds_mut()[0].source, interactive_cmd.source) == 0);
+                strcmp(repl_state_editor_buffer_line(0), interactive_text) == 0);
 
     {
         char out[256];
@@ -91,20 +93,19 @@ int main(void) {
     ASSERT_TRUE("loop header type", repl_state_document_cmds_mut()[0].type == CMD_FOR_BEGIN);
     ASSERT_TRUE("loop body type", repl_state_document_cmds_mut()[1].type == CMD_VERTEX3F);
     ASSERT_TRUE("loop body has vars", repl_state_document_cmds_mut()[1].has_vars == 1);
-    ASSERT_TRUE("loop body keeps expression", strstr(repl_state_document_cmds_mut()[1].source, "i + x") != NULL);
-    ASSERT_TRUE("loop body indented", strncmp(repl_state_document_cmds_mut()[1].source, "    ", 4) == 0);
+    ASSERT_TRUE("loop body keeps expression", strstr(repl_state_editor_buffer_line(1), "i + x") != NULL);
+    ASSERT_TRUE("loop body indented", strncmp(repl_state_editor_buffer_line(1), "    ", 4) == 0);
 
     {
-        strncpy(repl_state_document_cmds_mut()[1].source, "glVertex3f(i+x,0,0)", sizeof(repl_state_document_cmds_mut()[1].source) - 1);
-        repl_state_document_cmds_mut()[1].source[sizeof(repl_state_document_cmds_mut()[1].source) - 1] = '\0';
-        strncpy(repl_state_document_cmds_mut()[2].source, "}", sizeof(repl_state_document_cmds_mut()[2].source) - 1);
-        repl_state_document_cmds_mut()[2].source[sizeof(repl_state_document_cmds_mut()[2].source) - 1] = '\0';
+        repl_state_editor_buffer_set_line(1, "glVertex3f(i+x,0,0)");
+        repl_state_editor_buffer_set_line(2, "}");
         repl_reformat_commands();
-        ASSERT_TRUE("reformat body semicolon", repl_state_document_cmds_mut()[1].source[strlen(repl_state_document_cmds_mut()[1].source) - 1] == ';');
-        ASSERT_TRUE("reformat body indent", strncmp(repl_state_document_cmds_mut()[1].source, "    ", 4) == 0);
-        ASSERT_TRUE("reformat body comma spacing",
-                    strstr(repl_state_document_cmds_mut()[1].source, ", 0, 0") != NULL);
-        ASSERT_TRUE("reformat close brace indent", strcmp(repl_state_document_cmds_mut()[2].source, "  }") == 0);
+        const char *buf1 = repl_state_editor_buffer_line(1);
+        const char *buf2 = repl_state_editor_buffer_line(2);
+        ASSERT_TRUE("reformat body semicolon", buf1 && buf1[strlen(buf1) - 1] == ';');
+        ASSERT_TRUE("reformat body indent", buf1 && strncmp(buf1, "    ", 4) == 0);
+        ASSERT_TRUE("reformat body comma spacing", buf1 && strstr(buf1, ", 0, 0") != NULL);
+        ASSERT_TRUE("reformat close brace indent", buf2 && strcmp(buf2, "  }") == 0);
     }
 
     repl_reset_state();
@@ -114,30 +115,33 @@ int main(void) {
     repl_feed_line_public("}");
     ASSERT_TRUE("assign in loop cmd count", repl_state_document_count() == 3);
     ASSERT_TRUE("assign in loop type", repl_state_document_cmds_mut()[1].type == CMD_VAR_ASSIGN);
-    ASSERT_TRUE("assign in loop indent", strncmp(repl_state_document_cmds_mut()[1].source, "    ", 4) == 0);
-    ASSERT_TRUE("assign in loop keeps expression", strstr(repl_state_document_cmds_mut()[1].source, "i + 1") != NULL);
+    ASSERT_TRUE("assign in loop indent", strncmp(repl_state_editor_buffer_line(1), "    ", 4) == 0);
+    ASSERT_TRUE("assign in loop keeps expression", strstr(repl_state_editor_buffer_line(1), "i + 1") != NULL);
     {
-        strncpy(repl_state_document_cmds_mut()[1].source, "x=i+1", sizeof(repl_state_document_cmds_mut()[1].source) - 1);
-        repl_state_document_cmds_mut()[1].source[sizeof(repl_state_document_cmds_mut()[1].source) - 1] = '\0';
+        repl_state_editor_buffer_set_line(1, "x=i+1");
         repl_reformat_commands();
-        ASSERT_TRUE("reformat assign in loop indent", strncmp(repl_state_document_cmds_mut()[1].source, "    ", 4) == 0);
+        const char *buf1 = repl_state_editor_buffer_line(1);
+        ASSERT_TRUE("reformat assign in loop indent", buf1 && strncmp(buf1, "    ", 4) == 0);
         ASSERT_TRUE("reformat assign in loop semicolon",
-                    repl_state_document_cmds_mut()[1].source[strlen(repl_state_document_cmds_mut()[1].source) - 1] == ';');
+                    buf1 && buf1[strlen(buf1) - 1] == ';');
     }
 
     {
         GLCmd cmd;
+        char cmd_text[MAX_LINE_LEN] = "";
         memset(&cmd, 0, sizeof(cmd));
         ASSERT_TRUE("glu sphere constant parse",
-                    repl_parse_and_normalize("glutSolidSphere(0.25, 16, 12);", 0, NULL, 0, 0, &cmd) == 1);
+                    repl_parse_and_normalize("glutSolidSphere(0.25, 16, 12);", 0, NULL, 0, 0,
+                                             &cmd, cmd_text, sizeof(cmd_text)) == 1);
         ASSERT_TRUE("glut sphere constant no quadric",
-                    strstr(cmd.source, "g_quadric") == NULL);
+                    strstr(cmd_text, "g_quadric") == NULL);
         ASSERT_TRUE("glut sphere constant syntax",
-                    strstr(cmd.source, "glutSolidSphere(0.25, 16, 12);") != NULL);
+                    strstr(cmd_text, "glutSolidSphere(0.25, 16, 12);") != NULL);
     }
 
     {
         GLCmd cmd;
+        char cmd_text[MAX_LINE_LEN] = "";
         ExprVar vars[2] = {
             { "radius", 0.5f },
             { "stacks", 12.0f }
@@ -145,10 +149,11 @@ int main(void) {
         memset(&cmd, 0, sizeof(cmd));
         ASSERT_TRUE("glut sphere var parse",
                     repl_parse_and_normalize("glutSolidSphere(radius, 16, stacks);",
-                                             0, vars, 2, 1, &cmd) == 1);
-        ASSERT_TRUE("glut sphere var keeps radius", strstr(cmd.source, "radius") != NULL);
-        ASSERT_TRUE("glut sphere var keeps stacks", strstr(cmd.source, "stacks") != NULL);
-        ASSERT_TRUE("glut sphere var no quadric", strstr(cmd.source, "g_quadric") == NULL);
+                                             0, vars, 2, 1, &cmd,
+                                             cmd_text, sizeof(cmd_text)) == 1);
+        ASSERT_TRUE("glut sphere var keeps radius", strstr(cmd_text, "radius") != NULL);
+        ASSERT_TRUE("glut sphere var keeps stacks", strstr(cmd_text, "stacks") != NULL);
+        ASSERT_TRUE("glut sphere var no quadric", strstr(cmd_text, "g_quadric") == NULL);
     }
 
     {
@@ -189,8 +194,7 @@ int main(void) {
         memset(&repl_state_document_cmds_mut()[0], 0, sizeof(repl_state_document_cmds_mut()[0]));
         repl_state_document_cmds_mut()[0].type = CMD_COLOR4F;
         repl_state_document_cmds_mut()[0].valid = 1;
-        strncpy(repl_state_document_cmds_mut()[0].source, wrapped, sizeof(repl_state_document_cmds_mut()[0].source) - 1);
-        repl_state_document_cmds_mut()[0].source[sizeof(repl_state_document_cmds_mut()[0].source) - 1] = '\0';
+        repl_state_editor_buffer_set_line(0, wrapped);
         repl_state_document_count_set(1);
 
         ASSERT_TRUE("open visual dump file", dump_f != NULL);
@@ -230,8 +234,7 @@ int main(void) {
         memset(&repl_state_document_cmds_mut()[0], 0, sizeof(repl_state_document_cmds_mut()[0]));
         repl_state_document_cmds_mut()[0].type = CMD_VERTEX3F;
         repl_state_document_cmds_mut()[0].valid = 1;
-        strncpy(repl_state_document_cmds_mut()[0].source, wrapped, sizeof(repl_state_document_cmds_mut()[0].source) - 1);
-        repl_state_document_cmds_mut()[0].source[sizeof(repl_state_document_cmds_mut()[0].source) - 1] = '\0';
+        repl_state_editor_buffer_set_line(0, wrapped);
         repl_state_document_count_set(1);
 
         ASSERT_TRUE("open overflow visual dump file", dump_f != NULL);
@@ -274,8 +277,7 @@ int main(void) {
         memset(&repl_state_document_cmds_mut()[0], 0, sizeof(repl_state_document_cmds_mut()[0]));
         repl_state_document_cmds_mut()[0].type = CMD_POINT_PARAMETER_FV;
         repl_state_document_cmds_mut()[0].valid = 1;
-        strncpy(repl_state_document_cmds_mut()[0].source, wrapped, sizeof(repl_state_document_cmds_mut()[0].source) - 1);
-        repl_state_document_cmds_mut()[0].source[sizeof(repl_state_document_cmds_mut()[0].source) - 1] = '\0';
+        repl_state_editor_buffer_set_line(0, wrapped);
         repl_state_document_count_set(1);
 
         ASSERT_TRUE("open point-parameter visual dump file", dump_f != NULL);
@@ -316,8 +318,7 @@ int main(void) {
         memset(&repl_state_document_cmds_mut()[0], 0, sizeof(repl_state_document_cmds_mut()[0]));
         repl_state_document_cmds_mut()[0].type = CMD_POINT_PARAMETER_FV;
         repl_state_document_cmds_mut()[0].valid = 1;
-        strncpy(repl_state_document_cmds_mut()[0].source, wrapped, sizeof(repl_state_document_cmds_mut()[0].source) - 1);
-        repl_state_document_cmds_mut()[0].source[sizeof(repl_state_document_cmds_mut()[0].source) - 1] = '\0';
+        repl_state_editor_buffer_set_line(0, wrapped);
         repl_state_document_count_set(1);
 
         ASSERT_TRUE("open narrow point-parameter visual dump file", dump_f != NULL);
@@ -367,8 +368,7 @@ int main(void) {
             memset(&repl_state_document_cmds_mut()[0], 0, sizeof(repl_state_document_cmds_mut()[0]));
             repl_state_document_cmds_mut()[0].type = CMD_VERTEX3F;
             repl_state_document_cmds_mut()[0].valid = 1;
-            strncpy(repl_state_document_cmds_mut()[0].source, src, sizeof(repl_state_document_cmds_mut()[0].source) - 1);
-            repl_state_document_cmds_mut()[0].source[sizeof(repl_state_document_cmds_mut()[0].source) - 1] = '\0';
+            repl_state_editor_buffer_set_line(0, src);
             repl_state_document_count_set(1);
 
             ASSERT_TRUE("open layout visual dump file", dump_f != NULL);
