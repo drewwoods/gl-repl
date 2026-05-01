@@ -53,8 +53,12 @@ static GLCmd make_auto_normal(float nx, float ny, float nz,
 
 static void insert_cmd_at(int pos, const GLCmd *cmd) {
     ReplCommandStore store = repl_command_store_live();
+    char line[MAX_LINE_LEN];
+
+    repl_command_store_source_to_line(line, sizeof(line), cmd->source);
     repl_command_store_insert_one(&store, pos, cmd,
-                                  REPL_COMMAND_STORE_ADJUST_EDIT_LINE);
+                                  REPL_COMMAND_STORE_ADJUST_EDIT_LINE,
+                                  line);
 }
 
 static void apply_front_face_to_normal(GLenum front_face, float *n) {
@@ -192,7 +196,12 @@ void recompute_autonormals(void) {
                 if (repl_state_document_cmds_mut()[vidx - 1].is_auto) {
                     ReplCommandStore store = repl_command_store_live();
                     GLCmd auto_normal = make_auto_normal(nx, ny, nz, vidx - 1);
-                    repl_command_store_replace_one(&store, vidx - 1, &auto_normal);
+                    char line[MAX_LINE_LEN];
+
+                    repl_command_store_source_to_line(line, sizeof(line),
+                                                      auto_normal.source);
+                    repl_command_store_replace_one(&store, vidx - 1,
+                                                   &auto_normal, line);
                 }
                 continue;
             }

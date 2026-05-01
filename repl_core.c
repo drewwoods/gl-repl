@@ -253,6 +253,15 @@ int repl_parse_and_normalize_strict(const char *line, int pos,
                                     preserve_expr, out_cmd, 1);
 }
 
+static void repl_core_replace_formatted_cmd(ReplCommandStore *store,
+                                            int cmd_idx,
+                                            const GLCmd *cmd) {
+    char line[MAX_LINE_LEN];
+
+    repl_command_store_source_to_line(line, sizeof(line), cmd->source);
+    repl_command_store_replace_one(store, cmd_idx, cmd, line);
+}
+
 void repl_reformat_commands(void) {
     prof_begin(PROF_REFORMAT);
     int saved_edit_line = repl_state_edit_line();
@@ -290,7 +299,7 @@ void repl_reformat_commands(void) {
                 snprintf(fmt.source, sizeof(fmt.source), "%sfor(%s, %g, %g) {",
                          ind_s, var, orig.args[0], orig.args[1]);
             }
-            repl_command_store_replace_one(&store, cmd_idx, &fmt);
+            repl_core_replace_formatted_cmd(&store, cmd_idx, &fmt);
             break;
         }
         case CMD_FOR_END:
@@ -308,7 +317,7 @@ void repl_reformat_commands(void) {
             memset(close_s, ' ', (size_t)close_ind);
             close_s[close_ind] = '\0';
             snprintf(fmt.source, sizeof(fmt.source), "%s}", close_s);
-            repl_command_store_replace_one(&store, cmd_idx, &fmt);
+            repl_core_replace_formatted_cmd(&store, cmd_idx, &fmt);
             break;
         }
         case CMD_FUNC_DEF: {
@@ -323,7 +332,7 @@ void repl_reformat_commands(void) {
                                    parsed_fn, param_names, param_count);
             else
                 snprintf(fmt.source, sizeof(fmt.source), "%sfunc%d {", ind_s, fn);
-            repl_command_store_replace_one(&store, cmd_idx, &fmt);
+            repl_core_replace_formatted_cmd(&store, cmd_idx, &fmt);
             break;
         }
         case CMD_IF_BEGIN: {
@@ -331,7 +340,7 @@ void repl_reformat_commands(void) {
             if (!repl_extract_paren_payload(orig.source, cond, sizeof(cond)))
                 snprintf(cond, sizeof(cond), "%g", orig.args[0]);
             snprintf(fmt.source, sizeof(fmt.source), "%sif(%s) {", ind_s, cond);
-            repl_command_store_replace_one(&store, cmd_idx, &fmt);
+            repl_core_replace_formatted_cmd(&store, cmd_idx, &fmt);
             break;
         }
         case CMD_VAR_ASSIGN: {
@@ -360,7 +369,7 @@ void repl_reformat_commands(void) {
                 else if (name)
                     snprintf(fmt.source, sizeof(fmt.source), "%s%s = %g;%s", ind_s, name, orig.args[0], comment);
             }
-            repl_command_store_replace_one(&store, cmd_idx, &fmt);
+            repl_core_replace_formatted_cmd(&store, cmd_idx, &fmt);
             break;
         }
         case CMD_COMMENT: {
@@ -379,7 +388,7 @@ void repl_reformat_commands(void) {
             } else {
                 snprintf(fmt.source, sizeof(fmt.source), "%s//", ind_s);
             }
-            repl_command_store_replace_one(&store, cmd_idx, &fmt);
+            repl_core_replace_formatted_cmd(&store, cmd_idx, &fmt);
             break;
         }
         case CMD_VAR_DECLARE: {
@@ -389,21 +398,21 @@ void repl_reformat_commands(void) {
                 off += snprintf(fmt.source + off, sizeof(fmt.source) - off, "%s", orig.var_names[decl_idx]);
             }
             snprintf(fmt.source + off, sizeof(fmt.source) - off, ";");
-            repl_command_store_replace_one(&store, cmd_idx, &fmt);
+            repl_core_replace_formatted_cmd(&store, cmd_idx, &fmt);
             break;
         }
         case CMD_LABEL: {
             char label[64] = "";
             if (repl_extract_label_name(orig.source, label, sizeof(label)))
                 snprintf(fmt.source, sizeof(fmt.source), "%s:", label);
-            repl_command_store_replace_one(&store, cmd_idx, &fmt);
+            repl_core_replace_formatted_cmd(&store, cmd_idx, &fmt);
             break;
         }
         case CMD_GOTO: {
             char label[64] = "";
             if (repl_extract_goto_label(orig.source, label, sizeof(label)))
                 snprintf(fmt.source, sizeof(fmt.source), "%sgoto %s;", ind_s, label);
-            repl_command_store_replace_one(&store, cmd_idx, &fmt);
+            repl_core_replace_formatted_cmd(&store, cmd_idx, &fmt);
             break;
         }
         default: {
@@ -420,7 +429,7 @@ void repl_reformat_commands(void) {
                 parsed.is_auto = orig.is_auto;
                 parsed.src_cmd_idx = orig.src_cmd_idx;
                 if (!preserve_expr) parsed.has_vars = orig.has_vars;
-                repl_command_store_replace_one(&store, cmd_idx, &parsed);
+                repl_core_replace_formatted_cmd(&store, cmd_idx, &parsed);
             }
             break;
         }

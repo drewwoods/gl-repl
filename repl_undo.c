@@ -19,8 +19,22 @@ static ReplUndoSnapshot g_redo_buf[REPL_UNDO_DEPTH];
 static int g_redo_head = 0;
 static int g_redo_count = 0;
 
+static const char *const *undo_snapshot_line_ptrs(const ReplUndoSnapshot *snapshot) {
+    static const char *lines[MAX_COMMANDS];
+
+    if (!snapshot)
+        return NULL;
+    for (int i = 0; i < snapshot->num_cmds && i < MAX_COMMANDS; i++)
+        lines[i] = snapshot->editor_lines[i];
+    return lines;
+}
+
 void repl_undo_snapshot_save(ReplUndoSnapshot *snapshot) {
     memcpy(snapshot->cmds, repl_state_document_cmds_mut(), (size_t)repl_state_document_count() * sizeof(GLCmd));
+    for (int i = 0; i < repl_state_document_count(); i++)
+        repl_copy_string_fits(snapshot->editor_lines[i],
+                              MAX_LINE_LEN,
+                              repl_state_editor_buffer_line(i));
     snapshot->num_cmds = repl_state_document_count();
     snapshot->edit_line = repl_state_edit_line();
     snapshot->num_predef_vars = g_num_predef_vars;
@@ -34,6 +48,7 @@ void repl_undo_snapshot_restore(const ReplUndoSnapshot *snapshot) {
     ReplCommandStore store = repl_command_store_live();
     if (!repl_command_store_load(&store, snapshot->cmds,
                                  snapshot->num_cmds,
+                                 undo_snapshot_line_ptrs(snapshot),
                                  snapshot->edit_line))
         return;
     g_num_predef_vars = snapshot->num_predef_vars;

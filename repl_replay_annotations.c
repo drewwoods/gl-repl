@@ -33,6 +33,17 @@ static const char *replay_document_text(int cmd_idx) {
     return ((text = repl_state_editor_buffer_line(cmd_idx)) && text[0]) ? text : repl_state_document_cmds_mut()[cmd_idx].source;
 }
 
+static const char *replay_visible_text(int cmd_idx) {
+    const char *source;
+
+    if (cmd_idx < 0 || cmd_idx >= repl_state_document_count())
+        return "";
+    source = repl_state_document_cmds_mut()[cmd_idx].source;
+    if (source && source[0])
+        return source;
+    return replay_document_text(cmd_idx);
+}
+
 static const char *replay_flat_text(int flat_idx) {
     const GLCmd *flat_cmd;
 
@@ -654,9 +665,7 @@ int repl_replay_code_panel_get_command_display_text(int cmd_idx, char *out, int 
     if (cmd_idx < 0 || cmd_idx >= repl_state_document_count())
         return 0;
 
-    /* Spike: read display text from the editor-buffer-backed document helper
-     * so replay annotations stay aligned with the visible committed text. */
-    const char *base = replay_document_text(cmd_idx);
+    const char *base = replay_visible_text(cmd_idx);
 
     snprintf(out, out_size, "%s", base);
 

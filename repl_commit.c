@@ -77,6 +77,10 @@ static void fill_scope_close_indent(int pos, char *buf, int buf_sz) {
     buf[len] = '\0';
 }
 
+static void commit_cmd_line_text(char *buf, int buf_sz, const char *source) {
+    repl_command_store_source_to_line(buf, buf_sz, source);
+}
+
 int repl_commit_resolve_insert_exit_target(int target) {
     if (!repl_state_insert_mode() ||
         g_func_decl_resume_delta <= 0 ||
@@ -383,13 +387,17 @@ int try_commit_float_decl(void) {
         }
 
         ReplCommandStore store = repl_command_store_live();
+        char input_line[MAX_LINE_LEN];
+        commit_cmd_line_text(input_line, sizeof(input_line), cmd.source);
         if (overwriting_decl) {
-            repl_command_store_replace_one(&store, insert_idx, &cmd);
+            repl_command_store_replace_one(&store, insert_idx, &cmd,
+                                           input_line);
             repl_state_edit_line_set(repl_state_edit_line() + 1);
             load_line_to_input(repl_state_edit_line());
         } else if (repl_command_store_insert_one(
                        &store, decl_pos, &cmd,
-                       REPL_COMMAND_STORE_ADJUST_EDIT_LINE)) {
+                       REPL_COMMAND_STORE_ADJUST_EDIT_LINE,
+                       input_line)) {
             if (!repl_state_insert_mode() && repl_state_edit_line() < repl_state_document_count())
                 load_line_to_input(repl_state_edit_line());
         } else {
@@ -489,8 +497,11 @@ int try_assign_variable(void) {
             }
 
             ReplCommandStore store = repl_command_store_live();
+            char input_line[MAX_LINE_LEN];
+            commit_cmd_line_text(input_line, sizeof(input_line), cmd.source);
             if (repl_state_insert_mode()) {
-                if (repl_command_store_insert_one(&store, insert_idx, &cmd, 0))
+                if (repl_command_store_insert_one(&store, insert_idx, &cmd, 0,
+                                                  input_line))
                     repl_state_edit_line_set(repl_state_edit_line() + 1);
                 else {
                     set_status("Command buffer full!");
@@ -525,7 +536,8 @@ int try_assign_variable(void) {
                         }
                     }
                 }
-                repl_command_store_replace_one(&store, insert_idx, &cmd);
+                repl_command_store_replace_one(&store, insert_idx, &cmd,
+                                               input_line);
                 repl_state_edit_line_set(repl_state_edit_line() + 1);
                 load_line_to_input(repl_state_edit_line());
                 {
@@ -536,7 +548,9 @@ int try_assign_variable(void) {
                 mark_normals_dirty();
                 return 1;
             } else {
-                if (!repl_command_store_insert_one(&store, repl_state_document_count(), &cmd, 0)) {
+                if (!repl_command_store_insert_one(&store,
+                                                   repl_state_document_count(),
+                                                   &cmd, 0, input_line)) {
                     set_status("Command buffer full!");
                     return 1;
                 }
@@ -687,10 +701,16 @@ int try_commit_for_loop(void) {
             snprintf(fe.source, sizeof(fe.source), "%s}", indent);
 
             if (*body_start == '{' || *body_start == '\0') {
+                char header_line[MAX_LINE_LEN];
+                const char *loop_lines[2] = { header_line, "}" };
+                commit_cmd_line_text(header_line, sizeof(header_line),
+                                     fb.source);
+
                 if (!repl_state_insert_mode() && repl_state_edit_line() < repl_state_document_count() &&
                     repl_state_document_cmds_mut()[repl_state_edit_line()].type == CMD_FOR_BEGIN) {
                     ReplCommandStore store = repl_command_store_live();
-                    repl_command_store_replace_one(&store, repl_state_edit_line(), &fb);
+                    repl_command_store_replace_one(&store, repl_state_edit_line(),
+                                                   &fb, header_line);
                     repl_state_edit_line_set(repl_state_edit_line() + 1);
                     repl_state_insert_mode_set(1);
                     {
@@ -708,7 +728,8 @@ int try_commit_for_loop(void) {
                 ReplCommandStore store = repl_command_store_live();
                 GLCmd loop_cmds[2] = { fb, fe };
                 if (!repl_command_store_insert_many(&store, pos,
-                                                    loop_cmds, 2, 0)) {
+                                                    loop_cmds, 2, 0,
+                                                    loop_lines)) {
                     set_status("Command buffer full!");
                     return 1;
                 }
@@ -769,10 +790,17 @@ int try_commit_for_loop(void) {
                     snprintf(body_cmd.source, sizeof(body_cmd.source), "%s%s;", bind, body);
                 }
 
-                ReplCommandStore store = repl_command_store_live();
-                GLCmd loop_cmds[3] = { fb, body_cmd, fe };
+                                ReplCommandStore store = repl_command_store_live();
+                                GLCmd loop_cmds[3] = { fb, body_cmd, fe };
+                                char header_line[MAX_LINE_LEN];
+                                const char *loop_lines[3] = { header_line, body, "}" };
+
+                                repl_command_store_source_to_line(header_line,
+                                                                                                    sizeof(header_line),
+                                                                                                    fb.source);
                 if (!repl_command_store_insert_many(&store, pos,
-                                                    loop_cmds, 3, 0)) {
+                                                                                                        loop_cmds, 3, 0,
+                                                                                                        loop_lines)) {
                     set_status("Command buffer full!");
                     return 1;
                 }
@@ -845,6 +873,7 @@ int try_commit_func_def(void) {
         GLCmd fd;
         GLCmd fe;
         ReplCommandStore store = repl_command_store_live();
+        char header_line[MAX_LINE_LEN];
 
         fill_scope_indent(pos, indent, sizeof(indent));
 
@@ -855,7 +884,10 @@ int try_commit_func_def(void) {
             format_func_header(updated.source,
                                (int)sizeof(updated.source),
                                indent, fn, param_names, param_count);
-            repl_command_store_replace_one(&store, edit_pos, &updated);
+            commit_cmd_line_text(header_line, sizeof(header_line),
+                                 updated.source);
+            repl_command_store_replace_one(&store, edit_pos, &updated,
+                                           header_line);
             repl_state_edit_line_set(edit_pos + 1);
             repl_state_insert_mode_set(1);
             {
@@ -877,6 +909,7 @@ int try_commit_func_def(void) {
         fd.valid = 1;
         format_func_header(fd.source, (int)sizeof(fd.source),
                            indent, fn, param_names, param_count);
+        commit_cmd_line_text(header_line, sizeof(header_line), fd.source);
 
         memset(&fe, 0, sizeof(fe));
         fe.type = CMD_FUNC_END;
@@ -886,15 +919,28 @@ int try_commit_func_def(void) {
         int comment_start = edit_pos;
         int comment_count = 0;
         int resume_pos = edit_pos;
+        char (*comment_lines)[MAX_LINE_LEN] = NULL;
+        const char *insert_lines[MAX_COMMANDS];
 
         if (!overwriting_func) {
             comment_start = function_leading_comment_start(edit_pos);
             comment_count = edit_pos - comment_start;
+            if (comment_count > 0) {
+                comment_lines = malloc((size_t)comment_count * sizeof(*comment_lines));
+                if (!comment_lines) {
+                    set_status("Out of memory");
+                    return 1;
+                }
+                for (int comment_idx = 0; comment_idx < comment_count; comment_idx++)
+                    repl_copy_string_fits(comment_lines[comment_idx], MAX_LINE_LEN,
+                                          repl_state_editor_buffer_line(comment_start + comment_idx));
+            }
         }
 
         int insert_count = comment_count + 2;
         GLCmd *insert_cmds = (GLCmd *)malloc((size_t)insert_count * sizeof(*insert_cmds));
         if (!insert_cmds) {
+            free(comment_lines);
             set_status("Out of memory");
             return 1;
         }
@@ -908,13 +954,20 @@ int try_commit_func_def(void) {
         pos = function_decl_insert_pos();
         insert_cmds[comment_count] = fd;
         insert_cmds[comment_count + 1] = fe;
+        for (int comment_idx = 0; comment_idx < comment_count; comment_idx++)
+            insert_lines[comment_idx] = comment_lines[comment_idx];
+        insert_lines[comment_count] = header_line;
+        insert_lines[comment_count + 1] = "}";
         if (!repl_command_store_insert_many(&store, pos, insert_cmds,
-                                            insert_count, 0)) {
+                                            insert_count, 0,
+                                            insert_lines)) {
+            free(comment_lines);
             free(insert_cmds);
             set_status("Command buffer full!");
             return 1;
         }
         g_func_decl_resume_delta = resume_pos > pos ? resume_pos - pos : 0;
+        free(comment_lines);
         free(insert_cmds);
 
         repl_state_edit_line_set(pos + comment_count + 1);
@@ -1027,7 +1080,10 @@ int try_commit_if_block(void) {
         if (!repl_state_insert_mode() && repl_state_edit_line() < repl_state_document_count() &&
             repl_state_document_cmds_mut()[repl_state_edit_line()].type == CMD_IF_BEGIN) {
             ReplCommandStore store = repl_command_store_live();
-            repl_command_store_replace_one(&store, repl_state_edit_line(), &ib);
+            char input_line[MAX_LINE_LEN];
+            commit_cmd_line_text(input_line, sizeof(input_line), ib.source);
+            repl_command_store_replace_one(&store, repl_state_edit_line(), &ib,
+                                           input_line);
             repl_state_edit_line_set(repl_state_edit_line() + 1);
             repl_state_insert_mode_set(1);
             {
@@ -1049,7 +1105,11 @@ int try_commit_if_block(void) {
 
         ReplCommandStore store = repl_command_store_live();
         GLCmd if_cmds[2] = { ib, ie };
-        if (!repl_command_store_insert_many(&store, pos, if_cmds, 2, 0)) {
+        char input_line[MAX_LINE_LEN];
+        const char *if_lines[2] = { input_line, "}" };
+        commit_cmd_line_text(input_line, sizeof(input_line), ib.source);
+        if (!repl_command_store_insert_many(&store, pos, if_cmds, 2, 0,
+                                            if_lines)) {
             set_status("Command buffer full!");
             return 1;
         }
@@ -1133,7 +1193,7 @@ int try_commit_close_brace(void) {
         snprintf(fe.source, sizeof(fe.source), "%s}", indent);
 
         ReplCommandStore store = repl_command_store_live();
-        if (!repl_command_store_insert_one(&store, pos, &fe, 0)) {
+        if (!repl_command_store_insert_one(&store, pos, &fe, 0, "}")) {
             set_status("Command buffer full!");
             return 1;
         }
