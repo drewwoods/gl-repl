@@ -99,8 +99,8 @@
         .mouse_button = -1,
     },
     .viewport = {
-        .window_w = 1200,
-        .window_h = 800,
+        .window_w = 0,
+        .window_h = 0,
     },
     .presentation = {
         .wireframe = CFG_DEFAULT_WIREFRAME,

@@ -45,6 +45,7 @@ static int g_pass = 0;
 #define g_cam_lines (repl_state_import_export().cam_lines)
 
 static void declare_test_vars(void) {
+    repl_state_viewport_set_size(1200, 800);
     char err[128];
     repl_eval_declare_predef_var("x", err, sizeof(err));
     repl_eval_declare_predef_var("y", err, sizeof(err));
