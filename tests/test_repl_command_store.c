@@ -24,10 +24,9 @@ static TestHarness g_harness = TEST_HARNESS_INIT;
 
 static GLCmd make_cmd(CmdType type, const char *source) {
     GLCmd cmd;
+    (void)source;  /* text now lives in the editor buffer, not GLCmd */
     memset(&cmd, 0, sizeof(cmd));
     cmd.type = type;
-    strncpy(cmd.source, source, sizeof(cmd.source) - 1);
-    cmd.source[sizeof(cmd.source) - 1] = '\0';
     return cmd;
 }
 
@@ -150,14 +149,14 @@ static void test_repl_command_store_insert_one(void) {
     ASSERT_INT("insert to empty store",
                repl_command_store_insert_one(&store, 0, &cmd1, 0), 1);
     ASSERT_INT("count after insert", repl_command_store_count(&store), 1);
-    ASSERT_STR("inserted source",
-               repl_state_document_cmd_at(0)->source, "glVertex3f(1, 0, 0);");
+    /* source text now lives in editor buffer; verify type only */
+    ASSERT_INT("inserted cmd type", repl_state_document_cmd_at(0)->type, CMD_VERTEX3F);
 
     ASSERT_INT("insert at beginning with clamp",
                repl_command_store_insert_one(&store, -5, &cmd2, 0), 1);
     ASSERT_INT("count after insert", repl_command_store_count(&store), 2);
-    ASSERT_STR("first command after insert",
-               repl_state_document_cmd_at(0)->source, "glVertex3f(0, 1, 0);");
+    ASSERT_INT("first command type after insert",
+               repl_state_document_cmd_at(0)->type, CMD_VERTEX3F);
 
     ASSERT_INT("insert rejects NULL store",
                repl_command_store_insert_one(NULL, 0, &cmd1, 0), 0);
@@ -175,8 +174,6 @@ static void test_repl_command_store_insert_one_with_line(void) {
 
     ASSERT_INT("insert one with explicit line",
                repl_command_store_insert_one(&store, 0, &cmd, 0, line), 1);
-    ASSERT_STR("document source still stored",
-               repl_state_document_cmd_at(0)->source, "  glVertex3f(1, 0, 0);");
     ASSERT_STR("editor buffer uses explicit line",
                repl_state_editor_buffer_line(0), "glVertex3f(1, 0, 0)");
 }
@@ -239,14 +236,14 @@ static void test_repl_command_store_replace_one(void) {
     GLCmd cmd1 = make_cmd(CMD_VERTEX3F, "glVertex3f(1, 0, 0);");
     GLCmd cmd2 = make_cmd(CMD_VERTEX3F, "glVertex3f(0, 1, 0);");
 
-    repl_command_store_insert_one(&store, 0, &cmd1, 0);
+    repl_command_store_insert_one(&store, 0, &cmd1, 0, "glVertex3f(1, 0, 0);");
     ASSERT_STR("before replace",
-               repl_state_document_cmd_at(0)->source, "glVertex3f(1, 0, 0);");
+               repl_state_editor_buffer_line(0), "glVertex3f(1, 0, 0);");
 
     ASSERT_INT("replace at valid index",
-               repl_command_store_replace_one(&store, 0, &cmd2), 1);
+               repl_command_store_replace_one(&store, 0, &cmd2, "glVertex3f(0, 1, 0);"), 1);
     ASSERT_STR("after replace",
-               repl_state_document_cmd_at(0)->source, "glVertex3f(0, 1, 0);");
+               repl_state_editor_buffer_line(0), "glVertex3f(0, 1, 0);");
     ASSERT_INT("count unchanged after replace", repl_command_store_count(&store), 1);
 
     ASSERT_INT("replace rejects NULL store",
@@ -274,8 +271,6 @@ static void test_repl_command_store_replace_one_with_line(void) {
     ASSERT_INT("replace with explicit line",
                repl_command_store_replace_one(&store, 0, &cmd2,
                                               "glVertex3f(0, 1, 0)"), 1);
-    ASSERT_STR("replaced source preserved",
-               repl_state_document_cmd_at(0)->source, "  glVertex3f(0, 1, 0);");
     ASSERT_STR("replace updates editor buffer line",
                repl_state_editor_buffer_line(0), "glVertex3f(0, 1, 0)");
 }
@@ -311,14 +306,18 @@ static void test_repl_command_store_load(void) {
         make_cmd(CMD_VERTEX3F, "glVertex3f(1, 0, 0);"),
         make_cmd(CMD_COLOR3F, "glColor3f(1, 0, 0);")
     };
+    const char *lines[2] = {
+        "glVertex3f(1, 0, 0);",
+        "glColor3f(1, 0, 0);"
+    };
 
     ASSERT_INT("load commands",
-               repl_command_store_load(&store, cmds, 2, 0), 1);
+               repl_command_store_load(&store, cmds, 2, lines, 0), 1);
     ASSERT_INT("count after load", repl_command_store_count(&store), 2);
     ASSERT_STR("first loaded command",
-               repl_state_document_cmd_at(0)->source, "glVertex3f(1, 0, 0);");
+               repl_state_editor_buffer_line(0), "glVertex3f(1, 0, 0);");
     ASSERT_STR("second loaded command",
-               repl_state_document_cmd_at(1)->source, "glColor3f(1, 0, 0);");
+               repl_state_editor_buffer_line(1), "glColor3f(1, 0, 0);");
 
     ASSERT_INT("load clamps edit_line to count",
                repl_state_edit_line(), 0);

@@ -80,6 +80,10 @@ static int is_known_incomplete_func_name(const char *func) {
 /*
  * parse_command - Convert a single REPL text line into a GLCmd.
  *
+ * text_out receives the canonical source form (indented, with trailing ';')
+ * that was previously stored in GLCmd.source. text_sz is the capacity of
+ * text_out. Callers that don't need the text may pass NULL/0.
+ *
  * This is the main entry point for the parser. It tries each command
  * grammar in order:
  *
@@ -93,11 +97,22 @@ static int is_known_incomplete_func_name(const char *func) {
  * Returns 1 on success (cmd populated), 0 on parse failure (status set).
  */
 static int parse_command(const char *line, GLCmd *cmd,
+                         char *text_out, int text_sz,
                          const ReplParseContext *ctx) {
     int source_line_idx = ctx ? ctx->source_line_idx : repl_state_edit_line();
     ExprVar *vars = ctx ? ctx->vars : NULL;
     int num_vars = ctx ? ctx->num_vars : 0;
     char buf[MAX_LINE_LEN];
+
+    /* Null-safe text helpers: write to text_out when provided */
+#define WRITE_TEXT(fmt, ...) do { \
+    if (text_out && text_sz > 0) \
+        snprintf(text_out, (size_t)text_sz, fmt, ##__VA_ARGS__); \
+} while (0)
+#define WRITE_TEXT_APPEND(off, fmt, ...) do { \
+    if (text_out && text_sz > 0) \
+        snprintf(text_out + (off), (size_t)(text_sz - (off)), fmt, ##__VA_ARGS__); \
+} while (0)
     strncpy(buf, line, sizeof(buf) - 1);
     buf[sizeof(buf) - 1] = '\0';
 
@@ -110,7 +125,7 @@ static int parse_command(const char *line, GLCmd *cmd,
 
     cmd->valid = 0;
     cmd->num_args = 0;
-    cmd->source[0] = '\0';
+    if (text_out && text_sz > 0) text_out[0] = '\0';
 
     if (len == 0) return 0;
 
@@ -122,7 +137,7 @@ static int parse_command(const char *line, GLCmd *cmd,
         cmd->num_args = 0;
         char indent[32];
         repl_source_scope_cmd_indent(source_line_idx, indent, sizeof(indent));
-        snprintf(cmd->source, sizeof(cmd->source), "%s%s", indent, p);
+        WRITE_TEXT("%s%s", indent, p);
         return 1;
     }
 
@@ -177,11 +192,11 @@ static int parse_command(const char *line, GLCmd *cmd,
                             if (spaces > (int)sizeof(ind) - 1) spaces = (int)sizeof(ind) - 1;
                             memset(ind, ' ', (size_t)spaces);
                             ind[spaces] = '\0';
-                            snprintf(cmd->source, sizeof(cmd->source), def->fmt, ind, def->enums1[i].name);
+                            WRITE_TEXT(def->fmt, ind, def->enums1[i].name);
                         } else {
                             char ind[32];
                             repl_source_scope_cmd_indent(source_line_idx, ind, sizeof(ind));
-                            snprintf(cmd->source, sizeof(cmd->source), def->fmt, ind, def->enums1[i].name);
+                            WRITE_TEXT(def->fmt, ind, def->enums1[i].name);
                         }
                         return 1;
                     }
@@ -231,7 +246,7 @@ static int parse_command(const char *line, GLCmd *cmd,
                 cmd->args[0] = val2_f;
                 cmd->num_args = 1;
                 char ind[32]; repl_source_scope_cmd_indent(source_line_idx, ind, sizeof(ind));
-                snprintf(cmd->source, sizeof(cmd->source), def->fmt, ind, trimmed1, trimmed2);
+                WRITE_TEXT(def->fmt, ind, trimmed1, trimmed2);
                 return 1;
             }
         }
@@ -249,7 +264,7 @@ static int parse_command(const char *line, GLCmd *cmd,
             if (spaces > (int)sizeof(end_ind) - 1) spaces = (int)sizeof(end_ind) - 1;
             memset(end_ind, ' ', (size_t)spaces);
             end_ind[spaces] = '\0';
-            snprintf(cmd->source, sizeof(cmd->source), "%sglEnd();", end_ind);
+            WRITE_TEXT("%sglEnd();", end_ind);
         }
         return 1;
     }
@@ -285,36 +300,37 @@ static int parse_command(const char *line, GLCmd *cmd,
                 cmd->has_vars = input_has_any_visible_vars(args, vars, num_vars);
 
                 const char *ind = def->is_tess ? tess_indent : indent;
-                snprintf(cmd->source, sizeof(cmd->source), "%s", ind);
-                size_t current_len = strlen(cmd->source);
-
-                switch (def->num_args) {
-                case 1:
-                    snprintf(cmd->source + current_len, sizeof(cmd->source) - current_len,
-                             def->fmt, cmd->args[0]);
-                    break;
-                case 2:
-                    snprintf(cmd->source + current_len, sizeof(cmd->source) - current_len,
-                             def->fmt, cmd->args[0], cmd->args[1]);
-                    break;
-                case 3:
-                    snprintf(cmd->source + current_len, sizeof(cmd->source) - current_len,
-                             def->fmt, cmd->args[0], cmd->args[1], cmd->args[2]);
-                    break;
-                case 4:
-                    snprintf(cmd->source + current_len, sizeof(cmd->source) - current_len,
-                             def->fmt, cmd->args[0], cmd->args[1], cmd->args[2], cmd->args[3]);
-                    break;
-                case 5:
-                    snprintf(cmd->source + current_len, sizeof(cmd->source) - current_len,
-                             def->fmt, cmd->args[0], cmd->args[1], cmd->args[2], cmd->args[3], cmd->args[4]);
-                    break;
-                case 6:
-                    snprintf(cmd->source + current_len, sizeof(cmd->source) - current_len,
-                             def->fmt, cmd->args[0], cmd->args[1], cmd->args[2], cmd->args[3], cmd->args[4], cmd->args[5]);
-                    break;
+                if (text_out && text_sz > 0) {
+                    snprintf(text_out, (size_t)text_sz, "%s", ind);
+                    size_t current_len = strlen(text_out);
+                    switch (def->num_args) {
+                    case 1:
+                        snprintf(text_out + current_len, (size_t)(text_sz - (int)current_len),
+                                 def->fmt, cmd->args[0]);
+                        break;
+                    case 2:
+                        snprintf(text_out + current_len, (size_t)(text_sz - (int)current_len),
+                                 def->fmt, cmd->args[0], cmd->args[1]);
+                        break;
+                    case 3:
+                        snprintf(text_out + current_len, (size_t)(text_sz - (int)current_len),
+                                 def->fmt, cmd->args[0], cmd->args[1], cmd->args[2]);
+                        break;
+                    case 4:
+                        snprintf(text_out + current_len, (size_t)(text_sz - (int)current_len),
+                                 def->fmt, cmd->args[0], cmd->args[1], cmd->args[2], cmd->args[3]);
+                        break;
+                    case 5:
+                        snprintf(text_out + current_len, (size_t)(text_sz - (int)current_len),
+                                 def->fmt, cmd->args[0], cmd->args[1], cmd->args[2], cmd->args[3], cmd->args[4]);
+                        break;
+                    case 6:
+                        snprintf(text_out + current_len, (size_t)(text_sz - (int)current_len),
+                                 def->fmt, cmd->args[0], cmd->args[1], cmd->args[2], cmd->args[3], cmd->args[4], cmd->args[5]);
+                        break;
+                    }
                 }
-                /* glClearColor: clamp each RGB channel and rebuild source */
+                /* glClearColor: clamp each RGB channel and rebuild text */
                 if (def->type == CMD_CLEAR_COLOR) {
                     int clamped = 0;
                     for (int ci = 0; ci < 3; ci++) {
@@ -324,11 +340,13 @@ static int parse_command(const char *line, GLCmd *cmd,
                         }
                     }
                     if (clamped) {
-                        snprintf(cmd->source, sizeof(cmd->source), "%s", ind);
-                        size_t cl = strlen(cmd->source);
-                        snprintf(cmd->source + cl, sizeof(cmd->source) - cl,
-                                 def->fmt, cmd->args[0], cmd->args[1],
-                                 cmd->args[2], cmd->args[3]);
+                        if (text_out && text_sz > 0) {
+                            snprintf(text_out, (size_t)text_sz, "%s", ind);
+                            size_t cl = strlen(text_out);
+                            snprintf(text_out + cl, (size_t)(text_sz - (int)cl),
+                                     def->fmt, cmd->args[0], cmd->args[1],
+                                     cmd->args[2], cmd->args[3]);
+                        }
                         if (!cmd->has_vars)
                             set_status("glClearColor: channels clamped to 0.15 max");
                     }
@@ -404,10 +422,10 @@ static int parse_command(const char *line, GLCmd *cmd,
         cmd->has_vars = input_has_any_visible_vars(a3, vars, num_vars);
 
         if (num_parsed == 1) {
-            snprintf(cmd->source, sizeof(cmd->source), "%sglMaterialf(%s, %s, %g);", indent, p1, p2, parsed_args[0]);
+            WRITE_TEXT("%sglMaterialf(%s, %s, %g);", indent, p1, p2, parsed_args[0]);
         } else {
-            snprintf(cmd->source, sizeof(cmd->source), "%sglMaterialfv(%s, %s, (GLfloat[]){%g, %g, %g, %g});",
-                     indent, p1, p2, parsed_args[0], parsed_args[1], parsed_args[2], parsed_args[3]);
+            WRITE_TEXT("%sglMaterialfv(%s, %s, (GLfloat[]){%g, %g, %g, %g});",
+                       indent, p1, p2, parsed_args[0], parsed_args[1], parsed_args[2], parsed_args[3]);
         }
 
         return 1;
@@ -467,10 +485,11 @@ static int parse_command(const char *line, GLCmd *cmd,
         cmd->num_args = 3;
         cmd->has_vars = (num_vars > 0);
 
-        char ind[32]; repl_source_scope_cmd_indent(source_line_idx, ind, sizeof(ind));
-        snprintf(cmd->source, sizeof(cmd->source),
-                 "%sglPointParameterfv(%s, (GLfloat[]){%g, %g, %g});",
-                 ind, p1, parsed_args[0], parsed_args[1], parsed_args[2]);
+        {
+            char ind[32]; repl_source_scope_cmd_indent(source_line_idx, ind, sizeof(ind));
+            WRITE_TEXT("%sglPointParameterfv(%s, (GLfloat[]){%g, %g, %g});",
+                       ind, p1, parsed_args[0], parsed_args[1], parsed_args[2]);
+        }
         return 1;
     }
 
@@ -478,7 +497,7 @@ static int parse_command(const char *line, GLCmd *cmd,
     if (strcmp(func, "glPushMatrix") == 0) {
         cmd->type = CMD_PUSH_MATRIX;
         cmd->valid = 1;
-        snprintf(cmd->source, sizeof(cmd->source), "%sglPushMatrix();", indent);
+        WRITE_TEXT("%sglPushMatrix();", indent);
         return 1;
     }
 
@@ -486,7 +505,7 @@ static int parse_command(const char *line, GLCmd *cmd,
     if (strcmp(func, "glPopMatrix") == 0) {
         cmd->type = CMD_POP_MATRIX;
         cmd->valid = 1;
-        snprintf(cmd->source, sizeof(cmd->source), "%sglPopMatrix();", indent);
+        WRITE_TEXT("%sglPopMatrix();", indent);
         return 1;
     }
 
@@ -548,16 +567,18 @@ static int parse_command(const char *line, GLCmd *cmd,
         strncpy(raw_args, args, sizeof(raw_args) - 1);
         raw_args[sizeof(raw_args) - 1] = '\0';
         trim_in_place(raw_args);
-        if (arg_count > 0) {
-            if (!repl_format_fits(cmd->source, sizeof(cmd->source),
-                                  "%sfunc%d(%s);", ind_str, fn, raw_args)) {
+        if (text_out && text_sz > 0) {
+            if (arg_count > 0) {
+                if (!repl_format_fits(text_out, (size_t)text_sz,
+                                      "%sfunc%d(%s);", ind_str, fn, raw_args)) {
+                    set_status("Command too long");
+                    return 0;
+                }
+            } else if (!repl_format_fits(text_out, (size_t)text_sz,
+                                         "%sfunc%d();", ind_str, fn)) {
                 set_status("Command too long");
                 return 0;
             }
-        } else if (!repl_format_fits(cmd->source, sizeof(cmd->source),
-                                     "%sfunc%d();", ind_str, fn)) {
-            set_status("Command too long");
-            return 0;
         }
         return 1;
     }
@@ -568,13 +589,13 @@ static int parse_command(const char *line, GLCmd *cmd,
         if (strncmp(a, "GLU_POLYGON", 11) == 0) {
             cmd->type = CMD_TESS_BEGIN_POLYGON;
             cmd->valid = 1;
-            snprintf(cmd->source, sizeof(cmd->source), "%sgluBegin(GLU_POLYGON);", tess_indent);
+            WRITE_TEXT("%sgluBegin(GLU_POLYGON);", tess_indent);
             return 1;
         }
         if (strncmp(a, "GLU_CONTOUR", 11) == 0) {
             cmd->type = CMD_TESS_BEGIN_CONTOUR;
             cmd->valid = 1;
-            snprintf(cmd->source, sizeof(cmd->source), "%sgluBegin(GLU_CONTOUR);", tess_indent);
+            WRITE_TEXT("%sgluBegin(GLU_CONTOUR);", tess_indent);
             return 1;
         }
         set_status("Usage: gluBegin(GLU_POLYGON) or gluBegin(GLU_CONTOUR)");
@@ -597,7 +618,7 @@ static int parse_command(const char *line, GLCmd *cmd,
             if (spaces > (int)sizeof(close_ind) - 1) spaces = (int)sizeof(close_ind) - 1;
             memset(close_ind, ' ', (size_t)spaces);
             close_ind[spaces] = '\0';
-            snprintf(cmd->source, sizeof(cmd->source), "%sgluEnd();", close_ind);
+            WRITE_TEXT("%sgluEnd();", close_ind);
         }
         return 1;
     }
@@ -617,9 +638,8 @@ static int parse_command(const char *line, GLCmd *cmd,
             cmd->type = CMD_TESS_COLOR;
             cmd->valid = 1;
             cmd->has_vars = input_has_any_visible_vars(args, vars, num_vars);
-            snprintf(cmd->source, sizeof(cmd->source),
-                     "%sgluColor(%g, %g, %g, %g);",
-                     tess_indent, cmd->args[0], cmd->args[1], cmd->args[2], cmd->args[3]);
+            WRITE_TEXT("%sgluColor(%g, %g, %g, %g);",
+                       tess_indent, cmd->args[0], cmd->args[1], cmd->args[2], cmd->args[3]);
             return 1;
         }
         set_status("Usage: gluColor(r, g, b) or gluColor(r, g, b, a)");
@@ -647,13 +667,15 @@ static int parse_command(const char *line, GLCmd *cmd,
         if (ll > 0) {
             cmd->type = CMD_GOTO;
             cmd->valid = 1;
-            int fdepth = repl_source_scope_block_depth_at(source_line_idx);
-            int bb_v = repl_source_scope_in_begin_block_at(source_line_idx);
-            int ind_v = (bb_v ? 4 : 2) + fdepth * 2;
-            char ind_str[32];
-            if (ind_v > (int)sizeof(ind_str) - 1) ind_v = (int)sizeof(ind_str) - 1;
-            memset(ind_str, ' ', ind_v); ind_str[ind_v] = '\0';
-            snprintf(cmd->source, sizeof(cmd->source), "%sgoto %s;", ind_str, clean_lname);
+            {
+                int fdepth = repl_source_scope_block_depth_at(source_line_idx);
+                int bb_v = repl_source_scope_in_begin_block_at(source_line_idx);
+                int ind_v = (bb_v ? 4 : 2) + fdepth * 2;
+                char ind_str[32];
+                if (ind_v > (int)sizeof(ind_str) - 1) ind_v = (int)sizeof(ind_str) - 1;
+                memset(ind_str, ' ', ind_v); ind_str[ind_v] = '\0';
+                WRITE_TEXT("%sgoto %s;", ind_str, clean_lname);
+            }
             return 1;
         }
     }
@@ -665,7 +687,7 @@ static int parse_command(const char *line, GLCmd *cmd,
         cmd->valid = 1;
         /* labels go at column 0 in C */
         if (p[0] == ':') {
-            snprintf(cmd->source, sizeof(cmd->source), "%s:", p + 1);
+            WRITE_TEXT("%s:", p + 1);
         } else {
             char label[64];
             int n = 0;
@@ -677,7 +699,7 @@ static int parse_command(const char *line, GLCmd *cmd,
             label[n] = '\0';
             if (n <= 0)
                 return 0;
-            snprintf(cmd->source, sizeof(cmd->source), "%s:", label);
+            WRITE_TEXT("%s:", label);
         }
         return 1;
     }
@@ -685,26 +707,27 @@ static int parse_command(const char *line, GLCmd *cmd,
 unknown_command:
     set_status("Unknown cmd. Try glVertex3f, glBegin, glEnable, glShadeModel, ...");
     return 0;
+
+#undef WRITE_TEXT
+#undef WRITE_TEXT_APPEND
 }
 
 int repl_parser_parse_command(const char *line, GLCmd *cmd) {
+    char text[MAX_LINE_LEN];
     ReplParseContext ctx = { repl_state_edit_line(), NULL, 0, 0 };
-    return parse_command(line, cmd, &ctx);
+    return parse_command(line, cmd, text, sizeof(text), &ctx);
 }
 
 int repl_parser_parse_command_with_vars(const char *line, GLCmd *cmd,
                                  ExprVar *vars, int num_vars) {
+    char text[MAX_LINE_LEN];
     ReplParseContext ctx = { repl_state_edit_line(), vars, num_vars, 0 };
-    return parse_command(line, cmd, &ctx);
+    return parse_command(line, cmd, text, sizeof(text), &ctx);
 }
 
 int repl_parser_parse_command_ctx(const char *line, ReplParsedLine *out,
                            const ReplParseContext *ctx) {
     if (!out) return 0;
     memset(out, 0, sizeof(*out));
-    int r = parse_command(line, &out->cmd, ctx);
-    if (r)
-        repl_command_store_source_to_line(out->text, sizeof(out->text),
-                                         out->cmd.source);
-    return r;
+    return parse_command(line, &out->cmd, out->text, sizeof(out->text), ctx);
 }

@@ -25,14 +25,17 @@ void repl_debug_dump_editor(FILE *out) {
         fprintf(dst,
                 "%4d | %-22s | valid=%d has_vars=%d is_auto=%d src_idx=%d | %s\n",
                 cmd_idx, repl_cmd_type_name(cmd->type), cmd->valid,
-                cmd->has_vars, cmd->is_auto, cmd->src_cmd_idx, cmd->source);
+                cmd->has_vars, cmd->is_auto, cmd->src_cmd_idx,
+                repl_state_editor_buffer_line(cmd_idx) ?
+                    repl_state_editor_buffer_line(cmd_idx) : "");
     }
 
     fprintf(dst, "--- source ---\n");
     for (int cmd_idx = 0; cmd_idx < repl_state_document_count(); cmd_idx++) {
         const GLCmd *cmd = &repl_state_document_cmds()[cmd_idx];
         if (!cmd->valid) continue;
-        fprintf(dst, "%s\n", cmd->source);
+        fprintf(dst, "%s\n", repl_state_editor_buffer_line(cmd_idx) ?
+                              repl_state_editor_buffer_line(cmd_idx) : "");
     }
     fprintf(dst, "--- camera ---\n");
     {
@@ -80,7 +83,8 @@ void repl_debug_dump_flat_commands(FILE *out) {
                 flat_idx, repl_cmd_type_name(cmd->type), cmd->valid,
                 cmd->has_vars, cmd->src_cmd_idx, cmd->call_src_cmd_idx,
                 cmd->root_call_src_cmd_idx, cmd->func_scope_mask,
-                cmd->source);
+                repl_state_editor_buffer_line(cmd->src_cmd_idx) ?
+                    repl_state_editor_buffer_line(cmd->src_cmd_idx) : "");
     }
     fprintf(dst, "=== End REPL Flattened Commands Dump ===\n");
     fflush(dst);

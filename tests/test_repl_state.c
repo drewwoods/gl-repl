@@ -43,12 +43,10 @@ static void populate_runtime_snapshot_fixture(const char *scene_hint) {
     doc_cmds = repl_state_document_cmds_mut();
     doc_cmds[0].type = CMD_BEGIN;
     doc_cmds[0].valid = 1;
-    snprintf(doc_cmds[0].source, sizeof(doc_cmds[0].source), "%s",
-             "  glBegin(GL_TRIANGLES);");
+    repl_state_editor_buffer_set_line(0, "  glBegin(GL_TRIANGLES);");
     doc_cmds[1].type = CMD_END;
     doc_cmds[1].valid = 1;
-    snprintf(doc_cmds[1].source, sizeof(doc_cmds[1].source), "%s",
-             "  glEnd();");
+    repl_state_editor_buffer_set_line(1, "  glEnd();");
 
     repl_state_flat_program_set_count(1);
     flat_program = repl_state_flat_program_mut();
@@ -212,7 +210,7 @@ static void test_capture_restore_round_trip(void) {
     ASSERT_INT("edit line restored", repl_state_edit_line(), 1);
     ASSERT_INT("document cmd type restored", repl_state_document_cmds()[0].type, CMD_BEGIN);
     ASSERT_STR("document cmd source restored",
-               repl_state_document_cmds()[0].source,
+               repl_state_editor_buffer_line(0),
                "  glBegin(GL_TRIANGLES);");
     ASSERT_INT("flat count restored", repl_state_flat_program_count(), 1);
     ASSERT_INT("flat cmd type restored", repl_state_flat_program_cmds()[0].type, CMD_VERTEX3F);

@@ -261,7 +261,6 @@ typedef struct {
     GLenum   mode;
     float    args[8];
     int      num_args;              /* Number of meaningful entries in args[] */
-    char     source[MAX_LINE_LEN];  /* Normalized source text shown in the editor */
     int      valid;                 /* Deleted commands remain allocated but skipped */
     int      is_auto;               /* Auto-generated helper, e.g. synthesized normals */
     int      has_vars;              /* Source must be preserved/re-evaluated from text */

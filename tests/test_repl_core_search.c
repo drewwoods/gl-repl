@@ -60,7 +60,8 @@ int main(void) {
         char before0[MAX_LINE_LEN];
         int before_num = repl_state_document_count();
 
-        strncpy(before0, repl_state_document_cmds_mut()[0].source, sizeof(before0) - 1);
+        const char *buf_line0 = repl_state_editor_buffer_line(0);
+        strncpy(before0, buf_line0 ? buf_line0 : "", sizeof(before0) - 1);
         before0[sizeof(before0) - 1] = '\0';
 
         open_search();
@@ -68,7 +69,7 @@ int main(void) {
         ASSERT_TRUE("ctrl-f leaves query empty", g_search_query_len == 0);
         ASSERT_TRUE("ctrl-f leaves cmd count unchanged", repl_state_document_count() == before_num);
         ASSERT_TRUE("ctrl-f leaves source unchanged",
-                    strcmp(repl_state_document_cmds_mut()[0].source, before0) == 0);
+                    strcmp(repl_state_editor_buffer_line(0), before0) == 0);
     }
 
     repl_reset_state(); declare_test_vars();

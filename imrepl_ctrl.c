@@ -68,6 +68,7 @@ static SceneGuideSnapshot imrepl_ctrl_build_guide_snapshot(const SceneRenderConf
         .cursor_pos = input.cursor_pos,
         .edit_line_idx = config->edit_line_idx,
         .inserting = repl_state_insert_mode(),
+        .edit_line_committed_text = repl_state_editor_buffer_line(config->edit_line_idx),
         .source_cmds = repl_state_document_cmds_mut(),
         .source_cmd_count = repl_state_document_count(),
         .flat_program = config->flat_program,

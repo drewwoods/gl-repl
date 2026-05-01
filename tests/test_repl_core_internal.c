@@ -236,12 +236,10 @@ int main() {
         memset(loaded, 0, sizeof(loaded));
         loaded[0].type = CMD_VERTEX3F;
         loaded[0].valid = 1;
-        snprintf(loaded[0].source, sizeof(loaded[0].source),
-                 "glVertex3f(1, 0, 0);");
         loaded[1].type = CMD_COLOR3F;
         loaded[1].valid = 1;
-        snprintf(loaded[1].source, sizeof(loaded[1].source),
-                 "glColor3f(1, 0, 0);");
+        const char *loaded_lines[2] = { "glVertex3f(1, 0, 0);",
+                                        "glColor3f(1, 0, 0);" };
 
         store = repl_command_store_live();
         ASSERT_TRUE("command_store uses document cmds",
@@ -252,17 +250,17 @@ int main() {
         ASSERT_INT("document normals dirty clear",
                    repl_state_normals_dirty(), 0);
         ASSERT_INT("command_store_load ok",
-                   repl_command_store_load(&store, loaded, 2, 99), 1);
+                   repl_command_store_load(&store, loaded, 2, loaded_lines, 99), 1);
         ASSERT_INT("command_store_load count", repl_state_document_count(), 2);
         ASSERT_INT("command_store_load state count",
                    repl_state_document_count(), 2);
         ASSERT_INT("command_store_load edit clamp", repl_state_edit_line(), 2);
         ASSERT_INT("command_store_load state edit clamp",
                    repl_state_edit_line(), 2);
-        ASSERT_STR("command_store_load source", repl_state_document_cmds_mut()[1].source,
+        ASSERT_STR("command_store_load source", repl_state_editor_buffer_line(1),
                    "glColor3f(1, 0, 0);");
         ASSERT_STR("command_store_load state source",
-                   repl_state_document_cmd_at(1)->source,
+                   repl_state_editor_buffer_line(1),
                    "glColor3f(1, 0, 0);");
         ASSERT_INT("command_store_load marks normals dirty",
                    repl_state_normals_dirty(), 1);

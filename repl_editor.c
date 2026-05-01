@@ -195,13 +195,10 @@ void repl_clear_all_cmds(void) {
 }
 
 static const char *editor_committed_line_text(int idx) {
-    const char *text;
-    return ((text = repl_state_editor_buffer_line(idx)) && text[0]) ? text : repl_state_document_cmds_mut()[idx].source;
+    const char *text = repl_state_editor_buffer_line(idx);
+    return (text && text[0]) ? text : "";
 }
 
-static void editor_cmd_line_text(char *buf, int buf_sz, const char *source) {
-    repl_command_store_source_to_line(buf, buf_sz, source);
-}
 
 void load_line_to_input(int idx) {
     ReplEditorInputState *inp = repl_state_editor_input_mut();
@@ -291,12 +288,13 @@ static void navigate_to_line_raw_resolved(int target) {
 }
 
 
-/* Rewrite cmd->source from g_input with proper indentation.
+/* Rewrite the canonical source text for g_input with proper indentation.
  * Strips leading whitespace and trailing `;`/whitespace from g_input,
  * prefixes indent (2 outside a glBegin block, 4 inside), then appends `;`.
- * With include_block_depth, adds 2 spaces per open for/func/if scope at pos. */
-static void rewrite_cmd_source_with_indent(GLCmd *cmd, int pos,
-                                           int include_block_depth) {
+ * With include_block_depth, adds 2 spaces per open for/func/if scope at pos.
+ * Writes the result into text_out[text_sz]. */
+static void rewrite_source_text_with_indent(char *text_out, int text_sz,
+                                            int pos, int include_block_depth) {
     char stripped[MAX_LINE_LEN];
     const char *sp = repl_state_editor_input().input;
     while (*sp && isspace((unsigned char)*sp)) sp++;
@@ -315,7 +313,7 @@ static void rewrite_cmd_source_with_indent(GLCmd *cmd, int pos,
         indent_len = (int)sizeof(indent) - 1;
     memset(indent, ' ', (size_t)indent_len);
     indent[indent_len] = '\0';
-    snprintf(cmd->source, sizeof(cmd->source), "%s%s;", indent, stripped);
+    snprintf(text_out, (size_t)text_sz, "%s%s;", indent, stripped);
 }
 
 
@@ -328,10 +326,13 @@ static void rewrite_cmd_source_with_indent(GLCmd *cmd, int pos,
  *     without vars
  *   - else, plain parse only
  * Returns 1 if parsing succeeded. */
-static int parse_for_overwrite_enter(GLCmd *cmd, int insert_idx) {
+static int parse_for_overwrite_enter(GLCmd *cmd, char *text_out, int text_sz,
+                                     int insert_idx) {
     ExprVar vis_vars[MAX_EXPR_VARS];
     int num_vis_vars = collect_visible_vars(insert_idx, vis_vars, MAX_EXPR_VARS);
     memset(cmd, 0, sizeof(*cmd));
+    if (text_out && text_sz > 0)
+        text_out[0] = '\0';
     int parsed;
     if (num_vis_vars > 0) {
         ReplParseContext parse_ctx = { insert_idx, vis_vars, num_vis_vars, 0 };
@@ -339,7 +340,7 @@ static int parse_for_overwrite_enter(GLCmd *cmd, int insert_idx) {
         parsed = repl_parser_parse_command_ctx(repl_state_editor_input().input, &pl, &parse_ctx);
         if (parsed) {
             *cmd = pl.cmd;
-            rewrite_cmd_source_with_indent(cmd, insert_idx, 1);
+            rewrite_source_text_with_indent(text_out, text_sz, insert_idx, 1);
         }
     } else {
         ReplParseContext parse_ctx = { insert_idx, NULL, 0, 0 };
@@ -349,7 +350,11 @@ static int parse_for_overwrite_enter(GLCmd *cmd, int insert_idx) {
             *cmd = pl.cmd;
             if (repl_eval_input_has_predef_vars(repl_state_editor_input().input)) {
                 cmd->has_vars = 1;
-                rewrite_cmd_source_with_indent(cmd, insert_idx, 0);
+                rewrite_source_text_with_indent(text_out, text_sz, insert_idx, 0);
+            } else {
+                /* No local vars: use the parsed canonical text directly. */
+                if (text_out && text_sz > 0)
+                    repl_copy_string_fits(text_out, text_sz, pl.text);
             }
         }
     }
@@ -486,6 +491,7 @@ static CommitResult commit_current_input(int enter_mode) {
             ExprVar vis_vars[MAX_EXPR_VARS];
             int num_vis_vars = collect_visible_vars(insert_idx, vis_vars, MAX_EXPR_VARS);
 
+            char cmd_text[MAX_LINE_LEN] = "";
             memset(&cmd, 0, sizeof(cmd));
             if (num_vis_vars > 0) {
                 ReplParseContext parse_ctx = { insert_idx, vis_vars, num_vis_vars, 0 };
@@ -495,22 +501,23 @@ static CommitResult commit_current_input(int enter_mode) {
                 parsed = repl_parser_parse_command_ctx(repl_state_editor_input().input, &pl, &parse_ctx);
                 if (parsed) {
                     cmd = pl.cmd;
-                    rewrite_cmd_source_with_indent(&cmd, insert_idx, 1);
+                    rewrite_source_text_with_indent(cmd_text, sizeof(cmd_text),
+                                                    insert_idx, 1);
                 }
             } else {
                 ReplParseContext parse_ctx = { insert_idx, NULL, 0, 0 };
                 ReplParsedLine pl;
                 parsed = repl_parser_parse_command_ctx(repl_state_editor_input().input, &pl, &parse_ctx);
-                if (parsed)
+                if (parsed) {
                     cmd = pl.cmd;
+                    repl_copy_string_fits(cmd_text, sizeof(cmd_text), pl.text);
+                }
             }
 
             if (parsed) {
                 ReplCommandStore store = repl_command_store_live();
-                char input_line[MAX_LINE_LEN];
-                editor_cmd_line_text(input_line, sizeof(input_line), cmd.source);
                 if (!repl_command_store_insert_one(&store, repl_state_edit_line(),
-                                                   &cmd, 0, input_line)) {
+                                                   &cmd, 0, cmd_text)) {
                     set_status("Command buffer full!");
                     return COMMIT_REJECTED;
                 }
@@ -559,13 +566,13 @@ static CommitResult commit_current_input(int enter_mode) {
                 return commit_progressed_since(before) ? COMMIT_OK : COMMIT_REJECTED;
 
             GLCmd cmd;
-            int parsed = parse_for_overwrite_enter(&cmd, repl_state_edit_line());
+            char cmd_text[MAX_LINE_LEN] = "";
+            int parsed = parse_for_overwrite_enter(&cmd, cmd_text, sizeof(cmd_text),
+                                                   repl_state_edit_line());
             if (parsed) {
                 ReplCommandStore store = repl_command_store_live();
-                char input_line[MAX_LINE_LEN];
-                editor_cmd_line_text(input_line, sizeof(input_line), cmd.source);
                 repl_command_store_replace_one(&store, repl_state_edit_line(),
-                                               &cmd, input_line);
+                                               &cmd, cmd_text);
             } else {
                 can_advance = 0;
             }
@@ -588,15 +595,15 @@ static CommitResult commit_current_input(int enter_mode) {
 
     if (repl_state_editor_input().input_len > 0) {
         GLCmd cmd;
-        int parsed = parse_for_overwrite_enter(&cmd, repl_state_document_count());
+        char cmd_text[MAX_LINE_LEN] = "";
+        int parsed = parse_for_overwrite_enter(&cmd, cmd_text, sizeof(cmd_text),
+                                               repl_state_document_count());
 
         if (parsed) {
             ReplCommandStore store = repl_command_store_live();
-            char input_line[MAX_LINE_LEN];
-            editor_cmd_line_text(input_line, sizeof(input_line), cmd.source);
             if (!repl_command_store_insert_one(&store,
                                                repl_state_document_count(),
-                                               &cmd, 0, input_line)) {
+                                               &cmd, 0, cmd_text)) {
                 set_status("Command buffer full!");
                 return COMMIT_REJECTED;
             }
@@ -864,7 +871,8 @@ static int handle_comment_toggle_key_route(unsigned char key) {
             {
                 GLCmd *cur = &repl_state_document_cmds_mut()[repl_state_edit_line()];
                 if (cur->type == CMD_COMMENT) {
-                    const char *s = cur->source;
+                    const char *s = repl_state_editor_buffer_line(repl_state_edit_line());
+                    if (!s) s = "";
                     while (*s && isspace((unsigned char)*s))
                         s++;
                     if (s[0] == '/' && s[1] == '/') {
@@ -874,6 +882,7 @@ static int handle_comment_toggle_key_route(unsigned char key) {
                     }
                     {
                         GLCmd new_cmd;
+                        char new_cmd_text[MAX_LINE_LEN] = "";
                         ReplParseContext parse_ctx = { repl_state_edit_line(), NULL, 0, 0 };
                         memset(&new_cmd, 0, sizeof(new_cmd));
                         int built = 0;
@@ -888,6 +897,8 @@ static int handle_comment_toggle_key_route(unsigned char key) {
                             ReplParsedLine pl;
                             if (repl_parser_parse_command_ctx(s, &pl, &parse_ctx)) {
                                 new_cmd = pl.cmd;
+                                repl_copy_string_fits(new_cmd_text, sizeof(new_cmd_text),
+                                                      pl.text);
                                 built = 1;
                             }
                         }
@@ -938,8 +949,9 @@ static int handle_comment_toggle_key_route(unsigned char key) {
                                     new_cmd.args[0]  = val;
                                     new_cmd.num_args = var_idx;
                                     new_cmd.has_vars = repl_eval_input_has_predef_vars(rhs);
-                                    if (repl_format_fits(new_cmd.source,
-                                                         sizeof(new_cmd.source),
+                                    new_cmd_text[0] = '\0';
+                                    if (repl_format_fits(new_cmd_text,
+                                                         sizeof(new_cmd_text),
                                                          "%s%s = %s;",
                                                          indent, name, rhs)) {
                                         g_predef_vars[var_idx].value = val;
@@ -953,14 +965,10 @@ static int handle_comment_toggle_key_route(unsigned char key) {
                         }
                         if (built) {
                             ReplCommandStore store = repl_command_store_live();
-                            char uncommented_line[MAX_LINE_LEN];
-                            repl_command_store_source_to_line(uncommented_line,
-                                                              sizeof(uncommented_line),
-                                                              new_cmd.source);
                             repl_command_store_replace_one(&store,
                                                            repl_state_edit_line(),
                                                            &new_cmd,
-                                                           uncommented_line);
+                                                           new_cmd_text);
                             load_line_to_input(repl_state_edit_line());
                             mark_normals_dirty();
                             set_status("Uncommented");
@@ -971,26 +979,21 @@ static int handle_comment_toggle_key_route(unsigned char key) {
                 } else if (cur->type != CMD_FOR_BEGIN &&
                            cur->type != CMD_FOR_END) {
                     char new_src[MAX_LINE_LEN];
-                    char commented_line[MAX_LINE_LEN];
                     GLCmd commented = *cur;
-                    const char *s = cur->source;
+                    const char *s = repl_state_editor_buffer_line(repl_state_edit_line());
+                    if (!s) s = "";
                     int leading_ws_len = 0;
                     while (s[leading_ws_len] && isspace((unsigned char)s[leading_ws_len]))
                         leading_ws_len++;
                     snprintf(new_src, sizeof(new_src), "%.*s// %s", leading_ws_len, s, s + leading_ws_len);
                     commented.type = CMD_COMMENT;
                     commented.valid = 1;
-                    repl_copy_string_fits(commented.source, sizeof(commented.source),
-                                          new_src);
-                    repl_command_store_source_to_line(commented_line,
-                                                      sizeof(commented_line),
-                                                      new_src);
                     {
                         ReplCommandStore store = repl_command_store_live();
                         repl_command_store_replace_one(&store,
                                                        repl_state_edit_line(),
                                                        &commented,
-                                                       commented_line);
+                                                       new_src);
                     }
                     load_line_to_input(repl_state_edit_line());
                     mark_normals_dirty();
@@ -1108,6 +1111,7 @@ static int handle_semicolon_commit_key_route(unsigned char key) {
             }
             {
                 GLCmd cmd;
+                char cmd_text[MAX_LINE_LEN] = "";
                 int insert_idx = repl_state_insert_mode() ? repl_state_edit_line() :
                            (repl_state_edit_line() < repl_state_document_count() ? repl_state_edit_line() : repl_state_document_count());
                 int parsed;
@@ -1118,21 +1122,19 @@ static int handle_semicolon_commit_key_route(unsigned char key) {
                 if (num_vis_vars > 0)
                     parsed = repl_parse_and_normalize_strict(repl_state_editor_input().input, insert_idx, vis_vars, num_vis_vars,
                                                              input_has_any_visible_vars(repl_state_editor_input().input, vis_vars, num_vis_vars),
-                                                             &cmd);
+                                                             &cmd, cmd_text, sizeof(cmd_text));
                 else
                     parsed = repl_parse_and_normalize_strict(repl_state_editor_input().input, insert_idx, NULL, 0,
-                                                             repl_eval_input_has_predef_vars(repl_state_editor_input().input), &cmd);
+                                                             repl_eval_input_has_predef_vars(repl_state_editor_input().input),
+                                                             &cmd, cmd_text, sizeof(cmd_text));
 
                 if (parsed) {
                     ReplCommandStore store = repl_command_store_live();
-                    char input_line[MAX_LINE_LEN];
-                    editor_cmd_line_text(input_line, sizeof(input_line),
-                                         cmd.source);
                     if (repl_state_insert_mode()) {
                         if (repl_command_store_insert_one(&store,
                                                           repl_state_edit_line(),
                                                           &cmd, 0,
-                                                          input_line)) {
+                                                          cmd_text)) {
                             repl_state_edit_line_set(repl_state_edit_line() + 1);
                             {
                                 ReplEditorInputState *inp = repl_state_editor_input_mut();
@@ -1148,7 +1150,7 @@ static int handle_semicolon_commit_key_route(unsigned char key) {
                         repl_command_store_replace_one(&store,
                                                        repl_state_edit_line(),
                                                        &cmd,
-                                                       input_line);
+                                                       cmd_text);
                         set_status("Line updated");
                         repl_state_edit_line_set(repl_state_edit_line() + 1);
                         load_line_to_input(repl_state_edit_line());
@@ -1156,7 +1158,7 @@ static int handle_semicolon_commit_key_route(unsigned char key) {
                         if (repl_command_store_insert_one(&store,
                                                           repl_state_document_count(),
                                                           &cmd, 0,
-                                                          input_line)) {
+                                                          cmd_text)) {
                             repl_state_edit_line_set(repl_state_document_count());
                             set_status("OK");
                             {
@@ -1816,32 +1818,32 @@ int feed_line(const char *line) {
         ExprVar vis_vars[MAX_EXPR_VARS];
         int num_vis_vars = collect_visible_vars(insert_idx, vis_vars, MAX_EXPR_VARS);
 
+        char cmd_text[MAX_LINE_LEN] = "";
         memset(&cmd, 0, sizeof(cmd));
         if (num_vis_vars > 0)
             parsed = repl_parse_and_normalize_strict(repl_state_editor_input().input, insert_idx, vis_vars, num_vis_vars,
                                                      input_has_any_visible_vars(repl_state_editor_input().input, vis_vars, num_vis_vars),
-                                                     &cmd);
+                                                     &cmd, cmd_text, sizeof(cmd_text));
         else
             parsed = repl_parse_and_normalize_strict(repl_state_editor_input().input, insert_idx, NULL, 0,
-                                                     repl_eval_input_has_predef_vars(repl_state_editor_input().input), &cmd);
+                                                     repl_eval_input_has_predef_vars(repl_state_editor_input().input),
+                                                     &cmd, cmd_text, sizeof(cmd_text));
 
         if (parsed) {
             ReplCommandStore store = repl_command_store_live();
-            char input_line[MAX_LINE_LEN];
-            editor_cmd_line_text(input_line, sizeof(input_line), cmd.source);
             if (repl_state_insert_mode()) {
                 if (!repl_command_store_insert_one(&store, repl_state_edit_line(),
-                                                   &cmd, 0, input_line))
+                                                   &cmd, 0, cmd_text))
                     goto feed_line_done;
                 repl_state_edit_line_set(repl_state_edit_line() + 1);
             } else if (repl_state_edit_line() < repl_state_document_count()) {
                 repl_command_store_replace_one(&store, repl_state_edit_line(),
-                                               &cmd, input_line);
+                                               &cmd, cmd_text);
                 repl_state_edit_line_set(repl_state_edit_line() + 1);
             } else {
                 if (!repl_command_store_insert_one(&store,
                                                    repl_state_document_count(),
-                                                   &cmd, 0, input_line))
+                                                   &cmd, 0, cmd_text))
                     goto feed_line_done;
                 repl_state_edit_line_set(repl_state_document_count());
             }

@@ -68,10 +68,6 @@ static const char *export_document_text(int cmd_idx) {
     if (cmd_idx < 0 || cmd_idx >= repl_state_document_count())
         return "";
 
-    text = repl_state_document_cmds_mut()[cmd_idx].source;
-    if (text && text[0])
-        return text;
-
     text = repl_state_editor_buffer_line(cmd_idx);
     return (text && text[0]) ? text : "";
 }
@@ -316,8 +312,8 @@ static const InitBootstrapEntry g_init_bootstrap_repl[] = {
 #define NUM_INIT_BOOTSTRAP \
     ((int)(sizeof(g_init_bootstrap_repl) / sizeof(g_init_bootstrap_repl[0])))
 
-static GLCmd g_init_bootstrap_cmds[NUM_INIT_BOOTSTRAP];
-static int   g_init_bootstrap_ready = 0;
+static ReplParsedLine g_init_bootstrap_cmds[NUM_INIT_BOOTSTRAP];
+static int            g_init_bootstrap_ready = 0;
 
 static const char *g_init_host_only_visible_c[] = {
     "  GLfloat lm_amb[] = { 0.15f, 0.15f, 0.20f, 1.0f };",
@@ -409,7 +405,7 @@ static void parse_init_bootstrap(void) {
                     g_init_bootstrap_repl[bootstrap_idx].repl_line);
             abort();
         }
-        g_init_bootstrap_cmds[bootstrap_idx] = pl.cmd;
+        g_init_bootstrap_cmds[bootstrap_idx] = pl;
     }
     g_init_bootstrap_ready = 1;
 }
@@ -425,9 +421,9 @@ void apply_init_bootstrap(void) {
     for (int bootstrap_idx = 0; bootstrap_idx < NUM_INIT_BOOTSTRAP; bootstrap_idx++) {
         if (g_init_bootstrap_repl[bootstrap_idx].toggle_key != REPL_CONFIG_NONE &&
             !repl_config_get(g_init_bootstrap_repl[bootstrap_idx].toggle_key)) {
-            if (g_init_bootstrap_cmds[bootstrap_idx].type == CMD_POINT_PARAMETER_FV &&
-                g_init_bootstrap_cmds[bootstrap_idx].mode == GL_POINT_DISTANCE_ATTENUATION) {
-                GLCmd disabled = g_init_bootstrap_cmds[bootstrap_idx];
+            if (g_init_bootstrap_cmds[bootstrap_idx].cmd.type == CMD_POINT_PARAMETER_FV &&
+                g_init_bootstrap_cmds[bootstrap_idx].cmd.mode == GL_POINT_DISTANCE_ATTENUATION) {
+                GLCmd disabled = g_init_bootstrap_cmds[bootstrap_idx].cmd;
                 disabled.args[0] = 1.0f;
                 disabled.args[1] = 0.0f;
                 disabled.args[2] = 0.0f;
@@ -435,7 +431,7 @@ void apply_init_bootstrap(void) {
             }
             continue;
         }
-        apply_state_cmd(&g_init_bootstrap_cmds[bootstrap_idx], 1.0f);
+        apply_state_cmd(&g_init_bootstrap_cmds[bootstrap_idx].cmd, 1.0f);
     }
 }
 
@@ -478,7 +474,7 @@ void init_section_line(int i, char *buf, size_t n) {
             continue;
         if (enabled_idx == i) {
             format_cmd_source_as_c(buf, n,
-                                   g_init_bootstrap_cmds[bootstrap_idx].source,
+                                   g_init_bootstrap_cmds[bootstrap_idx].text,
                                    0);
             return;
         }
@@ -503,7 +499,7 @@ static void emit_export_init_section_to_file(FILE *f, int include_tess) {
             !repl_config_get(g_init_bootstrap_repl[bootstrap_idx].toggle_key))
             continue;
         format_cmd_source_as_c(line, sizeof(line),
-                               g_init_bootstrap_cmds[bootstrap_idx].source,
+                               g_init_bootstrap_cmds[bootstrap_idx].text,
                                0);
         fprintf(f, "%s\n", line);
     }
@@ -1609,8 +1605,9 @@ static int import_parse_declare_marker(const char *line, int *loaded,
     cmd.valid     = 1;
     int count     = 0;
 
-    /* Build the source string and collect names. */
-    int off = snprintf(cmd.source, sizeof(cmd.source), "  float");
+    /* Build the canonical source string and collect names. */
+    char decl_line[MAX_LINE_LEN];
+    int off = snprintf(decl_line, sizeof(decl_line), "  float");
     while (*p) {
         while (*p && isspace((unsigned char)*p)) p++;
         if (!*p) break;
@@ -1636,12 +1633,12 @@ static int import_parse_declare_marker(const char *line, int *loaded,
             if (warnings) (*warnings)++;
             continue;
         }
-        off += snprintf(cmd.source + off, sizeof(cmd.source) - (size_t)off,
+        off += snprintf(decl_line + off, sizeof(decl_line) - (size_t)off,
                         count == 0 ? " %.*s" : ", %.*s", len, start);
         count++;
     }
     if (count == 0) return 0;
-    snprintf(cmd.source + off, sizeof(cmd.source) - (size_t)off, ";");
+    snprintf(decl_line + off, sizeof(decl_line) - (size_t)off, ";");
     cmd.var_decl_count = count;
 
     /* Insert the command directly, bypassing try_commit_float_decl so we
@@ -1651,10 +1648,7 @@ static int import_parse_declare_marker(const char *line, int *loaded,
     {
         ReplCommandStore store = repl_command_store_live();
         int decl_pos = repl_command_store_first_non_decl(&store);
-        char decl_line[MAX_LINE_LEN];
 
-        repl_command_store_source_to_line(decl_line, sizeof(decl_line),
-                                          cmd.source);
         if (!repl_command_store_insert_one(
                 &store, decl_pos, &cmd,
                 REPL_COMMAND_STORE_ADJUST_EDIT_LINE,

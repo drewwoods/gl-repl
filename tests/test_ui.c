@@ -128,7 +128,6 @@ static void test_color_picker(void) {
     repl_state_document_cmds_mut()[0].args[2] = 0.0f;
     repl_state_document_cmds_mut()[0].valid = 1;
     repl_state_document_cmds_mut()[0].has_vars = 0;
-    strcpy(repl_state_document_cmds_mut()[0].source, "glColor3f(1, 0, 0);");
     
     ASSERT_TRUE("can edit color cmd", ui_color_picker_can_edit_cmd(0));
     
@@ -158,7 +157,6 @@ static void test_color_picker(void) {
     /* Test Alpha support */
     repl_state_document_cmds_mut()[0].type = CMD_COLOR4F;
     repl_state_document_cmds_mut()[0].args[3] = 0.5f;
-    strcpy(repl_state_document_cmds_mut()[0].source, "glColor4f(1, 0, 0, 0.5);");
     ui_color_picker_open(0, 300);
     
     gl_stub_counts_reset();

@@ -104,6 +104,16 @@ static int test_leading_ws_chars(const char *text) {
     return n;
 }
 
+/* Resolve source text for a flat command using the editor buffer, mirroring
+ * the real executor's execution_flat_text() logic. */
+static const char *flat_cmd_text(int pc) {
+    int src = repl_state_flat_program_cmds_mut()[pc].src_cmd_idx;
+    if (src < 0 || src >= repl_state_document_count())
+        return "";
+    const char *t = repl_state_editor_buffer_line(src);
+    return (t && t[0]) ? t : "";
+}
+
 /*
  * Mirror only the execute-time control-flow pieces that affect variables.
  * This lets the tests exercise goto/if/assignment replay rules without
@@ -125,7 +135,7 @@ static void run_flat_control_flow_only(void) {
             float value = repl_state_flat_program_cmds_mut()[pc].args[0];
             if (repl_state_flat_program_cmds_mut()[pc].has_vars) {
                 char rhs[256];
-                if (repl_extract_assignment_parts(repl_state_flat_program_cmds_mut()[pc].source,
+                if (repl_extract_assignment_parts(flat_cmd_text(pc),
                                                   NULL, 0,
                                                   rhs, sizeof(rhs))) {
                     ExprVar *eval_vars = g_predef_vars;
@@ -146,7 +156,7 @@ static void run_flat_control_flow_only(void) {
             float cond = repl_state_flat_program_cmds_mut()[pc].args[0];
             if (repl_state_flat_program_cmds_mut()[pc].has_vars) {
                 char cond_text[256];
-                if (repl_extract_paren_payload(repl_state_flat_program_cmds_mut()[pc].source,
+                if (repl_extract_paren_payload(flat_cmd_text(pc),
                                                cond_text, sizeof(cond_text))) {
                     ExprVar *eval_vars = g_predef_vars;
                     int eval_num_vars = g_num_predef_vars;
@@ -169,7 +179,7 @@ static void run_flat_control_flow_only(void) {
         }
         case CMD_GOTO: {
             char label[64];
-            if (!repl_extract_goto_label(repl_state_flat_program_cmds_mut()[pc].source, label, sizeof(label)))
+            if (!repl_extract_goto_label(flat_cmd_text(pc), label, sizeof(label)))
                 break;
             if (goto_count++ > 100000)
                 return;
@@ -177,7 +187,7 @@ static void run_flat_control_flow_only(void) {
                 char target_label[64];
                 if (repl_state_flat_program_cmds_mut()[li].valid &&
                     repl_state_flat_program_cmds_mut()[li].type == CMD_LABEL &&
-                    repl_extract_label_name(repl_state_flat_program_cmds_mut()[li].source,
+                    repl_extract_label_name(flat_cmd_text(li),
                                             target_label,
                                             sizeof(target_label)) &&
                     strcmp(target_label, label) == 0) {
@@ -244,7 +254,7 @@ int main(void) {
     repl_feed_line_public("goto walk;");
     repl_feed_line_public("}");
     ASSERT_TRUE("expr assign cmd count", repl_state_document_count() == 6);
-    ASSERT_TRUE("expr assign preserves source", strstr(repl_state_document_cmds_mut()[2].source, "n + 1") != NULL);
+    ASSERT_TRUE("expr assign preserves source", strstr(repl_state_editor_buffer_line(2) ? repl_state_editor_buffer_line(2) : "", "n + 1") != NULL);
     ASSERT_TRUE("expr assign marked has_vars", repl_state_document_cmds_mut()[2].has_vars == 1);
     repl_flatten_commands();
     execute_commands();
@@ -274,7 +284,7 @@ int main(void) {
     repl_feed_line_public("glEnd();");
     ASSERT_TRUE("goto geom cmd count", repl_state_document_count() == 10);
     ASSERT_TRUE("goto geom first vertex keeps expr",
-                strstr(repl_state_document_cmds_mut()[3].source, "0.42*n") != NULL);
+                strstr(repl_state_editor_buffer_line(3) ? repl_state_editor_buffer_line(3) : "", "0.42*n") != NULL);
     ASSERT_TRUE("goto geom first vertex has vars", repl_state_document_cmds_mut()[3].has_vars == 1);
     repl_flatten_commands();
     ASSERT_TRUE("goto geom flat first vertex has vars", repl_state_flat_program_cmds_mut()[3].has_vars == 1);
@@ -292,13 +302,13 @@ int main(void) {
     repl_reset_state(); declare_test_vars();
     repl_feed_line_public(":walk");
     ASSERT_TRUE("label cmd count", repl_state_document_count() == 1);
-    ASSERT_TRUE("label stored as C label", strcmp(repl_state_document_cmds_mut()[0].source, "walk:") == 0);
+    ASSERT_TRUE("label stored as C label", strcmp(repl_state_editor_buffer_line(0) ? repl_state_editor_buffer_line(0) : "", "walk:") == 0);
     repl_navigate_to_line(0);
     ASSERT_TRUE("label loads back into editor as repl syntax",
                 strcmp(repl_state_editor_input().input, ":walk") == 0);
     repl_keyboard_func(';', 0, 0);
     ASSERT_TRUE("recommitting loaded label keeps label type", repl_state_document_cmds_mut()[0].type == CMD_LABEL);
-    ASSERT_TRUE("recommitting loaded label keeps source", strcmp(repl_state_document_cmds_mut()[0].source, "walk:") == 0);
+    ASSERT_TRUE("recommitting loaded label keeps source", strcmp(repl_state_editor_buffer_line(0) ? repl_state_editor_buffer_line(0) : "", "walk:") == 0);
 
     repl_reset_state(); declare_test_vars();
     repl_feed_line_public("for(i, 0, 3) {");
@@ -308,7 +318,7 @@ int main(void) {
     ASSERT_TRUE("for begin", repl_state_document_cmds_mut()[0].type == CMD_FOR_BEGIN);
     ASSERT_TRUE("for body", repl_state_document_cmds_mut()[1].type == CMD_VERTEX3F);
     ASSERT_TRUE("for end", repl_state_document_cmds_mut()[2].type == CMD_FOR_END);
-    ASSERT_TRUE("for body keeps i", strstr(repl_state_document_cmds_mut()[1].source, "i") != NULL);
+    ASSERT_TRUE("for body keeps i", strstr(repl_state_editor_buffer_line(1) ? repl_state_editor_buffer_line(1) : "", "i") != NULL);
 
     repl_reset_state(); declare_test_vars();
     repl_feed_line_public("glBegin(GL_POINTS);");
@@ -368,7 +378,7 @@ int main(void) {
         int linenum_w = 4 * FONT_W;
         int idx_col_w = repl_state_presentation().show_vertex_indices ? (6 * FONT_W) : 0;
         int text_x = CODE_MARGIN_X + linenum_w + FONT_W + idx_col_w;
-        int indent = test_leading_ws_chars(repl_state_document_cmds_mut()[1].source);
+        int indent = test_leading_ws_chars(repl_state_editor_buffer_line(1) ? repl_state_editor_buffer_line(1) : "");
         int cursor_pos = ui_panels_handle_code_panel_click(text_x + indent * FONT_W + 1,
                                                            code_panel_mouse_y_for_cmd(1));
         if (cursor_pos >= 0)
@@ -472,15 +482,15 @@ int main(void) {
     ASSERT_TRUE("param func cmd count", repl_state_document_count() == 4);
     ASSERT_TRUE("param func def", repl_state_document_cmds_mut()[0].type == CMD_FUNC_DEF);
     ASSERT_TRUE("param func header keeps names",
-                strstr(repl_state_document_cmds_mut()[0].source, "radius") != NULL &&
-                strstr(repl_state_document_cmds_mut()[0].source, "yoff") != NULL);
+                strstr(repl_state_editor_buffer_line(0) ? repl_state_editor_buffer_line(0) : "", "radius") != NULL &&
+                strstr(repl_state_editor_buffer_line(0) ? repl_state_editor_buffer_line(0) : "", "yoff") != NULL);
     ASSERT_TRUE("param func body keeps radius",
-                strstr(repl_state_document_cmds_mut()[1].source, "radius") != NULL);
+                strstr(repl_state_editor_buffer_line(1) ? repl_state_editor_buffer_line(1) : "", "radius") != NULL);
     ASSERT_TRUE("param func body keeps yoff",
-                strstr(repl_state_document_cmds_mut()[1].source, "yoff") != NULL);
+                strstr(repl_state_editor_buffer_line(1) ? repl_state_editor_buffer_line(1) : "", "yoff") != NULL);
     ASSERT_TRUE("param func call type", repl_state_document_cmds_mut()[3].type == CMD_CALL);
     ASSERT_TRUE("param func call keeps expr",
-                strstr(repl_state_document_cmds_mut()[3].source, "x + 2") != NULL);
+                strstr(repl_state_editor_buffer_line(3) ? repl_state_editor_buffer_line(3) : "", "x + 2") != NULL);
 
     repl_reset_state(); declare_test_vars();
     repl_feed_line_public("glClearColor(0.1, 0.1, 0.1, 1);");
@@ -568,8 +578,8 @@ int main(void) {
     ASSERT_TRUE("local for begin type", repl_state_document_cmds_mut()[1].type == CMD_FOR_BEGIN);
     ASSERT_TRUE("local for body type", repl_state_document_cmds_mut()[2].type == CMD_VERTEX3F);
     ASSERT_TRUE("local for end type", repl_state_document_cmds_mut()[3].type == CMD_FOR_END);
-    ASSERT_TRUE("local for header keeps n", strstr(repl_state_document_cmds_mut()[1].source, "n") != NULL);
-    ASSERT_TRUE("local for body keeps n", strstr(repl_state_document_cmds_mut()[2].source, "n") != NULL);
+    ASSERT_TRUE("local for header keeps n", strstr(repl_state_editor_buffer_line(1) ? repl_state_editor_buffer_line(1) : "", "n") != NULL);
+    ASSERT_TRUE("local for body keeps n", strstr(repl_state_editor_buffer_line(2) ? repl_state_editor_buffer_line(2) : "", "n") != NULL);
     repl_flatten_commands();
     ASSERT_TRUE("local for flatten count", repl_state_flat_program_count() == 3);
     ASSERT_TRUE("local for first x", fabsf(repl_state_flat_program_cmds_mut()[0].args[0] - 0.0f) < 1e-6f);
@@ -585,7 +595,7 @@ int main(void) {
     repl_feed_line_public("}");
     repl_feed_line_public("func0(2);");
     repl_feed_line_public("func0(0.5);");
-    ASSERT_TRUE("local if header keeps scale", strstr(repl_state_document_cmds_mut()[1].source, "scale > 1") != NULL);
+    ASSERT_TRUE("local if header keeps scale", strstr(repl_state_editor_buffer_line(1) ? repl_state_editor_buffer_line(1) : "", "scale > 1") != NULL);
     repl_flatten_commands();
     ASSERT_TRUE("local if flatten count", repl_state_flat_program_count() == 1);
     ASSERT_TRUE("local if flatten type", repl_state_flat_program_cmds_mut()[0].type == CMD_VERTEX3F);
@@ -938,7 +948,7 @@ int main(void) {
     ASSERT_TRUE("func def overwrite: still CMD_FUNC_DEF",
                 repl_state_document_cmds_mut()[0].type == CMD_FUNC_DEF);
     ASSERT_TRUE("func def overwrite: header keeps new param",
-                strstr(repl_state_document_cmds_mut()[0].source, "z") != NULL);
+                strstr(repl_state_editor_buffer_line(0) ? repl_state_editor_buffer_line(0) : "", "z") != NULL);
     ASSERT_TRUE("func def overwrite: status not a duplicate rejection",
                 strstr(g_status, "already defined") == NULL);
 

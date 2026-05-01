@@ -29,18 +29,13 @@ static int   s_replay_predef_snap_valid[MAX_COMMANDS];
 static void replay_build_predef_snapshots(void);
 
 static const char *replay_document_text(int cmd_idx) {
-    const char *text;
-    return ((text = repl_state_editor_buffer_line(cmd_idx)) && text[0]) ? text : repl_state_document_cmds_mut()[cmd_idx].source;
+    const char *text = repl_state_editor_buffer_line(cmd_idx);
+    return (text && text[0]) ? text : "";
 }
 
 static const char *replay_visible_text(int cmd_idx) {
-    const char *source;
-
     if (cmd_idx < 0 || cmd_idx >= repl_state_document_count())
         return "";
-    source = repl_state_document_cmds_mut()[cmd_idx].source;
-    if (source && source[0])
-        return source;
     return replay_document_text(cmd_idx);
 }
 

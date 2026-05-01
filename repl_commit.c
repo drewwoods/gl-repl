@@ -77,9 +77,6 @@ static void fill_scope_close_indent(int pos, char *buf, int buf_sz) {
     buf[len] = '\0';
 }
 
-static void commit_cmd_line_text(char *buf, int buf_sz, const char *source) {
-    repl_command_store_source_to_line(buf, buf_sz, source);
-}
 
 int repl_commit_resolve_insert_exit_target(int target) {
     if (!repl_state_insert_mode() ||
@@ -309,16 +306,17 @@ int try_commit_float_decl(void) {
         memset(indent, ' ', (size_t)ind);
         indent[ind] = '\0';
 
-        int off = snprintf(cmd.source, sizeof(cmd.source), "%sfloat ", indent);
-        /* Format each variable name and optional initializer in the source. */
-        for (int var_idx = 0; var_idx < var_count && off < (int)sizeof(cmd.source) - 4; var_idx++) {
-            if (var_idx > 0) off += snprintf(cmd.source + off, sizeof(cmd.source) - off, ", ");
-            off += snprintf(cmd.source + off, sizeof(cmd.source) - off, "%s", names[var_idx]);
+        char decl_text[MAX_LINE_LEN];
+        int off = snprintf(decl_text, sizeof(decl_text), "%sfloat ", indent);
+        /* Format each variable name and optional initializer. */
+        for (int var_idx = 0; var_idx < var_count && off < (int)sizeof(decl_text) - 4; var_idx++) {
+            if (var_idx > 0) off += snprintf(decl_text + off, sizeof(decl_text) - off, ", ");
+            off += snprintf(decl_text + off, sizeof(decl_text) - off, "%s", names[var_idx]);
             if (has_init[var_idx])
-                off += snprintf(cmd.source + off, sizeof(cmd.source) - off,
+                off += snprintf(decl_text + off, sizeof(decl_text) - off,
                                 " = %g", init_vals[var_idx]);
         }
-        snprintf(cmd.source + off, sizeof(cmd.source) - off, ";");
+        snprintf(decl_text + off, sizeof(decl_text) - off, ";");
 
         /* Check overwrite feasibility BEFORE registering new names. Only
          * names being REMOVED (present in old decl, absent from new) need
@@ -335,7 +333,7 @@ int try_commit_float_decl(void) {
                 /* Check if this removed name is still used anywhere. */
                 for (int cmd_idx = 0; cmd_idx < repl_state_document_count(); cmd_idx++) {
                     if (cmd_idx == insert_idx) continue;
-                    if (repl_eval_source_uses_ident(repl_state_document_cmds_mut()[cmd_idx].source, nm)) {
+                    if (repl_eval_source_uses_ident(repl_state_editor_buffer_line(cmd_idx) ? repl_state_editor_buffer_line(cmd_idx) : "", nm)) {
                         char buf[128];
                         snprintf(buf, sizeof(buf),
                                  "variable '%s' is in use, cannot overwrite", nm);
@@ -387,17 +385,15 @@ int try_commit_float_decl(void) {
         }
 
         ReplCommandStore store = repl_command_store_live();
-        char input_line[MAX_LINE_LEN];
-        commit_cmd_line_text(input_line, sizeof(input_line), cmd.source);
         if (overwriting_decl) {
             repl_command_store_replace_one(&store, insert_idx, &cmd,
-                                           input_line);
+                                           decl_text);
             repl_state_edit_line_set(repl_state_edit_line() + 1);
             load_line_to_input(repl_state_edit_line());
         } else if (repl_command_store_insert_one(
                        &store, decl_pos, &cmd,
                        REPL_COMMAND_STORE_ADJUST_EDIT_LINE,
-                       input_line)) {
+                       decl_text)) {
             if (!repl_state_insert_mode() && repl_state_edit_line() < repl_state_document_count())
                 load_line_to_input(repl_state_edit_line());
         } else {
@@ -489,7 +485,8 @@ int try_assign_variable(void) {
             int insert_idx = repl_state_insert_mode() ? repl_state_edit_line() :
                        (repl_state_edit_line() < repl_state_document_count() ? repl_state_edit_line() : repl_state_document_count());
             fill_scope_indent(insert_idx, indent, sizeof(indent));
-            if (!repl_format_fits(cmd.source, sizeof(cmd.source),
+            char assign_text[MAX_LINE_LEN];
+            if (!repl_format_fits(assign_text, sizeof(assign_text),
                                   "%s%s = %s;%s",
                                   indent, name, rhs, comment)) {
                 set_status("Command too long");
@@ -497,11 +494,9 @@ int try_assign_variable(void) {
             }
 
             ReplCommandStore store = repl_command_store_live();
-            char input_line[MAX_LINE_LEN];
-            commit_cmd_line_text(input_line, sizeof(input_line), cmd.source);
             if (repl_state_insert_mode()) {
                 if (repl_command_store_insert_one(&store, insert_idx, &cmd, 0,
-                                                  input_line))
+                                                  assign_text))
                     repl_state_edit_line_set(repl_state_edit_line() + 1);
                 else {
                     set_status("Command buffer full!");
@@ -514,7 +509,7 @@ int try_assign_variable(void) {
                         const char *nm = repl_state_document_cmds_mut()[insert_idx].var_names[decl_idx];
                         for (int cmd_idx = 0; cmd_idx < repl_state_document_count(); cmd_idx++) {
                             if (cmd_idx == insert_idx) continue;
-                            if (repl_eval_source_uses_ident(repl_state_document_cmds_mut()[cmd_idx].source, nm)) {
+                            if (repl_eval_source_uses_ident(repl_state_editor_buffer_line(cmd_idx) ? repl_state_editor_buffer_line(cmd_idx) : "", nm)) {
                                 char buf[128];
                                 snprintf(buf, sizeof(buf),
                                          "variable '%s' is in use, cannot overwrite", nm);
@@ -537,7 +532,7 @@ int try_assign_variable(void) {
                     }
                 }
                 repl_command_store_replace_one(&store, insert_idx, &cmd,
-                                               input_line);
+                                               assign_text);
                 repl_state_edit_line_set(repl_state_edit_line() + 1);
                 load_line_to_input(repl_state_edit_line());
                 {
@@ -550,7 +545,7 @@ int try_assign_variable(void) {
             } else {
                 if (!repl_command_store_insert_one(&store,
                                                    repl_state_document_count(),
-                                                   &cmd, 0, input_line)) {
+                                                   &cmd, 0, assign_text)) {
                     set_status("Command buffer full!");
                     return 1;
                 }
@@ -603,6 +598,8 @@ int try_commit_for_loop(void) {
         {
             int ind;
             char indent[32];
+            char fb_text[MAX_LINE_LEN] = "";
+            char fe_text[MAX_LINE_LEN] = "";
             GLCmd fb;
             GLCmd fe;
 
@@ -670,21 +667,21 @@ int try_commit_for_loop(void) {
 
                         if (input_has_any_visible_vars(ra, visible_vars, visible_nv)) {
                             fb.has_vars = 1;
-                            if (!repl_format_fits(fb.source, sizeof(fb.source),
+                            if (!repl_format_fits(fb_text, sizeof(fb_text),
                                                   "%sfor(%s, %s) {",
                                                   indent, var_name, ra)) {
                                 set_status("Command too long");
                                 return 1;
                             }
                         } else if (step != 1.0f) {
-                            if (!repl_format_fits(fb.source, sizeof(fb.source),
+                            if (!repl_format_fits(fb_text, sizeof(fb_text),
                                                   "%sfor(%s, %g, %g, %g) {",
                                                   indent, var_name, start, end, step)) {
                                 set_status("Command too long");
                                 return 1;
                             }
                         } else {
-                            if (!repl_format_fits(fb.source, sizeof(fb.source),
+                            if (!repl_format_fits(fb_text, sizeof(fb_text),
                                                   "%sfor(%s, %g, %g) {",
                                                   indent, var_name, start, end)) {
                                 set_status("Command too long");
@@ -698,19 +695,16 @@ int try_commit_for_loop(void) {
             memset(&fe, 0, sizeof(fe));
             fe.type = CMD_FOR_END;
             fe.valid = 1;
-            snprintf(fe.source, sizeof(fe.source), "%s}", indent);
+            snprintf(fe_text, sizeof(fe_text), "%s}", indent);
 
             if (*body_start == '{' || *body_start == '\0') {
-                char header_line[MAX_LINE_LEN];
-                const char *loop_lines[2] = { header_line, "}" };
-                commit_cmd_line_text(header_line, sizeof(header_line),
-                                     fb.source);
+                const char *loop_lines[2] = { fb_text, fe_text };
 
                 if (!repl_state_insert_mode() && repl_state_edit_line() < repl_state_document_count() &&
                     repl_state_document_cmds_mut()[repl_state_edit_line()].type == CMD_FOR_BEGIN) {
                     ReplCommandStore store = repl_command_store_live();
                     repl_command_store_replace_one(&store, repl_state_edit_line(),
-                                                   &fb, header_line);
+                                                   &fb, fb_text);
                     repl_state_edit_line_set(repl_state_edit_line() + 1);
                     repl_state_insert_mode_set(1);
                     {
@@ -783,6 +777,7 @@ int try_commit_for_loop(void) {
                     body_cmd = body_pl.cmd;
                 }
 
+                char body_text[MAX_LINE_LEN];
                 {
                     char bind[32];
                     int bi = ind + 2;
@@ -790,20 +785,15 @@ int try_commit_for_loop(void) {
                         bi = (int)sizeof(bind) - 1;
                     memset(bind, ' ', (size_t)bi);
                     bind[bi] = '\0';
-                    snprintf(body_cmd.source, sizeof(body_cmd.source), "%s%s;", bind, body);
+                    snprintf(body_text, sizeof(body_text), "%s%s;", bind, body);
                 }
 
-                                ReplCommandStore store = repl_command_store_live();
-                                GLCmd loop_cmds[3] = { fb, body_cmd, fe };
-                                char header_line[MAX_LINE_LEN];
-                                const char *loop_lines[3] = { header_line, body, "}" };
-
-                                repl_command_store_source_to_line(header_line,
-                                                                                                    sizeof(header_line),
-                                                                                                    fb.source);
+                ReplCommandStore store = repl_command_store_live();
+                GLCmd loop_cmds[3] = { fb, body_cmd, fe };
+                const char *loop_lines[3] = { fb_text, body_text, fe_text };
                 if (!repl_command_store_insert_many(&store, pos,
-                                                                                                        loop_cmds, 3, 0,
-                                                                                                        loop_lines)) {
+                                                    loop_cmds, 3, 0,
+                                                    loop_lines)) {
                     set_status("Command buffer full!");
                     return 1;
                 }
@@ -876,7 +866,8 @@ int try_commit_func_def(void) {
         GLCmd fd;
         GLCmd fe;
         ReplCommandStore store = repl_command_store_live();
-        char header_line[MAX_LINE_LEN];
+        char fd_text[MAX_LINE_LEN] = "";
+        char fe_text[MAX_LINE_LEN] = "";
 
         fill_scope_indent(pos, indent, sizeof(indent));
 
@@ -884,13 +875,10 @@ int try_commit_func_def(void) {
             GLCmd updated = repl_state_document_cmds_mut()[edit_pos];
             updated.args[0] = (float)fn;
             updated.num_args = param_count;
-            format_func_header(updated.source,
-                               (int)sizeof(updated.source),
+            format_func_header(fd_text, (int)sizeof(fd_text),
                                indent, fn, param_names, param_count);
-            commit_cmd_line_text(header_line, sizeof(header_line),
-                                 updated.source);
             repl_command_store_replace_one(&store, edit_pos, &updated,
-                                           header_line);
+                                           fd_text);
             repl_state_edit_line_set(edit_pos + 1);
             repl_state_insert_mode_set(1);
             {
@@ -910,14 +898,13 @@ int try_commit_func_def(void) {
         fd.args[0] = (float)fn;
         fd.num_args = param_count;
         fd.valid = 1;
-        format_func_header(fd.source, (int)sizeof(fd.source),
+        format_func_header(fd_text, (int)sizeof(fd_text),
                            indent, fn, param_names, param_count);
-        commit_cmd_line_text(header_line, sizeof(header_line), fd.source);
 
         memset(&fe, 0, sizeof(fe));
         fe.type = CMD_FUNC_END;
         fe.valid = 1;
-        snprintf(fe.source, sizeof(fe.source), "%s}", indent);
+        snprintf(fe_text, sizeof(fe_text), "%s}", indent);
 
         int comment_start = edit_pos;
         int comment_count = 0;
@@ -959,8 +946,8 @@ int try_commit_func_def(void) {
         insert_cmds[comment_count + 1] = fe;
         for (int comment_idx = 0; comment_idx < comment_count; comment_idx++)
             insert_lines[comment_idx] = comment_lines[comment_idx];
-        insert_lines[comment_count] = header_line;
-        insert_lines[comment_count + 1] = "}";
+        insert_lines[comment_count] = fd_text;
+        insert_lines[comment_count + 1] = fe_text;
         if (!repl_command_store_insert_many(&store, pos, insert_cmds,
                                             insert_count, 0,
                                             insert_lines)) {
@@ -1004,6 +991,8 @@ int try_commit_if_block(void) {
         char cond_text[MAX_LINE_LEN];
         int clen;
         char indent[32];
+        char ib_text[MAX_LINE_LEN] = "";
+        char ie_text[MAX_LINE_LEN] = "";
         GLCmd ib;
         GLCmd ie;
 
@@ -1077,16 +1066,14 @@ int try_commit_if_block(void) {
             ctlen = (int)strlen(ct);
             while (ctlen > 0 && isspace((unsigned char)ct[ctlen - 1]))
                 ct[--ctlen] = '\0';
-            snprintf(ib.source, sizeof(ib.source), "%sif(%s) {", indent, ct);
+            snprintf(ib_text, sizeof(ib_text), "%sif(%s) {", indent, ct);
         }
 
         if (!repl_state_insert_mode() && repl_state_edit_line() < repl_state_document_count() &&
             repl_state_document_cmds_mut()[repl_state_edit_line()].type == CMD_IF_BEGIN) {
             ReplCommandStore store = repl_command_store_live();
-            char input_line[MAX_LINE_LEN];
-            commit_cmd_line_text(input_line, sizeof(input_line), ib.source);
             repl_command_store_replace_one(&store, repl_state_edit_line(), &ib,
-                                           input_line);
+                                           ib_text);
             repl_state_edit_line_set(repl_state_edit_line() + 1);
             repl_state_insert_mode_set(1);
             {
@@ -1104,13 +1091,11 @@ int try_commit_if_block(void) {
         memset(&ie, 0, sizeof(ie));
         ie.type = CMD_IF_END;
         ie.valid = 1;
-        snprintf(ie.source, sizeof(ie.source), "%s}", indent);
+        snprintf(ie_text, sizeof(ie_text), "%s}", indent);
 
         ReplCommandStore store = repl_command_store_live();
         GLCmd if_cmds[2] = { ib, ie };
-        char input_line[MAX_LINE_LEN];
-        const char *if_lines[2] = { input_line, "}" };
-        commit_cmd_line_text(input_line, sizeof(input_line), ib.source);
+        const char *if_lines[2] = { ib_text, ie_text };
         if (!repl_command_store_insert_many(&store, pos, if_cmds, 2, 0,
                                             if_lines)) {
             set_status("Command buffer full!");
@@ -1145,6 +1130,7 @@ int try_commit_close_brace(void) {
         CmdType end_type;
         const char *label;
         char indent[32];
+        char fe_text[MAX_LINE_LEN] = "";
         GLCmd fe;
 
         if (open_type == CMD_TYPE_COUNT)
@@ -1193,10 +1179,10 @@ int try_commit_close_brace(void) {
         memset(&fe, 0, sizeof(fe));
         fe.type = end_type;
         fe.valid = 1;
-        snprintf(fe.source, sizeof(fe.source), "%s}", indent);
+        snprintf(fe_text, sizeof(fe_text), "%s}", indent);
 
         ReplCommandStore store = repl_command_store_live();
-        if (!repl_command_store_insert_one(&store, pos, &fe, 0, "}")) {
+        if (!repl_command_store_insert_one(&store, pos, &fe, 0, fe_text)) {
             set_status("Command buffer full!");
             return 1;
         }

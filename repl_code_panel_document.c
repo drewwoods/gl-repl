@@ -130,8 +130,10 @@ static int code_panel_leading_ws_chars(const char *text) {
 int repl_code_panel_document_active_indent_chars(void) {
     if (repl_state_insert_mode())
         return repl_source_scope_cmd_indent_chars(repl_state_edit_line());
-    if (repl_state_edit_line() >= 0 && repl_state_edit_line() < repl_state_document_count())
-        return code_panel_leading_ws_chars(repl_state_document_cmds_mut()[repl_state_edit_line()].source);
+    if (repl_state_edit_line() >= 0 && repl_state_edit_line() < repl_state_document_count()) {
+        const char *line_text = repl_state_editor_buffer_line(repl_state_edit_line());
+        return code_panel_leading_ws_chars(line_text ? line_text : "");
+    }
     return repl_source_scope_cmd_indent_chars(repl_state_document_count());
 }
 
