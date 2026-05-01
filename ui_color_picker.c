@@ -82,7 +82,13 @@ static const GLCmd *cp_cmd_at(int cmd_idx) {
     return repl_state_document_cmd_at(cmd_idx);
 }
 
-static void color_picker_write_cmd(void) {
+/* Compute the effective color from current picker state and either:
+ *   - emit a UI_ACTION_COLOR_SET / UI_ACTION_CLEAR_COLOR_SET into `out`
+ *     (Phase C-1 deferred-dispatch path), OR
+ *   - call repl_command_store_* synchronously (legacy path; callers that
+ *     pass NULL).
+ */
+static void color_picker_write_cmd(UiActionList *out) {
     const GLCmd *cmd = cp_cmd_at(g_cp_line);
     float r, g, b;
 
@@ -90,6 +96,23 @@ static void color_picker_write_cmd(void) {
         return;
 
     cp_hsv_to_rgb(g_cp_hue, g_cp_sat, g_cp_val, &r, &g, &b);
+
+    if (out) {
+        UiActionKind kind = (cmd->type == CMD_CLEAR_COLOR)
+                          ? UI_ACTION_CLEAR_COLOR_SET
+                          : UI_ACTION_COLOR_SET;
+        UiAction *act = ui_action_list_append(out, kind);
+        if (act) {
+            act->args.color.cmd_idx   = g_cp_line;
+            act->args.color.r         = r;
+            act->args.color.g         = g;
+            act->args.color.b         = b;
+            act->args.color.a         = g_cp_alpha;
+            act->args.color.has_alpha = g_cp_has_alpha;
+        }
+        return;
+    }
+
     if (cmd->type == CMD_CLEAR_COLOR) {
         repl_command_store_set_clear_color(g_cp_line, r, g, b, g_cp_alpha);
         return;
@@ -97,16 +120,22 @@ static void color_picker_write_cmd(void) {
     repl_command_store_set_color(g_cp_line, r, g, b, g_cp_alpha, g_cp_has_alpha);
 }
 
-/* Open (or switch) the picker for cmd_idx.  my is GLUT screen y coord. */
-void ui_color_picker_open(int cmd_idx, int my) {
+/* Internal open: shared body for both the legacy synchronous variant and
+ * the Phase C-1 deferred-dispatch variant. `out` is non-NULL when the
+ * caller wants the undo-push deferred. */
+static void ui_color_picker_open_impl(UiActionList *out, int cmd_idx, int my) {
     int cp_x, cp_w;
     const GLCmd *cmd;
 
     if (!ui_color_picker_can_edit_cmd(cmd_idx))
         return;
 
-    if (g_cp_line != cmd_idx)
-        repl_undo_push_snapshot();
+    if (g_cp_line != cmd_idx) {
+        if (out)
+            ui_action_list_append(out, UI_ACTION_UNDO_PUSH_SNAPSHOT);
+        else
+            repl_undo_push_snapshot();
+    }
 
     repl_layout_code_panel_rect(&cp_x, NULL, &cp_w, NULL);
     g_cp_line = cmd_idx;
@@ -136,6 +165,14 @@ void ui_color_picker_open(int cmd_idx, int my) {
     if (ppy > win_h - 4) ppy = win_h - 4;
     if (ppy - ph < 4)       ppy = ph + 4;
     g_cp_px = ppx;  g_cp_py = ppy;
+}
+
+void ui_color_picker_open(int cmd_idx, int my) {
+    ui_color_picker_open_impl(NULL, cmd_idx, my);
+}
+
+void ui_color_picker_open_actions(UiActionList *out, int cmd_idx, int my) {
+    ui_color_picker_open_impl(out, cmd_idx, my);
 }
 
 void ui_color_picker_render(const UiRenderSnapshot *snap) {
@@ -270,7 +307,7 @@ void ui_color_picker_render(const UiRenderSnapshot *snap) {
     glEnd();
 }
 
-int ui_color_picker_press(int mx, int my) {
+int ui_color_picker_press(UiActionList *out, int mx, int my) {
     const GLCmd *cmd;
     CpRects r;
 
@@ -291,7 +328,7 @@ int ui_color_picker_press(int mx, int my) {
         if (g_cp_val<0)g_cp_val=0; if (g_cp_val>1)g_cp_val=1;
         if (cmd->type == CMD_CLEAR_COLOR && g_cp_val>CP_CLEAR_MAX_V)
             g_cp_val=CP_CLEAR_MAX_V;
-        color_picker_write_cmd(); return 1;
+        color_picker_write_cmd(out); return 1;
     }
     /* Hue bar */
     if (mx >= r.hue_x && mx < r.hue_x+CP_HUE_W &&
@@ -299,7 +336,7 @@ int ui_color_picker_press(int mx, int my) {
         g_cp_drag = 2;
         g_cp_hue = 1.0f-(float)(gl_y-r.hue_y)/(float)r.hue_h;
         if (g_cp_hue<0)g_cp_hue=0; if (g_cp_hue>=1)g_cp_hue=0.999f;
-        color_picker_write_cmd(); return 1;
+        color_picker_write_cmd(out); return 1;
     }
     /* Alpha bar */
     if (g_cp_has_alpha &&
@@ -308,7 +345,7 @@ int ui_color_picker_press(int mx, int my) {
         g_cp_drag = 3;
         g_cp_alpha = (float)(gl_y-r.alp_y)/(float)r.alp_h;
         if (g_cp_alpha<0)g_cp_alpha=0; if (g_cp_alpha>1)g_cp_alpha=1;
-        color_picker_write_cmd(); return 1;
+        color_picker_write_cmd(out); return 1;
     }
 
     /* Click outside picker: close and let the event fall through */
@@ -316,7 +353,7 @@ int ui_color_picker_press(int mx, int my) {
     return 0;
 }
 
-int ui_color_picker_motion(int mx, int my) {
+int ui_color_picker_motion(UiActionList *out, int mx, int my) {
     const GLCmd *cmd;
     CpRects r;
 
@@ -340,7 +377,7 @@ int ui_color_picker_motion(int mx, int my) {
         g_cp_alpha = (float)(gl_y-r.alp_y)/(float)r.alp_h;
         if (g_cp_alpha<0)g_cp_alpha=0; if (g_cp_alpha>1)g_cp_alpha=1;
     }
-    color_picker_write_cmd();
+    color_picker_write_cmd(out);
     return 1;
 }
 

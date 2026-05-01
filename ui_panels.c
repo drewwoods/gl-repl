@@ -10,6 +10,7 @@
 #include "repl_export.h"
 #include "repl_layout.h"
 #include "repl_source_scope.h"
+#include "ui_action.h"
 #include "ui_color_picker.h"
 #include "repl_code_panel_document.h"
 #include "repl_core.h"
@@ -1064,9 +1065,18 @@ int ui_panels_handle_code_panel_press(int mx, int my, int *cursor_pos_out) {
         *cursor_pos_out = -1;
 
     /* Color picker floats and may overlap the code panel (e.g. top/bottom
-     * layouts).  Give it first crack so its hit rects take priority. */
-    if (ui_color_picker_press(mx, my))
-        return UI_PANEL_PRESS_CONSUMED;
+     * layouts).  Give it first crack so its hit rects take priority. The
+     * color-picker press is the Phase C-1 deferred-dispatch entry point:
+     * it appends UI_ACTION_COLOR_SET (or _CLEAR_COLOR_SET) to a local list
+     * and we drain it through ui_action_dispatch_all() before returning. */
+    {
+        UiActionList actions;
+        ui_action_list_init(&actions);
+        if (ui_color_picker_press(&actions, mx, my)) {
+            ui_action_dispatch_all(&actions);
+            return UI_PANEL_PRESS_CONSUMED;
+        }
+    }
 
     /* Pins (Search, Replay) take priority over menu labels and dropdown items
      * so they remain clickable even when a menu label visually overlaps them
@@ -1130,7 +1140,12 @@ int ui_panels_handle_code_panel_press(int mx, int my, int *cursor_pos_out) {
                     ui_color_picker_close();   /* toggle: close picker */
                 } else {
                     actions |= UI_PANEL_PRESS_OPENED_COLOR_PICKER;
-                    ui_color_picker_open(target, my);
+                    /* Phase C-1: defer the undo-push that fires when a new
+                     * picker target is selected. */
+                    UiActionList open_actions;
+                    ui_action_list_init(&open_actions);
+                    ui_color_picker_open_actions(&open_actions, target, my);
+                    ui_action_dispatch_all(&open_actions);
                 }
                 return actions | UI_PANEL_PRESS_CONSUMED;
             }
@@ -1180,11 +1195,19 @@ int ui_panels_handle_escape(void) {
 }
 
 int ui_panels_handle_scene_press(int mx, int my) {
-    return ui_color_picker_press(mx, my);
+    UiActionList actions;
+    ui_action_list_init(&actions);
+    int consumed = ui_color_picker_press(&actions, mx, my);
+    ui_action_dispatch_all(&actions);
+    return consumed;
 }
 
 int ui_panels_handle_motion(int mx, int my) {
-    return ui_color_picker_motion(mx, my);
+    UiActionList actions;
+    ui_action_list_init(&actions);
+    int consumed = ui_color_picker_motion(&actions, mx, my);
+    ui_action_dispatch_all(&actions);
+    return consumed;
 }
 
 void ui_panels_handle_mouse_release(void) {

@@ -213,6 +213,7 @@ controller builds a `ReplayFadePlan` snapshot; the replay HUD now lives in
 | Module | Role |
 |--------|------|
 | `ui_snapshot` | `UiRenderSnapshot` definition; the read-only bundle the controller hands to every `ui_*_render*()` entry point |
+| `ui_action` | `UiAction` / `UiActionList` plus `ui_action_dispatch_all()`; deferred-dispatch buffer for input handlers (Phase C-1) |
 | `ui_panels` | Code-panel rows, overlay viewport bracket, scene status banner |
 | `repl_layout` | Pure scene/code-panel rectangle geometry, no GL |
 | `ui_menu_bar` | Menus, dropdowns, pinned buttons, search slot |

@@ -187,7 +187,101 @@ Wire into `make test` alongside the existing `check-views-no-owners`
 Exit criterion: `grep -l 'repl_state_' ui_*.c` returns only files that
 still call `repl_state_status_set()` from input handlers (Phase C scope).
 
-### Phase C — `UiOutput` model for input handlers (large, optional)
+### Phase C — `UiActionList` model for input handlers (in progress, two halves)
+
+Status (2026-05-01): Phase C is being landed in two halves. Splitting it
+keeps the diff reviewable and lets the smaller, self-contained handler
+chain prove the pattern before the bigger ones are touched.
+
+#### C-1 ✅ Done — infrastructure + color-picker chain
+
+What landed:
+
+- **`ui_action.h`** — `UiActionKind` enum (19 variants covering every
+  observed input-handler mutation), `UiAction` tagged union, fixed-size
+  `UiActionList` (cap 16, with overflow flag), and the `ui_action_list_*`
+  append/init helpers.
+- **`ui_action.c`** — `ui_action_dispatch_all()` switches over the kind
+  and forwards each entry to the matching `repl_action_*` /
+  `repl_command_store_*` / `repl_undo_*` / domain helper. Centralizing
+  the include set here keeps `ui_*.c` files free of action-API includes
+  for the actions they emit.
+- **Color-picker chain** —
+  `ui_color_picker_press(UiActionList *out, ...)`,
+  `ui_color_picker_motion(UiActionList *out, ...)`, and
+  `ui_color_picker_open_actions(UiActionList *out, ...)` append
+  `UI_ACTION_COLOR_SET` / `UI_ACTION_CLEAR_COLOR_SET` /
+  `UI_ACTION_UNDO_PUSH_SNAPSHOT` instead of calling
+  `repl_command_store_*` / `repl_undo_*` synchronously. Passing `NULL`
+  preserves the legacy synchronous path so unmigrated callers keep
+  working.
+- **`ui_panels.c` glue** — the three sites that drive the color picker
+  (`ui_panels_handle_code_panel_press`, `ui_panels_handle_scene_press`,
+  `ui_panels_handle_motion`) construct a stack-local `UiActionList`,
+  thread it down, and dispatch via `ui_action_dispatch_all()` before
+  returning. The public `ui_panels_handle_*` API is unchanged, so
+  unmigrated callers in `repl_editor.c` keep working.
+- **Tests** — `tests/test_ui.c` updated to the new color-picker
+  signatures (passes `NULL` to retain legacy semantics for those
+  fixtures). Full suites green: `make test` 24/24 binaries (2974 tests),
+  `make test-stubs` 27/27 binaries (3118 tests).
+
+What this proves:
+
+- The action-vocabulary split (kind + tagged args) covers real call
+  sites without contortions.
+- The two-style coexistence (`out` parameter optional, NULL falls
+  through to the legacy path) lets handlers migrate independently.
+- Stack-local `UiActionList` is the right buffer shape — no allocator,
+  no thread-safety questions, naturally scoped to one input event.
+
+#### C-2 ❌ Not started — `ui_panels`, `ui_menu_bar`, and `repl_editor.c` glue
+
+Concrete checklist for the follow-up commit:
+
+1. **`ui_menu_bar` input bridges** — convert
+   `ui_menu_bar_set_open_menu`, `ui_menu_bar_close`,
+   `ui_menu_bar_open_config`, `ui_menu_bar_handle_config_right_press`,
+   `ui_menu_bar_note_search_opened`, and
+   `ui_menu_bar_activate_dropdown_item` to take `UiActionList *out` and
+   emit `UI_ACTION_MENU_OPEN` / `UI_ACTION_MENU_CLOSE` /
+   `UI_ACTION_CFG_CYCLE_ROW` / `UI_ACTION_NOTE_SEARCH_OPENED` /
+   `UI_ACTION_MENU_ITEM_ACTIVATE`. The hit-test functions stay
+   read-only (they already are).
+2. **`ui_panels.c` non-color-picker handlers** — convert
+   `ui_panels_handle_code_panel_click` (navigate, blink-reset,
+   autocomplete clear, clipboard clear),
+   `ui_panels_handle_code_panel_press` (replay-toggle, search-key,
+   menu-open, menu-close, dropdown-activate),
+   `ui_panels_handle_code_panel_drag` (selection-start/end,
+   navigate, blink-reset), and `ui_panels_handle_right_press`. Each
+   either appends to a passed-in `UiActionList` or builds one
+   internally and dispatches.
+3. **`repl_editor.c` top-level dispatch** — make
+   `repl_keyboard_func`/`repl_mouse_func`/etc. allocate the
+   `UiActionList` once per event, pass it to the
+   `ui_panels_handle_*` chain, then call `ui_action_dispatch_all()`
+   before returning effects to the controller. This collapses the
+   per-handler dispatch C-1 introduced into a single dispatch per
+   GLUT event.
+4. **Allowlist tightening** — once the leaf handlers stop calling
+   action APIs directly, remove `repl_actions.h` /
+   `repl_command_store.h` / `repl_clipboard.h` / `repl_undo.h` /
+   `repl_search.h` / `repl_replay.h` includes from the migrated
+   `ui_*.c` files. Add a `check-ui-no-action-call` Makefile guard
+   that greps for the converted action-API call set in `ui_*.c`.
+5. **Renderer-side cursor-pixel actualization (Stage 4 link)** —
+   `ui_panels.c:249` still calls `repl_action_set_cursor_pixel()`
+   from inside the line-draw loop. C-2 is the natural place to
+   replace that with a `UiPanelsOutput { int cursor_px, cursor_py;
+   int cursor_pixel_valid; }` returned from
+   `ui_panels_render_code_panel()` and actualized by
+   `imrepl_ctrl_display_frame()`. Closes Stage 4 of
+   `feature/gold-standard-state-ownership.md`.
+
+#### Original Phase C plan (kept for reference)
+
+
 
 This converts UI input handlers from "synchronously call action APIs" to
 "return a list of intended actions; controller dispatches them."

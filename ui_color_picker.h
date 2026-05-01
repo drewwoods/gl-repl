@@ -30,6 +30,7 @@
 #ifndef UI_COLOR_PICKER_H
 #define UI_COLOR_PICKER_H
 
+#include "ui_action.h"
 #include "ui_snapshot.h"
 
 /* Width of inline color swatch boxes (shown in code panel). */
@@ -48,8 +49,18 @@ int  ui_color_picker_can_edit_cmd(int cmd_idx);
 
 /* Open the color picker on a specific command. cmd_idx is the source command
  * index (must pass can_edit_cmd check first). my is the mouse y-coordinate
- * where the picker was opened (for positioning). Called by ui_panels.c on
- * right-click of a color command. */
+ * where the picker was opened (for positioning).
+ *
+ * Two flavors:
+ *   - `ui_color_picker_open_actions(out, cmd_idx, my)` is the Phase C-1 entry
+ *     point: appends an undo-push action (when switching cmds) to `out` and
+ *     leaves the rest of the open path purely state-shaping (file-static
+ *     picker geometry only).
+ *   - `ui_color_picker_open(cmd_idx, my)` keeps the legacy synchronous
+ *     dispatch for callers that have not migrated yet (its undo-push fires
+ *     immediately).
+ */
+void ui_color_picker_open_actions(UiActionList *out, int cmd_idx, int my);
 void ui_color_picker_open(int cmd_idx, int my);
 
 /* Render the color picker overlay (RGB/RGBA sliders) once per frame. Called
@@ -67,19 +78,21 @@ void ui_color_picker_render_swatch(int cmd_idx, int sx, int sy);
 
 /* Handle mouse press in the color picker. mx, my are window coordinates.
  * Detects which slider was clicked and begins dragging. Returns 1 if the
- * picker consumed the click, 0 if not. Called by ui_panels.c on left-mouse
- * down while picker is active. */
-int  ui_color_picker_press(int mx, int my);
+ * picker consumed the click, 0 if not.
+ *
+ * Phase C-1: instead of mutating the underlying color command synchronously
+ * via repl_command_store_*, the press handler appends UI_ACTION_COLOR_SET
+ * (or UI_ACTION_CLEAR_COLOR_SET) records to `out` for the controller to
+ * dispatch. Pass NULL for the legacy synchronous behavior. */
+int  ui_color_picker_press(UiActionList *out, int mx, int my);
 
-/* Handle mouse motion during color picker drag. mx, my are window coordinates.
- * Updates the dragged slider value and syncs the command source in real-time.
- * Returns 1 if motion was consumed, 0 if not. Called by ui_panels.c on
- * GLUT motion while a slider is being dragged. */
-int  ui_color_picker_motion(int mx, int my);
+/* Handle mouse motion during color picker drag. See ui_color_picker_press()
+ * for the `out` semantics — motion-time slider updates also flow through
+ * the action list when one is supplied. */
+int  ui_color_picker_motion(UiActionList *out, int mx, int my);
 
-/* Handle mouse release during color picker drag. Finalizes the slider drag
- * (value is already synced during motion). Called by ui_panels.c on
- * left-mouse up. */
+/* Handle mouse release during color picker drag. Pure file-static state
+ * change; emits no actions. */
 void ui_color_picker_release(void);
 
 /* Close the color picker and dismiss the overlay. Returns 1 if a picker was
