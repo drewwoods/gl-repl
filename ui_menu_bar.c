@@ -374,12 +374,25 @@ void ui_menu_bar_open_config(void) {
     ui_menu_bar_set_open_menu(MENU_CONFIG);
 }
 
-int ui_menu_bar_handle_config_right_press(int mx, int my) {
+int ui_menu_bar_handle_config_right_press_actions(UiActionList *out,
+                                                  int mx, int my) {
     if (g_open_menu != MENU_CONFIG) return 0;
     int item = ui_menu_bar_dropdown_item_hit(mx, my);
     if (item < 0) return 0;
-    repl_cfg_cycle_row(item, -1);
+    if (out) {
+        UiAction *act = ui_action_list_append(out, UI_ACTION_CFG_CYCLE_ROW);
+        if (act) {
+            act->args.cfg.item = item;
+            act->args.cfg.dir  = -1;
+        }
+    } else {
+        repl_cfg_cycle_row(item, -1);
+    }
     return 1;
+}
+
+int ui_menu_bar_handle_config_right_press(int mx, int my) {
+    return ui_menu_bar_handle_config_right_press_actions(NULL, mx, my);
 }
 
 int ui_menu_bar_activate_dropdown_item(int item_idx) {
@@ -389,6 +402,20 @@ int ui_menu_bar_activate_dropdown_item(int item_idx) {
     if (close)
         ui_menu_bar_close();
     return close;
+}
+
+void ui_menu_bar_activate_dropdown_item_actions(UiActionList *out, int item_idx) {
+    if (!out) {
+        (void)ui_menu_bar_activate_dropdown_item(item_idx);
+        return;
+    }
+    if (g_open_menu < 0)
+        return;
+    UiAction *act = ui_action_list_append(out, UI_ACTION_MENU_ITEM_ACTIVATE);
+    if (act) {
+        act->args.menu.menu_id  = g_open_menu;
+        act->args.menu.item_idx = item_idx;
+    }
 }
 
 void ui_menu_bar_note_search_opened(void) {

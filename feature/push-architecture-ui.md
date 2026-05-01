@@ -235,47 +235,76 @@ What this proves:
 - Stack-local `UiActionList` is the right buffer shape — no allocator,
   no thread-safety questions, naturally scoped to one input event.
 
-#### C-2 ❌ Not started — `ui_panels`, `ui_menu_bar`, and `repl_editor.c` glue
+#### C-2 ✅ Done — `ui_panels` + `ui_menu_bar` handler chains internalized
 
-Concrete checklist for the follow-up commit:
+Status (2026-05-01): C-2 lands the deferred-dispatch pattern across the
+remaining `ui_panels` and `ui_menu_bar` input handlers. Each top-level
+handler builds a stack-local `UiActionList` and drains it on its way
+out. Public `ui_panels_handle_*` and `ui_menu_bar_*` signatures are
+unchanged so `repl_editor.c` continues to work without modification —
+moving the dispatch up to `repl_editor.c` is now explicitly C-3 work.
 
-1. **`ui_menu_bar` input bridges** — convert
-   `ui_menu_bar_set_open_menu`, `ui_menu_bar_close`,
-   `ui_menu_bar_open_config`, `ui_menu_bar_handle_config_right_press`,
-   `ui_menu_bar_note_search_opened`, and
-   `ui_menu_bar_activate_dropdown_item` to take `UiActionList *out` and
-   emit `UI_ACTION_MENU_OPEN` / `UI_ACTION_MENU_CLOSE` /
-   `UI_ACTION_CFG_CYCLE_ROW` / `UI_ACTION_NOTE_SEARCH_OPENED` /
-   `UI_ACTION_MENU_ITEM_ACTIVATE`. The hit-test functions stay
-   read-only (they already are).
-2. **`ui_panels.c` non-color-picker handlers** — convert
-   `ui_panels_handle_code_panel_click` (navigate, blink-reset,
-   autocomplete clear, clipboard clear),
-   `ui_panels_handle_code_panel_press` (replay-toggle, search-key,
-   menu-open, menu-close, dropdown-activate),
-   `ui_panels_handle_code_panel_drag` (selection-start/end,
-   navigate, blink-reset), and `ui_panels_handle_right_press`. Each
-   either appends to a passed-in `UiActionList` or builds one
-   internally and dispatches.
-3. **`repl_editor.c` top-level dispatch** — make
-   `repl_keyboard_func`/`repl_mouse_func`/etc. allocate the
-   `UiActionList` once per event, pass it to the
-   `ui_panels_handle_*` chain, then call `ui_action_dispatch_all()`
-   before returning effects to the controller. This collapses the
-   per-handler dispatch C-1 introduced into a single dispatch per
-   GLUT event.
-4. **Allowlist tightening** — once the leaf handlers stop calling
-   action APIs directly, remove `repl_actions.h` /
-   `repl_command_store.h` / `repl_clipboard.h` / `repl_undo.h` /
-   `repl_search.h` / `repl_replay.h` includes from the migrated
-   `ui_*.c` files. Add a `check-ui-no-action-call` Makefile guard
-   that greps for the converted action-API call set in `ui_*.c`.
-5. **Renderer-side cursor-pixel actualization (Stage 4 link)** —
-   `ui_panels.c:249` still calls `repl_action_set_cursor_pixel()`
-   from inside the line-draw loop. C-2 is the natural place to
-   replace that with a `UiPanelsOutput { int cursor_px, cursor_py;
-   int cursor_pixel_valid; }` returned from
-   `ui_panels_render_code_panel()` and actualized by
+What landed:
+
+- **`ui_menu_bar`** —
+  `ui_menu_bar_handle_config_right_press_actions(UiActionList *out, ...)`
+  emits `UI_ACTION_CFG_CYCLE_ROW`;
+  `ui_menu_bar_activate_dropdown_item_actions(UiActionList *out, ...)`
+  emits `UI_ACTION_MENU_ITEM_ACTIVATE`. The dispatch handler for
+  `MENU_ITEM_ACTIVATE` mirrors the legacy semantics by closing the
+  menu when `repl_action_menu_item_activate` reports the item is
+  terminal. Legacy synchronous variants kept as thin NULL-out wrappers.
+  Other menu mutations (`ui_menu_bar_set_open_menu`,
+  `ui_menu_bar_close`, `ui_menu_bar_note_search_opened`) only touch
+  file-static state, not REPL state, so they stay synchronous.
+- **`ui_panels` press chain** —
+  `ui_panels_handle_code_panel_press_inner(UiActionList *out, ...)`
+  threads one list through pin-button activation (replay toggle, search
+  key, search-opened note), dropdown-item activation, and the swatch
+  open path. Public `ui_panels_handle_code_panel_press()` is now a thin
+  wrapper that builds the list and dispatches once at the end.
+- **`ui_panels` click chain** —
+  `ui_panels_handle_code_panel_click_inner(UiActionList *out, ...)`
+  emits `UI_ACTION_NAVIGATE_TO_LINE` (when a line was hit),
+  `UI_ACTION_CURSOR_BLINK_RESET`, `UI_ACTION_CLEAR_AUTOCOMPLETE`,
+  `UI_ACTION_CLIPBOARD_CLEAR_SELECTION`. The press path now reuses the
+  inner click directly, so a single list spans the whole press event.
+- **`ui_panels` drag** — emits
+  `UI_ACTION_SELECTION_START` + `UI_ACTION_SELECTION_SET_END` +
+  `UI_ACTION_NAVIGATE_TO_LINE` + `UI_ACTION_CURSOR_BLINK_RESET` per
+  drag-target change.
+- **`ui_panels_handle_right_press`** — wraps
+  `ui_menu_bar_handle_config_right_press_actions` with init/dispatch.
+
+`make sample` and `make sample USE_GL_STUBS=1` clean. `make test` 24/24
+binaries (2974 tests) and `make test-stubs` 27/27 binaries (3118 tests)
+green — no test changes were needed because the public handler API is
+unchanged and the legacy synchronous variants of the menu-bar bridges
+remain available for callers that pass `NULL`.
+
+#### C-3 ❌ Not started — top-level dispatch + allowlist tightening
+
+Concrete checklist:
+
+1. **`repl_editor.c` top-level dispatch** — make
+   `repl_keyboard_func`/`repl_mouse_func`/etc. allocate one
+   `UiActionList` per GLUT event, pass it to the `ui_panels_handle_*`
+   chain (signatures must be widened to take `out`), and call
+   `ui_action_dispatch_all()` once before returning. This collapses the
+   per-handler dispatches C-1/C-2 introduced into a single dispatch per
+   event.
+2. **Allowlist tightening** — once the leaf handlers stop calling
+   action APIs directly through their wrappers, remove
+   `repl_actions.h` / `repl_command_store.h` / `repl_clipboard.h` /
+   `repl_undo.h` / `repl_search.h` / `repl_replay.h` includes from the
+   migrated `ui_*.c` files (currently still pulled in for the legacy
+   synchronous code paths). Add a `check-ui-no-action-call` Makefile
+   guard.
+3. **Renderer-side cursor-pixel actualization (Stage 4 link)** —
+   `ui_panels.c:249` still calls `repl_action_set_cursor_pixel()` from
+   inside the line-draw loop. Replace with a
+   `UiPanelsOutput { int cursor_px, cursor_py; int cursor_pixel_valid; }`
+   returned from `ui_panels_render_code_panel()` and actualized by
    `imrepl_ctrl_display_frame()`. Closes Stage 4 of
    `feature/gold-standard-state-ownership.md`.
 

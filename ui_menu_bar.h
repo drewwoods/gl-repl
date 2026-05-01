@@ -32,6 +32,7 @@
 #ifndef UI_MENU_BAR_H
 #define UI_MENU_BAR_H
 
+#include "ui_action.h"
 #include "ui_snapshot.h"
 
 /* Pinned button identifiers (right side of menu bar). Search and Replay
@@ -105,11 +106,24 @@ int  ui_menu_bar_dropdown_item_hit(int mx, int my);
  * dropdown item is clicked. */
 int  ui_menu_bar_activate_dropdown_item(int item_idx);
 
+/* Phase C-2 deferred-dispatch variant. Appends UI_ACTION_MENU_ITEM_ACTIVATE
+ * to `out` instead of calling repl_action_menu_item_activate() synchronously.
+ * The action dispatcher decides whether to close the menu after activation,
+ * so this returns void (the legacy synchronous int return is folded into
+ * dispatch). Pass `out == NULL` to fall back to the synchronous variant. */
+void ui_menu_bar_activate_dropdown_item_actions(UiActionList *out, int item_idx);
+
 /* Handle right-click on menu bar region: open Config menu if clicked on menu
  * button area, otherwise no-op. Returns 1 if Config menu was opened, 0 if
  * right-click was in pinned button area or elsewhere. mx, my are window
  * coordinates. Called by ui_panels.c on right-click. */
 int  ui_menu_bar_handle_config_right_press(int mx, int my);
+
+/* Phase C-2 deferred-dispatch variant. Same return semantics, but appends
+ * UI_ACTION_CFG_CYCLE_ROW to `out` instead of calling repl_cfg_cycle_row()
+ * synchronously. Pass `out == NULL` to fall back to the synchronous path. */
+int  ui_menu_bar_handle_config_right_press_actions(UiActionList *out,
+                                                   int mx, int my);
 
 /* --- State queries --- */
 

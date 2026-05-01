@@ -62,10 +62,16 @@ static void ui_action_dispatch_one(const UiAction *act) {
     case UI_ACTION_MENU_CLOSE:
         ui_menu_bar_close();
         return;
-    case UI_ACTION_MENU_ITEM_ACTIVATE:
-        repl_action_menu_item_activate(act->args.menu.menu_id,
-                                       act->args.menu.item_idx);
+    case UI_ACTION_MENU_ITEM_ACTIVATE: {
+        /* Mirror ui_menu_bar_activate_dropdown_item(): close the menu when
+         * the activate handler reports the item is "terminal" (action
+         * items, file I/O, scene switch, etc.) rather than a toggle/cycle. */
+        int close = repl_action_menu_item_activate(act->args.menu.menu_id,
+                                                   act->args.menu.item_idx);
+        if (close)
+            ui_menu_bar_close();
         return;
+    }
     case UI_ACTION_CFG_CYCLE_ROW:
         repl_cfg_cycle_row(act->args.cfg.item, act->args.cfg.dir);
         return;

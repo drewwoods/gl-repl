@@ -908,7 +908,11 @@ void ui_panels_render_scene_status(const UiRenderSnapshot *snap) {
 /* ========================================================================= */
 
 int ui_panels_handle_right_press(int mx, int my) {
-    return ui_menu_bar_handle_config_right_press(mx, my);
+    UiActionList actions;
+    ui_action_list_init(&actions);
+    int consumed = ui_menu_bar_handle_config_right_press_actions(&actions, mx, my);
+    ui_action_dispatch_all(&actions);
+    return consumed;
 }
 
 void ui_panels_close_menus(void) {
@@ -1016,15 +1020,20 @@ static int code_panel_drag_target(int mx, int my, int *out_target) {
     return repl_state_document_count() > 0;
 }
 
-/* Handle left-click in the code panel: navigate to line + column */
-int ui_panels_handle_code_panel_click(int mx, int my) {
+/* Phase C-2: deferred-dispatch click handler. Appends NAVIGATE,
+ * CURSOR_BLINK_RESET, CLEAR_AUTOCOMPLETE, and CLIPBOARD_CLEAR_SELECTION
+ * actions to `out` instead of calling them inline. Returns the new cursor
+ * column (or -1 if the hit-test missed). */
+static int ui_panels_handle_code_panel_click_inner(UiActionList *out,
+                                                   int mx, int my) {
     int target, on_insert_line, row_offset;
     if (!code_panel_hit_test(mx, my, &target, &on_insert_line, &row_offset)) return -1;
 
     if (!on_insert_line) {
         if (target < 0) target = 0;
         if (target > repl_state_document_count()) target = repl_state_document_count();
-        navigate_to_line(target);
+        UiAction *act = ui_action_list_append(out, UI_ACTION_NAVIGATE_TO_LINE);
+        if (act) act->args.line = target;
     }
 
     int cp_w;
@@ -1052,31 +1061,34 @@ int ui_panels_handle_code_panel_click(int mx, int my) {
         if (new_cursor > cur_input_len) new_cursor = cur_input_len;
     }
 
-    repl_action_cursor_blink_reset();
-    clear_autocomplete_state();
-    repl_clipboard_clear_selection();
+    ui_action_list_append(out, UI_ACTION_CURSOR_BLINK_RESET);
+    ui_action_list_append(out, UI_ACTION_CLEAR_AUTOCOMPLETE);
+    ui_action_list_append(out, UI_ACTION_CLIPBOARD_CLEAR_SELECTION);
     return new_cursor;
 }
 
-int ui_panels_handle_code_panel_press(int mx, int my, int *cursor_pos_out) {
+/* Handle left-click in the code panel: navigate to line + column. */
+int ui_panels_handle_code_panel_click(int mx, int my) {
+    UiActionList actions;
+    ui_action_list_init(&actions);
+    int new_cursor = ui_panels_handle_code_panel_click_inner(&actions, mx, my);
+    ui_action_dispatch_all(&actions);
+    return new_cursor;
+}
+
+/* Phase C-2: inner press handler builds up a single deferred-dispatch list
+ * spanning the whole event. Public wrapper drains the list before return. */
+static int ui_panels_handle_code_panel_press_inner(UiActionList *out,
+                                                   int mx, int my,
+                                                   int *cursor_pos_out) {
     int actions = UI_PANEL_PRESS_NONE;
 
     if (cursor_pos_out)
         *cursor_pos_out = -1;
 
-    /* Color picker floats and may overlap the code panel (e.g. top/bottom
-     * layouts).  Give it first crack so its hit rects take priority. The
-     * color-picker press is the Phase C-1 deferred-dispatch entry point:
-     * it appends UI_ACTION_COLOR_SET (or _CLEAR_COLOR_SET) to a local list
-     * and we drain it through ui_action_dispatch_all() before returning. */
-    {
-        UiActionList actions;
-        ui_action_list_init(&actions);
-        if (ui_color_picker_press(&actions, mx, my)) {
-            ui_action_dispatch_all(&actions);
-            return UI_PANEL_PRESS_CONSUMED;
-        }
-    }
+    /* Color picker floats and may overlap the code panel. */
+    if (ui_color_picker_press(out, mx, my))
+        return UI_PANEL_PRESS_CONSUMED;
 
     /* Pins (Search, Replay) take priority over menu labels and dropdown items
      * so they remain clickable even when a menu label visually overlaps them
@@ -1086,12 +1098,14 @@ int ui_panels_handle_code_panel_press(int mx, int my, int *cursor_pos_out) {
         ui_menu_bar_close();
         switch (pin) {
         case REPL_MENU_BAR_PIN_REPLAY:
-            repl_replay_toggle_play_pause();
+            ui_action_list_append(out, UI_ACTION_REPLAY_TOGGLE_PLAY_PAUSE);
             break;
-        case REPL_MENU_BAR_PIN_SEARCH:
-            handle_search_key(KEY_CTRL_F);
-            ui_menu_bar_note_search_opened();
+        case REPL_MENU_BAR_PIN_SEARCH: {
+            UiAction *act = ui_action_list_append(out, UI_ACTION_SEARCH_KEY);
+            if (act) act->args.key = KEY_CTRL_F;
+            ui_action_list_append(out, UI_ACTION_NOTE_SEARCH_OPENED);
             break;
+        }
         }
         return UI_PANEL_PRESS_CONSUMED;
     }
@@ -1112,7 +1126,7 @@ int ui_panels_handle_code_panel_press(int mx, int my, int *cursor_pos_out) {
         }
         int item = ui_menu_bar_dropdown_item_hit(mx, my);
         if (item >= 0) {
-            ui_menu_bar_activate_dropdown_item(item);
+            ui_menu_bar_activate_dropdown_item_actions(out, item);
             return UI_PANEL_PRESS_CONSUMED;
         }
         /* Click outside dropdown: dismiss, fall through for code nav */
@@ -1140,12 +1154,7 @@ int ui_panels_handle_code_panel_press(int mx, int my, int *cursor_pos_out) {
                     ui_color_picker_close();   /* toggle: close picker */
                 } else {
                     actions |= UI_PANEL_PRESS_OPENED_COLOR_PICKER;
-                    /* Phase C-1: defer the undo-push that fires when a new
-                     * picker target is selected. */
-                    UiActionList open_actions;
-                    ui_action_list_init(&open_actions);
-                    ui_color_picker_open_actions(&open_actions, target, my);
-                    ui_action_dispatch_all(&open_actions);
+                    ui_color_picker_open_actions(out, target, my);
                 }
                 return actions | UI_PANEL_PRESS_CONSUMED;
             }
@@ -1154,10 +1163,11 @@ int ui_panels_handle_code_panel_press(int mx, int my, int *cursor_pos_out) {
     /* Any non-swatch code-panel click closes the picker */
     ui_color_picker_close();
 
-    if (cursor_pos_out)
-        *cursor_pos_out = ui_panels_handle_code_panel_click(mx, my);
-    else
-        (void)ui_panels_handle_code_panel_click(mx, my);
+    {
+        int click_pos = ui_panels_handle_code_panel_click_inner(out, mx, my);
+        if (cursor_pos_out)
+            *cursor_pos_out = click_pos;
+    }
 
     g_code_panel_drag_active = 0;
     g_code_panel_drag_anchor = -1;
@@ -1169,17 +1179,32 @@ int ui_panels_handle_code_panel_press(int mx, int my, int *cursor_pos_out) {
     return actions | UI_PANEL_PRESS_CONSUMED;
 }
 
+int ui_panels_handle_code_panel_press(int mx, int my, int *cursor_pos_out) {
+    UiActionList actions;
+    ui_action_list_init(&actions);
+    int result = ui_panels_handle_code_panel_press_inner(&actions, mx, my, cursor_pos_out);
+    ui_action_dispatch_all(&actions);
+    return result;
+}
+
 int ui_panels_handle_code_panel_drag(int mx, int my) {
     int target;
     if (!g_code_panel_drag_active || g_code_panel_drag_anchor < 0) return 0;
     if (!code_panel_drag_target(mx, my, &target)) return 0;
 
     if (target != g_code_panel_drag_anchor || g_code_panel_drag_moved) {
+        UiActionList actions;
+        UiAction *act;
+        ui_action_list_init(&actions);
         g_code_panel_drag_moved = 1;
-        repl_selection_start(g_code_panel_drag_anchor);
-        repl_selection_set_end(target);
-        navigate_to_line(target);
-        repl_action_cursor_blink_reset();
+        act = ui_action_list_append(&actions, UI_ACTION_SELECTION_START);
+        if (act) act->args.line = g_code_panel_drag_anchor;
+        act = ui_action_list_append(&actions, UI_ACTION_SELECTION_SET_END);
+        if (act) act->args.line = target;
+        act = ui_action_list_append(&actions, UI_ACTION_NAVIGATE_TO_LINE);
+        if (act) act->args.line = target;
+        ui_action_list_append(&actions, UI_ACTION_CURSOR_BLINK_RESET);
+        ui_action_dispatch_all(&actions);
     }
     return 1;
 }
