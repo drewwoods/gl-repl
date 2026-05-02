@@ -16,7 +16,7 @@
 #include "repl_inline_rename.h"
 
 #define g_status     (repl_state_status_mut()->text)
-#define g_scroll     (repl_state_code_panel_mut()->scroll)
+#define g_scroll     (editor_state_scroll_mut()->scroll)
 #define g_panel_frac (repl_state_code_panel_mut()->panel_frac)
 #define g_ac_count   (editor_state_autocomplete_mut()->match_count)
 #define g_ac_sel     (editor_state_autocomplete_mut()->selected_idx)
@@ -29,7 +29,7 @@
 #define g_show_help          (repl_state_help_mut()->visible)
 #define g_help_tab           (repl_state_help_mut()->tab_idx)
 #define g_show_profile_panel (repl_state_profile_panel_mut()->mode)
-#define g_scroll_follow_cursor (repl_state_code_panel_mut()->scroll_follow_cursor)
+#define g_scroll_follow_cursor (editor_state_scroll_mut()->scroll_follow_cursor)
 #define refresh_workspace_header_lines repl_state_refresh_workspace_header_lines
 #define parse_workspace_header_line    repl_state_parse_workspace_header_line
 
@@ -2724,7 +2724,7 @@ int main() {
 
             repl_reset_state();
             repl_state_viewport_set_size(1000, 1000);
-            repl_state_code_panel_mut()->scroll = 0;
+            editor_scroll_set(0);
             repl_state_presentation_mut()->code_panel_layout = layout;
 
             repl_layout_code_panel_rect(&cp_x, &cp_y, &cp_w, &cp_h);
@@ -2739,29 +2739,29 @@ int main() {
             snprintf(label, sizeof(label),
                      "mousewheel: %s code panel scrolled down",
                      layout_names[layout_idx]);
-            ASSERT_INT(label, repl_state_code_panel().scroll, -1);
+            ASSERT_INT(label, editor_scroll(), -1);
 
             repl_mousewheel_func(0, -1, code_x, code_y);
             snprintf(label, sizeof(label),
                      "mousewheel: %s code panel scrolled up",
                      layout_names[layout_idx]);
-            ASSERT_INT(label, repl_state_code_panel().scroll, 0);
+            ASSERT_INT(label, editor_scroll(), 0);
 
             repl_mousewheel_func(0, 1, scene_x, scene_y);
             snprintf(label, sizeof(label),
                      "mousewheel: %s scene wheel leaves code scroll unchanged",
                      layout_names[layout_idx]);
-            ASSERT_INT(label, repl_state_code_panel().scroll, 0);
+            ASSERT_INT(label, editor_scroll(), 0);
         }
 
         repl_reset_state();
         repl_state_viewport_set_size(1000, 1000);
-        repl_state_code_panel_mut()->scroll = 0;
+        editor_scroll_set(0);
         repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_HIDDEN;
 
         repl_mousewheel_func(0, 1, 500, 500);
         ASSERT_INT("mousewheel: hidden layout leaves code scroll unchanged",
-                   repl_state_code_panel().scroll, 0);
+                   editor_scroll(), 0);
     }
 #endif
 

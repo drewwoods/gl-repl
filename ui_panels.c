@@ -190,7 +190,7 @@ static void render_active_input_rows(const UiRenderSnapshot *snap,
 
     repl_code_panel_document_wrap_iter_init(&wrap_it, input, input_x, panel_w);
     while (repl_code_panel_document_wrap_iter_next(&wrap_it, &wrap_start, &wrap_len, &wrap_x)) {
-        if (*io_cur >= cp.scroll && *io_cur < cp.scroll + visible_lines) {
+        if (*io_cur >= snap->scroll.scroll && *io_cur < snap->scroll.scroll + visible_lines) {
             glColor3f(0.55f, 0.55f, 0.30f);
             if (wrap_row == 0) {
                 char ln[16];
@@ -285,7 +285,7 @@ int ui_panels_code_panel_apply_scroll_follow_for_test(int *out_follow_doc_line,
         *out_follow_doc_line = layout.follow_doc_line;
     if (out_visible_lines)
         *out_visible_lines = layout.visible_lines;
-    int scroll = repl_state_code_panel().scroll;
+    int scroll = editor_scroll();
     return layout.follow_doc_line >= scroll &&
            layout.follow_doc_line < scroll + layout.visible_lines;
 }
@@ -733,7 +733,6 @@ void ui_panels_render_code_panel(const UiRenderSnapshot *snap) {
     int          document_count = snap->document_count;
     int          edit_line      = snap->edit_line;
     int          insert_mode    = snap->insert_mode;
-    ReplCodePanelRuntimeState cp = snap->code_panel;
 
     /* Pull feeding-cmd kinds out of the highlight snapshot once so the
      * per-row branch in code_panel_draw_row_overlays() stays cheap. */
@@ -793,7 +792,7 @@ void ui_panels_render_code_panel(const UiRenderSnapshot *snap) {
         .idx_x                = idx_x,
         .cp_x                 = cp_x,
         .cp_w                 = cp_w,
-        .scroll               = cp.scroll,
+        .scroll               = snap->scroll.scroll,
         .visible_lines        = visible_lines,
         .highlight_normal_idx = highlight_normal_idx,
         .highlight_color_idx  = highlight_color_idx,
@@ -970,7 +969,7 @@ void ui_panels_render_code_panel(const UiRenderSnapshot *snap) {
     prof_begin(PROF_CODE_PANEL_OVERLAYS);
 
     code_panel_draw_scrollbar(cp_x, cp_w, cp_h, panel_top,
-                              cp.scroll, total_lines, visible_lines);
+                              snap->scroll.scroll, total_lines, visible_lines);
     code_panel_draw_statusbar(snap, cp_x, cp_y, cp_w, edit_line, insert_mode);
     ui_color_picker_render(snap);
 
@@ -1098,7 +1097,7 @@ static int code_panel_hit_test(int mx, int my,
     int linenum_w = 4 * FONT_W;
     int idx_col_w = repl_state_presentation().show_vertex_indices ? (6 * FONT_W) : 0;
     int text_x = CODE_MARGIN_X + linenum_w + FONT_W + idx_col_w;
-    int doc_line = repl_state_code_panel().scroll + vis;
+    int doc_line = editor_scroll() + vis;
     CodePanelDocumentLayout layout;
     int target;
     int on_insert_line;
@@ -1135,7 +1134,7 @@ static int code_panel_drag_target(int mx, int my, int *out_target) {
     int linenum_w = 4 * FONT_W;
     int idx_col_w = repl_state_presentation().show_vertex_indices ? (6 * FONT_W) : 0;
     int text_x = CODE_MARGIN_X + linenum_w + FONT_W + idx_col_w;
-    int doc_line = repl_state_code_panel().scroll + vis;
+    int doc_line = editor_scroll() + vis;
     CodePanelDocumentLayout layout;
     int target;
     int on_insert_line;

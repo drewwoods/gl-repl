@@ -38,6 +38,10 @@
             .start_value = 0.0f,                      \
             .start_x = 0,                             \
         },                                            \
+        .scroll = {                                   \
+            .scroll = 0,                              \
+            .scroll_follow_cursor = 0,                \
+        },                                            \
     }
 
 static EditorState g_editor_state = EDITOR_STATE_INITIAL;
@@ -399,4 +403,28 @@ ReplVariableDragState *editor_state_variable_drag_mut(void) {
 
 void editor_state_variable_drag_reset(void) {
     g_editor_state.variable_drag = g_editor_state_defaults.variable_drag;
+}
+
+EditorScrollState editor_state_scroll(void) {
+    return g_editor_state.scroll;
+}
+
+EditorScrollState *editor_state_scroll_mut(void) {
+    return &g_editor_state.scroll;
+}
+
+int editor_scroll(void) {
+    return g_editor_state.scroll.scroll;
+}
+
+void editor_scroll_set(int scroll) {
+    g_editor_state.scroll.scroll = scroll;
+}
+
+int editor_scroll_follow_cursor(void) {
+    return g_editor_state.scroll.scroll_follow_cursor;
+}
+
+void editor_scroll_follow_cursor_set(int follow) {
+    g_editor_state.scroll.scroll_follow_cursor = follow ? 1 : 0;
 }

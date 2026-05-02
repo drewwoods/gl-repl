@@ -239,7 +239,9 @@ mirrors the gates that have come online.
 | 1.2 (UI batch) | status / help / variable_panel / profile_panel / viewport / pointer migrated to UiState (commit 8, 2026-05-02); audit section 1: 1263→1260 (forwarders preserve names; architectural prize is the storage move) |
 | 1.2 (editor overlays) | transformers / highlights / virtual_lines + variable_drag migrated to EditorState (commit 9, 2026-05-02); audit section 1: 1260→1209 |
 | 1.2 (input rename) | editor-input convenience getters renamed `repl_state_*` → `editor_*` (commit 10, 2026-05-02); audit section 1 unchanged (these names never matched the slice-name pattern); architectural prize is namespace consistency |
-| 1.3–5 | code_panel split + camera placement + later phases pending |
+| 1.2 (code_panel scroll) | scroll + scroll_follow_cursor split off into EditorState.scroll (commit 11, 2026-05-02); audit section 1: 1209→1194 |
+| 1.2 (ratchet) | `make check-editor-ownership-budget` ratchets transitional couplings downward only: ui-forwarder line count (baseline 21) and ui_state.h→repl_state_views.h include (baseline 1) (commit 11, 2026-05-02) |
+| 1.3–5 | camera placement + chrome accessor migration + later phases pending |
 
 ## Phase 0: Add Audits Before Moving Code
 

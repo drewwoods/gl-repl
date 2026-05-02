@@ -92,8 +92,8 @@ static ReplRuntimeState g_repl_state;
 #define g_t_var_idx                 (g_repl_state.variables.time_var_idx)
 #define g_panel_frac                (g_repl_state.code_panel.panel_frac)
 #define g_resizing_panel            (g_repl_state.code_panel.resizing_panel)
-#define g_scroll                    (g_repl_state.code_panel.scroll)
-#define g_scroll_follow_cursor      (g_repl_state.code_panel.scroll_follow_cursor)
+/* g_scroll / g_scroll_follow_cursor macros removed (Phase 1 commit 11);
+ * scroll lives on g_editor_state.scroll in editor_state.c. */
 #define g_cursor_on                 (g_repl_state.code_panel.cursor_visible)
 #define g_blink_tick                (g_repl_state.code_panel.blink_tick)
 /* g_show_help / g_help_tab / g_help_scroll / g_show_var_panel macros
@@ -661,11 +661,19 @@ void repl_state_reset_all(void) {
     repl_state_mark_normals_dirty();
 }
 
-/* Phase 1 commit 8: legacy `repl_state_*` UI-slice accessors as
+/* EDITOR_OWNERSHIP_TODO(phase-4): delete this entire forwarder block
+ * once `UiAction` dispatch eliminates the direct-mutation call sites
+ * that need the legacy `repl_state_*` names. Each new forwarder added
+ * here grows the budget tracked by
+ * scripts/check-editor-ownership-budget.sh; the ratchet only allows
+ * the count to decrease. New UI slice migrations should NOT add to
+ * this block — instead they should let callers migrate to the
+ * canonical `ui_state_*` API directly (extending the controller-
+ * boundaries allowlist where required).
+ *
+ * Phase 1 commit 8: legacy `repl_state_*` UI-slice accessors as
  * forwarders into ui_state.c. They keep callers in non-allowlisted
- * repl_*.c files linkable without forcing them to include ui_state.h.
- * Removed when Phase 4 (UiAction) eliminates the direct-mutation call
- * sites or when callers migrate to the canonical ui_state_* names. */
+ * repl_*.c files linkable without forcing them to include ui_state.h. */
 
 ReplStatusState repl_state_status(void) {
     return ui_state_status();

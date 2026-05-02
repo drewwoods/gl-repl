@@ -146,7 +146,7 @@ static void replay_set_src_line(int src_line) {
     if (src_line != g_replay_last_src_line) {
         g_replay_last_src_line = src_line;
         if (src_line >= 0)
-            repl_state_code_panel_mut()->scroll_follow_cursor = 1;
+            editor_scroll_follow_cursor_set(1);
     }
 }
 

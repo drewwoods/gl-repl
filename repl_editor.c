@@ -681,7 +681,7 @@ static void keyboard_begin_key(unsigned char key) {
         key != KEY_CTRL_X && key != KEY_DELETE)
         repl_clipboard_clear_selection();
 
-    code_panel_state->scroll_follow_cursor = 1;
+    editor_scroll_follow_cursor_set(1);
 }
 
 static int handle_rename_key_route(unsigned char key) {
@@ -1248,7 +1248,7 @@ static void special_begin_key(int key) {
     ReplCodePanelRuntimeState *code_panel_state = repl_state_code_panel_mut();
     code_panel_state->cursor_visible = 1;
     code_panel_state->blink_tick = 0;
-    code_panel_state->scroll_follow_cursor = 1;
+    editor_scroll_follow_cursor_set(1);
 }
 
 static int handle_rename_special_route(int key) {
@@ -1433,15 +1433,15 @@ static int handle_page_scroll_special_key_route(int key) {
         if (repl_state_help().visible)
             repl_state_help_mut()->scroll -= 5;
         else
-            repl_state_code_panel_mut()->scroll -= 5;
-        repl_state_code_panel_mut()->scroll_follow_cursor = 0;
+            editor_scroll_set(editor_scroll() - 5);
+        editor_scroll_follow_cursor_set(0);
         return 1;
     case GLUT_KEY_PAGE_DOWN:
         if (repl_state_help().visible)
             repl_state_help_mut()->scroll += 5;
         else
-            repl_state_code_panel_mut()->scroll += 5;
-        repl_state_code_panel_mut()->scroll_follow_cursor = 0;
+            editor_scroll_set(editor_scroll() + 5);
+        editor_scroll_follow_cursor_set(0);
         return 1;
     default:
         return 0;
@@ -1659,7 +1659,7 @@ static void mouse_func(int button, int state, int x, int y) {
             repl_state_help_mut()->scroll--;
         } else {
             if (editor_point_in_code_panel(x, y))
-                (repl_state_code_panel_mut()->scroll)--;
+                editor_scroll_set(editor_scroll() - 1);
             else
                 repl_camera_add_zoom_velocity(-0.3f);
         }
@@ -1669,7 +1669,7 @@ static void mouse_func(int button, int state, int x, int y) {
             repl_state_help_mut()->scroll++;
         } else {
             if (editor_point_in_code_panel(x, y))
-                (repl_state_code_panel_mut()->scroll)++;
+                editor_scroll_set(editor_scroll() + 1);
             else
                 repl_camera_add_zoom_velocity(0.3f);
         }
@@ -1685,7 +1685,7 @@ static void mousewheel_func(int wheel, int direction, int x, int y) {
         repl_state_help_mut()->scroll -= direction;
     } else {
         if (editor_point_in_code_panel(x, y))
-            repl_state_code_panel_mut()->scroll -= direction;
+            editor_scroll_set(editor_scroll() - direction);
         else
             repl_camera_add_zoom_velocity(-(float)direction * 0.1f);
     }

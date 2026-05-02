@@ -379,7 +379,7 @@ static void search_apply_hit(int row, int char_pos) {
     int row_occurrence = search_row_occurrence_index(row, char_pos);
     int nav_line = search_row_to_nav_line(row);
     if (nav_line >= 0) {
-        repl_state_code_panel_mut()->scroll_follow_cursor = 1;
+        editor_scroll_follow_cursor_set(1);
         navigate_to_line(nav_line);
         row = repl_state_edit_line();
         if (row_occurrence >= 0) {

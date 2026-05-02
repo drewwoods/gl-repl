@@ -301,18 +301,18 @@ void repl_code_panel_document_apply_follow_scroll(
 
     max_scroll = layout->total_lines - layout->visible_lines;
     if (max_scroll < 0) max_scroll = 0;
-    ReplCodePanelRuntimeState *cp = repl_state_code_panel_mut();
-    if (cp->scroll > max_scroll) cp->scroll = max_scroll;
-    if (cp->scroll < 0) cp->scroll = 0;
+    EditorScrollState *scroll = editor_state_scroll_mut();
+    if (scroll->scroll > max_scroll) scroll->scroll = max_scroll;
+    if (scroll->scroll < 0) scroll->scroll = 0;
 
-    if (cp->scroll_follow_cursor) {
-        if (layout->follow_doc_line < cp->scroll)
-            cp->scroll = layout->follow_doc_line;
-        if (layout->follow_doc_line >= cp->scroll + layout->visible_lines)
-            cp->scroll = layout->follow_doc_line - layout->visible_lines + 1;
-        if (cp->scroll > max_scroll) cp->scroll = max_scroll;
-        if (cp->scroll < 0) cp->scroll = 0;
-        cp->scroll_follow_cursor = 0;
+    if (scroll->scroll_follow_cursor) {
+        if (layout->follow_doc_line < scroll->scroll)
+            scroll->scroll = layout->follow_doc_line;
+        if (layout->follow_doc_line >= scroll->scroll + layout->visible_lines)
+            scroll->scroll = layout->follow_doc_line - layout->visible_lines + 1;
+        if (scroll->scroll > max_scroll) scroll->scroll = max_scroll;
+        if (scroll->scroll < 0) scroll->scroll = 0;
+        scroll->scroll_follow_cursor = 0;
     }
 }
 

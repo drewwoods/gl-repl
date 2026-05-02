@@ -384,8 +384,9 @@ Branch: `feature/editor-ownership-gap-cleanup`. Tracked against the
 | 8 | refactor: migrate UI slices (status / help / variable_panel / profile_panel / viewport / pointer) to UiState | ✅ landed (2026-05-02) |
 | 9 | refactor: migrate editor overlay snapshot lists (transformers / highlights / virtual_lines) + variable_drag to EditorState | ✅ landed (2026-05-02) |
 | 10 | refactor: rename editor-input convenience getters to editor_* namespace | ✅ landed (2026-05-02) |
-| 11 | refactor: code_panel slice split (scroll → EditorState; chrome → UiState) + camera placement | next |
-| 12–17 | (store text drop → compile gate → UiAction → renames → hard guards) | pending |
+| 11 | refactor: code_panel slice split (scroll → EditorState) + ownership ratchet for transitional couplings | ✅ landed (2026-05-02) |
+| 12 | refactor: camera placement (UiState) + remaining `repl_state_code_panel*` chrome accessor migration | next |
+| 13–17 | (store text drop → compile gate → UiAction → renames → hard guards) | pending |
 
 ## Phase 0 — Audits Before Moving Code
 
@@ -608,6 +609,30 @@ Each migration is a separate commit with passing tests at the end:
    variable_drag row. Audit delta: section-1 1260 → 1209 (−51).
    `repl_state.c` 826 → 748 lines.
 6. `code_panel` scroll + scroll-follow → `EditorState.scroll`.
+   ✅ **Landed (commit 11).** `ReplCodePanelRuntimeState` shrunk by
+   removing `scroll` and `scroll_follow_cursor`; a new
+   `EditorScrollState` slice on `EditorState` owns them. New API:
+   `editor_state_scroll / _mut`, `editor_scroll / _set`,
+   `editor_scroll_follow_cursor / _set`. `UiRenderSnapshot` gained an
+   `EditorScrollState scroll` field; `imrepl_ctrl` populates it from
+   `editor_state_scroll()`. UI render code reads `snap->scroll.scroll`
+   instead of `snap->code_panel.scroll`. 9 caller files migrated
+   (mostly mechanically; the `+= / -= / ++ / --` patterns and
+   local-var-pointer writes were rewritten by hand to use the
+   getter/setter pair). `repl_state_defaults.inc` lost the scroll
+   fields from its `.code_panel` block. `repl_state.c`'s `g_scroll` /
+   `g_scroll_follow_cursor` macros removed. Audit delta: section-1
+   1209 → 1194 (−15).
+
+   Commit 11 also lands ownership-budget guardrails per the user's
+   directive that transitional couplings must not become permanent.
+   `scripts/check-editor-ownership-budget.sh` ratchets two counts
+   strictly downward: (a) the body line count of UI-slice forwarders
+   in `repl_state.c` (currently 21), and (b) whether `ui_state.h`
+   still includes `repl_state_views.h` (currently 1). Both sites
+   carry an `EDITOR_OWNERSHIP_TODO(phase-N)` marker pointing at the
+   commit that finally retires the coupling. The check is wired into
+   the `check-state-ownership` aggregate and `make check`.
 7. `status` / `help` / `profile_panel` / `variable_panel` →
    `UiState`.
 8. `viewport` / `pointer` → `UiState`.
