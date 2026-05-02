@@ -19,8 +19,6 @@ typedef struct {
     ReplVariableDragState     variable_drag;
     ReplProfilePanelState     profile_panel;
     ReplStatusState           status;
-    ReplSearchState           search;
-    ReplAutocompleteState     autocomplete;
     ReplCameraState           camera;
     ReplPointerState          pointer;
     ReplViewportState         viewport;

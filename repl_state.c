@@ -560,29 +560,8 @@ void repl_state_status_tick(void) {
         status->ttl--;
 }
 
-ReplSearchState repl_state_search(void) {
-    return g_repl_state.search;
-}
-
-ReplSearchState *repl_state_search_mut(void) {
-    return &g_repl_state.search;
-}
-
-void repl_state_search_clear(void) {
-    g_repl_state.search = g_repl_state_defaults.search;
-}
-
-ReplAutocompleteState repl_state_autocomplete(void) {
-    return g_repl_state.autocomplete;
-}
-
-ReplAutocompleteState *repl_state_autocomplete_mut(void) {
-    return &g_repl_state.autocomplete;
-}
-
-void repl_state_autocomplete_clear(void) {
-    g_repl_state.autocomplete = g_repl_state_defaults.autocomplete;
-}
+/* Search + autocomplete accessors moved to editor_state.c (Phase 1
+ * commit 7). Use editor_state_search / _autocomplete. */
 
 ReplCameraState repl_state_camera(void) {
     return g_repl_state.camera;

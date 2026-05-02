@@ -10,9 +10,9 @@
 #define g_status  (repl_state_status_mut()->text)
 #define g_scroll  (repl_state_code_panel_mut()->scroll)
 #define g_t_playing (repl_state_variables_mut()->time_playing)
-#define g_ac_ghost  (repl_state_autocomplete_mut()->ghost)
-#define g_ac_hint   (repl_state_autocomplete_mut()->hint)
-#define g_ac_matches (repl_state_autocomplete_mut()->matches)
+#define g_ac_ghost  (editor_state_autocomplete_mut()->ghost)
+#define g_ac_hint   (editor_state_autocomplete_mut()->hint)
+#define g_ac_matches (editor_state_autocomplete_mut()->matches)
 
 #include "support/test_harness.h"
 #include <ctype.h>

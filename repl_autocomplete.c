@@ -150,7 +150,7 @@ static void update_input_param_hint(void) {
     const char *input = editor_state_input().input;
     const char *after = NULL;
     const FuncCompletion *builtin = find_builtin_completion_for_input(input, &after);
-    ReplAutocompleteState *ac = repl_state_autocomplete_mut();
+    ReplAutocompleteState *ac = editor_state_autocomplete_mut();
     if (builtin) {
         build_param_hint_text(builtin->params, builtin->param_count,
                               after, ac->hint, (int)sizeof(ac->hint));
@@ -172,7 +172,7 @@ static void update_input_param_hint(void) {
 
 void update_selected_autocomplete_preview(void) {
     ReplEditorInputView inp = editor_state_input();
-    ReplAutocompleteState *ac = repl_state_autocomplete_mut();
+    ReplAutocompleteState *ac = editor_state_autocomplete_mut();
 
     ac->ghost[0] = '\0';
     ac->hint[0] = '\0';
@@ -211,7 +211,7 @@ void update_selected_autocomplete_preview(void) {
 
 void update_autocomplete(void) {
     ReplEditorInputView inp = editor_state_input();
-    ReplAutocompleteState *ac = repl_state_autocomplete_mut();
+    ReplAutocompleteState *ac = editor_state_autocomplete_mut();
     const char *input = inp.input;
     int input_len = inp.input_len;
 
@@ -335,7 +335,7 @@ void update_autocomplete(void) {
 }
 
 void accept_autocomplete(void) {
-    ReplAutocompleteState ac = repl_state_autocomplete();
+    ReplAutocompleteState ac = editor_state_autocomplete();
 
     int ghost_len = (int)strlen(ac.ghost);
     {

@@ -12,7 +12,7 @@
  *   - Ghost suffix to append on Tab accept (completion proposal)
  *   - Parameter hints (function arguments, types, descriptions)
  *
- * This module queries that state via repl_state_autocomplete() (typed facade)
+ * This module queries that state via editor_state_autocomplete() (typed facade)
  * and renders the popup without modifying any state. Completion acceptance
  * (Tab key) is handled by repl_editor.c, which calls repl_autocomplete.c's
  * acceptance function.

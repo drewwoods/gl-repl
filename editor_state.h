@@ -81,11 +81,37 @@ typedef struct {
     int   cmd_count;
 } ReplClipboardState;
 
+/* Search session state: the find-text query plus the current match
+ * position the navigation has resolved to. */
 typedef struct {
-    ReplEditorBuffer     buffer;
-    ReplEditorInputState input;
-    ReplSelectionState   selection;
-    ReplClipboardState   clipboard;
+    int  active;
+    char query[MAX_INPUT_LEN];
+    int  query_len;
+    int  cursor_pos;
+    int  hit_line_idx;
+    int  hit_char_idx;
+    int  hit_ordinal;
+    int  match_count;
+} ReplSearchState;
+
+/* Autocomplete model: the live match list, ghost-text suffix the
+ * editor would insert on Tab, and parameter hint string. */
+typedef struct {
+    const char *matches[MAX_AC_MATCHES];
+    const char *insert_matches[MAX_AC_MATCHES];
+    int         match_count;
+    int         selected_idx;
+    char        ghost[MAX_LINE_LEN];
+    char        hint[MAX_LINE_LEN];
+} ReplAutocompleteState;
+
+typedef struct {
+    ReplEditorBuffer      buffer;
+    ReplEditorInputState  input;
+    ReplSelectionState    selection;
+    ReplClipboardState    clipboard;
+    ReplSearchState       search;
+    ReplAutocompleteState autocomplete;
 } EditorState;
 
 /* Capture / restore / reset symmetry with repl_state_*. */
@@ -133,5 +159,16 @@ void                editor_state_clipboard_clear(void);
 GLCmd              *editor_state_clipboard_cmds_mut(void);
 int                 editor_state_clipboard_count(void);
 void                editor_state_clipboard_count_set(int cmd_count);
+
+/* Search slice API. _clear restores the slice to the post-init
+ * default (no active query, hits invalidated). */
+ReplSearchState  editor_state_search(void);
+ReplSearchState *editor_state_search_mut(void);
+void             editor_state_search_clear(void);
+
+/* Autocomplete slice API. */
+ReplAutocompleteState  editor_state_autocomplete(void);
+ReplAutocompleteState *editor_state_autocomplete_mut(void);
+void                   editor_state_autocomplete_clear(void);
 
 #endif /* EDITOR_STATE_H */

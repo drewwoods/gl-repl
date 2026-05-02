@@ -296,10 +296,10 @@ static inline int is_transform_cmd(CmdType t) {
 int  init_section_line_count(void);
 void init_section_line(int i, char *buf, size_t n);
 
-void repl_state_autocomplete_clear(void);
+void editor_state_autocomplete_clear(void);
 
 static inline void clear_autocomplete_state(void) {
-    repl_state_autocomplete_clear();
+    editor_state_autocomplete_clear();
 }
 
 /* ========================================================================= */

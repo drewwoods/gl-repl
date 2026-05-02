@@ -380,8 +380,9 @@ Branch: `feature/editor-ownership-gap-cleanup`. Tracked against the
 | 4 | refactor: migrate editor_buffer slice to EditorState | ✅ landed (2026-05-02) |
 | 5 | refactor: migrate editor_input slice to EditorState | ✅ landed (2026-05-02) |
 | 6 | refactor: migrate selection + clipboard slices to EditorState | ✅ landed (2026-05-02) |
-| 7 | refactor: migrate search + autocomplete slices to EditorState | next |
-| 8–17 | (UI slices → store text drop → compile gate → UiAction → renames → hard guards) | pending |
+| 7 | refactor: migrate search + autocomplete slices to EditorState | ✅ landed (2026-05-02) |
+| 8 | refactor: migrate UI slices (status / help / panel visibility / viewport / pointer) to UiState | next |
+| 9–17 | (store text drop → compile gate → UiAction → renames → hard guards) | pending |
 
 ## Phase 0 — Audits Before Moving Code
 
@@ -568,6 +569,20 @@ Each migration is a separate commit with passing tests at the end:
    the `selection` and `clipboard` rows. Audit delta: section-1
    1363 → 1307 (−56).
 4. `search` + `autocomplete`.
+   ✅ **Landed (commit 7).** `ReplSearchState` and
+   `ReplAutocompleteState` typedefs moved to `editor_state.h`; the
+   `search` and `autocomplete` fields were removed from
+   `ReplRuntimeState`; storage now lives at
+   `g_editor_state.{search,autocomplete}`. New API:
+   `editor_state_search / _mut / _clear` and
+   `editor_state_autocomplete / _mut / _clear`. 13 caller files
+   migrated mechanically. `repl_state_defaults.inc` no longer
+   declares `.search` or `.autocomplete`; defaults moved into a
+   shared `EDITOR_STATE_INITIAL` macro in `editor_state.c` so the
+   live singleton and the defaults snapshot stay in sync.
+   `repl_debug.c` runtime-state-layout dump dropped both rows.
+   Audit delta: section-1 1307 → 1263 (−44); `repl_state.c` shrank
+   from 872 → 799 lines.
 5. transformer / highlight / virtual-line snapshot lists.
 6. `code_panel` scroll + scroll-follow → `EditorState.scroll`.
 7. `status` / `help` / `profile_panel` / `variable_panel` →

@@ -3,32 +3,39 @@
 #include <stddef.h>
 #include <string.h>
 
-static EditorState g_editor_state = {
-    .input = {
-        .input_capacity = MAX_INPUT_LEN,
-        .pending_newline_capacity = MAX_INPUT_LEN,
-    },
-    .selection = {
-        .anchor_idx = -1,
-        .end_idx = -1,
-    },
-    .clipboard = {
-        .cmd_count = 0,
-    },
-};
-static const EditorState g_editor_state_defaults = {
-    .input = {
-        .input_capacity = MAX_INPUT_LEN,
-        .pending_newline_capacity = MAX_INPUT_LEN,
-    },
-    .selection = {
-        .anchor_idx = -1,
-        .end_idx = -1,
-    },
-    .clipboard = {
-        .cmd_count = 0,
-    },
-};
+#define EDITOR_STATE_INITIAL                          \
+    {                                                 \
+        .input = {                                    \
+            .input_capacity = MAX_INPUT_LEN,          \
+            .pending_newline_capacity = MAX_INPUT_LEN,\
+        },                                            \
+        .selection = {                                \
+            .anchor_idx = -1,                         \
+            .end_idx = -1,                            \
+        },                                            \
+        .clipboard = {                                \
+            .cmd_count = 0,                           \
+        },                                            \
+        .search = {                                   \
+            .active = 0,                              \
+            .query = "",                              \
+            .query_len = 0,                           \
+            .cursor_pos = 0,                          \
+            .hit_line_idx = -1,                       \
+            .hit_char_idx = -1,                       \
+            .hit_ordinal = 0,                         \
+            .match_count = 0,                         \
+        },                                            \
+        .autocomplete = {                             \
+            .match_count = 0,                         \
+            .selected_idx = 0,                        \
+            .ghost = "",                              \
+            .hint = "",                               \
+        },                                            \
+    }
+
+static EditorState g_editor_state = EDITOR_STATE_INITIAL;
+static const EditorState g_editor_state_defaults = EDITOR_STATE_INITIAL;
 
 /* Bounded copy: writes src into dst (capacity sz, NUL-terminated). If
  * src is too long, dst is cleared to "" — same surrender behavior as
@@ -279,4 +286,28 @@ void editor_state_clipboard_count_set(int cmd_count) {
     if (cmd_count > MAX_COMMANDS)
         cmd_count = MAX_COMMANDS;
     g_editor_state.clipboard.cmd_count = cmd_count;
+}
+
+ReplSearchState editor_state_search(void) {
+    return g_editor_state.search;
+}
+
+ReplSearchState *editor_state_search_mut(void) {
+    return &g_editor_state.search;
+}
+
+void editor_state_search_clear(void) {
+    g_editor_state.search = g_editor_state_defaults.search;
+}
+
+ReplAutocompleteState editor_state_autocomplete(void) {
+    return g_editor_state.autocomplete;
+}
+
+ReplAutocompleteState *editor_state_autocomplete_mut(void) {
+    return &g_editor_state.autocomplete;
+}
+
+void editor_state_autocomplete_clear(void) {
+    g_editor_state.autocomplete = g_editor_state_defaults.autocomplete;
 }

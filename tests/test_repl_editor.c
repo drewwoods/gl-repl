@@ -18,14 +18,14 @@
 #define g_status     (repl_state_status_mut()->text)
 #define g_scroll     (repl_state_code_panel_mut()->scroll)
 #define g_panel_frac (repl_state_code_panel_mut()->panel_frac)
-#define g_ac_count   (repl_state_autocomplete_mut()->match_count)
-#define g_ac_sel     (repl_state_autocomplete_mut()->selected_idx)
-#define g_ac_ghost   (repl_state_autocomplete_mut()->ghost)
-#define g_ac_hint    (repl_state_autocomplete_mut()->hint)
-#define g_search_active    (repl_state_search_mut()->active)
-#define g_search_query     (repl_state_search_mut()->query)
-#define g_search_query_len (repl_state_search_mut()->query_len)
-#define g_search_cursor_pos (repl_state_search_mut()->cursor_pos)
+#define g_ac_count   (editor_state_autocomplete_mut()->match_count)
+#define g_ac_sel     (editor_state_autocomplete_mut()->selected_idx)
+#define g_ac_ghost   (editor_state_autocomplete_mut()->ghost)
+#define g_ac_hint    (editor_state_autocomplete_mut()->hint)
+#define g_search_active    (editor_state_search_mut()->active)
+#define g_search_query     (editor_state_search_mut()->query)
+#define g_search_query_len (editor_state_search_mut()->query_len)
+#define g_search_cursor_pos (editor_state_search_mut()->cursor_pos)
 #define g_show_help          (repl_state_help_mut()->visible)
 #define g_help_tab           (repl_state_help_mut()->tab_idx)
 #define g_show_profile_panel (repl_state_profile_panel_mut()->mode)
@@ -2591,9 +2591,9 @@ int main() {
         ASSERT_TRUE("Esc: help closed", !repl_state_help().visible);
 
         /* 2. Autocomplete active */
-        repl_state_autocomplete_mut()->match_count = 1;
+        editor_state_autocomplete_mut()->match_count = 1;
         repl_keyboard_func(27, 0, 0);
-        ASSERT_INT("Esc: autocomplete cleared", repl_state_autocomplete().match_count, 0);
+        ASSERT_INT("Esc: autocomplete cleared", editor_state_autocomplete().match_count, 0);
 
         /* 3. Insert mode */
         repl_state_insert_mode_set(1);
