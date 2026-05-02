@@ -30,6 +30,7 @@
 #ifndef UI_COLOR_PICKER_H
 #define UI_COLOR_PICKER_H
 
+#include "ui_editor.h"
 #include "ui_snapshot.h"
 
 /* Width of inline color swatch boxes (shown in code panel). */
@@ -58,12 +59,10 @@ void ui_color_picker_open(int cmd_idx, int my);
  * data; performs no live REPL state reads inside the render path. */
 void ui_color_picker_render(const UiRenderSnapshot *snap);
 
-/* Render an inline color swatch (small colored box) for a command in the code
- * panel. cmd_idx is the source command index; sx, sy are pixel coordinates in
- * the code panel. Draws a small box showing the command's color value. Called
- * by the code-panel renderer for each color command to provide at-a-glance
- * color feedback. */
-void ui_color_picker_render_swatch(int cmd_idx, int sx, int sy);
+/* Render an inline color swatch from a controller-pushed transformer entry.
+ * sx, sy are pixel coordinates in the code panel. The renderer reads color
+ * directly from t->state.color, so no live document lookup is required. */
+void ui_color_picker_render_swatch(const EditorTransformer *t, int sx, int sy);
 
 /* Handle mouse press in the color picker. mx, my are window coordinates.
  * Detects which slider was clicked and begins dragging. Returns 1 if the

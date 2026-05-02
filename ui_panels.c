@@ -27,6 +27,18 @@
 #define g_render_state_lines (repl_state_import_export().render_state_lines)
 #define g_cam_lines (repl_state_import_export().cam_lines)
 
+static const EditorTransformer *find_color_transformer(const EditorTransformerList *list,
+                                                       int line_idx) {
+    if (!list)
+        return NULL;
+    for (int i = 0; i < list->count; i++) {
+        const EditorTransformer *t = &list->items[i];
+        if (t->kind == TRANSFORMER_COLOR_PICKER && t->line_idx == line_idx)
+            return t;
+    }
+    return NULL;
+}
+
 
 /* Status footer height - design: 22px strip flush against code panel bottom */
 /* STATUSBAR_H lives in sample.h now so scene_render.c can lift the
@@ -555,12 +567,18 @@ void ui_panels_render_code_panel(const UiRenderSnapshot *snap) {
                                 gl2d_draw_string((float)idx_x, (float)line_y,
                                             idx_s, FONT_MONO);
                             }
-                            /* Color swatch for glColor / glClearColor */
-                            if (ui_color_picker_can_edit_cmd(i)) {
-                                int sw = UI_COLOR_SWATCH_W;
-                                int sx = cp_x + cp_w - CODE_MARGIN_X - sw - 2;
-                                int sy = line_y + (LINE_H - sw) / 2 - 1;
-                                ui_color_picker_render_swatch(i, sx, sy);
+                            /* Color swatch for glColor / glClearColor — read
+                             * from the controller-pushed transformer snapshot
+                             * so the row stays decoupled from live document. */
+                            {
+                                const EditorTransformer *ct =
+                                    find_color_transformer(snap->editor_transformers, i);
+                                if (ct) {
+                                    int sw = UI_COLOR_SWATCH_W;
+                                    int sx = cp_x + cp_w - CODE_MARGIN_X - sw - 2;
+                                    int sy = line_y + (LINE_H - sw) / 2 - 1;
+                                    ui_color_picker_render_swatch(ct, sx, sy);
+                                }
                             }
                         }
                         color_for_type(document_cmds[i].type);
