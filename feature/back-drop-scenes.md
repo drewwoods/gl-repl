@@ -32,21 +32,21 @@ The user works near the origin.  The backdrop fills the distance.
 
 ### Current Scenes
 
-#### Star Field (`scene_render.c` - `draw_stars`)
+#### Star Field (`scene_backdrop.c` - `draw_starry_sky`)
 220 points on a sky-dome sphere (radius 45).  Only camera rotation is applied - no world translation - so the stars appear fixed at infinity as the user orbits.  Colours are `(0.10–0.26, 0.10–0.26, 0.13–0.32)`, barely above the clear colour with a slight blue bias.  Per-star twinkle phases at very low amplitude (±0.012) ensure no two stars pulse together.  Point sizes are either 1 px (85% of stars) or 1.5 px.
 
-#### Starships (`scene_render.c` - `draw_starships`)
-Up to two ships fly overhead at altitude 6–14, in random horizontal headings, at 3.5–7.5 units/sec.  Each ship is a diamond-shaped hull outline with an additive engine glow point and a 24-sample ring-buffer trail that fades from engine colour to transparent.  Three colour palettes: blue-white, warm amber, pale green.  Ships spawn infrequently (12–37 s between appearances) and fade out over the last 20% of their crossing.
+#### Starships — not yet implemented
+Design: up to two ships fly overhead at altitude 6–14, in random horizontal headings, at 3.5–7.5 units/sec.  Each ship is a diamond-shaped hull outline with an additive engine glow point and a 24-sample ring-buffer trail that fades from engine colour to transparent.  Three colour palettes: blue-white, warm amber, pale green.  Ships spawn infrequently (12–37 s between appearances) and fade out over the last 20% of their crossing.
 
-#### City Skyline (`scene_render.c` - `draw_city`)
+#### City Skyline (`scene_backdrop.c` - `draw_cityscape`)
 128 buildings arranged in two concentric rings (radius 26 and 31.5) around the origin.  Three height classes - low suburban (0.5–1.7), midrise (1.6–4.0), skyscraper (4.2–9.7) - give a varied silhouette.  Building colour is `(0.105, 0.105, 0.135)`, just above the background.
 
 Window lights are driven by a **600-second cosine wave** that sweeps a "night zone" once around the full ring per cycle.  At any moment roughly half the horizon is in night (windows lit) and half in day (windows dark), like looking down at the Earth from orbit.  Each window has an individual random threshold so lights appear and extinguish at different moments as the wave passes - no mass switching.  Transitions use smoothstep.
 
 Window colours: 65% warm incandescent yellow, 23% cool white, 12% cold office blue.  A faint haze quad at the base of lit buildings adds ground glow.
 
-#### Pirate Sea Battle (`scene_pirates.c` - `draw_pirates`)
-Six ships - three pirate, three navy - patrol slow circular orbits (radius 17–24) at sea level.  Each is a dark silhouette: elongated hex hull, raised sides, mast with yard and backstay, triangular sail.
+#### Pirate Sea Battle — not yet implemented (`scene_pirates.c` does not exist)
+Design: six ships - three pirate, three navy - patrol slow circular orbits (radius 17–24) at sea level.  Each is a dark silhouette: elongated hex hull, raised sides, mast with yard and backstay, triangular sail.
 
 A state machine drives engagement: every 45–90 s a pirate and a navy ship break from patrol, close on each other, exchange cannon fire for 12–24 s, and one sinks.  Cannon shots are additive `GL_POINTS` on a ballistic arc with a brief muzzle flash at the bow.  The losing ship sinks over 20 s with alpha fade, then respawns off-screen after 18–40 s.
 
