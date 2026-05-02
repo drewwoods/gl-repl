@@ -6,6 +6,7 @@
 
 #include "sample.h"
 #include "repl_flatten.h"
+#include "ui_editor.h"
 
 #ifndef MAX_WORKSPACE_HEADER_LINES
 #define MAX_WORKSPACE_HEADER_LINES 48
@@ -289,6 +290,11 @@ ReplEditorInputView repl_state_editor_input(void);
 const ReplEditorBuffer *repl_state_editor_buffer(void);
 const char             *repl_state_editor_buffer_line(int idx);
 int                     repl_state_editor_buffer_count(void);
+
+/* Per-frame editor overlay snapshots, read-only. UI input handlers read
+ * these between frames; renderers prefer the UiRenderSnapshot copy. */
+const EditorTransformerList *repl_state_editor_transformers(void);
+const EditorHighlightList   *repl_state_editor_highlights(void);
 const char *repl_state_input_text(void);
 int         repl_state_input_len(void);
 int         repl_state_cursor_pos(void);
