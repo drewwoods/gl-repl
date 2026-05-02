@@ -22,10 +22,9 @@
 #include "ui_panels.h"
 #include "./include/gl_2d.h"
 
-#define g_workspace_header_lines (repl_state_import_export().workspace_header_lines)
-#define g_workspace_header_line_count (repl_state_import_export().workspace_header_line_count)
-#define g_render_state_lines (repl_state_import_export().render_state_lines)
-#define g_cam_lines (repl_state_import_export().cam_lines)
+/* Header / footer / camera scaffolding text lives in the import_export
+ * view. Render code reads it through snap->import_export instead of
+ * repl_state_*() so the per-row branch stays snapshot-only. */
 
 static const EditorTransformer *find_color_transformer(const EditorTransformerList *list,
                                                        int line_idx) {
@@ -801,9 +800,11 @@ void ui_panels_render_code_panel(const UiRenderSnapshot *snap) {
     prof_begin(PROF_CODE_PANEL_LINES);
     prof_begin(PROF_CODE_PANEL_LINES_STATIC);
 
+    const ReplImportExportView *imex = &snap->import_export;
+
     /* Workspace state (saved variable values + config toggles, dimmed) */
-    for (int i = 0; i < g_workspace_header_line_count; i++)
-        code_panel_draw_static_line(&ctx, g_workspace_header_lines[i],
+    for (int i = 0; i < imex->workspace_header_line_count; i++)
+        code_panel_draw_static_line(&ctx, imex->workspace_header_lines[i],
                                     0.45f, 0.55f, 0.42f);
     /* Header pre-lookAt scaffolding */
     for (int i = 0; g_header_pre[i]; i++)
@@ -811,11 +812,11 @@ void ui_panels_render_code_panel(const UiRenderSnapshot *snap) {
                                     0.38f, 0.38f, 0.42f);
     /* Dynamic render-state lines (rebuilt every frame in the controller) */
     for (int i = 0; i < RENDER_STATE_LINE_COUNT; i++)
-        code_panel_draw_static_line(&ctx, g_render_state_lines[i],
+        code_panel_draw_static_line(&ctx, imex->render_state_lines[i],
                                     0.50f, 0.45f, 0.55f);
     /* Camera transform lines (also rebuilt every frame) */
     for (int i = 0; i < CAM_LINE_COUNT; i++)
-        code_panel_draw_static_line(&ctx, g_cam_lines[i],
+        code_panel_draw_static_line(&ctx, imex->cam_lines[i],
                                     0.50f, 0.45f, 0.55f);
     /* Header post-camera scaffolding */
     for (int i = 0; g_header_post[i]; i++)
