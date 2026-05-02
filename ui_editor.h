@@ -72,4 +72,30 @@ typedef struct {
     int             count;
 } EditorHighlightList;
 
+/* Virtual lines: editor-overlay rows the controller injects below a real
+ * source line (e.g. replay annotations). Layout, scroll, and render all
+ * consume this list so a row that affects layout has exactly one source
+ * of truth. */
+typedef enum {
+    VIRTUAL_STYLE_REPLAY_SUBST,
+    VIRTUAL_STYLE_REPLAY_EVAL
+} VirtualLineStyle;
+
+#define MAX_VIRTUAL_LINE_TEXT 256
+#define MAX_VIRTUAL_LINE_AUX  128
+
+typedef struct {
+    int              after_line_idx;  /* render below this source line */
+    VirtualLineStyle style;
+    char             text[MAX_VIRTUAL_LINE_TEXT];
+    char             aux[MAX_VIRTUAL_LINE_AUX];  /* trailing comment text */
+} EditorVirtualLine;
+
+#define MAX_VIRTUAL_LINES 512
+
+typedef struct {
+    EditorVirtualLine items[MAX_VIRTUAL_LINES];
+    int               count;
+} EditorVirtualLineList;
+
 #endif /* UI_EDITOR_H */

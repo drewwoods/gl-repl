@@ -295,6 +295,7 @@ int                     repl_state_editor_buffer_count(void);
  * these between frames; renderers prefer the UiRenderSnapshot copy. */
 const EditorTransformerList *repl_state_editor_transformers(void);
 const EditorHighlightList   *repl_state_editor_highlights(void);
+const EditorVirtualLineList *repl_state_editor_virtual_lines(void);
 const char *repl_state_input_text(void);
 int         repl_state_input_len(void);
 int         repl_state_cursor_pos(void);

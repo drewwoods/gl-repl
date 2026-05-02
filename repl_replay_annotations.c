@@ -840,6 +840,41 @@ static int format_evaluated_cmd(const GLCmd *cmd, const char *orig_source,
 }
 
 
+static void repl_replay_annotations_refresh_virtual_lines(void) {
+    repl_state_editor_virtual_lines_clear();
+
+    ReplReplayRuntimeState replay = repl_state_replay();
+    if (!replay.active || !replay.expand_args)
+        return;
+    int cmd_idx = replay.src_line_idx;
+    if (cmd_idx < 0 || cmd_idx >= repl_state_document_count())
+        return;
+    const GLCmd *cmd = repl_state_document_cmd_at(cmd_idx);
+    if (!cmd || !cmd->has_vars || cmd->type == CMD_VAR_ASSIGN)
+        return;
+    int flat_idx = repl_replay_annotation_flat_cmd_for_source(cmd_idx);
+    if (flat_idx < 0)
+        return;
+
+    char subst[MAX_VIRTUAL_LINE_TEXT];
+    char var_comment[MAX_VIRTUAL_LINE_AUX];
+    if (repl_replay_build_subst_annotation(cmd_idx, flat_idx,
+                                           subst, sizeof(subst),
+                                           var_comment, sizeof(var_comment)) > 0) {
+        repl_state_editor_virtual_lines_append(cmd_idx,
+                                               VIRTUAL_STYLE_REPLAY_SUBST,
+                                               subst, var_comment);
+    }
+
+    char eval_buf[MAX_VIRTUAL_LINE_TEXT];
+    if (repl_replay_build_eval_annotation(cmd_idx, flat_idx,
+                                          eval_buf, sizeof(eval_buf))) {
+        repl_state_editor_virtual_lines_append(cmd_idx,
+                                               VIRTUAL_STYLE_REPLAY_EVAL,
+                                               eval_buf, NULL);
+    }
+}
+
 void repl_replay_annotations_prepare(void) {
     ReplReplayRuntimeState replay = repl_state_replay();
 
@@ -847,22 +882,20 @@ void repl_replay_annotations_prepare(void) {
         repl_replay_annotations_rebuild_cache();
     else if (!replay.active)
         repl_replay_annotations_invalidate();
+
+    repl_replay_annotations_refresh_virtual_lines();
 }
 
 int repl_replay_annotation_extra_rows_for_line(int cmd_idx) {
-    ReplReplayRuntimeState replay = repl_state_replay();
-
-    if (!replay.active)
+    /* Source of truth is the controller-pushed virtual-line list. Layout
+     * runs after the push, so the count here matches what render draws. */
+    const EditorVirtualLineList *list = repl_state_editor_virtual_lines();
+    if (!list || cmd_idx < 0)
         return 0;
-    if (!replay.expand_args)
-        return 0;
-    if (cmd_idx < 0 || cmd_idx >= repl_state_document_count())
-        return 0;
-    if (cmd_idx != replay.src_line_idx)
-        return 0;
-    if (!repl_state_document_cmds_mut()[cmd_idx].has_vars)
-        return 0;
-    if (repl_state_document_cmds_mut()[cmd_idx].type == CMD_VAR_ASSIGN)
-        return 0;
-    return 2;
+    int count = 0;
+    for (int i = 0; i < list->count; i++) {
+        if (list->items[i].after_line_idx == cmd_idx)
+            count++;
+    }
+    return count;
 }

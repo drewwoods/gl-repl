@@ -584,7 +584,28 @@ make test && make test-stubs
 
 ---
 
-## Step 6: Config Extraction + Virtual Lines (~3 days)
+## Step 6: Config Extraction + Virtual Lines (~3 days, virtual-lines portion completed 2026-05-02)
+
+**Status**: Virtual-lines portion complete. `ui_editor.h` defines
+`VirtualLineStyle`, `EditorVirtualLine`, and `EditorVirtualLineList`. The
+runtime carries an `editor_virtual_lines` slice with
+`repl_state_editor_virtual_lines() / _clear() / _append()` accessors and
+the const view declared in `repl_state_views.h`. Replay annotations are
+now pushed as virtual lines from
+`repl_replay_annotations_refresh_virtual_lines()` (called from
+`repl_replay_annotations_prepare()`, which the controller invokes once per
+frame and the layout still invokes defensively). The list is the single
+source of truth: `repl_replay_annotation_extra_rows_for_line()` counts
+entries from it, and the code-panel render iterates the list to draw
+substitution and evaluation rows instead of calling the inline
+annotation builders mid-render. Verified clean: 24/24 / 2970 release,
+27/27 / 3114 stubs.
+
+**Color scheme + syntax keywords portion deferred**. Moving the
+hardcoded `glColor3f` / `glColor4f` literals out of `ui_panels.c` into a
+controller-pushed `EditorColorScheme` snapshot is mostly mechanical
+churn with no current configurable consumer; revisit when a real theme
+or configurable-scheme requirement lands.
 
 **Goal**: Color scheme and syntax rules become snapshots. Replay annotations become virtual lines (not inline row injection mid-render).
 

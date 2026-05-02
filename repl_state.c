@@ -479,6 +479,39 @@ int repl_state_editor_highlights_append(int line_idx, int char_start,
     return 1;
 }
 
+const EditorVirtualLineList *repl_state_editor_virtual_lines(void) {
+    return &g_repl_state.editor_virtual_lines;
+}
+
+void repl_state_editor_virtual_lines_clear(void) {
+    g_repl_state.editor_virtual_lines.count = 0;
+}
+
+int repl_state_editor_virtual_lines_append(int after_line_idx,
+                                           VirtualLineStyle style,
+                                           const char *text,
+                                           const char *aux) {
+    EditorVirtualLineList *list = &g_repl_state.editor_virtual_lines;
+    if (list->count >= MAX_VIRTUAL_LINES)
+        return 0;
+    EditorVirtualLine *vl = &list->items[list->count++];
+    vl->after_line_idx = after_line_idx;
+    vl->style = style;
+    if (text) {
+        strncpy(vl->text, text, MAX_VIRTUAL_LINE_TEXT - 1);
+        vl->text[MAX_VIRTUAL_LINE_TEXT - 1] = '\0';
+    } else {
+        vl->text[0] = '\0';
+    }
+    if (aux) {
+        strncpy(vl->aux, aux, MAX_VIRTUAL_LINE_AUX - 1);
+        vl->aux[MAX_VIRTUAL_LINE_AUX - 1] = '\0';
+    } else {
+        vl->aux[0] = '\0';
+    }
+    return 1;
+}
+
 void repl_state_editor_input_reset(void) {
     repl_state_input_clear();
     repl_state_pending_newline_clear();
