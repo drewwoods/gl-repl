@@ -47,4 +47,29 @@ typedef struct {
     int               count;
 } EditorTransformerList;
 
+/* Cross-line highlight kinds. The controller pushes one entry per visible
+ * highlight each frame; UI render code iterates the list rather than
+ * recomputing feeding-cmd / replay PC / search-match positions inline. */
+typedef enum {
+    HIGHLIGHT_FEEDING_NORMAL,
+    HIGHLIGHT_FEEDING_COLOR,
+    HIGHLIGHT_REPLAY_PC,
+    HIGHLIGHT_SEARCH_MATCH,
+    HIGHLIGHT_SELECTION
+} HighlightKind;
+
+typedef struct {
+    int           line_idx;
+    int           char_start;  /* -1 = whole line */
+    int           char_end;    /* -1 = whole line */
+    HighlightKind kind;
+} EditorHighlight;
+
+#define MAX_HIGHLIGHTS 256
+
+typedef struct {
+    EditorHighlight items[MAX_HIGHLIGHTS];
+    int             count;
+} EditorHighlightList;
+
 #endif /* UI_EDITOR_H */

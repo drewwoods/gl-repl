@@ -26,6 +26,7 @@
 #include "repl_eval.h"
 #include "repl_core.h"
 #include "repl_flatten.h"
+#include "ui_editor.h"
 
 typedef struct UiRenderSnapshot {
     /* By-value state slices */
@@ -79,6 +80,9 @@ typedef struct UiRenderSnapshot {
 
     /* Workspace dir convenience */
     const char                 *workspace_dir;
+
+    /* Per-frame editor overlay snapshots (controller-pushed). */
+    const EditorHighlightList  *editor_highlights;
 } UiRenderSnapshot;
 
 #endif /* UI_SNAPSHOT_H */

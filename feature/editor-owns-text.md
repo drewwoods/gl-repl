@@ -502,7 +502,21 @@ make test && make test-stubs
 
 ---
 
-## Step 5: Cross-line Highlight API (~1 week)
+## Step 5: Cross-line Highlight API (~1 week, completed 2026-05-02)
+
+**Status**: Completed. `ui_editor.h` now also defines `HighlightKind`,
+`EditorHighlight`, and `EditorHighlightList`. The runtime carries an
+`editor_highlights` slice with `repl_state_editor_highlights() / _clear() /
+_append()` accessors. The controller refills the list each frame from
+`imrepl_ctrl_push_highlights()` (feeding-normal, feeding-color, replay-PC),
+and `imrepl_ctrl_build_ui_snapshot()` exposes the list as
+`UiRenderSnapshot.editor_highlights`. The code-panel render path in
+`ui_panels.c` reads the feeding-cmd kinds out of the snapshot once before
+the row loop and drops the inline `repl_find_feeding_*()` calls. Replay
+PC and search-match render paths still consume their existing slices for
+now; those can migrate to the highlight list when the hover-quality work
+in step 6 needs them. Verified clean: 24/24 binaries / 2970 tests
+(release), 27/27 / 3114 tests (stubs).
 
 **Goal**: Controller pushes `EditorHighlight[]` each frame. UI renders from snapshot, not by calling `repl_find_feeding_*()` inline during draw.
 
