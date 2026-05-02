@@ -1,76 +1,78 @@
-# Plan: Complete the Editor-Owns-Text Ownership Split
+# Plan: Three-Layer Ownership Split (Editor / REPL / UI)
 
-## Context
-
-`feature/editor-owns-text.md` (Steps 2–6) finished the *data-shape* part
-of the redesign:
-
-- `GLCmd.source[]` is gone; per-line text lives in `ReplEditorBuffer`.
-- The parser returns `ReplParsedLine { GLCmd cmd; char text[] }`.
-- Command-store APIs are text-aware (`_with_line[s]`).
-- Undo / user scenes / clipboard each carry parallel `lines[][]` text
-  sidecars.
-- Controller pushes `EditorTransformerList` / `EditorHighlightList` /
-  `EditorVirtualLineList` per frame; UI render reads from them.
-
-What it did *not* do is move ownership. The buffer is named
-"editor", but:
-
-1. It physically lives on `ReplRuntimeState` alongside `document`,
-   `flat_program`, `variables`, `replay`, `scenes`, etc.
-2. A REPL module (`repl_command_store.c`) writes to it. The store knows
-   about both cmds and text and updates them in lockstep.
-3. REPL modules (`repl_replay_annotations.c`, `repl_export.c`,
-   `repl_parser.c` reparse paths) reach into the buffer to read text.
-
-In the user-facing model the spirit asks for:
+## Target Contract
 
 ```
-Editor owns the text buffer + cursor + undo ring + commit boundaries.
-REPL is a validator / compiler:
-    repl_parse_validate(line, ctx) -> ParsedLine | error
-The editor calls in to validate; on success it stores the parser's
-canonical text in its own buffer and asks the cmd store to record the
-parsed cmd. The store does not touch text.
+Editor owns editable text, cursor, selection, navigation, and undo
+transactions.
+
+REPL owns validation / compilation of committed editor text into
+command / state changes.
+
+UI owns rendering and hit-testing, and emits editor actions rather
+than mutating REPL / editor state directly.
 ```
 
-This plan completes that ownership move. It is a sibling to
-`feature/push-architecture-refinement.md` (which already plans the
-`sample → imrepl` rename and the `repl_core.c` dissolution) and to the
-`editor-namespace` discussion that produced this doc.
+That is the load-bearing definition for this plan. Everything below
+exists to make the codebase obey it.
 
-## Current Inversions (the punch list)
+## Why The Spirit Isn't Realized Today
 
-### A. State-struct mixing
+`feature/editor-owns-text.md` (Steps 2–6) fixed the *data shape* —
+`GLCmd.source[]` is gone, the parser returns `ReplParsedLine`, the
+controller pushes editor-overlay snapshots. It did not move
+*ownership*. Three concrete violations of the target contract:
 
-`ReplRuntimeState` holds both REPL slices and editor / UI slices:
+### 1. Editor state lives inside REPL state
 
-| REPL slice (stays) | Editor / UI slice (moves) |
-|---|---|
-| `document` | `editor_input` |
-| `flat_program` | `editor_buffer` |
-| `variables` | `editor_transformers` |
-| `replay` | `editor_highlights` |
-| `scenes` | `editor_virtual_lines` |
-| `import_export` | `code_panel` |
-| `presentation` (presentation toggles affect rendering, but they're owned by the menu/config UI today) | `selection` |
-| `render` | `clipboard` |
-| | `autocomplete` |
-| | `variable_drag` |
-| | `variable_panel` |
-| | `help` |
-| | `status` |
-| | `search` |
-| | `profile_panel` |
-| | `viewport` |
-| | `pointer` |
-| | `camera` (scene-side, but tied to editor mouse drags via `repl_camera_controls`) |
+`ReplRuntimeState` holds editor-owned slices today:
 
-Target shape:
+```
+editor_input          editor_buffer          editor_transformers
+editor_highlights     editor_virtual_lines   selection
+clipboard             autocomplete           search
+variable_drag         code_panel.scroll      code_panel.scroll_follow_cursor
+```
+
+Plus UI render-time slices:
+
+```
+code_panel.cursor_visible   code_panel.blink_tick   code_panel.cursor_px/py
+help.visible                profile_panel.mode      variable_panel.visible
+status                      viewport                pointer
+```
+
+A REPL state struct should hold the *program* — document, flat program,
+variables, replay, scenes, render, presentation — not the typing buffer
+or the search query.
+
+### 2. REPL modules read and write editor text
+
+- `repl_command_store_*_with_line[s]` writes `editor_buffer.lines[]` in
+  lockstep with the cmd array.
+- `repl_replay_annotations.c::replay_visible_text(cmd_idx)` reaches
+  into the editor buffer to compose annotations.
+- `repl_export.c` reads the editor buffer when serializing.
+- `repl_parser.c` reparse paths read the editor buffer for context.
+
+In the target contract, REPL is *given* text by the editor on commit.
+It does not own a buffer; it does not write to one.
+
+### 3. UI input handlers mutate state directly
+
+`ui_panels_handle_code_panel_press` calls `ui_color_picker_open`,
+`repl_action_*`, `repl_clipboard_*`, etc. inline. The render path is
+already snapshot-only (Phase B of `push-architecture-ui.md` finished
+that). Phase C — convert input handlers to return a `UiAction` list
+that the controller dispatches — was deferred. That deferral is the
+gap.
+
+## Target State Shape
 
 ```c
+/* The user's program — what the REPL parses, flattens, executes,
+ * replays, exports. */
 typedef struct {
-    /* The REPL's own state — program, replay, exports, examples. */
     ReplDocumentState           document;
     ReplFlatProgramState        flat_program;
     ReplVariableState           variables;
@@ -78,244 +80,371 @@ typedef struct {
     ReplSceneRuntimeState       scenes;
     ReplImportExportState       import_export;
     ReplRenderState             render;        /* GL pipeline knobs */
-    ReplPresentationState       presentation;  /* moves to editor? see open question below */
+    ReplPresentationState       presentation;  /* render toggles */
 } ReplState;
 
+/* Editable text, cursor, selection, navigation, undo. */
 typedef struct {
-    /* Live typing buffer + canonical per-line text. */
-    ReplEditorInputState        input;
-    ReplEditorBuffer            buffer;
-
-    /* Per-frame snapshots the controller pushes for the renderer. */
-    EditorTransformerList       transformers;
-    EditorHighlightList         highlights;
-    EditorVirtualLineList       virtual_lines;
-
-    /* Editor-flavored UI state. */
-    ReplCodePanelRuntimeState   code_panel;
+    ReplEditorInputState        input;        /* typing buffer + cursor */
+    ReplEditorBuffer            buffer;       /* committed lines */
     ReplSelectionState          selection;
-    ReplClipboardState          clipboard;
-    ReplAutocompleteState       autocomplete;
+    ReplClipboardState          clipboard;    /* + lines[][] sidecar */
     ReplSearchState             search;
+    ReplAutocompleteState       autocomplete;
     ReplVariableDragState       variable_drag;
-    ReplVariablePanelState      variable_panel;
-    ReplHelpState               help;
-    ReplProfilePanelState       profile_panel;
-    ReplStatusState             status;
+    EditorScrollState           scroll;       /* extracted from code_panel */
+    EditorUndoRing              undo;         /* moved from sidecar */
+    EditorCameraNavState        camera_nav;   /* mouse-driven view nav */
+} EditorState;
 
-    /* Window-level inputs the editor consumes. */
+/* Render-time scratch + chrome visibility. UI owns geometry it
+ * computes per frame; nothing here is part of "the program" or "the
+ * editor session." */
+typedef struct {
     ReplViewportState           viewport;
     ReplPointerState            pointer;
-    ReplCameraState             camera;        /* drives scene viewing; lives here because it's mouse-driven */
-} EditorState;
+    ReplStatusState             status;        /* transient message */
+    ReplHelpState               help;          /* visibility */
+    ReplVariablePanelState      variable_panel;/* visibility */
+    ReplProfilePanelState       profile_panel; /* visibility */
+    EditorCursorBlinkState      cursor_blink;  /* render-only */
+    /* Per-frame snapshots populated by the controller, consumed by
+     * renderers (already pointer-shaped on UiRenderSnapshot). */
+} UiState;
 ```
 
-`imrepl_ctrl` owns both as static singletons. Each render path consumes
-the relevant state via existing snapshot mechanisms.
+`imrepl_ctrl` owns all three as static singletons. The frame loop:
 
-### B. Store writes editor text
+```
+input event
+  -> ui_*_input_handler(event)              [returns UiAction]
+  -> imrepl_ctrl_dispatch(action)
+       -> mutates EditorState
+       -> on commit: repl_compile(text, ctx) -> ParsedLine | error
+                     -> on success: mutates ReplState (document/flat)
+                                    pushes onto EditorState.undo
+                                    writes editor.buffer
+       -> on REPL-side actions (save / replay / load): mutates ReplState
 
-`repl_command_store.c` owns `editor_buffer.lines[]` mutations today.
-After the split:
+frame render
+  -> imrepl_ctrl_build_scene_config(SceneRenderConfig out)
+  -> imrepl_ctrl_build_ui_snapshot(UiRenderSnapshot out)
+  -> scene/ui renderers read snapshots only
+```
 
-- `repl_command_store_*` only mutates the cmd array.
-- A new `editor_buffer_*` API mutates `EditorState.buffer.lines[]`.
-- Commit / paste / load / undo paths call both in the right order. Most
-  call sites already pass `(GLCmd, line)` together — the change is
-  splitting that one call into two adjacent calls.
+## REPL Public Contract After The Split
 
-### C. REPL reads editor text directly
+```c
+/* Validate + compile a single committed line. Pure: no editor state,
+ * no UI state, no globals beyond the REPL's own. */
+typedef struct {
+    GLCmd cmd;                     /* parsed command (type, args, flags) */
+    char  text[MAX_LINE_LEN];      /* canonical normalized text */
+} ReplParsedLine;
 
-Three readers reach into the editor buffer:
+typedef enum {
+    REPL_COMPILE_OK = 0,
+    REPL_COMPILE_ERROR
+} ReplCompileResult;
 
-1. `repl_replay_annotations.c::replay_visible_text(cmd_idx)` — used to
-   build subst / eval annotations.
-2. `repl_export.c` — composes save-file content.
-3. `repl_parser.c` — when re-parsing a stored line during replay or
-   reformat.
+ReplCompileResult repl_compile(const char *line,
+                               const ReplCompileContext *ctx,
+                               ReplParsedLine *out,
+                               char *err_msg, int err_size);
 
-After the split each takes an editor-buffer view through its API:
+/* Apply a compiled command to REPL state at a specific document index.
+ * Mutates document + dependent caches; does not touch editor state. */
+void repl_apply_insert(int pos, const GLCmd *cmd);
+void repl_apply_replace(int pos, const GLCmd *cmd);
+void repl_apply_delete(int start, int count);
+void repl_apply_load(const GLCmd *cmds, int count);
+
+/* Programmatic queries the editor uses to validate / preview. */
+int  repl_indent_chars_for(int pos);
+int  repl_in_begin_block_at(int pos);
+ReplCompileContext repl_context_at(int pos);
+```
+
+REPL no longer takes text from a buffer it doesn't own. The editor
+calls `repl_compile(typed_text, ctx)`, then on success calls
+`repl_apply_*` with the result, then writes the canonical text into its
+own buffer.
+
+## UiAction Enumeration (Phase 4)
+
+Initial cut, refined as call sites are migrated:
+
+```c
+typedef enum {
+    /* Text + cursor */
+    UI_ACTION_INSERT_TEXT,
+    UI_ACTION_DELETE_TEXT,
+    UI_ACTION_MOVE_CURSOR,
+    UI_ACTION_NAVIGATE_LINE,        /* up/down/home/end */
+    UI_ACTION_COMMIT_LINE,          /* "execute" — invokes repl_compile */
+    UI_ACTION_TOGGLE_INSERT_MODE,
+    UI_ACTION_REFORMAT,
+
+    /* Selection + clipboard */
+    UI_ACTION_SELECT_BEGIN,
+    UI_ACTION_SELECT_EXTEND,
+    UI_ACTION_SELECT_CLEAR,
+    UI_ACTION_CLIPBOARD_CUT,
+    UI_ACTION_CLIPBOARD_COPY,
+    UI_ACTION_CLIPBOARD_PASTE,
+
+    /* Undo */
+    UI_ACTION_UNDO,
+    UI_ACTION_REDO,
+
+    /* Search */
+    UI_ACTION_SEARCH_OPEN,
+    UI_ACTION_SEARCH_NEXT,
+    UI_ACTION_SEARCH_PREV,
+    UI_ACTION_SEARCH_CLOSE,
+
+    /* Autocomplete */
+    UI_ACTION_AUTOCOMPLETE_ACCEPT,
+    UI_ACTION_AUTOCOMPLETE_DISMISS,
+
+    /* REPL-side actions */
+    UI_ACTION_SAVE,
+    UI_ACTION_LOAD_FILE,
+    UI_ACTION_LOAD_EXAMPLE,
+    UI_ACTION_REPLAY_TOGGLE,
+    UI_ACTION_REPLAY_STEP,
+
+    /* Color picker / variable slider transaction */
+    UI_ACTION_COLOR_PICKER_OPEN,
+    UI_ACTION_COLOR_PICKER_DRAG,
+    UI_ACTION_COLOR_PICKER_CLOSE,
+    UI_ACTION_VAR_DRAG_BEGIN,
+    UI_ACTION_VAR_DRAG_MOTION,
+    UI_ACTION_VAR_DRAG_END,
+
+    /* Camera / scene viewport */
+    UI_ACTION_CAMERA_ORBIT,
+    UI_ACTION_CAMERA_PAN,
+    UI_ACTION_CAMERA_ZOOM,
+
+    /* Config */
+    UI_ACTION_CONFIG_TOGGLE,
+    UI_ACTION_CONFIG_CYCLE,
+
+    /* Visibility */
+    UI_ACTION_HELP_TOGGLE,
+    UI_ACTION_VARIABLE_PANEL_TOGGLE,
+    UI_ACTION_PROFILE_PANEL_CYCLE,
+} UiActionKind;
+
+typedef struct {
+    UiActionKind kind;
+    union {
+        struct { int line, col; } cursor;
+        struct { const char *text; int len; } text;
+        struct { int line_idx; } commit;
+        struct { float dx, dy; } camera;
+        struct { int cmd_idx; float r, g, b, a; } color;
+        struct { ReplConfigKey key; } cfg;
+        ...
+    } data;
+} UiAction;
+```
+
+UI input handlers fill an output buffer:
 
 ```c
 typedef struct {
-    const char (*lines)[MAX_LINE_LEN];
-    int        line_count;
-} EditorBufferView;
+    UiAction items[MAX_UI_ACTIONS];
+    int count;
+} UiActionList;
 
-void repl_replay_annotations_prepare(EditorBufferView buf);
-int  repl_export_save(const char *path, EditorBufferView buf, ...);
+void ui_panels_handle_code_panel_press(int mx, int my, UiActionList *out);
 ```
 
-The controller passes the view from `EditorState.buffer`. REPL stays
-ignorant of where the text lives.
-
-### D. `ReplPresentationState` is fuzzy
-
-Presentation toggles (`wireframe`, `grid_theme`, `axes_theme`, vertex
-labels, normal vectors, …) drive scene rendering, but they're set
-exclusively from the editor's menu bar and config shortcuts. Two options:
-
-- Keep on `ReplState` (current home, scene reads it directly).
-- Move to `EditorState` (config UI owns it; scene reads via snapshot).
-
-Recommendation: leave on `ReplState` for now — scene already consumes
-it through the snapshot, and the presentation toggles persist with the
-program (workspace `@cfg` lines), not with the editor session. Revisit
-if a "headless REPL" build target lands.
+`imrepl_ctrl_dispatch_action(const UiAction *)` is the single mutation
+gate. It is the only function allowed to mutate `ReplState` or
+`EditorState` from input.
 
 ## Phases
 
-Each phase is a contained commit that builds clean and keeps the test
-suite green. Order matters because Phase 1 unblocks Phase 2's call-site
-edits.
+Each phase is a contained commit; each builds clean and keeps `make
+test` / `make test-stubs` green. The order is load-bearing.
 
 ### Phase 1 — Carve `EditorState` out of `ReplRuntimeState` (~1 day)
 
-Mechanical struct surgery. No behavior change.
+Mechanical struct surgery; no behavior change.
 
-1. Define `EditorState` in a new `editor_state.h` with the slices listed
-   above.
-2. Add a static `EditorState g_editor_state` in `repl_state.c` (or a new
-   `editor_state.c`); leave `ReplRuntimeState` minus the editor slices.
-3. Update every accessor:
+1. Define `EditorState` and `UiState` in new headers
+   (`editor_state.h`, `ui_state.h`). Move the slices listed in *Target
+   State Shape* off `ReplRuntimeState`.
+2. Add `static EditorState g_editor_state` and `static UiState
+   g_ui_state` in new `editor_state.c` / `ui_state.c`. Mirror
+   `repl_state_capture/restore` with `editor_state_*` and `ui_state_*`.
+3. Rename every accessor:
    - `repl_state_editor_buffer*` → `editor_state_buffer*`
-   - `repl_state_editor_input*` → `editor_state_input*`
    - `repl_state_clipboard*` → `editor_state_clipboard*`
    - `repl_state_search*` → `editor_state_search*`
-   - …and so on for autocomplete / selection / variable_drag / status
-     / etc.
-4. Add `editor_state_capture()` / `editor_state_restore()` mirroring the
-   REPL-side helpers; wire them into `repl_state_reset_all()`.
-5. Update `UiRenderSnapshot` builder to read from both `ReplState` and
-   `EditorState`.
+   - `repl_state_status*` → `ui_state_status*`
+   - …etc.
+4. `UiRenderSnapshot` builder reads from all three structs; render
+   signatures unchanged.
+5. Add Makefile guards mirroring `check-views-no-owners` for
+   `editor_state_owners.h` and `ui_state_owners.h`.
 
-Header guard checks (`check-views-no-owners`,
-`check-ui-no-repl-state-read`) get parallel rules for `editor_state_*`.
+### Phase 2 — REPL stops touching editor text (~1 day)
 
-### Phase 2 — Stop the store writing text (~1 day)
-
-1. Delete the text-aware overload set on `repl_command_store_*`. The
-   `_with_line[s]` variants disappear; the old `_without_line[s]`
-   variants become the only API.
-2. Add an `editor_buffer_*` mutation API:
+1. Drop `repl_command_store_*_with_line[s]`. The store mutates the cmd
+   array only.
+2. Add an `editor_buffer_*` mutation API on `EditorState` for the text
+   half. Each former `_with_line` call site becomes two adjacent calls
+   (cmd write + text write) issued by the editor side.
+3. Convert the three REPL readers to take an explicit
+   `EditorBufferView`:
    ```c
-   void editor_buffer_insert_line(int pos, const char *text);
-   void editor_buffer_insert_lines(int pos, const char *const *lines, int count);
-   void editor_buffer_replace_line(int pos, const char *text);
-   void editor_buffer_delete_range(int start, int count);
-   void editor_buffer_load(const char *const *lines, int count);
+   typedef struct {
+       const char (*lines)[MAX_LINE_LEN];
+       int        line_count;
+   } EditorBufferView;
    ```
-3. Walk the call sites currently using `_with_line[s]`. Each one becomes
-   two calls in order (text first or cmd first, depending on the
-   semantic).
-4. Snapshot persistence (undo, scenes, clipboard) splits the same way:
-   each carrier already has a `cmds[]` plus a `lines[][]` sidecar; the
-   sidecar moves to the editor side, save/restore wires both.
+   - `repl_replay_annotations_prepare(EditorBufferView)`
+   - `repl_export_save(path, EditorBufferView, ...)`
+   - parser reparse paths take a `const char *` argument explicitly
+4. The controller passes the view from `editor_state_buffer_view()`.
+5. Verification: `grep '#include "editor_state.h"' repl_*.c` is empty.
 
-### Phase 3 — REPL reads take a buffer view (~1 day)
+### Phase 3 — `repl_compile` is the validation gate (~1 day)
 
-1. Define `EditorBufferView`; expose a controller-level builder:
-   ```c
-   EditorBufferView editor_state_buffer_view(void);
-   ```
-2. Convert `repl_replay_annotations_prepare()` /
-   `repl_replay_code_panel_get_command_display_text()` /
-   `repl_export_save()` to take a view.
-3. Update `imrepl_ctrl_display_frame` and the export entry point to
-   pass `editor_state_buffer_view()`.
-4. Drop direct `editor_state_buffer_line(idx)` calls from REPL modules;
-   they now read through the supplied view.
+1. Split `repl_commit.c`. Move pure validation into
+   `repl_compile.c` — float-decl, for-loop, func-def, if-block,
+   close-brace, var-assign validators each return `ReplParsedLine` plus
+   an error. They do not call store mutators.
+2. The orchestration — "try each validator in order, on success call
+   `repl_apply_insert/replace`, on success append to undo, on success
+   write editor buffer" — moves to `editor_commit.c`. This is the
+   editor-side counterpart.
+3. Public REPL surface becomes `repl_compile()` + `repl_apply_*`.
+4. Verification: `repl_command_store.c` has no callers in `editor_*`
+   that pass text; only `repl_apply_*` paths remain.
 
-After Phase 3, the only REPL module that can reach `EditorState`
-directly is `repl_state.c` (for capture / restore symmetry), and even
-that goes away if capture / restore split too.
+### Phase 4 — UI input handlers emit `UiAction` (~3-5 days)
 
-### Phase 4 — Split `repl_commit.c` (~1 day, optional)
+The biggest phase. Walk every UI input entry point, convert from
+direct mutation to action emission.
 
-1. Move structural validation into `repl_commit_validate.c` (REPL):
-   - `try_commit_float_decl_validate`
-   - `try_commit_for_loop_validate`
-   - `try_commit_func_def_validate`
-   - …each returns `ReplParsedLine` + an error code, no mutations.
-2. The current orchestration helpers (`try_commit_var_statements`,
-   `try_commit_block_structs`, `try_commit_any`) move to
-   `editor_commit.c`. They call the validators, then perform the
-   `editor_buffer_*` + `repl_command_store_*` writes.
-3. `repl_editor.c` calls `editor_commit_*` instead of `try_commit_*`.
+1. Define `UiAction`, `UiActionList`, `UiActionKind` in `ui_action.h`.
+2. Add `imrepl_ctrl_dispatch_action(const UiAction *)`. This is the
+   only function in the codebase allowed to mutate `EditorState` /
+   `ReplState` from an input event.
+3. Convert handlers in waves:
+   - Wave A: keyboard (`ui_panels_handle_*`, character input) →
+     `UI_ACTION_INSERT_TEXT` / `_DELETE_TEXT` / `_MOVE_CURSOR` /
+     `_COMMIT_LINE`.
+   - Wave B: mouse press / drag / release on the code panel →
+     `UI_ACTION_SELECT_*`, `UI_ACTION_COLOR_PICKER_OPEN`, etc.
+   - Wave C: menu bar dispatch → `UI_ACTION_CONFIG_TOGGLE`,
+     `UI_ACTION_LOAD_EXAMPLE`, `UI_ACTION_SAVE`, etc.
+   - Wave D: scene mouse (camera) → `UI_ACTION_CAMERA_*`.
+4. Tighten `check-ui-no-repl-state-read` to forbid mutation calls
+   (`repl_action_*`, `repl_command_store_*`, `editor_state_*_mut`)
+   from `ui_*.c` files.
 
 ### Phase 5 — Rename to match ownership (~mostly mechanical)
 
-Optional but completes the spirit. Rename:
+Files whose contents are now editor- or UI-owned change prefix:
 
-- `repl_undo` → `editor_undo`
-- `repl_clipboard` → `editor_clipboard`
-- `repl_search` → `editor_search`
-- `repl_inline_rename` → `editor_inline_rename`
-- `repl_var_drag` → `editor_var_drag`
-- `repl_autocomplete` → `editor_autocomplete`
-- `repl_layout` → `editor_layout`
-- `repl_code_panel_layout` → `editor_code_panel_layout`
-- `repl_code_panel_document` → `editor_code_panel_document`
-- `repl_actions` → `editor_actions`
-- `repl_editor.c` splits into `editor_input.c` (router) + already-moved commit
-- `repl_camera_controls` → `scene_camera_controls`
+| Old | New | Owner |
+|---|---|---|
+| `repl_editor.c` | split: `editor_input.c` (router, see below), `editor_commit.c` (Phase 3) | editor |
+| `repl_undo.c` | `editor_undo.c` | editor |
+| `repl_clipboard.c` | `editor_clipboard.c` | editor |
+| `repl_search.c` | `editor_search.c` | editor |
+| `repl_inline_rename.c` | `editor_inline_rename.c` | editor |
+| `repl_var_drag.c` | `editor_var_drag.c` | editor |
+| `repl_autocomplete.c` | `editor_autocomplete.c` | editor |
+| `repl_layout.c` | `editor_layout.c` | UI |
+| `repl_code_panel_layout.c` | `editor_code_panel_layout.c` | UI |
+| `repl_code_panel_document.c` | `editor_code_panel_document.c` | UI |
+| `repl_actions.c` | split: REPL-side action dispatchers stay; UI-flavored bits move into `ui_action_dispatch.c` | both |
+| `repl_camera_controls.c` | `scene_camera_controls.c` (or `viewport_camera_controls.c`) | scene/UI |
 
-Each rename is a one-commit move with a stub header (or `#include`
-redirect) during the transition. Update Makefile, ARCHITECTURE.md,
-MODULES.md, callgraph_file_groups.json in the same commits.
+Each rename is a one-commit move with header redirects during the
+transition. ARCHITECTURE.md, MODULES.md, and
+`scripts/callgraph_file_groups.json` update in the same commits.
 
-## Verification
+## Verification Per Phase
 
 ```bash
+# Phase 1
 make test && make test-stubs
-
-# After each phase, every test should still pass.
-
-# After Phase 1, repl_state_*() callers in editor-state surfaces must
-# fail to compile (forcing the rename).
-grep -E 'repl_state_(editor_|clipboard|selection|autocomplete|search|status|variable_panel|variable_drag|help|code_panel|profile_panel|viewport|pointer)' \
-    *.c | wc -l   # should be 0 outside imrepl_ctrl.c
-
-# After Phase 2, no _with_line[s] APIs remain:
-grep -rn 'repl_command_store_.*_with_line' . --include='*.c' --include='*.h'
+# editor / ui state struct callers must use the new accessors:
+grep -E 'repl_state_(editor_|clipboard|selection|autocomplete|search|status|variable_panel|variable_drag|help|profile_panel|viewport|pointer)' \
+    *.c | grep -v 'imrepl_ctrl.c\|editor_state.c\|ui_state.c'
 # should be 0
 
-# After Phase 3, REPL modules don't include editor_state.h except
-# through their snapshot-view parameters:
-grep -l '#include "editor_state.h"' \
-    repl_*.c | grep -v repl_state.c
+# Phase 2
+grep -rn 'repl_command_store_.*_with_line' . --include='*.c' --include='*.h'
+# should be 0
+grep -l '#include "editor_state.h"' repl_*.c | grep -v repl_state.c
 # should be empty
+
+# Phase 3
+grep -E 'try_commit_(float_decl|for_loop|func_def|if_block|close_brace|var)' repl_commit*.c
+# should only appear inside repl_compile.c (validators) or editor_commit.c
+# (orchestration); never both in the same TU
+
+# Phase 4
+grep -rE 'repl_(action|command_store|clipboard|undo|search|var_drag|autocomplete)_[a-z_]+\(' \
+    ui_*.c
+# should be 0
+
+# Phase 5
+ls editor_*.c
+# matches the table above
+ls repl_*.c | wc -l
+# strictly fewer than before — only true REPL files remain
 ```
 
 ## Trade-offs
 
 **Pros**
 
-- The names match what the modules actually own.
-- A future "headless REPL" / "embedded REPL in another editor" /
-  "scripted REPL test harness" becomes feasible — `EditorState` can be
-  swapped or omitted entirely.
-- `ReplState` shrinks dramatically; capture / restore become cheaper.
-- `repl_command_store.c` becomes a small, focused command-array
-  mutation surface again.
+- Three-layer contract is enforceable mechanically (Makefile guards).
+- A "headless REPL" / "embedded REPL in another editor" / "scripted
+  REPL test harness" becomes feasible — drop `EditorState` and `UiState`
+  entirely.
+- `ReplState` shrinks dramatically; `repl_state_capture/restore` get
+  cheaper; clipboard's 1.88 MB lines sidecar moves off the REPL state
+  struct.
+- UI input becomes a pure function `(snapshot, event) -> UiActionList`,
+  testable without a live REPL.
 
 **Cons**
 
-- Touches every translation unit that includes `repl_state.h`. Big diff
-  but mostly mechanical.
-- Test fixtures need updating (currently many tests poke `ReplRuntimeState`
-  via the existing accessors; they'll point at `g_editor_state` instead).
-- Phase 5 renames invalidate every external doc / branch that referenced
-  the old file names.
+- Phase 4 is the largest commit set and touches every input handler.
+  Risk of behavior drift; mitigated by per-handler test coverage.
+- Phase 5 invalidates external references to the old file names.
+- `presentation` / `camera` placement is genuinely ambiguous (program
+  state vs. session state). This plan keeps `presentation` on
+  `ReplState` (it persists with the program via workspace `@cfg` lines)
+  and moves camera-nav scratch to `EditorState` (mouse-driven). Revisit
+  once a non-GUI REPL frontend exists, if ever.
 
 ## Out of Scope
 
-- Phase C of `push-architecture-ui.md` (UI input handlers returning
-  `UiAction` lists rather than calling actions inline). That's a
-  parallel question; nothing in this plan blocks or unblocks it.
-- The `ReplCameraState` placement question. It currently lives on
-  `ReplRuntimeState` but is mouse-driven; ownership is genuinely
-  ambiguous. Resolve when we audit `repl_camera_controls.c` →
-  `scene_camera_controls.c`.
-- Color scheme + syntax keyword extraction (deferred sub-task of
+- The further `sample.c → imrepl.c` rename
+  (`push-architecture-refinement.md` R8). Mechanical and last.
+- Color scheme / syntax keyword extraction (deferred sub-task of
   `editor-owns-text.md` Step 6).
+- Dissolving `repl_core.c` (R10 in the refinement plan). Unrelated.
+
+## Relationship To Other Plans
+
+- This plan supersedes the deferred Phase C of
+  `push-architecture-ui.md` — the `UiAction` work is folded in here as
+  Phase 4.
+- It builds on `feature/editor-owns-text.md` Steps 2–6 (the data-shape
+  half) and `feature/gold-standard-state-ownership.md` (Stage 7's UI
+  snapshot purity).
+- `feature/push-architecture-refinement.md` R10 (dissolve
+  `repl_core.c`) and R8 (`sample → imrepl` rename) remain independent.
