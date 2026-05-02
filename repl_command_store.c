@@ -1,6 +1,5 @@
 #include "repl_command_store.h"
-#include "repl_core_internal.h"
-#include "repl_state.h"
+#include "repl_state_owners.h"
 
 ReplCommandStore repl_command_store_live(void) {
     ReplDocumentState *document = repl_state_document_mut();
@@ -188,102 +187,6 @@ static void editor_buffer_load_lines(const GLCmd *cmds,
     for (int i = count; i < buf->line_count; i++)
         buf->lines[i][0] = '\0';
     buf->line_count = count;
-}
-
-static int repl_command_store_write_color_source(GLCmd *cmd,
-                                                 float r, float g, float b,
-                                                 float a, int has_alpha,
-                                                 int is_clear_color) {
-    char indent_prefix[MAX_LINE_LEN];
-    char new_source[MAX_LINE_LEN];
-    float out_r = r;
-    float out_g = g;
-    float out_b = b;
-    int formatted;
-    int indent_len = 0;
-
-    /* Get the existing text from the editor buffer to extract the indent. */
-    {
-        GLCmd *cmds = repl_state_document_cmds_mut();
-        int idx = (int)(cmd - cmds);
-        const char *existing = (idx >= 0 && idx < MAX_COMMANDS)
-                               ? repl_state_editor_buffer_line(idx) : NULL;
-        if (existing) {
-            while (existing[indent_len] == ' ' || existing[indent_len] == '\t')
-                indent_len++;
-        }
-    }
-    if (indent_len >= MAX_LINE_LEN) indent_len = MAX_LINE_LEN - 1;
-    for (int i = 0; i < indent_len; i++)
-        indent_prefix[i] = ' ';
-    indent_prefix[indent_len] = '\0';
-
-    if (is_clear_color) {
-        if (out_r > CP_CLEAR_MAX_V) out_r = CP_CLEAR_MAX_V;
-        if (out_g > CP_CLEAR_MAX_V) out_g = CP_CLEAR_MAX_V;
-        if (out_b > CP_CLEAR_MAX_V) out_b = CP_CLEAR_MAX_V;
-        formatted = repl_format_fits(new_source, sizeof(new_source),
-                                     "%sglClearColor(%g, %g, %g, %g);",
-                                     indent_prefix, out_r, out_g, out_b, a);
-    } else if (cmd->type == CMD_TESS_COLOR) {
-        if (has_alpha) {
-            formatted = repl_format_fits(new_source, sizeof(new_source),
-                                         "%sgluColor(%g, %g, %g, %g);",
-                                         indent_prefix, out_r, out_g, out_b, a);
-        } else {
-            formatted = repl_format_fits(new_source, sizeof(new_source),
-                                         "%sgluColor(%g, %g, %g);",
-                                         indent_prefix, out_r, out_g, out_b);
-        }
-    } else if (has_alpha) {
-        formatted = repl_format_fits(new_source, sizeof(new_source),
-                                     "%sglColor4f(%g, %g, %g, %g);",
-                                     indent_prefix, out_r, out_g, out_b, a);
-    } else {
-        formatted = repl_format_fits(new_source, sizeof(new_source),
-                                     "%sglColor3f(%g, %g, %g);",
-                                     indent_prefix, out_r, out_g, out_b);
-    }
-
-    if (!formatted) {
-        set_status("Command too long");
-        return 0;
-    }
-
-    cmd->args[0] = out_r;
-    cmd->args[1] = out_g;
-    cmd->args[2] = out_b;
-    cmd->num_args = has_alpha ? 4 : 3;
-    if (has_alpha)
-        cmd->args[3] = a;
-    {
-        GLCmd *cmds = repl_state_document_cmds_mut();
-        int idx = (int)(cmd - cmds);
-        if (idx >= 0 && idx < MAX_COMMANDS)
-            repl_state_editor_buffer_set_line(idx, new_source);
-    }
-    command_store_invalidate_after_mutation();
-    return 1;
-}
-
-int repl_command_store_set_color(int cmd_idx,
-                                 float r, float g, float b, float a,
-                                 int has_alpha) {
-    GLCmd *cmd = repl_state_document_cmd_at_mut(cmd_idx);
-    if (!cmd)
-        return 0;
-    if (cmd->type != CMD_COLOR3F && cmd->type != CMD_COLOR4F &&
-        cmd->type != CMD_TESS_COLOR)
-        return 0;
-    return repl_command_store_write_color_source(cmd, r, g, b, a, has_alpha, 0);
-}
-
-int repl_command_store_set_clear_color(int cmd_idx,
-                                       float r, float g, float b, float a) {
-    GLCmd *cmd = repl_state_document_cmd_at_mut(cmd_idx);
-    if (!cmd || cmd->type != CMD_CLEAR_COLOR)
-        return 0;
-    return repl_command_store_write_color_source(cmd, r, g, b, a, 1, 1);
 }
 
 int repl_command_store_insert_many_with_lines(ReplCommandStore *store, int pos,

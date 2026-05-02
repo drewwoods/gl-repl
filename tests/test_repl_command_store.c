@@ -378,78 +378,6 @@ static void test_repl_command_store_clear(void) {
     ASSERT_INT("clear with NULL store is safe", 1, 1);
 }
 
-static void test_repl_command_store_set_color(void) {
-    repl_reset_state();
-
-    ReplCommandStore store = repl_command_store_live();
-    GLCmd color_cmd = make_cmd(CMD_COLOR3F, "glColor3f(0, 0, 0);");
-
-    repl_command_store_insert_one(&store, 0, &color_cmd, 0);
-
-    ASSERT_INT("set color on CMD_COLOR3F",
-               repl_command_store_set_color(0, 1, 0, 0, 0, 0), 1);
-
-    GLCmd cmd4f = make_cmd(CMD_COLOR4F, "glColor4f(0, 0, 0, 0);");
-    repl_command_store_insert_one(&store, 1, &cmd4f, 0);
-
-    ASSERT_INT("set color on CMD_COLOR4F",
-               repl_command_store_set_color(1, 0, 1, 0, 1, 1), 1);
-
-    ASSERT_INT("set color rejects invalid command type",
-               repl_command_store_set_color(0, 1, 1, 1, 1, 0), 1);
-
-    ASSERT_INT("set color rejects out of bounds",
-               repl_command_store_set_color(10, 1, 0, 0, 0, 0), 0);
-}
-
-static void test_repl_command_store_set_clear_color(void) {
-    repl_reset_state();
-
-    ReplCommandStore store = repl_command_store_live();
-    GLCmd clear_cmd = make_cmd(CMD_CLEAR_COLOR, "glClearColor(0, 0, 0, 1);");
-
-    repl_command_store_insert_one(&store, 0, &clear_cmd, 0);
-
-    ASSERT_INT("set clear color on CMD_CLEAR_COLOR",
-               repl_command_store_set_clear_color(0, 0.5f, 0.5f, 0.5f, 1), 1);
-
-    ASSERT_INT("set clear color rejects wrong command type",
-               repl_command_store_set_clear_color(1, 0, 0, 0, 1), 0);
-
-    ASSERT_INT("set clear color rejects out of bounds",
-               repl_command_store_set_clear_color(10, 0, 0, 0, 1), 0);
-}
-
-static void test_repl_command_store_set_color_with_alpha(void) {
-    repl_reset_state();
-
-    ReplCommandStore store = repl_command_store_live();
-    GLCmd color4f = make_cmd(CMD_COLOR4F, "glColor4f(0, 0, 0, 1);");
-    GLCmd color3f = make_cmd(CMD_COLOR3F, "glColor3f(0, 0, 0);");
-
-    repl_command_store_insert_one(&store, 0, &color4f, 0);
-    repl_command_store_insert_one(&store, 1, &color3f, 0);
-
-    ASSERT_INT("set color4f with alpha",
-               repl_command_store_set_color(0, 0.5f, 0.5f, 0.5f, 0.8f, 1), 1);
-    ASSERT_INT("set color3f without alpha",
-               repl_command_store_set_color(1, 0.5f, 0.5f, 0.5f, 0, 0), 1);
-}
-
-static void test_repl_command_store_tess_color(void) {
-    repl_reset_state();
-
-    ReplCommandStore store = repl_command_store_live();
-    GLCmd tess_color = make_cmd(CMD_TESS_COLOR, "gluColor(1, 1, 1);");
-
-    repl_command_store_insert_one(&store, 0, &tess_color, 0);
-
-    ASSERT_INT("set tess color with alpha",
-               repl_command_store_set_color(0, 0.5f, 0.5f, 0.5f, 0.8f, 1), 1);
-    ASSERT_INT("set tess color without alpha",
-               repl_command_store_set_color(0, 0.3f, 0.3f, 0.3f, 0, 0), 1);
-}
-
 static void test_repl_command_store_delete_from_middle(void) {
     repl_reset_state();
 
@@ -518,10 +446,6 @@ int main(void) {
     test_repl_command_store_load();
     test_repl_command_store_load_with_lines();
     test_repl_command_store_clear();
-    test_repl_command_store_set_color();
-    test_repl_command_store_set_clear_color();
-    test_repl_command_store_set_color_with_alpha();
-    test_repl_command_store_tess_color();
     test_repl_command_store_delete_from_middle();
     test_repl_command_store_insert_at_end();
     test_repl_command_store_load_with_negative_edit_line();

@@ -394,11 +394,24 @@ make bench BENCH_ARGS="--only spike_flatten_largest"
 
 ---
 
-## Step 4: Transformer API — Color Picker (~1 week)
+## Step 4: Transformer API — Color Picker (~1 week, completed 2026-05-02)
+
+**Status**: Completed. `ui_editor.h` defines `EditorTransformer` /
+`EditorTransformerList`; the runtime state owns an `editor_transformers` slice
+that the controller refills each frame from `imrepl_ctrl_push_color_transformers()`
+after flatten. The color picker writer rebuilds the line text by command type,
+re-parses through `repl_parser_parse_command_ctx` (passing `cmd_idx` as
+`source_line_idx` so indent comes from the depth cache), and commits via
+`repl_command_store_replace_one(store, cmd_idx, &cmd, pl.text)`.
+`repl_command_store_set_color`, `repl_command_store_set_clear_color`, and the
+internal `repl_command_store_write_color_source` helper are removed; their
+focused tests in `tests/test_repl_command_store.c` are dropped. Full regression
+clean: 27/27 binaries, 3114/3114 tests (stub) and 24/24 binaries, 2970/2970
+tests (release).
 
 **Goal**: Color picker becomes a controller-pushed transformer. Editor renders swatch; drag rewrites text in buffer; controller re-parses next frame. Removes `repl_command_store_write_color_source` entirely.
 
-**File**: New `editor_transformer.h` in root
+**File**: New `ui_editor.h` in root
 
 ### Define EditorTransformer
 
@@ -493,7 +506,8 @@ make test && make test-stubs
 
 **Goal**: Controller pushes `EditorHighlight[]` each frame. UI renders from snapshot, not by calling `repl_find_feeding_*()` inline during draw.
 
-**File**: New `editor_highlight.h` in root
+**File**: Extend `ui_editor.h` with the highlight types (sibling of the
+transformer family).
 
 ### Define EditorHighlight
 
@@ -566,7 +580,7 @@ Move hardcoded colors from `ui_panels.c` into `EditorColorScheme` struct in `rep
 
 Syntax keywords (code-panel token coloring) → `SyntaxKeyword[]` table in same location.
 
-### Virtual lines for replay annotations (editor_virtual_lines.h)
+### Virtual lines for replay annotations (extend `ui_editor.h`)
 
 ```c
 typedef struct {
@@ -668,9 +682,7 @@ grep -rn "\.source" . --include="*.c" --include="*.h" \
 | **tests/test_scene_guides.c** | 3d | Test fixtures → pass lines to store load APIs |
 | **tests/** | 3d | Update constructor-based cmd fixtures to pass text alongside |
 | **ui_color_picker.c** | 4 | All editable color types (COLOR3F, COLOR4F, TESS_COLOR, CLEAR_COLOR); use store.replace_one() |
-| **editor_transformer.h** (new) | 4 | EditorTransformer / list types |
-| **editor_highlight.h** (new) | 5 | EditorHighlight / list types |
-| **editor_virtual_lines.h** (new) | 6 | EditorVirtualLine / list types |
+| **ui_editor.h** (new in 4) | 4, 5, 6 | Transformer / highlight / virtual-line snapshot types |
 | **imrepl_ctrl.c** | 4, 5, 6 | Push transformers, highlights, virtual lines each frame |
 | **repl_state.h / repl_state_owners.h** | 4, 5, 6 | Add transformer/highlight/virtual-line slices and accessors |
 | **ui_snapshot.h** | 5, 6 | Include highlights, layout model, color scheme in snapshot |

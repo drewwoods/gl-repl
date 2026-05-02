@@ -3,6 +3,7 @@
  */
 #include "sample.h"
 #include "repl_command_store.h"
+#include "repl_parser.h"
 #include "repl_state_views.h"
 #include "repl_undo.h"
 #include "ui_color_picker.h"
@@ -85,16 +86,51 @@ static const GLCmd *cp_cmd_at(int cmd_idx) {
 static void color_picker_write_cmd(void) {
     const GLCmd *cmd = cp_cmd_at(g_cp_line);
     float r, g, b;
+    char new_line[MAX_LINE_LEN];
+    int written;
 
     if (!cmd)
         return;
 
     cp_hsv_to_rgb(g_cp_hue, g_cp_sat, g_cp_val, &r, &g, &b);
     if (cmd->type == CMD_CLEAR_COLOR) {
-        repl_command_store_set_clear_color(g_cp_line, r, g, b, g_cp_alpha);
+        if (r > CP_CLEAR_MAX_V) r = CP_CLEAR_MAX_V;
+        if (g > CP_CLEAR_MAX_V) g = CP_CLEAR_MAX_V;
+        if (b > CP_CLEAR_MAX_V) b = CP_CLEAR_MAX_V;
+        written = snprintf(new_line, sizeof(new_line),
+                           "glClearColor(%g, %g, %g, %g);",
+                           r, g, b, g_cp_alpha);
+    } else if (cmd->type == CMD_COLOR3F) {
+        written = snprintf(new_line, sizeof(new_line),
+                           "glColor3f(%g, %g, %g);", r, g, b);
+    } else if (cmd->type == CMD_COLOR4F) {
+        written = snprintf(new_line, sizeof(new_line),
+                           "glColor4f(%g, %g, %g, %g);",
+                           r, g, b, g_cp_alpha);
+    } else if (cmd->type == CMD_TESS_COLOR) {
+        if (g_cp_has_alpha)
+            written = snprintf(new_line, sizeof(new_line),
+                               "gluColor(%g, %g, %g, %g);",
+                               r, g, b, g_cp_alpha);
+        else
+            written = snprintf(new_line, sizeof(new_line),
+                               "gluColor(%g, %g, %g);", r, g, b);
+    } else {
         return;
     }
-    repl_command_store_set_color(g_cp_line, r, g, b, g_cp_alpha, g_cp_has_alpha);
+
+    if (written < 0 || written >= (int)sizeof(new_line)) {
+        set_status("Command too long");
+        return;
+    }
+
+    ReplParseContext parse_ctx = { g_cp_line, NULL, 0, 0 };
+    ReplParsedLine pl;
+    if (!repl_parser_parse_command_ctx(new_line, &pl, &parse_ctx))
+        return;
+
+    ReplCommandStore store = repl_command_store_live();
+    repl_command_store_replace_one(&store, g_cp_line, &pl.cmd, pl.text);
 }
 
 /* Open (or switch) the picker for cmd_idx.  my is GLUT screen y coord. */
