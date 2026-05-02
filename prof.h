@@ -40,6 +40,12 @@ typedef enum {
     PROF_CODE_PANEL_LINES_FOOTER,  /* footer/static trailing rows */
     PROF_CODE_PANEL_OVERLAYS, /* scroll/status/color-picker overlays */
     PROF_UI_PANELS,     /* autocomplete + dropdown + var + config + help */
+    PROF_SNAPSHOT,                 /* aggregate snapshot production by controller */
+    PROF_SNAPSHOT_TRANSFORMERS,    /* push_color_transformers (per-line scan) */
+    PROF_SNAPSHOT_HIGHLIGHTS,      /* push_highlights (feeding cmd + replay PC) */
+    PROF_SNAPSHOT_VIRTUAL_LINES,   /* annotations_prepare + virtual-line refresh */
+    PROF_SNAPSHOT_SCENE_CONFIG,    /* build_scene_config */
+    PROF_SNAPSHOT_UI,              /* build_ui_snapshot */
     PROF_FLATTEN,       /* flatten_commands() (only when dirty) */
     PROF_REFORMAT,      /* repl_reformat_commands() (on demand) */
     PROF_FRAME_TOTAL,   /* entire display callback */

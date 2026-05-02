@@ -413,11 +413,25 @@ void imrepl_ctrl_display_frame(void) {
         g_num_flat_cmds = flat_program.cmd_count;
     }
 
+    /* Snapshot production: every per-frame list/snapshot the UI consumes
+     * is built here so timing of the producer side is visible in profile.
+     * The aggregate PROF_SNAPSHOT section sums the four sub-phases plus
+     * the scene-config and ui-snapshot builders below. */
+    prof_begin(PROF_SNAPSHOT);
+
+    prof_begin(PROF_SNAPSHOT_TRANSFORMERS);
     imrepl_ctrl_push_color_transformers();
+    prof_end(PROF_SNAPSHOT_TRANSFORMERS);
+
+    prof_begin(PROF_SNAPSHOT_HIGHLIGHTS);
     imrepl_ctrl_push_highlights();
+    prof_end(PROF_SNAPSHOT_HIGHLIGHTS);
+
     /* Prepare replay annotations + push the virtual-line list.
      * Layout also calls prepare(), so this stays idempotent. */
+    prof_begin(PROF_SNAPSHOT_VIRTUAL_LINES);
     repl_replay_annotations_prepare();
+    prof_end(PROF_SNAPSHOT_VIRTUAL_LINES);
 
     saved_flat_count = g_num_flat_cmds;
     repl_copy_predef_values(live_predef_vals, MAX_PREDEF_VARS);
@@ -426,8 +440,16 @@ void imrepl_ctrl_display_frame(void) {
 
     update_render_state_strings();
     update_cam_lines();
+
+    prof_begin(PROF_SNAPSHOT_SCENE_CONFIG);
     imrepl_ctrl_build_scene_config(&scene_config);
+    prof_end(PROF_SNAPSHOT_SCENE_CONFIG);
+
+    prof_begin(PROF_SNAPSHOT_UI);
     imrepl_ctrl_build_ui_snapshot(&ui_snap);
+    prof_end(PROF_SNAPSHOT_UI);
+
+    prof_end(PROF_SNAPSHOT);
 
     /* 3D scene - scene_render_3d_scene() handles optional accumulation-buffer AA */
     /* Reset subsection accumulators so timings across all AA samples sum up
