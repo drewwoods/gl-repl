@@ -76,8 +76,8 @@ static void populate_runtime_snapshot_fixture(const char *scene_hint) {
     code_panel = repl_state_code_panel_mut();
     code_panel->panel_frac = 0.61f;
     code_panel->resizing_panel = 1;
-    code_panel->scroll = 9;
-    code_panel->scroll_follow_cursor = 1;
+    editor_scroll_set(9);
+    editor_scroll_follow_cursor_set(1);
     code_panel->cursor_visible = 0;
     code_panel->blink_tick = 12;
     code_panel->cursor_px = 123;
@@ -239,9 +239,9 @@ static void test_capture_restore_round_trip(void) {
     ASSERT_INT("help scroll restored", repl_state_help().scroll, 3);
     ASSERT_TRUE("code panel frac restored", repl_state_code_panel().panel_frac == 0.61f);
     ASSERT_INT("code panel resizing restored", repl_state_code_panel().resizing_panel, 1);
-    ASSERT_INT("code panel scroll restored", repl_state_code_panel().scroll, 9);
+    ASSERT_INT("code panel scroll restored", editor_scroll(), 9);
     ASSERT_INT("code panel follow restored",
-               repl_state_code_panel().scroll_follow_cursor, 1);
+               editor_scroll_follow_cursor(), 1);
     ASSERT_INT("code panel cursor visible restored",
                repl_state_code_panel().cursor_visible, 0);
     ASSERT_INT("code panel blink restored", repl_state_code_panel().blink_tick, 12);
@@ -367,7 +367,7 @@ static void test_reset_all_restores_default_runtime(void) {
     ASSERT_TRUE("reset_all restores default snapshot",
                 memcmp(&defaults, &reset_state, sizeof(defaults)) == 0);
     ASSERT_INT("reset_all help hidden", repl_state_help().visible, 0);
-    ASSERT_INT("reset_all panel scroll", repl_state_code_panel().scroll, 0);
+    ASSERT_INT("reset_all panel scroll", editor_scroll(), 0);
     ASSERT_INT("reset_all replay mode", repl_state_replay().mode, REPLAY_MODE_VERTEX);
     ASSERT_INT("reset_all replay expand", repl_state_replay().expand_args, 1);
     ASSERT_STR("reset_all workspace dir", repl_state_workspace_dir(), "");

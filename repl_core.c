@@ -566,8 +566,8 @@ static void scroll_to_display_function(void) {
             break;
         target++;
     }
-    repl_state_code_panel_mut()->scroll = target;
-    repl_state_code_panel_mut()->scroll_follow_cursor = 0;
+    editor_scroll_set(target);
+    editor_scroll_follow_cursor_set(0);
 }
 
 static void load_initial_commands(const char *import_file) {

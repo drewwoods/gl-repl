@@ -1,0 +1,19 @@
+# Editor / UI ownership transitional-coupling budget.
+#
+# Tracked by scripts/check-editor-ownership-budget.sh. Both signals
+# ratchet down only — a commit cannot grow either count past these
+# baselines. Reductions are always allowed; ratchet by hand.
+#
+# Targets (Phase 4 / Phase 5):
+#   ui_forwarder_count -> 0  (UiAction eliminates the call sites)
+#   ui_state_includes_repl_views -> 0  (typedefs migrate to a ui-owned
+#     header)
+#
+# Each forwarder body line counts: a return-line into ui_state_*, or a
+# direct ui_state_* call. The forwarder block in repl_state.c lists 24
+# forwarder functions today; bodies are 21 lines (some return-by-value
+# helpers fold to one line). See the EDITOR_OWNERSHIP_TODO at that
+# block for context.
+
+ui_forwarder_count: 21
+ui_state_includes_repl_views: 1

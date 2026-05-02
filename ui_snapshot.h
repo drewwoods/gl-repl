@@ -47,6 +47,7 @@ typedef struct UiRenderSnapshot {
     ReplSceneRuntimeState       scenes;
     ReplVariableDragState       variable_drag;
     ReplSelectionState          selection;
+    EditorScrollState           scroll;
 
     /* Pointer-shaped read-only views (storage owned by repl_state.c) */
     ReplVariableView            variables;

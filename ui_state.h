@@ -1,6 +1,16 @@
 #ifndef UI_STATE_H
 #define UI_STATE_H
 
+/* EDITOR_OWNERSHIP_TODO(phase-5): break this include. ui_state.h
+ * shouldn't depend on repl_state's view header — it inverts the
+ * ownership relationship the three-layer contract is trying to
+ * establish. The dependency exists today because ReplStatusState /
+ * ReplHelpState / ReplVariablePanelState / ReplProfilePanelState /
+ * ReplViewportState / ReplPointerState typedefs still live in
+ * repl_state_views.h. The Phase 5 rename relocates the typedefs to a
+ * ui-owned header (likely a new ui_state_types.h) and this include
+ * goes away. The ratchet at scripts/check-editor-ownership-budget.sh
+ * forbids the include count from growing in the meantime. */
 #include "repl_state_views.h"  /* ReplStatusState, ReplHelpState, etc. */
 
 /* UiState owns transient chrome, viewport, pointer, status text,

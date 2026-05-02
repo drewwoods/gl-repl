@@ -116,6 +116,17 @@ typedef struct {
     int   start_x;
 } ReplVariableDragState;
 
+/* Editor scroll position: the doc-line index at the top of the
+ * code-panel viewport, plus a flag the editor sets to request the
+ * scroll follow cursor moves. The render-only chrome bits
+ * (panel_frac, resizing_panel, cursor_visible / blink / px / py)
+ * remain in ReplCodePanelRuntimeState which lives on UiState. The
+ * split happened in Phase 1 commit 11. */
+typedef struct {
+    int scroll;
+    int scroll_follow_cursor;
+} EditorScrollState;
+
 typedef struct {
     ReplEditorBuffer      buffer;
     ReplEditorInputState  input;
@@ -127,6 +138,7 @@ typedef struct {
     EditorHighlightList   highlights;
     EditorVirtualLineList virtual_lines;
     ReplVariableDragState variable_drag;
+    EditorScrollState     scroll;
 } EditorState;
 
 /* Capture / restore / reset symmetry with repl_state_*. */
@@ -228,5 +240,13 @@ int                          editor_state_virtual_lines_append(int after_line_id
 ReplVariableDragState  editor_state_variable_drag(void);
 ReplVariableDragState *editor_state_variable_drag_mut(void);
 void                   editor_state_variable_drag_reset(void);
+
+/* Editor scroll slice. */
+EditorScrollState  editor_state_scroll(void);
+EditorScrollState *editor_state_scroll_mut(void);
+int                editor_scroll(void);
+void               editor_scroll_set(int scroll);
+int                editor_scroll_follow_cursor(void);
+void               editor_scroll_follow_cursor_set(int follow);
 
 #endif /* EDITOR_STATE_H */

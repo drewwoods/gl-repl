@@ -21,11 +21,11 @@
     },
     /* editor_input + selection + clipboard defaults moved to
      * editor_state.c (Phase 1 commits 5-6). */
+    /* code_panel.scroll + scroll_follow_cursor moved to editor_state.c
+     * (Phase 1 commit 11). */
     .code_panel = {
         .panel_frac = CFG_DEFAULT_PANEL_FRAC,
         .resizing_panel = 0,
-        .scroll = 0,
-        .scroll_follow_cursor = 0,
         .cursor_visible = 1,
         .blink_tick = 0,
         .cursor_px = 0,

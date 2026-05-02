@@ -73,11 +73,13 @@ typedef struct {
  * editor_state.h alongside the EditorState struct that owns them
  * (Phase 1 commit 6). */
 
+/* Code-panel UI chrome: panel divider, cursor blink + pixel position
+ * the renderer uses. The scroll fields used to live here too; Phase 1
+ * commit 11 split them out into EditorState.scroll because scroll is
+ * an editing-session concern, not a render-chrome one. */
 typedef struct {
     float panel_frac;
     int   resizing_panel;
-    int   scroll;
-    int   scroll_follow_cursor;
     int   cursor_visible;
     int   blink_tick;
     int   cursor_px;
