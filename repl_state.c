@@ -441,6 +441,22 @@ int repl_state_editor_buffer_count(void) {
     return g_repl_state.editor_buffer.line_count;
 }
 
+const EditorTransformerList *repl_state_editor_transformers(void) {
+    return &g_repl_state.editor_transformers;
+}
+
+void repl_state_editor_transformers_clear(void) {
+    g_repl_state.editor_transformers.count = 0;
+}
+
+int repl_state_editor_transformers_append(const EditorTransformer *transformer) {
+    EditorTransformerList *list = &g_repl_state.editor_transformers;
+    if (!transformer || list->count >= MAX_TRANSFORMERS)
+        return 0;
+    list->items[list->count++] = *transformer;
+    return 1;
+}
+
 void repl_state_editor_input_reset(void) {
     repl_state_input_clear();
     repl_state_pending_newline_clear();

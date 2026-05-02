@@ -5,6 +5,7 @@
 #define REPL_STATE_OWNERS_H
 
 #include "repl_state_views.h"
+#include "ui_editor.h"
 
 ReplDocumentState       *repl_state_document_mut(void);
 const GLCmd *repl_state_document_cmds(void);
@@ -60,6 +61,13 @@ const char                   *repl_state_editor_buffer_line(int idx);
 void                          repl_state_editor_buffer_set_line(int idx, const char *text);
 void                          repl_state_editor_buffer_set_count(int count);
 int                           repl_state_editor_buffer_count(void);
+
+/* Per-frame editor transformer snapshot pushed by the controller after
+ * flatten so renderers/UI can iterate inline swatch/slider affordances
+ * without walking the document themselves. */
+const EditorTransformerList  *repl_state_editor_transformers(void);
+void                          repl_state_editor_transformers_clear(void);
+int                           repl_state_editor_transformers_append(const EditorTransformer *transformer);
 const char *repl_state_input_text(void);
 char       *repl_state_input_buffer_mut(void);
 int         repl_state_input_len(void);

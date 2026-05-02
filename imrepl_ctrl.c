@@ -9,6 +9,8 @@
 #include "repl_replay.h"
 #include "repl_state.h"
 #include "scene_render.h"
+#include "ui_color_picker.h"
+#include "ui_editor.h"
 #include "ui_replay_hud.h"
 #include "ui_autocomplete_panel.h"
 #include "ui_help_overlay.h"
@@ -109,6 +111,37 @@ static void imrepl_ctrl_build_replay_fade_plan(SceneRenderConfig *config) {
         const ReplayFadeBatch *batch = &fade_batches.batches[batch_idx];
         config->replay_fade_plan.batches[batch_idx] = *batch;
         config->replay_fade_plan.batch_alpha[batch_idx] = repl_replay_batch_alpha(batch);
+    }
+}
+
+static void imrepl_ctrl_push_color_transformers(void) {
+    repl_state_editor_transformers_clear();
+    int doc_count = repl_state_document_count();
+    for (int i = 0; i < doc_count; i++) {
+        if (!ui_color_picker_can_edit_cmd(i))
+            continue;
+        const GLCmd *cmd = repl_state_document_cmd_at(i);
+        if (!cmd)
+            continue;
+        int has_alpha = (cmd->type == CMD_COLOR4F ||
+                         cmd->type == CMD_TESS_COLOR ||
+                         cmd->type == CMD_CLEAR_COLOR);
+        EditorTransformer t = {
+            .line_idx = i,
+            .char_start = -1,
+            .char_end = -1,
+            .kind = TRANSFORMER_COLOR_PICKER,
+            .state.color = {
+                .r = cmd->args[0],
+                .g = cmd->args[1],
+                .b = cmd->args[2],
+                .a = has_alpha ? cmd->args[3] : 1.0f,
+                .has_alpha = has_alpha,
+                .is_clear = (cmd->type == CMD_CLEAR_COLOR),
+            },
+        };
+        if (!repl_state_editor_transformers_append(&t))
+            break;
     }
 }
 
@@ -333,6 +366,8 @@ void imrepl_ctrl_display_frame(void) {
         flat_program = repl_state_flat_program_view();
         g_num_flat_cmds = flat_program.cmd_count;
     }
+
+    imrepl_ctrl_push_color_transformers();
 
     saved_flat_count = g_num_flat_cmds;
     repl_copy_predef_values(live_predef_vals, MAX_PREDEF_VARS);

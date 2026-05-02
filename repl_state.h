@@ -3,6 +3,7 @@
 
 #include "repl_state_views.h"
 #include "repl_state_owners.h"
+#include "ui_editor.h"
 
 typedef struct {
     ReplDocumentState         document;
@@ -10,6 +11,7 @@ typedef struct {
     ReplVariableState         variables;
     ReplEditorInputState      editor_input;
     ReplEditorBuffer          editor_buffer;
+    EditorTransformerList     editor_transformers;
     ReplSelectionState        selection;
     ReplClipboardState        clipboard;
     ReplCodePanelRuntimeState code_panel;

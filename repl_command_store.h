@@ -164,19 +164,6 @@ static inline int repl_command_store_replace_one_without_line(
                                           repl_command_store_replace_one_with_line, \
                                           repl_command_store_replace_one_without_line)(__VA_ARGS__)
 
-/* Replace the color args and source text of an existing color command in
- * place. Marks the flat program dirty. Returns 1 on success, 0 if cmd_idx is
- * out of range, the command type is not editable by the color picker, or the
- * formatted source text does not fit. */
-int  repl_command_store_set_color(int cmd_idx,
-                                  float r, float g, float b, float a,
-                                  int has_alpha);
-
-/* Variant for CMD_CLEAR_COLOR: clamps r/g/b to CP_CLEAR_MAX_V before
- * writing. Returns 1 on success, 0 on out-of-range or formatting failure. */
-int  repl_command_store_set_clear_color(int cmd_idx,
-                                        float r, float g, float b, float a);
-
 /* Delete a range of commands. Shifts cmds[start+count..] left to fill the
  * deleted space. Returns 1 on success, 0 on error. Called by delete, cut, and
  * clear-all operations. */
