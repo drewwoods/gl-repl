@@ -230,7 +230,7 @@ mirrors the gates that have come online.
 
 | Phase | Audit / gate landed |
 |---|---|
-| 0 | `make audit-editor-ownership` (informational; commit 1, 2026-05-02) |
+| 0 | `make audit-editor-ownership` (informational; commit 1, 2026-05-02); baseline counts recorded (commit 2, 2026-05-02) |
 | 1–5 | pending |
 
 ## Phase 0: Add Audits Before Moving Code
@@ -282,20 +282,23 @@ audit-editor-ownership:
 
 ### 0.2 Add a baseline table
 
-After adding the script, update this section with real counts:
+✅ **Landed (commit 2).** Real counts from `make audit-editor-ownership`:
 
 ```text
-Date:
-Branch:
-repl_state editor/ui-like accessor hits:
-command store _with_line API hits:
-REPL direct editor-buffer read hits:
-UI live mutation hits:
-repl_editor.c include count:
-Known intentional exceptions:
+Date:                                  2026-05-02
+Branch:                                feature/editor-ownership-gap-cleanup
+SHA at measurement (post-commit-1):    0595c42
+repl_state editor/ui-like accessor hits:    1509
+command store _with_line API hits:            46
+REPL direct editor-buffer read hits:          36
+UI live mutation hits:                        16
+repl_editor.c include count:                  20
+Known intentional exceptions:                  0
 ```
 
 The first goal is not zero. The first goal is to make drift visible.
+The completion plan's *Implementation Status* table records per-phase
+targets each of these counts is driven toward.
 
 ### 0.3 Add explicit TODO markers for tolerated exceptions
 
