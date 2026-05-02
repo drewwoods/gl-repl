@@ -693,7 +693,7 @@ static int handle_rename_key_route(unsigned char key) {
 }
 
 static int handle_config_menu_key_route(unsigned char key) {
-    if (!repl_state_search().active && key == '`') {
+    if (!editor_state_search().active && key == '`') {
         if (repl_state_replay().active)
             repl_replay_stop();
         editor_restore_hidden_code_panel();
@@ -729,7 +729,7 @@ static int handle_escape_key_route(unsigned char key) {
             repl_state_help_mut()->visible = 0;
             repl_state_help_mut()->tab_idx = 0;
             repl_state_help_mut()->scroll = 0;
-        } else if (repl_state_autocomplete().match_count > 0) {
+        } else if (editor_state_autocomplete().match_count > 0) {
             clear_autocomplete_state();
         } else if (repl_state_insert_mode()) {
             repl_state_insert_mode_set(0);
@@ -1076,7 +1076,7 @@ static int handle_text_delete_key_route(unsigned char key) {
 
 static int handle_tab_key_route(unsigned char key) {
     if (key == '\t') {
-        if (repl_state_autocomplete().match_count > 0) {
+        if (editor_state_autocomplete().match_count > 0) {
             accept_autocomplete();
             update_autocomplete();
         }
@@ -1087,7 +1087,7 @@ static int handle_tab_key_route(unsigned char key) {
 
 static int handle_enter_key_route(unsigned char key) {
     if (key == '\r' || key == '\n') {
-        if (repl_state_autocomplete().match_count > 0) {
+        if (editor_state_autocomplete().match_count > 0) {
             accept_autocomplete();
             update_autocomplete();
             return 1;
@@ -1320,7 +1320,7 @@ static int handle_horizontal_special_key_route(int key) {
 
 static int handle_vertical_special_key_route(int key) {
     ReplHelpState *help = repl_state_help_mut();
-    ReplAutocompleteState *ac = repl_state_autocomplete_mut();
+    ReplAutocompleteState *ac = editor_state_autocomplete_mut();
     switch (key) {
     case GLUT_KEY_UP:
         if (help->visible) {

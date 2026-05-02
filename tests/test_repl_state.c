@@ -94,18 +94,18 @@ static void populate_runtime_snapshot_fixture(const char *scene_hint) {
     snprintf(status->text, sizeof(status->text), "%s", "state snapshot");
     status->ttl = 17;
 
-    repl_state_search_mut()->active = 1;
-    snprintf(repl_state_search_mut()->query,
-             sizeof(repl_state_search_mut()->query),
+    editor_state_search_mut()->active = 1;
+    snprintf(editor_state_search_mut()->query,
+             sizeof(editor_state_search_mut()->query),
              "%s", "vertex");
-    repl_state_search_mut()->query_len = 6;
-    repl_state_search_mut()->cursor_pos = 2;
-    repl_state_search_mut()->hit_line_idx = 5;
-    repl_state_search_mut()->hit_char_idx = 8;
-    repl_state_search_mut()->hit_ordinal = 2;
-    repl_state_search_mut()->match_count = 4;
+    editor_state_search_mut()->query_len = 6;
+    editor_state_search_mut()->cursor_pos = 2;
+    editor_state_search_mut()->hit_line_idx = 5;
+    editor_state_search_mut()->hit_char_idx = 8;
+    editor_state_search_mut()->hit_ordinal = 2;
+    editor_state_search_mut()->match_count = 4;
 
-    ac = repl_state_autocomplete_mut();
+    ac = editor_state_autocomplete_mut();
     ac->matches[0] = "glVertex3f";
     ac->matches[1] = "glVertex2f";
     ac->insert_matches[0] = "glVertex3f(";
@@ -251,8 +251,8 @@ static void test_capture_restore_round_trip(void) {
                repl_state_profile_panel().mode, PROFILE_PANEL_DETAILS);
     {
         ReplStatusState status = repl_state_status();
-        ReplSearchState search = repl_state_search();
-        ReplAutocompleteState autocomplete = repl_state_autocomplete();
+        ReplSearchState search = editor_state_search();
+        ReplAutocompleteState autocomplete = editor_state_autocomplete();
 
         ASSERT_STR("status text restored", status.text, "state snapshot");
         ASSERT_INT("status ttl restored", status.ttl, 17);

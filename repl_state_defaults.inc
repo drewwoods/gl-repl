@@ -52,22 +52,8 @@
         .text = "",
         .ttl = 0,
     },
-    .search = {
-        .active = 0,
-        .query = "",
-        .query_len = 0,
-        .cursor_pos = 0,
-        .hit_line_idx = -1,
-        .hit_char_idx = -1,
-        .hit_ordinal = 0,
-        .match_count = 0,
-    },
-    .autocomplete = {
-        .match_count = 0,
-        .selected_idx = 0,
-        .ghost = "",
-        .hint = "",
-    },
+    /* search + autocomplete defaults moved to editor_state.c
+     * (Phase 1 commit 7). */
     .camera = {
         .rx = 20.0f,
         .ry = 30.0f,

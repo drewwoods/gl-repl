@@ -125,13 +125,8 @@ void                   repl_state_status_set(const char *message);
 void                   repl_state_status_clear(void);
 void                   repl_state_status_tick(void);
 
-ReplSearchState          repl_state_search(void);
-ReplSearchState       *repl_state_search_mut(void);
-void                   repl_state_search_clear(void);
-
-ReplAutocompleteState    repl_state_autocomplete(void);
-ReplAutocompleteState       *repl_state_autocomplete_mut(void);
-void                        repl_state_autocomplete_clear(void);
+/* Search + autocomplete accessors moved to editor_state.h (Phase 1
+ * commit 7). Use editor_state_search / _autocomplete and friends. */
 
 ReplCameraState        repl_state_camera(void);
 ReplCameraState       *repl_state_camera_mut(void);

@@ -332,8 +332,8 @@ static void imrepl_ctrl_build_ui_snapshot(UiRenderSnapshot *snap) {
     snap->variable_panel = repl_state_variable_panel();
     snap->profile_panel  = repl_state_profile_panel();
     snap->status         = repl_state_status();
-    snap->search         = repl_state_search();
-    snap->autocomplete   = repl_state_autocomplete();
+    snap->search         = editor_state_search();
+    snap->autocomplete   = editor_state_autocomplete();
     snap->camera         = repl_state_camera();
     snap->pointer        = repl_state_pointer();
     snap->render         = repl_state_render();

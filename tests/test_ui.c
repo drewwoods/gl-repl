@@ -39,8 +39,8 @@ static void make_test_ui_snapshot(UiRenderSnapshot *snap) {
     snap->variable_panel = repl_state_variable_panel();
     snap->profile_panel  = repl_state_profile_panel();
     snap->status         = repl_state_status();
-    snap->search         = repl_state_search();
-    snap->autocomplete   = repl_state_autocomplete();
+    snap->search         = editor_state_search();
+    snap->autocomplete   = editor_state_autocomplete();
     snap->camera         = repl_state_camera();
     snap->pointer        = repl_state_pointer();
     snap->render         = repl_state_render();
@@ -199,14 +199,14 @@ static void test_autocomplete_panel(void) {
     printf("Testing Autocomplete Panel...\n");
     gl_stub_counts_reset();
     
-    repl_state_autocomplete_mut()->match_count = 0;
+    editor_state_autocomplete_mut()->match_count = 0;
     { UiRenderSnapshot s; make_test_ui_snapshot(&s); ui_autocomplete_panel_render(&s); }
     ASSERT_TRUE("ac hidden -> no GL calls", gl_stub_counts[GL_STUB_glBegin] == 0);
 
-    repl_state_autocomplete_mut()->match_count = 2;
-    repl_state_autocomplete_mut()->matches[0] = "glVertex3f";
-    repl_state_autocomplete_mut()->matches[1] = "glVertex2f";
-    repl_state_autocomplete_mut()->selected_idx = 0;
+    editor_state_autocomplete_mut()->match_count = 2;
+    editor_state_autocomplete_mut()->matches[0] = "glVertex3f";
+    editor_state_autocomplete_mut()->matches[1] = "glVertex2f";
+    editor_state_autocomplete_mut()->selected_idx = 0;
     repl_state_code_panel_mut()->cursor_px = 100;
     repl_state_code_panel_mut()->cursor_py = 100;
     
@@ -281,7 +281,7 @@ static void test_menu_bar(void) {
     ASSERT_TRUE("config menu open", ui_menu_bar_open_menu_id() == 2); // MENU_CONFIG
 
     /* Test search overlay */
-    repl_state_search_mut()->active = 1;
+    editor_state_search_mut()->active = 1;
     gl_stub_counts_reset();
     { UiRenderSnapshot s; make_test_ui_snapshot(&s); ui_menu_bar_render_search_overlay(&s, 0, 400, 600); }
     ASSERT_GL_CALLS("search overlay -> draws quads", GL_STUB_glBegin, 1);

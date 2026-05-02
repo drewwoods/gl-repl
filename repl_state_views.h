@@ -103,25 +103,9 @@ typedef struct {
     int  ttl;
 } ReplStatusState;
 
-typedef struct {
-    int  active;
-    char query[MAX_INPUT_LEN];
-    int  query_len;
-    int  cursor_pos;
-    int  hit_line_idx;
-    int  hit_char_idx;
-    int  hit_ordinal;
-    int  match_count;
-} ReplSearchState;
-
-typedef struct {
-    const char *matches[MAX_AC_MATCHES];
-    const char *insert_matches[MAX_AC_MATCHES];
-    int         match_count;
-    int         selected_idx;
-    char        ghost[MAX_LINE_LEN];
-    char        hint[MAX_LINE_LEN];
-} ReplAutocompleteState;
+/* ReplSearchState / ReplAutocompleteState typedefs moved to
+ * editor_state.h alongside the EditorState struct that owns them
+ * (Phase 1 commit 7). */
 
 typedef struct {
     float rx;
@@ -277,9 +261,8 @@ ReplProfilePanelState     repl_state_profile_panel(void);
 
 ReplStatusState          repl_state_status(void);
 
-ReplSearchState          repl_state_search(void);
-
-ReplAutocompleteState    repl_state_autocomplete(void);
+/* Search + autocomplete view accessors moved to editor_state.h
+ * (Phase 1 commit 7). Use editor_state_search / _autocomplete. */
 
 ReplCameraState        repl_state_camera(void);
 ReplCameraState        repl_state_camera_snapshot(void);

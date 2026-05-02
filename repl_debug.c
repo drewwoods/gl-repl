@@ -103,8 +103,6 @@ void repl_debug_dump_runtime_state_layout(FILE *out) {
     X(ReplVariableDragState, variable_drag)                                                        \
     X(ReplProfilePanelState, profile_panel)                                                        \
     X(ReplStatusState, status)                                                                     \
-    X(ReplSearchState, search)                                                                     \
-    X(ReplAutocompleteState, autocomplete)                                                         \
     X(ReplCameraState, camera)                                                                     \
     X(ReplPointerState, pointer)                                                                   \
     X(ReplViewportState, viewport)                                                                 \
