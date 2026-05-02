@@ -114,6 +114,33 @@ static void imrepl_ctrl_build_replay_fade_plan(SceneRenderConfig *config) {
     }
 }
 
+static void imrepl_ctrl_push_highlights(void) {
+    repl_state_editor_highlights_clear();
+
+    int doc_count = repl_state_document_count();
+    int edit_line = repl_state_edit_line();
+    int insert_mode = repl_state_insert_mode();
+
+    if (!insert_mode && edit_line >= 0 && edit_line < doc_count) {
+        const GLCmd *cmd = repl_state_document_cmd_at(edit_line);
+        if (cmd && cmd->valid) {
+            int norm_idx = repl_find_feeding_normal_cmd(edit_line);
+            int color_idx = repl_find_feeding_color_cmd(edit_line);
+            if (norm_idx >= 0)
+                repl_state_editor_highlights_append(norm_idx, -1, -1,
+                                                    HIGHLIGHT_FEEDING_NORMAL);
+            if (color_idx >= 0)
+                repl_state_editor_highlights_append(color_idx, -1, -1,
+                                                    HIGHLIGHT_FEEDING_COLOR);
+        }
+    }
+
+    ReplReplayRuntimeState replay = repl_state_replay();
+    if (replay.active && replay.src_line_idx >= 0)
+        repl_state_editor_highlights_append(replay.src_line_idx, -1, -1,
+                                            HIGHLIGHT_REPLAY_PC);
+}
+
 static void imrepl_ctrl_push_color_transformers(void) {
     repl_state_editor_transformers_clear();
     int doc_count = repl_state_document_count();
@@ -340,6 +367,7 @@ static void imrepl_ctrl_build_ui_snapshot(UiRenderSnapshot *snap) {
     }
 
     snap->workspace_dir = repl_state_workspace_dir();
+    snap->editor_highlights = repl_state_editor_highlights();
 }
 
 void imrepl_ctrl_display_frame(void) {
@@ -368,6 +396,7 @@ void imrepl_ctrl_display_frame(void) {
     }
 
     imrepl_ctrl_push_color_transformers();
+    imrepl_ctrl_push_highlights();
 
     saved_flat_count = g_num_flat_cmds;
     repl_copy_predef_values(live_predef_vals, MAX_PREDEF_VARS);

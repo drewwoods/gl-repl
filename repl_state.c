@@ -457,6 +457,28 @@ int repl_state_editor_transformers_append(const EditorTransformer *transformer) 
     return 1;
 }
 
+const EditorHighlightList *repl_state_editor_highlights(void) {
+    return &g_repl_state.editor_highlights;
+}
+
+void repl_state_editor_highlights_clear(void) {
+    g_repl_state.editor_highlights.count = 0;
+}
+
+int repl_state_editor_highlights_append(int line_idx, int char_start,
+                                        int char_end, HighlightKind kind) {
+    EditorHighlightList *list = &g_repl_state.editor_highlights;
+    if (list->count >= MAX_HIGHLIGHTS)
+        return 0;
+    list->items[list->count++] = (EditorHighlight){
+        .line_idx = line_idx,
+        .char_start = char_start,
+        .char_end = char_end,
+        .kind = kind,
+    };
+    return 1;
+}
+
 void repl_state_editor_input_reset(void) {
     repl_state_input_clear();
     repl_state_pending_newline_clear();

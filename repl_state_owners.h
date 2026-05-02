@@ -68,6 +68,16 @@ int                           repl_state_editor_buffer_count(void);
 const EditorTransformerList  *repl_state_editor_transformers(void);
 void                          repl_state_editor_transformers_clear(void);
 int                           repl_state_editor_transformers_append(const EditorTransformer *transformer);
+
+/* Per-frame editor highlight snapshot. The controller refills the list
+ * each frame with feeding-cmd, replay-PC, search-match, etc. entries so
+ * UI render code can iterate it instead of recomputing positions inline. */
+const EditorHighlightList    *repl_state_editor_highlights(void);
+void                          repl_state_editor_highlights_clear(void);
+int                           repl_state_editor_highlights_append(int line_idx,
+                                                                  int char_start,
+                                                                  int char_end,
+                                                                  HighlightKind kind);
 const char *repl_state_input_text(void);
 char       *repl_state_input_buffer_mut(void);
 int         repl_state_input_len(void);

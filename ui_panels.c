@@ -319,13 +319,19 @@ void ui_panels_render_code_panel(const UiRenderSnapshot *snap) {
      * stack beneath it render in the same 2D projection. */
     glViewport(0, 0, snap->viewport.window_w, snap->viewport.window_h);
 
-    /* When cursor is on a vertex, find which normal/color lines feed it so
-     * we can draw a gutter accent bar on them below. */
+    /* Gutter feeding-cmd highlights come from the controller-pushed
+     * editor_highlights snapshot. Lift the kinds we render here into
+     * line-indexed scalars so the per-row branch stays cheap. */
     int highlight_normal_idx = -1;
     int highlight_color_idx  = -1;
-    if (!insert_mode && edit_line < document_count && document_cmds[edit_line].valid) {
-        highlight_normal_idx = repl_find_feeding_normal_cmd(edit_line);
-        highlight_color_idx  = repl_find_feeding_color_cmd(edit_line);
+    if (snap->editor_highlights) {
+        for (int hi = 0; hi < snap->editor_highlights->count; hi++) {
+            const EditorHighlight *h = &snap->editor_highlights->items[hi];
+            if (h->kind == HIGHLIGHT_FEEDING_NORMAL)
+                highlight_normal_idx = h->line_idx;
+            else if (h->kind == HIGHLIGHT_FEEDING_COLOR)
+                highlight_color_idx = h->line_idx;
+        }
     }
 
     prof_end(PROF_CODE_PANEL_LAYOUT_GEOM_SETUP);
