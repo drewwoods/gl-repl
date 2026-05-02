@@ -1,6 +1,7 @@
 #define REPL_STATE_IMPLEMENTATION
 #include "repl_state.h"
 
+#include "editor_state.h"
 #include "repl_command_store.h"
 #include "repl_core.h"
 #include "repl_core_internal.h"
@@ -14,6 +15,14 @@ void refresh_workspace_header_lines(void);
 int  parse_workspace_header_line(const char *line);
 void update_render_state_strings(void);
 void update_cam_lines(void);
+
+/* Forward decl rather than including the ui_state header: the
+ * check-controller-boundaries guard forbids repl_*.c from depending on
+ * the ui_* layer, and repl_state_reset_all only needs the reset
+ * entry-point symbol. Once Phase 1 commit 7 lands and no UI slices
+ * remain on g_repl_state, this hookup migrates to the controller along
+ * with the slices. */
+void ui_state_reset(void);
 
 static const float g_grid_major_steps[GRID_MAJOR_COUNT] = {
     [GRID_MAJOR_1]  = 1.0f,
@@ -976,6 +985,11 @@ void repl_state_init_defaults(void) {
 
 void repl_state_reset_all(void) {
     g_repl_state = g_repl_state_defaults;
+    /* Phase 1 scaffold (commit 3): drain the new EditorState and UiState
+     * singletons too so every test reset clears all three structs. The
+     * structs are placeholders until commits 4-7 move slices in. */
+    editor_state_reset();
+    ui_state_reset();
     repl_state_bind_eval_predef_storage();
     repl_scenes_reset();
     reset_time_state();
