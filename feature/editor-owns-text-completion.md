@@ -377,8 +377,9 @@ Branch: `feature/editor-ownership-gap-cleanup`. Tracked against the
 | 1 | tools: add editor ownership audit report | ✅ landed (2026-05-02) |
 | 2 | docs: record baseline editor ownership audit counts | ✅ landed (2026-05-02) |
 | 3 | refactor: add EditorState + UiState storage + compatibility forwarders | ✅ landed (2026-05-02) |
-| 4 | refactor: migrate editor_buffer accessors to editor namespace | next |
-| 5–17 | (input/cursor → selection/clipboard → status/UI slices → store text drop → compile gate → UiAction → renames → hard guards) | pending |
+| 4 | refactor: migrate editor_buffer slice to EditorState | ✅ landed (2026-05-02) |
+| 5 | refactor: migrate editor_input / cursor / edit_line / insert_mode / pending_newline | next |
+| 6–17 | (selection/clipboard → UI slices → store text drop → compile gate → UiAction → renames → hard guards) | pending |
 
 ## Phase 0 — Audits Before Moving Code
 
@@ -521,6 +522,20 @@ have been migrated.
 Each migration is a separate commit with passing tests at the end:
 
 1. `editor_buffer` — most central; everything else builds on it.
+   ✅ **Landed (commit 4).** Storage moved from `g_repl_state.editor_buffer`
+   to `g_editor_state.buffer`. New API: `editor_state_buffer / _mut` for
+   the whole struct, `editor_buffer_line / set_line / count / set_count`
+   for slice-level access. The legacy `repl_state_editor_buffer*`
+   accessors are deleted entirely (Path A — no transitional forwarder
+   cruft); 29 production files and 11 test files were migrated as one
+   atomic commit. The `ReplEditorBuffer` typedef moved from
+   `repl_state_views.h` to `editor_state.h` alongside its owning struct.
+   `test_capture_restore_round_trip` in `tests/test_repl_state.c` gained
+   a paired `editor_state_capture/restore` since the editor session is
+   now its own snapshot domain. Audit deltas vs. commit 3 baseline:
+   section-1 1509 → 1460 (−49); section-3 36 → 29 (−7, now reports
+   only true text-line reads since `_count / _set_*` accessors are no
+   longer in the regex's union).
 2. `editor_input` (typing buffer / cursor / edit-line / insert mode /
    pending newline).
 3. `selection` + `clipboard`.

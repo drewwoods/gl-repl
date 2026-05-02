@@ -143,8 +143,8 @@ static void prepare_display_fixture(void) {
     set_cmd3(&doc_cmds[1], CMD_COLOR3F, 1, "glColor3f(0.2, 0.4, 0.6);",
              0.2f, 0.4f, 0.6f);
     /* Store source text in editor buffer (flat cmds resolve text via src_cmd_idx) */
-    repl_state_editor_buffer_set_line(0, "glVertex3f(1, 2, 3);");
-    repl_state_editor_buffer_set_line(1, "glColor3f(0.2, 0.4, 0.6);");
+    editor_buffer_set_line(0, "glVertex3f(1, 2, 3);");
+    editor_buffer_set_line(1, "glColor3f(0.2, 0.4, 0.6);");
     set_cmd3(&flat_cmds[0], CMD_VERTEX3F, 0, "glVertex3f(1, 2, 3);",
              1.0f, 2.0f, 3.0f);
     set_cmd3(&flat_cmds[1], CMD_COLOR3F, 1, "glColor3f(0.2, 0.4, 0.6);",

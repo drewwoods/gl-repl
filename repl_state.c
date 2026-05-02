@@ -414,41 +414,8 @@ ReplEditorInputState *repl_state_editor_input_mut(void) {
     return &g_repl_state.editor_input;
 }
 
-/* Editor-owns-text spike: per-line text buffer accessors. */
-const ReplEditorBuffer *repl_state_editor_buffer(void) {
-    return &g_repl_state.editor_buffer;
-}
-
-ReplEditorBuffer *repl_state_editor_buffer_mut(void) {
-    return &g_repl_state.editor_buffer;
-}
-
-const char *repl_state_editor_buffer_line(int idx) {
-    if (idx < 0 || idx >= MAX_COMMANDS)
-        return "";
-    return g_repl_state.editor_buffer.lines[idx];
-}
-
-void repl_state_editor_buffer_set_line(int idx, const char *text) {
-    if (idx < 0 || idx >= MAX_COMMANDS)
-        return;
-    if (!text) text = "";
-    char *dst = g_repl_state.editor_buffer.lines[idx];
-    int n = (int)strlen(text);
-    if (n >= MAX_LINE_LEN) n = MAX_LINE_LEN - 1;
-    memcpy(dst, text, (size_t)n);
-    dst[n] = '\0';
-}
-
-void repl_state_editor_buffer_set_count(int count) {
-    if (count < 0) count = 0;
-    if (count > MAX_COMMANDS) count = MAX_COMMANDS;
-    g_repl_state.editor_buffer.line_count = count;
-}
-
-int repl_state_editor_buffer_count(void) {
-    return g_repl_state.editor_buffer.line_count;
-}
+/* Editor-owned text buffer accessors moved to editor_state.c (Phase 1
+ * commit 4). Callers use editor_state_buffer / _mut and editor_buffer_*. */
 
 const EditorTransformerList *repl_state_editor_transformers(void) {
     return &g_repl_state.editor_transformers;

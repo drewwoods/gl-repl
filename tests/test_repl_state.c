@@ -1,4 +1,5 @@
 #include "repl_state.h"
+#include "editor_state.h"
 
 #include "support/test_harness.h"
 #include <stdio.h>
@@ -43,10 +44,10 @@ static void populate_runtime_snapshot_fixture(const char *scene_hint) {
     doc_cmds = repl_state_document_cmds_mut();
     doc_cmds[0].type = CMD_BEGIN;
     doc_cmds[0].valid = 1;
-    repl_state_editor_buffer_set_line(0, "  glBegin(GL_TRIANGLES);");
+    editor_buffer_set_line(0, "  glBegin(GL_TRIANGLES);");
     doc_cmds[1].type = CMD_END;
     doc_cmds[1].valid = 1;
-    repl_state_editor_buffer_set_line(1, "  glEnd();");
+    editor_buffer_set_line(1, "  glEnd();");
 
     repl_state_flat_program_set_count(1);
     flat_program = repl_state_flat_program_mut();
@@ -192,15 +193,20 @@ static void populate_runtime_snapshot_fixture(const char *scene_hint) {
 static void test_capture_restore_round_trip(void) {
     static ReplRuntimeState snapshot;
     static ReplRuntimeState round_trip;
+    static EditorState editor_snap;
+    static EditorState editor_round_trip;
     static const char *scene_hint = "Captured Scene";
     int foo_idx;
 
     repl_state_init_defaults();
     populate_runtime_snapshot_fixture(scene_hint);
     repl_state_capture(&snapshot);
+    editor_state_capture(&editor_snap);
     repl_state_reset_all();
     repl_state_restore(&snapshot);
+    editor_state_restore(&editor_snap);
     repl_state_capture(&round_trip);
+    editor_state_capture(&editor_round_trip);
 
     ASSERT_STR("input restored",
                repl_state_input_text(),
@@ -210,7 +216,7 @@ static void test_capture_restore_round_trip(void) {
     ASSERT_INT("edit line restored", repl_state_edit_line(), 1);
     ASSERT_INT("document cmd type restored", repl_state_document_cmds()[0].type, CMD_BEGIN);
     ASSERT_STR("document cmd source restored",
-               repl_state_editor_buffer_line(0),
+               editor_buffer_line(0),
                "  glBegin(GL_TRIANGLES);");
     ASSERT_INT("flat count restored", repl_state_flat_program_count(), 1);
     ASSERT_INT("flat cmd type restored", repl_state_flat_program_cmds()[0].type, CMD_VERTEX3F);
@@ -335,6 +341,8 @@ static void test_capture_restore_round_trip(void) {
         ASSERT_TRUE("foo value restored", g_predef_vars[foo_idx].value == 42.0f);
     ASSERT_TRUE("runtime snapshot round trip",
                 memcmp(&snapshot, &round_trip, sizeof(snapshot)) == 0);
+    ASSERT_TRUE("editor snapshot round trip",
+                memcmp(&editor_snap, &editor_round_trip, sizeof(editor_snap)) == 0);
 }
 
 static void test_reset_all_restores_default_runtime(void) {

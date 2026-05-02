@@ -81,7 +81,7 @@ static void clipboard_copy_range(int start, int count) {
     for (int i = start; i < start + count && n < MAX_COMMANDS; i++) {
         cb[n++] = cmds[i];
         repl_copy_string_fits(clipboard->lines[n - 1], MAX_LINE_LEN,
-                              repl_state_editor_buffer_line(i));
+                              editor_buffer_line(i));
     }
     repl_state_clipboard_count_set(n);
 }

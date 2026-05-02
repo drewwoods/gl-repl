@@ -290,7 +290,7 @@ void repl_reformat_commands(void) {
         char fmt_text[MAX_LINE_LEN] = "";
 
         /* Canonical text for this command lives in the editor buffer. */
-        const char *orig_text = repl_state_editor_buffer_line(cmd_idx);
+        const char *orig_text = editor_buffer_line(cmd_idx);
         if (!orig_text) orig_text = "";
 
         char ind_s[32];
@@ -514,7 +514,7 @@ int collect_visible_vars(int pos, ExprVar *vars, int max_vars) {
 
             if (t == CMD_FOR_BEGIN) {
                 char vn[16];
-                const char *for_text = repl_state_editor_buffer_line(cmd_idx);
+                const char *for_text = editor_buffer_line(cmd_idx);
                 get_for_var_name_from_text(for_text ? for_text : "", vn, sizeof(vn));
                 repl_copy_string_fits(frames[depth].vars[0].name,
                                       sizeof(frames[depth].vars[0].name),
@@ -525,7 +525,7 @@ int collect_visible_vars(int pos, ExprVar *vars, int max_vars) {
                 int fn = -1;
                 int param_count = 0;
                 char param_names[MAX_EXPR_VARS][16];
-                const char *func_text = repl_state_editor_buffer_line(cmd_idx);
+                const char *func_text = editor_buffer_line(cmd_idx);
                 if (parse_repl_func_signature(func_text ? func_text : "", &fn,
                                               param_names, MAX_EXPR_VARS,
                                               &param_count)) {
