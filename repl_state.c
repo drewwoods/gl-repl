@@ -16,13 +16,39 @@ int  parse_workspace_header_line(const char *line);
 void update_render_state_strings(void);
 void update_cam_lines(void);
 
-/* Forward decl rather than including the ui_state header: the
- * check-controller-boundaries guard forbids repl_*.c from depending on
- * the ui_* layer, and repl_state_reset_all only needs the reset
- * entry-point symbol. Once Phase 1 commit 7 lands and no UI slices
- * remain on g_repl_state, this hookup migrates to the controller along
- * with the slices. */
-void ui_state_reset(void);
+/* Forward decls for ui_state_* entry points referenced from this
+ * translation unit. check-controller-boundaries forbids repl_*.c from
+ * including ui_state.h, so the symbols are declared here directly.
+ *
+ * Phase 1 commit 8 routes legacy `repl_state_*` slice accessors
+ * (status / help / variable_panel / profile_panel / viewport /
+ * pointer) through one-line forwarders defined below; those
+ * forwarders call into the ui_state_* canonical API. Defining the
+ * forwarders here (not in ui_state.c) keeps `check-state-boundaries`
+ * happy: the guard forbids ui_*.c from calling `repl_state_*_mut()`,
+ * so the forwarders that *do* call those names live on the repl_state
+ * side instead. */
+void                    ui_state_reset(void);
+ReplStatusState         ui_state_status(void);
+ReplStatusState        *ui_state_status_mut(void);
+void                    ui_state_status_set(const char *message);
+void                    ui_state_status_clear(void);
+void                    ui_state_status_tick(void);
+ReplHelpState           ui_state_help(void);
+ReplHelpState          *ui_state_help_mut(void);
+void                    ui_state_help_reset(void);
+ReplVariablePanelState  ui_state_variable_panel(void);
+ReplVariablePanelState *ui_state_variable_panel_mut(void);
+ReplProfilePanelState   ui_state_profile_panel(void);
+ReplProfilePanelState  *ui_state_profile_panel_mut(void);
+ReplViewportState       ui_state_viewport(void);
+ReplViewportState      *ui_state_viewport_mut(void);
+void                    ui_state_viewport_set_size(int window_w, int window_h);
+ReplPointerState        ui_state_pointer(void);
+ReplPointerState       *ui_state_pointer_mut(void);
+void                    ui_state_pointer_set(int mouse_x, int mouse_y, int mouse_button);
+void                    ui_state_pointer_set_pos(int mouse_x, int mouse_y);
+void                    ui_state_pointer_set_button(int mouse_button);
 
 static const float g_grid_major_steps[GRID_MAJOR_COUNT] = {
     [GRID_MAJOR_1]  = 1.0f,
@@ -70,15 +96,15 @@ static ReplRuntimeState g_repl_state;
 #define g_scroll_follow_cursor      (g_repl_state.code_panel.scroll_follow_cursor)
 #define g_cursor_on                 (g_repl_state.code_panel.cursor_visible)
 #define g_blink_tick                (g_repl_state.code_panel.blink_tick)
-#define g_show_help                 (g_repl_state.help.visible)
-#define g_help_tab                  (g_repl_state.help.tab_idx)
-#define g_help_scroll               (g_repl_state.help.scroll)
-#define g_show_var_panel            (g_repl_state.variable_panel.visible)
+/* g_show_help / g_help_tab / g_help_scroll / g_show_var_panel macros
+ * removed (Phase 1 commit 8); the help and variable_panel slices live
+ * on g_ui_state.{help,variable_panel} in ui_state.c. */
 #define g_drag_var                  (g_repl_state.variable_drag.var_idx)
 #define g_drag_log_mode             (g_repl_state.variable_drag.log_mode)
 #define g_drag_start_val            (g_repl_state.variable_drag.start_value)
 #define g_drag_start_x              (g_repl_state.variable_drag.start_x)
-#define g_show_profile_panel        (g_repl_state.profile_panel.mode)
+/* g_show_profile_panel macro removed (Phase 1 commit 8); profile_panel
+ * lives on g_ui_state.profile_panel in ui_state.c. */
 #define g_cam_rx                    (g_repl_state.camera.rx)
 #define g_cam_ry                    (g_repl_state.camera.ry)
 #define g_cam_dist                  (g_repl_state.camera.dist)
@@ -86,11 +112,8 @@ static ReplRuntimeState g_repl_state;
 #define g_cam_ty                    (g_repl_state.camera.ty)
 #define g_cam_tz                    (g_repl_state.camera.tz)
 #define g_cam_motion_glow           (g_repl_state.camera.motion_glow)
-#define g_mouse_x                   (g_repl_state.pointer.mouse_x)
-#define g_mouse_y                   (g_repl_state.pointer.mouse_y)
-#define g_mouse_btn                 (g_repl_state.pointer.mouse_button)
-#define g_win_w                     (g_repl_state.viewport.window_w)
-#define g_win_h                     (g_repl_state.viewport.window_h)
+/* g_mouse_* and g_win_* macros removed (Phase 1 commit 8); pointer and
+ * viewport slices live on g_ui_state.{pointer,viewport} in ui_state.c. */
 #define g_wireframe                 (g_repl_state.presentation.wireframe)
 #define g_grid_theme                (g_repl_state.presentation.grid_theme)
 #define g_grid_major_idx            (g_repl_state.presentation.grid_major_idx)
@@ -125,8 +148,8 @@ static ReplRuntimeState g_repl_state;
 #define g_init_attenuate_points     (g_repl_state.render.point_attenuation_enabled)
 #define g_lights                    (g_repl_state.render.lights)
 #define g_clear_color               (g_repl_state.render.clear_color)
-#define g_status                    (g_repl_state.status.text)
-#define g_status_ttl                (g_repl_state.status.ttl)
+/* g_status / g_status_ttl macros removed (Phase 1 commit 8); status
+ * lives on g_ui_state.status in ui_state.c. */
 #define g_search_active             (g_repl_state.search.active)
 #define g_search_query              (g_repl_state.search.query)
 #define g_search_query_len          (g_repl_state.search.query_len)
@@ -491,25 +514,10 @@ void repl_state_code_panel_reset(void) {
     g_repl_state.code_panel = g_repl_state_defaults.code_panel;
 }
 
-ReplHelpState repl_state_help(void) {
-    return g_repl_state.help;
-}
-
-ReplHelpState *repl_state_help_mut(void) {
-    return &g_repl_state.help;
-}
-
-void repl_state_help_reset(void) {
-    g_repl_state.help = g_repl_state_defaults.help;
-}
-
-ReplVariablePanelState repl_state_variable_panel(void) {
-    return g_repl_state.variable_panel;
-}
-
-ReplVariablePanelState *repl_state_variable_panel_mut(void) {
-    return &g_repl_state.variable_panel;
-}
+/* Help / variable_panel / profile_panel / status / pointer / viewport
+ * accessors moved to ui_state.c (Phase 1 commit 8). The legacy
+ * repl_state_* names remain alive as one-line forwarders defined
+ * there, so existing callers link without including ui_state.h. */
 
 ReplVariableDragState repl_state_variable_drag(void) {
     return g_repl_state.variable_drag;
@@ -523,45 +531,11 @@ void repl_state_variable_drag_reset(void) {
     g_repl_state.variable_drag = g_repl_state_defaults.variable_drag;
 }
 
-ReplProfilePanelState repl_state_profile_panel(void) {
-    return g_repl_state.profile_panel;
-}
-
-ReplProfilePanelState *repl_state_profile_panel_mut(void) {
-    return &g_repl_state.profile_panel;
-}
-
-ReplStatusState repl_state_status(void) {
-    return g_repl_state.status;
-}
-
-ReplStatusState *repl_state_status_mut(void) {
-    return &g_repl_state.status;
-}
-
-void repl_state_status_set(const char *message) {
-    ReplStatusState *status = repl_state_status_mut();
-    if (!message)
-        message = "";
-    strncpy(status->text, message, sizeof(status->text) - 1);
-    status->text[sizeof(status->text) - 1] = '\0';
-    status->ttl = 240;
-}
-
-void repl_state_status_clear(void) {
-    ReplStatusState *status = repl_state_status_mut();
-    status->text[0] = '\0';
-    status->ttl = 0;
-}
-
-void repl_state_status_tick(void) {
-    ReplStatusState *status = repl_state_status_mut();
-    if (status->ttl > 0)
-        status->ttl--;
-}
-
 /* Search + autocomplete accessors moved to editor_state.c (Phase 1
- * commit 7). Use editor_state_search / _autocomplete. */
+ * commit 7). Use editor_state_search / _autocomplete.
+ * Status / help / variable_panel / profile_panel accessors moved to
+ * ui_state.c (Phase 1 commit 8); legacy repl_state_* names are
+ * forwarders defined there. */
 
 ReplCameraState repl_state_camera(void) {
     return g_repl_state.camera;
@@ -610,41 +584,8 @@ void repl_state_camera_reset_default(void) {
     g_repl_state.camera = g_repl_state_defaults.camera;
 }
 
-ReplPointerState repl_state_pointer(void) {
-    return g_repl_state.pointer;
-}
-
-ReplPointerState *repl_state_pointer_mut(void) {
-    return &g_repl_state.pointer;
-}
-
-void repl_state_pointer_set(int mouse_x, int mouse_y, int mouse_button) {
-    g_mouse_x = mouse_x;
-    g_mouse_y = mouse_y;
-    g_mouse_btn = mouse_button;
-}
-
-void repl_state_pointer_set_pos(int mouse_x, int mouse_y) {
-    g_mouse_x = mouse_x;
-    g_mouse_y = mouse_y;
-}
-
-void repl_state_pointer_set_button(int mouse_button) {
-    g_mouse_btn = mouse_button;
-}
-
-ReplViewportState repl_state_viewport(void) {
-    return g_repl_state.viewport;
-}
-
-ReplViewportState *repl_state_viewport_mut(void) {
-    return &g_repl_state.viewport;
-}
-
-void repl_state_viewport_set_size(int window_w, int window_h) {
-    g_win_w = window_w;
-    g_win_h = window_h;
-}
+/* Pointer + viewport accessors moved to ui_state.c (Phase 1 commit 8);
+ * legacy repl_state_* names are forwarders defined there. */
 
 ReplPresentationState repl_state_presentation(void) {
     return g_repl_state.presentation;
@@ -796,4 +737,90 @@ void repl_state_reset_all(void) {
     repl_source_scope_depth_cache_invalidate();
     repl_state_mark_flat_dirty();
     repl_state_mark_normals_dirty();
+}
+
+/* Phase 1 commit 8: legacy `repl_state_*` UI-slice accessors as
+ * forwarders into ui_state.c. They keep callers in non-allowlisted
+ * repl_*.c files linkable without forcing them to include ui_state.h.
+ * Removed when Phase 4 (UiAction) eliminates the direct-mutation call
+ * sites or when callers migrate to the canonical ui_state_* names. */
+
+ReplStatusState repl_state_status(void) {
+    return ui_state_status();
+}
+
+ReplStatusState *repl_state_status_mut(void) {
+    return ui_state_status_mut();
+}
+
+void repl_state_status_set(const char *message) {
+    ui_state_status_set(message);
+}
+
+void repl_state_status_clear(void) {
+    ui_state_status_clear();
+}
+
+void repl_state_status_tick(void) {
+    ui_state_status_tick();
+}
+
+ReplHelpState repl_state_help(void) {
+    return ui_state_help();
+}
+
+ReplHelpState *repl_state_help_mut(void) {
+    return ui_state_help_mut();
+}
+
+void repl_state_help_reset(void) {
+    ui_state_help_reset();
+}
+
+ReplVariablePanelState repl_state_variable_panel(void) {
+    return ui_state_variable_panel();
+}
+
+ReplVariablePanelState *repl_state_variable_panel_mut(void) {
+    return ui_state_variable_panel_mut();
+}
+
+ReplProfilePanelState repl_state_profile_panel(void) {
+    return ui_state_profile_panel();
+}
+
+ReplProfilePanelState *repl_state_profile_panel_mut(void) {
+    return ui_state_profile_panel_mut();
+}
+
+ReplViewportState repl_state_viewport(void) {
+    return ui_state_viewport();
+}
+
+ReplViewportState *repl_state_viewport_mut(void) {
+    return ui_state_viewport_mut();
+}
+
+void repl_state_viewport_set_size(int window_w, int window_h) {
+    ui_state_viewport_set_size(window_w, window_h);
+}
+
+ReplPointerState repl_state_pointer(void) {
+    return ui_state_pointer();
+}
+
+ReplPointerState *repl_state_pointer_mut(void) {
+    return ui_state_pointer_mut();
+}
+
+void repl_state_pointer_set(int mouse_x, int mouse_y, int mouse_button) {
+    ui_state_pointer_set(mouse_x, mouse_y, mouse_button);
+}
+
+void repl_state_pointer_set_pos(int mouse_x, int mouse_y) {
+    ui_state_pointer_set_pos(mouse_x, mouse_y);
+}
+
+void repl_state_pointer_set_button(int mouse_button) {
+    ui_state_pointer_set_button(mouse_button);
 }

@@ -14,14 +14,8 @@ typedef struct {
     EditorHighlightList       editor_highlights;
     EditorVirtualLineList     editor_virtual_lines;
     ReplCodePanelRuntimeState code_panel;
-    ReplHelpState             help;
-    ReplVariablePanelState    variable_panel;
     ReplVariableDragState     variable_drag;
-    ReplProfilePanelState     profile_panel;
-    ReplStatusState           status;
     ReplCameraState           camera;
-    ReplPointerState          pointer;
-    ReplViewportState         viewport;
     ReplPresentationState     presentation;
     ReplRenderState           render;
     ReplReplayRuntimeState    replay;

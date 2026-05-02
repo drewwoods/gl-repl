@@ -98,14 +98,8 @@ void repl_debug_dump_runtime_state_layout(FILE *out) {
     X(ReplFlatProgramState, flat_program)                                                          \
     X(ReplVariableState, variables)                                                                \
     X(ReplCodePanelRuntimeState, code_panel)                                                       \
-    X(ReplHelpState, help)                                                                         \
-    X(ReplVariablePanelState, variable_panel)                                                      \
     X(ReplVariableDragState, variable_drag)                                                        \
-    X(ReplProfilePanelState, profile_panel)                                                        \
-    X(ReplStatusState, status)                                                                     \
     X(ReplCameraState, camera)                                                                     \
-    X(ReplPointerState, pointer)                                                                   \
-    X(ReplViewportState, viewport)                                                                 \
     X(ReplPresentationState, presentation)                                                         \
     X(ReplRenderState, render)                                                                     \
     X(ReplReplayRuntimeState, replay)                                                              \

@@ -381,8 +381,9 @@ Branch: `feature/editor-ownership-gap-cleanup`. Tracked against the
 | 5 | refactor: migrate editor_input slice to EditorState | ✅ landed (2026-05-02) |
 | 6 | refactor: migrate selection + clipboard slices to EditorState | ✅ landed (2026-05-02) |
 | 7 | refactor: migrate search + autocomplete slices to EditorState | ✅ landed (2026-05-02) |
-| 8 | refactor: migrate UI slices (status / help / panel visibility / viewport / pointer) to UiState | next |
-| 9–17 | (store text drop → compile gate → UiAction → renames → hard guards) | pending |
+| 8 | refactor: migrate UI slices (status / help / variable_panel / profile_panel / viewport / pointer) to UiState | ✅ landed (2026-05-02) |
+| 9 | refactor: code_panel split (scroll → EditorState; chrome → UiState) and editor overlay snapshot lists migration | next |
+| 10–17 | (store text drop → compile gate → UiAction → renames → hard guards) | pending |
 
 ## Phase 0 — Audits Before Moving Code
 
@@ -588,6 +589,47 @@ Each migration is a separate commit with passing tests at the end:
 7. `status` / `help` / `profile_panel` / `variable_panel` →
    `UiState`.
 8. `viewport` / `pointer` → `UiState`.
+   ✅ **Landed (commit 8 — slices 7+8 batched).** `ReplStatusState`,
+   `ReplHelpState`, `ReplVariablePanelState`, `ReplProfilePanelState`,
+   `ReplViewportState`, `ReplPointerState` storage moved from
+   `ReplRuntimeState` to `UiState`. New canonical API:
+   `ui_state_status / _mut / _set / _clear / _tick`,
+   `ui_state_help / _mut / _reset`, `ui_state_variable_panel / _mut`,
+   `ui_state_profile_panel / _mut`,
+   `ui_state_viewport / _mut / _set_size`,
+   `ui_state_pointer / _mut / _set / _set_pos / _set_button`.
+
+   Naming asymmetry vs. EditorState: the legacy `repl_state_*`
+   accessors stay alive as one-line forwarders defined in
+   `repl_state.c` (forward-declaring the `ui_state_*` symbols)
+   because `check-controller-boundaries` forbids most `repl_*.c`
+   callers from including `ui_state.h`. Defining the forwarders on
+   the repl_state side rather than ui_state.c also keeps
+   `check-state-boundaries` happy (the rule "no
+   `repl_state_*_mut` from `ui_*.c`" stays enforced). The
+   forwarders go away in Phase 4 once `UiAction` eliminates the
+   direct-mutation call sites.
+
+   `repl_state_views.h` keeps the `Repl*State` typedefs for now
+   (they're shared with `ui_snapshot.h`); `ui_state.h` includes
+   `repl_state_views.h` to embed them as fields. That requires
+   adding `ui_state.h` to the
+   `scripts/allowlists/facade-includes-in-views.txt` allowlist —
+   cleared away in Phase 5 when typedefs migrate to their owning
+   state header.
+
+   `test_capture_restore_round_trip` in `tests/test_repl_state.c`
+   now also captures and restores `UiState` so the round-trip
+   asserts against state that no longer lives on
+   `ReplRuntimeState`. `repl_state_defaults.inc` lost its `.help`,
+   `.variable_panel`, `.profile_panel`, `.status`, `.pointer`,
+   `.viewport` blocks; defaults moved to
+   `UI_STATE_INITIAL` in `ui_state.c`. `repl_debug.c`'s
+   runtime-state-layout dump dropped six rows. Audit delta:
+   section-1 1263 → 1260 (−3 only — the forwarders preserve the
+   matching name shape; the architectural prize is the storage
+   move). `repl_state.c` 799 → 826 (+27 lines net: impls moved out,
+   24 forwarders moved in). `ui_state.c` 24 → 133.
 9. `camera_nav` decision: `EditorState.camera_nav` (if mouse-input
    transient) or scene/app state (if output of an action).
 
