@@ -119,7 +119,7 @@ static void imrepl_ctrl_build_replay_fade_plan(SceneRenderConfig *config) {
 }
 
 static void imrepl_ctrl_push_highlights(void) {
-    repl_state_editor_highlights_clear();
+    editor_state_highlights_clear();
 
     int doc_count = repl_state_document_count();
     int edit_line = repl_state_edit_line();
@@ -131,22 +131,22 @@ static void imrepl_ctrl_push_highlights(void) {
             int norm_idx = repl_find_feeding_normal_cmd(edit_line);
             int color_idx = repl_find_feeding_color_cmd(edit_line);
             if (norm_idx >= 0)
-                repl_state_editor_highlights_append(norm_idx, -1, -1,
+                editor_state_highlights_append(norm_idx, -1, -1,
                                                     HIGHLIGHT_FEEDING_NORMAL);
             if (color_idx >= 0)
-                repl_state_editor_highlights_append(color_idx, -1, -1,
+                editor_state_highlights_append(color_idx, -1, -1,
                                                     HIGHLIGHT_FEEDING_COLOR);
         }
     }
 
     ReplReplayRuntimeState replay = repl_state_replay();
     if (replay.active && replay.src_line_idx >= 0)
-        repl_state_editor_highlights_append(replay.src_line_idx, -1, -1,
+        editor_state_highlights_append(replay.src_line_idx, -1, -1,
                                             HIGHLIGHT_REPLAY_PC);
 }
 
 static void imrepl_ctrl_push_color_transformers(void) {
-    repl_state_editor_transformers_clear();
+    editor_state_transformers_clear();
     int doc_count = repl_state_document_count();
     for (int i = 0; i < doc_count; i++) {
         if (!ui_color_picker_can_edit_cmd(i))
@@ -171,7 +171,7 @@ static void imrepl_ctrl_push_color_transformers(void) {
                 .is_clear = (cmd->type == CMD_CLEAR_COLOR),
             },
         };
-        if (!repl_state_editor_transformers_append(&t))
+        if (!editor_state_transformers_append(&t))
             break;
     }
 }
@@ -339,7 +339,7 @@ static void imrepl_ctrl_build_ui_snapshot(UiRenderSnapshot *snap) {
     snap->render         = repl_state_render();
     snap->replay         = repl_state_replay();
     snap->scenes         = repl_state_scenes();
-    snap->variable_drag  = repl_state_variable_drag();
+    snap->variable_drag  = editor_state_variable_drag();
     snap->selection      = editor_state_selection();
 
     snap->variables      = repl_state_variables();
@@ -370,9 +370,9 @@ static void imrepl_ctrl_build_ui_snapshot(UiRenderSnapshot *snap) {
     }
 
     snap->workspace_dir = repl_state_workspace_dir();
-    snap->editor_transformers = repl_state_editor_transformers();
-    snap->editor_highlights = repl_state_editor_highlights();
-    snap->editor_virtual_lines = repl_state_editor_virtual_lines();
+    snap->editor_transformers = editor_state_transformers();
+    snap->editor_highlights = editor_state_highlights();
+    snap->editor_virtual_lines = editor_state_virtual_lines();
 
     /* Selection range materialized once for the per-row code-panel branch. */
     snap->selection_active = repl_clipboard_sel_active();

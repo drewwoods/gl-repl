@@ -32,6 +32,12 @@
             .ghost = "",                              \
             .hint = "",                               \
         },                                            \
+        .variable_drag = {                            \
+            .var_idx = -1,                            \
+            .log_mode = 0,                            \
+            .start_value = 0.0f,                      \
+            .start_x = 0,                             \
+        },                                            \
     }
 
 static EditorState g_editor_state = EDITOR_STATE_INITIAL;
@@ -310,4 +316,87 @@ ReplAutocompleteState *editor_state_autocomplete_mut(void) {
 
 void editor_state_autocomplete_clear(void) {
     g_editor_state.autocomplete = g_editor_state_defaults.autocomplete;
+}
+
+const EditorTransformerList *editor_state_transformers(void) {
+    return &g_editor_state.transformers;
+}
+
+void editor_state_transformers_clear(void) {
+    g_editor_state.transformers.count = 0;
+}
+
+int editor_state_transformers_append(const EditorTransformer *transformer) {
+    EditorTransformerList *list = &g_editor_state.transformers;
+    if (!transformer || list->count >= MAX_TRANSFORMERS)
+        return 0;
+    list->items[list->count++] = *transformer;
+    return 1;
+}
+
+const EditorHighlightList *editor_state_highlights(void) {
+    return &g_editor_state.highlights;
+}
+
+void editor_state_highlights_clear(void) {
+    g_editor_state.highlights.count = 0;
+}
+
+int editor_state_highlights_append(int line_idx, int char_start,
+                                   int char_end, HighlightKind kind) {
+    EditorHighlightList *list = &g_editor_state.highlights;
+    if (list->count >= MAX_HIGHLIGHTS)
+        return 0;
+    list->items[list->count++] = (EditorHighlight){
+        .line_idx = line_idx,
+        .char_start = char_start,
+        .char_end = char_end,
+        .kind = kind,
+    };
+    return 1;
+}
+
+const EditorVirtualLineList *editor_state_virtual_lines(void) {
+    return &g_editor_state.virtual_lines;
+}
+
+void editor_state_virtual_lines_clear(void) {
+    g_editor_state.virtual_lines.count = 0;
+}
+
+int editor_state_virtual_lines_append(int after_line_idx,
+                                      VirtualLineStyle style,
+                                      const char *text,
+                                      const char *aux) {
+    EditorVirtualLineList *list = &g_editor_state.virtual_lines;
+    if (list->count >= MAX_VIRTUAL_LINES)
+        return 0;
+    EditorVirtualLine *vl = &list->items[list->count++];
+    vl->after_line_idx = after_line_idx;
+    vl->style = style;
+    if (text) {
+        strncpy(vl->text, text, MAX_VIRTUAL_LINE_TEXT - 1);
+        vl->text[MAX_VIRTUAL_LINE_TEXT - 1] = '\0';
+    } else {
+        vl->text[0] = '\0';
+    }
+    if (aux) {
+        strncpy(vl->aux, aux, MAX_VIRTUAL_LINE_AUX - 1);
+        vl->aux[MAX_VIRTUAL_LINE_AUX - 1] = '\0';
+    } else {
+        vl->aux[0] = '\0';
+    }
+    return 1;
+}
+
+ReplVariableDragState editor_state_variable_drag(void) {
+    return g_editor_state.variable_drag;
+}
+
+ReplVariableDragState *editor_state_variable_drag_mut(void) {
+    return &g_editor_state.variable_drag;
+}
+
+void editor_state_variable_drag_reset(void) {
+    g_editor_state.variable_drag = g_editor_state_defaults.variable_drag;
 }

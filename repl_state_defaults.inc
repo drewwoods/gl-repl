@@ -32,14 +32,9 @@
         .cursor_py = 0,
     },
     /* help / variable_panel / profile_panel / status / pointer / viewport
-     * defaults moved to ui_state.c (Phase 1 commit 8). */
-    .variable_drag = {
-        .var_idx = -1,
-        .log_mode = 0,
-        .start_value = 0.0f,
-        .start_x = 0,
-    },
-    /* search + autocomplete defaults moved to editor_state.c
+     * defaults moved to ui_state.c (Phase 1 commit 8).
+     * variable_drag defaults moved to editor_state.c (Phase 1 commit 9).
+     * search + autocomplete defaults moved to editor_state.c
      * (Phase 1 commit 7). */
     .camera = {
         .rx = 20.0f,

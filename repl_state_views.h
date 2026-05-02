@@ -184,12 +184,8 @@ typedef struct {
     char workspace_dir[REPL_WORKSPACE_DIR_MAX];
 } ReplSceneRuntimeState;
 
-typedef struct {
-    int   var_idx;
-    int   log_mode;
-    float start_value;
-    int   start_x;
-} ReplVariableDragState;
+/* ReplVariableDragState typedef moved to editor_state.h alongside the
+ * EditorState struct that owns it (Phase 1 commit 9). */
 
 typedef struct {
     char        workspace_header_lines[MAX_WORKSPACE_HEADER_LINES][WORKSPACE_HEADER_LINE_LEN];
@@ -237,9 +233,9 @@ ReplVariableView repl_state_variables(void);
 
 /* Per-frame editor overlay snapshots, read-only. UI input handlers read
  * these between frames; renderers prefer the UiRenderSnapshot copy. */
-const EditorTransformerList *repl_state_editor_transformers(void);
-const EditorHighlightList   *repl_state_editor_highlights(void);
-const EditorVirtualLineList *repl_state_editor_virtual_lines(void);
+/* Editor overlay snapshot list view accessors moved to editor_state.h
+ * (Phase 1 commit 9). Use editor_state_transformers / _highlights /
+ * _virtual_lines. */
 const char *repl_state_input_text(void);
 int         repl_state_input_len(void);
 int         repl_state_cursor_pos(void);
@@ -255,7 +251,7 @@ ReplHelpState        repl_state_help(void);
 
 ReplVariablePanelState    repl_state_variable_panel(void);
 
-ReplVariableDragState     repl_state_variable_drag(void);
+/* editor_state_variable_drag moved to editor_state.h (Phase 1 commit 9). */
 
 ReplProfilePanelState     repl_state_profile_panel(void);
 

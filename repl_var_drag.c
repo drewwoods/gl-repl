@@ -13,20 +13,20 @@
 #include "repl_state.h"
 #include "repl_var_drag.h"
 int repl_var_drag_active(void) {
-    return repl_state_variable_drag().var_idx >= 0;
+    return editor_state_variable_drag().var_idx >= 0;
 }
 
 int repl_var_drag_active_var(void) {
-    return repl_state_variable_drag().var_idx;
+    return editor_state_variable_drag().var_idx;
 }
 
 int repl_var_drag_log_mode(void) {
-    return repl_state_variable_drag().log_mode;
+    return editor_state_variable_drag().log_mode;
 }
 
 void repl_var_drag_begin(int row, int log_mode, int x) {
     if (row < 0 || row >= g_num_predef_vars) return;
-    ReplVariableDragState *drag = repl_state_variable_drag_mut();
+    ReplVariableDragState *drag = editor_state_variable_drag_mut();
     drag->var_idx = row;
     drag->log_mode = log_mode ? 1 : 0;
     drag->start_value = g_predef_vars[row].value;
@@ -34,7 +34,7 @@ void repl_var_drag_begin(int row, int log_mode, int x) {
 }
 
 void repl_var_drag_reset(void) {
-    ReplVariableDragState *drag = repl_state_variable_drag_mut();
+    ReplVariableDragState *drag = editor_state_variable_drag_mut();
     drag->var_idx = -1;
     drag->log_mode = 0;
     drag->start_value = 0.0f;
@@ -42,7 +42,7 @@ void repl_var_drag_reset(void) {
 }
 
 void repl_var_drag_motion(int x) {
-    ReplVariableDragState *drag = repl_state_variable_drag_mut();
+    ReplVariableDragState *drag = editor_state_variable_drag_mut();
     if (drag->var_idx < 0) return;
 
     float new_val;

@@ -98,7 +98,6 @@ void repl_debug_dump_runtime_state_layout(FILE *out) {
     X(ReplFlatProgramState, flat_program)                                                          \
     X(ReplVariableState, variables)                                                                \
     X(ReplCodePanelRuntimeState, code_panel)                                                       \
-    X(ReplVariableDragState, variable_drag)                                                        \
     X(ReplCameraState, camera)                                                                     \
     X(ReplPresentationState, presentation)                                                         \
     X(ReplRenderState, render)                                                                     \

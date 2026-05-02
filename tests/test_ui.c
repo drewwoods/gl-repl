@@ -46,7 +46,7 @@ static void make_test_ui_snapshot(UiRenderSnapshot *snap) {
     snap->render         = repl_state_render();
     snap->replay         = repl_state_replay();
     snap->scenes         = repl_state_scenes();
-    snap->variable_drag  = repl_state_variable_drag();
+    snap->variable_drag  = editor_state_variable_drag();
     snap->selection      = editor_state_selection();
     snap->variables      = repl_state_variables();
     snap->editor_input   = editor_state_input();

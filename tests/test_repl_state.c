@@ -84,7 +84,7 @@ static void populate_runtime_snapshot_fixture(const char *scene_hint) {
     code_panel->cursor_py = 456;
     repl_state_variable_panel_mut()->visible = 0;
 
-    drag = repl_state_variable_drag_mut();
+    drag = editor_state_variable_drag_mut();
     drag->var_idx = 3;
     drag->log_mode = 1;
     drag->start_value = 2.5f;
@@ -248,11 +248,11 @@ static void test_capture_restore_round_trip(void) {
     ASSERT_INT("code panel cursor x restored", repl_state_code_panel().cursor_px, 123);
     ASSERT_INT("code panel cursor y restored", repl_state_code_panel().cursor_py, 456);
     ASSERT_INT("variable panel restored", repl_state_variable_panel().visible, 0);
-    ASSERT_INT("variable drag idx restored", repl_state_variable_drag().var_idx, 3);
-    ASSERT_INT("variable drag log restored", repl_state_variable_drag().log_mode, 1);
+    ASSERT_INT("variable drag idx restored", editor_state_variable_drag().var_idx, 3);
+    ASSERT_INT("variable drag log restored", editor_state_variable_drag().log_mode, 1);
     ASSERT_TRUE("variable drag value restored",
-                repl_state_variable_drag().start_value == 2.5f);
-    ASSERT_INT("variable drag x restored", repl_state_variable_drag().start_x, 17);
+                editor_state_variable_drag().start_value == 2.5f);
+    ASSERT_INT("variable drag x restored", editor_state_variable_drag().start_x, 17);
     ASSERT_INT("profile panel restored",
                repl_state_profile_panel().mode, PROFILE_PANEL_DETAILS);
     {

@@ -11,7 +11,7 @@
  *   - repl_replay_annotations_prepare() is called once per frame from the
  *     controller (and defensively from layout for legacy code paths). It
  *     refreshes the per-PC mapping cache and refills
- *     repl_state_editor_virtual_lines() so layout / render can read a
+ *     editor_state_virtual_lines() so layout / render can read a
  *     single source of truth.
  *   - repl_replay_annotation_extra_rows_for_line() counts virtual rows
  *     pushed below a source line so layout can compute row heights.
@@ -27,7 +27,7 @@
 #define REPL_REPLAY_ANNOTATIONS_H
 
 /* Prepare annotation lookups for the current frame. Refreshes the per-PC
- * cache and refills repl_state_editor_virtual_lines(). Idempotent within
+ * cache and refills editor_state_virtual_lines(). Idempotent within
  * a frame; safe to call from both the controller and the layout build. */
 void repl_replay_annotations_prepare(void);
 

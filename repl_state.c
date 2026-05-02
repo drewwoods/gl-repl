@@ -99,10 +99,8 @@ static ReplRuntimeState g_repl_state;
 /* g_show_help / g_help_tab / g_help_scroll / g_show_var_panel macros
  * removed (Phase 1 commit 8); the help and variable_panel slices live
  * on g_ui_state.{help,variable_panel} in ui_state.c. */
-#define g_drag_var                  (g_repl_state.variable_drag.var_idx)
-#define g_drag_log_mode             (g_repl_state.variable_drag.log_mode)
-#define g_drag_start_val            (g_repl_state.variable_drag.start_value)
-#define g_drag_start_x              (g_repl_state.variable_drag.start_x)
+/* g_drag_* macros removed (Phase 1 commit 9); variable_drag lives on
+ * g_editor_state.variable_drag in editor_state.c. */
 /* g_show_profile_panel macro removed (Phase 1 commit 8); profile_panel
  * lives on g_ui_state.profile_panel in ui_state.c. */
 #define g_cam_rx                    (g_repl_state.camera.rx)
@@ -422,76 +420,9 @@ void repl_state_time_reset_to_zero(void) {
  * the input slice, editor_state_buffer / _mut for the whole-buffer
  * struct, and editor_buffer_* for slice-level line text. */
 
-const EditorTransformerList *repl_state_editor_transformers(void) {
-    return &g_repl_state.editor_transformers;
-}
-
-void repl_state_editor_transformers_clear(void) {
-    g_repl_state.editor_transformers.count = 0;
-}
-
-int repl_state_editor_transformers_append(const EditorTransformer *transformer) {
-    EditorTransformerList *list = &g_repl_state.editor_transformers;
-    if (!transformer || list->count >= MAX_TRANSFORMERS)
-        return 0;
-    list->items[list->count++] = *transformer;
-    return 1;
-}
-
-const EditorHighlightList *repl_state_editor_highlights(void) {
-    return &g_repl_state.editor_highlights;
-}
-
-void repl_state_editor_highlights_clear(void) {
-    g_repl_state.editor_highlights.count = 0;
-}
-
-int repl_state_editor_highlights_append(int line_idx, int char_start,
-                                        int char_end, HighlightKind kind) {
-    EditorHighlightList *list = &g_repl_state.editor_highlights;
-    if (list->count >= MAX_HIGHLIGHTS)
-        return 0;
-    list->items[list->count++] = (EditorHighlight){
-        .line_idx = line_idx,
-        .char_start = char_start,
-        .char_end = char_end,
-        .kind = kind,
-    };
-    return 1;
-}
-
-const EditorVirtualLineList *repl_state_editor_virtual_lines(void) {
-    return &g_repl_state.editor_virtual_lines;
-}
-
-void repl_state_editor_virtual_lines_clear(void) {
-    g_repl_state.editor_virtual_lines.count = 0;
-}
-
-int repl_state_editor_virtual_lines_append(int after_line_idx,
-                                           VirtualLineStyle style,
-                                           const char *text,
-                                           const char *aux) {
-    EditorVirtualLineList *list = &g_repl_state.editor_virtual_lines;
-    if (list->count >= MAX_VIRTUAL_LINES)
-        return 0;
-    EditorVirtualLine *vl = &list->items[list->count++];
-    vl->after_line_idx = after_line_idx;
-    vl->style = style;
-    if (text) {
-        strncpy(vl->text, text, MAX_VIRTUAL_LINE_TEXT - 1);
-        vl->text[MAX_VIRTUAL_LINE_TEXT - 1] = '\0';
-    } else {
-        vl->text[0] = '\0';
-    }
-    if (aux) {
-        strncpy(vl->aux, aux, MAX_VIRTUAL_LINE_AUX - 1);
-        vl->aux[MAX_VIRTUAL_LINE_AUX - 1] = '\0';
-    } else {
-        vl->aux[0] = '\0';
-    }
-    return 1;
-}
+/* Editor overlay snapshot list accessors (transformers / highlights /
+ * virtual_lines) moved to editor_state.c (Phase 1 commit 9). Use
+ * editor_state_transformers / _highlights / _virtual_lines. */
 
 /* editor_state_input_reset and the editor_input convenience getters
  * (input_text / input_len / cursor_pos / insert_mode / pending_newline_*)
@@ -519,17 +450,8 @@ void repl_state_code_panel_reset(void) {
  * repl_state_* names remain alive as one-line forwarders defined
  * there, so existing callers link without including ui_state.h. */
 
-ReplVariableDragState repl_state_variable_drag(void) {
-    return g_repl_state.variable_drag;
-}
-
-ReplVariableDragState *repl_state_variable_drag_mut(void) {
-    return &g_repl_state.variable_drag;
-}
-
-void repl_state_variable_drag_reset(void) {
-    g_repl_state.variable_drag = g_repl_state_defaults.variable_drag;
-}
+/* editor_state_variable_drag accessors moved to editor_state.c
+ * (Phase 1 commit 9). Use editor_state_variable_drag / _mut / _reset. */
 
 /* Search + autocomplete accessors moved to editor_state.c (Phase 1
  * commit 7). Use editor_state_search / _autocomplete.
