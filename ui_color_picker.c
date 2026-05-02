@@ -405,21 +405,17 @@ int ui_color_picker_can_edit_cmd(int cmd_idx) {
            cmd->type == CMD_CLEAR_COLOR;
 }
 
-void ui_color_picker_render_swatch(int cmd_idx, int sx, int sy) {
-    const GLCmd *cmd = cp_cmd_at(cmd_idx);
-
-    if (!ui_color_picker_can_edit_cmd(cmd_idx))
+void ui_color_picker_render_swatch(const EditorTransformer *t,
+                                   int sx, int sy) {
+    if (!t || t->kind != TRANSFORMER_COLOR_PICKER)
         return;
 
     int sw = UI_COLOR_SWATCH_W;
-    float alpha = (cmd->type == CMD_COLOR4F ||
-                   cmd->type == CMD_TESS_COLOR ||
-                   cmd->type == CMD_CLEAR_COLOR)
-                ? cmd->args[3] : 1.0f;
+    float alpha = t->state.color.has_alpha ? t->state.color.a : 1.0f;
 
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-    glColor4f(cmd->args[0], cmd->args[1], cmd->args[2], alpha);
+    glColor4f(t->state.color.r, t->state.color.g, t->state.color.b, alpha);
     glRectf((float)sx, (float)sy, (float)sx + (float)sw, (float)sy + (float)sw);
 
     glColor4f(0.55f, 0.55f, 0.65f, 0.9f);
@@ -430,7 +426,7 @@ void ui_color_picker_render_swatch(int cmd_idx, int sx, int sy) {
     glVertex2f(sx,    sy+sw);
     glEnd();
 
-    if (g_cp_line == cmd_idx) {
+    if (g_cp_line == t->line_idx) {
         glColor4f(1.0f, 1.0f, 1.0f, 0.9f);
         glBegin(GL_LINE_LOOP);
         glVertex2f(sx-1,    sy-1);

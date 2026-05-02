@@ -177,9 +177,22 @@ static void test_color_picker(void) {
     ui_color_picker_close();
     ASSERT_TRUE("picker closed", ui_color_picker_active_line() == -1);
 
-    /* Test swatch rendering */
+    /* Test swatch rendering — render reads from a transformer entry, not
+     * from the document, so build a minimal one for the test. */
     gl_stub_counts_reset();
-    ui_color_picker_render_swatch(0, 100, 100);
+    {
+        EditorTransformer t = {
+            .line_idx = 0,
+            .char_start = -1,
+            .char_end = -1,
+            .kind = TRANSFORMER_COLOR_PICKER,
+            .state.color = {
+                .r = 0.5f, .g = 0.5f, .b = 0.5f, .a = 1.0f,
+                .has_alpha = 0, .is_clear = 0,
+            },
+        };
+        ui_color_picker_render_swatch(&t, 100, 100);
+    }
     ASSERT_GL_CALLS("swatch render -> draws quads", GL_STUB_glBegin, 1);
 }
 

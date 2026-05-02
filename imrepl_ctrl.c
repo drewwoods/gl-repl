@@ -367,6 +367,7 @@ static void imrepl_ctrl_build_ui_snapshot(UiRenderSnapshot *snap) {
     }
 
     snap->workspace_dir = repl_state_workspace_dir();
+    snap->editor_transformers = repl_state_editor_transformers();
     snap->editor_highlights = repl_state_editor_highlights();
 }
 
