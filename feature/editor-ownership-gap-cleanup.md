@@ -234,7 +234,8 @@ mirrors the gates that have come online.
 | 1.1 | EditorState + UiState scaffold landed (commit 3, 2026-05-02) |
 | 1.2 (slice 1 of 4) | editor_buffer slice migrated (commit 4, 2026-05-02); audit section 1: 1509→1460, section 3: 36→29 |
 | 1.2 (slice 2 of 4) | editor_input slice migrated (commit 5, 2026-05-02); audit section 1: 1460→1363 |
-| 1.2 (slices 3–4) | selection-clipboard / search-autocomplete pending |
+| 1.2 (slice 3 of 4) | selection + clipboard slices migrated (commit 6, 2026-05-02); audit section 1: 1363→1307 |
+| 1.2 (slice 4 of 4) | search + autocomplete pending |
 | 1.3–5 | pending |
 
 ## Phase 0: Add Audits Before Moving Code

@@ -64,9 +64,28 @@ typedef struct {
     int         insert_mode;
 } ReplEditorInputView;
 
+/* Selection anchor pair: which source-line range is selected. The
+ * canonical "no selection" state is anchor=-1, end=-1. */
+typedef struct {
+    int anchor_idx;
+    int end_idx;
+} ReplSelectionState;
+
+/* Editor clipboard. Holds a parsed-cmd snapshot plus the parallel
+ * per-line text the cmds were copied from. The text sidecar is large
+ * (1.88 MB) — moving it off ReplState removes that mass from every
+ * ReplRuntimeState snapshot. */
+typedef struct {
+    GLCmd cmds[MAX_COMMANDS];
+    char  lines[MAX_COMMANDS][MAX_LINE_LEN];
+    int   cmd_count;
+} ReplClipboardState;
+
 typedef struct {
     ReplEditorBuffer     buffer;
     ReplEditorInputState input;
+    ReplSelectionState   selection;
+    ReplClipboardState   clipboard;
 } EditorState;
 
 /* Capture / restore / reset symmetry with repl_state_*. */
@@ -96,5 +115,23 @@ void        editor_buffer_set_count(int count);
 ReplEditorInputView   editor_state_input(void);
 ReplEditorInputState *editor_state_input_mut(void);
 void                  editor_state_input_reset(void);
+
+/* Selection slice API. Field-level getters/setters mirror the
+ * pre-migration editor_state_selection_* surface; the canonical
+ * "no selection" state is anchor=-1, end=-1. */
+ReplSelectionState  editor_state_selection(void);
+ReplSelectionState *editor_state_selection_mut(void);
+void                editor_state_selection_clear(void);
+int                 editor_state_selection_anchor(void);
+int                 editor_state_selection_end_idx(void);
+void                editor_state_selection_set(int anchor_idx, int end_idx);
+
+/* Clipboard slice API. */
+ReplClipboardState  editor_state_clipboard(void);
+ReplClipboardState *editor_state_clipboard_mut(void);
+void                editor_state_clipboard_clear(void);
+GLCmd              *editor_state_clipboard_cmds_mut(void);
+int                 editor_state_clipboard_count(void);
+void                editor_state_clipboard_count_set(int cmd_count);
 
 #endif /* EDITOR_STATE_H */

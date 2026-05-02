@@ -8,11 +8,25 @@ static EditorState g_editor_state = {
         .input_capacity = MAX_INPUT_LEN,
         .pending_newline_capacity = MAX_INPUT_LEN,
     },
+    .selection = {
+        .anchor_idx = -1,
+        .end_idx = -1,
+    },
+    .clipboard = {
+        .cmd_count = 0,
+    },
 };
 static const EditorState g_editor_state_defaults = {
     .input = {
         .input_capacity = MAX_INPUT_LEN,
         .pending_newline_capacity = MAX_INPUT_LEN,
+    },
+    .selection = {
+        .anchor_idx = -1,
+        .end_idx = -1,
+    },
+    .clipboard = {
+        .cmd_count = 0,
     },
 };
 
@@ -211,4 +225,58 @@ void repl_state_pending_newline_set_text(const char *text) {
 void repl_state_pending_newline_clear(void) {
     g_editor_state.input.pending_newline[0] = '\0';
     g_editor_state.input.pending_newline_len = 0;
+}
+
+ReplSelectionState editor_state_selection(void) {
+    return g_editor_state.selection;
+}
+
+ReplSelectionState *editor_state_selection_mut(void) {
+    return &g_editor_state.selection;
+}
+
+void editor_state_selection_clear(void) {
+    g_editor_state.selection.anchor_idx = -1;
+    g_editor_state.selection.end_idx = -1;
+}
+
+int editor_state_selection_anchor(void) {
+    return g_editor_state.selection.anchor_idx;
+}
+
+int editor_state_selection_end_idx(void) {
+    return g_editor_state.selection.end_idx;
+}
+
+void editor_state_selection_set(int anchor_idx, int end_idx) {
+    g_editor_state.selection.anchor_idx = anchor_idx;
+    g_editor_state.selection.end_idx = end_idx;
+}
+
+ReplClipboardState editor_state_clipboard(void) {
+    return g_editor_state.clipboard;
+}
+
+ReplClipboardState *editor_state_clipboard_mut(void) {
+    return &g_editor_state.clipboard;
+}
+
+void editor_state_clipboard_clear(void) {
+    g_editor_state.clipboard.cmd_count = 0;
+}
+
+GLCmd *editor_state_clipboard_cmds_mut(void) {
+    return g_editor_state.clipboard.cmds;
+}
+
+int editor_state_clipboard_count(void) {
+    return g_editor_state.clipboard.cmd_count;
+}
+
+void editor_state_clipboard_count_set(int cmd_count) {
+    if (cmd_count < 0)
+        cmd_count = 0;
+    if (cmd_count > MAX_COMMANDS)
+        cmd_count = MAX_COMMANDS;
+    g_editor_state.clipboard.cmd_count = cmd_count;
 }

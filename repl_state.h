@@ -13,8 +13,6 @@ typedef struct {
     EditorTransformerList     editor_transformers;
     EditorHighlightList       editor_highlights;
     EditorVirtualLineList     editor_virtual_lines;
-    ReplSelectionState        selection;
-    ReplClipboardState        clipboard;
     ReplCodePanelRuntimeState code_panel;
     ReplHelpState             help;
     ReplVariablePanelState    variable_panel;

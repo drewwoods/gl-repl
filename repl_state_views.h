@@ -69,16 +69,9 @@ typedef struct {
  * (Phase 1 commit 5). The ReplEditorBuffer typedef moved earlier
  * (Phase 1 commit 4). */
 
-typedef struct {
-    int anchor_idx;
-    int end_idx;
-} ReplSelectionState;
-
-typedef struct {
-    GLCmd cmds[MAX_COMMANDS];
-    char  lines[MAX_COMMANDS][MAX_LINE_LEN];
-    int   cmd_count;
-} ReplClipboardState;
+/* ReplSelectionState / ReplClipboardState typedefs moved to
+ * editor_state.h alongside the EditorState struct that owns them
+ * (Phase 1 commit 6). */
 
 typedef struct {
     float panel_frac;
@@ -269,12 +262,8 @@ int         repl_state_cursor_pos(void);
 int         repl_state_insert_mode(void);
 int         repl_state_pending_newline_len(void);
 
-ReplSelectionState        repl_state_selection(void);
-int  repl_state_selection_anchor(void);
-int  repl_state_selection_end_idx(void);
-
-ReplClipboardState        repl_state_clipboard(void);
-int    repl_state_clipboard_count(void);
+/* Selection + clipboard view accessors moved to editor_state.h
+ * (Phase 1 commit 6). Use editor_state_selection / _clipboard. */
 
 ReplCodePanelRuntimeState repl_state_code_panel(void);
 

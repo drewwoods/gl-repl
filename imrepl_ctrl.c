@@ -340,7 +340,7 @@ static void imrepl_ctrl_build_ui_snapshot(UiRenderSnapshot *snap) {
     snap->replay         = repl_state_replay();
     snap->scenes         = repl_state_scenes();
     snap->variable_drag  = repl_state_variable_drag();
-    snap->selection      = repl_state_selection();
+    snap->selection      = editor_state_selection();
 
     snap->variables      = repl_state_variables();
     snap->editor_input   = editor_state_input();

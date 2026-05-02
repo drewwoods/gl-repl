@@ -19,14 +19,8 @@
         .time_playing = 1,
         .anim_time = 0.0f,
     },
-    /* editor_input defaults moved to editor_state.c (Phase 1 commit 5). */
-    .selection = {
-        .anchor_idx = -1,
-        .end_idx = -1,
-    },
-    .clipboard = {
-        .cmd_count = 0,
-    },
+    /* editor_input + selection + clipboard defaults moved to
+     * editor_state.c (Phase 1 commits 5-6). */
     .code_panel = {
         .panel_frac = CFG_DEFAULT_PANEL_FRAC,
         .resizing_panel = 0,

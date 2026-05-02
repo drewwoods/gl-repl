@@ -64,8 +64,8 @@ static void populate_runtime_snapshot_fixture(const char *scene_hint) {
     flat_program->user_lighting_enabled = 1;
     repl_state_flat_program_set_current_block(2, 5, 4);
 
-    repl_state_selection_set(4, 7);
-    clipboard = repl_state_clipboard_mut();
+    editor_state_selection_set(4, 7);
+    clipboard = editor_state_clipboard_mut();
     clipboard->cmd_count = 1;
     clipboard->cmds[0].type = CMD_COLOR3F;
 
@@ -224,10 +224,10 @@ static void test_capture_restore_round_trip(void) {
                repl_state_flat_program_local_vars_mut()[0].num_vars, 1);
     ASSERT_INT("flat lighting restored",
                repl_state_flat_program_user_lighting_enabled(), 1);
-    ASSERT_INT("selection anchor restored", repl_state_selection().anchor_idx, 4);
-    ASSERT_INT("selection end restored", repl_state_selection().end_idx, 7);
-    ASSERT_INT("clipboard count restored", repl_state_clipboard().cmd_count, 1);
-    ASSERT_INT("clipboard cmd restored", repl_state_clipboard().cmds[0].type, CMD_COLOR3F);
+    ASSERT_INT("selection anchor restored", editor_state_selection().anchor_idx, 4);
+    ASSERT_INT("selection end restored", editor_state_selection().end_idx, 7);
+    ASSERT_INT("clipboard count restored", editor_state_clipboard().cmd_count, 1);
+    ASSERT_INT("clipboard cmd restored", editor_state_clipboard().cmds[0].type, CMD_COLOR3F);
     ASSERT_INT("help restored", repl_state_help().visible, 1);
     ASSERT_INT("help tab restored", repl_state_help().tab_idx, 1);
     ASSERT_INT("help scroll restored", repl_state_help().scroll, 3);
