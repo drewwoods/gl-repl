@@ -259,6 +259,197 @@ pending the Phase C output-list work in
 | `sample` | Current `main()`, GLUT callback wiring, buffer swap, and legacy shared header; future rename target is `imrepl` |
 | `gl_stub_counts` | `USE_GL_STUBS` symbol tracking for `tests/gl-stubs` headers |
 
+## Ownership / Coordination Diagram
+
+The coordination web that drives most refactor decisions. Cluster boxes
+match the responsibility layers above. This is hand-curated for
+architectural clarity rather than a literal call-graph dump; verify
+against `make callgraph-files` (which writes `callgraph-files.mmd` from
+the same six layers as `scripts/callgraph_file_groups.json`).
+
+Three relationship kinds, each with a distinct stroke:
+
+- `e1@==>` — delegated mutation / write-owning path (orange, animated).
+- `-.->` — read / query / render dependency (default dotted).
+- `i1@-->` — invoke / stage / dataflow path (green, animated).
+
+```mermaid
+flowchart LR
+    subgraph legend["Edge meaning"]
+        lmut_a["delegates mutation"] e1@==> lmut_b["write-owning module"]
+        lread_a["reads / renders"] -.-> lread_b["query / model / helper"]
+        lflow_a["invokes / feeds"] i1@--> lflow_b["callback / stage / pass"]
+    end
+
+    sample["sample.c<br/>GLUT callback wiring · buffer swap"]
+
+    subgraph pipeline["1. REPL command pipeline"]
+        ctrl["imrepl_ctrl.c<br/>display frame · snapshot pushers"]
+        core["repl_core.c<br/>normalize · dissolving"]
+        parser["repl_parser.c<br/>parser → ReplParsedLine"]
+        scope["repl_source_scope.c<br/>depth · indent"]
+        flatten["repl_flatten.c<br/>source-to-flat builder"]
+        exec["repl_executor.c<br/>flat program execution"]
+        commit["repl_commit.c<br/>decls · assigns · blocks"]
+        store["repl_command_store.c<br/>text-aware command mutation"]
+    end
+
+    subgraph input["2. Editor + input"]
+        editor["repl_editor.c<br/>input router · feed_line"]
+        actions["repl_actions.c<br/>config + menu side effects"]
+        camera["repl_camera_controls.c<br/>orbit/pan/zoom"]
+        undo["repl_undo.c<br/>undo rings · text sidecar"]
+        clipboard["repl_clipboard.c<br/>selection · text sidecar"]
+        vardrag["repl_var_drag.c<br/>variable drag transaction"]
+        rename["repl_inline_rename.c<br/>scene-rename buffer"]
+        search["repl_search.c<br/>find next · row mapping"]
+    end
+
+    subgraph models["3. Domain models"]
+        state["repl_state.c<br/>ReplRuntimeState · editor_buffer · editor_*_list"]
+        scenes["repl_scenes.c<br/>user scenes + workspace · text sidecar"]
+        acmodel["repl_autocomplete.c<br/>completion model"]
+        replay["repl_replay.c<br/>replay state · fade batches"]
+        replay_ann["repl_replay_annotations.c<br/>annotation cache · virtual-line refresh"]
+        autonormal["repl_autonormal.c<br/>autonormals · feeding cmds"]
+    end
+
+    subgraph services["6. Services + lifecycle"]
+        audio["repl_audio.c<br/>playlist"]
+        prof["prof.c<br/>instrumentation"]
+        export["repl_export.c<br/>save/load · workspace"]
+    end
+
+    subgraph ui_layer["5. 2D UI rendering"]
+        uicp["ui_panels.c<br/>code panel rows · statusbar"]
+        layout["repl_code_panel_layout.c<br/>wrap iterator"]
+        docrows["repl_code_panel_document.c<br/>document row model"]
+        rect["repl_layout.c<br/>panel rect geometry"]
+        menu["ui_menu_bar.c<br/>menubar + dropdowns"]
+        color["ui_color_picker.c<br/>color picker · transformer-driven"]
+        help["ui_help_overlay.c<br/>modal F1 help"]
+        varpanel["ui_variable_panel.c<br/>slider panel"]
+        acpanel["ui_autocomplete_panel.c<br/>completion popup"]
+        uiprof["ui_profile_panel.c<br/>timing HUD"]
+        replay_hud["ui_replay_hud.c<br/>2D replay HUD"]
+    end
+
+    subgraph scene_layer["4. 3D scene rendering"]
+        sceneR["scene_render.c<br/>frame prep · accum-AA"]
+        geomg["scene_geometry_guides.c<br/>vertex/normal guides"]
+        xformg["scene_transform_guides.c<br/>xform guides"]
+        grid["scene_grid.c<br/>grid themes"]
+        axes["scene_axes.c<br/>axes themes"]
+        backdrop["scene_backdrop.c<br/>backdrop pass"]
+        lights["scene_lights.c<br/>lighting + indicators"]
+        overlays["scene_overlays.c<br/>geometry overlays"]
+    end
+
+    sample i2@--> ctrl
+
+    ctrl i3@--> flatten
+    ctrl i4@--> exec
+    ctrl i5@--> sceneR
+    ctrl i6@--> uicp
+    ctrl i7@--> menu
+    ctrl i8@--> uiprof
+    ctrl i9@--> help
+    ctrl i10@--> varpanel
+    ctrl i11@--> acpanel
+    ctrl i12@--> replay_hud
+    ctrl -.-> replay_ann
+    ctrl -.-> autonormal
+    ctrl -.-> state
+    ctrl -.-> editor
+
+    editor i13@--> actions
+    editor i14@--> camera
+    editor i15@--> undo
+    editor i16@--> clipboard
+    editor i17@--> commit
+    editor -.-> uicp
+    editor i18@--> replay
+    editor i19@--> rename
+    editor i20@--> vardrag
+    editor i21@--> search
+
+    actions e2@==> audio
+    actions e3@==> replay
+    actions e4@==> scenes
+    actions e5@==> core
+    actions e6@==> rename
+    actions e7@==> uicp
+
+    clipboard e8@==> undo
+    clipboard e9@==> store
+    commit e10@==> undo
+    commit -.-> parser
+    commit -.-> scope
+    commit e11@==> store
+
+    undo e12@==> scenes
+    rename e13@==> scenes
+
+    store -.-> state
+
+    core -.-> parser
+    core -.-> scope
+    core i22@--> flatten
+    core i23@--> exec
+
+    acpanel -.-> acmodel
+    uiprof -.-> prof
+    varpanel -.-> vardrag
+    replay i24@--> exec
+
+    sceneR i25@--> geomg
+    sceneR i26@--> xformg
+    sceneR i27@--> backdrop
+    sceneR i28@--> lights
+    sceneR i29@--> overlays
+    sceneR i30@--> grid
+    sceneR i31@--> axes
+    sceneR -.-> replay
+
+    parser -.-> scope
+
+    uicp i32@--> actions
+    uicp i33@--> menu
+    uicp i34@--> color
+    uicp -.-> docrows
+    uicp -.-> rect
+    uicp -.-> search
+    uicp -.-> clipboard
+    docrows -.-> layout
+    docrows -.-> replay_ann
+    replay_ann -.-> replay
+    replay_ann -.-> state
+    autonormal -.-> scope
+    autonormal -.-> state
+    menu i35@--> actions
+    color e14@==> store
+    color e15@==> undo
+    color -.-> rect
+    export -.-> state
+
+    classDef animateE stroke:#f50,stroke-dasharray: 9\,5,stroke-dashoffset: 900,animation: dash 90s linear infinite;
+    classDef animateF stroke:#5f0,stroke-dasharray: 9\,5,stroke-dashoffset: 900,animation: dash 90s linear infinite;
+
+    class e1,e2,e3,e4,e5,e6,e7,e8,e9,e10,e11,e12,e13,e14,e15 animateE
+    class i2,i3,i4,i5,i6,i7,i8,i9,i10,i11,i12,i13,i14,i15,i16,i17,i18,i19,i20,i21,i22,i23,i24,i25,i26,i27,i28,i29,i30,i31,i32,i33,i34,i35 animateF
+```
+
+A few edges in the diagram (`scene_render → scene_geometry_guides`,
+`ui_variable_panel → repl_var_drag`) are real per the source but absent
+from the static `make callgraph-files` output because the analyzer
+doesn't always trace through indirect-call helpers; treat the curated
+diagram as the architectural truth and the auto-generated graph as the
+strictly-static cross-check.
+
+`scene_render → repl_executor` is intentionally NOT shown: the scene
+calls user geometry through a callback adapter installed by the
+controller (`scene_execute_adapter` in `imrepl_ctrl.c`), not directly.
+
 ## Scene Render Config Direction
 
 `SceneRenderConfig` is the scene's explicit per-frame input. In this codebase it
