@@ -90,7 +90,8 @@ typedef struct {
     ReplPresentationState       presentation;  /* render toggles */
 } ReplState;
 
-/* Editable text, cursor, selection, navigation, undo. */
+/* Editable text, cursor, selection, navigation, undo. The
+ * code-editor session — not the 3D viewport. */
 typedef struct {
     ReplEditorInputState        input;        /* typing buffer + cursor */
     ReplEditorBuffer            buffer;       /* committed lines */
@@ -100,21 +101,22 @@ typedef struct {
     ReplAutocompleteState       autocomplete;
     ReplVariableDragState       variable_drag;
     EditorScrollState           scroll;       /* extracted from code_panel */
-    EditorUndoRing              undo;         /* moved from sidecar */
-    EditorCameraNavState        camera_nav;   /* mouse-driven view nav (see open question) */
+    EditorUndoRing              undo;         /* transaction snapshots */
 } EditorState;
 
-/* Render-time scratch + chrome visibility. UI owns geometry it
- * computes per frame; nothing here is part of "the program" or "the
- * editor session." */
+/* Render-time scratch + chrome visibility + 3D-viewport session state.
+ * Nothing here is part of "the program" or "the code-editor session."
+ * Camera pose lives here (or in a future ViewportState slice) — not
+ * in EditorState — because the camera is a viewport concern. */
 typedef struct {
     ReplViewportState           viewport;
     ReplPointerState            pointer;
-    ReplStatusState             status;        /* transient message */
+    ReplStatusState             status;        /* transient message; controller-written */
     ReplHelpState               help;          /* visibility */
     ReplVariablePanelState      variable_panel;/* visibility */
     ReplProfilePanelState       profile_panel; /* visibility */
     EditorCursorBlinkState      cursor_blink;  /* render-only */
+    ReplCameraState             camera;        /* pose; mouse-driven via UI_ACTION_CAMERA_* */
     /* Per-frame snapshots populated by the controller, consumed by
      * renderers (already pointer-shaped on UiRenderSnapshot). */
 } UiState;
@@ -124,14 +126,32 @@ typedef struct {
 
 ```
 input event
-  -> ui_*_input_handler(snapshot, event) -> UiActionList
+  -> ui_*_input_handler(const UiRenderSnapshot *snap,
+                        UiInputEvent ev,
+                        UiActionList *out)
   -> imrepl_ctrl_dispatch(action_list)
-       -> mutates UiState / EditorState
-       -> on commit: repl_compile(text, ctx) -> ParsedLine | error
-                     -> on success: editor_undo_push (snapshot prior text + cmd)
-                                    editor_buffer_replace(idx, parsed.text)
-                                    repl_apply_replace(idx, parsed.cmd)
-       -> on REPL-side actions (save / replay / load): mutates ReplState
+       -> on commit / reformat / paste / cut / load (text-changing action):
+            ReplCompiledChange change;
+            char err[REPL_STATUS_TEXT_MAX];
+            if (repl_compile(text, ctx, &change, err, sizeof(err)) != REPL_COMPILE_OK) {
+                ui_state_status_set(err);             /* controller writes status */
+                editor_input_mark_rejected();         /* keep typed text + flag */
+                /* nothing applied; no undo entry */
+            } else {
+                editor_undo_begin_transaction();      /* captures BEFORE snapshot */
+                  editor_buffer_apply(&change);       /* writes editor text only */
+                  repl_apply_compiled_change(&change);/* writes ReplState only */
+                editor_undo_commit_transaction();     /* atomic; restores both halves on undo */
+                if (commit_msg) ui_state_status_set(commit_msg);
+            }
+       -> on REPL-side actions (save / replay / load):
+            mutates ReplState; controller writes any UI status
+       -> on editor-side actions (cursor / selection / clipboard /
+          search / autocomplete / scroll):
+            mutates EditorState only
+       -> on UI-side actions (visibility / viewport / camera /
+          status / panel modes):
+            mutates UiState only
 
 frame render
   -> imrepl_ctrl_build_scene_config(SceneRenderConfig out)
@@ -139,27 +159,65 @@ frame render
   -> scene/ui renderers read snapshots only
 ```
 
-### Open question: presentation / camera placement
+### Settled questions: presentation / camera placement
 
 - **`presentation`** persists with the program via workspace `@cfg`
-  lines and is read by scene rendering. Recommendation: stay on
-  `ReplState`. Revisit only if a non-GUI REPL build target ever lands.
-- **`camera`** is mouse-driven by editor input but feeds scene
-  rendering. Recommendation: editor mouse handlers emit
-  `UI_ACTION_CAMERA_*`; the resulting *transient* camera state lives in
-  `EditorState.camera_nav` (or a new `viewport_camera`); the scene reads
-  via snapshot. Resolve before Phase 5 when `repl_camera_controls.c`
-  renames.
+  lines and is read by scene rendering. Stays on `ReplState`. Revisit
+  only if a non-GUI REPL build target ever lands.
+- **`camera`** is a viewport / session concern, not a code-editor
+  concern. Mouse handlers emit `UI_ACTION_CAMERA_*`; controller
+  dispatches into `UiState.camera` (or a future `ViewportState` slice
+  if more 3D-viewport state accumulates). Scene reads camera pose
+  through `SceneRenderConfig`. *Do not* put the camera in
+  `EditorState`: `EditorState` owns the code-editor session, not the
+  3D viewport. This decision pre-empts the open question; Phase 5's
+  `repl_camera_controls.c` rename moves to `scene_camera_controls.c`
+  for the transform-application half, while the input half is just
+  another UI handler emitting actions.
+
+### Status messages: REPL never writes status
+
+```
+REPL returns diagnostics.       It does not call set_status.
+Editor commit returns commit messages.   It does not call set_status.
+Controller writes UiState.status from those return values.
+```
+
+This rule is load-bearing. Existing `set_status()` calls inside
+`repl_*` and `editor_*` modules must be replaced with diagnostic
+return values; only `imrepl_ctrl_dispatch_action()` calls
+`ui_state_status_set()`. Otherwise the same coupling survives the
+split under a different name.
 
 ## REPL Public Contract After The Split
 
 ```c
-/* Validate + compile a single committed line. Pure: no editor state,
- * no UI state, no globals beyond the REPL's own. */
+/* Compile a single committed line. Returns a change-set big enough
+ * to express block-structured commits (for / func / if / multi-line
+ * declarations / paste / load) atomically. Pure: no editor state, no
+ * UI state, no global mutation. */
+typedef enum {
+    REPL_COMPILED_NO_CHANGE,
+    REPL_COMPILED_REPLACE_ONE,
+    REPL_COMPILED_INSERT_ONE,
+    REPL_COMPILED_INSERT_MANY,    /* for-loop body, func body, paste */
+    REPL_COMPILED_DELETE_RANGE,
+    REPL_COMPILED_LOAD_ALL        /* full reformat / load workspace */
+} ReplCompiledChangeKind;
+
+#define MAX_COMMIT_CMDS  MAX_COMMANDS  /* upper bound for LOAD_ALL */
+
 typedef struct {
-    GLCmd cmd;                     /* parsed command (type, args, flags) */
-    char  text[MAX_LINE_LEN];      /* canonical normalized text */
-} ReplParsedLine;
+    ReplCompiledChangeKind kind;
+    int   pos;                            /* insert/replace/delete index */
+    int   count;                          /* applies to MANY / DELETE / LOAD */
+    GLCmd cmds[MAX_COMMIT_CMDS];          /* parsed commands */
+    char  text[MAX_COMMIT_CMDS][MAX_LINE_LEN]; /* canonical text per cmd */
+    /* Optional commit-side message that the controller may forward to
+     * UiState.status (e.g. "for-loop: i from 0 to 10"). Empty = no
+     * status update. */
+    char  commit_message[REPL_STATUS_TEXT_MAX];
+} ReplCompiledChange;
 
 typedef enum {
     REPL_COMPILE_OK = 0,
@@ -168,11 +226,17 @@ typedef enum {
 
 ReplCompileResult repl_compile(const char *line,
                                const ReplCompileContext *ctx,
-                               ReplParsedLine *out,
+                               ReplCompiledChange *out,
                                char *err_msg, int err_size);
 
-/* Apply a compiled command to REPL state at a specific document index.
- * Mutates document + dependent caches; does not touch editor state. */
+/* Apply a compiled change to REPL state. Mutates document + dependent
+ * caches; does not touch editor state. The shape of the change tells
+ * the apply path which underlying repl_command_store_* primitive to
+ * call. */
+void repl_apply_compiled_change(const ReplCompiledChange *change);
+
+/* Lower-level primitives — used by repl_apply_compiled_change and by
+ * import / load paths that already hold parsed cmds. */
 void repl_apply_insert(int pos, const GLCmd *cmd);
 void repl_apply_replace(int pos, const GLCmd *cmd);
 void repl_apply_delete(int start, int count);
@@ -184,10 +248,23 @@ int  repl_in_begin_block_at(int pos);
 ReplCompileContext repl_context_at(int pos);
 ```
 
+The single-line `ReplParsedLine` from the prior draft is *not*
+sufficient: structured commits (for-loop with body, func-def with
+body, multi-line var declarations, paste of N lines, full reformat,
+workspace load) all need to express N>1 lines / commands as one
+atomic change so the editor commit transaction can apply both halves
+together. `ReplCompiledChange` carries that change-set.
+
 REPL no longer takes text from a buffer it doesn't own. The editor
-calls `repl_compile(typed_text, ctx)`, then on success calls
-`repl_apply_*` with the result, then writes the canonical text into its
-own buffer.
+calls `repl_compile(typed_text, ctx, &change)`, then on success
+applies the change in a single editor-undo transaction:
+
+```c
+editor_undo_begin_transaction();
+  editor_buffer_apply(&change);          /* writes lines[][] only */
+  repl_apply_compiled_change(&change);   /* writes cmds[] only */
+editor_undo_commit_transaction();        /* atomic boundary */
+```
 
 ## UiAction Enumeration (Phase 4 starting cut)
 
@@ -197,7 +274,13 @@ typedef enum {
     UI_ACTION_INSERT_TEXT, UI_ACTION_DELETE_TEXT,
     UI_ACTION_MOVE_CURSOR, UI_ACTION_NAVIGATE_LINE,
     UI_ACTION_COMMIT_LINE, UI_ACTION_TOGGLE_INSERT_MODE,
-    UI_ACTION_REFORMAT,
+
+    /* REPL transactional change-set actions — same dispatch path as
+     * COMMIT_LINE: controller calls repl_compile and applies the
+     * resulting ReplCompiledChange in one editor_undo transaction.
+     * Reformat is *not* a UI-only action; it rewrites editor text and
+     * parsed commands together. */
+    UI_ACTION_REFORMAT,           /* whole-document reformat → LOAD_ALL change */
 
     /* Selection + clipboard */
     UI_ACTION_SELECT_BEGIN, UI_ACTION_SELECT_EXTEND, UI_ACTION_SELECT_CLEAR,
@@ -250,12 +333,37 @@ typedef struct {
 #define MAX_UI_ACTIONS 16
 typedef struct { UiAction items[MAX_UI_ACTIONS]; int count; } UiActionList;
 
-void ui_panels_handle_code_panel_press(int mx, int my, UiActionList *out);
+/* Input-handler signatures uniformly take a snapshot. The handler
+ * does not reach into live state for hit-test geometry, document
+ * counts, scroll position, virtual-line layout, or anything else —
+ * everything it needs is on the snapshot or comes in via the event.
+ * This is what prevents Phase 4 from preserving the old live-state
+ * coupling under a new action-list wrapper. */
+typedef struct {
+    UiInputEventKind kind;        /* press / release / motion / key / wheel */
+    int mx, my;
+    int mods;
+    int button;
+    unsigned char key;
+    int special_key;
+    int wheel_delta;
+} UiInputEvent;
+
+void ui_panels_handle_code_panel_press(const UiRenderSnapshot *snap,
+                                       UiInputEvent ev,
+                                       UiActionList *out);
+void ui_menu_bar_handle_press(const UiRenderSnapshot *snap,
+                              UiInputEvent ev,
+                              UiActionList *out);
+void ui_color_picker_handle_press(const UiRenderSnapshot *snap,
+                                  UiInputEvent ev,
+                                  UiActionList *out);
+/* …same shape for every UI input handler… */
 ```
 
 `imrepl_ctrl_dispatch_action(const UiAction *)` is the single mutation
 gate. It is the only function allowed to mutate `ReplState` /
-`EditorState` from input.
+`EditorState` / `UiState` from input.
 
 ---
 
@@ -544,19 +652,34 @@ Do not change UX while splitting ownership. Tests must show:
 ### 3.3 API checkpoints
 
 ```c
-/* Compiler side (REPL) */
+/* Compiler side (REPL): returns a ReplCompiledChange so block
+ * commits, paste, and reformat can flow through the same gate. */
 ReplCompileResult repl_compile(const char *line,
                                const ReplCompileContext *ctx,
-                               ReplParsedLine *out,
+                               ReplCompiledChange *out,
                                char *err_msg, int err_size);
 
-/* Apply side (REPL) — pure cmd-array mutators */
+/* Apply side (REPL) — applies a compiled change atomically; never
+ * mutates editor or UI state. */
+void repl_apply_compiled_change(const ReplCompiledChange *change);
+
+/* Lower-level primitives used by repl_apply_compiled_change and by
+ * import / load paths that already hold parsed cmds. */
 void repl_apply_insert(int pos, const GLCmd *cmd);
 void repl_apply_replace(int pos, const GLCmd *cmd);
 void repl_apply_delete(int start, int count);
 void repl_apply_load(const GLCmd *cmds, int count);
 
-/* Editor side */
+/* Editor side: orchestrates a single transaction. Captures a BEFORE
+ * snapshot, applies both the editor-buffer change and the REPL apply
+ * atomically, and only then commits the undo entry. On compile error
+ * neither half is touched and the typed input is preserved with a
+ * rejected flag. */
+typedef struct {
+    int  applied;             /* 1 if change was applied, 0 if rejected */
+    char status_message[REPL_STATUS_TEXT_MAX]; /* for controller to forward */
+} EditorCommitResult;
+
 EditorCommitResult editor_commit_current_input(EditorState *editor,
                                                ReplState *repl,
                                                int enter_mode);
@@ -565,13 +688,33 @@ EditorCommitResult editor_commit_current_input(EditorState *editor,
 ### 3.4 Split `repl_commit.c`
 
 1. Pure validators move into `repl_compile.c`:
-   `try_commit_float_decl_validate`, `try_commit_for_loop_validate`,
-   `try_commit_func_def_validate`, `try_commit_if_block_validate`,
-   `try_commit_close_brace_validate`, `try_assign_variable_validate`.
-   Each returns `ReplParsedLine` plus an error code; no mutations.
-2. Orchestration moves to `editor_commit.c` — validates, on success
-   pushes undo, writes editor buffer, calls `repl_apply_*`.
+   `try_compile_float_decl`, `try_compile_for_loop`,
+   `try_compile_func_def`, `try_compile_if_block`,
+   `try_compile_close_brace`, `try_compile_var_assign`. Each fills a
+   `ReplCompiledChange` and returns an error code; no mutations.
+2. Orchestration moves to `editor_commit.c`:
+   ```c
+   editor_undo_begin_transaction();
+     editor_buffer_apply(&change);          /* lines[][] only */
+     repl_apply_compiled_change(&change);   /* cmds[] only */
+   editor_undo_commit_transaction();        /* captures BEFORE snapshot */
+   ```
 3. `repl_editor.c` callers switch to `editor_commit_*` entry points.
+
+### 3.5 Status messages flow through return values, not `set_status`
+
+REPL validators do **not** call `set_status`. They write into the
+`err_msg` out-parameter (compile errors) or the
+`ReplCompiledChange.commit_message` field (success messages like
+"for-loop: i from 0 to 10"). `editor_commit_*` returns
+`EditorCommitResult.status_message`. Only
+`imrepl_ctrl_dispatch_action()` calls `ui_state_status_set()`. Audit:
+
+```sh
+grep -RIn 'set_status\|ui_state_status_set' repl_*.c editor_*.c \
+  | grep -v ' imrepl_ctrl\.c:'
+# expected: 0 (status writes are controller-only)
+```
 
 ### Verification
 
@@ -652,7 +795,7 @@ mechanical with redirect headers during transition.
 
 | Old | New | Owner |
 |---|---|---|
-| `repl_editor.c` | split into `editor_input.c` (router) + `editor_commit.c` (already from Phase 3) | editor |
+| `repl_editor.c` | three-way split (see below): `editor_input.c` + `editor_commit.c` + lifted-into-`imrepl_ctrl.c` | editor / controller |
 | `repl_undo.c` | `editor_undo.c` | editor |
 | `repl_clipboard.c` | `editor_clipboard.c` | editor |
 | `repl_search.c` | `editor_search.c` | editor |
@@ -663,7 +806,36 @@ mechanical with redirect headers during transition.
 | `repl_code_panel_layout.c` | `ui_code_panel_layout.c` (pure wrap iterator) | UI |
 | `repl_code_panel_document.c` | `editor_code_panel_document.c` (owns scroll / hit-test, editor-state-shaped) | editor |
 | `repl_actions.c` | split into `ui_action_dispatch.c` + `editor_actions.c` + REPL-side actions stay | mixed |
-| `repl_camera_controls.c` | `scene_camera_controls.c` (or keep mouse-handler in editor + scene-side reader) | scene/UI |
+| `repl_camera_controls.c` | `scene_camera_controls.c` (transform application reads `UiState.camera`); the mouse-input half is just a regular UI handler emitting `UI_ACTION_CAMERA_*` | scene/UI |
+
+### 5.0 The `repl_editor.c` three-way split
+
+Today `repl_editor.c` mixes three responsibilities. Each goes to a
+different home — the new `editor_input.c` is **not** a GLUT router:
+
+```text
+repl_editor.c (today)
+  GLUT key/mouse callbacks + cross-layer routing  -> imrepl_ctrl.c
+                                                     (GLUT events become UiInputEvent;
+                                                      UI handlers emit UiAction;
+                                                      imrepl_ctrl_dispatch_action mutates)
+
+  editor-action application (cursor moves,         -> editor_input.c
+   insert text, delete text, navigate line,           (an editor-action *applier* / reducer
+   toggle insert mode)                                that mutates EditorState given a
+                                                      cursor / text / navigation action;
+                                                      no GLUT, no UI snapshot reads)
+
+  commit/navigation orchestration                  -> editor_commit.c
+   (compile + undo + buffer + apply transaction;      (already extracted in Phase 3)
+    rejected-parse rollback;
+    commit-before-navigation)
+```
+
+`editor_input.c` after the split is the editor's text-state reducer.
+It receives `UiAction`s from the dispatch gate and updates
+`EditorState` (cursor, selection, scroll, etc.). It does **not**
+register GLUT callbacks; that's the controller's job.
 
 ### 5.2 Redirect headers during transition
 
