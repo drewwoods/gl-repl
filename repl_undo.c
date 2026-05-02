@@ -34,7 +34,7 @@ void repl_undo_snapshot_save(ReplUndoSnapshot *snapshot) {
     for (int i = 0; i < repl_state_document_count(); i++)
         repl_copy_string_fits(snapshot->editor_lines[i],
                               MAX_LINE_LEN,
-                              repl_state_editor_buffer_line(i));
+                              editor_buffer_line(i));
     snapshot->num_cmds = repl_state_document_count();
     snapshot->edit_line = repl_state_edit_line();
     snapshot->num_predef_vars = g_num_predef_vars;

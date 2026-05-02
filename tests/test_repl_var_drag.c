@@ -248,7 +248,7 @@ static void test_source_sync_literal_assign(void) {
             ASSERT_FLOAT("assignment value updated", cmd->args[0], 4.14f, 0.01f);
             /* Source text should reflect new value */
             ASSERT_TRUE("source text updated",
-                        strstr(repl_state_editor_buffer_line(i) ? repl_state_editor_buffer_line(i) : "",
+                        strstr(editor_buffer_line(i) ? editor_buffer_line(i) : "",
                                "4.14") != NULL);
         }
     }
@@ -284,7 +284,7 @@ static void test_source_sync_skip_expressions(void) {
     ASSERT_TRUE("expression assignment found", expr_cmd_idx >= 0);
 
     char original_source[256];
-    const char *orig_text = repl_state_editor_buffer_line(expr_cmd_idx);
+    const char *orig_text = editor_buffer_line(expr_cmd_idx);
     snprintf(original_source, sizeof(original_source), "%s", orig_text ? orig_text : "");
 
     /* Drag x */
@@ -292,7 +292,7 @@ static void test_source_sync_skip_expressions(void) {
     repl_var_drag_motion(120);
 
     /* Expression-based assignment should NOT be updated */
-    const char *cur_text = repl_state_editor_buffer_line(expr_cmd_idx);
+    const char *cur_text = editor_buffer_line(expr_cmd_idx);
     ASSERT_TRUE("source unchanged", strcmp(cur_text ? cur_text : "", original_source) == 0);
 }
 

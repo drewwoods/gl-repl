@@ -115,7 +115,7 @@ static void save_scene_to_slot(int idx, const char *name) {
     memcpy(s->cmds, repl_state_document_cmds_mut(), (size_t)repl_state_document_count() * sizeof(GLCmd));
     for (int i = 0; i < repl_state_document_count(); i++)
         repl_copy_string_fits(s->lines[i], MAX_LINE_LEN,
-                              repl_state_editor_buffer_line(i));
+                              editor_buffer_line(i));
     s->num_cmds        = repl_state_document_count();
     s->edit_line       = repl_state_edit_line();
     s->num_predef_vars = g_num_predef_vars;
@@ -221,7 +221,7 @@ static void stash_live_state(UserScene *dst) {
     memcpy(dst->cmds, repl_state_document_cmds_mut(), (size_t)repl_state_document_count() * sizeof(GLCmd));
     for (int i = 0; i < repl_state_document_count(); i++)
         repl_copy_string_fits(dst->lines[i], MAX_LINE_LEN,
-                              repl_state_editor_buffer_line(i));
+                              editor_buffer_line(i));
     dst->num_cmds        = repl_state_document_count();
     dst->edit_line       = repl_state_edit_line();
     dst->num_predef_vars = g_num_predef_vars;

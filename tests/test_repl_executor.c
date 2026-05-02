@@ -180,10 +180,10 @@ static void test_execute_all_commands(void) {
 
     // Add IF_BEGIN and VAR_ASSIGN with has_vars
     // Set up editor buffer entries so execution_flat_text() can resolve text.
-    repl_state_editor_buffer_set_line(0, "if (1.0) {");
-    repl_state_editor_buffer_set_line(1, "x = 5.0;");
-    repl_state_editor_buffer_set_line(2, "goto skip;");
-    repl_state_editor_buffer_set_line(3, "label skip;");
+    editor_buffer_set_line(0, "if (1.0) {");
+    editor_buffer_set_line(1, "x = 5.0;");
+    editor_buffer_set_line(2, "goto skip;");
+    editor_buffer_set_line(3, "label skip;");
     repl_state_document_count_set(4);
 
     cmds[count].type = CMD_IF_BEGIN; cmds[count].valid = 1; cmds[count].has_vars = 1;

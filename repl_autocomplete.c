@@ -128,7 +128,7 @@ static int find_defined_func_call_params(const char *input, const char **after_o
         if ((int)repl_state_document_cmds_mut()[i].args[0] != fn)
             continue;
         {
-            const char *func_text = repl_state_editor_buffer_line(i);
+            const char *func_text = editor_buffer_line(i);
             if (!parse_repl_func_signature(func_text ? func_text : "", &parsed_fn,
                                            param_storage, MAX_EXPR_VARS,
                                            &param_count))

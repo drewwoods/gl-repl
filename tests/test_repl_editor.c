@@ -151,7 +151,7 @@ static int code_panel_mouse_y_for_cmd(int cmd_idx) {
 
     repl_layout_code_panel_rect(NULL, &cp_y, &panel_w, &cp_h);
     for (int i = 0; i < cmd_idx && i < repl_state_document_count(); i++) {
-        const char *line_text = repl_state_editor_buffer_line(i);
+        const char *line_text = editor_buffer_line(i);
         doc_line += test_code_panel_row_count_for_text(line_text ? line_text : "",
                                                        text_x, panel_w);
     }
@@ -595,11 +595,11 @@ int main() {
 
         repl_undo_pop_snapshot();
         ASSERT_INT("num_cmds after undo", repl_state_document_count(), 1);
-        ASSERT_STR("cmd 0 source", repl_state_editor_buffer_line(0), "  glVertex3f(1, 1, 1);");
+        ASSERT_STR("cmd 0 source", editor_buffer_line(0), "  glVertex3f(1, 1, 1);");
 
         repl_undo_do_redo();
         ASSERT_INT("num_cmds after redo", repl_state_document_count(), 2);
-        ASSERT_STR("cmd 1 source", repl_state_editor_buffer_line(1), "  glVertex3f(2, 2, 2);");
+        ASSERT_STR("cmd 1 source", editor_buffer_line(1), "  glVertex3f(2, 2, 2);");
     }
 
     /* 4. Deleting commands - basic */
@@ -612,8 +612,8 @@ int main() {
 
         delete_cmd_range(1, 1, "test");
         ASSERT_INT("num_cmds after delete", repl_state_document_count(), 2);
-        ASSERT_STR("line 0 still there", repl_state_editor_buffer_line(0), "  glVertex3f(0, 0, 0);");
-        ASSERT_STR("line 1 is now old line 2", repl_state_editor_buffer_line(1), "  glVertex3f(2, 2, 2);");
+        ASSERT_STR("line 0 still there", editor_buffer_line(0), "  glVertex3f(0, 0, 0);");
+        ASSERT_STR("line 1 is now old line 2", editor_buffer_line(1), "  glVertex3f(2, 2, 2);");
     }
 
     /* 5. delete_cmd_range - count=0 (no-op) */
@@ -640,7 +640,7 @@ int main() {
         /* ask to delete 5 but only 1 remains at start=1 */
         delete_cmd_range(1, 5, "clamp");
         ASSERT_INT("delete clamp: leaves 1 cmd", repl_state_document_count(), 1);
-        ASSERT_STR("delete clamp: cmd 0 remains", repl_state_editor_buffer_line(0), "  glVertex3f(0, 0, 0);");
+        ASSERT_STR("delete clamp: cmd 0 remains", editor_buffer_line(0), "  glVertex3f(0, 0, 0);");
     }
 
     /* 8. delete_cmd_range - edit_line clamped when it would exceed repl_state_document_count() */
@@ -667,8 +667,8 @@ int main() {
         delete_cmd_range(1, 3, "Deleted");
 
         ASSERT_INT("delete block: leaves 2 cmds", repl_state_document_count(), 2);
-        ASSERT_STR("delete block: first survives", repl_state_editor_buffer_line(0), "  glVertex3f(0, 0, 0);");
-        ASSERT_STR("delete block: last survives", repl_state_editor_buffer_line(1), "  glVertex3f(4, 4, 4);");
+        ASSERT_STR("delete block: first survives", editor_buffer_line(0), "  glVertex3f(0, 0, 0);");
+        ASSERT_STR("delete block: last survives", editor_buffer_line(1), "  glVertex3f(4, 4, 4);");
         ASSERT_INT("delete block: edit_line at deletion start", repl_state_edit_line(), 1);
         ASSERT_STR("delete block: input reloaded", repl_state_editor_input().input, "glVertex3f(4, 4, 4)");
         ASSERT_TRUE("delete block: selection cleared", !repl_clipboard_sel_active());
@@ -689,8 +689,8 @@ int main() {
         repl_keyboard_func(8, 0, 0);
 
         ASSERT_INT("backspace reversed selection: leaves 2 cmds", repl_state_document_count(), 2);
-        ASSERT_STR("backspace reversed selection: first survives", repl_state_editor_buffer_line(0), "  glVertex3f(0, 0, 0);");
-        ASSERT_STR("backspace reversed selection: second survives", repl_state_editor_buffer_line(1), "  glVertex3f(1, 1, 1);");
+        ASSERT_STR("backspace reversed selection: first survives", editor_buffer_line(0), "  glVertex3f(0, 0, 0);");
+        ASSERT_STR("backspace reversed selection: second survives", editor_buffer_line(1), "  glVertex3f(1, 1, 1);");
         ASSERT_INT("backspace reversed selection: edit_line", repl_state_edit_line(), 2);
         ASSERT_TRUE("backspace reversed selection: selection cleared", !repl_clipboard_sel_active());
     }
@@ -709,8 +709,8 @@ int main() {
         repl_keyboard_func(4, 0, 0);
 
         ASSERT_INT("ctrl-d selection: leaves 2 cmds", repl_state_document_count(), 2);
-        ASSERT_STR("ctrl-d selection: first survives", repl_state_editor_buffer_line(0), "  glVertex3f(0, 0, 0);");
-        ASSERT_STR("ctrl-d selection: last survives", repl_state_editor_buffer_line(1), "  glVertex3f(4, 4, 4);");
+        ASSERT_STR("ctrl-d selection: first survives", editor_buffer_line(0), "  glVertex3f(0, 0, 0);");
+        ASSERT_STR("ctrl-d selection: last survives", editor_buffer_line(1), "  glVertex3f(4, 4, 4);");
         ASSERT_INT("ctrl-d selection: edit_line", repl_state_edit_line(), 1);
         ASSERT_TRUE("ctrl-d selection: selection cleared", !repl_clipboard_sel_active());
         assert_status_contains("ctrl-d selection: status", "Deleted 3 lines");
@@ -730,11 +730,11 @@ int main() {
 
         repl_undo_pop_snapshot();
         ASSERT_INT("delete undo: restores 5 cmds", repl_state_document_count(), 5);
-        ASSERT_STR("delete undo: middle restored", repl_state_editor_buffer_line(2), "  glVertex3f(2, 2, 2);");
+        ASSERT_STR("delete undo: middle restored", editor_buffer_line(2), "  glVertex3f(2, 2, 2);");
 
         repl_undo_do_redo();
         ASSERT_INT("delete redo: leaves 2 cmds", repl_state_document_count(), 2);
-        ASSERT_STR("delete redo: last survives", repl_state_editor_buffer_line(1), "  glVertex3f(4, 4, 4);");
+        ASSERT_STR("delete redo: last survives", editor_buffer_line(1), "  glVertex3f(4, 4, 4);");
     }
 
     /* 8d. Copy selected block and paste inside a later block */
@@ -759,24 +759,24 @@ int main() {
         repl_state_insert_mode_set(0);
         repl_keyboard_func(22, 0, 0);
         ASSERT_INT("paste block: cmd count", repl_state_document_count(), 9);
-        ASSERT_STR("paste block: if preserved", repl_state_editor_buffer_line(4), "  if(x > 0) {");
-        ASSERT_STR("paste block: first inserted", repl_state_editor_buffer_line(5), "    glVertex3f(0, 0, 0);");
-        ASSERT_STR("paste block: second inserted", repl_state_editor_buffer_line(6), "    glVertex3f(1, 1, 1);");
-        ASSERT_STR("paste block: original body shifted", repl_state_editor_buffer_line(7), "    glColor3f(1, 0, 0);");
-        ASSERT_STR("paste block: close brace preserved", repl_state_editor_buffer_line(8), "  }");
+        ASSERT_STR("paste block: if preserved", editor_buffer_line(4), "  if(x > 0) {");
+        ASSERT_STR("paste block: first inserted", editor_buffer_line(5), "    glVertex3f(0, 0, 0);");
+        ASSERT_STR("paste block: second inserted", editor_buffer_line(6), "    glVertex3f(1, 1, 1);");
+        ASSERT_STR("paste block: original body shifted", editor_buffer_line(7), "    glColor3f(1, 0, 0);");
+        ASSERT_STR("paste block: close brace preserved", editor_buffer_line(8), "  }");
         ASSERT_INT("paste block: edit_line after pasted block", repl_state_edit_line(), 7);
         ASSERT_STR("paste block: input reloaded after paste", repl_state_editor_input().input, "glColor3f(1, 0, 0)");
         assert_status_contains("paste block: status", "Pasted 2 lines");
 
         repl_undo_pop_snapshot();
         ASSERT_INT("paste undo: restores original count", repl_state_document_count(), 7);
-        ASSERT_STR("paste undo: original body restored", repl_state_editor_buffer_line(5), "    glColor3f(1, 0, 0);");
-        ASSERT_STR("paste undo: close brace restored", repl_state_editor_buffer_line(6), "  }");
+        ASSERT_STR("paste undo: original body restored", editor_buffer_line(5), "    glColor3f(1, 0, 0);");
+        ASSERT_STR("paste undo: close brace restored", editor_buffer_line(6), "  }");
 
         repl_undo_do_redo();
         ASSERT_INT("paste redo: restores pasted count", repl_state_document_count(), 9);
-        ASSERT_STR("paste redo: first pasted line", repl_state_editor_buffer_line(5), "    glVertex3f(0, 0, 0);");
-        ASSERT_STR("paste redo: original body shifted again", repl_state_editor_buffer_line(7), "    glColor3f(1, 0, 0);");
+        ASSERT_STR("paste redo: first pasted line", editor_buffer_line(5), "    glVertex3f(0, 0, 0);");
+        ASSERT_STR("paste redo: original body shifted again", editor_buffer_line(7), "    glColor3f(1, 0, 0);");
     }
 
     /* 8e. Cut selected block, then undo/redo */
@@ -793,17 +793,17 @@ int main() {
         ASSERT_STR("cut block: first copied", repl_state_clipboard_mut()->lines[0], "  glVertex3f(1, 1, 1);");
         ASSERT_STR("cut block: second copied", repl_state_clipboard_mut()->lines[1], "  glVertex3f(2, 2, 2);");
         ASSERT_INT("cut block: leaves 2 cmds", repl_state_document_count(), 2);
-        ASSERT_STR("cut block: first survivor", repl_state_editor_buffer_line(0), "  glVertex3f(0, 0, 0);");
-        ASSERT_STR("cut block: second survivor", repl_state_editor_buffer_line(1), "  glVertex3f(3, 3, 3);");
+        ASSERT_STR("cut block: first survivor", editor_buffer_line(0), "  glVertex3f(0, 0, 0);");
+        ASSERT_STR("cut block: second survivor", editor_buffer_line(1), "  glVertex3f(3, 3, 3);");
         ASSERT_TRUE("cut block: selection cleared", !repl_clipboard_sel_active());
 
         repl_undo_pop_snapshot();
         ASSERT_INT("cut undo: restores 4 cmds", repl_state_document_count(), 4);
-        ASSERT_STR("cut undo: first cut line restored", repl_state_editor_buffer_line(1), "  glVertex3f(1, 1, 1);");
+        ASSERT_STR("cut undo: first cut line restored", editor_buffer_line(1), "  glVertex3f(1, 1, 1);");
 
         repl_undo_do_redo();
         ASSERT_INT("cut redo: leaves 2 cmds", repl_state_document_count(), 2);
-        ASSERT_STR("cut redo: second survivor", repl_state_editor_buffer_line(1), "  glVertex3f(3, 3, 3);");
+        ASSERT_STR("cut redo: second survivor", editor_buffer_line(1), "  glVertex3f(3, 3, 3);");
     }
 
     /* 8f. Copy/cut from a for-begin line captures the whole block */
@@ -843,7 +843,7 @@ int main() {
         repl_keyboard_func(22, 0, 0);
 
         ASSERT_INT("paste empty: no mutation", repl_state_document_count(), 1);
-        ASSERT_STR("paste empty: source unchanged", repl_state_editor_buffer_line(0), "  glVertex3f(1, 1, 1);");
+        ASSERT_STR("paste empty: source unchanged", editor_buffer_line(0), "  glVertex3f(1, 1, 1);");
         assert_status_contains("paste empty: status", "Clipboard empty");
     }
 
@@ -869,7 +869,7 @@ int main() {
         repl_feed_line_public("n = 5;");
         repl_state_clipboard_cmds_mut()[0] = repl_state_document_cmds()[1];
         repl_copy_string_fits(repl_state_clipboard_mut()->lines[0], MAX_LINE_LEN,
-                              repl_state_editor_buffer_line(1));
+                              editor_buffer_line(1));
         repl_state_clipboard_count_set(1);
         repl_state_edit_line_set(0);
 
@@ -900,7 +900,7 @@ int main() {
         repl_feed_line_public("glVertex3f(2,2,2)");
         repl_state_clipboard_cmds_mut()[0] = repl_state_document_cmds()[1];
         repl_copy_string_fits(repl_state_clipboard_mut()->lines[0], MAX_LINE_LEN,
-                              repl_state_editor_buffer_line(1));
+                              editor_buffer_line(1));
         repl_state_clipboard_count_set(1);
         repl_state_selection_set(0, 1);
         repl_state_edit_line_set(1);
@@ -1007,7 +1007,7 @@ int main() {
         int r = try_assign_variable();
         ASSERT_INT("try_assign_variable returns 1", r, 1);
         ASSERT_INT("num_cmds 1 after assign", repl_state_document_count(), 1);
-        ASSERT_STR("assigned cmd source", repl_state_editor_buffer_line(0), "  n = 10.5;");
+        ASSERT_STR("assigned cmd source", editor_buffer_line(0), "  n = 10.5;");
     }
 
     /* 13. try_assign_variable - inserting mode (inserts before cursor) */
@@ -1047,7 +1047,7 @@ int main() {
 
         int r = try_assign_variable();
         ASSERT_INT("overwrite assign returns 1", r, 1);
-        ASSERT_STR("overwrite assign: new source", repl_state_editor_buffer_line(0), "  n = 7.0;");
+        ASSERT_STR("overwrite assign: new source", editor_buffer_line(0), "  n = 7.0;");
         ASSERT_INT("overwrite assign: edit_line advanced", repl_state_edit_line(), 1);
     }
 
@@ -1063,8 +1063,8 @@ int main() {
         int r = try_commit_for_loop();
         ASSERT_INT("try_commit_for_loop returns 1", r, 1);
         ASSERT_INT("num_cmds 2 after for", repl_state_document_count(), 2);
-        ASSERT_STR("for loop source", repl_state_editor_buffer_line(0), "  for(i, 0, 5) {");
-        ASSERT_STR("for end source", repl_state_editor_buffer_line(1), "  }");
+        ASSERT_STR("for loop source", editor_buffer_line(0), "  for(i, 0, 5) {");
+        ASSERT_STR("for end source", editor_buffer_line(1), "  }");
     }
 
     /* 16. try_commit_for_loop - with explicit step */
@@ -1081,7 +1081,7 @@ int main() {
         ASSERT_INT("for with step: 2 cmds", repl_state_document_count(), 2);
         /* Source should contain step value */
         ASSERT_TRUE("for with step: source has 2 step",
-                    strstr(repl_state_editor_buffer_line(0) ? repl_state_editor_buffer_line(0) : "", "2") != NULL);
+                    strstr(editor_buffer_line(0) ? editor_buffer_line(0) : "", "2") != NULL);
     }
 
     /* 17. try_commit_for_loop - update existing for-begin header */
@@ -1110,7 +1110,7 @@ int main() {
         /* Should update in place, not add more commands */
         ASSERT_INT("update for-begin: still 2 cmds", repl_state_document_count(), 2);
         ASSERT_TRUE("update for-begin: source updated",
-                    strstr(repl_state_editor_buffer_line(0) ? repl_state_editor_buffer_line(0) : "", "10") != NULL);
+                    strstr(editor_buffer_line(0) ? editor_buffer_line(0) : "", "10") != NULL);
     }
 
     /* 18. try_commit_for_loop - inline form (for with body on same line) */
@@ -1142,8 +1142,8 @@ int main() {
         int r = try_commit_func_def();
         ASSERT_INT("try_commit_func_def returns 1", r, 1);
         ASSERT_INT("num_cmds 2 after func", repl_state_document_count(), 2);
-        ASSERT_STR("func def source", repl_state_editor_buffer_line(0), "  func0(x, y) {");
-        ASSERT_STR("func end source", repl_state_editor_buffer_line(1), "  }");
+        ASSERT_STR("func def source", editor_buffer_line(0), "  func0(x, y) {");
+        ASSERT_STR("func end source", editor_buffer_line(1), "  }");
     }
 
     /* 20. try_commit_func_def - update existing func-def header */
@@ -1170,7 +1170,7 @@ int main() {
         ASSERT_INT("update func-def returns 1", r, 1);
         ASSERT_INT("update func-def: still 2 cmds", repl_state_document_count(), 2);
         ASSERT_TRUE("update func-def: source has b param",
-                    strstr(repl_state_editor_buffer_line(0) ? repl_state_editor_buffer_line(0) : "", "b") != NULL);
+                    strstr(editor_buffer_line(0) ? editor_buffer_line(0) : "", "b") != NULL);
     }
 
     /* 21. Committing if blocks - basic */
@@ -1185,8 +1185,8 @@ int main() {
         int r = try_commit_if_block();
         ASSERT_INT("try_commit_if_block returns 1", r, 1);
         ASSERT_INT("num_cmds 2 after if", repl_state_document_count(), 2);
-        ASSERT_STR("if block source", repl_state_editor_buffer_line(0), "  if(x > 0) {");
-        ASSERT_STR("if end source", repl_state_editor_buffer_line(1), "  }");
+        ASSERT_STR("if block source", editor_buffer_line(0), "  if(x > 0) {");
+        ASSERT_STR("if end source", editor_buffer_line(1), "  }");
     }
 
     /* 22. try_commit_if_block - update existing if-begin */
@@ -1211,7 +1211,7 @@ int main() {
         int r = try_commit_if_block();
         ASSERT_INT("update if-begin returns 1", r, 1);
         ASSERT_INT("update if-begin: still 2 cmds", repl_state_document_count(), 2);
-        ASSERT_STR("update if-begin: source updated", repl_state_editor_buffer_line(0), "  if(x < 0) {");
+        ASSERT_STR("update if-begin: source updated", editor_buffer_line(0), "  if(x < 0) {");
     }
 
     /* 23. Committing close brace - for-loop */
@@ -1228,7 +1228,7 @@ int main() {
         int r = try_commit_close_brace();
         ASSERT_INT("try_commit_close_brace returns 1", r, 1);
         ASSERT_INT("num_cmds after brace", repl_state_document_count(), 2);
-        ASSERT_STR("close brace source", repl_state_editor_buffer_line(1), "  }");
+        ASSERT_STR("close brace source", editor_buffer_line(1), "  }");
     }
 
     /* 26. Committing close brace - while in inserting mode closes existing end */
@@ -1326,7 +1326,7 @@ int main() {
         ASSERT_INT("func no-params returns 1", r, 1);
         ASSERT_INT("func no-params: 2 cmds", repl_state_document_count(), 2);
         ASSERT_TRUE("func no-params: source correct",
-                    strstr(repl_state_editor_buffer_line(0) ? repl_state_editor_buffer_line(0) : "", "func3") != NULL);
+                    strstr(editor_buffer_line(0) ? editor_buffer_line(0) : "", "func3") != NULL);
     }
 
     /* 24. prof_frame_tick - increments staleness counters */
@@ -1646,7 +1646,7 @@ int main() {
         repl_feed_line_public("n = 5;");
         repl_state_clipboard_cmds_mut()[0] = repl_state_document_cmds()[1];
         repl_copy_string_fits(repl_state_clipboard_mut()->lines[0], MAX_LINE_LEN,
-                              repl_state_editor_buffer_line(1));
+                              editor_buffer_line(1));
         repl_state_clipboard_count_set(1);
         repl_state_edit_line_set(0);
 
@@ -1671,7 +1671,7 @@ int main() {
                     repl_eval_find_predef_var_idx("n") >= 0);
         repl_state_clipboard_cmds_mut()[0] = repl_state_document_cmds()[1];
         repl_copy_string_fits(repl_state_clipboard_mut()->lines[0], MAX_LINE_LEN,
-                              repl_state_editor_buffer_line(1));
+                              editor_buffer_line(1));
         repl_state_clipboard_count_set(1);
         repl_state_selection_set(0, 1);
 
@@ -2220,7 +2220,7 @@ int main() {
         repl_feed_line_public("glVertex3f(1,1,1)");
         navigate_to_line(0);
         snprintf(old_source, sizeof(old_source), "%s",
-                 repl_state_editor_buffer_line(0) ? repl_state_editor_buffer_line(0) : "");
+                 editor_buffer_line(0) ? editor_buffer_line(0) : "");
         old_num_cmds = repl_state_document_count();
         set_editor_input("glColor3f(1, 0");
 
@@ -2229,7 +2229,7 @@ int main() {
         ASSERT_INT("nav auto-commit invalid edit: cmd count unchanged",
                    repl_state_document_count(), old_num_cmds);
         ASSERT_STR("nav auto-commit invalid edit: source reverted",
-                   repl_state_editor_buffer_line(0), old_source);
+                   editor_buffer_line(0), old_source);
         ASSERT_INT("nav auto-commit invalid edit: cursor moved", repl_state_edit_line(), 1);
         ASSERT_STR("nav auto-commit invalid edit: input loaded next", repl_state_editor_input().input, "glVertex3f(1, 1, 1)");
         assert_status_contains("nav auto-commit invalid edit: status",
@@ -2386,7 +2386,7 @@ int main() {
         ASSERT_INT("comment assignment: type became comment",
                    repl_state_document_cmds_mut()[1].type, CMD_COMMENT);
         ASSERT_TRUE("comment assignment: source keeps x = 1",
-                    strstr(repl_state_editor_buffer_line(1) ? repl_state_editor_buffer_line(1) : "", "x = 1") != NULL);
+                    strstr(editor_buffer_line(1) ? editor_buffer_line(1) : "", "x = 1") != NULL);
         assert_status_contains("comment assignment: status", "Commented");
 
         /* Uncomment with Ctrl+/ again.  Fallback path must rebuild the
@@ -2422,7 +2422,7 @@ int main() {
         ASSERT_INT("mangled setup: commented", repl_state_document_cmds_mut()[0].type, CMD_COMMENT);
 
         /* Replace the comment body with nonsense so the re-parse fails. */
-        repl_state_editor_buffer_set_line(0, "// !@#$not a command$@#!");
+        editor_buffer_set_line(0, "// !@#$not a command$@#!");
         g_status[0] = '\0';
         repl_state_edit_line_set(0);
         repl_keyboard_func('/', 0, 0);

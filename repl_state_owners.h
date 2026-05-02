@@ -54,13 +54,10 @@ ReplEditorInputView          repl_state_editor_input(void);
 ReplEditorInputState       *repl_state_editor_input_mut(void);
 void                        repl_state_editor_input_reset(void);
 
-/* Editor-owns-text spike: per-line raw text storage (no trailing ';'). */
-const ReplEditorBuffer       *repl_state_editor_buffer(void);
-ReplEditorBuffer             *repl_state_editor_buffer_mut(void);
-const char                   *repl_state_editor_buffer_line(int idx);
-void                          repl_state_editor_buffer_set_line(int idx, const char *text);
-void                          repl_state_editor_buffer_set_count(int count);
-int                           repl_state_editor_buffer_count(void);
+/* Editor-owned text buffer accessors moved to editor_state.h
+ * (Phase 1 commit 4). Use `editor_state_buffer / _mut` for the whole
+ * struct, `editor_buffer_line / set_line / count / set_count` for
+ * slice-level access. */
 
 /* Per-frame editor transformer snapshot pushed by the controller after
  * flatten so renderers/UI can iterate inline swatch/slider affordances

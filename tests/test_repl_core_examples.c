@@ -445,7 +445,7 @@ static char *collect_loaded_definition_lines(void) {
     for (int i = 0; i < repl_state_document_count(); i++) {
         if (repl_state_document_cmds_mut()[i].type != CMD_VAR_DECLARE && repl_state_document_cmds_mut()[i].type != CMD_VAR_ASSIGN)
             continue;
-        canon_lines[count] = canonicalize_definition_line(repl_state_editor_buffer_line(i));
+        canon_lines[count] = canonicalize_definition_line(editor_buffer_line(i));
         if (!canon_lines[count]) {
             for (int j = 0; j < count; j++)
                 free(canon_lines[j]);

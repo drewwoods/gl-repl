@@ -76,7 +76,7 @@ void repl_var_drag_motion(int x) {
             char new_line[MAX_LINE_LEN];
             repl_state_document_cmds_mut()[i].args[0] = new_val;
             snprintf(new_line, sizeof(new_line), "  %s = %g;", vname, (double)new_val);
-            repl_state_editor_buffer_set_line(i, new_line);
+            editor_buffer_set_line(i, new_line);
         }
     }
     repl_state_mark_flat_dirty();

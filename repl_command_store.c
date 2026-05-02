@@ -1,5 +1,6 @@
 #include "repl_command_store.h"
 #include "repl_state_owners.h"
+#include "editor_state.h"  /* ReplEditorBuffer + editor_buffer_* / editor_state_buffer_mut */
 
 ReplCommandStore repl_command_store_live(void) {
     ReplDocumentState *document = repl_state_document_mut();
@@ -78,7 +79,7 @@ static void command_store_invalidate_after_mutation(void) {
  * so this fallback is only reached for reset/clear calls (count == 0).
  * Clear the buffer slots so stale text is not shown. */
 static void editor_buffer_sync_after_store_mutation(int count) {
-    ReplEditorBuffer *buf = repl_state_editor_buffer_mut();
+    ReplEditorBuffer *buf = editor_state_buffer_mut();
     if (!buf) return;
     if (count > MAX_COMMANDS) count = MAX_COMMANDS;
     for (int i = 0; i < count; i++)
@@ -111,7 +112,7 @@ static void editor_buffer_set_line_slot(char dst[MAX_LINE_LEN],
 static void editor_buffer_insert_many(int pos, const GLCmd *cmds,
                                       const char *const *lines,
                                       int count, int old_count) {
-    ReplEditorBuffer *buf = repl_state_editor_buffer_mut();
+    ReplEditorBuffer *buf = editor_state_buffer_mut();
 
     if (!buf || count <= 0)
         return;
@@ -137,7 +138,7 @@ static void editor_buffer_insert_many(int pos, const GLCmd *cmds,
 
 static void editor_buffer_replace_one(int pos, const GLCmd *cmd,
                                       const char *line, int count) {
-    ReplEditorBuffer *buf = repl_state_editor_buffer_mut();
+    ReplEditorBuffer *buf = editor_state_buffer_mut();
 
     (void)cmd;  /* GLCmd.source removed; explicit line is required */
     if (!buf || pos < 0 || pos >= MAX_COMMANDS)
@@ -149,7 +150,7 @@ static void editor_buffer_replace_one(int pos, const GLCmd *cmd,
 }
 
 static void editor_buffer_delete_range(int start, int count, int old_count) {
-    ReplEditorBuffer *buf = repl_state_editor_buffer_mut();
+    ReplEditorBuffer *buf = editor_state_buffer_mut();
     int new_count;
 
     if (!buf || count <= 0)
@@ -171,7 +172,7 @@ static void editor_buffer_delete_range(int start, int count, int old_count) {
 static void editor_buffer_load_lines(const GLCmd *cmds,
                                      const char *const *lines,
                                      int count) {
-    ReplEditorBuffer *buf = repl_state_editor_buffer_mut();
+    ReplEditorBuffer *buf = editor_state_buffer_mut();
 
     if (!buf)
         return;
@@ -282,6 +283,6 @@ void repl_command_store_clear(ReplCommandStore *store) {
     if (!store || !store->count)
         return;
     *store->count = 0;
-    repl_state_editor_buffer_set_count(0);
+    editor_buffer_set_count(0);
     command_store_invalidate_after_mutation();
 }

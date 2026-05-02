@@ -257,10 +257,10 @@ int main() {
         ASSERT_INT("command_store_load edit clamp", repl_state_edit_line(), 2);
         ASSERT_INT("command_store_load state edit clamp",
                    repl_state_edit_line(), 2);
-        ASSERT_STR("command_store_load source", repl_state_editor_buffer_line(1),
+        ASSERT_STR("command_store_load source", editor_buffer_line(1),
                    "glColor3f(1, 0, 0);");
         ASSERT_STR("command_store_load state source",
-                   repl_state_editor_buffer_line(1),
+                   editor_buffer_line(1),
                    "glColor3f(1, 0, 0);");
         ASSERT_INT("command_store_load marks normals dirty",
                    repl_state_normals_dirty(), 1);

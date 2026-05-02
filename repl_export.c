@@ -68,7 +68,7 @@ static const char *export_document_text(int cmd_idx) {
     if (cmd_idx < 0 || cmd_idx >= repl_state_document_count())
         return "";
 
-    text = repl_state_editor_buffer_line(cmd_idx);
+    text = editor_buffer_line(cmd_idx);
     return (text && text[0]) ? text : "";
 }
 

@@ -292,7 +292,7 @@ const char *repl_search_row_text(int row_idx) {
     if (repl_state_insert_mode() && row_idx > edit_line)
         row_idx--;
     /* Source text lives in the editor buffer. */
-    const char *text = repl_state_editor_buffer_line(row_idx);
+    const char *text = editor_buffer_line(row_idx);
     if (text)
         return text;
     return "";

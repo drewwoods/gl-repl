@@ -305,7 +305,7 @@ static const char *execution_flat_text(const GLCmd *flat_cmd) {
         return "";
 
     {
-        const char *text = repl_state_editor_buffer_line(src_cmd_idx);
+        const char *text = editor_buffer_line(src_cmd_idx);
         return (text && text[0]) ? text : "";
     }
 }

@@ -356,7 +356,7 @@ int main(void) {
         int have_bound = 0;
         for (int i = 0; i < repl_state_document_count(); i++) {
             if (repl_state_document_cmds_mut()[i].type == CMD_FOR_BEGIN &&
-                strstr(repl_state_editor_buffer_line(i) ? repl_state_editor_buffer_line(i) : "", "sides + 1") != NULL &&
+                strstr(editor_buffer_line(i) ? editor_buffer_line(i) : "", "sides + 1") != NULL &&
                 repl_state_document_cmds_mut()[i].has_vars) {
                 have_bound = 1;
             }
@@ -432,25 +432,25 @@ int main(void) {
     ASSERT_TRUE("loaded shape teapot fifth",  repl_state_document_cmds_mut()[4].type == CMD_GLUT_TEAPOT);
     ASSERT_TRUE("loaded shape cube sixth",    repl_state_document_cmds_mut()[5].type == CMD_GLUT_CUBE);
     ASSERT_TRUE("loaded shape sphere keeps expr source",
-                strstr(repl_state_editor_buffer_line(1) ? repl_state_editor_buffer_line(1) : "",
+                strstr(editor_buffer_line(1) ? editor_buffer_line(1) : "",
                        "glutSolidSphere(x, 16, 12);") != NULL);
     ASSERT_TRUE("loaded shape sphere has_vars set",
                 repl_state_document_cmds_mut()[1].has_vars == 1);
     ASSERT_TRUE("loaded shape cone source intact",
-                strstr(repl_state_editor_buffer_line(2) ? repl_state_editor_buffer_line(2) : "",
+                strstr(editor_buffer_line(2) ? editor_buffer_line(2) : "",
                        "glutSolidCone(0.15, 1.5, 8, 1);") != NULL);
     ASSERT_TRUE("loaded shape torus source intact",
-                strstr(repl_state_editor_buffer_line(3) ? repl_state_editor_buffer_line(3) : "",
+                strstr(editor_buffer_line(3) ? editor_buffer_line(3) : "",
                        "glutSolidTorus(0.1, 0.35, 12, 4);") != NULL);
     ASSERT_TRUE("loaded shape teapot source intact",
-                strstr(repl_state_editor_buffer_line(4) ? repl_state_editor_buffer_line(4) : "",
+                strstr(editor_buffer_line(4) ? editor_buffer_line(4) : "",
                        "glutSolidTeapot(0.25);") != NULL);
     ASSERT_TRUE("loaded shape cube source intact",
-                strstr(repl_state_editor_buffer_line(5) ? repl_state_editor_buffer_line(5) : "",
+                strstr(editor_buffer_line(5) ? editor_buffer_line(5) : "",
                        "glutSolidCube(0.5);") != NULL);
     for (int i = 1; i < repl_state_document_count(); i++)
         ASSERT_TRUE("loaded shape source omits g_quadric",
-                    strstr(repl_state_editor_buffer_line(i) ? repl_state_editor_buffer_line(i) : "",
+                    strstr(editor_buffer_line(i) ? editor_buffer_line(i) : "",
                            "g_quadric") == NULL);
 
     repl_reset_state(); declare_test_vars();

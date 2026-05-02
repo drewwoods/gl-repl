@@ -15,7 +15,7 @@
  * the editor buffer line at index i, falling back to "" if unset. */
 static const char *spike_text_for(const GLCmd *src_cmd, int i) {
     (void)src_cmd;
-    const char *text = repl_state_editor_buffer_line(i);
+    const char *text = editor_buffer_line(i);
     return (text && text[0]) ? text : "";
 }
 

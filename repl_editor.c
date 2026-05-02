@@ -195,7 +195,7 @@ void repl_clear_all_cmds(void) {
 }
 
 static const char *editor_committed_line_text(int idx) {
-    const char *text = repl_state_editor_buffer_line(idx);
+    const char *text = editor_buffer_line(idx);
     return (text && text[0]) ? text : "";
 }
 
@@ -871,7 +871,7 @@ static int handle_comment_toggle_key_route(unsigned char key) {
             {
                 GLCmd *cur = &repl_state_document_cmds_mut()[repl_state_edit_line()];
                 if (cur->type == CMD_COMMENT) {
-                    const char *s = repl_state_editor_buffer_line(repl_state_edit_line());
+                    const char *s = editor_buffer_line(repl_state_edit_line());
                     if (!s) s = "";
                     while (*s && isspace((unsigned char)*s))
                         s++;
@@ -980,7 +980,7 @@ static int handle_comment_toggle_key_route(unsigned char key) {
                            cur->type != CMD_FOR_END) {
                     char new_src[MAX_LINE_LEN];
                     GLCmd commented = *cur;
-                    const char *s = repl_state_editor_buffer_line(repl_state_edit_line());
+                    const char *s = editor_buffer_line(repl_state_edit_line());
                     if (!s) s = "";
                     int leading_ws_len = 0;
                     while (s[leading_ws_len] && isspace((unsigned char)s[leading_ws_len]))

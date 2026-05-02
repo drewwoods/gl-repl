@@ -29,7 +29,7 @@ static int   s_replay_predef_snap_valid[MAX_COMMANDS];
 static void replay_build_predef_snapshots(void);
 
 static const char *replay_document_text(int cmd_idx) {
-    const char *text = repl_state_editor_buffer_line(cmd_idx);
+    const char *text = editor_buffer_line(cmd_idx);
     return (text && text[0]) ? text : "";
 }
 

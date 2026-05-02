@@ -333,7 +333,7 @@ int try_commit_float_decl(void) {
                 /* Check if this removed name is still used anywhere. */
                 for (int cmd_idx = 0; cmd_idx < repl_state_document_count(); cmd_idx++) {
                     if (cmd_idx == insert_idx) continue;
-                    if (repl_eval_source_uses_ident(repl_state_editor_buffer_line(cmd_idx) ? repl_state_editor_buffer_line(cmd_idx) : "", nm)) {
+                    if (repl_eval_source_uses_ident(editor_buffer_line(cmd_idx) ? editor_buffer_line(cmd_idx) : "", nm)) {
                         char buf[128];
                         snprintf(buf, sizeof(buf),
                                  "variable '%s' is in use, cannot overwrite", nm);
@@ -509,7 +509,7 @@ int try_assign_variable(void) {
                         const char *nm = repl_state_document_cmds_mut()[insert_idx].var_names[decl_idx];
                         for (int cmd_idx = 0; cmd_idx < repl_state_document_count(); cmd_idx++) {
                             if (cmd_idx == insert_idx) continue;
-                            if (repl_eval_source_uses_ident(repl_state_editor_buffer_line(cmd_idx) ? repl_state_editor_buffer_line(cmd_idx) : "", nm)) {
+                            if (repl_eval_source_uses_ident(editor_buffer_line(cmd_idx) ? editor_buffer_line(cmd_idx) : "", nm)) {
                                 char buf[128];
                                 snprintf(buf, sizeof(buf),
                                          "variable '%s' is in use, cannot overwrite", nm);
@@ -923,7 +923,7 @@ int try_commit_func_def(void) {
                 }
                 for (int comment_idx = 0; comment_idx < comment_count; comment_idx++)
                     repl_copy_string_fits(comment_lines[comment_idx], MAX_LINE_LEN,
-                                          repl_state_editor_buffer_line(comment_start + comment_idx));
+                                          editor_buffer_line(comment_start + comment_idx));
             }
         }
 
