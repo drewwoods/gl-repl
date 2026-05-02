@@ -53,12 +53,11 @@ static ReplRuntimeState g_repl_state;
 #define g_current_block_begin       (g_repl_state.flat_program.current_block_begin_idx)
 #define g_current_block_end         (g_repl_state.flat_program.current_block_end_idx)
 #define g_current_block_line        (g_repl_state.flat_program.current_block_source_line_idx)
-#define g_input                     (g_repl_state.editor_input.input)
-#define g_input_len                 (g_repl_state.editor_input.input_len)
-#define g_cursor_pos                (g_repl_state.editor_input.cursor_pos)
-#define g_newline_buf               (g_repl_state.editor_input.pending_newline)
-#define g_newline_len               (g_repl_state.editor_input.pending_newline_len)
-#define g_inserting                 (g_repl_state.editor_input.insert_mode)
+/* g_input / g_cursor_pos / g_newline_buf / g_newline_len / g_inserting
+ * macros removed (Phase 1 commit 5). The editor_input slice now lives
+ * on g_editor_state.input in editor_state.c, where the dependent
+ * convenience getters (repl_state_input_text, _cursor_pos,
+ * _insert_mode, _pending_newline_*, etc.) are also implemented. */
 #define g_clipboard                 (g_repl_state.clipboard.cmds)
 #define g_clipboard_count           (g_repl_state.clipboard.cmd_count)
 #define g_sel_anchor                (g_repl_state.selection.anchor_idx)
@@ -396,26 +395,10 @@ void repl_state_time_reset_to_zero(void) {
     g_flat_dirty = 1;
 }
 
-ReplEditorInputView repl_state_editor_input(void) {
-    return (ReplEditorInputView){
-        .input = g_input,
-        .input_capacity = MAX_INPUT_LEN,
-        .input_len = g_input_len,
-        .cursor_pos = g_cursor_pos,
-        .edit_line_idx = g_edit_line,
-        .pending_newline = g_newline_buf,
-        .pending_newline_capacity = MAX_INPUT_LEN,
-        .pending_newline_len = g_newline_len,
-        .insert_mode = g_inserting,
-    };
-}
-
-ReplEditorInputState *repl_state_editor_input_mut(void) {
-    return &g_repl_state.editor_input;
-}
-
-/* Editor-owned text buffer accessors moved to editor_state.c (Phase 1
- * commit 4). Callers use editor_state_buffer / _mut and editor_buffer_*. */
+/* Editor-input + editor-buffer accessors moved to editor_state.c
+ * (Phase 1 commits 4-5). Use editor_state_input / _mut / _reset for
+ * the input slice, editor_state_buffer / _mut for the whole-buffer
+ * struct, and editor_buffer_* for slice-level line text. */
 
 const EditorTransformerList *repl_state_editor_transformers(void) {
     return &g_repl_state.editor_transformers;
@@ -488,92 +471,11 @@ int repl_state_editor_virtual_lines_append(int after_line_idx,
     return 1;
 }
 
-void repl_state_editor_input_reset(void) {
-    repl_state_input_clear();
-    repl_state_pending_newline_clear();
-    g_inserting = 0;
-}
-
-const char *repl_state_input_text(void) {
-    return g_input;
-}
-
-char *repl_state_input_buffer_mut(void) {
-    return g_input;
-}
-
-int repl_state_input_len(void) {
-    return g_input_len;
-}
-
-void repl_state_input_len_set(int input_len) {
-    if (input_len < 0)
-        input_len = 0;
-    if (input_len >= MAX_INPUT_LEN)
-        input_len = MAX_INPUT_LEN - 1;
-    g_input_len = input_len;
-    g_input[g_input_len] = '\0';
-    repl_state_cursor_pos_set(g_cursor_pos);
-}
-
-void repl_state_input_set_text(const char *text) {
-    repl_copy_string_fits(g_input, MAX_INPUT_LEN, text ? text : "");
-    repl_state_input_len_set((int)strlen(g_input));
-    repl_state_cursor_pos_set(g_input_len);
-}
-
-void repl_state_input_clear(void) {
-    g_input[0] = '\0';
-    g_input_len = 0;
-    g_cursor_pos = 0;
-}
-
-int repl_state_cursor_pos(void) {
-    return g_cursor_pos;
-}
-
-void repl_state_cursor_pos_set(int cursor_pos) {
-    if (cursor_pos < 0)
-        cursor_pos = 0;
-    if (cursor_pos > g_input_len)
-        cursor_pos = g_input_len;
-    g_cursor_pos = cursor_pos;
-}
-
-int repl_state_insert_mode(void) {
-    return g_inserting;
-}
-
-void repl_state_insert_mode_set(int insert_mode) {
-    g_inserting = insert_mode ? 1 : 0;
-}
-
-char *repl_state_pending_newline_buffer_mut(void) {
-    return g_newline_buf;
-}
-
-int repl_state_pending_newline_len(void) {
-    return g_newline_len;
-}
-
-void repl_state_pending_newline_len_set(int newline_len) {
-    if (newline_len < 0)
-        newline_len = 0;
-    if (newline_len >= MAX_INPUT_LEN)
-        newline_len = MAX_INPUT_LEN - 1;
-    g_newline_len = newline_len;
-    g_newline_buf[g_newline_len] = '\0';
-}
-
-void repl_state_pending_newline_set_text(const char *text) {
-    repl_copy_string_fits(g_newline_buf, MAX_INPUT_LEN, text ? text : "");
-    repl_state_pending_newline_len_set((int)strlen(g_newline_buf));
-}
-
-void repl_state_pending_newline_clear(void) {
-    g_newline_buf[0] = '\0';
-    g_newline_len = 0;
-}
+/* editor_state_input_reset and the editor_input convenience getters
+ * (input_text / input_len / cursor_pos / insert_mode / pending_newline_*)
+ * moved to editor_state.c (Phase 1 commit 5). The editor_state_input
+ * struct accessor and the new editor_state_input_reset entry point
+ * live there too. */
 
 ReplSelectionState repl_state_selection(void) {
     return g_repl_state.selection;

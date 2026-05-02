@@ -378,8 +378,9 @@ Branch: `feature/editor-ownership-gap-cleanup`. Tracked against the
 | 2 | docs: record baseline editor ownership audit counts | ✅ landed (2026-05-02) |
 | 3 | refactor: add EditorState + UiState storage + compatibility forwarders | ✅ landed (2026-05-02) |
 | 4 | refactor: migrate editor_buffer slice to EditorState | ✅ landed (2026-05-02) |
-| 5 | refactor: migrate editor_input / cursor / edit_line / insert_mode / pending_newline | next |
-| 6–17 | (selection/clipboard → UI slices → store text drop → compile gate → UiAction → renames → hard guards) | pending |
+| 5 | refactor: migrate editor_input slice to EditorState | ✅ landed (2026-05-02) |
+| 6 | refactor: migrate selection + clipboard slices | next |
+| 7–17 | (search/autocomplete → UI slices → store text drop → compile gate → UiAction → renames → hard guards) | pending |
 
 ## Phase 0 — Audits Before Moving Code
 
@@ -538,6 +539,20 @@ Each migration is a separate commit with passing tests at the end:
    longer in the regex's union).
 2. `editor_input` (typing buffer / cursor / edit-line / insert mode /
    pending newline).
+   ✅ **Landed (commit 5).** `ReplEditorInputState` and
+   `ReplEditorInputView` typedefs moved to `editor_state.h`; the field
+   `editor_input` was removed from `ReplRuntimeState`; storage now
+   lives at `g_editor_state.input`. New API: `editor_state_input` /
+   `_mut` / `_reset`. The 17 callers of `repl_state_editor_input*` were
+   migrated mechanically. The convenience getters
+   (`repl_state_input_text` / `_cursor_pos` / `_insert_mode` /
+   `_pending_newline_*` etc.) keep their public names but their impls
+   moved from `repl_state.c` to `editor_state.c`, where they read
+   `g_editor_state.input` directly. `edit_line_idx` stays on
+   `ReplDocumentState` (the canonical home); the input view builder
+   forward-declares `repl_state_edit_line()` to populate the view's
+   `edit_line_idx` field. Audit deltas: section-1 1460 → 1363 (−97);
+   `repl_state.c` shrank from 970 → 872 lines.
 3. `selection` + `clipboard`.
 4. `search` + `autocomplete`.
 5. transformer / highlight / virtual-line snapshot lists.

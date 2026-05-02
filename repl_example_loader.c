@@ -211,7 +211,7 @@ static void load_example_lines(const char *const *lines) {
     repl_state_flat_program_set_count(0);
     repl_state_insert_mode_set(0);
     {
-        ReplEditorInputState *inp = repl_state_editor_input_mut();
+        ReplEditorInputState *inp = editor_state_input_mut();
         inp->input[0] = '\0';
         inp->input_len = 0;
         repl_state_cursor_pos_set(0);
@@ -237,7 +237,7 @@ static void load_example_lines(const char *const *lines) {
     repl_state_insert_mode_set(0);
     repl_state_edit_line_set(repl_state_document_count());
     {
-        ReplEditorInputState *inp = repl_state_editor_input_mut();
+        ReplEditorInputState *inp = editor_state_input_mut();
         inp->input[0] = '\0';
         inp->input_len = 0;
         repl_state_cursor_pos_set(0);

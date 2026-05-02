@@ -102,7 +102,7 @@ void repl_commit_reset_transients(void) {
 }
 
 int try_commit_float_decl(void) {
-    const char *p = repl_state_editor_input().input;
+    const char *p = editor_state_input().input;
     while (*p && isspace((unsigned char)*p)) p++;
     if (strncmp(p, "float", 5) != 0) return 0;
     if (isalnum((unsigned char)p[5]) || p[5] == '_') return 0;
@@ -413,7 +413,7 @@ int try_commit_float_decl(void) {
         set_status(msg);
     }
     {
-        ReplEditorInputState *inp = repl_state_editor_input_mut();
+        ReplEditorInputState *inp = editor_state_input_mut();
         inp->input[0] = '\0';
         inp->input_len = 0;
     }
@@ -430,12 +430,12 @@ int try_assign_variable(void) {
     float val;
     char indent[32];
 
-    if (!repl_extract_assignment_parts(repl_state_editor_input().input, name, sizeof(name), rhs, sizeof(rhs)))
+    if (!repl_extract_assignment_parts(editor_state_input().input, name, sizeof(name), rhs, sizeof(rhs)))
         return 0;
 
     comment[0] = '\0';
     {
-        const char *comment_p = strstr(repl_state_editor_input().input, "//");
+        const char *comment_p = strstr(editor_state_input().input, "//");
         if (comment_p) {
             while (*comment_p && isspace((unsigned char)*comment_p))
                 comment_p++;
@@ -560,7 +560,7 @@ int try_assign_variable(void) {
         set_status(msg);
     }
     {
-        ReplEditorInputState *inp = repl_state_editor_input_mut();
+        ReplEditorInputState *inp = editor_state_input_mut();
         inp->input[0] = '\0';
         inp->input_len = 0;
     }
@@ -570,7 +570,7 @@ int try_assign_variable(void) {
 }
 
 int try_commit_for_loop(void) {
-    const char *p = repl_state_editor_input().input;
+    const char *p = editor_state_input().input;
     while (*p && isspace((unsigned char)*p))
         p++;
     if (strncmp(p, "for(", 4) != 0 && strncmp(p, "for (", 5) != 0)
@@ -708,7 +708,7 @@ int try_commit_for_loop(void) {
                     repl_state_edit_line_set(repl_state_edit_line() + 1);
                     repl_state_insert_mode_set(1);
                     {
-                        ReplEditorInputState *inp = repl_state_editor_input_mut();
+                        ReplEditorInputState *inp = editor_state_input_mut();
                         inp->input[0] = '\0';
                         inp->input_len = 0;
                     }
@@ -731,7 +731,7 @@ int try_commit_for_loop(void) {
                 repl_state_edit_line_set(pos + 1);
                 repl_state_insert_mode_set(1);
                 {
-                    ReplEditorInputState *inp = repl_state_editor_input_mut();
+                    ReplEditorInputState *inp = editor_state_input_mut();
                     inp->input[0] = '\0';
                     inp->input_len = 0;
                 }
@@ -801,13 +801,13 @@ int try_commit_for_loop(void) {
                 repl_state_edit_line_set(pos + 3);
                 repl_state_insert_mode_set(0);
                 {
-                    ReplEditorInputState *inp = repl_state_editor_input_mut();
+                    ReplEditorInputState *inp = editor_state_input_mut();
                     inp->input[0] = '\0';
                     inp->input_len = 0;
                 }
                 repl_state_cursor_pos_set(0);
                 {
-                    ReplEditorInputState *inp = repl_state_editor_input_mut();
+                    ReplEditorInputState *inp = editor_state_input_mut();
                     inp->pending_newline[0] = '\0';
                     inp->pending_newline_len = 0;
                 }
@@ -829,13 +829,13 @@ int try_commit_func_def(void) {
     int fn = -1;
     int param_count = 0;
     char param_names[MAX_EXPR_VARS][16];
-    const char *trimmed = repl_state_editor_input().input;
+    const char *trimmed = editor_state_input().input;
 
     while (*trimmed && isspace((unsigned char)*trimmed))
         trimmed++;
     if (strchr(trimmed, '(') && strchr(trimmed, '{') == NULL)
         return 0;
-    if (!parse_repl_func_signature(repl_state_editor_input().input, &fn,
+    if (!parse_repl_func_signature(editor_state_input().input, &fn,
                                    param_names, MAX_EXPR_VARS,
                                    &param_count))
         return 0;
@@ -882,7 +882,7 @@ int try_commit_func_def(void) {
             repl_state_edit_line_set(edit_pos + 1);
             repl_state_insert_mode_set(1);
             {
-                ReplEditorInputState *inp = repl_state_editor_input_mut();
+                ReplEditorInputState *inp = editor_state_input_mut();
                 inp->input[0] = '\0';
                 inp->input_len = 0;
             }
@@ -963,7 +963,7 @@ int try_commit_func_def(void) {
         repl_state_edit_line_set(pos + comment_count + 1);
         repl_state_insert_mode_set(1);
         {
-            ReplEditorInputState *inp = repl_state_editor_input_mut();
+            ReplEditorInputState *inp = editor_state_input_mut();
             inp->input[0] = '\0';
             inp->input_len = 0;
         }
@@ -975,7 +975,7 @@ int try_commit_func_def(void) {
 }
 
 int try_commit_if_block(void) {
-    const char *p = repl_state_editor_input().input;
+    const char *p = editor_state_input().input;
     while (*p && isspace((unsigned char)*p))
         p++;
     if (strncmp(p, "if(", 3) != 0 && strncmp(p, "if (", 4) != 0)
@@ -1077,7 +1077,7 @@ int try_commit_if_block(void) {
             repl_state_edit_line_set(repl_state_edit_line() + 1);
             repl_state_insert_mode_set(1);
             {
-                ReplEditorInputState *inp = repl_state_editor_input_mut();
+                ReplEditorInputState *inp = editor_state_input_mut();
                 inp->input[0] = '\0';
                 inp->input_len = 0;
             }
@@ -1105,7 +1105,7 @@ int try_commit_if_block(void) {
         repl_state_edit_line_set(pos + 1);
         repl_state_insert_mode_set(1);
         {
-            ReplEditorInputState *inp = repl_state_editor_input_mut();
+            ReplEditorInputState *inp = editor_state_input_mut();
             inp->input[0] = '\0';
             inp->input_len = 0;
         }
@@ -1117,7 +1117,7 @@ int try_commit_if_block(void) {
 }
 
 int try_commit_close_brace(void) {
-    const char *p = repl_state_editor_input().input;
+    const char *p = editor_state_input().input;
     while (*p && isspace((unsigned char)*p))
         p++;
     if (*p != '}')
@@ -1159,7 +1159,7 @@ int try_commit_close_brace(void) {
             apply_func_decl_resume(end_type);
             repl_state_insert_mode_set(keep_inserting ? 1 : 0);
             {
-                ReplEditorInputState *inp = repl_state_editor_input_mut();
+                ReplEditorInputState *inp = editor_state_input_mut();
                 inp->input[0] = '\0';
                 inp->input_len = 0;
             }
@@ -1192,13 +1192,13 @@ int try_commit_close_brace(void) {
         apply_func_decl_resume(end_type);
         repl_state_insert_mode_set(keep_inserting ? 1 : 0);
         {
-            ReplEditorInputState *inp = repl_state_editor_input_mut();
+            ReplEditorInputState *inp = editor_state_input_mut();
             inp->input[0] = '\0';
             inp->input_len = 0;
         }
         repl_state_cursor_pos_set(0);
         {
-            ReplEditorInputState *inp = repl_state_editor_input_mut();
+            ReplEditorInputState *inp = editor_state_input_mut();
             inp->pending_newline[0] = '\0';
             inp->pending_newline_len = 0;
         }
@@ -1247,7 +1247,7 @@ int try_commit_var_statements_then_insert(void) {
     if (try_commit_float_decl()) {
         repl_state_insert_mode_set(1);
         {
-            ReplEditorInputState *inp = repl_state_editor_input_mut();
+            ReplEditorInputState *inp = editor_state_input_mut();
             inp->input[0] = '\0';
             inp->input_len = 0;
         }
@@ -1258,7 +1258,7 @@ int try_commit_var_statements_then_insert(void) {
     if (try_assign_variable()) {
         repl_state_insert_mode_set(1);
         {
-            ReplEditorInputState *inp = repl_state_editor_input_mut();
+            ReplEditorInputState *inp = editor_state_input_mut();
             inp->input[0] = '\0';
             inp->input_len = 0;
         }

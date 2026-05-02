@@ -60,7 +60,7 @@ static SceneFocusVertex imrepl_ctrl_build_focus_vertex(void) {
 static SceneGuideSnapshot imrepl_ctrl_build_guide_snapshot(const SceneRenderConfig *config) {
     ReplPresentationState presentation = repl_state_presentation();
     ReplVariableView vars = repl_state_variables();
-    ReplEditorInputView input = repl_state_editor_input();
+    ReplEditorInputView input = editor_state_input();
     ReplPredefView predef = repl_eval_predef_view();
 
     SceneGuideSnapshot snapshot = {
@@ -343,7 +343,7 @@ static void imrepl_ctrl_build_ui_snapshot(UiRenderSnapshot *snap) {
     snap->selection      = repl_state_selection();
 
     snap->variables      = repl_state_variables();
-    snap->editor_input   = repl_state_editor_input();
+    snap->editor_input   = editor_state_input();
     snap->import_export  = repl_state_import_export();
     snap->flat_program   = repl_state_flat_program_view();
     snap->predef         = repl_eval_predef_view();

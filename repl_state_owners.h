@@ -50,13 +50,10 @@ void                     repl_state_variables_reset(void);
 void                     repl_state_time_advance(float dt);
 void                     repl_state_time_reset_to_zero(void);
 
-ReplEditorInputView          repl_state_editor_input(void);
-ReplEditorInputState       *repl_state_editor_input_mut(void);
-void                        repl_state_editor_input_reset(void);
-
-/* Editor-owned text buffer accessors moved to editor_state.h
- * (Phase 1 commit 4). Use `editor_state_buffer / _mut` for the whole
- * struct, `editor_buffer_line / set_line / count / set_count` for
+/* Editor-input + editor-buffer accessors moved to editor_state.h
+ * (Phase 1 commits 4-5). Use `editor_state_input / _mut / _reset` for
+ * the input slice, `editor_state_buffer / _mut` for the whole-buffer
+ * struct, and `editor_buffer_line / set_line / count / set_count` for
  * slice-level access. */
 
 /* Per-frame editor transformer snapshot pushed by the controller after

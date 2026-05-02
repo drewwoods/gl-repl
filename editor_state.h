@@ -34,8 +34,39 @@ typedef struct {
     int  line_count;
 } ReplEditorBuffer;
 
+/* Live editor-input state: the typing buffer, cursor, insert mode, and
+ * pending-newline scratch. Owned by EditorState (Phase 1 commit 5).
+ * `edit_line_idx` exists for view symmetry but is *not* the canonical
+ * edit-line cursor — that lives on `document.edit_line_idx`; the view
+ * builder copies it in for callers that consume the input view as a
+ * single struct. */
 typedef struct {
-    ReplEditorBuffer buffer;
+    char input[MAX_INPUT_LEN];
+    int  input_capacity;
+    int  input_len;
+    int  cursor_pos;
+    int  edit_line_idx;
+    char pending_newline[MAX_INPUT_LEN];
+    int  pending_newline_capacity;
+    int  pending_newline_len;
+    int  insert_mode;
+} ReplEditorInputState;
+
+typedef struct {
+    const char *input;
+    int         input_capacity;
+    int         input_len;
+    int         cursor_pos;
+    int         edit_line_idx;
+    const char *pending_newline;
+    int         pending_newline_capacity;
+    int         pending_newline_len;
+    int         insert_mode;
+} ReplEditorInputView;
+
+typedef struct {
+    ReplEditorBuffer     buffer;
+    ReplEditorInputState input;
 } EditorState;
 
 /* Capture / restore / reset symmetry with repl_state_*. */
@@ -57,5 +88,13 @@ const char *editor_buffer_line(int idx);
 void        editor_buffer_set_line(int idx, const char *text);
 int         editor_buffer_count(void);
 void        editor_buffer_set_count(int count);
+
+/* Editor-input slice API. The view variant returns the input by-value
+ * with `edit_line_idx` populated from the document cursor (the
+ * canonical edit-line index lives on ReplDocumentState, not on the
+ * input slice itself). */
+ReplEditorInputView   editor_state_input(void);
+ReplEditorInputState *editor_state_input_mut(void);
+void                  editor_state_input_reset(void);
 
 #endif /* EDITOR_STATE_H */

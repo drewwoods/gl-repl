@@ -1182,12 +1182,12 @@ int ui_panels_handle_code_panel_click(int mx, int my) {
     int idx_col_w = repl_state_presentation().show_vertex_indices ? (6 * FONT_W) : 0;
     int text_x = CODE_MARGIN_X + linenum_w + FONT_W + idx_col_w;
     int indent_chars = repl_code_panel_document_active_indent_chars();
-    int seg_start = repl_state_editor_input().input_len;
+    int seg_start = editor_state_input().input_len;
     int seg_len = 0;
     int seg_x = text_x + indent_chars * FONT_W;
     int col;
 
-    repl_code_panel_document_segment_for_row(repl_state_editor_input().input,
+    repl_code_panel_document_segment_for_row(editor_state_input().input,
                                seg_x, panel_w, row_offset,
                                &seg_start, &seg_len, &seg_x);
 
@@ -1196,7 +1196,7 @@ int ui_panels_handle_code_panel_click(int mx, int my) {
     if (col > seg_len) col = seg_len;
     int new_cursor = seg_start + col;
     {
-        int cur_input_len = repl_state_editor_input().input_len;
+        int cur_input_len = editor_state_input().input_len;
         if (new_cursor > cur_input_len) new_cursor = cur_input_len;
     }
 

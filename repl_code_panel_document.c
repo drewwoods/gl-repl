@@ -141,7 +141,7 @@ static int code_panel_command_main_rows(int cmd_idx, int panel_w, int text_x) {
     if (!repl_state_insert_mode() && cmd_idx == repl_state_edit_line()) {
         int indent_chars = repl_code_panel_document_active_indent_chars();
         return repl_code_panel_document_row_count_for_text(
-            repl_state_editor_input().input, text_x + indent_chars * FONT_W, panel_w);
+            editor_state_input().input, text_x + indent_chars * FONT_W, panel_w);
     }
 
     {
@@ -170,14 +170,14 @@ static void code_panel_precompute_layout_rows(int panel_w, int text_x,
 static int code_panel_insert_rows(int panel_w, int text_x) {
     int indent_chars = repl_code_panel_document_active_indent_chars();
     return repl_code_panel_document_row_count_for_text(
-        repl_state_editor_input().input, text_x + indent_chars * FONT_W, panel_w);
+        editor_state_input().input, text_x + indent_chars * FONT_W, panel_w);
 }
 
 static int code_panel_newline_rows(int panel_w, int text_x) {
     if (repl_state_edit_line() == repl_state_document_count()) {
         int indent_chars = repl_code_panel_document_active_indent_chars();
         return repl_code_panel_document_row_count_for_text(
-            repl_state_editor_input().input, text_x + indent_chars * FONT_W, panel_w);
+            editor_state_input().input, text_x + indent_chars * FONT_W, panel_w);
     }
     return 1;
 }
@@ -194,7 +194,7 @@ static int code_panel_cursor_doc_line_from_layout(
             cursor_doc_line += replay_extra_rows[cmd_idx];
         }
         cursor_doc_line += repl_code_panel_document_cursor_row_for_text(
-            repl_state_editor_input().input, text_x + repl_code_panel_document_active_indent_chars() * FONT_W,
+            editor_state_input().input, text_x + repl_code_panel_document_active_indent_chars() * FONT_W,
             panel_w, repl_state_cursor_pos(), NULL, NULL, NULL);
     } else if (repl_state_edit_line() < repl_state_document_count()) {
         /* Accumulate rows up to the edit line in overwrite mode. */
@@ -203,7 +203,7 @@ static int code_panel_cursor_doc_line_from_layout(
             cursor_doc_line += replay_extra_rows[cmd_idx];
         }
         cursor_doc_line += repl_code_panel_document_cursor_row_for_text(
-            repl_state_editor_input().input, text_x + repl_code_panel_document_active_indent_chars() * FONT_W,
+            editor_state_input().input, text_x + repl_code_panel_document_active_indent_chars() * FONT_W,
             panel_w, repl_state_cursor_pos(), NULL, NULL, NULL);
     } else {
         /* Accumulate all rows when edit line is past the end. */
@@ -212,7 +212,7 @@ static int code_panel_cursor_doc_line_from_layout(
             cursor_doc_line += replay_extra_rows[cmd_idx];
         }
         cursor_doc_line += repl_code_panel_document_cursor_row_for_text(
-            repl_state_editor_input().input, text_x + repl_code_panel_document_active_indent_chars() * FONT_W,
+            editor_state_input().input, text_x + repl_code_panel_document_active_indent_chars() * FONT_W,
             panel_w, repl_state_cursor_pos(), NULL, NULL, NULL);
     }
 

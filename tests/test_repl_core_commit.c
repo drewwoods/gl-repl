@@ -305,7 +305,7 @@ int main(void) {
     ASSERT_TRUE("label stored as C label", strcmp(editor_buffer_line(0) ? editor_buffer_line(0) : "", "walk:") == 0);
     repl_navigate_to_line(0);
     ASSERT_TRUE("label loads back into editor as repl syntax",
-                strcmp(repl_state_editor_input().input, ":walk") == 0);
+                strcmp(editor_state_input().input, ":walk") == 0);
     repl_keyboard_func(';', 0, 0);
     ASSERT_TRUE("recommitting loaded label keeps label type", repl_state_document_cmds_mut()[0].type == CMD_LABEL);
     ASSERT_TRUE("recommitting loaded label keeps source", strcmp(editor_buffer_line(0) ? editor_buffer_line(0) : "", "walk:") == 0);
@@ -329,7 +329,7 @@ int main(void) {
     ASSERT_TRUE("enter at line start enters insert mode", repl_state_insert_mode() == 1);
     ASSERT_TRUE("enter at line start keeps insertion index", repl_state_edit_line() == 1);
     {
-        ReplEditorInputState *inp = repl_state_editor_input_mut();
+        ReplEditorInputState *inp = editor_state_input_mut();
         strcpy(inp->input, "glColor3f(1, 0, 0)");
         inp->input_len = (int)strlen(inp->input);
         repl_state_cursor_pos_set(inp->input_len);
@@ -417,7 +417,7 @@ int main(void) {
                 strcmp(g_ac_hint, "x, y, z)") == 0);
     repl_keyboard_func('\t', 0, 0);
     ASSERT_TRUE("tab inserts function call prefix only",
-                strcmp(repl_state_editor_input().input, "glVertex3f(") == 0);
+                strcmp(editor_state_input().input, "glVertex3f(") == 0);
     ASSERT_TRUE("function call hint starts at first parameter",
                 strcmp(g_ac_hint, "x, y, z)") == 0);
     repl_keyboard_func('1', 0, 0);

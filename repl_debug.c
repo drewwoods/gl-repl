@@ -97,7 +97,6 @@ void repl_debug_dump_runtime_state_layout(FILE *out) {
     X(ReplDocumentState, document)                                                                 \
     X(ReplFlatProgramState, flat_program)                                                          \
     X(ReplVariableState, variables)                                                                \
-    X(ReplEditorInputState, editor_input)                                                          \
     X(ReplSelectionState, selection)                                                               \
     X(ReplClipboardState, clipboard)                                                               \
     X(ReplCodePanelRuntimeState, code_panel)                                                       \

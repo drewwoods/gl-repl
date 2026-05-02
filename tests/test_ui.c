@@ -49,7 +49,7 @@ static void make_test_ui_snapshot(UiRenderSnapshot *snap) {
     snap->variable_drag  = repl_state_variable_drag();
     snap->selection      = repl_state_selection();
     snap->variables      = repl_state_variables();
-    snap->editor_input   = repl_state_editor_input();
+    snap->editor_input   = editor_state_input();
     snap->import_export  = repl_state_import_export();
     snap->flat_program   = repl_state_flat_program_view();
     snap->predef         = repl_eval_predef_view();

@@ -287,7 +287,7 @@ int main() {
 
         repl_reset_state(); declare_test_vars();
 
-        input = repl_state_editor_input_mut();
+        input = editor_state_input_mut();
         ASSERT_TRUE("editor input facade uses input buffer",
                     input->input == repl_state_input_buffer_mut());
         repl_state_input_set_text("xyz");
@@ -296,7 +296,7 @@ int main() {
                     input->cursor_pos == repl_state_cursor_pos());
 
         repl_state_input_set_text("abc");
-        ASSERT_STR("state input set text", repl_state_editor_input().input, "abc");
+        ASSERT_STR("state input set text", editor_state_input().input, "abc");
         ASSERT_INT("state input set len", repl_state_input_len(), 3);
         ASSERT_INT("state input cursor at end", repl_state_cursor_pos(), 3);
         repl_state_cursor_pos_set(99);
@@ -327,8 +327,8 @@ int main() {
         repl_state_clipboard_clear();
         ASSERT_INT("state clipboard clear", repl_state_clipboard_count(), 0);
 
-        repl_state_editor_input_reset();
-        ASSERT_STR("state input reset text", repl_state_editor_input().input, "");
+        editor_state_input_reset();
+        ASSERT_STR("state input reset text", editor_state_input().input, "");
         ASSERT_INT("state input reset inserting", repl_state_insert_mode(), 0);
         ASSERT_STR("state newline reset text", repl_state_pending_newline_buffer_mut(), "");
     }
