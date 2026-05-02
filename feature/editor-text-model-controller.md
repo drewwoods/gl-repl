@@ -11,12 +11,14 @@ The correction is simple:
 The editor is the model/controller for textual documents.
 UI is a view and hit-test layer.
 REPL validates and compiles committed source text.
-imrepl_ctrl routes between subsystems.
+imrepl_ctrl routes between subsystems and builds snapshots.
 ```
 
 The editor should not be reduced to a passive text buffer behind UI
-actions. It should own text behavior: key handling, mouse handling,
-scrolling, search, autocomplete state, undo, and commit orchestration.
+actions, and `imrepl_ctrl` should not become a god-controller full of
+editor internals. The editor owns text behavior: key handling, mouse
+handling, scrolling, search, autocomplete state, undo, and commit
+orchestration.
 
 ---
 
@@ -49,15 +51,24 @@ REPL owns source semantics:
     completion candidates / rules
     parsed program state
 
-imrepl_ctrl owns routing:
+imrepl_ctrl owns routing and frame coordination:
     raw GLUT callback entry
     focus / region dispatch
     cross-subsystem coordination
     snapshot construction
+    diagnostic relay
 ```
 
 Only committed source/program changes go through REPL validation. Editor-local
 operations do not.
+
+The key distinction:
+
+```text
+imrepl_ctrl routes the event.
+The editor drives the editor UI behavior.
+UI draws and hit-tests.
+```
 
 ---
 
@@ -69,7 +80,8 @@ The prior Phase 4 direction drifted toward:
 UI input handler -> large UiAction enum -> controller mutates everything
 ```
 
-That is not the right model. It makes UI look like the editor controller.
+That is not the right model. It makes UI look like the editor controller and
+encourages `imrepl_ctrl` to accumulate one wrapper per editor operation.
 
 The corrected model is:
 
@@ -86,6 +98,131 @@ what that means.
 
 ---
 
+## Who Drives The Editor UI?
+
+The editor drives text-document UI behavior.
+
+`imrepl_ctrl` does **not** implement cursor movement, scrolling, search,
+selection, autocomplete, clipboard, or undo. It only routes raw input to the
+editor once focus/hit-testing says the event belongs to a text document.
+
+UI does not implement text behavior either. UI renders an editor snapshot and
+returns neutral `UiHit` results.
+
+The editor receives editor events plus hit-test context and mutates
+`EditorState` internally. It exposes a compact render snapshot for UI and a
+small commit boundary for REPL validation.
+
+In short:
+
+```text
+UI              sees pixels and rectangles
+imrepl_ctrl     sees focus, routes, and subsystem boundaries
+editor          sees text-document intent and owns editor state transitions
+REPL            sees proposed committed source text
+```
+
+---
+
+## imrepl_ctrl Non-Goals
+
+`imrepl_ctrl` is the application router and frame coordinator. It should not
+mirror the editor API.
+
+Avoid this shape:
+
+```c
+imrepl_ctrl_editor_search_next();
+imrepl_ctrl_editor_scroll(int delta);
+imrepl_ctrl_editor_move_cursor(int line, int col);
+imrepl_ctrl_editor_accept_autocomplete();
+imrepl_ctrl_editor_cut();
+imrepl_ctrl_editor_paste();
+```
+
+That shape makes editor state bubble upward into `imrepl_ctrl` and recreates a
+god-controller.
+
+Prefer this shape:
+
+```c
+editor_handle_key(EditorState *editor,
+                  const EditorKeyEvent *ev,
+                  const EditorServices *services);
+
+editor_handle_mouse(EditorState *editor,
+                    const EditorMouseEvent *ev,
+                    const UiHit *hit,
+                    const EditorServices *services);
+
+editor_handle_scroll(EditorState *editor,
+                     int delta,
+                     const UiHit *hit);
+```
+
+Then `imrepl_ctrl` only routes:
+
+```c
+switch (hit.kind) {
+case UI_HIT_CODE_TEXT:
+case UI_HIT_CODE_GUTTER:
+case UI_HIT_HELP_PANEL:
+    editor_handle_mouse(editor_state_mut(), &ev, &hit, &editor_services);
+    break;
+
+case UI_HIT_VARIABLE_SLIDER:
+    variable_panel_handle_mouse(variable_panel_state_mut(), &ev, &hit);
+    break;
+
+case UI_HIT_REPLAY_BUTTON:
+    replay_handle_mouse(replay_state_mut(), &ev, &hit);
+    break;
+}
+```
+
+The controller routes to owners. Owners implement behavior.
+
+---
+
+## Avoid Bubbling Editor State Upward
+
+`imrepl_ctrl` should not need individual editor fields:
+
+```text
+cursor_pos
+selection_anchor
+scroll
+search query
+current search match
+autocomplete selected item
+clipboard count
+pending newline
+edit line
+insert mode
+```
+
+Those are editor internals. They should be visible outside the editor only
+through coarse interfaces:
+
+```c
+void editor_handle_key(...);
+void editor_handle_mouse(...);
+void editor_handle_scroll(...);
+void editor_build_view_snapshot(const EditorState *editor,
+                                EditorViewSnapshot *out);
+```
+
+If `imrepl_ctrl` starts accumulating per-field editor helpers, the split is
+drifting.
+
+A useful rule:
+
+```text
+New editor behavior should add an editor API, not an imrepl_ctrl wrapper.
+```
+
+---
+
 ## Example Input Flows
 
 ### Mouse wheel over code text
@@ -94,7 +231,7 @@ what that means.
 GLUT wheel event
   -> imrepl_ctrl receives raw input
   -> UI hit-test says: code document region
-  -> imrepl_ctrl routes to editor_scroll(editor, delta)
+  -> imrepl_ctrl routes to editor_handle_scroll(...)
   -> editor updates scroll state
   -> next frame snapshot renders new scroll position
 ```
@@ -107,7 +244,7 @@ No REPL compile. No program mutation.
 GLUT mouse press
   -> imrepl_ctrl receives raw input
   -> UI hit-test says: source line N, visual row R, char C
-  -> imrepl_ctrl routes to editor_handle_text_click(editor, hit)
+  -> imrepl_ctrl routes to editor_handle_mouse(...)
   -> editor updates cursor / selection / focused document
 ```
 
@@ -117,7 +254,7 @@ No REPL compile unless the interaction causes a committed source edit.
 
 ```text
 GLUT key event
-  -> imrepl_ctrl routes to editor_handle_key(editor, key, mods)
+  -> imrepl_ctrl routes to editor_handle_key(...)
   -> editor updates active input, cursor, selection, autocomplete, etc.
 ```
 
@@ -126,14 +263,14 @@ No REPL compile until the editor reaches a commit path.
 ### Commit current source line
 
 ```text
-editor_commit_current_line(editor, repl)
+editor_commit_current_line(editor, services)
   -> editor gathers proposed source text + commit context
-  -> repl_compile(text, ctx) returns ReplCompiledChange or diagnostic
+  -> services.compile(text, ctx) returns ReplCompiledChange or diagnostic
 
 on success:
   -> editor starts undo transaction
   -> editor_buffer_apply(change.text)
-  -> repl_apply_compiled_change(change.cmds)
+  -> services.apply_repl_change(change.cmds)
   -> editor commits undo transaction
 
 on error:
@@ -221,6 +358,36 @@ annotation document  read-only or overlay-backed
 ```
 
 Only source documents have a REPL compile/apply path.
+
+---
+
+## Editor Services Boundary
+
+The editor owns commit orchestration, but REPL semantics are injected as
+services. This prevents the editor from rummaging through REPL globals and
+prevents `imrepl_ctrl` from becoming the editor implementation.
+
+```c
+typedef struct {
+    ReplCompileContext (*context_at)(int line_idx, void *user);
+
+    ReplCompileResult (*compile)(const char *text,
+                                 const ReplCompileContext *ctx,
+                                 ReplCompiledChange *out,
+                                 char *err,
+                                 int err_size,
+                                 void *user);
+
+    void (*apply_repl_change)(const ReplCompiledChange *change,
+                              void *user);
+
+    EditorCompletionProvider completion_provider;
+    void *user;
+} EditorServices;
+```
+
+`imrepl_ctrl` wires this service table. The editor calls the services when it
+needs source semantics. Most editor operations do not touch the services at all.
 
 ---
 
@@ -413,12 +580,13 @@ A useful Phase 4 checklist:
 ```text
 1. Identify current UI input handlers that directly mutate editor state.
 2. Replace mutation with neutral hit-test output where possible.
-3. Route text-document events into editor controller functions.
+3. Route text-document events into coarse editor controller functions.
 4. Route variable-panel events into variable-panel subsystem functions.
 5. Route replay events into replay subsystem functions.
 6. Route camera/viewport events into scene/viewport controller functions.
 7. Keep UI renderers snapshot-only.
 8. Keep REPL compile limited to committed source mutations.
+9. Keep imrepl_ctrl from gaining one wrapper per editor operation.
 ```
 
 ---
@@ -452,5 +620,6 @@ The split is complete when:
 9. editor_buffer mutates text only.
 10. Undo restores editor text and REPL command state together.
 11. Variable panel and replay remain separate subsystems.
-12. MODULES.md and checks enforce the same boundaries.
+12. imrepl_ctrl routes to coarse owner APIs instead of mirroring editor internals.
+13. MODULES.md and checks enforce the same boundaries.
 ```
