@@ -159,7 +159,6 @@ APIs.
 | `repl_clipboard` | Line selection and copy/cut/paste |
 | `repl_undo` | Snapshot rings and restore paths |
 | `repl_search` | Search state and navigation |
-| `repl_search.h` | Search query helpers and input routing API |
 | `repl_var_drag` | Variable slider drag transaction and writeback |
 | `repl_inline_rename` | Scene rename input buffer |
 
@@ -174,6 +173,7 @@ These modules own REPL state that is not itself a renderer.
 | Module | Role |
 |--------|------|
 | `repl_state` | Typed runtime-state facade. Owns `ReplRuntimeState` plus the per-frame editor snapshot slices (`editor_buffer`, `editor_transformers`, `editor_highlights`, `editor_virtual_lines`) |
+| `repl_config` | Config descriptor table backing menu toggles + persisted audio/render config |
 | `repl_scenes` | User-scene slots, workspace directory, LRU eviction. Slots carry `cmds[]` + parallel `lines[][]` text sidecar |
 | `repl_example_loader` | Built-in example loading and active tracking |
 | `repl_examples` | Built-in example data |
