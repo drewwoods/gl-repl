@@ -1148,9 +1148,13 @@ int ui_panels_handle_code_panel_press(int mx, int my, int *cursor_pos_out) {
     if (!code_panel_hit_test(mx, my, &target, &on_insert_line, &row_offset))
         return UI_PANEL_PRESS_NONE;
 
-    /* Check for swatch click on a color line */
-    if (!on_insert_line && row_offset == 0 && target >= 0 && target < repl_state_document_count()) {
-        if (ui_color_picker_can_edit_cmd(target)) {
+    /* Check for swatch click on a color line — resolve target via the
+     * controller-pushed transformer list so input matches what was drawn,
+     * not a fresh document scan. */
+    if (!on_insert_line && row_offset == 0 && target >= 0) {
+        const EditorTransformer *ct =
+            find_color_transformer(repl_state_editor_transformers(), target);
+        if (ct) {
             int cp_x2, cp_w2;
             repl_layout_code_panel_rect(&cp_x2, NULL, &cp_w2, NULL);
             int sx = cp_x2 + cp_w2 - CODE_MARGIN_X - UI_COLOR_SWATCH_W - 2;
