@@ -31,26 +31,13 @@
         .cursor_px = 0,
         .cursor_py = 0,
     },
-    .help = {
-        .visible = 0,
-        .tab_idx = 0,
-        .scroll = 0,
-    },
-    .variable_panel = {
-        .visible = 1,
-    },
+    /* help / variable_panel / profile_panel / status / pointer / viewport
+     * defaults moved to ui_state.c (Phase 1 commit 8). */
     .variable_drag = {
         .var_idx = -1,
         .log_mode = 0,
         .start_value = 0.0f,
         .start_x = 0,
-    },
-    .profile_panel = {
-        .mode = PROFILE_PANEL_OFF,
-    },
-    .status = {
-        .text = "",
-        .ttl = 0,
     },
     /* search + autocomplete defaults moved to editor_state.c
      * (Phase 1 commit 7). */
@@ -63,15 +50,6 @@
         .tz = 0.0f,
         .motion_glow = 0.0f,
         .auto_rotate = CFG_DEFAULT_CAMERA_ROTATE,
-    },
-    .pointer = {
-        .mouse_x = 0,
-        .mouse_y = 0,
-        .mouse_button = -1,
-    },
-    .viewport = {
-        .window_w = 0,
-        .window_h = 0,
     },
     .presentation = {
         .wireframe = CFG_DEFAULT_WIREFRAME,

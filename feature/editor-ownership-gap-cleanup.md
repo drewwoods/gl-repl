@@ -236,7 +236,8 @@ mirrors the gates that have come online.
 | 1.2 (slice 2 of 4) | editor_input slice migrated (commit 5, 2026-05-02); audit section 1: 1460→1363 |
 | 1.2 (slice 3 of 4) | selection + clipboard slices migrated (commit 6, 2026-05-02); audit section 1: 1363→1307 |
 | 1.2 (slice 4 of 4) | search + autocomplete slices migrated (commit 7, 2026-05-02); audit section 1: 1307→1263 |
-| 1.3–5 | UI-state slice migrations + later phases pending |
+| 1.2 (UI batch) | status / help / variable_panel / profile_panel / viewport / pointer migrated to UiState (commit 8, 2026-05-02); audit section 1: 1263→1260 (forwarders preserve names; architectural prize is the storage move) |
+| 1.3–5 | code_panel split + editor overlay lists + later phases pending |
 
 ## Phase 0: Add Audits Before Moving Code
 
