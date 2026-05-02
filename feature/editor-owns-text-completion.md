@@ -375,8 +375,9 @@ Branch: `feature/editor-ownership-gap-cleanup`. Tracked against the
 | # | Commit | Status |
 |---|---|---|
 | 1 | tools: add editor ownership audit report | ✅ landed (2026-05-02) |
-| 2 | docs: record baseline editor ownership audit counts | next |
-| 3–17 | (state carve-out → renames → hard guards) | pending |
+| 2 | docs: record baseline editor ownership audit counts | ✅ landed (2026-05-02) |
+| 3 | refactor: add EditorState + UiState storage with compatibility forwarders | next |
+| 4–17 | (slice migrations → store text drop → compile gate → UiAction → renames → hard guards) | pending |
 
 ## Phase 0 — Audits Before Moving Code
 
@@ -433,18 +434,28 @@ audit-editor-ownership:
 
 ### 0.2 Record baseline counts
 
-After the script lands, fill in a baseline section in this doc:
+✅ **Landed (commit 2).** Recorded against `make audit-editor-ownership`
+output. Count = output line count per section; one line is one hit.
 
 ```text
-Date:
-Branch:
-repl_state editor/ui-like accessor hits:
-command store _with_line API hits:
-REPL direct editor-buffer read hits:
-UI live mutation hits:
-repl_editor.c include count:
-Known intentional exceptions:
+Date:                                  2026-05-02
+Branch:                                feature/editor-ownership-gap-cleanup
+SHA at measurement (post-commit-1):    0595c42
+repl_state editor/ui-like accessor hits:    1509
+command store _with_line API hits:            46
+REPL direct editor-buffer read hits:          36
+UI live mutation hits:                        16
+repl_editor.c include count:                  20
+Known intentional exceptions:                  0
 ```
+
+**Per-phase target.** Phase 1 (commits 3–7) drives the editor/ui-like
+`repl_state_*` count toward zero outside `repl_state.c`, `editor_state.c`,
+`ui_state.c`, and forwarder shims. Phase 2 (commit 8) drives the
+`_with_line[s]` count to 0. Phase 2 (commit 9) drives REPL direct
+editor-buffer reads to 0. Phase 4 (commits 13–14) drives UI live
+mutation hits to 0. Phase 5 (commit 15) splits `repl_editor.c` so the
+include-surface signal becomes structural rather than sized.
 
 ### 0.3 Tolerated-exception markers
 
