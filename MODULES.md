@@ -127,17 +127,23 @@ annotations consume the flattened program or snapshots derived from it.
 | Module | Role |
 |--------|------|
 | `repl_core` | Core REPL model/pipeline, normalization wrapper, and legacy lifecycle wrappers that forward to the controller |
-| `imrepl_ctrl` | App-frame controller: display/reshape, scene config build, scene/UI render ordering |
+| `imrepl_ctrl` | App-frame controller: display/reshape, scene config build, snapshot pushers, scene/UI render ordering |
 | `repl_command_spec` | Declarative descriptors for fixed-arity GL-like commands |
-| `repl_parser` | Source-line parser and canonical `GLCmd.source[]` generation |
+| `repl_parser` | Source-line parser; returns `ReplParsedLine { GLCmd cmd; char text[] }` (the editor-buffer canonical text + the parse-result struct) |
 | `repl_source_scope` | Source prefix-depth cache, indent helpers, block lookup |
 | `repl_pipeline` | Public pipeline and lifecycle surface for frame orchestration (`flatten`, autonormal, replay/bootstrap snapshots) |
-| `repl_command_store` | Insert/delete/replace/load API over the source command array |
+| `repl_command_store` | Insert/delete/replace/load API over the source command array; text-aware (`_with_lines` / `_with_line`) so the editor buffer moves in lockstep with command arrays |
 | `repl_commit` | Float declarations, variable assignments, structured block commits |
 | `repl_flatten` | Source-to-flat program builder for loops, functions, and `if` blocks |
 | `repl_executor` | Narrow live-GL dispatch boundary for flat user geometry |
 | `repl_eval` | Expression evaluator |
 | `cmd_format` | Pure indentation/depth computation |
+
+`GLCmd` is a pure parse-result struct (type, args, flags). Per-line text
+lives in `ReplEditorBuffer` (one slot in `ReplRuntimeState`), and undo
+snapshots / user-scene slots / the clipboard each carry parallel
+`lines[][]` sidecars so text moves with commands through every persistence
+path. See `feature/editor-owns-text.md` for the migration history.
 
 ### 2. Editor and input controllers
 
@@ -167,14 +173,15 @@ These modules own REPL state that is not itself a renderer.
 
 | Module | Role |
 |--------|------|
-| `repl_state` | Typed runtime-state facade over historical globals |
-| `repl_scenes` | User-scene slots, workspace directory, LRU eviction |
+| `repl_state` | Typed runtime-state facade. Owns `ReplRuntimeState` plus the per-frame editor snapshot slices (`editor_buffer`, `editor_transformers`, `editor_highlights`, `editor_virtual_lines`) |
+| `repl_scenes` | User-scene slots, workspace directory, LRU eviction. Slots carry `cmds[]` + parallel `lines[][]` text sidecar |
 | `repl_example_loader` | Built-in example loading and active tracking |
 | `repl_examples` | Built-in example data |
 | `repl_autocomplete` | Completion model: matches, selection, ghost text, hints |
-| `repl_autonormal` | Auto-generated `glNormal3f` maintenance |
+| `repl_autonormal` | Auto-generated `glNormal3f` maintenance + feeding-cmd lookups consumed by the highlight push helper |
 | `repl_replay` | Replay state machine, replay PC/mode, fade/highlight inputs |
-| `repl_replay_annotations` | Source-line replay text expansion for the code panel |
+| `repl_replay_annotations` | Replay-time annotation cache + virtual-line refresh (`prepare()` refills `editor_virtual_lines`) |
+| `repl_debug` | Debug dump / diagnostic helpers |
 
 `repl_replay` owns replay semantics. Scene rendering should consume replay
 snapshots or documented transitional helpers, not own replay state.
@@ -213,10 +220,11 @@ controller builds a `ReplayFadePlan` snapshot; the replay HUD now lives in
 | Module | Role |
 |--------|------|
 | `ui_snapshot` | `UiRenderSnapshot` definition; the read-only bundle the controller hands to every `ui_*_render*()` entry point |
+| `ui_editor` | Editor-overlay snapshot family: `EditorTransformerList` (color/numeric inline editors), `EditorHighlightList` (feeding cmd + replay PC + search), `EditorVirtualLineList` (replay annotation rows) |
 | `ui_panels` | Code-panel rows, overlay viewport bracket, scene status banner |
 | `repl_layout` | Pure scene/code-panel rectangle geometry, no GL |
 | `ui_menu_bar` | Menus, dropdowns, pinned buttons, search slot |
-| `ui_color_picker` | Floating HSV/alpha picker and literal color swatches |
+| `ui_color_picker` | Floating HSV/alpha picker and inline color swatches (rendered from `EditorTransformer` entries) |
 | `ui_help_overlay` | Modal F1 help |
 | `ui_variable_panel` | Floating variable slider panel |
 | `ui_autocomplete_panel` | Completion popup |
@@ -226,13 +234,20 @@ controller builds a `ReplayFadePlan` snapshot; the replay HUD now lives in
 
 `UiRenderSnapshot` is built once per frame by
 `imrepl_ctrl_build_ui_snapshot()` and consumed by every `ui_*_render*()`
-function. The `check-ui-no-repl-state-read` and
-`check-ui-renderer-takes-view` Makefile guards enforce the
-snapshot-shaped signature. Mutations go through `repl_actions`,
-`repl_command_store`, `repl_var_drag`, or another REPL-owned mutation
-API; input-bridge helpers in `ui_*.c` (`*_hit`, `*_rect`, press/motion
-handlers) still query live state pending the Phase C output-list work
-in `feature/push-architecture-ui.md`.
+function. It carries by-value state slices, pointer-shaped read-only
+views, and pointers to the controller-pushed editor lists
+(`editor_transformers`, `editor_highlights`, `editor_virtual_lines`),
+plus per-frame derived metadata such as `selection_lo/_hi`,
+`active_indent_chars`, `in_begin_block`, and `current_begin_mode` so the
+render path never re-derives them.
+
+The `check-ui-no-repl-state-read` and `check-ui-renderer-takes-view`
+Makefile guards enforce the snapshot-shaped signature. Mutations go
+through `repl_actions`, `repl_command_store`, `repl_var_drag`, or
+another REPL-owned mutation API; input-bridge helpers in `ui_*.c`
+(`*_hit`, `*_rect`, press/motion handlers) still query live state
+pending the Phase C output-list work in
+`feature/push-architecture-ui.md`.
 
 ### 6. Persistence, audio, instrumentation, lifecycle
 
@@ -348,6 +363,13 @@ controller-side, R5, R6, R7). See
 `feature/push-architecture-refinement.md` for the per-recommendation
 status table.
 
+`feature/editor-owns-text.md` (Steps 2–6) is also complete: `GLCmd.source[]`
+is gone; `ReplEditorBuffer` owns canonical line text; the controller
+pushes `EditorTransformerList` / `EditorHighlightList` /
+`EditorVirtualLineList` per frame for the code-panel render path. Color
+scheme + syntax keyword extraction (a sub-task of Step 6) is deferred
+until a configurable theme actually has a consumer.
+
 Remaining work, in suggested order:
 
 ```
@@ -362,6 +384,17 @@ R11 (tail)  shrink remaining allowlists (bench_repl.c repl_core_internal.h)
 R12         consolidate public REPL APIs into one concise repl.h
 R8          sample → imrepl rename (last, mechanical)
 R9          optional: split repl_export.c
+
+Phase B residuals (push-architecture-ui.md): repl_code_panel_document_build /
+            apply_follow_scroll still read live state internally during the
+            render frame; repl_replay_code_panel_get_command_display_text
+            also pulls live state. Deeper refactor; deferred.
+
+Phase C    convert UI input handlers from synchronous repl_action_* /
+           repl_clipboard_* / repl_state_*() calls to a UiAction list the
+           controller dispatches. Explicitly optional in the doc.
+
+Color scheme + syntax (editor-owns-text.md Step 6 sub-task) — deferred.
 ```
 
 A parallel state-ownership track is tracked in

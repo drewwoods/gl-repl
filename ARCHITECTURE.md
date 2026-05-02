@@ -101,15 +101,25 @@ sample.c GLUT display callback (future: imrepl.c)
   -> imrepl_ctrl_display_frame          (sample.c calls controller directly; no shim)
         -> tick profiling
         -> rebuild autonormals if dirty
-        -> rebuild flat program if dirty
+        -> rebuild flat program if dirty                          [PROF_FLATTEN]
+        -> push editor snapshots (transformers / highlights /     [PROF_SNAPSHOT*]
+           virtual lines via repl_replay_annotations_prepare)
         -> save live predefined variable values
         -> prepare replay frame if replay is active
         -> update export/camera strings
-        -> build SceneRenderConfig from REPL state
-        -> scene_render_3d_scene(&scene_cfg)
-        -> render UI panels and overlays
+        -> build SceneRenderConfig from REPL state                [PROF_SNAPSHOT_SCENE_CONFIG]
+        -> build UiRenderSnapshot from REPL state                 [PROF_SNAPSHOT_UI]
+        -> scene_render_3d_scene(&scene_cfg)                      [PROF_SCENE_3D]
+        -> ui_panels_render_code_panel(&ui_snap)                  [PROF_CODE_PANEL]
+        -> ui_*_render(&ui_snap) overlays                         [PROF_UI_PANELS]
+        -> ui_profile_panel_render(&ui_snap)
         -> restore flat count and predefined variable values
 ```
+
+Profile sections wrap each producer so snapshot construction time is
+visible: `PROF_SNAPSHOT` is the aggregate, with sub-sections for
+transformers, highlights, virtual lines, scene config, and ui snapshot
+(see `prof.h`).
 
 The scene frame consumes the explicit config:
 
@@ -156,6 +166,48 @@ Flattened commands are the execution, replay, export, and 3D annotation model.
 
 Code outside the command pipeline should use `FlatProgramView` or a snapshot
 derived from it instead of poking raw global arrays.
+
+### Editor-owned text (post `feature/editor-owns-text.md`)
+
+`GLCmd` is a pure parse-result struct: `type`, `args[]`, validity / vars
+flags, and provenance fields (`src_cmd_idx`, `call_src_cmd_idx`, etc.).
+There is no `source[]` member. Per-line text lives in
+`ReplEditorBuffer.lines[MAX_COMMANDS][MAX_LINE_LEN]` inside
+`ReplRuntimeState`. The parser returns both the `GLCmd` and the
+canonical text in `ReplParsedLine { GLCmd cmd; char text[MAX_LINE_LEN] }`;
+commit code passes both to text-aware command-store APIs
+(`repl_command_store_*_with_line[s]`) so the editor buffer moves in
+lockstep with the command array.
+
+Persistence sidecars carry parallel `lines[][]` arrays:
+
+| Persisted form | Module |
+|---|---|
+| Undo / redo snapshots | `repl_undo` (`ReplUndoSnapshot.editor_lines`) |
+| User-scene slots | `repl_scenes` (workspace save / load + LRU eviction) |
+| Clipboard cmds | `ReplClipboardState.lines` |
+| Single-file / workspace export | `repl_export` (no extra sidecar; export reads `editor_buffer`) |
+
+Flat commands have no text of their own. `repl_flat_cmd_text(flat_cmd)`
+maps a flat command to its source-buffer line via `src_cmd_idx`.
+
+## Controller-Pushed Editor Snapshots
+
+The controller treats per-frame UI overlay data as snapshots it builds
+once and the UI consumes read-only. The snapshot family lives in
+`ui_editor.h`:
+
+| List | Push helper | What it carries |
+|---|---|---|
+| `EditorTransformerList editor_transformers` | `imrepl_ctrl_push_color_transformers()` | One entry per editable color command (line idx + r/g/b/a/has_alpha/is_clear). Drives inline swatch render and color-picker hit-test. Future kinds: numeric slider. |
+| `EditorHighlightList editor_highlights` | `imrepl_ctrl_push_highlights()` | Feeding-normal cmd, feeding-color cmd, replay PC, search match, selection. Rendered as gutter accents and row backgrounds. |
+| `EditorVirtualLineList editor_virtual_lines` | `repl_replay_annotations_prepare()` (via `_refresh_virtual_lines()`) | Replay-time annotation rows (substitution + evaluation) attached to the current source line. Layout, scroll, hit-test, and render all read from this list, so virtual-row counts have one source of truth (`repl_replay_annotation_extra_rows_for_line()` counts the list). |
+
+All three lists are stored on `ReplRuntimeState` as named slices and
+exposed via `repl_state_editor_*()` accessors (read-only view in
+`repl_state_views.h`, mutating clear/append in `repl_state_owners.h`).
+`UiRenderSnapshot.editor_transformers / editor_highlights /
+editor_virtual_lines` are pointers into those slices.
 
 ## Command Lifecycle
 
@@ -269,11 +321,36 @@ entry point. Render code does not call `repl_state_*()` directly. The
 `check-ui-no-repl-state-read` Makefile guard enforces the snapshot-shaped
 signature for audited renderers.
 
+`UiRenderSnapshot` carries:
+
+* by-value `Repl*State` slices (presentation, code_panel, render, replay,
+  search, autocomplete, status, …) — small structs cheap to copy
+* pointer-shaped read-only views (`ReplVariableView`, `ReplEditorInputView`,
+  `ReplImportExportView`, `FlatProgramView`, `ReplPredefView`)
+* document/flat metadata (`document_cmds`, `document_count`, `edit_line`,
+  `flat_program_count`, …)
+* user-scene names + slot-used flags
+* the controller-pushed editor snapshot pointers
+  (`editor_transformers`, `editor_highlights`, `editor_virtual_lines`)
+* per-frame derived metadata so the render path never re-derives:
+  `selection_active / selection_lo / selection_hi`,
+  `active_indent_chars`, `trailing_indent_chars`, `in_begin_block`,
+  `current_begin_mode`
+
+Slices that would have been heavy to copy are deliberately excluded:
+`ReplClipboardState` (~1.88 MB with the lines sidecar) is not on the
+snapshot — the per-row selection band reads `selection_lo/_hi` instead.
+
 Mutations route through `repl_actions`, `repl_command_store`,
 `repl_var_drag`, or another REPL-owned mutation path. UI input bridges
 (`*_hit`, `*_rect`, press/motion handlers) still query live state during
 GLUT input dispatch; pulling those onto a deferred output channel is the
-Phase C work in `feature/push-architecture-ui.md`.
+Phase C work in `feature/push-architecture-ui.md`. Two render-path live
+reads remain (`repl_code_panel_document_build` /
+`apply_follow_scroll` and `repl_replay_code_panel_get_command_display_text`);
+both produce snap-equivalent results because they run after the
+controller has finished updating live state, but converting them to
+take a snapshot pointer is the next layer of cleanup.
 
 ## Replay Architecture
 
@@ -538,6 +615,22 @@ built once per frame by `imrepl_ctrl_build_ui_snapshot()` (Phase B in
 remain on live state pending Phase C. Stages 4 (cursor-pixel `Ui*Output`
 actualization) and 6 (`repl_undo.c` consumes `repl_state_capture()`) are
 still open.
+
+The `feature/editor-owns-text.md` track (Steps 2–6) is complete:
+
+* `GLCmd.source[]` removed; per-line text owned by `ReplEditorBuffer`.
+* Parser returns `ReplParsedLine`; commit-store APIs are text-aware.
+* Text sidecars added to undo snapshots, user scenes, and clipboard.
+* Color picker rebuilt as a controller-pushed `EditorTransformer` with
+  store `replace_one(... line)` writeback (no more `set_color` API).
+* Cross-line `EditorHighlight` snapshot replaces inline `repl_find_feeding_*`
+  calls in render.
+* Replay annotations move from inline row injection to controller-pushed
+  `EditorVirtualLine` rows; layout / scroll / hit-test / render share one
+  source-of-truth count.
+
+The deferred sub-task is the color-scheme + syntax-keyword extraction
+(also Step 6); revisit when a configurable theme has a real consumer.
 
 ## Building Historical Checkouts
 

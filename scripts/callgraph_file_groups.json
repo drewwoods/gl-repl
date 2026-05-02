@@ -43,7 +43,8 @@
         "repl_autocomplete.c",
         "repl_autonormal.c",
         "repl_replay.c",
-        "repl_replay_annotations.c"
+        "repl_replay_annotations.c",
+        "repl_debug.c"
       ]
     },
     {
