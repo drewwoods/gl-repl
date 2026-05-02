@@ -1,31 +1,70 @@
 # Plan: Three-Layer Ownership Split (Editor / REPL / UI)
 
+> **Direction note (2026-05-02).** Commits 1–11 of this plan have
+> landed and remain correct. Phase 4's broad `UiAction` enum direction
+> has been **superseded** by
+> [`feature/editor-text-model-controller.md`](editor-text-model-controller.md),
+> which sharpens the contract:
+>
+> ```text
+> Editor = text model + controller (owns text, cursor, scroll, selection,
+>          search, autocomplete, clipboard, undo, key/mouse for text docs,
+>          commit orchestration).
+> UI     = view + hit-test/render services (renders glyphs, highlights,
+>          cursors; reports neutral UiHit results; owns no editor state).
+> REPL   = validator/compiler for committed source. Pure: no editor state,
+>          no UI state, no globals. Returns ReplCompiledChange or diagnostic.
+> imrepl_ctrl = router between subsystems. Receives raw GLUT events;
+>          dispatches to the owning subsystem based on focus / region;
+>          builds per-frame snapshots; routes diagnostics back.
+> ```
+>
+> Keep that doc as the authoritative contract for remaining Phase 4 / 5
+> work. The frame-loop pseudocode, `UiAction` enumeration, and Phase 4
+> migration plan inside *this* doc reflect the older direction; sections
+> marked **(superseded)** are kept for historical reference but should
+> not be implemented as written.
+>
+> The migration history (commits 1–11) recorded in *Implementation
+> Status* and *Phase 1.2 Slice migration order* below remains accurate.
+> Where remaining destinations have shifted under the new contract, the
+> *Implementation Status* table for commit 12+ has been updated.
+
 ## Target Contract
+
+The load-bearing definition is now in
+[`editor-text-model-controller.md`](editor-text-model-controller.md).
+The original three-line summary below is preserved because it is still
+correct as a high-level shape — it just under-describes how input
+routes through the system.
 
 ```
 Editor owns editable text, cursor, selection, navigation, and undo
-transactions.
+transactions. (Plus search, autocomplete, clipboard, and read-only
+text documents — see editor-text-model-controller.md.)
 
 REPL owns validation / compilation of committed editor text into
-command / state changes.
+command / state changes. (Pure compiler; no editor state, no UI state.)
 
-UI owns rendering and hit-testing, and emits editor actions rather
-than mutating REPL / editor state directly.
+UI owns rendering and hit-testing. (Reports neutral UiHit results;
+the owning subsystem interprets them. UI does *not* emit editor
+actions or mutate state.)
+
+imrepl_ctrl routes raw input to the owning subsystem and builds
+per-frame snapshots. (Not a "dispatch gate" against a giant action
+enum.)
 ```
 
-That is the load-bearing definition for this plan. Everything below
-exists to make the codebase obey it.
+## Why The Spirit Wasn't Realized (Pre-Commit-1)
 
-## Why The Spirit Isn't Realized Today
+This section is preserved as the *original problem statement* before
+commits 1–11 landed. Items 1 and most of 2 are now resolved; items 3
+and 4 are still in flight, with their solution path shifted to the
+corrected contract in `editor-text-model-controller.md`.
 
-`feature/editor-owns-text.md` (Steps 2–6) fixed the *data shape* —
-`GLCmd.source[]` is gone, the parser returns `ReplParsedLine`, the
-controller pushes editor-overlay snapshots. It did not move
-*ownership*. Three concrete violations of the target contract:
+### 1. Editor state lives inside REPL state ✅ resolved (commits 4–11)
 
-### 1. Editor state lives inside REPL state
-
-`ReplRuntimeState` holds editor-owned slices today:
+`ReplRuntimeState` *used to* hold editor-owned slices:
 
 ```
 editor_input          editor_buffer          editor_transformers
@@ -34,45 +73,51 @@ clipboard             autocomplete           search
 variable_drag         code_panel.scroll      code_panel.scroll_follow_cursor
 ```
 
-Plus UI render-time slices:
+These all moved to `EditorState` in commits 4, 5, 6, 7, 9, 11.
 
-```
-code_panel.cursor_visible   code_panel.blink_tick   code_panel.cursor_px/py
-help.visible                profile_panel.mode      variable_panel.visible
-status                      viewport                pointer
-```
+UI render-time slices (`status`, `help.visible`, `variable_panel.visible`,
+`profile_panel.mode`, `viewport`, `pointer`) moved to `UiState` in
+commit 8. The remaining `code_panel` chrome (`cursor_visible`,
+`blink_tick`, `cursor_px/py`, `panel_frac`, `resizing_panel`) and
+`camera` are in commit 12 — with cursor blink revised to land on
+`EditorState` (editor controls the cursor) rather than `UiState`.
 
-A REPL state struct should hold the *program* — document, flat program,
-variables, replay, scenes, render, presentation — not the typing buffer
-or the search query.
+### 2. REPL modules read and write editor text ⚠️ partial — commit 13 finishes
 
-### 2. REPL modules read and write editor text
+- `repl_command_store_*_with_line[s]` *still* writes
+  `editor_buffer.lines[]` in lockstep with the cmd array — drops in
+  commit 13.
+- `repl_replay_annotations.c::replay_visible_text(cmd_idx)` still
+  reaches into the editor buffer — converts to `EditorBufferView`
+  parameter in commit 13.
+- `repl_export.c` and `repl_parser.c` reparse paths same — same
+  commit.
 
-- `repl_command_store_*_with_line[s]` writes `editor_buffer.lines[]` in
-  lockstep with the cmd array.
-- `repl_replay_annotations.c::replay_visible_text(cmd_idx)` reaches
-  into the editor buffer to compose annotations.
-- `repl_export.c` reads the editor buffer when serializing.
-- `repl_parser.c` reparse paths read the editor buffer for context.
+In the corrected contract, REPL is *given* text by the editor on
+commit. It does not own a buffer; it does not write to one.
 
-In the target contract, REPL is *given* text by the editor on commit.
-It does not own a buffer; it does not write to one.
+### 3. UI input handlers mutate state directly ⚠️ in flight — commit 15
 
-### 3. UI input handlers mutate state directly
-
-`ui_panels_handle_code_panel_press` calls `ui_color_picker_open`,
+`ui_panels_handle_code_panel_press` still calls `ui_color_picker_open`,
 `repl_action_*`, `repl_clipboard_*`, etc. inline. The render path is
-already snapshot-only (Phase B of `push-architecture-ui.md` finished
-that). Phase C — convert input handlers to return a `UiAction` list
-that the controller dispatches — was deferred. That deferral is the
-gap.
+snapshot-only (Phase B of `push-architecture-ui.md` finished that).
 
-### 4. `repl_editor.c` is too broad to keep its name
+The corrected fix is **not** the original "convert input handlers to
+return a `UiAction` list that the controller dispatches" — it's
+narrower: UI handlers compute a neutral `UiHit`, `imrepl_ctrl`
+dispatches on `UiHit.kind` to the owning subsystem (editor, variable
+panel, replay, scene/viewport), and the subsystem mutates its own
+state directly. See `editor-text-model-controller.md` and Phase 4
+below.
 
-It currently combines: GLUT input router + UI bridge for
+### 4. `repl_editor.c` is too broad to keep its name ⚠️ in flight — commit 16
+
+It still combines: GLUT input router + UI bridge for
 menus/search/help/rename/replay/camera + text editor model + commit
-orchestration + direct coordination of undo/store/status/dirty/AC. Each
-of those belongs in a different file under the target contract.
+orchestration + direct coordination of undo/store/status/dirty/AC.
+Phase 5 splits it three ways: GLUT registration → `imrepl_ctrl`,
+text-document behavior → `editor_input.c`, commit orchestration →
+`editor_commit.c`. See §5.0 below.
 
 ## Target State Shape
 
@@ -83,15 +128,22 @@ typedef struct {
     ReplDocumentState           document;
     ReplFlatProgramState        flat_program;
     ReplVariableState           variables;
-    ReplReplayRuntimeState      replay;
+    ReplReplayRuntimeState      replay;        /* see note below */
     ReplSceneRuntimeState       scenes;
     ReplImportExportState       import_export;
     ReplRenderState             render;        /* GL pipeline knobs */
     ReplPresentationState       presentation;  /* render toggles */
 } ReplState;
 
-/* Editable text, cursor, selection, navigation, undo. The
- * code-editor session — not the 3D viewport. */
+/* Editable text, cursor, selection, navigation, undo, AND cursor-blink
+ * — the *editor controls when the cursor is visible*, so blink is
+ * editor session state, not UI chrome. UI just renders whatever
+ * `cursor_visible` says.
+ *
+ * variable_drag stays here only as a transitional home; under
+ * editor-text-model-controller.md it belongs to the variable-panel
+ * peer subsystem since it has nothing to do with text-document
+ * behavior. Scheduled to move out before Phase 5. */
 typedef struct {
     ReplEditorInputState        input;        /* typing buffer + cursor */
     ReplEditorBuffer            buffer;       /* committed lines */
@@ -99,65 +151,118 @@ typedef struct {
     ReplClipboardState          clipboard;    /* + lines[][] sidecar */
     ReplSearchState             search;
     ReplAutocompleteState       autocomplete;
-    ReplVariableDragState       variable_drag;
-    EditorScrollState           scroll;       /* extracted from code_panel */
+    EditorScrollState           scroll;       /* doc-line + follow flag */
+    EditorCursorBlinkState      cursor_blink; /* cursor_visible + blink_tick — corrected from UiState */
+    ReplVariableDragState       variable_drag;/* transitional; moves to variable-panel subsystem */
     EditorUndoRing              undo;         /* transaction snapshots */
 } EditorState;
 
-/* Render-time scratch + chrome visibility + 3D-viewport session state.
- * Nothing here is part of "the program" or "the code-editor session."
- * Camera pose lives here (or in a future ViewportState slice) — not
- * in EditorState — because the camera is a viewport concern. */
+/* Window chrome and viewport: the things that aren't part of "the
+ * program" *or* "a text-document session." Render reads these; UI
+ * input handlers may report changes via raw events into the
+ * controller, which mutates here.
+ *
+ * cursor_px / cursor_py are NOT here as live state. They are computed
+ * each frame from EditorState's logical cursor + layout and surfaced
+ * either via UiRenderSnapshot or a per-frame Ui*Output struct.
+ * Whichever home is chosen, the *controller* is the editor (the
+ * editor's logical cursor is the source of truth). */
 typedef struct {
     ReplViewportState           viewport;
     ReplPointerState            pointer;
     ReplStatusState             status;        /* transient message; controller-written */
-    ReplHelpState               help;          /* visibility */
-    ReplVariablePanelState      variable_panel;/* visibility */
+    ReplHelpState               help;          /* visibility — until help becomes a read-only editor session, see below */
+    ReplVariablePanelState      variable_panel;/* visibility — variable_panel subsystem owns its own model */
     ReplProfilePanelState       profile_panel; /* visibility */
-    EditorCursorBlinkState      cursor_blink;  /* render-only */
-    ReplCameraState             camera;        /* pose; mouse-driven via UI_ACTION_CAMERA_* */
-    /* Per-frame snapshots populated by the controller, consumed by
-     * renderers (already pointer-shaped on UiRenderSnapshot). */
+    PanelDividerState           divider;       /* panel_frac + resizing_panel: window-divider geometry, not text */
+    ReplCameraState             camera;        /* viewport pose; mouse handlers route to scene/viewport controller */
 } UiState;
+
+/* Peer subsystems carved out of the editor (per
+ * editor-text-model-controller.md). Each owns its own state +
+ * controller; the editor is unaware of them. */
+typedef struct { /* variable-panel subsystem */
+    int           visible;          /* moves out of UiState when this lands */
+    ReplVariableDragState drag;     /* moves out of EditorState when this lands */
+} VariablePanelSystem;
+
+typedef struct { /* replay subsystem (already exists as ReplReplayRuntimeState
+                  * + repl_replay.c — promoted to first-class peer; the
+                  * field on ReplState above stays during transition) */
+    /* mode, pc, speed, fade batches, etc. — see repl_replay.h */
+} ReplaySystem;
 ```
 
-`imrepl_ctrl` owns all three as static singletons. The frame loop:
+### Read-only document seam
+
+`editor-text-model-controller.md` introduces the "editor session"
+abstraction: an editor session owns text + cursor + scroll + search
+state, with a content provider and a `read_only` flag. The
+code-editing session is the modifiable instance backed by
+`editor_buffer` + REPL commit path. The help overlay becomes a
+*read-only* session whose content provider returns the help text and
+whose commit path is empty. That collapses today's `ui_help_overlay.c`
++ `ReplHelpState.scroll` / `tab_idx` into per-session editor state.
+The `ReplHelpState.visible` flag stays on `UiState` as a chrome bit —
+it's "is the help overlay shown?", not "what page is it on?".
+
+### Autocomplete completion-provider seam
+
+The editor doesn't know what variables exist. It calls a registered
+completion provider for candidates, supplying current document/cursor
+context. REPL/eval is one such provider; the editor's autocomplete
+state (popup visibility, selected match, ghost text) stays in
+`EditorState`. See `editor-text-model-controller.md` §"Editor / REPL
+Completion Boundary".
+
+`imrepl_ctrl` owns all three plus the peer subsystems as static
+singletons. The frame loop **(corrected per
+`editor-text-model-controller.md`)**:
 
 ```
-input event
-  -> ui_*_input_handler(const UiRenderSnapshot *snap,
-                        UiInputEvent ev,
-                        UiActionList *out)
-  -> imrepl_ctrl_dispatch(action_list)
-       -> on commit / reformat / paste / cut / load (text-changing action):
-            ReplCompiledChange change;
-            char err[REPL_STATUS_TEXT_MAX];
-            if (repl_compile(text, ctx, &change, err, sizeof(err)) != REPL_COMPILE_OK) {
-                ui_state_status_set(err);             /* controller writes status */
-                editor_input_mark_rejected();         /* keep typed text + flag */
-                /* nothing applied; no undo entry */
-            } else {
-                editor_undo_begin_transaction();      /* captures BEFORE snapshot */
-                  editor_buffer_apply(&change);       /* writes editor text only */
-                  repl_apply_compiled_change(&change);/* writes ReplState only */
-                editor_undo_commit_transaction();     /* atomic; restores both halves on undo */
-                if (commit_msg) ui_state_status_set(commit_msg);
-            }
-       -> on REPL-side actions (save / replay / load):
-            mutates ReplState; controller writes any UI status
-       -> on editor-side actions (cursor / selection / clipboard /
-          search / autocomplete / scroll):
-            mutates EditorState only
-       -> on UI-side actions (visibility / viewport / camera /
-          status / panel modes):
-            mutates UiState only
+input event (GLUT keyboard / mouse / wheel / motion)
+  -> imrepl_ctrl receives raw event
+  -> imrepl_ctrl asks UI for hit-test (UiHit { kind, line_idx,
+       visual_row, char_idx, cmd_idx, item_idx, local_x, local_y })
+  -> imrepl_ctrl dispatches based on UiHit.kind to the OWNING subsystem:
+       UI_HIT_CODE_TEXT     -> editor_handle_*(editor, hit_or_event)
+       UI_HIT_CODE_GUTTER   -> editor_handle_gutter(editor, hit)
+       UI_HIT_HELP_PANEL    -> editor_help_session_handle_*(...)
+       UI_HIT_COLOR_SWATCH  -> editor commit path (rewrites source text)
+       UI_HIT_VARIABLE_SLIDER -> variable_panel_handle_*(...)
+       UI_HIT_REPLAY_BUTTON -> replay_handle_*(...)
+       UI_HIT_MENU_ITEM     -> imrepl_menu_route(...)
+  -> editor / peer subsystem mutates its own state
+  -> only commit paths call repl_compile()
+
+editor commit path (the only thing that crosses into REPL):
+  ReplCompiledChange change;
+  char err[REPL_STATUS_TEXT_MAX];
+  if (repl_compile(text, ctx, &change, err, sizeof(err)) != REPL_COMPILE_OK) {
+      editor_record_diagnostic(err);    /* editor stores rejected state */
+      /* imrepl_ctrl forwards the diagnostic to ui_state_status_set
+       * — REPL doesn't, editor doesn't. */
+      /* nothing applied; no undo entry */
+  } else {
+      editor_undo_begin_transaction();      /* captures BEFORE snapshot */
+        editor_buffer_apply(&change);       /* writes editor text only */
+        repl_apply_compiled_change(&change);/* writes ReplState only */
+      editor_undo_commit_transaction();     /* atomic; restores both halves on undo */
+      if (change.commit_message[0])
+          imrepl_ctrl_set_status(change.commit_message);
+  }
 
 frame render
   -> imrepl_ctrl_build_scene_config(SceneRenderConfig out)
   -> imrepl_ctrl_build_ui_snapshot(UiRenderSnapshot out)
   -> scene/ui renderers read snapshots only
 ```
+
+Most input flows do **not** cross subsystem boundaries. Mouse-wheel
+over code text → editor scrolls. Ctrl+G → editor opens search. Tab →
+editor accepts autocomplete. None of these need a structured
+"action" — they're function calls into editor APIs once `imrepl_ctrl`
+has dispatched on `UiHit.kind`.
 
 ### Settled questions: presentation / camera placement
 
@@ -266,7 +371,37 @@ editor_undo_begin_transaction();
 editor_undo_commit_transaction();        /* atomic boundary */
 ```
 
-## UiAction Enumeration (Phase 4 starting cut)
+## UiAction Enumeration (Phase 4 starting cut) **(superseded)**
+
+> **Superseded by `editor-text-model-controller.md`.** The corrected
+> direction does **not** introduce a giant `UiAction` enum. Most of
+> the entries below are editor-internal (search, autocomplete,
+> clipboard, undo, cursor, selection) and don't cross any subsystem
+> boundary — they should be plain function calls into editor APIs
+> once `imrepl_ctrl` has dispatched on a neutral `UiHit`.
+>
+> The remaining entries fall into three small buckets that *do* cross
+> a boundary:
+>
+> ```text
+> Editor → REPL: repl_compile(text, ctx, &change, err)
+>                — for commit / reformat / paste of source / load.
+>
+> imrepl → REPL-side: save, load_file, load_example
+>                — direct function calls; no enum needed.
+>
+> imrepl → peer subsystem: replay_toggle, replay_step,
+>                          variable_panel_drag_*,
+>                          camera_orbit / pan / zoom
+>                — direct function calls into the peer; no enum.
+> ```
+>
+> `UiHit` (a passive struct) replaces the dispatch enum. UI reports
+> *where* the event landed; the owning subsystem decides *what it
+> means*. See `editor-text-model-controller.md` §"UI Hit-Test Result,
+> Not UI Ownership".
+>
+> The old enum below is kept for historical reference only.
 
 ```c
 typedef enum {
@@ -369,8 +504,10 @@ gate. It is the only function allowed to mutate `ReplState` /
 
 ## Implementation Status
 
-Branch: `feature/editor-ownership-gap-cleanup`. Tracked against the
-17-commit sequence in *Suggested Branch / Commit Breakdown* below.
+Branch: `feature/editor-ownership-gap-cleanup`. Tracked against a
+sequence inspired by but not strictly bound to the original
+17-commit list. Commit 12+ destinations have been **revised** to
+match `editor-text-model-controller.md`.
 
 | # | Commit | Status |
 |---|---|---|
@@ -385,8 +522,36 @@ Branch: `feature/editor-ownership-gap-cleanup`. Tracked against the
 | 9 | refactor: migrate editor overlay snapshot lists (transformers / highlights / virtual_lines) + variable_drag to EditorState | ✅ landed (2026-05-02) |
 | 10 | refactor: rename editor-input convenience getters to editor_* namespace | ✅ landed (2026-05-02) |
 | 11 | refactor: code_panel slice split (scroll → EditorState) + ownership ratchet for transitional couplings | ✅ landed (2026-05-02) |
-| 12 | refactor: camera placement (UiState) + remaining `repl_state_code_panel*` chrome accessor migration | next |
-| 13–17 | (store text drop → compile gate → UiAction → renames → hard guards) | pending |
+| 12 | refactor: code_panel chrome migration — cursor_visible + blink_tick → **EditorState**, panel_frac + resizing_panel → UiState (divider), cursor_px / cursor_py → per-frame Ui*Output (editor remains the controller); camera placement on UiState | next (revised destinations per editor-text-model-controller.md) |
+| 13 | refactor: drop `repl_command_store_*_with_line[s]` text-aware API; pass `EditorBufferView` to REPL consumers (was original commit 8/9) | pending |
+| 14 | refactor: split `repl_compile` (pure validators) from `editor_commit` (transaction orchestration) (was original commit 11) | pending |
+| 15 | refactor: route input via `UiHit` + carve out variable_panel and replay as peer subsystems (replaces original UiAction commits 12–14) | pending |
+| 16 | refactor: rename editor-owned modules; `ui_help_overlay` → `editor_help_session` (read-only document); register `EditorCompletionProvider` seam | pending |
+| 17 | docs: refresh MODULES + ARCHITECTURE; promote audits to hard guards | pending |
+
+Remaining-commit notes:
+
+- **Commit 12 destination correction.** The original plan put cursor
+  blink fields on `UiState`. The corrected contract puts them on
+  `EditorState` because the editor is the cursor's controller (decides
+  when it's visible, ticks blink). UI just renders whatever the
+  editor's `cursor_visible` says. Cursor pixel coordinates
+  (`cursor_px` / `cursor_py`) are render-output, not state — surfaced
+  per-frame via `UiRenderSnapshot` or a `Ui*Output` struct;
+  controller is the editor either way.
+- **Commit 15 reshape.** The original Phase 4 was three commits of
+  `UiAction` dispatch wiring. The corrected plan replaces the enum
+  with a passive `UiHit` struct that UI returns; `imrepl_ctrl` routes
+  on `UiHit.kind`. Most editor-internal handlers lose nothing — they
+  receive raw events from `imrepl_ctrl` once dispatched. Variable
+  panel and replay become peer subsystems in this commit, not
+  editor slices.
+- **Commit 16 reshape.** Adds the read-only document seam: help
+  becomes an editor session pointed at a help-text content provider.
+  `ReplHelpState.scroll` / `tab_idx` move into per-session editor
+  state. Also lands the autocomplete completion-provider registration
+  seam so the editor stops reaching into `repl_eval` for variable
+  names.
 
 ## Phase 0 — Audits Before Moving Code
 
@@ -923,44 +1088,104 @@ grep -E 'try_commit_(float_decl|for_loop|func_def|if_block|close_brace|var)' \
 
 ---
 
-## Phase 4 — UI input handlers emit `UiAction`
+## Phase 4 — Route input to the owning subsystem (corrected)
 
-The largest phase; behavior-drift risk is highest. Land in waves.
+> Replaces the original Phase 4 `UiAction` migration. The corrected
+> goal: UI is a view + hit-test layer; `imrepl_ctrl` routes raw input
+> to the editor or to a peer subsystem; only commit paths call into
+> REPL. Per `editor-text-model-controller.md`.
 
-### 4.1 Migration waves
+The work splits into four kinds of cleanup, each smaller than a
+"wave" of the old plan:
 
-1. **Keyboard text editing** —
-   `UI_ACTION_INSERT_TEXT`, `_DELETE_TEXT`, `_MOVE_CURSOR`,
-   `_COMMIT_LINE`, `_TOGGLE_INSERT_MODE`, `_REFORMAT`.
-2. **Code-panel mouse selection** —
-   `UI_ACTION_SELECT_BEGIN`, `_EXTEND`, `_CLEAR`.
-3. **Clipboard / search / autocomplete** —
-   `UI_ACTION_CLIPBOARD_*`, `UI_ACTION_SEARCH_*`,
-   `UI_ACTION_AUTOCOMPLETE_*`.
-4. **Color picker / variable slider** —
-   `UI_ACTION_COLOR_PICKER_*`, `UI_ACTION_VAR_DRAG_*`.
-5. **Menu / config / replay / load / save** —
-   `UI_ACTION_CONFIG_*`, `UI_ACTION_REPLAY_*`, `UI_ACTION_LOAD_*`,
-   `UI_ACTION_SAVE`.
-6. **Camera / scene gestures** —
-   `UI_ACTION_CAMERA_ORBIT`, `_PAN`, `_ZOOM`.
+### 4.1 Replace inline mutation with neutral `UiHit` reporting
 
-### 4.2 Dispatch gate
+Today `ui_panels_handle_code_panel_press` calls `ui_color_picker_open`,
+`repl_action_*`, etc. directly. Those handlers should:
+
+1. Compute a `UiHit` (kind + line/char/cmd_idx + local_x/local_y).
+2. Hand the hit to `imrepl_ctrl`.
+3. Stop mutating editor / REPL / peer state directly.
 
 ```c
-void imrepl_ctrl_dispatch_action(const UiAction *action);
-void imrepl_ctrl_dispatch_actions(const UiActionList *actions);
+typedef enum {
+    UI_HIT_NONE,
+    UI_HIT_CODE_TEXT,
+    UI_HIT_CODE_GUTTER,
+    UI_HIT_COLOR_SWATCH,
+    UI_HIT_MENU_ITEM,
+    UI_HIT_VARIABLE_SLIDER,
+    UI_HIT_REPLAY_BUTTON,
+    UI_HIT_HELP_PANEL,
+} UiHitKind;
+
+typedef struct {
+    UiHitKind kind;
+    int       line_idx;
+    int       visual_row;
+    int       char_idx;
+    int       cmd_idx;
+    int       item_idx;
+    float     local_x;
+    float     local_y;
+} UiHit;
+
+UiHit ui_panels_hit_test(const UiRenderSnapshot *snap, int mx, int my);
 ```
 
-The only function in the codebase allowed to mutate `EditorState` /
-`ReplState` from an input event.
+UI files keep all their layout/measure/render code. They lose
+`ui_color_picker_open` / `repl_action_*` / `repl_clipboard_*` calls.
 
-### 4.3 Tighten UI guards per wave
+### 4.2 Move text-document input handling into the editor
 
-After each wave, forbid direct mutation calls from migrated UI files.
-The existing `check-ui-no-repl-state-read` extends to forbid mutation
-calls (`repl_action_*`, `repl_command_store_*`, `editor_state_*_mut`,
-etc.) from `ui_*.c`.
+GLUT keyboard / mouse / wheel callbacks already exist in
+`repl_editor.c` (renamed `editor_input.c` in Phase 5.0). Their job
+under the corrected contract:
+
+- Receive raw events from `imrepl_ctrl`.
+- Mutate `EditorState` directly: cursor, selection, scroll, search
+  query, autocomplete popup, clipboard buffer, undo ring.
+- Reach the commit path (`editor_commit_current_input`) when the user
+  presses `;` / Enter; *that* is where `repl_compile` is called.
+
+No `UiAction` enum, no dispatch table. The editor *is* the controller
+for text-document behavior.
+
+### 4.3 Carve out peer subsystems
+
+`variable_panel`, `replay`, `camera/viewport` are not part of the
+editor. Each gets its own input entry point:
+
+```c
+void variable_panel_handle_drag_begin(VariablePanelSystem *vp, int var_idx, int mx);
+void variable_panel_handle_drag_motion(VariablePanelSystem *vp, int mx);
+void variable_panel_handle_drag_end(VariablePanelSystem *vp);
+
+void replay_handle_toggle_play_pause(ReplaySystem *rp);
+void replay_handle_step(ReplaySystem *rp, int direction);
+
+void scene_camera_handle_orbit(float dx, float dy);
+void scene_camera_handle_pan(float dx, float dy);
+void scene_camera_handle_zoom(float dz);
+```
+
+`imrepl_ctrl` dispatches to these based on `UiHit.kind` for mouse
+events and on focus / mode for keyboard events. Color picker (when it
+rewrites source text) is the one peer that crosses back into the
+editor commit path — it's the only true "action" that needs the
+compile-and-apply transaction.
+
+### 4.4 Tighten UI guards
+
+After 4.1–4.3 land, the existing UI guards strengthen naturally:
+
+- `check-ui-no-repl-state-read` keeps UI renderers snapshot-only
+  (already enforced).
+- A new `check-ui-no-mutation` (or extension of existing
+  `check-ui-no-repl-state-mut`) forbids `ui_*.c` from calling
+  `repl_action_*`, `repl_command_store_*`, `editor_*_mut*`, peer
+  subsystem mutators directly. Those files report `UiHit` and stop
+  there.
 
 ### Verification
 
@@ -969,9 +1194,9 @@ make test && make test-stubs
 make check-ui-no-repl-state-read
 make check-ui-renderer-takes-view
 
-grep -rE 'repl_(action|command_store|clipboard|undo|search|var_drag|autocomplete)_[a-z_]+\(' \
+grep -rE 'repl_(action|command_store|clipboard|undo|search|var_drag|autocomplete)_[a-z_]+\(|editor_[a-z_]+_(set|mut|begin|append|clear)' \
     ui_*.c
-# expected: 0 by end of phase
+# expected: 0 by end of phase (UI emits hits, doesn't mutate)
 ```
 
 Manual smoke required (see Verification Matrix).
@@ -985,6 +1210,10 @@ mechanical with redirect headers during transition.
 
 ### 5.1 Rename checklist
 
+Updated for the corrected contract. `ui_action_dispatch.c` is gone;
+the controller routes via `UiHit` directly. `ui_help_overlay.c`
+collapses into a read-only editor session.
+
 | Old | New | Owner |
 |---|---|---|
 | `repl_editor.c` | three-way split (see below): `editor_input.c` + `editor_commit.c` + lifted-into-`imrepl_ctrl.c` | editor / controller |
@@ -992,42 +1221,48 @@ mechanical with redirect headers during transition.
 | `repl_clipboard.c` | `editor_clipboard.c` | editor |
 | `repl_search.c` | `editor_search.c` | editor |
 | `repl_inline_rename.c` | `editor_inline_rename.c` | editor |
-| `repl_var_drag.c` | `editor_var_drag.c` | editor |
-| `repl_autocomplete.c` | `editor_autocomplete.c` | editor |
+| `repl_var_drag.c` | `variable_panel_drag.c` (peer subsystem, NOT editor — was the wrong destination in the prior plan) | variable-panel subsystem |
+| `repl_autocomplete.c` | `editor_autocomplete.c`; gains a `EditorCompletionProvider` registration seam so the editor stops reaching into `repl_eval` directly | editor |
 | `repl_layout.c` | `ui_layout.c` | UI |
 | `repl_code_panel_layout.c` | `ui_code_panel_layout.c` (pure wrap iterator) | UI |
 | `repl_code_panel_document.c` | `editor_code_panel_document.c` (owns scroll / hit-test, editor-state-shaped) | editor |
-| `repl_actions.c` | split into `ui_action_dispatch.c` + `editor_actions.c` + REPL-side actions stay | mixed |
-| `repl_camera_controls.c` | `scene_camera_controls.c` (transform application reads `UiState.camera`); the mouse-input half is just a regular UI handler emitting `UI_ACTION_CAMERA_*` | scene/UI |
+| `repl_actions.c` | split: menu activation routing → `imrepl_actions.c`; editor actions → `editor_actions.c`; REPL-side stays in repl_* | mixed |
+| `repl_camera_controls.c` | `scene_camera_controls.c` (transform application reads `UiState.camera`); the mouse-input half is a `imrepl_ctrl` route into `scene_camera_handle_*` | scene/UI |
+| `ui_help_overlay.c` | `editor_help_session.c` — a read-only editor session whose content provider returns help text. `ReplHelpState.scroll` and `tab_idx` move out of `UiState` into per-session editor state. `ReplHelpState.visible` stays on `UiState` as a chrome bit. | editor |
 
 ### 5.0 The `repl_editor.c` three-way split
 
 Today `repl_editor.c` mixes three responsibilities. Each goes to a
-different home — the new `editor_input.c` is **not** a GLUT router:
+different home — corrected for the M/V/C+router contract:
 
 ```text
 repl_editor.c (today)
-  GLUT key/mouse callbacks + cross-layer routing  -> imrepl_ctrl.c
-                                                     (GLUT events become UiInputEvent;
-                                                      UI handlers emit UiAction;
-                                                      imrepl_ctrl_dispatch_action mutates)
+  GLUT key/mouse callback registration             -> imrepl_ctrl.c
+   + cross-subsystem routing                          (GLUT events become raw input;
+                                                      imrepl_ctrl asks UI for UiHit;
+                                                      dispatches to the owning subsystem
+                                                      based on UiHit.kind / focus)
 
-  editor-action application (cursor moves,         -> editor_input.c
-   insert text, delete text, navigate line,           (an editor-action *applier* / reducer
-   toggle insert mode)                                that mutates EditorState given a
-                                                      cursor / text / navigation action;
-                                                      no GLUT, no UI snapshot reads)
+  editor-side text-document behavior                -> editor_input.c
+   (cursor moves, insert text, delete text,           (the text-document model/controller —
+    navigate line, toggle insert mode, scroll,        receives raw events from imrepl_ctrl
+    search-key handling, autocomplete navigation,     once dispatched here, mutates
+    clipboard cut/copy/paste keys, undo/redo keys)    EditorState directly. It IS the editor.
+                                                      No GLUT registration, no UiAction enum.)
 
-  commit/navigation orchestration                  -> editor_commit.c
-   (compile + undo + buffer + apply transaction;      (already extracted in Phase 3)
+  commit/navigation orchestration                   -> editor_commit.c
+   (compile + undo + buffer + apply transaction;       (Phase 3 work)
     rejected-parse rollback;
     commit-before-navigation)
 ```
 
-`editor_input.c` after the split is the editor's text-state reducer.
-It receives `UiAction`s from the dispatch gate and updates
-`EditorState` (cursor, selection, scroll, etc.). It does **not**
-register GLUT callbacks; that's the controller's job.
+`editor_input.c` after the split is the editor's text-document
+controller. It receives raw key/mouse events that `imrepl_ctrl` has
+routed to it (via `UiHit.kind == UI_HIT_CODE_TEXT` for mouse, or via
+focus state for keyboard). It mutates `EditorState`. It does **not**
+register GLUT callbacks; that's `imrepl_ctrl`'s job. It does **not**
+go through a `UiAction` dispatch table — the dispatch happens at the
+`imrepl_ctrl` boundary, not inside the editor.
 
 ### 5.2 Redirect headers during transition
 
@@ -1067,7 +1302,7 @@ ls repl_*.c | wc -l
 
 ---
 
-## Suggested Branch / Commit Breakdown
+## Suggested Branch / Commit Breakdown **(historical — see Implementation Status above for current sequence)**
 
 Branch name:
 
@@ -1075,7 +1310,10 @@ Branch name:
 feature/editor-ownership-gap-cleanup
 ```
 
-Suggested commits (each buildable, each with green tests):
+The original 17-commit list below was the *initial* plan. Commits 1–11
+matched it; commit 12+ has been retargeted under the corrected
+contract (see *Implementation Status*). The list is preserved for
+historical reference.
 
 ```text
 1.  tools: add editor ownership audit report
@@ -1089,9 +1327,9 @@ Suggested commits (each buildable, each with green tests):
 9.  refactor: pass EditorBufferView to REPL text consumers
 10. test: cover failed validation and commit transaction invariants
 11. refactor: split repl_compile validation from editor_commit application
-12. refactor: introduce UiAction dispatch gate
-13. refactor: migrate keyboard input handlers to UiAction
-14. refactor: migrate mouse/menu/color/camera input handlers to UiAction
+12. refactor: introduce UiAction dispatch gate            (REPLACED — UiHit routing instead)
+13. refactor: migrate keyboard input handlers to UiAction (REPLACED — direct editor calls)
+14. refactor: migrate mouse/menu/color/camera input handlers to UiAction (REPLACED — direct peer calls)
 15. refactor: rename editor-owned modules
 16. docs: refresh MODULES and ARCHITECTURE after ownership split
 17. checks: promote editor ownership audits to hard guards
@@ -1151,24 +1389,43 @@ make check-state-boundaries
 
 ## Exit Criteria
 
-Cleanup is complete when all thirteen statements are true:
+Cleanup is complete when all of the following are true. Items 11–13
+are reworded to match `editor-text-model-controller.md`'s corrected
+contract.
 
 ```text
-1.  Program-owned slices live in ReplState.
-2.  Editor-owned slices live in EditorState.
-3.  UI / session chrome slices live in UiState.
-4.  Editor text is mutated only through editor_buffer / editor_document APIs.
-5.  repl_command_store mutates only GLCmd arrays and related command-store state.
-6.  REPL modules that need source text receive EditorBufferView explicitly.
-7.  Commit validation can be called without mutating editor text or command state.
-8.  Successful commit application updates editor text and REPL command model
-    as one transaction.
-9.  Undo restores both editor text and REPL command state consistently.
+ 1. Program-owned slices live in ReplState.
+ 2. Editor-owned slices (text + cursor + scroll + selection + search +
+    autocomplete + clipboard + undo + cursor_blink) live in EditorState.
+ 3. UI / session chrome slices (viewport + pointer + status TTL +
+    visibility flags + panel divider + camera pose) live in UiState.
+ 4. Editor text is mutated only through editor_buffer / editor_document
+    APIs.
+ 5. repl_command_store mutates only GLCmd arrays and related
+    command-store state.
+ 6. REPL modules that need source text receive EditorBufferView
+    explicitly.
+ 7. Commit validation (repl_compile) can be called without mutating
+    editor text or command state.
+ 8. Successful commit application updates editor text and REPL command
+    model as one transaction.
+ 9. Undo restores both editor text and REPL command state consistently.
 10. ui_* renderers remain snapshot-only.
-11. ui_* input handlers emit UiAction rather than mutating state directly.
-12. imrepl_ctrl is the input-event mutation gate.
-13. MODULES.md and ARCHITECTURE.md describe the same ownership boundaries
-    enforced by Makefile checks.
+11. ui_* input handlers report neutral UiHit results; they do not own
+    editor or peer-subsystem behavior. (No giant UiAction enum.)
+12. imrepl_ctrl routes raw input to the owning subsystem based on
+    UiHit.kind; only editor commit paths cross into REPL via
+    repl_compile().
+13. Variable panel and replay are peer subsystems with their own
+    state + controllers — not slices of the editor.
+14. ui_help_overlay is implemented as a read-only editor session
+    backed by a content provider; help scroll / tab live in editor
+    session state.
+15. Autocomplete reaches the variable / GL-name table via a registered
+    EditorCompletionProvider, not by reaching into repl_eval directly.
+16. MODULES.md, editor-text-model-controller.md, and ARCHITECTURE.md
+    describe the same ownership boundaries enforced by Makefile
+    checks.
 ```
 
 ---
@@ -1215,14 +1472,21 @@ Those are separate tracks.
 
 ## Relationship To Other Plans
 
+- **Authoritative current contract:**
+  [`feature/editor-text-model-controller.md`](editor-text-model-controller.md)
+  — defines the M/V/C+compiler+router framing. This doc's Phase 4
+  direction is superseded by it; the migration history below remains
+  accurate.
 - **Supersedes** the deferred Phase C of
-  `feature/push-architecture-ui.md` — the `UiAction` work is folded in
-  here as Phase 4.
+  `feature/push-architecture-ui.md` — the input-handler work is folded
+  in here as Phase 4 (now framed as `UiHit` routing rather than a
+  `UiAction` enum).
 - **Builds on** `feature/editor-owns-text.md` Steps 2–6 (data shape) and
   `feature/gold-standard-state-ownership.md` Stage 7 (UI snapshot
   purity).
 - **Companion** to `feature/editor-ownership-gap-cleanup.md` — that doc
-  is the audit/landing-sequence checklist; this doc is the architectural
-  contract. Read both together.
+  is the audit/landing-sequence checklist; the contract lives in
+  `editor-text-model-controller.md` plus this doc's history. Read all
+  three together.
 - **Independent** of `push-architecture-refinement.md` R10 (dissolve
   `repl_core.c`) and R8 (`sample → imrepl`).
