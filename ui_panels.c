@@ -1273,7 +1273,7 @@ int ui_panels_handle_code_panel_press(int mx, int my, int *cursor_pos_out) {
      * not a fresh document scan. */
     if (!on_insert_line && row_offset == 0 && target >= 0) {
         const EditorTransformer *ct =
-            find_color_transformer(repl_state_editor_transformers(), target);
+            find_color_transformer(editor_state_transformers(), target);
         if (ct) {
             int cp_x2, cp_w2;
             repl_layout_code_panel_rect(&cp_x2, NULL, &cp_w2, NULL);

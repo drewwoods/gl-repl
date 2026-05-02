@@ -841,7 +841,7 @@ static int format_evaluated_cmd(const GLCmd *cmd, const char *orig_source,
 
 
 static void repl_replay_annotations_refresh_virtual_lines(void) {
-    repl_state_editor_virtual_lines_clear();
+    editor_state_virtual_lines_clear();
 
     ReplReplayRuntimeState replay = repl_state_replay();
     if (!replay.active || !replay.expand_args)
@@ -861,7 +861,7 @@ static void repl_replay_annotations_refresh_virtual_lines(void) {
     if (repl_replay_build_subst_annotation(cmd_idx, flat_idx,
                                            subst, sizeof(subst),
                                            var_comment, sizeof(var_comment)) > 0) {
-        repl_state_editor_virtual_lines_append(cmd_idx,
+        editor_state_virtual_lines_append(cmd_idx,
                                                VIRTUAL_STYLE_REPLAY_SUBST,
                                                subst, var_comment);
     }
@@ -869,7 +869,7 @@ static void repl_replay_annotations_refresh_virtual_lines(void) {
     char eval_buf[MAX_VIRTUAL_LINE_TEXT];
     if (repl_replay_build_eval_annotation(cmd_idx, flat_idx,
                                           eval_buf, sizeof(eval_buf))) {
-        repl_state_editor_virtual_lines_append(cmd_idx,
+        editor_state_virtual_lines_append(cmd_idx,
                                                VIRTUAL_STYLE_REPLAY_EVAL,
                                                eval_buf, NULL);
     }
@@ -889,7 +889,7 @@ void repl_replay_annotations_prepare(void) {
 int repl_replay_annotation_extra_rows_for_line(int cmd_idx) {
     /* Source of truth is the controller-pushed virtual-line list. Layout
      * runs after the push, so the count here matches what render draws. */
-    const EditorVirtualLineList *list = repl_state_editor_virtual_lines();
+    const EditorVirtualLineList *list = editor_state_virtual_lines();
     if (!list || cmd_idx < 0)
         return 0;
     int count = 0;

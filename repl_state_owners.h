@@ -59,29 +59,16 @@ void                     repl_state_time_reset_to_zero(void);
 /* Per-frame editor transformer snapshot pushed by the controller after
  * flatten so renderers/UI can iterate inline swatch/slider affordances
  * without walking the document themselves. */
-const EditorTransformerList  *repl_state_editor_transformers(void);
-void                          repl_state_editor_transformers_clear(void);
-int                           repl_state_editor_transformers_append(const EditorTransformer *transformer);
+/* Editor overlay snapshot list accessors moved to editor_state.h
+ * (Phase 1 commit 9). Use editor_state_transformers / _highlights /
+ * _virtual_lines. */
 
 /* Per-frame editor highlight snapshot. The controller refills the list
  * each frame with feeding-cmd, replay-PC, search-match, etc. entries so
  * UI render code can iterate it instead of recomputing positions inline. */
-const EditorHighlightList    *repl_state_editor_highlights(void);
-void                          repl_state_editor_highlights_clear(void);
-int                           repl_state_editor_highlights_append(int line_idx,
-                                                                  int char_start,
-                                                                  int char_end,
-                                                                  HighlightKind kind);
-
-/* Per-frame editor virtual-line snapshot. Rows are pushed below real
- * source lines (replay annotations today) and consulted by layout,
- * scroll, hit-test, and render so the count comes from one place. */
-const EditorVirtualLineList  *repl_state_editor_virtual_lines(void);
-void                          repl_state_editor_virtual_lines_clear(void);
-int                           repl_state_editor_virtual_lines_append(int after_line_idx,
-                                                                     VirtualLineStyle style,
-                                                                     const char *text,
-                                                                     const char *aux);
+/* Editor highlight + virtual-line accessors moved to editor_state.h
+ * (Phase 1 commit 9). Use editor_state_highlights /
+ * _virtual_lines. */
 const char *repl_state_input_text(void);
 char       *repl_state_input_buffer_mut(void);
 int         repl_state_input_len(void);
@@ -112,9 +99,8 @@ void                 repl_state_help_reset(void);
 ReplVariablePanelState    repl_state_variable_panel(void);
 ReplVariablePanelState       *repl_state_variable_panel_mut(void);
 
-ReplVariableDragState     repl_state_variable_drag(void);
-ReplVariableDragState       *repl_state_variable_drag_mut(void);
-void                         repl_state_variable_drag_reset(void);
+/* editor_state_variable_drag accessors moved to editor_state.h
+ * (Phase 1 commit 9). Use editor_state_variable_drag / _mut / _reset. */
 
 ReplProfilePanelState    repl_state_profile_panel(void);
 ReplProfilePanelState       *repl_state_profile_panel_mut(void);

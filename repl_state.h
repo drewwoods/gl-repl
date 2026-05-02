@@ -10,11 +10,7 @@ typedef struct {
     ReplDocumentState         document;
     ReplFlatProgramState      flat_program;
     ReplVariableState         variables;
-    EditorTransformerList     editor_transformers;
-    EditorHighlightList       editor_highlights;
-    EditorVirtualLineList     editor_virtual_lines;
     ReplCodePanelRuntimeState code_panel;
-    ReplVariableDragState     variable_drag;
     ReplCameraState           camera;
     ReplPresentationState     presentation;
     ReplRenderState           render;

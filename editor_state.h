@@ -1,7 +1,9 @@
 #ifndef EDITOR_STATE_H
 #define EDITOR_STATE_H
 
-#include "sample.h"  /* MAX_COMMANDS, MAX_LINE_LEN */
+#include "sample.h"     /* MAX_COMMANDS, MAX_LINE_LEN */
+#include "ui_editor.h"  /* EditorTransformerList, EditorHighlightList,
+                         * EditorVirtualLineList typedefs (live state) */
 
 /* EditorState owns editable text, cursor, selection, navigation, undo
  * transactions, and the rest of the code-editor session per the
@@ -105,6 +107,15 @@ typedef struct {
     char        hint[MAX_LINE_LEN];
 } ReplAutocompleteState;
 
+/* Variable slider drag transaction: which variable is being dragged,
+ * the starting value, and the cursor anchor x in window pixels. */
+typedef struct {
+    int   var_idx;
+    int   log_mode;
+    float start_value;
+    int   start_x;
+} ReplVariableDragState;
+
 typedef struct {
     ReplEditorBuffer      buffer;
     ReplEditorInputState  input;
@@ -112,6 +123,10 @@ typedef struct {
     ReplClipboardState    clipboard;
     ReplSearchState       search;
     ReplAutocompleteState autocomplete;
+    EditorTransformerList transformers;
+    EditorHighlightList   highlights;
+    EditorVirtualLineList virtual_lines;
+    ReplVariableDragState variable_drag;
 } EditorState;
 
 /* Capture / restore / reset symmetry with repl_state_*. */
@@ -170,5 +185,29 @@ void             editor_state_search_clear(void);
 ReplAutocompleteState  editor_state_autocomplete(void);
 ReplAutocompleteState *editor_state_autocomplete_mut(void);
 void                   editor_state_autocomplete_clear(void);
+
+/* Per-frame editor overlay snapshot lists. The controller refills
+ * these each frame after flatten so UI renderers and input bridges
+ * can iterate them without walking the document. */
+const EditorTransformerList *editor_state_transformers(void);
+void                         editor_state_transformers_clear(void);
+int                          editor_state_transformers_append(const EditorTransformer *transformer);
+
+const EditorHighlightList   *editor_state_highlights(void);
+void                         editor_state_highlights_clear(void);
+int                          editor_state_highlights_append(int line_idx, int char_start,
+                                                            int char_end, HighlightKind kind);
+
+const EditorVirtualLineList *editor_state_virtual_lines(void);
+void                         editor_state_virtual_lines_clear(void);
+int                          editor_state_virtual_lines_append(int after_line_idx,
+                                                               VirtualLineStyle style,
+                                                               const char *text,
+                                                               const char *aux);
+
+/* Variable slider drag transaction. */
+ReplVariableDragState  editor_state_variable_drag(void);
+ReplVariableDragState *editor_state_variable_drag_mut(void);
+void                   editor_state_variable_drag_reset(void);
 
 #endif /* EDITOR_STATE_H */
