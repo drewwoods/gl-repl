@@ -379,8 +379,9 @@ Branch: `feature/editor-ownership-gap-cleanup`. Tracked against the
 | 3 | refactor: add EditorState + UiState storage + compatibility forwarders | ✅ landed (2026-05-02) |
 | 4 | refactor: migrate editor_buffer slice to EditorState | ✅ landed (2026-05-02) |
 | 5 | refactor: migrate editor_input slice to EditorState | ✅ landed (2026-05-02) |
-| 6 | refactor: migrate selection + clipboard slices | next |
-| 7–17 | (search/autocomplete → UI slices → store text drop → compile gate → UiAction → renames → hard guards) | pending |
+| 6 | refactor: migrate selection + clipboard slices to EditorState | ✅ landed (2026-05-02) |
+| 7 | refactor: migrate search + autocomplete slices to EditorState | next |
+| 8–17 | (UI slices → store text drop → compile gate → UiAction → renames → hard guards) | pending |
 
 ## Phase 0 — Audits Before Moving Code
 
@@ -554,6 +555,18 @@ Each migration is a separate commit with passing tests at the end:
    `edit_line_idx` field. Audit deltas: section-1 1460 → 1363 (−97);
    `repl_state.c` shrank from 970 → 872 lines.
 3. `selection` + `clipboard`.
+   ✅ **Landed (commit 6).** `ReplSelectionState` and `ReplClipboardState`
+   typedefs moved to `editor_state.h`; the `selection` and `clipboard`
+   fields were removed from `ReplRuntimeState`; storage now lives at
+   `g_editor_state.{selection,clipboard}`. New API:
+   `editor_state_selection / _mut / _clear / _anchor / _end_idx / _set`
+   and `editor_state_clipboard / _mut / _clear / _cmds_mut / _count /
+   _count_set`. The clipboard's parallel `lines[][]` text sidecar
+   (1.88 MB) moves off `ReplRuntimeState` entirely. 7 caller files
+   migrated mechanically. `repl_state.c` g_clipboard / g_sel_*
+   macros removed. `repl_debug.c` runtime-state-layout dump dropped
+   the `selection` and `clipboard` rows. Audit delta: section-1
+   1363 → 1307 (−56).
 4. `search` + `autocomplete`.
 5. transformer / highlight / virtual-line snapshot lists.
 6. `code_panel` scroll + scroll-follow → `EditorState.scroll`.

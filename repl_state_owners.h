@@ -98,19 +98,8 @@ void        repl_state_pending_newline_len_set(int newline_len);
 void        repl_state_pending_newline_set_text(const char *text);
 void        repl_state_pending_newline_clear(void);
 
-ReplSelectionState       repl_state_selection(void);
-ReplSelectionState       *repl_state_selection_mut(void);
-void                      repl_state_selection_clear(void);
-int                       repl_state_selection_anchor(void);
-int                       repl_state_selection_end_idx(void);
-void                      repl_state_selection_set(int anchor_idx, int end_idx);
-
-ReplClipboardState       repl_state_clipboard(void);
-ReplClipboardState       *repl_state_clipboard_mut(void);
-void                      repl_state_clipboard_clear(void);
-GLCmd                    *repl_state_clipboard_cmds_mut(void);
-int                       repl_state_clipboard_count(void);
-void                      repl_state_clipboard_count_set(int cmd_count);
+/* Selection + clipboard accessors moved to editor_state.h (Phase 1
+ * commit 6). Use editor_state_selection / _clipboard and friends. */
 
 ReplCodePanelRuntimeState       repl_state_code_panel(void);
 ReplCodePanelRuntimeState       *repl_state_code_panel_mut(void);

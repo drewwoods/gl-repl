@@ -310,22 +310,22 @@ int main() {
         repl_state_insert_mode_set(42);
         ASSERT_INT("state insert mode set", repl_state_insert_mode(), 1);
 
-        repl_state_selection_set(4, 2);
-        ASSERT_INT("state selection anchor", repl_state_selection_anchor(), 4);
-        ASSERT_INT("state selection end", repl_state_selection_end_idx(), 2);
-        repl_state_selection_clear();
-        ASSERT_INT("state selection clear anchor", repl_state_selection_anchor(), -1);
-        ASSERT_INT("state selection clear end", repl_state_selection_end_idx(), -1);
+        editor_state_selection_set(4, 2);
+        ASSERT_INT("state selection anchor", editor_state_selection_anchor(), 4);
+        ASSERT_INT("state selection end", editor_state_selection_end_idx(), 2);
+        editor_state_selection_clear();
+        ASSERT_INT("state selection clear anchor", editor_state_selection_anchor(), -1);
+        ASSERT_INT("state selection clear end", editor_state_selection_end_idx(), -1);
 
-        clipboard = repl_state_clipboard_cmds_mut();
+        clipboard = editor_state_clipboard_cmds_mut();
         clipboard[0].type = CMD_COLOR3F;
         clipboard[0].valid = 1;
-        repl_state_clipboard_count_set(1);
-        ASSERT_INT("state clipboard count", repl_state_clipboard_count(), 1);
+        editor_state_clipboard_count_set(1);
+        ASSERT_INT("state clipboard count", editor_state_clipboard_count(), 1);
         ASSERT_INT("state clipboard count accessor",
-                   repl_state_clipboard_count(), 1);
-        repl_state_clipboard_clear();
-        ASSERT_INT("state clipboard clear", repl_state_clipboard_count(), 0);
+                   editor_state_clipboard_count(), 1);
+        editor_state_clipboard_clear();
+        ASSERT_INT("state clipboard clear", editor_state_clipboard_count(), 0);
 
         editor_state_input_reset();
         ASSERT_STR("state input reset text", editor_state_input().input, "");

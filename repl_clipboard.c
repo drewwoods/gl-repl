@@ -14,33 +14,33 @@
 #include "repl_state.h"
 
 void repl_clipboard_clear_selection(void) {
-    repl_state_selection_clear();
+    editor_state_selection_clear();
 }
 
 int repl_clipboard_sel_active(void) {
-    return repl_state_selection_anchor() >= 0 && repl_state_selection_end_idx() >= 0;
+    return editor_state_selection_anchor() >= 0 && editor_state_selection_end_idx() >= 0;
 }
 
 int repl_clipboard_sel_lo(void) {
-    int a = repl_state_selection_anchor(), e = repl_state_selection_end_idx();
+    int a = editor_state_selection_anchor(), e = editor_state_selection_end_idx();
     return a < e ? a : e;
 }
 
 int repl_clipboard_sel_hi(void) {
-    int a = repl_state_selection_anchor(), e = repl_state_selection_end_idx();
+    int a = editor_state_selection_anchor(), e = editor_state_selection_end_idx();
     return a > e ? a : e;
 }
 
 void repl_selection_start(int line_idx) {
-    repl_state_selection_set(line_idx, line_idx);
+    editor_state_selection_set(line_idx, line_idx);
 }
 
 int repl_selection_end(void) {
-    return repl_state_selection_end_idx();
+    return editor_state_selection_end_idx();
 }
 
 void repl_selection_set_end(int line_idx) {
-    repl_state_selection_set(repl_state_selection_anchor(), line_idx);
+    editor_state_selection_set(editor_state_selection_anchor(), line_idx);
 }
 
 int repl_selection_normalize_cmd_range(int start, int count,
@@ -74,8 +74,8 @@ void repl_selection_set_var_decl_action_status(const char *action) {
 }
 
 static void clipboard_copy_range(int start, int count) {
-    ReplClipboardState *clipboard = repl_state_clipboard_mut();
-    GLCmd *cb = repl_state_clipboard_cmds_mut();
+    ReplClipboardState *clipboard = editor_state_clipboard_mut();
+    GLCmd *cb = editor_state_clipboard_cmds_mut();
     const GLCmd *cmds = repl_state_document_cmds();
     int n = 0;
     for (int i = start; i < start + count && n < MAX_COMMANDS; i++) {
@@ -83,7 +83,7 @@ static void clipboard_copy_range(int start, int count) {
         repl_copy_string_fits(clipboard->lines[n - 1], MAX_LINE_LEN,
                               editor_buffer_line(i));
     }
-    repl_state_clipboard_count_set(n);
+    editor_state_clipboard_count_set(n);
 }
 
 static int selected_cmd_range(int *out_start, int *out_count) {
@@ -166,8 +166,8 @@ void repl_clipboard_copy_current(void) {
         {
             char msg[64];
             snprintf(msg, sizeof(msg), "Copied %d line%s",
-                     repl_state_clipboard_count(),
-                     repl_state_clipboard_count() > 1 ? "s" : "");
+                     editor_state_clipboard_count(),
+                     editor_state_clipboard_count() > 1 ? "s" : "");
             set_status(msg);
         }
     } else if (repl_state_edit_line() < repl_state_document_count()) {
@@ -186,13 +186,13 @@ void repl_clipboard_copy_current(void) {
         if (copying_for) {
             char msg[64];
             snprintf(msg, sizeof(msg), "Copied for-loop (%d lines)",
-                     repl_state_clipboard_count());
+                     editor_state_clipboard_count());
             set_status(msg);
         } else {
             set_status("Copied line");
         }
     } else {
-        repl_state_clipboard_count_set(0);
+        editor_state_clipboard_count_set(0);
     }
 
     repl_clipboard_clear_selection();
@@ -208,7 +208,7 @@ void repl_clipboard_cut_current(void) {
     }
 
     if (!current_cut_range(&start, &count)) {
-        repl_state_clipboard_count_set(0);
+        editor_state_clipboard_count_set(0);
         repl_clipboard_clear_selection();
         return;
     }
@@ -223,16 +223,16 @@ void repl_clipboard_cut_current(void) {
 }
 
 void repl_clipboard_paste_current(void) {
-    if (repl_state_clipboard_count() > 0) {
-        if (repl_selection_cmds_contain_var_decl(repl_state_clipboard_cmds_mut(),
-                                                 repl_state_clipboard_count())) {
+    if (editor_state_clipboard_count() > 0) {
+        if (repl_selection_cmds_contain_var_decl(editor_state_clipboard_cmds_mut(),
+                                                 editor_state_clipboard_count())) {
             repl_selection_set_var_decl_action_status("paste");
             return;
         }
 
         {
             ReplCommandStore store = repl_command_store_live();
-            if (!repl_command_store_can_insert(&store, repl_state_clipboard_count())) {
+            if (!repl_command_store_can_insert(&store, editor_state_clipboard_count())) {
                 set_status("Command buffer full!");
                 return;
             }
@@ -247,15 +247,15 @@ void repl_clipboard_paste_current(void) {
                       (edit < n ? edit : n);
             const char *lines[MAX_COMMANDS];
 
-            for (int i = 0; i < repl_state_clipboard_count(); i++)
-                lines[i] = repl_state_clipboard_mut()->lines[i];
-            if (!repl_command_store_insert_many(&store, pos, repl_state_clipboard_cmds_mut(),
-                                                repl_state_clipboard_count(), 0,
+            for (int i = 0; i < editor_state_clipboard_count(); i++)
+                lines[i] = editor_state_clipboard_mut()->lines[i];
+            if (!repl_command_store_insert_many(&store, pos, editor_state_clipboard_cmds_mut(),
+                                                editor_state_clipboard_count(), 0,
                                                 lines)) {
                 set_status("Command buffer full!");
                 return;
             }
-            repl_state_edit_line_set(pos + repl_state_clipboard_count());
+            repl_state_edit_line_set(pos + editor_state_clipboard_count());
             repl_state_insert_mode_set(0);
             load_line_to_input(repl_state_edit_line());
             mark_normals_dirty();
@@ -264,8 +264,8 @@ void repl_clipboard_paste_current(void) {
         {
             char msg[64];
             snprintf(msg, sizeof(msg), "Pasted %d line%s",
-                     repl_state_clipboard_count(),
-                     repl_state_clipboard_count() > 1 ? "s" : "");
+                     editor_state_clipboard_count(),
+                     editor_state_clipboard_count() > 1 ? "s" : "");
             set_status(msg);
         }
     } else {

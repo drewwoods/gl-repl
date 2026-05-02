@@ -58,10 +58,9 @@ static ReplRuntimeState g_repl_state;
  * on g_editor_state.input in editor_state.c, where the dependent
  * convenience getters (repl_state_input_text, _cursor_pos,
  * _insert_mode, _pending_newline_*, etc.) are also implemented. */
-#define g_clipboard                 (g_repl_state.clipboard.cmds)
-#define g_clipboard_count           (g_repl_state.clipboard.cmd_count)
-#define g_sel_anchor                (g_repl_state.selection.anchor_idx)
-#define g_sel_end                   (g_repl_state.selection.end_idx)
+/* g_clipboard / g_clipboard_count / g_sel_anchor / g_sel_end macros
+ * removed (Phase 1 commit 6). The selection + clipboard slices live
+ * on g_editor_state.{selection,clipboard} in editor_state.c. */
 #define g_anim_time                 (g_repl_state.variables.anim_time)
 #define g_t_playing                 (g_repl_state.variables.time_playing)
 #define g_t_var_idx                 (g_repl_state.variables.time_var_idx)
@@ -477,59 +476,8 @@ int repl_state_editor_virtual_lines_append(int after_line_idx,
  * struct accessor and the new editor_state_input_reset entry point
  * live there too. */
 
-ReplSelectionState repl_state_selection(void) {
-    return g_repl_state.selection;
-}
-
-ReplSelectionState *repl_state_selection_mut(void) {
-    return &g_repl_state.selection;
-}
-
-void repl_state_selection_clear(void) {
-    g_sel_anchor = -1;
-    g_sel_end = -1;
-}
-
-int repl_state_selection_anchor(void) {
-    return g_sel_anchor;
-}
-
-int repl_state_selection_end_idx(void) {
-    return g_sel_end;
-}
-
-void repl_state_selection_set(int anchor_idx, int end_idx) {
-    g_sel_anchor = anchor_idx;
-    g_sel_end = end_idx;
-}
-
-ReplClipboardState repl_state_clipboard(void) {
-    return g_repl_state.clipboard;
-}
-
-ReplClipboardState *repl_state_clipboard_mut(void) {
-    return &g_repl_state.clipboard;
-}
-
-void repl_state_clipboard_clear(void) {
-    g_clipboard_count = 0;
-}
-
-GLCmd *repl_state_clipboard_cmds_mut(void) {
-    return g_clipboard;
-}
-
-int repl_state_clipboard_count(void) {
-    return g_clipboard_count;
-}
-
-void repl_state_clipboard_count_set(int cmd_count) {
-    if (cmd_count < 0)
-        cmd_count = 0;
-    if (cmd_count > MAX_COMMANDS)
-        cmd_count = MAX_COMMANDS;
-    g_clipboard_count = cmd_count;
-}
+/* Selection + clipboard accessors moved to editor_state.c
+ * (Phase 1 commit 6). Use editor_state_selection / _clipboard. */
 
 ReplCodePanelRuntimeState repl_state_code_panel(void) {
     return g_repl_state.code_panel;
