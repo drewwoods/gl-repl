@@ -221,12 +221,26 @@ Do not defer this indefinitely. It is the UI half of the same ownership split.
 
 ---
 
+## Implementation Status
+
+Branch: `feature/editor-ownership-gap-cleanup`. Companion to the 17-commit
+sequence in `feature/editor-owns-text-completion.md`. See that doc's
+*Implementation Status* table for the source of truth; this companion
+mirrors the gates that have come online.
+
+| Phase | Audit / gate landed |
+|---|---|
+| 0 | `make audit-editor-ownership` (informational; commit 1, 2026-05-02) |
+| 1–5 | pending |
+
 ## Phase 0: Add Audits Before Moving Code
 
 This phase should land before large structural changes. It makes the gap visible
 and gives each later phase a measurable exit criterion.
 
 ### 0.1 Add `scripts/audit_editor_ownership.sh`
+
+✅ **Landed (commit 1).** Wired as `make audit-editor-ownership`.
 
 ```sh
 #!/bin/sh

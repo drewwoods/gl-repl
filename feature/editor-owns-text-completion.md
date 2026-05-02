@@ -367,6 +367,17 @@ gate. It is the only function allowed to mutate `ReplState` /
 
 ---
 
+## Implementation Status
+
+Branch: `feature/editor-ownership-gap-cleanup`. Tracked against the
+17-commit sequence in *Suggested Branch / Commit Breakdown* below.
+
+| # | Commit | Status |
+|---|---|---|
+| 1 | tools: add editor ownership audit report | ✅ landed (2026-05-02) |
+| 2 | docs: record baseline editor ownership audit counts | next |
+| 3–17 | (state carve-out → renames → hard guards) | pending |
+
 ## Phase 0 — Audits Before Moving Code
 
 This phase lands before structural changes so every later phase has a
@@ -374,6 +385,13 @@ measurable exit criterion. The first goal is *not* zero — it is making
 drift visible.
 
 ### 0.1 Add `scripts/audit_editor_ownership.sh`
+
+✅ **Landed (commit 1).** Wired as `make audit-editor-ownership`.
+Informational target only; promotion to a hard guard is deferred to
+commit 17 (Phase 5). The script drops the doc-draft sentinel comment
+and uses `bash` (matching the surrounding `scripts/check-*.sh` style).
+Tolerated exceptions are skipped via `EDITOR_OWNERSHIP_TODO` markers
+so known-knowns don't drown unknown drift.
 
 ```sh
 #!/bin/sh
