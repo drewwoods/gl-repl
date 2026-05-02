@@ -64,32 +64,10 @@ typedef struct {
     float          anim_time;
 } ReplVariableView;
 
-typedef struct {
-    char input[MAX_INPUT_LEN];
-    int  input_capacity;
-    int  input_len;
-    int  cursor_pos;
-    int  edit_line_idx;
-    char pending_newline[MAX_INPUT_LEN];
-    int  pending_newline_capacity;
-    int  pending_newline_len;
-    int  insert_mode;
-} ReplEditorInputState;
-
-typedef struct {
-    const char *input;
-    int         input_capacity;
-    int         input_len;
-    int         cursor_pos;
-    int         edit_line_idx;
-    const char *pending_newline;
-    int         pending_newline_capacity;
-    int         pending_newline_len;
-    int         insert_mode;
-} ReplEditorInputView;
-
-/* ReplEditorBuffer typedef has moved to editor_state.h alongside the
- * EditorState struct that owns it (Phase 1 commit 4). */
+/* ReplEditorInputState / ReplEditorInputView typedefs moved to
+ * editor_state.h alongside the EditorState struct that owns them
+ * (Phase 1 commit 5). The ReplEditorBuffer typedef moved earlier
+ * (Phase 1 commit 4). */
 
 typedef struct {
     int anchor_idx;
@@ -275,10 +253,10 @@ FlatProgramView   repl_state_flat_program_view(void);
 
 ReplVariableView repl_state_variables(void);
 
-ReplEditorInputView repl_state_editor_input(void);
-/* Editor-owned text buffer accessors have moved to editor_state.h
- * (Phase 1 commit 4). Use `editor_buffer_line / count` and
- * `editor_state_buffer` instead. */
+/* Editor-input + editor-buffer accessors moved to editor_state.h
+ * (Phase 1 commits 4-5). Use `editor_state_input` for the input view,
+ * `editor_state_buffer` for the buffer view, and the slice-level
+ * `editor_buffer_*` API for line text. */
 
 /* Per-frame editor overlay snapshots, read-only. UI input handlers read
  * these between frames; renderers prefer the UiRenderSnapshot copy. */

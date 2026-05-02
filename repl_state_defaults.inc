@@ -19,16 +19,7 @@
         .time_playing = 1,
         .anim_time = 0.0f,
     },
-    .editor_input = {
-        .input = "",
-        .input_capacity = MAX_INPUT_LEN,
-        .input_len = 0,
-        .cursor_pos = 0,
-        .pending_newline = "",
-        .pending_newline_capacity = MAX_INPUT_LEN,
-        .pending_newline_len = 0,
-        .insert_mode = 0,
-    },
+    /* editor_input defaults moved to editor_state.c (Phase 1 commit 5). */
     .selection = {
         .anchor_idx = -1,
         .end_idx = -1,

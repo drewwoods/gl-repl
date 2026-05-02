@@ -277,9 +277,9 @@ void repl_reformat_commands(void) {
     int saved_edit_line = repl_state_edit_line();
     int saved_inserting = repl_state_insert_mode();
     char saved_input[MAX_INPUT_LEN];
-    int saved_input_len = repl_state_editor_input().input_len;
+    int saved_input_len = editor_state_input().input_len;
     int saved_cursor_pos = repl_state_cursor_pos();
-    memcpy(saved_input, repl_state_editor_input().input, sizeof(saved_input));
+    memcpy(saved_input, editor_state_input().input, sizeof(saved_input));
     ReplCommandStore store = repl_command_store_live();
 
     for (int cmd_idx = 0; cmd_idx < repl_state_document_count(); cmd_idx++) {
@@ -460,7 +460,7 @@ void repl_reformat_commands(void) {
     repl_state_edit_line_clamp();
     repl_state_insert_mode_set(saved_inserting);
     if (saved_inserting) {
-        ReplEditorInputState *inp = repl_state_editor_input_mut();
+        ReplEditorInputState *inp = editor_state_input_mut();
         memcpy(inp->input, saved_input, sizeof(saved_input));
         inp->input_len = saved_input_len;
         repl_state_cursor_pos_set(saved_cursor_pos);

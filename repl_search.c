@@ -288,7 +288,7 @@ const char *repl_search_row_text(int row_idx) {
     if (row_idx < 0 || row_idx >= repl_search_row_count())
         return "";
     if (search_row_is_live_input(row_idx))
-        return repl_state_editor_input().input;
+        return editor_state_input().input;
     if (repl_state_insert_mode() && row_idx > edit_line)
         row_idx--;
     /* Source text lives in the editor buffer. */
