@@ -100,6 +100,12 @@ static const char *section_label(ProfSection s) {
     case PROF_CODE_PANEL_LINES_FOOTER: return "    footer";
     case PROF_CODE_PANEL_OVERLAYS: return "  overlays";
     case PROF_UI_PANELS:   return "UI Panels";
+    case PROF_SNAPSHOT:                return "Snapshot";
+    case PROF_SNAPSHOT_TRANSFORMERS:   return "  transformers";
+    case PROF_SNAPSHOT_HIGHLIGHTS:     return "  highlights";
+    case PROF_SNAPSHOT_VIRTUAL_LINES:  return "  virtual lines";
+    case PROF_SNAPSHOT_SCENE_CONFIG:   return "  scene config";
+    case PROF_SNAPSHOT_UI:             return "  ui snapshot";
     case PROF_FLATTEN:     return "Flatten";
     case PROF_REFORMAT:    return "Reformat";
     case PROF_FRAME_TOTAL: return "Frame Total";
@@ -143,7 +149,12 @@ static int is_detail_section(ProfSection s) {
             s == PROF_CODE_PANEL_LINES_BODY_CMDS ||
             s == PROF_CODE_PANEL_LINES_BODY_NEWLINE ||
             s == PROF_CODE_PANEL_LINES_FOOTER ||
-            s == PROF_CODE_PANEL_OVERLAYS);
+            s == PROF_CODE_PANEL_OVERLAYS ||
+            s == PROF_SNAPSHOT_TRANSFORMERS ||
+            s == PROF_SNAPSHOT_HIGHLIGHTS ||
+            s == PROF_SNAPSHOT_VIRTUAL_LINES ||
+            s == PROF_SNAPSHOT_SCENE_CONFIG ||
+            s == PROF_SNAPSHOT_UI);
 }
 
 /* Apply a green/yellow/red color based on section timing thresholds.
