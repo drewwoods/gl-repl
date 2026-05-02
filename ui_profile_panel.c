@@ -90,8 +90,6 @@ static const char *section_label(ProfSection s) {
     case PROF_CODE_PANEL_LAYOUT_GEOM:   return "    geom+rows";
     case PROF_CODE_PANEL_LAYOUT_GEOM_SETUP:      return "      setup";
     case PROF_CODE_PANEL_LAYOUT_GEOM_PRECOMPUTE: return "      precompute";
-    case PROF_CODE_PANEL_LAYOUT_GEOM_TOTALS:     return "      totals";
-    case PROF_CODE_PANEL_LAYOUT_CURSOR: return "    cursor map";
     case PROF_CODE_PANEL_LAYOUT_SCROLL: return "    scroll/follow";
     case PROF_CODE_PANEL_CHROME:   return "  chrome";
     case PROF_CODE_PANEL_LINES:    return "  lines";
@@ -137,8 +135,6 @@ static int is_detail_section(ProfSection s) {
             s == PROF_CODE_PANEL_LAYOUT_GEOM ||
             s == PROF_CODE_PANEL_LAYOUT_GEOM_SETUP ||
             s == PROF_CODE_PANEL_LAYOUT_GEOM_PRECOMPUTE ||
-            s == PROF_CODE_PANEL_LAYOUT_GEOM_TOTALS ||
-            s == PROF_CODE_PANEL_LAYOUT_CURSOR ||
             s == PROF_CODE_PANEL_LAYOUT_SCROLL ||
             s == PROF_CODE_PANEL_CHROME ||
             s == PROF_CODE_PANEL_LINES ||

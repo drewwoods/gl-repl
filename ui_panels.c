@@ -294,96 +294,60 @@ int ui_panels_code_panel_apply_scroll_follow_for_test(int *out_follow_doc_line,
 
 /* Color picker lives in repl_color_picker.c. */
 
-void ui_panels_render_code_panel(const UiRenderSnapshot *snap) {
-    ReplReplayRuntimeState          replay = snap->replay;
-    ReplCodePanelRuntimeState cp     = snap->code_panel;
-    ReplRenderState                 rs     = snap->render;
-    prof_begin(PROF_CODE_PANEL_LAYOUT);
-    prof_begin(PROF_CODE_PANEL_LAYOUT_GEOM);
-    prof_begin(PROF_CODE_PANEL_LAYOUT_GEOM_SETUP);
+/* ========================================================================= */
+/* Code-panel render helpers                                                  */
+/*                                                                            */
+/* ui_panels_render_code_panel() is split across these helpers to keep each  */
+/* phase focused on one concern. They all advance shared row-cursor state    */
+/* (visible-row counter, current y in OpenGL coords, file-line gutter        */
+/* number) through the CodePanelRowCtx struct so the orchestrator does not   */
+/* need to thread half a dozen mutable scalars by hand.                      */
+/* ========================================================================= */
 
-    CodePanelDocumentLayout doc_layout;
-    int cp_x, cp_y, cp_w, cp_h;
+typedef struct {
+    const UiRenderSnapshot *snap;
+    int  panel_w;
+    int  text_x;
+    int  idx_x;
+    int  cp_x;
+    int  cp_w;
+    int  scroll;
+    int  visible_lines;
+    int  highlight_normal_idx;
+    int  highlight_color_idx;
+    /* Mutable row cursor state advanced as rows are emitted. */
+    int  cur;
+    int  line_y;
+    int  file_line;
+} CodePanelRowCtx;
 
-    repl_layout_code_panel_rect(&cp_x, &cp_y, &cp_w, &cp_h);
-    if (cp_w <= 0 || cp_h <= 0) {
-        prof_end(PROF_CODE_PANEL_LAYOUT_GEOM_SETUP);
-        prof_end(PROF_CODE_PANEL_LAYOUT_GEOM);
-        prof_end(PROF_CODE_PANEL_LAYOUT);
-        return;
-    }
-    /* Workspace header lines were refreshed by the controller before the
-     * snapshot was built. */
-    int panel_w = cp_w;
-    int panel_top = cp_y + cp_h;  /* y of the panel's top edge (OpenGL coords) */
-    int linenum_w = 4 * FONT_W;
-    int idx_col_w = snap->presentation.show_vertex_indices ? (6 * FONT_W) : 0;
-    int idx_x = CODE_MARGIN_X + linenum_w + FONT_W;
-    int text_x = idx_x + idx_col_w;
-    int visible_lines;
-    int total_lines;
-    const GLCmd *document_cmds = snap->document_cmds;
-    int document_count = snap->document_count;
-    int edit_line = snap->edit_line;
-    int insert_mode = snap->insert_mode;
+/* Return 1 if the row at ctx->cur is inside the visible scroll window. */
+static int code_panel_row_visible(const CodePanelRowCtx *ctx) {
+    return ctx->cur >= ctx->scroll &&
+           ctx->cur < ctx->scroll + ctx->visible_lines;
+}
 
-    /* Own the full-window overlay viewport so the code panel and the UI
-     * stack beneath it render in the same 2D projection. */
-    glViewport(0, 0, snap->viewport.window_w, snap->viewport.window_h);
+/* Draw "  3" gutter line number at the current row. */
+static void code_panel_draw_gutter_lineno(int line_y, int file_line) {
+    char ln[16];
+    snprintf(ln, sizeof(ln), "%3d", file_line);
+    glColor3f(0.30f, 0.30f, 0.38f);
+    gl2d_draw_string((float)CODE_MARGIN_X, (float)line_y, ln, FONT_MONO);
+}
 
-    /* Gutter feeding-cmd highlights come from the controller-pushed
-     * editor_highlights snapshot. Lift the kinds we render here into
-     * line-indexed scalars so the per-row branch stays cheap. */
-    int highlight_normal_idx = -1;
-    int highlight_color_idx  = -1;
-    if (snap->editor_highlights) {
-        for (int hi = 0; hi < snap->editor_highlights->count; hi++) {
-            const EditorHighlight *h = &snap->editor_highlights->items[hi];
-            if (h->kind == HIGHLIGHT_FEEDING_NORMAL)
-                highlight_normal_idx = h->line_idx;
-            else if (h->kind == HIGHLIGHT_FEEDING_COLOR)
-                highlight_color_idx = h->line_idx;
-        }
-    }
-
-    prof_end(PROF_CODE_PANEL_LAYOUT_GEOM_SETUP);
-    prof_begin(PROF_CODE_PANEL_LAYOUT_GEOM_PRECOMPUTE);
-
-    repl_code_panel_document_build(&doc_layout, panel_w, text_x, cp_h);
-    visible_lines = doc_layout.visible_lines;
-    prof_end(PROF_CODE_PANEL_LAYOUT_GEOM_PRECOMPUTE);
-    prof_begin(PROF_CODE_PANEL_LAYOUT_GEOM_TOTALS);
-
-    total_lines = doc_layout.total_lines;
-
-    prof_end(PROF_CODE_PANEL_LAYOUT_GEOM_TOTALS);
-
-    prof_end(PROF_CODE_PANEL_LAYOUT_GEOM);
-    prof_begin(PROF_CODE_PANEL_LAYOUT_CURSOR);
-
-    (void)doc_layout.cursor_doc_line;
-
-    prof_end(PROF_CODE_PANEL_LAYOUT_CURSOR);
-    prof_begin(PROF_CODE_PANEL_LAYOUT_SCROLL);
-
-    /* Only snap to cursor/replay after an edit or replay step; manual scroll
-     * can stay off-target. */
-    repl_code_panel_document_apply_follow_scroll(&doc_layout);
-
-    prof_end(PROF_CODE_PANEL_LAYOUT_SCROLL);
-
-    prof_end(PROF_CODE_PANEL_LAYOUT);
-    prof_begin(PROF_CODE_PANEL_CHROME);
-
-    gl2d_begin(snap->viewport.window_w, snap->viewport.window_h);
-
-    /* Background */
+/* Background, border divider, menu bar, and search overlay. Mirrors the
+ * Header Wireframes v2 chrome and runs once per frame. */
+static void code_panel_draw_chrome(const UiRenderSnapshot *snap,
+                                   int cp_x, int cp_y, int cp_w, int cp_h,
+                                   int panel_top, int panel_w) {
+    /* Background fill */
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
     glColor4f(0.06f, 0.06f, 0.10f, 0.92f);
-    glRectf((float)((float)cp_x), (float)((float)cp_y), (float)((float)cp_x)+(float)((float)cp_w), (float)((float)cp_y)+(float)(cp_h));
+    glRectf((float)cp_x, (float)cp_y,
+            (float)cp_x + (float)cp_w, (float)cp_y + (float)cp_h);
 
-    /* Border: divider between code panel and scene */
+    /* Divider between code panel and scene; orientation depends on layout. */
     glColor4f(0.30f, 0.30f, 0.50f, 0.80f);
     glBegin(GL_LINES);
     {
@@ -406,258 +370,559 @@ void ui_panels_render_code_panel(const UiRenderSnapshot *snap) {
 
     ui_menu_bar_render(snap);
     ui_menu_bar_render_search_overlay(snap, cp_x, panel_w, panel_top);
+}
+
+/* One static (header / footer / workspace) line, possibly wrapped. The
+ * gutter line number is drawn on the first wrap row only. */
+static void code_panel_draw_static_line(CodePanelRowCtx *ctx, const char *text,
+                                        float r, float g, float b) {
+    CodePanelWrapIter wrap_it;
+    int wrap_row = 0;
+    int wrap_start, wrap_len, wrap_x;
+
+    repl_code_panel_document_wrap_iter_init(&wrap_it, text, ctx->text_x, ctx->panel_w);
+    while (repl_code_panel_document_wrap_iter_next(&wrap_it,
+                                                   &wrap_start, &wrap_len, &wrap_x)) {
+        if (code_panel_row_visible(ctx)) {
+            if (wrap_row == 0)
+                code_panel_draw_gutter_lineno(ctx->line_y, ctx->file_line);
+            glColor3f(r, g, b);
+            code_panel_draw_segment(wrap_x, ctx->line_y, text,
+                                    wrap_start, wrap_len, FONT_MONO);
+            ctx->line_y -= LINE_H;
+        }
+        ctx->cur++;
+        wrap_row++;
+    }
+    ctx->file_line++;
+}
+
+/* Per-row gutter + background overlays for an existing (non-edit) command
+ * row: replay PC bar, clipboard selection band, feeding-cmd accent. */
+static void code_panel_draw_row_overlays(const CodePanelRowCtx *ctx, int i) {
+    ReplReplayRuntimeState replay = ctx->snap->replay;
+
+    if (replay.active && replay.src_line_idx >= 0 && i == replay.src_line_idx) {
+        glEnable(GL_BLEND);
+        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+        glColor4f(0.10f, 0.35f, 0.15f, 0.55f);
+        glRectf(0.0f, (float)(ctx->line_y - 3),
+                (float)ctx->panel_w, (float)(ctx->line_y - 3) + (float)LINE_H);
+        glColor4f(0.20f, 0.90f, 0.30f, 0.85f);
+        glRectf(1.0f, (float)(ctx->line_y - 3),
+                1.0f + 3.0f, (float)(ctx->line_y - 3) + (float)LINE_H);
+        glDisable(GL_BLEND);
+    }
+    if (repl_clipboard_sel_active() &&
+        i >= repl_clipboard_sel_lo() && i <= repl_clipboard_sel_hi()) {
+        glEnable(GL_BLEND);
+        glColor4f(0.20f, 0.30f, 0.50f, 0.55f);
+        glRectf(0.0f, (float)(ctx->line_y - 3),
+                (float)ctx->panel_w, (float)(ctx->line_y - 3) + (float)LINE_H);
+        glDisable(GL_BLEND);
+    }
+    if (i == ctx->highlight_normal_idx || i == ctx->highlight_color_idx) {
+        glEnable(GL_BLEND);
+        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+        if (i == ctx->highlight_normal_idx)
+            glColor4f(0.40f, 0.80f, 0.95f, 0.85f);
+        else
+            glColor4f(0.95f, 0.85f, 0.30f, 0.85f);
+        glRectf(1.0f, (float)(ctx->line_y - 3),
+                1.0f + 3.0f, (float)(ctx->line_y - 3) + (float)LINE_H);
+        glDisable(GL_BLEND);
+    }
+}
+
+/* First-wrap-row gutter contents: line number, vertex index, color swatch. */
+static void code_panel_draw_row_gutter(const CodePanelRowCtx *ctx, int i,
+                                       int is_vertex, int vnum,
+                                       int primitive_vnums_exact) {
+    code_panel_draw_gutter_lineno(ctx->line_y, ctx->file_line);
+
+    if (ctx->snap->presentation.show_vertex_indices && is_vertex) {
+        char idx_s[16];
+        snprintf(idx_s, sizeof(idx_s),
+                 primitive_vnums_exact ? "v%d" : "vn", vnum);
+        glColor3f(0.45f, 0.50f, 0.65f);
+        gl2d_draw_string((float)ctx->idx_x, (float)ctx->line_y,
+                         idx_s, FONT_MONO);
+    }
+
+    /* Color swatch read from the controller-pushed transformer snapshot
+     * so the row stays decoupled from live document scans. */
+    const EditorTransformer *ct =
+        find_color_transformer(ctx->snap->editor_transformers, i);
+    if (ct) {
+        int sw = UI_COLOR_SWATCH_W;
+        int sx = ctx->cp_x + ctx->cp_w - CODE_MARGIN_X - sw - 2;
+        int sy = ctx->line_y + (LINE_H - sw) / 2 - 1;
+        ui_color_picker_render_swatch(ct, sx, sy);
+    }
+}
+
+/* Replay-only virtual rows (substitution + evaluation) emitted below the
+ * source line at after_line_idx. Layout already reserved the rows; this
+ * just paints them. */
+static void code_panel_draw_virtual_lines(CodePanelRowCtx *ctx, int after_line_idx) {
+    const EditorVirtualLineList *vlist = ctx->snap->editor_virtual_lines;
+    if (!vlist)
+        return;
+
+    for (int vi = 0; vi < vlist->count; vi++) {
+        const EditorVirtualLine *vl = &vlist->items[vi];
+        if (vl->after_line_idx != after_line_idx)
+            continue;
+        if (code_panel_row_visible(ctx)) {
+            glEnable(GL_BLEND);
+            glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+            if (vl->style == VIRTUAL_STYLE_REPLAY_SUBST)
+                glColor4f(0.10f, 0.25f, 0.15f, 0.35f);
+            else
+                glColor4f(0.15f, 0.15f, 0.25f, 0.35f);
+            glRectf(0.0f, (float)(ctx->line_y - 3),
+                    (float)ctx->panel_w, (float)(ctx->line_y - 3) + (float)LINE_H);
+            glDisable(GL_BLEND);
+
+            if (vl->style == VIRTUAL_STYLE_REPLAY_SUBST)
+                glColor3f(0.50f, 0.75f, 0.50f);
+            else
+                glColor3f(0.50f, 0.60f, 0.80f);
+            gl2d_draw_string((float)ctx->text_x, (float)ctx->line_y,
+                             vl->text, FONT_MONO);
+            if (vl->aux[0]) {
+                int sw = (int)strlen(vl->text) * FONT_W;
+                glColor3f(0.40f, 0.55f, 0.40f);
+                gl2d_draw_string((float)(ctx->text_x + sw),
+                                 (float)ctx->line_y, vl->aux, FONT_MONO);
+            }
+            ctx->line_y -= LINE_H;
+        }
+        ctx->cur++;
+    }
+}
+
+/* Render an existing (non-edit) command row plus any virtual annotation
+ * rows that follow it. Edit / insert rows are handled separately by
+ * render_active_input_rows() in the orchestrator. */
+static void code_panel_draw_command_row(CodePanelRowCtx *ctx, int i,
+                                        int is_vertex, int vnum,
+                                        int primitive_vnums_exact) {
+    const GLCmd *document_cmds = ctx->snap->document_cmds;
+    char display_text[MAX_INPUT_LEN];
+    int  search_row_idx = repl_search_row_for_cmd_index(i);
+    repl_replay_code_panel_get_command_display_text(i, display_text,
+                                                    sizeof(display_text));
+
+    CodePanelWrapIter wrap_it;
+    int wrap_row = 0;
+    int wrap_start, wrap_len, wrap_x;
+    repl_code_panel_document_wrap_iter_init(&wrap_it, display_text,
+                                            ctx->text_x, ctx->panel_w);
+    while (repl_code_panel_document_wrap_iter_next(&wrap_it,
+                                                   &wrap_start, &wrap_len, &wrap_x)) {
+        if (code_panel_row_visible(ctx)) {
+            code_panel_draw_row_overlays(ctx, i);
+            if (wrap_row == 0)
+                code_panel_draw_row_gutter(ctx, i, is_vertex, vnum,
+                                           primitive_vnums_exact);
+            color_for_type(document_cmds[i].type);
+            code_panel_draw_search_highlights(ctx->snap, display_text,
+                                              search_row_idx,
+                                              wrap_start, wrap_len,
+                                              wrap_x, ctx->line_y);
+            code_panel_draw_segment(wrap_x, ctx->line_y, display_text,
+                                    wrap_start, wrap_len, FONT_MONO);
+            ctx->line_y -= LINE_H;
+        }
+        ctx->cur++;
+        wrap_row++;
+    }
+    ctx->file_line++;
+
+    code_panel_draw_virtual_lines(ctx, i);
+}
+
+/* Trailing newline slot rendered after the last command. If the cursor is
+ * past the document end this slot is the active edit row; otherwise it is
+ * just a placeholder so the user can see "next line will go here". */
+static void code_panel_draw_trailing_newline(CodePanelRowCtx *ctx,
+                                             int document_count) {
+    int edit_line = ctx->snap->edit_line;
+    int is_edit_nl = (edit_line == document_count);
+    if (is_edit_nl) {
+        render_active_input_rows(ctx->snap, ctx->panel_w, ctx->text_x, ctx->idx_x,
+                                 ctx->visible_lines, ctx->file_line,
+                                 repl_code_panel_document_active_indent_chars(),
+                                 NULL,
+                                 edit_line,
+                                 &ctx->cur, &ctx->line_y);
+    } else if (code_panel_row_visible(ctx)) {
+        code_panel_draw_gutter_lineno(ctx->line_y, ctx->file_line);
+        glColor3f(0.28f, 0.28f, 0.35f);
+        char ind_s[32];
+        int  nc = repl_source_scope_cmd_indent_chars(document_count);
+        if (nc > 31) nc = 31;
+        memset(ind_s, ' ', (size_t)nc);
+        ind_s[nc] = '\0';
+        gl2d_draw_string((float)ctx->text_x, (float)ctx->line_y, ind_s, FONT_MONO);
+        ctx->line_y -= LINE_H;
+    }
+    ctx->file_line++;
+    ctx->cur++;
+}
+
+/* Vertical scrollbar thumb on the right edge. Drawn only when content
+ * exceeds the visible window. */
+static void code_panel_draw_scrollbar(int cp_x, int cp_w, int cp_h,
+                                      int panel_top, int scroll,
+                                      int total_lines, int visible_lines) {
+    if (total_lines <= visible_lines)
+        return;
+
+    int   bar_h    = cp_h - CODE_MARGIN_Y - LINE_H - STATUSBAR_H;
+    float frac     = (float)visible_lines / (float)total_lines;
+    float pos      = (float)scroll       / (float)total_lines;
+    int   thumb_h  = (int)(bar_h * frac);
+    if (thumb_h < 12) thumb_h = 12;
+    int   thumb_y  = panel_top - CODE_MARGIN_Y - LINE_H
+                   - (int)(bar_h * pos) - thumb_h;
+
+    glEnable(GL_BLEND);
+    glColor4f(0.50f, 0.50f, 0.65f, 0.35f);
+    glRectf((float)(cp_x + cp_w - 6), (float)thumb_y,
+            (float)(cp_x + cp_w - 6) + 5.0f, (float)thumb_y + (float)thumb_h);
+    glDisable(GL_BLEND);
+}
+
+/* Statusbar separator: a one-pixel vertical rule with 8px padding on each
+ * side. Mutates *tx so callers can chain segments left-to-right. */
+static void code_panel_statusbar_sep(int *tx, int sy, int sh) {
+    *tx += 8;
+    glColor4f(0.20f, 0.20f, 0.20f, 1.0f);
+    glBegin(GL_LINES);
+    glVertex2f((float)*tx, (float)(sy + 4));
+    glVertex2f((float)*tx, (float)(sy + sh - 4));
+    glEnd();
+    *tx += 8;
+}
+
+/* Bottom status strip: cmd count, line/insert mode, AA indicator, and the
+ * right-aligned F1 help affordance. The amber `g_status` message renders
+ * separately below the scene panel because the statusbar is narrower. */
+static void code_panel_draw_statusbar(const UiRenderSnapshot *snap,
+                                      int cp_x, int cp_y, int cp_w,
+                                      int edit_line, int insert_mode) {
+    ReplRenderState rs = snap->render;
+    int sy = cp_y;
+    int sh = STATUSBAR_H;
+
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+    /* Background strip + top divider */
+    glColor4f(0.094f, 0.094f, 0.094f, 0.98f);
+    glRectf((float)cp_x, (float)sy, (float)cp_x + (float)cp_w, (float)sy + (float)sh);
+    glColor4f(0.0f, 0.0f, 0.0f, 1.0f);
+    glBegin(GL_LINES);
+    glVertex2f((float)cp_x,          (float)(sy + sh));
+    glVertex2f((float)(cp_x + cp_w), (float)(sy + sh));
+    glEnd();
+
+    int text_y = sy + (sh - FONT_SMALL_H) / 2 + 1;
+    int tx = cp_x + CODE_MARGIN_X;
+
+    /* Cmd count (left-aligned, brighter color) */
+    char cmds_buf[48];
+    snprintf(cmds_buf, sizeof(cmds_buf), "%d/%d cmds",
+             snap->flat_program_count, MAX_COMMANDS);
+    glColor3f(0.878f, 0.878f, 0.878f);
+    gl2d_draw_string((float)tx, (float)text_y, cmds_buf, FONT_SMALL);
+    tx += (int)strlen(cmds_buf) * FONT_SMALL_W;
+
+    code_panel_statusbar_sep(&tx, sy, sh);
+
+    /* Cursor line / insert-mode badge / glBegin mode */
+    char ln_buf[64];
+    if (insert_mode)
+        snprintf(ln_buf, sizeof(ln_buf), "Ln %d [INSERT]", edit_line + 1);
+    else if (repl_source_scope_in_begin_block())
+        snprintf(ln_buf, sizeof(ln_buf), "Ln %d  %s",
+                 edit_line + 1, mode_name(current_begin_mode()));
+    else
+        snprintf(ln_buf, sizeof(ln_buf), "Ln %d", edit_line + 1);
+    glColor3f(0.627f, 0.627f, 0.627f);
+    gl2d_draw_string((float)tx, (float)text_y, ln_buf, FONT_SMALL);
+    tx += (int)strlen(ln_buf) * FONT_SMALL_W;
+
+    /* AA indicator (only when the accumulation buffer is in play) */
+    if (rs.use_accum) {
+        code_panel_statusbar_sep(&tx, sy, sh);
+        char aa_buf[24];
+        if (rs.accum_aa_enabled && rs.accum_samples > 1)
+            snprintf(aa_buf, sizeof(aa_buf), "AA %dx", rs.accum_samples);
+        else
+            snprintf(aa_buf, sizeof(aa_buf), "AA off");
+        gl2d_draw_string((float)tx, (float)text_y, aa_buf, FONT_SMALL);
+        tx += (int)strlen(aa_buf) * FONT_SMALL_W;
+    }
+
+    /* Right-aligned F1 help affordance: keycap chip + "help" label */
+    {
+        const char *help_kbd = "F1";
+        const char *help_lbl = "help";
+        int kbd_w = (int)strlen(help_kbd) * FONT_SMALL_W + 10;
+        int lbl_w = (int)strlen(help_lbl) * FONT_SMALL_W;
+        int rx = cp_x + cp_w - CODE_MARGIN_X - lbl_w;
+        glColor3f(0.627f, 0.627f, 0.627f);
+        gl2d_draw_string((float)rx, (float)text_y, help_lbl, FONT_SMALL);
+
+        int kx = rx - kbd_w - 6;
+        int ky = sy + 3;
+        int kh = sh - 6;
+        glColor4f(0.078f, 0.078f, 0.078f, 1.0f);
+        glRectf((float)kx, (float)ky, (float)kx + (float)kbd_w, (float)ky + (float)kh);
+        glColor4f(0.20f, 0.20f, 0.20f, 1.0f);
+        glBegin(GL_LINE_LOOP);
+        glVertex2f((float)kx,           (float)ky);
+        glVertex2f((float)(kx + kbd_w), (float)ky);
+        glVertex2f((float)(kx + kbd_w), (float)(ky + kh));
+        glVertex2f((float)kx,           (float)(ky + kh));
+        glEnd();
+        glColor3f(0.733f, 0.733f, 0.733f);
+        gl2d_draw_string((float)(kx + 5), (float)(ky + 2), help_kbd, FONT_SMALL);
+    }
+    glDisable(GL_BLEND);
+}
+
+void ui_panels_render_code_panel(const UiRenderSnapshot *snap) {
+    /* ------------------------------------------------------------------ */
+    /* Phase 1: layout. Compute panel rectangle and bail early if empty;  */
+    /* otherwise build the document layout (per-cmd row counts including  */
+    /* virtual annotation rows) and apply scroll-follow if the cursor or  */
+    /* replay PC just moved.                                              */
+    /* ------------------------------------------------------------------ */
+    prof_begin(PROF_CODE_PANEL_LAYOUT);
+    prof_begin(PROF_CODE_PANEL_LAYOUT_GEOM);
+    prof_begin(PROF_CODE_PANEL_LAYOUT_GEOM_SETUP);
+
+    int cp_x, cp_y, cp_w, cp_h;
+    repl_layout_code_panel_rect(&cp_x, &cp_y, &cp_w, &cp_h);
+    if (cp_w <= 0 || cp_h <= 0) {
+        prof_end(PROF_CODE_PANEL_LAYOUT_GEOM_SETUP);
+        prof_end(PROF_CODE_PANEL_LAYOUT_GEOM);
+        prof_end(PROF_CODE_PANEL_LAYOUT);
+        return;
+    }
+
+    int panel_w   = cp_w;
+    int panel_top = cp_y + cp_h;            /* OpenGL-y of panel top edge */
+    int linenum_w = 4 * FONT_W;
+    int idx_col_w = snap->presentation.show_vertex_indices ? (6 * FONT_W) : 0;
+    int idx_x     = CODE_MARGIN_X + linenum_w + FONT_W;
+    int text_x    = idx_x + idx_col_w;
+
+    const GLCmd *document_cmds = snap->document_cmds;
+    int          document_count = snap->document_count;
+    int          edit_line      = snap->edit_line;
+    int          insert_mode    = snap->insert_mode;
+    ReplCodePanelRuntimeState cp = snap->code_panel;
+
+    /* Pull feeding-cmd kinds out of the highlight snapshot once so the
+     * per-row branch in code_panel_draw_row_overlays() stays cheap. */
+    int highlight_normal_idx = -1;
+    int highlight_color_idx  = -1;
+    if (snap->editor_highlights) {
+        for (int hi = 0; hi < snap->editor_highlights->count; hi++) {
+            const EditorHighlight *h = &snap->editor_highlights->items[hi];
+            if (h->kind == HIGHLIGHT_FEEDING_NORMAL)
+                highlight_normal_idx = h->line_idx;
+            else if (h->kind == HIGHLIGHT_FEEDING_COLOR)
+                highlight_color_idx = h->line_idx;
+        }
+    }
+
+    /* Own the full-window 2D viewport for the chrome + UI stack. */
+    glViewport(0, 0, snap->viewport.window_w, snap->viewport.window_h);
+
+    prof_end(PROF_CODE_PANEL_LAYOUT_GEOM_SETUP);
+    prof_begin(PROF_CODE_PANEL_LAYOUT_GEOM_PRECOMPUTE);
+
+    CodePanelDocumentLayout doc_layout;
+    repl_code_panel_document_build(&doc_layout, panel_w, text_x, cp_h);
+    int visible_lines = doc_layout.visible_lines;
+    int total_lines   = doc_layout.total_lines;
+
+    prof_end(PROF_CODE_PANEL_LAYOUT_GEOM_PRECOMPUTE);
+    prof_end(PROF_CODE_PANEL_LAYOUT_GEOM);
+    prof_begin(PROF_CODE_PANEL_LAYOUT_SCROLL);
+
+    /* Snap the scroll position to follow the cursor / replay PC, but only
+     * if either just moved; manual scroll stays where the user left it. */
+    repl_code_panel_document_apply_follow_scroll(&doc_layout);
+
+    prof_end(PROF_CODE_PANEL_LAYOUT_SCROLL);
+    prof_end(PROF_CODE_PANEL_LAYOUT);
+
+    /* ------------------------------------------------------------------ */
+    /* Phase 2: chrome (background, divider, menu bar, search overlay).    */
+    /* ------------------------------------------------------------------ */
+    prof_begin(PROF_CODE_PANEL_CHROME);
+
+    gl2d_begin(snap->viewport.window_w, snap->viewport.window_h);
+    code_panel_draw_chrome(snap, cp_x, cp_y, cp_w, cp_h, panel_top, panel_w);
 
     prof_end(PROF_CODE_PANEL_CHROME);
+
+    /* ------------------------------------------------------------------ */
+    /* Phase 3: row cursor. Code lines start one row below the menu bar.  */
+    /* The CodePanelRowCtx threads cur / line_y / file_line through every */
+    /* phase that emits rows.                                             */
+    /* ------------------------------------------------------------------ */
+    CodePanelRowCtx ctx = {
+        .snap                 = snap,
+        .panel_w              = panel_w,
+        .text_x               = text_x,
+        .idx_x                = idx_x,
+        .cp_x                 = cp_x,
+        .cp_w                 = cp_w,
+        .scroll               = cp.scroll,
+        .visible_lines        = visible_lines,
+        .highlight_normal_idx = highlight_normal_idx,
+        .highlight_color_idx  = highlight_color_idx,
+        .cur                  = 0,
+        .line_y               = panel_top - CODE_MARGIN_Y - 2 * LINE_H,
+        .file_line            = 1,
+    };
+
+    /* ------------------------------------------------------------------ */
+    /* Phase 4: static header lines (workspace state + framing scaffolding) */
+    /* ------------------------------------------------------------------ */
     prof_begin(PROF_CODE_PANEL_LINES);
     prof_begin(PROF_CODE_PANEL_LINES_STATIC);
 
-    /* Code lines begin immediately below the menu bar (row 0). */
-    int line_y = panel_top - CODE_MARGIN_Y - 2 * LINE_H;
-    int cur = 0;
-    int file_line = 1;
-
-    /* Macro for rendering a static line (header/footer) */
-    #define RENDER_STATIC_LINE(text, set_color) do {                           \
-        CodePanelWrapIter wrap_it;                                              \
-        int wrap_row = 0;                                                       \
-        int wrap_start, wrap_len, wrap_x;                                       \
-        repl_code_panel_document_wrap_iter_init(&wrap_it, text, text_x, panel_w);                   \
-        while (repl_code_panel_document_wrap_iter_next(&wrap_it, &wrap_start, &wrap_len, &wrap_x)) {\
-            if (cur >= cp.scroll && cur < cp.scroll + visible_lines) {            \
-                if (wrap_row == 0) {                                             \
-                    glColor3f(0.30f, 0.30f, 0.38f);                            \
-                    { char ln[16]; snprintf(ln, sizeof(ln), "%3d", file_line);  \
-                      gl2d_draw_string((float)CODE_MARGIN_X, (float)line_y,          \
-                                  ln, FONT_MONO); }                             \
-                }                                                               \
-                set_color;                                                       \
-                code_panel_draw_segment(wrap_x, line_y, text,                   \
-                                        wrap_start, wrap_len, FONT_MONO);       \
-                line_y -= LINE_H;                                                \
-            }                                                                    \
-            cur++;                                                               \
-            wrap_row++;                                                          \
-        }                                                                        \
-        file_line++;                                                            \
-    } while (0)
-
-    /* Workspace state (saved var values + config toggles) */
-    for (int i = 0; i < g_workspace_header_line_count; i++) {
-        RENDER_STATIC_LINE(g_workspace_header_lines[i], glColor3f(0.45f, 0.55f, 0.42f));
-    }
-    /* Header pre-lookAt (dimmed) */
-    for (int i = 0; g_header_pre[i]; i++) {
-        RENDER_STATIC_LINE(g_header_pre[i], glColor3f(0.38f, 0.38f, 0.42f));
-    }
-    /* Dynamic render-state lines */
-    for (int i = 0; i < RENDER_STATE_LINE_COUNT; i++) {
-        RENDER_STATIC_LINE(g_render_state_lines[i], glColor3f(0.50f, 0.45f, 0.55f));
-    }
-    /* Camera transform lines (dynamic - updated every frame) */
-    for (int i = 0; i < CAM_LINE_COUNT; i++) {
-        RENDER_STATIC_LINE(g_cam_lines[i], glColor3f(0.50f, 0.45f, 0.55f));
-    }
-    /* Header post-camera */
-    for (int i = 0; g_header_post[i]; i++) {
-        RENDER_STATIC_LINE(g_header_post[i], glColor3f(0.38f, 0.38f, 0.42f));
-    }
+    /* Workspace state (saved variable values + config toggles, dimmed) */
+    for (int i = 0; i < g_workspace_header_line_count; i++)
+        code_panel_draw_static_line(&ctx, g_workspace_header_lines[i],
+                                    0.45f, 0.55f, 0.42f);
+    /* Header pre-lookAt scaffolding */
+    for (int i = 0; g_header_pre[i]; i++)
+        code_panel_draw_static_line(&ctx, g_header_pre[i],
+                                    0.38f, 0.38f, 0.42f);
+    /* Dynamic render-state lines (rebuilt every frame in the controller) */
+    for (int i = 0; i < RENDER_STATE_LINE_COUNT; i++)
+        code_panel_draw_static_line(&ctx, g_render_state_lines[i],
+                                    0.50f, 0.45f, 0.55f);
+    /* Camera transform lines (also rebuilt every frame) */
+    for (int i = 0; i < CAM_LINE_COUNT; i++)
+        code_panel_draw_static_line(&ctx, g_cam_lines[i],
+                                    0.50f, 0.45f, 0.55f);
+    /* Header post-camera scaffolding */
+    for (int i = 0; g_header_post[i]; i++)
+        code_panel_draw_static_line(&ctx, g_header_post[i],
+                                    0.38f, 0.38f, 0.42f);
 
     prof_end(PROF_CODE_PANEL_LINES_STATIC);
+
+    /* ------------------------------------------------------------------ */
+    /* Phase 5: body. Walk the document, emitting one row per command (or */
+    /* its wrap rows + virtual annotation rows). The active edit row and  */
+    /* the insert-mode virtual row are drawn via render_active_input_rows.*/
+    /* The vertex / loop / tess counters track primitive structure so the */
+    /* gutter "v3 / vn" indicator is correct even inside loops.           */
+    /* ------------------------------------------------------------------ */
     prof_begin(PROF_CODE_PANEL_LINES_BODY);
     prof_begin(PROF_CODE_PANEL_LINES_BODY_CMDS);
 
-    /* Commands + insert line + new-line slot */
-    int vnum = 0; /* vertex counter within current glBegin/glEnd block */
+    int vnum = 0;
     int loop_depth = 0;
-    int in_tess_poly = 0;
     int tess_depth = 0;
+    int in_tess_poly = 0;
     int primitive_vnums_exact = 1;
+
     for (int i = 0; i < document_count; i++) {
-        /* If inserting, render the virtual insert line before command[edit_line] */
+        /* Insert-mode preview row appears *before* document_cmds[edit_line]. */
         if (insert_mode && i == edit_line) {
-                        render_active_input_rows(snap, panel_w, text_x, idx_x,
-                                                                         visible_lines, file_line,
-                                                                         repl_code_panel_document_active_indent_chars(), NULL,
-                                                                         edit_line,
-                                                                         &cur, &line_y);
-            file_line++;
+            render_active_input_rows(snap, panel_w, text_x, idx_x,
+                                     visible_lines, ctx.file_line,
+                                     repl_code_panel_document_active_indent_chars(),
+                                     NULL,
+                                     edit_line,
+                                     &ctx.cur, &ctx.line_y);
+            ctx.file_line++;
         }
 
-        if (i < document_count) {
-            /* Track vertex number for all commands regardless of visibility */
-            if (document_cmds[i].valid) {
-                if (document_cmds[i].type == CMD_BEGIN) {
-                    vnum = 0;
-                    primitive_vnums_exact = (loop_depth == 0);
-                } else if (document_cmds[i].type == CMD_TESS_BEGIN_POLYGON) {
-                    vnum = 0;
-                    in_tess_poly = 1;
-                    tess_depth = 1;
-                    primitive_vnums_exact = (loop_depth == 0);
-                }
+        /* Reset vertex counter at the start of a primitive block. The
+         * "exact" flag drops to 0 inside loops because we cannot know how
+         * many iterations have already run at draw time. */
+        if (document_cmds[i].valid) {
+            if (document_cmds[i].type == CMD_BEGIN) {
+                vnum = 0;
+                primitive_vnums_exact = (loop_depth == 0);
+            } else if (document_cmds[i].type == CMD_TESS_BEGIN_POLYGON) {
+                vnum = 0;
+                in_tess_poly = 1;
+                tess_depth = 1;
+                primitive_vnums_exact = (loop_depth == 0);
             }
+        }
 
-            int is_edit = (!insert_mode && i == edit_line);
-            int is_vertex = document_cmds[i].valid && (document_cmds[i].type == CMD_VERTEX3F ||
-                                                document_cmds[i].type == CMD_TESS_VERTEX);
-            if (is_edit) {
-                /* Active editing line */
-                char idx_s[16];
-                const char *idx_text = NULL;
-                if (snap->presentation.show_vertex_indices && is_vertex) {
-                    snprintf(idx_s, sizeof(idx_s),
-                             primitive_vnums_exact ? "v%d" : "vn", vnum);
-                    idx_text = idx_s;
-                }
-                render_active_input_rows(snap, panel_w, text_x, idx_x,
-                                         visible_lines, file_line,
-                                         repl_code_panel_document_active_indent_chars(), idx_text,
-                                         edit_line,
-                                         &cur, &line_y);
-                file_line++;
-            } else {
-                /* Existing command, not being edited */
-                CodePanelWrapIter wrap_it;
-                char display_text[MAX_INPUT_LEN];
-                int wrap_row = 0;
-                int wrap_start, wrap_len, wrap_x;
-                int search_row_idx = repl_search_row_for_cmd_index(i);
-                repl_replay_code_panel_get_command_display_text(i, display_text,
-                                                    sizeof(display_text));
-                repl_code_panel_document_wrap_iter_init(&wrap_it, display_text, text_x, panel_w);
-                while (repl_code_panel_document_wrap_iter_next(&wrap_it, &wrap_start, &wrap_len, &wrap_x)) {
-                    if (cur >= cp.scroll && cur < cp.scroll + visible_lines) {
-                        if (replay.active &&
-                            replay.src_line_idx >= 0 &&
-                            i == replay.src_line_idx) {
-                            glEnable(GL_BLEND);
-                            glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-                            glColor4f(0.10f, 0.35f, 0.15f, 0.55f);
-                            glRectf((float)(0), (float)((float)(line_y - 3)), (float)(0)+(float)((float)panel_w), (float)((float)(line_y - 3))+(float)(LINE_H));
-                            glColor4f(0.20f, 0.90f, 0.30f, 0.85f);
-                            glRectf((float)(1.0f), (float)((float)(line_y - 3)), (float)(1.0f)+(float)(3.0f), (float)((float)(line_y - 3))+(float)(LINE_H));
-                            glDisable(GL_BLEND);
-                        }
-                        if (repl_clipboard_sel_active() && i >= repl_clipboard_sel_lo() && i <= repl_clipboard_sel_hi()) {
-                            glEnable(GL_BLEND);
-                            glColor4f(0.20f, 0.30f, 0.50f, 0.55f);
-                            glRectf((float)(0), (float)((float)(line_y - 3)), (float)(0)+(float)((float)panel_w), (float)((float)(line_y - 3))+(float)(LINE_H));
-                            glDisable(GL_BLEND);
-                        }
-                        if (i == highlight_normal_idx || i == highlight_color_idx) {
-                            glEnable(GL_BLEND);
-                            glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-                            if (i == highlight_normal_idx)
-                                glColor4f(0.40f, 0.80f, 0.95f, 0.85f);
-                            else
-                                glColor4f(0.95f, 0.85f, 0.30f, 0.85f);
-                            glRectf((float)(1.0f), (float)((float)(line_y - 3)), (float)(1.0f)+(float)(3.0f), (float)((float)(line_y - 3))+(float)(LINE_H));
-                            glDisable(GL_BLEND);
-                        }
-                        if (wrap_row == 0) {
-                            glColor3f(0.30f, 0.30f, 0.38f);
-                            { char ln[16]; snprintf(ln, sizeof(ln), "%3d", file_line);
-                              gl2d_draw_string((float)CODE_MARGIN_X, (float)line_y,
-                                          ln, FONT_MONO); }
-                            if (snap->presentation.show_vertex_indices && is_vertex) {
-                                char idx_s[16];
-                                snprintf(idx_s, sizeof(idx_s),
-                                         primitive_vnums_exact ? "v%d" : "vn", vnum);
-                                glColor3f(0.45f, 0.50f, 0.65f);
-                                gl2d_draw_string((float)idx_x, (float)line_y,
-                                            idx_s, FONT_MONO);
-                            }
-                            /* Color swatch for glColor / glClearColor — read
-                             * from the controller-pushed transformer snapshot
-                             * so the row stays decoupled from live document. */
-                            {
-                                const EditorTransformer *ct =
-                                    find_color_transformer(snap->editor_transformers, i);
-                                if (ct) {
-                                    int sw = UI_COLOR_SWATCH_W;
-                                    int sx = cp_x + cp_w - CODE_MARGIN_X - sw - 2;
-                                    int sy = line_y + (LINE_H - sw) / 2 - 1;
-                                    ui_color_picker_render_swatch(ct, sx, sy);
-                                }
-                            }
-                        }
-                        color_for_type(document_cmds[i].type);
-                        {
-                            /* Highlight against the exact row text being drawn
-                             * so search overlays stay aligned with visible text. */
-                            const char *hl_text = display_text;
-                            code_panel_draw_search_highlights(snap,
-                                                              hl_text,
-                                                              search_row_idx,
-                                                              wrap_start, wrap_len,
-                                                              wrap_x, line_y);
-                        }
-                        code_panel_draw_segment(wrap_x, line_y, display_text,
-                                                wrap_start, wrap_len, FONT_MONO);
-                        line_y -= LINE_H;
-                    }
-                    cur++;
-                    wrap_row++;
-                }
-                file_line++;
+        int is_edit = (!insert_mode && i == edit_line);
+        int is_vertex = document_cmds[i].valid &&
+                        (document_cmds[i].type == CMD_VERTEX3F ||
+                         document_cmds[i].type == CMD_TESS_VERTEX);
 
-                if (snap->editor_virtual_lines) {
-                    const EditorVirtualLineList *vlist = snap->editor_virtual_lines;
-                    for (int vi = 0; vi < vlist->count; vi++) {
-                        const EditorVirtualLine *vl = &vlist->items[vi];
-                        if (vl->after_line_idx != i)
-                            continue;
-                        if (cur >= cp.scroll && cur < cp.scroll + visible_lines) {
-                            glEnable(GL_BLEND);
-                            glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-                            if (vl->style == VIRTUAL_STYLE_REPLAY_SUBST)
-                                glColor4f(0.10f, 0.25f, 0.15f, 0.35f);
-                            else
-                                glColor4f(0.15f, 0.15f, 0.25f, 0.35f);
-                            glRectf((float)(0), (float)((float)(line_y - 3)),
-                                    (float)(0) + (float)((float)panel_w),
-                                    (float)((float)(line_y - 3)) + (float)(LINE_H));
-                            glDisable(GL_BLEND);
-                            if (vl->style == VIRTUAL_STYLE_REPLAY_SUBST)
-                                glColor3f(0.50f, 0.75f, 0.50f);
-                            else
-                                glColor3f(0.50f, 0.60f, 0.80f);
-                            gl2d_draw_string((float)text_x, (float)line_y,
-                                             vl->text, FONT_MONO);
-                            if (vl->aux[0]) {
-                                int sw = (int)strlen(vl->text) * FONT_W;
-                                glColor3f(0.40f, 0.55f, 0.40f);
-                                gl2d_draw_string((float)(text_x + sw),
-                                                 (float)line_y,
-                                                 vl->aux, FONT_MONO);
-                            }
-                            line_y -= LINE_H;
-                        }
-                        cur++;
-                    }
-                }
+        if (is_edit) {
+            /* Active edit row uses its own input-rendering path so the
+             * cursor, autocomplete ghost, and parameter hint render
+             * correctly with current keystroke state. */
+            char idx_s[16];
+            const char *idx_text = NULL;
+            if (snap->presentation.show_vertex_indices && is_vertex) {
+                snprintf(idx_s, sizeof(idx_s),
+                         primitive_vnums_exact ? "v%d" : "vn", vnum);
+                idx_text = idx_s;
             }
+            render_active_input_rows(snap, panel_w, text_x, idx_x,
+                                     visible_lines, ctx.file_line,
+                                     repl_code_panel_document_active_indent_chars(),
+                                     idx_text,
+                                     edit_line,
+                                     &ctx.cur, &ctx.line_y);
+            ctx.file_line++;
+        } else {
+            code_panel_draw_command_row(&ctx, i, is_vertex, vnum,
+                                        primitive_vnums_exact);
+        }
 
-            /* Advance vertex counter after rendering this command */
-            if (is_vertex) vnum++;
-
-            if (document_cmds[i].valid) {
-                if (document_cmds[i].type == CMD_FOR_BEGIN) {
-                    loop_depth++;
-                    primitive_vnums_exact = 0;
-                } else if (document_cmds[i].type == CMD_FOR_END) {
-                    if (loop_depth > 0) loop_depth--;
-                } else if (document_cmds[i].type == CMD_END) {
-                    primitive_vnums_exact = 1;
-                } else if (document_cmds[i].type == CMD_TESS_BEGIN_CONTOUR && in_tess_poly) {
-                    tess_depth++;
-                } else if (document_cmds[i].type == CMD_TESS_END && in_tess_poly) {
+        /* Advance vertex / block counters AFTER rendering this row. */
+        if (is_vertex) vnum++;
+        if (document_cmds[i].valid) {
+            switch (document_cmds[i].type) {
+            case CMD_FOR_BEGIN:
+                loop_depth++;
+                primitive_vnums_exact = 0;
+                break;
+            case CMD_FOR_END:
+                if (loop_depth > 0) loop_depth--;
+                break;
+            case CMD_END:
+                primitive_vnums_exact = 1;
+                break;
+            case CMD_TESS_BEGIN_CONTOUR:
+                if (in_tess_poly) tess_depth++;
+                break;
+            case CMD_TESS_END:
+                if (in_tess_poly) {
                     if (tess_depth > 0) tess_depth--;
                     if (tess_depth == 0) {
                         in_tess_poly = 0;
                         primitive_vnums_exact = 1;
                     }
                 }
+                break;
+            default:
+                break;
             }
         }
     }
@@ -665,171 +930,39 @@ void ui_panels_render_code_panel(const UiRenderSnapshot *snap) {
     prof_end(PROF_CODE_PANEL_LINES_BODY_CMDS);
     prof_begin(PROF_CODE_PANEL_LINES_BODY_NEWLINE);
 
-    /* New-line slot after the last command */
-    {
-        int is_edit_nl = (edit_line == document_count);
-        if (is_edit_nl) {
-            render_active_input_rows(snap, panel_w, text_x, idx_x,
-                                     visible_lines, file_line,
-                                     repl_code_panel_document_active_indent_chars(), NULL,
-                                     edit_line,
-                                     &cur, &line_y);
-        } else {
-            if (cur >= cp.scroll && cur < cp.scroll + visible_lines) {
-                glColor3f(0.30f, 0.30f, 0.38f);
-                { char ln[16]; snprintf(ln, sizeof(ln), "%3d", file_line);
-                  gl2d_draw_string(CODE_MARGIN_X, line_y, ln, FONT_MONO); }
-                glColor3f(0.28f, 0.28f, 0.35f);
-                { char ind_s[32]; int nc = repl_source_scope_cmd_indent_chars(document_count);
-                  if (nc > 31) nc = 31;
-                  memset(ind_s, ' ', nc); ind_s[nc] = '\0';
-                  gl2d_draw_string((float)text_x, (float)line_y, ind_s, FONT_MONO); }
-                line_y -= LINE_H;
-            }
-        }
-        file_line++;
-        cur++;
-    }
+    code_panel_draw_trailing_newline(&ctx, document_count);
 
     prof_end(PROF_CODE_PANEL_LINES_BODY_NEWLINE);
-
     prof_end(PROF_CODE_PANEL_LINES_BODY);
+
+    /* ------------------------------------------------------------------ */
+    /* Phase 6: footer (dimmed scaffolding wrapping the user's body)       */
+    /* ------------------------------------------------------------------ */
     prof_begin(PROF_CODE_PANEL_LINES_FOOTER);
 
-    /* Footer (dimmed) */
-    for (int i = 0; g_footer_pre_init[i]; i++) {
-        RENDER_STATIC_LINE(g_footer_pre_init[i], glColor3f(0.38f, 0.38f, 0.42f));
-    }
+    for (int i = 0; g_footer_pre_init[i]; i++)
+        code_panel_draw_static_line(&ctx, g_footer_pre_init[i],
+                                    0.38f, 0.38f, 0.42f);
     for (int i = 0; i < init_section_line_count(); i++) {
         char line[MAX_LINE_LEN];
         init_section_line(i, line, sizeof(line));
-        RENDER_STATIC_LINE(line, glColor3f(0.38f, 0.38f, 0.42f));
+        code_panel_draw_static_line(&ctx, line, 0.38f, 0.38f, 0.42f);
     }
-    for (int i = 0; g_footer_post_init[i]; i++) {
-        RENDER_STATIC_LINE(g_footer_post_init[i], glColor3f(0.38f, 0.38f, 0.42f));
-    }
+    for (int i = 0; g_footer_post_init[i]; i++)
+        code_panel_draw_static_line(&ctx, g_footer_post_init[i],
+                                    0.38f, 0.38f, 0.42f);
 
     prof_end(PROF_CODE_PANEL_LINES_FOOTER);
-
     prof_end(PROF_CODE_PANEL_LINES);
+
+    /* ------------------------------------------------------------------ */
+    /* Phase 7: floating overlays - scrollbar, statusbar, color picker.   */
+    /* ------------------------------------------------------------------ */
     prof_begin(PROF_CODE_PANEL_OVERLAYS);
 
-    #undef RENDER_STATIC_LINE
-
-    /* Scroll indicator */
-    if (total_lines > visible_lines) {
-        int bar_h = cp_h - CODE_MARGIN_Y - LINE_H - STATUSBAR_H;
-        float frac = (float)visible_lines / (float)total_lines;
-        float pos  = (float)cp.scroll / (float)total_lines;
-        int thumb_h = (int)(bar_h * frac);
-        if (thumb_h < 12) thumb_h = 12;
-        int thumb_y = panel_top - CODE_MARGIN_Y - LINE_H
-                      - (int)(bar_h * pos) - thumb_h;
-
-        glEnable(GL_BLEND);
-        glColor4f(0.50f, 0.50f, 0.65f, 0.35f);
-        glRectf((float)((float)(cp_x + cp_w - 6)), (float)((float)thumb_y), (float)((float)(cp_x + cp_w - 6))+(float)(5.0f), (float)((float)thumb_y)+(float)(thumb_h));
-        glDisable(GL_BLEND);
-    }
-
-    /* Bottom status strip - design ref: Header Wireframes v2 statusbar.
-     * Always drawn; shows cmd counts, cursor location, AA indicator, and the
-     * transient `g_status` message (when set) in amber "err" style. */
-    {
-        int sy = cp_y;
-        int sh = STATUSBAR_H;
-        glEnable(GL_BLEND);
-        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-
-        /* Strip bg (#181818) + top divider (#000) */
-        glColor4f(0.094f, 0.094f, 0.094f, 0.98f);
-        glRectf((float)((float)cp_x), (float)((float)sy), (float)((float)cp_x)+(float)((float)cp_w), (float)((float)sy)+(float)(sh));
-        glColor4f(0.0f, 0.0f, 0.0f, 1.0f);
-        glBegin(GL_LINES);
-        glVertex2f((float)cp_x,          (float)(sy + sh));
-        glVertex2f((float)(cp_x + cp_w), (float)(sy + sh));
-        glEnd();
-
-        int text_y = sy + (sh - FONT_SMALL_H) / 2 + 1;
-        int tx = cp_x + CODE_MARGIN_X;
-
-        /* cmd count */
-        char cmds_buf[48];
-        snprintf(cmds_buf, sizeof(cmds_buf), "%d/%d cmds",
-                 snap->flat_program_count, MAX_COMMANDS);
-        glColor3f(0.878f, 0.878f, 0.878f); /* #e0e0e0 - stronger for counts */
-        gl2d_draw_string((float)tx, (float)text_y, cmds_buf, FONT_SMALL);
-        tx += (int)strlen(cmds_buf) * FONT_SMALL_W;
-
-        #define STATUSBAR_SEP() do {                                    \
-            tx += 8;                                                    \
-            glColor4f(0.20f, 0.20f, 0.20f, 1.0f); /* #333 */            \
-            glBegin(GL_LINES);                                          \
-            glVertex2f((float)tx, (float)(sy + 4));                     \
-            glVertex2f((float)tx, (float)(sy + sh - 4));                \
-            glEnd();                                                    \
-            tx += 8;                                                    \
-        } while (0)
-
-        STATUSBAR_SEP();
-
-        /* Line / insert-mode / begin-mode */
-        char ln_buf[64];
-        if (insert_mode)
-            snprintf(ln_buf, sizeof(ln_buf), "Ln %d [INSERT]", edit_line + 1);
-        else if (repl_source_scope_in_begin_block())
-            snprintf(ln_buf, sizeof(ln_buf), "Ln %d  %s",
-                     edit_line + 1, mode_name(current_begin_mode()));
-        else
-            snprintf(ln_buf, sizeof(ln_buf), "Ln %d", edit_line + 1);
-        glColor3f(0.627f, 0.627f, 0.627f); /* #a0a0a0 */
-        gl2d_draw_string((float)tx, (float)text_y, ln_buf, FONT_SMALL);
-        tx += (int)strlen(ln_buf) * FONT_SMALL_W;
-
-        /* AA indicator */
-        if (rs.use_accum) {
-            STATUSBAR_SEP();
-            char aa_buf[24];
-            if (rs.accum_aa_enabled && rs.accum_samples > 1)
-                snprintf(aa_buf, sizeof(aa_buf), "AA %dx", rs.accum_samples);
-            else
-                snprintf(aa_buf, sizeof(aa_buf), "AA off");
-            gl2d_draw_string((float)tx, (float)text_y, aa_buf, FONT_SMALL);
-            tx += (int)strlen(aa_buf) * FONT_SMALL_W;
-        }
-
-        /* The amber g_status message renders at the bottom of the scene panel
-         * (see render_scene_status()) - the statusbar has limited width. */
-
-        /* Right-aligned F1 help affordance */
-        {
-            const char *help_kbd = "F1";
-            const char *help_lbl = "help";
-            int kbd_w = (int)strlen(help_kbd) * FONT_SMALL_W + 10;
-            int lbl_w = (int)strlen(help_lbl) * FONT_SMALL_W;
-            int rx = cp_x + cp_w - CODE_MARGIN_X - lbl_w;
-            glColor3f(0.627f, 0.627f, 0.627f);
-            gl2d_draw_string((float)rx, (float)text_y, help_lbl, FONT_SMALL);
-            int kx = rx - kbd_w - 6;
-            int ky = sy + 3;
-            int kh = sh - 6;
-            glColor4f(0.078f, 0.078f, 0.078f, 1.0f); /* #141414 */
-            glRectf((float)((float)kx), (float)((float)ky), (float)((float)kx)+(float)((float)kbd_w), (float)((float)ky)+(float)(kh));
-            glColor4f(0.20f, 0.20f, 0.20f, 1.0f); /* #333 */
-            glBegin(GL_LINE_LOOP);
-            glVertex2f((float)kx,           (float)ky);
-            glVertex2f((float)(kx + kbd_w), (float)ky);
-            glVertex2f((float)(kx + kbd_w), (float)(ky + kh));
-            glVertex2f((float)kx,           (float)(ky + kh));
-            glEnd();
-            glColor3f(0.733f, 0.733f, 0.733f); /* #bbb */
-            gl2d_draw_string((float)(kx + 5), (float)(ky + 2), help_kbd, FONT_SMALL);
-        }
-
-        #undef STATUSBAR_SEP
-        glDisable(GL_BLEND);
-    }
-
+    code_panel_draw_scrollbar(cp_x, cp_w, cp_h, panel_top,
+                              cp.scroll, total_lines, visible_lines);
+    code_panel_draw_statusbar(snap, cp_x, cp_y, cp_w, edit_line, insert_mode);
     ui_color_picker_render(snap);
 
     prof_end(PROF_CODE_PANEL_OVERLAYS);
