@@ -177,13 +177,13 @@ void repl_clear_all_cmds(void) {
     ReplCommandStore store = repl_command_store_live();
     repl_command_store_clear(&store);
     repl_state_edit_line_set(0);
-    repl_state_insert_mode_set(0);
+    editor_insert_mode_set(0);
     {
         ReplEditorInputState *inp = editor_state_input_mut();
         inp->input[0] = '\0';
         inp->input_len = 0;
     }
-    repl_state_cursor_pos_set(0);
+    editor_cursor_pos_set(0);
     {
         ReplEditorInputState *inp = editor_state_input_mut();
         inp->pending_newline[0] = '\0';
@@ -217,7 +217,7 @@ void load_line_to_input(int idx) {
                 memcpy(inp->input, s, (size_t)len);
                 inp->input[len] = '\0';
                 inp->input_len = len;
-                repl_state_cursor_pos_set(inp->input_len);
+                editor_cursor_pos_set(inp->input_len);
                 return;
             }
 
@@ -231,7 +231,7 @@ void load_line_to_input(int idx) {
             memcpy(inp->input + 1, s, (size_t)len);
             inp->input[len + 1] = '\0';
             inp->input_len = len + 1;
-            repl_state_cursor_pos_set(inp->input_len);
+            editor_cursor_pos_set(inp->input_len);
             return;
         }
 
@@ -244,11 +244,11 @@ void load_line_to_input(int idx) {
         memcpy(inp->input, s, (size_t)len);
         inp->input[len] = '\0';
         inp->input_len = len;
-        repl_state_cursor_pos_set(len);
+        editor_cursor_pos_set(len);
     } else {
         memcpy(inp->input, inp->pending_newline, (size_t)inp->pending_newline_len + 1);
         inp->input_len = inp->pending_newline_len;
-        repl_state_cursor_pos_set(inp->pending_newline_len);
+        editor_cursor_pos_set(inp->pending_newline_len);
     }
 }
 
@@ -275,14 +275,14 @@ static int normalize_navigation_target(int target) {
 }
 
 static void navigate_to_line_raw_resolved(int target) {
-    if (target == repl_state_edit_line() && !repl_state_insert_mode())
+    if (target == repl_state_edit_line() && !editor_insert_mode())
         return;
 
-    if (repl_state_edit_line() == repl_state_document_count() && !repl_state_insert_mode())
+    if (repl_state_edit_line() == repl_state_document_count() && !editor_insert_mode())
         save_newline_buf();
 
     repl_state_edit_line_set(target);
-    repl_state_insert_mode_set(0);
+    editor_insert_mode_set(0);
     load_line_to_input(target);
     clear_autocomplete_state();
 }
@@ -379,8 +379,8 @@ static void capture_commit_attempt_state(CommitAttemptState *s) {
     repl_undo_snapshot_save(&s->undo);
     memcpy(s->input, inp.input, sizeof(s->input));
     s->input_len = inp.input_len;
-    s->cursor_pos = repl_state_cursor_pos();
-    s->inserting = repl_state_insert_mode();
+    s->cursor_pos = editor_cursor_pos();
+    s->inserting = editor_insert_mode();
     memcpy(s->newline_buf, inp.pending_newline, sizeof(s->newline_buf));
     s->newline_len = inp.pending_newline_len;
 }
@@ -418,9 +418,9 @@ static int commit_progressed_since(const CommitAttemptState *s) {
     ReplEditorInputView inp = editor_state_input();
     if (repl_state_document_count() != s->undo.num_cmds ||
         repl_state_edit_line() != s->undo.edit_line ||
-        repl_state_insert_mode() != s->inserting ||
+        editor_insert_mode() != s->inserting ||
         inp.input_len != s->input_len ||
-        repl_state_cursor_pos() != s->cursor_pos)
+        editor_cursor_pos() != s->cursor_pos)
         return 1;
 
     if (memcmp(inp.input, s->input, (size_t)inp.input_len + 1) != 0)
@@ -437,7 +437,7 @@ static int commit_progressed_since(const CommitAttemptState *s) {
 static int current_input_needs_navigation_commit(void) {
     if (editor_state_input().input_len <= 0)
         return 0;
-    if (!repl_state_insert_mode() && repl_state_edit_line() < repl_state_document_count() &&
+    if (!editor_insert_mode() && repl_state_edit_line() < repl_state_document_count() &&
         input_matches_committed_line(repl_state_edit_line()))
         return 0;
     return 1;
@@ -450,21 +450,21 @@ static CommitResult commit_current_input(int enter_mode) {
     if (!enter_mode && !current_input_needs_navigation_commit())
         return COMMIT_UNCHANGED;
 
-    if (!repl_state_insert_mode() && repl_state_edit_line() < repl_state_document_count()) {
+    if (!editor_insert_mode() && repl_state_edit_line() < repl_state_document_count()) {
         int unmodified = (editor_state_input().input_len == 0 ||
                           input_matches_committed_line(repl_state_edit_line()));
         if (unmodified) {
             if (!enter_mode)
                 return COMMIT_UNCHANGED;
-            if (repl_state_cursor_pos() > 0)
+            if (editor_cursor_pos() > 0)
                 repl_state_edit_line_set(repl_state_edit_line() + 1);
-            repl_state_insert_mode_set(1);
+            editor_insert_mode_set(1);
             {
                 ReplEditorInputState *inp = editor_state_input_mut();
                 inp->input[0] = '\0';
                 inp->input_len = 0;
             }
-            repl_state_cursor_pos_set(0);
+            editor_cursor_pos_set(0);
             clear_autocomplete_state();
             set_status("Insert mode");
             mark_normals_dirty();
@@ -478,12 +478,12 @@ static CommitResult commit_current_input(int enter_mode) {
     CommitAttemptState *before = &g_commit_attempt_before;
     capture_commit_attempt_state(before);
 
-    if ((repl_state_insert_mode() || repl_state_edit_line() >= repl_state_document_count()) &&
+    if ((editor_insert_mode() || repl_state_edit_line() >= repl_state_document_count()) &&
         editor_state_input().input_len > 0 && try_commit_block_structs()) {
         return commit_progressed_since(before) ? COMMIT_OK : COMMIT_REJECTED;
     }
 
-    if (repl_state_insert_mode()) {
+    if (editor_insert_mode()) {
         if (editor_state_input().input_len > 0) {
             GLCmd cmd;
             int parsed;
@@ -527,7 +527,7 @@ static CommitResult commit_current_input(int enter_mode) {
                     inp->input[0] = '\0';
                     inp->input_len = 0;
                 }
-                repl_state_cursor_pos_set(0);
+                editor_cursor_pos_set(0);
                 set_status("Inserted");
                 return COMMIT_OK;
             }
@@ -535,7 +535,7 @@ static CommitResult commit_current_input(int enter_mode) {
         }
 
         if (enter_mode) {
-            repl_state_insert_mode_set(0);
+            editor_insert_mode_set(0);
             if (repl_state_edit_line() <= repl_state_document_count())
                 load_line_to_input(repl_state_edit_line());
             return COMMIT_OK;
@@ -580,13 +580,13 @@ static CommitResult commit_current_input(int enter_mode) {
 
         if (can_advance) {
             repl_state_edit_line_set(repl_state_edit_line() + 1);
-            repl_state_insert_mode_set(1);
+            editor_insert_mode_set(1);
             {
                 ReplEditorInputState *inp = editor_state_input_mut();
                 inp->input[0] = '\0';
                 inp->input_len = 0;
             }
-            repl_state_cursor_pos_set(0);
+            editor_cursor_pos_set(0);
             set_status("Insert mode");
             return COMMIT_OK;
         }
@@ -613,7 +613,7 @@ static CommitResult commit_current_input(int enter_mode) {
                 inp->input[0] = '\0';
                 inp->input_len = 0;
             }
-            repl_state_cursor_pos_set(0);
+            editor_cursor_pos_set(0);
             {
                 ReplEditorInputState *inp = editor_state_input_mut();
                 inp->pending_newline[0] = '\0';
@@ -659,7 +659,7 @@ static CommitResult commit_before_navigation(void) {
 
 void navigate_to_line(int target) {
     target = normalize_navigation_target(target);
-    if (target == repl_state_edit_line() && !repl_state_insert_mode())
+    if (target == repl_state_edit_line() && !editor_insert_mode())
         return;
 
     if (target != repl_state_edit_line())
@@ -731,8 +731,8 @@ static int handle_escape_key_route(unsigned char key) {
             repl_state_help_mut()->scroll = 0;
         } else if (editor_state_autocomplete().match_count > 0) {
             clear_autocomplete_state();
-        } else if (repl_state_insert_mode()) {
-            repl_state_insert_mode_set(0);
+        } else if (editor_insert_mode()) {
+            editor_insert_mode_set(0);
             if (repl_state_edit_line() <= repl_state_document_count())
                 load_line_to_input(repl_state_edit_line());
             set_status("Insert mode exited");
@@ -742,7 +742,7 @@ static int handle_escape_key_route(unsigned char key) {
                 inp->input[0] = '\0';
                 inp->input_len = 0;
             }
-            repl_state_cursor_pos_set(0);
+            editor_cursor_pos_set(0);
             set_status("Input cleared");
         }
         return 1;
@@ -756,12 +756,12 @@ static int handle_cfg_shortcut_key_route(unsigned char key) {
 
 static int handle_cursor_endpoint_key_route(unsigned char key) {
     if (key == KEY_CTRL_A) {
-        repl_state_cursor_pos_set(0);
+        editor_cursor_pos_set(0);
         update_autocomplete();
         return 1;
     }
     if (key == KEY_CTRL_E) {
-        repl_state_cursor_pos_set(editor_state_input().input_len);
+        editor_cursor_pos_set(editor_state_input().input_len);
         update_autocomplete();
         return 1;
     }
@@ -790,8 +790,8 @@ static int handle_replay_key_route(unsigned char key) {
 
 static int handle_line_delete_key_route(unsigned char key) {
     if (key == KEY_CTRL_D) {
-        if (repl_state_insert_mode()) {
-            repl_state_insert_mode_set(0);
+        if (editor_insert_mode()) {
+            editor_insert_mode_set(0);
             if (repl_state_edit_line() <= repl_state_document_count())
                 load_line_to_input(repl_state_edit_line());
             set_status("Insert mode exited");
@@ -866,7 +866,7 @@ static int handle_paste_key_route(unsigned char key) {
 
 static int handle_comment_toggle_key_route(unsigned char key) {
     if (key == '/' && (editor_get_modifiers() & GLUT_ACTIVE_CTRL)) {
-        if (repl_state_edit_line() < repl_state_document_count() && !repl_state_insert_mode()) {
+        if (repl_state_edit_line() < repl_state_document_count() && !editor_insert_mode()) {
             repl_undo_push_snapshot();
             {
                 GLCmd *cur = &repl_state_document_cmds_mut()[repl_state_edit_line()];
@@ -1050,7 +1050,7 @@ static int handle_accum_samples_key_route(unsigned char key) {
 
 static int handle_text_delete_key_route(unsigned char key) {
     if (key == KEY_BACKSPACE || key == KEY_DELETE) {
-        if (repl_clipboard_sel_active() && !repl_state_insert_mode()) {
+        if (repl_clipboard_sel_active() && !editor_insert_mode()) {
             int start = repl_clipboard_sel_lo();
             int hi = repl_clipboard_sel_hi();
             if (hi >= repl_state_document_count())
@@ -1059,13 +1059,13 @@ static int handle_text_delete_key_route(unsigned char key) {
             return 1;
         }
         {
-            int cur = repl_state_cursor_pos();
+            int cur = editor_cursor_pos();
             ReplEditorInputState *inp = editor_state_input_mut();
             if (cur > 0 && inp->input_len > 0) {
                 memmove(&inp->input[cur - 1], &inp->input[cur],
                         (size_t)(inp->input_len - cur + 1));
                 inp->input_len--;
-                repl_state_cursor_pos_set(cur - 1);
+                editor_cursor_pos_set(cur - 1);
                 update_autocomplete();
             }
         }
@@ -1112,7 +1112,7 @@ static int handle_semicolon_commit_key_route(unsigned char key) {
             {
                 GLCmd cmd;
                 char cmd_text[MAX_LINE_LEN] = "";
-                int insert_idx = repl_state_insert_mode() ? repl_state_edit_line() :
+                int insert_idx = editor_insert_mode() ? repl_state_edit_line() :
                            (repl_state_edit_line() < repl_state_document_count() ? repl_state_edit_line() : repl_state_document_count());
                 int parsed;
                 ExprVar vis_vars[MAX_EXPR_VARS];
@@ -1130,7 +1130,7 @@ static int handle_semicolon_commit_key_route(unsigned char key) {
 
                 if (parsed) {
                     ReplCommandStore store = repl_command_store_live();
-                    if (repl_state_insert_mode()) {
+                    if (editor_insert_mode()) {
                         if (repl_command_store_insert_one(&store,
                                                           repl_state_edit_line(),
                                                           &cmd, 0,
@@ -1141,7 +1141,7 @@ static int handle_semicolon_commit_key_route(unsigned char key) {
                                 inp->input[0] = '\0';
                                 inp->input_len = 0;
                             }
-                            repl_state_cursor_pos_set(0);
+                            editor_cursor_pos_set(0);
                             set_status("Inserted");
                         } else {
                             set_status("Command buffer full!");
@@ -1166,7 +1166,7 @@ static int handle_semicolon_commit_key_route(unsigned char key) {
                                 inp->input[0] = '\0';
                                 inp->input_len = 0;
                             }
-                            repl_state_cursor_pos_set(0);
+                            editor_cursor_pos_set(0);
                             {
                                 ReplEditorInputState *inp = editor_state_input_mut();
                                 inp->pending_newline[0] = '\0';
@@ -1196,14 +1196,14 @@ static int handle_quit_key_route(unsigned char key) {
 }
 
 static int handle_printable_input_key_route(unsigned char key) {
-    int cur = repl_state_cursor_pos();
+    int cur = editor_cursor_pos();
     ReplEditorInputState *inp = editor_state_input_mut();
     if (key >= 32 && key < 127 && inp->input_len < MAX_INPUT_LEN - 2) {
         memmove(&inp->input[cur + 1], &inp->input[cur],
                 (size_t)(inp->input_len - cur + 1));
         inp->input[cur] = (char)key;
         inp->input_len++;
-        repl_state_cursor_pos_set(cur + 1);
+        editor_cursor_pos_set(cur + 1);
         update_autocomplete();
         return 1;
     }
@@ -1288,8 +1288,8 @@ static int handle_horizontal_special_key_route(int key) {
             repl_action_help_tab_prev();
             return 1;
         }
-        if (repl_state_cursor_pos() > 0)
-            repl_state_cursor_pos_set(repl_state_cursor_pos() - 1);
+        if (editor_cursor_pos() > 0)
+            editor_cursor_pos_set(editor_cursor_pos() - 1);
         update_autocomplete();
         return 1;
     case GLUT_KEY_RIGHT:
@@ -1301,16 +1301,16 @@ static int handle_horizontal_special_key_route(int key) {
             repl_action_help_tab_next();
             return 1;
         }
-        if (repl_state_cursor_pos() < editor_state_input().input_len)
-            repl_state_cursor_pos_set(repl_state_cursor_pos() + 1);
+        if (editor_cursor_pos() < editor_state_input().input_len)
+            editor_cursor_pos_set(editor_cursor_pos() + 1);
         update_autocomplete();
         return 1;
     case GLUT_KEY_HOME:
-        repl_state_cursor_pos_set(0);
+        editor_cursor_pos_set(0);
         update_autocomplete();
         return 1;
     case GLUT_KEY_END:
-        repl_state_cursor_pos_set(editor_state_input().input_len);
+        editor_cursor_pos_set(editor_state_input().input_len);
         update_autocomplete();
         return 1;
     default:
@@ -1601,7 +1601,7 @@ static void mouse_func(int button, int state, int x, int y) {
             int cursor_pos = -1;
             int panel_actions = ui_panels_handle_code_panel_press(x, y, &cursor_pos);
             if (cursor_pos >= 0)
-                repl_state_cursor_pos_set(cursor_pos);
+                editor_cursor_pos_set(cursor_pos);
             if (panel_actions & UI_PANEL_PRESS_OPENED_COLOR_PICKER)
                 repl_undo_push_snapshot();
             editor_request_redraw();
@@ -1617,7 +1617,7 @@ static void mouse_func(int button, int state, int x, int y) {
             int cursor_pos = -1;
             int panel_actions = ui_panels_handle_code_panel_press(x, y, &cursor_pos);
             if (cursor_pos >= 0)
-                repl_state_cursor_pos_set(cursor_pos);
+                editor_cursor_pos_set(cursor_pos);
             if (panel_actions & UI_PANEL_PRESS_OPENED_COLOR_PICKER)
                 repl_undo_push_snapshot();
             editor_request_redraw();
@@ -1803,7 +1803,7 @@ int feed_line(const char *line) {
         strncpy(inp->input, line, MAX_INPUT_LEN - 1);
         inp->input[MAX_INPUT_LEN - 1] = '\0';
         inp->input_len = (int)strlen(inp->input);
-        repl_state_cursor_pos_set(inp->input_len);
+        editor_cursor_pos_set(inp->input_len);
     }
 
     if (try_commit_any())
@@ -1812,7 +1812,7 @@ int feed_line(const char *line) {
     {
         int handled = 0;
         GLCmd cmd;
-        int insert_idx = repl_state_insert_mode() ? repl_state_edit_line() :
+        int insert_idx = editor_insert_mode() ? repl_state_edit_line() :
                    (repl_state_edit_line() < repl_state_document_count() ? repl_state_edit_line() : repl_state_document_count());
         int parsed;
         ExprVar vis_vars[MAX_EXPR_VARS];
@@ -1831,7 +1831,7 @@ int feed_line(const char *line) {
 
         if (parsed) {
             ReplCommandStore store = repl_command_store_live();
-            if (repl_state_insert_mode()) {
+            if (editor_insert_mode()) {
                 if (!repl_command_store_insert_one(&store, repl_state_edit_line(),
                                                    &cmd, 0, cmd_text))
                     goto feed_line_done;
@@ -1855,7 +1855,7 @@ feed_line_done:
             inp->input[0] = '\0';
             inp->input_len = 0;
         }
-        repl_state_cursor_pos_set(0);
+        editor_cursor_pos_set(0);
         return handled;
     }
 }

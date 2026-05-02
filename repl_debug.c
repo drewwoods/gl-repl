@@ -17,7 +17,7 @@ void repl_debug_dump_editor(FILE *out) {
     fprintf(dst,
             "num_cmds=%d edit_line=%d inserting=%d flat_dirty=%d normals_dirty=%d\n",
             repl_state_document_count(), repl_state_edit_line(),
-            repl_state_insert_mode(), repl_state_flat_program_dirty(),
+            editor_insert_mode(), repl_state_flat_program_dirty(),
             repl_state_normals_dirty());
 
     for (int cmd_idx = 0; cmd_idx < repl_state_document_count(); cmd_idx++) {

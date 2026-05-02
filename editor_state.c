@@ -121,15 +121,15 @@ void editor_buffer_set_count(int count) {
  *
  * The other forward decls below cover entry points editor_state.c
  * implements that get called from sibling impls in this file (e.g.
- * editor_state_input_reset reuses repl_state_input_clear). They are
+ * editor_state_input_reset reuses editor_input_clear). They are
  * the same symbols declared in repl_state_views.h / repl_state_owners.h;
  * the headers are not included here to keep editor_state.c free of the
  * REPL state facade. Phase 5's rename will fold these into the
  * editor_* namespace. */
 int  repl_state_edit_line(void);
-void repl_state_input_clear(void);
-void repl_state_pending_newline_clear(void);
-void repl_state_cursor_pos_set(int cursor_pos);
+void editor_input_clear(void);
+void editor_pending_newline_clear(void);
+void editor_cursor_pos_set(int cursor_pos);
 
 ReplEditorInputView editor_state_input(void) {
     const ReplEditorInputState *in = &g_editor_state.input;
@@ -151,51 +151,51 @@ ReplEditorInputState *editor_state_input_mut(void) {
 }
 
 void editor_state_input_reset(void) {
-    repl_state_input_clear();
-    repl_state_pending_newline_clear();
+    editor_input_clear();
+    editor_pending_newline_clear();
     g_editor_state.input.insert_mode = 0;
 }
 
-const char *repl_state_input_text(void) {
+const char *editor_input_text(void) {
     return g_editor_state.input.input;
 }
 
-char *repl_state_input_buffer_mut(void) {
+char *editor_input_buffer_mut(void) {
     return g_editor_state.input.input;
 }
 
-int repl_state_input_len(void) {
+int editor_input_len(void) {
     return g_editor_state.input.input_len;
 }
 
-void repl_state_input_len_set(int input_len) {
+void editor_input_len_set(int input_len) {
     if (input_len < 0)
         input_len = 0;
     if (input_len >= MAX_INPUT_LEN)
         input_len = MAX_INPUT_LEN - 1;
     g_editor_state.input.input_len = input_len;
     g_editor_state.input.input[input_len] = '\0';
-    repl_state_cursor_pos_set(g_editor_state.input.cursor_pos);
+    editor_cursor_pos_set(g_editor_state.input.cursor_pos);
 }
 
-void repl_state_input_set_text(const char *text) {
+void editor_input_set_text(const char *text) {
     editor_input_copy_str(g_editor_state.input.input, MAX_INPUT_LEN,
                           text ? text : "");
-    repl_state_input_len_set((int)strlen(g_editor_state.input.input));
-    repl_state_cursor_pos_set(g_editor_state.input.input_len);
+    editor_input_len_set((int)strlen(g_editor_state.input.input));
+    editor_cursor_pos_set(g_editor_state.input.input_len);
 }
 
-void repl_state_input_clear(void) {
+void editor_input_clear(void) {
     g_editor_state.input.input[0] = '\0';
     g_editor_state.input.input_len = 0;
     g_editor_state.input.cursor_pos = 0;
 }
 
-int repl_state_cursor_pos(void) {
+int editor_cursor_pos(void) {
     return g_editor_state.input.cursor_pos;
 }
 
-void repl_state_cursor_pos_set(int cursor_pos) {
+void editor_cursor_pos_set(int cursor_pos) {
     if (cursor_pos < 0)
         cursor_pos = 0;
     if (cursor_pos > g_editor_state.input.input_len)
@@ -203,23 +203,23 @@ void repl_state_cursor_pos_set(int cursor_pos) {
     g_editor_state.input.cursor_pos = cursor_pos;
 }
 
-int repl_state_insert_mode(void) {
+int editor_insert_mode(void) {
     return g_editor_state.input.insert_mode;
 }
 
-void repl_state_insert_mode_set(int insert_mode) {
+void editor_insert_mode_set(int insert_mode) {
     g_editor_state.input.insert_mode = insert_mode ? 1 : 0;
 }
 
-char *repl_state_pending_newline_buffer_mut(void) {
+char *editor_pending_newline_buffer_mut(void) {
     return g_editor_state.input.pending_newline;
 }
 
-int repl_state_pending_newline_len(void) {
+int editor_pending_newline_len(void) {
     return g_editor_state.input.pending_newline_len;
 }
 
-void repl_state_pending_newline_len_set(int newline_len) {
+void editor_pending_newline_len_set(int newline_len) {
     if (newline_len < 0)
         newline_len = 0;
     if (newline_len >= MAX_INPUT_LEN)
@@ -228,14 +228,14 @@ void repl_state_pending_newline_len_set(int newline_len) {
     g_editor_state.input.pending_newline[newline_len] = '\0';
 }
 
-void repl_state_pending_newline_set_text(const char *text) {
+void editor_pending_newline_set_text(const char *text) {
     editor_input_copy_str(g_editor_state.input.pending_newline, MAX_INPUT_LEN,
                           text ? text : "");
-    repl_state_pending_newline_len_set(
+    editor_pending_newline_len_set(
         (int)strlen(g_editor_state.input.pending_newline));
 }
 
-void repl_state_pending_newline_clear(void) {
+void editor_pending_newline_clear(void) {
     g_editor_state.input.pending_newline[0] = '\0';
     g_editor_state.input.pending_newline_len = 0;
 }

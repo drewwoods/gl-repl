@@ -134,7 +134,7 @@ static void prepare_display_fixture(void) {
     presentation->code_panel_layout = CODE_PANEL_LAYOUT_BOTTOM;
 
     repl_state_variables_mut()->anim_time = 4.25f;
-    repl_state_insert_mode_set(1);
+    editor_insert_mode_set(1);
 
     doc_cmds = repl_state_document_cmds_mut();
     flat_cmds = repl_state_flat_program_cmds_mut();
@@ -152,8 +152,8 @@ static void prepare_display_fixture(void) {
     repl_state_document_count_set(2);
     repl_state_flat_program_set_count(2);
     repl_state_edit_line_set(repl_state_document_count());
-    repl_state_input_set_text("glColor3f(0.2, 0.4, 0.6);");
-    repl_state_cursor_pos_set(7);
+    editor_input_set_text("glColor3f(0.2, 0.4, 0.6);");
+    editor_cursor_pos_set(7);
 
     g_t_idx = repl_eval_find_predef_var_idx("t");
     ASSERT_TRUE("t predef exists", g_t_idx >= 0);
@@ -224,9 +224,9 @@ static void test_display_frame_builds_config_and_restores_live_state(void) {
                 g_last_scene_config.flat_program.cmds == repl_state_flat_program_cmds_mut());
 
     ASSERT_TRUE("guide input pointer forwarded",
-                g_last_scene_config.guide_snapshot.input == repl_state_input_text());
+                g_last_scene_config.guide_snapshot.input == editor_input_text());
     ASSERT_INT("guide input length copied", g_last_scene_config.guide_snapshot.input_len,
-               (int)strlen(repl_state_input_text()));
+               (int)strlen(editor_input_text()));
     ASSERT_INT("guide cursor copied", g_last_scene_config.guide_snapshot.cursor_pos, 7);
     ASSERT_INT("guide edit line copied", g_last_scene_config.guide_snapshot.edit_line_idx, 2);
     ASSERT_INT("guide insert mode copied", g_last_scene_config.guide_snapshot.inserting, 1);

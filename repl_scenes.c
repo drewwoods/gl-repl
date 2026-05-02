@@ -170,7 +170,7 @@ static void load_scene_from_slot(int idx) {
     }
     for (int i = 0; i < N_SCENE_CFG_KEYS; i++)
         repl_config_set(k_scene_cfg_keys[i], s->scene_cfg[i]);
-    repl_state_insert_mode_set(0);
+    editor_insert_mode_set(0);
     load_line_to_input(repl_state_edit_line());
     mark_normals_dirty();
     s->last_touch       = next_user_scene_tick();

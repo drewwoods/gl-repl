@@ -69,21 +69,9 @@ void                     repl_state_time_reset_to_zero(void);
 /* Editor highlight + virtual-line accessors moved to editor_state.h
  * (Phase 1 commit 9). Use editor_state_highlights /
  * _virtual_lines. */
-const char *repl_state_input_text(void);
-char       *repl_state_input_buffer_mut(void);
-int         repl_state_input_len(void);
-void        repl_state_input_len_set(int input_len);
-void        repl_state_input_set_text(const char *text);
-void        repl_state_input_clear(void);
-int         repl_state_cursor_pos(void);
-void        repl_state_cursor_pos_set(int cursor_pos);
-int         repl_state_insert_mode(void);
-void        repl_state_insert_mode_set(int insert_mode);
-char       *repl_state_pending_newline_buffer_mut(void);
-int         repl_state_pending_newline_len(void);
-void        repl_state_pending_newline_len_set(int newline_len);
-void        repl_state_pending_newline_set_text(const char *text);
-void        repl_state_pending_newline_clear(void);
+/* Editor-input convenience getters/setters moved to editor_state.h
+ * (Phase 1 commit 10). Use editor_input_* / editor_cursor_pos* /
+ * editor_insert_mode* / editor_pending_newline_*. */
 
 /* Selection + clipboard accessors moved to editor_state.h (Phase 1
  * commit 6). Use editor_state_selection / _clipboard and friends. */

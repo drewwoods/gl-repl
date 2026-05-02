@@ -73,7 +73,7 @@ static SceneGuideSnapshot imrepl_ctrl_build_guide_snapshot(const SceneRenderConf
         .input_len = input.input_len,
         .cursor_pos = input.cursor_pos,
         .edit_line_idx = config->edit_line_idx,
-        .inserting = repl_state_insert_mode(),
+        .inserting = editor_insert_mode(),
         .edit_line_committed_text = editor_buffer_line(config->edit_line_idx),
         .source_cmds = repl_state_document_cmds_mut(),
         .source_cmd_count = repl_state_document_count(),
@@ -123,7 +123,7 @@ static void imrepl_ctrl_push_highlights(void) {
 
     int doc_count = repl_state_document_count();
     int edit_line = repl_state_edit_line();
-    int insert_mode = repl_state_insert_mode();
+    int insert_mode = editor_insert_mode();
 
     if (!insert_mode && edit_line >= 0 && edit_line < doc_count) {
         const GLCmd *cmd = repl_state_document_cmd_at(edit_line);

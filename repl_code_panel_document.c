@@ -128,7 +128,7 @@ static int code_panel_leading_ws_chars(const char *text) {
 }
 
 int repl_code_panel_document_active_indent_chars(void) {
-    if (repl_state_insert_mode())
+    if (editor_insert_mode())
         return repl_source_scope_cmd_indent_chars(repl_state_edit_line());
     if (repl_state_edit_line() >= 0 && repl_state_edit_line() < repl_state_document_count()) {
         const char *line_text = editor_buffer_line(repl_state_edit_line());
@@ -138,7 +138,7 @@ int repl_code_panel_document_active_indent_chars(void) {
 }
 
 static int code_panel_command_main_rows(int cmd_idx, int panel_w, int text_x) {
-    if (!repl_state_insert_mode() && cmd_idx == repl_state_edit_line()) {
+    if (!editor_insert_mode() && cmd_idx == repl_state_edit_line()) {
         int indent_chars = repl_code_panel_document_active_indent_chars();
         return repl_code_panel_document_row_count_for_text(
             editor_state_input().input, text_x + indent_chars * FONT_W, panel_w);
@@ -187,7 +187,7 @@ static int code_panel_cursor_doc_line_from_layout(
     int panel_w, int text_x) {
     int cursor_doc_line = header_rows;
 
-    if (repl_state_insert_mode()) {
+    if (editor_insert_mode()) {
         /* Accumulate rows up to the edit line in insert mode. */
         for (int cmd_idx = 0; cmd_idx < repl_state_edit_line() && cmd_idx < repl_state_document_count(); cmd_idx++) {
             cursor_doc_line += cmd_main_rows[cmd_idx];
@@ -195,7 +195,7 @@ static int code_panel_cursor_doc_line_from_layout(
         }
         cursor_doc_line += repl_code_panel_document_cursor_row_for_text(
             editor_state_input().input, text_x + repl_code_panel_document_active_indent_chars() * FONT_W,
-            panel_w, repl_state_cursor_pos(), NULL, NULL, NULL);
+            panel_w, editor_cursor_pos(), NULL, NULL, NULL);
     } else if (repl_state_edit_line() < repl_state_document_count()) {
         /* Accumulate rows up to the edit line in overwrite mode. */
         for (int cmd_idx = 0; cmd_idx < repl_state_edit_line(); cmd_idx++) {
@@ -204,7 +204,7 @@ static int code_panel_cursor_doc_line_from_layout(
         }
         cursor_doc_line += repl_code_panel_document_cursor_row_for_text(
             editor_state_input().input, text_x + repl_code_panel_document_active_indent_chars() * FONT_W,
-            panel_w, repl_state_cursor_pos(), NULL, NULL, NULL);
+            panel_w, editor_cursor_pos(), NULL, NULL, NULL);
     } else {
         /* Accumulate all rows when edit line is past the end. */
         for (int cmd_idx = 0; cmd_idx < repl_state_document_count(); cmd_idx++) {
@@ -213,7 +213,7 @@ static int code_panel_cursor_doc_line_from_layout(
         }
         cursor_doc_line += repl_code_panel_document_cursor_row_for_text(
             editor_state_input().input, text_x + repl_code_panel_document_active_indent_chars() * FONT_W,
-            panel_w, repl_state_cursor_pos(), NULL, NULL, NULL);
+            panel_w, editor_cursor_pos(), NULL, NULL, NULL);
     }
 
     return cursor_doc_line;
@@ -277,7 +277,7 @@ void repl_code_panel_document_build(CodePanelDocumentLayout *layout,
                 + code_panel_newline_rows(panel_w, text_x);
     /* Add rows for each command in the document. */
     for (int cmd_idx = 0; cmd_idx < repl_state_document_count(); cmd_idx++) {
-        if (repl_state_insert_mode() && cmd_idx == repl_state_edit_line())
+        if (editor_insert_mode() && cmd_idx == repl_state_edit_line())
             total_lines += code_panel_insert_rows(panel_w, text_x);
         total_lines += layout->cmd_main_rows[cmd_idx];
         total_lines += layout->replay_extra_rows[cmd_idx];
@@ -330,7 +330,7 @@ int repl_code_panel_document_target_for_doc_line(
 
     /* Iterate through document commands to find the target. */
     for (int cmd_idx = 0; cmd_idx <= repl_state_document_count(); cmd_idx++) {
-        if (repl_state_insert_mode() && cmd_idx == repl_state_edit_line()) {
+        if (editor_insert_mode() && cmd_idx == repl_state_edit_line()) {
             int insert_rows = code_panel_insert_rows(layout->panel_w,
                                                      layout->text_x);
             if (row < insert_rows) {

@@ -92,7 +92,7 @@ static void set_editor_input(const char *text) {
     strncpy(inp->input, text, MAX_INPUT_LEN - 1);
     inp->input[MAX_INPUT_LEN - 1] = '\0';
     inp->input_len = (int)strlen(inp->input);
-    repl_state_cursor_pos_set(inp->input_len);
+    editor_cursor_pos_set(inp->input_len);
 }
 
 static int mock_get_modifiers(void) {
@@ -172,7 +172,7 @@ static void assert_float_decl_rejected_atomic(const char *label,
 
     set_editor_input(src);
     repl_state_edit_line_set(repl_state_document_count());
-    repl_state_insert_mode_set(0);
+    editor_insert_mode_set(0);
 
     int result = try_commit_float_decl();
 
@@ -201,7 +201,7 @@ int main() {
         repl_reset_state();
         set_editor_input("float chain_order;");
         repl_state_edit_line_set(0);
-        repl_state_insert_mode_set(0);
+        editor_insert_mode_set(0);
 
         int result = try_commit_any();
 
@@ -449,7 +449,7 @@ int main() {
         ASSERT_INT("rename special route begin", repl_inline_rename_begin(slot), 1);
 
         set_editor_input("abc");
-        repl_state_cursor_pos_set(2);
+        editor_cursor_pos_set(2);
         repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_HIDDEN;
         g_show_help = 0;
         replay_active = 1;
@@ -463,7 +463,7 @@ int main() {
         repl_special_func(GLUT_KEY_LEFT, 0, 0);
         ASSERT_INT("rename special swallows hidden restore",
                    repl_state_presentation().code_panel_layout, CODE_PANEL_LAYOUT_HIDDEN);
-        ASSERT_INT("rename special keeps editor cursor", repl_state_cursor_pos(), 2);
+        ASSERT_INT("rename special keeps editor cursor", editor_cursor_pos(), 2);
         ASSERT_INT("rename special keeps search cursor", g_search_cursor_pos, 2);
         ASSERT_INT("rename special keeps replay pc", replay_pc, 0);
 
@@ -484,7 +484,7 @@ int main() {
         repl_feed_line_public("glVertex3f(0,0,0)");
         navigate_to_line(0);
         set_editor_input("abc");
-        repl_state_cursor_pos_set(2);
+        editor_cursor_pos_set(2);
         g_show_help = 1;
         g_help_tab = 1;
         g_search_active = 1;
@@ -495,7 +495,7 @@ int main() {
         repl_special_func(GLUT_KEY_LEFT, 0, 0);
 
         ASSERT_INT("search special moves search cursor", g_search_cursor_pos, 1);
-        ASSERT_INT("search special leaves editor cursor", repl_state_cursor_pos(), 2);
+        ASSERT_INT("search special leaves editor cursor", editor_cursor_pos(), 2);
         ASSERT_INT("search special leaves help tab", g_help_tab, 1);
 
         search_clear_all();
@@ -756,7 +756,7 @@ int main() {
         ASSERT_TRUE("copy block: selection cleared", !repl_clipboard_sel_active());
 
         repl_state_edit_line_set(5);
-        repl_state_insert_mode_set(0);
+        editor_insert_mode_set(0);
         repl_keyboard_func(22, 0, 0);
         ASSERT_INT("paste block: cmd count", repl_state_document_count(), 9);
         ASSERT_STR("paste block: if preserved", editor_buffer_line(4), "  if(x > 0) {");
@@ -904,7 +904,7 @@ int main() {
         editor_state_clipboard_count_set(1);
         editor_state_selection_set(0, 1);
         repl_state_edit_line_set(1);
-        repl_state_insert_mode_set(1);
+        editor_insert_mode_set(1);
 
         repl_keyboard_func(3, 0, 0);
         ASSERT_INT("copy insert mode: cmd count unchanged", repl_state_document_count(), 2);
@@ -913,7 +913,7 @@ int main() {
         ASSERT_TRUE("copy insert mode: selection cleared", !repl_clipboard_sel_active());
 
         editor_state_selection_set(0, 1);
-        repl_state_insert_mode_set(1);
+        editor_insert_mode_set(1);
         repl_keyboard_func(24, 0, 0);
         ASSERT_INT("cut insert mode: cmd count unchanged", repl_state_document_count(), 2);
         ASSERT_INT("cut insert mode: clipboard unchanged", editor_state_clipboard_count(), 1);
@@ -928,16 +928,16 @@ int main() {
         repl_feed_line_public("glVertex3f(2,2,2)");
         editor_state_selection_set(0, 1);
         repl_state_edit_line_set(1);
-        repl_state_insert_mode_set(1);
+        editor_insert_mode_set(1);
         set_editor_input("abcd");
-        repl_state_cursor_pos_set(3);
+        editor_cursor_pos_set(3);
 
         repl_keyboard_func(8, 0, 0);
 
         ASSERT_INT("backspace insert mode: cmd count unchanged", repl_state_document_count(), 2);
         ASSERT_STR("backspace insert mode: input edited", editor_state_input().input, "abd");
-        ASSERT_INT("backspace insert mode: cursor moved", repl_state_cursor_pos(), 2);
-        ASSERT_INT("backspace insert mode: still inserting", repl_state_insert_mode(), 1);
+        ASSERT_INT("backspace insert mode: cursor moved", editor_cursor_pos(), 2);
+        ASSERT_INT("backspace insert mode: still inserting", editor_insert_mode(), 1);
     }
 
     /* 8k. Committing incomplete commands reports incomplete, not unknown */
@@ -1017,7 +1017,7 @@ int main() {
         repl_feed_line_public("glVertex3f(2,2,2)");
         /* Put cursor at line 1, inserting mode */
         repl_state_edit_line_set(1);
-        repl_state_insert_mode_set(1);
+        editor_insert_mode_set(1);
         {
             ReplEditorInputState *inp = editor_state_input_mut();
             strcpy(inp->input, "x = 3.0");
@@ -1038,7 +1038,7 @@ int main() {
         repl_feed_line_public("glVertex3f(1,1,1)");
         /* Navigate to the assignment line and overwrite */
         repl_state_edit_line_set(0);
-        repl_state_insert_mode_set(0);
+        editor_insert_mode_set(0);
         {
             ReplEditorInputState *inp = editor_state_input_mut();
             strcpy(inp->input, "n = 7.0");
@@ -1098,7 +1098,7 @@ int main() {
 
         /* Navigate back to line 0 and update the for header */
         repl_state_edit_line_set(0);
-        repl_state_insert_mode_set(0);
+        editor_insert_mode_set(0);
         {
             ReplEditorInputState *inp = editor_state_input_mut();
             strcpy(inp->input, "for(i, 0, 10) {");
@@ -1159,7 +1159,7 @@ int main() {
 
         /* Navigate back and update the func-def header */
         repl_state_edit_line_set(0);
-        repl_state_insert_mode_set(0);
+        editor_insert_mode_set(0);
         {
             ReplEditorInputState *inp = editor_state_input_mut();
             strcpy(inp->input, "func1(a, b) {");
@@ -1201,7 +1201,7 @@ int main() {
 
         /* Navigate back and update the if condition */
         repl_state_edit_line_set(0);
-        repl_state_insert_mode_set(0);
+        editor_insert_mode_set(0);
         {
             ReplEditorInputState *inp = editor_state_input_mut();
             strcpy(inp->input, "if(x < 0) {");
@@ -1241,8 +1241,8 @@ int main() {
             inp->input_len = (int)strlen(inp->input);
         }
         try_commit_for_loop();
-        /* repl_state_edit_line()=1, repl_state_insert_mode()=1 - we're inside the loop */
-        ASSERT_INT("insert-close setup: in inserting", repl_state_insert_mode(), 1);
+        /* repl_state_edit_line()=1, editor_insert_mode()=1 - we're inside the loop */
+        ASSERT_INT("insert-close setup: in inserting", editor_insert_mode(), 1);
         ASSERT_INT("insert-close setup: edit_line=1", repl_state_edit_line(), 1);
 
         {
@@ -1253,7 +1253,7 @@ int main() {
 
         int r = try_commit_close_brace();
         ASSERT_INT("insert-close brace returns 1", r, 1);
-        ASSERT_INT("insert-close: no longer inserting", repl_state_insert_mode(), 0);
+        ASSERT_INT("insert-close: no longer inserting", editor_insert_mode(), 0);
     }
 
     /* 27. Committing close brace - func-def */
@@ -1274,7 +1274,7 @@ int main() {
 
         int r = try_commit_close_brace();
         ASSERT_INT("func close brace returns 1", r, 1);
-        ASSERT_INT("func close: no longer inserting", repl_state_insert_mode(), 0);
+        ASSERT_INT("func close: no longer inserting", editor_insert_mode(), 0);
     }
 
     /* 28. Committing close brace - if-block */
@@ -1295,7 +1295,7 @@ int main() {
 
         int r = try_commit_close_brace();
         ASSERT_INT("if close brace returns 1", r, 1);
-        ASSERT_INT("if close: no longer inserting", repl_state_insert_mode(), 0);
+        ASSERT_INT("if close: no longer inserting", editor_insert_mode(), 0);
     }
 
     /* 29. try_commit_for_loop - empty body emits error */
@@ -1353,10 +1353,10 @@ int main() {
             strncpy(inp->input, "float tmp", MAX_INPUT_LEN - 1);
             inp->input[MAX_INPUT_LEN - 1] = '\0';
             inp->input_len = (int)strlen(inp->input);
-            repl_state_cursor_pos_set(inp->input_len);
+            editor_cursor_pos_set(inp->input_len);
         }
         repl_state_edit_line_set(repl_state_document_count());
-        repl_state_insert_mode_set(0);
+        editor_insert_mode_set(0);
 
         int result = try_commit_float_decl();
         ASSERT_INT("float_decl no-semi: accepted", result, 1);
@@ -1388,10 +1388,10 @@ int main() {
             strncpy(inp->input, "float tmp = 0", MAX_INPUT_LEN - 1);
             inp->input[MAX_INPUT_LEN - 1] = '\0';
             inp->input_len = (int)strlen(inp->input);
-            repl_state_cursor_pos_set(inp->input_len);
+            editor_cursor_pos_set(inp->input_len);
         }
         repl_state_edit_line_set(repl_state_document_count());
-        repl_state_insert_mode_set(0);
+        editor_insert_mode_set(0);
 
         int result = try_commit_float_decl();
         ASSERT_INT("float_decl init no-semi: accepted", result, 1);
@@ -1428,10 +1428,10 @@ int main() {
             strncpy(inp->input, "float a, b, c", MAX_INPUT_LEN - 1);
             inp->input[MAX_INPUT_LEN - 1] = '\0';
             inp->input_len = (int)strlen(inp->input);
-            repl_state_cursor_pos_set(inp->input_len);
+            editor_cursor_pos_set(inp->input_len);
         }
         repl_state_edit_line_set(repl_state_document_count());
-        repl_state_insert_mode_set(0);
+        editor_insert_mode_set(0);
 
         int result = try_commit_float_decl();
         ASSERT_INT("float_decl multi no-semi: accepted", result, 1);
@@ -1504,10 +1504,10 @@ int main() {
             strncpy(inp->input, "float radius = 3", MAX_INPUT_LEN - 1);
             inp->input[MAX_INPUT_LEN - 1] = '\0';
             inp->input_len = (int)strlen(inp->input);
-            repl_state_cursor_pos_set(inp->input_len);
+            editor_cursor_pos_set(inp->input_len);
         }
         repl_state_edit_line_set(1);
-        repl_state_insert_mode_set(0);
+        editor_insert_mode_set(0);
 
         int result = try_commit_float_decl();
         ASSERT_INT("decl-top mid: accepted", result, 1);
@@ -1540,10 +1540,10 @@ int main() {
             strncpy(inp->input, "float a, c", MAX_INPUT_LEN - 1);
             inp->input[MAX_INPUT_LEN - 1] = '\0';
             inp->input_len = (int)strlen(inp->input);
-            repl_state_cursor_pos_set(inp->input_len);
+            editor_cursor_pos_set(inp->input_len);
         }
         repl_state_edit_line_set(0);
-        repl_state_insert_mode_set(0);
+        editor_insert_mode_set(0);
 
         int result = try_commit_float_decl();
         ASSERT_INT("overwrite shared: accepted", result, 1);
@@ -1574,10 +1574,10 @@ int main() {
             strncpy(inp->input, "float n", MAX_INPUT_LEN - 1);
             inp->input[MAX_INPUT_LEN - 1] = '\0';
             inp->input_len = (int)strlen(inp->input);
-            repl_state_cursor_pos_set(inp->input_len);
+            editor_cursor_pos_set(inp->input_len);
         }
         repl_state_edit_line_set(0);
-        repl_state_insert_mode_set(0);
+        editor_insert_mode_set(0);
 
         int result = try_commit_float_decl();
         ASSERT_INT("drop b: accepted", result, 1);
@@ -1603,10 +1603,10 @@ int main() {
             strncpy(inp->input, "float n", MAX_INPUT_LEN - 1);
             inp->input[MAX_INPUT_LEN - 1] = '\0';
             inp->input_len = (int)strlen(inp->input);
-            repl_state_cursor_pos_set(inp->input_len);
+            editor_cursor_pos_set(inp->input_len);
         }
         repl_state_edit_line_set(0);
-        repl_state_insert_mode_set(0);
+        editor_insert_mode_set(0);
 
         int result = try_commit_float_decl();
         ASSERT_INT("drop referenced b: handler consumed input", result, 1);
@@ -1706,7 +1706,7 @@ int main() {
         repl_reset_state();
         set_editor_input("float v0, v1, v2, v3, v4, v5, v6, v7, v8");
         repl_state_edit_line_set(repl_state_document_count());
-        repl_state_insert_mode_set(0);
+        editor_insert_mode_set(0);
 
         int result = try_commit_float_decl();
 
@@ -1734,7 +1734,7 @@ int main() {
 
         set_editor_input("float overflow");
         repl_state_edit_line_set(repl_state_document_count());
-        repl_state_insert_mode_set(0);
+        editor_insert_mode_set(0);
         int result = try_commit_float_decl();
 
         ASSERT_INT("decl table full: handler consumed input", result, 1);
@@ -1805,10 +1805,10 @@ int main() {
             strncpy(inp->input, "float a, b, c, d", MAX_INPUT_LEN - 1);
             inp->input[MAX_INPUT_LEN - 1] = '\0';
             inp->input_len = (int)strlen(inp->input);
-            repl_state_cursor_pos_set(inp->input_len);
+            editor_cursor_pos_set(inp->input_len);
         }
         repl_state_edit_line_set(0);
-        repl_state_insert_mode_set(0);
+        editor_insert_mode_set(0);
 
         int result = try_commit_float_decl();
         ASSERT_INT("expand decl: accepted", result, 1);
@@ -1863,7 +1863,7 @@ int main() {
                     repl_format_fits(input, sizeof(input), "n = %s", big_rhs));
         set_editor_input(input);
         repl_state_edit_line_set(repl_state_document_count());
-        repl_state_insert_mode_set(0);
+        editor_insert_mode_set(0);
 
         int r = try_assign_variable();
         ASSERT_INT("overlong assign: handler consumed input", r, 1);
@@ -2068,7 +2068,7 @@ int main() {
     /* Regression: pressing Enter on the last existing command must enter
      * insert mode at repl_state_edit_line() == repl_state_document_count().  Before the fix the
      * cursor was invisible because the renderer guarded the active-input
-     * row with !repl_state_insert_mode(), so the slot drew a dimmed placeholder instead
+     * row with !editor_insert_mode(), so the slot drew a dimmed placeholder instead
      * of the cursor. */
     {
         repl_reset_state();
@@ -2077,11 +2077,11 @@ int main() {
         repl_feed_line_public("glVertex3f(2,2,2)");
         navigate_to_line(2);
         ASSERT_INT("enter-at-last: setup edit_line", repl_state_edit_line(), 2);
-        ASSERT_INT("enter-at-last: setup not inserting", repl_state_insert_mode(), 0);
+        ASSERT_INT("enter-at-last: setup not inserting", editor_insert_mode(), 0);
 
         repl_keyboard_func('\r', 0, 0);
 
-        ASSERT_INT("enter-at-last: now inserting", repl_state_insert_mode(), 1);
+        ASSERT_INT("enter-at-last: now inserting", editor_insert_mode(), 1);
         ASSERT_INT("enter-at-last: edit_line == num_cmds", repl_state_edit_line(), repl_state_document_count());
     }
 
@@ -2108,13 +2108,13 @@ int main() {
         replay_active = 0;
 
         repl_state_edit_line_set(repl_state_document_count());
-        repl_state_insert_mode_set(1);
+        editor_insert_mode_set(1);
         {
             ReplEditorInputState *inp = editor_state_input_mut();
             inp->input[0] = '\0';
             inp->input_len = 0;
         }
-        repl_state_cursor_pos_set(0);
+        editor_cursor_pos_set(0);
         g_scroll = 0;
         g_scroll_follow_cursor = 1;
         ui_panels_code_panel_apply_scroll_follow_for_test(&follow_insert, &visible_lines);
@@ -2123,7 +2123,7 @@ int main() {
                     follow_insert < g_scroll + visible_lines);
 
         repl_state_edit_line_set(repl_state_document_count());
-        repl_state_insert_mode_set(0);
+        editor_insert_mode_set(0);
         g_scroll = 0;
         g_scroll_follow_cursor = 1;
         ui_panels_code_panel_apply_scroll_follow_for_test(&follow_overwrite, &visible_lines);
@@ -2275,7 +2275,7 @@ int main() {
         assert_status_contains("nav auto-commit invalid append: status",
                                "Incomplete command");
         ASSERT_STR("nav auto-commit invalid append: newline buffer discarded",
-                   repl_state_pending_newline_buffer_mut(), "");
+                   editor_pending_newline_buffer_mut(), "");
 
         navigate_to_line(repl_state_document_count());
         ASSERT_STR("nav auto-commit invalid append: return to end is empty", editor_state_input().input, "");
@@ -2298,7 +2298,7 @@ int main() {
 
         int cursor_pos = ui_panels_handle_code_panel_click(CODE_MARGIN_X + 1, code_panel_mouse_y_for_cmd(2));
         if (cursor_pos >= 0)
-            repl_state_cursor_pos_set(cursor_pos);
+            editor_cursor_pos_set(cursor_pos);
 
         ASSERT_INT("mouse auto-commit valid edit: cursor moved", repl_state_edit_line(), 2);
         ASSERT_TRUE("mouse auto-commit valid edit: x arg",
@@ -2350,7 +2350,7 @@ int main() {
         repl_clear_all_cmds();
         ASSERT_INT("clear_all: num_cmds is 0", repl_state_document_count(), 0);
         ASSERT_INT("clear_all: edit_line is 0", repl_state_edit_line(), 0);
-        ASSERT_INT("clear_all: inserting is 0", repl_state_insert_mode(), 0);
+        ASSERT_INT("clear_all: inserting is 0", editor_insert_mode(), 0);
         ASSERT_INT("clear_all: input is empty", editor_state_input().input[0], 0);
         ASSERT_INT("clear_all: predef var count restored",
                    g_num_predef_vars, base_num_predef_vars);
@@ -2379,7 +2379,7 @@ int main() {
 
         /* Comment the assignment with Ctrl+/. */
         repl_state_edit_line_set(1);
-        repl_state_insert_mode_set(0);
+        editor_insert_mode_set(0);
         g_status[0] = '\0';
         g_mock_modifiers = GLUT_ACTIVE_CTRL;
         repl_keyboard_func('/', 0, 0);
@@ -2392,7 +2392,7 @@ int main() {
         /* Uncomment with Ctrl+/ again.  Fallback path must rebuild the
          * CMD_VAR_ASSIGN in place, not reject with "not a valid command". */
         repl_state_edit_line_set(1);
-        repl_state_insert_mode_set(0);
+        editor_insert_mode_set(0);
         g_status[0] = '\0';
         repl_keyboard_func('/', 0, 0);
         ASSERT_INT("uncomment assignment: type back to assign",
@@ -2415,7 +2415,7 @@ int main() {
         repl_reset_state();
         repl_feed_line_public("glVertex3f(0, 0, 0);");
         repl_state_edit_line_set(0);
-        repl_state_insert_mode_set(0);
+        editor_insert_mode_set(0);
         g_status[0] = '\0';
         g_mock_modifiers = GLUT_ACTIVE_CTRL;
         repl_keyboard_func('/', 0, 0);
@@ -2596,9 +2596,9 @@ int main() {
         ASSERT_INT("Esc: autocomplete cleared", editor_state_autocomplete().match_count, 0);
 
         /* 3. Insert mode */
-        repl_state_insert_mode_set(1);
+        editor_insert_mode_set(1);
         repl_keyboard_func(27, 0, 0);
-        ASSERT_TRUE("Esc: insert mode exited", !repl_state_insert_mode());
+        ASSERT_TRUE("Esc: insert mode exited", !editor_insert_mode());
 
         /* 4. Input clear */
         set_editor_input("some text");
@@ -2842,7 +2842,7 @@ int main() {
         g_mock_modifiers = GLUT_ACTIVE_CTRL;
 
         repl_state_edit_line_set(0);
-        repl_state_insert_mode_set(0);
+        editor_insert_mode_set(0);
         repl_keyboard_func('/', 0, 0);
         ASSERT_INT("comment if-begin", repl_state_document_cmds_mut()[0].type, CMD_COMMENT);
 
