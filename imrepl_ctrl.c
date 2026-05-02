@@ -7,6 +7,7 @@
 #include "repl_eval.h"
 #include "repl_pipeline.h"
 #include "repl_replay.h"
+#include "repl_replay_annotations.h"
 #include "repl_state.h"
 #include "scene_render.h"
 #include "ui_color_picker.h"
@@ -369,6 +370,7 @@ static void imrepl_ctrl_build_ui_snapshot(UiRenderSnapshot *snap) {
     snap->workspace_dir = repl_state_workspace_dir();
     snap->editor_transformers = repl_state_editor_transformers();
     snap->editor_highlights = repl_state_editor_highlights();
+    snap->editor_virtual_lines = repl_state_editor_virtual_lines();
 }
 
 void imrepl_ctrl_display_frame(void) {
@@ -398,6 +400,9 @@ void imrepl_ctrl_display_frame(void) {
 
     imrepl_ctrl_push_color_transformers();
     imrepl_ctrl_push_highlights();
+    /* Prepare replay annotations + push the virtual-line list.
+     * Layout also calls prepare(), so this stays idempotent. */
+    repl_replay_annotations_prepare();
 
     saved_flat_count = g_num_flat_cmds;
     repl_copy_predef_values(live_predef_vals, MAX_PREDEF_VARS);

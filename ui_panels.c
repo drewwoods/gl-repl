@@ -601,61 +601,39 @@ void ui_panels_render_code_panel(const UiRenderSnapshot *snap) {
                 }
                 file_line++;
 
-                if (replay.active &&
-                    replay.expand_args &&
-                    replay.src_line_idx >= 0 &&
-                    i == replay.src_line_idx &&
-                    document_cmds[i].has_vars &&
-                    document_cmds[i].type != CMD_VAR_ASSIGN) {
-                    int flat_idx = repl_replay_annotation_flat_cmd_for_source(i);
-                    if (flat_idx >= 0) {
-                        char subst[MAX_LINE_LEN], var_comment[128];
-                        if (repl_replay_build_subst_annotation(i, flat_idx,
-                                                          subst, sizeof(subst),
-                                                          var_comment, sizeof(var_comment)) > 0) {
-                            if (cur >= cp.scroll &&
-                                cur < cp.scroll + visible_lines) {
-                                glEnable(GL_BLEND);
-                                glBlendFunc(GL_SRC_ALPHA,
-                                            GL_ONE_MINUS_SRC_ALPHA);
+                if (snap->editor_virtual_lines) {
+                    const EditorVirtualLineList *vlist = snap->editor_virtual_lines;
+                    for (int vi = 0; vi < vlist->count; vi++) {
+                        const EditorVirtualLine *vl = &vlist->items[vi];
+                        if (vl->after_line_idx != i)
+                            continue;
+                        if (cur >= cp.scroll && cur < cp.scroll + visible_lines) {
+                            glEnable(GL_BLEND);
+                            glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+                            if (vl->style == VIRTUAL_STYLE_REPLAY_SUBST)
                                 glColor4f(0.10f, 0.25f, 0.15f, 0.35f);
-                                glRectf((float)(0), (float)((float)(line_y - 3)), (float)(0)+(float)((float)panel_w), (float)((float)(line_y - 3))+(float)(LINE_H));
-                                glDisable(GL_BLEND);
+                            else
+                                glColor4f(0.15f, 0.15f, 0.25f, 0.35f);
+                            glRectf((float)(0), (float)((float)(line_y - 3)),
+                                    (float)(0) + (float)((float)panel_w),
+                                    (float)((float)(line_y - 3)) + (float)(LINE_H));
+                            glDisable(GL_BLEND);
+                            if (vl->style == VIRTUAL_STYLE_REPLAY_SUBST)
                                 glColor3f(0.50f, 0.75f, 0.50f);
-                                gl2d_draw_string((float)text_x, (float)line_y,
-                                            subst, FONT_MONO);
-                                if (var_comment[0]) {
-                                    int sw = (int)strlen(subst) * FONT_W;
-                                    glColor3f(0.40f, 0.55f, 0.40f);
-                                    gl2d_draw_string((float)(text_x + sw),
-                                                (float)line_y,
-                                                var_comment, FONT_MONO);
-                                }
-                                line_y -= LINE_H;
+                            else
+                                glColor3f(0.50f, 0.60f, 0.80f);
+                            gl2d_draw_string((float)text_x, (float)line_y,
+                                             vl->text, FONT_MONO);
+                            if (vl->aux[0]) {
+                                int sw = (int)strlen(vl->text) * FONT_W;
+                                glColor3f(0.40f, 0.55f, 0.40f);
+                                gl2d_draw_string((float)(text_x + sw),
+                                                 (float)line_y,
+                                                 vl->aux, FONT_MONO);
                             }
-                            cur++;
+                            line_y -= LINE_H;
                         }
-
-                        {
-                            char eval_buf[MAX_LINE_LEN];
-                            if (repl_replay_build_eval_annotation(i, flat_idx,
-                                                             eval_buf, sizeof(eval_buf))) {
-                                if (cur >= cp.scroll &&
-                                    cur < cp.scroll + visible_lines) {
-                                    glEnable(GL_BLEND);
-                                    glBlendFunc(GL_SRC_ALPHA,
-                                                GL_ONE_MINUS_SRC_ALPHA);
-                                    glColor4f(0.15f, 0.15f, 0.25f, 0.35f);
-                                    glRectf((float)(0), (float)((float)(line_y - 3)), (float)(0)+(float)((float)panel_w), (float)((float)(line_y - 3))+(float)(LINE_H));
-                                    glDisable(GL_BLEND);
-                                    glColor3f(0.50f, 0.60f, 0.80f);
-                                    gl2d_draw_string((float)text_x, (float)line_y,
-                                                eval_buf, FONT_MONO);
-                                    line_y -= LINE_H;
-                                }
-                                cur++;
-                            }
-                        }
+                        cur++;
                     }
                 }
             }

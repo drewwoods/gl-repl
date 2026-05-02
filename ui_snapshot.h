@@ -84,6 +84,7 @@ typedef struct UiRenderSnapshot {
     /* Per-frame editor overlay snapshots (controller-pushed). */
     const EditorTransformerList *editor_transformers;
     const EditorHighlightList   *editor_highlights;
+    const EditorVirtualLineList *editor_virtual_lines;
 } UiRenderSnapshot;
 
 #endif /* UI_SNAPSHOT_H */

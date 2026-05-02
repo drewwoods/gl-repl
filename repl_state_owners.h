@@ -78,6 +78,16 @@ int                           repl_state_editor_highlights_append(int line_idx,
                                                                   int char_start,
                                                                   int char_end,
                                                                   HighlightKind kind);
+
+/* Per-frame editor virtual-line snapshot. Rows are pushed below real
+ * source lines (replay annotations today) and consulted by layout,
+ * scroll, hit-test, and render so the count comes from one place. */
+const EditorVirtualLineList  *repl_state_editor_virtual_lines(void);
+void                          repl_state_editor_virtual_lines_clear(void);
+int                           repl_state_editor_virtual_lines_append(int after_line_idx,
+                                                                     VirtualLineStyle style,
+                                                                     const char *text,
+                                                                     const char *aux);
 const char *repl_state_input_text(void);
 char       *repl_state_input_buffer_mut(void);
 int         repl_state_input_len(void);
