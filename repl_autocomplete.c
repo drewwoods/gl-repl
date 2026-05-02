@@ -223,7 +223,7 @@ void update_autocomplete(void) {
     if (input_len == 0) return;
 
     /* Only offer completions when cursor is at the end of input. */
-    if (repl_state_cursor_pos() != input_len) return;
+    if (editor_cursor_pos() != input_len) return;
 
     /* glPointParameterfv enum completion (custom: 1 enum + 3 floats). */
     {
@@ -343,7 +343,7 @@ void accept_autocomplete(void) {
         if (inp->input_len + ghost_len < MAX_INPUT_LEN - 1) {
             strcat(inp->input, ac.ghost);
             inp->input_len += ghost_len;
-            repl_state_cursor_pos_set(inp->input_len);
+            editor_cursor_pos_set(inp->input_len);
         }
     }
     clear_autocomplete_state();

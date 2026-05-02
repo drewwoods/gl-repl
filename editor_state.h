@@ -157,6 +157,25 @@ ReplEditorInputView   editor_state_input(void);
 ReplEditorInputState *editor_state_input_mut(void);
 void                  editor_state_input_reset(void);
 
+/* Editor-input convenience getters/setters. Implementations live in
+ * editor_state.c since commit 5 (storage moved); the names finally
+ * match the namespace they live in (commit 10). */
+const char *editor_input_text(void);
+char       *editor_input_buffer_mut(void);
+int         editor_input_len(void);
+void        editor_input_len_set(int input_len);
+void        editor_input_set_text(const char *text);
+void        editor_input_clear(void);
+int         editor_cursor_pos(void);
+void        editor_cursor_pos_set(int cursor_pos);
+int         editor_insert_mode(void);
+void        editor_insert_mode_set(int insert_mode);
+char       *editor_pending_newline_buffer_mut(void);
+int         editor_pending_newline_len(void);
+void        editor_pending_newline_len_set(int newline_len);
+void        editor_pending_newline_set_text(const char *text);
+void        editor_pending_newline_clear(void);
+
 /* Selection slice API. Field-level getters/setters mirror the
  * pre-migration editor_state_selection_* surface; the canonical
  * "no selection" state is anchor=-1, end=-1. */

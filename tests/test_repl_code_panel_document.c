@@ -65,7 +65,7 @@ int main(void) {
     }
 
     repl_navigate_to_line(1);
-    repl_state_cursor_pos_set(0);
+    editor_cursor_pos_set(0);
     repl_keyboard_func('\r', 0, 0);
     build_doc(&layout);
     {

@@ -56,7 +56,7 @@ void repl_undo_snapshot_restore(const ReplUndoSnapshot *snapshot) {
         g_predef_vars[i].value = snapshot->predef_vals[i];
         memcpy(g_predef_vars[i].name, snapshot->predef_names[i], 16);
     }
-    repl_state_insert_mode_set(0);
+    editor_insert_mode_set(0);
     load_line_to_input(repl_state_edit_line());
     mark_normals_dirty();
 }

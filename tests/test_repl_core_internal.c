@@ -289,26 +289,26 @@ int main() {
 
         input = editor_state_input_mut();
         ASSERT_TRUE("editor input facade uses input buffer",
-                    input->input == repl_state_input_buffer_mut());
-        repl_state_input_set_text("xyz");
+                    input->input == editor_input_buffer_mut());
+        editor_input_set_text("xyz");
         ASSERT_TRUE("editor input len ptr reflects state", input->input_len == 3);
         ASSERT_TRUE("editor input cursor ptr reflects state",
-                    input->cursor_pos == repl_state_cursor_pos());
+                    input->cursor_pos == editor_cursor_pos());
 
-        repl_state_input_set_text("abc");
+        editor_input_set_text("abc");
         ASSERT_STR("state input set text", editor_state_input().input, "abc");
-        ASSERT_INT("state input set len", repl_state_input_len(), 3);
-        ASSERT_INT("state input cursor at end", repl_state_cursor_pos(), 3);
-        repl_state_cursor_pos_set(99);
-        ASSERT_INT("state cursor clamps high", repl_state_cursor_pos(), 3);
-        repl_state_cursor_pos_set(-5);
-        ASSERT_INT("state cursor clamps low", repl_state_cursor_pos(), 0);
+        ASSERT_INT("state input set len", editor_input_len(), 3);
+        ASSERT_INT("state input cursor at end", editor_cursor_pos(), 3);
+        editor_cursor_pos_set(99);
+        ASSERT_INT("state cursor clamps high", editor_cursor_pos(), 3);
+        editor_cursor_pos_set(-5);
+        ASSERT_INT("state cursor clamps low", editor_cursor_pos(), 0);
 
-        repl_state_pending_newline_set_text("next line");
-        ASSERT_STR("state newline set text", repl_state_pending_newline_buffer_mut(), "next line");
-        ASSERT_INT("state newline len", repl_state_pending_newline_len(), 9);
-        repl_state_insert_mode_set(42);
-        ASSERT_INT("state insert mode set", repl_state_insert_mode(), 1);
+        editor_pending_newline_set_text("next line");
+        ASSERT_STR("state newline set text", editor_pending_newline_buffer_mut(), "next line");
+        ASSERT_INT("state newline len", editor_pending_newline_len(), 9);
+        editor_insert_mode_set(42);
+        ASSERT_INT("state insert mode set", editor_insert_mode(), 1);
 
         editor_state_selection_set(4, 2);
         ASSERT_INT("state selection anchor", editor_state_selection_anchor(), 4);
@@ -329,8 +329,8 @@ int main() {
 
         editor_state_input_reset();
         ASSERT_STR("state input reset text", editor_state_input().input, "");
-        ASSERT_INT("state input reset inserting", repl_state_insert_mode(), 0);
-        ASSERT_STR("state newline reset text", repl_state_pending_newline_buffer_mut(), "");
+        ASSERT_INT("state input reset inserting", editor_insert_mode(), 0);
+        ASSERT_STR("state newline reset text", editor_pending_newline_buffer_mut(), "");
     }
 
     /* 12. camera/pointer/viewport state facade */

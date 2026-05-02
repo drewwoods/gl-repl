@@ -236,11 +236,9 @@ ReplVariableView repl_state_variables(void);
 /* Editor overlay snapshot list view accessors moved to editor_state.h
  * (Phase 1 commit 9). Use editor_state_transformers / _highlights /
  * _virtual_lines. */
-const char *repl_state_input_text(void);
-int         repl_state_input_len(void);
-int         repl_state_cursor_pos(void);
-int         repl_state_insert_mode(void);
-int         repl_state_pending_newline_len(void);
+/* Editor-input convenience getters moved to editor_state.h
+ * (Phase 1 commit 10). Use editor_input_text / _len, editor_cursor_pos,
+ * editor_insert_mode, editor_pending_newline_len. */
 
 /* Selection + clipboard view accessors moved to editor_state.h
  * (Phase 1 commit 6). Use editor_state_selection / _clipboard. */

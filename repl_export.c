@@ -2532,7 +2532,7 @@ static int import_try_snippet_start(ImportState *s, const char *p) {
     /* Function/header import may leave the editor cursor in an insertion slot
      * inside existing commands.  Force snippet lines to start appending from
      * the end of the command list. */
-    repl_state_insert_mode_set(0);
+    editor_insert_mode_set(0);
     repl_state_edit_line_set(repl_state_document_count());
     return 1;
 }

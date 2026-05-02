@@ -33,11 +33,11 @@ static int search_row_to_nav_line(int row_idx) {
     if (row_idx < 0 || row_idx >= repl_search_row_count())
         return -1;
     if (search_row_is_live_input(row_idx)) {
-        if (repl_state_insert_mode())
+        if (editor_insert_mode())
             return -1;
         return repl_state_edit_line();
     }
-    if (repl_state_insert_mode() && row_idx > repl_state_edit_line())
+    if (editor_insert_mode() && row_idx > repl_state_edit_line())
         return row_idx - 1;
     return row_idx;
 }
@@ -125,7 +125,7 @@ int repl_search_row_for_cmd_index(int cmd_idx) {
 
     if (cmd_idx < 0 || cmd_idx >= repl_state_document_count())
         return -1;
-    if (repl_state_insert_mode() && cmd_idx >= edit_line)
+    if (editor_insert_mode() && cmd_idx >= edit_line)
         return cmd_idx + 1;
     return cmd_idx;
 }
@@ -277,7 +277,7 @@ void search_clear_all(void) {
 
 int repl_search_row_count(void) {
     int num_cmds = repl_state_document_count();
-    if (repl_state_insert_mode() || repl_state_edit_line() == num_cmds)
+    if (editor_insert_mode() || repl_state_edit_line() == num_cmds)
         return num_cmds + 1;
     return num_cmds;
 }
@@ -289,7 +289,7 @@ const char *repl_search_row_text(int row_idx) {
         return "";
     if (search_row_is_live_input(row_idx))
         return editor_state_input().input;
-    if (repl_state_insert_mode() && row_idx > edit_line)
+    if (editor_insert_mode() && row_idx > edit_line)
         row_idx--;
     /* Source text lives in the editor buffer. */
     const char *text = editor_buffer_line(row_idx);

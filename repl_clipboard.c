@@ -146,7 +146,7 @@ static int current_cut_range(int *out_start, int *out_count) {
 }
 
 void repl_clipboard_copy_current(void) {
-    if (repl_state_insert_mode()) {
+    if (editor_insert_mode()) {
         repl_clipboard_clear_selection();
         return;
     }
@@ -202,7 +202,7 @@ void repl_clipboard_cut_current(void) {
     int start;
     int count;
 
-    if (repl_state_insert_mode()) {
+    if (editor_insert_mode()) {
         repl_clipboard_clear_selection();
         return;
     }
@@ -243,7 +243,7 @@ void repl_clipboard_paste_current(void) {
             ReplCommandStore store = repl_command_store_live();
             int edit = repl_state_edit_line();
             int n = repl_state_document_count();
-            int pos = repl_state_insert_mode() ? edit :
+            int pos = editor_insert_mode() ? edit :
                       (edit < n ? edit : n);
             const char *lines[MAX_COMMANDS];
 
@@ -256,7 +256,7 @@ void repl_clipboard_paste_current(void) {
                 return;
             }
             repl_state_edit_line_set(pos + editor_state_clipboard_count());
-            repl_state_insert_mode_set(0);
+            editor_insert_mode_set(0);
             load_line_to_input(repl_state_edit_line());
             mark_normals_dirty();
         }

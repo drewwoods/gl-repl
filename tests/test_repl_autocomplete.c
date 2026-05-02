@@ -37,7 +37,7 @@ static void set_input_text(const char *text) {
     ReplEditorInputState *inp = editor_state_input_mut();
     strcpy(inp->input, text);
     inp->input_len = (int)strlen(inp->input);
-    repl_state_cursor_pos_set(inp->input_len);
+    editor_cursor_pos_set(inp->input_len);
 }
 
 static int has_insert_match(const char *text) {

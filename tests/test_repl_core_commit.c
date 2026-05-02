@@ -324,15 +324,15 @@ int main(void) {
     repl_feed_line_public("glBegin(GL_POINTS);");
     repl_feed_line_public("glEnd();");
     repl_navigate_to_line(1);
-    repl_state_cursor_pos_set(0);
+    editor_cursor_pos_set(0);
     repl_keyboard_func('\r', 0, 0);
-    ASSERT_TRUE("enter at line start enters insert mode", repl_state_insert_mode() == 1);
+    ASSERT_TRUE("enter at line start enters insert mode", editor_insert_mode() == 1);
     ASSERT_TRUE("enter at line start keeps insertion index", repl_state_edit_line() == 1);
     {
         ReplEditorInputState *inp = editor_state_input_mut();
         strcpy(inp->input, "glColor3f(1, 0, 0)");
         inp->input_len = (int)strlen(inp->input);
-        repl_state_cursor_pos_set(inp->input_len);
+        editor_cursor_pos_set(inp->input_len);
     }
     repl_keyboard_func('\r', 0, 0);
     ASSERT_TRUE("inserted line before current cmd count", repl_state_document_count() == 3);
@@ -343,9 +343,9 @@ int main(void) {
     repl_feed_line_public("glBegin(GL_POINTS);");
     repl_feed_line_public("glEnd();");
     repl_navigate_to_line(0);
-    repl_state_cursor_pos_set(repl_state_input_len());
+    editor_cursor_pos_set(editor_input_len());
     repl_keyboard_func('\r', 0, 0);
-    ASSERT_TRUE("enter away from line start still inserts after", repl_state_insert_mode() == 1 && repl_state_edit_line() == 1);
+    ASSERT_TRUE("enter away from line start still inserts after", editor_insert_mode() == 1 && repl_state_edit_line() == 1);
 
     repl_reset_state(); declare_test_vars();
     repl_feed_line_public("glBegin(GL_POINTS);");
@@ -355,7 +355,7 @@ int main(void) {
         int cursor_pos = -1;
         ui_panels_handle_code_panel_press(CODE_MARGIN_X + 1, code_panel_mouse_y_for_cmd(0), &cursor_pos);
         if (cursor_pos >= 0)
-            repl_state_cursor_pos_set(cursor_pos);
+            editor_cursor_pos_set(cursor_pos);
     }
     ASSERT_TRUE("mouse press selects current line for edit", repl_state_edit_line() == 0);
     ASSERT_TRUE("mouse press starts with no selection", !repl_clipboard_sel_active());
@@ -382,9 +382,9 @@ int main(void) {
         int cursor_pos = ui_panels_handle_code_panel_click(text_x + indent * FONT_W + 1,
                                                            code_panel_mouse_y_for_cmd(1));
         if (cursor_pos >= 0)
-            repl_state_cursor_pos_set(cursor_pos);
+            editor_cursor_pos_set(cursor_pos);
         ASSERT_TRUE("clicking indented active line keeps cursor at first char",
-                    repl_state_cursor_pos() == 0);
+                    editor_cursor_pos() == 0);
         ASSERT_TRUE("clicking indented active line selects correct line",
                     repl_state_edit_line() == 1);
     }
@@ -392,11 +392,11 @@ int main(void) {
     repl_reset_state(); declare_test_vars();
     repl_feed_line_public("glBegin(GL_POINTS);");
     repl_navigate_to_line(0);
-    repl_state_cursor_pos_set(4);
+    editor_cursor_pos_set(4);
     repl_keyboard_func(1, 0, 0);
-    ASSERT_TRUE("ctrl-a moves to line start", repl_state_cursor_pos() == 0);
+    ASSERT_TRUE("ctrl-a moves to line start", editor_cursor_pos() == 0);
     repl_keyboard_func(5, 0, 0);
-    ASSERT_TRUE("ctrl-e moves to line end", repl_state_cursor_pos() == repl_state_input_len());
+    ASSERT_TRUE("ctrl-e moves to line end", editor_cursor_pos() == editor_input_len());
     {
         int before = repl_state_presentation().code_panel_layout;
         repl_keyboard_func(2, 0, 0);
@@ -942,7 +942,7 @@ int main(void) {
     repl_feed_line_public("glVertex3f(1, 2, 3);");
     repl_feed_line_public("}");
     repl_state_edit_line_set(0);
-    repl_state_insert_mode_set(0);
+    editor_insert_mode_set(0);
     g_status[0] = '\0';
     repl_feed_line_public("func0(z) {");
     ASSERT_TRUE("func def overwrite: still CMD_FUNC_DEF",

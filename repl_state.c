@@ -82,7 +82,7 @@ static ReplRuntimeState g_repl_state;
 /* g_input / g_cursor_pos / g_newline_buf / g_newline_len / g_inserting
  * macros removed (Phase 1 commit 5). The editor_input slice now lives
  * on g_editor_state.input in editor_state.c, where the dependent
- * convenience getters (repl_state_input_text, _cursor_pos,
+ * convenience getters (editor_input_text, _cursor_pos,
  * _insert_mode, _pending_newline_*, etc.) are also implemented. */
 /* g_clipboard / g_clipboard_count / g_sel_anchor / g_sel_end macros
  * removed (Phase 1 commit 6). The selection + clipboard slices live

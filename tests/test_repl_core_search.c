@@ -47,7 +47,7 @@ static void set_live_input(const char *text) {
     strncpy(inp->input, text, MAX_INPUT_LEN - 1);
     inp->input[MAX_INPUT_LEN - 1] = '\0';
     inp->input_len = (int)strlen(inp->input);
-    repl_state_cursor_pos_set(inp->input_len);
+    editor_cursor_pos_set(inp->input_len);
 }
 
 int main(void) {
@@ -209,7 +209,7 @@ int main(void) {
     repl_reset_state(); declare_test_vars();
     repl_feed_line_public("glBegin(GL_POINTS);");
     repl_feed_line_public("glEnd();");
-    repl_state_insert_mode_set(1);
+    editor_insert_mode_set(1);
     repl_state_edit_line_set(1);
     ASSERT_TRUE("row count inserting includes input row",
                 repl_search_row_count() == repl_state_document_count() + 1);
