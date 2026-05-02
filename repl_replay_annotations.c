@@ -79,7 +79,7 @@ static void repl_replay_annotations_invalidate(void) {
 }
 
 /* Find the most recent flat command for a source line, at or before replay_pc */
-int repl_replay_annotation_flat_cmd_for_source(int src_line) {
+static int repl_replay_annotation_flat_cmd_for_source(int src_line) {
     ReplReplayRuntimeState replay = repl_state_replay();
 
     if (replay.pc <= 0) return -1;
@@ -685,9 +685,9 @@ int repl_replay_code_panel_get_command_display_text(int cmd_idx, char *out, int 
     return 1;
 }
 
-int repl_replay_build_subst_annotation(int cmd_idx, int flat_idx,
-                                         char *subst, int subst_size,
-                                         char *var_comment, int comment_size) {
+static int repl_replay_build_subst_annotation(int cmd_idx, int flat_idx,
+                                              char *subst, int subst_size,
+                                              char *var_comment, int comment_size) {
     ReplReplayRuntimeState replay = repl_state_replay();
     float predef_vals[MAX_PREDEF_VARS];
     ExprVar visible_vars[MAX_PREDEF_VARS + MAX_EXPR_VARS];
@@ -718,8 +718,8 @@ int repl_replay_build_subst_annotation(int cmd_idx, int flat_idx,
                               visible_vars, nv);
 }
 
-int repl_replay_build_eval_annotation(int cmd_idx, int flat_idx,
-                                        char *eval_buf, int eval_size) {
+static int repl_replay_build_eval_annotation(int cmd_idx, int flat_idx,
+                                             char *eval_buf, int eval_size) {
     ReplReplayRuntimeState replay = repl_state_replay();
     float predef_vals[MAX_PREDEF_VARS];
     ExprVar visible_vars[MAX_PREDEF_VARS + MAX_EXPR_VARS];
