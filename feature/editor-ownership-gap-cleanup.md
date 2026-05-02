@@ -231,7 +231,8 @@ mirrors the gates that have come online.
 | Phase | Audit / gate landed |
 |---|---|
 | 0 | `make audit-editor-ownership` (informational; commit 1, 2026-05-02); baseline counts recorded (commit 2, 2026-05-02) |
-| 1–5 | pending |
+| 1.1 | EditorState + UiState scaffold landed (commit 3, 2026-05-02); slice migrations 4–7 pending |
+| 1.2–5 | pending |
 
 ## Phase 0: Add Audits Before Moving Code
 

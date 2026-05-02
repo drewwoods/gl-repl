@@ -376,8 +376,9 @@ Branch: `feature/editor-ownership-gap-cleanup`. Tracked against the
 |---|---|---|
 | 1 | tools: add editor ownership audit report | ✅ landed (2026-05-02) |
 | 2 | docs: record baseline editor ownership audit counts | ✅ landed (2026-05-02) |
-| 3 | refactor: add EditorState + UiState storage with compatibility forwarders | next |
-| 4–17 | (slice migrations → store text drop → compile gate → UiAction → renames → hard guards) | pending |
+| 3 | refactor: add EditorState + UiState storage + compatibility forwarders | ✅ landed (2026-05-02) |
+| 4 | refactor: migrate editor_buffer accessors to editor namespace | next |
+| 5–17 | (input/cursor → selection/clipboard → status/UI slices → store text drop → compile gate → UiAction → renames → hard guards) | pending |
 
 ## Phase 0 — Audits Before Moving Code
 
@@ -474,6 +475,21 @@ slice-by-slice migrations rather than one giant rename, with
 compatibility wrappers that delete in 1.x.
 
 ### 1.1 Add new state structs and compatibility wrappers
+
+✅ **Landed (commit 3).** Initial scaffold uses just `editor_state.{c,h}`
+and `ui_state.{c,h}`; the optional `_views.h` / `_owners.h` splits are
+deferred until a slice has enough surface to warrant them. Each struct
+holds a `_phase1_scaffold_placeholder` field that is removed when the
+first real slice migrates into it (commit 4 for `EditorState`, commit 7
+for `UiState`).
+
+`repl_state.c` calls `editor_state_reset()` and `ui_state_reset()` from
+`repl_state_reset_all()` so every test reset clears all three structs.
+`ui_state_reset` is forward-declared rather than included, because
+`check-controller-boundaries` forbids `repl_*.c` from depending on the
+`ui_*` layer. The hookup migrates to the controller along with the
+slices once Phase 1 commit 7 lands and `g_repl_state` no longer hosts
+any UI-shaped state.
 
 Add files:
 
