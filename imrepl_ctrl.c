@@ -18,8 +18,11 @@
 #include "ui_menu_bar.h"
 #include "ui_panels.h"
 #include "ui_snapshot.h"
+#include "repl_clipboard.h"
+#include "repl_code_panel_document.h"
 #include "repl_export.h"
 #include "repl_layout.h"
+#include "repl_source_scope.h"
 #include "ui_profile_panel.h"
 #include "ui_variable_panel.h"
 #include "prof.h"
@@ -371,6 +374,18 @@ static void imrepl_ctrl_build_ui_snapshot(UiRenderSnapshot *snap) {
     snap->editor_transformers = repl_state_editor_transformers();
     snap->editor_highlights = repl_state_editor_highlights();
     snap->editor_virtual_lines = repl_state_editor_virtual_lines();
+
+    /* Selection range materialized once for the per-row code-panel branch. */
+    snap->selection_active = repl_clipboard_sel_active();
+    snap->selection_lo     = snap->selection_active ? repl_clipboard_sel_lo() : -1;
+    snap->selection_hi     = snap->selection_active ? repl_clipboard_sel_hi() : -1;
+
+    /* Indent + statusbar metadata so the render path does not call back
+     * into repl_source_scope_* / repl_code_panel_document_* per row. */
+    snap->active_indent_chars   = repl_code_panel_document_active_indent_chars();
+    snap->trailing_indent_chars = repl_source_scope_cmd_indent_chars(snap->document_count);
+    snap->in_begin_block        = repl_source_scope_in_begin_block();
+    snap->current_begin_mode    = current_begin_mode();
 }
 
 void imrepl_ctrl_display_frame(void) {

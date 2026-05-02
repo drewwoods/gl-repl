@@ -9,7 +9,6 @@
 #include "repl_state_views.h"
 #include "repl_export.h"
 #include "repl_layout.h"
-#include "repl_source_scope.h"
 #include "ui_color_picker.h"
 #include "repl_code_panel_document.h"
 #include "repl_core.h"
@@ -412,8 +411,8 @@ static void code_panel_draw_row_overlays(const CodePanelRowCtx *ctx, int i) {
                 1.0f + 3.0f, (float)(ctx->line_y - 3) + (float)LINE_H);
         glDisable(GL_BLEND);
     }
-    if (repl_clipboard_sel_active() &&
-        i >= repl_clipboard_sel_lo() && i <= repl_clipboard_sel_hi()) {
+    if (ctx->snap->selection_active &&
+        i >= ctx->snap->selection_lo && i <= ctx->snap->selection_hi) {
         glEnable(GL_BLEND);
         glColor4f(0.20f, 0.30f, 0.50f, 0.55f);
         glRectf(0.0f, (float)(ctx->line_y - 3),
@@ -509,7 +508,15 @@ static void code_panel_draw_command_row(CodePanelRowCtx *ctx, int i,
                                         int primitive_vnums_exact) {
     const GLCmd *document_cmds = ctx->snap->document_cmds;
     char display_text[MAX_INPUT_LEN];
-    int  search_row_idx = repl_search_row_for_cmd_index(i);
+    /* Search row index: shifted by one when an insert preview row sits
+     * before this command. Pure function of snap fields. */
+    int search_row_idx;
+    if (i < 0 || i >= ctx->snap->document_count)
+        search_row_idx = -1;
+    else if (ctx->snap->insert_mode && i >= ctx->snap->edit_line)
+        search_row_idx = i + 1;
+    else
+        search_row_idx = i;
     repl_replay_code_panel_get_command_display_text(i, display_text,
                                                     sizeof(display_text));
 
@@ -552,7 +559,7 @@ static void code_panel_draw_trailing_newline(CodePanelRowCtx *ctx,
     if (is_edit_nl) {
         render_active_input_rows(ctx->snap, ctx->panel_w, ctx->text_x, ctx->idx_x,
                                  ctx->visible_lines, ctx->file_line,
-                                 repl_code_panel_document_active_indent_chars(),
+                                 ctx->snap->active_indent_chars,
                                  NULL,
                                  edit_line,
                                  &ctx->cur, &ctx->line_y);
@@ -560,8 +567,9 @@ static void code_panel_draw_trailing_newline(CodePanelRowCtx *ctx,
         code_panel_draw_gutter_lineno(ctx->line_y, ctx->file_line);
         glColor3f(0.28f, 0.28f, 0.35f);
         char ind_s[32];
-        int  nc = repl_source_scope_cmd_indent_chars(document_count);
+        int  nc = ctx->snap->trailing_indent_chars;
         if (nc > 31) nc = 31;
+        if (nc < 0)  nc = 0;
         memset(ind_s, ' ', (size_t)nc);
         ind_s[nc] = '\0';
         gl2d_draw_string((float)ctx->text_x, (float)ctx->line_y, ind_s, FONT_MONO);
@@ -645,9 +653,9 @@ static void code_panel_draw_statusbar(const UiRenderSnapshot *snap,
     char ln_buf[64];
     if (insert_mode)
         snprintf(ln_buf, sizeof(ln_buf), "Ln %d [INSERT]", edit_line + 1);
-    else if (repl_source_scope_in_begin_block())
+    else if (snap->in_begin_block)
         snprintf(ln_buf, sizeof(ln_buf), "Ln %d  %s",
-                 edit_line + 1, mode_name(current_begin_mode()));
+                 edit_line + 1, mode_name(snap->current_begin_mode));
     else
         snprintf(ln_buf, sizeof(ln_buf), "Ln %d", edit_line + 1);
     glColor3f(0.627f, 0.627f, 0.627f);

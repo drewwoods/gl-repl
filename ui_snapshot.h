@@ -85,6 +85,20 @@ typedef struct UiRenderSnapshot {
     const EditorTransformerList *editor_transformers;
     const EditorHighlightList   *editor_highlights;
     const EditorVirtualLineList *editor_virtual_lines;
+
+    /* Selection range materialized once so the per-row branch in the
+     * code panel does not call back into clipboard helpers. */
+    int                         selection_active;
+    int                         selection_lo;
+    int                         selection_hi;
+
+    /* Indent + statusbar derived state. The controller computes these
+     * once per frame from the depth cache so the render path does not
+     * re-derive them per row or call into repl_source_scope_*. */
+    int                         active_indent_chars;
+    int                         trailing_indent_chars;
+    int                         in_begin_block;
+    GLenum                      current_begin_mode;
 } UiRenderSnapshot;
 
 #endif /* UI_SNAPSHOT_H */
