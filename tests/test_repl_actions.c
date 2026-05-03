@@ -1,6 +1,7 @@
 #include "repl_actions.h"
 #include "repl_state.h"
 #include "ui_state.h"
+#include "editor_help_session.h"
 #include "repl_config.h"
 #include "repl_audio.h"
 #include "repl_core.h"
@@ -51,25 +52,24 @@ static void test_cursor_actions(void) {
 
 static void test_help_tab_actions(void) {
     repl_reset_state();
-    ReplHelpState *help = ui_state_help_mut();
-    help->tab_idx = 0;
-    help->scroll = 50;
+    editor_help_session_set_tab(0);
+    editor_help_session_set_scroll(50);
 
     repl_action_help_tab_next();
-    ASSERT_INT("help tab next moves to 1", help->tab_idx, 1);
-    ASSERT_INT("help tab next resets scroll", help->scroll, 0);
+    ASSERT_INT("help tab next moves to 1", editor_help_session_tab_idx(), 1);
+    ASSERT_INT("help tab next resets scroll", editor_help_session_scroll(), 0);
 
-    help->scroll = 30;
+    editor_help_session_set_scroll(30);
     repl_action_help_tab_next();
-    ASSERT_INT("help tab next stays at 1 (max)", help->tab_idx, 1);
+    ASSERT_INT("help tab next stays at 1 (max)", editor_help_session_tab_idx(), 1);
 
     repl_action_help_tab_prev();
-    ASSERT_INT("help tab prev moves to 0", help->tab_idx, 0);
-    ASSERT_INT("help tab prev resets scroll", help->scroll, 0);
+    ASSERT_INT("help tab prev moves to 0", editor_help_session_tab_idx(), 0);
+    ASSERT_INT("help tab prev resets scroll", editor_help_session_scroll(), 0);
 
-    help->scroll = 20;
+    editor_help_session_set_scroll(20);
     repl_action_help_tab_prev();
-    ASSERT_INT("help tab prev stays at 0", help->tab_idx, 0);
+    ASSERT_INT("help tab prev stays at 0", editor_help_session_tab_idx(), 0);
 }
 
 int g_stub_modifiers = 0;

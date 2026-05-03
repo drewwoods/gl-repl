@@ -2,6 +2,7 @@
 #include "repl_state.h"
 
 #include "editor_state.h"
+#include "editor_help_session.h"
 #include "variable_panel.h"
 #include "replay_state.h"
 #include "repl_command_store.h"
@@ -560,6 +561,7 @@ void repl_state_reset_all(void) {
     ui_state_reset();
     variable_panel_state_reset();
     replay_state_reset();
+    editor_help_session_reset();
     repl_state_bind_eval_predef_storage();
     repl_scenes_reset();
     reset_time_state();

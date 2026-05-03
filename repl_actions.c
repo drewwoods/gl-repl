@@ -15,6 +15,7 @@
 #include "repl_editor.h"
 #include "repl_keys.h"
 #include "replay_state.h"
+#include "editor_help_session.h"
 #include "repl_pipeline.h"
 #include "repl_state.h"
 #include "ui_panels.h"
@@ -245,20 +246,18 @@ void repl_action_set_cursor_pixel(int px, int py) {
 }
 
 void repl_action_help_tab_next(void) {
-    ReplHelpState *help = ui_state_help_mut();
-
-    if (help->tab_idx < 1) {
-        help->tab_idx++;
-        help->scroll = 0;
+    int tab = editor_help_session_tab_idx();
+    if (tab < 1) {
+        editor_help_session_set_tab(tab + 1);
+        editor_help_session_set_scroll(0);
     }
 }
 
 void repl_action_help_tab_prev(void) {
-    ReplHelpState *help = ui_state_help_mut();
-
-    if (help->tab_idx > 0) {
-        help->tab_idx--;
-        help->scroll = 0;
+    int tab = editor_help_session_tab_idx();
+    if (tab > 0) {
+        editor_help_session_set_tab(tab - 1);
+        editor_help_session_set_scroll(0);
     }
 }
 

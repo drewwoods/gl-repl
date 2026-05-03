@@ -333,6 +333,7 @@ static void imrepl_ctrl_build_ui_snapshot(UiRenderSnapshot *snap) {
     snap->presentation   = repl_state_presentation();
     snap->code_panel     = ui_state_code_panel();
     snap->help           = ui_state_help();
+    snap->help_session   = editor_help_session_view();
     snap->variable_panel = variable_panel_view();
     snap->profile_panel  = ui_state_profile_panel();
     snap->status         = ui_state_status();

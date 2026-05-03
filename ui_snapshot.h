@@ -23,6 +23,7 @@
 
 #include "sample.h"
 #include "editor_state.h"  /* ReplEditorInputView (Phase 1 commit 5) */
+#include "editor_help_session.h"
 #include "repl_state_views.h"
 #include "repl_eval.h"
 #include "repl_core.h"
@@ -35,6 +36,7 @@ typedef struct UiRenderSnapshot {
     ReplPresentationState       presentation;
     ReplCodePanelRuntimeState   code_panel;
     ReplHelpState               help;
+    EditorHelpSession           help_session;
     ReplVariablePanelState      variable_panel;
     ReplProfilePanelState       profile_panel;
     ReplStatusState             status;
