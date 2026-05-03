@@ -53,32 +53,32 @@ static int function_leading_comment_start(int pos) {
     return start;
 }
 
-static void apply_func_decl_resume(CmdType end_type) {
-    if (end_type != CMD_FUNC_END || g_func_decl_resume_delta <= 0)
-        return;
+/* apply_func_decl_resume removed: callers (close_brace) now route
+ * through editor_commit_apply_plan which consumes the delta as part
+ * of the plan's editor post-effects. The remaining static helper is
+ * func_def's setter and Enter-while-inserting-at-func-end via
+ * repl_commit_resolve_insert_exit_target — both still touch the
+ * global directly, slated for Phase D commit 26d. */
 
-    repl_state_edit_line_set(repl_state_edit_line() + (g_func_decl_resume_delta));
-    if (repl_state_edit_line() > repl_state_document_count())
-        repl_state_edit_line_set(repl_state_document_count());
+int repl_commit_func_decl_resume_delta_peek(void) {
+    return g_func_decl_resume_delta;
+}
+
+int repl_commit_func_decl_resume_delta_take(void) {
+    int delta = g_func_decl_resume_delta;
     g_func_decl_resume_delta = 0;
+    return delta;
 }
 
 static void fill_scope_indent(int pos, char *buf, int buf_sz) {
     repl_source_scope_cmd_indent(pos, buf, buf_sz);
 }
 
-static void fill_scope_close_indent(int pos, char *buf, int buf_sz) {
-    repl_source_scope_cmd_indent(pos, buf, buf_sz);
-    int len = (int)strlen(buf);
-    if (len >= 2)
-        len -= 2;
-    else
-        len = 0;
-    if (len > buf_sz - 1)
-        len = buf_sz - 1;
-    memset(buf, ' ', (size_t)len);
-    buf[len] = '\0';
-}
+/* fill_scope_close_indent removed: close_brace migrated to
+ * editor_compile_close_brace which has its own static
+ * close_brace_indent. Other callers (none today; future func/for/if
+ * close-brace migrations land in 26c-26e) compute the indent
+ * inside the editor compile path. */
 
 
 int repl_commit_resolve_insert_exit_target(int target) {
@@ -817,100 +817,37 @@ int try_commit_if_block(void) {
 }
 
 int try_commit_close_brace(void) {
-    const char *p = editor_state_input().input;
-    while (*p && isspace((unsigned char)*p))
-        p++;
-    if (*p != '}')
-        return 0;
+    /* Phase D commit 26b migration: dispatch through the
+     * compile/apply pair. The compile step (editor_compile_close_brace)
+     * inspects the input and current scope state and produces an
+     * EditorCommitPlan; editor_commit_apply_plan replays the REPL
+     * change + editor post-effects atomically.
+     *
+     * Returns 0 (input not recognized as a close-brace) on
+     * NO_CHANGE, matching the legacy contract.
+     */
+    ReplCompileContext ctx = repl_compile_context_from_live();
+    EditorCommitPlan plan;
+    char err[REPL_STATUS_TEXT_MAX];
 
-    {
-        int pos = editor_insert_mode() ? repl_state_edit_line() :
-                  (repl_state_edit_line() < repl_state_document_count() ? repl_state_edit_line() : repl_state_document_count());
-        CmdType open_type = repl_source_scope_nearest_open_block_at(pos);
-        CmdType end_type;
-        const char *label;
-        char indent[32];
-        char fe_text[MAX_LINE_LEN] = "";
-        GLCmd fe;
-
-        if (open_type == CMD_TYPE_COUNT)
-            return 0;
-
-        if (open_type == CMD_FOR_BEGIN) {
-            end_type = CMD_FOR_END;
-            label = "for-loop";
-        } else if (open_type == CMD_FUNC_DEF) {
-            end_type = CMD_FUNC_END;
-            label = "func def";
-        } else if (open_type == CMD_IF_BEGIN) {
-            end_type = CMD_IF_END;
-            label = "if-block";
-        } else {
-            return 0;
-        }
-
-        /* Reuse an existing synthesized end marker even if we're no longer
-         * in insert mode (e.g. after closing an inner block). Otherwise a
-         * function/if/for close brace can duplicate the trailing end command. */
-        if (pos < repl_state_document_count() && repl_state_document_cmds_mut()[pos].type == end_type) {
-            int keep_inserting = (g_func_decl_resume_delta > 0 &&
-                                  end_type != CMD_FUNC_END);
-            repl_state_edit_line_set(pos + 1);
-            apply_func_decl_resume(end_type);
-            editor_insert_mode_set(keep_inserting ? 1 : 0);
-            {
-                ReplEditorInputState *inp = editor_state_input_mut();
-                inp->input[0] = '\0';
-                inp->input_len = 0;
-            }
-            editor_cursor_pos_set(0);
-            load_line_to_input(repl_state_edit_line());
-            {
-                char msg[64];
-                snprintf(msg, sizeof(msg), "%s block closed", label);
-                set_status(msg);
-            }
-            mark_normals_dirty();
-            return 1;
-        }
-
-        fill_scope_close_indent(pos, indent, sizeof(indent));
-
-        memset(&fe, 0, sizeof(fe));
-        fe.type = end_type;
-        fe.valid = 1;
-        snprintf(fe_text, sizeof(fe_text), "%s}", indent);
-
-        ReplCommandStore store = repl_command_store_live();
-        if (!repl_command_store_insert_one(&store, pos, &fe, 0)) {
-            set_status("Command buffer full!");
-            return 1;
-        }
-        editor_buffer_insert_line(pos, fe_text);
-        int keep_inserting = (g_func_decl_resume_delta > 0 &&
-                              end_type != CMD_FUNC_END);
-        repl_state_edit_line_set(pos + 1);
-        apply_func_decl_resume(end_type);
-        editor_insert_mode_set(keep_inserting ? 1 : 0);
-        {
-            ReplEditorInputState *inp = editor_state_input_mut();
-            inp->input[0] = '\0';
-            inp->input_len = 0;
-        }
-        editor_cursor_pos_set(0);
-        {
-            ReplEditorInputState *inp = editor_state_input_mut();
-            inp->pending_newline[0] = '\0';
-            inp->pending_newline_len = 0;
-        }
-        {
-            char msg[64];
-            snprintf(msg, sizeof(msg), "%s block closed", label);
-            set_status(msg);
-        }
-        mark_normals_dirty();
+    ReplCompileResult r = editor_compile_close_brace(editor_state_input().input,
+                                                     &ctx, &plan,
+                                                     err, sizeof(err));
+    if (r == REPL_COMPILE_OK &&
+        plan.change.kind == REPL_COMPILED_NO_CHANGE &&
+        !plan.commit_message_valid)
+        return 0;  /* not a close-brace context */
+    if (r != REPL_COMPILE_OK) {
+        set_status(err);
         return 1;
     }
+
+    if (!editor_commit_apply_plan(&plan)) {
+        set_status("Command buffer full!");
+        return 1;
+    }
+    mark_normals_dirty();
+    return 1;
 }
 
 /* Block-structural commit handlers: `}`, `for(`, `funcN`, `if(`.

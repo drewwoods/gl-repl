@@ -38,9 +38,9 @@
 #ifndef EDITOR_COMMIT_H
 #define EDITOR_COMMIT_H
 
-#include "repl_state_views.h"  /* REPL_STATUS_TEXT_MAX */
+#include "repl_compile.h"     /* ReplCompiledChange, ReplCompileContext, ReplCompileResult */
+#include "repl_state_views.h" /* REPL_STATUS_TEXT_MAX */
 
-struct ReplCompiledChange_s;
 struct EditorServices_s;
 
 /* Result of an editor commit attempt. The booleans say what
@@ -86,5 +86,108 @@ EditorCommitResult editor_commit_current_input(const struct EditorServices_s *se
  *
  * Does not call set_status; callers surface diagnostics. */
 int editor_commit_apply_compiled_change(const struct ReplCompiledChange_s *change);
+
+/* ---- Editor commit plan: REPL change + editor side-effects ----- */
+/*
+ * Structured-block commits (close-brace, if-block, func-def,
+ * for-loop) need cursor / insert-mode / input-clear / pending-
+ * newline side-effects in addition to the REPL source-command
+ * change. Putting those on `ReplCompiledChange` would let the
+ * REPL pipeline tests learn cursor mechanics and re-mix the
+ * compile/apply split. Instead the editor wraps the REPL change
+ * with a sibling editor-side struct:
+ *
+ *   ReplCompiledChange       describes source-command level
+ *                            mutations (insert/replace/delete/load).
+ *   EditorCommitPostEffects  describes editor cursor/mode/input
+ *                            effects to replay after the REPL
+ *                            mutation lands.
+ *   EditorCommitPlan         wraps both halves plus the success
+ *                            commit_message.
+ *
+ * Editor-side compile functions (`editor_compile_close_brace`, and
+ * the structured-block functions added in Phase D commits 26c-26e)
+ * return `EditorCommitPlan`. `editor_commit_apply_plan` drives the
+ * canonical transaction: preflight → undo capture → REPL apply →
+ * editor-buffer apply → editor post-effects.
+ *
+ * Pure-REPL handlers (float-decl, var-assign) keep returning
+ * `ReplCompiledChange`; their minimal post-mutation housekeeping
+ * (clear input, reset cursor pos) is covered by
+ * `editor_commit_current_input`. They don't need the plan wrapper.
+ */
+
+#define EDITOR_COMMIT_NO_CURSOR_CHANGE      (-1)
+#define EDITOR_COMMIT_NO_INSERT_MODE_CHANGE (-1)
+
+typedef struct EditorCommitPostEffects_s {
+    /* Desired edit_line after the REPL apply lands. -1 means leave
+     * the cursor where it is. */
+    int cursor_target;
+
+    /* -1 = no change, 0 = exit insert mode, 1 = enter insert mode. */
+    int insert_mode_target;
+
+    /* Drop g_input + reset cursor_pos to 0. */
+    int clear_input;
+
+    /* Drop the pending-newline scratch buffer. */
+    int clear_pending_newline;
+
+    /* After the cursor target lands, call load_line_to_input(...)
+     * to repopulate g_input from the new edit-line's text. */
+    int load_line_after_apply;
+
+    /* `apply_func_decl_resume` applies a stashed delta to edit_line
+     * after a func-def's close-brace lands. The compile step
+     * captures the delta here so apply doesn't rely on the
+     * `g_func_decl_resume_delta` global being read at apply time.
+     *
+     * The full eradication of the global lives in commit 26d
+     * (func_def migration); for close_brace the compile step
+     * reads the global as input and writes the value into this
+     * field, and apply consumes + clears the global. */
+    int func_decl_resume_advance;
+
+    /* CmdType-shaped value identifying the block kind. Used by
+     * the func-decl-resume guard ("only fire on CMD_FUNC_END") and
+     * by status-message formatting. */
+    int end_type;
+} EditorCommitPostEffects;
+
+typedef struct EditorCommitPlan_s {
+    ReplCompiledChange      change;
+    EditorCommitPostEffects effects;
+    int                     commit_message_valid;
+    char                    commit_message[REPL_STATUS_TEXT_MAX];
+} EditorCommitPlan;
+
+/* Initialize a plan to neutral defaults: NO_CHANGE on the REPL
+ * side, "no change" sentinels on every editor effect. Callers
+ * fill in the fields they need. */
+void editor_commit_plan_init(EditorCommitPlan *plan);
+
+/* Apply an EditorCommitPlan atomically:
+ *   1. Preflight `plan->change` via repl_apply_can_apply_compiled_change.
+ *      If the preflight fails (or the plan is NULL) returns 0
+ *      with no mutation.
+ *   2. Capture undo pre-state.
+ *   3. Apply the REPL halves (predef ops + editor-buffer apply +
+ *      REPL cmd-store apply).
+ *   4. Apply editor post-effects in order: cursor_target →
+ *      func-decl-resume → insert_mode_target → clear_input →
+ *      clear_pending_newline → load_line_after_apply → status.
+ * Returns 1 on success, 0 on preflight failure. */
+int editor_commit_apply_plan(const EditorCommitPlan *plan);
+
+/* Editor-side compile entry points. These are the structured-block
+ * counterparts to repl_compile_*; they return EditorCommitPlan
+ * (REPL change + editor effects) rather than bare
+ * ReplCompiledChange. */
+
+ReplCompileResult editor_compile_close_brace(const char *input,
+                                             const ReplCompileContext *ctx,
+                                             EditorCommitPlan *out,
+                                             char *err, int err_size);
 
 #endif /* EDITOR_COMMIT_H */

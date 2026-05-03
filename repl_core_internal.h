@@ -263,6 +263,14 @@ void repl_scenes_reset(void);
  * Ordering matters: see ARCHITECTURE.md "Structured block commits". */
 void repl_commit_reset_transients(void);
 int  repl_commit_resolve_insert_exit_target(int target);
+
+/* func-decl resume bookkeeping. Phase D commit 26b lifts these out
+ * of static-helper land so editor_commit.c can stash the delta into
+ * an EditorCommitPlan's post-effects + apply consumes the global
+ * here. Phase D commit 26d (func_def migration) folds the read+set
+ * portion into compile too, eliminating the global. */
+int  repl_commit_func_decl_resume_delta_take(void);   /* read + clear */
+int  repl_commit_func_decl_resume_delta_peek(void);   /* read only */
 int try_commit_float_decl(void);
 int try_assign_variable(void);
 int try_commit_for_loop(void);
