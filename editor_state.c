@@ -1,6 +1,7 @@
 #include "editor_state.h"
 
 #include "repl_compile.h"   /* ReplCompiledChange struct definition */
+#include "variable_panel.h" /* peer subsystem: drag-state bytes live here */
 
 #include <stddef.h>
 #include <string.h>
@@ -33,12 +34,6 @@
             .selected_idx = 0,                        \
             .ghost = "",                              \
             .hint = "",                               \
-        },                                            \
-        .variable_drag = {                            \
-            .var_idx = -1,                            \
-            .log_mode = 0,                            \
-            .start_value = 0.0f,                      \
-            .start_x = 0,                             \
         },                                            \
         .scroll = {                                   \
             .scroll = 0,                              \
@@ -524,16 +519,21 @@ int editor_state_virtual_lines_append(int after_line_idx,
     return 1;
 }
 
+/* Phase F commit 31: variable_drag bytes moved to the variable_panel
+ * peer (variable_panel.c). These accessors stay as thin forwarders
+ * during the migration; remove once call sites use variable_panel_*. */
 ReplVariableDragState editor_state_variable_drag(void) {
-    return g_editor_state.variable_drag;
+    return variable_panel_drag();
 }
 
 ReplVariableDragState *editor_state_variable_drag_mut(void) {
-    return &g_editor_state.variable_drag;
+    return variable_panel_drag_mut();
 }
 
 void editor_state_variable_drag_reset(void) {
-    g_editor_state.variable_drag = g_editor_state_defaults.variable_drag;
+    *variable_panel_drag_mut() = (ReplVariableDragState){
+        .var_idx = -1, .log_mode = 0, .start_value = 0.0f, .start_x = 0,
+    };
 }
 
 EditorScrollState editor_state_scroll(void) {

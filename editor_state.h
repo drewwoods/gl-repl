@@ -150,7 +150,8 @@ typedef struct {
     EditorTransformerList transformers;
     EditorHighlightList   highlights;
     EditorVirtualLineList virtual_lines;
-    ReplVariableDragState variable_drag;
+    /* variable_drag moved to variable_panel.c (Phase F commit 31).
+     * editor_state_variable_drag* accessors forward to the peer. */
     EditorScrollState     scroll;
 } EditorState;
 

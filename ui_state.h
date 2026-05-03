@@ -34,7 +34,9 @@
 typedef struct {
     ReplStatusState           status;
     ReplHelpState             help;
-    ReplVariablePanelState    variable_panel;
+    /* variable_panel visibility moved to variable_panel.c (Phase F
+     * commit 31). ui_state_variable_panel* accessors forward to the
+     * peer. */
     ReplProfilePanelState     profile_panel;
     ReplViewportState         viewport;
     ReplPointerState          pointer;

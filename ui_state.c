@@ -1,19 +1,22 @@
 #include "ui_state.h"
+#include "variable_panel.h" /* peer subsystem: visibility flag lives here */
 
 #include <stddef.h>
 #include <string.h>
 
 /* Defaults preserve the legacy behavior the pre-migration
- * repl_state_defaults.inc enshrined: variable panel visible by
- * default; pointer button starts at -1 (no button held); cursor
- * starts visible so the renderer's blink phase begins ON; camera
- * faces the same orbit/distance the example loader expects on a
- * fresh session; other slices zeroed. */
+ * repl_state_defaults.inc enshrined: pointer button starts at -1
+ * (no button held); cursor starts visible so the renderer's blink
+ * phase begins ON; camera faces the same orbit/distance the example
+ * loader expects on a fresh session; other slices zeroed.
+ *
+ * variable_panel visibility moved to variable_panel.c (Phase F
+ * commit 31); ui_state_variable_panel* accessors forward to that
+ * peer's view slice. */
 #define UI_STATE_INITIAL                                              \
     {                                                                 \
         .status = { .text = "", .ttl = 0 },                           \
         .help = { .visible = 0, .tab_idx = 0, .scroll = 0 },          \
-        .variable_panel = { .visible = 1 },                           \
         .profile_panel = { .mode = PROFILE_PANEL_OFF },               \
         .viewport = { .window_w = 0, .window_h = 0 },                 \
         .pointer = { .mouse_x = 0, .mouse_y = 0, .mouse_button = -1 },\
@@ -95,12 +98,15 @@ void ui_state_help_reset(void) {
     g_ui_state.help = g_ui_state_defaults.help;
 }
 
+/* Phase F commit 31: variable_panel visibility moved to the
+ * variable_panel peer; this accessor forwards. Remove once call
+ * sites use variable_panel_view / variable_panel_visible. */
 ReplVariablePanelState ui_state_variable_panel(void) {
-    return g_ui_state.variable_panel;
+    return variable_panel_view();
 }
 
 ReplVariablePanelState *ui_state_variable_panel_mut(void) {
-    return &g_ui_state.variable_panel;
+    return variable_panel_view_mut();
 }
 
 ReplProfilePanelState ui_state_profile_panel(void) {

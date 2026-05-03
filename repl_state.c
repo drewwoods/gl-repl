@@ -2,6 +2,7 @@
 #include "repl_state.h"
 
 #include "editor_state.h"
+#include "variable_panel.h"
 #include "repl_command_store.h"
 #include "repl_core.h"
 #include "repl_core_internal.h"
@@ -556,9 +557,11 @@ void repl_state_reset_all(void) {
     g_repl_state = g_repl_state_defaults;
     /* Phase 1 scaffold (commit 3): drain the new EditorState and UiState
      * singletons too so every test reset clears all three structs. The
-     * structs are placeholders until commits 4-7 move slices in. */
+     * structs are placeholders until commits 4-7 move slices in. Phase F
+     * commit 31 added the variable_panel peer; reset it alongside. */
     editor_state_reset();
     ui_state_reset();
+    variable_panel_state_reset();
     repl_state_bind_eval_predef_storage();
     repl_scenes_reset();
     reset_time_state();
