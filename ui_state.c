@@ -16,7 +16,7 @@
 #define UI_STATE_INITIAL                                              \
     {                                                                 \
         .status = { .text = "", .ttl = 0 },                           \
-        .help = { .visible = 0, .tab_idx = 0, .scroll = 0 },          \
+        .help = { .visible = 0 },                                     \
         .profile_panel = { .mode = PROFILE_PANEL_OFF },               \
         .viewport = { .window_w = 0, .window_h = 0 },                 \
         .pointer = { .mouse_x = 0, .mouse_y = 0, .mouse_button = -1 },\

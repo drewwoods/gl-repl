@@ -894,7 +894,7 @@ the editor or ui state slices.
 | # | Commit | Status |
 |---|---|---|
 | 34c | refactor: narrow `replay_state` public surface (replay_pc / replay_src_line / replay_machine_state / replay_mode / replay_speed / replay_total_flat / replay_expand_args); migrate single-field readers; `replay_state_view()` reserved for the snapshot-build path | done |
-| 35 | refactor: convert help overlay to `editor_help_session` (read-only editor session backed by content provider; `UiState.help.visible` stays as chrome flag) | pending |
+| 35 | refactor: convert help overlay to `editor_help_session` (tab_idx/scroll moved off `ReplHelpState` into `EditorHelpSession` peer; UiRenderSnapshot.help_session feeds the renderer; `UiState.help.visible` stays as chrome flag) | done |
 | 36 | refactor: introduce `EditorCompletionProvider`; `repl_autocomplete` registers a provider; editor owns popup state | pending |
 
 Phase G signal: editor sessions support both editable source

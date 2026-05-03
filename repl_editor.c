@@ -27,6 +27,7 @@
 #include "repl_undo.h"
 #include "repl_replay.h"
 #include "replay_state.h"
+#include "editor_help_session.h"
 #include "repl_keys.h"
 #include "ui_panels.h"
 #include "repl_layout.h"
@@ -735,8 +736,8 @@ static int handle_escape_key_route(unsigned char key) {
         }
         if (ui_state_help().visible) {
             ui_state_help_mut()->visible = 0;
-            ui_state_help_mut()->tab_idx = 0;
-            ui_state_help_mut()->scroll = 0;
+            editor_help_session_set_tab(0);
+            editor_help_session_set_scroll(0);
         } else if (editor_state_autocomplete().match_count > 0) {
             clear_autocomplete_state();
         } else if (editor_insert_mode()) {
@@ -1327,12 +1328,11 @@ static int handle_horizontal_special_key_route(int key) {
 }
 
 static int handle_vertical_special_key_route(int key) {
-    ReplHelpState *help = ui_state_help_mut();
     ReplAutocompleteState *ac = editor_state_autocomplete_mut();
     switch (key) {
     case GLUT_KEY_UP:
-        if (help->visible) {
-            help->scroll--;
+        if (ui_state_help().visible) {
+            editor_help_session_scroll_by(-1);
             return 1;
         }
         if (ac->match_count > 1) {
@@ -1353,8 +1353,8 @@ static int handle_vertical_special_key_route(int key) {
         }
         return 1;
     case GLUT_KEY_DOWN:
-        if (help->visible) {
-            help->scroll++;
+        if (ui_state_help().visible) {
+            editor_help_session_scroll_by(1);
             return 1;
         }
         if (ac->match_count > 1) {
@@ -1383,8 +1383,8 @@ static int handle_help_toggle_special_key_route(int key) {
     if (key == GLUT_KEY_F1) {
         ReplHelpState *help = ui_state_help_mut();
         help->visible = !help->visible;
-        help->tab_idx = 0;
-        help->scroll = 0;
+        editor_help_session_set_tab(0);
+        editor_help_session_set_scroll(0);
         return 1;
     }
     return 0;
@@ -1439,14 +1439,14 @@ static int handle_page_scroll_special_key_route(int key) {
     switch (key) {
     case GLUT_KEY_PAGE_UP:
         if (ui_state_help().visible)
-            ui_state_help_mut()->scroll -= 5;
+            editor_help_session_scroll_by(-5);
         else
             editor_scroll_set(editor_scroll() - 5);
         editor_scroll_follow_cursor_set(0);
         return 1;
     case GLUT_KEY_PAGE_DOWN:
         if (ui_state_help().visible)
-            ui_state_help_mut()->scroll += 5;
+            editor_help_session_scroll_by(5);
         else
             editor_scroll_set(editor_scroll() + 5);
         editor_scroll_follow_cursor_set(0);
@@ -1690,7 +1690,7 @@ static void mouse_func(int button, int state, int x, int y) {
 static void mousewheel_func(int wheel, int direction, int x, int y) {
     (void)wheel;
     if (ui_state_help().visible) {
-        ui_state_help_mut()->scroll -= direction;
+        editor_help_session_scroll_by(-direction);
     } else {
         if (editor_point_in_code_panel(x, y))
             editor_scroll_set(editor_scroll() - direction);

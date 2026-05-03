@@ -86,10 +86,11 @@ typedef struct {
     int   cursor_py;
 } ReplCodePanelRuntimeState;
 
+/* Help-overlay chrome flag. The session-state fields (tab_idx, scroll)
+ * moved to editor_help_session.c (Phase G commit 35); the renderer
+ * reads them from a separate UiRenderSnapshot.help_session slot. */
 typedef struct {
     int visible;
-    int tab_idx;
-    int scroll;
 } ReplHelpState;
 
 typedef struct {

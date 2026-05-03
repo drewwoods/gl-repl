@@ -2,6 +2,7 @@
 #include "ui_state.h"
 #include "repl_state.h"
 #include "repl_core.h"
+#include "editor_help_session.h"
 #include "ui_help_overlay.h"
 #include "prof.h"
 #include "ui_profile_panel.h"
@@ -38,6 +39,7 @@ static void make_test_ui_snapshot(UiRenderSnapshot *snap) {
     snap->presentation   = repl_state_presentation();
     snap->code_panel     = ui_state_code_panel();
     snap->help           = ui_state_help();
+    snap->help_session   = editor_help_session_view();
     snap->variable_panel = ui_state_variable_panel();
     snap->profile_panel  = ui_state_profile_panel();
     snap->status         = ui_state_status();
@@ -76,8 +78,8 @@ static void test_help_overlay(void) {
 
     ui_state_help_mut()->visible = 1;
     ui_state_viewport_set_size(800, 600);
-    ui_state_help_mut()->tab_idx = 0;
-    ui_state_help_mut()->scroll = 0;
+    editor_help_session_set_tab(0);
+    editor_help_session_set_scroll(0);
 
     gl_stub_counts_reset();
     { UiRenderSnapshot s; make_test_ui_snapshot(&s); ui_help_overlay_render(&s); }
@@ -87,7 +89,7 @@ static void test_help_overlay(void) {
     ASSERT_GL_CALLS("help visible -> enables blending", GL_STUB_glEnable, 1);
 
     /* Switch tabs */
-    ui_state_help_mut()->tab_idx = 1;
+    editor_help_session_set_tab(1);
     gl_stub_counts_reset();
     { UiRenderSnapshot s; make_test_ui_snapshot(&s); ui_help_overlay_render(&s); }
     ASSERT_GL_CALLS("help tab 1 -> draws text", GL_STUB_glRasterPos2f, 10);

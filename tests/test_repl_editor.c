@@ -8,6 +8,7 @@
 #include "repl_replay.h"
 #include "repl_keys.h"
 #include "repl_state.h"
+#include "editor_help_session.h"
 #include "sample.h"
 #include "ui_state.h"
 #include "prof.h"
@@ -28,7 +29,6 @@
 #define g_search_query_len (editor_state_search_mut()->query_len)
 #define g_search_cursor_pos (editor_state_search_mut()->cursor_pos)
 #define g_show_help          (ui_state_help_mut()->visible)
-#define g_help_tab           (ui_state_help_mut()->tab_idx)
 #define g_show_profile_panel (ui_state_profile_panel_mut()->mode)
 #define g_scroll_follow_cursor (editor_state_scroll_mut()->scroll_follow_cursor)
 #define refresh_workspace_header_lines repl_state_refresh_workspace_header_lines
@@ -487,7 +487,7 @@ int main() {
         set_editor_input("abc");
         editor_cursor_pos_set(2);
         g_show_help = 1;
-        g_help_tab = 1;
+        editor_help_session_set_tab(1);
         g_search_active = 1;
         snprintf(g_search_query, MAX_INPUT_LEN, "abc");
         g_search_query_len = 3;
@@ -497,7 +497,7 @@ int main() {
 
         ASSERT_INT("search special moves search cursor", g_search_cursor_pos, 1);
         ASSERT_INT("search special leaves editor cursor", editor_cursor_pos(), 2);
-        ASSERT_INT("search special leaves help tab", g_help_tab, 1);
+        ASSERT_INT("search special leaves help tab", editor_help_session_tab_idx(), 1);
 
         search_clear_all();
         g_show_help = 0;
@@ -2558,30 +2558,29 @@ int main() {
 
     /* Extra coverage: Help overlay scrolling */
     {
-        ReplHelpState *help = ui_state_help_mut();
-        help->visible = 1;
-        help->scroll = 0;
-        help->tab_idx = 0;
+        ui_state_help_mut()->visible = 1;
+        editor_help_session_set_scroll(0);
+        editor_help_session_set_tab(0);
 
         repl_special_func(GLUT_KEY_DOWN, 0, 0);
-        ASSERT_INT("help scroll down", help->scroll, 1);
+        ASSERT_INT("help scroll down", editor_help_session_scroll(), 1);
 
         repl_special_func(GLUT_KEY_UP, 0, 0);
-        ASSERT_INT("help scroll up", help->scroll, 0);
+        ASSERT_INT("help scroll up", editor_help_session_scroll(), 0);
 
         repl_special_func(GLUT_KEY_RIGHT, 0, 0);
-        ASSERT_INT("help tab right", help->tab_idx, 1);
+        ASSERT_INT("help tab right", editor_help_session_tab_idx(), 1);
 
         repl_special_func(GLUT_KEY_LEFT, 0, 0);
-        ASSERT_INT("help tab left", help->tab_idx, 0);
+        ASSERT_INT("help tab left", editor_help_session_tab_idx(), 0);
 
         repl_special_func(GLUT_KEY_PAGE_DOWN, 0, 0);
-        ASSERT_INT("help page down", help->scroll, 5);
+        ASSERT_INT("help page down", editor_help_session_scroll(), 5);
 
         repl_special_func(GLUT_KEY_PAGE_UP, 0, 0);
-        ASSERT_INT("help page up", help->scroll, 0);
+        ASSERT_INT("help page up", editor_help_session_scroll(), 0);
 
-        help->visible = 0;
+        ui_state_help_mut()->visible = 0;
     }
 
     /* Extra coverage: Escape key routes */

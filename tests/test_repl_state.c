@@ -3,6 +3,7 @@
 #include "ui_state.h"
 #include "variable_panel.h"
 #include "replay_state.h"
+#include "editor_help_session.h"
 
 #include "support/test_harness.h"
 #include <stdio.h>
@@ -73,8 +74,8 @@ static void populate_runtime_snapshot_fixture(const char *scene_hint) {
     clipboard->cmds[0].type = CMD_COLOR3F;
 
     ui_state_help_mut()->visible = 1;
-    ui_state_help_mut()->tab_idx = 1;
-    ui_state_help_mut()->scroll = 3;
+    editor_help_session_set_tab(1);
+    editor_help_session_set_scroll(3);
     code_panel = ui_state_code_panel_mut();
     code_panel->panel_frac = 0.61f;
     code_panel->resizing_panel = 1;
@@ -204,6 +205,8 @@ static void test_capture_restore_round_trip(void) {
     static VariablePanelState varpanel_round_trip;
     static ReplReplayRuntimeState replay_snap;
     static ReplReplayRuntimeState replay_round_trip;
+    static EditorHelpSession help_snap;
+    static EditorHelpSession help_round_trip;
     static const char *scene_hint = "Captured Scene";
     int foo_idx;
 
@@ -214,17 +217,20 @@ static void test_capture_restore_round_trip(void) {
     ui_state_capture(&ui_snap);
     variable_panel_state_capture(&varpanel_snap);
     replay_state_capture(&replay_snap);
+    editor_help_session_capture(&help_snap);
     repl_state_reset_all();
     repl_state_restore(&snapshot);
     editor_state_restore(&editor_snap);
     ui_state_restore(&ui_snap);
     variable_panel_state_restore(&varpanel_snap);
     replay_state_restore(&replay_snap);
+    editor_help_session_restore(&help_snap);
     repl_state_capture(&round_trip);
     editor_state_capture(&editor_round_trip);
     ui_state_capture(&ui_round_trip);
     variable_panel_state_capture(&varpanel_round_trip);
     replay_state_capture(&replay_round_trip);
+    editor_help_session_capture(&help_round_trip);
 
     ASSERT_STR("input restored",
                editor_input_text(),
@@ -247,8 +253,8 @@ static void test_capture_restore_round_trip(void) {
     ASSERT_INT("clipboard count restored", editor_state_clipboard().cmd_count, 1);
     ASSERT_INT("clipboard cmd restored", editor_state_clipboard().cmds[0].type, CMD_COLOR3F);
     ASSERT_INT("help restored", ui_state_help().visible, 1);
-    ASSERT_INT("help tab restored", ui_state_help().tab_idx, 1);
-    ASSERT_INT("help scroll restored", ui_state_help().scroll, 3);
+    ASSERT_INT("help tab restored", editor_help_session_tab_idx(), 1);
+    ASSERT_INT("help scroll restored", editor_help_session_scroll(), 3);
     ASSERT_TRUE("code panel frac restored", ui_state_code_panel().panel_frac == 0.61f);
     ASSERT_INT("code panel resizing restored", ui_state_code_panel().resizing_panel, 1);
     ASSERT_INT("code panel scroll restored", editor_scroll(), 9);

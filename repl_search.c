@@ -26,8 +26,10 @@
 /* ui_state_help_mut is forward-declared here because repl_*.c is not
  * allowed to include ui_state.h per check-controller-boundaries. The
  * search-open path closes the help overlay as a side-effect; the
- * help slice lives on UiState. */
+ * visibility flag lives on UiState while the session-state fields
+ * (tab_idx, scroll) live on the editor_help_session peer. */
 ReplHelpState *ui_state_help_mut(void);
+#include "editor_help_session.h"
 
 static int search_row_is_live_input(int row_idx) {
     if (row_idx < 0 || row_idx >= repl_search_row_count())
@@ -466,8 +468,8 @@ static void search_open(void) {
     srch->active = 1;
     srch->cursor_pos = srch->query_len;
     ui_state_help_mut()->visible = 0;
-    ui_state_help_mut()->tab_idx = 0;
-    ui_state_help_mut()->scroll = 0;
+    editor_help_session_set_tab(0);
+    editor_help_session_set_scroll(0);
     clear_autocomplete_state();
 }
 
