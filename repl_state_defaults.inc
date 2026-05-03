@@ -30,16 +30,7 @@
      * variable_drag defaults moved to editor_state.c (Phase 1 commit 9).
      * search + autocomplete defaults moved to editor_state.c
      * (Phase 1 commit 7). */
-    .camera = {
-        .rx = 20.0f,
-        .ry = 30.0f,
-        .dist = 5.0f,
-        .tx = 0.0f,
-        .ty = 0.0f,
-        .tz = 0.0f,
-        .motion_glow = 0.0f,
-        .auto_rotate = CFG_DEFAULT_CAMERA_ROTATE,
-    },
+    /* camera defaults moved to ui_state.c (Phase A commit 13). */
     .presentation = {
         .wireframe = CFG_DEFAULT_WIREFRAME,
         .grid_theme = CFG_DEFAULT_GRID_THEME,

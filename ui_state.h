@@ -23,8 +23,8 @@
  *   commit  8: status / help / variable_panel / profile_panel /
  *              viewport / pointer slices.
  *   commit 12: code_panel chrome (panel divider, cursor blink, cursor px/py).
- *
- * Slices still pending: camera (Phase A commit 13).
+ *   commit 13: camera viewport pose (rx/ry/dist/tx/ty/tz/motion_glow,
+ *              plus the auto_rotate config that sits on the same struct).
  *
  * Naming asymmetry vs. EditorState: the new canonical accessors here
  * use the `ui_state_*` prefix, but the legacy `repl_state_*` names
@@ -32,9 +32,8 @@
  * forwarders exist because `check-controller-boundaries` forbids most
  * `repl_*.c` callers from including `ui_state.h`; the legacy names
  * stay in repl_state_owners.h and resolve at link time to the
- * forwarders. The Phase 4-equivalent input-routing rework eliminates
- * the direct-mutation call sites that need the legacy names; the
- * forwarders go away then.
+ * forwarders. Phase A commit 14 deletes the forwarder block once
+ * the remaining callers move to the canonical `ui_state_*` API.
  */
 
 typedef struct {
@@ -45,6 +44,7 @@ typedef struct {
     ReplViewportState         viewport;
     ReplPointerState          pointer;
     ReplCodePanelRuntimeState code_panel;
+    ReplCameraState           camera;
 } UiState;
 
 void ui_state_capture(UiState *snapshot);
@@ -89,5 +89,20 @@ void              ui_state_pointer_set_button(int mouse_button);
 ReplCodePanelRuntimeState  ui_state_code_panel(void);
 ReplCodePanelRuntimeState *ui_state_code_panel_mut(void);
 void                       ui_state_code_panel_reset(void);
+
+/* Camera viewport pose. The auto_rotate config field sits on the same
+ * struct since it is naturally paired with the pose; presentation
+ * "reset" paths still write through ui_state_camera_mut(). */
+ReplCameraState  ui_state_camera(void);
+ReplCameraState *ui_state_camera_mut(void);
+ReplCameraState  ui_state_camera_snapshot(void);
+void             ui_state_camera_set(float rx, float ry, float dist,
+                                     float tx, float ty, float tz,
+                                     float motion_glow);
+void             ui_state_camera_set_orbit(float rx, float ry);
+void             ui_state_camera_set_pan(float tx, float ty, float tz);
+void             ui_state_camera_set_distance(float dist);
+void             ui_state_camera_set_motion_glow(float motion_glow);
+void             ui_state_camera_reset_default(void);
 
 #endif /* UI_STATE_H */
