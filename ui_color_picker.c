@@ -7,7 +7,7 @@
 #include "repl_parser.h"
 #include "repl_state_views.h"
 #include "ui_state.h"
-#include "repl_undo.h"
+#include "editor_undo.h"
 #include "ui_color_picker.h"
 #include "repl_layout.h"
 

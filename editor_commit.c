@@ -41,7 +41,7 @@
 #include "repl_parser.h"
 #include "repl_source_scope.h"
 #include "repl_state.h"
-#include "repl_undo.h"
+#include "editor_undo.h"
 
 #include <ctype.h>
 #include <stdio.h>

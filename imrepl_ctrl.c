@@ -20,7 +20,7 @@
 #include "ui_panels.h"
 #include "ui_snapshot.h"
 #include "ui_state.h"
-#include "repl_clipboard.h"
+#include "editor_clipboard.h"
 #include "repl_code_panel_document.h"
 #include "repl_export.h"
 #include "repl_layout.h"

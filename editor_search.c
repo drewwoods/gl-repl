@@ -18,7 +18,7 @@
  * accessed through the typed search facade.
  */
 #include "sample.h"
-#include "repl_search.h"
+#include "editor_search.h"
 #include "repl_state.h"
 #include "repl_core_internal.h"
 #include "repl_keys.h"

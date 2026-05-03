@@ -6,7 +6,7 @@
 #include "repl_executor.h"
 #include "repl_state.h"
 #include "ui_panels.h"
-#include "repl_inline_rename.h"
+#include "editor_inline_rename.h"
 
 #define g_anim_time (repl_state_variables_mut()->anim_time)
 

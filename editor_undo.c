@@ -5,7 +5,7 @@
  * predefined-variable table. Input routing decides when a mutation is about to
  * happen; this module records and restores the state affected by that mutation.
  */
-#include "repl_undo.h"
+#include "editor_undo.h"
 #include "repl_command_store.h"
 #include "repl_core_internal.h"
 #include "repl_state.h"

@@ -23,8 +23,8 @@
  * Used by the key dispatcher priority queue (repl_editor.c) to route input and by
  * the status-bar renderer (ui_panels.c) to show the rename prompt.
  */
-#ifndef REPL_INLINE_RENAME_H
-#define REPL_INLINE_RENAME_H
+#ifndef EDITOR_INLINE_RENAME_H
+#define EDITOR_INLINE_RENAME_H
 
 /* Query whether rename mode is active. Returns 1 if the user is editing a scene
  * name, 0 otherwise. Used by the key dispatcher (repl_editor.c) to prioritize
@@ -55,4 +55,4 @@ int  repl_inline_rename_handle_special(int key);
  * or explicitly by the editor. Clears the rename buffer and deactivates rename mode. */
 void repl_inline_rename_cancel(void);
 
-#endif /* REPL_INLINE_RENAME_H */
+#endif /* EDITOR_INLINE_RENAME_H */

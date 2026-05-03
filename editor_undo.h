@@ -30,8 +30,8 @@
  * to manually snapshot and restore state without using the history rings.
  */
 
-#ifndef REPL_UNDO_H
-#define REPL_UNDO_H
+#ifndef EDITOR_UNDO_H
+#define EDITOR_UNDO_H
 
 #include "sample.h"
 
@@ -81,4 +81,4 @@ void repl_undo_push_snapshot(void);
 void repl_undo_pop_snapshot(void);
 void repl_undo_do_redo(void);
 
-#endif /* REPL_UNDO_H */
+#endif /* EDITOR_UNDO_H */
