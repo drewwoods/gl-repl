@@ -36,6 +36,77 @@
 #include "editor_state.h"
 #include "repl_apply.h"
 #include "repl_compile.h"
+#include "repl_undo.h"
+
+#include <stdio.h>
+#include <string.h>
+
+static void result_set_diagnostic(EditorCommitResult *result, const char *msg) {
+    if (!result || !msg) return;
+    strncpy(result->diagnostic, msg, sizeof(result->diagnostic) - 1);
+    result->diagnostic[sizeof(result->diagnostic) - 1] = '\0';
+    result->diagnostic_valid = 1;
+}
+
+static void result_set_commit_message(EditorCommitResult *result,
+                                      const char *msg) {
+    if (!result || !msg) return;
+    strncpy(result->commit_message, msg, sizeof(result->commit_message) - 1);
+    result->commit_message[sizeof(result->commit_message) - 1] = '\0';
+    result->commit_message_valid = 1;
+}
+
+EditorCommitResult editor_commit_current_input(const struct EditorServices_s *services) {
+    EditorCommitResult result = {0};
+    if (!services) return result;
+
+    const char *text = editor_input_text();
+
+    ReplCompileContext ctx = services->context(services->user);
+    ReplCompiledChange change;
+    char err[REPL_STATUS_TEXT_MAX];
+    err[0] = '\0';
+
+    ReplCompileResult cr = services->compile(text, &ctx, &change,
+                                             err, sizeof(err),
+                                             services->user);
+
+    if (cr == REPL_COMPILE_ERROR) {
+        /* Diagnostic flows through the result; no mutation. */
+        result.consumed = 1;
+        result_set_diagnostic(&result, err);
+        return result;
+    }
+
+    if (change.kind == REPL_COMPILED_NO_CHANGE) {
+        /* Caller falls through to the legacy try_commit_* chain
+         * (or treats as unrecognized). */
+        result.consumed = 0;
+        return result;
+    }
+
+    /* Preflight before mutation. */
+    if (!repl_apply_can_apply_compiled_change(&change)) {
+        result.consumed = 1;
+        result.capacity_failed = 1;
+        return result;
+    }
+
+    /* Transaction boundary: compile + preflight succeeded, no
+     * mutation has run yet. Capture undo here. */
+    repl_undo_push_snapshot();
+
+    /* Past the preflight every apply call below succeeds. */
+    services->apply_predef_ops(&change, services->user);
+    editor_buffer_apply_compiled_change(&change);
+    services->apply_repl_change(&change, services->user);
+
+    result.consumed = 1;
+    result.mutated = 1;
+    if (change.commit_message[0])
+        result_set_commit_message(&result, change.commit_message);
+    return result;
+}
 
 int editor_commit_apply_compiled_change(const struct ReplCompiledChange_s *change) {
     if (!change) return 0;
