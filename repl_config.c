@@ -4,12 +4,14 @@
 #include "repl_state.h"
 
 /* Camera, profile_panel slices live on UiState; variable_panel
- * visibility lives on the variable_panel peer. repl_*.c is not
- * allowed to include ui_state.h per check-controller-boundaries,
- * so the relevant accessors are forward-declared inline. */
-ReplCameraState        *ui_state_camera_mut(void);
-ReplProfilePanelState  *ui_state_profile_panel_mut(void);
-ReplVariablePanelState *variable_panel_view_mut(void);
+ * visibility lives on the variable_panel peer; replay state lives
+ * on the replay peer. repl_*.c is not allowed to include ui_state.h
+ * per check-controller-boundaries, so the relevant accessors are
+ * forward-declared inline. */
+ReplCameraState         *ui_state_camera_mut(void);
+ReplProfilePanelState   *ui_state_profile_panel_mut(void);
+ReplVariablePanelState  *variable_panel_view_mut(void);
+ReplReplayRuntimeState  *replay_state_mut(void);
 
 static int clamp_int(int v, int lo, int hi) {
     if (v < lo) return lo;
@@ -37,9 +39,9 @@ static int *config_value_ptr(ReplConfigKey key) {
     case REPL_CONFIG_WIREFRAME:           return &repl_state_presentation_mut()->wireframe;
     case REPL_CONFIG_POINT_ATTENUATION:   return &repl_state_render_mut()->point_attenuation_enabled;
     case REPL_CONFIG_AUTO_TIME:           return &repl_state_variables_mut()->time_playing;
-    case REPL_CONFIG_REPLAY:              return &repl_state_replay_mut()->active;
-    case REPL_CONFIG_REPLAY_MODE:         return &repl_state_replay_mut()->mode;
-    case REPL_CONFIG_REPLAY_EXPAND:       return &repl_state_replay_mut()->expand_args;
+    case REPL_CONFIG_REPLAY:              return &replay_state_mut()->active;
+    case REPL_CONFIG_REPLAY_MODE:         return &replay_state_mut()->mode;
+    case REPL_CONFIG_REPLAY_EXPAND:       return &replay_state_mut()->expand_args;
     case REPL_CONFIG_GRID_THEME:          return &repl_state_presentation_mut()->grid_theme;
     case REPL_CONFIG_GRID_MAJOR:          return &repl_state_presentation_mut()->grid_major_idx;
     case REPL_CONFIG_GRID_EXTENT:         return &repl_state_presentation_mut()->grid_extent_idx;

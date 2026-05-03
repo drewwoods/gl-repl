@@ -28,6 +28,7 @@
 #include "ui_profile_panel.h"
 #include "ui_variable_panel.h"
 #include "variable_panel.h"
+#include "replay_state.h"
 #include "prof.h"
 
 static int imrepl_ctrl_cmd_is_focus_vertex(const GLCmd *cmd) {
@@ -142,7 +143,7 @@ static void imrepl_ctrl_push_highlights(void) {
         }
     }
 
-    ReplReplayRuntimeState replay = repl_state_replay();
+    ReplReplayRuntimeState replay = replay_state_view();
     if (replay.active && replay.src_line_idx >= 0)
         editor_state_highlights_append(replay.src_line_idx, -1, -1,
                                             HIGHLIGHT_REPLAY_PC);
@@ -215,7 +216,7 @@ static void scene_execute_reset_adapter(void *user_data) {
 
 static void imrepl_ctrl_build_scene_config(SceneRenderConfig *config) {
     ReplRenderState render = repl_state_render();
-    ReplReplayRuntimeState replay = repl_state_replay();
+    ReplReplayRuntimeState replay = replay_state_view();
     ReplPresentationState presentation = repl_state_presentation();
     ReplCameraState cam = ui_state_camera();
     const float *grid_major_steps = repl_state_grid_major_steps();
@@ -341,7 +342,7 @@ static void imrepl_ctrl_build_ui_snapshot(UiRenderSnapshot *snap) {
     snap->camera         = ui_state_camera();
     snap->pointer        = ui_state_pointer();
     snap->render         = repl_state_render();
-    snap->replay         = repl_state_replay();
+    snap->replay         = replay_state_view();
     snap->scenes         = repl_state_scenes();
     snap->variable_drag  = variable_panel_drag();
     snap->selection      = editor_state_selection();
@@ -397,7 +398,7 @@ void imrepl_ctrl_display_frame(void) {
     float live_predef_vals[MAX_PREDEF_VARS] = { 0 };
     FlatProgramView flat_program = repl_state_flat_program_view();
     int g_num_flat_cmds = flat_program.cmd_count;
-    ReplReplayRuntimeState replay = repl_state_replay();
+    ReplReplayRuntimeState replay = replay_state_view();
     SceneRenderConfig scene_config;
     UiRenderSnapshot ui_snap;
 

@@ -11,6 +11,7 @@
 #include "repl_replay_annotations.h"
 #include "repl_source_scope.h"
 #include "repl_state.h"
+#include "replay_state.h"
 
 #define g_workspace_header_lines (repl_state_import_export().workspace_header_lines)
 #define g_workspace_header_line_count (repl_state_import_export().workspace_header_line_count)
@@ -223,7 +224,7 @@ static int code_panel_cursor_doc_line_from_layout(
 static int code_panel_follow_doc_line_from_layout(
     int cursor_doc_line, int header_rows, const int *cmd_main_rows,
     const int *replay_extra_rows) {
-    ReplReplayRuntimeState replay = repl_state_replay();
+    ReplReplayRuntimeState replay = replay_state_view();
     int follow_doc_line = cursor_doc_line;
 
     if (replay.active &&

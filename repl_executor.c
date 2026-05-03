@@ -6,6 +6,7 @@
 #include "repl_core_internal.h"
 #include "repl_executor.h"
 #include "repl_state.h"
+#include "replay_state.h"
 
 /* Camera lives on UiState; repl_*.c is not allowed to include
  * ui_state.h per check-controller-boundaries. The executor reads
@@ -328,7 +329,7 @@ static const char *execution_flat_text(EditorBufferView text,
  * mutating repl_state_flat_program_count(). */
 void repl_execute_program(const ReplExecutionOptions *options) {
     FlatProgramView program = execution_program_from_options(options);
-    ReplReplayRuntimeState replay = repl_state_replay();
+    ReplReplayRuntimeState replay = replay_state_view();
     const GLCmd *flat_cmds = program.cmds;
     int flat_cmd_count = execution_flat_count_from_options(options, program);
     EditorBufferView text = options ? options->text : (EditorBufferView){0};

@@ -16,6 +16,7 @@
 #include "repl_clipboard.h"
 #include "repl_keys.h"
 #include "repl_replay.h"
+#include "replay_state.h"
 #include "ui_menu_bar.h"
 #include "ui_variable_panel.h"
 #include "repl_replay_annotations.h"
@@ -1328,7 +1329,7 @@ int ui_panels_handle_code_panel_press(int mx, int my, int *cursor_pos_out) {
         ui_menu_bar_close();
         switch (pin) {
         case REPL_MENU_BAR_PIN_REPLAY:
-            repl_replay_toggle_play_pause();
+            replay_handle_pin_clicked();
             break;
         case REPL_MENU_BAR_PIN_SEARCH:
             handle_search_key(KEY_CTRL_F);

@@ -26,6 +26,7 @@
 #include "repl_clipboard.h"
 #include "repl_undo.h"
 #include "repl_replay.h"
+#include "replay_state.h"
 #include "repl_keys.h"
 #include "ui_panels.h"
 #include "repl_layout.h"
@@ -701,7 +702,7 @@ static int handle_rename_key_route(unsigned char key) {
 
 static int handle_config_menu_key_route(unsigned char key) {
     if (!editor_state_search().active && key == '`') {
-        if (repl_state_replay().active)
+        if (replay_active())
             repl_replay_stop();
         editor_restore_hidden_code_panel();
         ui_panels_open_config();
@@ -711,7 +712,7 @@ static int handle_config_menu_key_route(unsigned char key) {
 }
 
 static int handle_active_replay_key_route(unsigned char key) {
-    return repl_state_replay().active && repl_replay_handle_key(key);
+    return replay_active() && replay_handle_key(key);
 }
 
 static void restore_hidden_code_panel_for_key(unsigned char key) {
@@ -792,7 +793,7 @@ static int handle_undo_redo_key_route(unsigned char key) {
 }
 
 static int handle_replay_key_route(unsigned char key) {
-    return repl_replay_handle_key(key);
+    return replay_handle_key(key);
 }
 
 static int handle_line_delete_key_route(unsigned char key) {
@@ -1265,7 +1266,7 @@ static int handle_rename_special_route(int key) {
 }
 
 static int handle_replay_special_route(int key) {
-    return repl_replay_handle_special_key(key);
+    return replay_handle_special(key);
 }
 
 static void restore_hidden_code_panel_for_special(int key) {
@@ -1593,7 +1594,7 @@ static void mouse_func(int button, int state, int x, int y) {
         if (variable_panel_visible()) {
             int row_idx;
             if (ui_variable_panel_hit(x, y, &row_idx)) {
-                if (repl_state_replay().active)
+                if (replay_active())
                     repl_replay_stop();
                 variable_panel_handle_drag_begin(row_idx, 0, x);
                 editor_request_redraw();
@@ -1650,7 +1651,7 @@ static void mouse_func(int button, int state, int x, int y) {
     if (button == GLUT_RIGHT_BUTTON && state == GLUT_DOWN && variable_panel_visible()) {
         int row_idx;
         if (ui_variable_panel_hit(x, y, &row_idx)) {
-            if (repl_state_replay().active)
+            if (replay_active())
                 repl_replay_stop();
             variable_panel_handle_drag_begin(row_idx, 1, x);
             editor_request_redraw();
@@ -1768,7 +1769,7 @@ static void timer_func(int value) {
     repl_advance_time(0.016f);
 
     {
-        ReplReplayRuntimeState *replay = repl_state_replay_mut();
+        ReplReplayRuntimeState *replay = replay_state_mut();
 
         if (replay->active)
             repl_replay_tick_fade_batches(0.016f);
