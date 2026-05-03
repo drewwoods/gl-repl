@@ -222,4 +222,24 @@ ReplCompileResult editor_compile_func_def(const char *input,
                                           EditorCommitPlan *out,
                                           char *err, int err_size);
 
+/* Editor-side compile for for-loops. Three branches:
+ *   - Header replace: REPLACE_ONE; cursor / insert-mode / clear-input /
+ *     clear-autocomplete effects.
+ *   - Empty body (`{` or end-of-input): INSERT_MANY count=2
+ *     (CMD_FOR_BEGIN + CMD_FOR_END); cursor lands inside the block,
+ *     insert mode entered.
+ *   - One-liner body: INSERT_MANY count=3 (begin + body + end);
+ *     cursor lands past the end, insert mode exited, pending newline
+ *     cleared.
+ *
+ * Returns:
+ *   REPL_COMPILE_OK + REPLACE_ONE | INSERT_MANY  plan ready
+ *   REPL_COMPILE_OK + NO_CHANGE                  not a for-loop input
+ *   REPL_COMPILE_ERROR                           syntax / body error;
+ *                                                `err` filled */
+ReplCompileResult editor_compile_for_loop(const char *input,
+                                          const ReplCompileContext *ctx,
+                                          EditorCommitPlan *out,
+                                          char *err, int err_size);
+
 #endif /* EDITOR_COMMIT_H */

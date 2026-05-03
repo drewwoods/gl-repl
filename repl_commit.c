@@ -265,260 +265,32 @@ int try_assign_variable(void) {
 
 
 int try_commit_for_loop(void) {
-    const char *p = editor_state_input().input;
-    while (*p && isspace((unsigned char)*p))
-        p++;
-    if (strncmp(p, "for(", 4) != 0 && strncmp(p, "for (", 5) != 0)
-        return 0;
+    /* Phase D commit 26e migration: dispatch through the
+     * compile/apply pair. editor_compile_for_loop handles all three
+     * branches (header replace, empty body, one-liner body).
+     */
+    ReplCompileContext ctx = repl_compile_context_from_live();
+    EditorCommitPlan plan;
+    char err[REPL_STATUS_TEXT_MAX];
 
-    {
-        int pos = editor_insert_mode() ? repl_state_edit_line() :
-                  (repl_state_edit_line() < repl_state_document_count() ? repl_state_edit_line() : repl_state_document_count());
-        ExprVar visible_vars[MAX_EXPR_VARS];
-        int visible_nv = collect_visible_vars(pos, visible_vars, MAX_EXPR_VARS);
-        char var_name[16];
-        float start, end, step;
-        const char *body_start;
-
-        if (!repl_eval_parse_for_header_with_vars(p, var_name, sizeof(var_name),
-                                        &start, &end, &step,
-                                        visible_vars, visible_nv, &body_start)) {
-            set_status("for syntax: for(var, start, end[, step]) body;");
-            return 1;
-        }
-
-        while (*body_start && isspace((unsigned char)*body_start))
-            body_start++;
-
-        {
-            int ind;
-            char indent[32];
-            char fb_text[MAX_LINE_LEN] = "";
-            char fe_text[MAX_LINE_LEN] = "";
-            GLCmd fb;
-            GLCmd fe;
-
-            fill_scope_indent(pos, indent, sizeof(indent));
-            ind = (int)strlen(indent);
-
-            memset(&fb, 0, sizeof(fb));
-            fb.type = CMD_FOR_BEGIN;
-            fb.args[0] = start;
-            fb.args[1] = end;
-            fb.args[2] = step;
-            fb.valid = 1;
-
-            {
-                const char *raw = p;
-                while (*raw && *raw != '(')
-                    raw++;
-                if (*raw)
-                    raw++;
-                while (*raw && isspace((unsigned char)*raw))
-                    raw++;
-                while (*raw && (isalnum((unsigned char)*raw) || *raw == '_'))
-                    raw++;
-                while (*raw && isspace((unsigned char)*raw))
-                    raw++;
-                if (*raw == ',')
-                    raw++;
-
-                {
-                    const char *args_start = raw;
-                    int paren = 1;
-                    const char *ap = args_start;
-                    char raw_args[MAX_LINE_LEN];
-                    int rlen;
-
-                    while (*ap && paren > 0) {
-                        if (*ap == '(')
-                            paren++;
-                        else if (*ap == ')')
-                            paren--;
-                        if (paren > 0)
-                            ap++;
-                    }
-
-                    rlen = (int)(ap - args_start);
-                    if (rlen > (int)sizeof(raw_args) - 1)
-                        rlen = (int)sizeof(raw_args) - 1;
-                    memcpy(raw_args, args_start, (size_t)rlen);
-                    raw_args[rlen] = '\0';
-                    while (rlen > 0 && isspace((unsigned char)raw_args[rlen - 1]))
-                        raw_args[--rlen] = '\0';
-
-                    {
-                        char *ra = raw_args;
-                        while (*ra && isspace((unsigned char)*ra))
-                            ra++;
-
-                        {
-                            char verr[128];
-                            if (!repl_eval_validate_expression_idents(ra, visible_vars, visible_nv, verr, sizeof(verr))) {
-                                set_status(verr);
-                                return 1;
-                            }
-                        }
-
-                        if (input_has_any_visible_vars(ra, visible_vars, visible_nv)) {
-                            fb.has_vars = 1;
-                            if (!repl_format_fits(fb_text, sizeof(fb_text),
-                                                  "%sfor(%s, %s) {",
-                                                  indent, var_name, ra)) {
-                                set_status("Command too long");
-                                return 1;
-                            }
-                        } else if (step != 1.0f) {
-                            if (!repl_format_fits(fb_text, sizeof(fb_text),
-                                                  "%sfor(%s, %g, %g, %g) {",
-                                                  indent, var_name, start, end, step)) {
-                                set_status("Command too long");
-                                return 1;
-                            }
-                        } else {
-                            if (!repl_format_fits(fb_text, sizeof(fb_text),
-                                                  "%sfor(%s, %g, %g) {",
-                                                  indent, var_name, start, end)) {
-                                set_status("Command too long");
-                                return 1;
-                            }
-                        }
-                    }
-                }
-            }
-
-            memset(&fe, 0, sizeof(fe));
-            fe.type = CMD_FOR_END;
-            fe.valid = 1;
-            snprintf(fe_text, sizeof(fe_text), "%s}", indent);
-
-            if (*body_start == '{' || *body_start == '\0') {
-                const char *loop_lines[2] = { fb_text, fe_text };
-
-                if (!editor_insert_mode() && repl_state_edit_line() < repl_state_document_count() &&
-                    repl_state_document_cmds_mut()[repl_state_edit_line()].type == CMD_FOR_BEGIN) {
-                    ReplCommandStore store = repl_command_store_live();
-                    int replace_idx = repl_state_edit_line();
-                    if (repl_command_store_replace_one(&store, replace_idx, &fb))
-                        editor_buffer_replace_line(replace_idx, fb_text);
-                    repl_state_edit_line_set(repl_state_edit_line() + 1);
-                    editor_insert_mode_set(1);
-                    {
-                        ReplEditorInputState *inp = editor_state_input_mut();
-                        inp->input[0] = '\0';
-                        inp->input_len = 0;
-                    }
-                    editor_cursor_pos_set(0);
-                    clear_autocomplete_state();
-                    set_status("for-loop header updated");
-                    mark_normals_dirty();
-                    return 1;
-                }
-
-                ReplCommandStore store = repl_command_store_live();
-                GLCmd loop_cmds[2] = { fb, fe };
-                if (!repl_command_store_insert_many(&store, pos,
-                                                    loop_cmds, 2, 0)) {
-                    set_status("Command buffer full!");
-                    return 1;
-                }
-                editor_buffer_insert_lines(pos, loop_lines, 2);
-
-                repl_state_edit_line_set(pos + 1);
-                editor_insert_mode_set(1);
-                {
-                    ReplEditorInputState *inp = editor_state_input_mut();
-                    inp->input[0] = '\0';
-                    inp->input_len = 0;
-                }
-                editor_cursor_pos_set(0);
-                set_status("for-loop: type body lines, press Esc when done");
-                mark_normals_dirty();
-                return 1;
-            }
-
-            {
-                char body[MAX_LINE_LEN];
-                int blen;
-                ExprVar dv[MAX_EXPR_VARS];
-                int dvn = 0;
-                GLCmd body_cmd;
-
-                strncpy(body, body_start, MAX_LINE_LEN - 1);
-                body[MAX_LINE_LEN - 1] = '\0';
-                blen = (int)strlen(body);
-                while (blen > 0 &&
-                       (body[blen - 1] == ';' || isspace((unsigned char)body[blen - 1])))
-                    body[--blen] = '\0';
-                if (blen == 0) {
-                    set_status("for-loop needs a body");
-                    return 1;
-                }
-
-                repl_copy_string_fits(dv[dvn].name, sizeof(dv[dvn].name),
-                                      var_name);
-                dv[dvn].value = start;
-                dvn++;
-                /* Append visible variables to the loop context. */
-                for (int var_idx = 0; var_idx < visible_nv && dvn < MAX_EXPR_VARS; var_idx++)
-                    dv[dvn++] = visible_vars[var_idx];
-
-                ReplParseContext parse_ctx = { pos, dv, dvn, 1 };
-                {
-                    ReplParsedLine body_pl;
-                    if (!repl_parser_parse_command_ctx(body, &body_pl, &parse_ctx)) {
-                        set_status("Invalid for-loop body command");
-                        return 1;
-                    }
-                    body_cmd = body_pl.cmd;
-                }
-
-                char body_text[MAX_LINE_LEN];
-                {
-                    char bind[32];
-                    int bi = ind + 2;
-                    if (bi > (int)sizeof(bind) - 1)
-                        bi = (int)sizeof(bind) - 1;
-                    memset(bind, ' ', (size_t)bi);
-                    bind[bi] = '\0';
-                    snprintf(body_text, sizeof(body_text), "%s%s;", bind, body);
-                }
-
-                ReplCommandStore store = repl_command_store_live();
-                GLCmd loop_cmds[3] = { fb, body_cmd, fe };
-                const char *loop_lines[3] = { fb_text, body_text, fe_text };
-                if (!repl_command_store_insert_many(&store, pos,
-                                                    loop_cmds, 3, 0)) {
-                    set_status("Command buffer full!");
-                    return 1;
-                }
-                editor_buffer_insert_lines(pos, loop_lines, 3);
-
-                repl_state_edit_line_set(pos + 3);
-                editor_insert_mode_set(0);
-                {
-                    ReplEditorInputState *inp = editor_state_input_mut();
-                    inp->input[0] = '\0';
-                    inp->input_len = 0;
-                }
-                editor_cursor_pos_set(0);
-                {
-                    ReplEditorInputState *inp = editor_state_input_mut();
-                    inp->pending_newline[0] = '\0';
-                    inp->pending_newline_len = 0;
-                }
-
-                {
-                    char msg[128];
-                    snprintf(msg, sizeof(msg), "for-loop: %s from %g to %g",
-                             var_name, start, end);
-                    set_status(msg);
-                }
-                mark_normals_dirty();
-                return 1;
-            }
-        }
+    ReplCompileResult r = editor_compile_for_loop(editor_state_input().input,
+                                                  &ctx, &plan,
+                                                  err, sizeof(err));
+    if (r == REPL_COMPILE_OK &&
+        plan.change.kind == REPL_COMPILED_NO_CHANGE &&
+        !plan.commit_message_valid)
+        return 0;  /* not a for-loop input */
+    if (r != REPL_COMPILE_OK) {
+        set_status(err);
+        return 1;
     }
+
+    if (!editor_commit_apply_plan(&plan)) {
+        set_status("Command buffer full!");
+        return 1;
+    }
+    mark_normals_dirty();
+    return 1;
 }
 
 int try_commit_func_def(void) {
