@@ -714,16 +714,55 @@ explicit `EditorBufferView` consumers.
 
 ### Phase C — `repl_compile` / `repl_apply` split
 
+The smell this phase attacks: today's commit code mixes parse +
+validation + editor-text mutation + command-store mutation + status
+mutation + undo into one tangle. Phase C separates those concerns.
+The naming convention is load-bearing — get it wrong here and a
+later commit will quietly merge text mutation back into the REPL
+side:
+
+```text
+ReplCompileResult repl_compile(...);
+    Pure. No editor mutation. No command-store mutation. No status
+    mutation. No undo entry. Returns ReplCompiledChange or diagnostic.
+
+void repl_apply_compiled_change(const ReplCompiledChange *change);
+    Mutates ReplState command store ONLY. Does not touch editor
+    text. Does not touch status.
+
+void editor_buffer_apply_compiled_change(const ReplCompiledChange *change);
+    Mutates EditorState text ONLY. Does not touch ReplState. Does
+    not touch status.
+```
+
+Both `_apply_*` halves take the same `ReplCompiledChange` so the
+editor commit orchestration can drive them in lockstep inside one
+undo transaction.
+
 | # | Commit | Status |
 |---|---|---|
-| 19 | refactor: introduce `ReplCompiledChange` and pure `repl_compile` validators; migrate float-decl + assign | pending |
-| 20 | refactor: migrate block-structured commits (for / func / if / close-brace) to compile/apply | pending |
-| 21 | refactor: route `;`-key, Enter, and `feed_line` commits through compile/apply with editor-side undo orchestration | pending |
-| 22 | test: commit-transaction invariants (failed validation leaves both sides untouched; success updates both atomically; undo restores both halves) | pending |
+| 19 | refactor: introduce `ReplCompiledChange` and pure `repl_compile` validators (parse + source-structure + var-decl validation; produces source-command changes, **not** flat program); migrate `try_commit_float_decl` and `try_assign_variable` first | pending |
+| 20 | refactor: migrate block-structured commits (for-loop / func-def / if-block / close-brace) into `repl_compile`; add `repl_apply_compiled_change` (writes ReplState command arrays only) and `editor_buffer_apply_compiled_change` (writes EditorState text only) | pending |
+| 21 | refactor: route `;`-key, Enter, and `feed_line` through editor commit orchestration; on success run `editor_undo_begin → editor_buffer_apply_compiled_change → repl_apply_compiled_change → editor_undo_commit`; on failure return diagnostic upward (no buffer / store / status / undo mutation) | pending |
+| 22 | test: commit-transaction invariants (failed validation leaves buffer + store + status + undo untouched; success updates both atomically; undo restores both halves; reformat is one transaction; color-picker reparse rolls back cleanly on parse error) | pending |
 
-Phase C signal: `repl_compile()` is pure (no mutation edges out);
-every editor-text-changing path goes through one undo transaction
-that wraps `editor_buffer_apply` + `repl_apply_compiled_change`.
+Phase C signals:
+
+- `repl_compile()` is pure — no editor mutation, no command-store
+  mutation, no status mutation, no undo entry. Compile produces a
+  source-command change description; flattening still happens later.
+- `repl_apply_compiled_change()` writes only `ReplState` command
+  arrays. The function name and docstring make that explicit so a
+  future commit can't quietly fold text mutation back in.
+- `editor_buffer_apply_compiled_change()` writes only `EditorState`
+  text. Same naming discipline.
+- Every editor-text-changing path goes through one undo transaction
+  that wraps the two `_apply_*` halves.
+- Status messages flow through diagnostic return values from
+  `repl_compile()` and commit-message return values from the editor
+  commit path; `repl_compile` itself never calls `set_status()`. The
+  controller / status layer renders the diagnostic after the
+  transaction returns.
 
 ### Phase D — Carve `editor_input.c` / `editor_commit.c`
 
