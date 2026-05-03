@@ -38,12 +38,6 @@ void                     editor_set_cursor(int cursor);
 void                     editor_schedule_timer(unsigned int millis, int value);
 int                      editor_get_modifiers(void);
 
-/* Audio-gesture coupling. The Web Audio context stays suspended until
- * a user gesture, so the very first key / mouse event fires
- * repl_audio_on_user_gesture once. Native builds make this a no-op.
- * Phase J1 commit 48a relocates this state to imrepl_ctrl. */
-void editor_input_notify_audio_gesture_once(void);
-
 /* Test seam: 49a renames repl_set_modifier_provider_for_test ->
  * editor_input_set_modifier_provider_for_test. Today both names
  * resolve to the same storage. */
