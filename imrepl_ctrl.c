@@ -661,7 +661,19 @@ void imrepl_ctrl_mouse(int button, int state, int x, int y) {
     imrepl_ctrl_apply_input_effects(editor_handle_mouse(button, state, x, y));
 }
 
+/* Phase J1 commit 47d — motion router pre-dispatch (partial).
+ *
+ * Variable-panel drag motion is a peer-subsystem concern; pre-dispatching
+ * it here matches the variable-panel drag begin / release pattern from
+ * 47c. Camera pointer tracking + camera drag motion remain inside
+ * editor_handle_motion's chain; like 47c they need a `consumed` flag on
+ * ReplInputDispatchEffects to migrate cleanly. Deferred. */
 void imrepl_ctrl_motion(int x, int y) {
+    editor_reset_input_effects();
+    if (editor_input_router_handle_variable_panel_motion(x, y)) {
+        imrepl_ctrl_apply_input_effects(editor_take_input_effects());
+        return;
+    }
     imrepl_ctrl_apply_input_effects(editor_handle_motion(x, y));
 }
 
