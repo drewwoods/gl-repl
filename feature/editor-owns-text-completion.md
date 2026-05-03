@@ -834,14 +834,15 @@ which would risk capturing post-state.
 
 | # | Commit | Status |
 |---|---|---|
-| 24 | refactor: introduce `EditorServices` table (compile / apply_repl_change / apply_predef_ops / context — not a generic callback bag); `imrepl_ctrl` wires services. Behaviour-preserving indirection only | pending |
-| 25 | refactor: carve `editor_commit.c` shell with `editor_commit_current_input` returning `EditorCommitResult` (explicit `*_valid` flags, not empty-string sentinels). Undo capture moves into the orchestration AFTER successful compile + preflight, BEFORE first mutation. Migrated handlers (float-decl, var-assign) stop calling `set_status` on compile failure — diagnostic flows through `EditorCommitResult.diagnostic` | pending |
-| 26a | refactor: carve `editor_input.c` shell with `editor_handle_key/mouse/scroll`. Move keyboard / mouse / scroll handlers that don't need structured-commit migration. Route `;`-key / Enter / `feed_line` through `editor_commit_current_input` for the already-migrated simple commit paths. Structured `try_commit_*` stay in place. `repl_editor.c` becomes a transitional shim | pending |
-| 26b | refactor: introduce `EditorCommitPostEffects` + `EditorCommitPlan` (editor-side, NOT on `ReplCompiledChange`); migrate `try_commit_close_brace` first — simplest cursor / mode model — to prove the shape | pending |
-| 26c | refactor: migrate `try_commit_if_block` to compile/apply through `EditorCommitPlan` | pending |
-| 26d | refactor: migrate `try_commit_func_def` to compile/apply (handles leading-comment relocation; potentially the largest single migration) | pending |
-| 26e | refactor: migrate `try_commit_for_loop` to compile/apply (one-liner-body branch + inline body parse) | pending |
-| 27 | checks: promote `check-imrepl-not-editor-mirror` to hard guard. Verify `imrepl_ctrl` calls only coarse `editor_handle_*` APIs (no per-field editor wrappers). Real `UiHit.kind` dispatch deferred to Phase E once the type exists | pending |
+| 24 | refactor: introduce `EditorServices` table (compile / apply_repl_change / apply_predef_ops / context — not a generic callback bag); `imrepl_ctrl` wires services. Behaviour-preserving indirection only | done |
+| 25 | refactor: carve `editor_commit.c` shell with `editor_commit_current_input` returning `EditorCommitResult` (explicit `*_valid` flags, not empty-string sentinels). Undo capture moves into the orchestration AFTER successful compile + preflight, BEFORE first mutation. Migrated handlers (float-decl, var-assign) stop calling `set_status` on compile failure — diagnostic flows through `EditorCommitResult.diagnostic` | done |
+| 26a | refactor: carve `editor_input.c` shell with `editor_handle_key/mouse/scroll`. Move keyboard / mouse / scroll handlers that don't need structured-commit migration. Route `;`-key / Enter / `feed_line` through `editor_commit_current_input` for the already-migrated simple commit paths. Structured `try_commit_*` stay in place. `repl_editor.c` becomes a transitional shim | done |
+| 26b | refactor: introduce `EditorCommitPostEffects` + `EditorCommitPlan` (editor-side, NOT on `ReplCompiledChange`); migrate `try_commit_close_brace` first — simplest cursor / mode model — to prove the shape | done |
+| 26c | refactor: migrate `try_commit_if_block` to compile/apply through `EditorCommitPlan` | done |
+| 26d | refactor: migrate `try_commit_func_def` overwrite-header branch to compile/apply through `EditorCommitPlan` | done |
+| 26e | refactor: migrate `try_commit_for_loop` to compile/apply (one-liner-body branch + inline body parse) | done |
+| 26f | refactor: complete `try_commit_func_def` migration via delete+insert plan + `func_decl_resume_publish` post-effect | done |
+| 27 | checks: promote `check-imrepl-not-editor-mirror` to hard guard. Verify `imrepl_ctrl` calls only coarse `editor_handle_*` APIs (no per-field editor wrappers). Real `UiHit.kind` dispatch deferred to Phase E once the type exists | done |
 
 Phase D signals:
 
