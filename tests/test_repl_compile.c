@@ -14,6 +14,7 @@
  */
 
 #include "editor_commit.h"
+#include "editor_services.h"
 #include "editor_state.h"
 #include "repl_apply.h"
 #include "repl_command_store.h"
@@ -388,6 +389,78 @@ static void test_reformat_keeps_buffer_and_store_aligned(void) {
     }
 }
 
+/* editor_commit_current_input compile-failure path: returns
+ * diagnostic via the result; no buffer/store/predef/status/undo
+ * mutation. */
+static void test_orchestration_compile_failure_returns_diagnostic(void) {
+    repl_reset_state();
+
+    /* Establish a non-trivial pre-state. */
+    editor_input_set_text("float anchor;");
+    EditorServices svc = editor_services_default();
+    EditorCommitResult ok = editor_commit_current_input(&svc);
+    ASSERT_INT("setup commit consumed", ok.consumed, 1);
+    ASSERT_INT("setup commit mutated", ok.mutated, 1);
+    ui_state_status_set("baseline status");
+
+    ComputeFingerprint before = capture_fingerprint();
+
+    /* Trigger compile failure: redeclare. */
+    editor_input_set_text("float anchor;");
+    EditorCommitResult r = editor_commit_current_input(&svc);
+    ASSERT_INT("compile failure consumed", r.consumed, 1);
+    ASSERT_INT("compile failure not mutated", r.mutated, 0);
+    ASSERT_INT("compile failure not capacity_failed", r.capacity_failed, 0);
+    ASSERT_INT("compile failure carries diagnostic", r.diagnostic_valid, 1);
+    ASSERT_INT("compile failure no commit message",
+               r.commit_message_valid, 0);
+    ASSERT_TRUE("diagnostic non-empty", r.diagnostic[0] != '\0');
+
+    ComputeFingerprint after = capture_fingerprint();
+    ASSERT_TRUE("orchestration compile failure leaves state untouched",
+                fingerprint_equal(&before, &after));
+}
+
+/* editor_commit_current_input NO_CHANGE path: input the dispatcher
+ * doesn't recognize. consumed=0, no mutation. */
+static void test_orchestration_no_change_falls_through(void) {
+    repl_reset_state();
+    editor_input_set_text("glVertex3f(0,0,0)");
+    ui_state_status_set("baseline");
+    ComputeFingerprint before = capture_fingerprint();
+
+    EditorServices svc = editor_services_default();
+    EditorCommitResult r = editor_commit_current_input(&svc);
+    ASSERT_INT("non-handler input consumed=0", r.consumed, 0);
+    ASSERT_INT("non-handler input mutated=0", r.mutated, 0);
+    ASSERT_INT("non-handler input no diagnostic", r.diagnostic_valid, 0);
+
+    ComputeFingerprint after = capture_fingerprint();
+    ASSERT_TRUE("orchestration NO_CHANGE leaves state untouched",
+                fingerprint_equal(&before, &after));
+}
+
+/* editor_commit_current_input success path: buffer + store + predef
+ * mutate together, commit_message valid. */
+static void test_orchestration_success_returns_message(void) {
+    repl_reset_state();
+    editor_input_set_text("float energy;");
+
+    EditorServices svc = editor_services_default();
+    EditorCommitResult r = editor_commit_current_input(&svc);
+    ASSERT_INT("success consumed", r.consumed, 1);
+    ASSERT_INT("success mutated", r.mutated, 1);
+    ASSERT_INT("success not capacity_failed", r.capacity_failed, 0);
+    ASSERT_INT("success not diagnostic", r.diagnostic_valid, 0);
+    ASSERT_INT("success has commit_message", r.commit_message_valid, 1);
+    ASSERT_TRUE("commit_message non-empty", r.commit_message[0] != '\0');
+
+    ASSERT_INT("post-success cmd count", repl_state_document_count(), 1);
+    ASSERT_INT("post-success buffer count", editor_buffer_count(), 1);
+    ASSERT_TRUE("post-success predef registered",
+                repl_eval_find_predef_var_idx("energy") >= 0);
+}
+
 int main(void) {
     test_compile_float_decl_failure_is_pure();
     test_compile_var_assign_failure_is_pure();
@@ -396,6 +469,9 @@ int main(void) {
     test_compile_apply_var_assign_updates_value();
     test_capacity_failure_is_atomic();
     test_reformat_keeps_buffer_and_store_aligned();
+    test_orchestration_compile_failure_returns_diagnostic();
+    test_orchestration_no_change_falls_through();
+    test_orchestration_success_returns_message();
 
     return test_harness_report(&g_harness, "test_repl_compile");
 }
