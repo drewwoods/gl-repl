@@ -868,7 +868,7 @@ Phase D signals:
 |---|---|---|
 | 28 | refactor: define `UiHit` / `UiHitKind`; convert `ui_panels` mouse handlers to compute and return hit | done |
 | 29 | refactor: convert `ui_menu_bar`, `ui_color_picker`, `ui_variable_panel` mouse handlers to return `UiHit` | done |
-| 30 | checks: promote `check-ui-returns-hits-only` to hard guard (ui_*.c forbidden from calling `repl_*` mutators or `editor_*_mut`) | pending |
+| 30 | checks: introduce `check-ui-returns-hits-only` hard guard with ratchet-down baseline (8 residual mutator calls scheduled for Phase F+ cleanup) | done |
 
 Phase E signal: `check-ui-returns-hits-only` is enforced; UI input
 handlers compute hits and return — they don't call mutators.
