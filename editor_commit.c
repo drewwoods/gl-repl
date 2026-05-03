@@ -475,6 +475,98 @@ ReplCompileResult editor_compile_if_block(const char *input,
     return REPL_COMPILE_OK;
 }
 
+/* ---- editor_compile_func_def (overwrite-only) ------------------- */
+
+ReplCompileResult editor_compile_func_def(const char *input,
+                                          const ReplCompileContext *ctx,
+                                          EditorCommitPlan *out,
+                                          char *err, int err_size) {
+    if (!ctx || !out) return REPL_COMPILE_ERROR;
+
+    editor_commit_plan_init(out);
+
+    int fn = -1;
+    int param_count = 0;
+    char param_names[MAX_EXPR_VARS][16];
+
+    /* Quick-reject inputs that look like func *calls* (have `(` and
+     * no `{`). The legacy guard returns 0 from try_commit_func_def
+     * for those so the dispatch chain falls through to
+     * parse_command, which classifies them as CMD_CALL. */
+    const char *trimmed = input ? input : "";
+    while (*trimmed && isspace((unsigned char)*trimmed)) trimmed++;
+    if (strchr(trimmed, '(') != NULL && strchr(trimmed, '{') == NULL) {
+        out->change.kind = REPL_COMPILED_NO_CHANGE;
+        return REPL_COMPILE_OK;
+    }
+
+    if (!parse_repl_func_signature(input ? input : "", &fn,
+                                   param_names, MAX_EXPR_VARS,
+                                   &param_count)) {
+        out->change.kind = REPL_COMPILED_NO_CHANGE;
+        return REPL_COMPILE_OK;
+    }
+
+    int edit_pos = ctx->insert_mode ? ctx->edit_line :
+                   (ctx->edit_line < ctx->document_count
+                        ? ctx->edit_line : ctx->document_count);
+    int overwriting_func = (!ctx->insert_mode &&
+                            edit_pos < ctx->document_count &&
+                            ctx->document_cmds[edit_pos].type == CMD_FUNC_DEF);
+
+    /* Reject duplicate-funcN definitions; overwriting the existing
+     * line is allowed. */
+    for (int ei = 0; ei < ctx->document_count; ei++) {
+        const GLCmd *c = &ctx->document_cmds[ei];
+        if (!c->valid) continue;
+        if (c->type != CMD_FUNC_DEF) continue;
+        if ((int)c->args[0] != fn) continue;
+        if (overwriting_func && ei == edit_pos) continue;
+        snprintf(err, (size_t)err_size,
+                 "func%d already defined (line %d)", fn, ei + 1);
+        return REPL_COMPILE_ERROR;
+    }
+
+    /* Phase D commit 26d migrates only the overwrite branch. The
+     * new-def-with-comment-relocation path (function_leading_comment
+     * relocation + g_func_decl_resume_delta publish) needs a
+     * delete-before-insert field on EditorCommitPlan + a
+     * publish-side post-effect; deferred to a follow-up commit.
+     * Falling through to legacy keeps behaviour intact. */
+    if (!overwriting_func) {
+        out->change.kind = REPL_COMPILED_NO_CHANGE;
+        return REPL_COMPILE_OK;
+    }
+
+    char indent[32];
+    repl_source_scope_cmd_indent(edit_pos, indent, sizeof(indent));
+
+    GLCmd updated = ctx->document_cmds[edit_pos];
+    updated.args[0] = (float)fn;
+    updated.num_args = param_count;
+
+    char fd_text[MAX_LINE_LEN];
+    format_func_header(fd_text, (int)sizeof(fd_text),
+                       indent, fn, param_names, param_count);
+
+    out->change.kind  = REPL_COMPILED_REPLACE_ONE;
+    out->change.pos   = edit_pos;
+    out->change.count = 1;
+    out->change.cmds[0] = updated;
+    snprintf(out->change.text[0], sizeof(out->change.text[0]),
+             "%s", fd_text);
+
+    out->effects.cursor_target      = edit_pos + 1;
+    out->effects.insert_mode_target = 1;
+    out->effects.clear_input        = 1;
+    out->effects.clear_autocomplete = 1;
+
+    snprintf(out->commit_message, sizeof(out->commit_message),
+             "func def header updated");
+    out->commit_message_valid = 1;
+    return REPL_COMPILE_OK;
+}
+
 int editor_commit_apply_compiled_change(const struct ReplCompiledChange_s *change) {
     if (!change) return 0;
 
