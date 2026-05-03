@@ -153,6 +153,11 @@ typedef struct EditorCommitPostEffects_s {
      * the func-decl-resume guard ("only fire on CMD_FUNC_END") and
      * by status-message formatting. */
     int end_type;
+
+    /* Drop autocomplete model state (matches the legacy
+     * clear_autocomplete_state() side-effect on header-replace
+     * paths). */
+    int clear_autocomplete;
 } EditorCommitPostEffects;
 
 typedef struct EditorCommitPlan_s {
@@ -189,5 +194,10 @@ ReplCompileResult editor_compile_close_brace(const char *input,
                                              const ReplCompileContext *ctx,
                                              EditorCommitPlan *out,
                                              char *err, int err_size);
+
+ReplCompileResult editor_compile_if_block(const char *input,
+                                          const ReplCompileContext *ctx,
+                                          EditorCommitPlan *out,
+                                          char *err, int err_size);
 
 #endif /* EDITOR_COMMIT_H */

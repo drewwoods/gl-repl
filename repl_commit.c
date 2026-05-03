@@ -674,146 +674,33 @@ int try_commit_func_def(void) {
 }
 
 int try_commit_if_block(void) {
-    const char *p = editor_state_input().input;
-    while (*p && isspace((unsigned char)*p))
-        p++;
-    if (strncmp(p, "if(", 3) != 0 && strncmp(p, "if (", 4) != 0)
-        return 0;
+    /* Phase D commit 26c migration: dispatch through the
+     * compile/apply pair. editor_compile_if_block produces the
+     * EditorCommitPlan; editor_commit_apply_plan replays both
+     * halves atomically.
+     */
+    ReplCompileContext ctx = repl_compile_context_from_live();
+    EditorCommitPlan plan;
+    char err[REPL_STATUS_TEXT_MAX];
 
-    {
-        int pos = editor_insert_mode() ? repl_state_edit_line() :
-                  (repl_state_edit_line() < repl_state_document_count() ? repl_state_edit_line() : repl_state_document_count());
-        ExprVar visible_vars[MAX_EXPR_VARS];
-        int visible_nv = collect_visible_vars(pos, visible_vars, MAX_EXPR_VARS);
-        float cond_args[1];
-        float cond_val;
-        char cond_text[MAX_LINE_LEN];
-        int clen;
-        char indent[32];
-        char ib_text[MAX_LINE_LEN] = "";
-        char ie_text[MAX_LINE_LEN] = "";
-        GLCmd ib;
-        GLCmd ie;
-
-        while (*p && *p != '(')
-            p++;
-        if (!*p)
-            return 0;
-        p++;
-
-        {
-            int paren = 1;
-            const char *expr_start = p;
-
-            while (*p && paren > 0) {
-                if (*p == '(')
-                    paren++;
-                else if (*p == ')')
-                    paren--;
-                if (paren > 0)
-                    p++;
-            }
-            if (paren != 0) {
-                set_status("if syntax: if(expr) {");
-                return 1;
-            }
-
-            clen = (int)(p - expr_start);
-            if (clen > (int)sizeof(cond_text) - 1)
-                clen = (int)sizeof(cond_text) - 1;
-            memcpy(cond_text, expr_start, (size_t)clen);
-            cond_text[clen] = '\0';
-        }
-
-        {
-            char verr[128];
-            if (!repl_eval_validate_expression_idents(cond_text,
-                                            visible_nv > 0 ? visible_vars : NULL, visible_nv,
-                                            verr, sizeof(verr))) {
-                set_status(verr);
-                return 1;
-            }
-        }
-        {
-            int neval = repl_eval_parse_exprs(cond_text, cond_args, 1,
-                                    visible_nv > 0 ? visible_vars : NULL, visible_nv);
-            cond_val = (neval >= 1) ? cond_args[0] : 0.0f;
-        }
-
-        p++;
-        while (*p && isspace((unsigned char)*p))
-            p++;
-        if (*p != '{' && *p != '\0') {
-            set_status("if syntax: if(expr) {");
-            return 1;
-        }
-
-        fill_scope_indent(pos, indent, sizeof(indent));
-
-        memset(&ib, 0, sizeof(ib));
-        ib.type = CMD_IF_BEGIN;
-        ib.args[0] = cond_val;
-        ib.valid = 1;
-        ib.has_vars = input_has_any_visible_vars(cond_text, visible_vars, visible_nv);
-
-        {
-            char *ct = cond_text;
-            int ctlen;
-
-            while (*ct && isspace((unsigned char)*ct))
-                ct++;
-            ctlen = (int)strlen(ct);
-            while (ctlen > 0 && isspace((unsigned char)ct[ctlen - 1]))
-                ct[--ctlen] = '\0';
-            snprintf(ib_text, sizeof(ib_text), "%sif(%s) {", indent, ct);
-        }
-
-        if (!editor_insert_mode() && repl_state_edit_line() < repl_state_document_count() &&
-            repl_state_document_cmds_mut()[repl_state_edit_line()].type == CMD_IF_BEGIN) {
-            ReplCommandStore store = repl_command_store_live();
-            int replace_idx = repl_state_edit_line();
-            if (repl_command_store_replace_one(&store, replace_idx, &ib))
-                editor_buffer_replace_line(replace_idx, ib_text);
-            repl_state_edit_line_set(repl_state_edit_line() + 1);
-            editor_insert_mode_set(1);
-            {
-                ReplEditorInputState *inp = editor_state_input_mut();
-                inp->input[0] = '\0';
-                inp->input_len = 0;
-            }
-            editor_cursor_pos_set(0);
-            clear_autocomplete_state();
-            set_status("if condition updated");
-            mark_normals_dirty();
-            return 1;
-        }
-
-        memset(&ie, 0, sizeof(ie));
-        ie.type = CMD_IF_END;
-        ie.valid = 1;
-        snprintf(ie_text, sizeof(ie_text), "%s}", indent);
-
-        ReplCommandStore store = repl_command_store_live();
-        GLCmd if_cmds[2] = { ib, ie };
-        const char *if_lines[2] = { ib_text, ie_text };
-        if (!repl_command_store_insert_many(&store, pos, if_cmds, 2, 0)) {
-            set_status("Command buffer full!");
-            return 1;
-        }
-        editor_buffer_insert_lines(pos, if_lines, 2);
-
-        repl_state_edit_line_set(pos + 1);
-        editor_insert_mode_set(1);
-        {
-            ReplEditorInputState *inp = editor_state_input_mut();
-            inp->input[0] = '\0';
-            inp->input_len = 0;
-        }
-        editor_cursor_pos_set(0);
-        set_status("if-block: type body lines, press Esc when done");
-        mark_normals_dirty();
+    ReplCompileResult r = editor_compile_if_block(editor_state_input().input,
+                                                  &ctx, &plan,
+                                                  err, sizeof(err));
+    if (r == REPL_COMPILE_OK &&
+        plan.change.kind == REPL_COMPILED_NO_CHANGE &&
+        !plan.commit_message_valid)
+        return 0;  /* not an if-block input */
+    if (r != REPL_COMPILE_OK) {
+        set_status(err);
         return 1;
     }
+
+    if (!editor_commit_apply_plan(&plan)) {
+        set_status("Command buffer full!");
+        return 1;
+    }
+    mark_normals_dirty();
+    return 1;
 }
 
 int try_commit_close_brace(void) {
