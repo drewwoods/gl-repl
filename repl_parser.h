@@ -28,12 +28,21 @@
  * vars/num_vars make local loop/function variables visible to expression
  * evaluation. strict_refs enforces that function calls reference declared
  * functions (CMD_FUNC_DEF); default 0 for back-compat with reformatting
- * and test paths that re-parse already-committed lines. */
+ * and test paths that re-parse already-committed lines.
+ *
+ * Phase H.5 commit 40: err_buf / err_sz invert the diagnostic flow.
+ * When err_buf is non-NULL, the parser writes any error message into
+ * the buffer instead of calling set_status() directly, so the editor
+ * (or whatever orchestrates the commit) decides whether and how to
+ * surface the diagnostic. Legacy callers that leave err_buf NULL keep
+ * the old set_status() side effect during the migration. */
 typedef struct {
     int source_line_idx;
     ExprVar *vars;
     int num_vars;
     int strict_refs;
+    char *err_buf;
+    int   err_sz;
 } ReplParseContext;
 
 /* Parser output struct. On success, cmd holds the parsed command and text
