@@ -63,9 +63,9 @@ static void insert_cmd_at(int pos, const GLCmd *cmd,
     char line[MAX_LINE_LEN];
 
     make_auto_normal_text(pos, nx, ny, nz, line, sizeof(line));
-    repl_command_store_insert_one(&store, pos, cmd,
-                                  REPL_COMMAND_STORE_ADJUST_EDIT_LINE,
-                                  line);
+    if (repl_command_store_insert_one(&store, pos, cmd,
+                                      REPL_COMMAND_STORE_ADJUST_EDIT_LINE))
+        editor_buffer_insert_line(pos, line);
 }
 
 static void apply_front_face_to_normal(GLenum front_face, float *n) {
@@ -206,8 +206,9 @@ void recompute_autonormals(void) {
                     char line[MAX_LINE_LEN];
 
                     make_auto_normal_text(vidx - 1, nx, ny, nz, line, sizeof(line));
-                    repl_command_store_replace_one(&store, vidx - 1,
-                                                   &auto_normal, line);
+                    if (repl_command_store_replace_one(&store, vidx - 1,
+                                                       &auto_normal))
+                        editor_buffer_replace_line(vidx - 1, line);
                 }
                 continue;
             }

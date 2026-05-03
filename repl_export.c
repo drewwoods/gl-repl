@@ -1662,11 +1662,11 @@ static int import_parse_declare_marker(const char *line, int *loaded,
 
         if (!repl_command_store_insert_one(
                 &store, decl_pos, &cmd,
-                REPL_COMMAND_STORE_ADJUST_EDIT_LINE,
-                decl_line)) {
+                REPL_COMMAND_STORE_ADJUST_EDIT_LINE)) {
             if (warnings) (*warnings)++;
             return 1;
         }
+        editor_buffer_insert_line(decl_pos, decl_line);
         (*loaded)++;
     }
     (void)warnings;

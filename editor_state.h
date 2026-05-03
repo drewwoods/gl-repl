@@ -167,12 +167,49 @@ const ReplEditorBuffer *editor_state_buffer(void);
 ReplEditorBuffer       *editor_state_buffer_mut(void);
 
 /* Slice-level editor_buffer API. This is the long-term surface; the
- * Phase 2 commit 8 mutation primitives (insert / replace / delete /
- * load) extend the same namespace. */
+ * Phase B commit 17 mutation primitives (insert / replace / delete /
+ * load) extend the same namespace and replace the previous text-aware
+ * `repl_command_store_*_with_line[s]` overloads. */
 const char *editor_buffer_line(int idx);
 void        editor_buffer_set_line(int idx, const char *text);
 int         editor_buffer_count(void);
 void        editor_buffer_set_count(int count);
+
+/* Mutation primitives. Each operates only on the editor buffer
+ * (lines + line_count); command-array mutations stay in
+ * repl_command_store. Callers pair the two — `repl_command_store_*`
+ * for the GLCmd shift, then `editor_buffer_*` for the parallel text
+ * write — typically inside one undo transaction.
+ *
+ * Semantics:
+ *   insert_lines(pos, lines, count)
+ *       Shift lines[pos..line_count) to the right by count, then
+ *       fill lines[pos..pos+count) from `lines[0..count)` (or "" if
+ *       lines is NULL or lines[i] is NULL). line_count grows by
+ *       count, clamped to MAX_COMMANDS.
+ *   insert_line(pos, line)
+ *       Convenience wrapper for inserting a single line.
+ *   replace_line(pos, line)
+ *       Overwrite the slot at pos with line (or ""). line_count is
+ *       extended to (pos+1) if it was below.
+ *   delete_range(start, count)
+ *       Shift lines[start+count..line_count) left by count. Clears
+ *       trailing slots.
+ *   load_lines(lines, count)
+ *       Bulk replace: clear, then write lines[0..count) (or "" if
+ *       lines is NULL or lines[i] is NULL). line_count becomes
+ *       count.
+ *   clear()
+ *       line_count = 0. Trailing slots are not zeroed (next mutation
+ *       will overwrite them).
+ *
+ * Returns 1 on success, 0 on bounds/capacity error. */
+int  editor_buffer_insert_lines(int pos, const char *const *lines, int count);
+int  editor_buffer_insert_line(int pos, const char *line);
+int  editor_buffer_replace_line(int pos, const char *line);
+int  editor_buffer_delete_range(int start, int count);
+int  editor_buffer_load_lines(const char *const *lines, int count);
+void editor_buffer_clear(void);
 
 /* Build a read-only EditorBufferView over the live editor buffer.
  * Cheap (one struct copy of pointer + int). REPL consumers should

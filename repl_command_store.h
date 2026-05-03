@@ -103,96 +103,48 @@ int  repl_command_store_normalize_range(const ReplCommandStore *store,
                                         int start, int count,
                                         int *out_start, int *out_count);
 
-/* Optional text-aware insertion helpers. When lines is non-NULL, the editor
- * buffer is updated from that parallel text array instead of re-reading
- * cmd->source after the array shift. */
-int  repl_command_store_insert_many_with_lines(ReplCommandStore *store, int pos,
-                                               const GLCmd *cmds, int count,
-                                               int flags,
-                                               const char *const *lines);
+/* Insert multiple commands at position pos. Shifts cmds[pos..count) to the
+ * right, then copies the source commands into the freed space. flags control
+ * whether to auto-adjust edit_line. Returns 1 on success, 0 on error (full or
+ * out of bounds). Called by paste, load-from-file, and undo operations.
+ *
+ * This API mutates only the GLCmd array. Callers that need parallel text
+ * writes pair the call with `editor_buffer_insert_lines(pos, lines, count)`
+ * (typically inside one undo transaction). The text-aware overload removed
+ * in Phase B commit 17. */
+int  repl_command_store_insert_many(ReplCommandStore *store, int pos,
+                                    const GLCmd *cmds, int count, int flags);
 
-static inline int repl_command_store_insert_many_without_lines(
-        ReplCommandStore *store, int pos, const GLCmd *cmds, int count,
-        int flags) {
-    return repl_command_store_insert_many_with_lines(store, pos, cmds, count,
-                                                     flags, NULL);
-}
-
-/* Insert multiple commands at position pos. Shifts cmds[pos..count) to the right,
- * then copies the source commands into the freed space. flags control whether to
- * auto-adjust edit_line. Returns 1 on success, 0 on error (full or out of bounds).
- * Called by paste, load-from-file, and undo operations. */
-#define REPL_COMMAND_STORE_INSERT_MANY_SELECT(_1, _2, _3, _4, _5, _6, NAME, ...) NAME
-#define repl_command_store_insert_many(...) \
-    REPL_COMMAND_STORE_INSERT_MANY_SELECT(__VA_ARGS__, \
-                                          repl_command_store_insert_many_with_lines, \
-                                          repl_command_store_insert_many_without_lines)(__VA_ARGS__)
-
-int  repl_command_store_insert_one_with_line(ReplCommandStore *store, int pos,
-                                             const GLCmd *cmd, int flags,
-                                             const char *line);
-
-static inline int repl_command_store_insert_one_without_line(
-        ReplCommandStore *store, int pos, const GLCmd *cmd, int flags) {
-    return repl_command_store_insert_one_with_line(store, pos, cmd, flags,
-                                                   NULL);
-}
-
-/* Insert a single command. Convenience wrapper around insert_many(). Returns 1
- * on success, 0 on error. */
-#define REPL_COMMAND_STORE_INSERT_ONE_SELECT(_1, _2, _3, _4, _5, NAME, ...) NAME
-#define repl_command_store_insert_one(...) \
-    REPL_COMMAND_STORE_INSERT_ONE_SELECT(__VA_ARGS__, \
-                                         repl_command_store_insert_one_with_line, \
-                                         repl_command_store_insert_one_without_line)(__VA_ARGS__)
-
-int  repl_command_store_replace_one_with_line(ReplCommandStore *store, int pos,
-                                              const GLCmd *cmd,
-                                              const char *line);
-
-static inline int repl_command_store_replace_one_without_line(
-        ReplCommandStore *store, int pos, const GLCmd *cmd) {
-    return repl_command_store_replace_one_with_line(store, pos, cmd, NULL);
-}
+/* Insert a single command. Convenience wrapper around insert_many(). Returns
+ * 1 on success, 0 on error. Pair with `editor_buffer_insert_line(pos, line)`
+ * when a parallel text write is needed. */
+int  repl_command_store_insert_one(ReplCommandStore *store, int pos,
+                                   const GLCmd *cmd, int flags);
 
 /* Replace a single command at pos. Does not shift; overwrites in place.
  * Returns 1 on success, 0 if out of bounds. Used for editing existing lines
- * without changing array size. */
-#define REPL_COMMAND_STORE_REPLACE_ONE_SELECT(_1, _2, _3, _4, NAME, ...) NAME
-#define repl_command_store_replace_one(...) \
-    REPL_COMMAND_STORE_REPLACE_ONE_SELECT(__VA_ARGS__, \
-                                          repl_command_store_replace_one_with_line, \
-                                          repl_command_store_replace_one_without_line)(__VA_ARGS__)
+ * without changing array size. Pair with
+ * `editor_buffer_replace_line(pos, line)` when a parallel text write is
+ * needed. */
+int  repl_command_store_replace_one(ReplCommandStore *store, int pos,
+                                    const GLCmd *cmd);
 
 /* Delete a range of commands. Shifts cmds[start+count..] left to fill the
- * deleted space. Returns 1 on success, 0 on error. Called by delete, cut, and
- * clear-all operations. */
+ * deleted space. Returns 1 on success, 0 on error. Pair with
+ * `editor_buffer_delete_range(start, count)` for the parallel text shift. */
 int  repl_command_store_delete_range(ReplCommandStore *store, int start,
                                      int count);
 
 /* Load a complete command array into the store (bulk replace). Clears the
  * current commands and copies in the new array, setting edit_line as specified.
- * Returns 1 on success, 0 if the array doesn't fit. Used by load-from-file,
- * undo, and example loading. */
-int  repl_command_store_load_with_lines(ReplCommandStore *store,
-                                        const GLCmd *cmds, int count,
-                                        const char *const *lines,
-                                        int edit_line);
-
-static inline int repl_command_store_load_without_lines(
-        ReplCommandStore *store, const GLCmd *cmds, int count, int edit_line) {
-    return repl_command_store_load_with_lines(store, cmds, count, NULL,
-                                              edit_line);
-}
-
-#define REPL_COMMAND_STORE_LOAD_SELECT(_1, _2, _3, _4, _5, NAME, ...) NAME
-#define repl_command_store_load(...) \
-    REPL_COMMAND_STORE_LOAD_SELECT(__VA_ARGS__, \
-                                   repl_command_store_load_with_lines, \
-                                   repl_command_store_load_without_lines)(__VA_ARGS__)
+ * Returns 1 on success, 0 if the array doesn't fit. Pair with
+ * `editor_buffer_load_lines(lines, count)` for the parallel text bulk load. */
+int  repl_command_store_load(ReplCommandStore *store,
+                             const GLCmd *cmds, int count, int edit_line);
 
 /* Clear all commands (set count to 0). Does not adjust edit_line; caller
- * must handle cursor repositioning. Used by Ctrl+L (clear all) and shutdown. */
+ * must handle cursor repositioning. Pair with `editor_buffer_clear()` for the
+ * parallel text clear. */
 void repl_command_store_clear(ReplCommandStore *store);
 
 #endif /* REPL_COMMAND_STORE_H */

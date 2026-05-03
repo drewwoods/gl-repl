@@ -149,9 +149,10 @@ static int load_commands_into_live(const GLCmd *cmds,
                                    const char lines[MAX_COMMANDS][MAX_LINE_LEN],
                                    int num_cmds, int edit_line) {
     ReplCommandStore store = repl_command_store_live();
-    return repl_command_store_load(&store, cmds, num_cmds,
-                                   scene_line_ptrs(lines, num_cmds),
-                                   edit_line);
+    if (!repl_command_store_load(&store, cmds, num_cmds, edit_line))
+        return 0;
+    editor_buffer_load_lines(scene_line_ptrs(lines, num_cmds), num_cmds);
+    return 1;
 }
 
 void repl_scenes_save_active_scene_if_any(void);

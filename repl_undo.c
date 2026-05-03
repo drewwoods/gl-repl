@@ -49,9 +49,10 @@ void repl_undo_snapshot_restore(const ReplUndoSnapshot *snapshot) {
     ReplCommandStore store = repl_command_store_live();
     if (!repl_command_store_load(&store, snapshot->cmds,
                                  snapshot->num_cmds,
-                                 undo_snapshot_line_ptrs(snapshot),
                                  snapshot->edit_line))
         return;
+    editor_buffer_load_lines(undo_snapshot_line_ptrs(snapshot),
+                             snapshot->num_cmds);
     g_num_predef_vars = snapshot->num_predef_vars;
     for (int i = 0; i < snapshot->num_predef_vars; i++) {
         g_predef_vars[i].value = snapshot->predef_vals[i];
