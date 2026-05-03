@@ -5,9 +5,15 @@
  *
  *   editor_commit_apply_compiled_change(change)
  *       preflight repl_apply_can_apply_compiled_change(change)
- *       repl_apply_predef_ops(change)             // predef-var cascade
+ *       services.apply_predef_ops(change)         // predef-var cascade
  *       editor_buffer_apply_compiled_change(change)  // EditorState only
- *       repl_apply_compiled_change(change)        // ReplState only
+ *       services.apply_repl_change(change)        // ReplState only
+ *
+ * The mutating halves go through the EditorServices table so the
+ * editor doesn't reach into `repl_apply_*` directly. Phase D commit
+ * 25 grows this into the full `editor_commit_current_input` shape
+ * (compile, undo, preflight, apply); for now this helper just
+ * threads services through the apply path that already exists.
  *
  * Preflight gives the helper an all-or-nothing atomicity guarantee:
  * if the cmd-store can't accept the change, none of the three
@@ -19,13 +25,14 @@
  *
  * The undo capture for migrated handlers still rides on
  * repl_undo_push_snapshot() pushed at the dispatch sites
- * (;-key, Enter, feed_line) in repl_editor.c. Phase D's editor_input
- * carve will replace that with a per-commit transaction wrapping
- * this helper.
+ * (;-key, Enter, feed_line) in repl_editor.c. Phase D commit 25
+ * replaces that with a per-commit transaction wrapping this
+ * helper.
  */
 
 #include "editor_commit.h"
 
+#include "editor_services.h"
 #include "editor_state.h"
 #include "repl_apply.h"
 #include "repl_compile.h"
@@ -34,16 +41,15 @@ int editor_commit_apply_compiled_change(const struct ReplCompiledChange_s *chang
     if (!change) return 0;
 
     /* Preflight: if the cmd-store can't accept the change, return
-     * 0 before mutating anything. This is the load-bearing
-     * atomicity guarantee — without it, a capacity failure leaves
-     * predef-vars and/or editor buffer mutated while cmd-store is
-     * still pre-change. */
+     * 0 before mutating anything. Pure read; doesn't go through
+     * services. */
     if (!repl_apply_can_apply_compiled_change(change))
         return 0;
 
     /* Past the preflight every apply call below succeeds. */
-    repl_apply_predef_ops(change);
+    EditorServices svc = editor_services_default();
+    svc.apply_predef_ops(change, svc.user);
     editor_buffer_apply_compiled_change(change);
-    repl_apply_compiled_change(change);
+    svc.apply_repl_change(change, svc.user);
     return 1;
 }
