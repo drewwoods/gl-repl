@@ -1,36 +1,46 @@
 #include "imrepl_ctrl.h"
 
 #include <gl_includes.h>
+#include <stdio.h>
+#include <stdlib.h>
 
 #include "editor_input.h"
-#include "repl_core.h"
-#include "repl_executor.h"
-#include "repl_eval.h"
-#include "repl_pipeline.h"
-#include "replay.h"
-#include "repl_replay_annotations.h"
-#include "repl_state.h"
-#include "scene_render.h"
-#include "ui_color_picker.h"
-#include "ui_editor.h"
-#include "ui_replay_hud.h"
-#include "ui_autocomplete_panel.h"
-#include "ui_help_overlay.h"
-#include "ui_menu_bar.h"
-#include "ui_panels.h"
-#include "ui_snapshot.h"
-#include "ui_state.h"
-#include "editor_clipboard.h"
-#include "editor_code_panel_document.h"
-#include "repl_export.h"
-#include "ui_layout.h"
-#include "repl_source_scope.h"
-#include "ui_profile_panel.h"
-#include "ui_variable_panel.h"
-#include "variable_panel.h"
-#include "replay_state.h"
+#include "editor_help_session.h"
+#include "editor_inline_rename.h"
+#include "editor_search.h"
+#include "repl_actions.h"
 #include "repl_audio.h"
 #include "repl_camera_controls.h"
+#include "repl_config.h"
+#include "repl_core.h"
+#include "repl_debug.h"
+#include "repl_eval.h"
+#include "repl_executor.h"
+#include "repl_export.h"
+#include "repl_keys.h"
+#include "repl_pipeline.h"
+#include "repl_replay_annotations.h"
+#include "repl_source_scope.h"
+#include "repl_state.h"
+#include "replay.h"
+#include "replay_state.h"
+#include "scene_render.h"
+#include "ui_autocomplete_panel.h"
+#include "ui_color_picker.h"
+#include "ui_editor.h"
+#include "ui_help_overlay.h"
+#include "ui_layout.h"
+#include "ui_menu_bar.h"
+#include "ui_panels.h"
+#include "ui_profile_panel.h"
+#include "ui_replay_hud.h"
+#include "ui_snapshot.h"
+#include "ui_state.h"
+#include "ui_variable_panel.h"
+#include "variable_panel.h"
+#include "variable_panel_drag.h"
+#include "editor_clipboard.h"
+#include "editor_code_panel_document.h"
 #include "prof.h"
 
 static int imrepl_ctrl_cmd_is_focus_vertex(const GLCmd *cmd) {
@@ -571,32 +581,327 @@ void imrepl_ctrl_set_accum(int enabled) {
     repl_state_render_mut()->use_accum = enabled ? 1 : 0;
 }
 
-/* Phase J1 commit 47a — keyboard router pre-dispatch.
+/* ===========================================================================
+ * Router helpers: non-editor input concerns
  *
- * Order is load-bearing:
- *   1. Rename modal capture FIRST. Inline rename is a hard modal: backtick,
- *      Ctrl+G, Ctrl+S, every other route helper must miss while rename is
- *      open or keystrokes leak out of the rename buffer.
- *   2. Controller-owned routes (config menu, replay forwarding, cfg
- *      shortcuts, replay toggle, accum samples, save / debug-dump / quit).
- *   3. Fall through to the editor for text-model concerns + remaining
- *      shortcuts that haven't been peeled out yet.
+ * imrepl_ctrl is the controller — it owns routing of raw GLUT input to
+ * the subsystem that owns each concern (replay, audio, config, save,
+ * scene cycle, variable panel, scene press, camera, scroll wheel,
+ * help). The editor's keyboard_func / special_func / mouse_func /
+ * motion_func / mousewheel_func dispatchers see only editor-text
+ * concerns: every helper below is run before the editor handler.
  *
- * Each branch wraps its own reset / take cycle so effects accumulated by
- * router helpers (cursor, redraw, timer) flow back through
- * imrepl_ctrl_apply_input_effects the same way editor_handle_key delivers
- * them today. */
-static int imrepl_ctrl_keyboard_router_dispatch(unsigned char key) {
-    if (editor_input_router_handle_config_menu_key(key)) return 1;
-    if (editor_input_router_handle_active_replay_key(key)) return 1;
-    if (editor_input_router_handle_cfg_shortcut_key(key)) return 1;
-    if (editor_input_router_handle_replay_toggle_key(key)) return 1;
-    if (editor_input_router_handle_accum_samples_key(key)) return 1;
-    if (editor_input_router_handle_save_key(key)) return 1;
-    if (editor_input_router_handle_debug_dump_key(key)) return 1;
-    if (editor_input_router_handle_quit_key(key)) return 1;
+ * Helpers are exported (declared in imrepl_ctrl.h) so test fixtures
+ * can drive a single routing concern without applying GLUT effects.
+ * Helpers fill the editor_input ReplInputDispatchEffects via
+ * editor_request_redraw etc.; glutPostRedisplay / glutSetCursor /
+ * glutTimerFunc fire only from imrepl_ctrl_apply_input_effects, which
+ * the dispatch entry points call after the helpers. Test fixtures
+ * bypass apply_input_effects entirely.
+ * ===========================================================================
+ */
+
+/* ---- Keyboard router helpers ------------------------------------------ */
+
+int imrepl_ctrl_router_handle_save_key(unsigned char key) {
+    if (key == KEY_CTRL_S) {
+        repl_save_default_output();
+        return 1;
+    }
     return 0;
 }
+
+int imrepl_ctrl_router_handle_debug_dump_key(unsigned char key) {
+    if (key == KEY_CTRL_P) {
+        repl_debug_dump_editor(stdout, editor_buffer_view());
+        repl_debug_dump_flat_commands(stdout, editor_buffer_view());
+        set_status("Dumped editor + flat commands to stdout");
+        return 1;
+    }
+    return 0;
+}
+
+int imrepl_ctrl_router_handle_quit_key(unsigned char key) {
+    if (key == KEY_CTRL_Q) {
+        repl_export_save_output("/tmp/temp-output.c", editor_buffer_view());
+        printf("Saved to %s\n", "/tmp/temp-output.c");
+        exit(0);
+    }
+    return 0;
+}
+
+int imrepl_ctrl_router_handle_config_menu_key(unsigned char key) {
+    if (!editor_state_search().active && key == '`') {
+        if (replay_active())
+            repl_replay_stop();
+        editor_input_restore_hidden_code_panel();
+        ui_panels_open_config();
+        return 1;
+    }
+    return 0;
+}
+
+int imrepl_ctrl_router_handle_active_replay_key(unsigned char key) {
+    return replay_active() && replay_handle_key(key);
+}
+
+int imrepl_ctrl_router_handle_replay_toggle_key(unsigned char key) {
+    return replay_handle_key(key);
+}
+
+int imrepl_ctrl_router_handle_cfg_shortcut_key(unsigned char key) {
+    return repl_cfg_handle_ascii_shortcut(key);
+}
+
+int imrepl_ctrl_router_handle_accum_samples_key(unsigned char key) {
+    static const int g_accum_steps[] = { 1, 2, 4, 8, 16 };
+    ReplRenderState *rs = repl_state_render_mut();
+    if (key == '=' || key == '+') {
+        if (!(editor_input_active_modifiers() & GLUT_ACTIVE_CTRL))
+            return 0;
+        if (rs->use_accum) {
+            for (int i = 0; i < ACCUM_STEP_COUNT - 1; i++) {
+                if (rs->accum_samples <= g_accum_steps[i]) {
+                    rs->accum_samples = g_accum_steps[i + 1];
+                    break;
+                }
+            }
+            char msg[64];
+            snprintf(msg, sizeof(msg), "Accum samples: %d", rs->accum_samples);
+            set_status(msg);
+        }
+        return 1;
+    }
+
+    if (key == KEY_CTRL_DASH ||
+        (key == '-' && (editor_input_active_modifiers() & GLUT_ACTIVE_CTRL))) {
+        if (rs->use_accum) {
+            for (int i = ACCUM_STEP_COUNT - 1; i > 0; i--) {
+                if (rs->accum_samples >= g_accum_steps[i]) {
+                    rs->accum_samples = g_accum_steps[i - 1];
+                    break;
+                }
+            }
+            char msg[64];
+            snprintf(msg, sizeof(msg), "Accum samples: %d", rs->accum_samples);
+            set_status(msg);
+        }
+        return 1;
+    }
+    return 0;
+}
+
+/* ---- Special-key router helpers --------------------------------------- */
+
+int imrepl_ctrl_router_handle_replay_special(int key) {
+    return replay_handle_special(key);
+}
+
+int imrepl_ctrl_router_handle_cfg_special_shortcut(int key) {
+    return repl_cfg_handle_special_shortcut(key);
+}
+
+int imrepl_ctrl_router_handle_horizontal_audio_special(int key) {
+    if (key != GLUT_KEY_LEFT && key != GLUT_KEY_RIGHT)
+        return 0;
+    if (!(editor_input_active_modifiers() & GLUT_ACTIVE_CTRL))
+        return 0;
+    if (key == GLUT_KEY_LEFT)
+        repl_audio_prev_track();
+    else
+        repl_audio_next_track();
+    return 1;
+}
+
+int imrepl_ctrl_router_handle_help_tab_special(int key) {
+    if (!ui_state_help().visible)
+        return 0;
+    if (key == GLUT_KEY_LEFT) {
+        repl_action_help_tab_prev();
+        return 1;
+    }
+    if (key == GLUT_KEY_RIGHT) {
+        repl_action_help_tab_next();
+        return 1;
+    }
+    return 0;
+}
+
+int imrepl_ctrl_router_handle_help_scroll_special(int key) {
+    if (!ui_state_help().visible)
+        return 0;
+    switch (key) {
+    case GLUT_KEY_UP:        editor_help_session_scroll_by(-1); return 1;
+    case GLUT_KEY_DOWN:      editor_help_session_scroll_by(1);  return 1;
+    case GLUT_KEY_PAGE_UP:   editor_help_session_scroll_by(-5); return 1;
+    case GLUT_KEY_PAGE_DOWN: editor_help_session_scroll_by(5);  return 1;
+    default: return 0;
+    }
+}
+
+int imrepl_ctrl_router_handle_help_toggle_special(int key) {
+    if (key == GLUT_KEY_F1) {
+        ReplHelpState *help = ui_state_help_mut();
+        help->visible = !help->visible;
+        editor_help_session_set_tab(0);
+        editor_help_session_set_scroll(0);
+        return 1;
+    }
+    return 0;
+}
+
+static void cycle_example_or_user_scene(void) {
+    /* F12 cycles: examples[0..N-1] -> user scenes (in slot order) -> back.
+     * Active example moves to the next example, then first user scene.
+     * Active user scene moves to the next occupied user slot, then example 0. */
+    int count = repl_example_count();
+    int active_scene = repl_active_user_scene();
+
+    if (active_scene >= 0) {
+        for (int scene_idx = active_scene + 1; scene_idx < MAX_USER_SCENES; scene_idx++) {
+            if (repl_user_scene_slot_used(scene_idx)) {
+                repl_load_user_scene_idx(scene_idx);
+                return;
+            }
+        }
+        if (count > 0)
+            repl_load_example(0);
+        return;
+    }
+
+    if (count > 0) {
+        int next = repl_state_scenes().active_example_idx + 1;
+        if (next < count) {
+            repl_load_example(next);
+            return;
+        }
+    }
+
+    for (int scene_idx = 0; scene_idx < MAX_USER_SCENES; scene_idx++) {
+        if (repl_user_scene_slot_used(scene_idx)) {
+            repl_load_user_scene_idx(scene_idx);
+            return;
+        }
+    }
+    if (count > 0)
+        repl_load_example(0);
+}
+
+int imrepl_ctrl_router_handle_scene_cycle_special(int key) {
+    if (key == GLUT_KEY_F12) {
+        cycle_example_or_user_scene();
+        return 1;
+    }
+    return 0;
+}
+
+/* ---- Mouse / motion router helpers ------------------------------------ */
+
+int imrepl_ctrl_router_handle_variable_panel_drag_begin(int button, int state, int x, int y) {
+    if (state != GLUT_DOWN) return 0;
+    if (!variable_panel_visible()) return 0;
+    if (button != GLUT_LEFT_BUTTON && button != GLUT_RIGHT_BUTTON)
+        return 0;
+    int row_idx;
+    if (!ui_variable_panel_hit(x, y, &row_idx))
+        return 0;
+    if (replay_active())
+        repl_replay_stop();
+    int log_mode = (button == GLUT_RIGHT_BUTTON) ? 1 : 0;
+    variable_panel_handle_drag_begin(row_idx, log_mode, x);
+    editor_request_redraw();
+    return 1;
+}
+
+int imrepl_ctrl_router_handle_variable_panel_drag_release(int state) {
+    if (state != GLUT_UP) return 0;
+    if (!variable_panel_drag_active()) return 0;
+    variable_panel_handle_drag_reset();
+    editor_request_redraw();
+    return 1;
+}
+
+int imrepl_ctrl_router_handle_right_config_press(int button, int state, int x, int y) {
+    if (state != GLUT_DOWN || button != GLUT_RIGHT_BUTTON)
+        return 0;
+    if (ui_panels_handle_right_press(x, y)) {
+        editor_request_redraw();
+        return 1;
+    }
+    return 0;
+}
+
+int imrepl_ctrl_router_handle_scene_press(int button, int state, int x, int y) {
+    if (state != GLUT_DOWN || button != GLUT_LEFT_BUTTON)
+        return 0;
+    if (ui_panels_handle_scene_press(x, y)) {
+        editor_request_redraw();
+        return 1;
+    }
+    return 0;
+}
+
+int imrepl_ctrl_router_handle_camera_mouse(int button, int state, int x, int y) {
+    repl_camera_mouse_event(button, state, x, y, editor_input_active_modifiers());
+    return 1;
+}
+
+int imrepl_ctrl_router_handle_variable_panel_motion(int x, int y) {
+    if (!variable_panel_drag_active())
+        return 0;
+    variable_panel_handle_drag_motion(x);
+    editor_request_redraw();
+    return 1;
+}
+
+int imrepl_ctrl_router_handle_camera_motion(int x, int y) {
+    repl_camera_drag_motion(x, y);
+    return 1;
+}
+
+int imrepl_ctrl_router_handle_camera_pointer_set(int x, int y) {
+    repl_camera_pointer_set(x, y);
+    return 1;
+}
+
+int imrepl_ctrl_router_handle_glut_scroll_wheel_button(int button, int state, int x, int y) {
+#ifdef USE_GLUT
+    if ((button != 3 && button != 4) || state != GLUT_DOWN)
+        return 0;
+    int direction = (button == 3) ? -1 : 1;
+    if (ui_state_help().visible) {
+        ui_state_help_mut()->scroll += direction;
+    } else if (editor_input_point_in_code_panel(x, y)) {
+        editor_input_code_panel_scroll(direction);
+    } else {
+        repl_camera_add_zoom_velocity(direction == -1 ? -0.3f : 0.3f);
+    }
+    editor_request_redraw();
+    return 1;
+#else
+    (void)button; (void)state; (void)x; (void)y;
+    return 0;
+#endif
+}
+
+/* ===========================================================================
+ * Dispatch entry points
+ *
+ * Each entry point is a fixed sandwich:
+ *   1. Audio gesture once (browser autoplay policy).
+ *   2. Rename modal capture FIRST (hard modal — every key/special key
+ *      goes to the rename buffer).
+ *   3. Controller-owned routes: routing helpers above, in the same
+ *      order as the legacy editor dispatch chain.
+ *   4. Editor's domain: editor_handle_* fires for clicks / keys that
+ *      land in the editor's text-document or code-panel UI rect.
+ *
+ * Effect accumulation is shared with the editor: every helper writes
+ * to the editor_input g_pending_input_effects struct via
+ * editor_request_redraw etc., and apply_input_effects flushes the
+ * accumulated effects through GLUT once per call.
+ * ===========================================================================
+ */
 
 void imrepl_ctrl_keyboard(unsigned char key, int x, int y) {
     imrepl_ctrl_notify_audio_gesture_once();
@@ -608,34 +913,25 @@ void imrepl_ctrl_keyboard(unsigned char key, int x, int y) {
         return;
     }
 
-    /* Controller-owned routes. */
     editor_reset_input_effects();
-    if (imrepl_ctrl_keyboard_router_dispatch(key)) {
+
+    /* Controller-owned routes — order matches the legacy editor chain
+     * so backtick / cfg shortcut / replay forwarding / Ctrl+G replay
+     * toggle / Ctrl+= accum / Ctrl+S save / Ctrl+P debug / Ctrl+Q quit
+     * fire exactly where they did before. */
+    if (imrepl_ctrl_router_handle_config_menu_key(key) ||
+        imrepl_ctrl_router_handle_active_replay_key(key) ||
+        imrepl_ctrl_router_handle_cfg_shortcut_key(key) ||
+        imrepl_ctrl_router_handle_replay_toggle_key(key) ||
+        imrepl_ctrl_router_handle_save_key(key) ||
+        imrepl_ctrl_router_handle_debug_dump_key(key) ||
+        imrepl_ctrl_router_handle_accum_samples_key(key) ||
+        imrepl_ctrl_router_handle_quit_key(key)) {
         imrepl_ctrl_apply_input_effects(editor_take_input_effects());
         return;
     }
 
-    /* Editor-side dispatch handles its own reset+take. */
     imrepl_ctrl_apply_input_effects(editor_handle_key(key, x, y));
-    (void)x;
-    (void)y;
-}
-
-/* Phase J1 commit 47b — special-key router pre-dispatch.
- *
- * Mirrors the keyboard sandwich (47a): rename modal capture FIRST, then
- * controller-owned routes (replay, cfg shortcut, audio prev/next, help-tab,
- * help-scroll, F1, F12), then editor_handle_special for cursor moves +
- * autocomplete + selection navigation + non-help scroll. */
-static int imrepl_ctrl_special_router_dispatch(int key) {
-    if (editor_input_router_handle_replay_special(key)) return 1;
-    if (editor_input_router_handle_cfg_special_shortcut(key)) return 1;
-    if (editor_input_router_handle_horizontal_audio_special(key)) return 1;
-    if (editor_input_router_handle_help_tab_special(key)) return 1;
-    if (editor_input_router_handle_help_scroll_special(key)) return 1;
-    if (editor_input_router_handle_help_toggle_special(key)) return 1;
-    if (editor_input_router_handle_scene_cycle_special(key)) return 1;
-    return 0;
 }
 
 void imrepl_ctrl_special(int key, int x, int y) {
@@ -648,62 +944,156 @@ void imrepl_ctrl_special(int key, int x, int y) {
     }
 
     editor_reset_input_effects();
-    if (imrepl_ctrl_special_router_dispatch(key)) {
+
+    if (imrepl_ctrl_router_handle_replay_special(key) ||
+        imrepl_ctrl_router_handle_cfg_special_shortcut(key) ||
+        imrepl_ctrl_router_handle_horizontal_audio_special(key) ||
+        imrepl_ctrl_router_handle_help_tab_special(key) ||
+        imrepl_ctrl_router_handle_help_scroll_special(key) ||
+        imrepl_ctrl_router_handle_help_toggle_special(key) ||
+        imrepl_ctrl_router_handle_scene_cycle_special(key)) {
         imrepl_ctrl_apply_input_effects(editor_take_input_effects());
         return;
     }
 
     imrepl_ctrl_apply_input_effects(editor_handle_special(key, x, y));
-    (void)x;
-    (void)y;
 }
 
-/* Phase J1 commit 47c — mouse router pre-dispatch (partial).
+/* Mouse routing: hit-test to decide owner before dispatching.
  *
- * Pre-dispatches peer-subsystem and unrelated-UI mouse routes that own
- * dedicated rects (variable panel, right-click config dropdown). Each
- * route hit-tests internally so a click that doesn't land returns 0
- * and falls through to editor_handle_mouse.
+ * UP cleanup: the editor first releases its own UP-side state
+ * (ui_panels_handle_mouse_release, panel resize end), then the
+ * variable-panel drag release fires if active.
  *
- * Scene press, camera mouse event, and scroll wheel are still inside
- * editor_handle_mouse's chain — they need a `consumed` flag on
- * ReplInputDispatchEffects to migrate cleanly without dispatching
- * camera/scroll twice. That's deferred to a follow-up commit. */
+ * DOWN: variable panel hit always wins over code panel because it
+ * owns its own rect that may overlap. Code-panel domain (proper /
+ * divider / dropdown extension) goes to the editor. Scene region
+ * tries the color picker overlay first, then camera. Right-click
+ * dispatches the config dropdown, the variable panel (log mode), or
+ * camera. The freeglut scroll-wheel emulation (buttons 3/4) routes
+ * to help-overlay scroll, code-panel scroll (editor), or camera zoom
+ * velocity. */
 void imrepl_ctrl_mouse(int button, int state, int x, int y) {
     imrepl_ctrl_notify_audio_gesture_once();
 
     editor_reset_input_effects();
-    if (editor_input_router_handle_variable_panel_drag_begin(button, state, x, y) ||
-        editor_input_router_handle_right_config_press(button, state, x, y)) {
+
+    if (state == GLUT_UP) {
+        /* Editor's UP cleanup runs first (ui_panels_release + panel resize end). */
+        imrepl_ctrl_apply_input_effects(editor_handle_mouse(button, state, x, y));
+        editor_reset_input_effects();
+        if (imrepl_ctrl_router_handle_variable_panel_drag_release(state)) {
+            imrepl_ctrl_apply_input_effects(editor_take_input_effects());
+        }
+        return;
+    }
+
+    if (button == GLUT_LEFT_BUTTON) {
+        if (imrepl_ctrl_router_handle_variable_panel_drag_begin(button, state, x, y)) {
+            imrepl_ctrl_apply_input_effects(editor_take_input_effects());
+            return;
+        }
+        if (ui_menu_bar_example_dropdown_is_open() ||
+            editor_input_point_on_code_panel_divider(x, y) ||
+            editor_input_point_in_code_panel(x, y)) {
+            imrepl_ctrl_apply_input_effects(editor_handle_mouse(button, state, x, y));
+            return;
+        }
+        if (imrepl_ctrl_router_handle_scene_press(button, state, x, y)) {
+            imrepl_ctrl_apply_input_effects(editor_take_input_effects());
+            return;
+        }
+        imrepl_ctrl_router_handle_camera_mouse(button, state, x, y);
         imrepl_ctrl_apply_input_effects(editor_take_input_effects());
         return;
     }
-    imrepl_ctrl_apply_input_effects(editor_handle_mouse(button, state, x, y));
+
+    if (button == GLUT_RIGHT_BUTTON) {
+        if (imrepl_ctrl_router_handle_right_config_press(button, state, x, y)) {
+            imrepl_ctrl_apply_input_effects(editor_take_input_effects());
+            return;
+        }
+        if (imrepl_ctrl_router_handle_variable_panel_drag_begin(button, state, x, y)) {
+            imrepl_ctrl_apply_input_effects(editor_take_input_effects());
+            return;
+        }
+        imrepl_ctrl_router_handle_camera_mouse(button, state, x, y);
+        imrepl_ctrl_apply_input_effects(editor_take_input_effects());
+        return;
+    }
+
+    if (imrepl_ctrl_router_handle_glut_scroll_wheel_button(button, state, x, y)) {
+        imrepl_ctrl_apply_input_effects(editor_take_input_effects());
+        return;
+    }
+
+    imrepl_ctrl_router_handle_camera_mouse(button, state, x, y);
+    imrepl_ctrl_apply_input_effects(editor_take_input_effects());
 }
 
-/* Phase J1 commit 47d — motion router pre-dispatch (partial).
- *
- * Variable-panel drag motion is a peer-subsystem concern; pre-dispatching
- * it here matches the variable-panel drag begin / release pattern from
- * 47c. Camera pointer tracking + camera drag motion remain inside
- * editor_handle_motion's chain; like 47c they need a `consumed` flag on
- * ReplInputDispatchEffects to migrate cleanly. Deferred. */
+/* Motion routing: camera pointer state tracks every event. UI overlay
+ * (color picker drag), variable-panel drag motion, and camera drag
+ * motion are router-side; code-panel resize tracking and code-panel
+ * selection drag are editor's. */
 void imrepl_ctrl_motion(int x, int y) {
     editor_reset_input_effects();
-    if (editor_input_router_handle_variable_panel_motion(x, y)) {
+
+    /* Camera pointer state is updated for every motion event. */
+    imrepl_ctrl_router_handle_camera_pointer_set(x, y);
+
+    if (ui_panels_handle_motion(x, y)) {
+        editor_request_redraw();
         imrepl_ctrl_apply_input_effects(editor_take_input_effects());
         return;
     }
-    imrepl_ctrl_apply_input_effects(editor_handle_motion(x, y));
+
+    if (imrepl_ctrl_router_handle_variable_panel_motion(x, y)) {
+        imrepl_ctrl_apply_input_effects(editor_take_input_effects());
+        return;
+    }
+
+    /* Editor's domain: panel resize tracking + code-panel selection
+     * drag both surface through editor_handle_motion which is a no-op
+     * when neither condition holds. */
+    if (ui_state_code_panel().resizing_panel ||
+        ui_panels_handle_code_panel_drag(x, y)) {
+        ReplInputDispatchEffects pre_editor = editor_take_input_effects();
+        imrepl_ctrl_apply_input_effects(editor_handle_motion(x, y));
+        imrepl_ctrl_apply_input_effects(pre_editor);
+        return;
+    }
+
+    imrepl_ctrl_router_handle_camera_motion(x, y);
+    imrepl_ctrl_apply_input_effects(editor_take_input_effects());
 }
 
 void imrepl_ctrl_passive_motion(int x, int y) {
-    imrepl_ctrl_apply_input_effects(editor_handle_passive_motion(x, y));
+    editor_reset_input_effects();
+    imrepl_ctrl_router_handle_camera_pointer_set(x, y);
+    ReplInputDispatchEffects editor_effects = editor_handle_passive_motion(x, y);
+    imrepl_ctrl_apply_input_effects(editor_take_input_effects());
+    imrepl_ctrl_apply_input_effects(editor_effects);
 }
 
 void imrepl_ctrl_mousewheel(int wheel, int direction, int x, int y) {
 #ifndef USE_GLUT
-    imrepl_ctrl_apply_input_effects(editor_handle_mousewheel(wheel, direction, x, y));
+    /* freeglut wheel callback: route to help scroll, code-panel scroll
+     * (editor), or camera zoom velocity. */
+    (void)wheel;
+    editor_reset_input_effects();
+    if (ui_state_help().visible) {
+        editor_help_session_scroll_by(-direction);
+        editor_request_redraw();
+        imrepl_ctrl_apply_input_effects(editor_take_input_effects());
+        return;
+    }
+    if (editor_input_point_in_code_panel(x, y)) {
+        imrepl_ctrl_apply_input_effects(editor_handle_mousewheel(wheel, direction, x, y));
+        return;
+    }
+    repl_camera_add_zoom_velocity(-(float)direction * 0.1f);
+    editor_request_redraw();
+    imrepl_ctrl_apply_input_effects(editor_take_input_effects());
 #else
     (void)wheel; (void)direction; (void)x; (void)y;
 #endif

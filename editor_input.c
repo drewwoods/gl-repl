@@ -1,28 +1,29 @@
 /*
  * editor_input.c — Editor input dispatch.
  *
- * Phase J1 commit 44 migrated the keyboard dispatch body and its
- * editor-owned helpers out of repl_editor.c. Special / mouse /
- * motion / mousewheel still delegate to the legacy repl_*_func
- * bodies pending commits 45 and 46.
+ * Owns text-document dispatch only: cursor / selection / scroll /
+ * search / autocomplete / clipboard / undo / commit chain / code-panel
+ * mouse-and-resize / divider hover. Non-editor concerns (replay,
+ * audio, config, save / debug / quit, scene cycle, variable panel,
+ * scene press, camera, scroll-wheel zoom) live in imrepl_ctrl.c and
+ * are routed there before the editor's keyboard_func / special_func /
+ * mouse_func / motion_func / mousewheel_func / passive_motion_func
+ * dispatchers run.
  *
  * Editor-owned concerns hosted here:
  *  - Effect accumulation (g_pending_input_effects + reset/take helpers)
  *  - Modifier provider test seam
- *  - Audio-gesture one-shot (relocated to imrepl_ctrl in commit 48a)
  *  - Cmd-range deletion + repl_clear_all_cmds
  *  - load_line_to_input / save_newline_buf / line navigation
  *  - Commit-attempt orchestration (try_commit_*, navigation commit,
  *    parse_for_overwrite_enter, rewrite_source_text_with_indent)
  *  - Code-panel-hidden helpers used by the keyboard dispatch
- *  - keyboard_func body and its 19 handle_*_key_route helpers
+ *  - keyboard_func / special_func / mouse_func / motion_func /
+ *    passive_motion_func / mousewheel_func bodies (editor routes only)
+ *  - Hit-test predicates (point_in_code_panel, point_on_code_panel_divider,
+ *    code_panel_resize_cursor) used by the controller to decide who
+ *    owns a click
  *  - feed_line() programmatic commit entry
- *
- * Non-editor concerns reachable through these handlers (config menu
- * open, replay forwarding, cfg shortcuts, accum samples, audio
- * prev/next, F1, F12, Ctrl+G, Ctrl+S, Ctrl+P, Ctrl+Q) are still
- * inline-called for behaviour preservation; commits 47a / 47b lift
- * them up into imrepl_ctrl as router pre-dispatch.
  */
 #include "editor_input.h"
 #include "sample.h"
@@ -115,7 +116,6 @@ int editor_input_active_modifiers(void) {
     return editor_get_modifiers();
 }
 
-static const int g_accum_steps[] = { 1, 2, 4, 8, 16 };
 
 static int delete_cmd_range_allowed(int start, int count) {
     if (repl_selection_cmd_range_contains_var_decl(start, count)) {
@@ -757,21 +757,6 @@ int editor_input_rename_capture_key(unsigned char key) {
     return repl_inline_rename_handle_key(key);
 }
 
-int editor_input_router_handle_config_menu_key(unsigned char key) {
-    if (!editor_state_search().active && key == '`') {
-        if (replay_active())
-            repl_replay_stop();
-        editor_input_restore_hidden_code_panel();
-        ui_panels_open_config();
-        return 1;
-    }
-    return 0;
-}
-
-int editor_input_router_handle_active_replay_key(unsigned char key) {
-    return replay_active() && replay_handle_key(key);
-}
-
 static void restore_hidden_code_panel_for_key(unsigned char key) {
     if (editor_input_code_panel_hidden()) {
         int key_mods = editor_get_modifiers();
@@ -815,10 +800,6 @@ static int handle_escape_key_route(unsigned char key) {
     return 0;
 }
 
-int editor_input_router_handle_cfg_shortcut_key(unsigned char key) {
-    return repl_cfg_handle_ascii_shortcut(key);
-}
-
 static int handle_cursor_endpoint_key_route(unsigned char key) {
     if (key == KEY_CTRL_A) {
         editor_cursor_pos_set(0);
@@ -849,10 +830,6 @@ static int handle_undo_redo_key_route(unsigned char key) {
     return 0;
 }
 
-int editor_input_router_handle_replay_toggle_key(unsigned char key) {
-    return replay_handle_key(key);
-}
-
 static int handle_line_delete_key_route(unsigned char key) {
     if (key == KEY_CTRL_D) {
         if (editor_insert_mode()) {
@@ -874,9 +851,9 @@ static int handle_line_delete_key_route(unsigned char key) {
     return 0;
 }
 
-/* Editor halves of the buffer-command route. Ctrl+S and Ctrl+P live
- * router-side (see repl_editor.c handle_buffer_command_router_key);
- * commit 47a folds them into imrepl_ctrl. */
+/* Editor halves of the buffer-command route: Ctrl+L clear-all,
+ * Ctrl+\ reformat. The save (Ctrl+S), debug dump (Ctrl+P), and quit
+ * (Ctrl+Q) variants are router-side. */
 static int handle_buffer_command_key_route(unsigned char key) {
     if (key == KEY_CTRL_L) {
         repl_clear_all_cmds();
@@ -892,36 +869,6 @@ static int handle_buffer_command_key_route(unsigned char key) {
             set_status("Nothing to reformat");
         }
         return 1;
-    }
-    return 0;
-}
-
-/* Router stubs reachable from repl_editor.c during the keyboard
- * migration. Commit 47a moves Ctrl+S, Ctrl+P, Ctrl+Q out of
- * editor_input.c into imrepl_ctrl router pre-dispatch. */
-int editor_input_router_handle_save_key(unsigned char key) {
-    if (key == KEY_CTRL_S) {
-        repl_save_default_output();
-        return 1;
-    }
-    return 0;
-}
-
-int editor_input_router_handle_debug_dump_key(unsigned char key) {
-    if (key == KEY_CTRL_P) {
-        repl_debug_dump_editor(stdout, editor_buffer_view());
-        repl_debug_dump_flat_commands(stdout, editor_buffer_view());
-        set_status("Dumped editor + flat commands to stdout");
-        return 1;
-    }
-    return 0;
-}
-
-int editor_input_router_handle_quit_key(unsigned char key) {
-    if (key == KEY_CTRL_Q) {
-        repl_export_save_output("/tmp/temp-output.c", editor_buffer_view());
-        printf("Saved to %s\n", "/tmp/temp-output.c");
-        exit(0);
     }
     return 0;
 }
@@ -1103,48 +1050,6 @@ static int handle_comment_toggle_key_route(unsigned char key) {
     return 0;
 }
 
-int editor_input_router_handle_accum_samples_key(unsigned char key) {
-    ReplRenderState *rs = repl_state_render_mut();
-    if (key == '=' || key == '+') {
-        int mods = editor_get_modifiers();
-        if (!(mods & GLUT_ACTIVE_CTRL))
-            return 0;
-        if (rs->use_accum) {
-            for (int i = 0; i < ACCUM_STEP_COUNT - 1; i++) {
-                if (rs->accum_samples <= g_accum_steps[i]) {
-                    rs->accum_samples = g_accum_steps[i + 1];
-                    break;
-                }
-            }
-            {
-                char msg[64];
-                snprintf(msg, sizeof(msg), "Accum samples: %d", rs->accum_samples);
-                set_status(msg);
-            }
-        }
-        return 1;
-    }
-
-    if (key == KEY_CTRL_DASH ||
-        (key == '-' && (editor_get_modifiers() & GLUT_ACTIVE_CTRL))) {
-        if (rs->use_accum) {
-            for (int i = ACCUM_STEP_COUNT - 1; i > 0; i--) {
-                if (rs->accum_samples >= g_accum_steps[i]) {
-                    rs->accum_samples = g_accum_steps[i - 1];
-                    break;
-                }
-            }
-            {
-                char msg[64];
-                snprintf(msg, sizeof(msg), "Accum samples: %d", rs->accum_samples);
-                set_status(msg);
-            }
-        }
-        return 1;
-    }
-    return 0;
-}
-
 static int handle_text_delete_key_route(unsigned char key) {
     if (key == KEY_BACKSPACE || key == KEY_DELETE) {
         if (repl_clipboard_sel_active() && !editor_insert_mode()) {
@@ -1297,6 +1202,10 @@ static int handle_printable_input_key_route(unsigned char key) {
     return 0;
 }
 
+/* Editor's keyboard dispatch. Non-editor concerns (config menu,
+ * replay forwarding, cfg shortcut, replay toggle, accum samples,
+ * save / debug / quit) are routed by imrepl_ctrl directly to their
+ * owning subsystem before this runs — they don't appear here. */
 static void keyboard_func(unsigned char key, int x, int y) {
     (void)x;
     (void)y;
@@ -1304,31 +1213,23 @@ static void keyboard_func(unsigned char key, int x, int y) {
     keyboard_begin_key(key);
 
     if (editor_input_rename_capture_key(key)) return;
-    if (editor_input_router_handle_config_menu_key(key)) return;
-    if (editor_input_router_handle_active_replay_key(key)) return;
 
     restore_hidden_code_panel_for_key(key);
 
     if (handle_search_key_route(key))       return;
     if (handle_escape_key_route(key))       return;
-    if (editor_input_router_handle_cfg_shortcut_key(key)) return;
     if (handle_cursor_endpoint_key_route(key)) return;
     if (handle_undo_redo_key_route(key))    return;
-    if (editor_input_router_handle_replay_toggle_key(key)) return;
     if (handle_line_delete_key_route(key))  return;
     if (handle_buffer_command_key_route(key)) return;
-    if (editor_input_router_handle_save_key(key)) return;
-    if (editor_input_router_handle_debug_dump_key(key)) return;
     if (handle_copy_key_route(key))         return;
     if (handle_cut_key_route(key))          return;
     if (handle_paste_key_route(key))        return;
     if (handle_comment_toggle_key_route(key)) return;
-    if (editor_input_router_handle_accum_samples_key(key)) return;
     if (handle_text_delete_key_route(key))  return;
     if (handle_tab_key_route(key))          return;
     if (handle_enter_key_route(key))        return;
     if (handle_semicolon_commit_key_route(key)) return;
-    if (editor_input_router_handle_quit_key(key)) return;
     (void)handle_printable_input_key_route(key);
 }
 
@@ -1409,13 +1310,15 @@ void repl_feed_line_public(const char *line) {
 
 /* ===========================================================================
  * Special-key dispatch (F-keys, arrows, Page Up/Down, Home/End).
- * Phase J1 commit 45 migrated the body and its 9 handle_*_special_route
- * helpers from repl_editor.c. Pre-split: handle_horizontal_special_key_route
- * keeps cursor-move halves (bare Left/Right + Home/End) inline; Ctrl+Left/Right
- * (audio prev/next) and help-tab toggle land router-side via
- * editor_input_router_handle_horizontal_audio_special and
- * editor_input_router_handle_help_tab_special so commit 47b can lift them
- * into imrepl_ctrl pre-dispatch.
+ *
+ * Editor concerns only: rename modal capture, search-overlay arrows,
+ * bare cursor moves (Left/Right + Home/End), autocomplete cycle,
+ * shift-extend selection, and code-panel page scroll.
+ *
+ * Non-editor concerns (replay forwarding, cfg special shortcut,
+ * Ctrl+Left/Right audio, help-tab toggle, help-overlay scroll, F1
+ * help toggle, F12 scene cycle) live in imrepl_ctrl.c and never reach
+ * this dispatcher.
  * ===========================================================================
  */
 
@@ -1431,22 +1334,6 @@ int editor_input_rename_capture_special(int key) {
     /* Rename captures arrows and F-keys ahead of replay/search/navigation so
      * modal text entry cannot leak actions into the editor. */
     return repl_inline_rename_handle_special(key);
-}
-
-int editor_input_router_handle_help_scroll_special(int key) {
-    if (!ui_state_help().visible)
-        return 0;
-    switch (key) {
-    case GLUT_KEY_UP:        editor_help_session_scroll_by(-1); return 1;
-    case GLUT_KEY_DOWN:      editor_help_session_scroll_by(1);  return 1;
-    case GLUT_KEY_PAGE_UP:   editor_help_session_scroll_by(-5); return 1;
-    case GLUT_KEY_PAGE_DOWN: editor_help_session_scroll_by(5);  return 1;
-    default: return 0;
-    }
-}
-
-int editor_input_router_handle_replay_special(int key) {
-    return replay_handle_special(key);
 }
 
 static int editor_special_restores_hidden_code_panel(int key, int mods) {
@@ -1474,39 +1361,9 @@ static int handle_search_special_route(int key) {
     return handle_search_special(key);
 }
 
-int editor_input_router_handle_cfg_special_shortcut(int key) {
-    return repl_cfg_handle_special_shortcut(key);
-}
-
-int editor_input_router_handle_horizontal_audio_special(int key) {
-    if (key != GLUT_KEY_LEFT && key != GLUT_KEY_RIGHT)
-        return 0;
-    if (!(editor_get_modifiers() & GLUT_ACTIVE_CTRL))
-        return 0;
-    if (key == GLUT_KEY_LEFT)
-        repl_audio_prev_track();
-    else
-        repl_audio_next_track();
-    return 1;
-}
-
-int editor_input_router_handle_help_tab_special(int key) {
-    if (!ui_state_help().visible)
-        return 0;
-    if (key == GLUT_KEY_LEFT) {
-        repl_action_help_tab_prev();
-        return 1;
-    }
-    if (key == GLUT_KEY_RIGHT) {
-        repl_action_help_tab_next();
-        return 1;
-    }
-    return 0;
-}
-
 /* Editor-side cursor moves: bare Left/Right + Home/End. Ctrl+Left/Right
- * (audio) and help-tab toggling are handled before this by the router
- * stubs above. */
+ * (audio prev/next) and help-tab toggling on Left/Right when help is
+ * visible are router-side and never reach this dispatcher. */
 static int handle_horizontal_special_key_route(int key) {
     switch (key) {
     case GLUT_KEY_LEFT:
@@ -1532,14 +1389,14 @@ static int handle_horizontal_special_key_route(int key) {
     }
 }
 
+/* Up/Down: autocomplete cycle, shift-extend selection, or move cursor
+ * line. Help-overlay scroll on Up/Down is router-side
+ * (imrepl_ctrl_router_handle_help_scroll_special) and never reaches
+ * this dispatcher when help is visible. */
 static int handle_vertical_special_key_route(int key) {
     ReplAutocompleteState *ac = editor_state_autocomplete_mut();
     switch (key) {
     case GLUT_KEY_UP:
-        if (ui_state_help().visible) {
-            editor_help_session_scroll_by(-1);
-            return 1;
-        }
         if (ac->match_count > 1) {
             ac->selected_idx = (ac->selected_idx - 1 + ac->match_count) % ac->match_count;
             update_selected_autocomplete_preview();
@@ -1558,10 +1415,6 @@ static int handle_vertical_special_key_route(int key) {
         }
         return 1;
     case GLUT_KEY_DOWN:
-        if (ui_state_help().visible) {
-            editor_help_session_scroll_by(1);
-            return 1;
-        }
         if (ac->match_count > 1) {
             ac->selected_idx = (ac->selected_idx + 1) % ac->match_count;
             update_selected_autocomplete_preview();
@@ -1584,76 +1437,18 @@ static int handle_vertical_special_key_route(int key) {
     }
 }
 
-int editor_input_router_handle_help_toggle_special(int key) {
-    if (key == GLUT_KEY_F1) {
-        ReplHelpState *help = ui_state_help_mut();
-        help->visible = !help->visible;
-        editor_help_session_set_tab(0);
-        editor_help_session_set_scroll(0);
-        return 1;
-    }
-    return 0;
-}
 
-static void cycle_example_or_user_scene(void) {
-    /* F12 cycles: examples[0..N-1] -> user scenes (in slot order) -> back.
-     * Active example moves to the next example, then first user scene.
-     * Active user scene moves to the next occupied user slot, then example 0. */
-    int count = repl_example_count();
-    int active_scene = repl_active_user_scene();
-
-    if (active_scene >= 0) {
-        for (int scene_idx = active_scene + 1; scene_idx < MAX_USER_SCENES; scene_idx++) {
-            if (repl_user_scene_slot_used(scene_idx)) {
-                repl_load_user_scene_idx(scene_idx);
-                return;
-            }
-        }
-        if (count > 0)
-            repl_load_example(0);
-        return;
-    }
-
-    if (count > 0) {
-        int next = repl_state_scenes().active_example_idx + 1;
-        if (next < count) {
-            repl_load_example(next);
-            return;
-        }
-    }
-
-    for (int scene_idx = 0; scene_idx < MAX_USER_SCENES; scene_idx++) {
-        if (repl_user_scene_slot_used(scene_idx)) {
-            repl_load_user_scene_idx(scene_idx);
-            return;
-        }
-    }
-    if (count > 0)
-        repl_load_example(0);
-}
-
-int editor_input_router_handle_scene_cycle_special(int key) {
-    if (key == GLUT_KEY_F12) {
-        cycle_example_or_user_scene();
-        return 1;
-    }
-    return 0;
-}
-
+/* PageUp/PageDown scroll the code panel. Help-overlay scroll on the
+ * same keys is router-side and never reaches this dispatcher when
+ * help is visible. */
 static int handle_page_scroll_special_key_route(int key) {
     switch (key) {
     case GLUT_KEY_PAGE_UP:
-        if (ui_state_help().visible)
-            editor_help_session_scroll_by(-5);
-        else
-            editor_scroll_set(editor_scroll() - 5);
+        editor_scroll_set(editor_scroll() - 5);
         editor_scroll_follow_cursor_set(0);
         return 1;
     case GLUT_KEY_PAGE_DOWN:
-        if (ui_state_help().visible)
-            editor_help_session_scroll_by(5);
-        else
-            editor_scroll_set(editor_scroll() + 5);
+        editor_scroll_set(editor_scroll() + 5);
         editor_scroll_follow_cursor_set(0);
         return 1;
     default:
@@ -1661,6 +1456,12 @@ static int handle_page_scroll_special_key_route(int key) {
     }
 }
 
+/* Editor's special-key dispatch. Non-editor concerns (replay
+ * forwarding, cfg special shortcut, audio prev/next, help tab,
+ * help scroll, F1 help toggle, F12 scene cycle) are routed by
+ * imrepl_ctrl directly to their owning subsystem before this runs.
+ * The bare cursor moves, autocomplete cycle, selection navigation,
+ * and code-panel page scroll stay here. */
 static void special_func(int key, int x, int y) {
     (void)x;
     (void)y;
@@ -1668,33 +1469,32 @@ static void special_func(int key, int x, int y) {
     special_begin_key(key);
 
     if (editor_input_rename_capture_special(key)) return;
-    if (editor_input_router_handle_replay_special(key)) return;
 
     restore_hidden_code_panel_for_special(key);
 
     if (handle_search_special_route(key))   return;
-    if (editor_input_router_handle_cfg_special_shortcut(key)) return;
-    if (editor_input_router_handle_horizontal_audio_special(key)) return;
-    if (editor_input_router_handle_help_tab_special(key)) return;
-    if (editor_input_router_handle_help_scroll_special(key)) return;
     if (handle_horizontal_special_key_route(key)) return;
     if (handle_vertical_special_key_route(key)) return;
-    if (editor_input_router_handle_help_toggle_special(key)) return;
-    if (editor_input_router_handle_scene_cycle_special(key)) return;
     if (handle_page_scroll_special_key_route(key)) return;
 }
 
 /* ===========================================================================
  * Mouse / motion / passive-motion / mousewheel dispatch.
- * Phase J1 commit 46 migrated the bodies and their static helpers from
- * repl_editor.c. Non-editor concerns (variable-panel drag, scene press,
- * right press, camera mouse, scroll-wheel zoom) are still inline-called
- * here pending commits 47c / 47d which lift them up into imrepl_ctrl
- * router pre-dispatch.
+ *
+ * Editor concerns only: clicks that land on the code panel proper, on
+ * the divider, or while the example dropdown is open; ui_panels mouse
+ * release on UP; panel-resize end on UP; code-panel resize tracking;
+ * code-panel selection drag; divider hover cursor; freeglut wheel
+ * scroll when over the code panel.
+ *
+ * Non-editor concerns (variable-panel drag, scene press / color
+ * picker, right-click config dropdown, camera orbit/pan/zoom, camera
+ * pointer tracking, help-overlay scroll, scene-area zoom velocity)
+ * live in imrepl_ctrl.c and never reach this dispatcher.
  * ===========================================================================
  */
 
-static int editor_point_in_code_panel(int x, int y) {
+int editor_input_point_in_code_panel(int x, int y) {
     int cp_x, cp_y, cp_w, cp_h;
     int gl_y = ui_state_viewport().window_h - y;
 
@@ -1703,7 +1503,7 @@ static int editor_point_in_code_panel(int x, int y) {
            gl_y >= cp_y && gl_y < cp_y + cp_h;
 }
 
-static int editor_point_on_code_panel_divider(int x, int y) {
+int editor_input_point_on_code_panel_divider(int x, int y) {
     int cp_x, cp_y, cp_w, cp_h;
     int gl_y = ui_state_viewport().window_h - y;
     int layout = editor_input_code_panel_layout();
@@ -1718,10 +1518,14 @@ static int editor_point_on_code_panel_divider(int x, int y) {
     return abs(x - (cp_x + cp_w)) < 10;
 }
 
-static int editor_code_panel_resize_cursor(void) {
+int editor_input_code_panel_resize_cursor(void) {
     return editor_input_code_panel_layout() == CODE_PANEL_LAYOUT_LEFT
          ? GLUT_CURSOR_LEFT_RIGHT
          : GLUT_CURSOR_UP_DOWN;
+}
+
+void editor_input_code_panel_scroll(int direction) {
+    editor_scroll_set(editor_scroll() + direction);
 }
 
 static void editor_update_panel_frac_from_mouse(int x, int y) {
@@ -1750,204 +1554,97 @@ static void editor_update_panel_frac_from_mouse(int x, int y) {
         code_panel_state->panel_frac = 0.9f;
 }
 
-int editor_input_router_handle_variable_panel_drag_begin(int button, int state, int x, int y) {
-    if (state != GLUT_DOWN) return 0;
-    if (!variable_panel_visible()) return 0;
-    int log_mode = (button == GLUT_RIGHT_BUTTON) ? 1 : 0;
-    if (button != GLUT_LEFT_BUTTON && button != GLUT_RIGHT_BUTTON)
-        return 0;
-    int row_idx;
-    if (!ui_variable_panel_hit(x, y, &row_idx))
-        return 0;
-    if (replay_active())
-        repl_replay_stop();
-    variable_panel_handle_drag_begin(row_idx, log_mode, x);
-    editor_request_redraw();
-    return 1;
-}
-
-int editor_input_router_handle_variable_panel_motion(int x, int y) {
-    if (!variable_panel_drag_active())
-        return 0;
-    variable_panel_handle_drag_motion(x);
-    repl_camera_pointer_set(x, y);
-    editor_request_redraw();
-    return 1;
-}
-
-int editor_input_router_handle_right_config_press(int button, int state, int x, int y) {
-    if (state != GLUT_DOWN || button != GLUT_RIGHT_BUTTON)
-        return 0;
-    if (ui_panels_handle_right_press(x, y)) {
-        editor_request_redraw();
-        return 1;
-    }
-    return 0;
-}
-
+/* Editor's mouse dispatch handles only its own domain: code-panel
+ * presses (cursor / picker swatch), example-dropdown presses (the
+ * dropdown can extend outside the panel rect but is conceptually code
+ * panel content), divider drag start, ui_panels release on UP, and
+ * panel-resize end on UP. The controller pre-dispatches every other
+ * mouse concern (variable panel, scene press, right-click config
+ * dropdown, camera, scroll wheel) before this runs. */
 static void mouse_func(int button, int state, int x, int y) {
     if (state == GLUT_UP) {
         ui_panels_handle_mouse_release();
-        if (variable_panel_drag_active()) {
-            variable_panel_handle_drag_reset();
-            editor_request_redraw();
-            return;
-        }
         if (ui_state_code_panel().resizing_panel) {
             ui_state_code_panel_mut()->resizing_panel = 0;
             editor_set_cursor(GLUT_CURSOR_INHERIT);
             editor_request_redraw();
             return;
         }
+        return;
     }
 
-    if (button == GLUT_LEFT_BUTTON && state == GLUT_DOWN) {
-        if (variable_panel_visible()) {
-            int row_idx;
-            if (ui_variable_panel_hit(x, y, &row_idx)) {
-                if (replay_active())
-                    repl_replay_stop();
-                variable_panel_handle_drag_begin(row_idx, 0, x);
-                editor_request_redraw();
-                return;
-            }
-        }
+    if (button != GLUT_LEFT_BUTTON || state != GLUT_DOWN)
+        return;
 
-        /* The example dropdown can extend outside the code panel bounds (e.g.
-         * below the panel in vertical layout).  Handle it before the
-         * panel-area gate so clicks on any part of the dropdown register. */
-        if (ui_menu_bar_example_dropdown_is_open()) {
-            int cursor_pos = -1;
-            int panel_actions = ui_panels_handle_code_panel_press(x, y, &cursor_pos);
-            if (cursor_pos >= 0)
-                editor_cursor_pos_set(cursor_pos);
-            if (panel_actions & UI_PANEL_PRESS_OPENED_COLOR_PICKER)
-                repl_undo_push_snapshot();
-            editor_request_redraw();
-            return;
-        }
-
-        if (editor_point_on_code_panel_divider(x, y)) {
-            ui_state_code_panel_mut()->resizing_panel = 1;
-            editor_set_cursor(editor_code_panel_resize_cursor());
-            return;
-        }
-        if (editor_point_in_code_panel(x, y)) {
-            int cursor_pos = -1;
-            int panel_actions = ui_panels_handle_code_panel_press(x, y, &cursor_pos);
-            if (cursor_pos >= 0)
-                editor_cursor_pos_set(cursor_pos);
-            if (panel_actions & UI_PANEL_PRESS_OPENED_COLOR_PICKER)
-                repl_undo_push_snapshot();
-            editor_request_redraw();
-            return;
-        }
-        /* Scene-area click: let the color picker intercept before camera. */
-        if (ui_panels_handle_scene_press(x, y)) {
-            editor_request_redraw();
-            return;
-        }
-    }
-
-    /* Right-click inside the Config dropdown cycles the item backward;
-     * missed clicks leave the menu open so the user can keep seeking. */
-    if (button == GLUT_RIGHT_BUTTON && state == GLUT_DOWN) {
-        if (ui_panels_handle_right_press(x, y)) {
-            editor_request_redraw();
-            return;
-        }
-    }
-
-    /* Right-click on var panel: logarithmic drag mode. */
-    if (button == GLUT_RIGHT_BUTTON && state == GLUT_DOWN && variable_panel_visible()) {
-        int row_idx;
-        if (ui_variable_panel_hit(x, y, &row_idx)) {
-            if (replay_active())
-                repl_replay_stop();
-            variable_panel_handle_drag_begin(row_idx, 1, x);
-            editor_request_redraw();
-            return;
-        }
-    }
-
-    repl_camera_mouse_event(button, state, x, y, editor_get_modifiers());
-
-#ifdef USE_GLUT
-    if (button == 3 && state == GLUT_DOWN) {
-        if (ui_state_help().visible) {
-            ui_state_help_mut()->scroll--;
-        } else {
-            if (editor_point_in_code_panel(x, y))
-                editor_scroll_set(editor_scroll() - 1);
-            else
-                repl_camera_add_zoom_velocity(-0.3f);
-        }
-        editor_request_redraw();
-    } else if (button == 4 && state == GLUT_DOWN) {
-        if (ui_state_help().visible) {
-            ui_state_help_mut()->scroll++;
-        } else {
-            if (editor_point_in_code_panel(x, y))
-                editor_scroll_set(editor_scroll() + 1);
-            else
-                repl_camera_add_zoom_velocity(0.3f);
-        }
-        editor_request_redraw();
-    }
-#endif
-}
-
-#ifndef USE_GLUT
-static void mousewheel_func(int wheel, int direction, int x, int y) {
-    (void)wheel;
-    if (ui_state_help().visible) {
-        editor_help_session_scroll_by(-direction);
-    } else {
-        if (editor_point_in_code_panel(x, y))
-            editor_scroll_set(editor_scroll() - direction);
-        else
-            repl_camera_add_zoom_velocity(-(float)direction * 0.1f);
-    }
-    editor_request_redraw();
-}
-#endif
-
-static void passive_motion_func(int x, int y) {
-    repl_camera_pointer_set(x, y);
-
-    if (editor_point_on_code_panel_divider(x, y))
-        editor_set_cursor(editor_code_panel_resize_cursor());
-    else
-        editor_set_cursor(GLUT_CURSOR_INHERIT);
-}
-
-static void motion_func(int x, int y) {
-    if (ui_panels_handle_motion(x, y)) {
-        repl_camera_pointer_set(x, y);
+    /* The example dropdown can extend outside the code panel bounds
+     * (e.g. below the panel in vertical layout).  Handle it before the
+     * panel-area gate so clicks on any part of the dropdown register. */
+    if (ui_menu_bar_example_dropdown_is_open()) {
+        int cursor_pos = -1;
+        int panel_actions = ui_panels_handle_code_panel_press(x, y, &cursor_pos);
+        if (cursor_pos >= 0)
+            editor_cursor_pos_set(cursor_pos);
+        if (panel_actions & UI_PANEL_PRESS_OPENED_COLOR_PICKER)
+            repl_undo_push_snapshot();
         editor_request_redraw();
         return;
     }
 
+    if (editor_input_point_on_code_panel_divider(x, y)) {
+        ui_state_code_panel_mut()->resizing_panel = 1;
+        editor_set_cursor(editor_input_code_panel_resize_cursor());
+        return;
+    }
+
+    if (editor_input_point_in_code_panel(x, y)) {
+        int cursor_pos = -1;
+        int panel_actions = ui_panels_handle_code_panel_press(x, y, &cursor_pos);
+        if (cursor_pos >= 0)
+            editor_cursor_pos_set(cursor_pos);
+        if (panel_actions & UI_PANEL_PRESS_OPENED_COLOR_PICKER)
+            repl_undo_push_snapshot();
+        editor_request_redraw();
+        return;
+    }
+}
+
+#ifndef USE_GLUT
+/* Editor's freeglut wheel handler scrolls the code panel only. The
+ * controller dispatches help-overlay scroll and camera zoom velocity
+ * before this runs (when the cursor isn't in the code panel rect). */
+static void mousewheel_func(int wheel, int direction, int x, int y) {
+    (void)wheel;
+    if (editor_input_point_in_code_panel(x, y)) {
+        editor_input_code_panel_scroll(-direction);
+        editor_request_redraw();
+    }
+}
+#endif
+
+/* Passive-motion (no button held) updates the editor's hover cursor.
+ * Camera pointer tracking happens controller-side first. */
+static void passive_motion_func(int x, int y) {
+    if (editor_input_point_on_code_panel_divider(x, y))
+        editor_set_cursor(editor_input_code_panel_resize_cursor());
+    else
+        editor_set_cursor(GLUT_CURSOR_INHERIT);
+}
+
+/* Editor's drag-motion handles only code-panel concerns: panel resize
+ * tracking and code-panel selection drag. The controller dispatches
+ * UI overlay motion (color picker), variable-panel drag motion, and
+ * camera drag motion before this runs. */
+static void motion_func(int x, int y) {
     if (ui_state_code_panel().resizing_panel) {
         editor_update_panel_frac_from_mouse(x, y);
         editor_request_redraw();
         return;
     }
 
-    if (variable_panel_drag_active()) {
-        variable_panel_handle_drag_motion(x);
-        repl_camera_pointer_set(x, y);
-        editor_request_redraw();
-        return;
-    }
-
     if (ui_panels_handle_code_panel_drag(x, y)) {
-        repl_camera_pointer_set(x, y);
         editor_request_redraw();
         return;
     }
-
-    repl_camera_drag_motion(x, y);
 }
 
 ReplInputDispatchEffects editor_handle_key(unsigned char key, int x, int y) {
