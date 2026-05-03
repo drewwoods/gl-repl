@@ -20,9 +20,13 @@
 #define g_pending_workspace_dir (IMPORT_EXPORT_STATE->pending_workspace_dir)
 
 const char *g_header_pre[] = {
+    "#define y0 _y0",
+    "#define y1 _y1",
     "#include <gl_includes.h>",
     "#include <math.h>",
     "#include <stdlib.h>",
+    "#undef y0",
+    "#undef y1",
     "",
     "#ifndef M_PI",
     "#define M_PI 3.14159265358979323846",
