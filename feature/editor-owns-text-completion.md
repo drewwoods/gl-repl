@@ -38,6 +38,148 @@
 > Where remaining destinations have shifted under the new contract, the
 > *Implementation Status* table for commit 12+ has been updated.
 
+## P1 Review Follow-Up: Finish The Input Boundary
+
+Review on 2026-05-03 found two completion blockers before the
+editor / controller / UI split should be considered fully closed:
+
+1. `editor_input.c` still delegates the real keyboard / mouse /
+   motion handlers to the legacy `repl_*_func` bodies in
+   `repl_editor.c`.
+2. The legacy code-panel press handler still performs side effects
+   from `ui_panels.c` instead of only returning a neutral `UiHit`.
+
+These are ownership-boundary issues, not behavior changes. The work
+below should land as small commits with `make test`,
+`make test-stubs`, and `make check-state-ownership` green after each
+commit.
+
+### J1 — Replace `editor_input.c` Shims With Real Editor Handlers
+
+**Goal:** make the live path `imrepl_ctrl -> editor_handle_*` execute
+editor-owned code directly. `editor_input.c` must not call
+`repl_keyboard_func`, `repl_special_func`, `repl_mouse_func`,
+`repl_motion_func`, or `repl_passive_motion_func`.
+
+Breakdown:
+
+1. Move the editor-owned keyboard path out of `repl_editor.c`:
+   text insertion/deletion, cursor movement, line navigation,
+   insert/overwrite mode, search keys, autocomplete acceptance,
+   clipboard shortcuts, undo/redo, reformat, commit trigger, and
+   `feed_line`-style programmatic commit orchestration.
+2. Keep non-editor routing out of `editor_input.c`. Replay pins,
+   menu actions, variable-panel drags, color picker opening, camera
+   orbit/pan/zoom, help visibility, and scene/menu actions should be
+   routed by `imrepl_ctrl` to their owning subsystem after UI hit-test.
+3. Move any editor-only helper state that `repl_editor.c` still owns
+   into editor-owned modules or narrower helpers:
+   `load_line_to_input`, line navigation, selection/clipboard
+   coordination, pending-newline handling, cursor blink reset, and
+   commit result/status propagation.
+4. Normalize grammar-specific apply helpers. `repl_compile_*`
+   functions may remain grammar-specific because they validate REPL
+   syntax, but editor-side apply should not have helpers such as
+   `apply_float_decl_change()` / `apply_var_assign_change()` that know
+   REPL command categories. Successful commits should flow through the
+   generic `editor_commit_apply_compiled_change()` or
+   `editor_commit_apply_plan()` path, with `EditorCommitPostEffects`
+   describing cursor movement, input clearing, reload-line behavior,
+   and commit/status text.
+5. Reduce `repl_editor.c` to either a compatibility wrapper layer that
+   calls `editor_handle_*` or delete it entirely once no production
+   caller needs the `repl_*_func` names.
+6. Add or tighten a guard so `editor_input.c` cannot include legacy
+   `repl_editor` declarations or call `repl_*_func` dispatch bodies.
+
+Acceptance checks:
+
+```sh
+rg -n 'repl_(keyboard|special|mouse|motion|passive_motion)_func' editor_input.c
+# no hits
+
+rg -n 'apply_(float_decl|var_assign)_change' editor_commit.c
+# no hits
+
+rg --files | rg '(^|/)repl_editor\.(c|h)$'
+# either no files, or wrappers only with no input-dispatch implementation
+
+make check-state-ownership
+make test
+make test-stubs
+```
+
+Manual smoke:
+
+- Typing, delete/backspace, Enter, `;`, insert/overwrite mode, and
+  cursor navigation behave unchanged.
+- Search, autocomplete, copy/cut/paste, undo/redo, and reformat behave
+  unchanged.
+- Programmatic load / example / `feed_line` paths still commit through
+  the same editor transaction boundary.
+
+### J2 — Route Code-Panel Press Side Effects Through `UiHit`
+
+**Goal:** UI input files classify where the event landed; they do not
+open pickers, toggle replay, start search, activate menus, clear
+selection, mutate cursor state, or call editor/replay/menu actions.
+
+Breakdown:
+
+1. Treat `ui_panels_hit_test()` as the canonical code-panel input
+   surface. It returns `UiHit { kind, line_idx, visual_row, char_idx,
+   cmd_idx, item_idx, local_x, local_y }` and performs no mutation.
+2. Move the remaining `ui_panels_handle_code_panel_press()` side
+   effects into `imrepl_ctrl` dispatch:
+   - `UI_HIT_CODE_TEXT` / `UI_HIT_CODE_GUTTER` ->
+     `editor_handle_mouse(...)`
+   - `UI_HIT_COLOR_SWATCH` -> color-picker / editor color-transform
+     owner
+   - `UI_HIT_PIN_BUTTON` -> replay or editor-search owner based on
+     `item_idx`
+   - `UI_HIT_MENU_ITEM` -> menu/app-action router
+   - `UI_HIT_VARIABLE_SLIDER` -> `variable_panel_handle_*`
+   - `UI_HIT_SCENE` / `UI_HIT_PANEL_DIVIDER` -> viewport / UI chrome
+     owner
+3. Delete or make private any legacy mutating UI press helpers once no
+   production caller uses them. If temporary wrappers remain for tests,
+   keep them clearly test-only or allowlisted by the boundary check.
+4. Tighten `check-ui-returns-hits-only` from a ratchet baseline to a
+   zero-production-hit guard for UI input files. Production `ui_*.c`
+   input helpers should not call editor, REPL, replay, variable-panel,
+   menu-action, or color-picker mutators.
+
+Acceptance checks:
+
+```sh
+rg -n 'ui_panels_handle_code_panel_press|ui_color_picker_open|replay_handle_pin_clicked|handle_search_key|ui_menu_bar_.*(open|close|activate)' ui_panels.c
+# no production input-handler hits
+
+make check-ui-returns-hits-only
+make check-state-ownership
+make test
+make test-stubs
+```
+
+Manual smoke:
+
+- Code text click moves the editor cursor to the clicked row/column.
+- Color swatch click opens/closes the picker and color edits still
+  reparse through the editor/commit path.
+- Search and replay pinned buttons still activate.
+- Menus still open, switch, dismiss, and activate items.
+- Variable-panel drag and scene/camera gestures still route to their
+  owning subsystem.
+
+### P1 Closure Definition
+
+The P1 issues are closed only when both are true:
+
+- `imrepl_ctrl -> editor_handle_*` no longer reaches legacy
+  `repl_*_func` bodies for normal input dispatch.
+- UI input handlers return hit-test data only; all side effects happen
+  in `imrepl_ctrl` or the owning subsystem selected by `UiHit.kind`.
+
 ## Target Contract
 
 The load-bearing definition is now in
