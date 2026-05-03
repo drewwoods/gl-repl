@@ -260,30 +260,10 @@ void repl_scenes_mark_example_active(void);
 void repl_scenes_activate_home_slot(void);
 void repl_scenes_reset(void);
 
-/* ---- Commit handler chain (implemented in repl_commit.c)
- * Each handler inspects g_input. Returns 1 if it consumed the line
- * (success or handled error), 0 if the input wasn't in its grammar.
- * Ordering matters: see ARCHITECTURE.md "Structured block commits". */
-void repl_commit_reset_transients(void);
-int  repl_commit_resolve_insert_exit_target(int target);
-
-/* func-decl resume bookkeeping. Phase D commit 26b lifts these out
- * of static-helper land so editor_commit.c can stash the delta into
- * an EditorCommitPlan's post-effects + apply consumes the global
- * here. Phase D commit 26d (func_def migration) folds the read+set
- * portion into compile too, eliminating the global. */
-int  repl_commit_func_decl_resume_delta_take(void);   /* read + clear */
-int  repl_commit_func_decl_resume_delta_peek(void);   /* read only */
-void repl_commit_func_decl_resume_delta_set(int delta);
-int try_commit_float_decl(void);
-int try_assign_variable(void);
-int try_commit_for_loop(void);
-int try_commit_func_def(void);
-int try_commit_if_block(void);
-int try_commit_close_brace(void);
-int try_commit_var_statements(void);
-int try_commit_block_structs(void);
-int try_commit_any(void);
-int try_commit_var_statements_then_insert(void);
+/* Commit dispatcher chain (try_commit_*, repl_commit_func_decl_resume_*,
+ * repl_commit_resolve_insert_exit_target, repl_commit_reset_transients)
+ * declarations moved to editor_commit.h (Phase H.5 commit 41). The
+ * bodies live in editor_commit.c (moved from repl_commit.c in
+ * commit 39). */
 
 #endif /* REPL_CORE_INTERNAL_H */
