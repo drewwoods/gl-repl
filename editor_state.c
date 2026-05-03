@@ -1,5 +1,7 @@
 #include "editor_state.h"
 
+#include "repl_compile.h"   /* ReplCompiledChange struct definition */
+
 #include <stddef.h>
 #include <string.h>
 
@@ -196,6 +198,32 @@ int editor_buffer_load_lines(const char *const *lines, int count) {
 
 void editor_buffer_clear(void) {
     g_editor_state.buffer.line_count = 0;
+}
+
+int editor_buffer_apply_compiled_change(const struct ReplCompiledChange_s *change) {
+    if (!change) return 0;
+
+    /* Build a const char *[] view of the change's text array — the
+     * editor_buffer_* mutators take a list of pointers. */
+    const char *line_ptrs[MAX_COMMIT_CMDS];
+    for (int i = 0; i < change->count && i < MAX_COMMIT_CMDS; i++)
+        line_ptrs[i] = change->text[i];
+
+    switch (change->kind) {
+    case REPL_COMPILED_NO_CHANGE:
+        return 1;
+    case REPL_COMPILED_INSERT_ONE:
+        return editor_buffer_insert_line(change->pos, change->text[0]);
+    case REPL_COMPILED_INSERT_MANY:
+        return editor_buffer_insert_lines(change->pos, line_ptrs, change->count);
+    case REPL_COMPILED_REPLACE_ONE:
+        return editor_buffer_replace_line(change->pos, change->text[0]);
+    case REPL_COMPILED_DELETE_RANGE:
+        return editor_buffer_delete_range(change->pos, change->count);
+    case REPL_COMPILED_LOAD_ALL:
+        return editor_buffer_load_lines(line_ptrs, change->count);
+    }
+    return 0;
 }
 
 EditorBufferView editor_buffer_view(void) {

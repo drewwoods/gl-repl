@@ -106,7 +106,7 @@ typedef struct {
 #define MAX_PREDEF_OPS_PER_COMMIT (MAX_NAMES_PER_DECL * 2 + 1)
 #endif
 
-typedef struct {
+typedef struct ReplCompiledChange_s {
     ReplCompiledChangeKind kind;
     int                    pos;
     int                    count;

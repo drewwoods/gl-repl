@@ -217,6 +217,20 @@ void editor_buffer_clear(void);
  * `editor_buffer_*` reads through globals. */
 EditorBufferView editor_buffer_view(void);
 
+/* Forward decl for apply boundary. The full type lives in
+ * repl_compile.h; the editor commit orchestration drives it
+ * alongside repl_apply_compiled_change inside one undo
+ * transaction. */
+struct ReplCompiledChange_s;
+
+/* Apply the editor-text portion of a compiled change. Mutates
+ * EditorState text only — does not touch ReplState, status, or
+ * undo. Returns 1 on success, 0 on capacity error.
+ *
+ * The dual of repl_apply_compiled_change(). The editor commit
+ * orchestration drives both inside one undo transaction. */
+int editor_buffer_apply_compiled_change(const struct ReplCompiledChange_s *change);
+
 /* Slice-level read accessors that take a view explicitly. The view
  * variants are the long-term API; the global-state variants above
  * remain during the migration and will be removed once every reader
