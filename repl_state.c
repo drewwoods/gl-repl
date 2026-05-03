@@ -49,6 +49,9 @@ ReplPointerState       *ui_state_pointer_mut(void);
 void                    ui_state_pointer_set(int mouse_x, int mouse_y, int mouse_button);
 void                    ui_state_pointer_set_pos(int mouse_x, int mouse_y);
 void                    ui_state_pointer_set_button(int mouse_button);
+ReplCodePanelRuntimeState  ui_state_code_panel(void);
+ReplCodePanelRuntimeState *ui_state_code_panel_mut(void);
+void                       ui_state_code_panel_reset(void);
 
 static const float g_grid_major_steps[GRID_MAJOR_COUNT] = {
     [GRID_MAJOR_1]  = 1.0f,
@@ -90,13 +93,12 @@ static ReplRuntimeState g_repl_state;
 #define g_anim_time                 (g_repl_state.variables.anim_time)
 #define g_t_playing                 (g_repl_state.variables.time_playing)
 #define g_t_var_idx                 (g_repl_state.variables.time_var_idx)
-#define g_panel_frac                (g_repl_state.code_panel.panel_frac)
-#define g_resizing_panel            (g_repl_state.code_panel.resizing_panel)
-/* g_scroll / g_scroll_follow_cursor macros removed (Phase 1 commit 11);
- * scroll lives on g_editor_state.scroll in editor_state.c. */
-#define g_cursor_on                 (g_repl_state.code_panel.cursor_visible)
-#define g_blink_tick                (g_repl_state.code_panel.blink_tick)
-/* g_show_help / g_help_tab / g_help_scroll / g_show_var_panel macros
+/* g_panel_frac / g_resizing_panel / g_cursor_on / g_blink_tick /
+ * g_cursor_px / g_cursor_py macros removed (Phase A commit 12); the
+ * code_panel render-chrome slice lives on g_ui_state.code_panel in
+ * ui_state.c. The scroll fields moved earlier (Phase 1 commit 11)
+ * onto g_editor_state.scroll in editor_state.c.
+ * g_show_help / g_help_tab / g_help_scroll / g_show_var_panel macros
  * removed (Phase 1 commit 8); the help and variable_panel slices live
  * on g_ui_state.{help,variable_panel} in ui_state.c. */
 /* g_drag_* macros removed (Phase 1 commit 9); variable_drag lives on
@@ -134,8 +136,8 @@ static ReplRuntimeState g_repl_state;
 #define g_show_vpoints              (g_repl_state.presentation.show_vertex_points)
 #define g_highlight_current_poly    (g_repl_state.presentation.highlight_current_poly)
 #define g_ortho_mode                (g_repl_state.presentation.ortho_mode)
-#define g_cursor_px                 (g_repl_state.code_panel.cursor_px)
-#define g_cursor_py                 (g_repl_state.code_panel.cursor_py)
+/* g_cursor_px / g_cursor_py defined alongside the other code_panel
+ * macro removals above. */
 #define g_use_accum                 (g_repl_state.render.use_accum)
 #define g_accum_aa_enabled          (g_repl_state.render.accum_aa_enabled)
 #define g_accum_samples             (g_repl_state.render.accum_samples)
@@ -147,7 +149,9 @@ static ReplRuntimeState g_repl_state;
 #define g_lights                    (g_repl_state.render.lights)
 #define g_clear_color               (g_repl_state.render.clear_color)
 /* g_status / g_status_ttl macros removed (Phase 1 commit 8); status
- * lives on g_ui_state.status in ui_state.c. */
+ * lives on g_ui_state.status in ui_state.c.
+ * g_cursor_px / g_cursor_py macros removed (Phase A commit 12); the
+ * code_panel slice lives on g_ui_state.code_panel in ui_state.c. */
 #define g_search_active             (g_repl_state.search.active)
 #define g_search_query              (g_repl_state.search.query)
 #define g_search_query_len          (g_repl_state.search.query_len)
@@ -433,22 +437,11 @@ void repl_state_time_reset_to_zero(void) {
 /* Selection + clipboard accessors moved to editor_state.c
  * (Phase 1 commit 6). Use editor_state_selection / _clipboard. */
 
-ReplCodePanelRuntimeState repl_state_code_panel(void) {
-    return g_repl_state.code_panel;
-}
-
-ReplCodePanelRuntimeState *repl_state_code_panel_mut(void) {
-    return &g_repl_state.code_panel;
-}
-
-void repl_state_code_panel_reset(void) {
-    g_repl_state.code_panel = g_repl_state_defaults.code_panel;
-}
-
-/* Help / variable_panel / profile_panel / status / pointer / viewport
- * accessors moved to ui_state.c (Phase 1 commit 8). The legacy
- * repl_state_* names remain alive as one-line forwarders defined
- * there, so existing callers link without including ui_state.h. */
+/* code_panel accessors moved to ui_state.c (Phase A commit 12).
+ * The legacy repl_state_code_panel* names remain alive as one-line
+ * forwarders in the block at the bottom of this file.
+ * Help / variable_panel / profile_panel / status / pointer / viewport
+ * accessors moved to ui_state.c (Phase 1 commit 8). */
 
 /* editor_state_variable_drag accessors moved to editor_state.c
  * (Phase 1 commit 9). Use editor_state_variable_drag / _mut / _reset. */
@@ -753,4 +746,16 @@ void repl_state_pointer_set_pos(int mouse_x, int mouse_y) {
 
 void repl_state_pointer_set_button(int mouse_button) {
     ui_state_pointer_set_button(mouse_button);
+}
+
+ReplCodePanelRuntimeState repl_state_code_panel(void) {
+    return ui_state_code_panel();
+}
+
+ReplCodePanelRuntimeState *repl_state_code_panel_mut(void) {
+    return ui_state_code_panel_mut();
+}
+
+void repl_state_code_panel_reset(void) {
+    ui_state_code_panel_reset();
 }

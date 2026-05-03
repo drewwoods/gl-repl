@@ -10,10 +10,12 @@
 #     header)
 #
 # Each forwarder body line counts: a return-line into ui_state_*, or a
-# direct ui_state_* call. The forwarder block in repl_state.c lists 24
-# forwarder functions today; bodies are 21 lines (some return-by-value
-# helpers fold to one line). See the EDITOR_OWNERSHIP_TODO at that
-# block for context.
+# direct ui_state_* call. The forwarder block in repl_state.c started
+# with 24 forwarder functions whose bodies were 21 lines (some
+# return-by-value helpers fold to one line). Phase A commit 12 added
+# code_panel forwarders (3 functions / 3 body lines), bringing the
+# count to 24. The block goes to zero in Phase A commit 14. See the
+# EDITOR_OWNERSHIP_TODO at the forwarder block for context.
 
-ui_forwarder_count: 21
+ui_forwarder_count: 24
 ui_state_includes_repl_views: 1
