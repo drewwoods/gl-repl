@@ -119,10 +119,20 @@ Consequences:
 
 | State | Owns | Does not own |
 |---|---|---|
-| `ReplState` | Parsed command array, flat program, variables, replay state machine, scenes, import/export metadata, persistent render/presentation config | Editable text, cursor, selection, search query, UI visibility, pointer/viewport chrome |
-| `EditorState` | Editable text buffer, active input, cursor/edit-line, insert mode, selection, clipboard, search/autocomplete, scroll, **cursor blink** (the editor controls cursor visibility/blink — UI just renders), undo/redo, editor transactions, *transitional* variable-drag (moves to variable-panel peer subsystem) | Parsed command semantics, GL execution, menu chrome, transient status banners, render-output pixel coordinates |
-| `UiState` | Viewport, pointer, status text TTL, help/profile/panel visibility, panel-divider geometry (panel_frac + resizing_panel), camera viewport pose | Program model, editable text, command validation, cursor blink (editor owns), per-frame render-output (uses `Ui*Output`) |
-| Peer subsystems | Variable panel system (visibility + drag transaction), replay system (PC, mode, fade batches) — own their own state structs, not slices of the editor | Editor text behavior |
+| `ReplState` | Parsed command array, flat program, variables, scenes, import/export metadata, persistent render/presentation config | Replay runtime state (peer), variable-panel state (peer), help-session state (peer), editable text, cursor, selection, search query, UI visibility, pointer/viewport chrome |
+| `EditorState` | Editable text buffer, active input, cursor/edit-line, insert mode, selection, clipboard, search/autocomplete, scroll, **cursor blink** (the editor controls cursor visibility/blink — UI just renders), undo/redo, editor transactions | Variable-panel drag (now on the variable_panel peer), parsed command semantics, GL execution, menu chrome, transient status banners, render-output pixel coordinates |
+| `UiState` | Viewport, pointer, status text TTL, help-overlay visibility (chrome flag), profile-panel visibility, panel-divider geometry (panel_frac + resizing_panel), camera viewport pose | Help-session tab/scroll (peer), variable-panel state (peer), program model, editable text, command validation, cursor blink (editor owns), per-frame render-output (uses `Ui*Output`) |
+| `variable_panel` peer | Variable-panel visibility flag + slider drag transaction (var_idx, log_mode, start_value, start_x). Storage in `variable_panel.c`. | Editor text behavior, REPL grammar |
+| `replay` peer | Replay state machine: PC, mode, speed, accum, fade speed, src_line_idx, total_flat_cmds, expand_args. Storage in `replay_state.c`. | Editor text behavior, REPL grammar |
+| `editor_help_session` peer | Help-overlay session state: tab_idx, scroll. Storage in `editor_help_session.c`. Visibility flag stays on `UiState.help` as chrome. | Help content (provided by content provider) |
+
+> Legacy forwarders (`ui_state_variable_panel*`, `editor_state_variable_drag*`,
+> `repl_state_replay*`) still resolve via shims in their original
+> headers so test fixtures keep compiling. Production callers go
+> through the peer accessors directly. The forwarders are tracked
+> by `check-variable-panel-forwarders` (baseline 87) and
+> `check-replay-forwarders` (baseline 37) and ratchet toward zero
+> as the test harness migrates.
 
 ## Repository Layout Rules
 
@@ -139,7 +149,7 @@ source-backed module.
 
 | Prefix | Owns |
 |---|---|
-| `repl_*` | Program model and compiler pipeline: parser, eval, command spec, source scope, compile, command store, flatten, executor, autonormal, replay state machine, examples, export. **No editor or UI state.** |
+| `repl_*` | Program model and compiler pipeline: parser, eval, command spec, source scope, compile, command store, flatten, executor, autonormal, examples, export. **No editor or UI state. No replay runtime state (that lives on the `replay` peer).** |
 | `editor_*` | Text-document model + controller: line text, active input, cursor, scroll, selection, navigation, undo/redo, clipboard, search, autocomplete, cursor blink, commit orchestration. Includes read-only document sessions (e.g. help) backed by a content provider |
 | `ui_*` | Screen-space rendering and hit-test/measurement services. Renderers consume snapshots; input handlers compute neutral `UiHit` results and return them. **Does not own state. Does not dispatch.** |
 | `scene_*` | 3D rendering, camera/view transforms, world decorators, scene overlays. Camera input routes through `imrepl_ctrl` to scene/viewport controller |
@@ -278,8 +288,11 @@ controllers; UI may render them; their input routes to them through
 
 | Module | Role |
 |--------|------|
-| `variable_panel_drag` | Variable-slider drag transaction and writeback policy. Transitional: today the drag state lives on `EditorState.variable_drag` and the visibility flag on `UiState.variable_panel`; both move into a single peer subsystem state struct |
-| `replay` | Replay state machine: PC, mode, speed, fade batches. Already largely a peer; promotion to first-class peer subsystem completes in a future commit |
+| `variable_panel` | Peer subsystem: owns visibility flag + slider drag transaction in a single `VariablePanelState`. Storage lives in `variable_panel.c`. |
+| `variable_panel_drag` | Implementation behind `variable_panel`'s drag transaction (begin/motion/reset, value writeback, source-line rewrite). Reads/writes through `variable_panel_drag_mut()`; legacy `repl_var_drag_*` symbol surface ratchets toward zero |
+| `replay_state` | Peer subsystem: owns `ReplReplayRuntimeState` storage in `replay_state.c`. Narrow accessors (`replay_active`, `replay_pc`, `replay_mode`, …) plus `replay_state_view()` for the per-frame snapshot fill |
+| `replay` | Replay state machine implementation behind `replay_state`: PC stepping, mode toggling, fade batches. Routes via `replay_handle_pin_clicked` / `replay_handle_key` / `replay_handle_special` |
+| `editor_help_session` | Peer subsystem: read-only editor session for the help overlay (tab_idx, scroll). Visibility flag stays on `UiState.help` as chrome |
 
 Peer subsystems may *produce* overlays consumed by the editor (replay
 annotations are virtual lines the editor can render). They do not
