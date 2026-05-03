@@ -92,11 +92,11 @@ Test sources live under `tests/` and shared test-only helpers live under
 | `sample.c` | GLUT callback registration, `main()`, window setup, buffer swap; forwards directly to `imrepl_ctrl_*` |
 | `sample.h` | Shared types (`GLCmd`, `CmdType`, `SceneLight`), defaults, stateless helpers, compatibility includes |
 | `imrepl_ctrl.c` | App-frame controller: `imrepl_ctrl_display_frame`, `imrepl_ctrl_reshape`, `imrepl_ctrl_init_gl`; builds `SceneRenderConfig`, calls scene/UI renderers |
-| `imrepl_ctrl.h` | Controller public surface: display, reshape, init-GL entrypoints |
+| `imrepl_ctrl.h` | Controller public surface: display, reshape, init-GL, input routing (keyboard/mouse/motion/timer), and bootstrap entrypoints |
 | `repl_config.c` | Config key implementation and descriptor table helpers |
 | `repl_config.h` | `ReplConfigKey` / `ReplConfigItem` descriptor API for keyed config access |
 | `repl_core.c` | Normalization pipeline (`repl_parse_and_normalize*`), reformatter, startup helpers; being dissolved into natural owners (R10) |
-| `repl_parser.c` | REPL source-line parser, expression validation, canonical `GLCmd.source[]` generation |
+| `repl_parser.c` | REPL source-line parser, expression validation, canonical `ReplParsedLine` text generation (stored in `ReplEditorBuffer`) |
 | `repl_parser.h` | Parser entrypoints (`repl_parser_parse_command*`, `repl_parser_parse_command_ctx`) and `ReplParseContext` |
 | `repl_source_scope.c` | Source prefix-depth cache, indentation helpers, block lookup |
 | `repl_source_scope.h` | Source-scope query API (`repl_source_scope_block_depth_at`, `repl_source_scope_find_block_end`, indent helpers) |
@@ -112,7 +112,7 @@ Test sources live under `tests/` and shared test-only helpers live under
 | `repl_state_views.h` | Read-only (by-value) state getters; safe to include from `scene_*` and `ui_*` |
 | `repl_state_owners.h` | Mutable `_mut()` accessors; owner modules and controller only |
 | `repl_editor.c` | Keyboard/mouse routing, commit orchestration, feed-line entrypoint |
-| `repl_editor.h` | Editor public API (`repl_keyboard_func`, `repl_editor_active_modifiers`, etc.) |
+| `repl_editor.h` | Editor public API (`repl_editor_active_modifiers`); note: input callback entry points (`repl_keyboard_func` etc.) are declared in `repl_core.h` |
 | `repl_keys.h` | ASCII and control-key code constants (Ctrl+A=1 … Ctrl+Z=26, F-key names) |
 | `repl_clipboard.c` | Line selection anchors, command clipboard buffer, copy/cut/paste behavior |
 | `repl_clipboard.h` | Clipboard public API |
@@ -419,29 +419,29 @@ example switch. Deferred — see `feature/multi-user-scenes.md`.
 is no shim layer.
 1. Rebuild autonormals and flat program if dirty; save predef var values;
    prepare replay frame if active; update export/camera strings
-2. Build `SceneRenderConfig` from REPL state; if accumulation-buffer AA is
-   enabled (currently read from `repl_state_render()`; R1a moves this to
-   config fields), call `scene_render_3d_scene(&cfg)` once per jitter sample.
-   Jitter is applied as a scene-local frustum shift inside the scene function —
-   it is no longer a config field
+2. Build `SceneRenderConfig` from REPL state (accumulation-buffer AA settings
+   are on the config); call `scene_render_3d_scene(&cfg)` once per jitter
+   sample. Jitter is applied as a scene-local frustum shift inside the scene
+   function — it is not a config field
 3. `scene_render_3d_scene(&cfg)` in `scene_render.c`: viewport/clear setup →
    projection → camera → execute user geometry via `SceneExecuteProgramFn`
-   callback → replay fade batches (transitional; R1b replaces with
-   `ReplayFadePlan` snapshot iteration) → grid/axes/backdrop/orbit-target →
-   polygon-outline, vertex, normal, and guide overlays → 2D replay HUD
-   (transitional; R1c moves to `ui_replay_hud.c`)
-4. 2D overlays: code panel, autocomplete popup, example dropdown,
-   variable slider panel, config menu, help overlay, search overlay
+   callback → replay fade batches (`ReplayFadePlan` snapshot iteration) →
+   grid/axes/backdrop/orbit-target → polygon-outline, vertex, normal, and
+   guide overlays
+4. 2D overlays: replay HUD (`ui_replay_hud.c`), code panel, autocomplete
+   popup, example dropdown, variable slider panel, config menu, help overlay,
+   search overlay
 
 ### Two-Level Command Model
 
 The core data flow is **source commands → flat commands → GL calls**:
 
 - **Source array** (`repl_state_document_cmds()`, count via
-  `repl_state_document_count()`) — each `GLCmd` holds parsed type/args,
-  normalized `source[]` text, and flags (`has_vars`, `valid`, `is_auto`).
+  `repl_state_document_count()`) — each `GLCmd` holds parsed type/args and
+  flags (`has_vars`, `valid`, `is_auto`). Canonical source text lives in the
+  parallel `ReplEditorBuffer` (via `repl_state_editor_buffer_line()`).
   Edited directly by the user via the code panel.
-- **Flat array** (`repl_state_flat_cmds()`) — expanded copy. For-loops are
+- **Flat array** (`repl_state_flat_program_view()`) — expanded copy. For-loops are
   unrolled, function calls are inlined, if-blocks are resolved.
   Each flat cmd records `src_cmd_idx` (owning source line),
   `call_src_cmd_idx` (immediate call site), and `func_scope_mask`

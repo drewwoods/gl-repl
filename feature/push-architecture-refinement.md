@@ -67,7 +67,7 @@ cleanup (app-shell shim removal) has also been completed. Phase 2 status as of
   framing assumed those decls were dead post shim-removal; they are alive.
 - ❌ R8 (sample → imrepl rename): Not started.
 - ❌ R9 (split repl_export.c): Not started — optional.
-- ❌ R10-phase2+ (dissolve repl_core.c): Not started — `repl_core.c` (663
+- ❌ R10-phase2+ (dissolve repl_core.c): Not started — `repl_core.c` (621
   lines) still contains `repl_parse_and_normalize*`, `normalize_with_indent`,
   `repl_reformat_commands`, `collect_visible_vars`, `load_initial_commands`,
   `scroll_to_display_function`, `repl_debug_dump_*`, `current_begin_mode`,
