@@ -1,26 +1,50 @@
 /*
  * editor_input.h - Editor input dispatch entry points.
  *
- * Phase D commit 26a carves out the editor input layer with the
- * five GLUT-callback entry points the controller dispatches on.
- * Today these are thin shims that delegate to the legacy
- * repl_*_func bodies in repl_editor.c — Phase D commits 26b-26e
- * move the bodies (and their file-local helpers) over here as
- * the structured-commit migration lands.
+ * Phase J1 commit 44 migrates the keyboard dispatch body out of
+ * repl_editor.c into editor_input.c. `editor_handle_key` is the
+ * canonical entry — no longer a shim. Special / mouse / motion /
+ * mousewheel still delegate to repl_*_func bodies in repl_editor.c
+ * (commits 45 and 46 migrate those next).
  *
- * The shim form establishes the boundary check
- * (`check-imrepl-not-editor-mirror` in commit 27 verifies
- * `imrepl_ctrl` calls only `editor_handle_*` for input dispatch).
+ * The boundary check (`check-no-repl-editor-input-shim`, commit 49b)
+ * locks the contract that editor_input.c may not call repl_*_func
+ * dispatch bodies once the migration is complete.
  */
 #ifndef EDITOR_INPUT_H
 #define EDITOR_INPUT_H
 
-#include "repl_core.h"  /* ReplInputDispatchEffects */
+#include "repl_core.h"           /* ReplInputDispatchEffects */
+#include "repl_core_internal.h"  /* ReplModifierProvider (test seam) */
 
 ReplInputDispatchEffects editor_handle_key(unsigned char key, int x, int y);
 ReplInputDispatchEffects editor_handle_special(int key, int x, int y);
 ReplInputDispatchEffects editor_handle_mouse(int button, int state, int x, int y);
 ReplInputDispatchEffects editor_handle_motion(int x, int y);
 ReplInputDispatchEffects editor_handle_passive_motion(int x, int y);
+
+/* Effect accumulation API used by the five public dispatch entry
+ * points. During the keyboard / special / mouse / motion migration
+ * (commits 44–46) the legacy repl_*_func wrappers in repl_editor.c
+ * also call these helpers; once every body has moved into
+ * editor_input.c they go file-private again. */
+void                     editor_reset_input_effects(void);
+ReplInputDispatchEffects editor_take_input_effects(void);
+void                     editor_request_redraw(void);
+void                     editor_set_cursor(int cursor);
+void                     editor_schedule_timer(unsigned int millis, int value);
+int                      editor_get_modifiers(void);
+
+/* Audio-gesture coupling. The Web Audio context stays suspended until
+ * a user gesture, so the very first key / mouse event fires
+ * repl_audio_on_user_gesture once. Native builds make this a no-op.
+ * Phase J1 commit 48a relocates this state to imrepl_ctrl. */
+void editor_input_notify_audio_gesture_once(void);
+
+/* Test seam: 49a renames repl_set_modifier_provider_for_test ->
+ * editor_input_set_modifier_provider_for_test. Today both names
+ * resolve to the same storage. */
+void editor_input_set_modifier_provider_for_test(ReplModifierProvider provider);
+int  editor_input_active_modifiers(void);
 
 #endif /* EDITOR_INPUT_H */
