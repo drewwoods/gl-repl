@@ -145,7 +145,8 @@ TEST_BINS = \
 	test_repl_editor \
 	test_repl_core_extra \
 	test_repl_autonormal \
-	test_repl_replay
+	test_repl_replay \
+	test_repl_compile
 
 ifeq ($(USE_GL_STUBS),1)
 TEST_BINS += test_ui
