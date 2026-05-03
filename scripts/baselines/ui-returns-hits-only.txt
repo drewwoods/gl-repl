@@ -1,0 +1,24 @@
+# Baseline for scripts/check-ui-returns-hits-only.sh.
+#
+# UI input helpers (`ui_*.c`, excluding `ui_state.c`) compute neutral
+# `UiHit` values; `imrepl_ctrl` routes hits to the owning subsystem.
+# Mutators called from inside `ui_*.c` violate the boundary and are
+# tracked here as a count that ratchets down only.
+#
+# Phase E commit 30 establishes the baseline at 8 — the residual
+# legacy mutator calls in ui_color_picker.c (color writeback through
+# repl_command_store_*, editor_buffer_replace_line, undo push),
+# ui_menu_bar.c (repl_action_menu_item_activate dispatcher), and
+# ui_panels.c (repl_action_set_cursor_pixel, repl_action_cursor_blink_reset).
+#
+# Phase F+ targets push these to zero by:
+#   - Color picker writeback going through editor compile/apply
+#     instead of direct command-store mutation.
+#   - Menu activation / cursor side effects routed via imrepl_ctrl
+#     on UiHit.kind dispatch.
+#
+# Reductions are always allowed; lower this number by hand when a
+# commit legitimately drives violations down so the next commit
+# cannot silently regress past the new low.
+
+count: 8
