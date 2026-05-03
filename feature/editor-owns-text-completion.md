@@ -912,12 +912,49 @@ provider, not a global call.
 Phase H signal: file names match ownership. No `repl_*` files own
 editor-session state; no `editor_*` files own replay state.
 
+**Deferred from Phase H** (each blocked on a prerequisite, not in
+the rename list):
+
+- `repl_camera_controls.c/h` — final namespace depends on the
+  eventual `scene_*` vs `viewport_*` split (whichever ends up
+  owning the orbit/pan/zoom state). Forcing a rename now risks
+  bouncing it twice.
+- `repl_actions.c/h` — controller / app-action glue (menu activation,
+  key shortcuts, config table) rather than REPL grammar. Right
+  destination (`controller_actions` / `app_actions` / etc.) depends
+  on how `imrepl_ctrl` itself gets re-namespaced when the app shell
+  carves out from REPL.
+- `repl_commit.c/h` — its **existence** is transitional. The
+  architectural target is: REPL parses and returns a structured
+  result; editor commits. Renaming would calcify a structure
+  Phase H.5 dissolves.
+
+### Phase H.5 — Dissolve repl_commit into editor_commit
+
+The corrected M/V/C+compiler+router contract has the editor attempt
+a commit and the REPL act as a pure parser/validator. Today
+`repl_commit.c` still hosts `try_commit_*` dispatchers as thin
+wrappers around `editor_compile_*` — they live on the REPL side and
+pretend the REPL owns commit dispatch. Phase H.5 inverts this so the
+editor truly drives, and the REPL only parses + reports errors.
+
+| # | Commit | Status |
+|---|---|---|
+| 39 | refactor: move `try_commit_var_statements` / `_block_structs` / `_any` / `_var_statements_then_insert` from `repl_commit.c` into `editor_commit.c`; move `repl_commit_func_decl_resume_*` helpers (already encapsulated by `editor_commit_func_decl_resume_set`); update dispatch sites | pending |
+| 40 | refactor: introduce `ReplCompileError` (or reuse `EditorCommitResult.*_valid`) so parse failures return data; migrate status-string sites in `repl_parser` / `repl_compile` to return errors that the editor consumes and sets status from | pending |
+| 41 | refactor: delete `repl_commit.c/h`; add `check-no-repl-commit` hard guard so the file (and any new `try_commit_*` wrappers under the `repl_*` namespace) cannot reappear | pending |
+
+Phase H.5 signal: there is no `repl_commit` translation unit. The
+editor is the sole entry point for committing input; REPL parse
+errors flow back through return values, not side effects on
+`set_status`.
+
 ### Phase I — Hard guards + final cleanup
 
 | # | Commit | Status |
 |---|---|---|
-| 37 | checks: promote remaining audits to hard guards (`check-editor-services-only`, `check-no-set-status-in-repl-or-editor`); remove the budget ratchet now that all transitional forwarders are zero. (`check-imrepl-not-editor-mirror` already lands in Phase D commit 27.) | pending |
-| 38 | docs: refresh MODULES, ARCHITECTURE, CLAUDE, callgraph groups; mark `editor-ownership-gap-cleanup`, `editor-text-model-controller`, and `editor-owns-text-completion(-revised)` plans as landed | pending |
+| 42 | checks: promote remaining audits to hard guards (`check-editor-services-only`, `check-no-set-status-in-repl-or-editor`); remove the budget ratchet now that all transitional forwarders are zero. (`check-imrepl-not-editor-mirror` already lands in Phase D commit 27; `check-no-repl-commit` lands in Phase H.5 commit 41.) | pending |
+| 43 | docs: refresh MODULES, ARCHITECTURE, CLAUDE, callgraph groups; mark `editor-ownership-gap-cleanup`, `editor-text-model-controller`, and `editor-owns-text-completion(-revised)` plans as landed | pending |
 
 Phase I signal: every boundary the plan articulates is enforced by a
 hard guard. The North Star MODULES.md and the build checks describe
