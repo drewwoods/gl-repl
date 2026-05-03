@@ -47,4 +47,23 @@ void editor_input_notify_audio_gesture_once(void);
 void editor_input_set_modifier_provider_for_test(ReplModifierProvider provider);
 int  editor_input_active_modifiers(void);
 
+/* Router pre-dispatch stubs.
+ *
+ * These are the non-editor concerns that bled into the keyboard /
+ * special dispatch in repl_editor.c. Phase J1 commits 47a / 47b lift
+ * each of them up into imrepl_ctrl router pre-dispatch; until then
+ * the bodies remain in editor_input.c and dispatch from
+ * keyboard_func / special_func calls them inline. Each returns 1 if
+ * the key was consumed.
+ */
+int editor_input_router_handle_save_key(unsigned char key);            /* Ctrl+S */
+int editor_input_router_handle_debug_dump_key(unsigned char key);      /* Ctrl+P */
+int editor_input_router_handle_quit_key(unsigned char key);            /* Ctrl+Q */
+int editor_input_router_handle_replay_special(int key);                /* replay-active forwarding */
+int editor_input_router_handle_cfg_special_shortcut(int key);          /* cfg shortcut on F-keys */
+int editor_input_router_handle_horizontal_audio_special(int key);      /* Ctrl+Left/Right audio */
+int editor_input_router_handle_help_tab_special(int key);              /* Left/Right help-tab when help visible */
+int editor_input_router_handle_help_toggle_special(int key);           /* F1 */
+int editor_input_router_handle_scene_cycle_special(int key);           /* F12 */
+
 #endif /* EDITOR_INPUT_H */
