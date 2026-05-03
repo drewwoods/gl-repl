@@ -33,6 +33,7 @@
 #include "ui_state.h"
 #include "ui_variable_panel.h"
 #include "repl_var_drag.h"
+#include "variable_panel.h"
 #include "repl_inline_rename.h"
 #include "repl_audio.h"
 
@@ -1575,8 +1576,8 @@ static void editor_update_panel_frac_from_mouse(int x, int y) {
 static void mouse_func(int button, int state, int x, int y) {
     if (state == GLUT_UP) {
         ui_panels_handle_mouse_release();
-        if (repl_var_drag_active()) {
-            repl_var_drag_reset();
+        if (variable_panel_drag_active()) {
+            variable_panel_handle_drag_reset();
             editor_request_redraw();
             return;
         }
@@ -1589,12 +1590,12 @@ static void mouse_func(int button, int state, int x, int y) {
     }
 
     if (button == GLUT_LEFT_BUTTON && state == GLUT_DOWN) {
-        if (ui_state_variable_panel().visible) {
+        if (variable_panel_visible()) {
             int row_idx;
             if (ui_variable_panel_hit(x, y, &row_idx)) {
                 if (repl_state_replay().active)
                     repl_replay_stop();
-                repl_var_drag_begin(row_idx, 0, x);
+                variable_panel_handle_drag_begin(row_idx, 0, x);
                 editor_request_redraw();
                 return;
             }
@@ -1646,12 +1647,12 @@ static void mouse_func(int button, int state, int x, int y) {
     }
 
     /* Right-click on var panel: logarithmic drag mode. */
-    if (button == GLUT_RIGHT_BUTTON && state == GLUT_DOWN && ui_state_variable_panel().visible) {
+    if (button == GLUT_RIGHT_BUTTON && state == GLUT_DOWN && variable_panel_visible()) {
         int row_idx;
         if (ui_variable_panel_hit(x, y, &row_idx)) {
             if (repl_state_replay().active)
                 repl_replay_stop();
-            repl_var_drag_begin(row_idx, 1, x);
+            variable_panel_handle_drag_begin(row_idx, 1, x);
             editor_request_redraw();
             return;
         }
@@ -1721,8 +1722,8 @@ static void motion_func(int x, int y) {
         return;
     }
 
-    if (repl_var_drag_active()) {
-        repl_var_drag_motion(x);
+    if (variable_panel_drag_active()) {
+        variable_panel_handle_drag_motion(x);
         repl_camera_pointer_set(x, y);
         editor_request_redraw();
         return;

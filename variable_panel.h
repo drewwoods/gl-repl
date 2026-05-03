@@ -53,4 +53,30 @@ ReplVariableDragState  *variable_panel_drag_mut(void);
 int  variable_panel_visible(void);
 void variable_panel_set_visible(int visible);
 
+/* --- Drag transaction handler API ---
+ *
+ * Phase F commit 32 entry points. `imrepl_ctrl` routes
+ * UI_HIT_VARIABLE_SLIDER hits through these handlers; the editor's
+ * mouse handler now calls them instead of touching the legacy
+ * repl_var_drag_* surface directly.
+ */
+
+/* Query whether a drag transaction is currently active. */
+int  variable_panel_drag_active(void);
+
+/* Active drag's variable index (into g_predef_vars[]), -1 if none. */
+int  variable_panel_drag_active_var(void);
+
+/* 1 if the active drag is in log mode (exponential scaling), 0 for linear. */
+int  variable_panel_drag_log_mode(void);
+
+/* Begin a drag transaction on a variable row. */
+void variable_panel_handle_drag_begin(int row, int log_mode, int x);
+
+/* Update the dragged variable from the new mouse x-coordinate. */
+void variable_panel_handle_drag_motion(int x);
+
+/* End the drag transaction. */
+void variable_panel_handle_drag_reset(void);
+
 #endif /* VARIABLE_PANEL_H */

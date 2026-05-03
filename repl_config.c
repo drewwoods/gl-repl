@@ -3,13 +3,13 @@
 #include "repl_audio.h"
 #include "repl_state.h"
 
-/* Camera, variable_panel, profile_panel slices live on UiState.
- * repl_*.c is not allowed to include ui_state.h per
- * check-controller-boundaries, so the relevant accessors are
- * forward-declared inline. */
+/* Camera, profile_panel slices live on UiState; variable_panel
+ * visibility lives on the variable_panel peer. repl_*.c is not
+ * allowed to include ui_state.h per check-controller-boundaries,
+ * so the relevant accessors are forward-declared inline. */
 ReplCameraState        *ui_state_camera_mut(void);
-ReplVariablePanelState *ui_state_variable_panel_mut(void);
 ReplProfilePanelState  *ui_state_profile_panel_mut(void);
+ReplVariablePanelState *variable_panel_view_mut(void);
 
 static int clamp_int(int v, int lo, int hi) {
     if (v < lo) return lo;
@@ -55,7 +55,7 @@ static int *config_value_ptr(ReplConfigKey key) {
     case REPL_CONFIG_NORMAL_VECTORS:      return &repl_state_presentation_mut()->show_normal_vectors;
     case REPL_CONFIG_VERTEX_OUTLINES:     return &repl_state_presentation_mut()->show_vertex_outlines;
     case REPL_CONFIG_VERTEX_POINTS:       return &repl_state_presentation_mut()->show_vertex_points;
-    case REPL_CONFIG_VARIABLE_PANEL:      return &ui_state_variable_panel_mut()->visible;
+    case REPL_CONFIG_VARIABLE_PANEL:      return &variable_panel_view_mut()->visible;
     case REPL_CONFIG_CPU_PROFILE:         return &ui_state_profile_panel_mut()->mode;
     case REPL_CONFIG_CODE_PANEL_LAYOUT:   return &repl_state_presentation_mut()->code_panel_layout;
     case REPL_CONFIG_WRAP_AT_COMMA:       return &repl_state_presentation_mut()->wrap_at_comma;

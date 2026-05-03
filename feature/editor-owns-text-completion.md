@@ -878,7 +878,7 @@ handlers compute hits and return — they don't call mutators.
 | # | Commit | Status |
 |---|---|---|
 | 31 | refactor: extract `variable_panel` peer subsystem shell (visibility flag + drag-state bytes moved off EditorState/UiState into VariablePanelState; legacy accessors forward) | done |
-| 32 | refactor: route variable-panel hits to `variable_panel_handle_*` (no editor_state.variable_drag, no ui_state.variable_panel as owner) | pending |
+| 32 | refactor: route variable-panel hits to `variable_panel_handle_*` (editor / ui_variable_panel / imrepl_ctrl / repl_config / repl_var_drag use peer accessors; legacy editor_state_variable_drag / ui_state_variable_panel kept as forwarders) | done |
 | 33 | refactor: promote `replay` to peer subsystem shell (move `ReplReplayRuntimeState` off `ReplState` into a dedicated module) | pending |
 | 34 | refactor: route replay hits to `replay_handle_*` (UI renders snapshot only, imrepl_ctrl routes only) | pending |
 

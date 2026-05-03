@@ -27,6 +27,7 @@
 #include "repl_source_scope.h"
 #include "ui_profile_panel.h"
 #include "ui_variable_panel.h"
+#include "variable_panel.h"
 #include "prof.h"
 
 static int imrepl_ctrl_cmd_is_focus_vertex(const GLCmd *cmd) {
@@ -332,7 +333,7 @@ static void imrepl_ctrl_build_ui_snapshot(UiRenderSnapshot *snap) {
     snap->presentation   = repl_state_presentation();
     snap->code_panel     = ui_state_code_panel();
     snap->help           = ui_state_help();
-    snap->variable_panel = ui_state_variable_panel();
+    snap->variable_panel = variable_panel_view();
     snap->profile_panel  = ui_state_profile_panel();
     snap->status         = ui_state_status();
     snap->search         = editor_state_search();
@@ -342,7 +343,7 @@ static void imrepl_ctrl_build_ui_snapshot(UiRenderSnapshot *snap) {
     snap->render         = repl_state_render();
     snap->replay         = repl_state_replay();
     snap->scenes         = repl_state_scenes();
-    snap->variable_drag  = editor_state_variable_drag();
+    snap->variable_drag  = variable_panel_drag();
     snap->selection      = editor_state_selection();
     snap->scroll         = editor_state_scroll();
 
