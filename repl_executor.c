@@ -302,7 +302,8 @@ static FlatCmdLocalVars *execution_local_vars_at(FlatProgramView program,
     return &program.local_vars[flat_cmd_idx];
 }
 
-static const char *execution_flat_text(const GLCmd *flat_cmd) {
+static const char *execution_flat_text(EditorBufferView text,
+                                       const GLCmd *flat_cmd) {
     int src_cmd_idx;
 
     if (!flat_cmd)
@@ -313,8 +314,8 @@ static const char *execution_flat_text(const GLCmd *flat_cmd) {
         return "";
 
     {
-        const char *text = editor_buffer_line(src_cmd_idx);
-        return (text && text[0]) ? text : "";
+        const char *line = editor_buffer_view_line(text, src_cmd_idx);
+        return (line && line[0]) ? line : "";
     }
 }
 
@@ -330,6 +331,7 @@ void repl_execute_program(const ReplExecutionOptions *options) {
     ReplReplayRuntimeState replay = repl_state_replay();
     const GLCmd *flat_cmds = program.cmds;
     int flat_cmd_count = execution_flat_count_from_options(options, program);
+    EditorBufferView text = options ? options->text : (EditorBufferView){0};
     int in_begin = 0;
     int tess_depth = 0; /* 0=outside, 1=in polygon, 2=in contour */
     int matrix_depth = 0;
@@ -502,7 +504,7 @@ void repl_execute_program(const ReplExecutionOptions *options) {
              * commands still use the args baked into flat_cmds[]. Replay also
              * cannot follow the dynamic jump trace. */
             char label_name[64];
-            if (!repl_extract_goto_label(execution_flat_text(&flat_cmds[pc]),
+            if (!repl_extract_goto_label(execution_flat_text(text, &flat_cmds[pc]),
                                          label_name, sizeof(label_name)))
                 break;
             if (goto_count++ > 100000) {
@@ -513,7 +515,7 @@ void repl_execute_program(const ReplExecutionOptions *options) {
                 if (flat_cmds[label_idx].valid &&
                     flat_cmds[label_idx].type == CMD_LABEL) {
                     char target_label[64];
-                    if (repl_extract_label_name(execution_flat_text(&flat_cmds[label_idx]),
+                    if (repl_extract_label_name(execution_flat_text(text, &flat_cmds[label_idx]),
                                                 target_label,
                                                 sizeof(target_label)) &&
                         strcmp(target_label, label_name) == 0) {
@@ -538,7 +540,7 @@ void repl_execute_program(const ReplExecutionOptions *options) {
                     eval_vars = local_vars->vars;
                     eval_num_vars = local_vars->num_vars;
                 }
-                if (repl_extract_paren_payload(execution_flat_text(&flat_cmds[pc]),
+                if (repl_extract_paren_payload(execution_flat_text(text, &flat_cmds[pc]),
                                                cond_text, sizeof(cond_text)) &&
                     cond_text[0]) {
                     char repl_cond[MAX_LINE_LEN];
@@ -565,7 +567,7 @@ void repl_execute_program(const ReplExecutionOptions *options) {
             float value = flat_cmds[pc].args[0];
             if (flat_cmds[pc].has_vars) {
                 char rhs[MAX_LINE_LEN] = "";
-                if (repl_extract_assignment_parts(execution_flat_text(&flat_cmds[pc]), NULL, 0,
+                if (repl_extract_assignment_parts(execution_flat_text(text, &flat_cmds[pc]), NULL, 0,
                                                   rhs, sizeof(rhs)) && rhs[0]) {
                     FlatCmdLocalVars *local_vars =
                         execution_local_vars_at(program, pc);
@@ -608,5 +610,14 @@ execute_done:
 }
 
 void execute_commands(void) {
-    repl_execute_program(NULL);
+    /* Test/legacy entry point. The executor's goto-label and
+     * paren-payload helpers route through the editor-text view; pass
+     * the live buffer view so those features work the same as the
+     * controller-driven path. */
+    ReplExecutionOptions options = {
+        .flat_cmd_count = repl_state_flat_program_count(),
+        .program        = repl_state_flat_program_view(),
+        .text           = editor_buffer_view(),
+    };
+    repl_execute_program(&options);
 }

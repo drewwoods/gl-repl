@@ -287,6 +287,11 @@ void repl_reformat_commands(void) {
     int saved_cursor_pos = editor_cursor_pos();
     memcpy(saved_input, editor_state_input().input, sizeof(saved_input));
     ReplCommandStore store = repl_command_store_live();
+    /* Source text reads route through an EditorBufferView so the
+     * dependency is declared at function scope rather than via a
+     * scattered global accessor. Phase D will replace this entry-time
+     * fetch with a view threaded from the controller. */
+    EditorBufferView text = editor_buffer_view();
 
     for (int cmd_idx = 0; cmd_idx < repl_state_document_count(); cmd_idx++) {
         if (!repl_state_document_cmds_mut()[cmd_idx].valid) continue;
@@ -296,7 +301,7 @@ void repl_reformat_commands(void) {
         char fmt_text[MAX_LINE_LEN] = "";
 
         /* Canonical text for this command lives in the editor buffer. */
-        const char *orig_text = editor_buffer_line(cmd_idx);
+        const char *orig_text = editor_buffer_view_line(text, cmd_idx);
         if (!orig_text) orig_text = "";
 
         char ind_s[32];
@@ -508,6 +513,11 @@ int collect_visible_vars(int pos, ExprVar *vars, int max_vars) {
 
     ScopeFrame frames[64];
     int depth = 0;
+    /* Source text reads for for-loop / func-def reparse route through
+     * an EditorBufferView fetched at entry. Phase D will accept the
+     * view as a parameter once collect_visible_vars is folded into
+     * the editor commit path. */
+    EditorBufferView text = editor_buffer_view();
 
     for (int cmd_idx = 0; cmd_idx < pos && cmd_idx < repl_state_document_count(); cmd_idx++) {
         CmdType t = repl_state_document_cmds_mut()[cmd_idx].type;
@@ -520,7 +530,7 @@ int collect_visible_vars(int pos, ExprVar *vars, int max_vars) {
 
             if (t == CMD_FOR_BEGIN) {
                 char vn[16];
-                const char *for_text = editor_buffer_line(cmd_idx);
+                const char *for_text = editor_buffer_view_line(text, cmd_idx);
                 get_for_var_name_from_text(for_text ? for_text : "", vn, sizeof(vn));
                 repl_copy_string_fits(frames[depth].vars[0].name,
                                       sizeof(frames[depth].vars[0].name),
@@ -531,7 +541,7 @@ int collect_visible_vars(int pos, ExprVar *vars, int max_vars) {
                 int fn = -1;
                 int param_count = 0;
                 char param_names[MAX_EXPR_VARS][16];
-                const char *func_text = editor_buffer_line(cmd_idx);
+                const char *func_text = editor_buffer_view_line(text, cmd_idx);
                 if (parse_repl_func_signature(func_text ? func_text : "", &fn,
                                               param_names, MAX_EXPR_VARS,
                                               &param_count)) {

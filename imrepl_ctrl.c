@@ -200,7 +200,8 @@ static void scene_execute_adapter(float alpha_scale,
     repl_execute_set_fade_context(alpha_scale, skip_geom_before_pc);
     repl_execute_program(&(ReplExecutionOptions){
         .flat_cmd_count = flat_cmd_count,
-        .program = program
+        .program = program,
+        .text = editor_buffer_view(),
     });
 }
 

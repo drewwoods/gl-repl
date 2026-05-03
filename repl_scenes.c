@@ -112,10 +112,11 @@ static void derive_unique_scene_name(char *out, size_t out_sz,
 static void save_scene_to_slot(int idx, const char *name) {
     if (idx < 0 || idx >= MAX_USER_SCENES) return;
     UserScene *s = &g_user_scenes[idx];
+    EditorBufferView text = editor_buffer_view();
     memcpy(s->cmds, repl_state_document_cmds_mut(), (size_t)repl_state_document_count() * sizeof(GLCmd));
     for (int i = 0; i < repl_state_document_count(); i++)
         repl_copy_string_fits(s->lines[i], MAX_LINE_LEN,
-                              editor_buffer_line(i));
+                              editor_buffer_view_line(text, i));
     s->num_cmds        = repl_state_document_count();
     s->edit_line       = repl_state_edit_line();
     s->num_predef_vars = g_num_predef_vars;
@@ -217,11 +218,12 @@ static void install_scene_into_live(int slot) {
 }
 
 static void stash_live_state(UserScene *dst) {
+    EditorBufferView text = editor_buffer_view();
     memset(dst, 0, sizeof(*dst));
     memcpy(dst->cmds, repl_state_document_cmds_mut(), (size_t)repl_state_document_count() * sizeof(GLCmd));
     for (int i = 0; i < repl_state_document_count(); i++)
         repl_copy_string_fits(dst->lines[i], MAX_LINE_LEN,
-                              editor_buffer_line(i));
+                              editor_buffer_view_line(text, i));
     dst->num_cmds        = repl_state_document_count();
     dst->edit_line       = repl_state_edit_line();
     dst->num_predef_vars = g_num_predef_vars;

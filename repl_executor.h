@@ -30,13 +30,18 @@
 #ifndef REPL_EXECUTOR_H
 #define REPL_EXECUTOR_H
 
+#include "editor_state.h"  /* EditorBufferView */
 #include "repl_flatten.h"
 
-/* Input: a flat program view and the number of commands to execute (typically
- * the full count, or the replay PC if replay is active). */
+/* Input: a flat program view, the number of commands to execute
+ * (typically the full count, or the replay PC if replay is active),
+ * and an editor buffer view used to resolve display text for status
+ * messages (goto-label resolution etc.). The view is non-owning and
+ * stays valid for the duration of the execute call. */
 typedef struct {
-    int             flat_cmd_count;
-    FlatProgramView program;
+    int              flat_cmd_count;
+    FlatProgramView  program;
+    EditorBufferView text;
 } ReplExecutionOptions;
 
 /* Get a view over the live flat program (g_flat_cmds, g_flat_local_vars).

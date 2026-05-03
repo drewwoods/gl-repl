@@ -297,8 +297,11 @@ const char *repl_search_row_text(int row_idx) {
         return editor_state_input().input;
     if (editor_insert_mode() && row_idx > edit_line)
         row_idx--;
-    /* Source text lives in the editor buffer. */
-    const char *text = editor_buffer_line(row_idx);
+    /* Source text lives in the editor buffer. Read through an
+     * EditorBufferView so the dependency is declared at function
+     * scope; Phase D will accept the view as a parameter. */
+    EditorBufferView text_view = editor_buffer_view();
+    const char *text = editor_buffer_view_line(text_view, row_idx);
     if (text)
         return text;
     return "";

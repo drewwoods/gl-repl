@@ -182,7 +182,8 @@ int main() {
             .source_cmd_count = repl_state_document_count(),
             .flat_cmds = temp_flat,
             .flat_local_vars = temp_locals,
-            .flat_capacity = 8
+            .flat_capacity = 8,
+            .text = editor_buffer_view()
         };
         ASSERT_INT("flatten_program ok",
                    repl_flatten_program(&opts, &result), 1);

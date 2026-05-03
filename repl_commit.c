@@ -322,6 +322,7 @@ int try_commit_float_decl(void) {
          * names being REMOVED (present in old decl, absent from new) need
          * the "in use" check - names being kept stay valid throughout. */
         if (overwriting_decl) {
+            EditorBufferView text = editor_buffer_view();
             /* Check each old declaration name. */
             for (int decl_idx = 0; decl_idx < repl_state_document_cmds_mut()[insert_idx].var_decl_count; decl_idx++) {
                 const char *nm = repl_state_document_cmds_mut()[insert_idx].var_names[decl_idx];
@@ -333,7 +334,8 @@ int try_commit_float_decl(void) {
                 /* Check if this removed name is still used anywhere. */
                 for (int cmd_idx = 0; cmd_idx < repl_state_document_count(); cmd_idx++) {
                     if (cmd_idx == insert_idx) continue;
-                    if (repl_eval_source_uses_ident(editor_buffer_line(cmd_idx) ? editor_buffer_line(cmd_idx) : "", nm)) {
+                    const char *line = editor_buffer_view_line(text, cmd_idx);
+                    if (repl_eval_source_uses_ident(line ? line : "", nm)) {
                         char buf[128];
                         snprintf(buf, sizeof(buf),
                                  "variable '%s' is in use, cannot overwrite", nm);
@@ -504,12 +506,14 @@ int try_assign_variable(void) {
                 }
             } else if (insert_idx < repl_state_document_count()) {
                 if (repl_state_document_cmds_mut()[insert_idx].type == CMD_VAR_DECLARE) {
+                    EditorBufferView text = editor_buffer_view();
                     /* Check if any variables are still in use. */
                     for (int decl_idx = 0; decl_idx < repl_state_document_cmds_mut()[insert_idx].var_decl_count; decl_idx++) {
                         const char *nm = repl_state_document_cmds_mut()[insert_idx].var_names[decl_idx];
                         for (int cmd_idx = 0; cmd_idx < repl_state_document_count(); cmd_idx++) {
                             if (cmd_idx == insert_idx) continue;
-                            if (repl_eval_source_uses_ident(editor_buffer_line(cmd_idx) ? editor_buffer_line(cmd_idx) : "", nm)) {
+                            const char *line = editor_buffer_view_line(text, cmd_idx);
+                            if (repl_eval_source_uses_ident(line ? line : "", nm)) {
                                 char buf[128];
                                 snprintf(buf, sizeof(buf),
                                          "variable '%s' is in use, cannot overwrite", nm);
@@ -916,6 +920,7 @@ int try_commit_func_def(void) {
             comment_start = function_leading_comment_start(edit_pos);
             comment_count = edit_pos - comment_start;
             if (comment_count > 0) {
+                EditorBufferView text = editor_buffer_view();
                 comment_lines = malloc((size_t)comment_count * sizeof(*comment_lines));
                 if (!comment_lines) {
                     set_status("Out of memory");
@@ -923,7 +928,8 @@ int try_commit_func_def(void) {
                 }
                 for (int comment_idx = 0; comment_idx < comment_count; comment_idx++)
                     repl_copy_string_fits(comment_lines[comment_idx], MAX_LINE_LEN,
-                                          editor_buffer_line(comment_start + comment_idx));
+                                          editor_buffer_view_line(text,
+                                                                  comment_start + comment_idx));
             }
         }
 

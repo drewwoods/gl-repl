@@ -77,11 +77,12 @@ static void clipboard_copy_range(int start, int count) {
     ReplClipboardState *clipboard = editor_state_clipboard_mut();
     GLCmd *cb = editor_state_clipboard_cmds_mut();
     const GLCmd *cmds = repl_state_document_cmds();
+    EditorBufferView text = editor_buffer_view();
     int n = 0;
     for (int i = start; i < start + count && n < MAX_COMMANDS; i++) {
         cb[n++] = cmds[i];
         repl_copy_string_fits(clipboard->lines[n - 1], MAX_LINE_LEN,
-                              editor_buffer_line(i));
+                              editor_buffer_view_line(text, i));
     }
     editor_state_clipboard_count_set(n);
 }
