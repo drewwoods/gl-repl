@@ -90,6 +90,7 @@ int editor_input_router_handle_scene_cycle_special(int key);            /* F12 *
  */
 int editor_input_router_handle_variable_panel_drag_begin(int button, int state, int x, int y);
 int editor_input_router_handle_right_config_press(int button, int state, int x, int y);
+int editor_input_router_handle_variable_panel_motion(int x, int y);
 
 /* Rename-capture predicate. The inline rename overlay is a hard modal:
  * when active, every keystroke must land in the rename buffer ahead of

@@ -1776,6 +1776,15 @@ int editor_input_router_handle_variable_panel_drag_begin(int button, int state, 
     return 1;
 }
 
+int editor_input_router_handle_variable_panel_motion(int x, int y) {
+    if (!variable_panel_drag_active())
+        return 0;
+    variable_panel_handle_drag_motion(x);
+    repl_camera_pointer_set(x, y);
+    editor_request_redraw();
+    return 1;
+}
+
 int editor_input_router_handle_right_config_press(int button, int state, int x, int y) {
     if (state != GLUT_DOWN || button != GLUT_RIGHT_BUTTON)
         return 0;
