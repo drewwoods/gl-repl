@@ -7,6 +7,7 @@
  * remains responsible for deciding when those handlers are invoked.
  */
 #include "sample.h"
+#include "editor_commit.h"
 #include "repl_apply.h"
 #include "repl_core_internal.h"
 #include "repl_command_store.h"
@@ -115,13 +116,10 @@ void repl_commit_reset_transients(void) {
  * orchestration so this helper can become a thin transaction wrap.
  */
 static int apply_float_decl_change(const ReplCompiledChange *change) {
-    repl_apply_predef_ops(change);
-
-    if (!repl_apply_compiled_change(change)) {
+    if (!editor_commit_apply_compiled_change(change)) {
         set_status("Command buffer full!");
         return 1;
     }
-    editor_buffer_apply_compiled_change(change);
 
     if (change->kind == REPL_COMPILED_REPLACE_ONE) {
         repl_state_edit_line_set(repl_state_edit_line() + 1);
@@ -181,10 +179,12 @@ int try_commit_float_decl(void) {
  * behaviour while still routing through the shared apply primitives.
  */
 static int apply_var_assign_change(const ReplCompiledChange *change) {
-    /* Replay predef-var ops (single SET_VALUE op for assigns). */
-    repl_apply_predef_ops(change);
-
-    /* Var-decl-overwrite cascade (legacy non-insert branch). */
+    /* Var-decl-overwrite cascade (legacy non-insert branch). The
+     * compile classified the change as REPLACE_ONE; if the existing
+     * slot at `pos` is a CMD_VAR_DECLARE the legacy path replays
+     * the float-decl-style undeclare cascade here. Phase D folds
+     * this into compile_var_assign so the predef-op plan covers it
+     * directly. */
     if (change->kind == REPL_COMPILED_REPLACE_ONE &&
         change->pos < repl_state_document_count() &&
         repl_state_document_cmds_mut()[change->pos].type == CMD_VAR_DECLARE) {
@@ -217,12 +217,10 @@ static int apply_var_assign_change(const ReplCompiledChange *change) {
         }
     }
 
-    /* Shared apply: cmd-store + editor-buffer write. */
-    if (!repl_apply_compiled_change(change)) {
+    if (!editor_commit_apply_compiled_change(change)) {
         set_status("Command buffer full!");
         return 1;
     }
-    editor_buffer_apply_compiled_change(change);
 
     /* Cursor housekeeping per the legacy var-assign paths. */
     if (change->kind == REPL_COMPILED_INSERT_ONE) {
