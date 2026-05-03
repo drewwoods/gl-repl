@@ -929,10 +929,25 @@ ReplCompileResult editor_compile_for_loop(const char *input,
     for (int var_idx = 0; var_idx < visible_nv && dvn < MAX_EXPR_VARS; var_idx++)
         dv[dvn++] = visible_vars[var_idx];
 
-    ReplParseContext parse_ctx = { pos, dv, dvn, 1 };
+    /* Phase H.5 commit 40 demo: feed the parser an err buffer so its
+     * specific diagnostic propagates to the caller rather than being
+     * lost behind a generic "Invalid for-loop body command" string. */
+    char body_err[REPL_STATUS_TEXT_MAX];
+    body_err[0] = '\0';
+    ReplParseContext parse_ctx = {
+        .source_line_idx = pos,
+        .vars            = dv,
+        .num_vars        = dvn,
+        .strict_refs     = 1,
+        .err_buf         = body_err,
+        .err_sz          = (int)sizeof(body_err),
+    };
     ReplParsedLine body_pl;
     if (!repl_parser_parse_command_ctx(body, &body_pl, &parse_ctx)) {
-        snprintf(err, (size_t)err_size, "Invalid for-loop body command");
+        if (body_err[0])
+            snprintf(err, (size_t)err_size, "for-loop body: %s", body_err);
+        else
+            snprintf(err, (size_t)err_size, "Invalid for-loop body command");
         return REPL_COMPILE_ERROR;
     }
     GLCmd body_cmd = body_pl.cmd;
