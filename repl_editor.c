@@ -28,6 +28,7 @@
 #include "repl_replay.h"
 #include "replay_state.h"
 #include "editor_help_session.h"
+#include "editor_completion.h"
 #include "repl_keys.h"
 #include "ui_panels.h"
 #include "repl_layout.h"

@@ -170,6 +170,8 @@ Test sources live under `tests/` and shared test-only helpers live under
 | `replay_state.h` | Peer-subsystem facade (`replay_state_capture/restore/reset/view/mut`) |
 | `editor_help_session.c` | Read-only editor session for the help overlay (tab_idx + scroll; Phase G commit 35) |
 | `editor_help_session.h` | `EditorHelpSession` API (capture/restore/reset, narrow accessors) |
+| `editor_completion.c` | Completion-provider registry: editor input invokes registered provider for autocomplete (Phase G commit 36) |
+| `editor_completion.h` | `EditorCompletionProvider` struct + `editor_completion_register/update/clear` API |
 | `repl_examples.c` | Predefined example data (`g_examples[]`, `g_example_names[]`) |
 | `repl_examples.h` | Example query API (`repl_examples_count/name/lines`) |
 | `repl_export.c` | `repl_export_save_output` / `repl_export_load_from_file`, workspace header directives, `@scene-name` / `@workspace-dir` markers |

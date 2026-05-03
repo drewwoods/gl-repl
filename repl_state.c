@@ -549,6 +549,11 @@ int repl_state_parse_workspace_header_line(const char *line) {
 
 void repl_state_init_defaults(void) {
     repl_state_reset_all();
+    /* Register the default editor completion provider (Phase G commit
+     * 36). Editor input dispatch calls editor_completion_* without
+     * knowing about repl_autocomplete; the registration here installs
+     * the REPL-aware backing. */
+    repl_autocomplete_register_provider();
 }
 
 void repl_state_reset_all(void) {
