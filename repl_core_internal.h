@@ -239,7 +239,9 @@ void repl_reset_time_to_zero(void);
 /* ---- Editor input dispatch test hooks --------------------------------- */
 
 typedef int (*ReplModifierProvider)(void);
-void repl_set_modifier_provider_for_test(ReplModifierProvider provider);
+/* Phase J1 commit 49a renamed repl_set_modifier_provider_for_test ->
+ * editor_input_set_modifier_provider_for_test (declared in editor_input.h);
+ * the typedef stays here so its callers don't ripple. */
 
 /* Delete cmds[start..start+count) with a status-bar message describing
  * what was removed. Guards against removing a `float` decl whose variable

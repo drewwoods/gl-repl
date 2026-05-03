@@ -128,30 +128,10 @@ typedef struct ReplInputDispatchEffects {
     int timer_value;
 } ReplInputDispatchEffects;
 
-/* --- Input callback entry points (wired through the controller) -------- */
-
-/* ASCII key and Ctrl-key input. Routes to repl_editor.c for editing, or to
- * repl_actions.c for config shortcuts (Ctrl+S, Ctrl+Z, Ctrl+R, etc.). */
-ReplInputDispatchEffects repl_keyboard_func(unsigned char key, int x, int y);
-
-/* Function key (F1-F12) and arrow input. Routes to repl_editor.c and
- * repl_actions.c for visual toggles, help overlay, theme cycling. */
-ReplInputDispatchEffects repl_special_func(int key, int x, int y);
-
-/* Mouse button press/release. Routes to ui_panels.c for code-panel hits,
- * color-picker drag, variable-slider transactions. */
-ReplInputDispatchEffects repl_mouse_func(int button, int state, int x, int y);
-
-/* Mouse motion during drag. Routes to ui_panels.c for in-progress drags. */
-ReplInputDispatchEffects repl_motion_func(int x, int y);
-
-/* Mouse motion without button held. Updates hover state for tooltips. */
-ReplInputDispatchEffects repl_passive_motion_func(int x, int y);
-
-#ifndef USE_GLUT
-/* Mousewheel (freeglut only). Routes to repl_camera_controls.c for zoom velocity. */
-ReplInputDispatchEffects repl_mousewheel_func(int wheel, int direction, int x, int y);
-#endif
+/* --- Input callback entry points -------------------------------------- */
+/* The legacy repl_*_func dispatch entry points were deleted in Phase J1
+ * commit 49a; production callers and test fixtures use editor_handle_*
+ * (declared in editor_input.h) directly. */
 
 /* --- Test helpers ------------------------------------------------------ */
 
