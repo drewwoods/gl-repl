@@ -1,0 +1,21 @@
+# Baseline for scripts/check-replay-forwarders.sh.
+#
+# Tracks how many call sites still use the legacy `repl_state_replay*`
+# forwarder API outside the owner translation units (replay_state.c /
+# repl_state.c).
+#
+# Phase F commit 33 moved ReplReplayRuntimeState into the replay peer;
+# commit 34 routed production callers through replay_state_view,
+# replay_state_mut, replay_active, and the replay_handle_* surface.
+# Commit 34 establishes this ratchet.
+#
+# Today's count is bench/* + tests/* fixture sites. Driving this to
+# zero requires migrating those call sites once the remaining
+# replay-internal callers (annotations, executor, etc.) are confirmed
+# stable on the peer accessors.
+#
+# Reductions are always allowed; lower this number by hand when a
+# commit drives violations down so the next commit cannot silently
+# regress past the new low.
+
+count: 37

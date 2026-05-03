@@ -96,7 +96,7 @@ else
 COVERAGE_LDFLAGS =
 endif
 
-.PHONY: all clean test check test-detailed test_detailed test-stubs lines debug coverage glut help bench bench-csv check-gl-boundaries check-layer-coupling check-controller-boundaries check-scene-no-repl-state-mut check-state-boundaries check-views-no-owners check-pure-scene-no-repl-state check-ui-no-repl-state-mut check-public-api-usage check-state-ownership check-no-write-through-view check-runtime-state-value-fields check-public-state-no-writable-pointers check-views-flat-types check-state-read-getters-return-values check-views-by-value-snapshot check-ui-renderer-takes-view check-renderer-no-direct-mutators check-output-actualization check-state-c-shrinking check-no-facade-include-in-views check-domain-owner-encapsulation check-cursor-px-encapsulated check-ui-no-repl-state-read check-editor-ownership-budget check-no-store-text-api check-repl-no-direct-buffer-read check-imrepl-not-editor-mirror check-ui-returns-hits-only check-variable-panel-forwarders audit-editor-ownership callgraph-static callgraph-static-entry callgraph-profile callgraph-graphviz callgraph-html callgraph-files FORCE
+.PHONY: all clean test check test-detailed test_detailed test-stubs lines debug coverage glut help bench bench-csv check-gl-boundaries check-layer-coupling check-controller-boundaries check-scene-no-repl-state-mut check-state-boundaries check-views-no-owners check-pure-scene-no-repl-state check-ui-no-repl-state-mut check-public-api-usage check-state-ownership check-no-write-through-view check-runtime-state-value-fields check-public-state-no-writable-pointers check-views-flat-types check-state-read-getters-return-values check-views-by-value-snapshot check-ui-renderer-takes-view check-renderer-no-direct-mutators check-output-actualization check-state-c-shrinking check-no-facade-include-in-views check-domain-owner-encapsulation check-cursor-px-encapsulated check-ui-no-repl-state-read check-editor-ownership-budget check-no-store-text-api check-repl-no-direct-buffer-read check-imrepl-not-editor-mirror check-ui-returns-hits-only check-variable-panel-forwarders check-replay-forwarders audit-editor-ownership callgraph-static callgraph-static-entry callgraph-profile callgraph-graphviz callgraph-html callgraph-files FORCE
 
 all: sample
 
@@ -400,7 +400,8 @@ check-state-ownership: ## Run state-ownership contract checks (new + tightened e
 		check-repl-no-direct-buffer-read \
 		check-imrepl-not-editor-mirror \
 		check-ui-returns-hits-only \
-		check-variable-panel-forwarders; do \
+		check-variable-panel-forwarders \
+		check-replay-forwarders; do \
 		$(MAKE) --no-print-directory $$target || exit $$?; \
 	done
 
@@ -427,6 +428,9 @@ check-ui-returns-hits-only: ## Verify ui_*.c input helpers do not call REPL/edit
 
 check-variable-panel-forwarders: ## Ratchet legacy variable_panel forwarder API uses (editor_state_variable_drag*, ui_state_variable_panel*, repl_var_drag_*).
 	@bash scripts/check-variable-panel-forwarders.sh scripts/baselines/variable-panel-forwarders.txt
+
+check-replay-forwarders: ## Ratchet legacy repl_state_replay* forwarder API uses (replay peer is the owner).
+	@bash scripts/check-replay-forwarders.sh scripts/baselines/replay-forwarders.txt
 
 CHECK_TARGETS = \
 	check-gl-boundaries \
