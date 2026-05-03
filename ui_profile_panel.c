@@ -104,11 +104,16 @@ static const char *section_label(ProfSection s) {
     case PROF_SNAPSHOT_TRANSFORMERS:   return "  transformers";
     case PROF_SNAPSHOT_HIGHLIGHTS:     return "  highlights";
     case PROF_SNAPSHOT_VIRTUAL_LINES:  return "  virtual lines";
+    case PROF_SNAPSHOT_PREP:           return "  prep";
     case PROF_SNAPSHOT_SCENE_CONFIG:   return "  scene config";
     case PROF_SNAPSHOT_UI:             return "  ui snapshot";
-    case PROF_FLATTEN:     return "Flatten";
-    case PROF_REFORMAT:    return "Reformat";
-    case PROF_FRAME_TOTAL: return "Frame Total";
+    case PROF_FLATTEN:        return "Flatten";
+    case PROF_REFORMAT:       return "Reformat";
+    case PROF_AUTONORMAL:     return "Autonormal";
+    case PROF_REPLAY_HUD:     return "Replay HUD";
+    case PROF_PROFILE_PANEL:  return "Profile Panel";
+    case PROF_FRAME_RESTORE:  return "Frame Restore";
+    case PROF_FRAME_TOTAL:    return "Frame Total";
     default:               return "?";
     }
 }
