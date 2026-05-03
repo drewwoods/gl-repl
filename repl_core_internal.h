@@ -53,8 +53,8 @@
  *
  * 15. Commit handler chain: try_commit_*() functions in declaration order
  *     (float, assign, close-brace, for, func, if, GL command). Each returns 1
- *     if consumed, 0 if not matched. Utilities repl_commit_reset_transients()
- *     and repl_commit_resolve_insert_exit_target().
+ *     if consumed, 0 if not matched. Utilities editor_commit_reset_transients()
+ *     and editor_commit_resolve_insert_exit_target().
  */
 #ifndef REPL_CORE_INTERNAL_H
 #define REPL_CORE_INTERNAL_H
@@ -260,8 +260,8 @@ void repl_scenes_mark_example_active(void);
 void repl_scenes_activate_home_slot(void);
 void repl_scenes_reset(void);
 
-/* Commit dispatcher chain (try_commit_*, repl_commit_func_decl_resume_*,
- * repl_commit_resolve_insert_exit_target, repl_commit_reset_transients)
+/* Commit dispatcher chain (try_commit_*, editor_commit_func_decl_resume_*,
+ * editor_commit_resolve_insert_exit_target, editor_commit_reset_transients)
  * declarations moved to editor_commit.h (Phase H.5 commit 41). The
  * bodies live in editor_commit.c (moved from repl_commit.c in
  * commit 39). */

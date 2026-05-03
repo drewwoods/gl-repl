@@ -20,7 +20,7 @@
 #include "repl_command_store.h"
 #include "repl_compile.h"
 #include "repl_core.h"
-#include "repl_core_internal.h"  /* try_commit_*, repl_commit_func_decl_resume_delta_peek */
+#include "repl_core_internal.h"  /* try_commit_*, editor_commit_func_decl_resume_peek */
 #include "repl_eval.h"
 #include "repl_state.h"
 #include "ui_state.h"
@@ -595,9 +595,9 @@ static void test_func_def_resume_publish_consumed_by_close_brace(void) {
      * func_def isn't in repl_compile_dispatch yet. */
     try_commit_block_structs();
 
-    /* After the migration, repl_commit_func_decl_resume_delta_peek
+    /* After the migration, editor_commit_func_decl_resume_peek
      * should reflect the published delta. */
-    int published = repl_commit_func_decl_resume_delta_peek();
+    int published = editor_commit_func_decl_resume_peek();
     ASSERT_INT("resume delta published by func_def", published, 1);
 
     /* Close the func block. The compile reads the delta (peek);
@@ -606,7 +606,7 @@ static void test_func_def_resume_publish_consumed_by_close_brace(void) {
     try_commit_close_brace();
 
     /* The global is consumed (cleared) on FUNC_END close. */
-    int post_consume = repl_commit_func_decl_resume_delta_peek();
+    int post_consume = editor_commit_func_decl_resume_peek();
     ASSERT_INT("resume delta cleared after func close-brace",
                post_consume, 0);
 }

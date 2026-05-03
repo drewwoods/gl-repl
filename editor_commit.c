@@ -176,15 +176,12 @@ static void apply_post_effects(const EditorCommitPostEffects *effects) {
         editor_commit_func_decl_resume_set(effects->func_decl_resume_publish_value);
 }
 
-void editor_commit_func_decl_resume_set(int delta) {
-    /* The backing storage is still the legacy
-     * g_func_decl_resume_delta global living in repl_commit.c.
-     * Hidden behind repl_commit_func_decl_resume_delta_set so
-     * callers no longer form a cross-module protocol around the
-     * raw global. A later refactor (post-Phase D) collapses
-     * repl_commit.c's transient bookkeeping into editor_commit.c. */
-    repl_commit_func_decl_resume_delta_set(delta);
-}
+/* editor_commit_func_decl_resume_set: defined below alongside the
+ * file-private g_func_decl_resume_delta storage. The Phase D
+ * encapsulator that originally indirected through a separate
+ * `_delta_set` cross-TU symbol collapsed when the resume bookkeeping
+ * moved into editor_commit.c (Phase H.5 commit 39); the global is
+ * file-private here now, so the wrapper layer is dead. */
 
 int editor_commit_apply_plan(const EditorCommitPlan *plan) {
     if (!plan) return 0;
@@ -278,7 +275,7 @@ ReplCompileResult editor_compile_close_brace(const char *input,
      *
      * Phase D commit 26d folds the set side of the global into
      * compile too, eliminating the global entirely. */
-    int resume_delta = repl_commit_func_decl_resume_delta_peek();
+    int resume_delta = editor_commit_func_decl_resume_peek();
 
     int keep_inserting = (resume_delta > 0 && end_type != CMD_FUNC_END);
 
@@ -287,7 +284,7 @@ ReplCompileResult editor_compile_close_brace(const char *input,
      * semantics as the legacy apply_func_decl_resume. For other
      * end_types we leave the global alone and forget the value. */
     if (end_type == CMD_FUNC_END)
-        (void)repl_commit_func_decl_resume_delta_take();
+        (void)editor_commit_func_decl_resume_take();
     else
         resume_delta = 0;  /* not consumed by this close-brace */
 
@@ -1028,21 +1025,21 @@ int editor_commit_apply_compiled_change(const struct ReplCompiledChange_s *chang
  * file-private now that all readers/writers live in this TU. */
 static int g_func_decl_resume_delta = 0;
 
-int repl_commit_func_decl_resume_delta_peek(void) {
+int editor_commit_func_decl_resume_peek(void) {
     return g_func_decl_resume_delta;
 }
 
-int repl_commit_func_decl_resume_delta_take(void) {
+int editor_commit_func_decl_resume_take(void) {
     int delta = g_func_decl_resume_delta;
     g_func_decl_resume_delta = 0;
     return delta;
 }
 
-void repl_commit_func_decl_resume_delta_set(int delta) {
+void editor_commit_func_decl_resume_set(int delta) {
     g_func_decl_resume_delta = delta;
 }
 
-int repl_commit_resolve_insert_exit_target(int target) {
+int editor_commit_resolve_insert_exit_target(int target) {
     if (!editor_insert_mode() ||
         g_func_decl_resume_delta <= 0 ||
         repl_state_edit_line() < 0 ||
@@ -1060,7 +1057,7 @@ int repl_commit_resolve_insert_exit_target(int target) {
     return target;
 }
 
-void repl_commit_reset_transients(void) {
+void editor_commit_reset_transients(void) {
     g_func_decl_resume_delta = 0;
 }
 
