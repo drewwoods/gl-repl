@@ -959,7 +959,7 @@ runs the boundary-audit sweep and the docs refresh.
 | # | Commit | Status |
 |---|---|---|
 | 42a | refactor: migrate the 6 remaining `repl_parser_parse_command_ctx` callers (`repl_core.c`, `repl_flatten.c`, `repl_replay_annotations.c`, `ui_color_picker.c`, `repl_export.c`, `repl_editor.c`) to provide an `err_buf` and decide explicitly — surface (commit chain, color picker), log to stderr (export bootstrap), or document deliberate drop (flatten / replay annotations / Ctrl+/ uncomment) | done |
-| 42b | refactor: strip the `set_status()` fallback from `parser_emit_error_v`; the helper writes to `ctx->err_buf` (or no-ops if absent). `repl_parser.c` no longer touches `set_status` | pending |
+| 42b | refactor: `parser_emit_error_v` writes to `ctx->err_buf` or no-ops; the legacy no-ctx wrappers (`repl_parser_parse_command` / `_with_vars`) surface via `set_status` themselves so the test harness still observes status, but `parse_command` and its internal helpers stop calling `set_status` directly | done |
 | 42c | checks: add `check-no-set-status-in-repl-parser` hard guard so the fallback can't return | pending |
 | 42 | checks: promote remaining audits to hard guards (`check-editor-services-only`, `check-no-set-status-in-repl-or-editor`); remove the budget ratchet now that all transitional forwarders are zero. (`check-imrepl-not-editor-mirror` already lands in Phase D commit 27; `check-no-repl-commit` lands in Phase H.5 commit 41.) | pending |
 | 43 | docs: refresh MODULES, ARCHITECTURE, CLAUDE, callgraph groups; mark `editor-ownership-gap-cleanup`, `editor-text-model-controller`, and `editor-owns-text-completion(-revised)` plans as landed | pending |

@@ -15,28 +15,23 @@
 
 #include <stdarg.h>
 
-/* Phase H.5 commit 40: surface diagnostics through the parse context's
- * err_buf when provided; fall back to the legacy set_status() side
- * effect when the caller did not opt in. The corrected contract has
- * the editor (the commit orchestrator) consume the structured error
- * and decide whether to publish a status string.
+/* Phase H.5 commit 40 introduced the err_buf seam. Phase I commit
+ * 42a migrated every caller to provide a buffer. Commit 42b (this
+ * one) drops the legacy set_status fallback: the parser writes to
+ * ctx->err_buf when available, and otherwise no-ops. Diagnostics
+ * never leave the parser as side effects on REPL state.
  *
- * `parser_emit_error` resolves to the active ReplParseContext when
- * available; for sites that don't carry a context yet, the
- * `parser_emit_error_global` overload preserves the legacy fallback
- * directly. */
+ * Commit 42c adds a hard guard so set_status calls cannot return
+ * to repl_parser.c. */
 static void parser_emit_error_v(const ReplParseContext *ctx,
                                 const char *fmt, va_list ap) {
-    char buf[REPL_STATUS_TEXT_MAX];
-    vsnprintf(buf, sizeof(buf), fmt, ap);
-    if (ctx && ctx->err_buf && ctx->err_sz > 0) {
-        int n = (int)strlen(buf);
-        if (n >= ctx->err_sz) n = ctx->err_sz - 1;
-        memcpy(ctx->err_buf, buf, (size_t)n);
-        ctx->err_buf[n] = '\0';
+    if (!ctx || !ctx->err_buf || ctx->err_sz <= 0) {
+        /* No buffer: the caller deliberately discarded diagnostics
+         * (or hasn't been migrated). Either way, the parser does
+         * not touch global status. */
         return;
     }
-    set_status(buf);
+    vsnprintf(ctx->err_buf, (size_t)ctx->err_sz, fmt, ap);
 }
 
 static void parser_emit_error(const ReplParseContext *ctx, const char *fmt, ...) {
@@ -747,17 +742,45 @@ unknown_command:
 #undef WRITE_TEXT_APPEND
 }
 
+/* Legacy no-context entry points: still surface diagnostics via
+ * set_status because the test harness (and a small handful of
+ * one-shot internal callers) assert against the global status text.
+ * New code should use repl_parser_parse_command_ctx with its own
+ * err_buf instead of these wrappers — see the doc comment in
+ * repl_parser.h. */
+static void parser_legacy_surface_to_status(const char *err_buf) {
+    if (err_buf && err_buf[0])
+        set_status(err_buf);
+}
+
 int repl_parser_parse_command(const char *line, GLCmd *cmd) {
     char text[MAX_LINE_LEN];
-    ReplParseContext ctx = { repl_state_edit_line(), NULL, 0, 0 };
-    return parse_command(line, cmd, text, sizeof(text), &ctx);
+    char err_buf[REPL_STATUS_TEXT_MAX];
+    err_buf[0] = '\0';
+    ReplParseContext ctx = {
+        .source_line_idx = repl_state_edit_line(),
+        .err_buf = err_buf,
+        .err_sz  = (int)sizeof(err_buf),
+    };
+    int ok = parse_command(line, cmd, text, sizeof(text), &ctx);
+    if (!ok) parser_legacy_surface_to_status(err_buf);
+    return ok;
 }
 
 int repl_parser_parse_command_with_vars(const char *line, GLCmd *cmd,
                                  ExprVar *vars, int num_vars) {
     char text[MAX_LINE_LEN];
-    ReplParseContext ctx = { repl_state_edit_line(), vars, num_vars, 0 };
-    return parse_command(line, cmd, text, sizeof(text), &ctx);
+    char err_buf[REPL_STATUS_TEXT_MAX];
+    err_buf[0] = '\0';
+    ReplParseContext ctx = {
+        .source_line_idx = repl_state_edit_line(),
+        .vars = vars, .num_vars = num_vars,
+        .err_buf = err_buf,
+        .err_sz  = (int)sizeof(err_buf),
+    };
+    int ok = parse_command(line, cmd, text, sizeof(text), &ctx);
+    if (!ok) parser_legacy_surface_to_status(err_buf);
+    return ok;
 }
 
 int repl_parser_parse_command_ctx(const char *line, ReplParsedLine *out,
