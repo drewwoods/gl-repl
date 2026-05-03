@@ -294,6 +294,162 @@ return values; only `imrepl_ctrl_dispatch_action()` calls
 `ui_state_status_set()`. Otherwise the same coupling survives the
 split under a different name.
 
+## Who Drives The Editor UI?
+
+The editor drives text-document UI behavior.
+
+`imrepl_ctrl` does **not** implement cursor movement, scrolling,
+search, selection, autocomplete, clipboard, or undo. It only routes
+raw input to the editor once focus / hit-testing says the event
+belongs to a text document.
+
+UI does not implement text behavior either. UI renders an editor
+snapshot and returns neutral `UiHit` results.
+
+The editor receives editor events plus hit-test context and mutates
+`EditorState` internally. It exposes a compact render snapshot for UI
+and a small commit boundary for REPL validation.
+
+```text
+UI              sees pixels and rectangles
+imrepl_ctrl     sees focus, routes, and subsystem boundaries
+editor          sees text-document intent and owns editor state transitions
+REPL            sees proposed committed source text
+```
+
+## imrepl_ctrl Non-Goals
+
+`imrepl_ctrl` is the application router and frame coordinator. It
+should not mirror the editor API.
+
+Avoid this shape:
+
+```c
+imrepl_ctrl_editor_search_next();
+imrepl_ctrl_editor_scroll(int delta);
+imrepl_ctrl_editor_move_cursor(int line, int col);
+imrepl_ctrl_editor_accept_autocomplete();
+imrepl_ctrl_editor_cut();
+imrepl_ctrl_editor_paste();
+```
+
+That shape makes editor state bubble upward into `imrepl_ctrl` and
+recreates a god-controller.
+
+Prefer this shape:
+
+```c
+editor_handle_key(EditorState *editor,
+                  const EditorKeyEvent *ev,
+                  const EditorServices *services);
+
+editor_handle_mouse(EditorState *editor,
+                    const EditorMouseEvent *ev,
+                    const UiHit *hit,
+                    const EditorServices *services);
+
+editor_handle_scroll(EditorState *editor,
+                     int delta,
+                     const UiHit *hit);
+```
+
+Then `imrepl_ctrl` only routes:
+
+```c
+switch (hit.kind) {
+case UI_HIT_CODE_TEXT:
+case UI_HIT_CODE_GUTTER:
+case UI_HIT_HELP_PANEL:
+    editor_handle_mouse(editor_state_mut(), &ev, &hit, &editor_services);
+    break;
+
+case UI_HIT_VARIABLE_SLIDER:
+    variable_panel_handle_mouse(variable_panel_state_mut(), &ev, &hit);
+    break;
+
+case UI_HIT_REPLAY_BUTTON:
+    replay_handle_mouse(replay_state_mut(), &ev, &hit);
+    break;
+}
+```
+
+The controller routes to owners. Owners implement behavior.
+
+A useful rule:
+
+```text
+New editor behavior should add an editor API, not an imrepl_ctrl wrapper.
+```
+
+This is enforced by the `check-imrepl-not-editor-mirror` boundary
+guard described in `MODULES.md`.
+
+## Avoid Bubbling Editor State Upward
+
+`imrepl_ctrl` should not need individual editor fields:
+
+```text
+cursor_pos
+selection_anchor
+scroll
+search query
+current search match
+autocomplete selected item
+clipboard count
+pending newline
+edit line
+insert mode
+```
+
+Those are editor internals. They should be visible outside the
+editor only through coarse interfaces:
+
+```c
+void editor_handle_key(...);
+void editor_handle_mouse(...);
+void editor_handle_scroll(...);
+void editor_build_view_snapshot(const EditorState *editor,
+                                EditorViewSnapshot *out);
+```
+
+If `imrepl_ctrl` starts accumulating per-field editor helpers, the
+split is drifting.
+
+## Editor Services Boundary
+
+The editor owns commit orchestration, but REPL semantics are
+*injected as services*. This prevents the editor from rummaging
+through REPL globals and prevents `imrepl_ctrl` from becoming the
+editor implementation.
+
+```c
+typedef struct {
+    ReplCompileContext (*context_at)(int line_idx, void *user);
+
+    ReplCompileResult (*compile)(const char *text,
+                                 const ReplCompileContext *ctx,
+                                 ReplCompiledChange *out,
+                                 char *err,
+                                 int err_size,
+                                 void *user);
+
+    void (*apply_repl_change)(const ReplCompiledChange *change,
+                              void *user);
+
+    EditorCompletionProvider completion_provider;
+    void *user;
+} EditorServices;
+```
+
+`imrepl_ctrl` wires this service table at startup. The editor calls
+the services when it needs source semantics. Most editor operations
+do not touch the services at all — they're editor-local
+(scroll, cursor, search, autocomplete navigation, clipboard buffer).
+
+This pattern lets the editor be unit-tested with a stub
+`EditorServices` and removes the temptation to reach across into
+REPL globals.
+
 ## REPL Public Contract After The Split
 
 ```c
@@ -1177,15 +1333,33 @@ compile-and-apply transaction.
 
 ### 4.4 Tighten UI guards
 
-After 4.1–4.3 land, the existing UI guards strengthen naturally:
+After 4.1–4.3 land, two guards strengthen the contract:
 
-- `check-ui-no-repl-state-read` keeps UI renderers snapshot-only
-  (already enforced).
-- A new `check-ui-no-mutation` (or extension of existing
-  `check-ui-no-repl-state-mut`) forbids `ui_*.c` from calling
-  `repl_action_*`, `repl_command_store_*`, `editor_*_mut*`, peer
-  subsystem mutators directly. Those files report `UiHit` and stop
-  there.
+- `check-ui-returns-hits-only` (replaces the original
+  `check-ui-emits-actions-only`) — `ui_*.c` input helpers do not call
+  `repl_action_*`, `repl_command_store_*`, `editor_*_mut*`,
+  `repl_state_*_mut*`, or peer-subsystem mutators directly. They
+  compute a `UiHit` and return it.
+- `check-imrepl-not-editor-mirror` (new) — `imrepl_ctrl` must not
+  accumulate one wrapper per editor operation
+  (`imrepl_ctrl_editor_search_next`,
+  `imrepl_ctrl_editor_scroll`, `imrepl_ctrl_editor_move_cursor`, …).
+  New editor behavior belongs behind `editor_handle_*` /
+  `editor_*` APIs.
+
+### Phase 4 checklist (corrected)
+
+```text
+1. Identify UI input handlers that directly mutate editor state.
+2. Replace mutation with neutral UiHit output where possible.
+3. Route text-document events into coarse editor controller functions.
+4. Route variable-panel events into variable-panel subsystem functions.
+5. Route replay events into replay subsystem functions.
+6. Route camera/viewport events into scene/viewport controller functions.
+7. Keep UI renderers snapshot-only.
+8. Keep REPL compile limited to committed source mutations.
+9. Keep imrepl_ctrl from gaining one wrapper per editor operation.
+```
 
 ### Verification
 
@@ -1193,10 +1367,16 @@ After 4.1–4.3 land, the existing UI guards strengthen naturally:
 make test && make test-stubs
 make check-ui-no-repl-state-read
 make check-ui-renderer-takes-view
+make check-ui-returns-hits-only
+make check-imrepl-not-editor-mirror
 
 grep -rE 'repl_(action|command_store|clipboard|undo|search|var_drag|autocomplete)_[a-z_]+\(|editor_[a-z_]+_(set|mut|begin|append|clear)' \
     ui_*.c
 # expected: 0 by end of phase (UI emits hits, doesn't mutate)
+
+grep -RInE 'imrepl_ctrl_editor_(search|scroll|move|autocomplete|cut|paste|undo|redo)' . \
+    --include='*.c' --include='*.h'
+# expected: 0 (no editor-API mirrors on imrepl_ctrl)
 ```
 
 Manual smoke required (see Verification Matrix).
@@ -1364,6 +1544,32 @@ After UI / render / input boundary changes:
 make check-ui-no-repl-state-read
 make check-ui-renderer-takes-view
 make check-state-boundaries
+make check-ui-returns-hits-only
+make check-imrepl-not-editor-mirror
+```
+
+### Boundary verification greps
+
+These spot-check the boundaries the corrected contract enforces:
+
+```sh
+# REPL must not own editor text mutation.
+grep -RIn 'repl_command_store_.*_with_line' . --include='*.c' --include='*.h'
+# expected after Phase 2: 0
+
+# REPL readers that need source text take explicit EditorBufferView.
+grep -RIn 'editor_buffer_line' repl_*.c repl_*.h
+# expected after Phase 2: only explicit view consumers / no global reach-through
+
+# UI hit-test/render files should not mutate editor/REPL/peer state.
+grep -RInE 'repl_(action|command_store|clipboard|undo|search|var_drag|autocomplete)_[a-z_]+\(|editor_.*_mut\(' \
+    ui_*.c ui_*.h
+# expected after Phase 4: 0 or intentional allowlisted exceptions
+
+# imrepl_ctrl should not mirror editor internals.
+grep -RInE 'imrepl_ctrl_editor_(search|scroll|move|autocomplete|cut|paste|undo|redo)' . \
+    --include='*.c' --include='*.h'
+# expected: 0
 ```
 
 ### Manual smoke checklist
@@ -1389,43 +1595,40 @@ make check-state-boundaries
 
 ## Exit Criteria
 
-Cleanup is complete when all of the following are true. Items 11–13
-are reworded to match `editor-text-model-controller.md`'s corrected
-contract.
+The split is complete when:
 
 ```text
- 1. Program-owned slices live in ReplState.
- 2. Editor-owned slices (text + cursor + scroll + selection + search +
-    autocomplete + clipboard + undo + cursor_blink) live in EditorState.
- 3. UI / session chrome slices (viewport + pointer + status TTL +
-    visibility flags + panel divider + camera pose) live in UiState.
- 4. Editor text is mutated only through editor_buffer / editor_document
-    APIs.
- 5. repl_command_store mutates only GLCmd arrays and related
-    command-store state.
- 6. REPL modules that need source text receive EditorBufferView
-    explicitly.
- 7. Commit validation (repl_compile) can be called without mutating
-    editor text or command state.
- 8. Successful commit application updates editor text and REPL command
-    model as one transaction.
- 9. Undo restores both editor text and REPL command state consistently.
-10. ui_* renderers remain snapshot-only.
-11. ui_* input handlers report neutral UiHit results; they do not own
-    editor or peer-subsystem behavior. (No giant UiAction enum.)
-12. imrepl_ctrl routes raw input to the owning subsystem based on
-    UiHit.kind; only editor commit paths cross into REPL via
-    repl_compile().
-13. Variable panel and replay are peer subsystems with their own
-    state + controllers — not slices of the editor.
-14. ui_help_overlay is implemented as a read-only editor session
-    backed by a content provider; help scroll / tab live in editor
-    session state.
-15. Autocomplete reaches the variable / GL-name table via a registered
-    EditorCompletionProvider, not by reaching into repl_eval directly.
-16. MODULES.md, editor-text-model-controller.md, and ARCHITECTURE.md
+ 1. ReplState contains program state only.
+ 2. EditorState contains text-document model/controller state
+    (text + cursor + scroll + selection + search + autocomplete +
+    clipboard + undo + cursor_blink).
+ 3. UiState contains transient UI / session chrome and viewport
+    state only (viewport + pointer + status TTL + visibility +
+    panel divider + camera pose).
+ 4. UI renderers consume snapshots only.
+ 5. UI hit-test code reports hits; it does not own editor behavior.
+ 6. Search, scroll, selection, autocomplete, and undo are
+    editor-owned.
+ 7. Only source/program mutations call repl_compile().
+ 8. repl_command_store mutates commands only.
+ 9. editor_buffer mutates text only.
+10. Undo restores editor text and REPL command state together.
+11. Variable panel and replay remain separate subsystems with their
+    own state + controllers.
+12. imrepl_ctrl routes to coarse owner APIs (editor_handle_*,
+    variable_panel_handle_*, replay_handle_*, scene_camera_handle_*)
+    instead of mirroring editor internals.
+13. ui_help_overlay is a read-only editor session backed by a content
+    provider; help scroll / search live in editor session state, help
+    visibility stays on UiState.
+14. Autocomplete reaches the variable / GL-name table via a
+    registered EditorCompletionProvider, not by reaching into
+    repl_eval directly.
+15. MODULES.md, editor-text-model-controller.md, and ARCHITECTURE.md
     describe the same ownership boundaries enforced by Makefile
-    checks.
+    checks (`check-ui-returns-hits-only`,
+    `check-imrepl-not-editor-mirror`,
+    `check-editor-ownership-budget`, etc.).
 ```
 
 ---
@@ -1474,9 +1677,15 @@ Those are separate tracks.
 
 - **Authoritative current contract:**
   [`feature/editor-text-model-controller.md`](editor-text-model-controller.md)
-  — defines the M/V/C+compiler+router framing. This doc's Phase 4
-  direction is superseded by it; the migration history below remains
-  accurate.
+  — defines the M/V/C+compiler+router framing. Read first.
+- **Sibling revision:**
+  [`feature/editor-owns-text-completion-revised.md`](editor-owns-text-completion-revised.md)
+  — a cleaner, history-light version of *this* doc. The
+  architectural sections of this file (Target Contract, Who Drives,
+  imrepl_ctrl Non-Goals, Avoid Bubbling, Editor Services Boundary,
+  Phase 4 corrected) are kept synchronized with that sibling. The
+  detailed migration history (Implementation Status table, per-slice
+  Phase 0/1 notes with audit deltas) lives only here.
 - **Supersedes** the deferred Phase C of
   `feature/push-architecture-ui.md` — the input-handler work is folded
   in here as Phase 4 (now framed as `UiHit` routing rather than a
@@ -1486,7 +1695,10 @@ Those are separate tracks.
   purity).
 - **Companion** to `feature/editor-ownership-gap-cleanup.md` — that doc
   is the audit/landing-sequence checklist; the contract lives in
-  `editor-text-model-controller.md` plus this doc's history. Read all
-  three together.
+  `editor-text-model-controller.md` plus the architectural sections
+  of this doc. Read all three together.
+- **Reflected in:**
+  [`feature/modules-editor-view-update.md`](modules-editor-view-update.md)
+  — the focused MODULES.md update plan applied via the prior commit.
 - **Independent** of `push-architecture-refinement.md` R10 (dissolve
   `repl_core.c`) and R8 (`sample → imrepl`).
