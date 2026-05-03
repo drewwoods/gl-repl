@@ -4,9 +4,18 @@
  * The orchestration shape is the dual of repl_compile():
  *
  *   editor_commit_apply_compiled_change(change)
+ *       preflight repl_apply_can_apply_compiled_change(change)
  *       repl_apply_predef_ops(change)             // predef-var cascade
  *       editor_buffer_apply_compiled_change(change)  // EditorState only
  *       repl_apply_compiled_change(change)        // ReplState only
+ *
+ * Preflight gives the helper an all-or-nothing atomicity guarantee:
+ * if the cmd-store can't accept the change, none of the three
+ * halves run, so predef-vars, editor buffer, and cmd-store stay in
+ * sync. Without the preflight a capacity failure would leave
+ * predef-vars declared and (potentially) editor text written but
+ * no cmd-store entry — exactly the partial-commit state the Phase C
+ * transaction shape exists to prevent.
  *
  * The undo capture for migrated handlers still rides on
  * repl_undo_push_snapshot() pushed at the dispatch sites
@@ -24,20 +33,17 @@
 int editor_commit_apply_compiled_change(const struct ReplCompiledChange_s *change) {
     if (!change) return 0;
 
-    /* Predef-var cascade fires first so the cmd-store / buffer
-     * apply observe the post-cascade state when they walk the
-     * document for any cross-checks. */
-    repl_apply_predef_ops(change);
-
-    /* Editor text first so that if the cmd-store call below fails
-     * with a capacity error, the buffer state still describes the
-     * intended source — the next undo / restore round-trip resyncs
-     * cleanly. (This mirrors the existing legacy behaviour: a full
-     * cmd-store has historically been treated as terminal.) */
-    editor_buffer_apply_compiled_change(change);
-
-    if (!repl_apply_compiled_change(change))
+    /* Preflight: if the cmd-store can't accept the change, return
+     * 0 before mutating anything. This is the load-bearing
+     * atomicity guarantee — without it, a capacity failure leaves
+     * predef-vars and/or editor buffer mutated while cmd-store is
+     * still pre-change. */
+    if (!repl_apply_can_apply_compiled_change(change))
         return 0;
 
+    /* Past the preflight every apply call below succeeds. */
+    repl_apply_predef_ops(change);
+    editor_buffer_apply_compiled_change(change);
+    repl_apply_compiled_change(change);
     return 1;
 }

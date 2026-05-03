@@ -24,9 +24,28 @@
 
 #include "repl_compile.h"
 
+/* Pure preflight check: would `repl_apply_compiled_change(change)`
+ * succeed against the live cmd-store right now? Returns 1 if the
+ * change fits within the cmd-store's capacity and (for delete /
+ * replace) within the current cmd-count bounds. Returns 0 if the
+ * apply would fail. Reads ReplState; never mutates.
+ *
+ * `editor_commit_apply_compiled_change` calls this before doing
+ * any mutation so a single capacity failure can't leave predef-vars
+ * declared with the cmd-store / editor-buffer untouched. */
+int  repl_apply_can_apply_compiled_change(const ReplCompiledChange *change);
+
 /* Apply the source-command portion of `change` to ReplState's
  * command array. Returns 1 on success, 0 on capacity failure or
- * out-of-bounds. NO_CHANGE is a no-op success. */
+ * out-of-bounds. NO_CHANGE is a no-op success.
+ *
+ * Callers that drive the full transaction shape (predef-ops +
+ * editor-buffer + cmd-store) should preflight with
+ * `repl_apply_can_apply_compiled_change()` before any mutation;
+ * otherwise a partial commit can leave predef declarations or
+ * editor text without their matching cmd-store entry. The
+ * preflight + apply pair is wrapped by
+ * `editor_commit_apply_compiled_change()`. */
 int  repl_apply_compiled_change(const ReplCompiledChange *change);
 
 /* Replay the predef-variable side-effects in `change` against the
