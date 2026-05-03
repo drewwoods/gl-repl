@@ -14,8 +14,23 @@
 #ifndef EDITOR_INPUT_H
 #define EDITOR_INPUT_H
 
-#include "repl_core.h"           /* ReplInputDispatchEffects */
 #include "repl_core_internal.h"  /* ReplModifierProvider (test seam) */
+
+/* Side-effects accumulated by editor input dispatch and replayed by
+ * imrepl_ctrl_apply_input_effects (request_redraw → glutPostRedisplay,
+ * set_cursor → glutSetCursor, schedule_timer → glutTimerFunc).
+ *
+ * Phase J1 commit 49b relocated this typedef from repl_core.h: the
+ * effects struct is owned by the editor input layer that produces it,
+ * not by the REPL grammar. */
+typedef struct ReplInputDispatchEffects {
+    int request_redraw;
+    int set_cursor;
+    int cursor;
+    int schedule_timer;
+    unsigned int timer_millis;
+    int timer_value;
+} ReplInputDispatchEffects;
 
 ReplInputDispatchEffects editor_handle_key(unsigned char key, int x, int y);
 ReplInputDispatchEffects editor_handle_special(int key, int x, int y);

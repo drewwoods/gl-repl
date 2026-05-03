@@ -92,6 +92,10 @@ ownership / contract guards. Highlights:
 
 - `check-no-repl-commit` — `repl_commit.c/h` cannot reappear
   (commit dispatch lives in `editor_commit.c`).
+- `check-no-repl-editor-input-shim` — `editor_input.c` cannot include
+  the deleted `repl_editor.h` or call legacy `repl_*_func` dispatch
+  bodies (Phase J1 closed the input boundary; `repl_editor.{c,h}`
+  is gone).
 - `check-no-set-status-in-repl-parser` — parser core never calls
   `set_status` (baseline 1 covers the legacy no-ctx wrapper bridge).
 - `check-no-set-status-in-compile-apply` — `repl_compile.c` and
@@ -136,8 +140,8 @@ ownership / contract guards. Highlights:
 | `repl_state.h` | Typed runtime-state facade, reset helpers, and focused accessors over the live REPL state |
 | `repl_state_views.h` | Read-only (by-value) state getters; safe to include from `scene_*` and `ui_*` |
 | `repl_state_owners.h` | Mutable `_mut()` accessors; owner modules and controller only |
-| `repl_editor.c` | Keyboard/mouse routing, commit orchestration, feed-line entrypoint |
-| `repl_editor.h` | Editor public API (`repl_keyboard_func`, `repl_editor_active_modifiers`, etc.) |
+| `editor_input.c` | GLUT-callback dispatch (`editor_handle_key/special/mouse/motion/passive_motion/mousewheel`), 19 keyboard route helpers + 9 special route helpers, router stubs for non-editor concerns, commit orchestration, `feed_line` |
+| `editor_input.h` | Editor input dispatch entry points + `editor_input_router_*` router stubs + `ReplInputDispatchEffects` typedef + `editor_input_active_modifiers` test seam |
 | `repl_keys.h` | ASCII and control-key code constants (Ctrl+A=1 … Ctrl+Z=26, F-key names) |
 | `editor_clipboard.c` | Line selection anchors, command clipboard buffer, copy/cut/paste behavior |
 | `editor_clipboard.h` | Clipboard public API |
