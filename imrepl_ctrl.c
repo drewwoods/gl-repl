@@ -143,9 +143,9 @@ static void imrepl_ctrl_push_highlights(void) {
         }
     }
 
-    ReplReplayRuntimeState replay = replay_state_view();
-    if (replay.active && replay.src_line_idx >= 0)
-        editor_state_highlights_append(replay.src_line_idx, -1, -1,
+    int src_line = replay_src_line();
+    if (replay_active() && src_line >= 0)
+        editor_state_highlights_append(src_line, -1, -1,
                                             HIGHLIGHT_REPLAY_PC);
 }
 
@@ -216,7 +216,6 @@ static void scene_execute_reset_adapter(void *user_data) {
 
 static void imrepl_ctrl_build_scene_config(SceneRenderConfig *config) {
     ReplRenderState render = repl_state_render();
-    ReplReplayRuntimeState replay = replay_state_view();
     ReplPresentationState presentation = repl_state_presentation();
     ReplCameraState cam = ui_state_camera();
     const float *grid_major_steps = repl_state_grid_major_steps();
@@ -287,8 +286,8 @@ static void imrepl_ctrl_build_scene_config(SceneRenderConfig *config) {
     config->show_vnums = presentation.show_vertex_labels;
     config->show_normals = presentation.show_normal_vectors;
     config->show_vertex_outlines = presentation.show_vertex_outlines;
-    config->replaying = replay.active;
-    config->replay_mode = replay.mode;
+    config->replaying = replay_active();
+    config->replay_mode = replay_mode();
     config->replay_tess_preview = config->replaying &&
                                   config->replay_mode == REPLAY_MODE_VERTEX;
     config->replay_vertex_points = config->replay_tess_preview;
@@ -398,7 +397,11 @@ void imrepl_ctrl_display_frame(void) {
     float live_predef_vals[MAX_PREDEF_VARS] = { 0 };
     FlatProgramView flat_program = repl_state_flat_program_view();
     int g_num_flat_cmds = flat_program.cmd_count;
-    ReplReplayRuntimeState replay = replay_state_view();
+    /* Capture replay state once before repl_replay_prepare_frame so the
+     * HUD shows the per-frame "before-prepare" view (the contract that
+     * test_imrepl_ctrl pins). Per-field narrow accessors elsewhere in
+     * the frame are reading post-prepare state, which is what they want. */
+    ReplReplayRuntimeState frame_replay = replay_state_view();
     SceneRenderConfig scene_config;
     UiRenderSnapshot ui_snap;
 
@@ -440,7 +443,7 @@ void imrepl_ctrl_display_frame(void) {
 
     saved_flat_count = g_num_flat_cmds;
     repl_copy_predef_values(live_predef_vals, MAX_PREDEF_VARS);
-    if (replay.active)
+    if (replay_active())
         repl_state_flat_program_set_count(repl_replay_prepare_frame(saved_flat_count));
 
     update_render_state_strings();
@@ -476,11 +479,11 @@ void imrepl_ctrl_display_frame(void) {
             .viewport_h = scene_config.viewport_h,
             .code_panel_layout = presentation.code_panel_layout,
             .replay_mode = scene_config.replay_mode,
-            .replay_pc = replay.pc,
-            .replay_total_cmds = replay.total_flat_cmds,
-            .replay_state_val = replay.state,
-            .replay_speed = replay.speed,
-            .replay_expand_args = replay.expand_args,
+            .replay_pc = frame_replay.pc,
+            .replay_total_cmds = frame_replay.total_flat_cmds,
+            .replay_state_val = frame_replay.state,
+            .replay_speed = frame_replay.speed,
+            .replay_expand_args = frame_replay.expand_args,
             .replaying = scene_config.replaying,
         };
         ui_replay_hud_render(&replay_hud_state);

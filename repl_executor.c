@@ -329,7 +329,6 @@ static const char *execution_flat_text(EditorBufferView text,
  * mutating repl_state_flat_program_count(). */
 void repl_execute_program(const ReplExecutionOptions *options) {
     FlatProgramView program = execution_program_from_options(options);
-    ReplReplayRuntimeState replay = replay_state_view();
     const GLCmd *flat_cmds = program.cmds;
     int flat_cmd_count = execution_flat_count_from_options(options, program);
     EditorBufferView text = options ? options->text : (EditorBufferView){0};
@@ -603,7 +602,7 @@ void repl_execute_program(const ReplExecutionOptions *options) {
     }
 execute_done:
     if (in_begin) glEnd();
-    if (!(replay.active && replay.mode == REPLAY_MODE_VERTEX)) {
+    if (!(replay_active() && replay_mode() == REPLAY_MODE_VERTEX)) {
         if (tess_depth == 2 && g_tess) { gluTessEndContour(g_tess); tess_depth = 1; }
         if (tess_depth == 1 && g_tess) { gluTessEndPolygon(g_tess); }
     }

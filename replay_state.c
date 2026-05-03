@@ -48,6 +48,34 @@ int replay_active(void) {
     return g_replay_state.active;
 }
 
+int replay_machine_state(void) {
+    return g_replay_state.state;
+}
+
+int replay_pc(void) {
+    return g_replay_state.pc;
+}
+
+int replay_mode(void) {
+    return g_replay_state.mode;
+}
+
+float replay_speed(void) {
+    return g_replay_state.speed;
+}
+
+int replay_src_line(void) {
+    return g_replay_state.src_line_idx;
+}
+
+int replay_total_flat(void) {
+    return g_replay_state.total_flat_cmds;
+}
+
+int replay_expand_args(void) {
+    return g_replay_state.expand_args;
+}
+
 void replay_handle_pin_clicked(void) {
     repl_replay_toggle_play_pause();
 }

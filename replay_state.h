@@ -30,11 +30,32 @@ void                     replay_state_capture(ReplReplayRuntimeState *snapshot);
 void                     replay_state_restore(const ReplReplayRuntimeState *snapshot);
 void                     replay_state_reset(void);
 
+/* Snapshot-build accessor: returns the full ReplReplayRuntimeState by
+ * value. Use the narrow accessors below for individual fields;
+ * replay_state_view exists primarily for the per-frame UiRenderSnapshot
+ * fill in imrepl_ctrl_build_ui_snapshot, where the controller copies
+ * the entire struct into the snapshot exactly once. */
 ReplReplayRuntimeState   replay_state_view(void);
+
+/* Mutable accessor: still required for the few writers that update
+ * multiple fields atomically (config-toggle pointers, repl_replay's
+ * REPLAY_STATE macro). New writers should prefer narrow handlers. */
 ReplReplayRuntimeState  *replay_state_mut(void);
 
-/* Convenience query: 1 if replay playback is currently active, 0 otherwise. */
-int  replay_active(void);
+/* --- Narrow read accessors ---
+ *
+ * Phase G commit 34c. Single-field queries that let callers avoid
+ * pulling the entire struct just to read one field. Reduces public
+ * exposure of ReplReplayRuntimeState's internal layout.
+ */
+int    replay_active(void);          /* .active */
+int    replay_machine_state(void);   /* .state — REPLAY_OFF/PLAYING/PAUSED/DONE */
+int    replay_pc(void);              /* .pc — current program counter */
+int    replay_mode(void);            /* .mode — REPLAY_MODE_VERTEX/POLYGON */
+float  replay_speed(void);           /* .speed — playback steps/sec */
+int    replay_src_line(void);        /* .src_line_idx — source line of current cmd */
+int    replay_total_flat(void);      /* .total_flat_cmds — captured at start */
+int    replay_expand_args(void);     /* .expand_args — annotation expansion toggle */
 
 /* --- Handler API ---
  *
