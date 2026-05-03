@@ -419,6 +419,10 @@ void repl_execute_program(const ReplExecutionOptions *options) {
             if (in_begin) { glEnd(); in_begin = 0; }
             glPointSize(flat_cmds[pc].args[0]);
             break;
+        case CMD_LINE_WIDTH:
+            if (in_begin) { glEnd(); in_begin = 0; }
+            glLineWidth(flat_cmds[pc].args[0]);
+            break;
         case CMD_POINT_PARAMETER_FV:
         case CMD_BLEND_FUNC:
             if (in_begin) { glEnd(); in_begin = 0; }
