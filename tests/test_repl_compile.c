@@ -245,6 +245,112 @@ static void test_compile_apply_var_assign_updates_value(void) {
     ASSERT_INT("doc has decl + assign", repl_state_document_count(), 2);
 }
 
+/* Forced cmd-store capacity failure leaves predef-vars, editor
+ * buffer, and command store all unchanged. The preflight inside
+ * editor_commit_apply_compiled_change is the load-bearing
+ * mechanism: without it the predef-op cascade would mutate while
+ * the cmd-store insert silently fails. */
+static void test_capacity_failure_is_atomic(void) {
+    repl_reset_state();
+
+    ReplCompiledChange change;
+    ReplCompileContext ctx;
+    char err[REPL_STATUS_TEXT_MAX];
+
+    /* Establish a small pre-state: one declared variable, one
+     * assignment line. */
+    set_input("float anchor;");
+    ctx = repl_compile_context_from_live();
+    repl_compile_float_decl("float anchor;", &ctx, &change, err, sizeof(err));
+    editor_commit_apply_compiled_change(&change);
+    set_input("anchor = 9");
+    ctx = repl_compile_context_from_live();
+    repl_compile_var_assign("anchor = 9", &ctx, &change, err, sizeof(err));
+    editor_commit_apply_compiled_change(&change);
+
+    /* Snapshot pre-state. */
+    int pre_doc_count    = repl_state_document_count();
+    int pre_buf_count    = editor_buffer_count();
+    int pre_predef_count = g_num_predef_vars;
+    int anchor_slot      = repl_eval_find_predef_var_idx("anchor");
+    float pre_anchor_val = anchor_slot >= 0 ? g_predef_vars[anchor_slot].value : 0.0f;
+    char pre_line0[MAX_LINE_LEN];
+    strncpy(pre_line0, editor_buffer_line(0) ? editor_buffer_line(0) : "",
+            sizeof(pre_line0) - 1);
+    pre_line0[sizeof(pre_line0) - 1] = '\0';
+
+    /* Forge a compiled change that the preflight must reject:
+     * INSERT_ONE at pos == doc_count + 5 is past the legal insert
+     * range. The preflight returns 0 and no mutation runs. */
+    repl_compiled_change_init(&change);
+    change.kind = REPL_COMPILED_INSERT_ONE;
+    change.pos = repl_state_document_count() + 5;  /* out of range */
+    change.count = 1;
+    change.adjust_edit_line = 1;
+    change.cmds[0].type = CMD_VAR_DECLARE;
+    change.cmds[0].valid = 1;
+    change.cmds[0].var_decl_count = 1;
+    strncpy(change.cmds[0].var_names[0], "ghost",
+            sizeof(change.cmds[0].var_names[0]) - 1);
+    change.cmds[0].var_names[0][sizeof(change.cmds[0].var_names[0]) - 1] = '\0';
+    strncpy(change.text[0], "  float ghost;", sizeof(change.text[0]) - 1);
+    change.text[0][sizeof(change.text[0]) - 1] = '\0';
+    /* Add a predef-op that, if replayed, would register a new
+     * predef and grow num_predef_vars by 1. */
+    change.predef_ops[0].kind = REPL_PREDEF_OP_DECLARE;
+    strncpy(change.predef_ops[0].name, "ghost",
+            sizeof(change.predef_ops[0].name) - 1);
+    change.predef_ops[0].name[sizeof(change.predef_ops[0].name) - 1] = '\0';
+    change.predef_op_count = 1;
+
+    /* Preflight rejects. */
+    int can = repl_apply_can_apply_compiled_change(&change);
+    ASSERT_INT("preflight rejects out-of-range insert", can, 0);
+
+    int ok = editor_commit_apply_compiled_change(&change);
+    ASSERT_INT("apply returns 0 on preflight failure", ok, 0);
+
+    /* All three surfaces unchanged. */
+    ASSERT_INT("doc count unchanged after failed apply",
+               repl_state_document_count(), pre_doc_count);
+    ASSERT_INT("buffer count unchanged after failed apply",
+               editor_buffer_count(), pre_buf_count);
+    ASSERT_INT("predef-var count unchanged after failed apply",
+               g_num_predef_vars, pre_predef_count);
+    ASSERT_INT("ghost not registered",
+               repl_eval_find_predef_var_idx("ghost"), -1);
+    if (anchor_slot >= 0) {
+        ASSERT_TRUE("anchor value unchanged after failed apply",
+                    g_predef_vars[anchor_slot].value == pre_anchor_val);
+    }
+    ASSERT_STR("buffer first line unchanged after failed apply",
+               editor_buffer_line(0), pre_line0);
+
+    /* Same atomicity for an over-capacity INSERT_MANY: forge one
+     * past the cmd-store capacity so insert_many's preflight fires. */
+    repl_compiled_change_init(&change);
+    change.kind = REPL_COMPILED_INSERT_MANY;
+    change.pos = 0;
+    change.count = MAX_COMMIT_CMDS + 1;  /* exceeds change buffer */
+    /* leave cmds/text uninitialized — preflight should reject before reading */
+    change.predef_ops[0].kind = REPL_PREDEF_OP_DECLARE;
+    strncpy(change.predef_ops[0].name, "phantom",
+            sizeof(change.predef_ops[0].name) - 1);
+    change.predef_ops[0].name[sizeof(change.predef_ops[0].name) - 1] = '\0';
+    change.predef_op_count = 1;
+
+    can = repl_apply_can_apply_compiled_change(&change);
+    ASSERT_INT("preflight rejects over-capacity insert_many", can, 0);
+    ok = editor_commit_apply_compiled_change(&change);
+    ASSERT_INT("apply returns 0 on insert_many capacity failure", ok, 0);
+    ASSERT_INT("doc count still unchanged",
+               repl_state_document_count(), pre_doc_count);
+    ASSERT_INT("predef-var count still unchanged",
+               g_num_predef_vars, pre_predef_count);
+    ASSERT_INT("phantom not registered",
+               repl_eval_find_predef_var_idx("phantom"), -1);
+}
+
 /* Reformat-the-document path: the legacy reformat loop calls
  * repl_command_store_replace_one + editor_buffer_replace_line for
  * every line. Verify that after a reformat (run via the existing
@@ -288,6 +394,7 @@ int main(void) {
     test_compile_no_change_leaves_state();
     test_compile_apply_updates_both();
     test_compile_apply_var_assign_updates_value();
+    test_capacity_failure_is_atomic();
     test_reformat_keeps_buffer_and_store_aligned();
 
     return test_harness_report(&g_harness, "test_repl_compile");

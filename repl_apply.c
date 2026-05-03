@@ -18,6 +18,37 @@
 #include "repl_eval.h"
 #include "repl_state.h"
 
+int repl_apply_can_apply_compiled_change(const ReplCompiledChange *change) {
+    if (!change) return 0;
+
+    ReplCommandStore store = repl_command_store_live();
+    int doc_count = repl_command_store_count(&store);
+
+    switch (change->kind) {
+    case REPL_COMPILED_NO_CHANGE:
+        return 1;
+    case REPL_COMPILED_INSERT_ONE:
+        if (change->pos < 0 || change->pos > doc_count) return 0;
+        return repl_command_store_can_insert(&store, 1);
+    case REPL_COMPILED_INSERT_MANY:
+        if (change->count <= 0 || change->count > MAX_COMMIT_CMDS) return 0;
+        if (change->pos < 0 || change->pos > doc_count) return 0;
+        return repl_command_store_can_insert(&store, change->count);
+    case REPL_COMPILED_REPLACE_ONE:
+        return change->pos >= 0 && change->pos < doc_count;
+    case REPL_COMPILED_DELETE_RANGE: {
+        int s = 0, c = 0;
+        return repl_command_store_normalize_range(&store, change->pos,
+                                                  change->count, &s, &c);
+    }
+    case REPL_COMPILED_LOAD_ALL:
+        return change->count >= 0 &&
+               change->count <= repl_command_store_capacity(&store) &&
+               change->count <= MAX_COMMIT_CMDS;
+    }
+    return 0;
+}
+
 int repl_apply_compiled_change(const ReplCompiledChange *change) {
     if (!change) return 0;
 
