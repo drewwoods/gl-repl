@@ -1060,6 +1060,86 @@ int ui_panels_handle_right_press(int mx, int my) {
     return ui_menu_bar_handle_config_right_press(mx, my);
 }
 
+/* Pure hit-test: classify (mx, my) as a UiHit. Reads layout / state
+ * snapshots; never mutates. Phase E commit 28 entry. */
+UiHit ui_panels_hit_test(int mx, int my) {
+    UiHit h = ui_hit_none();
+
+    int win_w = ui_state_viewport().window_w;
+    int win_h = ui_state_viewport().window_h;
+    if (win_w <= 0 || win_h <= 0)
+        return h;
+
+    int gl_y = win_h - my;
+
+    /* Help overlay takes priority when visible — hit goes there
+     * regardless of where in the window the pointer landed. The
+     * controller then routes to the help session for scroll/search. */
+    if (ui_state_help().visible) {
+        h.kind = UI_HIT_HELP_PANEL;
+        h.local_x = (float)mx;
+        h.local_y = (float)gl_y;
+        return h;
+    }
+
+    /* Code-panel region. */
+    int cp_x, cp_y, cp_w, cp_h;
+    repl_layout_code_panel_rect(&cp_x, &cp_y, &cp_w, &cp_h);
+
+    if (cp_w > 0 && cp_h > 0 &&
+        mx >= cp_x && mx < cp_x + cp_w &&
+        gl_y >= cp_y && gl_y < cp_y + cp_h) {
+        /* Within the code panel. Distinguish gutter (line numbers)
+         * from text area. Layout: CODE_MARGIN_X | linenum (4*FONT_W)
+         * | gap (FONT_W) | optional idx col | text. */
+        int linenum_w = 4 * FONT_W;
+        int gutter_right = cp_x + CODE_MARGIN_X + linenum_w;
+
+        if (mx < gutter_right) {
+            h.kind = UI_HIT_CODE_GUTTER;
+        } else {
+            h.kind = UI_HIT_CODE_TEXT;
+        }
+
+        /* Best-effort line / row mapping. Mirrors code_panel_hit_test
+         * but failure-tolerant — we always return a hit kind even
+         * when the row mapping doesn't resolve a target. */
+        int target = -1;
+        int on_insert_line = 0;
+        int row_offset = 0;
+        int panel_top = cp_y + cp_h;
+        int line_y_start = panel_top - CODE_MARGIN_Y - 2 * LINE_H;
+        int vis = (line_y_start + LINE_H - 3 - gl_y) / LINE_H;
+        if (vis >= 0 &&
+            vis < repl_code_panel_document_visible_lines_for_height(cp_h)) {
+            int idx_col_w = repl_state_presentation().show_vertex_indices ? (6 * FONT_W) : 0;
+            int text_x = CODE_MARGIN_X + linenum_w + FONT_W + idx_col_w;
+            int doc_line = editor_scroll() + vis;
+            CodePanelDocumentLayout layout;
+            repl_code_panel_document_build(&layout, cp_w, text_x, cp_h);
+            if (repl_code_panel_document_target_for_doc_line(doc_line, &layout,
+                                                             &target,
+                                                             &on_insert_line,
+                                                             &row_offset)) {
+                h.line_idx   = target;
+                h.visual_row = row_offset;
+                (void)on_insert_line;
+            }
+        }
+        h.local_x = (float)(mx - cp_x);
+        h.local_y = (float)(gl_y - cp_y);
+        return h;
+    }
+
+    /* Outside the code panel: assume scene/viewport region. The
+     * scene controller is the owner; the controller routes
+     * UI_HIT_SCENE to the camera/viewport handler. */
+    h.kind = UI_HIT_SCENE;
+    h.local_x = (float)mx;
+    h.local_y = (float)gl_y;
+    return h;
+}
+
 void ui_panels_close_menus(void) {
     ui_menu_bar_close();
     ui_color_picker_close();

@@ -101,6 +101,22 @@ void ui_panels_handle_mouse_release(void);
  * coordinates. */
 int  ui_panels_handle_right_press(int mx, int my);
 
+/* Pure hit-test: classify the pointer at (mx, my) as a `UiHit`.
+ *
+ * Phase E commit 28 entry. Reads layout / state to determine which
+ * region the pointer lands in (code text / code gutter / panel
+ * divider / scene / etc.); never mutates. Subsequent commits route
+ * the result through the controller to the owning subsystem.
+ *
+ * The existing imperative ui_panels_handle_* entry points stay
+ * during the migration. Callers can use the hit-test directly when
+ * they want a pure classification, or continue calling the
+ * imperative paths until the controller routes through hits
+ * end-to-end. */
+#include "ui_hit.h"
+
+UiHit ui_panels_hit_test(int mx, int my);
+
 /* --- Test helpers --- */
 
 /* Apply scroll-follow logic without rendering (for test verification). Computes

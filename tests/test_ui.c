@@ -9,6 +9,7 @@
 #include "ui_autocomplete_panel.h"
 #include "ui_variable_panel.h"
 #include "ui_menu_bar.h"
+#include "ui_panels.h"
 #include "ui_snapshot.h"
 #include "repl_var_drag.h"
 #include "support/test_harness.h"
@@ -292,6 +293,39 @@ static void test_menu_bar(void) {
     ASSERT_TRUE("menu closed", !ui_menu_bar_menu_dropdown_is_open());
 }
 
+/* Phase E commit 28: ui_panels_hit_test classifies pointer location
+ * as a UiHit without mutating state.
+ *
+ * Default code-panel layout is TOP at fraction 0.45 — at 800x600
+ * that puts the panel at OpenGL rect (0, 330, 800, 270). In GLUT
+ * (top-down) coords the panel occupies my in [0, 270]. */
+static void test_ui_panels_hit_test(void) {
+    repl_reset_state();
+    ui_state_viewport_set_size(800, 600);
+
+    /* Click in the scene region (below the panel, my > 270). */
+    UiHit h_scene = ui_panels_hit_test(400, 400);
+    ASSERT_TRUE("scene hit kind", h_scene.kind == UI_HIT_SCENE);
+
+    /* Click inside the code panel's text area. mx > gutter end
+     * (CODE_MARGIN_X + 4*FONT_W = ~40) and my within the panel. */
+    UiHit h_text = ui_panels_hit_test(150, 100);
+    ASSERT_TRUE("code-panel text hit kind",
+                h_text.kind == UI_HIT_CODE_TEXT);
+
+    /* Click in the gutter (line numbers, mx < ~40). */
+    UiHit h_gutter = ui_panels_hit_test(20, 100);
+    ASSERT_TRUE("code-panel gutter hit kind",
+                h_gutter.kind == UI_HIT_CODE_GUTTER);
+
+    /* Help overlay takes priority over everything. */
+    ui_state_help_mut()->visible = 1;
+    UiHit h_help = ui_panels_hit_test(150, 100);
+    ASSERT_TRUE("help overlay takes priority",
+                h_help.kind == UI_HIT_HELP_PANEL);
+    ui_state_help_mut()->visible = 0;
+}
+
 int main(void) {
 #ifndef OPENGL_VIBE_USE_GL_STUBS
     printf("This test requires GL stubs (USE_GL_STUBS=1)\n");
@@ -299,14 +333,15 @@ int main(void) {
 #endif
 
     repl_reset_state();
-    
+
     test_help_overlay();
     test_profile_panel();
     test_color_picker();
     test_autocomplete_panel();
     test_variable_panel();
     test_menu_bar();
-    
+    test_ui_panels_hit_test();
+
     printf("\nUI Tests: %d/%d passed\n", g_harness.passed, g_harness.run);
     return (g_harness.passed == g_harness.run) ? 0 : 1;
 }
