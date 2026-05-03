@@ -52,6 +52,17 @@ void                    ui_state_pointer_set_button(int mouse_button);
 ReplCodePanelRuntimeState  ui_state_code_panel(void);
 ReplCodePanelRuntimeState *ui_state_code_panel_mut(void);
 void                       ui_state_code_panel_reset(void);
+ReplCameraState  ui_state_camera(void);
+ReplCameraState *ui_state_camera_mut(void);
+ReplCameraState  ui_state_camera_snapshot(void);
+void             ui_state_camera_set(float rx, float ry, float dist,
+                                     float tx, float ty, float tz,
+                                     float motion_glow);
+void             ui_state_camera_set_orbit(float rx, float ry);
+void             ui_state_camera_set_pan(float tx, float ty, float tz);
+void             ui_state_camera_set_distance(float dist);
+void             ui_state_camera_set_motion_glow(float motion_glow);
+void             ui_state_camera_reset_default(void);
 
 static const float g_grid_major_steps[GRID_MAJOR_COUNT] = {
     [GRID_MAJOR_1]  = 1.0f,
@@ -105,14 +116,10 @@ static ReplRuntimeState g_repl_state;
  * g_editor_state.variable_drag in editor_state.c. */
 /* g_show_profile_panel macro removed (Phase 1 commit 8); profile_panel
  * lives on g_ui_state.profile_panel in ui_state.c. */
-#define g_cam_rx                    (g_repl_state.camera.rx)
-#define g_cam_ry                    (g_repl_state.camera.ry)
-#define g_cam_dist                  (g_repl_state.camera.dist)
-#define g_cam_tx                    (g_repl_state.camera.tx)
-#define g_cam_ty                    (g_repl_state.camera.ty)
-#define g_cam_tz                    (g_repl_state.camera.tz)
-#define g_cam_motion_glow           (g_repl_state.camera.motion_glow)
-/* g_mouse_* and g_win_* macros removed (Phase 1 commit 8); pointer and
+/* g_cam_* macros removed (Phase A commit 13); the camera slice lives
+ * on g_ui_state.camera in ui_state.c, and the camera setters call
+ * ui_state_camera_* directly.
+ * g_mouse_* and g_win_* macros removed (Phase 1 commit 8); pointer and
  * viewport slices live on g_ui_state.{pointer,viewport} in ui_state.c. */
 #define g_wireframe                 (g_repl_state.presentation.wireframe)
 #define g_grid_theme                (g_repl_state.presentation.grid_theme)
@@ -131,7 +138,8 @@ static ReplRuntimeState g_repl_state;
 #define g_autonormal                (g_repl_state.presentation.autonormal)
 #define g_show_lights               (g_repl_state.presentation.show_light_indicators)
 #define g_backdrop_mode             (g_repl_state.presentation.backdrop_mode)
-#define g_cam_rotate                (g_repl_state.camera.auto_rotate)
+/* g_cam_rotate macro removed (Phase A commit 13); auto_rotate lives on
+ * g_ui_state.camera with the rest of the camera slice. */
 #define g_show_outlines             (g_repl_state.presentation.show_vertex_outlines)
 #define g_show_vpoints              (g_repl_state.presentation.show_vertex_points)
 #define g_highlight_current_poly    (g_repl_state.presentation.highlight_current_poly)
@@ -452,54 +460,10 @@ void repl_state_time_reset_to_zero(void) {
  * ui_state.c (Phase 1 commit 8); legacy repl_state_* names are
  * forwarders defined there. */
 
-ReplCameraState repl_state_camera(void) {
-    return g_repl_state.camera;
-}
-
-ReplCameraState *repl_state_camera_mut(void) {
-    return &g_repl_state.camera;
-}
-
-ReplCameraState repl_state_camera_snapshot(void) {
-    return g_repl_state.camera;
-}
-
-void repl_state_camera_set(float rx, float ry, float dist,
-                           float tx, float ty, float tz,
-                           float motion_glow) {
-    g_cam_rx = rx;
-    g_cam_ry = ry;
-    g_cam_dist = dist;
-    g_cam_tx = tx;
-    g_cam_ty = ty;
-    g_cam_tz = tz;
-    g_cam_motion_glow = motion_glow;
-}
-
-void repl_state_camera_set_orbit(float rx, float ry) {
-    g_cam_rx = rx;
-    g_cam_ry = ry;
-}
-
-void repl_state_camera_set_pan(float tx, float ty, float tz) {
-    g_cam_tx = tx;
-    g_cam_ty = ty;
-    g_cam_tz = tz;
-}
-
-void repl_state_camera_set_distance(float dist) {
-    g_cam_dist = dist;
-}
-
-void repl_state_camera_set_motion_glow(float motion_glow) {
-    g_cam_motion_glow = motion_glow;
-}
-
-void repl_state_camera_reset_default(void) {
-    g_repl_state.camera = g_repl_state_defaults.camera;
-}
-
-/* Pointer + viewport accessors moved to ui_state.c (Phase 1 commit 8);
+/* Camera accessors moved to ui_state.c (Phase A commit 13); the legacy
+ * repl_state_camera* names remain alive as one-line forwarders in the
+ * transitional block at the bottom of this file.
+ * Pointer + viewport accessors moved to ui_state.c (Phase 1 commit 8);
  * legacy repl_state_* names are forwarders defined there. */
 
 ReplPresentationState repl_state_presentation(void) {
@@ -521,7 +485,7 @@ const float *repl_state_grid_extents(void) {
 
 void repl_state_presentation_reset_defaults(void) {
     g_repl_state.presentation = g_repl_state_defaults.presentation;
-    g_cam_rotate = g_repl_state_defaults.camera.auto_rotate;
+    ui_state_camera_mut()->auto_rotate = CFG_DEFAULT_CAMERA_ROTATE;
 }
 
 void repl_state_presentation_reset_example_defaults(void) {
@@ -539,7 +503,7 @@ void repl_state_presentation_reset_example_defaults(void) {
     g_xform_guide_mode = CFG_DEFAULT_XFORM_GUIDE_MODE;
     g_show_lights = CFG_DEFAULT_LIGHT_INDICATORS;
     g_backdrop_mode = CFG_DEFAULT_BACKDROP_MODE;
-    g_cam_rotate = CFG_DEFAULT_CAMERA_ROTATE;
+    ui_state_camera_mut()->auto_rotate = CFG_DEFAULT_CAMERA_ROTATE;
 }
 
 ReplRenderState repl_state_render(void) {
@@ -758,4 +722,42 @@ ReplCodePanelRuntimeState *repl_state_code_panel_mut(void) {
 
 void repl_state_code_panel_reset(void) {
     ui_state_code_panel_reset();
+}
+
+ReplCameraState repl_state_camera(void) {
+    return ui_state_camera();
+}
+
+ReplCameraState *repl_state_camera_mut(void) {
+    return ui_state_camera_mut();
+}
+
+ReplCameraState repl_state_camera_snapshot(void) {
+    return ui_state_camera_snapshot();
+}
+
+void repl_state_camera_set(float rx, float ry, float dist,
+                           float tx, float ty, float tz,
+                           float motion_glow) {
+    ui_state_camera_set(rx, ry, dist, tx, ty, tz, motion_glow);
+}
+
+void repl_state_camera_set_orbit(float rx, float ry) {
+    ui_state_camera_set_orbit(rx, ry);
+}
+
+void repl_state_camera_set_pan(float tx, float ty, float tz) {
+    ui_state_camera_set_pan(tx, ty, tz);
+}
+
+void repl_state_camera_set_distance(float dist) {
+    ui_state_camera_set_distance(dist);
+}
+
+void repl_state_camera_set_motion_glow(float motion_glow) {
+    ui_state_camera_set_motion_glow(motion_glow);
+}
+
+void repl_state_camera_reset_default(void) {
+    ui_state_camera_reset_default();
 }

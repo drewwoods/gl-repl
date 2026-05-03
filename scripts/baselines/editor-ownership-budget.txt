@@ -13,9 +13,12 @@
 # direct ui_state_* call. The forwarder block in repl_state.c started
 # with 24 forwarder functions whose bodies were 21 lines (some
 # return-by-value helpers fold to one line). Phase A commit 12 added
-# code_panel forwarders (3 functions / 3 body lines), bringing the
-# count to 24. The block goes to zero in Phase A commit 14. See the
-# EDITOR_OWNERSHIP_TODO at the forwarder block for context.
+# code_panel forwarders (3 functions / 3 body lines, total 24); Phase
+# A commit 13 added camera forwarders (9 functions / 11 body lines,
+# total 35) — repl_state_camera_set and the two ui_state_camera_set_
+# pair calls land on multi-line bodies. The block goes to zero in
+# Phase A commit 14. See the EDITOR_OWNERSHIP_TODO at the forwarder
+# block for context.
 
-ui_forwarder_count: 24
+ui_forwarder_count: 35
 ui_state_includes_repl_views: 1
