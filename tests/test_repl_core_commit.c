@@ -2,12 +2,13 @@
 #include "repl_export.h"
 #include "repl_clipboard.h"
 #include "repl_state.h"
+#include "ui_state.h"
 #include "repl_replay_annotations.h"
 #include "repl_code_panel_document.h"
 #include "ui_panels.h"
 #include "repl_layout.h"
 
-#define g_status  (repl_state_status_mut()->text)
+#define g_status  (ui_state_status_mut()->text)
 #define g_scroll  (editor_state_scroll_mut()->scroll)
 #define g_t_playing (repl_state_variables_mut()->time_playing)
 #define g_ac_ghost  (editor_state_autocomplete_mut()->ghost)
@@ -41,7 +42,7 @@ static TestHarness g_harness = TEST_HARNESS_INIT;
 #define g_cam_lines (repl_state_import_export().cam_lines)
 
 static void declare_test_vars(void) {
-    repl_state_viewport_set_size(1200, 800);
+    ui_state_viewport_set_size(1200, 800);
     char err[128];
     repl_eval_declare_predef_var("x", err, sizeof(err));
     repl_eval_declare_predef_var("y", err, sizeof(err));
@@ -85,7 +86,7 @@ static int code_panel_mouse_y_for_cmd(int cmd_idx) {
     int vis = doc_line - g_scroll;
     int line_y_start = cp_y + cp_h - CODE_MARGIN_Y - 2 * LINE_H;
     int gl_y = line_y_start - vis * LINE_H + 1;
-    return repl_state_viewport().window_h - gl_y;
+    return ui_state_viewport().window_h - gl_y;
 }
 
 static int predef_idx(const char *name) {

@@ -1,5 +1,6 @@
 #include "repl_core.h"
 #include "repl_state.h"
+#include "ui_state.h"
 
 #include "support/test_harness.h"
 #include <stdio.h>
@@ -233,9 +234,9 @@ int main(void) {
     repl_feed_line_public("glBegin(GL_POINTS);");
     repl_feed_line_public("glVertex3f(0, 0, 0);");
     repl_feed_line_public("glEnd();");
-    repl_state_camera_set_orbit(31.523f, 31.4799f);
-    repl_state_camera_set_distance(7.59313f);
-    repl_state_camera_set_pan(1.50f, 0.0f, -2.00f);
+    ui_state_camera_set_orbit(31.523f, 31.4799f);
+    ui_state_camera_set_distance(7.59313f);
+    ui_state_camera_set_pan(1.50f, 0.0f, -2.00f);
     repl_export_save_output(path);
     {
         char buf[16384];
@@ -248,23 +249,23 @@ int main(void) {
                     count_substr(buf, "glRotatef(g_angle, 0.0f, 1.0f, 0.0f);") == 1);
     }
     {
-        float saved_rx   = repl_state_camera().rx;
-        float saved_ry   = repl_state_camera().ry;
-        float saved_dist = repl_state_camera().dist;
-        float saved_tx   = repl_state_camera().tx;
-        float saved_ty   = repl_state_camera().ty;
-        float saved_tz   = repl_state_camera().tz;
-        repl_state_camera_set_orbit(20.0f, 30.0f);
-        repl_state_camera_set_distance(5.0f);
-        repl_state_camera_set_pan(0.0f, 0.0f, 0.0f);
+        float saved_rx   = ui_state_camera().rx;
+        float saved_ry   = ui_state_camera().ry;
+        float saved_dist = ui_state_camera().dist;
+        float saved_tx   = ui_state_camera().tx;
+        float saved_ty   = ui_state_camera().ty;
+        float saved_tz   = ui_state_camera().tz;
+        ui_state_camera_set_orbit(20.0f, 30.0f);
+        ui_state_camera_set_distance(5.0f);
+        ui_state_camera_set_pan(0.0f, 0.0f, 0.0f);
         repl_reset_state(); declare_test_vars();
         ASSERT_TRUE("load camera output", repl_export_load_from_file(path) == 1);
-        ASSERT_TRUE("camera rx restored",   fabsf(repl_state_camera().rx   - saved_rx)   < 1e-2f);
-        ASSERT_TRUE("camera ry restored",   fabsf(repl_state_camera().ry   - saved_ry)   < 1e-2f);
-        ASSERT_TRUE("camera dist restored", fabsf(repl_state_camera().dist - saved_dist) < 1e-2f);
-        ASSERT_TRUE("camera tx restored",   fabsf(repl_state_camera().tx   - saved_tx)   < 1e-2f);
-        ASSERT_TRUE("camera ty restored",   fabsf(repl_state_camera().ty   - saved_ty)   < 1e-2f);
-        ASSERT_TRUE("camera tz restored",   fabsf(repl_state_camera().tz   - saved_tz)   < 1e-2f);
+        ASSERT_TRUE("camera rx restored",   fabsf(ui_state_camera().rx   - saved_rx)   < 1e-2f);
+        ASSERT_TRUE("camera ry restored",   fabsf(ui_state_camera().ry   - saved_ry)   < 1e-2f);
+        ASSERT_TRUE("camera dist restored", fabsf(ui_state_camera().dist - saved_dist) < 1e-2f);
+        ASSERT_TRUE("camera tx restored",   fabsf(ui_state_camera().tx   - saved_tx)   < 1e-2f);
+        ASSERT_TRUE("camera ty restored",   fabsf(ui_state_camera().ty   - saved_ty)   < 1e-2f);
+        ASSERT_TRUE("camera tz restored",   fabsf(ui_state_camera().tz   - saved_tz)   < 1e-2f);
     }
 
     repl_reset_state(); declare_test_vars();

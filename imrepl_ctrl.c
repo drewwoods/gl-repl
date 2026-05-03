@@ -18,6 +18,7 @@
 #include "ui_menu_bar.h"
 #include "ui_panels.h"
 #include "ui_snapshot.h"
+#include "ui_state.h"
 #include "repl_clipboard.h"
 #include "repl_code_panel_document.h"
 #include "repl_export.h"
@@ -213,7 +214,7 @@ static void imrepl_ctrl_build_scene_config(SceneRenderConfig *config) {
     ReplRenderState render = repl_state_render();
     ReplReplayRuntimeState replay = repl_state_replay();
     ReplPresentationState presentation = repl_state_presentation();
-    ReplCameraState cam = repl_state_camera();
+    ReplCameraState cam = ui_state_camera();
     const float *grid_major_steps = repl_state_grid_major_steps();
     const float *grid_extents = repl_state_grid_extents();
     float bg_lum;
@@ -234,8 +235,8 @@ static void imrepl_ctrl_build_scene_config(SceneRenderConfig *config) {
     config->anim_time = repl_state_variables().anim_time;
 
     /* --- Viewport and scene rectangle --- */
-    config->viewport_w = repl_state_viewport().window_w;
-    config->viewport_h = repl_state_viewport().window_h;
+    config->viewport_w = ui_state_viewport().window_w;
+    config->viewport_h = ui_state_viewport().window_h;
     repl_layout_scene_rect(&config->scene_x, &config->scene_y,
                            &config->scene_w, &config->scene_h);
     if (config->scene_w < 1) config->scene_w = 1;
@@ -325,17 +326,17 @@ static void imrepl_ctrl_build_ui_snapshot(UiRenderSnapshot *snap) {
      * reflects the current frame before rendering reads it. */
     repl_state_refresh_workspace_header_lines();
 
-    snap->viewport       = repl_state_viewport();
+    snap->viewport       = ui_state_viewport();
     snap->presentation   = repl_state_presentation();
-    snap->code_panel     = repl_state_code_panel();
-    snap->help           = repl_state_help();
-    snap->variable_panel = repl_state_variable_panel();
-    snap->profile_panel  = repl_state_profile_panel();
-    snap->status         = repl_state_status();
+    snap->code_panel     = ui_state_code_panel();
+    snap->help           = ui_state_help();
+    snap->variable_panel = ui_state_variable_panel();
+    snap->profile_panel  = ui_state_profile_panel();
+    snap->status         = ui_state_status();
     snap->search         = editor_state_search();
     snap->autocomplete   = editor_state_autocomplete();
-    snap->camera         = repl_state_camera();
-    snap->pointer        = repl_state_pointer();
+    snap->camera         = ui_state_camera();
+    snap->pointer        = ui_state_pointer();
     snap->render         = repl_state_render();
     snap->replay         = repl_state_replay();
     snap->scenes         = repl_state_scenes();
@@ -507,7 +508,7 @@ void imrepl_ctrl_display_frame(void) {
 
 void imrepl_ctrl_reshape(int w, int h) {
     if (h < 1) h = 1;
-    repl_state_viewport_set_size(w, h);
+    ui_state_viewport_set_size(w, h);
 }
 
 void imrepl_ctrl_init_gl(void) {

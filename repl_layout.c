@@ -5,6 +5,13 @@
 #include "repl_layout.h"
 #include "repl_state.h"
 
+/* ui_state_viewport / ui_state_code_panel are forward-declared here
+ * because repl_*.c is not allowed to include ui_state.h per
+ * check-controller-boundaries. Layout reads viewport size and panel
+ * fraction; both slices are UiState chrome. */
+ReplViewportState         ui_state_viewport(void);
+ReplCodePanelRuntimeState ui_state_code_panel(void);
+
 static int repl_layout_code_panel_layout_mode(void) {
     if (repl_state_presentation().code_panel_layout < 0 ||
         repl_state_presentation().code_panel_layout >= CODE_PANEL_LAYOUT_COUNT)
@@ -13,7 +20,7 @@ static int repl_layout_code_panel_layout_mode(void) {
 }
 
 static int repl_layout_panel_span_px(int total_px) {
-    int span = (int)((float)total_px * repl_state_code_panel().panel_frac);
+    int span = (int)((float)total_px * ui_state_code_panel().panel_frac);
     if (span < 1) span = 1;
     if (span > total_px) span = total_px;
     return span;
@@ -21,8 +28,8 @@ static int repl_layout_panel_span_px(int total_px) {
 
 void repl_layout_code_panel_rect(int *x, int *y, int *w, int *h) {
     int layout = repl_layout_code_panel_layout_mode();
-    int win_w = repl_state_viewport().window_w;
-    int win_h = repl_state_viewport().window_h;
+    int win_w = ui_state_viewport().window_w;
+    int win_h = ui_state_viewport().window_h;
 
     if (layout == CODE_PANEL_LAYOUT_HIDDEN) {
         if (x) *x = 0;
@@ -52,8 +59,8 @@ void repl_layout_code_panel_rect(int *x, int *y, int *w, int *h) {
 
 void repl_layout_scene_rect(int *x, int *y, int *w, int *h) {
     int layout = repl_layout_code_panel_layout_mode();
-    int win_w = repl_state_viewport().window_w;
-    int win_h = repl_state_viewport().window_h;
+    int win_w = ui_state_viewport().window_w;
+    int win_h = ui_state_viewport().window_h;
 
     if (layout == CODE_PANEL_LAYOUT_HIDDEN) {
         if (x) *x = 0;

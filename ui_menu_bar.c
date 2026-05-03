@@ -7,6 +7,7 @@
 #include "repl_config.h"
 #include "repl_keys.h"
 #include "repl_state_views.h"
+#include "ui_state.h"
 #include "ui_menu_bar.h"
 #include "repl_layout.h"
 #include "./include/gl_2d.h"
@@ -268,7 +269,7 @@ int ui_menu_bar_menu_hit(int gx, int gy) {
     int menu_x[NUM_MENUS], menu_w[NUM_MENUS];
     int pin_x[NUM_PIN_BTNS], pin_w[NUM_PIN_BTNS];
     int by, bh;
-    int ry = repl_state_viewport().window_h - gy;
+    int ry = ui_state_viewport().window_h - gy;
     menubar_rects(menu_x, menu_w, pin_x, pin_w, &by, &bh);
     if (ry < by || ry >= by + bh) return -1;
     for (int i = 0; i < NUM_MENUS; i++)
@@ -280,7 +281,7 @@ int ui_menu_bar_pin_hit(int gx, int gy) {
     int menu_x[NUM_MENUS], menu_w[NUM_MENUS];
     int pin_x[NUM_PIN_BTNS], pin_w[NUM_PIN_BTNS];
     int by, bh;
-    int ry = repl_state_viewport().window_h - gy;
+    int ry = ui_state_viewport().window_h - gy;
     menubar_rects(menu_x, menu_w, pin_x, pin_w, &by, &bh);
     if (ry < by || ry >= by + bh) return -1;
     for (int i = 0; i < NUM_PIN_BTNS; i++)
@@ -331,7 +332,7 @@ int ui_menu_bar_dropdown_item_hit(int gx, int gy) {
     if (n == 0) return -1;
     int dx, dy, dw, dh;
     if (!menu_dropdown_rect(&dx, &dy, &dw, &dh)) return -1;
-    int ry = repl_state_viewport().window_h - gy;
+    int ry = ui_state_viewport().window_h - gy;
     if (gx < dx || gx >= dx + dw || ry < dy || ry >= dy + dh) return -1;
     int row = (dy + dh - 4 - ry) / LINE_H;
     if (row < 0 || row >= n) return -1;

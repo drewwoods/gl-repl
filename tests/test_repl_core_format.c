@@ -1,8 +1,9 @@
 #include "repl_core_internal.h"
 #include "repl_state.h"
+#include "ui_state.h"
 #include "support/test_harness.h"
 
-#define g_panel_frac (repl_state_code_panel_mut()->panel_frac)
+#define g_panel_frac (ui_state_code_panel_mut()->panel_frac)
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -188,7 +189,7 @@ int main(void) {
         repl_state_presentation_mut()->wrap_at_comma = 1;
         repl_state_presentation_mut()->show_vertex_indices = 0;
         repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT;
-        repl_state_viewport_set_size(360, repl_state_viewport().window_h);
+        ui_state_viewport_set_size(360, ui_state_viewport().window_h);
         g_panel_frac = 0.75f;
 
         memset(&repl_state_document_cmds_mut()[0], 0, sizeof(repl_state_document_cmds_mut()[0]));
@@ -228,7 +229,7 @@ int main(void) {
         repl_state_presentation_mut()->wrap_at_comma = 1;
         repl_state_presentation_mut()->show_vertex_indices = 0;
         repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT;
-        repl_state_viewport_set_size(360, repl_state_viewport().window_h);
+        ui_state_viewport_set_size(360, ui_state_viewport().window_h);
         g_panel_frac = 0.75f;
 
         memset(&repl_state_document_cmds_mut()[0], 0, sizeof(repl_state_document_cmds_mut()[0]));
@@ -271,7 +272,7 @@ int main(void) {
         repl_state_presentation_mut()->wrap_at_comma = 1;
         repl_state_presentation_mut()->show_vertex_indices = 0;
         repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT;
-        repl_state_viewport_set_size(360, repl_state_viewport().window_h);
+        ui_state_viewport_set_size(360, ui_state_viewport().window_h);
         g_panel_frac = 0.75f;
 
         memset(&repl_state_document_cmds_mut()[0], 0, sizeof(repl_state_document_cmds_mut()[0]));
@@ -312,7 +313,7 @@ int main(void) {
         declare_test_vars();
         repl_state_presentation_mut()->wrap_at_comma = 1;
         repl_state_presentation_mut()->show_vertex_indices = 0;
-        repl_state_viewport_set_size(260, repl_state_viewport().window_h);
+        ui_state_viewport_set_size(260, ui_state_viewport().window_h);
         g_panel_frac = 0.75f;
 
         memset(&repl_state_document_cmds_mut()[0], 0, sizeof(repl_state_document_cmds_mut()[0]));
@@ -361,7 +362,7 @@ int main(void) {
             declare_test_vars();
             repl_state_presentation_mut()->wrap_at_comma = 1;
             repl_state_presentation_mut()->show_vertex_indices = 0;
-            repl_state_viewport_set_size(360, 800);
+            ui_state_viewport_set_size(360, 800);
             g_panel_frac = 0.5f;
             repl_state_presentation_mut()->code_panel_layout = layouts[layout_idx];
 

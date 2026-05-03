@@ -1,10 +1,11 @@
 #include "repl_core_internal.h"
 #include "repl_parser.h"
 #include "repl_state.h"
+#include "ui_state.h"
 #include "support/repl_test_support.h"
 #include "support/test_harness.h"
 
-#define g_status (repl_state_status_mut()->text)
+#define g_status (ui_state_status_mut()->text)
 
 #include <stdio.h>
 #include <stdlib.h>
