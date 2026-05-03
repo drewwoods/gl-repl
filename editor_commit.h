@@ -200,4 +200,26 @@ ReplCompileResult editor_compile_if_block(const char *input,
                                           EditorCommitPlan *out,
                                           char *err, int err_size);
 
+/* Editor-side compile for func definitions.
+ *
+ * NOTE: this entry handles validation + the header-replace branch
+ * only (cursor sits on an existing CMD_FUNC_DEF in non-insert mode).
+ * The new-def-with-comment-relocation branch stays inline in
+ * try_commit_func_def for now — it needs a delete-before-insert
+ * field on EditorCommitPlan plus the function_decl_resume_delta
+ * publish-side captured into post-effects, both of which are
+ * deferred to a follow-up commit.
+ *
+ * Returns:
+ *   REPL_COMPILE_OK + REPLACE_ONE   header-replace plan ready
+ *   REPL_COMPILE_OK + NO_CHANGE     not a func decl OR a func decl
+ *                                   in non-overwrite context (caller
+ *                                   should fall through to legacy)
+ *   REPL_COMPILE_ERROR              syntax / duplicate-name error;
+ *                                   `err` filled */
+ReplCompileResult editor_compile_func_def(const char *input,
+                                          const ReplCompileContext *ctx,
+                                          EditorCommitPlan *out,
+                                          char *err, int err_size);
+
 #endif /* EDITOR_COMMIT_H */

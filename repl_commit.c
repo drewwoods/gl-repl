@@ -522,6 +522,41 @@ int try_commit_for_loop(void) {
 }
 
 int try_commit_func_def(void) {
+    /* Phase D commit 26d (partial migration):
+     * - editor_compile_func_def handles validation + the
+     *   overwrite-header branch through compile/apply.
+     * - The new-def-with-comment-relocation branch (which needs
+     *   a delete-before-insert plan field + g_func_decl_resume_delta
+     *   publish-side post-effect) stays inline for now and runs
+     *   only when the compile step returns NO_CHANGE without a
+     *   commit_message (i.e. valid func decl input but not an
+     *   overwrite context).
+     */
+    {
+        ReplCompileContext compile_ctx = repl_compile_context_from_live();
+        EditorCommitPlan plan;
+        char err[REPL_STATUS_TEXT_MAX];
+        ReplCompileResult r = editor_compile_func_def(editor_state_input().input,
+                                                      &compile_ctx, &plan,
+                                                      err, sizeof(err));
+        if (r == REPL_COMPILE_ERROR) {
+            set_status(err);
+            return 1;
+        }
+        if (plan.commit_message_valid) {
+            /* Overwrite-header path — compile produced a complete
+             * plan. Apply and we're done. */
+            if (!editor_commit_apply_plan(&plan)) {
+                set_status("Command buffer full!");
+                return 1;
+            }
+            mark_normals_dirty();
+            return 1;
+        }
+        /* NO_CHANGE without commit_message → fall through to the
+         * legacy path below. */
+    }
+
     int fn = -1;
     int param_count = 0;
     char param_names[MAX_EXPR_VARS][16];
