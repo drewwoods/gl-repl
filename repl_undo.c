@@ -30,11 +30,12 @@ static const char *const *undo_snapshot_line_ptrs(const ReplUndoSnapshot *snapsh
 }
 
 void repl_undo_snapshot_save(ReplUndoSnapshot *snapshot) {
+    EditorBufferView text = editor_buffer_view();
     memcpy(snapshot->cmds, repl_state_document_cmds_mut(), (size_t)repl_state_document_count() * sizeof(GLCmd));
     for (int i = 0; i < repl_state_document_count(); i++)
         repl_copy_string_fits(snapshot->editor_lines[i],
                               MAX_LINE_LEN,
-                              editor_buffer_line(i));
+                              editor_buffer_view_line(text, i));
     snapshot->num_cmds = repl_state_document_count();
     snapshot->edit_line = repl_state_edit_line();
     snapshot->num_predef_vars = g_num_predef_vars;

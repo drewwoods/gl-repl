@@ -10,13 +10,16 @@
 #define MAX_FLATTEN_CALL_DEPTH 64
 #define MAX_FLATTEN_VISIT_BUDGET 200000
 
-/* Editor-owns-text spike: read the source text for command index `i`
- * from the editor buffer rather than the GLCmd struct. Falls back to
- * the editor buffer line at index i, falling back to "" if unset. */
-static const char *spike_text_for(const GLCmd *src_cmd, int i) {
+/* Read the source text for command index `i` through the editor
+ * buffer view threaded into the flatten context, falling back to ""
+ * if unset. The view is supplied by `ReplFlattenOptions.text`; the
+ * GLCmd parameter is unused (kept for symmetry with earlier helpers
+ * before GLCmd carried no source text). */
+static const char *spike_text_for(EditorBufferView text,
+                                  const GLCmd *src_cmd, int i) {
     (void)src_cmd;
-    const char *text = editor_buffer_line(i);
-    return (text && text[0]) ? text : "";
+    const char *line = editor_buffer_view_line(text, i);
+    return (line && line[0]) ? line : "";
 }
 
 typedef struct {
@@ -26,6 +29,7 @@ typedef struct {
     FlatCmdLocalVars *flat_local_vars;
     int               flat_capacity;
     int               flat_count;
+    EditorBufferView  text;             /* editor source-text view for inline expansion */
     int               max_call_depth;
     int call_depth;
     int abort;
@@ -44,9 +48,10 @@ static void flatten_fail(FlattenContext *ctx, const char *msg) {
     ctx->abort = 1;
 }
 
-static void flatten_get_for_var_name(const GLCmd *cmd, int cmd_idx,
+static void flatten_get_for_var_name(EditorBufferView text,
+                                     const GLCmd *cmd, int cmd_idx,
                                      char *var, int var_sz) {
-    const char *p = spike_text_for(cmd, cmd_idx);
+    const char *p = spike_text_for(text, cmd, cmd_idx);
     while (*p && *p != '(') p++;
     if (*p) p++;
     while (*p && isspace((unsigned char)*p)) p++;
@@ -193,8 +198,8 @@ static void flatten_range(FlattenContext *ctx,
             float start_val = src_cmd->args[0];
             float end_val   = src_cmd->args[1];
             float step_val  = src_cmd->args[2];
-            const char *src_text = spike_text_for(src_cmd, i);
-            flatten_get_for_var_name(src_cmd, i, var_name, sizeof(var_name));
+            const char *src_text = spike_text_for(ctx->text, src_cmd, i);
+            flatten_get_for_var_name(ctx->text, src_cmd, i, var_name, sizeof(var_name));
 
             /* Re-evaluate for-loop bounds from source if they contain variables */
             if (src_cmd->has_vars) {
@@ -275,8 +280,8 @@ static void flatten_range(FlattenContext *ctx,
                     char arg_text[MAX_LINE_LEN];
                     float arg_vals[MAX_EXPR_VARS];
                     int arg_count = 0;
-                    const char *def_text = spike_text_for(def_cmd, k);
-                    const char *call_text = spike_text_for(src_cmd, i);
+                    const char *def_text = spike_text_for(ctx->text, def_cmd, k);
+                    const char *call_text = spike_text_for(ctx->text, src_cmd, i);
 
                     if (!parse_repl_func_signature(def_text, &def_fn,
                                                    param_names, MAX_EXPR_VARS,
@@ -336,7 +341,7 @@ static void flatten_range(FlattenContext *ctx,
             int if_end = flatten_repl_source_scope_find_block_end(ctx, i);
             char cond_text[MAX_LINE_LEN];
             int needs_local_eval = 0;
-            const char *src_text = spike_text_for(src_cmd, i);
+            const char *src_text = spike_text_for(ctx->text, src_cmd, i);
 
             if (vars && nv > 0 &&
                 repl_extract_paren_payload(src_text, cond_text, sizeof(cond_text)) &&
@@ -399,7 +404,7 @@ static void flatten_range(FlattenContext *ctx,
             float value = src_cmd->args[0];
             char rhs[MAX_LINE_LEN] = "";
             int local_rhs_vars = 0;
-            const char *src_text = spike_text_for(src_cmd, i);
+            const char *src_text = spike_text_for(ctx->text, src_cmd, i);
 
             if (repl_extract_assignment_parts(src_text, NULL, 0,
                                               rhs, sizeof(rhs)) && rhs[0]) {
@@ -427,7 +432,7 @@ static void flatten_range(FlattenContext *ctx,
 
         if (vars && nv > 0) {
             ReplParseContext parse_ctx = { i, vars, nv, 0 };
-            const char *text = spike_text_for(src_cmd, i);
+            const char *text = spike_text_for(ctx->text, src_cmd, i);
             ReplParsedLine tmp_pl;
             if (repl_parser_parse_command_ctx(text, &tmp_pl, &parse_ctx)) {
                 GLCmd tmp = tmp_pl.cmd;
@@ -440,7 +445,7 @@ static void flatten_range(FlattenContext *ctx,
         } else if (src_cmd->has_vars) {
             /* Outside loop but has predefined var references: re-evaluate */
             ReplParseContext parse_ctx = { i, NULL, 0, 0 };
-            const char *text = spike_text_for(src_cmd, i);
+            const char *text = spike_text_for(ctx->text, src_cmd, i);
             ReplParsedLine tmp_pl;
             if (repl_parser_parse_command_ctx(text, &tmp_pl, &parse_ctx)) {
                 GLCmd tmp = tmp_pl.cmd;
@@ -454,7 +459,7 @@ static void flatten_range(FlattenContext *ctx,
             /* Spike: re-parse the no-vars path too so we measure the
              * worst-case cost of an editor-owned text model. */
             ReplParseContext parse_ctx = { i, NULL, 0, 0 };
-            const char *text = spike_text_for(src_cmd, i);
+            const char *text = spike_text_for(ctx->text, src_cmd, i);
             ReplParsedLine tmp_pl;
             if (repl_parser_parse_command_ctx(text, &tmp_pl, &parse_ctx)) {
                 GLCmd tmp = tmp_pl.cmd;
@@ -498,6 +503,7 @@ int repl_flatten_program(const ReplFlattenOptions *options,
         .flat_local_vars = options ? options->flat_local_vars : NULL,
         .flat_capacity = options ? options->flat_capacity : 0,
         .flat_count = 0,
+        .text = options ? options->text : (EditorBufferView){0},
         .max_call_depth = options && options->max_call_depth > 0
                         ? options->max_call_depth : MAX_FLATTEN_CALL_DEPTH,
         .call_depth = 0,
@@ -538,6 +544,7 @@ void flatten_commands(void) {
         .flat_cmds = flat_program->cmds,
         .flat_local_vars = flat_program->local_vars,
         .flat_capacity = flat_program->capacity,
+        .text = editor_buffer_view(),
         .max_call_depth = MAX_FLATTEN_CALL_DEPTH,
         .visit_budget = MAX_FLATTEN_VISIT_BUDGET
     };
