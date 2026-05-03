@@ -171,6 +171,19 @@ static void apply_post_effects(const EditorCommitPostEffects *effects) {
 
     if (effects->clear_autocomplete)
         clear_autocomplete_state();
+
+    if (effects->func_decl_resume_publish)
+        editor_commit_func_decl_resume_set(effects->func_decl_resume_publish_value);
+}
+
+void editor_commit_func_decl_resume_set(int delta) {
+    /* The backing storage is still the legacy
+     * g_func_decl_resume_delta global living in repl_commit.c.
+     * Hidden behind repl_commit_func_decl_resume_delta_set so
+     * callers no longer form a cross-module protocol around the
+     * raw global. A later refactor (post-Phase D) collapses
+     * repl_commit.c's transient bookkeeping into editor_commit.c. */
+    repl_commit_func_decl_resume_delta_set(delta);
 }
 
 int editor_commit_apply_plan(const EditorCommitPlan *plan) {
@@ -476,7 +489,62 @@ ReplCompileResult editor_compile_if_block(const char *input,
     return REPL_COMPILE_OK;
 }
 
-/* ---- editor_compile_func_def (overwrite-only) ------------------- */
+/* ---- editor_compile_func_def ------------------------------------ */
+
+/* Walk backward from `pos` collecting depth-0 CMD_COMMENT lines.
+ * Mirrors the static function_leading_comment_start in repl_commit.c
+ * but reads from the compile-time context instead of live state. */
+static int compile_func_leading_comment_start(const ReplCompileContext *ctx,
+                                              int pos) {
+    int start = pos;
+    while (start > 0 &&
+           ctx->document_cmds[start - 1].valid &&
+           ctx->document_cmds[start - 1].type == CMD_COMMENT &&
+           repl_source_scope_block_depth_at(start - 1) == 0)
+        start--;
+    return start;
+}
+
+/* Walk function_decl_insert_pos's logic against a virtually-deleted
+ * document where indices [delete_pos, delete_pos+delete_count) are
+ * gone. Returns the insert position in post-delete coordinates.
+ *
+ * In the func_def relocation case, the deleted range is
+ * always contiguous depth-0 CMD_COMMENT lines that
+ * function_decl_insert_pos's walk would skip; the deleted indices
+ * therefore lie strictly outside the walk's stopping position.
+ * That keeps the math simple: walk normally, then translate by
+ * subtracting delete_count if the result was past the deleted
+ * range. */
+static int compile_function_decl_insert_pos_after_delete(
+        const ReplCompileContext *ctx, int delete_pos, int delete_count) {
+    const GLCmd *cmds = ctx->document_cmds;
+    int doc_count = ctx->document_count;
+
+    int pos = 0;
+    while (pos < doc_count && cmds[pos].type == CMD_VAR_DECLARE)
+        pos++;
+
+    while (pos < doc_count) {
+        if (cmds[pos].type == CMD_COMMENT) {
+            pos++;
+            continue;
+        }
+        if (cmds[pos].type != CMD_FUNC_DEF)
+            break;
+
+        int end = repl_source_scope_find_block_end(pos);
+        if (end >= doc_count)
+            return doc_count - delete_count;
+        pos = end + 1;
+    }
+
+    /* Translate to post-delete coordinates. By construction the
+     * deleted range never straddles `pos` (see comment above). */
+    if (delete_count > 0 && pos >= delete_pos + delete_count)
+        pos -= delete_count;
+    return pos;
+}
 
 ReplCompileResult editor_compile_func_def(const char *input,
                                           const ReplCompileContext *ctx,
@@ -528,43 +596,141 @@ ReplCompileResult editor_compile_func_def(const char *input,
         return REPL_COMPILE_ERROR;
     }
 
-    /* Phase D commit 26d migrates only the overwrite branch. The
-     * new-def-with-comment-relocation path (function_leading_comment
-     * relocation + g_func_decl_resume_delta publish) needs a
-     * delete-before-insert field on EditorCommitPlan + a
-     * publish-side post-effect; deferred to a follow-up commit.
-     * Falling through to legacy keeps behaviour intact. */
-    if (!overwriting_func) {
-        out->change.kind = REPL_COMPILED_NO_CHANGE;
+    /* Overwrite-header branch: REPLACE_ONE at the cursor line. */
+    if (overwriting_func) {
+        char indent[32];
+        repl_source_scope_cmd_indent(edit_pos, indent, sizeof(indent));
+
+        GLCmd updated = ctx->document_cmds[edit_pos];
+        updated.args[0] = (float)fn;
+        updated.num_args = param_count;
+
+        char fd_text[MAX_LINE_LEN];
+        format_func_header(fd_text, (int)sizeof(fd_text),
+                           indent, fn, param_names, param_count);
+
+        out->change.kind  = REPL_COMPILED_REPLACE_ONE;
+        out->change.pos   = edit_pos;
+        out->change.count = 1;
+        out->change.cmds[0] = updated;
+        snprintf(out->change.text[0], sizeof(out->change.text[0]),
+                 "%s", fd_text);
+
+        out->effects.cursor_target      = edit_pos + 1;
+        out->effects.insert_mode_target = 1;
+        out->effects.clear_input        = 1;
+        out->effects.clear_autocomplete = 1;
+
+        snprintf(out->commit_message, sizeof(out->commit_message),
+                 "func def header updated");
+        out->commit_message_valid = 1;
         return REPL_COMPILE_OK;
     }
 
-    char indent[32];
-    repl_source_scope_cmd_indent(edit_pos, indent, sizeof(indent));
+    /* New-func-def branch: insert + comment-relocation.
+     *
+     * The legacy code:
+     *   1. delete leading comments at [comment_start, edit_pos)
+     *   2. recompute function_decl_insert_pos against the
+     *      post-delete document
+     *   3. insert comments + fd + fe at the new position
+     *   4. publish g_func_decl_resume_delta = resume_pos - pos
+     *
+     * The compile path produces an EditorCommitPlan that expresses
+     * the same shape via the new delete_pos/delete_count fields and
+     * the func_decl_resume_publish post-effect. */
+    int comment_start = compile_func_leading_comment_start(ctx, edit_pos);
+    int comment_count = edit_pos - comment_start;
 
-    GLCmd updated = ctx->document_cmds[edit_pos];
-    updated.args[0] = (float)fn;
-    updated.num_args = param_count;
+    int insert_count = comment_count + 2;  /* comments + fd + fe */
+    if (insert_count > MAX_COMMIT_CMDS) {
+        snprintf(err, (size_t)err_size,
+                 "too many leading comments (%d > %d); split or shorten",
+                 comment_count, MAX_COMMIT_CMDS - 2);
+        return REPL_COMPILE_ERROR;
+    }
+
+    /* Build fd + fe before computing insert_pos so the indent
+     * reflects the doc state. fd lives at depth 0; the indent for
+     * a top-level decl is two spaces (legacy fill_scope_indent at a
+     * depth-0 position returns "  "). */
+    int insert_pos_pre_delete = -1;
+    {
+        /* Compute insert_pos as if no delete; used to fill `indent`
+         * via the source-scope helper at that pos. The result is
+         * post-delete via compile_function_decl_insert_pos_after_delete
+         * below, but the indent is the same either way (depth 0). */
+        insert_pos_pre_delete = 0;
+    }
+    char indent[32];
+    repl_source_scope_cmd_indent(insert_pos_pre_delete, indent, sizeof(indent));
+
+    GLCmd fd;
+    memset(&fd, 0, sizeof(fd));
+    fd.type = CMD_FUNC_DEF;
+    fd.args[0] = (float)fn;
+    fd.num_args = param_count;
+    fd.valid = 1;
 
     char fd_text[MAX_LINE_LEN];
     format_func_header(fd_text, (int)sizeof(fd_text),
                        indent, fn, param_names, param_count);
 
-    out->change.kind  = REPL_COMPILED_REPLACE_ONE;
-    out->change.pos   = edit_pos;
-    out->change.count = 1;
-    out->change.cmds[0] = updated;
-    snprintf(out->change.text[0], sizeof(out->change.text[0]),
-             "%s", fd_text);
+    GLCmd fe;
+    memset(&fe, 0, sizeof(fe));
+    fe.type = CMD_FUNC_END;
+    fe.valid = 1;
 
-    out->effects.cursor_target      = edit_pos + 1;
+    char fe_text[MAX_LINE_LEN];
+    snprintf(fe_text, sizeof(fe_text), "%s}", indent);
+
+    /* Resolve the post-delete insert position. */
+    int insert_pos = compile_function_decl_insert_pos_after_delete(
+        ctx, comment_start, comment_count);
+
+    /* Fill the change's cmds[] / text[] with comments + fd + fe.
+     * Comment text comes from the editor buffer view; the cmds
+     * themselves come from the document. */
+    EditorBufferView text_view = ctx->text;
+    for (int i = 0; i < comment_count; i++) {
+        out->change.cmds[i] = ctx->document_cmds[comment_start + i];
+        const char *line = editor_buffer_view_line(text_view,
+                                                   comment_start + i);
+        if (line)
+            repl_copy_string_fits(out->change.text[i],
+                                  sizeof(out->change.text[i]), line);
+    }
+    out->change.cmds[comment_count]     = fd;
+    out->change.cmds[comment_count + 1] = fe;
+    snprintf(out->change.text[comment_count],
+             sizeof(out->change.text[comment_count]), "%s", fd_text);
+    snprintf(out->change.text[comment_count + 1],
+             sizeof(out->change.text[comment_count + 1]), "%s", fe_text);
+
+    out->change.kind  = REPL_COMPILED_INSERT_MANY;
+    out->change.pos   = insert_pos;
+    out->change.count = insert_count;
+    out->change.delete_pos   = comment_count > 0 ? comment_start : -1;
+    out->change.delete_count = comment_count;
+
+    /* Resume bookkeeping. resume_pos is where the cursor would be in
+     * the post-delete document. Publish the delta so a subsequent
+     * close-brace's compile reads it. */
+    int resume_pos = edit_pos - comment_count;
+    int resume_delta = (resume_pos > insert_pos) ? (resume_pos - insert_pos) : 0;
+    out->effects.func_decl_resume_publish       = 1;
+    out->effects.func_decl_resume_publish_value = resume_delta;
+
+    /* Cursor lands on the first body line of the new func — that's
+     * insert_pos + comment_count + 1 in post-delete coordinates. */
+    out->effects.cursor_target      = insert_pos + comment_count + 1;
     out->effects.insert_mode_target = 1;
     out->effects.clear_input        = 1;
-    out->effects.clear_autocomplete = 1;
 
     snprintf(out->commit_message, sizeof(out->commit_message),
-             "func def header updated");
+             "func def: type body lines, press Esc when done");
     out->commit_message_valid = 1;
+
     return REPL_COMPILE_OK;
 }
 

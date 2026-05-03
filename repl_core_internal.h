@@ -271,6 +271,7 @@ int  repl_commit_resolve_insert_exit_target(int target);
  * portion into compile too, eliminating the global. */
 int  repl_commit_func_decl_resume_delta_take(void);   /* read + clear */
 int  repl_commit_func_decl_resume_delta_peek(void);   /* read only */
+void repl_commit_func_decl_resume_delta_set(int delta);
 int try_commit_float_decl(void);
 int try_assign_variable(void);
 int try_commit_for_loop(void);

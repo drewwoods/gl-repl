@@ -20,6 +20,7 @@
 #include "repl_command_store.h"
 #include "repl_compile.h"
 #include "repl_core.h"
+#include "repl_core_internal.h"  /* try_commit_*, repl_commit_func_decl_resume_delta_peek */
 #include "repl_eval.h"
 #include "repl_state.h"
 #include "ui_state.h"
@@ -461,6 +462,155 @@ static void test_orchestration_success_returns_message(void) {
                 repl_eval_find_predef_var_idx("energy") >= 0);
 }
 
+/* func_def comment-relocation: leading comments above the cursor
+ * get moved alongside the new func def block (delete + insert in
+ * one transaction). */
+static void test_func_def_comment_relocation(void) {
+    repl_reset_state();
+
+    /* Build doc:
+     *   line 0: glVertex3f(1, 0, 0);    (geometry above future func)
+     *   line 1: // descriptive comment   (top-level comment)
+     *   line 2: // continuation          (top-level comment)
+     *   cursor sits at line 3 (end of doc), about to define func0.
+     */
+    repl_feed_line_public("  glVertex3f(1, 0, 0);");
+    repl_feed_line_public("// descriptive comment");
+    repl_feed_line_public("// continuation");
+
+    int pre_doc_count = repl_state_document_count();
+    ASSERT_INT("pre-funcdef doc count", pre_doc_count, 3);
+
+    /* Commit a func_def. The compile path should:
+     *   - delete comments at [1, 2]
+     *   - insert {comment, comment, FUNC_DEF, FUNC_END} at the
+     *     post-delete function_decl_insert_pos (= 1 since vertex is
+     *     not a var-decl/comment/funcdef and stops the walk
+     *     immediately after var-decls).
+     * Wait: function_decl_insert_pos walks past var-decls then
+     * accepts CMD_COMMENT or CMD_FUNC_DEF as continuation. The
+     * vertex command is none of those, so it's a stopper. With no
+     * var-decls in our doc, the walk stops at index 0. */
+    set_input("func0() {");
+    EditorServices svc = editor_services_default();
+    EditorCommitResult ok = editor_commit_current_input(&svc);
+    /* func_def isn't in repl_compile_dispatch yet (it's an
+     * editor-side compile), so editor_commit_current_input returns
+     * NO_CHANGE. Use the legacy try_commit dispatcher (which
+     * forwards through editor_compile_func_def). */
+    if (!ok.consumed) {
+        /* Fall through to the legacy try_commit chain. */
+        try_commit_block_structs();
+    }
+
+    /* Post-commit doc shape:
+     *   - The two comments + fd + fe land at function_decl_insert_pos
+     *     = 0 (start of doc).
+     *   - The vertex shifts to index 4 (after the inserted block).
+     *   Total: 5 cmds.
+     */
+    int post_doc_count = repl_state_document_count();
+    ASSERT_INT("post-funcdef doc count", post_doc_count, 5);
+    ASSERT_INT("relocated comment 0",
+               repl_state_document_cmds()[0].type, CMD_COMMENT);
+    ASSERT_INT("relocated comment 1",
+               repl_state_document_cmds()[1].type, CMD_COMMENT);
+    ASSERT_INT("inserted func def",
+               repl_state_document_cmds()[2].type, CMD_FUNC_DEF);
+    ASSERT_INT("inserted func end",
+               repl_state_document_cmds()[3].type, CMD_FUNC_END);
+    ASSERT_INT("vertex shifted to end",
+               repl_state_document_cmds()[4].type, CMD_VERTEX3F);
+
+    /* The editor buffer mirrors the cmd-store with the same
+     * content. */
+    /* Comment text retains the canonical indent from feed_line. */
+    ASSERT_TRUE("buffer line 0 contains 'descriptive'",
+                strstr(editor_buffer_line(0), "descriptive") != NULL);
+    ASSERT_TRUE("buffer line 1 contains 'continuation'",
+                strstr(editor_buffer_line(1), "continuation") != NULL);
+    ASSERT_TRUE("buffer line 2 contains 'func0'",
+                strstr(editor_buffer_line(2), "func0") != NULL);
+    ASSERT_STR("buffer line 3 is closing brace",
+               editor_buffer_line(3), "  }");
+    ASSERT_STR("buffer line 4 is vertex",
+               editor_buffer_line(4), "  glVertex3f(1, 0, 0);");
+}
+
+/* Resume publish: when a func_def's relocation moves the original
+ * cursor position above the inserted block, the apply step
+ * publishes the delta so the matching close-brace's compile
+ * advances edit_line by that delta. */
+static void test_func_def_resume_publish_consumed_by_close_brace(void) {
+    repl_reset_state();
+
+    /* Build a doc where leading comments precede the cursor:
+     *   [0] // comment
+     *   cursor at 1, define func.
+     *
+     * After func def insert: comment + fd + fe at position 0.
+     * resume_pos = 1 - 1 = 0; insert_pos = 0; resume_delta = 0.
+     * That's a degenerate case; let's add a vertex above so the
+     * cursor sits past more state.
+     */
+    repl_feed_line_public("// header");
+    repl_feed_line_public("  glVertex3f(1, 0, 0);");
+
+    /* Move cursor between the vertex and a new comment. */
+    repl_feed_line_public("// before func");
+    int pre_count = repl_state_document_count();
+    ASSERT_INT("pre-funcdef count", pre_count, 3);
+
+    /* Now define func0. The leading comment "// before func" is at
+     * index 2 (depth 0). After delete: doc = [0:// header,
+     * 1:vertex]. function_decl_insert_pos walks: not a var_decl
+     * (header is a comment, allowed), step over comment, vertex is
+     * not a comment/funcdef → stops at 1 (post-delete index).
+     * Wait: function_decl_insert_pos starts after var-decls
+     * (none), then accepts CMD_COMMENT or CMD_FUNC_DEF. Comment at
+     * index 0 is stepped over → pos = 1. Vertex at 1 is the
+     * stopper → returns 1.
+     *
+     * So insert_pos = 1. resume_pos = 2 (edit_line) - 1 (count) =
+     * 1. resume_delta = max(0, 1 - 1) = 0. Hmm, still 0.
+     *
+     * Try a layout where insert_pos < resume_pos:
+     *   [0] // header
+     *   [1] // pre-vertex
+     *   [2] vertex
+     *   [3] // about to define func
+     *   cursor at 4.
+     * After delete of comment at [3,3]: insert_pos = 2
+     * (header, pre-vertex stepped over, vertex stops). resume_pos
+     * = 4 - 1 = 3. resume_delta = 3 - 2 = 1.
+     */
+    repl_reset_state();
+    repl_feed_line_public("// header");
+    repl_feed_line_public("// pre-vertex");
+    repl_feed_line_public("  glVertex3f(1, 0, 0);");
+    repl_feed_line_public("// about to define func");
+
+    set_input("func0() {");
+    /* Drive the migration through try_commit_block_structs since
+     * func_def isn't in repl_compile_dispatch yet. */
+    try_commit_block_structs();
+
+    /* After the migration, repl_commit_func_decl_resume_delta_peek
+     * should reflect the published delta. */
+    int published = repl_commit_func_decl_resume_delta_peek();
+    ASSERT_INT("resume delta published by func_def", published, 1);
+
+    /* Close the func block. The compile reads the delta (peek);
+     * since end_type is CMD_FUNC_END, take + advance fires. */
+    set_input("}");
+    try_commit_close_brace();
+
+    /* The global is consumed (cleared) on FUNC_END close. */
+    int post_consume = repl_commit_func_decl_resume_delta_peek();
+    ASSERT_INT("resume delta cleared after func close-brace",
+               post_consume, 0);
+}
+
 int main(void) {
     test_compile_float_decl_failure_is_pure();
     test_compile_var_assign_failure_is_pure();
@@ -472,6 +622,8 @@ int main(void) {
     test_orchestration_compile_failure_returns_diagnostic();
     test_orchestration_no_change_falls_through();
     test_orchestration_success_returns_message();
+    test_func_def_comment_relocation();
+    test_func_def_resume_publish_consumed_by_close_brace();
 
     return test_harness_report(&g_harness, "test_repl_compile");
 }

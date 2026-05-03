@@ -40,6 +40,8 @@ void repl_compiled_change_init(ReplCompiledChange *out) {
     out->kind = REPL_COMPILED_NO_CHANGE;
     out->pos = 0;
     out->count = 0;
+    out->delete_pos = -1;
+    out->delete_count = 0;
 }
 
 ReplCompileContext repl_compile_context_from_live(void) {

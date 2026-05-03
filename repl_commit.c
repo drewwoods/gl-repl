@@ -18,40 +18,10 @@
 
 static int g_func_decl_resume_delta = 0;
 
-static int function_decl_insert_pos(void) {
-    int pos = 0;
-
-    while (pos < repl_state_document_count() && repl_state_document_cmds_mut()[pos].type == CMD_VAR_DECLARE)
-        pos++;
-
-    while (pos < repl_state_document_count()) {
-        if (repl_state_document_cmds_mut()[pos].type == CMD_COMMENT) {
-            pos++;
-            continue;
-        }
-        if (repl_state_document_cmds_mut()[pos].type != CMD_FUNC_DEF)
-            break;
-
-        int end = repl_source_scope_find_block_end(pos);
-        if (end >= repl_state_document_count())
-            return repl_state_document_count();
-        pos = end + 1;
-    }
-
-    return pos;
-}
-
-static int function_leading_comment_start(int pos) {
-    int start = pos;
-
-    while (start > 0 &&
-           repl_state_document_cmds_mut()[start - 1].valid &&
-           repl_state_document_cmds_mut()[start - 1].type == CMD_COMMENT &&
-           repl_source_scope_block_depth_at(start - 1) == 0)
-        start--;
-
-    return start;
-}
+/* function_decl_insert_pos / function_leading_comment_start
+ * removed: try_commit_func_def's full migration to compile/apply
+ * (Phase D commit 26f) lives in editor_commit.c, where the helpers
+ * read from the compile-time context. */
 
 /* apply_func_decl_resume removed: callers (close_brace) now route
  * through editor_commit_apply_plan which consumes the delta as part
@@ -70,9 +40,13 @@ int repl_commit_func_decl_resume_delta_take(void) {
     return delta;
 }
 
-static void fill_scope_indent(int pos, char *buf, int buf_sz) {
-    repl_source_scope_cmd_indent(pos, buf, buf_sz);
+void repl_commit_func_decl_resume_delta_set(int delta) {
+    g_func_decl_resume_delta = delta;
 }
+
+/* fill_scope_indent removed: was a one-liner wrapper around
+ * repl_source_scope_cmd_indent used only by structured-block
+ * handlers, all now migrated to editor_commit.c. */
 
 /* fill_scope_close_indent removed: close_brace migrated to
  * editor_compile_close_brace which has its own static
@@ -294,191 +268,41 @@ int try_commit_for_loop(void) {
 }
 
 int try_commit_func_def(void) {
-    /* Phase D commit 26d (partial migration):
-     * - editor_compile_func_def handles validation + the
-     *   overwrite-header branch through compile/apply.
-     * - The new-def-with-comment-relocation branch (which needs
-     *   a delete-before-insert plan field + g_func_decl_resume_delta
-     *   publish-side post-effect) stays inline for now and runs
-     *   only when the compile step returns NO_CHANGE without a
-     *   commit_message (i.e. valid func decl input but not an
-     *   overwrite context).
+    /* Phase D commit 26f: full migration through compile/apply.
+     *
+     * editor_compile_func_def now handles both branches:
+     *   - Overwrite header (cursor on existing CMD_FUNC_DEF in
+     *     non-insert mode): REPLACE_ONE plan.
+     *   - New func def with leading-comment relocation:
+     *     INSERT_MANY plan with delete_pos / delete_count for the
+     *     comment range and func_decl_resume_publish for the
+     *     post-effect that publishes resume_delta into the
+     *     close-brace bookkeeping.
      */
-    {
-        ReplCompileContext compile_ctx = repl_compile_context_from_live();
-        EditorCommitPlan plan;
-        char err[REPL_STATUS_TEXT_MAX];
-        ReplCompileResult r = editor_compile_func_def(editor_state_input().input,
-                                                      &compile_ctx, &plan,
-                                                      err, sizeof(err));
-        if (r == REPL_COMPILE_ERROR) {
-            set_status(err);
-            return 1;
-        }
-        if (plan.commit_message_valid) {
-            /* Overwrite-header path — compile produced a complete
-             * plan. Apply and we're done. */
-            if (!editor_commit_apply_plan(&plan)) {
-                set_status("Command buffer full!");
-                return 1;
-            }
-            mark_normals_dirty();
-            return 1;
-        }
-        /* NO_CHANGE without commit_message → fall through to the
-         * legacy path below. */
-    }
+    ReplCompileContext ctx = repl_compile_context_from_live();
+    EditorCommitPlan plan;
+    char err[REPL_STATUS_TEXT_MAX];
 
-    int fn = -1;
-    int param_count = 0;
-    char param_names[MAX_EXPR_VARS][16];
-    const char *trimmed = editor_state_input().input;
-
-    while (*trimmed && isspace((unsigned char)*trimmed))
-        trimmed++;
-    if (strchr(trimmed, '(') && strchr(trimmed, '{') == NULL)
-        return 0;
-    if (!parse_repl_func_signature(editor_state_input().input, &fn,
-                                   param_names, MAX_EXPR_VARS,
-                                   &param_count))
-        return 0;
-
-    {
-        int edit_pos = editor_insert_mode() ? repl_state_edit_line() :
-                       (repl_state_edit_line() < repl_state_document_count() ? repl_state_edit_line() : repl_state_document_count());
-        int overwriting_func = (!editor_insert_mode() && edit_pos < repl_state_document_count() &&
-                                repl_state_document_cmds_mut()[edit_pos].type == CMD_FUNC_DEF);
-
-        /* Reject duplicate func definitions: each func<N> may only be defined
-         * once.  Overwriting the existing definition (cursor already on that
-         * line) is still allowed. */
-        for (int ei = 0; ei < repl_state_document_count(); ei++) {
-            if (!repl_state_document_cmds_mut()[ei].valid) continue;
-            if (repl_state_document_cmds_mut()[ei].type != CMD_FUNC_DEF) continue;
-            if ((int)repl_state_document_cmds_mut()[ei].args[0] != fn) continue;
-            if (overwriting_func && ei == edit_pos) continue;
-            char buf[64];
-            snprintf(buf, sizeof(buf),
-                     "func%d already defined (line %d)", fn, ei + 1);
-            set_status(buf);
-            return 1;
-        }
-
-        int pos = overwriting_func ? edit_pos : function_decl_insert_pos();
-        char indent[32];
-        GLCmd fd;
-        GLCmd fe;
-        ReplCommandStore store = repl_command_store_live();
-        char fd_text[MAX_LINE_LEN] = "";
-        char fe_text[MAX_LINE_LEN] = "";
-
-        fill_scope_indent(pos, indent, sizeof(indent));
-
-        if (overwriting_func) {
-            GLCmd updated = repl_state_document_cmds_mut()[edit_pos];
-            updated.args[0] = (float)fn;
-            updated.num_args = param_count;
-            format_func_header(fd_text, (int)sizeof(fd_text),
-                               indent, fn, param_names, param_count);
-            if (repl_command_store_replace_one(&store, edit_pos, &updated))
-                editor_buffer_replace_line(edit_pos, fd_text);
-            repl_state_edit_line_set(edit_pos + 1);
-            editor_insert_mode_set(1);
-            {
-                ReplEditorInputState *inp = editor_state_input_mut();
-                inp->input[0] = '\0';
-                inp->input_len = 0;
-            }
-            editor_cursor_pos_set(0);
-            clear_autocomplete_state();
-            set_status("func def header updated");
-            mark_normals_dirty();
-            return 1;
-        }
-
-        memset(&fd, 0, sizeof(fd));
-        fd.type = CMD_FUNC_DEF;
-        fd.args[0] = (float)fn;
-        fd.num_args = param_count;
-        fd.valid = 1;
-        format_func_header(fd_text, (int)sizeof(fd_text),
-                           indent, fn, param_names, param_count);
-
-        memset(&fe, 0, sizeof(fe));
-        fe.type = CMD_FUNC_END;
-        fe.valid = 1;
-        snprintf(fe_text, sizeof(fe_text), "%s}", indent);
-
-        int comment_start = edit_pos;
-        int comment_count = 0;
-        int resume_pos = edit_pos;
-        char (*comment_lines)[MAX_LINE_LEN] = NULL;
-        const char *insert_lines[MAX_COMMANDS];
-
-        if (!overwriting_func) {
-            comment_start = function_leading_comment_start(edit_pos);
-            comment_count = edit_pos - comment_start;
-            if (comment_count > 0) {
-                EditorBufferView text = editor_buffer_view();
-                comment_lines = malloc((size_t)comment_count * sizeof(*comment_lines));
-                if (!comment_lines) {
-                    set_status("Out of memory");
-                    return 1;
-                }
-                for (int comment_idx = 0; comment_idx < comment_count; comment_idx++)
-                    repl_copy_string_fits(comment_lines[comment_idx], MAX_LINE_LEN,
-                                          editor_buffer_view_line(text,
-                                                                  comment_start + comment_idx));
-            }
-        }
-
-        int insert_count = comment_count + 2;
-        GLCmd *insert_cmds = (GLCmd *)malloc((size_t)insert_count * sizeof(*insert_cmds));
-        if (!insert_cmds) {
-            free(comment_lines);
-            set_status("Out of memory");
-            return 1;
-        }
-        if (comment_count > 0) {
-            memcpy(insert_cmds, &repl_state_document_cmds_mut()[comment_start],
-                   (size_t)comment_count * sizeof(*insert_cmds));
-            repl_command_store_delete_range(&store, comment_start, comment_count);
-            editor_buffer_delete_range(comment_start, comment_count);
-            resume_pos = edit_pos - comment_count;
-        }
-
-        pos = function_decl_insert_pos();
-        insert_cmds[comment_count] = fd;
-        insert_cmds[comment_count + 1] = fe;
-        for (int comment_idx = 0; comment_idx < comment_count; comment_idx++)
-            insert_lines[comment_idx] = comment_lines[comment_idx];
-        insert_lines[comment_count] = fd_text;
-        insert_lines[comment_count + 1] = fe_text;
-        if (!repl_command_store_insert_many(&store, pos, insert_cmds,
-                                            insert_count, 0)) {
-            free(comment_lines);
-            free(insert_cmds);
-            set_status("Command buffer full!");
-            return 1;
-        }
-        editor_buffer_insert_lines(pos, insert_lines, insert_count);
-        g_func_decl_resume_delta = resume_pos > pos ? resume_pos - pos : 0;
-        free(comment_lines);
-        free(insert_cmds);
-
-        repl_state_edit_line_set(pos + comment_count + 1);
-        editor_insert_mode_set(1);
-        {
-            ReplEditorInputState *inp = editor_state_input_mut();
-            inp->input[0] = '\0';
-            inp->input_len = 0;
-        }
-        editor_cursor_pos_set(0);
-        set_status("func def: type body lines, press Esc when done");
-        mark_normals_dirty();
+    ReplCompileResult r = editor_compile_func_def(editor_state_input().input,
+                                                  &ctx, &plan,
+                                                  err, sizeof(err));
+    if (r == REPL_COMPILE_OK &&
+        plan.change.kind == REPL_COMPILED_NO_CHANGE &&
+        !plan.commit_message_valid)
+        return 0;  /* not a func decl input */
+    if (r != REPL_COMPILE_OK) {
+        set_status(err);
         return 1;
     }
+
+    if (!editor_commit_apply_plan(&plan)) {
+        set_status("Command buffer full!");
+        return 1;
+    }
+    mark_normals_dirty();
+    return 1;
 }
+
 
 int try_commit_if_block(void) {
     /* Phase D commit 26c migration: dispatch through the

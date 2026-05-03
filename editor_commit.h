@@ -158,6 +158,16 @@ typedef struct EditorCommitPostEffects_s {
      * clear_autocomplete_state() side-effect on header-replace
      * paths). */
     int clear_autocomplete;
+
+    /* Publish a value into the func-decl-resume bookkeeping. When
+     * `func_decl_resume_publish` is non-zero the apply step writes
+     * `func_decl_resume_publish_value` via
+     * `editor_commit_func_decl_resume_set` so a subsequent
+     * close-brace's compile reads it. The setter encapsulates the
+     * legacy `g_func_decl_resume_delta` global so it stops being a
+     * cross-module protocol. */
+    int func_decl_resume_publish;
+    int func_decl_resume_publish_value;
 } EditorCommitPostEffects;
 
 typedef struct EditorCommitPlan_s {
@@ -171,6 +181,13 @@ typedef struct EditorCommitPlan_s {
  * side, "no change" sentinels on every editor effect. Callers
  * fill in the fields they need. */
 void editor_commit_plan_init(EditorCommitPlan *plan);
+
+/* Publish a value into the func-decl-resume bookkeeping. Called
+ * by editor_commit_apply_plan when
+ * `effects.func_decl_resume_publish` is set. Encapsulates the
+ * legacy g_func_decl_resume_delta global so callers stop poking
+ * at it directly. */
+void editor_commit_func_decl_resume_set(int delta);
 
 /* Apply an EditorCommitPlan atomically:
  *   1. Preflight `plan->change` via repl_apply_can_apply_compiled_change.

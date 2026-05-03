@@ -67,11 +67,16 @@ typedef enum {
 } ReplCompiledChangeKind;
 
 /* The maximum number of cmds a single compile call can describe.
- * Float decls and assignments produce a single cmd; structured-block
- * commits in Phase C commit 20 raise this to cover for-loop bodies
- * (start + body + end). */
+ * Float decls and assignments produce a single cmd; for-loop
+ * one-liners produce 3 (begin + body + end); func_def with leading
+ * comment relocation produces N comments + begin + end where N is
+ * the count of contiguous depth-0 comments above the cursor.
+ *
+ * Set to 16 so practical func_def relocation cases (typical 0-4
+ * leading comments) fit comfortably; deeper comment blocks are
+ * rejected with a diagnostic in editor_compile_func_def. */
 #ifndef MAX_COMMIT_CMDS
-#define MAX_COMMIT_CMDS 4
+#define MAX_COMMIT_CMDS 16
 #endif
 
 /* Predef-variable side-effects produced by compile. The apply step
@@ -113,6 +118,22 @@ typedef struct ReplCompiledChange_s {
     int                    adjust_edit_line;
     GLCmd                  cmds[MAX_COMMIT_CMDS];
     char                   text[MAX_COMMIT_CMDS][MAX_LINE_LEN];
+
+    /* Optional pre-insert delete: when delete_count > 0, apply
+     * deletes `delete_count` source commands starting at
+     * `delete_pos` BEFORE running the main change. The combined
+     * shape is "delete a range, then INSERT_MANY at a new
+     * position" expressed as one atomic plan.
+     *
+     * Important convention: `pos` is interpreted in the
+     * **post-delete** document. compile is responsible for
+     * translating any insert position into post-delete
+     * coordinates so apply does not redo the math.
+     *
+     * Sentinel: delete_pos = -1, delete_count = 0 means no delete.
+     */
+    int                    delete_pos;
+    int                    delete_count;
 
     /* Predef-variable side-effects, replayed by the apply step. */
     ReplPredefOp           predef_ops[MAX_PREDEF_OPS_PER_COMMIT];
