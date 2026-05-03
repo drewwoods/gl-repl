@@ -1,39 +1,34 @@
 #ifndef UI_STATE_H
 #define UI_STATE_H
 
-/* EDITOR_OWNERSHIP_TODO(phase-5): break this include. ui_state.h
- * shouldn't depend on repl_state's view header — it inverts the
- * ownership relationship the three-layer contract is trying to
+/* EDITOR_OWNERSHIP_TODO: break this include. ui_state.h shouldn't
+ * depend on repl_state's view header — it inverts the ownership
+ * relationship the M/V/C+compiler+router contract is trying to
  * establish. The dependency exists today because ReplStatusState /
  * ReplHelpState / ReplVariablePanelState / ReplProfilePanelState /
  * ReplViewportState / ReplPointerState typedefs still live in
- * repl_state_views.h. The Phase 5 rename relocates the typedefs to a
- * ui-owned header (likely a new ui_state_types.h) and this include
- * goes away. The ratchet at scripts/check-editor-ownership-budget.sh
- * forbids the include count from growing in the meantime. */
+ * repl_state_views.h. The Phase H typedef relocation moves the
+ * typedefs to a ui-owned header (likely a new ui_state_types.h) and
+ * this include goes away. The ratchet at
+ * scripts/check-editor-ownership-budget.sh forbids the include count
+ * from growing in the meantime. */
 #include "repl_state_views.h"  /* ReplStatusState, ReplHelpState, etc. */
 
 /* UiState owns transient chrome, viewport, pointer, status text,
- * visibility flags, and the 3D-viewport session per the three-layer
- * ownership contract in MODULES.md and
- * feature/editor-owns-text-completion.md.
+ * code-panel render chrome, and camera viewport pose.
  *
- * Phase 1 progress:
- *   commit  3: scaffold (placeholder struct).
- *   commit  8: status / help / variable_panel / profile_panel /
- *              viewport / pointer slices.
- *   commit 12: code_panel chrome (panel divider, cursor blink, cursor px/py).
- *   commit 13: camera viewport pose (rx/ry/dist/tx/ty/tz/motion_glow,
- *              plus the auto_rotate config that sits on the same struct).
+ * UI is a view/hit-test layer. It should render snapshots and return
+ * UiHit results. imrepl_ctrl routes those hits to the owning
+ * subsystem (editor, variable panel, replay, scene/viewport). UI
+ * should not own editor behavior or mutate editor/REPL state
+ * directly.
  *
- * Naming asymmetry vs. EditorState: the new canonical accessors here
- * use the `ui_state_*` prefix, but the legacy `repl_state_*` names
- * remain alive as one-line forwarders defined in repl_state.c. The
- * forwarders exist because `check-controller-boundaries` forbids most
- * `repl_*.c` callers from including `ui_state.h`; the legacy names
- * stay in repl_state_owners.h and resolve at link time to the
- * forwarders. Phase A commit 14 deletes the forwarder block once
- * the remaining callers move to the canonical `ui_state_*` API.
+ * See feature/editor-text-model-controller.md and MODULES.md for the
+ * authoritative contract. The forwarder block that previously kept
+ * the legacy `repl_state_*` chrome accessors alive was deleted in
+ * Phase A commit 14; non-allowlisted repl_*.c callers forward-
+ * declare the few accessors they need, and the rest of the tree
+ * uses the canonical `ui_state_*` API directly.
  */
 
 typedef struct {
