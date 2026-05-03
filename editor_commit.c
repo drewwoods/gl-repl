@@ -987,3 +987,348 @@ int editor_commit_apply_compiled_change(const struct ReplCompiledChange_s *chang
     svc.apply_repl_change(change, svc.user);
     return 1;
 }
+
+/* ===========================================================================
+ * Commit dispatcher chain (moved from repl_commit.c — Phase H.5 commit 39).
+ *
+ * The corrected M/V/C+compiler+router contract has the editor attempt
+ * a commit and the REPL act as a pure parser/validator. These
+ * `try_commit_*` dispatchers decide which compile entry to call,
+ * apply the resulting plan, and own the editor post-effect /
+ * status fan-out — that is editor-side orchestration, not REPL
+ * grammar.
+ *
+ * For commit 39 the bodies move verbatim. Commit 40 untangles
+ * status-string side effects so parse failures return data instead
+ * of poking set_status from inside the REPL path. Commit 41 deletes
+ * `repl_commit.c` once the symbol-rename pass catches the public
+ * `try_commit_*` names up to their `editor_*` destinations.
+ * ===========================================================================
+ */
+
+/* Editor-orchestration scratch: the func-decl-resume delta is
+ * tracked between a CMD_FUNC_DEF commit (which publishes the delta
+ * via editor_commit_func_decl_resume_set) and the matching close-
+ * brace / Enter-out-of-func that consumes it. The state is
+ * file-private now that all readers/writers live in this TU. */
+static int g_func_decl_resume_delta = 0;
+
+int repl_commit_func_decl_resume_delta_peek(void) {
+    return g_func_decl_resume_delta;
+}
+
+int repl_commit_func_decl_resume_delta_take(void) {
+    int delta = g_func_decl_resume_delta;
+    g_func_decl_resume_delta = 0;
+    return delta;
+}
+
+void repl_commit_func_decl_resume_delta_set(int delta) {
+    g_func_decl_resume_delta = delta;
+}
+
+int repl_commit_resolve_insert_exit_target(int target) {
+    if (!editor_insert_mode() ||
+        g_func_decl_resume_delta <= 0 ||
+        repl_state_edit_line() < 0 ||
+        repl_state_edit_line() >= repl_state_document_count() ||
+        repl_state_document_cmds_mut()[repl_state_edit_line()].type != CMD_FUNC_END)
+        return target;
+
+    if (target == repl_state_edit_line()) {
+        target += g_func_decl_resume_delta;
+        if (target > repl_state_document_count())
+            target = repl_state_document_count();
+    }
+
+    g_func_decl_resume_delta = 0;
+    return target;
+}
+
+void repl_commit_reset_transients(void) {
+    g_func_decl_resume_delta = 0;
+}
+
+/* --- Float-decl commit --- */
+
+static int apply_float_decl_change(const ReplCompiledChange *change) {
+    if (!editor_commit_apply_compiled_change(change)) {
+        set_status("Command buffer full!");
+        return 1;
+    }
+
+    if (change->kind == REPL_COMPILED_REPLACE_ONE) {
+        repl_state_edit_line_set(repl_state_edit_line() + 1);
+        load_line_to_input(repl_state_edit_line());
+    } else if (change->kind == REPL_COMPILED_INSERT_ONE) {
+        if (!editor_insert_mode() &&
+            repl_state_edit_line() < repl_state_document_count())
+            load_line_to_input(repl_state_edit_line());
+    }
+
+    if (change->commit_message[0])
+        set_status(change->commit_message);
+    {
+        ReplEditorInputState *inp = editor_state_input_mut();
+        inp->input[0] = '\0';
+        inp->input_len = 0;
+    }
+    editor_cursor_pos_set(0);
+    mark_normals_dirty();
+    return 1;
+}
+
+int try_commit_float_decl(void) {
+    ReplCompileContext ctx = repl_compile_context_from_live();
+    ReplCompiledChange change;
+    char err[REPL_STATUS_TEXT_MAX];
+
+    ReplCompileResult result = repl_compile_float_decl(
+        editor_state_input().input, &ctx, &change, err, sizeof(err));
+    if (result == REPL_COMPILE_OK && change.kind == REPL_COMPILED_NO_CHANGE)
+        return 0;
+    if (result != REPL_COMPILE_OK) {
+        set_status(err);
+        return 1;
+    }
+    return apply_float_decl_change(&change);
+}
+
+/* --- Var-assign commit --- */
+
+static int apply_var_assign_change(const ReplCompiledChange *change) {
+    /* Var-decl-overwrite cascade: when an assign targets a slot that
+     * currently holds a CMD_VAR_DECLARE, replay the float-decl-style
+     * undeclare cascade so referenced names stay valid. Phase H.5
+     * commit 40 absorbs this into compile_var_assign so the predef
+     * op plan covers it directly. */
+    if (change->kind == REPL_COMPILED_REPLACE_ONE &&
+        change->pos < repl_state_document_count() &&
+        repl_state_document_cmds_mut()[change->pos].type == CMD_VAR_DECLARE) {
+        EditorBufferView text = editor_buffer_view();
+        const GLCmd *old_decl = &repl_state_document_cmds_mut()[change->pos];
+        for (int decl_idx = 0; decl_idx < old_decl->var_decl_count; decl_idx++) {
+            const char *nm = old_decl->var_names[decl_idx];
+            for (int cmd_idx = 0; cmd_idx < repl_state_document_count(); cmd_idx++) {
+                if (cmd_idx == change->pos) continue;
+                const char *line = editor_buffer_view_line(text, cmd_idx);
+                if (repl_eval_source_uses_ident(line ? line : "", nm)) {
+                    char buf[128];
+                    snprintf(buf, sizeof(buf),
+                             "variable '%s' is in use, cannot overwrite", nm);
+                    set_status(buf);
+                    return 1;
+                }
+            }
+        }
+        for (int decl_idx = 0; decl_idx < old_decl->var_decl_count; decl_idx++) {
+            const char *nm = old_decl->var_names[decl_idx];
+            int slot = repl_eval_find_predef_var_idx(nm);
+            if (slot < 0) continue;
+            repl_eval_undeclare_predef_var(nm);
+            for (int cmd_idx = 0; cmd_idx < repl_state_document_count(); cmd_idx++) {
+                if (repl_state_document_cmds_mut()[cmd_idx].type == CMD_VAR_ASSIGN &&
+                    repl_state_document_cmds_mut()[cmd_idx].num_args > slot)
+                    repl_state_document_cmds_mut()[cmd_idx].num_args--;
+            }
+        }
+    }
+
+    if (!editor_commit_apply_compiled_change(change)) {
+        set_status("Command buffer full!");
+        return 1;
+    }
+
+    if (change->kind == REPL_COMPILED_INSERT_ONE) {
+        if (change->pos == repl_state_document_count() - 1) {
+            repl_state_edit_line_set(repl_state_document_count());
+        } else if (editor_insert_mode()) {
+            repl_state_edit_line_set(repl_state_edit_line() + 1);
+        }
+    } else if (change->kind == REPL_COMPILED_REPLACE_ONE) {
+        repl_state_edit_line_set(repl_state_edit_line() + 1);
+        load_line_to_input(repl_state_edit_line());
+    }
+
+    if (change->commit_message[0])
+        set_status(change->commit_message);
+    {
+        ReplEditorInputState *inp = editor_state_input_mut();
+        inp->input[0] = '\0';
+        inp->input_len = 0;
+    }
+    editor_cursor_pos_set(0);
+    mark_normals_dirty();
+    return 1;
+}
+
+int try_assign_variable(void) {
+    ReplCompileContext ctx = repl_compile_context_from_live();
+    ReplCompiledChange change;
+    char err[REPL_STATUS_TEXT_MAX];
+
+    ReplCompileResult result = repl_compile_var_assign(
+        editor_state_input().input, &ctx, &change, err, sizeof(err));
+    if (result == REPL_COMPILE_OK && change.kind == REPL_COMPILED_NO_CHANGE)
+        return 0;
+    if (result != REPL_COMPILE_OK) {
+        set_status(err);
+        return 1;
+    }
+    return apply_var_assign_change(&change);
+}
+
+/* --- Structured-block commits: each delegates to its editor_compile_*
+ * partner and applies the resulting plan via editor_commit_apply_plan. --- */
+
+int try_commit_for_loop(void) {
+    ReplCompileContext ctx = repl_compile_context_from_live();
+    EditorCommitPlan plan;
+    char err[REPL_STATUS_TEXT_MAX];
+
+    ReplCompileResult r = editor_compile_for_loop(editor_state_input().input,
+                                                  &ctx, &plan,
+                                                  err, sizeof(err));
+    if (r == REPL_COMPILE_OK &&
+        plan.change.kind == REPL_COMPILED_NO_CHANGE &&
+        !plan.commit_message_valid)
+        return 0;
+    if (r != REPL_COMPILE_OK) {
+        set_status(err);
+        return 1;
+    }
+    if (!editor_commit_apply_plan(&plan)) {
+        set_status("Command buffer full!");
+        return 1;
+    }
+    mark_normals_dirty();
+    return 1;
+}
+
+int try_commit_func_def(void) {
+    ReplCompileContext ctx = repl_compile_context_from_live();
+    EditorCommitPlan plan;
+    char err[REPL_STATUS_TEXT_MAX];
+
+    ReplCompileResult r = editor_compile_func_def(editor_state_input().input,
+                                                  &ctx, &plan,
+                                                  err, sizeof(err));
+    if (r == REPL_COMPILE_OK &&
+        plan.change.kind == REPL_COMPILED_NO_CHANGE &&
+        !plan.commit_message_valid)
+        return 0;
+    if (r != REPL_COMPILE_OK) {
+        set_status(err);
+        return 1;
+    }
+    if (!editor_commit_apply_plan(&plan)) {
+        set_status("Command buffer full!");
+        return 1;
+    }
+    mark_normals_dirty();
+    return 1;
+}
+
+int try_commit_if_block(void) {
+    ReplCompileContext ctx = repl_compile_context_from_live();
+    EditorCommitPlan plan;
+    char err[REPL_STATUS_TEXT_MAX];
+
+    ReplCompileResult r = editor_compile_if_block(editor_state_input().input,
+                                                  &ctx, &plan,
+                                                  err, sizeof(err));
+    if (r == REPL_COMPILE_OK &&
+        plan.change.kind == REPL_COMPILED_NO_CHANGE &&
+        !plan.commit_message_valid)
+        return 0;
+    if (r != REPL_COMPILE_OK) {
+        set_status(err);
+        return 1;
+    }
+    if (!editor_commit_apply_plan(&plan)) {
+        set_status("Command buffer full!");
+        return 1;
+    }
+    mark_normals_dirty();
+    return 1;
+}
+
+int try_commit_close_brace(void) {
+    ReplCompileContext ctx = repl_compile_context_from_live();
+    EditorCommitPlan plan;
+    char err[REPL_STATUS_TEXT_MAX];
+
+    ReplCompileResult r = editor_compile_close_brace(editor_state_input().input,
+                                                     &ctx, &plan,
+                                                     err, sizeof(err));
+    if (r == REPL_COMPILE_OK &&
+        plan.change.kind == REPL_COMPILED_NO_CHANGE &&
+        !plan.commit_message_valid)
+        return 0;
+    if (r != REPL_COMPILE_OK) {
+        set_status(err);
+        return 1;
+    }
+    if (!editor_commit_apply_plan(&plan)) {
+        set_status("Command buffer full!");
+        return 1;
+    }
+    mark_normals_dirty();
+    return 1;
+}
+
+/* --- Higher-order dispatchers --- */
+
+/* Block-structural commit handlers: `}`, `for(`, `funcN`, `if(`. */
+int try_commit_block_structs(void) {
+    if (try_commit_close_brace()) return 1;
+    if (try_commit_for_loop())    return 1;
+    if (try_commit_func_def())    return 1;
+    if (try_commit_if_block())    return 1;
+    return 0;
+}
+
+/* Statement-level commit handlers. float decl MUST precede assign so
+ * that `float x` is not misread as an assignment to "float". */
+int try_commit_var_statements(void) {
+    if (try_commit_float_decl())  return 1;
+    if (try_assign_variable())    return 1;
+    return 0;
+}
+
+int try_commit_any(void) {
+    if (try_commit_var_statements()) return 1;
+    if (try_commit_block_structs())  return 1;
+    return 0;
+}
+
+/* Overwrite-mode Enter variant: on successful var-statement commit,
+ * enter insert mode and clear the input. Assign additionally
+ * publishes "Insert mode" status and marks normals dirty. */
+int try_commit_var_statements_then_insert(void) {
+    if (try_commit_float_decl()) {
+        editor_insert_mode_set(1);
+        {
+            ReplEditorInputState *inp = editor_state_input_mut();
+            inp->input[0] = '\0';
+            inp->input_len = 0;
+        }
+        editor_cursor_pos_set(0);
+        clear_autocomplete_state();
+        return 1;
+    }
+    if (try_assign_variable()) {
+        editor_insert_mode_set(1);
+        {
+            ReplEditorInputState *inp = editor_state_input_mut();
+            inp->input[0] = '\0';
+            inp->input_len = 0;
+        }
+        editor_cursor_pos_set(0);
+        clear_autocomplete_state();
+        set_status("Insert mode");
+        mark_normals_dirty();
+        return 1;
+    }
+    return 0;
+}
