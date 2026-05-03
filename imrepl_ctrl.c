@@ -30,6 +30,7 @@
 #include "variable_panel.h"
 #include "replay_state.h"
 #include "repl_audio.h"
+#include "repl_camera_controls.h"
 #include "prof.h"
 
 static int imrepl_ctrl_cmd_is_focus_vertex(const GLCmd *cmd) {
@@ -708,6 +709,81 @@ void imrepl_ctrl_mousewheel(int wheel, int direction, int x, int y) {
 #endif
 }
 
+/* Phase J1 commit 48b — timer dispatch inlined.
+ *
+ * Per-frame tick (16 ms): advance audio playlist, surface track-change
+ * status, advance time variable, advance replay state, decay camera
+ * momentum, blink the cursor, decay the status TTL. The body migrated
+ * verbatim from repl_editor.c's timer_func.
+ *
+ * The work is split from the GLUT scheduling so test fixtures (which
+ * don't initialize GLUT) can drive a single tick by calling
+ * imrepl_ctrl_tick directly. The public timer entry adds
+ * glutPostRedisplay + glutTimerFunc reschedule on top. */
+void imrepl_ctrl_tick(void) {
+    /* Advance the audio playlist if the current song reached its end
+     * (no-op under loop=Song; see repl_audio_tick). */
+    repl_audio_tick();
+
+    /* When the playing track changes (either auto-advance from tick
+     * or manual next/prev), surface the song name in the status bar.
+     * Tracking by generation avoids needing a callback hook into
+     * the audio module. */
+    {
+        static unsigned int last_track_gen = 0;
+        unsigned int gen = repl_audio_track_generation();
+        if (gen != last_track_gen) {
+            last_track_gen = gen;
+            const char *path = repl_audio_get_current_track();
+            if (path && *path) {
+                const char *base = strrchr(path, '/');
+                base = base ? base + 1 : path;
+                char msg[128];
+                snprintf(msg, sizeof(msg), "Now playing: %s", base);
+                set_status(msg);
+            }
+        }
+    }
+
+    repl_advance_time(0.016f);
+
+    {
+        ReplReplayRuntimeState *replay = replay_state_mut();
+
+        if (replay->active)
+            repl_replay_tick_fade_batches(0.016f);
+
+        if (replay->active && replay->state == REPLAY_PLAYING) {
+            replay->accum += replay->speed * 0.016f;
+            while (replay->accum >= 1.0f &&
+                   replay->state == REPLAY_PLAYING) {
+                replay->accum -= 1.0f;
+                repl_replay_advance();
+            }
+        }
+    }
+
+    repl_camera_tick();
+
+    {
+        ReplCodePanelRuntimeState *code_panel_state = ui_state_code_panel_mut();
+        (code_panel_state->blink_tick)++;
+        if (code_panel_state->blink_tick >= 30) {
+            code_panel_state->blink_tick = 0;
+            code_panel_state->cursor_visible = !code_panel_state->cursor_visible;
+        }
+    }
+
+    {
+        ReplStatusState *status = ui_state_status_mut();
+        if (status->ttl > 0)
+            status->ttl--;
+    }
+}
+
 void imrepl_ctrl_timer(int value) {
-    imrepl_ctrl_apply_input_effects(repl_timer_func(value));
+    (void)value;
+    imrepl_ctrl_tick();
+    glutPostRedisplay();
+    glutTimerFunc(16, imrepl_ctrl_timer, 0);
 }

@@ -153,10 +153,6 @@ ReplInputDispatchEffects repl_passive_motion_func(int x, int y);
 ReplInputDispatchEffects repl_mousewheel_func(int wheel, int direction, int x, int y);
 #endif
 
-/* Polling timer callback (every ~16ms @ 60 FPS). Ticks animation frame counter,
- * advances replays, updates camera momentum, and posts next timer event. */
-ReplInputDispatchEffects repl_timer_func(int value);
-
 /* --- Test helpers ------------------------------------------------------ */
 
 /* Reset global REPL state (cmds, input, cursor, camera, predef vars, undo/redo,
