@@ -410,8 +410,10 @@ void imrepl_ctrl_display_frame(void) {
     prof_begin(PROF_FRAME_TOTAL);
 
     if (repl_state_normals_dirty()) {
+        prof_begin(PROF_AUTONORMAL);
         recompute_autonormals();
         repl_state_normals_dirty_clear();
+        prof_end(PROF_AUTONORMAL);
     }
     if (repl_state_flat_program_dirty()) {
         prof_begin(PROF_FLATTEN);
@@ -442,6 +444,12 @@ void imrepl_ctrl_display_frame(void) {
     repl_replay_annotations_prepare(editor_buffer_view());
     prof_end(PROF_SNAPSHOT_VIRTUAL_LINES);
 
+    /* Per-frame prep that sits between virtual-line refresh and
+     * scene-config build: replay state-machine prepare_frame plus
+     * the import/export render-state and camera string refresh.
+     * Wrapped in its own subsection so the SNAPSHOT_* subsections
+     * sum to PROF_SNAPSHOT exactly. */
+    prof_begin(PROF_SNAPSHOT_PREP);
     saved_flat_count = g_num_flat_cmds;
     repl_copy_predef_values(live_predef_vals, MAX_PREDEF_VARS);
     if (replay_active())
@@ -449,6 +457,7 @@ void imrepl_ctrl_display_frame(void) {
 
     update_render_state_strings();
     update_cam_lines();
+    prof_end(PROF_SNAPSHOT_PREP);
 
     prof_begin(PROF_SNAPSHOT_SCENE_CONFIG);
     imrepl_ctrl_build_scene_config(&scene_config);
@@ -470,6 +479,7 @@ void imrepl_ctrl_display_frame(void) {
     prof_end(PROF_SCENE_3D);
 
     if (scene_config.replaying) {
+        prof_begin(PROF_REPLAY_HUD);
         ReplPresentationState presentation = repl_state_presentation();
         UiReplayHudState replay_hud_state = {
             .scene_x = scene_config.scene_x,
@@ -488,6 +498,7 @@ void imrepl_ctrl_display_frame(void) {
             .replaying = scene_config.replaying,
         };
         ui_replay_hud_render(&replay_hud_state);
+        prof_end(PROF_REPLAY_HUD);
     }
 
     /* Commit the accumulated subsection totals now that all AA samples are done. */
@@ -506,10 +517,14 @@ void imrepl_ctrl_display_frame(void) {
     ui_help_overlay_render(&ui_snap);
     prof_end(PROF_UI_PANELS);
 
+    prof_begin(PROF_PROFILE_PANEL);
     ui_profile_panel_render(&ui_snap);
+    prof_end(PROF_PROFILE_PANEL);
 
+    prof_begin(PROF_FRAME_RESTORE);
     repl_state_flat_program_set_count(saved_flat_count);
     repl_restore_predef_values(live_predef_vals, MAX_PREDEF_VARS);
+    prof_end(PROF_FRAME_RESTORE);
 
     prof_end(PROF_FRAME_TOTAL);
 }

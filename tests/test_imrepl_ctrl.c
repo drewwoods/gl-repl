@@ -281,11 +281,114 @@ static void test_reshape_clamps_height(void) {
     ASSERT_INT("reshape clamps height", ui_state_viewport().window_h, 1);
 }
 
+/* Regression test for the profile-coverage bug: a frame should land
+ * profile samples in every major section, and the sum of major
+ * sections should approximate PROF_FRAME_TOTAL (no section big
+ * enough to matter goes unprofiled). The test runs one
+ * imrepl_ctrl_display_frame() and inspects the profile state.
+ *
+ * The "all major sections non-stale" half is deterministic. The
+ * "sum approximately equals total" half uses a generous lower bound
+ * (50% of PROF_FRAME_TOTAL) to avoid flake from OS scheduling noise
+ * — any future regression that drops a major section entirely will
+ * blow the lower bound. A tighter upper bound is not asserted
+ * because per-section start/end overhead can stack to a real but
+ * harmless gap. */
+static void test_display_frame_profile_coverage(void) {
+    printf("--- imrepl_ctrl profile coverage ---\n");
+    prepare_display_fixture();
+
+    /* Drive one frame after marking both dirty so PROF_AUTONORMAL
+     * and PROF_FLATTEN both run. The fixture also leaves replay
+     * active so PROF_REPLAY_HUD lands. */
+    mark_normals_dirty();
+    repl_state_mark_flat_dirty();
+    imrepl_ctrl_display_frame();
+
+    /* Sections that should have landed a sample this frame. */
+    ProfSection major[] = {
+        PROF_FRAME_TOTAL,
+        PROF_AUTONORMAL,
+        PROF_FLATTEN,
+        PROF_SNAPSHOT,
+        PROF_SNAPSHOT_TRANSFORMERS,
+        PROF_SNAPSHOT_HIGHLIGHTS,
+        PROF_SNAPSHOT_VIRTUAL_LINES,
+        PROF_SNAPSHOT_PREP,
+        PROF_SNAPSHOT_SCENE_CONFIG,
+        PROF_SNAPSHOT_UI,
+        PROF_SCENE_3D,
+        PROF_REPLAY_HUD,    /* fixture has replay active */
+        PROF_CODE_PANEL,
+        PROF_UI_PANELS,
+        PROF_PROFILE_PANEL,
+        PROF_FRAME_RESTORE,
+    };
+    for (size_t i = 0; i < sizeof(major) / sizeof(major[0]); i++) {
+        char label[64];
+        snprintf(label, sizeof(label), "section %d not stale", (int)major[i]);
+        ASSERT_TRUE(label, !prof_section_is_stale(major[i]));
+    }
+
+    /* Sum of disjoint top-level sections should be a substantial
+     * fraction of PROF_FRAME_TOTAL. PROF_SNAPSHOT / PROF_SCENE_3D
+     * are themselves aggregates, so summing them with the leaves
+     * outside (autonormal, flatten, replay_hud, code_panel,
+     * ui_panels, profile_panel, frame_restore) covers the
+     * controller's whole frame body. */
+    double total_us = prof_section_last_us(PROF_FRAME_TOTAL);
+    double sum_us =
+        prof_section_last_us(PROF_AUTONORMAL) +
+        prof_section_last_us(PROF_FLATTEN) +
+        prof_section_last_us(PROF_SNAPSHOT) +
+        prof_section_last_us(PROF_SCENE_3D) +
+        prof_section_last_us(PROF_REPLAY_HUD) +
+        prof_section_last_us(PROF_CODE_PANEL) +
+        prof_section_last_us(PROF_UI_PANELS) +
+        prof_section_last_us(PROF_PROFILE_PANEL) +
+        prof_section_last_us(PROF_FRAME_RESTORE);
+
+    /* Both should be positive (frame did real work). */
+    ASSERT_TRUE("frame total positive", total_us > 0.0);
+    ASSERT_TRUE("major-section sum positive", sum_us > 0.0);
+
+    /* Sum should cover at least half the frame; missing a major
+     * section drops it well below this threshold. */
+    if (total_us > 0.0) {
+        double coverage = sum_us / total_us;
+        char label[96];
+        snprintf(label, sizeof(label),
+                 "major sections cover ≥50%% of FRAME_TOTAL (got %.1f%%)",
+                 coverage * 100.0);
+        ASSERT_TRUE(label, coverage >= 0.5);
+    }
+
+    /* PROF_SNAPSHOT subsections should sum to near the parent
+     * (they are disjoint and exhaustive). */
+    double snapshot_us = prof_section_last_us(PROF_SNAPSHOT);
+    double snapshot_sub_us =
+        prof_section_last_us(PROF_SNAPSHOT_TRANSFORMERS) +
+        prof_section_last_us(PROF_SNAPSHOT_HIGHLIGHTS) +
+        prof_section_last_us(PROF_SNAPSHOT_VIRTUAL_LINES) +
+        prof_section_last_us(PROF_SNAPSHOT_PREP) +
+        prof_section_last_us(PROF_SNAPSHOT_SCENE_CONFIG) +
+        prof_section_last_us(PROF_SNAPSHOT_UI);
+    if (snapshot_us > 0.0) {
+        double coverage = snapshot_sub_us / snapshot_us;
+        char label[96];
+        snprintf(label, sizeof(label),
+                 "SNAPSHOT subs cover ≥70%% of parent (got %.1f%%)",
+                 coverage * 100.0);
+        ASSERT_TRUE(label, coverage >= 0.7);
+    }
+}
+
 int main(void) {
     printf("--- imrepl_ctrl tests ---\n");
 
     test_display_frame_builds_config_and_restores_live_state();
     test_reshape_clamps_height();
+    test_display_frame_profile_coverage();
 
     printf("\n");
     return test_harness_report(&g_harness, "test_imrepl_ctrl");
