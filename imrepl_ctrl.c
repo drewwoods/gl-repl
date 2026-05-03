@@ -29,6 +29,7 @@
 #include "ui_variable_panel.h"
 #include "variable_panel.h"
 #include "replay_state.h"
+#include "repl_audio.h"
 #include "prof.h"
 
 static int imrepl_ctrl_cmd_is_focus_vertex(const GLCmd *cmd) {
@@ -178,6 +179,18 @@ static void imrepl_ctrl_push_color_transformers(void) {
         if (!editor_state_transformers_append(&t))
             break;
     }
+}
+
+/* Browser autoplay policy: the Web Audio context stays suspended until
+ * a user gesture. The very first key / mouse / special event after
+ * startup fires repl_audio_on_user_gesture; native builds make this a
+ * no-op. Phase J1 commit 48a relocated this from editor_input.c. */
+static int g_audio_gesture_sent = 0;
+
+static void imrepl_ctrl_notify_audio_gesture_once(void) {
+    if (g_audio_gesture_sent) return;
+    g_audio_gesture_sent = 1;
+    repl_audio_on_user_gesture();
 }
 
 static void imrepl_ctrl_apply_input_effects(ReplInputDispatchEffects effects) {
@@ -585,6 +598,8 @@ static int imrepl_ctrl_keyboard_router_dispatch(unsigned char key) {
 }
 
 void imrepl_ctrl_keyboard(unsigned char key, int x, int y) {
+    imrepl_ctrl_notify_audio_gesture_once();
+
     /* Rename capture: hard modal. */
     if (editor_input_rename_capture_key(key)) {
         editor_reset_input_effects();
@@ -623,6 +638,8 @@ static int imrepl_ctrl_special_router_dispatch(int key) {
 }
 
 void imrepl_ctrl_special(int key, int x, int y) {
+    imrepl_ctrl_notify_audio_gesture_once();
+
     if (editor_input_rename_capture_special(key)) {
         editor_reset_input_effects();
         imrepl_ctrl_apply_input_effects(editor_take_input_effects());
@@ -652,6 +669,8 @@ void imrepl_ctrl_special(int key, int x, int y) {
  * ReplInputDispatchEffects to migrate cleanly without dispatching
  * camera/scroll twice. That's deferred to a follow-up commit. */
 void imrepl_ctrl_mouse(int button, int state, int x, int y) {
+    imrepl_ctrl_notify_audio_gesture_once();
+
     editor_reset_input_effects();
     if (editor_input_router_handle_variable_panel_drag_begin(button, state, x, y) ||
         editor_input_router_handle_right_config_press(button, state, x, y)) {

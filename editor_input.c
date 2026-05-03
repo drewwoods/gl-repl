@@ -73,10 +73,6 @@ typedef enum {
     COMMIT_REJECTED
 } CommitResult;
 
-/* Browser autoplay policy: the Web Audio context stays suspended until
- * a user gesture. We call repl_audio_on_user_gesture() the first time
- * a key or mouse event arrives; native builds make this a no-op. */
-static int g_audio_gesture_sent = 0;
 static ReplModifierProvider g_modifier_provider_for_test = NULL;
 static ReplInputDispatchEffects g_pending_input_effects = {0};
 
@@ -117,12 +113,6 @@ void editor_schedule_timer(unsigned int millis, int value) {
 
 int editor_input_active_modifiers(void) {
     return editor_get_modifiers();
-}
-
-void editor_input_notify_audio_gesture_once(void) {
-    if (g_audio_gesture_sent) return;
-    g_audio_gesture_sent = 1;
-    repl_audio_on_user_gesture();
 }
 
 static const int g_accum_steps[] = { 1, 2, 4, 8, 16 };
@@ -1962,21 +1952,18 @@ static void motion_func(int x, int y) {
 
 ReplInputDispatchEffects editor_handle_key(unsigned char key, int x, int y) {
     editor_reset_input_effects();
-    editor_input_notify_audio_gesture_once();
     keyboard_func(key, x, y);
     return editor_take_input_effects();
 }
 
 ReplInputDispatchEffects editor_handle_special(int key, int x, int y) {
     editor_reset_input_effects();
-    editor_input_notify_audio_gesture_once();
     special_func(key, x, y);
     return editor_take_input_effects();
 }
 
 ReplInputDispatchEffects editor_handle_mouse(int button, int state, int x, int y) {
     editor_reset_input_effects();
-    editor_input_notify_audio_gesture_once();
     mouse_func(button, state, x, y);
     return editor_take_input_effects();
 }
