@@ -1,4 +1,4 @@
-#include "repl_var_drag.h"
+#include "variable_panel_drag.h"
 #include "repl_state.h"
 #include "repl_core.h"
 #include "support/test_harness.h"

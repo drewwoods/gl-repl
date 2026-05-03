@@ -25,11 +25,11 @@
  * line index to row scroll target (for Ctrl+K jump-to-line during replay and
  * keyboard navigation).
  */
-#ifndef REPL_CODE_PANEL_DOCUMENT_H
-#define REPL_CODE_PANEL_DOCUMENT_H
+#ifndef EDITOR_CODE_PANEL_DOCUMENT_H
+#define EDITOR_CODE_PANEL_DOCUMENT_H
 
 #include "sample.h"
-#include "repl_code_panel_layout.h"
+#include "ui_code_panel_layout.h"
 
 /* Full code-panel document layout. Combines header/footer fixed geometry with
  * per-command wrapping information. cmd_main_rows[] stores the row count for
@@ -127,4 +127,4 @@ int  repl_code_panel_document_target_for_doc_line(
     int doc_line, const CodePanelDocumentLayout *layout,
     int *out_target, int *out_on_insert_line, int *out_row_offset);
 
-#endif /* REPL_CODE_PANEL_DOCUMENT_H */
+#endif /* EDITOR_CODE_PANEL_DOCUMENT_H */

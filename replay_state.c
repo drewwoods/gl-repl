@@ -2,7 +2,7 @@
  * replay_state.c - Replay peer subsystem ownership.
  */
 #include "replay_state.h"
-#include "repl_replay.h"
+#include "replay.h"
 #include "sample.h"
 
 #define REPLAY_STATE_INITIAL                              \

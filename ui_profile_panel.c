@@ -4,7 +4,7 @@
 #include "sample.h"
 #include "ui_profile_panel.h"
 #include "./include/gl_2d.h"
-#include "repl_layout.h"
+#include "ui_layout.h"
 #include "ui_variable_panel.h"
 #include "prof.h"
 

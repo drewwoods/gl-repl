@@ -121,23 +121,23 @@ Test sources live under `tests/` and shared test-only helpers live under
 | `repl_camera_controls.c` | Scene camera pointer state, orbit/pan/zoom drags, wheel zoom velocity, momentum tick |
 | `repl_actions.c` | Config descriptor table, config shortcuts, menu actions, startup config defaults |
 | `repl_actions.h` | Actions public API (`repl_action_menu_item_activate`, cursor-pixel setter, etc.) |
-| `repl_code_panel_layout.c` | Pure code-panel wrapping, row counts, segment lookup, cursor-row mapping |
-| `repl_code_panel_layout.h` | `CodePanelTextLayout` / `CodePanelWrapIter` API shared by UI, export dumps, tests |
-| `repl_code_panel_document.c` | Code-panel document row model, scroll-follow calculation, hit-test targets |
-| `repl_code_panel_document.h` | `CodePanelDocumentLayout` API consumed by UI and scrolling tests |
+| `ui_code_panel_layout.c` | Pure code-panel wrapping, row counts, segment lookup, cursor-row mapping |
+| `ui_code_panel_layout.h` | `CodePanelTextLayout` / `CodePanelWrapIter` API shared by UI, export dumps, tests |
+| `editor_code_panel_document.c` | Code-panel document row model, scroll-follow calculation, hit-test targets |
+| `editor_code_panel_document.h` | `CodePanelDocumentLayout` API consumed by UI and scrolling tests |
 | `repl_executor.c` | Narrow live-GL dispatch: walks the flat command array emitting OpenGL calls |
 | `repl_executor.h` | Executor public API (`repl_execute_program`, transform helpers) |
 | `repl_flatten.c` | Source-to-flat program builder: unrolls loops, inlines functions, resolves if-blocks |
 | `repl_flatten.h` | Flatten public API (`repl_flatten_program`, cursor-highlight refresh) |
 | `repl_pipeline.h` | Pipeline and lifecycle surface for frame orchestration (flatten, autonormal, replay snapshots) |
 | `repl_autonormal.c` | Auto-generated `glNormal3f` maintenance for source commands |
-| `repl_replay.c` | Replay state machine: PC, mode (OFF/PLAYING/PAUSED/DONE), speed, fade-batch ring |
-| `repl_replay.h` | Replay public API (`repl_replay_start`, `repl_replay_toggle_play_pause`, etc.) |
+| `replay.c` | Replay state machine: PC, mode (OFF/PLAYING/PAUSED/DONE), speed, fade-batch ring |
+| `replay.h` | Replay public API (`repl_replay_start`, `repl_replay_toggle_play_pause`, etc.) |
 | `editor_search.c` | Case-insensitive substring search state and match navigation |
 | `editor_search.h` | Search query helpers and input routing API |
 | `editor_autocomplete.c` | Completion model: symbol matching, ghost text, parameter hints |
-| `repl_layout.c` | Pure window layout geometry: scene rect and code-panel rect derivation |
-| `repl_layout.h` | Layout geometry API (`repl_layout_scene_rect`, `repl_layout_code_panel_rect`) |
+| `ui_layout.c` | Pure window layout geometry: scene rect and code-panel rect derivation |
+| `ui_layout.h` | Layout geometry API (`repl_layout_scene_rect`, `repl_layout_code_panel_rect`) |
 | `repl_scenes.c` | User-scene slots, LRU eviction, workspace save/load, workspace dir binding |
 | `repl_example_loader.c` | Built-in example loading and active-example tracking |
 | `repl_debug.c` | Diagnostic dumps for CLI flags and tests |
@@ -162,8 +162,8 @@ Test sources live under `tests/` and shared test-only helpers live under
 | `ui_autocomplete_panel.h` | Autocomplete popup render entrypoint |
 | `editor_inline_rename.c` | Inline scene-rename input buffer and key handling (status-bar overlay) |
 | `editor_inline_rename.h` | Rename begin/active/cancel/key/special API |
-| `repl_var_drag.c` | Variable slider drag transaction: begin/motion/reset, linear/log value writeback |
-| `repl_var_drag.h` | Drag state accessors + begin/motion/reset API |
+| `variable_panel_drag.c` | Variable slider drag transaction: begin/motion/reset, linear/log value writeback |
+| `variable_panel_drag.h` | Drag state accessors + begin/motion/reset API |
 | `variable_panel.c` | Variable-panel peer subsystem: owns visibility flag + drag-state storage (Phase F) |
 | `variable_panel.h` | Peer-subsystem facade (`VariablePanelState`, capture/restore/reset, view/drag accessors) |
 | `replay_state.c` | Replay peer subsystem: owns `ReplReplayRuntimeState` storage (Phase F commit 33) |
@@ -586,7 +586,7 @@ Key details:
 
 ### Replay System
 
-Step-by-step execution visualization in `repl_replay.c`:
+Step-by-step execution visualization in `replay.c`:
 - `ReplReplayRuntimeState` (via `repl_state_replay()`) tracks state
   (OFF/PLAYING/PAUSED/DONE), program counter, and speed multiplier
 - During playback, the flat command count is clamped to `replay_exec_limit()`

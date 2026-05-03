@@ -12,7 +12,7 @@
  */
 #include "sample.h"
 #include "ui_autocomplete_panel.h"
-#include "repl_layout.h"
+#include "ui_layout.h"
 #include "./include/gl_2d.h"
 
 void ui_autocomplete_panel_render(const UiRenderSnapshot *snap) {

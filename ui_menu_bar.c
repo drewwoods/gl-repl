@@ -9,7 +9,7 @@
 #include "repl_state_views.h"
 #include "ui_state.h"
 #include "ui_menu_bar.h"
-#include "repl_layout.h"
+#include "ui_layout.h"
 #include "./include/gl_2d.h"
 
 /* Menu bar - styled after Header Wireframes v2.

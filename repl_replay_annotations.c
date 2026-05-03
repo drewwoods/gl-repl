@@ -5,7 +5,7 @@
 #include "repl_core.h"
 #include "repl_core_internal.h"
 #include "repl_parser.h"
-#include "repl_replay.h"
+#include "replay.h"
 #include "repl_state.h"
 #include "replay_state.h"
 #include "repl_replay_annotations.h"
