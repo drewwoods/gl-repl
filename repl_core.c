@@ -275,7 +275,8 @@ static void repl_core_replace_formatted_cmd(ReplCommandStore *store,
                                             int cmd_idx,
                                             const GLCmd *cmd,
                                             const char *text) {
-    repl_command_store_replace_one(store, cmd_idx, cmd, text);
+    if (repl_command_store_replace_one(store, cmd_idx, cmd))
+        editor_buffer_replace_line(cmd_idx, text);
 }
 
 void repl_reformat_commands(void) {

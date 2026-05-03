@@ -216,6 +216,7 @@ static void load_example_lines(const char *const *lines) {
     ReplCommandStore store = repl_command_store_live();
 
     repl_command_store_load(&store, NULL, 0, 0);
+    editor_buffer_clear();
     repl_state_flat_program_set_count(0);
     editor_insert_mode_set(0);
     {

@@ -2,6 +2,7 @@
  * ui_color_picker.c -- Floating color picker for literal color commands.
  */
 #include "sample.h"
+#include "editor_state.h"
 #include "repl_command_store.h"
 #include "repl_parser.h"
 #include "repl_state_views.h"
@@ -131,7 +132,8 @@ static void color_picker_write_cmd(void) {
         return;
 
     ReplCommandStore store = repl_command_store_live();
-    repl_command_store_replace_one(&store, g_cp_line, &pl.cmd, pl.text);
+    if (repl_command_store_replace_one(&store, g_cp_line, &pl.cmd))
+        editor_buffer_replace_line(g_cp_line, pl.text);
 }
 
 /* Open (or switch) the picker for cmd_idx.  my is GLUT screen y coord. */

@@ -252,7 +252,8 @@ int main() {
         ASSERT_INT("document normals dirty clear",
                    repl_state_normals_dirty(), 0);
         ASSERT_INT("command_store_load ok",
-                   repl_command_store_load(&store, loaded, 2, loaded_lines, 99), 1);
+                   repl_command_store_load(&store, loaded, 2, 99), 1);
+        editor_buffer_load_lines(loaded_lines, 2);
         ASSERT_INT("command_store_load count", repl_state_document_count(), 2);
         ASSERT_INT("command_store_load state count",
                    repl_state_document_count(), 2);

@@ -251,11 +251,11 @@ void repl_clipboard_paste_current(void) {
             for (int i = 0; i < editor_state_clipboard_count(); i++)
                 lines[i] = editor_state_clipboard_mut()->lines[i];
             if (!repl_command_store_insert_many(&store, pos, editor_state_clipboard_cmds_mut(),
-                                                editor_state_clipboard_count(), 0,
-                                                lines)) {
+                                                editor_state_clipboard_count(), 0)) {
                 set_status("Command buffer full!");
                 return;
             }
+            editor_buffer_insert_lines(pos, lines, editor_state_clipboard_count());
             repl_state_edit_line_set(pos + editor_state_clipboard_count());
             editor_insert_mode_set(0);
             load_line_to_input(repl_state_edit_line());

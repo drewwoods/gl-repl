@@ -118,6 +118,86 @@ void editor_buffer_set_count(int count) {
     g_editor_state.buffer.line_count = count;
 }
 
+static void editor_buffer_write_slot(char dst[MAX_LINE_LEN], const char *text) {
+    int n;
+    if (!text) text = "";
+    n = (int)strlen(text);
+    if (n >= MAX_LINE_LEN)
+        n = MAX_LINE_LEN - 1;
+    memcpy(dst, text, (size_t)n);
+    dst[n] = '\0';
+}
+
+int editor_buffer_insert_lines(int pos, const char *const *lines, int count) {
+    ReplEditorBuffer *buf = &g_editor_state.buffer;
+    int old_count = buf->line_count;
+
+    if (count <= 0) return 1;
+    if (old_count + count > MAX_COMMANDS) return 0;
+    if (pos < 0) pos = 0;
+    if (pos > old_count) pos = old_count;
+
+    memmove(&buf->lines[pos + count], &buf->lines[pos],
+            (size_t)(old_count - pos) * sizeof(buf->lines[0]));
+    for (int i = 0; i < count; i++) {
+        const char *text = (lines && lines[i]) ? lines[i] : "";
+        editor_buffer_write_slot(buf->lines[pos + i], text);
+    }
+    buf->line_count = old_count + count;
+    return 1;
+}
+
+int editor_buffer_insert_line(int pos, const char *line) {
+    const char *lines[1] = { line };
+    return editor_buffer_insert_lines(pos, line ? lines : NULL, 1);
+}
+
+int editor_buffer_replace_line(int pos, const char *line) {
+    ReplEditorBuffer *buf = &g_editor_state.buffer;
+    if (pos < 0 || pos >= MAX_COMMANDS) return 0;
+    editor_buffer_write_slot(buf->lines[pos], line ? line : "");
+    if (buf->line_count <= pos)
+        buf->line_count = pos + 1;
+    return 1;
+}
+
+int editor_buffer_delete_range(int start, int count) {
+    ReplEditorBuffer *buf = &g_editor_state.buffer;
+    int old_count = buf->line_count;
+
+    if (count <= 0) return 1;
+    if (start < 0) start = 0;
+    if (start >= old_count) return 1;
+    if (start + count > old_count) count = old_count - start;
+
+    memmove(&buf->lines[start], &buf->lines[start + count],
+            (size_t)(old_count - start - count) * sizeof(buf->lines[0]));
+    int new_count = old_count - count;
+    for (int i = new_count; i < old_count; i++)
+        buf->lines[i][0] = '\0';
+    buf->line_count = new_count;
+    return 1;
+}
+
+int editor_buffer_load_lines(const char *const *lines, int count) {
+    ReplEditorBuffer *buf = &g_editor_state.buffer;
+    if (count < 0) return 0;
+    if (count > MAX_COMMANDS) count = MAX_COMMANDS;
+
+    for (int i = 0; i < count; i++) {
+        const char *text = (lines && lines[i]) ? lines[i] : "";
+        editor_buffer_write_slot(buf->lines[i], text);
+    }
+    for (int i = count; i < buf->line_count; i++)
+        buf->lines[i][0] = '\0';
+    buf->line_count = count;
+    return 1;
+}
+
+void editor_buffer_clear(void) {
+    g_editor_state.buffer.line_count = 0;
+}
+
 EditorBufferView editor_buffer_view(void) {
     EditorBufferView view = {
         .lines      = g_editor_state.buffer.lines,

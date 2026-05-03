@@ -251,6 +251,7 @@ void repl_state_normals_dirty_clear(void) {
 void repl_state_document_reset(void) {
     ReplCommandStore store = repl_command_store_live();
     repl_command_store_load(&store, NULL, 0, 0);
+    editor_buffer_clear();
 }
 
 ReplFlatProgramState *repl_state_flat_program_mut(void) {

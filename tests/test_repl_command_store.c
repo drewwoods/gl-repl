@@ -173,7 +173,8 @@ static void test_repl_command_store_insert_one_with_line(void) {
     const char *line = "glVertex3f(1, 0, 0)";
 
     ASSERT_INT("insert one with explicit line",
-               repl_command_store_insert_one(&store, 0, &cmd, 0, line), 1);
+               repl_command_store_insert_one(&store, 0, &cmd, 0), 1);
+    editor_buffer_insert_line(0, line);
     ASSERT_STR("editor buffer uses explicit line",
                editor_buffer_line(0), "glVertex3f(1, 0, 0)");
 }
@@ -236,12 +237,14 @@ static void test_repl_command_store_replace_one(void) {
     GLCmd cmd1 = make_cmd(CMD_VERTEX3F, "glVertex3f(1, 0, 0);");
     GLCmd cmd2 = make_cmd(CMD_VERTEX3F, "glVertex3f(0, 1, 0);");
 
-    repl_command_store_insert_one(&store, 0, &cmd1, 0, "glVertex3f(1, 0, 0);");
+    repl_command_store_insert_one(&store, 0, &cmd1, 0);
+    editor_buffer_insert_line(0, "glVertex3f(1, 0, 0);");
     ASSERT_STR("before replace",
                editor_buffer_line(0), "glVertex3f(1, 0, 0);");
 
     ASSERT_INT("replace at valid index",
-               repl_command_store_replace_one(&store, 0, &cmd2, "glVertex3f(0, 1, 0);"), 1);
+               repl_command_store_replace_one(&store, 0, &cmd2), 1);
+    editor_buffer_replace_line(0, "glVertex3f(0, 1, 0);");
     ASSERT_STR("after replace",
                editor_buffer_line(0), "glVertex3f(0, 1, 0);");
     ASSERT_INT("count unchanged after replace", repl_command_store_count(&store), 1);
@@ -269,8 +272,8 @@ static void test_repl_command_store_replace_one_with_line(void) {
     repl_command_store_insert_one(&store, 0, &cmd1, 0);
 
     ASSERT_INT("replace with explicit line",
-               repl_command_store_replace_one(&store, 0, &cmd2,
-                                              "glVertex3f(0, 1, 0)"), 1);
+               repl_command_store_replace_one(&store, 0, &cmd2), 1);
+    editor_buffer_replace_line(0, "glVertex3f(0, 1, 0)");
     ASSERT_STR("replace updates editor buffer line",
                editor_buffer_line(0), "glVertex3f(0, 1, 0)");
 }
@@ -312,7 +315,8 @@ static void test_repl_command_store_load(void) {
     };
 
     ASSERT_INT("load commands",
-               repl_command_store_load(&store, cmds, 2, lines, 0), 1);
+               repl_command_store_load(&store, cmds, 2, 0), 1);
+    editor_buffer_load_lines(lines, 2);
     ASSERT_INT("count after load", repl_command_store_count(&store), 2);
     ASSERT_STR("first loaded command",
                editor_buffer_line(0), "glVertex3f(1, 0, 0);");
@@ -354,7 +358,8 @@ static void test_repl_command_store_load_with_lines(void) {
     };
 
     ASSERT_INT("load with explicit lines",
-               repl_command_store_load(&store, cmds, 2, lines, 0), 1);
+               repl_command_store_load(&store, cmds, 2, 0), 1);
+    editor_buffer_load_lines(lines, 2);
     ASSERT_STR("load line 0 preserved",
                editor_buffer_line(0), "glVertex3f(1, 0, 0)");
     ASSERT_STR("load line 1 preserved",
