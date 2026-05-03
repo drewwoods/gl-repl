@@ -511,7 +511,7 @@ int main() {
         repl_reset_state();
         if (repl_example_count() > 1) {
             repl_load_example(0);
-            editor_handle_special(GLUT_KEY_F12, 0, 0);
+            imrepl_ctrl_router_handle_scene_cycle_special(GLUT_KEY_F12);
             ASSERT_INT("f12 special route advances example",
                     repl_state_scenes().active_example_idx, 1);
         }
@@ -1908,18 +1908,18 @@ int main() {
 
         repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_HIDDEN;
         replay_state = REPLAY_PLAYING;
-        editor_handle_key(' ', 0, 0);
+        imrepl_ctrl_router_handle_active_replay_key(' ');
         ASSERT_INT("replay space keeps hidden code panel",
                    repl_state_presentation().code_panel_layout, CODE_PANEL_LAYOUT_HIDDEN);
-        ASSERT_INT("replay space still pauses through editor",
+        ASSERT_INT("replay space still pauses through router",
                    replay_state, REPLAY_PAUSED);
 
         replay_state = REPLAY_PAUSED;
         replay_pc = 0;
-        editor_handle_special(GLUT_KEY_RIGHT, 0, 0);
+        imrepl_ctrl_router_handle_replay_special(GLUT_KEY_RIGHT);
         ASSERT_INT("replay right keeps hidden code panel",
                    repl_state_presentation().code_panel_layout, CODE_PANEL_LAYOUT_HIDDEN);
-        ASSERT_INT("replay right still advances through editor",
+        ASSERT_INT("replay right still advances through router",
                    replay_pc, 1);
         repl_state_presentation_mut()->code_panel_layout = CFG_DEFAULT_CODE_PANEL_LAYOUT;
 
@@ -2450,23 +2450,23 @@ int main() {
         g_mock_modifiers = GLUT_ACTIVE_CTRL;
 
         /* Increment */
-        editor_handle_key('+', 0, 0);
+        imrepl_ctrl_router_handle_accum_samples_key('+');
         ASSERT_INT("accum toggle +: samples increased to 4", rs->accum_samples, 4);
 
-        editor_handle_key('=', 0, 0); /* some keyboards use = for + without shift */
+        imrepl_ctrl_router_handle_accum_samples_key('='); /* some keyboards use = for + without shift */
         ASSERT_INT("accum toggle =: samples increased to 8", rs->accum_samples, 8);
 
         /* Decrement */
-        editor_handle_key('-', 0, 0);
+        imrepl_ctrl_router_handle_accum_samples_key('-');
         ASSERT_INT("accum toggle -: samples decreased to 4", rs->accum_samples, 4);
 
         /* Test limits */
         rs->accum_samples = 16;
-        editor_handle_key('+', 0, 0);
+        imrepl_ctrl_router_handle_accum_samples_key('+');
         ASSERT_INT("accum toggle +: samples capped at 16", rs->accum_samples, 16);
 
         rs->accum_samples = 1;
-        editor_handle_key('-', 0, 0);
+        imrepl_ctrl_router_handle_accum_samples_key('-');
         ASSERT_INT("accum toggle -: samples floored at 1", rs->accum_samples, 1);
 
         g_mock_modifiers = saved_mods;
@@ -2499,13 +2499,13 @@ int main() {
             ASSERT_TRUE("F12 test: promoted example to slot", slot >= 0);
 
             /* Cycle from user scene 0 -> should go to example 0 */
-            editor_handle_special(GLUT_KEY_F12, 0, 0);
+            imrepl_ctrl_router_handle_scene_cycle_special(GLUT_KEY_F12);
             ASSERT_INT("F12: user scene 0 -> example 0", repl_state_scenes().active_example_idx, 0);
             ASSERT_INT("F12: active user scene now -1", repl_active_user_scene(), -1);
 
             /* Cycle through all examples to reach user scenes again */
             for (int i = 0; i < example_count; i++) {
-                 editor_handle_special(GLUT_KEY_F12, 0, 0);
+                 imrepl_ctrl_router_handle_scene_cycle_special(GLUT_KEY_F12);
             }
             /* After all examples, it should hit the first used user scene slot */
             ASSERT_INT("F12: cycled back to user scene 0", repl_active_user_scene(), 0);
@@ -2553,8 +2553,8 @@ int main() {
 
         /* Just trigger the routes to ensure they are covered.
          * Actual track change depends on audio assets. */
-        editor_handle_special(GLUT_KEY_LEFT, 0, 0);
-        editor_handle_special(GLUT_KEY_RIGHT, 0, 0);
+        imrepl_ctrl_router_handle_horizontal_audio_special(GLUT_KEY_LEFT);
+        imrepl_ctrl_router_handle_horizontal_audio_special(GLUT_KEY_RIGHT);
 
         g_mock_modifiers = saved_mods;
     }
@@ -2565,22 +2565,22 @@ int main() {
         editor_help_session_set_scroll(0);
         editor_help_session_set_tab(0);
 
-        editor_handle_special(GLUT_KEY_DOWN, 0, 0);
+        imrepl_ctrl_router_handle_help_scroll_special(GLUT_KEY_DOWN);
         ASSERT_INT("help scroll down", editor_help_session_scroll(), 1);
 
-        editor_handle_special(GLUT_KEY_UP, 0, 0);
+        imrepl_ctrl_router_handle_help_scroll_special(GLUT_KEY_UP);
         ASSERT_INT("help scroll up", editor_help_session_scroll(), 0);
 
-        editor_handle_special(GLUT_KEY_RIGHT, 0, 0);
+        imrepl_ctrl_router_handle_help_tab_special(GLUT_KEY_RIGHT);
         ASSERT_INT("help tab right", editor_help_session_tab_idx(), 1);
 
-        editor_handle_special(GLUT_KEY_LEFT, 0, 0);
+        imrepl_ctrl_router_handle_help_tab_special(GLUT_KEY_LEFT);
         ASSERT_INT("help tab left", editor_help_session_tab_idx(), 0);
 
-        editor_handle_special(GLUT_KEY_PAGE_DOWN, 0, 0);
+        imrepl_ctrl_router_handle_help_scroll_special(GLUT_KEY_PAGE_DOWN);
         ASSERT_INT("help page down", editor_help_session_scroll(), 5);
 
-        editor_handle_special(GLUT_KEY_PAGE_UP, 0, 0);
+        imrepl_ctrl_router_handle_help_scroll_special(GLUT_KEY_PAGE_UP);
         ASSERT_INT("help page up", editor_help_session_scroll(), 0);
 
         ui_state_help_mut()->visible = 0;
@@ -2663,13 +2663,13 @@ int main() {
         int click_x = px + pw / 2;
         int click_y = 1000 - (py + ph - VAR_PANEL_PAD_INTERNAL - VAR_TITLE_H_INTERNAL / 2);
 
-        editor_handle_mouse(GLUT_LEFT_BUTTON, GLUT_DOWN, click_x, click_y);
+        imrepl_ctrl_router_handle_variable_panel_drag_begin(GLUT_LEFT_BUTTON, GLUT_DOWN, click_x, click_y);
         ASSERT_TRUE("mouse: variable drag active", repl_var_drag_active());
 
-        editor_handle_motion(click_x + 100, click_y);
+        imrepl_ctrl_router_handle_variable_panel_motion(click_x + 100, click_y);
         /* drag motion should have changed the variable value. */
 
-        editor_handle_mouse(GLUT_LEFT_BUTTON, GLUT_UP, click_x + 100, click_y);
+        imrepl_ctrl_router_handle_variable_panel_drag_release(GLUT_UP);
         ASSERT_TRUE("mouse: variable drag inactive after release", !repl_var_drag_active());
     }
 
@@ -2782,7 +2782,7 @@ int main() {
 
         /* Ctrl+P (Dump) */
         /* We can't easily check stdout, but we trigger the branch. */
-        editor_handle_key(16, 0, 0);
+        imrepl_ctrl_router_handle_debug_dump_key(16);
         assert_status_contains("Ctrl+P dump", "Dumped");
 
         /* Ctrl+S (Save) */
@@ -2800,7 +2800,7 @@ int main() {
                 int cd_ok = chdir(made_dir);
                 ASSERT_INT("chdir default output dir", cd_ok, 0);
                 if (cd_ok == 0) {
-                    editor_handle_key(19, 0, 0);
+                    imrepl_ctrl_router_handle_save_key(19);
                     assert_status_contains("Ctrl+S save", "Saved");
                     ASSERT_INT("default output saved in temp dir",
                                access("output.c", F_OK), 0);
@@ -2884,9 +2884,9 @@ int main() {
         int click_x = px + pw / 2;
         int click_y = 1000 - (py + ph - VAR_PANEL_PAD_INTERNAL - VAR_TITLE_H_INTERNAL / 2);
 
-        editor_handle_mouse(GLUT_RIGHT_BUTTON, GLUT_DOWN, click_x, click_y);
+        imrepl_ctrl_router_handle_variable_panel_drag_begin(GLUT_RIGHT_BUTTON, GLUT_DOWN, click_x, click_y);
         ASSERT_TRUE("mouse: right-click variable drag active", repl_var_drag_active());
-        editor_handle_mouse(GLUT_RIGHT_BUTTON, GLUT_UP, click_x, click_y);
+        imrepl_ctrl_router_handle_variable_panel_drag_release(GLUT_UP);
     }
 
     printf("\n%d / %d tests passed\n", g_harness.passed, g_harness.run);

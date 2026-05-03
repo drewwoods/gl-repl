@@ -1,4 +1,5 @@
 #include "editor_input.h"
+#include "imrepl_ctrl.h"
 #include "repl_core_internal.h"
 #include "repl_export.h"
 #include "editor_clipboard.h"
@@ -435,7 +436,7 @@ int main(void) {
     ASSERT_TRUE("ctrl-e moves to line end", editor_cursor_pos() == editor_input_len());
     {
         int before = repl_state_presentation().code_panel_layout;
-        editor_handle_key(2, 0, 0);
+        imrepl_ctrl_router_handle_cfg_shortcut_key(2);
         ASSERT_TRUE("ctrl-b toggles code panel layout", repl_state_presentation().code_panel_layout != before);
     }
 
