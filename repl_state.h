@@ -12,7 +12,7 @@ typedef struct {
     ReplVariableState         variables;
     ReplPresentationState     presentation;
     ReplRenderState           render;
-    ReplReplayRuntimeState    replay;
+    /* replay moved to replay_state.c (Phase F commit 33); peer-owned. */
     ReplSceneRuntimeState     scenes;
     ReplImportExportState     import_export;
 } ReplRuntimeState;
