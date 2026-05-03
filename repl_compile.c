@@ -408,17 +408,13 @@ ReplCompileResult repl_compile_var_assign(const char *input,
                           "%s%s = %s;%s", indent, name, rhs, comment))
         return compile_set_err(err, err_size, "Command too long");
 
-    /* Decide insert / replace.
-     *
-     * The legacy try_assign_variable() has a special branch for
-     * "overwrite a CMD_VAR_DECLARE in non-insert mode": it walks the
-     * doc looking for ident usage of the dropped names and bails if
-     * any are found. That validation is identical to the float-decl
-     * overwrite check; we let the legacy apply path handle it for now
-     * (Phase C commit 20 absorbs it into the apply layer). For
-     * compile, we just classify the kind and let apply take care of
-     * the predef-op cascade.
-     */
+    /* Decide insert / replace. The REPLACE_ONE branch absorbs the
+     * legacy var-decl overwrite cascade: when the assignment lands on
+     * a CMD_VAR_DECLARE in non-insert mode, validate that the dropped
+     * names are not in use elsewhere and emit UNDECLARE predef ops so
+     * apply replays the slot shift through repl_apply_predef_ops. */
+    int overwriting_decl = 0;
+    const GLCmd *old_decl = NULL;
     if (ctx->insert_mode) {
         out->kind  = REPL_COMPILED_INSERT_ONE;
         out->pos   = insert_idx;
@@ -429,6 +425,10 @@ ReplCompileResult repl_compile_var_assign(const char *input,
         out->pos   = insert_idx;
         out->count = 1;
         out->adjust_edit_line = 0;
+        if (ctx->document_cmds[insert_idx].type == CMD_VAR_DECLARE) {
+            overwriting_decl = 1;
+            old_decl = &ctx->document_cmds[insert_idx];
+        }
     } else {
         out->kind  = REPL_COMPILED_INSERT_ONE;
         out->pos   = ctx->document_count;
@@ -438,13 +438,38 @@ ReplCompileResult repl_compile_var_assign(const char *input,
     out->cmds[0] = cmd;
     repl_copy_string_fits(out->text[0], sizeof(out->text[0]), assign_text);
 
+    /* Overwrite-feasibility check + UNDECLARE op plan. Mirrors the
+     * float-decl overwrite check at line 215+; the in-use predicate
+     * skips the line being replaced. */
+    int op_count = 0;
+    if (overwriting_decl) {
+        for (int decl_idx = 0; decl_idx < old_decl->var_decl_count; decl_idx++) {
+            const char *nm = old_decl->var_names[decl_idx];
+            for (int cmd_idx = 0; cmd_idx < ctx->document_count; cmd_idx++) {
+                if (cmd_idx == insert_idx) continue;
+                const char *line = editor_buffer_view_line(ctx->text, cmd_idx);
+                if (repl_eval_source_uses_ident(line ? line : "", nm))
+                    return compile_set_err(err, err_size,
+                        "variable '%s' is in use, cannot overwrite", nm);
+            }
+            if (op_count >= MAX_PREDEF_OPS_PER_COMMIT) break;
+            out->predef_ops[op_count].kind = REPL_PREDEF_OP_UNDECLARE;
+            repl_copy_string_fits(out->predef_ops[op_count].name,
+                                  sizeof(out->predef_ops[op_count].name), nm);
+            op_count++;
+        }
+    }
+
     /* Predef-op plan: write the live value. */
-    out->predef_ops[0].kind = REPL_PREDEF_OP_SET_VALUE;
-    repl_copy_string_fits(out->predef_ops[0].name,
-                          sizeof(out->predef_ops[0].name), name);
-    out->predef_ops[0].value = val;
-    out->predef_ops[0].has_value = 1;
-    out->predef_op_count = 1;
+    if (op_count < MAX_PREDEF_OPS_PER_COMMIT) {
+        out->predef_ops[op_count].kind = REPL_PREDEF_OP_SET_VALUE;
+        repl_copy_string_fits(out->predef_ops[op_count].name,
+                              sizeof(out->predef_ops[op_count].name), name);
+        out->predef_ops[op_count].value = val;
+        out->predef_ops[op_count].has_value = 1;
+        op_count++;
+    }
+    out->predef_op_count = op_count;
 
     snprintf(out->commit_message, sizeof(out->commit_message),
              "%s = %g", name, val);

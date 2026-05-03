@@ -1,6 +1,7 @@
 #include "repl_core_internal.h"
 #include "repl_export.h"
 #include "editor_clipboard.h"
+#include "editor_commit.h"
 #include "repl_state.h"
 #include "ui_state.h"
 #include "repl_replay_annotations.h"
@@ -245,6 +246,39 @@ int main(void) {
         ASSERT_TRUE("z predef exists", z_idx >= 0);
         if (z_idx >= 0)
             ASSERT_TRUE("z updated", fabsf(g_predef_vars[z_idx].value - (-0.55f)) < 1e-6f);
+    }
+
+    /* Var-decl-overwrite cascade: replacing a CMD_VAR_DECLARE with an
+     * assign must reject when one of the dropped names is referenced by
+     * another line. The diagnostic comes through the compile-error path
+     * (commit 43 absorbed the cascade into repl_compile_var_assign), so
+     * apply never runs and the document is unchanged. */
+    repl_reset_state(); declare_test_vars();
+    repl_feed_line_public("float foo;");
+    repl_feed_line_public("y = foo;");
+    ASSERT_TRUE("cascade fixture cmd count", repl_state_document_count() == 2);
+    ASSERT_TRUE("cascade fixture line 0 is decl",
+                repl_state_document_cmds_mut()[0].type == CMD_VAR_DECLARE);
+    ASSERT_TRUE("cascade fixture line 1 is assign",
+                repl_state_document_cmds_mut()[1].type == CMD_VAR_ASSIGN);
+    {
+        repl_state_edit_line_set(0);
+        editor_insert_mode_set(0);
+        ReplEditorInputState *inp = editor_state_input_mut();
+        strcpy(inp->input, "foo = 5");
+        inp->input_len = (int)strlen(inp->input);
+        editor_cursor_pos_set(inp->input_len);
+        g_status[0] = '\0';
+        int consumed = try_assign_variable();
+        ASSERT_TRUE("cascade in-use rejection consumed", consumed == 1);
+        ASSERT_TRUE("cascade in-use status names variable",
+                    strstr(g_status, "foo") != NULL &&
+                    strstr(g_status, "in use") != NULL);
+        ASSERT_TRUE("cascade in-use leaves doc unchanged",
+                    repl_state_document_count() == 2 &&
+                    repl_state_document_cmds_mut()[0].type == CMD_VAR_DECLARE);
+        ASSERT_TRUE("cascade in-use leaves foo declared",
+                    repl_eval_find_predef_var_idx("foo") >= 0);
     }
 
     repl_reset_state(); declare_test_vars();
