@@ -18,11 +18,17 @@
  * `variable_panel_state_capture` / `_restore` alongside the editor /
  * ui captures.
  *
- * Render path: ui_variable_panel.c reads visibility through the
- * `UiRenderSnapshot.variable_panel` slice (which the controller still
- * fills from `ui_state_variable_panel()` for now). The drag-state
- * read sites (panel renderer, code-panel highlight) keep using
- * `repl_var_drag_*` query helpers.
+ * Render path: imrepl_ctrl_build_ui_snapshot fills
+ * `UiRenderSnapshot.variable_panel` from `variable_panel_view()` and
+ * `UiRenderSnapshot.variable_drag` from `variable_panel_drag()`
+ * directly. ui_variable_panel.c reads visibility through
+ * `variable_panel_visible()` and the drag highlights through the
+ * narrow `variable_panel_drag_active_var` / `_log_mode` queries.
+ *
+ * Legacy forwarders (`ui_state_variable_panel*`,
+ * `editor_state_variable_drag*`, `repl_var_drag_*`) still resolve via
+ * shims so test fixtures keep compiling; they are tracked by
+ * `check-variable-panel-forwarders` and ratchet toward zero.
  */
 #ifndef VARIABLE_PANEL_H
 #define VARIABLE_PANEL_H
