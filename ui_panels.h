@@ -1,33 +1,41 @@
 /*
- * ui_panels.h - Code-panel rendering, scene status, and UI input bridge.
+ * ui_panels.h - Code-panel rendering, scene status, and pointer hit-test.
  *
- * Renders the code-panel (source commands with syntax highlighting, overlays,
- * annotations), scene status banner, and handles user input (clicks, drags,
- * keyboard navigation). Bridges repl_editor.c input dispatch with color-picker
- * and panel-specific internals (scroll state, selection, etc.).
+ * Target contract (Phase E onward):
+ *
+ *   UI renders the code-panel / status banner and classifies pointer
+ *   locations into a neutral `UiHit`. `imrepl_ctrl` routes the hit to
+ *   the owning subsystem (editor / variable_panel / replay / scene),
+ *   which implements the behavior. UI does not own input dispatch or
+ *   mutation.
  *
  * Rendering:
- *   - ui_panels_render_code_panel(): Render the code panel with wrapped lines,
- *     syntax highlighting, overlays (cursor, selection, replay annotations).
- *   - ui_panels_render_scene_status(): Render the status banner below the scene
- *     (showing example name, status messages, etc.).
+ *   - ui_panels_render_code_panel(): Render the code panel with wrapped
+ *     lines, syntax highlighting, overlays (cursor, selection, replay
+ *     annotations).
+ *   - ui_panels_render_scene_status(): Render the status banner below
+ *     the scene (showing example name, status messages, etc.).
  *
- * Input handling (called by repl_editor.c):
- *   - Code-panel mouse: ui_panels_handle_code_panel_click/press/drag/release()
- *     handle editing, selection, cursor movement via mouse.
- *   - Menu/config: ui_panels_open_config() opens the Config menu;
- *     ui_panels_close_menus() closes all overlays.
- *   - Right-click: ui_panels_handle_right_press() shows context menu or color picker.
- *   - Global input: ui_panels_handle_escape/scene_press/motion/mouse_release()
- *     coordinate input across panels.
+ * Hit-test:
+ *   - ui_panels_hit_test(): Pure classification of (mx, my) into a
+ *     `UiHit`. Dispatches to the floating-overlay hit-testers in
+ *     priority order (help > color picker > menu bar > variable
+ *     panel > code panel > scene). Reads layout / state only.
  *
- * Input bridge: Color-picker (floating overlay for inline color editing) state
- * is private to this module. Input handlers detect color-picker hits and manage
- * its input before forwarding to code-panel. ui_panels_handle_escape() cancels
- * color-picker without exposing its internals to repl_editor.c.
+ * Legacy imperative handlers (transitional):
+ *   - ui_panels_handle_code_panel_*, ui_panels_handle_right_press,
+ *     ui_panels_handle_escape, ui_panels_handle_scene_press,
+ *     ui_panels_handle_motion, ui_panels_handle_mouse_release,
+ *     ui_panels_open_config, ui_panels_close_menus.
+ *   These remain during the migration so existing call sites keep
+ *   working. They mutate REPL/editor/UI state directly and are
+ *   tracked by the `check-ui-returns-hits-only` ratchet — the target
+ *   is for callers to route via `imrepl_ctrl` on `UiHit.kind` and for
+ *   these entry points to disappear.
  *
- * Test helpers: ui_panels_code_panel_apply_scroll_follow_for_test() applies
- * scroll-follow logic for test verification (follow target → scroll position).
+ * Test helpers: ui_panels_code_panel_apply_scroll_follow_for_test()
+ * applies scroll-follow logic for test verification (follow target →
+ * scroll position).
  */
 #ifndef UI_PANELS_H
 #define UI_PANELS_H
@@ -50,7 +58,14 @@ void ui_panels_open_config(void);
 /* Close all menus/overlays (Config, Example dropdown, color picker, etc.). */
 void ui_panels_close_menus(void);
 
-/* --- Code-panel mouse input --- */
+/* --- Legacy imperative input handlers (transitional) ---
+ *
+ * These predate the `UiHit` contract and still mutate REPL / editor
+ * / UI state. They remain so that existing repl_editor.c call sites
+ * keep working, and are tracked by `check-ui-returns-hits-only` —
+ * the target is for the controller to route via `UiHit.kind` and
+ * for these entry points to be removed.
+ */
 
 /* Handle left-click in code panel: move cursor, extend selection, or begin drag.
  * Returns the cursor position to apply, or -1 if the click did not move it.

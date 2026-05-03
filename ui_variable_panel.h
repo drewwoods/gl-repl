@@ -1,35 +1,37 @@
 /*
- * ui_variable_panel.h - Floating variable slider panel (read-only HUD).
+ * ui_variable_panel.h - Floating variable slider panel (renderer + hit-test).
  *
- * Renders a floating panel listing all declared predefined variables (float x,
- * y, z, etc.) with their current values. Each variable gets a draggable slider
- * row for interactive manipulation. Panel layout is compacted to show only the
- * variables in use; unused rows are skipped. Values are displayed both as
- * numeric text and as slider position (linear or logarithmic scale).
+ * Renders a floating panel listing every declared predefined variable
+ * (float x, y, z, …) with current values. Each variable gets a draggable
+ * slider row for interactive manipulation. Panel layout is compacted —
+ * unused rows are skipped. Values are displayed both numerically and as
+ * a slider position (linear or logarithmic scale).
  *
- * Geometry: Panel floats in the top-right area of the viewport, non-modal
- * (doesn't block interaction with the scene or code panel). Each variable row
- * has a fixed height with name label on the left and draggable slider region
- * on the right. Color coding highlights the active drag row (via repl_var_drag.c
- * queries).
+ * Target contract (Phase E onward):
  *
- * Value mutation: This module is read-only rendering — it does NOT handle
- * dragging or value updates. Mutation is owned by repl_var_drag.c (which
- * implements begin/motion/reset for drag transactions) and repl_editor.c
- * (which calls drag handlers on mouse events). The panel just renders the
- * current state and reports geometry/hit-testing.
+ *   UI renders and reports `UiHit` (UI_HIT_VARIABLE_SLIDER with the
+ *   variable row in `item_idx`). `imrepl_ctrl` routes the hit to the
+ *   variable_panel peer subsystem (Phase F), which owns the visibility
+ *   flag and drag transaction. The renderer reads only — it does not
+ *   own input dispatch or mutation.
+ *
+ * Hit-test: ui_variable_panel_hit_test() returns UI_HIT_VARIABLE_SLIDER
+ * with item_idx = row index when the panel is visible and the pointer
+ * lands on a row.
+ *
+ * Geometry: Panel floats in the top-right area of the viewport,
+ * non-modal (doesn't block interaction with the scene or code panel).
+ * Each row has a fixed height with the name label on the left and a
+ * draggable slider region on the right. Color coding highlights the
+ * active drag row (via repl_var_drag.c queries).
+ *
+ * Value mutation lives outside this module. Today repl_var_drag.c
+ * implements drag transactions and repl_editor.c forwards mouse events
+ * — those will collapse into the variable_panel peer in Phase F.
  *
  * Visibility: Panel can be toggled on/off via the REPL_CONFIG_VARIABLE_PANEL
- * config item (F-key shortcut). When off, rendering and hit-testing are no-ops.
- *
- * Hit-testing: ui_variable_panel_hit() identifies which variable row was
- * clicked (by y-coordinate in the panel). Returns the row index; repl_editor.c
- * then calls repl_var_drag_begin() to start a drag transaction on that row.
- *
- * Integration: ui_panels.c queries geometry (ui_variable_panel_rect) for
- * layout and hit-testing (ui_variable_panel_hit) for input routing. repl_var_drag.c
- * queries active drag state (repl_var_drag_active_var, log_mode) to highlight
- * the dragged row and signal log-scale mode to the renderer.
+ * config item (F-key shortcut). When off, rendering and hit-testing
+ * are no-ops.
  */
 #ifndef UI_VARIABLE_PANEL_H
 #define UI_VARIABLE_PANEL_H
