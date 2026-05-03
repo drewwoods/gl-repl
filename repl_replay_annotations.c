@@ -26,10 +26,21 @@ static int   s_replay_current_flat_idx = -1;          /* flat cmd for src_line *
 static float s_replay_predef_snap[MAX_COMMANDS][MAX_PREDEF_VARS];
 static int   s_replay_predef_snap_valid[MAX_COMMANDS];
 
+/* Per-frame editor-text view, set by the public entry points
+ * (`repl_replay_annotations_prepare`,
+ *  `repl_replay_code_panel_get_command_display_text`). Static helpers
+ * read source text through this view instead of calling
+ * `editor_buffer_line` globally — that keeps the module's source-text
+ * dependency declared at the API boundary as an EditorBufferView
+ * parameter rather than a hidden global reach-through. The view is
+ * refreshed at frame start; the cache invariant matches the frame's
+ * snapshot of the editor buffer. */
+static EditorBufferView s_replay_text_view;
+
 static void replay_build_predef_snapshots(void);
 
 static const char *replay_document_text(int cmd_idx) {
-    const char *text = editor_buffer_line(cmd_idx);
+    const char *text = editor_buffer_view_line(s_replay_text_view, cmd_idx);
     return (text && text[0]) ? text : "";
 }
 
@@ -648,8 +659,11 @@ static int build_replay_assignment_inline_comment(int cmd_idx, int flat_idx,
     return 0;
 }
 
-int repl_replay_code_panel_get_command_display_text(int cmd_idx, char *out, int out_size) {
+int repl_replay_code_panel_get_command_display_text(EditorBufferView text,
+                                                    int cmd_idx,
+                                                    char *out, int out_size) {
     ReplReplayRuntimeState replay = repl_state_replay();
+    s_replay_text_view = text;
     int flat_idx;
     char comment[MAX_INPUT_LEN];
 
@@ -875,8 +889,10 @@ static void repl_replay_annotations_refresh_virtual_lines(void) {
     }
 }
 
-void repl_replay_annotations_prepare(void) {
+void repl_replay_annotations_prepare(EditorBufferView text) {
     ReplReplayRuntimeState replay = repl_state_replay();
+
+    s_replay_text_view = text;
 
     if (replay.active && s_replay_cache_pc != replay.pc)
         repl_replay_annotations_rebuild_cache();

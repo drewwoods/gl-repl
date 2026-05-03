@@ -162,7 +162,7 @@ int main(void) {
         FILE *dump_f = fopen(tmp_dump_path, "w");
         ASSERT_TRUE("open dump file", dump_f != NULL);
         if (dump_f) {
-            repl_dump_code_panel_text(dump_f);
+            repl_dump_code_panel_text(dump_f, editor_buffer_view());
             fclose(dump_f);
         }
 
@@ -200,7 +200,7 @@ int main(void) {
 
         ASSERT_TRUE("open visual dump file", dump_f != NULL);
         if (dump_f) {
-            repl_dump_code_panel_visual_text(dump_f);
+            repl_dump_code_panel_visual_text(dump_f, editor_buffer_view());
             fclose(dump_f);
         }
 
@@ -240,7 +240,7 @@ int main(void) {
 
         ASSERT_TRUE("open overflow visual dump file", dump_f != NULL);
         if (dump_f) {
-            repl_dump_code_panel_visual_text(dump_f);
+            repl_dump_code_panel_visual_text(dump_f, editor_buffer_view());
             fclose(dump_f);
         }
 
@@ -283,7 +283,7 @@ int main(void) {
 
         ASSERT_TRUE("open point-parameter visual dump file", dump_f != NULL);
         if (dump_f) {
-            repl_dump_code_panel_visual_text(dump_f);
+            repl_dump_code_panel_visual_text(dump_f, editor_buffer_view());
             fclose(dump_f);
         }
 
@@ -324,7 +324,7 @@ int main(void) {
 
         ASSERT_TRUE("open narrow point-parameter visual dump file", dump_f != NULL);
         if (dump_f) {
-            repl_dump_code_panel_visual_text(dump_f);
+            repl_dump_code_panel_visual_text(dump_f, editor_buffer_view());
             fclose(dump_f);
         }
 
@@ -374,7 +374,7 @@ int main(void) {
 
             ASSERT_TRUE("open layout visual dump file", dump_f != NULL);
             if (dump_f) {
-                repl_dump_code_panel_visual_text(dump_f);
+                repl_dump_code_panel_visual_text(dump_f, editor_buffer_view());
                 fclose(dump_f);
             }
 

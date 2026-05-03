@@ -61,6 +61,7 @@
 
 #include <stdarg.h>
 
+#include "editor_state.h"  /* EditorBufferView */
 #include "repl_core.h"
 #include "repl_replay.h"
 #include "repl_search.h"
@@ -180,8 +181,8 @@ int  repl_extract_assignment_parts(const char *src,
 
 /* ---- Code-panel dumps (debug + test fixtures) ------------------------- */
 
-void repl_dump_code_panel_text(FILE *out);
-void repl_dump_code_panel_visual_text(FILE *out);
+void repl_dump_code_panel_text(FILE *out, EditorBufferView text);
+void repl_dump_code_panel_visual_text(FILE *out, EditorBufferView text);
 
 /* ---- Autocomplete ----------------------------------------------------- */
 

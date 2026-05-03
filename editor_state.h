@@ -36,6 +36,19 @@ typedef struct {
     int  line_count;
 } ReplEditorBuffer;
 
+/* Read-only view over the editor buffer: a const pointer to the
+ * lines array plus the active count. Passed by value to REPL
+ * consumers that need source text (replay annotations, export,
+ * debug dumps, executor display text, flatten reparse helpers,
+ * etc.) so they don't reach into editor globals. The view is
+ * non-owning and stays valid as long as the editor buffer that
+ * produced it. Phase B (Phase A-revised commit 15) introduces
+ * the type; Phase B commits 15-16 thread it through call sites. */
+typedef struct {
+    const char (*lines)[MAX_LINE_LEN];
+    int          line_count;
+} EditorBufferView;
+
 /* Live editor-input state: the typing buffer, cursor, insert mode, and
  * pending-newline scratch. Owned by EditorState (Phase 1 commit 5).
  * `edit_line_idx` exists for view symmetry but is *not* the canonical
@@ -160,6 +173,19 @@ const char *editor_buffer_line(int idx);
 void        editor_buffer_set_line(int idx, const char *text);
 int         editor_buffer_count(void);
 void        editor_buffer_set_count(int count);
+
+/* Build a read-only EditorBufferView over the live editor buffer.
+ * Cheap (one struct copy of pointer + int). REPL consumers should
+ * accept the view as a parameter rather than calling
+ * `editor_buffer_*` reads through globals. */
+EditorBufferView editor_buffer_view(void);
+
+/* Slice-level read accessors that take a view explicitly. The view
+ * variants are the long-term API; the global-state variants above
+ * remain during the migration and will be removed once every reader
+ * has converted (Phase B commit 18 closes that down with a hard
+ * guard). */
+const char *editor_buffer_view_line(EditorBufferView view, int idx);
 
 /* Editor-input slice API. The view variant returns the input by-value
  * with `edit_line_idx` populated from the document cursor (the

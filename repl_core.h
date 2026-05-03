@@ -11,6 +11,7 @@
 
 #include <stdio.h>
 
+#include "editor_state.h"   /* EditorBufferView */
 #include "repl_flatten.h"
 
 /* --- Save / load ------------------------------------------------------- */
@@ -26,8 +27,10 @@ int  repl_export_load_from_file(const char *filename);
 
 /* Save active scene or example to a standalone .c file with metadata headers
  * (@var name=value, @cfg key=value, @camera, @scene-name, @workspace-dir).
- * Sets status message on success or failure. */
-void repl_export_save_output(const char *filename);
+ * Sets status message on success or failure. `text` is the editor
+ * buffer view the caller built; export reads source text exclusively
+ * through that view. */
+void repl_export_save_output(const char *filename, EditorBufferView text);
 
 /* Workspace I/O: save every occupied user-scene slot to `<dir>/<slug>.c`.
  * Each slot is flushed with its own @scene-name header. Both functions

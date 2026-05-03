@@ -63,13 +63,23 @@ static void workspace_format_float(char *buf, size_t n, float v) {
     snprintf(buf, n, "%g", (double)v);
 }
 
+/* Per-call editor-text view, set by the public entry points
+ * (`repl_export_save_output`, `repl_dump_code_panel_text`,
+ * `repl_dump_code_panel_visual_text`) before they invoke any helper
+ * that reads source text. Static helpers route through
+ * `export_document_text` instead of calling `editor_buffer_line`
+ * directly so the source-text dependency is declared at the API
+ * boundary as an EditorBufferView parameter rather than a hidden
+ * global reach-through. */
+static EditorBufferView s_export_text_view;
+
 static const char *export_document_text(int cmd_idx) {
     const char *text;
 
     if (cmd_idx < 0 || cmd_idx >= repl_state_document_count())
         return "";
 
-    text = editor_buffer_line(cmd_idx);
+    text = editor_buffer_view_line(s_export_text_view, cmd_idx);
     return (text && text[0]) ? text : "";
 }
 
@@ -2433,12 +2443,14 @@ static void emit_export_scaffold(FILE *f, const ExportScaffoldContext *ctx) {
     }
 }
 
-void repl_export_save_output(const char *filename) {
+void repl_export_save_output(const char *filename, EditorBufferView text) {
     FILE *f = fopen(filename, "w");
     if (!f) {
         set_status("Error: cannot write output.c");
         return;
     }
+
+    s_export_text_view = text;
 
     ExportScaffoldContext scaffold = {
         .needs = export_collect_needs(),
@@ -2669,8 +2681,10 @@ static void dump_code_panel_wrapped_line(FILE *dst, const char *text,
     }
 }
 
-void repl_dump_code_panel_text(FILE *out) {
+void repl_dump_code_panel_text(FILE *out, EditorBufferView text) {
     FILE *dst = out ? out : stdout;
+
+    s_export_text_view = text;
 
     update_render_state_strings();
     update_cam_lines();
@@ -2705,13 +2719,15 @@ void repl_dump_code_panel_text(FILE *out) {
     fflush(dst);
 }
 
-void repl_dump_code_panel_visual_text(FILE *out) {
+void repl_dump_code_panel_visual_text(FILE *out, EditorBufferView text) {
     FILE *dst = out ? out : stdout;
     int panel_w;
     int linenum_w = 4 * FONT_W;
     int idx_col_w = repl_state_presentation().show_vertex_indices ? (6 * FONT_W) : 0;
     int idx_x = CODE_MARGIN_X + linenum_w + FONT_W;
     int text_x = idx_x + idx_col_w;
+
+    s_export_text_view = text;
 
     repl_layout_code_panel_rect(NULL, NULL, &panel_w, NULL);
     update_render_state_strings();

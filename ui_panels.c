@@ -518,7 +518,8 @@ static void code_panel_draw_command_row(CodePanelRowCtx *ctx, int i,
         search_row_idx = i + 1;
     else
         search_row_idx = i;
-    repl_replay_code_panel_get_command_display_text(i, display_text,
+    repl_replay_code_panel_get_command_display_text(editor_buffer_view(),
+                                                    i, display_text,
                                                     sizeof(display_text));
 
     CodePanelWrapIter wrap_it;

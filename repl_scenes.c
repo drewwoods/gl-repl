@@ -303,7 +303,7 @@ int repl_save_workspace(const char *dir) {
         snprintf(path, sizeof(path), "%s/%s.c", dir, slug);
 
         g_export_scene_name_hint = g_user_scenes[s].name;
-        repl_export_save_output(path);
+        repl_export_save_output(path, editor_buffer_view());
         g_export_scene_name_hint = NULL;
         written++;
     }
@@ -412,7 +412,7 @@ static int evict_scene_to_workspace(int slot) {
     snprintf(path, sizeof(path), "%s/%s.c", g_workspace_dir, slug);
 
     g_export_scene_name_hint = g_user_scenes[slot].name;
-    repl_export_save_output(path);
+    repl_export_save_output(path, editor_buffer_view());
     g_export_scene_name_hint = NULL;
 
     g_user_scenes[slot].used = 0;

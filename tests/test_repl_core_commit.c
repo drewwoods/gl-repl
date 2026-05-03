@@ -647,7 +647,7 @@ int main(void) {
         replay_pc = 1;
         replay_src_line = 0;
         ASSERT_TRUE("replay display assignment text",
-                    repl_replay_code_panel_get_command_display_text(0, display, sizeof(display)));
+                    repl_replay_code_panel_get_command_display_text(editor_buffer_view(), 0, display, sizeof(display)));
         ASSERT_STR("replay display assignment inline comment",
                    display,
                    "  i = i + j + 3; // i = 3.2 + 1.2 + 3 = 7.4");
@@ -655,12 +655,12 @@ int main(void) {
         replay_pc = 2;
         replay_src_line = 1;
         ASSERT_TRUE("replay display prior assignment still visible",
-                    repl_replay_code_panel_get_command_display_text(0, display, sizeof(display)));
+                    repl_replay_code_panel_get_command_display_text(editor_buffer_view(), 0, display, sizeof(display)));
         ASSERT_STR("replay display prior assignment inline comment",
                    display,
                    "  i = i + j + 3; // i = 3.2 + 1.2 + 3 = 7.4");
         ASSERT_TRUE("replay display vertex text",
-                    repl_replay_code_panel_get_command_display_text(1, display, sizeof(display)));
+                    repl_replay_code_panel_get_command_display_text(editor_buffer_view(), 1, display, sizeof(display)));
         ASSERT_STR("replay display vertex source unchanged",
                    display,
                    "  glVertex3f(i, j, 0);");
@@ -691,7 +691,7 @@ int main(void) {
         replay_pc = 1;
         replay_src_line = 0;
         ASSERT_TRUE("replay chain assignment text",
-                    repl_replay_code_panel_get_command_display_text(0, display, sizeof(display)));
+                    repl_replay_code_panel_get_command_display_text(editor_buffer_view(), 0, display, sizeof(display)));
         ASSERT_STR("replay chain assignment inline comment",
                    display,
                    "  i = i + k; // i = 0.23 + 0.5 = 0.73");
@@ -723,7 +723,7 @@ int main(void) {
         replay_pc = repl_state_flat_program_count();
         replay_src_line = 5;
         ASSERT_TRUE("replay goto skipped assignment text",
-                    repl_replay_code_panel_get_command_display_text(3, display, sizeof(display)));
+                    repl_replay_code_panel_get_command_display_text(editor_buffer_view(), 3, display, sizeof(display)));
         ASSERT_TRUE("replay goto skipped assignment uses pre-jump value",
                     strstr(display, "// x = 1 + 1 = 2") != NULL);
         ASSERT_TRUE("replay goto skipped assignment ignores skipped overwrite",
@@ -755,7 +755,7 @@ int main(void) {
         replay_pc = 1;
         replay_src_line = 1;
         ASSERT_TRUE("replay scientific assignment text",
-                    repl_replay_code_panel_get_command_display_text(1, display, sizeof(display)));
+                    repl_replay_code_panel_get_command_display_text(editor_buffer_view(), 1, display, sizeof(display)));
         ASSERT_TRUE("replay scientific inline comment keeps expanded rhs",
                     strstr(display, "// i = 1 * 1e-06 = 1e-06") != NULL);
 

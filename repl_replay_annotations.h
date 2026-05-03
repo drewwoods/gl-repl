@@ -26,10 +26,16 @@
 #ifndef REPL_REPLAY_ANNOTATIONS_H
 #define REPL_REPLAY_ANNOTATIONS_H
 
+#include "editor_state.h"  /* EditorBufferView */
+
 /* Prepare annotation lookups for the current frame. Refreshes the per-PC
  * cache and refills editor_state_virtual_lines(). Idempotent within
- * a frame; safe to call from both the controller and the layout build. */
-void repl_replay_annotations_prepare(void);
+ * a frame; safe to call from both the controller and the layout build.
+ *
+ * `text` is the editor buffer view the controller built for this
+ * frame. The module caches the view internally so static helpers can
+ * read source text without reaching back into editor globals. */
+void repl_replay_annotations_prepare(EditorBufferView text);
 
 /* Count virtual annotation rows attached to a source line. Reads the
  * controller-pushed editor_virtual_lines list, so this stays in sync with
@@ -38,8 +44,10 @@ int  repl_replay_annotation_extra_rows_for_line(int cmd_idx);
 
 /* Get the inline annotated display text for a source line during replay
  * (the source body, without the extra annotation rows). Writes up to
- * out_size bytes into out. */
-int  repl_replay_code_panel_get_command_display_text(int cmd_idx,
+ * out_size bytes into out. `text` is the editor buffer view the caller
+ * built for this frame. */
+int  repl_replay_code_panel_get_command_display_text(EditorBufferView text,
+                                                     int cmd_idx,
                                                      char *out, int out_size);
 
 #endif /* REPL_REPLAY_ANNOTATIONS_H */

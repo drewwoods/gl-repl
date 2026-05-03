@@ -146,8 +146,9 @@ static int code_panel_command_main_rows(int cmd_idx, int panel_w, int text_x) {
 
     {
         char display_text[MAX_INPUT_LEN];
-        if (!repl_replay_code_panel_get_command_display_text(cmd_idx, display_text,
-                                                 sizeof(display_text)))
+        if (!repl_replay_code_panel_get_command_display_text(editor_buffer_view(),
+                                                             cmd_idx, display_text,
+                                                             sizeof(display_text)))
             return 1;
         return repl_code_panel_document_row_count_for_text(display_text,
                                                            text_x, panel_w);
@@ -265,7 +266,7 @@ void repl_code_panel_document_build(CodePanelDocumentLayout *layout,
     layout->visible_lines =
         repl_code_panel_document_visible_lines_for_height(cp_h);
 
-    repl_replay_annotations_prepare();
+    repl_replay_annotations_prepare(editor_buffer_view());
 
     layout->header_rows = code_panel_header_row_count(panel_w, text_x);
     layout->footer_rows = code_panel_footer_row_count(panel_w, text_x);

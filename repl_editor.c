@@ -828,8 +828,8 @@ static int handle_buffer_command_key_route(unsigned char key) {
     }
 
     if (key == KEY_CTRL_P) {
-        repl_debug_dump_editor(stdout);
-        repl_debug_dump_flat_commands(stdout);
+        repl_debug_dump_editor(stdout, editor_buffer_view());
+        repl_debug_dump_flat_commands(stdout, editor_buffer_view());
         set_status("Dumped editor + flat commands to stdout");
         return 1;
     }
@@ -1189,7 +1189,7 @@ static int handle_semicolon_commit_key_route(unsigned char key) {
 
 static int handle_quit_key_route(unsigned char key) {
     if (key == KEY_CTRL_Q) {
-        repl_export_save_output(quit_tempfile);
+        repl_export_save_output(quit_tempfile, editor_buffer_view());
         printf("Saved to %s\n", quit_tempfile);
         exit(0);
     }
