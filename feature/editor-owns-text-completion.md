@@ -1,5 +1,13 @@
 # Plan: Three-Layer Ownership Split (Editor / REPL / UI)
 
+> **Status: landed (2026-05-03).** Phases A–I (commits 1–43) all
+> shipped on `feature/editor-ownership-gap-cleanup`. The
+> M/V/C+compiler+router contract is enforced by 31 boundary
+> checks under `make check-state-ownership`. See `MODULES.md` for
+> the current ownership map. The deferred items are itemized at
+> the end of this document under **Deferred from Phase H** and
+> the post-Phase-I bullets in `MODULES.md`.
+
 > **Direction note (2026-05-02).** Commits 1–11 of this plan have
 > landed and remain correct. Phase 4's broad `UiAction` enum direction
 > has been **superseded** by
@@ -962,7 +970,7 @@ runs the boundary-audit sweep and the docs refresh.
 | 42b | refactor: `parser_emit_error_v` writes to `ctx->err_buf` or no-ops; the legacy no-ctx wrappers (`repl_parser_parse_command` / `_with_vars`) surface via `set_status` themselves so the test harness still observes status, but `parse_command` and its internal helpers stop calling `set_status` directly | done |
 | 42c | checks: `check-no-set-status-in-repl-parser` hard guard with baseline 1 (the surviving call site is the legacy no-ctx wrappers' `parser_legacy_surface_to_status` bridge); ratchets to 0 once the test harness migrates off the no-ctx entries | done |
 | 42 | checks: broader hard-guard sweep — add `check-no-set-status-in-compile-apply` symmetric to the parser guard so repl_compile/apply purity is locked in; tighten `state-c-shrinking` baseline from 1315 → 600 (current line count is 586 with 14-line headroom); refresh stale parser doc comments to reflect the err_buf seam | done |
-| 43 | docs: refresh MODULES, ARCHITECTURE, CLAUDE, callgraph groups; mark `editor-ownership-gap-cleanup`, `editor-text-model-controller`, and `editor-owns-text-completion(-revised)` plans as landed | pending |
+| 43 | docs: refresh MODULES (drop legacy-name annotations, replace stale "Current Status" section with the post-Phase-I shape), CLAUDE (add boundary-checks summary), callgraph groups (rename + delete repl_commit), and mark `editor-ownership-gap-cleanup`, `editor-text-model-controller`, `editor-owns-text-completion(-revised)` plans as landed | done |
 
 Phase I signal: the parser never calls `set_status`; every boundary
 the plan articulates is enforced by a hard guard; the North Star

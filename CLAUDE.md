@@ -85,6 +85,32 @@ Test sources live under `tests/` and shared test-only helpers live under
 `tests/support/`. The Makefile still builds root-level test executables
 (`./test_eval`, `./test_format`, etc.) so existing commands stay stable.
 
+### Boundary Checks
+
+`make check-state-ownership` runs the full inventory of
+ownership / contract guards. Highlights:
+
+- `check-no-repl-commit` — `repl_commit.c/h` cannot reappear
+  (commit dispatch lives in `editor_commit.c`).
+- `check-no-set-status-in-repl-parser` — parser core never calls
+  `set_status` (baseline 1 covers the legacy no-ctx wrapper bridge).
+- `check-no-set-status-in-compile-apply` — `repl_compile.c` and
+  `repl_apply.c` are status-free (Phase C purity).
+- `check-no-store-text-api` — `repl_command_store_*_with_line[s]`
+  text-aware overloads stay deleted.
+- `check-repl-no-direct-buffer-read` — REPL files read text via
+  `EditorBufferView`, not directly into editor buffer.
+- `check-ui-returns-hits-only` — `ui_*.c` input helpers compute
+  `UiHit` and return; no growth in legacy mutation sites
+  (baseline 8, ratchets down).
+- `check-variable-panel-forwarders` (87) and
+  `check-replay-forwarders` (37) — legacy forwarder-API uses
+  ratchet downward only.
+- `check-imrepl-not-editor-mirror` — `imrepl_ctrl_editor_*` per-field
+  wrappers are forbidden.
+- `check-editor-ownership-budget` — UI-slice forwarder + facade
+  include counts only shrink.
+
 ## File Layout
 
 | File | Responsibility |

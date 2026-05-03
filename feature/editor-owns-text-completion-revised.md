@@ -1,5 +1,13 @@
 # Plan: Editor-Owned Text Completion — Revised
 
+> **Status: landed.** This revised sibling's direction shipped via
+> Phases A–I of
+> [`editor-owns-text-completion.md`](editor-owns-text-completion.md).
+> The corrected controller boundary (no `UiAction` dispatch enum;
+> passive `UiHit` results routed by `imrepl_ctrl`) is in place;
+> Phase G's `EditorCompletionProvider` registry decouples editor
+> dispatch from REPL grammar.
+
 This is a revised sibling of `feature/editor-owns-text-completion.md`.
 
 The original file remains useful for migration history, especially the
