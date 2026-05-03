@@ -31,6 +31,7 @@ test_repl_executor
 test_repl_var_drag
 test_repl_replay
 test_repl_compile
+test_repl_export_all_commands
 workspace/
 test_ui
 test_ui_help_overlay

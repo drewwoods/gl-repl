@@ -102,7 +102,10 @@
       "Bash(chmod +x /tmp/update_tests.sh)",
       "Bash(/tmp/update_tests.sh)",
       "Bash(awk -F: '{print $1}')",
-      "Bash(./bench_repl*)"
+      "Bash(./bench_repl*)",
+      "Bash(chmod +x /tmp/check_commands.sh)",
+      "Bash(/tmp/check_commands.sh)",
+      "Bash(./test_repl_export_all_commands *)"
     ]
   }
 }
