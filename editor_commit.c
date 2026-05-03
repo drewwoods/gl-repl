@@ -167,6 +167,9 @@ static void apply_post_effects(const EditorCommitPostEffects *effects) {
 
     if (effects->load_line_after_apply)
         load_line_to_input(repl_state_edit_line());
+
+    if (effects->clear_autocomplete)
+        clear_autocomplete_state();
 }
 
 int editor_commit_apply_plan(const EditorCommitPlan *plan) {
@@ -313,6 +316,162 @@ ReplCompileResult editor_compile_close_brace(const char *input,
              "%s block closed", label);
     out->commit_message_valid = 1;
 
+    return REPL_COMPILE_OK;
+}
+
+/* ---- editor_compile_if_block ------------------------------------ */
+
+ReplCompileResult editor_compile_if_block(const char *input,
+                                          const ReplCompileContext *ctx,
+                                          EditorCommitPlan *out,
+                                          char *err, int err_size) {
+    if (!ctx || !out) return REPL_COMPILE_ERROR;
+
+    editor_commit_plan_init(out);
+
+    const char *p = input ? input : "";
+    while (*p && isspace((unsigned char)*p)) p++;
+    if (strncmp(p, "if(", 3) != 0 && strncmp(p, "if (", 4) != 0) {
+        out->change.kind = REPL_COMPILED_NO_CHANGE;
+        return REPL_COMPILE_OK;
+    }
+
+    int pos = ctx->insert_mode ? ctx->edit_line :
+              (ctx->edit_line < ctx->document_count
+                   ? ctx->edit_line : ctx->document_count);
+
+    ExprVar visible_vars[MAX_EXPR_VARS];
+    int visible_nv = collect_visible_vars(pos, visible_vars, MAX_EXPR_VARS);
+
+    /* Skip past `if` to the opening `(`. */
+    while (*p && *p != '(') p++;
+    if (!*p) {
+        snprintf(err, (size_t)err_size, "if syntax: if(expr) {");
+        return REPL_COMPILE_ERROR;
+    }
+    p++;
+
+    char cond_text[MAX_LINE_LEN];
+    int  clen;
+    {
+        int paren = 1;
+        const char *expr_start = p;
+        while (*p && paren > 0) {
+            if (*p == '(')      paren++;
+            else if (*p == ')') paren--;
+            if (paren > 0) p++;
+        }
+        if (paren != 0) {
+            snprintf(err, (size_t)err_size, "if syntax: if(expr) {");
+            return REPL_COMPILE_ERROR;
+        }
+        clen = (int)(p - expr_start);
+        if (clen > (int)sizeof(cond_text) - 1)
+            clen = (int)sizeof(cond_text) - 1;
+        memcpy(cond_text, expr_start, (size_t)clen);
+        cond_text[clen] = '\0';
+    }
+
+    {
+        char verr[128];
+        if (!repl_eval_validate_expression_idents(cond_text,
+                                                  visible_nv > 0 ? visible_vars : NULL,
+                                                  visible_nv,
+                                                  verr, sizeof(verr))) {
+            snprintf(err, (size_t)err_size, "%s", verr);
+            return REPL_COMPILE_ERROR;
+        }
+    }
+
+    float cond_val = 0.0f;
+    {
+        float cond_args[1];
+        int neval = repl_eval_parse_exprs(cond_text, cond_args, 1,
+                                          visible_nv > 0 ? visible_vars : NULL,
+                                          visible_nv);
+        cond_val = (neval >= 1) ? cond_args[0] : 0.0f;
+    }
+
+    /* Skip past `)`. */
+    p++;
+    while (*p && isspace((unsigned char)*p)) p++;
+    if (*p != '{' && *p != '\0') {
+        snprintf(err, (size_t)err_size, "if syntax: if(expr) {");
+        return REPL_COMPILE_ERROR;
+    }
+
+    char indent[32];
+    repl_source_scope_cmd_indent(pos, indent, sizeof(indent));
+
+    /* Build CMD_IF_BEGIN. */
+    GLCmd ib;
+    memset(&ib, 0, sizeof(ib));
+    ib.type = CMD_IF_BEGIN;
+    ib.args[0] = cond_val;
+    ib.valid = 1;
+    ib.has_vars = input_has_any_visible_vars(cond_text, visible_vars, visible_nv);
+
+    /* Format the begin line text. cond_text gets trimmed in place. */
+    char ib_text[MAX_LINE_LEN];
+    {
+        char *ct = cond_text;
+        int ctlen;
+        while (*ct && isspace((unsigned char)*ct)) ct++;
+        ctlen = (int)strlen(ct);
+        while (ctlen > 0 && isspace((unsigned char)ct[ctlen - 1]))
+            ct[--ctlen] = '\0';
+        snprintf(ib_text, sizeof(ib_text), "%sif(%s) {", indent, ct);
+    }
+
+    /* Header-replace branch: cursor sits on an existing CMD_IF_BEGIN
+     * in non-insert mode → REPLACE_ONE. */
+    if (!ctx->insert_mode &&
+        ctx->edit_line < ctx->document_count &&
+        ctx->document_cmds[ctx->edit_line].type == CMD_IF_BEGIN) {
+        out->change.kind  = REPL_COMPILED_REPLACE_ONE;
+        out->change.pos   = ctx->edit_line;
+        out->change.count = 1;
+        out->change.cmds[0] = ib;
+        snprintf(out->change.text[0], sizeof(out->change.text[0]),
+                 "%s", ib_text);
+
+        out->effects.cursor_target       = ctx->edit_line + 1;
+        out->effects.insert_mode_target  = 1;
+        out->effects.clear_input         = 1;
+        out->effects.clear_autocomplete  = 1;
+
+        snprintf(out->commit_message, sizeof(out->commit_message),
+                 "if condition updated");
+        out->commit_message_valid = 1;
+        return REPL_COMPILE_OK;
+    }
+
+    /* Insert-new-block branch: INSERT_MANY (begin + end). */
+    GLCmd ie;
+    memset(&ie, 0, sizeof(ie));
+    ie.type = CMD_IF_END;
+    ie.valid = 1;
+
+    char ie_text[MAX_LINE_LEN];
+    snprintf(ie_text, sizeof(ie_text), "%s}", indent);
+
+    out->change.kind  = REPL_COMPILED_INSERT_MANY;
+    out->change.pos   = pos;
+    out->change.count = 2;
+    out->change.cmds[0] = ib;
+    out->change.cmds[1] = ie;
+    snprintf(out->change.text[0], sizeof(out->change.text[0]),
+             "%s", ib_text);
+    snprintf(out->change.text[1], sizeof(out->change.text[1]),
+             "%s", ie_text);
+
+    out->effects.cursor_target      = pos + 1;
+    out->effects.insert_mode_target = 1;
+    out->effects.clear_input        = 1;
+
+    snprintf(out->commit_message, sizeof(out->commit_message),
+             "if-block: type body lines, press Esc when done");
+    out->commit_message_valid = 1;
     return REPL_COMPILE_OK;
 }
 
