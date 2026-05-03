@@ -578,7 +578,11 @@ void imrepl_ctrl_passive_motion(int x, int y) {
 }
 
 void imrepl_ctrl_mousewheel(int wheel, int direction, int x, int y) {
-    imrepl_ctrl_apply_input_effects(repl_mousewheel_func(wheel, direction, x, y));
+#ifndef USE_GLUT
+    imrepl_ctrl_apply_input_effects(editor_handle_mousewheel(wheel, direction, x, y));
+#else
+    (void)wheel; (void)direction; (void)x; (void)y;
+#endif
 }
 
 void imrepl_ctrl_timer(int value) {

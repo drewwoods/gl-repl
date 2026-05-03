@@ -22,6 +22,9 @@ ReplInputDispatchEffects editor_handle_special(int key, int x, int y);
 ReplInputDispatchEffects editor_handle_mouse(int button, int state, int x, int y);
 ReplInputDispatchEffects editor_handle_motion(int x, int y);
 ReplInputDispatchEffects editor_handle_passive_motion(int x, int y);
+#ifndef USE_GLUT
+ReplInputDispatchEffects editor_handle_mousewheel(int wheel, int direction, int x, int y);
+#endif
 
 /* Effect accumulation API used by the five public dispatch entry
  * points. During the keyboard / special / mouse / motion migration
