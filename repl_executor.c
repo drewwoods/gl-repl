@@ -24,7 +24,7 @@ static GLUtesselator *g_tess = NULL;
 static TessVertex     g_tess_verts[TESS_VERT_BUF_SIZE];
 static int            g_tess_vert_count = 0;
 
-/* Execution context adjusted by repl_replay.c for fade-batch rendering. */
+/* Execution context adjusted by replay.c for fade-batch rendering. */
 static float g_execute_alpha_scale = 1.0f;
 
 /* Skip expensive geometry-emitting commands (vertices, quadrics, tess) for

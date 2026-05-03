@@ -1,5 +1,5 @@
 /*
- * repl_clipboard.h - Selection and clipboard operations.
+ * editor_clipboard.h - Selection and clipboard operations.
  *
  * Manages line-range selection for copy/cut/paste operations. Selection is
  * anchored at a start line and extended/contracted to an end line; multiple

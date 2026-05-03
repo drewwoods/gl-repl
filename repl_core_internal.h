@@ -2,7 +2,7 @@
  * repl_core_internal.h - Implementation internals shared across REPL modules.
  *
  * Collects internal APIs used by repl_core.c, repl_editor.c, repl_executor.c,
- * repl_export.c, repl_parser.c, repl_search.c, and the unit test suites. These
+ * repl_export.c, repl_parser.c, editor_search.c, and the unit test suites. These
  * are NOT part of the public API (repl_core.h); they are domain-specific helpers
  * that tests and sibling modules need. When an internal API stabilizes and
  * becomes broadly useful, graduate it to repl_core.h.
@@ -21,7 +21,7 @@
  *    rendering logic without running the full UI.
  *
  * 4. Autocomplete: Update and accept logic for symbol completion and parameter
- *    hints. Integrates with repl_autocomplete.c model.
+ *    hints. Integrates with editor_autocomplete.c model.
  *
  * 5. Source-scope: Block depth, indentation, and scope queries (documented in
  *    repl_source_scope.h). Prefixes cached to avoid re-traversal.
@@ -211,7 +211,7 @@ int  collect_visible_vars(int pos, ExprVar *vars, int max_vars);
 
 /* ---- Replay state machine --------------------------------------------- */
 
-/* Replay APIs live in repl_replay.h. */
+/* Replay APIs live in replay.h. */
 
 /* ---- Bench helpers (populate replay fade state without stepping) -------
  * These exist solely for bench_repl.c to drive

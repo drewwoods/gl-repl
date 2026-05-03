@@ -8,7 +8,7 @@
  * the parser sees the line.
  *
  * Parse context allows internal callers (repl_flatten.c during expansion,
- * repl_replay.c during step-back) to parse lines outside the active edit position.
+ * replay.c during step-back) to parse lines outside the active edit position.
  * Each parse is stateless and immutable: parsing the same line twice yields
  * identical results.
  *
@@ -47,7 +47,7 @@ typedef struct {
 /* Context-aware parser entrypoint. Pass a ReplParseContext from internal
  * callers when the parse position is not the active editor line (e.g.,
  * repl_flatten.c parsing a source command at a different index, or
- * repl_replay.c doing a step-back parse). Pass NULL to fall back to the
+ * replay.c doing a step-back parse). Pass NULL to fall back to the
  * legacy g_edit_line behavior used by command-entry wrappers.
  * Returns 1 on success, 0 on parse error (status message set).
  * On success, out->cmd holds the parsed command and out->text holds the

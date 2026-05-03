@@ -58,7 +58,7 @@ void variable_panel_set_visible(int visible) {
 
 /* Drag transaction handlers. The drag-state writeback (value writeback,
  * source-line rewrite for matching CMD_VAR_ASSIGN) lives in
- * repl_var_drag.c; these wrappers expose it under the peer-subsystem
+ * variable_panel_drag.c; these wrappers expose it under the peer-subsystem
  * namespace. */
 int variable_panel_drag_active(void) {
     return repl_var_drag_active();

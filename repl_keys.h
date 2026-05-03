@@ -7,7 +7,7 @@
  * keyboard dispatch readable and provide a single place to check for conflicts
  * when adding new bindings.
  *
- * Shared by repl_editor.c (main input dispatcher), repl_search.c (search
+ * Shared by repl_editor.c (main input dispatcher), editor_search.c (search
  * overlay input), and other modules that need to recognize key codes. Comments
  * describe the action each key triggers (e.g., KEY_CTRL_S = save to output.c).
  *

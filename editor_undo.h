@@ -1,5 +1,5 @@
 /*
- * repl_undo.h - Undo/redo state snapshots and command history.
+ * editor_undo.h - Undo/redo state snapshots and command history.
  *
  * Implements undo/redo using circular snapshot buffers: one ring for undo
  * history (32 slots) and one for redo history (32 slots). Each snapshot

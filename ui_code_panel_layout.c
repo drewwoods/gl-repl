@@ -1,5 +1,5 @@
 /*
- * repl_code_panel_layout.c -- Pure code-panel text wrapping helpers.
+ * ui_code_panel_layout.c -- Pure code-panel text wrapping helpers.
  *
  * The code panel has several consumers that must agree on visual rows:
  * renderer, hit-testing, search/cursor positioning, tests, and visual text

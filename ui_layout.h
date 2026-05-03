@@ -1,5 +1,5 @@
 /*
- * repl_layout.h - pure window layout geometry.
+ * ui_layout.h - pure window layout geometry.
  *
  * Geometry queries for scene and code-panel rectangles. No GL or rendering
  * state; callers include this header when they only need window layout math.

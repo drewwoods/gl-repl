@@ -1,5 +1,5 @@
 /*
- * repl_replay.c - Replay state machine, fade batches, and replay input.
+ * replay.c - Replay state machine, fade batches, and replay input.
  */
 #include "replay.h"
 #include "repl_core_internal.h"

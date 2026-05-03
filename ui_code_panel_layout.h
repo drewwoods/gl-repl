@@ -1,5 +1,5 @@
 /*
- * repl_code_panel_layout.h - Pure text layout for code-panel line wrapping.
+ * ui_code_panel_layout.h - Pure text layout for code-panel line wrapping.
  *
  * Stateless algorithms for wrapping source lines to a fixed panel width, with
  * support for hanging indentation and optional break points (commas). Used by the
