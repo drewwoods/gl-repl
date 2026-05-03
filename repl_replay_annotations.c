@@ -758,7 +758,18 @@ static int repl_replay_build_eval_annotation(int cmd_idx, int flat_idx,
     nv = build_visible_vars_from_predef_values(flat_idx, predef_vals,
                                                visible_vars,
                                                (int)(sizeof(visible_vars) / sizeof(visible_vars[0])));
-    ReplParseContext parse_ctx = { cmd_idx, visible_vars, nv, 0 };
+    /* Replay annotation re-parses each step's source for display.
+     * Errors here are dropped — the command was already validated at
+     * commit time, and a parse failure during annotation just means
+     * the step renders without the evaluated-text overlay. */
+    char annotation_parse_err[REPL_STATUS_TEXT_MAX]; /* deliberately unread */
+    annotation_parse_err[0] = '\0';
+    ReplParseContext parse_ctx = {
+        .source_line_idx = cmd_idx,
+        .vars = visible_vars, .num_vars = nv,
+        .err_buf = annotation_parse_err,
+        .err_sz  = (int)sizeof(annotation_parse_err),
+    };
     ReplParsedLine eval_pl;
     if (!repl_parser_parse_command_ctx(replay_document_text(cmd_idx),
                                 &eval_pl, &parse_ctx))

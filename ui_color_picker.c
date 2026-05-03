@@ -126,10 +126,23 @@ static void color_picker_write_cmd(void) {
         return;
     }
 
-    ReplParseContext parse_ctx = { g_cp_line, NULL, 0, 0 };
+    /* Color picker writeback: surface parser errors so a malformed
+     * rewrite (shouldn't happen for synthesized glColor commands but
+     * defends the path) shows in the status bar instead of failing
+     * silently. */
+    char picker_parse_err[REPL_STATUS_TEXT_MAX];
+    picker_parse_err[0] = '\0';
+    ReplParseContext parse_ctx = {
+        .source_line_idx = g_cp_line,
+        .err_buf = picker_parse_err,
+        .err_sz  = (int)sizeof(picker_parse_err),
+    };
     ReplParsedLine pl;
-    if (!repl_parser_parse_command_ctx(new_line, &pl, &parse_ctx))
+    if (!repl_parser_parse_command_ctx(new_line, &pl, &parse_ctx)) {
+        if (picker_parse_err[0])
+            set_status(picker_parse_err);
         return;
+    }
 
     ReplCommandStore store = repl_command_store_live();
     if (repl_command_store_replace_one(&store, g_cp_line, &pl.cmd))

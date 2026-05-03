@@ -341,8 +341,15 @@ static int parse_for_overwrite_enter(GLCmd *cmd, char *text_out, int text_sz,
     if (text_out && text_sz > 0)
         text_out[0] = '\0';
     int parsed;
+    char editor_parse_err[REPL_STATUS_TEXT_MAX];
+    editor_parse_err[0] = '\0';
     if (num_vis_vars > 0) {
-        ReplParseContext parse_ctx = { insert_idx, vis_vars, num_vis_vars, 0 };
+        ReplParseContext parse_ctx = {
+            .source_line_idx = insert_idx,
+            .vars = vis_vars, .num_vars = num_vis_vars,
+            .err_buf = editor_parse_err,
+            .err_sz  = (int)sizeof(editor_parse_err),
+        };
         ReplParsedLine pl;
         parsed = repl_parser_parse_command_ctx(editor_state_input().input, &pl, &parse_ctx);
         if (parsed) {
@@ -350,7 +357,11 @@ static int parse_for_overwrite_enter(GLCmd *cmd, char *text_out, int text_sz,
             rewrite_source_text_with_indent(text_out, text_sz, insert_idx, 1);
         }
     } else {
-        ReplParseContext parse_ctx = { insert_idx, NULL, 0, 0 };
+        ReplParseContext parse_ctx = {
+            .source_line_idx = insert_idx,
+            .err_buf = editor_parse_err,
+            .err_sz  = (int)sizeof(editor_parse_err),
+        };
         ReplParsedLine pl;
         parsed = repl_parser_parse_command_ctx(editor_state_input().input, &pl, &parse_ctx);
         if (parsed) {
@@ -365,6 +376,8 @@ static int parse_for_overwrite_enter(GLCmd *cmd, char *text_out, int text_sz,
             }
         }
     }
+    if (!parsed && editor_parse_err[0])
+        set_status(editor_parse_err);
     return parsed;
 }
 
@@ -499,9 +512,16 @@ static CommitResult commit_current_input(int enter_mode) {
             int num_vis_vars = collect_visible_vars(insert_idx, vis_vars, MAX_EXPR_VARS);
 
             char cmd_text[MAX_LINE_LEN] = "";
+            char enter_parse_err[REPL_STATUS_TEXT_MAX];
+            enter_parse_err[0] = '\0';
             memset(&cmd, 0, sizeof(cmd));
             if (num_vis_vars > 0) {
-                ReplParseContext parse_ctx = { insert_idx, vis_vars, num_vis_vars, 0 };
+                ReplParseContext parse_ctx = {
+                    .source_line_idx = insert_idx,
+                    .vars = vis_vars, .num_vars = num_vis_vars,
+                    .err_buf = enter_parse_err,
+                    .err_sz  = (int)sizeof(enter_parse_err),
+                };
                 if (try_commit_var_statements())
                     return commit_progressed_since(before) ? COMMIT_OK : COMMIT_REJECTED;
                 ReplParsedLine pl;
@@ -512,7 +532,11 @@ static CommitResult commit_current_input(int enter_mode) {
                                                     insert_idx, 1);
                 }
             } else {
-                ReplParseContext parse_ctx = { insert_idx, NULL, 0, 0 };
+                ReplParseContext parse_ctx = {
+                    .source_line_idx = insert_idx,
+                    .err_buf = enter_parse_err,
+                    .err_sz  = (int)sizeof(enter_parse_err),
+                };
                 ReplParsedLine pl;
                 parsed = repl_parser_parse_command_ctx(editor_state_input().input, &pl, &parse_ctx);
                 if (parsed) {
@@ -520,6 +544,8 @@ static CommitResult commit_current_input(int enter_mode) {
                     repl_copy_string_fits(cmd_text, sizeof(cmd_text), pl.text);
                 }
             }
+            if (!parsed && enter_parse_err[0])
+                set_status(enter_parse_err);
 
             if (parsed) {
                 ReplCommandStore store = repl_command_store_live();
@@ -894,7 +920,18 @@ static int handle_comment_toggle_key_route(unsigned char key) {
                     {
                         GLCmd new_cmd;
                         char new_cmd_text[MAX_LINE_LEN] = "";
-                        ReplParseContext parse_ctx = { repl_state_edit_line(), NULL, 0, 0 };
+                        /* Uncomment-line path: the parser's diagnostic is
+                         * deliberately dropped — the friendly "Cannot
+                         * uncomment" fallback below is more actionable for
+                         * this key. The err_buf catches the message away
+                         * from the status bar. */
+                        char uncomment_parse_err[REPL_STATUS_TEXT_MAX]; /* deliberately unread */
+                        uncomment_parse_err[0] = '\0';
+                        ReplParseContext parse_ctx = {
+                            .source_line_idx = repl_state_edit_line(),
+                            .err_buf = uncomment_parse_err,
+                            .err_sz  = (int)sizeof(uncomment_parse_err),
+                        };
                         memset(&new_cmd, 0, sizeof(new_cmd));
                         int built = 0;
                         int fallback_set_status = 0;
@@ -914,10 +951,9 @@ static int handle_comment_toggle_key_route(unsigned char key) {
                             }
                         }
                         if (!built) {
-                            /* Parser may have set its own error (e.g. "Unknown
-                             * cmd.") - drop it; the friendly "Cannot uncomment"
-                             * message below is clearer for this key path. */
-                            ui_state_status_mut()->text[0] = '\0';
+                            /* Parser may have written into uncomment_parse_err -
+                             * drop it; the friendly "Cannot uncomment" message
+                             * below is clearer for this key path. */
 
                             /* Fallback: variable assignments (`x = expr;`) live
                              * in the commit chain, not the GL-command parser.
