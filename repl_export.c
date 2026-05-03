@@ -408,12 +408,19 @@ static void parse_init_bootstrap(void) {
         return;
 
     for (int bootstrap_idx = 0; bootstrap_idx < NUM_INIT_BOOTSTRAP; bootstrap_idx++) {
-        ReplParseContext parse_ctx = { 0, NULL, 0, 0 };
+        char bootstrap_err[REPL_STATUS_TEXT_MAX];
+        bootstrap_err[0] = '\0';
+        ReplParseContext parse_ctx = {
+            .err_buf = bootstrap_err,
+            .err_sz  = (int)sizeof(bootstrap_err),
+        };
         ReplParsedLine pl;
         if (!repl_parser_parse_command_ctx(g_init_bootstrap_repl[bootstrap_idx].repl_line,
                                     &pl, &parse_ctx)) {
-            fprintf(stderr, "init bootstrap parse failed: %s\n",
-                    g_init_bootstrap_repl[bootstrap_idx].repl_line);
+            fprintf(stderr, "init bootstrap parse failed: %s%s%s\n",
+                    g_init_bootstrap_repl[bootstrap_idx].repl_line,
+                    bootstrap_err[0] ? " — " : "",
+                    bootstrap_err);
             abort();
         }
         g_init_bootstrap_cmds[bootstrap_idx] = pl;

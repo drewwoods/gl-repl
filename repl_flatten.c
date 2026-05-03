@@ -430,8 +430,23 @@ static void flatten_range(FlattenContext *ctx,
             continue;
         }
 
+        /* Flatten re-parses every source line on every flatten pass.
+         * Errors here are dropped: a re-parse failure means the line
+         * was already invalid at commit time (it would have set
+         * .valid=0), and the flatten pass falls back to copying the
+         * original cmd through. Each parse gets its own scratch
+         * err_buf so 42b can drop the legacy set_status fallback
+         * without changing flatten behaviour. */
+        char flatten_parse_err[REPL_STATUS_TEXT_MAX]; /* deliberately unread */
+        flatten_parse_err[0] = '\0';
+
         if (vars && nv > 0) {
-            ReplParseContext parse_ctx = { i, vars, nv, 0 };
+            ReplParseContext parse_ctx = {
+                .source_line_idx = i,
+                .vars = vars, .num_vars = nv,
+                .err_buf = flatten_parse_err,
+                .err_sz  = (int)sizeof(flatten_parse_err),
+            };
             const char *text = spike_text_for(ctx->text, src_cmd, i);
             ReplParsedLine tmp_pl;
             if (repl_parser_parse_command_ctx(text, &tmp_pl, &parse_ctx)) {
@@ -444,7 +459,11 @@ static void flatten_range(FlattenContext *ctx,
             }
         } else if (src_cmd->has_vars) {
             /* Outside loop but has predefined var references: re-evaluate */
-            ReplParseContext parse_ctx = { i, NULL, 0, 0 };
+            ReplParseContext parse_ctx = {
+                .source_line_idx = i,
+                .err_buf = flatten_parse_err,
+                .err_sz  = (int)sizeof(flatten_parse_err),
+            };
             const char *text = spike_text_for(ctx->text, src_cmd, i);
             ReplParsedLine tmp_pl;
             if (repl_parser_parse_command_ctx(text, &tmp_pl, &parse_ctx)) {
@@ -458,7 +477,11 @@ static void flatten_range(FlattenContext *ctx,
         } else {
             /* Spike: re-parse the no-vars path too so we measure the
              * worst-case cost of an editor-owned text model. */
-            ReplParseContext parse_ctx = { i, NULL, 0, 0 };
+            ReplParseContext parse_ctx = {
+                .source_line_idx = i,
+                .err_buf = flatten_parse_err,
+                .err_sz  = (int)sizeof(flatten_parse_err),
+            };
             const char *text = spike_text_for(ctx->text, src_cmd, i);
             ReplParsedLine tmp_pl;
             if (repl_parser_parse_command_ctx(text, &tmp_pl, &parse_ctx)) {
