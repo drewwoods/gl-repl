@@ -4,9 +4,9 @@
 #include "repl_state.h"
 #include "ui_state.h"
 #include "repl_replay_annotations.h"
-#include "repl_code_panel_document.h"
+#include "editor_code_panel_document.h"
 #include "ui_panels.h"
-#include "repl_layout.h"
+#include "ui_layout.h"
 
 #define g_status  (ui_state_status_mut()->text)
 #define g_scroll  (editor_state_scroll_mut()->scroll)

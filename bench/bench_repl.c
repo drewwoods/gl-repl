@@ -43,7 +43,7 @@
 #include "repl_examples.h"
 #include "repl_executor.h"
 #include "repl_parser.h"
-#include "repl_replay.h"
+#include "replay.h"
 #include "scene_render.h"
 #include "scene_render_types.h"
 #include "repl_state.h"

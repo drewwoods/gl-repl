@@ -32,8 +32,8 @@
  * yielding position, length, and x-coordinate for each segment. Used by the renderer
  * to draw each wrapped line segment at the correct position.
  */
-#ifndef REPL_CODE_PANEL_LAYOUT_H
-#define REPL_CODE_PANEL_LAYOUT_H
+#ifndef UI_CODE_PANEL_LAYOUT_H
+#define UI_CODE_PANEL_LAYOUT_H
 
 /* Layout tuning constants. DEFAULT_RIGHT_PAD_PX reserves pixels on the right to
  * avoid cramming text to the edge. DEFAULT_MAX_HANG_INDENT_CHARS caps hanging
@@ -134,4 +134,4 @@ int  repl_code_panel_cursor_row_for_text(const char *text,
                                          int *out_seg_len,
                                          int *out_seg_x);
 
-#endif /* REPL_CODE_PANEL_LAYOUT_H */
+#endif /* UI_CODE_PANEL_LAYOUT_H */

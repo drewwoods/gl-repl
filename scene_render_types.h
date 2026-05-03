@@ -6,7 +6,7 @@
 
 #include "repl_flatten.h"
 #include "sample.h"
-#include "repl_replay.h"
+#include "replay.h"
 #include "scene_guides_shared.h"
 
 typedef struct SceneRgba {

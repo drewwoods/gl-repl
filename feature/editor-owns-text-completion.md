@@ -906,8 +906,8 @@ provider, not a global call.
 
 | # | Commit | Status |
 |---|---|---|
-| 37 | rename: editor-owned modules (`repl_undo` → `editor_undo`, `repl_clipboard` → `editor_clipboard`, `repl_search` → `editor_search`, `repl_autocomplete` → `editor_autocomplete`, `repl_inline_rename` → `editor_inline_rename`); add transitional redirect headers | pending |
-| 38 | rename: peer-subsystem and layout modules (`repl_var_drag` → `variable_panel_drag`, `repl_replay` → `replay`, `repl_layout` → `ui_layout`, `repl_code_panel_layout` → `ui_code_panel_layout`, `repl_code_panel_document` → `editor_code_panel_document`); drop the redirect headers from #37 once downstream catches up | pending |
+| 37 | rename: editor-owned modules (`repl_undo` → `editor_undo`, `repl_clipboard` → `editor_clipboard`, `repl_search` → `editor_search`, `repl_autocomplete` → `editor_autocomplete`, `repl_inline_rename` → `editor_inline_rename`); transitional redirect headers omitted because every caller migrated in the same commit | done |
+| 38 | rename: peer-subsystem and layout modules (`repl_var_drag` → `variable_panel_drag`, `repl_replay` → `replay`, `repl_layout` → `ui_layout`, `repl_code_panel_layout` → `ui_code_panel_layout`, `repl_code_panel_document` → `editor_code_panel_document`); allowlist `ui_layout` / `ui_code_panel_layout` for facade-include + ui-no-repl-state-read checks (Phase I follow-up: pass `code_panel_layout` as a parameter so geometry helpers become pure) | done |
 
 Phase H signal: file names match ownership. No `repl_*` files own
 editor-session state; no `editor_*` files own replay state.

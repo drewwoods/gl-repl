@@ -25,8 +25,8 @@
  * visual styling (e.g., color/opacity) to indicate which variable is being
  * manipulated.
  */
-#ifndef REPL_VAR_DRAG_H
-#define REPL_VAR_DRAG_H
+#ifndef VARIABLE_PANEL_DRAG_H
+#define VARIABLE_PANEL_DRAG_H
 
 /* Query drag state. repl_var_drag_active() returns 1 if a drag is currently
  * in progress, 0 otherwise. repl_var_drag_active_var() returns the index of
@@ -59,4 +59,4 @@ void repl_var_drag_motion(int x);
  * repl_var_drag_active_var() back to -1. */
 void repl_var_drag_reset(void);
 
-#endif /* REPL_VAR_DRAG_H */
+#endif /* VARIABLE_PANEL_DRAG_H */

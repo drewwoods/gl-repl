@@ -2,10 +2,10 @@
 #include "repl_actions.h"
 #include "repl_camera_controls.h"
 #include "editor_clipboard.h"
-#include "repl_code_panel_layout.h"
+#include "ui_code_panel_layout.h"
 #include "repl_config.h"
 #include "repl_export.h"
-#include "repl_replay.h"
+#include "replay.h"
 #include "repl_keys.h"
 #include "repl_state.h"
 #include "editor_help_session.h"
@@ -13,7 +13,7 @@
 #include "ui_state.h"
 #include "prof.h"
 #include "ui_panels.h"
-#include "repl_layout.h"
+#include "ui_layout.h"
 #include "ui_variable_panel.h"
 #include "editor_inline_rename.h"
 
@@ -83,7 +83,7 @@ static void declare_test_vars(void) {
     ASSERT_DECL_OK("declare_predef_var n", repl_eval_declare_predef_var("n", err, sizeof(err)), err);
 }
 
-#include "repl_var_drag.h"
+#include "variable_panel_drag.h"
 
 #define VAR_PANEL_PAD_INTERNAL   6
 #define VAR_TITLE_H_INTERNAL    20

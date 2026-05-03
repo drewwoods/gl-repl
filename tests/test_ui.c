@@ -12,7 +12,7 @@
 #include "ui_menu_bar.h"
 #include "ui_panels.h"
 #include "ui_snapshot.h"
-#include "repl_var_drag.h"
+#include "variable_panel_drag.h"
 #include "support/test_harness.h"
 #include <GL/gl_stub_counts.h>
 

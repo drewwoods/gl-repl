@@ -9,7 +9,7 @@
 #include "ui_state.h"
 #include "editor_undo.h"
 #include "ui_color_picker.h"
-#include "repl_layout.h"
+#include "ui_layout.h"
 
 /* ========================================================================= */
 /* Color picker                                                               */

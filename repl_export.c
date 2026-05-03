@@ -1,5 +1,5 @@
 #include "sample.h"
-#include "repl_code_panel_layout.h"
+#include "ui_code_panel_layout.h"
 #include "repl_core_internal.h"
 #include "repl_command_store.h"
 #include "repl_config.h"
@@ -7,7 +7,7 @@
 #include "repl_parser.h"
 #include "repl_source_scope.h"
 #include "repl_state.h"
-#include "repl_layout.h"
+#include "ui_layout.h"
 #include "ui_state.h"
 
 #define IMPORT_EXPORT_STATE (repl_state_import_export_mut())

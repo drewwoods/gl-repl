@@ -27,8 +27,8 @@
  * giving visual feedback about what's being added. The ring buffer holds up
  * to REPLAY_FADE_BATCH_MAX snapshots.
  */
-#ifndef REPL_REPLAY_H
-#define REPL_REPLAY_H
+#ifndef REPLAY_H
+#define REPLAY_H
 
 /* A snapshot of geometry from [old_pc, new_pc) that fades out as new geometry
  * appears. age is the fade timestamp (incremented by repl_replay_tick_fade_batches).
@@ -104,4 +104,4 @@ int  repl_bench_fade_install(const int *old_pcs, const int *new_pcs,
                              int count, float age);
 void repl_bench_fade_clear(void);
 
-#endif /* REPL_REPLAY_H */
+#endif /* REPLAY_H */

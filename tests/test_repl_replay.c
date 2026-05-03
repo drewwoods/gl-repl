@@ -1,6 +1,6 @@
 #include "repl_core.h"
 #include "repl_state.h"
-#include "repl_replay.c"
+#include "replay.c"
 #include "repl_keys.h"
 #include "support/test_harness.h"
 #include <stdio.h>

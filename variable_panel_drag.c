@@ -27,7 +27,7 @@
  */
 #include "sample.h"
 #include "repl_state.h"
-#include "repl_var_drag.h"
+#include "variable_panel_drag.h"
 #include "variable_panel.h"
 
 int repl_var_drag_active(void) {

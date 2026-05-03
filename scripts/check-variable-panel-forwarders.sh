@@ -44,7 +44,7 @@ violations=$(grep -REn \
     --exclude-dir='build' \
     'editor_state_variable_drag[a-z_]*\(|ui_state_variable_panel[a-z_]*\(|repl_var_drag_[a-z_]*\(' \
     . 2>/dev/null \
-    | grep -vE '^(\./)?(repl_var_drag|variable_panel|editor_state|ui_state)\.c:' || true)
+    | grep -vE '^(\./)?(repl_var_drag|variable_panel|variable_panel_drag|editor_state|ui_state)\.c:' || true)
 
 if [ -z "$violations" ]; then
     count=0
