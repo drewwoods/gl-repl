@@ -605,8 +605,39 @@ void imrepl_ctrl_keyboard(unsigned char key, int x, int y) {
     (void)y;
 }
 
+/* Phase J1 commit 47b — special-key router pre-dispatch.
+ *
+ * Mirrors the keyboard sandwich (47a): rename modal capture FIRST, then
+ * controller-owned routes (replay, cfg shortcut, audio prev/next, help-tab,
+ * help-scroll, F1, F12), then editor_handle_special for cursor moves +
+ * autocomplete + selection navigation + non-help scroll. */
+static int imrepl_ctrl_special_router_dispatch(int key) {
+    if (editor_input_router_handle_replay_special(key)) return 1;
+    if (editor_input_router_handle_cfg_special_shortcut(key)) return 1;
+    if (editor_input_router_handle_horizontal_audio_special(key)) return 1;
+    if (editor_input_router_handle_help_tab_special(key)) return 1;
+    if (editor_input_router_handle_help_scroll_special(key)) return 1;
+    if (editor_input_router_handle_help_toggle_special(key)) return 1;
+    if (editor_input_router_handle_scene_cycle_special(key)) return 1;
+    return 0;
+}
+
 void imrepl_ctrl_special(int key, int x, int y) {
+    if (editor_input_rename_capture_special(key)) {
+        editor_reset_input_effects();
+        imrepl_ctrl_apply_input_effects(editor_take_input_effects());
+        return;
+    }
+
+    editor_reset_input_effects();
+    if (imrepl_ctrl_special_router_dispatch(key)) {
+        imrepl_ctrl_apply_input_effects(editor_take_input_effects());
+        return;
+    }
+
     imrepl_ctrl_apply_input_effects(editor_handle_special(key, x, y));
+    (void)x;
+    (void)y;
 }
 
 void imrepl_ctrl_mouse(int button, int state, int x, int y) {

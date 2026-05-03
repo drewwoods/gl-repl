@@ -71,6 +71,7 @@ int editor_input_router_handle_replay_special(int key);                 /* repla
 int editor_input_router_handle_cfg_special_shortcut(int key);           /* cfg shortcut on F-keys */
 int editor_input_router_handle_horizontal_audio_special(int key);       /* Ctrl+Left/Right audio */
 int editor_input_router_handle_help_tab_special(int key);               /* Left/Right help-tab when help visible */
+int editor_input_router_handle_help_scroll_special(int key);            /* Up/Down/PageUp/Down when help visible */
 int editor_input_router_handle_help_toggle_special(int key);            /* F1 */
 int editor_input_router_handle_scene_cycle_special(int key);            /* F12 */
 
