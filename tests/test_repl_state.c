@@ -1,6 +1,7 @@
 #include "repl_state.h"
 #include "editor_state.h"
 #include "ui_state.h"
+#include "variable_panel.h"
 
 #include "support/test_harness.h"
 #include <stdio.h>
@@ -198,6 +199,8 @@ static void test_capture_restore_round_trip(void) {
     static EditorState editor_round_trip;
     static UiState ui_snap;
     static UiState ui_round_trip;
+    static VariablePanelState varpanel_snap;
+    static VariablePanelState varpanel_round_trip;
     static const char *scene_hint = "Captured Scene";
     int foo_idx;
 
@@ -206,13 +209,16 @@ static void test_capture_restore_round_trip(void) {
     repl_state_capture(&snapshot);
     editor_state_capture(&editor_snap);
     ui_state_capture(&ui_snap);
+    variable_panel_state_capture(&varpanel_snap);
     repl_state_reset_all();
     repl_state_restore(&snapshot);
     editor_state_restore(&editor_snap);
     ui_state_restore(&ui_snap);
+    variable_panel_state_restore(&varpanel_snap);
     repl_state_capture(&round_trip);
     editor_state_capture(&editor_round_trip);
     ui_state_capture(&ui_round_trip);
+    variable_panel_state_capture(&varpanel_round_trip);
 
     ASSERT_STR("input restored",
                editor_input_text(),

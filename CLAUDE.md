@@ -164,6 +164,8 @@ Test sources live under `tests/` and shared test-only helpers live under
 | `repl_inline_rename.h` | Rename begin/active/cancel/key/special API |
 | `repl_var_drag.c` | Variable slider drag transaction: begin/motion/reset, linear/log value writeback |
 | `repl_var_drag.h` | Drag state accessors + begin/motion/reset API |
+| `variable_panel.c` | Variable-panel peer subsystem: owns visibility flag + drag-state storage (Phase F) |
+| `variable_panel.h` | Peer-subsystem facade (`VariablePanelState`, capture/restore/reset, view/drag accessors) |
 | `repl_examples.c` | Predefined example data (`g_examples[]`, `g_example_names[]`) |
 | `repl_examples.h` | Example query API (`repl_examples_count/name/lines`) |
 | `repl_export.c` | `repl_export_save_output` / `repl_export_load_from_file`, workspace header directives, `@scene-name` / `@workspace-dir` markers |

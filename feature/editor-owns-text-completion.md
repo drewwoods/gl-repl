@@ -877,11 +877,15 @@ handlers compute hits and return — they don't call mutators.
 
 | # | Commit | Status |
 |---|---|---|
-| 31 | refactor: extract `variable_panel` peer subsystem (visibility flag + drag transaction off EditorState/UiState into a peer struct) | pending |
-| 32 | refactor: promote `replay` to peer subsystem (move `ReplReplayRuntimeState` off `ReplState` into a dedicated module) | pending |
+| 31 | refactor: extract `variable_panel` peer subsystem shell (visibility flag + drag-state bytes moved off EditorState/UiState into VariablePanelState; legacy accessors forward) | done |
+| 32 | refactor: route variable-panel hits to `variable_panel_handle_*` (no editor_state.variable_drag, no ui_state.variable_panel as owner) | pending |
+| 33 | refactor: promote `replay` to peer subsystem shell (move `ReplReplayRuntimeState` off `ReplState` into a dedicated module) | pending |
+| 34 | refactor: route replay hits to `replay_handle_*` (UI renders snapshot only, imrepl_ctrl routes only) | pending |
 
 Phase F signal: variable panel and replay each own their state;
-neither lives on EditorState or UiState.
+neither lives on EditorState or UiState. Hits route through
+`variable_panel_handle_*` / `replay_handle_*` instead of through
+the editor or ui state slices.
 
 ### Phase G — Read-only document seam + completion provider
 
