@@ -20,7 +20,7 @@
 #endif
 
 #include "repl_eval.h"
-#include "repl_search.h"
+#include "editor_search.h"
 
 /* ========================================================================= */
 /* Configuration                                                              */

@@ -114,10 +114,10 @@ Test sources live under `tests/` and shared test-only helpers live under
 | `repl_editor.c` | Keyboard/mouse routing, commit orchestration, feed-line entrypoint |
 | `repl_editor.h` | Editor public API (`repl_keyboard_func`, `repl_editor_active_modifiers`, etc.) |
 | `repl_keys.h` | ASCII and control-key code constants (Ctrl+A=1 … Ctrl+Z=26, F-key names) |
-| `repl_clipboard.c` | Line selection anchors, command clipboard buffer, copy/cut/paste behavior |
-| `repl_clipboard.h` | Clipboard public API |
-| `repl_undo.c` | Undo/redo snapshots, history rings, example auto-promote hook before mutation |
-| `repl_undo.h` | Undo public API (`repl_undo_push_snapshot`, `repl_undo_pop_snapshot`, `repl_undo_do_redo`) |
+| `editor_clipboard.c` | Line selection anchors, command clipboard buffer, copy/cut/paste behavior |
+| `editor_clipboard.h` | Clipboard public API |
+| `editor_undo.c` | Undo/redo snapshots, history rings, example auto-promote hook before mutation |
+| `editor_undo.h` | Undo public API (`editor_undo_push_snapshot`, `editor_undo_pop_snapshot`, `editor_undo_do_redo`) |
 | `repl_camera_controls.c` | Scene camera pointer state, orbit/pan/zoom drags, wheel zoom velocity, momentum tick |
 | `repl_actions.c` | Config descriptor table, config shortcuts, menu actions, startup config defaults |
 | `repl_actions.h` | Actions public API (`repl_action_menu_item_activate`, cursor-pixel setter, etc.) |
@@ -133,9 +133,9 @@ Test sources live under `tests/` and shared test-only helpers live under
 | `repl_autonormal.c` | Auto-generated `glNormal3f` maintenance for source commands |
 | `repl_replay.c` | Replay state machine: PC, mode (OFF/PLAYING/PAUSED/DONE), speed, fade-batch ring |
 | `repl_replay.h` | Replay public API (`repl_replay_start`, `repl_replay_toggle_play_pause`, etc.) |
-| `repl_search.c` | Case-insensitive substring search state and match navigation |
-| `repl_search.h` | Search query helpers and input routing API |
-| `repl_autocomplete.c` | Completion model: symbol matching, ghost text, parameter hints |
+| `editor_search.c` | Case-insensitive substring search state and match navigation |
+| `editor_search.h` | Search query helpers and input routing API |
+| `editor_autocomplete.c` | Completion model: symbol matching, ghost text, parameter hints |
 | `repl_layout.c` | Pure window layout geometry: scene rect and code-panel rect derivation |
 | `repl_layout.h` | Layout geometry API (`repl_layout_scene_rect`, `repl_layout_code_panel_rect`) |
 | `repl_scenes.c` | User-scene slots, LRU eviction, workspace save/load, workspace dir binding |
@@ -158,10 +158,10 @@ Test sources live under `tests/` and shared test-only helpers live under
 | `ui_help_overlay.h` | Help overlay render entrypoint |
 | `ui_variable_panel.c` | Floating variable slider panel rendering, geometry, and hit-test |
 | `ui_variable_panel.h` | Variable panel render/rect/hit API |
-| `ui_autocomplete_panel.c` | Floating autocomplete popup renderer (reads `repl_autocomplete.c` model) |
+| `ui_autocomplete_panel.c` | Floating autocomplete popup renderer (reads `editor_autocomplete.c` model) |
 | `ui_autocomplete_panel.h` | Autocomplete popup render entrypoint |
-| `repl_inline_rename.c` | Inline scene-rename input buffer and key handling (status-bar overlay) |
-| `repl_inline_rename.h` | Rename begin/active/cancel/key/special API |
+| `editor_inline_rename.c` | Inline scene-rename input buffer and key handling (status-bar overlay) |
+| `editor_inline_rename.h` | Rename begin/active/cancel/key/special API |
 | `repl_var_drag.c` | Variable slider drag transaction: begin/motion/reset, linear/log value writeback |
 | `repl_var_drag.h` | Drag state accessors + begin/motion/reset API |
 | `variable_panel.c` | Variable-panel peer subsystem: owns visibility flag + drag-state storage (Phase F) |
@@ -322,7 +322,7 @@ message (user has to save workspace first to unlock eviction).
 ### Inline rename
 
 - `repl_inline_rename_begin(slot)` / `repl_inline_rename_handle_key(...)` /
-  `repl_inline_rename_cancel()` in `repl_inline_rename.c`.
+  `repl_inline_rename_cancel()` in `editor_inline_rename.c`.
 - Triggered by the Scene → "Rename active scene" menu item; typing updates a
   status-bar prompt; Enter commits via `repl_user_scene_rename` (which trims,
   de-duplicates, and guards against an empty name), Esc cancels.
@@ -598,7 +598,7 @@ Step-by-step execution visualization in `repl_replay.c`:
 
 ### Undo/Redo
 
-Circular snapshot buffers in `repl_undo.c`:
+Circular snapshot buffers in `editor_undo.c`:
 - `ReplUndoSnapshot` captures the full editor state: source commands,
   command count, cursor position, predefined variable values
 - Undo and redo rings (32 slots each) with head/count tracking
@@ -610,7 +610,7 @@ Circular snapshot buffers in `repl_undo.c`:
 
 ### Autocomplete
 
-Symbol matching and function parameter hints in `repl_autocomplete.c`:
+Symbol matching and function parameter hints in `editor_autocomplete.c`:
 - `repl_state_autocomplete()->matches` — matched completions from GL command/constant tables
 - `repl_state_autocomplete()->ghost` — suffix to append to input on Tab accept
 - `repl_state_autocomplete()->hint` — parameter list hint shown below cursor
@@ -620,7 +620,7 @@ Symbol matching and function parameter hints in `repl_autocomplete.c`:
 
 ### Search
 
-Case-insensitive text search in `repl_search.c`:
+Case-insensitive text search in `editor_search.c`:
 - Activated by Ctrl+F; query and state accessed via `repl_state_search()`
 - `repl_search_find_next_in_text()` finds substring matches across
   all visible lines (header, user code, footer)

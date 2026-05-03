@@ -1,7 +1,7 @@
 #include "repl_core_internal.h"
 #include "repl_actions.h"
 #include "repl_camera_controls.h"
-#include "repl_clipboard.h"
+#include "editor_clipboard.h"
 #include "repl_code_panel_layout.h"
 #include "repl_config.h"
 #include "repl_export.h"
@@ -15,7 +15,7 @@
 #include "ui_panels.h"
 #include "repl_layout.h"
 #include "ui_variable_panel.h"
-#include "repl_inline_rename.h"
+#include "editor_inline_rename.h"
 
 #define g_status     (ui_state_status_mut()->text)
 #define g_scroll     (editor_state_scroll_mut()->scroll)

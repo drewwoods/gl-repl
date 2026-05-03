@@ -22,8 +22,8 @@
  * calls repl_clipboard_clear_selection().
  */
 
-#ifndef REPL_CLIPBOARD_H
-#define REPL_CLIPBOARD_H
+#ifndef EDITOR_CLIPBOARD_H
+#define EDITOR_CLIPBOARD_H
 
 #include "sample.h"
 
@@ -60,4 +60,4 @@ void repl_clipboard_copy_current(void);    /* copy selection to buffer, or curre
 void repl_clipboard_cut_current(void);     /* cut to buffer and delete, guarded */
 void repl_clipboard_paste_current(void);   /* paste buffer at edit line */
 
-#endif /* REPL_CLIPBOARD_H */
+#endif /* EDITOR_CLIPBOARD_H */

@@ -5,8 +5,8 @@
  * repl_state.h. Query helpers are read-only; the input handlers mutate the
  * overlay state.
  */
-#ifndef REPL_SEARCH_H
-#define REPL_SEARCH_H
+#ifndef EDITOR_SEARCH_H
+#define EDITOR_SEARCH_H
 
 void search_clear_all(void);
 int  handle_search_key(unsigned char key);
@@ -20,4 +20,4 @@ int  repl_search_find_next_in_text(const char *text, const char *query,
 int  repl_search_find_prev_in_text(const char *text, const char *query,
                                    int start_pos);
 
-#endif /* REPL_SEARCH_H */
+#endif /* EDITOR_SEARCH_H */

@@ -23,8 +23,8 @@
 #include "repl_command_store.h"
 #include "repl_source_scope.h"
 #include "repl_camera_controls.h"
-#include "repl_clipboard.h"
-#include "repl_undo.h"
+#include "editor_clipboard.h"
+#include "editor_undo.h"
 #include "repl_replay.h"
 #include "replay_state.h"
 #include "editor_help_session.h"
@@ -37,7 +37,7 @@
 #include "ui_variable_panel.h"
 #include "repl_var_drag.h"
 #include "variable_panel.h"
-#include "repl_inline_rename.h"
+#include "editor_inline_rename.h"
 #include "repl_audio.h"
 
 /* ========================================================================= */

@@ -20,7 +20,7 @@
 #include "repl_state.h"
 #include "ui_panels.h"
 #include "ui_state.h"
-#include "repl_inline_rename.h"
+#include "editor_inline_rename.h"
 
 static const char *replay_mode_names[] = { "Polygon", "Vertex" };
 static const char *backdrop_mode_names[] = { "Off", "Cityscape", "Stars", "City+Stars" };

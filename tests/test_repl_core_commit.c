@@ -1,6 +1,6 @@
 #include "repl_core_internal.h"
 #include "repl_export.h"
-#include "repl_clipboard.h"
+#include "editor_clipboard.h"
 #include "repl_state.h"
 #include "ui_state.h"
 #include "repl_replay_annotations.h"

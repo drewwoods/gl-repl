@@ -64,8 +64,8 @@
 #include "editor_state.h"  /* EditorBufferView */
 #include "repl_core.h"
 #include "repl_replay.h"
-#include "repl_search.h"
-#include "repl_undo.h"
+#include "editor_search.h"
+#include "editor_undo.h"
 
 #if defined(__GNUC__) || defined(__clang__)
 #define REPL_PRINTF_LIKE(fmt_idx, arg_idx) __attribute__((format(printf, fmt_idx, arg_idx)))
