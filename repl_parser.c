@@ -124,7 +124,10 @@ static int is_known_incomplete_func_name(const char *func) {
  *   5. Ad-hoc commands (glMaterialf, glPointParameterfv, glPush/PopMatrix,
  *      funcN calls, glu* tessellator commands, goto/label)
  *
- * Returns 1 on success (cmd populated), 0 on parse failure (status set).
+ * Returns 1 on success (cmd populated), 0 on parse failure.
+ * Diagnostics flow through ReplParseContext.err_buf when the caller
+ * provides one. The legacy no-ctx wrappers surface to status; the
+ * parser core itself never calls set_status.
  */
 static int parse_command(const char *line, GLCmd *cmd,
                          char *text_out, int text_sz,
