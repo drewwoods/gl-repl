@@ -1063,131 +1063,92 @@ void editor_commit_reset_transients(void) {
 
 /* --- Float-decl commit --- */
 
-static int apply_float_decl_change(const ReplCompiledChange *change) {
-    if (!editor_commit_apply_compiled_change(change)) {
-        set_status("Command buffer full!");
-        return 1;
-    }
-
-    if (change->kind == REPL_COMPILED_REPLACE_ONE) {
-        repl_state_edit_line_set(repl_state_edit_line() + 1);
-        load_line_to_input(repl_state_edit_line());
-    } else if (change->kind == REPL_COMPILED_INSERT_ONE) {
-        if (!editor_insert_mode() &&
-            repl_state_edit_line() < repl_state_document_count())
-            load_line_to_input(repl_state_edit_line());
-    }
-
-    if (change->commit_message[0])
-        set_status(change->commit_message);
-    {
-        ReplEditorInputState *inp = editor_state_input_mut();
-        inp->input[0] = '\0';
-        inp->input_len = 0;
-    }
-    editor_cursor_pos_set(0);
-    mark_normals_dirty();
-    return 1;
-}
-
 int try_commit_float_decl(void) {
     ReplCompileContext ctx = repl_compile_context_from_live();
-    ReplCompiledChange change;
+    EditorCommitPlan plan;
+    editor_commit_plan_init(&plan);
     char err[REPL_STATUS_TEXT_MAX];
 
     ReplCompileResult result = repl_compile_float_decl(
-        editor_state_input().input, &ctx, &change, err, sizeof(err));
-    if (result == REPL_COMPILE_OK && change.kind == REPL_COMPILED_NO_CHANGE)
+        editor_state_input().input, &ctx, &plan.change, err, sizeof(err));
+    if (result == REPL_COMPILE_OK && plan.change.kind == REPL_COMPILED_NO_CHANGE)
         return 0;
     if (result != REPL_COMPILE_OK) {
         set_status(err);
         return 1;
     }
-    return apply_float_decl_change(&change);
+
+    plan.effects.clear_input = 1;
+    if (plan.change.kind == REPL_COMPILED_REPLACE_ONE) {
+        plan.effects.cursor_target = ctx.edit_line + 1;
+        plan.effects.load_line_after_apply = 1;
+    } else if (plan.change.kind == REPL_COMPILED_INSERT_ONE) {
+        /* INSERT_ONE has adjust_edit_line=1 — the REPL apply auto-bumps
+         * edit_line when pos <= edit_line. The legacy post-effect
+         * conditionally reloaded the input from the new edit_line when
+         * not in insert mode and the cursor still pointed at a real
+         * line. Reproduce that here. */
+        int new_edit_line = ctx.edit_line +
+            (plan.change.pos <= ctx.edit_line ? 1 : 0);
+        int doc_count_after = ctx.document_count + 1;
+        if (!ctx.insert_mode && new_edit_line < doc_count_after)
+            plan.effects.load_line_after_apply = 1;
+    }
+    if (plan.change.commit_message[0]) {
+        snprintf(plan.commit_message, sizeof(plan.commit_message),
+                 "%s", plan.change.commit_message);
+        plan.commit_message_valid = 1;
+    }
+
+    if (!editor_commit_apply_plan(&plan)) {
+        set_status("Command buffer full!");
+        return 1;
+    }
+    mark_normals_dirty();
+    return 1;
 }
 
 /* --- Var-assign commit --- */
 
-static int apply_var_assign_change(const ReplCompiledChange *change) {
-    /* Var-decl-overwrite cascade: when an assign targets a slot that
-     * currently holds a CMD_VAR_DECLARE, replay the float-decl-style
-     * undeclare cascade so referenced names stay valid. Phase H.5
-     * commit 40 absorbs this into compile_var_assign so the predef
-     * op plan covers it directly. */
-    if (change->kind == REPL_COMPILED_REPLACE_ONE &&
-        change->pos < repl_state_document_count() &&
-        repl_state_document_cmds_mut()[change->pos].type == CMD_VAR_DECLARE) {
-        EditorBufferView text = editor_buffer_view();
-        const GLCmd *old_decl = &repl_state_document_cmds_mut()[change->pos];
-        for (int decl_idx = 0; decl_idx < old_decl->var_decl_count; decl_idx++) {
-            const char *nm = old_decl->var_names[decl_idx];
-            for (int cmd_idx = 0; cmd_idx < repl_state_document_count(); cmd_idx++) {
-                if (cmd_idx == change->pos) continue;
-                const char *line = editor_buffer_view_line(text, cmd_idx);
-                if (repl_eval_source_uses_ident(line ? line : "", nm)) {
-                    char buf[128];
-                    snprintf(buf, sizeof(buf),
-                             "variable '%s' is in use, cannot overwrite", nm);
-                    set_status(buf);
-                    return 1;
-                }
-            }
-        }
-        for (int decl_idx = 0; decl_idx < old_decl->var_decl_count; decl_idx++) {
-            const char *nm = old_decl->var_names[decl_idx];
-            int slot = repl_eval_find_predef_var_idx(nm);
-            if (slot < 0) continue;
-            repl_eval_undeclare_predef_var(nm);
-            for (int cmd_idx = 0; cmd_idx < repl_state_document_count(); cmd_idx++) {
-                if (repl_state_document_cmds_mut()[cmd_idx].type == CMD_VAR_ASSIGN &&
-                    repl_state_document_cmds_mut()[cmd_idx].num_args > slot)
-                    repl_state_document_cmds_mut()[cmd_idx].num_args--;
-            }
-        }
-    }
-
-    if (!editor_commit_apply_compiled_change(change)) {
-        set_status("Command buffer full!");
-        return 1;
-    }
-
-    if (change->kind == REPL_COMPILED_INSERT_ONE) {
-        if (change->pos == repl_state_document_count() - 1) {
-            repl_state_edit_line_set(repl_state_document_count());
-        } else if (editor_insert_mode()) {
-            repl_state_edit_line_set(repl_state_edit_line() + 1);
-        }
-    } else if (change->kind == REPL_COMPILED_REPLACE_ONE) {
-        repl_state_edit_line_set(repl_state_edit_line() + 1);
-        load_line_to_input(repl_state_edit_line());
-    }
-
-    if (change->commit_message[0])
-        set_status(change->commit_message);
-    {
-        ReplEditorInputState *inp = editor_state_input_mut();
-        inp->input[0] = '\0';
-        inp->input_len = 0;
-    }
-    editor_cursor_pos_set(0);
-    mark_normals_dirty();
-    return 1;
-}
-
 int try_assign_variable(void) {
     ReplCompileContext ctx = repl_compile_context_from_live();
-    ReplCompiledChange change;
+    EditorCommitPlan plan;
+    editor_commit_plan_init(&plan);
     char err[REPL_STATUS_TEXT_MAX];
 
     ReplCompileResult result = repl_compile_var_assign(
-        editor_state_input().input, &ctx, &change, err, sizeof(err));
-    if (result == REPL_COMPILE_OK && change.kind == REPL_COMPILED_NO_CHANGE)
+        editor_state_input().input, &ctx, &plan.change, err, sizeof(err));
+    if (result == REPL_COMPILE_OK && plan.change.kind == REPL_COMPILED_NO_CHANGE)
         return 0;
     if (result != REPL_COMPILE_OK) {
         set_status(err);
         return 1;
     }
-    return apply_var_assign_change(&change);
+
+    plan.effects.clear_input = 1;
+    if (plan.change.kind == REPL_COMPILED_REPLACE_ONE) {
+        plan.effects.cursor_target = ctx.edit_line + 1;
+        plan.effects.load_line_after_apply = 1;
+    } else if (plan.change.kind == REPL_COMPILED_INSERT_ONE) {
+        if (ctx.insert_mode) {
+            plan.effects.cursor_target = ctx.edit_line + 1;
+        } else {
+            /* Append-at-end branch (insert_idx == ctx.document_count). */
+            plan.effects.cursor_target = ctx.document_count + 1;
+        }
+    }
+    if (plan.change.commit_message[0]) {
+        snprintf(plan.commit_message, sizeof(plan.commit_message),
+                 "%s", plan.change.commit_message);
+        plan.commit_message_valid = 1;
+    }
+
+    if (!editor_commit_apply_plan(&plan)) {
+        set_status("Command buffer full!");
+        return 1;
+    }
+    mark_normals_dirty();
+    return 1;
 }
 
 /* --- Structured-block commits: each delegates to its editor_compile_*
