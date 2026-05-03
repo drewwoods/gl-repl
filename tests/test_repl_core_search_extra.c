@@ -1,3 +1,4 @@
+#include "editor_input.h"
 #include "repl_core_internal.h"
 #include "repl_state.h"
 
@@ -21,12 +22,12 @@ static TestHarness g_harness = TEST_HARNESS_INIT;
 } while (0)
 
 static void open_search(void) {
-    repl_keyboard_func(6, 0, 0); /* Ctrl+F */
+    editor_handle_key(6, 0, 0); /* Ctrl+F */
 }
 
 static void type_search_text(const char *text) {
     while (*text) {
-        repl_keyboard_func((unsigned char)*text, 0, 0);
+        editor_handle_key((unsigned char)*text, 0, 0);
         text++;
     }
 }

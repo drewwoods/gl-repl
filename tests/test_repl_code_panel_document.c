@@ -1,3 +1,4 @@
+#include "editor_input.h"
 #include <stdio.h>
 #include <string.h>
 
@@ -67,7 +68,7 @@ int main(void) {
 
     repl_navigate_to_line(1);
     editor_cursor_pos_set(0);
-    repl_keyboard_func('\r', 0, 0);
+    editor_handle_key('\r', 0, 0);
     build_doc(&layout);
     {
         int doc_line = layout.header_rows + layout.cmd_main_rows[0];

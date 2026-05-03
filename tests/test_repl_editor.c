@@ -1,3 +1,4 @@
+#include "editor_input.h"
 #include "repl_core_internal.h"
 #include "editor_commit.h"
 #include "repl_actions.h"
@@ -195,7 +196,7 @@ static void assert_float_decl_rejected_atomic(const char *label,
 
 int main() {
     repl_eval_init_predef_vars();
-    repl_set_modifier_provider_for_test(mock_get_modifiers);
+    editor_input_set_modifier_provider_for_test(mock_get_modifiers);
     printf("--- repl_editor tests ---\n");
 
     /* Commit chain ordering: float declarations must run before assignment
@@ -372,16 +373,16 @@ int main() {
     {
         repl_reset_state();
         repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_HIDDEN;
-        repl_keyboard_func('v', 0, 0);
+        editor_handle_key('v', 0, 0);
         ASSERT_INT("typing restores hidden code panel",
                    repl_state_presentation().code_panel_layout, CODE_PANEL_LAYOUT_LEFT);
         ASSERT_STR("typing after restore still reaches input", editor_state_input().input, "v");
 
         repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_HIDDEN;
-        repl_keyboard_func('`', 0, 0);
+        editor_handle_key('`', 0, 0);
         ASSERT_INT("config shortcut restores hidden code panel",
                    repl_state_presentation().code_panel_layout, CODE_PANEL_LAYOUT_LEFT);
-        repl_keyboard_func('`', 0, 0);
+        editor_handle_key('`', 0, 0);
 
         repl_state_presentation_mut()->code_panel_layout = CFG_DEFAULT_CODE_PANEL_LAYOUT;
     }
@@ -395,16 +396,16 @@ int main() {
         ASSERT_INT("rename route begin", repl_inline_rename_begin(slot), 1);
 
         repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_HIDDEN;
-        repl_keyboard_func('`', 0, 0);
+        editor_handle_key('`', 0, 0);
         ASSERT_INT("rename swallows config hidden restore",
                    repl_state_presentation().code_panel_layout, CODE_PANEL_LAYOUT_HIDDEN);
         ASSERT_INT("rename remains active after config key",
                    repl_inline_rename_active(), 1);
 
-        repl_keyboard_func(KEY_CTRL_R, 0, 0);
+        editor_handle_key(KEY_CTRL_R, 0, 0);
         ASSERT_INT("rename swallows replay toggle", replay_active, 0);
 
-        repl_keyboard_func(KEY_CTRL_F, 0, 0);
+        editor_handle_key(KEY_CTRL_F, 0, 0);
         ASSERT_INT("rename swallows search open", g_search_active, 0);
 
         repl_inline_rename_cancel();
@@ -417,10 +418,10 @@ int main() {
         repl_feed_line_public("glVertex3f(0,0,0)");
         set_editor_input("");
 
-        repl_keyboard_func(KEY_CTRL_F, 0, 0);
+        editor_handle_key(KEY_CTRL_F, 0, 0);
         ASSERT_INT("search route opens", g_search_active, 1);
 
-        repl_keyboard_func('v', 0, 0);
+        editor_handle_key('v', 0, 0);
         ASSERT_STR("search route receives printable key", g_search_query, "v");
         ASSERT_TRUE("search route does not type into editor input",
                     strcmp(editor_state_input().input, "v") != 0);
@@ -434,7 +435,7 @@ int main() {
         repl_reset_state();
         set_editor_input("float keyboard_route");
 
-        repl_keyboard_func(';', 0, 0);
+        editor_handle_key(';', 0, 0);
 
         ASSERT_INT("semicolon route committed one command", repl_state_document_count(), 1);
         ASSERT_INT("semicolon route used float declaration handler",
@@ -463,14 +464,14 @@ int main() {
         g_search_query_len = 3;
         g_search_cursor_pos = 2;
 
-        repl_special_func(GLUT_KEY_LEFT, 0, 0);
+        editor_handle_special(GLUT_KEY_LEFT, 0, 0);
         ASSERT_INT("rename special swallows hidden restore",
                    repl_state_presentation().code_panel_layout, CODE_PANEL_LAYOUT_HIDDEN);
         ASSERT_INT("rename special keeps editor cursor", editor_cursor_pos(), 2);
         ASSERT_INT("rename special keeps search cursor", g_search_cursor_pos, 2);
         ASSERT_INT("rename special keeps replay pc", replay_pc, 0);
 
-        repl_special_func(GLUT_KEY_F1, 0, 0);
+        editor_handle_special(GLUT_KEY_F1, 0, 0);
         ASSERT_INT("rename special swallows help toggle", g_show_help, 0);
         ASSERT_INT("rename still active after special keys",
                    repl_inline_rename_active(), 1);
@@ -495,7 +496,7 @@ int main() {
         g_search_query_len = 3;
         g_search_cursor_pos = 2;
 
-        repl_special_func(GLUT_KEY_LEFT, 0, 0);
+        editor_handle_special(GLUT_KEY_LEFT, 0, 0);
 
         ASSERT_INT("search special moves search cursor", g_search_cursor_pos, 1);
         ASSERT_INT("search special leaves editor cursor", editor_cursor_pos(), 2);
@@ -510,7 +511,7 @@ int main() {
         repl_reset_state();
         if (repl_example_count() > 1) {
             repl_load_example(0);
-            repl_special_func(GLUT_KEY_F12, 0, 0);
+            editor_handle_special(GLUT_KEY_F12, 0, 0);
             ASSERT_INT("f12 special route advances example",
                     repl_state_scenes().active_example_idx, 1);
         }
@@ -689,7 +690,7 @@ int main() {
         editor_state_selection_set(4, 2);
         repl_state_edit_line_set(4);
 
-        repl_keyboard_func(8, 0, 0);
+        editor_handle_key(8, 0, 0);
 
         ASSERT_INT("backspace reversed selection: leaves 2 cmds", repl_state_document_count(), 2);
         ASSERT_STR("backspace reversed selection: first survives", editor_buffer_line(0), "  glVertex3f(0, 0, 0);");
@@ -709,7 +710,7 @@ int main() {
         editor_state_selection_set(3, 1);
         repl_state_edit_line_set(3);
 
-        repl_keyboard_func(4, 0, 0);
+        editor_handle_key(4, 0, 0);
 
         ASSERT_INT("ctrl-d selection: leaves 2 cmds", repl_state_document_count(), 2);
         ASSERT_STR("ctrl-d selection: first survives", editor_buffer_line(0), "  glVertex3f(0, 0, 0);");
@@ -752,7 +753,7 @@ int main() {
         repl_feed_line_public("}");
         editor_state_selection_set(1, 2);
 
-        repl_keyboard_func(3, 0, 0);
+        editor_handle_key(3, 0, 0);
         ASSERT_INT("copy block: clipboard count", editor_state_clipboard_count(), 2);
         ASSERT_STR("copy block: first copied", editor_state_clipboard_mut()->lines[0], "    glVertex3f(0, 0, 0);");
         ASSERT_STR("copy block: second copied", editor_state_clipboard_mut()->lines[1], "    glVertex3f(1, 1, 1);");
@@ -760,7 +761,7 @@ int main() {
 
         repl_state_edit_line_set(5);
         editor_insert_mode_set(0);
-        repl_keyboard_func(22, 0, 0);
+        editor_handle_key(22, 0, 0);
         ASSERT_INT("paste block: cmd count", repl_state_document_count(), 9);
         ASSERT_STR("paste block: if preserved", editor_buffer_line(4), "  if(x > 0) {");
         ASSERT_STR("paste block: first inserted", editor_buffer_line(5), "    glVertex3f(0, 0, 0);");
@@ -791,7 +792,7 @@ int main() {
         repl_feed_line_public("glVertex3f(3,3,3)");
         editor_state_selection_set(1, 2);
 
-        repl_keyboard_func(24, 0, 0);
+        editor_handle_key(24, 0, 0);
         ASSERT_INT("cut block: clipboard count", editor_state_clipboard_count(), 2);
         ASSERT_STR("cut block: first copied", editor_state_clipboard_mut()->lines[0], "  glVertex3f(1, 1, 1);");
         ASSERT_STR("cut block: second copied", editor_state_clipboard_mut()->lines[1], "  glVertex3f(2, 2, 2);");
@@ -817,7 +818,7 @@ int main() {
         repl_feed_line_public("}");
         repl_state_edit_line_set(0);
 
-        repl_keyboard_func(3, 0, 0);
+        editor_handle_key(3, 0, 0);
         ASSERT_INT("copy for block: clipboard count", editor_state_clipboard_count(), 3);
         ASSERT_INT("copy for block: first type", editor_state_clipboard_cmds_mut()[0].type, CMD_FOR_BEGIN);
         ASSERT_INT("copy for block: last type", editor_state_clipboard_cmds_mut()[2].type, CMD_FOR_END);
@@ -829,7 +830,7 @@ int main() {
         repl_feed_line_public("}");
         repl_state_edit_line_set(0);
 
-        repl_keyboard_func(24, 0, 0);
+        editor_handle_key(24, 0, 0);
         ASSERT_INT("cut for block: clipboard count", editor_state_clipboard_count(), 3);
         ASSERT_INT("cut for block: first type", editor_state_clipboard_cmds_mut()[0].type, CMD_FOR_BEGIN);
         ASSERT_INT("cut for block: last type", editor_state_clipboard_cmds_mut()[2].type, CMD_FOR_END);
@@ -843,7 +844,7 @@ int main() {
         repl_feed_line_public("glVertex3f(1,1,1)");
         editor_state_clipboard_count_set(0);
 
-        repl_keyboard_func(22, 0, 0);
+        editor_handle_key(22, 0, 0);
 
         ASSERT_INT("paste empty: no mutation", repl_state_document_count(), 1);
         ASSERT_STR("paste empty: source unchanged", editor_buffer_line(0), "  glVertex3f(1, 1, 1);");
@@ -858,7 +859,7 @@ int main() {
         editor_state_clipboard_count_set(1);
         repl_state_document_count_set(MAX_COMMANDS);
 
-        repl_keyboard_func(22, 0, 0);
+        editor_handle_key(22, 0, 0);
 
         ASSERT_INT("paste full: no mutation", repl_state_document_count(), MAX_COMMANDS);
         ASSERT_INT("paste full: clipboard preserved", editor_state_clipboard_count(), 1);
@@ -876,7 +877,7 @@ int main() {
         editor_state_clipboard_count_set(1);
         repl_state_edit_line_set(0);
 
-        repl_keyboard_func(3, 0, 0);
+        editor_handle_key(3, 0, 0);
 
         ASSERT_INT("copy decl line: cmd count unchanged", repl_state_document_count(), 2);
         ASSERT_INT("copy decl line: clipboard count preserved", editor_state_clipboard_count(), 1);
@@ -887,7 +888,7 @@ int main() {
         editor_state_clipboard_count_set(1);
         repl_state_edit_line_set(repl_state_document_count());
 
-        repl_keyboard_func(22, 0, 0);
+        editor_handle_key(22, 0, 0);
 
         ASSERT_INT("paste decl line: cmd count unchanged", repl_state_document_count(), 2);
         ASSERT_INT("paste decl line: clipboard count preserved", editor_state_clipboard_count(), 1);
@@ -909,7 +910,7 @@ int main() {
         repl_state_edit_line_set(1);
         editor_insert_mode_set(1);
 
-        repl_keyboard_func(3, 0, 0);
+        editor_handle_key(3, 0, 0);
         ASSERT_INT("copy insert mode: cmd count unchanged", repl_state_document_count(), 2);
         ASSERT_INT("copy insert mode: clipboard unchanged", editor_state_clipboard_count(), 1);
         ASSERT_STR("copy insert mode: clipboard source unchanged", editor_state_clipboard_mut()->lines[0], "  glVertex3f(2, 2, 2);");
@@ -917,7 +918,7 @@ int main() {
 
         editor_state_selection_set(0, 1);
         editor_insert_mode_set(1);
-        repl_keyboard_func(24, 0, 0);
+        editor_handle_key(24, 0, 0);
         ASSERT_INT("cut insert mode: cmd count unchanged", repl_state_document_count(), 2);
         ASSERT_INT("cut insert mode: clipboard unchanged", editor_state_clipboard_count(), 1);
         ASSERT_STR("cut insert mode: clipboard source unchanged", editor_state_clipboard_mut()->lines[0], "  glVertex3f(2, 2, 2);");
@@ -935,7 +936,7 @@ int main() {
         set_editor_input("abcd");
         editor_cursor_pos_set(3);
 
-        repl_keyboard_func(8, 0, 0);
+        editor_handle_key(8, 0, 0);
 
         ASSERT_INT("backspace insert mode: cmd count unchanged", repl_state_document_count(), 2);
         ASSERT_STR("backspace insert mode: input edited", editor_state_input().input, "abd");
@@ -948,7 +949,7 @@ int main() {
         repl_reset_state();
         set_editor_input("glColor3f(1, 1");
 
-        repl_keyboard_func(';', 0, 0);
+        editor_handle_key(';', 0, 0);
 
         ASSERT_INT("commit incomplete glColor3f: no cmd added", repl_state_document_count(), 0);
         assert_status_contains("commit incomplete glColor3f: status", "Incomplete command");
@@ -961,7 +962,7 @@ int main() {
         repl_reset_state();
         set_editor_input("glTotallyUnknown(1, 2, 3)");
 
-        repl_keyboard_func(';', 0, 0);
+        editor_handle_key(';', 0, 0);
 
         ASSERT_INT("commit unknown command: no cmd added", repl_state_document_count(), 0);
         assert_status_contains("commit unknown command: status", "Unknown cmd");
@@ -1653,7 +1654,7 @@ int main() {
         editor_state_clipboard_count_set(1);
         repl_state_edit_line_set(0);
 
-        repl_keyboard_func(24, 0, 0);
+        editor_handle_key(24, 0, 0);
 
         ASSERT_INT("cut referenced decl: cmd count unchanged", repl_state_document_count(), 2);
         ASSERT_INT("cut referenced decl: first still decl", repl_state_document_cmds_mut()[0].type, CMD_VAR_DECLARE);
@@ -1678,7 +1679,7 @@ int main() {
         editor_state_clipboard_count_set(1);
         editor_state_selection_set(0, 1);
 
-        repl_keyboard_func(24, 0, 0);
+        editor_handle_key(24, 0, 0);
 
         ASSERT_INT("cut decl block: cmd count unchanged", repl_state_document_count(), 2);
         ASSERT_TRUE("cut decl block: n still registered",
@@ -1907,7 +1908,7 @@ int main() {
 
         repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_HIDDEN;
         replay_state = REPLAY_PLAYING;
-        repl_keyboard_func(' ', 0, 0);
+        editor_handle_key(' ', 0, 0);
         ASSERT_INT("replay space keeps hidden code panel",
                    repl_state_presentation().code_panel_layout, CODE_PANEL_LAYOUT_HIDDEN);
         ASSERT_INT("replay space still pauses through editor",
@@ -1915,7 +1916,7 @@ int main() {
 
         replay_state = REPLAY_PAUSED;
         replay_pc = 0;
-        repl_special_func(GLUT_KEY_RIGHT, 0, 0);
+        editor_handle_special(GLUT_KEY_RIGHT, 0, 0);
         ASSERT_INT("replay right keeps hidden code panel",
                    repl_state_presentation().code_panel_layout, CODE_PANEL_LAYOUT_HIDDEN);
         ASSERT_INT("replay right still advances through editor",
@@ -2082,7 +2083,7 @@ int main() {
         ASSERT_INT("enter-at-last: setup edit_line", repl_state_edit_line(), 2);
         ASSERT_INT("enter-at-last: setup not inserting", editor_insert_mode(), 0);
 
-        repl_keyboard_func('\r', 0, 0);
+        editor_handle_key('\r', 0, 0);
 
         ASSERT_INT("enter-at-last: now inserting", editor_insert_mode(), 1);
         ASSERT_INT("enter-at-last: edit_line == num_cmds", repl_state_edit_line(), repl_state_document_count());
@@ -2144,22 +2145,22 @@ int main() {
         navigate_to_line(0);
 
         g_scroll_follow_cursor = 0;
-        repl_special_func(GLUT_KEY_UP, 0, 0);
+        editor_handle_special(GLUT_KEY_UP, 0, 0);
         ASSERT_INT("up key sets scroll_follow_cursor", g_scroll_follow_cursor, 1);
 
         g_scroll_follow_cursor = 0;
-        repl_special_func(GLUT_KEY_DOWN, 0, 0);
+        editor_handle_special(GLUT_KEY_DOWN, 0, 0);
         ASSERT_INT("down key sets scroll_follow_cursor", g_scroll_follow_cursor, 1);
 
         /* Page Up/Down scroll the view manually and must NOT trigger cursor
          * follow - that would snap the view back to the cursor position,
          * defeating the purpose of the scroll. */
         g_scroll_follow_cursor = 0;
-        repl_special_func(GLUT_KEY_PAGE_UP, 0, 0);
+        editor_handle_special(GLUT_KEY_PAGE_UP, 0, 0);
         ASSERT_INT("page up cancels scroll_follow_cursor", g_scroll_follow_cursor, 0);
 
         g_scroll_follow_cursor = 0;
-        repl_special_func(GLUT_KEY_PAGE_DOWN, 0, 0);
+        editor_handle_special(GLUT_KEY_PAGE_DOWN, 0, 0);
         ASSERT_INT("page down cancels scroll_follow_cursor", g_scroll_follow_cursor, 0);
     }
 
@@ -2187,7 +2188,7 @@ int main() {
         g_scroll = 0;
         g_scroll_follow_cursor = 0;
 
-        repl_special_func(GLUT_KEY_UP, 0, 0);
+        editor_handle_special(GLUT_KEY_UP, 0, 0);
         ASSERT_INT("up nav: scroll_follow_cursor set", g_scroll_follow_cursor, 1);
 
         ASSERT_TRUE("up nav: cursor visible after follow",
@@ -2203,7 +2204,7 @@ int main() {
         navigate_to_line(0);
         set_editor_input("glVertex3f(9, 0, 0)");
 
-        repl_special_func(GLUT_KEY_DOWN, 0, 0);
+        editor_handle_special(GLUT_KEY_DOWN, 0, 0);
 
         ASSERT_INT("nav auto-commit valid edit: cursor moved", repl_state_edit_line(), 1);
         ASSERT_INT("nav auto-commit valid edit: first cmd type",
@@ -2227,7 +2228,7 @@ int main() {
         old_num_cmds = repl_state_document_count();
         set_editor_input("glColor3f(1, 0");
 
-        repl_special_func(GLUT_KEY_DOWN, 0, 0);
+        editor_handle_special(GLUT_KEY_DOWN, 0, 0);
 
         ASSERT_INT("nav auto-commit invalid edit: cmd count unchanged",
                    repl_state_document_count(), old_num_cmds);
@@ -2247,7 +2248,7 @@ int main() {
         navigate_to_line(repl_state_document_count());
         set_editor_input("glVertex3f(3, 3, 3)");
 
-        repl_special_func(GLUT_KEY_UP, 0, 0);
+        editor_handle_special(GLUT_KEY_UP, 0, 0);
 
         ASSERT_INT("nav auto-commit append: cmd count", repl_state_document_count(), 3);
         ASSERT_INT("nav auto-commit append: cursor moved up", repl_state_edit_line(), 1);
@@ -2268,7 +2269,7 @@ int main() {
         navigate_to_line(repl_state_document_count());
         set_editor_input("glVertex3f(");
 
-        repl_special_func(GLUT_KEY_UP, 0, 0);
+        editor_handle_special(GLUT_KEY_UP, 0, 0);
 
         ASSERT_INT("nav auto-commit invalid append: cmd count unchanged",
                    repl_state_document_count(), old_num_cmds);
@@ -2319,7 +2320,7 @@ int main() {
         g_ac_count = 2;
         g_ac_sel = 0;
 
-        repl_special_func(GLUT_KEY_DOWN, 0, 0);
+        editor_handle_special(GLUT_KEY_DOWN, 0, 0);
 
         ASSERT_INT("autocomplete down changes selection", g_ac_sel, 1);
         ASSERT_INT("autocomplete down does not navigate", repl_state_edit_line(), 0);
@@ -2385,7 +2386,7 @@ int main() {
         editor_insert_mode_set(0);
         g_status[0] = '\0';
         g_mock_modifiers = GLUT_ACTIVE_CTRL;
-        repl_keyboard_func('/', 0, 0);
+        editor_handle_key('/', 0, 0);
         ASSERT_INT("comment assignment: type became comment",
                    repl_state_document_cmds_mut()[1].type, CMD_COMMENT);
         ASSERT_TRUE("comment assignment: source keeps x = 1",
@@ -2397,7 +2398,7 @@ int main() {
         repl_state_edit_line_set(1);
         editor_insert_mode_set(0);
         g_status[0] = '\0';
-        repl_keyboard_func('/', 0, 0);
+        editor_handle_key('/', 0, 0);
         ASSERT_INT("uncomment assignment: type back to assign",
                    repl_state_document_cmds_mut()[1].type, CMD_VAR_ASSIGN);
         ASSERT_TRUE("uncomment assignment: no error status",
@@ -2421,14 +2422,14 @@ int main() {
         editor_insert_mode_set(0);
         g_status[0] = '\0';
         g_mock_modifiers = GLUT_ACTIVE_CTRL;
-        repl_keyboard_func('/', 0, 0);
+        editor_handle_key('/', 0, 0);
         ASSERT_INT("mangled setup: commented", repl_state_document_cmds_mut()[0].type, CMD_COMMENT);
 
         /* Replace the comment body with nonsense so the re-parse fails. */
         editor_buffer_set_line(0, "// !@#$not a command$@#!");
         g_status[0] = '\0';
         repl_state_edit_line_set(0);
-        repl_keyboard_func('/', 0, 0);
+        editor_handle_key('/', 0, 0);
         ASSERT_INT("uncomment genuinely bad: stays a comment",
                    repl_state_document_cmds_mut()[0].type, CMD_COMMENT);
         assert_status_contains("uncomment genuinely bad: error status",
@@ -2449,23 +2450,23 @@ int main() {
         g_mock_modifiers = GLUT_ACTIVE_CTRL;
 
         /* Increment */
-        repl_keyboard_func('+', 0, 0);
+        editor_handle_key('+', 0, 0);
         ASSERT_INT("accum toggle +: samples increased to 4", rs->accum_samples, 4);
 
-        repl_keyboard_func('=', 0, 0); /* some keyboards use = for + without shift */
+        editor_handle_key('=', 0, 0); /* some keyboards use = for + without shift */
         ASSERT_INT("accum toggle =: samples increased to 8", rs->accum_samples, 8);
 
         /* Decrement */
-        repl_keyboard_func('-', 0, 0);
+        editor_handle_key('-', 0, 0);
         ASSERT_INT("accum toggle -: samples decreased to 4", rs->accum_samples, 4);
 
         /* Test limits */
         rs->accum_samples = 16;
-        repl_keyboard_func('+', 0, 0);
+        editor_handle_key('+', 0, 0);
         ASSERT_INT("accum toggle +: samples capped at 16", rs->accum_samples, 16);
 
         rs->accum_samples = 1;
-        repl_keyboard_func('-', 0, 0);
+        editor_handle_key('-', 0, 0);
         ASSERT_INT("accum toggle -: samples floored at 1", rs->accum_samples, 1);
 
         g_mock_modifiers = saved_mods;
@@ -2479,7 +2480,7 @@ int main() {
         ASSERT_INT("Ctrl+L setup: 1 cmd", repl_state_document_count(), 1);
 
         g_mock_modifiers = GLUT_ACTIVE_CTRL;
-        repl_keyboard_func(12, 0, 0); /* Ctrl+L is 12 */
+        editor_handle_key(12, 0, 0); /* Ctrl+L is 12 */
         ASSERT_INT("Ctrl+L: cleared all", repl_state_document_count(), 0);
 
         g_mock_modifiers = saved_mods;
@@ -2498,13 +2499,13 @@ int main() {
             ASSERT_TRUE("F12 test: promoted example to slot", slot >= 0);
 
             /* Cycle from user scene 0 -> should go to example 0 */
-            repl_special_func(GLUT_KEY_F12, 0, 0);
+            editor_handle_special(GLUT_KEY_F12, 0, 0);
             ASSERT_INT("F12: user scene 0 -> example 0", repl_state_scenes().active_example_idx, 0);
             ASSERT_INT("F12: active user scene now -1", repl_active_user_scene(), -1);
 
             /* Cycle through all examples to reach user scenes again */
             for (int i = 0; i < example_count; i++) {
-                 repl_special_func(GLUT_KEY_F12, 0, 0);
+                 editor_handle_special(GLUT_KEY_F12, 0, 0);
             }
             /* After all examples, it should hit the first used user scene slot */
             ASSERT_INT("F12: cycled back to user scene 0", repl_active_user_scene(), 0);
@@ -2518,11 +2519,11 @@ int main() {
         repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT;
         ui_state_code_panel_mut()->resizing_panel = 1;
 
-        repl_motion_func(300, 500);
+        editor_handle_motion(300, 500);
         ASSERT_TRUE("panel resize left: frac updated", fabsf(ui_state_code_panel().panel_frac - 0.3f) < 1e-6f);
 
         repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_TOP;
-        repl_motion_func(500, 400);
+        editor_handle_motion(500, 400);
         ASSERT_TRUE("panel resize top: frac updated", fabsf(ui_state_code_panel().panel_frac - 0.4f) < 1e-6f);
 
         ui_state_code_panel_mut()->resizing_panel = 0;
@@ -2536,13 +2537,13 @@ int main() {
         ui_state_code_panel_mut()->panel_frac = 0.3f;
 
         /* Divider should be at x = 300. Test hit at 305. */
-        repl_passive_motion_func(305, 500);
+        editor_handle_passive_motion(305, 500);
         /* We can't easily assert the cursor change without more mocking,
          * but we are hitting the branch. */
 
         repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_TOP;
         /* Divider should be at gl_y = 300. window_h = 1000, so y = 700. Test hit at 705. */
-        repl_passive_motion_func(500, 705);
+        editor_handle_passive_motion(500, 705);
     }
 
     /* Extra coverage: Audio track navigation (Ctrl+Left/Right) */
@@ -2552,8 +2553,8 @@ int main() {
 
         /* Just trigger the routes to ensure they are covered.
          * Actual track change depends on audio assets. */
-        repl_special_func(GLUT_KEY_LEFT, 0, 0);
-        repl_special_func(GLUT_KEY_RIGHT, 0, 0);
+        editor_handle_special(GLUT_KEY_LEFT, 0, 0);
+        editor_handle_special(GLUT_KEY_RIGHT, 0, 0);
 
         g_mock_modifiers = saved_mods;
     }
@@ -2564,22 +2565,22 @@ int main() {
         editor_help_session_set_scroll(0);
         editor_help_session_set_tab(0);
 
-        repl_special_func(GLUT_KEY_DOWN, 0, 0);
+        editor_handle_special(GLUT_KEY_DOWN, 0, 0);
         ASSERT_INT("help scroll down", editor_help_session_scroll(), 1);
 
-        repl_special_func(GLUT_KEY_UP, 0, 0);
+        editor_handle_special(GLUT_KEY_UP, 0, 0);
         ASSERT_INT("help scroll up", editor_help_session_scroll(), 0);
 
-        repl_special_func(GLUT_KEY_RIGHT, 0, 0);
+        editor_handle_special(GLUT_KEY_RIGHT, 0, 0);
         ASSERT_INT("help tab right", editor_help_session_tab_idx(), 1);
 
-        repl_special_func(GLUT_KEY_LEFT, 0, 0);
+        editor_handle_special(GLUT_KEY_LEFT, 0, 0);
         ASSERT_INT("help tab left", editor_help_session_tab_idx(), 0);
 
-        repl_special_func(GLUT_KEY_PAGE_DOWN, 0, 0);
+        editor_handle_special(GLUT_KEY_PAGE_DOWN, 0, 0);
         ASSERT_INT("help page down", editor_help_session_scroll(), 5);
 
-        repl_special_func(GLUT_KEY_PAGE_UP, 0, 0);
+        editor_handle_special(GLUT_KEY_PAGE_UP, 0, 0);
         ASSERT_INT("help page up", editor_help_session_scroll(), 0);
 
         ui_state_help_mut()->visible = 0;
@@ -2589,22 +2590,22 @@ int main() {
     {
         /* 1. Help visible */
         ui_state_help_mut()->visible = 1;
-        repl_keyboard_func(27, 0, 0);
+        editor_handle_key(27, 0, 0);
         ASSERT_TRUE("Esc: help closed", !ui_state_help().visible);
 
         /* 2. Autocomplete active */
         editor_state_autocomplete_mut()->match_count = 1;
-        repl_keyboard_func(27, 0, 0);
+        editor_handle_key(27, 0, 0);
         ASSERT_INT("Esc: autocomplete cleared", editor_state_autocomplete().match_count, 0);
 
         /* 3. Insert mode */
         editor_insert_mode_set(1);
-        repl_keyboard_func(27, 0, 0);
+        editor_handle_key(27, 0, 0);
         ASSERT_TRUE("Esc: insert mode exited", !editor_insert_mode());
 
         /* 4. Input clear */
         set_editor_input("some text");
-        repl_keyboard_func(27, 0, 0);
+        editor_handle_key(27, 0, 0);
         ASSERT_INT("Esc: input cleared", editor_state_input().input_len, 0);
     }
 
@@ -2662,13 +2663,13 @@ int main() {
         int click_x = px + pw / 2;
         int click_y = 1000 - (py + ph - VAR_PANEL_PAD_INTERNAL - VAR_TITLE_H_INTERNAL / 2);
 
-        repl_mouse_func(GLUT_LEFT_BUTTON, GLUT_DOWN, click_x, click_y);
+        editor_handle_mouse(GLUT_LEFT_BUTTON, GLUT_DOWN, click_x, click_y);
         ASSERT_TRUE("mouse: variable drag active", repl_var_drag_active());
 
-        repl_motion_func(click_x + 100, click_y);
+        editor_handle_motion(click_x + 100, click_y);
         /* drag motion should have changed the variable value. */
 
-        repl_mouse_func(GLUT_LEFT_BUTTON, GLUT_UP, click_x + 100, click_y);
+        editor_handle_mouse(GLUT_LEFT_BUTTON, GLUT_UP, click_x + 100, click_y);
         ASSERT_TRUE("mouse: variable drag inactive after release", !repl_var_drag_active());
     }
 
@@ -2682,22 +2683,22 @@ int main() {
 
         /* Undo */
         g_mock_modifiers = GLUT_ACTIVE_CTRL;
-        repl_keyboard_func(26, 0, 0); /* Ctrl+Z */
+        editor_handle_key(26, 0, 0); /* Ctrl+Z */
         ASSERT_INT("Ctrl+Z: undo works", repl_state_document_count(), 0);
 
         /* Redo via Ctrl+Shift+Z */
         g_mock_modifiers = GLUT_ACTIVE_CTRL | GLUT_ACTIVE_SHIFT;
-        repl_keyboard_func(26, 0, 0);
+        editor_handle_key(26, 0, 0);
         ASSERT_INT("Ctrl+Shift+Z: redo works", repl_state_document_count(), 1);
 
         /* Undo again */
         g_mock_modifiers = GLUT_ACTIVE_CTRL;
-        repl_keyboard_func(26, 0, 0);
+        editor_handle_key(26, 0, 0);
         ASSERT_INT("undo again", repl_state_document_count(), 0);
 
         /* Redo via Ctrl+Y */
         g_mock_modifiers = GLUT_ACTIVE_CTRL;
-        repl_keyboard_func(25, 0, 0); /* Ctrl+Y */
+        editor_handle_key(25, 0, 0); /* Ctrl+Y */
         ASSERT_INT("Ctrl+Y: redo works", repl_state_document_count(), 1);
 
         g_mock_modifiers = saved_mods;
@@ -2737,19 +2738,19 @@ int main() {
             scene_x += scene_w / 2;
             scene_y = ui_state_viewport().window_h - (scene_y + scene_h / 2);
 
-            repl_mousewheel_func(0, 1, code_x, code_y);
+            editor_handle_mousewheel(0, 1, code_x, code_y);
             snprintf(label, sizeof(label),
                      "mousewheel: %s code panel scrolled down",
                      layout_names[layout_idx]);
             ASSERT_INT(label, editor_scroll(), -1);
 
-            repl_mousewheel_func(0, -1, code_x, code_y);
+            editor_handle_mousewheel(0, -1, code_x, code_y);
             snprintf(label, sizeof(label),
                      "mousewheel: %s code panel scrolled up",
                      layout_names[layout_idx]);
             ASSERT_INT(label, editor_scroll(), 0);
 
-            repl_mousewheel_func(0, 1, scene_x, scene_y);
+            editor_handle_mousewheel(0, 1, scene_x, scene_y);
             snprintf(label, sizeof(label),
                      "mousewheel: %s scene wheel leaves code scroll unchanged",
                      layout_names[layout_idx]);
@@ -2761,7 +2762,7 @@ int main() {
         editor_scroll_set(0);
         repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_HIDDEN;
 
-        repl_mousewheel_func(0, 1, 500, 500);
+        editor_handle_mousewheel(0, 1, 500, 500);
         ASSERT_INT("mousewheel: hidden layout leaves code scroll unchanged",
                    editor_scroll(), 0);
     }
@@ -2776,12 +2777,12 @@ int main() {
         g_mock_modifiers = GLUT_ACTIVE_CTRL;
 
         /* Ctrl+\ (Reformat) */
-        repl_keyboard_func(28, 0, 0);
+        editor_handle_key(28, 0, 0);
         assert_status_contains("Ctrl+\\ reformat", "Reformatted");
 
         /* Ctrl+P (Dump) */
         /* We can't easily check stdout, but we trigger the branch. */
-        repl_keyboard_func(16, 0, 0);
+        editor_handle_key(16, 0, 0);
         assert_status_contains("Ctrl+P dump", "Dumped");
 
         /* Ctrl+S (Save) */
@@ -2799,7 +2800,7 @@ int main() {
                 int cd_ok = chdir(made_dir);
                 ASSERT_INT("chdir default output dir", cd_ok, 0);
                 if (cd_ok == 0) {
-                    repl_keyboard_func(19, 0, 0);
+                    editor_handle_key(19, 0, 0);
                     assert_status_contains("Ctrl+S save", "Saved");
                     ASSERT_INT("default output saved in temp dir",
                                access("output.c", F_OK), 0);
@@ -2820,14 +2821,14 @@ int main() {
         repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_HIDDEN;
 
         /* Pressing a printable key should restore it. */
-        repl_keyboard_func('a', 0, 0);
+        editor_handle_key('a', 0, 0);
         ASSERT_INT("key restores hidden panel",
                    repl_state_presentation().code_panel_layout,
                    CODE_PANEL_LAYOUT_LEFT);
 
         repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_HIDDEN;
         /* Pressing a special key should restore it. */
-        repl_special_func(GLUT_KEY_UP, 0, 0);
+        editor_handle_special(GLUT_KEY_UP, 0, 0);
         ASSERT_INT("special key restores hidden panel",
                    repl_state_presentation().code_panel_layout,
                    CODE_PANEL_LAYOUT_LEFT);
@@ -2845,11 +2846,11 @@ int main() {
 
         repl_state_edit_line_set(0);
         editor_insert_mode_set(0);
-        repl_keyboard_func('/', 0, 0);
+        editor_handle_key('/', 0, 0);
         ASSERT_INT("comment if-begin", repl_state_document_cmds_mut()[0].type, CMD_COMMENT);
 
         repl_state_edit_line_set(2);
-        repl_keyboard_func('/', 0, 0);
+        editor_handle_key('/', 0, 0);
         ASSERT_INT("comment if-end", repl_state_document_cmds_mut()[2].type, CMD_COMMENT);
 
         g_mock_modifiers = saved_mods;
@@ -2863,10 +2864,10 @@ int main() {
         ui_state_code_panel_mut()->panel_frac = 0.3f;
 
         /* Divider should be at gl_y = 300 (y = 700). */
-        repl_passive_motion_func(500, 695);
+        editor_handle_passive_motion(500, 695);
 
         ui_state_code_panel_mut()->resizing_panel = 1;
-        repl_motion_func(500, 600);
+        editor_handle_motion(500, 600);
         ASSERT_TRUE("panel resize bottom: frac updated", fabsf(ui_state_code_panel().panel_frac - 0.4f) < 1e-6f);
         ui_state_code_panel_mut()->resizing_panel = 0;
     }
@@ -2883,9 +2884,9 @@ int main() {
         int click_x = px + pw / 2;
         int click_y = 1000 - (py + ph - VAR_PANEL_PAD_INTERNAL - VAR_TITLE_H_INTERNAL / 2);
 
-        repl_mouse_func(GLUT_RIGHT_BUTTON, GLUT_DOWN, click_x, click_y);
+        editor_handle_mouse(GLUT_RIGHT_BUTTON, GLUT_DOWN, click_x, click_y);
         ASSERT_TRUE("mouse: right-click variable drag active", repl_var_drag_active());
-        repl_mouse_func(GLUT_RIGHT_BUTTON, GLUT_UP, click_x, click_y);
+        editor_handle_mouse(GLUT_RIGHT_BUTTON, GLUT_UP, click_x, click_y);
     }
 
     printf("\n%d / %d tests passed\n", g_harness.passed, g_harness.run);

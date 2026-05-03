@@ -1,3 +1,4 @@
+#include "editor_input.h"
 #include "repl_core_internal.h"
 #include "repl_export.h"
 #include "editor_clipboard.h"
@@ -341,7 +342,7 @@ int main(void) {
     repl_navigate_to_line(0);
     ASSERT_TRUE("label loads back into editor as repl syntax",
                 strcmp(editor_state_input().input, ":walk") == 0);
-    repl_keyboard_func(';', 0, 0);
+    editor_handle_key(';', 0, 0);
     ASSERT_TRUE("recommitting loaded label keeps label type", repl_state_document_cmds_mut()[0].type == CMD_LABEL);
     ASSERT_TRUE("recommitting loaded label keeps source", strcmp(editor_buffer_line(0) ? editor_buffer_line(0) : "", "walk:") == 0);
 
@@ -360,7 +361,7 @@ int main(void) {
     repl_feed_line_public("glEnd();");
     repl_navigate_to_line(1);
     editor_cursor_pos_set(0);
-    repl_keyboard_func('\r', 0, 0);
+    editor_handle_key('\r', 0, 0);
     ASSERT_TRUE("enter at line start enters insert mode", editor_insert_mode() == 1);
     ASSERT_TRUE("enter at line start keeps insertion index", repl_state_edit_line() == 1);
     {
@@ -369,7 +370,7 @@ int main(void) {
         inp->input_len = (int)strlen(inp->input);
         editor_cursor_pos_set(inp->input_len);
     }
-    repl_keyboard_func('\r', 0, 0);
+    editor_handle_key('\r', 0, 0);
     ASSERT_TRUE("inserted line before current cmd count", repl_state_document_count() == 3);
     ASSERT_TRUE("inserted line before current type", repl_state_document_cmds_mut()[1].type == CMD_COLOR3F);
     ASSERT_TRUE("original current line shifted down", repl_state_document_cmds_mut()[2].type == CMD_END);
@@ -379,7 +380,7 @@ int main(void) {
     repl_feed_line_public("glEnd();");
     repl_navigate_to_line(0);
     editor_cursor_pos_set(editor_input_len());
-    repl_keyboard_func('\r', 0, 0);
+    editor_handle_key('\r', 0, 0);
     ASSERT_TRUE("enter away from line start still inserts after", editor_insert_mode() == 1 && repl_state_edit_line() == 1);
 
     repl_reset_state(); declare_test_vars();
@@ -400,7 +401,7 @@ int main(void) {
     ASSERT_TRUE("mouse drag selection high", repl_clipboard_sel_hi() == 2);
     ASSERT_TRUE("mouse drag navigates to drag end", repl_state_edit_line() == 2);
     ui_panels_handle_code_panel_release();
-    repl_keyboard_func(8, 0, 0);
+    editor_handle_key(8, 0, 0);
     ASSERT_TRUE("backspace deletes selected lines", repl_state_document_count() == 0);
     ASSERT_TRUE("backspace clears selection after delete", !repl_clipboard_sel_active());
     ASSERT_TRUE("backspace keeps edit line at start after delete", repl_state_edit_line() == 0);
@@ -428,13 +429,13 @@ int main(void) {
     repl_feed_line_public("glBegin(GL_POINTS);");
     repl_navigate_to_line(0);
     editor_cursor_pos_set(4);
-    repl_keyboard_func(1, 0, 0);
+    editor_handle_key(1, 0, 0);
     ASSERT_TRUE("ctrl-a moves to line start", editor_cursor_pos() == 0);
-    repl_keyboard_func(5, 0, 0);
+    editor_handle_key(5, 0, 0);
     ASSERT_TRUE("ctrl-e moves to line end", editor_cursor_pos() == editor_input_len());
     {
         int before = repl_state_presentation().code_panel_layout;
-        repl_keyboard_func(2, 0, 0);
+        editor_handle_key(2, 0, 0);
         ASSERT_TRUE("ctrl-b toggles code panel layout", repl_state_presentation().code_panel_layout != before);
     }
 
@@ -442,7 +443,7 @@ int main(void) {
     {
         const char *prefix = "glVer";
         for (int i = 0; prefix[i]; i++)
-            repl_keyboard_func((unsigned char)prefix[i], 0, 0);
+            editor_handle_key((unsigned char)prefix[i], 0, 0);
     }
     ASSERT_TRUE("autocomplete popup shows signature text",
                 strcmp(g_ac_matches[0], "glVertex3f(x, y, z)") == 0);
@@ -450,24 +451,24 @@ int main(void) {
                 strcmp(g_ac_ghost, "tex3f(") == 0);
     ASSERT_TRUE("autocomplete hint shows parameter names",
                 strcmp(g_ac_hint, "x, y, z)") == 0);
-    repl_keyboard_func('\t', 0, 0);
+    editor_handle_key('\t', 0, 0);
     ASSERT_TRUE("tab inserts function call prefix only",
                 strcmp(editor_state_input().input, "glVertex3f(") == 0);
     ASSERT_TRUE("function call hint starts at first parameter",
                 strcmp(g_ac_hint, "x, y, z)") == 0);
-    repl_keyboard_func('1', 0, 0);
+    editor_handle_key('1', 0, 0);
     ASSERT_TRUE("function call hint advances after first arg text",
                 strcmp(g_ac_hint, ", y, z)") == 0);
-    repl_keyboard_func(',', 0, 0);
-    repl_keyboard_func(' ', 0, 0);
+    editor_handle_key(',', 0, 0);
+    editor_handle_key(' ', 0, 0);
     ASSERT_TRUE("function call hint shows second parameter at comma",
                 strcmp(g_ac_hint, "y, z)") == 0);
-    repl_keyboard_func('2', 0, 0);
+    editor_handle_key('2', 0, 0);
     ASSERT_TRUE("function call hint advances to remaining args",
                 strcmp(g_ac_hint, ", z)") == 0);
-    repl_keyboard_func(',', 0, 0);
-    repl_keyboard_func(' ', 0, 0);
-    repl_keyboard_func('3', 0, 0);
+    editor_handle_key(',', 0, 0);
+    editor_handle_key(' ', 0, 0);
+    editor_handle_key('3', 0, 0);
     ASSERT_TRUE("function call hint ends with closing paren",
                 strcmp(g_ac_hint, ")") == 0);
 
@@ -477,7 +478,7 @@ int main(void) {
     {
         const char *call = "func0(";
         for (int i = 0; call[i]; i++)
-            repl_keyboard_func((unsigned char)call[i], 0, 0);
+            editor_handle_key((unsigned char)call[i], 0, 0);
     }
     ASSERT_TRUE("user function hint uses declared parameter names",
                 strcmp(g_ac_hint, "radius, yoff)") == 0);
