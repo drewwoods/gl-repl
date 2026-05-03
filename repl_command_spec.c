@@ -109,6 +109,7 @@ static const FuncCompletion k_func_completions[] = {
     { "glDisable(",          "glDisable(cap)",                                           1, { "cap" } },
     { "glShadeModel(",       "glShadeModel(mode)",                                       1, { "mode" } },
     { "glPointSize(",        "glPointSize(size)",                                        1, { "size" } },
+    { "glLineWidth(",        "glLineWidth(width)",                                       1, { "width" } },
     { "glPointParameterfv(", "glPointParameterfv(pname, a, b, c)",                       4, { "pname", "a", "b", "c" } },
     { "glBlendFunc(",        "glBlendFunc(sfactor, dfactor)",                            2, { "sfactor", "dfactor" } },
     { "glTranslatef(",       "glTranslatef(x, y, z)",                                    3, { "x", "y", "z" } },
@@ -212,6 +213,7 @@ static const ReplStdCommandSpec k_std_command_specs[] = {
     { "glutSolidTeapot",  CMD_GLUT_TEAPOT,   1, "glutSolidTeapot(%g);",               "Usage: glutSolidTeapot(size)", 0 },
     { "glutSolidCone",    CMD_GLUT_CONE,     4, "glutSolidCone(%g, %g, %g, %g);",     "Usage: glutSolidCone(base, height, slices, stacks)", 0 },
     { "glPointSize",    CMD_POINT_SIZE,       1, "glPointSize(%g);",                "Usage: glPointSize(size)", 0 },
+    { "glLineWidth",    CMD_LINE_WIDTH,       1, "glLineWidth(%g);",                "Usage: glLineWidth(width)", 0 },
     { "gluNormal",      CMD_TESS_NORMAL,      3, "gluNormal(%g, %g, %g);",          "Usage: gluNormal(x, y, z)", 1 },
     { "gluVertex",      CMD_TESS_VERTEX,      3, "gluVertex(%g, %g, %g);",          "Usage: gluVertex(x, y, z)", 1 },
     { NULL, 0, 0, NULL, NULL, 0 }
@@ -264,6 +266,7 @@ static const ReplCommandTypeSpec g_command_type_specs[CMD_TYPE_COUNT] = {
     CMD_TYPE_SPEC(CMD_TESS_VERTEX, 1, 1),
     CMD_TYPE_SPEC(CMD_MATERIALF, 1, 1),
     CMD_TYPE_SPEC(CMD_POINT_SIZE, 1, 1),
+    CMD_TYPE_SPEC(CMD_LINE_WIDTH, 1, 1),
     CMD_TYPE_SPEC(CMD_POINT_PARAMETER_FV, 1, 1),
     CMD_TYPE_SPEC(CMD_BLEND_FUNC, 1, 1),
     CMD_TYPE_SPEC(CMD_CLEAR_COLOR, 1, 1),

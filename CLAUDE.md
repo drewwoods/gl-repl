@@ -699,6 +699,7 @@ glEnable(CAP), glDisable(CAP)
        GL_LIGHT0, GL_LIGHT1, GL_LIGHT2, GL_LIGHT3
 glShadeModel(MODE)
 glPointSize(size)
+glLineWidth(width)
 glPointParameterfv(GL_POINT_DISTANCE_ATTENUATION, const, linear, quadratic)
 glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA|GL_ONE)
 glColorMaterial(face, mode), glMaterialf(face, pname, value)
