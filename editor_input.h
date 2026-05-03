@@ -75,6 +75,22 @@ int editor_input_router_handle_help_scroll_special(int key);            /* Up/Do
 int editor_input_router_handle_help_toggle_special(int key);            /* F1 */
 int editor_input_router_handle_scene_cycle_special(int key);            /* F12 */
 
+/* Mouse-side router stubs lifted into imrepl_ctrl pre-dispatch by
+ * commit 47c. Each returns 1 if the event was consumed.
+ *
+ * The variable-panel drag begin / right-config press preempt any
+ * code-panel handling because they own UI rects that may overlap
+ * the code panel. The variable-panel drag release on UP fires
+ * after the editor's UP cleanup so ui_panels_handle_mouse_release
+ * still runs first.
+ *
+ * Camera mouse event + scroll wheel + scene press are still inside
+ * editor_handle_mouse's chain pending a `consumed` field on
+ * ReplInputDispatchEffects (deferred).
+ */
+int editor_input_router_handle_variable_panel_drag_begin(int button, int state, int x, int y);
+int editor_input_router_handle_right_config_press(int button, int state, int x, int y);
+
 /* Rename-capture predicate. The inline rename overlay is a hard modal:
  * when active, every keystroke must land in the rename buffer ahead of
  * the controller-side router. imrepl_ctrl_keyboard / _special invoke
