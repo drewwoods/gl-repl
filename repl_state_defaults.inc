@@ -87,18 +87,7 @@
         },
         .clear_color = { 0.10f, 0.10f, 0.13f, 1.0f },
     },
-    .replay = {
-        .active = 0,
-        .state = REPLAY_OFF,
-        .pc = 0,
-        .mode = REPLAY_MODE_VERTEX,
-        .speed = 4.0f,
-        .accum = 0.0f,
-        .fade_speed = 2.0f,
-        .src_line_idx = -1,
-        .total_flat_cmds = 0,
-        .expand_args = 1,
-    },
+    /* .replay defaults moved to replay_state.c (Phase F commit 33). */
     .scenes = {
         .active_example_idx = -1,
         .workspace_dir = "",

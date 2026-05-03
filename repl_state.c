@@ -3,6 +3,7 @@
 
 #include "editor_state.h"
 #include "variable_panel.h"
+#include "replay_state.h"
 #include "repl_command_store.h"
 #include "repl_core.h"
 #include "repl_core_internal.h"
@@ -136,16 +137,9 @@ static ReplRuntimeState g_repl_state;
 #define g_ac_sel                    (g_repl_state.autocomplete.selected_idx)
 #define g_ac_ghost                  (g_repl_state.autocomplete.ghost)
 #define g_ac_hint                   (g_repl_state.autocomplete.hint)
-#define g_replay_active             (g_repl_state.replay.active)
-#define g_replay_state              (g_repl_state.replay.state)
-#define g_replay_pc                 (g_repl_state.replay.pc)
-#define g_replay_mode               (g_repl_state.replay.mode)
-#define g_replay_speed              (g_repl_state.replay.speed)
-#define g_replay_accum              (g_repl_state.replay.accum)
-#define g_replay_fade_speed         (g_repl_state.replay.fade_speed)
-#define g_replay_src_line           (g_repl_state.replay.src_line_idx)
-#define g_replay_total_flat         (g_repl_state.replay.total_flat_cmds)
-#define g_replay_expand_args        (g_repl_state.replay.expand_args)
+/* g_replay_* macros removed (Phase F commit 33); replay state lives
+ * on the replay peer (replay_state.c). Internal users use repl_state_replay /
+ * _mut, which forward to replay_state_view / _mut. */
 #define g_example_idx               (g_repl_state.scenes.active_example_idx)
 #define g_workspace_dir             (g_repl_state.scenes.workspace_dir)
 #define g_workspace_header_lines    (g_repl_state.import_export.workspace_header_lines)
@@ -472,16 +466,19 @@ void repl_state_render_reset_defaults(void) {
     g_repl_state.render = g_repl_state_defaults.render;
 }
 
+/* Phase F commit 33: replay state bytes moved to the replay peer
+ * (replay_state.c). These accessors stay as thin forwarders during
+ * the migration. */
 ReplReplayRuntimeState repl_state_replay(void) {
-    return g_repl_state.replay;
+    return replay_state_view();
 }
 
 ReplReplayRuntimeState *repl_state_replay_mut(void) {
-    return &g_repl_state.replay;
+    return replay_state_mut();
 }
 
 void repl_state_replay_reset(void) {
-    g_repl_state.replay = g_repl_state_defaults.replay;
+    replay_state_reset();
 }
 
 ReplSceneRuntimeState repl_state_scenes(void) {
@@ -562,6 +559,7 @@ void repl_state_reset_all(void) {
     editor_state_reset();
     ui_state_reset();
     variable_panel_state_reset();
+    replay_state_reset();
     repl_state_bind_eval_predef_storage();
     repl_scenes_reset();
     reset_time_state();
