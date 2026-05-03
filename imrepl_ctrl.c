@@ -431,7 +431,7 @@ void imrepl_ctrl_display_frame(void) {
     /* Prepare replay annotations + push the virtual-line list.
      * Layout also calls prepare(), so this stays idempotent. */
     prof_begin(PROF_SNAPSHOT_VIRTUAL_LINES);
-    repl_replay_annotations_prepare();
+    repl_replay_annotations_prepare(editor_buffer_view());
     prof_end(PROF_SNAPSHOT_VIRTUAL_LINES);
 
     saved_flat_count = g_num_flat_cmds;

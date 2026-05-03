@@ -52,7 +52,7 @@ GLenum current_begin_mode(void);
 int count_vertices(void);
 extern int repl_state_flat_program_count();
 
-/* Capture the output of repl_debug_dump_flat_commands() into a malloc'd string.
+/* Capture the output of repl_debug_dump_flat_commands(, editor_buffer_view()) into a malloc'd string.
  * Returns NULL on failure; caller frees the buffer. */
 static char *capture_flat_dump(void) {
     FILE *tmp = tmpfile();
@@ -62,7 +62,7 @@ static char *capture_flat_dump(void) {
 
     if (!tmp)
         return NULL;
-    repl_debug_dump_flat_commands(tmp);
+    repl_debug_dump_flat_commands(tmp, editor_buffer_view());
     fflush(tmp);
     if (fseek(tmp, 0, SEEK_END) != 0) goto done;
     len = ftell(tmp);
@@ -111,7 +111,7 @@ void test_utils() {
     /* debug dump */
     FILE *devnull = fopen("/dev/null", "w");
     if (devnull) {
-        repl_debug_dump_editor(devnull);
+        repl_debug_dump_editor(devnull, editor_buffer_view());
         fclose(devnull);
     }
 }
@@ -166,7 +166,7 @@ void test_io() {
     repl_feed_line_public("glVertex3f(1,2,3);");
 
     const char *tmpf = "test_extra_io.c";
-    repl_export_save_output(tmpf);
+    repl_export_save_output(tmpf, editor_buffer_view());
 
     repl_reset_state(); declare_test_vars();
     ASSERT_INT("num_cmds after reset", count_vertices(), 0);
@@ -678,7 +678,7 @@ void test_debug_dump_flat_commands() {
             close(devnull_fd);
         }
     }
-    repl_debug_dump_flat_commands(NULL);
+    repl_debug_dump_flat_commands(NULL, editor_buffer_view());
     fflush(stdout);
     if (stdout_redirected) {
         if (dup2(saved_stdout, STDOUT_FILENO) >= 0) {
@@ -823,13 +823,13 @@ void test_debug_dump_flat_commands() {
     repl_state_flat_program_set_count(0);
     FILE *dn = fopen("/dev/null", "w");
     if (dn) {
-        repl_debug_dump_flat_commands(dn);
+        repl_debug_dump_flat_commands(dn, editor_buffer_view());
         fclose(dn);
     }
     ASSERT_TRUE("dump re-flattens commands", repl_state_flat_program_count() >= 1);
 }
 
-/* Capture the output of repl_debug_dump_editor() into a malloc'd string. */
+/* Capture the output of repl_debug_dump_editor(, editor_buffer_view()) into a malloc'd string. */
 static char *capture_editor_dump(void) {
     FILE *tmp = tmpfile();
     char *buf = NULL;
@@ -838,7 +838,7 @@ static char *capture_editor_dump(void) {
 
     if (!tmp)
         return NULL;
-    repl_debug_dump_editor(tmp);
+    repl_debug_dump_editor(tmp, editor_buffer_view());
     fflush(tmp);
     if (fseek(tmp, 0, SEEK_END) != 0) goto done;
     len = ftell(tmp);

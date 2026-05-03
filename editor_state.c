@@ -118,6 +118,20 @@ void editor_buffer_set_count(int count) {
     g_editor_state.buffer.line_count = count;
 }
 
+EditorBufferView editor_buffer_view(void) {
+    EditorBufferView view = {
+        .lines      = g_editor_state.buffer.lines,
+        .line_count = g_editor_state.buffer.line_count,
+    };
+    return view;
+}
+
+const char *editor_buffer_view_line(EditorBufferView view, int idx) {
+    if (!view.lines || idx < 0 || idx >= MAX_COMMANDS)
+        return "";
+    return view.lines[idx];
+}
+
 /* The canonical edit-line cursor lives on ReplDocumentState. The input
  * slice copies it into the view for callers that consume the input as
  * one bundle. Forward-declared rather than including repl_state_views.h
