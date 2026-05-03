@@ -1760,6 +1760,32 @@ static void editor_update_panel_frac_from_mouse(int x, int y) {
         code_panel_state->panel_frac = 0.9f;
 }
 
+int editor_input_router_handle_variable_panel_drag_begin(int button, int state, int x, int y) {
+    if (state != GLUT_DOWN) return 0;
+    if (!variable_panel_visible()) return 0;
+    int log_mode = (button == GLUT_RIGHT_BUTTON) ? 1 : 0;
+    if (button != GLUT_LEFT_BUTTON && button != GLUT_RIGHT_BUTTON)
+        return 0;
+    int row_idx;
+    if (!ui_variable_panel_hit(x, y, &row_idx))
+        return 0;
+    if (replay_active())
+        repl_replay_stop();
+    variable_panel_handle_drag_begin(row_idx, log_mode, x);
+    editor_request_redraw();
+    return 1;
+}
+
+int editor_input_router_handle_right_config_press(int button, int state, int x, int y) {
+    if (state != GLUT_DOWN || button != GLUT_RIGHT_BUTTON)
+        return 0;
+    if (ui_panels_handle_right_press(x, y)) {
+        editor_request_redraw();
+        return 1;
+    }
+    return 0;
+}
+
 static void mouse_func(int button, int state, int x, int y) {
     if (state == GLUT_UP) {
         ui_panels_handle_mouse_release();

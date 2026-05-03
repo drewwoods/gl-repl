@@ -640,7 +640,24 @@ void imrepl_ctrl_special(int key, int x, int y) {
     (void)y;
 }
 
+/* Phase J1 commit 47c — mouse router pre-dispatch (partial).
+ *
+ * Pre-dispatches peer-subsystem and unrelated-UI mouse routes that own
+ * dedicated rects (variable panel, right-click config dropdown). Each
+ * route hit-tests internally so a click that doesn't land returns 0
+ * and falls through to editor_handle_mouse.
+ *
+ * Scene press, camera mouse event, and scroll wheel are still inside
+ * editor_handle_mouse's chain — they need a `consumed` flag on
+ * ReplInputDispatchEffects to migrate cleanly without dispatching
+ * camera/scroll twice. That's deferred to a follow-up commit. */
 void imrepl_ctrl_mouse(int button, int state, int x, int y) {
+    editor_reset_input_effects();
+    if (editor_input_router_handle_variable_panel_drag_begin(button, state, x, y) ||
+        editor_input_router_handle_right_config_press(button, state, x, y)) {
+        imrepl_ctrl_apply_input_effects(editor_take_input_effects());
+        return;
+    }
     imrepl_ctrl_apply_input_effects(editor_handle_mouse(button, state, x, y));
 }
 
