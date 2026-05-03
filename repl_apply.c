@@ -23,27 +23,47 @@ int repl_apply_can_apply_compiled_change(const ReplCompiledChange *change) {
 
     ReplCommandStore store = repl_command_store_live();
     int doc_count = repl_command_store_count(&store);
+    int capacity  = repl_command_store_capacity(&store);
+
+    /* Optional pre-insert delete: validate the delete range against
+     * the live document. The deleted count is removed before the
+     * insert capacity check below. */
+    int delete_count = (change->delete_count > 0) ? change->delete_count : 0;
+    if (delete_count > 0) {
+        if (change->delete_pos < 0 ||
+            change->delete_pos >= doc_count ||
+            change->delete_pos + delete_count > doc_count)
+            return 0;
+    }
+    int post_delete_count = doc_count - delete_count;
+    int post_delete_capacity_headroom = capacity - post_delete_count;
 
     switch (change->kind) {
     case REPL_COMPILED_NO_CHANGE:
-        return 1;
+        /* A delete-only change is legal but unusual; the dedicated
+         * DELETE_RANGE kind covers it more clearly. NO_CHANGE +
+         * delete_count > 0 is rejected to keep the contract crisp. */
+        return delete_count == 0;
     case REPL_COMPILED_INSERT_ONE:
-        if (change->pos < 0 || change->pos > doc_count) return 0;
-        return repl_command_store_can_insert(&store, 1);
+        if (change->pos < 0 || change->pos > post_delete_count) return 0;
+        return post_delete_capacity_headroom >= 1;
     case REPL_COMPILED_INSERT_MANY:
         if (change->count <= 0 || change->count > MAX_COMMIT_CMDS) return 0;
-        if (change->pos < 0 || change->pos > doc_count) return 0;
-        return repl_command_store_can_insert(&store, change->count);
+        if (change->pos < 0 || change->pos > post_delete_count) return 0;
+        return post_delete_capacity_headroom >= change->count;
     case REPL_COMPILED_REPLACE_ONE:
+        if (delete_count > 0) return 0;  /* compound replace+delete not supported */
         return change->pos >= 0 && change->pos < doc_count;
     case REPL_COMPILED_DELETE_RANGE: {
+        if (delete_count > 0) return 0;  /* use delete_pos/count + INSERT_MANY instead */
         int s = 0, c = 0;
         return repl_command_store_normalize_range(&store, change->pos,
                                                   change->count, &s, &c);
     }
     case REPL_COMPILED_LOAD_ALL:
+        if (delete_count > 0) return 0;  /* LOAD_ALL replaces the entire document */
         return change->count >= 0 &&
-               change->count <= repl_command_store_capacity(&store) &&
+               change->count <= capacity &&
                change->count <= MAX_COMMIT_CMDS;
     }
     return 0;
@@ -54,6 +74,15 @@ int repl_apply_compiled_change(const ReplCompiledChange *change) {
 
     ReplCommandStore store = repl_command_store_live();
     int flags = change->adjust_edit_line ? REPL_COMMAND_STORE_ADJUST_EDIT_LINE : 0;
+
+    /* Optional pre-insert delete fires first so `change->pos` —
+     * which is interpreted in post-delete coordinates — refers to
+     * the right slot when the insert lands. */
+    if (change->delete_count > 0) {
+        if (!repl_command_store_delete_range(&store, change->delete_pos,
+                                             change->delete_count))
+            return 0;
+    }
 
     switch (change->kind) {
     case REPL_COMPILED_NO_CHANGE:

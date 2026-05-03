@@ -209,6 +209,15 @@ int editor_buffer_apply_compiled_change(const struct ReplCompiledChange_s *chang
     for (int i = 0; i < change->count && i < MAX_COMMIT_CMDS; i++)
         line_ptrs[i] = change->text[i];
 
+    /* Optional pre-insert delete fires first to mirror the cmd-store
+     * apply ordering. `change->pos` is interpreted in post-delete
+     * coordinates. */
+    if (change->delete_count > 0) {
+        if (!editor_buffer_delete_range(change->delete_pos,
+                                        change->delete_count))
+            return 0;
+    }
+
     switch (change->kind) {
     case REPL_COMPILED_NO_CHANGE:
         return 1;
