@@ -17,6 +17,7 @@
 #include "ui_layout.h"
 #include "ui_variable_panel.h"
 #include "editor_inline_rename.h"
+#include "imrepl_ctrl.h"
 
 #define g_status     (ui_state_status_mut()->text)
 #define g_scroll     (editor_state_scroll_mut()->scroll)
@@ -2616,13 +2617,13 @@ int main() {
 
         /* 1. Status TTL decrement */
         ui_state_status_mut()->ttl = 10;
-        repl_timer_func(0);
+        imrepl_ctrl_tick();
         ASSERT_INT("timer: status ttl decremented", ui_state_status().ttl, 9);
 
         /* 2. Cursor blink */
         ui_state_code_panel_mut()->blink_tick = 29;
         ui_state_code_panel_mut()->cursor_visible = 1;
-        repl_timer_func(0);
+        imrepl_ctrl_tick();
         ASSERT_INT("timer: blink tick reset", ui_state_code_panel().blink_tick, 0);
         ASSERT_TRUE("timer: cursor visibility toggled", !ui_state_code_panel().cursor_visible);
 
@@ -2632,7 +2633,7 @@ int main() {
         repl_state_replay_mut()->speed = 1.0f;
         repl_state_replay_mut()->accum = 0.99f;
         /* This should trigger at least one repl_replay_advance */
-        repl_timer_func(0);
+        imrepl_ctrl_tick();
         ASSERT_TRUE("timer: replay accum advanced", repl_state_replay().accum < 0.5f);
 
         repl_state_replay_mut()->active = 0;

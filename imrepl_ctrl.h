@@ -14,4 +14,10 @@ void imrepl_ctrl_passive_motion(int x, int y);
 void imrepl_ctrl_mousewheel(int wheel, int direction, int x, int y);
 void imrepl_ctrl_timer(int value);
 
+/* Per-frame tick (16 ms). The timer entry above wraps this with
+ * glutPostRedisplay + glutTimerFunc reschedule; tests can drive a
+ * single tick by calling imrepl_ctrl_tick directly when GLUT isn't
+ * initialised. */
+void imrepl_ctrl_tick(void);
+
 #endif /* IMREPL_CTRL_H */
