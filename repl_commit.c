@@ -9,6 +9,7 @@
 #include "sample.h"
 #include "repl_core_internal.h"
 #include "repl_command_store.h"
+#include "repl_compile.h"
 #include "repl_parser.h"
 #include "repl_source_scope.h"
 #include "repl_state.h"
@@ -101,7 +102,105 @@ void repl_commit_reset_transients(void) {
     g_func_decl_resume_delta = 0;
 }
 
+/* Apply a compiled float-decl change to the live REPL+editor state.
+ *
+ * Phase C commit 19 keeps the apply logic inline here; commit 20
+ * extracts it into repl_apply_compiled_change (cmd-store half) +
+ * editor_buffer_apply_compiled_change (text half) so the editor
+ * commit orchestration can drive both inside one undo transaction.
+ *
+ * Walks the compiled change's predef_ops to declare/undeclare and
+ * cascade var_assign num_args adjustments, then issues the
+ * cmd-store + editor-buffer mutations.
+ */
+static int apply_float_decl_change(const ReplCompiledChange *change) {
+    /* Step 1: predef-op cascade. UNDECLARE entries fire first so
+     * subsequent var_assign num_args adjustments see the correct
+     * pre-removal slot indices; then DECLARE entries register new
+     * slots; SET_VALUE entries write the live value of kept slots. */
+    for (int op_idx = 0; op_idx < change->predef_op_count; op_idx++) {
+        const ReplPredefOp *op = &change->predef_ops[op_idx];
+        if (op->kind != REPL_PREDEF_OP_UNDECLARE) continue;
+        int slot = repl_eval_find_predef_var_idx(op->name);
+        if (slot < 0) continue;
+        repl_eval_undeclare_predef_var(op->name);
+        for (int cmd_idx = 0; cmd_idx < repl_state_document_count(); cmd_idx++) {
+            if (repl_state_document_cmds_mut()[cmd_idx].type == CMD_VAR_ASSIGN &&
+                repl_state_document_cmds_mut()[cmd_idx].num_args > slot)
+                repl_state_document_cmds_mut()[cmd_idx].num_args--;
+        }
+    }
+    for (int op_idx = 0; op_idx < change->predef_op_count; op_idx++) {
+        const ReplPredefOp *op = &change->predef_ops[op_idx];
+        if (op->kind == REPL_PREDEF_OP_DECLARE) {
+            repl_eval_declare_predef_var(op->name, NULL, 0);
+            if (op->has_value) {
+                int idx = repl_eval_find_predef_var_idx(op->name);
+                if (idx >= 0) g_predef_vars[idx].value = op->value;
+            }
+        } else if (op->kind == REPL_PREDEF_OP_SET_VALUE) {
+            int idx = repl_eval_find_predef_var_idx(op->name);
+            if (idx >= 0) g_predef_vars[idx].value = op->value;
+        }
+    }
+
+    /* Step 2: cmd-store + editor-buffer write. */
+    ReplCommandStore store = repl_command_store_live();
+    if (change->kind == REPL_COMPILED_REPLACE_ONE) {
+        if (repl_command_store_replace_one(&store, change->pos, &change->cmds[0]))
+            editor_buffer_replace_line(change->pos, change->text[0]);
+        repl_state_edit_line_set(repl_state_edit_line() + 1);
+        load_line_to_input(repl_state_edit_line());
+    } else if (change->kind == REPL_COMPILED_INSERT_ONE) {
+        int flags = change->adjust_edit_line ? REPL_COMMAND_STORE_ADJUST_EDIT_LINE : 0;
+        if (!repl_command_store_insert_one(&store, change->pos, &change->cmds[0], flags)) {
+            set_status("Command buffer full!");
+            return 1;
+        }
+        editor_buffer_insert_line(change->pos, change->text[0]);
+        if (!editor_insert_mode() &&
+            repl_state_edit_line() < repl_state_document_count())
+            load_line_to_input(repl_state_edit_line());
+    }
+
+    /* Step 3: status + housekeeping. */
+    if (change->commit_message[0])
+        set_status(change->commit_message);
+    {
+        ReplEditorInputState *inp = editor_state_input_mut();
+        inp->input[0] = '\0';
+        inp->input_len = 0;
+    }
+    editor_cursor_pos_set(0);
+    mark_normals_dirty();
+    return 1;
+}
+
 int try_commit_float_decl(void) {
+    ReplCompileContext ctx = repl_compile_context_from_live();
+    ReplCompiledChange change;
+    char err[REPL_STATUS_TEXT_MAX];
+
+    ReplCompileResult result = repl_compile_float_decl(
+        editor_state_input().input, &ctx, &change, err, sizeof(err));
+    if (result == REPL_COMPILE_OK && change.kind == REPL_COMPILED_NO_CHANGE)
+        return 0;  /* not a float decl; fall through */
+    if (result != REPL_COMPILE_OK) {
+        /* Phase C commit 19: the wrapper still surfaces the diagnostic
+         * via set_status. Phase C commit 21 routes the diagnostic
+         * through return values to the controller / status layer; the
+         * compile function itself never touched status. */
+        set_status(err);
+        return 1;
+    }
+    return apply_float_decl_change(&change);
+}
+
+#if 0  /* legacy try_commit_float_decl body — replaced by
+          repl_compile_float_decl + apply_float_decl_change above.
+          Kept compiled-out during the Phase C transition for diff
+          review; remove in a follow-up cleanup commit. */
+static int try_commit_float_decl_legacy_unused(void) {
     const char *p = editor_state_input().input;
     while (*p && isspace((unsigned char)*p)) p++;
     if (strncmp(p, "float", 5) != 0) return 0;
@@ -423,8 +522,117 @@ int try_commit_float_decl(void) {
     mark_normals_dirty();
     return 1;
 }
+#endif  /* legacy try_commit_float_decl body */
+
+/* Apply a compiled var-assignment change.
+ *
+ * Phase C commit 19 keeps the apply logic inline; commit 20 lifts it
+ * into shared repl_apply_compiled_change + editor_buffer_apply_*
+ * helpers driven by the editor commit orchestration. */
+static int apply_var_assign_change(const ReplCompiledChange *change) {
+    /* Step 1: live predef-var write (single SET_VALUE op for assigns).
+     * If the change replaces a CMD_VAR_DECLARE in non-insert mode the
+     * legacy compile path falls through here too; the cascade-removal
+     * tracking is the float-decl overwrite case and lives there. */
+    for (int op_idx = 0; op_idx < change->predef_op_count; op_idx++) {
+        const ReplPredefOp *op = &change->predef_ops[op_idx];
+        if (op->kind == REPL_PREDEF_OP_SET_VALUE && op->has_value) {
+            int idx = repl_eval_find_predef_var_idx(op->name);
+            if (idx >= 0) g_predef_vars[idx].value = op->value;
+        }
+    }
+
+    /* Step 2: handle the legacy "overwrite a CMD_VAR_DECLARE in
+     * non-insert mode" branch. The compile classified this as a
+     * REPLACE_ONE; if the existing slot is a decl, we replay the
+     * float-decl overwrite cascade here for now. */
+    ReplCommandStore store = repl_command_store_live();
+    if (change->kind == REPL_COMPILED_REPLACE_ONE &&
+        change->pos < repl_state_document_count() &&
+        repl_state_document_cmds_mut()[change->pos].type == CMD_VAR_DECLARE) {
+        EditorBufferView text = editor_buffer_view();
+        const GLCmd *old_decl = &repl_state_document_cmds_mut()[change->pos];
+        for (int decl_idx = 0; decl_idx < old_decl->var_decl_count; decl_idx++) {
+            const char *nm = old_decl->var_names[decl_idx];
+            for (int cmd_idx = 0; cmd_idx < repl_state_document_count(); cmd_idx++) {
+                if (cmd_idx == change->pos) continue;
+                const char *line = editor_buffer_view_line(text, cmd_idx);
+                if (repl_eval_source_uses_ident(line ? line : "", nm)) {
+                    char buf[128];
+                    snprintf(buf, sizeof(buf),
+                             "variable '%s' is in use, cannot overwrite", nm);
+                    set_status(buf);
+                    return 1;
+                }
+            }
+        }
+        for (int decl_idx = 0; decl_idx < old_decl->var_decl_count; decl_idx++) {
+            const char *nm = old_decl->var_names[decl_idx];
+            int slot = repl_eval_find_predef_var_idx(nm);
+            if (slot < 0) continue;
+            repl_eval_undeclare_predef_var(nm);
+            for (int cmd_idx = 0; cmd_idx < repl_state_document_count(); cmd_idx++) {
+                if (repl_state_document_cmds_mut()[cmd_idx].type == CMD_VAR_ASSIGN &&
+                    repl_state_document_cmds_mut()[cmd_idx].num_args > slot)
+                    repl_state_document_cmds_mut()[cmd_idx].num_args--;
+            }
+        }
+    }
+
+    /* Step 3: cmd-store + editor-buffer write. */
+    if (change->kind == REPL_COMPILED_INSERT_ONE) {
+        int flags = change->adjust_edit_line ? REPL_COMMAND_STORE_ADJUST_EDIT_LINE : 0;
+        if (!repl_command_store_insert_one(&store, change->pos,
+                                           &change->cmds[0], flags)) {
+            set_status("Command buffer full!");
+            return 1;
+        }
+        editor_buffer_insert_line(change->pos, change->text[0]);
+        if (change->pos == repl_state_document_count() - 1) {
+            /* append branch — keep cursor at end (legacy behaviour). */
+            repl_state_edit_line_set(repl_state_document_count());
+        } else if (editor_insert_mode()) {
+            repl_state_edit_line_set(repl_state_edit_line() + 1);
+        }
+    } else if (change->kind == REPL_COMPILED_REPLACE_ONE) {
+        if (repl_command_store_replace_one(&store, change->pos, &change->cmds[0]))
+            editor_buffer_replace_line(change->pos, change->text[0]);
+        repl_state_edit_line_set(repl_state_edit_line() + 1);
+        load_line_to_input(repl_state_edit_line());
+    }
+
+    /* Step 4: status + housekeeping. */
+    if (change->commit_message[0])
+        set_status(change->commit_message);
+    {
+        ReplEditorInputState *inp = editor_state_input_mut();
+        inp->input[0] = '\0';
+        inp->input_len = 0;
+    }
+    editor_cursor_pos_set(0);
+    mark_normals_dirty();
+    return 1;
+}
 
 int try_assign_variable(void) {
+    ReplCompileContext ctx = repl_compile_context_from_live();
+    ReplCompiledChange change;
+    char err[REPL_STATUS_TEXT_MAX];
+
+    ReplCompileResult result = repl_compile_var_assign(
+        editor_state_input().input, &ctx, &change, err, sizeof(err));
+    if (result == REPL_COMPILE_OK && change.kind == REPL_COMPILED_NO_CHANGE)
+        return 0;  /* not an assignment; fall through */
+    if (result != REPL_COMPILE_OK) {
+        set_status(err);
+        return 1;
+    }
+    return apply_var_assign_change(&change);
+}
+
+#if 0  /* legacy try_assign_variable body — replaced by
+          repl_compile_var_assign + apply_var_assign_change above. */
+static int try_assign_variable_legacy_unused(void) {
     char name[16];
     char rhs[MAX_LINE_LEN];
     char comment[MAX_LINE_LEN];
@@ -573,6 +781,7 @@ int try_assign_variable(void) {
     mark_normals_dirty();
     return 1;
 }
+#endif  /* legacy try_assign_variable body */
 
 int try_commit_for_loop(void) {
     const char *p = editor_state_input().input;
