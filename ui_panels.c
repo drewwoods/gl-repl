@@ -17,6 +17,7 @@
 #include "repl_keys.h"
 #include "repl_replay.h"
 #include "ui_menu_bar.h"
+#include "ui_variable_panel.h"
 #include "repl_replay_annotations.h"
 #include "prof.h"
 #include "ui_panels.h"
@@ -1061,7 +1062,9 @@ int ui_panels_handle_right_press(int mx, int my) {
 }
 
 /* Pure hit-test: classify (mx, my) as a UiHit. Reads layout / state
- * snapshots; never mutates. Phase E commit 28 entry. */
+ * snapshots; never mutates. Phase E commit 28 entry; commit 29 routes
+ * floating overlays (color picker, menu dropdown, menu/pin buttons,
+ * variable panel) before falling through to code panel and scene. */
 UiHit ui_panels_hit_test(int mx, int my) {
     UiHit h = ui_hit_none();
 
@@ -1081,6 +1084,25 @@ UiHit ui_panels_hit_test(int mx, int my) {
         h.local_y = (float)gl_y;
         return h;
     }
+
+    /* Floating overlays beat the underlying code panel / scene. The
+     * color picker, when open, is the most modal of these — it captures
+     * input while the user is dragging a slider. */
+    UiHit picker = ui_color_picker_hit_test(mx, my);
+    if (picker.kind != UI_HIT_NONE)
+        return picker;
+
+    /* Menu-bar regions: open dropdown row, top-level menu button,
+     * pin button. */
+    UiHit menu = ui_menu_bar_hit_test(mx, my);
+    if (menu.kind != UI_HIT_NONE)
+        return menu;
+
+    /* Variable panel is a non-modal floating panel; only matters when
+     * its slider rows are visible. */
+    UiHit varp = ui_variable_panel_hit_test(mx, my);
+    if (varp.kind != UI_HIT_NONE)
+        return varp;
 
     /* Code-panel region. */
     int cp_x, cp_y, cp_w, cp_h;

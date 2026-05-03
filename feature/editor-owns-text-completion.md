@@ -866,8 +866,8 @@ Phase D signals:
 
 | # | Commit | Status |
 |---|---|---|
-| 28 | refactor: define `UiHit` / `UiHitKind`; convert `ui_panels` mouse handlers to compute and return hit | pending |
-| 29 | refactor: convert `ui_menu_bar`, `ui_color_picker`, `ui_variable_panel` mouse handlers to return `UiHit` | pending |
+| 28 | refactor: define `UiHit` / `UiHitKind`; convert `ui_panels` mouse handlers to compute and return hit | done |
+| 29 | refactor: convert `ui_menu_bar`, `ui_color_picker`, `ui_variable_panel` mouse handlers to return `UiHit` | done |
 | 30 | checks: promote `check-ui-returns-hits-only` to hard guard (ui_*.c forbidden from calling `repl_*` mutators or `editor_*_mut`) | pending |
 
 Phase E signal: `check-ui-returns-hits-only` is enforced; UI input

@@ -385,6 +385,39 @@ int ui_color_picker_motion(int mx, int my) {
 
 void ui_color_picker_release(void) { g_cp_drag = 0; }
 
+UiHit ui_color_picker_hit_test(int mx, int my) {
+    UiHit h = ui_hit_none();
+    if (g_cp_line < 0) return h;
+    int win_h = ui_state_viewport().window_h;
+    if (win_h <= 0) return h;
+    int gl_y = win_h - my;
+
+    CpRects r;
+    cp_compute_rects(&r);
+
+    int region = 0;
+    if (mx >= r.sv_x && mx < r.sv_x + r.sv_sz &&
+        gl_y >= r.sv_y && gl_y < r.sv_y + r.sv_sz) {
+        region = 1; /* SV square */
+    } else if (mx >= r.hue_x && mx < r.hue_x + CP_HUE_W &&
+               gl_y >= r.hue_y && gl_y < r.hue_y + r.hue_h) {
+        region = 2; /* hue bar */
+    } else if (g_cp_has_alpha &&
+               mx >= r.alp_x && mx < r.alp_x + CP_ALPHA_W &&
+               gl_y >= r.alp_y && gl_y < r.alp_y + r.alp_h) {
+        region = 3; /* alpha bar */
+    }
+
+    if (region == 0) return h;
+
+    h.kind = UI_HIT_COLOR_SWATCH;
+    h.cmd_idx = g_cp_line;
+    h.item_idx = region;
+    h.local_x = (float)(mx - r.sv_x);
+    h.local_y = (float)(gl_y - r.sv_y);
+    return h;
+}
+
 /* Close the picker.  Returns 1 if it was open (caller should redisplay). */
 int ui_color_picker_close(void) {
     if (g_cp_line < 0) return 0;

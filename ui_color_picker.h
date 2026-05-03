@@ -31,6 +31,7 @@
 #define UI_COLOR_PICKER_H
 
 #include "ui_editor.h"
+#include "ui_hit.h"
 #include "ui_snapshot.h"
 
 /* Width of inline color swatch boxes (shown in code panel). */
@@ -85,5 +86,15 @@ void ui_color_picker_release(void);
  * open and closed, 0 if no picker was active. Called by Escape key handler
  * or when user clicks outside the picker. */
 int  ui_color_picker_close(void);
+
+/* Pure hit-test: classify (mx, my) as a UiHit for the floating color picker.
+ *
+ * Phase E commit 29 entry. Returns UI_HIT_COLOR_SWATCH if the pointer lands
+ * on a slider rectangle of the open picker; cmd_idx carries the source-command
+ * index whose color is being edited, item_idx encodes the slider region
+ * (1 = SV square, 2 = hue bar, 3 = alpha bar). Returns UI_HIT_NONE if the
+ * picker is closed or the pointer is outside its rects. Reads picker state
+ * only; never mutates. */
+UiHit ui_color_picker_hit_test(int mx, int my);
 
 #endif /* UI_COLOR_PICKER_H */

@@ -134,6 +134,25 @@ int ui_variable_panel_hit(int gx, int gy, int *out_row) {
     return 1;
 }
 
+UiHit ui_variable_panel_hit_test(int mx, int my) {
+    UiHit h = ui_hit_none();
+    if (!ui_state_variable_panel().visible) return h;
+    int win_h = ui_state_viewport().window_h;
+    if (win_h <= 0) return h;
+    int row = -1;
+    if (!ui_variable_panel_hit(mx, my, &row)) return h;
+
+    int px, py, pw, ph;
+    ui_variable_panel_rect(&px, &py, &pw, &ph);
+    int gl_y = win_h - my;
+
+    h.kind = UI_HIT_VARIABLE_SLIDER;
+    h.item_idx = row;
+    h.local_x = (float)(mx - px);
+    h.local_y = (float)(gl_y - py);
+    return h;
+}
+
 void ui_variable_panel_render(const UiRenderSnapshot *snap) {
     if (!snap->variable_panel.visible) return;
 
