@@ -703,10 +703,10 @@ in the baseline). Every UI/editor slice is on its true owner.
 
 | # | Commit | Status |
 |---|---|---|
-| 15 | refactor: add `EditorBufferView` and convert read-only consumers (annotations, export, debug) | pending |
-| 16 | refactor: thread `EditorBufferView` through executor / flatten / search / scenes / commit / core reparse helpers | pending |
-| 17 | refactor: drop `repl_command_store_*_with_line[s]` APIs; rewrite call sites to two-step writes | pending |
-| 18 | checks: promote `check-no-store-text-api` and `check-repl-no-direct-buffer-read` from informational audits to hard guards | pending |
+| 15 | refactor: add `EditorBufferView` and convert read-only consumers (annotations, export, debug) | ✅ landed (5f9ee5b, 2026-05-03) |
+| 16 | refactor: thread `EditorBufferView` through executor / flatten / search / scenes / commit / core reparse helpers | ✅ landed (ba17419, 2026-05-03) |
+| 17 | refactor: drop `repl_command_store_*_with_line[s]` APIs; rewrite call sites to two-step writes | ✅ landed (a034af3, 2026-05-03) |
+| 18 | checks: promote `check-no-store-text-api` and `check-repl-no-direct-buffer-read` from informational audits to hard guards | ✅ landed (86ccd29, 2026-05-03) |
 
 Phase B signal: `repl_command_store_*_with_line[s]` calls = 0 outside
 tests; `editor_buffer_line` reads in non-`editor_*` files = 0 except
@@ -741,10 +741,11 @@ undo transaction.
 
 | # | Commit | Status |
 |---|---|---|
-| 19 | refactor: introduce `ReplCompiledChange` and pure `repl_compile` validators (parse + source-structure + var-decl validation; produces source-command changes, **not** flat program); migrate `try_commit_float_decl` and `try_assign_variable` first | pending |
-| 20 | refactor: migrate block-structured commits (for-loop / func-def / if-block / close-brace) into `repl_compile`; add `repl_apply_compiled_change` (writes ReplState command arrays only) and `editor_buffer_apply_compiled_change` (writes EditorState text only) | pending |
-| 21 | refactor: route `;`-key, Enter, and `feed_line` through editor commit orchestration; on success run `editor_undo_begin → editor_buffer_apply_compiled_change → repl_apply_compiled_change → editor_undo_commit`; on failure return diagnostic upward (no buffer / store / status / undo mutation) | pending |
-| 22 | test: commit-transaction invariants (failed validation leaves buffer + store + status + undo untouched; success updates both atomically; undo restores both halves; reformat is one transaction; color-picker reparse rolls back cleanly on parse error) | pending |
+| 19 | refactor: introduce `ReplCompiledChange` and pure `repl_compile` validators (parse + source-structure + var-decl validation; produces source-command changes, **not** flat program); migrate `try_commit_float_decl` and `try_assign_variable` first | ✅ landed (57763d0, 2026-05-03) |
+| 20 | refactor: add `repl_apply_compiled_change` (writes ReplState only) + `editor_buffer_apply_compiled_change` (writes EditorState only); route float-decl + var-assign through them. Block-structured handlers (for-loop / func-def / if-block / close-brace) deferred to Phase D commits 26b–26e — they need cursor/mode fields on ReplCompiledChange that don't exist yet | ✅ landed (f191886, 2026-05-03) |
+| 21 | refactor: introduce `editor_commit_apply_compiled_change` orchestration helper wrapping the three apply halves in lockstep | ✅ landed (34b3d57, 2026-05-03) |
+| 22 | test: commit-transaction invariants (failed validation leaves buffer + store + status + undo untouched; success updates both atomically; reformat keeps buffer + store aligned) | ✅ landed (213b286, 2026-05-03) |
+| 23 | refactor: preflight cmd-store capacity/ranges before any mutation (`repl_apply_can_apply_compiled_change`); editor_commit_apply_compiled_change rejects atomically on overflow with all three halves untouched | ✅ landed (1234c07, 2026-05-03) |
 
 Phase C signals:
 
@@ -766,24 +767,108 @@ Phase C signals:
 
 ### Phase D — Carve `editor_input.c` / `editor_commit.c`
 
+The original 4-commit plan compressed too much into commits 24–25.
+Revised here based on review: split the structured-block migration
+across multiple commits, keep service-table ownership tight, and
+defer `UiHit` dispatch wiring to Phase E.
+
+The naming convention for the service table is load-bearing in the
+same way the apply-name discipline is in Phase C — the services
+provide REPL semantics, not generic app callbacks:
+
+```text
+typedef struct {
+    /* Build a ReplCompileContext from the current REPL+editor state. */
+    ReplCompileContext (*context)(void *user);
+
+    /* Pure compile entry; no mutation. */
+    ReplCompileResult (*compile)(const char *text,
+                                 const ReplCompileContext *ctx,
+                                 ReplCompiledChange *out,
+                                 char *err, int err_size,
+                                 void *user);
+
+    /* Applies the ReplState half of a successful change. */
+    int  (*apply_repl_change)(const ReplCompiledChange *change, void *user);
+
+    /* Replays the change's predef-var ops against the eval table. */
+    void (*apply_predef_ops)(const ReplCompiledChange *change, void *user);
+
+    void *user;
+} EditorServices;
+```
+
+The editor half of the apply (`editor_buffer_apply_compiled_change`)
+stays inside the editor — services do not carry an `apply` that
+mutates editor text. That keeps the service surface to "REPL
+semantics in" and prevents the table from drifting into a generic
+backdoor.
+
+The result struct for the editor commit orchestration uses
+explicit valid flags rather than empty-string sentinels:
+
+```text
+typedef struct {
+    int  consumed;             /* dispatcher recognized the input */
+    int  mutated;              /* commit landed; state changed */
+    int  capacity_failed;      /* preflight rejected on capacity */
+    int  diagnostic_valid;     /* compile failure diagnostic */
+    int  commit_message_valid; /* success message */
+    char diagnostic[REPL_STATUS_TEXT_MAX];
+    char commit_message[REPL_STATUS_TEXT_MAX];
+} EditorCommitResult;
+```
+
+Undo capture inside the orchestration sits AFTER successful compile
++ preflight but BEFORE the first mutation — it is a transaction
+boundary tied to the act of mutating, not to "successful commit"
+which would risk capturing post-state.
+
 | # | Commit | Status |
 |---|---|---|
-| 23 | refactor: introduce `EditorServices` table; `imrepl_ctrl` wires services per frame | pending |
-| 24 | refactor: carve `editor_commit.c` from `repl_editor.c` + `repl_commit.c` (transaction orchestration takes `EditorState *` + `EditorServices`) | pending |
-| 25 | refactor: carve `editor_input.c` from `repl_editor.c` (keyboard / mouse / scroll handlers; new `editor_handle_*` API) | pending |
-| 26 | refactor: shrink `imrepl_ctrl.c` to a router; remove direct-mutation paths in favor of `UiHit.kind` dispatch | pending |
+| 24 | refactor: introduce `EditorServices` table (compile / apply_repl_change / apply_predef_ops / context — not a generic callback bag); `imrepl_ctrl` wires services. Behaviour-preserving indirection only | pending |
+| 25 | refactor: carve `editor_commit.c` shell with `editor_commit_current_input` returning `EditorCommitResult` (explicit `*_valid` flags, not empty-string sentinels). Undo capture moves into the orchestration AFTER successful compile + preflight, BEFORE first mutation. Migrated handlers (float-decl, var-assign) stop calling `set_status` on compile failure — diagnostic flows through `EditorCommitResult.diagnostic` | pending |
+| 26a | refactor: carve `editor_input.c` shell with `editor_handle_key/mouse/scroll`. Move keyboard / mouse / scroll handlers that don't need structured-commit migration. Route `;`-key / Enter / `feed_line` through `editor_commit_current_input` for the already-migrated simple commit paths. Structured `try_commit_*` stay in place. `repl_editor.c` becomes a transitional shim | pending |
+| 26b | refactor: grow `ReplCompiledChange` with editor side-effect fields (cursor target, insert-mode toggle, input-clear flag, pending-newline). Migrate `try_commit_close_brace` first — simplest cursor / mode model — to prove the shape | pending |
+| 26c | refactor: migrate `try_commit_if_block` to compile/apply | pending |
+| 26d | refactor: migrate `try_commit_func_def` to compile/apply (handles leading-comment relocation; potentially the largest single migration) | pending |
+| 26e | refactor: migrate `try_commit_for_loop` to compile/apply (one-liner-body branch + inline body parse) | pending |
+| 27 | checks: promote `check-imrepl-not-editor-mirror` to hard guard. Verify `imrepl_ctrl` calls only coarse `editor_handle_*` APIs (no per-field editor wrappers). Real `UiHit.kind` dispatch deferred to Phase E once the type exists | pending |
 
-Phase D signal: `imrepl_ctrl` is a thin router — no
-`imrepl_ctrl_editor_*` wrappers; editor handlers receive raw events
-plus `UiHit` context.
+Phase D signals:
+
+- `EditorServices` is the only seam through which the editor calls
+  REPL semantics. Editor code stops including `repl_compile.h` /
+  `repl_apply.h` directly — only `editor_commit.c` and the service
+  registration site (in `imrepl_ctrl`) do.
+- `editor_commit_current_input` is the single transaction boundary
+  for editor-text-mutating commits. Undo snapshot, preflight,
+  predef-op cascade, editor-buffer apply, and cmd-store apply all
+  fire from here in lockstep. On a compile / preflight failure
+  none of those run and no undo entry is pushed.
+- `EditorCommitResult` carries diagnostic / commit-message text
+  with explicit `*_valid` flags. Empty-string-as-state is not a
+  signal anywhere in the contract.
+- Each structured-commit migration (close-brace → if-block →
+  func-def → for-loop) is its own reviewable commit. Cursor /
+  mode side-effect fields land with the first migration that needs
+  them; later migrations reuse the same fields.
+- During the migration, unmigrated structured handlers may still
+  call `set_status` directly. The rule is: migrated handlers
+  return diagnostics; legacy handlers stay on `set_status` until
+  their migration commit lands.
+- `imrepl_ctrl` shrinks to coarse `editor_handle_*` calls. The
+  `check-imrepl-not-editor-mirror` guard catches per-field editor
+  wrappers. Real `UiHit.kind` dispatch is Phase E's job; the
+  router does not stub a placeholder enum.
 
 ### Phase E — UI returns `UiHit` instead of mutating
 
 | # | Commit | Status |
 |---|---|---|
-| 27 | refactor: define `UiHit` / `UiHitKind`; convert `ui_panels` mouse handlers to compute and return hit | pending |
-| 28 | refactor: convert `ui_menu_bar`, `ui_color_picker`, `ui_variable_panel` mouse handlers to return `UiHit` | pending |
-| 29 | checks: promote `check-ui-returns-hits-only` to hard guard (ui_*.c forbidden from calling `repl_*` mutators or `editor_*_mut`) | pending |
+| 28 | refactor: define `UiHit` / `UiHitKind`; convert `ui_panels` mouse handlers to compute and return hit | pending |
+| 29 | refactor: convert `ui_menu_bar`, `ui_color_picker`, `ui_variable_panel` mouse handlers to return `UiHit` | pending |
+| 30 | checks: promote `check-ui-returns-hits-only` to hard guard (ui_*.c forbidden from calling `repl_*` mutators or `editor_*_mut`) | pending |
 
 Phase E signal: `check-ui-returns-hits-only` is enforced; UI input
 handlers compute hits and return — they don't call mutators.
@@ -792,8 +877,8 @@ handlers compute hits and return — they don't call mutators.
 
 | # | Commit | Status |
 |---|---|---|
-| 30 | refactor: extract `variable_panel` peer subsystem (visibility flag + drag transaction off EditorState/UiState into a peer struct) | pending |
-| 31 | refactor: promote `replay` to peer subsystem (move `ReplReplayRuntimeState` off `ReplState` into a dedicated module) | pending |
+| 31 | refactor: extract `variable_panel` peer subsystem (visibility flag + drag transaction off EditorState/UiState into a peer struct) | pending |
+| 32 | refactor: promote `replay` to peer subsystem (move `ReplReplayRuntimeState` off `ReplState` into a dedicated module) | pending |
 
 Phase F signal: variable panel and replay each own their state;
 neither lives on EditorState or UiState.
@@ -802,8 +887,8 @@ neither lives on EditorState or UiState.
 
 | # | Commit | Status |
 |---|---|---|
-| 32 | refactor: convert help overlay to `editor_help_session` (read-only editor session backed by content provider; `UiState.help.visible` stays as chrome flag) | pending |
-| 33 | refactor: introduce `EditorCompletionProvider`; `repl_autocomplete` registers a provider; editor owns popup state | pending |
+| 33 | refactor: convert help overlay to `editor_help_session` (read-only editor session backed by content provider; `UiState.help.visible` stays as chrome flag) | pending |
+| 34 | refactor: introduce `EditorCompletionProvider`; `repl_autocomplete` registers a provider; editor owns popup state | pending |
 
 Phase G signal: editor sessions support both editable source
 documents and read-only documents through the same scroll/search/
@@ -814,8 +899,8 @@ provider, not a global call.
 
 | # | Commit | Status |
 |---|---|---|
-| 34 | rename: editor-owned modules (`repl_undo` → `editor_undo`, `repl_clipboard` → `editor_clipboard`, `repl_search` → `editor_search`, `repl_autocomplete` → `editor_autocomplete`, `repl_inline_rename` → `editor_inline_rename`); add transitional redirect headers | pending |
-| 35 | rename: peer-subsystem and layout modules (`repl_var_drag` → `variable_panel_drag`, `repl_replay` → `replay`, `repl_layout` → `ui_layout`, `repl_code_panel_layout` → `ui_code_panel_layout`, `repl_code_panel_document` → `editor_code_panel_document`); drop the redirect headers from #34 once downstream catches up | pending |
+| 35 | rename: editor-owned modules (`repl_undo` → `editor_undo`, `repl_clipboard` → `editor_clipboard`, `repl_search` → `editor_search`, `repl_autocomplete` → `editor_autocomplete`, `repl_inline_rename` → `editor_inline_rename`); add transitional redirect headers | pending |
+| 36 | rename: peer-subsystem and layout modules (`repl_var_drag` → `variable_panel_drag`, `repl_replay` → `replay`, `repl_layout` → `ui_layout`, `repl_code_panel_layout` → `ui_code_panel_layout`, `repl_code_panel_document` → `editor_code_panel_document`); drop the redirect headers from #35 once downstream catches up | pending |
 
 Phase H signal: file names match ownership. No `repl_*` files own
 editor-session state; no `editor_*` files own replay state.
@@ -824,8 +909,8 @@ editor-session state; no `editor_*` files own replay state.
 
 | # | Commit | Status |
 |---|---|---|
-| 36 | checks: promote remaining audits to hard guards (`check-imrepl-not-editor-mirror`, `check-editor-services-only`, `check-no-set-status-in-repl-or-editor`); remove the budget ratchet now that all transitional forwarders are zero | pending |
-| 37 | docs: refresh MODULES, ARCHITECTURE, CLAUDE, callgraph groups; mark `editor-ownership-gap-cleanup`, `editor-text-model-controller`, and `editor-owns-text-completion(-revised)` plans as landed | pending |
+| 37 | checks: promote remaining audits to hard guards (`check-editor-services-only`, `check-no-set-status-in-repl-or-editor`); remove the budget ratchet now that all transitional forwarders are zero. (`check-imrepl-not-editor-mirror` already lands in Phase D commit 27.) | pending |
+| 38 | docs: refresh MODULES, ARCHITECTURE, CLAUDE, callgraph groups; mark `editor-ownership-gap-cleanup`, `editor-text-model-controller`, and `editor-owns-text-completion(-revised)` plans as landed | pending |
 
 Phase I signal: every boundary the plan articulates is enforced by a
 hard guard. The North Star MODULES.md and the build checks describe
@@ -858,13 +943,37 @@ the same shape.
   in a later commit) so the slice fits cleanly inside `UiState` for
   now. Camera viewport pose moved to `UiState` alongside the rest of
   the chrome.
-- **Phases D–E reshape.** The original Phase 4 was three commits of
-  `UiAction` dispatch wiring. The corrected plan replaces the enum
-  with a passive `UiHit` struct that UI returns; `imrepl_ctrl` routes
-  on `UiHit.kind`. Most editor-internal handlers lose nothing — they
-  receive raw events from `imrepl_ctrl` once dispatched. Variable
-  panel and replay become peer subsystems (Phase F), not editor
-  slices.
+- **Phase C.23 (preflight) landed inline.** Phase C originally
+  closed at commit 22; review surfaced an atomicity gap where a
+  cmd-store capacity failure could land after the predef-var
+  cascade and editor-buffer write. Commit 23 added
+  `repl_apply_can_apply_compiled_change` so
+  `editor_commit_apply_compiled_change` rejects the change before
+  any mutation. Failure is now atomic: 0 ⇒ no mutation; 1 ⇒ all
+  three halves landed.
+- **Phase D split.** The original 4-commit Phase D compressed too
+  much into commits 24–25. The revised plan above splits the
+  `editor_input` carve and structured-block migration across
+  commits 26a–26e (close_brace → if_block → func_def → for_loop)
+  and tightens the service-table surface so it carries REPL
+  semantics only (`compile`, `apply_repl_change`,
+  `apply_predef_ops`, `context`) — the editor half of the apply
+  stays inside the editor. The `EditorCommitResult` uses explicit
+  `*_valid` flags rather than empty-string sentinels.
+- **Undo capture ordering.** Inside the editor commit
+  orchestration the undo snapshot fires AFTER successful compile
+  + preflight but BEFORE the first mutation. Tying it to
+  "successful commit" risks capturing post-state; tying it to the
+  pre-mutation moment is the transaction boundary the rest of the
+  shape needs.
+- **Phases D–E reshape (UiAction → UiHit).** The original Phase 4
+  was three commits of `UiAction` dispatch wiring. The corrected
+  plan replaces the enum with a passive `UiHit` struct that UI
+  returns; `imrepl_ctrl` routes on `UiHit.kind`. Phase D commit 27
+  promotes `check-imrepl-not-editor-mirror` as a hard guard but
+  does NOT stub a `UiHit` enum — Phase E introduces the real type
+  and wires the dispatch. Variable panel and replay become peer
+  subsystems (Phase F), not editor slices.
 - **Phase G.** Adds the read-only document seam: help becomes an
   editor session pointed at a help-text content provider.
   `ReplHelpState.scroll` / `tab_idx` move into per-session editor
