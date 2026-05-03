@@ -53,20 +53,25 @@ typedef struct {
     char  text[MAX_LINE_LEN];
 } ReplParsedLine;
 
-/* Context-aware parser entrypoint. Pass a ReplParseContext from internal
- * callers when the parse position is not the active editor line (e.g.,
- * repl_flatten.c parsing a source command at a different index, or
- * replay.c doing a step-back parse). Pass NULL to fall back to the
- * legacy g_edit_line behavior used by command-entry wrappers.
- * Returns 1 on success, 0 on parse error (status message set).
- * On success, out->cmd holds the parsed command and out->text holds the
- * editor-buffer form of the normalized source. */
+/* Context-aware parser entrypoint. Pass a ReplParseContext from
+ * internal callers when the parse position is not the active editor
+ * line (e.g., flatten.c parsing a source command at a different
+ * index, or replay.c doing a step-back parse). Pass NULL to fall
+ * back to the legacy edit-line behavior used by the no-ctx wrappers.
+ *
+ * Returns 1 on success, 0 on parse error. On success, out->cmd holds
+ * the parsed command and out->text holds the editor-buffer form of
+ * the normalized source. On failure, parse diagnostics are written
+ * to `ctx->err_buf` when provided; the parser core never calls
+ * set_status itself. */
 int repl_parser_parse_command_ctx(const char *line, ReplParsedLine *out,
                                   const ReplParseContext *ctx);
 
-/* Parse a single REPL line into cmd. Returns 1 on success, 0 on parse error
- * (status message set). Use repl_parser_parse_command_ctx() when parsing
- * outside the active editor line or with explicit local-variable scope. */
+/* Legacy no-context parse: surfaces diagnostics via set_status as a
+ * back-compat bridge for the test harness. New code should use
+ * `repl_parser_parse_command_ctx` with its own err_buf and decide
+ * how to surface parse failures. The bridge is tracked by
+ * `check-no-set-status-in-repl-parser` and ratchets toward zero. */
 int repl_parser_parse_command(const char *line, GLCmd *cmd);
 
 #endif
