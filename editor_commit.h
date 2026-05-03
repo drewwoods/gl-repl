@@ -271,16 +271,19 @@ ReplCompileResult editor_compile_for_loop(const char *input,
  * dispatchers matters — `float` must precede `assign` so `float x`
  * isn't misread as an assignment to "float". */
 
-void repl_commit_reset_transients(void);
-int  repl_commit_resolve_insert_exit_target(int target);
+void editor_commit_reset_transients(void);
+int  editor_commit_resolve_insert_exit_target(int target);
 
 /* Func-decl resume bookkeeping: a CMD_FUNC_DEF commit publishes a
  * delta via editor_commit_func_decl_resume_set; the matching
  * close-brace / Enter-out-of-func consumes it. Read+clear with
  * `_take`, read-only inspection with `_peek`. */
-int  repl_commit_func_decl_resume_delta_take(void);
-int  repl_commit_func_decl_resume_delta_peek(void);
-void repl_commit_func_decl_resume_delta_set(int delta);
+int  editor_commit_func_decl_resume_take(void);
+int  editor_commit_func_decl_resume_peek(void);
+/* editor_commit_func_decl_resume_set is declared at line 190
+ * alongside the apply_plan / post-effects API, where it primarily
+ * serves; the redundant declaration here was elided in the symbol
+ * rename. */
 
 int try_commit_float_decl(void);
 int try_assign_variable(void);
