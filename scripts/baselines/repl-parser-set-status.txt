@@ -1,0 +1,14 @@
+# Baseline for scripts/check-no-set-status-in-repl-parser.sh.
+#
+# Phase I commit 42b removed the parser core's set_status calls.
+# The single surviving call site sits inside
+# `parser_legacy_surface_to_status` — the bridge for the two no-ctx
+# wrappers (repl_parser_parse_command / _with_vars) that the test
+# harness asserts against via g_status. This baseline freezes that
+# single allowed site.
+#
+# To drive the count to zero, retire the no-ctx wrappers (or have
+# the test harness migrate to the ctx surface and read err_buf
+# directly) and lower this number.
+
+count: 1
