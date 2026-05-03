@@ -117,21 +117,11 @@ int  repl_flat_cmd_matches_cursor(int flat_idx);
 int  repl_find_feeding_normal_cmd(int line_idx);
 int  repl_find_feeding_color_cmd(int line_idx);
 
-/* --- Controller-owned input callback effects --------------------------- */
-
-typedef struct ReplInputDispatchEffects {
-    int request_redraw;
-    int set_cursor;
-    int cursor;
-    int schedule_timer;
-    unsigned int timer_millis;
-    int timer_value;
-} ReplInputDispatchEffects;
-
 /* --- Input callback entry points -------------------------------------- */
-/* The legacy repl_*_func dispatch entry points were deleted in Phase J1
- * commit 49a; production callers and test fixtures use editor_handle_*
- * (declared in editor_input.h) directly. */
+/* The ReplInputDispatchEffects typedef and the editor_handle_* /
+ * editor_input_router_* dispatch APIs live in editor_input.h. The
+ * legacy repl_*_func dispatch entry points were deleted in Phase J1
+ * commit 49a. */
 
 /* --- Test helpers ------------------------------------------------------ */
 
