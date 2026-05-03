@@ -494,9 +494,14 @@ bench-csv: $(BENCH_BINS) ## Run benchmarks with --csv output (machine readable).
 	done
 
 # count lines: $(SRCS) $(HDRS)
-lines: $(SRCS) $(HDRS) ## Count lines across source and header files.
-	@echo "Counting lines of code in source and header files..."
-	@wc -l $(SRCS) $(HDRS) | sort -nr
+lines: $(SRCS) $(HDRS) ## Count SLOC (code/comment/blank) across source and header files.
+	@if ! command -v cloc >/dev/null 2>&1; then \
+		echo "cloc not found. Install it with:"; \
+		echo "  macOS:  brew install cloc"; \
+		echo "  Linux:  sudo apt install cloc"; \
+		exit 1; \
+	fi
+	@cloc $(SRCS) $(HDRS) --by-file
 
 debug: ## Clean and rebuild everything with debug/ASan flags.
 	$(MAKE) clean
