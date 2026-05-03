@@ -60,6 +60,12 @@
 /* Forward declarations. */
 static void keyboard_func(unsigned char key, int x, int y);
 static void special_func(int key, int x, int y);
+static void mouse_func(int button, int state, int x, int y);
+static void motion_func(int x, int y);
+static void passive_motion_func(int x, int y);
+#ifndef USE_GLUT
+static void mousewheel_func(int wheel, int direction, int x, int y);
+#endif
 
 typedef enum {
     COMMIT_UNCHANGED,
@@ -1675,6 +1681,237 @@ static void special_func(int key, int x, int y) {
     if (handle_page_scroll_special_key_route(key)) return;
 }
 
+/* ===========================================================================
+ * Mouse / motion / passive-motion / mousewheel dispatch.
+ * Phase J1 commit 46 migrated the bodies and their static helpers from
+ * repl_editor.c. Non-editor concerns (variable-panel drag, scene press,
+ * right press, camera mouse, scroll-wheel zoom) are still inline-called
+ * here pending commits 47c / 47d which lift them up into imrepl_ctrl
+ * router pre-dispatch.
+ * ===========================================================================
+ */
+
+static int editor_point_in_code_panel(int x, int y) {
+    int cp_x, cp_y, cp_w, cp_h;
+    int gl_y = ui_state_viewport().window_h - y;
+
+    repl_layout_code_panel_rect(&cp_x, &cp_y, &cp_w, &cp_h);
+    return x >= cp_x && x < cp_x + cp_w &&
+           gl_y >= cp_y && gl_y < cp_y + cp_h;
+}
+
+static int editor_point_on_code_panel_divider(int x, int y) {
+    int cp_x, cp_y, cp_w, cp_h;
+    int gl_y = ui_state_viewport().window_h - y;
+    int layout = editor_input_code_panel_layout();
+
+    if (layout == CODE_PANEL_LAYOUT_HIDDEN)
+        return 0;
+    repl_layout_code_panel_rect(&cp_x, &cp_y, &cp_w, &cp_h);
+    if (layout == CODE_PANEL_LAYOUT_TOP)
+        return abs(gl_y - cp_y) < 10;
+    if (layout == CODE_PANEL_LAYOUT_BOTTOM)
+        return abs(gl_y - (cp_y + cp_h)) < 10;
+    return abs(x - (cp_x + cp_w)) < 10;
+}
+
+static int editor_code_panel_resize_cursor(void) {
+    return editor_input_code_panel_layout() == CODE_PANEL_LAYOUT_LEFT
+         ? GLUT_CURSOR_LEFT_RIGHT
+         : GLUT_CURSOR_UP_DOWN;
+}
+
+static void editor_update_panel_frac_from_mouse(int x, int y) {
+    ReplCodePanelRuntimeState *code_panel_state = ui_state_code_panel_mut();
+    int layout = editor_input_code_panel_layout();
+
+    if (layout == CODE_PANEL_LAYOUT_HIDDEN) {
+        return;
+    } else if (layout == CODE_PANEL_LAYOUT_TOP) {
+        int win_h = ui_state_viewport().window_h;
+        if (win_h > 0)
+            code_panel_state->panel_frac = (float)y / (float)win_h;
+    } else if (layout == CODE_PANEL_LAYOUT_BOTTOM) {
+        int win_h = ui_state_viewport().window_h;
+        if (win_h > 0)
+            code_panel_state->panel_frac = (float)(win_h - y) / (float)win_h;
+    } else {
+        int win_w = ui_state_viewport().window_w;
+        if (win_w > 0)
+            code_panel_state->panel_frac = (float)x / (float)win_w;
+    }
+
+    if (code_panel_state->panel_frac < 0.1f)
+        code_panel_state->panel_frac = 0.1f;
+    if (code_panel_state->panel_frac > 0.9f)
+        code_panel_state->panel_frac = 0.9f;
+}
+
+static void mouse_func(int button, int state, int x, int y) {
+    if (state == GLUT_UP) {
+        ui_panels_handle_mouse_release();
+        if (variable_panel_drag_active()) {
+            variable_panel_handle_drag_reset();
+            editor_request_redraw();
+            return;
+        }
+        if (ui_state_code_panel().resizing_panel) {
+            ui_state_code_panel_mut()->resizing_panel = 0;
+            editor_set_cursor(GLUT_CURSOR_INHERIT);
+            editor_request_redraw();
+            return;
+        }
+    }
+
+    if (button == GLUT_LEFT_BUTTON && state == GLUT_DOWN) {
+        if (variable_panel_visible()) {
+            int row_idx;
+            if (ui_variable_panel_hit(x, y, &row_idx)) {
+                if (replay_active())
+                    repl_replay_stop();
+                variable_panel_handle_drag_begin(row_idx, 0, x);
+                editor_request_redraw();
+                return;
+            }
+        }
+
+        /* The example dropdown can extend outside the code panel bounds (e.g.
+         * below the panel in vertical layout).  Handle it before the
+         * panel-area gate so clicks on any part of the dropdown register. */
+        if (ui_menu_bar_example_dropdown_is_open()) {
+            int cursor_pos = -1;
+            int panel_actions = ui_panels_handle_code_panel_press(x, y, &cursor_pos);
+            if (cursor_pos >= 0)
+                editor_cursor_pos_set(cursor_pos);
+            if (panel_actions & UI_PANEL_PRESS_OPENED_COLOR_PICKER)
+                repl_undo_push_snapshot();
+            editor_request_redraw();
+            return;
+        }
+
+        if (editor_point_on_code_panel_divider(x, y)) {
+            ui_state_code_panel_mut()->resizing_panel = 1;
+            editor_set_cursor(editor_code_panel_resize_cursor());
+            return;
+        }
+        if (editor_point_in_code_panel(x, y)) {
+            int cursor_pos = -1;
+            int panel_actions = ui_panels_handle_code_panel_press(x, y, &cursor_pos);
+            if (cursor_pos >= 0)
+                editor_cursor_pos_set(cursor_pos);
+            if (panel_actions & UI_PANEL_PRESS_OPENED_COLOR_PICKER)
+                repl_undo_push_snapshot();
+            editor_request_redraw();
+            return;
+        }
+        /* Scene-area click: let the color picker intercept before camera. */
+        if (ui_panels_handle_scene_press(x, y)) {
+            editor_request_redraw();
+            return;
+        }
+    }
+
+    /* Right-click inside the Config dropdown cycles the item backward;
+     * missed clicks leave the menu open so the user can keep seeking. */
+    if (button == GLUT_RIGHT_BUTTON && state == GLUT_DOWN) {
+        if (ui_panels_handle_right_press(x, y)) {
+            editor_request_redraw();
+            return;
+        }
+    }
+
+    /* Right-click on var panel: logarithmic drag mode. */
+    if (button == GLUT_RIGHT_BUTTON && state == GLUT_DOWN && variable_panel_visible()) {
+        int row_idx;
+        if (ui_variable_panel_hit(x, y, &row_idx)) {
+            if (replay_active())
+                repl_replay_stop();
+            variable_panel_handle_drag_begin(row_idx, 1, x);
+            editor_request_redraw();
+            return;
+        }
+    }
+
+    repl_camera_mouse_event(button, state, x, y, editor_get_modifiers());
+
+#ifdef USE_GLUT
+    if (button == 3 && state == GLUT_DOWN) {
+        if (ui_state_help().visible) {
+            ui_state_help_mut()->scroll--;
+        } else {
+            if (editor_point_in_code_panel(x, y))
+                editor_scroll_set(editor_scroll() - 1);
+            else
+                repl_camera_add_zoom_velocity(-0.3f);
+        }
+        editor_request_redraw();
+    } else if (button == 4 && state == GLUT_DOWN) {
+        if (ui_state_help().visible) {
+            ui_state_help_mut()->scroll++;
+        } else {
+            if (editor_point_in_code_panel(x, y))
+                editor_scroll_set(editor_scroll() + 1);
+            else
+                repl_camera_add_zoom_velocity(0.3f);
+        }
+        editor_request_redraw();
+    }
+#endif
+}
+
+#ifndef USE_GLUT
+static void mousewheel_func(int wheel, int direction, int x, int y) {
+    (void)wheel;
+    if (ui_state_help().visible) {
+        editor_help_session_scroll_by(-direction);
+    } else {
+        if (editor_point_in_code_panel(x, y))
+            editor_scroll_set(editor_scroll() - direction);
+        else
+            repl_camera_add_zoom_velocity(-(float)direction * 0.1f);
+    }
+    editor_request_redraw();
+}
+#endif
+
+static void passive_motion_func(int x, int y) {
+    repl_camera_pointer_set(x, y);
+
+    if (editor_point_on_code_panel_divider(x, y))
+        editor_set_cursor(editor_code_panel_resize_cursor());
+    else
+        editor_set_cursor(GLUT_CURSOR_INHERIT);
+}
+
+static void motion_func(int x, int y) {
+    if (ui_panels_handle_motion(x, y)) {
+        repl_camera_pointer_set(x, y);
+        editor_request_redraw();
+        return;
+    }
+
+    if (ui_state_code_panel().resizing_panel) {
+        editor_update_panel_frac_from_mouse(x, y);
+        editor_request_redraw();
+        return;
+    }
+
+    if (variable_panel_drag_active()) {
+        variable_panel_handle_drag_motion(x);
+        repl_camera_pointer_set(x, y);
+        editor_request_redraw();
+        return;
+    }
+
+    if (ui_panels_handle_code_panel_drag(x, y)) {
+        repl_camera_pointer_set(x, y);
+        editor_request_redraw();
+        return;
+    }
+
+    repl_camera_drag_motion(x, y);
+}
+
 ReplInputDispatchEffects editor_handle_key(unsigned char key, int x, int y) {
     editor_reset_input_effects();
     editor_input_notify_audio_gesture_once();
@@ -1690,13 +1927,28 @@ ReplInputDispatchEffects editor_handle_special(int key, int x, int y) {
 }
 
 ReplInputDispatchEffects editor_handle_mouse(int button, int state, int x, int y) {
-    return repl_mouse_func(button, state, x, y);
+    editor_reset_input_effects();
+    editor_input_notify_audio_gesture_once();
+    mouse_func(button, state, x, y);
+    return editor_take_input_effects();
 }
 
 ReplInputDispatchEffects editor_handle_motion(int x, int y) {
-    return repl_motion_func(x, y);
+    editor_reset_input_effects();
+    motion_func(x, y);
+    return editor_take_input_effects();
 }
 
 ReplInputDispatchEffects editor_handle_passive_motion(int x, int y) {
-    return repl_passive_motion_func(x, y);
+    editor_reset_input_effects();
+    passive_motion_func(x, y);
+    return editor_take_input_effects();
 }
+
+#ifndef USE_GLUT
+ReplInputDispatchEffects editor_handle_mousewheel(int wheel, int direction, int x, int y) {
+    editor_reset_input_effects();
+    mousewheel_func(wheel, direction, x, y);
+    return editor_take_input_effects();
+}
+#endif
