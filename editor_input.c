@@ -759,7 +759,7 @@ static void keyboard_begin_key(unsigned char key) {
     editor_scroll_follow_cursor_set(1);
 }
 
-static int handle_rename_key_route(unsigned char key) {
+int editor_input_rename_capture_key(unsigned char key) {
     /* Rename overlay captures every keystroke while active, ahead of
      * the backtick/config, replay, and search branches - otherwise
      * typing `, or keys bound to replay would leak out of the rename
@@ -767,7 +767,7 @@ static int handle_rename_key_route(unsigned char key) {
     return repl_inline_rename_handle_key(key);
 }
 
-static int handle_config_menu_key_route(unsigned char key) {
+int editor_input_router_handle_config_menu_key(unsigned char key) {
     if (!editor_state_search().active && key == '`') {
         if (replay_active())
             repl_replay_stop();
@@ -778,7 +778,7 @@ static int handle_config_menu_key_route(unsigned char key) {
     return 0;
 }
 
-static int handle_active_replay_key_route(unsigned char key) {
+int editor_input_router_handle_active_replay_key(unsigned char key) {
     return replay_active() && replay_handle_key(key);
 }
 
@@ -825,7 +825,7 @@ static int handle_escape_key_route(unsigned char key) {
     return 0;
 }
 
-static int handle_cfg_shortcut_key_route(unsigned char key) {
+int editor_input_router_handle_cfg_shortcut_key(unsigned char key) {
     return repl_cfg_handle_ascii_shortcut(key);
 }
 
@@ -859,7 +859,7 @@ static int handle_undo_redo_key_route(unsigned char key) {
     return 0;
 }
 
-static int handle_replay_key_route(unsigned char key) {
+int editor_input_router_handle_replay_toggle_key(unsigned char key) {
     return replay_handle_key(key);
 }
 
@@ -1113,7 +1113,7 @@ static int handle_comment_toggle_key_route(unsigned char key) {
     return 0;
 }
 
-static int handle_accum_samples_key_route(unsigned char key) {
+int editor_input_router_handle_accum_samples_key(unsigned char key) {
     ReplRenderState *rs = repl_state_render_mut();
     if (key == '=' || key == '+') {
         int mods = editor_get_modifiers();
@@ -1313,18 +1313,18 @@ static void keyboard_func(unsigned char key, int x, int y) {
 
     keyboard_begin_key(key);
 
-    if (handle_rename_key_route(key))       return;
-    if (handle_config_menu_key_route(key))  return;
-    if (handle_active_replay_key_route(key)) return;
+    if (editor_input_rename_capture_key(key)) return;
+    if (editor_input_router_handle_config_menu_key(key)) return;
+    if (editor_input_router_handle_active_replay_key(key)) return;
 
     restore_hidden_code_panel_for_key(key);
 
     if (handle_search_key_route(key))       return;
     if (handle_escape_key_route(key))       return;
-    if (handle_cfg_shortcut_key_route(key)) return;
+    if (editor_input_router_handle_cfg_shortcut_key(key)) return;
     if (handle_cursor_endpoint_key_route(key)) return;
     if (handle_undo_redo_key_route(key))    return;
-    if (handle_replay_key_route(key))       return;
+    if (editor_input_router_handle_replay_toggle_key(key)) return;
     if (handle_line_delete_key_route(key))  return;
     if (handle_buffer_command_key_route(key)) return;
     if (editor_input_router_handle_save_key(key)) return;
@@ -1333,7 +1333,7 @@ static void keyboard_func(unsigned char key, int x, int y) {
     if (handle_cut_key_route(key))          return;
     if (handle_paste_key_route(key))        return;
     if (handle_comment_toggle_key_route(key)) return;
-    if (handle_accum_samples_key_route(key)) return;
+    if (editor_input_router_handle_accum_samples_key(key)) return;
     if (handle_text_delete_key_route(key))  return;
     if (handle_tab_key_route(key))          return;
     if (handle_enter_key_route(key))        return;

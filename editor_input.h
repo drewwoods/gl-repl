@@ -59,14 +59,27 @@ int  editor_input_active_modifiers(void);
  * keyboard_func / special_func calls them inline. Each returns 1 if
  * the key was consumed.
  */
-int editor_input_router_handle_save_key(unsigned char key);            /* Ctrl+S */
-int editor_input_router_handle_debug_dump_key(unsigned char key);      /* Ctrl+P */
-int editor_input_router_handle_quit_key(unsigned char key);            /* Ctrl+Q */
-int editor_input_router_handle_replay_special(int key);                /* replay-active forwarding */
-int editor_input_router_handle_cfg_special_shortcut(int key);          /* cfg shortcut on F-keys */
-int editor_input_router_handle_horizontal_audio_special(int key);      /* Ctrl+Left/Right audio */
-int editor_input_router_handle_help_tab_special(int key);              /* Left/Right help-tab when help visible */
-int editor_input_router_handle_help_toggle_special(int key);           /* F1 */
-int editor_input_router_handle_scene_cycle_special(int key);           /* F12 */
+int editor_input_router_handle_save_key(unsigned char key);             /* Ctrl+S */
+int editor_input_router_handle_debug_dump_key(unsigned char key);       /* Ctrl+P */
+int editor_input_router_handle_quit_key(unsigned char key);             /* Ctrl+Q */
+int editor_input_router_handle_config_menu_key(unsigned char key);      /* backtick → config menu */
+int editor_input_router_handle_active_replay_key(unsigned char key);    /* replay forwarding when active */
+int editor_input_router_handle_replay_toggle_key(unsigned char key);    /* Ctrl+G + replay shortcuts */
+int editor_input_router_handle_cfg_shortcut_key(unsigned char key);     /* repl_cfg_handle_ascii_shortcut */
+int editor_input_router_handle_accum_samples_key(unsigned char key);    /* Ctrl+= / Ctrl+- */
+int editor_input_router_handle_replay_special(int key);                 /* replay-active forwarding */
+int editor_input_router_handle_cfg_special_shortcut(int key);           /* cfg shortcut on F-keys */
+int editor_input_router_handle_horizontal_audio_special(int key);       /* Ctrl+Left/Right audio */
+int editor_input_router_handle_help_tab_special(int key);               /* Left/Right help-tab when help visible */
+int editor_input_router_handle_help_toggle_special(int key);            /* F1 */
+int editor_input_router_handle_scene_cycle_special(int key);            /* F12 */
+
+/* Rename-capture predicate. The inline rename overlay is a hard modal:
+ * when active, every keystroke must land in the rename buffer ahead of
+ * the controller-side router. imrepl_ctrl_keyboard / _special invoke
+ * these BEFORE any other dispatch so backtick / Ctrl+G / F1 / F12 etc.
+ * cannot leak out of the rename buffer. */
+int editor_input_rename_capture_key(unsigned char key);
+int editor_input_rename_capture_special(int key);
 
 #endif /* EDITOR_INPUT_H */
