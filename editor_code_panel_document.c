@@ -1,5 +1,5 @@
 /*
- * repl_code_panel_document.c -- Code-panel document row model.
+ * editor_code_panel_document.c -- Code-panel document row model.
  *
  * This module translates source/header/footer state into wrapped document rows.
  * Rendering and mouse hit-testing consume the same layout so scrolling,

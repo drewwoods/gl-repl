@@ -3,7 +3,7 @@
  *
  * Pure renderer + hit-test. Reads g_predef_vars, scene rect, and
  * the variable_panel peer's drag accessors, and draws. The actual
- * value mutation lives in repl_var_drag.c (the peer's drag
+ * value mutation lives in variable_panel_drag.c (the peer's drag
  * implementation); the editor's mouse handler invokes the peer via
  * variable_panel_handle_drag_*.
  *

@@ -23,9 +23,9 @@
  * non-modal (doesn't block interaction with the scene or code panel).
  * Each row has a fixed height with the name label on the left and a
  * draggable slider region on the right. Color coding highlights the
- * active drag row (via repl_var_drag.c queries).
+ * active drag row (via variable_panel_drag.c queries).
  *
- * Value mutation lives outside this module. Today repl_var_drag.c
+ * Value mutation lives outside this module. Today variable_panel_drag.c
  * implements drag transactions and repl_editor.c forwards mouse events
  * — those will collapse into the variable_panel peer in Phase F.
  *

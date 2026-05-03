@@ -4,9 +4,9 @@
  * Renders a floating autocomplete dropdown popup showing symbol completions
  * and parameter hints. Pure rendering module — no state mutations or match
  * computation. The model (match state, selection, hints) lives in
- * repl_autocomplete.c; this module reads that state and draws the popup.
+ * editor_autocomplete.c; this module reads that state and draws the popup.
  *
- * Model-view separation: repl_autocomplete.c maintains the autocomplete model:
+ * Model-view separation: editor_autocomplete.c maintains the autocomplete model:
  *   - Current match list (GL command names, constants, math functions, etc.)
  *   - Selected match index (highlighted row)
  *   - Ghost suffix to append on Tab accept (completion proposal)
@@ -14,7 +14,7 @@
  *
  * This module queries that state via editor_state_autocomplete() (typed facade)
  * and renders the popup without modifying any state. Completion acceptance
- * (Tab key) is handled by repl_editor.c, which calls repl_autocomplete.c's
+ * (Tab key) is handled by repl_editor.c, which calls editor_autocomplete.c's
  * acceptance function.
  *
  * Popup layout: Appears below the cursor position in the code panel. Shows a

@@ -66,7 +66,7 @@ typedef enum {
 } CommitResult;
 
 /* Variable drag state lives in repl_state.c and is accessed through the
- * transaction helpers in repl_var_drag.c. */
+ * transaction helpers in variable_panel_drag.c. */
 
 /* Browser autoplay policy: the Web Audio context stays suspended until
  * a user gesture. We call repl_audio_on_user_gesture() the first time

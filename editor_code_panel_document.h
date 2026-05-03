@@ -1,5 +1,5 @@
 /*
- * repl_code_panel_document.h - Code-panel document model and scroll layout.
+ * editor_code_panel_document.h - Code-panel document model and scroll layout.
  *
  * Bridges the flat source command array and the wrapped text layout system.
  * Computes full code-panel geometry: header rows (File/Scene/Config menu bar),
@@ -12,7 +12,7 @@
  * visible line count, cursor position, and follow target. Computed once per
  * frame by repl_code_panel_document_build().
  *
- * Wrapping: Uses CodePanelTextLayout (from repl_code_panel_layout.h) to wrap
+ * Wrapping: Uses CodePanelTextLayout (from ui_code_panel_layout.h) to wrap
  * individual command text to panel width with hanging indentation. Wrapping
  * accounts for command indentation (depth-based) and optional break points
  * (commas).

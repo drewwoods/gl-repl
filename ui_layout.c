@@ -1,5 +1,5 @@
 /*
- * repl_layout.c - pure window layout geometry.
+ * ui_layout.c - pure window layout geometry.
  */
 #include "sample.h"
 #include "ui_layout.h"

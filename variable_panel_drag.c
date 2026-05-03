@@ -1,5 +1,5 @@
 /*
- * repl_var_drag.c -- Variable slider drag-state implementation
+ * variable_panel_drag.c -- Variable slider drag-state implementation
  *                    (peer-owned by variable_panel).
  *
  * Status: implementation-behind-variable_panel.

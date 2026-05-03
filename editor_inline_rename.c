@@ -1,5 +1,5 @@
 /*
- * repl_inline_rename.c -- Input buffer for the inline scene-rename overlay.
+ * editor_inline_rename.c -- Input buffer for the inline scene-rename overlay.
  *
  * The rename "overlay" has no dedicated render pass: the buffered
  * text is surfaced through set_status() into the regular status

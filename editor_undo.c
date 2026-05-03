@@ -1,5 +1,5 @@
 /*
- * repl_undo.c -- Editor command snapshots and undo/redo rings.
+ * editor_undo.c -- Editor command snapshots and undo/redo rings.
  *
  * Undo snapshots own the source command buffer, active editor line, and
  * predefined-variable table. Input routing decides when a mutation is about to

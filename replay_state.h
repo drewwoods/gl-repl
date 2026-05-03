@@ -17,7 +17,7 @@
  *
  * Snapshot/restore: tests and undo capture this state via
  * `replay_state_capture` / `_restore` alongside the editor / ui /
- * runtime captures. The replay-mode behavior in repl_replay.c is
+ * runtime captures. The replay-mode behavior in replay.c is
  * unchanged — it still drives the state machine, just now writing
  * through `replay_state_mut()` rather than `repl_state_replay_mut()`.
  */
@@ -63,7 +63,7 @@ int    replay_expand_args(void);     /* .expand_args — annotation expansion to
  * UI_HIT_REPLAY_BUTTON hits through replay_handle_pin_clicked; the
  * editor's key dispatcher forwards keystrokes via replay_handle_key /
  * replay_handle_special. Implementations wrap the existing
- * repl_replay_* surface in repl_replay.c.
+ * repl_replay_* surface in replay.c.
  */
 
 /* Toggle replay state on a Replay-pin button click: starts replay

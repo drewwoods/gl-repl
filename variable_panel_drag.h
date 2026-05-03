@@ -1,5 +1,5 @@
 /*
- * repl_var_drag.h - Variable slider drag transaction management.
+ * variable_panel_drag.h - Variable slider drag transaction management.
  *
  * Handles the interactive drag transaction for adjusting predefined variable
  * values via the floating variable slider panel. Owns the drag state (which

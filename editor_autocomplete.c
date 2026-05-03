@@ -1,5 +1,5 @@
 /*
- * repl_autocomplete.c -- Input completion and parameter hints.
+ * editor_autocomplete.c -- Input completion and parameter hints.
  *
  * Runtime storage lives in repl_state.c and is accessed through the typed
  * autocomplete facade.

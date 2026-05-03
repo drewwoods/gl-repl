@@ -1,5 +1,5 @@
 /*
- * repl_inline_rename.h - Inline scene-rename input overlay.
+ * editor_inline_rename.h - Inline scene-rename input overlay.
  *
  * Modal rename mode for editing the active user scene's name in place. When
  * activated via the Scene menu ("Rename active scene"), a temporary input buffer

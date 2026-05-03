@@ -1,5 +1,5 @@
 /*
- * repl_clipboard.c -- Line selection and command clipboard operations.
+ * editor_clipboard.c -- Line selection and command clipboard operations.
  *
  * Editor input routing decides when copy/cut/paste happens; this file decides
  * which command range that means, preserves var-declaration guards, and

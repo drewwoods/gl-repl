@@ -1,5 +1,5 @@
 /*
- * repl_replay.h - Step-by-step execution visualization and state machine.
+ * replay.h - Step-by-step execution visualization and state machine.
  *
  * Replay mode lets users step through an expanded command stream one command
  * at a time (or with variable speed), seeing geometry appear progressively.
