@@ -2,6 +2,7 @@
  * variable_panel.c - Variable slider panel peer subsystem.
  */
 #include "variable_panel.h"
+#include "repl_var_drag.h"
 
 #define VARIABLE_PANEL_INITIAL                              \
     {                                                       \
@@ -53,4 +54,32 @@ int variable_panel_visible(void) {
 
 void variable_panel_set_visible(int visible) {
     g_variable_panel.view.visible = visible ? 1 : 0;
+}
+
+/* Drag transaction handlers. The drag-state writeback (value writeback,
+ * source-line rewrite for matching CMD_VAR_ASSIGN) lives in
+ * repl_var_drag.c; these wrappers expose it under the peer-subsystem
+ * namespace. */
+int variable_panel_drag_active(void) {
+    return repl_var_drag_active();
+}
+
+int variable_panel_drag_active_var(void) {
+    return repl_var_drag_active_var();
+}
+
+int variable_panel_drag_log_mode(void) {
+    return repl_var_drag_log_mode();
+}
+
+void variable_panel_handle_drag_begin(int row, int log_mode, int x) {
+    repl_var_drag_begin(row, log_mode, x);
+}
+
+void variable_panel_handle_drag_motion(int x) {
+    repl_var_drag_motion(x);
+}
+
+void variable_panel_handle_drag_reset(void) {
+    repl_var_drag_reset();
 }

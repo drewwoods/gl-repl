@@ -1,8 +1,12 @@
 /*
  * repl_var_drag.c -- Variable slider drag state and value writeback.
  *
- * The drag transaction still lives here, but the mutable state now
- * lives in repl_state.c and is accessed through repl_state.h.
+ * Phase F commit 31 moved the drag-state bytes into the variable_panel
+ * peer module (variable_panel.c). This file is now the implementation
+ * behind the peer's variable_panel_handle_drag_* surface — it reads /
+ * writes via variable_panel_drag_mut() and supplies the value-mapping
+ * logic (linear / log scaling, source-line rewrite). External callers
+ * should use variable_panel_handle_* instead of these symbols.
  *
  * Linear drag: 1 pixel = 0.05 units.
  * Log drag:    200 pixels = one decade (x10 / ÷10), sign preserved.
@@ -12,21 +16,23 @@
 #include "sample.h"
 #include "repl_state.h"
 #include "repl_var_drag.h"
+#include "variable_panel.h"
+
 int repl_var_drag_active(void) {
-    return editor_state_variable_drag().var_idx >= 0;
+    return variable_panel_drag().var_idx >= 0;
 }
 
 int repl_var_drag_active_var(void) {
-    return editor_state_variable_drag().var_idx;
+    return variable_panel_drag().var_idx;
 }
 
 int repl_var_drag_log_mode(void) {
-    return editor_state_variable_drag().log_mode;
+    return variable_panel_drag().log_mode;
 }
 
 void repl_var_drag_begin(int row, int log_mode, int x) {
     if (row < 0 || row >= g_num_predef_vars) return;
-    ReplVariableDragState *drag = editor_state_variable_drag_mut();
+    ReplVariableDragState *drag = variable_panel_drag_mut();
     drag->var_idx = row;
     drag->log_mode = log_mode ? 1 : 0;
     drag->start_value = g_predef_vars[row].value;
@@ -34,7 +40,7 @@ void repl_var_drag_begin(int row, int log_mode, int x) {
 }
 
 void repl_var_drag_reset(void) {
-    ReplVariableDragState *drag = editor_state_variable_drag_mut();
+    ReplVariableDragState *drag = variable_panel_drag_mut();
     drag->var_idx = -1;
     drag->log_mode = 0;
     drag->start_value = 0.0f;
@@ -42,7 +48,7 @@ void repl_var_drag_reset(void) {
 }
 
 void repl_var_drag_motion(int x) {
-    ReplVariableDragState *drag = editor_state_variable_drag_mut();
+    ReplVariableDragState *drag = variable_panel_drag_mut();
     if (drag->var_idx < 0) return;
 
     float new_val;

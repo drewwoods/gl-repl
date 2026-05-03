@@ -16,6 +16,7 @@
 #include "ui_state.h"
 #include "repl_var_drag.h"
 #include "repl_layout.h"
+#include "variable_panel.h"
 #include "./include/gl_2d.h"
 
 /* Local copy of the layout-mode clamp.  Duplicated by repl_editor.c and
@@ -136,7 +137,7 @@ int ui_variable_panel_hit(int gx, int gy, int *out_row) {
 
 UiHit ui_variable_panel_hit_test(int mx, int my) {
     UiHit h = ui_hit_none();
-    if (!ui_state_variable_panel().visible) return h;
+    if (!variable_panel_visible()) return h;
     int win_h = ui_state_viewport().window_h;
     if (win_h <= 0) return h;
     int row = -1;
@@ -208,8 +209,8 @@ void ui_variable_panel_render(const UiRenderSnapshot *snap) {
         float val  = g_predef_vars[i].value;
 
         /* Drag highlight - amber tint for log mode, blue for linear */
-        if (repl_var_drag_active_var() == i) {
-            if (repl_var_drag_log_mode())
+        if (variable_panel_drag_active_var() == i) {
+            if (variable_panel_drag_log_mode())
                 glColor4f(0.30f, 0.20f, 0.05f, 0.60f);
             else
                 glColor4f(0.20f, 0.20f, 0.40f, 0.60f);
@@ -242,8 +243,8 @@ void ui_variable_panel_render(const UiRenderSnapshot *snap) {
          * Yellow = linear drag, orange = log drag, blue = idle. */
         float t  = val_to_slider_t(val, log_scale);
         float hx = (float)track_x + t * (float)(track_w - handle_w);
-        if (repl_var_drag_active_var() == i) {
-            if (repl_var_drag_log_mode())
+        if (variable_panel_drag_active_var() == i) {
+            if (variable_panel_drag_log_mode())
                 glColor4f(1.00f, 0.55f, 0.10f, 0.95f);  /* orange: log mode */
             else
                 glColor4f(1.00f, 0.80f, 0.20f, 0.95f);  /* yellow: linear mode */
