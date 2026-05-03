@@ -5,8 +5,9 @@
 
 /* Defaults preserve the legacy behavior the pre-migration
  * repl_state_defaults.inc enshrined: variable panel visible by
- * default; pointer button starts at -1 (no button held); other slices
- * zeroed. */
+ * default; pointer button starts at -1 (no button held); cursor
+ * starts visible so the renderer's blink phase begins ON; other
+ * slices zeroed. */
 #define UI_STATE_INITIAL                                              \
     {                                                                 \
         .status = { .text = "", .ttl = 0 },                           \
@@ -15,6 +16,14 @@
         .profile_panel = { .mode = PROFILE_PANEL_OFF },               \
         .viewport = { .window_w = 0, .window_h = 0 },                 \
         .pointer = { .mouse_x = 0, .mouse_y = 0, .mouse_button = -1 },\
+        .code_panel = {                                               \
+            .panel_frac     = CFG_DEFAULT_PANEL_FRAC,                 \
+            .resizing_panel = 0,                                      \
+            .cursor_visible = 1,                                      \
+            .blink_tick     = 0,                                      \
+            .cursor_px      = 0,                                      \
+            .cursor_py      = 0,                                      \
+        },                                                            \
     }
 
 static UiState g_ui_state = UI_STATE_INITIAL;
@@ -127,7 +136,20 @@ void ui_state_pointer_set_button(int mouse_button) {
     g_ui_state.pointer.mouse_button = mouse_button;
 }
 
+ReplCodePanelRuntimeState ui_state_code_panel(void) {
+    return g_ui_state.code_panel;
+}
+
+ReplCodePanelRuntimeState *ui_state_code_panel_mut(void) {
+    return &g_ui_state.code_panel;
+}
+
+void ui_state_code_panel_reset(void) {
+    g_ui_state.code_panel = g_ui_state_defaults.code_panel;
+}
+
 /* Legacy `repl_state_*` forwarders for the slices migrated in Phase 1
- * commit 8 are defined in repl_state.c rather than here so the
+ * commit 8 (and the code_panel slice migrated in Phase A commit 12)
+ * are defined in repl_state.c rather than here so the
  * check-state-boundaries guard's "no repl_state_*_mut from ui_*.c"
  * rule keeps working. */

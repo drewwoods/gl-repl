@@ -22,16 +22,10 @@
     /* editor_input + selection + clipboard defaults moved to
      * editor_state.c (Phase 1 commits 5-6). */
     /* code_panel.scroll + scroll_follow_cursor moved to editor_state.c
-     * (Phase 1 commit 11). */
-    .code_panel = {
-        .panel_frac = CFG_DEFAULT_PANEL_FRAC,
-        .resizing_panel = 0,
-        .cursor_visible = 1,
-        .blink_tick = 0,
-        .cursor_px = 0,
-        .cursor_py = 0,
-    },
-    /* help / variable_panel / profile_panel / status / pointer / viewport
+     * (Phase 1 commit 11); the code_panel render-chrome bits
+     * (panel_frac, resizing_panel, cursor blink, cursor px/py) moved
+     * to ui_state.c (Phase A commit 12).
+     * help / variable_panel / profile_panel / status / pointer / viewport
      * defaults moved to ui_state.c (Phase 1 commit 8).
      * variable_drag defaults moved to editor_state.c (Phase 1 commit 9).
      * search + autocomplete defaults moved to editor_state.c

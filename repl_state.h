@@ -10,7 +10,6 @@ typedef struct {
     ReplDocumentState         document;
     ReplFlatProgramState      flat_program;
     ReplVariableState         variables;
-    ReplCodePanelRuntimeState code_panel;
     ReplCameraState           camera;
     ReplPresentationState     presentation;
     ReplRenderState           render;
