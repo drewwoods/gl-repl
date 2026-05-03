@@ -663,7 +663,15 @@ gate. It is the only function allowed to mutate `ReplState` /
 Branch: `feature/editor-ownership-gap-cleanup`. Tracked against a
 sequence inspired by but not strictly bound to the original
 17-commit list. Commit 12+ destinations have been **revised** to
-match `editor-text-model-controller.md`.
+match `editor-text-model-controller.md`, and the post-Phase-A work
+is split into smaller medium-sized commits so each one stays
+buildable and reviewable.
+
+The phases below group related commits. Each phase ends with the
+audit / ratchet / test signal that drives toward zero or hard-guards
+the boundary.
+
+### Pre-existing scaffolding (Phase 0–1) — landed
 
 | # | Commit | Status |
 |---|---|---|
@@ -678,32 +686,148 @@ match `editor-text-model-controller.md`.
 | 9 | refactor: migrate editor overlay snapshot lists (transformers / highlights / virtual_lines) + variable_drag to EditorState | ✅ landed (2026-05-02) |
 | 10 | refactor: rename editor-input convenience getters to editor_* namespace | ✅ landed (2026-05-02) |
 | 11 | refactor: code_panel slice split (scroll → EditorState) + ownership ratchet for transitional couplings | ✅ landed (2026-05-02) |
-| 12 | refactor: code_panel chrome migration — cursor_visible + blink_tick → **EditorState**, panel_frac + resizing_panel → UiState (divider), cursor_px / cursor_py → per-frame Ui*Output (editor remains the controller); camera placement on UiState | next (revised destinations per editor-text-model-controller.md) |
-| 13 | refactor: drop `repl_command_store_*_with_line[s]` text-aware API; pass `EditorBufferView` to REPL consumers (was original commit 8/9) | pending |
-| 14 | refactor: split `repl_compile` (pure validators) from `editor_commit` (transaction orchestration) (was original commit 11) | pending |
-| 15 | refactor: route input via `UiHit` + carve out variable_panel and replay as peer subsystems (replaces original UiAction commits 12–14) | pending |
-| 16 | refactor: rename editor-owned modules; `ui_help_overlay` → `editor_help_session` (read-only document); register `EditorCompletionProvider` seam | pending |
-| 17 | docs: refresh MODULES + ARCHITECTURE; promote audits to hard guards | pending |
 
-Remaining-commit notes:
+### Phase A — Finish state placement (ratchet to zero forwarders)
 
-- **Commit 12 destination correction.** The original plan put cursor
+| # | Commit | Status |
+|---|---|---|
+| 12 | refactor: migrate code_panel chrome slice to UiState | ✅ landed (70ce58a, 2026-05-03) |
+| 13 | refactor: migrate camera viewport pose to UiState | ✅ landed (c24e08e, 2026-05-03) |
+| 14 | refactor: drop transitional repl_state forwarders for UI/editor slices | ✅ landed (354e39f, 2026-05-03) |
+
+Phase A signal: `ui_forwarder_count` ratchet drops to 3 (the three
+remaining matches are non-forwarder `ui_state_*` calls — documented
+in the baseline). Every UI/editor slice is on its true owner.
+
+### Phase B — Editor-buffer single writer + view parameters
+
+| # | Commit | Status |
+|---|---|---|
+| 15 | refactor: add `EditorBufferView` and convert read-only consumers (annotations, export, debug) | pending |
+| 16 | refactor: thread `EditorBufferView` through executor / flatten / search / scenes / commit / core reparse helpers | pending |
+| 17 | refactor: drop `repl_command_store_*_with_line[s]` APIs; rewrite call sites to two-step writes | pending |
+| 18 | checks: promote `check-no-store-text-api` and `check-repl-no-direct-buffer-read` from informational audits to hard guards | pending |
+
+Phase B signal: `repl_command_store_*_with_line[s]` calls = 0 outside
+tests; `editor_buffer_line` reads in non-`editor_*` files = 0 except
+explicit `EditorBufferView` consumers.
+
+### Phase C — `repl_compile` / `repl_apply` split
+
+| # | Commit | Status |
+|---|---|---|
+| 19 | refactor: introduce `ReplCompiledChange` and pure `repl_compile` validators; migrate float-decl + assign | pending |
+| 20 | refactor: migrate block-structured commits (for / func / if / close-brace) to compile/apply | pending |
+| 21 | refactor: route `;`-key, Enter, and `feed_line` commits through compile/apply with editor-side undo orchestration | pending |
+| 22 | test: commit-transaction invariants (failed validation leaves both sides untouched; success updates both atomically; undo restores both halves) | pending |
+
+Phase C signal: `repl_compile()` is pure (no mutation edges out);
+every editor-text-changing path goes through one undo transaction
+that wraps `editor_buffer_apply` + `repl_apply_compiled_change`.
+
+### Phase D — Carve `editor_input.c` / `editor_commit.c`
+
+| # | Commit | Status |
+|---|---|---|
+| 23 | refactor: introduce `EditorServices` table; `imrepl_ctrl` wires services per frame | pending |
+| 24 | refactor: carve `editor_commit.c` from `repl_editor.c` + `repl_commit.c` (transaction orchestration takes `EditorState *` + `EditorServices`) | pending |
+| 25 | refactor: carve `editor_input.c` from `repl_editor.c` (keyboard / mouse / scroll handlers; new `editor_handle_*` API) | pending |
+| 26 | refactor: shrink `imrepl_ctrl.c` to a router; remove direct-mutation paths in favor of `UiHit.kind` dispatch | pending |
+
+Phase D signal: `imrepl_ctrl` is a thin router — no
+`imrepl_ctrl_editor_*` wrappers; editor handlers receive raw events
+plus `UiHit` context.
+
+### Phase E — UI returns `UiHit` instead of mutating
+
+| # | Commit | Status |
+|---|---|---|
+| 27 | refactor: define `UiHit` / `UiHitKind`; convert `ui_panels` mouse handlers to compute and return hit | pending |
+| 28 | refactor: convert `ui_menu_bar`, `ui_color_picker`, `ui_variable_panel` mouse handlers to return `UiHit` | pending |
+| 29 | checks: promote `check-ui-returns-hits-only` to hard guard (ui_*.c forbidden from calling `repl_*` mutators or `editor_*_mut`) | pending |
+
+Phase E signal: `check-ui-returns-hits-only` is enforced; UI input
+handlers compute hits and return — they don't call mutators.
+
+### Phase F — Peer subsystems carved out
+
+| # | Commit | Status |
+|---|---|---|
+| 30 | refactor: extract `variable_panel` peer subsystem (visibility flag + drag transaction off EditorState/UiState into a peer struct) | pending |
+| 31 | refactor: promote `replay` to peer subsystem (move `ReplReplayRuntimeState` off `ReplState` into a dedicated module) | pending |
+
+Phase F signal: variable panel and replay each own their state;
+neither lives on EditorState or UiState.
+
+### Phase G — Read-only document seam + completion provider
+
+| # | Commit | Status |
+|---|---|---|
+| 32 | refactor: convert help overlay to `editor_help_session` (read-only editor session backed by content provider; `UiState.help.visible` stays as chrome flag) | pending |
+| 33 | refactor: introduce `EditorCompletionProvider`; `repl_autocomplete` registers a provider; editor owns popup state | pending |
+
+Phase G signal: editor sessions support both editable source
+documents and read-only documents through the same scroll/search/
+cursor model. Completion semantics live behind a registered
+provider, not a global call.
+
+### Phase H — Renames
+
+| # | Commit | Status |
+|---|---|---|
+| 34 | rename: editor-owned modules (`repl_undo` → `editor_undo`, `repl_clipboard` → `editor_clipboard`, `repl_search` → `editor_search`, `repl_autocomplete` → `editor_autocomplete`, `repl_inline_rename` → `editor_inline_rename`); add transitional redirect headers | pending |
+| 35 | rename: peer-subsystem and layout modules (`repl_var_drag` → `variable_panel_drag`, `repl_replay` → `replay`, `repl_layout` → `ui_layout`, `repl_code_panel_layout` → `ui_code_panel_layout`, `repl_code_panel_document` → `editor_code_panel_document`); drop the redirect headers from #34 once downstream catches up | pending |
+
+Phase H signal: file names match ownership. No `repl_*` files own
+editor-session state; no `editor_*` files own replay state.
+
+### Phase I — Hard guards + final cleanup
+
+| # | Commit | Status |
+|---|---|---|
+| 36 | checks: promote remaining audits to hard guards (`check-imrepl-not-editor-mirror`, `check-editor-services-only`, `check-no-set-status-in-repl-or-editor`); remove the budget ratchet now that all transitional forwarders are zero | pending |
+| 37 | docs: refresh MODULES, ARCHITECTURE, CLAUDE, callgraph groups; mark `editor-ownership-gap-cleanup`, `editor-text-model-controller`, and `editor-owns-text-completion(-revised)` plans as landed | pending |
+
+Phase I signal: every boundary the plan articulates is enforced by a
+hard guard. The North Star MODULES.md and the build checks describe
+the same shape.
+
+### Conventions across the sequence
+
+- **Each commit is buildable.** `make test && make test-stubs` runs
+  green at every commit.
+- **Behavior preservation first.** Phases A–C are pure restructuring
+  with no UX delta. UX-visible regressions are tracked manually using
+  the smoke checklist in `editor-ownership-gap-cleanup.md` and at the
+  bottom of this document.
+- **Ratchet-driven.** Each commit either drives the audit counter
+  monotonically downward or promotes an audit to a hard guard.
+- **Renames last.** All file renames batch in Phase H so review noise
+  (rename diffs) stays out of behavior commits.
+- **Out of scope:** `sample.c → imrepl.c` rename, `repl_core.c`
+  dissolution, syntax-theme work — separate tracks per the doc's
+  *Non-goals* section.
+
+### Phase notes (revised commit destinations)
+
+- **Phase A (commits 12–14, landed).** The original plan put cursor
   blink fields on `UiState`. The corrected contract puts them on
-  `EditorState` because the editor is the cursor's controller (decides
-  when it's visible, ticks blink). UI just renders whatever the
-  editor's `cursor_visible` says. Cursor pixel coordinates
-  (`cursor_px` / `cursor_py`) are render-output, not state — surfaced
-  per-frame via `UiRenderSnapshot` or a `Ui*Output` struct;
-  controller is the editor either way.
-- **Commit 15 reshape.** The original Phase 4 was three commits of
+  `EditorState` because the editor is the cursor's controller —
+  Phase A only moves the render-chrome bits (panel_frac,
+  resizing_panel, cursor_px / cursor_py, plus the transitional
+  `cursor_visible` / `blink_tick` fields that the editor will reclaim
+  in a later commit) so the slice fits cleanly inside `UiState` for
+  now. Camera viewport pose moved to `UiState` alongside the rest of
+  the chrome.
+- **Phases D–E reshape.** The original Phase 4 was three commits of
   `UiAction` dispatch wiring. The corrected plan replaces the enum
   with a passive `UiHit` struct that UI returns; `imrepl_ctrl` routes
   on `UiHit.kind`. Most editor-internal handlers lose nothing — they
   receive raw events from `imrepl_ctrl` once dispatched. Variable
-  panel and replay become peer subsystems in this commit, not
-  editor slices.
-- **Commit 16 reshape.** Adds the read-only document seam: help
-  becomes an editor session pointed at a help-text content provider.
+  panel and replay become peer subsystems (Phase F), not editor
+  slices.
+- **Phase G.** Adds the read-only document seam: help becomes an
+  editor session pointed at a help-text content provider.
   `ReplHelpState.scroll` / `tab_idx` move into per-session editor
   state. Also lands the autocomplete completion-provider registration
   seam so the editor stops reaching into `repl_eval` for variable
