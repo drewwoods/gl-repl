@@ -72,9 +72,8 @@ static float var_panel_replay_target_lift_px(void) {
 }
 
 static float var_panel_replay_lift(void) {
-    ReplReplayRuntimeState replay = replay_state_view();
     float target = 0.0f;
-    if (replay.active)
+    if (replay_active())
         target = var_panel_replay_target_lift_px();
 
     float anim_time = repl_state_variables().anim_time;

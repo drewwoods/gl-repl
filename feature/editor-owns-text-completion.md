@@ -893,8 +893,9 @@ the editor or ui state slices.
 
 | # | Commit | Status |
 |---|---|---|
-| 33 | refactor: convert help overlay to `editor_help_session` (read-only editor session backed by content provider; `UiState.help.visible` stays as chrome flag) | pending |
-| 34 | refactor: introduce `EditorCompletionProvider`; `repl_autocomplete` registers a provider; editor owns popup state | pending |
+| 34c | refactor: narrow `replay_state` public surface (replay_pc / replay_src_line / replay_machine_state / replay_mode / replay_speed / replay_total_flat / replay_expand_args); migrate single-field readers; `replay_state_view()` reserved for the snapshot-build path | done |
+| 35 | refactor: convert help overlay to `editor_help_session` (read-only editor session backed by content provider; `UiState.help.visible` stays as chrome flag) | pending |
+| 36 | refactor: introduce `EditorCompletionProvider`; `repl_autocomplete` registers a provider; editor owns popup state | pending |
 
 Phase G signal: editor sessions support both editable source
 documents and read-only documents through the same scroll/search/
@@ -905,8 +906,8 @@ provider, not a global call.
 
 | # | Commit | Status |
 |---|---|---|
-| 35 | rename: editor-owned modules (`repl_undo` → `editor_undo`, `repl_clipboard` → `editor_clipboard`, `repl_search` → `editor_search`, `repl_autocomplete` → `editor_autocomplete`, `repl_inline_rename` → `editor_inline_rename`); add transitional redirect headers | pending |
-| 36 | rename: peer-subsystem and layout modules (`repl_var_drag` → `variable_panel_drag`, `repl_replay` → `replay`, `repl_layout` → `ui_layout`, `repl_code_panel_layout` → `ui_code_panel_layout`, `repl_code_panel_document` → `editor_code_panel_document`); drop the redirect headers from #35 once downstream catches up | pending |
+| 37 | rename: editor-owned modules (`repl_undo` → `editor_undo`, `repl_clipboard` → `editor_clipboard`, `repl_search` → `editor_search`, `repl_autocomplete` → `editor_autocomplete`, `repl_inline_rename` → `editor_inline_rename`); add transitional redirect headers | pending |
+| 38 | rename: peer-subsystem and layout modules (`repl_var_drag` → `variable_panel_drag`, `repl_replay` → `replay`, `repl_layout` → `ui_layout`, `repl_code_panel_layout` → `ui_code_panel_layout`, `repl_code_panel_document` → `editor_code_panel_document`); drop the redirect headers from #37 once downstream catches up | pending |
 
 Phase H signal: file names match ownership. No `repl_*` files own
 editor-session state; no `editor_*` files own replay state.
