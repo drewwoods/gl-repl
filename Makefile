@@ -96,7 +96,7 @@ else
 COVERAGE_LDFLAGS =
 endif
 
-.PHONY: all clean test check test-detailed test_detailed test-stubs lines debug coverage glut help bench bench-csv check-gl-boundaries check-layer-coupling check-controller-boundaries check-scene-no-repl-state-mut check-state-boundaries check-views-no-owners check-pure-scene-no-repl-state check-ui-no-repl-state-mut check-public-api-usage check-state-ownership check-no-write-through-view check-runtime-state-value-fields check-public-state-no-writable-pointers check-views-flat-types check-state-read-getters-return-values check-views-by-value-snapshot check-ui-renderer-takes-view check-renderer-no-direct-mutators check-output-actualization check-state-c-shrinking check-no-facade-include-in-views check-domain-owner-encapsulation check-cursor-px-encapsulated check-ui-no-repl-state-read check-editor-ownership-budget audit-editor-ownership callgraph-static callgraph-static-entry callgraph-profile callgraph-graphviz callgraph-html callgraph-files FORCE
+.PHONY: all clean test check test-detailed test_detailed test-stubs lines debug coverage glut help bench bench-csv check-gl-boundaries check-layer-coupling check-controller-boundaries check-scene-no-repl-state-mut check-state-boundaries check-views-no-owners check-pure-scene-no-repl-state check-ui-no-repl-state-mut check-public-api-usage check-state-ownership check-no-write-through-view check-runtime-state-value-fields check-public-state-no-writable-pointers check-views-flat-types check-state-read-getters-return-values check-views-by-value-snapshot check-ui-renderer-takes-view check-renderer-no-direct-mutators check-output-actualization check-state-c-shrinking check-no-facade-include-in-views check-domain-owner-encapsulation check-cursor-px-encapsulated check-ui-no-repl-state-read check-editor-ownership-budget check-no-store-text-api check-repl-no-direct-buffer-read audit-editor-ownership callgraph-static callgraph-static-entry callgraph-profile callgraph-graphviz callgraph-html callgraph-files FORCE
 
 all: sample
 
@@ -394,7 +394,9 @@ check-state-ownership: ## Run state-ownership contract checks (new + tightened e
 		check-domain-owner-encapsulation \
 		check-cursor-px-encapsulated \
 		check-ui-no-repl-state-read \
-		check-editor-ownership-budget; do \
+		check-editor-ownership-budget \
+		check-no-store-text-api \
+		check-repl-no-direct-buffer-read; do \
 		$(MAKE) --no-print-directory $$target || exit $$?; \
 	done
 
@@ -406,6 +408,12 @@ audit-editor-ownership: ## Report editor/REPL/UI ownership drift (informational;
 
 check-editor-ownership-budget: ## Ratchet the editor/UI transitional-coupling budget down only.
 	@bash scripts/check-editor-ownership-budget.sh scripts/baselines/editor-ownership-budget.txt
+
+check-no-store-text-api: ## Verify repl_command_store_*_with_line[s] API stays gone.
+	@bash scripts/check-no-store-text-api.sh
+
+check-repl-no-direct-buffer-read: ## Verify repl_*.c readers go through EditorBufferView, not editor_buffer_line().
+	@bash scripts/check-repl-no-direct-buffer-read.sh scripts/allowlists/repl-no-direct-buffer-read.txt
 
 CHECK_TARGETS = \
 	check-gl-boundaries \
