@@ -942,7 +942,7 @@ editor truly drives, and the REPL only parses + reports errors.
 |---|---|---|
 | 39 | refactor: move `try_commit_*` dispatchers + `apply_*_change` helpers + `repl_commit_func_decl_resume_*` editor-orchestration scratch from `repl_commit.c` into `editor_commit.c`; reduce `repl_commit.c` to a placeholder pending deletion in commit 41 | done |
 | 40 | refactor: extend `ReplParseContext` with `err_buf`/`err_sz`; `repl_parser.c` set_status sites become `parser_emit_error_*` helpers that write to ctx err_buf when provided (fall back to set_status only when caller did not opt in); demo: editor_compile_for_loop's body parse surfaces the specific parser diagnostic. `repl_compile.c` already returned errors via err buffer (Phase C). Future callers migrate to opt in incrementally. | done |
-| 41 | refactor: delete `repl_commit.c/h`; add `check-no-repl-commit` hard guard so the file (and any new `try_commit_*` wrappers under the `repl_*` namespace) cannot reappear | pending |
+| 41 | refactor: declarations moved from `repl_core_internal.h` into `editor_commit.h`; `repl_commit.c` deleted; `check-no-repl-commit` hard guard wired into `make check-state-ownership` so the file (and any new `try_commit_*` wrappers under the `repl_*` namespace) cannot reappear | done |
 
 Phase H.5 signal: there is no `repl_commit` translation unit. The
 editor is the sole entry point for committing input; REPL parse

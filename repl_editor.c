@@ -19,6 +19,7 @@
 #include "repl_parser.h"
 #include "repl_actions.h"
 #include "repl_core_internal.h"
+#include "editor_commit.h"
 #include "repl_debug.h"
 #include "repl_command_store.h"
 #include "repl_source_scope.h"

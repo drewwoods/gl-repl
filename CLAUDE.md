@@ -104,7 +104,6 @@ Test sources live under `tests/` and shared test-only helpers live under
 | `repl_command_spec.h` | Command spec query API |
 | `repl_command_store.c` | Source-command array mutations: insert, delete, replace, bulk-load |
 | `repl_command_store.h` | Command-store public API (`repl_command_store_insert_one`, etc.) |
-| `repl_commit.c` | Float declarations, variable assignments, structured block commits, close-brace commits |
 | `repl_core.h` | Public API (parse, flatten, user scene + workspace); GLUT input-dispatch declarations (`repl_keyboard_func` etc.) are live — called from `imrepl_ctrl.c` — pending R10-phase1 re-evaluation |
 | `repl_core_internal.h` | Test-visible internals (normalize/commit pipeline, `feed_line`, `load_line_to_input`, `repl_promote_example_if_needed`) |
 | `repl_state.c` | Owns `g_repl_state`, lifecycle, snapshot assembly (`repl_state_capture` / `repl_state_restore`) |
@@ -499,7 +498,7 @@ The core data flow is **source commands → flat commands → GL calls**:
 ### Commit Dispatch Sites
 
 The `try_commit_*` handler chain is consolidated into four helpers in
-`repl_commit.c`:
+`editor_commit.c`:
 - `try_commit_var_statements()` — float decl, then assign
 - `try_commit_block_structs()` — close-brace, for, func, if
 - `try_commit_any()` — both groups in canonical order
@@ -532,7 +531,7 @@ must also accept end-of-string as a valid terminator.
 
 ### Float Variable Declarations (`CMD_VAR_DECLARE`)
 
-`try_commit_float_decl()` in `repl_commit.c` handles `float name;`
+`try_commit_float_decl()` in `editor_commit.c` handles `float name;`
 syntax. Current implementation supports multi-name (`float a, b, c;`)
 and initializers (`float x = 1;`), but there is an open design
 question about simplifying to single-name, no-initializer only.

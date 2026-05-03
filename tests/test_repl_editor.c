@@ -1,4 +1,5 @@
 #include "repl_core_internal.h"
+#include "editor_commit.h"
 #include "repl_actions.h"
 #include "repl_camera_controls.h"
 #include "editor_clipboard.h"

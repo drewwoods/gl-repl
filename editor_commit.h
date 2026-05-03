@@ -259,4 +259,38 @@ ReplCompileResult editor_compile_for_loop(const char *input,
                                           EditorCommitPlan *out,
                                           char *err, int err_size);
 
+/* ---- Commit dispatcher chain ----
+ *
+ * Phase H.5 commit 41: declarations moved here from
+ * repl_core_internal.h. Bodies live in editor_commit.c (moved in
+ * Phase H.5 commit 39 from repl_commit.c, which is now deleted).
+ *
+ * Each `try_commit_*` inspects the live editor input. Returns 1 if
+ * it consumed the line (success or handled error), 0 if the input
+ * wasn't in its grammar. Ordering inside the higher-order
+ * dispatchers matters — `float` must precede `assign` so `float x`
+ * isn't misread as an assignment to "float". */
+
+void repl_commit_reset_transients(void);
+int  repl_commit_resolve_insert_exit_target(int target);
+
+/* Func-decl resume bookkeeping: a CMD_FUNC_DEF commit publishes a
+ * delta via editor_commit_func_decl_resume_set; the matching
+ * close-brace / Enter-out-of-func consumes it. Read+clear with
+ * `_take`, read-only inspection with `_peek`. */
+int  repl_commit_func_decl_resume_delta_take(void);
+int  repl_commit_func_decl_resume_delta_peek(void);
+void repl_commit_func_decl_resume_delta_set(int delta);
+
+int try_commit_float_decl(void);
+int try_assign_variable(void);
+int try_commit_for_loop(void);
+int try_commit_func_def(void);
+int try_commit_if_block(void);
+int try_commit_close_brace(void);
+int try_commit_var_statements(void);
+int try_commit_block_structs(void);
+int try_commit_any(void);
+int try_commit_var_statements_then_insert(void);
+
 #endif /* EDITOR_COMMIT_H */
