@@ -1,11 +1,11 @@
 /*
- * repl_variable_panel.c -- Floating slider panel for declared variables.
+ * ui_variable_panel.c -- Floating slider panel for declared variables.
  *
- * Pure renderer: reads g_predef_vars, scene rect, and the drag-state
- * accessors from repl_var_drag.c, and draws.  The actual value
-
- * mutation lives in repl_var_drag.c; the editor's mouse handler
- * begins/ends the drag transaction.
+ * Pure renderer + hit-test. Reads g_predef_vars, scene rect, and
+ * the variable_panel peer's drag accessors, and draws. The actual
+ * value mutation lives in repl_var_drag.c (the peer's drag
+ * implementation); the editor's mouse handler invokes the peer via
+ * variable_panel_handle_drag_*.
  *
  * The replay-lift easing state is panel-local animation (not
  * variable mutation) and stays here.

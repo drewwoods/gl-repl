@@ -1,0 +1,23 @@
+# Baseline for scripts/check-variable-panel-forwarders.sh.
+#
+# Tracks how many call sites still use the legacy variable_panel
+# forwarder API (`editor_state_variable_drag*`, `ui_state_variable_panel*`,
+# `repl_var_drag_*`) outside the owner / wrapper translation units.
+#
+# Phase F commit 31 moved the bytes into the variable_panel peer;
+# commit 32 routed production callers through `variable_panel_handle_*`
+# and the peer accessors. Commit 32b establishes this ratchet.
+#
+# Today's count is exclusively test-fixture sites. The remaining
+# work to drive this to zero:
+#   - Tests migrate to variable_panel_view_mut() / variable_panel_drag_mut()
+#     and variable_panel_drag_active() instead of the legacy names.
+#   - repl_var_drag.c eventually renames to variable_panel_drag.c
+#     (alongside the predef-variable writeback move into a peer/editor
+#     API as discussed in repl_var_drag.c's header comment).
+#
+# Reductions are always allowed; lower this number by hand when a
+# commit legitimately drives violations down so the next commit
+# cannot silently regress past the new low.
+
+count: 87
