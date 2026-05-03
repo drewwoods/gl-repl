@@ -16,53 +16,14 @@ int  parse_workspace_header_line(const char *line);
 void update_render_state_strings(void);
 void update_cam_lines(void);
 
-/* Forward decls for ui_state_* entry points referenced from this
- * translation unit. check-controller-boundaries forbids repl_*.c from
- * including ui_state.h, so the symbols are declared here directly.
- *
- * Phase 1 commit 8 routes legacy `repl_state_*` slice accessors
- * (status / help / variable_panel / profile_panel / viewport /
- * pointer) through one-line forwarders defined below; those
- * forwarders call into the ui_state_* canonical API. Defining the
- * forwarders here (not in ui_state.c) keeps `check-state-boundaries`
- * happy: the guard forbids ui_*.c from calling `repl_state_*_mut()`,
- * so the forwarders that *do* call those names live on the repl_state
- * side instead. */
-void                    ui_state_reset(void);
-ReplStatusState         ui_state_status(void);
-ReplStatusState        *ui_state_status_mut(void);
-void                    ui_state_status_set(const char *message);
-void                    ui_state_status_clear(void);
-void                    ui_state_status_tick(void);
-ReplHelpState           ui_state_help(void);
-ReplHelpState          *ui_state_help_mut(void);
-void                    ui_state_help_reset(void);
-ReplVariablePanelState  ui_state_variable_panel(void);
-ReplVariablePanelState *ui_state_variable_panel_mut(void);
-ReplProfilePanelState   ui_state_profile_panel(void);
-ReplProfilePanelState  *ui_state_profile_panel_mut(void);
-ReplViewportState       ui_state_viewport(void);
-ReplViewportState      *ui_state_viewport_mut(void);
-void                    ui_state_viewport_set_size(int window_w, int window_h);
-ReplPointerState        ui_state_pointer(void);
-ReplPointerState       *ui_state_pointer_mut(void);
-void                    ui_state_pointer_set(int mouse_x, int mouse_y, int mouse_button);
-void                    ui_state_pointer_set_pos(int mouse_x, int mouse_y);
-void                    ui_state_pointer_set_button(int mouse_button);
-ReplCodePanelRuntimeState  ui_state_code_panel(void);
-ReplCodePanelRuntimeState *ui_state_code_panel_mut(void);
-void                       ui_state_code_panel_reset(void);
-ReplCameraState  ui_state_camera(void);
+/* Forward decl for the one ui_state_* entry point this translation
+ * unit needs after the Phase A commit 14 forwarder removal:
+ * ui_state_reset is called from repl_state_reset_all so test resets
+ * still drain UiState alongside ReplState and EditorState. The full
+ * canonical `ui_state_*` API is in ui_state.h; check-controller-
+ * boundaries forbids repl_*.c from including it. */
+void ui_state_reset(void);
 ReplCameraState *ui_state_camera_mut(void);
-ReplCameraState  ui_state_camera_snapshot(void);
-void             ui_state_camera_set(float rx, float ry, float dist,
-                                     float tx, float ty, float tz,
-                                     float motion_glow);
-void             ui_state_camera_set_orbit(float rx, float ry);
-void             ui_state_camera_set_pan(float tx, float ty, float tz);
-void             ui_state_camera_set_distance(float dist);
-void             ui_state_camera_set_motion_glow(float motion_glow);
-void             ui_state_camera_reset_default(void);
 
 static const float g_grid_major_steps[GRID_MAJOR_COUNT] = {
     [GRID_MAJOR_1]  = 1.0f,
@@ -445,26 +406,17 @@ void repl_state_time_reset_to_zero(void) {
 /* Selection + clipboard accessors moved to editor_state.c
  * (Phase 1 commit 6). Use editor_state_selection / _clipboard. */
 
-/* code_panel accessors moved to ui_state.c (Phase A commit 12).
- * The legacy repl_state_code_panel* names remain alive as one-line
- * forwarders in the block at the bottom of this file.
- * Help / variable_panel / profile_panel / status / pointer / viewport
- * accessors moved to ui_state.c (Phase 1 commit 8). */
-
-/* editor_state_variable_drag accessors moved to editor_state.c
- * (Phase 1 commit 9). Use editor_state_variable_drag / _mut / _reset. */
-
-/* Search + autocomplete accessors moved to editor_state.c (Phase 1
- * commit 7). Use editor_state_search / _autocomplete.
- * Status / help / variable_panel / profile_panel accessors moved to
- * ui_state.c (Phase 1 commit 8); legacy repl_state_* names are
- * forwarders defined there. */
-
-/* Camera accessors moved to ui_state.c (Phase A commit 13); the legacy
- * repl_state_camera* names remain alive as one-line forwarders in the
- * transitional block at the bottom of this file.
- * Pointer + viewport accessors moved to ui_state.c (Phase 1 commit 8);
- * legacy repl_state_* names are forwarders defined there. */
+/* code_panel / camera / status / help / variable_panel /
+ * profile_panel / pointer / viewport accessors all live on
+ * ui_state.c (Phase 1 commit 8 + Phase A commits 12-14). Use the
+ * canonical `ui_state_*` API directly; the transitional
+ * `repl_state_*` forwarder block was removed in Phase A commit 14.
+ *
+ * editor_state_variable_drag accessors moved to editor_state.c
+ * (Phase 1 commit 9). Use editor_state_variable_drag / _mut / _reset.
+ *
+ * Search + autocomplete accessors moved to editor_state.c (Phase 1
+ * commit 7). Use editor_state_search / _autocomplete. */
 
 ReplPresentationState repl_state_presentation(void) {
     return g_repl_state.presentation;
@@ -618,146 +570,8 @@ void repl_state_reset_all(void) {
     repl_state_mark_normals_dirty();
 }
 
-/* EDITOR_OWNERSHIP_TODO(phase-4): delete this entire forwarder block
- * once `UiAction` dispatch eliminates the direct-mutation call sites
- * that need the legacy `repl_state_*` names. Each new forwarder added
- * here grows the budget tracked by
- * scripts/check-editor-ownership-budget.sh; the ratchet only allows
- * the count to decrease. New UI slice migrations should NOT add to
- * this block — instead they should let callers migrate to the
- * canonical `ui_state_*` API directly (extending the controller-
- * boundaries allowlist where required).
- *
- * Phase 1 commit 8: legacy `repl_state_*` UI-slice accessors as
- * forwarders into ui_state.c. They keep callers in non-allowlisted
- * repl_*.c files linkable without forcing them to include ui_state.h. */
-
-ReplStatusState repl_state_status(void) {
-    return ui_state_status();
-}
-
-ReplStatusState *repl_state_status_mut(void) {
-    return ui_state_status_mut();
-}
-
-void repl_state_status_set(const char *message) {
-    ui_state_status_set(message);
-}
-
-void repl_state_status_clear(void) {
-    ui_state_status_clear();
-}
-
-void repl_state_status_tick(void) {
-    ui_state_status_tick();
-}
-
-ReplHelpState repl_state_help(void) {
-    return ui_state_help();
-}
-
-ReplHelpState *repl_state_help_mut(void) {
-    return ui_state_help_mut();
-}
-
-void repl_state_help_reset(void) {
-    ui_state_help_reset();
-}
-
-ReplVariablePanelState repl_state_variable_panel(void) {
-    return ui_state_variable_panel();
-}
-
-ReplVariablePanelState *repl_state_variable_panel_mut(void) {
-    return ui_state_variable_panel_mut();
-}
-
-ReplProfilePanelState repl_state_profile_panel(void) {
-    return ui_state_profile_panel();
-}
-
-ReplProfilePanelState *repl_state_profile_panel_mut(void) {
-    return ui_state_profile_panel_mut();
-}
-
-ReplViewportState repl_state_viewport(void) {
-    return ui_state_viewport();
-}
-
-ReplViewportState *repl_state_viewport_mut(void) {
-    return ui_state_viewport_mut();
-}
-
-void repl_state_viewport_set_size(int window_w, int window_h) {
-    ui_state_viewport_set_size(window_w, window_h);
-}
-
-ReplPointerState repl_state_pointer(void) {
-    return ui_state_pointer();
-}
-
-ReplPointerState *repl_state_pointer_mut(void) {
-    return ui_state_pointer_mut();
-}
-
-void repl_state_pointer_set(int mouse_x, int mouse_y, int mouse_button) {
-    ui_state_pointer_set(mouse_x, mouse_y, mouse_button);
-}
-
-void repl_state_pointer_set_pos(int mouse_x, int mouse_y) {
-    ui_state_pointer_set_pos(mouse_x, mouse_y);
-}
-
-void repl_state_pointer_set_button(int mouse_button) {
-    ui_state_pointer_set_button(mouse_button);
-}
-
-ReplCodePanelRuntimeState repl_state_code_panel(void) {
-    return ui_state_code_panel();
-}
-
-ReplCodePanelRuntimeState *repl_state_code_panel_mut(void) {
-    return ui_state_code_panel_mut();
-}
-
-void repl_state_code_panel_reset(void) {
-    ui_state_code_panel_reset();
-}
-
-ReplCameraState repl_state_camera(void) {
-    return ui_state_camera();
-}
-
-ReplCameraState *repl_state_camera_mut(void) {
-    return ui_state_camera_mut();
-}
-
-ReplCameraState repl_state_camera_snapshot(void) {
-    return ui_state_camera_snapshot();
-}
-
-void repl_state_camera_set(float rx, float ry, float dist,
-                           float tx, float ty, float tz,
-                           float motion_glow) {
-    ui_state_camera_set(rx, ry, dist, tx, ty, tz, motion_glow);
-}
-
-void repl_state_camera_set_orbit(float rx, float ry) {
-    ui_state_camera_set_orbit(rx, ry);
-}
-
-void repl_state_camera_set_pan(float tx, float ty, float tz) {
-    ui_state_camera_set_pan(tx, ty, tz);
-}
-
-void repl_state_camera_set_distance(float dist) {
-    ui_state_camera_set_distance(dist);
-}
-
-void repl_state_camera_set_motion_glow(float motion_glow) {
-    ui_state_camera_set_motion_glow(motion_glow);
-}
-
-void repl_state_camera_reset_default(void) {
-    ui_state_camera_reset_default();
-}
+/* The legacy `repl_state_*` UI-slice forwarder block was removed in
+ * Phase A commit 14. All callers now talk to `ui_state_*` directly
+ * (allowlisted ui_*.c and the controller include ui_state.h; the
+ * remaining repl_*.c callers forward-declare the few accessors they
+ * need). The `ui_forwarder_count` ratchet is now zero. */

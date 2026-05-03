@@ -2,6 +2,7 @@
 #include <string.h>
 
 #include "sample.h"
+#include "ui_state.h"
 #include "repl_code_panel_document.h"
 #include "repl_core.h"
 #include "repl_state.h"
@@ -22,8 +23,8 @@ static int code_panel_text_x(void) {
 
 static void reset_doc_fixture(void) {
     repl_reset_state();
-    repl_state_viewport_set_size(800, 260);
-    repl_state_code_panel_mut()->panel_frac = 0.45f;
+    ui_state_viewport_set_size(800, 260);
+    ui_state_code_panel_mut()->panel_frac = 0.45f;
     repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT;
     repl_state_presentation_mut()->show_vertex_indices = 0;
     editor_scroll_set(0);

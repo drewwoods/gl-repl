@@ -9,16 +9,29 @@
 #   ui_state_includes_repl_views -> 0  (typedefs migrate to a ui-owned
 #     header)
 #
-# Each forwarder body line counts: a return-line into ui_state_*, or a
-# direct ui_state_* call. The forwarder block in repl_state.c started
-# with 24 forwarder functions whose bodies were 21 lines (some
-# return-by-value helpers fold to one line). Phase A commit 12 added
-# code_panel forwarders (3 functions / 3 body lines, total 24); Phase
-# A commit 13 added camera forwarders (9 functions / 11 body lines,
-# total 35) — repl_state_camera_set and the two ui_state_camera_set_
-# pair calls land on multi-line bodies. The block goes to zero in
-# Phase A commit 14. See the EDITOR_OWNERSHIP_TODO at the forwarder
-# block for context.
+# The forwarder block in repl_state.c was deleted in Phase A commit
+# 14. All UI-slice callers now talk to `ui_state_*` directly: ui_*.c
+# and the allowlisted controller / repl_actions / repl_editor /
+# repl_export include ui_state.h, while a handful of non-allowlisted
+# repl_*.c files forward-declare the few accessors they need.
+#
+# The ratchet's grep still counts 3 lines because repl_state.c
+# legitimately calls ui_state_*() outside the (now-deleted) forwarder
+# block:
+#   - ui_state_reset() inside repl_state_reset_all (every test reset
+#     drains all three state structs together).
+#   - ui_state_camera_mut()->auto_rotate writes inside the two
+#     repl_state_presentation_reset_* helpers — the auto_rotate field
+#     is structurally part of the camera slice but conceptually a
+#     presentation toggle. Splitting that field out of ReplCameraState
+#     is a follow-up; until then these calls stay.
+# These are not forwarders. The ratchet still serves its role: the
+# count cannot grow past 3, so any new transitional forwarder fails
+# the check. Tightening the grep itself is a future refinement.
+#
+# The ui_state_includes_repl_views coupling stays at 1 until the
+# Repl*State typedefs relocate to a ui-owned header (Phase 5 typedef
+# migration); the corrected contract still drives that target to 0.
 
-ui_forwarder_count: 35
+ui_forwarder_count: 3
 ui_state_includes_repl_views: 1

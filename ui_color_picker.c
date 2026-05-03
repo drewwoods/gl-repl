@@ -5,6 +5,7 @@
 #include "repl_command_store.h"
 #include "repl_parser.h"
 #include "repl_state_views.h"
+#include "ui_state.h"
 #include "repl_undo.h"
 #include "ui_color_picker.h"
 #include "repl_layout.h"
@@ -162,8 +163,8 @@ void ui_color_picker_open(int cmd_idx, int my) {
            + (g_cp_has_alpha ? CP_GAP + CP_ALPHA_W : 0) + CP_GAP;
     int ph = CP_SV_SZ + CP_GAP + CP_PREV_H + CP_GAP;
     int ppx = cp_x + cp_w + 8;
-    int win_w = repl_state_viewport().window_w;
-    int win_h = repl_state_viewport().window_h;
+    int win_w = ui_state_viewport().window_w;
+    int win_h = ui_state_viewport().window_h;
     if (ppx + pw > win_w - 4) ppx = cp_x - pw - 4;
     if (ppx < 4) ppx = 4;
     if (ppx + pw > win_w - 4) ppx = win_w - pw - 4;
@@ -314,7 +315,7 @@ int ui_color_picker_press(int mx, int my) {
     cmd = cp_cmd_at(g_cp_line);
     if (!cmd)
         return 0;
-    int gl_y = repl_state_viewport().window_h - my;
+    int gl_y = ui_state_viewport().window_h - my;
     cp_compute_rects(&r);
 
     /* SV square */
@@ -360,7 +361,7 @@ int ui_color_picker_motion(int mx, int my) {
     cmd = cp_cmd_at(g_cp_line);
     if (!cmd)
         return 0;
-    int gl_y = repl_state_viewport().window_h - my;
+    int gl_y = ui_state_viewport().window_h - my;
     cp_compute_rects(&r);
     if (g_cp_drag == 1) {
         g_cp_sat = (float)(mx-r.sv_x)/(float)r.sv_sz;

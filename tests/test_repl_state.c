@@ -70,10 +70,10 @@ static void populate_runtime_snapshot_fixture(const char *scene_hint) {
     clipboard->cmd_count = 1;
     clipboard->cmds[0].type = CMD_COLOR3F;
 
-    repl_state_help_mut()->visible = 1;
-    repl_state_help_mut()->tab_idx = 1;
-    repl_state_help_mut()->scroll = 3;
-    code_panel = repl_state_code_panel_mut();
+    ui_state_help_mut()->visible = 1;
+    ui_state_help_mut()->tab_idx = 1;
+    ui_state_help_mut()->scroll = 3;
+    code_panel = ui_state_code_panel_mut();
     code_panel->panel_frac = 0.61f;
     code_panel->resizing_panel = 1;
     editor_scroll_set(9);
@@ -82,16 +82,16 @@ static void populate_runtime_snapshot_fixture(const char *scene_hint) {
     code_panel->blink_tick = 12;
     code_panel->cursor_px = 123;
     code_panel->cursor_py = 456;
-    repl_state_variable_panel_mut()->visible = 0;
+    ui_state_variable_panel_mut()->visible = 0;
 
     drag = editor_state_variable_drag_mut();
     drag->var_idx = 3;
     drag->log_mode = 1;
     drag->start_value = 2.5f;
     drag->start_x = 17;
-    repl_state_profile_panel_mut()->mode = PROFILE_PANEL_DETAILS;
+    ui_state_profile_panel_mut()->mode = PROFILE_PANEL_DETAILS;
 
-    status = repl_state_status_mut();
+    status = ui_state_status_mut();
     snprintf(status->text, sizeof(status->text), "%s", "state snapshot");
     status->ttl = 17;
 
@@ -126,10 +126,10 @@ static void populate_runtime_snapshot_fixture(const char *scene_hint) {
     if (foo_idx >= 0)
         g_predef_vars[foo_idx].value = 42.0f;
 
-    repl_state_camera_set(11.0f, 22.0f, 7.5f, 0.5f, -0.25f, 1.75f, 0.9f);
-    repl_state_camera_mut()->auto_rotate = 1;
-    repl_state_pointer_set(321, 654, 2);
-    repl_state_viewport_set_size(1440, 900);
+    ui_state_camera_set(11.0f, 22.0f, 7.5f, 0.5f, -0.25f, 1.75f, 0.9f);
+    ui_state_camera_mut()->auto_rotate = 1;
+    ui_state_pointer_set(321, 654, 2);
+    ui_state_viewport_set_size(1440, 900);
 
     presentation = repl_state_presentation_mut();
     presentation->wireframe = 1;
@@ -234,29 +234,29 @@ static void test_capture_restore_round_trip(void) {
     ASSERT_INT("selection end restored", editor_state_selection().end_idx, 7);
     ASSERT_INT("clipboard count restored", editor_state_clipboard().cmd_count, 1);
     ASSERT_INT("clipboard cmd restored", editor_state_clipboard().cmds[0].type, CMD_COLOR3F);
-    ASSERT_INT("help restored", repl_state_help().visible, 1);
-    ASSERT_INT("help tab restored", repl_state_help().tab_idx, 1);
-    ASSERT_INT("help scroll restored", repl_state_help().scroll, 3);
-    ASSERT_TRUE("code panel frac restored", repl_state_code_panel().panel_frac == 0.61f);
-    ASSERT_INT("code panel resizing restored", repl_state_code_panel().resizing_panel, 1);
+    ASSERT_INT("help restored", ui_state_help().visible, 1);
+    ASSERT_INT("help tab restored", ui_state_help().tab_idx, 1);
+    ASSERT_INT("help scroll restored", ui_state_help().scroll, 3);
+    ASSERT_TRUE("code panel frac restored", ui_state_code_panel().panel_frac == 0.61f);
+    ASSERT_INT("code panel resizing restored", ui_state_code_panel().resizing_panel, 1);
     ASSERT_INT("code panel scroll restored", editor_scroll(), 9);
     ASSERT_INT("code panel follow restored",
                editor_scroll_follow_cursor(), 1);
     ASSERT_INT("code panel cursor visible restored",
-               repl_state_code_panel().cursor_visible, 0);
-    ASSERT_INT("code panel blink restored", repl_state_code_panel().blink_tick, 12);
-    ASSERT_INT("code panel cursor x restored", repl_state_code_panel().cursor_px, 123);
-    ASSERT_INT("code panel cursor y restored", repl_state_code_panel().cursor_py, 456);
-    ASSERT_INT("variable panel restored", repl_state_variable_panel().visible, 0);
+               ui_state_code_panel().cursor_visible, 0);
+    ASSERT_INT("code panel blink restored", ui_state_code_panel().blink_tick, 12);
+    ASSERT_INT("code panel cursor x restored", ui_state_code_panel().cursor_px, 123);
+    ASSERT_INT("code panel cursor y restored", ui_state_code_panel().cursor_py, 456);
+    ASSERT_INT("variable panel restored", ui_state_variable_panel().visible, 0);
     ASSERT_INT("variable drag idx restored", editor_state_variable_drag().var_idx, 3);
     ASSERT_INT("variable drag log restored", editor_state_variable_drag().log_mode, 1);
     ASSERT_TRUE("variable drag value restored",
                 editor_state_variable_drag().start_value == 2.5f);
     ASSERT_INT("variable drag x restored", editor_state_variable_drag().start_x, 17);
     ASSERT_INT("profile panel restored",
-               repl_state_profile_panel().mode, PROFILE_PANEL_DETAILS);
+               ui_state_profile_panel().mode, PROFILE_PANEL_DETAILS);
     {
-        ReplStatusState status = repl_state_status();
+        ReplStatusState status = ui_state_status();
         ReplSearchState search = editor_state_search();
         ReplAutocompleteState autocomplete = editor_state_autocomplete();
 
@@ -281,19 +281,19 @@ static void test_capture_restore_round_trip(void) {
     }
     ASSERT_INT("time playing restored", repl_state_variables().time_playing, 0);
     ASSERT_TRUE("anim time restored", repl_state_variables().anim_time == 1.25f);
-    ASSERT_TRUE("camera rx restored", repl_state_camera().rx == 11.0f);
-    ASSERT_TRUE("camera ry restored", repl_state_camera().ry == 22.0f);
-    ASSERT_TRUE("camera dist restored", repl_state_camera().dist == 7.5f);
-    ASSERT_TRUE("camera tx restored", repl_state_camera().tx == 0.5f);
-    ASSERT_TRUE("camera ty restored", repl_state_camera().ty == -0.25f);
-    ASSERT_TRUE("camera tz restored", repl_state_camera().tz == 1.75f);
-    ASSERT_TRUE("camera glow restored", repl_state_camera().motion_glow == 0.9f);
-    ASSERT_INT("camera rotate restored", repl_state_camera().auto_rotate, 1);
-    ASSERT_INT("pointer x restored", repl_state_pointer().mouse_x, 321);
-    ASSERT_INT("pointer y restored", repl_state_pointer().mouse_y, 654);
-    ASSERT_INT("pointer button restored", repl_state_pointer().mouse_button, 2);
-    ASSERT_INT("viewport width restored", repl_state_viewport().window_w, 1440);
-    ASSERT_INT("viewport height restored", repl_state_viewport().window_h, 900);
+    ASSERT_TRUE("camera rx restored", ui_state_camera().rx == 11.0f);
+    ASSERT_TRUE("camera ry restored", ui_state_camera().ry == 22.0f);
+    ASSERT_TRUE("camera dist restored", ui_state_camera().dist == 7.5f);
+    ASSERT_TRUE("camera tx restored", ui_state_camera().tx == 0.5f);
+    ASSERT_TRUE("camera ty restored", ui_state_camera().ty == -0.25f);
+    ASSERT_TRUE("camera tz restored", ui_state_camera().tz == 1.75f);
+    ASSERT_TRUE("camera glow restored", ui_state_camera().motion_glow == 0.9f);
+    ASSERT_INT("camera rotate restored", ui_state_camera().auto_rotate, 1);
+    ASSERT_INT("pointer x restored", ui_state_pointer().mouse_x, 321);
+    ASSERT_INT("pointer y restored", ui_state_pointer().mouse_y, 654);
+    ASSERT_INT("pointer button restored", ui_state_pointer().mouse_button, 2);
+    ASSERT_INT("viewport width restored", ui_state_viewport().window_w, 1440);
+    ASSERT_INT("viewport height restored", ui_state_viewport().window_h, 900);
     ASSERT_INT("presentation wireframe restored", repl_state_presentation().wireframe, 1);
     ASSERT_INT("presentation grid restored", repl_state_presentation().grid_theme, GRID_THEME_TRON);
     ASSERT_INT("presentation layout restored",
@@ -366,7 +366,7 @@ static void test_reset_all_restores_default_runtime(void) {
 
     ASSERT_TRUE("reset_all restores default snapshot",
                 memcmp(&defaults, &reset_state, sizeof(defaults)) == 0);
-    ASSERT_INT("reset_all help hidden", repl_state_help().visible, 0);
+    ASSERT_INT("reset_all help hidden", ui_state_help().visible, 0);
     ASSERT_INT("reset_all panel scroll", editor_scroll(), 0);
     ASSERT_INT("reset_all replay mode", repl_state_replay().mode, REPLAY_MODE_VERTEX);
     ASSERT_INT("reset_all replay expand", repl_state_replay().expand_args, 1);

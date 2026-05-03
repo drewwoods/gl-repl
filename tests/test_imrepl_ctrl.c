@@ -111,8 +111,8 @@ static void prepare_display_fixture(void) {
     repl_reset_state();
     repl_eval_init_predef_vars();
 
-    repl_state_viewport_set_size(800, 600);
-    repl_state_camera_set(11.0f, 22.0f, 7.5f, 0.5f, -0.25f, 1.75f, 0.9f);
+    ui_state_viewport_set_size(800, 600);
+    ui_state_camera_set(11.0f, 22.0f, 7.5f, 0.5f, -0.25f, 1.75f, 0.9f);
     repl_state_render_mut()->use_accum = 0;
     repl_state_render_mut()->accum_aa_enabled = 0;
     repl_state_render_mut()->accum_samples = 1;
@@ -274,11 +274,11 @@ static void test_display_frame_builds_config_and_restores_live_state(void) {
 static void test_reshape_clamps_height(void) {
     printf("--- imrepl_ctrl reshape ---\n");
 
-    repl_state_viewport_set_size(320, 240);
+    ui_state_viewport_set_size(320, 240);
     imrepl_ctrl_reshape(640, 0);
 
-    ASSERT_INT("reshape forwards width", repl_state_viewport().window_w, 640);
-    ASSERT_INT("reshape clamps height", repl_state_viewport().window_h, 1);
+    ASSERT_INT("reshape forwards width", ui_state_viewport().window_w, 640);
+    ASSERT_INT("reshape clamps height", ui_state_viewport().window_h, 1);
 }
 
 int main(void) {

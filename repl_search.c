@@ -23,6 +23,12 @@
 #include "repl_core_internal.h"
 #include "repl_keys.h"
 
+/* ui_state_help_mut is forward-declared here because repl_*.c is not
+ * allowed to include ui_state.h per check-controller-boundaries. The
+ * search-open path closes the help overlay as a side-effect; the
+ * help slice lives on UiState. */
+ReplHelpState *ui_state_help_mut(void);
+
 static int search_row_is_live_input(int row_idx) {
     if (row_idx < 0 || row_idx >= repl_search_row_count())
         return 0;
@@ -456,9 +462,9 @@ static void search_open(void) {
 
     srch->active = 1;
     srch->cursor_pos = srch->query_len;
-    repl_state_help_mut()->visible = 0;
-    repl_state_help_mut()->tab_idx = 0;
-    repl_state_help_mut()->scroll = 0;
+    ui_state_help_mut()->visible = 0;
+    ui_state_help_mut()->tab_idx = 0;
+    ui_state_help_mut()->scroll = 0;
     clear_autocomplete_state();
 }
 

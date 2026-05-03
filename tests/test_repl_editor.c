@@ -9,15 +9,16 @@
 #include "repl_keys.h"
 #include "repl_state.h"
 #include "sample.h"
+#include "ui_state.h"
 #include "prof.h"
 #include "ui_panels.h"
 #include "repl_layout.h"
 #include "ui_variable_panel.h"
 #include "repl_inline_rename.h"
 
-#define g_status     (repl_state_status_mut()->text)
+#define g_status     (ui_state_status_mut()->text)
 #define g_scroll     (editor_state_scroll_mut()->scroll)
-#define g_panel_frac (repl_state_code_panel_mut()->panel_frac)
+#define g_panel_frac (ui_state_code_panel_mut()->panel_frac)
 #define g_ac_count   (editor_state_autocomplete_mut()->match_count)
 #define g_ac_sel     (editor_state_autocomplete_mut()->selected_idx)
 #define g_ac_ghost   (editor_state_autocomplete_mut()->ghost)
@@ -26,9 +27,9 @@
 #define g_search_query     (editor_state_search_mut()->query)
 #define g_search_query_len (editor_state_search_mut()->query_len)
 #define g_search_cursor_pos (editor_state_search_mut()->cursor_pos)
-#define g_show_help          (repl_state_help_mut()->visible)
-#define g_help_tab           (repl_state_help_mut()->tab_idx)
-#define g_show_profile_panel (repl_state_profile_panel_mut()->mode)
+#define g_show_help          (ui_state_help_mut()->visible)
+#define g_help_tab           (ui_state_help_mut()->tab_idx)
+#define g_show_profile_panel (ui_state_profile_panel_mut()->mode)
 #define g_scroll_follow_cursor (editor_state_scroll_mut()->scroll_follow_cursor)
 #define refresh_workspace_header_lines repl_state_refresh_workspace_header_lines
 #define parse_workspace_header_line    repl_state_parse_workspace_header_line
@@ -159,7 +160,7 @@ static int code_panel_mouse_y_for_cmd(int cmd_idx) {
     int vis = doc_line - g_scroll;
     int line_y_start = cp_y + cp_h - CODE_MARGIN_Y - 2 * LINE_H;
     int gl_y = line_y_start - vis * LINE_H + 1;
-    return repl_state_viewport().window_h - gl_y;
+    return ui_state_viewport().window_h - gl_y;
 }
 
 static void assert_float_decl_rejected_atomic(const char *label,
@@ -217,7 +218,7 @@ int main() {
     {
         int x, y, w, h;
 
-        repl_state_viewport_set_size(1000, 800);
+        ui_state_viewport_set_size(1000, 800);
         g_panel_frac = 0.25f;
 
         repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT;
@@ -268,7 +269,7 @@ int main() {
         ASSERT_INT("hidden scene w", w, 1000);
         ASSERT_INT("hidden scene h", h, 800);
 
-        repl_state_viewport_set_size(1200, 800);
+        ui_state_viewport_set_size(1200, 800);
         g_panel_frac = CFG_DEFAULT_PANEL_FRAC;
         repl_state_presentation_mut()->code_panel_layout = CFG_DEFAULT_CODE_PANEL_LAYOUT;
     }
@@ -516,7 +517,7 @@ int main() {
     /* 0d. Cramped variable-panel fallback still preserves scene status strip */
     {
         int x, y, w, h;
-        repl_state_viewport_set_size(320, 80);
+        ui_state_viewport_set_size(320, 80);
         g_panel_frac = 0.25f;
         repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT;
         replay_active = 0;
@@ -525,7 +526,7 @@ int main() {
         ASSERT_INT("cramped var panel clears status strip",
                    y, STATUSBAR_H + 4);
 
-        repl_state_viewport_set_size(1200, 800);
+        ui_state_viewport_set_size(1200, 800);
         g_panel_frac = CFG_DEFAULT_PANEL_FRAC;
         repl_state_presentation_mut()->code_panel_layout = CFG_DEFAULT_CODE_PANEL_LAYOUT;
     }
@@ -533,37 +534,37 @@ int main() {
     /* 0e. Camera control module owns scene drag and momentum behavior. */
     {
         repl_reset_state();
-        repl_state_camera_set_orbit(0.0f, 0.0f);
-        repl_state_camera_set_distance(10.0f);
+        ui_state_camera_set_orbit(0.0f, 0.0f);
+        ui_state_camera_set_distance(10.0f);
         repl_camera_mouse_event(GLUT_LEFT_BUTTON, GLUT_DOWN, 10, 10, 0);
         repl_camera_drag_motion(20, 14);
         ASSERT_TRUE("camera left drag yaws",
-                    fabsf(repl_state_camera().ry - 5.0f) < 1e-6f);
+                    fabsf(ui_state_camera().ry - 5.0f) < 1e-6f);
         ASSERT_TRUE("camera left drag pitches",
-                    fabsf(repl_state_camera().rx - 2.0f) < 1e-6f);
+                    fabsf(ui_state_camera().rx - 2.0f) < 1e-6f);
         repl_camera_mouse_event(GLUT_LEFT_BUTTON, GLUT_UP, 20, 14, 0);
         repl_camera_tick();
         ASSERT_TRUE("camera release keeps yaw momentum",
-                    fabsf(repl_state_camera().ry - 7.5f) < 1e-6f);
+                    fabsf(ui_state_camera().ry - 7.5f) < 1e-6f);
 
         repl_camera_controls_reset();
-        repl_state_camera_set_orbit(0.0f, 0.0f);
-        repl_state_camera_set_pan(0.0f, 0.0f, 0.0f);
-        repl_state_camera_set_distance(10.0f);
+        ui_state_camera_set_orbit(0.0f, 0.0f);
+        ui_state_camera_set_pan(0.0f, 0.0f, 0.0f);
+        ui_state_camera_set_distance(10.0f);
         repl_camera_mouse_event(GLUT_RIGHT_BUTTON, GLUT_DOWN, 0, 0,
                                 GLUT_ACTIVE_SHIFT);
         repl_camera_drag_motion(0, 20);
         ASSERT_TRUE("camera shift-right drag pans y",
-                    fabsf(repl_state_camera().ty - 1.0f) < 1e-6f);
+                    fabsf(ui_state_camera().ty - 1.0f) < 1e-6f);
         ASSERT_TRUE("camera y pan lights motion glow",
-                    fabsf(repl_state_camera().motion_glow - 1.0f) < 1e-6f);
+                    fabsf(ui_state_camera().motion_glow - 1.0f) < 1e-6f);
 
         repl_camera_controls_reset();
-        repl_state_camera_set_distance(0.6f);
+        ui_state_camera_set_distance(0.6f);
         repl_camera_mouse_event(GLUT_MIDDLE_BUTTON, GLUT_DOWN, 0, 0, 0);
         repl_camera_drag_motion(0, -100);
         ASSERT_TRUE("camera middle drag clamps near zoom",
-                    fabsf(repl_state_camera().dist - 0.5f) < 1e-6f);
+                    fabsf(ui_state_camera().dist - 0.5f) < 1e-6f);
     }
 
     /* 1. Undo when nothing to undo - must run before any undo push */
@@ -1940,7 +1941,7 @@ int main() {
         repl_flatten_commands();
 
 
-        repl_state_viewport_set_size(800, 230);
+        ui_state_viewport_set_size(800, 230);
         g_panel_frac = 0.5f;
         repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT;
         repl_state_presentation_mut()->show_vertex_indices = 0;
@@ -2026,7 +2027,7 @@ int main() {
         repl_flatten_commands();
 
 
-        repl_state_viewport_set_size(800, 230);
+        ui_state_viewport_set_size(800, 230);
         g_panel_frac = 0.5f;
         repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT;
         repl_state_presentation_mut()->show_vertex_indices = 0;
@@ -2101,7 +2102,7 @@ int main() {
         }
 
 
-        repl_state_viewport_set_size(800, 230);
+        ui_state_viewport_set_size(800, 230);
         g_panel_frac = 0.5f;
         repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT;
         repl_state_presentation_mut()->show_vertex_indices = 0;
@@ -2174,7 +2175,7 @@ int main() {
         }
 
 
-        repl_state_viewport_set_size(800, 230);
+        ui_state_viewport_set_size(800, 230);
         g_panel_frac = 0.5f;
         repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT;
         repl_state_presentation_mut()->show_vertex_indices = 0;
@@ -2288,7 +2289,7 @@ int main() {
         repl_feed_line_public("glVertex3f(1,1,1)");
         repl_feed_line_public("glVertex3f(2,2,2)");
 
-        repl_state_viewport_set_size(800, 600);
+        ui_state_viewport_set_size(800, 600);
         g_panel_frac = 0.5f;
         repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT;
         repl_state_presentation_mut()->show_vertex_indices = 0;
@@ -2511,26 +2512,26 @@ int main() {
     /* Extra coverage: panel resizing via mouse motion */
     {
         repl_reset_state();
-        repl_state_viewport_set_size(1000, 1000);
+        ui_state_viewport_set_size(1000, 1000);
         repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT;
-        repl_state_code_panel_mut()->resizing_panel = 1;
+        ui_state_code_panel_mut()->resizing_panel = 1;
 
         repl_motion_func(300, 500);
-        ASSERT_TRUE("panel resize left: frac updated", fabsf(repl_state_code_panel().panel_frac - 0.3f) < 1e-6f);
+        ASSERT_TRUE("panel resize left: frac updated", fabsf(ui_state_code_panel().panel_frac - 0.3f) < 1e-6f);
 
         repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_TOP;
         repl_motion_func(500, 400);
-        ASSERT_TRUE("panel resize top: frac updated", fabsf(repl_state_code_panel().panel_frac - 0.4f) < 1e-6f);
+        ASSERT_TRUE("panel resize top: frac updated", fabsf(ui_state_code_panel().panel_frac - 0.4f) < 1e-6f);
 
-        repl_state_code_panel_mut()->resizing_panel = 0;
+        ui_state_code_panel_mut()->resizing_panel = 0;
     }
 
     /* Extra coverage: editor_point_on_code_panel_divider */
     {
         repl_reset_state();
-        repl_state_viewport_set_size(1000, 1000);
+        ui_state_viewport_set_size(1000, 1000);
         repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT;
-        repl_state_code_panel_mut()->panel_frac = 0.3f;
+        ui_state_code_panel_mut()->panel_frac = 0.3f;
 
         /* Divider should be at x = 300. Test hit at 305. */
         repl_passive_motion_func(305, 500);
@@ -2557,7 +2558,7 @@ int main() {
 
     /* Extra coverage: Help overlay scrolling */
     {
-        ReplHelpState *help = repl_state_help_mut();
+        ReplHelpState *help = ui_state_help_mut();
         help->visible = 1;
         help->scroll = 0;
         help->tab_idx = 0;
@@ -2586,9 +2587,9 @@ int main() {
     /* Extra coverage: Escape key routes */
     {
         /* 1. Help visible */
-        repl_state_help_mut()->visible = 1;
+        ui_state_help_mut()->visible = 1;
         repl_keyboard_func(27, 0, 0);
-        ASSERT_TRUE("Esc: help closed", !repl_state_help().visible);
+        ASSERT_TRUE("Esc: help closed", !ui_state_help().visible);
 
         /* 2. Autocomplete active */
         editor_state_autocomplete_mut()->match_count = 1;
@@ -2614,16 +2615,16 @@ int main() {
         repl_flatten_commands();
 
         /* 1. Status TTL decrement */
-        repl_state_status_mut()->ttl = 10;
+        ui_state_status_mut()->ttl = 10;
         repl_timer_func(0);
-        ASSERT_INT("timer: status ttl decremented", repl_state_status().ttl, 9);
+        ASSERT_INT("timer: status ttl decremented", ui_state_status().ttl, 9);
 
         /* 2. Cursor blink */
-        repl_state_code_panel_mut()->blink_tick = 29;
-        repl_state_code_panel_mut()->cursor_visible = 1;
+        ui_state_code_panel_mut()->blink_tick = 29;
+        ui_state_code_panel_mut()->cursor_visible = 1;
         repl_timer_func(0);
-        ASSERT_INT("timer: blink tick reset", repl_state_code_panel().blink_tick, 0);
-        ASSERT_TRUE("timer: cursor visibility toggled", !repl_state_code_panel().cursor_visible);
+        ASSERT_INT("timer: blink tick reset", ui_state_code_panel().blink_tick, 0);
+        ASSERT_TRUE("timer: cursor visibility toggled", !ui_state_code_panel().cursor_visible);
 
         /* 3. Replay advance */
         repl_state_replay_mut()->active = 1;
@@ -2640,8 +2641,8 @@ int main() {
     /* Extra coverage: variable dragging via mouse */
     {
         repl_reset_state();
-        repl_state_viewport_set_size(1000, 1000);
-        repl_state_variable_panel_mut()->visible = 1;
+        ui_state_viewport_set_size(1000, 1000);
+        ui_state_variable_panel_mut()->visible = 1;
         repl_feed_line_public("float testvar = 5.0;");
 
         /* Variable panel is usually at bottom-right of scene.
@@ -2723,7 +2724,7 @@ int main() {
             char label[128];
 
             repl_reset_state();
-            repl_state_viewport_set_size(1000, 1000);
+            ui_state_viewport_set_size(1000, 1000);
             editor_scroll_set(0);
             repl_state_presentation_mut()->code_panel_layout = layout;
 
@@ -2731,9 +2732,9 @@ int main() {
             repl_layout_scene_rect(&scene_x, &scene_y, &scene_w, &scene_h);
 
             code_x = cp_x + cp_w / 2;
-            code_y = repl_state_viewport().window_h - (cp_y + cp_h / 2);
+            code_y = ui_state_viewport().window_h - (cp_y + cp_h / 2);
             scene_x += scene_w / 2;
-            scene_y = repl_state_viewport().window_h - (scene_y + scene_h / 2);
+            scene_y = ui_state_viewport().window_h - (scene_y + scene_h / 2);
 
             repl_mousewheel_func(0, 1, code_x, code_y);
             snprintf(label, sizeof(label),
@@ -2755,7 +2756,7 @@ int main() {
         }
 
         repl_reset_state();
-        repl_state_viewport_set_size(1000, 1000);
+        ui_state_viewport_set_size(1000, 1000);
         editor_scroll_set(0);
         repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_HIDDEN;
 
@@ -2856,24 +2857,24 @@ int main() {
     /* Extra coverage: BOTTOM layout resizing */
     {
         repl_reset_state();
-        repl_state_viewport_set_size(1000, 1000);
+        ui_state_viewport_set_size(1000, 1000);
         repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_BOTTOM;
-        repl_state_code_panel_mut()->panel_frac = 0.3f;
+        ui_state_code_panel_mut()->panel_frac = 0.3f;
 
         /* Divider should be at gl_y = 300 (y = 700). */
         repl_passive_motion_func(500, 695);
 
-        repl_state_code_panel_mut()->resizing_panel = 1;
+        ui_state_code_panel_mut()->resizing_panel = 1;
         repl_motion_func(500, 600);
-        ASSERT_TRUE("panel resize bottom: frac updated", fabsf(repl_state_code_panel().panel_frac - 0.4f) < 1e-6f);
-        repl_state_code_panel_mut()->resizing_panel = 0;
+        ASSERT_TRUE("panel resize bottom: frac updated", fabsf(ui_state_code_panel().panel_frac - 0.4f) < 1e-6f);
+        ui_state_code_panel_mut()->resizing_panel = 0;
     }
 
     /* Extra coverage: Right-click variable drag */
     {
         repl_reset_state();
-        repl_state_viewport_set_size(1000, 1000);
-        repl_state_variable_panel_mut()->visible = 1;
+        ui_state_viewport_set_size(1000, 1000);
+        ui_state_variable_panel_mut()->visible = 1;
         repl_feed_line_public("float testvar = 5.0;");
 
         int px, py, pw, ph;

@@ -1,5 +1,6 @@
 #include "repl_actions.h"
 #include "repl_state.h"
+#include "ui_state.h"
 #include "repl_config.h"
 #include "repl_audio.h"
 #include "repl_core.h"
@@ -20,7 +21,7 @@ static TestHarness g_harness = TEST_HARNESS_INIT;
 
 /* Read status via the mutable accessor to avoid taking .text from a temporary. */
 static const char *last_status_text(void) {
-    return repl_state_status_mut()->text;
+    return ui_state_status_mut()->text;
 }
 
 #define g_last_status (last_status_text())
@@ -35,7 +36,7 @@ static void test_apply_defaults(void) {
 
 static void test_cursor_actions(void) {
     repl_reset_state();
-    ReplCodePanelRuntimeState *cp = repl_state_code_panel_mut();
+    ReplCodePanelRuntimeState *cp = ui_state_code_panel_mut();
     cp->cursor_visible = 0;
     cp->blink_tick = 100;
 
@@ -50,7 +51,7 @@ static void test_cursor_actions(void) {
 
 static void test_help_tab_actions(void) {
     repl_reset_state();
-    ReplHelpState *help = repl_state_help_mut();
+    ReplHelpState *help = ui_state_help_mut();
     help->tab_idx = 0;
     help->scroll = 50;
 

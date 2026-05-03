@@ -17,6 +17,7 @@
 #include "repl_pipeline.h"
 #include "repl_state.h"
 #include "ui_panels.h"
+#include "ui_state.h"
 #include "repl_inline_rename.h"
 
 static const char *replay_mode_names[] = { "Polygon", "Vertex" };
@@ -184,7 +185,7 @@ void repl_cfg_cycle_row(int row, int delta) {
     int new_value = repl_config_cycle(item->key, delta);
 
     if (item->key == REPL_CONFIG_CODE_PANEL_LAYOUT) {
-        repl_state_code_panel_mut()->panel_frac = 0.3f;
+        ui_state_code_panel_mut()->panel_frac = 0.3f;
         if (repl_state_presentation().code_panel_layout == CODE_PANEL_LAYOUT_TOP) {
             set_status("Layout: top code panel");
         } else if (repl_state_presentation().code_panel_layout == CODE_PANEL_LAYOUT_BOTTOM) {
@@ -229,21 +230,21 @@ void repl_cfg_cycle_row(int row, int delta) {
 }
 
 void repl_action_cursor_blink_reset(void) {
-    ReplCodePanelRuntimeState *cp = repl_state_code_panel_mut();
+    ReplCodePanelRuntimeState *cp = ui_state_code_panel_mut();
 
     cp->cursor_visible = 1;
     cp->blink_tick = 0;
 }
 
 void repl_action_set_cursor_pixel(int px, int py) {
-    ReplCodePanelRuntimeState *cp = repl_state_code_panel_mut();
+    ReplCodePanelRuntimeState *cp = ui_state_code_panel_mut();
 
     cp->cursor_px = px;
     cp->cursor_py = py;
 }
 
 void repl_action_help_tab_next(void) {
-    ReplHelpState *help = repl_state_help_mut();
+    ReplHelpState *help = ui_state_help_mut();
 
     if (help->tab_idx < 1) {
         help->tab_idx++;
@@ -252,7 +253,7 @@ void repl_action_help_tab_next(void) {
 }
 
 void repl_action_help_tab_prev(void) {
-    ReplHelpState *help = repl_state_help_mut();
+    ReplHelpState *help = ui_state_help_mut();
 
     if (help->tab_idx > 0) {
         help->tab_idx--;

@@ -1,4 +1,5 @@
 #include "sample.h"
+#include "ui_state.h"
 #include "repl_state.h"
 #include "repl_core.h"
 #include "ui_help_overlay.h"
@@ -32,17 +33,17 @@ static TestHarness g_harness = TEST_HARNESS_INIT;
  * controller TU, so we duplicate the relevant slice population here. */
 static void make_test_ui_snapshot(UiRenderSnapshot *snap) {
     memset(snap, 0, sizeof(*snap));
-    snap->viewport       = repl_state_viewport();
+    snap->viewport       = ui_state_viewport();
     snap->presentation   = repl_state_presentation();
-    snap->code_panel     = repl_state_code_panel();
-    snap->help           = repl_state_help();
-    snap->variable_panel = repl_state_variable_panel();
-    snap->profile_panel  = repl_state_profile_panel();
-    snap->status         = repl_state_status();
+    snap->code_panel     = ui_state_code_panel();
+    snap->help           = ui_state_help();
+    snap->variable_panel = ui_state_variable_panel();
+    snap->profile_panel  = ui_state_profile_panel();
+    snap->status         = ui_state_status();
     snap->search         = editor_state_search();
     snap->autocomplete   = editor_state_autocomplete();
-    snap->camera         = repl_state_camera();
-    snap->pointer        = repl_state_pointer();
+    snap->camera         = ui_state_camera();
+    snap->pointer        = ui_state_pointer();
     snap->render         = repl_state_render();
     snap->replay         = repl_state_replay();
     snap->scenes         = repl_state_scenes();
@@ -68,14 +69,14 @@ static void test_help_overlay(void) {
     printf("Testing Help Overlay...\n");
     gl_stub_counts_reset();
     
-    repl_state_help_mut()->visible = 0;
+    ui_state_help_mut()->visible = 0;
     { UiRenderSnapshot s; make_test_ui_snapshot(&s); ui_help_overlay_render(&s); }
     ASSERT_TRUE("help hidden -> no GL calls", gl_stub_counts[GL_STUB_glBegin] == 0);
 
-    repl_state_help_mut()->visible = 1;
-    repl_state_viewport_set_size(800, 600);
-    repl_state_help_mut()->tab_idx = 0;
-    repl_state_help_mut()->scroll = 0;
+    ui_state_help_mut()->visible = 1;
+    ui_state_viewport_set_size(800, 600);
+    ui_state_help_mut()->tab_idx = 0;
+    ui_state_help_mut()->scroll = 0;
 
     gl_stub_counts_reset();
     { UiRenderSnapshot s; make_test_ui_snapshot(&s); ui_help_overlay_render(&s); }
@@ -85,7 +86,7 @@ static void test_help_overlay(void) {
     ASSERT_GL_CALLS("help visible -> enables blending", GL_STUB_glEnable, 1);
 
     /* Switch tabs */
-    repl_state_help_mut()->tab_idx = 1;
+    ui_state_help_mut()->tab_idx = 1;
     gl_stub_counts_reset();
     { UiRenderSnapshot s; make_test_ui_snapshot(&s); ui_help_overlay_render(&s); }
     ASSERT_GL_CALLS("help tab 1 -> draws text", GL_STUB_glRasterPos2f, 10);
@@ -95,11 +96,11 @@ static void test_profile_panel(void) {
     printf("Testing Profile Panel...\n");
     gl_stub_counts_reset();
     
-    repl_state_profile_panel_mut()->mode = PROFILE_PANEL_OFF;
+    ui_state_profile_panel_mut()->mode = PROFILE_PANEL_OFF;
     { UiRenderSnapshot s; make_test_ui_snapshot(&s); ui_profile_panel_render(&s); }
     ASSERT_TRUE("profile hidden -> no GL calls", gl_stub_counts[GL_STUB_glBegin] == 0);
 
-    repl_state_profile_panel_mut()->mode = PROFILE_PANEL_ON;
+    ui_state_profile_panel_mut()->mode = PROFILE_PANEL_ON;
     prof_frame_tick();
     prof_begin(PROF_FRAME_TOTAL);
     prof_end(PROF_FRAME_TOTAL);
@@ -111,7 +112,7 @@ static void test_profile_panel(void) {
     ASSERT_GL_CALLS("profile visible -> calls glColor4f", GL_STUB_glColor4f, 1);
 
     /* Test details mode */
-    repl_state_profile_panel_mut()->mode = PROFILE_PANEL_DETAILS;
+    ui_state_profile_panel_mut()->mode = PROFILE_PANEL_DETAILS;
     gl_stub_counts_reset();
     { UiRenderSnapshot s; make_test_ui_snapshot(&s); ui_profile_panel_render(&s); }
     ASSERT_GL_CALLS("profile details -> draws more text", GL_STUB_glRasterPos2f, 10);
@@ -131,7 +132,7 @@ static void test_color_picker(void) {
     
     ASSERT_TRUE("can edit color cmd", ui_color_picker_can_edit_cmd(0));
     
-    repl_state_viewport_set_size(800, 600);
+    ui_state_viewport_set_size(800, 600);
     ui_color_picker_open(0, 300);
     ASSERT_TRUE("picker is active", ui_color_picker_active_line() == 0);
     
@@ -145,13 +146,13 @@ static void test_color_picker(void) {
     int py = 300;
     
     /* Press SV square (CP_SV_SZ = 150) */
-    ui_color_picker_press(px + 10, repl_state_viewport().window_h - (py - 10));
-    ui_color_picker_motion(px + 20, repl_state_viewport().window_h - (py - 20));
+    ui_color_picker_press(px + 10, ui_state_viewport().window_h - (py - 10));
+    ui_color_picker_motion(px + 20, ui_state_viewport().window_h - (py - 20));
     ui_color_picker_release();
 
     /* Press Hue bar (Offset by CP_SV_SZ + CP_GAP = 150 + 6 = 156) */
-    ui_color_picker_press(px + 156 + 10, repl_state_viewport().window_h - (py - 10));
-    ui_color_picker_motion(px + 156 + 10, repl_state_viewport().window_h - (py - 20));
+    ui_color_picker_press(px + 156 + 10, ui_state_viewport().window_h - (py - 10));
+    ui_color_picker_motion(px + 156 + 10, ui_state_viewport().window_h - (py - 20));
     ui_color_picker_release();
 
     /* Test Alpha support */
@@ -164,14 +165,14 @@ static void test_color_picker(void) {
     ASSERT_GL_CALLS("picker render with alpha -> draws quads", GL_STUB_glBegin, 1);
     
     /* Press Alpha bar (alp_x = hue_x + 18 + 6 = px + 156 + 24 = 180) */
-    ui_color_picker_press(px + 185, repl_state_viewport().window_h - (py - 10));
-    ui_color_picker_motion(px + 185, repl_state_viewport().window_h - (py - 20));
+    ui_color_picker_press(px + 185, ui_state_viewport().window_h - (py - 10));
+    ui_color_picker_motion(px + 185, ui_state_viewport().window_h - (py - 20));
     ui_color_picker_release();
 
     /* Test glClearColor limits */
     repl_state_document_cmds_mut()[0].type = CMD_CLEAR_COLOR;
     ui_color_picker_open(0, 300);
-    ui_color_picker_press(px + 10, repl_state_viewport().window_h - (py - 5)); // High V
+    ui_color_picker_press(px + 10, ui_state_viewport().window_h - (py - 5)); // High V
     ui_color_picker_release();
     
     ui_color_picker_close();
@@ -208,8 +209,8 @@ static void test_autocomplete_panel(void) {
     editor_state_autocomplete_mut()->matches[0] = "glVertex3f";
     editor_state_autocomplete_mut()->matches[1] = "glVertex2f";
     editor_state_autocomplete_mut()->selected_idx = 0;
-    repl_state_code_panel_mut()->cursor_px = 100;
-    repl_state_code_panel_mut()->cursor_py = 100;
+    ui_state_code_panel_mut()->cursor_px = 100;
+    ui_state_code_panel_mut()->cursor_py = 100;
     
     gl_stub_counts_reset();
     { UiRenderSnapshot s; make_test_ui_snapshot(&s); ui_autocomplete_panel_render(&s); }
@@ -222,11 +223,11 @@ static void test_variable_panel(void) {
     printf("Testing Variable Panel...\n");
     gl_stub_counts_reset();
     
-    repl_state_variable_panel_mut()->visible = 0;
+    ui_state_variable_panel_mut()->visible = 0;
     { UiRenderSnapshot s; make_test_ui_snapshot(&s); ui_variable_panel_render(&s); }
     ASSERT_TRUE("var panel hidden -> no GL calls", gl_stub_counts[GL_STUB_glBegin] == 0);
 
-    repl_state_variable_panel_mut()->visible = 1;
+    ui_state_variable_panel_mut()->visible = 1;
     g_num_predef_vars = 1;
     strcpy(g_predef_vars[0].name, "x");
     g_predef_vars[0].value = 1.0f;
@@ -239,10 +240,10 @@ static void test_variable_panel(void) {
     
     /* Test hit testing */
     int row = -1;
-    repl_state_viewport_set_size(800, 600);
+    ui_state_viewport_set_size(800, 600);
     int px, py, pw, ph;
     ui_variable_panel_rect(&px, &py, &pw, &ph);
-    ASSERT_TRUE("hit test in panel", ui_variable_panel_hit(px + 10, repl_state_viewport().window_h - (py + 10), &row));
+    ASSERT_TRUE("hit test in panel", ui_variable_panel_hit(px + 10, ui_state_viewport().window_h - (py + 10), &row));
     ASSERT_TRUE("hit test outside panel", !ui_variable_panel_hit(0, 0, &row));
 }
 
@@ -250,9 +251,9 @@ static void test_menu_bar(void) {
     printf("Testing Menu Bar...\n");
     gl_stub_counts_reset();
     
-    repl_state_viewport_set_size(800, 600);
+    ui_state_viewport_set_size(800, 600);
     repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT;
-    repl_state_code_panel_mut()->panel_frac = 0.5f;
+    ui_state_code_panel_mut()->panel_frac = 0.5f;
     
     gl_stub_counts_reset();
     { UiRenderSnapshot s; make_test_ui_snapshot(&s); ui_menu_bar_render(&s); }

@@ -3,6 +3,7 @@
 #include "repl_executor.h"
 #include "repl_source_scope.h"
 #include "repl_state.h"
+#include "ui_state.h"
 #include "support/test_harness.h"
 
 #ifdef OPENGL_VIBE_USE_GL_STUBS
@@ -339,65 +340,65 @@ int main() {
         ReplPointerState *pointer;
         ReplViewportState *viewport;
 
-        repl_state_camera_set(11.0f, -22.0f, 7.5f,
+        ui_state_camera_set(11.0f, -22.0f, 7.5f,
                               1.0f, 2.0f, 3.0f, 0.25f);
-        ASSERT_TRUE("state camera rx", repl_state_camera().rx == 11.0f);
-        ASSERT_TRUE("state camera ry", repl_state_camera().ry == -22.0f);
-        ASSERT_TRUE("state camera dist", repl_state_camera().dist == 7.5f);
-        ASSERT_TRUE("state camera tx", repl_state_camera().tx == 1.0f);
-        ASSERT_TRUE("state camera ty", repl_state_camera().ty == 2.0f);
-        ASSERT_TRUE("state camera tz", repl_state_camera().tz == 3.0f);
-        ASSERT_TRUE("state camera glow", repl_state_camera().motion_glow == 0.25f);
+        ASSERT_TRUE("state camera rx", ui_state_camera().rx == 11.0f);
+        ASSERT_TRUE("state camera ry", ui_state_camera().ry == -22.0f);
+        ASSERT_TRUE("state camera dist", ui_state_camera().dist == 7.5f);
+        ASSERT_TRUE("state camera tx", ui_state_camera().tx == 1.0f);
+        ASSERT_TRUE("state camera ty", ui_state_camera().ty == 2.0f);
+        ASSERT_TRUE("state camera tz", ui_state_camera().tz == 3.0f);
+        ASSERT_TRUE("state camera glow", ui_state_camera().motion_glow == 0.25f);
 
-        repl_state_camera_set_orbit(33.0f, 44.0f);
-        ASSERT_TRUE("state camera orbit rx", repl_state_camera().rx == 33.0f);
-        ASSERT_TRUE("state camera orbit ry", repl_state_camera().ry == 44.0f);
-        repl_state_camera_set_pan(-1.0f, -2.0f, -3.0f);
-        ASSERT_TRUE("state camera pan tx", repl_state_camera().tx == -1.0f);
-        ASSERT_TRUE("state camera pan ty", repl_state_camera().ty == -2.0f);
-        ASSERT_TRUE("state camera pan tz", repl_state_camera().tz == -3.0f);
-        repl_state_camera_set_distance(9.0f);
-        ASSERT_TRUE("state camera distance", repl_state_camera().dist == 9.0f);
-        repl_state_camera_set_motion_glow(0.5f);
-        ASSERT_TRUE("state camera motion glow", repl_state_camera().motion_glow == 0.5f);
-        repl_state_camera_mut()->auto_rotate = 1;
+        ui_state_camera_set_orbit(33.0f, 44.0f);
+        ASSERT_TRUE("state camera orbit rx", ui_state_camera().rx == 33.0f);
+        ASSERT_TRUE("state camera orbit ry", ui_state_camera().ry == 44.0f);
+        ui_state_camera_set_pan(-1.0f, -2.0f, -3.0f);
+        ASSERT_TRUE("state camera pan tx", ui_state_camera().tx == -1.0f);
+        ASSERT_TRUE("state camera pan ty", ui_state_camera().ty == -2.0f);
+        ASSERT_TRUE("state camera pan tz", ui_state_camera().tz == -3.0f);
+        ui_state_camera_set_distance(9.0f);
+        ASSERT_TRUE("state camera distance", ui_state_camera().dist == 9.0f);
+        ui_state_camera_set_motion_glow(0.5f);
+        ASSERT_TRUE("state camera motion glow", ui_state_camera().motion_glow == 0.5f);
+        ui_state_camera_mut()->auto_rotate = 1;
 
-        camera = repl_state_camera_mut();
+        camera = ui_state_camera_mut();
         ASSERT_TRUE("state camera facade rx", camera->rx == 33.0f);
         ASSERT_TRUE("state camera facade dist", camera->dist == 9.0f);
 
-        repl_state_pointer_set(10, 20, 3);
-        ASSERT_INT("state pointer x", repl_state_pointer().mouse_x, 10);
-        ASSERT_INT("state pointer y", repl_state_pointer().mouse_y, 20);
-        ASSERT_INT("state pointer button", repl_state_pointer().mouse_button, 3);
-        repl_state_pointer_set_pos(30, 40);
-        ASSERT_INT("state pointer pos x", repl_state_pointer().mouse_x, 30);
-        ASSERT_INT("state pointer pos y", repl_state_pointer().mouse_y, 40);
-        repl_state_pointer_set_button(-1);
-        ASSERT_INT("state pointer button set", repl_state_pointer().mouse_button, -1);
+        ui_state_pointer_set(10, 20, 3);
+        ASSERT_INT("state pointer x", ui_state_pointer().mouse_x, 10);
+        ASSERT_INT("state pointer y", ui_state_pointer().mouse_y, 20);
+        ASSERT_INT("state pointer button", ui_state_pointer().mouse_button, 3);
+        ui_state_pointer_set_pos(30, 40);
+        ASSERT_INT("state pointer pos x", ui_state_pointer().mouse_x, 30);
+        ASSERT_INT("state pointer pos y", ui_state_pointer().mouse_y, 40);
+        ui_state_pointer_set_button(-1);
+        ASSERT_INT("state pointer button set", ui_state_pointer().mouse_button, -1);
 
-        pointer = repl_state_pointer_mut();
+        pointer = ui_state_pointer_mut();
         ASSERT_TRUE("state pointer facade x", pointer->mouse_x == 30);
         ASSERT_TRUE("state pointer facade button", pointer->mouse_button == -1);
 
-        repl_state_viewport_set_size(1024, 768);
-        ASSERT_INT("state viewport width", repl_state_viewport().window_w, 1024);
-        ASSERT_INT("state viewport height", repl_state_viewport().window_h, 768);
+        ui_state_viewport_set_size(1024, 768);
+        ASSERT_INT("state viewport width", ui_state_viewport().window_w, 1024);
+        ASSERT_INT("state viewport height", ui_state_viewport().window_h, 768);
 
-        viewport = repl_state_viewport_mut();
+        viewport = ui_state_viewport_mut();
         ASSERT_TRUE("state viewport facade width", viewport->window_w == 1024);
         ASSERT_TRUE("state viewport facade height", viewport->window_h == 768);
 
-        repl_state_camera_reset_default();
-        ASSERT_TRUE("state camera reset rx", repl_state_camera().rx == 20.0f);
-        ASSERT_TRUE("state camera reset ry", repl_state_camera().ry == 30.0f);
-        ASSERT_TRUE("state camera reset dist", repl_state_camera().dist == 5.0f);
-        ASSERT_TRUE("state camera reset tx", repl_state_camera().tx == 0.0f);
-        ASSERT_TRUE("state camera reset ty", repl_state_camera().ty == 0.0f);
-        ASSERT_TRUE("state camera reset tz", repl_state_camera().tz == 0.0f);
-        ASSERT_TRUE("state camera reset glow", repl_state_camera().motion_glow == 0.0f);
+        ui_state_camera_reset_default();
+        ASSERT_TRUE("state camera reset rx", ui_state_camera().rx == 20.0f);
+        ASSERT_TRUE("state camera reset ry", ui_state_camera().ry == 30.0f);
+        ASSERT_TRUE("state camera reset dist", ui_state_camera().dist == 5.0f);
+        ASSERT_TRUE("state camera reset tx", ui_state_camera().tx == 0.0f);
+        ASSERT_TRUE("state camera reset ty", ui_state_camera().ty == 0.0f);
+        ASSERT_TRUE("state camera reset tz", ui_state_camera().tz == 0.0f);
+        ASSERT_TRUE("state camera reset glow", ui_state_camera().motion_glow == 0.0f);
         ASSERT_INT("state camera reset auto rotate",
-                   repl_state_camera().auto_rotate, CFG_DEFAULT_CAMERA_ROTATE);
+                   ui_state_camera().auto_rotate, CFG_DEFAULT_CAMERA_ROTATE);
     }
 
     /* 13. presentation state facade */
@@ -423,7 +424,7 @@ int main() {
         repl_state_presentation_mut()->autonormal = 1;
         repl_state_presentation_mut()->show_light_indicators = 0;
         repl_state_presentation_mut()->backdrop_mode = 0;
-        repl_state_camera_mut()->auto_rotate = 1;
+        ui_state_camera_mut()->auto_rotate = 1;
         repl_state_presentation_mut()->highlight_current_poly = 0;
         repl_state_presentation_mut()->ortho_mode = 1;
         repl_state_presentation_mut()->wrap_at_comma = 0;
@@ -463,7 +464,7 @@ int main() {
         ASSERT_INT("presentation reset backdrop",
                    repl_state_presentation().backdrop_mode, CFG_DEFAULT_BACKDROP_MODE);
         ASSERT_INT("presentation reset camera rotate",
-               repl_state_camera().auto_rotate, CFG_DEFAULT_CAMERA_ROTATE);
+               ui_state_camera().auto_rotate, CFG_DEFAULT_CAMERA_ROTATE);
         ASSERT_INT("presentation reset highlight", repl_state_presentation().highlight_current_poly, 1);
         ASSERT_INT("presentation reset ortho", repl_state_presentation().ortho_mode, 0);
         ASSERT_INT("presentation reset wrap",

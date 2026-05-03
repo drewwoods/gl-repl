@@ -7,6 +7,7 @@
 #include "sample.h"
 #include "repl_actions.h"
 #include "repl_state_views.h"
+#include "ui_state.h"
 #include "repl_export.h"
 #include "repl_layout.h"
 #include "ui_color_picker.h"
@@ -1084,7 +1085,7 @@ static int code_panel_hit_test(int mx, int my,
     int panel_w = cp_w;
     int panel_top = cp_y + cp_h;
     /* Convert GLUT Y (top=0) to OpenGL Y (bottom=0) */
-    int gl_y = repl_state_viewport().window_h - my;
+    int gl_y = ui_state_viewport().window_h - my;
     if (mx < cp_x || mx >= cp_x + cp_w) return 0;
     if (gl_y < cp_y || gl_y >= cp_y + cp_h) return 0;
 
@@ -1123,7 +1124,7 @@ static int code_panel_drag_target(int mx, int my, int *out_target) {
     if (cp_w <= 0 || cp_h <= 0) return 0;
     int panel_w = cp_w;
     int panel_top = cp_y + cp_h;
-    int gl_y = repl_state_viewport().window_h - my;
+    int gl_y = ui_state_viewport().window_h - my;
     int line_y_start = panel_top - CODE_MARGIN_Y - 2 * LINE_H;
     int vis = (line_y_start + LINE_H - 3 - gl_y) / LINE_H;
 

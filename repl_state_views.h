@@ -245,27 +245,12 @@ ReplVariableView repl_state_variables(void);
 /* Selection + clipboard view accessors moved to editor_state.h
  * (Phase 1 commit 6). Use editor_state_selection / _clipboard. */
 
-ReplCodePanelRuntimeState repl_state_code_panel(void);
-
-ReplHelpState        repl_state_help(void);
-
-ReplVariablePanelState    repl_state_variable_panel(void);
-
-/* editor_state_variable_drag moved to editor_state.h (Phase 1 commit 9). */
-
-ReplProfilePanelState     repl_state_profile_panel(void);
-
-ReplStatusState          repl_state_status(void);
-
-/* Search + autocomplete view accessors moved to editor_state.h
+/* Code-panel / help / variable_panel / profile_panel / status /
+ * camera / pointer / viewport view accessors moved to ui_state.h
+ * (Phase 1 commit 8 + Phase A commits 12-14); the legacy
+ * `repl_state_*` forwarders were removed in Phase A commit 14.
+ * Search + autocomplete view accessors moved to editor_state.h
  * (Phase 1 commit 7). Use editor_state_search / _autocomplete. */
-
-ReplCameraState        repl_state_camera(void);
-ReplCameraState        repl_state_camera_snapshot(void);
-
-ReplPointerState         repl_state_pointer(void);
-
-ReplViewportState       repl_state_viewport(void);
 
 ReplPresentationState repl_state_presentation(void);
 const float *repl_state_grid_major_steps(void);

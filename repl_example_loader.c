@@ -8,6 +8,14 @@
 #include "repl_examples.h"
 #include "repl_state.h"
 
+/* Camera lives on UiState; repl_*.c is not allowed to include
+ * ui_state.h per check-controller-boundaries. Example loading
+ * applies an explicit camera pose when a `// camera` block precedes
+ * the example body. */
+void ui_state_camera_set_orbit(float rx, float ry);
+void ui_state_camera_set_pan(float tx, float ty, float tz);
+void ui_state_camera_set_distance(float dist);
+
 static const char *example_cam_skip_ws(const char *text) {
     while (*text && isspace((unsigned char)*text))
         text++;
@@ -114,9 +122,9 @@ static int try_apply_example_camera_header(const char *const *lines) {
         !example_cam_parse_translate(lines[4], &tx, &ty, &tz))
         return 0;
 
-    repl_state_camera_set_orbit(rx, ry);
-    repl_state_camera_set_distance(-dist_z);
-    repl_state_camera_set_pan(-tx, -ty, -tz);
+    ui_state_camera_set_orbit(rx, ry);
+    ui_state_camera_set_distance(-dist_z);
+    ui_state_camera_set_pan(-tx, -ty, -tz);
     return 1;
 }
 

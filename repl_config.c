@@ -3,6 +3,14 @@
 #include "repl_audio.h"
 #include "repl_state.h"
 
+/* Camera, variable_panel, profile_panel slices live on UiState.
+ * repl_*.c is not allowed to include ui_state.h per
+ * check-controller-boundaries, so the relevant accessors are
+ * forward-declared inline. */
+ReplCameraState        *ui_state_camera_mut(void);
+ReplVariablePanelState *ui_state_variable_panel_mut(void);
+ReplProfilePanelState  *ui_state_profile_panel_mut(void);
+
 static int clamp_int(int v, int lo, int hi) {
     if (v < lo) return lo;
     if (v > hi) return hi;
@@ -41,14 +49,14 @@ static int *config_value_ptr(ReplConfigKey key) {
     case REPL_CONFIG_LIGHT_INDICATORS:    return &repl_state_presentation_mut()->show_light_indicators;
     case REPL_CONFIG_POLY_HIGHLIGHT:      return &repl_state_presentation_mut()->highlight_current_poly;
     case REPL_CONFIG_BACKDROP:            return &repl_state_presentation_mut()->backdrop_mode;
-    case REPL_CONFIG_CAMERA_ROTATE:       return &repl_state_camera_mut()->auto_rotate;
+    case REPL_CONFIG_CAMERA_ROTATE:       return &ui_state_camera_mut()->auto_rotate;
     case REPL_CONFIG_AUTO_NORMALS:        return &repl_state_presentation_mut()->autonormal;
     case REPL_CONFIG_VERTEX_LABELS:       return &repl_state_presentation_mut()->show_vertex_labels;
     case REPL_CONFIG_NORMAL_VECTORS:      return &repl_state_presentation_mut()->show_normal_vectors;
     case REPL_CONFIG_VERTEX_OUTLINES:     return &repl_state_presentation_mut()->show_vertex_outlines;
     case REPL_CONFIG_VERTEX_POINTS:       return &repl_state_presentation_mut()->show_vertex_points;
-    case REPL_CONFIG_VARIABLE_PANEL:      return &repl_state_variable_panel_mut()->visible;
-    case REPL_CONFIG_CPU_PROFILE:         return &repl_state_profile_panel_mut()->mode;
+    case REPL_CONFIG_VARIABLE_PANEL:      return &ui_state_variable_panel_mut()->visible;
+    case REPL_CONFIG_CPU_PROFILE:         return &ui_state_profile_panel_mut()->mode;
     case REPL_CONFIG_CODE_PANEL_LAYOUT:   return &repl_state_presentation_mut()->code_panel_layout;
     case REPL_CONFIG_WRAP_AT_COMMA:       return &repl_state_presentation_mut()->wrap_at_comma;
     case REPL_CONFIG_AUDIO_MODE:          return NULL; /* audio module owns this one */

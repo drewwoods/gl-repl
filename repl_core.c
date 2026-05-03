@@ -93,8 +93,14 @@ static void get_for_var_name_from_text(const char *text, char *var, int var_sz);
 /* Utility                                                                    */
 /* ========================================================================= */
 
+/* ui_state_status_set is forward-declared here because repl_*.c is not
+ * allowed to include ui_state.h per check-controller-boundaries.
+ * Status is UiState chrome; the call lives on the legacy set_status()
+ * facade until the diagnostic relay reshape lands. */
+void ui_state_status_set(const char *message);
+
 void set_status(const char *msg) {
-    repl_state_status_set(msg);
+    ui_state_status_set(msg);
 }
 
 const char *mode_name(GLenum mode) {
