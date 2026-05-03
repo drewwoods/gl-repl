@@ -829,8 +829,8 @@ which would risk capturing post-state.
 | 24 | refactor: introduce `EditorServices` table (compile / apply_repl_change / apply_predef_ops / context — not a generic callback bag); `imrepl_ctrl` wires services. Behaviour-preserving indirection only | pending |
 | 25 | refactor: carve `editor_commit.c` shell with `editor_commit_current_input` returning `EditorCommitResult` (explicit `*_valid` flags, not empty-string sentinels). Undo capture moves into the orchestration AFTER successful compile + preflight, BEFORE first mutation. Migrated handlers (float-decl, var-assign) stop calling `set_status` on compile failure — diagnostic flows through `EditorCommitResult.diagnostic` | pending |
 | 26a | refactor: carve `editor_input.c` shell with `editor_handle_key/mouse/scroll`. Move keyboard / mouse / scroll handlers that don't need structured-commit migration. Route `;`-key / Enter / `feed_line` through `editor_commit_current_input` for the already-migrated simple commit paths. Structured `try_commit_*` stay in place. `repl_editor.c` becomes a transitional shim | pending |
-| 26b | refactor: grow `ReplCompiledChange` with editor side-effect fields (cursor target, insert-mode toggle, input-clear flag, pending-newline). Migrate `try_commit_close_brace` first — simplest cursor / mode model — to prove the shape | pending |
-| 26c | refactor: migrate `try_commit_if_block` to compile/apply | pending |
+| 26b | refactor: introduce `EditorCommitPostEffects` + `EditorCommitPlan` (editor-side, NOT on `ReplCompiledChange`); migrate `try_commit_close_brace` first — simplest cursor / mode model — to prove the shape | pending |
+| 26c | refactor: migrate `try_commit_if_block` to compile/apply through `EditorCommitPlan` | pending |
 | 26d | refactor: migrate `try_commit_func_def` to compile/apply (handles leading-comment relocation; potentially the largest single migration) | pending |
 | 26e | refactor: migrate `try_commit_for_loop` to compile/apply (one-liner-body branch + inline body parse) | pending |
 | 27 | checks: promote `check-imrepl-not-editor-mirror` to hard guard. Verify `imrepl_ctrl` calls only coarse `editor_handle_*` APIs (no per-field editor wrappers). Real `UiHit.kind` dispatch deferred to Phase E once the type exists | pending |
@@ -960,6 +960,61 @@ the same shape.
   `apply_predef_ops`, `context`) — the editor half of the apply
   stays inside the editor. The `EditorCommitResult` uses explicit
   `*_valid` flags rather than empty-string sentinels.
+- **Editor side-effects do NOT live on `ReplCompiledChange`.**
+  Structured-block migrations need cursor / insert-mode / input-
+  clear / pending-newline / func-decl-resume side-effects
+  applied as part of the commit transaction, but those are
+  editor behaviour. Putting them on `ReplCompiledChange` would
+  let the REPL pipeline tests learn cursor mechanics and re-mix
+  the split Phase C just enforced. Phase D commit 26b introduces
+  a sibling editor-side struct:
+
+  ```text
+  typedef struct {
+      int cursor_target;             /* desired edit_line; -1 = no change */
+      int insert_mode_target;        /* -1 / 0 / 1 */
+      int clear_input;               /* drop g_input + reset cursor_pos */
+      int clear_pending_newline;
+      int load_line_after_apply;     /* call load_line_to_input(cursor_target) */
+      int func_decl_resume_advance;  /* delta to add to edit_line via apply_func_decl_resume */
+      int end_type;                  /* CmdType label for status / resume */
+  } EditorCommitPostEffects;
+
+  typedef struct {
+      ReplCompiledChange      change;
+      EditorCommitPostEffects effects;
+      char                    commit_message[REPL_STATUS_TEXT_MAX];
+      int                     commit_message_valid;
+  } EditorCommitPlan;
+  ```
+
+  The apply path becomes:
+  - `editor_commit_apply_plan(plan)` — preflights `plan->change`,
+    captures undo, applies the REPL change halves, then applies
+    `plan->effects` (cursor / mode / input / load_line / func-decl-
+    resume).
+  - Pure-REPL handlers (float-decl, var-assign) keep returning
+    `ReplCompiledChange` — they have no editor post-effects beyond
+    "clear input + reset cursor" which the existing
+    `editor_commit_current_input` covers.
+  - Structured-block handlers (close_brace, if_block, func_def,
+    for_loop) return `EditorCommitPlan`. Their compile functions
+    live in editor_commit.c (or a sibling `editor_compile_*` file)
+    because the post-effects are editor-owned.
+
+  The invariant the rule preserves:
+
+  ```text
+  repl_compile_*  → ReplCompiledChange     (source-command level only)
+  editor_compile_* → EditorCommitPlan      (REPL change + editor effects)
+  apply path applies both sides in one transaction after preflight.
+  ```
+
+- **`g_func_decl_resume_delta` becomes editor post-effect data.**
+  Today the global is a hidden coupling between compile-time
+  reading and apply-time consuming. Phase D commit 26d folds it
+  into `EditorCommitPostEffects.func_decl_resume_advance` so the
+  apply path owns clearing it.
 - **Undo capture ordering.** Inside the editor commit
   orchestration the undo snapshot fires AFTER successful compile
   + preflight but BEFORE the first mutation. Tying it to
