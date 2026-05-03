@@ -8,6 +8,7 @@
 #include "repl_state.h"
 #include "repl_core_internal.h"
 #include "repl_command_spec.h"
+#include "editor_completion.h"
 static const FuncCompletion *g_ac_func_matches[MAX_AC_MATCHES];
 
 typedef enum {
@@ -351,4 +352,25 @@ void accept_autocomplete(void) {
     g_ac_mode = AC_MODE_NONE;
     g_ac_token_len = 0;
     g_ac_suffix[0] = '\0';
+}
+
+/* --- EditorCompletionProvider hookup ---
+ *
+ * Phase G commit 36. Editor input dispatch invokes
+ * editor_completion_update / _update_selected_preview / _clear; we
+ * register the existing repl_autocomplete entry points here so the
+ * editor stays decoupled from REPL grammar specifics. */
+
+static void repl_autocomplete_provider_clear(void) {
+    clear_autocomplete_state();
+}
+
+static const EditorCompletionProvider g_repl_autocomplete_provider = {
+    .update                  = update_autocomplete,
+    .update_selected_preview = update_selected_autocomplete_preview,
+    .clear                   = repl_autocomplete_provider_clear,
+};
+
+void repl_autocomplete_register_provider(void) {
+    editor_completion_register(&g_repl_autocomplete_provider);
 }

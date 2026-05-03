@@ -189,6 +189,9 @@ void repl_dump_code_panel_visual_text(FILE *out, EditorBufferView text);
 void update_selected_autocomplete_preview(void);
 void update_autocomplete(void);
 void accept_autocomplete(void);
+/* Register repl_autocomplete as the EditorCompletionProvider. Called
+ * once at startup before the editor processes input. */
+void repl_autocomplete_register_provider(void);
 
 /* ---- Source-scope helpers --------------------------------------------- */
 
