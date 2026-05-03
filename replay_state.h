@@ -33,4 +33,29 @@ void                     replay_state_reset(void);
 ReplReplayRuntimeState   replay_state_view(void);
 ReplReplayRuntimeState  *replay_state_mut(void);
 
+/* Convenience query: 1 if replay playback is currently active, 0 otherwise. */
+int  replay_active(void);
+
+/* --- Handler API ---
+ *
+ * Phase F commit 34 entry points. `imrepl_ctrl` routes
+ * UI_HIT_REPLAY_BUTTON hits through replay_handle_pin_clicked; the
+ * editor's key dispatcher forwards keystrokes via replay_handle_key /
+ * replay_handle_special. Implementations wrap the existing
+ * repl_replay_* surface in repl_replay.c.
+ */
+
+/* Toggle replay state on a Replay-pin button click: starts replay
+ * when stopped, pauses when playing, resumes when paused, restarts
+ * from the beginning when DONE. */
+void replay_handle_pin_clicked(void);
+
+/* Forward an ASCII keystroke to the replay state machine while
+ * playback is active. Returns 1 if the key was consumed, 0 otherwise. */
+int  replay_handle_key(unsigned char key);
+
+/* Forward a GLUT special key (arrows, F-keys, etc.) to replay while
+ * playback is active. Returns 1 if consumed. */
+int  replay_handle_special(int key);
+
 #endif /* REPLAY_STATE_H */

@@ -14,6 +14,7 @@
 #include "repl_config.h"
 #include "repl_editor.h"
 #include "repl_keys.h"
+#include "replay_state.h"
 #include "repl_pipeline.h"
 #include "repl_state.h"
 #include "ui_panels.h"
@@ -179,7 +180,7 @@ void repl_cfg_cycle_row(int row, int delta) {
         }
     }
 
-    if (repl_state_replay().active)
+    if (replay_active())
         repl_replay_stop();
 
     int new_value = repl_config_cycle(item->key, delta);

@@ -6,8 +6,9 @@
 #include "repl_pipeline.h"
 #include "repl_keys.h"
 #include "repl_state.h"
+#include "replay_state.h"
 
-#define REPLAY_STATE (repl_state_replay_mut())
+#define REPLAY_STATE (replay_state_mut())
 #define g_replay_active      (REPLAY_STATE->active)
 #define g_replay_state       (REPLAY_STATE->state)
 #define g_replay_pc          (REPLAY_STATE->pc)

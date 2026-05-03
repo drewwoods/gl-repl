@@ -2,6 +2,7 @@
  * replay_state.c - Replay peer subsystem ownership.
  */
 #include "replay_state.h"
+#include "repl_replay.h"
 #include "sample.h"
 
 #define REPLAY_STATE_INITIAL                              \
@@ -41,4 +42,20 @@ ReplReplayRuntimeState replay_state_view(void) {
 
 ReplReplayRuntimeState *replay_state_mut(void) {
     return &g_replay_state;
+}
+
+int replay_active(void) {
+    return g_replay_state.active;
+}
+
+void replay_handle_pin_clicked(void) {
+    repl_replay_toggle_play_pause();
+}
+
+int replay_handle_key(unsigned char key) {
+    return repl_replay_handle_key(key);
+}
+
+int replay_handle_special(int key) {
+    return repl_replay_handle_special_key(key);
 }

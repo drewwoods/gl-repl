@@ -17,6 +17,7 @@
 #include "repl_var_drag.h"
 #include "repl_layout.h"
 #include "variable_panel.h"
+#include "replay_state.h"
 #include "./include/gl_2d.h"
 
 /* Local copy of the layout-mode clamp.  Duplicated by repl_editor.c and
@@ -71,7 +72,7 @@ static float var_panel_replay_target_lift_px(void) {
 }
 
 static float var_panel_replay_lift(void) {
-    ReplReplayRuntimeState replay = repl_state_replay();
+    ReplReplayRuntimeState replay = replay_state_view();
     float target = 0.0f;
     if (replay.active)
         target = var_panel_replay_target_lift_px();
