@@ -1437,10 +1437,22 @@ static void special_begin_key(int key) {
     editor_scroll_follow_cursor_set(1);
 }
 
-static int handle_rename_special_route(int key) {
+int editor_input_rename_capture_special(int key) {
     /* Rename captures arrows and F-keys ahead of replay/search/navigation so
      * modal text entry cannot leak actions into the editor. */
     return repl_inline_rename_handle_special(key);
+}
+
+int editor_input_router_handle_help_scroll_special(int key) {
+    if (!ui_state_help().visible)
+        return 0;
+    switch (key) {
+    case GLUT_KEY_UP:        editor_help_session_scroll_by(-1); return 1;
+    case GLUT_KEY_DOWN:      editor_help_session_scroll_by(1);  return 1;
+    case GLUT_KEY_PAGE_UP:   editor_help_session_scroll_by(-5); return 1;
+    case GLUT_KEY_PAGE_DOWN: editor_help_session_scroll_by(5);  return 1;
+    default: return 0;
+    }
 }
 
 int editor_input_router_handle_replay_special(int key) {
@@ -1665,7 +1677,7 @@ static void special_func(int key, int x, int y) {
 
     special_begin_key(key);
 
-    if (handle_rename_special_route(key))   return;
+    if (editor_input_rename_capture_special(key)) return;
     if (editor_input_router_handle_replay_special(key)) return;
 
     restore_hidden_code_panel_for_special(key);
@@ -1674,6 +1686,7 @@ static void special_func(int key, int x, int y) {
     if (editor_input_router_handle_cfg_special_shortcut(key)) return;
     if (editor_input_router_handle_horizontal_audio_special(key)) return;
     if (editor_input_router_handle_help_tab_special(key)) return;
+    if (editor_input_router_handle_help_scroll_special(key)) return;
     if (handle_horizontal_special_key_route(key)) return;
     if (handle_vertical_special_key_route(key)) return;
     if (editor_input_router_handle_help_toggle_special(key)) return;
