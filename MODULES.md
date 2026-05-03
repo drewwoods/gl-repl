@@ -20,32 +20,74 @@ and [`feature/editor-owns-text-completion.md`](feature/editor-owns-text-completi
 
 ```text
 Editor = text model + controller.
-    Owns editable text, cursor, scroll, selection, search,
-    autocomplete, clipboard, undo transactions, cursor blink, and
-    the keyboard/mouse behavior for text documents. Receives raw
-    input events from imrepl_ctrl and mutates EditorState directly.
-    Has a commit path that hands proposed text to REPL and applies
-    the result as one transaction.
+    Owns text-document behavior: editable source text, read-only text documents,
+    cursor, selection, scroll, search, autocomplete state, clipboard, undo/redo,
+    cursor blink, keyboard/mouse handling for text documents, and source commit
+    orchestration.
 
-UI    = view + hit-test/render services.
-    Renders glyphs, highlights, gutters, panels, widgets. Measures
-    text. Hit-tests visual rows, characters, buttons, swatches,
-    sliders. Reports neutral UiHit results back to imrepl_ctrl. Does
-    not own state. Does not decide what an input event means.
+    The editor uses UI as its view. It exposes editor snapshots for UI to render,
+    and it consumes neutral UI hit-test results to interpret mouse/pointer input.
+    UI does not decide text behavior.
 
-REPL  = validator/compiler for committed source.
-    Pure: no editor state, no UI state, no globals. Given proposed
-    text + context, returns either a ReplCompiledChange or a
-    diagnostic. Never writes editor text. Never calls set_status.
+UI = view + hit-test/render services.
+    Provides the view for the editor and other subsystems. Draws glyphs,
+    highlights, gutters, panels, widgets. Measures text. Hit-tests visual
+    rows/chars/buttons/swatches/sliders. Returns neutral UiHit results.
+    Does not own text behavior or editor state.
 
-imrepl_ctrl = router between subsystems.
-    Receives raw GLUT events. Asks UI for a UiHit. Dispatches on
-    UiHit.kind (or current focus, for keyboard) to the owning
-    subsystem: editor for text-document hits, peer subsystems for
-    variable-panel/replay/menu hits, scene/viewport for camera
-    drags. Builds per-frame snapshots. Routes diagnostics back from
-    REPL into editor + UiState.status. Is NOT a "dispatch gate"
-    against a giant UiAction enum.
+REPL = validator/compiler for committed source.
+    Given proposed source text + context, returns ReplCompiledChange or diagnostic.
+    Does not own editor state. Does not own UI state. Does not write editor text.
+    Does not call set_status.
+
+imrepl_ctrl = thin router + frame/snapshot coordinator.
+    Receives raw GLUT events, determines focus/region, asks UI for hit-test
+    results, routes events to the owning subsystem, builds snapshots, and relays
+    diagnostics/status messages. It does not implement editor behavior and does
+    not drive the editor UI.
+```
+
+The key distinction:
+
+```text
+The editor drives text-document UI behavior.
+The editor uses UI as its view.
+imrepl_ctrl routes the event.
+UI draws, measures, and hit-tests.
+```
+
+## Editor Uses UI As Its View
+
+The editor is the model/controller for text documents. UI is the view
+layer the editor uses to present that model and to map pixels back to
+document positions.
+
+```text
+EditorState
+  -> editor_build_view_snapshot(...)
+  -> UI renders text, highlights, cursor, gutters, overlays, popup geometry
+
+Mouse/pointer input
+  -> UI hit-tests visual geometry and returns UiHit
+  -> imrepl_ctrl routes the event + UiHit to the editor
+  -> editor interprets the hit in terms of text-document behavior
+```
+
+UI can know about rectangles, rows, columns, glyph bounds, swatches,
+and panel regions. UI should not know that Ctrl+G means search, that
+Tab accepts an autocomplete candidate, that scrolling should follow
+the cursor, or that a source-line edit requires a REPL commit. Those
+are editor decisions.
+
+The editor should not render glyphs or duplicate hit-test math. It
+asks UI for view services. But UI should not own editor state or
+editor policy.
+
+```text
+Editor model/controller:  what the text document is and how editing behaves
+UI view:                  how that document appears and where the user clicked
+imrepl_ctrl router:       which subsystem receives this event
+REPL compiler:             whether committed source text is valid
 ```
 
 Consequences:
@@ -359,8 +401,11 @@ flowchart LR
 
     sample["sample.c<br/>GLUT callback wiring · buffer swap"]
 
-    subgraph pipeline["1. REPL command pipeline (compiler)"]
-        ctrl["imrepl_ctrl.c<br/>raw input router · snapshot builder<br/>(NOT a UiAction dispatch gate)"]
+    subgraph app["0. App router"]
+        ctrl["imrepl_ctrl.c<br/>raw input router · frame/snapshot coordinator<br/>does NOT drive editor behavior"]
+    end
+
+    subgraph repl_pipeline["1. REPL compiler/program pipeline"]
         compile["repl_compile.c<br/>pure validation → ReplCompiledChange"]
         parser["repl_parser.c<br/>line parser"]
         scope["repl_source_scope.c<br/>depth · indent · context"]
@@ -372,6 +417,7 @@ flowchart LR
     subgraph editor["2. Editor (text model + controller)"]
         einput["editor_input.c<br/>text-doc controller<br/>(cursor / scroll / select / search)"]
         ecommit["editor_commit.c<br/>compile + undo + buffer + apply"]
+        eview["editor_view_snapshot.c<br/>builds editor view snapshot<br/>(editor uses UI as its view)"]
         ebuf["editor_buffer.c<br/>line text · only writer"]
         edoc["editor_document.c<br/>input · cursor · edit line"]
         eundo["editor_undo.c<br/>transaction snapshots"]
@@ -452,6 +498,7 @@ flowchart LR
     einput e3@==> esearch
     einput e4@==> eac
     einput e5@==> eclip
+    einput e9@==> eview
 
     %% Editor commit transaction is the only path crossing into REPL.
     einput i12@--> ecommit
@@ -459,6 +506,16 @@ flowchart LR
     ecommit e6@==> eundo
     ecommit e7@==> ebuf
     ecommit e8@==> store
+
+    %% Editor uses UI as its view: the editor view snapshot feeds UI
+    %% renderers. UI does not own editor state; it draws what the
+    %% editor publishes.
+    eview -.-> uipanels
+    eview -.-> uiac
+    eview -.-> uicolor
+
+    %% Controller invokes the editor view-snapshot build per frame.
+    ctrl i32@--> eview
 
     %% Clipboard cut/paste is a commit (rewrites text + cmds).
     eclip i14@--> ecommit
@@ -524,8 +581,8 @@ flowchart LR
     classDef animateE stroke:#f50,stroke-dasharray: 9\,5,stroke-dashoffset: 900,animation: dash 90s linear infinite;
     classDef animateF stroke:#5f0,stroke-dasharray: 9\,5,stroke-dashoffset: 900,animation: dash 90s linear infinite;
 
-    class e1,e2,e3,e4,e5,e6,e7,e8 animateE
-    class i2,i3,i4,i5,i6,i7,i8,i9,i10,i11,i12,i13,i14,i15,i16,i17,i18,i19,i20,i21,i22,i23,i24,i25,i26,i27,i28,i29,i30,i31 animateF
+    class e1,e2,e3,e4,e5,e6,e7,e8,e9 animateE
+    class i2,i3,i4,i5,i6,i7,i8,i9,i10,i11,i12,i13,i14,i15,i16,i17,i18,i19,i20,i21,i22,i23,i24,i25,i26,i27,i28,i29,i30,i31,i32 animateF
 ```
 
 Reading the diagram:
@@ -579,6 +636,13 @@ check-ui-returns-hits-only             (Phase 4 — replaces the planned
     directly. They compute a UiHit and return it. The corrected
     contract has imrepl_ctrl dispatch on UiHit.kind to the owning
     subsystem; UI does not own dispatch.
+
+check-imrepl-not-editor-mirror         (Phase 4)
+    imrepl_ctrl must not accumulate one wrapper per editor operation.
+    New editor behavior belongs behind editor_handle_* or editor_*
+    APIs. imrepl_ctrl routes raw input to the owning subsystem and
+    builds frame snapshots; it does not implement editor behavior or
+    duplicate the editor's API surface.
 
 check-editor-ownership-budget          (landed commit 11)
     Ratchets the transitional ui-forwarder line count in repl_state.c
