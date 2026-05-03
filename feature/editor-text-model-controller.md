@@ -1,5 +1,12 @@
 # Plan: Editor as Text Model/Controller
 
+> **Status: landed.** The corrected M/V/C+compiler+router contract
+> defined here was implemented across Phases A–I of
+> [`editor-owns-text-completion.md`](editor-owns-text-completion.md).
+> Hit-tests return passive `UiHit` results; `imrepl_ctrl` routes;
+> editor / peer subsystems / scene each own their behavior; REPL
+> compile + apply are pure. Hard guards lock the contract in.
+
 ## Purpose
 
 This document supersedes the broad Phase 4 `UiAction` direction in

@@ -1,5 +1,11 @@
 # Plan: Editor Ownership Gap Audit and Cleanup Companion
 
+> **Status: landed.** Phases A–I of the companion plan
+> [`editor-owns-text-completion.md`](editor-owns-text-completion.md)
+> closed the audit. The audits this document specifies are now
+> hard guards or ratchet-driven baselines under
+> `make check-state-ownership`.
+
 ## Purpose
 
 This document is an implementation companion to

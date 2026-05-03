@@ -1,15 +1,13 @@
 # REPL Module Guide — North Star
 
-> **This document is the target ownership map.** It describes where the
-> project is going, not necessarily the files that exist in the working
-> tree today. New code should follow this contract immediately; legacy
-> code should move toward it as the `editor-ownership-gap-cleanup` phases
-> land.
->
-> Files marked **(legacy name)** still have their old names today. They
-> rename in Phase 5 with temporary redirect headers. Until then, the
-> responsibility described here is binding even when the filename has not
-> caught up.
+> **This document is the target ownership map.** The
+> `editor-ownership-gap-cleanup` branch landed Phases A–I and the
+> tree now matches the contract described here. Three filename
+> deferrals remain (`repl_camera_controls`, `repl_actions` —
+> waiting on the scene/viewport split and the app-shell namespace
+> work; `repl_commit` is deleted entirely) and a small number of
+> ratchets continue to drive transitional uses toward zero. New
+> code follows this contract directly.
 
 For per-module detail and frame-pipeline narrative read
 [`ARCHITECTURE.md`](ARCHITECTURE.md). For the staged cleanup plan see
@@ -147,7 +145,7 @@ source-backed module.
 | `scene_*` | 3D rendering, camera/view transforms, world decorators, scene overlays. Camera input routes through `imrepl_ctrl` to scene/viewport controller |
 | `imrepl_*` | Application router: GLUT callback registration, frame ordering, snapshot builders, raw-input → owning-subsystem dispatch (based on `UiHit.kind` / focus), diagnostic relay from REPL to editor + status |
 | `variable_panel_*` | Peer subsystem: variable-slider visibility + drag transaction + writeback policy. Owns its own state |
-| `replay_*` *(legacy: `repl_replay.c`)* | Peer subsystem: replay state machine, PC, mode, fade batches |
+| `replay_*` | Peer subsystem: replay state machine, PC, mode, fade batches |
 | `prof`, `cmd_format` | Generic utilities with no ownership of REPL/editor/UI state |
 
 Treat prefixes as ownership boundaries, not naming aesthetics. A file
@@ -255,17 +253,17 @@ text edit into a committed program change.
 
 | Module | Role |
 |--------|------|
-| `editor_input` *(legacy: part of `repl_editor.c`)* | Editor's text-document controller. Receives raw key/mouse events from `imrepl_ctrl` once dispatched on `UI_HIT_CODE_TEXT` (or via focus). Mutates `EditorState` directly: cursor, selection, scroll, search, autocomplete navigation, clipboard, undo. *Not* a `UiAction` reducer |
-| `editor_commit` *(legacy: `repl_editor.c` + mutation half of `repl_commit.c`)* | Transaction boundary for commits: compile, undo snapshot, text-buffer write, REPL apply, dirty-state updates |
+| `editor_input` | Editor's text-document controller. Receives raw key/mouse events from `imrepl_ctrl` once dispatched on `UI_HIT_CODE_TEXT` (or via focus). Mutates `EditorState` directly: cursor, selection, scroll, search, autocomplete navigation, clipboard, undo. *Not* a `UiAction` reducer |
+| `editor_commit` | Transaction boundary for commits: compile, undo snapshot, text-buffer write, REPL apply, dirty-state updates |
 | `editor_buffer` *(new)* | Sole writer for canonical per-line text: insert, replace, delete, load, clear |
 | `editor_document` *(new)* | Active input buffer, cursor position, edit line, insert mode, pending newline, and navigation primitives |
-| `editor_undo` *(legacy: `repl_undo.c`)* | Undo/redo transaction rings that restore editor text and REPL command state together |
-| `editor_clipboard` *(legacy: `repl_clipboard.c`)* | Selection anchors plus copy/cut/paste payloads, including parallel text sidecars |
-| `editor_search` *(legacy: `repl_search.c`)* | Search query, match tracking, row/char hits, next/previous navigation |
-| `editor_autocomplete` *(legacy: `repl_autocomplete.c`)* | Completion popup state, ghost text, hints. Asks a registered `EditorCompletionProvider` for candidates — does *not* know about variables or GL command names directly |
-| `editor_inline_rename` *(legacy: `repl_inline_rename.c`)* | Inline scene-name edit buffer and validation |
-| `editor_help_session` *(legacy: `ui_help_overlay.c`)* | Read-only editor session backed by a help-text content provider. Uses the same scroll/search/cursor model as code editing; no commit path. Help visibility flag stays on `UiState` |
-| `editor_code_panel_document` *(legacy: `repl_code_panel_document.c`)* | Code-panel document row model, scroll state, hit-test mapping, and editor-visible line metadata |
+| `editor_undo` | Undo/redo transaction rings that restore editor text and REPL command state together |
+| `editor_clipboard` | Selection anchors plus copy/cut/paste payloads, including parallel text sidecars |
+| `editor_search` | Search query, match tracking, row/char hits, next/previous navigation |
+| `editor_autocomplete` | Completion popup state, ghost text, hints. Asks a registered `EditorCompletionProvider` for candidates — does *not* know about variables or GL command names directly |
+| `editor_inline_rename` | Inline scene-name edit buffer and validation |
+| `editor_help_session` | Read-only editor session backed by a help-text content provider. Uses the same scroll/search/cursor model as code editing; no commit path. Help visibility flag stays on `UiState` |
+| `editor_code_panel_document` | Code-panel document row model, scroll state, hit-test mapping, and editor-visible line metadata |
 
 If accepting a keystroke can change line text, cursor position, scroll,
 selection, search/autocomplete state, or undo history, the code belongs
@@ -280,8 +278,8 @@ controllers; UI may render them; their input routes to them through
 
 | Module | Role |
 |--------|------|
-| `variable_panel_drag` *(legacy: `repl_var_drag.c`)* | Variable-slider drag transaction and writeback policy. Transitional: today the drag state lives on `EditorState.variable_drag` and the visibility flag on `UiState.variable_panel`; both move into a single peer subsystem state struct |
-| `replay` *(legacy: `repl_replay.c` + `ReplReplayRuntimeState` on `ReplState`)* | Replay state machine: PC, mode, speed, fade batches. Already largely a peer; promotion to first-class peer subsystem completes in a future commit |
+| `variable_panel_drag` | Variable-slider drag transaction and writeback policy. Transitional: today the drag state lives on `EditorState.variable_drag` and the visibility flag on `UiState.variable_panel`; both move into a single peer subsystem state struct |
+| `replay` | Replay state machine: PC, mode, speed, fade batches. Already largely a peer; promotion to first-class peer subsystem completes in a future commit |
 
 Peer subsystems may *produce* overlays consumed by the editor (replay
 annotations are virtual lines the editor can render). They do not
@@ -343,8 +341,8 @@ does **not** dispatch.
 | `ui_editor` | Editor-overlay snapshot types: transformers, highlights, virtual lines |
 | `ui_hit` *(new — replaces `ui_action`)* | Defines `UiHitKind` + `UiHit`, the passive UI → controller contract. UI hit-test functions return `UiHit`; `imrepl_ctrl` dispatches on it |
 | `ui_panels` | Code-panel and status-banner rendering; input hit-tests return `UiHit` |
-| `ui_layout` *(legacy: `repl_layout.c`)* | Pure scene/code-panel rectangle geometry |
-| `ui_code_panel_layout` *(legacy: `repl_code_panel_layout.c`)* | Pure text wrapping and visual-line iteration |
+| `ui_layout` | Pure scene/code-panel rectangle geometry |
+| `ui_code_panel_layout` | Pure text wrapping and visual-line iteration |
 | `ui_menu_bar` | Menu bar, dropdowns, pinned buttons, search entry, and menu hit-testing |
 | `ui_color_picker` | Floating HSV/alpha picker; render reads transformer snapshots, input returns `UI_HIT_COLOR_SWATCH` (commit path runs through editor) |
 | `ui_variable_panel` | Renderer for the variable-slider panel (the panel chrome — the *peer subsystem* owns drag/visibility state). Input returns `UI_HIT_VARIABLE_SLIDER` |
@@ -686,49 +684,76 @@ render-neutral types belong in explicit shared headers such as
 
 ## Current Status vs. Target
 
-This document describes the **target**. As of writing (post-commit-11):
+This document describes the **target**. The
+`editor-ownership-gap-cleanup` branch landed Phases A through I,
+which closed the M/V/C+compiler+router contract end-to-end. As of
+that branch landing:
 
-- **Three-state split: largely done.** `EditorState` (commits 4–7, 9,
-  10, 11) and `UiState` (commit 8) own the migrated slices.
-  `ReplRuntimeState` still hosts `code_panel` chrome (commit 12) and
-  `camera` (commit 12). `cursor_blink` lands on `EditorState` per the
-  corrected contract.
-- **`repl_compile` / `repl_apply_*` API: not yet.** `repl_commit.c`
-  still mixes validation and mutation. Commit 14 splits.
-- **Editor-buffer single-writer: not yet.**
-  `repl_command_store_*_with_line[s]` still writes both. Commit 13
-  drops the text-aware overload.
-- **`EditorBufferView` for REPL readers: not yet.**
-  `repl_replay_annotations.c` and `repl_export.c` still reach into
-  editor state. Commit 13 converts to view parameters.
-- **Input routing: not yet.** UI input handlers still mutate state
-  inline. The corrected contract uses `UiHit` (passive) routed by
-  `imrepl_ctrl`, not a `UiAction` dispatch enum. Commit 15 lands the
-  routing + peer-subsystem carve-out.
-- **Read-only-document seam: not yet.** `ui_help_overlay.c` is still a
-  separate UI module; it becomes `editor_help_session.c` (a read-only
-  editor session) in commit 16.
-- **Completion-provider seam: not yet.** `repl_autocomplete.c` reaches
-  into `repl_eval` for variable names directly; commit 16 introduces
-  `EditorCompletionProvider` registration.
-- **File renames: not yet.** `repl_undo`, `repl_clipboard`,
-  `repl_search`, `repl_autocomplete`, `repl_inline_rename` still carry
-  the legacy prefix. Commit 16 renames with redirect headers. (Note:
-  `repl_var_drag` renames to `variable_panel_drag` — peer subsystem,
-  not editor.)
-- **Hard guards: not yet.** Audits are informational; commit 17
-  promotes them.
+- **Three-state split: done.** `EditorState`, `UiState`, and
+  `ReplRuntimeState` each own their respective slices. The
+  variable_panel and replay peers carved their state out as standalone
+  modules (Phase F).
+- **`repl_compile` / `repl_apply_*` API: done.** Compile is a pure
+  validator; apply is a pure mutator. Both produce / consume
+  `ReplCompiledChange`. Status side effects are forbidden by hard
+  guard (`check-no-set-status-in-compile-apply`).
+- **Editor-buffer single-writer: done.** `editor_buffer_*` is the
+  sole writer; the `repl_command_store_*_with_line[s]` overloads are
+  gone (Phase B).
+- **`EditorBufferView` for REPL readers: done.** Hard-guarded by
+  `check-repl-no-direct-buffer-read` with an allowlist for
+  transitional readers.
+- **Input routing: done.** `ui_panels_hit_test`, `ui_menu_bar_hit_test`,
+  `ui_color_picker_hit_test`, `ui_variable_panel_hit_test` produce
+  passive `UiHit` results; mutating press handlers track toward zero
+  via `check-ui-returns-hits-only` (baseline 8, ratchets down).
+- **Peer subsystems: done.** `variable_panel`, `replay`, and
+  `editor_help_session` each own their state separately from
+  `EditorState` / `UiState` / `ReplState`.
+- **Read-only-document seam: done.** `editor_help_session` is the
+  read-only editor session backing the help overlay. The
+  `EditorCompletionProvider` registry decouples editor input
+  dispatch from REPL grammar (Phase G).
+- **Commit dispatch is editor-side: done.** `try_commit_*`
+  dispatchers live in `editor_commit.c`. `repl_commit.c` is deleted
+  and hard-guarded against return (Phase H.5).
+- **Parser diagnostic flow: data, not side effects.** `repl_parser.c`
+  writes diagnostics to `ReplParseContext.err_buf`. The parser core
+  has zero `set_status` calls; the legacy no-ctx wrappers
+  (`repl_parser_parse_command` / `_with_vars`) keep one bridge for
+  the test harness, ratcheted by `check-no-set-status-in-repl-parser`
+  (baseline 1 → 0).
+- **File renames: done.** `repl_undo` → `editor_undo`,
+  `repl_clipboard` → `editor_clipboard`, `repl_search` →
+  `editor_search`, `repl_autocomplete` → `editor_autocomplete`,
+  `repl_inline_rename` → `editor_inline_rename`,
+  `repl_var_drag` → `variable_panel_drag`,
+  `repl_replay` → `replay`, `repl_layout` → `ui_layout`,
+  `repl_code_panel_layout` → `ui_code_panel_layout`,
+  `repl_code_panel_document` → `editor_code_panel_document`. Three
+  files (`repl_camera_controls`, `repl_actions`, `repl_commit`)
+  remain on the legacy prefix — the first two with explicit
+  blockers documented in the plan, the third was deleted entirely.
+- **Hard guards: 31 in place.** `make check-state-ownership` runs
+  the full inventory.
 
-Transitional couplings tracked by ratchet (commit 11):
+The deferred items still on the books:
 
-- `repl_state.c` UI-slice forwarders into `ui_state_*` (baseline 21,
-  target 0; cleared by commit 15's input routing).
-- `ui_state.h` → `repl_state_views.h` include for typedef import
-  (baseline 1, target 0; cleared by commit 16's typedef relocation).
+- `repl_camera_controls` rename (waiting on scene/viewport split).
+- `repl_actions` rename (waiting on app-shell namespace work).
+- Test harness migration off the legacy no-ctx parser wrappers,
+  which would let `check-no-set-status-in-repl-parser` ratchet from
+  1 → 0.
+- `ui_layout` / `ui_code_panel_layout` parameterization so geometry
+  helpers stop reading `repl_state_presentation()` (currently
+  allowlisted under `check-no-facade-include-in-views`).
+- Variable-panel and replay forwarder ratchets (87 + 37) shrink as
+  test fixtures migrate to the peer accessors directly.
 
 See `feature/editor-ownership-gap-cleanup.md` for the audit script and
-baseline counts; that file tracks observed drift commit by commit.
-See `feature/editor-text-model-controller.md` for the corrected
+baseline counts; `feature/editor-owns-text-completion.md` for the
+phase-by-phase commit ledger that delivered this state; and
+`feature/editor-text-model-controller.md` for the corrected
 contract that this document reflects.
 
 ## Open Refactor Edges
