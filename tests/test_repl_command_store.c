@@ -165,7 +165,7 @@ static void test_repl_command_store_insert_one(void) {
                repl_command_store_insert_one(&store, 0, NULL, 0), 0);
 }
 
-static void test_repl_command_store_insert_one_with_line(void) {
+static void test_repl_command_store_insert_one_with_explicit_line(void) {
     repl_reset_state();
 
     ReplCommandStore store = repl_command_store_live();
@@ -262,7 +262,7 @@ static void test_repl_command_store_replace_one(void) {
                repl_command_store_replace_one(&store, 1, &cmd1), 0);
 }
 
-static void test_repl_command_store_replace_one_with_line(void) {
+static void test_repl_command_store_replace_one_with_explicit_line(void) {
     repl_reset_state();
 
     ReplCommandStore store = repl_command_store_live();
@@ -344,7 +344,7 @@ static void test_repl_command_store_load(void) {
                repl_command_store_load(NULL, cmds, 1, 0), 0);
 }
 
-static void test_repl_command_store_load_with_lines(void) {
+static void test_repl_command_store_load_with_explicit_lines(void) {
     repl_reset_state();
 
     ReplCommandStore store = repl_command_store_live();
@@ -442,14 +442,14 @@ int main(void) {
     test_repl_command_store_first_non_decl();
     test_repl_command_store_normalize_range();
     test_repl_command_store_insert_one();
-    test_repl_command_store_insert_one_with_line();
+    test_repl_command_store_insert_one_with_explicit_line();
     test_repl_command_store_insert_many();
     test_repl_command_store_insert_with_edit_line_adjustment();
     test_repl_command_store_replace_one();
-    test_repl_command_store_replace_one_with_line();
+    test_repl_command_store_replace_one_with_explicit_line();
     test_repl_command_store_delete_range();
     test_repl_command_store_load();
-    test_repl_command_store_load_with_lines();
+    test_repl_command_store_load_with_explicit_lines();
     test_repl_command_store_clear();
     test_repl_command_store_delete_from_middle();
     test_repl_command_store_insert_at_end();
