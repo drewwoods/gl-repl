@@ -1,12 +1,24 @@
 /*
- * repl_var_drag.c -- Variable slider drag state and value writeback.
+ * repl_var_drag.c -- Variable slider drag-state implementation
+ *                    (peer-owned by variable_panel).
+ *
+ * Status: implementation-behind-variable_panel.
  *
  * Phase F commit 31 moved the drag-state bytes into the variable_panel
  * peer module (variable_panel.c). This file is now the implementation
  * behind the peer's variable_panel_handle_drag_* surface — it reads /
  * writes via variable_panel_drag_mut() and supplies the value-mapping
- * logic (linear / log scaling, source-line rewrite). External callers
- * should use variable_panel_handle_* instead of these symbols.
+ * logic (linear / log scaling, source-line rewrite).
+ *
+ * External callers must use variable_panel_handle_* / variable_panel_drag_*.
+ * The legacy repl_var_drag_* names are preserved so the existing
+ * imrepl_ctrl-routed callers keep compiling, and the drag value-writeback
+ * still reaches REPL state directly (g_predef_vars, document_cmds_mut,
+ * editor_buffer_set_line, mark_flat_dirty). That cross-subsystem
+ * writeback is the remaining transitional debt: it should move into
+ * an explicit "set predef variable" peer/editor API in a follow-up
+ * commit so this file can rename to variable_panel_drag.c without
+ * dragging REPL writes with it.
  *
  * Linear drag: 1 pixel = 0.05 units.
  * Log drag:    200 pixels = one decade (x10 / ÷10), sign preserved.
