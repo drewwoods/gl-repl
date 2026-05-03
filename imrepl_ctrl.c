@@ -557,8 +557,52 @@ void imrepl_ctrl_set_accum(int enabled) {
     repl_state_render_mut()->use_accum = enabled ? 1 : 0;
 }
 
+/* Phase J1 commit 47a — keyboard router pre-dispatch.
+ *
+ * Order is load-bearing:
+ *   1. Rename modal capture FIRST. Inline rename is a hard modal: backtick,
+ *      Ctrl+G, Ctrl+S, every other route helper must miss while rename is
+ *      open or keystrokes leak out of the rename buffer.
+ *   2. Controller-owned routes (config menu, replay forwarding, cfg
+ *      shortcuts, replay toggle, accum samples, save / debug-dump / quit).
+ *   3. Fall through to the editor for text-model concerns + remaining
+ *      shortcuts that haven't been peeled out yet.
+ *
+ * Each branch wraps its own reset / take cycle so effects accumulated by
+ * router helpers (cursor, redraw, timer) flow back through
+ * imrepl_ctrl_apply_input_effects the same way editor_handle_key delivers
+ * them today. */
+static int imrepl_ctrl_keyboard_router_dispatch(unsigned char key) {
+    if (editor_input_router_handle_config_menu_key(key)) return 1;
+    if (editor_input_router_handle_active_replay_key(key)) return 1;
+    if (editor_input_router_handle_cfg_shortcut_key(key)) return 1;
+    if (editor_input_router_handle_replay_toggle_key(key)) return 1;
+    if (editor_input_router_handle_accum_samples_key(key)) return 1;
+    if (editor_input_router_handle_save_key(key)) return 1;
+    if (editor_input_router_handle_debug_dump_key(key)) return 1;
+    if (editor_input_router_handle_quit_key(key)) return 1;
+    return 0;
+}
+
 void imrepl_ctrl_keyboard(unsigned char key, int x, int y) {
+    /* Rename capture: hard modal. */
+    if (editor_input_rename_capture_key(key)) {
+        editor_reset_input_effects();
+        imrepl_ctrl_apply_input_effects(editor_take_input_effects());
+        return;
+    }
+
+    /* Controller-owned routes. */
+    editor_reset_input_effects();
+    if (imrepl_ctrl_keyboard_router_dispatch(key)) {
+        imrepl_ctrl_apply_input_effects(editor_take_input_effects());
+        return;
+    }
+
+    /* Editor-side dispatch handles its own reset+take. */
     imrepl_ctrl_apply_input_effects(editor_handle_key(key, x, y));
+    (void)x;
+    (void)y;
 }
 
 void imrepl_ctrl_special(int key, int x, int y) {
