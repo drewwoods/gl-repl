@@ -2,6 +2,7 @@
 
 #include <gl_includes.h>
 
+#include "editor_input.h"
 #include "repl_core.h"
 #include "repl_executor.h"
 #include "repl_eval.h"
@@ -536,23 +537,23 @@ void imrepl_ctrl_set_accum(int enabled) {
 }
 
 void imrepl_ctrl_keyboard(unsigned char key, int x, int y) {
-    imrepl_ctrl_apply_input_effects(repl_keyboard_func(key, x, y));
+    imrepl_ctrl_apply_input_effects(editor_handle_key(key, x, y));
 }
 
 void imrepl_ctrl_special(int key, int x, int y) {
-    imrepl_ctrl_apply_input_effects(repl_special_func(key, x, y));
+    imrepl_ctrl_apply_input_effects(editor_handle_special(key, x, y));
 }
 
 void imrepl_ctrl_mouse(int button, int state, int x, int y) {
-    imrepl_ctrl_apply_input_effects(repl_mouse_func(button, state, x, y));
+    imrepl_ctrl_apply_input_effects(editor_handle_mouse(button, state, x, y));
 }
 
 void imrepl_ctrl_motion(int x, int y) {
-    imrepl_ctrl_apply_input_effects(repl_motion_func(x, y));
+    imrepl_ctrl_apply_input_effects(editor_handle_motion(x, y));
 }
 
 void imrepl_ctrl_passive_motion(int x, int y) {
-    imrepl_ctrl_apply_input_effects(repl_passive_motion_func(x, y));
+    imrepl_ctrl_apply_input_effects(editor_handle_passive_motion(x, y));
 }
 
 void imrepl_ctrl_mousewheel(int wheel, int direction, int x, int y) {
