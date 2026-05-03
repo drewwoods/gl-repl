@@ -326,6 +326,185 @@ static void test_ui_panels_hit_test(void) {
     ui_state_help_mut()->visible = 0;
 }
 
+/* Phase E commit 29: hit-test entry points for ui_menu_bar,
+ * ui_color_picker, ui_variable_panel return passive UiHit
+ * classifications without mutating state. ui_panels_hit_test
+ * dispatches to them in priority order. */
+static void test_ui_menu_bar_hit_test(void) {
+    repl_reset_state();
+    ui_state_viewport_set_size(800, 600);
+    repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT;
+    ui_state_code_panel_mut()->panel_frac = 0.5f;
+
+    /* Outside menu bar entirely (well below it). */
+    UiHit h_none = ui_menu_bar_hit_test(20, 400);
+    ASSERT_TRUE("menu bar miss -> NONE", h_none.kind == UI_HIT_NONE);
+
+    /* Top-level menu button (File at left edge, my within bar). */
+    ui_menu_bar_close();
+    UiHit h_menu = ui_menu_bar_hit_test(20, 10);
+    ASSERT_TRUE("menu top-level hit kind",
+                h_menu.kind == UI_HIT_MENU_ITEM);
+    ASSERT_TRUE("menu top-level item_idx is menu_id",
+                h_menu.item_idx >= 0 && h_menu.item_idx < 3);
+
+    /* Pin button (right side, mx near right edge). */
+    UiHit h_pin = ui_menu_bar_hit_test(380, 10);
+    ASSERT_TRUE("pin hit kind", h_pin.kind == UI_HIT_PIN_BUTTON);
+    ASSERT_TRUE("pin item_idx populated", h_pin.item_idx >= 0);
+
+    /* Open a menu, then a click on a dropdown row should report
+     * UI_HIT_MENU_ITEM with item_idx = row. The disambiguator from
+     * top-level vs row is ui_menu_bar_open_menu_id() != -1. */
+    ui_menu_bar_set_open_menu(0); /* File menu */
+    UiHit h_row = ui_menu_bar_hit_test(20, 100);
+    ASSERT_TRUE("dropdown row hit kind",
+                h_row.kind == UI_HIT_MENU_ITEM);
+    ASSERT_TRUE("dropdown row item_idx populated", h_row.item_idx >= 0);
+    ASSERT_TRUE("open menu disambiguates row",
+                ui_menu_bar_open_menu_id() == 0);
+    ui_menu_bar_close();
+}
+
+static void test_ui_color_picker_hit_test(void) {
+    repl_reset_state();
+    ui_state_viewport_set_size(800, 600);
+
+    /* No picker active -> miss. */
+    UiHit h_closed = ui_color_picker_hit_test(400, 300);
+    ASSERT_TRUE("closed picker -> NONE", h_closed.kind == UI_HIT_NONE);
+
+    /* Open a picker on a color command. The picker positions itself
+     * relative to the code-panel rect, so probe the actual rect by
+     * sweeping mx / my for the click coordinate that hits SV (region 1). */
+    repl_state_document_count_set(1);
+    repl_state_document_cmds_mut()[0].type = CMD_COLOR3F;
+    repl_state_document_cmds_mut()[0].args[0] = 1.0f;
+    repl_state_document_cmds_mut()[0].args[1] = 0.0f;
+    repl_state_document_cmds_mut()[0].args[2] = 0.0f;
+    repl_state_document_cmds_mut()[0].valid = 1;
+    repl_state_document_cmds_mut()[0].has_vars = 0;
+    ui_color_picker_open(0, 300);
+
+    int win_h = ui_state_viewport().window_h;
+    int sv_mx = -1, sv_my = -1;
+    int hue_mx = -1, hue_my = -1;
+    for (int my = 0; my < win_h; my += 4) {
+        for (int mx = 0; mx < ui_state_viewport().window_w; mx += 4) {
+            UiHit h = ui_color_picker_hit_test(mx, my);
+            if (h.kind == UI_HIT_COLOR_SWATCH && h.item_idx == 1 && sv_mx < 0) {
+                sv_mx = mx; sv_my = my;
+            }
+            if (h.kind == UI_HIT_COLOR_SWATCH && h.item_idx == 2 && hue_mx < 0) {
+                hue_mx = mx; hue_my = my;
+            }
+        }
+    }
+    ASSERT_TRUE("SV rect probed", sv_mx >= 0);
+    ASSERT_TRUE("hue rect probed", hue_mx >= 0);
+
+    UiHit h_sv = ui_color_picker_hit_test(sv_mx, sv_my);
+    ASSERT_TRUE("SV hit kind", h_sv.kind == UI_HIT_COLOR_SWATCH);
+    ASSERT_TRUE("SV cmd_idx is 0", h_sv.cmd_idx == 0);
+    ASSERT_TRUE("SV item_idx is 1", h_sv.item_idx == 1);
+
+    UiHit h_hue = ui_color_picker_hit_test(hue_mx, hue_my);
+    ASSERT_TRUE("hue hit kind", h_hue.kind == UI_HIT_COLOR_SWATCH);
+    ASSERT_TRUE("hue item_idx is 2", h_hue.item_idx == 2);
+
+    /* Click far outside picker -> NONE. */
+    UiHit h_miss = ui_color_picker_hit_test(0, 0);
+    ASSERT_TRUE("picker miss -> NONE", h_miss.kind == UI_HIT_NONE);
+    ui_color_picker_close();
+}
+
+static void test_ui_variable_panel_hit_test(void) {
+    repl_reset_state();
+    ui_state_viewport_set_size(800, 600);
+
+    /* Panel hidden -> always miss. */
+    ui_state_variable_panel_mut()->visible = 0;
+    UiHit h_off = ui_variable_panel_hit_test(700, 100);
+    ASSERT_TRUE("hidden panel -> NONE", h_off.kind == UI_HIT_NONE);
+
+    /* Visible panel with one declared variable. */
+    ui_state_variable_panel_mut()->visible = 1;
+    g_num_predef_vars = 1;
+    strcpy(g_predef_vars[0].name, "x");
+    g_predef_vars[0].value = 1.0f;
+
+    int px, py, pw, ph;
+    ui_variable_panel_rect(&px, &py, &pw, &ph);
+    int my = ui_state_viewport().window_h - (py + 10);
+
+    UiHit h_row = ui_variable_panel_hit_test(px + 10, my);
+    ASSERT_TRUE("row hit kind", h_row.kind == UI_HIT_VARIABLE_SLIDER);
+    ASSERT_TRUE("row item_idx populated",
+                h_row.item_idx >= 0 && h_row.item_idx < g_num_predef_vars);
+
+    /* Click outside the panel rect -> NONE. */
+    UiHit h_out = ui_variable_panel_hit_test(0, 0);
+    ASSERT_TRUE("outside panel -> NONE", h_out.kind == UI_HIT_NONE);
+}
+
+/* Verify ui_panels_hit_test routes to the floating-overlay
+ * hit-testers in priority order before falling through to the
+ * code panel and scene. */
+static void test_ui_panels_hit_test_dispatch(void) {
+    repl_reset_state();
+    ui_state_viewport_set_size(800, 600);
+    repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT;
+    ui_state_code_panel_mut()->panel_frac = 0.5f;
+
+    /* Variable panel should win over the scene-region fallback when
+     * a click lands on its rect. */
+    ui_state_variable_panel_mut()->visible = 1;
+    g_num_predef_vars = 1;
+    strcpy(g_predef_vars[0].name, "x");
+    g_predef_vars[0].value = 1.0f;
+    int px, py, pw, ph;
+    ui_variable_panel_rect(&px, &py, &pw, &ph);
+    int my_var = ui_state_viewport().window_h - (py + 10);
+    UiHit h_var = ui_panels_hit_test(px + 10, my_var);
+    ASSERT_TRUE("var panel routed via panels_hit_test",
+                h_var.kind == UI_HIT_VARIABLE_SLIDER);
+    ui_state_variable_panel_mut()->visible = 0;
+
+    /* Menu pin button click should resolve as UI_HIT_PIN_BUTTON. */
+    ui_menu_bar_close();
+    UiHit h_pin = ui_panels_hit_test(380, 10);
+    ASSERT_TRUE("pin routed via panels_hit_test",
+                h_pin.kind == UI_HIT_PIN_BUTTON);
+
+    /* Color picker, when open, beats menu / variable / code panel.
+     * Probe for an SV-rect coordinate so we don't depend on the
+     * picker's internal placement math. */
+    repl_state_document_count_set(1);
+    repl_state_document_cmds_mut()[0].type = CMD_COLOR3F;
+    repl_state_document_cmds_mut()[0].args[0] = 1.0f;
+    repl_state_document_cmds_mut()[0].args[1] = 0.0f;
+    repl_state_document_cmds_mut()[0].args[2] = 0.0f;
+    repl_state_document_cmds_mut()[0].valid = 1;
+    repl_state_document_cmds_mut()[0].has_vars = 0;
+    ui_color_picker_open(0, 300);
+
+    int sv_mx = -1, sv_my = -1;
+    for (int my = 0; my < ui_state_viewport().window_h && sv_mx < 0; my += 4) {
+        for (int mx = 0; mx < ui_state_viewport().window_w; mx += 4) {
+            UiHit h = ui_color_picker_hit_test(mx, my);
+            if (h.kind == UI_HIT_COLOR_SWATCH && h.item_idx == 1) {
+                sv_mx = mx; sv_my = my;
+                break;
+            }
+        }
+    }
+    ASSERT_TRUE("dispatch SV rect probed", sv_mx >= 0);
+    UiHit h_pick = ui_panels_hit_test(sv_mx, sv_my);
+    ASSERT_TRUE("picker routed via panels_hit_test",
+                h_pick.kind == UI_HIT_COLOR_SWATCH);
+    ui_color_picker_close();
+}
+
 int main(void) {
 #ifndef OPENGL_VIBE_USE_GL_STUBS
     printf("This test requires GL stubs (USE_GL_STUBS=1)\n");
@@ -341,6 +520,10 @@ int main(void) {
     test_variable_panel();
     test_menu_bar();
     test_ui_panels_hit_test();
+    test_ui_menu_bar_hit_test();
+    test_ui_color_picker_hit_test();
+    test_ui_variable_panel_hit_test();
+    test_ui_panels_hit_test_dispatch();
 
     printf("\nUI Tests: %d/%d passed\n", g_harness.passed, g_harness.run);
     return (g_harness.passed == g_harness.run) ? 0 : 1;

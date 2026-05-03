@@ -34,6 +34,7 @@
 #ifndef UI_VARIABLE_PANEL_H
 #define UI_VARIABLE_PANEL_H
 
+#include "ui_hit.h"
 #include "ui_snapshot.h"
 
 /* Render the variable panel with all declared variables and current values.
@@ -54,5 +55,13 @@ void ui_variable_panel_rect(int *px, int *py, int *pw, int *ph);
  * clicks; repl_editor.c then calls repl_var_drag_begin() with the row index
  * to start dragging. */
 int  ui_variable_panel_hit(int gx, int gy, int *out_row);
+
+/* Pure hit-test: classify (mx, my) as a UiHit for the variable panel.
+ *
+ * Phase E commit 29 entry. Returns UI_HIT_VARIABLE_SLIDER if the pointer
+ * lands on a slider row; item_idx carries the row index. Returns UI_HIT_NONE
+ * if the panel is hidden or the pointer is outside it. Reads layout / state
+ * only; never mutates. */
+UiHit ui_variable_panel_hit_test(int mx, int my);
 
 #endif /* UI_VARIABLE_PANEL_H */

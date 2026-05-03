@@ -32,6 +32,7 @@
 #ifndef UI_MENU_BAR_H
 #define UI_MENU_BAR_H
 
+#include "ui_hit.h"
 #include "ui_snapshot.h"
 
 /* Pinned button identifiers (right side of menu bar). Search and Replay
@@ -97,6 +98,25 @@ int  ui_menu_bar_pin_hit(int mx, int my);
  * menu item was clicked, -1 if not. mx, my are window coordinates. Called by
  * ui_panels.c on left-click while a dropdown is open. */
 int  ui_menu_bar_dropdown_item_hit(int mx, int my);
+
+/* Pure hit-test: classify (mx, my) as a UiHit for menu-bar-related regions.
+ *
+ * Phase E commit 29 entry. Reports the menu-bar slice of the hit-test in
+ * priority order: open dropdown row > top-level menu button > pin button.
+ * The result kind is one of:
+ *   UI_HIT_MENU_ITEM   — top-level menu button or open-dropdown row.
+ *                        item_idx carries the menu_id (top-level button)
+ *                        OR the dropdown row index (when a dropdown is
+ *                        already open). The router can disambiguate via
+ *                        ui_menu_bar_open_menu_id() — when -1 the hit is
+ *                        a top-level button, otherwise it is a dropdown
+ *                        row inside that menu.
+ *   UI_HIT_PIN_BUTTON  — pinned right-side button (Search/Replay).
+ *                        item_idx carries the pin id.
+ *   UI_HIT_NONE        — pointer is outside every menu-bar region.
+ *
+ * Reads layout / state only; never mutates. */
+UiHit ui_menu_bar_hit_test(int mx, int my);
 
 /* Activate a dropdown item by index (from dropdown_item_hit). Dispatches the
  * action through repl_actions.c for side effects (file I/O, config toggle,

@@ -341,6 +341,47 @@ int ui_menu_bar_dropdown_item_hit(int gx, int gy) {
     return row;
 }
 
+UiHit ui_menu_bar_hit_test(int mx, int my) {
+    UiHit h = ui_hit_none();
+    int win_h = ui_state_viewport().window_h;
+    if (win_h <= 0) return h;
+    int gl_y = win_h - my;
+
+    /* Open dropdown row beats every other menu region. */
+    if (g_open_menu >= 0) {
+        int row = ui_menu_bar_dropdown_item_hit(mx, my);
+        if (row >= 0) {
+            h.kind = UI_HIT_MENU_ITEM;
+            h.item_idx = row;
+            h.local_x = (float)mx;
+            h.local_y = (float)gl_y;
+            return h;
+        }
+    }
+
+    /* Top-level menu button (File / Scene / Config). */
+    int menu = ui_menu_bar_menu_hit(mx, my);
+    if (menu >= 0) {
+        h.kind = UI_HIT_MENU_ITEM;
+        h.item_idx = menu;
+        h.local_x = (float)mx;
+        h.local_y = (float)gl_y;
+        return h;
+    }
+
+    /* Pin button (Search / Replay). */
+    int pin = ui_menu_bar_pin_hit(mx, my);
+    if (pin >= 0) {
+        h.kind = UI_HIT_PIN_BUTTON;
+        h.item_idx = pin;
+        h.local_x = (float)mx;
+        h.local_y = (float)gl_y;
+        return h;
+    }
+
+    return h;
+}
+
 
 static int ui_menu_bar_panel_visible(void) {
     int cp_w, cp_h;
