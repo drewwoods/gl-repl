@@ -1065,10 +1065,58 @@ int ui_panels_handle_right_press(int mx, int my) {
     return ui_menu_bar_handle_config_right_press(mx, my);
 }
 
+/* Divider geometry for the code-panel ↔ scene splitter. Mirrors the
+ * legacy editor_input_point_on_code_panel_divider so the hit-test
+ * stays self-contained — no UI input file needs to know about
+ * editor_input.c's predicate. */
+static int ui_panels_point_on_panel_divider(int mx, int gl_y,
+                                            int cp_x, int cp_y,
+                                            int cp_w, int cp_h) {
+    int layout = (int)repl_state_presentation().code_panel_layout;
+    if (layout < 0 || layout >= CODE_PANEL_LAYOUT_COUNT)
+        layout = CODE_PANEL_LAYOUT_LEFT;
+    if (layout == CODE_PANEL_LAYOUT_HIDDEN)
+        return 0;
+    if (cp_w <= 0 || cp_h <= 0)
+        return 0;
+    if (layout == CODE_PANEL_LAYOUT_TOP)
+        return abs(gl_y - cp_y) < 10;
+    if (layout == CODE_PANEL_LAYOUT_BOTTOM)
+        return abs(gl_y - (cp_y + cp_h)) < 10;
+    return abs(mx - (cp_x + cp_w)) < 10;
+}
+
+/* Translate a code-panel click on a wrapped row into a position in
+ * the input buffer. Mirrors ui_panels_handle_code_panel_click's column
+ * derivation so the controller doesn't have to reimplement wrap /
+ * indent / segment math. */
+static int ui_panels_input_cursor_for_click(int mx, int row_offset,
+                                            int cp_w) {
+    int linenum_w = 4 * FONT_W;
+    int idx_col_w = repl_state_presentation().show_vertex_indices ? (6 * FONT_W) : 0;
+    int text_x = CODE_MARGIN_X + linenum_w + FONT_W + idx_col_w;
+    int indent_chars = repl_code_panel_document_active_indent_chars();
+    int seg_start = editor_state_input().input_len;
+    int seg_len = 0;
+    int seg_x = text_x + indent_chars * FONT_W;
+
+    repl_code_panel_document_segment_for_row(editor_state_input().input,
+                                             seg_x, cp_w, row_offset,
+                                             &seg_start, &seg_len, &seg_x);
+
+    int col = (mx - seg_x + FONT_W / 2) / FONT_W;
+    if (col < 0) col = 0;
+    if (col > seg_len) col = seg_len;
+    int new_cursor = seg_start + col;
+    int input_len = editor_state_input().input_len;
+    if (new_cursor > input_len) new_cursor = input_len;
+    return new_cursor;
+}
+
 /* Pure hit-test: classify (mx, my) as a UiHit. Reads layout / state
- * snapshots; never mutates. Phase E commit 28 entry; commit 29 routes
- * floating overlays (color picker, menu dropdown, menu/pin buttons,
- * variable panel) before falling through to code panel and scene. */
+ * snapshots; never mutates. The controller dispatches on
+ * UiHit.kind and uses the per-kind payload (line_idx, char_idx,
+ * cmd_idx, item_idx) without consulting any UI module's state. */
 UiHit ui_panels_hit_test(int mx, int my) {
     UiHit h = ui_hit_none();
 
@@ -1112,6 +1160,16 @@ UiHit ui_panels_hit_test(int mx, int my) {
     int cp_x, cp_y, cp_w, cp_h;
     repl_layout_code_panel_rect(&cp_x, &cp_y, &cp_w, &cp_h);
 
+    /* Panel divider drag handle has priority over the code-panel
+     * interior so dragging the divider doesn't accidentally hit a
+     * code-text row at the panel edge. */
+    if (ui_panels_point_on_panel_divider(mx, gl_y, cp_x, cp_y, cp_w, cp_h)) {
+        h.kind = UI_HIT_PANEL_DIVIDER;
+        h.local_x = (float)mx;
+        h.local_y = (float)gl_y;
+        return h;
+    }
+
     if (cp_w > 0 && cp_h > 0 &&
         mx >= cp_x && mx < cp_x + cp_w &&
         gl_y >= cp_y && gl_y < cp_y + cp_h) {
@@ -1120,12 +1178,7 @@ UiHit ui_panels_hit_test(int mx, int my) {
          * | gap (FONT_W) | optional idx col | text. */
         int linenum_w = 4 * FONT_W;
         int gutter_right = cp_x + CODE_MARGIN_X + linenum_w;
-
-        if (mx < gutter_right) {
-            h.kind = UI_HIT_CODE_GUTTER;
-        } else {
-            h.kind = UI_HIT_CODE_TEXT;
-        }
+        int in_gutter = (mx < gutter_right);
 
         /* Best-effort line / row mapping. Mirrors code_panel_hit_test
          * but failure-tolerant — we always return a hit kind even
@@ -1136,6 +1189,7 @@ UiHit ui_panels_hit_test(int mx, int my) {
         int panel_top = cp_y + cp_h;
         int line_y_start = panel_top - CODE_MARGIN_Y - 2 * LINE_H;
         int vis = (line_y_start + LINE_H - 3 - gl_y) / LINE_H;
+        int row_resolved = 0;
         if (vis >= 0 &&
             vis < repl_code_panel_document_visible_lines_for_height(cp_h)) {
             int idx_col_w = repl_state_presentation().show_vertex_indices ? (6 * FONT_W) : 0;
@@ -1147,13 +1201,53 @@ UiHit ui_panels_hit_test(int mx, int my) {
                                                              &target,
                                                              &on_insert_line,
                                                              &row_offset)) {
-                h.line_idx   = target;
-                h.visual_row = row_offset;
-                (void)on_insert_line;
+                row_resolved = 1;
             }
         }
         h.local_x = (float)(mx - cp_x);
         h.local_y = (float)(gl_y - cp_y);
+
+        /* Inline color swatch on the right edge of a committed
+         * source row (row_offset == 0, not the insert line). The
+         * controller opens / toggles / closes the picker on this hit
+         * kind, distinct from UI_HIT_COLOR_SWATCH which represents
+         * the floating picker's slider controls. */
+        if (!in_gutter && row_resolved && !on_insert_line && row_offset == 0 &&
+            target >= 0 &&
+            find_color_transformer(editor_state_transformers(), target)) {
+            int sx = cp_x + cp_w - CODE_MARGIN_X - UI_COLOR_SWATCH_W - 2;
+            if (mx >= sx && mx < sx + UI_COLOR_SWATCH_W) {
+                h.kind = UI_HIT_INLINE_COLOR_SWATCH;
+                h.line_idx = target;
+                h.cmd_idx = target;
+                h.visual_row = row_offset;
+                return h;
+            }
+        }
+
+        if (in_gutter) {
+            h.kind = UI_HIT_CODE_GUTTER;
+            if (row_resolved) {
+                h.line_idx = target;
+                h.visual_row = row_offset;
+            }
+            return h;
+        }
+
+        /* Code-text row: split insert-line vs committed-line. The
+         * insert line is the row past the last commit; clicks there
+         * set the cursor without navigating. The line_idx surfaced
+         * for UI_HIT_CODE_INSERT_LINE is the current edit_line so
+         * the controller's drag-anchor bookkeeping has a stable
+         * reference even when the insert row is virtual. */
+        if (row_resolved) {
+            h.kind = on_insert_line ? UI_HIT_CODE_INSERT_LINE : UI_HIT_CODE_TEXT;
+            h.line_idx = on_insert_line ? repl_state_edit_line() : target;
+            h.visual_row = row_offset;
+            h.char_idx = ui_panels_input_cursor_for_click(mx, row_offset, cp_w);
+        } else {
+            h.kind = UI_HIT_CODE_TEXT;
+        }
         return h;
     }
 

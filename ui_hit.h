@@ -27,19 +27,66 @@
 #define UI_HIT_H
 
 typedef enum {
-    UI_HIT_NONE = 0,         /* outside any UI region */
-    UI_HIT_CODE_TEXT,        /* code-panel text area (editable rows) */
-    UI_HIT_CODE_GUTTER,      /* code-panel left margin / line numbers */
-    UI_HIT_COLOR_SWATCH,     /* color literal swatch in the editor */
-    UI_HIT_MENU_ITEM,        /* menu bar dropdown item */
-    UI_HIT_PIN_BUTTON,       /* pinned right-side button (search / replay) */
-    UI_HIT_VARIABLE_SLIDER,  /* variable panel slider row */
-    UI_HIT_REPLAY_BUTTON,    /* replay HUD play/pause/step button */
-    UI_HIT_HELP_PANEL,       /* help overlay (read-only editor session) */
-    UI_HIT_PANEL_DIVIDER,    /* draggable code-panel ↔ scene divider */
-    UI_HIT_SCENE,            /* 3D viewport (scene/camera region) */
+    UI_HIT_NONE = 0,             /* outside any UI region */
+    UI_HIT_CODE_TEXT,            /* committed code-panel text row */
+    UI_HIT_CODE_INSERT_LINE,     /* code-panel "next line" past last commit */
+    UI_HIT_CODE_GUTTER,          /* code-panel left margin / line numbers */
+    UI_HIT_INLINE_COLOR_SWATCH,  /* inline color swatch drawn in a code-panel row */
+    UI_HIT_COLOR_SWATCH,         /* floating color picker slider control */
+    UI_HIT_MENU_BUTTON,          /* top-level menu-bar button (open / switch / dismiss) */
+    UI_HIT_MENU_ITEM,            /* open menu dropdown row */
+    UI_HIT_PIN_BUTTON,           /* pinned right-side button (search / replay) */
+    UI_HIT_VARIABLE_SLIDER,      /* variable panel slider row */
+    UI_HIT_REPLAY_BUTTON,        /* replay HUD play/pause/step button */
+    UI_HIT_HELP_PANEL,           /* help overlay (read-only editor session) */
+    UI_HIT_PANEL_DIVIDER,        /* draggable code-panel ↔ scene divider */
+    UI_HIT_SCENE,                /* 3D viewport (scene/camera region) */
 } UiHitKind;
 
+/* Per-kind field semantics. The struct shape is a flat union of optional
+ * fields; each composer fills only what its kind requires.
+ *
+ *   UI_HIT_CODE_TEXT
+ *     line_idx = committed source-cmd row the click landed on
+ *     char_idx = input-cursor target (column within input buffer)
+ *     visual_row = wrap-row offset within line_idx
+ *
+ *   UI_HIT_CODE_INSERT_LINE
+ *     line_idx = current edit_line (the row appended commands land on)
+ *     char_idx = input-cursor target
+ *     visual_row = wrap-row offset
+ *
+ *   UI_HIT_CODE_GUTTER
+ *     line_idx = committed source-cmd row
+ *     visual_row = wrap-row offset
+ *
+ *   UI_HIT_PANEL_DIVIDER  — coordinates only, no line / row payload
+ *
+ *   UI_HIT_INLINE_COLOR_SWATCH
+ *     line_idx = source-cmd row (the swatch's row)
+ *     cmd_idx  = same as line_idx (kept for callers that prefer it)
+ *
+ *   UI_HIT_COLOR_SWATCH (floating picker control)
+ *     line_idx = active picker source-cmd row
+ *     cmd_idx  = same
+ *     item_idx = picker region (1=SV, 2=hue, 3=alpha)
+ *
+ *   UI_HIT_MENU_BUTTON
+ *     cmd_idx  = menu_id
+ *
+ *   UI_HIT_MENU_ITEM
+ *     cmd_idx  = menu_id (the menu the dropdown belongs to)
+ *     item_idx = dropdown row index
+ *
+ *   UI_HIT_PIN_BUTTON
+ *     item_idx = pin id (REPL_MENU_BAR_PIN_REPLAY / _SEARCH)
+ *
+ *   UI_HIT_VARIABLE_SLIDER
+ *     cmd_idx  = predef-var slot
+ *     item_idx = row index
+ *
+ *   UI_HIT_SCENE / UI_HIT_HELP_PANEL — coordinates only.
+ */
 typedef struct {
     UiHitKind kind;
 
