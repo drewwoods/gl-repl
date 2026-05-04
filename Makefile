@@ -5,6 +5,13 @@ GL_STUB_INCLUDE := $(abspath tests/gl-stubs/include)
 TEST_DIR := tests
 BENCH_DIR := bench
 
+# Color codes for output
+RED := \033[0;31m
+GREEN := \033[0;32m
+YELLOW := \033[0;33m
+CYAN := \033[0;36m
+NC := \033[0m  # No Color
+
 UNAME_S := $(shell uname -s)
 
 ifeq ($(USE_GL_STUBS),1)
@@ -232,19 +239,19 @@ $(TEST_BINS) $(BENCH_BINS): %: $$($$@_OBJS)
 
 # Layering boundary enforcement ------------------------------------------
 check-gl-boundaries: ## Verify GL/GLUT calls are isolated to allowed files.
-	@echo "Checking GL/GLU drawing calls isolation..."
-	@! grep -nE '\b(gl[A-Z]|glu[A-Z])[A-Za-z0-9]*[[:space:]]*\(' $(REPL_SRCS) | grep -v '^repl_executor\.c:' | grep -vE '^([^:]+:)?[0-9]+:[[:space:]]*(/\*|\*|//)' | grep -vE '"' || (echo "ERROR: GL/GLU calls found outside repl_executor.c" && exit 1)
-	@echo "Checking GL/GLU calls in sample.h..."
-	@! grep -nE '\b(gl[A-Z]|glu[A-Z])[A-Za-z0-9]*[[:space:]]*\(' sample.h | grep -vE '^([^:]+:)?[0-9]+:[[:space:]]*(/\*|\*|//)' | grep -vE '"' || (echo "ERROR: GL/GLU calls found in sample.h" && exit 1)
-	@echo "Checking GLUT input/feedback calls isolation..."
-	@! grep -nE '\bglut[A-Z][A-Za-z0-9]*[[:space:]]*\(' $(REPL_SRCS) | grep -vE '^repl_executor\.c:' | grep -vE '^([^:]+:)?[0-9]+:[[:space:]]*(/\*|\*|//)' | grep -vE '"' || (echo "ERROR: GLUT calls found outside repl_executor.c" && exit 1)
-	@echo "GL/GLUT boundaries OK"
+	@echo "    Checking GL/GLU drawing calls isolation..."
+	@! grep -nE '\b(gl[A-Z]|glu[A-Z])[A-Za-z0-9]*[[:space:]]*\(' $(REPL_SRCS) | grep -v '^repl_executor\.c:' | grep -vE '^([^:]+:)?[0-9]+:[[:space:]]*(/\*|\*|//)' | grep -vE '"' || (echo "    $(RED)ERROR: GL/GLU calls found outside repl_executor.c$(NC)" && exit 1)
+	@echo "    Checking GL/GLU calls in sample.h..."
+	@! grep -nE '\b(gl[A-Z]|glu[A-Z])[A-Za-z0-9]*[[:space:]]*\(' sample.h | grep -vE '^([^:]+:)?[0-9]+:[[:space:]]*(/\*|\*|//)' | grep -vE '"' || (echo "    $(RED)ERROR: GL/GLU calls found in sample.h$(NC)" && exit 1)
+	@echo "    Checking GLUT input/feedback calls isolation..."
+	@! grep -nE '\bglut[A-Z][A-Za-z0-9]*[[:space:]]*\(' $(REPL_SRCS) | grep -vE '^repl_executor\.c:' | grep -vE '^([^:]+:)?[0-9]+:[[:space:]]*(/\*|\*|//)' | grep -vE '"' || (echo "    $(RED)ERROR: GLUT calls found outside repl_executor.c$(NC)" && exit 1)
+	@echo "    GL/GLUT boundaries $(GREEN)OK$(NC)"
 
 check-layer-coupling: ## Verify UI and scene layers don't include each other's headers.
-	@echo "Checking UI/scene layer coupling..."
-	@! grep -nE '#include\s+"scene_' $(UI_SRCS) $(UI_HDRS) || (echo "ERROR: UI files must not include scene headers" && exit 1)
-	@! grep -nE '#include\s+"ui_' $(SCENE_SRCS) $(SCENE_HDRS) || (echo "ERROR: scene files must not include UI headers" && exit 1)
-	@echo "Layer coupling OK"
+	@echo "    Checking UI/scene layer coupling..."
+	@! grep -nE '#include\s+"scene_' $(UI_SRCS) $(UI_HDRS) || (echo "    $(RED)ERROR: UI files must not include scene headers$(NC)" && exit 1)
+	@! grep -nE '#include\s+"ui_' $(SCENE_SRCS) $(SCENE_HDRS) || (echo "    $(RED)ERROR: scene files must not include UI headers$(NC)" && exit 1)
+	@echo "    Layer coupling $(GREEN)OK$(NC)"
 
 
 check-controller-boundaries: ## Verify controller owns the scene/UI wiring boundary.
@@ -252,79 +259,79 @@ check-controller-boundaries: ## Verify controller owns the scene/UI wiring bound
 	@bad=$$(grep -lE '#[[:space:]]*include[[:space:]]+"scene_' $(REPL_SRCS) imrepl_ctrl.c \
 		| grep -v '^imrepl_ctrl\.c$$' || true); \
 	if [ -n "$$bad" ]; then \
-		echo "ERROR: scene headers included outside imrepl_ctrl.c:"; \
+		echo "$(RED)ERROR: scene headers included outside imrepl_ctrl.c:$(NC)"; \
 		echo "$$bad"; exit 1; \
 	fi
 	@bad=$$(grep -lE '#[[:space:]]*include[[:space:]]+"ui_' $(REPL_SRCS) imrepl_ctrl.c \
 		| grep -vE '^(imrepl_ctrl|repl_(actions|editor|export))\.c$$' || true); \
 	if [ -n "$$bad" ]; then \
-		echo "ERROR: new ui headers included outside approved exceptions:"; \
+		echo "$(RED)ERROR: new ui headers included outside approved exceptions:$(NC)"; \
 		echo "$$bad"; exit 1; \
 	fi
-	@echo "Controller boundaries OK"
+	@echo "Controller boundaries $(GREEN)OK$(NC)"
 
 check-scene-no-repl-state-mut: ## Verify scene code does not mutate REPL state directly.
 	@echo "Checking scene renderers do not mutate REPL state..."
 	@bad=$$(grep -nE 'repl_state_[A-Za-z0-9_]*_mut[[:space:]]*\(' $(SCENE_SRCS) || true); \
 	if [ -n "$$bad" ]; then \
-		echo "ERROR: scene files mutate REPL state:"; \
+		echo "$(RED)ERROR: scene files mutate REPL state:$(NC)"; \
 		echo "$$bad"; exit 1; \
 	fi
-	@echo "Scene mutation boundary OK"
+	@echo "Scene mutation boundary $(GREEN)OK$(NC)"
 
 check-pure-scene-no-repl-state: ## Verify scene files do not reach into REPL state/replay APIs.
 	@echo "Checking scene files do not reach into REPL state/replay APIs..."
 	@bad=$$(grep -nE 'repl_(state|replay)_' $(SCENE_SRCS) || true); \
 	if [ -n "$$bad" ]; then \
-		echo "ERROR: scene files reach into REPL state/replay APIs:"; \
+		echo "$(RED)ERROR: scene files reach into REPL state/replay APIs:$(NC)"; \
 		echo "$$bad"; exit 1; \
 	fi
-	@echo "Pure-scene boundary OK"
+	@echo "Pure-scene boundary $(GREEN)OK$(NC)"
 
 check-state-boundaries: ## Verify REPL state facade usage stays in owned modules.
 	@echo "Checking state facade boundaries..."
 	@bad=$$(grep -lE '#[[:space:]]*include[[:space:]]+"repl_state\.h"' $(SCENE_SRCS) $(STATE_NEUTRAL_SRCS) 2>/dev/null || true); \
 	if [ -n "$$bad" ]; then \
-		echo "ERROR: scene or state-neutral files include repl_state.h:"; \
+		echo "$(RED)ERROR: scene or state-neutral files include repl_state.h:$(NC)"; \
 		echo "$$bad"; exit 1; \
 	fi
 	@bad=$$(grep -lE '#[[:space:]]*include[[:space:]]+"repl_core_internal\.h"' \
 		imrepl_ctrl.c $(SCENE_SRCS) $(UI_SRCS) $(STATE_NEUTRAL_SRCS) 2>/dev/null \
 		| grep -vE '^ui_(color_picker|panels)\.c$$' || true); \
 	if [ -n "$$bad" ]; then \
-		echo "ERROR: unapproved view/utility files include repl_core_internal.h:"; \
+		echo "$(RED)ERROR: unapproved view/utility files include repl_core_internal.h:$(NC)"; \
 		echo "$$bad"; exit 1; \
 	fi
 	@bad=$$(grep -lE 'repl_state_[A-Za-z0-9_]*_mut[[:space:]]*\(' $(UI_SRCS) 2>/dev/null \
 		| grep -vE '^(ui_(color_picker|help_overlay|panels))\.c$$' || true); \
 	if [ -n "$$bad" ]; then \
-		echo "ERROR: unapproved UI files mutate REPL state directly:"; \
+		echo "$(RED)ERROR: unapproved UI files mutate REPL state directly:$(NC)"; \
 		echo "$$bad"; exit 1; \
 	fi
 	@bad=$$(grep -nE 'repl_(state|replay)_' $(SCENE_SRCS) 2>/dev/null || true); \
 	if [ -n "$$bad" ]; then \
-		echo "ERROR: scene files reach into REPL state/replay APIs:"; \
+		echo "$(RED)ERROR: scene files reach into REPL state/replay APIs:$(NC)"; \
 		echo "$$bad"; exit 1; \
 	fi
-	@echo "State facade boundaries OK"
+	@echo "State facade boundaries $(GREEN)OK$(NC)"
 
 check-views-no-owners: ## Verify scene/UI files do not include repl_state_owners.h.
 	@echo "Checking scene/UI view files do not include repl_state_owners.h..."
 	@bad=$$(grep -lE '#[[:space:]]*include[[:space:]]+"repl_state_owners\.h"' $(SCENE_SRCS) $(UI_SRCS) 2>/dev/null || true); \
 	if [ -n "$$bad" ]; then \
-		echo "ERROR: scene/UI view files include repl_state_owners.h:"; \
+		echo "$(RED)ERROR: scene/UI view files include repl_state_owners.h:$(NC)"; \
 		echo "$$bad"; exit 1; \
 	fi
-	@echo "View-file ownership boundary OK"
+	@echo "View-file ownership boundary $(GREEN)OK$(NC)"
 
 check-ui-no-repl-state-mut: ## Verify UI files do not mutate REPL state directly.
 	@echo "Checking UI files do not mutate REPL state directly..."
 	@bad=$$(grep -nE 'repl_state_[A-Za-z0-9_]*_mut[[:space:]]*\(' $(UI_SRCS) || true); \
 	if [ -n "$$bad" ]; then \
-		echo "ERROR: UI files mutate REPL state:"; \
+		echo "$(RED)ERROR: UI files mutate REPL state:$(NC)"; \
 		echo "$$bad"; exit 1; \
 	fi
-	@echo "UI mutation boundary OK"
+	@echo "UI mutation boundary $(GREEN)OK$(NC)"
 
 check-no-write-through-view: ## Verify no writes happen through pointer fields on view structs.
 	@bash scripts/check-no-write-through-view.sh scripts/allowlists/write-through-view.txt $(UI_SRCS) $(SCENE_SRCS)
@@ -369,11 +376,11 @@ check-ui-no-repl-state-read: ## Verify UI renderers consume the UiRenderSnapshot
 		| grep -v -E 'ui_(autocomplete_panel|color_picker|help_overlay|menu_bar|panels|profile_panel|variable_panel|replay_hud|layout|code_panel_layout)\.c:' \
 		|| true); \
 	if [ -n "$$bad" ]; then \
-		echo "ERROR: ui_*.c files outside the input-bridge allowlist read live repl_state_*():"; \
+		echo "$(RED)ERROR: ui_*.c files outside the input-bridge allowlist read live repl_state_*():$(NC)"; \
 		echo "$$bad"; exit 1; \
 	fi
 	@bash scripts/check-ui-renderer-signatures.sh scripts/allowlists/ui-renderers-signature.txt
-	@echo "ui-no-repl-state-read OK"
+	@echo "ui-no-repl-state-read $(GREEN)OK$(NC)"
 
 check-state-ownership: ## Run state-ownership contract checks (new + tightened existing checks).
 	@set -e; \
@@ -407,7 +414,8 @@ check-state-ownership: ## Run state-ownership contract checks (new + tightened e
 		check-no-repl-editor-input-shim \
 		check-no-set-status-in-repl-parser \
 		check-no-set-status-in-compile-apply; do \
-		$(MAKE) --no-print-directory $$target || exit $$?; \
+		printf "  $(YELLOW)▶$(NC) $$target\n"; \
+		$(MAKE) --no-print-directory $$target 2>&1 | sed 's/^/    /' | sed $$'s/ OK / \033[0;32mOK\033[0m /g; s/ OK$$/ \033[0;32mOK\033[0m/' || exit $$?; \
 	done
 
 check-public-api-usage: ## Scan public API declarations for unused functions (informational).
@@ -459,7 +467,7 @@ check: ## Run all checks.
 	@set -e; \
 	for target in $(CHECK_TARGETS); do \
 		desc=$$(awk -v target="$$target" 'BEGIN {FS = ":.*## "} $$1 == target { print $$2; exit }' $(firstword $(MAKEFILE_LIST))); \
-		printf "\n==> %s\n" "$$desc"; \
+		printf "$(CYAN)\n==> %s$(NC)\n" "$$desc"; \
 		$(MAKE) --no-print-directory $$target || exit $$?; \
 	done
 
