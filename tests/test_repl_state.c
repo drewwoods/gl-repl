@@ -1,6 +1,7 @@
 #include "repl_state.h"
 #include "editor_state.h"
 #include "ui_state.h"
+#include "ui_profile_panel.h"
 #include "variable_panel.h"
 #include "replay_state.h"
 #include "editor_help_session.h"
