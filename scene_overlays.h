@@ -66,4 +66,12 @@ void scene_overlays_render_vertex_numbers(const FrameRenderContext *frame_ctx);
  * (F7). Helps users understand surface orientation and normals computation. */
 void scene_overlays_render_normal_vectors(const FrameRenderContext *frame_ctx);
 
+/* Render semi-transparent vertex point dots at each vertex position.
+ * Points are alpha-blended so they don't obscure underlying geometry.
+ * Line-mode primitives (GL_LINES, GL_LINE_STRIP, GL_LINE_LOOP) use a smaller
+ * point radius to avoid covering the line itself. Also drives geometry and
+ * transform guides inline, so they render at the correct model-matrix position.
+ * No-ops when both show_vpoints and replay_vertex_points are false. */
+void scene_overlays_render_vertex_points(const FrameRenderContext *frame_ctx);
+
 #endif /* SCENE_OVERLAYS_H */
