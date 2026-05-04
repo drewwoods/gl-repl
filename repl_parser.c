@@ -421,8 +421,8 @@ static int parse_command(const char *line, GLCmd *cmd,
         GLenum face = 0, pname = 0;
         int found1 = 0, found2 = 0;
 
-        const EnumEntry *face_types = repl_face_type_entries();
-        const EnumEntry *material_params = repl_material_param_entries();
+        const ReplEnumEntry *face_types = repl_face_type_entries();
+        const ReplEnumEntry *material_params = repl_material_param_entries();
         for (int i = 0; face_types[i].name; i++) {
             if (strcmp(p1, face_types[i].name) == 0) { face = face_types[i].value; found1 = 1; break; }
         }
@@ -483,7 +483,7 @@ static int parse_command(const char *line, GLCmd *cmd,
 
         GLenum pname = 0;
         int found = 0;
-        const EnumEntry *point_param_pnames = repl_point_param_pname_entries();
+        const ReplEnumEntry *point_param_pnames = repl_point_param_pname_entries();
         for (int i = 0; point_param_pnames[i].name; i++) {
             if (strcmp(p1, point_param_pnames[i].name) == 0) {
                 pname = point_param_pnames[i].value;

@@ -1,6 +1,6 @@
 #include "repl_command_spec.h"
 
-static const EnumEntry k_begin_modes[] = {
+static const ReplEnumEntry k_begin_modes[] = {
     { "GL_POINTS",         GL_POINTS },
     { "GL_LINES",          GL_LINES },
     { "GL_LINE_STRIP",     GL_LINE_STRIP },
@@ -14,7 +14,7 @@ static const EnumEntry k_begin_modes[] = {
     { NULL, 0 }
 };
 
-static const EnumEntry k_enable_caps[] = {
+static const ReplEnumEntry k_enable_caps[] = {
     { "GL_BLEND",           GL_BLEND },
     { "GL_COLOR_MATERIAL",  GL_COLOR_MATERIAL },
     { "GL_CULL_FACE",       GL_CULL_FACE },
@@ -30,26 +30,26 @@ static const EnumEntry k_enable_caps[] = {
     { NULL, 0 }
 };
 
-static const EnumEntry k_shade_models[] = {
+static const ReplEnumEntry k_shade_models[] = {
     { "GL_SMOOTH", GL_SMOOTH },
     { "GL_FLAT",   GL_FLAT },
     { NULL, 0 }
 };
 
-static const EnumEntry k_face_types[] = {
+static const ReplEnumEntry k_face_types[] = {
     { "GL_FRONT",            GL_FRONT },
     { "GL_BACK",             GL_BACK },
     { "GL_FRONT_AND_BACK",   GL_FRONT_AND_BACK },
     { NULL, 0 }
 };
 
-static const EnumEntry k_front_face[] = {
+static const ReplEnumEntry k_front_face[] = {
     { "GL_CW",              GL_CW },
     { "GL_CCW",             GL_CCW },
     { NULL, 0 }
 };
 
-static const EnumEntry k_material_params[] = {
+static const ReplEnumEntry k_material_params[] = {
     { "GL_AMBIENT",             GL_AMBIENT },
     { "GL_DIFFUSE",             GL_DIFFUSE },
     { "GL_SPECULAR",            GL_SPECULAR },
@@ -59,7 +59,7 @@ static const EnumEntry k_material_params[] = {
     { NULL, 0 }
 };
 
-static const EnumEntry k_color_material_modes[] = {
+static const ReplEnumEntry k_color_material_modes[] = {
     { "GL_AMBIENT",             GL_AMBIENT },
     { "GL_DIFFUSE",             GL_DIFFUSE },
     { "GL_SPECULAR",            GL_SPECULAR },
@@ -68,35 +68,35 @@ static const EnumEntry k_color_material_modes[] = {
     { NULL, 0 }
 };
 
-static const EnumEntry k_light_model_params[] = {
+static const ReplEnumEntry k_light_model_params[] = {
     { "GL_LIGHT_MODEL_LOCAL_VIEWER", GL_LIGHT_MODEL_LOCAL_VIEWER },
     { "GL_LIGHT_MODEL_TWO_SIDE",     GL_LIGHT_MODEL_TWO_SIDE },
     { NULL, 0 }
 };
 
-static const EnumEntry k_bool_vals[] = {
+static const ReplEnumEntry k_bool_vals[] = {
     { "GL_TRUE",  GL_TRUE  },
     { "GL_FALSE", GL_FALSE },
     { NULL, 0 }
 };
 
-static const EnumEntry k_point_param_pnames[] = {
+static const ReplEnumEntry k_point_param_pnames[] = {
     { "GL_POINT_DISTANCE_ATTENUATION", GL_POINT_DISTANCE_ATTENUATION },
     { NULL, 0 }
 };
 
-static const EnumEntry k_blend_src_factors[] = {
+static const ReplEnumEntry k_blend_src_factors[] = {
     { "GL_SRC_ALPHA", GL_SRC_ALPHA },
     { NULL, 0 }
 };
 
-static const EnumEntry k_blend_dst_factors[] = {
+static const ReplEnumEntry k_blend_dst_factors[] = {
     { "GL_ONE_MINUS_SRC_ALPHA", GL_ONE_MINUS_SRC_ALPHA },
     { "GL_ONE",                 GL_ONE },
     { NULL, 0 }
 };
 
-static const FuncCompletion k_func_completions[] = {
+static const ReplFuncCompletion k_func_completions[] = {
     { "glVertex3f(",         "glVertex3f(x, y, z)",                                      3, { "x", "y", "z" } },
     { "glVertex2f(",         "glVertex2f(x, y)",                                         2, { "x", "y" } },
     { "glNormal3f(",         "glNormal3f(nx, ny, nz)",                                   3, { "nx", "ny", "nz" } },
@@ -304,19 +304,19 @@ const ReplStdCommandSpec *repl_std_command_specs(void) {
     return k_std_command_specs;
 }
 
-const FuncCompletion *repl_func_completions(void) {
+const ReplFuncCompletion *repl_func_completions(void) {
     return k_func_completions;
 }
 
-const EnumEntry *repl_face_type_entries(void) {
+const ReplEnumEntry *repl_face_type_entries(void) {
     return k_face_types;
 }
 
-const EnumEntry *repl_material_param_entries(void) {
+const ReplEnumEntry *repl_material_param_entries(void) {
     return k_material_params;
 }
 
-const EnumEntry *repl_point_param_pname_entries(void) {
+const ReplEnumEntry *repl_point_param_pname_entries(void) {
     return k_point_param_pnames;
 }
 
