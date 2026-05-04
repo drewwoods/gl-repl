@@ -358,6 +358,20 @@ UiHit ui_menu_bar_hit_test(int mx, int my) {
         }
     }
 
+    /* Pin button (Search / Replay). Pins are rendered after the menu
+     * labels and overlap the label region in narrow code panels — the
+     * visible pin must beat the underlying label, so check pins
+     * before the top-level menu hit. Matches the legacy press-handler
+     * order (pin_hit before menu_hit). */
+    int pin = ui_menu_bar_pin_hit(mx, my);
+    if (pin >= 0) {
+        h.kind = UI_HIT_PIN_BUTTON;
+        h.item_idx = pin;
+        h.local_x = (float)mx;
+        h.local_y = (float)gl_y;
+        return h;
+    }
+
     /* Top-level menu button (File / Scene / Config). cmd_idx carries
      * menu_id; the controller decides whether to open / switch /
      * dismiss based on the open-menu state. */
@@ -365,16 +379,6 @@ UiHit ui_menu_bar_hit_test(int mx, int my) {
     if (menu >= 0) {
         h.kind = UI_HIT_MENU_BUTTON;
         h.cmd_idx = menu;
-        h.local_x = (float)mx;
-        h.local_y = (float)gl_y;
-        return h;
-    }
-
-    /* Pin button (Search / Replay). */
-    int pin = ui_menu_bar_pin_hit(mx, my);
-    if (pin >= 0) {
-        h.kind = UI_HIT_PIN_BUTTON;
-        h.item_idx = pin;
         h.local_x = (float)mx;
         h.local_y = (float)gl_y;
         return h;
