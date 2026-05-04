@@ -519,22 +519,9 @@ int editor_state_virtual_lines_append(int after_line_idx,
     return 1;
 }
 
-/* Phase F commit 31: variable_drag bytes moved to the variable_panel
- * peer (variable_panel.c). These accessors stay as thin forwarders
- * during the migration; remove once call sites use variable_panel_*. */
-ReplVariableDragState editor_state_variable_drag(void) {
-    return variable_panel_drag();
-}
-
-ReplVariableDragState *editor_state_variable_drag_mut(void) {
-    return variable_panel_drag_mut();
-}
-
-void editor_state_variable_drag_reset(void) {
-    *variable_panel_drag_mut() = (ReplVariableDragState){
-        .var_idx = -1, .log_mode = 0, .start_value = 0.0f, .start_x = 0,
-    };
-}
+/* Phase J7: the legacy `editor_state_variable_drag` / `_mut` /
+ * `_reset` forwarders are gone. Callers use `variable_panel_drag` /
+ * `_mut` / `variable_panel_handle_drag_reset` directly. */
 
 EditorScrollState editor_state_scroll(void) {
     return g_editor_state.scroll;

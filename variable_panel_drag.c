@@ -5,15 +5,15 @@
  * Status: implementation-behind-variable_panel.
  *
  * Phase F commit 31 moved the drag-state bytes into the variable_panel
- * peer module (variable_panel.c). This file is now the implementation
+ * peer module (variable_panel.c). This file is the implementation
  * behind the peer's variable_panel_handle_drag_* surface — it reads /
  * writes via variable_panel_drag_mut() and supplies the value-mapping
  * logic (linear / log scaling) for controller-routed external edits.
  *
- * External callers must use variable_panel_handle_* / variable_panel_drag_*.
- * The legacy repl_var_drag_* names are preserved so existing tests keep
- * compiling, but the motion path now returns a requested value change instead
- * of mutating REPL/editor state directly.
+ * Phase J7 retired the legacy repl_var_drag_* aliases — the bodies
+ * here are exposed under their canonical variable_panel_* /
+ * variable_panel_handle_* names directly. The motion path returns a
+ * requested value change instead of mutating REPL/editor state.
  *
  * Linear drag: 1 pixel = 0.05 units.
  * Log drag:    200 pixels = one decade (x10 / ÷10), sign preserved.
@@ -23,19 +23,19 @@
 #include "variable_panel_drag.h"
 #include "variable_panel.h"
 
-int repl_var_drag_active(void) {
+int variable_panel_drag_active(void) {
     return variable_panel_drag().var_idx >= 0;
 }
 
-int repl_var_drag_active_var(void) {
+int variable_panel_drag_active_var(void) {
     return variable_panel_drag().var_idx;
 }
 
-int repl_var_drag_log_mode(void) {
+int variable_panel_drag_log_mode(void) {
     return variable_panel_drag().log_mode;
 }
 
-void repl_var_drag_begin(int row, int log_mode, int x) {
+void variable_panel_handle_drag_begin(int row, int log_mode, int x) {
     if (row < 0 || row >= g_num_predef_vars) return;
     ReplVariableDragState *drag = variable_panel_drag_mut();
     drag->var_idx = row;
@@ -46,7 +46,7 @@ void repl_var_drag_begin(int row, int log_mode, int x) {
     drag->undo_snapshot_pushed = 0;
 }
 
-void repl_var_drag_reset(void) {
+void variable_panel_handle_drag_reset(void) {
     ReplVariableDragState *drag = variable_panel_drag_mut();
     drag->var_idx = -1;
     drag->log_mode = 0;
@@ -56,7 +56,7 @@ void repl_var_drag_reset(void) {
     drag->undo_snapshot_pushed = 0;
 }
 
-int repl_var_drag_motion(int x, VariablePanelValueChange *out) {
+int variable_panel_handle_drag_motion(int x, VariablePanelValueChange *out) {
     ReplVariableDragState *drag = variable_panel_drag_mut();
     float new_val;
 

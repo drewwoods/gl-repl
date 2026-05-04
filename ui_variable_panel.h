@@ -54,8 +54,8 @@ void ui_variable_panel_rect(int *px, int *py, int *pw, int *ph);
  * Returns the variable row index (0 = first declared variable) if a row was
  * clicked, or -1 if the click was outside the panel or between rows. out_row
  * is filled with the row index on success. Called by ui_panels.c on mouse
- * clicks; repl_editor.c then calls repl_var_drag_begin() with the row index
- * to start dragging. */
+ * clicks; imrepl_ctrl then calls variable_panel_handle_drag_begin() with the
+ * row index to start dragging. */
 int  ui_variable_panel_hit(int gx, int gy, int *out_row);
 
 /* Pure hit-test: classify (mx, my) as a UiHit for the variable panel.
