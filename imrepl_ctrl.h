@@ -2,6 +2,7 @@
 #define IMREPL_CTRL_H
 
 #include "editor_input.h"  /* ReplInputDispatchEffects */
+#include "ui_hit.h"        /* UiHit (code-panel hit dispatch) */
 
 void imrepl_ctrl_init_gl(void);
 void imrepl_ctrl_bootstrap_repl(const char *input_file);
@@ -63,5 +64,26 @@ int imrepl_ctrl_router_handle_variable_panel_motion(int x, int y);
 int imrepl_ctrl_router_handle_camera_motion(int x, int y);
 int imrepl_ctrl_router_handle_camera_pointer_set(int x, int y);
 int imrepl_ctrl_router_handle_glut_scroll_wheel_button(int button, int state, int x, int y);
+
+/* J2: dispatch a code-panel UiHit to the owning subsystem. Switch on
+ * hit.kind: code text / insert line / gutter / inline color swatch /
+ * panel divider / pin button / menu button / menu item / variable
+ * slider / floating color picker control. Returns 1 if the hit was
+ * consumed (i.e. dispatched to an owner). The (x, y) screen coords
+ * are passed through for helpers that need raw mouse coordinates
+ * (e.g. ui_color_picker_open expects screen-space my). */
+int imrepl_ctrl_router_handle_code_panel_hit(UiHit hit, int x, int y);
+
+/* J2: motion handler for an in-progress code-panel selection drag.
+ * The controller owns the drag state (active / anchor / moved); this
+ * helper re-runs ui_panels_hit_test on motion to derive the drag
+ * target and updates the editor selection. Returns 1 if drag was
+ * active (consumed), 0 otherwise. */
+int imrepl_ctrl_router_handle_code_panel_drag(int x, int y);
+
+/* J2: clear the controller's code-panel drag tracking state. Called
+ * by the editor's reset_transients hook so a state reset (Ctrl+L,
+ * example load) doesn't leave an orphaned mid-drag. */
+void imrepl_ctrl_router_reset_code_panel_drag(void);
 
 #endif /* IMREPL_CTRL_H */

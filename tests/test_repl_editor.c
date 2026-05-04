@@ -2300,9 +2300,12 @@ int main() {
         navigate_to_line(0);
         set_editor_input("glVertex3f(8, 0, 0)");
 
-        int cursor_pos = ui_panels_handle_code_panel_click(CODE_MARGIN_X + 1, code_panel_mouse_y_for_cmd(2));
-        if (cursor_pos >= 0)
-            editor_cursor_pos_set(cursor_pos);
+        {
+            int mx = CODE_MARGIN_X + 1;
+            int my = code_panel_mouse_y_for_cmd(2);
+            UiHit hit = ui_panels_hit_test(mx, my);
+            imrepl_ctrl_router_handle_code_panel_hit(hit, mx, my);
+        }
 
         ASSERT_INT("mouse auto-commit valid edit: cursor moved", repl_state_edit_line(), 2);
         ASSERT_TRUE("mouse auto-commit valid edit: x arg",
