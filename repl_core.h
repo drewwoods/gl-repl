@@ -70,6 +70,13 @@ void repl_flatten_commands(void);
  * Called automatically when source commands are modified. */
 void repl_recompute_autonormals(void);
 
+/* Shared status/document helpers surfaced outside repl_core.c. */
+void        set_status(const char *msg);
+const char *mode_name(GLenum mode);
+GLenum      current_begin_mode(void);
+int         count_vertices(void);
+void        mark_normals_dirty(void);
+
 /* --- Example library & user scene -------------------------------------- */
 #ifndef MAX_USER_SCENES
 #define MAX_USER_SCENES      8
