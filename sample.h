@@ -23,6 +23,7 @@
 #include "repl_command_spec.h"
 #include "repl_presentation.h"
 #include "replay.h"
+#include "ui_layout.h"
 #include "editor_search.h"
 
 /* ========================================================================= */
@@ -46,14 +47,6 @@
 
 #define MAX_ACCUM_SAMPLES 16
 #define ACCUM_STEP_COUNT  5
-typedef enum {
-    CODE_PANEL_LAYOUT_LEFT = 0,
-    CODE_PANEL_LAYOUT_TOP,
-    CODE_PANEL_LAYOUT_BOTTOM,
-    CODE_PANEL_LAYOUT_HIDDEN,
-    CODE_PANEL_LAYOUT_COUNT
-} CodePanelLayout;
-
 /* Default values for runtime-configurable state.
  * Used at both the variable definition site and in repl_reset_state() so the
  * two cannot drift.  Add a new entry here whenever a global's default appears
