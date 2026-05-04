@@ -40,6 +40,10 @@
 #define MAX_ACCUM_SAMPLES 16
 #define ACCUM_STEP_COUNT  5
 
+#define CFG_DEFAULT_MULTISAMPLE      1
+#define CFG_DEFAULT_LINE_SMOOTH      0
+#define CFG_DEFAULT_ATTENUATE_POINTS 1
+
 /* One-time GL initialization: create display lists, compile shaders, allocate
  * tessellator, set up default light state. Called once on startup. */
 void scene_render_init_gl(void);
