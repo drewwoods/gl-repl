@@ -7,6 +7,25 @@
 #ifndef UI_REPLAY_HUD_H
 #define UI_REPLAY_HUD_H
 
+#include "ui_metrics.h"
+
+/* Replay HUD layout shared by ui_replay_hud.c and other UI helpers that need
+ * to position themselves relative to the HUD footprint. */
+#define REPLAY_HUD_MARGIN_X      18
+#define REPLAY_HUD_MARGIN_Y      18
+#define REPLAY_HUD_MIN_WIDTH     220
+#define REPLAY_HUD_HEIGHT        56
+/* y positions measured from hud_y (bottom edge), top-to-bottom:
+ *   line1 (status)   @ 36 - icon row, above progress
+ *   progress groove  @ 22
+ *   line2 (kbd)      @  4 */
+#define REPLAY_HUD_PROGRESS_Y    22
+#define REPLAY_HUD_PROGRESS_H     6
+#define REPLAY_HUD_TEXT_PAD_X    10
+#define REPLAY_HUD_TEXT_LINE1_Y  36
+#define REPLAY_HUD_TEXT_LINE2_Y   4
+#define REPLAY_HUD_BOTTOM_Y (REPLAY_HUD_MARGIN_Y + REPLAY_HUD_HEIGHT)
+
 typedef struct UiReplayHudState {
     int scene_x;
     int scene_y;
