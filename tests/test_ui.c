@@ -530,6 +530,17 @@ static void test_vertex2f_gutter_labels(void) {
     /* Cursor on glEnd so glVertex2f is a non-edit row with a visible gutter */
     repl_state_edit_line_set(2);
 
+    /* The workspace header can be many rows long in builds with full REPL
+     * state (e.g. stubs with bootstrap commands), so scroll=0 may not show
+     * user code at all.  Run a warm-up render with follow_cursor set so that
+     * the scroll settles to the cursor's row; both measurement renders then
+     * see the same window and the vertex label is the only delta. */
+    editor_scroll_follow_cursor_set(1);
+    {
+        UiRenderSnapshot s; make_test_ui_snapshot(&s);
+        ui_panels_render_code_panel(&s);   /* scroll now follows cursor */
+    }
+
     repl_state_presentation_mut()->show_vertex_indices = 0;
     unsigned long long base;
     {
@@ -558,6 +569,12 @@ static void test_vertex2f_gutter_labels(void) {
     repl_feed_line_public("glVertex3f(1, 2, 0);");
     repl_feed_line_public("glEnd();");
     repl_state_edit_line_set(2);
+
+    editor_scroll_follow_cursor_set(1);
+    {
+        UiRenderSnapshot s; make_test_ui_snapshot(&s);
+        ui_panels_render_code_panel(&s);
+    }
 
     repl_state_presentation_mut()->show_vertex_indices = 0;
     unsigned long long v3f_base;
