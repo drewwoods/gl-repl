@@ -5,17 +5,10 @@
 #define REPL_STATE_VIEWS_H
 
 #include "sample.h"
+#include "repl_export_state.h"
 #include "scene_render_types.h"
 #include "repl_flatten.h"
 #include "ui_editor.h"
-
-#ifndef MAX_WORKSPACE_HEADER_LINES
-#define MAX_WORKSPACE_HEADER_LINES 48
-#endif
-
-#ifndef WORKSPACE_HEADER_LINE_LEN
-#define WORKSPACE_HEADER_LINE_LEN  96
-#endif
 
 #ifndef REPL_WORKSPACE_DIR_MAX
 #define REPL_WORKSPACE_DIR_MAX 1024
