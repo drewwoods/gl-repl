@@ -6,14 +6,11 @@
 #include "sample.h"
 #include "scene_axes.h"
 #include "scene_backdrop.h"
-#include "scene_geometry_guides.h"
 #include "scene_grid.h"
-#include "scene_guides_shared.h"
 #include "scene_lights.h"
 #include "scene_overlays.h"
 #include "scene_render_types.h"
 #include "scene_render.h"
-#include "scene_transform_guides.h"
 #include "scene_transform_utils.h"
 #include "prof.h"
 
@@ -380,75 +377,9 @@ static void render_3d_scene_pass(const SceneRenderConfig *config,
                                    config->replay_tess_preview);
     prof_accum_end(PROF_SCENE_3D_OUTLINES);
 
-    /* Vertex dots - replay transforms so dots match the filled geometry */
+    /* Vertex dots and edit guides - replay transforms so positions match geometry */
     prof_begin(PROF_SCENE_3D_OVERLAYS);
-    glPushMatrix();
-    /* Snapshot the pure camera-view matrix (before any user transforms are
-     * applied below) so the transform guide can render in world axes at an
-     * anchor point, independent of pre-cursor rotations. */
-    float tg_cam_view[16];
-    glGetFloatv(GL_MODELVIEW_MATRIX, tg_cam_view);
-    const SceneGuideSnapshot *guide_snapshot = &config->guide_snapshot;
-    SceneTransformGuidePlan xform_guide_plan;
-    scene_transform_guides_prepare(guide_snapshot, &xform_guide_plan);
-    {
-        const GLCmd *flat_cmds = config->flat_program.cmds;
-        int flat_cmd_count = config->flat_program.cmd_count;
-        int matrix_depth = 0;
-        GLenum primitive_mode = 0;
-
-        glEnable(GL_POINT_SMOOTH);
-        glHint(GL_POINT_SMOOTH_HINT, GL_NICEST);
-
-        if (config->replay_vertex_points)
-            glColor4f(1.0f, 0.88f, 0.20f, 0.75f);
-        else
-            glColor4f(0.05f, 0.05f, 0.10f, 0.80f);
-
-        for (int i = 0; i < flat_cmd_count; i++) {
-            if (!flat_cmds[i].valid) continue;
-            int is_cursor = (flat_cmds[i].src_cmd_idx == guide_snapshot->edit_line_idx);
-
-            /* Draw vertex guides and normals if this vertex is at the cursor
-             * position. Do this inline so that the current model matrix is
-             * applied to the guides, ensuring they are positioned correctly
-             * even when transforms separate blocks. */
-            if (is_cursor && !config->replaying) {
-                scene_geometry_guides_render_for_cursor(guide_snapshot);
-            }
-
-            scene_transform_guides_render_if_due(guide_snapshot,
-                                                 &xform_guide_plan,
-                                                 i, tg_cam_view);
-
-            if (is_transform_cmd(flat_cmds[i].type)) {
-                scene_apply_tracked_transform(&flat_cmds[i], &matrix_depth);
-            } else if (flat_cmds[i].type == CMD_BEGIN) {
-                primitive_mode = flat_cmds[i].mode;
-            } else if (flat_cmds[i].type == CMD_END) {
-                primitive_mode = 0;
-            } else if ((config->show_vpoints || config->replay_vertex_points) &&
-                       (flat_cmds[i].type == CMD_VERTEX3F ||
-                        flat_cmds[i].type == CMD_VERTEX2F ||
-                        flat_cmds[i].type == CMD_TESS_VERTEX)) {
-                int is_line = (primitive_mode == GL_LINES ||
-                               primitive_mode == GL_LINE_STRIP ||
-                               primitive_mode == GL_LINE_LOOP);
-                // Lines tend to be higher tesselated than polygons and points can obscure the line.
-                glPointSize(is_line ? 2.0f : 7.0f);
-                glBegin(GL_POINTS);
-                glVertex3f(flat_cmds[i].args[0], flat_cmds[i].args[1],
-                           flat_cmds[i].args[2]);
-                glEnd();
-            }
-        }
-        glPointSize(1.0f);
-        glDisable(GL_POINT_SMOOTH);
-        scene_unwind_transform_stack(&matrix_depth);
-    }
-    glPopMatrix();
-    glDisable(GL_BLEND);
-    if (config->user_lighting_enabled) glEnable(GL_LIGHTING);
+    scene_overlays_render_vertex_points(&frame_ctx);
     prof_accum_end(PROF_SCENE_3D_OVERLAYS);
 
     prof_begin(PROF_SCENE_3D_HUD);
