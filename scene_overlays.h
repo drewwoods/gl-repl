@@ -37,6 +37,11 @@
 
 #include "scene_render_types.h"
 
+/* Shared by live polygon-outline overlays and exported output.c outline
+ * passes so both paths use the same depth bias. */
+#define REPL_OUTLINE_POLYGON_OFFSET_FACTOR (-0.01f)
+#define REPL_OUTLINE_POLYGON_OFFSET_UNITS  (-100.0f)
+
 /* Check whether a flat command block (starting at begin_idx) matches the cursor
  * context (for highlighting in polygon outlines). Returns 1 if the block's
  * source code includes the cursor line, 0 otherwise. is_tess indicates whether

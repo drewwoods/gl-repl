@@ -34,8 +34,6 @@
 /* Configuration                                                              */
 /* ========================================================================= */
 
-#define MAX_ACCUM_SAMPLES 16
-#define ACCUM_STEP_COUNT  5
 /* Default values for runtime-configurable state.
  * Used at both the variable definition site and in repl_reset_state() so the
  * two cannot drift.  Add a new entry here whenever a global's default appears
@@ -46,17 +44,6 @@
 #define CFG_DEFAULT_WRAP_AT_COMMA     1
 #define CFG_DEFAULT_CODE_PANEL_LAYOUT CODE_PANEL_LAYOUT_TOP
 #define CFG_DEFAULT_PANEL_FRAC        0.45f
-
-/* Shared by live scene overlays and generated output.c outline passes. */
-#define REPL_OUTLINE_POLYGON_OFFSET_FACTOR (-0.01f)
-#define REPL_OUTLINE_POLYGON_OFFSET_UNITS  (-100.0f)
-#define TESS_VERT_BUF_SIZE 256
-
-typedef struct {
-    GLdouble pos[3];
-    GLdouble normal[3]; /* per-vertex normal, default (0,0,1) */
-    GLdouble color[4];  /* per-vertex RGBA,   default (1,1,1,1) */
-} TessVertex;
 
 /* ========================================================================= */
 /* Types                                                                      */

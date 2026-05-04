@@ -33,6 +33,14 @@
 #include "editor_state.h"  /* EditorBufferView */
 #include "repl_flatten.h"
 
+#define TESS_VERT_BUF_SIZE 256
+
+typedef struct TessVertex {
+    GLdouble pos[3];
+    GLdouble normal[3];
+    GLdouble color[4];
+} TessVertex;
+
 /* Input: a flat program view, the number of commands to execute
  * (typically the full count, or the replay PC if replay is active),
  * and an editor buffer view used to resolve display text for status

@@ -7,6 +7,7 @@
 #include "repl_parser.h"
 #include "repl_source_scope.h"
 #include "repl_state.h"
+#include "scene_overlays.h"
 #include "ui_layout.h"
 #include "ui_state.h"
 
