@@ -1,6 +1,29 @@
 TODO:
    - ability to switch between 2D orth where use glVertex2d
    - when glEnable(GL_LIGHTING) is commented I expected the lighting to be disabled, since that is the default state. 
+   - the exported C code sets the same windows size (or at least window aspect so the same clipping is applied)
+   - glLineWidth
+   - Have a 2d Mode, that swings the camera so looking down the z axis and engages the Adaptive plans grid.  Also the mouse click and drag turns to a translation along the z=0 plane instead of camera orbit
+   - the status bar should restore the color - means if the user application didnt get color it picks up the status bar color
+   - You can set the value of a variable when declaring and it is updated in the variable panel. But the reverse is not true, variable panel modification of variables does not modify the repls version.
+     - Today you can set the value of a variable when declaring and it is
+       updated in the variable panel. But the reverse is not true, variable
+       panel modification of variables does not modify the value shown in the
+       editor.  With the plan to remove any REPL concept from the editor, how
+       could this work?
+
+       Could the im_ctrl inform the editor of an external state change which it would
+       hand to the REPL for interpretation.  I'm not sure if its like this today, but
+       the editor may delegate tasks to the REPL, like indentation etc, since it has
+       the context.  If it is like this, the editor expects the REPL to return a
+       formatted version of the text which it stores.  The variable panel update
+       message is treated like an update to the editor which it hands to the REPL
+       logic transparently, the REPL can also update the value of the variable.  So
+       the editor has the concept of mutations, which can come from the user modifying
+       the text directly or externally, in both cases it always expects the REPL to
+       parse and format the text, or return an error in which case the editor will
+       undo the last commit and display the status message
+   - glPoints should have their point enlarged and colored when you are on a glVertex2f source line. glVertex3f works for coloring, but not point enlarged (maybe thats okay)
    - Using the status bar to enter a new filename is not ideal as it disappears
    - remove emdash — from status bar output since not ascii
    - See status bar history

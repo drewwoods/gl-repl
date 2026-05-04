@@ -73,6 +73,15 @@ typedef struct {
  * migrate them. */
 EditorCommitResult editor_commit_current_input(const struct EditorServices_s *services);
 
+/* Apply a precompiled external change atomically. This is the
+ * controller-facing companion to editor_commit_current_input: the
+ * caller already has a ReplCompiledChange and only needs the shared
+ * preflight/apply transaction. When `capture_undo` is non-zero the
+ * helper captures one undo snapshot immediately before the first
+ * mutation; when zero it leaves undo ownership to the caller. */
+int editor_commit_apply_external_change(const struct ReplCompiledChange_s *change,
+                                        int capture_undo);
+
 /* Apply a compiled change atomically. Lower-level helper used by
  * legacy try_commit_* handlers during the migration. Same
  * transaction shape as editor_commit_current_input from preflight

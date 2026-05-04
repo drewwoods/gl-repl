@@ -114,6 +114,25 @@ EditorCommitResult editor_commit_current_input(const struct EditorServices_s *se
     return result;
 }
 
+int editor_commit_apply_external_change(const struct ReplCompiledChange_s *change,
+                                        int capture_undo) {
+    EditorServices svc;
+
+    if (!change)
+        return 0;
+    if (!repl_apply_can_apply_compiled_change(change))
+        return 0;
+
+    if (capture_undo)
+        repl_undo_push_snapshot();
+
+    svc = editor_services_default();
+    svc.apply_predef_ops(change, svc.user);
+    editor_buffer_apply_compiled_change(change);
+    svc.apply_repl_change(change, svc.user);
+    return 1;
+}
+
 /* ---- EditorCommitPlan ------------------------------------------- */
 
 void editor_commit_plan_init(EditorCommitPlan *plan) {
@@ -984,20 +1003,7 @@ ReplCompileResult editor_compile_for_loop(const char *input,
 }
 
 int editor_commit_apply_compiled_change(const struct ReplCompiledChange_s *change) {
-    if (!change) return 0;
-
-    /* Preflight: if the cmd-store can't accept the change, return
-     * 0 before mutating anything. Pure read; doesn't go through
-     * services. */
-    if (!repl_apply_can_apply_compiled_change(change))
-        return 0;
-
-    /* Past the preflight every apply call below succeeds. */
-    EditorServices svc = editor_services_default();
-    svc.apply_predef_ops(change, svc.user);
-    editor_buffer_apply_compiled_change(change);
-    svc.apply_repl_change(change, svc.user);
-    return 1;
+    return editor_commit_apply_external_change(change, 0);
 }
 
 /* ===========================================================================

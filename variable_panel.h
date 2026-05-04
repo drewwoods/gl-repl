@@ -44,6 +44,11 @@ typedef struct {
     ReplVariableDragState  drag;   /* slider drag transaction */
 } VariablePanelState;
 
+typedef struct VariablePanelValueChange_s {
+    char  name[16];
+    float value;
+} VariablePanelValueChange;
+
 /* Lifecycle. */
 void variable_panel_state_capture(VariablePanelState *snapshot);
 void variable_panel_state_restore(const VariablePanelState *snapshot);
@@ -76,11 +81,19 @@ int  variable_panel_drag_active_var(void);
 /* 1 if the active drag is in log mode (exponential scaling), 0 for linear. */
 int  variable_panel_drag_log_mode(void);
 
+/* 1 once the current drag has captured its coalesced undo snapshot. */
+int  variable_panel_drag_undo_snapshot_pushed(void);
+
+/* Mark the current drag's undo snapshot as captured. */
+void variable_panel_drag_mark_undo_snapshot_pushed(void);
+
 /* Begin a drag transaction on a variable row. */
 void variable_panel_handle_drag_begin(int row, int log_mode, int x);
 
-/* Update the dragged variable from the new mouse x-coordinate. */
-void variable_panel_handle_drag_motion(int x);
+/* Compute the dragged variable's requested value from the new mouse
+ * x-coordinate and return it through `out`. Returns 1 when a request
+ * was produced, 0 when no drag is active. */
+int  variable_panel_handle_drag_motion(int x, VariablePanelValueChange *out);
 
 /* End the drag transaction. */
 void variable_panel_handle_drag_reset(void);

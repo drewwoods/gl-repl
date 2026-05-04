@@ -121,12 +121,16 @@ typedef struct {
 } ReplAutocompleteState;
 
 /* Variable slider drag transaction: which variable is being dragged,
- * the starting value, and the cursor anchor x in window pixels. */
+ * the variable name captured at drag-begin, the starting value, the
+ * cursor anchor x in window pixels, and whether the controller has
+ * already captured the coalesced undo snapshot for this drag. */
 typedef struct {
     int   var_idx;
     int   log_mode;
     float start_value;
     int   start_x;
+    char  name[16];
+    int   undo_snapshot_pushed;
 } ReplVariableDragState;
 
 /* Editor scroll position: the doc-line index at the top of the

@@ -72,6 +72,237 @@ static int compile_set_err(char *err, int err_size, const char *fmt, ...) {
 
 #include <stdarg.h>
 
+static void compile_copy_leading_ws(const char *text, char *out, int out_sz) {
+    int off = 0;
+    const char *p = text ? text : "";
+
+    if (!out || out_sz <= 0)
+        return;
+
+    while (*p && isspace((unsigned char)*p) && *p != '\n' && *p != '\r' &&
+           off < out_sz - 1) {
+        out[off++] = *p++;
+    }
+    out[off] = '\0';
+}
+
+static int compile_find_last_literal_assign(const ReplCompileContext *ctx,
+                                            int var_idx) {
+    int found = -1;
+
+    if (!ctx || !ctx->document_cmds)
+        return -1;
+
+    for (int cmd_idx = 0; cmd_idx < ctx->document_count; cmd_idx++) {
+        const GLCmd *cmd = &ctx->document_cmds[cmd_idx];
+        if (!cmd->valid || cmd->type != CMD_VAR_ASSIGN)
+            continue;
+        if (cmd->num_args != var_idx || cmd->has_vars)
+            continue;
+        found = cmd_idx;
+    }
+    return found;
+}
+
+static int compile_has_any_assign(const ReplCompileContext *ctx,
+                                  int var_idx) {
+    if (!ctx || !ctx->document_cmds)
+        return 0;
+
+    for (int cmd_idx = 0; cmd_idx < ctx->document_count; cmd_idx++) {
+        const GLCmd *cmd = &ctx->document_cmds[cmd_idx];
+        if (!cmd->valid || cmd->type != CMD_VAR_ASSIGN)
+            continue;
+        if (cmd->num_args == var_idx)
+            return 1;
+    }
+    return 0;
+}
+
+static int compile_find_var_decl(const ReplCompileContext *ctx,
+                                 const char *name) {
+    if (!ctx || !ctx->document_cmds || !name || !name[0])
+        return -1;
+
+    for (int cmd_idx = 0; cmd_idx < ctx->document_count; cmd_idx++) {
+        const GLCmd *cmd = &ctx->document_cmds[cmd_idx];
+        if (!cmd->valid || cmd->type != CMD_VAR_DECLARE)
+            continue;
+        for (int decl_idx = 0; decl_idx < cmd->var_decl_count; decl_idx++) {
+            if (strcmp(cmd->var_names[decl_idx], name) == 0)
+                return cmd_idx;
+        }
+    }
+    return -1;
+}
+
+static int compile_append_text(char *out, int out_sz, int *off,
+                               const char *fmt, ...) {
+    va_list ap;
+    int wrote;
+
+    if (!out || !off || *off < 0 || *off >= out_sz)
+        return 0;
+
+    va_start(ap, fmt);
+    wrote = vsnprintf(out + *off, (size_t)(out_sz - *off), fmt, ap);
+    va_end(ap);
+    if (wrote < 0 || *off + wrote >= out_sz)
+        return 0;
+    *off += wrote;
+    return 1;
+}
+
+static int compile_append_span(char *out, int out_sz, int *off,
+                               const char *start, const char *end) {
+    int len;
+
+    if (!out || !off || !start || !end || end < start)
+        return 0;
+    len = (int)(end - start);
+    if (*off < 0 || *off + len >= out_sz)
+        return 0;
+    memcpy(out + *off, start, (size_t)len);
+    *off += len;
+    out[*off] = '\0';
+    return 1;
+}
+
+static int compile_build_literal_assign_change(const ReplCompileContext *ctx,
+                                               int cmd_idx,
+                                               const char *name,
+                                               float value,
+                                               ReplCompiledChange *out) {
+    char indent[32];
+
+    if (!ctx || !out || !name || cmd_idx < 0 || cmd_idx >= ctx->document_count)
+        return 0;
+
+    compile_copy_leading_ws(editor_buffer_view_line(ctx->text, cmd_idx),
+                            indent, sizeof(indent));
+
+    out->kind = REPL_COMPILED_REPLACE_ONE;
+    out->pos = cmd_idx;
+    out->count = 1;
+    out->adjust_edit_line = 0;
+    out->cmds[0] = ctx->document_cmds[cmd_idx];
+    out->cmds[0].args[0] = value;
+    out->cmds[0].has_vars = 0;
+
+    return snprintf(out->text[0], sizeof(out->text[0]), "%s%s = %g;",
+                    indent, name, (double)value) < (int)sizeof(out->text[0]);
+}
+
+static int compile_rewrite_decl_initializer_text(const char *orig_text,
+                                                 const char *name,
+                                                 float value,
+                                                 char *out,
+                                                 int out_sz) {
+    char indent[32];
+    const char *line;
+    const char *scan;
+    const char *comment;
+    const char *body_end;
+    const char *semi;
+    const char *chunk_start;
+    int off = 0;
+    int found = 0;
+
+    if (!name || !name[0] || !out || out_sz <= 0)
+        return 0;
+
+    line = orig_text ? orig_text : "";
+    compile_copy_leading_ws(line, indent, sizeof(indent));
+    scan = line + strlen(indent);
+    if (strncmp(scan, "float", 5) != 0 ||
+        isalnum((unsigned char)scan[5]) || scan[5] == '_')
+        return 0;
+
+    scan += 5;
+    while (*scan && isspace((unsigned char)*scan))
+        scan++;
+
+    comment = strstr(scan, "//");
+    body_end = comment ? comment : scan + strlen(scan);
+    semi = body_end;
+    for (const char *p = scan; p < body_end; p++) {
+        if (*p == ';') {
+            semi = p;
+            break;
+        }
+    }
+
+    out[0] = '\0';
+    if (!compile_append_text(out, out_sz, &off, "%sfloat ", indent))
+        return 0;
+
+    chunk_start = scan;
+    int depth = 0;
+    for (const char *p = scan; ; p++) {
+        int at_end = (p >= semi);
+        char ch = at_end ? '\0' : *p;
+        if (!at_end) {
+            if (ch == '(') depth++;
+            else if (ch == ')' && depth > 0) depth--;
+        }
+        if (at_end || (ch == ',' && depth == 0)) {
+            const char *seg_start = chunk_start;
+            const char *seg_end = p;
+            const char *name_start;
+            const char *name_end;
+            char decl_name[16];
+            int decl_len;
+
+            while (seg_start < seg_end && isspace((unsigned char)*seg_start))
+                seg_start++;
+            while (seg_end > seg_start && isspace((unsigned char)seg_end[-1]))
+                seg_end--;
+            if (seg_start >= seg_end)
+                return 0;
+
+            name_start = seg_start;
+            if (!isalpha((unsigned char)*name_start) && *name_start != '_')
+                return 0;
+            name_end = name_start;
+            while (name_end < seg_end &&
+                   (isalnum((unsigned char)*name_end) || *name_end == '_'))
+                name_end++;
+            decl_len = (int)(name_end - name_start);
+            if (decl_len <= 0 || decl_len >= (int)sizeof(decl_name))
+                return 0;
+            memcpy(decl_name, name_start, (size_t)decl_len);
+            decl_name[decl_len] = '\0';
+
+            if (seg_start != scan && !compile_append_text(out, out_sz, &off, ", "))
+                return 0;
+
+            if (strcmp(decl_name, name) == 0) {
+                if (!compile_append_text(out, out_sz, &off, "%s = %g",
+                                         name, (double)value))
+                    return 0;
+                found = 1;
+            } else if (!compile_append_span(out, out_sz, &off, seg_start, seg_end)) {
+                return 0;
+            }
+
+            if (at_end)
+                break;
+            chunk_start = p + 1;
+        }
+    }
+
+    if (!found || !compile_append_text(out, out_sz, &off, ";"))
+        return 0;
+    if (comment && *comment) {
+        while (*comment && isspace((unsigned char)*comment))
+            comment++;
+        if (*comment && !compile_append_text(out, out_sz, &off, " %s", comment))
+            return 0;
+    }
+
+    return 1;
+}
+
 ReplCompileResult repl_compile_float_decl(const char *input,
                                           const ReplCompileContext *ctx,
                                           ReplCompiledChange *out,
@@ -96,6 +327,7 @@ ReplCompileResult repl_compile_float_decl(const char *input,
     char names[MAX_NAMES_PER_DECL][16];
     float init_vals[MAX_NAMES_PER_DECL];
     int has_init[MAX_NAMES_PER_DECL];
+    char decl_comment[MAX_LINE_LEN] = "";
     int var_count = 0;
     memset(has_init, 0, sizeof(has_init));
 
@@ -168,6 +400,8 @@ ReplCompileResult repl_compile_float_decl(const char *input,
     if (*p != '\0' && !(p[0] == '/' && p[1] == '/'))
         return compile_set_err(err, err_size,
             "syntax error: unexpected trailing text after declaration");
+    if (p[0] == '/' && p[1] == '/')
+        snprintf(decl_comment, sizeof(decl_comment), " %s", p);
 
     /* Detect overwrite-in-place. */
     int insert_idx = ctx->insert_mode ? ctx->edit_line :
@@ -260,7 +494,7 @@ ReplCompileResult repl_compile_float_decl(const char *input,
             off += snprintf(decl_text + off, sizeof(decl_text) - off,
                             " = %g", init_vals[var_idx]);
     }
-    snprintf(decl_text + off, sizeof(decl_text) - off, ";");
+    snprintf(decl_text + off, sizeof(decl_text) - off, ";%s", decl_comment);
 
     /* Populate the change. */
     if (overwriting_decl) {
@@ -473,6 +707,67 @@ ReplCompileResult repl_compile_var_assign(const char *input,
 
     snprintf(out->commit_message, sizeof(out->commit_message),
              "%s = %g", name, val);
+
+    return REPL_COMPILE_OK;
+}
+
+ReplCompileResult repl_compile_set_predef_value(const char *name,
+                                                float value,
+                                                const ReplCompileContext *ctx,
+                                                ReplCompiledChange *out,
+                                                char *err, int err_size) {
+    int var_idx;
+    int literal_assign_idx;
+    int has_any_assign;
+    int decl_idx;
+
+    if (!ctx || !out || !name || !name[0])
+        return REPL_COMPILE_ERROR;
+
+    repl_compiled_change_init(out);
+    if (err && err_size > 0)
+        err[0] = '\0';
+
+    var_idx = repl_eval_find_predef_var_idx(name);
+    if (var_idx < 0)
+        return compile_set_err(err, err_size,
+                               "undeclared variable '%s'", name);
+
+    out->predef_ops[0].kind = REPL_PREDEF_OP_SET_VALUE;
+    repl_copy_string_fits(out->predef_ops[0].name,
+                          sizeof(out->predef_ops[0].name), name);
+    out->predef_ops[0].value = value;
+    out->predef_ops[0].has_value = 1;
+    out->predef_op_count = 1;
+    snprintf(out->commit_message, sizeof(out->commit_message),
+             "%s = %g", name, (double)value);
+
+    literal_assign_idx = compile_find_last_literal_assign(ctx, var_idx);
+    if (literal_assign_idx >= 0) {
+        if (!compile_build_literal_assign_change(ctx, literal_assign_idx,
+                                                 name, value, out))
+            return compile_set_err(err, err_size, "Command too long");
+        return REPL_COMPILE_OK;
+    }
+
+    has_any_assign = compile_has_any_assign(ctx, var_idx);
+    if (has_any_assign)
+        return REPL_COMPILE_OK;
+
+    decl_idx = compile_find_var_decl(ctx, name);
+    if (decl_idx >= 0) {
+        char rewritten[MAX_LINE_LEN];
+        if (compile_rewrite_decl_initializer_text(
+                editor_buffer_view_line(ctx->text, decl_idx),
+                name, value, rewritten, sizeof(rewritten))) {
+            out->kind = REPL_COMPILED_REPLACE_ONE;
+            out->pos = decl_idx;
+            out->count = 1;
+            out->adjust_edit_line = 0;
+            out->cmds[0] = ctx->document_cmds[decl_idx];
+            repl_copy_string_fits(out->text[0], sizeof(out->text[0]), rewritten);
+        }
+    }
 
     return REPL_COMPILE_OK;
 }

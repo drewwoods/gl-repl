@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <string.h>
+#include "editor_undo.h"
 #include "support/test_harness.h"
 
 static TestHarness g_harness = TEST_HARNESS_INIT;
@@ -12,6 +13,9 @@ static TestHarness g_harness = TEST_HARNESS_INIT;
 
 #define ASSERT_FLOAT(label, got, exp) \
     TEST_ASSERT_FLOAT(&g_harness, label, got, exp, 1e-5f)
+
+#define ASSERT_STR(label, got, exp) \
+    TEST_ASSERT_STR(&g_harness, label, got, exp)
 
 /* Rename the controller's downstream render delegates so this test can stub
  * them and inspect the per-frame config without a real GL context. */
@@ -383,12 +387,153 @@ static void test_display_frame_profile_coverage(void) {
     }
 }
 
+static void test_variable_panel_motion_routes_through_compile_and_coalesces_undo(void) {
+    int px, py, pw, ph;
+    int click_x, click_y;
+    int hit_row;
+    int window_h;
+    int var_idx;
+    ReplUndoRingState undo_state;
+
+    printf("--- imrepl_ctrl variable panel drag route ---\n");
+
+    repl_reset_state();
+    ui_state_viewport_set_size(1000, 1000);
+    variable_panel_set_visible(1);
+    repl_feed_line_public("float testvar = 1.0;");
+
+    var_idx = repl_eval_find_predef_var_idx("testvar");
+    ASSERT_TRUE("testvar declared", var_idx >= 0);
+    ASSERT_FLOAT("testvar starts at 1", g_predef_vars[var_idx].value, 1.0f);
+
+    ui_variable_panel_rect(&px, &py, &pw, &ph);
+    window_h = ui_state_viewport().window_h;
+    click_x = px + pw / 2;
+    click_y = -1;
+    for (int gl_y = py; gl_y < py + ph; gl_y++) {
+        int candidate_y = window_h - gl_y;
+        hit_row = -1;
+        if (ui_variable_panel_hit(click_x, candidate_y, &hit_row)
+                && hit_row == var_idx) {
+            click_y = candidate_y;
+            break;
+        }
+    }
+    ASSERT_TRUE("found click target for testvar row", click_y >= 0);
+
+    ASSERT_INT("drag begin handled",
+               imrepl_ctrl_router_handle_variable_panel_drag_begin(
+                   GLUT_LEFT_BUTTON, GLUT_DOWN, click_x, click_y),
+               1);
+    ASSERT_TRUE("drag active after begin", variable_panel_drag_active());
+
+    for (int step = 1; step <= 10; step++) {
+        ASSERT_INT("drag motion handled",
+                   imrepl_ctrl_router_handle_variable_panel_motion(
+                       click_x + step * 10, click_y),
+                   1);
+    }
+
+    repl_undo_ring_state_capture(&undo_state);
+    ASSERT_INT("drag motions coalesce to one undo snapshot",
+               undo_state.undo_count, 1);
+    ASSERT_STR("drag rewrites declaration source through compiler",
+               editor_buffer_line(0), "  float testvar = 6;");
+    ASSERT_FLOAT("drag updates live predef value", g_predef_vars[var_idx].value, 6.0f);
+
+    ASSERT_INT("drag release handled",
+               imrepl_ctrl_router_handle_variable_panel_drag_release(GLUT_UP),
+               1);
+    ASSERT_TRUE("drag inactive after release", !variable_panel_drag_active());
+    ASSERT_INT("undo flag cleared after release",
+               variable_panel_drag_undo_snapshot_pushed(), 0);
+
+    repl_undo_pop_snapshot();
+    ASSERT_STR("undo restores declaration source",
+               editor_buffer_line(0), "  float testvar = 1;");
+    ASSERT_FLOAT("undo restores live predef value", g_predef_vars[var_idx].value, 1.0f);
+}
+
+static void test_variable_panel_motion_initializes_uninitialized_declaration(void) {
+    int px, py, pw, ph;
+    int click_x, click_y;
+    int hit_row;
+    int window_h;
+    int var_idx;
+    ReplUndoRingState undo_state;
+
+    printf("--- imrepl_ctrl variable panel initializes decl ---\n");
+
+    repl_reset_state();
+    ui_state_viewport_set_size(1000, 1000);
+    variable_panel_set_visible(1);
+    repl_feed_line_public("float testvar;");
+
+    var_idx = repl_eval_find_predef_var_idx("testvar");
+    ASSERT_TRUE("uninitialized testvar declared", var_idx >= 0);
+    ASSERT_FLOAT("uninitialized testvar starts at 0",
+                 g_predef_vars[var_idx].value, 0.0f);
+
+    ui_variable_panel_rect(&px, &py, &pw, &ph);
+    window_h = ui_state_viewport().window_h;
+    click_x = px + pw / 2;
+    click_y = -1;
+    for (int gl_y = py; gl_y < py + ph; gl_y++) {
+        int candidate_y = window_h - gl_y;
+        hit_row = -1;
+        if (ui_variable_panel_hit(click_x, candidate_y, &hit_row)
+                && hit_row == var_idx) {
+            click_y = candidate_y;
+            break;
+        }
+    }
+    ASSERT_TRUE("found click target for uninitialized testvar row", click_y >= 0);
+
+    ASSERT_INT("uninitialized drag begin handled",
+               imrepl_ctrl_router_handle_variable_panel_drag_begin(
+                   GLUT_LEFT_BUTTON, GLUT_DOWN, click_x, click_y),
+               1);
+    ASSERT_TRUE("uninitialized drag active after begin",
+                variable_panel_drag_active());
+
+    for (int step = 1; step <= 10; step++) {
+        ASSERT_INT("uninitialized drag motion handled",
+                   imrepl_ctrl_router_handle_variable_panel_motion(
+                       click_x + step * 10, click_y),
+                   1);
+    }
+
+    repl_undo_ring_state_capture(&undo_state);
+    ASSERT_INT("uninitialized drag motions coalesce to one undo snapshot",
+               undo_state.undo_count, 1);
+    ASSERT_STR("uninitialized drag adds explicit initializer",
+               editor_buffer_line(0), "  float testvar = 5;");
+    ASSERT_FLOAT("uninitialized drag updates live predef value",
+                 g_predef_vars[var_idx].value, 5.0f);
+
+    ASSERT_INT("uninitialized drag release handled",
+               imrepl_ctrl_router_handle_variable_panel_drag_release(GLUT_UP),
+               1);
+    ASSERT_TRUE("uninitialized drag inactive after release",
+                !variable_panel_drag_active());
+    ASSERT_INT("uninitialized undo flag cleared after release",
+               variable_panel_drag_undo_snapshot_pushed(), 0);
+
+    repl_undo_pop_snapshot();
+    ASSERT_STR("undo restores bare declaration",
+               editor_buffer_line(0), "  float testvar;");
+    ASSERT_FLOAT("undo restores live value to zero",
+                 g_predef_vars[var_idx].value, 0.0f);
+}
+
 int main(void) {
     printf("--- imrepl_ctrl tests ---\n");
 
     test_display_frame_builds_config_and_restores_live_state();
     test_reshape_clamps_height();
     test_display_frame_profile_coverage();
+    test_variable_panel_motion_routes_through_compile_and_coalesces_undo();
+    test_variable_panel_motion_initializes_uninitialized_declaration();
 
     printf("\n");
     return test_harness_report(&g_harness, "test_imrepl_ctrl");

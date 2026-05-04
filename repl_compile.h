@@ -199,4 +199,26 @@ ReplCompileResult repl_compile_var_assign(const char *input,
                                           ReplCompiledChange *out,
                                           char *err, int err_size);
 
+/* Compile an external live-value update for an existing predefined
+ * variable.
+ *
+ * Source policy:
+ *   - Prefer the last literal CMD_VAR_ASSIGN for the variable and
+ *     replace it with canonical `name = %g;` text.
+ *   - Otherwise, if a CMD_VAR_DECLARE line contains the variable,
+ *     rewrite just that declarator's initializer while preserving
+ *     the other declarators and any trailing comment.
+ *   - Otherwise emit REPL_COMPILED_NO_CHANGE and only carry the
+ *     REPL_PREDEF_OP_SET_VALUE side effect.
+ *
+ * This entry is pure like the other compile helpers: it never
+ * mutates editor text, command arrays, predef storage, status, or
+ * undo history. `name` must already identify a live predefined slot.
+ */
+ReplCompileResult repl_compile_set_predef_value(const char *name,
+                                                float value,
+                                                const ReplCompileContext *ctx,
+                                                ReplCompiledChange *out,
+                                                char *err, int err_size);
+
 #endif /* REPL_COMPILE_H */

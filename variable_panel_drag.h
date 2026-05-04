@@ -8,17 +8,16 @@
  *
  * Drag lifecycle: repl_var_drag_begin() initializes a drag on a variable row
  * with a specified mode (linear or log) and starting mouse x-coordinate. The
- * starting value is captured from the current predefined variable value.
- * repl_var_drag_motion() updates the variable as the mouse moves, computing
- * new values via linear mapping (motion_dx -> delta_value) or log mapping
- * (exponential scaling for large value ranges). repl_var_drag_reset() clears
- * the drag state and releases the variable.
+ * starting value and current variable name are captured from the live
+ * predefined-variable table. repl_var_drag_motion() computes a requested
+ * `{ name, value }` change as the mouse moves, using linear mapping
+ * (motion_dx -> delta_value) or log mapping (exponential scaling for large
+ * value ranges). It does not write predef state, command arrays, editor text,
+ * or dirty flags. repl_var_drag_reset() clears the drag state and releases the
+ * variable.
  *
- * State writeback: As motion computes new values, they are written back to
- * the live predefined-variable table immediately, so the geometry updates in
- * real time. If the source contains a literal CMD_VAR_ASSIGN line for the
- * dragged variable, that command text is rewritten in place to match the new
- * value. Expression-based assignments are left unchanged.
+ * State ownership: the variable panel computes drag requests only. The
+ * controller owns routing, compilation, external apply, and undo coalescing.
  *
  * Visual feedback: The variable panel renderer queries repl_var_drag_active_var()
  * and repl_var_drag_log_mode() to highlight the active drag row and adjust
@@ -27,6 +26,8 @@
  */
 #ifndef VARIABLE_PANEL_DRAG_H
 #define VARIABLE_PANEL_DRAG_H
+
+typedef struct VariablePanelValueChange_s VariablePanelValueChange;
 
 /* Query drag state. repl_var_drag_active() returns 1 if a drag is currently
  * in progress, 0 otherwise. repl_var_drag_active_var() returns the index of
@@ -47,12 +48,11 @@ int  repl_var_drag_log_mode(void);
 void repl_var_drag_begin(int row, int log_mode, int x);
 
 /* Update the drag with new mouse x-coordinate. Computes the motion delta from
- * the start x-coordinate, maps it to a new variable value (linear or log),
- * and writes the result back to the live predefined-variable table. Also
- * rewrites any matching literal CMD_VAR_ASSIGN source line to keep the
- * displayed code in sync with the dragged value. Called repeatedly as the
- * mouse moves during a drag. */
-void repl_var_drag_motion(int x);
+ * the start x-coordinate, maps it to a new requested variable value (linear or
+ * log), and returns that `{ name, value }` pair through `out`. Returns 1 when
+ * a drag is active, 0 otherwise. Called repeatedly as the mouse moves during a
+ * drag. */
+int  repl_var_drag_motion(int x, VariablePanelValueChange *out);
 
 /* End a drag transaction and clear the drag state. Called by the editor's
  * mouse handler when the user releases the mouse button. Clears
