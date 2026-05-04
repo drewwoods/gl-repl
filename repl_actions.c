@@ -18,6 +18,8 @@
 #include "editor_help_session.h"
 #include "repl_pipeline.h"
 #include "repl_state.h"
+#include "ui_color_picker.h"
+#include "ui_menu_bar.h"
 #include "ui_panels.h"
 #include "ui_state.h"
 #include "editor_inline_rename.h"
@@ -193,7 +195,8 @@ void repl_cfg_cycle_row(int row, int delta) {
         } else if (repl_state_presentation().code_panel_layout == CODE_PANEL_LAYOUT_BOTTOM) {
             set_status("Layout: bottom code panel");
         } else if (repl_state_presentation().code_panel_layout == CODE_PANEL_LAYOUT_HIDDEN) {
-            ui_panels_close_menus();
+            ui_menu_bar_close();
+            ui_color_picker_close();
             clear_autocomplete_state();
             set_status("Layout: code panel hidden");
         } else {

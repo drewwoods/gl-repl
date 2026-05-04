@@ -106,7 +106,12 @@ ownership / contract guards. Highlights:
   `EditorBufferView`, not directly into editor buffer.
 - `check-ui-returns-hits-only` — `ui_*.c` input helpers compute
   `UiHit` and return; no growth in legacy mutation sites
-  (baseline 8, ratchets down).
+  (baseline 5 after Phase J2.2 dropped 8 → 5; ratchets down).
+- `check-ui-panels-no-mutators` — Phase J2.2 hard guard. `ui_panels.c`
+  is hit-test only: zero matches for code-panel press / click / drag /
+  release / scene-press / motion / mouse-release / escape forwarders
+  and color-picker open/close/press/motion/release / replay-pin /
+  search / menu open-close-activate calls. No allowlist.
 - `check-variable-panel-forwarders` (87) and
   `check-replay-forwarders` (37) — legacy forwarder-API uses
   ratchet downward only.

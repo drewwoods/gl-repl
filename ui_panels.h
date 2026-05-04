@@ -31,9 +31,6 @@
  *     shortcut. Right-click hit-test classification is not yet on
  *     ui_panels_hit_test (deferred — the hit-test surface today is
  *     left-click oriented).
- *
- * Menu / config dispatch helpers:
- *   - ui_panels_open_config(), ui_panels_close_menus().
  */
 #ifndef UI_PANELS_H
 #define UI_PANELS_H
@@ -48,14 +45,6 @@ void ui_panels_render_code_panel(const UiRenderSnapshot *snap);
 
 /* Render the scene status banner from the supplied snapshot. */
 void ui_panels_render_scene_status(const UiRenderSnapshot *snap);
-
-/* --- Menu/config dispatch --- */
-
-/* Open the Config menu (visual dropdown showing toggles/cycles). */
-void ui_panels_open_config(void);
-
-/* Close all menus/overlays (Config, Example dropdown, color picker, etc.). */
-void ui_panels_close_menus(void);
 
 /* Handle right-click in non-code-panel areas: open Config menu if clicked on
  * menu bar region. Returns 1 if consumed, 0 otherwise. mx, my are window

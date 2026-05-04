@@ -1,8 +1,9 @@
 # Plan: Three-Layer Ownership Split (Editor / REPL / UI)
 
-> **Status: landed (2026-05-03).** Phases A–I (commits 1–43) all
-> shipped on `feature/editor-ownership-gap-cleanup`. The
-> M/V/C+compiler+router contract is enforced by 31 boundary
+> **Status: landed (2026-05-03).** Phases A–J (commits 1–49 plus
+> the J2.1 / J2.2 / J2.3 follow-ups) all shipped on
+> `feature/editor-ownership-gap-cleanup`. The
+> M/V/C+compiler+router contract is enforced by 33 boundary
 > checks under `make check-state-ownership`. See `MODULES.md` for
 > the current ownership map. The deferred items are itemized at
 > the end of this document under **Deferred from Phase H** and
@@ -1118,6 +1119,29 @@ runs the boundary-audit sweep and the docs refresh.
 Phase I signal: the parser never calls `set_status`; every boundary
 the plan articulates is enforced by a hard guard; the North Star
 MODULES.md and the build checks describe the same shape.
+
+### Phase J — Close the input boundary
+
+The P1 review on 2026-05-03 (above, *P1 Review Follow-Up: Finish The
+Input Boundary*) flagged two open completion blockers. Phase J closes
+both: J1 puts editor input dispatch in editor-owned code, and J2
+routes code-panel press side effects through `UiHit` so UI input
+files are hit-test only.
+
+| # | Commit | Status |
+|---|---|---|
+| 44–48 | refactor (J1): replace `editor_input.c` shims with real editor handlers; carve non-editor routing (replay / audio / config / save / camera / variable panel / scene press / scroll-wheel zoom) into `imrepl_ctrl_router_*` helpers; delete `repl_editor.{c,h}`; inline timer dispatch into `imrepl_ctrl_timer` / `imrepl_ctrl_tick`; add `check-no-repl-editor-input-shim` hard guard | done (2026-05-03) |
+| 49 | fix (J1 follow-up): `imrepl_ctrl_mouse` UP path releases the camera button; motion path no longer clobbers the camera pointer before the camera router computes its delta | done (2026-05-03) |
+| J2.1 | refactor: payload-complete `ui_panels_hit_test` — emit `UI_HIT_PANEL_DIVIDER`, `UI_HIT_INLINE_COLOR_SWATCH`, `UI_HIT_CODE_INSERT_LINE`, `UI_HIT_MENU_BUTTON`; populate `UI_HIT_CODE_TEXT.char_idx` so the controller no longer reimplements wrap/segment math; document per-kind field semantics in `ui_hit.h` | done (2026-05-03) |
+| J2.2 | refactor: route press / drag / release / menu activation / pin-button / inline-color-swatch / floating-picker control / panel-divider through `imrepl_ctrl_router_handle_code_panel_hit(UiHit, x, y)` + `_router_handle_code_panel_drag(x, y)` + `_router_reset_code_panel_drag()`; delete `ui_panels_handle_code_panel_press / _click / _drag / _release / _scene_press / _motion / _mouse_release / _escape`; move drag-anchor state into `imrepl_ctrl.c`; lower `check-ui-returns-hits-only` baseline 8 → 5; migrate impacted tests to call the controller helpers directly | done (2026-05-03) |
+| J2.3 | checks: add `check-ui-panels-no-mutators` hard guard (no allowlist) and wire it into `make check-state-ownership`; inline `ui_panels_close_menus` / `ui_panels_open_config` wrappers at their callers and delete the wrappers; refresh `MODULES.md`, `CLAUDE.md`, this ledger | done (2026-05-03) |
+
+Phase J signal: `editor_input.c` owns text-document input concerns
+only; `imrepl_ctrl.c` owns cross-subsystem routing; `ui_panels.c`
+is hit-test only. `make check-state-ownership` runs 30 sub-targets
+including `check-no-repl-editor-input-shim` and the new
+`check-ui-panels-no-mutators` hard guard. `make test` /
+`make test-stubs` are green.
 
 ### Conventions across the sequence
 

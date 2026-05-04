@@ -1,7 +1,7 @@
 # REPL Module Guide — North Star
 
 > **This document is the target ownership map.** The
-> `editor-ownership-gap-cleanup` branch landed Phases A–J1 and the
+> `editor-ownership-gap-cleanup` branch landed Phases A–J2 and the
 > tree now matches the contract described here. Two filename
 > deferrals remain (`repl_camera_controls`, `repl_actions` —
 > waiting on the scene/viewport split and the app-shell namespace
@@ -652,7 +652,17 @@ check-ui-returns-hits-only             (Phase 4 — replaces the planned
     editor_*_mut*, repl_state_*_mut*, or peer-subsystem mutators
     directly. They compute a UiHit and return it. The corrected
     contract has imrepl_ctrl dispatch on UiHit.kind to the owning
-    subsystem; UI does not own dispatch.
+    subsystem; UI does not own dispatch. Baseline 5 (lowered from
+    8 in Phase J2.2 once the controller took over code-panel press,
+    drag, menu activation, and color-picker open/close/press/motion/
+    release dispatch).
+
+check-ui-panels-no-mutators            (Phase J2.2 hard guard)
+    ui_panels.c is hit-test only. The legacy code-panel press / click /
+    drag / release / scene-press / motion / mouse-release / escape
+    forwarders + color-picker open/close/press/motion/release + replay
+    pin + search + menu open/close/activate calls are all routed by
+    imrepl_ctrl. Any reappearance fails the build with no allowlist.
 
 check-imrepl-not-editor-mirror         (Phase 4)
     imrepl_ctrl must not accumulate one wrapper per editor operation.
@@ -710,9 +720,10 @@ render-neutral types belong in explicit shared headers such as
 ## Current Status vs. Target
 
 This document describes the **target**. The
-`editor-ownership-gap-cleanup` branch landed Phases A through J1,
+`editor-ownership-gap-cleanup` branch landed Phases A through J2,
 which closed the M/V/C+compiler+router contract end-to-end
-including the input dispatch boundary. As of that branch landing:
+including the input dispatch boundary and the code-panel press
+side-effect routing. As of that branch landing:
 
 - **Three-state split: done.** `EditorState`, `UiState`, and
   `ReplRuntimeState` each own their respective slices. The
@@ -731,7 +742,24 @@ including the input dispatch boundary. As of that branch landing:
 - **Input routing: done.** `ui_panels_hit_test`, `ui_menu_bar_hit_test`,
   `ui_color_picker_hit_test`, `ui_variable_panel_hit_test` produce
   passive `UiHit` results; mutating press handlers track toward zero
-  via `check-ui-returns-hits-only` (baseline 8, ratchets down).
+  via `check-ui-returns-hits-only` (baseline 5, ratchets down). The
+  remaining five hits are 4 `ui_color_picker.c` color-writeback
+  callsites (separate refactor: route through
+  `editor_commit_apply_plan`) plus 1 render-time
+  `repl_action_set_cursor_pixel` publish in `ui_panels.c`.
+- **Code-panel press side effects: routed (Phase J2).**
+  `imrepl_ctrl_router_handle_code_panel_hit(UiHit, x, y)` dispatches
+  every code-panel press / drag / release / menu activation /
+  pin-button / inline-color-swatch / floating-picker control / panel-
+  divider hit by `UiHit.kind`. `ui_panels.c` is hit-test only —
+  the press / click / drag / release / scene-press / motion / mouse-
+  release / escape forwarders are deleted. Hard-guarded by
+  `check-ui-panels-no-mutators`. Drag-anchor state moved into
+  `imrepl_ctrl.c`; `route_menu_button_hit` / `route_menu_item_hit`
+  use `UI_HIT_MENU_BUTTON` vs `UI_HIT_MENU_ITEM` to disambiguate
+  top-level button clicks from open-dropdown row clicks via the
+  payload's `cmd_idx` / `item_idx` rather than reading menu state
+  back through `ui_menu_bar`.
 - **Input dispatch boundary: closed (Phase J1).** `repl_editor.{c,h}`
   is deleted. All keyboard, special-key, mouse, motion, and
   mousewheel dispatch migrated into `editor_input.c` (editor-text
@@ -770,9 +798,11 @@ including the input dispatch boundary. As of that branch landing:
   and `imrepl_ctrl`). Two files (`repl_camera_controls`,
   `repl_actions`) remain on the legacy prefix with explicit
   blockers documented in the plan.
-- **Hard guards: 32 in place.** `make check-state-ownership` runs
-  the full inventory (29 sub-targets) plus `check-gl-boundaries`,
-  `check-layer-coupling`, and `check-public-api-usage`.
+- **Hard guards: 33 in place.** `make check-state-ownership` runs
+  the full inventory (30 sub-targets, including the new
+  `check-ui-panels-no-mutators` from Phase J2.3) plus
+  `check-gl-boundaries`, `check-layer-coupling`, and
+  `check-public-api-usage`.
 
 The deferred items still on the books:
 
@@ -799,7 +829,10 @@ Phase 1 of the earlier refinement plan is complete. Most of refinement
 Phase 2 has landed (R1, R2, R3, R4 controller-side, R5, R6, R7).
 `feature/editor-owns-text.md` Steps 2–6 completed the data-shape half of
 editor-owned text. Phase J1 closed the input dispatch boundary
-(`repl_editor.{c,h}` deleted).
+(`repl_editor.{c,h}` deleted). Phase J2 routed code-panel press side
+effects through `UiHit` dispatch in `imrepl_ctrl`
+(`ui_panels.c` is hit-test only, hard-guarded by
+`check-ui-panels-no-mutators`).
 
 Outstanding tracks:
 
