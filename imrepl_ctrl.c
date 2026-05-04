@@ -226,11 +226,13 @@ static void scene_execute_adapter(float alpha_scale,
                                   void *user_data) {
     (void)user_data;
     repl_execute_set_fade_context(alpha_scale, skip_geom_before_pc);
+    glPushAttrib(GL_ALL_ATTRIB_BITS);
     repl_execute_program(&(ReplExecutionOptions){
         .flat_cmd_count = flat_cmd_count,
         .program = program,
         .text = editor_buffer_view(),
     });
+    glPopAttrib();
 }
 
 /* Execute reset callback: clears fade context after last fade batch */
