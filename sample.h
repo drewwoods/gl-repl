@@ -21,6 +21,7 @@
 
 #include "repl_command.h"
 #include "repl_command_spec.h"
+#include "replay.h"
 #include "editor_search.h"
 
 /* ========================================================================= */
@@ -185,18 +186,6 @@ typedef struct {
 /* ========================================================================= */
 
 typedef enum {
-    REPLAY_OFF = 0,
-    REPLAY_PLAYING,
-    REPLAY_PAUSED,
-    REPLAY_DONE
-} ReplayState;
-
-typedef enum {
-    REPLAY_MODE_POLYGON = 0,
-    REPLAY_MODE_VERTEX
-} ReplayMode;
-
-typedef enum {
     PROFILE_PANEL_OFF = 0,
     PROFILE_PANEL_ON,
     PROFILE_PANEL_DETAILS,
@@ -234,12 +223,6 @@ void mark_normals_dirty(void);
 void navigate_to_line(int target);
 void execute_commands(void);
 void flatten_commands(void);
-void replay_start(void);
-void replay_stop(void);
-void replay_advance(void);
-int  replay_exec_limit(void);
-int  replay_has_active_fades(void);
-int  replay_fill_base_limit(void);
 void recompute_autonormals(void);
 void update_cam_lines(void);
 
