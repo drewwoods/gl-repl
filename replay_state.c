@@ -3,7 +3,6 @@
  */
 #include "replay_state.h"
 #include "replay.h"
-#include "sample.h"
 
 #define REPLAY_STATE_INITIAL                              \
     {                                                     \

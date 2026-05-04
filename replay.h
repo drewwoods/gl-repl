@@ -30,6 +30,18 @@
 #ifndef REPLAY_H
 #define REPLAY_H
 
+typedef enum {
+    REPLAY_OFF = 0,
+    REPLAY_PLAYING,
+    REPLAY_PAUSED,
+    REPLAY_DONE
+} ReplayState;
+
+typedef enum {
+    REPLAY_MODE_POLYGON = 0,
+    REPLAY_MODE_VERTEX
+} ReplayMode;
+
 /* A snapshot of geometry from [old_pc, new_pc) that fades out as new geometry
  * appears. age is the fade timestamp (incremented by repl_replay_tick_fade_batches).
  * Multiple batches can be active simultaneously (ring buffer). */
