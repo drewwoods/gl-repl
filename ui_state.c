@@ -11,9 +11,9 @@
  * phase begins ON; camera faces the same orbit/distance the example
  * loader expects on a fresh session; other slices zeroed.
  *
- * variable_panel visibility moved to variable_panel.c (Phase F
- * commit 31); ui_state_variable_panel* accessors forward to that
- * peer's view slice. */
+ * variable_panel visibility lives on the variable_panel peer
+ * (Phase F commit 31); callers use variable_panel_view /
+ * variable_panel_view_mut directly. */
 #define UI_STATE_INITIAL                                              \
     {                                                                 \
         .status = { .text = "", .ttl = 0 },                           \
@@ -97,16 +97,9 @@ void ui_state_help_reset(void) {
     g_ui_state.help = g_ui_state_defaults.help;
 }
 
-/* Phase F commit 31: variable_panel visibility moved to the
- * variable_panel peer; this accessor forwards. Remove once call
- * sites use variable_panel_view / variable_panel_visible. */
-ReplVariablePanelState ui_state_variable_panel(void) {
-    return variable_panel_view();
-}
-
-ReplVariablePanelState *ui_state_variable_panel_mut(void) {
-    return variable_panel_view_mut();
-}
+/* Phase J7: the legacy `ui_state_variable_panel` / `_mut`
+ * forwarders are gone. Callers use `variable_panel_view` /
+ * `variable_panel_view_mut` directly. */
 
 ReplProfilePanelState ui_state_profile_panel(void) {
     return g_ui_state.profile_panel;

@@ -56,38 +56,19 @@ void variable_panel_set_visible(int visible) {
     g_variable_panel.view.visible = visible ? 1 : 0;
 }
 
-/* Drag transaction handlers. The drag-state writeback (value writeback,
- * source-line rewrite for matching CMD_VAR_ASSIGN) lives in
- * variable_panel_drag.c; these wrappers expose it under the peer-subsystem
- * namespace. */
-int variable_panel_drag_active(void) {
-    return repl_var_drag_active();
-}
-
-int variable_panel_drag_active_var(void) {
-    return repl_var_drag_active_var();
-}
-
-int variable_panel_drag_log_mode(void) {
-    return repl_var_drag_log_mode();
-}
-
+/* Drag transaction handlers. The pure-pass-through query / handler
+ * wrappers (variable_panel_drag_active / _active_var / _log_mode /
+ * variable_panel_handle_drag_begin / _motion / _reset) live in
+ * variable_panel_drag.c — they sit alongside the value-mapping
+ * logic (linear / log) so the implementation file is self-contained.
+ *
+ * The two undo-snapshot fields are kept here because they're a pure
+ * field accessor on the peer's drag state; no value-mapping logic
+ * involved. */
 int variable_panel_drag_undo_snapshot_pushed(void) {
     return variable_panel_drag().undo_snapshot_pushed;
 }
 
 void variable_panel_drag_mark_undo_snapshot_pushed(void) {
     variable_panel_drag_mut()->undo_snapshot_pushed = 1;
-}
-
-void variable_panel_handle_drag_begin(int row, int log_mode, int x) {
-    repl_var_drag_begin(row, log_mode, x);
-}
-
-int variable_panel_handle_drag_motion(int x, VariablePanelValueChange *out) {
-    return repl_var_drag_motion(x, out);
-}
-
-void variable_panel_handle_drag_reset(void) {
-    repl_var_drag_reset();
 }

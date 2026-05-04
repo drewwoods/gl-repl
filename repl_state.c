@@ -140,8 +140,9 @@ static ReplRuntimeState g_repl_state;
 #define g_ac_ghost                  (g_repl_state.autocomplete.ghost)
 #define g_ac_hint                   (g_repl_state.autocomplete.hint)
 /* g_replay_* macros removed (Phase F commit 33); replay state lives
- * on the replay peer (replay_state.c). Internal users use repl_state_replay /
- * _mut, which forward to replay_state_view / _mut. */
+ * on the replay peer (replay_state.c). Callers use replay_state_view
+ * / replay_state_mut directly (Phase J7 retired the legacy
+ * repl_state_replay forwarders). */
 #define g_example_idx               (g_repl_state.scenes.active_example_idx)
 #define g_workspace_dir             (g_repl_state.scenes.workspace_dir)
 #define g_workspace_header_lines    (g_repl_state.import_export.workspace_header_lines)
@@ -410,8 +411,9 @@ void repl_state_time_reset_to_zero(void) {
  * canonical `ui_state_*` API directly; the transitional
  * `repl_state_*` forwarder block was removed in Phase A commit 14.
  *
- * editor_state_variable_drag accessors moved to editor_state.c
- * (Phase 1 commit 9). Use editor_state_variable_drag / _mut / _reset.
+ * Variable-drag accessors live on the variable_panel peer
+ * (variable_panel.h). Use `variable_panel_drag` /
+ * `variable_panel_handle_drag_*` directly.
  *
  * Search + autocomplete accessors moved to editor_state.c (Phase 1
  * commit 7). Use editor_state_search / _autocomplete. */
@@ -468,20 +470,10 @@ void repl_state_render_reset_defaults(void) {
     g_repl_state.render = g_repl_state_defaults.render;
 }
 
-/* Phase F commit 33: replay state bytes moved to the replay peer
- * (replay_state.c). These accessors stay as thin forwarders during
- * the migration. */
-ReplReplayRuntimeState repl_state_replay(void) {
-    return replay_state_view();
-}
-
-ReplReplayRuntimeState *repl_state_replay_mut(void) {
-    return replay_state_mut();
-}
-
-void repl_state_replay_reset(void) {
-    replay_state_reset();
-}
+/* Phase J7: the legacy `repl_state_replay` / `_mut` / `_reset`
+ * forwarders are gone. Callers use `replay_state_view` /
+ * `replay_state_mut` / `replay_state_reset` directly. The
+ * `check-replay-forwarders` ratchet is at 0/0. */
 
 ReplSceneRuntimeState repl_state_scenes(void) {
     return g_repl_state.scenes;

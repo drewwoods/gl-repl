@@ -8,11 +8,11 @@
  * to its handler functions.
  *
  * Storage migration: the visibility flag was on `UiState.variable_panel`
- * and the drag state was on `EditorState.variable_drag`. Both move
- * here. The legacy accessors (`ui_state_variable_panel*`,
- * `editor_state_variable_drag*`) are kept as thin forwarders during
- * the migration so call sites keep compiling; they will be removed
- * once Phase F closes.
+ * and the drag state was on `EditorState.variable_drag`. Both live
+ * here. Phase J7 retired the legacy forwarders
+ * (`ui_state_variable_panel*`, `editor_state_variable_drag*`,
+ * `repl_var_drag_*`) — callers use `variable_panel_view` /
+ * `variable_panel_drag` / `variable_panel_handle_drag_*` directly.
  *
  * Snapshot/restore: tests and undo capture this state via
  * `variable_panel_state_capture` / `_restore` alongside the editor /
@@ -24,11 +24,6 @@
  * directly. ui_variable_panel.c reads visibility through
  * `variable_panel_visible()` and the drag highlights through the
  * narrow `variable_panel_drag_active_var` / `_log_mode` queries.
- *
- * Legacy forwarders (`ui_state_variable_panel*`,
- * `editor_state_variable_drag*`, `repl_var_drag_*`) still resolve via
- * shims so test fixtures keep compiling; they are tracked by
- * `check-variable-panel-forwarders` and ratchet toward zero.
  */
 #ifndef VARIABLE_PANEL_H
 #define VARIABLE_PANEL_H
@@ -68,8 +63,8 @@ void variable_panel_set_visible(int visible);
  *
  * Phase F commit 32 entry points. `imrepl_ctrl` routes
  * UI_HIT_VARIABLE_SLIDER hits through these handlers; the editor's
- * mouse handler now calls them instead of touching the legacy
- * repl_var_drag_* surface directly.
+ * mouse handler calls them. Implementations live in
+ * variable_panel_drag.c alongside the linear / log scaling logic.
  */
 
 /* Query whether a drag transaction is currently active. */

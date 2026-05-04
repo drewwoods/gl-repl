@@ -83,8 +83,9 @@ void                     repl_state_time_reset_to_zero(void);
  * were removed in Phase A commit 14.
  * Search + autocomplete accessors moved to editor_state.h (Phase 1
  * commit 7). Use editor_state_search / _autocomplete and friends.
- * editor_state_variable_drag accessors moved to editor_state.h
- * (Phase 1 commit 9). Use editor_state_variable_drag / _mut / _reset. */
+ * Variable-drag accessors live on the variable_panel peer
+ * (variable_panel.h). Use `variable_panel_drag` /
+ * `variable_panel_handle_drag_*` directly. */
 
 ReplPresentationState           repl_state_presentation(void);
 ReplPresentationState       *repl_state_presentation_mut(void);
@@ -96,10 +97,6 @@ void                         repl_state_presentation_reset_example_defaults(void
 ReplRenderState        repl_state_render(void);
 ReplRenderState       *repl_state_render_mut(void);
 void                   repl_state_render_reset_defaults(void);
-
-ReplReplayRuntimeState repl_state_replay(void);
-ReplReplayRuntimeState       *repl_state_replay_mut(void);
-void                          repl_state_replay_reset(void);
 
 ReplSceneRuntimeState    repl_state_scenes(void);
 ReplSceneRuntimeState       *repl_state_scenes_mut(void);

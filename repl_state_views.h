@@ -250,8 +250,6 @@ const float *repl_state_grid_extents(void);
 
 ReplRenderState          repl_state_render(void);
 
-ReplReplayRuntimeState    repl_state_replay(void);
-
 ReplSceneRuntimeState     repl_state_scenes(void);
 const char *repl_state_workspace_dir(void);
 

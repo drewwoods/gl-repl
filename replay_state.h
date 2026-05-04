@@ -9,17 +9,15 @@
  * functions in commit 34.
  *
  * Storage migration: ReplReplayRuntimeState was a member of
- * ReplRuntimeState. Its bytes move into a static here. The legacy
- * `repl_state_replay` / `_mut` / `_reset` accessors are kept as thin
- * forwarders so existing call sites (ui_snapshot build, executor,
- * editor key paths, tests) keep compiling. They will be removed once
- * Phase F closes.
+ * ReplRuntimeState. Its bytes live in a static here. The legacy
+ * `repl_state_replay` / `_mut` / `_reset` forwarders were retired
+ * in Phase J7; callers use `replay_state_view` / `replay_state_mut`
+ * / `replay_state_reset` directly.
  *
  * Snapshot/restore: tests and undo capture this state via
  * `replay_state_capture` / `_restore` alongside the editor / ui /
- * runtime captures. The replay-mode behavior in replay.c is
- * unchanged — it still drives the state machine, just now writing
- * through `replay_state_mut()` rather than `repl_state_replay_mut()`.
+ * runtime captures. The replay-mode behavior in replay.c writes
+ * through `replay_state_mut()`.
  */
 #ifndef REPLAY_STATE_H
 #define REPLAY_STATE_H

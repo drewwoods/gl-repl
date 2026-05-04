@@ -155,8 +155,9 @@ typedef struct {
     EditorTransformerList transformers;
     EditorHighlightList   highlights;
     EditorVirtualLineList virtual_lines;
-    /* variable_drag moved to variable_panel.c (Phase F commit 31).
-     * editor_state_variable_drag* accessors forward to the peer. */
+    /* variable_drag lives on the variable_panel peer (Phase F
+     * commit 31). Callers use variable_panel_drag /
+     * variable_panel_drag_mut / variable_panel_handle_drag_*. */
     EditorScrollState     scroll;
 } EditorState;
 
@@ -322,11 +323,6 @@ int                          editor_state_virtual_lines_append(int after_line_id
                                                                VirtualLineStyle style,
                                                                const char *text,
                                                                const char *aux);
-
-/* Variable slider drag transaction. */
-ReplVariableDragState  editor_state_variable_drag(void);
-ReplVariableDragState *editor_state_variable_drag_mut(void);
-void                   editor_state_variable_drag_reset(void);
 
 /* Editor scroll slice. */
 EditorScrollState  editor_state_scroll(void);
