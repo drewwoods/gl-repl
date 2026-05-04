@@ -1108,47 +1108,81 @@ static int route_variable_slider_hit(int x, int y) {
                                                                GLUT_DOWN, x, y);
 }
 
+/* Derive a code-panel target line from a hit, mirroring the legacy
+ * code_panel_drag_target. Insert-line drags use edit_line (the line
+ * the cursor is parked on), only falling back to the last committed
+ * line when edit_line is past the document end — preserving the
+ * insertion-point as the drag endpoint when the user is editing
+ * mid-document. Returns -1 if the hit is not a code-panel kind. */
+static int code_panel_target_from_hit(UiHit hit) {
+    switch (hit.kind) {
+    case UI_HIT_CODE_TEXT:
+    case UI_HIT_CODE_GUTTER:
+        return hit.line_idx;
+    case UI_HIT_CODE_INSERT_LINE: {
+        int target = hit.line_idx; /* set to repl_state_edit_line() in J2.1 */
+        int doc_count = repl_state_document_count();
+        if (target >= doc_count)
+            target = doc_count - 1;
+        return target;
+    }
+    default:
+        return -1;
+    }
+}
+
 int imrepl_ctrl_router_handle_code_panel_hit(UiHit hit, int x, int y) {
     /* A click outside the menu bar (anywhere that isn't UI_HIT_MENU_BUTTON
      * / UI_HIT_MENU_ITEM) dismisses an open dropdown — matches the legacy
      * "click outside dropdown closes it" behaviour from
      * ui_panels_handle_code_panel_press. */
+    int dismissed_dropdown = 0;
     if (hit.kind != UI_HIT_MENU_BUTTON &&
         hit.kind != UI_HIT_MENU_ITEM &&
         hit.kind != UI_HIT_PIN_BUTTON &&
         hit.kind != UI_HIT_COLOR_SWATCH &&
         ui_menu_bar_menu_dropdown_is_open()) {
         ui_menu_bar_close();
+        dismissed_dropdown = 1;
     }
 
+    int consumed;
     switch (hit.kind) {
     case UI_HIT_COLOR_SWATCH:
-        return route_color_picker_control_hit(x, y);
+        consumed = route_color_picker_control_hit(x, y); break;
     case UI_HIT_INLINE_COLOR_SWATCH:
-        return route_inline_color_swatch_hit(&hit, y);
+        consumed = route_inline_color_swatch_hit(&hit, y); break;
     case UI_HIT_PIN_BUTTON:
-        return route_pin_button_hit(&hit);
+        consumed = route_pin_button_hit(&hit); break;
     case UI_HIT_MENU_BUTTON:
-        return route_menu_button_hit(&hit);
+        consumed = route_menu_button_hit(&hit); break;
     case UI_HIT_MENU_ITEM:
-        return route_menu_item_hit(&hit);
+        consumed = route_menu_item_hit(&hit); break;
     case UI_HIT_VARIABLE_SLIDER:
-        return route_variable_slider_hit(x, y);
+        consumed = route_variable_slider_hit(x, y); break;
     case UI_HIT_PANEL_DIVIDER:
-        return route_panel_divider_hit(&hit);
+        consumed = route_panel_divider_hit(&hit); break;
     case UI_HIT_CODE_TEXT:
-        return route_code_text_hit(&hit);
+        consumed = route_code_text_hit(&hit); break;
     case UI_HIT_CODE_INSERT_LINE:
-        return route_code_insert_line_hit(&hit);
+        consumed = route_code_insert_line_hit(&hit); break;
     case UI_HIT_CODE_GUTTER:
-        return route_code_gutter_hit(&hit);
+        consumed = route_code_gutter_hit(&hit); break;
     case UI_HIT_HELP_PANEL:
     case UI_HIT_REPLAY_BUTTON:
     case UI_HIT_SCENE:
     case UI_HIT_NONE:
     default:
-        return 0;
+        consumed = 0;
     }
+
+    /* A click that only dismissed an open dropdown is consumed by the
+     * dismiss itself; do not fall through to scene-press / camera /
+     * variable-slider drag for the same press. Matches legacy
+     * UI_PANEL_PRESS_CONSUMED behaviour. */
+    if (!consumed && dismissed_dropdown)
+        return 1;
+    return consumed;
 }
 
 int imrepl_ctrl_router_handle_code_panel_drag(int x, int y) {
@@ -1156,23 +1190,26 @@ int imrepl_ctrl_router_handle_code_panel_drag(int x, int y) {
         return 0;
 
     UiHit hit = ui_panels_hit_test(x, y);
-    int target;
-    switch (hit.kind) {
-    case UI_HIT_CODE_TEXT:
-    case UI_HIT_CODE_GUTTER:
-        target = hit.line_idx;
-        break;
-    case UI_HIT_CODE_INSERT_LINE:
-        /* Clamp to the last committed line so the selection stays
-         * within the document range. Matches the legacy
-         * code_panel_drag_target clamp. */
-        target = repl_state_document_count() > 0
-               ? repl_state_document_count() - 1 : -1;
-        break;
-    default:
-        /* Drag wandered off the code panel — no-op until the cursor
-         * comes back, matching legacy code_panel_drag_target. */
-        return 1;
+    int target = code_panel_target_from_hit(hit);
+    if (target < 0) {
+        /* Drag wandered off the code-panel kinds — clamp the pointer
+         * into the code-panel rect and re-classify so the selection
+         * extends to the nearest visible row. Matches legacy
+         * code_panel_drag_target's [0, visible_lines-1] vis clamp. */
+        int cp_x, cp_y, cp_w, cp_h;
+        repl_layout_code_panel_rect(&cp_x, &cp_y, &cp_w, &cp_h);
+        int win_h = ui_state_viewport().window_h;
+        if (cp_w > 0 && cp_h > 0 && win_h > 0) {
+            int gl_y = win_h - y;
+            int cx = x;
+            int cy = y;
+            if (cx < cp_x + 1) cx = cp_x + 1;
+            if (cx > cp_x + cp_w - 1) cx = cp_x + cp_w - 1;
+            if (gl_y < cp_y + 1) cy = win_h - (cp_y + 1);
+            if (gl_y > cp_y + cp_h - 1) cy = win_h - (cp_y + cp_h - 1);
+            UiHit clamped = ui_panels_hit_test(cx, cy);
+            target = code_panel_target_from_hit(clamped);
+        }
     }
     if (target < 0)
         return 1;
