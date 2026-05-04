@@ -65,7 +65,6 @@ typedef enum {
 #define CFG_DEFAULT_CODE_PANEL_LAYOUT CODE_PANEL_LAYOUT_TOP
 #define CFG_DEFAULT_PANEL_FRAC        0.45f
 
-#define MAX_LIGHTS        4
 /* Shared by live scene overlays and generated output.c outline passes. */
 #define REPL_OUTLINE_POLYGON_OFFSET_FACTOR (-0.01f)
 #define REPL_OUTLINE_POLYGON_OFFSET_UNITS  (-100.0f)
@@ -125,15 +124,6 @@ typedef enum {
     PROFILE_PANEL_DETAILS,
     PROFILE_PANEL_MODE_COUNT
 } ProfilePanelMode;
-
-typedef struct {
-    GLenum   id;         /* GL_LIGHT0 .. GL_LIGHT3 */
-    int      enabled;
-    float    pos[4];     /* xyz + w (0=directional, 1=positional) */
-    float    diffuse[4];
-    float    ambient[4];
-    float    specular[4];
-} SceneLight;
 
 int  init_section_line_count(void);
 void init_section_line(int i, char *buf, size_t n);
