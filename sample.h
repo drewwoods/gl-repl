@@ -23,6 +23,8 @@
 #include "repl_command_spec.h"
 #include "repl_presentation.h"
 #include "replay.h"
+#include "editor_limits.h"
+#include "repl_export_state.h"
 #include "ui_layout.h"
 #include "ui_metrics.h"
 #include "ui_replay_hud.h"
@@ -31,11 +33,6 @@
 /* ========================================================================= */
 /* Configuration                                                              */
 /* ========================================================================= */
-
-#define MAX_INPUT_LEN   1024
-#define MAX_AC_MATCHES  10
-#define MAX_WORKSPACE_HEADER_LINES 48
-#define WORKSPACE_HEADER_LINE_LEN   96
 
 #define MAX_ACCUM_SAMPLES 16
 #define ACCUM_STEP_COUNT  5
@@ -54,8 +51,6 @@
 #define REPL_OUTLINE_POLYGON_OFFSET_FACTOR (-0.01f)
 #define REPL_OUTLINE_POLYGON_OFFSET_UNITS  (-100.0f)
 #define TESS_VERT_BUF_SIZE 256
-#define CAM_LINE_COUNT 4
-#define RENDER_STATE_LINE_COUNT 3
 
 typedef struct {
     GLdouble pos[3];
