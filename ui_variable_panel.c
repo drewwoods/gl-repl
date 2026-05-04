@@ -19,7 +19,7 @@
 #include "replay_state.h"
 #include "./include/gl_2d.h"
 #include "ui_metrics.h"
-#include "ui_replay_hud.h"
+#include "replay_ui_hud.h"
 
 /* Local copy of the layout-mode clamp.  Duplicated by repl_editor.c and
  * ui_panels.c; promoting to a shared header is a separate cleanup. */

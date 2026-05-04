@@ -1,15 +1,23 @@
 /*
- * ui_replay_hud.h - replay status HUD overlay.
+ * replay_ui_hud.h - replay subsystem's UI surface (status HUD overlay).
  *
- * Screen-space replay HUD rendered from a UI-local snapshot. This is a
- * UI-layer overlay, not part of the 3D scene renderer.
+ * Feature-owned UI: the replay peer subsystem's screen-space HUD. Lives
+ * under the `replay_ui_*` prefix instead of generic `ui_*` because the
+ * module legitimately knows replay concepts (mode, PC, speed, play /
+ * paused / done state) and reads from the replay peer subsystem's
+ * snapshot. It still must not own unrelated editor / REPL state and
+ * must not call parser / compile / apply.
+ *
+ * See MODULES.md "2D UI rendering and hit-test" for the prefix
+ * discipline rule and `scripts/check-replay-ui-isolation.sh` for the
+ * lighter feature-UI guard.
  */
-#ifndef UI_REPLAY_HUD_H
-#define UI_REPLAY_HUD_H
+#ifndef REPLAY_UI_HUD_H
+#define REPLAY_UI_HUD_H
 
 #include "ui_metrics.h"
 
-/* Replay HUD layout shared by ui_replay_hud.c and other UI helpers that need
+/* Replay HUD layout shared by replay_ui_hud.c and other UI helpers that need
  * to position themselves relative to the HUD footprint. */
 #define REPLAY_HUD_MARGIN_X      18
 #define REPLAY_HUD_MARGIN_Y      18
@@ -45,6 +53,6 @@ typedef struct UiReplayHudState {
 
 /* Render the replay HUD once per frame. Uses only the supplied UI snapshot
  * and no live REPL state. No-op when replaying is disabled. */
-void ui_replay_hud_render(const UiReplayHudState *state);
+void replay_ui_hud_render(const UiReplayHudState *state);
 
-#endif /* UI_REPLAY_HUD_H */
+#endif /* REPLAY_UI_HUD_H */

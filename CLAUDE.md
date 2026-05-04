@@ -112,6 +112,11 @@ ownership / contract guards. Highlights:
   release / scene-press / motion / mouse-release / escape forwarders
   and color-picker open/close/press/motion/release / replay-pin /
   search / menu open-close-activate calls. No allowlist.
+- `check-replay-ui-isolation` — feature-UI prefix discipline.
+  `replay_ui_*.c` may render replay HUD/buttons, hit-test replay
+  controls, route hits via `replay_handle_*`, and read replay
+  snapshots, but must not mutate editor/REPL state, call
+  parser/compile/apply, or grow generic `ui_*` responsibilities.
 - `check-variable-panel-forwarders` (87) and
   `check-replay-forwarders` (37) — legacy forwarder-API uses
   ratchet downward only.
@@ -180,8 +185,8 @@ ownership / contract guards. Highlights:
 | `repl_replay_annotations.h` | Code-panel replay annotation API |
 | `ui_snapshot.h` | `UiRenderSnapshot` — frame-frozen bundle built once per frame by `imrepl_ctrl_build_ui_snapshot()` |
 | `ui_editor.h` | Per-frame editor-overlay snapshots (swatches, sliders, highlights) pushed by the controller |
-| `ui_replay_hud.c` | 2D replay status HUD rendered from `UiRenderSnapshot` |
-| `ui_replay_hud.h` | Replay HUD render entrypoint |
+| `replay_ui_hud.c` | 2D replay status HUD (feature-UI under the `replay_ui_*` prefix; reads replay peer snapshot) |
+| `replay_ui_hud.h` | Replay HUD render entrypoint |
 | `ui_profile_panel.c` | CPU profiling overlay panel (per-frame section timings) |
 | `ui_profile_panel.h` | Profile panel render entrypoint |
 | `ui_menu_bar.c` | Code-panel menu bar, dropdowns, config right-click handling, search slot |

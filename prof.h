@@ -52,7 +52,7 @@ typedef enum {
     PROF_FLATTEN,       /* flatten_commands() (only when dirty) */
     PROF_REFORMAT,      /* repl_reformat_commands() (on demand) */
     PROF_AUTONORMAL,    /* recompute_autonormals() (only when dirty) */
-    PROF_REPLAY_HUD,    /* ui_replay_hud_render() (only when replaying) */
+    PROF_REPLAY_HUD,    /* replay_ui_hud_render() (only when replaying) */
     PROF_PROFILE_PANEL, /* ui_profile_panel_render() (the panel itself) */
     PROF_FRAME_RESTORE, /* post-render flat-count + predef-value restore */
     PROF_FRAME_TOTAL,   /* entire display callback */

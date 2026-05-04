@@ -1,14 +1,20 @@
 /*
- * ui_replay_hud.c - replay status HUD overlay.
+ * replay_ui_hud.c - replay subsystem's UI surface (status HUD overlay).
+ *
+ * Feature-owned UI under the `replay_ui_*` prefix. May know replay
+ * concepts (mode / PC / play-paused-done / speed / expand) and read
+ * the replay snapshot. Must not own unrelated editor / REPL state and
+ * must not call parser / compile / apply. Enforced by
+ * `scripts/check-replay-ui-isolation.sh`.
  */
-#include "ui_replay_hud.h"
+#include "replay_ui_hud.h"
 #include "./include/gl_2d.h"
 #include "replay_state.h"
 
 #include <stdio.h>
 #include <string.h>
 
-void ui_replay_hud_render(const UiReplayHudState *state) {
+void replay_ui_hud_render(const UiReplayHudState *state) {
     char progress_txt[64];
     char kbd_txt[128];
     float progress = 0.0f;

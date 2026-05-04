@@ -364,7 +364,7 @@ R1 target in `feature/push-architecture-refinement.md`:
 * scene iterates the snapshot and owns the GL pass orchestration without
   calling `repl_replay_*` or `repl_state_*`
 * accumulation-AA settings are `SceneRenderConfig` fields set by the controller
-* 2D replay HUD lives in `ui_replay_hud.c`, driven by config fields
+* 2D replay HUD lives in `replay_ui_hud.c`, driven by config fields
 * `scene_*.c` files contain no `repl_state_*` or `repl_replay_*` calls; once
   the relevant Phase 2 slice is complete, Makefile checks keep that true
 
@@ -562,7 +562,7 @@ Completed (Phase 1 + most of Phase 2):
   focus/guide snapshot construction, scene-local accumulation jitter, and
   app-shell shim removal (`sample.c` calls `imrepl_ctrl_*` directly).
 - ✅ **R1** — Replay/HUD migration: controller builds `ReplayFadePlan`; scene
-  iterates it; 2D HUD lives in `ui_replay_hud.c`. Scene files contain zero
+  iterates it; 2D HUD lives in `replay_ui_hud.c`. Scene files contain zero
   `repl_replay_*` and `repl_state_*` calls.
 - ✅ **R2** — UI → REPL mutation holes closed: `ui_color_picker`, `ui_panels`,
   `ui_help_overlay` route mutations through store/action APIs. UI files have
