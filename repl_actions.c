@@ -6,7 +6,6 @@
  * cycling, F-key/Ctrl-key config shortcuts, startup config defaults, and menu
  * item actions that touch scenes, files, replay, audio, or presentation state.
  */
-#include "sample.h"
 #include "repl_actions.h"
 #include "repl_audio.h"
 #include "repl_core.h"

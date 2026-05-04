@@ -3,7 +3,6 @@
  *
  * Extracted from sample.c for maintainability.
  */
-#include "sample.h"
 #include "scene_axes.h"
 #include "scene_backdrop.h"
 #include "scene_grid.h"

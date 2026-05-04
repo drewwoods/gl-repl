@@ -1,8 +1,8 @@
 /*
  * scene_axes.c - axes theme rendering
  */
-#include "sample.h"
 #include "scene_axes.h"
+#include "./include/gl_2d.h"
 
 enum {
     SCENE_AXIS_X = 0,

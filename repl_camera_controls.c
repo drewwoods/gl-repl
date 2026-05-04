@@ -6,7 +6,6 @@
  * Phase 2 migration; this module owns active drag modifiers, inertial
  * velocities, orbit/pan/zoom math, and per-frame momentum decay.
  */
-#include "sample.h"
 #include "repl_camera_controls.h"
 #include "repl_state.h"
 

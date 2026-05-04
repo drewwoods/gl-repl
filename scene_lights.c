@@ -1,8 +1,8 @@
 /*
  * scene_lights.c - scene light setup and visible light indicators.
  */
-#include "sample.h"
 #include "scene_lights.h"
+#include "./include/gl_2d.h"
 
 static void scene_lights_push_state(void) {
     glPushAttrib(GL_ALL_ATTRIB_BITS);

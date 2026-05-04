@@ -3,7 +3,7 @@
  */
 #include "repl_debug.h"
 
-#include "sample.h"
+#include "repl_export.h"
 #include "repl_command_spec.h"
 #include "repl_pipeline.h"
 #include "repl_state.h"

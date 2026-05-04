@@ -1,9 +1,9 @@
 /*
  * ui_replay_hud.c - replay status HUD overlay.
  */
-#include "sample.h"
 #include "ui_replay_hud.h"
 #include "./include/gl_2d.h"
+#include "replay_state.h"
 
 #include <stdio.h>
 #include <string.h>

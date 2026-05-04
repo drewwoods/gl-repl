@@ -5,9 +5,9 @@
  * The Keys tab's F-key section is generated dynamically from g_cfg_items
  * so the displayed bindings always match the actual config table.
  */
-#include "sample.h"
 #include "repl_config.h"
 #include "ui_help_overlay.h"
+#include "ui_metrics.h"
 #include "./include/gl_2d.h"
 
 /* Compile-time stringify for embedding macro values in string literals */

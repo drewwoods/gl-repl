@@ -21,7 +21,6 @@
 #ifndef UI_SNAPSHOT_H
 #define UI_SNAPSHOT_H
 
-#include "sample.h"
 #include "editor_state.h"  /* ReplEditorInputView (Phase 1 commit 5) */
 #include "editor_help_session.h"
 #include "repl_state_views.h"

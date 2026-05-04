@@ -2,7 +2,6 @@
  * repl_executor.c -- Flat command execution, GLUtesselator resource lifetimes,
  * and execution-time state helpers.
  */
-#include "sample.h"
 #include "repl_core_internal.h"
 #include "repl_executor.h"
 #include "repl_state.h"

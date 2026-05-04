@@ -5,6 +5,7 @@
 #include "repl_state.h"
 #include "ui_state.h"
 #include "support/test_harness.h"
+#include "scene_render.h"
 
 #ifdef OPENGL_VIBE_USE_GL_STUBS
 #include <GL/gl_stub_counts.h>
@@ -80,7 +81,7 @@ int main() {
         ASSERT_INT("extract_for_args spaced ok", r, 1);
         ASSERT_STR("extract_for_args spaced var", var, "j");
         ASSERT_STR("extract_for_args spaced args", args, "1 , 5 , 0.5");
-        
+
         ASSERT_INT("extract_for_args fail", extract_for_args_text("not a for", var, 16, args, 64), 0);
     }
 
@@ -134,7 +135,7 @@ int main() {
         repl_feed_line_public("for(i, 0, 1) {");     /* 0 */
         repl_feed_line_public("  glVertex3f(0,0,0);"); /* 1 */
         repl_feed_line_public("}");                    /* 2 */
-        
+
         ASSERT_INT("repl_source_scope_find_block_end(0)", repl_source_scope_find_block_end(0), 2);
         ASSERT_INT("repl_source_scope_block_depth_at(1)", repl_source_scope_block_depth_at(1), 1);
         ASSERT_INT("repl_source_scope_block_depth_at(2)", repl_source_scope_block_depth_at(2), 1); /* Still 1 at the closing brace */
@@ -146,7 +147,7 @@ int main() {
         repl_reset_state(); declare_test_vars();
         repl_feed_line_public("for(i, 0, 1) {");
         repl_feed_line_public("  for(j, 0, 1) {");
-        
+
         ExprVar vars[8];
         int n = collect_visible_vars(2, vars, 8);
         ASSERT_INT("collect_visible_vars count", n, 2);

@@ -10,10 +10,10 @@
  * the input line stay in ui_panels.c where the code panel's row
  * layout has the surrounding context.
  */
-#include "sample.h"
 #include "ui_autocomplete_panel.h"
 #include "ui_layout.h"
 #include "./include/gl_2d.h"
+#include "ui_metrics.h"
 
 void ui_autocomplete_panel_render(const UiRenderSnapshot *snap) {
     ReplAutocompleteState           ac  = snap->autocomplete;

@@ -1,7 +1,6 @@
 /*
  * repl_example_loader.c -- Built-in example loading and metadata handling.
  */
-#include "sample.h"
 #include "repl_export.h"
 #include "repl_command_store.h"
 #include "repl_core_internal.h"

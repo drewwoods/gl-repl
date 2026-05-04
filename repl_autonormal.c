@@ -1,7 +1,6 @@
 /*
  * repl_autonormal.c -- Auto-generated normal commands and feeding-state lookup.
  */
-#include "sample.h"
 #include "repl_core.h"
 #include "repl_command_store.h"
 #include "repl_source_scope.h"
