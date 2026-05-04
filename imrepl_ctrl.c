@@ -34,7 +34,7 @@
 #include "ui_menu_bar.h"
 #include "ui_panels.h"
 #include "ui_profile_panel.h"
-#include "ui_replay_hud.h"
+#include "replay_ui_hud.h"
 #include "ui_snapshot.h"
 #include "ui_state.h"
 #include "ui_variable_panel.h"
@@ -524,7 +524,7 @@ void imrepl_ctrl_display_frame(void) {
             .replay_expand_args = frame_replay.expand_args,
             .replaying = scene_config.replaying,
         };
-        ui_replay_hud_render(&replay_hud_state);
+        replay_ui_hud_render(&replay_hud_state);
         prof_end(PROF_REPLAY_HUD);
     }
 

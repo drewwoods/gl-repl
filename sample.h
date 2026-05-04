@@ -32,7 +32,7 @@
 #include "scene_render.h"
 #include "ui_layout.h"
 #include "ui_metrics.h"
-#include "ui_replay_hud.h"
+#include "replay_ui_hud.h"
 #include "editor_input.h"
 #include "editor_search.h"
 

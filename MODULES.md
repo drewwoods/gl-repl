@@ -342,10 +342,20 @@ Scene code renders. It does not parse, edit, save, or dispatch UI actions.
 
 ### 5. 2D UI rendering and hit-test
 
-`ui_*` owns screen-space drawing and hit-testing. Render paths consume
-snapshots. Input paths return neutral `UiHit` results to `imrepl_ctrl`,
-which dispatches to the owning subsystem. UI does **not** own state and
-does **not** dispatch.
+Generic `ui_*` modules are reusable screen-space view/hit-test
+services. They render from snapshots and return neutral `UiHit`
+results to `imrepl_ctrl`, which dispatches to the owning subsystem.
+UI does **not** own state and does **not** dispatch.
+
+Feature-owned UI may live under the feature prefix instead — for
+example `replay_ui_*` for the replay subsystem's HUD/buttons.
+Feature-UI modules may know their feature's semantics and route hits
+to that feature's controller (e.g. call `replay_handle_*`), but they
+must not own unrelated editor / REPL / app-router state and must not
+call parser / compile / apply. This keeps generic `ui_*` modules
+fully feature-agnostic without slowly punching holes through their
+allowlists. The contract is enforced by a per-feature lighter guard:
+`scripts/check-replay-ui-isolation.sh` covers `replay_ui_*`.
 
 | Module | Role |
 |--------|------|
@@ -361,7 +371,7 @@ does **not** dispatch.
 | `ui_variable_panel` | Renderer for the variable-slider panel (the panel chrome — the *peer subsystem* owns drag/visibility state). Input returns `UI_HIT_VARIABLE_SLIDER` |
 | `ui_autocomplete_panel` | Completion popup renderer; reads `EditorState.autocomplete` |
 | `ui_profile_panel` | CPU timing HUD renderer |
-| `ui_replay_hud` | 2D replay HUD; reads replay peer subsystem state through snapshot |
+| `replay_ui_hud` | **Feature-UI** (replay peer): 2D replay HUD; reads replay peer subsystem state through snapshot. Lives under the `replay_ui_*` prefix because it knows replay concepts (mode / PC / play-paused-done / speed); audited by `check-replay-ui-isolation` |
 
 Files no longer in this layer:
 
@@ -466,7 +476,7 @@ flowchart LR
         uivpanel["ui_variable_panel.c<br/>variable panel chrome"]
         uiac["ui_autocomplete_panel.c<br/>completion popup"]
         uiprof["ui_profile_panel.c<br/>timing HUD"]
-        uirhud["ui_replay_hud.c<br/>replay HUD"]
+        uirhud["replay_ui_hud.c<br/>replay HUD (feature-UI)"]
         uilayout["ui_layout.c<br/>rect geometry"]
         uicpdoc["editor_code_panel_document.c<br/>document row model"]
         uicplay["ui_code_panel_layout.c<br/>wrap iterator"]
@@ -664,6 +674,14 @@ check-ui-panels-no-mutators            (Phase J2.2 hard guard)
     pin + search + menu open/close/activate calls are all routed by
     imrepl_ctrl. Any reappearance fails the build with no allowlist.
 
+check-replay-ui-isolation              (feature-UI prefix discipline)
+    replay_ui_*.c is feature-owned UI: it may render the replay HUD,
+    hit-test replay-specific controls, route hits via replay_handle_*,
+    and read replay snapshots. It must not mutate editor/REPL state,
+    call parser/compile/apply, or grow generic ui_* responsibilities.
+    A separate lighter guard for feature UI keeps the generic ui_*
+    allowlists clean of feature-specific exemptions.
+
 check-imrepl-not-editor-mirror         (Phase 4)
     imrepl_ctrl must not accumulate one wrapper per editor operation.
     New editor behavior belongs behind editor_handle_* or editor_*
@@ -798,10 +816,11 @@ side-effect routing. As of that branch landing:
   and `imrepl_ctrl`). Two files (`repl_camera_controls`,
   `repl_actions`) remain on the legacy prefix with explicit
   blockers documented in the plan.
-- **Hard guards: 33 in place.** `make check-state-ownership` runs
-  the full inventory (30 sub-targets, including the new
-  `check-ui-panels-no-mutators` from Phase J2.3) plus
-  `check-gl-boundaries`, `check-layer-coupling`, and
+- **Hard guards: 34 in place.** `make check-state-ownership` runs
+  the full inventory (31 sub-targets, including
+  `check-ui-panels-no-mutators` from Phase J2.3 and
+  `check-replay-ui-isolation` for the `replay_ui_*` feature-UI
+  prefix) plus `check-gl-boundaries`, `check-layer-coupling`, and
   `check-public-api-usage`.
 
 The deferred items still on the books:

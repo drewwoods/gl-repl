@@ -20,7 +20,7 @@ static TestHarness g_harness = TEST_HARNESS_INIT;
 /* Rename the controller's downstream render delegates so this test can stub
  * them and inspect the per-frame config without a real GL context. */
 #define scene_render_3d_scene              test_scene_render_3d_scene
-#define ui_replay_hud_render               test_ui_replay_hud_render
+#define replay_ui_hud_render               test_replay_ui_hud_render
 #define ui_panels_render_code_panel        test_ui_panels_render_code_panel
 #define ui_autocomplete_panel_render       test_ui_autocomplete_panel_render
 #define ui_menu_bar_render_example_dropdown test_ui_menu_bar_render_example_dropdown
@@ -32,7 +32,7 @@ static TestHarness g_harness = TEST_HARNESS_INIT;
 #include "imrepl_ctrl.c"
 
 #undef scene_render_3d_scene
-#undef ui_replay_hud_render
+#undef replay_ui_hud_render
 #undef ui_panels_render_code_panel
 #undef ui_autocomplete_panel_render
 #undef ui_menu_bar_render_example_dropdown
@@ -81,7 +81,7 @@ void test_scene_render_3d_scene(const SceneRenderConfig *config) {
     repl_state_flat_program_set_count(g_mutated_flat_count);
 }
 
-void test_ui_replay_hud_render(const UiReplayHudState *state) {
+void test_replay_ui_hud_render(const UiReplayHudState *state) {
     g_replay_hud_calls++;
     g_last_replay_hud_state = *state;
 
