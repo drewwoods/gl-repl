@@ -29,7 +29,21 @@
 #ifndef REPL_COMMAND_SPEC_H
 #define REPL_COMMAND_SPEC_H
 
-#include "sample.h"
+#include "repl_command.h"
+
+typedef struct {
+    const char *name;
+    GLenum      value;
+} EnumEntry;
+
+#define MAX_FUNC_HINT_PARAMS 10
+
+typedef struct {
+    const char *insert_text;
+    const char *display_text;
+    int         param_count;
+    const char *params[MAX_FUNC_HINT_PARAMS];
+} FuncCompletion;
 
 /* Metadata for control structures and command-type properties. Describes whether
  * a command type needs a trailing semicolon (e.g., float decl, assignment) and
