@@ -1,12 +1,12 @@
 /*
  * ui_color_picker.c -- Floating color picker for literal color commands.
  */
+#include "editor_commit.h"
 #include "editor_state.h"
-#include "repl_command_store.h"
+#include "repl_compile.h"
 #include "repl_parser.h"
 #include "repl_state_views.h"
 #include "ui_state.h"
-#include "editor_undo.h"
 #include "ui_color_picker.h"
 #include "ui_layout.h"
 #include "config.h" /* CP_CLEAR_MAX_V */
@@ -29,6 +29,13 @@ static float g_cp_alpha    = 1.0f;
 static int   g_cp_px       = 0, g_cp_py = 0;  /* top-left (OpenGL y-up) */
 static int   g_cp_drag     = 0;    /* 0=none 1=SV 2=hue 3=alpha */
 static int   g_cp_has_alpha= 0;    /* 1 when editing an RGBA color command */
+/* Picker session undo bookkeeping: the very first writeback after open
+ * (or after switching the active line) captures one undo snapshot via
+ * editor_commit_apply_external_change(capture_undo=1). Subsequent
+ * slider drags within the same session pass capture_undo=0 so the
+ * undo ring records "before this picker session" state, not every
+ * intermediate slider tick. */
+static int   g_cp_undo_captured = 0;
 
 /* Hit-rect bundle in y-up OpenGL coords. Derived from anchor + flags via
  * cp_compute_rects() at both render and input time so render no longer
@@ -144,9 +151,25 @@ static void color_picker_write_cmd(void) {
         return;
     }
 
-    ReplCommandStore store = repl_command_store_live();
-    if (repl_command_store_replace_one(&store, g_cp_line, &pl.cmd))
-        editor_buffer_replace_line(g_cp_line, pl.text);
+    /* Route the cmd-store + editor-buffer writes through the editor
+     * commit pipeline so the picker is a pure value-emitter and
+     * ui_color_picker.c stops being the only UI input file with
+     * direct mutators. The first writeback of a session captures
+     * undo; subsequent drags pass capture_undo=0 so each session
+     * lands as one undo entry. */
+    ReplCompiledChange change;
+    repl_compiled_change_init(&change);
+    change.kind  = REPL_COMPILED_REPLACE_ONE;
+    change.pos   = g_cp_line;
+    change.count = 1;
+    change.cmds[0] = pl.cmd;
+    int text_len = (int)strlen(pl.text);
+    if (text_len >= MAX_LINE_LEN) text_len = MAX_LINE_LEN - 1;
+    memcpy(change.text[0], pl.text, (size_t)text_len);
+    change.text[0][text_len] = '\0';
+
+    if (editor_commit_apply_external_change(&change, !g_cp_undo_captured))
+        g_cp_undo_captured = 1;
 }
 
 /* Open (or switch) the picker for cmd_idx.  my is GLUT screen y coord. */
@@ -157,8 +180,14 @@ void ui_color_picker_open(int cmd_idx, int my) {
     if (!ui_color_picker_can_edit_cmd(cmd_idx))
         return;
 
+    /* New session (first open, or switching to a different line):
+     * arm the next writeback to capture undo. Editing the same line
+     * after a close-then-reopen is treated as a new session — matches
+     * the legacy behaviour where every open-on-different-line pushed
+     * undo, except the snapshot now records the moment of the first
+     * actual mutation rather than the moment of open. */
     if (g_cp_line != cmd_idx)
-        repl_undo_push_snapshot();
+        g_cp_undo_captured = 0;
 
     repl_layout_code_panel_rect(&cp_x, NULL, &cp_w, NULL);
     g_cp_line = cmd_idx;
@@ -365,6 +394,7 @@ int ui_color_picker_press(int mx, int my) {
 
     /* Click outside picker: close and let the event fall through */
     g_cp_line = -1;  g_cp_drag = 0;
+    g_cp_undo_captured = 0;
     return 0;
 }
 
@@ -435,6 +465,7 @@ UiHit ui_color_picker_hit_test(int mx, int my) {
 int ui_color_picker_close(void) {
     if (g_cp_line < 0) return 0;
     g_cp_line = -1;  g_cp_drag = 0;
+    g_cp_undo_captured = 0;
     return 1;
 }
 

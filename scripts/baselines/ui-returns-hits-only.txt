@@ -7,20 +7,24 @@
 #
 # Phase E commit 30 established the baseline at 8.
 # Phase J2.2 dropped the baseline to 5: the controller now dispatches
-# code-panel press / drag / menu activation directly. The remaining
-# violations are:
-#   - ui_color_picker.c color writeback (4 hits) through
-#     repl_command_store_replace_one + editor_buffer_replace_line +
-#     repl_undo_push_snapshot. These will route through
-#     editor_commit_apply_plan in a separate refactor track so the
-#     picker becomes a pure hit-test + value-change emitter.
-#   - ui_panels.c:259 repl_action_set_cursor_pixel (1 hit) inside
+# code-panel press / drag / menu activation directly.
+# Phase J3 (color-picker writeback) dropped the baseline to 1: the
+# picker now routes its source-line replace through
+# editor_commit_apply_external_change(REPL_COMPILED_REPLACE_ONE) and
+# captures undo on the first writeback per session, so the four
+# repl_command_store_live + repl_command_store_replace_one +
+# editor_buffer_replace_line + repl_undo_push_snapshot hits are gone.
+#
+# The single remaining violation is:
+#   - ui_panels.c:260 repl_action_set_cursor_pixel (1 hit) inside
 #     render_active_input_rows — render-time cursor pixel publish, not
-#     input dispatch. Eliminating it is a render-side refactor outside
-#     the J2 input scope.
+#     input dispatch. Eliminating it requires a render-side refactor
+#     that returns the cursor pixel through a UiCodePanelOutput
+#     snapshot/output struct that imrepl_ctrl actualizes; that is a
+#     separate track from the J2 input-boundary work.
 #
 # Reductions are always allowed; lower this number by hand when a
 # commit legitimately drives violations down so the next commit
 # cannot silently regress past the new low.
 
-count: 5
+count: 1
