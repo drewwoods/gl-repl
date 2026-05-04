@@ -44,7 +44,9 @@
 #include "editor_completion.h"
 #include "repl_keys.h"
 #include "ui_panels.h"
+#include "ui_color_picker.h"
 #include "ui_layout.h"
+#include "imrepl_ctrl.h"
 #include "ui_menu_bar.h"
 #include "ui_state.h"
 #include "ui_variable_panel.h"
@@ -267,7 +269,7 @@ void repl_editor_reset_transients(void) {
     editor_commit_reset_transients();
     repl_camera_controls_reset();
     ui_panels_close_menus();
-    ui_panels_handle_code_panel_release();
+    imrepl_ctrl_router_reset_code_panel_drag();
 }
 
 static int normalize_navigation_target(int target) {
@@ -771,7 +773,7 @@ static int handle_search_key_route(unsigned char key) {
 
 static int handle_escape_key_route(unsigned char key) {
     if (key == KEY_ESC) {
-        if (ui_panels_handle_escape()) {
+        if (ui_color_picker_close()) {
             editor_request_redraw();
             return 1;
         }
@@ -1554,57 +1556,22 @@ static void editor_update_panel_frac_from_mouse(int x, int y) {
         code_panel_state->panel_frac = 0.9f;
 }
 
-/* Editor's mouse dispatch handles only its own domain: code-panel
- * presses (cursor / picker swatch), example-dropdown presses (the
- * dropdown can extend outside the panel rect but is conceptually code
- * panel content), divider drag start, ui_panels release on UP, and
- * panel-resize end on UP. The controller pre-dispatches every other
- * mouse concern (variable panel, scene press, right-click config
- * dropdown, camera, scroll wheel) before this runs. */
+/* Editor-side mouse dispatch reduces to UP-only panel-resize end.
+ *
+ * The controller (imrepl_ctrl_mouse) handles every DOWN event by
+ * routing the UiHit returned by ui_panels_hit_test through
+ * imrepl_ctrl_router_handle_code_panel_hit. Picker / variable panel
+ * / menu / scene / camera / scroll wheel all dispatch from there.
+ * The editor only sees UP events, where it clears the resizing flag
+ * the controller set on UI_HIT_PANEL_DIVIDER. */
 static void mouse_func(int button, int state, int x, int y) {
-    if (state == GLUT_UP) {
-        ui_panels_handle_mouse_release();
-        if (ui_state_code_panel().resizing_panel) {
-            ui_state_code_panel_mut()->resizing_panel = 0;
-            editor_set_cursor(GLUT_CURSOR_INHERIT);
-            editor_request_redraw();
-            return;
-        }
+    (void)button; (void)x; (void)y;
+    if (state != GLUT_UP)
         return;
-    }
-
-    if (button != GLUT_LEFT_BUTTON || state != GLUT_DOWN)
-        return;
-
-    /* The example dropdown can extend outside the code panel bounds
-     * (e.g. below the panel in vertical layout).  Handle it before the
-     * panel-area gate so clicks on any part of the dropdown register. */
-    if (ui_menu_bar_example_dropdown_is_open()) {
-        int cursor_pos = -1;
-        int panel_actions = ui_panels_handle_code_panel_press(x, y, &cursor_pos);
-        if (cursor_pos >= 0)
-            editor_cursor_pos_set(cursor_pos);
-        if (panel_actions & UI_PANEL_PRESS_OPENED_COLOR_PICKER)
-            repl_undo_push_snapshot();
+    if (ui_state_code_panel().resizing_panel) {
+        ui_state_code_panel_mut()->resizing_panel = 0;
+        editor_set_cursor(GLUT_CURSOR_INHERIT);
         editor_request_redraw();
-        return;
-    }
-
-    if (editor_input_point_on_code_panel_divider(x, y)) {
-        ui_state_code_panel_mut()->resizing_panel = 1;
-        editor_set_cursor(editor_input_code_panel_resize_cursor());
-        return;
-    }
-
-    if (editor_input_point_in_code_panel(x, y)) {
-        int cursor_pos = -1;
-        int panel_actions = ui_panels_handle_code_panel_press(x, y, &cursor_pos);
-        if (cursor_pos >= 0)
-            editor_cursor_pos_set(cursor_pos);
-        if (panel_actions & UI_PANEL_PRESS_OPENED_COLOR_PICKER)
-            repl_undo_push_snapshot();
-        editor_request_redraw();
-        return;
     }
 }
 
@@ -1630,20 +1597,15 @@ static void passive_motion_func(int x, int y) {
         editor_set_cursor(GLUT_CURSOR_INHERIT);
 }
 
-/* Editor's drag-motion handles only code-panel concerns: panel resize
- * tracking and code-panel selection drag. The controller dispatches
- * UI overlay motion (color picker), variable-panel drag motion, and
- * camera drag motion before this runs. */
+/* Editor-side drag-motion only handles panel-resize tracking. The
+ * controller dispatches UI overlay motion (color picker), variable-
+ * panel drag motion, code-panel selection drag motion (via
+ * imrepl_ctrl_router_handle_code_panel_drag), and camera drag motion
+ * before this runs. */
 static void motion_func(int x, int y) {
     if (ui_state_code_panel().resizing_panel) {
         editor_update_panel_frac_from_mouse(x, y);
         editor_request_redraw();
-        return;
-    }
-
-    if (ui_panels_handle_code_panel_drag(x, y)) {
-        editor_request_redraw();
-        return;
     }
 }
 

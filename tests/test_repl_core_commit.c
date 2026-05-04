@@ -388,20 +388,27 @@ int main(void) {
     repl_feed_line_public("glBegin(GL_POINTS);");
     repl_feed_line_public("glColor3f(1, 0, 0);");
     repl_feed_line_public("glEnd();");
+    /* J2.2: code-panel mouse press / drag dispatch through the
+     * controller's UiHit router. Press resolves the click via
+     * ui_panels_hit_test and dispatches via
+     * imrepl_ctrl_router_handle_code_panel_hit; subsequent motion
+     * calls imrepl_ctrl_router_handle_code_panel_drag with the new
+     * coords. */
     {
-        int cursor_pos = -1;
-        ui_panels_handle_code_panel_press(CODE_MARGIN_X + 1, code_panel_mouse_y_for_cmd(0), &cursor_pos);
-        if (cursor_pos >= 0)
-            editor_cursor_pos_set(cursor_pos);
+        UiHit hit = ui_panels_hit_test(CODE_MARGIN_X + 1,
+                                       code_panel_mouse_y_for_cmd(0));
+        imrepl_ctrl_router_handle_code_panel_hit(hit, CODE_MARGIN_X + 1,
+                                                 code_panel_mouse_y_for_cmd(0));
     }
     ASSERT_TRUE("mouse press selects current line for edit", repl_state_edit_line() == 0);
     ASSERT_TRUE("mouse press starts with no selection", !repl_clipboard_sel_active());
-    ui_panels_handle_code_panel_drag(CODE_MARGIN_X + 1, code_panel_mouse_y_for_cmd(2));
+    imrepl_ctrl_router_handle_code_panel_drag(CODE_MARGIN_X + 1,
+                                              code_panel_mouse_y_for_cmd(2));
     ASSERT_TRUE("mouse drag activates selection", repl_clipboard_sel_active());
     ASSERT_TRUE("mouse drag selection low", repl_clipboard_sel_lo() == 0);
     ASSERT_TRUE("mouse drag selection high", repl_clipboard_sel_hi() == 2);
     ASSERT_TRUE("mouse drag navigates to drag end", repl_state_edit_line() == 2);
-    ui_panels_handle_code_panel_release();
+    imrepl_ctrl_router_reset_code_panel_drag();
     editor_handle_key(8, 0, 0);
     ASSERT_TRUE("backspace deletes selected lines", repl_state_document_count() == 0);
     ASSERT_TRUE("backspace clears selection after delete", !repl_clipboard_sel_active());
@@ -416,10 +423,10 @@ int main(void) {
         int idx_col_w = repl_state_presentation().show_vertex_indices ? (6 * FONT_W) : 0;
         int text_x = CODE_MARGIN_X + linenum_w + FONT_W + idx_col_w;
         int indent = test_leading_ws_chars(editor_buffer_line(1) ? editor_buffer_line(1) : "");
-        int cursor_pos = ui_panels_handle_code_panel_click(text_x + indent * FONT_W + 1,
-                                                           code_panel_mouse_y_for_cmd(1));
-        if (cursor_pos >= 0)
-            editor_cursor_pos_set(cursor_pos);
+        int mx = text_x + indent * FONT_W + 1;
+        int my = code_panel_mouse_y_for_cmd(1);
+        UiHit hit = ui_panels_hit_test(mx, my);
+        imrepl_ctrl_router_handle_code_panel_hit(hit, mx, my);
         ASSERT_TRUE("clicking indented active line keeps cursor at first char",
                     editor_cursor_pos() == 0);
         ASSERT_TRUE("clicking indented active line selects correct line",

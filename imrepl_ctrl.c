@@ -837,7 +837,11 @@ int imrepl_ctrl_router_handle_right_config_press(int button, int state, int x, i
 int imrepl_ctrl_router_handle_scene_press(int button, int state, int x, int y) {
     if (state != GLUT_DOWN || button != GLUT_LEFT_BUTTON)
         return 0;
-    if (ui_panels_handle_scene_press(x, y)) {
+    /* The scene region is owned by the camera, but the floating color
+     * picker can overlap it. Give the picker first crack on press
+     * (matches legacy ui_panels_handle_scene_press → ui_color_picker_press
+     * forwarding). */
+    if (ui_color_picker_press(x, y)) {
         editor_request_redraw();
         return 1;
     }
@@ -931,6 +935,253 @@ int imrepl_ctrl_router_handle_glut_scroll_wheel_button(int button, int state, in
     (void)button; (void)state; (void)x; (void)y;
     return 0;
 #endif
+}
+
+/* ---- Code-panel UiHit dispatch (Phase J2.2) -------------------------- */
+
+/* Code-panel selection drag tracking. Press handlers set the anchor
+ * to the clicked source-cmd row; motion re-runs ui_panels_hit_test
+ * to derive the drag target and extends the editor selection.
+ * Release on UP clears the active flag. The state lives here (not in
+ * ui_panels.c) because UI input files report hit-test data only. */
+static int g_code_panel_drag_active = 0;
+static int g_code_panel_drag_anchor = -1;
+static int g_code_panel_drag_moved  = 0;
+
+void imrepl_ctrl_router_reset_code_panel_drag(void) {
+    g_code_panel_drag_active = 0;
+    g_code_panel_drag_anchor = -1;
+    g_code_panel_drag_moved  = 0;
+}
+
+/* Common epilog for clicks that move the editor cursor: blink reset,
+ * autocomplete clear, selection clear, redraw. Mirrors the legacy
+ * ui_panels_handle_code_panel_click tail. */
+static void route_code_click_epilog(void) {
+    repl_action_cursor_blink_reset();
+    clear_autocomplete_state();
+    repl_clipboard_clear_selection();
+    editor_request_redraw();
+}
+
+/* UI_HIT_CODE_TEXT: navigate to clicked line, set cursor column, arm
+ * the selection drag anchor. */
+static int route_code_text_hit(const UiHit *hit) {
+    /* A non-swatch click on the code panel closes any open color picker
+     * (matches legacy ui_panels_handle_code_panel_press behaviour). */
+    ui_color_picker_close();
+
+    if (hit->line_idx >= 0)
+        navigate_to_line(hit->line_idx);
+    if (hit->char_idx >= 0)
+        editor_cursor_pos_set(hit->char_idx);
+    route_code_click_epilog();
+
+    /* Arm drag anchor for committed lines only. */
+    if (hit->line_idx >= 0 && hit->line_idx < repl_state_document_count()) {
+        g_code_panel_drag_active = 1;
+        g_code_panel_drag_anchor = hit->line_idx;
+        g_code_panel_drag_moved  = 0;
+    } else {
+        imrepl_ctrl_router_reset_code_panel_drag();
+    }
+    return 1;
+}
+
+/* UI_HIT_CODE_INSERT_LINE: insertion virtual row in insert mode. Set
+ * cursor column but do not navigate (matches legacy on_insert_line=1
+ * behaviour). No drag anchor — the insert row is virtual. */
+static int route_code_insert_line_hit(const UiHit *hit) {
+    ui_color_picker_close();
+    if (hit->char_idx >= 0)
+        editor_cursor_pos_set(hit->char_idx);
+    route_code_click_epilog();
+    imrepl_ctrl_router_reset_code_panel_drag();
+    return 1;
+}
+
+/* UI_HIT_CODE_GUTTER: clicking the line-number column selects the
+ * row. Same dispatch as CODE_TEXT minus the cursor-column move. */
+static int route_code_gutter_hit(const UiHit *hit) {
+    ui_color_picker_close();
+    if (hit->line_idx >= 0)
+        navigate_to_line(hit->line_idx);
+    route_code_click_epilog();
+    if (hit->line_idx >= 0 && hit->line_idx < repl_state_document_count()) {
+        g_code_panel_drag_active = 1;
+        g_code_panel_drag_anchor = hit->line_idx;
+        g_code_panel_drag_moved  = 0;
+    } else {
+        imrepl_ctrl_router_reset_code_panel_drag();
+    }
+    return 1;
+}
+
+/* UI_HIT_INLINE_COLOR_SWATCH: toggle / open the floating color picker
+ * for the swatch's source line. */
+static int route_inline_color_swatch_hit(const UiHit *hit, int my) {
+    if (hit->line_idx < 0)
+        return 0;
+    if (ui_color_picker_active_line() == hit->line_idx) {
+        ui_color_picker_close();
+    } else {
+        repl_undo_push_snapshot();
+        ui_color_picker_open(hit->line_idx, my);
+    }
+    editor_request_redraw();
+    return 1;
+}
+
+/* UI_HIT_COLOR_SWATCH: floating picker slider control press. The
+ * picker has its own internal hit-test for SV/hue/alpha regions and
+ * starts a drag on press. */
+static int route_color_picker_control_hit(int x, int y) {
+    if (ui_color_picker_press(x, y)) {
+        editor_request_redraw();
+        return 1;
+    }
+    return 0;
+}
+
+/* UI_HIT_PIN_BUTTON: Search / Replay pinned right-side button. */
+static int route_pin_button_hit(const UiHit *hit) {
+    ui_menu_bar_close();
+    switch (hit->item_idx) {
+    case REPL_MENU_BAR_PIN_REPLAY:
+        replay_handle_pin_clicked();
+        break;
+    case REPL_MENU_BAR_PIN_SEARCH:
+        handle_search_key(KEY_CTRL_F);
+        ui_menu_bar_note_search_opened();
+        break;
+    default:
+        break;
+    }
+    editor_request_redraw();
+    return 1;
+}
+
+/* UI_HIT_MENU_BUTTON: top-level menu-bar button. Click on the open
+ * menu's button toggles it closed; click on a different button
+ * switches the open dropdown. */
+static int route_menu_button_hit(const UiHit *hit) {
+    int menu_id = hit->cmd_idx;
+    if (menu_id < 0) return 0;
+
+    int open_menu = ui_menu_bar_open_menu_id();
+    if (open_menu == menu_id)
+        ui_menu_bar_close();
+    else
+        ui_menu_bar_set_open_menu(menu_id);
+    editor_request_redraw();
+    return 1;
+}
+
+/* UI_HIT_MENU_ITEM: open dropdown row click. Activates the action
+ * via repl_action_menu_item_activate using both menu_id (cmd_idx)
+ * and item_idx from the hit payload. */
+static int route_menu_item_hit(const UiHit *hit) {
+    if (hit->cmd_idx < 0 || hit->item_idx < 0) return 0;
+    ui_menu_bar_activate_dropdown_item(hit->item_idx);
+    editor_request_redraw();
+    return 1;
+}
+
+/* UI_HIT_PANEL_DIVIDER: start the panel-resize drag. Motion updates
+ * panel_frac via editor_handle_motion's resizing-panel branch; UP
+ * clears the resizing flag. */
+static int route_panel_divider_hit(const UiHit *hit) {
+    (void)hit;
+    ui_state_code_panel_mut()->resizing_panel = 1;
+    editor_set_cursor(editor_input_code_panel_resize_cursor());
+    return 1;
+}
+
+/* UI_HIT_VARIABLE_SLIDER: variable-panel left-click drag begin. The
+ * J1 helper handles replay-stop + drag start. */
+static int route_variable_slider_hit(int x, int y) {
+    return imrepl_ctrl_router_handle_variable_panel_drag_begin(GLUT_LEFT_BUTTON,
+                                                               GLUT_DOWN, x, y);
+}
+
+int imrepl_ctrl_router_handle_code_panel_hit(UiHit hit, int x, int y) {
+    /* A click outside the menu bar (anywhere that isn't UI_HIT_MENU_BUTTON
+     * / UI_HIT_MENU_ITEM) dismisses an open dropdown — matches the legacy
+     * "click outside dropdown closes it" behaviour from
+     * ui_panels_handle_code_panel_press. */
+    if (hit.kind != UI_HIT_MENU_BUTTON &&
+        hit.kind != UI_HIT_MENU_ITEM &&
+        hit.kind != UI_HIT_PIN_BUTTON &&
+        hit.kind != UI_HIT_COLOR_SWATCH &&
+        ui_menu_bar_menu_dropdown_is_open()) {
+        ui_menu_bar_close();
+    }
+
+    switch (hit.kind) {
+    case UI_HIT_COLOR_SWATCH:
+        return route_color_picker_control_hit(x, y);
+    case UI_HIT_INLINE_COLOR_SWATCH:
+        return route_inline_color_swatch_hit(&hit, y);
+    case UI_HIT_PIN_BUTTON:
+        return route_pin_button_hit(&hit);
+    case UI_HIT_MENU_BUTTON:
+        return route_menu_button_hit(&hit);
+    case UI_HIT_MENU_ITEM:
+        return route_menu_item_hit(&hit);
+    case UI_HIT_VARIABLE_SLIDER:
+        return route_variable_slider_hit(x, y);
+    case UI_HIT_PANEL_DIVIDER:
+        return route_panel_divider_hit(&hit);
+    case UI_HIT_CODE_TEXT:
+        return route_code_text_hit(&hit);
+    case UI_HIT_CODE_INSERT_LINE:
+        return route_code_insert_line_hit(&hit);
+    case UI_HIT_CODE_GUTTER:
+        return route_code_gutter_hit(&hit);
+    case UI_HIT_HELP_PANEL:
+    case UI_HIT_REPLAY_BUTTON:
+    case UI_HIT_SCENE:
+    case UI_HIT_NONE:
+    default:
+        return 0;
+    }
+}
+
+int imrepl_ctrl_router_handle_code_panel_drag(int x, int y) {
+    if (!g_code_panel_drag_active || g_code_panel_drag_anchor < 0)
+        return 0;
+
+    UiHit hit = ui_panels_hit_test(x, y);
+    int target;
+    switch (hit.kind) {
+    case UI_HIT_CODE_TEXT:
+    case UI_HIT_CODE_GUTTER:
+        target = hit.line_idx;
+        break;
+    case UI_HIT_CODE_INSERT_LINE:
+        /* Clamp to the last committed line so the selection stays
+         * within the document range. Matches the legacy
+         * code_panel_drag_target clamp. */
+        target = repl_state_document_count() > 0
+               ? repl_state_document_count() - 1 : -1;
+        break;
+    default:
+        /* Drag wandered off the code panel — no-op until the cursor
+         * comes back, matching legacy code_panel_drag_target. */
+        return 1;
+    }
+    if (target < 0)
+        return 1;
+
+    if (target != g_code_panel_drag_anchor || g_code_panel_drag_moved) {
+        g_code_panel_drag_moved = 1;
+        repl_selection_start(g_code_panel_drag_anchor);
+        repl_selection_set_end(target);
+        navigate_to_line(target);
+        repl_action_cursor_blink_reset();
+        editor_request_redraw();
+    }
+    return 1;
 }
 
 /* ===========================================================================
@@ -1028,32 +1279,34 @@ void imrepl_ctrl_mouse(int button, int state, int x, int y) {
     editor_reset_input_effects();
 
     if (state == GLUT_UP) {
-        /* Editor's UP cleanup runs first (ui_panels_release + panel resize end). */
+        /* UP cleanup: release floating color picker drag, clear the
+         * code-panel selection drag tracking, fire editor's UP-side
+         * (panel resize end), then variable-panel release, then
+         * camera UP so the orbit/pan/zoom interaction releases. */
+        ui_color_picker_release();
+        imrepl_ctrl_router_reset_code_panel_drag();
         imrepl_ctrl_apply_input_effects(editor_handle_mouse(button, state, x, y));
         editor_reset_input_effects();
         if (imrepl_ctrl_router_handle_variable_panel_drag_release(state)) {
             imrepl_ctrl_apply_input_effects(editor_take_input_effects());
             return;
         }
-        /* Camera UP: drop_small_velocities + clear pointer button so the
-         * orbit/pan/zoom interaction releases. The original mouse_func
-         * called repl_camera_mouse_event unconditionally as a fallthrough
-         * after the LEFT/RIGHT DOWN handlers; UP events that didn't end a
-         * variable-panel drag landed here. */
         imrepl_ctrl_router_handle_camera_mouse(button, state, x, y);
         imrepl_ctrl_apply_input_effects(editor_take_input_effects());
         return;
     }
 
     if (button == GLUT_LEFT_BUTTON) {
-        if (imrepl_ctrl_router_handle_variable_panel_drag_begin(button, state, x, y)) {
+        /* J2.2: classify the click via the canonical hit-test, then
+         * route by UiHit.kind to the owning subsystem. The hit-test
+         * covers variable panel, color picker, menu bar, code panel
+         * (including divider + inline swatch + insert line) and pin
+         * buttons. Only kinds that don't apply (UI_HIT_SCENE,
+         * UI_HIT_NONE, UI_HIT_HELP_PANEL) fall through to scene
+         * press / camera. */
+        UiHit hit = ui_panels_hit_test(x, y);
+        if (imrepl_ctrl_router_handle_code_panel_hit(hit, x, y)) {
             imrepl_ctrl_apply_input_effects(editor_take_input_effects());
-            return;
-        }
-        if (ui_menu_bar_example_dropdown_is_open() ||
-            editor_input_point_on_code_panel_divider(x, y) ||
-            editor_input_point_in_code_panel(x, y)) {
-            imrepl_ctrl_apply_input_effects(editor_handle_mouse(button, state, x, y));
             return;
         }
         if (imrepl_ctrl_router_handle_scene_press(button, state, x, y)) {
@@ -1102,7 +1355,8 @@ void imrepl_ctrl_mouse(int button, int state, int x, int y) {
 void imrepl_ctrl_motion(int x, int y) {
     editor_reset_input_effects();
 
-    if (ui_panels_handle_motion(x, y)) {
+    /* Floating color picker drag tracking (SV / hue / alpha sliders). */
+    if (ui_color_picker_motion(x, y)) {
         imrepl_ctrl_router_handle_camera_pointer_set(x, y);
         editor_request_redraw();
         imrepl_ctrl_apply_input_effects(editor_take_input_effects());
@@ -1115,11 +1369,16 @@ void imrepl_ctrl_motion(int x, int y) {
         return;
     }
 
-    /* Editor's domain: panel resize tracking + code-panel selection
-     * drag both surface through editor_handle_motion which is a no-op
-     * when neither condition holds. */
-    if (ui_state_code_panel().resizing_panel ||
-        ui_panels_handle_code_panel_drag(x, y)) {
+    /* Code-panel selection drag (controller-owned state). */
+    if (imrepl_ctrl_router_handle_code_panel_drag(x, y)) {
+        imrepl_ctrl_router_handle_camera_pointer_set(x, y);
+        imrepl_ctrl_apply_input_effects(editor_take_input_effects());
+        return;
+    }
+
+    /* Editor's domain: panel resize tracking. editor_handle_motion is
+     * a no-op when resizing_panel is clear. */
+    if (ui_state_code_panel().resizing_panel) {
         ReplInputDispatchEffects pre_editor = editor_take_input_effects();
         imrepl_ctrl_apply_input_effects(editor_handle_motion(x, y));
         imrepl_ctrl_router_handle_camera_pointer_set(x, y);
