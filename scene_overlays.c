@@ -175,6 +175,7 @@ static void walk_vertex_overlay(int selected_block_only,
             state.normal[2] = cmd->args[2];
             break;
         case CMD_VERTEX3F:
+        case CMD_VERTEX2F:
         case CMD_TESS_VERTEX: {
             int visit = selected_block_only
                       ? (state.in_block && state.block_selected)
@@ -359,6 +360,12 @@ void scene_overlays_render_outlines(const FrameRenderContext *frame_ctx,
                     if (block_is_current || cfg->show_vertex_outlines)
                         glVertex3f(cmds[i].args[0], cmds[i].args[1],
                                    cmds[i].args[2]);
+                }
+                break;
+            case CMD_VERTEX2F:
+                if (in_begin) {
+                    if (block_is_current || cfg->show_vertex_outlines)
+                        glVertex2f(cmds[i].args[0], cmds[i].args[1]);
                 }
                 break;
             case CMD_TESS_BEGIN_POLYGON:
