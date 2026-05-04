@@ -8,6 +8,7 @@
 #include "scene_backdrop.h"
 #include "scene_lights.h"
 #include "scene_overlays.h"
+#include "scene_geometry_guides.h"
 #include "scene_render_types.h"
 #include "repl_flatten.h"
 
@@ -390,6 +391,91 @@ static void test_render_mode_toggles(void) {
     ASSERT_TRUE("all toggles tested", 1);
 }
 
+/* --- Regression tests for glVertex2f parity with glVertex3f ----------- */
+
+static void test_vertex2f_overlay_parity(void) {
+    printf("--- vertex2f overlay parity (vertex numbers + outlines) ---\n");
+
+#ifdef OPENGL_VIBE_USE_GL_STUBS
+    GLCmd flat_cmds[3] = {0};
+    flat_cmds[0].type = CMD_BEGIN;
+    flat_cmds[0].valid = 1;
+    flat_cmds[0].mode = GL_TRIANGLES;
+    flat_cmds[0].src_cmd_idx = 0;
+    flat_cmds[1].type = CMD_VERTEX2F;
+    flat_cmds[1].valid = 1;
+    flat_cmds[1].args[0] = 1.0f;
+    flat_cmds[1].args[1] = 2.0f;
+    flat_cmds[1].src_cmd_idx = 1;
+    flat_cmds[2].type = CMD_END;
+    flat_cmds[2].valid = 1;
+    flat_cmds[2].src_cmd_idx = 2;
+
+    FrameRenderContext ctx = make_test_frame_ctx();
+    ctx.config.flat_program.cmds      = flat_cmds;
+    ctx.config.flat_program.cmd_count = 3;
+    /* scene_overlays_render_vertex_numbers uses selected_block_only=1 so it
+     * only labels vertices whose block matches the cursor.  Set edit_line_idx
+     * to the VERTEX2F source line and supply the block range so the overlay
+     * walker considers the block selected. */
+    ctx.config.edit_line_idx             = 1;
+    ctx.config.cursor_block_begin_idx    = 0;
+    ctx.config.cursor_block_end_idx      = 2;
+    ctx.config.show_vnums = 1;
+
+    gl_stub_counts_reset();
+    scene_overlays_render_vertex_numbers(&ctx);
+    ASSERT_TRUE("vertex2f: vertex number label calls glRasterPos3f",
+                gl_stub_counts[GL_STUB_glRasterPos3f] > 0);
+
+    ctx.config.show_vnums = 0;
+    ctx.config.show_vertex_outlines = 1;
+    gl_stub_counts_reset();
+    scene_overlays_render_outlines(&ctx, 0, 0);
+    ASSERT_TRUE("vertex2f: outline pass calls glVertex2f",
+                gl_stub_counts[GL_STUB_glVertex2f] > 0);
+#else
+    ASSERT_TRUE("vertex2f overlay parity (GL stubs only)", 1);
+#endif
+}
+
+static void test_vertex2f_guide_cursor_dot(void) {
+    printf("--- vertex2f guide: red cursor dot when both args filled ---\n");
+
+#ifdef OPENGL_VIBE_USE_GL_STUBS
+    SceneGuideSnapshot snap = {0};
+    snap.show_guides = 1;
+    snap.alpha_scale = 1.0f;
+
+    const char *input3f = "glVertex3f(1, 2, 3)";
+    snap.input     = input3f;
+    snap.input_len = (int)strlen(input3f);
+    gl_stub_counts_reset();
+    scene_geometry_guides_render_for_cursor(&snap);
+    unsigned long long points3f = gl_stub_counts[GL_STUB_glBegin];
+    ASSERT_TRUE("vertex3f(1,2,3): guide draws GL_POINTS", points3f > 0);
+
+    const char *input2f = "glVertex2f(1, 2)";
+    snap.input     = input2f;
+    snap.input_len = (int)strlen(input2f);
+    gl_stub_counts_reset();
+    scene_geometry_guides_render_for_cursor(&snap);
+    ASSERT_TRUE("vertex2f(1,2): guide draws GL_POINTS (same as vertex3f)",
+                gl_stub_counts[GL_STUB_glBegin] > 0);
+
+    /* Partial entry: only one arg — should still produce a guide (plane), not a dot */
+    const char *input2f_partial = "glVertex2f(1,";
+    snap.input     = input2f_partial;
+    snap.input_len = (int)strlen(input2f_partial);
+    gl_stub_counts_reset();
+    scene_geometry_guides_render_for_cursor(&snap);
+    ASSERT_TRUE("vertex2f(1,): partial entry still draws a guide",
+                gl_stub_counts[GL_STUB_glBegin] > 0);
+#else
+    ASSERT_TRUE("vertex2f guide cursor dot (GL stubs only)", 1);
+#endif
+}
+
 int main(int argc, char **argv) {
 #ifdef OPENGL_VIBE_USE_GL_STUBS
     /* In stub mode these are no-ops, but keeping the calls preserves coverage
@@ -428,6 +514,8 @@ int main(int argc, char **argv) {
     test_grid_table_arrays();
     test_viewport_dimensions();
     test_render_mode_toggles();
+    test_vertex2f_overlay_parity();
+    test_vertex2f_guide_cursor_dot();
 
     printf("\ntest_scene_render: %d/%d passed\n", g_harness.passed, g_harness.run);
     return (g_harness.passed == g_harness.run) ? 0 : 1;

@@ -507,6 +507,76 @@ static void test_ui_panels_hit_test_dispatch(void) {
     ui_color_picker_close();
 }
 
+/* Regression: glVertex2f commands should generate gutter vertex-index labels
+ * (v0, v1, ...) when show_vertex_indices is on, just like glVertex3f. */
+static void test_vertex2f_gutter_labels(void) {
+    printf("Testing glVertex2f gutter labels...\n");
+
+    /* Use a wide viewport (4000px) so that the available character width
+     * (>165 chars) stays above every header line in both the idx_col_w=0 and
+     * idx_col_w=54 states.  Toggling show_vertex_indices then causes no row
+     * wrapping changes, so the only glRasterPos2f delta is the "v0" label. */
+    repl_reset_state();
+    ui_state_viewport_set_size(4000, 600);
+    repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT;
+    ui_state_code_panel_mut()->panel_frac = 0.4f;
+
+    /* Commit a real program so both the document array and editor buffer
+     * are populated — the wrap iterator needs non-empty display text to
+     * produce rows, which is required for the gutter to draw. */
+    repl_feed_line_public("glBegin(GL_TRIANGLES);");
+    repl_feed_line_public("glVertex2f(1, 2);");
+    repl_feed_line_public("glEnd();");
+    /* Cursor on glEnd so glVertex2f is a non-edit row with a visible gutter */
+    repl_state_edit_line_set(2);
+
+    repl_state_presentation_mut()->show_vertex_indices = 0;
+    unsigned long long base;
+    {
+        UiRenderSnapshot s; make_test_ui_snapshot(&s);
+        gl_stub_counts_reset();
+        ui_panels_render_code_panel(&s);
+        base = gl_stub_counts[GL_STUB_glRasterPos2f];
+    }
+
+    repl_state_presentation_mut()->show_vertex_indices = 1;
+    {
+        UiRenderSnapshot s; make_test_ui_snapshot(&s);
+        gl_stub_counts_reset();
+        ui_panels_render_code_panel(&s);
+    }
+    ASSERT_TRUE("vertex2f gutter label drawn when show_vertex_indices=1",
+                gl_stub_counts[GL_STUB_glRasterPos2f] > base);
+
+    /* Confirm vertex3f has the same behaviour */
+    repl_reset_state();
+    ui_state_viewport_set_size(4000, 600);
+    repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT;
+    ui_state_code_panel_mut()->panel_frac = 0.4f;
+
+    repl_feed_line_public("glBegin(GL_TRIANGLES);");
+    repl_feed_line_public("glVertex3f(1, 2, 0);");
+    repl_feed_line_public("glEnd();");
+    repl_state_edit_line_set(2);
+
+    repl_state_presentation_mut()->show_vertex_indices = 0;
+    unsigned long long v3f_base;
+    {
+        UiRenderSnapshot s; make_test_ui_snapshot(&s);
+        gl_stub_counts_reset();
+        ui_panels_render_code_panel(&s);
+        v3f_base = gl_stub_counts[GL_STUB_glRasterPos2f];
+    }
+    repl_state_presentation_mut()->show_vertex_indices = 1;
+    {
+        UiRenderSnapshot s; make_test_ui_snapshot(&s);
+        gl_stub_counts_reset();
+        ui_panels_render_code_panel(&s);
+    }
+    ASSERT_TRUE("vertex3f gutter label consistent with vertex2f",
+                gl_stub_counts[GL_STUB_glRasterPos2f] > v3f_base);
+}
+
 int main(void) {
 #ifndef OPENGL_VIBE_USE_GL_STUBS
     printf("This test requires GL stubs (USE_GL_STUBS=1)\n");
@@ -526,6 +596,7 @@ int main(void) {
     test_ui_color_picker_hit_test();
     test_ui_variable_panel_hit_test();
     test_ui_panels_hit_test_dispatch();
+    test_vertex2f_gutter_labels();
 
     printf("\nUI Tests: %d/%d passed\n", g_harness.passed, g_harness.run);
     return (g_harness.passed == g_harness.run) ? 0 : 1;

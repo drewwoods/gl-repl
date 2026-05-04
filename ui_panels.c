@@ -884,6 +884,7 @@ void ui_panels_render_code_panel(const UiRenderSnapshot *snap) {
         int is_edit = (!insert_mode && i == edit_line);
         int is_vertex = document_cmds[i].valid &&
                         (document_cmds[i].type == CMD_VERTEX3F ||
+                         document_cmds[i].type == CMD_VERTEX2F ||
                          document_cmds[i].type == CMD_TESS_VERTEX);
 
         if (is_edit) {
