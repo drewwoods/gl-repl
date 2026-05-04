@@ -300,6 +300,10 @@ ReplAutocompleteState  editor_state_autocomplete(void);
 ReplAutocompleteState *editor_state_autocomplete_mut(void);
 void                   editor_state_autocomplete_clear(void);
 
+static inline void clear_autocomplete_state(void) {
+    editor_state_autocomplete_clear();
+}
+
 /* Per-frame editor overlay snapshot lists. The controller refills
  * these each frame after flatten so UI renderers and input bridges
  * can iterate them without walking the document. */

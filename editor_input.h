@@ -77,6 +77,10 @@ int editor_input_restore_hidden_code_panel(void);
  * imrepl_ctrl.c. */
 void editor_input_code_panel_scroll(int direction);
 
+/* Move the active edit-line cursor to a source line and sync the input buffer
+ * to that line's text. */
+void navigate_to_line(int target);
+
 /* Rename-capture predicate. The inline rename overlay is a hard modal:
  * when active, every keystroke must land in the rename buffer ahead of
  * the controller-side router. imrepl_ctrl_keyboard / _special invoke

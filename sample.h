@@ -25,43 +25,15 @@
 #include "replay.h"
 #include "editor_limits.h"
 #include "repl_export_state.h"
+#include "repl_core.h"
+#include "repl_executor.h"
+#include "repl_export.h"
+#include "repl_pipeline.h"
 #include "scene_render.h"
 #include "ui_layout.h"
 #include "ui_metrics.h"
 #include "ui_replay_hud.h"
+#include "editor_input.h"
 #include "editor_search.h"
-
-/* ========================================================================= */
-/* Configuration                                                              */
-/* ========================================================================= */
-
-/* ========================================================================= */
-/* Types                                                                      */
-/* ========================================================================= */
-
-int  init_section_line_count(void);
-void init_section_line(int i, char *buf, size_t n);
-
-void editor_state_autocomplete_clear(void);
-
-static inline void clear_autocomplete_state(void) {
-    editor_state_autocomplete_clear();
-}
-
-/* ========================================================================= */
-/* Shared utility functions                                                   */
-/* ========================================================================= */
-
-void set_status(const char *msg);
-const char *mode_name(GLenum mode);
-GLenum current_begin_mode(void);
-int  count_vertices(void);
-void mark_normals_dirty(void);
-
-void navigate_to_line(int target);
-void execute_commands(void);
-void flatten_commands(void);
-void recompute_autonormals(void);
-void update_cam_lines(void);
 
 #endif /* SAMPLE_H */

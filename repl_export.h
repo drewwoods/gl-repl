@@ -81,4 +81,9 @@ void repl_state_refresh_workspace_header_lines(void);
  * load_from_file() to extract metadata. */
 int  repl_state_parse_workspace_header_line(const char *line);
 
+/* Access the init-section boilerplate lines rendered into the code panel and
+ * exported output. */
+int  init_section_line_count(void);
+void init_section_line(int i, char *buf, size_t n);
+
 #endif
