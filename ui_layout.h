@@ -7,6 +7,14 @@
 #ifndef UI_LAYOUT_H
 #define UI_LAYOUT_H
 
+typedef enum {
+	CODE_PANEL_LAYOUT_LEFT = 0,
+	CODE_PANEL_LAYOUT_TOP,
+	CODE_PANEL_LAYOUT_BOTTOM,
+	CODE_PANEL_LAYOUT_HIDDEN,
+	CODE_PANEL_LAYOUT_COUNT
+} CodePanelLayout;
+
 void repl_layout_code_panel_rect(int *x, int *y, int *w, int *h);
 void repl_layout_scene_rect(int *x, int *y, int *w, int *h);
 
