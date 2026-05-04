@@ -44,10 +44,6 @@ static void test_cursor_actions(void) {
     repl_action_cursor_blink_reset();
     ASSERT_INT("cursor visible after reset", cp->cursor_visible, 1);
     ASSERT_INT("blink tick reset", cp->blink_tick, 0);
-
-    repl_action_set_cursor_pixel(10, 20);
-    ASSERT_INT("cursor_px set", cp->cursor_px, 10);
-    ASSERT_INT("cursor_py set", cp->cursor_py, 20);
 }
 
 static void test_help_tab_actions(void) {

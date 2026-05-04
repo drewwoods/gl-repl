@@ -533,11 +533,19 @@ void imrepl_ctrl_display_frame(void) {
         prof_accum_commit(section_idx);
 
     prof_begin(PROF_CODE_PANEL);
-    ui_panels_render_code_panel(&ui_snap);
+    UiCodePanelOutput cp_out = { 0, 0, 0 };
+    ui_panels_render_code_panel(&ui_snap, &cp_out);
     prof_end(PROF_CODE_PANEL);
 
     prof_begin(PROF_UI_PANELS);
-    ui_autocomplete_panel_render(&ui_snap);
+    /* Autocomplete popup anchors under the editor cursor. When the
+     * active input row didn't render this frame (code panel hidden,
+     * row scrolled offscreen) cp_out.cursor_valid is 0 and we skip
+     * the popup — there's no visible cursor to anchor to. Same
+     * semantic as the legacy mid-render publish, which simply didn't
+     * fire on those frames. */
+    if (cp_out.cursor_valid)
+        ui_autocomplete_panel_render(&ui_snap, cp_out.cursor_px, cp_out.cursor_py);
     ui_menu_bar_render_example_dropdown(&ui_snap);
     ui_variable_panel_render(&ui_snap);
     ui_panels_render_scene_status(&ui_snap);

@@ -84,8 +84,6 @@ static void populate_runtime_snapshot_fixture(const char *scene_hint) {
     editor_scroll_follow_cursor_set(1);
     code_panel->cursor_visible = 0;
     code_panel->blink_tick = 12;
-    code_panel->cursor_px = 123;
-    code_panel->cursor_py = 456;
     ui_state_variable_panel_mut()->visible = 0;
 
     drag = editor_state_variable_drag_mut();
@@ -264,8 +262,6 @@ static void test_capture_restore_round_trip(void) {
     ASSERT_INT("code panel cursor visible restored",
                ui_state_code_panel().cursor_visible, 0);
     ASSERT_INT("code panel blink restored", ui_state_code_panel().blink_tick, 12);
-    ASSERT_INT("code panel cursor x restored", ui_state_code_panel().cursor_px, 123);
-    ASSERT_INT("code panel cursor y restored", ui_state_code_panel().cursor_py, 456);
     ASSERT_INT("variable panel restored", ui_state_variable_panel().visible, 0);
     ASSERT_INT("variable drag idx restored", editor_state_variable_drag().var_idx, 3);
     ASSERT_INT("variable drag log restored", editor_state_variable_drag().log_mode, 1);

@@ -1,5 +1,0 @@
-# Files still allowed to touch cursor_px/cursor_py during migration.
-# ui_state.c owns the storage as of Phase A commit 12.
-ui_autocomplete_panel.c
-ui_panels.c
-ui_state.c

@@ -212,18 +212,16 @@ static void test_autocomplete_panel(void) {
     gl_stub_counts_reset();
 
     editor_state_autocomplete_mut()->match_count = 0;
-    { UiRenderSnapshot s; make_test_ui_snapshot(&s); ui_autocomplete_panel_render(&s); }
+    { UiRenderSnapshot s; make_test_ui_snapshot(&s); ui_autocomplete_panel_render(&s, 100, 100); }
     ASSERT_TRUE("ac hidden -> no GL calls", gl_stub_counts[GL_STUB_glBegin] == 0);
 
     editor_state_autocomplete_mut()->match_count = 2;
     editor_state_autocomplete_mut()->matches[0] = "glVertex3f";
     editor_state_autocomplete_mut()->matches[1] = "glVertex2f";
     editor_state_autocomplete_mut()->selected_idx = 0;
-    ui_state_code_panel_mut()->cursor_px = 100;
-    ui_state_code_panel_mut()->cursor_py = 100;
 
     gl_stub_counts_reset();
-    { UiRenderSnapshot s; make_test_ui_snapshot(&s); ui_autocomplete_panel_render(&s); }
+    { UiRenderSnapshot s; make_test_ui_snapshot(&s); ui_autocomplete_panel_render(&s, 100, 100); }
     ASSERT_GL_CALLS("ac visible -> draws quads", GL_STUB_glBegin, 1);
     ASSERT_GL_CALLS("ac visible -> draws text", GL_STUB_glRasterPos2f, 2);
     ASSERT_GL_CALLS("ac visible -> calls glVertex2f", GL_STUB_glVertex2f, 4);
@@ -705,7 +703,7 @@ static void test_vertex2f_gutter_labels(void) {
     editor_scroll_follow_cursor_set(1);
     {
         UiRenderSnapshot s; make_test_ui_snapshot(&s);
-        ui_panels_render_code_panel(&s);   /* scroll now follows cursor */
+        ui_panels_render_code_panel(&s, NULL);   /* scroll now follows cursor */
     }
 
     repl_state_presentation_mut()->show_vertex_indices = 0;
@@ -713,7 +711,7 @@ static void test_vertex2f_gutter_labels(void) {
     {
         UiRenderSnapshot s; make_test_ui_snapshot(&s);
         gl_stub_counts_reset();
-        ui_panels_render_code_panel(&s);
+        ui_panels_render_code_panel(&s, NULL);
         base = gl_stub_counts[GL_STUB_glRasterPos2f];
     }
 
@@ -721,7 +719,7 @@ static void test_vertex2f_gutter_labels(void) {
     {
         UiRenderSnapshot s; make_test_ui_snapshot(&s);
         gl_stub_counts_reset();
-        ui_panels_render_code_panel(&s);
+        ui_panels_render_code_panel(&s, NULL);
     }
     ASSERT_TRUE("vertex2f gutter label drawn when show_vertex_indices=1",
                 gl_stub_counts[GL_STUB_glRasterPos2f] > base);
@@ -740,7 +738,7 @@ static void test_vertex2f_gutter_labels(void) {
     editor_scroll_follow_cursor_set(1);
     {
         UiRenderSnapshot s; make_test_ui_snapshot(&s);
-        ui_panels_render_code_panel(&s);
+        ui_panels_render_code_panel(&s, NULL);
     }
 
     repl_state_presentation_mut()->show_vertex_indices = 0;
@@ -748,14 +746,14 @@ static void test_vertex2f_gutter_labels(void) {
     {
         UiRenderSnapshot s; make_test_ui_snapshot(&s);
         gl_stub_counts_reset();
-        ui_panels_render_code_panel(&s);
+        ui_panels_render_code_panel(&s, NULL);
         v3f_base = gl_stub_counts[GL_STUB_glRasterPos2f];
     }
     repl_state_presentation_mut()->show_vertex_indices = 1;
     {
         UiRenderSnapshot s; make_test_ui_snapshot(&s);
         gl_stub_counts_reset();
-        ui_panels_render_code_panel(&s);
+        ui_panels_render_code_panel(&s, NULL);
     }
     ASSERT_TRUE("vertex3f gutter label consistent with vertex2f",
                 gl_stub_counts[GL_STUB_glRasterPos2f] > v3f_base);

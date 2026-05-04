@@ -9,22 +9,24 @@
 # Phase J2.2 dropped the baseline to 5: the controller now dispatches
 # code-panel press / drag / menu activation directly.
 # Phase J3 (color-picker writeback) dropped the baseline to 1: the
-# picker now routes its source-line replace through
+# picker routes its source-line replace through
 # editor_commit_apply_external_change(REPL_COMPILED_REPLACE_ONE) and
-# captures undo on the first writeback per session, so the four
-# repl_command_store_live + repl_command_store_replace_one +
-# editor_buffer_replace_line + repl_undo_push_snapshot hits are gone.
+# captures undo on the first writeback per session.
+# Phase J4 (cursor-pixel UiCodePanelOutput) dropped the baseline to 0:
+# render_active_input_rows now publishes the editor cursor's pixel
+# coordinates through ui_panels_render_code_panel's UiCodePanelOutput
+# parameter; the controller actualizes the value by passing it
+# directly to ui_autocomplete_panel_render. The cursor_px / cursor_py
+# fields on ReplCodePanelRuntimeState and the
+# repl_action_set_cursor_pixel setter were deleted along with the
+# obsolete check-cursor-px-encapsulated guard, since the data was
+# rendering ephemera, not state.
 #
-# The single remaining violation is:
-#   - ui_panels.c:260 repl_action_set_cursor_pixel (1 hit) inside
-#     render_active_input_rows — render-time cursor pixel publish, not
-#     input dispatch. Eliminating it requires a render-side refactor
-#     that returns the cursor pixel through a UiCodePanelOutput
-#     snapshot/output struct that imrepl_ctrl actualizes; that is a
-#     separate track from the J2 input-boundary work.
+# ui_*.c is now mutator-free in the input + render paths. Any new hit
+# fails the build.
 #
 # Reductions are always allowed; lower this number by hand when a
 # commit legitimately drives violations down so the next commit
 # cannot silently regress past the new low.
 
-count: 1
+count: 0

@@ -40,7 +40,14 @@
 
 /* Render the autocomplete popup once per frame from the supplied snapshot.
  * Performs no live REPL state reads. Renders nothing if autocomplete is not
- * active (no matches). */
-void ui_autocomplete_panel_render(const UiRenderSnapshot *snap);
+ * active (no matches).
+ *
+ * `cursor_px`/`cursor_py` are window-pixel coordinates of the editor
+ * cursor — typically the `UiCodePanelOutput.cursor_px/_py` produced by
+ * the same-frame `ui_panels_render_code_panel`. They're per-frame
+ * transients (not snapshot state) so the autocomplete popup anchors
+ * under the live cursor without snapshot staleness across renderers. */
+void ui_autocomplete_panel_render(const UiRenderSnapshot *snap,
+                                  int cursor_px, int cursor_py);
 
 #endif /* UI_AUTOCOMPLETE_PANEL_H */

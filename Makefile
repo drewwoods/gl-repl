@@ -103,7 +103,7 @@ else
 COVERAGE_LDFLAGS =
 endif
 
-.PHONY: all clean test check test-detailed test_detailed test-stubs lines debug coverage glut help bench bench-csv check-gl-boundaries check-layer-coupling check-controller-boundaries check-scene-no-repl-state-mut check-state-boundaries check-views-no-owners check-pure-scene-no-repl-state check-ui-no-repl-state-mut check-public-api-usage check-state-ownership check-no-write-through-view check-runtime-state-value-fields check-public-state-no-writable-pointers check-views-flat-types check-state-read-getters-return-values check-views-by-value-snapshot check-ui-renderer-takes-view check-renderer-no-direct-mutators check-output-actualization check-state-c-shrinking check-no-facade-include-in-views check-domain-owner-encapsulation check-cursor-px-encapsulated check-ui-no-repl-state-read check-editor-ownership-budget check-no-store-text-api check-repl-no-direct-buffer-read check-imrepl-not-editor-mirror check-ui-returns-hits-only check-ui-panels-no-mutators check-replay-ui-isolation check-variable-panel-forwarders check-replay-forwarders check-no-repl-commit check-no-repl-editor-input-shim check-no-set-status-in-repl-parser check-no-set-status-in-compile-apply audit-editor-ownership callgraph-static callgraph-static-entry callgraph-profile callgraph-graphviz callgraph-html callgraph-files FORCE
+.PHONY: all clean test check test-detailed test_detailed test-stubs lines debug coverage glut help bench bench-csv check-gl-boundaries check-layer-coupling check-controller-boundaries check-scene-no-repl-state-mut check-state-boundaries check-views-no-owners check-pure-scene-no-repl-state check-ui-no-repl-state-mut check-public-api-usage check-state-ownership check-no-write-through-view check-runtime-state-value-fields check-public-state-no-writable-pointers check-views-flat-types check-state-read-getters-return-values check-views-by-value-snapshot check-ui-renderer-takes-view check-renderer-no-direct-mutators check-output-actualization check-state-c-shrinking check-no-facade-include-in-views check-domain-owner-encapsulation check-ui-no-repl-state-read check-editor-ownership-budget check-no-store-text-api check-repl-no-direct-buffer-read check-imrepl-not-editor-mirror check-ui-returns-hits-only check-ui-panels-no-mutators check-replay-ui-isolation check-variable-panel-forwarders check-replay-forwarders check-no-repl-commit check-no-repl-editor-input-shim check-no-set-status-in-repl-parser check-no-set-status-in-compile-apply audit-editor-ownership callgraph-static callgraph-static-entry callgraph-profile callgraph-graphviz callgraph-html callgraph-files FORCE
 
 all: sample
 
@@ -367,9 +367,6 @@ check-no-facade-include-in-views: ## Verify view/render files avoid repl_state f
 check-domain-owner-encapsulation: ## Enforce per-domain mutator encapsulation rules as domains migrate.
 	@bash scripts/check-domain-encapsulation.sh scripts/allowlists/domain-owner-encapsulation.txt
 
-check-cursor-px-encapsulated: ## Verify cursor pixel wiring is limited to allowlisted migration files.
-	@bash scripts/check-cursor-px-encapsulated.sh scripts/allowlists/cursor-px-encapsulated.txt
-
 check-ui-no-repl-state-read: ## Verify UI renderers consume the UiRenderSnapshot, not live repl_state_*().
 	@echo "Checking UI render entry points consume UiRenderSnapshot..."
 	@bad=$$(grep -nE 'repl_state_[A-Za-z0-9_]+\s*\(' $(UI_SRCS) 2>/dev/null \
@@ -401,7 +398,6 @@ check-state-ownership: ## Run state-ownership contract checks (new + tightened e
 		check-state-c-shrinking \
 		check-no-facade-include-in-views \
 		check-domain-owner-encapsulation \
-		check-cursor-px-encapsulated \
 		check-ui-no-repl-state-read \
 		check-editor-ownership-budget \
 		check-no-store-text-api \
