@@ -421,6 +421,7 @@ static void render_3d_scene_pass(const SceneRenderConfig *config,
                 scene_apply_tracked_transform(&flat_cmds[i], &matrix_depth);
             } else if ((config->show_vpoints || config->replay_vertex_points) &&
                        (flat_cmds[i].type == CMD_VERTEX3F ||
+                        flat_cmds[i].type == CMD_VERTEX2F ||
                         flat_cmds[i].type == CMD_TESS_VERTEX)) {
                 glBegin(GL_POINTS);
                 glVertex3f(flat_cmds[i].args[0], flat_cmds[i].args[1],
