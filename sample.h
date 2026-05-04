@@ -118,13 +118,6 @@ typedef struct {
 /* Types                                                                      */
 /* ========================================================================= */
 
-typedef enum {
-    PROFILE_PANEL_OFF = 0,
-    PROFILE_PANEL_ON,
-    PROFILE_PANEL_DETAILS,
-    PROFILE_PANEL_MODE_COUNT
-} ProfilePanelMode;
-
 int  init_section_line_count(void);
 void init_section_line(int i, char *buf, size_t n);
 

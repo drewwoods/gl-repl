@@ -77,7 +77,7 @@ static void make_test_ui_snapshot(UiRenderSnapshot *snap) {
 static void test_help_overlay(void) {
     printf("Testing Help Overlay...\n");
     gl_stub_counts_reset();
-    
+
     ui_state_help_mut()->visible = 0;
     { UiRenderSnapshot s; make_test_ui_snapshot(&s); ui_help_overlay_render(&s); }
     ASSERT_TRUE("help hidden -> no GL calls", gl_stub_counts[GL_STUB_glBegin] == 0);
@@ -104,7 +104,7 @@ static void test_help_overlay(void) {
 static void test_profile_panel(void) {
     printf("Testing Profile Panel...\n");
     gl_stub_counts_reset();
-    
+
     ui_state_profile_panel_mut()->mode = PROFILE_PANEL_OFF;
     { UiRenderSnapshot s; make_test_ui_snapshot(&s); ui_profile_panel_render(&s); }
     ASSERT_TRUE("profile hidden -> no GL calls", gl_stub_counts[GL_STUB_glBegin] == 0);
@@ -129,7 +129,7 @@ static void test_profile_panel(void) {
 
 static void test_color_picker(void) {
     printf("Testing Color Picker...\n");
-    
+
     /* Setup a command to edit */
     repl_state_document_count_set(1);
     repl_state_document_cmds_mut()[0].type = CMD_COLOR3F;
@@ -138,22 +138,22 @@ static void test_color_picker(void) {
     repl_state_document_cmds_mut()[0].args[2] = 0.0f;
     repl_state_document_cmds_mut()[0].valid = 1;
     repl_state_document_cmds_mut()[0].has_vars = 0;
-    
+
     ASSERT_TRUE("can edit color cmd", ui_color_picker_can_edit_cmd(0));
-    
+
     ui_state_viewport_set_size(800, 600);
     ui_color_picker_open(0, 300);
     ASSERT_TRUE("picker is active", ui_color_picker_active_line() == 0);
-    
+
     gl_stub_counts_reset();
     { UiRenderSnapshot s; make_test_ui_snapshot(&s); ui_color_picker_render(&s); }
     ASSERT_GL_CALLS("picker render -> draws quads", GL_STUB_glBegin, 1);
     ASSERT_GL_CALLS("picker render -> calls glVertex2f", GL_STUB_glVertex2f, 4);
-    
+
     /* Test interactions */
     int px = 400;
     int py = 300;
-    
+
     /* Press SV square (CP_SV_SZ = 150) */
     ui_color_picker_press(px + 10, ui_state_viewport().window_h - (py - 10));
     ui_color_picker_motion(px + 20, ui_state_viewport().window_h - (py - 20));
@@ -168,11 +168,11 @@ static void test_color_picker(void) {
     repl_state_document_cmds_mut()[0].type = CMD_COLOR4F;
     repl_state_document_cmds_mut()[0].args[3] = 0.5f;
     ui_color_picker_open(0, 300);
-    
+
     gl_stub_counts_reset();
     { UiRenderSnapshot s; make_test_ui_snapshot(&s); ui_color_picker_render(&s); }
     ASSERT_GL_CALLS("picker render with alpha -> draws quads", GL_STUB_glBegin, 1);
-    
+
     /* Press Alpha bar (alp_x = hue_x + 18 + 6 = px + 156 + 24 = 180) */
     ui_color_picker_press(px + 185, ui_state_viewport().window_h - (py - 10));
     ui_color_picker_motion(px + 185, ui_state_viewport().window_h - (py - 20));
@@ -183,7 +183,7 @@ static void test_color_picker(void) {
     ui_color_picker_open(0, 300);
     ui_color_picker_press(px + 10, ui_state_viewport().window_h - (py - 5)); // High V
     ui_color_picker_release();
-    
+
     ui_color_picker_close();
     ASSERT_TRUE("picker closed", ui_color_picker_active_line() == -1);
 
@@ -209,7 +209,7 @@ static void test_color_picker(void) {
 static void test_autocomplete_panel(void) {
     printf("Testing Autocomplete Panel...\n");
     gl_stub_counts_reset();
-    
+
     editor_state_autocomplete_mut()->match_count = 0;
     { UiRenderSnapshot s; make_test_ui_snapshot(&s); ui_autocomplete_panel_render(&s); }
     ASSERT_TRUE("ac hidden -> no GL calls", gl_stub_counts[GL_STUB_glBegin] == 0);
@@ -220,7 +220,7 @@ static void test_autocomplete_panel(void) {
     editor_state_autocomplete_mut()->selected_idx = 0;
     ui_state_code_panel_mut()->cursor_px = 100;
     ui_state_code_panel_mut()->cursor_py = 100;
-    
+
     gl_stub_counts_reset();
     { UiRenderSnapshot s; make_test_ui_snapshot(&s); ui_autocomplete_panel_render(&s); }
     ASSERT_GL_CALLS("ac visible -> draws quads", GL_STUB_glBegin, 1);
@@ -231,7 +231,7 @@ static void test_autocomplete_panel(void) {
 static void test_variable_panel(void) {
     printf("Testing Variable Panel...\n");
     gl_stub_counts_reset();
-    
+
     ui_state_variable_panel_mut()->visible = 0;
     { UiRenderSnapshot s; make_test_ui_snapshot(&s); ui_variable_panel_render(&s); }
     ASSERT_TRUE("var panel hidden -> no GL calls", gl_stub_counts[GL_STUB_glBegin] == 0);
@@ -246,7 +246,7 @@ static void test_variable_panel(void) {
     ASSERT_GL_CALLS("var panel visible -> draws quads", GL_STUB_glBegin, 1);
     ASSERT_GL_CALLS("var panel visible -> draws text", GL_STUB_glRasterPos2f, 2);
     ASSERT_GL_CALLS("var panel visible -> calls glColor4f", GL_STUB_glColor4f, 1);
-    
+
     /* Test hit testing */
     int row = -1;
     ui_state_viewport_set_size(800, 600);
@@ -259,34 +259,34 @@ static void test_variable_panel(void) {
 static void test_menu_bar(void) {
     printf("Testing Menu Bar...\n");
     gl_stub_counts_reset();
-    
+
     ui_state_viewport_set_size(800, 600);
     repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT;
     ui_state_code_panel_mut()->panel_frac = 0.5f;
-    
+
     gl_stub_counts_reset();
     { UiRenderSnapshot s; make_test_ui_snapshot(&s); ui_menu_bar_render(&s); }
     ASSERT_GL_CALLS("menu bar render -> draws quads", GL_STUB_glBegin, 1);
     ASSERT_GL_CALLS("menu bar render -> draws text", GL_STUB_glRasterPos2f, 2);
-    
+
     /* Test hits */
     ASSERT_TRUE("menu hit", ui_menu_bar_menu_hit(20, 10) >= 0);
-    /* Pins are on the right side of the code panel. 
-     * With CP LEFT and frac 0.5, cp_w = 400. 
+    /* Pins are on the right side of the code panel.
+     * With CP LEFT and frac 0.5, cp_w = 400.
      */
     ASSERT_TRUE("pin hit", ui_menu_bar_pin_hit(380, 10) >= 0);
 
     /* Test dropdown */
     ui_menu_bar_set_open_menu(0); // File menu
     ASSERT_TRUE("dropdown open", ui_menu_bar_menu_dropdown_is_open());
-    
+
     gl_stub_counts_reset();
     { UiRenderSnapshot s; make_test_ui_snapshot(&s); ui_menu_bar_render_example_dropdown(&s); }
     ASSERT_GL_CALLS("dropdown render -> draws quads", GL_STUB_glBegin, 1);
-    
+
     /* Dropdown item hit */
     ASSERT_TRUE("dropdown item hit", ui_menu_bar_dropdown_item_hit(20, 100) >= 0);
-    
+
     /* Test config menu */
     ui_menu_bar_open_config();
     ASSERT_TRUE("config menu open", ui_menu_bar_open_menu_id() == 2); // MENU_CONFIG
@@ -296,7 +296,7 @@ static void test_menu_bar(void) {
     gl_stub_counts_reset();
     { UiRenderSnapshot s; make_test_ui_snapshot(&s); ui_menu_bar_render_search_overlay(&s, 0, 400, 600); }
     ASSERT_GL_CALLS("search overlay -> draws quads", GL_STUB_glBegin, 1);
-    
+
     ui_menu_bar_close();
     ASSERT_TRUE("menu closed", !ui_menu_bar_menu_dropdown_is_open());
 }

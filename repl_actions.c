@@ -21,6 +21,7 @@
 #include "ui_color_picker.h"
 #include "ui_menu_bar.h"
 #include "ui_panels.h"
+#include "ui_profile_panel.h"
 #include "ui_state.h"
 #include "editor_inline_rename.h"
 
