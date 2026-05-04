@@ -15,6 +15,7 @@
 #include "ui_snapshot.h"
 #include "ui_layout.h"
 #include "editor_code_panel_document.h"
+#include "variable_panel.h"
 #include "variable_panel_drag.h"
 #include "support/test_harness.h"
 #include <GL/gl_stub_counts.h>
@@ -48,7 +49,7 @@ static void make_test_ui_snapshot(UiRenderSnapshot *snap) {
     snap->code_panel     = ui_state_code_panel();
     snap->help           = ui_state_help();
     snap->help_session   = editor_help_session_view();
-    snap->variable_panel = ui_state_variable_panel();
+    snap->variable_panel = variable_panel_view();
     snap->profile_panel  = ui_state_profile_panel();
     snap->status         = ui_state_status();
     snap->search         = editor_state_search();
@@ -58,7 +59,7 @@ static void make_test_ui_snapshot(UiRenderSnapshot *snap) {
     snap->render         = repl_state_render();
     snap->replay         = replay_state_view();
     snap->scenes         = repl_state_scenes();
-    snap->variable_drag  = editor_state_variable_drag();
+    snap->variable_drag  = variable_panel_drag();
     snap->selection      = editor_state_selection();
     snap->scroll         = editor_state_scroll();
     snap->variables      = repl_state_variables();
@@ -232,11 +233,11 @@ static void test_variable_panel(void) {
     printf("Testing Variable Panel...\n");
     gl_stub_counts_reset();
 
-    ui_state_variable_panel_mut()->visible = 0;
+    variable_panel_view_mut()->visible = 0;
     { UiRenderSnapshot s; make_test_ui_snapshot(&s); ui_variable_panel_render(&s); }
     ASSERT_TRUE("var panel hidden -> no GL calls", gl_stub_counts[GL_STUB_glBegin] == 0);
 
-    ui_state_variable_panel_mut()->visible = 1;
+    variable_panel_view_mut()->visible = 1;
     g_num_predef_vars = 1;
     strcpy(g_predef_vars[0].name, "x");
     g_predef_vars[0].value = 1.0f;
@@ -434,12 +435,12 @@ static void test_ui_variable_panel_hit_test(void) {
     ui_state_viewport_set_size(800, 600);
 
     /* Panel hidden -> always miss. */
-    ui_state_variable_panel_mut()->visible = 0;
+    variable_panel_view_mut()->visible = 0;
     UiHit h_off = ui_variable_panel_hit_test(700, 100);
     ASSERT_TRUE("hidden panel -> NONE", h_off.kind == UI_HIT_NONE);
 
     /* Visible panel with one declared variable. */
-    ui_state_variable_panel_mut()->visible = 1;
+    variable_panel_view_mut()->visible = 1;
     g_num_predef_vars = 1;
     strcpy(g_predef_vars[0].name, "x");
     g_predef_vars[0].value = 1.0f;
@@ -469,7 +470,7 @@ static void test_ui_panels_hit_test_dispatch(void) {
 
     /* Variable panel should win over the scene-region fallback when
      * a click lands on its rect. */
-    ui_state_variable_panel_mut()->visible = 1;
+    variable_panel_view_mut()->visible = 1;
     g_num_predef_vars = 1;
     strcpy(g_predef_vars[0].name, "x");
     g_predef_vars[0].value = 1.0f;
@@ -479,7 +480,7 @@ static void test_ui_panels_hit_test_dispatch(void) {
     UiHit h_var = ui_panels_hit_test(px + 10, my_var);
     ASSERT_TRUE("var panel routed via panels_hit_test",
                 h_var.kind == UI_HIT_VARIABLE_SLIDER);
-    ui_state_variable_panel_mut()->visible = 0;
+    variable_panel_view_mut()->visible = 0;
 
     /* Menu pin button click should resolve as UI_HIT_PIN_BUTTON. */
     ui_menu_bar_close();

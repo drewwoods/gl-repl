@@ -88,6 +88,7 @@ static void declare_test_vars(void) {
     ASSERT_DECL_OK("declare_predef_var n", repl_eval_declare_predef_var("n", err, sizeof(err)), err);
 }
 
+#include "variable_panel.h"
 #include "variable_panel_drag.h"
 
 #define VAR_PANEL_PAD_INTERNAL   6
@@ -2649,7 +2650,7 @@ int main() {
     {
         repl_reset_state();
         ui_state_viewport_set_size(1000, 1000);
-        ui_state_variable_panel_mut()->visible = 1;
+        variable_panel_view_mut()->visible = 1;
         repl_feed_line_public("float testvar = 5.0;");
 
         /* Variable panel is usually at bottom-right of scene.
@@ -2669,13 +2670,13 @@ int main() {
         int click_y = 1000 - (py + ph - VAR_PANEL_PAD_INTERNAL - VAR_TITLE_H_INTERNAL / 2);
 
         imrepl_ctrl_router_handle_variable_panel_drag_begin(GLUT_LEFT_BUTTON, GLUT_DOWN, click_x, click_y);
-        ASSERT_TRUE("mouse: variable drag active", repl_var_drag_active());
+        ASSERT_TRUE("mouse: variable drag active", variable_panel_drag_active());
 
         imrepl_ctrl_router_handle_variable_panel_motion(click_x + 100, click_y);
         /* drag motion should have changed the variable value. */
 
         imrepl_ctrl_router_handle_variable_panel_drag_release(GLUT_UP);
-        ASSERT_TRUE("mouse: variable drag inactive after release", !repl_var_drag_active());
+        ASSERT_TRUE("mouse: variable drag inactive after release", !variable_panel_drag_active());
     }
 
     /* Extra coverage: Undo/Redo keys */
@@ -2881,7 +2882,7 @@ int main() {
     {
         repl_reset_state();
         ui_state_viewport_set_size(1000, 1000);
-        ui_state_variable_panel_mut()->visible = 1;
+        variable_panel_view_mut()->visible = 1;
         repl_feed_line_public("float testvar = 5.0;");
 
         int px, py, pw, ph;
@@ -2890,7 +2891,7 @@ int main() {
         int click_y = 1000 - (py + ph - VAR_PANEL_PAD_INTERNAL - VAR_TITLE_H_INTERNAL / 2);
 
         imrepl_ctrl_router_handle_variable_panel_drag_begin(GLUT_RIGHT_BUTTON, GLUT_DOWN, click_x, click_y);
-        ASSERT_TRUE("mouse: right-click variable drag active", repl_var_drag_active());
+        ASSERT_TRUE("mouse: right-click variable drag active", variable_panel_drag_active());
         imrepl_ctrl_router_handle_variable_panel_drag_release(GLUT_UP);
     }
 
