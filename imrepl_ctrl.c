@@ -919,7 +919,7 @@ int imrepl_ctrl_router_handle_glut_scroll_wheel_button(int button, int state, in
         return 0;
     int direction = (button == 3) ? -1 : 1;
     if (ui_state_help().visible) {
-        ui_state_help_mut()->scroll += direction;
+        editor_help_session_scroll_by(direction);
     } else if (editor_input_point_in_code_panel(x, y)) {
         editor_input_code_panel_scroll(direction);
     } else {
