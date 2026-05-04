@@ -400,6 +400,26 @@ const char *g_footer_post_init[] = {
     NULL
 };
 
+static void emit_footer_post_init(FILE *f, int win_w, int win_h) {
+    fprintf(f,
+        "}\n"
+        "\n"
+        "int main(int argc, char **argv) {\n"
+        "  glutInit(&argc, argv);\n"
+        "  glutInitDisplayMode(GLUT_DOUBLE|GLUT_RGB|GLUT_DEPTH|GLUT_MULTISAMPLE);\n"
+        "  glutInitWindowSize(%d, %d);\n"
+        "  glutCreateWindow(\"OpenGL REPL\");\n"
+        "  init();\n"
+        "  glutDisplayFunc(display);\n"
+        "  glutReshapeFunc(reshape);\n"
+        "  glutKeyboardFunc(keyboard);\n"
+        "  glutIdleFunc(idle);\n"
+        "  glutMainLoop();\n"
+        "  return 0;\n"
+        "}\n",
+        win_w, win_h);
+}
+
 static int init_host_only_line_count(void) {
     int count = 0;
     while (g_init_host_only_visible_c[count])
@@ -2337,13 +2357,18 @@ static void emit_export_display_geometry(FILE *f) {
 static void emit_export_display_tail(FILE *f, const ExportNeeds *needs) {
     int include_tess = needs ? needs->needs_tess : 0;
 
-    /* Emit footer lines before init section. */
     for (int line_idx = 0; g_footer_pre_init[line_idx]; line_idx++)
         fprintf(f, "%s\n", g_footer_pre_init[line_idx]);
     emit_export_init_section_to_file(f, include_tess);
-    /* Emit footer lines after init section. */
-    for (int line_idx = 0; g_footer_post_init[line_idx]; line_idx++)
-        fprintf(f, "%s\n", g_footer_post_init[line_idx]);
+
+    /* Use the actual scene rect so the exported window preserves the REPL
+     * viewport's aspect ratio and geometry is never clipped. Fall back to
+     * 800x600 when dimensions aren't available (e.g. headless export). */
+    int sx, sy, sw, sh;
+    repl_layout_scene_rect(&sx, &sy, &sw, &sh);
+    if (sw <= 0) sw = 800;
+    if (sh <= 0) sh = 600;
+    emit_footer_post_init(f, sw, sh);
 }
 
 static void emit_export_display(FILE *f, const ExportNeeds *needs) {
