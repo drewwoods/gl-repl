@@ -123,8 +123,12 @@ ownership / contract guards. Highlights:
   controls, route hits via `replay_handle_*`, and read replay
   snapshots, but must not mutate editor/REPL state, call
   parser/compile/apply, or grow generic `ui_*` responsibilities.
-- `check-variable-panel-forwarders` (current 50/87) — legacy
-  variable-panel forwarder-API uses ratchet downward only.
+- `check-variable-panel-forwarders` — baseline **0/0** after Phase
+  J6 migrated every fixture site onto `variable_panel_drag` /
+  `variable_panel_view` / `variable_panel_handle_drag_*`. The
+  legacy `editor_state_variable_drag*` / `ui_state_variable_panel*`
+  / `repl_var_drag_*` wrappers survive as one-line redirects and
+  can be deleted in a follow-up.
 - `check-replay-forwarders` — baseline **0/0** after Phase J5
   migrated every `bench/` + `tests/` site onto `replay_state_view` /
   `replay_state_mut` / `replay_handle_*`. The legacy

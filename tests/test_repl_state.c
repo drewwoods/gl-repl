@@ -84,9 +84,9 @@ static void populate_runtime_snapshot_fixture(const char *scene_hint) {
     editor_scroll_follow_cursor_set(1);
     code_panel->cursor_visible = 0;
     code_panel->blink_tick = 12;
-    ui_state_variable_panel_mut()->visible = 0;
+    variable_panel_view_mut()->visible = 0;
 
-    drag = editor_state_variable_drag_mut();
+    drag = variable_panel_drag_mut();
     drag->var_idx = 3;
     drag->log_mode = 1;
     drag->start_value = 2.5f;
@@ -262,12 +262,12 @@ static void test_capture_restore_round_trip(void) {
     ASSERT_INT("code panel cursor visible restored",
                ui_state_code_panel().cursor_visible, 0);
     ASSERT_INT("code panel blink restored", ui_state_code_panel().blink_tick, 12);
-    ASSERT_INT("variable panel restored", ui_state_variable_panel().visible, 0);
-    ASSERT_INT("variable drag idx restored", editor_state_variable_drag().var_idx, 3);
-    ASSERT_INT("variable drag log restored", editor_state_variable_drag().log_mode, 1);
+    ASSERT_INT("variable panel restored", variable_panel_view().visible, 0);
+    ASSERT_INT("variable drag idx restored", variable_panel_drag().var_idx, 3);
+    ASSERT_INT("variable drag log restored", variable_panel_drag().log_mode, 1);
     ASSERT_TRUE("variable drag value restored",
-                editor_state_variable_drag().start_value == 2.5f);
-    ASSERT_INT("variable drag x restored", editor_state_variable_drag().start_x, 17);
+                variable_panel_drag().start_value == 2.5f);
+    ASSERT_INT("variable drag x restored", variable_panel_drag().start_x, 17);
     ASSERT_INT("profile panel restored",
                ui_state_profile_panel().mode, PROFILE_PANEL_DETAILS);
     {
