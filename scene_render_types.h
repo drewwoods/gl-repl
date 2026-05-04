@@ -5,9 +5,20 @@
 #define SCENE_RENDER_TYPES_H
 
 #include "repl_flatten.h"
-#include "sample.h"
+#include "repl_presentation.h"
 #include "replay.h"
 #include "scene_guides_shared.h"
+
+#define MAX_LIGHTS 4
+
+typedef struct {
+    GLenum   id;         /* GL_LIGHT0 .. GL_LIGHT3 */
+    int      enabled;
+    float    pos[4];     /* xyz + w (0=directional, 1=positional) */
+    float    diffuse[4];
+    float    ambient[4];
+    float    specular[4];
+} SceneLight;
 
 typedef struct SceneRgba {
     float r, g, b, a;
