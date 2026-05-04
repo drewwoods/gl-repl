@@ -347,11 +347,14 @@ UiHit ui_menu_bar_hit_test(int mx, int my) {
     if (win_h <= 0) return h;
     int gl_y = win_h - my;
 
-    /* Open dropdown row beats every other menu region. */
+    /* Open dropdown row beats every other menu region. The cmd_idx
+     * carries the menu_id the row belongs to so the controller can
+     * activate the action without reading ui_menu_bar state. */
     if (g_open_menu >= 0) {
         int row = ui_menu_bar_dropdown_item_hit(mx, my);
         if (row >= 0) {
             h.kind = UI_HIT_MENU_ITEM;
+            h.cmd_idx = g_open_menu;
             h.item_idx = row;
             h.local_x = (float)mx;
             h.local_y = (float)gl_y;
@@ -359,11 +362,13 @@ UiHit ui_menu_bar_hit_test(int mx, int my) {
         }
     }
 
-    /* Top-level menu button (File / Scene / Config). */
+    /* Top-level menu button (File / Scene / Config). cmd_idx carries
+     * menu_id; the controller decides whether to open / switch /
+     * dismiss based on the open-menu state. */
     int menu = ui_menu_bar_menu_hit(mx, my);
     if (menu >= 0) {
-        h.kind = UI_HIT_MENU_ITEM;
-        h.item_idx = menu;
+        h.kind = UI_HIT_MENU_BUTTON;
+        h.cmd_idx = menu;
         h.local_x = (float)mx;
         h.local_y = (float)gl_y;
         return h;

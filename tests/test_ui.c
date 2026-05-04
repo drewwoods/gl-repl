@@ -12,6 +12,8 @@
 #include "ui_menu_bar.h"
 #include "ui_panels.h"
 #include "ui_snapshot.h"
+#include "ui_layout.h"
+#include "editor_code_panel_document.h"
 #include "variable_panel_drag.h"
 #include "support/test_harness.h"
 #include <GL/gl_stub_counts.h>
@@ -24,6 +26,10 @@ static TestHarness g_harness = TEST_HARNESS_INIT;
 
 #define ASSERT_TRUE(label, cond) do { \
     TEST_ASSERT_TRUE(&g_harness, label, cond); \
+} while (0)
+
+#define ASSERT_INT(label, got, expected) do { \
+    TEST_ASSERT_INT(&g_harness, label, got, expected); \
 } while (0)
 
 #define ASSERT_GL_CALLS(label, counter, min_calls) do { \
@@ -342,29 +348,32 @@ static void test_ui_menu_bar_hit_test(void) {
     UiHit h_none = ui_menu_bar_hit_test(20, 400);
     ASSERT_TRUE("menu bar miss -> NONE", h_none.kind == UI_HIT_NONE);
 
-    /* Top-level menu button (File at left edge, my within bar). */
+    /* Top-level menu button (File at left edge, my within bar). The
+     * J2.1 split emits UI_HIT_MENU_BUTTON for top-level labels with
+     * cmd_idx = menu_id; the controller no longer reads ui_menu_bar
+     * state to distinguish a top-level click from a dropdown row. */
     ui_menu_bar_close();
     UiHit h_menu = ui_menu_bar_hit_test(20, 10);
     ASSERT_TRUE("menu top-level hit kind",
-                h_menu.kind == UI_HIT_MENU_ITEM);
-    ASSERT_TRUE("menu top-level item_idx is menu_id",
-                h_menu.item_idx >= 0 && h_menu.item_idx < 3);
+                h_menu.kind == UI_HIT_MENU_BUTTON);
+    ASSERT_TRUE("menu top-level cmd_idx is menu_id",
+                h_menu.cmd_idx >= 0 && h_menu.cmd_idx < 3);
 
     /* Pin button (right side, mx near right edge). */
     UiHit h_pin = ui_menu_bar_hit_test(380, 10);
     ASSERT_TRUE("pin hit kind", h_pin.kind == UI_HIT_PIN_BUTTON);
     ASSERT_TRUE("pin item_idx populated", h_pin.item_idx >= 0);
 
-    /* Open a menu, then a click on a dropdown row should report
-     * UI_HIT_MENU_ITEM with item_idx = row. The disambiguator from
-     * top-level vs row is ui_menu_bar_open_menu_id() != -1. */
+    /* Open a menu, then a click on a dropdown row reports
+     * UI_HIT_MENU_ITEM with cmd_idx = open_menu_id and item_idx =
+     * row. */
     ui_menu_bar_set_open_menu(0); /* File menu */
     UiHit h_row = ui_menu_bar_hit_test(20, 100);
     ASSERT_TRUE("dropdown row hit kind",
                 h_row.kind == UI_HIT_MENU_ITEM);
+    ASSERT_TRUE("dropdown row cmd_idx is menu_id",
+                h_row.cmd_idx == 0);
     ASSERT_TRUE("dropdown row item_idx populated", h_row.item_idx >= 0);
-    ASSERT_TRUE("open menu disambiguates row",
-                ui_menu_bar_open_menu_id() == 0);
     ui_menu_bar_close();
 }
 
@@ -507,6 +516,163 @@ static void test_ui_panels_hit_test_dispatch(void) {
     ui_color_picker_close();
 }
 
+/* J2.1: ui_panels_hit_test emits UI_HIT_PANEL_DIVIDER for the
+ * code-panel splitter strip. */
+static void test_ui_panels_hit_test_panel_divider(void) {
+    repl_reset_state();
+    ui_state_viewport_set_size(800, 600);
+    ui_state_code_panel_mut()->panel_frac = 0.5f;
+
+    /* LEFT layout: divider sits at x = panel_w. */
+    repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT;
+    int cp_x, cp_y, cp_w, cp_h;
+    repl_layout_code_panel_rect(&cp_x, &cp_y, &cp_w, &cp_h);
+    UiHit h_left = ui_panels_hit_test(cp_x + cp_w, cp_y + 20);
+    ASSERT_TRUE("LEFT divider hit kind",
+                h_left.kind == UI_HIT_PANEL_DIVIDER);
+
+    /* TOP layout: divider sits at gl_y = cp_y. The hit is at
+     * my == window_h - cp_y. */
+    repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_TOP;
+    repl_layout_code_panel_rect(&cp_x, &cp_y, &cp_w, &cp_h);
+    int my_top = ui_state_viewport().window_h - cp_y;
+    UiHit h_top = ui_panels_hit_test(cp_x + 100, my_top);
+    ASSERT_TRUE("TOP divider hit kind",
+                h_top.kind == UI_HIT_PANEL_DIVIDER);
+
+    /* BOTTOM layout: divider sits at gl_y = cp_y + cp_h. */
+    repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_BOTTOM;
+    repl_layout_code_panel_rect(&cp_x, &cp_y, &cp_w, &cp_h);
+    int my_bot = ui_state_viewport().window_h - (cp_y + cp_h);
+    UiHit h_bot = ui_panels_hit_test(cp_x + 100, my_bot);
+    ASSERT_TRUE("BOTTOM divider hit kind",
+                h_bot.kind == UI_HIT_PANEL_DIVIDER);
+
+    /* HIDDEN layout: no divider. */
+    repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_HIDDEN;
+    UiHit h_hidden = ui_panels_hit_test(400, 300);
+    ASSERT_TRUE("HIDDEN layout has no divider hit",
+                h_hidden.kind != UI_HIT_PANEL_DIVIDER);
+
+    repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT;
+}
+
+/* Compute the GLUT-space (mx, my) for the first code-panel text row
+ * that resolves to a real document line, derived from the same layout
+ * helpers production uses (no baked-in magic coordinates).
+ *
+ * Production math:
+ *   vis = (line_y_start + LINE_H - 3 - gl_y) / LINE_H, where
+ *   line_y_start = panel_top - CODE_MARGIN_Y - 2*LINE_H.
+ *   doc_line = editor_scroll() + vis.
+ *   target_for_doc_line(doc_line) requires doc_line >= header_rows
+ *   to resolve a row.
+ *
+ * The header section (workspace metadata, render-state setup, camera
+ * setup) typically takes more rows than fit in the panel at the
+ * default panel_frac. Setting editor_scroll() = layout.header_rows
+ * makes the first user / insert-line row land at vis=0, regardless
+ * of how the header section grows.
+ *
+ * Caller is responsible for restoring editor_scroll() after the test
+ * if it cares (the per-test repl_reset_state() calls do this). */
+static void code_panel_first_row_text_click(int *out_mx, int *out_my) {
+    int cp_x, cp_y, cp_w, cp_h;
+    repl_layout_code_panel_rect(&cp_x, &cp_y, &cp_w, &cp_h);
+
+    int linenum_w = 4 * FONT_W;
+    int idx_col_w = repl_state_presentation().show_vertex_indices ? (6 * FONT_W) : 0;
+    int text_x = CODE_MARGIN_X + linenum_w + FONT_W + idx_col_w;
+    CodePanelDocumentLayout layout;
+    repl_code_panel_document_build(&layout, cp_w, text_x, cp_h);
+
+    /* Scroll past the header so vis=0 maps to a resolvable doc row. */
+    editor_scroll_set(layout.header_rows);
+
+    int line_y_start = (cp_y + cp_h) - CODE_MARGIN_Y - 2 * LINE_H;
+    /* gl_y for vis=0 lives in (line_y_start - 3, line_y_start - 3 + LINE_H);
+     * pick the midpoint so off-by-one shifts in CODE_MARGIN_Y don't
+     * leak into the test. */
+    int gl_y_mid = line_y_start - 3 + LINE_H / 2;
+    int my = ui_state_viewport().window_h - gl_y_mid;
+
+    /* mx in the text-area column (past the gutter), past the indent
+     * so the segment math has a real seg_x to clamp against. */
+    int mx = cp_x + CODE_MARGIN_X + linenum_w + FONT_W + idx_col_w + 2 * FONT_W;
+    if (out_mx) *out_mx = mx;
+    if (out_my) *out_my = my;
+}
+
+/* J2.1: ui_panels_hit_test populates char_idx for code-text clicks
+ * with the input-cursor target derived from the wrap / indent /
+ * segment math the legacy press helper used. */
+static void test_ui_panels_hit_test_code_text_cursor(void) {
+    repl_reset_state();
+    ui_state_viewport_set_size(800, 600);
+
+    int mx, my;
+    code_panel_first_row_text_click(&mx, &my);
+
+    /* Empty input → click resolves char_idx == 0 regardless of mx. */
+    {
+        ReplEditorInputState *inp = editor_state_input_mut();
+        inp->input[0] = '\0';
+        inp->input_len = 0;
+    }
+    UiHit h_empty = ui_panels_hit_test(mx, my);
+    ASSERT_TRUE("empty input code-text kind",
+                h_empty.kind == UI_HIT_CODE_TEXT ||
+                h_empty.kind == UI_HIT_CODE_INSERT_LINE);
+    ASSERT_INT("empty input char_idx == 0", h_empty.char_idx, 0);
+
+    /* Populate input "abcdef"; click 4 chars right of mx → char_idx
+     * is non-zero and within the input length. Exact column depends
+     * on segment / indent math but the property holds: clicking
+     * further right yields a higher char_idx (capped at input_len). */
+    {
+        ReplEditorInputState *inp = editor_state_input_mut();
+        strcpy(inp->input, "abcdef");
+        inp->input_len = 6;
+    }
+    UiHit h_mid = ui_panels_hit_test(mx + 4 * FONT_W, my);
+    ASSERT_TRUE("mid-input code-text kind",
+                h_mid.kind == UI_HIT_CODE_TEXT ||
+                h_mid.kind == UI_HIT_CODE_INSERT_LINE);
+    ASSERT_TRUE("mid-input char_idx in range",
+                h_mid.char_idx >= 0 && h_mid.char_idx <= 6);
+    ASSERT_TRUE("mid-input char_idx past start", h_mid.char_idx > 0);
+}
+
+/* J2.1: in insert mode, clicking on the insertion virtual rows
+ * (the extra "ghost" row above the edit-line where the user is
+ * typing the next command) surfaces UI_HIT_CODE_INSERT_LINE — the
+ * controller's route_code_insert_line_hit skips navigate_to_line
+ * for these clicks, matching the legacy on_insert_line=1 path. */
+static void test_ui_panels_hit_test_insert_line(void) {
+    repl_reset_state();
+    ui_state_viewport_set_size(800, 600);
+
+    /* Commit one line so insert mode at edit_line=0 produces an
+     * insertion ghost row above it. */
+    repl_feed_line_public("glBegin(GL_POINTS);");
+    repl_state_edit_line_set(0);
+    editor_insert_mode_set(1);
+
+    /* The insert ghost row sits at doc_line == header_rows (the
+     * first row inside the document section). Use the same helper
+     * that scrolls past the header so vis=0 maps there. */
+    int mx, my;
+    code_panel_first_row_text_click(&mx, &my);
+
+    UiHit h = ui_panels_hit_test(mx, my);
+    ASSERT_TRUE("insert-mode ghost row hit kind",
+                h.kind == UI_HIT_CODE_INSERT_LINE);
+    ASSERT_INT("insert-line line_idx == edit_line",
+               h.line_idx, repl_state_edit_line());
+
+    editor_insert_mode_set(0);
+}
+
 /* Regression: glVertex2f commands should generate gutter vertex-index labels
  * (v0, v1, ...) when show_vertex_indices is on, just like glVertex3f. */
 static void test_vertex2f_gutter_labels(void) {
@@ -613,6 +779,9 @@ int main(void) {
     test_ui_color_picker_hit_test();
     test_ui_variable_panel_hit_test();
     test_ui_panels_hit_test_dispatch();
+    test_ui_panels_hit_test_panel_divider();
+    test_ui_panels_hit_test_code_text_cursor();
+    test_ui_panels_hit_test_insert_line();
     test_vertex2f_gutter_labels();
 
     printf("\nUI Tests: %d/%d passed\n", g_harness.passed, g_harness.run);
