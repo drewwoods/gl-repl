@@ -1031,7 +1031,15 @@ void imrepl_ctrl_mouse(int button, int state, int x, int y) {
         editor_reset_input_effects();
         if (imrepl_ctrl_router_handle_variable_panel_drag_release(state)) {
             imrepl_ctrl_apply_input_effects(editor_take_input_effects());
+            return;
         }
+        /* Camera UP: drop_small_velocities + clear pointer button so the
+         * orbit/pan/zoom interaction releases. The original mouse_func
+         * called repl_camera_mouse_event unconditionally as a fallthrough
+         * after the LEFT/RIGHT DOWN handlers; UP events that didn't end a
+         * variable-panel drag landed here. */
+        imrepl_ctrl_router_handle_camera_mouse(button, state, x, y);
+        imrepl_ctrl_apply_input_effects(editor_take_input_effects());
         return;
     }
 
@@ -1078,23 +1086,29 @@ void imrepl_ctrl_mouse(int button, int state, int x, int y) {
     imrepl_ctrl_apply_input_effects(editor_take_input_effects());
 }
 
-/* Motion routing: camera pointer state tracks every event. UI overlay
- * (color picker drag), variable-panel drag motion, and camera drag
- * motion are router-side; code-panel resize tracking and code-panel
- * selection drag are editor's. */
+/* Motion routing: UI overlay (color picker drag), variable-panel drag
+ * motion, and camera drag motion are router-side; code-panel resize
+ * tracking and code-panel selection drag are editor's.
+ *
+ * Pointer-state tracking: each non-camera handler updates
+ * ui_state_pointer via repl_camera_pointer_set(x, y) AFTER its own
+ * work so the camera's view of the pointer stays current. The camera
+ * branch deliberately does NOT pre-set the pointer because
+ * repl_camera_drag_motion reads the previous (px, py) to compute
+ * delta and updates the pointer to (x, y) at the end. Pre-setting
+ * here would zero the delta and freeze orbit/pan/zoom drag. */
 void imrepl_ctrl_motion(int x, int y) {
     editor_reset_input_effects();
 
-    /* Camera pointer state is updated for every motion event. */
-    imrepl_ctrl_router_handle_camera_pointer_set(x, y);
-
     if (ui_panels_handle_motion(x, y)) {
+        imrepl_ctrl_router_handle_camera_pointer_set(x, y);
         editor_request_redraw();
         imrepl_ctrl_apply_input_effects(editor_take_input_effects());
         return;
     }
 
     if (imrepl_ctrl_router_handle_variable_panel_motion(x, y)) {
+        imrepl_ctrl_router_handle_camera_pointer_set(x, y);
         imrepl_ctrl_apply_input_effects(editor_take_input_effects());
         return;
     }
@@ -1106,16 +1120,21 @@ void imrepl_ctrl_motion(int x, int y) {
         ui_panels_handle_code_panel_drag(x, y)) {
         ReplInputDispatchEffects pre_editor = editor_take_input_effects();
         imrepl_ctrl_apply_input_effects(editor_handle_motion(x, y));
+        imrepl_ctrl_router_handle_camera_pointer_set(x, y);
         imrepl_ctrl_apply_input_effects(pre_editor);
         return;
     }
 
+    /* Camera drag motion reads pointer = (px, py), computes delta,
+     * then calls pointer_set(x, y) itself. */
     imrepl_ctrl_router_handle_camera_motion(x, y);
     imrepl_ctrl_apply_input_effects(editor_take_input_effects());
 }
 
 void imrepl_ctrl_passive_motion(int x, int y) {
     editor_reset_input_effects();
+    /* Passive motion (no button held) just updates the pointer
+     * position — there's no drag delta to preserve. */
     imrepl_ctrl_router_handle_camera_pointer_set(x, y);
     ReplInputDispatchEffects editor_effects = editor_handle_passive_motion(x, y);
     imrepl_ctrl_apply_input_effects(editor_take_input_effects());
