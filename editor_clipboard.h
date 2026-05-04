@@ -25,7 +25,7 @@
 #ifndef EDITOR_CLIPBOARD_H
 #define EDITOR_CLIPBOARD_H
 
-#include "sample.h"
+#include "repl_command.h"
 
 /* --- Selection state --------------------------------------------------- */
 

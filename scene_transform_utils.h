@@ -3,12 +3,12 @@
  *
  * Inline helpers for applying and unwinding GL matrix transforms.
  * Mirrors repl_executor.c functionality without requiring repl_executor.h.
- * Depends only on sample.h (GLCmd, CmdType).
+ * Depends only on repl_command.h (GLCmd, CmdType).
  */
 #ifndef SCENE_TRANSFORM_UTILS_H
 #define SCENE_TRANSFORM_UTILS_H
 
-#include "sample.h"
+#include "repl_command.h"
 #include <gl_includes.h>
 
 /* Apply a single transform command to the GL matrix stack.

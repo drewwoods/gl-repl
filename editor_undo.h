@@ -33,7 +33,7 @@
 #ifndef EDITOR_UNDO_H
 #define EDITOR_UNDO_H
 
-#include "sample.h"
+#include "repl_command.h"
 
 /* A captured snapshot of complete editor state: source commands, cursor
  * position, and predefined variable state. Used by undo/redo history rings

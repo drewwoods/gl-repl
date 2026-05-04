@@ -25,7 +25,7 @@
 #ifndef REPL_COMPILE_H
 #define REPL_COMPILE_H
 
-#include "sample.h"           /* GLCmd, MAX_LINE_LEN, etc. */
+#include "repl_command.h"     /* GLCmd, MAX_LINE_LEN */
 #include "editor_state.h"     /* EditorBufferView */
 #include "repl_state_views.h" /* REPL_STATUS_TEXT_MAX */
 #include "repl_eval.h"        /* MAX_NAMES_PER_DECL, ExprVar */

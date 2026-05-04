@@ -27,7 +27,10 @@
 #ifndef REPL_COMMAND_STORE_H
 #define REPL_COMMAND_STORE_H
 
-#include "sample.h"
+#include <ctype.h>
+#include <string.h>
+
+#include "repl_command.h"
 
 /* Facade over the live source-command array. Points to the current command
  * buffer, its count, capacity, and edit-line index. Obtained via

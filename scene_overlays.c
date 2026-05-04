@@ -124,7 +124,7 @@ static void walk_vertex_overlay(int selected_block_only,
         if (!cmds[i].valid) continue;
 
         const GLCmd *cmd = &cmds[i];
-        if (!state.in_block && is_transform_cmd(cmd->type)) {
+        if (!state.in_block && repl_cmd_is_transform(cmd->type)) {
             scene_apply_tracked_transform(cmd, &matrix_depth);
             continue;
         }
@@ -285,7 +285,7 @@ void scene_overlays_render_outlines(const FrameRenderContext *frame_ctx,
         for (int i = 0; i < cmd_count; i++) {
             if (!cmds[i].valid) continue;
 
-            if (is_transform_cmd(cmds[i].type)) {
+            if (repl_cmd_is_transform(cmds[i].type)) {
                 if (!in_begin && !tess_in_contour)
                     scene_apply_tracked_transform(&cmds[i], &matrix_depth);
                 continue;
@@ -448,7 +448,7 @@ void scene_overlays_render_vertex_points(const FrameRenderContext *frame_ctx) {
                                                  &xform_guide_plan,
                                                  i, tg_cam_view);
 
-            if (is_transform_cmd(flat_cmds[i].type)) {
+            if (repl_cmd_is_transform(flat_cmds[i].type)) {
                 scene_apply_tracked_transform(&flat_cmds[i], &matrix_depth);
             } else if (flat_cmds[i].type == CMD_BEGIN) {
                 primitive_mode = flat_cmds[i].mode;
