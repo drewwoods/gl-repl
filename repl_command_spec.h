@@ -34,7 +34,7 @@
 typedef struct {
     const char *name;
     GLenum      value;
-} EnumEntry;
+} ReplEnumEntry;
 
 #define MAX_FUNC_HINT_PARAMS 10
 
@@ -43,7 +43,7 @@ typedef struct {
     const char *display_text;
     int         param_count;
     const char *params[MAX_FUNC_HINT_PARAMS];
-} FuncCompletion;
+} ReplFuncCompletion;
 
 /* Metadata for control structures and command-type properties. Describes whether
  * a command type needs a trailing semicolon (e.g., float decl, assignment) and
@@ -63,8 +63,8 @@ typedef struct {
     const char *name;
     CmdType     type;
     int         num_args;
-    const EnumEntry *enums1;
-    const EnumEntry *enums2;
+    const ReplEnumEntry *enums1;
+    const ReplEnumEntry *enums2;
     const char *fmt;
     const char *usage1;
     const char *usage2;
@@ -114,15 +114,15 @@ const ReplStdCommandSpec *repl_std_command_specs(void);
 
 /* Query completion suggestions for built-in math functions. Used by the
  * autocomplete system to populate function name completions (sin, cos, sqrt, etc.). */
-const FuncCompletion *repl_func_completions(void);
+const ReplFuncCompletion *repl_func_completions(void);
 
 /* Query enumeration tables for GL constants used in command arguments. Provides
  * suggestions for glColorMaterial face parameter, glMaterialf parameter names,
  * and glPointParameterfv pname values. Used by autocomplete to populate
  * parameter suggestions. */
-const EnumEntry *repl_face_type_entries(void);
-const EnumEntry *repl_material_param_entries(void);
-const EnumEntry *repl_point_param_pname_entries(void);
+const ReplEnumEntry *repl_face_type_entries(void);
+const ReplEnumEntry *repl_material_param_entries(void);
+const ReplEnumEntry *repl_point_param_pname_entries(void);
 
 /* Convert a GL_TRIANGLES, GL_QUADS, etc. constant to its string name (e.g.,
  * GL_TRIANGLES → "GL_TRIANGLES"). Used for display and diagnostic output. */

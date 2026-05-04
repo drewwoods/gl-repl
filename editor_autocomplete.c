@@ -9,7 +9,7 @@
 #include "repl_core_internal.h"
 #include "repl_command_spec.h"
 #include "editor_completion.h"
-static const FuncCompletion *g_ac_func_matches[MAX_AC_MATCHES];
+static const ReplFuncCompletion *g_ac_func_matches[MAX_AC_MATCHES];
 
 typedef enum {
     AC_MODE_NONE = 0,
@@ -82,9 +82,9 @@ static void build_param_hint_text(const char *const *params, int param_count,
     hint_append(out, out_sz, ")");
 }
 
-static const FuncCompletion *find_builtin_completion_for_input(const char *input,
+static const ReplFuncCompletion *find_builtin_completion_for_input(const char *input,
                                                                const char **after_out) {
-    const FuncCompletion *completions = repl_func_completions();
+    const ReplFuncCompletion *completions = repl_func_completions();
     for (int i = 0; completions[i].insert_text; i++) {
         int plen = (int)strlen(completions[i].insert_text);
         if (completions[i].param_count <= 0)
@@ -151,7 +151,7 @@ static int find_defined_func_call_params(const char *input, const char **after_o
 static void update_input_param_hint(void) {
     const char *input = editor_state_input().input;
     const char *after = NULL;
-    const FuncCompletion *builtin = find_builtin_completion_for_input(input, &after);
+    const ReplFuncCompletion *builtin = find_builtin_completion_for_input(input, &after);
     ReplAutocompleteState *ac = editor_state_autocomplete_mut();
     if (builtin) {
         build_param_hint_text(builtin->params, builtin->param_count,
@@ -230,7 +230,7 @@ void update_autocomplete(void) {
     /* glPointParameterfv enum completion (custom: 1 enum + 3 floats). */
     {
         static const char prefix[] = "glPointParameterfv(";
-        const EnumEntry *point_param_pnames = repl_point_param_pname_entries();
+        const ReplEnumEntry *point_param_pnames = repl_point_param_pname_entries();
         int plen = (int)sizeof(prefix) - 1;
         if (strncmp(input, prefix, plen) == 0 && input_len > plen &&
             strchr(input + plen, ',') == NULL) {
@@ -317,7 +317,7 @@ void update_autocomplete(void) {
     }
 
     /* Complete function names. */
-    const FuncCompletion *completions = repl_func_completions();
+    const ReplFuncCompletion *completions = repl_func_completions();
     for (int i = 0; completions[i].insert_text && ac->match_count < MAX_AC_MATCHES; i++) {
         if (strncmp(completions[i].insert_text, input, (size_t)input_len) == 0 &&
             (int)strlen(completions[i].insert_text) > input_len) {
