@@ -638,7 +638,7 @@ int imrepl_ctrl_router_handle_config_menu_key(unsigned char key) {
         if (replay_active())
             repl_replay_stop();
         editor_input_restore_hidden_code_panel();
-        ui_panels_open_config();
+        ui_menu_bar_open_config();
         return 1;
     }
     return 0;
@@ -1079,10 +1079,14 @@ static int route_menu_button_hit(const UiHit *hit) {
 
 /* UI_HIT_MENU_ITEM: open dropdown row click. Activates the action
  * via repl_action_menu_item_activate using both menu_id (cmd_idx)
- * and item_idx from the hit payload. */
+ * and item_idx from the hit payload. The action returns 1 if the
+ * dropdown should close after activation (most action items) or 0 to
+ * leave it open (cycle / toggle items). */
 static int route_menu_item_hit(const UiHit *hit) {
     if (hit->cmd_idx < 0 || hit->item_idx < 0) return 0;
-    ui_menu_bar_activate_dropdown_item(hit->item_idx);
+    int close = repl_action_menu_item_activate(hit->cmd_idx, hit->item_idx);
+    if (close)
+        ui_menu_bar_close();
     editor_request_redraw();
     return 1;
 }

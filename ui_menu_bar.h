@@ -128,13 +128,6 @@ int  ui_menu_bar_dropdown_item_hit(int mx, int my);
  * Reads layout / state only; never mutates. */
 UiHit ui_menu_bar_hit_test(int mx, int my);
 
-/* Activate a dropdown item by index (from dropdown_item_hit). Dispatches the
- * action through repl_actions.c for side effects (file I/O, config toggle,
- * scene switch, etc.). Returns 1 if menu should close after action, 0 if it
- * should stay open (for toggles/cycles). Called by ui_panels.c after a
- * dropdown item is clicked. */
-int  ui_menu_bar_activate_dropdown_item(int item_idx);
-
 /* Handle right-click on menu bar region: open Config menu if clicked on menu
  * button area, otherwise no-op. Returns 1 if Config menu was opened, 0 if
  * right-click was in pinned button area or elsewhere. mx, my are window

@@ -5,20 +5,22 @@
 # Mutators called from inside `ui_*.c` violate the boundary and are
 # tracked here as a count that ratchets down only.
 #
-# Phase E commit 30 establishes the baseline at 8 — the residual
-# legacy mutator calls in ui_color_picker.c (color writeback through
-# repl_command_store_*, editor_buffer_replace_line, undo push),
-# ui_menu_bar.c (repl_action_menu_item_activate dispatcher), and
-# ui_panels.c (repl_action_set_cursor_pixel, repl_action_cursor_blink_reset).
-#
-# Phase F+ targets push these to zero by:
-#   - Color picker writeback going through editor compile/apply
-#     instead of direct command-store mutation.
-#   - Menu activation / cursor side effects routed via imrepl_ctrl
-#     on UiHit.kind dispatch.
+# Phase E commit 30 established the baseline at 8.
+# Phase J2.2 dropped the baseline to 5: the controller now dispatches
+# code-panel press / drag / menu activation directly. The remaining
+# violations are:
+#   - ui_color_picker.c color writeback (4 hits) through
+#     repl_command_store_replace_one + editor_buffer_replace_line +
+#     repl_undo_push_snapshot. These will route through
+#     editor_commit_apply_plan in a separate refactor track so the
+#     picker becomes a pure hit-test + value-change emitter.
+#   - ui_panels.c:259 repl_action_set_cursor_pixel (1 hit) inside
+#     render_active_input_rows — render-time cursor pixel publish, not
+#     input dispatch. Eliminating it is a render-side refactor outside
+#     the J2 input scope.
 #
 # Reductions are always allowed; lower this number by hand when a
 # commit legitimately drives violations down so the next commit
 # cannot silently regress past the new low.
 
-count: 8
+count: 5

@@ -1260,15 +1260,14 @@ UiHit ui_panels_hit_test(int mx, int my) {
     return h;
 }
 
-void ui_panels_close_menus(void) {
-    ui_menu_bar_close();
-    ui_color_picker_close();
-}
-void ui_panels_open_config(void) {
-    ui_menu_bar_open_config();
-}
-
-/* J2.2: ui_panels_handle_code_panel_press / _click / _drag /
+/* J2.3: ui_panels_close_menus / ui_panels_open_config were thin
+ * wrappers around ui_menu_bar / ui_color_picker. They were inlined
+ * at their callers (editor_input.c, repl_actions.c, imrepl_ctrl.c)
+ * so ui_panels.c can be hit-test-only without the
+ * check-ui-panels-no-mutators guard needing an allowlist exception
+ * for the wrapper bodies.
+ *
+ * J2.2: ui_panels_handle_code_panel_press / _click / _drag /
  * _release / _scene_press / _motion / _mouse_release / _escape were
  * deleted. The controller dispatches code-panel clicks via
  * imrepl_ctrl_router_handle_code_panel_hit on the UiHit returned by

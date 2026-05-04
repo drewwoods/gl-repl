@@ -226,10 +226,6 @@ static int cfg_max_state_chars(void) {
     return max_chars;
 }
 
-static int menu_item_activate(int menu_id, int i) {
-    return repl_action_menu_item_activate(menu_id, i);
-}
-
 static void menubar_rects(int menu_x[NUM_MENUS], int menu_w[NUM_MENUS],
                           int pin_x[NUM_PIN_BTNS], int pin_w[NUM_PIN_BTNS],
                           int *row_y, int *row_h) {
@@ -427,15 +423,6 @@ int ui_menu_bar_handle_config_right_press(int mx, int my) {
     if (item < 0) return 0;
     repl_cfg_cycle_row(item, -1);
     return 1;
-}
-
-int ui_menu_bar_activate_dropdown_item(int item_idx) {
-    if (g_open_menu < 0)
-        return 0;
-    int close = menu_item_activate(g_open_menu, item_idx);
-    if (close)
-        ui_menu_bar_close();
-    return close;
 }
 
 void ui_menu_bar_note_search_opened(void) {

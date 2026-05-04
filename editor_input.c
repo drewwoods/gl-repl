@@ -268,7 +268,8 @@ static void save_newline_buf(void) {
 void repl_editor_reset_transients(void) {
     editor_commit_reset_transients();
     repl_camera_controls_reset();
-    ui_panels_close_menus();
+    ui_menu_bar_close();
+    ui_color_picker_close();
     imrepl_ctrl_router_reset_code_panel_drag();
 }
 
@@ -722,7 +723,8 @@ int editor_input_restore_hidden_code_panel(void) {
     if (!editor_input_code_panel_hidden())
         return 0;
     repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT;
-    ui_panels_close_menus();
+    ui_menu_bar_close();
+    ui_color_picker_close();
     return 1;
 }
 
