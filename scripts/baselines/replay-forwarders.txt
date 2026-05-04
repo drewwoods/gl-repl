@@ -7,15 +7,13 @@
 # Phase F commit 33 moved ReplReplayRuntimeState into the replay peer;
 # commit 34 routed production callers through replay_state_view,
 # replay_state_mut, replay_active, and the replay_handle_* surface.
-# Commit 34 establishes this ratchet.
+# Phase J5 migrated the last 37 fixture sites (bench/bench_repl.c +
+# six tests/*.c files) onto replay_state_view / replay_state_mut so
+# the count reaches 0. The legacy forwarders in repl_state.c
+# (repl_state_replay / _mut / _reset) can now be deleted in a
+# follow-up commit alongside the public-facing declarations in
+# repl_state_owners.h and repl_state_views.h.
 #
-# Today's count is bench/* + tests/* fixture sites. Driving this to
-# zero requires migrating those call sites once the remaining
-# replay-internal callers (annotations, executor, etc.) are confirmed
-# stable on the peer accessors.
-#
-# Reductions are always allowed; lower this number by hand when a
-# commit drives violations down so the next commit cannot silently
-# regress past the new low.
+# Any new caller fails the build.
 
-count: 37
+count: 0

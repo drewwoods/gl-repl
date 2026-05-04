@@ -1,14 +1,20 @@
 # Baseline for scripts/check-no-set-status-in-repl-parser.sh.
 #
-# Phase I commit 42b removed the parser core's set_status calls.
-# The single surviving call site sits inside
-# `parser_legacy_surface_to_status` — the bridge for the two no-ctx
-# wrappers (repl_parser_parse_command / _with_vars) that the test
-# harness asserts against via g_status. This baseline freezes that
-# single allowed site.
+# Phase I commit 42b removed the parser core's set_status calls,
+# leaving one surviving site inside `parser_legacy_surface_to_status`
+# — the bridge for the no-ctx wrappers
+# (repl_parser_parse_command / _with_vars) that the test harness
+# asserted against via g_status.
 #
-# To drive the count to zero, retire the no-ctx wrappers (or have
-# the test harness migrate to the ctx surface and read err_buf
-# directly) and lower this number.
+# Phase J5 retired those wrappers + the bridge: the bench loop
+# (bench/bench_repl.c) and the test fixture
+# (tests/test_repl_core_parse.c) now call
+# repl_parser_parse_command_ctx with their own err_buf. The fixture
+# keeps a thin local helper that surfaces err_buf to set_status so
+# existing g_status assertions still observe the diagnostic; the
+# surfacing happens on the test side, not in the parser core.
+#
+# repl_parser.c is now fully set_status-free. Any new hit fails the
+# build.
 
-count: 1
+count: 0

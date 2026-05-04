@@ -68,11 +68,4 @@ typedef struct {
 int repl_parser_parse_command_ctx(const char *line, ReplParsedLine *out,
                                   const ReplParseContext *ctx);
 
-/* Legacy no-context parse: surfaces diagnostics via set_status as a
- * back-compat bridge for the test harness. New code should use
- * `repl_parser_parse_command_ctx` with its own err_buf and decide
- * how to surface parse failures. The bridge is tracked by
- * `check-no-set-status-in-repl-parser` and ratchets toward zero. */
-int repl_parser_parse_command(const char *line, GLCmd *cmd);
-
 #endif

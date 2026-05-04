@@ -186,11 +186,14 @@ static BenchResult bench_parse_lines(int iters) {
                       .min_sec = 1e18 };
     GLCmd cmd;
 
+    ReplParseContext bench_ctx = { 0, NULL, 0, 0 };
+    ReplParsedLine pl;
     for (int it = 0; it < iters; it++) {
         double t0 = now_seconds();
         for (long long i = 0; i < flat_n; i++) {
             memset(&cmd, 0, sizeof(cmd));
-            (void)repl_parser_parse_command(flat[i], &cmd);
+            (void)repl_parser_parse_command_ctx(flat[i], &pl, &bench_ctx);
+            cmd = pl.cmd;
         }
         double dt = now_seconds() - t0;
         if (dt < r.min_sec) r.min_sec = dt;
@@ -377,7 +380,7 @@ static BenchResult bench_replay_examples(int iters) {
 
             repl_replay_start();
             int safety = repl_state_flat_program_count() + 1;
-            ReplReplayRuntimeState replay = repl_state_replay();
+            ReplReplayRuntimeState replay = replay_state_view();
             while (replay.state == REPLAY_PLAYING && safety-- > 0) {
                 repl_replay_advance();
                 steps++;
@@ -472,7 +475,7 @@ static BenchResult bench_replay_long(int iters) {
 
         repl_replay_start();
         int safety = repl_state_flat_program_count() + 1;
-        ReplReplayRuntimeState replay = repl_state_replay();
+        ReplReplayRuntimeState replay = replay_state_view();
         while (replay.state == REPLAY_PLAYING && safety-- > 0) {
             repl_replay_advance();
             steps++;

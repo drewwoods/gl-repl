@@ -170,7 +170,7 @@ static void populate_runtime_snapshot_fixture(const char *scene_hint) {
     render->clear_color[2] = 0.30f;
     render->clear_color[3] = 1.0f;
 
-    replay = repl_state_replay_mut();
+    replay = replay_state_mut();
     replay->active = 1;
     replay->state = REPLAY_PAUSED;
     replay->pc = 9;
@@ -324,13 +324,13 @@ static void test_capture_restore_round_trip(void) {
     ASSERT_INT("render light enabled restored", repl_state_render().lights[1].enabled, 0);
     ASSERT_TRUE("render clear color restored",
                 repl_state_render().clear_color[2] == 0.30f);
-    ASSERT_INT("replay active restored", repl_state_replay().active, 1);
-    ASSERT_INT("replay state restored", repl_state_replay().state, REPLAY_PAUSED);
-    ASSERT_INT("replay mode restored", repl_state_replay().mode, REPLAY_MODE_POLYGON);
-    ASSERT_INT("replay pc restored", repl_state_replay().pc, 9);
-    ASSERT_TRUE("replay speed restored", repl_state_replay().speed == 12.5f);
-    ASSERT_INT("replay src line restored", repl_state_replay().src_line_idx, 7);
-    ASSERT_INT("replay expand restored", repl_state_replay().expand_args, 0);
+    ASSERT_INT("replay active restored", replay_state_view().active, 1);
+    ASSERT_INT("replay state restored", replay_state_view().state, REPLAY_PAUSED);
+    ASSERT_INT("replay mode restored", replay_state_view().mode, REPLAY_MODE_POLYGON);
+    ASSERT_INT("replay pc restored", replay_state_view().pc, 9);
+    ASSERT_TRUE("replay speed restored", replay_state_view().speed == 12.5f);
+    ASSERT_INT("replay src line restored", replay_state_view().src_line_idx, 7);
+    ASSERT_INT("replay expand restored", replay_state_view().expand_args, 0);
     ASSERT_INT("active example restored", repl_state_scenes().active_example_idx, 3);
     ASSERT_STR("workspace restored",
                repl_state_workspace_dir(),
@@ -383,8 +383,8 @@ static void test_reset_all_restores_default_runtime(void) {
                 memcmp(&defaults, &reset_state, sizeof(defaults)) == 0);
     ASSERT_INT("reset_all help hidden", ui_state_help().visible, 0);
     ASSERT_INT("reset_all panel scroll", editor_scroll(), 0);
-    ASSERT_INT("reset_all replay mode", repl_state_replay().mode, REPLAY_MODE_VERTEX);
-    ASSERT_INT("reset_all replay expand", repl_state_replay().expand_args, 1);
+    ASSERT_INT("reset_all replay mode", replay_state_view().mode, REPLAY_MODE_VERTEX);
+    ASSERT_INT("reset_all replay expand", replay_state_view().expand_args, 1);
     ASSERT_STR("reset_all workspace dir", repl_state_workspace_dir(), "");
     ASSERT_INT("reset_all workspace header count",
                repl_state_import_export().workspace_header_line_count,

@@ -8,6 +8,7 @@
 #include "repl_config.h"
 #include "repl_export.h"
 #include "replay.h"
+#include "replay_state.h"
 #include "repl_keys.h"
 #include "repl_state.h"
 #include "editor_help_session.h"
@@ -64,12 +65,12 @@ static int g_mock_modifiers = 0;
 #define g_render_state_lines (repl_state_import_export().render_state_lines)
 #define g_cam_lines (repl_state_import_export().cam_lines)
 
-#define replay_active        (repl_state_replay_mut()->active)
-#define replay_state         (repl_state_replay_mut()->state)
-#define replay_pc            (repl_state_replay_mut()->pc)
-#define replay_mode          (repl_state_replay_mut()->mode)
-#define replay_src_line      (repl_state_replay_mut()->src_line_idx)
-#define replay_expand_args   (repl_state_replay_mut()->expand_args)
+#define replay_active        (replay_state_mut()->active)
+#define replay_state         (replay_state_mut()->state)
+#define replay_pc            (replay_state_mut()->pc)
+#define replay_mode          (replay_state_mut()->mode)
+#define replay_src_line      (replay_state_mut()->src_line_idx)
+#define replay_expand_args   (replay_state_mut()->expand_args)
 
 #define ASSERT_DECL_OK(label, cond, err) do { \
     (void)(err); \
@@ -2633,15 +2634,15 @@ int main() {
         ASSERT_TRUE("timer: cursor visibility toggled", !ui_state_code_panel().cursor_visible);
 
         /* 3. Replay advance */
-        repl_state_replay_mut()->active = 1;
-        repl_state_replay_mut()->state = REPLAY_PLAYING;
-        repl_state_replay_mut()->speed = 1.0f;
-        repl_state_replay_mut()->accum = 0.99f;
+        replay_state_mut()->active = 1;
+        replay_state_mut()->state = REPLAY_PLAYING;
+        replay_state_mut()->speed = 1.0f;
+        replay_state_mut()->accum = 0.99f;
         /* This should trigger at least one repl_replay_advance */
         imrepl_ctrl_tick();
-        ASSERT_TRUE("timer: replay accum advanced", repl_state_replay().accum < 0.5f);
+        ASSERT_TRUE("timer: replay accum advanced", replay_state_view().accum < 0.5f);
 
-        repl_state_replay_mut()->active = 0;
+        replay_state_mut()->active = 0;
     }
 
     /* Extra coverage: variable dragging via mouse */

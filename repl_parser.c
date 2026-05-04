@@ -747,47 +747,6 @@ unknown_command:
 #undef WRITE_TEXT_APPEND
 }
 
-/* Legacy no-context entry points: still surface diagnostics via
- * set_status because the test harness (and a small handful of
- * one-shot internal callers) assert against the global status text.
- * New code should use repl_parser_parse_command_ctx with its own
- * err_buf instead of these wrappers — see the doc comment in
- * repl_parser.h. */
-static void parser_legacy_surface_to_status(const char *err_buf) {
-    if (err_buf && err_buf[0])
-        set_status(err_buf);
-}
-
-int repl_parser_parse_command(const char *line, GLCmd *cmd) {
-    char text[MAX_LINE_LEN];
-    char err_buf[REPL_STATUS_TEXT_MAX];
-    err_buf[0] = '\0';
-    ReplParseContext ctx = {
-        .source_line_idx = repl_state_edit_line(),
-        .err_buf = err_buf,
-        .err_sz  = (int)sizeof(err_buf),
-    };
-    int ok = parse_command(line, cmd, text, sizeof(text), &ctx);
-    if (!ok) parser_legacy_surface_to_status(err_buf);
-    return ok;
-}
-
-int repl_parser_parse_command_with_vars(const char *line, GLCmd *cmd,
-                                 ExprVar *vars, int num_vars) {
-    char text[MAX_LINE_LEN];
-    char err_buf[REPL_STATUS_TEXT_MAX];
-    err_buf[0] = '\0';
-    ReplParseContext ctx = {
-        .source_line_idx = repl_state_edit_line(),
-        .vars = vars, .num_vars = num_vars,
-        .err_buf = err_buf,
-        .err_sz  = (int)sizeof(err_buf),
-    };
-    int ok = parse_command(line, cmd, text, sizeof(text), &ctx);
-    if (!ok) parser_legacy_surface_to_status(err_buf);
-    return ok;
-}
-
 int repl_parser_parse_command_ctx(const char *line, ReplParsedLine *out,
                            const ReplParseContext *ctx) {
     if (!out) return 0;

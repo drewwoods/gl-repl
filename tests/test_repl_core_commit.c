@@ -5,6 +5,7 @@
 #include "editor_clipboard.h"
 #include "editor_commit.h"
 #include "repl_state.h"
+#include "replay_state.h"
 #include "ui_state.h"
 #include "repl_replay_annotations.h"
 #include "editor_code_panel_document.h"
@@ -36,10 +37,10 @@ static TestHarness g_harness = TEST_HARNESS_INIT;
     TEST_ASSERT_STR(&g_harness, label, got, exp); \
 } while (0)
 
-#define replay_active        (repl_state_replay_mut()->active)
-#define replay_state         (repl_state_replay_mut()->state)
-#define replay_pc            (repl_state_replay_mut()->pc)
-#define replay_src_line      (repl_state_replay_mut()->src_line_idx)
+#define replay_active        (replay_state_mut()->active)
+#define replay_state         (replay_state_mut()->state)
+#define replay_pc            (replay_state_mut()->pc)
+#define replay_src_line      (replay_state_mut()->src_line_idx)
 
 #define g_workspace_header_lines (repl_state_import_export().workspace_header_lines)
 #define g_workspace_header_line_count (repl_state_import_export().workspace_header_line_count)

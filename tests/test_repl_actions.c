@@ -1,5 +1,6 @@
 #include "repl_actions.h"
 #include "repl_state.h"
+#include "replay_state.h"
 #include "ui_state.h"
 #include "editor_help_session.h"
 #include "repl_config.h"
@@ -101,7 +102,7 @@ static void test_cfg_cycling(void) {
     ASSERT_STR("wireframe status ON", g_last_status, "Wireframe: ON");
 
     /* Test Replay special case - only starts if there are commands to replay */
-    repl_state_replay_mut()->active = 0;
+    replay_state_mut()->active = 0;
     repl_config_set(REPL_CONFIG_REPLAY, 0);
     /* When no commands present, replay toggles but stays inactive with "nothing to play" */
     repl_cfg_cycle_row(replay_row, 1);
