@@ -34,6 +34,12 @@
 
 #include "scene_render_types.h"
 
+/* Accumulation-buffer AA supports 1, 2, 4, 8, and 16-sample passes. The
+ * controller cycles across that fixed ladder, and the scene renderer keeps a
+ * 16-entry jitter table whose first N offsets form a good N-sample set. */
+#define MAX_ACCUM_SAMPLES 16
+#define ACCUM_STEP_COUNT  5
+
 /* One-time GL initialization: create display lists, compile shaders, allocate
  * tessellator, set up default light state. Called once on startup. */
 void scene_render_init_gl(void);
