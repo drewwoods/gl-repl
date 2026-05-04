@@ -1,7 +1,6 @@
 /*
  * repl_scenes.c -- User scene slots, promotion, and workspace save/load.
  */
-#include "sample.h"
 #include "repl_command_store.h"
 #include "repl_config.h"
 #include "repl_core_internal.h"

@@ -1,7 +1,7 @@
 #include "editor_input.h"
 #include "imrepl_ctrl.h"
 #include "repl_core_internal.h"
-#include "repl_export.h"
+#include "repl_executor.h"
 #include "editor_clipboard.h"
 #include "editor_commit.h"
 #include "repl_state.h"
@@ -10,6 +10,8 @@
 #include "editor_code_panel_document.h"
 #include "ui_panels.h"
 #include "ui_layout.h"
+#include "ui_metrics.h"
+#include "./include/gl_2d.h"
 
 #define g_status  (ui_state_status_mut()->text)
 #define g_scroll  (editor_state_scroll_mut()->scroll)

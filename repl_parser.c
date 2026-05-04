@@ -13,6 +13,8 @@
 #include "repl_source_scope.h"
 #include "repl_state.h"
 
+#include "config.h" /* CP_CLEAR_MAX_V */
+
 #include <stdarg.h>
 
 /* Phase H.5 commit 40 introduced the err_buf seam. Phase I commit

@@ -4,16 +4,17 @@
  *
  * Extracted from sample.c for maintainability.
  */
-#include "sample.h"
 #include "repl_actions.h"
 #include "repl_state_views.h"
 #include "ui_state.h"
 #include "repl_export.h"
 #include "ui_layout.h"
 #include "ui_color_picker.h"
+#include "ui_metrics.h"
 #include "editor_code_panel_document.h"
 #include "repl_core.h"
 #include "editor_clipboard.h"
+#include "editor_search.h"
 #include "repl_keys.h"
 #include "replay.h"
 #include "replay_state.h"
@@ -42,7 +43,7 @@ static const EditorTransformer *find_color_transformer(const EditorTransformerLi
 
 
 /* Status footer height - design: 22px strip flush against code panel bottom */
-/* STATUSBAR_H lives in sample.h now so scene_render.c can lift the
+/* STATUSBAR_H lives in ui_metrics.h now so scene_render.c can lift the
  * replay HUD above the amber status strip.  */
 
 /* ========================================================================= */

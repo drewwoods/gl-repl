@@ -4,7 +4,6 @@
 #ifndef REPL_STATE_VIEWS_H
 #define REPL_STATE_VIEWS_H
 
-#include "sample.h"
 #include "repl_export_state.h"
 #include "scene_render_types.h"
 #include "repl_flatten.h"

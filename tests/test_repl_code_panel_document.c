@@ -1,13 +1,14 @@
+#include "./include/gl_2d.h"
 #include "editor_input.h"
 #include <stdio.h>
 #include <string.h>
 
-#include "sample.h"
 #include "ui_state.h"
 #include "editor_code_panel_document.h"
 #include "repl_core.h"
 #include "repl_state.h"
 #include "ui_layout.h"
+#include "ui_metrics.h"
 #include "support/test_harness.h"
 
 static TestHarness g_harness = TEST_HARNESS_INIT;

@@ -9,7 +9,6 @@
  * ui_menu_bar.c; the editor's key dispatcher forwards keystrokes
  * here ahead of its own routing while rename is active.
  */
-#include "sample.h"
 #include "repl_core.h"
 #include "repl_keys.h"
 #include "editor_inline_rename.h"

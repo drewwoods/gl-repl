@@ -1,5 +1,6 @@
 #include "repl_core.h"
 #include "repl_state.h"
+#include "repl_export.h"
 #include "ui_state.h"
 
 #include "support/test_harness.h"

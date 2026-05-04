@@ -51,7 +51,6 @@
  *   repl_examples.c- predefined example scene data
  */
 
-#include "sample.h"
 #include "repl_export.h"
 #include "repl_core.h"
 #include "repl_core_internal.h"

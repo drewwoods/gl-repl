@@ -26,7 +26,6 @@
  *  - feed_line() programmatic commit entry
  */
 #include "editor_input.h"
-#include "sample.h"
 #include "repl_state.h"
 #include "repl_parser.h"
 #include "repl_actions.h"

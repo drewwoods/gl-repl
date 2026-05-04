@@ -11,7 +11,6 @@
 #include "repl_keys.h"
 #include "repl_state.h"
 #include "editor_help_session.h"
-#include "sample.h"
 #include "ui_state.h"
 #include "prof.h"
 #include "ui_panels.h"
@@ -19,6 +18,8 @@
 #include "ui_variable_panel.h"
 #include "editor_inline_rename.h"
 #include "imrepl_ctrl.h"
+#include "./include/gl_2d.h"
+#include "ui_metrics.h"
 
 #define g_status     (ui_state_status_mut()->text)
 #define g_scroll     (editor_state_scroll_mut()->scroll)

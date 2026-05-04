@@ -20,7 +20,6 @@
  *              Near-zero start value falls back to a linear bootstrap
  *              so the slider can walk off zero.
  */
-#include "sample.h"
 #include "variable_panel_drag.h"
 #include "variable_panel.h"
 

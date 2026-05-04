@@ -1,7 +1,6 @@
 /*
  * ui_color_picker.c -- Floating color picker for literal color commands.
  */
-#include "sample.h"
 #include "editor_state.h"
 #include "repl_command_store.h"
 #include "repl_parser.h"
@@ -10,6 +9,7 @@
 #include "editor_undo.h"
 #include "ui_color_picker.h"
 #include "ui_layout.h"
+#include "config.h" /* CP_CLEAR_MAX_V */
 
 /* ========================================================================= */
 /* Color picker                                                               */
@@ -20,7 +20,7 @@
 #define CP_ALPHA_W   18   /* alpha bar width (COLOR4F only) */
 #define CP_GAP        6   /* gap between elements */
 #define CP_PREV_H    16   /* preview strip height */
-/* CP_CLEAR_MAX_V is defined in sample.h */
+/* CP_CLEAR_MAX_V is defined in ui_metrics.h */
 
 /* g_cp_line >= 0: picker is open for that cmd index */
 static int   g_cp_line     = -1;

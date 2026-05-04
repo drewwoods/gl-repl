@@ -1,7 +1,6 @@
 /*
  * ui_layout.c - pure window layout geometry.
  */
-#include "sample.h"
 #include "ui_layout.h"
 #include "repl_state.h"
 
