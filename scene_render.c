@@ -129,7 +129,7 @@ static void draw_replay_tess_preview(const SceneRenderConfig *config) {
         for (int i = 0; i < flat_cmd_count; i++) {
             if (!flat_cmds[i].valid) continue;
 
-            if (is_transform_cmd(flat_cmds[i].type)) {
+            if (repl_cmd_is_transform(flat_cmds[i].type)) {
                 if (!in_contour)
                     scene_apply_tracked_transform(&flat_cmds[i], &matrix_depth);
                 continue;

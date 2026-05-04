@@ -344,7 +344,7 @@ void repl_execute_program(const ReplExecutionOptions *options) {
     int pc = 0;
     while (pc < flat_cmd_count) {
         if (!flat_cmds[pc].valid) { pc++; continue; }
-        if (is_transform_cmd(flat_cmds[pc].type)) {
+        if (repl_cmd_is_transform(flat_cmds[pc].type)) {
             repl_executor_apply_tracked_transform_cmd(&flat_cmds[pc], &matrix_depth);
             pc++;
             continue;
@@ -591,7 +591,7 @@ void repl_execute_program(const ReplExecutionOptions *options) {
                 g_predef_vars[var_idx].value = value;
             break;
         }
-        /* Transforms handled by is_transform_cmd() early-continue above. */
+        /* Transforms handled by repl_cmd_is_transform() early-continue above. */
         case CMD_TRANSLATE3F: case CMD_SCALEF: case CMD_ROTATEF:
         case CMD_PUSH_MATRIX: case CMD_POP_MATRIX:
         /* These are resolved during flatten and should not appear in flat_cmds. */

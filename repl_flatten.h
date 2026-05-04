@@ -19,8 +19,9 @@
 #ifndef REPL_FLATTEN_H
 #define REPL_FLATTEN_H
 
-#include "sample.h"
+#include "repl_command.h"
 #include "editor_state.h"  /* EditorBufferView */
+#include "repl_eval.h"
 
 /* Local variable snapshot for a single flat command. Captured when the
  * command is emitted (e.g., loop counter value, function parameter binding).

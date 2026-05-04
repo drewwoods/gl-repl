@@ -20,7 +20,8 @@
 #ifndef REPL_PARSER_H
 #define REPL_PARSER_H
 
-#include "sample.h"
+#include "repl_command.h"
+#include "repl_eval.h"
 
 /* Parse context: allows internal callers to parse lines outside the active
  * editor position. source_line_idx is used for error reporting and line-number

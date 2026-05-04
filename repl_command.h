@@ -1,0 +1,79 @@
+/*
+ * repl_command.h - Core REPL command model types.
+ */
+#ifndef REPL_COMMAND_H
+#define REPL_COMMAND_H
+
+#include <gl_includes.h>
+
+#ifndef MAX_COMMANDS
+#define MAX_COMMANDS 4096
+#endif
+
+#ifndef MAX_LINE_LEN
+#define MAX_LINE_LEN 256
+#endif
+
+#include "repl_eval.h"
+
+typedef enum {
+    CMD_BEGIN, CMD_END,
+    CMD_VERTEX3F, CMD_VERTEX2F,
+    CMD_NORMAL3F,
+    CMD_COLOR3F, CMD_COLOR4F,
+    CMD_ENABLE, CMD_DISABLE,
+    CMD_SHADE_MODEL,
+    CMD_TRANSLATE3F,
+    CMD_SCALEF,
+    CMD_ROTATEF,
+    CMD_PUSH_MATRIX,
+    CMD_POP_MATRIX,
+    CMD_COLOR_MATERIAL,
+    CMD_LIGHT_MODEL_I,
+    CMD_FRONT_FACE,
+    CMD_FOR_BEGIN, CMD_FOR_END,
+    CMD_FUNC_DEF, CMD_FUNC_END, CMD_CALL,
+    CMD_IF_BEGIN, CMD_IF_END,
+    CMD_COMMENT,
+    CMD_VAR_ASSIGN,
+    CMD_VAR_DECLARE,
+    CMD_LABEL, CMD_GOTO,
+    CMD_GLUT_TORUS, CMD_GLUT_CUBE, CMD_GLUT_SPHERE, CMD_GLUT_TEAPOT, CMD_GLUT_CONE,
+    CMD_TESS_BEGIN_POLYGON,
+    CMD_TESS_BEGIN_CONTOUR,
+    CMD_TESS_END,
+    CMD_TESS_NORMAL,
+    CMD_TESS_COLOR,
+    CMD_TESS_VERTEX,
+    CMD_MATERIALF,
+    CMD_POINT_SIZE,
+    CMD_LINE_WIDTH,
+    CMD_POINT_PARAMETER_FV,
+    CMD_BLEND_FUNC,
+    CMD_CLEAR_COLOR,
+    CMD_DEPTH_MASK,
+    CMD_TYPE_COUNT
+} CmdType;
+
+typedef struct {
+    CmdType  type;
+    GLenum   mode;
+    float    args[8];
+    int      num_args;              /* Number of meaningful entries in args[] */
+    int      valid;                 /* Deleted commands remain allocated but skipped */
+    int      is_auto;               /* Auto-generated helper, e.g. synthesized normals */
+    int      has_vars;              /* Source must be preserved/re-evaluated from text */
+    char     var_names[MAX_NAMES_PER_DECL][16];
+    int      var_decl_count;        /* Number of names in a CMD_VAR_DECLARE line */
+    int      src_cmd_idx;           /* Owning source command for flat->source mapping */
+    int      call_src_cmd_idx;      /* Immediate call site that expanded this command */
+    int      root_call_src_cmd_idx; /* Outermost call site in nested expansion */
+    unsigned int func_scope_mask;   /* Function scopes active when command was flattened */
+} GLCmd;
+
+static inline int repl_cmd_is_transform(CmdType type) {
+    return (type == CMD_TRANSLATE3F || type == CMD_SCALEF  || type == CMD_ROTATEF ||
+            type == CMD_PUSH_MATRIX || type == CMD_POP_MATRIX);
+}
+
+#endif /* REPL_COMMAND_H */

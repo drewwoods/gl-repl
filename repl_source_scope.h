@@ -32,7 +32,7 @@
 #ifndef REPL_SOURCE_SCOPE_H
 #define REPL_SOURCE_SCOPE_H
 
-#include "sample.h"
+#include "repl_command.h"
 
 /* Invalidate the prefix-depth cache. Called whenever the source command array
  * changes (e.g., after insert, delete, or edit) to force recomputation of block
