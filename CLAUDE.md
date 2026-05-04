@@ -96,7 +96,7 @@ Test sources live under `tests/` and shared test-only helpers live under
 | `repl_config.c` | Config key implementation and descriptor table helpers |
 | `repl_config.h` | `ReplConfigKey` / `ReplConfigItem` descriptor API for keyed config access |
 | `repl_core.c` | Normalization pipeline (`repl_parse_and_normalize*`), reformatter, startup helpers; being dissolved into natural owners (R10) |
-| `repl_parser.c` | REPL source-line parser, expression validation, canonical `GLCmd.source[]` generation |
+| `repl_parser.c` | REPL source-line parser, expression validation, `ReplParsedLine` (cmd + canonical text) output |
 | `repl_parser.h` | Parser entrypoints (`repl_parser_parse_command*`, `repl_parser_parse_command_ctx`) and `ReplParseContext` |
 | `repl_source_scope.c` | Source prefix-depth cache, indentation helpers, block lookup |
 | `repl_source_scope.h` | Source-scope query API (`repl_source_scope_block_depth_at`, `repl_source_scope_find_block_end`, indent helpers) |
@@ -438,8 +438,9 @@ is no shim layer.
 The core data flow is **source commands → flat commands → GL calls**:
 
 - **Source array** (`repl_state_document_cmds()`, count via
-  `repl_state_document_count()`) — each `GLCmd` holds parsed type/args,
-  normalized `source[]` text, and flags (`has_vars`, `valid`, `is_auto`).
+  `repl_state_document_count()`) — each `GLCmd` holds parsed type/args and
+  flags (`has_vars`, `valid`, `is_auto`). Canonical display text lives in
+  `ReplEditorBuffer` (accessed via `repl_state_editor_buffer_line()`).
   Edited directly by the user via the code panel.
 - **Flat array** (`repl_state_flat_cmds()`) — expanded copy. For-loops are
   unrolled, function calls are inlined, if-blocks are resolved.
@@ -475,11 +476,12 @@ The core data flow is **source commands → flat commands → GL calls**:
    If all handlers return 0, `parse_command()` in `repl_parser.c`
    sets `"Unknown cmd."` status (`repl_parser.c`, end of
    `parse_command`).
-3. **Parse** — `parse_command()` in `repl_parser.c` matches the line to a
-   `CmdType`, evaluates argument expressions via `eval_expr()`, stores
-   result in `GLCmd.args[]` and normalized text in `GLCmd.source[]`.
-   Internal call sites pass `ReplParseContext.source_line_idx` instead of
-   temporarily changing the edit-line cursor.
+3. **Parse** — `repl_parser_parse_command()` in `repl_parser.c` matches
+   the line to a `CmdType`, evaluates argument expressions via `eval_expr()`,
+   and returns a `ReplParsedLine` containing `GLCmd.args[]` and canonical
+   text in `text[]`; the command store writes that text into
+   `ReplEditorBuffer`. Internal call sites pass `ReplParseContext.source_line_idx`
+   instead of temporarily changing the edit-line cursor.
 4. **Flatten** — `flatten_range()` recursively expands the source array:
    for-loops iterate (capped at 100k visits), function calls inline the
    body with actual args, if-blocks evaluate conditions. Recursion

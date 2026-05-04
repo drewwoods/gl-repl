@@ -88,14 +88,12 @@ typedef struct {
     int         insert_mode;
 } ReplEditorInputView;
 
-/* Editor-owned text buffer (Phase: editor-owns-text spike).
- *
- * One canonical text line per source command. Indexed by source command
- * index. The text is the raw user-typed form (no trailing ';', no
- * leading whitespace) — the same shape `load_line_to_input()` produces
- * after stripping. During the spike `cmds[idx].source` keeps the
- * normalized form for backwards compatibility; this slice is the
- * load-bearing buffer the redesign will eventually consume. */
+/* Editor-owned text buffer: one canonical text line per source command,
+ * indexed by source command index. The text is the raw user-typed form
+ * (no trailing ';', no leading whitespace) — the same shape
+ * `load_line_to_input()` produces after stripping. This is the
+ * authoritative source of display text for the code panel; GLCmd no
+ * longer carries a source[] field. */
 typedef struct {
     char lines[MAX_COMMANDS][MAX_LINE_LEN];
     int  line_count;

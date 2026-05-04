@@ -143,7 +143,7 @@ annotations consume the flattened program or snapshots derived from it.
 lives in `ReplEditorBuffer` (one slot in `ReplRuntimeState`), and undo
 snapshots / user-scene slots / the clipboard each carry parallel
 `lines[][]` sidecars so text moves with commands through every persistence
-path. See `feature/editor-owns-text.md` for the migration history.
+path.
 
 ### 2. Editor and input controllers
 
@@ -554,7 +554,7 @@ controller-side, R5, R6, R7). See
 `feature/push-architecture-refinement.md` for the per-recommendation
 status table.
 
-`feature/editor-owns-text.md` (Steps 2–6) is also complete: `GLCmd.source[]`
+The editor-owns-text migration (Steps 2–6) is also complete: `GLCmd.source[]`
 is gone; `ReplEditorBuffer` owns canonical line text; the controller
 pushes `EditorTransformerList` / `EditorHighlightList` /
 `EditorVirtualLineList` per frame for the code-panel render path. Color

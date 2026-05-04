@@ -61,12 +61,15 @@ They are also not a simulation.  Timing is approximate, randomness is determinis
 ### Potential Future Scenes
 
 The pattern is easy to extend.  A new scene needs:
-1. A `.c` / `.h` file pair with a `draw_*()` entry point.
-2. A `g_show_*` global in `repl_core.c` + extern in `sample.h`.
-3. A `ReplConfigItem` descriptor row in `repl_actions.c` plus the matching
-   `ReplConfigKey` case in `repl_config.h` / `repl_config.c`.
-4. A `draw_*()` call in `render_3d_scene()` after `execute_commands()`.
-5. An entry in `SRCS` / `CORE_TEST_SRCS` in the Makefile.
+1. A `.c` / `.h` file pair with a `scene_backdrop_*()` entry point.
+2. A `ReplConfigItem` descriptor row in `repl_actions.c` plus the matching
+   `ReplConfigKey` case in `repl_config.h` / `repl_config.c`. Presentation
+   state is owned by `repl_state_presentation()`; no separate `g_show_*`
+   global in `repl_core.c` is needed.
+3. A call inside `scene_backdrop.c` (for new modes of the existing backdrop
+   dispatcher) or a new `scene_backdrop_*_render()` call in
+   `scene_render_3d_scene()` in `scene_render.c` (for a standalone scene).
+4. An entry in `SRCS` / `CORE_TEST_SRCS` in the Makefile.
 
 Ideas that would fit the design principles:
 - **Aurora borealis** - sinusoidal curtains of faint colour sweeping slowly across the sky dome, triggered at low frequency.
