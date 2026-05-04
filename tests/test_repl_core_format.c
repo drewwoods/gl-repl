@@ -179,6 +179,19 @@ int main(void) {
         }
     }
 
+    repl_reset_state();
+    repl_feed_line_public("float a = 2, b, c = 3;");
+    ASSERT_TRUE("decl cmd count", repl_state_document_count() == 1);
+    ASSERT_TRUE("decl cmd type", repl_state_document_cmds_mut()[0].type == CMD_VAR_DECLARE);
+    editor_buffer_set_line(0, "float a=max(1, 2),b,c=abs(-3)// vars");
+    repl_reformat_commands();
+    {
+        const char *buf0 = editor_buffer_line(0);
+        ASSERT_TRUE("reformat decl keeps initializer text and comment",
+                    buf0 && strcmp(buf0,
+                                   "  float a = max(1, 2), b, c = abs(-3); // vars") == 0);
+    }
+
     {
         const char *wrapped = "  glColor4f(0.125, 0.250, 0.500, 1.000);";
         char visual_buf[8192];

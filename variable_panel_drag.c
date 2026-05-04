@@ -8,17 +8,12 @@
  * peer module (variable_panel.c). This file is now the implementation
  * behind the peer's variable_panel_handle_drag_* surface — it reads /
  * writes via variable_panel_drag_mut() and supplies the value-mapping
- * logic (linear / log scaling, source-line rewrite).
+ * logic (linear / log scaling) for controller-routed external edits.
  *
  * External callers must use variable_panel_handle_* / variable_panel_drag_*.
- * The legacy repl_var_drag_* names are preserved so the existing
- * imrepl_ctrl-routed callers keep compiling, and the drag value-writeback
- * still reaches REPL state directly (g_predef_vars, document_cmds_mut,
- * editor_buffer_set_line, mark_flat_dirty). That cross-subsystem
- * writeback is the remaining transitional debt: it should move into
- * an explicit "set predef variable" peer/editor API in a follow-up
- * commit so this file can rename to variable_panel_drag.c without
- * dragging REPL writes with it.
+ * The legacy repl_var_drag_* names are preserved so existing tests keep
+ * compiling, but the motion path now returns a requested value change instead
+ * of mutating REPL/editor state directly.
  *
  * Linear drag: 1 pixel = 0.05 units.
  * Log drag:    200 pixels = one decade (x10 / ÷10), sign preserved.
@@ -26,7 +21,6 @@
  *              so the slider can walk off zero.
  */
 #include "sample.h"
-#include "repl_state.h"
 #include "variable_panel_drag.h"
 #include "variable_panel.h"
 
@@ -49,6 +43,8 @@ void repl_var_drag_begin(int row, int log_mode, int x) {
     drag->log_mode = log_mode ? 1 : 0;
     drag->start_value = g_predef_vars[row].value;
     drag->start_x = x;
+    snprintf(drag->name, sizeof(drag->name), "%s", g_predef_vars[row].name);
+    drag->undo_snapshot_pushed = 0;
 }
 
 void repl_var_drag_reset(void) {
@@ -57,13 +53,21 @@ void repl_var_drag_reset(void) {
     drag->log_mode = 0;
     drag->start_value = 0.0f;
     drag->start_x = 0;
+    drag->name[0] = '\0';
+    drag->undo_snapshot_pushed = 0;
 }
 
-void repl_var_drag_motion(int x) {
+int repl_var_drag_motion(int x, VariablePanelValueChange *out) {
     ReplVariableDragState *drag = variable_panel_drag_mut();
-    if (drag->var_idx < 0) return;
-
     float new_val;
+
+    if (out) {
+        out->name[0] = '\0';
+        out->value = 0.0f;
+    }
+    if (drag->var_idx < 0)
+        return 0;
+
     if (drag->log_mode) {
         /* Logarithmic drag: ×10 / ÷10 per 200 pixels.
          * Preserves sign; near-zero start falls back to linear bootstrap. */
@@ -81,21 +85,10 @@ void repl_var_drag_motion(int x) {
         new_val = drag->start_value + delta;
     }
 
-    g_predef_vars[drag->var_idx].value = new_val;
-
-    /* Sync any literal CMD_VAR_ASSIGN for this var so the source line
-     * on screen matches the new value (constant assignments only -
-     * expressions that reference other vars are left alone). */
-    const char *vname = g_predef_vars[drag->var_idx].name;
-    for (int i = 0; i < repl_state_document_count(); i++) {
-        if (repl_state_document_cmds_mut()[i].valid && repl_state_document_cmds_mut()[i].type == CMD_VAR_ASSIGN &&
-            repl_state_document_cmds_mut()[i].num_args == drag->var_idx &&
-            !repl_state_document_cmds_mut()[i].has_vars) {
-            char new_line[MAX_LINE_LEN];
-            repl_state_document_cmds_mut()[i].args[0] = new_val;
-            snprintf(new_line, sizeof(new_line), "  %s = %g;", vname, (double)new_val);
-            editor_buffer_set_line(i, new_line);
-        }
+    if (out) {
+        const char *name = drag->name[0] ? drag->name : g_predef_vars[drag->var_idx].name;
+        snprintf(out->name, sizeof(out->name), "%s", name);
+        out->value = new_val;
     }
-    repl_state_mark_flat_dirty();
+    return 1;
 }

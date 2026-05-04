@@ -40,6 +40,8 @@ static TestHarness g_harness = TEST_HARNESS_INIT;
     TEST_ASSERT_STR(&g_harness, label, actual, expected)
 #define ASSERT_FALSE(label, cond) \
     TEST_ASSERT_TRUE(&g_harness, label, !(cond))
+#define ASSERT_FLOAT(label, actual, expected, tolerance) \
+    TEST_ASSERT_FLOAT(&g_harness, label, actual, expected, tolerance)
 
 /* Fill the input buffer the compile entry points read from. */
 static void set_input(const char *s) {
@@ -390,6 +392,149 @@ static void test_reformat_keeps_buffer_and_store_aligned(void) {
     }
 }
 
+static void test_set_predef_value_prefers_last_literal_assign(void) {
+    repl_reset_state();
+
+    repl_feed_line_public("float x = 1, y;");
+    repl_feed_line_public("x = 2;");
+    repl_feed_line_public("x = y + 1;");
+    repl_feed_line_public("x = 3;");
+
+    ReplCompileContext ctx = repl_compile_context_from_live();
+    ReplCompiledChange change;
+    char err[REPL_STATUS_TEXT_MAX];
+
+    ReplCompileResult r = repl_compile_set_predef_value(
+        "x", 4.5f, &ctx, &change, err, sizeof(err));
+    ASSERT_INT("set_predef literal compile OK", r, REPL_COMPILE_OK);
+    ASSERT_INT("set_predef literal replace kind", change.kind,
+               REPL_COMPILED_REPLACE_ONE);
+    ASSERT_INT("set_predef literal replace pos", change.pos, 3);
+    ASSERT_STR("set_predef literal text", change.text[0], "  x = 4.5;");
+    ASSERT_INT("set_predef literal predef op count", change.predef_op_count, 1);
+    ASSERT_INT("set_predef literal op kind", change.predef_ops[0].kind,
+               REPL_PREDEF_OP_SET_VALUE);
+
+    ASSERT_INT("set_predef literal apply OK",
+               editor_commit_apply_compiled_change(&change), 1);
+    ASSERT_STR("set_predef literal buffer line updated",
+               editor_buffer_line(3), "  x = 4.5;");
+    {
+        int x_idx = repl_eval_find_predef_var_idx("x");
+        ASSERT_TRUE("set_predef literal x exists", x_idx >= 0);
+        ASSERT_FLOAT("set_predef literal live value",
+                     g_predef_vars[x_idx].value, 4.5f, 1e-6f);
+    }
+}
+
+static void test_set_predef_value_rewrites_declaration_initializer(void) {
+    repl_reset_state();
+
+    repl_feed_line_public("float a = 1, x = 2, y; // vars");
+
+    ReplCompileContext ctx = repl_compile_context_from_live();
+    ReplCompiledChange change;
+    char err[REPL_STATUS_TEXT_MAX];
+
+    ReplCompileResult r = repl_compile_set_predef_value(
+        "x", 2.5f, &ctx, &change, err, sizeof(err));
+    ASSERT_INT("set_predef decl compile OK", r, REPL_COMPILE_OK);
+    ASSERT_INT("set_predef decl replace kind", change.kind,
+               REPL_COMPILED_REPLACE_ONE);
+    ASSERT_STR("set_predef decl text",
+               change.text[0], "  float a = 1, x = 2.5, y; // vars");
+
+    ASSERT_INT("set_predef decl apply OK",
+               editor_commit_apply_compiled_change(&change), 1);
+    ASSERT_STR("set_predef decl buffer line updated",
+               editor_buffer_line(0), "  float a = 1, x = 2.5, y; // vars");
+    {
+        int x_idx = repl_eval_find_predef_var_idx("x");
+        ASSERT_TRUE("set_predef decl x exists", x_idx >= 0);
+        ASSERT_FLOAT("set_predef decl live value",
+                     g_predef_vars[x_idx].value, 2.5f, 1e-6f);
+    }
+}
+
+static void test_set_predef_value_adds_declaration_initializer(void) {
+    repl_reset_state();
+
+    repl_feed_line_public("float x;");
+
+    ReplCompileContext ctx = repl_compile_context_from_live();
+    ReplCompiledChange change;
+    char err[REPL_STATUS_TEXT_MAX];
+
+    ReplCompileResult r = repl_compile_set_predef_value(
+        "x", 2.5f, &ctx, &change, err, sizeof(err));
+    ASSERT_INT("set_predef add init compile OK", r, REPL_COMPILE_OK);
+    ASSERT_INT("set_predef add init replace kind", change.kind,
+               REPL_COMPILED_REPLACE_ONE);
+    ASSERT_STR("set_predef add init text", change.text[0], "  float x = 2.5;");
+
+    ASSERT_INT("set_predef add init apply OK",
+               editor_commit_apply_compiled_change(&change), 1);
+    ASSERT_STR("set_predef add init buffer line updated",
+               editor_buffer_line(0), "  float x = 2.5;");
+}
+
+static void test_set_predef_value_keeps_expression_sources(void) {
+    repl_reset_state();
+
+    repl_feed_line_public("float x;");
+    repl_feed_line_public("float y;");
+    repl_feed_line_public("x = y + 1;");
+
+    ReplCompileContext ctx = repl_compile_context_from_live();
+    ReplCompiledChange change;
+    char err[REPL_STATUS_TEXT_MAX];
+
+    ReplCompileResult r = repl_compile_set_predef_value(
+        "x", 8.0f, &ctx, &change, err, sizeof(err));
+    ASSERT_INT("set_predef expr compile OK", r, REPL_COMPILE_OK);
+    ASSERT_INT("set_predef expr source untouched kind", change.kind,
+               REPL_COMPILED_NO_CHANGE);
+
+    ASSERT_INT("set_predef expr apply OK",
+               editor_commit_apply_compiled_change(&change), 1);
+    ASSERT_STR("set_predef expr formula preserved",
+               editor_buffer_line(2), "  x = y + 1;");
+    ASSERT_STR("set_predef expr decl preserved",
+               editor_buffer_line(0), "  float x;");
+    {
+        int x_idx = repl_eval_find_predef_var_idx("x");
+        ASSERT_TRUE("set_predef expr x exists", x_idx >= 0);
+        ASSERT_FLOAT("set_predef expr live value",
+                     g_predef_vars[x_idx].value, 8.0f, 1e-6f);
+    }
+}
+
+static void test_set_predef_value_live_only_without_source(void) {
+    repl_reset_state();
+
+    ReplCompileContext ctx = repl_compile_context_from_live();
+    ReplCompiledChange change;
+    char err[REPL_STATUS_TEXT_MAX];
+
+    ReplCompileResult r = repl_compile_set_predef_value(
+        "t", 3.5f, &ctx, &change, err, sizeof(err));
+    ASSERT_INT("set_predef live-only compile OK", r, REPL_COMPILE_OK);
+    ASSERT_INT("set_predef live-only no source change", change.kind,
+               REPL_COMPILED_NO_CHANGE);
+    ASSERT_INT("set_predef live-only predef op count", change.predef_op_count, 1);
+
+    ASSERT_INT("set_predef live-only apply OK",
+               editor_commit_apply_compiled_change(&change), 1);
+    ASSERT_INT("set_predef live-only buffer count unchanged",
+               editor_buffer_count(), 0);
+    {
+        int t_idx = repl_eval_find_predef_var_idx("t");
+        ASSERT_TRUE("set_predef live-only t exists", t_idx >= 0);
+        ASSERT_FLOAT("set_predef live-only value",
+                     g_predef_vars[t_idx].value, 3.5f, 1e-6f);
+    }
+}
+
 /* editor_commit_current_input compile-failure path: returns
  * diagnostic via the result; no buffer/store/predef/status/undo
  * mutation. */
@@ -619,6 +764,11 @@ int main(void) {
     test_compile_apply_var_assign_updates_value();
     test_capacity_failure_is_atomic();
     test_reformat_keeps_buffer_and_store_aligned();
+    test_set_predef_value_prefers_last_literal_assign();
+    test_set_predef_value_rewrites_declaration_initializer();
+    test_set_predef_value_adds_declaration_initializer();
+    test_set_predef_value_keeps_expression_sources();
+    test_set_predef_value_live_only_without_source();
     test_orchestration_compile_failure_returns_diagnostic();
     test_orchestration_no_change_falls_through();
     test_orchestration_success_returns_message();

@@ -220,6 +220,154 @@ static void normalize_with_indent(const char *raw_expr, int indent_spaces,
     out[indent_spaces + (int)body_copy_len] = '\0';
 }
 
+static int repl_core_append_text(char *dst, int dst_sz, int *off,
+                                 const char *text) {
+    size_t len;
+
+    if (!dst || dst_sz <= 0 || !off || !text)
+        return 0;
+    if (*off < 0 || *off >= dst_sz)
+        return 0;
+
+    len = strlen(text);
+    if ((size_t)*off + len >= (size_t)dst_sz)
+        return 0;
+
+    memcpy(dst + *off, text, len);
+    *off += (int)len;
+    dst[*off] = '\0';
+    return 1;
+}
+
+static int repl_core_append_span(char *dst, int dst_sz, int *off,
+                                 const char *start, const char *end) {
+    size_t len;
+
+    if (!dst || dst_sz <= 0 || !off || !start || !end || end < start)
+        return 0;
+    if (*off < 0 || *off >= dst_sz)
+        return 0;
+
+    len = (size_t)(end - start);
+    if ((size_t)*off + len >= (size_t)dst_sz)
+        return 0;
+
+    memcpy(dst + *off, start, len);
+    *off += (int)len;
+    dst[*off] = '\0';
+    return 1;
+}
+
+static int repl_core_format_var_decl_text(const char *orig_text,
+                                          const char *indent,
+                                          char *out, int out_sz) {
+    char buf[MAX_LINE_LEN] = "";
+    const char *p = orig_text ? orig_text : "";
+    int decl_count = 0;
+    int off = 0;
+
+    while (*p && isspace((unsigned char)*p)) p++;
+    if (strncmp(p, "float", 5) != 0)
+        return 0;
+    if (isalnum((unsigned char)p[5]) || p[5] == '_')
+        return 0;
+    p += 5;
+
+    if (!repl_core_append_text(buf, sizeof(buf), &off, indent ? indent : ""))
+        return 0;
+    if (!repl_core_append_text(buf, sizeof(buf), &off, "float "))
+        return 0;
+
+    while (*p) {
+        const char *name_start;
+
+        while (*p && isspace((unsigned char)*p)) p++;
+        if (*p == ';' || (*p == '/' && p[1] == '/'))
+            break;
+
+        if (decl_count > 0) {
+            if (*p != ',')
+                return 0;
+            p++;
+            while (*p && isspace((unsigned char)*p)) p++;
+            if (!repl_core_append_text(buf, sizeof(buf), &off, ", "))
+                return 0;
+        }
+
+        if (!isalpha((unsigned char)*p) && *p != '_')
+            return 0;
+        name_start = p;
+        while (*p && (isalnum((unsigned char)*p) || *p == '_')) p++;
+        if (!repl_core_append_span(buf, sizeof(buf), &off, name_start, p))
+            return 0;
+
+        while (*p && isspace((unsigned char)*p)) p++;
+        if (*p == '=' && p[1] != '=') {
+            const char *expr_start;
+            const char *expr_end;
+            int depth = 0;
+
+            p++;
+            while (*p && isspace((unsigned char)*p)) p++;
+            expr_start = p;
+            while (*p) {
+                if (*p == '(') {
+                    depth++;
+                } else if (*p == ')') {
+                    if (depth > 0)
+                        depth--;
+                } else if (depth == 0 && (*p == ',' || *p == ';')) {
+                    break;
+                } else if (depth == 0 && *p == '/' && p[1] == '/') {
+                    break;
+                }
+                p++;
+            }
+            expr_end = p;
+            while (expr_end > expr_start &&
+                   isspace((unsigned char)expr_end[-1]))
+                expr_end--;
+            if (expr_end == expr_start)
+                return 0;
+            if (!repl_core_append_text(buf, sizeof(buf), &off, " = ") ||
+                !repl_core_append_span(buf, sizeof(buf), &off,
+                                       expr_start, expr_end))
+                return 0;
+        }
+
+        decl_count++;
+        while (*p && isspace((unsigned char)*p)) p++;
+        if (*p == ';' || (*p == '/' && p[1] == '/'))
+            break;
+    }
+
+    if (decl_count == 0)
+        return 0;
+
+    if (*p == ';')
+        p++;
+    while (*p && isspace((unsigned char)*p)) p++;
+    if (*p != '\0' && !(p[0] == '/' && p[1] == '/'))
+        return 0;
+
+    if (!repl_core_append_text(buf, sizeof(buf), &off, ";"))
+        return 0;
+    if (p[0] == '/' && p[1] == '/') {
+        const char *comment_end = p + strlen(p);
+        while (comment_end > p && isspace((unsigned char)comment_end[-1]))
+            comment_end--;
+        if (!repl_core_append_text(buf, sizeof(buf), &off, " ") ||
+            !repl_core_append_span(buf, sizeof(buf), &off, p, comment_end))
+            return 0;
+    }
+
+    if (!out || out_sz <= 0)
+        return 0;
+    strncpy(out, buf, (size_t)out_sz - 1);
+    out[out_sz - 1] = '\0';
+    return 1;
+}
+
 static int parse_and_normalize_impl(const char *line, int pos,
                                     ExprVar *vars, int num_vars,
                                     int preserve_expr, GLCmd *out_cmd,
@@ -438,12 +586,19 @@ void repl_reformat_commands(void) {
             break;
         }
         case CMD_VAR_DECLARE: {
-            int off = snprintf(fmt_text, sizeof(fmt_text), "%sfloat ", ind_s);
-            for (int decl_idx = 0; decl_idx < orig.var_decl_count && off < (int)sizeof(fmt_text) - 4; decl_idx++) {
-                if (decl_idx > 0) off += snprintf(fmt_text + off, sizeof(fmt_text) - off, ", ");
-                off += snprintf(fmt_text + off, sizeof(fmt_text) - off, "%s", orig.var_names[decl_idx]);
+            if (!repl_core_format_var_decl_text(orig_text, ind_s,
+                                                fmt_text, sizeof(fmt_text))) {
+                int off = snprintf(fmt_text, sizeof(fmt_text), "%sfloat ", ind_s);
+                for (int decl_idx = 0;
+                     decl_idx < orig.var_decl_count && off < (int)sizeof(fmt_text) - 4;
+                     decl_idx++) {
+                    if (decl_idx > 0)
+                        off += snprintf(fmt_text + off, sizeof(fmt_text) - off, ", ");
+                    off += snprintf(fmt_text + off, sizeof(fmt_text) - off,
+                                    "%s", orig.var_names[decl_idx]);
+                }
+                snprintf(fmt_text + off, sizeof(fmt_text) - off, ";");
             }
-            snprintf(fmt_text + off, sizeof(fmt_text) - off, ";");
             repl_core_replace_formatted_cmd(&store, cmd_idx, &fmt, fmt_text);
             break;
         }

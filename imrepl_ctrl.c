@@ -7,6 +7,7 @@
 #include "editor_input.h"
 #include "editor_help_session.h"
 #include "editor_inline_rename.h"
+#include "editor_commit.h"
 #include "editor_search.h"
 #include "repl_actions.h"
 #include "repl_audio.h"
@@ -846,10 +847,56 @@ int imrepl_ctrl_router_handle_camera_mouse(int button, int state, int x, int y) 
     return 1;
 }
 
+static int imrepl_ctrl_apply_variable_panel_value_change(
+        const VariablePanelValueChange *value_change) {
+    ReplCompiledChange compiled;
+    ReplCompileContext ctx;
+    ReplVariableDragState drag;
+    char err[REPL_STATUS_TEXT_MAX] = "";
+    int var_idx;
+    int capture_undo;
+
+    if (!value_change || !value_change->name[0])
+        return 1;
+
+    drag = variable_panel_drag();
+    var_idx = drag.var_idx;
+    if (var_idx < 0 || var_idx >= g_num_predef_vars)
+        return 1;
+    if (strcmp(g_predef_vars[var_idx].name, value_change->name) != 0) {
+        var_idx = repl_eval_find_predef_var_idx(value_change->name);
+        if (var_idx < 0)
+            return 1;
+    }
+    if (g_predef_vars[var_idx].value == value_change->value)
+        return 1;
+
+    ctx = repl_compile_context_from_live();
+    if (repl_compile_set_predef_value(value_change->name, value_change->value,
+                                      &ctx, &compiled,
+                                      err, sizeof(err)) != REPL_COMPILE_OK) {
+        set_status(err[0] ? err : "Variable update failed");
+        return 1;
+    }
+
+    capture_undo = !variable_panel_drag_undo_snapshot_pushed();
+    if (!editor_commit_apply_external_change(&compiled, capture_undo)) {
+        set_status("Command buffer full!");
+        return 1;
+    }
+    if (capture_undo)
+        variable_panel_drag_mark_undo_snapshot_pushed();
+    return 1;
+}
+
 int imrepl_ctrl_router_handle_variable_panel_motion(int x, int y) {
+    VariablePanelValueChange value_change;
+
+    (void)y;
     if (!variable_panel_drag_active())
         return 0;
-    variable_panel_handle_drag_motion(x);
+    if (variable_panel_handle_drag_motion(x, &value_change))
+        imrepl_ctrl_apply_variable_panel_value_change(&value_change);
     editor_request_redraw();
     return 1;
 }

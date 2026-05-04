@@ -72,12 +72,20 @@ int variable_panel_drag_log_mode(void) {
     return repl_var_drag_log_mode();
 }
 
+int variable_panel_drag_undo_snapshot_pushed(void) {
+    return variable_panel_drag().undo_snapshot_pushed;
+}
+
+void variable_panel_drag_mark_undo_snapshot_pushed(void) {
+    variable_panel_drag_mut()->undo_snapshot_pushed = 1;
+}
+
 void variable_panel_handle_drag_begin(int row, int log_mode, int x) {
     repl_var_drag_begin(row, log_mode, x);
 }
 
-void variable_panel_handle_drag_motion(int x) {
-    repl_var_drag_motion(x);
+int variable_panel_handle_drag_motion(int x, VariablePanelValueChange *out) {
+    return repl_var_drag_motion(x, out);
 }
 
 void variable_panel_handle_drag_reset(void) {

@@ -1,13 +1,13 @@
 # REPL Module Guide — North Star
 
 > **This document is the target ownership map.** The
-> `editor-ownership-gap-cleanup` branch landed Phases A–I and the
-> tree now matches the contract described here. Three filename
+> `editor-ownership-gap-cleanup` branch landed Phases A–J1 and the
+> tree now matches the contract described here. Two filename
 > deferrals remain (`repl_camera_controls`, `repl_actions` —
 > waiting on the scene/viewport split and the app-shell namespace
-> work; `repl_commit` is deleted entirely) and a small number of
-> ratchets continue to drive transitional uses toward zero. New
-> code follows this contract directly.
+> work; `repl_commit` and `repl_editor` are both deleted entirely)
+> and a small number of ratchets continue to drive transitional
+> uses toward zero. New code follows this contract directly.
 
 For per-module detail and frame-pipeline narrative read
 [`ARCHITECTURE.md`](ARCHITECTURE.md). For the staged cleanup plan see
@@ -242,7 +242,7 @@ commands.
 
 | Module | Role |
 |--------|------|
-| `imrepl_ctrl` | Application controller. Owns frame order, snapshot construction, and action dispatch. It is the only input-event mutation gate |
+| `imrepl_ctrl` | Application controller and input router. Owns frame order, snapshot construction, action dispatch, timer tick, and non-editor input routing (`imrepl_ctrl_router_*` helpers route replay, audio, config, save, camera, variable panel, scene press, scroll-wheel zoom to their owning subsystems). It is the only input-event mutation gate |
 | `repl_command_spec` | Declarative command descriptors for fixed-arity GL-like commands |
 | `repl_parser` | Parses one source line into `ReplParsedLine { GLCmd cmd; char text[] }`; no storage ownership |
 | `repl_source_scope` | Computes source depth, indentation, and block context used by compile/format paths |
@@ -263,7 +263,7 @@ text edit into a committed program change.
 
 | Module | Role |
 |--------|------|
-| `editor_input` | Editor's text-document controller. Receives raw key/mouse events from `imrepl_ctrl` once dispatched on `UI_HIT_CODE_TEXT` (or via focus). Mutates `EditorState` directly: cursor, selection, scroll, search, autocomplete navigation, clipboard, undo. *Not* a `UiAction` reducer |
+| `editor_input` | Editor's pure text-document controller. Receives key/mouse events from `imrepl_ctrl` only after the controller has already filtered out non-editor concerns (replay, audio, config, save, camera, variable panel, scene press, scroll-wheel zoom). Mutates `EditorState` directly: cursor, selection, scroll, search, autocomplete navigation, clipboard, undo. Also exposes hit-test predicates (`editor_input_point_in_code_panel`, etc.) and the `ReplInputDispatchEffects` accumulation API that the controller consumes. `repl_editor.{c,h}` is deleted; this module is the sole dispatch boundary |
 | `editor_commit` | Transaction boundary for commits: compile, undo snapshot, text-buffer write, REPL apply, dirty-state updates |
 | `editor_buffer` *(new)* | Sole writer for canonical per-line text: insert, replace, delete, load, clear |
 | `editor_document` *(new)* | Active input buffer, cursor position, edit line, insert mode, pending newline, and navigation primitives |
@@ -413,7 +413,7 @@ flowchart LR
     sample["sample.c<br/>GLUT callback wiring · buffer swap"]
 
     subgraph app["0. App router"]
-        ctrl["imrepl_ctrl.c<br/>raw input router · frame/snapshot coordinator<br/>does NOT drive editor behavior"]
+        ctrl["imrepl_ctrl.c<br/>raw input router · frame/snapshot coordinator<br/>non-editor router helpers · timer tick<br/>does NOT drive editor behavior"]
     end
 
     subgraph repl_pipeline["1. REPL compiler/program pipeline"]
@@ -426,7 +426,7 @@ flowchart LR
     end
 
     subgraph editor["2. Editor (text model + controller)"]
-        einput["editor_input.c<br/>text-doc controller<br/>(cursor / scroll / select / search)"]
+        einput["editor_input.c<br/>pure text-doc controller<br/>(cursor / scroll / select / search)<br/>repl_editor.{c,h} deleted"]
         ecommit["editor_commit.c<br/>compile + undo + buffer + apply"]
         eview["editor_view_snapshot.c<br/>builds editor view snapshot<br/>(editor uses UI as its view)"]
         ebuf["editor_buffer.c<br/>line text · only writer"]
@@ -495,16 +495,21 @@ flowchart LR
     uivpanel i6@--> ctrl
 
     %% Controller routes raw events to the owning subsystem based on
-    %% UiHit.kind (or focus). These are routing edges, not mutation
-    %% delegations — the editor and peers are each their own controller.
+    %% UiHit.kind (or focus). Non-editor concerns (replay, audio,
+    %% config, save, camera, variable panel, scene press, scroll-wheel
+    %% zoom) are routed by imrepl_ctrl_router_* helpers BEFORE the
+    %% editor dispatch entry points run. These are routing edges, not
+    %% mutation delegations — the editor and peers are each their own
+    %% controller.
     ctrl i7@--> einput
     ctrl i8@--> ehelpsess
     ctrl i9@--> vpanel
     ctrl i10@--> replay_sys
     ctrl i11@--> scam
+    ctrl i33@--> audio
 
     %% Editor controllers mutate their own state directly.
-    einput e1@==> edoc
+    einput e10@==> edoc
     einput e2@==> ebuf
     einput e3@==> esearch
     einput e4@==> eac
@@ -557,6 +562,7 @@ flowchart LR
     ctrl -.-> replay_ann
     ctrl -.-> vpanel
     ctrl -.-> replay_sys
+    ctrl -.-> export
 
     %% Scene render fan-out
     sceneR i23@--> exec
@@ -592,8 +598,8 @@ flowchart LR
     classDef animateE stroke:#f50,stroke-dasharray: 9\,5,stroke-dashoffset: 900,animation: dash 90s linear infinite;
     classDef animateF stroke:#5f0,stroke-dasharray: 9\,5,stroke-dashoffset: 900,animation: dash 90s linear infinite;
 
-    class e1,e2,e3,e4,e5,e6,e7,e8,e9 animateE
-    class i2,i3,i4,i5,i6,i7,i8,i9,i10,i11,i12,i13,i14,i15,i16,i17,i18,i19,i20,i21,i22,i23,i24,i25,i26,i27,i28,i29,i30,i31,i32 animateF
+    class e1,e2,e3,e4,e5,e6,e7,e8,e9,e10 animateE
+    class i1,i2,i3,i4,i5,i6,i7,i8,i9,i10,i11,i12,i13,i14,i15,i16,i17,i18,i19,i20,i21,i22,i23,i24,i25,i26,i27,i28,i29,i30,i31,i32,i33,i34 animateF
 ```
 
 Reading the diagram:
@@ -655,6 +661,12 @@ check-imrepl-not-editor-mirror         (Phase 4)
     builds frame snapshots; it does not implement editor behavior or
     duplicate the editor's API surface.
 
+check-no-repl-editor-input-shim        (Phase J1)
+    editor_input.c must not include the deleted repl_editor.h or call
+    legacy repl_*_func dispatch bodies. The input dispatch boundary
+    is closed: editor_input.c handles editor-text-model concerns only;
+    non-editor routing lives in imrepl_ctrl_router_* helpers.
+
 check-editor-ownership-budget          (landed commit 11)
     Ratchets the transitional ui-forwarder line count in repl_state.c
     and the ui_state.h -> repl_state_views.h include count strictly
@@ -698,9 +710,9 @@ render-neutral types belong in explicit shared headers such as
 ## Current Status vs. Target
 
 This document describes the **target**. The
-`editor-ownership-gap-cleanup` branch landed Phases A through I,
-which closed the M/V/C+compiler+router contract end-to-end. As of
-that branch landing:
+`editor-ownership-gap-cleanup` branch landed Phases A through J1,
+which closed the M/V/C+compiler+router contract end-to-end
+including the input dispatch boundary. As of that branch landing:
 
 - **Three-state split: done.** `EditorState`, `UiState`, and
   `ReplRuntimeState` each own their respective slices. The
@@ -720,6 +732,14 @@ that branch landing:
   `ui_color_picker_hit_test`, `ui_variable_panel_hit_test` produce
   passive `UiHit` results; mutating press handlers track toward zero
   via `check-ui-returns-hits-only` (baseline 8, ratchets down).
+- **Input dispatch boundary: closed (Phase J1).** `repl_editor.{c,h}`
+  is deleted. All keyboard, special-key, mouse, motion, and
+  mousewheel dispatch migrated into `editor_input.c` (editor-text
+  concerns only) and `imrepl_ctrl.c` (non-editor routing via
+  `imrepl_ctrl_router_*` helpers: replay, audio, config, save,
+  camera, variable panel, scene press, scroll-wheel zoom). Timer
+  dispatch inlined into `imrepl_ctrl_timer` / `imrepl_ctrl_tick`.
+  Hard-guarded by `check-no-repl-editor-input-shim`.
 - **Peer subsystems: done.** `variable_panel`, `replay`, and
   `editor_help_session` each own their state separately from
   `EditorState` / `UiState` / `ReplState`.
@@ -729,7 +749,9 @@ that branch landing:
   dispatch from REPL grammar (Phase G).
 - **Commit dispatch is editor-side: done.** `try_commit_*`
   dispatchers live in `editor_commit.c`. `repl_commit.c` is deleted
-  and hard-guarded against return (Phase H.5).
+  and hard-guarded against return (Phase H.5). `try_commit_float_decl`
+  and `try_assign_variable` now route through
+  `editor_commit_apply_plan`.
 - **Parser diagnostic flow: data, not side effects.** `repl_parser.c`
   writes diagnostics to `ReplParseContext.err_buf`. The parser core
   has zero `set_status` calls; the legacy no-ctx wrappers
@@ -743,12 +765,14 @@ that branch landing:
   `repl_var_drag` → `variable_panel_drag`,
   `repl_replay` → `replay`, `repl_layout` → `ui_layout`,
   `repl_code_panel_layout` → `ui_code_panel_layout`,
-  `repl_code_panel_document` → `editor_code_panel_document`. Three
-  files (`repl_camera_controls`, `repl_actions`, `repl_commit`)
-  remain on the legacy prefix — the first two with explicit
-  blockers documented in the plan, the third was deleted entirely.
-- **Hard guards: 31 in place.** `make check-state-ownership` runs
-  the full inventory.
+  `repl_code_panel_document` → `editor_code_panel_document`,
+  `repl_editor` → deleted (dispatch split between `editor_input`
+  and `imrepl_ctrl`). Two files (`repl_camera_controls`,
+  `repl_actions`) remain on the legacy prefix with explicit
+  blockers documented in the plan.
+- **Hard guards: 32 in place.** `make check-state-ownership` runs
+  the full inventory (29 sub-targets) plus `check-gl-boundaries`,
+  `check-layer-coupling`, and `check-public-api-usage`.
 
 The deferred items still on the books:
 
@@ -774,12 +798,12 @@ contract that this document reflects.
 Phase 1 of the earlier refinement plan is complete. Most of refinement
 Phase 2 has landed (R1, R2, R3, R4 controller-side, R5, R6, R7).
 `feature/editor-owns-text.md` Steps 2–6 completed the data-shape half of
-editor-owned text.
+editor-owned text. Phase J1 closed the input dispatch boundary
+(`repl_editor.{c,h}` deleted).
 
 Outstanding tracks:
 
 ```text
-editor-ownership-gap-cleanup  three-layer ownership split (this plan)
 R10-phase1                    reassess "stale" GLUT decls in repl_core.h
 R10-ph2-5                     dissolve repl_core.c into natural owners
 R11 (tail)                    shrink remaining allowlists (bench_repl.c)
