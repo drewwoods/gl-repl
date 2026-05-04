@@ -4,6 +4,8 @@
 #ifndef REPL_PRESENTATION_H
 #define REPL_PRESENTATION_H
 
+#include "ui_layout.h"
+
 /* Grid themes. The label tables in repl_actions.c, scene_grid.c, and the
  * custom render paths in scene_render.c must stay in sync with this enum. */
 typedef enum {
@@ -70,5 +72,7 @@ typedef enum {
 #define CFG_DEFAULT_LIGHT_INDICATORS  1
 #define CFG_DEFAULT_BACKDROP_MODE     0
 #define CFG_DEFAULT_CAMERA_ROTATE     0
+#define CFG_DEFAULT_WRAP_AT_COMMA     1
+#define CFG_DEFAULT_CODE_PANEL_LAYOUT CODE_PANEL_LAYOUT_TOP
 
 #endif /* REPL_PRESENTATION_H */

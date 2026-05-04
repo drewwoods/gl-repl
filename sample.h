@@ -25,6 +25,7 @@
 #include "replay.h"
 #include "editor_limits.h"
 #include "repl_export_state.h"
+#include "scene_render.h"
 #include "ui_layout.h"
 #include "ui_metrics.h"
 #include "ui_replay_hud.h"
@@ -33,17 +34,6 @@
 /* ========================================================================= */
 /* Configuration                                                              */
 /* ========================================================================= */
-
-/* Default values for runtime-configurable state.
- * Used at both the variable definition site and in repl_reset_state() so the
- * two cannot drift.  Add a new entry here whenever a global's default appears
- * in more than one place. */
-#define CFG_DEFAULT_MULTISAMPLE       1
-#define CFG_DEFAULT_LINE_SMOOTH       0
-#define CFG_DEFAULT_ATTENUATE_POINTS  1
-#define CFG_DEFAULT_WRAP_AT_COMMA     1
-#define CFG_DEFAULT_CODE_PANEL_LAYOUT CODE_PANEL_LAYOUT_TOP
-#define CFG_DEFAULT_PANEL_FRAC        0.45f
 
 /* ========================================================================= */
 /* Types                                                                      */
