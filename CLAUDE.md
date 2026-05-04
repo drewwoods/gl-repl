@@ -97,7 +97,10 @@ ownership / contract guards. Highlights:
   bodies (Phase J1 closed the input boundary; `repl_editor.{c,h}`
   is gone).
 - `check-no-set-status-in-repl-parser` — parser core never calls
-  `set_status` (baseline 1 covers the legacy no-ctx wrapper bridge).
+  `set_status` (baseline **0/0** after Phase J5 retired the legacy
+  no-ctx wrappers `repl_parser_parse_command` / `_with_vars` and the
+  `parser_legacy_surface_to_status` bridge; tests now own status
+  surfacing locally via their own `parse_for_test` helper).
 - `check-no-set-status-in-compile-apply` — `repl_compile.c` and
   `repl_apply.c` are status-free (Phase C purity).
 - `check-no-store-text-api` — `repl_command_store_*_with_line[s]`
@@ -120,9 +123,14 @@ ownership / contract guards. Highlights:
   controls, route hits via `replay_handle_*`, and read replay
   snapshots, but must not mutate editor/REPL state, call
   parser/compile/apply, or grow generic `ui_*` responsibilities.
-- `check-variable-panel-forwarders` (87) and
-  `check-replay-forwarders` (37) — legacy forwarder-API uses
-  ratchet downward only.
+- `check-variable-panel-forwarders` (current 50/87) — legacy
+  variable-panel forwarder-API uses ratchet downward only.
+- `check-replay-forwarders` — baseline **0/0** after Phase J5
+  migrated every `bench/` + `tests/` site onto `replay_state_view` /
+  `replay_state_mut` / `replay_handle_*`. The legacy
+  `repl_state_replay` / `_mut` / `_reset` forwarders survive in
+  `repl_state.c` as one-line redirects and can be deleted in a
+  follow-up.
 - `check-imrepl-not-editor-mirror` — `imrepl_ctrl_editor_*` per-field
   wrappers are forbidden.
 - `check-editor-ownership-budget` — UI-slice forwarder + facade

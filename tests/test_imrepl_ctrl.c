@@ -170,13 +170,13 @@ static void prepare_display_fixture(void) {
     if (g_t_idx >= 0)
         g_predef_vars[g_t_idx].value = 9.0f;
 
-    repl_state_replay_mut()->active = 1;
-    repl_state_replay_mut()->state = REPLAY_PLAYING;
-    repl_state_replay_mut()->pc = 1;
-    repl_state_replay_mut()->mode = REPLAY_MODE_VERTEX;
-    repl_state_replay_mut()->speed = 2.5f;
-    repl_state_replay_mut()->expand_args = 1;
-    repl_state_replay_mut()->total_flat_cmds = 777;
+    replay_state_mut()->active = 1;
+    replay_state_mut()->state = REPLAY_PLAYING;
+    replay_state_mut()->pc = 1;
+    replay_state_mut()->mode = REPLAY_MODE_VERTEX;
+    replay_state_mut()->speed = 2.5f;
+    replay_state_mut()->expand_args = 1;
+    replay_state_mut()->total_flat_cmds = 777;
 
     repl_state_flat_program_clear_dirty();
     repl_state_normals_dirty_clear();

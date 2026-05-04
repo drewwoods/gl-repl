@@ -1,6 +1,7 @@
 #include "sample.h"
 #include "ui_state.h"
 #include "repl_state.h"
+#include "replay_state.h"
 #include "repl_core.h"
 #include "editor_help_session.h"
 #include "ui_help_overlay.h"
@@ -55,7 +56,7 @@ static void make_test_ui_snapshot(UiRenderSnapshot *snap) {
     snap->camera         = ui_state_camera();
     snap->pointer        = ui_state_pointer();
     snap->render         = repl_state_render();
-    snap->replay         = repl_state_replay();
+    snap->replay         = replay_state_view();
     snap->scenes         = repl_state_scenes();
     snap->variable_drag  = editor_state_variable_drag();
     snap->selection      = editor_state_selection();

@@ -38,6 +38,44 @@ static int parse_cmd_with_text(const char *line, GLCmd *cmd,
     return ok;
 }
 
+/* Test-local replacements for the deleted no-ctx parser wrappers.
+ * The wrappers used to surface parser diagnostics through set_status
+ * so the test harness could assert against g_status; preserve that
+ * by writing the err_buf into the status text on failure. The
+ * production parser is set_status-free (check-no-set-status-in-
+ * repl-parser baseline 0). */
+static int parse_for_test(const char *line, GLCmd *cmd) {
+    char err_buf[REPL_STATUS_TEXT_MAX];
+    err_buf[0] = '\0';
+    ReplParseContext ctx = {
+        .source_line_idx = repl_state_edit_line(),
+        .err_buf = err_buf,
+        .err_sz  = (int)sizeof(err_buf),
+    };
+    ReplParsedLine pl;
+    int ok = repl_parser_parse_command_ctx(line, &pl, &ctx);
+    if (cmd) *cmd = pl.cmd;
+    if (!ok && err_buf[0]) set_status(err_buf);
+    return ok;
+}
+
+static int parse_for_test_with_vars(const char *line, GLCmd *cmd,
+                                    ExprVar *vars, int num_vars) {
+    char err_buf[REPL_STATUS_TEXT_MAX];
+    err_buf[0] = '\0';
+    ReplParseContext ctx = {
+        .source_line_idx = repl_state_edit_line(),
+        .vars = vars, .num_vars = num_vars,
+        .err_buf = err_buf,
+        .err_sz  = (int)sizeof(err_buf),
+    };
+    ReplParsedLine pl;
+    int ok = repl_parser_parse_command_ctx(line, &pl, &ctx);
+    if (cmd) *cmd = pl.cmd;
+    if (!ok && err_buf[0]) set_status(err_buf);
+    return ok;
+}
+
 static void declare_test_vars(void) {
     char err[128];
     static const char *const names[] = { "x", "y", "z" };
@@ -112,7 +150,7 @@ int main(void) {
     {
         GLCmd cmd;
         memset(&cmd, 0, sizeof(cmd));
-        int ok = repl_parser_parse_command("glVertex3f(x + 1, 0, 0)", &cmd);
+        int ok = parse_for_test("glVertex3f(x + 1, 0, 0)", &cmd);
         ASSERT_TRUE("public parse_command detects predef vars", ok == 1);
         ASSERT_TRUE("public parse_command has_vars for predef", cmd.has_vars == 1);
     }
@@ -121,7 +159,7 @@ int main(void) {
         ExprVar vars[1] = { { "radius", 2.0f } };
         GLCmd cmd;
         memset(&cmd, 0, sizeof(cmd));
-        int ok = repl_parser_parse_command_with_vars("glVertex3f(1, 2, 3)", &cmd, vars, 1);
+        int ok = parse_for_test_with_vars("glVertex3f(1, 2, 3)", &cmd, vars, 1);
         ASSERT_TRUE("parse with locals constant ok", ok == 1);
         ASSERT_TRUE("parse with locals constant has_vars off", cmd.has_vars == 0);
     }
@@ -130,7 +168,7 @@ int main(void) {
         ExprVar vars[1] = { { "radius", 2.0f } };
         GLCmd cmd;
         memset(&cmd, 0, sizeof(cmd));
-        int ok = repl_parser_parse_command_with_vars("glVertex3f(radius, 0, 0)", &cmd, vars, 1);
+        int ok = parse_for_test_with_vars("glVertex3f(radius, 0, 0)", &cmd, vars, 1);
         ASSERT_TRUE("parse with locals referenced ok", ok == 1);
         ASSERT_TRUE("parse with locals referenced has_vars on", cmd.has_vars == 1);
     }
@@ -139,7 +177,7 @@ int main(void) {
         ExprVar vars[1] = { { "radius", 2.0f } };
         GLCmd cmd;
         memset(&cmd, 0, sizeof(cmd));
-        int ok = repl_parser_parse_command_with_vars("func0(1, 2)", &cmd, vars, 1);
+        int ok = parse_for_test_with_vars("func0(1, 2)", &cmd, vars, 1);
         ASSERT_TRUE("func call with locals constant ok", ok == 1);
         ASSERT_TRUE("func call with locals constant has_vars off", cmd.has_vars == 0);
     }
@@ -213,7 +251,7 @@ int main(void) {
         repl_state_edit_line_set(0);
         GLCmd cmd;
         memset(&cmd, 0, sizeof(cmd));
-        int ok = repl_parser_parse_command("glBegin(GL_TRIANGLES)", &cmd);
+        int ok = parse_for_test("glBegin(GL_TRIANGLES)", &cmd);
         ASSERT_TRUE("public parse_command", ok == 1);
         ASSERT_TRUE("public parse_command type", cmd.type == CMD_BEGIN);
     }
@@ -238,7 +276,7 @@ int main(void) {
         memset(&cmd, 0, sizeof(cmd));
         memset(long_cmd, 'a', sizeof(long_cmd) - 1);
         long_cmd[sizeof(long_cmd) - 1] = '\0';
-        int ok = repl_parser_parse_command(long_cmd, &cmd);
+        int ok = parse_for_test(long_cmd, &cmd);
         ASSERT_TRUE("long unknown command parse fails", ok == 0);
         ASSERT_TRUE("long unknown command reports status",
                     strstr(g_status, "Unknown cmd") != NULL);
@@ -260,7 +298,7 @@ int main(void) {
         repl_reset_state();
         GLCmd cmd;
         memset(&cmd, 0, sizeof(cmd));
-        int ok = repl_parser_parse_command("glutSolidTorus(0.1, 0.4, 8, 16)", &cmd);
+        int ok = parse_for_test("glutSolidTorus(0.1, 0.4, 8, 16)", &cmd);
         ASSERT_TRUE("glutSolidTorus parse ok", ok == 1);
         ASSERT_TRUE("glutSolidTorus type", cmd.type == CMD_GLUT_TORUS);
     }
@@ -269,7 +307,7 @@ int main(void) {
         repl_reset_state();
         GLCmd cmd;
         memset(&cmd, 0, sizeof(cmd));
-        int ok = repl_parser_parse_command("glutSolidCone(0.25, 1.0, 12, 4)", &cmd);
+        int ok = parse_for_test("glutSolidCone(0.25, 1.0, 12, 4)", &cmd);
         ASSERT_TRUE("glutSolidCone parse ok", ok == 1);
         ASSERT_TRUE("glutSolidCone type", cmd.type == CMD_GLUT_CONE);
     }
@@ -278,7 +316,7 @@ int main(void) {
         repl_reset_state();
         GLCmd cmd;
         memset(&cmd, 0, sizeof(cmd));
-        int ok = repl_parser_parse_command("glutSolidSphere(0.25, 16, 12)", &cmd);
+        int ok = parse_for_test("glutSolidSphere(0.25, 16, 12)", &cmd);
         ASSERT_TRUE("glutSolidSphere parse ok", ok == 1);
         ASSERT_TRUE("glutSolidSphere type", cmd.type == CMD_GLUT_SPHERE);
     }
@@ -287,7 +325,7 @@ int main(void) {
         repl_reset_state();
         GLCmd cmd;
         memset(&cmd, 0, sizeof(cmd));
-        int ok = repl_parser_parse_command("glutSolidTeapot(0.25)", &cmd);
+        int ok = parse_for_test("glutSolidTeapot(0.25)", &cmd);
         ASSERT_TRUE("glutSolidTeapot parse ok", ok == 1);
         ASSERT_TRUE("glutSolidTeapot type", cmd.type == CMD_GLUT_TEAPOT);
     }
@@ -298,13 +336,13 @@ int main(void) {
         GLCmd cmd;
         memset(&cmd, 0, sizeof(cmd));
         ASSERT_TRUE("gluSphere parse fails",
-                    repl_parser_parse_command("gluSphere(0.25, 16, 12)", &cmd) == 0);
+                    parse_for_test("gluSphere(0.25, 16, 12)", &cmd) == 0);
         ASSERT_TRUE("gluCylinder parse fails",
-                    repl_parser_parse_command("gluCylinder(0.3, 0.3, 1.0, 12, 4)", &cmd) == 0);
+                    parse_for_test("gluCylinder(0.3, 0.3, 1.0, 12, 4)", &cmd) == 0);
         ASSERT_TRUE("gluDisk parse fails",
-                    repl_parser_parse_command("gluDisk(0.2, 0.5, 16, 2)", &cmd) == 0);
+                    parse_for_test("gluDisk(0.2, 0.5, 16, 2)", &cmd) == 0);
         ASSERT_TRUE("gluPartialDisk parse fails",
-                    repl_parser_parse_command("gluPartialDisk(0.1, 0.5, 16, 2, 0, 180)", &cmd) == 0);
+                    parse_for_test("gluPartialDisk(0.1, 0.5, 16, 2, 0, 180)", &cmd) == 0);
     }
 
     /* glColorMaterial - face/mode enums */
@@ -327,7 +365,7 @@ int main(void) {
         repl_reset_state();
         GLCmd cmd;
         memset(&cmd, 0, sizeof(cmd));
-        int ok = repl_parser_parse_command("glColorMaterial(GL_FRONT, GL_SHININESS)", &cmd);
+        int ok = parse_for_test("glColorMaterial(GL_FRONT, GL_SHININESS)", &cmd);
         ASSERT_TRUE("glColorMaterial rejects shininess", ok == 0);
         assert_status_contains("glColorMaterial bad mode status", "GL_AMBIENT_AND_DIFFUSE");
     }
@@ -350,7 +388,7 @@ int main(void) {
         repl_reset_state();
         GLCmd cmd;
         memset(&cmd, 0, sizeof(cmd));
-        int ok = repl_parser_parse_command("glMaterialf(GL_FRONT, GL_DIFFUSE, 0.8, 0.2, 0.2, 1.0)", &cmd);
+        int ok = parse_for_test("glMaterialf(GL_FRONT, GL_DIFFUSE, 0.8, 0.2, 0.2, 1.0)", &cmd);
         ASSERT_TRUE("glMaterialf vector parse ok", ok == 1);
         ASSERT_TRUE("glMaterialf vector type", cmd.type == CMD_MATERIALF);
         ASSERT_TRUE("glMaterialf vector num_args", cmd.num_args == 5); /* pname + 4 vals */
@@ -361,7 +399,7 @@ int main(void) {
         repl_reset_state();
         GLCmd cmd;
         memset(&cmd, 0, sizeof(cmd));
-        int ok = repl_parser_parse_command("glMaterialf(FRONT, GL_DIFFUSE, 0.5)", &cmd);
+        int ok = parse_for_test("glMaterialf(FRONT, GL_DIFFUSE, 0.5)", &cmd);
         ASSERT_TRUE("glMaterialf bad face returns 0", ok == 0);
     }
 
@@ -370,7 +408,7 @@ int main(void) {
         repl_reset_state();
         GLCmd cmd;
         memset(&cmd, 0, sizeof(cmd));
-        int ok = repl_parser_parse_command("glPointParameterfv(GL_POINT_DISTANCE_ATTENUATION, 1, 0, 0)", &cmd);
+        int ok = parse_for_test("glPointParameterfv(GL_POINT_DISTANCE_ATTENUATION, 1, 0, 0)", &cmd);
         ASSERT_TRUE("glPointParameterfv parse ok", ok == 1);
         ASSERT_TRUE("glPointParameterfv type", cmd.type == CMD_POINT_PARAMETER_FV);
     }
@@ -380,7 +418,7 @@ int main(void) {
         repl_reset_state();
         GLCmd cmd;
         memset(&cmd, 0, sizeof(cmd));
-        int ok = repl_parser_parse_command("glColor3f(1, 1", &cmd);
+        int ok = parse_for_test("glColor3f(1, 1", &cmd);
         ASSERT_TRUE("incomplete glColor3f returns 0", ok == 0);
         assert_status_contains("incomplete glColor3f status", "Incomplete command");
         assert_status_contains("incomplete glColor3f missing paren", "missing ')'");
@@ -392,7 +430,7 @@ int main(void) {
         repl_reset_state();
         GLCmd cmd;
         memset(&cmd, 0, sizeof(cmd));
-        int ok = repl_parser_parse_command("glVertex(1,", &cmd);
+        int ok = parse_for_test("glVertex(1,", &cmd);
         ASSERT_TRUE("incomplete glVertex returns 0", ok == 0);
         assert_status_contains("incomplete glVertex status", "Incomplete command");
         assert_status_contains("incomplete glVertex missing paren", "missing ')'");
@@ -404,7 +442,7 @@ int main(void) {
         repl_reset_state();
         GLCmd cmd;
         memset(&cmd, 0, sizeof(cmd));
-        int ok = repl_parser_parse_command("glColor3f(1, 1)", &cmd);
+        int ok = parse_for_test("glColor3f(1, 1)", &cmd);
         ASSERT_TRUE("short glColor3f returns 0", ok == 0);
         assert_status_contains("short glColor3f status", "Incomplete command");
         assert_status_contains("short glColor3f expected count", "expects 3 arguments");
@@ -416,7 +454,7 @@ int main(void) {
         repl_reset_state();
         GLCmd cmd;
         memset(&cmd, 0, sizeof(cmd));
-        int ok = repl_parser_parse_command("glColor3f(1,, 3)", &cmd);
+        int ok = parse_for_test("glColor3f(1,, 3)", &cmd);
         ASSERT_TRUE("malformed glColor3f returns 0", ok == 0);
         assert_status_contains("malformed glColor3f incomplete", "Incomplete command");
         ASSERT_TRUE("malformed glColor3f not unknown",
@@ -427,7 +465,7 @@ int main(void) {
         repl_reset_state();
         GLCmd cmd;
         memset(&cmd, 0, sizeof(cmd));
-        int ok = repl_parser_parse_command("glTotallyUnknown(1, 2, 3)", &cmd);
+        int ok = parse_for_test("glTotallyUnknown(1, 2, 3)", &cmd);
         ASSERT_TRUE("complete unknown command returns 0", ok == 0);
         assert_status_contains("complete unknown command status", "Unknown cmd");
     }
@@ -436,7 +474,7 @@ int main(void) {
         repl_reset_state();
         GLCmd cmd;
         memset(&cmd, 0, sizeof(cmd));
-        int ok = repl_parser_parse_command("glTotallyUnknown(1, 2", &cmd);
+        int ok = parse_for_test("glTotallyUnknown(1, 2", &cmd);
         ASSERT_TRUE("unterminated unknown command returns 0", ok == 0);
         assert_status_contains("unterminated unknown command status", "Unknown cmd");
         ASSERT_TRUE("unterminated unknown command not incomplete",
@@ -448,7 +486,7 @@ int main(void) {
         repl_reset_state();
         GLCmd cmd;
         memset(&cmd, 0, sizeof(cmd));
-        int ok = repl_parser_parse_command("gluBegin(GLU_POLYGON)", &cmd);
+        int ok = parse_for_test("gluBegin(GLU_POLYGON)", &cmd);
         ASSERT_TRUE("gluBegin POLYGON parse ok", ok == 1);
         ASSERT_TRUE("gluBegin POLYGON type", cmd.type == CMD_TESS_BEGIN_POLYGON);
     }
@@ -457,7 +495,7 @@ int main(void) {
         repl_reset_state();
         GLCmd cmd;
         memset(&cmd, 0, sizeof(cmd));
-        int ok = repl_parser_parse_command("gluBegin(GLU_CONTOUR)", &cmd);
+        int ok = parse_for_test("gluBegin(GLU_CONTOUR)", &cmd);
         ASSERT_TRUE("gluBegin CONTOUR parse ok", ok == 1);
         ASSERT_TRUE("gluBegin CONTOUR type", cmd.type == CMD_TESS_BEGIN_CONTOUR);
     }
@@ -479,7 +517,7 @@ int main(void) {
         repl_reset_state();
         GLCmd cmd;
         memset(&cmd, 0, sizeof(cmd));
-        int ok = repl_parser_parse_command("glDepthMask(GL_TRUE)", &cmd);
+        int ok = parse_for_test("glDepthMask(GL_TRUE)", &cmd);
         ASSERT_TRUE("glDepthMask(GL_TRUE) parse ok", ok == 1);
         ASSERT_TRUE("glDepthMask GL_TRUE mode", cmd.mode == GL_TRUE);
     }
@@ -487,7 +525,7 @@ int main(void) {
         repl_reset_state();
         GLCmd cmd;
         memset(&cmd, 0, sizeof(cmd));
-        int ok = repl_parser_parse_command("glDepthMask(1)", &cmd);
+        int ok = parse_for_test("glDepthMask(1)", &cmd);
         ASSERT_TRUE("glDepthMask rejects non-enum arg", ok == 0);
         assert_status_contains("glDepthMask rejects non-enum status",
                                "GL_TRUE");
@@ -526,7 +564,7 @@ int main(void) {
         repl_reset_state();
         GLCmd cmd;
         memset(&cmd, 0, sizeof(cmd));
-        int ok = repl_parser_parse_command("glPushMatrix", &cmd);
+        int ok = parse_for_test("glPushMatrix", &cmd);
         ASSERT_TRUE("glPushMatrix without parens parse ok", ok == 1);
         ASSERT_TRUE("glPushMatrix without parens type", cmd.type == CMD_PUSH_MATRIX);
     }
@@ -535,7 +573,7 @@ int main(void) {
         repl_reset_state();
         GLCmd cmd;
         memset(&cmd, 0, sizeof(cmd));
-        int ok = repl_parser_parse_command("glPopMatrix()", &cmd);
+        int ok = parse_for_test("glPopMatrix()", &cmd);
         ASSERT_TRUE("glPopMatrix with parens parse ok", ok == 1);
         ASSERT_TRUE("glPopMatrix with parens type", cmd.type == CMD_POP_MATRIX);
     }
@@ -545,7 +583,7 @@ int main(void) {
         repl_reset_state();
         GLCmd cmd;
         memset(&cmd, 0, sizeof(cmd));
-        int ok = repl_parser_parse_command("glColor3f(1, 2, 3, 4)", &cmd);
+        int ok = parse_for_test("glColor3f(1, 2, 3, 4)", &cmd);
         ASSERT_TRUE("long glColor3f returns 0", ok == 0);
         ASSERT_TRUE("long glColor3f reports usage", strstr(g_status, "Usage:") != NULL);
         ASSERT_TRUE("long glColor3f not incomplete",
@@ -557,7 +595,7 @@ int main(void) {
         ExprVar vars[1] = { { "radius", 2.0f } };
         GLCmd cmd;
         memset(&cmd, 0, sizeof(cmd));
-        int ok = repl_parser_parse_command_with_vars("glVertex3f(unknown_name, 0, 0)", &cmd, vars, 1);
+        int ok = parse_for_test_with_vars("glVertex3f(unknown_name, 0, 0)", &cmd, vars, 1);
         ASSERT_TRUE("unknown local var returns 0", ok == 0);
         ASSERT_TRUE("unknown local var message",
                     strstr(g_status, "undeclared variable 'unknown_name'") != NULL);
@@ -568,7 +606,7 @@ int main(void) {
         repl_reset_state();
         GLCmd cmd;
         memset(&cmd, 0, sizeof(cmd));
-        int ok = repl_parser_parse_command("func2()", &cmd);
+        int ok = parse_for_test("func2()", &cmd);
         ASSERT_TRUE("func2 empty arglist parse ok", ok == 1);
         ASSERT_TRUE("func2 empty arglist type", cmd.type == CMD_CALL);
         ASSERT_TRUE("func2 empty arglist num_args", cmd.num_args == 0);
@@ -578,7 +616,7 @@ int main(void) {
         repl_reset_state();
         GLCmd cmd;
         memset(&cmd, 0, sizeof(cmd));
-        int ok = repl_parser_parse_command("func2(1,)", &cmd);
+        int ok = parse_for_test("func2(1,)", &cmd);
         ASSERT_TRUE("func2 malformed arglist returns 0", ok == 0);
         ASSERT_TRUE("func2 malformed arglist status",
                     strstr(g_status, "Invalid function call arguments") != NULL);
@@ -601,7 +639,7 @@ int main(void) {
         repl_reset_state();
         GLCmd cmd;
         memset(&cmd, 0, sizeof(cmd));
-        int ok = repl_parser_parse_command("func2(1 2)", &cmd);
+        int ok = parse_for_test("func2(1 2)", &cmd);
         ASSERT_TRUE("func2 missing comma invalid", ok == 0);
         ASSERT_TRUE("func2 missing comma status",
                     strstr(g_status, "Invalid function call arguments") != NULL);
@@ -612,7 +650,7 @@ int main(void) {
         repl_reset_state();
         GLCmd cmd;
         memset(&cmd, 0, sizeof(cmd));
-        int ok = repl_parser_parse_command("glMaterialf(GL_FRONT, GL_AMBIENT, 0.1, 0.2, 0.3)", &cmd);
+        int ok = parse_for_test("glMaterialf(GL_FRONT, GL_AMBIENT, 0.1, 0.2, 0.3)", &cmd);
         ASSERT_TRUE("glMaterialf 3-float vector invalid", ok == 0);
         ASSERT_TRUE("glMaterialf 3-float status", strstr(g_status, "Expected 1 or 4 float values") != NULL);
     }
@@ -621,7 +659,7 @@ int main(void) {
         repl_reset_state();
         GLCmd cmd;
         memset(&cmd, 0, sizeof(cmd));
-        int ok = repl_parser_parse_command("glPointParameterfv(GL_POINT_DISTANCE_ATTENUATION, 1, 0)", &cmd);
+        int ok = parse_for_test("glPointParameterfv(GL_POINT_DISTANCE_ATTENUATION, 1, 0)", &cmd);
         ASSERT_TRUE("glPointParameterfv short arglist invalid", ok == 0);
         ASSERT_TRUE("glPointParameterfv short arglist status",
                     strstr(g_status, "Expected 3 floats") != NULL);
@@ -631,7 +669,7 @@ int main(void) {
         repl_reset_state();
         GLCmd cmd;
         memset(&cmd, 0, sizeof(cmd));
-        int ok = repl_parser_parse_command("glPointParameterfv(GL_POINT_FADE_THRESHOLD_SIZE, 1, 0, 0)", &cmd);
+        int ok = parse_for_test("glPointParameterfv(GL_POINT_FADE_THRESHOLD_SIZE, 1, 0, 0)", &cmd);
         ASSERT_TRUE("glPointParameterfv bad pname invalid", ok == 0);
         ASSERT_TRUE("glPointParameterfv bad pname status",
                     strstr(g_status, "GL_POINT_DISTANCE_ATTENUATION") != NULL);
@@ -642,7 +680,7 @@ int main(void) {
         repl_reset_state();
         GLCmd cmd;
         memset(&cmd, 0, sizeof(cmd));
-        int ok = repl_parser_parse_command("glTranslatef(1, 2, 3;", &cmd);
+        int ok = parse_for_test("glTranslatef(1, 2, 3;", &cmd);
         ASSERT_TRUE("unterminated known command returns 0", ok == 0);
         ASSERT_TRUE("unterminated known command incomplete",
                     strstr(g_status, "Incomplete command") != NULL);
@@ -674,7 +712,7 @@ int main(void) {
 
         GLCmd cmd;
         memset(&cmd, 0, sizeof(cmd));
-        int ok = repl_parser_parse_command(line, &cmd);
+        int ok = parse_for_test(line, &cmd);
         ASSERT_TRUE("overlong funcN: parse fails", ok == 0);
         assert_status_contains("overlong funcN: status", "Command too long");
     }
