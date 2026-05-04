@@ -628,6 +628,7 @@ static void code_panel_draw_statusbar(const UiRenderSnapshot *snap,
     int sy = cp_y;
     int sh = STATUSBAR_H;
 
+    glPushAttrib(GL_CURRENT_BIT);
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
@@ -704,6 +705,7 @@ static void code_panel_draw_statusbar(const UiRenderSnapshot *snap,
         gl2d_draw_string((float)(kx + 5), (float)(ky + 2), help_kbd, FONT_SMALL);
     }
     glDisable(GL_BLEND);
+    glPopAttrib();
 }
 
 void ui_panels_render_code_panel(const UiRenderSnapshot *snap) {
