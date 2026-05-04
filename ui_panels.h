@@ -40,8 +40,31 @@
 
 /* --- Rendering --- */
 
-/* Render the code panel from the supplied snapshot. */
-void ui_panels_render_code_panel(const UiRenderSnapshot *snap);
+/* Per-frame render output: values the renderer discovers while drawing
+ * that the controller actualizes after the render call. Today this
+ * carries the editor cursor's window-pixel position, which the
+ * floating autocomplete popup needs to anchor itself under the cursor.
+ * The cursor pixel is not durable state — it's recomputed every frame
+ * from the same wrap/segment math the renderer is already running, so
+ * surfacing it as a per-frame output (rather than a state field
+ * mutated mid-render) keeps `ui_*` pure.
+ *
+ * `cursor_valid` is 0 when the active input row didn't render this
+ * frame (code panel hidden, edit row scrolled offscreen). The
+ * controller leaves any prior cursor coords undisturbed in that
+ * case — same behaviour as the legacy mid-render publish, which
+ * simply didn't fire in those frames. */
+typedef struct UiCodePanelOutput {
+    int cursor_px;
+    int cursor_py;
+    int cursor_valid;
+} UiCodePanelOutput;
+
+/* Render the code panel from the supplied snapshot. `out` is optional;
+ * pass NULL when the caller doesn't need the cursor-pixel discovery
+ * (test fixtures that aren't checking autocomplete anchoring). */
+void ui_panels_render_code_panel(const UiRenderSnapshot *snap,
+                                 UiCodePanelOutput *out);
 
 /* Render the scene status banner from the supplied snapshot. */
 void ui_panels_render_scene_status(const UiRenderSnapshot *snap);

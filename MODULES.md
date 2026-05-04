@@ -759,12 +759,17 @@ side-effect routing. As of that branch landing:
   transitional readers.
 - **Input routing: done.** `ui_panels_hit_test`, `ui_menu_bar_hit_test`,
   `ui_color_picker_hit_test`, `ui_variable_panel_hit_test` produce
-  passive `UiHit` results; mutating press handlers track toward zero
-  via `check-ui-returns-hits-only` (baseline 5, ratchets down). The
-  remaining five hits are 4 `ui_color_picker.c` color-writeback
-  callsites (separate refactor: route through
-  `editor_commit_apply_plan`) plus 1 render-time
-  `repl_action_set_cursor_pixel` publish in `ui_panels.c`.
+  passive `UiHit` results; `check-ui-returns-hits-only` is now at
+  **0/0** — every legacy mid-input/mid-render mutator in `ui_*.c` is
+  gone. Color-picker writeback routes through
+  `editor_commit_apply_external_change`; the cursor-pixel publish
+  routes through the per-frame `UiCodePanelOutput` struct that
+  `ui_panels_render_code_panel` fills and `imrepl_ctrl` actualizes
+  by passing the coords directly to `ui_autocomplete_panel_render`.
+  The `cursor_px` / `cursor_py` fields on
+  `ReplCodePanelRuntimeState`, the `repl_action_set_cursor_pixel`
+  setter, and the `check-cursor-px-encapsulated` guard were deleted
+  along with the data — it was rendering ephemera, not state.
 - **Code-panel press side effects: routed (Phase J2).**
   `imrepl_ctrl_router_handle_code_panel_hit(UiHit, x, y)` dispatches
   every code-panel press / drag / release / menu activation /
@@ -816,12 +821,16 @@ side-effect routing. As of that branch landing:
   and `imrepl_ctrl`). Two files (`repl_camera_controls`,
   `repl_actions`) remain on the legacy prefix with explicit
   blockers documented in the plan.
-- **Hard guards: 34 in place.** `make check-state-ownership` runs
-  the full inventory (31 sub-targets, including
+- **Hard guards: 33 in place.** `make check-state-ownership` runs
+  the full inventory (30 sub-targets, including
   `check-ui-panels-no-mutators` from Phase J2.3 and
   `check-replay-ui-isolation` for the `replay_ui_*` feature-UI
-  prefix) plus `check-gl-boundaries`, `check-layer-coupling`, and
-  `check-public-api-usage`.
+  prefix; the `check-cursor-px-encapsulated` migration guard was
+  retired along with the cursor_px/cursor_py state) plus
+  `check-gl-boundaries`, `check-layer-coupling`, and
+  `check-public-api-usage`. `check-output-actualization` is now
+  actively scanning `UiCodePanelOutput` and verifies the controller
+  reads every field.
 
 The deferred items still on the books:
 

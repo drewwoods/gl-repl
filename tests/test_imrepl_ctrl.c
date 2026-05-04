@@ -90,8 +90,14 @@ void test_replay_ui_hud_render(const UiReplayHudState *state) {
     g_flat_count_seen_in_hud = repl_state_flat_program_count();
 }
 
-void test_ui_panels_render_code_panel(const UiRenderSnapshot *snap) { (void)snap; }
-void test_ui_autocomplete_panel_render(const UiRenderSnapshot *snap) { (void)snap; }
+void test_ui_panels_render_code_panel(const UiRenderSnapshot *snap,
+                                      UiCodePanelOutput *out) {
+    (void)snap; (void)out;
+}
+void test_ui_autocomplete_panel_render(const UiRenderSnapshot *snap,
+                                       int cursor_px, int cursor_py) {
+    (void)snap; (void)cursor_px; (void)cursor_py;
+}
 void test_ui_menu_bar_render_example_dropdown(const UiRenderSnapshot *snap) { (void)snap; }
 void test_ui_variable_panel_render(const UiRenderSnapshot *snap) { (void)snap; }
 void test_ui_panels_render_scene_status(const UiRenderSnapshot *snap) { (void)snap; }

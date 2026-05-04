@@ -104,9 +104,12 @@ ownership / contract guards. Highlights:
   text-aware overloads stay deleted.
 - `check-repl-no-direct-buffer-read` — REPL files read text via
   `EditorBufferView`, not directly into editor buffer.
-- `check-ui-returns-hits-only` — `ui_*.c` input helpers compute
-  `UiHit` and return; no growth in legacy mutation sites
-  (baseline 5 after Phase J2.2 dropped 8 → 5; ratchets down).
+- `check-ui-returns-hits-only` — `ui_*.c` is mutator-free in input
+  + render paths. Baseline reached **0/0** (Phase J4 routed the
+  cursor-pixel publish through `UiCodePanelOutput` and deleted the
+  `cursor_px/cursor_py` state slice along with the
+  `check-cursor-px-encapsulated` migration guard). Any new mutator
+  fails the build.
 - `check-ui-panels-no-mutators` — Phase J2.2 hard guard. `ui_panels.c`
   is hit-test only: zero matches for code-panel press / click / drag /
   release / scene-press / motion / mouse-release / escape forwarders

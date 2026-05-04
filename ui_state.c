@@ -26,8 +26,6 @@
             .resizing_panel = 0,                                      \
             .cursor_visible = 1,                                      \
             .blink_tick     = 0,                                      \
-            .cursor_px      = 0,                                      \
-            .cursor_py      = 0,                                      \
         },                                                            \
         .camera = {                                                   \
             .rx          = 20.0f,                                     \

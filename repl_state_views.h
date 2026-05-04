@@ -75,8 +75,6 @@ typedef struct {
     int   resizing_panel;
     int   cursor_visible;
     int   blink_tick;
-    int   cursor_px;
-    int   cursor_py;
 } ReplCodePanelRuntimeState;
 
 /* Help-overlay chrome flag. The session-state fields (tab_idx, scroll)

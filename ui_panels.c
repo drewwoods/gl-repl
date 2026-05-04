@@ -170,6 +170,7 @@ static void render_active_input_rows(const UiRenderSnapshot *snap,
                                      int visible_lines, int file_line,
                                      int indent_chars, const char *idx_text,
                                      int search_row_idx,
+                                     UiCodePanelOutput *out,
                                      int *io_cur, int *io_line_y) {
     ReplEditorInputView            inp    = snap->editor_input;
     ReplCodePanelRuntimeState cp     = snap->code_panel;
@@ -257,7 +258,11 @@ static void render_active_input_rows(const UiRenderSnapshot *snap,
                     glDisable(GL_BLEND);
                 }
 
-                repl_action_set_cursor_pixel(cursor_x, *io_line_y);
+                if (out) {
+                    out->cursor_px    = cursor_x;
+                    out->cursor_py    = *io_line_y;
+                    out->cursor_valid = 1;
+                }
             }
 
             *io_line_y -= LINE_H;
@@ -317,6 +322,10 @@ typedef struct {
     int  visible_lines;
     int  highlight_normal_idx;
     int  highlight_color_idx;
+    /* Per-frame render output discovered while drawing the active
+     * input row. NULL when the caller (e.g. test fixtures) doesn't
+     * need cursor-pixel publishing. */
+    UiCodePanelOutput *out;
     /* Mutable row cursor state advanced as rows are emitted. */
     int  cur;
     int  line_y;
@@ -567,6 +576,7 @@ static void code_panel_draw_trailing_newline(CodePanelRowCtx *ctx,
                                  ctx->snap->active_indent_chars,
                                  NULL,
                                  edit_line,
+                                 ctx->out,
                                  &ctx->cur, &ctx->line_y);
     } else if (code_panel_row_visible(ctx)) {
         code_panel_draw_gutter_lineno(ctx->line_y, ctx->file_line);
@@ -709,7 +719,14 @@ static void code_panel_draw_statusbar(const UiRenderSnapshot *snap,
     glPopAttrib();
 }
 
-void ui_panels_render_code_panel(const UiRenderSnapshot *snap) {
+void ui_panels_render_code_panel(const UiRenderSnapshot *snap,
+                                 UiCodePanelOutput *out) {
+    if (out) {
+        out->cursor_px    = 0;
+        out->cursor_py    = 0;
+        out->cursor_valid = 0;
+    }
+
     /* ------------------------------------------------------------------ */
     /* Phase 1: layout. Compute panel rectangle and bail early if empty;  */
     /* otherwise build the document layout (per-cmd row counts including  */
@@ -803,6 +820,7 @@ void ui_panels_render_code_panel(const UiRenderSnapshot *snap) {
         .visible_lines        = visible_lines,
         .highlight_normal_idx = highlight_normal_idx,
         .highlight_color_idx  = highlight_color_idx,
+        .out                  = out,
         .cur                  = 0,
         .line_y               = panel_top - CODE_MARGIN_Y - 2 * LINE_H,
         .file_line            = 1,
@@ -863,6 +881,7 @@ void ui_panels_render_code_panel(const UiRenderSnapshot *snap) {
                                      repl_code_panel_document_active_indent_chars(),
                                      NULL,
                                      edit_line,
+                                     out,
                                      &ctx.cur, &ctx.line_y);
             ctx.file_line++;
         }
@@ -904,6 +923,7 @@ void ui_panels_render_code_panel(const UiRenderSnapshot *snap) {
                                      repl_code_panel_document_active_indent_chars(),
                                      idx_text,
                                      edit_line,
+                                     out,
                                      &ctx.cur, &ctx.line_y);
             ctx.file_line++;
         } else {
