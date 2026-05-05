@@ -28,6 +28,7 @@
 #include "repl_core.h"
 #include "repl_flatten.h"
 #include "ui_editor.h"
+#include "color_picker.h"
 
 /* Forward decl: snapshot only carries a pointer; the full type lives
  * in ui_tabbed_overlay.h and is included by the controller (which
@@ -54,6 +55,7 @@ typedef struct UiRenderSnapshot {
     ReplVariableDragState       variable_drag;
     ReplSelectionState          selection;
     EditorScrollState           scroll;
+    ColorPickerView             color_picker;
 
     /* Pointer-shaped read-only views (storage owned by repl_state.c) */
     ReplVariableView            variables;

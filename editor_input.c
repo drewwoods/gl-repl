@@ -53,7 +53,7 @@
 #include "editor_completion.h"
 #include "repl_keys.h"
 #include "ui_panels.h"
-#include "ui_color_picker.h"
+#include "color_picker_ui.h"
 #include "ui_layout.h"
 #include "imrepl_ctrl.h"
 #include "ui_menu_bar.h"

@@ -1,13 +1,11 @@
 # Renderers audited for snapshot-signature shape.
 # Generic ui_* renderers only. Feature-owned UI under prefixes like
-# `replay_ui_*` is audited by its own dedicated guard
-# (`check-replay-ui-renderer-signatures.sh`), so it does not appear
-# here.
+# `replay_ui_*` and `color_picker_ui_*` is audited by its own
+# dedicated guard, so it does not appear here.
 ui_tabbed_overlay_render
 ui_profile_panel_render
 ui_autocomplete_panel_render
 ui_variable_panel_render
-ui_color_picker_render
 ui_menu_bar_render
 ui_menu_bar_render_search_overlay
 ui_menu_bar_render_example_dropdown
