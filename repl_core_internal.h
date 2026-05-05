@@ -205,8 +205,9 @@ int  apply_state_cmd(const GLCmd *cmd, float alpha_scale);
 
 void load_line_to_input(int idx);
 /* Populate `vars` with every loop/function-local visible at source line
- * `pos`. Returns the count (capped at max_vars). */
-int  collect_visible_vars(int pos, ExprVar *vars, int max_vars);
+ * `pos`. Returns the count (capped at max_vars). If total_out is non-NULL,
+ * receives the uncapped total (for truncation detection at commit sites). */
+int  collect_visible_vars(int pos, ExprVar *vars, int max_vars, int *total_out);
 
 /* ---- Replay state machine --------------------------------------------- */
 
