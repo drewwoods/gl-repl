@@ -125,16 +125,14 @@ ownership / contract guards. Highlights:
   parser/compile/apply, or grow generic `ui_*` responsibilities.
 - `check-variable-panel-forwarders` — baseline **0/0** after Phase
   J6 migrated every fixture site onto `variable_panel_drag` /
-  `variable_panel_view` / `variable_panel_handle_drag_*`. The
-  legacy `editor_state_variable_drag*` / `ui_state_variable_panel*`
-  / `repl_var_drag_*` wrappers survive as one-line redirects and
-  can be deleted in a follow-up.
+  `variable_panel_view` / `variable_panel_handle_drag_*`, and Phase
+  J7 deleted the legacy `editor_state_variable_drag*` /
+  `ui_state_variable_panel*` / `repl_var_drag_*` shims. The
+  canonical peer accessors are the only entry points.
 - `check-replay-forwarders` — baseline **0/0** after Phase J5
   migrated every `bench/` + `tests/` site onto `replay_state_view` /
-  `replay_state_mut` / `replay_handle_*`. The legacy
-  `repl_state_replay` / `_mut` / `_reset` forwarders survive in
-  `repl_state.c` as one-line redirects and can be deleted in a
-  follow-up.
+  `replay_state_mut` / `replay_handle_*`, and Phase J7 deleted the
+  legacy `repl_state_replay` / `_mut` / `_reset` forwarders.
 - `check-imrepl-not-editor-mirror` — `imrepl_ctrl_editor_*` per-field
   wrappers are forbidden.
 - `check-editor-ownership-budget` — UI-slice forwarder + facade
@@ -277,13 +275,24 @@ ownership / contract guards. Highlights:
 - Config toggles use the `ReplConfigItem` / `ReplConfigKey` pattern: add a
   descriptor entry to `g_cfg_items[]` in `repl_actions.c`; `CFG_ITEM_COUNT`
   auto-computes via `sizeof`
-- New GL commands: add to `CmdType` enum in `sample.h`, then handle in
-  `repl_parser_parse_command()` in `repl_parser.c`, `repl_execute_program()` in
-  `repl_executor.c`, and `flatten_range()` (static, inside `repl_flatten.c`)
-- Keyboard bindings: `repl_editor_handle_key()` for ASCII keys (Ctrl+X = key
-  code X-64), `repl_editor_handle_special()` for F-keys/arrows. Currently
-  `repl_editor.c` also owns the cross-layer routing; Phase 2 moves that to
-  `imrepl_ctrl.c` (see R in `feature/push-architecture-refinement.md`)
+- New GL commands: add to the `CmdType` enum in `repl_command.h`, then
+  handle in `repl_parser_parse_command_ctx()` in `repl_parser.c`,
+  `repl_execute_program()` in `repl_executor.c`, and `flatten_range()`
+  (static, inside `repl_flatten.c`). Add a `g_command_type_specs[]`
+  entry in `repl_command_spec.c` with the right `CmdSyntaxCategory`
+  so the new command picks up its code-panel highlight color
+  automatically; if you need a `glEnable`-shaped enum-arg spec or a
+  standard float-arg spec, append a row to `k_enum_command_specs[]`
+  or `k_std_command_specs[]` in the same file.
+- Keyboard bindings: `editor_handle_key()` for ASCII keys (Ctrl+X
+  produces ASCII X & 0x1F via standard GLUT), `editor_handle_special()`
+  for F-keys/arrows. Cross-subsystem routing (replay / save / config /
+  audio / camera) lives in `imrepl_ctrl.c::imrepl_ctrl_router_*`
+  helpers, called from `imrepl_ctrl_keyboard` before delegating to
+  `editor_handle_key`. macOS Cmd+letter is normalized to its
+  control-character form by `editor_input_normalize_super_to_ctrl`,
+  called at the top of `imrepl_ctrl_keyboard` so every downstream
+  dispatcher sees Cmd+B identically to Ctrl+B.
 - Expression variables: `ExprVar` struct in `repl_eval.h`, predefined set
   accessible via `repl_state_variables()` and managed by `declare_predef_var()`
 
@@ -318,7 +327,10 @@ Grids and axes are themeable through small specs in `scene_grid.c` and
    line/color themes and an `AxesThemeSpec` entry in `scene_axes.c` for
    standard axes themes. Keep custom geometry-heavy grid cases in
    `scene_grid.c`.
-4. The theme cycles via F3 (grid) / F4 (axes) in `repl_editor.c`
+4. The theme cycles via F3 (grid) / F4 (axes); the special-key route
+   in `editor_input.c` calls `repl_cfg_handle_special_shortcut`, which
+   walks `g_cfg_items[]` in `repl_actions.c` and cycles the matching
+   config row.
 
 ## Adding Menu Bar Items
 
@@ -342,8 +354,9 @@ To add a **new top-level menu**: extend the `MENU_*` enum (before
 `repl_actions.c` for side effects.
 
 To add a **pinned right-side button**: extend `PIN_*` enum, append a label
-to `g_pin_btn_labels[]` in `ui_menu_bar.c`, and add a `case` in
-`handle_code_panel_press()` inside the `ui_menu_bar_pin_hit` block.
+to `g_pin_btn_labels[]` in `ui_menu_bar.c`. Activation routing lives in
+`imrepl_ctrl.c::route_pin_button_hit()` — add the new pin id to its
+switch.
 
 ## User Scene System
 
@@ -357,7 +370,8 @@ variable values + a scene `name` + `last_touch` tick for LRU.
 
 - `g_active_user_scene` (`-1` means an example or a fresh empty workspace is
   loaded instead of a user scene).
-- `repl_undo_push_snapshot()` (called from `repl_editor.c`) calls
+- `repl_undo_push_snapshot()` (in `editor_undo.c`, called from
+  `editor_input.c` and `editor_commit.c` before mutations) calls
   `repl_promote_example_if_needed()` before every mutation. If the user is
   editing an example, that call allocates a fresh slot, copies the current
   state into it, inherits the example's name (de-duplicated via
@@ -382,9 +396,9 @@ message (user has to save workspace first to unlock eviction).
   de-duplicates, and guards against an empty name), Esc cancels.
 - Path-unsafe chars (`/`, `\`, `:`) and non-printables are filtered at input
   time since names become filesystem slugs on workspace export.
-- The key dispatcher in `repl_editor.c` forwards keys to
-  `repl_inline_rename_handle_key` right after `handle_search_key`, so rename
-  mode swallows input even when other overlays aren't open.
+- The key dispatcher in `editor_input.c::keyboard_func` forwards keys
+  to `editor_input_rename_capture_key` at the very top, so rename mode
+  swallows input even when other overlays aren't open.
 
 ### Workspace I/O
 
@@ -491,7 +505,8 @@ is no shim layer.
    callback → replay fade batches (transitional; R1b replaces with
    `ReplayFadePlan` snapshot iteration) → grid/axes/backdrop/orbit-target →
    polygon-outline, vertex, normal, and guide overlays → 2D replay HUD
-   (transitional; R1c moves to `ui_replay_hud.c`)
+   (renders via `replay_ui_hud_render` from `replay_ui_hud.c` —
+   feature-UI under the `replay_ui_*` prefix)
 4. 2D overlays: code panel, autocomplete popup, example dropdown,
    variable slider panel, config menu, help overlay, search overlay
 
@@ -516,17 +531,20 @@ The core data flow is **source commands → flat commands → GL calls**:
 1. **Input** — user types into the input buffer (`repl_state_editor_input()->input`,
    max 1024 chars)
 2. **Commit** — pressing `;` calls the commit dispatch chain in
-   `keyboard_func()` in `repl_editor.c`. There are TWO distinct paths:
-   - **Interactive `;` key** (`repl_editor.c`, `key == ';'` block):
+   `keyboard_func()` in `editor_input.c`. There are TWO distinct paths:
+   - **Interactive `;` key** (`editor_input.c`, `key == ';'` block):
      the input buffer does NOT include the `;` — the keystroke triggers the
      commit but is not appended. Commit handlers must accept input
      without a trailing `;`.
-   - **`feed_line()`** (`repl_editor.c`): copies the full line
+   - **`feed_line()`** (`editor_input.c`): copies the full line
      (including `;`) into the input buffer, then runs the same dispatch chain.
      Used by file loading and example loading.
    - **Enter key** (insert mode): input may or may not have `;`
      depending on what the user typed.
-   The dispatch chain calls `try_commit_*()` handlers in order:
+   The dispatch chain calls the consolidated `try_commit_*()` helpers
+   in `editor_commit.c` (`try_commit_var_statements`,
+   `try_commit_block_structs`, `try_commit_any`, plus the var-then-
+   insert variant). Internally those run, in canonical order:
    `try_commit_float_decl` → `try_assign_variable` → `try_commit_close_brace`
    → `try_commit_for_loop` → `try_commit_func_def` → `try_commit_if_block`
    → `repl_parse_and_normalize()` (general GL commands).
@@ -535,8 +553,8 @@ The core data flow is **source commands → flat commands → GL calls**:
    assignment. Each handler returns 1 if it consumed the input
    (success or error with status message), 0 if it didn't match.
    If all handlers return 0, `parse_command()` in `repl_parser.c`
-   sets `"Unknown cmd."` status (`repl_parser.c`, end of
-   `parse_command`).
+   sets the per-context error buffer (no `set_status` from the parser
+   core — the bridge was retired in Phase J5).
 3. **Parse** — `parse_command()` in `repl_parser.c` matches the line to a
    `CmdType`, evaluates argument expressions via `eval_expr()`, stores
    result in `GLCmd.args[]` and normalized text in `GLCmd.source[]`.

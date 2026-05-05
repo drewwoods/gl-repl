@@ -1,10 +1,14 @@
 # Plan: Editor Ownership Gap Audit and Cleanup Companion
 
-> **Status: landed.** Phases A–I of the companion plan
+> **Status: landed (extended through 2026-05-05).** Phases A–J of
+> the companion plan
 > [`editor-owns-text-completion.md`](editor-owns-text-completion.md)
-> closed the audit. The audits this document specifies are now
-> hard guards or ratchet-driven baselines under
-> `make check-state-ownership`.
+> closed the audit. Every audit this document specified is now a
+> hard guard under `make check-state-ownership`, and every
+> ratchet-driven baseline reaches **0/0** with the legacy bridge
+> code that fed it deleted (`check-ui-returns-hits-only`,
+> `check-no-set-status-in-repl-parser`, `check-replay-forwarders`,
+> `check-variable-panel-forwarders`).
 
 ## Purpose
 

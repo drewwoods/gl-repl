@@ -821,29 +821,36 @@ side-effect routing. As of that branch landing:
   and `imrepl_ctrl`). Two files (`repl_camera_controls`,
   `repl_actions`) remain on the legacy prefix with explicit
   blockers documented in the plan.
-- **Hard guards: 33 in place.** `make check-state-ownership` runs
-  the full inventory (30 sub-targets, including
-  `check-ui-panels-no-mutators` from Phase J2.3 and
-  `check-replay-ui-isolation` for the `replay_ui_*` feature-UI
-  prefix; the `check-cursor-px-encapsulated` migration guard was
-  retired along with the cursor_px/cursor_py state) plus
-  `check-gl-boundaries`, `check-layer-coupling`, and
-  `check-public-api-usage`. `check-output-actualization` is now
-  actively scanning `UiCodePanelOutput` and verifies the controller
-  reads every field.
+- **Hard guards: 32 in place.** `make check-state-ownership` runs
+  30 sub-targets (the `check-cursor-px-encapsulated` migration
+  guard was retired alongside the `cursor_px/cursor_py` state in
+  Phase J4); `make check` adds `check-gl-boundaries` and
+  `check-layer-coupling` for 32 hard guards total.
+  `check-public-api-usage` is informational. The most recent
+  additions are `check-ui-panels-no-mutators` (Phase J2.3) and
+  `check-replay-ui-isolation` (Phase J3.1, the feature-UI prefix
+  discipline). `check-output-actualization` actively scans
+  `UiCodePanelOutput` and verifies `imrepl_ctrl.c` reads every
+  field.
+- **Migration ratchets: all at 0/0.** `check-ui-returns-hits-only`,
+  `check-no-set-status-in-repl-parser`, `check-replay-forwarders`,
+  and `check-variable-panel-forwarders` all reach 0/0 after Phase
+  J3–J7 retired the legacy bridge code (parser no-ctx wrappers,
+  `repl_state_replay*` forwarders, `editor_state_variable_drag*`
+  / `ui_state_variable_panel*` / `repl_var_drag_*` shims). The
+  canonical peer accessors are the only entry points.
 
 The deferred items still on the books:
 
 - `repl_camera_controls` rename (waiting on scene/viewport split).
 - `repl_actions` rename (waiting on app-shell namespace work).
-- Test harness migration off the legacy no-ctx parser wrappers,
-  which would let `check-no-set-status-in-repl-parser` ratchet from
-  1 → 0.
 - `ui_layout` / `ui_code_panel_layout` parameterization so geometry
   helpers stop reading `repl_state_presentation()` (currently
   allowlisted under `check-no-facade-include-in-views`).
-- Variable-panel and replay forwarder ratchets (87 + 37) shrink as
-  test fixtures migrate to the peer accessors directly.
+- Color picker as a peer subsystem split (`color_picker_*` +
+  `color_picker_ui_*`) — natural sequel to the `replay_ui` rename
+  now that the picker has its own state, input lifecycle, and
+  writeback transaction.
 
 See `feature/editor-ownership-gap-cleanup.md` for the audit script and
 baseline counts; `feature/editor-owns-text-completion.md` for the
@@ -858,9 +865,18 @@ Phase 2 has landed (R1, R2, R3, R4 controller-side, R5, R6, R7).
 `feature/editor-owns-text.md` Steps 2–6 completed the data-shape half of
 editor-owned text. Phase J1 closed the input dispatch boundary
 (`repl_editor.{c,h}` deleted). Phase J2 routed code-panel press side
-effects through `UiHit` dispatch in `imrepl_ctrl`
-(`ui_panels.c` is hit-test only, hard-guarded by
-`check-ui-panels-no-mutators`).
+effects through `UiHit` dispatch (`ui_panels.c` is hit-test only).
+Phase J3 routed color-picker writeback through
+`editor_commit_apply_external_change` and renamed the replay HUD to
+the feature-UI `replay_ui_*` prefix. Phase J4 introduced
+`UiCodePanelOutput` so the editor cursor pixel flows back through a
+per-frame render-output struct rather than a state mutation; UI is
+now mutator-free in input AND render paths. Phases J5–J7 retired
+every legacy forwarder shim across parser, replay, and
+variable_panel. Phase J8 added macOS Cmd-key support
+(`editor_input_normalize_super_to_ctrl`). Phase J9 made code-panel
+syntax highlighting metadata-driven via `CmdSyntaxCategory` on
+`ReplCommandTypeSpec`.
 
 Outstanding tracks:
 
