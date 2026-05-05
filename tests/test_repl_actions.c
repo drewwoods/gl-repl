@@ -7,8 +7,10 @@
 #include "repl_audio.h"
 #include "repl_core.h"
 #include "support/test_harness.h"
+#include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+#include <unistd.h>
 
 static TestHarness g_harness = TEST_HARNESS_INIT;
 
@@ -27,6 +29,48 @@ static const char *last_status_text(void) {
 }
 
 #define g_last_status (last_status_text())
+
+static void run_menu_action_in_temp_dir(const char *label,
+                                        int menu_id,
+                                        int item_idx,
+                                        int expect_output_file,
+                                        int expect_workspace_dir) {
+    char cwd[1024];
+    char workspace_dir[REPL_WORKSPACE_DIR_MAX];
+    char temp_dir[] = "/tmp/test_repl_actions_output.XXXXXX";
+    char *made_dir = mkdtemp(temp_dir);
+    int have_cwd = getcwd(cwd, sizeof(cwd)) != NULL;
+
+    snprintf(workspace_dir, sizeof(workspace_dir), "%s", repl_workspace_dir());
+
+    ASSERT_TRUE("mkdtemp menu action dir", made_dir != NULL);
+    ASSERT_TRUE("getcwd before menu action", have_cwd);
+    if (!made_dir || !have_cwd)
+        return;
+
+    int cd_ok = chdir(made_dir);
+    ASSERT_INT("chdir menu action dir", cd_ok, 0);
+    if (cd_ok == 0) {
+        repl_set_workspace_dir(NULL);
+        ASSERT_INT(label,
+                   repl_action_menu_item_activate(menu_id, item_idx),
+                   1);
+        if (expect_output_file) {
+            ASSERT_INT("menu action wrote temp output.c",
+                       access("output.c", F_OK), 0);
+            unlink("output.c");
+        }
+        if (expect_workspace_dir) {
+            ASSERT_INT("menu action wrote temp workspace dir",
+                       access(REPL_DEFAULT_WORKSPACE_DIR, F_OK), 0);
+            rmdir(REPL_DEFAULT_WORKSPACE_DIR);
+        }
+        repl_set_workspace_dir(workspace_dir);
+        ASSERT_INT("restore cwd after menu action", chdir(cwd), 0);
+    }
+
+    rmdir(made_dir);
+}
 
 static void test_apply_defaults(void) {
     repl_reset_state();
@@ -172,11 +216,23 @@ static void test_menu_actions(void) {
     repl_reset_state();
 
     /* File menu */
-    ASSERT_INT("File Export", repl_action_menu_item_activate(REPL_MENU_FILE, REPL_FILE_ITEM_EXPORT), 1);
+    run_menu_action_in_temp_dir("File Export",
+                                REPL_MENU_FILE,
+                                REPL_FILE_ITEM_EXPORT,
+                                1,
+                                0);
     ASSERT_INT("File Import", repl_action_menu_item_activate(REPL_MENU_FILE, REPL_FILE_ITEM_IMPORT), 1);
     ASSERT_STR("Import status", g_last_status, "Import not implemented yet");
-    ASSERT_INT("File Save Workspace", repl_action_menu_item_activate(REPL_MENU_FILE, REPL_FILE_ITEM_SAVE_WORKSPACE), 1);
-    ASSERT_INT("File Load Workspace", repl_action_menu_item_activate(REPL_MENU_FILE, REPL_FILE_ITEM_LOAD_WORKSPACE), 1);
+    run_menu_action_in_temp_dir("File Save Workspace",
+                                REPL_MENU_FILE,
+                                REPL_FILE_ITEM_SAVE_WORKSPACE,
+                                0,
+                                1);
+    run_menu_action_in_temp_dir("File Load Workspace",
+                                REPL_MENU_FILE,
+                                REPL_FILE_ITEM_LOAD_WORKSPACE,
+                                0,
+                                0);
 
     /* Scene menu - Examples */
     int example_count = repl_example_count();
@@ -189,7 +245,11 @@ static void test_menu_actions(void) {
     ASSERT_INT("Scene New", repl_action_menu_item_activate(REPL_MENU_SCENE, example_count + REPL_SCENE_OFF_NEW), 1);
     ASSERT_INT("active example cleared", repl_state_scenes().active_example_idx, -1);
 
-    ASSERT_INT("Scene Save", repl_action_menu_item_activate(REPL_MENU_SCENE, example_count + REPL_SCENE_OFF_SAVE), 1);
+    run_menu_action_in_temp_dir("Scene Save",
+                                REPL_MENU_SCENE,
+                                example_count + REPL_SCENE_OFF_SAVE,
+                                1,
+                                0);
 
     /* Scene Rename - need an active user scene */
     /* For now, just call it and expect "No active scene to rename" if none active */
