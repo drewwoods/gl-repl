@@ -626,7 +626,11 @@ Key details:
   names carried over from the old decl are exempted from the duplicate
   check (they get undeclared before the new registration runs).
 - `delete_cmd_range()` guards against deleting a declaration whose
-  variable is still referenced elsewhere (uses `source_uses_ident()`)
+  variable is still referenced outside the deleted range (uses
+  `repl_eval_source_uses_ident()` against every line not in the range).
+  Deleting a decl together with all its uses is allowed; deleting an
+  unreferenced decl by itself is allowed. Cut/copy/paste of decl rows
+  remain blocked outright (clipboard semantics — see commit 72be1dd).
 - C export writes `// @declare name` markers; import via
   `import_parse_declare_marker()` in `repl_export.c` reconstructs
   the `CMD_VAR_DECLARE` commands, bypassing `try_commit_float_decl`
