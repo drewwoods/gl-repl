@@ -56,6 +56,13 @@ int                      editor_get_modifiers(void);
 void editor_input_set_modifier_provider_for_test(ReplModifierProvider provider);
 int  editor_input_active_modifiers(void);
 
+/* Production hook: imrepl_ctrl calls this from imrepl_ctrl_init_gl
+ * after glutInit so editor_get_modifiers() may safely call
+ * glutGetModifiers(). Tests that don't install a modifier provider
+ * skip this hook; modifier reads return 0 instead of aborting
+ * freeglut for being called pre-init. */
+void editor_input_enable_glut_modifier_reads(void);
+
 /* Hit-test predicates that imrepl_ctrl uses to decide which subsystem
  * owns a click. A click is editor's concern when it lands on the code
  * panel proper, on the divider, or while the example dropdown is open
