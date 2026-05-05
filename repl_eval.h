@@ -85,10 +85,10 @@
  *  - MAX_PREDEF_VARS is the user-facing "how many float x; can I have" limit.
  */
 #ifndef MAX_EXPR_VARS
-#define MAX_EXPR_VARS 24
+#define MAX_EXPR_VARS 32
 #endif
 #ifndef MAX_PREDEF_VARS
-#define MAX_PREDEF_VARS 16
+#define MAX_PREDEF_VARS 24
 #endif
 
 #ifndef MAX_NAMES_PER_DECL
@@ -97,6 +97,10 @@
 
 #ifndef M_PI
 #define M_PI 3.14159265358979323846
+#endif
+
+#if MAX_PREDEF_VARS > MAX_EXPR_VARS
+#error "MAX_PREDEF_VARS must be <= MAX_EXPR_VARS to avoid silent truncation of the visible-variable list during parsing."
 #endif
 
 /* ---- Types ------------------------------------------------------------ */
