@@ -176,18 +176,20 @@ static void test_color_picker(void) {
     ASSERT_GL_CALLS("picker render -> draws quads", GL_STUB_glBegin, 1);
     ASSERT_GL_CALLS("picker render -> calls glVertex2f", GL_STUB_glVertex2f, 4);
 
-    /* Test interactions */
-    int px = 400;
-    int py = 300;
+    ColorPickerView view = color_picker_view();
+    int sv_mx = view.rects.sv_x + 10;
+    int sv_my = ui_state_viewport().window_h - (view.rects.sv_y + 10);
 
     /* Press SV square (CP_SV_SZ = 150) */
-    color_picker_handle_press(px + 10, ui_state_viewport().window_h - (py - 10));
-    color_picker_handle_motion(px + 20, ui_state_viewport().window_h - (py - 20));
+    color_picker_handle_press(sv_mx, sv_my);
+    color_picker_handle_motion(sv_mx + 10, sv_my - 10);
     color_picker_handle_release();
 
-    /* Press Hue bar (Offset by CP_SV_SZ + CP_GAP = 150 + 6 = 156) */
-    color_picker_handle_press(px + 156 + 10, ui_state_viewport().window_h - (py - 10));
-    color_picker_handle_motion(px + 156 + 10, ui_state_viewport().window_h - (py - 20));
+    /* Press Hue bar */
+    int hue_mx = view.rects.hue_x + 5;
+    int hue_my = ui_state_viewport().window_h - (view.rects.hue_y + 10);
+    color_picker_handle_press(hue_mx, hue_my);
+    color_picker_handle_motion(hue_mx, hue_my - 10);
     color_picker_handle_release();
 
     /* Test Alpha support */
@@ -199,15 +201,75 @@ static void test_color_picker(void) {
     { UiRenderSnapshot s; make_test_ui_snapshot(&s); color_picker_ui_render(&s.color_picker, s.viewport.window_w, s.viewport.window_h); }
     ASSERT_GL_CALLS("picker render with alpha -> draws quads", GL_STUB_glBegin, 1);
 
-    /* Press Alpha bar (alp_x = hue_x + 18 + 6 = px + 156 + 24 = 180) */
-    color_picker_handle_press(px + 185, ui_state_viewport().window_h - (py - 10));
-    color_picker_handle_motion(px + 185, ui_state_viewport().window_h - (py - 20));
+    view = color_picker_view();
+    /* Press Alpha bar */
+    int alp_mx = view.rects.alp_x + 5;
+    int alp_my = ui_state_viewport().window_h - (view.rects.alp_y + 10);
+    color_picker_handle_press(alp_mx, alp_my);
+    color_picker_handle_motion(alp_mx, alp_my - 10);
     color_picker_handle_release();
 
     /* Test glClearColor limits */
     repl_state_document_cmds_mut()[0].type = CMD_CLEAR_COLOR;
     color_picker_open(0, 300);
-    color_picker_handle_press(px + 10, ui_state_viewport().window_h - (py - 5)); // High V
+    view = color_picker_view();
+    int sv_mx2 = view.rects.sv_x + 10;
+    int sv_my2 = ui_state_viewport().window_h - (view.rects.sv_y + 10); // High V
+    color_picker_handle_press(sv_mx2, sv_my2); 
+    color_picker_handle_release();
+
+    /* Test CMD_TESS_COLOR writeback */
+    repl_state_document_cmds_mut()[0].type = CMD_TESS_COLOR;
+    color_picker_open(0, 300);
+    view = color_picker_view();
+    color_picker_handle_press(view.rects.hue_x + 5, ui_state_viewport().window_h - (view.rects.hue_y + 10));
+    color_picker_handle_release();
+
+    /* Test RGB->HSV branches */
+    color_picker_close();
+    repl_state_document_cmds_mut()[0].type = CMD_COLOR3F;
+    repl_state_document_cmds_mut()[0].args[0] = 0.0f;
+    repl_state_document_cmds_mut()[0].args[1] = 1.0f;
+    repl_state_document_cmds_mut()[0].args[2] = 0.0f;
+    color_picker_open(0, 300);
+    
+    repl_state_document_cmds_mut()[0].args[0] = 0.0f;
+    repl_state_document_cmds_mut()[0].args[1] = 0.0f;
+    repl_state_document_cmds_mut()[0].args[2] = 1.0f;
+    color_picker_open(0, 300);
+    
+    /* Open an uneditable command to hit coverage */
+    repl_state_document_cmds_mut()[0].type = CMD_BEGIN;
+    color_picker_open(0, 300);
+
+    /* Test invalid/vars constraints */
+    repl_state_document_cmds_mut()[0].type = CMD_COLOR3F;
+    repl_state_document_cmds_mut()[0].valid = 0;
+    color_picker_can_edit_cmd(0);
+    repl_state_document_cmds_mut()[0].valid = 1;
+    repl_state_document_cmds_mut()[0].has_vars = 1;
+    color_picker_can_edit_cmd(0);
+    repl_state_document_cmds_mut()[0].has_vars = 0;
+
+    /* Out of bounds cmd_idx */
+    color_picker_can_edit_cmd(-1);
+
+    /* Test clicking outside picker */
+    color_picker_open(0, 300);
+    color_picker_handle_press(0, 0);
+
+    /* Test writeback short-circuit (mutated command type underneath) */
+    color_picker_open(0, 300);
+    view = color_picker_view();
+    repl_state_document_cmds_mut()[0].type = CMD_BEGIN;
+    color_picker_handle_press(view.rects.sv_x + 10, ui_state_viewport().window_h - (view.rects.sv_y + 10));
+    color_picker_handle_release();
+
+    /* Test writeback short-circuit (command deleted underneath) */
+    color_picker_open(0, 300);
+    view = color_picker_view();
+    repl_state_document_count_set(0);
+    color_picker_handle_press(view.rects.sv_x + 10, ui_state_viewport().window_h - (view.rects.sv_y + 10));
     color_picker_handle_release();
 
     color_picker_close();
