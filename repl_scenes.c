@@ -66,6 +66,26 @@ static UserScene g_user_scenes[MAX_USER_SCENES];
 static int       g_active_user_scene = -1;
 static uint32_t  g_user_scene_tick = 0;
 
+/* Example sandbox: snapshot of the 14 presentation keys taken at the
+ * moment we enter an example from non-example state. Conceptually the
+ * user's "desired" baseline, captured before example @cfg overlays
+ * stomp it. Restored on the next transition out of example state
+ * (load_scene_from_slot or activate_home_slot) before the destination
+ * applies its own scene_cfg. With full scene_cfg coverage today the
+ * restore-then-apply is observably a no-op, but the explicit data
+ * model makes the sandbox intent clear and is the seam where a future
+ * Option B (continuous desired-cfg mirror) would attach.
+ *
+ * Lifecycle:
+ *   - clear at startup (repl_scenes_reset).
+ *   - capture on first load_example after non-example state.
+ *   - restore on the next user-scene / home load.
+ *   - cleared by restore. Entering another example without an
+ *     intervening user-scene load leaves the original snapshot
+ *     untouched (toggles inside example A are sandboxed across A->B). */
+static int g_pre_example_cfg[N_SCENE_CFG_KEYS];
+static int g_pre_example_valid = 0;
+
 #define WORKSPACE_DIR_MAX REPL_WORKSPACE_DIR_MAX
 
 /* Default home-scene name -- used when slot 0 is captured on first example load. */
@@ -73,6 +93,19 @@ static uint32_t  g_user_scene_tick = 0;
 
 static uint32_t next_user_scene_tick(void) {
     return ++g_user_scene_tick;
+}
+
+static void capture_pre_example_cfg(void) {
+    for (int i = 0; i < N_SCENE_CFG_KEYS; i++)
+        g_pre_example_cfg[i] = repl_config_get(k_scene_cfg_keys[i]);
+    g_pre_example_valid = 1;
+}
+
+static void restore_pre_example_cfg_if_valid(void) {
+    if (!g_pre_example_valid) return;
+    for (int i = 0; i < N_SCENE_CFG_KEYS; i++)
+        repl_config_set(k_scene_cfg_keys[i], g_pre_example_cfg[i]);
+    g_pre_example_valid = 0;
 }
 
 static int user_scene_slot_count(void) {
@@ -169,6 +202,11 @@ static void load_scene_from_slot(int idx) {
         g_predef_vars[i].value = s->predef_vals[i];
         memcpy(g_predef_vars[i].name, s->predef_names[i], 16);
     }
+    /* Roll back any example sandbox before stamping in the user
+     * scene's saved cfg. Observably overwritten by the loop below
+     * today (scene_cfg covers all keys); becomes load-bearing if a
+     * future change makes scene_cfg sparse / inherited-aware. */
+    restore_pre_example_cfg_if_valid();
     for (int i = 0; i < N_SCENE_CFG_KEYS; i++)
         repl_config_set(k_scene_cfg_keys[i], s->scene_cfg[i]);
     editor_insert_mode_set(0);
@@ -545,6 +583,15 @@ void repl_scenes_capture_home_if_needed(void) {
         save_user_scene();
 }
 
+void repl_scenes_capture_pre_example_cfg_if_entering(void) {
+    /* Capture only on the transition from non-example -> example.
+     * Subsequent example->example F12 cycles leave the snapshot
+     * untouched so the pre-example baseline survives across them. */
+    if (g_example_idx >= 0) return;
+    if (g_pre_example_valid) return;
+    capture_pre_example_cfg();
+}
+
 void repl_scenes_mark_example_active(void) {
     g_active_user_scene = -1;
 }
@@ -554,6 +601,9 @@ void repl_scenes_activate_home_slot(void) {
                                                : USER_SCENE_HOME_NAME;
     char unique[USER_SCENE_NAME_MAX];
     derive_unique_scene_name(unique, sizeof(unique), name, 0);
+    /* Drop any pending example sandbox: workspace import / explicit
+     * home activation establishes a fresh user-controlled state. */
+    restore_pre_example_cfg_if_valid();
     save_scene_to_slot(0, unique);
     g_active_user_scene = 0;
     g_example_idx       = -1;
@@ -563,4 +613,5 @@ void repl_scenes_reset(void) {
     memset(g_user_scenes, 0, sizeof(g_user_scenes));
     g_active_user_scene = -1;
     g_user_scene_tick = 0;
+    g_pre_example_valid = 0;
 }

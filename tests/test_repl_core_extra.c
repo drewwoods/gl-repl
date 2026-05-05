@@ -631,6 +631,34 @@ void test_scene_cfg_not_inherited_from_example() {
                repl_config_get(REPL_CONFIG_BACKDROP), scene_backdrop);
 }
 
+/* Option A sandbox: in-example cfg toggles must not leak across an
+ * example->user-scene transition. A user scene has full scene_cfg
+ * coverage so the destination's saved cfg dominates regardless, but
+ * this test pins the rollback path so a future move to sparse /
+ * inherited-aware scene_cfg keeps the contract. */
+void test_in_example_toggles_dont_leak_to_user_scene() {
+    printf("--- In-example cfg toggles do not leak to user scene ---\n");
+    repl_reset_state(); declare_test_vars();
+    if (repl_example_count() < 1) return;
+
+    /* Establish home (slot 0) with a known backdrop. */
+    repl_scenes_activate_home_slot();
+    int home_backdrop = repl_config_get(REPL_CONFIG_BACKDROP);
+
+    /* Enter an example, then toggle the backdrop while inside. */
+    repl_load_example(0);
+    int example_toggled = (home_backdrop + 1) %
+                          repl_config_state_count(REPL_CONFIG_BACKDROP);
+    repl_config_set(REPL_CONFIG_BACKDROP, example_toggled);
+    ASSERT_INT("in-example toggle visible in live cfg",
+               repl_config_get(REPL_CONFIG_BACKDROP), example_toggled);
+
+    /* Return to home: the in-example toggle must be gone. */
+    repl_load_user_scene_idx(0);
+    ASSERT_INT("home backdrop after example trip",
+               repl_config_get(REPL_CONFIG_BACKDROP), home_backdrop);
+}
+
 void test_debug_dump_flat_commands() {
     printf("--- Debug dump flat commands ---\n");
 
@@ -913,6 +941,7 @@ int main(int argc, char **argv) {
     test_your_scene_persists_edits_from_startup();
     test_scene_cfg_persists_across_example_switch();
     test_scene_cfg_not_inherited_from_example();
+    test_in_example_toggles_dont_leak_to_user_scene();
     test_debug_dump_flat_commands();
     test_var_declare_cmd();
     test_time();

@@ -493,10 +493,22 @@ focused regression suite for this area; `make test` for broader REPL state.
 
 ### Open: desired vs. inherited @cfg
 
-`@cfg` settings currently can't distinguish "desired" (always apply) from
-"inherited" (only if unset). A desired/inherited split would let user scenes
-save their own presentation config without being overwritten on the next
-example switch. Deferred — see `feature/multi-user-scenes.md`.
+The "inherited (scene-set) is ephemeral" half of this is now in place via
+the example sandbox in `repl_scenes.c`: entering an example from
+non-example state captures the 14 presentation keys into
+`g_pre_example_cfg[]`, and the next user-scene / home transition restores
+them before applying the destination's saved `scene_cfg[]`. Today the
+restore is observably overwritten by full `scene_cfg` coverage, but the
+sandbox is now the canonical seam where any sparse-`scene_cfg` /
+inherited-aware future change attaches.
+
+Still open: a continuous "desired" mirror that survives toggles BETWEEN
+example F12 cycles (Option B in the plan). Today, toggling cfg while
+inside example A and then F12-cycling to example B drops A's toggles
+on the floor — which matches the "ephemeral" intent for in-example
+toggles. A future Option B would let users distinguish "I'm tweaking
+A" from "this is my new preference" via a `repl_config_apply_inherited`
+sibling to `repl_config_set`.
 
 ## Architecture
 

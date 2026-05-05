@@ -258,6 +258,10 @@ void repl_clear_all_cmds(void);
 int repl_promote_example_if_needed(void);
 void repl_scenes_save_active_scene_if_any(void);
 void repl_scenes_capture_home_if_needed(void);
+/* Snapshot the 14 presentation-cfg keys when entering an example from
+ * non-example state. Restored on the next user-scene / home transition.
+ * Idempotent across consecutive example loads. */
+void repl_scenes_capture_pre_example_cfg_if_entering(void);
 void repl_scenes_mark_example_active(void);
 void repl_scenes_activate_home_slot(void);
 void repl_scenes_reset(void);
