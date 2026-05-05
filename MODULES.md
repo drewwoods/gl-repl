@@ -334,7 +334,7 @@ never read `ReplState`, `EditorState`, or `UiState` directly.
 | `scene_overlays` | REPL-aware outlines, vertex labels, normal vectors, and selection-like overlays |
 | `scene_geometry_guides` | Vertex/primitive guide rendering from snapshots |
 | `scene_transform_guides` | Transform-guide rendering from snapshots |
-| `scene_camera_controls` *(legacy: `repl_camera_controls.c`)* | Camera/view transform helpers. Input arrives as `UI_ACTION_CAMERA_*`; scene consumes final camera state through `SceneRenderConfig` |
+| `repl_camera_controls` *(rename to `scene_camera_controls` deferred — blocked on the scene/viewport split)* | Camera/view transform helpers — orbit/pan/zoom drag state machine. `imrepl_ctrl_router_handle_camera_mouse` drives input; scene consumes final camera state through `SceneRenderConfig` |
 | `scene_transform_utils` | Small GL matrix helpers used by renderers |
 | `scene_guides_shared` | Shared guide snapshot/planning types for REPL-aware 3D overlays |
 
@@ -436,22 +436,23 @@ flowchart LR
     end
 
     subgraph editor["2. Editor (text model + controller)"]
-        einput["editor_input.c<br/>pure text-doc controller<br/>(cursor / scroll / select / search)<br/>repl_editor.{c,h} deleted"]
-        ecommit["editor_commit.c<br/>compile + undo + buffer + apply"]
-        eview["editor_view_snapshot.c<br/>builds editor view snapshot<br/>(editor uses UI as its view)"]
-        ebuf["editor_buffer.c<br/>line text · only writer"]
-        edoc["editor_document.c<br/>input · cursor · edit line"]
+        einput["editor_input.c<br/>text-doc input dispatch<br/>(cursor / scroll / select / search)<br/>(repl_editor.{c,h} deleted in J1)"]
+        ecommit["editor_commit.c<br/>commit transaction<br/>(compile + undo + buffer + apply)"]
+        estate["editor_state.c<br/>EditorState storage<br/>(buffer · cursor · scroll · selection ·<br/>autocomplete · search · transformers)"]
+        eservices["editor_services.c<br/>commit-services dispatch table"]
         eundo["editor_undo.c<br/>transaction snapshots"]
-        eclip["editor_clipboard.c<br/>selection · cut/copy/paste"]
+        eclip["editor_clipboard.c<br/>cut/copy/paste"]
         esearch["editor_search.c<br/>query · hit tracking"]
-        eac["editor_autocomplete.c<br/>matches · ghost · hint<br/>(asks CompletionProvider)"]
-        ehelpsess["editor_help_session.c<br/>read-only editor session<br/>(was ui_help_overlay)"]
+        eac["editor_autocomplete.c<br/>matches · ghost · hint<br/>(reads from editor_completion)"]
+        ecompl["editor_completion.c<br/>completion-provider registry"]
+        ehelpsess["editor_help_session.c<br/>read-only editor session<br/>(carved from ui_help_overlay state)"]
         erename["editor_inline_rename.c<br/>rename buffer"]
     end
 
     subgraph peers["2b. Peer subsystems (own state + controller)"]
-        vpanel["variable_panel_drag.c<br/>(was repl_var_drag)<br/>visibility + drag transaction"]
-        replay_sys["replay.c<br/>(was repl_replay)<br/>state machine · fades"]
+        vpanel["variable_panel.c + variable_panel_drag.c<br/>(was repl_var_drag)<br/>visibility + drag transaction"]
+        replay_sys["replay.c + replay_state.c<br/>(was repl_replay)<br/>state machine · fades"]
+        camera["repl_camera_controls.c<br/>orbit/pan/zoom transform<br/>(rename deferred — scene/viewport split)"]
     end
 
     subgraph models["3. REPL domain models"]
@@ -484,7 +485,6 @@ flowchart LR
 
     subgraph scene_layer["4. 3D scene rendering"]
         sceneR["scene_render.c<br/>3D frame"]
-        scam["scene_camera_controls.c<br/>camera transform"]
         sgeomg["scene_geometry_guides.c<br/>geometry guides"]
         sxformg["scene_transform_guides.c<br/>transform guides"]
         sgrid["scene_grid.c<br/>grid"]
@@ -515,33 +515,28 @@ flowchart LR
     ctrl i8@--> ehelpsess
     ctrl i9@--> vpanel
     ctrl i10@--> replay_sys
-    ctrl i11@--> scam
+    ctrl i11@--> camera
     ctrl i33@--> audio
 
     %% Editor controllers mutate their own state directly.
-    einput e10@==> edoc
-    einput e2@==> ebuf
+    einput e10@==> estate
     einput e3@==> esearch
     einput e4@==> eac
     einput e5@==> eclip
-    einput e9@==> eview
+    eac -.-> ecompl
 
     %% Editor commit transaction is the only path crossing into REPL.
     einput i12@--> ecommit
     ecommit i13@--> compile
+    ecommit i32@--> eservices
     ecommit e6@==> eundo
-    ecommit e7@==> ebuf
+    ecommit e7@==> estate
     ecommit e8@==> store
 
-    %% Editor uses UI as its view: the editor view snapshot feeds UI
-    %% renderers. UI does not own editor state; it draws what the
-    %% editor publishes.
-    eview -.-> uipanels
-    eview -.-> uiac
-    eview -.-> uicolor
-
-    %% Controller invokes the editor view-snapshot build per frame.
-    ctrl i32@--> eview
+    %% Editor uses UI as its view: ctrl builds the per-frame snapshot
+    %% inline (imrepl_ctrl_build_ui_snapshot) and pushes it to UI
+    %% renderers via the ctrl→ui edges below. UI does not own editor
+    %% state; it draws what the editor publishes through ctrl.
 
     %% Clipboard cut/paste is a commit (rewrites text + cmds).
     eclip i14@--> ecommit
@@ -566,12 +561,13 @@ flowchart LR
 
     %% Snapshot reads
     ctrl -.-> state
-    ctrl -.-> ebuf
+    ctrl -.-> estate
     ctrl -.-> uistate
     ctrl -.-> autonormal
     ctrl -.-> replay_ann
     ctrl -.-> vpanel
     ctrl -.-> replay_sys
+    ctrl -.-> camera
     ctrl -.-> export
 
     %% Scene render fan-out
@@ -583,7 +579,7 @@ flowchart LR
     sceneR i28@--> soverlays
     sceneR i29@--> sgrid
     sceneR i30@--> saxes
-    sceneR -.-> scam
+    sceneR -.-> camera
     sceneR -.-> replay_sys
 
     %% REPL domain reads
@@ -603,7 +599,7 @@ flowchart LR
     uiac -.-> eac
     uiprof -.-> prof
     uivpanel -.-> vpanel
-    export -.-> ebuf
+    export -.-> estate
 
     classDef animateE stroke:#f50,stroke-dasharray: 9\,5,stroke-dashoffset: 900,animation: dash 90s linear infinite;
     classDef animateF stroke:#5f0,stroke-dasharray: 9\,5,stroke-dashoffset: 900,animation: dash 90s linear infinite;
