@@ -1628,7 +1628,8 @@ int main() {
                     strstr(g_status, "'n'") == NULL);
     }
 
-    /* 37. Deleting a declaration line is rejected */
+    /* 37. Deleting a declaration line is rejected when the var is still
+     * referenced outside the deleted range. */
     {
         repl_reset_state();
         repl_feed_line_public("float n;");
@@ -1643,7 +1644,8 @@ int main() {
         ASSERT_INT("delete referenced decl: second still assign", repl_state_document_cmds_mut()[1].type, CMD_VAR_ASSIGN);
         ASSERT_TRUE("delete referenced decl: n still registered",
                     repl_eval_find_predef_var_idx("n") >= 0);
-        assert_status_contains("delete referenced decl: status", "Cannot remove float declarations");
+        assert_status_contains("delete referenced decl: status", "'n'");
+        assert_status_contains("delete referenced decl: status reason", "still referenced");
     }
 
     /* 37a. Ctrl+X rejects cutting declaration lines */
@@ -1692,7 +1694,8 @@ int main() {
         assert_status_contains("cut decl block: status", "Cannot remove float declarations");
     }
 
-    /* 38. Deleting a declaration with all its uses is still rejected */
+    /* 38. Deleting a declaration together with all its uses succeeds:
+     * no remaining references means the variable can be cleanly removed. */
     {
         repl_reset_state();
         repl_feed_line_public("float n;");
@@ -1702,10 +1705,23 @@ int main() {
 
         delete_cmd_range(0, 2, "Deleted");
 
-        ASSERT_INT("delete decl block: cmd count unchanged", repl_state_document_count(), 2);
-        ASSERT_TRUE("delete decl block: n still registered",
+        ASSERT_INT("delete decl block: cmd count is zero", repl_state_document_count(), 0);
+        ASSERT_TRUE("delete decl block: n unregistered",
+                    repl_eval_find_predef_var_idx("n") < 0);
+    }
+
+    /* 38a. Deleting an unreferenced decl line on its own succeeds. */
+    {
+        repl_reset_state();
+        repl_feed_line_public("float n;");
+        ASSERT_TRUE("delete unref decl setup: n registered",
                     repl_eval_find_predef_var_idx("n") >= 0);
-        assert_status_contains("delete decl block: status", "Cannot remove float declarations");
+
+        delete_cmd_range(0, 1, "Deleted");
+
+        ASSERT_INT("delete unref decl: cmd count is zero", repl_state_document_count(), 0);
+        ASSERT_TRUE("delete unref decl: n unregistered",
+                    repl_eval_find_predef_var_idx("n") < 0);
     }
 
     /* 39. Per-declaration name limit rejects atomically */

@@ -166,11 +166,28 @@ int editor_input_active_modifiers(void) {
 
 
 static int delete_cmd_range_allowed(int start, int count) {
-    if (repl_selection_cmd_range_contains_var_decl(start, count)) {
-        repl_selection_set_var_decl_action_status("remove");
-        return 0;
+    int end = start + count;
+    int n = repl_state_document_count();
+    if (end > n) end = n;
+    const GLCmd *cmds = repl_state_document_cmds();
+    EditorBufferView text = editor_buffer_view();
+    for (int i = start; i < end; i++) {
+        if (cmds[i].type != CMD_VAR_DECLARE) continue;
+        for (int d = 0; d < cmds[i].var_decl_count; d++) {
+            const char *nm = cmds[i].var_names[d];
+            for (int j = 0; j < n; j++) {
+                if (j >= start && j < end) continue;
+                const char *line = editor_buffer_view_line(text, j);
+                if (line && repl_eval_source_uses_ident(line, nm)) {
+                    char msg[96];
+                    snprintf(msg, sizeof(msg),
+                             "Cannot remove '%s': still referenced", nm);
+                    set_status(msg);
+                    return 0;
+                }
+            }
+        }
     }
-
     return 1;
 }
 
