@@ -45,13 +45,39 @@ typedef struct {
     const char *params[MAX_FUNC_HINT_PARAMS];
 } ReplFuncCompletion;
 
+/* Syntax-highlighting category for code-panel rendering. Each CmdType maps
+ * to exactly one category; the renderer (ui_panels.c) translates the
+ * category into an RGB color via a category→color palette. Living in the
+ * spec means a new CmdType picks up the right highlight automatically — the
+ * UI doesn't need to grow another switch case. */
+typedef enum {
+    CMD_CAT_DEFAULT = 0,    /* fallback gray; only hit for out-of-range types */
+    CMD_CAT_PRIMITIVE,      /* glBegin / glEnd */
+    CMD_CAT_VERTEX,         /* glVertex* / gluVertex */
+    CMD_CAT_NORMAL,         /* glNormal3f / gluNormal */
+    CMD_CAT_COLOR,          /* glColor* / glClearColor / glColorMaterial / glMaterialf / gluColor */
+    CMD_CAT_TRANSFORM,      /* glTranslate / glScale / glRotate / glPushMatrix / glPopMatrix */
+    CMD_CAT_STATE,          /* glEnable / glDisable / glShadeModel / glLineWidth / glPointSize / glBlendFunc / glDepthMask / glLightModeli / glFrontFace / glPointParameterfv */
+    CMD_CAT_LOOP,           /* for { ... } */
+    CMD_CAT_FUNCTION,       /* funcN { ... } / call */
+    CMD_CAT_VARIABLE,       /* float decl / assignment */
+    CMD_CAT_CONDITIONAL,    /* if { ... } */
+    CMD_CAT_LABEL,          /* :label / goto */
+    CMD_CAT_COMMENT,        /* // comment */
+    CMD_CAT_GLUT_SHAPE,     /* glutSolidTorus / Cube / Sphere / Teapot / Cone */
+    CMD_CAT_TESS_BLOCK,     /* gluTessBeginPolygon / Contour / End */
+    CMD_CAT_COUNT
+} CmdSyntaxCategory;
+
 /* Metadata for control structures and command-type properties. Describes whether
  * a command type needs a trailing semicolon (e.g., float decl, assignment) and
- * whether it needs block-based indentation (for, func, if blocks). */
+ * whether it needs block-based indentation (for, func, if blocks). The category
+ * field drives the code-panel renderer's syntax highlighting. */
 typedef struct {
     const char *name;
     int needs_semicolon;
     int needs_block_indent;
+    CmdSyntaxCategory category;
 } ReplCommandTypeSpec;
 
 /* Metadata for GL commands with enumerated arguments. Specifies the command name,
@@ -101,6 +127,11 @@ int repl_cmd_type_needs_semicolon(CmdType type);
 /* Query whether a command type requires block-based indentation (e.g., for/func/if
  * blocks). Used by the formatter to determine indentation rules. */
 int repl_cmd_type_needs_block_indent(CmdType type);
+
+/* Query the syntax-highlighting category for a command type. Used by the
+ * code-panel renderer to pick the row color. Returns CMD_CAT_DEFAULT
+ * for out-of-range types. */
+CmdSyntaxCategory repl_cmd_type_category(CmdType type);
 
 /* Query the full array of enum-backed GL command specs (glBegin, glEnable,
  * glShadeModel, etc.). Terminated by an entry with a null name. Used by the

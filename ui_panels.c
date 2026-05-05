@@ -5,6 +5,7 @@
  * Extracted from sample.c for maintainability.
  */
 #include "repl_actions.h"
+#include "repl_command_spec.h"
 #include "repl_state_views.h"
 #include "ui_state.h"
 #include "repl_export.h"
@@ -50,57 +51,36 @@ static const EditorTransformer *find_color_transformer(const EditorTransformerLi
 /* Syntax color helpers                                                       */
 /* ========================================================================= */
 
+/* Category → RGB palette. The category for each CmdType is declared in
+ * repl_command_spec.c's g_command_type_specs[] table; the renderer just
+ * looks the color up here. Adding a new CmdType picks up its highlight
+ * automatically — set its category in the spec table and the renderer
+ * follows. Tweak the palette here if you want to change how a category
+ * looks; the spec table doesn't change. */
+static const struct { float r, g, b; } k_category_colors[CMD_CAT_COUNT] = {
+    [CMD_CAT_DEFAULT]     = { 0.70f, 0.70f, 0.70f },  /* gray (fallback) */
+    [CMD_CAT_PRIMITIVE]   = { 0.85f, 0.45f, 0.85f },  /* magenta — glBegin/glEnd */
+    [CMD_CAT_VERTEX]      = { 0.40f, 0.90f, 0.40f },  /* green */
+    [CMD_CAT_NORMAL]      = { 0.40f, 0.80f, 0.95f },  /* cyan */
+    [CMD_CAT_COLOR]       = { 0.95f, 0.85f, 0.30f },  /* yellow */
+    [CMD_CAT_TRANSFORM]   = { 0.95f, 0.65f, 0.40f },  /* orange */
+    [CMD_CAT_STATE]       = { 0.80f, 0.70f, 0.95f },  /* lavender */
+    [CMD_CAT_LOOP]        = { 0.95f, 0.60f, 0.30f },  /* orange-red */
+    [CMD_CAT_FUNCTION]    = { 0.60f, 0.85f, 0.95f },  /* sky blue */
+    [CMD_CAT_VARIABLE]    = { 0.55f, 0.80f, 0.95f },  /* slightly cooler blue */
+    [CMD_CAT_CONDITIONAL] = { 0.95f, 0.75f, 0.50f },  /* peach */
+    [CMD_CAT_LABEL]       = { 0.85f, 0.55f, 0.85f },  /* purple */
+    [CMD_CAT_COMMENT]     = { 0.45f, 0.50f, 0.45f },  /* gray-green */
+    [CMD_CAT_GLUT_SHAPE]  = { 0.50f, 0.90f, 0.70f },  /* mint */
+    [CMD_CAT_TESS_BLOCK]  = { 0.70f, 0.55f, 0.90f },  /* violet */
+};
+
 static void color_for_type(CmdType t) {
-    switch (t) {
-    case CMD_BEGIN:
-    case CMD_END:      glColor3f(0.85f, 0.45f, 0.85f); break;
-    case CMD_VERTEX3F:
-    case CMD_VERTEX2F: glColor3f(0.40f, 0.90f, 0.40f); break;
-    case CMD_NORMAL3F:      glColor3f(0.40f, 0.80f, 0.95f); break;
-    case CMD_TRANSLATE3F:
-    case CMD_SCALEF:
-    case CMD_ROTATEF:
-    case CMD_PUSH_MATRIX:
-    case CMD_POP_MATRIX:    glColor3f(0.95f, 0.65f, 0.40f); break; /* orange */
-    case CMD_COLOR_MATERIAL:
-    case CMD_MATERIALF:     glColor3f(0.95f, 0.85f, 0.30f); break; /* yellow */
-    case CMD_COLOR3F:
-    case CMD_COLOR4F:
-    case CMD_CLEAR_COLOR: glColor3f(0.95f, 0.85f, 0.30f); break; /* yellow */
-    case CMD_ENABLE:
-    case CMD_DISABLE:
-    case CMD_SHADE_MODEL:
-    case CMD_LIGHT_MODEL_I:
-    case CMD_FRONT_FACE:
-    case CMD_POINT_SIZE:
-    case CMD_POINT_PARAMETER_FV:
-    case CMD_BLEND_FUNC:
-    case CMD_DEPTH_MASK: glColor3f(0.80f, 0.70f, 0.95f); break; /* lavender */
-    case CMD_FOR_BEGIN:
-    case CMD_FOR_END:  glColor3f(0.95f, 0.60f, 0.30f); break;
-    case CMD_FUNC_DEF:
-    case CMD_FUNC_END: glColor3f(0.60f, 0.85f, 0.95f); break;
-    case CMD_CALL:     glColor3f(0.60f, 0.85f, 0.95f); break;
-    case CMD_IF_BEGIN:
-    case CMD_IF_END:   glColor3f(0.95f, 0.75f, 0.50f); break;
-    case CMD_COMMENT:    glColor3f(0.45f, 0.50f, 0.45f); break;
-    case CMD_VAR_ASSIGN:
-    case CMD_VAR_DECLARE: glColor3f(0.55f, 0.80f, 0.95f); break;
-    case CMD_LABEL:
-    case CMD_GOTO:       glColor3f(0.85f, 0.55f, 0.85f); break;
-    case CMD_GLUT_TORUS:  glColor3f(0.50f, 0.90f, 0.70f); break;
-    case CMD_GLUT_CUBE:
-    case CMD_GLUT_SPHERE:
-    case CMD_GLUT_TEAPOT:
-    case CMD_GLUT_CONE:   glColor3f(0.50f, 0.90f, 0.70f); break;
-    case CMD_TESS_BEGIN_POLYGON:
-    case CMD_TESS_BEGIN_CONTOUR:
-    case CMD_TESS_END:    glColor3f(0.70f, 0.55f, 0.90f); break; /* violet */
-    case CMD_TESS_NORMAL: glColor3f(0.40f, 0.80f, 0.95f); break; /* cyan */
-    case CMD_TESS_COLOR:  glColor3f(0.95f, 0.85f, 0.30f); break; /* yellow */
-    case CMD_TESS_VERTEX: glColor3f(0.40f, 0.90f, 0.40f); break; /* green */
-    default:             glColor3f(0.70f, 0.70f, 0.70f); break;
-    }
+    CmdSyntaxCategory cat = repl_cmd_type_category(t);
+    if (cat < 0 || cat >= CMD_CAT_COUNT) cat = CMD_CAT_DEFAULT;
+    glColor3f(k_category_colors[cat].r,
+              k_category_colors[cat].g,
+              k_category_colors[cat].b);
 }
 
 /* Replay annotations live in repl_replay_annotations.c. */
