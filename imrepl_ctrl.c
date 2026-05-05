@@ -30,7 +30,7 @@
 #include "replay_state.h"
 #include "scene_render.h"
 #include "ui_autocomplete_panel.h"
-#include "ui_color_picker.h"
+#include "color_picker_ui.h"
 #include "ui_editor.h"
 #include "ui_tabbed_overlay.h"
 #include "ui_layout.h"
@@ -377,6 +377,7 @@ static void imrepl_ctrl_build_ui_snapshot(UiRenderSnapshot *snap) {
     snap->variable_drag  = variable_panel_drag();
     snap->selection      = editor_state_selection();
     snap->scroll         = editor_state_scroll();
+    snap->color_picker   = color_picker_view();
 
     snap->variables      = repl_state_variables();
     snap->editor_input   = editor_state_input();
