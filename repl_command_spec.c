@@ -219,58 +219,58 @@ static const ReplStdCommandSpec k_std_command_specs[] = {
     { NULL, 0, 0, NULL, NULL, 0 }
 };
 
-#define CMD_TYPE_SPEC(type_, semicolon_, block_indent_) \
-    [type_] = { #type_, (semicolon_), (block_indent_) }
+#define CMD_TYPE_SPEC(type_, semicolon_, block_indent_, category_) \
+    [type_] = { #type_, (semicolon_), (block_indent_), (category_) }
 
 static const ReplCommandTypeSpec g_command_type_specs[CMD_TYPE_COUNT] = {
-    CMD_TYPE_SPEC(CMD_BEGIN, 1, 1),
-    CMD_TYPE_SPEC(CMD_END, 1, 1),
-    CMD_TYPE_SPEC(CMD_VERTEX3F, 1, 1),
-    CMD_TYPE_SPEC(CMD_VERTEX2F, 1, 1),
-    CMD_TYPE_SPEC(CMD_NORMAL3F, 1, 1),
-    CMD_TYPE_SPEC(CMD_COLOR3F, 1, 1),
-    CMD_TYPE_SPEC(CMD_COLOR4F, 1, 1),
-    CMD_TYPE_SPEC(CMD_ENABLE, 1, 1),
-    CMD_TYPE_SPEC(CMD_DISABLE, 1, 1),
-    CMD_TYPE_SPEC(CMD_SHADE_MODEL, 1, 1),
-    CMD_TYPE_SPEC(CMD_TRANSLATE3F, 1, 1),
-    CMD_TYPE_SPEC(CMD_SCALEF, 1, 1),
-    CMD_TYPE_SPEC(CMD_ROTATEF, 1, 1),
-    CMD_TYPE_SPEC(CMD_PUSH_MATRIX, 1, 1),
-    CMD_TYPE_SPEC(CMD_POP_MATRIX, 1, 1),
-    CMD_TYPE_SPEC(CMD_COLOR_MATERIAL, 1, 1),
-    CMD_TYPE_SPEC(CMD_LIGHT_MODEL_I, 1, 1),
-    CMD_TYPE_SPEC(CMD_FRONT_FACE, 1, 1),
-    CMD_TYPE_SPEC(CMD_FOR_BEGIN, 1, 0),
-    CMD_TYPE_SPEC(CMD_FOR_END, 1, 0),
-    CMD_TYPE_SPEC(CMD_FUNC_DEF, 1, 0),
-    CMD_TYPE_SPEC(CMD_FUNC_END, 1, 0),
-    CMD_TYPE_SPEC(CMD_CALL, 1, 0),
-    CMD_TYPE_SPEC(CMD_IF_BEGIN, 1, 0),
-    CMD_TYPE_SPEC(CMD_IF_END, 1, 0),
-    CMD_TYPE_SPEC(CMD_COMMENT, 0, 0),
-    CMD_TYPE_SPEC(CMD_VAR_ASSIGN, 1, 0),
-    CMD_TYPE_SPEC(CMD_VAR_DECLARE, 0, 0),
-    CMD_TYPE_SPEC(CMD_LABEL, 0, 0),
-    CMD_TYPE_SPEC(CMD_GOTO, 1, 0),
-    CMD_TYPE_SPEC(CMD_GLUT_TORUS, 1, 1),
-    CMD_TYPE_SPEC(CMD_GLUT_CUBE, 1, 1),
-    CMD_TYPE_SPEC(CMD_GLUT_SPHERE, 1, 1),
-    CMD_TYPE_SPEC(CMD_GLUT_TEAPOT, 1, 1),
-    CMD_TYPE_SPEC(CMD_GLUT_CONE, 1, 1),
-    CMD_TYPE_SPEC(CMD_TESS_BEGIN_POLYGON, 1, 1),
-    CMD_TYPE_SPEC(CMD_TESS_BEGIN_CONTOUR, 1, 1),
-    CMD_TYPE_SPEC(CMD_TESS_END, 1, 1),
-    CMD_TYPE_SPEC(CMD_TESS_NORMAL, 1, 1),
-    CMD_TYPE_SPEC(CMD_TESS_COLOR, 1, 1),
-    CMD_TYPE_SPEC(CMD_TESS_VERTEX, 1, 1),
-    CMD_TYPE_SPEC(CMD_MATERIALF, 1, 1),
-    CMD_TYPE_SPEC(CMD_POINT_SIZE, 1, 1),
-    CMD_TYPE_SPEC(CMD_LINE_WIDTH, 1, 1),
-    CMD_TYPE_SPEC(CMD_POINT_PARAMETER_FV, 1, 1),
-    CMD_TYPE_SPEC(CMD_BLEND_FUNC, 1, 1),
-    CMD_TYPE_SPEC(CMD_CLEAR_COLOR, 1, 1),
-    CMD_TYPE_SPEC(CMD_DEPTH_MASK, 1, 1),
+    CMD_TYPE_SPEC(CMD_BEGIN,                1, 1, CMD_CAT_PRIMITIVE),
+    CMD_TYPE_SPEC(CMD_END,                  1, 1, CMD_CAT_PRIMITIVE),
+    CMD_TYPE_SPEC(CMD_VERTEX3F,             1, 1, CMD_CAT_VERTEX),
+    CMD_TYPE_SPEC(CMD_VERTEX2F,             1, 1, CMD_CAT_VERTEX),
+    CMD_TYPE_SPEC(CMD_NORMAL3F,             1, 1, CMD_CAT_NORMAL),
+    CMD_TYPE_SPEC(CMD_COLOR3F,              1, 1, CMD_CAT_COLOR),
+    CMD_TYPE_SPEC(CMD_COLOR4F,              1, 1, CMD_CAT_COLOR),
+    CMD_TYPE_SPEC(CMD_ENABLE,               1, 1, CMD_CAT_STATE),
+    CMD_TYPE_SPEC(CMD_DISABLE,              1, 1, CMD_CAT_STATE),
+    CMD_TYPE_SPEC(CMD_SHADE_MODEL,          1, 1, CMD_CAT_STATE),
+    CMD_TYPE_SPEC(CMD_TRANSLATE3F,          1, 1, CMD_CAT_TRANSFORM),
+    CMD_TYPE_SPEC(CMD_SCALEF,               1, 1, CMD_CAT_TRANSFORM),
+    CMD_TYPE_SPEC(CMD_ROTATEF,              1, 1, CMD_CAT_TRANSFORM),
+    CMD_TYPE_SPEC(CMD_PUSH_MATRIX,          1, 1, CMD_CAT_TRANSFORM),
+    CMD_TYPE_SPEC(CMD_POP_MATRIX,           1, 1, CMD_CAT_TRANSFORM),
+    CMD_TYPE_SPEC(CMD_COLOR_MATERIAL,       1, 1, CMD_CAT_COLOR),
+    CMD_TYPE_SPEC(CMD_LIGHT_MODEL_I,        1, 1, CMD_CAT_STATE),
+    CMD_TYPE_SPEC(CMD_FRONT_FACE,           1, 1, CMD_CAT_STATE),
+    CMD_TYPE_SPEC(CMD_FOR_BEGIN,            1, 0, CMD_CAT_LOOP),
+    CMD_TYPE_SPEC(CMD_FOR_END,              1, 0, CMD_CAT_LOOP),
+    CMD_TYPE_SPEC(CMD_FUNC_DEF,             1, 0, CMD_CAT_FUNCTION),
+    CMD_TYPE_SPEC(CMD_FUNC_END,             1, 0, CMD_CAT_FUNCTION),
+    CMD_TYPE_SPEC(CMD_CALL,                 1, 0, CMD_CAT_FUNCTION),
+    CMD_TYPE_SPEC(CMD_IF_BEGIN,             1, 0, CMD_CAT_CONDITIONAL),
+    CMD_TYPE_SPEC(CMD_IF_END,               1, 0, CMD_CAT_CONDITIONAL),
+    CMD_TYPE_SPEC(CMD_COMMENT,              0, 0, CMD_CAT_COMMENT),
+    CMD_TYPE_SPEC(CMD_VAR_ASSIGN,           1, 0, CMD_CAT_VARIABLE),
+    CMD_TYPE_SPEC(CMD_VAR_DECLARE,          0, 0, CMD_CAT_VARIABLE),
+    CMD_TYPE_SPEC(CMD_LABEL,                0, 0, CMD_CAT_LABEL),
+    CMD_TYPE_SPEC(CMD_GOTO,                 1, 0, CMD_CAT_LABEL),
+    CMD_TYPE_SPEC(CMD_GLUT_TORUS,           1, 1, CMD_CAT_GLUT_SHAPE),
+    CMD_TYPE_SPEC(CMD_GLUT_CUBE,            1, 1, CMD_CAT_GLUT_SHAPE),
+    CMD_TYPE_SPEC(CMD_GLUT_SPHERE,          1, 1, CMD_CAT_GLUT_SHAPE),
+    CMD_TYPE_SPEC(CMD_GLUT_TEAPOT,          1, 1, CMD_CAT_GLUT_SHAPE),
+    CMD_TYPE_SPEC(CMD_GLUT_CONE,            1, 1, CMD_CAT_GLUT_SHAPE),
+    CMD_TYPE_SPEC(CMD_TESS_BEGIN_POLYGON,   1, 1, CMD_CAT_TESS_BLOCK),
+    CMD_TYPE_SPEC(CMD_TESS_BEGIN_CONTOUR,   1, 1, CMD_CAT_TESS_BLOCK),
+    CMD_TYPE_SPEC(CMD_TESS_END,             1, 1, CMD_CAT_TESS_BLOCK),
+    CMD_TYPE_SPEC(CMD_TESS_NORMAL,          1, 1, CMD_CAT_NORMAL),
+    CMD_TYPE_SPEC(CMD_TESS_COLOR,           1, 1, CMD_CAT_COLOR),
+    CMD_TYPE_SPEC(CMD_TESS_VERTEX,          1, 1, CMD_CAT_VERTEX),
+    CMD_TYPE_SPEC(CMD_MATERIALF,            1, 1, CMD_CAT_COLOR),
+    CMD_TYPE_SPEC(CMD_POINT_SIZE,           1, 1, CMD_CAT_STATE),
+    CMD_TYPE_SPEC(CMD_LINE_WIDTH,           1, 1, CMD_CAT_STATE),
+    CMD_TYPE_SPEC(CMD_POINT_PARAMETER_FV,   1, 1, CMD_CAT_STATE),
+    CMD_TYPE_SPEC(CMD_BLEND_FUNC,           1, 1, CMD_CAT_STATE),
+    CMD_TYPE_SPEC(CMD_CLEAR_COLOR,          1, 1, CMD_CAT_COLOR),
+    CMD_TYPE_SPEC(CMD_DEPTH_MASK,           1, 1, CMD_CAT_STATE),
 };
 
 const ReplCommandTypeSpec *repl_command_type_spec(CmdType type) {
@@ -294,6 +294,11 @@ int repl_cmd_type_needs_semicolon(CmdType type) {
 int repl_cmd_type_needs_block_indent(CmdType type) {
     const ReplCommandTypeSpec *spec = repl_command_type_spec(type);
     return spec ? spec->needs_block_indent : 1;
+}
+
+CmdSyntaxCategory repl_cmd_type_category(CmdType type) {
+    const ReplCommandTypeSpec *spec = repl_command_type_spec(type);
+    return spec ? spec->category : CMD_CAT_DEFAULT;
 }
 
 const ReplEnumCommandSpec *repl_enum_command_specs(void) {
