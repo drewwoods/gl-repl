@@ -147,7 +147,8 @@ void repl_flatten_refresh_current_block_highlight(void) {
             if (repl_state_document_cmds_mut()[ci].type == CMD_FUNC_DEF || repl_state_document_cmds_mut()[ci].type == CMD_FUNC_END ||
                 repl_state_document_cmds_mut()[ci].type == CMD_FOR_BEGIN || repl_state_document_cmds_mut()[ci].type == CMD_FOR_END ||
                 repl_state_document_cmds_mut()[ci].type == CMD_IF_BEGIN  || repl_state_document_cmds_mut()[ci].type == CMD_IF_END  ||
-                repl_state_document_cmds_mut()[ci].type == CMD_CALL)
+                repl_state_document_cmds_mut()[ci].type == CMD_CALL ||
+                repl_state_document_cmds_mut()[ci].type == CMD_EMPTY)
                 continue;
             while (fcur < flat_cmd_count && !flat_cmds[fcur].valid) fcur++;
             if (fcur >= flat_cmd_count) break;
@@ -394,6 +395,8 @@ static void flatten_range(FlattenContext *ctx,
             i++;
             continue;
         }
+
+        if (src_cmd->type == CMD_EMPTY) { i++; continue; }
 
         if (src_cmd->type == CMD_VAR_DECLARE) { i++; continue; }
 

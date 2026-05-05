@@ -1343,7 +1343,9 @@ static int find_export_block_end(int begin_idx) {
 static int comment_run_attached_func_idx(int start, int end_idx) {
     int cmd_idx = start;
     while (cmd_idx < end_idx && cmd_idx < repl_state_document_count() &&
-           repl_state_document_cmds_mut()[cmd_idx].valid && repl_state_document_cmds_mut()[cmd_idx].type == CMD_COMMENT)
+           repl_state_document_cmds_mut()[cmd_idx].valid &&
+           (repl_state_document_cmds_mut()[cmd_idx].type == CMD_COMMENT ||
+            repl_state_document_cmds_mut()[cmd_idx].type == CMD_EMPTY))
         cmd_idx++;
     if (cmd_idx > start && cmd_idx < end_idx && cmd_idx < repl_state_document_count() &&
         repl_state_document_cmds_mut()[cmd_idx].valid && repl_state_document_cmds_mut()[cmd_idx].type == CMD_FUNC_DEF)
@@ -1356,6 +1358,9 @@ static void write_canonical_cmd_as_c(FILE *f, const GLCmd *cmd, int cmd_idx,
     const char *source_text = export_document_text(cmd_idx);
 
     switch (cmd->type) {
+    case CMD_EMPTY:
+        fputc('\n', f);
+        break;
     case CMD_COMMENT:
         fprintf(f, "%s\n", source_text);
         break;
@@ -1474,7 +1479,9 @@ static void write_render_body_range_as_c(FILE *f, int start, int end_idx,
 
     for (int cmd_idx = start; cmd_idx < end_idx && cmd_idx < repl_state_document_count(); cmd_idx++) {
         if (!repl_state_document_cmds_mut()[cmd_idx].valid) continue;
-        if (skip_func_defs && repl_state_document_cmds_mut()[cmd_idx].type == CMD_COMMENT) {
+        if (skip_func_defs &&
+            (repl_state_document_cmds_mut()[cmd_idx].type == CMD_COMMENT ||
+             repl_state_document_cmds_mut()[cmd_idx].type == CMD_EMPTY)) {
             int attached_func = comment_run_attached_func_idx(cmd_idx, end_idx);
             if (attached_func >= 0) {
                 cmd_idx = find_export_block_end(attached_func);
@@ -1559,7 +1566,8 @@ static void write_func_defs_as_c(FILE *f) {
         int comment_start = cmd_idx;
         while (comment_start > 0 &&
                repl_state_document_cmds_mut()[comment_start - 1].valid &&
-               repl_state_document_cmds_mut()[comment_start - 1].type == CMD_COMMENT)
+               (repl_state_document_cmds_mut()[comment_start - 1].type == CMD_COMMENT ||
+                repl_state_document_cmds_mut()[comment_start - 1].type == CMD_EMPTY))
             comment_start--;
         /* Emit any preceding comment lines. */
         for (int comment_idx = comment_start; comment_idx < cmd_idx; comment_idx++)
@@ -2669,8 +2677,12 @@ static int import_try_snippet_end(ImportState *s, const char *p) {
     return 1;
 }
 
-static int import_try_blank(const char *p) {
-    return *p == '\0';
+static int import_try_blank(ImportState *s, const char *p) {
+    if (*p != '\0')
+        return 0;
+
+    import_feed_one_line(p, &s->loaded, &s->warnings);
+    return 1;
 }
 
 static int import_try_predef_decl(const char *p) {
@@ -2704,7 +2716,7 @@ static void import_process_line(ImportState *s, const char *p, const char *raw) 
 
     /* In-snippet: */
     if (import_try_snippet_end(s, p))                          return;
-    if (import_try_blank(p))                                   return;
+    if (import_try_blank(s, p))                                return;
     if (import_try_predef_decl(p))                             return;
     (void)import_try_snippet_body_line(s, p);
 }

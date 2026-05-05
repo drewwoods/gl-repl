@@ -270,6 +270,18 @@ static const char *editor_committed_line_text(int idx) {
     return (text && text[0]) ? text : "";
 }
 
+static void build_empty_source_cmd(GLCmd *cmd, char *text_out, int text_sz) {
+    if (!cmd)
+        return;
+
+    memset(cmd, 0, sizeof(*cmd));
+    cmd->type = CMD_EMPTY;
+    cmd->valid = 1;
+
+    if (text_out && text_sz > 0)
+        text_out[0] = '\0';
+}
+
 void load_line_to_input(int idx) {
     ReplEditorInputState *inp = editor_state_input_mut();
     if (idx >= 0 && idx < repl_state_document_count()) {
@@ -569,7 +581,9 @@ static CommitResult commit_current_input(int enter_mode) {
         }
     }
 
-    if (editor_state_input().input_len > 0)
+    if (editor_state_input().input_len > 0 ||
+        (enter_mode && editor_insert_mode()) ||
+        (enter_mode && repl_state_edit_line() >= repl_state_document_count()))
         repl_undo_push_snapshot();
 
     CommitAttemptState *before = &g_commit_attempt_before;
@@ -581,6 +595,29 @@ static CommitResult commit_current_input(int enter_mode) {
     }
 
     if (editor_insert_mode()) {
+        if (enter_mode && editor_state_input().input_len == 0) {
+            GLCmd cmd;
+            char cmd_text[MAX_LINE_LEN] = "";
+            ReplCommandStore store = repl_command_store_live();
+            int insert_pos = repl_state_edit_line();
+
+            build_empty_source_cmd(&cmd, cmd_text, sizeof(cmd_text));
+            if (!repl_command_store_insert_one(&store, insert_pos, &cmd, 0)) {
+                set_status("Command buffer full!");
+                return COMMIT_REJECTED;
+            }
+            editor_buffer_insert_line(insert_pos, cmd_text);
+            repl_state_edit_line_set(repl_state_edit_line() + 1);
+            {
+                ReplEditorInputState *inp = editor_state_input_mut();
+                inp->input[0] = '\0';
+                inp->input_len = 0;
+            }
+            editor_cursor_pos_set(0);
+            set_status("Inserted blank line");
+            return COMMIT_OK;
+        }
+
         if (editor_state_input().input_len > 0) {
             GLCmd cmd;
             int parsed;
@@ -707,6 +744,32 @@ static CommitResult commit_current_input(int enter_mode) {
             return COMMIT_OK;
         }
         return COMMIT_REJECTED;
+    }
+
+    if (enter_mode && editor_state_input().input_len == 0) {
+        GLCmd cmd;
+        char cmd_text[MAX_LINE_LEN] = "";
+        ReplCommandStore store = repl_command_store_live();
+        int insert_pos = repl_state_document_count();
+
+        build_empty_source_cmd(&cmd, cmd_text, sizeof(cmd_text));
+        if (!repl_command_store_insert_one(&store, insert_pos, &cmd, 0)) {
+            set_status("Command buffer full!");
+            return COMMIT_REJECTED;
+        }
+        editor_buffer_insert_line(insert_pos, cmd_text);
+        repl_state_edit_line_set(repl_state_document_count());
+        editor_insert_mode_set(1);
+        {
+            ReplEditorInputState *inp = editor_state_input_mut();
+            inp->input[0] = '\0';
+            inp->input_len = 0;
+            inp->pending_newline[0] = '\0';
+            inp->pending_newline_len = 0;
+        }
+        editor_cursor_pos_set(0);
+        set_status("Inserted blank line");
+        return COMMIT_OK;
     }
 
     if (editor_state_input().input_len > 0) {

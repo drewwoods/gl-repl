@@ -162,7 +162,13 @@ static int parse_command(const char *line, GLCmd *cmd,
     cmd->num_args = 0;
     if (text_out && text_sz > 0) text_out[0] = '\0';
 
-    if (len == 0) return 0;
+    if (len == 0) {
+        cmd->type = CMD_EMPTY;
+        cmd->valid = 1;
+        cmd->is_auto = 0;
+        cmd->num_args = 0;
+        return 1;
+    }
 
     /* Comment: line starts with // */
     if (p[0] == '/' && p[1] == '/') {

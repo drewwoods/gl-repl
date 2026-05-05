@@ -100,6 +100,7 @@ int main(void) {
 
     repl_feed_line_public("x = 1.25;");
     repl_feed_line_public("glBegin(GL_LINE_STRIP);");
+    repl_feed_line_public("");
     repl_feed_line_public("for(i, 0, 3) {");
     repl_feed_line_public("glVertex3f(i + x, 0, 0);");
     repl_feed_line_public("}");
@@ -226,6 +227,10 @@ int main(void) {
         snprintf(label, sizeof(label), "roundtrip type %d", i);
         ASSERT_TRUE(label, repl_state_document_cmds_mut()[i].type == before_types[i]);
     }
+    ASSERT_TRUE("roundtrip blank line type preserved",
+                repl_state_document_cmds_mut()[2].type == CMD_EMPTY);
+    ASSERT_TRUE("roundtrip blank line text preserved",
+                strcmp(editor_buffer_line(2), "") == 0);
 
     repl_flatten_commands();
     ASSERT_TRUE("flatten produced cmds", repl_state_flat_program_count() > 0);
