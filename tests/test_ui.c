@@ -4,7 +4,8 @@
 #include "replay_state.h"
 #include "repl_core.h"
 #include "editor_help_session.h"
-#include "ui_help_overlay.h"
+#include "ui_tabbed_overlay.h"
+#include "repl_help_text.h"
 #include "prof.h"
 #include "ui_profile_panel.h"
 #include "ui_color_picker.h"
@@ -77,12 +78,24 @@ static void make_test_ui_snapshot(UiRenderSnapshot *snap) {
     snap->user_scene_active_idx = -1;
 }
 
+static UiOverlayState build_help_overlay_input(void) {
+    UiOverlayState in = {
+        .visible    = ui_state_help().visible,
+        .tab_idx    = editor_help_session_view().tab_idx,
+        .scroll     = editor_help_session_view().scroll,
+        .viewport_w = ui_state_viewport().window_w,
+        .viewport_h = ui_state_viewport().window_h,
+        .content    = repl_help_text_build(),
+    };
+    return in;
+}
+
 static void test_help_overlay(void) {
     printf("Testing Help Overlay...\n");
     gl_stub_counts_reset();
 
     ui_state_help_mut()->visible = 0;
-    { UiRenderSnapshot s; make_test_ui_snapshot(&s); ui_help_overlay_render(&s); }
+    { UiOverlayState in = build_help_overlay_input(); ui_tabbed_overlay_render(&in); }
     ASSERT_TRUE("help hidden -> no GL calls", gl_stub_counts[GL_STUB_glBegin] == 0);
 
     ui_state_help_mut()->visible = 1;
@@ -91,7 +104,7 @@ static void test_help_overlay(void) {
     editor_help_session_set_scroll(0);
 
     gl_stub_counts_reset();
-    { UiRenderSnapshot s; make_test_ui_snapshot(&s); ui_help_overlay_render(&s); }
+    { UiOverlayState in = build_help_overlay_input(); ui_tabbed_overlay_render(&in); }
     ASSERT_GL_CALLS("help visible -> draws quads", GL_STUB_glBegin, 1);
     ASSERT_GL_CALLS("help visible -> calls glVertex2f", GL_STUB_glVertex2f, 4);
     ASSERT_GL_CALLS("help visible -> draws text", GL_STUB_glRasterPos2f, 10);
@@ -100,7 +113,7 @@ static void test_help_overlay(void) {
     /* Switch tabs */
     editor_help_session_set_tab(1);
     gl_stub_counts_reset();
-    { UiRenderSnapshot s; make_test_ui_snapshot(&s); ui_help_overlay_render(&s); }
+    { UiOverlayState in = build_help_overlay_input(); ui_tabbed_overlay_render(&in); }
     ASSERT_GL_CALLS("help tab 1 -> draws text", GL_STUB_glRasterPos2f, 10);
 }
 

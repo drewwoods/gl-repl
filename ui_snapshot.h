@@ -29,6 +29,11 @@
 #include "repl_flatten.h"
 #include "ui_editor.h"
 
+/* Forward decl: snapshot only carries a pointer; the full type lives
+ * in ui_tabbed_overlay.h and is included by the controller (which
+ * builds the value) and the renderer (which reads it). */
+struct UiOverlayContent;
+
 typedef struct UiRenderSnapshot {
     /* By-value state slices */
     ReplViewportState           viewport;
@@ -82,6 +87,10 @@ typedef struct UiRenderSnapshot {
 
     /* Workspace dir convenience */
     const char                 *workspace_dir;
+
+    /* F1 help overlay text content (REPL-built; the renderer is
+     * tabbed-overlay-shaped and feature-agnostic). */
+    const struct UiOverlayContent *help_content;
 
     /* Per-frame editor overlay snapshots (controller-pushed). */
     const EditorTransformerList *editor_transformers;

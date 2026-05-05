@@ -15,6 +15,7 @@
 #include "repl_camera_controls.h"
 #include "repl_config.h"
 #include "repl_core.h"
+#include "repl_help_text.h"
 #include "repl_debug.h"
 #include "repl_eval.h"
 #include "repl_executor.h"
@@ -30,7 +31,7 @@
 #include "ui_autocomplete_panel.h"
 #include "ui_color_picker.h"
 #include "ui_editor.h"
-#include "ui_help_overlay.h"
+#include "ui_tabbed_overlay.h"
 #include "ui_layout.h"
 #include "ui_menu_bar.h"
 #include "ui_panels.h"
@@ -404,6 +405,7 @@ static void imrepl_ctrl_build_ui_snapshot(UiRenderSnapshot *snap) {
     }
 
     snap->workspace_dir = repl_state_workspace_dir();
+    snap->help_content = repl_help_text_build();
     snap->editor_transformers = editor_state_transformers();
     snap->editor_highlights = editor_state_highlights();
     snap->editor_virtual_lines = editor_state_virtual_lines();
@@ -550,7 +552,17 @@ void imrepl_ctrl_display_frame(void) {
     ui_menu_bar_render_example_dropdown(&ui_snap);
     ui_variable_panel_render(&ui_snap);
     ui_panels_render_scene_status(&ui_snap);
-    ui_help_overlay_render(&ui_snap);
+    {
+        UiOverlayState help_overlay = {
+            .visible    = ui_snap.help.visible,
+            .tab_idx    = ui_snap.help_session.tab_idx,
+            .scroll     = ui_snap.help_session.scroll,
+            .viewport_w = ui_snap.viewport.window_w,
+            .viewport_h = ui_snap.viewport.window_h,
+            .content    = ui_snap.help_content,
+        };
+        ui_tabbed_overlay_render(&help_overlay);
+    }
     prof_end(PROF_UI_PANELS);
 
     prof_begin(PROF_PROFILE_PANEL);
