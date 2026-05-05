@@ -1264,6 +1264,14 @@ int imrepl_ctrl_router_handle_code_panel_drag(int x, int y) {
 void imrepl_ctrl_keyboard(unsigned char key, int x, int y) {
     imrepl_ctrl_notify_audio_gesture_once();
 
+    /* macOS Cmd+letter normalization happens before any dispatch so
+     * the controller-owned cfg-shortcut chain (Cmd+B / Cmd+S / Cmd+T
+     * etc.) compares against the control-character form (KEY_CTRL_*).
+     * Without this, Cmd+B arrives here as 'b' (0x62), the chain looks
+     * for KEY_CTRL_B (0x02) in g_cfg_items[].key_code, and the
+     * shortcut silently misses. */
+    key = editor_input_normalize_super_to_ctrl(key);
+
     /* Rename capture: hard modal. */
     if (editor_input_rename_capture_key(key)) {
         editor_reset_input_effects();
