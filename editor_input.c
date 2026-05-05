@@ -27,6 +27,15 @@
  */
 #include "editor_input.h"
 #include "repl_state.h"
+
+/* macOS Cmd-key support. The freeglut-fork sets GLUT_ACTIVE_SUPER
+ * when Cmd is held; mainline freeglut and other GLUT builds don't
+ * deliver Cmd at all, so on those platforms the constant is absent.
+ * Define it to 0 there so the bitwise checks below compile out to
+ * no-ops without #ifdef-cluttering the call sites. */
+#ifndef GLUT_ACTIVE_SUPER
+#define GLUT_ACTIVE_SUPER 0
+#endif
 #include "repl_parser.h"
 #include "repl_actions.h"
 #include "repl_core_internal.h"
@@ -92,10 +101,34 @@ ReplInputDispatchEffects editor_take_input_effects(void) {
     return out;
 }
 
+/* Production sets this from imrepl_ctrl after glutInit so
+ * editor_get_modifiers() can safely call glutGetModifiers(). Tests
+ * that don't install a modifier provider leave it at 0; the read
+ * is suppressed and modifier checks see "no modifiers" rather than
+ * aborting freeglut for being called pre-init. */
+static int g_glut_modifier_reads_enabled = 0;
+
+void editor_input_enable_glut_modifier_reads(void) {
+    g_glut_modifier_reads_enabled = 1;
+}
+
 int editor_get_modifiers(void) {
+    int mods;
     if (g_modifier_provider_for_test)
-        return g_modifier_provider_for_test();
-    return glutGetModifiers();
+        mods = g_modifier_provider_for_test();
+    else if (g_glut_modifier_reads_enabled)
+        mods = glutGetModifiers();
+    else
+        mods = 0;
+    /* Treat Cmd (GLUT_ACTIVE_SUPER on the freeglut-fork) as a Ctrl
+     * alias so every existing GLUT_ACTIVE_CTRL check fires on macOS
+     * Cmd shortcuts (Cmd+/ for comment toggle, mouse-modifier checks,
+     * etc.). The SUPER bit stays visible so keyboard_func can do the
+     * letter→control-char translation specifically for Cmd+letter
+     * combos without disturbing the real-Ctrl path. */
+    if (mods & GLUT_ACTIVE_SUPER)
+        mods |= GLUT_ACTIVE_CTRL;
+    return mods;
 }
 
 void editor_request_redraw(void) {
@@ -1212,6 +1245,25 @@ static int handle_printable_input_key_route(unsigned char key) {
 static void keyboard_func(unsigned char key, int x, int y) {
     (void)x;
     (void)y;
+
+    /* macOS Cmd+letter: GLUT delivers the raw letter byte (e.g. 'c')
+     * rather than the control-character that real Ctrl+letter
+     * produces (e.g. 0x03). Translate to the control-character form
+     * so the rest of the pipeline (KEY_CTRL_C / _S / _Z dispatchers)
+     * sees Cmd+C identically to Ctrl+C. Only triggered when the
+     * SUPER bit is actually set, so the real-Ctrl path is untouched
+     * on platforms where Ctrl+letter already arrives as a control
+     * character.
+     *
+     * The alpha-letter check runs first so non-letter keys never
+     * touch editor_get_modifiers() — that read goes through
+     * glutGetModifiers() (when the test seam isn't installed) which
+     * aborts hard if glutInit hasn't run, and many test fixtures
+     * exercise keyboard_func without a real GLUT context. */
+    if (((key >= 'a' && key <= 'z') || (key >= 'A' && key <= 'Z')) &&
+        (editor_get_modifiers() & GLUT_ACTIVE_SUPER)) {
+        key = (unsigned char)(key & 0x1F);
+    }
 
     keyboard_begin_key(key);
 

@@ -575,6 +575,12 @@ void imrepl_ctrl_init_gl(void) {
     scene_render_init_gl();
     repl_executor_init_resources();
     apply_init_bootstrap();
+    /* glutInit has run by the time imrepl_ctrl_init_gl is called.
+     * Unlock glutGetModifiers() reads in editor_input so Cmd / Ctrl /
+     * Shift modifier checks land. Tests skip this hook so modifier
+     * reads default to "no modifiers held" instead of aborting
+     * freeglut for being called pre-init. */
+    editor_input_enable_glut_modifier_reads();
 }
 
 void imrepl_ctrl_bootstrap_repl(const char *input_file) {
