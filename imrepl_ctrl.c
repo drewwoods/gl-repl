@@ -1026,14 +1026,17 @@ static int route_code_gutter_hit(const UiHit *hit) {
 }
 
 /* UI_HIT_INLINE_COLOR_SWATCH: toggle / open the floating color picker
- * for the swatch's source line. */
+ * for the swatch's source line. Undo capture is owned by the picker's
+ * writeback path (color_picker_write_cmd → editor_commit_apply_external
+ * _change with capture_undo on the first slider edit per session), so
+ * a session that opens and closes without editing leaves the undo ring
+ * untouched. */
 static int route_inline_color_swatch_hit(const UiHit *hit, int my) {
     if (hit->line_idx < 0)
         return 0;
     if (ui_color_picker_active_line() == hit->line_idx) {
         ui_color_picker_close();
     } else {
-        repl_undo_push_snapshot();
         ui_color_picker_open(hit->line_idx, my);
     }
     editor_request_redraw();
