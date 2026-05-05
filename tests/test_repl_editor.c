@@ -1750,9 +1750,29 @@ int main() {
     /* 40. Total variable table limit rejects atomically */
     {
         repl_reset_state();
-        repl_feed_line_public("float v0, v1, v2, v3, v4, v5, v6, v7;");
-        repl_feed_line_public("float v8, v9, v10, v11, v12, v13, v14;");
-        ASSERT_INT("decl table full setup: two decl cmds", repl_state_document_count(), 2);
+        /* Fill all user-declarable slots (MAX_PREDEF_VARS - 1; slot 0 is
+         * reserved for t which is re-declared on every reset). Feed in
+         * batches of 8 — the per-line name limit. */
+        int user_slots = MAX_PREDEF_VARS - 1;
+        int filled_cmds = 0;
+        char last_var[16] = "";
+        for (int base = 0; base < user_slots; base += 8) {
+            int count = user_slots - base;
+            if (count > 8) count = 8;
+            char decl[256] = "float ";
+            int pos = 6;
+            for (int j = 0; j < count; j++) {
+                if (j > 0) { decl[pos++] = ','; decl[pos++] = ' '; }
+                int n = snprintf(decl + pos, sizeof(decl) - pos, "v%d", base + j);
+                pos += n;
+                if (j == count - 1)
+                    snprintf(last_var, sizeof(last_var), "v%d", base + j);
+            }
+            snprintf(decl + pos, sizeof(decl) - pos, ";");
+            repl_feed_line_public(decl);
+            filled_cmds++;
+        }
+        ASSERT_INT("decl table full setup: all decl cmds", repl_state_document_count(), filled_cmds);
         ASSERT_INT("decl table full setup: all slots used", g_num_predef_vars, MAX_PREDEF_VARS);
 
         set_editor_input("float overflow");
@@ -1761,16 +1781,18 @@ int main() {
         int result = try_commit_float_decl();
 
         ASSERT_INT("decl table full: handler consumed input", result, 1);
-        ASSERT_INT("decl table full: cmd count unchanged", repl_state_document_count(), 2);
+        ASSERT_INT("decl table full: cmd count unchanged", repl_state_document_count(), filled_cmds);
         ASSERT_INT("decl table full: var count unchanged", g_num_predef_vars, MAX_PREDEF_VARS);
         ASSERT_TRUE("decl table full: overflow not registered",
                     repl_eval_find_predef_var_idx("overflow") < 0);
         ASSERT_TRUE("decl table full: first existing var remains",
                     repl_eval_find_predef_var_idx("v0") >= 0);
         ASSERT_TRUE("decl table full: last existing var remains",
-                    repl_eval_find_predef_var_idx("v14") >= 0);
+                    repl_eval_find_predef_var_idx(last_var) >= 0);
+        char max_msg[32];
+        snprintf(max_msg, sizeof(max_msg), "max %d", MAX_PREDEF_VARS);
         assert_status_contains("decl table full: status full", "variable table full");
-        assert_status_contains("decl table full: status max", "max 16");
+        assert_status_contains("decl table full: status max", max_msg);
     }
 
     /* 41. Declaration validation failures are atomic */
