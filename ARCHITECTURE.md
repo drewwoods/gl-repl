@@ -473,10 +473,12 @@ REPL. Every bullet is required unless the note says otherwise. The GLUT solid
 shapes (`glutSolidCube`, `glutSolidSphere`, `glutSolidTeapot`, `glutSolidCone`)
 are a recent worked example.
 
-### 1. `sample.h` — declare the type
+### 1. `repl_command.h` — declare the type
 
 Add a new `CmdType` enum entry in the `CMD_*` block, adjacent to related
-commands. The enum drives switch dispatch everywhere.
+commands. The enum drives switch dispatch everywhere. (`CmdType` lives in
+`repl_command.h`; `sample.h` only re-exports it transitively via
+`#include "repl_command.h"`.)
 
 ```c
 CMD_GLUT_CUBE, CMD_GLUT_SPHERE, CMD_GLUT_TEAPOT, CMD_GLUT_CONE,
@@ -492,23 +494,27 @@ The hint string is displayed inline; param names drive Tab-cycle hints.
 { "glutSolidCube(",  "glutSolidCube(size)",  1, { "size" } },
 ```
 
-**b. `g_std_command_specs[]`** — parse spec used by `repl_parser.c` and the
-autocomplete lookup. `num_args` must match the `%g` count in `fmt`.
+**b. `k_std_command_specs[]`** — parse spec used by `repl_parser.c` and the
+autocomplete lookup. `num_args` must match the `%g` count in `fmt`. For
+commands with `glEnable`/`glBlendFunc`-style enum arguments, append to
+`k_enum_command_specs[]` instead and wire `enums1` / `enums2` to the
+appropriate `ReplEnumEntry` tables.
 
 ```c
 { "glutSolidCube", CMD_GLUT_CUBE, 1, "glutSolidCube(%g);", "Usage: glutSolidCube(size)", 0 },
 ```
 
-For commands with `glEnable`/`glBlendFunc`-style enum arguments, add to
-`g_enum_command_specs[]` instead and wire `enums1`/`enums2` to the
-appropriate `EnumEntry` tables.
-
-**c. `g_command_type_specs[]`** — formatting/indentation metadata for the
-new `CmdType`. Nearly all geometry commands use `(1, 1)` (needs semicolon,
-needs block indent).
+**c. `g_command_type_specs[]`** — formatting/indentation metadata plus the
+syntax category that drives code-panel highlight color. The
+`CMD_TYPE_SPEC(type, needs_semicolon, needs_block_indent, category)`
+macro is keyed on the enum, so order is validated at compile time. Pick
+the matching `CMD_CAT_*` from `repl_command_spec.h` (e.g.
+`CMD_CAT_GLUT_SHAPE` for solid shapes, `CMD_CAT_VERTEX` for vertices,
+`CMD_CAT_STATE` for `glEnable`-shaped state). Nearly all geometry
+commands use `(1, 1, ...)` — needs semicolon, needs block indent.
 
 ```c
-CMD_TYPE_SPEC(CMD_GLUT_CUBE, 1, 1),
+CMD_TYPE_SPEC(CMD_GLUT_CUBE, 1, 1, CMD_CAT_GLUT_SHAPE),
 ```
 
 ### 3. `repl_executor.c` — execute the command
@@ -516,6 +522,10 @@ CMD_TYPE_SPEC(CMD_GLUT_CUBE, 1, 1),
 Add a `case` block after the nearest related command. Call the GL/GLU/GLUT
 function, casting `flat_cmds[pc].args[N]` to the correct C type (`(double)`,
 `(int)`, etc.). Always close an open `glBegin` block first for shape commands.
+If the command emits geometry that should be skipped during replay's
+"already-rendered prefix" pass, also list the new `CMD_*` in the
+`REPLAY_MODE_VERTEX` skip switch near the top of `execute_commands`
+(alongside `CMD_VERTEX3F` / `CMD_GLUT_CUBE` / etc.).
 
 ```c
 case CMD_GLUT_CUBE:
@@ -535,8 +545,10 @@ case CMD_GLUT_CUBE: *nargs_out = 1; return "glutSolidCube(%g);";
 
 ### 5. `ui_help_overlay.c` — help text
 
-Add a line to the appropriate section of `g_commands_lines[]` (F1 overlay,
-Commands tab). Group with related commands under the same section header.
+Add a line to the `tab_commands[]` static array inside
+`ui_help_overlay_render` (F1 overlay, Commands tab). Lines use a `\t`
+to separate the command from its description. Group with related
+commands under the same section header.
 
 ### 6. Stubs (only if adding a symbol not yet in the stub headers)
 
@@ -560,15 +572,22 @@ static inline void glutSolidTeapot(double size) {
 Keep stubs minimal: model the signature, call `gl_stub_tick`, suppress
 unused-parameter warnings with `(void)`, no real rendering.
 
+### 7. Save/load round-trip
+
+Most commands round-trip automatically: `repl_export.c` writes
+`GLCmd.source[]` verbatim into the exported `display()` body, and
+`repl_export_load_from_file` feeds those lines back through the commit
+pipeline. You only need to touch `repl_export.c` for commands with
+non-source-text encoding — declarations (`@declare`), tess blocks, etc.
+Add a focused round-trip case to `tests/test_repl_export_all_commands.c`
+to keep coverage tight.
+
 ### Verify
 
 ```bash
 make sample          # must be clean (no new warnings)
 make test-stubs      # all tests must pass
 ```
-
-For commands that affect save/load round-trips, update the matching export
-and import helpers in `repl_export.c`.
 
 ## Open Refactor Edges
 
