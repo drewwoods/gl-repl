@@ -128,6 +128,11 @@ ownership / contract guards. Highlights:
   controls, route hits via `replay_handle_*`, and read replay
   snapshots, but must not mutate editor/REPL state, call
   parser/compile/apply, or grow generic `ui_*` responsibilities.
+- `check-color-picker-ui-isolation` — stricter feature-UI guard.
+  `color_picker_ui*.c` is a pure renderer + hit-test over
+  `ColorPickerView`; no mutators, no live REPL/editor state reads,
+  no parser/compile/apply, no `set_status`. Lifecycle and writeback
+  belong on the peer (`color_picker.c`).
 - `check-variable-panel-forwarders` — baseline **0/0** after Phase
   J6 migrated every fixture site onto `variable_panel_drag` /
   `variable_panel_view` / `variable_panel_handle_drag_*`, and Phase
@@ -209,8 +214,10 @@ ownership / contract guards. Highlights:
 | `ui_profile_panel.h` | Profile panel render entrypoint |
 | `ui_menu_bar.c` | Code-panel menu bar, dropdowns, config right-click handling, search slot |
 | `ui_menu_bar.h` | Menu/pin hit-test and dropdown state API |
-| `ui_color_picker.c` | Floating color picker and literal color swatch rendering/mutation |
-| `ui_color_picker.h` | Color-picker input/render bridge API |
+| `color_picker.c` | Floating color picker peer: state, lifecycle, slider input handlers, source-line writeback through editor commit |
+| `color_picker.h` | Peer API (`ColorPickerView`, `ColorPickerInputResult`, `color_picker_open/close/handle_*`, `color_picker_hsv_to_rgb`) |
+| `color_picker_ui.c` | Floating color picker renderer + hit-test (pure, takes `ColorPickerView *`) |
+| `color_picker_ui.h` | Picker UI render/hit-test API + `UI_COLOR_SWATCH_W` |
 | `ui_help_overlay.c` | Modal F1 help overlay (Commands / Keys tabs, dynamic F-key bindings) |
 | `ui_help_overlay.h` | Help overlay render entrypoint |
 | `ui_variable_panel.c` | Floating variable slider panel rendering, geometry, and hit-test |
