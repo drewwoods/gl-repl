@@ -7,6 +7,7 @@
  * item actions that touch scenes, files, replay, audio, or presentation state.
  */
 #include "repl_actions.h"
+#include "color_picker.h"
 #include "repl_audio.h"
 #include "repl_core.h"
 #include "repl_core_internal.h"
@@ -197,7 +198,7 @@ void repl_cfg_cycle_row(int row, int delta) {
             set_status("Layout: bottom code panel");
         } else if (repl_state_presentation().code_panel_layout == CODE_PANEL_LAYOUT_HIDDEN) {
             ui_menu_bar_close();
-            ui_color_picker_close();
+            color_picker_close();
             editor_completion_clear();
             set_status("Layout: code panel hidden");
         } else {
