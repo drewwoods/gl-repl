@@ -499,6 +499,10 @@ test-stubs: ## Build and run tests using local GL/GLU/GLUT stubs, without GL lib
 # BENCH_ARGS to pass through flags, e.g. `make bench BENCH_ARGS="--iters 20"`.
 BENCH_ARGS ?=
 
+capacity-matrix: ## Print state-scaling matrix: per-tunable bytes-per-unit, current totals, and undo/redo ring footprint.
+	@$(CC) $(COMMON_CFLAGS) -o build/capacity_matrix tools/capacity_matrix.c
+	@./build/capacity_matrix
+
 bench: $(BENCH_BINS) ## Build and run the REPL runtime benchmarks.
 	@for b in $(BENCH_BINS); do \
 		echo "==> $$b $(BENCH_ARGS)"; \
