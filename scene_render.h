@@ -40,9 +40,9 @@
 #define MAX_ACCUM_SAMPLES 16
 #define ACCUM_STEP_COUNT  5
 
-#define CFG_DEFAULT_MULTISAMPLE      1
-#define CFG_DEFAULT_LINE_SMOOTH      0
-#define CFG_DEFAULT_ATTENUATE_POINTS 1
+/* CFG_DEFAULT_MULTISAMPLE / _LINE_SMOOTH / _ATTENUATE_POINTS live in
+ * repl_presentation.h alongside the other CFG_DEFAULT_* macros so
+ * repl_state.c can read them without including a `scene_*` header. */
 
 /* One-time GL initialization: create display lists, compile shaders, allocate
  * tessellator, set up default light state. Called once on startup. */

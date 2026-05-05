@@ -37,10 +37,10 @@
 
 #include "scene_render_types.h"
 
-/* Shared by live polygon-outline overlays and exported output.c outline
- * passes so both paths use the same depth bias. */
-#define REPL_OUTLINE_POLYGON_OFFSET_FACTOR (-0.01f)
-#define REPL_OUTLINE_POLYGON_OFFSET_UNITS  (-100.0f)
+/* REPL_OUTLINE_POLYGON_OFFSET_{FACTOR,UNITS} live in scene_render_types.h
+ * so repl_export.c can write the same depth-bias constants into the
+ * exported output.c without having to include a `scene_*` header
+ * (which would trip check-controller-boundaries). */
 
 /* Check whether a flat command block (starting at begin_idx) matches the cursor
  * context (for highlighting in polygon outlines). Returns 1 if the block's

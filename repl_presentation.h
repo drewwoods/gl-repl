@@ -75,4 +75,15 @@ typedef enum {
 #define CFG_DEFAULT_WRAP_AT_COMMA     1
 #define CFG_DEFAULT_CODE_PANEL_LAYOUT CODE_PANEL_LAYOUT_TOP
 
+/* Render-side config defaults — these were briefly housed in
+ * scene_render.h, but the reset helpers and ReplRenderState
+ * initializer in repl_state.c need them, and a `repl_*.c` file
+ * cannot include a `scene_*` header (check-controller-boundaries).
+ * Living here keeps them adjacent to the rest of the CFG_DEFAULT_*
+ * block and reachable by both the scene renderer (via
+ * scene_render_types.h) and the REPL state defaults. */
+#define CFG_DEFAULT_MULTISAMPLE       1
+#define CFG_DEFAULT_LINE_SMOOTH       0
+#define CFG_DEFAULT_ATTENUATE_POINTS  1
+
 #endif /* REPL_PRESENTATION_H */

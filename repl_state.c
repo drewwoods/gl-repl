@@ -11,7 +11,6 @@
 #include "repl_pipeline.h"
 #include "repl_eval.h"
 #include "repl_source_scope.h"
-#include "scene_render.h"
 #undef REPL_STATE_IMPLEMENTATION
 
 /* Import/export helpers stay in repl_export.c for now; state exposes them. */
