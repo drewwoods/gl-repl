@@ -1,0 +1,102 @@
+/*
+ * color_picker.h - Floating color-picker peer (state + lifecycle + writeback).
+ *
+ * The picker is a peer subsystem owned by the editor commit pipeline:
+ * it holds the currently-edited line, slider state (HSV + alpha),
+ * anchor geometry, and routes writebacks through
+ * editor_commit_apply_external_change. The renderer + hit-test
+ * (ui_color_picker.c today, color_picker_ui.c after the next phase)
+ * read state through `ColorPickerView` and never mutate.
+ *
+ * Public API:
+ *   - color_picker_open / _close / _active_line / _can_edit_cmd
+ *     for the controller's open/close orchestration.
+ *   - color_picker_handle_press / _motion / _release for input
+ *     dispatch. Each returns a ColorPickerInputResult so the
+ *     controller can act on consumed-vs-closed-vs-changed without
+ *     reading peer state.
+ *   - color_picker_view returns a frame snapshot for renderers and
+ *     hit-test consumers.
+ *   - color_picker_hsv_to_rgb is the shared color-math helper used
+ *     by the SV square, hue strip, alpha preview, and inline swatch
+ *     drawers; RGB->HSV stays peer-private since only open/sync needs it.
+ */
+#ifndef COLOR_PICKER_H
+#define COLOR_PICKER_H
+
+/* Hit-rect bundle in y-up OpenGL coords. Materialized into the view so
+ * UI hit-test and render don't recompute peer geometry. */
+typedef struct {
+    int sv_x, sv_y, sv_sz;
+    int hue_x, hue_y, hue_w, hue_h;
+    int alp_x, alp_y, alp_w, alp_h;
+} ColorPickerRects;
+
+typedef struct {
+    int   open;             /* 0 when no picker is active; other fields stale */
+    int   active_line;      /* source-cmd index, -1 when !open */
+    int   has_alpha;        /* RGBA-shaped command (incl. CMD_CLEAR_COLOR) */
+    float hue, sat, val;    /* HSV slider values, 0..1 */
+    float alpha;            /* alpha slider, 0..1 (1.0 when !has_alpha) */
+    int   anchor_px;        /* SV-square top-left in y-up OpenGL coords */
+    int   anchor_py;
+    ColorPickerRects rects;
+    /* Maximum permissible V for the active command. 1.0 normally;
+     * clamped lower for CMD_CLEAR_COLOR so renderers can shade the
+     * out-of-range region without consulting the document. */
+    float value_max;
+} ColorPickerView;
+
+typedef struct {
+    int consumed;   /* picker handled the event; controller should not fall through */
+    int closed;     /* picker just transitioned from open to closed */
+    int changed;    /* writeback fired (slider edit / new-value commit) */
+} ColorPickerInputResult;
+
+/* Pure HSV->RGB. h, s, v in [0, 1]; outputs in [0, 1]. */
+void color_picker_hsv_to_rgb(float h, float s, float v,
+                             float *r, float *g, float *b);
+
+/* Open the picker on a specific source command. cmd_idx must satisfy
+ * color_picker_can_edit_cmd (CMD_COLOR3F / CMD_COLOR4F / CMD_TESS_COLOR /
+ * CMD_CLEAR_COLOR with constant args). my is the GLUT screen y where the
+ * picker was triggered (used for vertical anchoring). No-op if the
+ * command is not editable. */
+void color_picker_open(int cmd_idx, int my);
+
+/* Dismiss any active picker. Returns 1 if a picker was open and closed,
+ * 0 if no picker was active. */
+int  color_picker_close(void);
+
+/* Source-cmd index of the open picker, or -1 when closed. */
+int  color_picker_active_line(void);
+
+/* Returns 1 if cmd_idx is a glColor3f/glColor4f/gluColor/glClearColor
+ * with constant arguments; 0 otherwise. */
+int  color_picker_can_edit_cmd(int cmd_idx);
+
+/* Snapshot of picker state for the current frame. Cheap to call (returns
+ * a value); UI code should call this once per frame and pass the result
+ * to its render/hit-test entry points rather than re-querying. */
+ColorPickerView color_picker_view(void);
+
+/* Mouse press / motion / release handlers. mx, my are GLUT screen coords.
+ *
+ * Press semantics:
+ *   - inside a slider rect: { consumed=1, closed=0, changed=1 } (drag begins)
+ *   - inside the picker bounds but outside slider rects: returns no-consume
+ *     so callers can fall through (rare; today returns the close-fallthrough
+ *     branch below)
+ *   - outside the picker: { consumed=0, closed=1, changed=0 } — picker
+ *     dismisses itself; controller should redraw and let the click flow to
+ *     menu/scene handlers.
+ *   - picker not open: { consumed=0, closed=0, changed=0 }.
+ *
+ * Motion fires only while a slider drag is active (set by press).
+ * Release ends any active drag; no result struct because nothing branches
+ * on it today. */
+ColorPickerInputResult color_picker_handle_press(int mx, int my);
+ColorPickerInputResult color_picker_handle_motion(int mx, int my);
+void                   color_picker_handle_release(void);
+
+#endif /* COLOR_PICKER_H */

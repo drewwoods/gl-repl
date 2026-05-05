@@ -4,6 +4,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+#include "color_picker.h"
 #include "editor_input.h"
 #include "editor_completion.h"
 #include "editor_help_session.h"
@@ -168,7 +169,7 @@ static void imrepl_ctrl_push_color_transformers(void) {
     editor_state_transformers_clear();
     int doc_count = repl_state_document_count();
     for (int i = 0; i < doc_count; i++) {
-        if (!ui_color_picker_can_edit_cmd(i))
+        if (!color_picker_can_edit_cmd(i))
             continue;
         const GLCmd *cmd = repl_state_document_cmd_at(i);
         if (!cmd)
@@ -865,13 +866,15 @@ int imrepl_ctrl_router_handle_scene_press(int button, int state, int x, int y) {
     if (state != GLUT_DOWN || button != GLUT_LEFT_BUTTON)
         return 0;
     /* The scene region is owned by the camera, but the floating color
-     * picker can overlap it. Give the picker first crack on press
-     * (matches legacy ui_panels_handle_scene_press → ui_color_picker_press
-     * forwarding). */
-    if (ui_color_picker_press(x, y)) {
+     * picker can overlap it. Give the picker first crack on press; if
+     * the click lands outside its rects the peer dismisses itself
+     * (closed=1) and we redraw but fall through so the camera sees
+     * the event. */
+    ColorPickerInputResult r = color_picker_handle_press(x, y);
+    if (r.closed || r.changed)
         editor_request_redraw();
+    if (r.consumed)
         return 1;
-    }
     return 0;
 }
 
@@ -996,7 +999,7 @@ static void route_code_click_epilog(void) {
 static int route_code_text_hit(const UiHit *hit) {
     /* A non-swatch click on the code panel closes any open color picker
      * (matches legacy ui_panels_handle_code_panel_press behaviour). */
-    ui_color_picker_close();
+    color_picker_close();
 
     if (hit->line_idx >= 0)
         navigate_to_line(hit->line_idx);
@@ -1019,7 +1022,7 @@ static int route_code_text_hit(const UiHit *hit) {
  * cursor column but do not navigate (matches legacy on_insert_line=1
  * behaviour). No drag anchor — the insert row is virtual. */
 static int route_code_insert_line_hit(const UiHit *hit) {
-    ui_color_picker_close();
+    color_picker_close();
     if (hit->char_idx >= 0)
         editor_cursor_pos_set(hit->char_idx);
     route_code_click_epilog();
@@ -1030,7 +1033,7 @@ static int route_code_insert_line_hit(const UiHit *hit) {
 /* UI_HIT_CODE_GUTTER: clicking the line-number column selects the
  * row. Same dispatch as CODE_TEXT minus the cursor-column move. */
 static int route_code_gutter_hit(const UiHit *hit) {
-    ui_color_picker_close();
+    color_picker_close();
     if (hit->line_idx >= 0)
         navigate_to_line(hit->line_idx);
     route_code_click_epilog();
@@ -1053,10 +1056,10 @@ static int route_code_gutter_hit(const UiHit *hit) {
 static int route_inline_color_swatch_hit(const UiHit *hit, int my) {
     if (hit->line_idx < 0)
         return 0;
-    if (ui_color_picker_active_line() == hit->line_idx) {
-        ui_color_picker_close();
+    if (color_picker_active_line() == hit->line_idx) {
+        color_picker_close();
     } else {
-        ui_color_picker_open(hit->line_idx, my);
+        color_picker_open(hit->line_idx, my);
     }
     editor_request_redraw();
     return 1;
@@ -1066,11 +1069,10 @@ static int route_inline_color_swatch_hit(const UiHit *hit, int my) {
  * picker has its own internal hit-test for SV/hue/alpha regions and
  * starts a drag on press. */
 static int route_color_picker_control_hit(int x, int y) {
-    if (ui_color_picker_press(x, y)) {
+    ColorPickerInputResult r = color_picker_handle_press(x, y);
+    if (r.changed || r.closed)
         editor_request_redraw();
-        return 1;
-    }
-    return 0;
+    return r.consumed;
 }
 
 /* UI_HIT_PIN_BUTTON: Search / Replay pinned right-side button. */
@@ -1362,7 +1364,7 @@ void imrepl_ctrl_mouse(int button, int state, int x, int y) {
          * code-panel selection drag tracking, fire editor's UP-side
          * (panel resize end), then variable-panel release, then
          * camera UP so the orbit/pan/zoom interaction releases. */
-        ui_color_picker_release();
+        color_picker_handle_release();
         imrepl_ctrl_router_reset_code_panel_drag();
         imrepl_ctrl_apply_input_effects(editor_handle_mouse(button, state, x, y));
         editor_reset_input_effects();
@@ -1435,11 +1437,14 @@ void imrepl_ctrl_motion(int x, int y) {
     editor_reset_input_effects();
 
     /* Floating color picker drag tracking (SV / hue / alpha sliders). */
-    if (ui_color_picker_motion(x, y)) {
-        imrepl_ctrl_router_handle_camera_pointer_set(x, y);
-        editor_request_redraw();
-        imrepl_ctrl_apply_input_effects(editor_take_input_effects());
-        return;
+    {
+        ColorPickerInputResult r = color_picker_handle_motion(x, y);
+        if (r.consumed) {
+            imrepl_ctrl_router_handle_camera_pointer_set(x, y);
+            editor_request_redraw();
+            imrepl_ctrl_apply_input_effects(editor_take_input_effects());
+            return;
+        }
     }
 
     if (imrepl_ctrl_router_handle_variable_panel_motion(x, y)) {
