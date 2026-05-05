@@ -19,7 +19,7 @@
 set -euo pipefail
 
 violations=$(grep -nE \
-    'ui_panels_handle_code_panel_(press|click|drag|release)\b|ui_panels_handle_(scene_press|motion|mouse_release|escape)\b|ui_color_picker_(open|close|press|motion|release)\b|replay_handle_pin_clicked\b|handle_search_key\b|ui_menu_bar_(close|set_open_menu|activate_dropdown_item|note_search_opened)\b' \
+    'ui_panels_handle_code_panel_(press|click|drag|release)\b|ui_panels_handle_(scene_press|motion|mouse_release|escape)\b|color_picker_(open|close|handle_press|handle_motion|handle_release)\b|replay_handle_pin_clicked\b|handle_search_key\b|ui_menu_bar_(close|set_open_menu|activate_dropdown_item|note_search_opened)\b' \
     ui_panels.c 2>/dev/null \
     | grep -vE '^[0-9]+:[[:space:]]*(/\*|\*|//)' \
     || true)
