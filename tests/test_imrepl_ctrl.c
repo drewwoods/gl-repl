@@ -26,7 +26,7 @@ static TestHarness g_harness = TEST_HARNESS_INIT;
 #define ui_menu_bar_render_example_dropdown test_ui_menu_bar_render_example_dropdown
 #define ui_variable_panel_render           test_ui_variable_panel_render
 #define ui_panels_render_scene_status      test_ui_panels_render_scene_status
-#define ui_help_overlay_render             test_ui_help_overlay_render
+#define ui_tabbed_overlay_render           test_ui_tabbed_overlay_render
 #define ui_profile_panel_render            test_ui_profile_panel_render
 
 #include "imrepl_ctrl.c"
@@ -38,7 +38,7 @@ static TestHarness g_harness = TEST_HARNESS_INIT;
 #undef ui_menu_bar_render_example_dropdown
 #undef ui_variable_panel_render
 #undef ui_panels_render_scene_status
-#undef ui_help_overlay_render
+#undef ui_tabbed_overlay_render
 #undef ui_profile_panel_render
 
 static SceneRenderConfig g_last_scene_config;
@@ -101,7 +101,7 @@ void test_ui_autocomplete_panel_render(const UiRenderSnapshot *snap,
 void test_ui_menu_bar_render_example_dropdown(const UiRenderSnapshot *snap) { (void)snap; }
 void test_ui_variable_panel_render(const UiRenderSnapshot *snap) { (void)snap; }
 void test_ui_panels_render_scene_status(const UiRenderSnapshot *snap) { (void)snap; }
-void test_ui_help_overlay_render(const UiRenderSnapshot *snap) { (void)snap; }
+void test_ui_tabbed_overlay_render(const UiOverlayState *in) { (void)in; }
 void test_ui_profile_panel_render(const UiRenderSnapshot *snap) { (void)snap; }
 
 static void prepare_display_fixture(void) {
