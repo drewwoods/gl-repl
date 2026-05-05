@@ -380,7 +380,7 @@ check-ui-no-repl-state-read: ## Verify UI renderers consume the UiRenderSnapshot
 	@echo "ui-no-repl-state-read $(GREEN)OK$(NC)"
 
 check-state-ownership: ## Run state-ownership contract checks (new + tightened existing checks).
-	@set -e; \
+	@set -e -o pipefail; \
 	for target in \
 		check-controller-boundaries \
 		check-scene-no-repl-state-mut \
