@@ -4,18 +4,23 @@
  *
  * Extracted from sample.c for maintainability.
  */
-#include "sample.h"
 #include "repl_actions.h"
+#include "repl_command_spec.h"
 #include "repl_state_views.h"
+#include "ui_state.h"
 #include "repl_export.h"
-#include "repl_layout.h"
+#include "ui_layout.h"
 #include "ui_color_picker.h"
-#include "repl_code_panel_document.h"
+#include "ui_metrics.h"
+#include "editor_code_panel_document.h"
 #include "repl_core.h"
-#include "repl_clipboard.h"
+#include "editor_clipboard.h"
+#include "editor_search.h"
 #include "repl_keys.h"
-#include "repl_replay.h"
+#include "replay.h"
+#include "replay_state.h"
 #include "ui_menu_bar.h"
+#include "ui_variable_panel.h"
 #include "repl_replay_annotations.h"
 #include "prof.h"
 #include "ui_panels.h"
@@ -39,64 +44,43 @@ static const EditorTransformer *find_color_transformer(const EditorTransformerLi
 
 
 /* Status footer height - design: 22px strip flush against code panel bottom */
-/* STATUSBAR_H lives in sample.h now so scene_render.c can lift the
+/* STATUSBAR_H lives in ui_metrics.h now so scene_render.c can lift the
  * replay HUD above the amber status strip.  */
 
 /* ========================================================================= */
 /* Syntax color helpers                                                       */
 /* ========================================================================= */
 
+/* Category → RGB palette. The category for each CmdType is declared in
+ * repl_command_spec.c's g_command_type_specs[] table; the renderer just
+ * looks the color up here. Adding a new CmdType picks up its highlight
+ * automatically — set its category in the spec table and the renderer
+ * follows. Tweak the palette here if you want to change how a category
+ * looks; the spec table doesn't change. */
+static const struct { float r, g, b; } k_category_colors[CMD_CAT_COUNT] = {
+    [CMD_CAT_DEFAULT]     = { 0.70f, 0.70f, 0.70f },  /* gray (fallback) */
+    [CMD_CAT_PRIMITIVE]   = { 0.85f, 0.45f, 0.85f },  /* magenta — glBegin/glEnd */
+    [CMD_CAT_VERTEX]      = { 0.40f, 0.90f, 0.40f },  /* green */
+    [CMD_CAT_NORMAL]      = { 0.40f, 0.80f, 0.95f },  /* cyan */
+    [CMD_CAT_COLOR]       = { 0.95f, 0.85f, 0.30f },  /* yellow */
+    [CMD_CAT_TRANSFORM]   = { 0.95f, 0.65f, 0.40f },  /* orange */
+    [CMD_CAT_STATE]       = { 0.80f, 0.70f, 0.95f },  /* lavender */
+    [CMD_CAT_LOOP]        = { 0.95f, 0.60f, 0.30f },  /* orange-red */
+    [CMD_CAT_FUNCTION]    = { 0.60f, 0.85f, 0.95f },  /* sky blue */
+    [CMD_CAT_VARIABLE]    = { 0.55f, 0.80f, 0.95f },  /* slightly cooler blue */
+    [CMD_CAT_CONDITIONAL] = { 0.95f, 0.75f, 0.50f },  /* peach */
+    [CMD_CAT_LABEL]       = { 0.85f, 0.55f, 0.85f },  /* purple */
+    [CMD_CAT_COMMENT]     = { 0.45f, 0.50f, 0.45f },  /* gray-green */
+    [CMD_CAT_GLUT_SHAPE]  = { 0.50f, 0.90f, 0.70f },  /* mint */
+    [CMD_CAT_TESS_BLOCK]  = { 0.70f, 0.55f, 0.90f },  /* violet */
+};
+
 static void color_for_type(CmdType t) {
-    switch (t) {
-    case CMD_BEGIN:
-    case CMD_END:      glColor3f(0.85f, 0.45f, 0.85f); break;
-    case CMD_VERTEX3F:
-    case CMD_VERTEX2F: glColor3f(0.40f, 0.90f, 0.40f); break;
-    case CMD_NORMAL3F:      glColor3f(0.40f, 0.80f, 0.95f); break;
-    case CMD_TRANSLATE3F:
-    case CMD_SCALEF:
-    case CMD_ROTATEF:
-    case CMD_PUSH_MATRIX:
-    case CMD_POP_MATRIX:    glColor3f(0.95f, 0.65f, 0.40f); break; /* orange */
-    case CMD_COLOR_MATERIAL:
-    case CMD_MATERIALF:     glColor3f(0.95f, 0.85f, 0.30f); break; /* yellow */
-    case CMD_COLOR3F:
-    case CMD_COLOR4F:
-    case CMD_CLEAR_COLOR: glColor3f(0.95f, 0.85f, 0.30f); break; /* yellow */
-    case CMD_ENABLE:
-    case CMD_DISABLE:
-    case CMD_SHADE_MODEL:
-    case CMD_LIGHT_MODEL_I:
-    case CMD_FRONT_FACE:
-    case CMD_POINT_SIZE:
-    case CMD_POINT_PARAMETER_FV:
-    case CMD_BLEND_FUNC:
-    case CMD_DEPTH_MASK: glColor3f(0.80f, 0.70f, 0.95f); break; /* lavender */
-    case CMD_FOR_BEGIN:
-    case CMD_FOR_END:  glColor3f(0.95f, 0.60f, 0.30f); break;
-    case CMD_FUNC_DEF:
-    case CMD_FUNC_END: glColor3f(0.60f, 0.85f, 0.95f); break;
-    case CMD_CALL:     glColor3f(0.60f, 0.85f, 0.95f); break;
-    case CMD_IF_BEGIN:
-    case CMD_IF_END:   glColor3f(0.95f, 0.75f, 0.50f); break;
-    case CMD_COMMENT:    glColor3f(0.45f, 0.50f, 0.45f); break;
-    case CMD_VAR_ASSIGN:
-    case CMD_VAR_DECLARE: glColor3f(0.55f, 0.80f, 0.95f); break;
-    case CMD_LABEL:
-    case CMD_GOTO:       glColor3f(0.85f, 0.55f, 0.85f); break;
-    case CMD_GLUT_TORUS:  glColor3f(0.50f, 0.90f, 0.70f); break;
-    case CMD_GLUT_CUBE:
-    case CMD_GLUT_SPHERE:
-    case CMD_GLUT_TEAPOT:
-    case CMD_GLUT_CONE:   glColor3f(0.50f, 0.90f, 0.70f); break;
-    case CMD_TESS_BEGIN_POLYGON:
-    case CMD_TESS_BEGIN_CONTOUR:
-    case CMD_TESS_END:    glColor3f(0.70f, 0.55f, 0.90f); break; /* violet */
-    case CMD_TESS_NORMAL: glColor3f(0.40f, 0.80f, 0.95f); break; /* cyan */
-    case CMD_TESS_COLOR:  glColor3f(0.95f, 0.85f, 0.30f); break; /* yellow */
-    case CMD_TESS_VERTEX: glColor3f(0.40f, 0.90f, 0.40f); break; /* green */
-    default:             glColor3f(0.70f, 0.70f, 0.70f); break;
-    }
+    CmdSyntaxCategory cat = repl_cmd_type_category(t);
+    if (cat < 0 || cat >= CMD_CAT_COUNT) cat = CMD_CAT_DEFAULT;
+    glColor3f(k_category_colors[cat].r,
+              k_category_colors[cat].g,
+              k_category_colors[cat].b);
 }
 
 /* Replay annotations live in repl_replay_annotations.c. */
@@ -166,6 +150,7 @@ static void render_active_input_rows(const UiRenderSnapshot *snap,
                                      int visible_lines, int file_line,
                                      int indent_chars, const char *idx_text,
                                      int search_row_idx,
+                                     UiCodePanelOutput *out,
                                      int *io_cur, int *io_line_y) {
     ReplEditorInputView            inp    = snap->editor_input;
     ReplCodePanelRuntimeState cp     = snap->code_panel;
@@ -190,7 +175,7 @@ static void render_active_input_rows(const UiRenderSnapshot *snap,
 
     repl_code_panel_document_wrap_iter_init(&wrap_it, input, input_x, panel_w);
     while (repl_code_panel_document_wrap_iter_next(&wrap_it, &wrap_start, &wrap_len, &wrap_x)) {
-        if (*io_cur >= cp.scroll && *io_cur < cp.scroll + visible_lines) {
+        if (*io_cur >= snap->scroll.scroll && *io_cur < snap->scroll.scroll + visible_lines) {
             glColor3f(0.55f, 0.55f, 0.30f);
             if (wrap_row == 0) {
                 char ln[16];
@@ -253,7 +238,11 @@ static void render_active_input_rows(const UiRenderSnapshot *snap,
                     glDisable(GL_BLEND);
                 }
 
-                repl_action_set_cursor_pixel(cursor_x, *io_line_y);
+                if (out) {
+                    out->cursor_px    = cursor_x;
+                    out->cursor_py    = *io_line_y;
+                    out->cursor_valid = 1;
+                }
             }
 
             *io_line_y -= LINE_H;
@@ -285,7 +274,7 @@ int ui_panels_code_panel_apply_scroll_follow_for_test(int *out_follow_doc_line,
         *out_follow_doc_line = layout.follow_doc_line;
     if (out_visible_lines)
         *out_visible_lines = layout.visible_lines;
-    int scroll = repl_state_code_panel().scroll;
+    int scroll = editor_scroll();
     return layout.follow_doc_line >= scroll &&
            layout.follow_doc_line < scroll + layout.visible_lines;
 }
@@ -313,6 +302,10 @@ typedef struct {
     int  visible_lines;
     int  highlight_normal_idx;
     int  highlight_color_idx;
+    /* Per-frame render output discovered while drawing the active
+     * input row. NULL when the caller (e.g. test fixtures) doesn't
+     * need cursor-pixel publishing. */
+    UiCodePanelOutput *out;
     /* Mutable row cursor state advanced as rows are emitted. */
     int  cur;
     int  line_y;
@@ -517,7 +510,8 @@ static void code_panel_draw_command_row(CodePanelRowCtx *ctx, int i,
         search_row_idx = i + 1;
     else
         search_row_idx = i;
-    repl_replay_code_panel_get_command_display_text(i, display_text,
+    repl_replay_code_panel_get_command_display_text(editor_buffer_view(),
+                                                    i, display_text,
                                                     sizeof(display_text));
 
     CodePanelWrapIter wrap_it;
@@ -562,6 +556,7 @@ static void code_panel_draw_trailing_newline(CodePanelRowCtx *ctx,
                                  ctx->snap->active_indent_chars,
                                  NULL,
                                  edit_line,
+                                 ctx->out,
                                  &ctx->cur, &ctx->line_y);
     } else if (code_panel_row_visible(ctx)) {
         code_panel_draw_gutter_lineno(ctx->line_y, ctx->file_line);
@@ -624,6 +619,7 @@ static void code_panel_draw_statusbar(const UiRenderSnapshot *snap,
     int sy = cp_y;
     int sh = STATUSBAR_H;
 
+    glPushAttrib(GL_CURRENT_BIT);
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
@@ -700,9 +696,17 @@ static void code_panel_draw_statusbar(const UiRenderSnapshot *snap,
         gl2d_draw_string((float)(kx + 5), (float)(ky + 2), help_kbd, FONT_SMALL);
     }
     glDisable(GL_BLEND);
+    glPopAttrib();
 }
 
-void ui_panels_render_code_panel(const UiRenderSnapshot *snap) {
+void ui_panels_render_code_panel(const UiRenderSnapshot *snap,
+                                 UiCodePanelOutput *out) {
+    if (out) {
+        out->cursor_px    = 0;
+        out->cursor_py    = 0;
+        out->cursor_valid = 0;
+    }
+
     /* ------------------------------------------------------------------ */
     /* Phase 1: layout. Compute panel rectangle and bail early if empty;  */
     /* otherwise build the document layout (per-cmd row counts including  */
@@ -733,7 +737,6 @@ void ui_panels_render_code_panel(const UiRenderSnapshot *snap) {
     int          document_count = snap->document_count;
     int          edit_line      = snap->edit_line;
     int          insert_mode    = snap->insert_mode;
-    ReplCodePanelRuntimeState cp = snap->code_panel;
 
     /* Pull feeding-cmd kinds out of the highlight snapshot once so the
      * per-row branch in code_panel_draw_row_overlays() stays cheap. */
@@ -793,10 +796,11 @@ void ui_panels_render_code_panel(const UiRenderSnapshot *snap) {
         .idx_x                = idx_x,
         .cp_x                 = cp_x,
         .cp_w                 = cp_w,
-        .scroll               = cp.scroll,
+        .scroll               = snap->scroll.scroll,
         .visible_lines        = visible_lines,
         .highlight_normal_idx = highlight_normal_idx,
         .highlight_color_idx  = highlight_color_idx,
+        .out                  = out,
         .cur                  = 0,
         .line_y               = panel_top - CODE_MARGIN_Y - 2 * LINE_H,
         .file_line            = 1,
@@ -857,6 +861,7 @@ void ui_panels_render_code_panel(const UiRenderSnapshot *snap) {
                                      repl_code_panel_document_active_indent_chars(),
                                      NULL,
                                      edit_line,
+                                     out,
                                      &ctx.cur, &ctx.line_y);
             ctx.file_line++;
         }
@@ -879,6 +884,7 @@ void ui_panels_render_code_panel(const UiRenderSnapshot *snap) {
         int is_edit = (!insert_mode && i == edit_line);
         int is_vertex = document_cmds[i].valid &&
                         (document_cmds[i].type == CMD_VERTEX3F ||
+                         document_cmds[i].type == CMD_VERTEX2F ||
                          document_cmds[i].type == CMD_TESS_VERTEX);
 
         if (is_edit) {
@@ -897,6 +903,7 @@ void ui_panels_render_code_panel(const UiRenderSnapshot *snap) {
                                      repl_code_panel_document_active_indent_chars(),
                                      idx_text,
                                      edit_line,
+                                     out,
                                      &ctx.cur, &ctx.line_y);
             ctx.file_line++;
         } else {
@@ -970,7 +977,7 @@ void ui_panels_render_code_panel(const UiRenderSnapshot *snap) {
     prof_begin(PROF_CODE_PANEL_OVERLAYS);
 
     code_panel_draw_scrollbar(cp_x, cp_w, cp_h, panel_top,
-                              cp.scroll, total_lines, visible_lines);
+                              snap->scroll.scroll, total_lines, visible_lines);
     code_panel_draw_statusbar(snap, cp_x, cp_y, cp_w, edit_line, insert_mode);
     ui_color_picker_render(snap);
 
@@ -1059,288 +1066,212 @@ int ui_panels_handle_right_press(int mx, int my) {
     return ui_menu_bar_handle_config_right_press(mx, my);
 }
 
-void ui_panels_close_menus(void) {
-    ui_menu_bar_close();
-    ui_color_picker_close();
-}
-void ui_panels_open_config(void) {
-    ui_menu_bar_open_config();
-}
-
-/* ========================================================================= */
-/* Code panel click handler                                                   */
-/* ========================================================================= */
-
-static int g_code_panel_drag_active = 0;
-static int g_code_panel_drag_anchor = -1;
-static int g_code_panel_drag_moved = 0;
-
-static int code_panel_hit_test(int mx, int my,
-                               int *out_target,
-                               int *out_on_insert_line,
-                               int *out_row_offset) {
-    int cp_x, cp_y, cp_w, cp_h;
-    repl_layout_code_panel_rect(&cp_x, &cp_y, &cp_w, &cp_h);
-        if (cp_w <= 0 || cp_h <= 0) return 0;
-    int panel_w = cp_w;
-    int panel_top = cp_y + cp_h;
-    /* Convert GLUT Y (top=0) to OpenGL Y (bottom=0) */
-    int gl_y = repl_state_viewport().window_h - my;
-    if (mx < cp_x || mx >= cp_x + cp_w) return 0;
-    if (gl_y < cp_y || gl_y >= cp_y + cp_h) return 0;
-
-    /* Same layout constants as render_code_panel */
-    int line_y_start = panel_top - CODE_MARGIN_Y - 2 * LINE_H;
-    int vis = (line_y_start + LINE_H - 3 - gl_y) / LINE_H;
-    if (vis < 0) return 0;   /* clicked in header */
-    if (vis >= repl_code_panel_document_visible_lines_for_height(cp_h)) return 0;
-
-    int linenum_w = 4 * FONT_W;
-    int idx_col_w = repl_state_presentation().show_vertex_indices ? (6 * FONT_W) : 0;
-    int text_x = CODE_MARGIN_X + linenum_w + FONT_W + idx_col_w;
-    int doc_line = repl_state_code_panel().scroll + vis;
-    CodePanelDocumentLayout layout;
-    int target;
-    int on_insert_line;
-    int row_offset;
-
-    repl_code_panel_document_build(&layout, panel_w, text_x, cp_h);
-    if (!repl_code_panel_document_target_for_doc_line(doc_line, &layout,
-                                                      &target,
-                                                      &on_insert_line,
-                                                      &row_offset))
+/* Divider geometry for the code-panel ↔ scene splitter. Mirrors the
+ * legacy editor_input_point_on_code_panel_divider so the hit-test
+ * stays self-contained — no UI input file needs to know about
+ * editor_input.c's predicate. */
+static int ui_panels_point_on_panel_divider(int mx, int gl_y,
+                                            int cp_x, int cp_y,
+                                            int cp_w, int cp_h) {
+    int layout = (int)repl_state_presentation().code_panel_layout;
+    if (layout < 0 || layout >= CODE_PANEL_LAYOUT_COUNT)
+        layout = CODE_PANEL_LAYOUT_LEFT;
+    if (layout == CODE_PANEL_LAYOUT_HIDDEN)
         return 0;
-
-    if (out_target) *out_target = target;
-    if (out_on_insert_line) *out_on_insert_line = on_insert_line;
-    if (out_row_offset) *out_row_offset = row_offset;
-    return 1;
-}
-
-static int code_panel_drag_target(int mx, int my, int *out_target) {
-    (void)mx;
-    int cp_x, cp_y, cp_w, cp_h;
-    repl_layout_code_panel_rect(&cp_x, &cp_y, &cp_w, &cp_h);
-    if (cp_w <= 0 || cp_h <= 0) return 0;
-    int panel_w = cp_w;
-    int panel_top = cp_y + cp_h;
-    int gl_y = repl_state_viewport().window_h - my;
-    int line_y_start = panel_top - CODE_MARGIN_Y - 2 * LINE_H;
-    int vis = (line_y_start + LINE_H - 3 - gl_y) / LINE_H;
-
-    int visible_lines = repl_code_panel_document_visible_lines_for_height(cp_h);
-    if (vis < 0) vis = 0;
-    if (vis >= visible_lines) vis = visible_lines - 1;
-
-    int linenum_w = 4 * FONT_W;
-    int idx_col_w = repl_state_presentation().show_vertex_indices ? (6 * FONT_W) : 0;
-    int text_x = CODE_MARGIN_X + linenum_w + FONT_W + idx_col_w;
-    int doc_line = repl_state_code_panel().scroll + vis;
-    CodePanelDocumentLayout layout;
-    int target;
-    int on_insert_line;
-
-    repl_code_panel_document_build(&layout, panel_w, text_x, cp_h);
-    if (!repl_code_panel_document_target_for_doc_line(doc_line, &layout,
-                                                      &target,
-                                                      &on_insert_line,
-                                                      NULL))
+    if (cp_w <= 0 || cp_h <= 0)
         return 0;
-
-    if (on_insert_line) {
-        if (repl_state_edit_line() < repl_state_document_count())
-            target = repl_state_edit_line();
-        else if (repl_state_document_count() > 0)
-            target = repl_state_document_count() - 1;
-        else
-            return 0;
-    } else if (target >= repl_state_document_count()) {
-        target = repl_state_document_count() - 1;
-    }
-
-    if (target < 0) target = 0;
-    if (target >= repl_state_document_count()) target = repl_state_document_count() - 1;
-    if (out_target) *out_target = target;
-    return repl_state_document_count() > 0;
+    if (layout == CODE_PANEL_LAYOUT_TOP)
+        return abs(gl_y - cp_y) < 10;
+    if (layout == CODE_PANEL_LAYOUT_BOTTOM)
+        return abs(gl_y - (cp_y + cp_h)) < 10;
+    return abs(mx - (cp_x + cp_w)) < 10;
 }
 
-/* Handle left-click in the code panel: navigate to line + column */
-int ui_panels_handle_code_panel_click(int mx, int my) {
-    int target, on_insert_line, row_offset;
-    if (!code_panel_hit_test(mx, my, &target, &on_insert_line, &row_offset)) return -1;
-
-    if (!on_insert_line) {
-        if (target < 0) target = 0;
-        if (target > repl_state_document_count()) target = repl_state_document_count();
-        navigate_to_line(target);
-    }
-
-    int cp_w;
-    repl_layout_code_panel_rect(NULL, NULL, &cp_w, NULL);
-    int panel_w = cp_w;
+/* Translate a code-panel click on a wrapped row into a position in
+ * the input buffer. Mirrors ui_panels_handle_code_panel_click's column
+ * derivation so the controller doesn't have to reimplement wrap /
+ * indent / segment math. */
+static int ui_panels_input_cursor_for_click(int mx, int row_offset,
+                                            int cp_w) {
     int linenum_w = 4 * FONT_W;
     int idx_col_w = repl_state_presentation().show_vertex_indices ? (6 * FONT_W) : 0;
     int text_x = CODE_MARGIN_X + linenum_w + FONT_W + idx_col_w;
     int indent_chars = repl_code_panel_document_active_indent_chars();
-    int seg_start = repl_state_editor_input().input_len;
+    int seg_start = editor_state_input().input_len;
     int seg_len = 0;
     int seg_x = text_x + indent_chars * FONT_W;
-    int col;
 
-    repl_code_panel_document_segment_for_row(repl_state_editor_input().input,
-                               seg_x, panel_w, row_offset,
-                               &seg_start, &seg_len, &seg_x);
+    repl_code_panel_document_segment_for_row(editor_state_input().input,
+                                             seg_x, cp_w, row_offset,
+                                             &seg_start, &seg_len, &seg_x);
 
-    col = (mx - seg_x + FONT_W / 2) / FONT_W;
+    int col = (mx - seg_x + FONT_W / 2) / FONT_W;
     if (col < 0) col = 0;
     if (col > seg_len) col = seg_len;
     int new_cursor = seg_start + col;
-    {
-        int cur_input_len = repl_state_editor_input().input_len;
-        if (new_cursor > cur_input_len) new_cursor = cur_input_len;
-    }
-
-    repl_action_cursor_blink_reset();
-    clear_autocomplete_state();
-    repl_clipboard_clear_selection();
+    int input_len = editor_state_input().input_len;
+    if (new_cursor > input_len) new_cursor = input_len;
     return new_cursor;
 }
 
-int ui_panels_handle_code_panel_press(int mx, int my, int *cursor_pos_out) {
-    int actions = UI_PANEL_PRESS_NONE;
+/* Pure hit-test: classify (mx, my) as a UiHit. Reads layout / state
+ * snapshots; never mutates. The controller dispatches on
+ * UiHit.kind and uses the per-kind payload (line_idx, char_idx,
+ * cmd_idx, item_idx) without consulting any UI module's state. */
+UiHit ui_panels_hit_test(int mx, int my) {
+    UiHit h = ui_hit_none();
 
-    if (cursor_pos_out)
-        *cursor_pos_out = -1;
+    int win_w = ui_state_viewport().window_w;
+    int win_h = ui_state_viewport().window_h;
+    if (win_w <= 0 || win_h <= 0)
+        return h;
 
-    /* Color picker floats and may overlap the code panel (e.g. top/bottom
-     * layouts).  Give it first crack so its hit rects take priority. */
-    if (ui_color_picker_press(mx, my))
-        return UI_PANEL_PRESS_CONSUMED;
+    int gl_y = win_h - my;
 
-    /* Pins (Search, Replay) take priority over menu labels and dropdown items
-     * so they remain clickable even when a menu label visually overlaps them
-     * in a narrow window - matches the render order (pins drawn on top). */
-    int pin = ui_menu_bar_pin_hit(mx, my);
-    if (pin >= 0) {
-        ui_menu_bar_close();
-        switch (pin) {
-        case REPL_MENU_BAR_PIN_REPLAY:
-            repl_replay_toggle_play_pause();
-            break;
-        case REPL_MENU_BAR_PIN_SEARCH:
-            handle_search_key(KEY_CTRL_F);
-            ui_menu_bar_note_search_opened();
-            break;
-        }
-        return UI_PANEL_PRESS_CONSUMED;
+    /* Help overlay takes priority when visible — hit goes there
+     * regardless of where in the window the pointer landed. The
+     * controller then routes to the help session for scroll/search. */
+    if (ui_state_help().visible) {
+        h.kind = UI_HIT_HELP_PANEL;
+        h.local_x = (float)mx;
+        h.local_y = (float)gl_y;
+        return h;
     }
 
-    /* Menu dropdown (floats over code) */
-    if (ui_menu_bar_menu_dropdown_is_open()) {
-        /* Clicking the same top-level menu toggles closed; clicking another
-         * switches to it. */
-        int open_menu = ui_menu_bar_open_menu_id();
-        int over_menu = ui_menu_bar_menu_hit(mx, my);
-        if (over_menu >= 0) {
-            if (over_menu == open_menu) {
-                ui_menu_bar_close();
-            } else {
-                ui_menu_bar_set_open_menu(over_menu);
+    /* Floating overlays beat the underlying code panel / scene. The
+     * color picker, when open, is the most modal of these — it captures
+     * input while the user is dragging a slider. */
+    UiHit picker = ui_color_picker_hit_test(mx, my);
+    if (picker.kind != UI_HIT_NONE)
+        return picker;
+
+    /* Menu-bar regions: open dropdown row, top-level menu button,
+     * pin button. */
+    UiHit menu = ui_menu_bar_hit_test(mx, my);
+    if (menu.kind != UI_HIT_NONE)
+        return menu;
+
+    /* Variable panel is a non-modal floating panel; only matters when
+     * its slider rows are visible. */
+    UiHit varp = ui_variable_panel_hit_test(mx, my);
+    if (varp.kind != UI_HIT_NONE)
+        return varp;
+
+    /* Code-panel region. */
+    int cp_x, cp_y, cp_w, cp_h;
+    repl_layout_code_panel_rect(&cp_x, &cp_y, &cp_w, &cp_h);
+
+    /* Panel divider drag handle has priority over the code-panel
+     * interior so dragging the divider doesn't accidentally hit a
+     * code-text row at the panel edge. */
+    if (ui_panels_point_on_panel_divider(mx, gl_y, cp_x, cp_y, cp_w, cp_h)) {
+        h.kind = UI_HIT_PANEL_DIVIDER;
+        h.local_x = (float)mx;
+        h.local_y = (float)gl_y;
+        return h;
+    }
+
+    if (cp_w > 0 && cp_h > 0 &&
+        mx >= cp_x && mx < cp_x + cp_w &&
+        gl_y >= cp_y && gl_y < cp_y + cp_h) {
+        /* Within the code panel. Distinguish gutter (line numbers)
+         * from text area. Layout: CODE_MARGIN_X | linenum (4*FONT_W)
+         * | gap (FONT_W) | optional idx col | text. */
+        int linenum_w = 4 * FONT_W;
+        int gutter_right = cp_x + CODE_MARGIN_X + linenum_w;
+        int in_gutter = (mx < gutter_right);
+
+        /* Best-effort line / row mapping. Mirrors code_panel_hit_test
+         * but failure-tolerant — we always return a hit kind even
+         * when the row mapping doesn't resolve a target. */
+        int target = -1;
+        int on_insert_line = 0;
+        int row_offset = 0;
+        int panel_top = cp_y + cp_h;
+        int line_y_start = panel_top - CODE_MARGIN_Y - 2 * LINE_H;
+        int vis = (line_y_start + LINE_H - 3 - gl_y) / LINE_H;
+        int row_resolved = 0;
+        if (vis >= 0 &&
+            vis < repl_code_panel_document_visible_lines_for_height(cp_h)) {
+            int idx_col_w = repl_state_presentation().show_vertex_indices ? (6 * FONT_W) : 0;
+            int text_x = CODE_MARGIN_X + linenum_w + FONT_W + idx_col_w;
+            int doc_line = editor_scroll() + vis;
+            CodePanelDocumentLayout layout;
+            repl_code_panel_document_build(&layout, cp_w, text_x, cp_h);
+            if (repl_code_panel_document_target_for_doc_line(doc_line, &layout,
+                                                             &target,
+                                                             &on_insert_line,
+                                                             &row_offset)) {
+                row_resolved = 1;
             }
-            return UI_PANEL_PRESS_CONSUMED;
         }
-        int item = ui_menu_bar_dropdown_item_hit(mx, my);
-        if (item >= 0) {
-            ui_menu_bar_activate_dropdown_item(item);
-            return UI_PANEL_PRESS_CONSUMED;
-        }
-        /* Click outside dropdown: dismiss, fall through for code nav */
-        ui_menu_bar_close();
-    }
+        h.local_x = (float)(mx - cp_x);
+        h.local_y = (float)(gl_y - cp_y);
 
-    int menu = ui_menu_bar_menu_hit(mx, my);
-    if (menu >= 0) {
-        ui_menu_bar_set_open_menu(menu);
-        return UI_PANEL_PRESS_CONSUMED;
-    }
-
-    int target, on_insert_line, row_offset;
-    if (!code_panel_hit_test(mx, my, &target, &on_insert_line, &row_offset))
-        return UI_PANEL_PRESS_NONE;
-
-    /* Check for swatch click on a color line — resolve target via the
-     * controller-pushed transformer list so input matches what was drawn,
-     * not a fresh document scan. */
-    if (!on_insert_line && row_offset == 0 && target >= 0) {
-        const EditorTransformer *ct =
-            find_color_transformer(repl_state_editor_transformers(), target);
-        if (ct) {
-            int cp_x2, cp_w2;
-            repl_layout_code_panel_rect(&cp_x2, NULL, &cp_w2, NULL);
-            int sx = cp_x2 + cp_w2 - CODE_MARGIN_X - UI_COLOR_SWATCH_W - 2;
+        /* Inline color swatch on the right edge of a committed
+         * source row (row_offset == 0, not the insert line). The
+         * controller opens / toggles / closes the picker on this hit
+         * kind, distinct from UI_HIT_COLOR_SWATCH which represents
+         * the floating picker's slider controls. */
+        if (!in_gutter && row_resolved && !on_insert_line && row_offset == 0 &&
+            target >= 0 &&
+            find_color_transformer(editor_state_transformers(), target)) {
+            int sx = cp_x + cp_w - CODE_MARGIN_X - UI_COLOR_SWATCH_W - 2;
             if (mx >= sx && mx < sx + UI_COLOR_SWATCH_W) {
-                if (ui_color_picker_active_line() == target) {
-                    ui_color_picker_close();   /* toggle: close picker */
-                } else {
-                    actions |= UI_PANEL_PRESS_OPENED_COLOR_PICKER;
-                    ui_color_picker_open(target, my);
-                }
-                return actions | UI_PANEL_PRESS_CONSUMED;
+                h.kind = UI_HIT_INLINE_COLOR_SWATCH;
+                h.line_idx = target;
+                h.cmd_idx = target;
+                h.visual_row = row_offset;
+                return h;
             }
         }
+
+        if (in_gutter) {
+            h.kind = UI_HIT_CODE_GUTTER;
+            if (row_resolved) {
+                h.line_idx = target;
+                h.visual_row = row_offset;
+            }
+            return h;
+        }
+
+        /* Code-text row: split insert-line vs committed-line. The
+         * insert line is the row past the last commit; clicks there
+         * set the cursor without navigating. The line_idx surfaced
+         * for UI_HIT_CODE_INSERT_LINE is the current edit_line so
+         * the controller's drag-anchor bookkeeping has a stable
+         * reference even when the insert row is virtual. */
+        if (row_resolved) {
+            h.kind = on_insert_line ? UI_HIT_CODE_INSERT_LINE : UI_HIT_CODE_TEXT;
+            h.line_idx = on_insert_line ? repl_state_edit_line() : target;
+            h.visual_row = row_offset;
+            h.char_idx = ui_panels_input_cursor_for_click(mx, row_offset, cp_w);
+        } else {
+            h.kind = UI_HIT_CODE_TEXT;
+        }
+        return h;
     }
-    /* Any non-swatch code-panel click closes the picker */
-    ui_color_picker_close();
 
-    if (cursor_pos_out)
-        *cursor_pos_out = ui_panels_handle_code_panel_click(mx, my);
-    else
-        (void)ui_panels_handle_code_panel_click(mx, my);
-
-    g_code_panel_drag_active = 0;
-    g_code_panel_drag_anchor = -1;
-    g_code_panel_drag_moved = 0;
-    if (!on_insert_line && target >= 0 && target < repl_state_document_count()) {
-        g_code_panel_drag_active = 1;
-        g_code_panel_drag_anchor = target;
-    }
-    return actions | UI_PANEL_PRESS_CONSUMED;
+    /* Outside the code panel: assume scene/viewport region. The
+     * scene controller is the owner; the controller routes
+     * UI_HIT_SCENE to the camera/viewport handler. */
+    h.kind = UI_HIT_SCENE;
+    h.local_x = (float)mx;
+    h.local_y = (float)gl_y;
+    return h;
 }
 
-int ui_panels_handle_code_panel_drag(int mx, int my) {
-    int target;
-    if (!g_code_panel_drag_active || g_code_panel_drag_anchor < 0) return 0;
-    if (!code_panel_drag_target(mx, my, &target)) return 0;
-
-    if (target != g_code_panel_drag_anchor || g_code_panel_drag_moved) {
-        g_code_panel_drag_moved = 1;
-        repl_selection_start(g_code_panel_drag_anchor);
-        repl_selection_set_end(target);
-        navigate_to_line(target);
-        repl_action_cursor_blink_reset();
-    }
-    return 1;
-}
-
-void ui_panels_handle_code_panel_release(void) {
-    g_code_panel_drag_active = 0;
-    g_code_panel_drag_anchor = -1;
-    g_code_panel_drag_moved = 0;
-}
-
-int ui_panels_handle_escape(void) {
-    return ui_color_picker_close();
-}
-
-int ui_panels_handle_scene_press(int mx, int my) {
-    return ui_color_picker_press(mx, my);
-}
-
-int ui_panels_handle_motion(int mx, int my) {
-    return ui_color_picker_motion(mx, my);
-}
-
-void ui_panels_handle_mouse_release(void) {
-    ui_color_picker_release();
-    ui_panels_handle_code_panel_release();
-}
+/* J2.3: ui_panels_close_menus / ui_panels_open_config were thin
+ * wrappers around ui_menu_bar / ui_color_picker. They were inlined
+ * at their callers (editor_input.c, repl_actions.c, imrepl_ctrl.c)
+ * so ui_panels.c can be hit-test-only without the
+ * check-ui-panels-no-mutators guard needing an allowlist exception
+ * for the wrapper bodies.
+ *
+ * J2.2: ui_panels_handle_code_panel_press / _click / _drag /
+ * _release / _scene_press / _motion / _mouse_release / _escape were
+ * deleted. The controller dispatches code-panel clicks via
+ * imrepl_ctrl_router_handle_code_panel_hit on the UiHit returned by
+ * ui_panels_hit_test; drag tracking + release / picker press / motion
+ * / release / escape live on the controller side. UI input files
+ * report hit-test data only. */

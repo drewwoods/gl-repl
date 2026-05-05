@@ -2,11 +2,11 @@
 #include "repl_config.h"
 #include "repl_core_internal.h"
 #include "repl_debug.h"
-#include "repl_replay.h"
+#include "replay.h"
 #include "repl_executor.h"
 #include "repl_state.h"
 #include "ui_panels.h"
-#include "repl_inline_rename.h"
+#include "editor_inline_rename.h"
 
 #define g_anim_time (repl_state_variables_mut()->anim_time)
 
@@ -52,7 +52,7 @@ GLenum current_begin_mode(void);
 int count_vertices(void);
 extern int repl_state_flat_program_count();
 
-/* Capture the output of repl_debug_dump_flat_commands() into a malloc'd string.
+/* Capture the output of repl_debug_dump_flat_commands(, editor_buffer_view()) into a malloc'd string.
  * Returns NULL on failure; caller frees the buffer. */
 static char *capture_flat_dump(void) {
     FILE *tmp = tmpfile();
@@ -62,7 +62,7 @@ static char *capture_flat_dump(void) {
 
     if (!tmp)
         return NULL;
-    repl_debug_dump_flat_commands(tmp);
+    repl_debug_dump_flat_commands(tmp, editor_buffer_view());
     fflush(tmp);
     if (fseek(tmp, 0, SEEK_END) != 0) goto done;
     len = ftell(tmp);
@@ -111,7 +111,7 @@ void test_utils() {
     /* debug dump */
     FILE *devnull = fopen("/dev/null", "w");
     if (devnull) {
-        repl_debug_dump_editor(devnull);
+        repl_debug_dump_editor(devnull, editor_buffer_view());
         fclose(devnull);
     }
 }
@@ -165,8 +165,8 @@ void test_io() {
     repl_reset_state(); declare_test_vars();
     repl_feed_line_public("glVertex3f(1,2,3);");
 
-    const char *tmpf = "test_extra_io.c";
-    repl_export_save_output(tmpf);
+    const char *tmpf = "/tmp/test_repl_core_extra_io.c";
+    repl_export_save_output(tmpf, editor_buffer_view());
 
     repl_reset_state(); declare_test_vars();
     ASSERT_INT("num_cmds after reset", count_vertices(), 0);
@@ -179,26 +179,11 @@ void test_io() {
     unlink(tmpf);
 
     repl_load_initial_commands(NULL);
-    char cwd[1024];
-    char default_dir[] = "/tmp/repl_core_extra_default.XXXXXX";
-    char *made_dir = mkdtemp(default_dir);
-    int have_cwd = (getcwd(cwd, sizeof(cwd)) != NULL);
-    ASSERT_TRUE("mkdtemp default output dir", made_dir != NULL);
-    ASSERT_TRUE("getcwd before default output save", have_cwd);
-    if (made_dir && have_cwd) {
-        int cd_ok = chdir(made_dir);
-        ASSERT_INT("chdir default output dir", cd_ok, 0);
-        if (cd_ok == 0) {
-            repl_save_default_output();
-            ASSERT_INT("default output saved in temp dir",
-                       access("output.c", F_OK), 0);
-            unlink("output.c");
-            int restore_ok = chdir(cwd);
-            ASSERT_INT("restore cwd after default output save", restore_ok, 0);
-        }
-    }
-    if (made_dir)
-        rmdir(made_dir);
+    const char *save_path = "/tmp/test_repl_core_extra_default_output.c";
+    repl_export_save_output(save_path, editor_buffer_view());
+    ASSERT_INT("default-path save creates file",
+               access(save_path, F_OK), 0);
+    unlink(save_path);
 }
 
 void test_execution() {
@@ -678,7 +663,7 @@ void test_debug_dump_flat_commands() {
             close(devnull_fd);
         }
     }
-    repl_debug_dump_flat_commands(NULL);
+    repl_debug_dump_flat_commands(NULL, editor_buffer_view());
     fflush(stdout);
     if (stdout_redirected) {
         if (dup2(saved_stdout, STDOUT_FILENO) >= 0) {
@@ -823,13 +808,13 @@ void test_debug_dump_flat_commands() {
     repl_state_flat_program_set_count(0);
     FILE *dn = fopen("/dev/null", "w");
     if (dn) {
-        repl_debug_dump_flat_commands(dn);
+        repl_debug_dump_flat_commands(dn, editor_buffer_view());
         fclose(dn);
     }
     ASSERT_TRUE("dump re-flattens commands", repl_state_flat_program_count() >= 1);
 }
 
-/* Capture the output of repl_debug_dump_editor() into a malloc'd string. */
+/* Capture the output of repl_debug_dump_editor(, editor_buffer_view()) into a malloc'd string. */
 static char *capture_editor_dump(void) {
     FILE *tmp = tmpfile();
     char *buf = NULL;
@@ -838,7 +823,7 @@ static char *capture_editor_dump(void) {
 
     if (!tmp)
         return NULL;
-    repl_debug_dump_editor(tmp);
+    repl_debug_dump_editor(tmp, editor_buffer_view());
     fflush(tmp);
     if (fseek(tmp, 0, SEEK_END) != 0) goto done;
     len = ftell(tmp);

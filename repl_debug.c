@@ -3,43 +3,48 @@
  */
 #include "repl_debug.h"
 
-#include "sample.h"
+#include "repl_export.h"
 #include "repl_command_spec.h"
 #include "repl_pipeline.h"
 #include "repl_state.h"
 
 #include <stddef.h>
 
-void repl_debug_dump_editor(FILE *out) {
+/* Camera lives on UiState; repl_*.c is not allowed to include
+ * ui_state.h per check-controller-boundaries. The diagnostic dump
+ * just reads pose for display. */
+ReplCameraState ui_state_camera(void);
+
+void repl_debug_dump_editor(FILE *out, EditorBufferView text) {
     FILE *dst = out ? out : stdout;
 
     fprintf(dst, "=== REPL Editor Dump ===\n");
     fprintf(dst,
             "num_cmds=%d edit_line=%d inserting=%d flat_dirty=%d normals_dirty=%d\n",
             repl_state_document_count(), repl_state_edit_line(),
-            repl_state_insert_mode(), repl_state_flat_program_dirty(),
+            editor_insert_mode(), repl_state_flat_program_dirty(),
             repl_state_normals_dirty());
 
     for (int cmd_idx = 0; cmd_idx < repl_state_document_count(); cmd_idx++) {
         const GLCmd *cmd = &repl_state_document_cmds()[cmd_idx];
+        const char *line_text = editor_buffer_view_line(text, cmd_idx);
         fprintf(dst,
                 "%4d | %-22s | valid=%d has_vars=%d is_auto=%d src_idx=%d | %s\n",
                 cmd_idx, repl_cmd_type_name(cmd->type), cmd->valid,
                 cmd->has_vars, cmd->is_auto, cmd->src_cmd_idx,
-                repl_state_editor_buffer_line(cmd_idx) ?
-                    repl_state_editor_buffer_line(cmd_idx) : "");
+                line_text ? line_text : "");
     }
 
     fprintf(dst, "--- source ---\n");
     for (int cmd_idx = 0; cmd_idx < repl_state_document_count(); cmd_idx++) {
         const GLCmd *cmd = &repl_state_document_cmds()[cmd_idx];
         if (!cmd->valid) continue;
-        fprintf(dst, "%s\n", repl_state_editor_buffer_line(cmd_idx) ?
-                              repl_state_editor_buffer_line(cmd_idx) : "");
+        const char *line_text = editor_buffer_view_line(text, cmd_idx);
+        fprintf(dst, "%s\n", line_text ? line_text : "");
     }
     fprintf(dst, "--- camera ---\n");
     {
-        ReplCameraState cam = repl_state_camera();
+        ReplCameraState cam = ui_state_camera();
         fprintf(dst, "rx=%g ry=%g dist=%g tx=%g ty=%g tz=%g\n",
                 (double)cam.rx, (double)cam.ry, (double)cam.dist,
                 (double)cam.tx, (double)cam.ty, (double)cam.tz);
@@ -60,7 +65,7 @@ void repl_debug_dump_editor(FILE *out) {
     fflush(dst);
 }
 
-void repl_debug_dump_flat_commands(FILE *out) {
+void repl_debug_dump_flat_commands(FILE *out, EditorBufferView text) {
     FILE *dst = out ? out : stdout;
     FlatProgramView flat_program = repl_state_flat_program_view();
     const GLCmd *g_flat_cmds = flat_program.cmds;
@@ -78,13 +83,13 @@ void repl_debug_dump_flat_commands(FILE *out) {
 
     for (int flat_idx = 0; flat_idx < g_num_flat_cmds; flat_idx++) {
         const GLCmd *cmd = &g_flat_cmds[flat_idx];
+        const char *line_text = editor_buffer_view_line(text, cmd->src_cmd_idx);
         fprintf(dst,
                 "%4d | %-22s | valid=%d has_vars=%d src_idx=%d call_src_idx=%d root_call_src_idx=%d func_scope=0x%08x | %s\n",
                 flat_idx, repl_cmd_type_name(cmd->type), cmd->valid,
                 cmd->has_vars, cmd->src_cmd_idx, cmd->call_src_cmd_idx,
                 cmd->root_call_src_cmd_idx, cmd->func_scope_mask,
-                repl_state_editor_buffer_line(cmd->src_cmd_idx) ?
-                    repl_state_editor_buffer_line(cmd->src_cmd_idx) : "");
+                line_text ? line_text : "");
     }
     fprintf(dst, "=== End REPL Flattened Commands Dump ===\n");
     fflush(dst);
@@ -93,27 +98,14 @@ void repl_debug_dump_flat_commands(FILE *out) {
 void repl_debug_dump_runtime_state_layout(FILE *out) {
     FILE *dst = out ? out : stdout;
 
+/* ReplReplayRuntimeState moved to replay_state.c (Phase F commit 33);
+ * the runtime-state layout dump no longer includes a replay row. */
 #define REPL_RUNTIME_STATE_FIELDS(X)                                                               \
     X(ReplDocumentState, document)                                                                 \
     X(ReplFlatProgramState, flat_program)                                                          \
     X(ReplVariableState, variables)                                                                \
-    X(ReplEditorInputState, editor_input)                                                          \
-    X(ReplSelectionState, selection)                                                               \
-    X(ReplClipboardState, clipboard)                                                               \
-    X(ReplCodePanelRuntimeState, code_panel)                                                       \
-    X(ReplHelpState, help)                                                                         \
-    X(ReplVariablePanelState, variable_panel)                                                      \
-    X(ReplVariableDragState, variable_drag)                                                        \
-    X(ReplProfilePanelState, profile_panel)                                                        \
-    X(ReplStatusState, status)                                                                     \
-    X(ReplSearchState, search)                                                                     \
-    X(ReplAutocompleteState, autocomplete)                                                         \
-    X(ReplCameraState, camera)                                                                     \
-    X(ReplPointerState, pointer)                                                                   \
-    X(ReplViewportState, viewport)                                                                 \
     X(ReplPresentationState, presentation)                                                         \
     X(ReplRenderState, render)                                                                     \
-    X(ReplReplayRuntimeState, replay)                                                              \
     X(ReplSceneRuntimeState, scenes)                                                               \
     X(ReplImportExportState, import_export)
 

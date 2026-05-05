@@ -1,14 +1,15 @@
+#include "editor_input.h"
 #include "repl_core_internal.h"
 #include "repl_state.h"
 
-#define g_search_active    (repl_state_search_mut()->active)
-#define g_search_query     (repl_state_search_mut()->query)
-#define g_search_query_len (repl_state_search_mut()->query_len)
-#define g_search_cursor_pos (repl_state_search_mut()->cursor_pos)
-#define g_search_match_count (repl_state_search_mut()->match_count)
-#define g_search_hit_line  (repl_state_search_mut()->hit_line_idx)
-#define g_search_hit_char  (repl_state_search_mut()->hit_char_idx)
-#define g_search_hit_ordinal (repl_state_search_mut()->hit_ordinal)
+#define g_search_active    (editor_state_search_mut()->active)
+#define g_search_query     (editor_state_search_mut()->query)
+#define g_search_query_len (editor_state_search_mut()->query_len)
+#define g_search_cursor_pos (editor_state_search_mut()->cursor_pos)
+#define g_search_match_count (editor_state_search_mut()->match_count)
+#define g_search_hit_line  (editor_state_search_mut()->hit_line_idx)
+#define g_search_hit_char  (editor_state_search_mut()->hit_char_idx)
+#define g_search_hit_ordinal (editor_state_search_mut()->hit_ordinal)
 
 #include "support/test_harness.h"
 #include <stdio.h>
@@ -21,12 +22,12 @@ static TestHarness g_harness = TEST_HARNESS_INIT;
 } while (0)
 
 static void open_search(void) {
-    repl_keyboard_func(6, 0, 0); /* Ctrl+F */
+    editor_handle_key(6, 0, 0); /* Ctrl+F */
 }
 
 static void type_search_text(const char *text) {
     while (*text) {
-        repl_keyboard_func((unsigned char)*text, 0, 0);
+        editor_handle_key((unsigned char)*text, 0, 0);
         text++;
     }
 }
@@ -43,11 +44,11 @@ static void declare_test_vars(void) {
 }
 
 static void set_live_input(const char *text) {
-    ReplEditorInputState *inp = repl_state_editor_input_mut();
+    ReplEditorInputState *inp = editor_state_input_mut();
     strncpy(inp->input, text, MAX_INPUT_LEN - 1);
     inp->input[MAX_INPUT_LEN - 1] = '\0';
     inp->input_len = (int)strlen(inp->input);
-    repl_state_cursor_pos_set(inp->input_len);
+    editor_cursor_pos_set(inp->input_len);
 }
 
 int main(void) {

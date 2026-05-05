@@ -21,12 +21,18 @@
 #ifndef UI_SNAPSHOT_H
 #define UI_SNAPSHOT_H
 
-#include "sample.h"
+#include "editor_state.h"  /* ReplEditorInputView (Phase 1 commit 5) */
+#include "editor_help_session.h"
 #include "repl_state_views.h"
 #include "repl_eval.h"
 #include "repl_core.h"
 #include "repl_flatten.h"
 #include "ui_editor.h"
+
+/* Forward decl: snapshot only carries a pointer; the full type lives
+ * in ui_tabbed_overlay.h and is included by the controller (which
+ * builds the value) and the renderer (which reads it). */
+struct UiOverlayContent;
 
 typedef struct UiRenderSnapshot {
     /* By-value state slices */
@@ -34,6 +40,7 @@ typedef struct UiRenderSnapshot {
     ReplPresentationState       presentation;
     ReplCodePanelRuntimeState   code_panel;
     ReplHelpState               help;
+    EditorHelpSession           help_session;
     ReplVariablePanelState      variable_panel;
     ReplProfilePanelState       profile_panel;
     ReplStatusState             status;
@@ -46,6 +53,7 @@ typedef struct UiRenderSnapshot {
     ReplSceneRuntimeState       scenes;
     ReplVariableDragState       variable_drag;
     ReplSelectionState          selection;
+    EditorScrollState           scroll;
 
     /* Pointer-shaped read-only views (storage owned by repl_state.c) */
     ReplVariableView            variables;
@@ -79,6 +87,10 @@ typedef struct UiRenderSnapshot {
 
     /* Workspace dir convenience */
     const char                 *workspace_dir;
+
+    /* F1 help overlay text content (REPL-built; the renderer is
+     * tabbed-overlay-shaped and feature-agnostic). */
+    const struct UiOverlayContent *help_content;
 
     /* Per-frame editor overlay snapshots (controller-pushed). */
     const EditorTransformerList *editor_transformers;

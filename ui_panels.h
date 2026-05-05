@@ -1,105 +1,84 @@
 /*
- * ui_panels.h - Code-panel rendering, scene status, and UI input bridge.
+ * ui_panels.h - Code-panel rendering, scene status, and pointer hit-test.
  *
- * Renders the code-panel (source commands with syntax highlighting, overlays,
- * annotations), scene status banner, and handles user input (clicks, drags,
- * keyboard navigation). Bridges repl_editor.c input dispatch with color-picker
- * and panel-specific internals (scroll state, selection, etc.).
+ * Contract (Phase J2 onward):
+ *
+ *   UI renders the code-panel / status banner and classifies pointer
+ *   locations into a neutral `UiHit` via `ui_panels_hit_test`.
+ *   `imrepl_ctrl` routes the hit to the owning subsystem (editor /
+ *   variable_panel / replay / scene / color picker / menu) which
+ *   implements the behavior. UI does not own input dispatch or
+ *   mutation.
  *
  * Rendering:
- *   - ui_panels_render_code_panel(): Render the code panel with wrapped lines,
- *     syntax highlighting, overlays (cursor, selection, replay annotations).
- *   - ui_panels_render_scene_status(): Render the status banner below the scene
- *     (showing example name, status messages, etc.).
+ *   - ui_panels_render_code_panel(): Render the code panel with wrapped
+ *     lines, syntax highlighting, overlays (cursor, selection, replay
+ *     annotations).
+ *   - ui_panels_render_scene_status(): Render the status banner below
+ *     the scene (showing example name, status messages, etc.).
  *
- * Input handling (called by repl_editor.c):
- *   - Code-panel mouse: ui_panels_handle_code_panel_click/press/drag/release()
- *     handle editing, selection, cursor movement via mouse.
- *   - Menu/config: ui_panels_open_config() opens the Config menu;
- *     ui_panels_close_menus() closes all overlays.
- *   - Right-click: ui_panels_handle_right_press() shows context menu or color picker.
- *   - Global input: ui_panels_handle_escape/scene_press/motion/mouse_release()
- *     coordinate input across panels.
+ * Hit-test:
+ *   - ui_panels_hit_test(): Pure classification of (mx, my) into a
+ *     `UiHit`. Dispatches to the floating-overlay hit-testers in
+ *     priority order (help > color picker > menu bar > variable
+ *     panel > code panel > scene). Reads layout / state only. Sets
+ *     line_idx / char_idx / cmd_idx / item_idx according to the
+ *     per-kind contract documented in ui_hit.h.
  *
- * Input bridge: Color-picker (floating overlay for inline color editing) state
- * is private to this module. Input handlers detect color-picker hits and manage
- * its input before forwarding to code-panel. ui_panels_handle_escape() cancels
- * color-picker without exposing its internals to repl_editor.c.
- *
- * Test helpers: ui_panels_code_panel_apply_scroll_follow_for_test() applies
- * scroll-follow logic for test verification (follow target → scroll position).
+ * Right-click handler:
+ *   - ui_panels_handle_right_press(): only thin wrapper that survives
+ *     because right-click on the menu bar is treated as a Config-menu
+ *     shortcut. Right-click hit-test classification is not yet on
+ *     ui_panels_hit_test (deferred — the hit-test surface today is
+ *     left-click oriented).
  */
 #ifndef UI_PANELS_H
 #define UI_PANELS_H
 
 #include "ui_snapshot.h"
+#include "ui_hit.h"
 
 /* --- Rendering --- */
 
-/* Render the code panel from the supplied snapshot. */
-void ui_panels_render_code_panel(const UiRenderSnapshot *snap);
+/* Per-frame render output: values the renderer discovers while drawing
+ * that the controller actualizes after the render call. Today this
+ * carries the editor cursor's window-pixel position, which the
+ * floating autocomplete popup needs to anchor itself under the cursor.
+ * The cursor pixel is not durable state — it's recomputed every frame
+ * from the same wrap/segment math the renderer is already running, so
+ * surfacing it as a per-frame output (rather than a state field
+ * mutated mid-render) keeps `ui_*` pure.
+ *
+ * `cursor_valid` is 0 when the active input row didn't render this
+ * frame (code panel hidden, edit row scrolled offscreen). The
+ * controller leaves any prior cursor coords undisturbed in that
+ * case — same behaviour as the legacy mid-render publish, which
+ * simply didn't fire in those frames. */
+typedef struct UiCodePanelOutput {
+    int cursor_px;
+    int cursor_py;
+    int cursor_valid;
+} UiCodePanelOutput;
+
+/* Render the code panel from the supplied snapshot. `out` is optional;
+ * pass NULL when the caller doesn't need the cursor-pixel discovery
+ * (test fixtures that aren't checking autocomplete anchoring). */
+void ui_panels_render_code_panel(const UiRenderSnapshot *snap,
+                                 UiCodePanelOutput *out);
 
 /* Render the scene status banner from the supplied snapshot. */
 void ui_panels_render_scene_status(const UiRenderSnapshot *snap);
-
-/* --- Menu/config dispatch (called by repl_editor.c) --- */
-
-/* Open the Config menu (visual dropdown showing toggles/cycles). */
-void ui_panels_open_config(void);
-
-/* Close all menus/overlays (Config, Example dropdown, color picker, etc.). */
-void ui_panels_close_menus(void);
-
-/* --- Code-panel mouse input --- */
-
-/* Handle left-click in code panel: move cursor, extend selection, or begin drag.
- * Returns the cursor position to apply, or -1 if the click did not move it.
- * mx, my are window coordinates. Called by repl_editor.c on GLUT mouse down. */
-int ui_panels_handle_code_panel_click(int mx, int my);
-
-/* Handle right-click in code panel: show context menu or color picker for inline
- * color editing. Returns a bitmask (UI_PANEL_PRESS_*): CONSUMED if click was
- * handled, OPENED_COLOR_PICKER if color picker was opened. If the press path
- * changes the cursor, stores the new cursor position in cursor_pos_out; -1 means
- * no cursor update. Called by repl_editor.c on right-mouse down. */
-#define UI_PANEL_PRESS_NONE                0
-#define UI_PANEL_PRESS_CONSUMED            (1 << 0)
-#define UI_PANEL_PRESS_OPENED_COLOR_PICKER (1 << 1)
-int  ui_panels_handle_code_panel_press(int mx, int my, int *cursor_pos_out);
-
-/* Handle mouse drag in code panel: extend selection, drag scroll, or adjust color
- * picker (if active). mx, my are window coordinates. Called by repl_editor.c on
- * GLUT motion while button pressed. */
-int  ui_panels_handle_code_panel_drag(int mx, int my);
-
-/* Handle mouse release in code panel: finalize selection, end drag. Called by
- * repl_editor.c on GLUT mouse up. */
-void ui_panels_handle_code_panel_release(void);
-
-/* --- Global input bridge (routes input across panels) --- */
-
-/* Handle Escape key: cancel/close color picker if active, otherwise close menus.
- * Returns 1 if color picker consumed the key, 0 otherwise. Bridges to color-picker
- * state without exposing internals to repl_editor.c. */
-int  ui_panels_handle_escape(void);
-
-/* Handle mouse press on scene (3D geometry area): select orbit target or pan
- * camera. Returns 1 if consumed, 0 if caller should forward to camera controls.
- * mx, my are window coordinates. */
-int  ui_panels_handle_scene_press(int mx, int my);
-
-/* Handle mouse motion: forward to color picker or camera/drag handler as needed.
- * Returns 1 if consumed, 0 otherwise. mx, my are window coordinates. */
-int  ui_panels_handle_motion(int mx, int my);
-
-/* Handle mouse release: finalize drag/selection across all panels. Called when
- * any mouse button is released. */
-void ui_panels_handle_mouse_release(void);
 
 /* Handle right-click in non-code-panel areas: open Config menu if clicked on
  * menu bar region. Returns 1 if consumed, 0 otherwise. mx, my are window
  * coordinates. */
 int  ui_panels_handle_right_press(int mx, int my);
+
+/* Pure hit-test: classify the pointer at (mx, my) as a `UiHit`.
+ * imrepl_ctrl_router_handle_code_panel_hit (declared in
+ * imrepl_ctrl.h) is the canonical consumer — it dispatches by
+ * UiHit.kind to the owning subsystem. */
+UiHit ui_panels_hit_test(int mx, int my);
 
 /* --- Test helpers --- */
 

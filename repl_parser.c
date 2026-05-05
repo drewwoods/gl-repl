@@ -13,23 +13,55 @@
 #include "repl_source_scope.h"
 #include "repl_state.h"
 
-static void set_incomplete_missing_paren_status(const char *func) {
-    char msg[128];
+#include "config.h" /* CP_CLEAR_MAX_V */
 
-    if (func && func[0])
-        snprintf(msg, sizeof(msg), "Incomplete command: missing ')' in %s(...)", func);
-    else
-        snprintf(msg, sizeof(msg), "Incomplete command: missing ')'");
-    set_status(msg);
+#include <stdarg.h>
+
+/* Phase H.5 commit 40 introduced the err_buf seam. Phase I commit
+ * 42a migrated every caller to provide a buffer. Commit 42b (this
+ * one) drops the legacy set_status fallback: the parser writes to
+ * ctx->err_buf when available, and otherwise no-ops. Diagnostics
+ * never leave the parser as side effects on REPL state.
+ *
+ * Commit 42c adds a hard guard so set_status calls cannot return
+ * to repl_parser.c. */
+static void parser_emit_error_v(const ReplParseContext *ctx,
+                                const char *fmt, va_list ap) {
+    if (!ctx || !ctx->err_buf || ctx->err_sz <= 0) {
+        /* No buffer: the caller deliberately discarded diagnostics
+         * (or hasn't been migrated). Either way, the parser does
+         * not touch global status. */
+        return;
+    }
+    vsnprintf(ctx->err_buf, (size_t)ctx->err_sz, fmt, ap);
 }
 
-static void set_incomplete_arg_count_status(const char *func, int expected, int got) {
-    char msg[128];
+static void parser_emit_error(const ReplParseContext *ctx, const char *fmt, ...) {
+    va_list ap;
+    va_start(ap, fmt);
+    parser_emit_error_v(ctx, fmt, ap);
+    va_end(ap);
+}
 
-    snprintf(msg, sizeof(msg),
-             "Incomplete command: %s expects %d argument%s (got %d)",
-             func, expected, expected == 1 ? "" : "s", got);
-    set_status(msg);
+static void parser_emit_error_static(const ReplParseContext *ctx, const char *msg) {
+    parser_emit_error(ctx, "%s", msg ? msg : "");
+}
+
+static void set_incomplete_missing_paren_status(const ReplParseContext *ctx,
+                                                const char *func) {
+    if (func && func[0])
+        parser_emit_error(ctx,
+                          "Incomplete command: missing ')' in %s(...)", func);
+    else
+        parser_emit_error_static(ctx, "Incomplete command: missing ')'");
+}
+
+static void set_incomplete_arg_count_status(const ReplParseContext *ctx,
+                                            const char *func,
+                                            int expected, int got) {
+    parser_emit_error(ctx,
+                      "Incomplete command: %s expects %d argument%s (got %d)",
+                      func, expected, expected == 1 ? "" : "s", got);
 }
 
 static int command_name_matches_or_prefixes(const char *func, const char *known) {
@@ -94,7 +126,10 @@ static int is_known_incomplete_func_name(const char *func) {
  *   5. Ad-hoc commands (glMaterialf, glPointParameterfv, glPush/PopMatrix,
  *      funcN calls, glu* tessellator commands, goto/label)
  *
- * Returns 1 on success (cmd populated), 0 on parse failure (status set).
+ * Returns 1 on success (cmd populated), 0 on parse failure.
+ * Diagnostics flow through ReplParseContext.err_buf when the caller
+ * provides one. The legacy no-ctx wrappers surface to status; the
+ * parser core itself never calls set_status.
  */
 static int parse_command(const char *line, GLCmd *cmd,
                          char *text_out, int text_sz,
@@ -127,7 +162,13 @@ static int parse_command(const char *line, GLCmd *cmd,
     cmd->num_args = 0;
     if (text_out && text_sz > 0) text_out[0] = '\0';
 
-    if (len == 0) return 0;
+    if (len == 0) {
+        cmd->type = CMD_EMPTY;
+        cmd->valid = 1;
+        cmd->is_auto = 0;
+        cmd->num_args = 0;
+        return 1;
+    }
 
     /* Comment: line starts with // */
     if (p[0] == '/' && p[1] == '/') {
@@ -156,7 +197,7 @@ static int parse_command(const char *line, GLCmd *cmd,
         if (!close_p || close_p < open_p) {
             if (!is_known_incomplete_func_name(func))
                 goto unknown_command;
-            set_incomplete_missing_paren_status(func);
+            set_incomplete_missing_paren_status(ctx, func);
             return 0;
         }
 
@@ -201,12 +242,12 @@ static int parse_command(const char *line, GLCmd *cmd,
                         return 1;
                     }
                 }
-                set_status(def->usage1);
+                parser_emit_error_static(ctx, def->usage1);
                 return 0;
             } else if (def->num_args == 2) {
                 char raw_arg1[64] = "", raw_arg2[64] = "";
                 char *comma = strchr(args, ',');
-                if (!comma) { set_status(def->usage1 ? def->usage1 : "Invalid arguments"); return 0; }
+                if (!comma) { parser_emit_error_static(ctx, def->usage1 ? def->usage1 : "Invalid arguments"); return 0; }
                 int len1 = (int)(comma - args);
                 if (len1 >= (int)sizeof(raw_arg1)) len1 = (int)sizeof(raw_arg1) - 1;
                 strncpy(raw_arg1, args, len1); raw_arg1[len1] = '\0';
@@ -228,17 +269,17 @@ static int parse_command(const char *line, GLCmd *cmd,
                 for (int i = 0; def->enums2[i].name; i++) {
                     if (strcmp(trimmed2, def->enums2[i].name) == 0) { val2_f = (float)def->enums2[i].value; found2 = 1; break; }
                 }
-                if (!found1) { set_status(def->usage1); return 0; }
+                if (!found1) { parser_emit_error_static(ctx, def->usage1); return 0; }
 
                 if (!found2 && def->type == CMD_LIGHT_MODEL_I) {
                     char verr[128];
                     if (!repl_eval_validate_expression_idents(trimmed2, vars, num_vars, verr, sizeof(verr))) {
-                        set_status(verr); return 0;
+                        parser_emit_error_static(ctx, verr); return 0;
                     }
                     float fv; if (repl_eval_parse_exprs(trimmed2, &fv, 1, vars, num_vars) == 1) { val2_f = fv; found2 = 1; }
                 }
 
-                if (!found2) { set_status(def->usage2); return 0; }
+                if (!found2) { parser_emit_error_static(ctx, def->usage2); return 0; }
 
                 cmd->type = def->type;
                 cmd->valid = 1;
@@ -287,7 +328,7 @@ static int parse_command(const char *line, GLCmd *cmd,
             {
                 char verr[128];
                 if (!repl_eval_validate_expression_idents(args, vars, num_vars, verr, sizeof(verr))) {
-                    set_status(verr); return 0;
+                    parser_emit_error_static(ctx, verr); return 0;
                 }
             }
             int exact_count = 0;
@@ -348,16 +389,16 @@ static int parse_command(const char *line, GLCmd *cmd,
                                      cmd->args[2], cmd->args[3]);
                         }
                         if (!cmd->has_vars)
-                            set_status("glClearColor: channels clamped to 0.15 max");
+                            parser_emit_error_static(ctx, "glClearColor: channels clamped to 0.15 max");
                     }
                 }
                 return 1;
             }
             cmd->num_args = repl_eval_parse_exprs(args, cmd->args, def->num_args, vars, num_vars);
             if (cmd->num_args < def->num_args)
-                set_incomplete_arg_count_status(def->name, def->num_args, cmd->num_args);
+                set_incomplete_arg_count_status(ctx, def->name, def->num_args, cmd->num_args);
             else
-                set_status(def->usage);
+                parser_emit_error_static(ctx, def->usage);
             return 0;
         }
     }
@@ -368,7 +409,7 @@ static int parse_command(const char *line, GLCmd *cmd,
         char *comma1 = strchr(args, ',');
         char *comma2 = comma1 ? strchr(comma1 + 1, ',') : NULL;
 
-        if (!comma1 || !comma2) { set_status("Usage: glMaterialf(face, pname, params...)"); return 0; }
+        if (!comma1 || !comma2) { parser_emit_error_static(ctx, "Usage: glMaterialf(face, pname, params...)"); return 0; }
 
         int l1 = (int)(comma1 - args);
         if (l1 >= (int)sizeof(a1)) l1 = (int)sizeof(a1) - 1;
@@ -388,8 +429,8 @@ static int parse_command(const char *line, GLCmd *cmd,
         GLenum face = 0, pname = 0;
         int found1 = 0, found2 = 0;
 
-        const EnumEntry *face_types = repl_face_type_entries();
-        const EnumEntry *material_params = repl_material_param_entries();
+        const ReplEnumEntry *face_types = repl_face_type_entries();
+        const ReplEnumEntry *material_params = repl_material_param_entries();
         for (int i = 0; face_types[i].name; i++) {
             if (strcmp(p1, face_types[i].name) == 0) { face = face_types[i].value; found1 = 1; break; }
         }
@@ -397,19 +438,19 @@ static int parse_command(const char *line, GLCmd *cmd,
             if (strcmp(p2, material_params[i].name) == 0) { pname = material_params[i].value; found2 = 1; break; }
         }
 
-        if (!found1) { set_status("face: GL_FRONT, GL_BACK, GL_FRONT_AND_BACK"); return 0; }
-        if (!found2) { set_status("pname: GL_DIFFUSE, GL_AMBIENT, GL_SPECULAR, GL_SHININESS..."); return 0; }
+        if (!found1) { parser_emit_error_static(ctx, "face: GL_FRONT, GL_BACK, GL_FRONT_AND_BACK"); return 0; }
+        if (!found2) { parser_emit_error_static(ctx, "pname: GL_DIFFUSE, GL_AMBIENT, GL_SPECULAR, GL_SHININESS..."); return 0; }
 
         {
             char verr[128];
             if (!repl_eval_validate_expression_idents(a3, vars, num_vars, verr, sizeof(verr))) {
-                set_status(verr); return 0;
+                parser_emit_error_static(ctx, verr); return 0;
             }
         }
         float parsed_args[8];
         int num_parsed = repl_eval_parse_exprs(a3, parsed_args, 8, vars, num_vars);
         if (num_parsed != 1 && num_parsed != 4) {
-            set_status("Expected 1 or 4 float values");
+            parser_emit_error_static(ctx, "Expected 1 or 4 float values");
             return 0;
         }
 
@@ -437,7 +478,7 @@ static int parse_command(const char *line, GLCmd *cmd,
         char a1[64] = "", rest[MAX_LINE_LEN] = "";
         char *comma = strchr(args, ',');
         if (!comma) {
-            set_status("Usage: glPointParameterfv(GL_POINT_DISTANCE_ATTENUATION, const, linear, quadratic)");
+            parser_emit_error_static(ctx, "Usage: glPointParameterfv(GL_POINT_DISTANCE_ATTENUATION, const, linear, quadratic)");
             return 0;
         }
         int l1 = (int)(comma - args);
@@ -450,7 +491,7 @@ static int parse_command(const char *line, GLCmd *cmd,
 
         GLenum pname = 0;
         int found = 0;
-        const EnumEntry *point_param_pnames = repl_point_param_pname_entries();
+        const ReplEnumEntry *point_param_pnames = repl_point_param_pname_entries();
         for (int i = 0; point_param_pnames[i].name; i++) {
             if (strcmp(p1, point_param_pnames[i].name) == 0) {
                 pname = point_param_pnames[i].value;
@@ -459,20 +500,20 @@ static int parse_command(const char *line, GLCmd *cmd,
             }
         }
         if (!found) {
-            set_status("pname: GL_POINT_DISTANCE_ATTENUATION");
+            parser_emit_error_static(ctx, "pname: GL_POINT_DISTANCE_ATTENUATION");
             return 0;
         }
 
         {
             char verr[128];
             if (!repl_eval_validate_expression_idents(rest, vars, num_vars, verr, sizeof(verr))) {
-                set_status(verr); return 0;
+                parser_emit_error_static(ctx, verr); return 0;
             }
         }
         float parsed_args[4];
         int num_parsed = repl_eval_parse_exprs(rest, parsed_args, 4, vars, num_vars);
         if (num_parsed != 3) {
-            set_status("Expected 3 floats: const, linear, quadratic attenuation coefficients");
+            parser_emit_error_static(ctx, "Expected 3 floats: const, linear, quadratic attenuation coefficients");
             return 0;
         }
 
@@ -518,12 +559,12 @@ static int parse_command(const char *line, GLCmd *cmd,
         if (args[0] != '\0') {
             char verr[128];
             if (!repl_eval_validate_expression_idents(args, vars, num_vars, verr, sizeof(verr))) {
-                set_status(verr); return 0;
+                parser_emit_error_static(ctx, verr); return 0;
             }
         }
         if (!parse_expr_list_exact(args, dummy_vals, MAX_EXPR_VARS,
                                    vars, num_vars, &arg_count)) {
-            set_status("Invalid function call arguments");
+            parser_emit_error_static(ctx, "Invalid function call arguments");
             return 0;
         }
 
@@ -544,7 +585,7 @@ static int parse_command(const char *line, GLCmd *cmd,
                 char buf[96];
                 snprintf(buf, sizeof(buf),
                          "undefined function 'func%d' - define it first", fn);
-                set_status(buf);
+                parser_emit_error_static(ctx, buf);
                 return 0;
             }
         }
@@ -571,12 +612,12 @@ static int parse_command(const char *line, GLCmd *cmd,
             if (arg_count > 0) {
                 if (!repl_format_fits(text_out, (size_t)text_sz,
                                       "%sfunc%d(%s);", ind_str, fn, raw_args)) {
-                    set_status("Command too long");
+                    parser_emit_error_static(ctx, "Command too long");
                     return 0;
                 }
             } else if (!repl_format_fits(text_out, (size_t)text_sz,
                                          "%sfunc%d();", ind_str, fn)) {
-                set_status("Command too long");
+                parser_emit_error_static(ctx, "Command too long");
                 return 0;
             }
         }
@@ -598,7 +639,7 @@ static int parse_command(const char *line, GLCmd *cmd,
             WRITE_TEXT("%sgluBegin(GLU_CONTOUR);", tess_indent);
             return 1;
         }
-        set_status("Usage: gluBegin(GLU_POLYGON) or gluBegin(GLU_CONTOUR)");
+        parser_emit_error_static(ctx, "Usage: gluBegin(GLU_POLYGON) or gluBegin(GLU_CONTOUR)");
         return 0;
     }
 
@@ -628,7 +669,7 @@ static int parse_command(const char *line, GLCmd *cmd,
         {
             char verr[128];
             if (!repl_eval_validate_expression_idents(args, vars, num_vars, verr, sizeof(verr))) {
-                set_status(verr); return 0;
+                parser_emit_error_static(ctx, verr); return 0;
             }
         }
         cmd->num_args = repl_eval_parse_exprs(args, cmd->args, 4, vars, num_vars);
@@ -642,7 +683,7 @@ static int parse_command(const char *line, GLCmd *cmd,
                        tess_indent, cmd->args[0], cmd->args[1], cmd->args[2], cmd->args[3]);
             return 1;
         }
-        set_status("Usage: gluColor(r, g, b) or gluColor(r, g, b, a)");
+        parser_emit_error_static(ctx, "Usage: gluColor(r, g, b) or gluColor(r, g, b, a)");
         return 0;
     }
 
@@ -705,24 +746,11 @@ static int parse_command(const char *line, GLCmd *cmd,
     }
 
 unknown_command:
-    set_status("Unknown cmd. Try glVertex3f, glBegin, glEnable, glShadeModel, ...");
+    parser_emit_error_static(ctx, "Unknown cmd. Try glVertex3f, glBegin, glEnable, glShadeModel, ...");
     return 0;
 
 #undef WRITE_TEXT
 #undef WRITE_TEXT_APPEND
-}
-
-int repl_parser_parse_command(const char *line, GLCmd *cmd) {
-    char text[MAX_LINE_LEN];
-    ReplParseContext ctx = { repl_state_edit_line(), NULL, 0, 0 };
-    return parse_command(line, cmd, text, sizeof(text), &ctx);
-}
-
-int repl_parser_parse_command_with_vars(const char *line, GLCmd *cmd,
-                                 ExprVar *vars, int num_vars) {
-    char text[MAX_LINE_LEN];
-    ReplParseContext ctx = { repl_state_edit_line(), vars, num_vars, 0 };
-    return parse_command(line, cmd, text, sizeof(text), &ctx);
 }
 
 int repl_parser_parse_command_ctx(const char *line, ReplParsedLine *out,

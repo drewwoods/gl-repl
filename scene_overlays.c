@@ -1,10 +1,12 @@
 /*
  * scene_overlays.c - scene geometry overlay passes shared by render frame code.
  */
-#include "sample.h"
+#include "scene_geometry_guides.h"
 #include "scene_overlays.h"
 #include "scene_render_types.h"
+#include "scene_transform_guides.h"
 #include "scene_transform_utils.h"
+#include "./include/gl_2d.h"
 
 static int begin_mode_has_outline_overlay(GLenum mode) {
     switch (mode) {
@@ -122,7 +124,7 @@ static void walk_vertex_overlay(int selected_block_only,
         if (!cmds[i].valid) continue;
 
         const GLCmd *cmd = &cmds[i];
-        if (!state.in_block && is_transform_cmd(cmd->type)) {
+        if (!state.in_block && repl_cmd_is_transform(cmd->type)) {
             scene_apply_tracked_transform(cmd, &matrix_depth);
             continue;
         }
@@ -175,6 +177,7 @@ static void walk_vertex_overlay(int selected_block_only,
             state.normal[2] = cmd->args[2];
             break;
         case CMD_VERTEX3F:
+        case CMD_VERTEX2F:
         case CMD_TESS_VERTEX: {
             int visit = selected_block_only
                       ? (state.in_block && state.block_selected)
@@ -282,7 +285,7 @@ void scene_overlays_render_outlines(const FrameRenderContext *frame_ctx,
         for (int i = 0; i < cmd_count; i++) {
             if (!cmds[i].valid) continue;
 
-            if (is_transform_cmd(cmds[i].type)) {
+            if (repl_cmd_is_transform(cmds[i].type)) {
                 if (!in_begin && !tess_in_contour)
                     scene_apply_tracked_transform(&cmds[i], &matrix_depth);
                 continue;
@@ -361,6 +364,12 @@ void scene_overlays_render_outlines(const FrameRenderContext *frame_ctx,
                                    cmds[i].args[2]);
                 }
                 break;
+            case CMD_VERTEX2F:
+                if (in_begin) {
+                    if (block_is_current || cfg->show_vertex_outlines)
+                        glVertex2f(cmds[i].args[0], cmds[i].args[1]);
+                }
+                break;
             case CMD_TESS_BEGIN_POLYGON:
                 tess_poly_is_current = show_current_poly &&
                                        scene_overlay_flat_block_matches_cursor(i, 1, cfg);
@@ -386,4 +395,83 @@ void scene_overlays_render_outlines(const FrameRenderContext *frame_ctx,
     glDisable(GL_POLYGON_OFFSET_LINE);
     glDepthMask(GL_TRUE);
     glDisable(GL_BLEND);
+}
+
+void scene_overlays_render_vertex_points(const FrameRenderContext *frame_ctx) {
+    const SceneRenderConfig *cfg = &frame_ctx->config;
+    if (!cfg->show_vpoints && !cfg->replay_vertex_points)
+        return;
+
+    /* Snapshot the pure camera-view matrix (before any user transforms are
+     * applied below) so the transform guide can render in world axes at an
+     * anchor point, independent of pre-cursor rotations. */
+    const SceneGuideSnapshot *guide_snapshot = &cfg->guide_snapshot;
+    SceneTransformGuidePlan xform_guide_plan;
+
+    scene_overlay_push_state();
+    glDisable(GL_LIGHTING);
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    glEnable(GL_POINT_SMOOTH);
+    glHint(GL_POINT_SMOOTH_HINT, GL_NICEST);
+
+    if (cfg->replay_vertex_points)
+        glColor4f(1.0f, 0.88f, 0.20f, 0.75f);
+    else
+        glColor4f(0.05f, 0.05f, 0.10f, 0.80f);
+
+    glPushMatrix();
+    float tg_cam_view[16];
+    glGetFloatv(GL_MODELVIEW_MATRIX, tg_cam_view);
+    scene_transform_guides_prepare(guide_snapshot, &xform_guide_plan);
+
+    {
+        const GLCmd *flat_cmds = cfg->flat_program.cmds;
+        int flat_cmd_count = cfg->flat_program.cmd_count;
+        int matrix_depth = 0;
+        GLenum primitive_mode = 0;
+
+        for (int i = 0; i < flat_cmd_count; i++) {
+            if (!flat_cmds[i].valid) continue;
+            int is_cursor = (flat_cmds[i].src_cmd_idx == guide_snapshot->edit_line_idx);
+
+
+            /* Draw vertex guides and normals if this vertex is at the cursor
+             * position. Do this inline so that the current model matrix is
+             * applied to the guides, ensuring they are positioned correctly
+             * even when transforms separate blocks. */
+            if (is_cursor && !cfg->replaying) {
+                scene_geometry_guides_render_for_cursor(guide_snapshot);
+            }
+
+            scene_transform_guides_render_if_due(guide_snapshot,
+                                                 &xform_guide_plan,
+                                                 i, tg_cam_view);
+
+            if (repl_cmd_is_transform(flat_cmds[i].type)) {
+                scene_apply_tracked_transform(&flat_cmds[i], &matrix_depth);
+            } else if (flat_cmds[i].type == CMD_BEGIN) {
+                primitive_mode = flat_cmds[i].mode;
+            } else if (flat_cmds[i].type == CMD_END) {
+                primitive_mode = 0;
+            } else if (flat_cmds[i].type == CMD_VERTEX3F ||
+                       flat_cmds[i].type == CMD_VERTEX2F ||
+                       flat_cmds[i].type == CMD_TESS_VERTEX) {
+                int is_line = (primitive_mode == GL_LINES ||
+                               primitive_mode == GL_LINE_STRIP ||
+                               primitive_mode == GL_LINE_LOOP);
+                // Lines tend to be higher tesselated than polygons and points can obscure the line.
+                glPointSize(is_line ? 2.0f : 7.0f);
+                glBegin(GL_POINTS);
+                glVertex3f(flat_cmds[i].args[0], flat_cmds[i].args[1],
+                           flat_cmds[i].args[2]);
+                glEnd();
+            }
+        }
+        glPointSize(1.0f);
+        scene_unwind_transform_stack(&matrix_depth);
+    }
+
+    glPopMatrix();
+    scene_overlay_pop_state();
 }

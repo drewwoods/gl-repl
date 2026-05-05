@@ -3,6 +3,16 @@
 #include "repl_audio.h"
 #include "repl_state.h"
 
+/* Camera, profile_panel slices live on UiState; variable_panel
+ * visibility lives on the variable_panel peer; replay state lives
+ * on the replay peer. repl_*.c is not allowed to include ui_state.h
+ * per check-controller-boundaries, so the relevant accessors are
+ * forward-declared inline. */
+ReplCameraState         *ui_state_camera_mut(void);
+ReplProfilePanelState   *ui_state_profile_panel_mut(void);
+ReplVariablePanelState  *variable_panel_view_mut(void);
+ReplReplayRuntimeState  *replay_state_mut(void);
+
 static int clamp_int(int v, int lo, int hi) {
     if (v < lo) return lo;
     if (v > hi) return hi;
@@ -29,9 +39,9 @@ static int *config_value_ptr(ReplConfigKey key) {
     case REPL_CONFIG_WIREFRAME:           return &repl_state_presentation_mut()->wireframe;
     case REPL_CONFIG_POINT_ATTENUATION:   return &repl_state_render_mut()->point_attenuation_enabled;
     case REPL_CONFIG_AUTO_TIME:           return &repl_state_variables_mut()->time_playing;
-    case REPL_CONFIG_REPLAY:              return &repl_state_replay_mut()->active;
-    case REPL_CONFIG_REPLAY_MODE:         return &repl_state_replay_mut()->mode;
-    case REPL_CONFIG_REPLAY_EXPAND:       return &repl_state_replay_mut()->expand_args;
+    case REPL_CONFIG_REPLAY:              return &replay_state_mut()->active;
+    case REPL_CONFIG_REPLAY_MODE:         return &replay_state_mut()->mode;
+    case REPL_CONFIG_REPLAY_EXPAND:       return &replay_state_mut()->expand_args;
     case REPL_CONFIG_GRID_THEME:          return &repl_state_presentation_mut()->grid_theme;
     case REPL_CONFIG_GRID_MAJOR:          return &repl_state_presentation_mut()->grid_major_idx;
     case REPL_CONFIG_GRID_EXTENT:         return &repl_state_presentation_mut()->grid_extent_idx;
@@ -41,14 +51,14 @@ static int *config_value_ptr(ReplConfigKey key) {
     case REPL_CONFIG_LIGHT_INDICATORS:    return &repl_state_presentation_mut()->show_light_indicators;
     case REPL_CONFIG_POLY_HIGHLIGHT:      return &repl_state_presentation_mut()->highlight_current_poly;
     case REPL_CONFIG_BACKDROP:            return &repl_state_presentation_mut()->backdrop_mode;
-    case REPL_CONFIG_CAMERA_ROTATE:       return &repl_state_camera_mut()->auto_rotate;
+    case REPL_CONFIG_CAMERA_ROTATE:       return &ui_state_camera_mut()->auto_rotate;
     case REPL_CONFIG_AUTO_NORMALS:        return &repl_state_presentation_mut()->autonormal;
     case REPL_CONFIG_VERTEX_LABELS:       return &repl_state_presentation_mut()->show_vertex_labels;
     case REPL_CONFIG_NORMAL_VECTORS:      return &repl_state_presentation_mut()->show_normal_vectors;
     case REPL_CONFIG_VERTEX_OUTLINES:     return &repl_state_presentation_mut()->show_vertex_outlines;
     case REPL_CONFIG_VERTEX_POINTS:       return &repl_state_presentation_mut()->show_vertex_points;
-    case REPL_CONFIG_VARIABLE_PANEL:      return &repl_state_variable_panel_mut()->visible;
-    case REPL_CONFIG_CPU_PROFILE:         return &repl_state_profile_panel_mut()->mode;
+    case REPL_CONFIG_VARIABLE_PANEL:      return &variable_panel_view_mut()->visible;
+    case REPL_CONFIG_CPU_PROFILE:         return &ui_state_profile_panel_mut()->mode;
     case REPL_CONFIG_CODE_PANEL_LAYOUT:   return &repl_state_presentation_mut()->code_panel_layout;
     case REPL_CONFIG_WRAP_AT_COMMA:       return &repl_state_presentation_mut()->wrap_at_comma;
     case REPL_CONFIG_AUDIO_MODE:          return NULL; /* audio module owns this one */

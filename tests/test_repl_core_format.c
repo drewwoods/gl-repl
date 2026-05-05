@@ -1,8 +1,9 @@
 #include "repl_core_internal.h"
 #include "repl_state.h"
+#include "ui_state.h"
 #include "support/test_harness.h"
 
-#define g_panel_frac (repl_state_code_panel_mut()->panel_frac)
+#define g_panel_frac (ui_state_code_panel_mut()->panel_frac)
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -43,7 +44,7 @@ int main(void) {
     repl_feed_line_public(line);
     ASSERT_TRUE("feed inserted one", repl_state_document_count() == 1);
     ASSERT_TRUE("feed matches interactive",
-                strcmp(repl_state_editor_buffer_line(0), interactive_text) == 0);
+                strcmp(editor_buffer_line(0), interactive_text) == 0);
 
     {
         FILE *f = fopen(tmp_path, "w");
@@ -61,7 +62,7 @@ int main(void) {
     ASSERT_TRUE("load from file", repl_export_load_from_file(tmp_path) == 1);
     ASSERT_TRUE("load inserted one", repl_state_document_count() == 1);
     ASSERT_TRUE("load matches interactive",
-                strcmp(repl_state_editor_buffer_line(0), interactive_text) == 0);
+                strcmp(editor_buffer_line(0), interactive_text) == 0);
 
     {
         char out[256];
@@ -93,15 +94,15 @@ int main(void) {
     ASSERT_TRUE("loop header type", repl_state_document_cmds_mut()[0].type == CMD_FOR_BEGIN);
     ASSERT_TRUE("loop body type", repl_state_document_cmds_mut()[1].type == CMD_VERTEX3F);
     ASSERT_TRUE("loop body has vars", repl_state_document_cmds_mut()[1].has_vars == 1);
-    ASSERT_TRUE("loop body keeps expression", strstr(repl_state_editor_buffer_line(1), "i + x") != NULL);
-    ASSERT_TRUE("loop body indented", strncmp(repl_state_editor_buffer_line(1), "    ", 4) == 0);
+    ASSERT_TRUE("loop body keeps expression", strstr(editor_buffer_line(1), "i + x") != NULL);
+    ASSERT_TRUE("loop body indented", strncmp(editor_buffer_line(1), "    ", 4) == 0);
 
     {
-        repl_state_editor_buffer_set_line(1, "glVertex3f(i+x,0,0)");
-        repl_state_editor_buffer_set_line(2, "}");
+        editor_buffer_set_line(1, "glVertex3f(i+x,0,0)");
+        editor_buffer_set_line(2, "}");
         repl_reformat_commands();
-        const char *buf1 = repl_state_editor_buffer_line(1);
-        const char *buf2 = repl_state_editor_buffer_line(2);
+        const char *buf1 = editor_buffer_line(1);
+        const char *buf2 = editor_buffer_line(2);
         ASSERT_TRUE("reformat body semicolon", buf1 && buf1[strlen(buf1) - 1] == ';');
         ASSERT_TRUE("reformat body indent", buf1 && strncmp(buf1, "    ", 4) == 0);
         ASSERT_TRUE("reformat body comma spacing", buf1 && strstr(buf1, ", 0, 0") != NULL);
@@ -115,12 +116,12 @@ int main(void) {
     repl_feed_line_public("}");
     ASSERT_TRUE("assign in loop cmd count", repl_state_document_count() == 3);
     ASSERT_TRUE("assign in loop type", repl_state_document_cmds_mut()[1].type == CMD_VAR_ASSIGN);
-    ASSERT_TRUE("assign in loop indent", strncmp(repl_state_editor_buffer_line(1), "    ", 4) == 0);
-    ASSERT_TRUE("assign in loop keeps expression", strstr(repl_state_editor_buffer_line(1), "i + 1") != NULL);
+    ASSERT_TRUE("assign in loop indent", strncmp(editor_buffer_line(1), "    ", 4) == 0);
+    ASSERT_TRUE("assign in loop keeps expression", strstr(editor_buffer_line(1), "i + 1") != NULL);
     {
-        repl_state_editor_buffer_set_line(1, "x=i+1");
+        editor_buffer_set_line(1, "x=i+1");
         repl_reformat_commands();
-        const char *buf1 = repl_state_editor_buffer_line(1);
+        const char *buf1 = editor_buffer_line(1);
         ASSERT_TRUE("reformat assign in loop indent", buf1 && strncmp(buf1, "    ", 4) == 0);
         ASSERT_TRUE("reformat assign in loop semicolon",
                     buf1 && buf1[strlen(buf1) - 1] == ';');
@@ -161,7 +162,7 @@ int main(void) {
         FILE *dump_f = fopen(tmp_dump_path, "w");
         ASSERT_TRUE("open dump file", dump_f != NULL);
         if (dump_f) {
-            repl_dump_code_panel_text(dump_f);
+            repl_dump_code_panel_text(dump_f, editor_buffer_view());
             fclose(dump_f);
         }
 
@@ -178,6 +179,19 @@ int main(void) {
         }
     }
 
+    repl_reset_state();
+    repl_feed_line_public("float a = 2, b, c = 3;");
+    ASSERT_TRUE("decl cmd count", repl_state_document_count() == 1);
+    ASSERT_TRUE("decl cmd type", repl_state_document_cmds_mut()[0].type == CMD_VAR_DECLARE);
+    editor_buffer_set_line(0, "float a=max(1, 2),b,c=abs(-3)// vars");
+    repl_reformat_commands();
+    {
+        const char *buf0 = editor_buffer_line(0);
+        ASSERT_TRUE("reformat decl keeps initializer text and comment",
+                    buf0 && strcmp(buf0,
+                                   "  float a = max(1, 2), b, c = abs(-3); // vars") == 0);
+    }
+
     {
         const char *wrapped = "  glColor4f(0.125, 0.250, 0.500, 1.000);";
         char visual_buf[8192];
@@ -188,18 +202,18 @@ int main(void) {
         repl_state_presentation_mut()->wrap_at_comma = 1;
         repl_state_presentation_mut()->show_vertex_indices = 0;
         repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT;
-        repl_state_viewport_set_size(360, repl_state_viewport().window_h);
+        ui_state_viewport_set_size(360, ui_state_viewport().window_h);
         g_panel_frac = 0.75f;
 
         memset(&repl_state_document_cmds_mut()[0], 0, sizeof(repl_state_document_cmds_mut()[0]));
         repl_state_document_cmds_mut()[0].type = CMD_COLOR4F;
         repl_state_document_cmds_mut()[0].valid = 1;
-        repl_state_editor_buffer_set_line(0, wrapped);
+        editor_buffer_set_line(0, wrapped);
         repl_state_document_count_set(1);
 
         ASSERT_TRUE("open visual dump file", dump_f != NULL);
         if (dump_f) {
-            repl_dump_code_panel_visual_text(dump_f);
+            repl_dump_code_panel_visual_text(dump_f, editor_buffer_view());
             fclose(dump_f);
         }
 
@@ -228,18 +242,18 @@ int main(void) {
         repl_state_presentation_mut()->wrap_at_comma = 1;
         repl_state_presentation_mut()->show_vertex_indices = 0;
         repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT;
-        repl_state_viewport_set_size(360, repl_state_viewport().window_h);
+        ui_state_viewport_set_size(360, ui_state_viewport().window_h);
         g_panel_frac = 0.75f;
 
         memset(&repl_state_document_cmds_mut()[0], 0, sizeof(repl_state_document_cmds_mut()[0]));
         repl_state_document_cmds_mut()[0].type = CMD_VERTEX3F;
         repl_state_document_cmds_mut()[0].valid = 1;
-        repl_state_editor_buffer_set_line(0, wrapped);
+        editor_buffer_set_line(0, wrapped);
         repl_state_document_count_set(1);
 
         ASSERT_TRUE("open overflow visual dump file", dump_f != NULL);
         if (dump_f) {
-            repl_dump_code_panel_visual_text(dump_f);
+            repl_dump_code_panel_visual_text(dump_f, editor_buffer_view());
             fclose(dump_f);
         }
 
@@ -271,18 +285,18 @@ int main(void) {
         repl_state_presentation_mut()->wrap_at_comma = 1;
         repl_state_presentation_mut()->show_vertex_indices = 0;
         repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT;
-        repl_state_viewport_set_size(360, repl_state_viewport().window_h);
+        ui_state_viewport_set_size(360, ui_state_viewport().window_h);
         g_panel_frac = 0.75f;
 
         memset(&repl_state_document_cmds_mut()[0], 0, sizeof(repl_state_document_cmds_mut()[0]));
         repl_state_document_cmds_mut()[0].type = CMD_POINT_PARAMETER_FV;
         repl_state_document_cmds_mut()[0].valid = 1;
-        repl_state_editor_buffer_set_line(0, wrapped);
+        editor_buffer_set_line(0, wrapped);
         repl_state_document_count_set(1);
 
         ASSERT_TRUE("open point-parameter visual dump file", dump_f != NULL);
         if (dump_f) {
-            repl_dump_code_panel_visual_text(dump_f);
+            repl_dump_code_panel_visual_text(dump_f, editor_buffer_view());
             fclose(dump_f);
         }
 
@@ -312,18 +326,18 @@ int main(void) {
         declare_test_vars();
         repl_state_presentation_mut()->wrap_at_comma = 1;
         repl_state_presentation_mut()->show_vertex_indices = 0;
-        repl_state_viewport_set_size(260, repl_state_viewport().window_h);
+        ui_state_viewport_set_size(260, ui_state_viewport().window_h);
         g_panel_frac = 0.75f;
 
         memset(&repl_state_document_cmds_mut()[0], 0, sizeof(repl_state_document_cmds_mut()[0]));
         repl_state_document_cmds_mut()[0].type = CMD_POINT_PARAMETER_FV;
         repl_state_document_cmds_mut()[0].valid = 1;
-        repl_state_editor_buffer_set_line(0, wrapped);
+        editor_buffer_set_line(0, wrapped);
         repl_state_document_count_set(1);
 
         ASSERT_TRUE("open narrow point-parameter visual dump file", dump_f != NULL);
         if (dump_f) {
-            repl_dump_code_panel_visual_text(dump_f);
+            repl_dump_code_panel_visual_text(dump_f, editor_buffer_view());
             fclose(dump_f);
         }
 
@@ -361,19 +375,19 @@ int main(void) {
             declare_test_vars();
             repl_state_presentation_mut()->wrap_at_comma = 1;
             repl_state_presentation_mut()->show_vertex_indices = 0;
-            repl_state_viewport_set_size(360, 800);
+            ui_state_viewport_set_size(360, 800);
             g_panel_frac = 0.5f;
             repl_state_presentation_mut()->code_panel_layout = layouts[layout_idx];
 
             memset(&repl_state_document_cmds_mut()[0], 0, sizeof(repl_state_document_cmds_mut()[0]));
             repl_state_document_cmds_mut()[0].type = CMD_VERTEX3F;
             repl_state_document_cmds_mut()[0].valid = 1;
-            repl_state_editor_buffer_set_line(0, src);
+            editor_buffer_set_line(0, src);
             repl_state_document_count_set(1);
 
             ASSERT_TRUE("open layout visual dump file", dump_f != NULL);
             if (dump_f) {
-                repl_dump_code_panel_visual_text(dump_f);
+                repl_dump_code_panel_visual_text(dump_f, editor_buffer_view());
                 fclose(dump_f);
             }
 

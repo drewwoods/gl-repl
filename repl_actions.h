@@ -75,12 +75,6 @@ void repl_cfg_cycle_row(int row, int delta);
 /* Reset the code-panel cursor blink state after navigation moves the cursor. */
 void repl_action_cursor_blink_reset(void);
 
-/* Record the cursor pixel position discovered while drawing the active input
- * row. The code panel exposes this for hit-testing and overlay placement
- * (autocomplete popup, color picker anchor). UI render code emits the
- * coordinates through this action instead of mutating REPL state directly. */
-void repl_action_set_cursor_pixel(int px, int py);
-
 /* Cycle the help overlay tabs. */
 void repl_action_help_tab_next(void);
 void repl_action_help_tab_prev(void);

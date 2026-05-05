@@ -1,23 +1,24 @@
 /*
- * repl_autocomplete_panel.c -- Floating autocomplete popup.
+ * ui_autocomplete_panel.c -- Floating autocomplete popup.
  *
  * Pure renderer: reads match_count / matches / selected_idx from the
- * autocomplete model (repl_autocomplete.c) and the cursor pixel
- * position (cursor_px/cursor_py), and draws.  Selection
- * mutation, match building, and hint text all live outside.
+ * autocomplete model and takes the cursor pixel position from
+ * ui_panels_render_code_panel's per-frame UiCodePanelOutput, then
+ * draws. Selection mutation, match building, and hint text all live
+ * outside.
  *
  * The ghost-text and parameter-hint overlays drawn inline next to
  * the input line stay in ui_panels.c where the code panel's row
  * layout has the surrounding context.
  */
-#include "sample.h"
 #include "ui_autocomplete_panel.h"
-#include "repl_layout.h"
+#include "ui_layout.h"
 #include "./include/gl_2d.h"
+#include "ui_metrics.h"
 
-void ui_autocomplete_panel_render(const UiRenderSnapshot *snap) {
+void ui_autocomplete_panel_render(const UiRenderSnapshot *snap,
+                                  int cursor_px, int cursor_py) {
     ReplAutocompleteState           ac  = snap->autocomplete;
-    ReplCodePanelRuntimeState       cp  = snap->code_panel;
 
     if (ac.match_count < 1) return;
 
@@ -25,8 +26,8 @@ void ui_autocomplete_panel_render(const UiRenderSnapshot *snap) {
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
-    int popup_x = cp.cursor_px;
-    int popup_y = cp.cursor_py - LINE_H - 4;
+    int popup_x = cursor_px;
+    int popup_y = cursor_py - LINE_H - 4;
 
     /* Calculate popup width from longest match */
     int max_w = 0;

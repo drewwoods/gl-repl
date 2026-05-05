@@ -1,12 +1,18 @@
 TODO:
-   - ability to switch between 2D orth where use glVertex2d
    - when glEnable(GL_LIGHTING) is commented I expected the lighting to be disabled, since that is the default state. 
+   - complete bezier example
+   - make solar system example
+   - add sunset grid example
+   - allow cmd-<key> to alias to ctrl-key on macOS
+   - Have a 2d Mode, that swings the camera so looking down the z axis and engages the Adaptive plans grid.  Also the mouse click and drag turns to a translation along the z=0 plane instead of camera orbit.  Maybe swing the camera and implement some of the grids in OpenGL-Vibe/src/grid-animation. See constellation of gemini-3.0-pro-ai-studio/grid-animation-4.c or field-study of claude4.7-opus-thinking/grid-animation-2.c
+   - Have a loading animation similar to my glkit-examples.  Although there i start out at 0,0,0 and zoom to desired zoom.  I could experiment with zoomed out then quick zoom in if its not too distracting
    - Using the status bar to enter a new filename is not ideal as it disappears
-   - remove emdash — from status bar output since not ascii
    - See status bar history
    - add the light setup to the REPL (static) so the user can see the location and color of each
    - Think of how to handle music - maybe a menu?
+   - Guards should support git worktree
    - Have a tutorial or popup windows
+     - see https://claude.ai/design/p/019de056-5d56-76d3-9605-6a21bcf7e15c?file=Tutorial+System+Wireframes.html
    - outlines dont function correctly when not using lighting
      - replace the exported code with a stencil test (color and depth mask false, stencil set, then color black where stencil set)
    - add ability to reset the x,y,z translation of the camera

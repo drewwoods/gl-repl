@@ -1,5 +1,7 @@
 #include "repl_core.h"
 #include "repl_state.h"
+#include "repl_export.h"
+#include "ui_state.h"
 
 #include "support/test_harness.h"
 #include <stdio.h>
@@ -90,6 +92,7 @@ int main(void) {
     const char *func_path = "/tmp/repl_core_func_output.c";
     const char *param_loop_path = "/tmp/repl_core_param_loop_output.c";
     const char *decl_func_path = "/tmp/repl_core_decl_func_output.c";
+    const char *decl_func_blank_path = "/tmp/repl_core_decl_func_blank_output.c";
     const char *shape_path = "/tmp/repl_core_shapes_output.c";
     const char *tess_path = "/tmp/repl_core_tess_output.c";
 
@@ -98,6 +101,7 @@ int main(void) {
 
     repl_feed_line_public("x = 1.25;");
     repl_feed_line_public("glBegin(GL_LINE_STRIP);");
+    repl_feed_line_public("");
     repl_feed_line_public("for(i, 0, 3) {");
     repl_feed_line_public("glVertex3f(i + x, 0, 0);");
     repl_feed_line_public("}");
@@ -139,7 +143,7 @@ int main(void) {
     g_line_smooth_enabled = 1;
     repl_state_presentation_mut()->show_vertex_outlines = 0;
     repl_state_presentation_mut()->show_vertex_points = 0;
-    repl_export_save_output(path);
+    repl_export_save_output(path, editor_buffer_view());
     {
         char buf[16384];
         read_text_file(path, buf, sizeof(buf));
@@ -206,7 +210,7 @@ int main(void) {
     g_init_attenuate_points = 0;
     ASSERT_TRUE("init hides point attenuation when disabled",
                 find_init_line_substr("glPointParameterfv(GL_POINT_DISTANCE_ATTENUATION") < 0);
-    repl_export_save_output(path);
+    repl_export_save_output(path, editor_buffer_view());
     {
         char buf[16384];
         read_text_file(path, buf, sizeof(buf));
@@ -224,6 +228,10 @@ int main(void) {
         snprintf(label, sizeof(label), "roundtrip type %d", i);
         ASSERT_TRUE(label, repl_state_document_cmds_mut()[i].type == before_types[i]);
     }
+    ASSERT_TRUE("roundtrip blank line type preserved",
+                repl_state_document_cmds_mut()[2].type == CMD_EMPTY);
+    ASSERT_TRUE("roundtrip blank line text preserved",
+                strcmp(editor_buffer_line(2), "") == 0);
 
     repl_flatten_commands();
     ASSERT_TRUE("flatten produced cmds", repl_state_flat_program_count() > 0);
@@ -233,10 +241,10 @@ int main(void) {
     repl_feed_line_public("glBegin(GL_POINTS);");
     repl_feed_line_public("glVertex3f(0, 0, 0);");
     repl_feed_line_public("glEnd();");
-    repl_state_camera_set_orbit(31.523f, 31.4799f);
-    repl_state_camera_set_distance(7.59313f);
-    repl_state_camera_set_pan(1.50f, 0.0f, -2.00f);
-    repl_export_save_output(path);
+    ui_state_camera_set_orbit(31.523f, 31.4799f);
+    ui_state_camera_set_distance(7.59313f);
+    ui_state_camera_set_pan(1.50f, 0.0f, -2.00f);
+    repl_export_save_output(path, editor_buffer_view());
     {
         char buf[16384];
         read_text_file(path, buf, sizeof(buf));
@@ -248,23 +256,23 @@ int main(void) {
                     count_substr(buf, "glRotatef(g_angle, 0.0f, 1.0f, 0.0f);") == 1);
     }
     {
-        float saved_rx   = repl_state_camera().rx;
-        float saved_ry   = repl_state_camera().ry;
-        float saved_dist = repl_state_camera().dist;
-        float saved_tx   = repl_state_camera().tx;
-        float saved_ty   = repl_state_camera().ty;
-        float saved_tz   = repl_state_camera().tz;
-        repl_state_camera_set_orbit(20.0f, 30.0f);
-        repl_state_camera_set_distance(5.0f);
-        repl_state_camera_set_pan(0.0f, 0.0f, 0.0f);
+        float saved_rx   = ui_state_camera().rx;
+        float saved_ry   = ui_state_camera().ry;
+        float saved_dist = ui_state_camera().dist;
+        float saved_tx   = ui_state_camera().tx;
+        float saved_ty   = ui_state_camera().ty;
+        float saved_tz   = ui_state_camera().tz;
+        ui_state_camera_set_orbit(20.0f, 30.0f);
+        ui_state_camera_set_distance(5.0f);
+        ui_state_camera_set_pan(0.0f, 0.0f, 0.0f);
         repl_reset_state(); declare_test_vars();
         ASSERT_TRUE("load camera output", repl_export_load_from_file(path) == 1);
-        ASSERT_TRUE("camera rx restored",   fabsf(repl_state_camera().rx   - saved_rx)   < 1e-2f);
-        ASSERT_TRUE("camera ry restored",   fabsf(repl_state_camera().ry   - saved_ry)   < 1e-2f);
-        ASSERT_TRUE("camera dist restored", fabsf(repl_state_camera().dist - saved_dist) < 1e-2f);
-        ASSERT_TRUE("camera tx restored",   fabsf(repl_state_camera().tx   - saved_tx)   < 1e-2f);
-        ASSERT_TRUE("camera ty restored",   fabsf(repl_state_camera().ty   - saved_ty)   < 1e-2f);
-        ASSERT_TRUE("camera tz restored",   fabsf(repl_state_camera().tz   - saved_tz)   < 1e-2f);
+        ASSERT_TRUE("camera rx restored",   fabsf(ui_state_camera().rx   - saved_rx)   < 1e-2f);
+        ASSERT_TRUE("camera ry restored",   fabsf(ui_state_camera().ry   - saved_ry)   < 1e-2f);
+        ASSERT_TRUE("camera dist restored", fabsf(ui_state_camera().dist - saved_dist) < 1e-2f);
+        ASSERT_TRUE("camera tx restored",   fabsf(ui_state_camera().tx   - saved_tx)   < 1e-2f);
+        ASSERT_TRUE("camera ty restored",   fabsf(ui_state_camera().ty   - saved_ty)   < 1e-2f);
+        ASSERT_TRUE("camera tz restored",   fabsf(ui_state_camera().tz   - saved_tz)   < 1e-2f);
     }
 
     repl_reset_state(); declare_test_vars();
@@ -279,7 +287,7 @@ int main(void) {
 
     repl_state_presentation_mut()->show_vertex_outlines = 1;
     repl_state_presentation_mut()->show_vertex_points = 1;
-    repl_export_save_output(func_path);
+    repl_export_save_output(func_path, editor_buffer_view());
     {
         char buf[32768];
         read_text_file(func_path, buf, sizeof(buf));
@@ -342,7 +350,7 @@ int main(void) {
     repl_feed_line_public("}");
     repl_feed_line_public("}");
     repl_feed_line_public("func0(1, 6, 0);");
-    repl_export_save_output(param_loop_path);
+    repl_export_save_output(param_loop_path, editor_buffer_view());
     {
         char buf[32768];
         read_text_file(param_loop_path, buf, sizeof(buf));
@@ -356,7 +364,7 @@ int main(void) {
         int have_bound = 0;
         for (int i = 0; i < repl_state_document_count(); i++) {
             if (repl_state_document_cmds_mut()[i].type == CMD_FOR_BEGIN &&
-                strstr(repl_state_editor_buffer_line(i) ? repl_state_editor_buffer_line(i) : "", "sides + 1") != NULL &&
+                strstr(editor_buffer_line(i) ? editor_buffer_line(i) : "", "sides + 1") != NULL &&
                 repl_state_document_cmds_mut()[i].has_vars) {
                 have_bound = 1;
             }
@@ -381,7 +389,7 @@ int main(void) {
     repl_feed_line_public("}");
     repl_feed_line_public("r = 2;");
     repl_feed_line_public("func0();");
-    repl_export_save_output(decl_func_path);
+    repl_export_save_output(decl_func_path, editor_buffer_view());
 
     repl_reset_state(); declare_test_vars();
     ASSERT_TRUE("load decl plus promoted func output",
@@ -396,6 +404,40 @@ int main(void) {
     ASSERT_TRUE("imported call follows assign", repl_state_document_cmds_mut()[6].type == CMD_CALL);
 
     repl_reset_state(); declare_test_vars();
+    repl_feed_line_public("float r;");
+    repl_feed_line_public("");
+    repl_feed_line_public("// func prelude");
+    repl_feed_line_public("func0(radius) {");
+    repl_feed_line_public("glVertex3f(radius, 0, 0);");
+    repl_feed_line_public("}");
+    repl_feed_line_public("func0(2);");
+    repl_export_save_output(decl_func_blank_path, editor_buffer_view());
+
+    repl_reset_state(); declare_test_vars();
+    ASSERT_TRUE("load decl blank plus func output",
+                repl_export_load_from_file(decl_func_blank_path) == 1);
+    ASSERT_TRUE("decl blank plus func cmd count", repl_state_document_count() == 7);
+    ASSERT_TRUE("imported decl stays first with blank func prelude",
+                repl_state_document_cmds_mut()[0].type == CMD_VAR_DECLARE);
+    ASSERT_TRUE("imported blank stays after decl",
+                repl_state_document_cmds_mut()[1].type == CMD_EMPTY);
+    ASSERT_TRUE("imported comment stays after blank",
+                repl_state_document_cmds_mut()[2].type == CMD_COMMENT);
+    ASSERT_TRUE("imported func def stays after blank/comment prelude",
+                repl_state_document_cmds_mut()[3].type == CMD_FUNC_DEF);
+    ASSERT_TRUE("imported func body stays after func def",
+                repl_state_document_cmds_mut()[4].type == CMD_VERTEX3F);
+    ASSERT_TRUE("imported func end stays after func body",
+                repl_state_document_cmds_mut()[5].type == CMD_FUNC_END);
+    ASSERT_TRUE("imported call stays after function block",
+                repl_state_document_cmds_mut()[6].type == CMD_CALL);
+    ASSERT_TRUE("imported blank prelude text preserved",
+                strcmp(editor_buffer_line(1), "") == 0);
+    ASSERT_TRUE("imported comment prelude text preserved",
+                strstr(editor_buffer_line(2) ? editor_buffer_line(2) : "",
+                       "func prelude") != NULL);
+
+    repl_reset_state(); declare_test_vars();
     repl_feed_line_public("x = 0.25;");
     repl_feed_line_public("glutSolidSphere(x, 16, 12);");
     repl_feed_line_public("glutSolidCone(0.15, 1.5, 8, 1);");
@@ -404,7 +446,7 @@ int main(void) {
     repl_feed_line_public("glutSolidCube(0.5);");
     repl_state_presentation_mut()->show_vertex_outlines = 0;
     repl_state_presentation_mut()->show_vertex_points = 0;
-    repl_export_save_output(shape_path);
+    repl_export_save_output(shape_path, editor_buffer_view());
     {
         char buf[16384];
         read_text_file(shape_path, buf, sizeof(buf));
@@ -432,25 +474,25 @@ int main(void) {
     ASSERT_TRUE("loaded shape teapot fifth",  repl_state_document_cmds_mut()[4].type == CMD_GLUT_TEAPOT);
     ASSERT_TRUE("loaded shape cube sixth",    repl_state_document_cmds_mut()[5].type == CMD_GLUT_CUBE);
     ASSERT_TRUE("loaded shape sphere keeps expr source",
-                strstr(repl_state_editor_buffer_line(1) ? repl_state_editor_buffer_line(1) : "",
+                strstr(editor_buffer_line(1) ? editor_buffer_line(1) : "",
                        "glutSolidSphere(x, 16, 12);") != NULL);
     ASSERT_TRUE("loaded shape sphere has_vars set",
                 repl_state_document_cmds_mut()[1].has_vars == 1);
     ASSERT_TRUE("loaded shape cone source intact",
-                strstr(repl_state_editor_buffer_line(2) ? repl_state_editor_buffer_line(2) : "",
+                strstr(editor_buffer_line(2) ? editor_buffer_line(2) : "",
                        "glutSolidCone(0.15, 1.5, 8, 1);") != NULL);
     ASSERT_TRUE("loaded shape torus source intact",
-                strstr(repl_state_editor_buffer_line(3) ? repl_state_editor_buffer_line(3) : "",
+                strstr(editor_buffer_line(3) ? editor_buffer_line(3) : "",
                        "glutSolidTorus(0.1, 0.35, 12, 4);") != NULL);
     ASSERT_TRUE("loaded shape teapot source intact",
-                strstr(repl_state_editor_buffer_line(4) ? repl_state_editor_buffer_line(4) : "",
+                strstr(editor_buffer_line(4) ? editor_buffer_line(4) : "",
                        "glutSolidTeapot(0.25);") != NULL);
     ASSERT_TRUE("loaded shape cube source intact",
-                strstr(repl_state_editor_buffer_line(5) ? repl_state_editor_buffer_line(5) : "",
+                strstr(editor_buffer_line(5) ? editor_buffer_line(5) : "",
                        "glutSolidCube(0.5);") != NULL);
     for (int i = 1; i < repl_state_document_count(); i++)
         ASSERT_TRUE("loaded shape source omits g_quadric",
-                    strstr(repl_state_editor_buffer_line(i) ? repl_state_editor_buffer_line(i) : "",
+                    strstr(editor_buffer_line(i) ? editor_buffer_line(i) : "",
                            "g_quadric") == NULL);
 
     repl_reset_state(); declare_test_vars();
@@ -467,7 +509,7 @@ int main(void) {
     repl_feed_line_public("func0(2.0);");
     repl_state_presentation_mut()->show_vertex_outlines = 1;
     repl_state_presentation_mut()->show_vertex_points = 1;
-    repl_export_save_output(tess_path);
+    repl_export_save_output(tess_path, editor_buffer_view());
     {
         char buf[65536];
         read_text_file(tess_path, buf, sizeof(buf));

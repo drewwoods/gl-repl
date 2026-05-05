@@ -1,30 +1,49 @@
 #include "imrepl_ctrl.h"
 
 #include <gl_includes.h>
+#include <stdio.h>
+#include <stdlib.h>
 
+#include "editor_input.h"
+#include "editor_completion.h"
+#include "editor_help_session.h"
+#include "editor_inline_rename.h"
+#include "editor_commit.h"
+#include "editor_search.h"
+#include "repl_actions.h"
+#include "repl_audio.h"
+#include "repl_camera_controls.h"
+#include "repl_config.h"
 #include "repl_core.h"
-#include "repl_executor.h"
+#include "repl_help_text.h"
+#include "repl_debug.h"
 #include "repl_eval.h"
+#include "repl_executor.h"
+#include "repl_export.h"
+#include "repl_keys.h"
 #include "repl_pipeline.h"
-#include "repl_replay.h"
 #include "repl_replay_annotations.h"
+#include "repl_source_scope.h"
 #include "repl_state.h"
+#include "replay.h"
+#include "replay_state.h"
 #include "scene_render.h"
+#include "ui_autocomplete_panel.h"
 #include "ui_color_picker.h"
 #include "ui_editor.h"
-#include "ui_replay_hud.h"
-#include "ui_autocomplete_panel.h"
-#include "ui_help_overlay.h"
+#include "ui_tabbed_overlay.h"
+#include "ui_layout.h"
 #include "ui_menu_bar.h"
 #include "ui_panels.h"
-#include "ui_snapshot.h"
-#include "repl_clipboard.h"
-#include "repl_code_panel_document.h"
-#include "repl_export.h"
-#include "repl_layout.h"
-#include "repl_source_scope.h"
 #include "ui_profile_panel.h"
+#include "replay_ui_hud.h"
+#include "ui_snapshot.h"
+#include "ui_state.h"
 #include "ui_variable_panel.h"
+#include "variable_panel.h"
+#include "variable_panel_drag.h"
+#include "editor_clipboard.h"
+#include "editor_code_panel_document.h"
 #include "prof.h"
 
 static int imrepl_ctrl_cmd_is_focus_vertex(const GLCmd *cmd) {
@@ -60,7 +79,7 @@ static SceneFocusVertex imrepl_ctrl_build_focus_vertex(void) {
 static SceneGuideSnapshot imrepl_ctrl_build_guide_snapshot(const SceneRenderConfig *config) {
     ReplPresentationState presentation = repl_state_presentation();
     ReplVariableView vars = repl_state_variables();
-    ReplEditorInputView input = repl_state_editor_input();
+    ReplEditorInputView input = editor_state_input();
     ReplPredefView predef = repl_eval_predef_view();
 
     SceneGuideSnapshot snapshot = {
@@ -73,8 +92,8 @@ static SceneGuideSnapshot imrepl_ctrl_build_guide_snapshot(const SceneRenderConf
         .input_len = input.input_len,
         .cursor_pos = input.cursor_pos,
         .edit_line_idx = config->edit_line_idx,
-        .inserting = repl_state_insert_mode(),
-        .edit_line_committed_text = repl_state_editor_buffer_line(config->edit_line_idx),
+        .inserting = editor_insert_mode(),
+        .edit_line_committed_text = editor_buffer_line(config->edit_line_idx),
         .source_cmds = repl_state_document_cmds_mut(),
         .source_cmd_count = repl_state_document_count(),
         .flat_program = config->flat_program,
@@ -119,11 +138,11 @@ static void imrepl_ctrl_build_replay_fade_plan(SceneRenderConfig *config) {
 }
 
 static void imrepl_ctrl_push_highlights(void) {
-    repl_state_editor_highlights_clear();
+    editor_state_highlights_clear();
 
     int doc_count = repl_state_document_count();
     int edit_line = repl_state_edit_line();
-    int insert_mode = repl_state_insert_mode();
+    int insert_mode = editor_insert_mode();
 
     if (!insert_mode && edit_line >= 0 && edit_line < doc_count) {
         const GLCmd *cmd = repl_state_document_cmd_at(edit_line);
@@ -131,22 +150,22 @@ static void imrepl_ctrl_push_highlights(void) {
             int norm_idx = repl_find_feeding_normal_cmd(edit_line);
             int color_idx = repl_find_feeding_color_cmd(edit_line);
             if (norm_idx >= 0)
-                repl_state_editor_highlights_append(norm_idx, -1, -1,
+                editor_state_highlights_append(norm_idx, -1, -1,
                                                     HIGHLIGHT_FEEDING_NORMAL);
             if (color_idx >= 0)
-                repl_state_editor_highlights_append(color_idx, -1, -1,
+                editor_state_highlights_append(color_idx, -1, -1,
                                                     HIGHLIGHT_FEEDING_COLOR);
         }
     }
 
-    ReplReplayRuntimeState replay = repl_state_replay();
-    if (replay.active && replay.src_line_idx >= 0)
-        repl_state_editor_highlights_append(replay.src_line_idx, -1, -1,
+    int src_line = replay_src_line();
+    if (replay_active() && src_line >= 0)
+        editor_state_highlights_append(src_line, -1, -1,
                                             HIGHLIGHT_REPLAY_PC);
 }
 
 static void imrepl_ctrl_push_color_transformers(void) {
-    repl_state_editor_transformers_clear();
+    editor_state_transformers_clear();
     int doc_count = repl_state_document_count();
     for (int i = 0; i < doc_count; i++) {
         if (!ui_color_picker_can_edit_cmd(i))
@@ -171,9 +190,21 @@ static void imrepl_ctrl_push_color_transformers(void) {
                 .is_clear = (cmd->type == CMD_CLEAR_COLOR),
             },
         };
-        if (!repl_state_editor_transformers_append(&t))
+        if (!editor_state_transformers_append(&t))
             break;
     }
+}
+
+/* Browser autoplay policy: the Web Audio context stays suspended until
+ * a user gesture. The very first key / mouse / special event after
+ * startup fires repl_audio_on_user_gesture; native builds make this a
+ * no-op. Phase J1 commit 48a relocated this from editor_input.c. */
+static int g_audio_gesture_sent = 0;
+
+static void imrepl_ctrl_notify_audio_gesture_once(void) {
+    if (g_audio_gesture_sent) return;
+    g_audio_gesture_sent = 1;
+    repl_audio_on_user_gesture();
 }
 
 static void imrepl_ctrl_apply_input_effects(ReplInputDispatchEffects effects) {
@@ -197,10 +228,13 @@ static void scene_execute_adapter(float alpha_scale,
                                   void *user_data) {
     (void)user_data;
     repl_execute_set_fade_context(alpha_scale, skip_geom_before_pc);
+    glPushAttrib(GL_ALL_ATTRIB_BITS);
     repl_execute_program(&(ReplExecutionOptions){
         .flat_cmd_count = flat_cmd_count,
-        .program = program
+        .program = program,
+        .text = editor_buffer_view(),
     });
+    glPopAttrib();
 }
 
 /* Execute reset callback: clears fade context after last fade batch */
@@ -211,9 +245,8 @@ static void scene_execute_reset_adapter(void *user_data) {
 
 static void imrepl_ctrl_build_scene_config(SceneRenderConfig *config) {
     ReplRenderState render = repl_state_render();
-    ReplReplayRuntimeState replay = repl_state_replay();
     ReplPresentationState presentation = repl_state_presentation();
-    ReplCameraState cam = repl_state_camera();
+    ReplCameraState cam = ui_state_camera();
     const float *grid_major_steps = repl_state_grid_major_steps();
     const float *grid_extents = repl_state_grid_extents();
     float bg_lum;
@@ -234,8 +267,8 @@ static void imrepl_ctrl_build_scene_config(SceneRenderConfig *config) {
     config->anim_time = repl_state_variables().anim_time;
 
     /* --- Viewport and scene rectangle --- */
-    config->viewport_w = repl_state_viewport().window_w;
-    config->viewport_h = repl_state_viewport().window_h;
+    config->viewport_w = ui_state_viewport().window_w;
+    config->viewport_h = ui_state_viewport().window_h;
     repl_layout_scene_rect(&config->scene_x, &config->scene_y,
                            &config->scene_w, &config->scene_h);
     if (config->scene_w < 1) config->scene_w = 1;
@@ -282,8 +315,8 @@ static void imrepl_ctrl_build_scene_config(SceneRenderConfig *config) {
     config->show_vnums = presentation.show_vertex_labels;
     config->show_normals = presentation.show_normal_vectors;
     config->show_vertex_outlines = presentation.show_vertex_outlines;
-    config->replaying = replay.active;
-    config->replay_mode = replay.mode;
+    config->replaying = replay_active();
+    config->replay_mode = replay_mode();
     config->replay_tess_preview = config->replaying &&
                                   config->replay_mode == REPLAY_MODE_VERTEX;
     config->replay_vertex_points = config->replay_tess_preview;
@@ -325,25 +358,27 @@ static void imrepl_ctrl_build_ui_snapshot(UiRenderSnapshot *snap) {
      * reflects the current frame before rendering reads it. */
     repl_state_refresh_workspace_header_lines();
 
-    snap->viewport       = repl_state_viewport();
+    snap->viewport       = ui_state_viewport();
     snap->presentation   = repl_state_presentation();
-    snap->code_panel     = repl_state_code_panel();
-    snap->help           = repl_state_help();
-    snap->variable_panel = repl_state_variable_panel();
-    snap->profile_panel  = repl_state_profile_panel();
-    snap->status         = repl_state_status();
-    snap->search         = repl_state_search();
-    snap->autocomplete   = repl_state_autocomplete();
-    snap->camera         = repl_state_camera();
-    snap->pointer        = repl_state_pointer();
+    snap->code_panel     = ui_state_code_panel();
+    snap->help           = ui_state_help();
+    snap->help_session   = editor_help_session_view();
+    snap->variable_panel = variable_panel_view();
+    snap->profile_panel  = ui_state_profile_panel();
+    snap->status         = ui_state_status();
+    snap->search         = editor_state_search();
+    snap->autocomplete   = editor_state_autocomplete();
+    snap->camera         = ui_state_camera();
+    snap->pointer        = ui_state_pointer();
     snap->render         = repl_state_render();
-    snap->replay         = repl_state_replay();
+    snap->replay         = replay_state_view();
     snap->scenes         = repl_state_scenes();
-    snap->variable_drag  = repl_state_variable_drag();
-    snap->selection      = repl_state_selection();
+    snap->variable_drag  = variable_panel_drag();
+    snap->selection      = editor_state_selection();
+    snap->scroll         = editor_state_scroll();
 
     snap->variables      = repl_state_variables();
-    snap->editor_input   = repl_state_editor_input();
+    snap->editor_input   = editor_state_input();
     snap->import_export  = repl_state_import_export();
     snap->flat_program   = repl_state_flat_program_view();
     snap->predef         = repl_eval_predef_view();
@@ -370,9 +405,10 @@ static void imrepl_ctrl_build_ui_snapshot(UiRenderSnapshot *snap) {
     }
 
     snap->workspace_dir = repl_state_workspace_dir();
-    snap->editor_transformers = repl_state_editor_transformers();
-    snap->editor_highlights = repl_state_editor_highlights();
-    snap->editor_virtual_lines = repl_state_editor_virtual_lines();
+    snap->help_content = repl_help_text_build();
+    snap->editor_transformers = editor_state_transformers();
+    snap->editor_highlights = editor_state_highlights();
+    snap->editor_virtual_lines = editor_state_virtual_lines();
 
     /* Selection range materialized once for the per-row code-panel branch. */
     snap->selection_active = repl_clipboard_sel_active();
@@ -392,7 +428,11 @@ void imrepl_ctrl_display_frame(void) {
     float live_predef_vals[MAX_PREDEF_VARS] = { 0 };
     FlatProgramView flat_program = repl_state_flat_program_view();
     int g_num_flat_cmds = flat_program.cmd_count;
-    ReplReplayRuntimeState replay = repl_state_replay();
+    /* Capture replay state once before repl_replay_prepare_frame so the
+     * HUD shows the per-frame "before-prepare" view (the contract that
+     * test_imrepl_ctrl pins). Per-field narrow accessors elsewhere in
+     * the frame are reading post-prepare state, which is what they want. */
+    ReplReplayRuntimeState frame_replay = replay_state_view();
     SceneRenderConfig scene_config;
     UiRenderSnapshot ui_snap;
 
@@ -400,8 +440,10 @@ void imrepl_ctrl_display_frame(void) {
     prof_begin(PROF_FRAME_TOTAL);
 
     if (repl_state_normals_dirty()) {
+        prof_begin(PROF_AUTONORMAL);
         recompute_autonormals();
         repl_state_normals_dirty_clear();
+        prof_end(PROF_AUTONORMAL);
     }
     if (repl_state_flat_program_dirty()) {
         prof_begin(PROF_FLATTEN);
@@ -429,16 +471,23 @@ void imrepl_ctrl_display_frame(void) {
     /* Prepare replay annotations + push the virtual-line list.
      * Layout also calls prepare(), so this stays idempotent. */
     prof_begin(PROF_SNAPSHOT_VIRTUAL_LINES);
-    repl_replay_annotations_prepare();
+    repl_replay_annotations_prepare(editor_buffer_view());
     prof_end(PROF_SNAPSHOT_VIRTUAL_LINES);
 
+    /* Per-frame prep that sits between virtual-line refresh and
+     * scene-config build: replay state-machine prepare_frame plus
+     * the import/export render-state and camera string refresh.
+     * Wrapped in its own subsection so the SNAPSHOT_* subsections
+     * sum to PROF_SNAPSHOT exactly. */
+    prof_begin(PROF_SNAPSHOT_PREP);
     saved_flat_count = g_num_flat_cmds;
     repl_copy_predef_values(live_predef_vals, MAX_PREDEF_VARS);
-    if (replay.active)
+    if (replay_active())
         repl_state_flat_program_set_count(repl_replay_prepare_frame(saved_flat_count));
 
     update_render_state_strings();
     update_cam_lines();
+    prof_end(PROF_SNAPSHOT_PREP);
 
     prof_begin(PROF_SNAPSHOT_SCENE_CONFIG);
     imrepl_ctrl_build_scene_config(&scene_config);
@@ -460,6 +509,7 @@ void imrepl_ctrl_display_frame(void) {
     prof_end(PROF_SCENE_3D);
 
     if (scene_config.replaying) {
+        prof_begin(PROF_REPLAY_HUD);
         ReplPresentationState presentation = repl_state_presentation();
         UiReplayHudState replay_hud_state = {
             .scene_x = scene_config.scene_x,
@@ -470,14 +520,15 @@ void imrepl_ctrl_display_frame(void) {
             .viewport_h = scene_config.viewport_h,
             .code_panel_layout = presentation.code_panel_layout,
             .replay_mode = scene_config.replay_mode,
-            .replay_pc = replay.pc,
-            .replay_total_cmds = replay.total_flat_cmds,
-            .replay_state_val = replay.state,
-            .replay_speed = replay.speed,
-            .replay_expand_args = replay.expand_args,
+            .replay_pc = frame_replay.pc,
+            .replay_total_cmds = frame_replay.total_flat_cmds,
+            .replay_state_val = frame_replay.state,
+            .replay_speed = frame_replay.speed,
+            .replay_expand_args = frame_replay.expand_args,
             .replaying = scene_config.replaying,
         };
-        ui_replay_hud_render(&replay_hud_state);
+        replay_ui_hud_render(&replay_hud_state);
+        prof_end(PROF_REPLAY_HUD);
     }
 
     /* Commit the accumulated subsection totals now that all AA samples are done. */
@@ -485,28 +536,50 @@ void imrepl_ctrl_display_frame(void) {
         prof_accum_commit(section_idx);
 
     prof_begin(PROF_CODE_PANEL);
-    ui_panels_render_code_panel(&ui_snap);
+    UiCodePanelOutput cp_out = { 0, 0, 0 };
+    ui_panels_render_code_panel(&ui_snap, &cp_out);
     prof_end(PROF_CODE_PANEL);
 
     prof_begin(PROF_UI_PANELS);
-    ui_autocomplete_panel_render(&ui_snap);
+    /* Autocomplete popup anchors under the editor cursor. When the
+     * active input row didn't render this frame (code panel hidden,
+     * row scrolled offscreen) cp_out.cursor_valid is 0 and we skip
+     * the popup — there's no visible cursor to anchor to. Same
+     * semantic as the legacy mid-render publish, which simply didn't
+     * fire on those frames. */
+    if (cp_out.cursor_valid)
+        ui_autocomplete_panel_render(&ui_snap, cp_out.cursor_px, cp_out.cursor_py);
     ui_menu_bar_render_example_dropdown(&ui_snap);
     ui_variable_panel_render(&ui_snap);
     ui_panels_render_scene_status(&ui_snap);
-    ui_help_overlay_render(&ui_snap);
+    {
+        UiOverlayState help_overlay = {
+            .visible    = ui_snap.help.visible,
+            .tab_idx    = ui_snap.help_session.tab_idx,
+            .scroll     = ui_snap.help_session.scroll,
+            .viewport_w = ui_snap.viewport.window_w,
+            .viewport_h = ui_snap.viewport.window_h,
+            .content    = ui_snap.help_content,
+        };
+        ui_tabbed_overlay_render(&help_overlay);
+    }
     prof_end(PROF_UI_PANELS);
 
+    prof_begin(PROF_PROFILE_PANEL);
     ui_profile_panel_render(&ui_snap);
+    prof_end(PROF_PROFILE_PANEL);
 
+    prof_begin(PROF_FRAME_RESTORE);
     repl_state_flat_program_set_count(saved_flat_count);
     repl_restore_predef_values(live_predef_vals, MAX_PREDEF_VARS);
+    prof_end(PROF_FRAME_RESTORE);
 
     prof_end(PROF_FRAME_TOTAL);
 }
 
 void imrepl_ctrl_reshape(int w, int h) {
     if (h < 1) h = 1;
-    repl_state_viewport_set_size(w, h);
+    ui_state_viewport_set_size(w, h);
 }
 
 void imrepl_ctrl_init_gl(void) {
@@ -515,6 +588,12 @@ void imrepl_ctrl_init_gl(void) {
     scene_render_init_gl();
     repl_executor_init_resources();
     apply_init_bootstrap();
+    /* glutInit has run by the time imrepl_ctrl_init_gl is called.
+     * Unlock glutGetModifiers() reads in editor_input so Cmd / Ctrl /
+     * Shift modifier checks land. Tests skip this hook so modifier
+     * reads default to "no modifiers held" instead of aborting
+     * freeglut for being called pre-init. */
+    editor_input_enable_glut_modifier_reads();
 }
 
 void imrepl_ctrl_bootstrap_repl(const char *input_file) {
@@ -532,30 +611,975 @@ void imrepl_ctrl_set_accum(int enabled) {
     repl_state_render_mut()->use_accum = enabled ? 1 : 0;
 }
 
+/* ===========================================================================
+ * Router helpers: non-editor input concerns
+ *
+ * imrepl_ctrl is the controller — it owns routing of raw GLUT input to
+ * the subsystem that owns each concern (replay, audio, config, save,
+ * scene cycle, variable panel, scene press, camera, scroll wheel,
+ * help). The editor's keyboard_func / special_func / mouse_func /
+ * motion_func / mousewheel_func dispatchers see only editor-text
+ * concerns: every helper below is run before the editor handler.
+ *
+ * Helpers are exported (declared in imrepl_ctrl.h) so test fixtures
+ * can drive a single routing concern without applying GLUT effects.
+ * Helpers fill the editor_input ReplInputDispatchEffects via
+ * editor_request_redraw etc.; glutPostRedisplay / glutSetCursor /
+ * glutTimerFunc fire only from imrepl_ctrl_apply_input_effects, which
+ * the dispatch entry points call after the helpers. Test fixtures
+ * bypass apply_input_effects entirely.
+ * ===========================================================================
+ */
+
+/* ---- Keyboard router helpers ------------------------------------------ */
+
+int imrepl_ctrl_router_handle_save_key(unsigned char key) {
+    if (key == KEY_CTRL_S) {
+        repl_save_default_output();
+        return 1;
+    }
+    return 0;
+}
+
+int imrepl_ctrl_router_handle_debug_dump_key(unsigned char key) {
+    if (key == KEY_CTRL_P) {
+        repl_debug_dump_editor(stdout, editor_buffer_view());
+        repl_debug_dump_flat_commands(stdout, editor_buffer_view());
+        set_status("Dumped editor + flat commands to stdout");
+        return 1;
+    }
+    return 0;
+}
+
+int imrepl_ctrl_router_handle_quit_key(unsigned char key) {
+    if (key == KEY_CTRL_Q) {
+        repl_export_save_output("/tmp/temp-output.c", editor_buffer_view());
+        printf("Saved to %s\n", "/tmp/temp-output.c");
+        exit(0);
+    }
+    return 0;
+}
+
+int imrepl_ctrl_router_handle_config_menu_key(unsigned char key) {
+    if (!editor_state_search().active && key == '`') {
+        if (replay_active())
+            repl_replay_stop();
+        editor_input_restore_hidden_code_panel();
+        ui_menu_bar_open_config();
+        return 1;
+    }
+    return 0;
+}
+
+int imrepl_ctrl_router_handle_active_replay_key(unsigned char key) {
+    return replay_active() && replay_handle_key(key);
+}
+
+int imrepl_ctrl_router_handle_replay_toggle_key(unsigned char key) {
+    return replay_handle_key(key);
+}
+
+int imrepl_ctrl_router_handle_cfg_shortcut_key(unsigned char key) {
+    return repl_cfg_handle_ascii_shortcut(key);
+}
+
+int imrepl_ctrl_router_handle_accum_samples_key(unsigned char key) {
+    static const int g_accum_steps[] = { 1, 2, 4, 8, 16 };
+    ReplRenderState *rs = repl_state_render_mut();
+    if (key == '=' || key == '+') {
+        if (!(editor_input_active_modifiers() & GLUT_ACTIVE_CTRL))
+            return 0;
+        if (rs->use_accum) {
+            for (int i = 0; i < ACCUM_STEP_COUNT - 1; i++) {
+                if (rs->accum_samples <= g_accum_steps[i]) {
+                    rs->accum_samples = g_accum_steps[i + 1];
+                    break;
+                }
+            }
+            char msg[64];
+            snprintf(msg, sizeof(msg), "Accum samples: %d", rs->accum_samples);
+            set_status(msg);
+        }
+        return 1;
+    }
+
+    if (key == KEY_CTRL_DASH ||
+        (key == '-' && (editor_input_active_modifiers() & GLUT_ACTIVE_CTRL))) {
+        if (rs->use_accum) {
+            for (int i = ACCUM_STEP_COUNT - 1; i > 0; i--) {
+                if (rs->accum_samples >= g_accum_steps[i]) {
+                    rs->accum_samples = g_accum_steps[i - 1];
+                    break;
+                }
+            }
+            char msg[64];
+            snprintf(msg, sizeof(msg), "Accum samples: %d", rs->accum_samples);
+            set_status(msg);
+        }
+        return 1;
+    }
+    return 0;
+}
+
+/* ---- Special-key router helpers --------------------------------------- */
+
+int imrepl_ctrl_router_handle_replay_special(int key) {
+    return replay_handle_special(key);
+}
+
+int imrepl_ctrl_router_handle_cfg_special_shortcut(int key) {
+    return repl_cfg_handle_special_shortcut(key);
+}
+
+int imrepl_ctrl_router_handle_horizontal_audio_special(int key) {
+    if (key != GLUT_KEY_LEFT && key != GLUT_KEY_RIGHT)
+        return 0;
+    if (!(editor_input_active_modifiers() & GLUT_ACTIVE_CTRL))
+        return 0;
+    if (key == GLUT_KEY_LEFT)
+        repl_audio_prev_track();
+    else
+        repl_audio_next_track();
+    return 1;
+}
+
+int imrepl_ctrl_router_handle_help_tab_special(int key) {
+    if (!ui_state_help().visible)
+        return 0;
+    if (key == GLUT_KEY_LEFT) {
+        repl_action_help_tab_prev();
+        return 1;
+    }
+    if (key == GLUT_KEY_RIGHT) {
+        repl_action_help_tab_next();
+        return 1;
+    }
+    return 0;
+}
+
+int imrepl_ctrl_router_handle_help_scroll_special(int key) {
+    if (!ui_state_help().visible)
+        return 0;
+    switch (key) {
+    case GLUT_KEY_UP:        editor_help_session_scroll_by(-1); return 1;
+    case GLUT_KEY_DOWN:      editor_help_session_scroll_by(1);  return 1;
+    case GLUT_KEY_PAGE_UP:   editor_help_session_scroll_by(-5); return 1;
+    case GLUT_KEY_PAGE_DOWN: editor_help_session_scroll_by(5);  return 1;
+    default: return 0;
+    }
+}
+
+int imrepl_ctrl_router_handle_help_toggle_special(int key) {
+    if (key == GLUT_KEY_F1) {
+        ReplHelpState *help = ui_state_help_mut();
+        help->visible = !help->visible;
+        editor_help_session_set_tab(0);
+        editor_help_session_set_scroll(0);
+        return 1;
+    }
+    return 0;
+}
+
+static void cycle_example_or_user_scene(void) {
+    /* F12 cycles: examples[0..N-1] -> user scenes (in slot order) -> back.
+     * Active example moves to the next example, then first user scene.
+     * Active user scene moves to the next occupied user slot, then example 0. */
+    int count = repl_example_count();
+    int active_scene = repl_active_user_scene();
+
+    if (active_scene >= 0) {
+        for (int scene_idx = active_scene + 1; scene_idx < MAX_USER_SCENES; scene_idx++) {
+            if (repl_user_scene_slot_used(scene_idx)) {
+                repl_load_user_scene_idx(scene_idx);
+                return;
+            }
+        }
+        if (count > 0)
+            repl_load_example(0);
+        return;
+    }
+
+    if (count > 0) {
+        int next = repl_state_scenes().active_example_idx + 1;
+        if (next < count) {
+            repl_load_example(next);
+            return;
+        }
+    }
+
+    for (int scene_idx = 0; scene_idx < MAX_USER_SCENES; scene_idx++) {
+        if (repl_user_scene_slot_used(scene_idx)) {
+            repl_load_user_scene_idx(scene_idx);
+            return;
+        }
+    }
+    if (count > 0)
+        repl_load_example(0);
+}
+
+int imrepl_ctrl_router_handle_scene_cycle_special(int key) {
+    if (key == GLUT_KEY_F12) {
+        cycle_example_or_user_scene();
+        return 1;
+    }
+    return 0;
+}
+
+/* ---- Mouse / motion router helpers ------------------------------------ */
+
+int imrepl_ctrl_router_handle_variable_panel_drag_begin(int button, int state, int x, int y) {
+    if (state != GLUT_DOWN) return 0;
+    if (!variable_panel_visible()) return 0;
+    if (button != GLUT_LEFT_BUTTON && button != GLUT_RIGHT_BUTTON)
+        return 0;
+    int row_idx;
+    if (!ui_variable_panel_hit(x, y, &row_idx))
+        return 0;
+    if (replay_active())
+        repl_replay_stop();
+    int log_mode = (button == GLUT_RIGHT_BUTTON) ? 1 : 0;
+    variable_panel_handle_drag_begin(row_idx, log_mode, x);
+    editor_request_redraw();
+    return 1;
+}
+
+int imrepl_ctrl_router_handle_variable_panel_drag_release(int state) {
+    if (state != GLUT_UP) return 0;
+    if (!variable_panel_drag_active()) return 0;
+    variable_panel_handle_drag_reset();
+    editor_request_redraw();
+    return 1;
+}
+
+int imrepl_ctrl_router_handle_right_config_press(int button, int state, int x, int y) {
+    if (state != GLUT_DOWN || button != GLUT_RIGHT_BUTTON)
+        return 0;
+    if (ui_panels_handle_right_press(x, y)) {
+        editor_request_redraw();
+        return 1;
+    }
+    return 0;
+}
+
+int imrepl_ctrl_router_handle_scene_press(int button, int state, int x, int y) {
+    if (state != GLUT_DOWN || button != GLUT_LEFT_BUTTON)
+        return 0;
+    /* The scene region is owned by the camera, but the floating color
+     * picker can overlap it. Give the picker first crack on press
+     * (matches legacy ui_panels_handle_scene_press → ui_color_picker_press
+     * forwarding). */
+    if (ui_color_picker_press(x, y)) {
+        editor_request_redraw();
+        return 1;
+    }
+    return 0;
+}
+
+int imrepl_ctrl_router_handle_camera_mouse(int button, int state, int x, int y) {
+    repl_camera_mouse_event(button, state, x, y, editor_input_active_modifiers());
+    return 1;
+}
+
+static int imrepl_ctrl_apply_variable_panel_value_change(
+        const VariablePanelValueChange *value_change) {
+    ReplCompiledChange compiled;
+    ReplCompileContext ctx;
+    ReplVariableDragState drag;
+    char err[REPL_STATUS_TEXT_MAX] = "";
+    int var_idx;
+    int capture_undo;
+
+    if (!value_change || !value_change->name[0])
+        return 1;
+
+    drag = variable_panel_drag();
+    var_idx = drag.var_idx;
+    if (var_idx < 0 || var_idx >= g_num_predef_vars)
+        return 1;
+    if (strcmp(g_predef_vars[var_idx].name, value_change->name) != 0) {
+        var_idx = repl_eval_find_predef_var_idx(value_change->name);
+        if (var_idx < 0)
+            return 1;
+    }
+    if (g_predef_vars[var_idx].value == value_change->value)
+        return 1;
+
+    ctx = repl_compile_context_from_live();
+    if (repl_compile_set_predef_value(value_change->name, value_change->value,
+                                      &ctx, &compiled,
+                                      err, sizeof(err)) != REPL_COMPILE_OK) {
+        set_status(err[0] ? err : "Variable update failed");
+        return 1;
+    }
+
+    capture_undo = !variable_panel_drag_undo_snapshot_pushed();
+    if (!editor_commit_apply_external_change(&compiled, capture_undo)) {
+        set_status("Command buffer full!");
+        return 1;
+    }
+    if (capture_undo)
+        variable_panel_drag_mark_undo_snapshot_pushed();
+    return 1;
+}
+
+int imrepl_ctrl_router_handle_variable_panel_motion(int x, int y) {
+    VariablePanelValueChange value_change;
+
+    (void)y;
+    if (!variable_panel_drag_active())
+        return 0;
+    if (variable_panel_handle_drag_motion(x, &value_change))
+        imrepl_ctrl_apply_variable_panel_value_change(&value_change);
+    editor_request_redraw();
+    return 1;
+}
+
+int imrepl_ctrl_router_handle_camera_motion(int x, int y) {
+    repl_camera_drag_motion(x, y);
+    return 1;
+}
+
+int imrepl_ctrl_router_handle_camera_pointer_set(int x, int y) {
+    repl_camera_pointer_set(x, y);
+    return 1;
+}
+
+int imrepl_ctrl_router_handle_glut_scroll_wheel_button(int button, int state, int x, int y) {
+#ifdef USE_GLUT
+    if ((button != 3 && button != 4) || state != GLUT_DOWN)
+        return 0;
+    int direction = (button == 3) ? -1 : 1;
+    if (ui_state_help().visible) {
+        editor_help_session_scroll_by(direction);
+    } else if (editor_input_point_in_code_panel(x, y)) {
+        editor_input_code_panel_scroll(direction);
+    } else {
+        repl_camera_add_zoom_velocity(direction == -1 ? -0.3f : 0.3f);
+    }
+    editor_request_redraw();
+    return 1;
+#else
+    (void)button; (void)state; (void)x; (void)y;
+    return 0;
+#endif
+}
+
+/* ---- Code-panel UiHit dispatch (Phase J2.2) -------------------------- */
+
+/* Code-panel selection drag tracking. Press handlers set the anchor
+ * to the clicked source-cmd row; motion re-runs ui_panels_hit_test
+ * to derive the drag target and extends the editor selection.
+ * Release on UP clears the active flag. The state lives here (not in
+ * ui_panels.c) because UI input files report hit-test data only. */
+static int g_code_panel_drag_active = 0;
+static int g_code_panel_drag_anchor = -1;
+static int g_code_panel_drag_moved  = 0;
+
+void imrepl_ctrl_router_reset_code_panel_drag(void) {
+    g_code_panel_drag_active = 0;
+    g_code_panel_drag_anchor = -1;
+    g_code_panel_drag_moved  = 0;
+}
+
+/* Common epilog for clicks that move the editor cursor: blink reset,
+ * autocomplete clear, selection clear, redraw. Mirrors the legacy
+ * ui_panels_handle_code_panel_click tail. */
+static void route_code_click_epilog(void) {
+    repl_action_cursor_blink_reset();
+    editor_completion_clear();
+    repl_clipboard_clear_selection();
+    editor_request_redraw();
+}
+
+/* UI_HIT_CODE_TEXT: navigate to clicked line, set cursor column, arm
+ * the selection drag anchor. */
+static int route_code_text_hit(const UiHit *hit) {
+    /* A non-swatch click on the code panel closes any open color picker
+     * (matches legacy ui_panels_handle_code_panel_press behaviour). */
+    ui_color_picker_close();
+
+    if (hit->line_idx >= 0)
+        navigate_to_line(hit->line_idx);
+    if (hit->char_idx >= 0)
+        editor_cursor_pos_set(hit->char_idx);
+    route_code_click_epilog();
+
+    /* Arm drag anchor for committed lines only. */
+    if (hit->line_idx >= 0 && hit->line_idx < repl_state_document_count()) {
+        g_code_panel_drag_active = 1;
+        g_code_panel_drag_anchor = hit->line_idx;
+        g_code_panel_drag_moved  = 0;
+    } else {
+        imrepl_ctrl_router_reset_code_panel_drag();
+    }
+    return 1;
+}
+
+/* UI_HIT_CODE_INSERT_LINE: insertion virtual row in insert mode. Set
+ * cursor column but do not navigate (matches legacy on_insert_line=1
+ * behaviour). No drag anchor — the insert row is virtual. */
+static int route_code_insert_line_hit(const UiHit *hit) {
+    ui_color_picker_close();
+    if (hit->char_idx >= 0)
+        editor_cursor_pos_set(hit->char_idx);
+    route_code_click_epilog();
+    imrepl_ctrl_router_reset_code_panel_drag();
+    return 1;
+}
+
+/* UI_HIT_CODE_GUTTER: clicking the line-number column selects the
+ * row. Same dispatch as CODE_TEXT minus the cursor-column move. */
+static int route_code_gutter_hit(const UiHit *hit) {
+    ui_color_picker_close();
+    if (hit->line_idx >= 0)
+        navigate_to_line(hit->line_idx);
+    route_code_click_epilog();
+    if (hit->line_idx >= 0 && hit->line_idx < repl_state_document_count()) {
+        g_code_panel_drag_active = 1;
+        g_code_panel_drag_anchor = hit->line_idx;
+        g_code_panel_drag_moved  = 0;
+    } else {
+        imrepl_ctrl_router_reset_code_panel_drag();
+    }
+    return 1;
+}
+
+/* UI_HIT_INLINE_COLOR_SWATCH: toggle / open the floating color picker
+ * for the swatch's source line. Undo capture is owned by the picker's
+ * writeback path (color_picker_write_cmd → editor_commit_apply_external
+ * _change with capture_undo on the first slider edit per session), so
+ * a session that opens and closes without editing leaves the undo ring
+ * untouched. */
+static int route_inline_color_swatch_hit(const UiHit *hit, int my) {
+    if (hit->line_idx < 0)
+        return 0;
+    if (ui_color_picker_active_line() == hit->line_idx) {
+        ui_color_picker_close();
+    } else {
+        ui_color_picker_open(hit->line_idx, my);
+    }
+    editor_request_redraw();
+    return 1;
+}
+
+/* UI_HIT_COLOR_SWATCH: floating picker slider control press. The
+ * picker has its own internal hit-test for SV/hue/alpha regions and
+ * starts a drag on press. */
+static int route_color_picker_control_hit(int x, int y) {
+    if (ui_color_picker_press(x, y)) {
+        editor_request_redraw();
+        return 1;
+    }
+    return 0;
+}
+
+/* UI_HIT_PIN_BUTTON: Search / Replay pinned right-side button. */
+static int route_pin_button_hit(const UiHit *hit) {
+    ui_menu_bar_close();
+    switch (hit->item_idx) {
+    case REPL_MENU_BAR_PIN_REPLAY:
+        replay_handle_pin_clicked();
+        break;
+    case REPL_MENU_BAR_PIN_SEARCH:
+        handle_search_key(KEY_CTRL_F);
+        ui_menu_bar_note_search_opened();
+        break;
+    default:
+        break;
+    }
+    editor_request_redraw();
+    return 1;
+}
+
+/* UI_HIT_MENU_BUTTON: top-level menu-bar button. Click on the open
+ * menu's button toggles it closed; click on a different button
+ * switches the open dropdown. */
+static int route_menu_button_hit(const UiHit *hit) {
+    int menu_id = hit->cmd_idx;
+    if (menu_id < 0) return 0;
+
+    int open_menu = ui_menu_bar_open_menu_id();
+    if (open_menu == menu_id)
+        ui_menu_bar_close();
+    else
+        ui_menu_bar_set_open_menu(menu_id);
+    editor_request_redraw();
+    return 1;
+}
+
+/* UI_HIT_MENU_ITEM: open dropdown row click. Activates the action
+ * via repl_action_menu_item_activate using both menu_id (cmd_idx)
+ * and item_idx from the hit payload. The action returns 1 if the
+ * dropdown should close after activation (most action items) or 0 to
+ * leave it open (cycle / toggle items). */
+static int route_menu_item_hit(const UiHit *hit) {
+    if (hit->cmd_idx < 0 || hit->item_idx < 0) return 0;
+    int close = repl_action_menu_item_activate(hit->cmd_idx, hit->item_idx);
+    if (close)
+        ui_menu_bar_close();
+    editor_request_redraw();
+    return 1;
+}
+
+/* UI_HIT_PANEL_DIVIDER: start the panel-resize drag. Motion updates
+ * panel_frac via editor_handle_motion's resizing-panel branch; UP
+ * clears the resizing flag. */
+static int route_panel_divider_hit(const UiHit *hit) {
+    (void)hit;
+    ui_state_code_panel_mut()->resizing_panel = 1;
+    editor_set_cursor(editor_input_code_panel_resize_cursor());
+    return 1;
+}
+
+/* UI_HIT_VARIABLE_SLIDER: variable-panel left-click drag begin. The
+ * J1 helper handles replay-stop + drag start. */
+static int route_variable_slider_hit(int x, int y) {
+    return imrepl_ctrl_router_handle_variable_panel_drag_begin(GLUT_LEFT_BUTTON,
+                                                               GLUT_DOWN, x, y);
+}
+
+/* Derive a code-panel target line from a hit, mirroring the legacy
+ * code_panel_drag_target. Insert-line drags use edit_line (the line
+ * the cursor is parked on), only falling back to the last committed
+ * line when edit_line is past the document end — preserving the
+ * insertion-point as the drag endpoint when the user is editing
+ * mid-document. Returns -1 if the hit is not a code-panel kind. */
+static int code_panel_target_from_hit(UiHit hit) {
+    switch (hit.kind) {
+    case UI_HIT_CODE_TEXT:
+    case UI_HIT_CODE_GUTTER:
+        return hit.line_idx;
+    case UI_HIT_CODE_INSERT_LINE: {
+        int target = hit.line_idx; /* set to repl_state_edit_line() in J2.1 */
+        int doc_count = repl_state_document_count();
+        if (target >= doc_count)
+            target = doc_count - 1;
+        return target;
+    }
+    default:
+        return -1;
+    }
+}
+
+int imrepl_ctrl_router_handle_code_panel_hit(UiHit hit, int x, int y) {
+    /* A click outside the menu bar (anywhere that isn't UI_HIT_MENU_BUTTON
+     * / UI_HIT_MENU_ITEM) dismisses an open dropdown — matches the legacy
+     * "click outside dropdown closes it" behaviour from
+     * ui_panels_handle_code_panel_press. */
+    int dismissed_dropdown = 0;
+    if (hit.kind != UI_HIT_MENU_BUTTON &&
+        hit.kind != UI_HIT_MENU_ITEM &&
+        hit.kind != UI_HIT_PIN_BUTTON &&
+        hit.kind != UI_HIT_COLOR_SWATCH &&
+        ui_menu_bar_menu_dropdown_is_open()) {
+        ui_menu_bar_close();
+        dismissed_dropdown = 1;
+    }
+
+    int consumed;
+    switch (hit.kind) {
+    case UI_HIT_COLOR_SWATCH:
+        consumed = route_color_picker_control_hit(x, y); break;
+    case UI_HIT_INLINE_COLOR_SWATCH:
+        consumed = route_inline_color_swatch_hit(&hit, y); break;
+    case UI_HIT_PIN_BUTTON:
+        consumed = route_pin_button_hit(&hit); break;
+    case UI_HIT_MENU_BUTTON:
+        consumed = route_menu_button_hit(&hit); break;
+    case UI_HIT_MENU_ITEM:
+        consumed = route_menu_item_hit(&hit); break;
+    case UI_HIT_VARIABLE_SLIDER:
+        consumed = route_variable_slider_hit(x, y); break;
+    case UI_HIT_PANEL_DIVIDER:
+        consumed = route_panel_divider_hit(&hit); break;
+    case UI_HIT_CODE_TEXT:
+        consumed = route_code_text_hit(&hit); break;
+    case UI_HIT_CODE_INSERT_LINE:
+        consumed = route_code_insert_line_hit(&hit); break;
+    case UI_HIT_CODE_GUTTER:
+        consumed = route_code_gutter_hit(&hit); break;
+    case UI_HIT_HELP_PANEL:
+    case UI_HIT_REPLAY_BUTTON:
+    case UI_HIT_SCENE:
+    case UI_HIT_NONE:
+    default:
+        consumed = 0;
+    }
+
+    /* A click that only dismissed an open dropdown is consumed by the
+     * dismiss itself; do not fall through to scene-press / camera /
+     * variable-slider drag for the same press. Matches legacy
+     * UI_PANEL_PRESS_CONSUMED behaviour. */
+    if (!consumed && dismissed_dropdown)
+        return 1;
+    return consumed;
+}
+
+int imrepl_ctrl_router_handle_code_panel_drag(int x, int y) {
+    if (!g_code_panel_drag_active || g_code_panel_drag_anchor < 0)
+        return 0;
+
+    UiHit hit = ui_panels_hit_test(x, y);
+    int target = code_panel_target_from_hit(hit);
+    if (target < 0) {
+        /* Drag wandered off the code-panel kinds — clamp the pointer
+         * into the code-panel rect and re-classify so the selection
+         * extends to the nearest visible row. Matches legacy
+         * code_panel_drag_target's [0, visible_lines-1] vis clamp. */
+        int cp_x, cp_y, cp_w, cp_h;
+        repl_layout_code_panel_rect(&cp_x, &cp_y, &cp_w, &cp_h);
+        int win_h = ui_state_viewport().window_h;
+        if (cp_w > 0 && cp_h > 0 && win_h > 0) {
+            int gl_y = win_h - y;
+            int cx = x;
+            int cy = y;
+            if (cx < cp_x + 1) cx = cp_x + 1;
+            if (cx > cp_x + cp_w - 1) cx = cp_x + cp_w - 1;
+            if (gl_y < cp_y + 1) cy = win_h - (cp_y + 1);
+            if (gl_y > cp_y + cp_h - 1) cy = win_h - (cp_y + cp_h - 1);
+            UiHit clamped = ui_panels_hit_test(cx, cy);
+            target = code_panel_target_from_hit(clamped);
+        }
+    }
+    if (target < 0)
+        return 1;
+
+    if (target != g_code_panel_drag_anchor || g_code_panel_drag_moved) {
+        g_code_panel_drag_moved = 1;
+        repl_selection_start(g_code_panel_drag_anchor);
+        repl_selection_set_end(target);
+        navigate_to_line(target);
+        repl_action_cursor_blink_reset();
+        editor_request_redraw();
+    }
+    return 1;
+}
+
+/* ===========================================================================
+ * Dispatch entry points
+ *
+ * Each entry point is a fixed sandwich:
+ *   1. Audio gesture once (browser autoplay policy).
+ *   2. Rename modal capture FIRST (hard modal — every key/special key
+ *      goes to the rename buffer).
+ *   3. Controller-owned routes: routing helpers above, in the same
+ *      order as the legacy editor dispatch chain.
+ *   4. Editor's domain: editor_handle_* fires for clicks / keys that
+ *      land in the editor's text-document or code-panel UI rect.
+ *
+ * Effect accumulation is shared with the editor: every helper writes
+ * to the editor_input g_pending_input_effects struct via
+ * editor_request_redraw etc., and apply_input_effects flushes the
+ * accumulated effects through GLUT once per call.
+ * ===========================================================================
+ */
+
 void imrepl_ctrl_keyboard(unsigned char key, int x, int y) {
-    imrepl_ctrl_apply_input_effects(repl_keyboard_func(key, x, y));
+    imrepl_ctrl_notify_audio_gesture_once();
+
+    /* macOS Cmd+letter normalization happens before any dispatch so
+     * the controller-owned cfg-shortcut chain (Cmd+B / Cmd+S / Cmd+T
+     * etc.) compares against the control-character form (KEY_CTRL_*).
+     * Without this, Cmd+B arrives here as 'b' (0x62), the chain looks
+     * for KEY_CTRL_B (0x02) in g_cfg_items[].key_code, and the
+     * shortcut silently misses. */
+    key = editor_input_normalize_super_to_ctrl(key);
+
+    /* Rename capture: hard modal. */
+    if (editor_input_rename_capture_key(key)) {
+        editor_reset_input_effects();
+        imrepl_ctrl_apply_input_effects(editor_take_input_effects());
+        return;
+    }
+
+    editor_reset_input_effects();
+
+    /* Controller-owned routes — order matches the legacy editor chain
+     * so backtick / cfg shortcut / replay forwarding / Ctrl+G replay
+     * toggle / Ctrl+= accum / Ctrl+S save / Ctrl+P debug / Ctrl+Q quit
+     * fire exactly where they did before. */
+    if (imrepl_ctrl_router_handle_config_menu_key(key) ||
+        imrepl_ctrl_router_handle_active_replay_key(key) ||
+        imrepl_ctrl_router_handle_cfg_shortcut_key(key) ||
+        imrepl_ctrl_router_handle_replay_toggle_key(key) ||
+        imrepl_ctrl_router_handle_save_key(key) ||
+        imrepl_ctrl_router_handle_debug_dump_key(key) ||
+        imrepl_ctrl_router_handle_accum_samples_key(key) ||
+        imrepl_ctrl_router_handle_quit_key(key)) {
+        imrepl_ctrl_apply_input_effects(editor_take_input_effects());
+        return;
+    }
+
+    imrepl_ctrl_apply_input_effects(editor_handle_key(key, x, y));
 }
 
 void imrepl_ctrl_special(int key, int x, int y) {
-    imrepl_ctrl_apply_input_effects(repl_special_func(key, x, y));
+    imrepl_ctrl_notify_audio_gesture_once();
+
+    if (editor_input_rename_capture_special(key)) {
+        editor_reset_input_effects();
+        imrepl_ctrl_apply_input_effects(editor_take_input_effects());
+        return;
+    }
+
+    editor_reset_input_effects();
+
+    if (imrepl_ctrl_router_handle_replay_special(key) ||
+        imrepl_ctrl_router_handle_cfg_special_shortcut(key) ||
+        imrepl_ctrl_router_handle_horizontal_audio_special(key) ||
+        imrepl_ctrl_router_handle_help_tab_special(key) ||
+        imrepl_ctrl_router_handle_help_scroll_special(key) ||
+        imrepl_ctrl_router_handle_help_toggle_special(key) ||
+        imrepl_ctrl_router_handle_scene_cycle_special(key)) {
+        imrepl_ctrl_apply_input_effects(editor_take_input_effects());
+        return;
+    }
+
+    imrepl_ctrl_apply_input_effects(editor_handle_special(key, x, y));
 }
 
+/* Mouse routing: hit-test to decide owner before dispatching.
+ *
+ * UP cleanup: the editor first releases its own UP-side state
+ * (ui_panels_handle_mouse_release, panel resize end), then the
+ * variable-panel drag release fires if active.
+ *
+ * DOWN: variable panel hit always wins over code panel because it
+ * owns its own rect that may overlap. Code-panel domain (proper /
+ * divider / dropdown extension) goes to the editor. Scene region
+ * tries the color picker overlay first, then camera. Right-click
+ * dispatches the config dropdown, the variable panel (log mode), or
+ * camera. The freeglut scroll-wheel emulation (buttons 3/4) routes
+ * to help-overlay scroll, code-panel scroll (editor), or camera zoom
+ * velocity. */
 void imrepl_ctrl_mouse(int button, int state, int x, int y) {
-    imrepl_ctrl_apply_input_effects(repl_mouse_func(button, state, x, y));
+    imrepl_ctrl_notify_audio_gesture_once();
+
+    editor_reset_input_effects();
+
+    if (state == GLUT_UP) {
+        /* UP cleanup: release floating color picker drag, clear the
+         * code-panel selection drag tracking, fire editor's UP-side
+         * (panel resize end), then variable-panel release, then
+         * camera UP so the orbit/pan/zoom interaction releases. */
+        ui_color_picker_release();
+        imrepl_ctrl_router_reset_code_panel_drag();
+        imrepl_ctrl_apply_input_effects(editor_handle_mouse(button, state, x, y));
+        editor_reset_input_effects();
+        if (imrepl_ctrl_router_handle_variable_panel_drag_release(state)) {
+            imrepl_ctrl_apply_input_effects(editor_take_input_effects());
+            return;
+        }
+        imrepl_ctrl_router_handle_camera_mouse(button, state, x, y);
+        imrepl_ctrl_apply_input_effects(editor_take_input_effects());
+        return;
+    }
+
+    if (button == GLUT_LEFT_BUTTON) {
+        /* J2.2: classify the click via the canonical hit-test, then
+         * route by UiHit.kind to the owning subsystem. The hit-test
+         * covers variable panel, color picker, menu bar, code panel
+         * (including divider + inline swatch + insert line) and pin
+         * buttons. Only kinds that don't apply (UI_HIT_SCENE,
+         * UI_HIT_NONE, UI_HIT_HELP_PANEL) fall through to scene
+         * press / camera. */
+        UiHit hit = ui_panels_hit_test(x, y);
+        if (imrepl_ctrl_router_handle_code_panel_hit(hit, x, y)) {
+            imrepl_ctrl_apply_input_effects(editor_take_input_effects());
+            return;
+        }
+        if (imrepl_ctrl_router_handle_scene_press(button, state, x, y)) {
+            imrepl_ctrl_apply_input_effects(editor_take_input_effects());
+            return;
+        }
+        imrepl_ctrl_router_handle_camera_mouse(button, state, x, y);
+        imrepl_ctrl_apply_input_effects(editor_take_input_effects());
+        return;
+    }
+
+    if (button == GLUT_RIGHT_BUTTON) {
+        if (imrepl_ctrl_router_handle_right_config_press(button, state, x, y)) {
+            imrepl_ctrl_apply_input_effects(editor_take_input_effects());
+            return;
+        }
+        if (imrepl_ctrl_router_handle_variable_panel_drag_begin(button, state, x, y)) {
+            imrepl_ctrl_apply_input_effects(editor_take_input_effects());
+            return;
+        }
+        imrepl_ctrl_router_handle_camera_mouse(button, state, x, y);
+        imrepl_ctrl_apply_input_effects(editor_take_input_effects());
+        return;
+    }
+
+    if (imrepl_ctrl_router_handle_glut_scroll_wheel_button(button, state, x, y)) {
+        imrepl_ctrl_apply_input_effects(editor_take_input_effects());
+        return;
+    }
+
+    imrepl_ctrl_router_handle_camera_mouse(button, state, x, y);
+    imrepl_ctrl_apply_input_effects(editor_take_input_effects());
 }
 
+/* Motion routing: UI overlay (color picker drag), variable-panel drag
+ * motion, and camera drag motion are router-side; code-panel resize
+ * tracking and code-panel selection drag are editor's.
+ *
+ * Pointer-state tracking: each non-camera handler updates
+ * ui_state_pointer via repl_camera_pointer_set(x, y) AFTER its own
+ * work so the camera's view of the pointer stays current. The camera
+ * branch deliberately does NOT pre-set the pointer because
+ * repl_camera_drag_motion reads the previous (px, py) to compute
+ * delta and updates the pointer to (x, y) at the end. Pre-setting
+ * here would zero the delta and freeze orbit/pan/zoom drag. */
 void imrepl_ctrl_motion(int x, int y) {
-    imrepl_ctrl_apply_input_effects(repl_motion_func(x, y));
+    editor_reset_input_effects();
+
+    /* Floating color picker drag tracking (SV / hue / alpha sliders). */
+    if (ui_color_picker_motion(x, y)) {
+        imrepl_ctrl_router_handle_camera_pointer_set(x, y);
+        editor_request_redraw();
+        imrepl_ctrl_apply_input_effects(editor_take_input_effects());
+        return;
+    }
+
+    if (imrepl_ctrl_router_handle_variable_panel_motion(x, y)) {
+        imrepl_ctrl_router_handle_camera_pointer_set(x, y);
+        imrepl_ctrl_apply_input_effects(editor_take_input_effects());
+        return;
+    }
+
+    /* Code-panel selection drag (controller-owned state). */
+    if (imrepl_ctrl_router_handle_code_panel_drag(x, y)) {
+        imrepl_ctrl_router_handle_camera_pointer_set(x, y);
+        imrepl_ctrl_apply_input_effects(editor_take_input_effects());
+        return;
+    }
+
+    /* Editor's domain: panel resize tracking. editor_handle_motion is
+     * a no-op when resizing_panel is clear. */
+    if (ui_state_code_panel().resizing_panel) {
+        ReplInputDispatchEffects pre_editor = editor_take_input_effects();
+        imrepl_ctrl_apply_input_effects(editor_handle_motion(x, y));
+        imrepl_ctrl_router_handle_camera_pointer_set(x, y);
+        imrepl_ctrl_apply_input_effects(pre_editor);
+        return;
+    }
+
+    /* Camera drag motion reads pointer = (px, py), computes delta,
+     * then calls pointer_set(x, y) itself. */
+    imrepl_ctrl_router_handle_camera_motion(x, y);
+    imrepl_ctrl_apply_input_effects(editor_take_input_effects());
 }
 
 void imrepl_ctrl_passive_motion(int x, int y) {
-    imrepl_ctrl_apply_input_effects(repl_passive_motion_func(x, y));
+    editor_reset_input_effects();
+    /* Passive motion (no button held) just updates the pointer
+     * position — there's no drag delta to preserve. */
+    imrepl_ctrl_router_handle_camera_pointer_set(x, y);
+    ReplInputDispatchEffects editor_effects = editor_handle_passive_motion(x, y);
+    imrepl_ctrl_apply_input_effects(editor_take_input_effects());
+    imrepl_ctrl_apply_input_effects(editor_effects);
 }
 
 void imrepl_ctrl_mousewheel(int wheel, int direction, int x, int y) {
-    imrepl_ctrl_apply_input_effects(repl_mousewheel_func(wheel, direction, x, y));
+#ifndef USE_GLUT
+    /* freeglut wheel callback: route to help scroll, code-panel scroll
+     * (editor), or camera zoom velocity. */
+    (void)wheel;
+    editor_reset_input_effects();
+    if (ui_state_help().visible) {
+        editor_help_session_scroll_by(-direction);
+        editor_request_redraw();
+        imrepl_ctrl_apply_input_effects(editor_take_input_effects());
+        return;
+    }
+    if (editor_input_point_in_code_panel(x, y)) {
+        imrepl_ctrl_apply_input_effects(editor_handle_mousewheel(wheel, direction, x, y));
+        return;
+    }
+    repl_camera_add_zoom_velocity(-(float)direction * 0.1f);
+    editor_request_redraw();
+    imrepl_ctrl_apply_input_effects(editor_take_input_effects());
+#else
+    (void)wheel; (void)direction; (void)x; (void)y;
+#endif
+}
+
+/* Phase J1 commit 48b — timer dispatch inlined.
+ *
+ * Per-frame tick (16 ms): advance audio playlist, surface track-change
+ * status, advance time variable, advance replay state, decay camera
+ * momentum, blink the cursor, decay the status TTL. The body migrated
+ * verbatim from repl_editor.c's timer_func.
+ *
+ * The work is split from the GLUT scheduling so test fixtures (which
+ * don't initialize GLUT) can drive a single tick by calling
+ * imrepl_ctrl_tick directly. The public timer entry adds
+ * glutPostRedisplay + glutTimerFunc reschedule on top. */
+void imrepl_ctrl_tick(void) {
+    /* Advance the audio playlist if the current song reached its end
+     * (no-op under loop=Song; see repl_audio_tick). */
+    repl_audio_tick();
+
+    /* When the playing track changes (either auto-advance from tick
+     * or manual next/prev), surface the song name in the status bar.
+     * Tracking by generation avoids needing a callback hook into
+     * the audio module. */
+    {
+        static unsigned int last_track_gen = 0;
+        unsigned int gen = repl_audio_track_generation();
+        if (gen != last_track_gen) {
+            last_track_gen = gen;
+            const char *path = repl_audio_get_current_track();
+            if (path && *path) {
+                const char *base = strrchr(path, '/');
+                base = base ? base + 1 : path;
+                char msg[128];
+                snprintf(msg, sizeof(msg), "Now playing: %s", base);
+                set_status(msg);
+            }
+        }
+    }
+
+    repl_advance_time(0.016f);
+
+    {
+        ReplReplayRuntimeState *replay = replay_state_mut();
+
+        if (replay->active)
+            repl_replay_tick_fade_batches(0.016f);
+
+        if (replay->active && replay->state == REPLAY_PLAYING) {
+            replay->accum += replay->speed * 0.016f;
+            while (replay->accum >= 1.0f &&
+                   replay->state == REPLAY_PLAYING) {
+                replay->accum -= 1.0f;
+                repl_replay_advance();
+            }
+        }
+    }
+
+    repl_camera_tick();
+
+    {
+        ReplCodePanelRuntimeState *code_panel_state = ui_state_code_panel_mut();
+        (code_panel_state->blink_tick)++;
+        if (code_panel_state->blink_tick >= 30) {
+            code_panel_state->blink_tick = 0;
+            code_panel_state->cursor_visible = !code_panel_state->cursor_visible;
+        }
+    }
+
+    {
+        ReplStatusState *status = ui_state_status_mut();
+        if (status->ttl > 0)
+            status->ttl--;
+    }
 }
 
 void imrepl_ctrl_timer(int value) {
-    imrepl_ctrl_apply_input_effects(repl_timer_func(value));
+    (void)value;
+    imrepl_ctrl_tick();
+    glutPostRedisplay();
+    glutTimerFunc(16, imrepl_ctrl_timer, 0);
 }

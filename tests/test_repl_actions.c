@@ -1,11 +1,16 @@
 #include "repl_actions.h"
 #include "repl_state.h"
+#include "replay_state.h"
+#include "ui_state.h"
+#include "editor_help_session.h"
 #include "repl_config.h"
 #include "repl_audio.h"
 #include "repl_core.h"
 #include "support/test_harness.h"
+#include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+#include <unistd.h>
 
 static TestHarness g_harness = TEST_HARNESS_INIT;
 
@@ -20,10 +25,52 @@ static TestHarness g_harness = TEST_HARNESS_INIT;
 
 /* Read status via the mutable accessor to avoid taking .text from a temporary. */
 static const char *last_status_text(void) {
-    return repl_state_status_mut()->text;
+    return ui_state_status_mut()->text;
 }
 
 #define g_last_status (last_status_text())
+
+static void run_menu_action_in_temp_dir(const char *label,
+                                        int menu_id,
+                                        int item_idx,
+                                        int expect_output_file,
+                                        int expect_workspace_dir) {
+    char cwd[1024];
+    char workspace_dir[REPL_WORKSPACE_DIR_MAX];
+    char temp_dir[] = "/tmp/test_repl_actions_output.XXXXXX";
+    char *made_dir = mkdtemp(temp_dir);
+    int have_cwd = getcwd(cwd, sizeof(cwd)) != NULL;
+
+    snprintf(workspace_dir, sizeof(workspace_dir), "%s", repl_workspace_dir());
+
+    ASSERT_TRUE("mkdtemp menu action dir", made_dir != NULL);
+    ASSERT_TRUE("getcwd before menu action", have_cwd);
+    if (!made_dir || !have_cwd)
+        return;
+
+    int cd_ok = chdir(made_dir);
+    ASSERT_INT("chdir menu action dir", cd_ok, 0);
+    if (cd_ok == 0) {
+        repl_set_workspace_dir(NULL);
+        ASSERT_INT(label,
+                   repl_action_menu_item_activate(menu_id, item_idx),
+                   1);
+        if (expect_output_file) {
+            ASSERT_INT("menu action wrote temp output.c",
+                       access("output.c", F_OK), 0);
+            unlink("output.c");
+        }
+        if (expect_workspace_dir) {
+            ASSERT_INT("menu action wrote temp workspace dir",
+                       access(REPL_DEFAULT_WORKSPACE_DIR, F_OK), 0);
+            rmdir(REPL_DEFAULT_WORKSPACE_DIR);
+        }
+        repl_set_workspace_dir(workspace_dir);
+        ASSERT_INT("restore cwd after menu action", chdir(cwd), 0);
+    }
+
+    rmdir(made_dir);
+}
 
 static void test_apply_defaults(void) {
     repl_reset_state();
@@ -35,40 +82,35 @@ static void test_apply_defaults(void) {
 
 static void test_cursor_actions(void) {
     repl_reset_state();
-    ReplCodePanelRuntimeState *cp = repl_state_code_panel_mut();
+    ReplCodePanelRuntimeState *cp = ui_state_code_panel_mut();
     cp->cursor_visible = 0;
     cp->blink_tick = 100;
 
     repl_action_cursor_blink_reset();
     ASSERT_INT("cursor visible after reset", cp->cursor_visible, 1);
     ASSERT_INT("blink tick reset", cp->blink_tick, 0);
-
-    repl_action_set_cursor_pixel(10, 20);
-    ASSERT_INT("cursor_px set", cp->cursor_px, 10);
-    ASSERT_INT("cursor_py set", cp->cursor_py, 20);
 }
 
 static void test_help_tab_actions(void) {
     repl_reset_state();
-    ReplHelpState *help = repl_state_help_mut();
-    help->tab_idx = 0;
-    help->scroll = 50;
+    editor_help_session_set_tab(0);
+    editor_help_session_set_scroll(50);
 
     repl_action_help_tab_next();
-    ASSERT_INT("help tab next moves to 1", help->tab_idx, 1);
-    ASSERT_INT("help tab next resets scroll", help->scroll, 0);
+    ASSERT_INT("help tab next moves to 1", editor_help_session_tab_idx(), 1);
+    ASSERT_INT("help tab next resets scroll", editor_help_session_scroll(), 0);
 
-    help->scroll = 30;
+    editor_help_session_set_scroll(30);
     repl_action_help_tab_next();
-    ASSERT_INT("help tab next stays at 1 (max)", help->tab_idx, 1);
+    ASSERT_INT("help tab next stays at 1 (max)", editor_help_session_tab_idx(), 1);
 
     repl_action_help_tab_prev();
-    ASSERT_INT("help tab prev moves to 0", help->tab_idx, 0);
-    ASSERT_INT("help tab prev resets scroll", help->scroll, 0);
+    ASSERT_INT("help tab prev moves to 0", editor_help_session_tab_idx(), 0);
+    ASSERT_INT("help tab prev resets scroll", editor_help_session_scroll(), 0);
 
-    help->scroll = 20;
+    editor_help_session_set_scroll(20);
     repl_action_help_tab_prev();
-    ASSERT_INT("help tab prev stays at 0", help->tab_idx, 0);
+    ASSERT_INT("help tab prev stays at 0", editor_help_session_tab_idx(), 0);
 }
 
 int g_stub_modifiers = 0;
@@ -104,7 +146,7 @@ static void test_cfg_cycling(void) {
     ASSERT_STR("wireframe status ON", g_last_status, "Wireframe: ON");
 
     /* Test Replay special case - only starts if there are commands to replay */
-    repl_state_replay_mut()->active = 0;
+    replay_state_mut()->active = 0;
     repl_config_set(REPL_CONFIG_REPLAY, 0);
     /* When no commands present, replay toggles but stays inactive with "nothing to play" */
     repl_cfg_cycle_row(replay_row, 1);
@@ -174,11 +216,23 @@ static void test_menu_actions(void) {
     repl_reset_state();
 
     /* File menu */
-    ASSERT_INT("File Export", repl_action_menu_item_activate(REPL_MENU_FILE, REPL_FILE_ITEM_EXPORT), 1);
+    run_menu_action_in_temp_dir("File Export",
+                                REPL_MENU_FILE,
+                                REPL_FILE_ITEM_EXPORT,
+                                1,
+                                0);
     ASSERT_INT("File Import", repl_action_menu_item_activate(REPL_MENU_FILE, REPL_FILE_ITEM_IMPORT), 1);
     ASSERT_STR("Import status", g_last_status, "Import not implemented yet");
-    ASSERT_INT("File Save Workspace", repl_action_menu_item_activate(REPL_MENU_FILE, REPL_FILE_ITEM_SAVE_WORKSPACE), 1);
-    ASSERT_INT("File Load Workspace", repl_action_menu_item_activate(REPL_MENU_FILE, REPL_FILE_ITEM_LOAD_WORKSPACE), 1);
+    run_menu_action_in_temp_dir("File Save Workspace",
+                                REPL_MENU_FILE,
+                                REPL_FILE_ITEM_SAVE_WORKSPACE,
+                                0,
+                                1);
+    run_menu_action_in_temp_dir("File Load Workspace",
+                                REPL_MENU_FILE,
+                                REPL_FILE_ITEM_LOAD_WORKSPACE,
+                                0,
+                                0);
 
     /* Scene menu - Examples */
     int example_count = repl_example_count();
@@ -191,7 +245,11 @@ static void test_menu_actions(void) {
     ASSERT_INT("Scene New", repl_action_menu_item_activate(REPL_MENU_SCENE, example_count + REPL_SCENE_OFF_NEW), 1);
     ASSERT_INT("active example cleared", repl_state_scenes().active_example_idx, -1);
 
-    ASSERT_INT("Scene Save", repl_action_menu_item_activate(REPL_MENU_SCENE, example_count + REPL_SCENE_OFF_SAVE), 1);
+    run_menu_action_in_temp_dir("Scene Save",
+                                REPL_MENU_SCENE,
+                                example_count + REPL_SCENE_OFF_SAVE,
+                                1,
+                                0);
 
     /* Scene Rename - need an active user scene */
     /* For now, just call it and expect "No active scene to rename" if none active */

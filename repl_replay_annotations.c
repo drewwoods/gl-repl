@@ -1,12 +1,12 @@
 /*
  * repl_replay_annotations.c -- Code-panel replay variable annotations.
  */
-#include "sample.h"
 #include "repl_core.h"
 #include "repl_core_internal.h"
 #include "repl_parser.h"
-#include "repl_replay.h"
+#include "replay.h"
 #include "repl_state.h"
+#include "replay_state.h"
 #include "repl_replay_annotations.h"
 
 /* ========================================================================= */
@@ -26,10 +26,21 @@ static int   s_replay_current_flat_idx = -1;          /* flat cmd for src_line *
 static float s_replay_predef_snap[MAX_COMMANDS][MAX_PREDEF_VARS];
 static int   s_replay_predef_snap_valid[MAX_COMMANDS];
 
+/* Per-frame editor-text view, set by the public entry points
+ * (`repl_replay_annotations_prepare`,
+ *  `repl_replay_code_panel_get_command_display_text`). Static helpers
+ * read source text through this view instead of calling
+ * `editor_buffer_line` globally — that keeps the module's source-text
+ * dependency declared at the API boundary as an EditorBufferView
+ * parameter rather than a hidden global reach-through. The view is
+ * refreshed at frame start; the cache invariant matches the frame's
+ * snapshot of the editor buffer. */
+static EditorBufferView s_replay_text_view;
+
 static void replay_build_predef_snapshots(void);
 
 static const char *replay_document_text(int cmd_idx) {
-    const char *text = repl_state_editor_buffer_line(cmd_idx);
+    const char *text = editor_buffer_view_line(s_replay_text_view, cmd_idx);
     return (text && text[0]) ? text : "";
 }
 
@@ -53,7 +64,7 @@ static const char *replay_flat_text(int flat_idx) {
 }
 
 static void repl_replay_annotations_rebuild_cache(void) {
-    ReplReplayRuntimeState replay = repl_state_replay();
+    ReplReplayRuntimeState replay = replay_state_view();
     memset(s_replay_flat_map, 0xff, sizeof(int) * (size_t)repl_state_document_count());
 
     /* Backward pass: first match per src_cmd_idx = most recent execution */
@@ -80,7 +91,7 @@ static void repl_replay_annotations_invalidate(void) {
 
 /* Find the most recent flat command for a source line, at or before replay_pc */
 static int repl_replay_annotation_flat_cmd_for_source(int src_line) {
-    ReplReplayRuntimeState replay = repl_state_replay();
+    ReplReplayRuntimeState replay = replay_state_view();
 
     if (replay.pc <= 0) return -1;
     /* Use per-frame cache when available */
@@ -95,7 +106,7 @@ static int repl_replay_annotation_flat_cmd_for_source(int src_line) {
 }
 
 static int replay_current_flat_cmd(void) {
-    ReplReplayRuntimeState replay = repl_state_replay();
+    ReplReplayRuntimeState replay = replay_state_view();
 
     if (replay.src_line_idx < 0)
         return -1;
@@ -220,7 +231,7 @@ static int replay_flat_cmd_context_matches(int flat_idx, int current_flat_idx) {
 }
 
 static int find_replay_assignment_flat_cmd(int src_line) {
-    ReplReplayRuntimeState replay = repl_state_replay();
+    ReplReplayRuntimeState replay = replay_state_view();
     int current_flat_idx = replay_current_flat_cmd();
 
     if (replay.pc <= 0)
@@ -391,7 +402,7 @@ static int replay_eval_expr_with_predefs(int flat_idx, const char *expr,
 static int replay_copy_predef_values_before_flat_cmd(int target_pc,
                                                      float *out_vals,
                                                      int max_vals) {
-    ReplReplayRuntimeState replay = repl_state_replay();
+    ReplReplayRuntimeState replay = replay_state_view();
     int pc = 0;
     int goto_count = 0;
 
@@ -490,7 +501,7 @@ next_pc:
  * executes, matching replay_copy_predef_values_before_flat_cmd semantics.
  * Total cost: O(replay_pc), called once per frame during cache rebuild. */
 static void replay_build_predef_snapshots(void) {
-    ReplReplayRuntimeState replay = repl_state_replay();
+    ReplReplayRuntimeState replay = replay_state_view();
     float vals[MAX_PREDEF_VARS];
     int pc = 0, goto_count = 0;
     int target_pc = replay.pc;
@@ -595,7 +606,7 @@ snap_done:
 
 static int build_replay_assignment_inline_comment(int cmd_idx, int flat_idx,
                                                   char *out, int out_size) {
-    ReplReplayRuntimeState replay = repl_state_replay();
+    ReplReplayRuntimeState replay = replay_state_view();
     float predef_vals[MAX_PREDEF_VARS];
     ExprVar visible_vars[MAX_PREDEF_VARS + MAX_EXPR_VARS];
     char rhs_subst[MAX_LINE_LEN];
@@ -648,8 +659,11 @@ static int build_replay_assignment_inline_comment(int cmd_idx, int flat_idx,
     return 0;
 }
 
-int repl_replay_code_panel_get_command_display_text(int cmd_idx, char *out, int out_size) {
-    ReplReplayRuntimeState replay = repl_state_replay();
+int repl_replay_code_panel_get_command_display_text(EditorBufferView text,
+                                                    int cmd_idx,
+                                                    char *out, int out_size) {
+    ReplReplayRuntimeState replay = replay_state_view();
+    s_replay_text_view = text;
     int flat_idx;
     char comment[MAX_INPUT_LEN];
 
@@ -688,7 +702,7 @@ int repl_replay_code_panel_get_command_display_text(int cmd_idx, char *out, int 
 static int repl_replay_build_subst_annotation(int cmd_idx, int flat_idx,
                                               char *subst, int subst_size,
                                               char *var_comment, int comment_size) {
-    ReplReplayRuntimeState replay = repl_state_replay();
+    ReplReplayRuntimeState replay = replay_state_view();
     float predef_vals[MAX_PREDEF_VARS];
     ExprVar visible_vars[MAX_PREDEF_VARS + MAX_EXPR_VARS];
     int nv;
@@ -720,7 +734,7 @@ static int repl_replay_build_subst_annotation(int cmd_idx, int flat_idx,
 
 static int repl_replay_build_eval_annotation(int cmd_idx, int flat_idx,
                                              char *eval_buf, int eval_size) {
-    ReplReplayRuntimeState replay = repl_state_replay();
+    ReplReplayRuntimeState replay = replay_state_view();
     float predef_vals[MAX_PREDEF_VARS];
     ExprVar visible_vars[MAX_PREDEF_VARS + MAX_EXPR_VARS];
     int nv;
@@ -743,7 +757,18 @@ static int repl_replay_build_eval_annotation(int cmd_idx, int flat_idx,
     nv = build_visible_vars_from_predef_values(flat_idx, predef_vals,
                                                visible_vars,
                                                (int)(sizeof(visible_vars) / sizeof(visible_vars[0])));
-    ReplParseContext parse_ctx = { cmd_idx, visible_vars, nv, 0 };
+    /* Replay annotation re-parses each step's source for display.
+     * Errors here are dropped — the command was already validated at
+     * commit time, and a parse failure during annotation just means
+     * the step renders without the evaluated-text overlay. */
+    char annotation_parse_err[REPL_STATUS_TEXT_MAX]; /* deliberately unread */
+    annotation_parse_err[0] = '\0';
+    ReplParseContext parse_ctx = {
+        .source_line_idx = cmd_idx,
+        .vars = visible_vars, .num_vars = nv,
+        .err_buf = annotation_parse_err,
+        .err_sz  = (int)sizeof(annotation_parse_err),
+    };
     ReplParsedLine eval_pl;
     if (!repl_parser_parse_command_ctx(replay_document_text(cmd_idx),
                                 &eval_pl, &parse_ctx))
@@ -841,9 +866,9 @@ static int format_evaluated_cmd(const GLCmd *cmd, const char *orig_source,
 
 
 static void repl_replay_annotations_refresh_virtual_lines(void) {
-    repl_state_editor_virtual_lines_clear();
+    editor_state_virtual_lines_clear();
 
-    ReplReplayRuntimeState replay = repl_state_replay();
+    ReplReplayRuntimeState replay = replay_state_view();
     if (!replay.active || !replay.expand_args)
         return;
     int cmd_idx = replay.src_line_idx;
@@ -861,7 +886,7 @@ static void repl_replay_annotations_refresh_virtual_lines(void) {
     if (repl_replay_build_subst_annotation(cmd_idx, flat_idx,
                                            subst, sizeof(subst),
                                            var_comment, sizeof(var_comment)) > 0) {
-        repl_state_editor_virtual_lines_append(cmd_idx,
+        editor_state_virtual_lines_append(cmd_idx,
                                                VIRTUAL_STYLE_REPLAY_SUBST,
                                                subst, var_comment);
     }
@@ -869,14 +894,16 @@ static void repl_replay_annotations_refresh_virtual_lines(void) {
     char eval_buf[MAX_VIRTUAL_LINE_TEXT];
     if (repl_replay_build_eval_annotation(cmd_idx, flat_idx,
                                           eval_buf, sizeof(eval_buf))) {
-        repl_state_editor_virtual_lines_append(cmd_idx,
+        editor_state_virtual_lines_append(cmd_idx,
                                                VIRTUAL_STYLE_REPLAY_EVAL,
                                                eval_buf, NULL);
     }
 }
 
-void repl_replay_annotations_prepare(void) {
-    ReplReplayRuntimeState replay = repl_state_replay();
+void repl_replay_annotations_prepare(EditorBufferView text) {
+    ReplReplayRuntimeState replay = replay_state_view();
+
+    s_replay_text_view = text;
 
     if (replay.active && s_replay_cache_pc != replay.pc)
         repl_replay_annotations_rebuild_cache();
@@ -889,7 +916,7 @@ void repl_replay_annotations_prepare(void) {
 int repl_replay_annotation_extra_rows_for_line(int cmd_idx) {
     /* Source of truth is the controller-pushed virtual-line list. Layout
      * runs after the push, so the count here matches what render draws. */
-    const EditorVirtualLineList *list = repl_state_editor_virtual_lines();
+    const EditorVirtualLineList *list = editor_state_virtual_lines();
     if (!list || cmd_idx < 0)
         return 0;
     int count = 0;

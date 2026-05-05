@@ -50,127 +50,42 @@ void                     repl_state_variables_reset(void);
 void                     repl_state_time_advance(float dt);
 void                     repl_state_time_reset_to_zero(void);
 
-ReplEditorInputView          repl_state_editor_input(void);
-ReplEditorInputState       *repl_state_editor_input_mut(void);
-void                        repl_state_editor_input_reset(void);
-
-/* Editor-owns-text spike: per-line raw text storage (no trailing ';'). */
-const ReplEditorBuffer       *repl_state_editor_buffer(void);
-ReplEditorBuffer             *repl_state_editor_buffer_mut(void);
-const char                   *repl_state_editor_buffer_line(int idx);
-void                          repl_state_editor_buffer_set_line(int idx, const char *text);
-void                          repl_state_editor_buffer_set_count(int count);
-int                           repl_state_editor_buffer_count(void);
+/* Editor-input + editor-buffer accessors moved to editor_state.h
+ * (Phase 1 commits 4-5). Use `editor_state_input / _mut / _reset` for
+ * the input slice, `editor_state_buffer / _mut` for the whole-buffer
+ * struct, and `editor_buffer_line / set_line / count / set_count` for
+ * slice-level access. */
 
 /* Per-frame editor transformer snapshot pushed by the controller after
  * flatten so renderers/UI can iterate inline swatch/slider affordances
  * without walking the document themselves. */
-const EditorTransformerList  *repl_state_editor_transformers(void);
-void                          repl_state_editor_transformers_clear(void);
-int                           repl_state_editor_transformers_append(const EditorTransformer *transformer);
+/* Editor overlay snapshot list accessors moved to editor_state.h
+ * (Phase 1 commit 9). Use editor_state_transformers / _highlights /
+ * _virtual_lines. */
 
 /* Per-frame editor highlight snapshot. The controller refills the list
  * each frame with feeding-cmd, replay-PC, search-match, etc. entries so
  * UI render code can iterate it instead of recomputing positions inline. */
-const EditorHighlightList    *repl_state_editor_highlights(void);
-void                          repl_state_editor_highlights_clear(void);
-int                           repl_state_editor_highlights_append(int line_idx,
-                                                                  int char_start,
-                                                                  int char_end,
-                                                                  HighlightKind kind);
+/* Editor highlight + virtual-line accessors moved to editor_state.h
+ * (Phase 1 commit 9). Use editor_state_highlights /
+ * _virtual_lines. */
+/* Editor-input convenience getters/setters moved to editor_state.h
+ * (Phase 1 commit 10). Use editor_input_* / editor_cursor_pos* /
+ * editor_insert_mode* / editor_pending_newline_*. */
 
-/* Per-frame editor virtual-line snapshot. Rows are pushed below real
- * source lines (replay annotations today) and consulted by layout,
- * scroll, hit-test, and render so the count comes from one place. */
-const EditorVirtualLineList  *repl_state_editor_virtual_lines(void);
-void                          repl_state_editor_virtual_lines_clear(void);
-int                           repl_state_editor_virtual_lines_append(int after_line_idx,
-                                                                     VirtualLineStyle style,
-                                                                     const char *text,
-                                                                     const char *aux);
-const char *repl_state_input_text(void);
-char       *repl_state_input_buffer_mut(void);
-int         repl_state_input_len(void);
-void        repl_state_input_len_set(int input_len);
-void        repl_state_input_set_text(const char *text);
-void        repl_state_input_clear(void);
-int         repl_state_cursor_pos(void);
-void        repl_state_cursor_pos_set(int cursor_pos);
-int         repl_state_insert_mode(void);
-void        repl_state_insert_mode_set(int insert_mode);
-char       *repl_state_pending_newline_buffer_mut(void);
-int         repl_state_pending_newline_len(void);
-void        repl_state_pending_newline_len_set(int newline_len);
-void        repl_state_pending_newline_set_text(const char *text);
-void        repl_state_pending_newline_clear(void);
+/* Selection + clipboard accessors moved to editor_state.h (Phase 1
+ * commit 6). Use editor_state_selection / _clipboard and friends. */
 
-ReplSelectionState       repl_state_selection(void);
-ReplSelectionState       *repl_state_selection_mut(void);
-void                      repl_state_selection_clear(void);
-int                       repl_state_selection_anchor(void);
-int                       repl_state_selection_end_idx(void);
-void                      repl_state_selection_set(int anchor_idx, int end_idx);
-
-ReplClipboardState       repl_state_clipboard(void);
-ReplClipboardState       *repl_state_clipboard_mut(void);
-void                      repl_state_clipboard_clear(void);
-GLCmd                    *repl_state_clipboard_cmds_mut(void);
-int                       repl_state_clipboard_count(void);
-void                      repl_state_clipboard_count_set(int cmd_count);
-
-ReplCodePanelRuntimeState       repl_state_code_panel(void);
-ReplCodePanelRuntimeState       *repl_state_code_panel_mut(void);
-void                             repl_state_code_panel_reset(void);
-
-ReplHelpState        repl_state_help(void);
-ReplHelpState       *repl_state_help_mut(void);
-void                 repl_state_help_reset(void);
-
-ReplVariablePanelState    repl_state_variable_panel(void);
-ReplVariablePanelState       *repl_state_variable_panel_mut(void);
-
-ReplVariableDragState     repl_state_variable_drag(void);
-ReplVariableDragState       *repl_state_variable_drag_mut(void);
-void                         repl_state_variable_drag_reset(void);
-
-ReplProfilePanelState    repl_state_profile_panel(void);
-ReplProfilePanelState       *repl_state_profile_panel_mut(void);
-
-ReplStatusState          repl_state_status(void);
-ReplStatusState       *repl_state_status_mut(void);
-void                   repl_state_status_set(const char *message);
-void                   repl_state_status_clear(void);
-void                   repl_state_status_tick(void);
-
-ReplSearchState          repl_state_search(void);
-ReplSearchState       *repl_state_search_mut(void);
-void                   repl_state_search_clear(void);
-
-ReplAutocompleteState    repl_state_autocomplete(void);
-ReplAutocompleteState       *repl_state_autocomplete_mut(void);
-void                        repl_state_autocomplete_clear(void);
-
-ReplCameraState        repl_state_camera(void);
-ReplCameraState       *repl_state_camera_mut(void);
-ReplCameraState        repl_state_camera_snapshot(void);
-void                   repl_state_camera_set(float rx, float ry, float dist,
-                                            float tx, float ty, float tz,
-                                            float motion_glow);
-void                   repl_state_camera_set_orbit(float rx, float ry);
-void                   repl_state_camera_set_pan(float tx, float ty, float tz);
-void                   repl_state_camera_set_distance(float dist);
-void                   repl_state_camera_set_motion_glow(float motion_glow);
-void                   repl_state_camera_reset_default(void);
-
-ReplPointerState       repl_state_pointer(void);
-ReplPointerState       *repl_state_pointer_mut(void);
-void                    repl_state_pointer_set(int mouse_x, int mouse_y, int mouse_button);
-void                    repl_state_pointer_set_pos(int mouse_x, int mouse_y);
-void                    repl_state_pointer_set_button(int mouse_button);
-
-ReplViewportState      repl_state_viewport(void);
-ReplViewportState       *repl_state_viewport_mut(void);
-void                    repl_state_viewport_set_size(int window_w, int window_h);
+/* Code-panel / help / variable_panel / profile_panel / status /
+ * camera / pointer / viewport accessors moved to ui_state.h (Phase 1
+ * commit 8 + Phase A commits 12-14). Use the canonical
+ * `ui_state_*` API directly; the legacy `repl_state_*` forwarders
+ * were removed in Phase A commit 14.
+ * Search + autocomplete accessors moved to editor_state.h (Phase 1
+ * commit 7). Use editor_state_search / _autocomplete and friends.
+ * Variable-drag accessors live on the variable_panel peer
+ * (variable_panel.h). Use `variable_panel_drag` /
+ * `variable_panel_handle_drag_*` directly. */
 
 ReplPresentationState           repl_state_presentation(void);
 ReplPresentationState       *repl_state_presentation_mut(void);
@@ -182,10 +97,6 @@ void                         repl_state_presentation_reset_example_defaults(void
 ReplRenderState        repl_state_render(void);
 ReplRenderState       *repl_state_render_mut(void);
 void                   repl_state_render_reset_defaults(void);
-
-ReplReplayRuntimeState repl_state_replay(void);
-ReplReplayRuntimeState       *repl_state_replay_mut(void);
-void                          repl_state_replay_reset(void);
 
 ReplSceneRuntimeState    repl_state_scenes(void);
 ReplSceneRuntimeState       *repl_state_scenes_mut(void);

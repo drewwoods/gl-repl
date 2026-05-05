@@ -1,5 +1,7 @@
-#include "sample.h"
-#include "repl_code_panel_layout.h"
+#include "./include/gl_2d.h"
+
+#include "ui_metrics.h"
+#include "ui_code_panel_layout.h"
 #include "repl_core_internal.h"
 #include "repl_command_store.h"
 #include "repl_config.h"
@@ -7,7 +9,8 @@
 #include "repl_parser.h"
 #include "repl_source_scope.h"
 #include "repl_state.h"
-#include "repl_layout.h"
+#include "ui_layout.h"
+#include "ui_state.h"
 
 #define IMPORT_EXPORT_STATE (repl_state_import_export_mut())
 #define g_workspace_header_lines (IMPORT_EXPORT_STATE->workspace_header_lines)
@@ -19,9 +22,13 @@
 #define g_pending_workspace_dir (IMPORT_EXPORT_STATE->pending_workspace_dir)
 
 const char *g_header_pre[] = {
+    "#define y0 _y0",
+    "#define y1 _y1",
     "#include <gl_includes.h>",
     "#include <math.h>",
     "#include <stdlib.h>",
+    "#undef y0",
+    "#undef y1",
     "",
     "#ifndef M_PI",
     "#define M_PI 3.14159265358979323846",
@@ -62,13 +69,23 @@ static void workspace_format_float(char *buf, size_t n, float v) {
     snprintf(buf, n, "%g", (double)v);
 }
 
+/* Per-call editor-text view, set by the public entry points
+ * (`repl_export_save_output`, `repl_dump_code_panel_text`,
+ * `repl_dump_code_panel_visual_text`) before they invoke any helper
+ * that reads source text. Static helpers route through
+ * `export_document_text` instead of calling `editor_buffer_line`
+ * directly so the source-text dependency is declared at the API
+ * boundary as an EditorBufferView parameter rather than a hidden
+ * global reach-through. */
+static EditorBufferView s_export_text_view;
+
 static const char *export_document_text(int cmd_idx) {
     const char *text;
 
     if (cmd_idx < 0 || cmd_idx >= repl_state_document_count())
         return "";
 
-    text = repl_state_editor_buffer_line(cmd_idx);
+    text = editor_buffer_view_line(s_export_text_view, cmd_idx);
     return (text && text[0]) ? text : "";
 }
 
@@ -385,6 +402,26 @@ const char *g_footer_post_init[] = {
     NULL
 };
 
+static void emit_footer_post_init(FILE *f, int win_w, int win_h) {
+    fprintf(f,
+        "}\n"
+        "\n"
+        "int main(int argc, char **argv) {\n"
+        "  glutInit(&argc, argv);\n"
+        "  glutInitDisplayMode(GLUT_DOUBLE|GLUT_RGB|GLUT_DEPTH|GLUT_MULTISAMPLE);\n"
+        "  glutInitWindowSize(%d, %d);\n"
+        "  glutCreateWindow(\"OpenGL REPL\");\n"
+        "  init();\n"
+        "  glutDisplayFunc(display);\n"
+        "  glutReshapeFunc(reshape);\n"
+        "  glutKeyboardFunc(keyboard);\n"
+        "  glutIdleFunc(idle);\n"
+        "  glutMainLoop();\n"
+        "  return 0;\n"
+        "}\n",
+        win_w, win_h);
+}
+
 static int init_host_only_line_count(void) {
     int count = 0;
     while (g_init_host_only_visible_c[count])
@@ -397,12 +434,19 @@ static void parse_init_bootstrap(void) {
         return;
 
     for (int bootstrap_idx = 0; bootstrap_idx < NUM_INIT_BOOTSTRAP; bootstrap_idx++) {
-        ReplParseContext parse_ctx = { 0, NULL, 0, 0 };
+        char bootstrap_err[REPL_STATUS_TEXT_MAX];
+        bootstrap_err[0] = '\0';
+        ReplParseContext parse_ctx = {
+            .err_buf = bootstrap_err,
+            .err_sz  = (int)sizeof(bootstrap_err),
+        };
         ReplParsedLine pl;
         if (!repl_parser_parse_command_ctx(g_init_bootstrap_repl[bootstrap_idx].repl_line,
                                     &pl, &parse_ctx)) {
-            fprintf(stderr, "init bootstrap parse failed: %s\n",
-                    g_init_bootstrap_repl[bootstrap_idx].repl_line);
+            fprintf(stderr, "init bootstrap parse failed: %s%s%s\n",
+                    g_init_bootstrap_repl[bootstrap_idx].repl_line,
+                    bootstrap_err[0] ? " — " : "",
+                    bootstrap_err);
             abort();
         }
         g_init_bootstrap_cmds[bootstrap_idx] = pl;
@@ -509,7 +553,7 @@ static void emit_export_header_pre(FILE *f) {
     char angle_line[64];
 
     snprintf(angle_line, sizeof(angle_line),
-             "static float g_angle = %.4ff;", repl_state_camera().ry);
+             "static float g_angle = %.4ff;", ui_state_camera().ry);
 
     for (int line_idx = 0; g_header_pre[line_idx]; line_idx++) {
         if (strcmp(g_header_pre[line_idx], "void display() {") == 0)
@@ -523,7 +567,7 @@ static void emit_export_header_pre(FILE *f) {
 }
 
 static void emit_export_cam_lines(FILE *f) {
-    ReplCameraState cam = repl_state_camera();
+    ReplCameraState cam = ui_state_camera();
     fprintf(f, "  glTranslatef(0.0000f, 0.0000f, %.4ff);\n", -cam.dist);
     fprintf(f, "  glRotatef(%.4ff, 1.0f, 0.0f, 0.0f);\n", cam.rx);
     fprintf(f, "  glRotatef(g_angle, 0.0f, 1.0f, 0.0f);\n");
@@ -592,7 +636,7 @@ static int import_parse_export_angle_init(const char *text) {
     if (end == eq)
         return 0;
 
-    repl_state_camera_set_orbit(repl_state_camera().rx, v);
+    ui_state_camera_set_orbit(ui_state_camera().rx, v);
     return 1;
 }
 
@@ -611,7 +655,7 @@ int import_parse_cam_line(const char *text) {
         p++;
         float v[3];
         if (!cam_line_read_floats(p, v, 3)) return 0;
-        repl_state_camera_set_distance(-v[2]);
+        ui_state_camera_set_distance(-v[2]);
         g_cam_parse_state = 1;
         return 1;
     }
@@ -623,7 +667,7 @@ int import_parse_cam_line(const char *text) {
         float v[4];
         if (!cam_line_read_floats(p, v, 4)) return 0;
         if (v[1] != 1.0f || v[2] != 0.0f || v[3] != 0.0f) return 0;
-        repl_state_camera_set_orbit(v[0], repl_state_camera().ry);
+        ui_state_camera_set_orbit(v[0], ui_state_camera().ry);
         g_cam_parse_state = 2;
         return 1;
     }
@@ -641,7 +685,7 @@ int import_parse_cam_line(const char *text) {
         float v[4];
         if (!cam_line_read_floats(p, v, 4)) return 0;
         if (v[1] != 0.0f || v[2] != 1.0f || v[3] != 0.0f) return 0;
-        repl_state_camera_set_orbit(repl_state_camera().rx, v[0]);
+        ui_state_camera_set_orbit(ui_state_camera().rx, v[0]);
         g_cam_parse_state = 3;
         return 1;
     }
@@ -665,7 +709,7 @@ int import_parse_cam_line(const char *text) {
         p++;
         float v[3];
         if (!cam_line_read_floats(p, v, 3)) return 0;
-        repl_state_camera_set_pan(-v[0], -v[1], -v[2]);
+        ui_state_camera_set_pan(-v[0], -v[1], -v[2]);
         g_cam_parse_state = 5;
         return 1;
     }
@@ -674,7 +718,7 @@ int import_parse_cam_line(const char *text) {
 }
 
 void update_cam_lines(void) {
-    ReplCameraState cam = repl_state_camera();
+    ReplCameraState cam = ui_state_camera();
     snprintf(g_cam_lines[0], sizeof(g_cam_lines[0]),
              "  glTranslatef(0.0000f, 0.0000f, %.4ff);", -cam.dist);
     snprintf(g_cam_lines[1], sizeof(g_cam_lines[1]),
@@ -1299,7 +1343,9 @@ static int find_export_block_end(int begin_idx) {
 static int comment_run_attached_func_idx(int start, int end_idx) {
     int cmd_idx = start;
     while (cmd_idx < end_idx && cmd_idx < repl_state_document_count() &&
-           repl_state_document_cmds_mut()[cmd_idx].valid && repl_state_document_cmds_mut()[cmd_idx].type == CMD_COMMENT)
+           repl_state_document_cmds_mut()[cmd_idx].valid &&
+           (repl_state_document_cmds_mut()[cmd_idx].type == CMD_COMMENT ||
+            repl_state_document_cmds_mut()[cmd_idx].type == CMD_EMPTY))
         cmd_idx++;
     if (cmd_idx > start && cmd_idx < end_idx && cmd_idx < repl_state_document_count() &&
         repl_state_document_cmds_mut()[cmd_idx].valid && repl_state_document_cmds_mut()[cmd_idx].type == CMD_FUNC_DEF)
@@ -1312,6 +1358,9 @@ static void write_canonical_cmd_as_c(FILE *f, const GLCmd *cmd, int cmd_idx,
     const char *source_text = export_document_text(cmd_idx);
 
     switch (cmd->type) {
+    case CMD_EMPTY:
+        fputc('\n', f);
+        break;
     case CMD_COMMENT:
         fprintf(f, "%s\n", source_text);
         break;
@@ -1320,10 +1369,51 @@ static void write_canonical_cmd_as_c(FILE *f, const GLCmd *cmd, int cmd_idx,
          * We cannot write a local float declaration here because it would shadow
          * the file-scope global.  Instead, emit a special REPL marker comment so
          * the importer can recreate the CMD_VAR_DECLARE when loading back into the
-         * REPL without creating a C local variable. */
+         * REPL without creating a C local variable.
+         *
+         * Inline initializers (`float x = 5;`) ride along as `name=value` so
+         * the canonical decl text round-trips byte-exact through export+import. */
+        float inits[MAX_NAMES_PER_DECL];
+        int   has_init[MAX_NAMES_PER_DECL];
+        for (int di = 0; di < MAX_NAMES_PER_DECL; di++) {
+            inits[di] = 0;
+            has_init[di] = 0;
+        }
+        {
+            const char *p = source_text;
+            while (*p && isspace((unsigned char)*p)) p++;
+            if (strncmp(p, "float", 5) == 0 &&
+                (p[5] == ' ' || p[5] == '\t')) {
+                p += 5;
+                int idx = 0;
+                while (*p && *p != ';' && idx < cmd->var_decl_count) {
+                    while (*p && isspace((unsigned char)*p)) p++;
+                    while (*p && (isalnum((unsigned char)*p) || *p == '_')) p++;
+                    while (*p && isspace((unsigned char)*p)) p++;
+                    if (*p == '=') {
+                        p++;
+                        while (*p && isspace((unsigned char)*p)) p++;
+                        char *endp = NULL;
+                        float v = strtof(p, &endp);
+                        if (endp && endp != p) {
+                            inits[idx] = v;
+                            has_init[idx] = 1;
+                            p = endp;
+                        }
+                    }
+                    while (*p && isspace((unsigned char)*p)) p++;
+                    if (*p == ',') p++;
+                    idx++;
+                }
+            }
+        }
         int off = fprintf(f, "  // @declare");
-        for (int di = 0; di < cmd->var_decl_count; di++)
-            off += fprintf(f, " %s", cmd->var_names[di]);
+        for (int di = 0; di < cmd->var_decl_count; di++) {
+            if (has_init[di])
+                off += fprintf(f, " %s=%g", cmd->var_names[di], inits[di]);
+            else
+                off += fprintf(f, " %s", cmd->var_names[di]);
+        }
         (void)off;
         fprintf(f, "\n");
         break;
@@ -1389,7 +1479,9 @@ static void write_render_body_range_as_c(FILE *f, int start, int end_idx,
 
     for (int cmd_idx = start; cmd_idx < end_idx && cmd_idx < repl_state_document_count(); cmd_idx++) {
         if (!repl_state_document_cmds_mut()[cmd_idx].valid) continue;
-        if (skip_func_defs && repl_state_document_cmds_mut()[cmd_idx].type == CMD_COMMENT) {
+        if (skip_func_defs &&
+            (repl_state_document_cmds_mut()[cmd_idx].type == CMD_COMMENT ||
+             repl_state_document_cmds_mut()[cmd_idx].type == CMD_EMPTY)) {
             int attached_func = comment_run_attached_func_idx(cmd_idx, end_idx);
             if (attached_func >= 0) {
                 cmd_idx = find_export_block_end(attached_func);
@@ -1474,7 +1566,8 @@ static void write_func_defs_as_c(FILE *f) {
         int comment_start = cmd_idx;
         while (comment_start > 0 &&
                repl_state_document_cmds_mut()[comment_start - 1].valid &&
-               repl_state_document_cmds_mut()[comment_start - 1].type == CMD_COMMENT)
+               (repl_state_document_cmds_mut()[comment_start - 1].type == CMD_COMMENT ||
+                repl_state_document_cmds_mut()[comment_start - 1].type == CMD_EMPTY))
             comment_start--;
         /* Emit any preceding comment lines. */
         for (int comment_idx = comment_start; comment_idx < cmd_idx; comment_idx++)
@@ -1605,7 +1698,10 @@ static int import_parse_declare_marker(const char *line, int *loaded,
     cmd.valid     = 1;
     int count     = 0;
 
-    /* Build the canonical source string and collect names. */
+    /* Build the canonical source string and collect names. Tokens take the
+     * form `name` or `name=value`; the optional value carries the inline
+     * initializer through the round-trip so the canonical decl text matches
+     * the original source byte-for-byte. */
     char decl_line[MAX_LINE_LEN];
     int off = snprintf(decl_line, sizeof(decl_line), "  float");
     while (*p) {
@@ -1619,6 +1715,18 @@ static int import_parse_declare_marker(const char *line, int *loaded,
         char name[16];
         memcpy(name, start, (size_t)len);
         name[len] = '\0';
+        /* Optional `=value` rider. */
+        int has_init = 0;
+        float init_val = 0;
+        if (*p == '=') {
+            p++;
+            char *endp = NULL;
+            init_val = strtof(p, &endp);
+            if (endp && endp != p) {
+                has_init = 1;
+                p = endp;
+            }
+        }
         /* Declare the var if not yet registered (noop if already there). */
         int var_idx = repl_eval_find_predef_var_idx(name);
         if (var_idx < 0) {
@@ -1635,6 +1743,9 @@ static int import_parse_declare_marker(const char *line, int *loaded,
         }
         off += snprintf(decl_line + off, sizeof(decl_line) - (size_t)off,
                         count == 0 ? " %.*s" : ", %.*s", len, start);
+        if (has_init)
+            off += snprintf(decl_line + off, sizeof(decl_line) - (size_t)off,
+                            " = %g", init_val);
         count++;
     }
     if (count == 0) return 0;
@@ -1651,11 +1762,11 @@ static int import_parse_declare_marker(const char *line, int *loaded,
 
         if (!repl_command_store_insert_one(
                 &store, decl_pos, &cmd,
-                REPL_COMMAND_STORE_ADJUST_EDIT_LINE,
-                decl_line)) {
+                REPL_COMMAND_STORE_ADJUST_EDIT_LINE)) {
             if (warnings) (*warnings)++;
             return 1;
         }
+        editor_buffer_insert_line(decl_pos, decl_line);
         (*loaded)++;
     }
     (void)warnings;
@@ -2315,13 +2426,18 @@ static void emit_export_display_geometry(FILE *f) {
 static void emit_export_display_tail(FILE *f, const ExportNeeds *needs) {
     int include_tess = needs ? needs->needs_tess : 0;
 
-    /* Emit footer lines before init section. */
     for (int line_idx = 0; g_footer_pre_init[line_idx]; line_idx++)
         fprintf(f, "%s\n", g_footer_pre_init[line_idx]);
     emit_export_init_section_to_file(f, include_tess);
-    /* Emit footer lines after init section. */
-    for (int line_idx = 0; g_footer_post_init[line_idx]; line_idx++)
-        fprintf(f, "%s\n", g_footer_post_init[line_idx]);
+
+    /* Use the actual scene rect so the exported window preserves the REPL
+     * viewport's aspect ratio and geometry is never clipped. Fall back to
+     * 800x600 when dimensions aren't available (e.g. headless export). */
+    int sx, sy, sw, sh;
+    repl_layout_scene_rect(&sx, &sy, &sw, &sh);
+    if (sw <= 0) sw = 800;
+    if (sh <= 0) sh = 600;
+    emit_footer_post_init(f, sw, sh);
 }
 
 static void emit_export_display(FILE *f, const ExportNeeds *needs) {
@@ -2432,12 +2548,14 @@ static void emit_export_scaffold(FILE *f, const ExportScaffoldContext *ctx) {
     }
 }
 
-void repl_export_save_output(const char *filename) {
+void repl_export_save_output(const char *filename, EditorBufferView text) {
     FILE *f = fopen(filename, "w");
     if (!f) {
         set_status("Error: cannot write output.c");
         return;
     }
+
+    s_export_text_view = text;
 
     ExportScaffoldContext scaffold = {
         .needs = export_collect_needs(),
@@ -2477,6 +2595,7 @@ typedef struct {
     int warnings;
     char pending_comments[IMPORT_MAX_PENDING_COMMENTS][MAX_LINE_LEN];
     int  pending_comment_count;
+    int  pending_blank_run;
 } ImportState;
 
 static void import_state_init(ImportState *s) {
@@ -2486,6 +2605,36 @@ static void import_state_init(ImportState *s) {
     s->loaded = 0;
     s->warnings = 0;
     s->pending_comment_count = 0;
+    s->pending_blank_run = 0;
+}
+
+static void import_reset_pending_function_prelude(ImportState *s) {
+    s->pending_comment_count = 0;
+    s->pending_blank_run = 0;
+}
+
+static void import_append_pending_function_prelude(ImportState *s,
+                                                   const char *line) {
+    if (s->pending_comment_count >= IMPORT_MAX_PENDING_COMMENTS)
+        return;
+    snprintf(s->pending_comments[s->pending_comment_count++],
+             MAX_LINE_LEN, "%s", line);
+}
+
+static void import_flush_pending_blank_run(ImportState *s) {
+    int logical_blank_count;
+
+    if (s->pending_blank_run <= 0)
+        return;
+
+    /* Helper-function export writes one formatting blank line before each
+     * emitted prelude line or function header. Every user-authored blank row
+     * therefore appears as two raw blank lines, with one extra formatting
+     * blank immediately before the next non-empty line. */
+    logical_blank_count = (s->pending_blank_run - 1) / 2;
+    for (int blank_idx = 0; blank_idx < logical_blank_count; blank_idx++)
+        import_append_pending_function_prelude(s, "");
+    s->pending_blank_run = 0;
 }
 
 /* --- pre-snippet handlers (camera, workspace header, function bodies) ----- */
@@ -2510,10 +2659,11 @@ static int import_try_function_header(ImportState *s, const char *p, const char 
     char repl_func_line[MAX_LINE_LEN];
     if (!import_make_repl_func_header(p, repl_func_line, sizeof(repl_func_line)))
         return 0;
+    import_flush_pending_blank_run(s);
     /* Feed accumulated pending comments before the function header. */
     for (int comment_idx = 0; comment_idx < s->pending_comment_count; comment_idx++)
         import_feed_one_line(s->pending_comments[comment_idx], &s->loaded, &s->warnings);
-    s->pending_comment_count = 0;
+    import_reset_pending_function_prelude(s);
     int before = repl_state_document_count();
     int handled = feed_line(repl_func_line);
     if (repl_state_document_count() > before) s->loaded += (repl_state_document_count() - before);
@@ -2527,25 +2677,26 @@ static int import_try_function_header(ImportState *s, const char *p, const char 
 
 static int import_try_snippet_start(ImportState *s, const char *p) {
     if (strncmp(p, "// Snippet start", 16) != 0) return 0;
-    s->pending_comment_count = 0;
+    import_reset_pending_function_prelude(s);
     s->in_snippet = 1;
     /* Function/header import may leave the editor cursor in an insertion slot
      * inside existing commands.  Force snippet lines to start appending from
      * the end of the command list. */
-    repl_state_insert_mode_set(0);
+    editor_insert_mode_set(0);
     repl_state_edit_line_set(repl_state_document_count());
     return 1;
 }
 
 static int import_try_pending_comment(ImportState *s, const char *p) {
-    if (p[0] == '/' && p[1] == '/' &&
-        s->pending_comment_count < IMPORT_MAX_PENDING_COMMENTS) {
-        snprintf(s->pending_comments[s->pending_comment_count++],
-                 MAX_LINE_LEN, "%s", p);
-    } else if (*p != '\0') {
+    if (*p == '\0') {
+        s->pending_blank_run++;
+    } else if (p[0] == '/' && p[1] == '/') {
+        import_flush_pending_blank_run(s);
+        import_append_pending_function_prelude(s, p);
+    } else {
         /* Any non-empty, non-comment line resets the pending buffer so stray
          * comments don't leak onto unrelated lines that follow. */
-        s->pending_comment_count = 0;
+        import_reset_pending_function_prelude(s);
     }
     return 1; /* always consumes (including blank lines) */
 }
@@ -2559,8 +2710,12 @@ static int import_try_snippet_end(ImportState *s, const char *p) {
     return 1;
 }
 
-static int import_try_blank(const char *p) {
-    return *p == '\0';
+static int import_try_blank(ImportState *s, const char *p) {
+    if (*p != '\0')
+        return 0;
+
+    import_feed_one_line(p, &s->loaded, &s->warnings);
+    return 1;
 }
 
 static int import_try_predef_decl(const char *p) {
@@ -2594,7 +2749,7 @@ static void import_process_line(ImportState *s, const char *p, const char *raw) 
 
     /* In-snippet: */
     if (import_try_snippet_end(s, p))                          return;
-    if (import_try_blank(p))                                   return;
+    if (import_try_blank(s, p))                                return;
     if (import_try_predef_decl(p))                             return;
     (void)import_try_snippet_body_line(s, p);
 }
@@ -2668,8 +2823,10 @@ static void dump_code_panel_wrapped_line(FILE *dst, const char *text,
     }
 }
 
-void repl_dump_code_panel_text(FILE *out) {
+void repl_dump_code_panel_text(FILE *out, EditorBufferView text) {
     FILE *dst = out ? out : stdout;
+
+    s_export_text_view = text;
 
     update_render_state_strings();
     update_cam_lines();
@@ -2704,13 +2861,15 @@ void repl_dump_code_panel_text(FILE *out) {
     fflush(dst);
 }
 
-void repl_dump_code_panel_visual_text(FILE *out) {
+void repl_dump_code_panel_visual_text(FILE *out, EditorBufferView text) {
     FILE *dst = out ? out : stdout;
     int panel_w;
     int linenum_w = 4 * FONT_W;
     int idx_col_w = repl_state_presentation().show_vertex_indices ? (6 * FONT_W) : 0;
     int idx_x = CODE_MARGIN_X + linenum_w + FONT_W;
     int text_x = idx_x + idx_col_w;
+
+    s_export_text_view = text;
 
     repl_layout_code_panel_rect(NULL, NULL, &panel_w, NULL);
     update_render_state_strings();

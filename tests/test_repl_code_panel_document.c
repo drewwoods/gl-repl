@@ -1,11 +1,14 @@
+#include "./include/gl_2d.h"
+#include "editor_input.h"
 #include <stdio.h>
 #include <string.h>
 
-#include "sample.h"
-#include "repl_code_panel_document.h"
+#include "ui_state.h"
+#include "editor_code_panel_document.h"
 #include "repl_core.h"
 #include "repl_state.h"
-#include "repl_layout.h"
+#include "ui_layout.h"
+#include "ui_metrics.h"
 #include "support/test_harness.h"
 
 static TestHarness g_harness = TEST_HARNESS_INIT;
@@ -22,12 +25,12 @@ static int code_panel_text_x(void) {
 
 static void reset_doc_fixture(void) {
     repl_reset_state();
-    repl_state_viewport_set_size(800, 260);
-    repl_state_code_panel_mut()->panel_frac = 0.45f;
+    ui_state_viewport_set_size(800, 260);
+    ui_state_code_panel_mut()->panel_frac = 0.45f;
     repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT;
     repl_state_presentation_mut()->show_vertex_indices = 0;
-    repl_state_code_panel_mut()->scroll = 0;
-    repl_state_code_panel_mut()->scroll_follow_cursor = 0;
+    editor_scroll_set(0);
+    editor_scroll_follow_cursor_set(0);
     repl_state_refresh_workspace_header_lines();
 }
 
@@ -65,8 +68,8 @@ int main(void) {
     }
 
     repl_navigate_to_line(1);
-    repl_state_cursor_pos_set(0);
-    repl_keyboard_func('\r', 0, 0);
+    editor_cursor_pos_set(0);
+    editor_handle_key('\r', 0, 0);
     build_doc(&layout);
     {
         int doc_line = layout.header_rows + layout.cmd_main_rows[0];
@@ -82,13 +85,13 @@ int main(void) {
     repl_feed_line_public("glColor3f(1, 0, 0);");
     repl_feed_line_public("glEnd();");
     repl_navigate_to_line(2);
-    repl_state_code_panel_mut()->scroll = 0;
-    repl_state_code_panel_mut()->scroll_follow_cursor = 1;
+    editor_scroll_set(0);
+    editor_scroll_follow_cursor_set(1);
     build_doc(&layout);
     repl_code_panel_document_apply_follow_scroll(&layout);
     ASSERT_TRUE("follow line visible after apply",
-                layout.follow_doc_line >= repl_state_code_panel().scroll &&
-                layout.follow_doc_line < repl_state_code_panel().scroll + layout.visible_lines);
+                layout.follow_doc_line >= editor_scroll() &&
+                layout.follow_doc_line < editor_scroll() + layout.visible_lines);
 
     return test_harness_report(&g_harness, "repl_code_panel_document");
 }

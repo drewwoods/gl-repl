@@ -1,18 +1,25 @@
+#include "editor_input.h"
+#include "imrepl_ctrl.h"
 #include "repl_core_internal.h"
-#include "repl_export.h"
-#include "repl_clipboard.h"
+#include "repl_executor.h"
+#include "editor_clipboard.h"
+#include "editor_commit.h"
 #include "repl_state.h"
+#include "replay_state.h"
+#include "ui_state.h"
 #include "repl_replay_annotations.h"
-#include "repl_code_panel_document.h"
+#include "editor_code_panel_document.h"
 #include "ui_panels.h"
-#include "repl_layout.h"
+#include "ui_layout.h"
+#include "ui_metrics.h"
+#include "./include/gl_2d.h"
 
-#define g_status  (repl_state_status_mut()->text)
-#define g_scroll  (repl_state_code_panel_mut()->scroll)
+#define g_status  (ui_state_status_mut()->text)
+#define g_scroll  (editor_state_scroll_mut()->scroll)
 #define g_t_playing (repl_state_variables_mut()->time_playing)
-#define g_ac_ghost  (repl_state_autocomplete_mut()->ghost)
-#define g_ac_hint   (repl_state_autocomplete_mut()->hint)
-#define g_ac_matches (repl_state_autocomplete_mut()->matches)
+#define g_ac_ghost  (editor_state_autocomplete_mut()->ghost)
+#define g_ac_hint   (editor_state_autocomplete_mut()->hint)
+#define g_ac_matches (editor_state_autocomplete_mut()->matches)
 
 #include "support/test_harness.h"
 #include <ctype.h>
@@ -30,10 +37,10 @@ static TestHarness g_harness = TEST_HARNESS_INIT;
     TEST_ASSERT_STR(&g_harness, label, got, exp); \
 } while (0)
 
-#define replay_active        (repl_state_replay_mut()->active)
-#define replay_state         (repl_state_replay_mut()->state)
-#define replay_pc            (repl_state_replay_mut()->pc)
-#define replay_src_line      (repl_state_replay_mut()->src_line_idx)
+#define replay_active        (replay_state_mut()->active)
+#define replay_state         (replay_state_mut()->state)
+#define replay_pc            (replay_state_mut()->pc)
+#define replay_src_line      (replay_state_mut()->src_line_idx)
 
 #define g_workspace_header_lines (repl_state_import_export().workspace_header_lines)
 #define g_workspace_header_line_count (repl_state_import_export().workspace_header_line_count)
@@ -41,7 +48,7 @@ static TestHarness g_harness = TEST_HARNESS_INIT;
 #define g_cam_lines (repl_state_import_export().cam_lines)
 
 static void declare_test_vars(void) {
-    repl_state_viewport_set_size(1200, 800);
+    ui_state_viewport_set_size(1200, 800);
     char err[128];
     repl_eval_declare_predef_var("x", err, sizeof(err));
     repl_eval_declare_predef_var("y", err, sizeof(err));
@@ -85,7 +92,7 @@ static int code_panel_mouse_y_for_cmd(int cmd_idx) {
     int vis = doc_line - g_scroll;
     int line_y_start = cp_y + cp_h - CODE_MARGIN_Y - 2 * LINE_H;
     int gl_y = line_y_start - vis * LINE_H + 1;
-    return repl_state_viewport().window_h - gl_y;
+    return ui_state_viewport().window_h - gl_y;
 }
 
 static int predef_idx(const char *name) {
@@ -110,7 +117,7 @@ static const char *flat_cmd_text(int pc) {
     int src = repl_state_flat_program_cmds_mut()[pc].src_cmd_idx;
     if (src < 0 || src >= repl_state_document_count())
         return "";
-    const char *t = repl_state_editor_buffer_line(src);
+    const char *t = editor_buffer_line(src);
     return (t && t[0]) ? t : "";
 }
 
@@ -246,6 +253,39 @@ int main(void) {
             ASSERT_TRUE("z updated", fabsf(g_predef_vars[z_idx].value - (-0.55f)) < 1e-6f);
     }
 
+    /* Var-decl-overwrite cascade: replacing a CMD_VAR_DECLARE with an
+     * assign must reject when one of the dropped names is referenced by
+     * another line. The diagnostic comes through the compile-error path
+     * (commit 43 absorbed the cascade into repl_compile_var_assign), so
+     * apply never runs and the document is unchanged. */
+    repl_reset_state(); declare_test_vars();
+    repl_feed_line_public("float foo;");
+    repl_feed_line_public("y = foo;");
+    ASSERT_TRUE("cascade fixture cmd count", repl_state_document_count() == 2);
+    ASSERT_TRUE("cascade fixture line 0 is decl",
+                repl_state_document_cmds_mut()[0].type == CMD_VAR_DECLARE);
+    ASSERT_TRUE("cascade fixture line 1 is assign",
+                repl_state_document_cmds_mut()[1].type == CMD_VAR_ASSIGN);
+    {
+        repl_state_edit_line_set(0);
+        editor_insert_mode_set(0);
+        ReplEditorInputState *inp = editor_state_input_mut();
+        strcpy(inp->input, "foo = 5");
+        inp->input_len = (int)strlen(inp->input);
+        editor_cursor_pos_set(inp->input_len);
+        g_status[0] = '\0';
+        int consumed = try_assign_variable();
+        ASSERT_TRUE("cascade in-use rejection consumed", consumed == 1);
+        ASSERT_TRUE("cascade in-use status names variable",
+                    strstr(g_status, "foo") != NULL &&
+                    strstr(g_status, "in use") != NULL);
+        ASSERT_TRUE("cascade in-use leaves doc unchanged",
+                    repl_state_document_count() == 2 &&
+                    repl_state_document_cmds_mut()[0].type == CMD_VAR_DECLARE);
+        ASSERT_TRUE("cascade in-use leaves foo declared",
+                    repl_eval_find_predef_var_idx("foo") >= 0);
+    }
+
     repl_reset_state(); declare_test_vars();
     repl_feed_line_public("n = 0;");
     repl_feed_line_public(":walk");
@@ -254,7 +294,7 @@ int main(void) {
     repl_feed_line_public("goto walk;");
     repl_feed_line_public("}");
     ASSERT_TRUE("expr assign cmd count", repl_state_document_count() == 6);
-    ASSERT_TRUE("expr assign preserves source", strstr(repl_state_editor_buffer_line(2) ? repl_state_editor_buffer_line(2) : "", "n + 1") != NULL);
+    ASSERT_TRUE("expr assign preserves source", strstr(editor_buffer_line(2) ? editor_buffer_line(2) : "", "n + 1") != NULL);
     ASSERT_TRUE("expr assign marked has_vars", repl_state_document_cmds_mut()[2].has_vars == 1);
     repl_flatten_commands();
     execute_commands();
@@ -284,7 +324,7 @@ int main(void) {
     repl_feed_line_public("glEnd();");
     ASSERT_TRUE("goto geom cmd count", repl_state_document_count() == 10);
     ASSERT_TRUE("goto geom first vertex keeps expr",
-                strstr(repl_state_editor_buffer_line(3) ? repl_state_editor_buffer_line(3) : "", "0.42*n") != NULL);
+                strstr(editor_buffer_line(3) ? editor_buffer_line(3) : "", "0.42*n") != NULL);
     ASSERT_TRUE("goto geom first vertex has vars", repl_state_document_cmds_mut()[3].has_vars == 1);
     repl_flatten_commands();
     ASSERT_TRUE("goto geom flat first vertex has vars", repl_state_flat_program_cmds_mut()[3].has_vars == 1);
@@ -302,13 +342,13 @@ int main(void) {
     repl_reset_state(); declare_test_vars();
     repl_feed_line_public(":walk");
     ASSERT_TRUE("label cmd count", repl_state_document_count() == 1);
-    ASSERT_TRUE("label stored as C label", strcmp(repl_state_editor_buffer_line(0) ? repl_state_editor_buffer_line(0) : "", "walk:") == 0);
+    ASSERT_TRUE("label stored as C label", strcmp(editor_buffer_line(0) ? editor_buffer_line(0) : "", "walk:") == 0);
     repl_navigate_to_line(0);
     ASSERT_TRUE("label loads back into editor as repl syntax",
-                strcmp(repl_state_editor_input().input, ":walk") == 0);
-    repl_keyboard_func(';', 0, 0);
+                strcmp(editor_state_input().input, ":walk") == 0);
+    editor_handle_key(';', 0, 0);
     ASSERT_TRUE("recommitting loaded label keeps label type", repl_state_document_cmds_mut()[0].type == CMD_LABEL);
-    ASSERT_TRUE("recommitting loaded label keeps source", strcmp(repl_state_editor_buffer_line(0) ? repl_state_editor_buffer_line(0) : "", "walk:") == 0);
+    ASSERT_TRUE("recommitting loaded label keeps source", strcmp(editor_buffer_line(0) ? editor_buffer_line(0) : "", "walk:") == 0);
 
     repl_reset_state(); declare_test_vars();
     repl_feed_line_public("for(i, 0, 3) {");
@@ -318,23 +358,23 @@ int main(void) {
     ASSERT_TRUE("for begin", repl_state_document_cmds_mut()[0].type == CMD_FOR_BEGIN);
     ASSERT_TRUE("for body", repl_state_document_cmds_mut()[1].type == CMD_VERTEX3F);
     ASSERT_TRUE("for end", repl_state_document_cmds_mut()[2].type == CMD_FOR_END);
-    ASSERT_TRUE("for body keeps i", strstr(repl_state_editor_buffer_line(1) ? repl_state_editor_buffer_line(1) : "", "i") != NULL);
+    ASSERT_TRUE("for body keeps i", strstr(editor_buffer_line(1) ? editor_buffer_line(1) : "", "i") != NULL);
 
     repl_reset_state(); declare_test_vars();
     repl_feed_line_public("glBegin(GL_POINTS);");
     repl_feed_line_public("glEnd();");
     repl_navigate_to_line(1);
-    repl_state_cursor_pos_set(0);
-    repl_keyboard_func('\r', 0, 0);
-    ASSERT_TRUE("enter at line start enters insert mode", repl_state_insert_mode() == 1);
+    editor_cursor_pos_set(0);
+    editor_handle_key('\r', 0, 0);
+    ASSERT_TRUE("enter at line start enters insert mode", editor_insert_mode() == 1);
     ASSERT_TRUE("enter at line start keeps insertion index", repl_state_edit_line() == 1);
     {
-        ReplEditorInputState *inp = repl_state_editor_input_mut();
+        ReplEditorInputState *inp = editor_state_input_mut();
         strcpy(inp->input, "glColor3f(1, 0, 0)");
         inp->input_len = (int)strlen(inp->input);
-        repl_state_cursor_pos_set(inp->input_len);
+        editor_cursor_pos_set(inp->input_len);
     }
-    repl_keyboard_func('\r', 0, 0);
+    editor_handle_key('\r', 0, 0);
     ASSERT_TRUE("inserted line before current cmd count", repl_state_document_count() == 3);
     ASSERT_TRUE("inserted line before current type", repl_state_document_cmds_mut()[1].type == CMD_COLOR3F);
     ASSERT_TRUE("original current line shifted down", repl_state_document_cmds_mut()[2].type == CMD_END);
@@ -343,29 +383,36 @@ int main(void) {
     repl_feed_line_public("glBegin(GL_POINTS);");
     repl_feed_line_public("glEnd();");
     repl_navigate_to_line(0);
-    repl_state_cursor_pos_set(repl_state_input_len());
-    repl_keyboard_func('\r', 0, 0);
-    ASSERT_TRUE("enter away from line start still inserts after", repl_state_insert_mode() == 1 && repl_state_edit_line() == 1);
+    editor_cursor_pos_set(editor_input_len());
+    editor_handle_key('\r', 0, 0);
+    ASSERT_TRUE("enter away from line start still inserts after", editor_insert_mode() == 1 && repl_state_edit_line() == 1);
 
     repl_reset_state(); declare_test_vars();
     repl_feed_line_public("glBegin(GL_POINTS);");
     repl_feed_line_public("glColor3f(1, 0, 0);");
     repl_feed_line_public("glEnd();");
+    /* J2.2: code-panel mouse press / drag dispatch through the
+     * controller's UiHit router. Press resolves the click via
+     * ui_panels_hit_test and dispatches via
+     * imrepl_ctrl_router_handle_code_panel_hit; subsequent motion
+     * calls imrepl_ctrl_router_handle_code_panel_drag with the new
+     * coords. */
     {
-        int cursor_pos = -1;
-        ui_panels_handle_code_panel_press(CODE_MARGIN_X + 1, code_panel_mouse_y_for_cmd(0), &cursor_pos);
-        if (cursor_pos >= 0)
-            repl_state_cursor_pos_set(cursor_pos);
+        UiHit hit = ui_panels_hit_test(CODE_MARGIN_X + 1,
+                                       code_panel_mouse_y_for_cmd(0));
+        imrepl_ctrl_router_handle_code_panel_hit(hit, CODE_MARGIN_X + 1,
+                                                 code_panel_mouse_y_for_cmd(0));
     }
     ASSERT_TRUE("mouse press selects current line for edit", repl_state_edit_line() == 0);
     ASSERT_TRUE("mouse press starts with no selection", !repl_clipboard_sel_active());
-    ui_panels_handle_code_panel_drag(CODE_MARGIN_X + 1, code_panel_mouse_y_for_cmd(2));
+    imrepl_ctrl_router_handle_code_panel_drag(CODE_MARGIN_X + 1,
+                                              code_panel_mouse_y_for_cmd(2));
     ASSERT_TRUE("mouse drag activates selection", repl_clipboard_sel_active());
     ASSERT_TRUE("mouse drag selection low", repl_clipboard_sel_lo() == 0);
     ASSERT_TRUE("mouse drag selection high", repl_clipboard_sel_hi() == 2);
     ASSERT_TRUE("mouse drag navigates to drag end", repl_state_edit_line() == 2);
-    ui_panels_handle_code_panel_release();
-    repl_keyboard_func(8, 0, 0);
+    imrepl_ctrl_router_reset_code_panel_drag();
+    editor_handle_key(8, 0, 0);
     ASSERT_TRUE("backspace deletes selected lines", repl_state_document_count() == 0);
     ASSERT_TRUE("backspace clears selection after delete", !repl_clipboard_sel_active());
     ASSERT_TRUE("backspace keeps edit line at start after delete", repl_state_edit_line() == 0);
@@ -378,13 +425,13 @@ int main(void) {
         int linenum_w = 4 * FONT_W;
         int idx_col_w = repl_state_presentation().show_vertex_indices ? (6 * FONT_W) : 0;
         int text_x = CODE_MARGIN_X + linenum_w + FONT_W + idx_col_w;
-        int indent = test_leading_ws_chars(repl_state_editor_buffer_line(1) ? repl_state_editor_buffer_line(1) : "");
-        int cursor_pos = ui_panels_handle_code_panel_click(text_x + indent * FONT_W + 1,
-                                                           code_panel_mouse_y_for_cmd(1));
-        if (cursor_pos >= 0)
-            repl_state_cursor_pos_set(cursor_pos);
+        int indent = test_leading_ws_chars(editor_buffer_line(1) ? editor_buffer_line(1) : "");
+        int mx = text_x + indent * FONT_W + 1;
+        int my = code_panel_mouse_y_for_cmd(1);
+        UiHit hit = ui_panels_hit_test(mx, my);
+        imrepl_ctrl_router_handle_code_panel_hit(hit, mx, my);
         ASSERT_TRUE("clicking indented active line keeps cursor at first char",
-                    repl_state_cursor_pos() == 0);
+                    editor_cursor_pos() == 0);
         ASSERT_TRUE("clicking indented active line selects correct line",
                     repl_state_edit_line() == 1);
     }
@@ -392,14 +439,14 @@ int main(void) {
     repl_reset_state(); declare_test_vars();
     repl_feed_line_public("glBegin(GL_POINTS);");
     repl_navigate_to_line(0);
-    repl_state_cursor_pos_set(4);
-    repl_keyboard_func(1, 0, 0);
-    ASSERT_TRUE("ctrl-a moves to line start", repl_state_cursor_pos() == 0);
-    repl_keyboard_func(5, 0, 0);
-    ASSERT_TRUE("ctrl-e moves to line end", repl_state_cursor_pos() == repl_state_input_len());
+    editor_cursor_pos_set(4);
+    editor_handle_key(1, 0, 0);
+    ASSERT_TRUE("ctrl-a moves to line start", editor_cursor_pos() == 0);
+    editor_handle_key(5, 0, 0);
+    ASSERT_TRUE("ctrl-e moves to line end", editor_cursor_pos() == editor_input_len());
     {
         int before = repl_state_presentation().code_panel_layout;
-        repl_keyboard_func(2, 0, 0);
+        imrepl_ctrl_router_handle_cfg_shortcut_key(2);
         ASSERT_TRUE("ctrl-b toggles code panel layout", repl_state_presentation().code_panel_layout != before);
     }
 
@@ -407,7 +454,7 @@ int main(void) {
     {
         const char *prefix = "glVer";
         for (int i = 0; prefix[i]; i++)
-            repl_keyboard_func((unsigned char)prefix[i], 0, 0);
+            editor_handle_key((unsigned char)prefix[i], 0, 0);
     }
     ASSERT_TRUE("autocomplete popup shows signature text",
                 strcmp(g_ac_matches[0], "glVertex3f(x, y, z)") == 0);
@@ -415,24 +462,24 @@ int main(void) {
                 strcmp(g_ac_ghost, "tex3f(") == 0);
     ASSERT_TRUE("autocomplete hint shows parameter names",
                 strcmp(g_ac_hint, "x, y, z)") == 0);
-    repl_keyboard_func('\t', 0, 0);
+    editor_handle_key('\t', 0, 0);
     ASSERT_TRUE("tab inserts function call prefix only",
-                strcmp(repl_state_editor_input().input, "glVertex3f(") == 0);
+                strcmp(editor_state_input().input, "glVertex3f(") == 0);
     ASSERT_TRUE("function call hint starts at first parameter",
                 strcmp(g_ac_hint, "x, y, z)") == 0);
-    repl_keyboard_func('1', 0, 0);
+    editor_handle_key('1', 0, 0);
     ASSERT_TRUE("function call hint advances after first arg text",
                 strcmp(g_ac_hint, ", y, z)") == 0);
-    repl_keyboard_func(',', 0, 0);
-    repl_keyboard_func(' ', 0, 0);
+    editor_handle_key(',', 0, 0);
+    editor_handle_key(' ', 0, 0);
     ASSERT_TRUE("function call hint shows second parameter at comma",
                 strcmp(g_ac_hint, "y, z)") == 0);
-    repl_keyboard_func('2', 0, 0);
+    editor_handle_key('2', 0, 0);
     ASSERT_TRUE("function call hint advances to remaining args",
                 strcmp(g_ac_hint, ", z)") == 0);
-    repl_keyboard_func(',', 0, 0);
-    repl_keyboard_func(' ', 0, 0);
-    repl_keyboard_func('3', 0, 0);
+    editor_handle_key(',', 0, 0);
+    editor_handle_key(' ', 0, 0);
+    editor_handle_key('3', 0, 0);
     ASSERT_TRUE("function call hint ends with closing paren",
                 strcmp(g_ac_hint, ")") == 0);
 
@@ -442,7 +489,7 @@ int main(void) {
     {
         const char *call = "func0(";
         for (int i = 0; call[i]; i++)
-            repl_keyboard_func((unsigned char)call[i], 0, 0);
+            editor_handle_key((unsigned char)call[i], 0, 0);
     }
     ASSERT_TRUE("user function hint uses declared parameter names",
                 strcmp(g_ac_hint, "radius, yoff)") == 0);
@@ -482,15 +529,15 @@ int main(void) {
     ASSERT_TRUE("param func cmd count", repl_state_document_count() == 4);
     ASSERT_TRUE("param func def", repl_state_document_cmds_mut()[0].type == CMD_FUNC_DEF);
     ASSERT_TRUE("param func header keeps names",
-                strstr(repl_state_editor_buffer_line(0) ? repl_state_editor_buffer_line(0) : "", "radius") != NULL &&
-                strstr(repl_state_editor_buffer_line(0) ? repl_state_editor_buffer_line(0) : "", "yoff") != NULL);
+                strstr(editor_buffer_line(0) ? editor_buffer_line(0) : "", "radius") != NULL &&
+                strstr(editor_buffer_line(0) ? editor_buffer_line(0) : "", "yoff") != NULL);
     ASSERT_TRUE("param func body keeps radius",
-                strstr(repl_state_editor_buffer_line(1) ? repl_state_editor_buffer_line(1) : "", "radius") != NULL);
+                strstr(editor_buffer_line(1) ? editor_buffer_line(1) : "", "radius") != NULL);
     ASSERT_TRUE("param func body keeps yoff",
-                strstr(repl_state_editor_buffer_line(1) ? repl_state_editor_buffer_line(1) : "", "yoff") != NULL);
+                strstr(editor_buffer_line(1) ? editor_buffer_line(1) : "", "yoff") != NULL);
     ASSERT_TRUE("param func call type", repl_state_document_cmds_mut()[3].type == CMD_CALL);
     ASSERT_TRUE("param func call keeps expr",
-                strstr(repl_state_editor_buffer_line(3) ? repl_state_editor_buffer_line(3) : "", "x + 2") != NULL);
+                strstr(editor_buffer_line(3) ? editor_buffer_line(3) : "", "x + 2") != NULL);
 
     repl_reset_state(); declare_test_vars();
     repl_feed_line_public("glClearColor(0.1, 0.1, 0.1, 1);");
@@ -578,8 +625,8 @@ int main(void) {
     ASSERT_TRUE("local for begin type", repl_state_document_cmds_mut()[1].type == CMD_FOR_BEGIN);
     ASSERT_TRUE("local for body type", repl_state_document_cmds_mut()[2].type == CMD_VERTEX3F);
     ASSERT_TRUE("local for end type", repl_state_document_cmds_mut()[3].type == CMD_FOR_END);
-    ASSERT_TRUE("local for header keeps n", strstr(repl_state_editor_buffer_line(1) ? repl_state_editor_buffer_line(1) : "", "n") != NULL);
-    ASSERT_TRUE("local for body keeps n", strstr(repl_state_editor_buffer_line(2) ? repl_state_editor_buffer_line(2) : "", "n") != NULL);
+    ASSERT_TRUE("local for header keeps n", strstr(editor_buffer_line(1) ? editor_buffer_line(1) : "", "n") != NULL);
+    ASSERT_TRUE("local for body keeps n", strstr(editor_buffer_line(2) ? editor_buffer_line(2) : "", "n") != NULL);
     repl_flatten_commands();
     ASSERT_TRUE("local for flatten count", repl_state_flat_program_count() == 3);
     ASSERT_TRUE("local for first x", fabsf(repl_state_flat_program_cmds_mut()[0].args[0] - 0.0f) < 1e-6f);
@@ -595,7 +642,7 @@ int main(void) {
     repl_feed_line_public("}");
     repl_feed_line_public("func0(2);");
     repl_feed_line_public("func0(0.5);");
-    ASSERT_TRUE("local if header keeps scale", strstr(repl_state_editor_buffer_line(1) ? repl_state_editor_buffer_line(1) : "", "scale > 1") != NULL);
+    ASSERT_TRUE("local if header keeps scale", strstr(editor_buffer_line(1) ? editor_buffer_line(1) : "", "scale > 1") != NULL);
     repl_flatten_commands();
     ASSERT_TRUE("local if flatten count", repl_state_flat_program_count() == 1);
     ASSERT_TRUE("local if flatten type", repl_state_flat_program_cmds_mut()[0].type == CMD_VERTEX3F);
@@ -646,7 +693,7 @@ int main(void) {
         replay_pc = 1;
         replay_src_line = 0;
         ASSERT_TRUE("replay display assignment text",
-                    repl_replay_code_panel_get_command_display_text(0, display, sizeof(display)));
+                    repl_replay_code_panel_get_command_display_text(editor_buffer_view(), 0, display, sizeof(display)));
         ASSERT_STR("replay display assignment inline comment",
                    display,
                    "  i = i + j + 3; // i = 3.2 + 1.2 + 3 = 7.4");
@@ -654,12 +701,12 @@ int main(void) {
         replay_pc = 2;
         replay_src_line = 1;
         ASSERT_TRUE("replay display prior assignment still visible",
-                    repl_replay_code_panel_get_command_display_text(0, display, sizeof(display)));
+                    repl_replay_code_panel_get_command_display_text(editor_buffer_view(), 0, display, sizeof(display)));
         ASSERT_STR("replay display prior assignment inline comment",
                    display,
                    "  i = i + j + 3; // i = 3.2 + 1.2 + 3 = 7.4");
         ASSERT_TRUE("replay display vertex text",
-                    repl_replay_code_panel_get_command_display_text(1, display, sizeof(display)));
+                    repl_replay_code_panel_get_command_display_text(editor_buffer_view(), 1, display, sizeof(display)));
         ASSERT_STR("replay display vertex source unchanged",
                    display,
                    "  glVertex3f(i, j, 0);");
@@ -690,7 +737,7 @@ int main(void) {
         replay_pc = 1;
         replay_src_line = 0;
         ASSERT_TRUE("replay chain assignment text",
-                    repl_replay_code_panel_get_command_display_text(0, display, sizeof(display)));
+                    repl_replay_code_panel_get_command_display_text(editor_buffer_view(), 0, display, sizeof(display)));
         ASSERT_STR("replay chain assignment inline comment",
                    display,
                    "  i = i + k; // i = 0.23 + 0.5 = 0.73");
@@ -722,7 +769,7 @@ int main(void) {
         replay_pc = repl_state_flat_program_count();
         replay_src_line = 5;
         ASSERT_TRUE("replay goto skipped assignment text",
-                    repl_replay_code_panel_get_command_display_text(3, display, sizeof(display)));
+                    repl_replay_code_panel_get_command_display_text(editor_buffer_view(), 3, display, sizeof(display)));
         ASSERT_TRUE("replay goto skipped assignment uses pre-jump value",
                     strstr(display, "// x = 1 + 1 = 2") != NULL);
         ASSERT_TRUE("replay goto skipped assignment ignores skipped overwrite",
@@ -754,7 +801,7 @@ int main(void) {
         replay_pc = 1;
         replay_src_line = 1;
         ASSERT_TRUE("replay scientific assignment text",
-                    repl_replay_code_panel_get_command_display_text(1, display, sizeof(display)));
+                    repl_replay_code_panel_get_command_display_text(editor_buffer_view(), 1, display, sizeof(display)));
         ASSERT_TRUE("replay scientific inline comment keeps expanded rhs",
                     strstr(display, "// i = 1 * 1e-06 = 1e-06") != NULL);
 
@@ -942,13 +989,13 @@ int main(void) {
     repl_feed_line_public("glVertex3f(1, 2, 3);");
     repl_feed_line_public("}");
     repl_state_edit_line_set(0);
-    repl_state_insert_mode_set(0);
+    editor_insert_mode_set(0);
     g_status[0] = '\0';
     repl_feed_line_public("func0(z) {");
     ASSERT_TRUE("func def overwrite: still CMD_FUNC_DEF",
                 repl_state_document_cmds_mut()[0].type == CMD_FUNC_DEF);
     ASSERT_TRUE("func def overwrite: header keeps new param",
-                strstr(repl_state_editor_buffer_line(0) ? repl_state_editor_buffer_line(0) : "", "z") != NULL);
+                strstr(editor_buffer_line(0) ? editor_buffer_line(0) : "", "z") != NULL);
     ASSERT_TRUE("func def overwrite: status not a duplicate rejection",
                 strstr(g_status, "already defined") == NULL);
 

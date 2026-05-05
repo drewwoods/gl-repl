@@ -19,7 +19,9 @@
 #ifndef REPL_FLATTEN_H
 #define REPL_FLATTEN_H
 
-#include "sample.h"
+#include "repl_command.h"
+#include "editor_state.h"  /* EditorBufferView */
+#include "repl_eval.h"
 
 /* Local variable snapshot for a single flat command. Captured when the
  * command is emitted (e.g., loop counter value, function parameter binding).
@@ -41,14 +43,16 @@ typedef struct {
 } FlatProgramView;
 
 /* Input: source program to expand. Caller provides the source command array,
- * a target flat buffer (with capacity), and resource limits (call depth,
- * visit budget). Output written to flat_cmds[] and flat_local_vars[]. */
+ * a target flat buffer (with capacity), an editor-text view for the
+ * expansion's text reads, and resource limits (call depth, visit
+ * budget). Output written to flat_cmds[] and flat_local_vars[]. */
 typedef struct {
     const GLCmd      *source_cmds;
     int               source_cmd_count;
     GLCmd            *flat_cmds;
     FlatCmdLocalVars *flat_local_vars;
     int               flat_capacity;
+    EditorBufferView  text;             /* editor source-text view used for inline expansion */
     int               max_call_depth;   /* recursion limit (default MAX_FLATTEN_CALL_DEPTH) */
     int               visit_budget;     /* total command visits allowed (default MAX_FLATTEN_VISIT_BUDGET) */
 } ReplFlattenOptions;

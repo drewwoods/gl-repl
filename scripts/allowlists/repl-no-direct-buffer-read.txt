@@ -1,0 +1,8 @@
+# Files allowed to call editor_buffer_line() directly. These are
+# editor-side modules that currently live under repl_*.c but rename
+# to editor_*.c in Phase H of feature/editor-text-model-controller.md.
+# Once renamed, the editor_*.c files own the buffer and the allowlist
+# can shrink further (or the guard can switch to "no editor_buffer_line
+# calls in repl_*.c except via view").
+repl_editor.c
+repl_code_panel_document.c

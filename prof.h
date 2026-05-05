@@ -44,10 +44,17 @@ typedef enum {
     PROF_SNAPSHOT_TRANSFORMERS,    /* push_color_transformers (per-line scan) */
     PROF_SNAPSHOT_HIGHLIGHTS,      /* push_highlights (feeding cmd + replay PC) */
     PROF_SNAPSHOT_VIRTUAL_LINES,   /* annotations_prepare + virtual-line refresh */
+    PROF_SNAPSHOT_PREP,            /* replay_prepare_frame + render-state /
+                                    * camera string refresh that sits between
+                                    * virtual-line refresh and scene-config */
     PROF_SNAPSHOT_SCENE_CONFIG,    /* build_scene_config */
     PROF_SNAPSHOT_UI,              /* build_ui_snapshot */
     PROF_FLATTEN,       /* flatten_commands() (only when dirty) */
     PROF_REFORMAT,      /* repl_reformat_commands() (on demand) */
+    PROF_AUTONORMAL,    /* recompute_autonormals() (only when dirty) */
+    PROF_REPLAY_HUD,    /* replay_ui_hud_render() (only when replaying) */
+    PROF_PROFILE_PANEL, /* ui_profile_panel_render() (the panel itself) */
+    PROF_FRAME_RESTORE, /* post-render flat-count + predef-value restore */
     PROF_FRAME_TOTAL,   /* entire display callback */
     PROF_SECTION_COUNT
 } ProfSection;

@@ -4,6 +4,8 @@
 #include "repl_core_internal.h"
 #include "repl_examples.h"
 #include "repl_state.h"
+#include "ui_state.h"
+#include "scene_render.h"
 
 #define g_accum_aa_enabled    (repl_state_render_mut()->accum_aa_enabled)
 #define g_multisample_enabled (repl_state_render_mut()->multisample_enabled)
@@ -99,9 +101,9 @@ static void declare_test_vars(void) {
 }
 
 static void pin_code_panel_state(void) {
-    repl_state_camera_set_orbit(18.0f, 32.0f);
-    repl_state_camera_set_distance(5.5f);
-    repl_state_camera_set_pan(0.0f, 0.0f, 0.0f);
+    ui_state_camera_set_orbit(18.0f, 32.0f);
+    ui_state_camera_set_distance(5.5f);
+    ui_state_camera_set_pan(0.0f, 0.0f, 0.0f);
     repl_state_presentation_mut()->axes_theme = CFG_DEFAULT_AXES_THEME;
     repl_state_presentation_mut()->backdrop_mode = CFG_DEFAULT_BACKDROP_MODE;
     repl_state_presentation_mut()->show_vertex_outlines = CFG_DEFAULT_VERTEX_OUTLINES;
@@ -112,9 +114,9 @@ static void pin_code_panel_state(void) {
 }
 
 static void seed_nondefault_example_presentation_state(void) {
-    repl_state_camera_set_orbit(-41.0f, 73.0f);
-    repl_state_camera_set_distance(12.0f);
-    repl_state_camera_set_pan(1.5f, -2.0f, 0.75f);
+    ui_state_camera_set_orbit(-41.0f, 73.0f);
+    ui_state_camera_set_distance(12.0f);
+    ui_state_camera_set_pan(1.5f, -2.0f, 0.75f);
     repl_state_presentation_mut()->wireframe = 1;
     repl_state_presentation_mut()->grid_theme = 1;
     repl_state_presentation_mut()->grid_major_idx = GRID_MAJOR_10;
@@ -128,7 +130,7 @@ static void seed_nondefault_example_presentation_state(void) {
     repl_state_presentation_mut()->show_vertex_guides = 0;
     repl_state_presentation_mut()->show_light_indicators = 0;
     repl_state_presentation_mut()->backdrop_mode = 1;
-    repl_state_camera_mut()->auto_rotate = 1;
+    ui_state_camera_mut()->auto_rotate = 1;
 }
 
 static char *slurp_stream(FILE *f) {
@@ -168,7 +170,7 @@ static char *dump_current_code_panel_text(void) {
     char *buf;
     if (!tmp)
         return NULL;
-    repl_dump_code_panel_text(tmp);
+    repl_dump_code_panel_text(tmp, editor_buffer_view());
     buf = slurp_stream(tmp);
     fclose(tmp);
     return buf;
@@ -445,7 +447,7 @@ static char *collect_loaded_definition_lines(void) {
     for (int i = 0; i < repl_state_document_count(); i++) {
         if (repl_state_document_cmds_mut()[i].type != CMD_VAR_DECLARE && repl_state_document_cmds_mut()[i].type != CMD_VAR_ASSIGN)
             continue;
-        canon_lines[count] = canonicalize_definition_line(repl_state_editor_buffer_line(i));
+        canon_lines[count] = canonicalize_definition_line(editor_buffer_line(i));
         if (!canon_lines[count]) {
             for (int j = 0; j < count; j++)
                 free(canon_lines[j]);
@@ -612,19 +614,19 @@ int main(int argc, char **argv) {
         ASSERT_TRUE("no cfg reset backdrop default",
                     repl_state_presentation().backdrop_mode == CFG_DEFAULT_BACKDROP_MODE);
         ASSERT_TRUE("no cfg reset camera rotate default",
-                    repl_state_camera().auto_rotate == CFG_DEFAULT_CAMERA_ROTATE);
+                    ui_state_camera().auto_rotate == CFG_DEFAULT_CAMERA_ROTATE);
         ASSERT_TRUE("no cfg keeps camera rx",
-                    fabsf(repl_state_camera().rx - (-41.0f)) < 1e-4f);
+                    fabsf(ui_state_camera().rx - (-41.0f)) < 1e-4f);
         ASSERT_TRUE("no cfg keeps camera ry",
-                    fabsf(repl_state_camera().ry - 73.0f) < 1e-4f);
+                    fabsf(ui_state_camera().ry - 73.0f) < 1e-4f);
         ASSERT_TRUE("no cfg keeps camera dist",
-                    fabsf(repl_state_camera().dist - 12.0f) < 1e-4f);
+                    fabsf(ui_state_camera().dist - 12.0f) < 1e-4f);
         ASSERT_TRUE("no cfg keeps camera tx",
-                    fabsf(repl_state_camera().tx - 1.5f) < 1e-4f);
+                    fabsf(ui_state_camera().tx - 1.5f) < 1e-4f);
         ASSERT_TRUE("no cfg keeps camera ty",
-                    fabsf(repl_state_camera().ty - (-2.0f)) < 1e-4f);
+                    fabsf(ui_state_camera().ty - (-2.0f)) < 1e-4f);
         ASSERT_TRUE("no cfg keeps camera tz",
-                    fabsf(repl_state_camera().tz - 0.75f) < 1e-4f);
+                    fabsf(ui_state_camera().tz - 0.75f) < 1e-4f);
     }
 
     {
@@ -667,9 +669,9 @@ int main(int argc, char **argv) {
         ASSERT_TRUE("partial cfg lights reset default",
                     repl_state_presentation().show_light_indicators == CFG_DEFAULT_LIGHT_INDICATORS);
         ASSERT_TRUE("partial cfg camera rotate reset default",
-                    repl_state_camera().auto_rotate == CFG_DEFAULT_CAMERA_ROTATE);
+                    ui_state_camera().auto_rotate == CFG_DEFAULT_CAMERA_ROTATE);
         ASSERT_TRUE("partial cfg keeps camera rx",
-                    fabsf(repl_state_camera().rx - (-41.0f)) < 1e-4f);
+                    fabsf(ui_state_camera().rx - (-41.0f)) < 1e-4f);
     }
 
     {
@@ -686,17 +688,17 @@ int main(int argc, char **argv) {
             ASSERT_TRUE("stress example backdrop preset",
                         repl_state_presentation().backdrop_mode == 1);
             ASSERT_TRUE("stress example camera rx preset",
-                        fabsf(repl_state_camera().rx - 27.5f) < 1e-4f);
+                        fabsf(ui_state_camera().rx - 27.5f) < 1e-4f);
             ASSERT_TRUE("stress example camera ry preset",
-                        fabsf(repl_state_camera().ry - (-24.0f)) < 1e-4f);
+                        fabsf(ui_state_camera().ry - (-24.0f)) < 1e-4f);
             ASSERT_TRUE("stress example camera dist preset",
-                        fabsf(repl_state_camera().dist - 12.5f) < 1e-4f);
+                        fabsf(ui_state_camera().dist - 12.5f) < 1e-4f);
             ASSERT_TRUE("stress example camera tx preset",
-                        fabsf(repl_state_camera().tx - 0.6f) < 1e-4f);
+                        fabsf(ui_state_camera().tx - 0.6f) < 1e-4f);
             ASSERT_TRUE("stress example camera ty preset",
-                        fabsf(repl_state_camera().ty - 0.1f) < 1e-4f);
+                        fabsf(ui_state_camera().ty - 0.1f) < 1e-4f);
             ASSERT_TRUE("stress example camera tz preset",
-                        fabsf(repl_state_camera().tz - 0.4f) < 1e-4f);
+                        fabsf(ui_state_camera().tz - 0.4f) < 1e-4f);
 
             dump = dump_current_code_panel_text();
             ASSERT_TRUE("stress example camera dump alloc", dump != NULL);
@@ -744,17 +746,17 @@ int main(int argc, char **argv) {
         ASSERT_TRUE("mixed cfg camera disallowed layout ignored",
                     repl_state_presentation().code_panel_layout == CFG_DEFAULT_CODE_PANEL_LAYOUT);
         ASSERT_TRUE("mixed cfg camera rx preset",
-                    fabsf(repl_state_camera().rx - 11.0f) < 1e-4f);
+                    fabsf(ui_state_camera().rx - 11.0f) < 1e-4f);
         ASSERT_TRUE("mixed cfg camera ry preset",
-                    fabsf(repl_state_camera().ry - (-17.0f)) < 1e-4f);
+                    fabsf(ui_state_camera().ry - (-17.0f)) < 1e-4f);
         ASSERT_TRUE("mixed cfg camera dist preset",
-                    fabsf(repl_state_camera().dist - 9.0f) < 1e-4f);
+                    fabsf(ui_state_camera().dist - 9.0f) < 1e-4f);
         ASSERT_TRUE("mixed cfg camera tx preset",
-                    fabsf(repl_state_camera().tx - 0.2f) < 1e-4f);
+                    fabsf(ui_state_camera().tx - 0.2f) < 1e-4f);
         ASSERT_TRUE("mixed cfg camera ty preset",
-                    fabsf(repl_state_camera().ty - 0.3f) < 1e-4f);
+                    fabsf(ui_state_camera().ty - 0.3f) < 1e-4f);
         ASSERT_TRUE("mixed cfg camera tz preset",
-                    fabsf(repl_state_camera().tz - (-0.4f)) < 1e-4f);
+                    fabsf(ui_state_camera().tz - (-0.4f)) < 1e-4f);
         ASSERT_TRUE("mixed cfg camera body cmds loaded", repl_state_document_count() == 3);
 
         dump = dump_current_code_panel_text();
@@ -819,17 +821,17 @@ int main(int argc, char **argv) {
         ASSERT_TRUE("invalid camera header keeps cmds valid",
                     examples_have_no_invalid_cmds());
         ASSERT_TRUE("invalid camera header preserves rx",
-                    fabsf(repl_state_camera().rx - 18.0f) < 1e-4f);
+                    fabsf(ui_state_camera().rx - 18.0f) < 1e-4f);
         ASSERT_TRUE("invalid camera header preserves ry",
-                    fabsf(repl_state_camera().ry - 32.0f) < 1e-4f);
+                    fabsf(ui_state_camera().ry - 32.0f) < 1e-4f);
         ASSERT_TRUE("invalid camera header preserves dist",
-                    fabsf(repl_state_camera().dist - 5.5f) < 1e-4f);
+                    fabsf(ui_state_camera().dist - 5.5f) < 1e-4f);
         ASSERT_TRUE("invalid camera header preserves tx",
-                    fabsf(repl_state_camera().tx - 0.0f) < 1e-4f);
+                    fabsf(ui_state_camera().tx - 0.0f) < 1e-4f);
         ASSERT_TRUE("invalid camera header preserves ty",
-                    fabsf(repl_state_camera().ty - 0.0f) < 1e-4f);
+                    fabsf(ui_state_camera().ty - 0.0f) < 1e-4f);
         ASSERT_TRUE("invalid camera header preserves tz",
-                    fabsf(repl_state_camera().tz - 0.0f) < 1e-4f);
+                    fabsf(ui_state_camera().tz - 0.0f) < 1e-4f);
 
         dump = dump_current_code_panel_text();
         ASSERT_TRUE("invalid camera header dump alloc", dump != NULL);
@@ -939,7 +941,7 @@ int main(int argc, char **argv) {
         snprintf(export_path, sizeof(export_path), "%s/example_%02d.c",
                  temp_dir, idx);
         log_example_step(idx, name, "export", export_path);
-        repl_export_save_output(export_path);
+        repl_export_save_output(export_path, editor_buffer_view());
         compile_detail[0] = '\0';
         compiled = compile_exported_source(idx, name, export_path,
                                            compile_detail,
@@ -1009,7 +1011,7 @@ int main(int argc, char **argv) {
                 snprintf(reexport_path, sizeof(reexport_path),
                          "%s/example_%02d_roundtrip.c", temp_dir, idx);
                 log_example_step(idx, name, "re-export", reexport_path);
-                repl_export_save_output(reexport_path);
+                repl_export_save_output(reexport_path, editor_buffer_view());
                 reexport_detail[0] = '\0';
                 roundtrip_compiled = compile_exported_source(idx, name, reexport_path,
                                                              reexport_detail,

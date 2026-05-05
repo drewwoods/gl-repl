@@ -1,0 +1,32 @@
+# Baseline for scripts/check-ui-returns-hits-only.sh.
+#
+# UI input helpers (`ui_*.c`, excluding `ui_state.c`) compute neutral
+# `UiHit` values; `imrepl_ctrl` routes hits to the owning subsystem.
+# Mutators called from inside `ui_*.c` violate the boundary and are
+# tracked here as a count that ratchets down only.
+#
+# Phase E commit 30 established the baseline at 8.
+# Phase J2.2 dropped the baseline to 5: the controller now dispatches
+# code-panel press / drag / menu activation directly.
+# Phase J3 (color-picker writeback) dropped the baseline to 1: the
+# picker routes its source-line replace through
+# editor_commit_apply_external_change(REPL_COMPILED_REPLACE_ONE) and
+# captures undo on the first writeback per session.
+# Phase J4 (cursor-pixel UiCodePanelOutput) dropped the baseline to 0:
+# render_active_input_rows now publishes the editor cursor's pixel
+# coordinates through ui_panels_render_code_panel's UiCodePanelOutput
+# parameter; the controller actualizes the value by passing it
+# directly to ui_autocomplete_panel_render. The cursor_px / cursor_py
+# fields on ReplCodePanelRuntimeState and the
+# repl_action_set_cursor_pixel setter were deleted along with the
+# obsolete check-cursor-px-encapsulated guard, since the data was
+# rendering ephemera, not state.
+#
+# ui_*.c is now mutator-free in the input + render paths. Any new hit
+# fails the build.
+#
+# Reductions are always allowed; lower this number by hand when a
+# commit legitimately drives violations down so the next commit
+# cannot silently regress past the new low.
+
+count: 0

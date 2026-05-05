@@ -26,6 +26,13 @@
 #ifndef UI_PROFILE_PANEL_H
 #define UI_PROFILE_PANEL_H
 
+typedef enum {
+	PROFILE_PANEL_OFF = 0,
+	PROFILE_PANEL_ON,
+	PROFILE_PANEL_DETAILS,
+	PROFILE_PANEL_MODE_COUNT
+} ProfilePanelMode;
+
 #include "ui_snapshot.h"
 
 /* Render the CPU profile panel overlay once per frame from the supplied

@@ -1,2 +1,4 @@
 # Renderers audited for no direct mutators in render path.
-ui_replay_hud_render
+# Generic ui_* renderers only. Feature-owned UI under prefixes like
+# `replay_ui_*` is audited by its own dedicated guard
+# (`check-replay-ui-isolation.sh`), so it does not appear here.

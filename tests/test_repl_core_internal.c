@@ -3,7 +3,9 @@
 #include "repl_executor.h"
 #include "repl_source_scope.h"
 #include "repl_state.h"
+#include "ui_state.h"
 #include "support/test_harness.h"
+#include "scene_render.h"
 
 #ifdef OPENGL_VIBE_USE_GL_STUBS
 #include <GL/gl_stub_counts.h>
@@ -79,7 +81,7 @@ int main() {
         ASSERT_INT("extract_for_args spaced ok", r, 1);
         ASSERT_STR("extract_for_args spaced var", var, "j");
         ASSERT_STR("extract_for_args spaced args", args, "1 , 5 , 0.5");
-        
+
         ASSERT_INT("extract_for_args fail", extract_for_args_text("not a for", var, 16, args, 64), 0);
     }
 
@@ -133,7 +135,7 @@ int main() {
         repl_feed_line_public("for(i, 0, 1) {");     /* 0 */
         repl_feed_line_public("  glVertex3f(0,0,0);"); /* 1 */
         repl_feed_line_public("}");                    /* 2 */
-        
+
         ASSERT_INT("repl_source_scope_find_block_end(0)", repl_source_scope_find_block_end(0), 2);
         ASSERT_INT("repl_source_scope_block_depth_at(1)", repl_source_scope_block_depth_at(1), 1);
         ASSERT_INT("repl_source_scope_block_depth_at(2)", repl_source_scope_block_depth_at(2), 1); /* Still 1 at the closing brace */
@@ -145,9 +147,9 @@ int main() {
         repl_reset_state(); declare_test_vars();
         repl_feed_line_public("for(i, 0, 1) {");
         repl_feed_line_public("  for(j, 0, 1) {");
-        
+
         ExprVar vars[8];
-        int n = collect_visible_vars(2, vars, 8);
+        int n = collect_visible_vars(2, vars, 8, NULL);
         ASSERT_INT("collect_visible_vars count", n, 2);
         /* Note: variables are collected inner-to-outer */
         ASSERT_STR("var0 name", vars[0].name, "j");
@@ -181,7 +183,8 @@ int main() {
             .source_cmd_count = repl_state_document_count(),
             .flat_cmds = temp_flat,
             .flat_local_vars = temp_locals,
-            .flat_capacity = 8
+            .flat_capacity = 8,
+            .text = editor_buffer_view()
         };
         ASSERT_INT("flatten_program ok",
                    repl_flatten_program(&opts, &result), 1);
@@ -250,17 +253,18 @@ int main() {
         ASSERT_INT("document normals dirty clear",
                    repl_state_normals_dirty(), 0);
         ASSERT_INT("command_store_load ok",
-                   repl_command_store_load(&store, loaded, 2, loaded_lines, 99), 1);
+                   repl_command_store_load(&store, loaded, 2, 99), 1);
+        editor_buffer_load_lines(loaded_lines, 2);
         ASSERT_INT("command_store_load count", repl_state_document_count(), 2);
         ASSERT_INT("command_store_load state count",
                    repl_state_document_count(), 2);
         ASSERT_INT("command_store_load edit clamp", repl_state_edit_line(), 2);
         ASSERT_INT("command_store_load state edit clamp",
                    repl_state_edit_line(), 2);
-        ASSERT_STR("command_store_load source", repl_state_editor_buffer_line(1),
+        ASSERT_STR("command_store_load source", editor_buffer_line(1),
                    "glColor3f(1, 0, 0);");
         ASSERT_STR("command_store_load state source",
-                   repl_state_editor_buffer_line(1),
+                   editor_buffer_line(1),
                    "glColor3f(1, 0, 0);");
         ASSERT_INT("command_store_load marks normals dirty",
                    repl_state_normals_dirty(), 1);
@@ -287,50 +291,50 @@ int main() {
 
         repl_reset_state(); declare_test_vars();
 
-        input = repl_state_editor_input_mut();
+        input = editor_state_input_mut();
         ASSERT_TRUE("editor input facade uses input buffer",
-                    input->input == repl_state_input_buffer_mut());
-        repl_state_input_set_text("xyz");
+                    input->input == editor_input_buffer_mut());
+        editor_input_set_text("xyz");
         ASSERT_TRUE("editor input len ptr reflects state", input->input_len == 3);
         ASSERT_TRUE("editor input cursor ptr reflects state",
-                    input->cursor_pos == repl_state_cursor_pos());
+                    input->cursor_pos == editor_cursor_pos());
 
-        repl_state_input_set_text("abc");
-        ASSERT_STR("state input set text", repl_state_editor_input().input, "abc");
-        ASSERT_INT("state input set len", repl_state_input_len(), 3);
-        ASSERT_INT("state input cursor at end", repl_state_cursor_pos(), 3);
-        repl_state_cursor_pos_set(99);
-        ASSERT_INT("state cursor clamps high", repl_state_cursor_pos(), 3);
-        repl_state_cursor_pos_set(-5);
-        ASSERT_INT("state cursor clamps low", repl_state_cursor_pos(), 0);
+        editor_input_set_text("abc");
+        ASSERT_STR("state input set text", editor_state_input().input, "abc");
+        ASSERT_INT("state input set len", editor_input_len(), 3);
+        ASSERT_INT("state input cursor at end", editor_cursor_pos(), 3);
+        editor_cursor_pos_set(99);
+        ASSERT_INT("state cursor clamps high", editor_cursor_pos(), 3);
+        editor_cursor_pos_set(-5);
+        ASSERT_INT("state cursor clamps low", editor_cursor_pos(), 0);
 
-        repl_state_pending_newline_set_text("next line");
-        ASSERT_STR("state newline set text", repl_state_pending_newline_buffer_mut(), "next line");
-        ASSERT_INT("state newline len", repl_state_pending_newline_len(), 9);
-        repl_state_insert_mode_set(42);
-        ASSERT_INT("state insert mode set", repl_state_insert_mode(), 1);
+        editor_pending_newline_set_text("next line");
+        ASSERT_STR("state newline set text", editor_pending_newline_buffer_mut(), "next line");
+        ASSERT_INT("state newline len", editor_pending_newline_len(), 9);
+        editor_insert_mode_set(42);
+        ASSERT_INT("state insert mode set", editor_insert_mode(), 1);
 
-        repl_state_selection_set(4, 2);
-        ASSERT_INT("state selection anchor", repl_state_selection_anchor(), 4);
-        ASSERT_INT("state selection end", repl_state_selection_end_idx(), 2);
-        repl_state_selection_clear();
-        ASSERT_INT("state selection clear anchor", repl_state_selection_anchor(), -1);
-        ASSERT_INT("state selection clear end", repl_state_selection_end_idx(), -1);
+        editor_state_selection_set(4, 2);
+        ASSERT_INT("state selection anchor", editor_state_selection_anchor(), 4);
+        ASSERT_INT("state selection end", editor_state_selection_end_idx(), 2);
+        editor_state_selection_clear();
+        ASSERT_INT("state selection clear anchor", editor_state_selection_anchor(), -1);
+        ASSERT_INT("state selection clear end", editor_state_selection_end_idx(), -1);
 
-        clipboard = repl_state_clipboard_cmds_mut();
+        clipboard = editor_state_clipboard_cmds_mut();
         clipboard[0].type = CMD_COLOR3F;
         clipboard[0].valid = 1;
-        repl_state_clipboard_count_set(1);
-        ASSERT_INT("state clipboard count", repl_state_clipboard_count(), 1);
+        editor_state_clipboard_count_set(1);
+        ASSERT_INT("state clipboard count", editor_state_clipboard_count(), 1);
         ASSERT_INT("state clipboard count accessor",
-                   repl_state_clipboard_count(), 1);
-        repl_state_clipboard_clear();
-        ASSERT_INT("state clipboard clear", repl_state_clipboard_count(), 0);
+                   editor_state_clipboard_count(), 1);
+        editor_state_clipboard_clear();
+        ASSERT_INT("state clipboard clear", editor_state_clipboard_count(), 0);
 
-        repl_state_editor_input_reset();
-        ASSERT_STR("state input reset text", repl_state_editor_input().input, "");
-        ASSERT_INT("state input reset inserting", repl_state_insert_mode(), 0);
-        ASSERT_STR("state newline reset text", repl_state_pending_newline_buffer_mut(), "");
+        editor_state_input_reset();
+        ASSERT_STR("state input reset text", editor_state_input().input, "");
+        ASSERT_INT("state input reset inserting", editor_insert_mode(), 0);
+        ASSERT_STR("state newline reset text", editor_pending_newline_buffer_mut(), "");
     }
 
     /* 12. camera/pointer/viewport state facade */
@@ -339,65 +343,65 @@ int main() {
         ReplPointerState *pointer;
         ReplViewportState *viewport;
 
-        repl_state_camera_set(11.0f, -22.0f, 7.5f,
+        ui_state_camera_set(11.0f, -22.0f, 7.5f,
                               1.0f, 2.0f, 3.0f, 0.25f);
-        ASSERT_TRUE("state camera rx", repl_state_camera().rx == 11.0f);
-        ASSERT_TRUE("state camera ry", repl_state_camera().ry == -22.0f);
-        ASSERT_TRUE("state camera dist", repl_state_camera().dist == 7.5f);
-        ASSERT_TRUE("state camera tx", repl_state_camera().tx == 1.0f);
-        ASSERT_TRUE("state camera ty", repl_state_camera().ty == 2.0f);
-        ASSERT_TRUE("state camera tz", repl_state_camera().tz == 3.0f);
-        ASSERT_TRUE("state camera glow", repl_state_camera().motion_glow == 0.25f);
+        ASSERT_TRUE("state camera rx", ui_state_camera().rx == 11.0f);
+        ASSERT_TRUE("state camera ry", ui_state_camera().ry == -22.0f);
+        ASSERT_TRUE("state camera dist", ui_state_camera().dist == 7.5f);
+        ASSERT_TRUE("state camera tx", ui_state_camera().tx == 1.0f);
+        ASSERT_TRUE("state camera ty", ui_state_camera().ty == 2.0f);
+        ASSERT_TRUE("state camera tz", ui_state_camera().tz == 3.0f);
+        ASSERT_TRUE("state camera glow", ui_state_camera().motion_glow == 0.25f);
 
-        repl_state_camera_set_orbit(33.0f, 44.0f);
-        ASSERT_TRUE("state camera orbit rx", repl_state_camera().rx == 33.0f);
-        ASSERT_TRUE("state camera orbit ry", repl_state_camera().ry == 44.0f);
-        repl_state_camera_set_pan(-1.0f, -2.0f, -3.0f);
-        ASSERT_TRUE("state camera pan tx", repl_state_camera().tx == -1.0f);
-        ASSERT_TRUE("state camera pan ty", repl_state_camera().ty == -2.0f);
-        ASSERT_TRUE("state camera pan tz", repl_state_camera().tz == -3.0f);
-        repl_state_camera_set_distance(9.0f);
-        ASSERT_TRUE("state camera distance", repl_state_camera().dist == 9.0f);
-        repl_state_camera_set_motion_glow(0.5f);
-        ASSERT_TRUE("state camera motion glow", repl_state_camera().motion_glow == 0.5f);
-        repl_state_camera_mut()->auto_rotate = 1;
+        ui_state_camera_set_orbit(33.0f, 44.0f);
+        ASSERT_TRUE("state camera orbit rx", ui_state_camera().rx == 33.0f);
+        ASSERT_TRUE("state camera orbit ry", ui_state_camera().ry == 44.0f);
+        ui_state_camera_set_pan(-1.0f, -2.0f, -3.0f);
+        ASSERT_TRUE("state camera pan tx", ui_state_camera().tx == -1.0f);
+        ASSERT_TRUE("state camera pan ty", ui_state_camera().ty == -2.0f);
+        ASSERT_TRUE("state camera pan tz", ui_state_camera().tz == -3.0f);
+        ui_state_camera_set_distance(9.0f);
+        ASSERT_TRUE("state camera distance", ui_state_camera().dist == 9.0f);
+        ui_state_camera_set_motion_glow(0.5f);
+        ASSERT_TRUE("state camera motion glow", ui_state_camera().motion_glow == 0.5f);
+        ui_state_camera_mut()->auto_rotate = 1;
 
-        camera = repl_state_camera_mut();
+        camera = ui_state_camera_mut();
         ASSERT_TRUE("state camera facade rx", camera->rx == 33.0f);
         ASSERT_TRUE("state camera facade dist", camera->dist == 9.0f);
 
-        repl_state_pointer_set(10, 20, 3);
-        ASSERT_INT("state pointer x", repl_state_pointer().mouse_x, 10);
-        ASSERT_INT("state pointer y", repl_state_pointer().mouse_y, 20);
-        ASSERT_INT("state pointer button", repl_state_pointer().mouse_button, 3);
-        repl_state_pointer_set_pos(30, 40);
-        ASSERT_INT("state pointer pos x", repl_state_pointer().mouse_x, 30);
-        ASSERT_INT("state pointer pos y", repl_state_pointer().mouse_y, 40);
-        repl_state_pointer_set_button(-1);
-        ASSERT_INT("state pointer button set", repl_state_pointer().mouse_button, -1);
+        ui_state_pointer_set(10, 20, 3);
+        ASSERT_INT("state pointer x", ui_state_pointer().mouse_x, 10);
+        ASSERT_INT("state pointer y", ui_state_pointer().mouse_y, 20);
+        ASSERT_INT("state pointer button", ui_state_pointer().mouse_button, 3);
+        ui_state_pointer_set_pos(30, 40);
+        ASSERT_INT("state pointer pos x", ui_state_pointer().mouse_x, 30);
+        ASSERT_INT("state pointer pos y", ui_state_pointer().mouse_y, 40);
+        ui_state_pointer_set_button(-1);
+        ASSERT_INT("state pointer button set", ui_state_pointer().mouse_button, -1);
 
-        pointer = repl_state_pointer_mut();
+        pointer = ui_state_pointer_mut();
         ASSERT_TRUE("state pointer facade x", pointer->mouse_x == 30);
         ASSERT_TRUE("state pointer facade button", pointer->mouse_button == -1);
 
-        repl_state_viewport_set_size(1024, 768);
-        ASSERT_INT("state viewport width", repl_state_viewport().window_w, 1024);
-        ASSERT_INT("state viewport height", repl_state_viewport().window_h, 768);
+        ui_state_viewport_set_size(1024, 768);
+        ASSERT_INT("state viewport width", ui_state_viewport().window_w, 1024);
+        ASSERT_INT("state viewport height", ui_state_viewport().window_h, 768);
 
-        viewport = repl_state_viewport_mut();
+        viewport = ui_state_viewport_mut();
         ASSERT_TRUE("state viewport facade width", viewport->window_w == 1024);
         ASSERT_TRUE("state viewport facade height", viewport->window_h == 768);
 
-        repl_state_camera_reset_default();
-        ASSERT_TRUE("state camera reset rx", repl_state_camera().rx == 20.0f);
-        ASSERT_TRUE("state camera reset ry", repl_state_camera().ry == 30.0f);
-        ASSERT_TRUE("state camera reset dist", repl_state_camera().dist == 5.0f);
-        ASSERT_TRUE("state camera reset tx", repl_state_camera().tx == 0.0f);
-        ASSERT_TRUE("state camera reset ty", repl_state_camera().ty == 0.0f);
-        ASSERT_TRUE("state camera reset tz", repl_state_camera().tz == 0.0f);
-        ASSERT_TRUE("state camera reset glow", repl_state_camera().motion_glow == 0.0f);
+        ui_state_camera_reset_default();
+        ASSERT_TRUE("state camera reset rx", ui_state_camera().rx == 20.0f);
+        ASSERT_TRUE("state camera reset ry", ui_state_camera().ry == 30.0f);
+        ASSERT_TRUE("state camera reset dist", ui_state_camera().dist == 5.0f);
+        ASSERT_TRUE("state camera reset tx", ui_state_camera().tx == 0.0f);
+        ASSERT_TRUE("state camera reset ty", ui_state_camera().ty == 0.0f);
+        ASSERT_TRUE("state camera reset tz", ui_state_camera().tz == 0.0f);
+        ASSERT_TRUE("state camera reset glow", ui_state_camera().motion_glow == 0.0f);
         ASSERT_INT("state camera reset auto rotate",
-                   repl_state_camera().auto_rotate, CFG_DEFAULT_CAMERA_ROTATE);
+                   ui_state_camera().auto_rotate, CFG_DEFAULT_CAMERA_ROTATE);
     }
 
     /* 13. presentation state facade */
@@ -423,7 +427,7 @@ int main() {
         repl_state_presentation_mut()->autonormal = 1;
         repl_state_presentation_mut()->show_light_indicators = 0;
         repl_state_presentation_mut()->backdrop_mode = 0;
-        repl_state_camera_mut()->auto_rotate = 1;
+        ui_state_camera_mut()->auto_rotate = 1;
         repl_state_presentation_mut()->highlight_current_poly = 0;
         repl_state_presentation_mut()->ortho_mode = 1;
         repl_state_presentation_mut()->wrap_at_comma = 0;
@@ -463,7 +467,7 @@ int main() {
         ASSERT_INT("presentation reset backdrop",
                    repl_state_presentation().backdrop_mode, CFG_DEFAULT_BACKDROP_MODE);
         ASSERT_INT("presentation reset camera rotate",
-               repl_state_camera().auto_rotate, CFG_DEFAULT_CAMERA_ROTATE);
+               ui_state_camera().auto_rotate, CFG_DEFAULT_CAMERA_ROTATE);
         ASSERT_INT("presentation reset highlight", repl_state_presentation().highlight_current_poly, 1);
         ASSERT_INT("presentation reset ortho", repl_state_presentation().ortho_mode, 0);
         ASSERT_INT("presentation reset wrap",
@@ -540,6 +544,73 @@ int main() {
         ASSERT_INT("executor destroy quadric removed", (int)gl_stub_counts[GL_STUB_gluDeleteQuadric], 0);
         ASSERT_INT("executor destroy tess", (int)gl_stub_counts[GL_STUB_gluDeleteTess], 1);
     #endif
+    }
+
+    /* 15. MAX_EXPR_VARS truncation warning - verify collect_visible_vars tracks total */
+    {
+        /* Test A: verify collect_visible_vars returns correct total when not truncated */
+        {
+            repl_reset_state(); declare_test_vars();
+            repl_feed_line_public("for(i, 0, 1) {");
+            repl_feed_line_public("  for(j, 0, 1) {");
+
+            ExprVar vars[8];
+            int total = 0;
+            int count = collect_visible_vars(2, vars, 8, &total);
+            ASSERT_INT("2 nested loops: count", count, 2);
+            ASSERT_INT("2 nested loops: total", total, 2);
+            ASSERT_TRUE("total equals count (not truncated)", total == count);
+        }
+
+        /* Test B: verify collect_visible_vars returns total > max_vars when truncated */
+        {
+            repl_reset_state(); declare_test_vars();
+            /* Manually verify the logic: if we can have 32 visible vars,
+               and we ask for only 8, we should see total > 8 if we had more scope */
+            ExprVar vars[8];
+            int total = 0;
+            repl_feed_line_public("for(i, 0, 1) {");
+            int count1 = collect_visible_vars(1, vars, 8, &total);
+            ASSERT_INT("1 loop with max_vars=8: count", count1, 1);
+            ASSERT_INT("1 loop with max_vars=8: total", total, 1);
+            ASSERT_TRUE("1 loop: total equals count", total == count1);
+        }
+
+        /* Test C: verify total is well below MAX_EXPR_VARS for shallow
+         * nesting (the truncation guard should never fire here). */
+        {
+            repl_reset_state();
+            repl_feed_line_public("for(i, 0, 1) {");
+            repl_feed_line_public("  for(j, 0, 1) {");
+            repl_feed_line_public("    for(k, 0, 1) {");
+            ExprVar vars[MAX_EXPR_VARS];
+            int total = 0;
+            int count = collect_visible_vars(3, vars, MAX_EXPR_VARS, &total);
+            ASSERT_INT("3 nested loops: total", total, 3);
+            ASSERT_INT("3 nested loops: count == total", count, total);
+            ASSERT_TRUE("3 nested loops: total <= MAX_EXPR_VARS",
+                        total <= MAX_EXPR_VARS);
+        }
+
+
+        /* Test D: verify warning capability works (programmatic truncation check) */
+        {
+            ExprVar vars[4];  /* Limit to 4 vars */
+            int total = 0;
+
+            /* Simulate 5 nested scopes */
+            repl_reset_state();
+            repl_feed_line_public("for(a, 0, 1) {");
+            repl_feed_line_public("  for(b, 0, 1) {");
+            repl_feed_line_public("    for(c, 0, 1) {");
+            repl_feed_line_public("      for(d, 0, 1) {");
+            repl_feed_line_public("        for(e, 0, 1) {");
+            /* Query at position 5 with max_vars=4 */
+            int count = collect_visible_vars(5, vars, 4, &total);
+            ASSERT_INT("5 nested, max_vars=4: count capped", count, 4);
+            ASSERT_INT("5 nested, max_vars=4: total uncapped", total, 5);
+            ASSERT_TRUE("5 nested: total > max_vars", total > 4);
+        }
     }
 
     printf("\n%d / %d tests passed\n", g_harness.passed, g_harness.run);

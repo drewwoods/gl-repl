@@ -1,6 +1,7 @@
 #ifndef REPL_STATE_H
 #define REPL_STATE_H
 
+#include "editor_state.h"  /* ReplEditorBuffer typedef + EditorState API */
 #include "repl_state_views.h"
 #include "repl_state_owners.h"
 #include "ui_editor.h"
@@ -9,27 +10,9 @@ typedef struct {
     ReplDocumentState         document;
     ReplFlatProgramState      flat_program;
     ReplVariableState         variables;
-    ReplEditorInputState      editor_input;
-    ReplEditorBuffer          editor_buffer;
-    EditorTransformerList     editor_transformers;
-    EditorHighlightList       editor_highlights;
-    EditorVirtualLineList     editor_virtual_lines;
-    ReplSelectionState        selection;
-    ReplClipboardState        clipboard;
-    ReplCodePanelRuntimeState code_panel;
-    ReplHelpState             help;
-    ReplVariablePanelState    variable_panel;
-    ReplVariableDragState     variable_drag;
-    ReplProfilePanelState     profile_panel;
-    ReplStatusState           status;
-    ReplSearchState           search;
-    ReplAutocompleteState     autocomplete;
-    ReplCameraState           camera;
-    ReplPointerState          pointer;
-    ReplViewportState         viewport;
     ReplPresentationState     presentation;
     ReplRenderState           render;
-    ReplReplayRuntimeState    replay;
+    /* replay moved to replay_state.c (Phase F commit 33); peer-owned. */
     ReplSceneRuntimeState     scenes;
     ReplImportExportState     import_export;
 } ReplRuntimeState;

@@ -1,4 +1,10 @@
 #include "repl_state.h"
+#include "editor_state.h"
+#include "ui_state.h"
+#include "ui_profile_panel.h"
+#include "variable_panel.h"
+#include "replay_state.h"
+#include "editor_help_session.h"
 
 #include "support/test_harness.h"
 #include <stdio.h>
@@ -36,17 +42,17 @@ static void populate_runtime_snapshot_fixture(const char *scene_hint) {
     ReplReplayRuntimeState *replay;
     ReplFlatProgramState *flat_program;
 
-    repl_state_input_set_text("glVertex3f(1, 2, 3)");
-    repl_state_cursor_pos_set(6);
+    editor_input_set_text("glVertex3f(1, 2, 3)");
+    editor_cursor_pos_set(6);
     repl_state_document_count_set(2);
     repl_state_edit_line_set(1);
     doc_cmds = repl_state_document_cmds_mut();
     doc_cmds[0].type = CMD_BEGIN;
     doc_cmds[0].valid = 1;
-    repl_state_editor_buffer_set_line(0, "  glBegin(GL_TRIANGLES);");
+    editor_buffer_set_line(0, "  glBegin(GL_TRIANGLES);");
     doc_cmds[1].type = CMD_END;
     doc_cmds[1].valid = 1;
-    repl_state_editor_buffer_set_line(1, "  glEnd();");
+    editor_buffer_set_line(1, "  glEnd();");
 
     repl_state_flat_program_set_count(1);
     flat_program = repl_state_flat_program_mut();
@@ -63,48 +69,46 @@ static void populate_runtime_snapshot_fixture(const char *scene_hint) {
     flat_program->user_lighting_enabled = 1;
     repl_state_flat_program_set_current_block(2, 5, 4);
 
-    repl_state_selection_set(4, 7);
-    clipboard = repl_state_clipboard_mut();
+    editor_state_selection_set(4, 7);
+    clipboard = editor_state_clipboard_mut();
     clipboard->cmd_count = 1;
     clipboard->cmds[0].type = CMD_COLOR3F;
 
-    repl_state_help_mut()->visible = 1;
-    repl_state_help_mut()->tab_idx = 1;
-    repl_state_help_mut()->scroll = 3;
-    code_panel = repl_state_code_panel_mut();
+    ui_state_help_mut()->visible = 1;
+    editor_help_session_set_tab(1);
+    editor_help_session_set_scroll(3);
+    code_panel = ui_state_code_panel_mut();
     code_panel->panel_frac = 0.61f;
     code_panel->resizing_panel = 1;
-    code_panel->scroll = 9;
-    code_panel->scroll_follow_cursor = 1;
+    editor_scroll_set(9);
+    editor_scroll_follow_cursor_set(1);
     code_panel->cursor_visible = 0;
     code_panel->blink_tick = 12;
-    code_panel->cursor_px = 123;
-    code_panel->cursor_py = 456;
-    repl_state_variable_panel_mut()->visible = 0;
+    variable_panel_view_mut()->visible = 0;
 
-    drag = repl_state_variable_drag_mut();
+    drag = variable_panel_drag_mut();
     drag->var_idx = 3;
     drag->log_mode = 1;
     drag->start_value = 2.5f;
     drag->start_x = 17;
-    repl_state_profile_panel_mut()->mode = PROFILE_PANEL_DETAILS;
+    ui_state_profile_panel_mut()->mode = PROFILE_PANEL_DETAILS;
 
-    status = repl_state_status_mut();
+    status = ui_state_status_mut();
     snprintf(status->text, sizeof(status->text), "%s", "state snapshot");
     status->ttl = 17;
 
-    repl_state_search_mut()->active = 1;
-    snprintf(repl_state_search_mut()->query,
-             sizeof(repl_state_search_mut()->query),
+    editor_state_search_mut()->active = 1;
+    snprintf(editor_state_search_mut()->query,
+             sizeof(editor_state_search_mut()->query),
              "%s", "vertex");
-    repl_state_search_mut()->query_len = 6;
-    repl_state_search_mut()->cursor_pos = 2;
-    repl_state_search_mut()->hit_line_idx = 5;
-    repl_state_search_mut()->hit_char_idx = 8;
-    repl_state_search_mut()->hit_ordinal = 2;
-    repl_state_search_mut()->match_count = 4;
+    editor_state_search_mut()->query_len = 6;
+    editor_state_search_mut()->cursor_pos = 2;
+    editor_state_search_mut()->hit_line_idx = 5;
+    editor_state_search_mut()->hit_char_idx = 8;
+    editor_state_search_mut()->hit_ordinal = 2;
+    editor_state_search_mut()->match_count = 4;
 
-    ac = repl_state_autocomplete_mut();
+    ac = editor_state_autocomplete_mut();
     ac->matches[0] = "glVertex3f";
     ac->matches[1] = "glVertex2f";
     ac->insert_matches[0] = "glVertex3f(";
@@ -124,10 +128,10 @@ static void populate_runtime_snapshot_fixture(const char *scene_hint) {
     if (foo_idx >= 0)
         g_predef_vars[foo_idx].value = 42.0f;
 
-    repl_state_camera_set(11.0f, 22.0f, 7.5f, 0.5f, -0.25f, 1.75f, 0.9f);
-    repl_state_camera_mut()->auto_rotate = 1;
-    repl_state_pointer_set(321, 654, 2);
-    repl_state_viewport_set_size(1440, 900);
+    ui_state_camera_set(11.0f, 22.0f, 7.5f, 0.5f, -0.25f, 1.75f, 0.9f);
+    ui_state_camera_mut()->auto_rotate = 1;
+    ui_state_pointer_set(321, 654, 2);
+    ui_state_viewport_set_size(1440, 900);
 
     presentation = repl_state_presentation_mut();
     presentation->wireframe = 1;
@@ -166,7 +170,7 @@ static void populate_runtime_snapshot_fixture(const char *scene_hint) {
     render->clear_color[2] = 0.30f;
     render->clear_color[3] = 1.0f;
 
-    replay = repl_state_replay_mut();
+    replay = replay_state_mut();
     replay->active = 1;
     replay->state = REPLAY_PAUSED;
     replay->pc = 9;
@@ -192,25 +196,50 @@ static void populate_runtime_snapshot_fixture(const char *scene_hint) {
 static void test_capture_restore_round_trip(void) {
     static ReplRuntimeState snapshot;
     static ReplRuntimeState round_trip;
+    static EditorState editor_snap;
+    static EditorState editor_round_trip;
+    static UiState ui_snap;
+    static UiState ui_round_trip;
+    static VariablePanelState varpanel_snap;
+    static VariablePanelState varpanel_round_trip;
+    static ReplReplayRuntimeState replay_snap;
+    static ReplReplayRuntimeState replay_round_trip;
+    static EditorHelpSession help_snap;
+    static EditorHelpSession help_round_trip;
     static const char *scene_hint = "Captured Scene";
     int foo_idx;
 
     repl_state_init_defaults();
     populate_runtime_snapshot_fixture(scene_hint);
     repl_state_capture(&snapshot);
+    editor_state_capture(&editor_snap);
+    ui_state_capture(&ui_snap);
+    variable_panel_state_capture(&varpanel_snap);
+    replay_state_capture(&replay_snap);
+    editor_help_session_capture(&help_snap);
     repl_state_reset_all();
     repl_state_restore(&snapshot);
+    editor_state_restore(&editor_snap);
+    ui_state_restore(&ui_snap);
+    variable_panel_state_restore(&varpanel_snap);
+    replay_state_restore(&replay_snap);
+    editor_help_session_restore(&help_snap);
     repl_state_capture(&round_trip);
+    editor_state_capture(&editor_round_trip);
+    ui_state_capture(&ui_round_trip);
+    variable_panel_state_capture(&varpanel_round_trip);
+    replay_state_capture(&replay_round_trip);
+    editor_help_session_capture(&help_round_trip);
 
     ASSERT_STR("input restored",
-               repl_state_input_text(),
+               editor_input_text(),
                "glVertex3f(1, 2, 3)");
-    ASSERT_INT("cursor restored", repl_state_cursor_pos(), 6);
+    ASSERT_INT("cursor restored", editor_cursor_pos(), 6);
     ASSERT_INT("document count restored", repl_state_document_count(), 2);
     ASSERT_INT("edit line restored", repl_state_edit_line(), 1);
     ASSERT_INT("document cmd type restored", repl_state_document_cmds()[0].type, CMD_BEGIN);
     ASSERT_STR("document cmd source restored",
-               repl_state_editor_buffer_line(0),
+               editor_buffer_line(0),
                "  glBegin(GL_TRIANGLES);");
     ASSERT_INT("flat count restored", repl_state_flat_program_count(), 1);
     ASSERT_INT("flat cmd type restored", repl_state_flat_program_cmds()[0].type, CMD_VERTEX3F);
@@ -218,35 +247,33 @@ static void test_capture_restore_round_trip(void) {
                repl_state_flat_program_local_vars_mut()[0].num_vars, 1);
     ASSERT_INT("flat lighting restored",
                repl_state_flat_program_user_lighting_enabled(), 1);
-    ASSERT_INT("selection anchor restored", repl_state_selection().anchor_idx, 4);
-    ASSERT_INT("selection end restored", repl_state_selection().end_idx, 7);
-    ASSERT_INT("clipboard count restored", repl_state_clipboard().cmd_count, 1);
-    ASSERT_INT("clipboard cmd restored", repl_state_clipboard().cmds[0].type, CMD_COLOR3F);
-    ASSERT_INT("help restored", repl_state_help().visible, 1);
-    ASSERT_INT("help tab restored", repl_state_help().tab_idx, 1);
-    ASSERT_INT("help scroll restored", repl_state_help().scroll, 3);
-    ASSERT_TRUE("code panel frac restored", repl_state_code_panel().panel_frac == 0.61f);
-    ASSERT_INT("code panel resizing restored", repl_state_code_panel().resizing_panel, 1);
-    ASSERT_INT("code panel scroll restored", repl_state_code_panel().scroll, 9);
+    ASSERT_INT("selection anchor restored", editor_state_selection().anchor_idx, 4);
+    ASSERT_INT("selection end restored", editor_state_selection().end_idx, 7);
+    ASSERT_INT("clipboard count restored", editor_state_clipboard().cmd_count, 1);
+    ASSERT_INT("clipboard cmd restored", editor_state_clipboard().cmds[0].type, CMD_COLOR3F);
+    ASSERT_INT("help restored", ui_state_help().visible, 1);
+    ASSERT_INT("help tab restored", editor_help_session_tab_idx(), 1);
+    ASSERT_INT("help scroll restored", editor_help_session_scroll(), 3);
+    ASSERT_TRUE("code panel frac restored", ui_state_code_panel().panel_frac == 0.61f);
+    ASSERT_INT("code panel resizing restored", ui_state_code_panel().resizing_panel, 1);
+    ASSERT_INT("code panel scroll restored", editor_scroll(), 9);
     ASSERT_INT("code panel follow restored",
-               repl_state_code_panel().scroll_follow_cursor, 1);
+               editor_scroll_follow_cursor(), 1);
     ASSERT_INT("code panel cursor visible restored",
-               repl_state_code_panel().cursor_visible, 0);
-    ASSERT_INT("code panel blink restored", repl_state_code_panel().blink_tick, 12);
-    ASSERT_INT("code panel cursor x restored", repl_state_code_panel().cursor_px, 123);
-    ASSERT_INT("code panel cursor y restored", repl_state_code_panel().cursor_py, 456);
-    ASSERT_INT("variable panel restored", repl_state_variable_panel().visible, 0);
-    ASSERT_INT("variable drag idx restored", repl_state_variable_drag().var_idx, 3);
-    ASSERT_INT("variable drag log restored", repl_state_variable_drag().log_mode, 1);
+               ui_state_code_panel().cursor_visible, 0);
+    ASSERT_INT("code panel blink restored", ui_state_code_panel().blink_tick, 12);
+    ASSERT_INT("variable panel restored", variable_panel_view().visible, 0);
+    ASSERT_INT("variable drag idx restored", variable_panel_drag().var_idx, 3);
+    ASSERT_INT("variable drag log restored", variable_panel_drag().log_mode, 1);
     ASSERT_TRUE("variable drag value restored",
-                repl_state_variable_drag().start_value == 2.5f);
-    ASSERT_INT("variable drag x restored", repl_state_variable_drag().start_x, 17);
+                variable_panel_drag().start_value == 2.5f);
+    ASSERT_INT("variable drag x restored", variable_panel_drag().start_x, 17);
     ASSERT_INT("profile panel restored",
-               repl_state_profile_panel().mode, PROFILE_PANEL_DETAILS);
+               ui_state_profile_panel().mode, PROFILE_PANEL_DETAILS);
     {
-        ReplStatusState status = repl_state_status();
-        ReplSearchState search = repl_state_search();
-        ReplAutocompleteState autocomplete = repl_state_autocomplete();
+        ReplStatusState status = ui_state_status();
+        ReplSearchState search = editor_state_search();
+        ReplAutocompleteState autocomplete = editor_state_autocomplete();
 
         ASSERT_STR("status text restored", status.text, "state snapshot");
         ASSERT_INT("status ttl restored", status.ttl, 17);
@@ -269,19 +296,19 @@ static void test_capture_restore_round_trip(void) {
     }
     ASSERT_INT("time playing restored", repl_state_variables().time_playing, 0);
     ASSERT_TRUE("anim time restored", repl_state_variables().anim_time == 1.25f);
-    ASSERT_TRUE("camera rx restored", repl_state_camera().rx == 11.0f);
-    ASSERT_TRUE("camera ry restored", repl_state_camera().ry == 22.0f);
-    ASSERT_TRUE("camera dist restored", repl_state_camera().dist == 7.5f);
-    ASSERT_TRUE("camera tx restored", repl_state_camera().tx == 0.5f);
-    ASSERT_TRUE("camera ty restored", repl_state_camera().ty == -0.25f);
-    ASSERT_TRUE("camera tz restored", repl_state_camera().tz == 1.75f);
-    ASSERT_TRUE("camera glow restored", repl_state_camera().motion_glow == 0.9f);
-    ASSERT_INT("camera rotate restored", repl_state_camera().auto_rotate, 1);
-    ASSERT_INT("pointer x restored", repl_state_pointer().mouse_x, 321);
-    ASSERT_INT("pointer y restored", repl_state_pointer().mouse_y, 654);
-    ASSERT_INT("pointer button restored", repl_state_pointer().mouse_button, 2);
-    ASSERT_INT("viewport width restored", repl_state_viewport().window_w, 1440);
-    ASSERT_INT("viewport height restored", repl_state_viewport().window_h, 900);
+    ASSERT_TRUE("camera rx restored", ui_state_camera().rx == 11.0f);
+    ASSERT_TRUE("camera ry restored", ui_state_camera().ry == 22.0f);
+    ASSERT_TRUE("camera dist restored", ui_state_camera().dist == 7.5f);
+    ASSERT_TRUE("camera tx restored", ui_state_camera().tx == 0.5f);
+    ASSERT_TRUE("camera ty restored", ui_state_camera().ty == -0.25f);
+    ASSERT_TRUE("camera tz restored", ui_state_camera().tz == 1.75f);
+    ASSERT_TRUE("camera glow restored", ui_state_camera().motion_glow == 0.9f);
+    ASSERT_INT("camera rotate restored", ui_state_camera().auto_rotate, 1);
+    ASSERT_INT("pointer x restored", ui_state_pointer().mouse_x, 321);
+    ASSERT_INT("pointer y restored", ui_state_pointer().mouse_y, 654);
+    ASSERT_INT("pointer button restored", ui_state_pointer().mouse_button, 2);
+    ASSERT_INT("viewport width restored", ui_state_viewport().window_w, 1440);
+    ASSERT_INT("viewport height restored", ui_state_viewport().window_h, 900);
     ASSERT_INT("presentation wireframe restored", repl_state_presentation().wireframe, 1);
     ASSERT_INT("presentation grid restored", repl_state_presentation().grid_theme, GRID_THEME_TRON);
     ASSERT_INT("presentation layout restored",
@@ -297,13 +324,13 @@ static void test_capture_restore_round_trip(void) {
     ASSERT_INT("render light enabled restored", repl_state_render().lights[1].enabled, 0);
     ASSERT_TRUE("render clear color restored",
                 repl_state_render().clear_color[2] == 0.30f);
-    ASSERT_INT("replay active restored", repl_state_replay().active, 1);
-    ASSERT_INT("replay state restored", repl_state_replay().state, REPLAY_PAUSED);
-    ASSERT_INT("replay mode restored", repl_state_replay().mode, REPLAY_MODE_POLYGON);
-    ASSERT_INT("replay pc restored", repl_state_replay().pc, 9);
-    ASSERT_TRUE("replay speed restored", repl_state_replay().speed == 12.5f);
-    ASSERT_INT("replay src line restored", repl_state_replay().src_line_idx, 7);
-    ASSERT_INT("replay expand restored", repl_state_replay().expand_args, 0);
+    ASSERT_INT("replay active restored", replay_state_view().active, 1);
+    ASSERT_INT("replay state restored", replay_state_view().state, REPLAY_PAUSED);
+    ASSERT_INT("replay mode restored", replay_state_view().mode, REPLAY_MODE_POLYGON);
+    ASSERT_INT("replay pc restored", replay_state_view().pc, 9);
+    ASSERT_TRUE("replay speed restored", replay_state_view().speed == 12.5f);
+    ASSERT_INT("replay src line restored", replay_state_view().src_line_idx, 7);
+    ASSERT_INT("replay expand restored", replay_state_view().expand_args, 0);
     ASSERT_INT("active example restored", repl_state_scenes().active_example_idx, 3);
     ASSERT_STR("workspace restored",
                repl_state_workspace_dir(),
@@ -335,6 +362,10 @@ static void test_capture_restore_round_trip(void) {
         ASSERT_TRUE("foo value restored", g_predef_vars[foo_idx].value == 42.0f);
     ASSERT_TRUE("runtime snapshot round trip",
                 memcmp(&snapshot, &round_trip, sizeof(snapshot)) == 0);
+    ASSERT_TRUE("editor snapshot round trip",
+                memcmp(&editor_snap, &editor_round_trip, sizeof(editor_snap)) == 0);
+    ASSERT_TRUE("ui snapshot round trip",
+                memcmp(&ui_snap, &ui_round_trip, sizeof(ui_snap)) == 0);
 }
 
 static void test_reset_all_restores_default_runtime(void) {
@@ -350,10 +381,10 @@ static void test_reset_all_restores_default_runtime(void) {
 
     ASSERT_TRUE("reset_all restores default snapshot",
                 memcmp(&defaults, &reset_state, sizeof(defaults)) == 0);
-    ASSERT_INT("reset_all help hidden", repl_state_help().visible, 0);
-    ASSERT_INT("reset_all panel scroll", repl_state_code_panel().scroll, 0);
-    ASSERT_INT("reset_all replay mode", repl_state_replay().mode, REPLAY_MODE_VERTEX);
-    ASSERT_INT("reset_all replay expand", repl_state_replay().expand_args, 1);
+    ASSERT_INT("reset_all help hidden", ui_state_help().visible, 0);
+    ASSERT_INT("reset_all panel scroll", editor_scroll(), 0);
+    ASSERT_INT("reset_all replay mode", replay_state_view().mode, REPLAY_MODE_VERTEX);
+    ASSERT_INT("reset_all replay expand", replay_state_view().expand_args, 1);
     ASSERT_STR("reset_all workspace dir", repl_state_workspace_dir(), "");
     ASSERT_INT("reset_all workspace header count",
                repl_state_import_export().workspace_header_line_count,

@@ -19,89 +19,18 @@
         .time_playing = 1,
         .anim_time = 0.0f,
     },
-    .editor_input = {
-        .input = "",
-        .input_capacity = MAX_INPUT_LEN,
-        .input_len = 0,
-        .cursor_pos = 0,
-        .pending_newline = "",
-        .pending_newline_capacity = MAX_INPUT_LEN,
-        .pending_newline_len = 0,
-        .insert_mode = 0,
-    },
-    .selection = {
-        .anchor_idx = -1,
-        .end_idx = -1,
-    },
-    .clipboard = {
-        .cmd_count = 0,
-    },
-    .code_panel = {
-        .panel_frac = CFG_DEFAULT_PANEL_FRAC,
-        .resizing_panel = 0,
-        .scroll = 0,
-        .scroll_follow_cursor = 0,
-        .cursor_visible = 1,
-        .blink_tick = 0,
-        .cursor_px = 0,
-        .cursor_py = 0,
-    },
-    .help = {
-        .visible = 0,
-        .tab_idx = 0,
-        .scroll = 0,
-    },
-    .variable_panel = {
-        .visible = 1,
-    },
-    .variable_drag = {
-        .var_idx = -1,
-        .log_mode = 0,
-        .start_value = 0.0f,
-        .start_x = 0,
-    },
-    .profile_panel = {
-        .mode = PROFILE_PANEL_OFF,
-    },
-    .status = {
-        .text = "",
-        .ttl = 0,
-    },
-    .search = {
-        .active = 0,
-        .query = "",
-        .query_len = 0,
-        .cursor_pos = 0,
-        .hit_line_idx = -1,
-        .hit_char_idx = -1,
-        .hit_ordinal = 0,
-        .match_count = 0,
-    },
-    .autocomplete = {
-        .match_count = 0,
-        .selected_idx = 0,
-        .ghost = "",
-        .hint = "",
-    },
-    .camera = {
-        .rx = 20.0f,
-        .ry = 30.0f,
-        .dist = 5.0f,
-        .tx = 0.0f,
-        .ty = 0.0f,
-        .tz = 0.0f,
-        .motion_glow = 0.0f,
-        .auto_rotate = CFG_DEFAULT_CAMERA_ROTATE,
-    },
-    .pointer = {
-        .mouse_x = 0,
-        .mouse_y = 0,
-        .mouse_button = -1,
-    },
-    .viewport = {
-        .window_w = 0,
-        .window_h = 0,
-    },
+    /* editor_input + selection + clipboard defaults moved to
+     * editor_state.c (Phase 1 commits 5-6). */
+    /* code_panel.scroll + scroll_follow_cursor moved to editor_state.c
+     * (Phase 1 commit 11); the code_panel render-chrome bits
+     * (panel_frac, resizing_panel, cursor blink, cursor px/py) moved
+     * to ui_state.c (Phase A commit 12).
+     * help / variable_panel / profile_panel / status / pointer / viewport
+     * defaults moved to ui_state.c (Phase 1 commit 8).
+     * variable_drag defaults moved to editor_state.c (Phase 1 commit 9).
+     * search + autocomplete defaults moved to editor_state.c
+     * (Phase 1 commit 7). */
+    /* camera defaults moved to ui_state.c (Phase A commit 13). */
     .presentation = {
         .wireframe = CFG_DEFAULT_WIREFRAME,
         .grid_theme = CFG_DEFAULT_GRID_THEME,
@@ -158,18 +87,7 @@
         },
         .clear_color = { 0.10f, 0.10f, 0.13f, 1.0f },
     },
-    .replay = {
-        .active = 0,
-        .state = REPLAY_OFF,
-        .pc = 0,
-        .mode = REPLAY_MODE_VERTEX,
-        .speed = 4.0f,
-        .accum = 0.0f,
-        .fade_speed = 2.0f,
-        .src_line_idx = -1,
-        .total_flat_cmds = 0,
-        .expand_args = 1,
-    },
+    /* .replay defaults moved to replay_state.c (Phase F commit 33). */
     .scenes = {
         .active_example_idx = -1,
         .workspace_dir = "",

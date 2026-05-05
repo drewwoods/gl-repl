@@ -1,7 +1,6 @@
 /*
  * repl_scenes.c -- User scene slots, promotion, and workspace save/load.
  */
-#include "sample.h"
 #include "repl_command_store.h"
 #include "repl_config.h"
 #include "repl_core_internal.h"
@@ -112,10 +111,11 @@ static void derive_unique_scene_name(char *out, size_t out_sz,
 static void save_scene_to_slot(int idx, const char *name) {
     if (idx < 0 || idx >= MAX_USER_SCENES) return;
     UserScene *s = &g_user_scenes[idx];
+    EditorBufferView text = editor_buffer_view();
     memcpy(s->cmds, repl_state_document_cmds_mut(), (size_t)repl_state_document_count() * sizeof(GLCmd));
     for (int i = 0; i < repl_state_document_count(); i++)
         repl_copy_string_fits(s->lines[i], MAX_LINE_LEN,
-                              repl_state_editor_buffer_line(i));
+                              editor_buffer_view_line(text, i));
     s->num_cmds        = repl_state_document_count();
     s->edit_line       = repl_state_edit_line();
     s->num_predef_vars = g_num_predef_vars;
@@ -148,9 +148,10 @@ static int load_commands_into_live(const GLCmd *cmds,
                                    const char lines[MAX_COMMANDS][MAX_LINE_LEN],
                                    int num_cmds, int edit_line) {
     ReplCommandStore store = repl_command_store_live();
-    return repl_command_store_load(&store, cmds, num_cmds,
-                                   scene_line_ptrs(lines, num_cmds),
-                                   edit_line);
+    if (!repl_command_store_load(&store, cmds, num_cmds, edit_line))
+        return 0;
+    editor_buffer_load_lines(scene_line_ptrs(lines, num_cmds), num_cmds);
+    return 1;
 }
 
 void repl_scenes_save_active_scene_if_any(void);
@@ -170,7 +171,7 @@ static void load_scene_from_slot(int idx) {
     }
     for (int i = 0; i < N_SCENE_CFG_KEYS; i++)
         repl_config_set(k_scene_cfg_keys[i], s->scene_cfg[i]);
-    repl_state_insert_mode_set(0);
+    editor_insert_mode_set(0);
     load_line_to_input(repl_state_edit_line());
     mark_normals_dirty();
     s->last_touch       = next_user_scene_tick();
@@ -217,11 +218,12 @@ static void install_scene_into_live(int slot) {
 }
 
 static void stash_live_state(UserScene *dst) {
+    EditorBufferView text = editor_buffer_view();
     memset(dst, 0, sizeof(*dst));
     memcpy(dst->cmds, repl_state_document_cmds_mut(), (size_t)repl_state_document_count() * sizeof(GLCmd));
     for (int i = 0; i < repl_state_document_count(); i++)
         repl_copy_string_fits(dst->lines[i], MAX_LINE_LEN,
-                              repl_state_editor_buffer_line(i));
+                              editor_buffer_view_line(text, i));
     dst->num_cmds        = repl_state_document_count();
     dst->edit_line       = repl_state_edit_line();
     dst->num_predef_vars = g_num_predef_vars;
@@ -303,7 +305,7 @@ int repl_save_workspace(const char *dir) {
         snprintf(path, sizeof(path), "%s/%s.c", dir, slug);
 
         g_export_scene_name_hint = g_user_scenes[s].name;
-        repl_export_save_output(path);
+        repl_export_save_output(path, editor_buffer_view());
         g_export_scene_name_hint = NULL;
         written++;
     }
@@ -412,7 +414,7 @@ static int evict_scene_to_workspace(int slot) {
     snprintf(path, sizeof(path), "%s/%s.c", g_workspace_dir, slug);
 
     g_export_scene_name_hint = g_user_scenes[slot].name;
-    repl_export_save_output(path);
+    repl_export_save_output(path, editor_buffer_view());
     g_export_scene_name_hint = NULL;
 
     g_user_scenes[slot].used = 0;
