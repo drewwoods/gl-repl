@@ -26,6 +26,7 @@
  *  - feed_line() programmatic commit entry
  */
 #include "editor_input.h"
+#include "color_picker.h"
 #include "repl_state.h"
 
 /* macOS Cmd-key support. The freeglut-fork sets GLUT_ACTIVE_SUPER
@@ -344,7 +345,7 @@ void repl_editor_reset_transients(void) {
     editor_commit_reset_transients();
     repl_camera_controls_reset();
     ui_menu_bar_close();
-    ui_color_picker_close();
+    color_picker_close();
     imrepl_ctrl_router_reset_code_panel_drag();
 }
 
@@ -868,7 +869,7 @@ int editor_input_restore_hidden_code_panel(void) {
         return 0;
     repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT;
     ui_menu_bar_close();
-    ui_color_picker_close();
+    color_picker_close();
     return 1;
 }
 
@@ -919,7 +920,7 @@ static int handle_search_key_route(unsigned char key) {
 
 static int handle_escape_key_route(unsigned char key) {
     if (key == KEY_ESC) {
-        if (ui_color_picker_close()) {
+        if (color_picker_close()) {
             editor_request_redraw();
             return 1;
         }

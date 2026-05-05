@@ -8,6 +8,7 @@
 #include "repl_help_text.h"
 #include "prof.h"
 #include "ui_profile_panel.h"
+#include "color_picker.h"
 #include "ui_color_picker.h"
 #include "ui_autocomplete_panel.h"
 #include "ui_variable_panel.h"
@@ -155,11 +156,11 @@ static void test_color_picker(void) {
     repl_state_document_cmds_mut()[0].valid = 1;
     repl_state_document_cmds_mut()[0].has_vars = 0;
 
-    ASSERT_TRUE("can edit color cmd", ui_color_picker_can_edit_cmd(0));
+    ASSERT_TRUE("can edit color cmd", color_picker_can_edit_cmd(0));
 
     ui_state_viewport_set_size(800, 600);
-    ui_color_picker_open(0, 300);
-    ASSERT_TRUE("picker is active", ui_color_picker_active_line() == 0);
+    color_picker_open(0, 300);
+    ASSERT_TRUE("picker is active", color_picker_active_line() == 0);
 
     gl_stub_counts_reset();
     { UiRenderSnapshot s; make_test_ui_snapshot(&s); ui_color_picker_render(&s); }
@@ -171,37 +172,37 @@ static void test_color_picker(void) {
     int py = 300;
 
     /* Press SV square (CP_SV_SZ = 150) */
-    ui_color_picker_press(px + 10, ui_state_viewport().window_h - (py - 10));
-    ui_color_picker_motion(px + 20, ui_state_viewport().window_h - (py - 20));
-    ui_color_picker_release();
+    color_picker_handle_press(px + 10, ui_state_viewport().window_h - (py - 10));
+    color_picker_handle_motion(px + 20, ui_state_viewport().window_h - (py - 20));
+    color_picker_handle_release();
 
     /* Press Hue bar (Offset by CP_SV_SZ + CP_GAP = 150 + 6 = 156) */
-    ui_color_picker_press(px + 156 + 10, ui_state_viewport().window_h - (py - 10));
-    ui_color_picker_motion(px + 156 + 10, ui_state_viewport().window_h - (py - 20));
-    ui_color_picker_release();
+    color_picker_handle_press(px + 156 + 10, ui_state_viewport().window_h - (py - 10));
+    color_picker_handle_motion(px + 156 + 10, ui_state_viewport().window_h - (py - 20));
+    color_picker_handle_release();
 
     /* Test Alpha support */
     repl_state_document_cmds_mut()[0].type = CMD_COLOR4F;
     repl_state_document_cmds_mut()[0].args[3] = 0.5f;
-    ui_color_picker_open(0, 300);
+    color_picker_open(0, 300);
 
     gl_stub_counts_reset();
     { UiRenderSnapshot s; make_test_ui_snapshot(&s); ui_color_picker_render(&s); }
     ASSERT_GL_CALLS("picker render with alpha -> draws quads", GL_STUB_glBegin, 1);
 
     /* Press Alpha bar (alp_x = hue_x + 18 + 6 = px + 156 + 24 = 180) */
-    ui_color_picker_press(px + 185, ui_state_viewport().window_h - (py - 10));
-    ui_color_picker_motion(px + 185, ui_state_viewport().window_h - (py - 20));
-    ui_color_picker_release();
+    color_picker_handle_press(px + 185, ui_state_viewport().window_h - (py - 10));
+    color_picker_handle_motion(px + 185, ui_state_viewport().window_h - (py - 20));
+    color_picker_handle_release();
 
     /* Test glClearColor limits */
     repl_state_document_cmds_mut()[0].type = CMD_CLEAR_COLOR;
-    ui_color_picker_open(0, 300);
-    ui_color_picker_press(px + 10, ui_state_viewport().window_h - (py - 5)); // High V
-    ui_color_picker_release();
+    color_picker_open(0, 300);
+    color_picker_handle_press(px + 10, ui_state_viewport().window_h - (py - 5)); // High V
+    color_picker_handle_release();
 
-    ui_color_picker_close();
-    ASSERT_TRUE("picker closed", ui_color_picker_active_line() == -1);
+    color_picker_close();
+    ASSERT_TRUE("picker closed", color_picker_active_line() == -1);
 
     /* Test swatch rendering — render reads from a transformer entry, not
      * from the document, so build a minimal one for the test. */
@@ -409,7 +410,7 @@ static void test_ui_color_picker_hit_test(void) {
     repl_state_document_cmds_mut()[0].args[2] = 0.0f;
     repl_state_document_cmds_mut()[0].valid = 1;
     repl_state_document_cmds_mut()[0].has_vars = 0;
-    ui_color_picker_open(0, 300);
+    color_picker_open(0, 300);
 
     int win_h = ui_state_viewport().window_h;
     int sv_mx = -1, sv_my = -1;
@@ -440,7 +441,7 @@ static void test_ui_color_picker_hit_test(void) {
     /* Click far outside picker -> NONE. */
     UiHit h_miss = ui_color_picker_hit_test(0, 0);
     ASSERT_TRUE("picker miss -> NONE", h_miss.kind == UI_HIT_NONE);
-    ui_color_picker_close();
+    color_picker_close();
 }
 
 static void test_ui_variable_panel_hit_test(void) {
@@ -511,7 +512,7 @@ static void test_ui_panels_hit_test_dispatch(void) {
     repl_state_document_cmds_mut()[0].args[2] = 0.0f;
     repl_state_document_cmds_mut()[0].valid = 1;
     repl_state_document_cmds_mut()[0].has_vars = 0;
-    ui_color_picker_open(0, 300);
+    color_picker_open(0, 300);
 
     int sv_mx = -1, sv_my = -1;
     for (int my = 0; my < ui_state_viewport().window_h && sv_mx < 0; my += 4) {
@@ -527,7 +528,7 @@ static void test_ui_panels_hit_test_dispatch(void) {
     UiHit h_pick = ui_panels_hit_test(sv_mx, sv_my);
     ASSERT_TRUE("picker routed via panels_hit_test",
                 h_pick.kind == UI_HIT_COLOR_SWATCH);
-    ui_color_picker_close();
+    color_picker_close();
 }
 
 /* J2.1: ui_panels_hit_test emits UI_HIT_PANEL_DIVIDER for the
