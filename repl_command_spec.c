@@ -25,6 +25,8 @@ static const ReplEnumEntry k_enable_caps[] = {
     { "GL_LIGHT3",          GL_LIGHT3 },
     { "GL_LIGHTING",        GL_LIGHTING },
     { "GL_LINE_SMOOTH",     GL_LINE_SMOOTH },
+    { "GL_LINE_STIPPLE",    GL_LINE_STIPPLE },
+    { "GL_MULTISAMPLE",     GL_MULTISAMPLE },
     { "GL_NORMALIZE",       GL_NORMALIZE },
     { "GL_POINT_SMOOTH",    GL_POINT_SMOOTH },
     { NULL, 0 }

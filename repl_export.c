@@ -1364,10 +1364,51 @@ static void write_canonical_cmd_as_c(FILE *f, const GLCmd *cmd, int cmd_idx,
          * We cannot write a local float declaration here because it would shadow
          * the file-scope global.  Instead, emit a special REPL marker comment so
          * the importer can recreate the CMD_VAR_DECLARE when loading back into the
-         * REPL without creating a C local variable. */
+         * REPL without creating a C local variable.
+         *
+         * Inline initializers (`float x = 5;`) ride along as `name=value` so
+         * the canonical decl text round-trips byte-exact through export+import. */
+        float inits[MAX_NAMES_PER_DECL];
+        int   has_init[MAX_NAMES_PER_DECL];
+        for (int di = 0; di < MAX_NAMES_PER_DECL; di++) {
+            inits[di] = 0;
+            has_init[di] = 0;
+        }
+        {
+            const char *p = source_text;
+            while (*p && isspace((unsigned char)*p)) p++;
+            if (strncmp(p, "float", 5) == 0 &&
+                (p[5] == ' ' || p[5] == '\t')) {
+                p += 5;
+                int idx = 0;
+                while (*p && *p != ';' && idx < cmd->var_decl_count) {
+                    while (*p && isspace((unsigned char)*p)) p++;
+                    while (*p && (isalnum((unsigned char)*p) || *p == '_')) p++;
+                    while (*p && isspace((unsigned char)*p)) p++;
+                    if (*p == '=') {
+                        p++;
+                        while (*p && isspace((unsigned char)*p)) p++;
+                        char *endp = NULL;
+                        float v = strtof(p, &endp);
+                        if (endp && endp != p) {
+                            inits[idx] = v;
+                            has_init[idx] = 1;
+                            p = endp;
+                        }
+                    }
+                    while (*p && isspace((unsigned char)*p)) p++;
+                    if (*p == ',') p++;
+                    idx++;
+                }
+            }
+        }
         int off = fprintf(f, "  // @declare");
-        for (int di = 0; di < cmd->var_decl_count; di++)
-            off += fprintf(f, " %s", cmd->var_names[di]);
+        for (int di = 0; di < cmd->var_decl_count; di++) {
+            if (has_init[di])
+                off += fprintf(f, " %s=%g", cmd->var_names[di], inits[di]);
+            else
+                off += fprintf(f, " %s", cmd->var_names[di]);
+        }
         (void)off;
         fprintf(f, "\n");
         break;
@@ -1649,7 +1690,10 @@ static int import_parse_declare_marker(const char *line, int *loaded,
     cmd.valid     = 1;
     int count     = 0;
 
-    /* Build the canonical source string and collect names. */
+    /* Build the canonical source string and collect names. Tokens take the
+     * form `name` or `name=value`; the optional value carries the inline
+     * initializer through the round-trip so the canonical decl text matches
+     * the original source byte-for-byte. */
     char decl_line[MAX_LINE_LEN];
     int off = snprintf(decl_line, sizeof(decl_line), "  float");
     while (*p) {
@@ -1663,6 +1707,18 @@ static int import_parse_declare_marker(const char *line, int *loaded,
         char name[16];
         memcpy(name, start, (size_t)len);
         name[len] = '\0';
+        /* Optional `=value` rider. */
+        int has_init = 0;
+        float init_val = 0;
+        if (*p == '=') {
+            p++;
+            char *endp = NULL;
+            init_val = strtof(p, &endp);
+            if (endp && endp != p) {
+                has_init = 1;
+                p = endp;
+            }
+        }
         /* Declare the var if not yet registered (noop if already there). */
         int var_idx = repl_eval_find_predef_var_idx(name);
         if (var_idx < 0) {
@@ -1679,6 +1735,9 @@ static int import_parse_declare_marker(const char *line, int *loaded,
         }
         off += snprintf(decl_line + off, sizeof(decl_line) - (size_t)off,
                         count == 0 ? " %.*s" : ", %.*s", len, start);
+        if (has_init)
+            off += snprintf(decl_line + off, sizeof(decl_line) - (size_t)off,
+                            " = %g", init_val);
         count++;
     }
     if (count == 0) return 0;
