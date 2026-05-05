@@ -597,6 +597,7 @@ void repl_execute_program(const ReplExecutionOptions *options) {
         case CMD_FOR_BEGIN: case CMD_FOR_END:
         case CMD_FUNC_DEF: case CMD_FUNC_END: case CMD_CALL:
         case CMD_COMMENT:
+        case CMD_EMPTY:
         case CMD_VAR_DECLARE:
         case CMD_TYPE_COUNT:
             break;

@@ -1017,6 +1017,29 @@ int main() {
         ASSERT_STR("assigned cmd source", editor_buffer_line(0), "  n = 10.5;");
     }
 
+    /* 12b. Enter on an empty insert row creates a persistent blank line. */
+    {
+        repl_reset_state();
+        repl_feed_line_public("glBegin(GL_POINTS);");
+        repl_feed_line_public("glColor3f(1,0,0);");
+        repl_feed_line_public("glEnd();");
+
+        repl_navigate_to_line(1);
+        editor_cursor_pos_set(1);
+        editor_handle_key('\r', 0, 0);
+
+        ASSERT_INT("blank line setup: insert mode entered", editor_insert_mode(), 1);
+        ASSERT_INT("blank line setup: edit line moved below current", repl_state_edit_line(), 2);
+
+        editor_handle_key('\r', 0, 0);
+
+        ASSERT_INT("blank line inserted: doc count grows", repl_state_document_count(), 4);
+        ASSERT_INT("blank line inserted: cmd type", repl_state_document_cmds_mut()[2].type, CMD_EMPTY);
+        ASSERT_STR("blank line inserted: source text empty", editor_buffer_line(2), "");
+        ASSERT_INT("blank line inserted: edit line advances", repl_state_edit_line(), 3);
+        ASSERT_INT("blank line inserted: stays in insert mode", editor_insert_mode(), 1);
+    }
+
     /* 13. try_assign_variable - inserting mode (inserts before cursor) */
     {
         repl_reset_state(); declare_test_vars();
