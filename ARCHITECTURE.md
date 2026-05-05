@@ -227,14 +227,21 @@ Owned stages:
 
 | Stage | Owner |
 |-------|-------|
-| Input buffer and routing | `repl_editor.c` |
-| Structured commits | `repl_commit.c` |
+| GLUT input dispatch (cross-subsystem routing) | `imrepl_ctrl.c` |
+| Editor text-document input + commit orchestration | `editor_input.c` + `editor_commit.c` |
 | Parsing | `repl_parser.c` |
-| Source command mutation | `repl_command_store.c` |
+| Validation / compilation (pure, returns `ReplCompiledChange`) | `repl_compile.c` |
+| Apply (writes `ReplState` only) | `repl_apply.c` |
+| Source command mutation (low-level shifts) | `repl_command_store.c` |
 | Source scope/depth | `repl_source_scope.c` |
 | Flattening | `repl_flatten.c` |
 | User geometry execution | `repl_executor.c` |
 | Export/import | `repl_export.c` |
+
+Note: `repl_editor.{c,h}` and `repl_commit.{c,h}` are deleted (Phase J1
++ Phase H.5). Their responsibilities split into the entries above.
+`check-no-repl-editor-input-shim` and `check-no-repl-commit` hard-guard
+against either filename returning.
 
 Outside code that needs to inject commands should use the public command/input
 paths instead of directly mutating command arrays.
@@ -342,10 +349,15 @@ Slices that would have been heavy to copy are deliberately excluded:
 snapshot — the per-row selection band reads `selection_lo/_hi` instead.
 
 Mutations route through `repl_actions`, `repl_command_store`,
-`repl_var_drag`, or another REPL-owned mutation path. UI input bridges
-(`*_hit`, `*_rect`, press/motion handlers) still query live state during
-GLUT input dispatch; pulling those onto a deferred output channel is the
-Phase C work in `feature/push-architecture-ui.md`. Two render-path live
+`variable_panel_drag`, or another REPL-owned mutation path. UI input
+hit-tests (`*_hit_test`, `*_rect`) compute neutral `UiHit` values and
+return — `imrepl_ctrl_router_handle_code_panel_hit` dispatches by
+`UiHit.kind` to the owning subsystem (Phase J2). Render-side
+discoveries (e.g. the editor cursor pixel computed during
+`render_active_input_rows`) flow back through per-frame
+`Ui*Output` structs that the controller actualizes after the render
+call (Phase J4 introduced `UiCodePanelOutput`; the pattern is
+hard-guarded by `check-output-actualization`). Two render-path live
 reads remain (`repl_code_panel_document_build` /
 `apply_follow_scroll` and `repl_replay_code_panel_get_command_display_text`);
 both produce snap-equivalent results because they run after the
@@ -389,10 +401,12 @@ names in parser/export/example/spec code is not a live GL call.
 Allowed:
 
 ```text
-sample.c
+sample.c        GLUT callback registration, glutInit, buffer swap
 imrepl.c        after the sample.c rename lands
-repl_editor.c   cross-layer input routing + REPL-internal dispatch (current);
-                routing moves to imrepl_ctrl.c in Phase 2 (see R in refinement plan)
+imrepl_ctrl.c   GLUT modifier reads + cross-layer input routing
+                (took over from the deleted repl_editor.c in Phase J1)
+editor_input.c  glutGetModifiers via editor_get_modifiers (gated behind
+                editor_input_enable_glut_modifier_reads so tests stay safe)
 repl_executor.c tessellator callback setup only
 ```
 
@@ -400,13 +414,15 @@ repl_executor.c tessellator callback setup only
 
 After controller extraction, ordinary `repl_*` model files should not include
 `scene_*.h`. `imrepl_ctrl.c` is the scene/UI frame-rendering exception.
+`check-controller-boundaries` enforces this; cross-layer constants used by
+both layers (e.g. `CFG_DEFAULT_MULTISAMPLE`, `REPL_OUTLINE_POLYGON_OFFSET_*`)
+live in neutral headers (`repl_presentation.h`, `scene_render_types.h`)
+that both sides include via existing transitive paths.
 
-Existing input/layout exceptions: `repl_editor.c`, `repl_actions.c`, and
-`repl_export.c` still include selected `ui_*` headers. The `repl_editor.c`
-exception is eliminated by Phase 2 input routing: the cross-layer priority
-chain moves to `imrepl_ctrl.c`, after which `repl_editor.c` only needs
-REPL-internal headers. The `repl_actions.c` and `repl_export.c` exceptions
-require separate, independent cleanup.
+Remaining `ui_*` include exceptions: `repl_actions.c` and `repl_export.c`.
+The `repl_editor.c` exception is gone — that file is deleted (Phase J1).
+The other two require separate cleanup tracks tied to the deferred
+`repl_actions` rename and the export-as-its-own-feature split.
 
 ### Scene state access
 
@@ -585,11 +601,13 @@ Completed (Phase 1 + most of Phase 2):
 
 Still open:
 
-- ⚠️ **R10-phase1** — Reassess: the GLUT decls in `repl_core.h`
-  (`repl_keyboard_func`, `repl_special_func`, …) are not stale — they are
-  implemented in `repl_editor.c` and called from `imrepl_ctrl.c` for
-  cross-layer input dispatch. Decide between leaving them in `repl_core.h`
-  until R10-phase5 dissolves it or moving them to `repl_editor.h`.
+- ⚠️ **R10-phase1** — Phase J1 obsoleted the original framing of this
+  task: `repl_editor.c/h` is deleted. The remaining GLUT-flavored
+  declarations in `repl_core.h` should be reviewed against the actual
+  callers in `imrepl_ctrl.c` and `editor_input.c`; anything that's
+  no longer reachable can be removed, and anything still in use can
+  move to a more specific home (`editor_input.h` for editor input,
+  `imrepl_ctrl.h` for controller routing).
 - ❌ **R10-phase2..phase5** — Dissolve `repl_core.c` (~663 lines): move
   `repl_parse_and_normalize*` / `normalize_with_indent` /
   `parse_and_normalize_impl` to `repl_parser.c`; move `collect_visible_vars`

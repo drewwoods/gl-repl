@@ -1,14 +1,39 @@
 # Plan: Make `ui_*` snapshot-driven (push model)
 
-## Context
+> **Status: landed (2026-05-04).** Phase B (snapshot-driven render
+> path via `UiRenderSnapshot`) shipped first; Phase A (eliminate
+> render-time write-backs) closed in J4 with the introduction of
+> `UiCodePanelOutput`. The replay HUD reference in this doc has
+> moved to `replay_ui_hud.{c,h}` under the feature-UI prefix
+> discipline (Phase J3.1). The historical context below is preserved
+> as a record of the original gap; the actual current state is:
+>
+> - Every `ui_*` render entry point takes `const UiRenderSnapshot *`
+>   (and an optional `Ui*Output *`). `check-ui-renderer-takes-view`
+>   + `check-ui-no-repl-state-read` enforce the snapshot input.
+> - Render-time write-backs: 0. `check-ui-returns-hits-only` reaches
+>   **0/0**. `check-output-actualization` actively scans
+>   `Ui*Output` typedefs and verifies the controller reads each
+>   field.
+> - The `cursor_px / cursor_py` mutation noted below was retired:
+>   `UiCodePanelOutput.cursor_px / cursor_py / cursor_valid` flow
+>   through `ui_panels_render_code_panel(snap, &cp_out)` and
+>   `imrepl_ctrl_display_frame` passes the values directly to
+>   `ui_autocomplete_panel_render`. The
+>   `repl_action_set_cursor_pixel` setter and the
+>   `cursor_px / cursor_py` fields on `ReplCodePanelRuntimeState`
+>   are deleted.
+
+## Context (historical)
 
 Today the `scene_*` layer is snapshot-driven: the controller
 (`imrepl_ctrl.c`) builds a `SceneRenderConfig` once per frame, pushes it to
 `scene_render_3d_scene(&cfg)`, and the scene reads only from the config.
 The `ui_*` layer is half-converted:
 
-- `ui_replay_hud.c` already takes a `UiReplayHudState` snapshot
-  (`ui_replay_hud.h:10–25`). Zero live state reads. This is the proven pattern.
+- `replay_ui_hud.c` already takes a `UiReplayHudState` snapshot
+  (`replay_ui_hud.h:10–25`). Zero live state reads. This was the proven
+  pattern that the rest of `ui_*` extended in Phase B.
 - Every other `ui_*.c` file still pulls live state through
   `repl_state_views.h` — 127 read sites across 8 files
   (~70 in `ui_panels.c`, ~26 in `ui_menu_bar.c`).

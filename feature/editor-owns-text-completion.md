@@ -1,13 +1,18 @@
 # Plan: Three-Layer Ownership Split (Editor / REPL / UI)
 
-> **Status: landed (2026-05-03).** Phases A–J (commits 1–49 plus
-> the J2.1 / J2.2 / J2.3 follow-ups) all shipped on
-> `feature/editor-ownership-gap-cleanup`. The
-> M/V/C+compiler+router contract is enforced by 33 boundary
-> checks under `make check-state-ownership`. See `MODULES.md` for
-> the current ownership map. The deferred items are itemized at
-> the end of this document under **Deferred from Phase H** and
-> the post-Phase-I bullets in `MODULES.md`.
+> **Status: landed (2026-05-03 → 2026-05-05).** Phases A–J shipped
+> on `feature/editor-ownership-gap-cleanup` — commits 1–49 plus the
+> J2.x / J3 / J3.1 / J4 / J5 / J6 / J7 / J8 / J9 follow-ups. The
+> M/V/C+compiler+router contract is enforced by 32 hard guards
+> under `make check` (30 sub-targets in `check-state-ownership` +
+> `check-gl-boundaries` + `check-layer-coupling`). Every active
+> migration ratchet (`ui-returns-hits-only`,
+> `no-set-status-in-repl-parser`, `replay-forwarders`,
+> `variable-panel-forwarders`) sits at **0/0** with the legacy
+> forwarder bodies they tracked deleted. See `MODULES.md` for the
+> current ownership map. The deferred items are itemized at the
+> end of this document under **Deferred from Phase H** and the
+> post-Phase-I bullets in `MODULES.md`.
 
 > **Direction note (2026-05-02).** Commits 1–11 of this plan have
 > landed and remain correct. Phase 4's broad `UiAction` enum direction
@@ -209,9 +214,14 @@ enum.)
 ## Why The Spirit Wasn't Realized (Pre-Commit-1)
 
 This section is preserved as the *original problem statement* before
-commits 1–11 landed. Items 1 and most of 2 are now resolved; items 3
-and 4 are still in flight, with their solution path shifted to the
-corrected contract in `editor-text-model-controller.md`.
+commits 1–11 landed. **All four items are now resolved**: item 1 by
+commits 4–11 (the EditorState/UiState carve-out), item 2 by Phase B
+(`EditorBufferView` + single-writer commit transaction), item 3 by
+Phases E + J2 + J3 + J4 (UI is hit-test only; controller dispatches
+on `UiHit.kind`; render-side discoveries flow back through
+`UiCodePanelOutput`), item 4 by Phase J1 (`repl_editor.{c,h}`
+deleted; input dispatch split between `imrepl_ctrl.c` and
+`editor_input.c`).
 
 ### 1. Editor state lives inside REPL state ✅ resolved (commits 4–11)
 
@@ -247,28 +257,55 @@ commit 8. The remaining `code_panel` chrome (`cursor_visible`,
 In the corrected contract, REPL is *given* text by the editor on
 commit. It does not own a buffer; it does not write to one.
 
-### 3. UI input handlers mutate state directly ⚠️ in flight — commit 15
+### 3. UI input handlers mutate state directly ✅ resolved (Phase E + J2 + J3 + J4)
 
-`ui_panels_handle_code_panel_press` still calls `ui_color_picker_open`,
-`repl_action_*`, `repl_clipboard_*`, etc. inline. The render path is
-snapshot-only (Phase B of `push-architecture-ui.md` finished that).
+Fully closed across four phases.
 
-The corrected fix is **not** the original "convert input handlers to
-return a `UiAction` list that the controller dispatches" — it's
-narrower: UI handlers compute a neutral `UiHit`, `imrepl_ctrl`
-dispatches on `UiHit.kind` to the owning subsystem (editor, variable
-panel, replay, scene/viewport), and the subsystem mutates its own
-state directly. See `editor-text-model-controller.md` and Phase 4
-below.
+- **Phase E** carved the passive `UiHit` surface — `ui_panels_hit_test`,
+  `ui_menu_bar_hit_test`, `ui_color_picker_hit_test`,
+  `ui_variable_panel_hit_test` all classify regions and return neutral
+  `UiHit` values without mutating.
+- **Phase J2** routed every code-panel press side effect through
+  `imrepl_ctrl_router_handle_code_panel_hit(UiHit, x, y)`. Deleted
+  `ui_panels_handle_code_panel_press / _click / _drag / _release /
+  _scene_press / _motion / _mouse_release / _escape`. Drag-anchor
+  state moved into `imrepl_ctrl.c`. Hard-guarded by
+  `check-ui-panels-no-mutators`.
+- **Phase J3** routed `ui_color_picker.c`'s color writeback through
+  `editor_commit_apply_external_change(REPL_COMPILED_REPLACE_ONE)` and
+  introduced session-scoped undo capture (one entry per swatch edit
+  session, captured at first mutation, none if the session was open-
+  then-close without a drag). Open-time `repl_undo_push_snapshot`
+  retired in the J2 P2 follow-up.
+- **Phase J4** retired the last render-time mutator
+  (`repl_action_set_cursor_pixel` inside `render_active_input_rows`)
+  by introducing `UiCodePanelOutput` — a per-frame render-output
+  struct the controller actualizes after the render call. Cursor
+  pixel is no longer state; it's a frame transient passed directly
+  to `ui_autocomplete_panel_render`.
 
-### 4. `repl_editor.c` is too broad to keep its name ⚠️ in flight — commit 16
+`check-ui-returns-hits-only` reaches **0/0**. Generic `ui_*.c` is
+mutator-free in input AND render paths. Feature-UI prefixes
+(`replay_ui_*`) are audited by their own lighter guard
+(`check-replay-ui-isolation`).
 
-It still combines: GLUT input router + UI bridge for
-menus/search/help/rename/replay/camera + text editor model + commit
-orchestration + direct coordination of undo/store/status/dirty/AC.
-Phase 5 splits it three ways: GLUT registration → `imrepl_ctrl`,
-text-document behavior → `editor_input.c`, commit orchestration →
-`editor_commit.c`. See §5.0 below.
+### 4. `repl_editor.c` is too broad to keep its name ✅ resolved (Phase J1)
+
+Fully closed. `repl_editor.{c,h}` is **deleted**. Phase J1 split it
+three ways exactly as planned:
+
+- GLUT input router → `imrepl_ctrl.c` (with
+  `imrepl_ctrl_router_*` helpers for replay / audio / config / save /
+  camera / variable panel / scene press / scroll-wheel zoom)
+- text-document input behavior → `editor_input.c` (19 keyboard
+  routes + 9 special-key routes, plus the input-effect accumulation
+  pattern via `ReplInputDispatchEffects`)
+- commit orchestration → `editor_commit.c` (the `try_commit_*`
+  dispatchers and `editor_commit_apply_plan` / `_external_change`
+  helpers; `repl_commit.{c,h}` was already retired in Phase H.5)
+
+`check-no-repl-editor-input-shim` hard-guards against the legacy
+shape returning. `editor_input.c` carries no `repl_*_func` calls.
 
 ## Target State Shape
 
@@ -1123,10 +1160,9 @@ MODULES.md and the build checks describe the same shape.
 ### Phase J — Close the input boundary
 
 The P1 review on 2026-05-03 (above, *P1 Review Follow-Up: Finish The
-Input Boundary*) flagged two open completion blockers. Phase J closes
-both: J1 puts editor input dispatch in editor-owned code, and J2
-routes code-panel press side effects through `UiHit` so UI input
-files are hit-test only.
+Input Boundary*) flagged two open completion blockers. Phase J went
+beyond closing those: it took every active migration ratchet to 0/0
+and retired the legacy forwarder bodies they tracked.
 
 | # | Commit | Status |
 |---|---|---|
@@ -1134,14 +1170,29 @@ files are hit-test only.
 | 49 | fix (J1 follow-up): `imrepl_ctrl_mouse` UP path releases the camera button; motion path no longer clobbers the camera pointer before the camera router computes its delta | done (2026-05-03) |
 | J2.1 | refactor: payload-complete `ui_panels_hit_test` — emit `UI_HIT_PANEL_DIVIDER`, `UI_HIT_INLINE_COLOR_SWATCH`, `UI_HIT_CODE_INSERT_LINE`, `UI_HIT_MENU_BUTTON`; populate `UI_HIT_CODE_TEXT.char_idx` so the controller no longer reimplements wrap/segment math; document per-kind field semantics in `ui_hit.h` | done (2026-05-03) |
 | J2.2 | refactor: route press / drag / release / menu activation / pin-button / inline-color-swatch / floating-picker control / panel-divider through `imrepl_ctrl_router_handle_code_panel_hit(UiHit, x, y)` + `_router_handle_code_panel_drag(x, y)` + `_router_reset_code_panel_drag()`; delete `ui_panels_handle_code_panel_press / _click / _drag / _release / _scene_press / _motion / _mouse_release / _escape`; move drag-anchor state into `imrepl_ctrl.c`; lower `check-ui-returns-hits-only` baseline 8 → 5; migrate impacted tests to call the controller helpers directly | done (2026-05-03) |
-| J2.3 | checks: add `check-ui-panels-no-mutators` hard guard (no allowlist) and wire it into `make check-state-ownership`; inline `ui_panels_close_menus` / `ui_panels_open_config` wrappers at their callers and delete the wrappers; refresh `MODULES.md`, `CLAUDE.md`, this ledger | done (2026-05-03) |
+| J2.3 | checks: add `check-ui-panels-no-mutators` hard guard (no allowlist) and wire it into `make check-state-ownership`; inline `ui_panels_close_menus` / `ui_panels_open_config` wrappers at their callers and delete the wrappers | done (2026-05-03) |
+| J2 P2 fixes | fix: 4 P2 regressions in code-panel hit-test + drag — dismiss-click consumed by dropdown close, pin-before-menu hit ordering in narrow panels, insert-row drag preserves `edit_line` target, off-panel drag clamps to nearest visible row | done (2026-05-04) |
+| J3 | refactor (`ui_color_picker`): route source-line writeback through `editor_commit_apply_external_change(REPL_COMPILED_REPLACE_ONE)`; capture undo on the first slider edit per session via the picker's `g_cp_undo_captured` flag; baseline 5 → 1 | done (2026-05-04) |
+| J3.1 | rename: `ui_replay_hud.{c,h}` → `replay_ui_hud.{c,h}` introducing the **feature-UI prefix discipline**. Generic `ui_*` modules stay feature-agnostic; feature-owned UI lives under the feature prefix (`replay_ui_*`). Add `scripts/check-replay-ui-isolation.sh` lighter guard; drop `ui_replay_hud_render` from the `ui-renderers-signature` and `renderer-purity` allowlists | done (2026-05-04) |
+| J4 | refactor (`UiCodePanelOutput`): publish the editor cursor pixel through a per-frame render-output struct that `imrepl_ctrl` actualizes; pass coords directly to `ui_autocomplete_panel_render` (no snapshot staleness). Delete the `cursor_px / cursor_py` fields from `ReplCodePanelRuntimeState`, the `repl_action_set_cursor_pixel` setter, and the `check-cursor-px-encapsulated` migration guard. UI is now mutator-free — `check-ui-returns-hits-only` reaches 0/0 and `check-output-actualization` actively scans `UiCodePanelOutput` | done (2026-05-04) |
+| J5 | refactor (parser + replay): retire `repl_parser_parse_command` / `_with_vars` and the `parser_legacy_surface_to_status` bridge — the parser core is now `set_status`-free (`check-no-set-status-in-repl-parser` 1 → 0). Bulk-migrate every `bench/` + `tests/` site from `repl_state_replay()` / `_mut()` to `replay_state_view()` / `replay_state_mut()` (`check-replay-forwarders` 37 → 0) | done (2026-05-04) |
+| J6 | refactor (variable_panel): bulk-migrate every fixture site from `editor_state_variable_drag*` / `ui_state_variable_panel*` / `repl_var_drag_*` to the canonical peer accessors (`variable_panel_drag` / `_view` / `_handle_drag_*`) — `check-variable-panel-forwarders` 87 → 0. The picker undo session-flag is now the sole capture point: opening a swatch and closing without dragging leaves the undo ring untouched | done (2026-05-04) |
+| J7 | refactor: delete the now-dead legacy forwarder bodies in `repl_state.c` (`repl_state_replay` / `_mut` / `_reset`), `editor_state.c` (`editor_state_variable_drag` / `_mut` / `_reset`), `ui_state.c` (`ui_state_variable_panel` / `_mut`), and rename the implementations in `variable_panel_drag.c` to their canonical `variable_panel_drag_*` / `variable_panel_handle_drag_*` names. Drop the corresponding declarations from `repl_state_owners.h`, `repl_state_views.h`, `editor_state.h`, `ui_state.h`, `variable_panel_drag.h` | done (2026-05-04) |
+| J8 | feat: macOS Cmd-key support — `editor_input_normalize_super_to_ctrl(key)` translates Cmd+letter at the controller entry (`imrepl_ctrl_keyboard`) so every cfg-shortcut / replay / save / quit / debug-dump dispatcher reaches its `KEY_CTRL_*` form. The translation is a no-op on platforms where `GLUT_ACTIVE_SUPER` is undefined (mainline freeglut). Add `editor_input_enable_glut_modifier_reads()` so test fixtures that don't install a modifier seam see "no modifiers held" instead of aborting freeglut for being called pre-init | done (2026-05-05) |
+| J9 | refactor (highlight): drive code-panel syntax colors from a per-`CmdType` `CmdSyntaxCategory` field on `ReplCommandTypeSpec`. Replace the 50-line hand-curated switch in `ui_panels.c::color_for_type` with a 16-entry category→RGB palette + 4-line lookup. Fixes `CMD_LINE_WIDTH` falling through to the default gray (now `CMD_CAT_STATE`, lavender like `glPointSize`); future commands pick up the right highlight automatically | done (2026-05-05) |
 
-Phase J signal: `editor_input.c` owns text-document input concerns
-only; `imrepl_ctrl.c` owns cross-subsystem routing; `ui_panels.c`
-is hit-test only. `make check-state-ownership` runs 30 sub-targets
-including `check-no-repl-editor-input-shim` and the new
-`check-ui-panels-no-mutators` hard guard. `make test` /
-`make test-stubs` are green.
+Phase J signal: every active migration ratchet sits at **0/0**
+(`check-ui-returns-hits-only`, `check-no-set-status-in-repl-parser`,
+`check-replay-forwarders`, `check-variable-panel-forwarders`).
+The legacy forwarder bodies that fed those ratchets are deleted —
+the canonical peer accessors are the only entry points.
+`editor_input.c` owns text-document input; `imrepl_ctrl.c` owns
+cross-subsystem routing; `ui_panels.c` is hit-test only;
+`replay_ui_*` is feature-UI under its own prefix discipline.
+`make check-state-ownership` runs 30 sub-targets (32 hard guards
+total when counting `check-gl-boundaries` + `check-layer-coupling`
+which run alongside; `check-public-api-usage` is informational).
+`make test` / `make test-stubs` are green.
 
 ### Conventions across the sequence
 
