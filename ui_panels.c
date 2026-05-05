@@ -10,7 +10,7 @@
 #include "ui_state.h"
 #include "repl_export.h"
 #include "ui_layout.h"
-#include "ui_color_picker.h"
+#include "color_picker_ui.h"
 #include "ui_metrics.h"
 #include "editor_code_panel_document.h"
 #include "repl_core.h"
@@ -448,7 +448,8 @@ static void code_panel_draw_row_gutter(const CodePanelRowCtx *ctx, int i,
         int sw = UI_COLOR_SWATCH_W;
         int sx = ctx->cp_x + ctx->cp_w - CODE_MARGIN_X - sw - 2;
         int sy = ctx->line_y + (LINE_H - sw) / 2 - 1;
-        ui_color_picker_render_swatch(ct, sx, sy);
+        color_picker_ui_render_swatch(ct, sx, sy,
+                                      ctx->snap->color_picker.active_line);
     }
 }
 
@@ -979,7 +980,9 @@ void ui_panels_render_code_panel(const UiRenderSnapshot *snap,
     code_panel_draw_scrollbar(cp_x, cp_w, cp_h, panel_top,
                               snap->scroll.scroll, total_lines, visible_lines);
     code_panel_draw_statusbar(snap, cp_x, cp_y, cp_w, edit_line, insert_mode);
-    ui_color_picker_render(snap);
+    color_picker_ui_render(&snap->color_picker,
+                           snap->viewport.window_w,
+                           snap->viewport.window_h);
 
     prof_end(PROF_CODE_PANEL_OVERLAYS);
 
@@ -1141,9 +1144,12 @@ UiHit ui_panels_hit_test(int mx, int my) {
     /* Floating overlays beat the underlying code panel / scene. The
      * color picker, when open, is the most modal of these — it captures
      * input while the user is dragging a slider. */
-    UiHit picker = ui_color_picker_hit_test(mx, my);
-    if (picker.kind != UI_HIT_NONE)
-        return picker;
+    {
+        ColorPickerView pv = color_picker_view();
+        UiHit picker = color_picker_ui_hit_test(&pv, mx, my, win_h);
+        if (picker.kind != UI_HIT_NONE)
+            return picker;
+    }
 
     /* Menu-bar regions: open dropdown row, top-level menu button,
      * pin button. */

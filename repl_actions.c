@@ -19,7 +19,7 @@
 #include "editor_help_session.h"
 #include "repl_pipeline.h"
 #include "repl_state.h"
-#include "ui_color_picker.h"
+#include "color_picker_ui.h"
 #include "ui_menu_bar.h"
 #include "ui_panels.h"
 #include "ui_profile_panel.h"

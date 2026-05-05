@@ -9,7 +9,7 @@
 #include "prof.h"
 #include "ui_profile_panel.h"
 #include "color_picker.h"
-#include "ui_color_picker.h"
+#include "color_picker_ui.h"
 #include "ui_autocomplete_panel.h"
 #include "ui_variable_panel.h"
 #include "ui_menu_bar.h"
@@ -64,6 +64,7 @@ static void make_test_ui_snapshot(UiRenderSnapshot *snap) {
     snap->variable_drag  = variable_panel_drag();
     snap->selection      = editor_state_selection();
     snap->scroll         = editor_state_scroll();
+    snap->color_picker   = color_picker_view();
     snap->variables      = repl_state_variables();
     snap->editor_input   = editor_state_input();
     snap->import_export  = repl_state_import_export();
@@ -77,6 +78,14 @@ static void make_test_ui_snapshot(UiRenderSnapshot *snap) {
     snap->input_len      = snap->editor_input.input_len;
     snap->flat_program_count = snap->flat_program.cmd_count;
     snap->user_scene_active_idx = -1;
+}
+
+/* Test-side helper: build a fresh ColorPickerView and hit-test against
+ * the live viewport height. Mirrors ui_panels_hit_test's inline pattern
+ * so legacy tests keep their `(mx, my)` shape. */
+static UiHit color_picker_ui_hit_test_helper(int mx, int my) {
+    ColorPickerView pv = color_picker_view();
+    return color_picker_ui_hit_test(&pv, mx, my, ui_state_viewport().window_h);
 }
 
 static UiOverlayState build_help_overlay_input(void) {
@@ -163,7 +172,7 @@ static void test_color_picker(void) {
     ASSERT_TRUE("picker is active", color_picker_active_line() == 0);
 
     gl_stub_counts_reset();
-    { UiRenderSnapshot s; make_test_ui_snapshot(&s); ui_color_picker_render(&s); }
+    { UiRenderSnapshot s; make_test_ui_snapshot(&s); color_picker_ui_render(&s.color_picker, s.viewport.window_w, s.viewport.window_h); }
     ASSERT_GL_CALLS("picker render -> draws quads", GL_STUB_glBegin, 1);
     ASSERT_GL_CALLS("picker render -> calls glVertex2f", GL_STUB_glVertex2f, 4);
 
@@ -187,7 +196,7 @@ static void test_color_picker(void) {
     color_picker_open(0, 300);
 
     gl_stub_counts_reset();
-    { UiRenderSnapshot s; make_test_ui_snapshot(&s); ui_color_picker_render(&s); }
+    { UiRenderSnapshot s; make_test_ui_snapshot(&s); color_picker_ui_render(&s.color_picker, s.viewport.window_w, s.viewport.window_h); }
     ASSERT_GL_CALLS("picker render with alpha -> draws quads", GL_STUB_glBegin, 1);
 
     /* Press Alpha bar (alp_x = hue_x + 18 + 6 = px + 156 + 24 = 180) */
@@ -218,7 +227,7 @@ static void test_color_picker(void) {
                 .has_alpha = 0, .is_clear = 0,
             },
         };
-        ui_color_picker_render_swatch(&t, 100, 100);
+        color_picker_ui_render_swatch(&t, 100, 100, color_picker_active_line());
     }
     ASSERT_GL_CALLS("swatch render -> draws quads", GL_STUB_glBegin, 1);
 }
@@ -397,7 +406,7 @@ static void test_ui_color_picker_hit_test(void) {
     ui_state_viewport_set_size(800, 600);
 
     /* No picker active -> miss. */
-    UiHit h_closed = ui_color_picker_hit_test(400, 300);
+    UiHit h_closed = color_picker_ui_hit_test_helper(400, 300);
     ASSERT_TRUE("closed picker -> NONE", h_closed.kind == UI_HIT_NONE);
 
     /* Open a picker on a color command. The picker positions itself
@@ -417,7 +426,7 @@ static void test_ui_color_picker_hit_test(void) {
     int hue_mx = -1, hue_my = -1;
     for (int my = 0; my < win_h; my += 4) {
         for (int mx = 0; mx < ui_state_viewport().window_w; mx += 4) {
-            UiHit h = ui_color_picker_hit_test(mx, my);
+            UiHit h = color_picker_ui_hit_test_helper(mx, my);
             if (h.kind == UI_HIT_COLOR_SWATCH && h.item_idx == 1 && sv_mx < 0) {
                 sv_mx = mx; sv_my = my;
             }
@@ -429,17 +438,17 @@ static void test_ui_color_picker_hit_test(void) {
     ASSERT_TRUE("SV rect probed", sv_mx >= 0);
     ASSERT_TRUE("hue rect probed", hue_mx >= 0);
 
-    UiHit h_sv = ui_color_picker_hit_test(sv_mx, sv_my);
+    UiHit h_sv = color_picker_ui_hit_test_helper(sv_mx, sv_my);
     ASSERT_TRUE("SV hit kind", h_sv.kind == UI_HIT_COLOR_SWATCH);
     ASSERT_TRUE("SV cmd_idx is 0", h_sv.cmd_idx == 0);
     ASSERT_TRUE("SV item_idx is 1", h_sv.item_idx == 1);
 
-    UiHit h_hue = ui_color_picker_hit_test(hue_mx, hue_my);
+    UiHit h_hue = color_picker_ui_hit_test_helper(hue_mx, hue_my);
     ASSERT_TRUE("hue hit kind", h_hue.kind == UI_HIT_COLOR_SWATCH);
     ASSERT_TRUE("hue item_idx is 2", h_hue.item_idx == 2);
 
     /* Click far outside picker -> NONE. */
-    UiHit h_miss = ui_color_picker_hit_test(0, 0);
+    UiHit h_miss = color_picker_ui_hit_test_helper(0, 0);
     ASSERT_TRUE("picker miss -> NONE", h_miss.kind == UI_HIT_NONE);
     color_picker_close();
 }
@@ -517,7 +526,7 @@ static void test_ui_panels_hit_test_dispatch(void) {
     int sv_mx = -1, sv_my = -1;
     for (int my = 0; my < ui_state_viewport().window_h && sv_mx < 0; my += 4) {
         for (int mx = 0; mx < ui_state_viewport().window_w; mx += 4) {
-            UiHit h = ui_color_picker_hit_test(mx, my);
+            UiHit h = color_picker_ui_hit_test_helper(mx, my);
             if (h.kind == UI_HIT_COLOR_SWATCH && h.item_idx == 1) {
                 sv_mx = mx; sv_my = my;
                 break;

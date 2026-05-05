@@ -1,45 +1,40 @@
 /*
- * ui_color_picker.c -- Floating color picker renderer + hit-test.
+ * color_picker_ui.c -- Floating color picker renderer + hit-test.
  *
- * State, lifecycle, and writeback live on the peer (color_picker.c);
- * this file only renders the popup and computes UiHit results from
- * the peer view. The next phase renames this TU to color_picker_ui.c
- * and tightens the boundary check.
+ * Pure UI layer over the `color_picker.h` peer. Reads a frame-shaped
+ * `ColorPickerView` for popup geometry/state and a couple of viewport
+ * scalars; never mutates peer state, never reads live REPL/editor
+ * state, and never calls the parser/commit pipeline.
+ *
+ * The companion guard `check-color-picker-ui-isolation.sh` enforces
+ * that surface — anything mutating must live on the peer
+ * (color_picker.c) or another module the controller routes to.
  */
-#include "color_picker.h"
-#include "ui_color_picker.h"
-#include "ui_state.h"
+#include "color_picker_ui.h"
 
-/* Slider geometry constants reused by the renderer. The hit-test reads
- * rect dimensions directly from the peer view (which materializes them
- * via cp_compute_rects on the peer side). These constants are only
- * needed by render for the popup background / preview swatch / alpha
- * checkerboard sizing — none of them feed back into hit dispatch. */
-#define CP_GAP        6
-#define CP_PREV_H    16
+#include "./include/gl_2d.h"
 
-static void cp_ring(float cx, float cy, float r, int n) {
-    glBegin(GL_LINE_LOOP);
-    for (int i = 0; i < n; i++) {
-        float a = (float)i / (float)n * 6.28318f;
-        glVertex2f(cx + cosf(a) * r, cy + sinf(a) * r);
-    }
-    glEnd();
-}
+#include <math.h>
 
-void ui_color_picker_render(const UiRenderSnapshot *snap) {
-    (void)snap;
-    ColorPickerView v = color_picker_view();
-    if (!v.open) return;
+void color_picker_ui_render(const ColorPickerView *view,
+                            int viewport_w, int viewport_h) {
+    if (!view || !view->open) return;
 
-    int px = v.anchor_px;
-    int py = v.anchor_py;
-    int sz = v.rects.sv_sz;
-    int hue_w = v.rects.hue_w;
-    int alp_w = v.rects.alp_w;
+    /* Slider geometry constants reused by the renderer. The hit-test
+     * indexes view->rects directly; these only feed the popup
+     * background, preview swatch, and alpha checkerboard sizing. */
+    enum { CP_GAP = 6, CP_PREV_H = 16 };
+
+    int px = view->anchor_px;
+    int py = view->anchor_py;
+    int sz = view->rects.sv_sz;
+    int hue_w = view->rects.hue_w;
+    int alp_w = view->rects.alp_w;
     int pw = sz + CP_GAP + hue_w
-           + (v.has_alpha ? CP_GAP + alp_w : 0) + CP_GAP;
+           + (view->has_alpha ? CP_GAP + alp_w : 0) + CP_GAP;
     int ph = sz + CP_GAP + CP_PREV_H + CP_GAP;
+
+    gl2d_begin(viewport_w, viewport_h);
 
     /* Background */
     glEnable(GL_BLEND);
@@ -56,7 +51,7 @@ void ui_color_picker_render(const UiRenderSnapshot *snap) {
     glDisable(GL_BLEND);
 
     /* SV square: white→hue left-right, hue→black top-bottom */
-    float hr,hg,hb; color_picker_hsv_to_rgb(v.hue,1,1,&hr,&hg,&hb);
+    float hr,hg,hb; color_picker_hsv_to_rgb(view->hue,1,1,&hr,&hg,&hb);
     glBegin(GL_QUADS);
     glColor3f(1,1,1);    glVertex2f(px,    py);
     glColor3f(hr,hg,hb); glVertex2f(px+sz, py);
@@ -73,8 +68,8 @@ void ui_color_picker_render(const UiRenderSnapshot *snap) {
     glDisable(GL_BLEND);
     /* Shade the V > value_max zone to mark it off-limits (used by
      * CMD_CLEAR_COLOR which clamps to CP_CLEAR_MAX_V). */
-    if (v.value_max < 1.0f) {
-        float lim_y = py - (1.0f - v.value_max) * (float)sz;
+    if (view->value_max < 1.0f) {
+        float lim_y = py - (1.0f - view->value_max) * (float)sz;
         glEnable(GL_BLEND); glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
         glColor4f(0.0f, 0.0f, 0.0f, 0.72f);
         glRectf((float)px, lim_y, (float)px + (float)sz, lim_y + (py - lim_y));
@@ -85,10 +80,23 @@ void ui_color_picker_render(const UiRenderSnapshot *snap) {
         glEnd();
         glLineWidth(1.0f);
     }
-    /* SV cursor */
-    float cx = px + v.sat * sz, cy = py - (1.0f - v.val) * sz;
-    glColor3f(1,1,1); glLineWidth(1.5f); cp_ring(cx,cy,5.0f,16);
-    glColor3f(0,0,0); glLineWidth(1.0f); cp_ring(cx,cy,6.5f,16);
+
+    /* SV cursor (small pair of rings centred on (sat, val)). */
+    {
+        float cx = px + view->sat * sz;
+        float cy = py - (1.0f - view->val) * sz;
+        for (int pass = 0; pass < 2; pass++) {
+            float r = (pass == 0) ? 5.0f : 6.5f;
+            if (pass == 0) { glColor3f(1,1,1); glLineWidth(1.5f); }
+            else           { glColor3f(0,0,0); glLineWidth(1.0f); }
+            glBegin(GL_LINE_LOOP);
+            for (int i = 0; i < 16; i++) {
+                float a = (float)i / 16.0f * 6.28318f;
+                glVertex2f(cx + cosf(a) * r, cy + sinf(a) * r);
+            }
+            glEnd();
+        }
+    }
 
     /* Hue bar: hue=0 at top, hue=1 at bottom */
     int hx = px + sz + CP_GAP;
@@ -105,14 +113,16 @@ void ui_color_picker_render(const UiRenderSnapshot *snap) {
         glEnd();
     }
     glColor3f(1,1,1); glLineWidth(2.0f);
-    float hy = py - v.hue * sz;
-    glBegin(GL_LINES); glVertex2f(hx-2,hy); glVertex2f(hx+hue_w+2,hy); glEnd();
+    {
+        float hy = py - view->hue * sz;
+        glBegin(GL_LINES); glVertex2f(hx-2,hy); glVertex2f(hx+hue_w+2,hy); glEnd();
+    }
     glLineWidth(1.0f);
 
     /* Alpha bar (RGBA-shaped only): alpha=1 at top */
-    if (v.has_alpha) {
+    if (view->has_alpha) {
         int ax = hx + hue_w + CP_GAP;
-        float cr,cg,cb; color_picker_hsv_to_rgb(v.hue,v.sat,v.val,&cr,&cg,&cb);
+        float cr,cg,cb; color_picker_hsv_to_rgb(view->hue,view->sat,view->val,&cr,&cg,&cb);
         int ck = 5;
         for (int iy = 0; iy < sz; iy += ck) for (int ix = 0; ix < alp_w; ix += ck) {
             float gv=((ix/ck+iy/ck)%2)?0.35f:0.55f; glColor3f(gv,gv,gv);
@@ -131,17 +141,17 @@ void ui_color_picker_render(const UiRenderSnapshot *snap) {
             glEnd();
         }
         glDisable(GL_BLEND);
-        float ay = py - (1.0f - v.alpha) * sz;
+        float ay = py - (1.0f - view->alpha) * sz;
         glColor3f(1,1,1); glLineWidth(2.0f);
         glBegin(GL_LINES); glVertex2f(ax-2,ay); glVertex2f(ax+alp_w+2,ay); glEnd();
         glLineWidth(1.0f);
     }
 
     /* Preview swatch */
-    float pr,pg,pb; color_picker_hsv_to_rgb(v.hue,v.sat,v.val,&pr,&pg,&pb);
-    int total_w = sz + CP_GAP + hue_w + (v.has_alpha ? CP_GAP + alp_w : 0);
+    float pr,pg,pb; color_picker_hsv_to_rgb(view->hue,view->sat,view->val,&pr,&pg,&pb);
+    int total_w = sz + CP_GAP + hue_w + (view->has_alpha ? CP_GAP + alp_w : 0);
     int swy = py - sz - CP_GAP;
-    if (v.has_alpha) {
+    if (view->has_alpha) {
         int ck = 4;
         for (int iy = 0; iy < CP_PREV_H; iy += ck) for (int ix = 0; ix < total_w; ix += ck) {
             float gv=((ix/ck+iy/ck)%2)?0.35f:0.55f; glColor3f(gv,gv,gv);
@@ -149,51 +159,53 @@ void ui_color_picker_render(const UiRenderSnapshot *snap) {
             glRectf((float)(px+ix), (float)(swy-CP_PREV_H+iy), (float)(px+ix)+(float)tw, (float)(swy-CP_PREV_H+iy)+(float)th);
         }
         glEnable(GL_BLEND); glBlendFunc(GL_SRC_ALPHA,GL_ONE_MINUS_SRC_ALPHA);
-        glColor4f(pr,pg,pb,v.alpha);
+        glColor4f(pr,pg,pb,view->alpha);
     } else {
         glColor3f(pr,pg,pb);
     }
     glRectf((float)px, (float)(swy-CP_PREV_H), (float)px+(float)total_w, (float)(swy-CP_PREV_H)+(float)CP_PREV_H);
-    if (v.has_alpha) glDisable(GL_BLEND);
+    if (view->has_alpha) glDisable(GL_BLEND);
     glColor3f(0.4f,0.4f,0.5f);
     glBegin(GL_LINE_LOOP);
     glVertex2f(px,         swy-CP_PREV_H); glVertex2f(px+total_w, swy-CP_PREV_H);
     glVertex2f(px+total_w, swy);           glVertex2f(px,         swy);
     glEnd();
+
+    gl2d_end();
 }
 
-UiHit ui_color_picker_hit_test(int mx, int my) {
+UiHit color_picker_ui_hit_test(const ColorPickerView *view,
+                               int mx, int my, int viewport_h) {
     UiHit h = ui_hit_none();
-    ColorPickerView v = color_picker_view();
-    if (!v.open) return h;
-    int win_h = ui_state_viewport().window_h;
-    if (win_h <= 0) return h;
-    int gl_y = win_h - my;
+    if (!view || !view->open) return h;
+    if (viewport_h <= 0) return h;
+    int gl_y = viewport_h - my;
 
     int region = 0;
-    if (mx >= v.rects.sv_x && mx < v.rects.sv_x + v.rects.sv_sz &&
-        gl_y >= v.rects.sv_y && gl_y < v.rects.sv_y + v.rects.sv_sz) {
+    if (mx >= view->rects.sv_x && mx < view->rects.sv_x + view->rects.sv_sz &&
+        gl_y >= view->rects.sv_y && gl_y < view->rects.sv_y + view->rects.sv_sz) {
         region = 1; /* SV square */
-    } else if (mx >= v.rects.hue_x && mx < v.rects.hue_x + v.rects.hue_w &&
-               gl_y >= v.rects.hue_y && gl_y < v.rects.hue_y + v.rects.hue_h) {
+    } else if (mx >= view->rects.hue_x && mx < view->rects.hue_x + view->rects.hue_w &&
+               gl_y >= view->rects.hue_y && gl_y < view->rects.hue_y + view->rects.hue_h) {
         region = 2; /* hue bar */
-    } else if (v.has_alpha &&
-               mx >= v.rects.alp_x && mx < v.rects.alp_x + v.rects.alp_w &&
-               gl_y >= v.rects.alp_y && gl_y < v.rects.alp_y + v.rects.alp_h) {
+    } else if (view->has_alpha &&
+               mx >= view->rects.alp_x && mx < view->rects.alp_x + view->rects.alp_w &&
+               gl_y >= view->rects.alp_y && gl_y < view->rects.alp_y + view->rects.alp_h) {
         region = 3; /* alpha bar */
     }
     if (region == 0) return h;
 
     h.kind = UI_HIT_COLOR_SWATCH;
-    h.cmd_idx = v.active_line;
+    h.cmd_idx = view->active_line;
     h.item_idx = region;
-    h.local_x = (float)(mx - v.rects.sv_x);
-    h.local_y = (float)(gl_y - v.rects.sv_y);
+    h.local_x = (float)(mx - view->rects.sv_x);
+    h.local_y = (float)(gl_y - view->rects.sv_y);
     return h;
 }
 
-void ui_color_picker_render_swatch(const EditorTransformer *t,
-                                   int sx, int sy) {
+void color_picker_ui_render_swatch(const EditorTransformer *t,
+                                   int sx, int sy,
+                                   int active_line) {
     if (!t || t->kind != TRANSFORMER_COLOR_PICKER)
         return;
 
@@ -213,7 +225,7 @@ void ui_color_picker_render_swatch(const EditorTransformer *t,
     glVertex2f(sx,    sy+sw);
     glEnd();
 
-    if (color_picker_active_line() == t->line_idx) {
+    if (active_line == t->line_idx) {
         glColor4f(1.0f, 1.0f, 1.0f, 0.9f);
         glBegin(GL_LINE_LOOP);
         glVertex2f(sx-1,    sy-1);
