@@ -63,6 +63,19 @@ int  editor_input_active_modifiers(void);
  * freeglut for being called pre-init. */
 void editor_input_enable_glut_modifier_reads(void);
 
+/* macOS Cmd+letter translation. On the freeglut-fork, Cmd+letter is
+ * delivered as the raw letter byte (e.g. 'b' = 0x62) rather than the
+ * control-character that real Ctrl+letter produces (e.g. KEY_CTRL_B
+ * = 0x02). Callers that dispatch on the control-character form must
+ * translate before their lookup or they'll miss the shortcut.
+ *
+ * Returns the translated key when SUPER is held and the input is a
+ * letter; otherwise returns key unchanged. The controller calls this
+ * at the top of its keyboard route so every downstream handler
+ * (cfg-shortcut chain, replay, save, editor) sees the already-
+ * translated form. */
+unsigned char editor_input_normalize_super_to_ctrl(unsigned char key);
+
 /* Hit-test predicates that imrepl_ctrl uses to decide which subsystem
  * owns a click. A click is editor's concern when it lands on the code
  * panel proper, on the divider, or while the example dropdown is open

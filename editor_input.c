@@ -112,6 +112,20 @@ void editor_input_enable_glut_modifier_reads(void) {
     g_glut_modifier_reads_enabled = 1;
 }
 
+unsigned char editor_input_normalize_super_to_ctrl(unsigned char key) {
+    /* Alpha check first so non-letter keys never read modifiers — that
+     * read goes through glutGetModifiers() in production, which aborts
+     * pre-init. The controller calls this at the top of its keyboard
+     * route, before the cfg-shortcut chain that compares against
+     * KEY_CTRL_* constants (= 1..26). Without the translation, Cmd+B
+     * would arrive as 'b' (0x62) and miss KEY_CTRL_B (0x02). */
+    if (((key >= 'a' && key <= 'z') || (key >= 'A' && key <= 'Z')) &&
+        (editor_get_modifiers() & GLUT_ACTIVE_SUPER)) {
+        return (unsigned char)(key & 0x1F);
+    }
+    return key;
+}
+
 int editor_get_modifiers(void) {
     int mods;
     if (g_modifier_provider_for_test)
@@ -1246,24 +1260,13 @@ static void keyboard_func(unsigned char key, int x, int y) {
     (void)x;
     (void)y;
 
-    /* macOS Cmd+letter: GLUT delivers the raw letter byte (e.g. 'c')
-     * rather than the control-character that real Ctrl+letter
-     * produces (e.g. 0x03). Translate to the control-character form
-     * so the rest of the pipeline (KEY_CTRL_C / _S / _Z dispatchers)
-     * sees Cmd+C identically to Ctrl+C. Only triggered when the
-     * SUPER bit is actually set, so the real-Ctrl path is untouched
-     * on platforms where Ctrl+letter already arrives as a control
-     * character.
-     *
-     * The alpha-letter check runs first so non-letter keys never
-     * touch editor_get_modifiers() — that read goes through
-     * glutGetModifiers() (when the test seam isn't installed) which
-     * aborts hard if glutInit hasn't run, and many test fixtures
-     * exercise keyboard_func without a real GLUT context. */
-    if (((key >= 'a' && key <= 'z') || (key >= 'A' && key <= 'Z')) &&
-        (editor_get_modifiers() & GLUT_ACTIVE_SUPER)) {
-        key = (unsigned char)(key & 0x1F);
-    }
+    /* Defensive translation. The controller's imrepl_ctrl_keyboard
+     * already normalizes Cmd+letter → control-character before this
+     * runs, but tests call editor_handle_key (and thence keyboard_func)
+     * directly without going through the controller chain. The
+     * helper is a no-op on already-translated keys (control chars
+     * fail the alpha check). */
+    key = editor_input_normalize_super_to_ctrl(key);
 
     keyboard_begin_key(key);
 
