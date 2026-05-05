@@ -2,7 +2,7 @@
  * repl_core_internal.h - Implementation internals shared across REPL modules.
  *
  * Collects internal APIs used by repl_core.c, repl_editor.c, repl_executor.c,
- * repl_export.c, repl_parser.c, repl_search.c, and the unit test suites. These
+ * repl_export.c, repl_parser.c, editor_search.c, and the unit test suites. These
  * are NOT part of the public API (repl_core.h); they are domain-specific helpers
  * that tests and sibling modules need. When an internal API stabilizes and
  * becomes broadly useful, graduate it to repl_core.h.
@@ -21,7 +21,7 @@
  *    rendering logic without running the full UI.
  *
  * 4. Autocomplete: Update and accept logic for symbol completion and parameter
- *    hints. Integrates with repl_autocomplete.c model.
+ *    hints. Integrates with editor_autocomplete.c model.
  *
  * 5. Source-scope: Block depth, indentation, and scope queries (documented in
  *    repl_source_scope.h). Prefixes cached to avoid re-traversal.
@@ -53,18 +53,19 @@
  *
  * 15. Commit handler chain: try_commit_*() functions in declaration order
  *     (float, assign, close-brace, for, func, if, GL command). Each returns 1
- *     if consumed, 0 if not matched. Utilities repl_commit_reset_transients()
- *     and repl_commit_resolve_insert_exit_target().
+ *     if consumed, 0 if not matched. Utilities editor_commit_reset_transients()
+ *     and editor_commit_resolve_insert_exit_target().
  */
 #ifndef REPL_CORE_INTERNAL_H
 #define REPL_CORE_INTERNAL_H
 
 #include <stdarg.h>
 
+#include "editor_state.h"  /* EditorBufferView */
 #include "repl_core.h"
-#include "repl_replay.h"
-#include "repl_search.h"
-#include "repl_undo.h"
+#include "replay.h"
+#include "editor_search.h"
+#include "editor_undo.h"
 
 #if defined(__GNUC__) || defined(__clang__)
 #define REPL_PRINTF_LIKE(fmt_idx, arg_idx) __attribute__((format(printf, fmt_idx, arg_idx)))
@@ -156,11 +157,6 @@ int  extract_func_call_args_text(const char *src, int *fn,
 void format_func_header(char *out, int out_sz, const char *indent,
                         int fn, char param_names[][16], int param_count);
 
-/* Test-only: parse a command with a local variable scope.
- * Accepts provided vars array instead of predef-only. */
-int repl_parser_parse_command_with_vars(const char *line, GLCmd *cmd,
-                                        ExprVar *vars, int num_vars);
-
 /* Does `s` reference any variable in the given loop/function-scope array? */
 int  input_has_expr_vars(const char *s, ExprVar *vars, int num_vars);
 /* Same, but counting predef vars too (i.e. is any var visible at all?). */
@@ -180,14 +176,21 @@ int  repl_extract_assignment_parts(const char *src,
 
 /* ---- Code-panel dumps (debug + test fixtures) ------------------------- */
 
-void repl_dump_code_panel_text(FILE *out);
-void repl_dump_code_panel_visual_text(FILE *out);
+void repl_dump_code_panel_text(FILE *out, EditorBufferView text);
+void repl_dump_code_panel_visual_text(FILE *out, EditorBufferView text);
 
 /* ---- Autocomplete ----------------------------------------------------- */
 
-void update_selected_autocomplete_preview(void);
-void update_autocomplete(void);
+/* update_autocomplete / update_selected_autocomplete_preview are
+ * file-static inside editor_autocomplete.c — production code reaches
+ * them through the EditorCompletionProvider seam in
+ * editor_completion.h. accept_autocomplete is exposed because the
+ * editor input dispatcher invokes it directly when the user presses
+ * Tab / Enter on the popup. */
 void accept_autocomplete(void);
+/* Register repl_autocomplete as the EditorCompletionProvider. Called
+ * once at startup before the editor processes input. */
+void repl_autocomplete_register_provider(void);
 
 /* ---- Source-scope helpers --------------------------------------------- */
 
@@ -202,12 +205,13 @@ int  apply_state_cmd(const GLCmd *cmd, float alpha_scale);
 
 void load_line_to_input(int idx);
 /* Populate `vars` with every loop/function-local visible at source line
- * `pos`. Returns the count (capped at max_vars). */
-int  collect_visible_vars(int pos, ExprVar *vars, int max_vars);
+ * `pos`. Returns the count (capped at max_vars). If total_out is non-NULL,
+ * receives the uncapped total (for truncation detection at commit sites). */
+int  collect_visible_vars(int pos, ExprVar *vars, int max_vars, int *total_out);
 
 /* ---- Replay state machine --------------------------------------------- */
 
-/* Replay APIs live in repl_replay.h. */
+/* Replay APIs live in replay.h. */
 
 /* ---- Bench helpers (populate replay fade state without stepping) -------
  * These exist solely for bench_repl.c to drive
@@ -235,7 +239,9 @@ void repl_reset_time_to_zero(void);
 /* ---- Editor input dispatch test hooks --------------------------------- */
 
 typedef int (*ReplModifierProvider)(void);
-void repl_set_modifier_provider_for_test(ReplModifierProvider provider);
+/* Phase J1 commit 49a renamed repl_set_modifier_provider_for_test ->
+ * editor_input_set_modifier_provider_for_test (declared in editor_input.h);
+ * the typedef stays here so its callers don't ripple. */
 
 /* Delete cmds[start..start+count) with a status-bar message describing
  * what was removed. Guards against removing a `float` decl whose variable
@@ -256,21 +262,10 @@ void repl_scenes_mark_example_active(void);
 void repl_scenes_activate_home_slot(void);
 void repl_scenes_reset(void);
 
-/* ---- Commit handler chain (implemented in repl_commit.c)
- * Each handler inspects g_input. Returns 1 if it consumed the line
- * (success or handled error), 0 if the input wasn't in its grammar.
- * Ordering matters: see ARCHITECTURE.md "Structured block commits". */
-void repl_commit_reset_transients(void);
-int  repl_commit_resolve_insert_exit_target(int target);
-int try_commit_float_decl(void);
-int try_assign_variable(void);
-int try_commit_for_loop(void);
-int try_commit_func_def(void);
-int try_commit_if_block(void);
-int try_commit_close_brace(void);
-int try_commit_var_statements(void);
-int try_commit_block_structs(void);
-int try_commit_any(void);
-int try_commit_var_statements_then_insert(void);
+/* Commit dispatcher chain (try_commit_*, editor_commit_func_decl_resume_*,
+ * editor_commit_resolve_insert_exit_target, editor_commit_reset_transients)
+ * declarations moved to editor_commit.h (Phase H.5 commit 41). The
+ * bodies live in editor_commit.c (moved from repl_commit.c in
+ * commit 39). */
 
 #endif /* REPL_CORE_INTERNAL_H */

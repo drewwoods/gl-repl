@@ -30,6 +30,10 @@ test_repl_actions
 test_repl_executor
 test_repl_var_drag
 test_repl_replay
+test_repl_compile
+test_repl_export_all_commands
+test_editor_completion
+test_ui_menu_bar
 workspace/
 test_ui
 test_ui_help_overlay
@@ -42,3 +46,5 @@ callgraph*.dot
 callgraph*.html
 callgrind.out*
 .compat-scratch/
+*.swp
+*.swo

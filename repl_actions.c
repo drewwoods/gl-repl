@@ -6,18 +6,24 @@
  * cycling, F-key/Ctrl-key config shortcuts, startup config defaults, and menu
  * item actions that touch scenes, files, replay, audio, or presentation state.
  */
-#include "sample.h"
 #include "repl_actions.h"
 #include "repl_audio.h"
 #include "repl_core.h"
 #include "repl_core_internal.h"
 #include "repl_config.h"
-#include "repl_editor.h"
+#include "editor_input.h"
+#include "editor_completion.h"
 #include "repl_keys.h"
+#include "replay_state.h"
+#include "editor_help_session.h"
 #include "repl_pipeline.h"
 #include "repl_state.h"
+#include "ui_color_picker.h"
+#include "ui_menu_bar.h"
 #include "ui_panels.h"
-#include "repl_inline_rename.h"
+#include "ui_profile_panel.h"
+#include "ui_state.h"
+#include "editor_inline_rename.h"
 
 static const char *replay_mode_names[] = { "Polygon", "Vertex" };
 static const char *backdrop_mode_names[] = { "Off", "Cityscape", "Stars", "City+Stars" };
@@ -170,7 +176,7 @@ void repl_cfg_cycle_row(int row, int delta) {
     }
 
     if (item->key == REPL_CONFIG_AUTO_TIME) {
-        if (repl_editor_active_modifiers() & GLUT_ACTIVE_SHIFT) {
+        if (editor_input_active_modifiers() & GLUT_ACTIVE_SHIFT) {
             repl_reset_time_to_zero();
             set_status(repl_state_variables().time_playing ? "Time: reset to 0"
                                                            : "Time: reset to 0 (paused)");
@@ -178,20 +184,21 @@ void repl_cfg_cycle_row(int row, int delta) {
         }
     }
 
-    if (repl_state_replay().active)
+    if (replay_active())
         repl_replay_stop();
 
     int new_value = repl_config_cycle(item->key, delta);
 
     if (item->key == REPL_CONFIG_CODE_PANEL_LAYOUT) {
-        repl_state_code_panel_mut()->panel_frac = 0.3f;
+        ui_state_code_panel_mut()->panel_frac = 0.3f;
         if (repl_state_presentation().code_panel_layout == CODE_PANEL_LAYOUT_TOP) {
             set_status("Layout: top code panel");
         } else if (repl_state_presentation().code_panel_layout == CODE_PANEL_LAYOUT_BOTTOM) {
             set_status("Layout: bottom code panel");
         } else if (repl_state_presentation().code_panel_layout == CODE_PANEL_LAYOUT_HIDDEN) {
-            ui_panels_close_menus();
-            clear_autocomplete_state();
+            ui_menu_bar_close();
+            ui_color_picker_close();
+            editor_completion_clear();
             set_status("Layout: code panel hidden");
         } else {
             set_status("Layout: left code panel");
@@ -229,34 +236,25 @@ void repl_cfg_cycle_row(int row, int delta) {
 }
 
 void repl_action_cursor_blink_reset(void) {
-    ReplCodePanelRuntimeState *cp = repl_state_code_panel_mut();
+    ReplCodePanelRuntimeState *cp = ui_state_code_panel_mut();
 
     cp->cursor_visible = 1;
     cp->blink_tick = 0;
 }
 
-void repl_action_set_cursor_pixel(int px, int py) {
-    ReplCodePanelRuntimeState *cp = repl_state_code_panel_mut();
-
-    cp->cursor_px = px;
-    cp->cursor_py = py;
-}
-
 void repl_action_help_tab_next(void) {
-    ReplHelpState *help = repl_state_help_mut();
-
-    if (help->tab_idx < 1) {
-        help->tab_idx++;
-        help->scroll = 0;
+    int tab = editor_help_session_tab_idx();
+    if (tab < 1) {
+        editor_help_session_set_tab(tab + 1);
+        editor_help_session_set_scroll(0);
     }
 }
 
 void repl_action_help_tab_prev(void) {
-    ReplHelpState *help = repl_state_help_mut();
-
-    if (help->tab_idx > 0) {
-        help->tab_idx--;
-        help->scroll = 0;
+    int tab = editor_help_session_tab_idx();
+    if (tab > 0) {
+        editor_help_session_set_tab(tab - 1);
+        editor_help_session_set_scroll(0);
     }
 }
 

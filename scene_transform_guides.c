@@ -48,7 +48,7 @@ static void compute_before_cursor_matrix(const SceneGuideSnapshot *snapshot,
     int depth = 0;
     for (int i = 0; i < cursor_flat_idx; i++) {
         if (!flat_cmds[i].valid) continue;
-        if (is_transform_cmd(flat_cmds[i].type))
+        if (repl_cmd_is_transform(flat_cmds[i].type))
             scene_apply_tracked_transform(&flat_cmds[i], &depth);
     }
     glGetFloatv(GL_MODELVIEW_MATRIX, out);
@@ -74,7 +74,7 @@ static void compute_after_cursor_origin(const SceneGuideSnapshot *snapshot,
     for (int i = first_after_idx; i < flat_cmd_count; i++) {
         if (!flat_cmds[i].valid) continue;
         if (is_geometry_emit_cmd(flat_cmds[i].type)) break;
-        if (is_transform_cmd(flat_cmds[i].type))
+        if (repl_cmd_is_transform(flat_cmds[i].type))
             scene_apply_tracked_transform(&flat_cmds[i], &depth);
     }
     float m[16];

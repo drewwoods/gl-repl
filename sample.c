@@ -1,4 +1,3 @@
-#include "sample.h"
 #include "imrepl_ctrl.h"
 #include "repl_actions.h"
 #include "repl_debug.h"
@@ -164,9 +163,9 @@ int main(int argc, char **argv) {
         if (dump_code || dump_flat)
             imrepl_ctrl_bootstrap_repl(input_file);
         if (dump_code)
-            repl_debug_dump_editor(stdout);
+            repl_debug_dump_editor(stdout, editor_buffer_view());
         if (dump_flat)
-            repl_debug_dump_flat_commands(stdout);
+            repl_debug_dump_flat_commands(stdout, editor_buffer_view());
         if (dump_state_layout)
             repl_debug_dump_runtime_state_layout(stdout);
         return 0;

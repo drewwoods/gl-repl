@@ -1,21 +1,25 @@
 /*
- * repl_variable_panel.c -- Floating slider panel for declared variables.
+ * ui_variable_panel.c -- Floating slider panel for declared variables.
  *
- * Pure renderer: reads g_predef_vars, scene rect, and the drag-state
- * accessors from repl_var_drag.c, and draws.  The actual value
-
- * mutation lives in repl_var_drag.c; the editor's mouse handler
- * begins/ends the drag transaction.
+ * Pure renderer + hit-test. Reads g_predef_vars, scene rect, and
+ * the variable_panel peer's drag accessors, and draws. The actual
+ * value mutation lives in variable_panel_drag.c (the peer's drag
+ * implementation); the editor's mouse handler invokes the peer via
+ * variable_panel_handle_drag_*.
  *
  * The replay-lift easing state is panel-local animation (not
  * variable mutation) and stays here.
  */
-#include "sample.h"
 #include "ui_variable_panel.h"
 #include "repl_state_views.h"
-#include "repl_var_drag.h"
-#include "repl_layout.h"
+#include "ui_state.h"
+#include "variable_panel_drag.h"
+#include "ui_layout.h"
+#include "variable_panel.h"
+#include "replay_state.h"
 #include "./include/gl_2d.h"
+#include "ui_metrics.h"
+#include "replay_ui_hud.h"
 
 /* Local copy of the layout-mode clamp.  Duplicated by repl_editor.c and
  * ui_panels.c; promoting to a shared header is a separate cleanup. */
@@ -69,9 +73,8 @@ static float var_panel_replay_target_lift_px(void) {
 }
 
 static float var_panel_replay_lift(void) {
-    ReplReplayRuntimeState replay = repl_state_replay();
     float target = 0.0f;
-    if (replay.active)
+    if (replay_active())
         target = var_panel_replay_target_lift_px();
 
     float anim_time = repl_state_variables().anim_time;
@@ -124,13 +127,32 @@ void ui_variable_panel_rect(int *px, int *py, int *pw, int *ph) {
 int ui_variable_panel_hit(int gx, int gy, int *out_row) {
     int px, py, pw, ph;
     ui_variable_panel_rect(&px, &py, &pw, &ph);
-    int ry = repl_state_viewport().window_h - gy;
+    int ry = ui_state_viewport().window_h - gy;
     if (gx < px || gx >= px + pw || ry < py || ry >= py + ph) return 0;
     int inner_top = py + ph - VAR_PANEL_PAD - VAR_TITLE_H;
     int row = (inner_top - ry) / VAR_ROW_H;
     if (row < 0 || row >= g_num_predef_vars) return 0;
     if (out_row) *out_row = row;
     return 1;
+}
+
+UiHit ui_variable_panel_hit_test(int mx, int my) {
+    UiHit h = ui_hit_none();
+    if (!variable_panel_visible()) return h;
+    int win_h = ui_state_viewport().window_h;
+    if (win_h <= 0) return h;
+    int row = -1;
+    if (!ui_variable_panel_hit(mx, my, &row)) return h;
+
+    int px, py, pw, ph;
+    ui_variable_panel_rect(&px, &py, &pw, &ph);
+    int gl_y = win_h - my;
+
+    h.kind = UI_HIT_VARIABLE_SLIDER;
+    h.item_idx = row;
+    h.local_x = (float)(mx - px);
+    h.local_y = (float)(gl_y - py);
+    return h;
 }
 
 void ui_variable_panel_render(const UiRenderSnapshot *snap) {
@@ -188,8 +210,8 @@ void ui_variable_panel_render(const UiRenderSnapshot *snap) {
         float val  = g_predef_vars[i].value;
 
         /* Drag highlight - amber tint for log mode, blue for linear */
-        if (repl_var_drag_active_var() == i) {
-            if (repl_var_drag_log_mode())
+        if (variable_panel_drag_active_var() == i) {
+            if (variable_panel_drag_log_mode())
                 glColor4f(0.30f, 0.20f, 0.05f, 0.60f);
             else
                 glColor4f(0.20f, 0.20f, 0.40f, 0.60f);
@@ -222,8 +244,8 @@ void ui_variable_panel_render(const UiRenderSnapshot *snap) {
          * Yellow = linear drag, orange = log drag, blue = idle. */
         float t  = val_to_slider_t(val, log_scale);
         float hx = (float)track_x + t * (float)(track_w - handle_w);
-        if (repl_var_drag_active_var() == i) {
-            if (repl_var_drag_log_mode())
+        if (variable_panel_drag_active_var() == i) {
+            if (variable_panel_drag_log_mode())
                 glColor4f(1.00f, 0.55f, 0.10f, 0.95f);  /* orange: log mode */
             else
                 glColor4f(1.00f, 0.80f, 0.20f, 0.95f);  /* yellow: linear mode */

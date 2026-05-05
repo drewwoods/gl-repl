@@ -23,21 +23,21 @@
  * Other translation units:
  *   repl_eval.c    - expression evaluator, for-loop header parsers
  *   repl_export.c  - save / load  (output.c round-tripping)
- *   repl_undo.c    - undo/redo snapshots and history rings
+ *   editor_undo.c    - undo/redo snapshots and history rings
  *   repl_camera_controls.c - viewport camera drag and momentum controls
  *   repl_actions.c - config shortcuts, menu actions, startup config defaults
- *   repl_code_panel_layout.c - pure code-panel wrapping and row lookup
- *   repl_code_panel_document.c - code-panel document rows and hit targets
- *   repl_search.c  - incremental search overlay
+ *   ui_code_panel_layout.c - pure code-panel wrapping and row lookup
+ *   editor_code_panel_document.c - code-panel document rows and hit targets
+ *   editor_search.c  - incremental search overlay
  *   cmd_format.c   - source-text formatting helpers
  *   repl_parser.c  - parse_command(): text → GLCmd
  *   repl_source_scope.c - source block/depth queries and indent cache
  *   repl_flatten.c - repl_flatten_program() / flatten_commands()
  *   repl_executor.c- repl_execute_program() / execute_commands()
- *   repl_autocomplete.c - completions and parameter hints
+ *   editor_autocomplete.c - completions and parameter hints
  *   repl_autonormal.c - auto-generated normals and feeding-state lookup
  *   repl_example_loader.c - built-in example loading and metadata
- *   repl_replay.c  - replay state machine and fade-batch rendering
+ *   replay.c  - replay state machine and fade-batch rendering
  *   repl_replay_annotations.c - code-panel replay variable annotations
  *   scene_render.c - 3D scene setup, grid / axes / overlay drawing
  *   ui_menu_bar.c - code-panel menus, dropdowns, and search slot
@@ -45,13 +45,12 @@
  *   ui_autocomplete_panel.c - floating autocomplete popup renderer
  *   ui_help_overlay.c - modal F1 help overlay
  *   ui_variable_panel.c - floating variable panel renderer
- *   repl_inline_rename.c - scene-rename input buffer
- *   repl_var_drag.c - variable slider drag state/writeback
+ *   editor_inline_rename.c - scene-rename input buffer
+ *   variable_panel_drag.c - variable slider drag state/writeback
  *   ui_panels.c    - code rows, scene status, hit routing
  *   repl_examples.c- predefined example scene data
  */
 
-#include "sample.h"
 #include "repl_export.h"
 #include "repl_core.h"
 #include "repl_core_internal.h"
@@ -93,8 +92,14 @@ static void get_for_var_name_from_text(const char *text, char *var, int var_sz);
 /* Utility                                                                    */
 /* ========================================================================= */
 
+/* ui_state_status_set is forward-declared here because repl_*.c is not
+ * allowed to include ui_state.h per check-controller-boundaries.
+ * Status is UiState chrome; the call lives on the legacy set_status()
+ * facade until the diagnostic relay reshape lands. */
+void ui_state_status_set(const char *message);
+
 void set_status(const char *msg) {
-    repl_state_status_set(msg);
+    ui_state_status_set(msg);
 }
 
 const char *mode_name(GLenum mode) {
@@ -214,14 +219,181 @@ static void normalize_with_indent(const char *raw_expr, int indent_spaces,
     out[indent_spaces + (int)body_copy_len] = '\0';
 }
 
+static int repl_core_append_text(char *dst, int dst_sz, int *off,
+                                 const char *text) {
+    size_t len;
+
+    if (!dst || dst_sz <= 0 || !off || !text)
+        return 0;
+    if (*off < 0 || *off >= dst_sz)
+        return 0;
+
+    len = strlen(text);
+    if ((size_t)*off + len >= (size_t)dst_sz)
+        return 0;
+
+    memcpy(dst + *off, text, len);
+    *off += (int)len;
+    dst[*off] = '\0';
+    return 1;
+}
+
+static int repl_core_append_span(char *dst, int dst_sz, int *off,
+                                 const char *start, const char *end) {
+    size_t len;
+
+    if (!dst || dst_sz <= 0 || !off || !start || !end || end < start)
+        return 0;
+    if (*off < 0 || *off >= dst_sz)
+        return 0;
+
+    len = (size_t)(end - start);
+    if ((size_t)*off + len >= (size_t)dst_sz)
+        return 0;
+
+    memcpy(dst + *off, start, len);
+    *off += (int)len;
+    dst[*off] = '\0';
+    return 1;
+}
+
+static int repl_core_format_var_decl_text(const char *orig_text,
+                                          const char *indent,
+                                          char *out, int out_sz) {
+    char buf[MAX_LINE_LEN] = "";
+    const char *p = orig_text ? orig_text : "";
+    int decl_count = 0;
+    int off = 0;
+
+    while (*p && isspace((unsigned char)*p)) p++;
+    if (strncmp(p, "float", 5) != 0)
+        return 0;
+    if (isalnum((unsigned char)p[5]) || p[5] == '_')
+        return 0;
+    p += 5;
+
+    if (!repl_core_append_text(buf, sizeof(buf), &off, indent ? indent : ""))
+        return 0;
+    if (!repl_core_append_text(buf, sizeof(buf), &off, "float "))
+        return 0;
+
+    while (*p) {
+        const char *name_start;
+
+        while (*p && isspace((unsigned char)*p)) p++;
+        if (*p == ';' || (*p == '/' && p[1] == '/'))
+            break;
+
+        if (decl_count > 0) {
+            if (*p != ',')
+                return 0;
+            p++;
+            while (*p && isspace((unsigned char)*p)) p++;
+            if (!repl_core_append_text(buf, sizeof(buf), &off, ", "))
+                return 0;
+        }
+
+        if (!isalpha((unsigned char)*p) && *p != '_')
+            return 0;
+        name_start = p;
+        while (*p && (isalnum((unsigned char)*p) || *p == '_')) p++;
+        if (!repl_core_append_span(buf, sizeof(buf), &off, name_start, p))
+            return 0;
+
+        while (*p && isspace((unsigned char)*p)) p++;
+        if (*p == '=' && p[1] != '=') {
+            const char *expr_start;
+            const char *expr_end;
+            int depth = 0;
+
+            p++;
+            while (*p && isspace((unsigned char)*p)) p++;
+            expr_start = p;
+            while (*p) {
+                if (*p == '(') {
+                    depth++;
+                } else if (*p == ')') {
+                    if (depth > 0)
+                        depth--;
+                } else if (depth == 0 && (*p == ',' || *p == ';')) {
+                    break;
+                } else if (depth == 0 && *p == '/' && p[1] == '/') {
+                    break;
+                }
+                p++;
+            }
+            expr_end = p;
+            while (expr_end > expr_start &&
+                   isspace((unsigned char)expr_end[-1]))
+                expr_end--;
+            if (expr_end == expr_start)
+                return 0;
+            if (!repl_core_append_text(buf, sizeof(buf), &off, " = ") ||
+                !repl_core_append_span(buf, sizeof(buf), &off,
+                                       expr_start, expr_end))
+                return 0;
+        }
+
+        decl_count++;
+        while (*p && isspace((unsigned char)*p)) p++;
+        if (*p == ';' || (*p == '/' && p[1] == '/'))
+            break;
+    }
+
+    if (decl_count == 0)
+        return 0;
+
+    if (*p == ';')
+        p++;
+    while (*p && isspace((unsigned char)*p)) p++;
+    if (*p != '\0' && !(p[0] == '/' && p[1] == '/'))
+        return 0;
+
+    if (!repl_core_append_text(buf, sizeof(buf), &off, ";"))
+        return 0;
+    if (p[0] == '/' && p[1] == '/') {
+        const char *comment_end = p + strlen(p);
+        while (comment_end > p && isspace((unsigned char)comment_end[-1]))
+            comment_end--;
+        if (!repl_core_append_text(buf, sizeof(buf), &off, " ") ||
+            !repl_core_append_span(buf, sizeof(buf), &off, p, comment_end))
+            return 0;
+    }
+
+    if (!out || out_sz <= 0)
+        return 0;
+    strncpy(out, buf, (size_t)out_sz - 1);
+    out[out_sz - 1] = '\0';
+    return 1;
+}
+
 static int parse_and_normalize_impl(const char *line, int pos,
                                     ExprVar *vars, int num_vars,
                                     int preserve_expr, GLCmd *out_cmd,
                                     char *text_out, int text_sz,
                                     int strict_refs) {
-    ReplParseContext parse_ctx = { pos, vars, num_vars, strict_refs };
+    /* repl_parse_and_normalize is called from many sites — commit
+     * paths, reformatter, tests. None of them want the parser
+     * silently calling set_status; the commit path that wants the
+     * diagnostic surfaces it through its own status helper after
+     * the call returns 0. Provide a scratch buffer here so the
+     * helper's set_status fallback (slated for removal in commit
+     * 42b) is never reached, and the legacy status-bar message —
+     * generated by the parser today — keeps showing through this
+     * route until callers migrate. */
+    char normalize_parse_err[REPL_STATUS_TEXT_MAX];
+    normalize_parse_err[0] = '\0';
+    ReplParseContext parse_ctx = {
+        .source_line_idx = pos,
+        .vars = vars, .num_vars = num_vars,
+        .strict_refs = strict_refs,
+        .err_buf = normalize_parse_err,
+        .err_sz  = (int)sizeof(normalize_parse_err),
+    };
     ReplParsedLine pl;
     int parsed = repl_parser_parse_command_ctx(line, &pl, &parse_ctx);
+    if (!parsed && normalize_parse_err[0])
+        set_status(normalize_parse_err);
 
     if (!parsed) return 0;
     *out_cmd = pl.cmd;
@@ -269,18 +441,24 @@ static void repl_core_replace_formatted_cmd(ReplCommandStore *store,
                                             int cmd_idx,
                                             const GLCmd *cmd,
                                             const char *text) {
-    repl_command_store_replace_one(store, cmd_idx, cmd, text);
+    if (repl_command_store_replace_one(store, cmd_idx, cmd))
+        editor_buffer_replace_line(cmd_idx, text);
 }
 
 void repl_reformat_commands(void) {
     prof_begin(PROF_REFORMAT);
     int saved_edit_line = repl_state_edit_line();
-    int saved_inserting = repl_state_insert_mode();
+    int saved_inserting = editor_insert_mode();
     char saved_input[MAX_INPUT_LEN];
-    int saved_input_len = repl_state_editor_input().input_len;
-    int saved_cursor_pos = repl_state_cursor_pos();
-    memcpy(saved_input, repl_state_editor_input().input, sizeof(saved_input));
+    int saved_input_len = editor_state_input().input_len;
+    int saved_cursor_pos = editor_cursor_pos();
+    memcpy(saved_input, editor_state_input().input, sizeof(saved_input));
     ReplCommandStore store = repl_command_store_live();
+    /* Source text reads route through an EditorBufferView so the
+     * dependency is declared at function scope rather than via a
+     * scattered global accessor. Phase D will replace this entry-time
+     * fetch with a view threaded from the controller. */
+    EditorBufferView text = editor_buffer_view();
 
     for (int cmd_idx = 0; cmd_idx < repl_state_document_count(); cmd_idx++) {
         if (!repl_state_document_cmds_mut()[cmd_idx].valid) continue;
@@ -290,7 +468,7 @@ void repl_reformat_commands(void) {
         char fmt_text[MAX_LINE_LEN] = "";
 
         /* Canonical text for this command lives in the editor buffer. */
-        const char *orig_text = repl_state_editor_buffer_line(cmd_idx);
+        const char *orig_text = editor_buffer_view_line(text, cmd_idx);
         if (!orig_text) orig_text = "";
 
         char ind_s[32];
@@ -407,12 +585,19 @@ void repl_reformat_commands(void) {
             break;
         }
         case CMD_VAR_DECLARE: {
-            int off = snprintf(fmt_text, sizeof(fmt_text), "%sfloat ", ind_s);
-            for (int decl_idx = 0; decl_idx < orig.var_decl_count && off < (int)sizeof(fmt_text) - 4; decl_idx++) {
-                if (decl_idx > 0) off += snprintf(fmt_text + off, sizeof(fmt_text) - off, ", ");
-                off += snprintf(fmt_text + off, sizeof(fmt_text) - off, "%s", orig.var_names[decl_idx]);
+            if (!repl_core_format_var_decl_text(orig_text, ind_s,
+                                                fmt_text, sizeof(fmt_text))) {
+                int off = snprintf(fmt_text, sizeof(fmt_text), "%sfloat ", ind_s);
+                for (int decl_idx = 0;
+                     decl_idx < orig.var_decl_count && off < (int)sizeof(fmt_text) - 4;
+                     decl_idx++) {
+                    if (decl_idx > 0)
+                        off += snprintf(fmt_text + off, sizeof(fmt_text) - off, ", ");
+                    off += snprintf(fmt_text + off, sizeof(fmt_text) - off,
+                                    "%s", orig.var_names[decl_idx]);
+                }
+                snprintf(fmt_text + off, sizeof(fmt_text) - off, ";");
             }
-            snprintf(fmt_text + off, sizeof(fmt_text) - off, ";");
             repl_core_replace_formatted_cmd(&store, cmd_idx, &fmt, fmt_text);
             break;
         }
@@ -432,7 +617,7 @@ void repl_reformat_commands(void) {
         }
         default: {
             ExprVar vis_vars[MAX_EXPR_VARS];
-            int num_vis_vars = collect_visible_vars(cmd_idx, vis_vars, MAX_EXPR_VARS);
+            int num_vis_vars = collect_visible_vars(cmd_idx, vis_vars, MAX_EXPR_VARS, NULL);
             int preserve_expr = (num_vis_vars > 0) || orig.has_vars;
             GLCmd parsed;
             char parsed_text[MAX_LINE_LEN] = "";
@@ -458,12 +643,12 @@ void repl_reformat_commands(void) {
 
     repl_state_edit_line_set(saved_edit_line);
     repl_state_edit_line_clamp();
-    repl_state_insert_mode_set(saved_inserting);
+    editor_insert_mode_set(saved_inserting);
     if (saved_inserting) {
-        ReplEditorInputState *inp = repl_state_editor_input_mut();
+        ReplEditorInputState *inp = editor_state_input_mut();
         memcpy(inp->input, saved_input, sizeof(saved_input));
         inp->input_len = saved_input_len;
-        repl_state_cursor_pos_set(saved_cursor_pos);
+        editor_cursor_pos_set(saved_cursor_pos);
     } else {
         load_line_to_input(repl_state_edit_line());
     }
@@ -493,7 +678,7 @@ static void get_for_var_name_from_text(const char *text, char *var, int var_sz) 
     var[i] = '\0';
 }
 
-int collect_visible_vars(int pos, ExprVar *vars, int max_vars) {
+int collect_visible_vars(int pos, ExprVar *vars, int max_vars, int *total_out) {
     typedef struct {
         CmdType type;
         ExprVar vars[MAX_EXPR_VARS];
@@ -502,6 +687,11 @@ int collect_visible_vars(int pos, ExprVar *vars, int max_vars) {
 
     ScopeFrame frames[64];
     int depth = 0;
+    /* Source text reads for for-loop / func-def reparse route through
+     * an EditorBufferView fetched at entry. Phase D will accept the
+     * view as a parameter once collect_visible_vars is folded into
+     * the editor commit path. */
+    EditorBufferView text = editor_buffer_view();
 
     for (int cmd_idx = 0; cmd_idx < pos && cmd_idx < repl_state_document_count(); cmd_idx++) {
         CmdType t = repl_state_document_cmds_mut()[cmd_idx].type;
@@ -514,7 +704,7 @@ int collect_visible_vars(int pos, ExprVar *vars, int max_vars) {
 
             if (t == CMD_FOR_BEGIN) {
                 char vn[16];
-                const char *for_text = repl_state_editor_buffer_line(cmd_idx);
+                const char *for_text = editor_buffer_view_line(text, cmd_idx);
                 get_for_var_name_from_text(for_text ? for_text : "", vn, sizeof(vn));
                 repl_copy_string_fits(frames[depth].vars[0].name,
                                       sizeof(frames[depth].vars[0].name),
@@ -525,7 +715,7 @@ int collect_visible_vars(int pos, ExprVar *vars, int max_vars) {
                 int fn = -1;
                 int param_count = 0;
                 char param_names[MAX_EXPR_VARS][16];
-                const char *func_text = repl_state_editor_buffer_line(cmd_idx);
+                const char *func_text = editor_buffer_view_line(text, cmd_idx);
                 if (parse_repl_func_signature(func_text ? func_text : "", &fn,
                                               param_names, MAX_EXPR_VARS,
                                               &param_count)) {
@@ -544,12 +734,15 @@ int collect_visible_vars(int pos, ExprVar *vars, int max_vars) {
         }
     }
 
-    int count = 0;
-    for (int depth_idx = depth - 1; depth_idx >= 0 && count < max_vars; depth_idx--) {
-        for (int var_idx = 0; var_idx < frames[depth_idx].count && count < max_vars; var_idx++)
-            vars[count++] = frames[depth_idx].vars[var_idx];
+    int count = 0, total = 0;
+    for (int depth_idx = depth - 1; depth_idx >= 0; depth_idx--) {
+        for (int var_idx = 0; var_idx < frames[depth_idx].count; var_idx++) {
+            if (count < max_vars)
+                vars[count++] = frames[depth_idx].vars[var_idx];
+            total++;
+        }
     }
-
+    if (total_out) *total_out = total;
     return count;
 }
 
@@ -566,8 +759,8 @@ static void scroll_to_display_function(void) {
             break;
         target++;
     }
-    repl_state_code_panel_mut()->scroll = target;
-    repl_state_code_panel_mut()->scroll_follow_cursor = 0;
+    editor_scroll_set(target);
+    editor_scroll_follow_cursor_set(0);
 }
 
 static void load_initial_commands(const char *import_file) {
@@ -597,7 +790,7 @@ static void load_initial_commands(const char *import_file) {
 }
 
 void repl_save_default_output(void) {
-    repl_export_save_output(outfile);
+    repl_export_save_output(outfile, editor_buffer_view());
 }
 
 void repl_flatten_commands(void) {

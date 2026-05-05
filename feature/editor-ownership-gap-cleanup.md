@@ -1,5 +1,15 @@
 # Plan: Editor Ownership Gap Audit and Cleanup Companion
 
+> **Status: landed (extended through 2026-05-05).** Phases A–J of
+> the companion plan
+> [`editor-owns-text-completion.md`](editor-owns-text-completion.md)
+> closed the audit. Every audit this document specified is now a
+> hard guard under `make check-state-ownership`, and every
+> ratchet-driven baseline reaches **0/0** with the legacy bridge
+> code that fed it deleted (`check-ui-returns-hits-only`,
+> `check-no-set-status-in-repl-parser`, `check-replay-forwarders`,
+> `check-variable-panel-forwarders`).
+
 ## Purpose
 
 This document is an implementation companion to
@@ -221,12 +231,36 @@ Do not defer this indefinitely. It is the UI half of the same ownership split.
 
 ---
 
+## Implementation Status
+
+Branch: `feature/editor-ownership-gap-cleanup`. Companion to the 17-commit
+sequence in `feature/editor-owns-text-completion.md`. See that doc's
+*Implementation Status* table for the source of truth; this companion
+mirrors the gates that have come online.
+
+| Phase | Audit / gate landed |
+|---|---|
+| 0 | `make audit-editor-ownership` (informational; commit 1, 2026-05-02); baseline counts recorded (commit 2, 2026-05-02) |
+| 1.1 | EditorState + UiState scaffold landed (commit 3, 2026-05-02) |
+| 1.2 (slice 1 of 4) | editor_buffer slice migrated (commit 4, 2026-05-02); audit section 1: 1509→1460, section 3: 36→29 |
+| 1.2 (slice 2 of 4) | editor_input slice migrated (commit 5, 2026-05-02); audit section 1: 1460→1363 |
+| 1.2 (slice 3 of 4) | selection + clipboard slices migrated (commit 6, 2026-05-02); audit section 1: 1363→1307 |
+| 1.2 (slice 4 of 4) | search + autocomplete slices migrated (commit 7, 2026-05-02); audit section 1: 1307→1263 |
+| 1.2 (UI batch) | status / help / variable_panel / profile_panel / viewport / pointer migrated to UiState (commit 8, 2026-05-02); audit section 1: 1263→1260 (forwarders preserve names; architectural prize is the storage move) |
+| 1.2 (editor overlays) | transformers / highlights / virtual_lines + variable_drag migrated to EditorState (commit 9, 2026-05-02); audit section 1: 1260→1209 |
+| 1.2 (input rename) | editor-input convenience getters renamed `repl_state_*` → `editor_*` (commit 10, 2026-05-02); audit section 1 unchanged (these names never matched the slice-name pattern); architectural prize is namespace consistency |
+| 1.2 (code_panel scroll) | scroll + scroll_follow_cursor split off into EditorState.scroll (commit 11, 2026-05-02); audit section 1: 1209→1194 |
+| 1.2 (ratchet) | `make check-editor-ownership-budget` ratchets transitional couplings downward only: ui-forwarder line count (baseline 21) and ui_state.h→repl_state_views.h include (baseline 1) (commit 11, 2026-05-02) |
+| 1.3–5 | camera placement + chrome accessor migration + later phases pending |
+
 ## Phase 0: Add Audits Before Moving Code
 
 This phase should land before large structural changes. It makes the gap visible
 and gives each later phase a measurable exit criterion.
 
 ### 0.1 Add `scripts/audit_editor_ownership.sh`
+
+✅ **Landed (commit 1).** Wired as `make audit-editor-ownership`.
 
 ```sh
 #!/bin/sh
@@ -268,20 +302,23 @@ audit-editor-ownership:
 
 ### 0.2 Add a baseline table
 
-After adding the script, update this section with real counts:
+✅ **Landed (commit 2).** Real counts from `make audit-editor-ownership`:
 
 ```text
-Date:
-Branch:
-repl_state editor/ui-like accessor hits:
-command store _with_line API hits:
-REPL direct editor-buffer read hits:
-UI live mutation hits:
-repl_editor.c include count:
-Known intentional exceptions:
+Date:                                  2026-05-02
+Branch:                                feature/editor-ownership-gap-cleanup
+SHA at measurement (post-commit-1):    0595c42
+repl_state editor/ui-like accessor hits:    1509
+command store _with_line API hits:            46
+REPL direct editor-buffer read hits:          36
+UI live mutation hits:                        16
+repl_editor.c include count:                  20
+Known intentional exceptions:                  0
 ```
 
 The first goal is not zero. The first goal is to make drift visible.
+The completion plan's *Implementation Status* table records per-phase
+targets each of these counts is driven toward.
 
 ### 0.3 Add explicit TODO markers for tolerated exceptions
 

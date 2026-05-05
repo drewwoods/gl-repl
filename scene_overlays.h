@@ -37,6 +37,11 @@
 
 #include "scene_render_types.h"
 
+/* REPL_OUTLINE_POLYGON_OFFSET_{FACTOR,UNITS} live in scene_render_types.h
+ * so repl_export.c can write the same depth-bias constants into the
+ * exported output.c without having to include a `scene_*` header
+ * (which would trip check-controller-boundaries). */
+
 /* Check whether a flat command block (starting at begin_idx) matches the cursor
  * context (for highlighting in polygon outlines). Returns 1 if the block's
  * source code includes the cursor line, 0 otherwise. is_tess indicates whether
@@ -65,5 +70,13 @@ void scene_overlays_render_vertex_numbers(const FrameRenderContext *frame_ctx);
  * Called during the overlay rendering phase if normal vector overlay is enabled
  * (F7). Helps users understand surface orientation and normals computation. */
 void scene_overlays_render_normal_vectors(const FrameRenderContext *frame_ctx);
+
+/* Render semi-transparent vertex point dots at each vertex position.
+ * Points are alpha-blended so they don't obscure underlying geometry.
+ * Line-mode primitives (GL_LINES, GL_LINE_STRIP, GL_LINE_LOOP) use a smaller
+ * point radius to avoid covering the line itself. Also drives geometry and
+ * transform guides inline, so they render at the correct model-matrix position.
+ * No-ops when both show_vpoints and replay_vertex_points are false. */
+void scene_overlays_render_vertex_points(const FrameRenderContext *frame_ctx);
 
 #endif /* SCENE_OVERLAYS_H */

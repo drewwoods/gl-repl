@@ -92,9 +92,14 @@ static void draw_vertex_guides(const SceneGuideSnapshot *snapshot) {
         return;
 
     const char *args_str = NULL;
+    int is_vertex2f = 0;
     if (strncmp(snapshot->input, "glVertex3f(", 11) == 0 &&
         snapshot->input_len > 11) {
         args_str = snapshot->input + 11;
+    } else if (strncmp(snapshot->input, "glVertex2f(", 11) == 0 &&
+               snapshot->input_len > 11) {
+        args_str = snapshot->input + 11;
+        is_vertex2f = 1;
     } else if (strncmp(snapshot->input, "gluVertex(", 10) == 0 &&
                snapshot->input_len > 10) {
         args_str = snapshot->input + 10;
@@ -116,7 +121,18 @@ static void draw_vertex_guides(const SceneGuideSnapshot *snapshot) {
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
-    if (n == 1) {
+    if (n == 2 && is_vertex2f) {
+        /* Both x,y filled for glVertex2f — treat as a complete vertex at z=0 */
+        int depth = glIsEnabled(GL_DEPTH_TEST);
+        if (depth) glDisable(GL_DEPTH_TEST);
+        glColor4f(1.0f, 0.3f, 0.3f, 0.9f);
+        glPointSize(8.0f);
+        glBegin(GL_POINTS);
+        glVertex3f(vals[0], vals[1], 0.0f);
+        glEnd();
+        glPointSize(1.0f);
+        if (depth) glEnable(GL_DEPTH_TEST);
+    } else if (n == 1) {
         if      (filled[0]) draw_guide_yz_plane(vals[0], sz, as);
         else if (filled[1]) draw_guide_xz_plane(vals[1], sz, as);
         else if (filled[2]) draw_guide_xy_plane(vals[2], sz, as);

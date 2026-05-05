@@ -2,10 +2,18 @@
  * repl_executor.c -- Flat command execution, GLUtesselator resource lifetimes,
  * and execution-time state helpers.
  */
-#include "sample.h"
 #include "repl_core_internal.h"
 #include "repl_executor.h"
 #include "repl_state.h"
+#include "replay_state.h"
+
+/* Camera lives on UiState; repl_*.c is not allowed to include
+ * ui_state.h per check-controller-boundaries. The executor reads
+ * camera distance once per frame for the legacy point-size fallback
+ * on platforms missing glPointParameterfv. */
+#ifdef NO_POINT_PARAMETER
+ReplCameraState ui_state_camera(void);
+#endif
 
 #define EXEC_RENDER (repl_state_render_mut())
 #define g_lights      (EXEC_RENDER->lights)
@@ -15,7 +23,7 @@ static GLUtesselator *g_tess = NULL;
 static TessVertex     g_tess_verts[TESS_VERT_BUF_SIZE];
 static int            g_tess_vert_count = 0;
 
-/* Execution context adjusted by repl_replay.c for fade-batch rendering. */
+/* Execution context adjusted by replay.c for fade-batch rendering. */
 static float g_execute_alpha_scale = 1.0f;
 
 /* Skip expensive geometry-emitting commands (vertices, quadrics, tess) for
@@ -32,7 +40,7 @@ static int g_execute_skip_geom_before_pc = 0;
  * glPointSize call by 2/cam_dist. Defined here so the override only affects
  * the executor's user-facing CMD_POINT_SIZE dispatch. */
 static void _repl_point_size(GLfloat sz) {
-    float cam_dist = repl_state_camera().dist;
+    float cam_dist = ui_state_camera().dist;
     glPointSize(cam_dist > 0.0f ? sz * (2.0f / (0.5 * cam_dist)) : sz);
 }
 #define glPointSize _repl_point_size
@@ -294,7 +302,8 @@ static FlatCmdLocalVars *execution_local_vars_at(FlatProgramView program,
     return &program.local_vars[flat_cmd_idx];
 }
 
-static const char *execution_flat_text(const GLCmd *flat_cmd) {
+static const char *execution_flat_text(EditorBufferView text,
+                                       const GLCmd *flat_cmd) {
     int src_cmd_idx;
 
     if (!flat_cmd)
@@ -305,8 +314,8 @@ static const char *execution_flat_text(const GLCmd *flat_cmd) {
         return "";
 
     {
-        const char *text = repl_state_editor_buffer_line(src_cmd_idx);
-        return (text && text[0]) ? text : "";
+        const char *line = editor_buffer_view_line(text, src_cmd_idx);
+        return (line && line[0]) ? line : "";
     }
 }
 
@@ -319,9 +328,9 @@ static const char *execution_flat_text(const GLCmd *flat_cmd) {
  * mutating repl_state_flat_program_count(). */
 void repl_execute_program(const ReplExecutionOptions *options) {
     FlatProgramView program = execution_program_from_options(options);
-    ReplReplayRuntimeState replay = repl_state_replay();
     const GLCmd *flat_cmds = program.cmds;
     int flat_cmd_count = execution_flat_count_from_options(options, program);
+    EditorBufferView text = options ? options->text : (EditorBufferView){0};
     int in_begin = 0;
     int tess_depth = 0; /* 0=outside, 1=in polygon, 2=in contour */
     int matrix_depth = 0;
@@ -334,7 +343,7 @@ void repl_execute_program(const ReplExecutionOptions *options) {
     int pc = 0;
     while (pc < flat_cmd_count) {
         if (!flat_cmds[pc].valid) { pc++; continue; }
-        if (is_transform_cmd(flat_cmds[pc].type)) {
+        if (repl_cmd_is_transform(flat_cmds[pc].type)) {
             repl_executor_apply_tracked_transform_cmd(&flat_cmds[pc], &matrix_depth);
             pc++;
             continue;
@@ -408,6 +417,10 @@ void repl_execute_program(const ReplExecutionOptions *options) {
         case CMD_POINT_SIZE:
             if (in_begin) { glEnd(); in_begin = 0; }
             glPointSize(flat_cmds[pc].args[0]);
+            break;
+        case CMD_LINE_WIDTH:
+            if (in_begin) { glEnd(); in_begin = 0; }
+            glLineWidth(flat_cmds[pc].args[0]);
             break;
         case CMD_POINT_PARAMETER_FV:
         case CMD_BLEND_FUNC:
@@ -494,7 +507,7 @@ void repl_execute_program(const ReplExecutionOptions *options) {
              * commands still use the args baked into flat_cmds[]. Replay also
              * cannot follow the dynamic jump trace. */
             char label_name[64];
-            if (!repl_extract_goto_label(execution_flat_text(&flat_cmds[pc]),
+            if (!repl_extract_goto_label(execution_flat_text(text, &flat_cmds[pc]),
                                          label_name, sizeof(label_name)))
                 break;
             if (goto_count++ > 100000) {
@@ -505,7 +518,7 @@ void repl_execute_program(const ReplExecutionOptions *options) {
                 if (flat_cmds[label_idx].valid &&
                     flat_cmds[label_idx].type == CMD_LABEL) {
                     char target_label[64];
-                    if (repl_extract_label_name(execution_flat_text(&flat_cmds[label_idx]),
+                    if (repl_extract_label_name(execution_flat_text(text, &flat_cmds[label_idx]),
                                                 target_label,
                                                 sizeof(target_label)) &&
                         strcmp(target_label, label_name) == 0) {
@@ -530,7 +543,7 @@ void repl_execute_program(const ReplExecutionOptions *options) {
                     eval_vars = local_vars->vars;
                     eval_num_vars = local_vars->num_vars;
                 }
-                if (repl_extract_paren_payload(execution_flat_text(&flat_cmds[pc]),
+                if (repl_extract_paren_payload(execution_flat_text(text, &flat_cmds[pc]),
                                                cond_text, sizeof(cond_text)) &&
                     cond_text[0]) {
                     char repl_cond[MAX_LINE_LEN];
@@ -557,7 +570,7 @@ void repl_execute_program(const ReplExecutionOptions *options) {
             float value = flat_cmds[pc].args[0];
             if (flat_cmds[pc].has_vars) {
                 char rhs[MAX_LINE_LEN] = "";
-                if (repl_extract_assignment_parts(execution_flat_text(&flat_cmds[pc]), NULL, 0,
+                if (repl_extract_assignment_parts(execution_flat_text(text, &flat_cmds[pc]), NULL, 0,
                                                   rhs, sizeof(rhs)) && rhs[0]) {
                     FlatCmdLocalVars *local_vars =
                         execution_local_vars_at(program, pc);
@@ -577,13 +590,14 @@ void repl_execute_program(const ReplExecutionOptions *options) {
                 g_predef_vars[var_idx].value = value;
             break;
         }
-        /* Transforms handled by is_transform_cmd() early-continue above. */
+        /* Transforms handled by repl_cmd_is_transform() early-continue above. */
         case CMD_TRANSLATE3F: case CMD_SCALEF: case CMD_ROTATEF:
         case CMD_PUSH_MATRIX: case CMD_POP_MATRIX:
         /* These are resolved during flatten and should not appear in flat_cmds. */
         case CMD_FOR_BEGIN: case CMD_FOR_END:
         case CMD_FUNC_DEF: case CMD_FUNC_END: case CMD_CALL:
         case CMD_COMMENT:
+        case CMD_EMPTY:
         case CMD_VAR_DECLARE:
         case CMD_TYPE_COUNT:
             break;
@@ -592,7 +606,7 @@ void repl_execute_program(const ReplExecutionOptions *options) {
     }
 execute_done:
     if (in_begin) glEnd();
-    if (!(replay.active && replay.mode == REPLAY_MODE_VERTEX)) {
+    if (!(replay_active() && replay_mode() == REPLAY_MODE_VERTEX)) {
         if (tess_depth == 2 && g_tess) { gluTessEndContour(g_tess); tess_depth = 1; }
         if (tess_depth == 1 && g_tess) { gluTessEndPolygon(g_tess); }
     }
@@ -600,5 +614,14 @@ execute_done:
 }
 
 void execute_commands(void) {
-    repl_execute_program(NULL);
+    /* Test/legacy entry point. The executor's goto-label and
+     * paren-payload helpers route through the editor-text view; pass
+     * the live buffer view so those features work the same as the
+     * controller-driven path. */
+    ReplExecutionOptions options = {
+        .flat_cmd_count = repl_state_flat_program_count(),
+        .program        = repl_state_flat_program_view(),
+        .text           = editor_buffer_view(),
+    };
+    repl_execute_program(&options);
 }

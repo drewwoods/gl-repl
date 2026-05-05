@@ -38,6 +38,9 @@
 #ifndef REPL_EXPORT_H
 #define REPL_EXPORT_H
 
+#include "editor_state.h"  /* EditorBufferView */
+#include "repl_export_state.h"
+
 /* Boilerplate C file segments for export. g_header_pre is the initial includes
  * and setup; g_header_post follows the metadata comments; g_footer_pre_init is
  * before the display() function; g_footer_post_init follows the function body.
@@ -51,8 +54,12 @@ extern const char  *g_footer_post_init[];
  * @scene-name, @workspace-dir), global variable declarations, camera state, function
  * definitions, and geometry commands to filename. The file is a complete, standalone
  * C program that can be reloaded via load_from_file(). Called by save-to-output and
- * workspace export routines. */
-void repl_export_save_output(const char *filename);
+ * workspace export routines.
+ *
+ * `text` is the editor buffer view the caller built; the export
+ * pipeline reads source text exclusively through that view rather
+ * than reaching into editor globals. */
+void repl_export_save_output(const char *filename, EditorBufferView text);
 
 /* Import a C source file saved by save_output(). Parses workspace header directives,
  * camera state, function definitions, and geometry commands. Feeds geometry lines
@@ -73,5 +80,10 @@ void repl_state_refresh_workspace_header_lines(void);
  * 0 if it's not a directive (caller should process as regular code). Used during
  * load_from_file() to extract metadata. */
 int  repl_state_parse_workspace_header_line(const char *line);
+
+/* Access the init-section boilerplate lines rendered into the code panel and
+ * exported output. */
+int  init_section_line_count(void);
+void init_section_line(int i, char *buf, size_t n);
 
 #endif

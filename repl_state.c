@@ -1,6 +1,10 @@
 #define REPL_STATE_IMPLEMENTATION
 #include "repl_state.h"
 
+#include "editor_state.h"
+#include "editor_help_session.h"
+#include "variable_panel.h"
+#include "replay_state.h"
 #include "repl_command_store.h"
 #include "repl_core.h"
 #include "repl_core_internal.h"
@@ -14,6 +18,15 @@ void refresh_workspace_header_lines(void);
 int  parse_workspace_header_line(const char *line);
 void update_render_state_strings(void);
 void update_cam_lines(void);
+
+/* Forward decl for the one ui_state_* entry point this translation
+ * unit needs after the Phase A commit 14 forwarder removal:
+ * ui_state_reset is called from repl_state_reset_all so test resets
+ * still drain UiState alongside ReplState and EditorState. The full
+ * canonical `ui_state_*` API is in ui_state.h; check-controller-
+ * boundaries forbids repl_*.c from including it. */
+void ui_state_reset(void);
+ReplCameraState *ui_state_camera_mut(void);
 
 static const float g_grid_major_steps[GRID_MAJOR_COUNT] = {
     [GRID_MAJOR_1]  = 1.0f,
@@ -44,46 +57,34 @@ static ReplRuntimeState g_repl_state;
 #define g_current_block_begin       (g_repl_state.flat_program.current_block_begin_idx)
 #define g_current_block_end         (g_repl_state.flat_program.current_block_end_idx)
 #define g_current_block_line        (g_repl_state.flat_program.current_block_source_line_idx)
-#define g_input                     (g_repl_state.editor_input.input)
-#define g_input_len                 (g_repl_state.editor_input.input_len)
-#define g_cursor_pos                (g_repl_state.editor_input.cursor_pos)
-#define g_newline_buf               (g_repl_state.editor_input.pending_newline)
-#define g_newline_len               (g_repl_state.editor_input.pending_newline_len)
-#define g_inserting                 (g_repl_state.editor_input.insert_mode)
-#define g_clipboard                 (g_repl_state.clipboard.cmds)
-#define g_clipboard_count           (g_repl_state.clipboard.cmd_count)
-#define g_sel_anchor                (g_repl_state.selection.anchor_idx)
-#define g_sel_end                   (g_repl_state.selection.end_idx)
+/* g_input / g_cursor_pos / g_newline_buf / g_newline_len / g_inserting
+ * macros removed (Phase 1 commit 5). The editor_input slice now lives
+ * on g_editor_state.input in editor_state.c, where the dependent
+ * convenience getters (editor_input_text, _cursor_pos,
+ * _insert_mode, _pending_newline_*, etc.) are also implemented. */
+/* g_clipboard / g_clipboard_count / g_sel_anchor / g_sel_end macros
+ * removed (Phase 1 commit 6). The selection + clipboard slices live
+ * on g_editor_state.{selection,clipboard} in editor_state.c. */
 #define g_anim_time                 (g_repl_state.variables.anim_time)
 #define g_t_playing                 (g_repl_state.variables.time_playing)
 #define g_t_var_idx                 (g_repl_state.variables.time_var_idx)
-#define g_panel_frac                (g_repl_state.code_panel.panel_frac)
-#define g_resizing_panel            (g_repl_state.code_panel.resizing_panel)
-#define g_scroll                    (g_repl_state.code_panel.scroll)
-#define g_scroll_follow_cursor      (g_repl_state.code_panel.scroll_follow_cursor)
-#define g_cursor_on                 (g_repl_state.code_panel.cursor_visible)
-#define g_blink_tick                (g_repl_state.code_panel.blink_tick)
-#define g_show_help                 (g_repl_state.help.visible)
-#define g_help_tab                  (g_repl_state.help.tab_idx)
-#define g_help_scroll               (g_repl_state.help.scroll)
-#define g_show_var_panel            (g_repl_state.variable_panel.visible)
-#define g_drag_var                  (g_repl_state.variable_drag.var_idx)
-#define g_drag_log_mode             (g_repl_state.variable_drag.log_mode)
-#define g_drag_start_val            (g_repl_state.variable_drag.start_value)
-#define g_drag_start_x              (g_repl_state.variable_drag.start_x)
-#define g_show_profile_panel        (g_repl_state.profile_panel.mode)
-#define g_cam_rx                    (g_repl_state.camera.rx)
-#define g_cam_ry                    (g_repl_state.camera.ry)
-#define g_cam_dist                  (g_repl_state.camera.dist)
-#define g_cam_tx                    (g_repl_state.camera.tx)
-#define g_cam_ty                    (g_repl_state.camera.ty)
-#define g_cam_tz                    (g_repl_state.camera.tz)
-#define g_cam_motion_glow           (g_repl_state.camera.motion_glow)
-#define g_mouse_x                   (g_repl_state.pointer.mouse_x)
-#define g_mouse_y                   (g_repl_state.pointer.mouse_y)
-#define g_mouse_btn                 (g_repl_state.pointer.mouse_button)
-#define g_win_w                     (g_repl_state.viewport.window_w)
-#define g_win_h                     (g_repl_state.viewport.window_h)
+/* g_panel_frac / g_resizing_panel / g_cursor_on / g_blink_tick /
+ * g_cursor_px / g_cursor_py macros removed (Phase A commit 12); the
+ * code_panel render-chrome slice lives on g_ui_state.code_panel in
+ * ui_state.c. The scroll fields moved earlier (Phase 1 commit 11)
+ * onto g_editor_state.scroll in editor_state.c.
+ * g_show_help / g_help_tab / g_help_scroll / g_show_var_panel macros
+ * removed (Phase 1 commit 8); the help and variable_panel slices live
+ * on g_ui_state.{help,variable_panel} in ui_state.c. */
+/* g_drag_* macros removed (Phase 1 commit 9); variable_drag lives on
+ * g_editor_state.variable_drag in editor_state.c. */
+/* g_show_profile_panel macro removed (Phase 1 commit 8); profile_panel
+ * lives on g_ui_state.profile_panel in ui_state.c. */
+/* g_cam_* macros removed (Phase A commit 13); the camera slice lives
+ * on g_ui_state.camera in ui_state.c, and the camera setters call
+ * ui_state_camera_* directly.
+ * g_mouse_* and g_win_* macros removed (Phase 1 commit 8); pointer and
+ * viewport slices live on g_ui_state.{pointer,viewport} in ui_state.c. */
 #define g_wireframe                 (g_repl_state.presentation.wireframe)
 #define g_grid_theme                (g_repl_state.presentation.grid_theme)
 #define g_grid_major_idx            (g_repl_state.presentation.grid_major_idx)
@@ -101,13 +102,14 @@ static ReplRuntimeState g_repl_state;
 #define g_autonormal                (g_repl_state.presentation.autonormal)
 #define g_show_lights               (g_repl_state.presentation.show_light_indicators)
 #define g_backdrop_mode             (g_repl_state.presentation.backdrop_mode)
-#define g_cam_rotate                (g_repl_state.camera.auto_rotate)
+/* g_cam_rotate macro removed (Phase A commit 13); auto_rotate lives on
+ * g_ui_state.camera with the rest of the camera slice. */
 #define g_show_outlines             (g_repl_state.presentation.show_vertex_outlines)
 #define g_show_vpoints              (g_repl_state.presentation.show_vertex_points)
 #define g_highlight_current_poly    (g_repl_state.presentation.highlight_current_poly)
 #define g_ortho_mode                (g_repl_state.presentation.ortho_mode)
-#define g_cursor_px                 (g_repl_state.code_panel.cursor_px)
-#define g_cursor_py                 (g_repl_state.code_panel.cursor_py)
+/* g_cursor_px / g_cursor_py defined alongside the other code_panel
+ * macro removals above. */
 #define g_use_accum                 (g_repl_state.render.use_accum)
 #define g_accum_aa_enabled          (g_repl_state.render.accum_aa_enabled)
 #define g_accum_samples             (g_repl_state.render.accum_samples)
@@ -118,8 +120,10 @@ static ReplRuntimeState g_repl_state;
 #define g_init_attenuate_points     (g_repl_state.render.point_attenuation_enabled)
 #define g_lights                    (g_repl_state.render.lights)
 #define g_clear_color               (g_repl_state.render.clear_color)
-#define g_status                    (g_repl_state.status.text)
-#define g_status_ttl                (g_repl_state.status.ttl)
+/* g_status / g_status_ttl macros removed (Phase 1 commit 8); status
+ * lives on g_ui_state.status in ui_state.c.
+ * g_cursor_px / g_cursor_py macros removed (Phase A commit 12); the
+ * code_panel slice lives on g_ui_state.code_panel in ui_state.c. */
 #define g_search_active             (g_repl_state.search.active)
 #define g_search_query              (g_repl_state.search.query)
 #define g_search_query_len          (g_repl_state.search.query_len)
@@ -134,16 +138,10 @@ static ReplRuntimeState g_repl_state;
 #define g_ac_sel                    (g_repl_state.autocomplete.selected_idx)
 #define g_ac_ghost                  (g_repl_state.autocomplete.ghost)
 #define g_ac_hint                   (g_repl_state.autocomplete.hint)
-#define g_replay_active             (g_repl_state.replay.active)
-#define g_replay_state              (g_repl_state.replay.state)
-#define g_replay_pc                 (g_repl_state.replay.pc)
-#define g_replay_mode               (g_repl_state.replay.mode)
-#define g_replay_speed              (g_repl_state.replay.speed)
-#define g_replay_accum              (g_repl_state.replay.accum)
-#define g_replay_fade_speed         (g_repl_state.replay.fade_speed)
-#define g_replay_src_line           (g_repl_state.replay.src_line_idx)
-#define g_replay_total_flat         (g_repl_state.replay.total_flat_cmds)
-#define g_replay_expand_args        (g_repl_state.replay.expand_args)
+/* g_replay_* macros removed (Phase F commit 33); replay state lives
+ * on the replay peer (replay_state.c). Callers use replay_state_view
+ * / replay_state_mut directly (Phase J7 retired the legacy
+ * repl_state_replay forwarders). */
 #define g_example_idx               (g_repl_state.scenes.active_example_idx)
 #define g_workspace_dir             (g_repl_state.scenes.workspace_dir)
 #define g_workspace_header_lines    (g_repl_state.import_export.workspace_header_lines)
@@ -250,6 +248,7 @@ void repl_state_normals_dirty_clear(void) {
 void repl_state_document_reset(void) {
     ReplCommandStore store = repl_command_store_live();
     repl_command_store_load(&store, NULL, 0, 0);
+    editor_buffer_clear();
 }
 
 ReplFlatProgramState *repl_state_flat_program_mut(void) {
@@ -387,459 +386,36 @@ void repl_state_time_reset_to_zero(void) {
     g_flat_dirty = 1;
 }
 
-ReplEditorInputView repl_state_editor_input(void) {
-    return (ReplEditorInputView){
-        .input = g_input,
-        .input_capacity = MAX_INPUT_LEN,
-        .input_len = g_input_len,
-        .cursor_pos = g_cursor_pos,
-        .edit_line_idx = g_edit_line,
-        .pending_newline = g_newline_buf,
-        .pending_newline_capacity = MAX_INPUT_LEN,
-        .pending_newline_len = g_newline_len,
-        .insert_mode = g_inserting,
-    };
-}
-
-ReplEditorInputState *repl_state_editor_input_mut(void) {
-    return &g_repl_state.editor_input;
-}
-
-/* Editor-owns-text spike: per-line text buffer accessors. */
-const ReplEditorBuffer *repl_state_editor_buffer(void) {
-    return &g_repl_state.editor_buffer;
-}
-
-ReplEditorBuffer *repl_state_editor_buffer_mut(void) {
-    return &g_repl_state.editor_buffer;
-}
-
-const char *repl_state_editor_buffer_line(int idx) {
-    if (idx < 0 || idx >= MAX_COMMANDS)
-        return "";
-    return g_repl_state.editor_buffer.lines[idx];
-}
-
-void repl_state_editor_buffer_set_line(int idx, const char *text) {
-    if (idx < 0 || idx >= MAX_COMMANDS)
-        return;
-    if (!text) text = "";
-    char *dst = g_repl_state.editor_buffer.lines[idx];
-    int n = (int)strlen(text);
-    if (n >= MAX_LINE_LEN) n = MAX_LINE_LEN - 1;
-    memcpy(dst, text, (size_t)n);
-    dst[n] = '\0';
-}
-
-void repl_state_editor_buffer_set_count(int count) {
-    if (count < 0) count = 0;
-    if (count > MAX_COMMANDS) count = MAX_COMMANDS;
-    g_repl_state.editor_buffer.line_count = count;
-}
-
-int repl_state_editor_buffer_count(void) {
-    return g_repl_state.editor_buffer.line_count;
-}
-
-const EditorTransformerList *repl_state_editor_transformers(void) {
-    return &g_repl_state.editor_transformers;
-}
-
-void repl_state_editor_transformers_clear(void) {
-    g_repl_state.editor_transformers.count = 0;
-}
-
-int repl_state_editor_transformers_append(const EditorTransformer *transformer) {
-    EditorTransformerList *list = &g_repl_state.editor_transformers;
-    if (!transformer || list->count >= MAX_TRANSFORMERS)
-        return 0;
-    list->items[list->count++] = *transformer;
-    return 1;
-}
-
-const EditorHighlightList *repl_state_editor_highlights(void) {
-    return &g_repl_state.editor_highlights;
-}
-
-void repl_state_editor_highlights_clear(void) {
-    g_repl_state.editor_highlights.count = 0;
-}
-
-int repl_state_editor_highlights_append(int line_idx, int char_start,
-                                        int char_end, HighlightKind kind) {
-    EditorHighlightList *list = &g_repl_state.editor_highlights;
-    if (list->count >= MAX_HIGHLIGHTS)
-        return 0;
-    list->items[list->count++] = (EditorHighlight){
-        .line_idx = line_idx,
-        .char_start = char_start,
-        .char_end = char_end,
-        .kind = kind,
-    };
-    return 1;
-}
-
-const EditorVirtualLineList *repl_state_editor_virtual_lines(void) {
-    return &g_repl_state.editor_virtual_lines;
-}
-
-void repl_state_editor_virtual_lines_clear(void) {
-    g_repl_state.editor_virtual_lines.count = 0;
-}
-
-int repl_state_editor_virtual_lines_append(int after_line_idx,
-                                           VirtualLineStyle style,
-                                           const char *text,
-                                           const char *aux) {
-    EditorVirtualLineList *list = &g_repl_state.editor_virtual_lines;
-    if (list->count >= MAX_VIRTUAL_LINES)
-        return 0;
-    EditorVirtualLine *vl = &list->items[list->count++];
-    vl->after_line_idx = after_line_idx;
-    vl->style = style;
-    if (text) {
-        strncpy(vl->text, text, MAX_VIRTUAL_LINE_TEXT - 1);
-        vl->text[MAX_VIRTUAL_LINE_TEXT - 1] = '\0';
-    } else {
-        vl->text[0] = '\0';
-    }
-    if (aux) {
-        strncpy(vl->aux, aux, MAX_VIRTUAL_LINE_AUX - 1);
-        vl->aux[MAX_VIRTUAL_LINE_AUX - 1] = '\0';
-    } else {
-        vl->aux[0] = '\0';
-    }
-    return 1;
-}
-
-void repl_state_editor_input_reset(void) {
-    repl_state_input_clear();
-    repl_state_pending_newline_clear();
-    g_inserting = 0;
-}
-
-const char *repl_state_input_text(void) {
-    return g_input;
-}
-
-char *repl_state_input_buffer_mut(void) {
-    return g_input;
-}
-
-int repl_state_input_len(void) {
-    return g_input_len;
-}
-
-void repl_state_input_len_set(int input_len) {
-    if (input_len < 0)
-        input_len = 0;
-    if (input_len >= MAX_INPUT_LEN)
-        input_len = MAX_INPUT_LEN - 1;
-    g_input_len = input_len;
-    g_input[g_input_len] = '\0';
-    repl_state_cursor_pos_set(g_cursor_pos);
-}
-
-void repl_state_input_set_text(const char *text) {
-    repl_copy_string_fits(g_input, MAX_INPUT_LEN, text ? text : "");
-    repl_state_input_len_set((int)strlen(g_input));
-    repl_state_cursor_pos_set(g_input_len);
-}
-
-void repl_state_input_clear(void) {
-    g_input[0] = '\0';
-    g_input_len = 0;
-    g_cursor_pos = 0;
-}
-
-int repl_state_cursor_pos(void) {
-    return g_cursor_pos;
-}
-
-void repl_state_cursor_pos_set(int cursor_pos) {
-    if (cursor_pos < 0)
-        cursor_pos = 0;
-    if (cursor_pos > g_input_len)
-        cursor_pos = g_input_len;
-    g_cursor_pos = cursor_pos;
-}
-
-int repl_state_insert_mode(void) {
-    return g_inserting;
-}
-
-void repl_state_insert_mode_set(int insert_mode) {
-    g_inserting = insert_mode ? 1 : 0;
-}
-
-char *repl_state_pending_newline_buffer_mut(void) {
-    return g_newline_buf;
-}
-
-int repl_state_pending_newline_len(void) {
-    return g_newline_len;
-}
-
-void repl_state_pending_newline_len_set(int newline_len) {
-    if (newline_len < 0)
-        newline_len = 0;
-    if (newline_len >= MAX_INPUT_LEN)
-        newline_len = MAX_INPUT_LEN - 1;
-    g_newline_len = newline_len;
-    g_newline_buf[g_newline_len] = '\0';
-}
-
-void repl_state_pending_newline_set_text(const char *text) {
-    repl_copy_string_fits(g_newline_buf, MAX_INPUT_LEN, text ? text : "");
-    repl_state_pending_newline_len_set((int)strlen(g_newline_buf));
-}
-
-void repl_state_pending_newline_clear(void) {
-    g_newline_buf[0] = '\0';
-    g_newline_len = 0;
-}
-
-ReplSelectionState repl_state_selection(void) {
-    return g_repl_state.selection;
-}
-
-ReplSelectionState *repl_state_selection_mut(void) {
-    return &g_repl_state.selection;
-}
-
-void repl_state_selection_clear(void) {
-    g_sel_anchor = -1;
-    g_sel_end = -1;
-}
-
-int repl_state_selection_anchor(void) {
-    return g_sel_anchor;
-}
-
-int repl_state_selection_end_idx(void) {
-    return g_sel_end;
-}
-
-void repl_state_selection_set(int anchor_idx, int end_idx) {
-    g_sel_anchor = anchor_idx;
-    g_sel_end = end_idx;
-}
-
-ReplClipboardState repl_state_clipboard(void) {
-    return g_repl_state.clipboard;
-}
-
-ReplClipboardState *repl_state_clipboard_mut(void) {
-    return &g_repl_state.clipboard;
-}
-
-void repl_state_clipboard_clear(void) {
-    g_clipboard_count = 0;
-}
-
-GLCmd *repl_state_clipboard_cmds_mut(void) {
-    return g_clipboard;
-}
-
-int repl_state_clipboard_count(void) {
-    return g_clipboard_count;
-}
-
-void repl_state_clipboard_count_set(int cmd_count) {
-    if (cmd_count < 0)
-        cmd_count = 0;
-    if (cmd_count > MAX_COMMANDS)
-        cmd_count = MAX_COMMANDS;
-    g_clipboard_count = cmd_count;
-}
-
-ReplCodePanelRuntimeState repl_state_code_panel(void) {
-    return g_repl_state.code_panel;
-}
-
-ReplCodePanelRuntimeState *repl_state_code_panel_mut(void) {
-    return &g_repl_state.code_panel;
-}
-
-void repl_state_code_panel_reset(void) {
-    g_repl_state.code_panel = g_repl_state_defaults.code_panel;
-}
-
-ReplHelpState repl_state_help(void) {
-    return g_repl_state.help;
-}
-
-ReplHelpState *repl_state_help_mut(void) {
-    return &g_repl_state.help;
-}
-
-void repl_state_help_reset(void) {
-    g_repl_state.help = g_repl_state_defaults.help;
-}
-
-ReplVariablePanelState repl_state_variable_panel(void) {
-    return g_repl_state.variable_panel;
-}
-
-ReplVariablePanelState *repl_state_variable_panel_mut(void) {
-    return &g_repl_state.variable_panel;
-}
-
-ReplVariableDragState repl_state_variable_drag(void) {
-    return g_repl_state.variable_drag;
-}
-
-ReplVariableDragState *repl_state_variable_drag_mut(void) {
-    return &g_repl_state.variable_drag;
-}
-
-void repl_state_variable_drag_reset(void) {
-    g_repl_state.variable_drag = g_repl_state_defaults.variable_drag;
-}
-
-ReplProfilePanelState repl_state_profile_panel(void) {
-    return g_repl_state.profile_panel;
-}
-
-ReplProfilePanelState *repl_state_profile_panel_mut(void) {
-    return &g_repl_state.profile_panel;
-}
-
-ReplStatusState repl_state_status(void) {
-    return g_repl_state.status;
-}
-
-ReplStatusState *repl_state_status_mut(void) {
-    return &g_repl_state.status;
-}
-
-void repl_state_status_set(const char *message) {
-    ReplStatusState *status = repl_state_status_mut();
-    if (!message)
-        message = "";
-    strncpy(status->text, message, sizeof(status->text) - 1);
-    status->text[sizeof(status->text) - 1] = '\0';
-    status->ttl = 240;
-}
-
-void repl_state_status_clear(void) {
-    ReplStatusState *status = repl_state_status_mut();
-    status->text[0] = '\0';
-    status->ttl = 0;
-}
-
-void repl_state_status_tick(void) {
-    ReplStatusState *status = repl_state_status_mut();
-    if (status->ttl > 0)
-        status->ttl--;
-}
-
-ReplSearchState repl_state_search(void) {
-    return g_repl_state.search;
-}
-
-ReplSearchState *repl_state_search_mut(void) {
-    return &g_repl_state.search;
-}
-
-void repl_state_search_clear(void) {
-    g_repl_state.search = g_repl_state_defaults.search;
-}
-
-ReplAutocompleteState repl_state_autocomplete(void) {
-    return g_repl_state.autocomplete;
-}
-
-ReplAutocompleteState *repl_state_autocomplete_mut(void) {
-    return &g_repl_state.autocomplete;
-}
-
-void repl_state_autocomplete_clear(void) {
-    g_repl_state.autocomplete = g_repl_state_defaults.autocomplete;
-}
-
-ReplCameraState repl_state_camera(void) {
-    return g_repl_state.camera;
-}
-
-ReplCameraState *repl_state_camera_mut(void) {
-    return &g_repl_state.camera;
-}
-
-ReplCameraState repl_state_camera_snapshot(void) {
-    return g_repl_state.camera;
-}
-
-void repl_state_camera_set(float rx, float ry, float dist,
-                           float tx, float ty, float tz,
-                           float motion_glow) {
-    g_cam_rx = rx;
-    g_cam_ry = ry;
-    g_cam_dist = dist;
-    g_cam_tx = tx;
-    g_cam_ty = ty;
-    g_cam_tz = tz;
-    g_cam_motion_glow = motion_glow;
-}
-
-void repl_state_camera_set_orbit(float rx, float ry) {
-    g_cam_rx = rx;
-    g_cam_ry = ry;
-}
-
-void repl_state_camera_set_pan(float tx, float ty, float tz) {
-    g_cam_tx = tx;
-    g_cam_ty = ty;
-    g_cam_tz = tz;
-}
-
-void repl_state_camera_set_distance(float dist) {
-    g_cam_dist = dist;
-}
-
-void repl_state_camera_set_motion_glow(float motion_glow) {
-    g_cam_motion_glow = motion_glow;
-}
-
-void repl_state_camera_reset_default(void) {
-    g_repl_state.camera = g_repl_state_defaults.camera;
-}
-
-ReplPointerState repl_state_pointer(void) {
-    return g_repl_state.pointer;
-}
-
-ReplPointerState *repl_state_pointer_mut(void) {
-    return &g_repl_state.pointer;
-}
-
-void repl_state_pointer_set(int mouse_x, int mouse_y, int mouse_button) {
-    g_mouse_x = mouse_x;
-    g_mouse_y = mouse_y;
-    g_mouse_btn = mouse_button;
-}
-
-void repl_state_pointer_set_pos(int mouse_x, int mouse_y) {
-    g_mouse_x = mouse_x;
-    g_mouse_y = mouse_y;
-}
-
-void repl_state_pointer_set_button(int mouse_button) {
-    g_mouse_btn = mouse_button;
-}
-
-ReplViewportState repl_state_viewport(void) {
-    return g_repl_state.viewport;
-}
-
-ReplViewportState *repl_state_viewport_mut(void) {
-    return &g_repl_state.viewport;
-}
-
-void repl_state_viewport_set_size(int window_w, int window_h) {
-    g_win_w = window_w;
-    g_win_h = window_h;
-}
+/* Editor-input + editor-buffer accessors moved to editor_state.c
+ * (Phase 1 commits 4-5). Use editor_state_input / _mut / _reset for
+ * the input slice, editor_state_buffer / _mut for the whole-buffer
+ * struct, and editor_buffer_* for slice-level line text. */
+
+/* Editor overlay snapshot list accessors (transformers / highlights /
+ * virtual_lines) moved to editor_state.c (Phase 1 commit 9). Use
+ * editor_state_transformers / _highlights / _virtual_lines. */
+
+/* editor_state_input_reset and the editor_input convenience getters
+ * (input_text / input_len / cursor_pos / insert_mode / pending_newline_*)
+ * moved to editor_state.c (Phase 1 commit 5). The editor_state_input
+ * struct accessor and the new editor_state_input_reset entry point
+ * live there too. */
+
+/* Selection + clipboard accessors moved to editor_state.c
+ * (Phase 1 commit 6). Use editor_state_selection / _clipboard. */
+
+/* code_panel / camera / status / help / variable_panel /
+ * profile_panel / pointer / viewport accessors all live on
+ * ui_state.c (Phase 1 commit 8 + Phase A commits 12-14). Use the
+ * canonical `ui_state_*` API directly; the transitional
+ * `repl_state_*` forwarder block was removed in Phase A commit 14.
+ *
+ * Variable-drag accessors live on the variable_panel peer
+ * (variable_panel.h). Use `variable_panel_drag` /
+ * `variable_panel_handle_drag_*` directly.
+ *
+ * Search + autocomplete accessors moved to editor_state.c (Phase 1
+ * commit 7). Use editor_state_search / _autocomplete. */
 
 ReplPresentationState repl_state_presentation(void) {
     return g_repl_state.presentation;
@@ -860,7 +436,7 @@ const float *repl_state_grid_extents(void) {
 
 void repl_state_presentation_reset_defaults(void) {
     g_repl_state.presentation = g_repl_state_defaults.presentation;
-    g_cam_rotate = g_repl_state_defaults.camera.auto_rotate;
+    ui_state_camera_mut()->auto_rotate = CFG_DEFAULT_CAMERA_ROTATE;
 }
 
 void repl_state_presentation_reset_example_defaults(void) {
@@ -878,7 +454,7 @@ void repl_state_presentation_reset_example_defaults(void) {
     g_xform_guide_mode = CFG_DEFAULT_XFORM_GUIDE_MODE;
     g_show_lights = CFG_DEFAULT_LIGHT_INDICATORS;
     g_backdrop_mode = CFG_DEFAULT_BACKDROP_MODE;
-    g_cam_rotate = CFG_DEFAULT_CAMERA_ROTATE;
+    ui_state_camera_mut()->auto_rotate = CFG_DEFAULT_CAMERA_ROTATE;
 }
 
 ReplRenderState repl_state_render(void) {
@@ -893,17 +469,10 @@ void repl_state_render_reset_defaults(void) {
     g_repl_state.render = g_repl_state_defaults.render;
 }
 
-ReplReplayRuntimeState repl_state_replay(void) {
-    return g_repl_state.replay;
-}
-
-ReplReplayRuntimeState *repl_state_replay_mut(void) {
-    return &g_repl_state.replay;
-}
-
-void repl_state_replay_reset(void) {
-    g_repl_state.replay = g_repl_state_defaults.replay;
-}
+/* Phase J7: the legacy `repl_state_replay` / `_mut` / `_reset`
+ * forwarders are gone. Callers use `replay_state_view` /
+ * `replay_state_mut` / `replay_state_reset` directly. The
+ * `check-replay-forwarders` ratchet is at 0/0. */
 
 ReplSceneRuntimeState repl_state_scenes(void) {
     return g_repl_state.scenes;
@@ -972,10 +541,24 @@ int repl_state_parse_workspace_header_line(const char *line) {
 
 void repl_state_init_defaults(void) {
     repl_state_reset_all();
+    /* Register the default editor completion provider (Phase G commit
+     * 36). Editor input dispatch calls editor_completion_* without
+     * knowing about repl_autocomplete; the registration here installs
+     * the REPL-aware backing. */
+    repl_autocomplete_register_provider();
 }
 
 void repl_state_reset_all(void) {
     g_repl_state = g_repl_state_defaults;
+    /* Phase 1 scaffold (commit 3): drain the new EditorState and UiState
+     * singletons too so every test reset clears all three structs. The
+     * structs are placeholders until commits 4-7 move slices in. Phase F
+     * commit 31 added the variable_panel peer; reset it alongside. */
+    editor_state_reset();
+    ui_state_reset();
+    variable_panel_state_reset();
+    replay_state_reset();
+    editor_help_session_reset();
     repl_state_bind_eval_predef_storage();
     repl_scenes_reset();
     reset_time_state();
@@ -986,4 +569,11 @@ void repl_state_reset_all(void) {
     repl_source_scope_depth_cache_invalidate();
     repl_state_mark_flat_dirty();
     repl_state_mark_normals_dirty();
+    repl_autocomplete_register_provider();
 }
+
+/* The legacy `repl_state_*` UI-slice forwarder block was removed in
+ * Phase A commit 14. All callers now talk to `ui_state_*` directly
+ * (allowlisted ui_*.c and the controller include ui_state.h; the
+ * remaining repl_*.c callers forward-declare the few accessors they
+ * need). The `ui_forwarder_count` ratchet is now zero. */

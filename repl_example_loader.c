@@ -1,12 +1,19 @@
 /*
  * repl_example_loader.c -- Built-in example loading and metadata handling.
  */
-#include "sample.h"
 #include "repl_export.h"
 #include "repl_command_store.h"
 #include "repl_core_internal.h"
 #include "repl_examples.h"
 #include "repl_state.h"
+
+/* Camera lives on UiState; repl_*.c is not allowed to include
+ * ui_state.h per check-controller-boundaries. Example loading
+ * applies an explicit camera pose when a `// camera` block precedes
+ * the example body. */
+void ui_state_camera_set_orbit(float rx, float ry);
+void ui_state_camera_set_pan(float tx, float ty, float tz);
+void ui_state_camera_set_distance(float dist);
 
 static const char *example_cam_skip_ws(const char *text) {
     while (*text && isspace((unsigned char)*text))
@@ -114,9 +121,9 @@ static int try_apply_example_camera_header(const char *const *lines) {
         !example_cam_parse_translate(lines[4], &tx, &ty, &tz))
         return 0;
 
-    repl_state_camera_set_orbit(rx, ry);
-    repl_state_camera_set_distance(-dist_z);
-    repl_state_camera_set_pan(-tx, -ty, -tz);
+    ui_state_camera_set_orbit(rx, ry);
+    ui_state_camera_set_distance(-dist_z);
+    ui_state_camera_set_pan(-tx, -ty, -tz);
     return 1;
 }
 
@@ -208,13 +215,14 @@ static void load_example_lines(const char *const *lines) {
     ReplCommandStore store = repl_command_store_live();
 
     repl_command_store_load(&store, NULL, 0, 0);
+    editor_buffer_clear();
     repl_state_flat_program_set_count(0);
-    repl_state_insert_mode_set(0);
+    editor_insert_mode_set(0);
     {
-        ReplEditorInputState *inp = repl_state_editor_input_mut();
+        ReplEditorInputState *inp = editor_state_input_mut();
         inp->input[0] = '\0';
         inp->input_len = 0;
-        repl_state_cursor_pos_set(0);
+        editor_cursor_pos_set(0);
         inp->pending_newline[0] = '\0';
         inp->pending_newline_len = 0;
     }
@@ -234,13 +242,13 @@ static void load_example_lines(const char *const *lines) {
     for (; body && *body; body++)
         feed_line(*body);
 
-    repl_state_insert_mode_set(0);
+    editor_insert_mode_set(0);
     repl_state_edit_line_set(repl_state_document_count());
     {
-        ReplEditorInputState *inp = repl_state_editor_input_mut();
+        ReplEditorInputState *inp = editor_state_input_mut();
         inp->input[0] = '\0';
         inp->input_len = 0;
-        repl_state_cursor_pos_set(0);
+        editor_cursor_pos_set(0);
     }
     mark_normals_dirty();
 }

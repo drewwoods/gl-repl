@@ -6,9 +6,17 @@
  * Phase 2 migration; this module owns active drag modifiers, inertial
  * velocities, orbit/pan/zoom math, and per-frame momentum decay.
  */
-#include "sample.h"
 #include "repl_camera_controls.h"
 #include "repl_state.h"
+
+/* Camera and pointer slices live on UiState. repl_*.c is not allowed
+ * to include ui_state.h per check-controller-boundaries, so the
+ * narrow set of accessors this controller needs is forward-declared
+ * inline. */
+ReplCameraState  *ui_state_camera_mut(void);
+ReplPointerState  ui_state_pointer(void);
+void              ui_state_pointer_set_pos(int mouse_x, int mouse_y);
+void              ui_state_pointer_set_button(int mouse_button);
 
 #define CAM_DECAY 0.88f
 #define CAM_DECAY_ZOOM 0.65f
@@ -75,24 +83,24 @@ static void drop_small_velocities(void) {
 }
 
 void repl_camera_controls_reset(void) {
-    repl_state_pointer_set_button(-1);
+    ui_state_pointer_set_button(-1);
     g_mouse_mods = 0;
     reset_velocities();
 }
 
 void repl_camera_pointer_set(int x, int y) {
-    repl_state_pointer_set_pos(x, y);
+    ui_state_pointer_set_pos(x, y);
 }
 
 void repl_camera_mouse_event(int button, int state, int x, int y, int mods) {
     g_mouse_mods = mods;
     if (state == GLUT_DOWN) {
-        repl_state_pointer_set_button(button);
+        ui_state_pointer_set_button(button);
         repl_camera_pointer_set(x, y);
         reset_velocities();
     } else {
         drop_small_velocities();
-        repl_state_pointer_set_button(-1);
+        ui_state_pointer_set_button(-1);
     }
 }
 
@@ -101,8 +109,8 @@ void repl_camera_add_zoom_velocity(float delta) {
 }
 
 void repl_camera_drag_motion(int x, int y) {
-    ReplCameraState *c = repl_state_camera_mut();
-    ReplPointerState pointer = repl_state_pointer();
+    ReplCameraState *c = ui_state_camera_mut();
+    ReplPointerState pointer = ui_state_pointer();
     int px = pointer.mouse_x;
     int py = pointer.mouse_y;
     int btn = pointer.mouse_button;
@@ -162,8 +170,8 @@ void repl_camera_drag_motion(int x, int y) {
 }
 
 void repl_camera_tick(void) {
-    ReplCameraState *c = repl_state_camera_mut();
-    int btn = repl_state_pointer().mouse_button;
+    ReplCameraState *c = ui_state_camera_mut();
+    int btn = ui_state_pointer().mouse_button;
 
     if (btn == -1) {
         c->ry += g_vel_ry;

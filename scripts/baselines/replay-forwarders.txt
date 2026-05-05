@@ -1,0 +1,19 @@
+# Baseline for scripts/check-replay-forwarders.sh.
+#
+# Tracks how many call sites still use the legacy `repl_state_replay*`
+# forwarder API outside the owner translation units (replay_state.c /
+# repl_state.c).
+#
+# Phase F commit 33 moved ReplReplayRuntimeState into the replay peer;
+# commit 34 routed production callers through replay_state_view,
+# replay_state_mut, replay_active, and the replay_handle_* surface.
+# Phase J5 migrated the last 37 fixture sites (bench/bench_repl.c +
+# six tests/*.c files) onto replay_state_view / replay_state_mut so
+# the count reaches 0. The legacy forwarders in repl_state.c
+# (repl_state_replay / _mut / _reset) can now be deleted in a
+# follow-up commit alongside the public-facing declarations in
+# repl_state_owners.h and repl_state_views.h.
+#
+# Any new caller fails the build.
+
+count: 0

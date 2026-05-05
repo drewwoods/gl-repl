@@ -29,15 +29,55 @@
 #ifndef REPL_COMMAND_SPEC_H
 #define REPL_COMMAND_SPEC_H
 
-#include "sample.h"
+#include "repl_command.h"
+
+typedef struct {
+    const char *name;
+    GLenum      value;
+} ReplEnumEntry;
+
+#define MAX_FUNC_HINT_PARAMS 10
+
+typedef struct {
+    const char *insert_text;
+    const char *display_text;
+    int         param_count;
+    const char *params[MAX_FUNC_HINT_PARAMS];
+} ReplFuncCompletion;
+
+/* Syntax-highlighting category for code-panel rendering. Each CmdType maps
+ * to exactly one category; the renderer (ui_panels.c) translates the
+ * category into an RGB color via a category→color palette. Living in the
+ * spec means a new CmdType picks up the right highlight automatically — the
+ * UI doesn't need to grow another switch case. */
+typedef enum {
+    CMD_CAT_DEFAULT = 0,    /* fallback gray; only hit for out-of-range types */
+    CMD_CAT_PRIMITIVE,      /* glBegin / glEnd */
+    CMD_CAT_VERTEX,         /* glVertex* / gluVertex */
+    CMD_CAT_NORMAL,         /* glNormal3f / gluNormal */
+    CMD_CAT_COLOR,          /* glColor* / glClearColor / glColorMaterial / glMaterialf / gluColor */
+    CMD_CAT_TRANSFORM,      /* glTranslate / glScale / glRotate / glPushMatrix / glPopMatrix */
+    CMD_CAT_STATE,          /* glEnable / glDisable / glShadeModel / glLineWidth / glPointSize / glBlendFunc / glDepthMask / glLightModeli / glFrontFace / glPointParameterfv */
+    CMD_CAT_LOOP,           /* for { ... } */
+    CMD_CAT_FUNCTION,       /* funcN { ... } / call */
+    CMD_CAT_VARIABLE,       /* float decl / assignment */
+    CMD_CAT_CONDITIONAL,    /* if { ... } */
+    CMD_CAT_LABEL,          /* :label / goto */
+    CMD_CAT_COMMENT,        /* // comment */
+    CMD_CAT_GLUT_SHAPE,     /* glutSolidTorus / Cube / Sphere / Teapot / Cone */
+    CMD_CAT_TESS_BLOCK,     /* gluTessBeginPolygon / Contour / End */
+    CMD_CAT_COUNT
+} CmdSyntaxCategory;
 
 /* Metadata for control structures and command-type properties. Describes whether
  * a command type needs a trailing semicolon (e.g., float decl, assignment) and
- * whether it needs block-based indentation (for, func, if blocks). */
+ * whether it needs block-based indentation (for, func, if blocks). The category
+ * field drives the code-panel renderer's syntax highlighting. */
 typedef struct {
     const char *name;
     int needs_semicolon;
     int needs_block_indent;
+    CmdSyntaxCategory category;
 } ReplCommandTypeSpec;
 
 /* Metadata for GL commands with enumerated arguments. Specifies the command name,
@@ -49,8 +89,8 @@ typedef struct {
     const char *name;
     CmdType     type;
     int         num_args;
-    const EnumEntry *enums1;
-    const EnumEntry *enums2;
+    const ReplEnumEntry *enums1;
+    const ReplEnumEntry *enums2;
     const char *fmt;
     const char *usage1;
     const char *usage2;
@@ -88,6 +128,11 @@ int repl_cmd_type_needs_semicolon(CmdType type);
  * blocks). Used by the formatter to determine indentation rules. */
 int repl_cmd_type_needs_block_indent(CmdType type);
 
+/* Query the syntax-highlighting category for a command type. Used by the
+ * code-panel renderer to pick the row color. Returns CMD_CAT_DEFAULT
+ * for out-of-range types. */
+CmdSyntaxCategory repl_cmd_type_category(CmdType type);
+
 /* Query the full array of enum-backed GL command specs (glBegin, glEnable,
  * glShadeModel, etc.). Terminated by an entry with a null name. Used by the
  * parser and autocomplete to look up command metadata by type or name. */
@@ -100,15 +145,15 @@ const ReplStdCommandSpec *repl_std_command_specs(void);
 
 /* Query completion suggestions for built-in math functions. Used by the
  * autocomplete system to populate function name completions (sin, cos, sqrt, etc.). */
-const FuncCompletion *repl_func_completions(void);
+const ReplFuncCompletion *repl_func_completions(void);
 
 /* Query enumeration tables for GL constants used in command arguments. Provides
  * suggestions for glColorMaterial face parameter, glMaterialf parameter names,
  * and glPointParameterfv pname values. Used by autocomplete to populate
  * parameter suggestions. */
-const EnumEntry *repl_face_type_entries(void);
-const EnumEntry *repl_material_param_entries(void);
-const EnumEntry *repl_point_param_pname_entries(void);
+const ReplEnumEntry *repl_face_type_entries(void);
+const ReplEnumEntry *repl_material_param_entries(void);
+const ReplEnumEntry *repl_point_param_pname_entries(void);
 
 /* Convert a GL_TRIANGLES, GL_QUADS, etc. constant to its string name (e.g.,
  * GL_TRIANGLES → "GL_TRIANGLES"). Used for display and diagnostic output. */

@@ -1,14 +1,15 @@
+#include "editor_input.h"
 #include "repl_core.h"
 #include "repl_state.h"
 
-#define g_search_active    (repl_state_search_mut()->active)
-#define g_search_query     (repl_state_search_mut()->query)
-#define g_search_query_len (repl_state_search_mut()->query_len)
-#define g_search_cursor_pos (repl_state_search_mut()->cursor_pos)
-#define g_search_match_count (repl_state_search_mut()->match_count)
-#define g_search_hit_line  (repl_state_search_mut()->hit_line_idx)
-#define g_search_hit_char  (repl_state_search_mut()->hit_char_idx)
-#define g_search_hit_ordinal (repl_state_search_mut()->hit_ordinal)
+#define g_search_active    (editor_state_search_mut()->active)
+#define g_search_query     (editor_state_search_mut()->query)
+#define g_search_query_len (editor_state_search_mut()->query_len)
+#define g_search_cursor_pos (editor_state_search_mut()->cursor_pos)
+#define g_search_match_count (editor_state_search_mut()->match_count)
+#define g_search_hit_line  (editor_state_search_mut()->hit_line_idx)
+#define g_search_hit_char  (editor_state_search_mut()->hit_char_idx)
+#define g_search_hit_ordinal (editor_state_search_mut()->hit_ordinal)
 
 #include "support/test_harness.h"
 #include <stdio.h>
@@ -21,12 +22,12 @@ static TestHarness g_harness = TEST_HARNESS_INIT;
 } while (0)
 
 static void open_search(void) {
-    repl_keyboard_func(6, 0, 0); /* Ctrl+F */
+    editor_handle_key(6, 0, 0); /* Ctrl+F */
 }
 
 static void type_search_text(const char *text) {
     while (*text) {
-        repl_keyboard_func((unsigned char)*text, 0, 0);
+        editor_handle_key((unsigned char)*text, 0, 0);
         text++;
     }
 }
@@ -43,11 +44,11 @@ static void declare_test_vars(void) {
 }
 
 static void set_live_input(const char *text) {
-    ReplEditorInputState *inp = repl_state_editor_input_mut();
+    ReplEditorInputState *inp = editor_state_input_mut();
     strncpy(inp->input, text, MAX_INPUT_LEN - 1);
     inp->input[MAX_INPUT_LEN - 1] = '\0';
     inp->input_len = (int)strlen(inp->input);
-    repl_state_cursor_pos_set(inp->input_len);
+    editor_cursor_pos_set(inp->input_len);
 }
 
 int main(void) {
@@ -60,7 +61,7 @@ int main(void) {
         char before0[MAX_LINE_LEN];
         int before_num = repl_state_document_count();
 
-        const char *buf_line0 = repl_state_editor_buffer_line(0);
+        const char *buf_line0 = editor_buffer_line(0);
         strncpy(before0, buf_line0 ? buf_line0 : "", sizeof(before0) - 1);
         before0[sizeof(before0) - 1] = '\0';
 
@@ -69,7 +70,7 @@ int main(void) {
         ASSERT_TRUE("ctrl-f leaves query empty", g_search_query_len == 0);
         ASSERT_TRUE("ctrl-f leaves cmd count unchanged", repl_state_document_count() == before_num);
         ASSERT_TRUE("ctrl-f leaves source unchanged",
-                    strcmp(repl_state_editor_buffer_line(0), before0) == 0);
+                    strcmp(editor_buffer_line(0), before0) == 0);
     }
 
     repl_reset_state(); declare_test_vars();
@@ -90,12 +91,12 @@ int main(void) {
         ASSERT_TRUE("search first hit char", g_search_hit_char == first);
         ASSERT_TRUE("search first ordinal", g_search_hit_ordinal == 1);
 
-        repl_keyboard_func('\n', 0, 0);
+        editor_handle_key('\n', 0, 0);
         ASSERT_TRUE("enter navigates next same-line hit", repl_state_edit_line() == 0);
         ASSERT_TRUE("enter next hit char", g_search_hit_char == second);
         ASSERT_TRUE("enter next ordinal", g_search_hit_ordinal == 2);
 
-        repl_special_func(GLUT_KEY_DOWN, 0, 0);
+        editor_handle_special(GLUT_KEY_DOWN, 0, 0);
         ASSERT_TRUE("down navigates next line", repl_state_edit_line() == 1);
         ASSERT_TRUE("down hit line", g_search_hit_line == 1);
         ASSERT_TRUE("down hit ordinal", g_search_hit_ordinal == 3);
@@ -104,13 +105,13 @@ int main(void) {
                     repl_search_find_next_in_text(repl_search_row_text(1),
                                                   g_search_query, 0));
 
-        repl_special_func(GLUT_KEY_DOWN, 0, 0);
+        editor_handle_special(GLUT_KEY_DOWN, 0, 0);
         ASSERT_TRUE("down wraps to first hit", repl_state_edit_line() == 0);
         ASSERT_TRUE("down wrap line", g_search_hit_line == 0);
         ASSERT_TRUE("down wrap char", g_search_hit_char == first);
         ASSERT_TRUE("down wrap ordinal", g_search_hit_ordinal == 1);
 
-        repl_special_func(GLUT_KEY_UP, 0, 0);
+        editor_handle_special(GLUT_KEY_UP, 0, 0);
         ASSERT_TRUE("up wraps to last hit", repl_state_edit_line() == 1);
         ASSERT_TRUE("up wrap line", g_search_hit_line == 1);
         ASSERT_TRUE("up wrap ordinal", g_search_hit_ordinal == 3);
@@ -147,7 +148,7 @@ int main(void) {
     ASSERT_TRUE("newline hit char", g_search_hit_char == 0);
     ASSERT_TRUE("newline search keeps current line", repl_state_edit_line() == 0);
 
-    repl_keyboard_func(27, 0, 0);
+    editor_handle_key(27, 0, 0);
     ASSERT_TRUE("escape closes search", g_search_active == 0);
     ASSERT_TRUE("escape clears search query", g_search_query_len == 0);
     ASSERT_TRUE("escape clears search hit", g_search_hit_line == -1);
@@ -187,13 +188,13 @@ int main(void) {
     open_search();
     type_search_text("abc");
     ASSERT_TRUE("search cursor starts at query len", g_search_cursor_pos == 3);
-    repl_special_func(GLUT_KEY_LEFT, 0, 0);
+    editor_handle_special(GLUT_KEY_LEFT, 0, 0);
     ASSERT_TRUE("search cursor left", g_search_cursor_pos == 2);
-    repl_special_func(GLUT_KEY_HOME, 0, 0);
+    editor_handle_special(GLUT_KEY_HOME, 0, 0);
     ASSERT_TRUE("search cursor home", g_search_cursor_pos == 0);
-    repl_special_func(GLUT_KEY_RIGHT, 0, 0);
+    editor_handle_special(GLUT_KEY_RIGHT, 0, 0);
     ASSERT_TRUE("search cursor right", g_search_cursor_pos == 1);
-    repl_special_func(GLUT_KEY_END, 0, 0);
+    editor_handle_special(GLUT_KEY_END, 0, 0);
     ASSERT_TRUE("search cursor end", g_search_cursor_pos == g_search_query_len);
 
     repl_reset_state(); declare_test_vars();
@@ -201,7 +202,7 @@ int main(void) {
     open_search();
     type_search_text("abcd");
     ASSERT_TRUE("search backspace initial len", g_search_query_len == 4);
-    repl_keyboard_func(127, 0, 0);
+    editor_handle_key(127, 0, 0);
     ASSERT_TRUE("search backspace decrements len", g_search_query_len == 3);
     ASSERT_TRUE("search backspace removes last char",
                 strcmp(g_search_query, "abc") == 0);
@@ -209,7 +210,7 @@ int main(void) {
     repl_reset_state(); declare_test_vars();
     repl_feed_line_public("glBegin(GL_POINTS);");
     repl_feed_line_public("glEnd();");
-    repl_state_insert_mode_set(1);
+    editor_insert_mode_set(1);
     repl_state_edit_line_set(1);
     ASSERT_TRUE("row count inserting includes input row",
                 repl_search_row_count() == repl_state_document_count() + 1);

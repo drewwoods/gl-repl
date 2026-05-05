@@ -11,6 +11,7 @@
 
 #include <stdio.h>
 
+#include "editor_state.h"   /* EditorBufferView */
 #include "repl_flatten.h"
 
 /* --- Save / load ------------------------------------------------------- */
@@ -26,8 +27,10 @@ int  repl_export_load_from_file(const char *filename);
 
 /* Save active scene or example to a standalone .c file with metadata headers
  * (@var name=value, @cfg key=value, @camera, @scene-name, @workspace-dir).
- * Sets status message on success or failure. */
-void repl_export_save_output(const char *filename);
+ * Sets status message on success or failure. `text` is the editor
+ * buffer view the caller built; export reads source text exclusively
+ * through that view. */
+void repl_export_save_output(const char *filename, EditorBufferView text);
 
 /* Workspace I/O: save every occupied user-scene slot to `<dir>/<slug>.c`.
  * Each slot is flushed with its own @scene-name header. Both functions
@@ -66,6 +69,13 @@ void repl_flatten_commands(void);
 /* Recompute auto-normals for every glBegin/glEnd batch in the source array.
  * Called automatically when source commands are modified. */
 void repl_recompute_autonormals(void);
+
+/* Shared status/document helpers surfaced outside repl_core.c. */
+void        set_status(const char *msg);
+const char *mode_name(GLenum mode);
+GLenum      current_begin_mode(void);
+int         count_vertices(void);
+void        mark_normals_dirty(void);
 
 /* --- Example library & user scene -------------------------------------- */
 #ifndef MAX_USER_SCENES
@@ -114,45 +124,11 @@ int  repl_flat_cmd_matches_cursor(int flat_idx);
 int  repl_find_feeding_normal_cmd(int line_idx);
 int  repl_find_feeding_color_cmd(int line_idx);
 
-/* --- Controller-owned input callback effects --------------------------- */
-
-typedef struct ReplInputDispatchEffects {
-    int request_redraw;
-    int set_cursor;
-    int cursor;
-    int schedule_timer;
-    unsigned int timer_millis;
-    int timer_value;
-} ReplInputDispatchEffects;
-
-/* --- Input callback entry points (wired through the controller) -------- */
-
-/* ASCII key and Ctrl-key input. Routes to repl_editor.c for editing, or to
- * repl_actions.c for config shortcuts (Ctrl+S, Ctrl+Z, Ctrl+R, etc.). */
-ReplInputDispatchEffects repl_keyboard_func(unsigned char key, int x, int y);
-
-/* Function key (F1-F12) and arrow input. Routes to repl_editor.c and
- * repl_actions.c for visual toggles, help overlay, theme cycling. */
-ReplInputDispatchEffects repl_special_func(int key, int x, int y);
-
-/* Mouse button press/release. Routes to ui_panels.c for code-panel hits,
- * color-picker drag, variable-slider transactions. */
-ReplInputDispatchEffects repl_mouse_func(int button, int state, int x, int y);
-
-/* Mouse motion during drag. Routes to ui_panels.c for in-progress drags. */
-ReplInputDispatchEffects repl_motion_func(int x, int y);
-
-/* Mouse motion without button held. Updates hover state for tooltips. */
-ReplInputDispatchEffects repl_passive_motion_func(int x, int y);
-
-#ifndef USE_GLUT
-/* Mousewheel (freeglut only). Routes to repl_camera_controls.c for zoom velocity. */
-ReplInputDispatchEffects repl_mousewheel_func(int wheel, int direction, int x, int y);
-#endif
-
-/* Polling timer callback (every ~16ms @ 60 FPS). Ticks animation frame counter,
- * advances replays, updates camera momentum, and posts next timer event. */
-ReplInputDispatchEffects repl_timer_func(int value);
+/* --- Input callback entry points -------------------------------------- */
+/* The ReplInputDispatchEffects typedef and the editor_handle_* /
+ * editor_input_router_* dispatch APIs live in editor_input.h. The
+ * legacy repl_*_func dispatch entry points were deleted in Phase J1
+ * commit 49a. */
 
 /* --- Test helpers ------------------------------------------------------ */
 

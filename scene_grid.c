@@ -1,7 +1,6 @@
 /*
  * scene_grid.c - grid theme rendering
  */
-#include "sample.h"
 #include "scene_grid.h"
 #include "./include/gl_2d.h"
 

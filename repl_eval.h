@@ -39,12 +39,56 @@
 #define MAX_LINE_LEN 256
 #endif
 
+/*
+ *  MAX_EXPR_VARS - global user-declared variables
+ *  -------------
+ *  This sizes the predefined-variable table populated by float t;, float radius;, etc. It's the global identifier table the user sees.
+ *
+ *  - Storage: g_predef_vars[MAX_PREDEF_VARS] (in repl_eval.c).
+ *  - One slot is reserved for the built-in t (animation time).
+ *  - 15 slots remain for user float name; declarations.
+ *  - The try_commit_float_decl handler rejects new declarations once full with "variable table full (max 16)".
+ *  The REPL UI shows all declared variables in the "Predefined Variables" section of the code panel, and they are available for use in expressions.
+ *  Used in:
+ *  - repl_eval.c — the table itself.
+ *  - editor_undo.h — undo snapshots capture all 16 slots' names + values.
+ *  - replay.c / imrepl_ctrl.c — replay baselines copy/restore all 16 values across mode transitions.
+ *  - repl_state_views.h — the by-value snapshot the UI reads from.
+ *
+ *
+ *  MAX_EXPR_VARS — local lexical scope at parse time
+ *  -------------
+ *  This sizes the per-expression visible-variable list built when compiling a
+ *  single expression. It's a lexical scope handed to repl_eval so it can
+ *  resolve identifiers like i, j, function parameters, and predef vars at
+ *  evaluation time without taking out a global lock.
+ *
+ *  - Storage: per-call stack arrays — ExprVar vis[MAX_EXPR_VARS] in repl_compile.c, ExprVar vars[MAX_EXPR_VARS] in repl_flatten.h's FlatScope, params[MAX_EXPR_VARS] in autocomplete hint generation.
+ *  - Populated by collect_visible_vars() walking the active for-loop / function-def scope.
+ *  - Includes function-call parameters, for-loop iterator vars, and visible predef vars.
+ *  - Acts as a name-resolution snapshot during one parse/eval call; not persistent state.
+ *
+ *  Why two
+ *  -------
+ *
+ *  - MAX_PREDEF_VARS caps how many global identifiers can exist at once.
+ *  - MAX_EXPR_VARS caps how many identifiers a single expression's lexical scope can hold while it's being parsed.
+ *
+ *  The values are equal today only because the worst-case scope is "all 16
+ *  predef vars visible plus zero locals" (the for-loop body inside zero nested
+ *  scopes). But they're not the same constraint:
+ *
+ *  - MAX_EXPR_VARS actually needs to be MAX_PREDEF_VARS + worst-case nested
+ *    locals to be fully correct. With 8-deep nested for-loops each declaring a
+ *    fresh iterator name, you'd exceed 16 visible names. In
+ *    practice the parser truncates the visible-list silently because the limit happens to be 16. (Not a great property, just hidden by the equal value.)
+ *  - MAX_PREDEF_VARS is the user-facing "how many float x; can I have" limit.
+ */
 #ifndef MAX_EXPR_VARS
-#define MAX_EXPR_VARS 16
+#define MAX_EXPR_VARS 32
 #endif
-
 #ifndef MAX_PREDEF_VARS
-#define MAX_PREDEF_VARS 16
+#define MAX_PREDEF_VARS 24
 #endif
 
 #ifndef MAX_NAMES_PER_DECL
@@ -53,6 +97,10 @@
 
 #ifndef M_PI
 #define M_PI 3.14159265358979323846
+#endif
+
+#if MAX_PREDEF_VARS > MAX_EXPR_VARS
+#error "MAX_PREDEF_VARS must be <= MAX_EXPR_VARS to avoid silent truncation of the visible-variable list during parsing."
 #endif
 
 /* ---- Types ------------------------------------------------------------ */

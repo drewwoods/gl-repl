@@ -1,14 +1,15 @@
 /*
  * repl_menu_bar.c -- Code-panel menu bar, dropdowns, and search slot.
  */
-#include "sample.h"
 #include "repl_actions.h"
 #include "repl_core.h"
 #include "repl_config.h"
 #include "repl_keys.h"
 #include "repl_state_views.h"
+#include "ui_state.h"
 #include "ui_menu_bar.h"
-#include "repl_layout.h"
+#include "ui_metrics.h"
+#include "ui_layout.h"
 #include "./include/gl_2d.h"
 
 /* Menu bar - styled after Header Wireframes v2.
@@ -225,10 +226,6 @@ static int cfg_max_state_chars(void) {
     return max_chars;
 }
 
-static int menu_item_activate(int menu_id, int i) {
-    return repl_action_menu_item_activate(menu_id, i);
-}
-
 static void menubar_rects(int menu_x[NUM_MENUS], int menu_w[NUM_MENUS],
                           int pin_x[NUM_PIN_BTNS], int pin_w[NUM_PIN_BTNS],
                           int *row_y, int *row_h) {
@@ -268,7 +265,7 @@ int ui_menu_bar_menu_hit(int gx, int gy) {
     int menu_x[NUM_MENUS], menu_w[NUM_MENUS];
     int pin_x[NUM_PIN_BTNS], pin_w[NUM_PIN_BTNS];
     int by, bh;
-    int ry = repl_state_viewport().window_h - gy;
+    int ry = ui_state_viewport().window_h - gy;
     menubar_rects(menu_x, menu_w, pin_x, pin_w, &by, &bh);
     if (ry < by || ry >= by + bh) return -1;
     for (int i = 0; i < NUM_MENUS; i++)
@@ -280,7 +277,7 @@ int ui_menu_bar_pin_hit(int gx, int gy) {
     int menu_x[NUM_MENUS], menu_w[NUM_MENUS];
     int pin_x[NUM_PIN_BTNS], pin_w[NUM_PIN_BTNS];
     int by, bh;
-    int ry = repl_state_viewport().window_h - gy;
+    int ry = ui_state_viewport().window_h - gy;
     menubar_rects(menu_x, menu_w, pin_x, pin_w, &by, &bh);
     if (ry < by || ry >= by + bh) return -1;
     for (int i = 0; i < NUM_PIN_BTNS; i++)
@@ -331,13 +328,63 @@ int ui_menu_bar_dropdown_item_hit(int gx, int gy) {
     if (n == 0) return -1;
     int dx, dy, dw, dh;
     if (!menu_dropdown_rect(&dx, &dy, &dw, &dh)) return -1;
-    int ry = repl_state_viewport().window_h - gy;
+    int ry = ui_state_viewport().window_h - gy;
     if (gx < dx || gx >= dx + dw || ry < dy || ry >= dy + dh) return -1;
     int row = (dy + dh - 4 - ry) / LINE_H;
     if (row < 0 || row >= n) return -1;
     const char *lbl = menu_item_label(g_open_menu, row);
     if (!lbl || strncmp(lbl, "###", 3) == 0 || strcmp(lbl, "---") == 0) return -1;
     return row;
+}
+
+UiHit ui_menu_bar_hit_test(int mx, int my) {
+    UiHit h = ui_hit_none();
+    int win_h = ui_state_viewport().window_h;
+    if (win_h <= 0) return h;
+    int gl_y = win_h - my;
+
+    /* Open dropdown row beats every other menu region. The cmd_idx
+     * carries the menu_id the row belongs to so the controller can
+     * activate the action without reading ui_menu_bar state. */
+    if (g_open_menu >= 0) {
+        int row = ui_menu_bar_dropdown_item_hit(mx, my);
+        if (row >= 0) {
+            h.kind = UI_HIT_MENU_ITEM;
+            h.cmd_idx = g_open_menu;
+            h.item_idx = row;
+            h.local_x = (float)mx;
+            h.local_y = (float)gl_y;
+            return h;
+        }
+    }
+
+    /* Pin button (Search / Replay). Pins are rendered after the menu
+     * labels and overlap the label region in narrow code panels — the
+     * visible pin must beat the underlying label, so check pins
+     * before the top-level menu hit. Matches the legacy press-handler
+     * order (pin_hit before menu_hit). */
+    int pin = ui_menu_bar_pin_hit(mx, my);
+    if (pin >= 0) {
+        h.kind = UI_HIT_PIN_BUTTON;
+        h.item_idx = pin;
+        h.local_x = (float)mx;
+        h.local_y = (float)gl_y;
+        return h;
+    }
+
+    /* Top-level menu button (File / Scene / Config). cmd_idx carries
+     * menu_id; the controller decides whether to open / switch /
+     * dismiss based on the open-menu state. */
+    int menu = ui_menu_bar_menu_hit(mx, my);
+    if (menu >= 0) {
+        h.kind = UI_HIT_MENU_BUTTON;
+        h.cmd_idx = menu;
+        h.local_x = (float)mx;
+        h.local_y = (float)gl_y;
+        return h;
+    }
+
+    return h;
 }
 
 
@@ -380,15 +427,6 @@ int ui_menu_bar_handle_config_right_press(int mx, int my) {
     if (item < 0) return 0;
     repl_cfg_cycle_row(item, -1);
     return 1;
-}
-
-int ui_menu_bar_activate_dropdown_item(int item_idx) {
-    if (g_open_menu < 0)
-        return 0;
-    int close = menu_item_activate(g_open_menu, item_idx);
-    if (close)
-        ui_menu_bar_close();
-    return close;
 }
 
 void ui_menu_bar_note_search_opened(void) {

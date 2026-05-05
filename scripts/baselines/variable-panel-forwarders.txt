@@ -1,0 +1,27 @@
+# Baseline for scripts/check-variable-panel-forwarders.sh.
+#
+# Tracks how many call sites still use the legacy variable_panel
+# forwarder API (`editor_state_variable_drag*`, `ui_state_variable_panel*`,
+# `repl_var_drag_*`) outside the owner / wrapper translation units.
+#
+# Phase F commit 31 moved the bytes into the variable_panel peer;
+# commit 32 routed production callers through `variable_panel_handle_*`
+# and the peer accessors. Commit 32b establishes the ratchet at 87.
+# Phase J6 migrated the last 50 fixture sites (4 test files) onto the
+# canonical peer accessors so the count reaches 0:
+#   editor_state_variable_drag()      → variable_panel_drag()
+#   editor_state_variable_drag_mut()  → variable_panel_drag_mut()
+#   ui_state_variable_panel()         → variable_panel_view()
+#   ui_state_variable_panel_mut()     → variable_panel_view_mut()
+#   repl_var_drag_active()            → variable_panel_drag_active()
+#   repl_var_drag_active_var()        → variable_panel_drag_active_var()
+#   repl_var_drag_log_mode()          → variable_panel_drag_log_mode()
+#   repl_var_drag_begin(...)          → variable_panel_handle_drag_begin(...)
+#   repl_var_drag_motion(...)         → variable_panel_handle_drag_motion(...)
+#   repl_var_drag_reset()             → variable_panel_handle_drag_reset()
+#
+# The legacy forwarder bodies in editor_state.c / ui_state.c and the
+# repl_var_drag_* wrappers in variable_panel_drag.c can be deleted
+# in a follow-up commit. Any new caller fails the build.
+
+count: 0

@@ -85,6 +85,64 @@ Test sources live under `tests/` and shared test-only helpers live under
 `tests/support/`. The Makefile still builds root-level test executables
 (`./test_eval`, `./test_format`, etc.) so existing commands stay stable.
 
+### Boundary Checks
+
+`make check-state-ownership` runs the full inventory of
+ownership / contract guards. Highlights:
+
+- `check-no-repl-commit` — `repl_commit.c/h` cannot reappear
+  (commit dispatch lives in `editor_commit.c`).
+- `check-no-repl-editor-input-shim` — `editor_input.c` cannot include
+  the deleted `repl_editor.h` or call legacy `repl_*_func` dispatch
+  bodies (Phase J1 closed the input boundary; `repl_editor.{c,h}`
+  is gone).
+- `check-no-set-status-in-repl-parser` — parser core never calls
+  `set_status` (baseline **0/0** after Phase J5 retired the legacy
+  no-ctx wrappers `repl_parser_parse_command` / `_with_vars` and the
+  `parser_legacy_surface_to_status` bridge; tests now own status
+  surfacing locally via their own `parse_for_test` helper).
+- `check-no-set-status-in-compile-apply` — `repl_compile.c` and
+  `repl_apply.c` are status-free (Phase C purity).
+- `check-no-test-default-output` — hard guard. Tests may not call
+  `repl_save_default_output()`, which writes to the hardcoded relative
+  path `./output.c` (the repo root when tests run). Tests that need to
+  verify save behavior must call `repl_export_save_output()` with an
+  explicit `/tmp/` path instead.
+- `check-no-store-text-api` — `repl_command_store_*_with_line[s]`
+  text-aware overloads stay deleted.
+- `check-repl-no-direct-buffer-read` — REPL files read text via
+  `EditorBufferView`, not directly into editor buffer.
+- `check-ui-returns-hits-only` — `ui_*.c` is mutator-free in input
+  + render paths. Baseline reached **0/0** (Phase J4 routed the
+  cursor-pixel publish through `UiCodePanelOutput` and deleted the
+  `cursor_px/cursor_py` state slice along with the
+  `check-cursor-px-encapsulated` migration guard). Any new mutator
+  fails the build.
+- `check-ui-panels-no-mutators` — Phase J2.2 hard guard. `ui_panels.c`
+  is hit-test only: zero matches for code-panel press / click / drag /
+  release / scene-press / motion / mouse-release / escape forwarders
+  and color-picker open/close/press/motion/release / replay-pin /
+  search / menu open-close-activate calls. No allowlist.
+- `check-replay-ui-isolation` — feature-UI prefix discipline.
+  `replay_ui_*.c` may render replay HUD/buttons, hit-test replay
+  controls, route hits via `replay_handle_*`, and read replay
+  snapshots, but must not mutate editor/REPL state, call
+  parser/compile/apply, or grow generic `ui_*` responsibilities.
+- `check-variable-panel-forwarders` — baseline **0/0** after Phase
+  J6 migrated every fixture site onto `variable_panel_drag` /
+  `variable_panel_view` / `variable_panel_handle_drag_*`, and Phase
+  J7 deleted the legacy `editor_state_variable_drag*` /
+  `ui_state_variable_panel*` / `repl_var_drag_*` shims. The
+  canonical peer accessors are the only entry points.
+- `check-replay-forwarders` — baseline **0/0** after Phase J5
+  migrated every `bench/` + `tests/` site onto `replay_state_view` /
+  `replay_state_mut` / `replay_handle_*`, and Phase J7 deleted the
+  legacy `repl_state_replay` / `_mut` / `_reset` forwarders.
+- `check-imrepl-not-editor-mirror` — `imrepl_ctrl_editor_*` per-field
+  wrappers are forbidden.
+- `check-editor-ownership-budget` — UI-slice forwarder + facade
+  include counts only shrink.
+
 ## File Layout
 
 | File | Responsibility |
@@ -104,40 +162,39 @@ Test sources live under `tests/` and shared test-only helpers live under
 | `repl_command_spec.h` | Command spec query API |
 | `repl_command_store.c` | Source-command array mutations: insert, delete, replace, bulk-load |
 | `repl_command_store.h` | Command-store public API (`repl_command_store_insert_one`, etc.) |
-| `repl_commit.c` | Float declarations, variable assignments, structured block commits, close-brace commits |
 | `repl_core.h` | Public API (parse, flatten, user scene + workspace); GLUT input-dispatch declarations (`repl_keyboard_func` etc.) are live — called from `imrepl_ctrl.c` — pending R10-phase1 re-evaluation |
 | `repl_core_internal.h` | Test-visible internals (normalize/commit pipeline, `feed_line`, `load_line_to_input`, `repl_promote_example_if_needed`) |
 | `repl_state.c` | Owns `g_repl_state`, lifecycle, snapshot assembly (`repl_state_capture` / `repl_state_restore`) |
 | `repl_state.h` | Typed runtime-state facade, reset helpers, and focused accessors over the live REPL state |
 | `repl_state_views.h` | Read-only (by-value) state getters; safe to include from `scene_*` and `ui_*` |
 | `repl_state_owners.h` | Mutable `_mut()` accessors; owner modules and controller only |
-| `repl_editor.c` | Keyboard/mouse routing, commit orchestration, feed-line entrypoint |
-| `repl_editor.h` | Editor public API (`repl_keyboard_func`, `repl_editor_active_modifiers`, etc.) |
+| `editor_input.c` | GLUT-callback dispatch (`editor_handle_key/special/mouse/motion/passive_motion/mousewheel`), 19 keyboard route helpers + 9 special route helpers, router stubs for non-editor concerns, commit orchestration, `feed_line` |
+| `editor_input.h` | Editor input dispatch entry points + `editor_input_router_*` router stubs + `ReplInputDispatchEffects` typedef + `editor_input_active_modifiers` test seam |
 | `repl_keys.h` | ASCII and control-key code constants (Ctrl+A=1 … Ctrl+Z=26, F-key names) |
-| `repl_clipboard.c` | Line selection anchors, command clipboard buffer, copy/cut/paste behavior |
-| `repl_clipboard.h` | Clipboard public API |
-| `repl_undo.c` | Undo/redo snapshots, history rings, example auto-promote hook before mutation |
-| `repl_undo.h` | Undo public API (`repl_undo_push_snapshot`, `repl_undo_pop_snapshot`, `repl_undo_do_redo`) |
+| `editor_clipboard.c` | Line selection anchors, command clipboard buffer, copy/cut/paste behavior |
+| `editor_clipboard.h` | Clipboard public API |
+| `editor_undo.c` | Undo/redo snapshots, history rings, example auto-promote hook before mutation |
+| `editor_undo.h` | Undo public API (`editor_undo_push_snapshot`, `editor_undo_pop_snapshot`, `editor_undo_do_redo`) |
 | `repl_camera_controls.c` | Scene camera pointer state, orbit/pan/zoom drags, wheel zoom velocity, momentum tick |
 | `repl_actions.c` | Config descriptor table, config shortcuts, menu actions, startup config defaults |
 | `repl_actions.h` | Actions public API (`repl_action_menu_item_activate`, cursor-pixel setter, etc.) |
-| `repl_code_panel_layout.c` | Pure code-panel wrapping, row counts, segment lookup, cursor-row mapping |
-| `repl_code_panel_layout.h` | `CodePanelTextLayout` / `CodePanelWrapIter` API shared by UI, export dumps, tests |
-| `repl_code_panel_document.c` | Code-panel document row model, scroll-follow calculation, hit-test targets |
-| `repl_code_panel_document.h` | `CodePanelDocumentLayout` API consumed by UI and scrolling tests |
+| `ui_code_panel_layout.c` | Pure code-panel wrapping, row counts, segment lookup, cursor-row mapping |
+| `ui_code_panel_layout.h` | `CodePanelTextLayout` / `CodePanelWrapIter` API shared by UI, export dumps, tests |
+| `editor_code_panel_document.c` | Code-panel document row model, scroll-follow calculation, hit-test targets |
+| `editor_code_panel_document.h` | `CodePanelDocumentLayout` API consumed by UI and scrolling tests |
 | `repl_executor.c` | Narrow live-GL dispatch: walks the flat command array emitting OpenGL calls |
 | `repl_executor.h` | Executor public API (`repl_execute_program`, transform helpers) |
 | `repl_flatten.c` | Source-to-flat program builder: unrolls loops, inlines functions, resolves if-blocks |
 | `repl_flatten.h` | Flatten public API (`repl_flatten_program`, cursor-highlight refresh) |
 | `repl_pipeline.h` | Pipeline and lifecycle surface for frame orchestration (flatten, autonormal, replay snapshots) |
 | `repl_autonormal.c` | Auto-generated `glNormal3f` maintenance for source commands |
-| `repl_replay.c` | Replay state machine: PC, mode (OFF/PLAYING/PAUSED/DONE), speed, fade-batch ring |
-| `repl_replay.h` | Replay public API (`repl_replay_start`, `repl_replay_toggle_play_pause`, etc.) |
-| `repl_search.c` | Case-insensitive substring search state and match navigation |
-| `repl_search.h` | Search query helpers and input routing API |
-| `repl_autocomplete.c` | Completion model: symbol matching, ghost text, parameter hints |
-| `repl_layout.c` | Pure window layout geometry: scene rect and code-panel rect derivation |
-| `repl_layout.h` | Layout geometry API (`repl_layout_scene_rect`, `repl_layout_code_panel_rect`) |
+| `replay.c` | Replay state machine: PC, mode (OFF/PLAYING/PAUSED/DONE), speed, fade-batch ring |
+| `replay.h` | Replay public API (`repl_replay_start`, `repl_replay_toggle_play_pause`, etc.) |
+| `editor_search.c` | Case-insensitive substring search state and match navigation |
+| `editor_search.h` | Search query helpers and input routing API |
+| `editor_autocomplete.c` | Completion model: symbol matching, ghost text, parameter hints |
+| `ui_layout.c` | Pure window layout geometry: scene rect and code-panel rect derivation |
+| `ui_layout.h` | Layout geometry API (`repl_layout_scene_rect`, `repl_layout_code_panel_rect`) |
 | `repl_scenes.c` | User-scene slots, LRU eviction, workspace save/load, workspace dir binding |
 | `repl_example_loader.c` | Built-in example loading and active-example tracking |
 | `repl_debug.c` | Diagnostic dumps for CLI flags and tests |
@@ -146,8 +203,8 @@ Test sources live under `tests/` and shared test-only helpers live under
 | `repl_replay_annotations.h` | Code-panel replay annotation API |
 | `ui_snapshot.h` | `UiRenderSnapshot` — frame-frozen bundle built once per frame by `imrepl_ctrl_build_ui_snapshot()` |
 | `ui_editor.h` | Per-frame editor-overlay snapshots (swatches, sliders, highlights) pushed by the controller |
-| `ui_replay_hud.c` | 2D replay status HUD rendered from `UiRenderSnapshot` |
-| `ui_replay_hud.h` | Replay HUD render entrypoint |
+| `replay_ui_hud.c` | 2D replay status HUD (feature-UI under the `replay_ui_*` prefix; reads replay peer snapshot) |
+| `replay_ui_hud.h` | Replay HUD render entrypoint |
 | `ui_profile_panel.c` | CPU profiling overlay panel (per-frame section timings) |
 | `ui_profile_panel.h` | Profile panel render entrypoint |
 | `ui_menu_bar.c` | Code-panel menu bar, dropdowns, config right-click handling, search slot |
@@ -158,12 +215,20 @@ Test sources live under `tests/` and shared test-only helpers live under
 | `ui_help_overlay.h` | Help overlay render entrypoint |
 | `ui_variable_panel.c` | Floating variable slider panel rendering, geometry, and hit-test |
 | `ui_variable_panel.h` | Variable panel render/rect/hit API |
-| `ui_autocomplete_panel.c` | Floating autocomplete popup renderer (reads `repl_autocomplete.c` model) |
+| `ui_autocomplete_panel.c` | Floating autocomplete popup renderer (reads `editor_autocomplete.c` model) |
 | `ui_autocomplete_panel.h` | Autocomplete popup render entrypoint |
-| `repl_inline_rename.c` | Inline scene-rename input buffer and key handling (status-bar overlay) |
-| `repl_inline_rename.h` | Rename begin/active/cancel/key/special API |
-| `repl_var_drag.c` | Variable slider drag transaction: begin/motion/reset, linear/log value writeback |
-| `repl_var_drag.h` | Drag state accessors + begin/motion/reset API |
+| `editor_inline_rename.c` | Inline scene-rename input buffer and key handling (status-bar overlay) |
+| `editor_inline_rename.h` | Rename begin/active/cancel/key/special API |
+| `variable_panel_drag.c` | Variable slider drag transaction: begin/motion/reset, linear/log value writeback |
+| `variable_panel_drag.h` | Drag state accessors + begin/motion/reset API |
+| `variable_panel.c` | Variable-panel peer subsystem: owns visibility flag + drag-state storage (Phase F) |
+| `variable_panel.h` | Peer-subsystem facade (`VariablePanelState`, capture/restore/reset, view/drag accessors) |
+| `replay_state.c` | Replay peer subsystem: owns `ReplReplayRuntimeState` storage (Phase F commit 33) |
+| `replay_state.h` | Peer-subsystem facade (`replay_state_capture/restore/reset/view/mut`) |
+| `editor_help_session.c` | Read-only editor session for the help overlay (tab_idx + scroll; Phase G commit 35) |
+| `editor_help_session.h` | `EditorHelpSession` API (capture/restore/reset, narrow accessors) |
+| `editor_completion.c` | Completion-provider registry: editor input invokes registered provider for autocomplete (Phase G commit 36) |
+| `editor_completion.h` | `EditorCompletionProvider` struct + `editor_completion_register/update/clear` API |
 | `repl_examples.c` | Predefined example data (`g_examples[]`, `g_example_names[]`) |
 | `repl_examples.h` | Example query API (`repl_examples_count/name/lines`) |
 | `repl_export.c` | `repl_export_save_output` / `repl_export_load_from_file`, workspace header directives, `@scene-name` / `@workspace-dir` markers |
@@ -215,13 +280,24 @@ Test sources live under `tests/` and shared test-only helpers live under
 - Config toggles use the `ReplConfigItem` / `ReplConfigKey` pattern: add a
   descriptor entry to `g_cfg_items[]` in `repl_actions.c`; `CFG_ITEM_COUNT`
   auto-computes via `sizeof`
-- New GL commands: add to `CmdType` enum in `sample.h`, then handle in
-  `repl_parser_parse_command()` in `repl_parser.c`, `repl_execute_program()` in
-  `repl_executor.c`, and `flatten_range()` (static, inside `repl_flatten.c`)
-- Keyboard bindings: `repl_editor_handle_key()` for ASCII keys (Ctrl+X = key
-  code X-64), `repl_editor_handle_special()` for F-keys/arrows. Currently
-  `repl_editor.c` also owns the cross-layer routing; Phase 2 moves that to
-  `imrepl_ctrl.c` (see R in `feature/push-architecture-refinement.md`)
+- New GL commands: add to the `CmdType` enum in `repl_command.h`, then
+  handle in `repl_parser_parse_command_ctx()` in `repl_parser.c`,
+  `repl_execute_program()` in `repl_executor.c`, and `flatten_range()`
+  (static, inside `repl_flatten.c`). Add a `g_command_type_specs[]`
+  entry in `repl_command_spec.c` with the right `CmdSyntaxCategory`
+  so the new command picks up its code-panel highlight color
+  automatically; if you need a `glEnable`-shaped enum-arg spec or a
+  standard float-arg spec, append a row to `k_enum_command_specs[]`
+  or `k_std_command_specs[]` in the same file.
+- Keyboard bindings: `editor_handle_key()` for ASCII keys (Ctrl+X
+  produces ASCII X & 0x1F via standard GLUT), `editor_handle_special()`
+  for F-keys/arrows. Cross-subsystem routing (replay / save / config /
+  audio / camera) lives in `imrepl_ctrl.c::imrepl_ctrl_router_*`
+  helpers, called from `imrepl_ctrl_keyboard` before delegating to
+  `editor_handle_key`. macOS Cmd+letter is normalized to its
+  control-character form by `editor_input_normalize_super_to_ctrl`,
+  called at the top of `imrepl_ctrl_keyboard` so every downstream
+  dispatcher sees Cmd+B identically to Ctrl+B.
 - Expression variables: `ExprVar` struct in `repl_eval.h`, predefined set
   accessible via `repl_state_variables()` and managed by `declare_predef_var()`
 
@@ -256,7 +332,10 @@ Grids and axes are themeable through small specs in `scene_grid.c` and
    line/color themes and an `AxesThemeSpec` entry in `scene_axes.c` for
    standard axes themes. Keep custom geometry-heavy grid cases in
    `scene_grid.c`.
-4. The theme cycles via F3 (grid) / F4 (axes) in `repl_editor.c`
+4. The theme cycles via F3 (grid) / F4 (axes); the special-key route
+   in `editor_input.c` calls `repl_cfg_handle_special_shortcut`, which
+   walks `g_cfg_items[]` in `repl_actions.c` and cycles the matching
+   config row.
 
 ## Adding Menu Bar Items
 
@@ -280,8 +359,9 @@ To add a **new top-level menu**: extend the `MENU_*` enum (before
 `repl_actions.c` for side effects.
 
 To add a **pinned right-side button**: extend `PIN_*` enum, append a label
-to `g_pin_btn_labels[]` in `ui_menu_bar.c`, and add a `case` in
-`handle_code_panel_press()` inside the `ui_menu_bar_pin_hit` block.
+to `g_pin_btn_labels[]` in `ui_menu_bar.c`. Activation routing lives in
+`imrepl_ctrl.c::route_pin_button_hit()` — add the new pin id to its
+switch.
 
 ## User Scene System
 
@@ -295,7 +375,8 @@ variable values + a scene `name` + `last_touch` tick for LRU.
 
 - `g_active_user_scene` (`-1` means an example or a fresh empty workspace is
   loaded instead of a user scene).
-- `repl_undo_push_snapshot()` (called from `repl_editor.c`) calls
+- `repl_undo_push_snapshot()` (in `editor_undo.c`, called from
+  `editor_input.c` and `editor_commit.c` before mutations) calls
   `repl_promote_example_if_needed()` before every mutation. If the user is
   editing an example, that call allocates a fresh slot, copies the current
   state into it, inherits the example's name (de-duplicated via
@@ -314,15 +395,15 @@ message (user has to save workspace first to unlock eviction).
 ### Inline rename
 
 - `repl_inline_rename_begin(slot)` / `repl_inline_rename_handle_key(...)` /
-  `repl_inline_rename_cancel()` in `repl_inline_rename.c`.
+  `repl_inline_rename_cancel()` in `editor_inline_rename.c`.
 - Triggered by the Scene → "Rename active scene" menu item; typing updates a
   status-bar prompt; Enter commits via `repl_user_scene_rename` (which trims,
   de-duplicates, and guards against an empty name), Esc cancels.
 - Path-unsafe chars (`/`, `\`, `:`) and non-printables are filtered at input
   time since names become filesystem slugs on workspace export.
-- The key dispatcher in `repl_editor.c` forwards keys to
-  `repl_inline_rename_handle_key` right after `handle_search_key`, so rename
-  mode swallows input even when other overlays aren't open.
+- The key dispatcher in `editor_input.c::keyboard_func` forwards keys
+  to `editor_input_rename_capture_key` at the very top, so rename mode
+  swallows input even when other overlays aren't open.
 
 ### Workspace I/O
 
@@ -429,7 +510,8 @@ is no shim layer.
    callback → replay fade batches (transitional; R1b replaces with
    `ReplayFadePlan` snapshot iteration) → grid/axes/backdrop/orbit-target →
    polygon-outline, vertex, normal, and guide overlays → 2D replay HUD
-   (transitional; R1c moves to `ui_replay_hud.c`)
+   (renders via `replay_ui_hud_render` from `replay_ui_hud.c` —
+   feature-UI under the `replay_ui_*` prefix)
 4. 2D overlays: code panel, autocomplete popup, example dropdown,
    variable slider panel, config menu, help overlay, search overlay
 
@@ -454,17 +536,20 @@ The core data flow is **source commands → flat commands → GL calls**:
 1. **Input** — user types into the input buffer (`repl_state_editor_input()->input`,
    max 1024 chars)
 2. **Commit** — pressing `;` calls the commit dispatch chain in
-   `keyboard_func()` in `repl_editor.c`. There are TWO distinct paths:
-   - **Interactive `;` key** (`repl_editor.c`, `key == ';'` block):
+   `keyboard_func()` in `editor_input.c`. There are TWO distinct paths:
+   - **Interactive `;` key** (`editor_input.c`, `key == ';'` block):
      the input buffer does NOT include the `;` — the keystroke triggers the
      commit but is not appended. Commit handlers must accept input
      without a trailing `;`.
-   - **`feed_line()`** (`repl_editor.c`): copies the full line
+   - **`feed_line()`** (`editor_input.c`): copies the full line
      (including `;`) into the input buffer, then runs the same dispatch chain.
      Used by file loading and example loading.
    - **Enter key** (insert mode): input may or may not have `;`
      depending on what the user typed.
-   The dispatch chain calls `try_commit_*()` handlers in order:
+   The dispatch chain calls the consolidated `try_commit_*()` helpers
+   in `editor_commit.c` (`try_commit_var_statements`,
+   `try_commit_block_structs`, `try_commit_any`, plus the var-then-
+   insert variant). Internally those run, in canonical order:
    `try_commit_float_decl` → `try_assign_variable` → `try_commit_close_brace`
    → `try_commit_for_loop` → `try_commit_func_def` → `try_commit_if_block`
    → `repl_parse_and_normalize()` (general GL commands).
@@ -473,8 +558,8 @@ The core data flow is **source commands → flat commands → GL calls**:
    assignment. Each handler returns 1 if it consumed the input
    (success or error with status message), 0 if it didn't match.
    If all handlers return 0, `parse_command()` in `repl_parser.c`
-   sets `"Unknown cmd."` status (`repl_parser.c`, end of
-   `parse_command`).
+   sets the per-context error buffer (no `set_status` from the parser
+   core — the bridge was retired in Phase J5).
 3. **Parse** — `parse_command()` in `repl_parser.c` matches the line to a
    `CmdType`, evaluates argument expressions via `eval_expr()`, stores
    result in `GLCmd.args[]` and normalized text in `GLCmd.source[]`.
@@ -491,7 +576,7 @@ The core data flow is **source commands → flat commands → GL calls**:
 ### Commit Dispatch Sites
 
 The `try_commit_*` handler chain is consolidated into four helpers in
-`repl_commit.c`:
+`editor_commit.c`:
 - `try_commit_var_statements()` — float decl, then assign
 - `try_commit_block_structs()` — close-brace, for, func, if
 - `try_commit_any()` — both groups in canonical order
@@ -524,7 +609,7 @@ must also accept end-of-string as a valid terminator.
 
 ### Float Variable Declarations (`CMD_VAR_DECLARE`)
 
-`try_commit_float_decl()` in `repl_commit.c` handles `float name;`
+`try_commit_float_decl()` in `editor_commit.c` handles `float name;`
 syntax. Current implementation supports multi-name (`float a, b, c;`)
 and initializers (`float x = 1;`), but there is an open design
 question about simplifying to single-name, no-initializer only.
@@ -546,7 +631,11 @@ Key details:
   names carried over from the old decl are exempted from the duplicate
   check (they get undeclared before the new registration runs).
 - `delete_cmd_range()` guards against deleting a declaration whose
-  variable is still referenced elsewhere (uses `source_uses_ident()`)
+  variable is still referenced outside the deleted range (uses
+  `repl_eval_source_uses_ident()` against every line not in the range).
+  Deleting a decl together with all its uses is allowed; deleting an
+  unreferenced decl by itself is allowed. Cut/copy/paste of decl rows
+  remain blocked outright (clipboard semantics — see commit 72be1dd).
 - C export writes `// @declare name` markers; import via
   `import_parse_declare_marker()` in `repl_export.c` reconstructs
   the `CMD_VAR_DECLARE` commands, bypassing `try_commit_float_decl`
@@ -578,7 +667,7 @@ Key details:
 
 ### Replay System
 
-Step-by-step execution visualization in `repl_replay.c`:
+Step-by-step execution visualization in `replay.c`:
 - `ReplReplayRuntimeState` (via `repl_state_replay()`) tracks state
   (OFF/PLAYING/PAUSED/DONE), program counter, and speed multiplier
 - During playback, the flat command count is clamped to `replay_exec_limit()`
@@ -590,7 +679,7 @@ Step-by-step execution visualization in `repl_replay.c`:
 
 ### Undo/Redo
 
-Circular snapshot buffers in `repl_undo.c`:
+Circular snapshot buffers in `editor_undo.c`:
 - `ReplUndoSnapshot` captures the full editor state: source commands,
   command count, cursor position, predefined variable values
 - Undo and redo rings (32 slots each) with head/count tracking
@@ -602,7 +691,7 @@ Circular snapshot buffers in `repl_undo.c`:
 
 ### Autocomplete
 
-Symbol matching and function parameter hints in `repl_autocomplete.c`:
+Symbol matching and function parameter hints in `editor_autocomplete.c`:
 - `repl_state_autocomplete()->matches` — matched completions from GL command/constant tables
 - `repl_state_autocomplete()->ghost` — suffix to append to input on Tab accept
 - `repl_state_autocomplete()->hint` — parameter list hint shown below cursor
@@ -612,7 +701,7 @@ Symbol matching and function parameter hints in `repl_autocomplete.c`:
 
 ### Search
 
-Case-insensitive text search in `repl_search.c`:
+Case-insensitive text search in `editor_search.c`:
 - Activated by Ctrl+F; query and state accessed via `repl_state_search()`
 - `repl_search_find_next_in_text()` finds substring matches across
   all visible lines (header, user code, footer)
@@ -662,6 +751,7 @@ glEnable(CAP), glDisable(CAP)
        GL_LIGHT0, GL_LIGHT1, GL_LIGHT2, GL_LIGHT3
 glShadeModel(MODE)
 glPointSize(size)
+glLineWidth(width)
 glPointParameterfv(GL_POINT_DISTANCE_ATTENUATION, const, linear, quadratic)
 glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA|GL_ONE)
 glColorMaterial(face, mode), glMaterialf(face, pname, value)

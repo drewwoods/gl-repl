@@ -227,14 +227,21 @@ Owned stages:
 
 | Stage | Owner |
 |-------|-------|
-| Input buffer and routing | `repl_editor.c` |
-| Structured commits | `repl_commit.c` |
+| GLUT input dispatch (cross-subsystem routing) | `imrepl_ctrl.c` |
+| Editor text-document input + commit orchestration | `editor_input.c` + `editor_commit.c` |
 | Parsing | `repl_parser.c` |
-| Source command mutation | `repl_command_store.c` |
+| Validation / compilation (pure, returns `ReplCompiledChange`) | `repl_compile.c` |
+| Apply (writes `ReplState` only) | `repl_apply.c` |
+| Source command mutation (low-level shifts) | `repl_command_store.c` |
 | Source scope/depth | `repl_source_scope.c` |
 | Flattening | `repl_flatten.c` |
 | User geometry execution | `repl_executor.c` |
 | Export/import | `repl_export.c` |
+
+Note: `repl_editor.{c,h}` and `repl_commit.{c,h}` are deleted (Phase J1
++ Phase H.5). Their responsibilities split into the entries above.
+`check-no-repl-editor-input-shim` and `check-no-repl-commit` hard-guard
+against either filename returning.
 
 Outside code that needs to inject commands should use the public command/input
 paths instead of directly mutating command arrays.
@@ -342,10 +349,15 @@ Slices that would have been heavy to copy are deliberately excluded:
 snapshot — the per-row selection band reads `selection_lo/_hi` instead.
 
 Mutations route through `repl_actions`, `repl_command_store`,
-`repl_var_drag`, or another REPL-owned mutation path. UI input bridges
-(`*_hit`, `*_rect`, press/motion handlers) still query live state during
-GLUT input dispatch; pulling those onto a deferred output channel is the
-Phase C work in `feature/push-architecture-ui.md`. Two render-path live
+`variable_panel_drag`, or another REPL-owned mutation path. UI input
+hit-tests (`*_hit_test`, `*_rect`) compute neutral `UiHit` values and
+return — `imrepl_ctrl_router_handle_code_panel_hit` dispatches by
+`UiHit.kind` to the owning subsystem (Phase J2). Render-side
+discoveries (e.g. the editor cursor pixel computed during
+`render_active_input_rows`) flow back through per-frame
+`Ui*Output` structs that the controller actualizes after the render
+call (Phase J4 introduced `UiCodePanelOutput`; the pattern is
+hard-guarded by `check-output-actualization`). Two render-path live
 reads remain (`repl_code_panel_document_build` /
 `apply_follow_scroll` and `repl_replay_code_panel_get_command_display_text`);
 both produce snap-equivalent results because they run after the
@@ -364,7 +376,7 @@ R1 target in `feature/push-architecture-refinement.md`:
 * scene iterates the snapshot and owns the GL pass orchestration without
   calling `repl_replay_*` or `repl_state_*`
 * accumulation-AA settings are `SceneRenderConfig` fields set by the controller
-* 2D replay HUD lives in `ui_replay_hud.c`, driven by config fields
+* 2D replay HUD lives in `replay_ui_hud.c`, driven by config fields
 * `scene_*.c` files contain no `repl_state_*` or `repl_replay_*` calls; once
   the relevant Phase 2 slice is complete, Makefile checks keep that true
 
@@ -389,10 +401,12 @@ names in parser/export/example/spec code is not a live GL call.
 Allowed:
 
 ```text
-sample.c
+sample.c        GLUT callback registration, glutInit, buffer swap
 imrepl.c        after the sample.c rename lands
-repl_editor.c   cross-layer input routing + REPL-internal dispatch (current);
-                routing moves to imrepl_ctrl.c in Phase 2 (see R in refinement plan)
+imrepl_ctrl.c   GLUT modifier reads + cross-layer input routing
+                (took over from the deleted repl_editor.c in Phase J1)
+editor_input.c  glutGetModifiers via editor_get_modifiers (gated behind
+                editor_input_enable_glut_modifier_reads so tests stay safe)
 repl_executor.c tessellator callback setup only
 ```
 
@@ -400,13 +414,15 @@ repl_executor.c tessellator callback setup only
 
 After controller extraction, ordinary `repl_*` model files should not include
 `scene_*.h`. `imrepl_ctrl.c` is the scene/UI frame-rendering exception.
+`check-controller-boundaries` enforces this; cross-layer constants used by
+both layers (e.g. `CFG_DEFAULT_MULTISAMPLE`, `REPL_OUTLINE_POLYGON_OFFSET_*`)
+live in neutral headers (`repl_presentation.h`, `scene_render_types.h`)
+that both sides include via existing transitive paths.
 
-Existing input/layout exceptions: `repl_editor.c`, `repl_actions.c`, and
-`repl_export.c` still include selected `ui_*` headers. The `repl_editor.c`
-exception is eliminated by Phase 2 input routing: the cross-layer priority
-chain moves to `imrepl_ctrl.c`, after which `repl_editor.c` only needs
-REPL-internal headers. The `repl_actions.c` and `repl_export.c` exceptions
-require separate, independent cleanup.
+Remaining `ui_*` include exceptions: `repl_actions.c` and `repl_export.c`.
+The `repl_editor.c` exception is gone — that file is deleted (Phase J1).
+The other two require separate cleanup tracks tied to the deferred
+`repl_actions` rename and the export-as-its-own-feature split.
 
 ### Scene state access
 
@@ -457,10 +473,12 @@ REPL. Every bullet is required unless the note says otherwise. The GLUT solid
 shapes (`glutSolidCube`, `glutSolidSphere`, `glutSolidTeapot`, `glutSolidCone`)
 are a recent worked example.
 
-### 1. `sample.h` — declare the type
+### 1. `repl_command.h` — declare the type
 
 Add a new `CmdType` enum entry in the `CMD_*` block, adjacent to related
-commands. The enum drives switch dispatch everywhere.
+commands. The enum drives switch dispatch everywhere. (`CmdType` lives in
+`repl_command.h`; `sample.h` only re-exports it transitively via
+`#include "repl_command.h"`.)
 
 ```c
 CMD_GLUT_CUBE, CMD_GLUT_SPHERE, CMD_GLUT_TEAPOT, CMD_GLUT_CONE,
@@ -476,23 +494,27 @@ The hint string is displayed inline; param names drive Tab-cycle hints.
 { "glutSolidCube(",  "glutSolidCube(size)",  1, { "size" } },
 ```
 
-**b. `g_std_command_specs[]`** — parse spec used by `repl_parser.c` and the
-autocomplete lookup. `num_args` must match the `%g` count in `fmt`.
+**b. `k_std_command_specs[]`** — parse spec used by `repl_parser.c` and the
+autocomplete lookup. `num_args` must match the `%g` count in `fmt`. For
+commands with `glEnable`/`glBlendFunc`-style enum arguments, append to
+`k_enum_command_specs[]` instead and wire `enums1` / `enums2` to the
+appropriate `ReplEnumEntry` tables.
 
 ```c
 { "glutSolidCube", CMD_GLUT_CUBE, 1, "glutSolidCube(%g);", "Usage: glutSolidCube(size)", 0 },
 ```
 
-For commands with `glEnable`/`glBlendFunc`-style enum arguments, add to
-`g_enum_command_specs[]` instead and wire `enums1`/`enums2` to the
-appropriate `EnumEntry` tables.
-
-**c. `g_command_type_specs[]`** — formatting/indentation metadata for the
-new `CmdType`. Nearly all geometry commands use `(1, 1)` (needs semicolon,
-needs block indent).
+**c. `g_command_type_specs[]`** — formatting/indentation metadata plus the
+syntax category that drives code-panel highlight color. The
+`CMD_TYPE_SPEC(type, needs_semicolon, needs_block_indent, category)`
+macro is keyed on the enum, so order is validated at compile time. Pick
+the matching `CMD_CAT_*` from `repl_command_spec.h` (e.g.
+`CMD_CAT_GLUT_SHAPE` for solid shapes, `CMD_CAT_VERTEX` for vertices,
+`CMD_CAT_STATE` for `glEnable`-shaped state). Nearly all geometry
+commands use `(1, 1, ...)` — needs semicolon, needs block indent.
 
 ```c
-CMD_TYPE_SPEC(CMD_GLUT_CUBE, 1, 1),
+CMD_TYPE_SPEC(CMD_GLUT_CUBE, 1, 1, CMD_CAT_GLUT_SHAPE),
 ```
 
 ### 3. `repl_executor.c` — execute the command
@@ -500,6 +522,10 @@ CMD_TYPE_SPEC(CMD_GLUT_CUBE, 1, 1),
 Add a `case` block after the nearest related command. Call the GL/GLU/GLUT
 function, casting `flat_cmds[pc].args[N]` to the correct C type (`(double)`,
 `(int)`, etc.). Always close an open `glBegin` block first for shape commands.
+If the command emits geometry that should be skipped during replay's
+"already-rendered prefix" pass, also list the new `CMD_*` in the
+`REPLAY_MODE_VERTEX` skip switch near the top of `execute_commands`
+(alongside `CMD_VERTEX3F` / `CMD_GLUT_CUBE` / etc.).
 
 ```c
 case CMD_GLUT_CUBE:
@@ -519,8 +545,10 @@ case CMD_GLUT_CUBE: *nargs_out = 1; return "glutSolidCube(%g);";
 
 ### 5. `ui_help_overlay.c` — help text
 
-Add a line to the appropriate section of `g_commands_lines[]` (F1 overlay,
-Commands tab). Group with related commands under the same section header.
+Add a line to the `tab_commands[]` static array inside
+`ui_help_overlay_render` (F1 overlay, Commands tab). Lines use a `\t`
+to separate the command from its description. Group with related
+commands under the same section header.
 
 ### 6. Stubs (only if adding a symbol not yet in the stub headers)
 
@@ -544,15 +572,22 @@ static inline void glutSolidTeapot(double size) {
 Keep stubs minimal: model the signature, call `gl_stub_tick`, suppress
 unused-parameter warnings with `(void)`, no real rendering.
 
+### 7. Save/load round-trip
+
+Most commands round-trip automatically: `repl_export.c` writes
+`GLCmd.source[]` verbatim into the exported `display()` body, and
+`repl_export_load_from_file` feeds those lines back through the commit
+pipeline. You only need to touch `repl_export.c` for commands with
+non-source-text encoding — declarations (`@declare`), tess blocks, etc.
+Add a focused round-trip case to `tests/test_repl_export_all_commands.c`
+to keep coverage tight.
+
 ### Verify
 
 ```bash
 make sample          # must be clean (no new warnings)
 make test-stubs      # all tests must pass
 ```
-
-For commands that affect save/load round-trips, update the matching export
-and import helpers in `repl_export.c`.
 
 ## Open Refactor Edges
 
@@ -562,7 +597,7 @@ Completed (Phase 1 + most of Phase 2):
   focus/guide snapshot construction, scene-local accumulation jitter, and
   app-shell shim removal (`sample.c` calls `imrepl_ctrl_*` directly).
 - ✅ **R1** — Replay/HUD migration: controller builds `ReplayFadePlan`; scene
-  iterates it; 2D HUD lives in `ui_replay_hud.c`. Scene files contain zero
+  iterates it; 2D HUD lives in `replay_ui_hud.c`. Scene files contain zero
   `repl_replay_*` and `repl_state_*` calls.
 - ✅ **R2** — UI → REPL mutation holes closed: `ui_color_picker`, `ui_panels`,
   `ui_help_overlay` route mutations through store/action APIs. UI files have
@@ -585,11 +620,13 @@ Completed (Phase 1 + most of Phase 2):
 
 Still open:
 
-- ⚠️ **R10-phase1** — Reassess: the GLUT decls in `repl_core.h`
-  (`repl_keyboard_func`, `repl_special_func`, …) are not stale — they are
-  implemented in `repl_editor.c` and called from `imrepl_ctrl.c` for
-  cross-layer input dispatch. Decide between leaving them in `repl_core.h`
-  until R10-phase5 dissolves it or moving them to `repl_editor.h`.
+- ⚠️ **R10-phase1** — Phase J1 obsoleted the original framing of this
+  task: `repl_editor.c/h` is deleted. The remaining GLUT-flavored
+  declarations in `repl_core.h` should be reviewed against the actual
+  callers in `imrepl_ctrl.c` and `editor_input.c`; anything that's
+  no longer reachable can be removed, and anything still in use can
+  move to a more specific home (`editor_input.h` for editor input,
+  `imrepl_ctrl.h` for controller routing).
 - ❌ **R10-phase2..phase5** — Dissolve `repl_core.c` (~663 lines): move
   `repl_parse_and_normalize*` / `normalize_with_indent` /
   `parse_and_normalize_impl` to `repl_parser.c`; move `collect_visible_vars`
