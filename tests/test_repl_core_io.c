@@ -92,6 +92,7 @@ int main(void) {
     const char *func_path = "/tmp/repl_core_func_output.c";
     const char *param_loop_path = "/tmp/repl_core_param_loop_output.c";
     const char *decl_func_path = "/tmp/repl_core_decl_func_output.c";
+    const char *decl_func_blank_path = "/tmp/repl_core_decl_func_blank_output.c";
     const char *shape_path = "/tmp/repl_core_shapes_output.c";
     const char *tess_path = "/tmp/repl_core_tess_output.c";
 
@@ -401,6 +402,40 @@ int main(void) {
     ASSERT_TRUE("imported prior command follows func block", repl_state_document_cmds_mut()[4].type == CMD_CLEAR_COLOR);
     ASSERT_TRUE("imported var assign follows prior command", repl_state_document_cmds_mut()[5].type == CMD_VAR_ASSIGN);
     ASSERT_TRUE("imported call follows assign", repl_state_document_cmds_mut()[6].type == CMD_CALL);
+
+    repl_reset_state(); declare_test_vars();
+    repl_feed_line_public("float r;");
+    repl_feed_line_public("");
+    repl_feed_line_public("// func prelude");
+    repl_feed_line_public("func0(radius) {");
+    repl_feed_line_public("glVertex3f(radius, 0, 0);");
+    repl_feed_line_public("}");
+    repl_feed_line_public("func0(2);");
+    repl_export_save_output(decl_func_blank_path, editor_buffer_view());
+
+    repl_reset_state(); declare_test_vars();
+    ASSERT_TRUE("load decl blank plus func output",
+                repl_export_load_from_file(decl_func_blank_path) == 1);
+    ASSERT_TRUE("decl blank plus func cmd count", repl_state_document_count() == 7);
+    ASSERT_TRUE("imported decl stays first with blank func prelude",
+                repl_state_document_cmds_mut()[0].type == CMD_VAR_DECLARE);
+    ASSERT_TRUE("imported blank stays after decl",
+                repl_state_document_cmds_mut()[1].type == CMD_EMPTY);
+    ASSERT_TRUE("imported comment stays after blank",
+                repl_state_document_cmds_mut()[2].type == CMD_COMMENT);
+    ASSERT_TRUE("imported func def stays after blank/comment prelude",
+                repl_state_document_cmds_mut()[3].type == CMD_FUNC_DEF);
+    ASSERT_TRUE("imported func body stays after func def",
+                repl_state_document_cmds_mut()[4].type == CMD_VERTEX3F);
+    ASSERT_TRUE("imported func end stays after func body",
+                repl_state_document_cmds_mut()[5].type == CMD_FUNC_END);
+    ASSERT_TRUE("imported call stays after function block",
+                repl_state_document_cmds_mut()[6].type == CMD_CALL);
+    ASSERT_TRUE("imported blank prelude text preserved",
+                strcmp(editor_buffer_line(1), "") == 0);
+    ASSERT_TRUE("imported comment prelude text preserved",
+                strstr(editor_buffer_line(2) ? editor_buffer_line(2) : "",
+                       "func prelude") != NULL);
 
     repl_reset_state(); declare_test_vars();
     repl_feed_line_public("x = 0.25;");

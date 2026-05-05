@@ -30,6 +30,7 @@ void display() {
 --- header_post ---
 --- source ---
   float n, x, y, z, k;
+
   // --- func0: parametric surface patch (nested for + math) ---
   func0(rows, cols, amp, phase) {
     for(i, 0, rows) {
@@ -52,6 +53,7 @@ void display() {
       glEnd();
     }
   }
+
   // --- func1: recursive branching tree (recursion + if + matrix stack) ---
   func1(depth, len, twist) {
     glColor3f(0.35 + depth*0.12, 0.25 + 0.15*sin(twist), 0.15);
@@ -94,6 +96,7 @@ void display() {
       glEnd();
     }
   }
+
   // --- func2: tessellated star floor with circular cutout ---
   func2(radius, hole) {
     glFrontFace(GL_CW);
@@ -120,6 +123,7 @@ void display() {
     gluEnd();
     glFrontFace(GL_CCW);
   }
+
   // --- func3: orbiting GLUT solid satellites ---
   func3(count, orbit_r, sat_size, spin) {
     for(i, 0, count) {
@@ -151,28 +155,34 @@ void display() {
   glShadeModel(GL_SMOOTH);
   glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE);
   glLightModeli(GL_LIGHT_MODEL_TWO_SIDE, 1);
+
   // ===== Main scene composition =====
+
   // Animated variables
   n = 8;
   x = 0.4*sin(t*0.6);
   y = 0.15*cos(t*0.8);
+
   // Ground: tessellated star floor
   glPushMatrix();
   glTranslatef(0, -1.8, 0);
   func2(3.0, 0.8);
   glPopMatrix();
+
   // Wavy parametric surface
   glPushMatrix();
   glTranslatef(0, x, 0);
   glRotatef(t*12, 0, 1, 0);
   func0(n, n, 0.35 + 0.15*sin(t), t*0.5);
   glPopMatrix();
+
   // Fractal tree (recursive)
   glPushMatrix();
   glTranslatef(-2.5, -1.8, 0);
   glRotatef(-5*sin(t*0.3), 0, 0, 1);
   func1(3, 0.7, t*0.2);
   glPopMatrix();
+
   // Second tree, mirrored
   glPushMatrix();
   glTranslatef(2.5, -1.8, 0);
@@ -180,11 +190,13 @@ void display() {
   glRotatef(-5*cos(t*0.25), 0, 0, 1);
   func1(3, 0.65, t*0.15 + 1);
   glPopMatrix();
+
   // Orbiting satellites
   glPushMatrix();
   glTranslatef(0, y + 1.0, 0);
   func3(5, 2.8, 0.18, t*35);
   glPopMatrix();
+
   // Central decoration: torus + sphere
   glPushMatrix();
   glTranslatef(0, 0.5 + 0.3*sin(t*1.2), 0);
@@ -195,6 +207,7 @@ void display() {
   glColor3f(0.95, 0.9, 0.7);
   glutSolidSphere(0.25, 16, 12);
   glPopMatrix();
+
   // Wireframe accent ring
   glDisable(GL_LIGHTING);
   glBegin(GL_LINE_LOOP);
@@ -204,6 +217,7 @@ void display() {
     }
   glEnd();
   glEnable(GL_LIGHTING);
+
   // Long expression stress: animated vertex spiral
   glDisable(GL_LIGHTING);
   glBegin(GL_LINE_STRIP);
