@@ -31,6 +31,7 @@
  */
 
 #include "editor_commit.h"
+#include "editor_completion.h"
 
 #include "editor_services.h"
 #include "editor_state.h"
@@ -189,7 +190,7 @@ static void apply_post_effects(const EditorCommitPostEffects *effects) {
         load_line_to_input(repl_state_edit_line());
 
     if (effects->clear_autocomplete)
-        clear_autocomplete_state();
+        editor_completion_clear();
 
     if (effects->func_decl_resume_publish)
         editor_commit_func_decl_resume_set(effects->func_decl_resume_publish_value);
@@ -1293,7 +1294,7 @@ int try_commit_var_statements_then_insert(void) {
             inp->input_len = 0;
         }
         editor_cursor_pos_set(0);
-        clear_autocomplete_state();
+        editor_completion_clear();
         return 1;
     }
     if (try_assign_variable()) {
@@ -1304,7 +1305,7 @@ int try_commit_var_statements_then_insert(void) {
             inp->input_len = 0;
         }
         editor_cursor_pos_set(0);
-        clear_autocomplete_state();
+        editor_completion_clear();
         set_status("Insert mode");
         mark_normals_dirty();
         return 1;

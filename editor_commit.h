@@ -164,7 +164,7 @@ typedef struct EditorCommitPostEffects_s {
     int end_type;
 
     /* Drop autocomplete model state (matches the legacy
-     * clear_autocomplete_state() side-effect on header-replace
+     * editor_completion_clear() side-effect on header-replace
      * paths). */
     int clear_autocomplete;
 

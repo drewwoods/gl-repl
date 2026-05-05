@@ -1,5 +1,6 @@
 #include "repl_core_internal.h"
 #include "repl_state.h"
+#include "editor_completion.h"
 #include "support/test_harness.h"
 
 #define g_ac_count          (editor_state_autocomplete_mut()->match_count)
@@ -58,7 +59,7 @@ int main() {
         repl_reset_state(); declare_test_vars();
         set_input_text("glVer");
         
-        update_autocomplete();
+        editor_completion_update();
         ASSERT_TRUE("ac_count > 0", g_ac_count > 0);
         ASSERT_STR("first match", g_ac_insert_matches[0], "glVertex3f(");
         ASSERT_STR("ghost text", g_ac_ghost, "tex3f(");
@@ -73,7 +74,7 @@ int main() {
         repl_reset_state(); declare_test_vars();
         set_input_text("glBegin(GL_TRI");
         
-        update_autocomplete();
+        editor_completion_update();
         ASSERT_TRUE("ac_count > 0", g_ac_count > 0);
         ASSERT_STR("first match", g_ac_insert_matches[0], "GL_TRIANGLES");
         ASSERT_STR("ghost text", g_ac_ghost, "ANGLES)");
@@ -87,21 +88,21 @@ int main() {
         repl_reset_state(); declare_test_vars();
         set_input_text("glColorMaterial(GL_FR");
         
-        update_autocomplete();
+        editor_completion_update();
         ASSERT_STR("first match arg1", g_ac_insert_matches[0], "GL_FRONT");
         ASSERT_STR("ghost text arg1", g_ac_ghost, "ONT, ");
         accept_autocomplete();
         ASSERT_STR("input after arg1", editor_state_input().input, "glColorMaterial(GL_FRONT, ");
         
         set_input_text("glColorMaterial(GL_FRONT, GL_AMB");
-        update_autocomplete();
+        editor_completion_update();
         ASSERT_STR("first match arg2", g_ac_insert_matches[0], "GL_AMBIENT");
         ASSERT_STR("ghost text arg2", g_ac_ghost, "IENT)");
         accept_autocomplete();
         ASSERT_STR("input after arg2", editor_state_input().input, "glColorMaterial(GL_FRONT, GL_AMBIENT)");
 
         set_input_text("glColorMaterial(GL_FRONT, GL_SH");
-        update_autocomplete();
+        editor_completion_update();
         ASSERT_INT("shininess is not a color-material mode", g_ac_count, 0);
     }
 
@@ -110,7 +111,7 @@ int main() {
         repl_reset_state(); declare_test_vars();
         set_input_text("glPointParameterfv(GL_POINT_DIST");
         
-        update_autocomplete();
+        editor_completion_update();
         ASSERT_STR("match", g_ac_insert_matches[0], "GL_POINT_DISTANCE_ATTENUATION");
         ASSERT_STR("ghost", g_ac_ghost, "ANCE_ATTENUATION, ");
         accept_autocomplete();
@@ -125,11 +126,11 @@ int main() {
         
         set_input_text("func0(");
         
-        update_autocomplete();
+        editor_completion_update();
         ASSERT_STR("user func hint", g_ac_hint, "radius, height)");
         
         set_input_text("func0(10, ");
-        update_autocomplete();
+        editor_completion_update();
         ASSERT_STR("user func hint arg2", g_ac_hint, "height)");
     }
 
@@ -138,7 +139,7 @@ int main() {
         repl_reset_state(); declare_test_vars();
         set_input_text("flo");
 
-        update_autocomplete();
+        editor_completion_update();
         ASSERT_TRUE("float completion present", has_insert_match("float "));
         ASSERT_STR("float match", g_ac_insert_matches[0], "float ");
         ASSERT_STR("float ghost", g_ac_ghost, "at ");
@@ -161,7 +162,7 @@ int main() {
             snprintf(call_text, sizeof(call_text), "func%d()", fn);
             set_input_text(prefix);
 
-            update_autocomplete();
+            editor_completion_update();
 
             snprintf(label, sizeof(label), "func%d def completion", fn);
             ASSERT_TRUE(label, has_insert_match(def_text));

@@ -12,6 +12,7 @@
 #include "repl_core_internal.h"
 #include "repl_config.h"
 #include "editor_input.h"
+#include "editor_completion.h"
 #include "repl_keys.h"
 #include "replay_state.h"
 #include "editor_help_session.h"
@@ -197,7 +198,7 @@ void repl_cfg_cycle_row(int row, int delta) {
         } else if (repl_state_presentation().code_panel_layout == CODE_PANEL_LAYOUT_HIDDEN) {
             ui_menu_bar_close();
             ui_color_picker_close();
-            clear_autocomplete_state();
+            editor_completion_clear();
             set_status("Layout: code panel hidden");
         } else {
             set_status("Layout: left code panel");

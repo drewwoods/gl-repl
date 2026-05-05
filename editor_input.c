@@ -355,7 +355,7 @@ static void navigate_to_line_raw_resolved(int target) {
     repl_state_edit_line_set(target);
     editor_insert_mode_set(0);
     load_line_to_input(target);
-    clear_autocomplete_state();
+    editor_completion_clear();
 }
 
 /* Rewrite the canonical source text for g_input with proper indentation.
@@ -547,7 +547,7 @@ static CommitResult commit_current_input(int enter_mode) {
                 inp->input_len = 0;
             }
             editor_cursor_pos_set(0);
-            clear_autocomplete_state();
+            editor_completion_clear();
             set_status("Insert mode");
             mark_normals_dirty();
             return COMMIT_OK;
@@ -752,7 +752,7 @@ static CommitResult commit_before_navigation(void) {
         status->text[REPL_STATUS_TEXT_MAX - 1] = '\0';
         status->ttl = rejected_ttl;
     }
-    clear_autocomplete_state();
+    editor_completion_clear();
     return COMMIT_REJECTED;
 }
 
@@ -847,7 +847,7 @@ static int handle_escape_key_route(unsigned char key) {
             editor_help_session_set_tab(0);
             editor_help_session_set_scroll(0);
         } else if (editor_state_autocomplete().match_count > 0) {
-            clear_autocomplete_state();
+            editor_completion_clear();
         } else if (editor_insert_mode()) {
             editor_insert_mode_set(0);
             if (repl_state_edit_line() <= repl_state_document_count())
@@ -870,12 +870,12 @@ static int handle_escape_key_route(unsigned char key) {
 static int handle_cursor_endpoint_key_route(unsigned char key) {
     if (key == KEY_CTRL_A) {
         editor_cursor_pos_set(0);
-        update_autocomplete();
+        editor_completion_update();
         return 1;
     }
     if (key == KEY_CTRL_E) {
         editor_cursor_pos_set(editor_state_input().input_len);
-        update_autocomplete();
+        editor_completion_update();
         return 1;
     }
     return 0;
@@ -1135,7 +1135,7 @@ static int handle_text_delete_key_route(unsigned char key) {
                         (size_t)(inp->input_len - cur + 1));
                 inp->input_len--;
                 editor_cursor_pos_set(cur - 1);
-                update_autocomplete();
+                editor_completion_update();
             }
         }
         return 1;
@@ -1147,7 +1147,7 @@ static int handle_tab_key_route(unsigned char key) {
     if (key == '\t') {
         if (editor_state_autocomplete().match_count > 0) {
             accept_autocomplete();
-            update_autocomplete();
+            editor_completion_update();
         }
         return 1;
     }
@@ -1158,12 +1158,12 @@ static int handle_enter_key_route(unsigned char key) {
     if (key == '\r' || key == '\n') {
         if (editor_state_autocomplete().match_count > 0) {
             accept_autocomplete();
-            update_autocomplete();
+            editor_completion_update();
             return 1;
         }
 
         (void)commit_current_input(1);
-        clear_autocomplete_state();
+        editor_completion_clear();
         mark_normals_dirty();
         return 1;
     }
@@ -1175,7 +1175,7 @@ static int handle_semicolon_commit_key_route(unsigned char key) {
         if (editor_state_input().input_len > 0) {
             repl_undo_push_snapshot();
             if (try_commit_any()) {
-                clear_autocomplete_state();
+                editor_completion_clear();
                 return 1;
             }
             {
@@ -1247,7 +1247,7 @@ static int handle_semicolon_commit_key_route(unsigned char key) {
                 }
             }
         }
-        clear_autocomplete_state();
+        editor_completion_clear();
         mark_normals_dirty();
         return 1;
     }
@@ -1263,7 +1263,7 @@ static int handle_printable_input_key_route(unsigned char key) {
         inp->input[cur] = (char)key;
         inp->input_len++;
         editor_cursor_pos_set(cur + 1);
-        update_autocomplete();
+        editor_completion_update();
         return 1;
     }
     return 0;
@@ -1444,20 +1444,20 @@ static int handle_horizontal_special_key_route(int key) {
     case GLUT_KEY_LEFT:
         if (editor_cursor_pos() > 0)
             editor_cursor_pos_set(editor_cursor_pos() - 1);
-        update_autocomplete();
+        editor_completion_update();
         return 1;
     case GLUT_KEY_RIGHT:
         if (editor_cursor_pos() < editor_state_input().input_len)
             editor_cursor_pos_set(editor_cursor_pos() + 1);
-        update_autocomplete();
+        editor_completion_update();
         return 1;
     case GLUT_KEY_HOME:
         editor_cursor_pos_set(0);
-        update_autocomplete();
+        editor_completion_update();
         return 1;
     case GLUT_KEY_END:
         editor_cursor_pos_set(editor_state_input().input_len);
-        update_autocomplete();
+        editor_completion_update();
         return 1;
     default:
         return 0;
@@ -1474,7 +1474,7 @@ static int handle_vertical_special_key_route(int key) {
     case GLUT_KEY_UP:
         if (ac->match_count > 1) {
             ac->selected_idx = (ac->selected_idx - 1 + ac->match_count) % ac->match_count;
-            update_selected_autocomplete_preview();
+            editor_completion_update_selected_preview();
         } else if (editor_get_modifiers() & GLUT_ACTIVE_SHIFT) {
             if (!repl_clipboard_sel_active()) {
                 repl_selection_start(repl_state_edit_line());
@@ -1492,7 +1492,7 @@ static int handle_vertical_special_key_route(int key) {
     case GLUT_KEY_DOWN:
         if (ac->match_count > 1) {
             ac->selected_idx = (ac->selected_idx + 1) % ac->match_count;
-            update_selected_autocomplete_preview();
+            editor_completion_update_selected_preview();
         } else if (editor_get_modifiers() & GLUT_ACTIVE_SHIFT) {
             if (!repl_clipboard_sel_active()) {
                 repl_selection_start(repl_state_edit_line());

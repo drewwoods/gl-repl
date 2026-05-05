@@ -142,6 +142,7 @@ TEST_BINS = \
 	test_repl_core_examples \
 	test_repl_core_search \
 	test_repl_core_search_extra \
+	test_editor_completion \
 	test_repl_audio \
 	test_repl_core_internal \
 	test_repl_autocomplete \

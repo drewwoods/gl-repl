@@ -181,8 +181,12 @@ void repl_dump_code_panel_visual_text(FILE *out, EditorBufferView text);
 
 /* ---- Autocomplete ----------------------------------------------------- */
 
-void update_selected_autocomplete_preview(void);
-void update_autocomplete(void);
+/* update_autocomplete / update_selected_autocomplete_preview are
+ * file-static inside editor_autocomplete.c — production code reaches
+ * them through the EditorCompletionProvider seam in
+ * editor_completion.h. accept_autocomplete is exposed because the
+ * editor input dispatcher invokes it directly when the user presses
+ * Tab / Enter on the popup. */
 void accept_autocomplete(void);
 /* Register repl_autocomplete as the EditorCompletionProvider. Called
  * once at startup before the editor processes input. */

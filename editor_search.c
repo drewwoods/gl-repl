@@ -18,6 +18,7 @@
  * accessed through the typed search facade.
  */
 #include "editor_input.h"
+#include "editor_completion.h"
 #include "editor_search.h"
 #include "repl_state.h"
 #include "repl_core_internal.h"
@@ -470,7 +471,7 @@ static void search_open(void) {
     ui_state_help_mut()->visible = 0;
     editor_help_session_set_tab(0);
     editor_help_session_set_scroll(0);
-    clear_autocomplete_state();
+    editor_completion_clear();
 }
 
 int handle_search_key(unsigned char key) {
