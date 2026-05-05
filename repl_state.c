@@ -569,6 +569,7 @@ void repl_state_reset_all(void) {
     repl_source_scope_depth_cache_invalidate();
     repl_state_mark_flat_dirty();
     repl_state_mark_normals_dirty();
+    repl_autocomplete_register_provider();
 }
 
 /* The legacy `repl_state_*` UI-slice forwarder block was removed in

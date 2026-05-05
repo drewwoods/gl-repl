@@ -2,6 +2,7 @@
  * editor_completion.c - Editor completion provider registry.
  */
 #include "editor_completion.h"
+#include "editor_state.h"
 
 #include <stddef.h>
 
@@ -26,6 +27,7 @@ void editor_completion_update_selected_preview(void) {
 }
 
 void editor_completion_clear(void) {
+    editor_state_autocomplete_clear();
     if (g_provider && g_provider->clear)
         g_provider->clear();
 }

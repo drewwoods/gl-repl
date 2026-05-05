@@ -171,7 +171,7 @@ static void update_input_param_hint(void) {
     }
 }
 
-void update_selected_autocomplete_preview(void) {
+static void update_selected_autocomplete_preview(void) {
     ReplEditorInputView inp = editor_state_input();
     ReplAutocompleteState *ac = editor_state_autocomplete_mut();
 
@@ -210,13 +210,13 @@ void update_selected_autocomplete_preview(void) {
     }
 }
 
-void update_autocomplete(void) {
+static void update_autocomplete(void) {
     ReplEditorInputView inp = editor_state_input();
     ReplAutocompleteState *ac = editor_state_autocomplete_mut();
     const char *input = inp.input;
     int input_len = inp.input_len;
 
-    clear_autocomplete_state();
+    editor_state_autocomplete_clear();
     g_ac_mode = AC_MODE_NONE;
     g_ac_token_len = 0;
     g_ac_suffix[0] = '\0';
@@ -347,7 +347,7 @@ void accept_autocomplete(void) {
             editor_cursor_pos_set(inp->input_len);
         }
     }
-    clear_autocomplete_state();
+    editor_state_autocomplete_clear();
     g_ac_mode = AC_MODE_NONE;
     g_ac_token_len = 0;
     g_ac_suffix[0] = '\0';
@@ -358,10 +358,16 @@ void accept_autocomplete(void) {
  * Phase G commit 36. Editor input dispatch invokes
  * editor_completion_update / _update_selected_preview / _clear; we
  * register the existing repl_autocomplete entry points here so the
- * editor stays decoupled from REPL grammar specifics. */
+ * editor stays decoupled from REPL grammar specifics.
+ *
+ * editor_completion_clear() owns the slice wipe (it lives on
+ * EditorState), so this provider hook only resets the
+ * provider-private statics. */
 
 static void repl_autocomplete_provider_clear(void) {
-    clear_autocomplete_state();
+    g_ac_mode = AC_MODE_NONE;
+    g_ac_token_len = 0;
+    g_ac_suffix[0] = '\0';
 }
 
 static const EditorCompletionProvider g_repl_autocomplete_provider = {

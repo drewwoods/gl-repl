@@ -5,6 +5,7 @@
 #include <stdlib.h>
 
 #include "editor_input.h"
+#include "editor_completion.h"
 #include "editor_help_session.h"
 #include "editor_inline_rename.h"
 #include "editor_commit.h"
@@ -973,7 +974,7 @@ void imrepl_ctrl_router_reset_code_panel_drag(void) {
  * ui_panels_handle_code_panel_click tail. */
 static void route_code_click_epilog(void) {
     repl_action_cursor_blink_reset();
-    clear_autocomplete_state();
+    editor_completion_clear();
     repl_clipboard_clear_selection();
     editor_request_redraw();
 }
