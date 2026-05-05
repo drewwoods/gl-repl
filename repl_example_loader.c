@@ -267,6 +267,10 @@ static void load_example(int idx) {
      * an example. Subsequent example loads leave the home slot untouched. */
     repl_scenes_save_active_scene_if_any();
     repl_scenes_capture_home_if_needed();
+    /* Snapshot the user's pre-example presentation cfg so the next
+     * transition out of example state can roll back any in-example
+     * cfg toggles before applying the destination's saved cfg. */
+    repl_scenes_capture_pre_example_cfg_if_entering();
 
     load_example_lines(lines);
     repl_state_scenes_mut()->active_example_idx = idx;
