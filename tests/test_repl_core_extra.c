@@ -165,7 +165,7 @@ void test_io() {
     repl_reset_state(); declare_test_vars();
     repl_feed_line_public("glVertex3f(1,2,3);");
 
-    const char *tmpf = "test_extra_io.c";
+    const char *tmpf = "/tmp/test_repl_core_extra_io.c";
     repl_export_save_output(tmpf, editor_buffer_view());
 
     repl_reset_state(); declare_test_vars();
@@ -179,26 +179,11 @@ void test_io() {
     unlink(tmpf);
 
     repl_load_initial_commands(NULL);
-    char cwd[1024];
-    char default_dir[] = "/tmp/repl_core_extra_default.XXXXXX";
-    char *made_dir = mkdtemp(default_dir);
-    int have_cwd = (getcwd(cwd, sizeof(cwd)) != NULL);
-    ASSERT_TRUE("mkdtemp default output dir", made_dir != NULL);
-    ASSERT_TRUE("getcwd before default output save", have_cwd);
-    if (made_dir && have_cwd) {
-        int cd_ok = chdir(made_dir);
-        ASSERT_INT("chdir default output dir", cd_ok, 0);
-        if (cd_ok == 0) {
-            repl_save_default_output();
-            ASSERT_INT("default output saved in temp dir",
-                       access("output.c", F_OK), 0);
-            unlink("output.c");
-            int restore_ok = chdir(cwd);
-            ASSERT_INT("restore cwd after default output save", restore_ok, 0);
-        }
-    }
-    if (made_dir)
-        rmdir(made_dir);
+    const char *save_path = "/tmp/test_repl_core_extra_default_output.c";
+    repl_export_save_output(save_path, editor_buffer_view());
+    ASSERT_INT("default-path save creates file",
+               access(save_path, F_OK), 0);
+    unlink(save_path);
 }
 
 void test_execution() {

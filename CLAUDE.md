@@ -103,6 +103,11 @@ ownership / contract guards. Highlights:
   surfacing locally via their own `parse_for_test` helper).
 - `check-no-set-status-in-compile-apply` — `repl_compile.c` and
   `repl_apply.c` are status-free (Phase C purity).
+- `check-no-test-default-output` — hard guard. Tests may not call
+  `repl_save_default_output()`, which writes to the hardcoded relative
+  path `./output.c` (the repo root when tests run). Tests that need to
+  verify save behavior must call `repl_export_save_output()` with an
+  explicit `/tmp/` path instead.
 - `check-no-store-text-api` — `repl_command_store_*_with_line[s]`
   text-aware overloads stay deleted.
 - `check-repl-no-direct-buffer-read` — REPL files read text via
