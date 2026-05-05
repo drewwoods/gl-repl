@@ -372,7 +372,7 @@ ReplCompileResult editor_compile_if_block(const char *input,
                    ? ctx->edit_line : ctx->document_count);
 
     ExprVar visible_vars[MAX_EXPR_VARS];
-    int visible_nv = collect_visible_vars(pos, visible_vars, MAX_EXPR_VARS);
+    int visible_nv = collect_visible_vars(pos, visible_vars, MAX_EXPR_VARS, NULL);
 
     /* Skip past `if` to the opening `(`. */
     while (*p && *p != '(') p++;
@@ -773,7 +773,7 @@ ReplCompileResult editor_compile_for_loop(const char *input,
                    ? ctx->edit_line : ctx->document_count);
 
     ExprVar visible_vars[MAX_EXPR_VARS];
-    int visible_nv = collect_visible_vars(pos, visible_vars, MAX_EXPR_VARS);
+    int visible_nv = collect_visible_vars(pos, visible_vars, MAX_EXPR_VARS, NULL);
 
     char var_name[16];
     float start, end, step;

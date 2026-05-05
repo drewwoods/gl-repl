@@ -105,7 +105,18 @@
       "Bash(./bench_repl*)",
       "Bash(chmod +x /tmp/check_commands.sh)",
       "Bash(/tmp/check_commands.sh)",
-      "Bash(./test_repl_export_all_commands *)"
+      "Bash(./test_repl_export_all_commands *)",
+      "Bash(awk NR>=360 && NR<=400 *)",
+      "Bash(awk NR>=540 && NR<=580 *)",
+      "Bash(awk NR>=995 && NR<=1030 *)",
+      "Bash(awk NR>=1155 && NR<=1185 *)",
+      "Bash(awk NR>=1295 && NR<=1325 *)",
+      "Bash(awk 'NR>=300 && NR<=390 {print NR\": \"$0}' /Users/drew/src/code/openGL/samples/gen-ai/gl-repl/editor_input.c)",
+      "Bash(awk -F: '{if \\($1+0 <= 620\\) last=$0} END {print last}')",
+      "Bash(awk -F: '{if \\($1+0 <= 617\\) last=$0} END {print last}')",
+      "Bash(awk NR>=600 && NR<=640 {print NR\": \"$0} *)",
+      "Bash(chmod +x *)",
+      "Bash(./test_repl_core_internal *)"
     ]
   }
 }

@@ -395,10 +395,24 @@ static void rewrite_source_text_with_indent(char *text_out, int text_sz,
  *     without vars
  *   - else, plain parse only
  * Returns 1 if parsing succeeded. */
+/* Surface MAX_EXPR_VARS truncation as a status when the visible-var
+ * collector had to drop frames. Called after the parse so it overrides
+ * any "undeclared variable" status the parser set when truncation was
+ * the actual cause. */
+static void warn_if_scope_truncated(int vis_total) {
+    if (vis_total <= MAX_EXPR_VARS) return;
+    char msg[REPL_STATUS_TEXT_MAX];
+    snprintf(msg, sizeof(msg),
+             "scope has %d loop vars (max %d); deepest iterator vars may appear undeclared",
+             vis_total, MAX_EXPR_VARS);
+    set_status(msg);
+}
+
 static int parse_for_overwrite_enter(GLCmd *cmd, char *text_out, int text_sz,
                                      int insert_idx) {
     ExprVar vis_vars[MAX_EXPR_VARS];
-    int num_vis_vars = collect_visible_vars(insert_idx, vis_vars, MAX_EXPR_VARS);
+    int vis_total = 0;
+    int num_vis_vars = collect_visible_vars(insert_idx, vis_vars, MAX_EXPR_VARS, &vis_total);
     memset(cmd, 0, sizeof(*cmd));
     if (text_out && text_sz > 0)
         text_out[0] = '\0';
@@ -440,6 +454,7 @@ static int parse_for_overwrite_enter(GLCmd *cmd, char *text_out, int text_sz,
     }
     if (!parsed && editor_parse_err[0])
         set_status(editor_parse_err);
+    warn_if_scope_truncated(vis_total);
     return parsed;
 }
 
@@ -571,7 +586,8 @@ static CommitResult commit_current_input(int enter_mode) {
             int parsed;
             int insert_idx = repl_state_edit_line();
             ExprVar vis_vars[MAX_EXPR_VARS];
-            int num_vis_vars = collect_visible_vars(insert_idx, vis_vars, MAX_EXPR_VARS);
+            int vis_total = 0;
+            int num_vis_vars = collect_visible_vars(insert_idx, vis_vars, MAX_EXPR_VARS, &vis_total);
 
             char cmd_text[MAX_LINE_LEN] = "";
             char enter_parse_err[REPL_STATUS_TEXT_MAX];
@@ -626,8 +642,10 @@ static CommitResult commit_current_input(int enter_mode) {
                 }
                 editor_cursor_pos_set(0);
                 set_status("Inserted");
+                warn_if_scope_truncated(vis_total);
                 return COMMIT_OK;
             }
+            warn_if_scope_truncated(vis_total);
             return COMMIT_REJECTED;
         }
 
@@ -1029,7 +1047,7 @@ static int handle_comment_toggle_key_route(unsigned char key) {
                                 int var_idx = repl_eval_find_predef_var_idx(name);
                                 ExprVar vis[MAX_EXPR_VARS];
                                 int vis_n = collect_visible_vars(repl_state_edit_line(),
-                                                                 vis, MAX_EXPR_VARS);
+                                                                 vis, MAX_EXPR_VARS, NULL);
                                 char verr[128];
                                 if (var_idx < 0) {
                                     char buf[128];
@@ -1185,7 +1203,8 @@ static int handle_semicolon_commit_key_route(unsigned char key) {
                            (repl_state_edit_line() < repl_state_document_count() ? repl_state_edit_line() : repl_state_document_count());
                 int parsed;
                 ExprVar vis_vars[MAX_EXPR_VARS];
-                int num_vis_vars = collect_visible_vars(insert_idx, vis_vars, MAX_EXPR_VARS);
+                int vis_total = 0;
+                int num_vis_vars = collect_visible_vars(insert_idx, vis_vars, MAX_EXPR_VARS, &vis_total);
 
                 memset(&cmd, 0, sizeof(cmd));
                 if (num_vis_vars > 0)
@@ -1245,6 +1264,7 @@ static int handle_semicolon_commit_key_route(unsigned char key) {
                         }
                     }
                 }
+                warn_if_scope_truncated(vis_total);
             }
         }
         editor_completion_clear();
@@ -1327,7 +1347,8 @@ int feed_line(const char *line) {
                    (repl_state_edit_line() < repl_state_document_count() ? repl_state_edit_line() : repl_state_document_count());
         int parsed;
         ExprVar vis_vars[MAX_EXPR_VARS];
-        int num_vis_vars = collect_visible_vars(insert_idx, vis_vars, MAX_EXPR_VARS);
+        int vis_total = 0;
+        int num_vis_vars = collect_visible_vars(insert_idx, vis_vars, MAX_EXPR_VARS, &vis_total);
 
         char cmd_text[MAX_LINE_LEN] = "";
         memset(&cmd, 0, sizeof(cmd));
@@ -1371,6 +1392,7 @@ feed_line_done:
             inp->input_len = 0;
         }
         editor_cursor_pos_set(0);
+        warn_if_scope_truncated(vis_total);
         return handled;
     }
 }

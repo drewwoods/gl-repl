@@ -617,7 +617,7 @@ void repl_reformat_commands(void) {
         }
         default: {
             ExprVar vis_vars[MAX_EXPR_VARS];
-            int num_vis_vars = collect_visible_vars(cmd_idx, vis_vars, MAX_EXPR_VARS);
+            int num_vis_vars = collect_visible_vars(cmd_idx, vis_vars, MAX_EXPR_VARS, NULL);
             int preserve_expr = (num_vis_vars > 0) || orig.has_vars;
             GLCmd parsed;
             char parsed_text[MAX_LINE_LEN] = "";
@@ -678,7 +678,7 @@ static void get_for_var_name_from_text(const char *text, char *var, int var_sz) 
     var[i] = '\0';
 }
 
-int collect_visible_vars(int pos, ExprVar *vars, int max_vars) {
+int collect_visible_vars(int pos, ExprVar *vars, int max_vars, int *total_out) {
     typedef struct {
         CmdType type;
         ExprVar vars[MAX_EXPR_VARS];
@@ -734,12 +734,15 @@ int collect_visible_vars(int pos, ExprVar *vars, int max_vars) {
         }
     }
 
-    int count = 0;
-    for (int depth_idx = depth - 1; depth_idx >= 0 && count < max_vars; depth_idx--) {
-        for (int var_idx = 0; var_idx < frames[depth_idx].count && count < max_vars; var_idx++)
-            vars[count++] = frames[depth_idx].vars[var_idx];
+    int count = 0, total = 0;
+    for (int depth_idx = depth - 1; depth_idx >= 0; depth_idx--) {
+        for (int var_idx = 0; var_idx < frames[depth_idx].count; var_idx++) {
+            if (count < max_vars)
+                vars[count++] = frames[depth_idx].vars[var_idx];
+            total++;
+        }
     }
-
+    if (total_out) *total_out = total;
     return count;
 }
 

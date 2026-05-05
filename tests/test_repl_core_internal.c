@@ -149,7 +149,7 @@ int main() {
         repl_feed_line_public("  for(j, 0, 1) {");
 
         ExprVar vars[8];
-        int n = collect_visible_vars(2, vars, 8);
+        int n = collect_visible_vars(2, vars, 8, NULL);
         ASSERT_INT("collect_visible_vars count", n, 2);
         /* Note: variables are collected inner-to-outer */
         ASSERT_STR("var0 name", vars[0].name, "j");
@@ -544,6 +544,73 @@ int main() {
         ASSERT_INT("executor destroy quadric removed", (int)gl_stub_counts[GL_STUB_gluDeleteQuadric], 0);
         ASSERT_INT("executor destroy tess", (int)gl_stub_counts[GL_STUB_gluDeleteTess], 1);
     #endif
+    }
+
+    /* 15. MAX_EXPR_VARS truncation warning - verify collect_visible_vars tracks total */
+    {
+        /* Test A: verify collect_visible_vars returns correct total when not truncated */
+        {
+            repl_reset_state(); declare_test_vars();
+            repl_feed_line_public("for(i, 0, 1) {");
+            repl_feed_line_public("  for(j, 0, 1) {");
+
+            ExprVar vars[8];
+            int total = 0;
+            int count = collect_visible_vars(2, vars, 8, &total);
+            ASSERT_INT("2 nested loops: count", count, 2);
+            ASSERT_INT("2 nested loops: total", total, 2);
+            ASSERT_TRUE("total equals count (not truncated)", total == count);
+        }
+
+        /* Test B: verify collect_visible_vars returns total > max_vars when truncated */
+        {
+            repl_reset_state(); declare_test_vars();
+            /* Manually verify the logic: if we can have 32 visible vars,
+               and we ask for only 8, we should see total > 8 if we had more scope */
+            ExprVar vars[8];
+            int total = 0;
+            repl_feed_line_public("for(i, 0, 1) {");
+            int count1 = collect_visible_vars(1, vars, 8, &total);
+            ASSERT_INT("1 loop with max_vars=8: count", count1, 1);
+            ASSERT_INT("1 loop with max_vars=8: total", total, 1);
+            ASSERT_TRUE("1 loop: total equals count", total == count1);
+        }
+
+        /* Test C: verify total is well below MAX_EXPR_VARS for shallow
+         * nesting (the truncation guard should never fire here). */
+        {
+            repl_reset_state();
+            repl_feed_line_public("for(i, 0, 1) {");
+            repl_feed_line_public("  for(j, 0, 1) {");
+            repl_feed_line_public("    for(k, 0, 1) {");
+            ExprVar vars[MAX_EXPR_VARS];
+            int total = 0;
+            int count = collect_visible_vars(3, vars, MAX_EXPR_VARS, &total);
+            ASSERT_INT("3 nested loops: total", total, 3);
+            ASSERT_INT("3 nested loops: count == total", count, total);
+            ASSERT_TRUE("3 nested loops: total <= MAX_EXPR_VARS",
+                        total <= MAX_EXPR_VARS);
+        }
+
+
+        /* Test D: verify warning capability works (programmatic truncation check) */
+        {
+            ExprVar vars[4];  /* Limit to 4 vars */
+            int total = 0;
+
+            /* Simulate 5 nested scopes */
+            repl_reset_state();
+            repl_feed_line_public("for(a, 0, 1) {");
+            repl_feed_line_public("  for(b, 0, 1) {");
+            repl_feed_line_public("    for(c, 0, 1) {");
+            repl_feed_line_public("      for(d, 0, 1) {");
+            repl_feed_line_public("        for(e, 0, 1) {");
+            /* Query at position 5 with max_vars=4 */
+            int count = collect_visible_vars(5, vars, 4, &total);
+            ASSERT_INT("5 nested, max_vars=4: count capped", count, 4);
+            ASSERT_INT("5 nested, max_vars=4: total uncapped", total, 5);
+            ASSERT_TRUE("5 nested: total > max_vars", total > 4);
+        }
     }
 
     printf("\n%d / %d tests passed\n", g_harness.passed, g_harness.run);

@@ -614,7 +614,7 @@ ReplCompileResult repl_compile_var_assign(const char *input,
                           ? ctx->edit_line : ctx->document_count);
 
     ExprVar vis[MAX_EXPR_VARS];
-    int vis_n = collect_visible_vars(insert_idx, vis, MAX_EXPR_VARS);
+    int vis_n = collect_visible_vars(insert_idx, vis, MAX_EXPR_VARS, NULL);
     char verr[128];
     if (!repl_eval_validate_expression_idents(rhs,
                                               vis_n > 0 ? vis : NULL, vis_n,
