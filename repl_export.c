@@ -2595,6 +2595,7 @@ typedef struct {
     int warnings;
     char pending_comments[IMPORT_MAX_PENDING_COMMENTS][MAX_LINE_LEN];
     int  pending_comment_count;
+    int  pending_blank_run;
 } ImportState;
 
 static void import_state_init(ImportState *s) {
@@ -2604,6 +2605,36 @@ static void import_state_init(ImportState *s) {
     s->loaded = 0;
     s->warnings = 0;
     s->pending_comment_count = 0;
+    s->pending_blank_run = 0;
+}
+
+static void import_reset_pending_function_prelude(ImportState *s) {
+    s->pending_comment_count = 0;
+    s->pending_blank_run = 0;
+}
+
+static void import_append_pending_function_prelude(ImportState *s,
+                                                   const char *line) {
+    if (s->pending_comment_count >= IMPORT_MAX_PENDING_COMMENTS)
+        return;
+    snprintf(s->pending_comments[s->pending_comment_count++],
+             MAX_LINE_LEN, "%s", line);
+}
+
+static void import_flush_pending_blank_run(ImportState *s) {
+    int logical_blank_count;
+
+    if (s->pending_blank_run <= 0)
+        return;
+
+    /* Helper-function export writes one formatting blank line before each
+     * emitted prelude line or function header. Every user-authored blank row
+     * therefore appears as two raw blank lines, with one extra formatting
+     * blank immediately before the next non-empty line. */
+    logical_blank_count = (s->pending_blank_run - 1) / 2;
+    for (int blank_idx = 0; blank_idx < logical_blank_count; blank_idx++)
+        import_append_pending_function_prelude(s, "");
+    s->pending_blank_run = 0;
 }
 
 /* --- pre-snippet handlers (camera, workspace header, function bodies) ----- */
@@ -2628,10 +2659,11 @@ static int import_try_function_header(ImportState *s, const char *p, const char 
     char repl_func_line[MAX_LINE_LEN];
     if (!import_make_repl_func_header(p, repl_func_line, sizeof(repl_func_line)))
         return 0;
+    import_flush_pending_blank_run(s);
     /* Feed accumulated pending comments before the function header. */
     for (int comment_idx = 0; comment_idx < s->pending_comment_count; comment_idx++)
         import_feed_one_line(s->pending_comments[comment_idx], &s->loaded, &s->warnings);
-    s->pending_comment_count = 0;
+    import_reset_pending_function_prelude(s);
     int before = repl_state_document_count();
     int handled = feed_line(repl_func_line);
     if (repl_state_document_count() > before) s->loaded += (repl_state_document_count() - before);
@@ -2645,7 +2677,7 @@ static int import_try_function_header(ImportState *s, const char *p, const char 
 
 static int import_try_snippet_start(ImportState *s, const char *p) {
     if (strncmp(p, "// Snippet start", 16) != 0) return 0;
-    s->pending_comment_count = 0;
+    import_reset_pending_function_prelude(s);
     s->in_snippet = 1;
     /* Function/header import may leave the editor cursor in an insertion slot
      * inside existing commands.  Force snippet lines to start appending from
@@ -2656,14 +2688,15 @@ static int import_try_snippet_start(ImportState *s, const char *p) {
 }
 
 static int import_try_pending_comment(ImportState *s, const char *p) {
-    if (p[0] == '/' && p[1] == '/' &&
-        s->pending_comment_count < IMPORT_MAX_PENDING_COMMENTS) {
-        snprintf(s->pending_comments[s->pending_comment_count++],
-                 MAX_LINE_LEN, "%s", p);
-    } else if (*p != '\0') {
+    if (*p == '\0') {
+        s->pending_blank_run++;
+    } else if (p[0] == '/' && p[1] == '/') {
+        import_flush_pending_blank_run(s);
+        import_append_pending_function_prelude(s, p);
+    } else {
         /* Any non-empty, non-comment line resets the pending buffer so stray
          * comments don't leak onto unrelated lines that follow. */
-        s->pending_comment_count = 0;
+        import_reset_pending_function_prelude(s);
     }
     return 1; /* always consumes (including blank lines) */
 }

@@ -508,7 +508,7 @@ ReplCompileResult editor_compile_if_block(const char *input,
 
 /* ---- editor_compile_func_def ------------------------------------ */
 
-/* Walk backward from `pos` collecting depth-0 CMD_COMMENT lines.
+/* Walk backward from `pos` collecting depth-0 comment/blank rows.
  * Mirrors the static function_leading_comment_start in repl_commit.c
  * but reads from the compile-time context instead of live state. */
 static int compile_func_leading_comment_start(const ReplCompileContext *ctx,
@@ -516,7 +516,8 @@ static int compile_func_leading_comment_start(const ReplCompileContext *ctx,
     int start = pos;
     while (start > 0 &&
            ctx->document_cmds[start - 1].valid &&
-           ctx->document_cmds[start - 1].type == CMD_COMMENT &&
+           (ctx->document_cmds[start - 1].type == CMD_COMMENT ||
+            ctx->document_cmds[start - 1].type == CMD_EMPTY) &&
            repl_source_scope_block_depth_at(start - 1) == 0)
         start--;
     return start;
@@ -527,7 +528,7 @@ static int compile_func_leading_comment_start(const ReplCompileContext *ctx,
  * gone. Returns the insert position in post-delete coordinates.
  *
  * In the func_def relocation case, the deleted range is
- * always contiguous depth-0 CMD_COMMENT lines that
+ * always contiguous depth-0 CMD_COMMENT/CMD_EMPTY rows that
  * function_decl_insert_pos's walk would skip; the deleted indices
  * therefore lie strictly outside the walk's stopping position.
  * That keeps the math simple: walk normally, then translate by
@@ -543,7 +544,7 @@ static int compile_function_decl_insert_pos_after_delete(
         pos++;
 
     while (pos < doc_count) {
-        if (cmds[pos].type == CMD_COMMENT) {
+        if (cmds[pos].type == CMD_COMMENT || cmds[pos].type == CMD_EMPTY) {
             pos++;
             continue;
         }

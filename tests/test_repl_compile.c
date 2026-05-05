@@ -682,6 +682,44 @@ static void test_func_def_comment_relocation(void) {
                editor_buffer_line(4), "  glVertex3f(1, 0, 0);");
 }
 
+static void test_func_def_blank_line_relocation(void) {
+    repl_reset_state();
+
+    repl_feed_line_public("  glVertex3f(1, 0, 0);");
+    repl_feed_line_public("");
+    repl_feed_line_public("// descriptive comment");
+    repl_feed_line_public("// continuation");
+
+    ASSERT_INT("pre-funcdef blank relocation count",
+               repl_state_document_count(), 4);
+    ASSERT_INT("pre-funcdef blank row present",
+               repl_state_document_cmds()[1].type, CMD_EMPTY);
+
+    set_input("func0() {");
+    try_commit_block_structs();
+
+    ASSERT_INT("post-funcdef blank relocation count",
+               repl_state_document_count(), 6);
+    ASSERT_INT("relocated blank row",
+               repl_state_document_cmds()[0].type, CMD_EMPTY);
+    ASSERT_INT("relocated comment 0 after blank",
+               repl_state_document_cmds()[1].type, CMD_COMMENT);
+    ASSERT_INT("relocated comment 1 after blank",
+               repl_state_document_cmds()[2].type, CMD_COMMENT);
+    ASSERT_INT("inserted func def after blank/comment run",
+               repl_state_document_cmds()[3].type, CMD_FUNC_DEF);
+    ASSERT_INT("inserted func end after blank/comment run",
+               repl_state_document_cmds()[4].type, CMD_FUNC_END);
+    ASSERT_INT("vertex shifted to end after relocation",
+               repl_state_document_cmds()[5].type, CMD_VERTEX3F);
+
+    ASSERT_STR("buffer line 0 preserved blank", editor_buffer_line(0), "");
+    ASSERT_TRUE("buffer line 1 contains descriptive",
+                strstr(editor_buffer_line(1), "descriptive") != NULL);
+    ASSERT_TRUE("buffer line 2 contains continuation",
+                strstr(editor_buffer_line(2), "continuation") != NULL);
+}
+
 /* Resume publish: when a func_def's relocation moves the original
  * cursor position above the inserted block, the apply step
  * publishes the delta so the matching close-brace's compile
@@ -773,6 +811,7 @@ int main(void) {
     test_orchestration_no_change_falls_through();
     test_orchestration_success_returns_message();
     test_func_def_comment_relocation();
+    test_func_def_blank_line_relocation();
     test_func_def_resume_publish_consumed_by_close_brace();
 
     return test_harness_report(&g_harness, "test_repl_compile");
