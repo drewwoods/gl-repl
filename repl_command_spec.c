@@ -182,6 +182,7 @@ static const ReplFuncCompletion k_func_completions[] = {
     { "floor(",              "floor(x)",                                                 1, { "x" } },
     { "ceil(",               "ceil(x)",                                                  1, { "x" } },
     { "fmod(",               "fmod(x, y)",                                               2, { "x", "y" } },
+    { "rem(",                "rem(x, y)",                                                2, { "x", "y" } },
     { "rand(",               "rand(seed[, iter])",                                       2, { "seed", "iter" } },
     { "PI",                  "PI",                                                       0, { NULL } },
     { "TAU",                 "TAU",                                                      0, { NULL } },

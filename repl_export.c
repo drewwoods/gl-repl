@@ -1958,6 +1958,7 @@ static int import_expr_has_symbolic_ident(const char *expr) {
              strcmp(name, "floor") == 0 ||
              strcmp(name, "ceil") == 0 ||
              strcmp(name, "fmod") == 0 ||
+             strcmp(name, "rem") == 0 ||
              strcmp(name, "rand") == 0)) {
             continue;
         }
