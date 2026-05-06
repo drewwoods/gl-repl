@@ -483,6 +483,30 @@ int main(void) {
         assert_status_contains("complete unknown command status", "Unknown cmd");
     }
 
+    /* Top-level math expressions get a tailored error instead of the
+     * generic "Unknown cmd" — typing `rand()` or `sin(t)` as a
+     * statement is a common mistake (the result has nowhere to go). */
+    {
+        repl_reset_state();
+        GLCmd cmd;
+        memset(&cmd, 0, sizeof(cmd));
+        int ok = parse_for_test("rand()", &cmd);
+        ASSERT_TRUE("rand() returns 0", ok == 0);
+        assert_status_contains("rand() status names function", "rand");
+        assert_status_contains("rand() status hints expression", "expression");
+        ASSERT_TRUE("rand() status not generic",
+                    strstr(g_status, "Unknown cmd") == NULL);
+    }
+    {
+        repl_reset_state();
+        GLCmd cmd;
+        memset(&cmd, 0, sizeof(cmd));
+        int ok = parse_for_test("sin(t)", &cmd);
+        ASSERT_TRUE("sin(t) returns 0", ok == 0);
+        assert_status_contains("sin(t) status names function", "sin");
+        assert_status_contains("sin(t) status hints assign", "x = sin");
+    }
+
     {
         repl_reset_state();
         GLCmd cmd;
