@@ -21,6 +21,12 @@ typedef enum {
 static AutocompleteMode g_ac_mode = AC_MODE_NONE;
 static int g_ac_token_len = 0;
 static char g_ac_suffix[8] = "";
+/* Offset into the live input buffer where the completion prefix
+ * starts. Non-zero when the user has typed `... = ` and the matcher
+ * is treating the RHS as the prefix rather than the whole line.
+ * The accept path (and update_selected_autocomplete_preview) uses
+ * this to compute the ghost's `chars-already-typed` length. */
+static int g_ac_input_offset = 0;
 
 static void hint_append(char *out, int out_sz, const char *text) {
     int len = (int)strlen(out);
@@ -187,8 +193,12 @@ static void update_selected_autocomplete_preview(void) {
         char param_storage[MAX_EXPR_VARS][16];
         int param_count = 0;
 
+        /* Already-typed length of the candidate is the post-`=` prefix
+         * length, not the whole input length. */
+        int typed_len = inp.input_len - g_ac_input_offset;
+        if (typed_len < 0) typed_len = 0;
         snprintf(ac->ghost, sizeof(ac->ghost), "%s",
-                 ac->insert_matches[ac->selected_idx] + inp.input_len);
+                 ac->insert_matches[ac->selected_idx] + typed_len);
         if (g_ac_func_matches[ac->selected_idx] && g_ac_func_matches[ac->selected_idx]->param_count > 0) {
             build_param_hint_text(g_ac_func_matches[ac->selected_idx]->params,
                                   g_ac_func_matches[ac->selected_idx]->param_count,
@@ -213,18 +223,48 @@ static void update_selected_autocomplete_preview(void) {
 static void update_autocomplete(void) {
     ReplEditorInputView inp = editor_state_input();
     ReplAutocompleteState *ac = editor_state_autocomplete_mut();
-    const char *input = inp.input;
-    int input_len = inp.input_len;
+    const char *raw_input = inp.input;
+    int raw_input_len = inp.input_len;
 
     editor_state_autocomplete_clear();
     g_ac_mode = AC_MODE_NONE;
     g_ac_token_len = 0;
+    g_ac_input_offset = 0;
     g_ac_suffix[0] = '\0';
 
-    if (input_len == 0) return;
+    if (raw_input_len == 0) return;
 
     /* Only offer completions when cursor is at the end of input. */
-    if (editor_cursor_pos() != input_len) return;
+    if (editor_cursor_pos() != raw_input_len) return;
+
+    /* Skip past a leading `... = ` so the matcher works on the RHS
+     * rather than the whole line. Examples:
+     *   "x = rand"        -> RHS = "rand"
+     *   "float x = sin"   -> RHS = "sin"
+     *   "A[0] = glC"      -> RHS = "glC"
+     * Distinguishes assignment `=` from `==`/`<=`/`>=`/`!=` so a
+     * partial conditional doesn't get treated as an assignment. */
+    {
+        int last_eq = -1;
+        for (int i = 0; i < raw_input_len; i++) {
+            if (raw_input[i] != '=') continue;
+            if (i + 1 < raw_input_len && raw_input[i + 1] == '=') { i++; continue; }
+            if (i > 0 && (raw_input[i - 1] == '<' ||
+                          raw_input[i - 1] == '>' ||
+                          raw_input[i - 1] == '!' ||
+                          raw_input[i - 1] == '=')) continue;
+            last_eq = i;
+        }
+        if (last_eq >= 0) {
+            int o = last_eq + 1;
+            while (o < raw_input_len && isspace((unsigned char)raw_input[o])) o++;
+            g_ac_input_offset = o;
+        }
+    }
+
+    const char *input = raw_input + g_ac_input_offset;
+    int input_len = raw_input_len - g_ac_input_offset;
+    if (input_len <= 0) return;
 
     /* glPointParameterfv enum completion (custom: 1 enum + 3 floats). */
     {

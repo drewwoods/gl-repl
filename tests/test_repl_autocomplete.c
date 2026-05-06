@@ -69,6 +69,51 @@ int main() {
         ASSERT_STR("input after accept", editor_state_input().input, "glVertex3f(");
     }
 
+    /* 1b. Completion after `IDENT = ` assignment-shaped prefix.
+     * The matcher should treat the RHS as the completion prefix so
+     * `x = glVer` finishes the same way as a bare `glVer`. */
+    {
+        repl_reset_state(); declare_test_vars();
+        set_input_text("x = glVer");
+
+        editor_completion_update();
+        ASSERT_TRUE("post-assign ac_count > 0", g_ac_count > 0);
+        ASSERT_STR("post-assign first match",
+                   g_ac_insert_matches[0], "glVertex3f(");
+        ASSERT_STR("post-assign ghost", g_ac_ghost, "tex3f(");
+
+        accept_autocomplete();
+        ASSERT_STR("post-assign input after accept",
+                   editor_state_input().input, "x = glVertex3f(");
+    }
+
+    /* 1c. Assignment via array index (A[0] = ...) and multi-token
+     * declaration prefix (float x = ...). */
+    {
+        repl_reset_state(); declare_test_vars();
+        set_input_text("A[0] = sin");
+        editor_completion_update();
+        ASSERT_TRUE("array-assign matches", g_ac_count > 0);
+
+        repl_reset_state(); declare_test_vars();
+        set_input_text("float n = cos");
+        editor_completion_update();
+        ASSERT_TRUE("float-decl-assign matches", g_ac_count > 0);
+    }
+
+    /* 1d. `==` / `<=` / `>=` / `!=` are NOT assignments. The matcher
+     * must not skip past their `=` and treat the RHS as a completion
+     * prefix (which would surface bogus matches mid-comparison). */
+    {
+        repl_reset_state(); declare_test_vars();
+        set_input_text("if(x == glVer");
+        editor_completion_update();
+        /* `glVer` should not match here — the leading `if(x == ` is
+         * not an assignment context. */
+        ASSERT_INT("comparison '==' not treated as assignment",
+                   g_ac_count, 0);
+    }
+
     /* 2. Enum completion - glBegin */
     {
         repl_reset_state(); declare_test_vars();
