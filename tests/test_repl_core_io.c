@@ -256,7 +256,7 @@ int main(void) {
                 strstr(buf, "repl_lerp") == NULL);
         ASSERT_TRUE("scratch blend assignment exported",
             strstr(buf,
-                   "A[(int)(0)] = A[(int)(0)] + (A[(int)(1)] - A[(int)(0)])*0.25;") != NULL);
+                   "A[0] = A[0] + (A[1] - A[0])*0.25;") != NULL);
     }
 
     repl_reset_state(); declare_test_vars();

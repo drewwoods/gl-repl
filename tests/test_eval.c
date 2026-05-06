@@ -404,8 +404,9 @@ static void run_tests(void) {
     ASSERT_TO_C("10 % 3", "fmodf(10, 3)");
     ASSERT_TO_C("(x+y) % (z*2)", "fmodf((x+y), (z*2))");
     ASSERT_TO_C("sin(x) % 1", "fmodf(sinf(x), 1)");
+    ASSERT_TO_C("A[2]", "A[2]");
     ASSERT_TO_C("A[i+1]", "A[(int)(i+1)]");
-    ASSERT_TO_C("A[B[0]+1]", "A[(int)(B[(int)(0)]+1)]");
+    ASSERT_TO_C("A[B[0]+1]", "A[(int)(B[0]+1)]");
 
     printf("c_expr_to_repl:\n");
     ASSERT_TO_REPL("sinf(x)", "sin(x)");
@@ -417,8 +418,9 @@ static void run_tests(void) {
     ASSERT_TO_REPL("powf(x,2)", "pow(x,2)");
     ASSERT_TO_REPL("powf(1.0f,2.0f)", "pow(1.0f,2.0f)");
     ASSERT_TO_REPL("repl_randf(i,3)", "rand(i,3)");
+    ASSERT_TO_REPL("A[2]", "A[2]");
     ASSERT_TO_REPL("A[(int)(i+1)]", "A[i+1]");
-    ASSERT_TO_REPL("A[(int)(B[(int)(0)] + 1)]", "A[B[0] + 1]");
+    ASSERT_TO_REPL("A[(int)(B[0] + 1)]", "A[B[0] + 1]");
     ASSERT_FLOAT("pow(1.0f,2.0f)", 1.0f);
     {
         char tiny[5];
