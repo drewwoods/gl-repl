@@ -486,12 +486,21 @@ CMD_GLUT_CUBE, CMD_GLUT_SPHERE, CMD_GLUT_TEAPOT, CMD_GLUT_CONE,
 
 ### 2. `repl_command_spec.c` — three additions
 
-**a. `k_func_completions[]`** — autocomplete prefix/hint entry. The prefix
-string (including the opening `(`) must match exactly what the user types.
-The hint string is displayed inline; param names drive Tab-cycle hints.
+**a. `k_func_completions[]`** — autocomplete prefix/hint entry **and** the
+F1 help row. The prefix string (including the opening `(`) must match
+exactly what the user types. The hint string is displayed inline; param
+names drive Tab-cycle hints. The trailing two fields drive the help
+overlay: `help_desc` is the right-column description (empty string ""
+to render the signature row alone, `NULL` to skip the entry from help
+entirely — used for language-level entries like `func0() {` or `x =`),
+and `help_group` (`REPL_HELP_GROUP_TOP` / `LIGHTING` / `GLUT_SHAPES` /
+`GLU_TESS` / `NONE`) selects the section header. Multi-line help
+descriptions use embedded `\n`; the renderer emits each segment as an
+indented continuation row.
 
 ```c
-{ "glutSolidCube(",  "glutSolidCube(size)",  1, { "size" } },
+{ "glutSolidCube(", "glutSolidCube(size)", 1, { "size" },
+    "", REPL_HELP_GROUP_GLUT_SHAPES },
 ```
 
 **b. `k_std_command_specs[]`** — parse spec used by `repl_parser.c` and the
@@ -543,12 +552,19 @@ for the replay annotation overlay.
 case CMD_GLUT_CUBE: *nargs_out = 1; return "glutSolidCube(%g);";
 ```
 
-### 5. `ui_help_overlay.c` — help text
+### 5. F1 help text — already wired
 
-Add a line to the `tab_commands[]` static array inside
-`ui_help_overlay_render` (F1 overlay, Commands tab). Lines use a `\t`
-to separate the command from its description. Group with related
-commands under the same section header.
+Help is generated from `k_func_completions[]` (step 2a). The
+`help_desc` + `help_group` fields you set there feed the F1 overlay's
+Commands tab automatically — `repl_help_text.c` walks the spec table,
+groups by section, and emits one row per command. No separate edit
+needed unless your command lives in a *new* group (in which case add
+both an enum value to `ReplHelpGroup` in `repl_command_spec.h` and a
+`help_group_header` case in `repl_help_text.c`).
+
+The hand-written language-level sections in `repl_help_text.c`
+(`Math Expressions`, `Variables`, `For-Loops`, `Functions`, etc.)
+remain manual since they document REPL syntax, not commands.
 
 ### 6. Stubs (only if adding a symbol not yet in the stub headers)
 

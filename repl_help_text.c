@@ -11,7 +11,9 @@
 #include "repl_config.h"
 #include "repl_eval.h"           /* REPL_SCRATCH_ARRAY_LEN */
 
+#include <stdarg.h>
 #include <stdio.h>
+#include <string.h>
 
 /* Compile-time stringify for embedding macro values in string literals */
 #define _HELP_STR2(x) #x
@@ -19,59 +21,15 @@
 
 /* '\t' marks the boundary between left column (command) and right
  * column (description). Lines without '\t' render in a single colour
- * based on indent level. */
-static const char *const k_tab_commands[] = {
-    "Supported Commands (type + ;):",
-    "  glBegin(MODE)        \tGL_TRIANGLES, GL_TRIANGLE_STRIP, ...",
-    "  glEnd()              \tEnd current primitive block",
-    "  glVertex3f(x,y,z)    \tSpecify a vertex position",
-    "  glVertex2f(x,y)      \tSpecify a 2D vertex (z=0)",
-    "  glNormal3f(x,y,z)    \tSpecify a vertex normal",
-    "  glColor3f(r,g,b)     \tSpecify vertex color",
-    "  glColor4f(r,g,b,a)   \tSpecify color with alpha",
-    "  glClearColor(r,g,b,a)\tSet the background clear color",
-    "  glTranslatef(x,y,z)  \tTranslate the modelview matrix",
-    "  glScalef(sx,sy,sz)   \tScale the modelview matrix",
-    "  glRotatef(d,x,y,z)   \tRotate the modelview matrix",
-    "  glPushMatrix()       \tPush current matrix onto stack",
-    "  glPopMatrix()        \tPop matrix from stack",
-    "  glEnable(CAP) / glDisable(CAP)",
-    "       \tGL_BLEND, GL_COLOR_MATERIAL, GL_CULL_FACE, GL_DEPTH_TEST",
-    "       \tGL_LIGHTING, GL_LIGHT0..GL_LIGHT3, GL_LINE_SMOOTH, GL_LINE_STIPPLE",
-    "       \tGL_MULTISAMPLE, GL_NORMALIZE, GL_POINT_SMOOTH",
-    "  glShadeModel(MODE)   \tGL_SMOOTH, GL_FLAT",
-    "  glFrontFace(MODE)    \tGL_CW, GL_CCW",
-    "  glDepthMask(FLAG)    \tGL_TRUE, GL_FALSE (depth-buffer writes)",
-    "  glPointSize(size)    \tRasterized point diameter",
-    "  glPointParameterfv(GL_POINT_DISTANCE_ATTENUATION, const, linear, quadratic)",
-    "       \tDistance attenuation: size *= 1/sqrt(const + linear*d + quadratic*d*d)",
-    "  glBlendFunc(sfactor, dfactor)",
-    "       \tGL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA / GL_ONE",
-    "",
-    "Lighting / Material:",
-    "  glColorMaterial(face, mode)",
-    "       \tface: GL_FRONT, GL_BACK, or GL_FRONT_AND_BACK",
-    "       \tmode: GL_AMBIENT / GL_AMBIENT_AND_DIFFUSE / GL_DIFFUSE / GL_SPECULAR / GL_EMISSION",
-    "  glMaterialf(face, pname, value | {r,g,b,a})",
-    "  glLightModeli(pname, param)",
-    "       \tpname: GL_LIGHT_MODEL_TWO_SIDE, GL_LIGHT_MODEL_LOCAL_VIEWER",
-    "",
-    "GLUT Solid Shapes:",
-    "  glutSolidTorus(innerR, outerR, nsides, rings)",
-    "  glutSolidCube(size)",
-    "  glutSolidSphere(radius, slices, stacks)",
-    "  glutSolidTeapot(size)",
-    "  glutSolidCone(base, height, slices, stacks)",
-    "",
-    "GLU Tessellator (concave / complex polygons):",
-    "  gluBegin(GLU_POLYGON)  \tStart a tessellated polygon",
-    "  gluBegin(GLU_CONTOUR)  \tStart a contour within the polygon",
-    "  gluEnd()               \tEnd contour or polygon",
-    "  gluNormal(x,y,z)       \tSet per-vertex normal",
-    "  gluColor(r,g,b[,a])    \tSet per-vertex color",
-    "  gluVertex(x,y,z)       \tAdd vertex to current contour",
-    "  Multiple contours in one polygon create holes (opposite winding)",
-    "",
+ * based on indent level.
+ *
+ * Per-command rows (Supported Commands / Lighting / GLUT / GLU) are
+ * generated at frame-build time from `k_func_completions[]` in
+ * repl_command_spec.c so adding a new command only touches the spec.
+ * The language-level sections below ("Math Expressions:", "Variables:",
+ * For-Loops, etc.) stay hand-written — they document REPL syntax, not
+ * commands. */
+static const char *const k_lang_sections_tail[] = {
     "Math Expressions (use anywhere floats are expected):",
     "  Constants:  PI, TAU       \tFunctions: sin cos tan sqrt abs pow rand",
     "  Operators:  + - * / % ( ) \tAlso: min max floor ceil fmod rem",
@@ -221,10 +179,101 @@ static const char *const k_tab_keys_base[] = {
 static char        g_fkey_strbuf[HELP_FKEY_MAX][48];
 static const char *g_tab_keys[HELP_KEYS_MAX];
 
+/* Commands tab: per-command rows generated from k_func_completions[];
+ * the language-tail (Math, Variables, …) lives in
+ * k_lang_sections_tail above. Buffer is sized for current spec entries
+ * plus a few hundred-byte cushion; raise both if a new help-grouped
+ * command runs out of room. */
+#define HELP_CMD_LINES_MAX 192
+#define HELP_CMD_LINE_BUF  120
+
+static char        g_cmd_strbuf[HELP_CMD_LINES_MAX][HELP_CMD_LINE_BUF];
+static const char *g_tab_commands[HELP_CMD_LINES_MAX];
+
 static UiOverlayTab g_tabs[2];
 static UiOverlayContent g_content;
 
+static const char *help_group_header(ReplHelpGroup g) {
+    switch (g) {
+    case REPL_HELP_GROUP_TOP:         return "Supported Commands (type + ;):";
+    case REPL_HELP_GROUP_LIGHTING:    return "Lighting / Material:";
+    case REPL_HELP_GROUP_GLUT_SHAPES: return "GLUT Solid Shapes:";
+    case REPL_HELP_GROUP_GLU_TESS:    return "GLU Tessellator (concave / complex polygons):";
+    default:                          return NULL;
+    }
+}
+
+/* Optional trailing note printed under a group's last command. */
+static const char *help_group_footer(ReplHelpGroup g) {
+    if (g == REPL_HELP_GROUP_GLU_TESS)
+        return "  Multiple contours in one polygon create holes (opposite winding)";
+    return NULL;
+}
+
+static int cmd_emit(int n, const char *fmt, ...) {
+    if (n >= HELP_CMD_LINES_MAX) return n;
+    va_list ap;
+    va_start(ap, fmt);
+    vsnprintf(g_cmd_strbuf[n], HELP_CMD_LINE_BUF, fmt, ap);
+    va_end(ap);
+    g_tab_commands[n] = g_cmd_strbuf[n];
+    return n + 1;
+}
+
+/* Emit one group: header, then `  hint\tdesc-line-1` per entry plus
+ * `       \tcontinuation` rows for any `\n`-separated continuations. */
+static int cmd_emit_group(int n, ReplHelpGroup group) {
+    const char *header = help_group_header(group);
+    if (header) n = cmd_emit(n, "%s", header);
+
+    const ReplFuncCompletion *completions = repl_func_completions();
+    for (int i = 0; completions[i].insert_text; i++) {
+        const ReplFuncCompletion *c = &completions[i];
+        if (c->help_group != group) continue;
+        const char *desc = c->help_desc ? c->help_desc : "";
+        const char *nl = strchr(desc, '\n');
+        int seg_len = nl ? (int)(nl - desc) : (int)strlen(desc);
+        if (seg_len > 0)
+            n = cmd_emit(n, "  %s\t%.*s", c->display_text, seg_len, desc);
+        else
+            n = cmd_emit(n, "  %s", c->display_text);
+        while (nl) {
+            desc = nl + 1;
+            nl = strchr(desc, '\n');
+            seg_len = nl ? (int)(nl - desc) : (int)strlen(desc);
+            n = cmd_emit(n, "       \t%.*s", seg_len, desc);
+        }
+    }
+
+    const char *footer = help_group_footer(group);
+    if (footer) n = cmd_emit(n, "%s", footer);
+
+    /* Blank separator after the group. */
+    n = cmd_emit(n, "%s", "");
+    return n;
+}
+
 const UiOverlayContent *repl_help_text_build(void) {
+    /* --- Commands tab: per-command sections from the spec, then the
+     * hand-written language sections. --- */
+    int nc = 0;
+    nc = cmd_emit_group(nc, REPL_HELP_GROUP_TOP);
+    nc = cmd_emit_group(nc, REPL_HELP_GROUP_LIGHTING);
+    nc = cmd_emit_group(nc, REPL_HELP_GROUP_GLUT_SHAPES);
+    nc = cmd_emit_group(nc, REPL_HELP_GROUP_GLU_TESS);
+    /* Language sections: copy pointers verbatim from the static array
+     * (these strings are immortal so we can hand them to the renderer
+     * directly without copying into g_cmd_strbuf). */
+    for (int i = 0;
+         k_lang_sections_tail[i] && nc < HELP_CMD_LINES_MAX - 1;
+         i++) {
+        g_tab_commands[nc++] = k_lang_sections_tail[i];
+    }
+    if (nc < HELP_CMD_LINES_MAX)
+        g_tab_commands[nc] = NULL;
+    else
+        g_tab_commands[HELP_CMD_LINES_MAX - 1] = NULL;
+
     int nk = 0;
     for (int i = 0;
          k_tab_keys_base[i] != NULL && nk < HELP_KEYS_MAX - HELP_FKEY_MAX - 4;
@@ -263,7 +312,7 @@ const UiOverlayContent *repl_help_text_build(void) {
     g_tab_keys[nk]   = NULL;
 
     g_tabs[0].label = "Commands";
-    g_tabs[0].lines = k_tab_commands;
+    g_tabs[0].lines = g_tab_commands;
     g_tabs[1].label = "Keys";
     g_tabs[1].lines = g_tab_keys;
 
