@@ -222,7 +222,7 @@ int repl_eval_find_predef_var_idx(const char *name) {
 static const char *s_reserved_idents[] = {
     "t", "PI", "TAU", "float", "var",
     "sin", "cos", "tan", "sqrt", "abs", "pow",
-    "min", "max", "floor", "ceil", "fmod", "rand",
+    "min", "max", "floor", "ceil", "fmod", "rem", "rand",
     "A", "B", "C",
     NULL
 };
@@ -861,6 +861,7 @@ static float eval_primary(ExprCtx *ctx) {
             if (strcmp(name, "floor") == 0 && arg_count == 1) return floorf(args[0]);
             if (strcmp(name, "ceil") == 0 && arg_count == 1)  return ceilf(args[0]);
             if (strcmp(name, "fmod") == 0 && arg_count == 2) return fmodf(args[0], args[1]);
+            if (strcmp(name, "rem") == 0 && arg_count == 2) return remainderf(args[0], args[1]);
             if (strcmp(name, "rand") == 0)
                 return arg_count >= 2 ? expr_rand01(args[0], args[1])
                                       : (arg_count == 1 ? expr_rand01(args[0], 0.0f) : 0.0f);
@@ -974,6 +975,7 @@ void repl_eval_expr_to_c(const char *in, char *out, int out_sz) {
         { "floor", "floorf", 1 },
         { "ceil",  "ceilf",  1 },
         { "fmod",  "fmodf",  1 },
+        { "rem",   "remainderf", 1 },
         { "rand",  "repl_randf", 1 },
         { "TAU",   "(2*M_PI)", 0 },
         { "PI",    "M_PI",     0 },
@@ -1142,6 +1144,7 @@ void repl_eval_c_expr_to_repl(const char *in, char *out, int out_sz) {
         { "floorf", "floor" },
         { "ceilf",  "ceil"  },
         { "fmodf",  "fmod"  },
+        { "remainderf", "rem" },
         { "repl_randf", "rand" },
         { "M_PI",   "PI"    },
     };

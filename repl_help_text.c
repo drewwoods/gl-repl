@@ -74,7 +74,7 @@ static const char *const k_tab_commands[] = {
     "",
     "Math Expressions (use anywhere floats are expected):",
     "  Constants:  PI, TAU       \tFunctions: sin cos tan sqrt abs pow rand",
-    "  Operators:  + - * / % ( ) \tAlso: min max floor ceil fmod",
+    "  Operators:  + - * / % ( ) \tAlso: min max floor ceil fmod rem",
     "       \trand(seed[,iter])",
     "  Comparison: > < >= <= == !=  Logical: && || !",
     "  Example:    glVertex3f(cos(PI/4), sin(PI/4), 0)",
