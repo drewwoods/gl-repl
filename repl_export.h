@@ -50,6 +50,8 @@ extern const char  *g_header_post[];
 extern const char  *g_footer_pre_init[];
 extern const char  *g_footer_post_init[];
 
+#define REPL_CODE_PANEL_SCRATCH_DECL_LINE "  float A[8], B[8], C[8];"
+
 /* Export current REPL state to a C source file. Writes header metadata (@var, @cfg,
  * @scene-name, @workspace-dir), global variable declarations, camera state, function
  * definitions, and geometry commands to filename. The file is a complete, standalone
