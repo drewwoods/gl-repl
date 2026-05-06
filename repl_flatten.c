@@ -432,6 +432,61 @@ static void flatten_range(FlattenContext *ctx,
             continue;
         }
 
+        if (src_cmd->type == CMD_SCRATCH_ASSIGN) {
+            int array_idx = (int)src_cmd->args[0];
+            int elem_idx = (int)src_cmd->args[1];
+            float value = src_cmd->args[2];
+            char name[16] = "";
+            char index_expr[MAX_LINE_LEN] = "";
+            char rhs[MAX_LINE_LEN] = "";
+            int local_index_vars = 0;
+            int local_rhs_vars = 0;
+            const char *src_text = spike_text_for(ctx->text, src_cmd, i);
+
+            if (repl_extract_assignment_target_parts(src_text,
+                                                    name, sizeof(name),
+                                                    index_expr, sizeof(index_expr),
+                                                    rhs, sizeof(rhs))) {
+                char repl_index[MAX_LINE_LEN];
+                char repl_rhs[MAX_LINE_LEN];
+                repl_eval_c_expr_to_repl(index_expr, repl_index, sizeof(repl_index));
+                repl_eval_c_expr_to_repl(rhs, repl_rhs, sizeof(repl_rhs));
+
+                ExprCtx index_ctx = { repl_index, vars, nv, NULL, 0 };
+                ExprCtx rhs_ctx = { repl_rhs, vars, nv, NULL, 0 };
+                elem_idx = (int)repl_eval_expr(&index_ctx);
+                value = repl_eval_expr(&rhs_ctx);
+                if (vars && nv > 0) {
+                    local_index_vars = input_has_expr_vars(index_expr, vars, nv);
+                    local_rhs_vars = input_has_expr_vars(rhs, vars, nv);
+                }
+            }
+
+            if (elem_idx < 0 || elem_idx >= REPL_SCRATCH_ARRAY_LEN) {
+                char msg[128];
+                snprintf(msg, sizeof(msg),
+                         "scratch array index out of range: %d", elem_idx);
+                flatten_fail(ctx, msg);
+                return;
+            }
+
+            repl_eval_scratch_set(array_idx, elem_idx, value);
+            {
+                GLCmd tmp = *src_cmd;
+                tmp.args[0] = (float)array_idx;
+                tmp.args[1] = (float)elem_idx;
+                tmp.args[2] = value;
+                tmp.num_args = 3;
+                tmp.has_vars = src_cmd->has_vars || local_index_vars || local_rhs_vars;
+                if (!flatten_append_cmd(ctx, &tmp, i, call_src_cmd_idx,
+                                        root_call_src_cmd_idx, func_scope_mask,
+                                        vars, nv))
+                    return;
+            }
+            i++;
+            continue;
+        }
+
         /* Flatten re-parses every source line on every flatten pass.
          * Errors here are dropped: a re-parse failure means the line
          * was already invalid at commit time (it would have set

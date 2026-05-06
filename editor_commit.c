@@ -105,6 +105,7 @@ EditorCommitResult editor_commit_current_input(const struct EditorServices_s *se
 
     /* Past the preflight every apply call below succeeds. */
     services->apply_predef_ops(&change, services->user);
+    services->apply_scratch_ops(&change, services->user);
     editor_buffer_apply_compiled_change(&change);
     services->apply_repl_change(&change, services->user);
 
@@ -129,6 +130,7 @@ int editor_commit_apply_external_change(const struct ReplCompiledChange_s *chang
 
     svc = editor_services_default();
     svc.apply_predef_ops(change, svc.user);
+    svc.apply_scratch_ops(change, svc.user);
     editor_buffer_apply_compiled_change(change);
     svc.apply_repl_change(change, svc.user);
     return 1;
@@ -221,6 +223,7 @@ int editor_commit_apply_plan(const EditorCommitPlan *plan) {
 
     /* REPL halves. */
     repl_apply_predef_ops(&plan->change);
+    repl_apply_scratch_ops(&plan->change);
     editor_buffer_apply_compiled_change(&plan->change);
     repl_apply_compiled_change(&plan->change);
 

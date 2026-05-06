@@ -590,6 +590,40 @@ void repl_execute_program(const ReplExecutionOptions *options) {
                 g_predef_vars[var_idx].value = value;
             break;
         }
+        case CMD_SCRATCH_ASSIGN: {
+            int array_idx = (int)flat_cmds[pc].args[0];
+            int elem_idx = (int)flat_cmds[pc].args[1];
+            float value = flat_cmds[pc].args[2];
+            if (flat_cmds[pc].has_vars) {
+                char name[16] = "";
+                char index_expr[MAX_LINE_LEN] = "";
+                char rhs[MAX_LINE_LEN] = "";
+                if (repl_extract_assignment_target_parts(execution_flat_text(text, &flat_cmds[pc]),
+                                                        name, sizeof(name),
+                                                        index_expr, sizeof(index_expr),
+                                                        rhs, sizeof(rhs)) &&
+                    index_expr[0] && rhs[0]) {
+                    FlatCmdLocalVars *local_vars =
+                        execution_local_vars_at(program, pc);
+                    ExprVar *eval_vars = g_predef_vars;
+                    int eval_num_vars = g_num_predef_vars;
+                    if (local_vars && local_vars->num_vars > 0) {
+                        eval_vars = local_vars->vars;
+                        eval_num_vars = local_vars->num_vars;
+                    }
+                    char repl_index[MAX_LINE_LEN];
+                    char repl_rhs[MAX_LINE_LEN];
+                    repl_eval_c_expr_to_repl(index_expr, repl_index, sizeof(repl_index));
+                    repl_eval_c_expr_to_repl(rhs, repl_rhs, sizeof(repl_rhs));
+                    ExprCtx index_ctx = { repl_index, eval_vars, eval_num_vars, NULL, 0 };
+                    ExprCtx rhs_ctx = { repl_rhs, eval_vars, eval_num_vars, NULL, 0 };
+                    elem_idx = (int)repl_eval_expr(&index_ctx);
+                    value = repl_eval_expr(&rhs_ctx);
+                }
+            }
+            repl_eval_scratch_set(array_idx, elem_idx, value);
+            break;
+        }
         /* Transforms handled by repl_cmd_is_transform() early-continue above. */
         case CMD_TRANSLATE3F: case CMD_SCALEF: case CMD_ROTATEF:
         case CMD_PUSH_MATRIX: case CMD_POP_MATRIX:

@@ -138,3 +138,13 @@ void repl_apply_predef_ops(const ReplCompiledChange *change) {
         }
     }
 }
+
+void repl_apply_scratch_ops(const ReplCompiledChange *change) {
+    if (!change)
+        return;
+
+    for (int op_idx = 0; op_idx < change->scratch_op_count; op_idx++) {
+        const ReplScratchOp *op = &change->scratch_ops[op_idx];
+        repl_eval_scratch_set(op->array_idx, op->elem_idx, op->value);
+    }
+}

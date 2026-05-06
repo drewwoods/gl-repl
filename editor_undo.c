@@ -43,6 +43,7 @@ void repl_undo_snapshot_save(ReplUndoSnapshot *snapshot) {
         snapshot->predef_vals[i] = g_predef_vars[i].value;
         memcpy(snapshot->predef_names[i], g_predef_vars[i].name, 16);
     }
+    repl_eval_copy_scratch_arrays(snapshot->scratch_arrays);
 }
 
 void repl_undo_snapshot_restore(const ReplUndoSnapshot *snapshot) {
@@ -58,6 +59,7 @@ void repl_undo_snapshot_restore(const ReplUndoSnapshot *snapshot) {
         g_predef_vars[i].value = snapshot->predef_vals[i];
         memcpy(g_predef_vars[i].name, snapshot->predef_names[i], 16);
     }
+    repl_eval_restore_scratch_arrays(snapshot->scratch_arrays);
     editor_insert_mode_set(0);
     load_line_to_input(repl_state_edit_line());
     mark_normals_dirty();

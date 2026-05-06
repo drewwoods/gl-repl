@@ -592,21 +592,31 @@ int main() {
 
     /* 3. Undo/Redo basic */
     {
+        float scratch = 0.0f;
         repl_reset_state(); declare_test_vars();
-        repl_feed_line_public("glVertex3f(1,1,1)");
+        repl_feed_line_public("A[0] = 3;");
         ASSERT_INT("num_cmds 1", repl_state_document_count(), 1);
+        ASSERT_TRUE("scratch set before undo snapshot",
+                    repl_eval_scratch_get(0, 0, &scratch) && fabsf(scratch - 3.0f) < 1e-6f);
 
         repl_undo_push_snapshot();
+        repl_feed_line_public("A[0] = 7;");
         repl_feed_line_public("glVertex3f(2,2,2)");
-        ASSERT_INT("num_cmds 2", repl_state_document_count(), 2);
+        ASSERT_INT("num_cmds 3", repl_state_document_count(), 3);
+        ASSERT_TRUE("scratch changed after redo mutation",
+                    repl_eval_scratch_get(0, 0, &scratch) && fabsf(scratch - 7.0f) < 1e-6f);
 
         repl_undo_pop_snapshot();
         ASSERT_INT("num_cmds after undo", repl_state_document_count(), 1);
-        ASSERT_STR("cmd 0 source", editor_buffer_line(0), "  glVertex3f(1, 1, 1);");
+        ASSERT_STR("cmd 0 source", editor_buffer_line(0), "  A[0] = 3;");
+        ASSERT_TRUE("undo restores scratch value",
+                    repl_eval_scratch_get(0, 0, &scratch) && fabsf(scratch - 3.0f) < 1e-6f);
 
         repl_undo_do_redo();
-        ASSERT_INT("num_cmds after redo", repl_state_document_count(), 2);
-        ASSERT_STR("cmd 1 source", editor_buffer_line(1), "  glVertex3f(2, 2, 2);");
+        ASSERT_INT("num_cmds after redo", repl_state_document_count(), 3);
+        ASSERT_STR("cmd 2 source", editor_buffer_line(2), "  glVertex3f(2, 2, 2);");
+        ASSERT_TRUE("redo restores scratch value",
+                    repl_eval_scratch_get(0, 0, &scratch) && fabsf(scratch - 7.0f) < 1e-6f);
     }
 
     /* 4. Deleting commands - basic */

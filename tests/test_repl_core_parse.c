@@ -108,8 +108,10 @@ int main(void) {
 
     {
         char name[32];
+        char index_expr[128];
         char rhs[128];
         memset(name, 0, sizeof(name));
+        memset(index_expr, 0, sizeof(index_expr));
         memset(rhs, 0, sizeof(rhs));
         ASSERT_TRUE("extract assignment parts",
                     repl_extract_assignment_parts("  radius = sin(x + 1);  ",
@@ -129,6 +131,17 @@ int main(void) {
                                                   rhs, sizeof(rhs)) == 1);
         ASSERT_TRUE("assignment rhs strips semicolon and comment",
                     strcmp(rhs, "sin(x)") == 0);
+        ASSERT_TRUE("extract scratch assignment target",
+                repl_extract_assignment_target_parts("  A[i + 1] = sin(x); // keep",
+                                 name, sizeof(name),
+                                 index_expr, sizeof(index_expr),
+                                 rhs, sizeof(rhs)) == 1);
+        ASSERT_TRUE("scratch assignment name", strcmp(name, "A") == 0);
+        ASSERT_TRUE("scratch assignment index", strcmp(index_expr, "i + 1") == 0);
+        ASSERT_TRUE("scratch assignment rhs", strcmp(rhs, "sin(x)") == 0);
+        ASSERT_TRUE("scalar wrapper rejects scratch target",
+                repl_extract_assignment_parts("A[0] = 1", name, sizeof(name),
+                              rhs, sizeof(rhs)) == 0);
     }
 
     {

@@ -89,6 +89,7 @@ static int find_init_line_substr(const char *needle) {
 
 int main(void) {
     const char *path = "/tmp/repl_core_roundtrip_output.c";
+    const char *scratch_path = "/tmp/repl_core_scratch_output.c";
     const char *func_path = "/tmp/repl_core_func_output.c";
     const char *param_loop_path = "/tmp/repl_core_param_loop_output.c";
     const char *decl_func_path = "/tmp/repl_core_decl_func_output.c";
@@ -235,6 +236,37 @@ int main(void) {
 
     repl_flatten_commands();
     ASSERT_TRUE("flatten produced cmds", repl_state_flat_program_count() > 0);
+
+    repl_reset_state(); declare_test_vars();
+    repl_feed_line_public("A[0] = 0;");
+    repl_feed_line_public("A[1] = 1;");
+    repl_feed_line_public("A[0] = lerp(A[0], A[1], 0.25);");
+    repl_feed_line_public("glVertex3f(A[0], 0, 0);");
+    repl_export_save_output(scratch_path, editor_buffer_view());
+    {
+        char buf[16384];
+        read_text_file(scratch_path, buf, sizeof(buf));
+        ASSERT_TRUE("scratch global A exported",
+                    strstr(buf, "static float A[8] = {0};") != NULL);
+        ASSERT_TRUE("scratch global B exported",
+                    strstr(buf, "static float B[8] = {0};") != NULL);
+        ASSERT_TRUE("scratch global C exported",
+                    strstr(buf, "static float C[8] = {0};") != NULL);
+        ASSERT_TRUE("lerp helper exported",
+                    strstr(buf, "static float repl_lerp(float a, float b, float t)") != NULL);
+        ASSERT_TRUE("scratch lerp assignment exported",
+                    strstr(buf, "A[0] = repl_lerp(A[0], A[1], 0.25);") != NULL);
+    }
+
+    repl_reset_state(); declare_test_vars();
+    ASSERT_TRUE("load scratch output", repl_export_load_from_file(scratch_path) == 1);
+    ASSERT_TRUE("scratch roundtrip command count", repl_state_document_count() == 4);
+    ASSERT_TRUE("scratch roundtrip keeps assign type",
+                repl_state_document_cmds_mut()[2].type == CMD_SCRATCH_ASSIGN);
+    ASSERT_TRUE("scratch roundtrip keeps lerp source",
+                strstr(editor_buffer_line(2), "A[0] = lerp(A[0], A[1], 0.25);") != NULL);
+    ASSERT_TRUE("scratch roundtrip keeps vertex source",
+                strstr(editor_buffer_line(3), "glVertex3f(A[0], 0, 0);") != NULL);
 
     /* Camera state round-trip: non-default eye/center must survive save+load. */
     repl_reset_state(); declare_test_vars();

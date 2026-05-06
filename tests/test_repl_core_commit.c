@@ -253,6 +253,57 @@ int main(void) {
             ASSERT_TRUE("z updated", fabsf(g_predef_vars[z_idx].value - (-0.55f)) < 1e-6f);
     }
 
+    repl_reset_state(); declare_test_vars();
+    repl_feed_line_public("A[0] = 1;");
+    ASSERT_TRUE("scratch assign cmd count", repl_state_document_count() == 1);
+    ASSERT_TRUE("scratch assign type",
+                repl_state_document_cmds_mut()[0].type == CMD_SCRATCH_ASSIGN);
+    ASSERT_TRUE("scratch assign normalized text",
+              strstr(editor_buffer_line(0) ? editor_buffer_line(0) : "",
+                  "A[0] = 1;") != NULL);
+    {
+        float scratch = -1.0f;
+        ASSERT_TRUE("scratch assign applied live",
+                    repl_eval_scratch_get(0, 0, &scratch) && fabsf(scratch - 1.0f) < 1e-6f);
+        ASSERT_TRUE("scratch assign cached array idx",
+                    fabsf(repl_state_document_cmds_mut()[0].args[0]) < 1e-6f);
+        ASSERT_TRUE("scratch assign cached elem idx",
+                    fabsf(repl_state_document_cmds_mut()[0].args[1]) < 1e-6f);
+        ASSERT_TRUE("scratch assign cached value",
+                    fabsf(repl_state_document_cmds_mut()[0].args[2] - 1.0f) < 1e-6f);
+    }
+
+    repl_reset_state(); declare_test_vars();
+    repl_feed_line_public("for(i, 0, 2) {");
+    repl_feed_line_public("A[i] = A[i] + 1;");
+    repl_feed_line_public("}");
+    ASSERT_TRUE("scratch assign in loop cmd count", repl_state_document_count() == 3);
+    ASSERT_TRUE("scratch assign in loop type",
+                repl_state_document_cmds_mut()[1].type == CMD_SCRATCH_ASSIGN);
+    ASSERT_TRUE("scratch assign in loop has vars",
+                repl_state_document_cmds_mut()[1].has_vars == 1);
+
+    repl_reset_state(); declare_test_vars();
+    repl_feed_line_public("A[0] = 1;");
+    repl_feed_line_public("func0(depth) {");
+    repl_feed_line_public("if(depth > 0) {");
+    repl_feed_line_public("func0(depth - 1);");
+    repl_feed_line_public("A[depth] = A[depth - 1] + 1;");
+    repl_feed_line_public("}");
+    repl_feed_line_public("}");
+    repl_feed_line_public("func0(3);");
+    repl_flatten_commands();
+    execute_commands();
+    {
+        float scratch = 0.0f;
+        ASSERT_TRUE("recursive scratch A[1]",
+                    repl_eval_scratch_get(0, 1, &scratch) && fabsf(scratch - 2.0f) < 1e-6f);
+        ASSERT_TRUE("recursive scratch A[2]",
+                    repl_eval_scratch_get(0, 2, &scratch) && fabsf(scratch - 3.0f) < 1e-6f);
+        ASSERT_TRUE("recursive scratch A[3]",
+                    repl_eval_scratch_get(0, 3, &scratch) && fabsf(scratch - 4.0f) < 1e-6f);
+    }
+
     /* Var-decl-overwrite cascade: replacing a CMD_VAR_DECLARE with an
      * assign must reject when one of the dropped names is referenced by
      * another line. The diagnostic comes through the compile-error path
@@ -710,6 +761,46 @@ int main(void) {
         ASSERT_STR("replay display vertex source unchanged",
                    display,
                    "  glVertex3f(i, j, 0);");
+
+        replay_active = 0;
+        replay_state = REPLAY_OFF;
+        replay_src_line = -1;
+        replay_pc = 0;
+    }
+
+    repl_reset_state(); declare_test_vars();
+    {
+        char display[MAX_INPUT_LEN];
+        const EditorVirtualLineList *vlines;
+
+        repl_feed_line_public("A[0] = 1;");
+        repl_feed_line_public("A[0] = A[0] + 3;");
+        repl_feed_line_public("glVertex3f(A[0], 0, 0);");
+        repl_replay_start();
+        replay_state = REPLAY_PAUSED;
+
+        replay_pc = 2;
+        replay_src_line = 1;
+        ASSERT_TRUE("scratch replay assignment text",
+                    repl_replay_code_panel_get_command_display_text(editor_buffer_view(), 1, display, sizeof(display)));
+        ASSERT_STR("scratch replay assignment inline comment",
+                   display,
+                   "  A[0] = A[0] + 3; // A[0] = 1 + 3 = 4");
+
+        replay_pc = 3;
+        replay_src_line = 2;
+        repl_replay_annotations_prepare(editor_buffer_view());
+        vlines = editor_state_virtual_lines();
+        ASSERT_TRUE("scratch replay vertex annotation rows exist",
+                    vlines != NULL && vlines->count >= 1);
+        if (vlines && vlines->count >= 1) {
+            const EditorVirtualLine *eval_line = &vlines->items[vlines->count - 1];
+            ASSERT_TRUE("scratch replay eval row style",
+                        eval_line->style == VIRTUAL_STYLE_REPLAY_EVAL);
+            ASSERT_STR("scratch replay vertex eval text",
+                       eval_line->text,
+                       "  glVertex3f(4, 0, 0);");
+        }
 
         replay_active = 0;
         replay_state = REPLAY_OFF;

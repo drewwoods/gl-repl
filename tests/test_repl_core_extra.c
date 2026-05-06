@@ -384,6 +384,30 @@ void test_workspace_round_trip() {
     }
 }
 
+void test_user_scene_preserves_scratch_state(void) {
+    printf("--- User scene scratch preservation ---\n");
+    repl_reset_state(); declare_test_vars();
+    if (repl_example_count() < 1) return;
+
+    repl_feed_line_public("A[0] = 1;");
+    repl_load_example(0);
+    ASSERT_INT("home slot captured", repl_user_scene_slot_used(0), 1);
+
+    ASSERT_INT("promotion creates slot 1", repl_promote_example_if_needed(), 1);
+    repl_feed_line_public("A[0] = 5;");
+
+    {
+        float scratch = 0.0f;
+        ASSERT_INT("load home scene", repl_load_user_scene_idx(0), 1);
+        ASSERT_TRUE("home scene scratch preserved",
+                    repl_eval_scratch_get(0, 0, &scratch) && fabsf(scratch - 1.0f) < 1e-6f);
+
+        ASSERT_INT("load promoted scene", repl_load_user_scene_idx(1), 1);
+        ASSERT_TRUE("promoted scene scratch preserved",
+                    repl_eval_scratch_get(0, 0, &scratch) && fabsf(scratch - 5.0f) < 1e-6f);
+    }
+}
+
 void test_user_scene_promote_all_slots_full() {
     printf("--- User scene promotion when all slots full ---\n");
     repl_reset_state(); declare_test_vars();
@@ -933,6 +957,7 @@ int main(int argc, char **argv) {
     test_user_scene_persists_across_example_switch();
     test_user_scene_promote_on_edit();
     test_user_scene_promote_name_dedup();
+    test_user_scene_preserves_scratch_state();
     test_user_scene_promote_all_slots_full();
     test_user_scene_promote_lru_evict();
     test_user_scene_rename_flow();

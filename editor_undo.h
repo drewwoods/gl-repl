@@ -34,6 +34,7 @@
 #define EDITOR_UNDO_H
 
 #include "repl_command.h"
+#include "repl_eval.h"
 
 /* A captured snapshot of complete editor state: source commands, cursor
  * position, and predefined variable state. Used by undo/redo history rings
@@ -44,6 +45,7 @@ typedef struct {
     int   num_cmds;
     int   edit_line;
     float predef_vals[MAX_PREDEF_VARS];
+    float scratch_arrays[REPL_SCRATCH_ARRAY_COUNT][REPL_SCRATCH_ARRAY_LEN];
     char  predef_names[MAX_PREDEF_VARS][16];
     int   num_predef_vars;
 } ReplUndoSnapshot;
