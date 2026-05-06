@@ -58,13 +58,13 @@ int main() {
     {
         repl_reset_state(); declare_test_vars();
         set_input_text("glVer");
-        
+
         editor_completion_update();
         ASSERT_TRUE("ac_count > 0", g_ac_count > 0);
         ASSERT_STR("first match", g_ac_insert_matches[0], "glVertex3f(");
         ASSERT_STR("ghost text", g_ac_ghost, "tex3f(");
         ASSERT_STR("hint text", g_ac_hint, "x, y, z)");
-        
+
         accept_autocomplete();
         ASSERT_STR("input after accept", editor_state_input().input, "glVertex3f(");
     }
@@ -73,12 +73,12 @@ int main() {
     {
         repl_reset_state(); declare_test_vars();
         set_input_text("glBegin(GL_TRI");
-        
+
         editor_completion_update();
         ASSERT_TRUE("ac_count > 0", g_ac_count > 0);
         ASSERT_STR("first match", g_ac_insert_matches[0], "GL_TRIANGLES");
         ASSERT_STR("ghost text", g_ac_ghost, "ANGLES)");
-        
+
         accept_autocomplete();
         ASSERT_STR("input after accept", editor_state_input().input, "glBegin(GL_TRIANGLES)");
     }
@@ -87,13 +87,13 @@ int main() {
     {
         repl_reset_state(); declare_test_vars();
         set_input_text("glColorMaterial(GL_FR");
-        
+
         editor_completion_update();
         ASSERT_STR("first match arg1", g_ac_insert_matches[0], "GL_FRONT");
         ASSERT_STR("ghost text arg1", g_ac_ghost, "ONT, ");
         accept_autocomplete();
         ASSERT_STR("input after arg1", editor_state_input().input, "glColorMaterial(GL_FRONT, ");
-        
+
         set_input_text("glColorMaterial(GL_FRONT, GL_AMB");
         editor_completion_update();
         ASSERT_STR("first match arg2", g_ac_insert_matches[0], "GL_AMBIENT");
@@ -110,7 +110,7 @@ int main() {
     {
         repl_reset_state(); declare_test_vars();
         set_input_text("glPointParameterfv(GL_POINT_DIST");
-        
+
         editor_completion_update();
         ASSERT_STR("match", g_ac_insert_matches[0], "GL_POINT_DISTANCE_ATTENUATION");
         ASSERT_STR("ghost", g_ac_ghost, "ANCE_ATTENUATION, ");
@@ -123,12 +123,12 @@ int main() {
         repl_reset_state(); declare_test_vars();
         repl_feed_line_public("func0(radius, height) {");
         repl_feed_line_public("}");
-        
+
         set_input_text("func0(");
-        
+
         editor_completion_update();
         ASSERT_STR("user func hint", g_ac_hint, "radius, height)");
-        
+
         set_input_text("func0(10, ");
         editor_completion_update();
         ASSERT_STR("user func hint arg2", g_ac_hint, "height)");

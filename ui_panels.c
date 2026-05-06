@@ -26,6 +26,8 @@
 #include "ui_panels.h"
 #include "./include/gl_2d.h"
 
+#include <string.h>
+
 /* Header / footer / camera scaffolding text lives in the import_export
  * view. Render code reads it through snap->import_export instead of
  * repl_state_*() so the per-row branch stays snapshot-only. */
@@ -81,6 +83,31 @@ static void color_for_type(CmdType t) {
     glColor3f(k_category_colors[cat].r,
               k_category_colors[cat].g,
               k_category_colors[cat].b);
+}
+
+static void category_rgb(CmdSyntaxCategory cat,
+                         float *r, float *g, float *b) {
+    if (cat < 0 || cat >= CMD_CAT_COUNT)
+        cat = CMD_CAT_DEFAULT;
+    if (r) *r = k_category_colors[cat].r;
+    if (g) *g = k_category_colors[cat].g;
+    if (b) *b = k_category_colors[cat].b;
+}
+
+static void code_panel_static_line_rgb(const char *text,
+                                       float fallback_r,
+                                       float fallback_g,
+                                       float fallback_b,
+                                       float *r,
+                                       float *g,
+                                       float *b) {
+    if (text && strcmp(text, REPL_CODE_PANEL_SCRATCH_DECL_LINE) == 0) {
+        category_rgb(CMD_CAT_VARIABLE, r, g, b);
+        return;
+    }
+    if (r) *r = fallback_r;
+    if (g) *g = fallback_g;
+    if (b) *b = fallback_b;
 }
 
 /* Replay annotations live in repl_replay_annotations.c. */
@@ -370,6 +397,9 @@ static void code_panel_draw_static_line(CodePanelRowCtx *ctx, const char *text,
     CodePanelWrapIter wrap_it;
     int wrap_row = 0;
     int wrap_start, wrap_len, wrap_x;
+    float draw_r, draw_g, draw_b;
+
+    code_panel_static_line_rgb(text, r, g, b, &draw_r, &draw_g, &draw_b);
 
     repl_code_panel_document_wrap_iter_init(&wrap_it, text, ctx->text_x, ctx->panel_w);
     while (repl_code_panel_document_wrap_iter_next(&wrap_it,
@@ -377,7 +407,7 @@ static void code_panel_draw_static_line(CodePanelRowCtx *ctx, const char *text,
         if (code_panel_row_visible(ctx)) {
             if (wrap_row == 0)
                 code_panel_draw_gutter_lineno(ctx->line_y, ctx->file_line);
-            glColor3f(r, g, b);
+            glColor3f(draw_r, draw_g, draw_b);
             code_panel_draw_segment(wrap_x, ctx->line_y, text,
                                     wrap_start, wrap_len, FONT_MONO);
             ctx->line_y -= LINE_H;

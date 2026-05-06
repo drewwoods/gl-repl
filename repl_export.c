@@ -1,5 +1,6 @@
 #include "./include/gl_2d.h"
 
+#include "repl_export.h"
 #include "ui_metrics.h"
 #include "ui_code_panel_layout.h"
 #include "repl_core_internal.h"
@@ -41,6 +42,7 @@ const char *g_header_pre[] = {
     "  glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);",
     "  glLoadIdentity();",
     "  glPushAttrib(GL_ALL_ATTRIB_BITS);",
+    REPL_CODE_PANEL_SCRATCH_DECL_LINE,
     NULL
 };
 
