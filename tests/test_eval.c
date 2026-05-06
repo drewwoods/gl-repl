@@ -219,6 +219,9 @@ static void run_tests(void) {
     ASSERT_FLOAT("floor(2.7)", 2.0f);
     ASSERT_FLOAT("ceil(2.3)", 3.0f);
     ASSERT_FLOAT("fmod(7,3)", 1.0f);
+    ASSERT_FLOAT("rem(7,3)", remainderf(7.0f, 3.0f));   /* IEEE round-to-nearest */
+    ASSERT_FLOAT("rem(8,3)", remainderf(8.0f, 3.0f));   /* -1, not 2 */
+    ASSERT_FLOAT("rem(-7,3)", remainderf(-7.0f, 3.0f));
     ASSERT_FLOAT("rand(7,11)", 0.564453f);
     ASSERT_FLOAT("rand(7,11)", 0.564453f); /* deterministic */
     ASSERT_FLOAT("rand(3)", 0.589844f);    /* implicit iter=0 */
@@ -404,6 +407,7 @@ static void run_tests(void) {
     ASSERT_TO_C("10 % 3", "fmodf(10, 3)");
     ASSERT_TO_C("(x+y) % (z*2)", "fmodf((x+y), (z*2))");
     ASSERT_TO_C("sin(x) % 1", "fmodf(sinf(x), 1)");
+    ASSERT_TO_C("rem(x,2)", "remainderf(x,2)");
     ASSERT_TO_C("A[2]", "A[2]");
     ASSERT_TO_C("A[i+1]", "A[(int)(i+1)]");
     ASSERT_TO_C("A[B[0]+1]", "A[(int)(B[0]+1)]");
@@ -418,6 +422,7 @@ static void run_tests(void) {
     ASSERT_TO_REPL("powf(x,2)", "pow(x,2)");
     ASSERT_TO_REPL("powf(1.0f,2.0f)", "pow(1.0f,2.0f)");
     ASSERT_TO_REPL("repl_randf(i,3)", "rand(i,3)");
+    ASSERT_TO_REPL("remainderf(x,2)", "rem(x,2)");
     ASSERT_TO_REPL("A[2]", "A[2]");
     ASSERT_TO_REPL("A[(int)(i+1)]", "A[i+1]");
     ASSERT_TO_REPL("A[(int)(B[0] + 1)]", "A[B[0] + 1]");

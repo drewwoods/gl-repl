@@ -796,7 +796,7 @@ A[index] = expr;           (fixed scratch arrays: A/B/C, index 0..7)
 
 ## Math
 
-Functions: `sin`, `cos`, `tan`, `sqrt`, `abs`, `pow`, `min`, `max`, `floor`, `ceil`, `fmod`, `rand(seed[, iter])`
+Functions: `sin`, `cos`, `tan`, `sqrt`, `abs`, `pow`, `min`, `max`, `floor`, `ceil`, `fmod`, `rem`, `rand(seed[, iter])`
 Constants: `PI`, `TAU`
 Variables: declared via `float name;` — only `t` is predefined (Ctrl+T toggles animation).
 Scratch arrays: `A[8]`, `B[8]`, `C[8]` are fixed global runtime arrays for recursive/loop algorithms.
