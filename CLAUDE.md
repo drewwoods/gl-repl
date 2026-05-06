@@ -795,7 +795,7 @@ A[index] = expr;           (fixed scratch arrays: A/B/C, index 0..7)
 
 ## Math
 
-Functions: `sin`, `cos`, `tan`, `sqrt`, `abs`, `pow`, `lerp`, `min`, `max`, `floor`, `ceil`, `fmod`, `rand(seed[, iter])`
+Functions: `sin`, `cos`, `tan`, `sqrt`, `abs`, `pow`, `min`, `max`, `floor`, `ceil`, `fmod`, `rand(seed[, iter])`
 Constants: `PI`, `TAU`
 Variables: declared via `float name;` — only `t` is predefined (Ctrl+T toggles animation).
 Scratch arrays: `A[8]`, `B[8]`, `C[8]` are fixed global runtime arrays for recursive/loop algorithms.
@@ -808,6 +808,6 @@ Example:
 ```c
 A[0] = 0;
 A[1] = 1;
-A[0] = lerp(A[0], A[1], 0.25);
+A[0] = A[0] + (A[1] - A[0]) * 0.25;
 glVertex3f(A[0], 0, 0);
 ```
