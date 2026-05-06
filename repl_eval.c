@@ -175,6 +175,25 @@ static const char *find_matching_square(const char *open, const char *limit) {
     return NULL;
 }
 
+static int expr_is_plain_integer_literal(const char *src) {
+    const char *p = skip_ws_ptr(src);
+
+    if (!p || !*p)
+        return 0;
+
+    if (*p == '+' || *p == '-')
+        p++;
+
+    if (!isdigit((unsigned char)*p))
+        return 0;
+
+    while (isdigit((unsigned char)*p))
+        p++;
+
+    p = skip_ws_ptr(p);
+    return *p == '\0';
+}
+
 static void expr_rewrite_scratch_subscripts_to_c(const char *src,
                                                  char *dst,
                                                  int dst_sz) {
@@ -220,7 +239,9 @@ static void expr_rewrite_scratch_subscripts_to_c(const char *src,
                     out += id_len;
 
                     avail = (size_t)(end - out + 1);
-                    wrote = snprintf(out, avail, "[(int)(%s)]", inner_c);
+                    wrote = expr_is_plain_integer_literal(inner_c)
+                        ? snprintf(out, avail, "[%s]", inner_c)
+                        : snprintf(out, avail, "[(int)(%s)]", inner_c);
                     if (wrote < 0)
                         break;
                     if ((size_t)wrote >= avail) {
