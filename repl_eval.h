@@ -103,6 +103,19 @@
 #define REPL_SCRATCH_ARRAY_LEN 8
 #endif
 
+/* Function slots: the REPL has a fixed `funcN` table (0..9). Each slot
+ * may carry an optional user-chosen alias name, e.g. so `drawCube` can
+ * call into slot 4. The slot is still the load-bearing identity stored
+ * in CMD_FUNC_DEF / CMD_CALL via GLCmd.args[0]; the alias is purely a
+ * display + parser-recognition layer. */
+#ifndef REPL_FUNC_SLOT_COUNT
+#define REPL_FUNC_SLOT_COUNT 10
+#endif
+
+#ifndef REPL_FUNC_NAME_MAX
+#define REPL_FUNC_NAME_MAX 16
+#endif
+
 #ifndef M_PI
 #define M_PI 3.14159265358979323846
 #endif
@@ -150,6 +163,28 @@ typedef struct {
  * stable until the next declare/undeclare/restore call; do not cache it across
  * frames. */
 ReplPredefView repl_eval_predef_view(void);
+
+/* Function-alias table. Slot index 0..REPL_FUNC_SLOT_COUNT-1; an empty
+ * string at a slot means "no alias, use bare funcN". Lookups never
+ * match an empty alias. The table is REPL state and round-trips
+ * through capture/restore + workspace import/export. */
+void repl_func_alias_bind_storage(
+    char arrays[REPL_FUNC_SLOT_COUNT][REPL_FUNC_NAME_MAX]);
+void repl_func_alias_clear_all(void);
+const char *repl_func_alias_get(int slot);
+int  repl_func_alias_lookup_slot(const char *name);
+/* Register `name` for `slot`. Returns 1 on success, 0 if the name is
+ * empty / too long / reserved / already taken by a different slot, or
+ * if slot is out of range. Pass NULL or "" to clear the slot. */
+int  repl_func_alias_set(int slot, const char *name);
+void repl_func_alias_clear(int slot);
+/* Shape: returns 1 if `name` is a syntactically valid alias and is
+ * not reserved. Does not check whether it's already registered. */
+int  repl_func_alias_name_is_valid(const char *name);
+/* Find a free slot (alias[]==""), return its index or -1 if all 10
+ * slots are taken. The caller still has to call repl_func_alias_set
+ * to actually register a name. */
+int  repl_func_alias_first_free_slot(void);
 
 void repl_eval_bind_scratch_storage(
     float arrays[REPL_SCRATCH_ARRAY_COUNT][REPL_SCRATCH_ARRAY_LEN]);

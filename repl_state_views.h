@@ -45,6 +45,11 @@ typedef struct {
     ExprVar predef_vars[MAX_PREDEF_VARS];
     int     predef_var_count;
     float   scratch_arrays[REPL_SCRATCH_ARRAY_COUNT][REPL_SCRATCH_ARRAY_LEN];
+    /* Per-slot user alias for funcN (0..9). Empty string == no alias,
+     * the slot is referenced as bare `funcN`. Round-trips through
+     * capture/restore + workspace import/export; per-scene table is
+     * saved alongside predef vars in user-scene slots. */
+    char    func_aliases[REPL_FUNC_SLOT_COUNT][REPL_FUNC_NAME_MAX];
     int     time_var_idx;
     int     time_playing;
     float   anim_time;

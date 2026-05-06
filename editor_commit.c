@@ -590,6 +590,71 @@ ReplCompileResult editor_compile_func_def(const char *input,
         return REPL_COMPILE_OK;
     }
 
+    /* Alias-aware pre-step: parse_repl_func_signature only knows the
+     * bare `funcN` form plus already-registered aliases. New user
+     * names (`drawCube { ... }`) are unregistered the first time the
+     * user types them, so we register them up front before invoking
+     * the parser.
+     *
+     * Slot picking: if the cursor is on an existing CMD_FUNC_DEF and
+     * we're not in insert mode, the rename targets that line's slot
+     * (so `drawCube` -> `drawSphere` reuses slot N). Otherwise pick
+     * the next free slot. The bare-funcN branch is a no-op fast path. */
+    {
+        const char *p = trimmed;
+        if (!(strncmp(p, "func", 4) == 0 && p[4] >= '0' && p[4] <= '9' &&
+              !isalnum((unsigned char)p[5]) && p[5] != '_') &&
+            (isalpha((unsigned char)*p) || *p == '_')) {
+            char ident[REPL_FUNC_NAME_MAX];
+            int len = 0;
+            while (*p && (isalnum((unsigned char)*p) || *p == '_')) {
+                if (len >= REPL_FUNC_NAME_MAX - 1) { ident[0] = '\0'; break; }
+                ident[len++] = *p++;
+            }
+            if (len > 0) {
+                ident[len] = '\0';
+                while (*p && isspace((unsigned char)*p)) p++;
+                if (*p == '{' || *p == '(') {
+                    int existing = repl_func_alias_lookup_slot(ident);
+                    if (existing < 0) {
+                        /* Reject reserved / control-flow names by
+                         * FALLING THROUGH (NO_CHANGE) so the next
+                         * commit handler in the chain (if-block,
+                         * close-brace, etc.) can claim the input.
+                         * Erroring here would block legitimate
+                         * `if(cond) {` syntax. */
+                        if (!repl_func_alias_name_is_valid(ident)) {
+                            out->change.kind = REPL_COMPILED_NO_CHANGE;
+                            return REPL_COMPILE_OK;
+                        }
+                        int target_slot = -1;
+                        int ep = ctx->insert_mode ? ctx->edit_line :
+                                 (ctx->edit_line < ctx->document_count
+                                      ? ctx->edit_line : ctx->document_count);
+                        if (!ctx->insert_mode &&
+                            ep < ctx->document_count &&
+                            ctx->document_cmds[ep].type == CMD_FUNC_DEF) {
+                            target_slot = (int)ctx->document_cmds[ep].args[0];
+                        }
+                        if (target_slot < 0)
+                            target_slot = repl_func_alias_first_free_slot();
+                        if (target_slot < 0) {
+                            snprintf(err, (size_t)err_size,
+                                     "no free function slots (max %d)",
+                                     REPL_FUNC_SLOT_COUNT);
+                            return REPL_COMPILE_ERROR;
+                        }
+                        if (!repl_func_alias_set(target_slot, ident)) {
+                            snprintf(err, (size_t)err_size,
+                                     "name '%s' already used", ident);
+                            return REPL_COMPILE_ERROR;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     if (!parse_repl_func_signature(input ? input : "", &fn,
                                    param_names, MAX_EXPR_VARS,
                                    &param_count)) {
