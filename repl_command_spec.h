@@ -38,11 +38,32 @@ typedef struct {
 
 #define MAX_FUNC_HINT_PARAMS 10
 
+/* F1 help-overlay grouping for autocomplete entries. The renderer walks
+ * the completion table once per group, emitting a section header and
+ * one row per entry. NONE means "don't render in the command help"
+ * (used by language-level entries like `func0 {`, `x = `, math
+ * builtins, and the constants `PI` / `TAU` — those live in the
+ * hand-written language sections of the overlay). */
+typedef enum {
+    REPL_HELP_GROUP_NONE = 0,
+    REPL_HELP_GROUP_TOP,         /* "Supported Commands (type + ;):" */
+    REPL_HELP_GROUP_LIGHTING,    /* "Lighting / Material:" */
+    REPL_HELP_GROUP_GLUT_SHAPES, /* "GLUT Solid Shapes:" */
+    REPL_HELP_GROUP_GLU_TESS,    /* "GLU Tessellator (concave / complex polygons):" */
+} ReplHelpGroup;
+
 typedef struct {
     const char *insert_text;
     const char *display_text;
     int         param_count;
     const char *params[MAX_FUNC_HINT_PARAMS];
+    /* Help-overlay description. NULL => entry is skipped in the
+     * Commands tab (covered by a hand-written language section, or
+     * just an autocomplete-only entry like `glPushMatrix()`). May
+     * include `\n` to emit indented continuation rows under the
+     * command's signature line. */
+    const char   *help_desc;
+    ReplHelpGroup help_group;
 } ReplFuncCompletion;
 
 /* Syntax-highlighting category for code-panel rendering. Each CmdType maps
