@@ -158,7 +158,7 @@ int main() {
 
             repl_reset_state(); declare_test_vars();
             snprintf(prefix, sizeof(prefix), "func%d", fn);
-            snprintf(def_text, sizeof(def_text), "func%d {", fn);
+            snprintf(def_text, sizeof(def_text), "func%d() {", fn);
             snprintf(call_text, sizeof(call_text), "func%d()", fn);
             set_input_text(prefix);
 

@@ -1179,15 +1179,18 @@ void format_func_header(char *out, int out_sz, const char *indent,
         if (out_sz > 0) out[out_sz - 1] = '\0';
         return;
     }
-    if (param_count > 0) {
+    /* Always emit `()` — even for zero-arg decls — so the canonical
+     * form mirrors C function syntax. The bare `funcN {` shape that
+     * older saves used still parses (parse_repl_func_signature
+     * accepts it) but reformat normalises to `funcN() {`. */
+    if (written < out_sz)
         written += snprintf(out + written, out_sz - written, "(");
-        for (int param_idx = 0; param_idx < param_count && written < out_sz; param_idx++) {
-            written += snprintf(out + written, out_sz - written, "%s%s",
-                                param_idx == 0 ? "" : ", ", param_names[param_idx]);
-        }
-        if (written < out_sz)
-            written += snprintf(out + written, out_sz - written, ")");
+    for (int param_idx = 0; param_idx < param_count && written < out_sz; param_idx++) {
+        written += snprintf(out + written, out_sz - written, "%s%s",
+                            param_idx == 0 ? "" : ", ", param_names[param_idx]);
     }
+    if (written < out_sz)
+        written += snprintf(out + written, out_sz - written, ")");
     if (written < out_sz)
         snprintf(out + written, out_sz - written, " {");
 }
