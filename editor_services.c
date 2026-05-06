@@ -79,12 +79,19 @@ static void default_apply_predef_ops(const ReplCompiledChange *change,
     repl_apply_predef_ops(change);
 }
 
+static void default_apply_scratch_ops(const ReplCompiledChange *change,
+                                      void *user) {
+    (void)user;
+    repl_apply_scratch_ops(change);
+}
+
 EditorServices editor_services_default(void) {
     EditorServices svc = {
         .context           = default_context,
         .compile           = default_compile,
         .apply_repl_change = default_apply_repl_change,
         .apply_predef_ops  = default_apply_predef_ops,
+        .apply_scratch_ops = default_apply_scratch_ops,
         .user              = NULL,
     };
     return svc;

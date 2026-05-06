@@ -584,12 +584,14 @@ ReplCompileResult repl_compile_var_assign(const char *input,
     repl_compiled_change_init(out);
 
     char name[16];
+    char index_expr[MAX_LINE_LEN];
     char rhs[MAX_LINE_LEN];
     char comment[MAX_LINE_LEN];
 
-    if (!repl_extract_assignment_parts(input ? input : "",
-                                       name, sizeof(name),
-                                       rhs, sizeof(rhs))) {
+    if (!repl_extract_assignment_target_parts(input ? input : "",
+                                              name, sizeof(name),
+                                              index_expr, sizeof(index_expr),
+                                              rhs, sizeof(rhs))) {
         out->kind = REPL_COMPILED_NO_CHANGE;
         return REPL_COMPILE_OK;
     }
@@ -604,11 +606,6 @@ ReplCompileResult repl_compile_var_assign(const char *input,
         }
     }
 
-    int var_idx = repl_eval_find_predef_var_idx(name);
-    if (var_idx < 0)
-        return compile_set_err(err, err_size,
-            "undeclared variable '%s' - use 'float %s;' first", name, name);
-
     int insert_idx = ctx->insert_mode ? ctx->edit_line :
                      (ctx->edit_line < ctx->document_count
                           ? ctx->edit_line : ctx->document_count);
@@ -616,31 +613,99 @@ ReplCompileResult repl_compile_var_assign(const char *input,
     ExprVar vis[MAX_EXPR_VARS];
     int vis_n = collect_visible_vars(insert_idx, vis, MAX_EXPR_VARS, NULL);
     char verr[128];
-    if (!repl_eval_validate_expression_idents(rhs,
-                                              vis_n > 0 ? vis : NULL, vis_n,
-                                              verr, sizeof(verr)))
-        return compile_set_err(err, err_size, "%s", verr);
-
-    ExprCtx eval_ctx = { rhs, g_predef_vars, g_num_predef_vars };
-    float val = repl_eval_expr(&eval_ctx);
-    int has_rhs_vars = repl_eval_input_has_predef_vars(rhs);
-
-    /* Build the GLCmd. */
     GLCmd cmd;
     memset(&cmd, 0, sizeof(cmd));
-    cmd.type     = CMD_VAR_ASSIGN;
-    cmd.valid    = 1;
-    cmd.args[0]  = val;
-    cmd.num_args = var_idx;
-    cmd.has_vars = has_rhs_vars;
+
+    if (index_expr[0]) {
+        int scratch_array_idx = repl_eval_scratch_array_index(name);
+        if (scratch_array_idx < 0)
+            return compile_set_err(err, err_size, "unknown array '%s'", name);
+
+        if (!repl_eval_validate_expression_idents(index_expr,
+                                                  vis_n > 0 ? vis : NULL, vis_n,
+                                                  verr, sizeof(verr)))
+            return compile_set_err(err, err_size, "%s", verr);
+        if (!repl_eval_validate_expression_idents(rhs,
+                                                  vis_n > 0 ? vis : NULL, vis_n,
+                                                  verr, sizeof(verr)))
+            return compile_set_err(err, err_size, "%s", verr);
+
+        ExprCtx idx_ctx = { index_expr, vis_n > 0 ? vis : NULL, vis_n, NULL, 0 };
+        ExprCtx rhs_ctx = { rhs, vis_n > 0 ? vis : NULL, vis_n, NULL, 0 };
+        int elem_idx = (int)repl_eval_expr(&idx_ctx);
+        if (elem_idx < 0 || elem_idx >= REPL_SCRATCH_ARRAY_LEN)
+            return compile_set_err(err, err_size,
+                                   "scratch array index out of range: %d", elem_idx);
+
+        float val = repl_eval_expr(&rhs_ctx);
+        int has_index_vars = input_has_any_visible_vars(index_expr,
+                                                        vis_n > 0 ? vis : NULL, vis_n);
+        int has_rhs_vars = input_has_any_visible_vars(rhs,
+                                                      vis_n > 0 ? vis : NULL, vis_n);
+
+        cmd.type = CMD_SCRATCH_ASSIGN;
+        cmd.valid = 1;
+        cmd.args[0] = (float)scratch_array_idx;
+        cmd.args[1] = (float)elem_idx;
+        cmd.args[2] = val;
+        cmd.num_args = 3;
+        cmd.has_vars = has_index_vars || has_rhs_vars;
+
+        out->scratch_ops[0].array_idx = scratch_array_idx;
+        out->scratch_ops[0].elem_idx = elem_idx;
+        out->scratch_ops[0].value = val;
+        out->scratch_op_count = 1;
+
+        snprintf(out->commit_message, sizeof(out->commit_message),
+                 "%s[%d] = %g", name, elem_idx, (double)val);
+    } else {
+        int var_idx = repl_eval_find_predef_var_idx(name);
+        if (var_idx < 0)
+            return compile_set_err(err, err_size,
+                "undeclared variable '%s' - use 'float %s;' first", name, name);
+
+        if (!repl_eval_validate_expression_idents(rhs,
+                                                  vis_n > 0 ? vis : NULL, vis_n,
+                                                  verr, sizeof(verr)))
+            return compile_set_err(err, err_size, "%s", verr);
+
+        ExprCtx eval_ctx = { rhs, vis_n > 0 ? vis : NULL, vis_n, NULL, 0 };
+        float val = repl_eval_expr(&eval_ctx);
+        int has_rhs_vars = input_has_any_visible_vars(rhs,
+                                                      vis_n > 0 ? vis : NULL, vis_n);
+
+        cmd.type     = CMD_VAR_ASSIGN;
+        cmd.valid    = 1;
+        cmd.args[0]  = val;
+        cmd.num_args = var_idx;
+        cmd.has_vars = has_rhs_vars;
+
+        if (out->predef_op_count < MAX_PREDEF_OPS_PER_COMMIT) {
+            out->predef_ops[out->predef_op_count].kind = REPL_PREDEF_OP_SET_VALUE;
+            repl_copy_string_fits(out->predef_ops[out->predef_op_count].name,
+                                  sizeof(out->predef_ops[out->predef_op_count].name), name);
+            out->predef_ops[out->predef_op_count].value = val;
+            out->predef_ops[out->predef_op_count].has_value = 1;
+            out->predef_op_count++;
+        }
+
+        snprintf(out->commit_message, sizeof(out->commit_message),
+                 "%s = %g", name, (double)val);
+    }
 
     /* Format text using the scope indent at the insert position. */
     char indent[32];
     compile_scope_indent(insert_idx, indent, sizeof(indent));
     char assign_text[MAX_LINE_LEN];
-    if (!repl_format_fits(assign_text, sizeof(assign_text),
-                          "%s%s = %s;%s", indent, name, rhs, comment))
+    if (index_expr[0]) {
+        if (!repl_format_fits(assign_text, sizeof(assign_text),
+                              "%s%s[%s] = %s;%s",
+                              indent, name, index_expr, rhs, comment))
+            return compile_set_err(err, err_size, "Command too long");
+    } else if (!repl_format_fits(assign_text, sizeof(assign_text),
+                                 "%s%s = %s;%s", indent, name, rhs, comment)) {
         return compile_set_err(err, err_size, "Command too long");
+    }
 
     /* Decide insert / replace. The REPLACE_ONE branch absorbs the
      * legacy var-decl overwrite cascade: when the assignment lands on
@@ -694,19 +759,14 @@ ReplCompileResult repl_compile_var_assign(const char *input,
         }
     }
 
-    /* Predef-op plan: write the live value. */
-    if (op_count < MAX_PREDEF_OPS_PER_COMMIT) {
-        out->predef_ops[op_count].kind = REPL_PREDEF_OP_SET_VALUE;
-        repl_copy_string_fits(out->predef_ops[op_count].name,
-                              sizeof(out->predef_ops[op_count].name), name);
-        out->predef_ops[op_count].value = val;
-        out->predef_ops[op_count].has_value = 1;
-        op_count++;
+    if (!index_expr[0] && out->predef_op_count > 0) {
+        ReplPredefOp set_value = out->predef_ops[out->predef_op_count - 1];
+        out->predef_op_count--;
+        if (op_count < MAX_PREDEF_OPS_PER_COMMIT) {
+            out->predef_ops[op_count++] = set_value;
+        }
     }
     out->predef_op_count = op_count;
-
-    snprintf(out->commit_message, sizeof(out->commit_message),
-             "%s = %g", name, val);
 
     return REPL_COMPILE_OK;
 }

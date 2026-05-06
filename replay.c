@@ -21,6 +21,7 @@
 #define g_replay_expand_args (REPLAY_STATE->expand_args)
 
 static float g_replay_baseline_predef_vals[MAX_PREDEF_VARS];
+static float g_replay_baseline_scratch_arrays[REPL_SCRATCH_ARRAY_COUNT][REPL_SCRATCH_ARRAY_LEN];
 static int   g_replay_saved_t_playing = 1;
 static int   g_replay_last_src_line = -1;
 
@@ -474,10 +475,13 @@ int repl_replay_seek_to_src_line(int target_line) {
 
     if (repl_state_flat_program_dirty()) {
         float live_predef_vals[MAX_PREDEF_VARS] = { 0 };
+        float live_scratch_arrays[REPL_SCRATCH_ARRAY_COUNT][REPL_SCRATCH_ARRAY_LEN] = { { 0.0f } };
         repl_copy_predef_values(live_predef_vals, MAX_PREDEF_VARS);
+        repl_eval_copy_scratch_arrays(live_scratch_arrays);
         flatten_commands();
         repl_state_flat_program_clear_dirty();
         repl_restore_predef_values(live_predef_vals, MAX_PREDEF_VARS);
+        repl_eval_restore_scratch_arrays(live_scratch_arrays);
     }
 
     while (pc < g_num_flat_cmds) {
@@ -517,13 +521,16 @@ void repl_replay_restart_from_beginning(void) {
 
 void repl_replay_start(void) {
     float live_predef_vals[MAX_PREDEF_VARS];
+    float live_scratch_arrays[REPL_SCRATCH_ARRAY_COUNT][REPL_SCRATCH_ARRAY_LEN];
     REPLAY_FLAT_STATE;
 
     repl_copy_predef_values(live_predef_vals, MAX_PREDEF_VARS);
+    repl_eval_copy_scratch_arrays(live_scratch_arrays);
     if (repl_state_flat_program_dirty()) {
         flatten_commands();
         repl_state_flat_program_clear_dirty();
         repl_restore_predef_values(live_predef_vals, MAX_PREDEF_VARS);
+        repl_eval_restore_scratch_arrays(live_scratch_arrays);
     }
 
     if (!replay_has_meaningful_cmds()) {
@@ -532,6 +539,7 @@ void repl_replay_start(void) {
     }
 
     repl_copy_predef_values(g_replay_baseline_predef_vals, MAX_PREDEF_VARS);
+    repl_eval_copy_scratch_arrays(g_replay_baseline_scratch_arrays);
     g_replay_saved_t_playing = repl_state_variables().time_playing;
     repl_state_variables_mut()->time_playing = 0;
 
@@ -667,6 +675,18 @@ void repl_replay_copy_baseline_predef_values(float *dst, int max_vals) {
 
     n = max_vals < MAX_PREDEF_VARS ? max_vals : MAX_PREDEF_VARS;
     memcpy(dst, g_replay_baseline_predef_vals, (size_t)n * sizeof(float));
+}
+
+void repl_replay_restore_baseline_scratch_arrays(void) {
+    repl_eval_restore_scratch_arrays(g_replay_baseline_scratch_arrays);
+}
+
+void repl_replay_copy_baseline_scratch_arrays(
+    float dst[REPL_SCRATCH_ARRAY_COUNT][REPL_SCRATCH_ARRAY_LEN]) {
+    if (!dst)
+        return;
+    memcpy(dst, g_replay_baseline_scratch_arrays,
+           sizeof(g_replay_baseline_scratch_arrays));
 }
 
 int repl_replay_handle_key(unsigned char key) {
@@ -827,6 +847,7 @@ int repl_bench_fade_install(const int *old_pcs, const int *new_pcs,
     g_replay_fade_batch_count = installed;
 
     repl_copy_predef_values(g_replay_baseline_predef_vals, MAX_PREDEF_VARS);
+    repl_eval_copy_scratch_arrays(g_replay_baseline_scratch_arrays);
     g_replay_active = (installed > 0);
     return installed;
 }

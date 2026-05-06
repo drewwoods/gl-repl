@@ -49,9 +49,11 @@ static int g_t_idx = -1;
 static float g_predef_value_seen_in_scene = 0.0f;
 static float g_predef_value_seen_in_hud = 0.0f;
 static int g_flat_count_seen_in_hud = -1;
+static float g_scratch_value_seen_in_scene = 0.0f;
 
 static const float g_mutated_predef_value = 123.0f;
 static const int g_mutated_flat_count = 99;
+static const float g_mutated_scratch_value = 77.0f;
 
 static void set_cmd3(GLCmd *cmd, CmdType type, int src_idx,
                      const char *source, float a, float b, float c) {
@@ -77,6 +79,8 @@ void test_scene_render_3d_scene(const SceneRenderConfig *config) {
         g_predef_value_seen_in_scene = g_predef_vars[g_t_idx].value;
         g_predef_vars[g_t_idx].value = g_mutated_predef_value;
     }
+    repl_eval_scratch_get(0, 0, &g_scratch_value_seen_in_scene);
+    repl_eval_scratch_set(0, 0, g_mutated_scratch_value);
 
     repl_state_flat_program_set_count(g_mutated_flat_count);
 }
@@ -116,6 +120,7 @@ static void prepare_display_fixture(void) {
     g_predef_value_seen_in_scene = 0.0f;
     g_predef_value_seen_in_hud = 0.0f;
     g_flat_count_seen_in_hud = -1;
+    g_scratch_value_seen_in_scene = 0.0f;
     g_t_idx = -1;
 
     repl_reset_state();
@@ -169,6 +174,10 @@ static void prepare_display_fixture(void) {
     ASSERT_TRUE("t predef exists", g_t_idx >= 0);
     if (g_t_idx >= 0)
         g_predef_vars[g_t_idx].value = 9.0f;
+    repl_eval_scratch_set(0, 0, 4.0f);
+
+    repl_replay_start();
+    repl_state_flat_program_set_user_lighting_enabled(1);
 
     replay_state_mut()->active = 1;
     replay_state_mut()->state = REPLAY_PLAYING;
@@ -218,6 +227,8 @@ static void test_display_frame_builds_config_and_restores_live_state(void) {
     ASSERT_INT("replay fades absent", g_last_scene_config.replay_has_fades, 0);
     ASSERT_INT("replay base limit zero without fades", g_last_scene_config.replay_base_limit, 0);
     ASSERT_INT("replay fade batches empty", g_last_scene_config.replay_fade_plan.batch_count, 0);
+    ASSERT_FLOAT("replay baseline scratch copied",
+                 g_last_scene_config.replay_fade_plan.baseline_scratch_arrays[0][0], 4.0f);
     ASSERT_FLOAT("alpha scale boosted for black background", g_last_scene_config.alpha_scale, 3.0f);
     ASSERT_INT("cursor block begin cleared by refresh", g_last_scene_config.cursor_block_begin_idx, -1);
     ASSERT_INT("cursor block end cleared by refresh", g_last_scene_config.cursor_block_end_idx, -1);
@@ -273,11 +284,17 @@ static void test_display_frame_builds_config_and_restores_live_state(void) {
     ASSERT_INT("HUD replaying copied", g_last_replay_hud_state.replaying, 1);
 
     ASSERT_FLOAT("scene saw live predef before mutation", g_predef_value_seen_in_scene, 9.0f);
+    ASSERT_FLOAT("scene saw live scratch before mutation", g_scratch_value_seen_in_scene, 4.0f);
     ASSERT_FLOAT("HUD observed mutated predef during frame", g_predef_value_seen_in_hud, g_mutated_predef_value);
     ASSERT_INT("HUD observed mutated flat count during frame", g_flat_count_seen_in_hud,
                g_mutated_flat_count);
 
     ASSERT_FLOAT("predef restored after frame", g_predef_vars[g_t_idx].value, saved_t_value);
+    {
+        float scratch = 0.0f;
+        ASSERT_TRUE("scratch restored after frame",
+                    repl_eval_scratch_get(0, 0, &scratch) && fabsf(scratch - 4.0f) < 1e-6f);
+    }
     ASSERT_INT("flat count restored after frame", repl_state_flat_program_count(), saved_flat_count);
 }
 

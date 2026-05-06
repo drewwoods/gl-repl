@@ -163,6 +163,7 @@ ExprVar *repl_state_predef_vars_storage(int *capacity, int **count_ptr) {
 static void repl_state_bind_eval_predef_storage(void) {
     repl_eval_bind_predef_storage(g_repl_state.variables.predef_vars,
                                   &g_repl_state.variables.predef_var_count);
+    repl_eval_bind_scratch_storage(g_repl_state.variables.scratch_arrays);
 }
 
 #if defined(__GNUC__) || defined(__clang__)
@@ -348,6 +349,9 @@ ReplVariableView repl_state_variables(void) {
     return (ReplVariableView){
         .vars = g_predef_vars,
         .var_count = g_num_predef_vars,
+        .scratch_arrays = g_repl_state.variables.scratch_arrays,
+        .scratch_array_count = REPL_SCRATCH_ARRAY_COUNT,
+        .scratch_array_len = REPL_SCRATCH_ARRAY_LEN,
         .time_var_idx = g_t_var_idx,
         .time_playing = g_t_playing,
         .anim_time = g_anim_time,

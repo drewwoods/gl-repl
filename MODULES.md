@@ -119,7 +119,7 @@ Consequences:
 
 | State | Owns | Does not own |
 |---|---|---|
-| `ReplState` | Parsed command array, flat program, variables, scenes, import/export metadata, persistent render/presentation config | Replay runtime state (peer), variable-panel state (peer), help-session state (peer), editable text, cursor, selection, search query, UI visibility, pointer/viewport chrome |
+| `ReplState` | Parsed command array, flat program, REPL variable state (scalar predefined vars plus fixed scratch arrays `A/B/C[8]`), scenes, import/export metadata, persistent render/presentation config | Replay runtime state (peer), variable-panel state (peer), help-session state (peer), editable text, cursor, selection, search query, UI visibility, pointer/viewport chrome |
 | `EditorState` | Editable text buffer, active input, cursor/edit-line, insert mode, selection, clipboard, search/autocomplete, scroll, **cursor blink** (the editor controls cursor visibility/blink — UI just renders), undo/redo, editor transactions | Variable-panel drag (now on the variable_panel peer), parsed command semantics, GL execution, menu chrome, transient status banners, render-output pixel coordinates |
 | `UiState` | Viewport, pointer, status text TTL, help-overlay visibility (chrome flag), profile-panel visibility, panel-divider geometry (panel_frac + resizing_panel), camera viewport pose | Help-session tab/scroll (peer), variable-panel state (peer), program model, editable text, command validation, cursor blink (editor owns), per-frame render-output (uses `Ui*Output`) |
 | `variable_panel` peer | Variable-panel visibility flag + slider drag transaction (var_idx, log_mode, start_value, start_x). Storage in `variable_panel.c`. | Editor text behavior, REPL grammar |
@@ -133,6 +133,10 @@ Consequences:
 > by `check-variable-panel-forwarders` (baseline 87) and
 > `check-replay-forwarders` (baseline 37) and ratchet toward zero
 > as the test harness migrates.
+
+`ReplState` owns the fixed scratch arrays `A/B/C[8]` as REPL language runtime
+state. They are not editor/UI state, do not participate in variable-panel
+editing, and do not consume `MAX_PREDEF_VARS` scalar slots.
 
 ## Repository Layout Rules
 

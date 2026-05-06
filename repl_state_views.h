@@ -44,6 +44,7 @@ typedef struct {
 typedef struct {
     ExprVar predef_vars[MAX_PREDEF_VARS];
     int     predef_var_count;
+    float   scratch_arrays[REPL_SCRATCH_ARRAY_COUNT][REPL_SCRATCH_ARRAY_LEN];
     int     time_var_idx;
     int     time_playing;
     float   anim_time;
@@ -52,6 +53,9 @@ typedef struct {
 typedef struct {
     const ExprVar *vars;
     int            var_count;
+    const float  (*scratch_arrays)[REPL_SCRATCH_ARRAY_LEN];
+    int            scratch_array_count;
+    int            scratch_array_len;
     int            time_var_idx;
     int            time_playing;
     float          anim_time;

@@ -15,6 +15,7 @@
     },
     .variables = {
         .predef_var_count = 0,
+        .scratch_arrays = { { 0.0f } },
         .time_var_idx = -1,
         .time_playing = 1,
         .anim_time = 0.0f,

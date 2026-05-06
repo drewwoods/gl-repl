@@ -672,7 +672,8 @@ Key details:
   comments embedding workspace state (`@var name=value`,
   `@cfg setting=value`, `@scene-name <name>`, `@workspace-dir <path>`),
   camera state as the raw `glTranslatef`/`glRotatef` sequence the REPL
-  uses internally, predefined vars as globals, REPL functions as C
+  uses internally, predefined vars plus fixed scratch arrays `A/B/C[8]` as
+  globals, REPL functions as C
   functions, and `display()` body containing the user's geometry commands.
   The workspace iterator in `repl_core.c` sets the export scene-name hint
   in import/export state before each slot's save so the hint wins over the
@@ -789,12 +790,24 @@ if(expr) { body }
 // comment
 float name[, name2, ...];  (variable declaration)
 var = expr;
+A[index] = expr;           (fixed scratch arrays: A/B/C, index 0..7)
 ```
 
 ## Math
 
-Functions: `sin`, `cos`, `tan`, `sqrt`, `abs`, `pow`, `min`, `max`, `floor`, `ceil`, `fmod`, `rand(seed[, iter])`
+Functions: `sin`, `cos`, `tan`, `sqrt`, `abs`, `pow`, `lerp`, `min`, `max`, `floor`, `ceil`, `fmod`, `rand(seed[, iter])`
 Constants: `PI`, `TAU`
 Variables: declared via `float name;` — only `t` is predefined (Ctrl+T toggles animation).
+Scratch arrays: `A[8]`, `B[8]`, `C[8]` are fixed global runtime arrays for recursive/loop algorithms.
+Reads and writes use normal expression syntax; indices are truncated with `(int)` and must stay in `0..7`.
 Other names (`x`, `y`, `z`, etc.) must be declared before use.
 `MAX_PREDEF_VARS` = 16 (1 reserved for `t`, 15 user-declarable slots).
+
+Example:
+
+```c
+A[0] = 0;
+A[1] = 1;
+A[0] = lerp(A[0], A[1], 0.25);
+glVertex3f(A[0], 0, 0);
+```

@@ -232,7 +232,17 @@ static void test_misc_helpers(void) {
     repl_replay_prepare_frame(1);
     
     float dummy[MAX_PREDEF_VARS];
+    float scratch[REPL_SCRATCH_ARRAY_COUNT][REPL_SCRATCH_ARRAY_LEN];
+    float scratch_value = 0.0f;
     repl_replay_copy_baseline_predef_values(dummy, MAX_PREDEF_VARS);
+    repl_eval_scratch_set(0, 0, 3.0f);
+    repl_replay_start();
+    repl_eval_scratch_set(0, 0, 9.0f);
+    repl_replay_copy_baseline_scratch_arrays(scratch);
+    ASSERT_TRUE("baseline scratch copied", fabsf(scratch[0][0] - 3.0f) < 1e-6f);
+    repl_replay_restore_baseline_scratch_arrays();
+    ASSERT_TRUE("baseline scratch restored",
+                repl_eval_scratch_get(0, 0, &scratch_value) && fabsf(scratch_value - 3.0f) < 1e-6f);
     repl_replay_restore_baseline_predef_values();
 }
 

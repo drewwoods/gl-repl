@@ -118,6 +118,8 @@ static void imrepl_ctrl_build_replay_fade_plan(SceneRenderConfig *config) {
 
     repl_replay_copy_baseline_predef_values(config->replay_fade_plan.baseline_predef_vals,
                                             MAX_PREDEF_VARS);
+    repl_replay_copy_baseline_scratch_arrays(
+        config->replay_fade_plan.baseline_scratch_arrays);
 
     config->replay_has_fades = repl_replay_has_active_fades();
     if (!config->replay_has_fades)
@@ -428,6 +430,7 @@ static void imrepl_ctrl_build_ui_snapshot(UiRenderSnapshot *snap) {
 void imrepl_ctrl_display_frame(void) {
     int saved_flat_count;
     float live_predef_vals[MAX_PREDEF_VARS] = { 0 };
+    float live_scratch_arrays[REPL_SCRATCH_ARRAY_COUNT][REPL_SCRATCH_ARRAY_LEN] = { { 0.0f } };
     FlatProgramView flat_program = repl_state_flat_program_view();
     int g_num_flat_cmds = flat_program.cmd_count;
     /* Capture replay state once before repl_replay_prepare_frame so the
@@ -484,6 +487,7 @@ void imrepl_ctrl_display_frame(void) {
     prof_begin(PROF_SNAPSHOT_PREP);
     saved_flat_count = g_num_flat_cmds;
     repl_copy_predef_values(live_predef_vals, MAX_PREDEF_VARS);
+    repl_eval_copy_scratch_arrays(live_scratch_arrays);
     if (replay_active())
         repl_state_flat_program_set_count(repl_replay_prepare_frame(saved_flat_count));
 
@@ -574,6 +578,7 @@ void imrepl_ctrl_display_frame(void) {
     prof_begin(PROF_FRAME_RESTORE);
     repl_state_flat_program_set_count(saved_flat_count);
     repl_restore_predef_values(live_predef_vals, MAX_PREDEF_VARS);
+    repl_eval_restore_scratch_arrays(live_scratch_arrays);
     prof_end(PROF_FRAME_RESTORE);
 
     prof_end(PROF_FRAME_TOTAL);

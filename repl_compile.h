@@ -104,11 +104,21 @@ typedef struct {
     int              has_value;   /* DECLARE: 1 = with init expression */
 } ReplPredefOp;
 
+typedef struct {
+    int   array_idx;
+    int   elem_idx;
+    float value;
+} ReplScratchOp;
+
 /* Bound: a single float decl can declare up to MAX_NAMES_PER_DECL
  * names; an assignment writes one. Float-decl overwrite needs DECLARE
  * and UNDECLARE for each delta name. We size for the worst case. */
 #ifndef MAX_PREDEF_OPS_PER_COMMIT
 #define MAX_PREDEF_OPS_PER_COMMIT (MAX_NAMES_PER_DECL * 2 + 1)
+#endif
+
+#ifndef MAX_SCRATCH_OPS_PER_COMMIT
+#define MAX_SCRATCH_OPS_PER_COMMIT MAX_COMMIT_CMDS
 #endif
 
 typedef struct ReplCompiledChange_s {
@@ -138,6 +148,10 @@ typedef struct ReplCompiledChange_s {
     /* Predef-variable side-effects, replayed by the apply step. */
     ReplPredefOp           predef_ops[MAX_PREDEF_OPS_PER_COMMIT];
     int                    predef_op_count;
+
+    /* Scratch-array side-effects, replayed by the apply step. */
+    ReplScratchOp          scratch_ops[MAX_SCRATCH_OPS_PER_COMMIT];
+    int                    scratch_op_count;
 
     /* Success message (used by callers; not mutated by compile). */
     char                   commit_message[REPL_STATUS_TEXT_MAX];
