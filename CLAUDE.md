@@ -785,8 +785,8 @@ GLUT Solid Shapes:
   glutSolidTeapot(size)
   glutSolidCone(base, height, slices, stacks)
 for(var, start, end[, step]) { body }
-func0..func9[(params)] { body }
-NAME[(params)] { body }     (alias: NAME -> next free funcN slot, 10 max)
+func0..func9(params) { body }   (parens always required, even for zero args)
+NAME(params) { body }     (alias: NAME -> next free funcN slot, 10 max)
 if(expr) { body }
 // comment
 float name[, name2, ...];  (variable declaration)
