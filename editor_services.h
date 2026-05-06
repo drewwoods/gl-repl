@@ -51,6 +51,10 @@ typedef struct EditorServices_s {
      * adjustments), then DECLARE / SET_VALUE. */
     void (*apply_predef_ops)(const ReplCompiledChange *change, void *user);
 
+    /* Replay scratch-array side-effects against the evaluator's bound
+     * scratch storage. */
+    void (*apply_scratch_ops)(const ReplCompiledChange *change, void *user);
+
     void *user;
 } EditorServices;
 

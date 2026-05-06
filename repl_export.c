@@ -1153,7 +1153,23 @@ int repl_extract_goto_label(const char *src, char *name, int name_sz) {
 int repl_extract_assignment_parts(const char *src,
                                   char *name, int name_sz,
                                   char *rhs, int rhs_sz) {
+    char index_expr[MAX_LINE_LEN];
+
+    if (!repl_extract_assignment_target_parts(src,
+                                              name, name_sz,
+                                              index_expr, sizeof(index_expr),
+                                              rhs, rhs_sz))
+        return 0;
+    return index_expr[0] == '\0';
+}
+
+int repl_extract_assignment_target_parts(const char *src,
+                                         char *name, int name_sz,
+                                         char *index_expr, int index_expr_sz,
+                                         char *rhs, int rhs_sz) {
     const char *p = src;
+    const char *index_start = NULL;
+    const char *index_end = NULL;
     const char *rhs_start;
     const char *rhs_end;
     const char *comment_start;
@@ -1170,6 +1186,38 @@ int repl_extract_assignment_parts(const char *src,
         name[n < name_sz - 1 ? n : name_sz - 1] = '\0';
     if (n == 0)
         return 0;
+
+    if (index_expr && index_expr_sz > 0)
+        index_expr[0] = '\0';
+
+    while (*p && isspace((unsigned char)*p)) p++;
+    if (*p == '[') {
+        int depth = 1;
+        index_start = ++p;
+        while (*p && depth > 0) {
+            if (*p == '[')
+                depth++;
+            else if (*p == ']')
+                depth--;
+            if (depth > 0)
+                p++;
+        }
+        if (depth != 0 || !*p)
+            return 0;
+        index_end = p;
+        p++;
+
+        if (index_expr && index_expr_sz > 0) {
+            int idx_len = (int)(index_end - index_start);
+            if (idx_len > index_expr_sz - 1)
+                idx_len = index_expr_sz - 1;
+            memcpy(index_expr, index_start, (size_t)idx_len);
+            index_expr[idx_len] = '\0';
+            trim_in_place(index_expr);
+            if (!index_expr[0])
+                return 0;
+        }
+    }
 
     while (*p && isspace((unsigned char)*p)) p++;
     if (*p != '=' || p[1] == '=')
@@ -1419,6 +1467,12 @@ static void write_canonical_cmd_as_c(FILE *f, const GLCmd *cmd, int cmd_idx,
         break;
     }
     case CMD_VAR_ASSIGN: {
+        char c_src[MAX_LINE_LEN];
+        repl_eval_expr_to_c(source_text, c_src, sizeof(c_src));
+        fprintf(f, "%s\n", c_src);
+        break;
+    }
+    case CMD_SCRATCH_ASSIGN: {
         char c_src[MAX_LINE_LEN];
         repl_eval_expr_to_c(source_text, c_src, sizeof(c_src));
         fprintf(f, "%s\n", c_src);
@@ -2328,6 +2382,7 @@ static void import_feed_one_line(const char *line, int *loaded, int *warnings) {
 typedef struct {
     int needs_tess;
     int needs_rand;
+    int needs_lerp;
 } ExportNeeds;
 
 typedef struct {
@@ -2346,6 +2401,7 @@ static ExportNeeds export_collect_needs(void) {
     ExportNeeds needs = {
         .needs_tess = export_uses_tess_commands(),
         .needs_rand = 0,
+        .needs_lerp = 0,
     };
 
     /* Check each command for rand() function calls. */
@@ -2353,6 +2409,9 @@ static ExportNeeds export_collect_needs(void) {
         if (repl_state_document_cmds_mut()[cmd_idx].valid &&
             strstr(export_document_text(cmd_idx), "rand(") != NULL)
             needs.needs_rand = 1;
+        if (repl_state_document_cmds_mut()[cmd_idx].valid &&
+            strstr(export_document_text(cmd_idx), "lerp(") != NULL)
+            needs.needs_lerp = 1;
     }
 
     return needs;
@@ -2491,10 +2550,40 @@ static void emit_export_predef_globals_section(FILE *f,
     write_predef_var_globals(f);
 }
 
+static void emit_export_scratch_globals_section(FILE *f,
+                                                const ExportScaffoldContext *ctx) {
+    (void)ctx;
+    fprintf(f,
+            "\n/* Fixed scratch arrays */\n"
+            "static float A[%d] = {0};\n"
+            "static float B[%d] = {0};\n"
+            "static float C[%d] = {0};\n",
+            REPL_SCRATCH_ARRAY_LEN,
+            REPL_SCRATCH_ARRAY_LEN,
+            REPL_SCRATCH_ARRAY_LEN);
+}
+
 static void emit_export_rand_helper_section(FILE *f,
                                             const ExportScaffoldContext *ctx) {
     (void)ctx;
     write_rand_helper(f);
+}
+
+static void write_lerp_helper(FILE *f) {
+    fprintf(f,
+        "\nstatic float repl_lerp(float a, float b, float t) {\n"
+        "  return a + (b - a) * t;\n"
+        "}\n");
+}
+
+static int export_section_needs_lerp(const ExportScaffoldContext *ctx) {
+    return ctx && ctx->needs.needs_lerp;
+}
+
+static void emit_export_lerp_helper_section(FILE *f,
+                                            const ExportScaffoldContext *ctx) {
+    (void)ctx;
+    write_lerp_helper(f);
 }
 
 static void emit_export_tess_preamble_section(FILE *f,
@@ -2531,7 +2620,9 @@ static const ExportScaffoldSectionSpec EXPORT_SCAFFOLD_SECTIONS[] = {
     { "workspace metadata", emit_export_workspace_metadata_section, export_section_always },
     { "header",             emit_export_header_section,             export_section_always },
     { "predef globals",     emit_export_predef_globals_section,     export_section_always },
+    { "scratch globals",    emit_export_scratch_globals_section,    export_section_always },
     { "rand helper",        emit_export_rand_helper_section,        export_section_needs_rand },
+    { "lerp helper",        emit_export_lerp_helper_section,        export_section_needs_lerp },
     { "tess preamble",      emit_export_tess_preamble_section,      export_section_needs_tess },
     { "reset vars",         emit_export_reset_vars_section,         export_section_always },
     { "functions",          emit_export_functions_section,          export_section_always },

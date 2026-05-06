@@ -95,6 +95,14 @@
 #define MAX_NAMES_PER_DECL 8
 #endif
 
+#ifndef REPL_SCRATCH_ARRAY_COUNT
+#define REPL_SCRATCH_ARRAY_COUNT 3
+#endif
+
+#ifndef REPL_SCRATCH_ARRAY_LEN
+#define REPL_SCRATCH_ARRAY_LEN 8
+#endif
+
 #ifndef M_PI
 #define M_PI 3.14159265358979323846
 #endif
@@ -117,6 +125,8 @@ typedef struct {
     const char *p;          /* current position in string */
     const ExprVar *vars;
     int         num_vars;
+    char       *err;
+    int         err_sz;
 } ExprCtx;
 
 /* ---- Predefined variables (global scope) ------------------------------- */
@@ -141,8 +151,20 @@ typedef struct {
  * frames. */
 ReplPredefView repl_eval_predef_view(void);
 
+void repl_eval_bind_scratch_storage(
+    float arrays[REPL_SCRATCH_ARRAY_COUNT][REPL_SCRATCH_ARRAY_LEN]);
+void repl_eval_reset_scratch_arrays(void);
+int  repl_eval_scratch_array_index(const char *name);
+int  repl_eval_scratch_get(int array_idx, int elem_idx, float *out);
+int  repl_eval_scratch_set(int array_idx, int elem_idx, float value);
+void repl_eval_copy_scratch_arrays(
+    float dst[REPL_SCRATCH_ARRAY_COUNT][REPL_SCRATCH_ARRAY_LEN]);
+void repl_eval_restore_scratch_arrays(
+    const float src[REPL_SCRATCH_ARRAY_COUNT][REPL_SCRATCH_ARRAY_LEN]);
+
 void repl_eval_init_predef_vars(void);
-/* Query: does input contain references to predefined variables (not just literals)? */
+/* Query: does input contain references to runtime-bound values (predef vars or
+ * scratch arrays), not just literals? */
 int  repl_eval_input_has_predef_vars(const char *s);
 /* Look up a variable by name; returns index in g_predef_vars, or -1 if not found. */
 int  repl_eval_find_predef_var_idx(const char *name);

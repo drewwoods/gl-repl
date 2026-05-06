@@ -30,6 +30,8 @@
 #ifndef REPLAY_H
 #define REPLAY_H
 
+#include "repl_eval.h"
+
 typedef enum {
     REPLAY_OFF = 0,
     REPLAY_PLAYING,
@@ -104,6 +106,9 @@ int  repl_replay_prepare_frame(int full_flat_count);
 
 void repl_replay_restore_baseline_predef_values(void);
 void repl_replay_copy_baseline_predef_values(float *dst, int max_vals);
+void repl_replay_restore_baseline_scratch_arrays(void);
+void repl_replay_copy_baseline_scratch_arrays(
+    float dst[REPL_SCRATCH_ARRAY_COUNT][REPL_SCRATCH_ARRAY_LEN]);
 
 /* --- Input routing (called from repl_editor.c) ----------------------- */
 

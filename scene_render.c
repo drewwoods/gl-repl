@@ -8,6 +8,7 @@
 #include "scene_grid.h"
 #include "scene_lights.h"
 #include "scene_overlays.h"
+#include "repl_eval.h"
 #include "scene_render_types.h"
 #include "scene_render.h"
 #include "scene_transform_utils.h"
@@ -244,6 +245,14 @@ static void scene_restore_predef_values(const float *src, int max_vals) {
         g_predef_vars[i].value = src[i];
 }
 
+static void scene_restore_runtime_state(const ReplayFadePlan *fade_plan) {
+    if (!fade_plan)
+        return;
+    scene_restore_predef_values(fade_plan->baseline_predef_vals,
+                                MAX_PREDEF_VARS);
+    repl_eval_restore_scratch_arrays(fade_plan->baseline_scratch_arrays);
+}
+
 void scene_render_replay_fade_pass(const FrameRenderContext *frame_ctx) {
     const SceneRenderConfig *config = &frame_ctx->config;
     if (!config->replay_has_fades || !config->execute_fn)
@@ -282,8 +291,7 @@ void scene_render_replay_fade_pass(const FrameRenderContext *frame_ctx) {
                     continue;
 
                 prof_begin(PROF_SCENE_3D_FADE_BATCH_PREP);
-                scene_restore_predef_values(fade_plan->baseline_predef_vals,
-                                            MAX_PREDEF_VARS);
+                scene_restore_runtime_state(fade_plan);
                 glColor4f(0.70f, 0.70f, 0.80f, alpha);
                 glPushMatrix();
                 prof_accum_end(PROF_SCENE_3D_FADE_BATCH_PREP);
@@ -405,8 +413,7 @@ void scene_render_3d_scene(const SceneRenderConfig *config) {
         for (int sample_idx = 0; sample_idx < accum_samples; sample_idx++) {
             glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
             if (config->replaying)
-                scene_restore_predef_values(config->replay_fade_plan.baseline_predef_vals,
-                                            MAX_PREDEF_VARS);
+                scene_restore_runtime_state(&config->replay_fade_plan);
             render_3d_scene_pass(config,
                                  g_jitter_table[sample_idx % MAX_ACCUM_SAMPLES][0],
                                  g_jitter_table[sample_idx % MAX_ACCUM_SAMPLES][1]);
@@ -416,8 +423,7 @@ void scene_render_3d_scene(const SceneRenderConfig *config) {
     } else {
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
         if (config->replaying)
-            scene_restore_predef_values(config->replay_fade_plan.baseline_predef_vals,
-                                        MAX_PREDEF_VARS);
+            scene_restore_runtime_state(&config->replay_fade_plan);
         render_3d_scene_pass(config, 0.0f, 0.0f);
     }
 }

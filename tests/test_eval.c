@@ -222,6 +222,7 @@ static void run_tests(void) {
     ASSERT_FLOAT("rand(7,11)", 0.564453f);
     ASSERT_FLOAT("rand(7,11)", 0.564453f); /* deterministic */
     ASSERT_FLOAT("rand(3)", 0.589844f);    /* implicit iter=0 */
+    ASSERT_FLOAT("lerp(0,10,0.25)", 2.5f);
     ASSERT_FLOAT("sin(PI/2)", 1.0f);
     ASSERT_FLOAT("cos(TAU)", 1.0f);
     ASSERT_FLOAT("10/0", 0.0f);  /* div by zero returns 0 */
@@ -298,6 +299,68 @@ static void run_tests(void) {
     ASSERT_FLOAT("x+y+z+t", 11.5f);
     ASSERT_FLOAT("n*2", 48.0f);
     ASSERT_FLOAT("TAU/n", (float)(2.0 * M_PI / 24.0));
+
+    printf("scratch arrays:\n");
+    {
+        float value = -1.0f;
+        float snapshot[REPL_SCRATCH_ARRAY_COUNT][REPL_SCRATCH_ARRAY_LEN];
+
+        repl_eval_reset_scratch_arrays();
+        ASSERT_TRUE("scratch array index A", repl_eval_scratch_array_index("A") == 0);
+        ASSERT_TRUE("scratch array index B", repl_eval_scratch_array_index("B") == 1);
+        ASSERT_TRUE("scratch array index C", repl_eval_scratch_array_index("C") == 2);
+        ASSERT_TRUE("scratch array index miss", repl_eval_scratch_array_index("Z") == -1);
+
+        ASSERT_TRUE("scratch arrays reset to zero",
+                    repl_eval_scratch_get(0, 0, &value) && fabsf(value) < 1e-6f);
+        ASSERT_TRUE("scratch set A[0]",
+                    repl_eval_scratch_set(0, 0, 1.25f));
+        ASSERT_TRUE("scratch set A[2]",
+                    repl_eval_scratch_set(0, 2, 3.5f));
+        ASSERT_TRUE("scratch get A[2]",
+                    repl_eval_scratch_get(0, 2, &value) && fabsf(value - 3.5f) < 1e-6f);
+        ASSERT_TRUE("scratch reject bad element",
+                    !repl_eval_scratch_set(0, 8, 0.0f));
+        repl_eval_copy_scratch_arrays(snapshot);
+        repl_eval_scratch_set(0, 2, 9.0f);
+        repl_eval_restore_scratch_arrays(snapshot);
+        ASSERT_TRUE("scratch restore A[2]",
+                    repl_eval_scratch_get(0, 2, &value) && fabsf(value - 3.5f) < 1e-6f);
+
+        set_predef("i", 2.0f);
+        {
+            char err[128] = {0};
+            ExprCtx ctx = { "A[1 + 1]", NULL, 0, err, sizeof(err) };
+            float actual = repl_eval_expr(&ctx);
+            ASSERT_TRUE("scratch read A[1+1]",
+                        fabsf(actual - 3.5f) < 1e-4f && err[0] == '\0');
+        }
+        {
+            char err[128] = {0};
+            ExprCtx ctx = { "A[i]", NULL, 0, err, sizeof(err) };
+            float actual = repl_eval_expr(&ctx);
+            ASSERT_TRUE("scratch read A[i]",
+                        fabsf(actual - 3.5f) < 1e-4f && err[0] == '\0');
+        }
+        {
+            char err[128] = {0};
+            ExprCtx ctx = { "A[8]", NULL, 0, err, sizeof(err) };
+            (void)repl_eval_expr(&ctx);
+            ASSERT_TRUE("scratch read A[8] errors", err[0] != '\0');
+        }
+        {
+            char err[128] = {0};
+            ExprCtx ctx = { "A[-1]", NULL, 0, err, sizeof(err) };
+            (void)repl_eval_expr(&ctx);
+            ASSERT_TRUE("scratch read A[-1] errors", err[0] != '\0');
+        }
+        {
+            char err[128] = {0};
+            ExprCtx ctx = { "A", NULL, 0, err, sizeof(err) };
+            (void)repl_eval_expr(&ctx);
+            ASSERT_TRUE("bare scratch array errors", err[0] != '\0');
+        }
+    }
 
     /* Loop vars override predefined */
     {
@@ -522,6 +585,18 @@ static void run_tests(void) {
         ok = repl_eval_declare_predef_var("PI", err, sizeof(err));
         ASSERT_TRUE("reserved name PI should fail", !ok);
 
+        ok = repl_eval_declare_predef_var("A", err, sizeof(err));
+        ASSERT_TRUE("reserved name A should fail", !ok);
+
+        ok = repl_eval_declare_predef_var("B", err, sizeof(err));
+        ASSERT_TRUE("reserved name B should fail", !ok);
+
+        ok = repl_eval_declare_predef_var("C", err, sizeof(err));
+        ASSERT_TRUE("reserved name C should fail", !ok);
+
+        ok = repl_eval_declare_predef_var("lerp", err, sizeof(err));
+        ASSERT_TRUE("reserved name lerp should fail", !ok);
+
         ok = repl_eval_declare_predef_var("t", err, sizeof(err));
         ASSERT_TRUE("reserved name t should fail (already declared)", !ok);
 
@@ -574,6 +649,8 @@ static void run_tests(void) {
 
         /* Declared predefined var */
         ASSERT_VALIDATE_OK("x + 1", NULL, 0);  /* x is a predef var */
+        ASSERT_VALIDATE_OK("A[0] + x", NULL, 0);
+        ASSERT_VALIDATE_OK("A[i]", NULL, 0);
 
         /* Loop-local var provided in vars array */
         ASSERT_VALIDATE_OK("r + h", lv, 2);
@@ -581,6 +658,10 @@ static void run_tests(void) {
         /* Undeclared variable - should fail */
         ASSERT_VALIDATE_FAIL("undefined_var", NULL, 0);
         ASSERT_VALIDATE_FAIL("r + unknown", lv, 2);
+        ASSERT_VALIDATE_FAIL("A", NULL, 0);
+        ASSERT_VALIDATE_FAIL("x[0]", NULL, 0);
+        ASSERT_VALIDATE_FAIL("A[8]", NULL, 0);
+        ASSERT_VALIDATE_FAIL("A[-1]", NULL, 0);
 
         /* Inline comment - scanner stops before it */
         ASSERT_VALIDATE_OK("x + 1 // comment with undefined_var", NULL, 0);
@@ -672,6 +753,8 @@ static void run_tests(void) {
     /* ---- input_has_predef_vars after undeclare ---- */
     printf("input_has_predef_vars (after undeclare):\n");
     {
+        ASSERT_HAS_VARS("A[0] + 1", 1);
+
         /* 'x' is currently declared - should be found */
         ASSERT_HAS_VARS("x + 1", 1);
 

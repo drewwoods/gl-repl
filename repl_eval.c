@@ -16,6 +16,8 @@
  */
 #include "repl_eval.h"
 
+#include <stdarg.h>
+
 /* ========================================================================= */
 /* Predefined variables                                                       */
 /* ========================================================================= */
@@ -24,6 +26,9 @@ static ExprVar g_fallback_predef_vars[MAX_PREDEF_VARS];
 static int     g_fallback_num_predef_vars = 0;
 static ExprVar *g_active_predef_vars = g_fallback_predef_vars;
 static int     *g_active_num_predef_vars = &g_fallback_num_predef_vars;
+static float   g_fallback_scratch_arrays[REPL_SCRATCH_ARRAY_COUNT][REPL_SCRATCH_ARRAY_LEN];
+static float   (*g_active_scratch_arrays)[REPL_SCRATCH_ARRAY_LEN] =
+    g_fallback_scratch_arrays;
 
 void repl_eval_bind_predef_storage(ExprVar *vars, int *count_ptr) {
     if (vars && count_ptr) {
@@ -45,6 +50,61 @@ int *repl_eval_predef_count_mut(void) {
 
 ReplPredefView repl_eval_predef_view(void) {
     return (ReplPredefView){ .vars = g_predef_vars, .count = g_num_predef_vars };
+}
+
+void repl_eval_bind_scratch_storage(
+    float arrays[REPL_SCRATCH_ARRAY_COUNT][REPL_SCRATCH_ARRAY_LEN]) {
+    g_active_scratch_arrays = arrays ? arrays : g_fallback_scratch_arrays;
+}
+
+void repl_eval_reset_scratch_arrays(void) {
+    memset(g_active_scratch_arrays, 0, sizeof(g_fallback_scratch_arrays));
+}
+
+int repl_eval_scratch_array_index(const char *name) {
+    if (!name)
+        return -1;
+    if (strcmp(name, "A") == 0)
+        return 0;
+    if (strcmp(name, "B") == 0)
+        return 1;
+    if (strcmp(name, "C") == 0)
+        return 2;
+    return -1;
+}
+
+static int scratch_elem_in_range(int elem_idx) {
+    return elem_idx >= 0 && elem_idx < REPL_SCRATCH_ARRAY_LEN;
+}
+
+int repl_eval_scratch_get(int array_idx, int elem_idx, float *out) {
+    if (array_idx < 0 || array_idx >= REPL_SCRATCH_ARRAY_COUNT ||
+        !scratch_elem_in_range(elem_idx) || !out)
+        return 0;
+    *out = g_active_scratch_arrays[array_idx][elem_idx];
+    return 1;
+}
+
+int repl_eval_scratch_set(int array_idx, int elem_idx, float value) {
+    if (array_idx < 0 || array_idx >= REPL_SCRATCH_ARRAY_COUNT ||
+        !scratch_elem_in_range(elem_idx))
+        return 0;
+    g_active_scratch_arrays[array_idx][elem_idx] = value;
+    return 1;
+}
+
+void repl_eval_copy_scratch_arrays(
+    float dst[REPL_SCRATCH_ARRAY_COUNT][REPL_SCRATCH_ARRAY_LEN]) {
+    if (!dst)
+        return;
+    memcpy(dst, g_active_scratch_arrays, sizeof(g_fallback_scratch_arrays));
+}
+
+void repl_eval_restore_scratch_arrays(
+    const float src[REPL_SCRATCH_ARRAY_COUNT][REPL_SCRATCH_ARRAY_LEN]) {
+    if (!src)
+        return;
+    memcpy(g_active_scratch_arrays, src, sizeof(g_fallback_scratch_arrays));
 }
 
 static const char *skip_numeric_literal(const char *s) {
@@ -75,9 +135,218 @@ int repl_eval_find_predef_var_idx(const char *name) {
 static const char *s_reserved_idents[] = {
     "t", "PI", "TAU", "float", "var",
     "sin", "cos", "tan", "sqrt", "abs", "pow",
-    "min", "max", "floor", "ceil", "fmod", "rand",
+    "min", "max", "floor", "ceil", "fmod", "rand", "lerp",
+    "A", "B", "C",
     NULL
 };
+
+static void expr_write_err(ExprCtx *ctx, const char *fmt, ...) {
+    va_list ap;
+
+    if (!ctx || !ctx->err || ctx->err_sz <= 0)
+        return;
+
+    va_start(ap, fmt);
+    vsnprintf(ctx->err, (size_t)ctx->err_sz, fmt, ap);
+    va_end(ap);
+}
+
+static const char *skip_ws_ptr(const char *p) {
+    while (p && *p && isspace((unsigned char)*p))
+        p++;
+    return p;
+}
+
+static const char *find_matching_square(const char *open, const char *limit) {
+    int depth = 0;
+
+    if (!open || *open != '[')
+        return NULL;
+
+    for (const char *p = open; *p && (!limit || p < limit); p++) {
+        if (*p == '[')
+            depth++;
+        else if (*p == ']') {
+            depth--;
+            if (depth == 0)
+                return p;
+        }
+    }
+    return NULL;
+}
+
+static int expr_range_has_runtime_values(const char *src, const char *end,
+                                         const ExprVar *vars, int num_vars) {
+    const char *s = src;
+
+    while (s && *s && (!end || s < end)) {
+        if (s[0] == '/' && (!end || s + 1 < end) && s[1] == '/')
+            break;
+
+        if (isdigit((unsigned char)*s) ||
+            (*s == '.' && (!end || s + 1 < end) && isdigit((unsigned char)s[1]))) {
+            const char *next = skip_numeric_literal(s);
+            if (next != s) {
+                s = next;
+                continue;
+            }
+        }
+
+        if (!isalpha((unsigned char)*s) && *s != '_') {
+            s++;
+            continue;
+        }
+
+        const char *start = s;
+        while (*s && (!end || s < end) &&
+               (isalnum((unsigned char)*s) || *s == '_'))
+            s++;
+
+        int len = (int)(s - start);
+        char name[16];
+        if (len <= 0 || len >= (int)sizeof(name))
+            return 1;
+
+        memcpy(name, start, (size_t)len);
+        name[len] = '\0';
+
+        if (strcmp(name, "PI") == 0 || strcmp(name, "TAU") == 0)
+            continue;
+
+        const char *q = skip_ws_ptr(s);
+        if (repl_eval_scratch_array_index(name) >= 0)
+            return 1;
+        if (*q == '(')
+            continue;
+
+        for (int var_idx = 0; var_idx < num_vars; var_idx++) {
+            if (strcmp(name, vars[var_idx].name) == 0)
+                return 1;
+        }
+        if (repl_eval_find_predef_var_idx(name) >= 0)
+            return 1;
+    }
+
+    return 0;
+}
+
+static int validate_expression_idents_range(const char *src, const char *end,
+                                            const ExprVar *vars, int num_vars,
+                                            char *err, int errsz) {
+    const char *s = src;
+
+    while (s && *s && (!end || s < end)) {
+        if (s[0] == '/' && (!end || s + 1 < end) && s[1] == '/')
+            break;
+
+        if (isdigit((unsigned char)*s) ||
+            (*s == '.' && (!end || s + 1 < end) && isdigit((unsigned char)s[1]))) {
+            const char *next = skip_numeric_literal(s);
+            if (next != s) {
+                s = next;
+                continue;
+            }
+        }
+
+        if (!isalpha((unsigned char)*s) && *s != '_') {
+            s++;
+            continue;
+        }
+
+        const char *start = s;
+        while (*s && (!end || s < end) &&
+               (isalnum((unsigned char)*s) || *s == '_'))
+            s++;
+
+        int len = (int)(s - start);
+        char name[16];
+        if (len >= (int)sizeof(name)) {
+            if (err)
+                snprintf(err, (size_t)errsz, "identifier too long");
+            return 0;
+        }
+
+        memcpy(name, start, (size_t)len);
+        name[len] = '\0';
+
+        if (strcmp(name, "PI") == 0 || strcmp(name, "TAU") == 0)
+            continue;
+
+        const char *q = skip_ws_ptr(s);
+        int scratch_idx = repl_eval_scratch_array_index(name);
+
+        if (scratch_idx >= 0) {
+            if (*q != '[') {
+                if (err)
+                    snprintf(err, (size_t)errsz,
+                             "scratch array '%s' requires an index", name);
+                return 0;
+            }
+
+            const char *close = find_matching_square(q, end);
+            if (!close) {
+                if (err)
+                    snprintf(err, (size_t)errsz,
+                             "missing ']' for scratch array '%s'", name);
+                return 0;
+            }
+
+            if (!validate_expression_idents_range(q + 1, close,
+                                                  vars, num_vars,
+                                                  err, errsz))
+                return 0;
+
+            if (!expr_range_has_runtime_values(q + 1, close, vars, num_vars)) {
+                char idx_expr[MAX_LINE_LEN];
+                int idx_len = (int)(close - (q + 1));
+                if (idx_len >= (int)sizeof(idx_expr))
+                    idx_len = (int)sizeof(idx_expr) - 1;
+                memcpy(idx_expr, q + 1, (size_t)idx_len);
+                idx_expr[idx_len] = '\0';
+
+                ExprCtx idx_ctx = { idx_expr, vars, num_vars, NULL, 0 };
+                int elem_idx = (int)repl_eval_expr(&idx_ctx);
+                if (!scratch_elem_in_range(elem_idx)) {
+                    if (err)
+                        snprintf(err, (size_t)errsz,
+                                 "scratch array index out of range: %d", elem_idx);
+                    return 0;
+                }
+            }
+
+            s = close + 1;
+            continue;
+        }
+
+        if (*q == '[') {
+            if (err)
+                snprintf(err, (size_t)errsz, "unknown array '%s'", name);
+            return 0;
+        }
+
+        if (*q == '(')
+            continue;
+
+        int found = 0;
+        for (int var_idx = 0; var_idx < num_vars; var_idx++) {
+            if (strcmp(name, vars[var_idx].name) == 0) {
+                found = 1;
+                break;
+            }
+        }
+        if (found)
+            continue;
+
+        if (repl_eval_find_predef_var_idx(name) >= 0)
+            continue;
+
+        if (err)
+            snprintf(err, (size_t)errsz, "undeclared variable '%s'", name);
+        return 0;
+    }
+
+    return 1;
+}
 
 int repl_eval_is_reserved_ident(const char *name) {
     for (const char **r = s_reserved_idents; *r; r++)
@@ -155,59 +424,20 @@ int repl_eval_source_uses_ident(const char *src, const char *name) {
 
 int repl_eval_validate_expression_idents(const char *src, const ExprVar *vars,
                                int num_vars, char *err, int errsz) {
-    const char *s = src;
-    while (*s) {
-        /* Stop at inline comments */
-        if (s[0] == '/' && s[1] == '/') break;
-
-        /* Skip number literals, including scientific notation like 1e-06. */
-        if (isdigit((unsigned char)*s) ||
-            (*s == '.' && isdigit((unsigned char)s[1]))) {
-            const char *end = skip_numeric_literal(s);
-            if (end != s) {
-                s = end;
-                continue;
-            }
-        }
-        if (!isalpha((unsigned char)*s) && *s != '_') { s++; continue; }
-        const char *start = s;
-        while (*s && (isalnum((unsigned char)*s) || *s == '_')) s++;
-        int len = (int)(s - start);
-        char name[16];
-        if (len >= (int)sizeof(name)) {
-            if (err) snprintf(err, errsz, "identifier too long");
-            return 0;
-        }
-        memcpy(name, start, len);
-        name[len] = '\0';
-
-        if (strcmp(name, "PI") == 0 || strcmp(name, "TAU") == 0) continue;
-
-        /* Skip function calls (identifier followed by '(') */
-        const char *q = s;
-        while (*q && isspace((unsigned char)*q)) q++;
-        if (*q == '(') continue;
-
-        /* Check loop/function locals */
-        int found = 0;
-        for (int i = 0; i < num_vars; i++)
-            if (strcmp(name, vars[i].name) == 0) { found = 1; break; }
-        if (found) continue;
-
-        if (repl_eval_find_predef_var_idx(name) >= 0) continue;
-
-        if (err) snprintf(err, errsz, "undeclared variable '%s'", name);
-        return 0;
-    }
-    return 1;
+    return validate_expression_idents_range(src, NULL, vars, num_vars,
+                                            err, errsz);
 }
 
 int repl_eval_input_has_predef_vars(const char *s) {
     while (*s) {
+        if (s[0] == '/' && s[1] == '/')
+            break;
         if (!isalpha((unsigned char)*s) && *s != '_') { s++; continue; }
         const char *start = s;
         while (*s && (isalnum((unsigned char)*s) || *s == '_')) s++;
         int len = (int)(s - start);
+        if (len == 1 && (*start == 'A' || *start == 'B' || *start == 'C'))
+            return 1;
         for (int pv = 0; pv < g_num_predef_vars; pv++) {
             int nlen = (int)strlen(g_predef_vars[pv].name);
             if (nlen == len && strncmp(start, g_predef_vars[pv].name, len) == 0)
@@ -279,10 +509,44 @@ static float eval_primary(ExprCtx *ctx) {
                name_len < (int)sizeof(name) - 1)
             name[name_len++] = *ctx->p++;
         name[name_len] = '\0';
+        const char *q = skip_ws_ptr(ctx->p);
 
         /* Constants */
         if (strcmp(name, "PI") == 0)  return (float)M_PI;
         if (strcmp(name, "TAU") == 0) return (float)(2.0 * M_PI);
+
+        {
+            int scratch_idx = repl_eval_scratch_array_index(name);
+            if (scratch_idx >= 0) {
+                if (*q != '[') {
+                    ctx->p = q;
+                    expr_write_err(ctx, "scratch array '%s' requires an index", name);
+                    return 0.0f;
+                }
+
+                ctx->p = q + 1;
+                float idx_value = repl_eval_expr(ctx);
+                expr_skip_ws(ctx);
+                if (*ctx->p != ']') {
+                    expr_write_err(ctx, "missing ']' for scratch array '%s'", name);
+                    return 0.0f;
+                }
+                ctx->p++;
+
+                int elem_idx = (int)idx_value;
+                float value = 0.0f;
+                if (!repl_eval_scratch_get(scratch_idx, elem_idx, &value)) {
+                    expr_write_err(ctx, "scratch array index out of range: %d", elem_idx);
+                    return 0.0f;
+                }
+                return value;
+            }
+            if (*q == '[') {
+                ctx->p = q;
+                expr_write_err(ctx, "unknown array '%s'", name);
+                return 0.0f;
+            }
+        }
 
         /* Variables (loop vars take precedence) */
         if (ctx->vars) {
@@ -297,29 +561,46 @@ static float eval_primary(ExprCtx *ctx) {
                 return g_predef_vars[i].value;
 
         /* Functions (consume opening paren) */
-        expr_skip_ws(ctx);
-        if (*ctx->p == '(') {
-            ctx->p++;
-            float a = repl_eval_expr(ctx);
-            float b = 0;
-            int has_b = 0;
-            expr_skip_ws(ctx);
-            if (*ctx->p == ',') { ctx->p++; b = repl_eval_expr(ctx); has_b = 1; }
-            expr_skip_ws(ctx);
-            if (*ctx->p == ')') ctx->p++;
+        if (*q == '(') {
+            float args[3] = { 0.0f, 0.0f, 0.0f };
+            int arg_count = 0;
 
-            if (strcmp(name, "sin") == 0)  return sinf(a);
-            if (strcmp(name, "cos") == 0)  return cosf(a);
-            if (strcmp(name, "tan") == 0)  return tanf(a);
-            if (strcmp(name, "sqrt") == 0) return sqrtf(fabsf(a));
-            if (strcmp(name, "abs") == 0)  return fabsf(a);
-            if (strcmp(name, "pow") == 0 && has_b) return powf(a, b);
-            if (strcmp(name, "min") == 0 && has_b) return a < b ? a : b;
-            if (strcmp(name, "max") == 0 && has_b) return a > b ? a : b;
-            if (strcmp(name, "floor") == 0) return floorf(a);
-            if (strcmp(name, "ceil") == 0)  return ceilf(a);
-            if (strcmp(name, "fmod") == 0 && has_b) return fmodf(a, b);
-            if (strcmp(name, "rand") == 0) return has_b ? expr_rand01(a, b) : expr_rand01(a, 0.0f);
+            ctx->p = q + 1;
+            expr_skip_ws(ctx);
+            if (*ctx->p != ')') {
+                for (;;) {
+                    float arg = repl_eval_expr(ctx);
+                    if (arg_count < (int)(sizeof(args) / sizeof(args[0])))
+                        args[arg_count] = arg;
+                    arg_count++;
+
+                    expr_skip_ws(ctx);
+                    if (*ctx->p != ',')
+                        break;
+                    ctx->p++;
+                    expr_skip_ws(ctx);
+                }
+            }
+            expr_skip_ws(ctx);
+            if (*ctx->p == ')')
+                ctx->p++;
+
+            if (strcmp(name, "sin") == 0 && arg_count == 1)  return sinf(args[0]);
+            if (strcmp(name, "cos") == 0 && arg_count == 1)  return cosf(args[0]);
+            if (strcmp(name, "tan") == 0 && arg_count == 1)  return tanf(args[0]);
+            if (strcmp(name, "sqrt") == 0 && arg_count == 1) return sqrtf(fabsf(args[0]));
+            if (strcmp(name, "abs") == 0 && arg_count == 1)  return fabsf(args[0]);
+            if (strcmp(name, "pow") == 0 && arg_count == 2) return powf(args[0], args[1]);
+            if (strcmp(name, "min") == 0 && arg_count == 2) return args[0] < args[1] ? args[0] : args[1];
+            if (strcmp(name, "max") == 0 && arg_count == 2) return args[0] > args[1] ? args[0] : args[1];
+            if (strcmp(name, "floor") == 0 && arg_count == 1) return floorf(args[0]);
+            if (strcmp(name, "ceil") == 0 && arg_count == 1)  return ceilf(args[0]);
+            if (strcmp(name, "fmod") == 0 && arg_count == 2) return fmodf(args[0], args[1]);
+            if (strcmp(name, "rand") == 0)
+                return arg_count >= 2 ? expr_rand01(args[0], args[1])
+                                      : (arg_count == 1 ? expr_rand01(args[0], 0.0f) : 0.0f);
+            if (strcmp(name, "lerp") == 0 && arg_count == 3)
+                return args[0] + (args[1] - args[0]) * args[2];
         }
 
         return 0.0f;   /* unknown identifier */
@@ -404,7 +685,7 @@ int repl_eval_parse_exprs(const char *s, float *out, int max,
     while (*p && n < max) {
         while (*p && (isspace((unsigned char)*p) || *p == ',')) p++;
         if (!*p || *p == ')') break;
-        ExprCtx ctx = { p, vars, num_vars };
+        ExprCtx ctx = { p, vars, num_vars, NULL, 0 };
         out[n] = repl_eval_expr(&ctx);
         if (ctx.p == p) break;   /* no progress */
         n++;
@@ -431,6 +712,7 @@ void repl_eval_expr_to_c(const char *in, char *out, int out_sz) {
         { "ceil",  "ceilf",  1 },
         { "fmod",  "fmodf",  1 },
         { "rand",  "repl_randf", 1 },
+        { "lerp",  "repl_lerp", 1 },
         { "TAU",   "(2*M_PI)", 0 },
         { "PI",    "M_PI",     0 },
     };
@@ -593,6 +875,7 @@ void repl_eval_c_expr_to_repl(const char *in, char *out, int out_sz) {
         { "ceilf",  "ceil"  },
         { "fmodf",  "fmod"  },
         { "repl_randf", "rand" },
+        { "repl_lerp", "lerp" },
         { "M_PI",   "PI"    },
     };
     int nmap = (int)(sizeof(map) / sizeof(map[0]));
@@ -662,7 +945,7 @@ int repl_eval_parse_for_header_with_vars(const char *input, char *var_name, int 
 
     /* Start and end expressions share the same ExprCtx; we only need to
      * re-seat ctx.p at each argument boundary since eval_expr advances it. */
-    ExprCtx ctx = { p, vars, num_vars };
+    ExprCtx ctx = { p, vars, num_vars, NULL, 0 };
     *start = repl_eval_expr(&ctx);
     p = ctx.p;
     while (*p && isspace((unsigned char)*p)) p++;
@@ -728,7 +1011,7 @@ int repl_eval_parse_c_for_header(const char *input, char *var_name, int var_sz,
     p++;
 
     /* Start value */
-    ExprCtx ctx = { p, NULL, 0 };
+    ExprCtx ctx = { p, NULL, 0, NULL, 0 };
     *start = repl_eval_expr(&ctx);
     p = ctx.p;
     if (*p == 'f' || *p == 'F') p++;   /* skip C float suffix */

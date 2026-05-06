@@ -57,6 +57,7 @@ typedef struct {
     int      num_cmds;
     int      edit_line;
     float    predef_vals[MAX_PREDEF_VARS];
+    float    scratch_arrays[REPL_SCRATCH_ARRAY_COUNT][REPL_SCRATCH_ARRAY_LEN];
     char     predef_names[MAX_PREDEF_VARS][16];
     int      num_predef_vars;
     int      scene_cfg[N_SCENE_CFG_KEYS];
@@ -156,6 +157,7 @@ static void save_scene_to_slot(int idx, const char *name) {
         s->predef_vals[i] = g_predef_vars[i].value;
         memcpy(s->predef_names[i], g_predef_vars[i].name, 16);
     }
+    repl_eval_copy_scratch_arrays(s->scratch_arrays);
     for (int i = 0; i < N_SCENE_CFG_KEYS; i++)
         s->scene_cfg[i] = repl_config_get(k_scene_cfg_keys[i]);
     if (name && *name)
@@ -202,6 +204,7 @@ static void load_scene_from_slot(int idx) {
         g_predef_vars[i].value = s->predef_vals[i];
         memcpy(g_predef_vars[i].name, s->predef_names[i], 16);
     }
+    repl_eval_restore_scratch_arrays(s->scratch_arrays);
     /* Roll back any example sandbox before stamping in the user
      * scene's saved cfg. Observably overwritten by the loop below
      * today (scene_cfg covers all keys); becomes load-bearing if a
@@ -253,6 +256,7 @@ static void install_scene_into_live(int slot) {
         g_predef_vars[i].value = s->predef_vals[i];
         memcpy(g_predef_vars[i].name, s->predef_names[i], 16);
     }
+    repl_eval_restore_scratch_arrays(s->scratch_arrays);
 }
 
 static void stash_live_state(UserScene *dst) {
@@ -269,6 +273,7 @@ static void stash_live_state(UserScene *dst) {
         dst->predef_vals[i] = g_predef_vars[i].value;
         memcpy(dst->predef_names[i], g_predef_vars[i].name, 16);
     }
+    repl_eval_copy_scratch_arrays(dst->scratch_arrays);
 }
 
 static void restore_live_from_stash(const UserScene *src) {
@@ -280,6 +285,7 @@ static void restore_live_from_stash(const UserScene *src) {
         g_predef_vars[i].value = src->predef_vals[i];
         memcpy(g_predef_vars[i].name, src->predef_names[i], 16);
     }
+    repl_eval_restore_scratch_arrays(src->scratch_arrays);
 }
 
 static void scene_filename_slug(const char *name, char *out, size_t out_sz) {

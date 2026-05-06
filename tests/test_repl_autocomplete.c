@@ -171,6 +171,25 @@ int main() {
         }
     }
 
+    /* 8. Scratch-array and lerp completions */
+    {
+        repl_reset_state(); declare_test_vars();
+        set_input_text("A");
+
+        editor_completion_update();
+        ASSERT_TRUE("scratch array completion present", has_insert_match("A["));
+        ASSERT_STR("scratch array ghost", g_ac_ghost, "[");
+
+        accept_autocomplete();
+        ASSERT_STR("scratch array input after accept", editor_state_input().input, "A[");
+
+        set_input_text("ler");
+        editor_completion_update();
+        ASSERT_TRUE("lerp completion present", has_insert_match("lerp("));
+        ASSERT_STR("lerp ghost", g_ac_ghost, "p(");
+        ASSERT_STR("lerp hint", g_ac_hint, "a, b, t)");
+    }
+
     printf("\n");
     return test_harness_report(&g_harness, "test_repl_autocomplete");
 }

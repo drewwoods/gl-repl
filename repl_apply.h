@@ -55,4 +55,8 @@ int  repl_apply_compiled_change(const ReplCompiledChange *change);
  * new state. */
 void repl_apply_predef_ops(const ReplCompiledChange *change);
 
+/* Replay scratch-array side-effects in `change` against the evaluator's
+ * bound scratch storage. */
+void repl_apply_scratch_ops(const ReplCompiledChange *change);
+
 #endif /* REPL_APPLY_H */

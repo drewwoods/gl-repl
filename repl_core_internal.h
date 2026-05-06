@@ -173,6 +173,10 @@ int  repl_extract_goto_label(const char *src, char *name, int name_sz);
 int  repl_extract_assignment_parts(const char *src,
                                    char *name, int name_sz,
                                    char *rhs, int rhs_sz);
+int  repl_extract_assignment_target_parts(const char *src,
+                                          char *name, int name_sz,
+                                          char *index_expr, int index_expr_sz,
+                                          char *rhs, int rhs_sz);
 
 /* ---- Code-panel dumps (debug + test fixtures) ------------------------- */
 
