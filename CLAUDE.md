@@ -786,6 +786,7 @@ GLUT Solid Shapes:
   glutSolidCone(base, height, slices, stacks)
 for(var, start, end[, step]) { body }
 func0..func9[(params)] { body }
+NAME[(params)] { body }     (alias: NAME -> next free funcN slot, 10 max)
 if(expr) { body }
 // comment
 float name[, name2, ...];  (variable declaration)

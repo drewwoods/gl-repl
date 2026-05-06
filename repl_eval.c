@@ -29,6 +29,9 @@ static int     *g_active_num_predef_vars = &g_fallback_num_predef_vars;
 static float   g_fallback_scratch_arrays[REPL_SCRATCH_ARRAY_COUNT][REPL_SCRATCH_ARRAY_LEN];
 static float   (*g_active_scratch_arrays)[REPL_SCRATCH_ARRAY_LEN] =
     g_fallback_scratch_arrays;
+static char    g_fallback_func_aliases[REPL_FUNC_SLOT_COUNT][REPL_FUNC_NAME_MAX];
+static char    (*g_active_func_aliases)[REPL_FUNC_NAME_MAX] =
+    g_fallback_func_aliases;
 
 void repl_eval_bind_predef_storage(ExprVar *vars, int *count_ptr) {
     if (vars && count_ptr) {
@@ -55,6 +58,90 @@ ReplPredefView repl_eval_predef_view(void) {
 void repl_eval_bind_scratch_storage(
     float arrays[REPL_SCRATCH_ARRAY_COUNT][REPL_SCRATCH_ARRAY_LEN]) {
     g_active_scratch_arrays = arrays ? arrays : g_fallback_scratch_arrays;
+}
+
+void repl_func_alias_bind_storage(
+    char arrays[REPL_FUNC_SLOT_COUNT][REPL_FUNC_NAME_MAX]) {
+    g_active_func_aliases = arrays ? arrays : g_fallback_func_aliases;
+}
+
+void repl_func_alias_clear_all(void) {
+    for (int slot = 0; slot < REPL_FUNC_SLOT_COUNT; slot++)
+        g_active_func_aliases[slot][0] = '\0';
+}
+
+const char *repl_func_alias_get(int slot) {
+    if (slot < 0 || slot >= REPL_FUNC_SLOT_COUNT) return NULL;
+    return g_active_func_aliases[slot][0] ? g_active_func_aliases[slot] : NULL;
+}
+
+int repl_func_alias_lookup_slot(const char *name) {
+    if (!name || !*name) return -1;
+    for (int slot = 0; slot < REPL_FUNC_SLOT_COUNT; slot++) {
+        if (g_active_func_aliases[slot][0] &&
+            strcmp(g_active_func_aliases[slot], name) == 0)
+            return slot;
+    }
+    return -1;
+}
+
+int repl_func_alias_name_is_valid(const char *name) {
+    if (!name || !*name) return 0;
+    /* Must be a C identifier. */
+    if (!isalpha((unsigned char)name[0]) && name[0] != '_') return 0;
+    int len = 0;
+    for (const char *p = name; *p; p++, len++) {
+        if (!isalnum((unsigned char)*p) && *p != '_') return 0;
+    }
+    if (len >= REPL_FUNC_NAME_MAX) return 0;
+    /* Reject the bare slot names — those are the underlying form. */
+    if (len == 5 && strncmp(name, "func", 4) == 0 &&
+        name[4] >= '0' && name[4] <= '9')
+        return 0;
+    /* Reject the language-reserved set (predef vars `t`, constants
+     * PI/TAU, math funcs sin/cos/..., scratch A/B/C, type keywords). */
+    if (repl_eval_is_reserved_ident(name)) return 0;
+    /* Reject control-flow keywords. These have their own commit
+     * handlers (try_commit_for_loop, try_commit_if_block) and would
+     * otherwise hijack their syntax if a user typed `if(...)` after
+     * accidentally declaring an alias by the same name. */
+    static const char *const control_flow_kw[] = {
+        "if", "for", "goto", NULL
+    };
+    for (const char *const *kw = control_flow_kw; *kw; kw++)
+        if (strcmp(name, *kw) == 0) return 0;
+    /* Reject if a predef var with this name is registered (would
+     * shadow an existing scalar). Inverse check (predef declare
+     * after alias) is enforced by declare_predef_var via the
+     * reserved-ident check + this collision-free guarantee. */
+    if (repl_eval_find_predef_var_idx(name) >= 0) return 0;
+    return 1;
+}
+
+int repl_func_alias_first_free_slot(void) {
+    for (int slot = 0; slot < REPL_FUNC_SLOT_COUNT; slot++) {
+        if (!g_active_func_aliases[slot][0])
+            return slot;
+    }
+    return -1;
+}
+
+int repl_func_alias_set(int slot, const char *name) {
+    if (slot < 0 || slot >= REPL_FUNC_SLOT_COUNT) return 0;
+    if (!name || !*name) {
+        g_active_func_aliases[slot][0] = '\0';
+        return 1;
+    }
+    if (!repl_func_alias_name_is_valid(name)) return 0;
+    int existing = repl_func_alias_lookup_slot(name);
+    if (existing >= 0 && existing != slot) return 0;
+    snprintf(g_active_func_aliases[slot], REPL_FUNC_NAME_MAX, "%s", name);
+    return 1;
+}
+
+void repl_func_alias_clear(int slot) {
+    if (slot < 0 || slot >= REPL_FUNC_SLOT_COUNT) return;
+    g_active_func_aliases[slot][0] = '\0';
 }
 
 void repl_eval_reset_scratch_arrays(void) {
@@ -553,6 +640,11 @@ int repl_eval_declare_predef_var(const char *name, char *err, int errsz) {
     }
     if (repl_eval_find_predef_var_idx(name) >= 0) {
         if (err) snprintf(err, errsz, "'%s' already declared", name);
+        return 0;
+    }
+    if (repl_func_alias_lookup_slot(name) >= 0) {
+        if (err) snprintf(err, errsz,
+                          "'%s' is in use as a function name", name);
         return 0;
     }
     if (g_num_predef_vars >= MAX_PREDEF_VARS) {

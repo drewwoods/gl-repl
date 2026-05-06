@@ -44,6 +44,14 @@ void repl_undo_snapshot_save(ReplUndoSnapshot *snapshot) {
         memcpy(snapshot->predef_names[i], g_predef_vars[i].name, 16);
     }
     repl_eval_copy_scratch_arrays(snapshot->scratch_arrays);
+    for (int slot = 0; slot < REPL_FUNC_SLOT_COUNT; slot++) {
+        const char *alias = repl_func_alias_get(slot);
+        if (alias)
+            snprintf(snapshot->func_aliases[slot], REPL_FUNC_NAME_MAX,
+                     "%s", alias);
+        else
+            snapshot->func_aliases[slot][0] = '\0';
+    }
 }
 
 void repl_undo_snapshot_restore(const ReplUndoSnapshot *snapshot) {
@@ -60,6 +68,11 @@ void repl_undo_snapshot_restore(const ReplUndoSnapshot *snapshot) {
         memcpy(g_predef_vars[i].name, snapshot->predef_names[i], 16);
     }
     repl_eval_restore_scratch_arrays(snapshot->scratch_arrays);
+    repl_func_alias_clear_all();
+    for (int slot = 0; slot < REPL_FUNC_SLOT_COUNT; slot++) {
+        if (snapshot->func_aliases[slot][0])
+            repl_func_alias_set(slot, snapshot->func_aliases[slot]);
+    }
     editor_insert_mode_set(0);
     load_line_to_input(repl_state_edit_line());
     mark_normals_dirty();

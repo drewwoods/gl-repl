@@ -269,6 +269,54 @@ int main(void) {
     ASSERT_TRUE("scratch roundtrip keeps vertex source",
                 strstr(editor_buffer_line(3), "glVertex3f(A[0], 0, 0);") != NULL);
 
+    /* Func alias roundtrip: a user-named func decl exports an
+     * `// @func 0 = drawCube` workspace directive and reloads with
+     * the same alias mapping, so subsequent `drawCube()` calls in
+     * the source resolve to the same slot. */
+    {
+        const char *alias_path = "/tmp/repl_core_func_alias_roundtrip.c";
+        repl_reset_state(); declare_test_vars();
+        repl_feed_line_public("drawCube {");
+        repl_feed_line_public("  glVertex3f(0, 0, 0);");
+        repl_feed_line_public("}");
+        repl_feed_line_public("drawCube();");
+        ASSERT_TRUE("alias decl assigned slot 0",
+                    repl_func_alias_lookup_slot("drawCube") == 0);
+        const char *post_decl = repl_func_alias_get(0);
+        ASSERT_TRUE("alias readable post-decl",
+                    post_decl && strcmp(post_decl, "drawCube") == 0);
+        repl_export_save_output(alias_path, editor_buffer_view());
+        {
+            char buf[16384];
+            read_text_file(alias_path, buf, sizeof(buf));
+            ASSERT_TRUE("alias workspace directive emitted",
+                        strstr(buf, "// @func 0 = drawCube") != NULL);
+            ASSERT_TRUE("alias canonical text preserved in display",
+                        strstr(buf, "drawCube") != NULL);
+        }
+        repl_reset_state(); declare_test_vars();
+        ASSERT_TRUE("alias cleared after reset",
+                    repl_func_alias_lookup_slot("drawCube") == -1);
+        ASSERT_TRUE("load alias output",
+                    repl_export_load_from_file(alias_path) == 1);
+        ASSERT_TRUE("alias restored on import",
+                    repl_func_alias_lookup_slot("drawCube") == 0);
+        const char *post_import = repl_func_alias_get(0);
+        ASSERT_TRUE("alias name matches on reload",
+                    post_import && strcmp(post_import, "drawCube") == 0);
+        remove(alias_path);
+    }
+
+    /* `if(...)` does not get hijacked into an alias even when it
+     * shares the func-decl shape `IDENT(...) {`. The control-flow
+     * keyword must fall through to try_commit_if_block. */
+    {
+        repl_reset_state(); declare_test_vars();
+        repl_feed_line_public("if(1) {");
+        ASSERT_TRUE("'if' did not register as alias",
+                    repl_func_alias_lookup_slot("if") == -1);
+    }
+
     /* Camera state round-trip: non-default eye/center must survive save+load. */
     repl_reset_state(); declare_test_vars();
     repl_feed_line_public("glBegin(GL_POINTS);");

@@ -550,10 +550,25 @@ static int parse_command(const char *line, GLCmd *cmd,
         return 1;
     }
 
-    /* funcN([expr, ...]) - function call */
+    /* funcN([expr, ...]) or aliased call - function call.
+     *
+     * Recognises both the bare slot form `funcN` (N=0..9) and any user
+     * alias registered through repl_func_alias_set. The slot index is
+     * the load-bearing identity stored on the resulting CMD_CALL; the
+     * alias is purely a parser/display layer. */
+    int fn = -1;
+    int matched_alias = 0;
     if (strncmp(func, "func", 4) == 0 && func[4] >= '0' && func[4] <= '9' &&
-        func[5] == '\0' && open_p && close_p) {
-        int fn = func[4] - '0';
+        func[5] == '\0') {
+        fn = func[4] - '0';
+    } else {
+        int alias_slot = repl_func_alias_lookup_slot(func);
+        if (alias_slot >= 0) {
+            fn = alias_slot;
+            matched_alias = 1;
+        }
+    }
+    if (fn >= 0 && open_p && close_p) {
         float dummy_vals[MAX_EXPR_VARS];
         int arg_count = 0;
         if (args[0] != '\0') {
@@ -583,8 +598,13 @@ static int parse_command(const char *line, GLCmd *cmd,
             }
             if (!def_exists) {
                 char buf[96];
-                snprintf(buf, sizeof(buf),
-                         "undefined function 'func%d' - define it first", fn);
+                const char *alias = repl_func_alias_get(fn);
+                if (alias)
+                    snprintf(buf, sizeof(buf),
+                             "undefined function '%s' - define it first", alias);
+                else
+                    snprintf(buf, sizeof(buf),
+                             "undefined function 'func%d' - define it first", fn);
                 parser_emit_error_static(ctx, buf);
                 return 0;
             }
@@ -608,15 +628,22 @@ static int parse_command(const char *line, GLCmd *cmd,
         strncpy(raw_args, args, sizeof(raw_args) - 1);
         raw_args[sizeof(raw_args) - 1] = '\0';
         trim_in_place(raw_args);
+        const char *alias = repl_func_alias_get(fn);
+        char fn_token[REPL_FUNC_NAME_MAX + 8];
+        if (alias)
+            snprintf(fn_token, sizeof(fn_token), "%s", alias);
+        else
+            snprintf(fn_token, sizeof(fn_token), "func%d", fn);
+        (void)matched_alias;
         if (text_out && text_sz > 0) {
             if (arg_count > 0) {
                 if (!repl_format_fits(text_out, (size_t)text_sz,
-                                      "%sfunc%d(%s);", ind_str, fn, raw_args)) {
+                                      "%s%s(%s);", ind_str, fn_token, raw_args)) {
                     parser_emit_error_static(ctx, "Command too long");
                     return 0;
                 }
             } else if (!repl_format_fits(text_out, (size_t)text_sz,
-                                         "%sfunc%d();", ind_str, fn)) {
+                                         "%s%s();", ind_str, fn_token)) {
                 parser_emit_error_static(ctx, "Command too long");
                 return 0;
             }

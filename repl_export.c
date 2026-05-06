@@ -203,6 +203,52 @@ static void emit_vars(int *n) {
     }
 }
 
+/* --- func aliases ----------------------------------------------------------
+ * Round-trip the func-alias table through the workspace header so a saved
+ * `drawCube` definition reloads into the same slot. Format:
+ *   `// @func 0 = drawCube`
+ * Slots without an alias don't emit a line. */
+
+static int parse_func_alias(const char *args) {
+    const char *p = args;
+    while (*p && isspace((unsigned char)*p)) p++;
+    if (!isdigit((unsigned char)*p)) return 0;
+    int slot = 0;
+    while (isdigit((unsigned char)*p)) {
+        slot = slot * 10 + (*p - '0');
+        p++;
+    }
+    if (slot < 0 || slot >= REPL_FUNC_SLOT_COUNT) return 0;
+    while (*p && isspace((unsigned char)*p)) p++;
+    if (*p != '=') return 0;
+    p++;
+    while (*p && isspace((unsigned char)*p)) p++;
+    if (!isalpha((unsigned char)*p) && *p != '_') return 0;
+    char name[REPL_FUNC_NAME_MAX];
+    int len = 0;
+    while (*p && (isalnum((unsigned char)*p) || *p == '_') &&
+           len < REPL_FUNC_NAME_MAX - 1) {
+        name[len++] = *p++;
+    }
+    name[len] = '\0';
+    if (len == 0) return 0;
+    repl_func_alias_set(slot, name);
+    return 1;
+}
+
+static void emit_func_aliases(int *n) {
+    for (int slot = 0;
+         slot < REPL_FUNC_SLOT_COUNT && *n < MAX_WORKSPACE_HEADER_LINES;
+         slot++) {
+        const char *alias = repl_func_alias_get(slot);
+        if (!alias) continue;
+        if (repl_format_fits(g_workspace_header_lines[*n],
+                             WORKSPACE_HEADER_LINE_LEN,
+                             "// @func %d = %s", slot, alias))
+            (*n)++;
+    }
+}
+
 /* --- cfg ------------------------------------------------------------------- */
 
 static int parse_cfg(const char *args) {
@@ -264,6 +310,7 @@ static const WorkspaceDirective WORKSPACE_DIRECTIVES[] = {
     WS_DIR("scene-name",    parse_scene_name,    emit_scene_name),
     WS_DIR("workspace-dir", parse_workspace_dir, emit_workspace_dir),
     WS_DIR("var",           parse_var,           emit_vars),
+    WS_DIR("func",          parse_func_alias,    emit_func_aliases),
     WS_DIR("cfg",           parse_cfg,           emit_cfgs),
 };
 #define WORKSPACE_DIRECTIVE_COUNT \
@@ -1006,16 +1053,51 @@ int parse_expr_list_exact(const char *src, float *out_vals, int max_vals,
     return 1;
 }
 
+/* Parse a leading function name token into its slot index. Returns 1
+ * and writes *fn on success; returns 0 on no match.
+ *
+ * Accepts the bare slot form `funcN` (N=0..9) plus any alias name
+ * registered through repl_func_alias_set. Advances *p_inout past the
+ * matched identifier on success. */
+static int parse_func_name_token(const char **p_inout, int *fn) {
+    const char *p = *p_inout;
+    while (*p && isspace((unsigned char)*p)) p++;
+    /* Bare funcN form. */
+    if (strncmp(p, "func", 4) == 0 &&
+        p[4] >= '0' && p[4] <= '9' &&
+        !isalnum((unsigned char)p[5]) && p[5] != '_') {
+        if (fn) *fn = p[4] - '0';
+        p += 5;
+        *p_inout = p;
+        return 1;
+    }
+    /* Alias form: pull a C identifier and look it up. */
+    if (!isalpha((unsigned char)*p) && *p != '_') return 0;
+    char ident[REPL_FUNC_NAME_MAX];
+    int len = 0;
+    const char *id_start = p;
+    while (*p && (isalnum((unsigned char)*p) || *p == '_') &&
+           len < REPL_FUNC_NAME_MAX - 1) {
+        ident[len++] = *p++;
+    }
+    /* If the identifier overflowed the alias-name buffer, the rest
+     * couldn't possibly be a registered alias. */
+    if (*p && (isalnum((unsigned char)*p) || *p == '_')) return 0;
+    ident[len] = '\0';
+    if (len == 0) return 0;
+    int slot = repl_func_alias_lookup_slot(ident);
+    if (slot < 0) return 0;
+    if (fn) *fn = slot;
+    *p_inout = p;
+    (void)id_start;
+    return 1;
+}
+
 int parse_repl_func_signature(const char *src, int *fn,
                               char param_names[][16], int max_params,
                               int *param_count) {
     const char *p = src;
-    while (*p && isspace((unsigned char)*p)) p++;
-    if (strncmp(p, "func", 4) != 0) return 0;
-    p += 4;
-    if (*p < '0' || *p > '9') return 0;
-    if (fn) *fn = *p - '0';
-    p++;
+    if (!parse_func_name_token(&p, fn)) return 0;
 
     while (*p && isspace((unsigned char)*p)) p++;
     if (*p == '{' || *p == '\0') {
@@ -1058,12 +1140,7 @@ int parse_repl_func_signature(const char *src, int *fn,
 int extract_func_call_args_text(const char *src, int *fn,
                                 char *args, int args_sz) {
     const char *p = src;
-    while (*p && isspace((unsigned char)*p)) p++;
-    if (strncmp(p, "func", 4) != 0) return 0;
-    p += 4;
-    if (*p < '0' || *p > '9') return 0;
-    if (fn) *fn = *p - '0';
-    p++;
+    if (!parse_func_name_token(&p, fn)) return 0;
 
     while (*p && isspace((unsigned char)*p)) p++;
     if (*p != '(') return 0;
@@ -1091,7 +1168,13 @@ int extract_func_call_args_text(const char *src, int *fn,
 
 void format_func_header(char *out, int out_sz, const char *indent,
                         int fn, char param_names[][16], int param_count) {
-    int written = snprintf(out, out_sz, "%sfunc%d", indent, fn);
+    /* Prefer the user's alias (from the func-alias table) over the bare
+     * funcN form so the canonical source text reflects what the user
+     * typed. Falls back to funcN when no alias is registered. */
+    const char *alias = repl_func_alias_get(fn);
+    int written = alias
+        ? snprintf(out, out_sz, "%s%s", indent, alias)
+        : snprintf(out, out_sz, "%sfunc%d", indent, fn);
     if (written < 0 || written >= out_sz) {
         if (out_sz > 0) out[out_sz - 1] = '\0';
         return;

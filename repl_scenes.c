@@ -60,6 +60,7 @@ typedef struct {
     float    scratch_arrays[REPL_SCRATCH_ARRAY_COUNT][REPL_SCRATCH_ARRAY_LEN];
     char     predef_names[MAX_PREDEF_VARS][16];
     int      num_predef_vars;
+    char     func_aliases[REPL_FUNC_SLOT_COUNT][REPL_FUNC_NAME_MAX];
     int      scene_cfg[N_SCENE_CFG_KEYS];
 } UserScene;
 
@@ -158,6 +159,13 @@ static void save_scene_to_slot(int idx, const char *name) {
         memcpy(s->predef_names[i], g_predef_vars[i].name, 16);
     }
     repl_eval_copy_scratch_arrays(s->scratch_arrays);
+    for (int slot = 0; slot < REPL_FUNC_SLOT_COUNT; slot++) {
+        const char *alias = repl_func_alias_get(slot);
+        if (alias)
+            snprintf(s->func_aliases[slot], REPL_FUNC_NAME_MAX, "%s", alias);
+        else
+            s->func_aliases[slot][0] = '\0';
+    }
     for (int i = 0; i < N_SCENE_CFG_KEYS; i++)
         s->scene_cfg[i] = repl_config_get(k_scene_cfg_keys[i]);
     if (name && *name)
@@ -205,6 +213,13 @@ static void load_scene_from_slot(int idx) {
         memcpy(g_predef_vars[i].name, s->predef_names[i], 16);
     }
     repl_eval_restore_scratch_arrays(s->scratch_arrays);
+    /* Restore the per-scene func-alias table. Each scene owns its own
+     * mapping so renaming `drawCube` in scene A doesn't reach into B. */
+    repl_func_alias_clear_all();
+    for (int slot = 0; slot < REPL_FUNC_SLOT_COUNT; slot++) {
+        if (s->func_aliases[slot][0])
+            repl_func_alias_set(slot, s->func_aliases[slot]);
+    }
     /* Roll back any example sandbox before stamping in the user
      * scene's saved cfg. Observably overwritten by the loop below
      * today (scene_cfg covers all keys); becomes load-bearing if a
