@@ -222,7 +222,6 @@ static void run_tests(void) {
     ASSERT_FLOAT("rand(7,11)", 0.564453f);
     ASSERT_FLOAT("rand(7,11)", 0.564453f); /* deterministic */
     ASSERT_FLOAT("rand(3)", 0.589844f);    /* implicit iter=0 */
-    ASSERT_FLOAT("lerp(0,10,0.25)", 2.5f);
     ASSERT_FLOAT("sin(PI/2)", 1.0f);
     ASSERT_FLOAT("cos(TAU)", 1.0f);
     ASSERT_FLOAT("10/0", 0.0f);  /* div by zero returns 0 */
@@ -405,6 +404,8 @@ static void run_tests(void) {
     ASSERT_TO_C("10 % 3", "fmodf(10, 3)");
     ASSERT_TO_C("(x+y) % (z*2)", "fmodf((x+y), (z*2))");
     ASSERT_TO_C("sin(x) % 1", "fmodf(sinf(x), 1)");
+    ASSERT_TO_C("A[i+1]", "A[(int)(i+1)]");
+    ASSERT_TO_C("A[B[0]+1]", "A[(int)(B[(int)(0)]+1)]");
 
     printf("c_expr_to_repl:\n");
     ASSERT_TO_REPL("sinf(x)", "sin(x)");
@@ -416,6 +417,8 @@ static void run_tests(void) {
     ASSERT_TO_REPL("powf(x,2)", "pow(x,2)");
     ASSERT_TO_REPL("powf(1.0f,2.0f)", "pow(1.0f,2.0f)");
     ASSERT_TO_REPL("repl_randf(i,3)", "rand(i,3)");
+    ASSERT_TO_REPL("A[(int)(i+1)]", "A[i+1]");
+    ASSERT_TO_REPL("A[(int)(B[(int)(0)] + 1)]", "A[B[0] + 1]");
     ASSERT_FLOAT("pow(1.0f,2.0f)", 1.0f);
     {
         char tiny[5];
@@ -595,7 +598,12 @@ static void run_tests(void) {
         ASSERT_TRUE("reserved name C should fail", !ok);
 
         ok = repl_eval_declare_predef_var("lerp", err, sizeof(err));
-        ASSERT_TRUE("reserved name lerp should fail", !ok);
+        ASSERT_TRUE("name lerp now allowed", ok);
+        ASSERT_TRUE("name lerp registered",
+                repl_eval_find_predef_var_idx("lerp") >= 0);
+        repl_eval_undeclare_predef_var("lerp");
+        ASSERT_TRUE("name lerp removed",
+                repl_eval_find_predef_var_idx("lerp") < 0);
 
         ok = repl_eval_declare_predef_var("t", err, sizeof(err));
         ASSERT_TRUE("reserved name t should fail (already declared)", !ok);

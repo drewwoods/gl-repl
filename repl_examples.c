@@ -1010,8 +1010,8 @@ static const char *const g_example_xform_stress[] = {
 };
 
 /* Scratch-array demo - cubic Bezier evaluation via de Casteljau updates.
- * A/B/C hold the x/y/z control-point lanes and are overwritten in place with
- * lerp() at each level until A[0], B[0], C[0] become the evaluated point. */
+ * A/B/C hold the x/y/z control-point lanes while func0 implements one
+ * in-place interpolation step using ordinary expression math. */
 static const char *const g_example_scratch_casteljau[] = {
     "// camera",
     "glTranslatef(0.0f, 0.0f, -10.0f);",
@@ -1023,7 +1023,13 @@ static const char *const g_example_scratch_casteljau[] = {
     "glDisable(GL_LIGHTING);",
     "glLineWidth(3);",
     "float u;",
-    "// Seed A/B/C with control points, then overwrite them with lerp().",
+    "// func0(dst, lo, hi, blend): collapse one Bezier edge in place.",
+    "func0(dst, lo, hi, blend) {",
+        "A[dst] = A[lo] + (A[hi] - A[lo])*blend;",
+        "B[dst] = B[lo] + (B[hi] - B[lo])*blend;",
+        "C[dst] = C[lo] + (C[hi] - C[lo])*blend;",
+    "}",
+    "// Seed A/B/C with control points, then overwrite them with func0().",
     "glColor3f(1.0, 0.55, 0.2);",
     "glBegin(GL_LINE_STRIP);",
     "for(i, 0, 48) {",
@@ -1040,24 +1046,12 @@ static const char *const g_example_scratch_casteljau[] = {
         "B[3] = 1.6;",
         "C[3] = 1.0 + 0.25*sin(t*0.5);",
         "u = i/48.0;",
-        "A[0] = lerp(A[0], A[1], u);",
-        "B[0] = lerp(B[0], B[1], u);",
-        "C[0] = lerp(C[0], C[1], u);",
-        "A[1] = lerp(A[1], A[2], u);",
-        "B[1] = lerp(B[1], B[2], u);",
-        "C[1] = lerp(C[1], C[2], u);",
-        "A[2] = lerp(A[2], A[3], u);",
-        "B[2] = lerp(B[2], B[3], u);",
-        "C[2] = lerp(C[2], C[3], u);",
-        "A[0] = lerp(A[0], A[1], u);",
-        "B[0] = lerp(B[0], B[1], u);",
-        "C[0] = lerp(C[0], C[1], u);",
-        "A[1] = lerp(A[1], A[2], u);",
-        "B[1] = lerp(B[1], B[2], u);",
-        "C[1] = lerp(C[1], C[2], u);",
-        "A[0] = lerp(A[0], A[1], u);",
-        "B[0] = lerp(B[0], B[1], u);",
-        "C[0] = lerp(C[0], C[1], u);",
+        "func0(0, 0, 1, u);",
+        "func0(1, 1, 2, u);",
+        "func0(2, 2, 3, u);",
+        "func0(0, 0, 1, u);",
+        "func0(1, 1, 2, u);",
+        "func0(0, 0, 1, u);",
         "glVertex3f(A[0], B[0], C[0]);",
     "}",
     "glEnd();",

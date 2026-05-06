@@ -177,7 +177,6 @@ static const ReplFuncCompletion k_func_completions[] = {
     { "sqrt(",               "sqrt(x)",                                                  1, { "x" } },
     { "abs(",                "abs(x)",                                                   1, { "x" } },
     { "pow(",                "pow(base, exp)",                                           2, { "base", "exp" } },
-    { "lerp(",               "lerp(a, b, t)",                                            3, { "a", "b", "t" } },
     { "min(",                "min(a, b)",                                                2, { "a", "b" } },
     { "max(",                "max(a, b)",                                                2, { "a", "b" } },
     { "floor(",              "floor(x)",                                                 1, { "x" } },

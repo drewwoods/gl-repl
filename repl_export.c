@@ -2384,7 +2384,6 @@ static void import_feed_one_line(const char *line, int *loaded, int *warnings) {
 typedef struct {
     int needs_tess;
     int needs_rand;
-    int needs_lerp;
 } ExportNeeds;
 
 typedef struct {
@@ -2403,7 +2402,6 @@ static ExportNeeds export_collect_needs(void) {
     ExportNeeds needs = {
         .needs_tess = export_uses_tess_commands(),
         .needs_rand = 0,
-        .needs_lerp = 0,
     };
 
     /* Check each command for rand() function calls. */
@@ -2411,9 +2409,6 @@ static ExportNeeds export_collect_needs(void) {
         if (repl_state_document_cmds_mut()[cmd_idx].valid &&
             strstr(export_document_text(cmd_idx), "rand(") != NULL)
             needs.needs_rand = 1;
-        if (repl_state_document_cmds_mut()[cmd_idx].valid &&
-            strstr(export_document_text(cmd_idx), "lerp(") != NULL)
-            needs.needs_lerp = 1;
     }
 
     return needs;
@@ -2571,23 +2566,6 @@ static void emit_export_rand_helper_section(FILE *f,
     write_rand_helper(f);
 }
 
-static void write_lerp_helper(FILE *f) {
-    fprintf(f,
-        "\nstatic float repl_lerp(float a, float b, float t) {\n"
-        "  return a + (b - a) * t;\n"
-        "}\n");
-}
-
-static int export_section_needs_lerp(const ExportScaffoldContext *ctx) {
-    return ctx && ctx->needs.needs_lerp;
-}
-
-static void emit_export_lerp_helper_section(FILE *f,
-                                            const ExportScaffoldContext *ctx) {
-    (void)ctx;
-    write_lerp_helper(f);
-}
-
 static void emit_export_tess_preamble_section(FILE *f,
                                               const ExportScaffoldContext *ctx) {
     (void)ctx;
@@ -2624,7 +2602,6 @@ static const ExportScaffoldSectionSpec EXPORT_SCAFFOLD_SECTIONS[] = {
     { "predef globals",     emit_export_predef_globals_section,     export_section_always },
     { "scratch globals",    emit_export_scratch_globals_section,    export_section_always },
     { "rand helper",        emit_export_rand_helper_section,        export_section_needs_rand },
-    { "lerp helper",        emit_export_lerp_helper_section,        export_section_needs_lerp },
     { "tess preamble",      emit_export_tess_preamble_section,      export_section_needs_tess },
     { "reset vars",         emit_export_reset_vars_section,         export_section_always },
     { "functions",          emit_export_functions_section,          export_section_always },
