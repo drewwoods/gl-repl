@@ -773,6 +773,24 @@ static int parse_command(const char *line, GLCmd *cmd,
     }
 
 unknown_command:
+    /* Recognise "I typed a math expression as a top-level command"
+     * before the generic "unknown cmd" — otherwise `rand();` or
+     * `sin(t);` get the same diagnostic as a misspelled GL call,
+     * which is actively misleading. */
+    if (func[0] && repl_eval_is_reserved_ident(func)) {
+        if (open_p) {
+            parser_emit_error(ctx,
+                "'%s(...)' is an expression, not a command — assign it "
+                "(e.g. 'x = %s(...);') or use it inside another expression",
+                func, func);
+        } else {
+            parser_emit_error(ctx,
+                "'%s' is a reserved name (constant or scratch array), "
+                "not a command — use it inside an expression",
+                func);
+        }
+        return 0;
+    }
     parser_emit_error_static(ctx, "Unknown cmd. Try glVertex3f, glBegin, glEnable, glShadeModel, ...");
     return 0;
 
