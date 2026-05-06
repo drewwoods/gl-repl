@@ -171,7 +171,7 @@ int main() {
         }
     }
 
-    /* 8. Scratch-array and lerp completions */
+    /* 8. Scratch-array completions */
     {
         repl_reset_state(); declare_test_vars();
         set_input_text("A");
@@ -182,12 +182,6 @@ int main() {
 
         accept_autocomplete();
         ASSERT_STR("scratch array input after accept", editor_state_input().input, "A[");
-
-        set_input_text("ler");
-        editor_completion_update();
-        ASSERT_TRUE("lerp completion present", has_insert_match("lerp("));
-        ASSERT_STR("lerp ghost", g_ac_ghost, "p(");
-        ASSERT_STR("lerp hint", g_ac_hint, "a, b, t)");
     }
 
     printf("\n");

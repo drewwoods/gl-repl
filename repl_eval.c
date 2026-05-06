@@ -135,7 +135,7 @@ int repl_eval_find_predef_var_idx(const char *name) {
 static const char *s_reserved_idents[] = {
     "t", "PI", "TAU", "float", "var",
     "sin", "cos", "tan", "sqrt", "abs", "pow",
-    "min", "max", "floor", "ceil", "fmod", "rand", "lerp",
+    "min", "max", "floor", "ceil", "fmod", "rand",
     "A", "B", "C",
     NULL
 };
@@ -173,6 +173,158 @@ static const char *find_matching_square(const char *open, const char *limit) {
         }
     }
     return NULL;
+}
+
+static void expr_rewrite_scratch_subscripts_to_c(const char *src,
+                                                 char *dst,
+                                                 int dst_sz) {
+    const char *p = src;
+    char *out = dst;
+    char *end = dst + dst_sz - 1;
+
+    if (!src || !dst || dst_sz <= 0)
+        return;
+
+    while (*p && out < end) {
+        if (isalpha((unsigned char)*p) || *p == '_') {
+            const char *id_start = p;
+
+            while (*p && (isalnum((unsigned char)*p) || *p == '_'))
+                p++;
+
+            int id_len = (int)(p - id_start);
+            int is_scratch_name = id_len == 1 &&
+                repl_eval_scratch_array_index(*id_start == 'A' ? "A" :
+                                              (*id_start == 'B' ? "B" :
+                                               (*id_start == 'C' ? "C" : ""))) >= 0;
+
+            if (is_scratch_name && *p == '[') {
+                const char *close = find_matching_square(p, NULL);
+                if (close) {
+                    int inner_len = (int)(close - (p + 1));
+                    char inner[MAX_LINE_LEN];
+                    char inner_c[MAX_LINE_LEN];
+                    size_t avail;
+                    int wrote;
+
+                    if (inner_len >= (int)sizeof(inner))
+                        inner_len = (int)sizeof(inner) - 1;
+                    memcpy(inner, p + 1, (size_t)inner_len);
+                    inner[inner_len] = '\0';
+
+                    expr_rewrite_scratch_subscripts_to_c(inner, inner_c, sizeof(inner_c));
+
+                    if (out + id_len >= end)
+                        break;
+                    memcpy(out, id_start, (size_t)id_len);
+                    out += id_len;
+
+                    avail = (size_t)(end - out + 1);
+                    wrote = snprintf(out, avail, "[(int)(%s)]", inner_c);
+                    if (wrote < 0)
+                        break;
+                    if ((size_t)wrote >= avail) {
+                        out = end;
+                        break;
+                    }
+                    out += wrote;
+                    p = close + 1;
+                    continue;
+                }
+            }
+
+            if (out + id_len >= end)
+                break;
+            memcpy(out, id_start, (size_t)id_len);
+            out += id_len;
+            continue;
+        }
+
+        *out++ = *p++;
+    }
+
+    *out = '\0';
+}
+
+static void expr_rewrite_scratch_subscripts_to_repl(const char *src,
+                                                    char *dst,
+                                                    int dst_sz) {
+    const char *p = src;
+    char *out = dst;
+    char *end = dst + dst_sz - 1;
+
+    if (!src || !dst || dst_sz <= 0)
+        return;
+
+    while (*p && out < end) {
+        if (isalpha((unsigned char)*p) || *p == '_') {
+            const char *id_start = p;
+
+            while (*p && (isalnum((unsigned char)*p) || *p == '_'))
+                p++;
+
+            int id_len = (int)(p - id_start);
+            int is_scratch_name = id_len == 1 &&
+                repl_eval_scratch_array_index(*id_start == 'A' ? "A" :
+                                              (*id_start == 'B' ? "B" :
+                                               (*id_start == 'C' ? "C" : ""))) >= 0;
+
+            if (is_scratch_name && *p == '[') {
+                const char *close = find_matching_square(p, NULL);
+                if (close) {
+                    int inner_len = (int)(close - (p + 1));
+                    const char *inner_src = p + 1;
+                    char inner[MAX_LINE_LEN];
+                    char inner_repl[MAX_LINE_LEN];
+                    size_t avail;
+                    int wrote;
+
+                    if (inner_len >= 7 &&
+                        strncmp(inner_src, "(int)(", 6) == 0 &&
+                        inner_src[inner_len - 1] == ')') {
+                        inner_src += 6;
+                        inner_len -= 7;
+                    }
+
+                    if (inner_len < 0)
+                        inner_len = 0;
+                    if (inner_len >= (int)sizeof(inner))
+                        inner_len = (int)sizeof(inner) - 1;
+                    memcpy(inner, inner_src, (size_t)inner_len);
+                    inner[inner_len] = '\0';
+
+                    expr_rewrite_scratch_subscripts_to_repl(inner, inner_repl, sizeof(inner_repl));
+
+                    if (out + id_len >= end)
+                        break;
+                    memcpy(out, id_start, (size_t)id_len);
+                    out += id_len;
+
+                    avail = (size_t)(end - out + 1);
+                    wrote = snprintf(out, avail, "[%s]", inner_repl);
+                    if (wrote < 0)
+                        break;
+                    if ((size_t)wrote >= avail) {
+                        out = end;
+                        break;
+                    }
+                    out += wrote;
+                    p = close + 1;
+                    continue;
+                }
+            }
+
+            if (out + id_len >= end)
+                break;
+            memcpy(out, id_start, (size_t)id_len);
+            out += id_len;
+            continue;
+        }
+
+        *out++ = *p++;
+    }
+
+    *out = '\0';
 }
 
 static int expr_range_has_runtime_values(const char *src, const char *end,
@@ -599,8 +751,6 @@ static float eval_primary(ExprCtx *ctx) {
             if (strcmp(name, "rand") == 0)
                 return arg_count >= 2 ? expr_rand01(args[0], args[1])
                                       : (arg_count == 1 ? expr_rand01(args[0], 0.0f) : 0.0f);
-            if (strcmp(name, "lerp") == 0 && arg_count == 3)
-                return args[0] + (args[1] - args[0]) * args[2];
         }
 
         return 0.0f;   /* unknown identifier */
@@ -712,7 +862,6 @@ void repl_eval_expr_to_c(const char *in, char *out, int out_sz) {
         { "ceil",  "ceilf",  1 },
         { "fmod",  "fmodf",  1 },
         { "rand",  "repl_randf", 1 },
-        { "lerp",  "repl_lerp", 1 },
         { "TAU",   "(2*M_PI)", 0 },
         { "PI",    "M_PI",     0 },
     };
@@ -834,6 +983,12 @@ void repl_eval_expr_to_c(const char *in, char *out, int out_sz) {
         }
         *o = '\0';
     }
+
+    {
+        char scratch_buf[MAX_LINE_LEN];
+        expr_rewrite_scratch_subscripts_to_c(out, scratch_buf, sizeof(scratch_buf));
+        snprintf(out, (size_t)out_sz, "%s", scratch_buf);
+    }
 }
 
 void repl_eval_c_expr_to_repl(const char *in, char *out, int out_sz) {
@@ -875,7 +1030,6 @@ void repl_eval_c_expr_to_repl(const char *in, char *out, int out_sz) {
         { "ceilf",  "ceil"  },
         { "fmodf",  "fmod"  },
         { "repl_randf", "rand" },
-        { "repl_lerp", "lerp" },
         { "M_PI",   "PI"    },
     };
     int nmap = (int)(sizeof(map) / sizeof(map[0]));
@@ -912,6 +1066,12 @@ void repl_eval_c_expr_to_repl(const char *in, char *out, int out_sz) {
         }
     }
     *dst = '\0';
+
+    {
+        char scratch_buf[MAX_LINE_LEN];
+        expr_rewrite_scratch_subscripts_to_repl(out, scratch_buf, sizeof(scratch_buf));
+        snprintf(out, (size_t)out_sz, "%s", scratch_buf);
+    }
 }
 
 /* ========================================================================= */

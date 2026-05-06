@@ -240,7 +240,7 @@ int main(void) {
     repl_reset_state(); declare_test_vars();
     repl_feed_line_public("A[0] = 0;");
     repl_feed_line_public("A[1] = 1;");
-    repl_feed_line_public("A[0] = lerp(A[0], A[1], 0.25);");
+    repl_feed_line_public("A[0] = A[0] + (A[1] - A[0])*0.25;");
     repl_feed_line_public("glVertex3f(A[0], 0, 0);");
     repl_export_save_output(scratch_path, editor_buffer_view());
     {
@@ -252,10 +252,11 @@ int main(void) {
                     strstr(buf, "static float B[8] = {0};") != NULL);
         ASSERT_TRUE("scratch global C exported",
                     strstr(buf, "static float C[8] = {0};") != NULL);
-        ASSERT_TRUE("lerp helper exported",
-                    strstr(buf, "static float repl_lerp(float a, float b, float t)") != NULL);
-        ASSERT_TRUE("scratch lerp assignment exported",
-                    strstr(buf, "A[0] = repl_lerp(A[0], A[1], 0.25);") != NULL);
+        ASSERT_TRUE("lerp helper omitted",
+                strstr(buf, "repl_lerp") == NULL);
+        ASSERT_TRUE("scratch blend assignment exported",
+            strstr(buf,
+                   "A[(int)(0)] = A[(int)(0)] + (A[(int)(1)] - A[(int)(0)])*0.25;") != NULL);
     }
 
     repl_reset_state(); declare_test_vars();
@@ -263,8 +264,8 @@ int main(void) {
     ASSERT_TRUE("scratch roundtrip command count", repl_state_document_count() == 4);
     ASSERT_TRUE("scratch roundtrip keeps assign type",
                 repl_state_document_cmds_mut()[2].type == CMD_SCRATCH_ASSIGN);
-    ASSERT_TRUE("scratch roundtrip keeps lerp source",
-                strstr(editor_buffer_line(2), "A[0] = lerp(A[0], A[1], 0.25);") != NULL);
+    ASSERT_TRUE("scratch roundtrip keeps blend source",
+                strstr(editor_buffer_line(2), "A[0] = A[0] + (A[1] - A[0])*0.25;") != NULL);
     ASSERT_TRUE("scratch roundtrip keeps vertex source",
                 strstr(editor_buffer_line(3), "glVertex3f(A[0], 0, 0);") != NULL);
 
