@@ -9,6 +9,7 @@
 #include "repl_help_text.h"
 #include "repl_command_spec.h"   /* MAX_FUNC_HINT_PARAMS */
 #include "repl_config.h"
+#include "repl_eval.h"           /* REPL_SCRATCH_ARRAY_LEN */
 
 #include <stdio.h>
 
@@ -72,8 +73,9 @@ static const char *const k_tab_commands[] = {
     "  Multiple contours in one polygon create holes (opposite winding)",
     "",
     "Math Expressions (use anywhere floats are expected):",
-    "  Constants:  PI, TAU       \tFunctions: sin cos tan sqrt abs pow rand",
-    "  Operators:  + - * / % ( ) \tAlso: min max floor ceil fmod  rand(seed[,iter])",
+    "  Constants:  PI, TAU       \tFunctions: sin cos tan sqrt abs pow lerp rand",
+    "  Operators:  + - * / % ( ) \tAlso: min max floor ceil fmod",
+    "       \tlerp(a,b,t)  rand(seed[,iter])",
     "  Comparison: > < >= <= == !=  Logical: && || !",
     "  Example:    glVertex3f(cos(PI/4), sin(PI/4), 0)",
     "",
@@ -82,6 +84,12 @@ static const char *const k_tab_commands[] = {
     "  x = 1.5;                 \tAssign a value",
     "  glVertex3f(x, y, z);     \tUse in expressions",
     "  Variables persist across commands and are saved/loaded",
+    "",
+    "Scratch Arrays (A/B/C[" _HELP_STR(REPL_SCRATCH_ARRAY_LEN) "]):",
+    "  A[0] = 1;                \tWrite scratch storage (also B[] / C[])",
+    "  glVertex3f(A[i], B[i], C[i]);\tRead scratch values in expressions",
+    "  Indices truncate to int; use lerp(a,b,t) for in-place blends",
+    "  Scratch arrays persist across commands and are saved/loaded",
     "",
     "For-Loops:",
     "  for(i, 0, 24) glVertex3f(cos(i*TAU/24), sin(i*TAU/24), 0);",
