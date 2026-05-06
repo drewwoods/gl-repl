@@ -1039,16 +1039,23 @@ int main(int argc, char **argv) {
      * assert one logical row per header/source line. Wrapped-row rendering is
      * covered separately by the visual code-panel dump tests.
      */
-    load_example_for_test(repl_example_count() - 1);
     {
-        char *dump = dump_current_code_panel_text();
-        ASSERT_TRUE("wrap placeholder dump alloc", dump != NULL);
-        if (dump) {
-                 ASSERT_TRUE("logical dump keeps stress line unwrapped",
-                        strstr(dump,
-                               "      n = 1.0/sqrt(1 + amp*amp*6.25*(cos(x*2.5 + phase)*cos(x*2.5 + phase)*cos(z*2.5 + phase*0.7)*cos(z*2.5 + phase*0.7) + sin(x*2.5 + phase)*sin(x*2.5 + phase)*sin(z*2.5 + phase*0.7)*sin(z*2.5 + phase*0.7)));")
-                        != NULL);
-            free(dump);
+        int stress_idx = find_example_index_by_name("Stress test (all features)");
+
+        ASSERT_TRUE("wrap placeholder stress example found", stress_idx >= 0);
+        if (stress_idx >= 0) {
+            load_example_for_test(stress_idx);
+            {
+                char *dump = dump_current_code_panel_text();
+                ASSERT_TRUE("wrap placeholder dump alloc", dump != NULL);
+                if (dump) {
+                         ASSERT_TRUE("logical dump keeps stress line unwrapped",
+                                strstr(dump,
+                                       "      n = 1.0/sqrt(1 + amp*amp*6.25*(cos(x*2.5 + phase)*cos(x*2.5 + phase)*cos(z*2.5 + phase*0.7)*cos(z*2.5 + phase*0.7) + sin(x*2.5 + phase)*sin(x*2.5 + phase)*sin(z*2.5 + phase*0.7)*sin(z*2.5 + phase*0.7)));")
+                                != NULL);
+                    free(dump);
+                }
+            }
         }
     }
 

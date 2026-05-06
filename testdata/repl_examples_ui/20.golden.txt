@@ -1,0 +1,103 @@
+--- header_pre ---
+#define y0 _y0
+#define y1 _y1
+#include <gl_includes.h>
+#include <math.h>
+#include <stdlib.h>
+#undef y0
+#undef y1
+
+#ifndef M_PI
+#define M_PI 3.14159265358979323846
+#endif
+
+static float g_angle = 0.0f;
+static int   g_rotating = 0;
+
+void display() {
+  glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+  glLoadIdentity();
+  glPushAttrib(GL_ALL_ATTRIB_BITS);
+--- render_state ---
+  glEnable(GL_MULTISAMPLE);
+  glDisable(GL_LINE_SMOOTH);
+  glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE);
+--- camera ---
+  glTranslatef(0.0000f, 0.0000f, -10.0000f);
+  glRotatef(18.0000f, 1.0f, 0.0f, 0.0f);
+  glRotatef(-18.0000f, 0.0f, 1.0f, 0.0f);
+  glTranslatef(-0.0000f, -0.0000f, -0.0000f);
+--- header_post ---
+--- source ---
+  float u;
+  glClearColor(0.07, 0.08, 0.1, 1);
+  glEnable(GL_DEPTH_TEST);
+  glDisable(GL_LIGHTING);
+  glLineWidth(3);
+  // Seed A/B/C with control points, then overwrite them with lerp().
+  glColor3f(1, 0.55, 0.2);
+  glBegin(GL_LINE_STRIP);
+    for(i, 0, 48) {
+      A[0] = -3.2;
+      B[0] = -1.8;
+      C[0] = -0.8;
+      A[1] = -1.1 + 0.4*sin(t*0.9);
+      B[1] = 2.4;
+      C[1] = -0.1;
+      A[2] = 1.0;
+      B[2] = -2.1 + 0.5*cos(t*0.7);
+      C[2] = 0.5;
+      A[3] = 3.1;
+      B[3] = 1.6;
+      C[3] = 1.0 + 0.25*sin(t*0.5);
+      u = i/48.0;
+      A[0] = lerp(A[0], A[1], u);
+      B[0] = lerp(B[0], B[1], u);
+      C[0] = lerp(C[0], C[1], u);
+      A[1] = lerp(A[1], A[2], u);
+      B[1] = lerp(B[1], B[2], u);
+      C[1] = lerp(C[1], C[2], u);
+      A[2] = lerp(A[2], A[3], u);
+      B[2] = lerp(B[2], B[3], u);
+      C[2] = lerp(C[2], C[3], u);
+      A[0] = lerp(A[0], A[1], u);
+      B[0] = lerp(B[0], B[1], u);
+      C[0] = lerp(C[0], C[1], u);
+      A[1] = lerp(A[1], A[2], u);
+      B[1] = lerp(B[1], B[2], u);
+      C[1] = lerp(C[1], C[2], u);
+      A[0] = lerp(A[0], A[1], u);
+      B[0] = lerp(B[0], B[1], u);
+      C[0] = lerp(C[0], C[1], u);
+      glVertex3f(A[0], B[0], C[0]);
+    }
+  glEnd();
+
+  // Rebuild the same control polygon from scratch-array state.
+  A[0] = -3.2;
+  B[0] = -1.8;
+  C[0] = -0.8;
+  A[1] = -1.1 + 0.4*sin(t*0.9);
+  B[1] = 2.4;
+  C[1] = -0.1;
+  A[2] = 1.0;
+  B[2] = -2.1 + 0.5*cos(t*0.7);
+  C[2] = 0.5;
+  A[3] = 3.1;
+  B[3] = 1.6;
+  C[3] = 1.0 + 0.25*sin(t*0.5);
+  glColor3f(0.25, 0.45, 0.95);
+  glBegin(GL_LINE_STRIP);
+    glVertex3f(A[0], B[0], C[0]);
+    glVertex3f(A[1], B[1], C[1]);
+    glVertex3f(A[2], B[2], C[2]);
+    glVertex3f(A[3], B[3], C[3]);
+  glEnd();
+  glPointSize(9);
+  glColor3f(1, 0.9, 0.35);
+  glBegin(GL_POINTS);
+    glVertex3f(A[0], B[0], C[0]);
+    glVertex3f(A[1], B[1], C[1]);
+    glVertex3f(A[2], B[2], C[2]);
+    glVertex3f(A[3], B[3], C[3]);
+  glEnd();
