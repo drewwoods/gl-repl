@@ -228,6 +228,9 @@ static void load_example_lines(const char *const *lines) {
     }
     repl_editor_reset_transients();
     repl_eval_init_predef_vars();
+    /* Examples use bare funcN; clear any user-aliased names from the
+     * outgoing scene so funcN free-slot allocation starts fresh. */
+    repl_func_alias_clear_all();
     reset_example_presentation_defaults();
 
     if (body)

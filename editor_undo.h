@@ -48,6 +48,7 @@ typedef struct {
     float scratch_arrays[REPL_SCRATCH_ARRAY_COUNT][REPL_SCRATCH_ARRAY_LEN];
     char  predef_names[MAX_PREDEF_VARS][16];
     int   num_predef_vars;
+    char  func_aliases[REPL_FUNC_SLOT_COUNT][REPL_FUNC_NAME_MAX];
 } ReplUndoSnapshot;
 
 /* Ring state descriptors: exposed for test access to undo/redo ring pointers

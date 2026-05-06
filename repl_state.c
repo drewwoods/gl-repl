@@ -164,6 +164,7 @@ static void repl_state_bind_eval_predef_storage(void) {
     repl_eval_bind_predef_storage(g_repl_state.variables.predef_vars,
                                   &g_repl_state.variables.predef_var_count);
     repl_eval_bind_scratch_storage(g_repl_state.variables.scratch_arrays);
+    repl_func_alias_bind_storage(g_repl_state.variables.func_aliases);
 }
 
 #if defined(__GNUC__) || defined(__clang__)
