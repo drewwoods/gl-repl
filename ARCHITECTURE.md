@@ -435,15 +435,23 @@ Phase 2 cleanup, not to the beginning.
 
 ### UI mutation boundary
 
-`ui_*` renderers must route all REPL mutations through `repl_actions`,
-`repl_command_store`, `repl_var_drag`, or another REPL-owned mutation path.
-Using `repl_state_*_mut()` accessors directly from `ui_*` files is not
-permitted. Phase 2 R2 closes the known violations in `ui_color_picker.c`,
-`ui_panels.c`, and `ui_help_overlay.c`.
+`ui_*` renderers route REPL mutations through their owning peer or
+through the editor commit pipeline (`repl_actions` for menu actions,
+`editor_commit_apply_external_change` for picker writebacks,
+`variable_panel_drag_*` for slider transactions, `replay_handle_*`
+for replay buttons). `repl_state_*_mut()` accessors directly from
+`ui_*` files are not permitted. The known historical violations in
+`ui_color_picker`, `ui_panels`, and `ui_help_overlay` were all
+closed; their work redistributed into peer subsystems (`color_picker`)
+or generic renderers (`ui_tabbed_overlay` consuming
+`UiOverlayContent` produced by `repl_help_text`).
 
-Target state after R2 and R6: `ui_*.c` files include `repl_state_views.h`
-only, not `repl_state.h` or `repl_state_owners.h`. The `check-views-no-owners`
-Makefile rule enforces this mechanically.
+`ui_*.c` files include `repl_state_views.h` only, not `repl_state.h`
+or `repl_state_owners.h`. `check-views-no-owners` enforces this;
+`check-ui-returns-hits-only` (baseline 0/0) keeps any new mutator
+out of the input + render paths;
+`check-color-picker-ui-isolation` and `check-replay-ui-isolation`
+audit the feature-UI prefixes.
 
 ### UI / scene independence
 
@@ -615,9 +623,22 @@ Completed (Phase 1 + most of Phase 2):
 - ✅ **R1** — Replay/HUD migration: controller builds `ReplayFadePlan`; scene
   iterates it; 2D HUD lives in `replay_ui_hud.c`. Scene files contain zero
   `repl_replay_*` and `repl_state_*` calls.
-- ✅ **R2** — UI → REPL mutation holes closed: `ui_color_picker`, `ui_panels`,
-  `ui_help_overlay` route mutations through store/action APIs. UI files have
-  zero `_mut()` calls.
+- ✅ **R2** — UI → REPL mutation holes closed end-to-end:
+  - `ui_panels.c` is hit-test only (`check-ui-panels-no-mutators`).
+  - The color picker now lives across `color_picker.c` (peer state +
+    lifecycle + writeback through `editor_commit_apply_external_change`)
+    and `color_picker_ui.c` (pure renderer + hit-test over a
+    `ColorPickerView`); the picker UI carries no live state reads, no
+    parser/compile/apply, no `set_status`. Locked in by
+    `check-color-picker-ui-isolation`.
+  - The legacy `ui_help_overlay` is gone — split into the generic
+    `ui_tabbed_overlay.c` renderer (knows nothing about REPL) and the
+    REPL-side `repl_help_text.c` producer that walks
+    `k_func_completions[]` to assemble the F1 overlay's per-command
+    rows. Adding a new GL command + `help_desc` + `help_group` to the
+    spec entry now auto-populates F1.
+  - All `ui_*.c` files have zero `_mut()` calls
+    (`check-ui-returns-hits-only` baseline 0/0).
 - ✅ **R3** — `repl_layout.c` / `repl_layout.h` own `repl_layout_scene_rect` /
   `repl_layout_code_panel_rect`; non-UI callers include `repl_layout.h`.
 - ✅ **R4** — `imrepl_ctrl.c` no longer includes `repl_core_internal.h`;
@@ -664,7 +685,7 @@ A parallel state-ownership track lives in
 remaining; Stage 7 (UI snapshot purity) is done at the render boundary —
 every `ui_*_render*()` entry point consumes `const UiRenderSnapshot *snap`
 built once per frame by `imrepl_ctrl_build_ui_snapshot()` (Phase B in
-`feature/push-architecture-ui.md`); input-bridge helpers in `ui_*.c`
+`feature/done/push-architecture-ui.md`); input-bridge helpers in `ui_*.c`
 remain on live state pending Phase C. Stages 4 (cursor-pixel `Ui*Output`
 actualization) and 6 (`repl_undo.c` consumes `repl_state_capture()`) are
 still open.

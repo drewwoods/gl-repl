@@ -12,7 +12,7 @@
 For per-module detail and frame-pipeline narrative read
 [`ARCHITECTURE.md`](ARCHITECTURE.md). For the staged cleanup plan see
 [`feature/push-architecture-refinement.md`](feature/push-architecture-refinement.md)
-and [`feature/editor-owns-text-completion.md`](feature/editor-owns-text-completion.md).
+and [`feature/done/editor-owns-text-completion.md`](feature/done/editor-owns-text-completion.md).
 
 ## Four-Role Ownership Contract
 
@@ -119,24 +119,34 @@ Consequences:
 
 | State | Owns | Does not own |
 |---|---|---|
-| `ReplState` | Parsed command array, flat program, REPL variable state (scalar predefined vars plus fixed scratch arrays `A/B/C[8]`), scenes, import/export metadata, persistent render/presentation config | Replay runtime state (peer), variable-panel state (peer), help-session state (peer), editable text, cursor, selection, search query, UI visibility, pointer/viewport chrome |
+| `ReplState` | Parsed command array, flat program, REPL variable state (scalar predefined vars plus fixed scratch arrays `A/B/C` of `REPL_SCRATCH_ARRAY_LEN` floats and the `func0..func9` user-alias table), scenes, import/export metadata, persistent render/presentation config | Replay runtime state (peer), variable-panel state (peer), help-session state (peer), color-picker state (peer), editable text, cursor, selection, search query, UI visibility, pointer/viewport chrome |
 | `EditorState` | Editable text buffer, active input, cursor/edit-line, insert mode, selection, clipboard, search/autocomplete, scroll, **cursor blink** (the editor controls cursor visibility/blink — UI just renders), undo/redo, editor transactions | Variable-panel drag (now on the variable_panel peer), parsed command semantics, GL execution, menu chrome, transient status banners, render-output pixel coordinates |
 | `UiState` | Viewport, pointer, status text TTL, help-overlay visibility (chrome flag), profile-panel visibility, panel-divider geometry (panel_frac + resizing_panel), camera viewport pose | Help-session tab/scroll (peer), variable-panel state (peer), program model, editable text, command validation, cursor blink (editor owns), per-frame render-output (uses `Ui*Output`) |
 | `variable_panel` peer | Variable-panel visibility flag + slider drag transaction (var_idx, log_mode, start_value, start_x). Storage in `variable_panel.c`. | Editor text behavior, REPL grammar |
 | `replay` peer | Replay state machine: PC, mode, speed, accum, fade speed, src_line_idx, total_flat_cmds, expand_args. Storage in `replay_state.c`. | Editor text behavior, REPL grammar |
 | `editor_help_session` peer | Help-overlay session state: tab_idx, scroll. Storage in `editor_help_session.c`. Visibility flag stays on `UiState.help` as chrome. | Help content (provided by content provider) |
+| `color_picker` peer | Floating color-picker state, lifecycle, slider input handlers, source-line writeback through editor commit. Storage in `color_picker.c`; peer view + `ColorPickerInputResult` in `color_picker.h`. | Picker rendering / hit-test (lives on `color_picker_ui.c`) |
 
-> Legacy forwarders (`ui_state_variable_panel*`, `editor_state_variable_drag*`,
-> `repl_state_replay*`) still resolve via shims in their original
-> headers so test fixtures keep compiling. Production callers go
-> through the peer accessors directly. The forwarders are tracked
-> by `check-variable-panel-forwarders` (baseline 87) and
-> `check-replay-forwarders` (baseline 37) and ratchet toward zero
-> as the test harness migrates.
+> The legacy forwarders (`ui_state_variable_panel*`, `editor_state_variable_drag*`,
+> `repl_state_replay*`) were retired in Phases J5–J7. Production callers and
+> tests use the peer accessors (`variable_panel_*`, `replay_state_*`)
+> directly; `check-variable-panel-forwarders` and
+> `check-replay-forwarders` are at baseline **0/0**.
 
-`ReplState` owns the fixed scratch arrays `A/B/C[8]` as REPL language runtime
-state. They are not editor/UI state, do not participate in variable-panel
-editing, and do not consume `MAX_PREDEF_VARS` scalar slots.
+`ReplState` owns the fixed scratch arrays `A/B/C[REPL_SCRATCH_ARRAY_LEN]`
+as REPL language runtime state. They are not editor/UI state, do not
+participate in variable-panel editing, and do not consume
+`MAX_PREDEF_VARS` scalar slots. The exported `output.c` only emits the
+arrays a snippet actually references — `export_collect_needs` scans for
+`A[`/`B[`/`C[` use per-letter and skips unused arrays.
+
+`ReplState.variables.func_aliases[REPL_FUNC_SLOT_COUNT][REPL_FUNC_NAME_MAX]`
+backs the user-named function feature: any C identifier (not reserved /
+not control-flow) maps to one of the 10 underlying `funcN` slots, so a
+user can type `drawCube { ... }` instead of `func0 { ... }`. The alias
+is purely a parser/display layer — the slot integer in `args[0]` is
+still the load-bearing identity. Aliases round-trip through workspace
+import/export via the `// @func N = name` directive.
 
 ## Repository Layout Rules
 
@@ -297,6 +307,8 @@ controllers; UI may render them; their input routes to them through
 | `replay_state` | Peer subsystem: owns `ReplReplayRuntimeState` storage in `replay_state.c`. Narrow accessors (`replay_active`, `replay_pc`, `replay_mode`, …) plus `replay_state_view()` for the per-frame snapshot fill |
 | `replay` | Replay state machine implementation behind `replay_state`: PC stepping, mode toggling, fade batches. Routes via `replay_handle_pin_clicked` / `replay_handle_key` / `replay_handle_special` |
 | `editor_help_session` | Peer subsystem: read-only editor session for the help overlay (tab_idx, scroll). Visibility flag stays on `UiState.help` as chrome |
+| `color_picker` | Peer subsystem: floating HSV/alpha picker. Owns `g_cp_*` state, lifecycle (`color_picker_open` / `_close` / `_active_line` / `_can_edit_cmd`), input handlers (`color_picker_handle_press` / `_motion` / `_release` returning `ColorPickerInputResult`), and source-line writeback through `editor_commit_apply_external_change`. Exposes `color_picker_view()` for renderers and `color_picker_hsv_to_rgb` as a shared color-math helper. Renderer lives separately in `color_picker_ui.c` |
+| `repl_help_text` | REPL-side producer of the F1 help-overlay content. Walks `k_func_completions[]`, groups by `ReplHelpGroup`, emits per-command rows with header sections; appends hand-written language-level sections (Math operators, Variables, For-Loops, …) verbatim. Renderer (`ui_tabbed_overlay.c`) is feature-agnostic |
 
 Peer subsystems may *produce* overlays consumed by the editor (replay
 annotations are virtual lines the editor can render). They do not
@@ -371,7 +383,8 @@ allowlists. The contract is enforced by a per-feature lighter guard:
 | `ui_layout` | Pure scene/code-panel rectangle geometry |
 | `ui_code_panel_layout` | Pure text wrapping and visual-line iteration |
 | `ui_menu_bar` | Menu bar, dropdowns, pinned buttons, search entry, and menu hit-testing |
-| `ui_color_picker` | Floating HSV/alpha picker; render reads transformer snapshots, input returns `UI_HIT_COLOR_SWATCH` (commit path runs through editor) |
+| `color_picker_ui` | **Feature-UI** (color-picker peer): pure renderer + hit-test over `ColorPickerView`. State, lifecycle, and source-line writeback live on the `color_picker.c` peer; the UI side is mutator- and live-state-free, audited by `check-color-picker-ui-isolation` |
+| `ui_tabbed_overlay` | Generic modal tabbed text overlay renderer. Takes a `UiOverlayState` (visible / tab_idx / scroll / viewport / `UiOverlayContent`) and draws a titled, paged reference card. Knows nothing about REPL semantics. Currently consumed by the F1 help; available for future modal text panels |
 | `ui_variable_panel` | Renderer for the variable-slider panel (the panel chrome — the *peer subsystem* owns drag/visibility state). Input returns `UI_HIT_VARIABLE_SLIDER` |
 | `ui_autocomplete_panel` | Completion popup renderer; reads `EditorState.autocomplete` |
 | `ui_profile_panel` | CPU timing HUD renderer |
@@ -379,9 +392,18 @@ allowlists. The contract is enforced by a per-feature lighter guard:
 
 Files no longer in this layer:
 
-- `ui_help_overlay` → `editor_help_session` (read-only editor session;
-  see Layer 2). The visibility *flag* stays in `UiState`; the document
-  *content + scroll + search* moves into editor session state.
+- `ui_help_overlay` → split. The session state (`tab_idx`, `scroll`)
+  moved to `editor_help_session.c` (Layer 2). The renderer became the
+  generic, REPL-agnostic `ui_tabbed_overlay.c`; the per-row text
+  content is built REPL-side by `repl_help_text.c` from
+  `k_func_completions[]` so adding a new GL command auto-populates
+  the F1 overlay.
+- `ui_color_picker` → split into `color_picker.c` (peer state +
+  lifecycle + writeback) and `color_picker_ui.c` (renderer +
+  hit-test). The picker UI is a pure renderer over `ColorPickerView`;
+  the peer is the only mutator. Locked in by
+  `check-color-picker-ui-isolation` (stricter than the replay-UI
+  guard).
 - `ui_action` / `ui_action_dispatch` (planned but never landed) — the
   corrected contract uses `UiHit` (passive) instead of `UiAction`
   (dispatch enum), so these modules are not introduced.
@@ -456,6 +478,7 @@ flowchart LR
     subgraph peers["2b. Peer subsystems (own state + controller)"]
         vpanel["variable_panel.c + variable_panel_drag.c<br/>(was repl_var_drag)<br/>visibility + drag transaction"]
         replay_sys["replay.c + replay_state.c<br/>(was repl_replay)<br/>state machine · fades"]
+        cpicker["color_picker.c<br/>(was inside ui_color_picker)<br/>HSV/alpha state · lifecycle · writeback"]
         camera["repl_camera_controls.c<br/>orbit/pan/zoom transform<br/>(rename deferred — scene/viewport split)"]
     end
 
@@ -477,7 +500,8 @@ flowchart LR
         uihit["ui_hit.h<br/>UiHit · UiHitKind"]
         uipanels["ui_panels.c<br/>code panel · statusbar<br/>(returns UiHit)"]
         uimenu["ui_menu_bar.c<br/>menubar + dropdowns<br/>(returns UiHit)"]
-        uicolor["ui_color_picker.c<br/>color picker"]
+        uicolor["color_picker_ui.c<br/>color picker render + hit-test<br/>(feature-UI · reads ColorPickerView)"]
+        uitabbed["ui_tabbed_overlay.c<br/>generic modal tabbed text<br/>(content from repl_help_text.c)"]
         uivpanel["ui_variable_panel.c<br/>variable panel chrome"]
         uiac["ui_autocomplete_panel.c<br/>completion popup"]
         uiprof["ui_profile_panel.c<br/>timing HUD"]
@@ -545,8 +569,10 @@ flowchart LR
     %% Clipboard cut/paste is a commit (rewrites text + cmds).
     eclip i14@--> ecommit
 
-    %% Color picker drag → editor commit path (rewrites source text).
-    uicolor i15@--> ecommit
+    %% Color picker peer drives the writeback (UI side just renders +
+    %% reports UiHit). cpicker -> ecommit is the only mutation path.
+    cpicker i15@--> ecommit
+    ctrl i34@--> cpicker
 
     %% REPL compile is pure (no edges OUT to state).
     compile -.-> parser
@@ -821,13 +847,15 @@ side-effect routing. As of that branch landing:
   and `imrepl_ctrl`). Two files (`repl_camera_controls`,
   `repl_actions`) remain on the legacy prefix with explicit
   blockers documented in the plan.
-- **Hard guards: 32 in place.** `make check-state-ownership` runs
-  30 sub-targets (the `check-cursor-px-encapsulated` migration
+- **Hard guards: 33 in place.** `make check-state-ownership` runs
+  31 sub-targets (the `check-cursor-px-encapsulated` migration
   guard was retired alongside the `cursor_px/cursor_py` state in
   Phase J4); `make check` adds `check-gl-boundaries` and
-  `check-layer-coupling` for 32 hard guards total.
+  `check-layer-coupling` for 33 hard guards total.
   `check-public-api-usage` is informational. The most recent
-  additions are `check-ui-panels-no-mutators` (Phase J2.3) and
+  additions are `check-color-picker-ui-isolation` (the picker peer
+  split — `color_picker_ui*.c` is renderer + hit-test only, no
+  state reads / mutations / parser / commit) and
   `check-replay-ui-isolation` (Phase J3.1, the feature-UI prefix
   discipline). `check-output-actualization` actively scans
   `UiCodePanelOutput` and verifies `imrepl_ctrl.c` reads every
@@ -847,15 +875,11 @@ The deferred items still on the books:
 - `ui_layout` / `ui_code_panel_layout` parameterization so geometry
   helpers stop reading `repl_state_presentation()` (currently
   allowlisted under `check-no-facade-include-in-views`).
-- Color picker as a peer subsystem split (`color_picker_*` +
-  `color_picker_ui_*`) — natural sequel to the `replay_ui` rename
-  now that the picker has its own state, input lifecycle, and
-  writeback transaction.
 
-See `feature/editor-ownership-gap-cleanup.md` for the audit script and
+See `feature/done/editor-ownership-gap-cleanup.md` for the audit script and
 baseline counts; `feature/editor-owns-text-completion.md` for the
 phase-by-phase commit ledger that delivered this state; and
-`feature/editor-text-model-controller.md` for the corrected
+`feature/done/editor-text-model-controller.md` for the corrected
 contract that this document reflects.
 
 ## Open Refactor Edges
