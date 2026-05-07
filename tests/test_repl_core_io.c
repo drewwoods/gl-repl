@@ -246,17 +246,39 @@ int main(void) {
     {
         char buf[16384];
         read_text_file(scratch_path, buf, sizeof(buf));
-        ASSERT_TRUE("scratch global A exported",
+        ASSERT_TRUE("scratch global A exported (used)",
                     strstr(buf, "static float A[8] = {0};") != NULL);
-        ASSERT_TRUE("scratch global B exported",
-                    strstr(buf, "static float B[8] = {0};") != NULL);
-        ASSERT_TRUE("scratch global C exported",
-                    strstr(buf, "static float C[8] = {0};") != NULL);
+        /* B and C are unreferenced in this snippet, so the emit-on-
+         * demand gate must skip them. */
+        ASSERT_TRUE("scratch global B omitted (unused)",
+                    strstr(buf, "static float B[") == NULL);
+        ASSERT_TRUE("scratch global C omitted (unused)",
+                    strstr(buf, "static float C[") == NULL);
         ASSERT_TRUE("lerp helper omitted",
                 strstr(buf, "repl_lerp") == NULL);
         ASSERT_TRUE("scratch blend assignment exported",
             strstr(buf,
                    "A[0] = A[0] + (A[1] - A[0])*0.25;") != NULL);
+    }
+
+    /* Cross-array example: A and B used, C unused -> A and B emit, C
+     * omitted. Pins the per-letter detection. */
+    {
+        const char *cross_path = "/tmp/repl_core_scratch_cross.c";
+        repl_reset_state(); declare_test_vars();
+        repl_feed_line_public("A[0] = 1;");
+        repl_feed_line_public("B[0] = 2;");
+        repl_feed_line_public("glVertex3f(A[0], B[0], 0);");
+        repl_export_save_output(cross_path, editor_buffer_view());
+        char buf[8192];
+        read_text_file(cross_path, buf, sizeof(buf));
+        ASSERT_TRUE("scratch A exported when used",
+                    strstr(buf, "static float A[") != NULL);
+        ASSERT_TRUE("scratch B exported when used",
+                    strstr(buf, "static float B[") != NULL);
+        ASSERT_TRUE("scratch C omitted when unused",
+                    strstr(buf, "static float C[") == NULL);
+        remove(cross_path);
     }
 
     repl_reset_state(); declare_test_vars();
