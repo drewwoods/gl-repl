@@ -2471,6 +2471,9 @@ static void import_feed_one_line(const char *line, int *loaded, int *warnings) {
 typedef struct {
     int needs_tess;
     int needs_rand;
+    int needs_scratch_a;
+    int needs_scratch_b;
+    int needs_scratch_c;
 } ExportNeeds;
 
 typedef struct {
@@ -2485,17 +2488,44 @@ typedef struct {
     ExportDisplayPassSetupFn    emit_setup;
 } ExportDisplayPassSpec;
 
+/* Word-boundary-aware substring scan: returns 1 iff `needle` appears in
+ * `haystack` and the byte immediately before its match position is NOT
+ * an identifier character. Avoids false hits like `glRand(` triggering
+ * `rand(` detection or `dataA[0]` triggering `A[`. */
+static int export_text_uses_token(const char *haystack, const char *needle) {
+    if (!haystack || !needle) return 0;
+    size_t nlen = strlen(needle);
+    const char *p = haystack;
+    while ((p = strstr(p, needle)) != NULL) {
+        if (p == haystack ||
+            (!isalnum((unsigned char)p[-1]) && p[-1] != '_'))
+            return 1;
+        p += nlen;
+    }
+    return 0;
+}
+
 static ExportNeeds export_collect_needs(void) {
     ExportNeeds needs = {
         .needs_tess = export_uses_tess_commands(),
         .needs_rand = 0,
+        .needs_scratch_a = 0,
+        .needs_scratch_b = 0,
+        .needs_scratch_c = 0,
     };
 
-    /* Check each command for rand() function calls. */
+    /* Check each command for rand() and scratch-array references. The
+     * scratch detection is intentionally a textual scan over source
+     * lines (not a CmdType check) so that reads inside argument
+     * expressions — e.g. `glVertex3f(A[i], B[i], C[i])` — count
+     * alongside writes (`A[0] = ...`). */
     for (int cmd_idx = 0; cmd_idx < repl_state_document_count(); cmd_idx++) {
-        if (repl_state_document_cmds_mut()[cmd_idx].valid &&
-            strstr(export_document_text(cmd_idx), "rand(") != NULL)
-            needs.needs_rand = 1;
+        if (!repl_state_document_cmds_mut()[cmd_idx].valid) continue;
+        const char *src = export_document_text(cmd_idx);
+        if (export_text_uses_token(src, "rand(")) needs.needs_rand = 1;
+        if (export_text_uses_token(src, "A["))    needs.needs_scratch_a = 1;
+        if (export_text_uses_token(src, "B["))    needs.needs_scratch_b = 1;
+        if (export_text_uses_token(src, "C["))    needs.needs_scratch_c = 1;
     }
 
     return needs;
@@ -2608,6 +2638,12 @@ static int export_section_needs_rand(const ExportScaffoldContext *ctx) {
     return ctx && ctx->needs.needs_rand;
 }
 
+static int export_section_needs_scratch(const ExportScaffoldContext *ctx) {
+    return ctx && (ctx->needs.needs_scratch_a ||
+                   ctx->needs.needs_scratch_b ||
+                   ctx->needs.needs_scratch_c);
+}
+
 static int export_section_needs_tess(const ExportScaffoldContext *ctx) {
     return ctx && ctx->needs.needs_tess;
 }
@@ -2636,15 +2672,18 @@ static void emit_export_predef_globals_section(FILE *f,
 
 static void emit_export_scratch_globals_section(FILE *f,
                                                 const ExportScaffoldContext *ctx) {
-    (void)ctx;
-    fprintf(f,
-            "\n/* Fixed scratch arrays */\n"
-            "static float A[%d] = {0};\n"
-            "static float B[%d] = {0};\n"
-            "static float C[%d] = {0};\n",
-            REPL_SCRATCH_ARRAY_LEN,
-            REPL_SCRATCH_ARRAY_LEN,
-            REPL_SCRATCH_ARRAY_LEN);
+    if (!ctx) return;
+    int has_any = ctx->needs.needs_scratch_a ||
+                  ctx->needs.needs_scratch_b ||
+                  ctx->needs.needs_scratch_c;
+    if (!has_any) return;
+    fprintf(f, "\n/* Fixed scratch arrays */\n");
+    if (ctx->needs.needs_scratch_a)
+        fprintf(f, "static float A[%d] = {0};\n", REPL_SCRATCH_ARRAY_LEN);
+    if (ctx->needs.needs_scratch_b)
+        fprintf(f, "static float B[%d] = {0};\n", REPL_SCRATCH_ARRAY_LEN);
+    if (ctx->needs.needs_scratch_c)
+        fprintf(f, "static float C[%d] = {0};\n", REPL_SCRATCH_ARRAY_LEN);
 }
 
 static void emit_export_rand_helper_section(FILE *f,
@@ -2687,7 +2726,7 @@ static const ExportScaffoldSectionSpec EXPORT_SCAFFOLD_SECTIONS[] = {
     { "workspace metadata", emit_export_workspace_metadata_section, export_section_always },
     { "header",             emit_export_header_section,             export_section_always },
     { "predef globals",     emit_export_predef_globals_section,     export_section_always },
-    { "scratch globals",    emit_export_scratch_globals_section,    export_section_always },
+    { "scratch globals",    emit_export_scratch_globals_section,    export_section_needs_scratch },
     { "rand helper",        emit_export_rand_helper_section,        export_section_needs_rand },
     { "tess preamble",      emit_export_tess_preamble_section,      export_section_needs_tess },
     { "reset vars",         emit_export_reset_vars_section,         export_section_always },

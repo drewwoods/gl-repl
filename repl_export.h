@@ -39,6 +39,7 @@
 #define REPL_EXPORT_H
 
 #include "editor_state.h"  /* EditorBufferView */
+#include "repl_eval.h"     /* REPL_SCRATCH_ARRAY_LEN */
 #include "repl_export_state.h"
 
 /* Boilerplate C file segments for export. g_header_pre is the initial includes
@@ -50,7 +51,19 @@ extern const char  *g_header_post[];
 extern const char  *g_footer_pre_init[];
 extern const char  *g_footer_post_init[];
 
-#define REPL_CODE_PANEL_SCRATCH_DECL_LINE "  float A[8], B[8], C[8];"
+/* Stringify a macro value (compose-time only). Used to inject
+ * REPL_SCRATCH_ARRAY_LEN into the literal scratch-decl line shown in
+ * the live editor + exported file, so changing the array length
+ * doesn't require hand-editing this string. */
+#ifndef REPL_EXPORT_STRINGIFY
+#define REPL_EXPORT_STRINGIFY2(x) #x
+#define REPL_EXPORT_STRINGIFY(x)  REPL_EXPORT_STRINGIFY2(x)
+#endif
+#define REPL_CODE_PANEL_SCRATCH_DECL_LINE \
+    "  float " \
+    "A[" REPL_EXPORT_STRINGIFY(REPL_SCRATCH_ARRAY_LEN) "], " \
+    "B[" REPL_EXPORT_STRINGIFY(REPL_SCRATCH_ARRAY_LEN) "], " \
+    "C[" REPL_EXPORT_STRINGIFY(REPL_SCRATCH_ARRAY_LEN) "];"
 
 /* Export current REPL state to a C source file. Writes header metadata (@var, @cfg,
  * @scene-name, @workspace-dir), global variable declarations, camera state, function
