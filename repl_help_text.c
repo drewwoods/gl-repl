@@ -30,10 +30,8 @@
  * For-Loops, etc.) stay hand-written — they document REPL syntax, not
  * commands. */
 static const char *const k_lang_sections_tail[] = {
-    "Math Expressions (use anywhere floats are expected):",
-    "  Constants:  PI, TAU       \tFunctions: sin cos tan sqrt abs pow rand",
-    "  Operators:  + - * / % ( ) \tAlso: min max floor ceil fmod rem",
-    "       \trand(seed[,iter])",
+    "Math Operators / Comparisons:",
+    "  Operators:  + - * / % ( )",
     "  Comparison: > < >= <= == !=  Logical: && || !",
     "  Example:    glVertex3f(cos(PI/4), sin(PI/4), 0)",
     "",
@@ -199,6 +197,7 @@ static const char *help_group_header(ReplHelpGroup g) {
     case REPL_HELP_GROUP_LIGHTING:    return "Lighting / Material:";
     case REPL_HELP_GROUP_GLUT_SHAPES: return "GLUT Solid Shapes:";
     case REPL_HELP_GROUP_GLU_TESS:    return "GLU Tessellator (concave / complex polygons):";
+    case REPL_HELP_GROUP_MATH:        return "Math Functions (use anywhere floats are expected):";
     default:                          return NULL;
     }
 }
@@ -261,6 +260,7 @@ const UiOverlayContent *repl_help_text_build(void) {
     nc = cmd_emit_group(nc, REPL_HELP_GROUP_LIGHTING);
     nc = cmd_emit_group(nc, REPL_HELP_GROUP_GLUT_SHAPES);
     nc = cmd_emit_group(nc, REPL_HELP_GROUP_GLU_TESS);
+    nc = cmd_emit_group(nc, REPL_HELP_GROUP_MATH);
     /* Language sections: copy pointers verbatim from the static array
      * (these strings are immortal so we can hand them to the renderer
      * directly without copying into g_cmd_strbuf). */
