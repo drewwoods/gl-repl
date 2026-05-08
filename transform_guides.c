@@ -2,7 +2,7 @@
  * scene_transform_guides.c - transform edit-guide planning/rendering.
  */
 #include "transform_guides.h"
-#include "scene/transform_utils.h"
+#include "transform_utils.h"
 
 static void scene_transform_guides_push_state(void) {
     glPushAttrib(GL_ALL_ATTRIB_BITS);
@@ -49,10 +49,10 @@ static void compute_before_cursor_matrix(const SceneGuideSnapshot *snapshot,
     for (int i = 0; i < cursor_flat_idx; i++) {
         if (!flat_cmds[i].valid) continue;
         if (repl_cmd_is_transform(flat_cmds[i].type))
-            scene_apply_tracked_transform(&flat_cmds[i], &depth);
+            apply_tracked_transform(&flat_cmds[i], &depth);
     }
     glGetFloatv(GL_MODELVIEW_MATRIX, out);
-    scene_unwind_transform_stack(&depth);
+    unwind_transform_stack(&depth);
     glPopMatrix();
 }
 
@@ -75,14 +75,14 @@ static void compute_after_cursor_origin(const SceneGuideSnapshot *snapshot,
         if (!flat_cmds[i].valid) continue;
         if (is_geometry_emit_cmd(flat_cmds[i].type)) break;
         if (repl_cmd_is_transform(flat_cmds[i].type))
-            scene_apply_tracked_transform(&flat_cmds[i], &depth);
+            apply_tracked_transform(&flat_cmds[i], &depth);
     }
     float m[16];
     glGetFloatv(GL_MODELVIEW_MATRIX, m);
     out[0] = m[12];
     out[1] = m[13];
     out[2] = m[14];
-    scene_unwind_transform_stack(&depth);
+    unwind_transform_stack(&depth);
     glPopMatrix();
 }
 

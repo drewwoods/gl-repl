@@ -1,19 +1,21 @@
 /*
- * scene_transform_utils.h - GL matrix transform helpers for scene modules.
+ * transform_utils.h - GL matrix transform helpers used by REPL-aware
+ * controller code (imrepl_ctrl.c, transform_guides.c).
  *
  * Inline helpers for applying and unwinding GL matrix transforms.
  * Mirrors repl_executor.c functionality without requiring repl_executor.h.
- * Depends only on repl_command.h (GLCmd, CmdType).
+ * Depends only on repl_command.h (GLCmd, CmdType). Lives at the repo root
+ * because no src/scene/.c consumes it; only controller-layer helpers do.
  */
-#ifndef SCENE_TRANSFORM_UTILS_H
-#define SCENE_TRANSFORM_UTILS_H
+#ifndef TRANSFORM_UTILS_H
+#define TRANSFORM_UTILS_H
 
 #include "repl_command.h"
 #include <gl_includes.h>
 
 /* Apply a single transform command to the GL matrix stack.
  * Increments *depth on glPushMatrix, decrements on glPopMatrix. */
-static inline void scene_apply_tracked_transform(const GLCmd *cmd, int *depth) {
+static inline void apply_tracked_transform(const GLCmd *cmd, int *depth) {
     if (!cmd)
         return;
 
@@ -45,7 +47,7 @@ static inline void scene_apply_tracked_transform(const GLCmd *cmd, int *depth) {
 }
 
 /* Pop the GL matrix stack until *depth reaches zero. */
-static inline void scene_unwind_transform_stack(int *depth) {
+static inline void unwind_transform_stack(int *depth) {
     if (!depth)
         return;
 
@@ -55,4 +57,4 @@ static inline void scene_unwind_transform_stack(int *depth) {
     }
 }
 
-#endif /* SCENE_TRANSFORM_UTILS_H */
+#endif /* TRANSFORM_UTILS_H */

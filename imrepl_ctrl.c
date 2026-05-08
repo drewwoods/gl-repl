@@ -33,7 +33,7 @@
 #include "scene/overlays.h"          /* scene_draw_vertex_number_label / _arrow primitives */
 #include "geometry_guides.h"   /* scene_geometry_guides_render_for_cursor */
 #include "transform_guides.h"  /* scene_transform_guides_prepare / _render_if_due */
-#include "scene/transform_utils.h"   /* scene_apply_tracked_transform / _unwind_transform_stack */
+#include "transform_utils.h"   /* apply_tracked_transform / unwind_transform_stack */
 #include "ui/autocomplete_panel.h"
 #include "color_picker_ui.h"
 #include "ui/editor.h"
@@ -429,7 +429,7 @@ static void imrepl_ctrl_render_normal_vectors(void) {
  * post_overlays. The renders take that context plus the per-frame
  * SceneRenderConfig (for multisample / line_smooth quality flags).
  *
- * The walks call scene_apply_tracked_transform / scene_unwind_transform_stack
+ * The walks call apply_tracked_transform / unwind_transform_stack
  * — tiny inline GLCmd→GL helpers in scene/transform_utils.h. Pending
  * follow-up: relocate that header to REPL territory so this dependency
  * goes away. */
@@ -536,7 +536,7 @@ static void imrepl_ctrl_render_outlines(const OverlayWalkCtx *ctx,
 
             if (repl_cmd_is_transform(cmds[i].type)) {
                 if (!in_begin && !tess_in_contour)
-                    scene_apply_tracked_transform(&cmds[i], &matrix_depth);
+                    apply_tracked_transform(&cmds[i], &matrix_depth);
                 continue;
             }
 
@@ -627,7 +627,7 @@ static void imrepl_ctrl_render_outlines(const OverlayWalkCtx *ctx,
             glEnd();
             glLineWidth(1.0f);
         }
-        scene_unwind_transform_stack(&matrix_depth);
+        unwind_transform_stack(&matrix_depth);
         glPopMatrix();
     }
 
@@ -662,7 +662,7 @@ static void imrepl_ctrl_render_vertex_points(const OverlayWalkCtx *ctx) {
         for (int i = 0; i < flat_cmd_count; i++) {
             if (!flat_cmds[i].valid) continue;
             if (repl_cmd_is_transform(flat_cmds[i].type)) {
-                scene_apply_tracked_transform(&flat_cmds[i], &matrix_depth);
+                apply_tracked_transform(&flat_cmds[i], &matrix_depth);
             } else if (flat_cmds[i].type == CMD_BEGIN) {
                 primitive_mode = flat_cmds[i].mode;
             } else if (flat_cmds[i].type == CMD_END) {
@@ -681,7 +681,7 @@ static void imrepl_ctrl_render_vertex_points(const OverlayWalkCtx *ctx) {
             }
         }
         glPointSize(1.0f);
-        scene_unwind_transform_stack(&matrix_depth);
+        unwind_transform_stack(&matrix_depth);
     }
     glPopMatrix();
 
