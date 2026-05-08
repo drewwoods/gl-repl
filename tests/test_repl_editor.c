@@ -2943,6 +2943,139 @@ int main() {
         g_mock_modifiers = saved_mods;
     }
 
+    /* Block-batch toggle: Ctrl+/ on a FOR_BEGIN comments out the whole
+     * for-loop in one stroke. */
+    {
+        repl_reset_state();
+        repl_feed_line_public("for(i, 0, 3) {");
+        repl_feed_line_public("  glVertex2f(i, 0);");
+        repl_feed_line_public("}");
+
+        int saved_mods = g_mock_modifiers;
+        g_mock_modifiers = GLUT_ACTIVE_CTRL;
+
+        repl_state_edit_line_set(0);
+        editor_insert_mode_set(0);
+        editor_handle_key('/', 0, 0);
+
+        ASSERT_INT("for-block batch: line 0 is comment",
+                   repl_state_document_cmds_mut()[0].type, CMD_COMMENT);
+        ASSERT_INT("for-block batch: line 1 is comment",
+                   repl_state_document_cmds_mut()[1].type, CMD_COMMENT);
+        ASSERT_INT("for-block batch: line 2 is comment",
+                   repl_state_document_cmds_mut()[2].type, CMD_COMMENT);
+        ASSERT_TRUE("for-block batch: line 0 text has // prefix",
+                    strstr(editor_buffer_line(0) ? editor_buffer_line(0) : "",
+                           "// for") != NULL);
+        ASSERT_TRUE("for-block batch: body line text has // prefix",
+                    strstr(editor_buffer_line(1) ? editor_buffer_line(1) : "",
+                           "// ") != NULL);
+        assert_status_contains("for-block batch: status counts lines",
+                               "3 lines");
+
+        g_mock_modifiers = saved_mods;
+    }
+
+    /* Block-batch toggle from the END side: Ctrl+/ on FOR_END walks
+     * back to the matching FOR_BEGIN and comments the whole block. */
+    {
+        repl_reset_state();
+        repl_feed_line_public("for(i, 0, 3) {");
+        repl_feed_line_public("  glVertex2f(i, 0);");
+        repl_feed_line_public("}");
+
+        int saved_mods = g_mock_modifiers;
+        g_mock_modifiers = GLUT_ACTIVE_CTRL;
+
+        repl_state_edit_line_set(2);  /* on FOR_END */
+        editor_insert_mode_set(0);
+        editor_handle_key('/', 0, 0);
+
+        ASSERT_INT("for-end back-scan: line 0 is comment",
+                   repl_state_document_cmds_mut()[0].type, CMD_COMMENT);
+        ASSERT_INT("for-end back-scan: line 1 is comment",
+                   repl_state_document_cmds_mut()[1].type, CMD_COMMENT);
+        ASSERT_INT("for-end back-scan: line 2 is comment",
+                   repl_state_document_cmds_mut()[2].type, CMD_COMMENT);
+
+        g_mock_modifiers = saved_mods;
+    }
+
+    /* Block-batch toggle on FUNC_DEF: same shape as FOR but with
+     * different head/end cmd kinds. */
+    {
+        repl_reset_state();
+        repl_feed_line_public("func0() {");
+        repl_feed_line_public("  glVertex3f(0,0,0);");
+        repl_feed_line_public("}");
+
+        int saved_mods = g_mock_modifiers;
+        g_mock_modifiers = GLUT_ACTIVE_CTRL;
+
+        repl_state_edit_line_set(0);
+        editor_insert_mode_set(0);
+        editor_handle_key('/', 0, 0);
+
+        ASSERT_INT("func-block batch: line 0 is comment",
+                   repl_state_document_cmds_mut()[0].type, CMD_COMMENT);
+        ASSERT_INT("func-block batch: line 1 is comment",
+                   repl_state_document_cmds_mut()[1].type, CMD_COMMENT);
+        ASSERT_INT("func-block batch: line 2 is comment",
+                   repl_state_document_cmds_mut()[2].type, CMD_COMMENT);
+
+        g_mock_modifiers = saved_mods;
+    }
+
+    /* Phase 3 status framing: REPL produces the diagnostic, editor
+     * wraps it with "Toggle failed: ". */
+    {
+        int saved_mods = g_mock_modifiers;
+
+        repl_reset_state();
+        repl_feed_line_public("glVertex3f(0, 0, 0);");
+        repl_state_edit_line_set(0);
+        editor_insert_mode_set(0);
+        g_status[0] = '\0';
+        g_mock_modifiers = GLUT_ACTIVE_CTRL;
+        editor_handle_key('/', 0, 0);  /* commenting out */
+        ASSERT_INT("toggle framing setup: commented",
+                   repl_state_document_cmds_mut()[0].type, CMD_COMMENT);
+
+        editor_buffer_set_line(0, "// !@#$not a command$@#!");
+        g_status[0] = '\0';
+        repl_state_edit_line_set(0);
+        editor_handle_key('/', 0, 0);  /* uncomment fails */
+        assert_status_contains("toggle framing: editor wraps as 'Toggle failed:'",
+                               "Toggle failed");
+        assert_status_contains("toggle framing: REPL diagnostic preserved",
+                               "Cannot uncomment");
+
+        g_mock_modifiers = saved_mods;
+    }
+
+    /* Unset prefix: Ctrl+/ becomes a no-op. */
+    {
+        const char *saved_prefix = editor_line_comment_prefix();
+        int saved_mods = g_mock_modifiers;
+
+        repl_reset_state();
+        repl_feed_line_public("glVertex3f(0, 0, 0);");
+        editor_set_line_comment_prefix(NULL);
+
+        repl_state_edit_line_set(0);
+        editor_insert_mode_set(0);
+        g_status[0] = '\0';
+        g_mock_modifiers = GLUT_ACTIVE_CTRL;
+        editor_handle_key('/', 0, 0);
+
+        ASSERT_INT("unset prefix: line stays a regular cmd",
+                   repl_state_document_cmds_mut()[0].type, CMD_VERTEX3F);
+        ASSERT_INT("unset prefix: status untouched", g_status[0], '\0');
+
+        editor_set_line_comment_prefix(saved_prefix);
+        g_mock_modifiers = saved_mods;
+    }
+
     /* Extra coverage: BOTTOM layout resizing */
     {
         repl_reset_state();
