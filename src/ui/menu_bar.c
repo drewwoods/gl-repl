@@ -515,7 +515,7 @@ void ui_menu_bar_render_search_overlay(const UiRenderSnapshot *snap,
     (void)cp_x; (void)panel_w; (void)panel_top;
 
     static int prev_active = 0;
-    if (srch.active && !prev_active) g_search_open_time = snap->variables.anim_time;
+    if (srch.active && !prev_active) g_search_open_time = snap->anim_time;
     prev_active = srch.active;
 
     if (!srch.active)
@@ -554,7 +554,7 @@ void ui_menu_bar_render_search_overlay(const UiRenderSnapshot *snap,
     code_panel_format_search_query(srch, query_buf, sizeof(query_buf),
                                    max_query_chars, &cursor_col);
 
-    float alpha = ui_fade_alpha(snap->variables.anim_time, g_search_open_time);
+    float alpha = ui_fade_alpha(snap->anim_time, g_search_open_time);
 
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
@@ -754,7 +754,7 @@ void ui_menu_bar_render_example_dropdown(const UiRenderSnapshot *snap) {
 
     g_menu_item_hover = ui_menu_bar_dropdown_item_hit(snap->pointer.mouse_x, snap->pointer.mouse_y);
 
-    float alpha = ui_fade_alpha(snap->variables.anim_time, g_menu_open_time);
+    float alpha = ui_fade_alpha(snap->anim_time, g_menu_open_time);
 
     gl2d_begin(snap->viewport.window_w, snap->viewport.window_h);
     glEnable(GL_BLEND);

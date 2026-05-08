@@ -13,7 +13,7 @@
  *
  * The snapshot embeds existing by-value `Repl*State` slices verbatim plus a
  * handful of pointer-style views (`FlatProgramView`, `ReplPredefView`,
- * `ReplVariableView`, `ReplEditorInputView`, `ReplImportExportView`) whose
+ * `ReplEditorInputView`, `ReplImportExportView`) whose
  * stable storage is owned by `repl_state.c`. Embedded pointers are valid
  * for the duration of the frame; the snapshot itself is `const` to the
  * renderer.
@@ -70,7 +70,6 @@ typedef struct UiRenderSnapshot {
     ColorPickerView             color_picker;
 
     /* Pointer-shaped read-only views (storage owned by repl_state.c) */
-    ReplVariableView            variables;
     ReplEditorInputView         editor_input;
     ReplImportExportView        import_export;
     FlatProgramView             flat_program;
@@ -93,6 +92,7 @@ typedef struct UiRenderSnapshot {
     int                         input_len;
     int                         pending_newline_len;
     int                         flat_program_count;
+    float                       anim_time;
 
     /* Grid arrays */
     const float                *grid_major_steps;
