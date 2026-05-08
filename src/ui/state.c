@@ -165,10 +165,6 @@ ReplCameraState *ui_state_camera_mut(void) {
     return &g_ui_state.camera;
 }
 
-ReplCameraState ui_state_camera_snapshot(void) {
-    return g_ui_state.camera;
-}
-
 void ui_state_camera_set(float rx, float ry, float dist,
                          float tx, float ty, float tz,
                          float motion_glow) {

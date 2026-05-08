@@ -398,10 +398,57 @@ static void test_reset_all_restores_default_runtime(void) {
                "// @workspace: REPL state (auto-saved)");
 }
 
+/* Regression (feedback P3): the per-line override list cap must
+ * cover the full document size — otherwise layout (which reads the
+ * snapshot list) and render (formerly recomputing live) drift past
+ * the cap, breaking wrap-row counts / scroll / hit-testing.
+ *
+ * Push 600 distinct overrides; verify all 600 are retrievable. The
+ * pre-fix cap of 512 silently dropped entries 512..599; this test
+ * fails on that build (override_for(513) returns NULL) and passes
+ * after MAX_LINE_OVERRIDES bumps to MAX_COMMANDS. */
+static void test_line_override_cap_covers_busy_replay(void) {
+    const int N = 600;
+    char buf[64];
+    int append_failures = 0;
+
+    editor_state_line_overrides_clear();
+    for (int i = 0; i < N; i++) {
+        snprintf(buf, sizeof(buf), "// override-row %d", i);
+        if (!editor_state_line_overrides_append(i, buf))
+            append_failures++;
+    }
+    ASSERT_INT("override list: all 600 appends succeed",
+               append_failures, 0);
+    ASSERT_INT("override list: count tracks total",
+               editor_state_line_overrides()->count, N);
+
+    /* Past the old 512 cap. Pre-fix this returns NULL because the
+     * append at 513 silently failed; post-fix the cap covers the
+     * whole document so the lookup succeeds. Guard against NULL
+     * before strcmp so the test fails cleanly on pre-fix instead
+     * of segfaulting in ASSERT_STR. */
+    {
+        const char *got = editor_state_line_override_for(513);
+        snprintf(buf, sizeof(buf), "// override-row %d", 513);
+        ASSERT_TRUE("override-for(513) returns the pushed text past old cap",
+                    got != NULL);
+        ASSERT_STR("override-for(513) text matches",
+                   got ? got : "<null>", buf);
+    }
+
+    /* Sanity: lookups for an entry that was never pushed return NULL. */
+    ASSERT_TRUE("override-for(out-of-range) returns NULL",
+                editor_state_line_override_for(N + 50) == NULL);
+
+    editor_state_line_overrides_clear();
+}
+
 int main(void) {
     printf("--- repl_state tests ---\n");
     test_capture_restore_round_trip();
     test_reset_all_restores_default_runtime();
+    test_line_override_cap_covers_busy_replay();
     printf("%d / %d tests passed\n", g_harness.passed, g_harness.run);
     return g_harness.passed == g_harness.run ? 0 : 1;
 }
