@@ -5,6 +5,7 @@
 #include "editor_inline_rename.h"
 #include "editor_input.h"
 #include "editor_search.h"
+#include "editor_state.h"
 #include "editor_undo.h"
 #include "imrepl_ctrl.h"
 #include "prof.h"
@@ -205,6 +206,10 @@ static void assert_float_decl_rejected_atomic(const char *label,
 int main() {
     repl_eval_init_predef_vars();
     editor_input_set_modifier_provider_for_test(mock_get_modifiers);
+    /* Tests skip imrepl_ctrl_init_gl (no GLUT context); register the
+     * comment-toggle prefix explicitly so Ctrl+/ test paths exercise the
+     * full toggle path. */
+    editor_set_line_comment_prefix("// ");
     printf("--- repl_editor tests ---\n");
 
     /* Commit chain ordering: float declarations must run before assignment
