@@ -332,4 +332,18 @@ void               editor_scroll_set(int scroll);
 int                editor_scroll_follow_cursor(void);
 void               editor_scroll_follow_cursor_set(int follow);
 
+/* Line-comment prefix configuration.
+ *
+ * Generic editor feature: the comment-toggle key reads / writes lines
+ * using the configured prefix (e.g., "// " for C-like, "# " for shell).
+ * The editor itself has no default — the controller registers a prefix
+ * at startup. While unset (NULL or empty), the comment-toggle key is a
+ * no-op.
+ *
+ * The setter takes ownership of nothing; the supplied pointer must
+ * stay valid for the lifetime of the editor (use a string literal or
+ * static buffer). */
+void        editor_set_line_comment_prefix(const char *prefix);
+const char *editor_line_comment_prefix(void);
+
 #endif /* EDITOR_STATE_H */

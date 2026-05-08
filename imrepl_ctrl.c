@@ -8,6 +8,7 @@
 #include "color_picker.h"
 #include "editor_input.h"
 #include "editor_completion.h"
+#include "editor_state.h"
 #include "editor_help_session.h"
 #include "editor_commit.h"
 #include "editor_search.h"
@@ -1280,6 +1281,10 @@ void imrepl_ctrl_init_gl(void) {
      * reads default to "no modifiers held" instead of aborting
      * freeglut for being called pre-init. */
     editor_input_enable_glut_modifier_reads();
+    /* App-level config: tell the editor what comment prefix to use
+     * for Ctrl+/ toggle. Editor itself has no default — tests that
+     * exercise the toggle key path set the prefix explicitly. */
+    editor_set_line_comment_prefix("// ");
 }
 
 void imrepl_ctrl_bootstrap_repl(const char *input_file) {

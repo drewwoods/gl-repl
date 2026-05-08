@@ -545,3 +545,17 @@ int editor_scroll_follow_cursor(void) {
 void editor_scroll_follow_cursor_set(int follow) {
     g_editor_state.scroll.scroll_follow_cursor = follow ? 1 : 0;
 }
+
+/* Line-comment prefix. Set explicitly by the controller at startup
+ * (e.g., "// " from imrepl_ctrl). NULL / empty disables comment
+ * toggle. The pointer is borrowed; callers pass a string literal or
+ * static buffer. */
+static const char *g_line_comment_prefix = NULL;
+
+void editor_set_line_comment_prefix(const char *prefix) {
+    g_line_comment_prefix = prefix;
+}
+
+const char *editor_line_comment_prefix(void) {
+    return g_line_comment_prefix;
+}
