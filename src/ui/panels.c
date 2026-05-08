@@ -4,7 +4,6 @@
  *
  * Extracted from sample.c for maintainability.
  */
-#include "repl_actions.h"
 #include "repl_command_spec.h"
 #include "repl_state_views.h"
 #include "state.h"
@@ -14,11 +13,7 @@
 #include "metrics.h"
 #include "editor_code_panel_document.h"
 #include "repl_core.h"
-#include "editor_clipboard.h"
 #include "editor_search.h"
-#include "repl_keys.h"
-#include "replay.h"
-#include "replay_state.h"
 #include "menu_bar.h"
 #include "variable_panel.h"
 #include "repl_replay_annotations.h"

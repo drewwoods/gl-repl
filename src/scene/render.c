@@ -7,7 +7,6 @@
 #include "backdrop.h"
 #include "grid.h"
 #include "lights.h"
-#include "overlays.h"
 #include "render_types.h"
 #include "render.h"
 #include "prof.h"

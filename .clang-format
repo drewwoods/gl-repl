@@ -6,7 +6,7 @@ ColumnLimit: 100
 ObjCBlockIndentWidth: 4
 ObjCBreakBeforeNestedBlockParam: true
 InsertNewlineAtEOF: true
-SortIncludes: Never
+#SortIncludes: Never
 #InsertTrailingCommas: Wrapped
 
 #

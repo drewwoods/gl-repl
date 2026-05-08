@@ -9,7 +9,6 @@
 #include "editor_code_panel_document.h"
 #include "repl_replay_annotations.h"
 #include "repl_source_scope.h"
-#include "repl_state.h"
 #include "replay_state.h"
 #include "./include/gl_2d.h"
 #include "ui/metrics.h"

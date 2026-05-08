@@ -1,7 +1,6 @@
 #ifndef IMREPL_CTRL_H
 #define IMREPL_CTRL_H
 
-#include "editor_input.h"  /* ReplInputDispatchEffects */
 #include "ui/hit.h"        /* UiHit (code-panel hit dispatch) */
 
 void imrepl_ctrl_init_gl(void);

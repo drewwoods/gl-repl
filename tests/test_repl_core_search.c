@@ -1,4 +1,5 @@
 #include "editor_input.h"
+#include "editor_search.h"
 #include "repl_core.h"
 #include "repl_state.h"
 

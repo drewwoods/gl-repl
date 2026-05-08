@@ -5,7 +5,8 @@
 #include "repl_core_internal.h"
 #include "repl_pipeline.h"
 #include "repl_keys.h"
-#include "repl_state.h"
+#include "repl_core.h"
+#include "repl_state_owners.h"
 #include "replay_state.h"
 
 #define REPLAY_STATE (replay_state_mut())

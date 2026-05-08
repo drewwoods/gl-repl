@@ -37,11 +37,11 @@
 #include "editor_state.h"
 #include "repl_apply.h"
 #include "repl_compile.h"
-#include "repl_command_store.h"
 #include "repl_core_internal.h"
 #include "repl_parser.h"
+#include "repl_core.h"
+#include "repl_state_owners.h"
 #include "repl_source_scope.h"
-#include "repl_state.h"
 #include "editor_undo.h"
 
 #include <ctype.h>

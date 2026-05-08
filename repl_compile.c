@@ -25,10 +25,8 @@
 
 #include "repl_compile.h"
 
-#include "repl_command_store.h"  /* MAX_COMMANDS, REPL_COMMAND_STORE_ADJUST_EDIT_LINE */
 #include "repl_core_internal.h"  /* repl_format_fits, repl_extract_assignment_parts, collect_visible_vars */
 #include "repl_source_scope.h"   /* repl_source_scope_cmd_indent */
-#include "repl_state.h"          /* repl_state_document_*, repl_state_edit_line, etc. */
 
 #include <ctype.h>
 #include <stdio.h>
