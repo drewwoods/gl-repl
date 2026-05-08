@@ -25,9 +25,35 @@
  *    owns a click
  *  - feed_line() programmatic commit entry
  */
-#include "editor_input.h"
 #include "color_picker.h"
-#include "repl_state.h"
+
+#include "editor_clipboard.h"
+#include "editor_commit.h"
+#include "editor_completion.h"
+#include "editor_help_session.h"
+#include "editor_inline_rename.h"
+#include "editor_input.h"
+#include "editor_search.h"
+#include "editor_undo.h"
+
+#include "repl_camera_controls.h"
+#include "repl_command_store.h"
+#include "repl_core_internal.h"
+#include "repl_keys.h"
+#include "repl_parser.h"
+#include "repl_state_owners.h"
+#include "repl_source_scope.h"
+
+#include "imrepl_ctrl.h"
+
+#include "ui/layout.h"
+#include "ui/menu_bar.h"
+#include "ui/state.h"
+
+#include <ctype.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 
 /* macOS Cmd-key support. The freeglut-fork sets GLUT_ACTIVE_SUPER
  * when Cmd is held; mainline freeglut and other GLUT builds don't
@@ -37,37 +63,6 @@
 #ifndef GLUT_ACTIVE_SUPER
 #define GLUT_ACTIVE_SUPER 0
 #endif
-#include "repl_parser.h"
-#include "repl_actions.h"
-#include "repl_core_internal.h"
-#include "editor_commit.h"
-#include "repl_debug.h"
-#include "repl_command_store.h"
-#include "repl_source_scope.h"
-#include "repl_camera_controls.h"
-#include "editor_clipboard.h"
-#include "editor_undo.h"
-#include "replay.h"
-#include "replay_state.h"
-#include "editor_help_session.h"
-#include "editor_completion.h"
-#include "repl_keys.h"
-#include "ui/panels.h"
-#include "color_picker_ui.h"
-#include "ui/layout.h"
-#include "imrepl_ctrl.h"
-#include "ui/menu_bar.h"
-#include "ui/state.h"
-#include "ui/variable_panel.h"
-#include "variable_panel_drag.h"
-#include "variable_panel_state.h"
-#include "editor_inline_rename.h"
-#include "repl_audio.h"
-
-#include <ctype.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
 
 /* Forward declarations. */
 static void keyboard_func(unsigned char key, int x, int y);

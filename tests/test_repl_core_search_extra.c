@@ -1,6 +1,6 @@
 #include "editor_input.h"
-#include "repl_core_internal.h"
-#include "repl_state.h"
+#include "editor_search.h"
+#include "repl_core.h"
 
 #define g_search_active    (editor_state_search_mut()->active)
 #define g_search_query     (editor_state_search_mut()->query)

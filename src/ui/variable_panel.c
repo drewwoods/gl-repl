@@ -13,7 +13,6 @@
 #include "variable_panel.h"
 #include "repl_state_views.h"
 #include "state.h"
-#include "variable_panel_drag.h"
 #include "layout.h"
 #include "variable_panel_state.h"
 #include "replay_state.h"

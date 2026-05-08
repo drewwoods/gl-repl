@@ -11,7 +11,8 @@
 #include "repl_core_internal.h"
 #include "repl_source_scope.h"
 #include "editor_undo.h"
-#include "repl_state.h"
+#include "repl_core.h"
+#include "repl_state_owners.h"
 
 void editor_clipboard_clear_selection(void) {
     editor_state_selection_clear();
