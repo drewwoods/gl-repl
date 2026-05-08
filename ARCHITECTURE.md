@@ -626,9 +626,9 @@ Completed (Phase 1 + most of Phase 2):
   `repl_replay_*` and `repl_state_*` calls.
 - ✅ **R2** — UI → REPL mutation holes closed end-to-end:
   - `src/ui/panels.c` is hit-test only (`check-ui-panels-no-mutators`).
-  - The color picker now lives across `color_picker.c` (peer state +
+  - The color picker now lives across `color_picker_state.c` (peer state +
     lifecycle + writeback through `editor_commit_apply_external_change`)
-    and `color_picker_ui.c` (pure renderer + hit-test over a
+    and `src/ui/color_picker.c` (pure renderer + hit-test over a
     `ColorPickerView`); the picker UI carries no live state reads, no
     parser/compile/apply, no `set_status`. Locked in by
     `check-color-picker-ui-isolation`.

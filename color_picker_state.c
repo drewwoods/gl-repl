@@ -1,7 +1,7 @@
 /*
- * color_picker.c - Floating color-picker peer (state + lifecycle + writeback).
+ * color_picker_state.c - Floating color-picker peer (state + lifecycle + writeback).
  */
-#include "color_picker.h"
+#include "color_picker_state.h"
 
 #include "config.h"               /* CP_CLEAR_MAX_V */
 #include "editor/commit.h"
