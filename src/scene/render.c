@@ -290,20 +290,12 @@ static void render_3d_scene_pass(const SceneRenderConfig *config,
     prof_accum_end(PROF_SCENE_3D_ORBIT_TARGET);
     prof_accum_end(PROF_SCENE_3D_HELPERS);
 
-    /* Polygon outline overlay (optional) + current-block highlight.
-     * Each overlay pass is wrapped in push/pop so transforms don't bleed
-     * between passes.  CMD_TRANSLATE3F is replayed within each pass so
-     * outlines are positioned correctly even when transforms separate blocks. */
-    prof_begin(PROF_SCENE_3D_OUTLINES);
-    scene_overlays_render_outlines(&frame_ctx, config->show_current_poly,
-                                   config->replay_tess_preview);
-    prof_accum_end(PROF_SCENE_3D_OUTLINES);
-
-    /* Vertex dots and edit guides - replay transforms so positions match geometry */
-    prof_begin(PROF_SCENE_3D_OVERLAYS);
-    scene_overlays_render_vertex_points(&frame_ctx);
-    prof_accum_end(PROF_SCENE_3D_OVERLAYS);
-
+    /* Polygon outline overlay, vertex-point overlay, vertex-number /
+     * normal-vector labels, and the cursor-edit guide stack all render
+     * here through post_overlays_fn — none of them are scene-internal
+     * any more (see imrepl_ctrl.c for the bodies). post_overlays_fn
+     * fires after lights_render so its output sits on top of the
+     * scene's helpers. */
     prof_begin(PROF_SCENE_3D_HUD);
 
     scene_lights_render(&frame_ctx);

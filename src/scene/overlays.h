@@ -42,23 +42,6 @@
  * exported output.c without having to include a `scene_*` header
  * (which would trip check-controller-boundaries). */
 
-/* Check whether a flat command block (starting at begin_idx) matches the cursor
- * context (for highlighting in polygon outlines). Returns 1 if the block's
- * source code includes the cursor line, 0 otherwise. is_tess indicates whether
- * the block is tessellation-related (gluTessCallback). Used to determine whether
- * to highlight or dim polygon outlines while editing. */
-int  scene_overlay_flat_block_matches_cursor(int begin_idx, int is_tess,
-                                             const SceneRenderConfig *cfg);
-
-/* Render polygon outlines (wireframe edges of filled triangles/quads), color-coded
- * by matrix stack depth. show_current_poly controls whether to brighten outlines
- * for geometry matching the cursor block (1) or dim them (0). replay_tess_preview
- * enables special highlighting for tessellation callback geometry during replay.
- * Called during the overlay rendering phase of the frame. */
-void scene_overlays_render_outlines(const FrameRenderContext *frame_ctx,
-                                    int show_current_poly,
-                                    int replay_tess_preview);
-
 /* Per-vertex primitive renderers exposed for the controller's overlay
  * orchestration. Each draws ONE label / arrow at a transformed position;
  * iteration of the user's program and applying transforms is the
@@ -72,12 +55,13 @@ void scene_draw_normal_vector_arrow(float vx, float vy, float vz,
                                     float nx, float ny, float nz,
                                     float scale);
 
-/* Render semi-transparent vertex point dots at each vertex position.
- * Points are alpha-blended so they don't obscure underlying geometry.
- * Line-mode primitives (GL_LINES, GL_LINE_STRIP, GL_LINE_LOOP) use a smaller
- * point radius to avoid covering the line itself. Also drives geometry and
- * transform guides inline, so they render at the correct model-matrix position.
- * No-ops when both show_vpoints and replay_vertex_points are false. */
-void scene_overlays_render_vertex_points(const FrameRenderContext *frame_ctx);
+/* Note: outlines and vertex-point overlays no longer live in this header.
+ * They moved to imrepl_ctrl.c where they're implemented by re-executing
+ * the user's program with glPolygonMode(GL_LINE) / GL_POINT respectively
+ * — the gluTessCallback edge-flag handler in repl_executor.c keeps
+ * triangulation interiors invisible in GL_LINE mode, so no GLCmd
+ * iteration is needed. The visual style (currently black with lighting,
+ * later stencil-based) is the controller's choice; the scene module is
+ * not involved. */
 
 #endif /* SCENE_OVERLAYS_H */

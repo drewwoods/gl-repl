@@ -30,7 +30,9 @@
 #include "replay.h"
 #include "replay_state.h"
 #include "scene/render.h"
-#include "scene/overlays.h"     /* scene_draw_vertex_number_label / _arrow primitives */
+#include "scene/overlays.h"          /* scene_draw_vertex_number_label / _arrow primitives */
+#include "scene/geometry_guides.h"   /* scene_geometry_guides_render_for_cursor */
+#include "scene/transform_guides.h"  /* scene_transform_guides_prepare / _render_if_due */
 #include "ui/autocomplete_panel.h"
 #include "color_picker_ui.h"
 #include "ui/editor.h"
@@ -409,9 +411,132 @@ static void imrepl_ctrl_render_normal_vectors(void) {
     glPopAttrib();
 }
 
+/* --- Outline + vertex-point overlays via glPolygonMode --------------------
+ *
+ * Same pattern repl_export uses in its outline / point passes (see
+ * emit_export_outline_pass_setup): re-execute the user's program with
+ * glPolygonMode flipped to GL_LINE or GL_POINT. The gluTess edge-flag
+ * callback registered in repl_executor.c keeps internal triangulation
+ * edges suppressed in GL_LINE mode, so outlines only show real polygon
+ * edges. No GLCmd iteration is needed here.
+ *
+ * The visual style (currently black material with lighting on, matching
+ * the export's pass) lives entirely in the *_pass_setup helpers. A
+ * future stencil-based highlight (cursor-block, replay current poly,
+ * etc.) replaces these helpers without touching the program-execution
+ * scaffolding. */
+
+static void imrepl_ctrl_execute_user_geometry_for_overlay(void) {
+    repl_execute_set_fade_context(1.0f, 0);
+    repl_execute_program(&(ReplExecutionOptions){
+        .flat_cmd_count = repl_state_flat_program_count(),
+        .program        = repl_state_flat_program_view(),
+        .text           = editor_buffer_view(),
+    });
+}
+
+static void overlay_outline_pass_setup(void) {
+    glEnable(GL_COLOR_MATERIAL);
+    glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE);
+    glColor3f(0.0f, 0.0f, 0.0f);
+    glDisable(GL_COLOR_MATERIAL);
+    glEnable(GL_POLYGON_OFFSET_LINE);
+    glPolygonOffset(REPL_OUTLINE_POLYGON_OFFSET_FACTOR,
+                    REPL_OUTLINE_POLYGON_OFFSET_UNITS);
+    glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+    glLineWidth(1.2f);
+    glEnable(GL_LIGHTING);
+}
+
+static void overlay_vertex_point_pass_setup(void) {
+    glEnable(GL_COLOR_MATERIAL);
+    glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE);
+    glColor3f(0.0f, 0.0f, 0.0f);
+    glDisable(GL_COLOR_MATERIAL);
+    glPointSize(8.0f);
+    glPolygonMode(GL_FRONT_AND_BACK, GL_POINT);
+    glEnable(GL_LIGHTING);
+}
+
+static void imrepl_ctrl_render_outlines_overlay(void) {
+    glPushAttrib(GL_ALL_ATTRIB_BITS);
+    overlay_outline_pass_setup();
+    glPushMatrix();
+    imrepl_ctrl_execute_user_geometry_for_overlay();
+    glPopMatrix();
+    glPopAttrib();
+}
+
+static void imrepl_ctrl_render_vertex_points_overlay(void) {
+    glPushAttrib(GL_ALL_ATTRIB_BITS);
+    overlay_vertex_point_pass_setup();
+    glPushMatrix();
+    imrepl_ctrl_execute_user_geometry_for_overlay();
+    glPopMatrix();
+    glPopAttrib();
+}
+
+/* --- Cursor edit-guide walker --------------------------------------------
+ *
+ * The geometry-guide planes / crosshairs and transform-guide arrows need
+ * to render at the user's current modelview transform at the cursor's
+ * flat-cmd position. We walk the program with the existing REPL vertex
+ * walker (which tracks transforms) and invoke the scene-side guide
+ * renderers at each cmd's transformed position. */
+
+typedef struct {
+    const SceneGuideSnapshot *snapshot;
+    SceneTransformGuidePlan   xform_plan;
+    float                     cam_view[16];
+} CursorGuideRenderCtx;
+
+static void on_cmd_render_cursor_guides(const ReplVertexWalkState *state,
+                                         void *user) {
+    CursorGuideRenderCtx *ctx = (CursorGuideRenderCtx *)user;
+    int is_cursor = (state->src_cmd_idx == ctx->snapshot->edit_line_idx);
+
+    if (is_cursor && !ctx->snapshot->replaying)
+        scene_geometry_guides_render_for_cursor(ctx->snapshot);
+
+    scene_transform_guides_render_if_due(ctx->snapshot, &ctx->xform_plan,
+                                         state->flat_cmd_idx, ctx->cam_view);
+}
+
+static void imrepl_ctrl_render_cursor_guides(const SceneGuideSnapshot *snapshot) {
+    if (!snapshot || !snapshot->show_guides) return;
+
+    CursorGuideRenderCtx ctx;
+    ctx.snapshot = snapshot;
+    scene_transform_guides_prepare(snapshot, &ctx.xform_plan);
+
+    glPushAttrib(GL_ALL_ATTRIB_BITS);
+    glDisable(GL_LIGHTING);
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+    glPushMatrix();
+    glGetFloatv(GL_MODELVIEW_MATRIX, ctx.cam_view);
+
+    static const ReplVertexWalkCallbacks cb = {
+        .on_each_cmd = on_cmd_render_cursor_guides,
+    };
+    ReplVertexWalkContext walk = imrepl_ctrl_build_vertex_walk_context(0);
+    repl_walk_user_vertices(&walk, &cb, &ctx);
+
+    glPopMatrix();
+    glPopAttrib();
+}
+
 static void imrepl_ctrl_post_overlays(void *user_data) {
-    (void)user_data;
+    const SceneRenderConfig *cfg = (const SceneRenderConfig *)user_data;
     ReplPresentationState presentation = repl_state_presentation();
+
+    if (presentation.show_vertex_outlines)
+        imrepl_ctrl_render_outlines_overlay();
+    if (presentation.show_vertex_points)
+        imrepl_ctrl_render_vertex_points_overlay();
+    if (cfg)
+        imrepl_ctrl_render_cursor_guides(&cfg->guide_snapshot);
     if (presentation.show_vertex_labels)
         imrepl_ctrl_render_vertex_numbers();
     if (presentation.show_normal_vectors)
@@ -547,11 +672,12 @@ static void imrepl_ctrl_build_scene_config(SceneRenderConfig *config) {
     config->post_fill_fn = NULL;
     config->post_fill_user_data = NULL;
 
-    /* --- Post-overlays hook (vertex_numbers / normal_vectors) ---
-     * Always wired; the body itself short-circuits when the relevant
-     * presentation flags are off. */
+    /* --- Post-overlays hook ---
+     * Always wired; the body short-circuits per-overlay based on REPL
+     * presentation flags. user_data carries the per-frame config so the
+     * hook can read guide_snapshot for the cursor edit guides. */
     config->post_overlays_fn        = imrepl_ctrl_post_overlays;
-    config->post_overlays_user_data = NULL;
+    config->post_overlays_user_data = config;
 
     /* --- Flat program --- */
     config->flat_program = repl_state_flat_program_view();
