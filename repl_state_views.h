@@ -78,12 +78,20 @@ typedef struct {
 /* Code-panel UI chrome: panel divider, cursor blink + pixel position
  * the renderer uses. The scroll fields used to live here too; Phase 1
  * commit 11 split them out into EditorState.scroll because scroll is
- * an editing-session concern, not a render-chrome one. */
+ * an editing-session concern, not a render-chrome one.
+ *
+ * `layout_mode` and `show_vertex_indices` are per-frame mirrors of
+ * ReplPresentationState fields so ui_*.c renderers and hit-tests can
+ * read them without crossing the repl_state_*() boundary; the controller
+ * refreshes them in imrepl_ctrl_build_ui_snapshot. The source of truth
+ * still lives on ReplPresentationState. */
 typedef struct {
     float panel_frac;
     int   resizing_panel;
     int   cursor_visible;
     int   blink_tick;
+    int   layout_mode;          /* mirror of presentation.code_panel_layout */
+    int   show_vertex_indices;  /* mirror of presentation.show_vertex_indices */
 } ReplCodePanelRuntimeState;
 
 /* Help-overlay chrome flag. The session-state fields (tab_idx, scroll)

@@ -1018,6 +1018,11 @@ static void imrepl_ctrl_build_ui_snapshot(UiRenderSnapshot *snap) {
      * reflects the current frame before rendering reads it. */
     repl_state_refresh_workspace_header_lines();
 
+    /* Mirror chrome-relevant presentation fields into ui_state.code_panel
+     * so ui_*.c renderers and hit-tests can read them via ui_state_*()
+     * without crossing the repl_state_*() boundary. */
+    repl_state_sync_ui_chrome();
+
     snap->viewport       = ui_state_viewport();
     snap->presentation   = repl_state_presentation();
     snap->code_panel     = ui_state_code_panel();

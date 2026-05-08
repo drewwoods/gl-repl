@@ -863,6 +863,7 @@ int editor_input_restore_hidden_code_panel(void) {
     if (!editor_input_code_panel_hidden())
         return 0;
     repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT;
+    repl_state_sync_ui_chrome();
     ui_menu_bar_close();
     color_picker_close();
     return 1;

@@ -27,8 +27,8 @@ static void reset_doc_fixture(void) {
     repl_reset_state();
     ui_state_viewport_set_size(800, 260);
     ui_state_code_panel_mut()->panel_frac = 0.45f;
-    repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT;
-    repl_state_presentation_mut()->show_vertex_indices = 0;
+    repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT; repl_state_sync_ui_chrome();
+    repl_state_presentation_mut()->show_vertex_indices = 0; repl_state_sync_ui_chrome();
     editor_scroll_set(0);
     editor_scroll_follow_cursor_set(0);
     repl_state_refresh_workspace_header_lines();
