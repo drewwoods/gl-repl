@@ -32,9 +32,10 @@
 
 #include "commit.h"
 #include "completion.h"
-
 #include "services.h"
 #include "state.h"
+#include "undo.h"
+
 #include "repl_apply.h"
 #include "repl_compile.h"
 #include "repl_core_internal.h"
@@ -42,7 +43,6 @@
 #include "repl_core.h"
 #include "repl_state_owners.h"
 #include "repl_source_scope.h"
-#include "undo.h"
 
 #include <ctype.h>
 #include <stdio.h>

@@ -5,52 +5,52 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#include "color_picker.h"
-#include "editor/input.h"
-#include "editor/completion.h"
-#include "editor/state.h"
-#include "editor/help_session.h"
-#include "editor/commit.h"
-#include "editor/search.h"
-#include "glr_actions.h"
 #include "audio.h"
+#include "color_picker.h"
+#include "editor/clipboard.h"
+#include "editor/code_panel_document.h"
+#include "editor/commit.h"
+#include "editor/completion.h"
+#include "editor/help_session.h"
+#include "editor/input.h"
+#include "editor/search.h"
+#include "editor/state.h"
+#include "geometry_guides.h" /* geometry_guides_render_for_cursor */
+#include "glr_actions.h"
 #include "glr_camera.h"
-#include "repl_core.h"
-#include "repl_help_text.h"
 #include "glr_debug.h"
+#include "keys.h"
+#include "outline_offset.h" /* REPL_OUTLINE_POLYGON_OFFSET_{FACTOR,UNITS} */
+#include "prof.h"
+#include "repl_core.h"
 #include "repl_eval.h"
 #include "repl_executor.h"
 #include "repl_export.h"
-#include "keys.h"
+#include "repl_help_text.h"
 #include "repl_pipeline.h"
 #include "repl_replay_annotations.h"
 #include "repl_source_scope.h"
 #include "repl_state_owners.h"
 #include "replay.h"
 #include "replay_state.h"
+#include "replay_ui_hud.h"
+#include "scene/overlays.h" /* scene_draw_vertex_number_label / _arrow primitives */
 #include "scene/render.h"
-#include "scene/overlays.h"          /* scene_draw_vertex_number_label / _arrow primitives */
-#include "geometry_guides.h"   /* geometry_guides_render_for_cursor */
-#include "transform_guides.h"  /* transform_guides_prepare / _render_if_due */
-#include "transform_utils.h"   /* apply_tracked_transform / unwind_transform_stack */
-#include "outline_offset.h"    /* REPL_OUTLINE_POLYGON_OFFSET_{FACTOR,UNITS} */
+#include "transform_guides.h" /* transform_guides_prepare / _render_if_due */
+#include "transform_utils.h"  /* apply_tracked_transform / unwind_transform_stack */
 #include "ui/autocomplete_panel.h"
 #include "ui/editor.h"
-#include "ui/tabbed_overlay.h"
 #include "ui/layout.h"
 #include "ui/menu_bar.h"
 #include "ui/panels.h"
 #include "ui/profile_panel.h"
-#include "replay_ui_hud.h"
 #include "ui/snapshot.h"
 #include "ui/state.h"
+#include "ui/state_types.h" /* UI-chrome typedefs (CodePanel/Camera/Help/etc.) */
+#include "ui/tabbed_overlay.h"
 #include "ui/variable_panel.h"
-#include "variable_panel_state.h"
 #include "variable_panel_drag.h"
-#include "editor/clipboard.h"
-#include "editor/code_panel_document.h"
-#include "prof.h"
-#include "ui/state_types.h"  /* UI-chrome typedefs (CodePanel/Camera/Help/etc.) */
+#include "variable_panel_state.h"
 
 static int glr_ctrl_cmd_is_focus_vertex(const GLCmd *cmd) {
     return cmd->valid &&

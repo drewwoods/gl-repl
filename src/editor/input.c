@@ -25,7 +25,6 @@
  *    owns a click
  *  - feed_line() programmatic commit entry
  */
-#include "color_picker.h"
 
 #include "clipboard.h"
 #include "commit.h"
@@ -36,17 +35,16 @@
 #include "search.h"
 #include "undo.h"
 
+#include "color_picker.h"
 #include "glr_camera.h"
+#include "glr_ctrl.h"
+#include "keys.h"
 #include "repl_command_store.h"
 #include "repl_core.h"
 #include "repl_core_internal.h"
-#include "keys.h"
 #include "repl_parser.h"
-#include "repl_state_owners.h"
 #include "repl_source_scope.h"
-
-#include "glr_ctrl.h"
-
+#include "repl_state_owners.h"
 #include "ui/layout.h"
 #include "ui/menu_bar.h"
 #include "ui/state.h"
