@@ -152,13 +152,14 @@ typedef struct {
     ReplClipboardState    clipboard;
     ReplSearchState       search;
     ReplAutocompleteState autocomplete;
-    EditorTransformerList transformers;
-    EditorHighlightList   highlights;
-    EditorVirtualLineList virtual_lines;
+    EditorTransformerList  transformers;
+    EditorHighlightList    highlights;
+    EditorVirtualLineList  virtual_lines;
+    EditorLineOverrideList line_overrides;
     /* variable_drag lives on the variable_panel peer (Phase F
      * commit 31). Callers use variable_panel_drag /
      * variable_panel_drag_mut / variable_panel_handle_drag_*. */
-    EditorScrollState     scroll;
+    EditorScrollState      scroll;
 } EditorState;
 
 /* Capture / restore / reset symmetry with repl_state_*. */
@@ -327,6 +328,16 @@ int                          editor_state_virtual_lines_append(int after_line_id
  * code-panel layout to extend row-height accounting; the editor stays
  * agnostic to which feature pushed the rows. */
 int                          editor_state_virtual_lines_count_for(int after_line_idx);
+
+/* Per-line text override slice. Controller pushes overrides each
+ * frame for source lines whose displayed text should differ from the
+ * buffer text (e.g., replay's expand_args annotations). Editor reads
+ * via _for() with a buffer fallback. */
+const EditorLineOverrideList *editor_state_line_overrides(void);
+void                          editor_state_line_overrides_clear(void);
+int                           editor_state_line_overrides_append(int line_idx,
+                                                                 const char *text);
+const char                   *editor_state_line_override_for(int line_idx);
 
 /* Editor scroll slice. */
 EditorScrollState  editor_state_scroll(void);

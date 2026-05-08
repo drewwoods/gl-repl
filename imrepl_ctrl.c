@@ -800,6 +800,32 @@ static void imrepl_ctrl_push_highlights(void) {
                                             HIGHLIGHT_REPLAY_PC);
 }
 
+/* Push per-line text overrides for source lines whose displayed text
+ * should differ from the buffer text. Today only replay's expand_args
+ * annotations produce overrides (e.g. `x = 0.4` → `x = 0.4 // = 0.4`
+ * with the evaluated form appended). The list stays empty outside
+ * active replay, and is sparse during it (only has_vars cmds of the
+ * applicable kinds get entries). */
+static void imrepl_ctrl_push_line_overrides(void) {
+    editor_state_line_overrides_clear();
+    ReplReplayRuntimeState replay = replay_state_view();
+    if (!replay.active || !replay.expand_args)
+        return;
+
+    EditorBufferView view = editor_buffer_view();
+    int n = repl_state_document_count();
+    for (int i = 0; i < n; i++) {
+        char display[MAX_LINE_OVERRIDE_TEXT];
+        if (!repl_replay_code_panel_get_command_display_text(view, i, display,
+                                                             sizeof(display)))
+            continue;
+        const char *base = editor_buffer_view_line(view, i);
+        if (base && strcmp(display, base) == 0)
+            continue;
+        editor_state_line_overrides_append(i, display);
+    }
+}
+
 static void imrepl_ctrl_push_color_transformers(void) {
     editor_state_transformers_clear();
     int doc_count = repl_state_document_count();
@@ -1140,10 +1166,12 @@ void imrepl_ctrl_display_frame(void) {
     imrepl_ctrl_push_highlights();
     prof_end(PROF_SNAPSHOT_HIGHLIGHTS);
 
-    /* Prepare replay annotations + push the virtual-line list.
-     * Layout also calls prepare(), so this stays idempotent. */
+    /* Prepare replay annotations + push the virtual-line list and
+     * the per-line text-override list. Layout reads both as snapshot
+     * data; the editor is agnostic to which feature pushed them. */
     prof_begin(PROF_SNAPSHOT_VIRTUAL_LINES);
     repl_replay_annotations_prepare(editor_buffer_view());
+    imrepl_ctrl_push_line_overrides();
     prof_end(PROF_SNAPSHOT_VIRTUAL_LINES);
 
     /* Per-frame prep that sits between virtual-line refresh and

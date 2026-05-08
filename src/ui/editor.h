@@ -98,4 +98,21 @@ typedef struct {
     int               count;
 } EditorVirtualLineList;
 
+/* Per-line text overrides. The controller may push a replacement
+ * text for a source line (e.g., replay's variable-substituted form);
+ * editor row-count and render read this slice with a buffer fallback.
+ * Sparse — only lines with a real override appear. */
+#define MAX_LINE_OVERRIDE_TEXT 256
+#define MAX_LINE_OVERRIDES     512
+
+typedef struct {
+    int  line_idx;
+    char text[MAX_LINE_OVERRIDE_TEXT];
+} EditorLineOverride;
+
+typedef struct {
+    EditorLineOverride items[MAX_LINE_OVERRIDES];
+    int                count;
+} EditorLineOverrideList;
+
 #endif /* UI_EDITOR_H */
