@@ -1,12 +1,12 @@
-#include "ui_menu_bar.h"
+#include "ui/menu_bar.h"
 #include "repl_actions.h"
 #include "repl_config.h"
 #include "repl_core.h"
 #include "repl_state_owners.h"
 #include "replay.h"
-#include "ui_state.h"
-#include "ui_layout.h"
-#include "ui_metrics.h"
+#include "ui/state.h"
+#include "ui/layout.h"
+#include "ui/metrics.h"
 #include "support/test_harness.h"
 #include <gl_2d.h>
 #ifdef OPENGL_VIBE_USE_GL_STUBS

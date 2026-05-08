@@ -1,5 +1,5 @@
 #include "variable_panel_drag.h"
-#include "variable_panel.h"
+#include "variable_panel_state.h"
 #include "repl_state.h"
 #include "repl_core.h"
 #include "repl_eval.h"

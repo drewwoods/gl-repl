@@ -1,7 +1,7 @@
 /*
  * ui_layout.c - pure window layout geometry.
  */
-#include "ui_layout.h"
+#include "layout.h"
 #include "repl_state.h"
 
 /* ui_state_viewport / ui_state_code_panel are forward-declared here

@@ -3,12 +3,12 @@
 #include <stdio.h>
 #include <string.h>
 
-#include "ui_state.h"
+#include "ui/state.h"
 #include "editor_code_panel_document.h"
 #include "repl_core.h"
 #include "repl_state.h"
-#include "ui_layout.h"
-#include "ui_metrics.h"
+#include "ui/layout.h"
+#include "ui/metrics.h"
 #include "support/test_harness.h"
 
 static TestHarness g_harness = TEST_HARNESS_INIT;

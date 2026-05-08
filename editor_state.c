@@ -1,7 +1,7 @@
 #include "editor_state.h"
 
 #include "repl_compile.h"   /* ReplCompiledChange struct definition */
-#include "variable_panel.h" /* peer subsystem: drag-state bytes live here */
+#include "variable_panel_state.h" /* peer subsystem: drag-state bytes live here */
 
 #include <stddef.h>
 #include <string.h>

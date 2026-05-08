@@ -8,7 +8,7 @@
 #ifndef REPL_HELP_TEXT_H
 #define REPL_HELP_TEXT_H
 
-#include "ui_tabbed_overlay.h"
+#include "ui/tabbed_overlay.h"
 
 /* Returns a pointer to the assembled help content. The pointer
  * references file-static storage and stays valid until the next call;

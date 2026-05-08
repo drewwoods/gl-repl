@@ -118,7 +118,7 @@ ownership / contract guards. Highlights:
   `cursor_px/cursor_py` state slice along with the
   `check-cursor-px-encapsulated` migration guard). Any new mutator
   fails the build.
-- `check-ui-panels-no-mutators` — Phase J2.2 hard guard. `ui_panels.c`
+- `check-ui-panels-no-mutators` — Phase J2.2 hard guard. `src/ui/panels.c`
   is hit-test only: zero matches for code-panel press / click / drag /
   release / scene-press / motion / mouse-release / escape forwarders
   and color-picker open/close/press/motion/release / replay-pin /
@@ -183,8 +183,8 @@ ownership / contract guards. Highlights:
 | `repl_camera_controls.c` | Scene camera pointer state, orbit/pan/zoom drags, wheel zoom velocity, momentum tick |
 | `repl_actions.c` | Config descriptor table, config shortcuts, menu actions, startup config defaults |
 | `repl_actions.h` | Actions public API (`repl_action_menu_item_activate`, cursor-pixel setter, etc.) |
-| `ui_code_panel_layout.c` | Pure code-panel wrapping, row counts, segment lookup, cursor-row mapping |
-| `ui_code_panel_layout.h` | `CodePanelTextLayout` / `CodePanelWrapIter` API shared by UI, export dumps, tests |
+| `src/ui/code_panel_layout.c` | Pure code-panel wrapping, row counts, segment lookup, cursor-row mapping |
+| `src/ui/code_panel_layout.h` | `CodePanelTextLayout` / `CodePanelWrapIter` API shared by UI, export dumps, tests |
 | `editor_code_panel_document.c` | Code-panel document row model, scroll-follow calculation, hit-test targets |
 | `editor_code_panel_document.h` | `CodePanelDocumentLayout` API consumed by UI and scrolling tests |
 | `repl_executor.c` | Narrow live-GL dispatch: walks the flat command array emitting OpenGL calls |
@@ -198,38 +198,38 @@ ownership / contract guards. Highlights:
 | `editor_search.c` | Case-insensitive substring search state and match navigation |
 | `editor_search.h` | Search query helpers and input routing API |
 | `editor_autocomplete.c` | Completion model: symbol matching, ghost text, parameter hints |
-| `ui_layout.c` | Pure window layout geometry: scene rect and code-panel rect derivation |
-| `ui_layout.h` | Layout geometry API (`ui_layout_scene_rect`, `ui_layout_code_panel_rect`) |
+| `src/ui/layout.c` | Pure window layout geometry: scene rect and code-panel rect derivation |
+| `src/ui/layout.h` | Layout geometry API (`ui_layout_scene_rect`, `ui_layout_code_panel_rect`) |
 | `repl_scenes.c` | User-scene slots, LRU eviction, workspace save/load, workspace dir binding |
 | `repl_example_loader.c` | Built-in example loading and active-example tracking |
 | `repl_debug.c` | Diagnostic dumps for CLI flags and tests |
 | `repl_debug.h` | Debug dump public API |
 | `repl_replay_annotations.c` | Replay-time source annotations, variable substitution, evaluated command display text |
 | `repl_replay_annotations.h` | Code-panel replay annotation API |
-| `ui_snapshot.h` | `UiRenderSnapshot` — frame-frozen bundle built once per frame by `imrepl_ctrl_build_ui_snapshot()` |
-| `ui_editor.h` | Per-frame editor-overlay snapshots (swatches, sliders, highlights) pushed by the controller |
+| `src/ui/snapshot.h` | `UiRenderSnapshot` — frame-frozen bundle built once per frame by `imrepl_ctrl_build_ui_snapshot()` |
+| `src/ui/editor.h` | Per-frame editor-overlay snapshots (swatches, sliders, highlights) pushed by the controller |
 | `replay_ui_hud.c` | 2D replay status HUD (feature-UI under the `replay_ui_*` prefix; reads replay peer snapshot) |
 | `replay_ui_hud.h` | Replay HUD render entrypoint |
-| `ui_profile_panel.c` | CPU profiling overlay panel (per-frame section timings) |
-| `ui_profile_panel.h` | Profile panel render entrypoint |
-| `ui_menu_bar.c` | Code-panel menu bar, dropdowns, config right-click handling, search slot |
-| `ui_menu_bar.h` | Menu/pin hit-test and dropdown state API |
+| `src/ui/profile_panel.c` | CPU profiling overlay panel (per-frame section timings) |
+| `src/ui/profile_panel.h` | Profile panel render entrypoint |
+| `src/ui/menu_bar.c` | Code-panel menu bar, dropdowns, config right-click handling, search slot |
+| `src/ui/menu_bar.h` | Menu/pin hit-test and dropdown state API |
 | `color_picker.c` | Floating color picker peer: state, lifecycle, slider input handlers, source-line writeback through editor commit |
 | `color_picker.h` | Peer API (`ColorPickerView`, `ColorPickerInputResult`, `color_picker_open/close/handle_*`, `color_picker_hsv_to_rgb`) |
 | `color_picker_ui.c` | Floating color picker renderer + hit-test (pure, takes `ColorPickerView *`) |
 | `color_picker_ui.h` | Picker UI render/hit-test API + `UI_COLOR_SWATCH_W` |
 | `ui_help_overlay.c` | Modal F1 help overlay (Commands / Keys tabs, dynamic F-key bindings) |
 | `ui_help_overlay.h` | Help overlay render entrypoint |
-| `ui_variable_panel.c` | Floating variable slider panel rendering, geometry, and hit-test |
-| `ui_variable_panel.h` | Variable panel render/rect/hit API |
-| `ui_autocomplete_panel.c` | Floating autocomplete popup renderer (reads `editor_autocomplete.c` model) |
-| `ui_autocomplete_panel.h` | Autocomplete popup render entrypoint |
+| `src/ui/variable_panel_state.c` | Floating variable slider panel rendering, geometry, and hit-test |
+| `src/ui/variable_panel_state.h` | Variable panel render/rect/hit API |
+| `src/ui/autocomplete_panel.c` | Floating autocomplete popup renderer (reads `editor_autocomplete.c` model) |
+| `src/ui/autocomplete_panel.h` | Autocomplete popup render entrypoint |
 | `editor_inline_rename.c` | Inline scene-rename input buffer and key handling (status-bar overlay) |
 | `editor_inline_rename.h` | Rename begin/active/cancel/key/special API |
 | `variable_panel_drag.c` | Variable slider drag transaction: begin/motion/reset, linear/log value writeback |
 | `variable_panel_drag.h` | Drag state accessors + begin/motion/reset API |
-| `variable_panel.c` | Variable-panel peer subsystem: owns visibility flag + drag-state storage (Phase F) |
-| `variable_panel.h` | Peer-subsystem facade (`VariablePanelState`, capture/restore/reset, view/drag accessors) |
+| `variable_panel_state.c` | Variable-panel peer subsystem: owns visibility flag + drag-state storage (Phase F) |
+| `variable_panel_state.h` | Peer-subsystem facade (`VariablePanelState`, capture/restore/reset, view/drag accessors) |
 | `replay_state.c` | Replay peer subsystem: owns `ReplReplayRuntimeState` storage (Phase F commit 33) |
 | `replay_state.h` | Peer-subsystem facade (`replay_state_capture/restore/reset/view/mut`) |
 | `editor_help_session.c` | Read-only editor session for the help overlay (tab_idx + scroll; Phase G commit 35) |
@@ -261,8 +261,8 @@ ownership / contract guards. Highlights:
 | `scene_lights.h` | Scene light setup/render entrypoints |
 | `scene_overlays.c` | Polygon outline/current-block, vertex-number, and normal-vector overlays |
 | `scene_overlays.h` | Scene overlay render/helper API |
-| `ui_panels.c` | Code-panel row rendering (incl. inline ghost/hint text), scene status banner, top-level panel hit routing |
-| `ui_panels.h` | Code-panel geometry, render, hit-test, and panel input bridge declarations |
+| `src/ui/panels.c` | Code-panel row rendering (incl. inline ghost/hint text), scene status banner, top-level panel hit routing |
+| `src/ui/panels.h` | Code-panel geometry, render, hit-test, and panel input bridge declarations |
 | `repl_eval.c` | Expression evaluator (recursive descent), REPL<->C translators, for-loop parsers |
 | `repl_eval.h` | Evaluator types (`ExprVar`, `ExprCtx`), function declarations |
 | `cmd_format.c` | Pure indentation/depth computation (no GL dependency) |
@@ -346,7 +346,7 @@ Grids and axes are themeable through small specs in `scene_grid.c` and
 
 ## Adding Menu Bar Items
 
-The top row is a menu bar in `ui_menu_bar.c` styled after the Header
+The top row is a menu bar in `src/ui/menu_bar.c` styled after the Header
 Wireframes v2 mock. Left side has top-level menus (File / Scene / Config);
 right side has pinned buttons (Search / Replay).
 
@@ -354,7 +354,7 @@ To add an **item** to an existing top-level menu:
 1. Extend the per-menu enum (e.g. `FILE_ITEM_*` or the `SCENE_OFF_*` block) and
    bump the trailing `*_COUNT`
 2. Add the label in `menu_item_label()` and shortcut (if any) in
-   `menu_item_shortcut()` in `ui_menu_bar.c`
+   `menu_item_shortcut()` in `src/ui/menu_bar.c`
 3. Add the action branch in `repl_action_menu_item_activate()` in
    `repl_actions.c`; return `1` for action items (menu closes), `0` for
    cycle/toggle items (menu stays open; click-outside dismisses)
@@ -362,11 +362,11 @@ To add an **item** to an existing top-level menu:
 To add a **new top-level menu**: extend the `MENU_*` enum (before
 `NUM_MENUS`), add a label in `g_menu_labels[]`, and handle the new id in
 `menu_item_count` / `menu_item_label` / `menu_item_shortcut` in
-`ui_menu_bar.c`, plus `repl_action_menu_item_activate()` in
+`src/ui/menu_bar.c`, plus `repl_action_menu_item_activate()` in
 `repl_actions.c` for side effects.
 
 To add a **pinned right-side button**: extend `PIN_*` enum, append a label
-to `g_pin_btn_labels[]` in `ui_menu_bar.c`. Activation routing lives in
+to `g_pin_btn_labels[]` in `src/ui/menu_bar.c`. Activation routing lives in
 `imrepl_ctrl.c::route_pin_button_hit()` — add the new pin id to its
 switch.
 
@@ -431,7 +431,7 @@ message (user has to save workspace first to unlock eviction).
 
 ### Scene menu layout
 
-`SCENE_OFF_*` offsets in `ui_menu_bar.c` place fixed rows above the user-scene
+`SCENE_OFF_*` offsets in `src/ui/menu_bar.c` place fixed rows above the user-scene
 list (`New empty scene`, `Save to output.c`, `Rename active scene`). User
 scenes follow at `SCENE_OFF_SCENES`; rows are dense (unused slots skipped via
 `repl_scene_menu_slot_for_dense_index`). The active scene row is drawn with
@@ -740,7 +740,7 @@ Declarative toggle system in `repl_actions.c`:
   is_special, key, state_count, state_names[], section_header }`
 - Each item is a toggle (2 states, default OFF/ON) or cycle (>2 states
   with named entries, e.g. grid themes)
-- Rendered by the Config dropdown in `ui_menu_bar.c`; menu clicks and
+- Rendered by the Config dropdown in `src/ui/menu_bar.c`; menu clicks and
   F-key/Ctrl-key shortcuts dispatch through `repl_actions.c`
 - Adding a config item: append to `g_cfg_items[]` — count is
   auto-computed via `sizeof`

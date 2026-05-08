@@ -10,7 +10,7 @@
 # pushes, peer-state writes) belongs in editor / imrepl_ctrl /
 # peer-subsystem handlers, not inside ui_*.c.
 #
-# Tracked patterns (in `ui_*.c`, excluding `ui_state.c` which is the
+# Tracked patterns (in `ui_*.c`, excluding `src/ui/state.c` which is the
 # legitimate owner of `ui_state_*_mut`):
 #
 #   - `repl_action_*(`               — REPL action dispatch
@@ -49,11 +49,10 @@ if [ -z "${baseline:-}" ]; then
 fi
 
 violations=$(grep -REn \
-    --include='ui_*.c' \
-    --exclude='ui_state.c' \
-    --exclude-dir='.claude' \
+    --include='*.c' \
+    --exclude='state.c' \
     'repl_action_[a-zA-Z_]+\(|repl_command_store_[a-zA-Z_]+\(|repl_state_[a-zA-Z_]+_mut\(|editor_state_[a-zA-Z_]+_mut\(|editor_buffer_(replace_line|insert_line|delete_range|set_input|apply_compiled_change)\(|editor_undo_(push_snapshot|pop_snapshot|do_redo)\(' \
-    . 2>/dev/null || true)
+    src/ui 2>/dev/null || true)
 
 if [ -z "$violations" ]; then
     count=0
@@ -62,7 +61,7 @@ else
 fi
 
 if [ "$count" -gt "$baseline" ]; then
-    echo "ERROR: ui_*.c mutator-call count grew past baseline (${baseline} -> ${count})." >&2
+    echo "ERROR: src/ui/*.c mutator-call count grew past baseline (${baseline} -> ${count})." >&2
     echo "UI files compute UiHits; mutation belongs in editor / imrepl_ctrl / peers." >&2
     echo "See scripts/baselines/ui-returns-hits-only.txt for context." >&2
     echo "Violations:" >&2

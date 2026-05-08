@@ -14,7 +14,7 @@ while IFS= read -r fn; do
   [ -z "$fn" ] && continue
   [[ "$fn" =~ ^# ]] && continue
 
-  sig_line="$(rg -n "^\s*void\s+${fn}\s*\(" ui_*.h ui_*.c 2>/dev/null | head -n1 || true)"
+  sig_line="$(rg -n "^\s*void\s+${fn}\s*\(" src/ui/*.h src/ui/*.c 2>/dev/null | head -n1 || true)"
   if [ -z "$sig_line" ]; then
     echo "ERROR: renderer signature not found for $fn" >&2
     bad=1

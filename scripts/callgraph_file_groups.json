@@ -65,15 +65,15 @@
       "id": "ui_rendering",
       "label": "5. 2D UI rendering",
       "files": [
-        "ui_panels.c",
-        "ui_layout.c",
-        "ui_menu_bar.c",
+        "src/ui/panels.c",
+        "src/ui/layout.c",
+        "src/ui/menu_bar.c",
         "ui_color_picker.c",
         "ui_help_overlay.c",
-        "ui_variable_panel.c",
-        "ui_autocomplete_panel.c",
-        "ui_profile_panel.c",
-        "ui_code_panel_layout.c",
+        "src/ui/variable_panel.c",
+        "src/ui/autocomplete_panel.c",
+        "src/ui/profile_panel.c",
+        "src/ui/code_panel_layout.c",
         "editor_code_panel_document.c"
       ]
     },

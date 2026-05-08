@@ -12,7 +12,7 @@
 #   repl_var_drag_*(               — legacy drag-transaction symbols
 #
 # Sites inside the owner / wrapper translation units are ignored:
-#   - editor_state.c / ui_state.c host the forwarder definitions.
+#   - editor_state.c / src/ui/state.c host the forwarder definitions.
 #   - repl_var_drag.c is the implementation behind the peer's
 #     variable_panel_handle_drag_* surface.
 #   - variable_panel.c wraps repl_var_drag_* into the peer API.
@@ -44,7 +44,7 @@ violations=$(grep -REn \
     --exclude-dir='build' \
     'editor_state_variable_drag[a-z_]*\(|ui_state_variable_panel[a-z_]*\(|repl_var_drag_[a-z_]*\(' \
     . 2>/dev/null \
-    | grep -vE '^(\./)?(repl_var_drag|variable_panel|variable_panel_drag|editor_state|ui_state)\.c:' || true)
+    | grep -vE '^(\./)?(repl_var_drag|variable_panel_state|variable_panel_drag|editor_state)\.c:|^(\./)?src/ui/state\.c:' || true)
 
 if [ -z "$violations" ]; then
     count=0

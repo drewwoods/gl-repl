@@ -35,8 +35,8 @@
 #ifndef UI_PANELS_H
 #define UI_PANELS_H
 
-#include "ui_snapshot.h"
-#include "ui_hit.h"
+#include "snapshot.h"
+#include "hit.h"
 
 /* --- Rendering --- */
 

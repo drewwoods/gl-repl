@@ -1,6 +1,6 @@
-#include "ui_state.h"
-#include "ui_profile_panel.h"
-#include "variable_panel.h" /* peer subsystem: visibility flag lives here */
+#include "state.h"
+#include "profile_panel.h"
+#include "variable_panel_state.h" /* peer subsystem: visibility flag lives here */
 
 #include <stddef.h>
 #include <string.h>

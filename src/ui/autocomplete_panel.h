@@ -36,7 +36,7 @@
 #ifndef UI_AUTOCOMPLETE_PANEL_H
 #define UI_AUTOCOMPLETE_PANEL_H
 
-#include "ui_snapshot.h"
+#include "snapshot.h"
 
 /* Render the autocomplete popup once per frame from the supplied snapshot.
  * Performs no live REPL state reads. Renders nothing if autocomplete is not

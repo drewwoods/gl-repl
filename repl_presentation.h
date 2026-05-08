@@ -4,7 +4,7 @@
 #ifndef REPL_PRESENTATION_H
 #define REPL_PRESENTATION_H
 
-#include "ui_layout.h"
+#include "ui/layout.h"
 
 /* Grid themes. The label tables in repl_actions.c, scene_grid.c, and the
  * custom render paths in scene_render.c must stay in sync with this enum. */

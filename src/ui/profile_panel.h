@@ -33,7 +33,7 @@ typedef enum {
 	PROFILE_PANEL_MODE_COUNT
 } ProfilePanelMode;
 
-#include "ui_snapshot.h"
+#include "snapshot.h"
 
 /* Render the CPU profile panel overlay once per frame from the supplied
  * snapshot. Reads measurements from prof.c and displays per-section CPU

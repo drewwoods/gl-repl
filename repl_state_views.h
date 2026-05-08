@@ -7,7 +7,7 @@
 #include "repl_export_state.h"
 #include "scene/render_types.h"
 #include "repl_flatten.h"
-#include "ui_editor.h"
+#include "ui/editor.h"
 
 #ifndef REPL_WORKSPACE_DIR_MAX
 #define REPL_WORKSPACE_DIR_MAX 1024
