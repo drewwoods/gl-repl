@@ -13,8 +13,6 @@
  *     refreshes the per-PC mapping cache and refills
  *     editor_state_virtual_lines() so layout / render can read a
  *     single source of truth.
- *   - repl_replay_annotation_extra_rows_for_line() counts virtual rows
- *     pushed below a source line so layout can compute row heights.
  *   - repl_replay_code_panel_get_command_display_text() returns the
  *     in-line annotated source text for a command (no extra rows).
  *
@@ -36,11 +34,6 @@
  * frame. The module caches the view internally so static helpers can
  * read source text without reaching back into editor globals. */
 void repl_replay_annotations_prepare(EditorBufferView text);
-
-/* Count virtual annotation rows attached to a source line. Reads the
- * controller-pushed editor_virtual_lines list, so this stays in sync with
- * what render draws. */
-int  repl_replay_annotation_extra_rows_for_line(int cmd_idx);
 
 /* Get the inline annotated display text for a source line during replay
  * (the source body, without the extra annotation rows). Writes up to
