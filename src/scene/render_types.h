@@ -87,14 +87,19 @@ typedef struct SceneRenderConfig {
     int scene_w;
     int scene_h;
 
-    /* --- Camera --- */
+    /* --- Camera state (read-only inputs) ---
+     * The actual modelview transform is no longer applied by the scene module —
+     * callers must invoke scene_apply_camera() before scene_render_3d_scene().
+     * These fields are still passed in because grid/axes themes orient
+     * themselves to camera angle, the orbit-target gizmo is sized by cam_dist,
+     * and the gizmo position comes from cam_tx/ty/tz. */
     float cam_dist;
     float cam_rx;
     float cam_ry;
     float cam_tx;
     float cam_ty;
     float cam_tz;
-    float cam_motion_glow;
+    float cam_motion_glow; /* 0 = orbit-target gizmo hidden */
 
     /* --- Rendering quality --- */
     int multisample_enabled;

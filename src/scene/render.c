@@ -77,13 +77,14 @@ static void scene_apply_projection(const SceneRenderConfig *config,
               near_z, far_z);
 }
 
-static void scene_apply_camera_view(const SceneRenderConfig *config) {
+void scene_apply_camera(float rx, float ry, float dist,
+                        float tx, float ty, float tz) {
     glMatrixMode(GL_MODELVIEW);
     glLoadIdentity();
-    glTranslatef(0.0f, 0.0f, -config->cam_dist);
-    glRotatef(config->cam_rx, 1, 0, 0);
-    glRotatef(config->cam_ry, 0, 1, 0);
-    glTranslatef(-config->cam_tx, -config->cam_ty, -config->cam_tz);
+    glTranslatef(0.0f, 0.0f, -dist);
+    glRotatef(rx, 1, 0, 0);
+    glRotatef(ry, 0, 1, 0);
+    glTranslatef(-tx, -ty, -tz);
 }
 
 static void scene_apply_quality_config(const SceneRenderConfig *config) {
@@ -324,7 +325,8 @@ static void render_3d_scene_pass(const SceneRenderConfig *config,
     glPushAttrib(GL_ALL_ATTRIB_BITS);
 
     scene_apply_projection(config, accum_jitter_x, accum_jitter_y);
-    scene_apply_camera_view(config);
+    /* Caller is responsible for the modelview camera transform; see
+     * scene_apply_camera() in scene/render.h. */
 
     scene_lights_setup(&frame_ctx);
     glDisable(GL_LIGHTING); /* baseline: disabled; execute_commands() enables if user typed it */

@@ -521,11 +521,16 @@ is no shim layer.
    prepare replay frame if active; update export/camera strings
 2. Build `SceneRenderConfig` from REPL state; if accumulation-buffer AA is
    enabled (currently read from `repl_state_render()`; R1a moves this to
-   config fields), call `scene_render_3d_scene(&cfg)` once per jitter sample.
-   Jitter is applied as a scene-local frustum shift inside the scene function —
-   it is no longer a config field
-3. `scene_render_3d_scene(&cfg)` in `scene_render.c`: viewport/clear setup →
-   projection → camera → execute user geometry via `SceneExecuteProgramFn`
+   config fields), call `scene_apply_camera(...)` then
+   `scene_render_3d_scene(&cfg)` once per jitter sample.
+   The camera modelview transform is the controller's responsibility —
+   `scene/render.c` no longer touches the modelview except for sub-renderer
+   push/pop bracketing. Jitter is applied as a scene-local frustum shift
+   inside the scene function — it is no longer a config field. The
+   standalone `teapot_demo` binary in `tools/teapot_demo/` exercises this
+   contract with a non-REPL geometry callback.
+3. `scene_render_3d_scene(&cfg)` in `src/scene/render.c`: viewport/clear setup
+   → projection → execute user geometry via `SceneExecuteProgramFn`
    callback → replay fade batches (transitional; R1b replaces with
    `ReplayFadePlan` snapshot iteration) → grid/axes/backdrop/orbit-target →
    polygon-outline, vertex, normal, and guide overlays → 2D replay HUD

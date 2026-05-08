@@ -123,6 +123,11 @@ SCENE_HDRS = $(filter src/scene/%.h,$(HDRS))
 UI_HDRS = $(filter ui_%.h,$(HDRS))
 STATE_NEUTRAL_SRCS = cmd_format.c prof.c tests/gl-stubs/gl_stub_counts.c
 
+# Object lists used to build the standalone teapot_demo without dragging in
+# any REPL editor/controller code. Scene + repl_eval (predef vars used by the
+# replay path, harmless when replay is off) + prof.
+TEAPOT_DEMO_DEP_SRCS = $(SCENE_SRCS) repl_eval.c prof.c
+
 OBJDIR = build/$(BUILD)$(if $(filter 1,$(USE_GL_STUBS)),-gl-stubs,)
 OBJ_CFLAGS = $(BUILD_CFLAGS) $(CFLAGS)
 DEPFLAGS = -MMD -MP
@@ -230,6 +235,14 @@ $(OBJDIR)/%.o: %.c
 
 sample: $(SAMPLE_OBJS) ## Build the main REPL sample using release flags by default.
 	$(CC) $(OBJ_CFLAGS) -o $@ $(SAMPLE_OBJS) $(GL_LDFLAGS)
+
+# Standalone demo binary that drives the scene module with a teapot callback.
+# Proves the scene/ subtree links cleanly without the editor/UI/controller code.
+TEAPOT_DEMO_OBJS = $(OBJDIR)/tools/teapot_demo/teapot.o \
+                   $(addprefix $(OBJDIR)/,$(TEAPOT_DEMO_DEP_SRCS:.c=.o))
+
+teapot_demo: $(TEAPOT_DEMO_OBJS) ## Build the standalone teapot demo.
+	$(CC) $(OBJ_CFLAGS) -o $@ $(TEAPOT_DEMO_OBJS) $(GL_LDFLAGS)
 
 .SECONDEXPANSION:
 
