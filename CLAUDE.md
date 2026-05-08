@@ -129,10 +129,10 @@ ownership / contract guards. Highlights:
   snapshots, but must not mutate editor/REPL state, call
   parser/compile/apply, or grow generic `ui_*` responsibilities.
 - `check-color-picker-ui-isolation` — stricter feature-UI guard.
-  `color_picker_ui*.c` is a pure renderer + hit-test over
+  `src/ui/color_picker.c` is a pure renderer + hit-test over
   `ColorPickerView`; no mutators, no live REPL/editor state reads,
   no parser/compile/apply, no `set_status`. Lifecycle and writeback
-  belong on the peer (`color_picker.c`).
+  belong on the peer (`color_picker_state.c`).
 - `check-variable-panel-forwarders` — baseline **0/0** after Phase
   J6 migrated every fixture site onto `variable_panel_drag` /
   `variable_panel_view` / `variable_panel_handle_drag_*`, and Phase
@@ -214,10 +214,10 @@ ownership / contract guards. Highlights:
 | `src/ui/profile_panel.h` | Profile panel render entrypoint |
 | `src/ui/menu_bar.c` | Code-panel menu bar, dropdowns, config right-click handling, search slot |
 | `src/ui/menu_bar.h` | Menu/pin hit-test and dropdown state API |
-| `color_picker.c` | Floating color picker peer: state, lifecycle, slider input handlers, source-line writeback through editor commit |
-| `color_picker.h` | Peer API (`ColorPickerView`, `ColorPickerInputResult`, `color_picker_open/close/handle_*`, `color_picker_hsv_to_rgb`) |
-| `color_picker_ui.c` | Floating color picker renderer + hit-test (pure, takes `ColorPickerView *`) |
-| `color_picker_ui.h` | Picker UI render/hit-test API + `UI_COLOR_SWATCH_W` |
+| `color_picker_state.c` | Floating color picker peer: state, lifecycle, slider input handlers, source-line writeback through editor commit |
+| `color_picker_state.h` | Peer API (`ColorPickerView`, `ColorPickerInputResult`, `color_picker_open/close/handle_*`, `color_picker_hsv_to_rgb`) |
+| `src/ui/color_picker.c` | Floating color picker renderer + hit-test (pure, takes `ColorPickerView *`) |
+| `src/ui/color_picker.h` | Picker UI render/hit-test API + `UI_COLOR_SWATCH_W` |
 | `src/ui/tabbed_overlay.c` | Generic modal tabbed text overlay renderer (the F1 help overlay's UI shell) |
 | `src/ui/tabbed_overlay.h` | Tabbed-overlay render API (`UiOverlayState`, `UiOverlayContent`) |
 | `repl_help_text.c` | Builds the F1 help overlay's content table (commands, key bindings) consumed by `tabbed_overlay` |
