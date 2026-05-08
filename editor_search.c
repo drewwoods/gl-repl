@@ -132,7 +132,7 @@ int repl_search_find_prev_in_text(const char *text, const char *query,
 int repl_search_row_for_cmd_index(int cmd_idx) {
     int edit_line = repl_state_edit_line();
 
-    if (cmd_idx < 0 || cmd_idx >= repl_state_document_count())
+    if (cmd_idx < 0 || cmd_idx >= editor_buffer_count())
         return -1;
     if (editor_insert_mode() && cmd_idx >= edit_line)
         return cmd_idx + 1;
@@ -285,10 +285,10 @@ void search_clear_all(void) {
 }
 
 int repl_search_row_count(void) {
-    int num_cmds = repl_state_document_count();
-    if (editor_insert_mode() || repl_state_edit_line() == num_cmds)
-        return num_cmds + 1;
-    return num_cmds;
+    int num_lines = editor_buffer_count();
+    if (editor_insert_mode() || repl_state_edit_line() == num_lines)
+        return num_lines + 1;
+    return num_lines;
 }
 
 const char *repl_search_row_text(int row_idx) {
