@@ -15,7 +15,7 @@ test_repl_core_io
 test_repl_core_examples
 test_repl_core_search
 test_repl_core_search_extra
-test_repl_audio
+test_audio
 test_repl_core_internal
 test_repl_autocomplete
 test_scene_guides
