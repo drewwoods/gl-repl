@@ -181,8 +181,8 @@ ownership / contract guards. Highlights:
 | `src/editor/undo.c` | Undo/redo snapshots, history rings, example auto-promote hook before mutation |
 | `src/editor/undo.h` | Undo public API (`editor_undo_push_snapshot`, `editor_undo_pop_snapshot`, `editor_undo_do_redo`) |
 | `repl_camera_controls.c` | Scene camera pointer state, orbit/pan/zoom drags, wheel zoom velocity, momentum tick |
-| `repl_actions.c` | Config descriptor table, config shortcuts, menu actions, startup config defaults |
-| `repl_actions.h` | Actions public API (`repl_action_menu_item_activate`, cursor-pixel setter, etc.) |
+| `glr_actions.c` | Config descriptor table, config shortcuts, menu actions, startup config defaults |
+| `glr_actions.h` | Actions public API (`glr_action_menu_item_activate`, cursor-pixel setter, etc.) |
 | `src/ui/code_panel_layout.c` | Pure code-panel wrapping, row counts, segment lookup, cursor-row mapping |
 | `src/ui/code_panel_layout.h` | `CodePanelTextLayout` / `CodePanelWrapIter` API shared by UI, export dumps, tests |
 | `src/editor/code_panel_document.c` | Code-panel document row model, scroll-follow calculation, hit-test targets |
@@ -287,7 +287,7 @@ ownership / contract guards. Highlights:
   should be revisited with the deferred app-shell namespace work rather than
   copied as a pattern.
 - Config toggles use the `ReplConfigItem` / `ReplConfigKey` pattern: add a
-  descriptor entry to `g_cfg_items[]` in `repl_actions.c`; `CFG_ITEM_COUNT`
+  descriptor entry to `g_cfg_items[]` in `glr_actions.c`; `CFG_ITEM_COUNT`
   auto-computes via `sizeof`
 - New GL commands: add to the `CmdType` enum in `repl_command.h`, then
   handle in `repl_parser_parse_command_ctx()` in `repl_parser.c`,
@@ -342,8 +342,8 @@ Grids and axes are themeable through small specs in `src/scene/grid.c` and
    standard axes themes. Keep custom geometry-heavy grid cases in
    `src/scene/grid.c`.
 4. The theme cycles via F3 (grid) / F4 (axes); the special-key route
-   in `src/editor/input.c` calls `repl_cfg_handle_special_shortcut`, which
-   walks `g_cfg_items[]` in `repl_actions.c` and cycles the matching
+   in `src/editor/input.c` calls `glr_cfg_handle_special_shortcut`, which
+   walks `g_cfg_items[]` in `glr_actions.c` and cycles the matching
    config row.
 
 ## Adding Menu Bar Items
@@ -357,15 +357,15 @@ To add an **item** to an existing top-level menu:
    bump the trailing `*_COUNT`
 2. Add the label in `menu_item_label()` and shortcut (if any) in
    `menu_item_shortcut()` in `src/ui/menu_bar.c`
-3. Add the action branch in `repl_action_menu_item_activate()` in
-   `repl_actions.c`; return `1` for action items (menu closes), `0` for
+3. Add the action branch in `glr_action_menu_item_activate()` in
+   `glr_actions.c`; return `1` for action items (menu closes), `0` for
    cycle/toggle items (menu stays open; click-outside dismisses)
 
 To add a **new top-level menu**: extend the `MENU_*` enum (before
 `NUM_MENUS`), add a label in `g_menu_labels[]`, and handle the new id in
 `menu_item_count` / `menu_item_label` / `menu_item_shortcut` in
-`src/ui/menu_bar.c`, plus `repl_action_menu_item_activate()` in
-`repl_actions.c` for side effects.
+`src/ui/menu_bar.c`, plus `glr_action_menu_item_activate()` in
+`glr_actions.c` for side effects.
 
 To add a **pinned right-side button**: extend `PIN_*` enum, append a label
 to `g_pin_btn_labels[]` in `src/ui/menu_bar.c`. Activation routing lives in
@@ -737,13 +737,13 @@ Case-insensitive text search in `src/editor/search.c`:
 
 ### Config Menu
 
-Declarative toggle system in `repl_actions.c`:
+Declarative toggle system in `glr_actions.c`:
 - `g_cfg_items[]` array of `ReplConfigItem` descriptors: `{ label, key_code,
   is_special, key, state_count, state_names[], section_header }`
 - Each item is a toggle (2 states, default OFF/ON) or cycle (>2 states
   with named entries, e.g. grid themes)
 - Rendered by the Config dropdown in `src/ui/menu_bar.c`; menu clicks and
-  F-key/Ctrl-key shortcuts dispatch through `repl_actions.c`
+  F-key/Ctrl-key shortcuts dispatch through `glr_actions.c`
 - Adding a config item: append to `g_cfg_items[]` — count is
   auto-computed via `sizeof`
 

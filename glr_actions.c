@@ -6,7 +6,7 @@
  * cycling, F-key/Ctrl-key config shortcuts, startup config defaults, and menu
  * item actions that touch scenes, files, replay, audio, or presentation state.
  */
-#include "repl_actions.h"
+#include "glr_actions.h"
 #include "ui/layout.h"           /* CODE_PANEL_LAYOUT_* enum values */
 #include "color_picker.h"
 #include "audio.h"
@@ -156,7 +156,7 @@ int repl_scene_menu_slot_for_dense_index(int scene_idx) {
     return -1;
 }
 
-void repl_cfg_cycle_row(int row, int delta) {
+void glr_cfg_cycle_row(int row, int delta) {
     const ReplConfigItem *item = repl_config_item_at(row);
 
     if (!item || item->section_header)
@@ -236,14 +236,14 @@ void repl_cfg_cycle_row(int row, int delta) {
     }
 }
 
-void repl_action_cursor_blink_reset(void) {
+void glr_action_cursor_blink_reset(void) {
     ReplCodePanelRuntimeState *cp = ui_state_code_panel_mut();
 
     cp->cursor_visible = 1;
     cp->blink_tick = 0;
 }
 
-void repl_action_help_tab_next(void) {
+void glr_action_help_tab_next(void) {
     int tab = editor_help_session_tab_idx();
     if (tab < 1) {
         editor_help_session_set_tab(tab + 1);
@@ -251,7 +251,7 @@ void repl_action_help_tab_next(void) {
     }
 }
 
-void repl_action_help_tab_prev(void) {
+void glr_action_help_tab_prev(void) {
     int tab = editor_help_session_tab_idx();
     if (tab > 0) {
         editor_help_session_set_tab(tab - 1);
@@ -259,7 +259,7 @@ void repl_action_help_tab_prev(void) {
     }
 }
 
-int repl_cfg_handle_ascii_shortcut(unsigned char key) {
+int glr_cfg_handle_ascii_shortcut(unsigned char key) {
     for (int i = 0; i < CFG_ITEM_COUNT; i++) {
         const ReplConfigItem *item = repl_config_item_at(i);
         if (item && !item->section_header &&
@@ -267,27 +267,27 @@ int repl_cfg_handle_ascii_shortcut(unsigned char key) {
             item->key_code > 0 &&
             item->key_code < 32 &&
             item->key_code == key) {
-            repl_cfg_cycle_row(i, 1);
+            glr_cfg_cycle_row(i, 1);
             return 1;
         }
     }
     return 0;
 }
 
-int repl_cfg_handle_special_shortcut(int key) {
+int glr_cfg_handle_special_shortcut(int key) {
     for (int i = 0; i < CFG_ITEM_COUNT; i++) {
         const ReplConfigItem *item = repl_config_item_at(i);
         if (item && !item->section_header &&
             item->is_special && item->key_code == key) {
-            repl_cfg_cycle_row(i, 1);
+            glr_cfg_cycle_row(i, 1);
             return 1;
         }
     }
     return 0;
 }
 
-int repl_action_menu_item_activate(int menu_id, int item_idx) {
-    if (menu_id == REPL_MENU_FILE) {
+int glr_action_menu_item_activate(int menu_id, int item_idx) {
+    if (menu_id == GLR_MENU_FILE) {
         if (item_idx == REPL_FILE_ITEM_EXPORT) {
             repl_save_default_output();
             return 1;
@@ -299,35 +299,35 @@ int repl_action_menu_item_activate(int menu_id, int item_idx) {
         if (item_idx == REPL_FILE_ITEM_SAVE_WORKSPACE) {
             const char *dir = repl_workspace_dir();
             if (!dir || !dir[0])
-                dir = REPL_DEFAULT_WORKSPACE_DIR;
+                dir = GLR_DEFAULT_WORKSPACE_DIR;
             repl_save_workspace(dir);
             return 1;
         }
         if (item_idx == REPL_FILE_ITEM_LOAD_WORKSPACE) {
             const char *dir = repl_workspace_dir();
             if (!dir || !dir[0])
-                dir = REPL_DEFAULT_WORKSPACE_DIR;
+                dir = GLR_DEFAULT_WORKSPACE_DIR;
             repl_load_workspace(dir);
             return 1;
         }
-    } else if (menu_id == REPL_MENU_SCENE) {
+    } else if (menu_id == GLR_MENU_SCENE) {
         int example_count = repl_example_count();
         if (item_idx >= 1 && item_idx <= example_count) {
             repl_load_example(item_idx - 1);
             return 1;
         }
-        if (item_idx == example_count + REPL_SCENE_OFF_NEW) {
+        if (item_idx == example_count + GLR_SCENE_OFF_NEW) {
             ReplSceneRuntimeState *scenes = repl_state_scenes_mut();
             if (scenes->active_example_idx >= 0)
                 scenes->active_example_idx = -1;
             repl_clear_all_cmds();
             return 1;
         }
-        if (item_idx == example_count + REPL_SCENE_OFF_SAVE) {
+        if (item_idx == example_count + GLR_SCENE_OFF_SAVE) {
             repl_save_default_output();
             return 1;
         }
-        if (item_idx == example_count + REPL_SCENE_OFF_RENAME) {
+        if (item_idx == example_count + GLR_SCENE_OFF_RENAME) {
             int slot = repl_active_user_scene();
             if (slot < 0) {
                 set_status("No active scene to rename");
@@ -337,7 +337,7 @@ int repl_action_menu_item_activate(int menu_id, int item_idx) {
             return 1;
         }
 
-        int scene_idx = item_idx - (example_count + REPL_SCENE_OFF_SCENES);
+        int scene_idx = item_idx - (example_count + GLR_SCENE_OFF_SCENES);
         if (scene_idx >= 0 && scene_idx < repl_user_scene_count()) {
             int slot = repl_scene_menu_slot_for_dense_index(scene_idx);
             if (slot >= 0) {
@@ -346,10 +346,10 @@ int repl_action_menu_item_activate(int menu_id, int item_idx) {
             }
         }
         return 1;
-    } else if (menu_id == REPL_MENU_CONFIG) {
+    } else if (menu_id == GLR_MENU_CONFIG) {
         if (repl_config_item_at(item_idx) &&
             !repl_config_item_at(item_idx)->section_header) {
-            repl_cfg_cycle_row(item_idx, 1);
+            glr_cfg_cycle_row(item_idx, 1);
         }
         return 0;
     }

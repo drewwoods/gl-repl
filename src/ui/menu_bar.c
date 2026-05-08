@@ -1,7 +1,7 @@
 /*
  * repl_menu_bar.c -- Code-panel menu bar, dropdowns, and search slot.
  */
-#include "repl_actions.h"
+#include "glr_actions.h"
 #include "repl_core.h"
 #include "repl_config.h"
 #include "keys.h"
@@ -19,10 +19,10 @@
  * right-side redesign lands. */
 
 enum {
-    MENU_FILE = REPL_MENU_FILE,
-    MENU_SCENE = REPL_MENU_SCENE,
-    MENU_CONFIG = REPL_MENU_CONFIG,
-    NUM_MENUS = REPL_MENU_COUNT
+    MENU_FILE = GLR_MENU_FILE,
+    MENU_SCENE = GLR_MENU_SCENE,
+    MENU_CONFIG = GLR_MENU_CONFIG,
+    NUM_MENUS = GLR_MENU_COUNT
 };
 
 static const char *g_menu_labels[NUM_MENUS] = {
@@ -76,12 +76,12 @@ enum {
  *                                     (n = repl_user_scene_count())
  */
 enum {
-    SCENE_OFF_DIVIDER = REPL_SCENE_OFF_DIVIDER,
-    SCENE_OFF_HDR     = REPL_SCENE_OFF_HDR,
-    SCENE_OFF_NEW     = REPL_SCENE_OFF_NEW,
-    SCENE_OFF_SAVE    = REPL_SCENE_OFF_SAVE,
-    SCENE_OFF_RENAME  = REPL_SCENE_OFF_RENAME,
-    SCENE_OFF_SCENES  = REPL_SCENE_OFF_SCENES,
+    SCENE_OFF_DIVIDER = GLR_SCENE_OFF_DIVIDER,
+    SCENE_OFF_HDR     = GLR_SCENE_OFF_HDR,
+    SCENE_OFF_NEW     = GLR_SCENE_OFF_NEW,
+    SCENE_OFF_SAVE    = GLR_SCENE_OFF_SAVE,
+    SCENE_OFF_RENAME  = GLR_SCENE_OFF_RENAME,
+    SCENE_OFF_SCENES  = GLR_SCENE_OFF_SCENES,
     SCENE_FIXED_COUNT = REPL_SCENE_FIXED_COUNT
 };
 
@@ -426,7 +426,7 @@ int ui_menu_bar_handle_config_right_press(int mx, int my) {
     if (g_open_menu != MENU_CONFIG) return 0;
     int item = ui_menu_bar_dropdown_item_hit(mx, my);
     if (item < 0) return 0;
-    repl_cfg_cycle_row(item, -1);
+    glr_cfg_cycle_row(item, -1);
     return 1;
 }
 

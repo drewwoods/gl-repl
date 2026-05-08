@@ -684,7 +684,7 @@ check-ui-no-repl-state-read
 
 check-ui-returns-hits-only             (Phase 4 — replaces the planned
                                         check-ui-emits-actions-only)
-    ui_*.c input handlers do not call repl_action_*, repl_command_store_*,
+    ui_*.c input handlers do not call glr_action_*, repl_command_store_*,
     editor_*_mut*, repl_state_*_mut*, or peer-subsystem mutators
     directly. They compute a UiHit and return it. The corrected
     contract has imrepl_ctrl dispatch on UiHit.kind to the owning
@@ -793,7 +793,7 @@ side-effect routing. As of that branch landing:
   `ui_panels_render_code_panel` fills and `imrepl_ctrl` actualizes
   by passing the coords directly to `ui_autocomplete_panel_render`.
   The `cursor_px` / `cursor_py` fields on
-  `ReplCodePanelRuntimeState`, the `repl_action_set_cursor_pixel`
+  `ReplCodePanelRuntimeState`, the `glr_action_set_cursor_pixel`
   setter, and the `check-cursor-px-encapsulated` guard were deleted
   along with the data — it was rendering ephemera, not state.
 - **Code-panel press side effects: routed (Phase J2).**

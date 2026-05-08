@@ -26,7 +26,7 @@ test_repl_autonormal
 test_repl_state
 test_repl_command_store
 test_imrepl_ctrl
-test_repl_actions
+test_glr_actions
 test_repl_executor
 test_repl_var_drag
 test_repl_replay
