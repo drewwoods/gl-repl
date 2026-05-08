@@ -541,9 +541,22 @@ static void code_panel_draw_command_row(CodePanelRowCtx *ctx, int i,
         search_row_idx = i + 1;
     else
         search_row_idx = i;
-    repl_replay_code_panel_get_command_display_text(editor_buffer_view(),
-                                                    i, display_text,
-                                                    sizeof(display_text));
+    /* Read the per-line display text from the same source layout
+     * uses (controller-pushed override list) so wrap-row counts
+     * never disagree with what render draws — even if the override
+     * list capped out (every entry past the cap falls back to
+     * buffer text consistently for both layout and render). */
+    {
+        const char *override_text = editor_state_line_override_for(i);
+        const char *src;
+        if (override_text)
+            src = override_text;
+        else {
+            const char *buf_line = editor_buffer_line(i);
+            src = buf_line ? buf_line : "";
+        }
+        snprintf(display_text, sizeof(display_text), "%s", src);
+    }
 
     CodePanelWrapIter wrap_it;
     int wrap_row = 0;

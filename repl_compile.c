@@ -870,13 +870,65 @@ ReplCompileResult repl_compile_empty_line(int line_idx,
     return REPL_COMPILE_OK;
 }
 
+/* Walk [range_start, range_end) for CMD_VAR_DECLARE rows. For each
+ * declared name:
+ *   1. Verify no line outside the range still references it. CMD_COMMENT
+ *      lines are skipped — a line like `// x axis` is not a real use of
+ *      `x`, and counting it would block legitimate decl removals.
+ *   2. Append a REPL_PREDEF_OP_UNDECLARE op to `out->predef_ops`.
+ *
+ * Returns REPL_COMPILE_OK on success (predef_op_count incremented).
+ * Returns REPL_COMPILE_ERROR with `err` filled on still-referenced
+ * name (`"Cannot %s '%s': still referenced"`, %s = action_verb) or
+ * predef-op cap overflow. */
+static ReplCompileResult compile_collect_undeclare_for_range(
+        const ReplCompileContext *ctx,
+        int range_start, int range_end,
+        const char *action_verb,
+        ReplCompiledChange *out, char *err, int err_size) {
+    int n = ctx->document_count;
+
+    /* Reference scan. Comments are not real references. */
+    for (int i = range_start; i < range_end; i++) {
+        const GLCmd *cmd = &ctx->document_cmds[i];
+        if (cmd->type != CMD_VAR_DECLARE) continue;
+        for (int d = 0; d < cmd->var_decl_count; d++) {
+            const char *nm = cmd->var_names[d];
+            for (int j = 0; j < n; j++) {
+                if (j >= range_start && j < range_end) continue;
+                if (ctx->document_cmds[j].type == CMD_COMMENT) continue;
+                const char *line = editor_buffer_view_line(ctx->text, j);
+                if (line && repl_eval_source_uses_ident(line, nm))
+                    return compile_set_err(err, err_size,
+                                           "Cannot %s '%s': still referenced",
+                                           action_verb, nm);
+            }
+        }
+    }
+
+    /* Append UNDECLARE ops for every declared name in the range. */
+    for (int i = range_start; i < range_end; i++) {
+        const GLCmd *cmd = &ctx->document_cmds[i];
+        if (cmd->type != CMD_VAR_DECLARE) continue;
+        for (int d = 0; d < cmd->var_decl_count; d++) {
+            if (out->predef_op_count >= MAX_PREDEF_OPS_PER_COMMIT)
+                return compile_set_err(err, err_size,
+                                       "Too many declarations in range");
+            ReplPredefOp *op = &out->predef_ops[out->predef_op_count++];
+            op->kind = REPL_PREDEF_OP_UNDECLARE;
+            repl_copy_string_fits(op->name, sizeof(op->name),
+                                  cmd->var_names[d]);
+        }
+    }
+    return REPL_COMPILE_OK;
+}
+
 ReplCompileResult repl_compile_delete_range(int start, int count,
                                             const ReplCompileContext *ctx,
                                             ReplCompiledChange *out,
                                             char *err, int err_size) {
     int n;
     int end;
-    int op_count;
 
     if (!ctx || !out)
         return REPL_COMPILE_ERROR;
@@ -894,44 +946,13 @@ ReplCompileResult repl_compile_delete_range(int start, int count,
         count = n - start;
     end = start + count;
 
-    /* Reference check: any CMD_VAR_DECLARE in the range whose name is
-     * still referenced outside the range blocks the delete. */
-    for (int i = start; i < end; i++) {
-        const GLCmd *cmd = &ctx->document_cmds[i];
-        if (cmd->type != CMD_VAR_DECLARE) continue;
-        for (int d = 0; d < cmd->var_decl_count; d++) {
-            const char *nm = cmd->var_names[d];
-            for (int j = 0; j < n; j++) {
-                if (j >= start && j < end) continue;
-                const char *line = editor_buffer_view_line(ctx->text, j);
-                if (line && repl_eval_source_uses_ident(line, nm)) {
-                    return compile_set_err(err, err_size,
-                                           "Cannot remove '%s': still referenced",
-                                           nm);
-                }
-            }
-        }
-    }
-
-    /* Populate UNDECLARE predef ops for every variable declared in
-     * the range. Apply cascades the CMD_VAR_ASSIGN.num_args
-     * compaction. */
-    op_count = 0;
-    for (int i = start; i < end; i++) {
-        const GLCmd *cmd = &ctx->document_cmds[i];
-        if (cmd->type != CMD_VAR_DECLARE) continue;
-        for (int d = 0; d < cmd->var_decl_count; d++) {
-            if (op_count >= MAX_PREDEF_OPS_PER_COMMIT)
-                return compile_set_err(err, err_size,
-                                       "Too many declarations in range");
-            out->predef_ops[op_count].kind = REPL_PREDEF_OP_UNDECLARE;
-            repl_copy_string_fits(out->predef_ops[op_count].name,
-                                  sizeof(out->predef_ops[op_count].name),
-                                  cmd->var_names[d]);
-            op_count++;
-        }
-    }
-    out->predef_op_count = op_count;
+    /* Reference check + UNDECLARE op collection. Shared with the
+     * comment-toggle paths; comments are not real uses, so the
+     * scanner skips CMD_COMMENT lines. */
+    if (compile_collect_undeclare_for_range(ctx, start, end, "remove",
+                                             out, err, err_size)
+            != REPL_COMPILE_OK)
+        return REPL_COMPILE_ERROR;
 
     out->kind = REPL_COMPILED_DELETE_RANGE;
     out->pos = start;
@@ -1065,6 +1086,17 @@ ReplCompileResult repl_compile_toggle_comment(int line_idx,
                                    "Block too large to toggle (max %d lines)",
                                    MAX_COMMIT_CMDS);
 
+        /* Decl-reference check + UNDECLARE op collection for any
+         * CMD_VAR_DECLARE rows inside the block. Commenting a decl
+         * out is symmetric to deleting it: references must be
+         * removed first, and apply must undeclare the variable so
+         * the runtime variable table matches the source. */
+        if (compile_collect_undeclare_for_range(ctx, head, end + 1,
+                                                 "comment",
+                                                 out, err, err_size)
+                != REPL_COMPILE_OK)
+            return REPL_COMPILE_ERROR;
+
         for (int i = 0; i < n; i++) {
             const char *orig = editor_buffer_view_line(ctx->text, head + i);
             compile_prepend_prefix(orig, prefix,
@@ -1141,6 +1173,19 @@ ReplCompileResult repl_compile_toggle_comment(int line_idx,
     /* Plain non-comment, non-structural: prepend prefix → CMD_COMMENT. */
     {
         const char *orig = editor_buffer_view_line(ctx->text, line_idx);
+
+        /* If the line is a CMD_VAR_DECLARE, commenting it out must
+         * also remove the variable from the predef table — otherwise
+         * the live runtime keeps a name the source no longer
+         * declares (and a save/reload would disagree). The shared
+         * helper validates references and emits UNDECLARE ops with
+         * the same shape delete-range uses. */
+        if (compile_collect_undeclare_for_range(ctx, line_idx, line_idx + 1,
+                                                 "comment",
+                                                 out, err, err_size)
+                != REPL_COMPILE_OK)
+            return REPL_COMPILE_ERROR;
+
         compile_prepend_prefix(orig, prefix,
                                out->text[0], (int)sizeof(out->text[0]));
         memset(&out->cmds[0], 0, sizeof(out->cmds[0]));

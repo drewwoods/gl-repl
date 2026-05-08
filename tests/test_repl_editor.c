@@ -2491,6 +2491,77 @@ int main() {
         g_mock_modifiers = saved_mods;
     }
 
+    /* Regression (feedback P1): commenting out an unreferenced
+     * float declaration must drop the variable from the predef
+     * table, not just turn the row into CMD_COMMENT. Otherwise the
+     * runtime keeps a name the source no longer declares. */
+    {
+        int saved_mods = g_mock_modifiers;
+
+        repl_reset_state();
+        repl_feed_line_public("float comment_x;");
+        ASSERT_TRUE("comment-decl setup: x declared",
+                    repl_eval_find_predef_var_idx("comment_x") >= 0);
+
+        repl_state_edit_line_set(0);
+        editor_insert_mode_set(0);
+        g_status[0] = '\0';
+        g_mock_modifiers = GLUT_ACTIVE_CTRL;
+        editor_handle_key('/', 0, 0);
+
+        ASSERT_INT("comment unref decl: row is CMD_COMMENT",
+                   repl_state_document_cmds_mut()[0].type, CMD_COMMENT);
+        ASSERT_TRUE("comment unref decl: predef var removed",
+                    repl_eval_find_predef_var_idx("comment_x") < 0);
+
+        g_mock_modifiers = saved_mods;
+    }
+
+    /* Regression (feedback P1): commenting a referenced declaration
+     * must refuse with a "still referenced" diagnostic, mirroring
+     * delete-range semantics. The row stays a decl; predef-var stays
+     * declared. */
+    {
+        int saved_mods = g_mock_modifiers;
+
+        repl_reset_state();
+        repl_feed_line_public("float refed_y;");
+        repl_feed_line_public("refed_y = 5;");
+
+        repl_state_edit_line_set(0);
+        editor_insert_mode_set(0);
+        g_status[0] = '\0';
+        g_mock_modifiers = GLUT_ACTIVE_CTRL;
+        editor_handle_key('/', 0, 0);
+
+        ASSERT_INT("comment refed decl: row stays CMD_VAR_DECLARE",
+                   repl_state_document_cmds_mut()[0].type, CMD_VAR_DECLARE);
+        ASSERT_TRUE("comment refed decl: predef var still declared",
+                    repl_eval_find_predef_var_idx("refed_y") >= 0);
+        assert_status_contains("comment refed decl: error wording",
+                               "still referenced");
+
+        g_mock_modifiers = saved_mods;
+    }
+
+    /* Regression (feedback P2): the delete-range reference scan must
+     * skip CMD_COMMENT lines. A comment like `// p axis` is not a
+     * real use of `p`; deleting `float p;` should succeed. */
+    {
+        repl_reset_state();
+        repl_feed_line_public("float p;");
+        repl_feed_line_public("// p axis");
+        ASSERT_TRUE("delete-with-comment-mention setup: p declared",
+                    repl_eval_find_predef_var_idx("p") >= 0);
+
+        delete_cmd_range(0, 1, "Deleted");
+
+        ASSERT_INT("delete decl with comment-mention: row gone",
+                   repl_state_document_count(), 1);
+        ASSERT_TRUE("delete decl with comment-mention: predef removed",
+                    repl_eval_find_predef_var_idx("p") < 0);
+    }
+
     /* Regression: uncomment still errors on genuinely unparseable lines.
      * Comment a valid line, mangle the source so neither the GL parser
      * nor the assignment fallback can rebuild it, then Ctrl+/ again. */
