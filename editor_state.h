@@ -323,6 +323,10 @@ int                          editor_state_virtual_lines_append(int after_line_id
                                                                VirtualLineStyle style,
                                                                const char *text,
                                                                const char *aux);
+/* Count virtual rows anchored after the given source line. Used by
+ * code-panel layout to extend row-height accounting; the editor stays
+ * agnostic to which feature pushed the rows. */
+int                          editor_state_virtual_lines_count_for(int after_line_idx);
 
 /* Editor scroll slice. */
 EditorScrollState  editor_state_scroll(void);

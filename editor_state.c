@@ -518,6 +518,18 @@ int editor_state_virtual_lines_append(int after_line_idx,
     return 1;
 }
 
+int editor_state_virtual_lines_count_for(int after_line_idx) {
+    const EditorVirtualLineList *list = &g_editor_state.virtual_lines;
+    int count = 0;
+    if (after_line_idx < 0)
+        return 0;
+    for (int i = 0; i < list->count; i++) {
+        if (list->items[i].after_line_idx == after_line_idx)
+            count++;
+    }
+    return count;
+}
+
 /* Phase J7: the legacy `editor_state_variable_drag` / `_mut` /
  * `_reset` forwarders are gone. Callers use `variable_panel_drag` /
  * `_mut` / `variable_panel_handle_drag_reset` directly. */
