@@ -263,4 +263,44 @@ ReplCompileResult repl_compile_delete_range(int start, int count,
                                             ReplCompiledChange *out,
                                             char *err, int err_size);
 
+/* Compile a comment-toggle on `line_idx` using `prefix` as the
+ * line-comment marker (e.g., "// "). The REPL fully owns toggle
+ * semantics — the editor passes intent, this entry decides.
+ *
+ * Behavior by cmd kind at line_idx:
+ *
+ *   Plain non-comment line: prepend `prefix` after leading whitespace
+ *     and produce REPLACE_ONE with cmds[0]=CMD_COMMENT. commit_message
+ *     "Commented out 1 line".
+ *
+ *   CMD_COMMENT line: strip `prefix` (must match the line's prefix
+ *     after leading whitespace; otherwise REPL_COMPILE_ERROR), then
+ *     re-parse the stripped text via the dispatch handlers + GL
+ *     parser fallback. Result is coerced to REPLACE_ONE at line_idx
+ *     (override kind/pos/count, preserve cmds[0], text[0],
+ *     predef_ops, scratch_ops). Re-parses producing INSERT_MANY /
+ *     DELETE_RANGE / LOAD_ALL are rejected as multi-line uncomment.
+ *     commit_message "Uncommented 1 line".
+ *
+ *   Block head (CMD_FOR_BEGIN, CMD_FUNC_DEF, CMD_IF_BEGIN) or end
+ *     (CMD_FOR_END, CMD_FUNC_END, CMD_IF_END): walk to the matching
+ *     other end; for every line in [head..end] inclusive, build
+ *     prefix-prepended text and a CMD_COMMENT cmd. Returns
+ *     INSERT_MANY at `head` with `delete_pos=head, delete_count=N`
+ *     (combined replace-range plan; uses ReplCompiledChange's
+ *     pre-insert delete fields). commit_message "Commented out N
+ *     lines". Block size is capped at MAX_COMMIT_CMDS; larger blocks
+ *     are rejected with a diagnostic.
+ *
+ * `prefix` may be NULL or empty — the function returns NO_CHANGE in
+ * that case (toggle disabled). `line_idx` out of range also returns
+ * NO_CHANGE.
+ *
+ * Pure: never mutates state, never calls set_status. */
+ReplCompileResult repl_compile_toggle_comment(int line_idx,
+                                              const char *prefix,
+                                              const ReplCompileContext *ctx,
+                                              ReplCompiledChange *out,
+                                              char *err, int err_size);
+
 #endif /* REPL_COMPILE_H */
