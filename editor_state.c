@@ -530,6 +530,41 @@ int editor_state_virtual_lines_count_for(int after_line_idx) {
     return count;
 }
 
+const EditorLineOverrideList *editor_state_line_overrides(void) {
+    return &g_editor_state.line_overrides;
+}
+
+void editor_state_line_overrides_clear(void) {
+    g_editor_state.line_overrides.count = 0;
+}
+
+int editor_state_line_overrides_append(int line_idx, const char *text) {
+    EditorLineOverrideList *list = &g_editor_state.line_overrides;
+    EditorLineOverride *o;
+    if (list->count >= MAX_LINE_OVERRIDES)
+        return 0;
+    o = &list->items[list->count++];
+    o->line_idx = line_idx;
+    if (text) {
+        strncpy(o->text, text, MAX_LINE_OVERRIDE_TEXT - 1);
+        o->text[MAX_LINE_OVERRIDE_TEXT - 1] = '\0';
+    } else {
+        o->text[0] = '\0';
+    }
+    return 1;
+}
+
+const char *editor_state_line_override_for(int line_idx) {
+    const EditorLineOverrideList *list = &g_editor_state.line_overrides;
+    if (line_idx < 0)
+        return NULL;
+    for (int i = 0; i < list->count; i++) {
+        if (list->items[i].line_idx == line_idx)
+            return list->items[i].text;
+    }
+    return NULL;
+}
+
 /* Phase J7: the legacy `editor_state_variable_drag` / `_mut` /
  * `_reset` forwarders are gone. Callers use `variable_panel_drag` /
  * `_mut` / `variable_panel_handle_drag_reset` directly. */
