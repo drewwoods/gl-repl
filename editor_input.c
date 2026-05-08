@@ -227,18 +227,6 @@ static const char *editor_committed_line_text(int idx) {
     return (text && text[0]) ? text : "";
 }
 
-static void build_empty_source_cmd(GLCmd *cmd, char *text_out, int text_sz) {
-    if (!cmd)
-        return;
-
-    memset(cmd, 0, sizeof(*cmd));
-    cmd->type = CMD_EMPTY;
-    cmd->valid = 1;
-
-    if (text_out && text_sz > 0)
-        text_out[0] = '\0';
-}
-
 void load_line_to_input(int idx) {
     ReplEditorInputState *inp = editor_state_input_mut();
     if (idx >= 0 && idx < repl_state_document_count()) {
@@ -246,7 +234,7 @@ void load_line_to_input(int idx) {
         while (*s && isspace((unsigned char)*s))
             s++;
 
-        if (repl_state_document_cmds_mut()[idx].type == CMD_LABEL) {
+        if (repl_line_is_label(idx)) {
             if (*s == ':') {
                 int len = (int)strlen(s);
                 while (len > 0 && isspace((unsigned char)s[len - 1]))
@@ -553,25 +541,28 @@ static CommitResult commit_current_input(int enter_mode) {
 
     if (editor_insert_mode()) {
         if (enter_mode && editor_state_input().input_len == 0) {
-            GLCmd cmd;
-            char cmd_text[MAX_LINE_LEN] = "";
-            ReplCommandStore store = repl_command_store_live();
+            ReplCompileContext ctx = repl_compile_context_from_live();
+            ReplCompiledChange change;
+            char err[REPL_STATUS_TEXT_MAX] = "";
             int insert_pos = repl_state_edit_line();
 
-            build_empty_source_cmd(&cmd, cmd_text, sizeof(cmd_text));
-            if (!repl_command_store_insert_one(&store, insert_pos, &cmd, 0)) {
+            if (repl_compile_empty_line(insert_pos, &ctx, &change,
+                                        err, sizeof(err)) != REPL_COMPILE_OK) {
+                set_status(err[0] ? err : "Cannot insert blank line");
+                return COMMIT_REJECTED;
+            }
+            if (!editor_commit_apply_external_change(&change, /*capture_undo=*/0)) {
                 set_status("Command buffer full!");
                 return COMMIT_REJECTED;
             }
-            editor_buffer_insert_line(insert_pos, cmd_text);
-            repl_state_edit_line_set(repl_state_edit_line() + 1);
+            repl_state_edit_line_set(insert_pos + 1);
             {
                 ReplEditorInputState *inp = editor_state_input_mut();
                 inp->input[0] = '\0';
                 inp->input_len = 0;
             }
             editor_cursor_pos_set(0);
-            set_status("Inserted blank line");
+            set_status(change.commit_message);
             return COMMIT_OK;
         }
 
@@ -701,17 +692,20 @@ static CommitResult commit_current_input(int enter_mode) {
     }
 
     if (enter_mode && editor_state_input().input_len == 0) {
-        GLCmd cmd;
-        char cmd_text[MAX_LINE_LEN] = "";
-        ReplCommandStore store = repl_command_store_live();
+        ReplCompileContext ctx = repl_compile_context_from_live();
+        ReplCompiledChange change;
+        char err[REPL_STATUS_TEXT_MAX] = "";
         int insert_pos = repl_state_document_count();
 
-        build_empty_source_cmd(&cmd, cmd_text, sizeof(cmd_text));
-        if (!repl_command_store_insert_one(&store, insert_pos, &cmd, 0)) {
+        if (repl_compile_empty_line(insert_pos, &ctx, &change,
+                                    err, sizeof(err)) != REPL_COMPILE_OK) {
+            set_status(err[0] ? err : "Cannot insert blank line");
+            return COMMIT_REJECTED;
+        }
+        if (!editor_commit_apply_external_change(&change, /*capture_undo=*/0)) {
             set_status("Command buffer full!");
             return COMMIT_REJECTED;
         }
-        editor_buffer_insert_line(insert_pos, cmd_text);
         repl_state_edit_line_set(repl_state_document_count());
         editor_insert_mode_set(1);
         {
@@ -722,7 +716,7 @@ static CommitResult commit_current_input(int enter_mode) {
             inp->pending_newline_len = 0;
         }
         editor_cursor_pos_set(0);
-        set_status("Inserted blank line");
+        set_status(change.commit_message);
         return COMMIT_OK;
     }
 
