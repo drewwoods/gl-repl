@@ -1160,11 +1160,11 @@ static int ui_panels_input_cursor_for_click(int mx, int row_offset,
     return new_cursor;
 }
 
-/* Pure hit-test: classify (mx, my) as a UiHit. Reads layout / state
- * snapshots; never mutates. The controller dispatches on
+/* Pure hit-test: classify (mx, my) as a UiHit. Reads UI layout state and
+ * caller-supplied counts; never mutates. The controller dispatches on
  * UiHit.kind and uses the per-kind payload (line_idx, char_idx,
  * cmd_idx, item_idx) without consulting any UI module's state. */
-UiHit ui_panels_hit_test(int mx, int my) {
+UiHit ui_panels_hit_test(int mx, int my, int variable_count) {
     UiHit h = ui_hit_none();
 
     int win_w = ui_state_viewport().window_w;
@@ -1202,7 +1202,7 @@ UiHit ui_panels_hit_test(int mx, int my) {
 
     /* Variable panel is a non-modal floating panel; only matters when
      * its slider rows are visible. */
-    UiHit varp = ui_variable_panel_hit_test(mx, my);
+    UiHit varp = ui_variable_panel_hit_test(mx, my, variable_count);
     if (varp.kind != UI_HIT_NONE)
         return varp;
 

@@ -75,10 +75,11 @@ void ui_panels_render_scene_status(const UiRenderSnapshot *snap);
 int  ui_panels_handle_right_press(int mx, int my);
 
 /* Pure hit-test: classify the pointer at (mx, my) as a `UiHit`.
- * glr_ctrl_router_handle_code_panel_hit (declared in
- * imrepl_ctrl.h) is the canonical consumer — it dispatches by
- * UiHit.kind to the owning subsystem. */
-UiHit ui_panels_hit_test(int mx, int my);
+ * glr_ctrl_router_handle_code_panel_hit is the canonical consumer — it
+ * dispatches by UiHit.kind to the owning subsystem. `variable_count` is
+ * supplied by the controller so UI hit-testing does not read the live
+ * REPL variable table. */
+UiHit ui_panels_hit_test(int mx, int my, int variable_count);
 
 /* --- Test helpers --- */
 
