@@ -11,6 +11,7 @@
 #include "repl_actions.h"
 #include "repl_camera_controls.h"
 #include "repl_config.h"
+#include "repl_core.h"
 #include "repl_core_internal.h"
 #include "repl_export.h"
 #include "repl_keys.h"

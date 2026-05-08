@@ -1,5 +1,6 @@
 #define _DEFAULT_SOURCE
 #include "repl_config.h"
+#include "repl_core.h"
 #include "repl_core_internal.h"
 #include "repl_debug.h"
 #include "replay.h"
