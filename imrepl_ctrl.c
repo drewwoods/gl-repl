@@ -247,6 +247,14 @@ static void scene_execute_reset_adapter(void *user_data) {
     repl_execute_set_fade_context(1.0f, 0);
 }
 
+/* Wrapper installed on SceneRenderConfig.replay_restore_baseline_fn so the
+ * scene module never has to touch repl_eval / predef-var globals. */
+static void imrepl_ctrl_replay_restore_baseline(const ReplayFadePlan *fade_plan) {
+    if (!fade_plan) return;
+    repl_restore_predef_values(fade_plan->baseline_predef_vals, MAX_PREDEF_VARS);
+    repl_eval_restore_scratch_arrays(fade_plan->baseline_scratch_arrays);
+}
+
 static void imrepl_ctrl_build_scene_config(SceneRenderConfig *config) {
     ReplRenderState render = repl_state_render();
     ReplPresentationState presentation = repl_state_presentation();
@@ -263,6 +271,7 @@ static void imrepl_ctrl_build_scene_config(SceneRenderConfig *config) {
     config->execute_fn = scene_execute_adapter;
     config->execute_user_data = NULL;
     config->execute_reset_fn = scene_execute_reset_adapter;
+    config->replay_restore_baseline_fn = imrepl_ctrl_replay_restore_baseline;
 
     /* --- Flat program --- */
     config->flat_program = repl_state_flat_program_view();
