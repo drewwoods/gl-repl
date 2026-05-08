@@ -76,8 +76,6 @@ typedef struct UiRenderSnapshot {
     int                         edit_line;
 
     /* Convenience scalars (mirror editor_input/code_panel for terse access) */
-    int                         insert_mode;
-    int                         cursor_pos;
     int                         flat_program_count;
     float                       anim_time;
 
