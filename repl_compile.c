@@ -839,6 +839,36 @@ ReplCompileResult repl_compile_set_predef_value(const char *name,
     return REPL_COMPILE_OK;
 }
 
+ReplCompileResult repl_compile_empty_line(int line_idx,
+                                          const ReplCompileContext *ctx,
+                                          ReplCompiledChange *out,
+                                          char *err, int err_size) {
+    if (!ctx || !out)
+        return REPL_COMPILE_ERROR;
+
+    repl_compiled_change_init(out);
+    if (err && err_size > 0)
+        err[0] = '\0';
+
+    if (line_idx < 0)
+        line_idx = 0;
+    if (line_idx > ctx->document_count)
+        line_idx = ctx->document_count;
+
+    memset(&out->cmds[0], 0, sizeof(out->cmds[0]));
+    out->cmds[0].type = CMD_EMPTY;
+    out->cmds[0].valid = 1;
+    out->text[0][0] = '\0';
+
+    out->kind = REPL_COMPILED_INSERT_ONE;
+    out->pos = line_idx;
+    out->count = 1;
+    out->adjust_edit_line = 0;
+    snprintf(out->commit_message, sizeof(out->commit_message),
+             "Inserted blank line");
+    return REPL_COMPILE_OK;
+}
+
 ReplCompileResult repl_compile_delete_range(int start, int count,
                                             const ReplCompileContext *ctx,
                                             ReplCompiledChange *out,

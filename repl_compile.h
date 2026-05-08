@@ -263,6 +263,16 @@ ReplCompileResult repl_compile_delete_range(int start, int count,
                                             ReplCompiledChange *out,
                                             char *err, int err_size);
 
+/* Compile a blank-line insert at `line_idx`. Produces INSERT_ONE
+ * with `cmds[0]` set to CMD_EMPTY and `text[0]` empty. Pure: never
+ * mutates state, never calls set_status. Lets the editor's
+ * Enter-on-empty-input path go through the compile/apply seam
+ * without constructing a GLCmd inline. */
+ReplCompileResult repl_compile_empty_line(int line_idx,
+                                          const ReplCompileContext *ctx,
+                                          ReplCompiledChange *out,
+                                          char *err, int err_size);
+
 /* Compile a comment-toggle on `line_idx` using `prefix` as the
  * line-comment marker (e.g., "// "). The REPL fully owns toggle
  * semantics — the editor passes intent, this entry decides.
