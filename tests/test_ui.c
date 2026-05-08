@@ -82,8 +82,6 @@ static void make_test_ui_snapshot(UiRenderSnapshot *snap) {
     snap->document_cmds  = repl_state_document_cmds();
     snap->document_count = repl_state_document_count();
     snap->edit_line      = repl_state_edit_line();
-    snap->insert_mode    = snap->editor_input.insert_mode;
-    snap->cursor_pos     = snap->editor_input.cursor_pos;
     snap->flat_program_count = flat_program.cmd_count;
     snap->anim_time      = repl_state_variables().anim_time;
     snap->user_scene_active_idx = -1;

@@ -179,7 +179,7 @@ static void render_active_input_rows(const UiRenderSnapshot *snap,
     ReplAutocompleteState           ac     = snap->autocomplete;
     ReplSearchState                 srch   = snap->search;
     const char *input = inp.input;
-    int cursor_pos = snap->cursor_pos;
+    int cursor_pos = snap->editor_input.cursor_pos;
     int input_len = inp.input_len;
     CodePanelWrapIter wrap_it;
     int wrap_row = 0;
@@ -532,7 +532,7 @@ static void code_panel_draw_command_row(CodePanelRowCtx *ctx, int i,
     int search_row_idx;
     if (i < 0 || i >= ctx->snap->document_count)
         search_row_idx = -1;
-    else if (ctx->snap->insert_mode && i >= ctx->snap->edit_line)
+    else if (ctx->snap->editor_input.insert_mode && i >= ctx->snap->edit_line)
         search_row_idx = i + 1;
     else
         search_row_idx = i;
@@ -762,7 +762,7 @@ void ui_panels_render_code_panel(const UiRenderSnapshot *snap,
     const GLCmd *document_cmds = snap->document_cmds;
     int          document_count = snap->document_count;
     int          edit_line      = snap->edit_line;
-    int          insert_mode    = snap->insert_mode;
+    int          insert_mode    = snap->editor_input.insert_mode;
 
     /* Pull feeding-cmd kinds out of the highlight snapshot once so the
      * per-row branch in code_panel_draw_row_overlays() stays cheap. */
