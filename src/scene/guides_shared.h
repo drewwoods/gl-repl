@@ -5,7 +5,6 @@
 #define SCENE_GUIDES_SHARED_H
 
 #include "repl_command.h"
-#include "repl_eval.h"
 #include "repl_flatten.h"
 
 typedef struct SceneGuideSnapshot {
@@ -26,8 +25,18 @@ typedef struct SceneGuideSnapshot {
     int source_cmd_count;
     FlatProgramView flat_program;
 
-    const ExprVar *predef_vars;
-    int predef_var_count;
+    /* Pre-parsed vertex / normal cursor args. The controller evaluates the
+     * partial input string (e.g. `glVertex3f(1, t*2, `) using the live REPL
+     * variable table and writes the floats here so the scene module can
+     * draw guides without needing repl_eval. vertex_n_filled = 0 when the
+     * input doesn't look like glVertex2f / glVertex3f / gluVertex(.
+     * normal_n_filled < 3 means "don't draw a normal guide". */
+    float vertex_args[3];
+    int   vertex_filled[3];
+    int   vertex_n_filled;
+    float normal_args[3];
+    int   normal_n_filled;
+
     float alpha_scale; /* alpha boost to counter dark-bg crush; 1.0 = no change */
 } SceneGuideSnapshot;
 

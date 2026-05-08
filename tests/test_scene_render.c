@@ -447,17 +447,27 @@ static void test_vertex2f_guide_cursor_dot(void) {
     snap.show_guides = 1;
     snap.alpha_scale = 1.0f;
 
+    /* The controller now pre-parses cursor args; the scene module reads
+     * snapshot->vertex_args / vertex_filled / vertex_n_filled. Each case
+     * below populates those alongside the input string. */
     const char *input3f = "glVertex3f(1, 2, 3)";
-    snap.input     = input3f;
-    snap.input_len = (int)strlen(input3f);
+    snap.input          = input3f;
+    snap.input_len      = (int)strlen(input3f);
+    snap.vertex_args[0] = 1; snap.vertex_args[1] = 2; snap.vertex_args[2] = 3;
+    snap.vertex_filled[0] = snap.vertex_filled[1] = snap.vertex_filled[2] = 1;
+    snap.vertex_n_filled = 3;
     gl_stub_counts_reset();
     scene_geometry_guides_render_for_cursor(&snap);
     unsigned long long points3f = gl_stub_counts[GL_STUB_glBegin];
     ASSERT_TRUE("vertex3f(1,2,3): guide draws GL_POINTS", points3f > 0);
 
     const char *input2f = "glVertex2f(1, 2)";
-    snap.input     = input2f;
-    snap.input_len = (int)strlen(input2f);
+    snap.input          = input2f;
+    snap.input_len      = (int)strlen(input2f);
+    snap.vertex_args[0] = 1; snap.vertex_args[1] = 2; snap.vertex_args[2] = 0;
+    snap.vertex_filled[0] = snap.vertex_filled[1] = 1;
+    snap.vertex_filled[2] = 0;
+    snap.vertex_n_filled = 2;
     gl_stub_counts_reset();
     scene_geometry_guides_render_for_cursor(&snap);
     ASSERT_TRUE("vertex2f(1,2): guide draws GL_POINTS (same as vertex3f)",
@@ -465,8 +475,12 @@ static void test_vertex2f_guide_cursor_dot(void) {
 
     /* Partial entry: only one arg — should still produce a guide (plane), not a dot */
     const char *input2f_partial = "glVertex2f(1,";
-    snap.input     = input2f_partial;
-    snap.input_len = (int)strlen(input2f_partial);
+    snap.input          = input2f_partial;
+    snap.input_len      = (int)strlen(input2f_partial);
+    snap.vertex_args[0] = 1; snap.vertex_args[1] = 0; snap.vertex_args[2] = 0;
+    snap.vertex_filled[0] = 1;
+    snap.vertex_filled[1] = snap.vertex_filled[2] = 0;
+    snap.vertex_n_filled = 1;
     gl_stub_counts_reset();
     scene_geometry_guides_render_for_cursor(&snap);
     ASSERT_TRUE("vertex2f(1,): partial entry still draws a guide",

@@ -124,9 +124,11 @@ UI_HDRS = $(filter src/ui/%.h,$(HDRS))
 STATE_NEUTRAL_SRCS = cmd_format.c prof.c tests/gl-stubs/gl_stub_counts.c
 
 # Object lists used to build the standalone teapot_demo without dragging in
-# any REPL editor/controller code. Scene + repl_eval (predef vars used by the
-# replay path, harmless when replay is off) + prof.
-TEAPOT_DEMO_DEP_SRCS = $(SCENE_SRCS) repl_eval.c prof.c
+# any REPL editor/controller code. Scene + prof — the scene module no
+# longer touches repl_eval (replay-baseline restore is dispatched through a
+# function pointer the controller installs; geometry-guide arg parsing is
+# done in the controller before snapshot is built).
+TEAPOT_DEMO_DEP_SRCS = $(SCENE_SRCS) prof.c
 
 OBJDIR = build/$(BUILD)$(if $(filter 1,$(USE_GL_STUBS)),-gl-stubs,)
 OBJ_CFLAGS = $(BUILD_CFLAGS) $(CFLAGS)
