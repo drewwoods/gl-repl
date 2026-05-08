@@ -3,6 +3,7 @@
 #include "repl_executor.h"
 #include "repl_source_scope.h"
 #include "repl_state.h"
+#include "repl_core.h"
 #include "ui/state.h"
 #include "ui/layout.h"           /* CODE_PANEL_LAYOUT_* */
 #include "repl_presentation.h"   /* CFG_DEFAULT_* */

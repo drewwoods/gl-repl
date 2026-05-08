@@ -5,6 +5,7 @@
 #include "repl_config.h"
 #include "repl_core_internal.h"
 #include "repl_examples.h"
+#include "repl_core.h"
 #include "repl_state.h"
 
 #include <dirent.h>

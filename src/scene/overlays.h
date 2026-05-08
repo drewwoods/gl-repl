@@ -35,8 +35,6 @@
 #ifndef SCENE_OVERLAYS_H
 #define SCENE_OVERLAYS_H
 
-#include "render_types.h"
-
 /* Per-vertex primitive renderers exposed for the controller's overlay
  * orchestration. Each draws ONE label / arrow at a transformed position;
  * iteration of the user's program and applying transforms is the

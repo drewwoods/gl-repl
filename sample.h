@@ -19,21 +19,4 @@
 #define M_PI 3.14159265358979323846
 #endif
 
-#include "repl_command.h"
-#include "repl_command_spec.h"
-#include "repl_presentation.h"
-#include "replay.h"
-#include "editor_limits.h"
-#include "repl_export_state.h"
-#include "repl_core.h"
-#include "repl_executor.h"
-#include "repl_export.h"
-#include "repl_pipeline.h"
-#include "scene/render.h"
-#include "ui/layout.h"
-#include "ui/metrics.h"
-#include "replay_ui_hud.h"
-#include "editor_input.h"
-#include "editor_search.h"
-
 #endif /* SAMPLE_H */

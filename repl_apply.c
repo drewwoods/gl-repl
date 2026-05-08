@@ -16,7 +16,7 @@
 
 #include "repl_command_store.h"
 #include "repl_eval.h"
-#include "repl_state.h"
+#include "repl_state_owners.h"
 
 int repl_apply_can_apply_compiled_change(const ReplCompiledChange *change) {
     if (!change) return 0;

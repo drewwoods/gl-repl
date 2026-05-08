@@ -1,6 +1,5 @@
 #include "state.h"
 #include "profile_panel.h"
-#include "variable_panel_state.h" /* peer subsystem: visibility flag lives here */
 #include "repl_presentation.h"    /* CFG_DEFAULT_CAMERA_ROTATE */
 
 #include <stddef.h>

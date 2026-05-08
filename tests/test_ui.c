@@ -1,4 +1,4 @@
-#include "sample.h"
+#include "ui/metrics.h"
 #include "ui/state.h"
 #include "repl_state.h"
 #include "replay_state.h"
@@ -215,7 +215,7 @@ static void test_color_picker(void) {
     view = color_picker_view();
     int sv_mx2 = view.rects.sv_x + 10;
     int sv_my2 = ui_state_viewport().window_h - (view.rects.sv_y + 10); // High V
-    color_picker_handle_press(sv_mx2, sv_my2); 
+    color_picker_handle_press(sv_mx2, sv_my2);
     color_picker_handle_release();
 
     /* Test CMD_TESS_COLOR writeback */
@@ -232,12 +232,12 @@ static void test_color_picker(void) {
     repl_state_document_cmds_mut()[0].args[1] = 1.0f;
     repl_state_document_cmds_mut()[0].args[2] = 0.0f;
     color_picker_open(0, 300);
-    
+
     repl_state_document_cmds_mut()[0].args[0] = 0.0f;
     repl_state_document_cmds_mut()[0].args[1] = 0.0f;
     repl_state_document_cmds_mut()[0].args[2] = 1.0f;
     color_picker_open(0, 300);
-    
+
     /* Open an uneditable command to hit coverage */
     repl_state_document_cmds_mut()[0].type = CMD_BEGIN;
     color_picker_open(0, 300);
