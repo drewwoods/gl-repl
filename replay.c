@@ -293,6 +293,85 @@ int repl_replay_fill_base_limit(void) {
     return g_replay_fade_batches[0].old_pc;
 }
 
+/* Apply a single transform CmdType to the current GL modelview, tracking
+ * push/pop balance. Used by repl_replay_walk_tess_preview below — REPL is
+ * the home of GLCmd→GL translation, so the scene module never has to do
+ * its own command iteration. */
+static void replay_walk_apply_transform(const GLCmd *cmd, int *depth) {
+    if (!cmd) return;
+    switch (cmd->type) {
+    case CMD_PUSH_MATRIX:
+        glPushMatrix();
+        if (depth) (*depth)++;
+        break;
+    case CMD_POP_MATRIX:
+        if (!depth || *depth > 0) {
+            glPopMatrix();
+            if (depth) (*depth)--;
+        }
+        break;
+    case CMD_TRANSLATE3F:
+        glTranslatef(cmd->args[0], cmd->args[1], cmd->args[2]);
+        break;
+    case CMD_SCALEF:
+        glScalef(cmd->args[0], cmd->args[1], cmd->args[2]);
+        break;
+    case CMD_ROTATEF:
+        glRotatef(cmd->args[0], cmd->args[1], cmd->args[2], cmd->args[3]);
+        break;
+    default: break;
+    }
+}
+
+void repl_replay_walk_tess_preview(const ReplTessPreviewCallbacks *cb,
+                                   void *user_data) {
+    if (!cb) return;
+
+    FlatProgramView program = repl_state_flat_program_view();
+    int in_contour = 0;
+    int matrix_depth = 0;
+
+    glPushMatrix();
+    for (int i = 0; i < program.cmd_count; i++) {
+        const GLCmd *cmd = &program.cmds[i];
+        if (!cmd->valid) continue;
+
+        if (repl_cmd_is_transform(cmd->type)) {
+            /* Skip transforms while inside a contour — the contour's
+             * vertex coordinates are emitted in the surrounding frame. */
+            if (!in_contour)
+                replay_walk_apply_transform(cmd, &matrix_depth);
+            continue;
+        }
+
+        switch (cmd->type) {
+        case CMD_TESS_BEGIN_CONTOUR:
+            if (in_contour && cb->end_contour)
+                cb->end_contour(user_data);
+            if (cb->begin_contour)
+                cb->begin_contour(user_data);
+            in_contour = 1;
+            break;
+        case CMD_TESS_VERTEX:
+            if (in_contour && cb->vertex)
+                cb->vertex(cmd->args[0], cmd->args[1], cmd->args[2], user_data);
+            break;
+        case CMD_TESS_END:
+            if (in_contour && cb->end_contour)
+                cb->end_contour(user_data);
+            in_contour = 0;
+            break;
+        default:
+            break;
+        }
+    }
+    if (in_contour && cb->end_contour)
+        cb->end_contour(user_data);
+
+    while (matrix_depth > 0) { glPopMatrix(); matrix_depth--; }
+    glPopMatrix();
+}
+
 static int replay_next_polygon_limit(int start, int *fade_begin, int *fade_end) {
     int saw_meaningful = 0;
     REPLAY_FLAT_STATE;
