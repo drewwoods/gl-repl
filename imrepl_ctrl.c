@@ -180,39 +180,114 @@ static SceneGuideSnapshot imrepl_ctrl_build_guide_snapshot(const SceneRenderConf
     return snapshot;
 }
 
-static void imrepl_ctrl_build_replay_fade_plan(SceneRenderConfig *config) {
+/* Re-establish the REPL's predef-var / scratch-array baseline before
+ * each fade-batch render so each batch starts from the same world state. */
+static void imrepl_ctrl_replay_restore_baseline(const ReplayFadePlan *fade_plan) {
+    if (!fade_plan) return;
+    repl_restore_predef_values(fade_plan->baseline_predef_vals, MAX_PREDEF_VARS);
+    repl_eval_restore_scratch_arrays(fade_plan->baseline_scratch_arrays);
+}
+
+/* Per-frame replay-fade plan, owned by the controller. Used by the main
+ * fill (to clamp the flat-cmd count to the pre-fade base limit) and by
+ * the post_fill_fn hook (to render the fading-batch overlay). */
+static ReplayFadePlan g_replay_fade_plan;
+static int            g_replay_fade_plan_active;     /* 1 = post_fill_fn should run */
+static int            g_replay_fade_plan_base_limit; /* clamp for the main fill */
+
+static void imrepl_ctrl_build_replay_fade_plan(int replaying) {
     ReplayFadeBatchView fade_batches;
     int batch_count;
 
-    memset(&config->replay_fade_plan, 0, sizeof(config->replay_fade_plan));
-    config->replay_has_fades = 0;
-    config->replay_base_limit = 0;
+    memset(&g_replay_fade_plan, 0, sizeof(g_replay_fade_plan));
+    g_replay_fade_plan_active = 0;
+    g_replay_fade_plan_base_limit = 0;
 
-    if (!config->replaying)
+    if (!replaying)
         return;
 
-    repl_replay_copy_baseline_predef_values(config->replay_fade_plan.baseline_predef_vals,
+    repl_replay_copy_baseline_predef_values(g_replay_fade_plan.baseline_predef_vals,
                                             MAX_PREDEF_VARS);
     repl_replay_copy_baseline_scratch_arrays(
-        config->replay_fade_plan.baseline_scratch_arrays);
+        g_replay_fade_plan.baseline_scratch_arrays);
 
-    config->replay_has_fades = repl_replay_has_active_fades();
-    if (!config->replay_has_fades)
+    if (!repl_replay_has_active_fades())
         return;
 
-    config->replay_base_limit = repl_replay_fill_base_limit();
+    g_replay_fade_plan_base_limit = repl_replay_fill_base_limit();
     fade_batches = repl_replay_fade_batches_view();
-    batch_count = repl_replay_compute_fade_skip_limits(config->replay_fade_plan.skip_limits,
+    batch_count = repl_replay_compute_fade_skip_limits(g_replay_fade_plan.skip_limits,
                                                        REPLAY_FADE_BATCH_MAX);
     if (batch_count > REPLAY_FADE_BATCH_MAX)
         batch_count = REPLAY_FADE_BATCH_MAX;
 
-    config->replay_fade_plan.batch_count = batch_count;
+    g_replay_fade_plan.batch_count = batch_count;
     for (int batch_idx = 0; batch_idx < batch_count; batch_idx++) {
         const ReplayFadeBatch *batch = &fade_batches.batches[batch_idx];
-        config->replay_fade_plan.batches[batch_idx] = *batch;
-        config->replay_fade_plan.batch_alpha[batch_idx] = repl_replay_batch_alpha(batch);
+        g_replay_fade_plan.batches[batch_idx] = *batch;
+        g_replay_fade_plan.batch_alpha[batch_idx] = repl_replay_batch_alpha(batch);
     }
+    g_replay_fade_plan_active = 1;
+}
+
+/* Replay-fade overlay pass, installed on SceneRenderConfig.post_fill_fn
+ * when fades are active. Runs between the scene's main user-geometry
+ * fill and its grid/axes/backdrop helpers — the GL state set up by
+ * render_3d_scene_pass (camera modelview, projection, lights, quality
+ * flags, materials) is still live, so this body just layers blended
+ * fade overlays on top. */
+static void imrepl_ctrl_post_fill_replay_fade(void *user_data) {
+    (void)user_data;
+    if (!g_replay_fade_plan_active) return;
+
+    const ReplayFadePlan *plan = &g_replay_fade_plan;
+    int batch_count = plan->batch_count;
+    if (batch_count <= 0) return;
+
+    prof_begin(PROF_SCENE_3D_FADE);
+
+    glPushAttrib(GL_ALL_ATTRIB_BITS);
+    glDisable(GL_LIGHTING);
+    glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE);
+    GLfloat mspec[] = { 0.4f, 0.4f, 0.4f, 1.0f };
+    GLfloat mshin[] = { 30.0f };
+    glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, mspec);
+    glMaterialfv(GL_FRONT_AND_BACK, GL_SHININESS, mshin);
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+    FlatProgramView program = repl_state_flat_program_view();
+    EditorBufferView text = editor_buffer_view();
+
+    for (int batch_idx = 0; batch_idx < batch_count; batch_idx++) {
+        const ReplayFadeBatch *batch = &plan->batches[batch_idx];
+        float alpha = plan->batch_alpha[batch_idx];
+        if (alpha <= 0.0f) continue;
+
+        prof_begin(PROF_SCENE_3D_FADE_BATCH_PREP);
+        imrepl_ctrl_replay_restore_baseline(plan);
+        glColor4f(0.70f, 0.70f, 0.80f, alpha);
+        glPushMatrix();
+        prof_accum_end(PROF_SCENE_3D_FADE_BATCH_PREP);
+
+        prof_begin(PROF_SCENE_3D_FADE_BATCH_EXEC);
+        repl_execute_set_fade_context(alpha, plan->skip_limits[batch_idx]);
+        repl_execute_program(&(ReplExecutionOptions){
+            .flat_cmd_count = batch->new_pc,
+            .program        = program,
+            .text           = text,
+        });
+        prof_accum_end(PROF_SCENE_3D_FADE_BATCH_EXEC);
+
+        glPopMatrix();
+    }
+
+    prof_begin(PROF_SCENE_3D_FADE_BATCH_POST);
+    repl_execute_set_fade_context(1.0f, 0);
+    glPopAttrib();
+    prof_accum_end(PROF_SCENE_3D_FADE_BATCH_POST);
+
+    prof_accum_end(PROF_SCENE_3D_FADE);
 }
 
 static void imrepl_ctrl_push_highlights(void) {
@@ -298,35 +373,28 @@ static void imrepl_ctrl_apply_input_effects(ReplInputDispatchEffects effects) {
 /* Scene config builder (push model)                                          */
 /* ========================================================================= */
 
-/* Execute callback adapter: forwards to repl_execute_program() */
-static void scene_execute_adapter(float alpha_scale,
-                                  int skip_geom_before_pc,
-                                  int flat_cmd_count,
-                                  FlatProgramView program,
+/* Scene's main-fill geometry callback. The signature is intentionally
+ * opaque to scene — the controller pulls live program / count / text
+ * from REPL state here, and clamps the count to the pre-fade base limit
+ * when replay-fade overlays are active so the fade pass can layer on
+ * top of an unmodified prefix. */
+static void scene_execute_adapter(const SceneExecuteContext *ctx,
                                   void *user_data) {
+    (void)ctx;
     (void)user_data;
-    repl_execute_set_fade_context(alpha_scale, skip_geom_before_pc);
+
+    int count = repl_state_flat_program_count();
+    if (g_replay_fade_plan_active)
+        count = g_replay_fade_plan_base_limit;
+
+    repl_execute_set_fade_context(1.0f, 0);
     glPushAttrib(GL_ALL_ATTRIB_BITS);
     repl_execute_program(&(ReplExecutionOptions){
-        .flat_cmd_count = flat_cmd_count,
-        .program = program,
-        .text = editor_buffer_view(),
+        .flat_cmd_count = count,
+        .program        = repl_state_flat_program_view(),
+        .text           = editor_buffer_view(),
     });
     glPopAttrib();
-}
-
-/* Execute reset callback: clears fade context after last fade batch */
-static void scene_execute_reset_adapter(void *user_data) {
-    (void)user_data;
-    repl_execute_set_fade_context(1.0f, 0);
-}
-
-/* Wrapper installed on SceneRenderConfig.replay_restore_baseline_fn so the
- * scene module never has to touch repl_eval / predef-var globals. */
-static void imrepl_ctrl_replay_restore_baseline(const ReplayFadePlan *fade_plan) {
-    if (!fade_plan) return;
-    repl_restore_predef_values(fade_plan->baseline_predef_vals, MAX_PREDEF_VARS);
-    repl_eval_restore_scratch_arrays(fade_plan->baseline_scratch_arrays);
 }
 
 static void imrepl_ctrl_build_scene_config(SceneRenderConfig *config) {
@@ -344,8 +412,12 @@ static void imrepl_ctrl_build_scene_config(SceneRenderConfig *config) {
     /* --- Execute hook --- */
     config->execute_fn = scene_execute_adapter;
     config->execute_user_data = NULL;
-    config->execute_reset_fn = scene_execute_reset_adapter;
-    config->replay_restore_baseline_fn = imrepl_ctrl_replay_restore_baseline;
+
+    /* --- Post-fill hook (replay-fade overlay) ---
+     * Wired up further below after the fade plan is built; left NULL when
+     * there are no fades to overlay. */
+    config->post_fill_fn = NULL;
+    config->post_fill_user_data = NULL;
 
     /* --- Flat program --- */
     config->flat_program = repl_state_flat_program_view();
@@ -432,8 +504,16 @@ static void imrepl_ctrl_build_scene_config(SceneRenderConfig *config) {
 
     config->guide_snapshot = imrepl_ctrl_build_guide_snapshot(config);
 
-    /* --- Replay --- */
-    imrepl_ctrl_build_replay_fade_plan(config);
+    /* --- Replay ---
+     * Build the controller-private fade plan from REPL replay state, and
+     * if there's anything to overlay on the main fill, install our
+     * post_fill_fn so the scene calls it between the user-geometry fill
+     * and the grid/axes/backdrop helpers. */
+    imrepl_ctrl_build_replay_fade_plan(config->replaying);
+    if (g_replay_fade_plan_active) {
+        config->post_fill_fn        = imrepl_ctrl_post_fill_replay_fade;
+        config->post_fill_user_data = NULL;
+    }
 }
 
 /* ========================================================================= */

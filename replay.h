@@ -31,7 +31,36 @@
 #define REPLAY_H
 
 #include "repl_eval.h"
-#include "scene/replay_types.h"
+
+#define REPLAY_FADE_BATCH_MAX 24
+
+/* A snapshot of geometry from [old_pc, new_pc) that fades out as new
+ * geometry appears. age is the fade timestamp (incremented by the REPL
+ * replay state machine). Multiple batches can be active simultaneously
+ * via a ring buffer. */
+typedef struct {
+    int   old_pc;
+    int   new_pc;
+    float age;
+} ReplayFadeBatch;
+
+/* Read-only view over the active fade batches; valid for one frame. */
+typedef struct {
+    const ReplayFadeBatch *batches;
+    int                    count;
+} ReplayFadeBatchView;
+
+/* Snapshot the controller assembles per frame and feeds into its
+ * post-fill fade-render hook. The scene module no longer touches it —
+ * it's pure REPL state. */
+typedef struct ReplayFadePlan {
+    int             batch_count;
+    ReplayFadeBatch batches[REPLAY_FADE_BATCH_MAX];
+    int             skip_limits[REPLAY_FADE_BATCH_MAX];
+    float           batch_alpha[REPLAY_FADE_BATCH_MAX];
+    float           baseline_predef_vals[MAX_PREDEF_VARS];
+    float           baseline_scratch_arrays[REPL_SCRATCH_ARRAY_COUNT][REPL_SCRATCH_ARRAY_LEN];
+} ReplayFadePlan;
 
 typedef enum {
     REPLAY_OFF = 0,
