@@ -82,15 +82,16 @@ int  ui_menu_bar_open_menu_id(void);
 void ui_menu_bar_close(void);
 
 /* Open a specific top-level menu by ID (REPL_MENU_FILE, etc.). Called by menu
- * button click or keyboard dispatch. */
-void ui_menu_bar_set_open_menu(int menu_id);
+ * button click or keyboard dispatch. `now` is the current animation clock
+ * (variables.anim_time), used to seed dropdown fade-in animation. */
+void ui_menu_bar_set_open_menu(int menu_id, float now);
 
 /* Open the Config dropdown specifically (convenience for keyboard shortcut). */
-void ui_menu_bar_open_config(void);
+void ui_menu_bar_open_config(float now);
 
 /* Notify menu bar that search overlay became active (used to highlight Search
- * pin button). Called by search.c when search is opened. */
-void ui_menu_bar_note_search_opened(void);
+ * pin button). `now` seeds the highlight fade-in. */
+void ui_menu_bar_note_search_opened(float now);
 
 /* --- Hit-testing and interaction --- */
 

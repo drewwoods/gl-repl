@@ -2035,7 +2035,7 @@ int main() {
         g_scroll = 0;
         g_scroll_follow_cursor = 0;
 
-        (void)ui_panels_code_panel_apply_scroll_follow_for_test(&follow_doc_line,
+        (void)ui_panels_code_panel_apply_scroll_follow_for_test(repl_state_presentation().show_vertex_indices, &follow_doc_line,
                                                       &visible_lines);
         ASSERT_TRUE("replay follow helper computes target",
                     follow_doc_line >= 0);
@@ -2046,7 +2046,7 @@ int main() {
         g_scroll_follow_cursor = 1;
 
         ASSERT_TRUE("replay follow helper reports visible",
-                    ui_panels_code_panel_apply_scroll_follow_for_test(&follow_doc_line,
+                    ui_panels_code_panel_apply_scroll_follow_for_test(repl_state_presentation().show_vertex_indices, &follow_doc_line,
                                                             &visible_lines));
         ASSERT_INT("replay follow scrolls row above status bar",
                    g_scroll, follow_doc_line - visible_lines + 1);
@@ -2122,20 +2122,20 @@ int main() {
         g_scroll_follow_cursor = 0;
 
         replay_expand_args = 0;
-        (void)ui_panels_code_panel_apply_scroll_follow_for_test(&collapsed_follow,
+        (void)ui_panels_code_panel_apply_scroll_follow_for_test(repl_state_presentation().show_vertex_indices, &collapsed_follow,
                                                       &visible_lines);
         ASSERT_TRUE("collapsed replay follow resolves command row",
                     collapsed_follow >= 0);
 
         replay_expand_args = 1;
-        (void)ui_panels_code_panel_apply_scroll_follow_for_test(&expanded_follow,
+        (void)ui_panels_code_panel_apply_scroll_follow_for_test(repl_state_presentation().show_vertex_indices, &expanded_follow,
                                                       &visible_lines);
         ASSERT_INT("expanded replay follows final annotation row",
                    expanded_follow, collapsed_follow + 2);
 
         replay_expand_args = 0;
         expanded_follow = -1;
-        (void)ui_panels_code_panel_apply_scroll_follow_for_test(&expanded_follow,
+        (void)ui_panels_code_panel_apply_scroll_follow_for_test(repl_state_presentation().show_vertex_indices, &expanded_follow,
                                                       &visible_lines);
         ASSERT_INT("collapsed replay removes annotation rows from follow",
                    expanded_follow, collapsed_follow);
@@ -2199,7 +2199,7 @@ int main() {
         editor_cursor_pos_set(0);
         g_scroll = 0;
         g_scroll_follow_cursor = 1;
-        ui_panels_code_panel_apply_scroll_follow_for_test(&follow_insert, &visible_lines);
+        ui_panels_code_panel_apply_scroll_follow_for_test(repl_state_presentation().show_vertex_indices, &follow_insert, &visible_lines);
         ASSERT_TRUE("insert-at-end cursor in visible region",
                     follow_insert >= g_scroll &&
                     follow_insert < g_scroll + visible_lines);
@@ -2208,7 +2208,7 @@ int main() {
         editor_insert_mode_set(0);
         g_scroll = 0;
         g_scroll_follow_cursor = 1;
-        ui_panels_code_panel_apply_scroll_follow_for_test(&follow_overwrite, &visible_lines);
+        ui_panels_code_panel_apply_scroll_follow_for_test(repl_state_presentation().show_vertex_indices, &follow_overwrite, &visible_lines);
 
         ASSERT_INT("insert-at-end follow matches overwrite-at-end follow",
                    follow_insert, follow_overwrite);
@@ -2270,7 +2270,7 @@ int main() {
         ASSERT_INT("up nav: scroll_follow_cursor set", g_scroll_follow_cursor, 1);
 
         ASSERT_TRUE("up nav: cursor visible after follow",
-                    ui_panels_code_panel_apply_scroll_follow_for_test(&follow_doc_line,
+                    ui_panels_code_panel_apply_scroll_follow_for_test(repl_state_presentation().show_vertex_indices, &follow_doc_line,
                                                             &visible_lines));
     }
 

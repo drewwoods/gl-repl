@@ -84,9 +84,12 @@ UiHit ui_panels_hit_test(int mx, int my);
 
 /* Apply scroll-follow logic without rendering (for test verification). Computes
  * the scroll target for the follow line and outputs the follow_doc_line and
- * visible_lines. Used by tests to verify scroll-follow calculation. Returns 1
- * on success, 0 if follow target is out of bounds. */
-int  ui_panels_code_panel_apply_scroll_follow_for_test(int *out_follow_doc_line,
+ * visible_lines. `show_vertex_indices` mirrors
+ * `ReplPresentationState.show_vertex_indices` so the gutter width matches what
+ * the renderer will use. Used by tests to verify scroll-follow calculation.
+ * Returns 1 on success, 0 if follow target is out of bounds. */
+int  ui_panels_code_panel_apply_scroll_follow_for_test(int show_vertex_indices,
+                                                       int *out_follow_doc_line,
                                                        int *out_visible_lines);
 
 #endif /* UI_PANELS_H */

@@ -363,7 +363,7 @@ static void test_menu_bar(void) {
     ASSERT_TRUE("pin hit", ui_menu_bar_pin_hit(380, 10) >= 0);
 
     /* Test dropdown */
-    ui_menu_bar_set_open_menu(0); // File menu
+    ui_menu_bar_set_open_menu(0, 0.0f); // File menu
     ASSERT_TRUE("dropdown open", ui_menu_bar_menu_dropdown_is_open());
 
     gl_stub_counts_reset();
@@ -374,7 +374,7 @@ static void test_menu_bar(void) {
     ASSERT_TRUE("dropdown item hit", ui_menu_bar_dropdown_item_hit(20, 100) >= 0);
 
     /* Test config menu */
-    ui_menu_bar_open_config();
+    ui_menu_bar_open_config(0.0f);
     ASSERT_TRUE("config menu open", ui_menu_bar_open_menu_id() == 2); // MENU_CONFIG
 
     /* Test search overlay */
@@ -453,7 +453,7 @@ static void test_ui_menu_bar_hit_test(void) {
     /* Open a menu, then a click on a dropdown row reports
      * UI_HIT_MENU_ITEM with cmd_idx = open_menu_id and item_idx =
      * row. */
-    ui_menu_bar_set_open_menu(0); /* File menu */
+    ui_menu_bar_set_open_menu(0, 0.0f); /* File menu */
     UiHit h_row = ui_menu_bar_hit_test(20, 100);
     ASSERT_TRUE("dropdown row hit kind",
                 h_row.kind == UI_HIT_MENU_ITEM);
