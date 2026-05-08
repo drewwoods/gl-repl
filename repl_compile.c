@@ -21,6 +21,28 @@
  * shift, editor-buffer write) are performed by repl_apply.c (Phase
  * C commit 20) and orchestrated by editor_commit (Phase C commit
  * 21).
+ *
+ * Reading guide — entry points and what they emit:
+ *   repl_compile_float_decl         INSERT_ONE / REPLACE_ONE  +
+ *                                   DECLARE / UNDECLARE / SET_VALUE
+ *   repl_compile_var_assign         INSERT_ONE / REPLACE_ONE  +
+ *                                   SET_VALUE (+ UNDECLARE on
+ *                                   decl-row overwrite)
+ *   repl_compile_set_predef_value   REPLACE_ONE on the literal
+ *                                   assign or decl initializer
+ *                                   that backs the named variable;
+ *                                   pure SET_VALUE if neither exists
+ *   repl_compile_empty_line         INSERT_ONE
+ *   repl_compile_delete_range       DELETE_RANGE + UNDECLARE for any
+ *                                   decl rows in the range
+ *   repl_compile_toggle_comment     INSERT_MANY for block-batches
+ *                                   (head..end), REPLACE_ONE for
+ *                                   single rows; UNDECLAREs decl
+ *                                   rows being commented out
+ *
+ * Cross-file helper: repl_compile_dispatch() lives in
+ * editor_services.c and runs the float-decl + var-assign chain;
+ * the uncomment path calls it as a fallback.
  */
 
 #include "repl_compile.h"
@@ -201,6 +223,21 @@ static int compile_build_literal_assign_change(const ReplCompileContext *ctx,
                     indent, name, (double)value) < (int)sizeof(out->text[0]);
 }
 
+/* Rewrite the initializer for one name in a multi-name decl line.
+ *
+ * Given `  float a = sin(t), b, c = 2; // ok` and (name="b", value=4),
+ * produce `  float a = sin(t), b = 4, c = 2; // ok`.
+ *
+ * Approach: tokenize the body between `float ` and the first `;`
+ * into name segments separated by commas at paren-depth 0 (so
+ * `sin(t, u)` initializers don't split). For each segment, parse
+ * the leading identifier; if it matches `name`, emit `name = value`,
+ * otherwise emit the segment verbatim. Returns 1 on a clean rewrite,
+ * 0 if `name` was not found or anything failed (caller falls back to
+ * a pure SET_VALUE op without rewriting source).
+ *
+ * Indentation, the trailing `;`, and any trailing `// comment` are
+ * preserved. */
 static int compile_rewrite_decl_initializer_text(const char *orig_text,
                                                  const char *name,
                                                  float value,
@@ -311,6 +348,264 @@ static int compile_rewrite_decl_initializer_text(const char *orig_text,
     return 1;
 }
 
+/* Parsed shape of `float a, b = expr, c;` — names + optional init
+ * values (already evaluated at compile time so apply doesn't need
+ * the source string). decl_comment carries any trailing `// ...`
+ * verbatim so format_decl_text can re-emit it. */
+typedef struct {
+    char  names[MAX_NAMES_PER_DECL][16];
+    float init_vals[MAX_NAMES_PER_DECL];
+    int   has_init[MAX_NAMES_PER_DECL];
+    int   count;
+    char  decl_comment[MAX_LINE_LEN];
+} FloatDeclParse;
+
+/* Parse `float NAME [= EXPR] (, NAME [= EXPR])* ;  // comment`.
+ * Returns:
+ *   REPL_COMPILE_OK + parsed != NULL, *recognized = 1   on success.
+ *   REPL_COMPILE_OK + *recognized = 0                   when input
+ *      doesn't start with the `float` keyword (caller falls through
+ *      to the next handler).
+ *   REPL_COMPILE_ERROR with err filled                  on a real
+ *      syntax error inside an otherwise float-shaped line. */
+static ReplCompileResult parse_float_name_list(const char *input,
+                                               FloatDeclParse *parsed,
+                                               int *recognized,
+                                               char *err, int err_size) {
+    *recognized = 0;
+    memset(parsed, 0, sizeof(*parsed));
+
+    const char *p = input ? input : "";
+    while (*p && isspace((unsigned char)*p)) p++;
+    if (strncmp(p, "float", 5) != 0)
+        return REPL_COMPILE_OK;
+    if (isalnum((unsigned char)p[5]) || p[5] == '_')
+        return REPL_COMPILE_OK;
+    p += 5;
+    *recognized = 1;
+
+    while (*p) {
+        while (*p && isspace((unsigned char)*p)) p++;
+        if (*p == ';' || *p == '\0') break;
+        if (parsed->count > 0) {
+            /* Subsequent name must be preceded by ','. A non-comma
+             * here means the line was float-shaped through `float `
+             * but breaks the comma-separated list — fall through to
+             * the next handler instead of erroring. */
+            if (*p != ',') {
+                *recognized = 0;
+                return REPL_COMPILE_OK;
+            }
+            p++;
+            while (*p && isspace((unsigned char)*p)) p++;
+        }
+        if (!isalpha((unsigned char)*p) && *p != '_')
+            return compile_set_err(err, err_size,
+                "syntax error in float declaration: expected identifier");
+
+        const char *start = p;
+        while (*p && (isalnum((unsigned char)*p) || *p == '_')) p++;
+        int len = (int)(p - start);
+        if (len <= 0 || len >= 16)
+            return compile_set_err(err, err_size, "invalid identifier (max 15 chars)");
+        if (parsed->count >= MAX_NAMES_PER_DECL)
+            return compile_set_err(err, err_size,
+                "too many names per declaration (max %d); split across lines",
+                MAX_NAMES_PER_DECL);
+        memcpy(parsed->names[parsed->count], start, (size_t)len);
+        parsed->names[parsed->count][len] = '\0';
+
+        /* Optional `= expr`. Stop at unparenthesized comma so the
+         * outer name loop picks up the next decl. `==` is left for
+         * the eval validator to reject — a literal `=` followed by
+         * `=` is not a decl initializer. */
+        while (*p && isspace((unsigned char)*p)) p++;
+        if (*p == '=' && p[1] != '=') {
+            p++;
+            while (*p && isspace((unsigned char)*p)) p++;
+            if (*p == '\0' || *p == ';' || *p == ',')
+                return compile_set_err(err, err_size, "expected expression after '='");
+
+            const char *expr_start = p;
+            int depth = 0;
+            while (*p && *p != ';') {
+                if (*p == '(') depth++;
+                else if (*p == ')') depth--;
+                else if (*p == ',' && depth == 0) break;
+                p++;
+            }
+
+            char init_expr[MAX_LINE_LEN];
+            int elen = (int)(p - expr_start);
+            if (elen >= (int)sizeof(init_expr)) elen = (int)sizeof(init_expr) - 1;
+            memcpy(init_expr, expr_start, (size_t)elen);
+            init_expr[elen] = '\0';
+            while (elen > 0 && isspace((unsigned char)init_expr[elen - 1]))
+                init_expr[--elen] = '\0';
+            if (elen == 0)
+                return compile_set_err(err, err_size, "expected expression after '='");
+
+            char verr[128];
+            if (!repl_eval_validate_expression_idents(init_expr, NULL, 0,
+                                                      verr, sizeof(verr)))
+                return compile_set_err(err, err_size, "%s", verr);
+            ExprCtx eval_ctx = { init_expr, g_predef_vars, g_num_predef_vars };
+            parsed->init_vals[parsed->count] = repl_eval_expr(&eval_ctx);
+            parsed->has_init[parsed->count] = 1;
+        }
+
+        parsed->count++;
+    }
+
+    if (parsed->count == 0)
+        return compile_set_err(err, err_size,
+            "float declaration requires at least one identifier");
+    if (*p == ';') p++;
+    while (*p && isspace((unsigned char)*p)) p++;
+    if (*p != '\0' && !(p[0] == '/' && p[1] == '/'))
+        return compile_set_err(err, err_size,
+            "syntax error: unexpected trailing text after declaration");
+    if (p[0] == '/' && p[1] == '/')
+        snprintf(parsed->decl_comment, sizeof(parsed->decl_comment), " %s", p);
+
+    return REPL_COMPILE_OK;
+}
+
+/* Validate the parsed name list against project invariants:
+ *   - no duplicates within the declaration
+ *   - no clash with reserved keywords (`t`, `PI`, etc.)
+ *   - identifiers start with a letter or underscore
+ *   - names already in the predef table are only re-declarable when
+ *     they're being *kept* across a decl-row overwrite (old_decl has
+ *     them); otherwise it's a duplicate decl
+ *   - net new slot count fits MAX_PREDEF_VARS */
+static ReplCompileResult validate_decl_names(const FloatDeclParse *parsed,
+                                             const GLCmd *old_decl,
+                                             char *err, int err_size) {
+    for (int var_idx = 0; var_idx < parsed->count; var_idx++) {
+        const char *nm = parsed->names[var_idx];
+
+        for (int prev = 0; prev < var_idx; prev++) {
+            if (strcmp(nm, parsed->names[prev]) == 0)
+                return compile_set_err(err, err_size,
+                    "duplicate name '%s' in declaration", nm);
+        }
+        if (repl_eval_find_predef_var_idx(nm) >= 0) {
+            int in_old_decl = 0;
+            if (old_decl) {
+                for (int d = 0; d < old_decl->var_decl_count; d++) {
+                    if (strcmp(old_decl->var_names[d], nm) == 0) {
+                        in_old_decl = 1;
+                        break;
+                    }
+                }
+            }
+            if (!in_old_decl)
+                return compile_set_err(err, err_size,
+                    "'%s' is already declared", nm);
+        }
+        if (repl_eval_is_reserved_ident(nm))
+            return compile_set_err(err, err_size, "'%s' is reserved", nm);
+        if (!(isalpha((unsigned char)nm[0]) || nm[0] == '_'))
+            return compile_set_err(err, err_size, "invalid identifier '%s'", nm);
+    }
+
+    int old_count = old_decl ? old_decl->var_decl_count : 0;
+    if (g_num_predef_vars + parsed->count - old_count > MAX_PREDEF_VARS)
+        return compile_set_err(err, err_size,
+            "variable table full (max %d)", MAX_PREDEF_VARS);
+
+    return REPL_COMPILE_OK;
+}
+
+/* Format the decl into source text. Decls always live at depth 0,
+ * so the indent is the project's standard 2-space gutter. */
+static void format_decl_text(const FloatDeclParse *parsed,
+                             char *out, int out_sz) {
+    const char indent[] = "  ";
+    int off = snprintf(out, (size_t)out_sz, "%sfloat ", indent);
+    for (int var_idx = 0;
+         var_idx < parsed->count && off < out_sz - 4;
+         var_idx++) {
+        if (var_idx > 0)
+            off += snprintf(out + off, (size_t)(out_sz - off), ", ");
+        off += snprintf(out + off, (size_t)(out_sz - off), "%s",
+                        parsed->names[var_idx]);
+        if (parsed->has_init[var_idx])
+            off += snprintf(out + off, (size_t)(out_sz - off),
+                            " = %g", parsed->init_vals[var_idx]);
+    }
+    snprintf(out + off, (size_t)(out_sz - off), ";%s", parsed->decl_comment);
+}
+
+/* Build the predef-op plan for the decl change. Three cases per
+ * name:
+ *   - dropped (in old_decl, not in new) -> UNDECLARE
+ *   - new (not currently in predef table) -> DECLARE [+ value]
+ *   - kept (already declared) -> SET_VALUE if has_init else NOOP
+ *
+ * UNDECLAREs go first so apply's slot-shift cascade observes the
+ * pre-removal indices (see repl_apply_predef_ops). */
+static void build_decl_predef_ops(const FloatDeclParse *parsed,
+                                  const GLCmd *old_decl,
+                                  ReplCompiledChange *out) {
+    int op_count = 0;
+
+    if (old_decl) {
+        for (int d = 0; d < old_decl->var_decl_count; d++) {
+            const char *nm = old_decl->var_names[d];
+            int kept = 0;
+            for (int v = 0; v < parsed->count; v++) {
+                if (strcmp(parsed->names[v], nm) == 0) { kept = 1; break; }
+            }
+            if (kept) continue;
+            if (op_count >= MAX_PREDEF_OPS_PER_COMMIT) break;
+            out->predef_ops[op_count].kind = REPL_PREDEF_OP_UNDECLARE;
+            repl_copy_string_fits(out->predef_ops[op_count].name,
+                                  sizeof(out->predef_ops[op_count].name), nm);
+            op_count++;
+        }
+    }
+    for (int v = 0; v < parsed->count; v++) {
+        if (op_count >= MAX_PREDEF_OPS_PER_COMMIT) break;
+        const char *nm = parsed->names[v];
+        int already_registered =
+            (old_decl && repl_eval_find_predef_var_idx(nm) >= 0);
+        ReplPredefOp *op = &out->predef_ops[op_count++];
+
+        if (already_registered) {
+            if (parsed->has_init[v]) {
+                op->kind = REPL_PREDEF_OP_SET_VALUE;
+                op->value = parsed->init_vals[v];
+                op->has_value = 1;
+                repl_copy_string_fits(op->name, sizeof(op->name), nm);
+            } else {
+                op->kind = REPL_PREDEF_OP_NOOP;
+            }
+        } else {
+            op->kind = REPL_PREDEF_OP_DECLARE;
+            repl_copy_string_fits(op->name, sizeof(op->name), nm);
+            if (parsed->has_init[v]) {
+                op->value = parsed->init_vals[v];
+                op->has_value = 1;
+            }
+        }
+    }
+    out->predef_op_count = op_count;
+}
+
+/* Compose "declared a, b, c" for the status banner. */
+static void build_decl_commit_message(const FloatDeclParse *parsed,
+                                      char *msg, int msg_sz) {
+    int off = snprintf(msg, (size_t)msg_sz, "declared ");
+    for (int v = 0; v < parsed->count && off < msg_sz - 4; v++) {
+        if (v > 0)
+            off += snprintf(msg + off, (size_t)(msg_sz - off), ", ");
+        off += snprintf(msg + off, (size_t)(msg_sz - off), "%s",
+                        parsed->names[v]);
+    }
+}
+
 ReplCompileResult repl_compile_float_decl(const char *input,
                                           const ReplCompileContext *ctx,
                                           ReplCompiledChange *out,
@@ -320,98 +615,22 @@ ReplCompileResult repl_compile_float_decl(const char *input,
 
     repl_compiled_change_init(out);
 
-    const char *p = input ? input : "";
-    while (*p && isspace((unsigned char)*p)) p++;
-    if (strncmp(p, "float", 5) != 0) {
+    FloatDeclParse parsed;
+    int recognized = 0;
+    ReplCompileResult r =
+        parse_float_name_list(input, &parsed, &recognized, err, err_size);
+    if (r != REPL_COMPILE_OK)
+        return r;
+    if (!recognized) {
         out->kind = REPL_COMPILED_NO_CHANGE;
         return REPL_COMPILE_OK;
     }
-    if (isalnum((unsigned char)p[5]) || p[5] == '_') {
-        out->kind = REPL_COMPILED_NO_CHANGE;
-        return REPL_COMPILE_OK;
-    }
-    p += 5;
 
-    char names[MAX_NAMES_PER_DECL][16];
-    float init_vals[MAX_NAMES_PER_DECL];
-    int has_init[MAX_NAMES_PER_DECL];
-    char decl_comment[MAX_LINE_LEN] = "";
-    int var_count = 0;
-    memset(has_init, 0, sizeof(has_init));
-
-    while (*p) {
-        while (*p && isspace((unsigned char)*p)) p++;
-        if (*p == ';' || *p == '\0') break;
-        if (var_count > 0) {
-            if (*p != ',') {
-                out->kind = REPL_COMPILED_NO_CHANGE;
-                return REPL_COMPILE_OK;
-            }
-            p++;
-            while (*p && isspace((unsigned char)*p)) p++;
-        }
-        if (!isalpha((unsigned char)*p) && *p != '_') {
-            return compile_set_err(err, err_size,
-                "syntax error in float declaration: expected identifier");
-        }
-        const char *start = p;
-        while (*p && (isalnum((unsigned char)*p) || *p == '_')) p++;
-        int len = (int)(p - start);
-        if (len <= 0 || len >= 16)
-            return compile_set_err(err, err_size, "invalid identifier (max 15 chars)");
-        if (var_count >= MAX_NAMES_PER_DECL)
-            return compile_set_err(err, err_size,
-                "too many names per declaration (max %d); split across lines",
-                MAX_NAMES_PER_DECL);
-        memcpy(names[var_count], start, (size_t)len);
-        names[var_count][len] = '\0';
-
-        while (*p && isspace((unsigned char)*p)) p++;
-        if (*p == '=' && p[1] != '=') {
-            p++;
-            while (*p && isspace((unsigned char)*p)) p++;
-            if (*p == '\0' || *p == ';' || *p == ',')
-                return compile_set_err(err, err_size, "expected expression after '='");
-            char init_expr[MAX_LINE_LEN];
-            const char *expr_start = p;
-            int depth = 0;
-            while (*p && *p != ';') {
-                if (*p == '(') depth++;
-                else if (*p == ')') depth--;
-                else if (*p == ',' && depth == 0) break;
-                p++;
-            }
-            int elen = (int)(p - expr_start);
-            if (elen >= (int)sizeof(init_expr)) elen = (int)sizeof(init_expr) - 1;
-            memcpy(init_expr, expr_start, (size_t)elen);
-            init_expr[elen] = '\0';
-            while (elen > 0 && isspace((unsigned char)init_expr[elen - 1]))
-                init_expr[--elen] = '\0';
-            if (elen == 0)
-                return compile_set_err(err, err_size, "expected expression after '='");
-            char verr[128];
-            if (!repl_eval_validate_expression_idents(init_expr, NULL, 0,
-                                                      verr, sizeof(verr)))
-                return compile_set_err(err, err_size, "%s", verr);
-            ExprCtx eval_ctx = { init_expr, g_predef_vars, g_num_predef_vars };
-            init_vals[var_count] = repl_eval_expr(&eval_ctx);
-            has_init[var_count] = 1;
-        }
-
-        var_count++;
-    }
-    if (var_count == 0)
-        return compile_set_err(err, err_size,
-            "float declaration requires at least one identifier");
-    if (*p == ';') p++;
-    while (*p && isspace((unsigned char)*p)) p++;
-    if (*p != '\0' && !(p[0] == '/' && p[1] == '/'))
-        return compile_set_err(err, err_size,
-            "syntax error: unexpected trailing text after declaration");
-    if (p[0] == '/' && p[1] == '/')
-        snprintf(decl_comment, sizeof(decl_comment), " %s", p);
-
-    /* Detect overwrite-in-place. */
+    /* Decl placement and overwrite-in-place detection. New decls
+     * always land at the top of the non-decl region, so existing
+     * references appear strictly after their declaration. Editing
+     * an existing CMD_VAR_DECLARE row is the only case that
+     * replaces in-place. */
     int insert_idx = ctx->insert_mode ? ctx->edit_line :
                      (ctx->edit_line < ctx->document_count
                           ? ctx->edit_line : ctx->document_count);
@@ -420,46 +639,19 @@ ReplCompileResult repl_compile_float_decl(const char *input,
                             ctx->document_cmds[insert_idx].type == CMD_VAR_DECLARE);
     const GLCmd *old_decl = overwriting_decl ? &ctx->document_cmds[insert_idx] : NULL;
 
-    /* Validate names. */
-    for (int var_idx = 0; var_idx < var_count; var_idx++) {
-        for (int prev_var_idx = 0; prev_var_idx < var_idx; prev_var_idx++) {
-            if (strcmp(names[var_idx], names[prev_var_idx]) == 0)
-                return compile_set_err(err, err_size,
-                    "duplicate name '%s' in declaration", names[var_idx]);
-        }
-        if (repl_eval_find_predef_var_idx(names[var_idx]) >= 0) {
-            int in_old_decl = 0;
-            if (old_decl) {
-                for (int decl_idx = 0; decl_idx < old_decl->var_decl_count; decl_idx++) {
-                    if (strcmp(old_decl->var_names[decl_idx], names[var_idx]) == 0) {
-                        in_old_decl = 1;
-                        break;
-                    }
-                }
-            }
-            if (!in_old_decl)
-                return compile_set_err(err, err_size,
-                    "'%s' is already declared", names[var_idx]);
-        }
-        if (repl_eval_is_reserved_ident(names[var_idx]))
-            return compile_set_err(err, err_size, "'%s' is reserved", names[var_idx]);
-        if (!(isalpha((unsigned char)names[var_idx][0]) || names[var_idx][0] == '_'))
-            return compile_set_err(err, err_size,
-                "invalid identifier '%s'", names[var_idx]);
-    }
+    r = validate_decl_names(&parsed, old_decl, err, err_size);
+    if (r != REPL_COMPILE_OK)
+        return r;
 
-    int old_count = old_decl ? old_decl->var_decl_count : 0;
-    if (g_num_predef_vars + var_count - old_count > MAX_PREDEF_VARS)
-        return compile_set_err(err, err_size,
-            "variable table full (max %d)", MAX_PREDEF_VARS);
-
-    /* Overwrite-feasibility check: removed names must not be in use. */
+    /* Overwrite-feasibility: removed names must not be referenced
+     * elsewhere in the document. Replacement is rejected outright
+     * rather than auto-deleting the references. */
     if (overwriting_decl) {
-        for (int decl_idx = 0; decl_idx < old_decl->var_decl_count; decl_idx++) {
-            const char *nm = old_decl->var_names[decl_idx];
+        for (int d = 0; d < old_decl->var_decl_count; d++) {
+            const char *nm = old_decl->var_names[d];
             int kept = 0;
-            for (int var_idx = 0; var_idx < var_count; var_idx++) {
-                if (strcmp(names[var_idx], nm) == 0) { kept = 1; break; }
+            for (int v = 0; v < parsed.count; v++) {
+                if (strcmp(parsed.names[v], nm) == 0) { kept = 1; break; }
             }
             if (kept) continue;
             for (int cmd_idx = 0; cmd_idx < ctx->document_count; cmd_idx++) {
@@ -472,39 +664,24 @@ ReplCompileResult repl_compile_float_decl(const char *input,
         }
     }
 
-    /* Build the GLCmd. */
+    /* Build the GLCmd that backs the source row. */
     GLCmd cmd;
     memset(&cmd, 0, sizeof(cmd));
     cmd.type = CMD_VAR_DECLARE;
     cmd.valid = 1;
-    cmd.var_decl_count = var_count;
-    for (int var_idx = 0; var_idx < var_count; var_idx++) {
-        if (!repl_copy_string_fits(cmd.var_names[var_idx],
-                                   sizeof(cmd.var_names[var_idx]),
-                                   names[var_idx]))
+    cmd.var_decl_count = parsed.count;
+    for (int v = 0; v < parsed.count; v++) {
+        if (!repl_copy_string_fits(cmd.var_names[v],
+                                   sizeof(cmd.var_names[v]),
+                                   parsed.names[v]))
             return compile_set_err(err, err_size, "invalid identifier (max 15 chars)");
     }
 
-    /* Decl placement: at the top of the non-decl region. */
     int decl_pos = 0;
     while (decl_pos < ctx->document_count &&
            ctx->document_cmds[decl_pos].type == CMD_VAR_DECLARE)
         decl_pos++;
 
-    /* Format text. Decls always live at depth 0 → 2-space indent. */
-    char indent[3] = "  ";
-    char decl_text[MAX_LINE_LEN];
-    int off = snprintf(decl_text, sizeof(decl_text), "%sfloat ", indent);
-    for (int var_idx = 0; var_idx < var_count && off < (int)sizeof(decl_text) - 4; var_idx++) {
-        if (var_idx > 0) off += snprintf(decl_text + off, sizeof(decl_text) - off, ", ");
-        off += snprintf(decl_text + off, sizeof(decl_text) - off, "%s", names[var_idx]);
-        if (has_init[var_idx])
-            off += snprintf(decl_text + off, sizeof(decl_text) - off,
-                            " = %g", init_vals[var_idx]);
-    }
-    snprintf(decl_text + off, sizeof(decl_text) - off, ";%s", decl_comment);
-
-    /* Populate the change. */
     if (overwriting_decl) {
         out->kind  = REPL_COMPILED_REPLACE_ONE;
         out->pos   = insert_idx;
@@ -517,68 +694,14 @@ ReplCompileResult repl_compile_float_decl(const char *input,
         out->adjust_edit_line = 1;  /* REPL_COMMAND_STORE_ADJUST_EDIT_LINE */
     }
     out->cmds[0] = cmd;
+
+    char decl_text[MAX_LINE_LEN];
+    format_decl_text(&parsed, decl_text, (int)sizeof(decl_text));
     repl_copy_string_fits(out->text[0], sizeof(out->text[0]), decl_text);
 
-    /* Build predef-op plan:
-     *   - For each old name not present in the new decl: UNDECLARE.
-     *   - For each new name not already registered: DECLARE (with init
-     *     value if has_init).
-     *   - For each kept name with an init: SET_VALUE (preserve slot,
-     *     update value).
-     */
-    int op_count = 0;
-    if (overwriting_decl) {
-        for (int decl_idx = 0; decl_idx < old_decl->var_decl_count; decl_idx++) {
-            const char *nm = old_decl->var_names[decl_idx];
-            int kept = 0;
-            for (int var_idx = 0; var_idx < var_count; var_idx++) {
-                if (strcmp(names[var_idx], nm) == 0) { kept = 1; break; }
-            }
-            if (kept) continue;
-            if (op_count >= MAX_PREDEF_OPS_PER_COMMIT) break;
-            out->predef_ops[op_count].kind = REPL_PREDEF_OP_UNDECLARE;
-            repl_copy_string_fits(out->predef_ops[op_count].name,
-                                  sizeof(out->predef_ops[op_count].name), nm);
-            op_count++;
-        }
-    }
-    for (int var_idx = 0; var_idx < var_count; var_idx++) {
-        if (op_count >= MAX_PREDEF_OPS_PER_COMMIT) break;
-        int already_registered = (overwriting_decl &&
-                                  repl_eval_find_predef_var_idx(names[var_idx]) >= 0);
-        ReplPredefOp *op = &out->predef_ops[op_count++];
-        if (already_registered) {
-            if (has_init[var_idx]) {
-                op->kind = REPL_PREDEF_OP_SET_VALUE;
-                op->value = init_vals[var_idx];
-                op->has_value = 1;
-                repl_copy_string_fits(op->name, sizeof(op->name), names[var_idx]);
-            } else {
-                /* Kept without init: nothing to do. */
-                op->kind = REPL_PREDEF_OP_NOOP;
-            }
-        } else {
-            op->kind = REPL_PREDEF_OP_DECLARE;
-            repl_copy_string_fits(op->name, sizeof(op->name), names[var_idx]);
-            if (has_init[var_idx]) {
-                op->value = init_vals[var_idx];
-                op->has_value = 1;
-            }
-        }
-    }
-    out->predef_op_count = op_count;
-
-    /* Success message. */
-    int msg_off = snprintf(out->commit_message, sizeof(out->commit_message),
-                           "declared ");
-    for (int var_idx = 0; var_idx < var_count && msg_off < (int)sizeof(out->commit_message) - 4; var_idx++) {
-        if (var_idx > 0)
-            msg_off += snprintf(out->commit_message + msg_off,
-                                sizeof(out->commit_message) - msg_off, ", ");
-        msg_off += snprintf(out->commit_message + msg_off,
-                            sizeof(out->commit_message) - msg_off, "%s", names[var_idx]);
-    }
-
+    build_decl_predef_ops(&parsed, old_decl, out);
+    build_decl_commit_message(&parsed, out->commit_message,
+                              (int)sizeof(out->commit_message));
     return REPL_COMPILE_OK;
 }
 
@@ -746,8 +869,28 @@ ReplCompileResult repl_compile_var_assign(const char *input,
     repl_copy_string_fits(out->text[0], sizeof(out->text[0]), assign_text);
 
     /* Overwrite-feasibility check + UNDECLARE op plan. Mirrors the
-     * float-decl overwrite check at line 215+; the in-use predicate
-     * skips the line being replaced. */
+     * float-decl overwrite check; the in-use predicate skips the
+     * line being replaced.
+     *
+     * Reorder note: the scalar branch above pushed a SET_VALUE op
+     * at slot 0 (predef_op_count = 1). This loop writes UNDECLAREs
+     * starting at slot 0 too, so it clobbers the SET_VALUE in place.
+     * The salvage block below copies whatever lives at slot 0
+     * (which is now an UNDECLARE) and appends it after the
+     * UNDECLAREs. The result is `[UNDECLARE_a, ..., UNDECLARE_n,
+     * UNDECLARE_a]` — a duplicate UNDECLARE rather than the
+     * SET_VALUE the layout-comment in repl_apply.c would suggest.
+     *
+     * This is benign because repl_apply_predef_ops is idempotent:
+     *   - the second UNDECLARE no-ops (find_predef_var_idx returns
+     *     -1 once the first call removed the variable), and
+     *   - a SET_VALUE for an undeclared name no-ops too.
+     *
+     * TODO: rewrite as stash-before-clobber so we actually preserve
+     * SET_VALUE for the case "overwrite decl-row of name Y with an
+     * assignment to X (X declared elsewhere)" — currently the
+     * SET_VALUE on X is silently dropped. Behavior change is
+     * observable, so add a focused test before fixing. */
     int op_count = 0;
     if (overwriting_decl) {
         for (int decl_idx = 0; decl_idx < old_decl->var_decl_count; decl_idx++) {
