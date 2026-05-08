@@ -1,5 +1,6 @@
 #define REPL_STATE_IMPLEMENTATION
 #include "repl_state.h"
+#include "repl_presentation.h"  /* CFG_DEFAULT_* macros for state defaults */
 
 #include "editor_state.h"
 #include "editor_help_session.h"

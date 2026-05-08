@@ -5,7 +5,9 @@
 #include "repl_camera_controls.h"
 #include "editor_clipboard.h"
 #include "ui/code_panel_layout.h"
+#include "ui/layout.h"            /* CODE_PANEL_LAYOUT_* */
 #include "repl_config.h"
+#include "repl_presentation.h"    /* CFG_DEFAULT_* */
 #include "repl_export.h"
 #include "replay.h"
 #include "replay_state.h"

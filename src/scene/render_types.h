@@ -5,8 +5,8 @@
 #define SCENE_RENDER_TYPES_H
 
 #include "repl_flatten.h"
-#include "repl_presentation.h"
-#include "replay.h"
+#include "themes.h"
+#include "replay_types.h"
 #include "guides_shared.h"
 
 #define MAX_LIGHTS 4
