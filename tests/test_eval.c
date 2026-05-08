@@ -699,6 +699,15 @@ static void run_tests(void) {
     ASSERT_SOURCE_USES("3.14", "x", 0);
     /* Empty source */
     ASSERT_SOURCE_USES("", "x", 0);
+    /* Inline comment - scanner stops before //, mirroring the
+     * expression validator above. A trailing comment that mentions
+     * a name does not count as a real use; otherwise the
+     * delete/comment-toggle reference checks falsely block on
+     * remarks like `glVertex3f(0,0,0); // p axis`. */
+    ASSERT_SOURCE_USES("glVertex3f(0,0,0) // p axis", "p", 0);
+    ASSERT_SOURCE_USES("y = 1 // x lives in a comment now", "x", 0);
+    /* Real use BEFORE an inline comment is still detected. */
+    ASSERT_SOURCE_USES("y = x + 1 // x lives in a comment now", "x", 1);
 
     /* ---- parse_exprs edge cases ---- */
     printf("parse_exprs (edge cases):\n");

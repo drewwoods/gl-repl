@@ -672,6 +672,11 @@ int repl_eval_source_uses_ident(const char *src, const char *name) {
     int nlen = (int)strlen(name);
     const char *s = src;
     while (*s) {
+        /* Stop at inline `//` — the rest of the line is a comment,
+         * not real code. Mirrors the expression validator at
+         * validate_expression_idents_range. */
+        if (s[0] == '/' && s[1] == '/')
+            break;
         if (isdigit((unsigned char)*s) ||
             (*s == '.' && isdigit((unsigned char)s[1]))) {
             const char *end = skip_numeric_literal(s);

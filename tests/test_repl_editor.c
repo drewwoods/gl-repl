@@ -2562,6 +2562,29 @@ int main() {
                     repl_eval_find_predef_var_idx("p") < 0);
     }
 
+    /* Regression (feedback P2 part 2): the reference scan must also
+     * stop at inline `//`. The previous fix only handled full-line
+     * CMD_COMMENT rows; a regular cmd line like `glVertex3f(0,0,0)
+     * // p axis` would still falsely flag `p` as referenced because
+     * repl_eval_source_uses_ident walked the full text including
+     * the trailing comment. */
+    {
+        repl_reset_state();
+        repl_feed_line_public("float p;");
+        repl_feed_line_public("glVertex3f(0,0,0); // p axis");
+        ASSERT_TRUE("delete-with-inline-comment setup: p declared",
+                    repl_eval_find_predef_var_idx("p") >= 0);
+        ASSERT_INT("delete-with-inline-comment setup: vertex line is GL cmd",
+                   repl_state_document_cmds_mut()[1].type, CMD_VERTEX3F);
+
+        delete_cmd_range(0, 1, "Deleted");
+
+        ASSERT_INT("delete decl with inline-comment-mention: row gone",
+                   repl_state_document_count(), 1);
+        ASSERT_TRUE("delete decl with inline-comment-mention: predef removed",
+                    repl_eval_find_predef_var_idx("p") < 0);
+    }
+
     /* Regression (feedback P1, block-batch path): repl_compile_
      * toggle_comment's block-batch branch uses the same shared
      * `compile_collect_undeclare_for_range` helper as the single-
